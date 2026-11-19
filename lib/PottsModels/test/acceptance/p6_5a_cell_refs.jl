@@ -51,7 +51,7 @@
 #    changes: cell variables no `@on_copy` writes, `kind`, `birth`, `alive(ref)`, e.g.
 #    `λ * (volume - V₀ - q[partner])^2 + μ[kind, kind[partner]] * volume`. Reading a
 #    copy-varying quantity of a referent in an energy (`volume[partner]`) is refused at
-#    `mtkcompile` with D-209's `ArgumentError` (its message contains "a copy changes" and
+#    `mtkcompile` with a `PottsCompileError` (its message contains "a copy changes" and
 #    "in @energy cells"): ΔH evaluates only the copy's two cells, exactly as D-209 already
 #    refuses `volume[id]` and as `cluster_volume` is not readable in cell energies. A
 #    drive may read it (drives are copy-scope work terms, not part of H).

@@ -48,8 +48,8 @@
 #    fold element). A dead referent or ref 0 reads 0.0 (the medium, as `centroid(k)` of
 #    an empty slot reads today, `_centroid_axis`). Cell scope: updates (`@after_mcs`),
 #    `@observed`, population folds (`sum(centroid(c, 1) for c in cells(nucleus))`).
-#    Refused in `@energy` (ArgumentError naming `centroid`: it has no ΔH, D-032 until R7).
-#    `centroid(c, k)` with k not an axis of the lattice is an ArgumentError naming
+#    Refused in `@energy` (`PottsCompileError` naming `centroid`: it has no ΔH).
+#    `centroid(c, k)` with k not an axis of the lattice is a `PottsCompileError` naming
 #    `centroid`.
 # C. `minimum_image(d, axis)` (E7; the scalar wrap). On a periodic axis of length L, the
 #    representative of `d` modulo L nearest 0; on a closed axis `d` itself. `axis` is a
@@ -71,7 +71,7 @@
 #    alive member of the current cell's cluster (each site weight 1; divide by the
 #    cluster's volume for the mean). The same value for every member. For a cell that is
 #    its own cluster it equals plain `integral(x)`, which stays the cell sum. Cell scope like `integral` (updates,
-#    `@observed`); refused in `@energy` with an ArgumentError (as `integral` is: no ΔH).
+#    `@observed`); refused in `@energy` with a `PottsCompileError` (as `integral` is: no ΔH).
 #    The integrand is in site scope (spec-owner ruling, 2026-10-14): `kind` and `volume`
 #    inside `x` bind to the site's owner, the member cell the site belongs to, so
 #    `integral(volume; over = cluster)` = Σ_members V_m², not (Σ V_m)·V_current. An unknown

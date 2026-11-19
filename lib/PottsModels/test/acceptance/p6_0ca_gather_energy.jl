@@ -20,7 +20,7 @@
 #  - `x[owner[n]]` for any cell quantity x (a cell variable or a builtin such as `volume`),
 #  - a site variable written by an `@on_copy` update, or one declared
 #    `clear_on_ownership_change`,
-# is an `ArgumentError` at `mtkcompile` (so also at `PottsProblem`), naming the statement.
+# is a `PottsCompileError` at `mtkcompile` (so also at `PottsProblem`), naming the statement.
 # THE STABLE MESSAGE FRAGMENT: the message contains `a copy changes` (e.g. "… reads `owner[n]`,
 # which a copy changes; …") and the statement as `_located` already prints it (`in @energy
 # <domain> => …`). Every refusal below checks both; the wording around them is free.
@@ -40,7 +40,7 @@
 #
 # On 487fda85: 83 pass, 77 fail of 160. Every failure is in section 1 and is the missing
 # refusal (the forms compile; contacts and `volume[owner[n]]` then fail at `PottsProblem` with
-# an ErrorException; the `@on_copy` site variable is an ArgumentError at `mtkcompile` with
+# an ErrorException; the `@on_copy` site variable is a `PottsCompileError` at `mtkcompile` with
 # the D-045 wording, located at the `@on_copy` statement, so only its type check passes).
 # Sections 0, 2, 3 and 4 pass.
 #
@@ -74,7 +74,7 @@
 # in sites)`, `sum(y[c] for c in cells)` with `@on_copy` writing y — and the bare pair read
 # `act + act′` of an on-copy site variable in a contact term.
 # On a6239bad: sections 0–6 pass (276); section 7 fails 13 of 18 (the four site fixtures
-# compile; `kind[id]` is an ArgumentError without "bare"); section 8 fails 3 of 8 (the three
+# compile; `kind[id]` is already refused without the "bare" wording); section 8 fails 3 of 8 (the three
 # population folds are refused by the whole-term walk; the contact pair control passes). The frozen files re-frozen with this item (p6_0at, p6_0ax, p6_0ba) replace their
 # refused fixtures with the static forms of section 2.
 using Potts: CorePotts

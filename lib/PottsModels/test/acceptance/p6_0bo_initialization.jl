@@ -93,15 +93,16 @@ p60bo_byname(xs, n) = only(x for x in xs if p60bo_name(x) === n)
 p60bo_init(c, scope) = Potts.initialization_system(c, scope)
 
 _p60bo_unwrap(err) = err isa LoadError ? _p60bo_unwrap(err.error) : err
-p60bo_clear(f, word = nothing) = try
+p60bo_clear(E::Type{<:Exception}, f, word = nothing) = try
     f()
     false
 catch err
     e = _p60bo_unwrap(err)
-    ok = e isa Union{ArgumentError, Potts.PottsCompileError} && (word === nothing || occursin(word, sprint(showerror, e)))
-    ok || @info "expected ArgumentError or PottsCompileError$(word === nothing ? "" : " naming $word")" exception = e
+    ok = e isa E && (word === nothing || occursin(word, sprint(showerror, e)))
+    ok || @info "expected $E$(word === nothing ? "" : " naming $word")" exception = e
     ok
 end
+p60bo_clear(f, word = nothing) = p60bo_clear(ArgumentError, f, word)
 
 # Fixtures are defined by evaluating their `@potts_model` here and capturing any error, so
 # that a tree without the section fails in the testsets and not when this file loads.
@@ -555,9 +556,9 @@ end
 
 @testset "P6.0bo X: cross-entity initialization is refused until P6.4a" begin
     attempt(name) = () -> PottsProblem(p60bo_build(name), p60bo_op(), (0, 1))
-    @test p60bo_clear(attempt(:P60boCross), "partner")
-    @test p60bo_clear(attempt(:P60boGather), "xgather")
-    @test p60bo_clear(attempt(:P60boField), "cfield")
+    @test p60bo_clear(Potts.PottsCompileError, attempt(:P60boCross), "partner")
+    @test p60bo_clear(Potts.PottsCompileError, attempt(:P60boGather), "xgather")
+    @test p60bo_clear(Potts.PottsCompileError, attempt(:P60boField), "cfield")
 end
 
 # ---------------------------------------------------------------------------------------

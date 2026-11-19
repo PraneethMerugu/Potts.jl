@@ -50,7 +50,7 @@
 #     `nothing`; the published model with ODEs (Merks, field PDEs) runs bitwise as recorded on
 #     4b81dd79 (our own field step, D-158). Generated code and fingerprints of all-differential
 #     models are pinned byte-identical by p6_0o (D-137 rule 7), not here.
-#  R. Rejections, at `mtkcompile` (ArgumentError; the words listed must appear): an implicit
+#  R. Rejections, at `mtkcompile` (`PottsCompileError`; the words listed must appear): an implicit
 #     equation (`xalias + x ~ 1`: "algebraic"); an algebraic equation for a field
 #     ("algebraic", the name); a variable with both `D(·)` and an algebraic equation, two
 #     algebraic equations for one variable, a self-reference, and a cycle through two
@@ -81,14 +81,16 @@ p60bn_scheduled(s) = P60BN_M.isscheduled(s)
 p60bn_observed_names(s) = Set{Symbol}(p60bn_name(o.lhs) for o in P60BN_M.observed(s))
 p60bn_byname(xs, n) = only(x for x in xs if p60bn_name(x) === n)
 
-p60bn_clear(f, words...) = try
-    f()
-    false
-catch err
-    ok = err isa Union{ArgumentError, Potts.PottsCompileError} &&
-        (isempty(words) || occursin(first(words), sprint(showerror, err)))
-    ok || @info "expected ArgumentError or PottsCompileError" exception = err
-    ok
+p60bn_clear(f, words...) = p60bn_clear(ArgumentError, f, words...)
+function p60bn_clear(E::Type{<:Exception}, f, words...)
+    return try
+        f()
+        false
+    catch err
+        ok = err isa E && (isempty(words) || occursin(first(words), sprint(showerror, err)))
+        ok || @info "expected $(nameof(E))" exception = err
+        ok
+    end
 end
 
 # ---------------------------------------------------------------------------------------
@@ -530,7 +532,7 @@ end
 # R. Rejections
 
 @testset "P6.0bn R: rejected algebraic equations" begin
-    @test p60bn_clear(() -> mtkcompile(P60bnImplicit(; name = :r)), "algebraic")
+    @test p60bn_clear(Potts.PottsCompileError, () -> mtkcompile(P60bnImplicit(; name = :r)), "algebraic")
     # an aux-only field model builds (F3-00, D-F3-R1): its field phase evaluates `cfield ~ 1.0`
     let s = zeros(Int32, 12, 8)
         s[3:6, 3:6] .= 1
@@ -538,11 +540,11 @@ end
             SequentialCPM()).u[end]
         @test all(==(1.0), Array(u.site.cfield))
     end
-    @test p60bn_clear(() -> mtkcompile(P60bnBoth(; name = :r)), "algebraic", "xalias")
-    @test p60bn_clear(() -> mtkcompile(P60bnTwice(; name = :r)), "algebraic", "xalias")
-    @test p60bn_clear(() -> mtkcompile(P60bnSelf(; name = :r)), "algebraic", "xalias")
-    @test p60bn_clear(() -> mtkcompile(P60bnCycle(; name = :r)), "algebraic")
-    @test p60bn_clear(() -> mtkcompile(P60bnWrite(; name = :r)), "algebraic", "xalias")
+    @test p60bn_clear(Potts.PottsCompileError, () -> mtkcompile(P60bnBoth(; name = :r)), "algebraic", "xalias")
+    @test p60bn_clear(Potts.PottsCompileError, () -> mtkcompile(P60bnTwice(; name = :r)), "algebraic", "xalias")
+    @test p60bn_clear(Potts.PottsCompileError, () -> mtkcompile(P60bnSelf(; name = :r)), "algebraic", "xalias")
+    @test p60bn_clear(Potts.PottsCompileError, () -> mtkcompile(P60bnCycle(; name = :r)), "algebraic")
+    @test p60bn_clear(Potts.PottsCompileError, () -> mtkcompile(P60bnWrite(; name = :r)), "algebraic", "xalias")
 end
 
 @testset "P6.0bn R: no initial value for an algebraic variable" begin

@@ -21,7 +21,7 @@
 # (`_delta_H_expr`, the constraint test in src/codegen.jl), where σ moves at every accepted
 # copy while an integral is refreshed only between sweeps; like energies, they reject it.
 # Any `integral(…)` in a `@drive` (including `Chemotaxis` arguments) or an expression
-# `@constraint` is an `ArgumentError` at build (`mtkcompile`, hence `PottsProblem`) that
+# `@constraint` is a `PottsCompileError` at build (`mtkcompile`, hence `PottsProblem`) that
 # names `integral`, the section (the statement's location) and the workaround: keep the
 # integral in a cell variable updated `@before_mcs` (`s ~ integral(x)`) and read `s[new]`,
 # `s[old]`. `connectivity(…)` and `no_extinction` carry no user expression.
