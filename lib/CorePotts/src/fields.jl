@@ -224,7 +224,8 @@ function _field_bind(ph::FieldPhase, st, p, backend; tables = nothing, abstol = 
     store = Problems.FieldStore(backend, bufs, ones(Int, length(bufs)), tables)
     n = field_substeps(ph, p)
     host = FieldBinding(p, arrs, _bound_values(ph, p)...)
-    return Problems.bind_group(ph.group, ph.alg, store, praw(ph, p); n, dt = ph.dt, c = nothing, ends_in = :slot1,
+    return Problems.bind_group(
+        ph.group, ph.alg, store, praw(ph, p); n, dt = ph.dt, c = nothing, ends_in = :slot1,
         backend, options = ph.options, V = ph.T, host, abstol, reltol, kernels = ph.aux_only ? (Int[], _aux_ids(ph)) : nothing
     )
 end
@@ -667,11 +668,13 @@ function tangent_run(phases::Phases, st, p, tg::ParameterTangent, backend, ctx, 
     for ph in phs
         _shadow!(run, ph, st, _runtime(getfield(ctx, _ctxkey(ph))))
         any_seeded |= any(x -> LatticeFields.Compile.npartials(typeof(x)) > 0 && !iszero(x - LatticeFields.Compile.primal(x)),
-            praw(ph, tg.p))
+            praw(ph, tg.p)
+        )
     end
     any_seeded || !isempty(tg.u0) || isempty(phs) || @warn string("no field group reads a parameter with derivative parts, ",
         "so every derivative of the fields is zero: the CPM and the ODEs read the primal values, and the derivative holds ",
-        "the CPM path fixed") maxlog = 1
+        "the CPM path fixed"
+    ) maxlog = 1
     fresh && _seed_initial!(nothing, run, tg)
     return run
 end
@@ -709,7 +712,8 @@ function _shadow!(run::TangentRun, ph::FieldPhase{K}, st, prt) where {K}
     shared = ph.alg isa Problems.AbstractImplicitFieldAlgorithm && !ph.aux_only && prt.cache isa Problems.ImplicitCache
     store = Problems.FieldStore(backend, bufs, shared ? prt.store.cur : ones(Int, length(bufs)), prt.store.tables)
     tols = shared ? (abstol = prt.cache.abstol, reltol = prt.cache.reltol) : (;)
-    trt = Problems.bind_group(ph.group, ph.alg, store, praw(ph, run.p); n = prt.n, dt = ph.dt, c = zero(E),
+    trt = Problems.bind_group(
+        ph.group, ph.alg, store, praw(ph, run.p); n = prt.n, dt = ph.dt, c = zero(E),
         ends_in = :slot1, backend, options = ph.options, V = ph.T, host = nothing,
         kernels = ph.aux_only ? (Int[], _aux_ids(ph)) : nothing,
         tols...,

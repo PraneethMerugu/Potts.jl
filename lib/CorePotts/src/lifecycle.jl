@@ -605,13 +605,13 @@ end
 function _copy_columns!(stats, a::AbstractVector, dst, src)
     h = to_host(stats, a)
     h[dst] .= h[src]
-    counted_copy!(stats, a, h)
+    return counted_copy!(stats, a, h)
 end
 function _copy_columns!(stats, a::AbstractArray, dst, src)
     h = to_host(stats, a)
     sel(x) = ntuple(d -> d == ndims(h) ? x : Colon(), ndims(h))
     h[sel(dst)...] .= h[sel(src)...]
-    counted_copy!(stats, a, h)
+    return counted_copy!(stats, a, h)
 end
 
 """

@@ -178,7 +178,9 @@ function _rebuild_cluster_trackers!(stats, st, σ, ctx)
         # in integer weight units for a weighted float column (as the device lifecycle; F3-23 r2)
         T = eltype(st.cell.cluster_surface)
         σK = map(s -> s == 0 ? Int32(0) : Int32(cl[s]), σ)
-        counted_copy!(stats, st.cell.cluster_surface, _recompute_surface(T, σK, ctx.lattice, ctx.surface, length(cl),
+        counted_copy!(
+            stats, st.cell.cluster_surface, _recompute_surface(
+                T, σK, ctx.lattice, ctx.surface, length(cl),
             _units_for(T, ctx.surface, length(σ), CPU())))
     end
     return nothing
@@ -198,10 +200,14 @@ function _cluster_planes!(stats, normals, bias, lc, st, p, ctx, key, mcs, roots,
     σK = map(s -> s == 0 ? Int32(0) : cl[s], σ)
     mK = init_moments(σK, lat, cap)
     cellK = merge(mK, (; volume = recompute_cluster_volume(σ, cl),
-        generation = to_host(stats, st.cell.generation), kind = to_host(stats, st.cell.kind), cluster = cl))
+            generation = to_host(stats, st.cell.generation), kind = to_host(stats, st.cell.kind), cluster = cl,
+        )
+    )
     stK = (; ownership = σK, cell = cellK)
-    cell = (; volume = to_host(stats, st.cell.volume), anchor = to_host(stats, st.cell.anchor),
-        m1 = to_host(stats, st.cell.m1))
+    cell = (;
+        volume = to_host(stats, st.cell.volume), anchor = to_host(stats, st.cell.anchor),
+        m1 = to_host(stats, st.cell.m1),
+    )
     nh = zeros(T, N, cap); bh = zeros(T, cap)
     for r in roots
         n = _plane(lc.cluster_normal, T)(stK, p, ctx, key, mcs, Int32(r))

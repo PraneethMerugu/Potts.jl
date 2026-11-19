@@ -847,7 +847,8 @@ Base.@nospecializeinfer function _init(
     # a field-step entry's handler is still in an inference cycle, the call stays dynamic and
     # boxes the entry (16 B per MCS, Merks Float32 under CheckerboardCPM, P6.0bl)
     _each(e -> precompile(_run_entry!, (typeof(integ), typeof(e))), prob.f.phases.mcs)
-    _stats(integ).launches += run_phases(fresh ? prob.f.phases.at_init : derived(prob.f.phases.at_init), integ.state, integ.p, integ.ctx,
+    _stats(integ).launches += run_phases(
+        fresh ? prob.f.phases.at_init : derived(prob.f.phases.at_init), integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend, _stats(integ))
     _start_failed!(integ)
     _each(cb -> cb.initialize(cb, integ.state, integ.t, integ), integ.callbacks)
@@ -1147,7 +1148,8 @@ end
 
 # One entry of the MCS order: a tuple of phases, the sweep, the lifecycle or a `Repeat`.
 function _run_entry!(integ::PottsIntegrator, phases::Tuple, part::NTuple{2, Int} = (1, 1))
-    _stats(integ).launches += run_phases(phases, integ.state, integ.p, integ.ctx,
+    _stats(integ).launches += run_phases(
+        phases, integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend, _stats(integ), part)
     return nothing
 end

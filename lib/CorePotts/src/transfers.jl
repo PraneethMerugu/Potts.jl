@@ -196,7 +196,7 @@ device must not be read on the host.
 """
 function host_leaves(stats, st::CPMState; ownership::Bool = false, cell = (), site = (), model = (), history = ())
     part(nt, names) = isempty(names) ? nt :
-                      merge(nt, NamedTuple{Tuple(names)}(map(n -> adapt_host(stats, getfield(nt, n)), Tuple(names))))
+        merge(nt, NamedTuple{Tuple(names)}(map(n -> adapt_host(stats, getfield(nt, n)), Tuple(names))))
     return CPMState(
         ownership ? adapt_host(stats, st.ownership) : st.ownership, part(st.cell, cell), part(st.site, site),
         part(st.model, model), part(st.history, history))
