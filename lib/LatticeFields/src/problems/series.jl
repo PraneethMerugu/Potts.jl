@@ -1,7 +1,7 @@
 # Solutions of lattice problems (F4-04; F4 design §3.5): an owned solve returns SciML's
 # `ODESolution` (linear interpolation: `sol(t)`, `Array(sol)`, `sol.ps`, `sol.alg`, `sol.stats`).
 # A field read on any solution of a lattice problem (owned, OrdinaryDiffEq, or a FieldProblem
-# solved directly) follows SciML and `PottsProblem` (ruling Q18): `sol[c]` is one grid per save;
+# solved directly) follows SciML and `PottsProblem`: `sol[c]` is one grid per save;
 # `field_series(sol, c)` is the time-first lazy view of the saves (MethodOfLines' shape).
 
 """
@@ -10,7 +10,7 @@
 A field's values over the saves of a solution, time first (F4-04; MethodOfLines' shape): an
 `AbstractArray` of size `(nt, dims...)` whose entries are read from the saved states when
 indexed, with no copy of the series ([`field_series`](@ref) gives it; `sol[c]` is a vector of
-grids, ruling Q18). `s[i, :, :]` (or `sol[c, i]`, `sol[c][i]`) is the grid at save `i`,
+grids). `s[i, :, :]` (or `sol[c, i]`, `sol[c][i]`) is the grid at save `i`,
 `Array(s)` copies the whole series. An aux field (`K ~ rhs`) is evaluated from the saved state
 at each save time when that save is read. An owned solve saves host vectors; an OrdinaryDiffEq
 solve on a device saves device arrays: there read whole grids (`s[i, :, :]`, `Array(s)`), not
