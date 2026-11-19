@@ -59,7 +59,8 @@ function _pde_content(sys, f::ModelingToolkitBase.PDESystem, prefix, what::Abstr
     M = ModelingToolkitBase
     pname = "the PDESystem `$(nameof(f))`"
     bound = _input_bindings(sys, f, inputs, what, pname)
-    isempty(getfield(f, :systems)) && getfield(f, :analytic) === nothing && getfield(f, :analytic_func) === nothing ||
+    # (`analytic`, `analytic_func`: no public MTKBase accessor, an upstream gap)
+    isempty(ModelingToolkitBase.get_systems(f)) && getfield(f, :analytic) === nothing && getfield(f, :analytic_func) === nothing ||
         throw(ArgumentError("$what: $pname has subsystems or analytic solutions, which the fields of a model do not " *
                             "carry; leave them out"))
     qname(n) = prefix === nothing ? Symbol(n) : Symbol(prefix, :₊, n)
@@ -67,7 +68,7 @@ function _pde_content(sys, f::ModelingToolkitBase.PDESystem, prefix, what::Abstr
     N = length(lat.dims)
     h = something(lat.spacing, ntuple(_ -> 1.0, N))
     ext = ntuple(d -> lat.dims[d] * Float64(h[d]), N)
-    ivs = Any[_unwrap(v) for v in getfield(f, :ivs)]
+    ivs = Any[_unwrap(v) for v in ModelingToolkitBase.get_ivs(f)]
     length(ivs) in (N, N + 1) || throw(ArgumentError(string(what, ": ", pname, " has the independent variables ",
         join(("`$v`" for v in ivs), ", "), "; the lattice of `", _hostname(sys), "` has ", N, " axes: give the time and one ",
         "coordinate per axis, in the order of the lattice's axes")))
@@ -75,7 +76,7 @@ function _pde_content(sys, f::ModelingToolkitBase.PDESystem, prefix, what::Abstr
     xc = ivs[(end - N + 1):end]
     # the time is the first independent variable: the variable of each rate
     # `D(c) ~ …` and map `Shift(t, 1)(c) ~ …`
-    for eq in getfield(f, :eqs)
+    for eq in ModelingToolkitBase.get_eqs(f)
         l = _unwrap(eq.lhs)
         iscall(l) && (operation(l) isa Differential || operation(l) isa ModelingToolkitBase.Shift) || continue
         v = _unwrap(operation(l) isa Differential ? operation(l).x : operation(l).t)
@@ -89,7 +90,7 @@ function _pde_content(sys, f::ModelingToolkitBase.PDESystem, prefix, what::Abstr
     # the spatial domain is the lattice's in the model's length unit (ruling Q8): axis `d` spans
     # `[0, dims[d] · spacing[d]]`, which is also the domain `Potts.fields` gives. An axis the
     # PDESystem gives no interval for takes the lattice's (F4-E5); a given one must match it.
-    dom = getfield(f, :domain)
+    dom = ModelingToolkitBase.get_domain(f)
     for e in dom
         v = _unwrap(e.variables)
         any(w -> isequal(w, v), ivs) || throw(ArgumentError(string(what, ": ", pname, " gives the domain `", e.variables,
@@ -107,7 +108,7 @@ function _pde_content(sys, f::ModelingToolkitBase.PDESystem, prefix, what::Abstr
             "); a model has one length unit: give `", xc[d], " ∈ Interval(0, ", _extent_text(ext[d]), ")`, or set the ",
             "lattice's `spacing` so that its extent is ", _extent_text(hi))))
     end
-    ic = Dict{Any, Any}(_unwrap(k) => v for (k, v) in getfield(f, :initial_conditions))
+    ic = Dict{Any, Any}(_unwrap(k) => v for (k, v) in ModelingToolkitBase.get_initial_conditions(f))
     # a name the model has already: refused (the second declaration would hide or shadow the first)
     taken = Dict{Symbol, String}()
     for x in _p(sys, :parameters)
@@ -128,7 +129,7 @@ function _pde_content(sys, f::ModelingToolkitBase.PDESystem, prefix, what::Abstr
     end
     # the parameters: model parameters with the same values and metadata; a computed value
     # (`k2 = 2k`) is made after the parameters it reads
-    raw = getfield(f, :ps)
+    raw = ModelingToolkitBase.get_ps(f)
     raw = raw isa SciMLBase.NullParameters ? Any[] : collect(Any, raw)
     k = findfirst(q -> q isa Pair, raw)
     k === nothing || throw(ArgumentError(string(what, ": ", pname, " declares its parameters natively, `@parameters ",
@@ -160,7 +161,7 @@ function _pde_content(sys, f::ModelingToolkitBase.PDESystem, prefix, what::Abstr
     fields = Any[]
     # (input name, CPM expression, element type, PDESystem name), for `Potts.field_inputs`
     filled = Tuple{Symbol, Any, Type, Symbol}[]
-    for dv in getfield(f, :dvs)
+    for dv in ModelingToolkitBase.get_dvs(f)
         u = _unwrap(dv)
         i = info(u)
         i !== nothing && i.role === :builtin &&
@@ -204,7 +205,7 @@ function _pde_content(sys, f::ModelingToolkitBase.PDESystem, prefix, what::Abstr
     # an input listed but read by no equation or condition: a term `src(t, x, y) ∈ Set(…)` is
     # Julia's `false` and deletes itself (`α * false` is 0), so the input is silently unused
     for (op, _) in imap
-        any(eq -> _reads_op(eq.lhs, op) || _reads_op(eq.rhs, op), Iterators.flatten((getfield(f, :eqs), getfield(f, :bcs)))) &&
+        any(eq -> _reads_op(eq.lhs, op) || _reads_op(eq.rhs, op), Iterators.flatten((ModelingToolkitBase.get_eqs(f), ModelingToolkitBase.get_bcs(f)))) &&
             continue
         @warn string(what, ": ", pname, " lists the input `", nameof(op), "`, which no equation or condition reads; a ",
             "membership test `", nameof(op), "(t, x, y) ∈ Set(…)` is Julia's `false`, which deletes its term: write ",
@@ -218,7 +219,7 @@ function _pde_content(sys, f::ModelingToolkitBase.PDESystem, prefix, what::Abstr
     conds = Any[]
     k = tc === nothing ? nothing : findfirst(e -> isequal(_unwrap(e.variables), tc), dom)
     t0 = k === nothing ? 0.0 : Float64(minimum(dom[k].domain))
-    for b in getfield(f, :bcs)
+    for b in ModelingToolkitBase.get_bcs(f)
         l = _unwrap(b.lhs)
         a = iscall(l) ? arguments(l) : Any[]
         if tc !== nothing && iscall(l) && any(p -> isequal(p[2], operation(l)), fields) && length(a) == length(ivs) &&
@@ -265,7 +266,7 @@ function _pde_content(sys, f::ModelingToolkitBase.PDESystem, prefix, what::Abstr
         fmap[op] = _unwrap(fv)
         push!(variables, fv)
     end
-    equations = Equation[Symbolics.wrap(_pde_term(eq.lhs, m)) ~ Symbolics.wrap(_pde_term(eq.rhs, m)) for eq in getfield(f, :eqs)]
+    equations = Equation[Symbolics.wrap(_pde_term(eq.lhs, m)) ~ Symbolics.wrap(_pde_term(eq.rhs, m)) for eq in ModelingToolkitBase.get_eqs(f)]
     mf = (; m..., face = true)
     bcs = Equation[Symbolics.wrap(_pde_term(b.lhs, mf)) ~ Symbolics.wrap(_pde_term(b.rhs, mf)) for b in conds]
     return (; variables, parameters = Any[Symbolics.wrap(pmap[u]) for u in raw], equations, bcs, inputs = filled)
@@ -321,7 +322,7 @@ function _input_bindings(sys, f, inputs, what, pname)
     out = Dict{Any, Any}()
     isempty(inputs) && return out
     M = ModelingToolkitBase
-    dvs = Any[_unwrap(dv) for dv in getfield(f, :dvs)]
+    dvs = Any[_unwrap(dv) for dv in ModelingToolkitBase.get_dvs(f)]
     ops = [(u, iscall(u) ? operation(u) : nothing) for u in dvs]
     names = join(("`$(_input_key(u, op))`" for (u, op) in ops if op !== nothing && M.isinput(u)), ", ")
     for b in inputs
@@ -335,7 +336,7 @@ function _input_bindings(sys, f, inputs, what, pname)
             k = _binding_target(key, ops)
         end
         k === nothing && throw(ArgumentError(string(what, ": `", _key_text(key), "` is not a dependent variable of ", pname,
-            "; its inputs are ", isempty(names) ? "none" : names, _declared_input(key, getfield(f, :ivs)) ?
+            "; its inputs are ", isempty(names) ? "none" : names, _declared_input(key, ModelingToolkitBase.get_ivs(f)) ?
             string(". `", _key_text(key), "` is declared `[input = true]`, but no equation of ", pname, " reads it: a ",
             "membership test `", _key_text(key), "(t, x, y) ∈ Set(…)` is Julia's `false`, so its term is deleted before ",
             "the PDESystem is built; write `ismember(", _key_text(key), "(t, x, y), (1, 2))`") : "")))

@@ -745,7 +745,7 @@ function _lower_field_group(sys::PottsSystem, names::Vector{Symbol}, T::Type; kn
     end
     # the model's parameter of each slot and table (the spec names them as the PDESystem prints
     # them); the clock's slot keeps its reserved name (the phase writes the MCS number there)
-    pname(k) = k == LatticeFields.Problems.CLOCK_KEY ? Symbol(k) : info(only(q for q in getfield(pdesys, :ps) if string(q) == k)).name
+    pname(k) = k == LatticeFields.Problems.CLOCK_KEY ? Symbol(k) : info(only(q for q in ModelingToolkitBase.get_ps(pdesys) if string(q) == k)).name
     params = Symbol[pname(k.name) for k in spec.params]
     tables = Pair{Int, Symbol}[i => pname(tb.key) for (i, tb) in enumerate(spec.rate.tables)]
     return (; spec, params, tables, filled = copy(cv.filled), pdesys)
