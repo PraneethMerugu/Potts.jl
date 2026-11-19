@@ -13,6 +13,7 @@ const SECTIONS = (
     Symbol("@relationship"), Symbol("@link"), Symbol("@unlink"), Symbol("@observed"),
     Symbol("@extend"), Symbol("@components"), Symbol("@schedule"),
     Symbol("@initialization_equations"), Symbol("@convert"), Symbol("@fields"),
+    Symbol("@description"), Symbol("@metadata"),
 )
 
 """
@@ -295,6 +296,8 @@ function _potts_model(name::Symbol, body::Expr, mod)
     # likewise `@fields` (F4-B2: a plain PDESystem's fields; its conditions are stored, printed and
     # classified by the field compiler)
     coupled = _has_section(body, Symbol("@fields"))
+    # likewise `@description` and `@metadata` (MTK's `@mtkmodel` sections: the inner System's)
+    described = _has_section(body, Symbol("@description")) || _has_section(body, Symbol("@metadata"))
     preamble = quote
         # each parameter keyword, kept before `@extend` may rebind its name (D-114)
         $([:($(_kw_local(k)) = $k) for k in parts.params]...)
@@ -330,6 +333,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
         $(sched ? :(__schedule = Any[]) : nothing)
         $(inits ? :(__init_eqs = $P.Equation[]) : nothing)
         $(convs ? :(__converts = $P.ConvertSpec[]) : nothing)
+        $(described ? :(__description = nothing; __metadata = Pair{Any, Any}[]) : nothing)
         $(
             coupled ? :(
                     __bcs = $P.Equation[]; __field_inputs = Any[]; __bcs_origins = Pair{Any, Symbol}[];
@@ -391,7 +395,8 @@ function _potts_model(name::Symbol, body::Expr, mod)
                             $P._check_fields_names(__params, __vars, __fields_brought)
                         ) : nothing
                 )
-                $(extends ? :(foldl((s, b) -> $P.ModelingToolkitBase.extend(s, b; name), __bases; init = $finish)) : finish)
+                __built = $(extends ? :(foldl((s, b) -> $P.ModelingToolkitBase.extend(s, b; name), __bases; init = $finish)) : finish)
+                $(described ? :($P._describe(__built, __description, __metadata)) : :__built)
             end
         end
     end
@@ -1042,6 +1047,16 @@ function _section!(parts, sec, args, ln = nothing)
         )
     elseif sec === Symbol("@convert")
         push!(code, _convert_section(args, ln))
+    elseif sec === Symbol("@description")
+        length(args) == 1 || throw(ArgumentError("@description takes one string: `@description \"what the model is\"`"))
+        push!(code, :(__description = $(args[1])))
+    elseif sec === Symbol("@metadata")
+        for l in _lines(args)
+            l isa Expr && l.head === :(=) || throw(
+                ArgumentError("@metadata entries are `Key = value`, with `Key` a type, as in MTK's `@mtkmodel`")
+            )
+            push!(code, :(push!(__metadata, $(l.args[1]) => $(l.args[2]))))
+        end
     elseif sec === Symbol("@sweep")
         ex = only(args)
         ex = _replace_call(ex, :Metropolis, :($P.sweep_spec), QuoteNode(:metropolis))

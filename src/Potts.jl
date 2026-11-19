@@ -11,6 +11,7 @@ module Potts
 # exported CorePotts name to resolve in Potts); every name Potts itself uses is listed
 # explicitly on the next line (ExplicitImports, P6.0j).
 using ADTypes: AutoFiniteDiff
+using ConstructionBase: ConstructionBase
 using CorePotts
 using CorePotts: CorePotts, Footprint, Lattice, embed, PottsProblem, Periodic, Closed, Moore, init, solve, step!, saturating, saturating_linear
 # the compile workload's `@potts_model` body names these (precompile.jl)

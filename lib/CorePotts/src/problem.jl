@@ -460,6 +460,12 @@ function _check_keywords(kw::NamedTuple, prob)
             )
         )
     end
+    :initializealg in bad && throw(
+        ArgumentError(
+            "`solve`/`init` of a PottsProblem: `initializealg` is a keyword of the problem " *
+                "(`PottsProblem(sys, op, tspan; initializealg)`): its state is initialized when the problem is built"
+        )
+    )
     throw(
         ArgumentError(
             string(
@@ -505,10 +511,11 @@ clock:
   [`PottsCheckpoint`](@ref) to continue.
 
 Any other keyword is an `ArgumentError` listing these (`SOLVE_KEYWORDS`). The
-problem's `kwargs` are merged in first.
+problem's `kwargs` are merged in first (except the problem's `initializealg`, which its
+symbolic layer used when it built the state).
 """
 function CommonSolve.init(prob::PottsProblem, alg::AbstractCPMAlgorithm; kwargs...)
-    kw = _merge_kwargs(prob.kwargs, NamedTuple(kwargs))
+    kw = _merge_kwargs(Base.structdiff(prob.kwargs, NamedTuple{(:initializealg,)}), NamedTuple(kwargs))
     _check_keywords(kw, prob)
     return _init_kw(prob, alg; kw...)
 end
@@ -1483,6 +1490,47 @@ function Base.show(io::IO, ::MIME"text/plain", sol::PottsSolution)
 end
 Base.show(io::IO, sol::PottsSolution) =
     print(io, "PottsSolution(", sol.retcode, ", ", length(sol.t), " states)")
+
+# a lattice in a few words: `24×20 periodic lattice`, `16×16 closed hexagonal lattice`
+function _lattice_words(l::Lattice)
+    b = all(l.periodic) ? " periodic" : any(l.periodic) ? " partly periodic" : " closed"
+    g = l.geometry isa Square ? "" : string(" ", lowercase(string(nameof(typeof(l.geometry)))))
+    return string(join(l.dims, "×"), b, g, " lattice")
+end
+_count_words(n, what) = string(n, " ", what, n == 1 ? "" : "s")
+_live_cells(st::CPMState) = count(>(0), Array(st.cell.volume))
+# up to `n` names, then `…`
+_names_words(ks, n = 8) = length(ks) <= n ? join(ks, ", ") : string(join(ks[1:n], ", "), ", …")
+
+Base.show(io::IO, st::CPMState) =
+    print(io, "CPMState(", join(size(st.ownership), "×"), ", ", _count_words(_live_cells(st), "cell"), ")")
+function Base.show(io::IO, ::MIME"text/plain", st::CPMState)
+    print(io, "CPMState on a ", join(size(st.ownership), "×"), " lattice: ", _count_words(_live_cells(st), "cell"),
+        " in ", _count_words(length(st.cell.kind), "slot"))
+    for (part, nt) in (("cell", st.cell), ("site", st.site), ("model", st.model))
+        isempty(nt) || print(io, "\n  ", part, ": ", _names_words(collect(keys(nt))))
+    end
+end
+
+Base.show(io::IO, prob::PottsProblem) =
+    print(io, "PottsProblem(", join(prob.lattice.dims, "×"), ", ", _count_words(_live_cells(prob.u0), "cell"), ", tspan ", prob.tspan, ")")
+function Base.show(io::IO, ::MIME"text/plain", prob::PottsProblem)
+    print(io, "PottsProblem on a ", _lattice_words(prob.lattice), ": ", _count_words(_live_cells(prob.u0), "cell"),
+        ", tspan ", prob.tspan, ", seed ", Int(prob.seed))
+    print(io, "\n  u0: ")
+    show(io, prob.u0)
+    isempty(prob.kwargs) || print(io, "\n  solve keywords: ", join(keys(prob.kwargs), ", "))
+end
+
+Base.show(io::IO, integ::PottsIntegrator) =
+    print(io, "PottsIntegrator(", nameof(typeof(integ.alg)), ", ", join(integ.prob.lattice.dims, "×"), ", t = ", integ.t,
+        " of ", integ.tstop, ", ", integ.retcode, ")")
+function Base.show(io::IO, ::MIME"text/plain", integ::PottsIntegrator)
+    print(io, "PottsIntegrator on a ", _lattice_words(integ.prob.lattice), ": ", nameof(typeof(integ.alg)),
+        ", t = ", integ.t, " of ", integ.tstop, ", retcode ", integ.retcode)
+    print(io, "\n  state: ")
+    show(io, integ.state)
+end
 
 function (sol::PottsSolution)(t::Real; idxs = nothing)
     (isinteger(t) && !isempty(sol.t) && first(sol.t) <= t <= last(sol.t)) || throw(

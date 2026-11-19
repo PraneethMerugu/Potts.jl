@@ -130,6 +130,7 @@ Base.convert(::Type{ModelingToolkitBase.System}, c::CompiledPottsSystem) = throw
     )
 )
 
+Base.show(io::IO, c::CompiledPottsSystem) = (print(io, "Compiled"); show(io, getfield(c, :authored)))
 function Base.show(io::IO, ::MIME"text/plain", c::CompiledPottsSystem)
     print(io, "CompiledPottsSystem of ")
     return show(io, MIME"text/plain"(), getfield(c, :authored))
