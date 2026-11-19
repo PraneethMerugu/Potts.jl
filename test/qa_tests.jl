@@ -211,6 +211,7 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     :remake_function,
     :remake_parameters,
     :remake_state,
+    :check_initializealg, # `remake` hook: the model refuses an initialization algorithm it cannot apply
     :remake_tangent,      # `remake` hook: the Dual seeds of a remade problem (F3-21b)
     :ParameterTangent,    # a problem's parameters with derivative parts (F3-21b)
     :tangent_parameters,  # the Dual parameters after a write on a run with derivative parts (F3-21b r1)

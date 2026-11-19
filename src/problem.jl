@@ -1701,6 +1701,9 @@ function CorePotts.remake_state(info::PottsModelInfo, prob, u0, kw = prob.kwargs
     )
 end
 
+# an `initializealg` given to `remake` is one the model can apply
+CorePotts.check_initializealg(::PottsModelInfo, a) = (_init_options(a); nothing)
+
 # `kw`: the remade problem's keywords (its `initializealg`)
 function CorePotts.remake_state(info::PottsModelInfo, prob, u0::_SymbolicMap, kw = prob.kwargs)
     any(x -> _has_dual(last(x)), u0) && throw(

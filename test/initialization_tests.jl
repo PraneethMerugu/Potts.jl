@@ -579,6 +579,15 @@ end
     @test again.kwargs.initializealg === SB.NoInit() && ini_u0(Potts.SciMLBase.remake(again; u0 = op), :y) == [0.0, 0.0]
     @test ini_u0(Potts.SciMLBase.remake(base; u0 = op, initializealg = SB.NoInit()), :y) == [0.0, 0.0]
     @test ini_u0(Potts.SciMLBase.remake(none; u0 = op, initializealg = SB.OverrideInit()), :y) ≈ solved rtol = 1.0e-12
+    # `initializealg = nothing` is stored as the constructor stores it: not at all
+    reset = Potts.SciMLBase.remake(none; u0 = op, initializealg = nothing)
+    @test !haskey(reset.kwargs, :initializealg)
+    @test ini_u0(reset, :y) ≈ solved rtol = 1.0e-12
+    # a new algorithm needs a new `u0`; an unknown one is refused whenever it is given
+    @test_throws ArgumentError Potts.SciMLBase.remake(base; initializealg = SB.NoInit())
+    @test_throws ArgumentError Potts.SciMLBase.remake(base; kwargs = (; initializealg = SB.NoInit()))
+    @test_throws ArgumentError Potts.SciMLBase.remake(base; u0 = op, initializealg = :newton)
+    @test Potts.SciMLBase.remake(none; initializealg = SB.NoInit()).kwargs.initializealg === SB.NoInit()
     # at `init`/`solve`: the problem's own or `NoInit()` change nothing
     @test init(base, SequentialCPM(); initializealg = SB.NoInit()).t == 0
     @test solve(none, SequentialCPM(); initializealg = SB.NoInit()).retcode == SB.ReturnCode.Success

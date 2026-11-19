@@ -101,6 +101,8 @@ end
 # `remake` into the problem's parameter object and state (identity here).
 remake_parameters(sys, prob, p) = p
 remake_state(sys, prob, u0, kwargs = prob.kwargs) = u0
+# Hook for the symbolic layer: refuse an `initializealg` it cannot apply (accepted here)
+check_initializealg(sys, alg) = nothing
 # Hook for the symbolic layer: the `tangent` of a problem remade with the parameters `pgiven`
 # (as the user gave them; `pnew` the primal object `remake_parameters` made). Here: none.
 remake_tangent(sys, prob, pgiven, pnew) = nothing
@@ -211,7 +213,8 @@ object or a map (`[T => 5.0]`, also `[:T => 5.0]` for the fields of a `NamedTupl
 object). A `solve` keyword (`saveat = 10`) joins the problem's `kwargs`; `kwargs = (; …)`
 replaces them, but keeps the problem's `initializealg` unless they set one. `initializealg`
 is kept with the problem: a new `u0` is initialized with the given one, or else with the
-problem's. Other keywords are the symbolic layer's problem keywords (Potts: `field_solver`,
+problem's. A new `initializealg` needs a new `u0` (nothing else is initialized again); without
+one it is an `ArgumentError`. Other keywords are the symbolic layer's problem keywords (Potts: `field_solver`,
 `solvers`, …).
 """
 function SciMLBase.remake(
@@ -222,10 +225,27 @@ function SciMLBase.remake(
     solvekw = NamedTuple(k => v for (k, v) in rest if kept(k))
     other = NamedTuple(k => v for (k, v) in rest if !kept(k))
     base = kwargs === missing ? prob.kwargs : NamedTuple(kwargs)
+    given = merge(kwargs === missing ? (;) : base, solvekw)
+    haskey(given, :initializealg) && _remake_initializealg(prob, f, u0, given.initializealg)
     (haskey(prob.kwargs, :initializealg) && !haskey(base, :initializealg)) &&
         (base = merge(base, (; initializealg = prob.kwargs.initializealg)))
     kw = merge(base, solvekw)
+    # no algorithm is stored as the constructor stores it: not at all
+    (haskey(kw, :initializealg) && kw.initializealg === nothing) && (kw = _without_init(kw))
     return _remake(prob, f, u0, tspan, p, seed, replica, repeat, other, kw)
+end
+
+# a new `initializealg` at `remake`: a value the model can apply, and a new `u0` for it to
+# initialize (the problem's own is accepted as it is)
+function _remake_initializealg(prob, f, u0, a)
+    check_initializealg(f.sys, a)
+    (u0 === prob.u0 && !isequal(a, get(prob.kwargs, :initializealg, nothing))) && throw(
+        ArgumentError(
+            "remake: `initializealg` initializes a new state; give it with `u0` " *
+                "(`remake(prob; u0 = op, initializealg)`): without one, nothing would be initialized again"
+        )
+    )
+    return nothing
 end
 
 # `remake`, compiled once for every model (TS1c): specialized on the problem's type it was
