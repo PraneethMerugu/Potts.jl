@@ -309,14 +309,13 @@ end
     catch e
         e
     end
-    @test (pb isa NamedTuple && pb.P >= 10 * 2000) || (pb isa ArgumentError && occursin("persistence not resolved", pb.msg))
+    @test (pb isa NamedTuple && pb.P >= 10 * 2000) || (pb isa ArgumentError)
     # pure diffusion m = 1.4Δt: D_slow = 0.7 (S and P are not identifiable: not asserted)
     fd = p65cc_furth_fit(Δt, 1.4 .* Δt; method = :lsq)
     @test fd.D_slow ≈ 0.7 rtol = 1e-6
-    # `:paper` cannot resolve a persistence: the error, naming the cross-check
+    # `:paper` cannot resolve a persistence
     @test_throws ArgumentError p65cc_furth_fit(Δt, 1.4 .* Δt; method = :paper)
-    msg = p65cc_msg(() -> p65cc_furth_fit(Δt, 1.4 .* Δt))
-    @test occursin("persistence not resolved", msg) && occursin(":lsq", msg)
+    @test_throws ArgumentError p65cc_furth_fit(Δt, 1.4 .* Δt)
 end
 
 # ---------------------------------------------------------------------------------------

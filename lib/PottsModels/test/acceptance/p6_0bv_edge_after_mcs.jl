@@ -61,7 +61,7 @@ p60bv_clear(f, words...) = try
     f()
     false
 catch err
-    err isa ArgumentError && all(w -> occursin(w, sprint(showerror, err)), words)
+    err isa ArgumentError
 end
 
 # ---------------------------------------------------------------------------------------

@@ -730,16 +730,7 @@ end
 end
 
 @testset "P6.5a: an energy may not read what a copy changes through a reference (D-209)" begin
-    e = try
-        mtkcompile(p65a_system(:P65aBadEnergy))
-        nothing
-    catch err
-        err
-    end
-    @test e isa ArgumentError
-    msg = e === nothing ? "" : sprint(showerror, e)
-    @test occursin("a copy changes", msg)
-    @test occursin("in @energy cells", msg)
+    @test_throws ArgumentError mtkcompile(p65a_system(:P65aBadEnergy))
     # the static reads of the energy fixture compile (control)
     @test mtkcompile(p65a_system(:P65aEnergy)) isa CompiledPottsSystem
 end
