@@ -57,10 +57,10 @@ _is_coupling(l) = l isa SymbolicUtils.BasicSymbolic && !SymbolicUtils.isconst(l)
 # Operations MTK sees inside a template: plain functions (arithmetic, `exp`, comparisons,
 # `ifelse`, registered user functions). Potts' own operations (`gather`, `population`,
 # `cell_integral`, …), LatticePDE's reads `value_at` (a kind-table entry or a value at a
-# cell), operators (`Pre`) and `getindex` stand for a quantity MTK cannot express: the whole
-# call is an input (S-4: an input never indexes an array parameter inside a template).
-_template_op(op) = op isa Function && op !== getindex && op !== value_at && parentmodule(op) !== (@__MODULE__) &&
-                   !(op isa Union{Differential, Pre, ModelingToolkitBase.Shift, ModelingToolkitBase.Sample, ModelingToolkitBase.Hold})
+# cell), operators (`D`, `Pre`, `Shift`: SymbolicUtils operators, not functions) and
+# `getindex` stand for a quantity MTK cannot express: the whole call is an input (S-4: an
+# input never indexes an array parameter inside a template).
+_template_op(op) = op isa Function && op !== getindex && op !== value_at && parentmodule(op) !== (@__MODULE__)
 
 """
 The model's cell and model ODEs through `mtkcompile`: one template per scope that has
@@ -183,7 +183,14 @@ _walk_statement(f, x::Union{Num, SymbolicUtils.BasicSymbolic}) = _walk_all(f, x)
 _walk_statement(f, x::Equation) = (_walk_all(f, x.lhs); _walk_all(f, x.rhs))
 _walk_statement(f, x::Pair) = (_walk_statement(f, x.first); _walk_statement(f, x.second))
 _walk_statement(f, x::Union{AbstractArray, Tuple, NamedTuple}) = foreach(y -> _walk_statement(f, y), x)
-_walk_statement(f, ::Union{Number, Symbol, AbstractString, Nothing, Function, Module, DataType}) = nothing
+# (leaves: no symbolic value inside, and not walked field by field)
+_walk_statement(f, ::Number) = nothing
+_walk_statement(f, ::Symbol) = nothing
+_walk_statement(f, ::AbstractString) = nothing
+_walk_statement(f, ::Nothing) = nothing
+_walk_statement(f, ::Function) = nothing
+_walk_statement(f, ::Module) = nothing
+_walk_statement(f, ::DataType) = nothing
 function _walk_statement(f, x)
     isstructtype(typeof(x)) || return nothing
     foreach(n -> isdefined(x, n) && _walk_statement(f, getfield(x, n)), fieldnames(typeof(x)))

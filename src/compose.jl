@@ -131,13 +131,15 @@ for (M, n) in ((:JumpProcesses, :JumpProblem), ((:SciMLBase, n) for n in _REFUSE
     P = Expr(:., M, QuoteNode(n))
     msg = String(n)
     @eval begin
-        $P(::CompiledPottsSystem, ::_ProblemArg, args...; kw...) = throw(ArgumentError(_problem_msg($msg)))
-        $P{iip}(::CompiledPottsSystem, ::_ProblemArg, args...; kw...) where {iip} = throw(ArgumentError(_problem_msg($msg)))
-        $P{iip, spec}(::CompiledPottsSystem, ::_ProblemArg, args...; kw...) where {iip, spec} =
-            throw(ArgumentError(_problem_msg($msg)))
+        $P{iip}(::CompiledPottsSystem, args...; kw...) where {iip} = throw(ArgumentError(_problem_msg($msg)))
+        $P{iip, spec}(::CompiledPottsSystem, args...; kw...) where {iip, spec} = throw(ArgumentError(_problem_msg($msg)))
     end
+    n === :JumpProblem || @eval $P(::CompiledPottsSystem, args...; kw...) = throw(ArgumentError(_problem_msg($msg)))
 end
-SciMLBase.ODEProblem{iip, SciMLBase.FunctionWrapperSpecialize}(::CompiledPottsSystem, ::_ProblemArg, args...; kw...) where {iip} =
+JumpProcesses.JumpProblem(::CompiledPottsSystem, op, tspan::Tuple, args...; kw...) = throw(ArgumentError(_problem_msg("JumpProblem")))
+JumpProcesses.JumpProblem(::CompiledPottsSystem, op::Union{AbstractArray, AbstractDict, NamedTuple}; kw...) =
+    throw(ArgumentError(_problem_msg("JumpProblem")))
+SciMLBase.ODEProblem{iip, SciMLBase.FunctionWrapperSpecialize}(::CompiledPottsSystem, args...; kw...) where {iip} =
     throw(ArgumentError(_problem_msg("ODEProblem")))
 
 """

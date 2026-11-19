@@ -1138,11 +1138,11 @@ Base.show(io::IO, r::Local) = print(io, "Local(; gain = ", r.gain, ", adjacency 
 Base.show(io::IO, ::ArcOrPair) = print(io, "ArcOrPair()")
 Base.show(io::IO, r::Simple) = print(io, "Simple(; adjacency = ", repr(r.adjacency), ")")
 
-function _rule(who, r)
-    r isa Union{Local, ArcOrPair, Simple, Global} ||
-        throw(ArgumentError("$who: `rule` must be `Local()`, `ArcOrPair()`, `Simple()` or `Global()`, got $(repr(r))"))
-    return r
-end
+_rule(who, r::Local) = r
+_rule(who, r::ArcOrPair) = r
+_rule(who, r::Simple) = r
+_rule(who, r::Global) = r
+_rule(who, r) = throw(ArgumentError("$who: `rule` must be `Local()`, `ArcOrPair()`, `Simple()` or `Global()`, got $(repr(r))"))
 # the rule as a constant of the generated code: Local 0–3 (gain + 2 full), ArcOrPair 4, Simple
 # 5–6, Global 7 + full + 2 window (window `nothing` is 0)
 _rule_code(r::Local) = Int(r.gain) + 2 * Int(r.adjacency === :full)
@@ -2230,8 +2230,16 @@ function SciMLStructures.canonicalize(portion::Union{SciMLStructures.Tunable, Sc
     return buf, repack, false
 end
 
+# a plain number, as a problem's parameter object holds (not a ForwardDiff `Dual` or a
+# symbolic `Num`, which are `Real`s too)
+_plain_number(v) = false
+_plain_number(::AbstractFloat) = true
+_plain_number(::Integer) = true
+_plain_number(::Rational) = true
+_plain_number(::AbstractIrrational) = true
+
 function _cpm_value(::Type{T}, v, k::Symbol) where {T}
-    v isa Union{AbstractFloat, Integer, Rational, AbstractIrrational} ||
+    _plain_number(v) ||
         throw(
         ArgumentError(
             "SciMLStructures.replace: parameter `$k` = $v (a $(typeof(v))) is not a plain number: " *
