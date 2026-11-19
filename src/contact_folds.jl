@@ -72,12 +72,14 @@ end
 
 """The kind set of predicate `pred` over the kinds `0:nk-1` (bit `k`: kind `k` counts)."""
 function _fold_mask(pred, nk::Integer, name)
-    nk <= 64 || throw(ArgumentError("`count(… for _ in contacts)` supports models with at most 63 cell kinds"))
+    nk <= 64 || throw(PottsCompileError("`count(… for _ in contacts)` supports models with at most 63 cell kinds"))
     m = UInt64(0)
     for k in 0:(nk - 1)
         v = pred isa Bool ? pred : _unwrap(Symbolics.substitute(pred, Dict{Any, Any}(_unwrap(B.neighbor_kind) => k); fold = Val(true)))
         v isa SymbolicUtils.BasicSymbolic && SymbolicUtils.isconst(v) && (v = SymbolicUtils.unwrap_const(v))
-        v isa Bool || throw(ArgumentError("`count(pred for _ in contacts)` (`$name`): the predicate is not true or " *
+        v isa Bool || throw(
+            PottsCompileError(
+                "`count(pred for _ in contacts)` (`$name`): the predicate is not true or " *
                                           "false for partner kind $k (it gives `$v`)"))
         v && (m |= UInt64(1) << k)
     end
@@ -124,10 +126,11 @@ function _check_contact_folds(sys::PottsSystem, relations, contact_spec, lat)
     _may_have(sys, :folds) || return none
     folds = _contact_folds(sys)
     isempty(folds) && return none
-    haskey(relations, :contact_counts) && throw(ArgumentError("the relation name `contact_counts` is reserved"))
+    haskey(relations, :contact_counts) && throw(PottsCompileError("the relation name `contact_counts` is reserved"))
     _walk(_p(sys, :sweep).temperature) do y
         i = info(y)
-        i !== nothing && i.role === :contact_count && throw(ArgumentError(
+        i !== nothing && i.role === :contact_count && throw(
+            PottsCompileError(
             "`count(… for _ in contacts)` is not available in the @sweep temperature: it is a cell quantity, exact " *
             "between sweeps, and the temperature is read during the sweep"))
     end
@@ -135,12 +138,17 @@ function _check_contact_folds(sys::PottsSystem, relations, contact_spec, lat)
     rad = 0
     trackers = Tuple{Symbol, Symbol, UInt64}[]
     for (name, rel, pred) in folds
-        rel === :contact || haskey(relations, rel) || throw(ArgumentError(
+        rel === :contact || haskey(relations, rel) || throw(
+            PottsCompileError(
             "`count(… for _ in contacts($rel))`: relation `$rel` is not declared in @relations"))
         r = CorePotts.relation(_fold_spec(rel, relations, contact_spec), lat)
-        CorePotts.has_origin(r) && throw(ArgumentError("`count(… for _ in contacts$(rel === :contact ? "" : "($rel)"))`: " *
+        CorePotts.has_origin(r) && throw(
+            PottsCompileError(
+                "`count(… for _ in contacts$(rel === :contact ? "" : "($rel)"))`: " *
                                                        "the relation includes the origin (a site is not its own partner)"))
-        CorePotts.is_symmetric(r) || throw(ArgumentError("`count(… for _ in contacts$(rel === :contact ? "" : "($rel)"))`: " *
+        CorePotts.is_symmetric(r) || throw(
+            PottsCompileError(
+                "`count(… for _ in contacts$(rel === :contact ? "" : "($rel)"))`: " *
                                                          "the relation is not symmetric (each offset needs its negation)"))
         push!(trackers, (name, rel, _fold_mask(pred, nk, name)))
         rad = max(rad, CorePotts.radius(r))

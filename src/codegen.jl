@@ -1239,7 +1239,7 @@ function CorePotts._run_phase(ph::_AdaptiveODE, st, p, ctx, key, mcs, backend, s
         end
         SciMLBase.solve!(integ)
         SciMLBase.successful_retcode(integ.sol) || throw(
-            ArgumentError(
+            PottsCompileError(
                 "Adaptive ODE integration failed at MCS $mcs" *
                     (c == 0 ? "" : " (cell $c)") * ": retcode $(integ.sol.retcode)"
             )

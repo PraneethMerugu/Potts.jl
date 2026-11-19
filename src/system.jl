@@ -552,7 +552,7 @@ function _check_robin_coefs(eq, N = 2)
     args = join(("t", ("x", "y", "z")[1:N]...), ", ")
     pde(s) = replace(_builtin_text(s), r"\b(\w+)\(t\)" => SubstitutionString("\\1($args)"))
     refuse(c, what) = throw(
-        ArgumentError(
+        PottsCompileError(
             string(
                 "the Robin coefficient `", pde(string(c)), "` reads `", what,
         "`; a Robin coefficient α or β is an expression of numbers, parameters, the coordinates `x`, `y`, `z` ",

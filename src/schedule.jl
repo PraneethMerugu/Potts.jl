@@ -105,135 +105,17 @@ function _to_snapshots(x, snap::Dict{Symbol, Any}, self)
     return _unwrap(Symbolics.substitute(y, Dict{Any, Any}(v => k for (k, v) in ints); fold = Val(false)))
 end
 
-const _POP_CELL_BIND = Set{Symbol}(
-    (
-        :volume, :surface, :kind, :id, :generation, :__cell, :birth, :euler, :euler_full,
-        :cluster, :cluster_volume, :cluster_surface,
-    )
-)
-const _POP_SITE_BIND = Set{Symbol}((:owner, :kind, :__site, :position, :site))
-
-_can_lower_literal(v) = v isa Union{Bool, Integer, Real} ||
-    (v isa Tuple && all(_can_lower_literal, v))
-
-_is_const_axis(x) = SymbolicUtils.isconst(_unwrap(x)) &&
-    (k = SymbolicUtils.unwrap_const(_unwrap(x)); k isa Integer && !(k isa Bool) && 1 <= Int(k) <= _LATTICE_N)
-
-function _has_cell_var(x)
-    found = false
-    _walk(y -> (i = info(y); i !== nothing && i.role === :cell && (found = true)), x)
-    return found
-end
-
-function _can_lower_ref_default(i::Entity)
-    get(i.options, :reference, false) === true && return true
-    v = i.default
-    (v isa Bool || (v isa Real && !_is_symbolic(v))) && return true
-    return v isa Union{Num, SymbolicUtils.BasicSymbolic} && (_param_only(v) || _param_only(v; kind = true))
-end
-
-function _can_lower_at(args, bound::Set{Symbol}, outers::Vector{Set{Symbol}}, rn)
-    x = _unwrap(args[1])
-    iscall(x) && operation(x) isa ModelingToolkitBase.Pre && (x = _unwrap(arguments(x)[1]))
-    iscall(x) && operation(x) === _nonzero &&
-        return _can_lower_at(Any[arguments(x)[1], args[2:end]...], bound, outers, rn)
-    if _is_site_position(x)
-        return length(args) == 2 && _can_lower_in(arguments(x)[2], bound, outers, rn) &&
-            _can_lower_in(args[2], bound, outers, rn)
-    end
-    i = info(x)
-    i === nothing && return false
-    if i.role !== :kindtable && length(args) == 2 && _is_ref(args[2])
-        _can_lower_in(args[2], bound, outers, rn) || return false
-        i.role === :cell && return _can_lower_ref_default(i)
-        i.role === :builtin || return false
-        n = i.name
-        return n in (:kind, :volume, :birth, :cluster, :surface, :generation, :euler, :euler_full) || n in _PIECES_NAMES
-    end
-    all(a -> _can_lower_in(a, bound, outers, rn), args[2:end]) || return false
-    i.role === :kindtable && return true
-    length(args) == 2 || return false
-    s = _sort(args[2])
-    if i.role === :site || i.role === :field
-        return s !== :cell
-    elseif i.role === :cell
-        return s !== :site
-    elseif i.role === :builtin
-        i.name === :owner && return true
-        i.name === :position && return s !== :site && (:position in bound)
-        i.name === :direction && return false
-        i.name === :kind && return s === :site || s === :cell
-        i.name in (:volume, :surface, :generation) && return true
-        (i.name === :birth || i.name in (:euler, :euler_full) || i.name in _PIECES_NAMES || i.name === :cluster) &&
-            return s !== :site
-    end
-    return false
-end
-
-function _can_lower_in(x, bound::Set{Symbol}, outers::Vector{Set{Symbol}}, rn)
-    x = _unwrap(x)
-    x isa SymbolicUtils.BasicSymbolic || return _can_lower_literal(x)
-    SymbolicUtils.isconst(x) && return _can_lower_literal(SymbolicUtils.unwrap_const(x))
-    i = info(x)
-    if i !== nothing && !(i.role in (:bound, :bound_cell, :bound_site))
-        r = i.role
-        r in (:param, :model) && return true
-        if r === :builtin || r === :delta
-            r === :builtin && i.name === :direction && return false
-            r === :builtin && i.name === :position && return :position in bound
-            return (r === :delta ? Symbol(:δ, i.name) : i.name) in bound
-        end
-        (r === :site || r === :field) && return :__site in bound
-        (r === :cell || r === :contact_count) && return :__cell in bound
-        return false
-    end
-    issym(x) && return i !== nothing
-    op = operation(x)
-    args = arguments(x)
-    (op === laplacian || op === copy_displacement || op === _connected) && return false
-    op === ismember && return _can_lower_in(args[1], bound, outers, rn)
-    op === value_at && return _can_lower_at(args, bound, outers, rn)
-    if op === population
-        ni = info(args[1])
-        ni === nothing && return false
-        inner = ni.role === :bound_cell ? union(bound, _POP_CELL_BIND, _PIECES_NAMES) : union(bound, _POP_SITE_BIND)
-        next_outers = pushfirst!(copy(outers), bound)
-        return _can_lower_in(args[3], inner, next_outers, rn) && _can_lower_in(args[2], inner, next_outers, rn)
-    end
-    if op === gather
-        _uses_builtin(args[2], :position) && return false
-        ni = info(args[1])
-        ni === nothing && return false
-        spec = ni.options.relation
-        (spec isa ShellRelation || spec isa RelationRef || haskey(rn, spec)) || return false
-        return _can_lower_in(args[2], bound, outers, rn) &&
-            _can_lower_in(args[4], bound, outers, rn) &&
-            _can_lower_in(args[3], bound, outers, rn)
-    end
-    op === outer_value && return !isempty(outers) && _can_lower_in(args[1], outers[1], outers[2:end], rn)
-    (op === cell_centroid || op === cell_integral || op === cluster_integral_sum) && return :__cell in bound
-    if op === ref_centroid || op === ref_separation
-        return _is_const_axis(args[end]) && all(a -> _can_lower_in(a, bound, outers, rn), args[1:(end - 1)])
-    end
-    op === axis_minimum_image && return !_PIECES_HEX[] && _is_const_axis(args[2]) && _can_lower_in(args[1], bound, outers, rn)
-    if op === history_lag
-        return (:mcs in bound) && !_has_cell_var(args[1]) &&
-            SymbolicUtils.isconst(_unwrap(args[2])) && SymbolicUtils.unwrap_const(_unwrap(args[2])) isa Integer &&
-            _can_lower_in(args[1], bound, outers, rn)
-    end
-    if op === random_uniform || op === random_normal || op === random_normal_above
-        (:__draw in bound) || return false
-        return op !== random_normal_above || all(a -> _can_lower_in(a, bound, outers, rn), args[2:4])
-    end
-    op === cell_alive && return _can_lower_in(args[1], bound, outers, rn)
-    op === cluster_sibling && return _can_lower_in(args[1], bound, outers, rn) && _can_lower_in(args[2], bound, outers, rn)
-    op === as_ref && return _can_lower_in(args[1], bound, outers, rn)
-    return all(a -> _can_lower_in(a, bound, outers, rn), args)
-end
-
 # Whether a population fold can be computed once, outside any cell or site (its body does
 # not read the enclosing entity).
-_hoistable(pop, rn) = _can_lower_in(pop, Set{Symbol}((:mcs, :__draw)), Set{Symbol}[], rn)
+function _hoistable(pop, rn)
+    try
+        lower(pop, _model_env(Float64, rn; key = :key))
+        return true
+    catch e
+        e isa PottsCompileError || rethrow()
+        return false
+    end
+end
 
 # Replace hoistable population folds in `x` by model slots (named `prefix1`, `prefix2`, … in
 # statement order and, within `x`, in canonical order (`_symkey`, D-107); equal folds share
@@ -253,7 +135,9 @@ function _hoist_populations(x, slots::Vector{Pair{Symbol, Any}}, rn, prefix::Sym
     length(pops) > 1 && (pops = pops[sortperm(map(_symkey, pops))])
     sub = Dict{Any, Any}()
     for p in pops
-        _hoistable(p, rn) || (strict ? throw(ArgumentError(
+        _hoistable(p, rn) || (
+            strict ? throw(
+                    PottsCompileError(
             "a population fold in an energy is computed once per MCS, so its body must not read " *
             "the current cell or site; got `$p`")) : continue)
         j = findfirst(s -> isequal(s.second, p), slots)
@@ -316,7 +200,9 @@ function _check_integral_pre(sys, u::Update, writers)
         bares = unique(first(r) for r in rs if !r[2])
         (isempty(pres) || isempty(bares)) && return
         _located(sys, u) do
-            throw(ArgumentError("`$(replace(string(y), r"\S*cell_integral" => "integral"))` reads $(join(pres, ", ")) through `Pre` (the values before the block) " *
+            throw(
+                PottsCompileError(
+                    "`$(replace(string(y), r"\S*cell_integral" => "integral"))` reads $(join(pres, ", ")) through `Pre` (the values before the block) " *
                                 "and $(join(bares, ", ")) bare (the block's new values), all written in the " *
                                 "same block; split it into `integral(…Pre…)` and `integral(…)` terms, or keep " *
                                 "`Pre(x)` in a site variable (`xp ~ Pre(x)`) and fold that"))
@@ -365,7 +251,9 @@ function _check_edge_block(sys, us)
             (n === me || !haskey(cadences, n)) && continue
             (pre && cadences[n] == Set((u.every,))) && continue
             _located(sys, u) do
-                throw(ArgumentError("the edge update of `$me` reads `$n`, which the same block writes " *
+                throw(
+                    PottsCompileError(
+                        "the edge update of `$me` reads `$n`, which the same block writes " *
                                     (pre ? "at another cadence" : "(a bare read is its new value)") *
                                     "; an edge update reads the edge variables its block writes only as " *
                                     "`Pre(x)`, written at the update's own cadence"))
@@ -404,7 +292,9 @@ function _edge_stage_ranks(sys, us, isedge)
             vars = sort!(unique([n for ((a, b), n) in why if a in left && b in left]))
             j = findfirst(i -> isedge[i] && _update_name(us[i]) in vars, eachindex(us))
             _located(sys, us[j]) do
-                throw(ArgumentError("the edge updates of $(join(("`$v`" for v in vars), ", ")) at cadences " *
+                throw(
+                    PottsCompileError(
+                        "the edge updates of $(join(("`$v`" for v in vars), ", ")) at cadences " *
                                     "$(join(("Every($c)" for c in sort(left)), ", ")) cannot run in declaration " *
                                     "order: each cadence's edge updates run together, and these writers alternate " *
                                     "between them; write each variable's updates at those cadences in the same order"))
@@ -460,7 +350,9 @@ function _schedule_block(sys, us::Vector{Update}, rn, popslots::Vector{Pair{Symb
         if state[j] == 1
             cyc = names[path[findfirst(==(j), path):end]]
             _located(sys, us[j]) do
-                throw(ArgumentError("updates depend on each other's new values in a cycle " *
+                throw(
+                    PottsCompileError(
+                        "updates depend on each other's new values in a cycle " *
                                     "($(join([cyc; names[j]], " → "))); read one of them through `Pre`"))
             end
         end

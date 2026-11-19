@@ -17,7 +17,7 @@ using CorePotts: CorePotts, Footprint, Lattice, embed, PottsProblem, Periodic, C
 using CorePotts: Metropolis, RandomPlane
 using JumpProcesses: JumpProcesses
 using KernelAbstractions: KernelAbstractions
-using LatticeFields: LatticeFields
+using LatticeFields: LatticeFields, isfatal
 using LatticeFields.Problems: ExplicitEuler, ExplicitMap, LatticeNewton, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, AbstractFieldAlgorithm,
                              substep_counts, steady_fields, field_series, field_report
 using LatticeFields.Solvers: LatticePCG, LatticeGMRES, LatticeMultigrid, LatticeBlockSolve, VCycle

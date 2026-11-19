@@ -163,7 +163,8 @@ function lower(x, env::LowerEnv)
     end
     # the E7 geometry helpers (D-243)
     if op === cluster_integral_sum
-        haskey(env.bind, :__cell) || throw(ArgumentError(
+        haskey(env.bind, :__cell) || throw(
+            PottsCompileError(
             "`integral(x; over = cluster)` is per cell (the sum over the cell's cluster): use it in cell updates, " *
             "division conditions or observed quantities, not in $(_MODE_NAMES[env.mode])"))
         y = _unwrap(args[1])
@@ -173,7 +174,8 @@ function lower(x, env::LowerEnv)
         name = op === ref_centroid ? "centroid(c, k)" : "separation(a, b)"
         # between sweeps (cell, model and site scope: updates, field equations, `@convert`
         # decisions, @observed); energies are refused before lowering (`_check_energy_geometry`)
-        env.mode in (:cell, :model, :site) || throw(ArgumentError(
+        env.mode in (:cell, :model, :site) || throw(
+            PottsCompileError(
             "`$name` reads cell centroids, which a copy changes: it is available between sweeps (cell and site " *
             "updates, field equations, division conditions and rules, @convert, @observed), not in $(_MODE_NAMES[env.mode])"))
         k = _literal_axis(op === ref_centroid ? "centroid" : "separation", args[end])
@@ -183,7 +185,7 @@ function lower(x, env::LowerEnv)
     end
     if op === axis_minimum_image
         k = _literal_axis("minimum_image", args[2])
-        _PIECES_HEX[] && throw(ArgumentError(_HEX_MINIMUM_IMAGE))
+        _PIECES_HEX[] && throw(PottsCompileError(_HEX_MINIMUM_IMAGE))
         return :(Potts._minimum_image_axis($(env.T), ctx.lattice, $(lower(args[1], env)), $k))
     end
     if op === history_lag
@@ -383,9 +385,9 @@ function _literal_axis(name, x)
     k = _unwrap(x)
     k isa SymbolicUtils.BasicSymbolic && SymbolicUtils.isconst(k) && (k = SymbolicUtils.unwrap_const(k))
     (k isa Real && !(k isa Bool) && isinteger(k)) ||
-        throw(ArgumentError("`$name`: the axis is a literal axis of the lattice (1, 2, …); got `$x`"))
+        throw(PottsCompileError("`$name`: the axis is a literal axis of the lattice (1, 2, …); got `$x`"))
     N = length(_LATTICE_DIMS[])
-    N == 0 || 1 <= k <= N || throw(ArgumentError("`$name`: axis `$k` is not an axis of the $(N)D lattice (a literal 1 to $N)"))
+    N == 0 || 1 <= k <= N || throw(PottsCompileError("`$name`: axis `$k` is not an axis of the $(N)D lattice (a literal 1 to $N)"))
     return Int(k)
 end
 const _HEX_MINIMUM_IMAGE = "`minimum_image` wraps one lattice axis, which is not a displacement on a hexagonal lattice " *
@@ -518,7 +520,9 @@ function _is_ref(x)
         br = arguments(x)[2:3]
         any(_is_ref, br) || return false
         for b in br
-            _is_cell_index(b) || throw(ArgumentError("`$(Symbolics.wrap(x))`: one branch of this `ifelse` is a " *
+            _is_cell_index(b) || throw(
+                PottsCompileError(
+                    "`$(Symbolics.wrap(x))`: one branch of this `ifelse` is a " *
                 "reference, so the other must be a cell too (a reference, `old`, `new`, `id`, `owner[s]`, " *
                 "`cluster`, or 0 for none); got `$(Symbolics.wrap(b))`"))
         end
@@ -759,7 +763,7 @@ function _lower_at(args, env)
         return :(Potts._position($(env.T), ctx, $(lower(arguments(x)[2], env)))[$(lower(args[2], env))])
     end
     i = info(x)
-    i === nothing && iscall(x) && _spatial_op(operation(x)) && throw(ArgumentError(_operator_read_text(x)))
+    i === nothing && iscall(x) && _spatial_op(operation(x)) && throw(PottsCompileError(_operator_read_text(x)))
     i === nothing && throw(PottsCompileError("cannot index `$(_standin_var(x))`"))
     # `x[ref]`: the referent's value, the medium's when it is dead or 0 (D-066 item 5)
     i.role !== :kindtable && length(args) == 2 && _is_ref(args[2]) && return _lower_deref(i, args[2], env)

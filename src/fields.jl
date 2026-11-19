@@ -167,7 +167,9 @@ function _field_term(x, cv)
                _unwrap(f(map(y -> Symbolics.wrap(_field_term(y, cv)), a)...))
     elseif f isa ModelingToolkitBase.Shift
         # a map's own left side (`Shift(t, 1)(m) ~ rhs`); on a right side it has no meaning
-        throw(ArgumentError("the term `$(_nopkg(_builtin_text(string(u))))` of a field equation reads `$(_nopkg(f))`: a " *
+        throw(
+            PottsCompileError(
+                "the term `$(_nopkg(_builtin_text(string(u))))` of a field equation reads `$(_nopkg(f))`: a " *
                             "`Shift` is the left side of a map, `Shift(t, 1)(m) ~ rhs` (the right side reads `m`, " *
                             "its value before the step)"))
     end
@@ -187,7 +189,9 @@ function _check_operand(u, f, y, cv)
     op = f isa Differential ? "Differential($(f.x))" : _nopkg(f)
     text(x) = (s = _nopkg(_builtin_text(string(x))); cv.kinds === nothing ? s : _bc_text(s, cv.kinds))
     w = text(v)
-    throw(ArgumentError("the term `$(text(u))` of a field equation applies `$op` to `$w`, a CPM value (a value the CPM " *
+    throw(
+        PottsCompileError(
+            "the term `$(text(u))` of a field equation applies `$op` to `$w`, a CPM value (a value the CPM " *
                         "writes once per MCS, not a field; an input of the PDESystem bound to `$w` is that value); a " *
                         "spatial operator applies to a field or site variable: hold the value in a site variable " *
                         "(`@variables v(site) = 0.0` and `@after_mcs v ~ $w` in the model), read it in the PDESystem as " *
@@ -204,7 +208,9 @@ function _check_axis(u, f, cv)
     w = _unwrap(f.x)
     any(v -> isequal(v, w), cv.ivs[2:end]) && return nothing
     axes = join(("`$(string(v))`" for v in cv.ivs[2:end]), ", ")
-    throw(ArgumentError("the term `$(_nopkg(_builtin_text(string(u))))` of a field equation differentiates along " *
+    throw(
+        PottsCompileError(
+            "the term `$(_nopkg(_builtin_text(string(u))))` of a field equation differentiates along " *
                         "`$(string(w))`, which is not a lattice axis; `Differential` takes an axis of the lattice: $axes"))
 end
 
@@ -237,10 +243,12 @@ function _has_cpm_fill(x)
 end
 
 function _filled_or_refuse(cv, u)
-    _has_op(u, random_uniform) && throw(ArgumentError(
+    _has_op(u, random_uniform) && throw(
+        PottsCompileError(
         "`rand()` in a field equation or condition: the field compiler steps fields with no draws; draw in a " *
         "site update (`@after_mcs s ~ rand()`) and bind the input to that variable"))
-    _reads_site_vars(u) && throw(ArgumentError(
+    _reads_site_vars(u) && throw(
+        PottsCompileError(
         "the term `$(_builtin_text(string(u)))` of a field equation reads a field or site variable inside a CPM " *
                 "read (a gather, a cell read, …); the field compiler lowers fields only through arithmetic, `laplacian`, " *
         "`ismember`, `ifelse` and kind tables: compute the CPM part in a site update and read the variable"))
@@ -281,7 +289,9 @@ function _refuse_input_words(cv, names, ps)
         what === nothing && continue
         src = e[1] === :domain__in ? "the lattice's domain mask" : e[1] === :kind__in ? "the site's kind" :
               "the CPM read `$w`"
-        throw(ArgumentError("the field equations read `$w` ($src), and `$w` is also $what of the model; " *
+        throw(
+            PottsCompileError(
+                "the field equations read `$w` ($src), and `$w` is also $what of the model; " *
                             "give the $(what[3:end]) another name"))
     end
     return nothing
@@ -371,7 +381,10 @@ function _steady_assign(sys::PottsSystem)
     picks, bad = LatticePDE.steady_choice([idx(r.ops) for r in reads], [idx(r.all) for r in reads], length(free))
     if bad != 0
         left = [info(free[k]).name for k in eachindex(free) if !(k in picks)]
-        throw(ArgumentError(string("`", rows[bad], "`: a steady row `0 ~ rhs` is solved for a field that it reads and that ",
+        throw(
+            PottsCompileError(
+                string(
+                    "`", rows[bad], "`: a steady row `0 ~ rhs` is solved for a field that it reads and that ",
             "has no other equation, and it reads none", isempty(left) ? " (every field has an equation)" :
             string(" of the fields with no equation (", join(("`$n`" for n in left), ", "), ")"),
                     "; write the field's operator into the row (`0 ~ D * laplacian(c) - k * c + …` for `c`)"
@@ -407,7 +420,7 @@ function _field_at_term(u, cv)
     f = haskey(cv.states, n) ? cv.states[n] : get(cv.direct, n, nothing)
     cut = f !== nothing && SymbolicUtils.getmetadata(f, LatticePDE.LatticeCutField, false) === true
     (haskey(cv.states, n) || cut) || throw(
-        ArgumentError(
+        PottsCompileError(
             string(
                 "`", _builtin_text(string(u)), "` reads the field `", n,
         "` of another solver group; a condition reads the field it sets (give the fields one solver)")))
@@ -418,7 +431,7 @@ function _field_at_term(u, cv)
         v = SymbolicUtils.isconst(w) ? SymbolicUtils.unwrap_const(w) : w
         v isa Real && return v
         throw(
-            ArgumentError(
+            PottsCompileError(
                 string(
                     "`", _builtin_text(string(u)), "` reads `", n, "` at `", y, "`; a field is read ",
             "at `t` and the coordinates, a face fixing one of them to a number (`", n, "(t, 0, y)`)")))
@@ -455,18 +468,18 @@ function _bcs_equation(sys, b, names, cv, core, ext, kinds, N, stepped)
     text = "`" * _bc_text(b, kinds) * "`"
     fields, pins = _bcs_reads(b, ext)
     isempty(fields) && throw(
-        ArgumentError(
+        PottsCompileError(
             "the condition $text reads no field: a condition sets a field (`c(t, 0, y) ~ v`, " *
                                            "`c ~ masked(pred, v)`)"))
     n = first(fields)
     n in stepped || throw(
-        ArgumentError(
+        PottsCompileError(
             "the condition $text sets `$n`, which has no equation " *
         "`Differential(t)($n($(join(("t", _AXIS_NAMES[1:N]...), ", ")))) ~ …` " *
         "(or map); a condition applies to a field the model steps"))
     n in names || return nothing                 # a field of another group: its own system
     any(p -> p[1] == 1, pins) && throw(
-        ArgumentError(
+        PottsCompileError(
             "the condition $text sets an initial value; a field's " *
         "initial value is its default (`@variables $n(..) = v`) or the operating point (`:$n => values`): " *
         "remove the condition"))
@@ -481,13 +494,13 @@ function _bcs_equation(sys, b, names, cv, core, ext, kinds, N, stepped)
         if periodic
             core.periodic[d] && (drop = true; break)    # the lattice's own pair
             throw(
-                ArgumentError(
+                PottsCompileError(
                     "the condition $text makes axis `$ax` of `$n` periodic, but the lattice closes " *
                 "`$ax`; periodicity is the lattice's, for every field (per-field periodicity is planned, FE-20): make " *
                 "the lattice periodic on `$ax`, or remove the condition"))
         end
         core.periodic[d] && throw(
-            ArgumentError(
+            PottsCompileError(
                 "the condition $text sets a face of axis `$ax`, which the " *
             "lattice makes periodic (per-field periodicity is planned, FE-20); close `$ax` on the lattice, or remove " *
             "the condition"))
@@ -497,7 +510,8 @@ function _bcs_equation(sys, b, names, cv, core, ext, kinds, N, stepped)
     # `K ~ laplacian(n)`) it would do nothing (F4-E14)
     if !periodic && !masked && !isempty(axes)
         any(f -> _has_spatial_op(f[2], n), _field_equations(sys)) || any(f -> _has_spatial_op(f[2], n), _field_aux(sys)) ||
-            throw(ArgumentError(
+            throw(
+            PottsCompileError(
                 "the condition $text sets a face of `$n`, which sets the ghost values of a spatial operator of `$n`, " *
                     "but the equation of `$n` has no `laplacian($n)` nor another spatial operator of `$n` (`DivKGrad(…)(K, $n)`, " *
             "`Advect(…)(u, $n)`, a raw flux `Differential(x)(K * Differential(x)($n))`), and no other field's " *

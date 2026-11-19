@@ -82,7 +82,7 @@ function _init_located(f, sys::PottsSystem, eq)
         ln = get(_p(sys, :sources), eq, nothing)
         loc = ln === nothing ? "" : " at $(ln.file):$(ln.line)"
         msg = "$(e.msg)\n  in @initialization_equations $eq$loc"
-        throw(e isa PottsCompileError ? PottsCompileError(msg) : ArgumentError(msg))
+        throw(PottsCompileError(msg))
     end
 end
 
@@ -176,7 +176,9 @@ function _check_init_reads(x, what)
                 args = arguments(y)
                 all(_own_kind, args[2:end]) && return
                 n = info(_unwrap(args[1])).name
-                throw(ArgumentError("$what reads the kind table `$n` at `$(join(args[2:end], ", "))`; in initialization " *
+                throw(
+                    PottsCompileError(
+                        "$what reads the kind table `$n` at `$(join(args[2:end], ", "))`; in initialization " *
                                     "equations a kind table is read at the cell's own kind (`$n[kind]`, or " *
                                     "`$n[kind, kind]` for a matrix); $(_INIT_LOCAL)"))
             end
@@ -184,32 +186,40 @@ function _check_init_reads(x, what)
             if i !== nothing
                 (i.role in _ODE_SCOPES || i.role === :param) && return
                 i.role === :builtin && i.name in _INIT_BUILTINS && return
-                i.role === :kindtable && throw(ArgumentError(
+                i.role === :kindtable && throw(
+                    PottsCompileError(
                     "$what reads the kind table `$(i.name)` as a whole; read it at the cell's own kind (`$(i.name)[kind]`)"))
-                i.role in (:site, :field, :edge) && throw(ArgumentError(
+                i.role in (:site, :field, :edge) && throw(
+                    PottsCompileError(
                     "$what reads the $(i.role) variable `$(i.name)`; $(_INIT_LOCAL). Initialization of site, field " *
                     "and edge variables reads across entities and is planned (P6.4a)"))
-                i.role === :builtin && throw(ArgumentError(
+                i.role === :builtin && throw(
+                    PottsCompileError(
                     "$what reads the built-in `$(i.name)`, which has no value at initialization; $(_INIT_LOCAL)"))
-                throw(ArgumentError("$what reads `$(i.name)` (a $(i.role) quantity); $(_INIT_LOCAL)"))
+                throw(PottsCompileError("$what reads `$(i.name)` (a $(i.role) quantity); $(_INIT_LOCAL)"))
             end
             if !iscall(y)
                 SymbolicUtils.isconst(y) && return
-                throw(ArgumentError("$what reads `$y`, which is not a quantity of the model; $(_INIT_LOCAL)"))
+                throw(PottsCompileError("$what reads `$y`, which is not a quantity of the model; $(_INIT_LOCAL)"))
             end
             op = operation(y)
             op isa Differential && return                    # checked with its rate (`_init_with_rates`)
             _template_op(op) && return
-            op isa Function || throw(ArgumentError(
+            op isa Function || throw(
+                PottsCompileError(
                 "$what reads `$y`, which is not a cell or model variable of the model (a component's variables are " *
                 "initialized by the component); $(_INIT_LOCAL)"))
             if op === value_at
                 v = info(_unwrap(arguments(y)[1]))
                 n = v === nothing ? string(arguments(y)[1]) : string(v.name)
-                throw(ArgumentError("$what reads `$n` of another cell (`$y`); $(_INIT_LOCAL). Cross-entity " *
+                throw(
+                    PottsCompileError(
+                        "$what reads `$n` of another cell (`$y`); $(_INIT_LOCAL). Cross-entity " *
                                     "initialization is planned (P6.4a)"))
             end
-            throw(ArgumentError("$what reads `$y`, which reads across entities (a neighbor gather, a fold over " *
+            throw(
+                PottsCompileError(
+                    "$what reads `$y`, which reads across entities (a neighbor gather, a fold over " *
                                 "cells, an integral, a draw or a previous value); $(_INIT_LOCAL). Cross-entity " *
                                 "initialization is planned (P6.4a)"))
         end
@@ -226,7 +236,8 @@ function _init_with_rates(eq::Equation, rates, what)
             a = _unwrap(arguments(y)[1])
             i = info(a)
             dx = "D($(i === nothing ? a : i.name))"
-            (i !== nothing && i.role in _ODE_SCOPES && haskey(rates, i.name)) || throw(ArgumentError(
+            (i !== nothing && i.role in _ODE_SCOPES && haskey(rates, i.name)) || throw(
+                PottsCompileError(
                 "$what reads `$dx`, but `$(i === nothing ? a : i.name)` has no ODE; `D(x)` is read for a cell or model " *
                 "variable `x` with an ODE `D(x) ~ rate` in @equations"))
             r = rates[i.name][2]
@@ -467,7 +478,7 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
         ModelingToolkitBase.InitializationProblem(ModelingToolkitBase.complete(isys), 0.0, Dict{Any, Any}(zip(params, vals(1)));
             guesses = Dict{Any, Any}(zip(free, gs)), fully_determined = true, use_scc = false)
     catch e
-        e isa Union{ArgumentError, InterruptException, StackOverflowError, OutOfMemoryError} && rethrow()
+        (isfatal(e) || e isa ArgumentError) && rethrow()
         throw(ArgumentError("initialization of $where_: ModelingToolkit could not build the initialization problem for " *
                             "$names: $(first(sprint(showerror, e), 2000))"))
     end
@@ -513,7 +524,7 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
     solving(f, k) = try
         f()
     catch e
-        e isa Union{InterruptException, StackOverflowError, OutOfMemoryError, ArgumentError} && rethrow()
+        (isfatal(e) || e isa ArgumentError) && rethrow()
         failed(k, "the solve failed: $(first(sprint(showerror, e), 300))")
     end
     for k in 1:n
@@ -694,10 +705,12 @@ end
 
 # the size of the terms of each condition at (`p`, `x`)
 function _init_scales(c::_InitCheck, p, x)
+    # User functions inside initialization conditions can throw DomainError, BoundsError,
+    # MethodError, etc.; return zeros so the scale probe never fails.
     try
         _init_eval!(c, p, x)
     catch e
-        e isa Union{DomainError, DivideError, InexactError} || rethrow()
+        isfatal(e) && rethrow()
         return zeros(length(c.rows))
     end
     return Float64[c.m[l] + c.m[r] for (l, r) in c.rows]
@@ -705,10 +718,11 @@ end
 
 """The first condition not satisfied at (`p`, `x`): (row, residual, size of its terms), or `nothing`."""
 function _init_residual(c::_InitCheck, p, x)
+    # Treat any non-fatal evaluation failure in user expressions as unsatisfied.
     try
         _init_eval!(c, p, x)
     catch e
-        e isa Union{DomainError, DivideError, InexactError} || rethrow()
+        isfatal(e) && rethrow()
         return (1, NaN, NaN)
     end
     for (q, (l, r)) in enumerate(c.rows)
@@ -783,6 +797,7 @@ function _init_accept(c::_InitCheck, p, x, g)
     isfinite(bad[2]) || return bad
     n = length(x)
     J = zeros(n, n)
+    # SingularException, LAPACKException, or user-function evaluation errors reject the candidate.
     δ = try
         _init_jacobian!(J, c, p, x, g)
         _init_eval!(c, p, x)
@@ -790,7 +805,7 @@ function _init_accept(c::_InitCheck, p, x, g)
         _init_flat!(copy(J)) && return bad
         J \ r
     catch e
-        e isa Union{DomainError, DivideError, InexactError} || rethrow()
+        isfatal(e) && rethrow()
         return bad
     end
     # against the value itself (a large guess must not loosen it), floored far below the guess
@@ -805,10 +820,11 @@ is refused rather than one of many returned.
 function _init_singular(c::_InitCheck, p, x, g)
     n = length(x)
     J = zeros(n, n)
+    # User-function evaluation errors mean the derivative cannot be judged here.
     try
         _init_jacobian!(J, c, p, x, g)
     catch e
-        e isa Union{DomainError, DivideError, InexactError} || rethrow()
+        isfatal(e) && rethrow()
         return false                                    # not evaluable beside the solution: not judged
     end
     return _init_flat!(J)

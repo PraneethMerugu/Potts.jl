@@ -206,15 +206,15 @@ function _check_names(x, allowed, what; between_copies::Bool = false)
     end
     for n in _bare_builtins(x)
         n === :neighbor_site && !(n in allowed) &&
-            throw(ArgumentError("a primed site variable `x′` (its value at the pair's other site) is only available in contact terms, not in $what"))
-        n in allowed || throw(ArgumentError("`$n` is not available in $what (available: $(join(_visible(allowed), ", ")); index `owner`, `kind`, `volume` explicitly, e.g. `kind[new]`)"))
+            throw(PottsCompileError("a primed site variable `x′` (its value at the pair's other site) is only available in contact terms, not in $what"))
+        n in allowed || throw(PottsCompileError("`$n` is not available in $what (available: $(join(_visible(allowed), ", ")); index `owner`, `kind`, `volume` explicitly, e.g. `kind[new]`)"))
     end
     for (r, n) in _uses(x)
         r === :builtin && !(n in allowed) && !(n in _INDEXABLE) &&
-            throw(ArgumentError("`$n` is not available in $what (available: $(join(_visible(allowed), ", ")))"))
+            throw(PottsCompileError("`$n` is not available in $what (available: $(join(_visible(allowed), ", ")))"))
         # a contact fold (D-150) is a cell quantity read between sweeps
         r === :contact_count && !(between_copies && :volume in allowed) && throw(
-            ArgumentError(
+            PottsCompileError(
                 "`count(… for _ in contacts)` is not available in $what: it is a cell quantity, exact between " *
                     "sweeps, for cell updates and equations, division conditions and rules, and cell observed quantities"
             )
@@ -229,9 +229,9 @@ function _relationships(sys::PottsSystem)
     rels = _p(sys, :relationships)
     names = [r.name for r in rels]
     for (i, n) in enumerate(names)
-        n in view(names, 1:(i - 1)) && throw(ArgumentError("@relationship `$n` is declared twice"))
+        n in view(names, 1:(i - 1)) && throw(PottsCompileError("@relationship `$n` is declared twice"))
         n in SCOPES && throw(
-            ArgumentError(
+            PottsCompileError(
                 "@relationship `$n`: the name is a variable scope " *
                     "($(join(SCOPES, ", "))); choose another"
             )
@@ -244,9 +244,9 @@ function _relationships(sys::PottsSystem)
         i.role === :edge || continue
         r = get(i.options, :relationship, nothing)
         if r === nothing
-            isempty(names) && throw(ArgumentError("edge variable `$(i.name)` needs a @relationship"))
+            isempty(names) && throw(PottsCompileError("edge variable `$(i.name)` needs a @relationship"))
             length(names) == 1 || throw(
-                ArgumentError(
+                PottsCompileError(
                     "edge variable `$(i.name)(edge)` is ambiguous: the model has relationships " *
                         "$(join(names, ", ")); name one as its scope, e.g. `$(i.name)($(first(names)))`"
                 )
@@ -254,7 +254,7 @@ function _relationships(sys::PottsSystem)
             r = only(names)
         else
             r in names || throw(
-                ArgumentError(
+                PottsCompileError(
                     "variable `$(i.name)($r)`: `$r` is neither a scope ($(join(SCOPES, ", "))) nor a @relationship" *
                         (isempty(names) ? "" : " (the model has $(join(names, ", ")))")
                 )
@@ -271,7 +271,7 @@ end
 function _check_edge_vars(x, r, edge_rel, what)
     for (role, n) in _uses(x)
         role === :edge && edge_rel[n] !== r && throw(
-            ArgumentError(
+            PottsCompileError(
                 "$what reads `$n`, an edge variable of relationship `$(edge_rel[n])`"
             )
         )
@@ -343,14 +343,14 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
             d isa Union{CellDomain, EdgeDomain, ContactDomain} && _check_copy_reads(e.expr, d, copy_sites, copy_cells)
             _check_energy_refs(e.expr, d)
             if d isa CellDomain
-                0 in d.kinds && throw(ArgumentError("cells(…) cannot include the medium kind (kind 0); list only cell kinds"))
+                0 in d.kinds && throw(PottsCompileError("cells(…) cannot include the medium kind (kind 0); list only cell kinds"))
                 _check_names(e.expr, _CELL_ENERGY_BUILTINS, "a cell term")
                 push!(cell_terms, (_all_kinds(sys, d.kinds), e.expr))
             elseif d isa ClusterDomain
-                0 in d.kinds && throw(ArgumentError("clusters(…) cannot include the medium kind (kind 0); list only cell kinds"))
+                0 in d.kinds && throw(PottsCompileError("clusters(…) cannot include the medium kind (kind 0); list only cell kinds"))
                 _check_names(e.expr, _CLUSTER_BUILTINS, "a cluster term")
                 isempty(_gathers(e.expr)) || throw(
-                    ArgumentError(
+                    PottsCompileError(
                         "cluster terms reading neighbors are not supported; read neighbors in a `cells(…)` or `contacts` term instead"
                     )
                 )
@@ -362,7 +362,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
                 contact_terms[d.relation] = haskey(contact_terms, d.relation) ? contact_terms[d.relation] + E : E
             elseif d isa EdgeDomain
                 haskey(edge_vars, d.relationship) ||
-                    throw(ArgumentError("edges($(d.relationship)): no @relationship $(d.relationship)"))
+                    throw(PottsCompileError("edges($(d.relationship)): no @relationship $(d.relationship)"))
                 _check_names(e.expr, _EDGE_BUILTINS, "an edge term")
                 _check_static(_strip_populations(e.expr)[1], "an edge term")
                 _check_edge_vars(e.expr, d.relationship, edge_rel, "edges($(d.relationship))")
@@ -371,13 +371,13 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
                 _check_names(e.expr, _SITE_BUILTINS, "a site term")
                 _check_static(_strip_populations(e.expr)[1], "a site term")
                 isempty(_gathers(e.expr)) || throw(
-                    ArgumentError(
+                    PottsCompileError(
                         "site terms reading neighbors are not supported yet; use a `contacts` term or snapshot in `@before_mcs`/`@after_mcs`"
                     )
                 )
                 push!(site_terms, e.expr)
             else
-                throw(ArgumentError("unknown energy domain `$d`; expected `cells(…)`, `clusters(…)`, `contacts(…)`, `edges(…)` or `sites`"))
+                throw(PottsCompileError("unknown energy domain `$d`; expected `cells(…)`, `clusters(…)`, `contacts(…)`, `edges(…)` or `sites`"))
             end
         end
     end
@@ -401,7 +401,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
         end
         any(E -> any(==((i.role, i.name)), _uses(E)), readers) && _located(sys, u) do
             throw(
-                ArgumentError(
+                PottsCompileError(
                     "an energy reads `$(i.name)`, which this on-copy update writes; ΔH applies the " *
                         "write only for cell terms reading `$(i.name)[new]`/`[old]`, and site and contact terms " *
                         "reading a site variable written at the target"
@@ -429,12 +429,12 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
         lhs = _unwrap(u.eq.lhs)
         scope = _located(sys, u) do
             if u.phase === :on_copy
-                (iscall(lhs) && (operation(lhs) === value_at && length(arguments(lhs)) == 2)) || throw(ArgumentError("@on_copy updates assign at a site or cell, e.g. `act[target] ~ …`"))
-                u.every == 1 || throw(ArgumentError("`Every` does not apply to @on_copy updates: they run at every accepted copy"))
+                (iscall(lhs) && (operation(lhs) === value_at && length(arguments(lhs)) == 2)) || throw(PottsCompileError("@on_copy updates assign at a site or cell, e.g. `act[target] ~ …`"))
+                u.every == 1 || throw(PottsCompileError("`Every` does not apply to @on_copy updates: they run at every accepted copy"))
                 _check_names(u.eq.rhs, _PROPOSAL_BUILTINS, "an on-copy update")
                 _check_ref_sources(u.eq.rhs, "on-copy updates")
                 _is_ref(arguments(lhs)[2]) && throw(
-                    ArgumentError(
+                    PottsCompileError(
                         "@on_copy writes `$(_indexed_string(lhs))` through a reference; an on-copy update writes at the copy's " *
                             "cells or sites (`x[new]`, `x[old]`, `x[target]`)"
                     )
@@ -443,17 +443,17 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
                 :proposal
             else
                 i = info(lhs)
-                (i !== nothing && i.role in SCOPES) || throw(ArgumentError("update target `$lhs` is not a declared variable"))
+                (i !== nothing && i.role in SCOPES) || throw(PottsCompileError("update target `$lhs` is not a declared variable"))
                 if i.role === :edge
                     # once per existing link, in the environment of `edges(rel)` and `@unlink` (D-169)
                     _check_names(u.eq.rhs, _LINK_BUILTINS, "an edge update"; between_copies = true)
                     _has_op(u.eq.rhs, random_uniform) && throw(
-                        ArgumentError(
+                        PottsCompileError(
                             "`rand()` is not available in an edge update: draws are not addressed per link"
                         )
                     )
                     (_has_op(u.eq.rhs, random_normal) || _has_op(u.eq.rhs, random_normal_above)) && throw(
-                        ArgumentError(
+                        PottsCompileError(
                             "`randn()` is not available in an edge update: draws are not addressed per link"
                         )
                     )
@@ -484,7 +484,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
                 x, kind = fl
                 n = info(x).name
                 haskey(derivatives, n) && throw(
-                    ArgumentError(
+                    PottsCompileError(
                         "`$n` is already given by `$(derivatives[n])`; one equation per field"
                     )
                 )
@@ -499,16 +499,16 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
             steady = fl !== nothing && fl[3] === :steady
             steady || (iscall(lhs) && operation(lhs) isa Differential) ||
                 throw(
-                ArgumentError(
+                PottsCompileError(
                     "equations are `D(x) ~ rhs` (a rate), `Shift(t, 1)(m) ~ rhs` (a map of a field), " *
                         "`K ~ rhs` (a field defined by its value) or `0 ~ rhs` (a steady field); got $eq"
                 )
             )
             x = steady ? fl[1] : arguments(lhs)[1]
             i = info(x)
-            i === nothing && throw(ArgumentError("`$x` is not a declared variable; declare it in `@variables`"))
+            i === nothing && throw(PottsCompileError("`$x` is not a declared variable; declare it in `@variables`"))
             haskey(derivatives, i.name) && throw(
-                ArgumentError(
+                PottsCompileError(
                     "`D($(i.name))` is already given by `$(derivatives[i.name])`; one equation per variable (add the terms)"
                 )
             )
@@ -524,7 +524,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
                 _check_names(eq.rhs, (:mcs, :time), "a model equation"; between_copies = true)
                 push!(model_odes, (x, eq.rhs))
             else
-                throw(ArgumentError("equations are for field, site, cell and model variables; `$x` is $(i.role)"))
+                throw(PottsCompileError("equations are for field, site, cell and model variables; `$x` is $(i.role)"))
             end
         end
     end
@@ -534,7 +534,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
             for (x, r) in d.rules
                 _is_ref_var(x) || continue
                 r isa Split && throw(
-                    ArgumentError(
+                    PottsCompileError(
                         "@divide: `$(info(x).name) => Split()` halves a number; " *
                             "`$(info(x).name)` is a reference (a `CellRef`)"
                     )
@@ -553,7 +553,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
     )
     both = intersect(domain_kinds(CellDomain), domain_kinds(ClusterDomain))
     isempty(both) || throw(
-        ArgumentError(
+        PottsCompileError(
             "kind$(length(both) == 1 ? "" : "s") " *
                 join(("`$(_p(sys, :kinds)[k + 1])`" for k in sort(both)), ", ") *
                 " divided by both @divide cells(…) and @divide clusters(…); a kind divides alone or with its cluster, not both"
@@ -562,7 +562,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
     for r in _p(sys, :link_rules)
         _located(sys, r) do
             haskey(edge_vars, r.relationship) ||
-                throw(ArgumentError("@$(r.action) $(r.relationship): no @relationship $(r.relationship)"))
+                throw(PottsCompileError("@$(r.action) $(r.relationship): no @relationship $(r.relationship)"))
             _check_names(r.when, _LINK_BUILTINS, "a link rule"; between_copies = true)
             _check_edge_vars(r.when, r.relationship, edge_rel, "@$(r.action) $(r.relationship)")
         end
@@ -588,7 +588,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
         k = (_target_key(u)..., u.every)
         haskey(writers, k) && _located(sys, u) do
             throw(
-                ArgumentError(
+                PottsCompileError(
                     "`$(u.eq.lhs)` is already written @$(u.phase)$(u.every == 1 ? "" : " Every($(u.every))") " *
                         "by `$(writers[k].eq)`; combine contributions with `+=` or in one equation"
                 )
@@ -619,14 +619,14 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
         # CorePotts reserves are run-context fields, so a relation may not take them (the
         # fingerprint resolves every relation the code reads by its context name, D-124)
         k in (:lattice, :mobility, :spacing) && throw(
-            ArgumentError(
+            PottsCompileError(
                 "relation names `contact`, `proposal`, `lattice`, `mobility`, `spacing` are reserved"
             )
         )
         k in (:contact, :proposal) || (relations[k] = v)
     end
     for r in keys(contact_terms)
-        r === :contact || haskey(relations, r) || throw(ArgumentError("contacts($r): relation `$r` is not declared in @relations"))
+        r === :contact || haskey(relations, r) || throw(PottsCompileError("contacts($r): relation `$r` is not declared in @relations"))
     end
     gather_names = Dict{Any, Symbol}()
     all_exprs = Any[
@@ -681,7 +681,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
         ]
     )
     (uses_pieces || uses_pieces_full) && !isempty(converts) && throw(
-        ArgumentError(
+        PottsCompileError(
             "@convert $(first(converts).name): cell-scope `pieces`/`largest_piece` trackers are not maintained by a " *
                 "conversion pass yet; a model with `@convert` cannot read them"
         )
@@ -826,29 +826,29 @@ function _check_converts(sys::PottsSystem)
     for v in _p(sys, :converts)
         _located(sys, v) do
             v.name in SCHEDULE_PHASES && throw(
-                ArgumentError(
+                PottsCompileError(
                     "@convert $(v.name): `$(v.name)` is a phase of the MCS (the phases are $(join(SCHEDULE_PHASES, ", "))); " *
                         "name the pass otherwise"
                 )
             )
-            v.name in seen && throw(ArgumentError("@convert $(v.name): two passes are named `$(v.name)`; name each once"))
+            v.name in seen && throw(PottsCompileError("@convert $(v.name): two passes are named `$(v.name)`; name each once"))
             push!(seen, v.name)
             for k in v.domain.kinds
                 1 <= k < length(kinds) || throw(
-                    ArgumentError(
+                    PottsCompileError(
                         "@convert $(v.name): kind number $k is not a cell kind (cell kinds are 1:$(length(kinds) - 1))"
                     )
                 )
             end
             v.fresh == 0 || 1 <= v.fresh < length(kinds) || throw(
-                ArgumentError(
+                PottsCompileError(
                     "@convert $(v.name): `Fresh($(v.fresh))` is not a cell kind (cell kinds are 1:$(length(kinds) - 1))"
                 )
             )
             for x in _convert_exprs(v)
                 (_has_op(x, random_uniform) || _has_op(x, random_normal) || _has_op(x, random_normal_above)) &&
                     throw(
-                    ArgumentError(
+                    PottsCompileError(
                         "@convert $(v.name): `rand()`/`randn()` are not available in a conversion pass " *
                             "(each candidate's draw is the pass's own, `u < p`)"
                     )
@@ -862,14 +862,14 @@ function _check_converts(sys::PottsSystem)
             for t in v.transfers
                 _check_names(t.per_site, (_CELL_BUILTINS..., :from, :to), "a transfer of @convert $(v.name)"; between_copies = true)
                 for r in (t.from, t.to)
-                    _is_ref(r) || throw(ArgumentError("@convert $(v.name): a transfer moves between cells, `from => to`; got `$r`"))
+                    _is_ref(r) || throw(PottsCompileError("@convert $(v.name): a transfer moves between cells, `from => to`; got `$r`"))
                 end
             end
             for (lhs, d) in v.writes
                 i = info(lhs)
                 if i !== nothing
                     i.role === :model || throw(
-                        ArgumentError(
+                        PottsCompileError(
                             "@convert $(v.name): `$(i.name) += …` writes a model variable; " *
                                 "write a cell variable at a cell, `$(i.name)[to] += …`"
                         )
@@ -881,14 +881,14 @@ function _check_converts(sys::PottsSystem)
                                 get(xi.options, :reference, false) !== true
                         )
                     ) || throw(
-                        ArgumentError(
+                        PottsCompileError(
                             "@convert $(v.name): a write adds to a model variable (`m += …`) or to a cell variable at a cell " *
                                 "(`x[to] += …`); got `$(_indexed_string(lhs))`"
                         )
                     )
                     _check_names(arguments(lhs)[2], _CONVERT_SITE_BUILTINS, "a write of @convert $(v.name)"; between_copies = true)
                     _is_ref(arguments(lhs)[2]) || throw(
-                        ArgumentError(
+                        PottsCompileError(
                             "@convert $(v.name): a write adds to a cell variable at a cell named by a reference (`from`, " *
                                 "`to`, `sibling(k)`, a `CellRef`); got `$(_indexed_string(lhs))`"
                         )
@@ -901,7 +901,7 @@ function _check_converts(sys::PottsSystem)
                 fz = _p(sys, :frozen_kinds)
                 ks = Int[v.fresh, (_implicit_fresh(r) for r in (v.from, v.to))..., v.domain.kinds...]
                 (_implicit_fresh(v.from) > 0 && _implicit_fresh(v.to) > 0 && !any(in(fz), ks)) || throw(
-                    ArgumentError(
+                    PottsCompileError(
                         "@convert $(v.name): with frozen kinds, `from` and `to` are `sibling(k)` of kinds that are not frozen " *
                             "(a conversion must not change the frozen sites)"
                     )
@@ -935,7 +935,7 @@ function _check_convert_order(v::ConvertSpec)
             i = info(y)
             (i !== nothing && i.role in (:cell, :model) && i.name in written) || return
             throw(
-                ArgumentError(
+                PottsCompileError(
                     "@convert $(v.name): a transfer or write reads `$(i.name)`, which the pass itself " *
                         "transfers or writes; the value read would depend on the order of the parallel " *
                         "updates. Read a snapshot (`@after_mcs`) or another variable instead"
@@ -961,7 +961,7 @@ function _check_fields(sys::PottsSystem, rn)
     # a condition sets a stepped field (never dropped; F2 design §2.12)
     isempty(eqs) && !isempty(_p(sys, :bcs)) && _located(sys, _BcsLine(first(_p(sys, :bcs)))) do
         throw(
-            ArgumentError(
+            PottsCompileError(
                 string(
                     "the condition `", _bc_text(first(_p(sys, :bcs)), _p(sys, :kinds)), "` of `",
                     nameof(sys), "`: the model has no field equation (`Differential(t)(c(",
@@ -982,9 +982,11 @@ function _check_fields(sys::PottsSystem, rn)
     g = try
         _lower_field_group(sys, names, Float64; known, bound = false)
     catch e
-        e isa Union{ArgumentError, PottsCompileError} || rethrow()
         k = pop!(task_local_storage(), :lattice_equation, nothing)
+        e isa Union{ArgumentError, PottsCompileError, LatticeFields.IR.IRError} || rethrow()
         _located(() -> throw(e), sys, _field_equation_of(sys, k))
+    finally
+        delete!(task_local_storage(), :lattice_equation)
     end
     env = _site_env(Float64, :i, rn; mcs = :mcs, key = :key)
     foreach(e -> _fill_value(e[2], env), g.filled)
@@ -1023,7 +1025,7 @@ function _check_discrete_slots(sys)
         (i !== nothing && haskey(slots, i.name)) || continue
         _located(sys, s) do
             throw(
-                ArgumentError(
+                PottsCompileError(
                     "`$(i.name)` is a node of the discrete component `$(slots[i.name])`: only its ticks " *
                         "write it (no updates or equations for it)"
                 )
@@ -1040,7 +1042,7 @@ _all_kinds(sys::PottsSystem, kinds) = sort(unique(kinds)) == 1:(length(_p(sys, :
 # derived only for cell terms.
 function _check_static(x, what)
     for n in (:volume, :surface, :cluster_volume, :cluster_surface, :euler, :euler_full, _PIECES_NAMES...)
-        _uses_builtin(x, n) && throw(ArgumentError("`$n` changes with the copy; it can only appear in cell terms, not in $what"))
+        _uses_builtin(x, n) && throw(PottsCompileError("`$n` changes with the copy; it can only appear in cell terms, not in $what"))
     end
     return nothing
 end
@@ -1150,7 +1152,7 @@ function _indexed_string(x)
 end
 
 function _copy_read_error(s, bare, where)
-    bare === :reference && return ArgumentError(
+    bare === :reference && return PottsCompileError(
         "this energy reads `$s`$where through a reference, which a copy changes during the sweep; ΔH evaluates " *
             "the term only for the copy's two cells, so a change of the referent by another copy would be missing " *
             "from it. Through a reference a cell energy reads only what no copy changes: cell variables no @on_copy " *
@@ -1159,7 +1161,7 @@ function _copy_read_error(s, bare, where)
             "`v ~ $s`, read bare as `v` in the energy)"
     )
     hint = bare === nothing ? "" : " Read the cell's own value bare, as `$bare`: ΔH updates it for the copy's cells."
-    return ArgumentError(
+    return PottsCompileError(
         "this energy reads `$s`$where, which a copy changes; ΔH evaluates the term only where the copy acts " *
             "(its two cells with their own `volume`, `surface`, …; their links; the pairs at the target), so the " *
             "change would be missing from it.$hint A fold over a relation, its anchor and any explicit site in a " *
@@ -1195,7 +1197,7 @@ function _check_energy_refs(E, d)
     d isa CellDomain && return _check_ref_sources(E, "energies")
     (_mentions_refs(E) || _has_op(E, as_ref) || _has_op(E, cluster_sibling) || _has_op(E, outer_value)) &&
         throw(
-        ArgumentError(
+        PottsCompileError(
             "this energy reads a cell through a reference; references are read in cell energies " *
                 "(`cells(…) => …`), drives and constraints, not in $(_domain_string(d)) terms"
         )
@@ -1207,7 +1209,7 @@ end
 # of the cell scope (updates, division conditions and rules, `@observed`), not of the sweep
 function _check_ref_sources(x, what)
     (_has_op(x, cluster_sibling) || _has_op(x, outer_value)) && throw(
-        ArgumentError(
+        PottsCompileError(
             "`sibling(…)` and `members(…)` read every cell of a cluster, which a copy changes; they are available in " *
                 "cell updates, division conditions and rules and @observed, not in $what. Keep the reference in a " *
                 "`CellRef` variable updated between sweeps (`@after_mcs nuc ~ sibling(nucleus)`) and read through it"
@@ -1220,7 +1222,7 @@ end
 # (0: none), or a choice between them
 function _check_ref_value(name, x)
     _ref_valued(x) || throw(
-        ArgumentError(
+        PottsCompileError(
             "`$name` is a reference (a `CellRef`); it is written with a cell: another reference, `sibling(k)`, " *
                 "`root(cluster)`, `id`, `old`, `new`, `cluster`, a cell id or 0, or `ifelse` between them; got `$x`"
         )
@@ -1364,26 +1366,24 @@ function _located(f, sys::PottsSystem, x)
     try
         return f()
     catch e
-        e isa Union{ArgumentError, PottsCompileError} || rethrow()
+        e isa Union{ArgumentError, PottsCompileError, LatticeFields.IR.IRError} || rethrow()
         occursin("\n  in ", e.msg) && rethrow()
-        wrap(m) = throw(e isa PottsCompileError ? PottsCompileError(m) : ArgumentError(m))
+        wrap(m) = throw(e isa Union{PottsCompileError, LatticeFields.IR.IRError} ? PottsCompileError(m) : ArgumentError(m))
         ln = get(_p(sys, :sources), _source_key(x), nothing)
         loc = ln === nothing ? "" : " at $(ln.file):$(ln.line)"
         msg = _builtin_text(e.msg)
-        # a condition a PDESystem brought (`@fields`, `Potts.couple`) is named as its condition (F4-E10)
+        # a condition a PDESystem brought (`@fields`, `Potts.couple`) is named as its condition
         o = x isa _BcsLine ? _bcs_origin(sys, x.eq) : nothing
         if o !== nothing
             wrap(
                 string(
-                    "the PDESystem `", o, "`: ", msg, "\n  in the condition `",
+                    msg, "\n  in the condition `",
                     _bc_text(x.eq, _p(sys, :kinds)), "` of the PDESystem `", o, "`", loc
                 )
             )
         end
-        # (a condition with no recorded PDESystem, `PottsSystem(; bcs)`: the fields' PDESystem)
-        x isa _BcsLine && (msg = string("the fields' PDESystem: ", msg))
         # a field equation is named as the equation of its field in its PDESystem, as the user
-        # wrote it (`c(t, x, y)`; batch-end review (d), as F4-E10 names a condition)
+        # wrote it (`c(t, x, y)`)
         fl = x isa Equation ? _field_lhs(x, sys) : nothing
         if fl !== nothing && fl[1] !== nothing
             o = _bcs_origin(sys, x)
@@ -1574,9 +1574,9 @@ function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
         _located(sys, o) do
             _check_geometry(o.rhs, N; hex)
             _has_op(o.rhs, history_lag) &&
-                throw(ArgumentError("`Pre(x, k)` is not available in @observed; keep the lag in a variable updated @after_mcs"))
+                throw(PottsCompileError("`Pre(x, k)` is not available in @observed; keep the lag in a variable updated @after_mcs"))
             _has_op(o.rhs, random_uniform) &&
-                throw(ArgumentError("`rand()` is not available in @observed (observed quantities are pure functions of the state)"))
+                throw(PottsCompileError("`rand()` is not available in @observed (observed quantities are pure functions of the state)"))
         end
     end
     return nothing
@@ -1590,9 +1590,9 @@ Implemented by the DynamicQuantities extension; without it (or without units) a 
 """
 _check_units(sys) = nothing
 
-function _check_integral_pre_outside(x)
+function _check_integral_pre_outside(x, E::Type{<:Exception} = PottsCompileError)
     _integral_pre(x) && throw(
-        ArgumentError(
+        E(
             "`integral(Pre(x))` is only available in update blocks, where it folds the values before the " *
                 "block; elsewhere `Pre(x)` is the stored value. Keep it in a cell variable updated in " *
                 "the block (`s ~ integral(Pre(x))`), or write `integral(x)`"
@@ -1606,7 +1606,7 @@ end
 # an integral is refreshed only between sweeps.
 function _check_copy_integral(x, what; when = "every copy attempt")
     _has_op(x, cell_integral) && throw(
-        ArgumentError(
+        PottsCompileError(
             "`integral` is not available in $what: they are evaluated at $when, while an " *
                 "integral is refreshed only between sweeps. Keep it in a cell variable updated @before_mcs " *
                 "(`s ~ integral(x)`) and read `s[new]`, `s[old]`"
@@ -1621,7 +1621,7 @@ _bcs_exprs(sys::PottsSystem) = Any[x for b in _p(sys, :bcs) for x in (b.lhs, b.r
 
 _is_hex(sys) = core_lattice(_p(sys, :lattice)).geometry isa CorePotts.Hexagonal
 
-_energy_centroid_error(name) = ArgumentError(
+_energy_centroid_error(name) = PottsCompileError(
     "`$name` is not available in energies: a copy moves the centroids it " *
         "reads and that shift is not part of ΔH (D-032); read it in cell " *
         "updates or @observed, or use `displacement(c, k)` in a @drive"
@@ -1634,7 +1634,7 @@ function _check_energy_geometry(E)
     _has_op(E, ref_centroid) && throw(_energy_centroid_error("centroid"))
     _has_op(E, ref_separation) && throw(_energy_centroid_error("separation"))
     _has_op(E, cluster_integral_sum) && throw(
-        ArgumentError(
+        PottsCompileError(
             "`integral(x; over = cluster)` is not available in energies (it is refreshed once per MCS, so it has no ΔH)"
         )
     )
@@ -1650,15 +1650,15 @@ function _check_geometry(x, N; energy = false, hex = false)
         if op === ref_centroid || op === ref_separation || op === axis_minimum_image
             name = op === ref_centroid ? "centroid" : op === ref_separation ? "separation" : "minimum_image"
             energy && op !== axis_minimum_image && throw(_energy_centroid_error(name))
-            hex && op === axis_minimum_image && throw(ArgumentError(_HEX_MINIMUM_IMAGE))
+            hex && op === axis_minimum_image && throw(PottsCompileError(_HEX_MINIMUM_IMAGE))
             k = SymbolicUtils.unwrap_const(_unwrap(arguments(y)[end]))
             (k isa Real && isinteger(k) && 1 <= k <= N) ||
-                throw(ArgumentError("`$name`: axis `$k` is not an axis of the $(N)D lattice (a literal 1 to $N)"))
+                throw(PottsCompileError("`$name`: axis `$k` is not an axis of the $(N)D lattice (a literal 1 to $N)"))
             return
         end
         if op === cell_integral
             energy && throw(
-                ArgumentError(
+                PottsCompileError(
                     "`integral` is not available in energies (it is refreshed once per MCS, " *
                         "so it has no ΔH); write the site term in the energy instead"
                 )
@@ -1673,20 +1673,20 @@ function _check_geometry(x, N; energy = false, hex = false)
             name === nothing && return
             k = SymbolicUtils.unwrap_const(_unwrap(arguments(y)[2]))
             (k isa Real && isinteger(k) && 1 <= k <= N) ||
-                throw(ArgumentError("`$name`: the axis `k` is a literal axis of the $(N)D lattice (1 to $N); got `$k`"))
+                throw(PottsCompileError("`$name`: the axis `k` is a literal axis of the $(N)D lattice (1 to $N); got `$k`"))
             return
         end
         (op === cell_centroid || op === copy_displacement) || return
         name = op === cell_centroid ? "centroid" : "displacement"
         energy && throw(
-            ArgumentError(
+            PottsCompileError(
                 "`$name` is not available in energies (the copy's centroid shift " *
                     "is not part of ΔH); use `displacement(c, k)` in a @drive"
             )
         )
         k = SymbolicUtils.unwrap_const(_unwrap(arguments(y)[end]))
         (k isa Real && isinteger(k) && 1 <= k <= N) ||
-            throw(ArgumentError("`$name`: axis `$k` is not an axis of the $(N)D lattice (a literal 1 to $N)"))
+            throw(PottsCompileError("`$name`: axis `$k` is not an axis of the $(N)D lattice (a literal 1 to $N)"))
     end
     return nothing
 end

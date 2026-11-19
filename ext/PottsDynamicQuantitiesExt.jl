@@ -79,7 +79,7 @@ function _unit(label, x)
         msg = err isa ValidationError ? err.message : err isa DQ.DimensionError ?
               ": $(err.q1) and $(err.q2) are not dimensionally compatible." : nothing
         msg === nothing && rethrow()
-        throw(ArgumentError("units: in $label$msg"))
+        throw(Potts.PottsCompileError("units: in $label$msg"))
     end
 end
 
@@ -87,7 +87,7 @@ end
 _literal_zero(x) = (x isa Number && iszero(x)) || _iszeroconst(Symbolics.unwrap(x))
 
 function _require(label, u, want, what)
-    _same(u, want) || throw(ArgumentError("units: in $label, $what has units [$u], expected [$want]"))
+    _same(u, want) || throw(Potts.PottsCompileError("units: in $label, $what has units [$u], expected [$want]"))
     return nothing
 end
 
@@ -104,7 +104,8 @@ function Potts._check_units(sys::PottsSystem)
         if first_term === nothing
             first_term = (label, u)
         else
-            _same(u, first_term[2]) || throw(ArgumentError(
+            _same(u, first_term[2]) || throw(
+                Potts.PottsCompileError(
                 "units: the terms of H disagree: [$(first_term[2])] in $(first_term[1]), [$u] in $label"))
         end
     end
@@ -123,7 +124,7 @@ function Potts._check_units(sys::PottsSystem)
         q = DQ.dimension(r / _unit(label, x))
         pertime = q.time == -1 && all(f -> f === :time || iszero(getfield(q, f)), fieldnames(typeof(q)))
         (iszero(q) || pertime) ||
-            throw(ArgumentError("units: in $label, the rate has units [$r]; expected [$(_unit(label, x))] per unit of time"))
+            throw(Potts.PottsCompileError("units: in $label, the rate has units [$r]; expected [$(_unit(label, x))] per unit of time"))
     end
     for c in Potts._p(sys, :constraints)
         c.kind === :expr && _require(Potts._describe(c), _unit(Potts._describe(c), c.expr), UNITLESS, "the condition")

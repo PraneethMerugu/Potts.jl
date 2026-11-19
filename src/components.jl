@@ -30,20 +30,7 @@ struct ComponentSpec
     domain::Union{CellDomain, Symbol}           # a cell domain, or `:model`
 end
 
-_is_mtk_var(u) = u isa SymbolicUtils.BasicSymbolic && (
-    SymbolicUtils.issym(u) ||
-        (
-        iscall(u) && (
-            (
-                operation(u) === getindex && all(i -> SymbolicUtils.unwrap_const(_unwrap(i)) isa Integer, arguments(u)[2:end]) &&
-                    _is_mtk_var(arguments(u)[1])
-            ) ||
-                _is_mtk_var(operation(u))
-        )
-    )
-)
-
-_mtkname(x) = (u = _unwrap(x); _is_mtk_var(u) && info(u) === nothing ? _slot_name(u) : nothing)
+_mtkname(x) = (u = _unwrap(x); SymbolicIndexingInterface.hasname(u) && info(u) === nothing ? _slot_name(u) : nothing)
 
 """
 Name of an MTK variable as a Potts quantity: its name, or `z_i` for element `i` of an array
@@ -157,7 +144,9 @@ function _bind_components(sys::PottsSystem)
         pending = [(x, v) for (x, v) in bnd if ModelingToolkitBase.isparameter(x) && _reads_params_only(v)]
         while !isempty(pending)
             k = findfirst(((x, v),) -> all(u -> haskey(local_sub, u), _unwrap.(Symbolics.get_variables(v))), pending)
-            k === nothing && throw(ArgumentError("component `$(comp.name)`: the bindings " *
+            k === nothing && throw(
+                PottsCompileError(
+                    "component `$(comp.name)`: the bindings " *
                 join(("`$x = $v`" for (x, v) in pending), ", ") * " read one another in a cycle"))
             x, v = popat!(pending, k)
             nm = Symbol(comp.name, :₊, SymbolicIndexingInterface.getname(x))
@@ -173,7 +162,7 @@ function _bind_components(sys::PottsSystem)
             # one slot per discrete variable (and per older lag): the value of its latest tick
             for (x, standin) in zip(plan.slots, plan.standins)
                 nm = Symbol(comp.name, :₊, _slot_name(x))
-                haskey(names, nm) && throw(ArgumentError("component `$(comp.name)`: two discrete variables are both stored as `$nm`"))
+                haskey(names, nm) && throw(PottsCompileError("component `$(comp.name)`: two discrete variables are both stored as `$nm`"))
                 v = variable(only(Symbolics.@variables $nm(t)), scope; default = _element_default(ics, x))
                 push!(vars, v)
                 names[nm] = standin(_unwrap(v))
@@ -211,7 +200,7 @@ function _bind_components(sys::PottsSystem)
         for eq in ModelingToolkitBase.equations(cs)
             lhs = _unwrap(eq.lhs)
             (iscall(lhs) && operation(lhs) isa Differential) ||
-                throw(ArgumentError("component `$(comp.name)`: only explicit ODEs `D(x) ~ f` are supported; got $eq"))
+                throw(PottsCompileError("component `$(comp.name)`: only explicit ODEs `D(x) ~ f` are supported; got $eq"))
             x = local_sub[arguments(lhs)[1]]
             rhs = _unwrap(Symbolics.substitute(expand(eq.rhs), local_sub; fold = Val(false)))
             comp.domain isa CellDomain && !isempty(comp.domain.kinds) && (rhs = _unwrap(ifelse(_kind_in(comp.domain.kinds), Symbolics.wrap(rhs), 0.0)))
@@ -219,7 +208,9 @@ function _bind_components(sys::PottsSystem)
         end
     end
     for k in keys(couplings)
-        k in coupleable || throw(ArgumentError("@equations $k ~ …: `$k` is not a parameter of a component " *
+        k in coupleable || throw(
+            PottsCompileError(
+                "@equations $k ~ …: `$k` is not a parameter of a component " *
                                                "(component unknowns evolve by their own equations)"))
     end
     # couplings may read other components' state (`dec.k ~ clock.m`)
@@ -227,7 +218,7 @@ function _bind_components(sys::PottsSystem)
     function subst(x)
         isempty(unread) || _walk_all(x) do y
             n = _mtkname(y)
-            n !== nothing && haskey(unread, n) && throw(ArgumentError(unread[n]))
+            n !== nothing && haskey(unread, n) && throw(PottsCompileError(unread[n]))
         end
         return _substitute_names(x, names, slotnames_all)
     end
@@ -286,7 +277,9 @@ function _reject_ignored_features(comp)
                 "Potts advances cell ODEs once per MCS and never stops inside a step; write the stop as a Potts update (`@after_mcs`)"),
             ("assertions", collect(keys(ModelingToolkitBase.assertions(sys))),
                 "Potts does not check MTK assertions; write the check as a Potts update or a callback"))
-        isempty(items) || throw(ArgumentError("component `$(comp.name)`: MTK $field are not supported " *
+        isempty(items) || throw(
+            PottsCompileError(
+                "component `$(comp.name)`: MTK $field are not supported " *
                                               "(they would be ignored): $(what(items)); $why"))
     end
     return nothing
@@ -321,7 +314,9 @@ function _reject_coupled_bindings(comp, cs, couplings)
             m !== nothing && haskey(couplings, m) && !(m in touched) && push!(touched, m)
         end
         isempty(touched) && continue
-        throw(ArgumentError("component `$(comp.name)`: the MTK binding `$lhs = $rhs` touches the coupled " *
+        throw(
+            PottsCompileError(
+                "component `$(comp.name)`: the MTK binding `$lhs = $rhs` touches the coupled " *
                             "parameter$(length(touched) > 1 ? "s" : "") $(join(("`$c`" for c in touched), ", ")) " *
                             "(`@equations $(first(touched)) ~ …`); a coupled parameter has no value of its own for MTK " *
                             "to bind with. Write the expression inline in the component's equations instead, or give " *
@@ -369,13 +364,15 @@ function _reject_bindings(comp, cs, discrete::Bool, unread = Dict{Symbol, String
               "more than the component's parameters; Potts evaluates a binding of parameters (`k2 = 2k`, " *
               "`y(t) = 2k`) when a problem is built: give `$x` a value or an expression of parameters, or write " *
               "the expression inline in the component's equations"
-        reads(x) && throw(ArgumentError(msg))
+        reads(x) && throw(PottsCompileError(msg))
         u in observed || (unread[Symbol(comp.name, :₊, _slot_name(u))] = msg)
     end
     for (x, v) in ModelingToolkitBase.initial_conditions(cs)
         w = _unwrap(v)
         w isa SymbolicUtils.BasicSymbolic && !SymbolicUtils.isconst(w) && !(_reads_params_only(w) && !discrete) && reads(x) &&
-            throw(ArgumentError("component `$(comp.name)`: the initial value `$x => $v` is an expression that reads " *
+            throw(
+            PottsCompileError(
+                "component `$(comp.name)`: the initial value `$x => $v` is an expression that reads " *
                                 "more than the component's parameters; Potts evaluates an initial value of parameters " *
                                 "(`y => 2k`) when a problem is built (it does not run MTK initialization)"))
     end
@@ -392,7 +389,7 @@ function _fixpoint(f, x; n = 32)
         isequal(y, x) && return y
         x = y
     end
-    throw(ArgumentError("component observed equations are cyclic"))
+    throw(PottsCompileError("component observed equations are cyclic"))
 end
 
 # Substitute leaves that are MTK variables of components (no Potts metadata) by name.
@@ -457,13 +454,15 @@ failures become `ArgumentError`s naming the component.
 function _compile_discrete(comp)
     eqs = ModelingToolkitBase.equations(comp.system)
     for eq in eqs, side in (eq.lhs, eq.rhs)            # Sample/Hold first: they come with D(x)
-        _has_operator(side, Union{ModelingToolkitBase.Sample, ModelingToolkitBase.Hold}) && throw(ArgumentError(
+        _has_operator(side, Union{ModelingToolkitBase.Sample, ModelingToolkitBase.Hold}) && throw(
+            PottsCompileError(
             "component `$(comp.name)`: `Sample`/`Hold` are not supported (ModelingToolkitBase has no clock " *
             "partitioning); couple a continuous and a discrete component with `@equations` instead (the discrete " *
             "one samples at its tick, the continuous one holds the latest tick); got $eq"))
     end
     for eq in eqs, side in (eq.lhs, eq.rhs)
-        _has_operator(side, Differential) && throw(ArgumentError(
+        _has_operator(side, Differential) && throw(
+            PottsCompileError(
             "component `$(comp.name)`: a discrete (clocked, `Shift`) component cannot also have `D(x)` equations " *
             "(hybrid systems are not supported); make two components, one continuous and one discrete, " *
             "coupled with `@equations`; got $eq"))
@@ -472,17 +471,19 @@ function _compile_discrete(comp)
 end
 
 # ModelingToolkit's compile of a discrete component. Only errors ModelingToolkit raises become
-# `ArgumentError`s naming the component: an error raised in Potts' own code (a unit-check hook
+# `PottsCompileError`s naming the component: an error raised in Potts' own code (a unit-check hook
 # of an extension runs inside MTK's compile) is a Potts bug and propagates unchanged (P6.0k2 F4).
 function _mtk_compile_call(compile::F, comp) where {F}
     try
         return compile(comp.system)
     catch e
-        e isa Union{ArgumentError, InterruptException, StackOverflowError, OutOfMemoryError} && rethrow()
+        (isfatal(e) || e isa Union{ArgumentError, PottsCompileError}) && rethrow()
         _raised_in_potts(catch_backtrace()) && rethrow()
         hint = nameof(typeof(e)) === :ExtraVariablesSystemException ?
                "every discrete variable needs an update `x(k) ~ …`; " : ""
-        throw(ArgumentError("component `$(comp.name)`: $(hint)ModelingToolkit cannot compile this discrete system: " *
+        throw(
+            PottsCompileError(
+                "component `$(comp.name)`: $(hint)ModelingToolkit cannot compile this discrete system: " *
                             first(sprint(showerror, e), 600)))
     end
 end
@@ -517,12 +518,14 @@ function _discrete_plan(comp, cs, mcs_duration)
     for eq in ModelingToolkitBase.equations(cs)
         l = _unwrap(eq.lhs)
         (iscall(l) && operation(l) isa ModelingToolkitBase.Shift && operation(l).steps == 1 && arguments(l)[1] in unk) ||
-            throw(ArgumentError("component `$name`: `$eq` is not an explicit discrete update " *
+            throw(
+            PottsCompileError(
+                "component `$name`: `$eq` is not an explicit discrete update " *
                                 "(`x(k) ~ f(x(k - 1), …)`): an implicit rule or an algebraic loop of same-step reads"))
         src[arguments(l)[1]] = _unwrap(eq.rhs)
     end
     for u in unk
-        haskey(src, u) || throw(ArgumentError("component `$name`: unknown `$u` has no update"))
+        haskey(src, u) || throw(PottsCompileError("component `$name`: unknown `$u` has no update"))
     end
     obs = [o for o in ModelingToolkitBase.observed(cs) if !SymbolicUtils.is_array_shape(SymbolicUtils.shape(_unwrap(o.lhs)))]
     obsd = Dict{Any, Any}(_unwrap(o.lhs) => _unwrap(o.rhs) for o in obs)
@@ -534,7 +537,8 @@ function _discrete_plan(comp, cs, mcs_duration)
     for o in sort(obs; by = o -> string(_slot_name(o.lhs)))
         x = _unwrap(o.lhs)
         r = expand(o.rhs)
-        SymbolicUtils.symtype(x) === Bool && SymbolicUtils.symtype(r) !== Bool && throw(ArgumentError(
+        SymbolicUtils.symtype(x) === Bool && SymbolicUtils.symtype(r) !== Bool && throw(
+            PottsCompileError(
             "component `$name`: the Bool node `$x` has the non-Bool rule `$r`; write a Bool expression " *
             "(`&`, `|`, `!`, `xor`, comparisons, `ifelse` of Bools) or declare the node Real"))
         push!(slots, x)
@@ -550,7 +554,7 @@ function _discrete_plan(comp, cs, mcs_duration)
     end
     lags = Pair{Any, Int}[]
     for (ℓ, v) in src
-        haskey(slot_of, v) || throw(ArgumentError("component `$name`: the lag `$ℓ` holds `$v`, which is not a discrete variable"))
+        haskey(slot_of, v) || throw(PottsCompileError("component `$name`: the lag `$ℓ` holds `$v`, which is not a discrete variable"))
         push!(lags, ℓ => slot_of[v])
     end
     standins = [SymbolicUtils.symtype(x) === Bool ? (v -> _unwrap(_nonzero(Symbolics.wrap(v)))) : identity for x in slots]
@@ -594,20 +598,25 @@ function _clock_cadence(comp, cs, slots, mcs_duration)
         d = SymbolicUtils.getmetadata(_unwrap(x), ModelingToolkitBase.VariableTimeDomain, nothing)
         d === nothing || any(c -> isequal(c, d), clocks) || push!(clocks, d)
     end
-    length(clocks) <= 1 || throw(ArgumentError("component `$(comp.name)`: several clocks ($(join(clocks, ", "))); " *
+    length(clocks) <= 1 || throw(
+        PottsCompileError(
+            "component `$(comp.name)`: several clocks ($(join(clocks, ", "))); " *
                                                "a discrete component has one clock (put each clock in its own component)"))
     isempty(clocks) && return 1, 0
     c = only(clocks)
     c isa ModelingToolkitBase.IntegerSequence && return 1, 0
-    c isa SciMLBase.Clocks.PeriodicClock || throw(ArgumentError(
+    c isa SciMLBase.Clocks.PeriodicClock || throw(
+        PottsCompileError(
         "component `$(comp.name)`: clock $c is not supported; use `ShiftIndex(t, 0)` (one tick per MCS) or " *
         "`ShiftIndex(Clock(n * mcs_duration))`"))
     whole(x) = (r = round(x); isapprox(x, r; rtol = 1.0e-9, atol = 1.0e-12) ? Int(r) : nothing)
     n = whole(Float64(c.dt) / Float64(mcs_duration))
-    (n === nothing || n < 1) && throw(ArgumentError(
+    (n === nothing || n < 1) && throw(
+        PottsCompileError(
         "component `$(comp.name)`: the clock period $(c.dt) is not a whole number of MCS (mcs_duration = $mcs_duration)"))
     o = whole(Float64(c.phase) / Float64(mcs_duration))
-    (o === nothing || !(0 <= o < n)) && throw(ArgumentError(
+    (o === nothing || !(0 <= o < n)) && throw(
+        PottsCompileError(
         "component `$(comp.name)`: the clock phase $(c.phase) must be a whole number of MCS in [0, period)"))
     return n, o
 end
