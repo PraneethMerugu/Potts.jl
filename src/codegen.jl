@@ -1760,7 +1760,7 @@ function _convert_pass_fns(c::CompiledPottsSystem, T, v::ConvertSpec)
     decide = _rgf(:((st, p, ctx, key, mcs, i, from, to) -> begin
         $(v.at === true ? nothing : :($(lower(v.at, senv)) || return false))
         q = $T($(lower(v.p, senv)))
-                $(nan === nothing ? nothing : :(isnan(q) && CorePotts.bump!($(nan[1]), $(nan[2]))))
+        $(nan === nothing ? nothing : :(isnan(q) && CorePotts.bump!($(nan[1]), $(nan[2]))))
         u = CorePotts.uniform($T, CorePotts.draw(key, mcs, i, $stream)[1])
         # A NaN `p` converts nothing: `clamp` keeps NaN, and `u < NaN` is false (D-233 ruling 6).
         # Do not rewrite this test as `!(u >= q)`, which would convert every candidate of a NaN `p`.

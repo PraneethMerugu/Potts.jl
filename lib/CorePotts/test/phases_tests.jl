@@ -140,15 +140,15 @@ end
 @testset "transfer counters: host arrays count nothing; merge and restore" begin
     s = CorePotts.PottsStats()
     h = Int32[1, 2, 3]
-        g = CorePotts.to_host(s, h)
+    g = CorePotts.to_host(s, h)
     @test g == h && g !== h                                   # a copy, as `Array(a)`
-        @test CorePotts.counted_copy!(s, zeros(Int32, 3), h) == h
+    @test CorePotts.counted_copy!(s, zeros(Int32, 3), h) == h
     @test CorePotts._readback(s, h) == 1
     st = initial_state(Int32[1 0; 0 2], Int32[1, 1])
-        snap = CorePotts.snapshot(s, CorePotts.CPU(), st)
-        @test snap.ownership == st.ownership && snap.ownership !== st.ownership                   # independent (deepcopy)
-        @test CorePotts.adapt_host(s, (; a = h)).a === h         # host leaves kept, as `adapt(Array, …)`
-        CorePotts.sync!(s, CorePotts.CPU())
+    snap = CorePotts.snapshot(s, CorePotts.CPU(), st)
+    @test snap.ownership == st.ownership && snap.ownership !== st.ownership                   # independent (deepcopy)
+    @test CorePotts.adapt_host(s, (; a = h)).a === h         # host leaves kept, as `adapt(Array, …)`
+    CorePotts.sync!(s, CorePotts.CPU())
     @test (s.syncs, s.transfers, s.transfer_bytes) == (0, 0, 0)
     # the one counter (what a device copy calls)
     CorePotts._count_transfer!(s, 1, 2, 12)
