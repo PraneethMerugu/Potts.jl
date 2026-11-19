@@ -276,7 +276,15 @@ end
         # Dual temperature on plain CPMFunction: refused by uniform(::Type{Float...}, ::UInt32)
         f_track = CPMFunction(gg_delta_H; temperature = gg_temperature, track = CorePotts.TrackEnergyChange{Float64}())
         p_dual_T = PottsProblem(f_track, initial_state(σ, kinds), lat, (0, 2), merge(gg_params(), (; T = dT)))
-        @test_throws MethodError solve(p_dual_T, SequentialCPM())
+        err_cpm = try
+            solve(p_dual_T, SequentialCPM())
+            nothing
+        catch e
+            e isa MethodError || rethrow()
+            e
+        end
+        @test err_cpm isa MethodError
+        @test occursin("Dual", sprint(showerror, err_cpm))
 
         # 2. CellReduce on a non-CPU device backend refuses Dual / BigFloat columns
         st_dual_col = initial_state(

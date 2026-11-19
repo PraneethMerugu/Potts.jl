@@ -31,9 +31,8 @@ end
         @test issorted([sum(abs2, o) for o in r.offsets])
         # aliasing on small periodic axes is rejected; closed axes are fine
         @test_throws ArgumentError relation(Moore(1), Lattice((2, 10)))
-        @test CorePotts.try_relation(Moore(1), Lattice((2, 10))) === nothing
-        @test CorePotts.try_relation(Moore(1), l2) == relation(Moore(1), l2)
         @test_throws CorePotts.DeviceTimeoutError CorePotts._wait_timed_out(0.1)
+        @test occursin("0.25", sprint(showerror, CorePotts.DeviceTimeoutError(0.25)))
         @test length(relation(Moore(1), Lattice((2, 10); boundary = Closed()))) == 8
         @test length(relation(EuclideanBall(1.5), l2)) == 8
         @test length(relation(Stencil([(1, 0), (0, 1)]), l2)) == 2

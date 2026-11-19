@@ -59,7 +59,7 @@ function load_checkpoint(path::AbstractString)
         try
             Serialization.deserialize(io)
         catch e
-            (e isa InterruptException || e isa StackOverflowError || e isa OutOfMemoryError) && rethrow()
+            isfatal(e) && rethrow()
             throw(ArgumentError("$path is not a checkpoint of format $CHECKPOINT_FORMAT: a checkpoint written before " *
                 "the field-compiler cutover (format 1) or by other package versions cannot be read ($(sprint(showerror, e)))"))
         end
