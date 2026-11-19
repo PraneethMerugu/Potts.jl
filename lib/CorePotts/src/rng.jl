@@ -184,12 +184,20 @@ negative `σ` gives NaN and `STATUS_DRAW_NEGATIVE_SD`.
 end
 @inline _set_status!(::Nothing, bit) = nothing
 @inline _set_status!(status, bit) = (Atomix.@atomic status[1] |= bit; nothing)     # status has 1 entry
-# a diagnostic counter (`Potts`' `track = (:references,)`): entry `j` of `cnt` (j in range by
-# construction) incremented atomically, on the host or the device
-@inline _bump!(cnt, j) = (Atomix.@atomic cnt[j] += one(eltype(cnt)); nothing)
-# `a[j] += v` atomically, for `j` in `1:length(a)` (0, the medium, and a stale index are skipped):
-# `@convert` transfers and writes
-@inline function _atomic_add!(a, j, v)
+"""
+    bump!(cnt, j)
+
+A diagnostic counter (`Potts`' `track = (:references,)`): entry `j` of `cnt` (in range by
+construction) incremented atomically, on the host or the device.
+"""
+@inline bump!(cnt, j) = (Atomix.@atomic cnt[j] += one(eltype(cnt)); nothing)
+"""
+    atomic_add!(a, j, v)
+
+`a[j] += v` atomically, for `j` in `1:length(a)` (0, the medium, and a stale index are
+skipped): `@convert` transfers and writes.
+"""
+@inline function atomic_add!(a, j, v)
     ((0 < j) & (j <= length(a))) && (@inbounds Atomix.@atomic a[j] += convert(eltype(a), v))   # bound checked here
     return nothing
 end

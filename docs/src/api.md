@@ -89,6 +89,18 @@ callbacks and checkpoints.
 ```@autodocs
 Modules = [CorePotts]
 Private = false
+Filter = t -> !Main.corepotts_interface(t)
+```
+
+### Interface for model compilers
+
+The hooks, defaults and counted host transfers that Potts builds problems and generates code
+against. They are public so that a model compiler can use them; a model does not need them.
+
+```@autodocs
+Modules = [CorePotts]
+Private = false
+Filter = t -> Main.corepotts_interface(t)
 ```
 
 ## PottsModels

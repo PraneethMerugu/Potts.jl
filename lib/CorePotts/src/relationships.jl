@@ -41,6 +41,7 @@ columns belong to `name` is the model's knowledge (generated code builds full vi
 """
 link_store(cell, name::Symbol) = (; links = getfield(cell, adjacency_name(name)))
 
+"""The most links a cell can hold (the link store's capacity per cell)."""
 @inline maxdegree(cell) = size(cell.links, 1)
 
 """Slot of `b` in `a`'s link row, or 0."""
@@ -289,15 +290,15 @@ function _declared(names)
 end
 
 (ph::HostPhase{F})(st, p, ctx, key, mcs, backend) where {F} =
-    _run_phase(ph, st, p, ctx, key, mcs, backend, nothing)
+    run_phase(ph, st, p, ctx, key, mcs, backend, nothing)
 
-function _run_phase(ph::HostPhase{F}, st, p, ctx, key, mcs, backend, stats) where {F}
+function run_phase(ph::HostPhase{F}, st, p, ctx, key, mcs, backend, stats) where {F}
     _check_declared(ph.reads, st)
     _check_declared(ph.writes, st)
     mcs % ph.every == 0 || return 0
-    _sync!(stats, backend)
+    sync!(stats, backend)
     host = _host_state(ph, stats, backend, st)
-    ph.f!(host.cell, host, p, merge(ctx, (; lattice = _host_lattice(stats, ctx.lattice))), mcs)
+    ph.f!(host.cell, host, p, merge(ctx, (; lattice = host_lattice(stats, ctx.lattice))), mcs)
     if ph.writes === nothing
         foreach(keys(st.cell)) do name
             _write_back!(stats, getfield(st.cell, name), getfield(host.cell, name))
@@ -326,11 +327,11 @@ end
 # declared leaves (written columns too; every cell column when `writes = nothing`). On the
 # host, declared leaves are the live arrays (no copy).
 function _host_state(ph::HostPhase, stats, backend, st)
-    ph.reads === nothing && return _snapshot(stats, backend, st)
+    ph.reads === nothing && return snapshot(stats, backend, st)
     used = ph.writes === nothing ? (ph.reads..., keys(st.cell)...) : (ph.reads..., ph.writes...)
     cell = unique(n for n in used if n !== :ownership)
-    return _host_leaves(stats, st; ownership = :ownership in used, cell)
+    return host_leaves(stats, st; ownership = :ownership in used, cell)
 end
 
 # a host copy back to its live array (nothing when the body ran on the live array itself)
-_write_back!(stats, live, host) = live === host ? nothing : (_copy!(stats, live, host); nothing)
+_write_back!(stats, live, host) = live === host ? nothing : (counted_copy!(stats, live, host); nothing)

@@ -542,7 +542,7 @@ function field_report(io::IO, integ::FieldIntegrator)
     for rt in integ.starts
         group_report(io, rt, pp; title = "steady start", dt = rt.dt, spec = prob.group.spec)
     end
-    prob.kind == :map || _coupling_lines(io, prob.stability, [rt.keys for rt in rts], [rt.alg for rt in rts], pp, integ.dt)
+    prob.kind == :map || _coupling_lines(io, prob.stability, [rt.keys for rt in rts], [rt.alg for rt in rts], pp, Float64(integ.dt))
     return nothing
 end
 

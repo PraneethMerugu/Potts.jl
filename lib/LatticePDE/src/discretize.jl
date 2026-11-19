@@ -109,7 +109,7 @@ function _time_interval(t, tspan)
     tspan isa Union{Tuple, AbstractVector} && length(tspan) == 2 && all(v -> v isa Real && isfinite(v), tspan) &&
         tspan[1] < tspan[2] || throw(ArgumentError(string("lattice_domain: `tspan` is the time interval `(t₀, t₁)`, ",
         "two finite numbers with t₀ < t₁; got ", repr(tspan))))
-    return t ∈ Interval(Float64(tspan[1]), Float64(tspan[2]))
+    return t ∈ Interval(_float_span(tspan[1], tspan[2])...)
 end
 
 """
@@ -200,8 +200,9 @@ function _check_parts(sys::PDESystem)
     sy = get_systems(sys)
     isempty(sy) || _dverr("`$(nameof(sys))` has subsystems ($(join(("`$(nameof(x))`" for x in sy), ", "))); " *
                           "`discretize` lowers one flat PDESystem: write their equations into it")
-    # (`analytic`, `analytic_func`: no public MTKBase accessor, an upstream gap)
-    (getfield(sys, :analytic) === nothing && getfield(sys, :analytic_func) === nothing) ||
+    # (`analytic`, `analytic_func`: read as properties, which `PDESystem`'s `getproperty` gives;
+    # switch to `get_analytic` once a ModelingToolkitBase release has it, SciML/ModelingToolkit.jl#5420)
+    (sys.analytic === nothing && sys.analytic_func === nothing) ||
         _dverr("`$(nameof(sys))` has analytic solutions, which `discretize` does not use in this version " *
                "(no solution carries them); compare against them yourself and leave `analytic` out")
     # every `initial_conditions` key is a parameter or a dependent variable (a typo is not ignored)

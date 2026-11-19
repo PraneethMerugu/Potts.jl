@@ -42,7 +42,7 @@ end
             e = solver_err(() -> spec(offset = o))
             @test e isa ArgumentError
         end
-        @test spec(offset = 2).offset === 2.0 && spec(offset = -1.5f0).offset === -1.5
+        @test spec(offset = 2).offset === 2.0 && spec(offset = -1.5f0).offset === -1.5f0
     end
 end
 
@@ -88,10 +88,12 @@ end
         @test isoff(solver_err(() -> spec(offset = NaN, combine = anon, mcs_duration = 0)))
         @test iscomb(solver_err(() -> spec(combine = anon, mcs_duration = 0)))
         @test isoff(solver_err(() -> Potts.SweepSpec(:metropolis, 1.0, anon, NaN, 0)))
-        # accepted values are stored as Float64, by `@sweep` and by hand alike
+        # accepted values are stored as `float` of the value (its own float type), by `@sweep`
+        # and by hand alike
         for md in (1, 0.5f0, 3 // 2, big"0.25", 1.0e300, floatmin(Float64), nextfloat(0.0))
-            @test spec(mcs_duration = md).mcs_duration === Float64(md)
-            @test hand(2, md).mcs_duration === Float64(md) && hand(2, md).offset === 2.0
+            @test isequal(spec(mcs_duration = md).mcs_duration, float(md))
+            @test spec(mcs_duration = md).mcs_duration isa typeof(float(md))
+            @test isequal(hand(2, md).mcs_duration, float(md)) && hand(2, md).offset === 2.0
         end
         # control: a valid hand-built spec builds, compiles, and fingerprints like the `@sweep` one
         good = sys(hand(0, 0.5))

@@ -1613,31 +1613,33 @@ end
 
 """The sweep protocol: acceptance law, temperature expression and MCS duration. The solvers
 are `PottsProblem` keywords, not part of the model."""
-struct SweepSpec
+struct SweepSpec{O <: AbstractFloat, M <: AbstractFloat}
     law::Symbol
     temperature::Any          # copy scope, or cell scope (`T[kind]`, a cell variable)
     combine::Any              # combines the source and target cells' temperatures
-    offset::Float64
-    mcs_duration::Float64
+    offset::O                 # `float` of the given value
+    mcs_duration::M           # `float` of the given value
     # D-126: the `offset`, `combine` and `mcs_duration` checks live here, in that order, so a
     # hand-built `SweepSpec` passed to `PottsSystem(; sweep)` is checked as `@sweep` checks it
     function SweepSpec(law::Symbol, temperature, combine, offset, mcs_duration)
         o = _sweep_offset(offset)
         _sweep_combine(combine)
-        return new(law, temperature, combine, o, _sweep_mcs_duration(mcs_duration))
+        md = _sweep_mcs_duration(mcs_duration)
+        return new{typeof(o), typeof(md)}(law, temperature, combine, o, md)
     end
 end
-# D-123: a finite real, also after conversion to Float64
+# D-123: a finite real, also after `float` and in `Float64` (the state converts it to its
+# float type)
 function _sweep_offset(offset)
     o = offset isa Real && !_is_symbolic(offset) ? (
             try
-                Float64(offset)
+                float(offset)
         catch e
                 e isa Union{InexactError, MethodError, TypeError} || rethrow()
                 NaN
         end
         ) : NaN
-    isfinite(o) || throw(
+    (isfinite(o) && isfinite(Float64(o))) || throw(
         ArgumentError(
             "`@sweep`: `offset` must be a finite real number, got $(repr(offset))::$(typeof(offset)); " *
                 "pass a finite number (`offset = 0` disables it)"
@@ -1645,18 +1647,19 @@ function _sweep_offset(offset)
     )
     return o
 end
-# D-126: a positive, finite real, also after conversion to Float64 (a `BigFloat` can overflow
-# to Inf or underflow to 0); a symbolic parameter does not convert and is rejected
+# D-126: a positive, finite real, also after `float` and in `Float64` (the field clock), so a
+# `BigFloat` beyond the `Float64` range is refused; a symbolic parameter does not convert and
+# is rejected
 function _sweep_mcs_duration(mcs_duration)
     md = mcs_duration isa Real && !_is_symbolic(mcs_duration) ? (
             try
-                Float64(mcs_duration)
+                float(mcs_duration)
         catch e
                 e isa Union{InexactError, MethodError, TypeError} || rethrow()
                 NaN
         end
         ) : NaN
-    (isfinite(md) && md > 0) || throw(
+    (isfinite(md) && md > 0 && isfinite(Float64(md)) && Float64(md) > 0) || throw(
         ArgumentError(
             "`@sweep`: `mcs_duration` must be a positive, finite real number, got $(repr(mcs_duration))::$(typeof(mcs_duration)); " *
                 "it is the time one MCS stands for (default 1.0)"
@@ -1689,7 +1692,7 @@ The `SweepSpec` built by `@sweep Metropolis(; …)` (`law = :metropolis`) or
 - `mcs_duration`, the time one MCS stands for, must be a positive, finite real number; NaN,
   ±Inf, 0, negative values, a `BigFloat` beyond the `Float64` range, non-numbers and a
   symbolic parameter are an `ArgumentError`, so the system does not build. It is stored as
-  `Float64(mcs_duration)`.
+  `float(mcs_duration)`; `offset` as `float(offset)`.
 - `combine` must be a named function (`min`, `max`, or `amean(a, b) = (a + b) / 2` defined
   at the top level and passed as `combine = amean`), a composition of named functions
   (`min ∘ max`), or an instance of a callable struct whose fields are values. An anonymous

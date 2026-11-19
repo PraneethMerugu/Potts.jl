@@ -315,6 +315,7 @@ mutable struct CoupledKrylov{RS, WK, OP, PC, WS, A, CT, S, H, L}
     σ::Float64              # (its Cayley shift)
     keys::Vector{String}
     lin::L                  # the LinearSolve cache of the coupled solve (its `cacheval` is `ws`)
+    growth::Any             # the growth check's shifted solve, built on first use (`coupled_growth`)
 end
 
 """
@@ -436,7 +437,7 @@ function _bind_coupled(
     auto_newton || Exec.launch!(backend, _reset_hist_body!, 1, (hist,))
     return CoupledKrylov(
         rws, walk, A, P, ws, _zeros(st.backend, K, off), _zeros(st.backend, UInt32, off), hist, off, scal, zeros(K, GM_SCALARS), m, kr.maxiters,
-        kr.reltol, linear, mkpres, 0, 1.0, collect(String, keys), lin
+        kr.reltol, linear, mkpres, 0, 1.0, collect(String, keys), lin, nothing
     )
 end
 
@@ -540,10 +541,6 @@ LinearAlgebra.ldiv!(y::CoupledVector, P::CoupledPrecond, v::CoupledVector) = Lin
 # the block preconditioner of a coupled solve: each field's own solve (`bs.linsolve`, bound on its
 # row when the group was built), a right preconditioner
 (bs::LatticeBlockSolve)(A::CoupledOperator, p) = (LinearAlgebra.I, CoupledPrecond(A.rows, A.walk, A.backend))
-
-# stop a solve whose residual is not finite (it cannot recover)
-struct _CsStop end
-(::_CsStop)(ws) = (r = ws.stats.residuals; !isempty(r) && !isfinite(@inbounds r[end]))
 
 # One Newton iteration of a coupled group (the per-row iteration's place in `_stage!`): the
 # residuals of every row at the iterate, the coupled solve `A δ = G` (Krylov.jl's FGMRES), the
@@ -710,7 +707,7 @@ end
 # A linear group is checked at the bind and at a parameter write; a nonlinear one (its Jacobian
 # depends on the state) right after its first solve after either, or after the steady start (r2 M1). Cost: `m`
 # coupled solves, with their waits on a device.
-struct CoupledShift{OP, K}
+struct CoupledShift{OP, K} <: SciMLOperators.AbstractSciMLOperator{K}
     A::OP
     σ::K
 end
@@ -721,16 +718,29 @@ function LinearAlgebra.mul!(w::CoupledVector, S::CoupledShift, z::CoupledVector)
     Krylov.kaxpy!(length(w), S.σ, z, w)
     return w
 end
+(bs::LatticeBlockSolve)(S::CoupledShift, p) = bs(S.A, p)
 function coupled_growth(cs::CoupledKrylov, σ::Real, t; m = 12, par = 1)
-    rows, walk, A, ws = cs.rows, cs.walk, cs.A, cs.ws
+    rows, walk, A = cs.rows, cs.walk, cs.A
     K = eltype(cs.scal)
     backend = A.backend
     A.it = (par, true, Float64(t), Inf, 0)
     walk(rows, _csop(:residual, (par, true, t, Inf, 0, A.b.a, cs.part, backend, nothing)))
     Exec.launch!(backend, _cs_un_body!, 1, (cs.scal, cs.part, cs.nbt))
-    S = CoupledShift(A, K(σ))
-    V = [similar(A.b) for _ in 1:(m + 1)]
-    y = similar(A.b)
+    # the shifted solve as a LinearSolve cache: the group's `LatticeGMRES` to 1e-6, its block
+    # preconditioner (of `A`) on the shifted operator. Built once per shift, size and budget
+    # and kept on the group; setting `A` again rebuilds the preconditioner for the current `A`
+    key = (K(σ), m, cs.budget)
+    if cs.growth === nothing || cs.growth[1] != key
+        S = CoupledShift(A, K(σ))
+        y = similar(A.b)
+        kr = cs.lin.alg
+        alg = LatticeGMRES(; gmres_restart = kr.gmres_restart, maxiters = cs.budget, reltol = 1.0e-6, precs = kr.precs)
+        cs.growth = (key, S, [similar(A.b) for _ in 1:(m + 1)], y, CommonSolve.init(SciMLBase.LinearProblem(S, y; u0 = similar(y)), alg))
+    else
+        cs.growth[5].A = cs.growth[2]
+    end
+    _, S, V, y, lin = cs.growth
+    ws = lin.cacheval
     Krylov.kfill!(V[1], one(K))
     _cs_div!(V[1], K(sqrt(_cs_dot(V[1], V[1]))))
     H = zeros(m + 1, m)
@@ -738,8 +748,7 @@ function coupled_growth(cs::CoupledKrylov, σ::Real, t; m = 12, par = 1)
     for j in 1:m
         LinearAlgebra.mul!(y, A, V[j])
         Krylov.kaxpby!(A.n, K(σ), V[j], -one(K), y)           # y = σ v − A v
-        Krylov.fgmres!(ws, S, y; N = cs.P, restart = true, rtol = K(1e-6), atol = K(1e-6 * Solvers.FLOOR),
-            itmax = cs.budget, history = true, callback = _CsStop())
+        _solve_cache!(lin)
         w = V[j + 1]
         Krylov.kcopy!(A.n, w, ws.x)
         for i in 1:j

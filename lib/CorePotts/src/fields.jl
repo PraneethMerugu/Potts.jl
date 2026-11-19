@@ -164,16 +164,19 @@ function _same_tables(ph::FieldPhase, b::FieldBinding, p)
     return true
 end
 
-# the phase's tables at `p` by their program keys (the substep bound reads them: a table
-# coefficient, F1)
-# (and the tables only the rule reads: the steady gain of another group, F3-12c)
-_table_values(ph::FieldPhase, p) = Pair{String, Vector{Float64}}[
+"""
+    table_values(ph::FieldPhase, p)
+
+The field phase's tables at `p` by their program keys (the substep bound reads them: a
+table coefficient), and the tables only its substep rule reads.
+"""
+table_values(ph::FieldPhase, p) = Pair{String, Vector{Float64}}[
     [ph.program.tables[i].key => Float64.(vec(collect(getproperty(p, name)))) for (i, name) in ph.tables];
     [k => Float64.(vec(collect(getproperty(p, name)))) for (k, name) in ph.rule_tables]]
-# the raw parameter values of the phase's slots at `p`
-_praw(ph::FieldPhase, p) = Tuple(_param(p, n) for n in ph.params)
+"""The raw parameter values of the field phase's slots at `p`."""
+praw(ph::FieldPhase, p) = Tuple(_param(p, n) for n in ph.params)
 # … as the substep rule reads them, with the phase's tables (`field_substeps`, `field_report`)
-_policy_params(ph::FieldPhase, p) = Problems.with_tables(Float64[_praw(ph, p)...], _table_values(ph, p))
+_policy_params(ph::FieldPhase, p) = Problems.with_tables(Float64[praw(ph, p)...], table_values(ph, p))
 
 """
     field_substeps(ph, p) -> Int
@@ -221,7 +224,8 @@ function _field_bind(ph::FieldPhase, st, p, backend; tables = nothing, abstol = 
     store = Problems.FieldStore(backend, bufs, ones(Int, length(bufs)), tables)
     n = field_substeps(ph, p)
     host = FieldBinding(p, arrs, _bound_values(ph, p)...)
-    return Problems.bind_group(ph.group, ph.alg, store, _praw(ph, p); n, dt = ph.dt, c = nothing, ends_in = :slot1,
+    return Problems.bind_group(
+        ph.group, ph.alg, store, praw(ph, p); n, dt = ph.dt, c = nothing, ends_in = :slot1,
         backend, options = ph.options, V = ph.T, host, abstol, reltol, kernels = ph.aux_only ? (Int[], _aux_ids(ph)) : nothing
     )
 end
@@ -350,12 +354,12 @@ function _rebind!(rt::Problems.GroupRuntime, ph::FieldPhase, st, p, backend)
     # an implicit group on the same arrays: in place (its solvers take the new coefficients;
     # building them again would compile their kernels), the tables written into their arrays,
     # and `reset!` (the hierarchy is rebuilt before the next window)
-    if same_arrays && rt.cache isa Problems.ImplicitCache && _tables_fit(ph, rt, p) && _praw(ph, p) isa typeof(rt.p)
+    if same_arrays && rt.cache isa Problems.ImplicitCache && _tables_fit(ph, rt, p) && praw(ph, p) isa typeof(rt.p)
         n = field_substeps(ph, p)                   # (the policy's refusals first: nothing changed yet)
-        praw = _praw(ph, p)
-        launches = Problems.rebind_launches(rt, praw)
+        pr = praw(ph, p)
+        launches = Problems.rebind_launches(rt, pr)
         same_tables || _write_tables!(ph, rt, p)
-        rt.p = praw
+        rt.p = pr
         Problems.install_launches!(rt, launches)
         rt.n = n
         b.p = p
@@ -418,10 +422,10 @@ function (ph::FieldPhase{K})(st, p, ctx, key, mcs, backend, part::NTuple{2, Int}
     return launches
 end
 
-# a field phase takes the pass of a sub-MCS `repeat` (`_run_phases`); other phases do not.
+# a field phase takes the pass of a sub-MCS `repeat` (`run_phases`); other phases do not.
 # On the host its group's status word is read after its window (F3 design §3.4: a plain read;
 # nothing for the explicit algorithms, whose caches have no word)
-function _run_phase(ph::FieldPhase{K}, st, p, ctx, key, mcs, backend, stats, part) where {K}
+function run_phase(ph::FieldPhase{K}, st, p, ctx, key, mcs, backend, stats, part) where {K}
     n = ph(st, p, ctx, key, mcs, backend, part)
     # (a steady start's word is read at once on a device too: one read at init, cold)
     stats === nothing || ph.init || !(ph.start || Exec.ishost(backend)) || _read_status!(stats, _runtime(getfield(ctx, K)))
@@ -490,10 +494,14 @@ function _read_statuses!(stats, ctx)
     return nothing
 end
 
-# The at-init phases of a state that is not fresh (a checkpoint restore, `Potts.anneal`'s
-# per-MCS refresh): the derived refreshes without the field clamps and the steady starts,
-# which hold on a fresh initial state only (D-145)
-_derived(t::Tuple) = filter(ph -> !(ph isa FieldPhase && (ph.init || ph.start)), t)
+"""
+    derived(phases::Tuple)
+
+The at-init phases of a state that is not fresh (a checkpoint restore, `Potts.anneal`'s
+per-MCS refresh): the derived refreshes without the field clamps and the steady starts,
+which hold on a fresh initial state only.
+"""
+derived(t::Tuple) = filter(ph -> !(ph isa FieldPhase && (ph.init || ph.start)), t)
 
 # ---------------------------------------------------------------------------------------
 # Derivative parts of the fields (F3-21b): a shadow tangent store. A problem with a
@@ -512,7 +520,7 @@ _derived(t::Tuple) = filter(ph -> !(ph isa FieldPhase && (ph.init || ph.start)),
 """
     ParameterTangent(p, seeds, u0 = [])
 
-The parameters of a run with derivative parts (F3-21b): `p` is the parameter object with
+The parameters of a run with derivative parts: `p` is the parameter object with
 ForwardDiff Duals in the entries that carry them (the seeded parameters and the computed ones
 that read them), `seeds` the front end's record of the Dual values given (`name => value`), and
 `u0` the derivative parts of the initial fields (`name => Dual array or Dual number`: a Dual
@@ -660,11 +668,13 @@ function tangent_run(phases::Phases, st, p, tg::ParameterTangent, backend, ctx, 
     for ph in phs
         _shadow!(run, ph, st, _runtime(getfield(ctx, _ctxkey(ph))))
         any_seeded |= any(x -> LatticeFields.Compile.npartials(typeof(x)) > 0 && !iszero(x - LatticeFields.Compile.primal(x)),
-            _praw(ph, tg.p))
+            praw(ph, tg.p)
+        )
     end
     any_seeded || !isempty(tg.u0) || isempty(phs) || @warn string("no field group reads a parameter with derivative parts, ",
         "so every derivative of the fields is zero: the CPM and the ODEs read the primal values, and the derivative holds ",
-        "the CPM path fixed (F3-21b)") maxlog = 1
+        "the CPM path fixed"
+    ) maxlog = 1
     fresh && _seed_initial!(nothing, run, tg)
     return run
 end
@@ -702,7 +712,8 @@ function _shadow!(run::TangentRun, ph::FieldPhase{K}, st, prt) where {K}
     shared = ph.alg isa Problems.AbstractImplicitFieldAlgorithm && !ph.aux_only && prt.cache isa Problems.ImplicitCache
     store = Problems.FieldStore(backend, bufs, shared ? prt.store.cur : ones(Int, length(bufs)), prt.store.tables)
     tols = shared ? (abstol = prt.cache.abstol, reltol = prt.cache.reltol) : (;)
-    trt = Problems.bind_group(ph.group, ph.alg, store, _praw(ph, run.p); n = prt.n, dt = ph.dt, c = zero(E),
+    trt = Problems.bind_group(
+        ph.group, ph.alg, store, praw(ph, run.p); n = prt.n, dt = ph.dt, c = zero(E),
         ends_in = :slot1, backend, options = ph.options, V = ph.T, host = nothing,
         kernels = ph.aux_only ? (Int[], _aux_ids(ph)) : nothing,
         tols...,
@@ -732,7 +743,7 @@ function _tangent_snapshot(::Val{true}, stats, ctx, snap::CPMState)
     isempty(run.names) && return snap
     ks = Tuple(k for k in keys(snap.site) if haskey(run.names, k))
     vs = map(ks) do k
-        tw = _to_host(stats, run.names[k])
+        tw = to_host(stats, run.names[k])
         v = getfield(snap.site, k)
         reshape(map((d, x) -> LatticeFields.Compile.dreplace(d, x), vec(tw), vec(v)), size(v))
     end
@@ -751,7 +762,7 @@ function _set_parts!(stats, run::TangentRun, tw, v, name)
                                 "written values hold $(LatticeFields.Compile.npartials(eltype(w)))"))
         size(w) == size(tw) || throw(DimensionMismatch("`$name` has size $(size(tw)); got $(size(w))"))
         src = similar(tw, E, size(tw))
-        _copy!(stats, src, E[convert(E, x) for x in w])
+        counted_copy!(stats, src, E[convert(E, x) for x in w])
         for j in 1:LatticeFields.Compile.npartials(E)
             Exec.launch!(run.backend, _tpart_body!, length(tw), (vec(tw), vec(src), j))
         end

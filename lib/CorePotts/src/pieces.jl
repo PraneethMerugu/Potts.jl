@@ -585,13 +585,13 @@ end
 function _rebuild_pieces!(stats, st, σ, lat, cap)
     if haskey(st.cell, :pieces)
         P, L = recompute_pieces(σ, lat, Val(false), cap)
-        _copy!(stats, st.cell.pieces, P)
-        _copy!(stats, st.cell.largest_piece, L)
+        counted_copy!(stats, st.cell.pieces, P)
+        counted_copy!(stats, st.cell.largest_piece, L)
     end
     if haskey(st.cell, :pieces_full)
         P, L = recompute_pieces(σ, lat, Val(true), cap)
-        _copy!(stats, st.cell.pieces_full, P)
-        _copy!(stats, st.cell.largest_piece_full, L)
+        counted_copy!(stats, st.cell.pieces_full, P)
+        counted_copy!(stats, st.cell.largest_piece_full, L)
     end
     return nothing
 end

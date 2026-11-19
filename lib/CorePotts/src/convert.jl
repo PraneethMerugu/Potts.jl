@@ -121,7 +121,7 @@ One site conversion pass (R8 `@convert`, D-233), a phase of the MCS order
   - `writes!(st, p, ctx, key, mcs, i, from, to, created, acc)` — once per converted site, or
     `nothing`; `created` is true for exactly one conversion of an entity whose `to` this pass
     allocated (the lowest such site). Each compound write `j` is
-    `_cv_write!(acc, Val(j), dst, idx, w)` (`dst[idx] += w`); `wcols` names the `dst` of each write
+    `cv_write!(acc, Val(j), dst, idx, w)` (`dst[idx] += w`); `wcols` names the `dst` of each write
     (a `Part`), in order. A write into a float column is an exact sum (F3-23: the pass runs
     `writes!` twice, an exponent pass and an Int64 fixed-point pass, as `CellReduce`, then adds
     each target's sum once), so it does not depend on the order of the sites; every write reads
@@ -459,12 +459,12 @@ Adapt.adapt_structure(to, m::_WriteSum) = _WriteSum(Adapt.adapt(to, m.sc), m.L, 
 @inline _wsc_sum(sc) = (; acc = sc.wsum, lo = sc.wslo, hi = sc.wshi)
 
 """
-    _cv_write!(acc, Val(j), dst, idx, w)
+    cv_write!(acc, Val(j), dst, idx, w)
 
 Compound write `j` of a `@convert` pass, `dst[idx] += w` (`ConvertPass`); `idx` outside
 `1:length(dst)` (0, the medium, a stale index) is skipped.
 """
-@inline function _cv_write!(m::_WriteExp, ::Val{j}, dst, idx, w) where {j}
+@inline function cv_write!(m::_WriteExp, ::Val{j}, dst, idx, w) where {j}
     ((0 < idx) & (idx <= length(dst))) || return nothing
     _wfloat(eltype(dst)) || return nothing
     v = _cr_work(eltype(dst))(convert(eltype(dst), w))
@@ -478,10 +478,10 @@ Compound write `j` of a `@convert` pass, `dst[idx] += w` (`ConvertPass`); `idx` 
     end
     return nothing
 end
-@inline function _cv_write!(m::_WriteSum, ::Val{j}, dst, idx, w) where {j}
+@inline function cv_write!(m::_WriteSum, ::Val{j}, dst, idx, w) where {j}
     ((0 < idx) & (idx <= length(dst))) || return nothing
     T = eltype(dst)
-    _wfloat(T) || return _atomic_add!(dst, idx, w)        # integer columns: exact in any order
+    _wfloat(T) || return atomic_add!(dst, idx, w)        # integer columns: exact in any order
     W = _cr_work(T)
     r = _wrow(m.sc, j, idx)
     e = _cr_shift(W, @inbounds(m.sc.wexp[r]), m.L)
@@ -489,10 +489,10 @@ end
     return nothing
 end
 struct _WriteAtomic end
-@inline _cv_write!(::_WriteAtomic, ::Val{j}, dst, idx, w) where {j} = _atomic_add!(dst, idx, w)
+@inline cv_write!(::_WriteAtomic, ::Val{j}, dst, idx, w) where {j} = atomic_add!(dst, idx, w)
 # host only (any other number type): the writes in site order
 struct _WriteSeq end
-@inline _cv_write!(::_WriteSeq, ::Val{j}, dst, idx, w) where {j} =
+@inline cv_write!(::_WriteSeq, ::Val{j}, dst, idx, w) where {j} =
     (((0 < idx) & (idx <= length(dst))) && (@inbounds dst[idx] += convert(eltype(dst), w)); nothing)
 
 @inline function _cv_wzero_body!(c, sc)

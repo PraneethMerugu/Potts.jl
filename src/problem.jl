@@ -51,12 +51,15 @@ update is the model's last after-MCS cell update when the trigger reads the colu
 writes only at its own cell; it then runs with the lifecycle and is not among `phases`.
 Each is `(args…) -> body` and can be `eval`'d into a plain function (e.g. for JET).
 """
-function generated_code(sys; T::Type = Float64, field_solver = nothing, ode_solver = ExplicitEuler(), solvers = ())
+function generated_code(
+        sys; T::Type = Float64, field_solver = nothing, ode_solver = ExplicitEuler(), solvers = (),
+        discretization = nothing
+    )
     c = sys isa CompiledPottsSystem ? sys : ModelingToolkitBase.mtkcompile(sys)
-    return _with_model_scope(() -> _generated_code(c, T, field_solver, ode_solver, solvers), c)
+    return _with_model_scope(() -> _generated_code(c, T, field_solver, ode_solver, solvers, discretization), c)
 end
-function _generated_code(c, T, field_solver, ode_solver, solvers)
-    spec = _resolve_solvers(c; field_solver, ode_solver, solvers)
+function _generated_code(c, T, field_solver, ode_solver, solvers, discretization)
+    spec = _resolve_solvers(c; field_solver, ode_solver, solvers, discretization, T)
     values = Dict{Any, Any}(_unwrap(x) => info(x).default for x in _p(getfield(c, :sys), :parameters))
     (phases0, cand), phases = _recording(() -> _phases_parts(c, T, values, spec))
     lc, lex = _recording(() -> _lifecycle(c, T))
@@ -76,7 +79,7 @@ function _generated_code(c, T, field_solver, ode_solver, solvers)
 end
 """
     PottsProblem(sys, op, tspan; field_solver = ExplicitEuler(), ode_solver = ExplicitEuler(), solvers = [],
-                 backend = nothing, T, capacity, seed = 0, replica = 0, repeat = 0, track = (),
+                 discretization = nothing, backend = nothing, T, capacity, seed = 0, replica = 0, repeat = 0, track = (),
                  initializealg = nothing, expression = Val(false))
 
 Build the numerical problem from a `PottsSystem` (compiled with `mtkcompile` if
@@ -129,9 +132,21 @@ How fields and ODEs are integrated is part of the problem, compiled into its cod
 - `solvers = [x => solver, …]`, keyed by integrated variables (or a component: all its
   unknowns), overrides them for those variables only (a stiff ODE under
   `Adaptive(Rodas5P())` beside explicit ones). Every ODE step reads the state at the start
-  of the step (Jacobi), across solvers too.
+  of the step (Jacobi), across solvers too;
+- `discretization` (any `SciMLBase.AbstractDiscretization`) discretizes the fields. Left out,
+  or a `LatticeDiscretization(Grid(dims))` of the model's lattice, the fields are the fused
+  lattice fields described above. Any other discretization steps the problem
+  `discretize(Potts.fields(model), discretization; inputs)` over each MCS window, solved with
+  `field_solver` (required: a SciML algorithm such as `Tsit5()`), on the CPU. Each window
+  starts from the fields' current values and the CPM inputs at that MCS
+  ([`Potts.field_inputs`](@ref) names them). The discretization must take
+  `inputs = [name => array, …]` and give an integrator that reads and writes each field by
+  name (`getu`, `setu`) as a vector of the lattice's sites in column-major order, and sets
+  each input and parameter by name (`setp`). `PottsProblem` and `remake` check this and throw
+  an `ArgumentError` otherwise; a discretization that grids the domain its own way (such as
+  MethodOfLines') does not meet it.
 
-`remake(prob; field_solver | ode_solver | solvers = …)` rebuilds the code with the keywords
+`remake(prob; field_solver | ode_solver | solvers | discretization = …)` rebuilds the code with the keywords
 it names and keeps the others, `u0`, `p` and the seed; the problem fingerprint hashes a
 canonical form of the resolved solvers, so a checkpoint loads only into an equally
 discretized problem.
@@ -160,11 +175,19 @@ function CorePotts.PottsProblem(
         c::CompiledPottsSystem, op, tspan; backend = nothing,
         T::Type = backend === nothing ? Float64 : LatticeFields.Exec.default_float(backend), capacity = nothing,
         seed = 0, replica = 0, repeat = 0, expression = Val(false), field_solver = nothing,
-        ode_solver = ExplicitEuler(), solvers = (), track = (), initializealg = nothing, kwargs...
+        ode_solver = ExplicitEuler(), solvers = (), discretization = nothing, track = (), initializealg = nothing, kwargs...
     )
     sys = getfield(c, :sys)
     init = _init_options(initializealg)
-    spec = _resolve_solvers(c; field_solver, ode_solver, solvers)
+    spec = _resolve_solvers(c; field_solver, ode_solver, solvers, discretization, T)
+    spec.discretization === nothing || backend === nothing || backend isa KernelAbstractions.CPU || throw(
+        ArgumentError(
+            string(
+                "`discretization = ", repr(spec.discretization), "`: its fields step on the host; give a CPU backend, ",
+                "or leave `discretization` out"
+            )
+        )
+    )
     track = _track(track)
     opd = _operating_point(sys, op)
     seeds, u0seeds = _split_tangents!(sys, opd)     # Dual values: their primal values in `opd` (F3-21b)
@@ -198,6 +221,7 @@ function CorePotts.PottsProblem(
     )
     f = _problem_function(c, T, spec, values, hctx, Dict{Any, Any}(); track)
     _check_field_substeps(f, p; tspan)
+    _check_discretized(f, st)
     frozen = _frozen_mask(sys, st)
     _host_init!(f, st, p, hctx, seed, replica, repeat, NamedTuple(kwargs))
     tangent = isempty(seeds) && isempty(u0seeds) ? nothing : _tangent(c, T, p, seeds, opd; u0 = u0seeds)
@@ -463,13 +487,14 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
     order = _phase_order(sys)
     order == collect(SCHEDULE_PHASES) || push!(cad, "schedule=$(join(order, ","))")
     lifecycle === nothing || lifecycle.every == 1 || push!(cad, "lifecycle($(lifecycle.every))")
-    # the MCS length, which solvers keep as data (`Adaptive`'s dt, a field phase's `dt`)
-    _p(sys, :sweep).mcs_duration == 1 || push!(cad, "mcs_duration=$(repr(_p(sys, :sweep).mcs_duration))")
+    # the MCS length, which solvers keep as data (`Adaptive`'s dt, a field phase's `dt`); the
+    # run clock is Float64, so it is hashed in Float64 (`0.5`, `1//2` and `0.5f0` hash alike)
+    _p(sys, :sweep).mcs_duration == 1 || push!(cad, "mcs_duration=$(repr(Float64(_p(sys, :sweep).mcs_duration)))")
     # the acceptance law and its offset, solver data in `CPMFunction.acceptance` (D-121); only
     # non-default values (Metropolis, offset 0), so the default keeps its fingerprint. The
-    # offset is a Float64 in `SweepSpec`, so `offset = 2` and `offset = 2.0` hash alike.
+    # offset is hashed in Float64, so `offset = 2`, `offset = 2.0` and `offset = 2.0f0` hash alike.
     _p(sys, :sweep).law === :metropolis || push!(cad, "law=$(_p(sys, :sweep).law)")
-    _p(sys, :sweep).offset == 0 || push!(cad, "offset=$(repr(_p(sys, :sweep).offset))")
+    _p(sys, :sweep).offset == 0 || push!(cad, "offset=$(repr(Float64(_p(sys, :sweep).offset)))")
     # the proposal and contact neighbourhoods, run data outside the generated code (D-122):
     # each resolved on the lattice and hashed with its role when it differs from its default
     # (proposal `VonNeumann(1)`, contact the lattice's `neighborhood`). A default that does
@@ -570,22 +595,27 @@ end
 # Never reached by `remake(prob; p | u0 | seed)`.
 function CorePotts.remake_function(
         mi::PottsModelInfo, prob; field_solver = mi.solvers.field_solver,
-        ode_solver = mi.solvers.ode_solver, solvers = nothing, track = _track_names(prob), kwargs...
+        ode_solver = mi.solvers.ode_solver, solvers = nothing, discretization = mi.solvers.discretization,
+        track = _track_names(prob), kwargs...
     )
     isempty(kwargs) || throw(
         ArgumentError(
             "remake: unknown keyword$(length(kwargs) == 1 ? "" : "s") $(join(("`$k`" for k in keys(kwargs)), ", ")); " *
                 "supported keywords are `u0`, `p`, `tspan`, `seed`, `replica`, `repeat`, `field_solver`, `ode_solver`, " *
-                "`solvers`, `track`, `initializealg`, `f`"
+                "`solvers`, `discretization`, `track`, `initializealg`, `f`"
         )
     )
     c = mi.csys
     kept = solvers === nothing                      # the problem's `solvers` (named in a clash)
-    spec = _resolve_solvers(c; field_solver, ode_solver, solvers = kept ? mi.solvers.solvers : solvers, kept)
+    spec = _resolve_solvers(
+        c; field_solver, ode_solver, solvers = kept ? mi.solvers.solvers : solvers, kept, discretization,
+        mi.T
+    )
     values = _parameter_dict(c, prob.p)
     track = _track(track)
     f = _problem_function(c, mi.T, spec, values, mi.ctx, mi.cache; track)
     _check_field_substeps(f, prob.p; prob.tspan)   # the policy's refusals at `remake`, as at the build
+    _check_discretized(f, prob.u0)
     return f, _track_layout(_ode_layout(prob.u0, c, spec), c, track)
 end
 
@@ -623,7 +653,7 @@ function CorePotts.report_run(info::PottsModelInfo, integ)
     model = integ.state.model
     haskey(model, CorePotts.CONVERT_FLAGS) && _report_converts(info, integ)
     haskey(model, REF_COUNTS) || return nothing
-    counts = CorePotts._to_host(getfield(integ, :stats), getfield(model, REF_COUNTS))
+    counts = CorePotts.to_host(getfield(integ, :stats), getfield(model, REF_COUNTS))
     any(>(0), counts) || return nothing
     labels = _ref_count_labels(info.csys)
     lines = String[]
@@ -1405,7 +1435,7 @@ function _host_init!(@nospecialize(f), @nospecialize(st), @nospecialize(p), @nos
     # (only `LatticeNewton` groups read them; `init` refuses them for the others)
     atol, rtol = LatticeFields.Problems.resolve_tols(get(kw, :abstol, nothing), get(kw, :reltol, nothing))
     ctx = merge(ctx, CorePotts.phase_contexts(f.phases, st, p, CorePotts.CPU(); abstol = atol, reltol = rtol))
-    CorePotts._run_phases(f.phases.at_init, st, p, ctx, key, 0, CorePotts.CPU())
+    CorePotts.run_phases(f.phases.at_init, st, p, ctx, key, 0, CorePotts.CPU())
     return st
 end
 
@@ -1653,7 +1683,7 @@ CorePotts.remake_state(info::PottsModelInfo, prob, u0::CorePotts.CPMState, kw = 
 # skipped for the Int32 moment scratch, read once per solve (as the lifecycle's deferrals)
 function _report_converts(info::PottsModelInfo, integ)
     dev = getfield(integ.state.model, CorePotts.CONVERT_FLAGS)
-    flags = CorePotts._to_host(getfield(integ, :stats), dev)
+    flags = CorePotts.to_host(getfield(integ, :stats), dev)
     deferred, large = Int(flags[3]), Int(flags[4])
     deferred > 0 && @warn "@convert in $(nameof(info.csys)): $deferred allocation(s) deferred: all " *
         "$(length(integ.state.cell.kind)) cell slots are in use (the lowest-slot entities " *

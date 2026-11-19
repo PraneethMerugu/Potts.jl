@@ -334,7 +334,9 @@ end
 ProblemTexts() = ProblemTexts("ExplicitEuler(; substeps = n)")
 
 # the warnings of the policy, once per key in a session (the key holds no value: a sweep warns
-# once), for both coupled and standalone routes
+# once), for both coupled and standalone routes; none while precompiling (Julia has no public
+# query for that: `Base.generating_output` is internal, so the runtime's ccall; an upstream
+# gap, D-294)
 const _SEEN_WARNED = Set{String}()
 const _SEEN_WARNED_LOCK = ReentrantLock()
 _warn_once(key) = Exec.VERBOSE[] && ccall(:jl_generating_output, Cint, ()) == 0 &&

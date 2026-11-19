@@ -119,11 +119,11 @@ end
 # Host rebuild of every count named in `ctx.contact_counts` (`_rebuild_trackers!`)
 _rebuild_contact_counts!(stats, st, σ, lat, ::Nothing) = nothing
 function _rebuild_contact_counts!(stats, st, σ, lat, cc::ContactCounts)
-    kind = _to_host(stats, st.cell.kind)
+    kind = to_host(stats, st.cell.kind)
     cap = length(kind)
     foreach(cc.counts) do x
         col = x.column(st)
-        _copy!(stats, col, _recompute_contact_count(eltype(col), σ, kind, lat, x.relation, x.mask, cap))
+        counted_copy!(stats, col, _recompute_contact_count(eltype(col), σ, kind, lat, x.relation, x.mask, cap))
         return nothing
     end
     return nothing

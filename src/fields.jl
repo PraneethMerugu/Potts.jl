@@ -1130,6 +1130,7 @@ end
 # the field phases of a problem (in group order) and their at-init clamps
 function _field_phases(c::CompiledPottsSystem, T, spec::SolverSpec)
     _has_fields(c) || return Any[], Any[]
+    spec.discretization === nothing || return _discretized_phases(c, T, spec)
     groups = _field_groups(c, T, spec)
     dt = _field_dt(getfield(c, :sys))
     steps, clamps = Any[], Any[]
@@ -1175,6 +1176,181 @@ function _field_phases(c::CompiledPottsSystem, T, spec::SolverSpec)
     return steps, (fill === nothing ? clamps : Any[fill; clamps])
 end
 
+# The fields of a problem with a `discretization` other than the fused lattice one: the fill
+# phase (the CPM inputs into their site arrays), then one host phase that steps the problem
+# `discretize(Potts.fields(model), discretization; inputs)` over each MCS window with
+# `field_solver`, from the fields' site arrays and back
+function _discretized_phases(c::CompiledPottsSystem, T, spec::SolverSpec)
+    sys = getfield(c, :sys)
+    _field_dt(sys) == Float64(_p(sys, :sweep).mcs_duration) || throw(
+        ArgumentError(
+            string(
+                "`discretization = ",
+                repr(spec.discretization), "`: the fields of model `", nameof(sys), "` step in a sub-MCS `repeat`, which the ",
+                "fused lattice fields run; leave `discretization` out"
+            )
+        )
+    )
+    F = fields(sys)
+    filled = Dict{Symbol, Type}(n => E for (n, _, E) in _field_inputs(c, T))
+    back = Dict{Symbol, Symbol}(Symbol(w) => g for (g, w) in _input_names(sys))
+    inputs = Tuple{Symbol, Symbol, Type}[]
+    for dv in ModelingToolkitBase.get_dvs(F)
+        x = _unwrap(dv)
+        ModelingToolkitBase.isinput(x) || continue
+        op = Symbol(nameof(operation(x)))
+        op = get(back, op, op)
+        key = Symbol(something(LatticePDE.get_lattice_input_name(x), string(op)))
+        st = SymbolicUtils.symtype(x)
+        E = get(filled, op, st <: Bool ? Bool : st <: Integer ? Int32 : T)
+        push!(inputs, (key, op, E))
+    end
+    names = Set{Symbol}(info(x).name for x in _p(sys, :parameters))
+    params = Symbol[n for n in (Symbol(nameof(_unwrap(q))) for q in ModelingToolkitBase.get_ps(F)) if n in names]
+    ph = _DiscretizedFields(
+        F, spec.discretization, spec.field_solver, Symbol[info(x).name for (x, _) in getfield(c, :fields)],
+        inputs, params, T, Float64(_p(sys, :sweep).mcs_duration), Dict{UInt, Tuple{WeakRef, Any}}(), ReentrantLock()
+    )
+    fill = _field_fill_phase(c, T)
+    return fill === nothing ? (Any[ph], Any[]) : (Any[fill, ph], Any[fill])
+end
+
+# One integrator of the discretized fields per trajectory, keyed by the identity of its live
+# state array (as `_AdaptiveODE`). The contract of a discretization (checked at build,
+# `_check_discretized`): `discretize(pdesys, d; inputs = [name => array, …])` takes the CPM
+# inputs by name, and its problem's integrator reads and writes each field by name
+# (`getu`/`setu`) as a vector of the lattice's sites in column-major order, and sets each
+# input and parameter by name (`setp`), as a `LatticeDiscretization`'s does.
+struct _DiscretizedFields{D, A}
+    pdesys::Any
+    disc::D
+    alg::A
+    fields::Vector{Symbol}                 # the fields: their site arrays and their names in the problem
+    inputs::Vector{Tuple{Symbol, Symbol, Type}}   # (name in the problem, site array, element type)
+    params::Vector{Symbol}                 # the model parameters the fields read
+    T::Type
+    dt::Float64                            # the MCS (`mcs_duration`)
+    integrators::Dict{UInt, Tuple{WeakRef, Any}}
+    lock::ReentrantLock
+end
+
+(ph::_DiscretizedFields)(st, p, ctx, key, mcs, backend) = CorePotts.run_phase(ph, st, p, ctx, key, mcs, backend, nothing)
+
+# the inputs by name, converted only when the site array's element type differs
+_input_values(ph::_DiscretizedFields, st) = [
+    k => (a = getproperty(st.site, n); eltype(a) === E ? a : E.(a))
+        for (k, n, E) in ph.inputs
+]
+
+_discretized_refusal(ph::_DiscretizedFields, what) = ArgumentError(
+    string(
+        "`discretization = ", repr(ph.disc), "`: ", what, ". The contract: `discretize(Potts.fields(model), d; ",
+        "inputs = [name => array, …])` returns a problem whose integrator reads and writes each field by name as a vector ",
+        "of the lattice's sites in column-major order (`getu`, `setu`) and sets each input and parameter by name (`setp`)"
+    )
+)
+
+# the discretization's problem for the given inputs (a discretizer without `inputs` refused)
+function _discretized_problem(ph::_DiscretizedFields, ins)
+    hasmethod(SciMLBase.discretize, Tuple{typeof(ph.pdesys), typeof(ph.disc)}, (:inputs,)) ||
+        throw(_discretized_refusal(ph, "`discretize` does not take `inputs` for this discretization"))
+    return SciMLBase.discretize(ph.pdesys, ph.disc; inputs = ins)
+end
+
+# At build and at `remake`: the problem of each discretized-fields phase meets the contract,
+# for the state's input and field arrays
+function _check_discretized(@nospecialize(f), st)
+    SII = SymbolicIndexingInterface
+    for e in f.phases.mcs, t in (e isa CorePotts.Repeat ? e.entries : (e,))
+        for ph in (t isa Tuple ? t : (t,))
+            ph isa _DiscretizedFields || continue
+            # (a discretizer's own error, e.g. one taking `kwargs...` that cannot build this
+            # system, refused as the contract)
+            prob = try
+                _discretized_problem(ph, _input_values(ph, st))
+            catch err
+                (isfatal(err) || err isa ArgumentError) && rethrow()
+                throw(_discretized_refusal(ph, "its `discretize` failed: " * sprint(showerror, err)))
+            end
+            for n in ph.fields
+                SII.is_variable(prob, n) || throw(_discretized_refusal(ph, "its problem has no field `$n`"))
+                l, sites = length(SII.getu(prob, n)(prob)), length(getproperty(st.site, n))
+                l == sites || throw(_discretized_refusal(ph, "its field `$n` has $l values, the lattice $sites sites"))
+            end
+            for k in Iterators.flatten((first.(ph.inputs), ph.params))
+                SII.is_parameter(prob, k) ||
+                    throw(_discretized_refusal(ph, "its problem has no parameter or input `$k` to set"))
+            end
+        end
+    end
+    return nothing
+end
+
+# The integrator of a trajectory and the accessors built once with it
+struct _DiscretizedIntegrator{I, SI, SP, SU, GU}
+    integ::I
+    set_inputs::SI      # one `setp` per input
+    set_params::SP      # one `setp` per model parameter
+    set_fields::SU      # one `setu` per field
+    get_fields::GU      # one `getu` per field
+    lastp::Ref{Any}                         # the parameter values last written
+end
+
+function _discretized_integrator(ph::_DiscretizedFields, ins, t0)
+    SII = SymbolicIndexingInterface
+    prob = SciMLBase.remake(_discretized_problem(ph, ins); tspan = (t0, t0 + ph.dt))
+    # (nothing reads the solution: the fields are read from the integrator)
+    integ = SciMLBase.init(prob, ph.alg; save_everystep = false, save_start = false, save_end = false)
+    return _DiscretizedIntegrator(
+        integ, Tuple(SII.setp(integ, k) for (k, _) in ins), Tuple(SII.setp(integ, n) for n in ph.params),
+        Tuple(SII.setu(integ, n) for n in ph.fields), Tuple(SII.getu(integ, n) for n in ph.fields), Ref{Any}(nothing)
+    )
+end
+
+function CorePotts.run_phase(ph::_DiscretizedFields, st, p, ctx, key, mcs, backend, stats)
+    backend isa KernelAbstractions.CPU || throw(
+        ArgumentError(
+            string(
+                "`discretization = ", repr(ph.disc), "`: its ",
+                "fields step on the host; run the problem on the CPU, or leave `discretization` out"
+            )
+        )
+    )
+    owner = st.ownership
+    t0 = mcs * ph.dt
+    ins = _input_values(ph, st)
+    di = lock(() -> _cached_integrator(ph.integrators, owner), ph.lock)
+    if di === nothing
+        di = _discretized_integrator(ph, ins, t0)
+        lock(() -> _cache_integrator!(ph.integrators, owner, di), ph.lock)
+    end
+    return _step_discretized!(di, ph, st, p, ins, t0, mcs, stats)
+end
+
+# One window on the cached integrator (a function barrier: `di` comes from an untyped cache)
+function _step_discretized!(di::_DiscretizedIntegrator, ph::_DiscretizedFields, st, p, ins, t0, mcs, stats)
+    integ = di.integ
+    # the inputs, the model's parameter values when they change (`remake(prob; p)`,
+    # `integ.ps[k] = v`), then the fields; `reinit!` from that state starts the window (and
+    # its first step size) from them, whatever the algorithm keeps internally
+    foreach(((s, (_, v)),) -> s(integ, v), zip(di.set_inputs, ins))
+    if di.lastp[] !== p
+        foreach(((s, n),) -> s(integ, p[n]), zip(di.set_params, ph.params))
+        di.lastp[] = p
+    end
+    foreach(((s, n),) -> s(integ, vec(getproperty(st.site, n))), zip(di.set_fields, ph.fields))
+    SciMLBase.reinit!(integ, copy(integ.u); t0, tf = t0 + ph.dt, erase_sol = true)
+    SciMLBase.solve!(integ)
+    if !SciMLBase.successful_retcode(integ.sol)
+        LatticeFields.Exec.VERBOSE[] && @warn "Fields failed at MCS $mcs: retcode $(integ.sol.retcode)"
+        stats !== nothing && (stats.ode_code = integ.sol.retcode)
+        return 0
+    end
+    # (host arrays: the phase refuses a device backend above)
+    foreach(((g, n),) -> vec(getproperty(st.site, n)) .= g(integ), zip(di.get_fields, ph.fields))
+    return 0
+end
+
 # At build: each field phase's substep count at the problem's parameters (the policy's
 # refusals, and its warning for an explicit count the bound does not cover)
 function _check_field_substeps(@nospecialize(f), @nospecialize(p); tspan = nothing)     # (host, once per problem; TS1c)
@@ -1184,7 +1360,7 @@ function _check_field_substeps(@nospecialize(f), @nospecialize(p); tspan = nothi
         for ph in t
             ph isa CorePotts.FieldPhase && !ph.init &&
                 ph.substeps isa Union{LatticeFields.Problems.GroupSubsteps, LatticeFields.Problems.StartSubsteps} || continue
-            pp = LatticeFields.Problems.with_tables(Float64[CorePotts._praw(ph, p)...], CorePotts._table_values(ph, p))
+            pp = LatticeFields.Problems.with_tables(Float64[CorePotts.praw(ph, p)...], CorePotts.table_values(ph, p))
             # (the run's time span, MCS times the step length: a Robin face that reads the time
             # is checked over it, F4-12b review)
             sp = tspan === nothing || !(ph.substeps isa LatticeFields.Problems.GroupSubsteps) ? nothing :

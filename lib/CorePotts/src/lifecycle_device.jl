@@ -819,8 +819,9 @@ end
 # ---------------------------------------------------------------------------------------
 # Host orchestration (enqueue only)
 
-# The built-in planes compute in the device's float type (the planner compiles every plane
-# of the model, also those of rules that never fire: a `Float64` default must not reach Metal)
+# The built-in planes compute in the state's float type, on the host and on a device (the
+# planner compiles every plane of the model, also those of rules that never fire: a `Float64`
+# default must not reach Metal)
 _plane(::AlongMinorAxis, ::Type{T}) where {T} = AlongMinorAxis{T}()
 _plane(::AlongMajorAxis, ::Type{T}) where {T} = AlongMajorAxis{T}()
 _plane(::RandomPlane, ::Type{T}) where {T} = RandomPlane{T}()
@@ -1158,10 +1159,10 @@ MCS before it (a proven form never fails over). One synchronizing read, once per
 """
 function _drop_device_counts!(integ, D::DeviceLifecycle)
     stats = _stats(integ)
-    _copy!(stats, D.acc, D.dv.acc)
+    counted_copy!(stats, D.acc, D.dv.acc)
     D.acc_seen .= D.acc
     if integ.mscratch !== nothing
-        _copy!(stats, D.mask, D.dv.mask)
+        counted_copy!(stats, D.mask, D.dv.mask)
         D.mask_seen .= D.mask
     end
     return nothing
@@ -1180,7 +1181,7 @@ function _fold_lifecycle!(integ; report::Bool = true)
     (lc === nothing || lc.device === nothing) && return nothing
     D = lc.device
     stats = _stats(integ)
-    _copy!(stats, D.acc, D.dv.acc)
+    counted_copy!(stats, D.acc, D.dv.acc)
     δ(i) = Int(D.acc[i] - D.acc_seen[i])             # Int32 differences (wrap-safe)
     s = stats.lifecycle
     deferred = δ(_ACC_DEFERRED)
@@ -1197,7 +1198,7 @@ function _fold_lifecycle!(integ; report::Bool = true)
     badtrans = δ(_ACC_BADTRANS)
     D.acc_seen .= D.acc
     if integ.mscratch !== nothing
-        _copy!(stats, D.mask, D.dv.mask)
+        counted_copy!(stats, D.mask, D.dv.mask)
         dD = D.mask[1] - D.mask_seen[1]
         dM = D.mask[2] - D.mask_seen[2]
         # the MCS after a refresh at MCS m (m + 1 … t − 1) ran with the old mobile count

@@ -340,11 +340,11 @@ function _trow!(pr::ImplicitRow, tr::TangentRow, c::TangentCache, par, t1, hγ, 
 end
 # a coupled group's tangent step: the operator at the primal iterate (its residual `b` the base of
 # the difference), one FGMRES per derivative part (an exact difference for a linear group, else
-# a few corrections with the Dual residual)
+# a few corrections with the Dual residual), each a solve of the group's LinearSolve cache with
+# the part as its right-hand side
 function _tcoupled!(c::TangentCache, cs::CoupledKrylov, par, t1, hγ, k)
     backend = c.backend
-    A, ws, bt = cs.A, cs.ws, c.bt
-    Kt = eltype(cs.scal)
+    A, ws, bt, lin = cs.A, cs.ws, c.bt, cs.lin
     A.it = (par, false, Float64(t1), Float64(hγ), Int(k))
     cs.walk(cs.rows, _csop(:residual, (par, false, t1, hγ, k, A.b.a, cs.part, backend, nothing)))
     Exec.launch!(backend, _cs_un_body!, 1, (cs.scal, cs.part, cs.nbt))
@@ -354,8 +354,13 @@ function _tcoupled!(c::TangentCache, cs::CoupledKrylov, par, t1, hγ, k)
             for (cr, tr) in zip(cs.rows, c.rows)
                 Exec.launch!(backend, _tcload_body!, cr.n, (bt.a, cr.voff, tr.resarr, j, cr.row.mask, cr.row.dom))
             end
-            Krylov.fgmres!(ws, A, bt; N = cs.P, restart = true, rtol = Kt(cs.rtol), atol = Kt(cs.rtol * Solvers.FLOOR),
-                itmax = cs.budget, callback = _CsStop())
+            b0 = lin.b
+            lin.b = bt
+            try
+                _solve_cache!(lin)
+            finally
+                lin.b = b0
+            end
             for (cr, tr) in zip(cs.rows, c.rows)
                 dst = tr.bufs[3 - par]
                 δ = view(ws.x.a, (cr.voff + 1):(cr.voff + cr.n))

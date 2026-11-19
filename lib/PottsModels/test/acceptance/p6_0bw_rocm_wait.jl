@@ -11,11 +11,11 @@
 #    100². The wait cost is all at host read points: saves, `current_state(integ)`, checkpoints.
 #  - A read point right after `step!` (`current_state(integ)`, i.e. `current_state`; also what a
 #    callback or a hand-written integrator loop reads), 600 reads per process, two
-#    processes per mode. "default" is the library today: `_sync!` is
+#    processes per mode. "default" is the library today: `sync!` is
 #    `KernelAbstractions.synchronize`, i.e. AMDGPU's default `synchronize` (256 spins,
 #    then a HIP host callback through Julia's event loop), and every device→host
 #    `copyto!` waits the same way inside AMDGPU. "spin" is a `hipStreamQuery` spin in
-#    `_sync!` with the copies enqueued `async = true` and waited on by the same spin:
+#    `sync!` with the copies enqueued `async = true` and waited on by the same spin:
 #        model (MCS GPU µs)        default: median / reads > 1 ms     spin: median / > 1 ms
 #        OpenVT monolayer (77)     12.9 ms / 600 of 600               0.12 ms / 1–2 of 600
 #        OpenVT reference (113)    12.9 ms / 462–466 of 600           0.19 ms / 1 of 600
@@ -43,8 +43,8 @@
 #        CorePotts._spin_until(done, timeout) -> nothing
 #      which returns once `done()` is true and throws an exception whose message names
 #      the timeout (the number of seconds and the word "time") once more than `timeout`
-#      seconds have passed. Every explicit library wait (`_sync!`) and every device→host
-#      copy the integrator makes (`_to_host`, `_copy!`, `_readback`, `_snapshot`) waits
+#      seconds have passed. Every explicit library wait (`sync!`) and every device→host
+#      copy the integrator makes (`to_host`, `counted_copy!`, `_readback`, `snapshot`) waits
 #      through `_device_wait`.
 #  (S) Spinning keeps the process alive: another task runs while `_spin_until` spins (the
 #      yield; on one thread it could not otherwise), another thread's `GC.gc()` completes
@@ -93,7 +93,7 @@
 # device backend.
 #
 # Checked before the freeze against a stub of (W) (the spin above in `_device_wait`,
-# `_sync!` and `_to_host` on ROCm): CPU 17 pass + 1 skip (julia -t 2), Metal 33 pass +
+# `sync!` and `to_host` on ROCm): CPU 17 pass + 1 skip (julia -t 2), Metal 33 pass +
 # 2 skips, ROCm 43 pass + 1 skip (the one-thread hostcall control; (P) 0 slow reads of
 # 300 per model, at most 1 slow saving step).
 #

@@ -102,7 +102,7 @@ function anneal(prob::CorePotts.PottsProblem, u, mcs::Integer; seed::Integer = 0
     f = prob.f
     # the at-init phases (derived refreshes) before every MCS; no other phase, no lifecycle,
     # no field clamp (masked conditions hold on a fresh initial state and in field steps)
-    refresh = CorePotts.Phases(; before_mcs = CorePotts._derived(f.phases.at_init))
+    refresh = CorePotts.Phases(; before_mcs = CorePotts.derived(f.phases.at_init))
     # no track (D-140): the relaxation is a measurement, its accepted ΔH is not the run's
     cold = CorePotts.CPMFunction(f.delta_H; f.commit!, f.constraint,
         temperature = _ZeroTemperature(f.temperature), f.bias, phases = refresh, f.acceptance,

@@ -898,7 +898,7 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
     snapshots = isempty(getfield(c, :energy_snapshots)) ? () : (_slots_phase(T, getfield(c, :energy_snapshots), rn),)
     # fields after the synchronous updates (MTK equations advance with the MCS clock): the CPM
     # inputs, then one field phase per solver group (fields.jl)
-    dt = _p(getfield(c, :sys), :sweep).mcs_duration
+    dt = Float64(_p(getfield(c, :sys), :sweep).mcs_duration)   # the run clock is Float64
     fsteps, clamps = _field_phases(c, T, spec)
     append!(groups[:fields], fsteps)
     # cell then model ODEs (model ODEs see the cells' new values; D-077 N3), one phase per
@@ -945,7 +945,7 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
     postconv = Dict{Symbol, Vector{Any}}(n => (haskey(post, n) && !isempty(post[n]) ? refresh(post[n]) : Any[]) for n in keys(convs))
     # masked clamps hold on a fresh initial state (D-145), after its inputs and before its
     # derived quantities (a checkpoint restore and `anneal` run `at_init` without them:
-    # `CorePotts._derived`)
+    # `CorePotts.derived`)
     # the MCS order: entries of adjacent groups merged into one tuple
     entries = Any[]
     rsched = _schedule_repeat(_p(s, :schedule))
@@ -1212,16 +1212,16 @@ struct _AdaptiveODE{F, A, K, R}
     lock::ReentrantLock
 end
 
-(ph::_AdaptiveODE)(st, p, ctx, key, mcs, backend) = CorePotts._run_phase(ph, st, p, ctx, key, mcs, backend, nothing)
+(ph::_AdaptiveODE)(st, p, ctx, key, mcs, backend) = CorePotts.run_phase(ph, st, p, ctx, key, mcs, backend, nothing)
 
 # `stats`: the integrator's `PottsStats`, counting the host copies (D-085)
-function CorePotts._run_phase(ph::_AdaptiveODE, st, p, ctx, key, mcs, backend, stats)
-    ph.sync && CorePotts._sync!(stats, backend)
+function CorePotts.run_phase(ph::_AdaptiveODE, st, p, ctx, key, mcs, backend, stats)
+    ph.sync && CorePotts.sync!(stats, backend)
     owner = st.ownership                                   # identifies the trajectory
     cpu = backend isa KernelAbstractions.CPU
     host = cpu ? st : _adaptive_host_state(ph, stats, backend, st)
-    hp = cpu ? p : CorePotts._adapt_host(stats, p)     # Potts' parameters are isbits: nothing to copy
-    hctx = merge(ctx, (; lattice = CorePotts._host_lattice(stats, ctx.lattice)))
+    hp = cpu ? p : CorePotts.adapt_host(stats, p)     # Potts' parameters are isbits: nothing to copy
+    hctx = merge(ctx, (; lattice = CorePotts.host_lattice(stats, ctx.lattice)))
     part = ph.scope === :cell ? host.cell : host.model
     arrays = [getfield(part, n) for n in ph.names]
     outs = [getfield(part, n) for n in ph.outs]
@@ -1280,7 +1280,7 @@ function CorePotts._run_phase(ph::_AdaptiveODE, st, p, ctx, key, mcs, backend, s
     end
     if ok && !cpu
         dst = ph.scope === :cell ? st.cell : st.model
-        foreach(n -> CorePotts._copy!(stats, getfield(dst, n), getfield(part, n)), ph.outs)
+        foreach(n -> CorePotts.counted_copy!(stats, getfield(dst, n), getfield(part, n)), ph.outs)
     end
     return 0
 end
@@ -1290,12 +1290,12 @@ end
 # host buffers (every entry is written); every other leaf stays on the device, unread.
 function _adaptive_host_state(ph::_AdaptiveODE, stats, backend, st)
     r = ph.reads
-    r === nothing && return CorePotts._snapshot(stats, backend, st)
+    r === nothing && return CorePotts.snapshot(stats, backend, st)
     cell, model = ph.scope === :cell ? ((r.cell..., ph.names..., :volume), r.model) : (r.cell, (r.model..., ph.names...))
-    host = CorePotts._host_leaves(stats, st; ownership = r.ownership, cell = unique(cell), model = unique(model), r.site, r.history)
+    host = CorePotts.host_leaves(stats, st; ownership = r.ownership, cell = unique(cell), model = unique(model), r.site, r.history)
     fresh = Tuple(n for n in ph.outs if !(n in (ph.scope === :cell ? cell : model)))    # not copied down
     isempty(fresh) && return host
-    bufs(nt) = merge(nt, NamedTuple{fresh}(map(n -> CorePotts._host_buffer(getfield(nt, n)), fresh)))
+    bufs(nt) = merge(nt, NamedTuple{fresh}(map(n -> CorePotts.host_buffer(getfield(nt, n)), fresh)))
     return ph.scope === :cell ? CorePotts.CPMState(host.ownership, bufs(host.cell), host.site, host.model, host.history) :
         CorePotts.CPMState(host.ownership, host.cell, host.site, bufs(host.model), host.history)
 end
@@ -1584,9 +1584,9 @@ struct _Gated{P}
 end
 _Gated(every::Integer, phase) = _Gated(every, 0, phase)
 (g::_Gated{P})(st, p, ctx, key, mcs, backend) where {P} =
-    CorePotts._run_phase(g, st, p, ctx, key, mcs, backend, nothing)
-CorePotts._run_phase(g::_Gated{P}, st, p, ctx, key, mcs, backend, stats) where {P} =
-    mcs % g.every == g.offset ? CorePotts._run_phase(g.phase, st, p, ctx, key, mcs, backend, stats) : 0
+    CorePotts.run_phase(g, st, p, ctx, key, mcs, backend, nothing)
+CorePotts.run_phase(g::_Gated{P}, st, p, ctx, key, mcs, backend, stats) where {P} =
+    mcs % g.every == g.offset ? CorePotts.run_phase(g.phase, st, p, ctx, key, mcs, backend, stats) : 0
 
 _model_env(T, rn; mcs = :mcs, key = nothing, extra = ()) =
     LowerEnv(T, :model, Dict{Symbol, Any}(:mcs => mcs, _draws(key, mcs, 0)..., extra...), rn)
@@ -1760,7 +1760,7 @@ function _convert_pass_fns(c::CompiledPottsSystem, T, v::ConvertSpec)
     decide = _rgf(:((st, p, ctx, key, mcs, i, from, to) -> begin
         $(v.at === true ? nothing : :($(lower(v.at, senv)) || return false))
         q = $T($(lower(v.p, senv)))
-        $(nan === nothing ? nothing : :(isnan(q) && CorePotts._bump!($(nan[1]), $(nan[2]))))
+                $(nan === nothing ? nothing : :(isnan(q) && CorePotts.bump!($(nan[1]), $(nan[2]))))
         u = CorePotts.uniform($T, CorePotts.draw(key, mcs, i, $stream)[1])
         # A NaN `p` converts nothing: `clamp` keeps NaN, and `u < NaN` is false (D-233 ruling 6).
         # Do not rewrite this test as `!(u >= q)`, which would convert every candidate of a NaN `p`.
@@ -1804,8 +1804,9 @@ function _convert_pass_fns(c::CompiledPottsSystem, T, v::ConvertSpec)
             a = Symbol(:a_, j)
             x = info(t.var).name
             push!(body, :($a = $T($(lower(t.per_site, tenv))) * $T(n)),
-                :(CorePotts._atomic_add!(st.cell.$x, $(lower(t.from, tenv)), -$a)),
-                :(CorePotts._atomic_add!(st.cell.$x, $(lower(t.to, tenv)), $a)))
+                :(CorePotts.atomic_add!(st.cell.$x, $(lower(t.from, tenv)), -$a)),
+                :(CorePotts.atomic_add!(st.cell.$x, $(lower(t.to, tenv)), $a))
+            )
         end
         transfer! = _rgf(:((st, p, ctx, key, mcs, r, from, to, n) -> begin
             $(body...)
@@ -1829,11 +1830,11 @@ function _convert_pass_fns(c::CompiledPottsSystem, T, v::ConvertSpec)
             push!(vals, :($w = $T($(lower(d, wenv)))))
             i = info(lhs)
             if i !== nothing
-                push!(adds, :(CorePotts._cv_write!(acc, Val($j), st.model.$(i.name), 1, $w)))
+                push!(adds, :(CorePotts.cv_write!(acc, Val($j), st.model.$(i.name), 1, $w)))
                 push!(cols, (:model, i.name))
             else
                 x = info(arguments(lhs)[1]).name
-                push!(adds, :(CorePotts._cv_write!(acc, Val($j), st.cell.$x, $(lower(arguments(lhs)[2], wenv)), $w)))
+                push!(adds, :(CorePotts.cv_write!(acc, Val($j), st.cell.$x, $(lower(arguments(lhs)[2], wenv)), $w)))
                 push!(cols, (:cell, x))
             end
         end

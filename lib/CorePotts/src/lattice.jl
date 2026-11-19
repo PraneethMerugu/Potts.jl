@@ -1,5 +1,6 @@
 # N-dimensional Cartesian lattices and neighborhood relations of any order.
 
+"""The supertype of a lattice axis's boundary condition (`Periodic`, `Closed`)."""
 abstract type AbstractBoundary end
 """Opposite faces are identified."""
 struct Periodic <: AbstractBoundary end
@@ -107,10 +108,15 @@ end
 
 """The lattice with its domain mask on the host (for host code given a device context). The
 mask is static: its host copy is made once per device mask and reused (read-only)."""
-host_lattice(l::Lattice) = _host_lattice(nothing, l)
+host_lattice(l::Lattice) = host_lattice(nothing, l)
 # `stats` counts the mask copy (D-085), or `nothing`; the copy is cached (D-092, audit A4/H3)
-_host_lattice(stats, l::Lattice{N, Nothing}) where {N} = l
-_host_lattice(stats, l::Lattice) = _adapt_host_cached(stats, l)
+"""
+    host_lattice(stats, l::Lattice)
+
+The lattice with its domain mask on the host: a counted copy (`stats`) of a device mask.
+"""
+host_lattice(stats, l::Lattice{N, Nothing}) where {N} = l
+host_lattice(stats, l::Lattice) = _adapt_host_cached(stats, l)
 
 Base.ndims(::Lattice{N}) where {N} = N
 """
@@ -229,6 +235,7 @@ end
 end
 
 
+"""The supertype of a relation's specification (a neighborhood or stencil before it is bound to a lattice)."""
 abstract type AbstractRelationSpec end
 
 """Chebyshev ball: all offsets with `maximum(abs, o) ≤ k` (order 1 = 8 in 2D, 26 in 3D)."""
@@ -363,6 +370,7 @@ function _offsets(spec::AbstractRelationSpec, l::Lattice{N}) where {N}
     return offs
 end
 relation(r::Relation, ::Lattice) = r
+"""Whether relation `r` includes the origin offset (a site is its own neighbor)."""
 has_origin(r::Relation) = any(o -> all(iszero, o), r.offsets)
 
 """Whether every offset's negation is in `r` with the same weight (a symmetric pair relation)."""
@@ -453,7 +461,7 @@ end
 # Overwrite a mask mobility from a host mask (the custom-rule fallback of `refresh_frozen!`).
 # `stats` counts the host→device copy (D-085), or `nothing`.
 function _set_mobility!(stats, m::MaskMobility, frozen::AbstractArray{Bool})
-    _copy!(stats, m.frozen, frozen isa Array{Bool} ? frozen : Array{Bool}(frozen))
+    counted_copy!(stats, m.frozen, frozen isa Array{Bool} ? frozen : Array{Bool}(frozen))
     m.sites === nothing || _mobile_sites!(m.sites, frozen)
     return nothing
 end

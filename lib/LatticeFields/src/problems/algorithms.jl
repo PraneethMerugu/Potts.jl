@@ -547,10 +547,10 @@ function _window(alg::AbstractFieldAlgorithm, dt, clock)
             "`", nameof(typeof(alg)), "` on a `FieldProblem` needs `dt` (the window) when the discretization declares no ",
                     "`clock`: nothing else sets the window, and `saveat` never does; give `solve(prob, alg; dt)` or ",
             "`LatticeDiscretization(…; clock = τ)`")))
-        return Float64(clock)
+        return float(clock)
     end
     clock === nothing || _per(dt, clock)
-    return Float64(dt)
+    return float(dt)
 end
 # a map steps one unit of time: a clock is a whole number of map steps
 function _window(::ExplicitMap, dt, clock)
@@ -570,10 +570,16 @@ end
 # the number of windows `dt` in one period of the clock
 function _per(dt, clock)
     m = round(Int, clock / dt)
-    m >= 1 && abs(m * dt - clock) <= 1e-12 * clock || throw(ArgumentError(string(
-        "dt = ", dt, " does not divide the clock's period ", clock, " (to a relative 1e-12): the stepper lands on every ",
-        "boundary of the clock, so a period holds a whole number of windows; give dt = ", clock, "/n, or leave `dt` out ",
-        "to step windows of ", clock)))
+    # (to a relative 1e-12, or a few roundings of `dt`'s type when that is coarser: Float32)
+    m >= 1 && abs(m * dt - clock) <= max(1.0e-12, 4 * eps(typeof(float(dt)))) * clock || throw(
+        ArgumentError(
+            string(
+                "dt = ", dt, " does not divide the clock's period ", clock, " (to the rounding of dt's type): the stepper lands on every ",
+                "boundary of the clock, so a period holds a whole number of windows; give dt = ", clock, "/n, or leave `dt` out ",
+                "to step windows of ", clock
+            )
+        )
+    )
     return m
 end
 
