@@ -227,9 +227,9 @@ function _check_adaptive_draws(c::CompiledPottsSystem, resolved)
         lhs = _unwrap(eq.lhs)
         (iscall(lhs) && operation(lhs) isa Differential) || continue
         get(resolved, _solver_name(arguments(lhs)[1]), nothing) isa Adaptive || continue
-        _has_op(eq.rhs, random_uniform) && _located(getfield(c, :sys), eq) do
+        _has_op(eq.rhs, random_uniform) && _located(getfield(c, :sys), eq; compile = false) do
             throw(
-                PottsCompileError(
+                ArgumentError(
                     "`rand()` in an equation integrated by `Adaptive(…)`: the solver re-evaluates " *
                         "the rate at trial steps; use `Potts.RK4`/`ExplicitEuler`, or draw in an update"
                 )

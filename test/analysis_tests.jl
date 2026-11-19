@@ -366,6 +366,7 @@ end
                 () -> Potts.anneal(prob, 5; seed = 1, alg)
             )
         end
+        @test sprint(showerror, Potts.PottsSolveError("step failed")) == "step failed"
         # negative control: away from volume 8 the same model anneals
         σ2 = zeros(Int32, 16, 16)
         σ2[3:6, 3:6] .= 1                                        # volume 16: T = 0 grows it, ΔH finite

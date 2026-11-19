@@ -1238,14 +1238,15 @@ function CorePotts._run_phase(ph::_AdaptiveODE, st, p, ctx, key, mcs, backend, s
             SciMLBase.reinit!(integ, u; t0, tf = t0 + ph.dt, erase_sol = true, reset_dt = true)
         end
         SciMLBase.solve!(integ)
-        SciMLBase.successful_retcode(integ.sol) || throw(
-            PottsSolveError(
-                "Adaptive ODE integration failed at MCS $mcs" *
-                    (c == 0 ? "" : " (cell $c)") * ": retcode $(integ.sol.retcode)"
-            )
-        )
+        if !SciMLBase.successful_retcode(integ.sol)
+            @warn "Adaptive ODE integration failed at MCS $mcs" *
+                (c == 0 ? "" : " (cell $c)") * ": retcode $(integ.sol.retcode)"
+            stats !== nothing && (stats.ode_code = integ.sol.retcode)
+            return nothing
+        end
         return integ.u
     end
+    ok = true
     if ph.scope === :cell
         for c in 1:length(host.cell.kind)
             if !(host.cell.volume[c] > 0)
@@ -1256,6 +1257,10 @@ function CorePotts._run_phase(ph::_AdaptiveODE, st, p, ctx, key, mcs, backend, s
                 u[i] = a[c]
             end
             v = advance!((host, hp, hctx, mcs, c), c)
+            if v === nothing
+                ok = false
+                break
+            end
             for (i, o) in enumerate(outs)
                 o[c] = v[i]
             end
@@ -1265,11 +1270,15 @@ function CorePotts._run_phase(ph::_AdaptiveODE, st, p, ctx, key, mcs, backend, s
             u[i] = a[1]
         end
         v = advance!((host, hp, hctx, mcs, 0), 0)
-        for (i, o) in enumerate(outs)
-            o[1] = v[i]
+        if v === nothing
+            ok = false
+        else
+            for (i, o) in enumerate(outs)
+                o[1] = v[i]
+            end
         end
     end
-    if !cpu
+    if ok && !cpu
         dst = ph.scope === :cell ? st.cell : st.model
         foreach(n -> CorePotts._copy!(stats, getfield(dst, n), getfield(part, n)), ph.outs)
     end

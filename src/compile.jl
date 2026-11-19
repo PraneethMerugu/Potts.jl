@@ -1362,13 +1362,13 @@ end
 _source!(d, x, ln) = (ln isa LineNumberNode && (d[x] = ln); x)
 
 """Run `f()`; an error it raises is re-raised naming statement `x` and its source line."""
-function _located(f, sys::PottsSystem, x)
+function _located(f, sys::PottsSystem, x; compile::Bool = true)
     try
         return f()
     catch e
         e isa Union{ArgumentError, PottsCompileError, LatticeFields.IR.IRError} || rethrow()
         occursin("\n  in ", e.msg) && rethrow()
-        wrap(m) = throw(PottsCompileError(m))
+        wrap(m) = throw(compile || e isa Union{PottsCompileError, LatticeFields.IR.IRError} ? PottsCompileError(m) : ArgumentError(m))
         ln = get(_p(sys, :sources), _source_key(x), nothing)
         loc = ln === nothing ? "" : " at $(ln.file):$(ln.line)"
         msg = _builtin_text(e.msg)
