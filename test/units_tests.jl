@@ -145,7 +145,7 @@ end
         @test unit_compile(:drive_good_zero) isa CompiledPottsSystem
         @test unit_compile(:after_good_max) isa CompiledPottsSystem
         @test unit_refuses(:after_bad_max)
-        @test_throws ArgumentError unit_compile(:drive_bad_cond)              # condition in m
+        @test_throws ArgumentError unit_compile(:drive_bad_cond)              # SymbolicUtils rejects non-Bool ifelse condition before compile
         # A-56: zero in comparisons and rules; equations need x's units per unit of time
         @test unit_compile(:divide_good_zero) isa CompiledPottsSystem
         @test unit_compile(:after_good_zero) isa CompiledPottsSystem

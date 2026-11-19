@@ -220,7 +220,8 @@ end
         @test solve(p, CheckerboardCPM(; proposal = Moore(1))).u[end].cell.y[1] ≈ exp(-0.9) rtol = 1e-6
         # a failing solve is an error, not a silent truncation
         bad = PottsProblem(adaptive_model(), op, (0, 1); ode_solver = Adaptive(Tsit5(); maxiters = 5))
-        ad_throws(Potts.PottsCompileError, ["MaxIters"], () -> solve(bad, SequentialCPM()))
+        ad_throws(Potts.PottsSolveError, ["MaxIters"], () -> solve(bad, SequentialCPM()))
+        @test sprint(showerror, Potts.PottsSolveError("step failed")) == "step failed"
         # nested @extend: numbering continues (independent draws), the outer lattice dimension is kept
         σ2 = zeros(Int32, 16, 16); σ2[4:8, 4:8] .= 1
         u = solve(PottsProblem(RndOuter(; name = :o), [ownership => σ2, kind => [1]], (0, 1)), SequentialCPM()).u[end]

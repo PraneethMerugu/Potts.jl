@@ -244,24 +244,7 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
 
     _qa_invariants_match(found, reviewed) = sort(collect(String, found)) == sort(collect(String, reviewed))
 
-    """
-        qa_error_rules(pkg_root; reviewed_invariants = String[], allowed_bcs_files = String[])
-
-    Verify that `src/` and `ext/` in `pkg_root` contain:
-    - no `error(...)`, `Base.error(...)`, or `ErrorException(...)` calls,
-    - no bare `catch` clauses (`try ... catch; ... end` without an exception binding),
-    - internal `"please report"` invariants thrown exclusively via `AssertionError` and matching
-      `reviewed_invariants`,
-    that `src/`, `ext/`, and `test/` contain no stale front-end wording (`"front end A"`,
-    `"front end B"`, `"both front ends"`, `"@bcs"` outside explicit legacy section refusal),
-    and run negative controls proving every guard flags synthetic violations.
-    """
-    function qa_error_rules(
-            pkg_root::AbstractString;
-            reviewed_invariants::AbstractVector{<:AbstractString} = String[],
-            allowed_bcs_files::AbstractVector{<:AbstractString} = String[]
-        )
-        Test = Base.require(Base.PkgId(Base.UUID("8dfed614-e22c-5e08-85e1-65c5234f0b40"), "Test"))
+    function _qa_collect_tree(pkg_root::AbstractString, allowed_bcs_files::AbstractVector{<:AbstractString})
         allowed_bcs = Set(normpath.(allowed_bcs_files))
         qa_self = normpath(joinpath(pkg_root, "test", "shared", "qa_common.jl"))
 
@@ -308,6 +291,29 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
                 end
             end
         end
+        return (; bad_errors, bad_catches, bad_invariant_forms, bad_stale, found_invariants)
+    end
+
+    """
+        qa_error_rules(pkg_root; reviewed_invariants = String[], allowed_bcs_files = String[])
+
+    Verify that `src/` and `ext/` in `pkg_root` contain:
+    - no `error(...)`, `Base.error(...)`, or `ErrorException(...)` calls,
+    - no bare `catch` clauses (`try ... catch; ... end` without an exception binding),
+    - internal `"please report"` invariants thrown exclusively via `AssertionError` and matching
+      `reviewed_invariants`,
+    that `src/`, `ext/`, and `test/` contain no stale front-end wording (`"front end A"`,
+    `"front end B"`, `"both front ends"`, `"@bcs"` outside explicit legacy section refusal),
+    and run negative controls proving every guard flags synthetic violations.
+    """
+    function qa_error_rules(
+            pkg_root::AbstractString;
+            reviewed_invariants::AbstractVector{<:AbstractString} = String[],
+            allowed_bcs_files::AbstractVector{<:AbstractString} = String[]
+        )
+        Test = Base.require(Base.PkgId(Base.UUID("8dfed614-e22c-5e08-85e1-65c5234f0b40"), "Test"))
+        (; bad_errors, bad_catches, bad_invariant_forms, bad_stale, found_invariants) =
+            _qa_collect_tree(pkg_root, allowed_bcs_files)
 
         isempty(bad_errors) || @error "untyped error() / ErrorException calls" bad_errors
         isempty(bad_catches) || @error "bare catch clauses" bad_catches
@@ -332,14 +338,26 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
         Test.@test inv_form_neg.non_assertion_invariants == [1]
         inv_form_ok = _qa_scan_error_rules("f() = throw(AssertionError(\"bad (please report it)\"))")
         Test.@test isempty(inv_form_ok.non_assertion_invariants)
-        Test.@test !_qa_invariants_match(["src/a.jl"], String[])
-        Test.@test _qa_invariants_match(["src/a.jl"], ["src/a.jl"])
+        mktempdir() do tmp
+            mkdir(joinpath(tmp, "src"))
+            write(joinpath(tmp, "src", "planted.jl"), "f() = throw(AssertionError(\"bad (please report)\"))\n")
+            planted = _qa_collect_tree(tmp, String[])
+            Test.@test isempty(planted.bad_invariant_forms)
+            Test.@test !_qa_invariants_match(planted.found_invariants, String[])
+            Test.@test _qa_invariants_match(planted.found_invariants, ["src/planted.jl"])
+        end
         stale_neg = _qa_scan_error_rules("# front end A\nmsg = \"write @bcs: x\"")
         Test.@test stale_neg.stale_terms == [1, 2]
         bcs_neg = _qa_scan_error_rules("op === Symbol(\"@bcs\")"; allow_bcs = false)
         Test.@test bcs_neg.stale_terms == [1]
         bcs_ok = _qa_scan_error_rules("op === Symbol(\"@bcs\")"; allow_bcs = true)
         Test.@test isempty(bcs_ok.stale_terms)
+        bcs_test_neg = _qa_scan_error_rules("msg = \"@bcs\""; allow_bcs_test = false)
+        Test.@test bcs_test_neg.stale_terms == [1]
+        bcs_test_ok = _qa_scan_error_rules("msg = \"@bcs\""; allow_bcs_test = true)
+        Test.@test isempty(bcs_test_ok.stale_terms)
+        bcs_test_fe = _qa_scan_error_rules("# front end A"; allow_bcs_test = true)
+        Test.@test bcs_test_fe.stale_terms == [1]
         return nothing
     end
 end

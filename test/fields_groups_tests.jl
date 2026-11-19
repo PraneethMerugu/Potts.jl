@@ -209,7 +209,7 @@ end
     end
 end
 
-# F2-07: standalone `FieldGroups` steps FdTwo's field system as the model's two solver groups do
+# Standalone `FieldGroups` steps FdTwo's field system as the model's two solver groups do
 # (c with 2 substeps, then u with 3, reading the new c): σ is frozen (`A[frozen]`), so the
 # kind input is the same at every MCS
 @testitem "F2-07: B FieldGroups equals a model's two groups (FdTwo, σ frozen)" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin

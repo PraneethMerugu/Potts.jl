@@ -5,7 +5,7 @@
 # (`kind == A`, `volume[owner]`), filled per site by the field compiler. Oracles: LatticePDE's
 # own run of the same PDESystem over each MCS window (`cp_replay`), from the coupled run's
 # field before the window, with the inputs computed by hand from σ after the sweep (until
-# F4-B6 the oracle was the same field in the model's `@equations`, bitwise); the routes
+# the oracle was the same field in the model's `@equations`, bitwise); the routes
 # (`Potts.couple`, `@fields`, `@extend` with a drive) against each other, bitwise; ForwardDiff
 # against central differences at a fixed CPM path (F3-21b's shadow store); the ODE path, the
 # PDESystem solved by Tsit5 with `Potts.field_inputs(integ)` against the owned explicit run at

@@ -105,10 +105,10 @@ end
     end
 end
 
-@testitem "D-130: values too deep outside the solvers are an ArgumentError naming the part" setup = [SolversSetup] tags = [:potts, :solvers] begin
-    @testset "D-130: values too deep outside the solvers are an ArgumentError naming the part" begin
+@testitem "canonical depth: values too deep are PottsCompileError naming the part" setup = [SolversSetup] tags = [:potts, :solvers] begin
+    @testset "canonical depth: values too deep are PottsCompileError naming the part" begin
         deep = solver_deep_relation(9)
-        @test deep isa ArgumentError
+        @test deep isa Potts.PottsCompileError
         # control: the same relation within the cap compiles and runs
         ok = solver_deep_relation(3)
         @test ok isa Potts.CompiledPottsSystem
@@ -117,16 +117,16 @@ end
         @test Symbol(solve(PottsProblem(ok, [ownership => σ, kind => [:A]], (0, 2)), SequentialCPM()).retcode) === :Success
         # a constant in an expression key (`_symkey`): too deep names it, within the cap prints
         e = solver_err(() -> Potts._symkey(solver_nest(12)))
-        @test e isa ArgumentError
+        @test e isa Potts.PottsCompileError
         @test Potts._symkey(solver_nest(3)) isa String
         cyc = Ref{Any}(nothing)
         cyc[] = cyc
-        @test solver_err(() -> Potts._symkey(cyc)) isa ArgumentError
+        @test solver_err(() -> Potts._symkey(cyc)) isa Potts.PottsCompileError
     end
 end
 
-@testitem "F2-04: one ExplicitEuler for coupled and standalone routes" setup = [SolversSetup] tags = [:potts, :solvers] begin
-    @testset "F2-04: one ExplicitEuler for coupled and standalone routes" begin
+@testitem "field solvers: one ExplicitEuler for coupled and standalone routes" setup = [SolversSetup] tags = [:potts, :solvers] begin
+    @testset "field solvers: one ExplicitEuler for coupled and standalone routes" begin
         m = Module()
         Core.eval(m, :(using Potts; using Potts.LatticePDE))
         @test Core.eval(m, :ExplicitEuler) === Potts.ExplicitEuler === Potts.LatticePDE.ExplicitEuler ===

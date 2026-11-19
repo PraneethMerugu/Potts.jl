@@ -4,7 +4,7 @@
 # the field at a site reads the node whose block holds the site, so `integral(c) / volume` is
 # the cell's average over its sites. With σ frozen the coupled model equals its PDESystem solved
 # by LatticePDE (`Potts.fields` → `discretize`) bitwise. The fields are coupled with `@fields`
-# (F4-B4t; before, written in `@equations`). Base 392dd404 (~/lpwork/f3b6-nc-a.log):
+# (`@fields`; before, written in `@equations`). Base 392dd404 (~/lpwork/f3b6-nc-a.log):
 # `lattice_level` is not an option of `variable` (every model errors).
 
 @testsetup module FieldsCoarseSetup

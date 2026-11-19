@@ -1,5 +1,5 @@
-# F4-12a (F4 design §3.8 FE-10): the values of a PDESystem's conditions (expressions of parameters, the
-# coordinates `x`, `y`, `z` and the time, lowered into F3-07's value fields. Oracles:
+# Values of a PDESystem's conditions (expressions of parameters, the
+# coordinates `x`, `y`, `z` and the time), lowered into value fields. Oracles:
 # LatticePDE's own run of the same PDESystem (no cells: the field does not depend on the CPM),
 # hand values of the Robin slots, a manufactured solution with a time-dependent Dirichlet face
 # and a space-dependent Neumann face (order 2) and the hand ghost-rule matrix of one
@@ -14,7 +14,7 @@ isdefined(@__MODULE__, :PottsDevices) || include(joinpath(@__DIR__, "shared", "d
 using Potts, Test
 
 
-# F4-B4t, F4-B6: the models couple their fields with `@fields`
+# Models couple their fields with `@fields`
 isdefined(@__MODULE__, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
 isdefined(@__MODULE__, :observed_orders) || include(joinpath(@__DIR__, "shared", "stats_helpers.jl"))
 
@@ -258,7 +258,7 @@ end
     end
 end
 
-# F4-12a review: a slot means one quantity however the face is written (base 6d11bc85: the condition
+# Slot convention: a slot means one quantity however the face is written (base 6d11bc85: the condition
 # slot held −0.75, the coefficient of ∂c/∂x); a coefficient that reads more than parameters is
 # refused in the model's words, naming the read and the PDESystem (base: LatticePDE's "… is one
 # value at every site: …", with the first `@equations` line)
@@ -276,7 +276,7 @@ end
         for (r, word) in ((:y, "built"), (:t, "built"), (:vin, "volume"))
             M = _FbBadBcs(; name = Symbol(:FbBadBcs, r), r)
             e = fb_msg(() -> PottsProblem(M, fb_op((8, 8)), (0, 1)))
-            @test occursin(word, e) || (println("F4-12b condition ", r, ": ", e); false)
+            @test occursin(word, e) || (println("condition ", r, ": ", e); false)
         end
     end
 end
