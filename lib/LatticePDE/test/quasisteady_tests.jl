@@ -140,7 +140,7 @@ end
     # refused at build, as a growth is, with the eigenvalue and the route; and at a write
     for (kd, β) in ((2.0, 0.5), (0.5, 1.0), (0.2, 1.0), (0.05, 0.5))
             @test_throws ArgumentError init(rob(kd, β), alg; dt = 0.1)
-    end
+        end
         ig = init(rob(2.0, 1.0), alg; dt = 0.1)
         @test_throws ArgumentError (ig.ps[bk] = 0.5)
         @test init(rob(2.0, 0.5), BackwardEuler(); dt = 0.1) isa Any                      # (the route builds)
