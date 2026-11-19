@@ -141,7 +141,10 @@ How fields and ODEs are integrated is part of the problem, compiled into its cod
   starts from the fields' current values and the CPM inputs at that MCS
   ([`Potts.field_inputs`](@ref) names them). The discretization must take
   `inputs = [name => array, …]` and give an integrator that reads and writes each field by
-  name (`getu`, `setu`) and sets each input and parameter by name (`setp`).
+  name (`getu`, `setu`) as a vector of the lattice's sites in column-major order, and sets
+  each input and parameter by name (`setp`). `PottsProblem` and `remake` check this and throw
+  an `ArgumentError` otherwise; a discretization that grids the domain its own way (such as
+  MethodOfLines') does not meet it.
 
 `remake(prob; field_solver | ode_solver | solvers | discretization = …)` rebuilds the code with the keywords
 it names and keeps the others, `u0`, `p` and the seed; the problem fingerprint hashes a
@@ -218,6 +221,7 @@ function CorePotts.PottsProblem(
     )
     f = _problem_function(c, T, spec, values, hctx, Dict{Any, Any}(); track)
     _check_field_substeps(f, p; tspan)
+    _check_discretized(f, st)
     frozen = _frozen_mask(sys, st)
     _host_init!(f, st, p, hctx, seed, replica, repeat, NamedTuple(kwargs))
     tangent = isempty(seeds) && isempty(u0seeds) ? nothing : _tangent(c, T, p, seeds, opd; u0 = u0seeds)
@@ -611,6 +615,7 @@ function CorePotts.remake_function(
     track = _track(track)
     f = _problem_function(c, mi.T, spec, values, mi.ctx, mi.cache; track)
     _check_field_substeps(f, prob.p; prob.tspan)   # the policy's refusals at `remake`, as at the build
+    _check_discretized(f, prob.u0)
     return f, _track_layout(_ode_layout(prob.u0, c, spec), c, track)
 end
 

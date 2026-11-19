@@ -268,6 +268,16 @@ function _resolve_discretized(c::CompiledPottsSystem, disc, field_solver, ode_so
             )
         )
     )
+    # (`remake(p; field_solver = ExplicitEuler())` keeps the discretization: refused here)
+    field_solver isa SciMLBase.AbstractDEAlgorithm && !_is_field_solver(field_solver) || throw(
+        ArgumentError(
+            string(
+                "`discretization = ", repr(disc), "`: `field_solver` takes a SciML algorithm for its problem ",
+                "(e.g. `Tsit5()`), not a lattice field solver; got ", repr(field_solver),
+                "; or leave `discretization` out (`discretization = nothing` in `remake`)"
+            )
+        )
+    )
     isempty(_field_aux(sys)) || throw(
         ArgumentError(
             string(

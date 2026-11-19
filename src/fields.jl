@@ -1216,10 +1216,11 @@ function _discretized_phases(c::CompiledPottsSystem, T, spec::SolverSpec)
 end
 
 # One integrator of the discretized fields per trajectory, keyed by the identity of its live
-# state array (as `_AdaptiveODE`). The contract of a discretization: `discretize(pdesys, d;
-# inputs = [name => array, …])` takes the CPM inputs by name, and its problem's integrator
-# reads and writes each field by name (`getu`/`setu`), each input and parameter by name
-# (`setp`), as a `LatticeDiscretization`'s does.
+# state array (as `_AdaptiveODE`). The contract of a discretization (checked at build,
+# `_check_discretized`): `discretize(pdesys, d; inputs = [name => array, …])` takes the CPM
+# inputs by name, and its problem's integrator reads and writes each field by name
+# (`getu`/`setu`) as a vector of the lattice's sites in column-major order, and sets each
+# input and parameter by name (`setp`), as a `LatticeDiscretization`'s does.
 struct _DiscretizedFields{D, A}
     pdesys::Any
     disc::D
@@ -1235,10 +1236,73 @@ end
 
 (ph::_DiscretizedFields)(st, p, ctx, key, mcs, backend) = CorePotts._run_phase(ph, st, p, ctx, key, mcs, backend, nothing)
 
+# the inputs by name, converted only when the site array's element type differs
 _input_values(ph::_DiscretizedFields, st) = [
-    k => (a = getproperty(st.site, n); E === Bool ? Bool.(a) : E.(a))
+    k => (a = getproperty(st.site, n); eltype(a) === E ? a : E.(a))
         for (k, n, E) in ph.inputs
 ]
+
+_discretized_refusal(ph::_DiscretizedFields, what) = ArgumentError(
+    string(
+        "`discretization = ", repr(ph.disc), "`: ", what, ". The contract: `discretize(Potts.fields(model), d; ",
+        "inputs = [name => array, …])` returns a problem whose integrator reads and writes each field by name as a vector ",
+        "of the lattice's sites in column-major order (`getu`, `setu`) and sets each input and parameter by name (`setp`)"
+    )
+)
+
+# the discretization's problem for the given inputs (a discretizer without `inputs` refused)
+function _discretized_problem(ph::_DiscretizedFields, ins)
+    return try
+        SciMLBase.discretize(ph.pdesys, ph.disc; inputs = ins)
+    catch e
+        e isa MethodError && (e.f === SciMLBase.discretize ||
+            (e.f === Core.kwcall && length(e.args) >= 2 && e.args[2] === SciMLBase.discretize)) || rethrow()
+        throw(_discretized_refusal(ph, "`discretize` does not take `inputs` for this discretization"))
+    end
+end
+
+# At build and at `remake`: the problem of each discretized-fields phase meets the contract,
+# for the state's input and field arrays
+function _check_discretized(@nospecialize(f), st)
+    SII = SymbolicIndexingInterface
+    for e in f.phases.mcs, t in (e isa CorePotts.Repeat ? e.entries : (e,))
+        for ph in (t isa Tuple ? t : (t,))
+            ph isa _DiscretizedFields || continue
+            prob = _discretized_problem(ph, _input_values(ph, st))
+            for n in ph.fields
+                SII.is_variable(prob, n) || throw(_discretized_refusal(ph, "its problem has no field `$n`"))
+                l, sites = length(SII.getu(prob, n)(prob)), length(getproperty(st.site, n))
+                l == sites || throw(_discretized_refusal(ph, "its field `$n` has $l values, the lattice $sites sites"))
+            end
+            for k in Iterators.flatten((first.(ph.inputs), ph.params))
+                SII.is_parameter(prob, k) ||
+                    throw(_discretized_refusal(ph, "its problem has no parameter or input `$k` to set"))
+            end
+        end
+    end
+    return nothing
+end
+
+# The integrator of a trajectory and the accessors built once with it
+struct _DiscretizedIntegrator{I, SI, SP, SU, GU}
+    integ::I
+    set_inputs::SI      # one `setp` per input
+    set_params::SP      # one `setp` per model parameter
+    set_fields::SU      # one `setu` per field
+    get_fields::GU      # one `getu` per field
+    lastp::Base.RefValue{Any}               # the parameter values last written
+end
+
+function _discretized_integrator(ph::_DiscretizedFields, ins, t0)
+    SII = SymbolicIndexingInterface
+    prob = SciMLBase.remake(_discretized_problem(ph, ins); tspan = (t0, t0 + ph.dt))
+    # (nothing reads the solution: the fields are read from the integrator)
+    integ = SciMLBase.init(prob, ph.alg; save_everystep = false, save_start = false, save_end = false)
+    return _DiscretizedIntegrator(
+        integ, Tuple(SII.setp(integ, k) for (k, _) in ins), Tuple(SII.setp(integ, n) for n in ph.params),
+        Tuple(SII.setu(integ, n) for n in ph.fields), Tuple(SII.getu(integ, n) for n in ph.fields), Ref{Any}(nothing)
+    )
+end
 
 function CorePotts._run_phase(ph::_DiscretizedFields, st, p, ctx, key, mcs, backend, stats)
     backend isa KernelAbstractions.CPU || throw(
@@ -1252,24 +1316,22 @@ function CorePotts._run_phase(ph::_DiscretizedFields, st, p, ctx, key, mcs, back
     owner = st.ownership
     t0 = mcs * ph.dt
     ins = _input_values(ph, st)
-    integ = lock(() -> _cached_integrator(ph.integrators, owner), ph.lock)
-    if integ === nothing
-        prob = SciMLBase.remake(SciMLBase.discretize(ph.pdesys, ph.disc; inputs = ins); tspan = (t0, t0 + ph.dt))
-        integ = SciMLBase.init(prob, ph.alg; save_everystep = false, save_start = false)
-        integ = (integ, Ref{Any}(nothing))     # (the parameter values last written)
-        lock(() -> _cache_integrator!(ph.integrators, owner, integ), ph.lock)
-    else
-        SciMLBase.reinit!(integ[1]; t0, tf = t0 + ph.dt, erase_sol = true)
-        foreach(((k, v),) -> SymbolicIndexingInterface.setp(integ[1], k)(integ[1], v), ins)
+    di = lock(() -> _cached_integrator(ph.integrators, owner), ph.lock)
+    if di === nothing
+        di = _discretized_integrator(ph, ins, t0)
+        lock(() -> _cache_integrator!(ph.integrators, owner, di), ph.lock)
     end
-    integ, lastp = integ
-    # the model's parameter values, when they change (`remake(prob; p)`, `integ.ps[k] = v`)
-    if lastp[] !== p
-        foreach(n -> SymbolicIndexingInterface.setp(integ, n)(integ, p[n]), ph.params)
-        lastp[] = p
+    integ = di.integ
+    # the inputs, the model's parameter values when they change (`remake(prob; p)`,
+    # `integ.ps[k] = v`), then the fields; `reinit!` from that state starts the window (and
+    # its first step size) from them, whatever the algorithm keeps internally
+    foreach(((s, (_, v)),) -> s(integ, v), zip(di.set_inputs, ins))
+    if di.lastp[] !== p
+        foreach(((s, n),) -> s(integ, p[n]), zip(di.set_params, ph.params))
+        di.lastp[] = p
     end
-    foreach(n -> SymbolicIndexingInterface.setu(integ, n)(integ, vec(getproperty(st.site, n))), ph.fields)
-    SciMLBase.u_modified!(integ, true)
+    foreach(((s, n),) -> s(integ, vec(getproperty(st.site, n))), zip(di.set_fields, ph.fields))
+    SciMLBase.reinit!(integ, copy(integ.u); t0, tf = t0 + ph.dt, erase_sol = true)
     SciMLBase.solve!(integ)
     if !SciMLBase.successful_retcode(integ.sol)
         LatticeFields.Exec.VERBOSE[] && @warn "Fields failed at MCS $mcs: retcode $(integ.sol.retcode)"
@@ -1277,7 +1339,7 @@ function CorePotts._run_phase(ph::_DiscretizedFields, st, p, ctx, key, mcs, back
         return 0
     end
     # (host arrays: the phase refuses a device backend above)
-    foreach(n -> vec(getproperty(st.site, n)) .= SymbolicIndexingInterface.getu(integ, n)(integ), ph.fields)
+    foreach(((g, n),) -> vec(getproperty(st.site, n)) .= g(integ), zip(di.get_fields, ph.fields))
     return 0
 end
 
