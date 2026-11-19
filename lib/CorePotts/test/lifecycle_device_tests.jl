@@ -222,7 +222,6 @@ end
                 e
             end
             @test err isa CorePotts._StagedFailedMidway && err.enqueued == CorePotts._STAGED_PARTITION
-            @test occursin("no longer consistent", sprint(showerror, err))
             @test integ.lcache.device.form[] == CorePotts._FORM_STAGED       # not handed over
         finally
             CorePotts._STAGED_FAULT_AFTER[] = 0

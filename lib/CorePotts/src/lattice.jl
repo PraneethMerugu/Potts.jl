@@ -356,13 +356,28 @@ _weight(f, g, o) = f(_embed(g, Tuple(o)))
 _weight(f::OnIndices, g, o) = f.f(Tuple(o))
 
 function _offsets(spec::AbstractRelationSpec, l::Lattice{N}) where {N}
-    offs = unique(_candidates(spec, N, l.geometry))
-    filter!(o -> _include_self(spec) || !all(iszero, o), offs)
-    sort!(offs; by = o -> (_ordersq(l.geometry, o), o))
+    offs = _raw_offsets(spec, l)
     _check_aliasing(offs, l)
     return offs
 end
+function _raw_offsets(spec::AbstractRelationSpec, l::Lattice{N}) where {N}
+    offs = unique(_candidates(spec, N, l.geometry))
+    filter!(o -> _include_self(spec) || !all(iszero, o), offs)
+    sort!(offs; by = o -> (_ordersq(l.geometry, o), o))
+    return offs
+end
 relation(r::Relation, ::Lattice) = r
+"""
+    try_relation(spec::AbstractRelationSpec, l::Lattice) -> Union{Relation, Nothing}
+
+Return the concrete `Relation` for `spec` on `l`, or `nothing` if an offset would alias on a
+periodic axis.
+"""
+function try_relation(spec::AbstractRelationSpec, l::Lattice{N}) where {N}
+    offs = _raw_offsets(spec, l)
+    _aliases(offs, l) && return nothing
+    return Relation{N, length(offs)}(Tuple(map(o -> Int32.(o), offs)))
+end
 has_origin(r::Relation) = any(o -> all(iszero, o), r.offsets)
 
 """Whether every offset's negation is in `r` with the same weight (a symmetric pair relation)."""
@@ -373,6 +388,18 @@ function is_symmetric(r::Relation)
         r.weights === nothing || r.weights[j] == r.weights[k] || return false
     end
     return true
+end
+
+function _aliases(offs, l::Lattice{N}) where {N}
+    wrap(o) = ntuple(d -> l.periodic[d] ? mod(o[d], l.dims[d]) : o[d], N)
+    seen = Set{NTuple{N, Int}}()
+    for o in offs
+        w = wrap(o)
+        !all(iszero, o) && all(iszero, w) && return true
+        w in seen && return true
+        push!(seen, w)
+    end
+    return false
 end
 
 function _check_aliasing(offs, l::Lattice{N}) where {N}

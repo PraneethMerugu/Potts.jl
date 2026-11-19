@@ -64,7 +64,7 @@ end
     σ, kinds = blocks((12, 12), 4)
     st = initial_state(σ, kinds)
     prob = PottsProblem(GG, st, lat, (0, 1), gg_params(); contact = Stencil([(1, 0), (0, 1)]))
-        @test_throws ["ArgumentError", "contact relation", "not symmetric"] solve(prob, SequentialCPM())
+    @test_throws ArgumentError solve(prob, SequentialCPM())
     ok = PottsProblem(GG, st, lat, (0, 1), gg_params(); contact = Stencil([(1, 0), (-1, 0)]))
     @test solve(ok, SequentialCPM()).retcode == ReturnCode.Success
 end

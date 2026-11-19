@@ -60,8 +60,18 @@ function _spin_until(done::F, timeout::Real) where {F}
     return nothing
 end
 
-@noinline _wait_timed_out(timeout) =
-    error("device wait timed out after $(timeout) s: the work queued on the device is not done")
+"""
+    DeviceTimeoutError(timeout)
+
+Exception thrown when waiting for queued device work exceeds `timeout` seconds.
+"""
+struct DeviceTimeoutError <: Exception
+    timeout::Float64
+end
+Base.showerror(io::IO, e::DeviceTimeoutError) =
+    print(io, "device wait timed out after $(e.timeout) s: the work queued on the device is not done")
+
+@noinline _wait_timed_out(timeout) = throw(DeviceTimeoutError(Float64(timeout)))
 
 """`copyto!(dst, doff, src, soff, n)` from device array `src` into host array `dst`, finished
 on return: enqueued without waiting and then waited for (`_device_wait`) where the backend

@@ -899,7 +899,7 @@ function Base.getproperty(integ::PottsIntegrator, name::Symbol)
     name === :tdir && return 1
     name === :sol && return invokelatest(PottsSolution, integ)
     # a read of `integ.stats`: on a device the field groups' status words are read first (one
-    # synchronization), so `integ.stats.fields` counts every window so far, as B's `field_stats`
+    # synchronization), so `integ.stats.fields` counts every window so far, as `field_stats`
     # does (review r1 N1); the solver itself reads `_stats(integ)`
     name === :stats && !Exec.ishost(getfield(integ, :backend)) && _read_statuses!(_stats(integ), getfield(integ, :ctx))
     return getfield(integ, name)

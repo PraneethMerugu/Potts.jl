@@ -51,6 +51,7 @@ export FieldPhase, owner_kind
 export Metropolis, Barker, SequentialCPM, CheckerboardCPM
 export PottsProblem, PottsIntegrator, PottsSolution, current_state, refresh_frozen!, frozen_sites, StateIndex, getu, setu, getp, setp
 export init, solve, solve!, step!, remake, CPU
+public DeviceTimeoutError
 # SciML ensembles and callbacks, as solver packages re-export them
 export EnsembleProblem, EnsembleSerial, EnsembleThreads, DiscreteCallback, CallbackSet, terminate!, derivative_discontinuity!
 export PottsCheckpoint, checkpoint, save_checkpoint, load_checkpoint, reinit!
@@ -59,6 +60,7 @@ export read_piff, write_piff
 # and generated code, and the frozen-mask hooks a model system extends (ExplicitImports
 # checks qualified accesses against this list).
 public CHECKPOINT_FORMAT, Part, BindingScratch, coordinates, shift, interior, neighbor_index, linear_index, draw, cell_entity, uniform, normal, bounded_normal, radius, weight, RNGKey, frozen_varies, frozen_kinds, frozen_reads,
+    DeviceTimeoutError, try_relation,
     TrackEnergyChange, track_eltype, phase_context, phase_contexts, field_clamp,
     shell_offsets, shell_owners, shell_mask, shell_pieces, local_rule, arc_or_pair, simple_point, ShellRead, read_shell, check_shell_lattice,
     ConnectivityHooks, GlobalExact, GlobalBoard, GlobalLocal, GlobalSearch, global_keeps, global_gains, global_defer,

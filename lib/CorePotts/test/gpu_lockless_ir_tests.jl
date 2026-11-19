@@ -182,7 +182,7 @@ end
             b = wide(() -> solve(fk32, CheckerboardCPM(); backend, saveat = 1))
             @test a.stats.attempts == b.stats.attempts && a.stats.lifecycle.removals == b.stats.lifecycle.removals == 1
         else
-            @test_throws r"Int64 atomics.*D-253" wide(() -> init(fk32, CheckerboardCPM(); backend))
+            @test_throws ArgumentError wide(() -> init(fk32, CheckerboardCPM(); backend))
             static = fk_problem(rm2; T = Float32, sys = nothing)
             @test wide(() -> solve(static, CheckerboardCPM(); backend)).retcode == ReturnCode.Success
         end

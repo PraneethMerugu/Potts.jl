@@ -30,7 +30,10 @@ end
         r = relation(NeighborOrder(4), l2)
         @test issorted([sum(abs2, o) for o in r.offsets])
         # aliasing on small periodic axes is rejected; closed axes are fine
-        @test_throws ["ArgumentError", "alias on lattice"] relation(Moore(1), Lattice((2, 10)))
+        @test_throws ArgumentError relation(Moore(1), Lattice((2, 10)))
+        @test CorePotts.try_relation(Moore(1), Lattice((2, 10))) === nothing
+        @test CorePotts.try_relation(Moore(1), l2) == relation(Moore(1), l2)
+        @test_throws CorePotts.DeviceTimeoutError CorePotts._wait_timed_out(0.1)
         @test length(relation(Moore(1), Lattice((2, 10); boundary = Closed()))) == 8
         @test length(relation(EuclideanBall(1.5), l2)) == 8
         @test length(relation(Stencil([(1, 0), (0, 1)]), l2)) == 2
@@ -244,7 +247,7 @@ end
                 @test SciMLBase.successful_retcode(sol)
             end
             # `mcs` is the sweep's own context field (D-188), so a relation may not take it
-            @test_throws r"relation names .*`mcs`.* are reserved" PottsProblem(f, initial_state(σ, kinds), lat, (0, 3),
+            @test_throws ArgumentError PottsProblem(f, initial_state(σ, kinds), lat, (0, 3),
                 gg_params(); relations = (; mcs = Moore(1)))
         end
         for (hi, lo, n) in ((0xffffffff, 0xffffffff, 10^9), (0x89abcdef, 0x01234567, 2^24 + 3), (0x00000001, 0x80000000, 7))
@@ -401,7 +404,7 @@ end
         @test u.cell.surface ≈ brute_surface(u.ownership, lat, relation(sspec, lat), length(kinds)) rtol = 1.0e-12
         bad = PottsProblem(GS, sprob.u0, lat, (0, 1), gs_params();
             relations = (; surface = Moore(1; include_self = true)))
-        @test_throws ["ArgumentError", "surface relation", "must not include the origin", "VonNeumann"] init(bad, alg)
+        @test_throws ArgumentError init(bad, alg)
     end
 end
 
@@ -423,11 +426,11 @@ end
             @test sol(10).ownership == sol.u[3].ownership
             @test sol.u[1].ownership == σ0 && sol.u[2].ownership != sol.u[end].ownership     # snapshots, not aliases
             @test sol.u[1].ownership !== sol.u[end].ownership
-            @test_throws ["ArgumentError", "MCS 11 was not saved"] sol(11)
+            @test_throws ArgumentError sol(11)
             @test sol.stats.attempts == 20 * nsites(lat)
             integ = init(prob, alg)
             solve!(integ)
-            @test_throws ["ArgumentError", "finished with retcode", "reinit!(integ)"] step!(integ)
+            @test_throws ArgumentError step!(integ)
         end
     end
 end

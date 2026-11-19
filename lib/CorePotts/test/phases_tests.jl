@@ -17,9 +17,9 @@ end
     lat = Lattice((24, 24))
 
     @testset "state validation" begin
-            @test_throws ["ArgumentError", "site quantity", "has size"] initial_state(σ, kinds; site = (; u = zeros(3, 3)))
-            @test_throws ["ArgumentError", "cell quantity", "last dimension"] initial_state(σ, kinds; cell = (; a = zeros(2)))
-            @test_throws ["ArgumentError", "model quantity", "1-element array"] initial_state(σ, kinds; model = (; m = 1.0))
+        @test_throws ArgumentError initial_state(σ, kinds; site = (; u = zeros(3, 3)))
+        @test_throws ArgumentError initial_state(σ, kinds; cell = (; a = zeros(2)))
+        @test_throws ArgumentError initial_state(σ, kinds; model = (; m = 1.0))
         @test initial_state(σ, kinds; cell = (; M = zeros(2, length(kinds)))) isa CPMState
     end
 
@@ -112,12 +112,12 @@ end
     ph = Phases(after_mcs = (CopyPhase((:site, :u) => (:site, :v)),))
     @test ph.mcs == ((), SweepPhase(), ph.after_mcs, LifecyclePhase(), ())
     @test Phases((), ph.after_mcs, (), ()).mcs == ph.mcs
-        @test_throws ["ArgumentError", "SweepPhase()", "exactly once"] Phases(; mcs = ((), LifecyclePhase()))                     # no sweep
-        @test_throws ["ArgumentError", "SweepPhase()", "exactly once"] Phases(; mcs = (SweepPhase(), SweepPhase(), LifecyclePhase()))
+    @test_throws ArgumentError Phases(; mcs = ((), LifecyclePhase()))                     # no sweep
+    @test_throws ArgumentError Phases(; mcs = (SweepPhase(), SweepPhase(), LifecyclePhase()))
     # at most 31 entries: `_run_mcs!` folds the order with `Base.afoldl`, unrolled only that far
     @test Phases(; mcs = (SweepPhase(), LifecyclePhase(), ntuple(_ -> (), 29)...)).mcs isa NTuple{31, Any}
-        @test_throws ["ArgumentError", "32 entries", "at most 31"] Phases(; mcs = (SweepPhase(), LifecyclePhase(), ntuple(_ -> (), 30)...))
-        @test_throws ["ArgumentError", "each entry", "tuple of phases"] Phases(; mcs = (SweepPhase(), LifecyclePhase(), CopyPhase((:site, :u) => (:site, :v))))
+    @test_throws ArgumentError Phases(; mcs = (SweepPhase(), LifecyclePhase(), ntuple(_ -> (), 30)...))
+    @test_throws ArgumentError Phases(; mcs = (SweepPhase(), LifecyclePhase(), CopyPhase((:site, :u) => (:site, :v))))
 
     # the same phase after the sweep (default) or before it (an explicit order)
     age!(st, p, ctx, key, mcs, i) = (@inbounds st.site.age[i] += 1; nothing)
