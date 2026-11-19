@@ -84,7 +84,8 @@ function ab_disturbances(; exclude = Int[])
         return BenchMachine.busy_reasons(; gpu = AB_GPU, ci = AB_WAIT == "all", exclude)
     c = something(BenchMachine.allowed_cpus(), Int[])
     return BenchMachine.disturbances(length(c) == 1 ? only(c) : -1, m.bench;
-        gpu = AB_GPU, ci = AB_WAIT == "all", exclude)
+        gpu = AB_GPU, ci = AB_WAIT == "all", exclude
+    )
 end
 
 # 1. wait (before loading anything heavy, so a waiting child holds no GPU context; in
@@ -169,8 +170,10 @@ function ab_time_item!(item; samples, seconds, gctrial)
         flush(stdout)
         return nothing
     end
-    med, mn, k, gc, al, mem = ab_time(item.prob, item.alg, item.backend;
-        samples, seconds, gctrial)
+    med, mn, k, gc, al, mem = ab_time(
+        item.prob, item.alg, item.backend;
+        samples, seconds, gctrial
+    )
     ab_check_gc!(item.label, item.backend, gc)
     println("ABR ", item.label, " ", med, " ", mn, " ", k, " ", gc, " ", al, " ", mem)
     flush(stdout)
@@ -186,7 +189,7 @@ function ab_wait_go()
     fields[1] == "GO" || error("expected GO, got $(repr(line))")
     target_cpu = length(fields) >= 2 ? parse(Int, fields[2]) : -1
     exclude_pids = length(fields) >= 3 ?
-                   parse.(Int, split(fields[3], ','; keepempty = false)) : Int[]
+        parse.(Int, split(fields[3], ','; keepempty = false)) : Int[]
     if target_cpu >= 0 && BenchMachine.pins(BenchMachine.machine())
         allowed = BenchMachine.allowed_cpus()
         allowed == [target_cpu] ||
@@ -208,12 +211,18 @@ function ab_burnin!(prepared)
     return nothing
 end
 
-function ab_run_prepared!(prepared, tc_start, go, samples, seconds, gctrial_for;
-        resolve_dev = false)
+function ab_run_prepared!(
+        prepared, tc_start, go, samples, seconds, gctrial_for;
+        resolve_dev = false
+    )
     items = resolve_dev ?
-            [(; item.label, item.prob, item.alg,
-                  backend = item.dev ? device_backend() : nothing) for item in prepared] :
-            prepared
+        [
+            (;
+                item.label, item.prob, item.alg,
+                backend = item.dev ? device_backend() : nothing,
+            ) for item in prepared
+        ] :
+        prepared
     start_dist = ab_disturbances(; exclude = go.exclude_pids)
     ab_burnin!(items)
     println("TC ", join(tc_start, " "))
@@ -250,8 +259,10 @@ function ab_one_main(pos, opts)
             load_device!(DEVICE)
             seed > 0 && BenchMachine.seed_type_cache!(seed)
             tc_start = BenchMachine.type_cache_stats()
-            return Base.invokelatest(ab_run_prepared!, prepared, tc_start, go,
-                samples, seconds, gctrial_for; resolve_dev = true)
+            return Base.invokelatest(
+                ab_run_prepared!, prepared, tc_start, go,
+                samples, seconds, gctrial_for; resolve_dev = true
+            )
         end
         seed > 0 && BenchMachine.seed_type_cache!(seed)
         tc_start = BenchMachine.type_cache_stats()
@@ -307,8 +318,10 @@ function ab_one_main(pos, opts)
                     println("ABSKIP $name.$v")
                     continue
                 end
-                ab_time_item!((; label = "$name.$v", prob, alg, backend);
-                    samples, seconds, gctrial = gctrial_for(backend))
+                ab_time_item!(
+                    (; label = "$name.$v", prob, alg, backend);
+                    samples, seconds, gctrial = gctrial_for(backend)
+                )
             end
         end
     end

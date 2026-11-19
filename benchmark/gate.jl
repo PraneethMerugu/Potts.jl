@@ -72,7 +72,7 @@ function load_device!(dev = DEVICE)
                 k += 1
                 if k & 0x3fff == 0
                     yield()
-                    time_ns() - t0 > SPIN_TIMEOUT * 1e9 &&
+                    time_ns() - t0 > SPIN_TIMEOUT * 1.0e9 &&
                         error("ROCm stream not done after $(SPIN_TIMEOUT) s")
                 end
             end

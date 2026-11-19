@@ -326,7 +326,7 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
         @test o.variants == "rocm" && o.rounds == 8 && !o.pin
         o = parse_ab(["--inprocess", "d", "v.jl", "cpu", "--alg=checkerboard"])
         @test o.inprocess && o.pos == ["d", "v.jl", "cpu"] && o.variants == "checkerboard" &&
-              !o.parallel
+            !o.parallel
         @test parse_ab(["b", "c", "gg", "cpu"]).parallel
         @test !parse_ab(["b", "c", "gg", "cpu", "--serial"]).parallel
         @test !parse_ab(["b", "c", "gg", "cpu", "--child=stub.jl"]).parallel
@@ -477,19 +477,24 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
         par_stub = joinpath(sb, "par_stub.jl")
         write(par_stub, PAR_STUB)
         root, b, c, sd = checkouts()
-        st, out, ev = run_ab(sb, sd, [
-            b, c, "gg", "cpu", "--rounds=2", "--no-warm", "--parallel",
-            "--child=$par_stub", "--wait=none", "--alg=sequential"])
+        st, out, ev = run_ab(
+            sb, sd, [
+                b, c, "gg", "cpu", "--rounds=2", "--no-warm", "--parallel",
+                "--child=$par_stub", "--wait=none", "--alg=sequential",
+            ]
+        )
         @test st == 0 && occursin("verdict (paired): pass", out) &&
-              occursin("parallel compile", out)
+            occursin("parallel compile", out)
         @test !isdir(lockdir)
         preps = [e for e in ev if e[1] == "prep"]
         gos = [e for e in ev if e[1] == "go"]
         @test length(preps) == 8 && length(gos) == 8
         @test all(e -> e[6] == "0", preps)     # prepare runs outside the lock
         @test all(e -> e[8] == "1", gos)       # GO is sent only while the lock is held
-        @test [e[2] for e in gos] == ["base", "cand", "base-abctl", "cand-abctl",
-            "cand", "base-abctl", "cand-abctl", "base"]
+        @test [e[2] for e in gos] == [
+            "base", "cand", "base-abctl", "cand-abctl",
+            "cand", "base-abctl", "cand-abctl", "base",
+        ]
         # Within each round: all prepare/READY finish before first GO, GO intervals are disjoint (locked)
         for r in 1:2
             rp = preps[(4r - 3):(4r)]
@@ -510,20 +515,42 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
         # A child that dies before READY fails the round loudly (exit 4)
         root, b, c, sd = checkouts()
         out_f = IOBuffer()
-        env_f = merge(ENV, Dict("STUB_LOG" => joinpath(sd, "log"), "STUB_DIR" => sd,
-            "POTTS_MACHINE" => "test-machine", "PAR_FAIL" => "cand"))
-        pf = run(pipeline(ignorestatus(setenv(
-                `$(jl()) $(joinpath(sb, "benchmark", "ab.jl")) $b $c gg cpu --rounds=1 --no-warm --parallel --child=$par_stub --wait=none --alg=sequential`,
-                env_f; dir = sb)); stdout = out_f, stderr = out_f))
+        env_f = merge(
+            ENV, Dict(
+                "STUB_LOG" => joinpath(sd, "log"), "STUB_DIR" => sd,
+                "POTTS_MACHINE" => "test-machine", "PAR_FAIL" => "cand"
+            )
+        )
+        pf = run(
+            pipeline(
+                ignorestatus(
+                    setenv(
+                        `$(jl()) $(joinpath(sb, "benchmark", "ab.jl")) $b $c gg cpu --rounds=1 --no-warm --parallel --child=$par_stub --wait=none --alg=sequential`,
+                        env_f; dir = sb
+                    )
+                ); stdout = out_f, stderr = out_f
+            )
+        )
         @test pf.exitcode == 4 && occursin("exited before READY", String(take!(out_f)))
         # A child that hangs before READY hits --ready-timeout and fails loudly (exit 4)
         root, b, c, sd = checkouts()
         out_h = IOBuffer()
-        env_h = merge(ENV, Dict("STUB_LOG" => joinpath(sd, "log"), "STUB_DIR" => sd,
-            "POTTS_MACHINE" => "test-machine", "PAR_HANG" => "cand"))
-        ph = run(pipeline(ignorestatus(setenv(
-                `$(jl()) $(joinpath(sb, "benchmark", "ab.jl")) $b $c gg cpu --rounds=1 --no-warm --parallel --child=$par_stub --wait=none --alg=sequential --ready-timeout=1.5`,
-                env_h; dir = sb)); stdout = out_h, stderr = out_h))
+        env_h = merge(
+            ENV, Dict(
+                "STUB_LOG" => joinpath(sd, "log"), "STUB_DIR" => sd,
+                "POTTS_MACHINE" => "test-machine", "PAR_HANG" => "cand"
+            )
+        )
+        ph = run(
+            pipeline(
+                ignorestatus(
+                    setenv(
+                        `$(jl()) $(joinpath(sb, "benchmark", "ab.jl")) $b $c gg cpu --rounds=1 --no-warm --parallel --child=$par_stub --wait=none --alg=sequential --ready-timeout=1.5`,
+                        env_h; dir = sb
+                    )
+                ); stdout = out_h, stderr = out_h
+            )
+        )
         @test ph.exitcode == 4 && occursin("timed out", String(take!(out_h)))
         # A child that crashes after READY or during GO fails (exit 4), releases the lock, and stops siblings
         for (var, pat) in (
@@ -645,8 +672,12 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
         # --prepare READY/GO/DONE handshake
         inp = Pipe()
         outp = Pipe()
-        pp = run(pipeline(`$(jl()) --project=$proj $one fake sequential,checkerboard --prepare --samples=3 --seconds=1 --wait=none --seed=0`;
-            stdin = inp, stdout = outp, stderr = outp); wait = false)
+        pp = run(
+            pipeline(
+                `$(jl()) --project=$proj $one fake sequential,checkerboard --prepare --samples=3 --seconds=1 --wait=none --seed=0`;
+                stdin = inp, stdout = outp, stderr = outp
+            ); wait = false
+        )
         close(inp.out)
         close(outp.in)
         ready_line = readline(outp)

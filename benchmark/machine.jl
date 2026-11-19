@@ -172,8 +172,12 @@ Move running process `pid` (all its threads) to logical CPU `c`. Returns `true` 
 function repin!(pid::Integer, c::Integer)
     Sys.islinux() && c >= 0 || return true
     Sys.which("taskset") === nothing && return false
-    p = run(pipeline(ignorestatus(`taskset -a -cp $c $pid`);
-        stdout = devnull, stderr = devnull))
+    p = run(
+        pipeline(
+            ignorestatus(`taskset -a -cp $c $pid`);
+            stdout = devnull, stderr = devnull
+        )
+    )
     return success(p)
 end
 
@@ -253,7 +257,8 @@ any `extra` PIDs passed in (such as live sibling A/B children from `GO`).
 function gpu_users(; exclude = _default_gpu_exclude(), dir = "/sys/class/kfd/kfd/proc")
     isdir(dir) || return Int[]
     return [parse(Int, p)
-            for p in readdir(dir) if all(isdigit, p) && !(parse(Int, p) in exclude)]
+            for p in readdir(dir) if all(isdigit, p) && !(parse(Int, p) in exclude)
+    ]
 end
 
 """
@@ -284,15 +289,17 @@ times anyway and counts the run as disturbed). D-157: benchmarks on the NucBox r
 runner idle; a CI job's GPU group made a ROCm Graner–Glazier MCS read 2500 instead of
 47 ns/site (2026-10-07). Off Linux it returns at once.
 """
-function wait_idle(; gpu = false, ci = true, poll = 30, deadline = time() + 4 * 3600,
-        exclude = Int[], on_wait = msg -> (println("WAIT ", msg); flush(stdout)))
+function wait_idle(;
+        gpu = false, ci = true, poll = 30, deadline = time() + 4 * 3600,
+        exclude = Int[], on_wait = msg -> (println("WAIT ", msg); flush(stdout))
+    )
     Sys.islinux() || return true
     said = ""
     while true
         why = busy_reasons(; gpu, ci, exclude)
         isempty(why) && return true
         if gpu && length(why) == 1 && startswith(why[1], "other GPU clients ") &&
-           wait_kfd_clear(; exclude = _default_gpu_exclude(exclude))
+                wait_kfd_clear(; exclude = _default_gpu_exclude(exclude))
             continue
         end
         msg = join(why, " and ")
@@ -323,7 +330,8 @@ the L3 and the power budget). Empty when nothing does.
 function disturbances(c, reserved; gpu = false, ci = true, dt = 0.5,
         busy = cpus -> cpu_busy(cpus; dt), siblings = siblings,
         linux = Sys.islinux(), exclude = Int[],
-        reasons = () -> busy_reasons(; gpu, ci, exclude))
+        reasons = () -> busy_reasons(; gpu, ci, exclude)
+    )
     why = reasons()
     linux && c >= 0 || return why
     sib = siblings(c)
