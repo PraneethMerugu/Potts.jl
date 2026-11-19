@@ -87,7 +87,8 @@ function _rhs_options(fp::FieldProblem)
     o = fp.options
     return CompileOptions(o.T, o.I, o.float64_ok, o.debug, o.index, o.lanes, clock_slot(fp.group.spec), o.S, o.declared)
 end
-# a solution of SciML's solvers is returned as it is (no eager `PDENoTimeSolution`)
+# a solution of SciML's solvers is returned as it is: no SciMLBase wrapper (a
+# `PDETimeSeriesSolution`, or a `PDENoTimeSolution` without a time) is built eagerly
 SciMLBase.wrap_sol(sol, ::LatticeMetadata) = sol
 
 """
