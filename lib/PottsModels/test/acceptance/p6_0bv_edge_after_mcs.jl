@@ -61,7 +61,7 @@ p60bv_clear(f, words...) = try
     f()
     false
 catch err
-    err isa ArgumentError
+    err isa Potts.PottsCompileError
 end
 
 # ---------------------------------------------------------------------------------------

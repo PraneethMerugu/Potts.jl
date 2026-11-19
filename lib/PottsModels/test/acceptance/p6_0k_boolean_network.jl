@@ -182,7 +182,7 @@ end
         @test p60k_mismatches(sol, rows, P60K_TABLE) > 0                 # not every MCS
     end
     # a period that is not a whole number of MCS
-    @test_throws ArgumentError mtkcompile(p60k_model(p60k_network(; clock = Clock(1.5))))
+    @test_throws Potts.PottsCompileError mtkcompile(p60k_model(p60k_network(; clock = Clock(1.5))))
 end
 
 @testset "P6.0k: update order comes from the MTK equations" begin
@@ -222,7 +222,7 @@ end
     Dt = Potts.D
     # positive control: the valid network compiles (the rejections below fail for their own reason)
     @test mtkcompile(p60k_model(p60k_network())) isa Potts.CompiledPottsSystem
-    reject(sys) = @test_throws ArgumentError mtkcompile(p60k_model(sys; name = :rejected))
+    reject(sys) = @test_throws Potts.PottsCompileError mtkcompile(p60k_model(sys; name = :rejected))
     # hybrid: a continuous equation in a discrete component
     reject(System([Dt(x) ~ -x, A(k) ~ wnt & !A(k - 1)], t; name = :grn))
     # Sample/Hold (MTKBase would compile these with the wrong semantics)

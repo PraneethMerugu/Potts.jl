@@ -19,7 +19,7 @@ function p60al_rejection(f, words...)
         while e isa LoadError
             e = e.error
         end
-        e isa ArgumentError || return "not an ArgumentError: $(typeof(e)): $(first(sprint(showerror, e), 300))"
+        e isa Union{ArgumentError, Potts.PottsCompileError} || return "not an ArgumentError or PottsCompileError: $(typeof(e)): $(first(sprint(showerror, e), 300))"
         return :ok
     end
     return "accepted silently"

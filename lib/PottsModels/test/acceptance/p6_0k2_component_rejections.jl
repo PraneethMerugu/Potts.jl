@@ -38,7 +38,7 @@ function p60k2_rejection(f, words...)
     try
         f()
     catch e
-        e isa ArgumentError || return "not an ArgumentError: $(typeof(e)): $(first(sprint(showerror, e), 300))"
+        e isa Union{ArgumentError, Potts.PottsCompileError} || return "not an ArgumentError or PottsCompileError: $(typeof(e)): $(first(sprint(showerror, e), 300))"
         isempty(words) || occursin(first(words), sprint(showerror, e)) || return "message does not name $(first(words))"
         return :ok
     end

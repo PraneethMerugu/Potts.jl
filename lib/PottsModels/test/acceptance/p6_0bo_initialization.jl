@@ -98,7 +98,7 @@ p60bo_clear(f, word = nothing) = try
     false
 catch err
     e = _p60bo_unwrap(err)
-    ok = e isa ArgumentError && (word === nothing || occursin(word, sprint(showerror, e)))
+    ok = e isa Union{ArgumentError, Potts.PottsCompileError} && (word === nothing || occursin(word, sprint(showerror, e)))
     ok || @info "P6.0bo: expected an ArgumentError$(word === nothing ? "" : " naming $word")" exception = e
     ok
 end

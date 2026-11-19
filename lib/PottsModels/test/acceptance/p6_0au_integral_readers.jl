@@ -248,17 +248,17 @@ end
 
 @testset "P6.0au: integral in a @$section ($label) is rejected at build" for (section, label, M) in P60AU_REJECTED
     e, msg = p60au_error(() -> mtkcompile(M(; name = :m)))
-    @test e isa ArgumentError                                           # DEFECT CHECK (fold: builds today)
+    @test e isa Potts.PottsCompileError                                 # DEFECT CHECK (fold: builds today)
     @test occursin("integral", msg)
     # and so does building the problem, before any step
     e2, msg2 = p60au_error(() -> PottsProblem(M(; name = :m), p60au_op(), (0, 2)))
-    @test e2 isa ArgumentError                                          # DEFECT CHECK
+    @test e2 isa Potts.PottsCompileError                                # DEFECT CHECK
     @test occursin("integral", msg2)
 end
 
 @testset "P6.0au: integral(Pre(u)) in a drive is rejected at build" begin
     e, msg = p60au_error(() -> PottsProblem(P60auDrivePre(; name = :m), p60au_op(), (0, 2)))
-    @test e isa ArgumentError                                           # DEFECT CHECK (builds today)
+    @test e isa Potts.PottsCompileError                                 # DEFECT CHECK (builds today)
     @test occursin("integral", msg)
 end
 
@@ -304,7 +304,7 @@ end
 
 @testset "P6.0au: energies still reject integral" begin
     e, msg = p60au_error(() -> mtkcompile(P60auEnergy(; name = :m)))
-    @test e isa ArgumentError
+    @test e isa Potts.PottsCompileError
     @test occursin("integral", msg)
 end
 

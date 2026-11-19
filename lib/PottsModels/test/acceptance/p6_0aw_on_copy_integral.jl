@@ -224,7 +224,7 @@ end
 @testset "P6.0aw: integral in a $scope-scope @on_copy ($label) is rejected at build" for (scope, label, M) in P60AW_REJECTED
     for build in (() -> mtkcompile(M(; name = :m)), () -> PottsProblem(M(; name = :m), p60aw_op(), (0, 2)))
         e, msg = p60aw_error(build)
-        @test e isa ArgumentError                                       # DEFECT CHECK (folds: build today)
+        @test e isa Potts.PottsCompileError                             # DEFECT CHECK (folds: build today)
         @test occursin("integral", msg)
     end
 end

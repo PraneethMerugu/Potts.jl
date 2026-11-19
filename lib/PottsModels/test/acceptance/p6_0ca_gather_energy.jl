@@ -266,7 +266,7 @@ function p60ca_compile_error(label)
     end
 end
 """Is `e` the D-209 refusal of a statement in domain `dom`?"""
-p60ca_is_refusal(e, dom) = e isa ArgumentError && occursin("$dom", e.msg)
+p60ca_is_refusal(e, dom) = e isa Potts.PottsCompileError && occursin("$dom", e.msg)
 
 """ΔH oracle: a Metropolis chain driven by `dH(u, p, prop, ctx)` (default the generated
 `delta_H`), `nsteps` copy attempts (unlike pairs, Moore(1) source) each compared with
@@ -327,7 +327,7 @@ end
         @testset "$label" begin
             dom = P60CA_DOMAIN[label]
             e = p60ca_compile_error(label)
-            @test e isa ArgumentError
+            @test e isa Potts.PottsCompileError
             ok = p60ca_is_refusal(e, dom)
             @test ok
             ok || @info "P6.0ca: `$label` at mtkcompile: $(e === nothing ? "compiles" : sprint(showerror, e))"
@@ -429,11 +429,11 @@ end
             bare = P60CA_BARE[label]
             @test p60ca_system(label) isa Potts.PottsSystem          # the model is built; the refusal is the compiler's
             e = p60ca_compile_error(label)
-            @test e isa ArgumentError
+            @test e isa Potts.PottsCompileError
             ok = p60ca_is_refusal(e, dom)
             @test ok
             ok || @info "P6.0ca: `$label` at mtkcompile: $(e === nothing ? "compiles" : sprint(showerror, e))"
-            bare === nothing || @test e isa ArgumentError && occursin("`$bare`", e.msg)
+            bare === nothing || @test e isa Potts.PottsCompileError && occursin("`$bare`", e.msg)
             e2 = try
                 p60ca_problem(label)
                 nothing
@@ -471,7 +471,7 @@ end
             dom = P60CA_DOMAIN[label]
             @test p60ca_system(label) isa Potts.PottsSystem
             e = p60ca_compile_error(label)
-            @test e isa ArgumentError
+            @test e isa Potts.PottsCompileError
             ok = p60ca_is_refusal(e, dom)
             @test ok
             ok || @info "P6.0ca: `$label` at mtkcompile: $(e === nothing ? "compiles" : sprint(showerror, e))"
@@ -486,9 +486,9 @@ end
     end
     @testset "indexed kind[id]: refused, with a hint to read it bare" begin
         e = p60ca_compile_error("indexed kind[id] == A")
-        @test e isa ArgumentError
-        @test e isa ArgumentError && occursin("bare", e.msg)
-        e isa ArgumentError || @info "P6.0ca: `kind[id]` at mtkcompile: $(e === nothing ? "compiles" : sprint(showerror, e))"
+        @test e isa Potts.PottsCompileError
+        @test e isa Potts.PottsCompileError && occursin("bare", e.msg)
+        e isa Potts.PottsCompileError || @info "P6.0ca: `kind[id]` at mtkcompile: $(e === nothing ? "compiles" : sprint(showerror, e))"
     end
 end
 

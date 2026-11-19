@@ -730,7 +730,7 @@ end
 end
 
 @testset "P6.5a: an energy may not read what a copy changes through a reference (D-209)" begin
-    @test_throws ArgumentError mtkcompile(p65a_system(:P65aBadEnergy))
+    @test_throws Potts.PottsCompileError mtkcompile(p65a_system(:P65aBadEnergy))
     # the static reads of the energy fixture compile (control)
     @test mtkcompile(p65a_system(:P65aEnergy)) isa CompiledPottsSystem
 end
