@@ -72,14 +72,14 @@ public CHECKPOINT_FORMAT, Part, BindingScratch, coordinates, shift, interior, ne
 # it without reaching into internals; not part of the modeling API (the API page lists it
 # apart).
 const MODEL_COMPILER_INTERFACE = (
-    :AbstractBoundary, :AbstractRelationSpec, :_run_phases, :link_frame, :link_at, :maxdegree,
-    :_derived, :_snapshot, :_run_phase, :_sync!, :_copy!, :_adapt_host, :_host_leaves,
-    :_host_buffer, :_host_lattice, :adjacency_name, :always, :is_symmetric, :has_origin,
-    :MODEL_STATUS, :_bump!, :_atomic_add!, :_cv_write!, :_to_host, :report_run, :no_bias,
+    :AbstractBoundary, :AbstractRelationSpec, :run_phases, :link_frame, :link_at, :maxdegree,
+    :derived, :snapshot, :run_phase, :sync!, :counted_copy!, :adapt_host, :host_leaves,
+    :host_buffer, :adjacency_name, :always, :is_symmetric, :has_origin,
+    :MODEL_STATUS, :bump!, :atomic_add!, :cv_write!, :to_host, :report_run, :no_bias,
     :no_divide_rule, :remake_frozen, :remake_function, :remake_parameters, :remake_state,
     :check_initializealg, :remake_tangent, :ParameterTangent, :tangent_parameters,
     :copy_step_relations, :set_parameter, :set_parameters, :readonly_message,
-    :parameter_setter, :name_setter, :symbol_setter, :stream_id, :_praw, :_table_values,
+    :parameter_setter, :name_setter, :symbol_setter, :stream_id, :praw, :table_values,
 )
 eval(Expr(:public, MODEL_COMPILER_INTERFACE...))
 

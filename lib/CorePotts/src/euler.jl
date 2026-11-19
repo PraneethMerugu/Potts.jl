@@ -217,8 +217,8 @@ end
 
 # host rebuild of every Euler column (`_rebuild_trackers!`)
 function _rebuild_euler!(stats, st, σ, lat, cap)
-    haskey(st.cell, :euler) && _copy!(stats, st.cell.euler, recompute_euler(σ, lat, Val(:face), cap))
-    haskey(st.cell, :euler_full) && _copy!(stats, st.cell.euler_full, recompute_euler(σ, lat, Val(:full), cap))
+    haskey(st.cell, :euler) && counted_copy!(stats, st.cell.euler, recompute_euler(σ, lat, Val(:face), cap))
+    haskey(st.cell, :euler_full) && counted_copy!(stats, st.cell.euler_full, recompute_euler(σ, lat, Val(:full), cap))
     return nothing
 end
 

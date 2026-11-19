@@ -108,15 +108,15 @@ end
 
 """The lattice with its domain mask on the host (for host code given a device context). The
 mask is static: its host copy is made once per device mask and reused (read-only)."""
-host_lattice(l::Lattice) = _host_lattice(nothing, l)
+host_lattice(l::Lattice) = host_lattice(nothing, l)
 # `stats` counts the mask copy (D-085), or `nothing`; the copy is cached (D-092, audit A4/H3)
 """
-    _host_lattice(stats, l::Lattice)
+    host_lattice(stats, l::Lattice)
 
 The lattice with its domain mask on the host: a counted copy (`stats`) of a device mask.
 """
-_host_lattice(stats, l::Lattice{N, Nothing}) where {N} = l
-_host_lattice(stats, l::Lattice) = _adapt_host_cached(stats, l)
+host_lattice(stats, l::Lattice{N, Nothing}) where {N} = l
+host_lattice(stats, l::Lattice) = _adapt_host_cached(stats, l)
 
 Base.ndims(::Lattice{N}) where {N} = N
 """
@@ -461,7 +461,7 @@ end
 # Overwrite a mask mobility from a host mask (the custom-rule fallback of `refresh_frozen!`).
 # `stats` counts the host→device copy (D-085), or `nothing`.
 function _set_mobility!(stats, m::MaskMobility, frozen::AbstractArray{Bool})
-    _copy!(stats, m.frozen, frozen isa Array{Bool} ? frozen : Array{Bool}(frozen))
+    counted_copy!(stats, m.frozen, frozen isa Array{Bool} ? frozen : Array{Bool}(frozen))
     m.sites === nothing || _mobile_sites!(m.sites, frozen)
     return nothing
 end

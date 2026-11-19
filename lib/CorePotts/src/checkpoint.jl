@@ -46,7 +46,7 @@ function checkpoint(integ::PottsIntegrator)
     # `current_state` is the host read point that makes `stats` exact (D-089): it runs
     # before the statistics are copied
     return PottsCheckpoint(current_state(integ), integ.t, prob.seed, prob.replica,
-        prob.repeat, _adapt_host(_stats(integ), integ.p), prob.f.fingerprint, deepcopy(_stats(integ)))
+        prob.repeat, adapt_host(_stats(integ), integ.p), prob.f.fingerprint, deepcopy(_stats(integ)))
 end
 
 """Write a checkpoint to `path` (Julia `Serialization`; same package versions to read)."""
@@ -109,7 +109,7 @@ function SciMLBase.reinit!(
     t0 <= tf || throw(ArgumentError("reinit!: t0 = $t0 is after tf = $tf"))
     saves = _saveat_list(saveat, t0, tf)            # (checked before the state changes)
     stops = _in_span(_tstops_list(tstops), t0, tf)
-    _sync!(_stats(integ), integ.backend)            # reset below with the statistics
+    sync!(_stats(integ), integ.backend)            # reset below with the statistics
     fresh = u0 === integ.prob.u0                    # (the problem's own state: its derivative parts, F3-21b)
     # symbolic maps; a state is laid out for the model's functions (e.g. Potts' ODE scratch)
     u0 = remake_state(integ.f.sys, integ.prob, u0)
@@ -131,7 +131,7 @@ function SciMLBase.reinit!(
     _reset_cache!(integ.cache, integ)
     _clear_field_status!(integ.ctx)          # a new run: the field groups' failures and counters go
     tangent_reinit!(integ.ctx, fresh ? integ.prob.tangent : nothing)   # (and the derivative parts, F3-21b)
-    _stats(integ).launches += _run_phases(integ.f.phases.at_init, integ.state, integ.p, integ.ctx,
+    _stats(integ).launches += run_phases(integ.f.phases.at_init, integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend, _stats(integ))
     _start_failed!(integ)
     reinit_callbacks && _each(cb -> cb.initialize(cb, integ.state, integ.t, integ), integ.callbacks)

@@ -257,22 +257,22 @@ const NO_PHASES = Phases((), (), (), ())
 Enqueue every phase; returns the number of launches. `stats` (the integrator's
 `PottsStats`, or `nothing`) counts the host transfers of phases that make them.
 """
-_run_phases(phases::Tuple, st, p, ctx, key, mcs, backend, stats = nothing, part::NTuple{2, Int} = (1, 1)) =
-    sum(ph -> _run_phase(ph, st, p, ctx, key, mcs, backend, stats, part), phases; init = 0)
+run_phases(phases::Tuple, st, p, ctx, key, mcs, backend, stats = nothing, part::NTuple{2, Int} = (1, 1)) =
+    sum(ph -> run_phase(ph, st, p, ctx, key, mcs, backend, stats, part), phases; init = 0)
 
 """
-    _run_phase(phase, st, p, ctx, key, mcs, backend, stats)
+    run_phase(phase, st, p, ctx, key, mcs, backend, stats)
 
 Internal: run one phase, `phase(st, p, ctx, key, mcs, backend)`, with the integrator's
 transfer counters. Not an extension point for users: host work in a phase goes through the
 public `HostPhase`, which counts its copies. CorePotts' and Potts' own phases that copy
 between the host and a device add a method that routes the copies through the counted
-helpers (`_sync!`, `_to_host`, `_copy!`, `_snapshot`); a wrapper phase forwards `stats` to
+helpers (`sync!`, `to_host`, `counted_copy!`, `snapshot`); a wrapper phase forwards `stats` to
 the phase it wraps.
 """
-_run_phase(ph::P, st, p, ctx, key, mcs, backend, stats) where {P} = ph(st, p, ctx, key, mcs, backend)
+run_phase(ph::P, st, p, ctx, key, mcs, backend, stats) where {P} = ph(st, p, ctx, key, mcs, backend)
 # with the pass `part = (j, n)` of a sub-MCS `Repeat` (only a field phase reads it, fields.jl)
-_run_phase(ph::P, st, p, ctx, key, mcs, backend, stats, part) where {P} = _run_phase(ph, st, p, ctx, key, mcs, backend, stats)
+run_phase(ph::P, st, p, ctx, key, mcs, backend, stats, part) where {P} = run_phase(ph, st, p, ctx, key, mcs, backend, stats)
 
 """Accepted-copy affect: reset `array[target]` to `value` when ownership changes."""
 @inline clear_on_copy!(array, prop, value) = (@inbounds array[prop.target] = value; nothing)

@@ -269,7 +269,7 @@ applied at the boundary.
     `nmobile` and `stats.attempts` exactly (the MCS `m + 1 … t − 1` after a refresh at
     MCS `m` ran with the old count). Nothing on the device needs the count
     (CheckerboardCPM reads only the mask).
-  - Custom rule: a host copy of the state (`_snapshot` off the CPU), `frozen_sites`, copy
+  - Custom rule: a host copy of the state (`snapshot` off the CPU), `frozen_sites`, copy
     of the mask to the device.
   - `frozen_sites(prob, u)` is the same rule on a host state, with the domain complement;
     MakiePotts uses it per saved frame.

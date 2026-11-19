@@ -704,12 +704,12 @@ end
 # tracked (E5): counts the scans that found several members
 @inline function _sibling_counted(cell, cl, k, cnt, j)
     s, dup = _sibling_scan(cell, cl, k)
-    dup && CorePotts._bump!(cnt, j)
+    dup && CorePotts.bump!(cnt, j)
     return s
 end
 # tracked (E4): `r`, counted in slot `j` when it names a dead cell (nonzero and not alive)
 @inline function _count_dead(cnt, j, vol, r)
-    (r != 0 && !_alive_slot(vol, r)) && CorePotts._bump!(cnt, j)
+    (r != 0 && !_alive_slot(vol, r)) && CorePotts.bump!(cnt, j)
     return r
 end
 

@@ -431,7 +431,7 @@ _fold_track!(stats, cache::CheckerboardCache) = _fold_track!(stats, cache.track)
 # `committed` (equal: a lockless copy commits when it is accepted) and zeroed.
 function _fold_counts!(stats, cache::CheckerboardCache)
     a = cache.cnt
-    h = _ondevice(a) ? _to_host(stats, a) : a
+    h = _ondevice(a) ? to_host(stats, a) : a
     n = sum(Int, h)
     fill!(a, Int32(0))
     stats.accepted = max(stats.accepted, 0) + n
@@ -447,7 +447,7 @@ _fold_deferred!(stats, cache::CheckerboardCache) = _fold_deferred!(stats, cache.
 _fold_deferred!(stats, ::Nothing) = nothing
 function _fold_deferred!(stats, sl::NamedTuple)
     d = sl.deferred
-    h = _ondevice(d) ? _to_host(stats, d) : d
+    h = _ondevice(d) ? to_host(stats, d) : d
     stats.connectivity_deferred === nothing || (stats.connectivity_deferred += Int(h[1]))
     fill!(d, UInt32(0))
     return nothing

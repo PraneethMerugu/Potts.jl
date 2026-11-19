@@ -235,7 +235,7 @@ const POTTS_NONPUBLIC_EXPLICIT = (
 const RAW_TRANSFER_ALLOW = Dict(
     # Lattice `==` and `hash` (host utilities, 79-80); `Array{Bool}` of host masks: the domain
     # (66, construction), `mobility` (366, construction), `_set_mobility!` (392, converts the
-    # host mask; its device copy is the counted `_copy!`)
+    # host mask; its device copy is the counted `counted_copy!`)
     "lib/CorePotts/src/lattice.jl" => 6,
     # `initial_state` builds host arrays (53 `Vector{Int32}`, 66 `Array{Int32}`; setup)
     "lib/CorePotts/src/model.jl" => 2,

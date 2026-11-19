@@ -653,7 +653,7 @@ function CorePotts.report_run(info::PottsModelInfo, integ)
     model = integ.state.model
     haskey(model, CorePotts.CONVERT_FLAGS) && _report_converts(info, integ)
     haskey(model, REF_COUNTS) || return nothing
-    counts = CorePotts._to_host(getfield(integ, :stats), getfield(model, REF_COUNTS))
+    counts = CorePotts.to_host(getfield(integ, :stats), getfield(model, REF_COUNTS))
     any(>(0), counts) || return nothing
     labels = _ref_count_labels(info.csys)
     lines = String[]
@@ -1435,7 +1435,7 @@ function _host_init!(@nospecialize(f), @nospecialize(st), @nospecialize(p), @nos
     # (only `LatticeNewton` groups read them; `init` refuses them for the others)
     atol, rtol = LatticeFields.Problems.resolve_tols(get(kw, :abstol, nothing), get(kw, :reltol, nothing))
     ctx = merge(ctx, CorePotts.phase_contexts(f.phases, st, p, CorePotts.CPU(); abstol = atol, reltol = rtol))
-    CorePotts._run_phases(f.phases.at_init, st, p, ctx, key, 0, CorePotts.CPU())
+    CorePotts.run_phases(f.phases.at_init, st, p, ctx, key, 0, CorePotts.CPU())
     return st
 end
 
@@ -1683,7 +1683,7 @@ CorePotts.remake_state(info::PottsModelInfo, prob, u0::CorePotts.CPMState, kw = 
 # skipped for the Int32 moment scratch, read once per solve (as the lifecycle's deferrals)
 function _report_converts(info::PottsModelInfo, integ)
     dev = getfield(integ.state.model, CorePotts.CONVERT_FLAGS)
-    flags = CorePotts._to_host(getfield(integ, :stats), dev)
+    flags = CorePotts.to_host(getfield(integ, :stats), dev)
     deferred, large = Int(flags[3]), Int(flags[4])
     deferred > 0 && @warn "@convert in $(nameof(info.csys)): $deferred allocation(s) deferred: all " *
         "$(length(integ.state.cell.kind)) cell slots are in use (the lowest-slot entities " *
