@@ -1549,7 +1549,8 @@ function _index(cf::CompiledField, sys::PDESystem, s, state; derived = Pair[], c
         free = nothing)
     slots = Problems.state_layout(s, [fieldid(s, k) for k in state])
     # a system with no time (F3-12b): each field also reads by its time-free term `c(x, y)`
-    alias(v, i, n) = free === nothing ? () : (o = free[findfirst(w -> isequal(unwrap(w), unwrap(v)), get_dvs(sys))];
+    alias(v, i, n) = free === nothing ? () : (
+            o = free[findfirst(w -> isequal(unwrap(w), unwrap(v)), get_dvs(sys))];
                                              (n == 1 ? unwrap(o) : unwrap(Symbolics.wrap(unwrap(o))[i]),))
     dims(k) = Int.(leveldims(s, s.fields[fieldid(s, k)].levels[1]))      # (a `Coarse` field's grid, F3-16)
     vars, inputs, inputnames, boolinputs, inputbounds, aux = Pair[], Pair[], Pair[], String[], Pair[], Pair[]
@@ -1606,7 +1607,9 @@ function _index(cf::CompiledField, sys::PDESystem, s, state; derived = Pair[], c
     ends, d0 = _domain_ends(sys), Int.(leveldims(s, 0))
     coordinates = Pair[(unwrap(q), Symbol(string(unwrap(q)))) =>
                        range(ends[d + 1][1] + (ends[d + 1][2] - ends[d + 1][1]) / (2d0[d]);
-                             step = (ends[d + 1][2] - ends[d + 1][1]) / d0[d], length = d0[d]) for (d, q) in enumerate(get_ivs(sys)[2:end])]
+            step = (ends[d + 1][2] - ends[d + 1][1]) / d0[d], length = d0[d]
+        ) for (d, q) in enumerate(get_ivs(sys)[2:end])
+    ]
     # the masks' switch times on an OrdinaryDiffEq solve (review F4 b2 #3)
     maskevents, maskunlocated = _mask_events(sys, ps, tt)
     return LatticeIndex(; key = _symkey, variables = vars, parameters = params,
@@ -1669,7 +1672,8 @@ function _fold_computed(sys::PDESystem)
     tabs = Set(unwrap(p) for p in ps if !scalar(p))
     for (k, e) in resolved
         free = [v for v in Symbolics.get_variables(e) if !(v in plain) && !(_tabof(v) in tabs) &&
-                                                          !any(iv -> isequal(iv, v), unwrap.(get_ivs(sys)))]
+                !any(iv -> isequal(iv, v), unwrap.(get_ivs(sys)))
+        ]
         isempty(free) || _dverr("the computed parameter `$k = $(comp[k])` reads $(join(("`$f`" for f in free), ", ")), " *
                                 "which $(length(free) == 1 ? "is not a parameter" : "are not parameters") of the system")
     end
@@ -1677,7 +1681,8 @@ function _fold_computed(sys::PDESystem)
     symb(v) = v isa Union{Num, SymbolicUtils.BasicSymbolic}
     ic2 = Dict(k => (symb(v) ? sub(v) : v) for (k, v) in ic if !haskey(comp, k))   # field values read them too
     derived = Pair[(k, Symbol(string(k))) => _computed_message(k, comp[k], resolved[k], plain) for k in keys(comp)]
-    new = PDESystem(get_eqs(sys), get_bcs(sys), get_domain(sys), get_ivs(sys), get_dvs(sys), ps; name = nameof(sys),
+    new = PDESystem(
+        get_eqs(sys), get_bcs(sys), get_domain(sys), get_ivs(sys), get_dvs(sys), ps; name = nameof(sys),
         initial_conditions = merge(ic2, Dict(k => v for (k, v) in ic if haskey(comp, k))))
     computed = Pair[(k, Symbol(string(k))) => e for (k, e) in resolved]
     return new, derived, computed, Pair[k => comp[k] for k in keys(comp)]

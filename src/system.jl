@@ -352,8 +352,10 @@ function _named_inputs(f::ModelingToolkitBase.PDESystem, sys::PottsSystem)
     subeq(eqs) = isempty(renamed) ? eqs : Equation[Equation(sub(eq.lhs), sub(eq.rhs)) for eq in eqs]
     eqs, bcs = subeq(_MTKB.get_eqs(f)), subeq(_MTKB.get_bcs(f))
     dvs = Any[ModelingToolkitBase.isinput(_unwrap(dv)) ? Symbolics.wrap(rename(sub(dv))) : dv for dv in _MTKB.get_dvs(f)]
-    return ModelingToolkitBase.PDESystem(eqs, bcs, _MTKB.get_domain(f), _MTKB.get_ivs(f), dvs,
-        _MTKB.get_ps(f); name = nameof(f), initial_conditions = _MTKB.get_initial_conditions(f))
+    return ModelingToolkitBase.PDESystem(
+        eqs, bcs, _MTKB.get_domain(f), _MTKB.get_ivs(f), dvs,
+        _MTKB.get_ps(f); name = nameof(f), initial_conditions = _MTKB.get_initial_conditions(f)
+    )
 end
 # the callable of an input `u = g(t, x, y)` under the name `w`: each call carries `u`'s metadata
 # (input, bounds, storage, level, its CPM read) with `w` as its `lattice_input_name`, not its
@@ -425,8 +427,10 @@ function _with_defaults(f::ModelingToolkitBase.PDESystem, eqs)
         end
         k += 1
     end
-    return ModelingToolkitBase.PDESystem(_MTKB.get_eqs(f), _MTKB.get_bcs(f), _MTKB.get_domain(f), _MTKB.get_ivs(f),
-        _MTKB.get_dvs(f), ps; name = nameof(f), initial_conditions = ic)
+    return ModelingToolkitBase.PDESystem(
+        _MTKB.get_eqs(f), _MTKB.get_bcs(f), _MTKB.get_domain(f), _MTKB.get_ivs(f),
+        _MTKB.get_dvs(f), ps; name = nameof(f), initial_conditions = ic
+    )
 end
 # the PDESystem slot of a wrap (a hand-wrapped or compiled one), without building it
 _stored_fields(sys::PottsSystem) = getfield(sys, :fields)
@@ -447,7 +451,8 @@ function wrap_system(
     fields === nothing || nameof(fields) === name ||
         throw(ArgumentError("wrap_system: the PDESystem is named `$(nameof(fields))`, the model `$name`; they must agree"))
     ModelingToolkitBase.iscomplete(sys) || (sys = complete(sys; allow_parameter_eqs = true))
-    isempty(_MTKB.get_systems(sys)) || throw(ArgumentError(
+    isempty(_MTKB.get_systems(sys)) || throw(
+        ArgumentError(
         "wrap: `$name` is complete but not flattened (it still has subsystems: a completed system was composed); " *
                 "compose the uncompleted systems, then wrap them"
         )
@@ -958,8 +963,10 @@ function _merge_fields(name, p, cs)
         ic[k] = v
     end
     ps(f) = (x = _MTKB.get_ps(f); x isa SciMLBase.NullParameters ? Any[] : x)
-    return ModelingToolkitBase.PDESystem(merged(f -> _MTKB.get_eqs(f)), merged(f -> _MTKB.get_bcs(f)), merged(f -> _MTKB.get_domain(f)), merged(f -> _MTKB.get_ivs(f)),
-        merged(f -> _MTKB.get_dvs(f)), merged(ps); name, initial_conditions = ic)
+    return ModelingToolkitBase.PDESystem(
+        merged(f -> _MTKB.get_eqs(f)), merged(f -> _MTKB.get_bcs(f)), merged(f -> _MTKB.get_domain(f)), merged(f -> _MTKB.get_ivs(f)),
+        merged(f -> _MTKB.get_dvs(f)), merged(ps); name, initial_conditions = ic
+    )
 end
 
 const _STATEMENT_FIELDS = (:energies, :drives, :constraints, :updates, :divisions, :converts, :relationships, :link_rules,
@@ -1267,7 +1274,7 @@ const _REFUSED_PROBLEMS = (:ODEProblem, :NonlinearProblem, :SteadyStateProblem, 
     :SDDEProblem, :BVProblem, :DiscreteProblem, :ImplicitDiscreteProblem, :NonlinearLeastSquaresProblem, :LinearProblem,
     :IntervalNonlinearProblem, :HomotopyProblem, :OptimizationProblem)
 _problem_msg(f) = "$f: a Potts model is not an ODE or jump system; build its problem with `PottsProblem(sys, op, tspan)` " *
-                  "and solve it with a CPM algorithm (for the cell/model ODE alone, use `Potts.inner(sys)`)"
+    "and solve it with a CPM algorithm (for the cell/model ODE alone, use `Potts.inner(sys)`)"
 for (M, n) in ((:JumpProcesses, :JumpProblem), ((:SciMLBase, n) for n in _REFUSED_PROBLEMS)...)
     P = Expr(:., M, QuoteNode(n))
     msg = String(n)
@@ -1443,8 +1450,11 @@ function Base.show(io::IO, ::MIME"text/plain", sys::PottsSystem)
         _count_string(length(_MTKB.unknowns(s)), "unknown"), ", ", _count_string(length(_MTKB.parameters(s)), "parameter"))
     isempty(_MTKB.unknowns(s)) || print(io, "\n    unknowns: ", join(_MTKB.unknowns(s), ", "))
     f = _stored_fields(sys)    # the stored slot (not built here)
-    f === nothing || print(io, "\n  fields: PDESystem with ", _count_string(length(_MTKB.get_eqs(f)), "equation"), ", ",
-        _count_string(length(_MTKB.get_bcs(f)), "bc"), ", ", _count_string(length(_MTKB.get_dvs(f)), "dependent variable"))
+    f === nothing || print(
+        io, "\n  fields: PDESystem with ", _count_string(length(_MTKB.get_eqs(f)), "equation"), ", ",
+        _count_string(length(_MTKB.get_bcs(f)), "bc"), ", ", _count_string(length(_MTKB.get_dvs(f)), "dependent variable")
+    )
+    return nothing
 end
 
 # a parameter with its MTK description (F2-14): `Dc ("diffusion of c")`

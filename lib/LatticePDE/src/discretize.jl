@@ -368,7 +368,8 @@ function _clock_slot(sys::PDESystem, disc::LatticeDiscretization)
                                      "declares none; give `LatticeDiscretization(…; clock = τ)` (the period of one step index)")
     rule = Dict{Any, Any}(u => _CLOCK_TICK for u in unique(calls))
     sub(x) = substitute(x, rule; fold = Val(false))
-    return PDESystem([sub(eq.lhs) ~ sub(eq.rhs) for eq in get_eqs(sys)], [sub(b.lhs) ~ sub(b.rhs) for b in get_bcs(sys)],
+    return PDESystem(
+        [sub(eq.lhs) ~ sub(eq.rhs) for eq in get_eqs(sys)], [sub(b.lhs) ~ sub(b.rhs) for b in get_bcs(sys)],
         get_domain(sys), get_ivs(sys), get_dvs(sys), Any[ps; _CLOCK_TICK]; name = nameof(sys),
         initial_conditions = _ics(sys))
 end
@@ -378,7 +379,7 @@ function _scan_clock(sys)
                                  (operation(u) isa Shift && operation(u).steps != 1)) &&
                                 _dverr("`$eq`: `$(operation(u))` is not supported; only `Shift(t, 1)` maps are; $SHIFT_HINT");
                                 foreach(a -> walk(a, eq), arguments(u)))
-    foreach(eq -> (walk(unwrap(eq.lhs), eq); walk(unwrap(eq.rhs), eq)), [get_eqs(sys); get_bcs(sys)])
+    return foreach(eq -> (walk(unwrap(eq.lhs), eq); walk(unwrap(eq.rhs), eq)), [get_eqs(sys); get_bcs(sys)])
 end
 
 # The `Coarse` level of each dependent variable (F3-16): `[lattice_level = Coarse(k)]` puts the

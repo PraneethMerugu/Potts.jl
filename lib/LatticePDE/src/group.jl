@@ -133,7 +133,8 @@ function _group_cut(sys::PDESystem, fields)
     bcmine(eq) = mine(eq) || _reads(unwrap(eq.lhs), faced)
     ics = _ics(sys)
     ic2 = Dict(k => v for (k, v) in ics if !any(o -> isequal(o, _opof(k)), cut))
-    out = PDESystem(eqs, filter(bcmine, get_bcs(sys)), get_domain(sys), get_ivs(sys), dvs, _params(sys);
+    out = PDESystem(
+        eqs, filter(bcmine, get_bcs(sys)), get_domain(sys), get_ivs(sys), dvs, _params(sys);
         name = nameof(sys), initial_conditions = ic2)
     return out, external
 end

@@ -357,7 +357,9 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
         Pair{String, Vector{Float64}}[first(q) => Float64.(collect(last(q))) for q in cf.tables])
     staterefs = unique([_ref(v) for v in values(dvs)])     # the group's own states (no aux field, no input)
     allops = Any[unique([_ref(v) for v in values(dvs)]);
-                 unique([_opof(v) for v in unwrap.(get_dvs(sys)) if !haskey(cf.keys, _opof(v)) ||
+        unique(
+            [
+                _opof(v) for v in unwrap.(get_dvs(sys)) if !haskey(cf.keys, _opof(v)) ||
                                                                !any(k -> k in states, cf.keys[_opof(v)])])]
     # the group's states each aux field reads, through the aux fields it reads in turn (a term
     # that reads an aux field is a cross term of those states, or a source when it reads none:
@@ -594,7 +596,8 @@ function _jac_program(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDiscret
     # the domain on a row's level (a coarse row's: the domain folded onto its grid, F3-16)
     domat(L) = domid == 0 || L == 0 ? domid : fieldid_in(pb, "domain:$L")
     # (a blending coarse row's coefficients fold over the free children, as its rate does: F4-15b)
-    env(kb, L, k) = Env(kb, fids, params, tables, spacing, unwrap(get_ivs(sys)[1]), xs, lo, level_spacing(h, fdims, L), false,
+    env(kb, L, k) = Env(
+        kb, fids, params, tables, spacing, unwrap(get_ivs(sys)[1]), xs, lo, level_spacing(h, fdims, L), false,
         ntuple(_ -> 0, N), RESOLVE, nothing, false, domat(L), Int32[], L, flev, fdims, 0, get(cf.free, k, nothing), cf.domfree)
     for (k, pl) in sort!(collect(plans); by = first)
         id = fieldid_in(pb, k)

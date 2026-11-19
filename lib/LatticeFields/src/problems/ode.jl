@@ -76,9 +76,11 @@ struct LatticeMetadata{P <: FieldProblem, H} <: SciMLBase.AbstractDiscretization
     sem::Base.RefValue{Any}                    # the semantic program of the right side (built once)
     plans::Any                                 # its init and step plans per value type (shared by the masks of `u0`)
 end
-LatticeMetadata(fp::FieldProblem{N}) where {N} = LatticeMetadata{typeof(fp), Val(!fp.group.spec.timefree)}(fp,
+LatticeMetadata(fp::FieldProblem{N}) where {N} = LatticeMetadata{typeof(fp), Val(!fp.group.spec.timefree)}(
+    fp,
     fp.kind == :map ? :map : :ode, Ref{Any}(nothing), Ref(0), ReentrantLock(), Ref{Any}(nothing),
-    Dict{Type, Tuple{StepPlan{N}, StepPlan{N}}}())
+    Dict{Type, Tuple{StepPlan{N}, StepPlan{N}}}()
+)
 _sem(m::LatticeMetadata) = (m.sem[] === nothing && (m.sem[] = semantic(m.problem.group.spec.rate)); m.sem[]::Program)
 # the compile options of the right side: the launches write the step index into the clock's slot
 function _rhs_options(fp::FieldProblem)

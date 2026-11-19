@@ -245,6 +245,7 @@ function robin_slots(sys::PDESystem)
                sum(Symbolics.wrap(c) * Symbolics.wrap(core) for (core, c) in zip(cores, coefs)) ~ eq.rhs
     end
     isempty(extra) && return sys
-    return PDESystem(get_eqs(sys), bcs, get_domain(sys), get_ivs(sys), get_dvs(sys), Any[ps; extra]; name = nameof(sys),
+    return PDESystem(
+        get_eqs(sys), bcs, get_domain(sys), get_ivs(sys), get_dvs(sys), Any[ps; extra]; name = nameof(sys),
         initial_conditions = ic)
 end

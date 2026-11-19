@@ -634,8 +634,10 @@ function _init_options(alg)
                 "(the default), checked by `CheckInit()` or kept by `NoInit()`"
         )
     )
-    tol(v, n) = v === nothing ? nothing : (v isa Real && v >= 0 ? Float64(v) :
-        throw(ArgumentError("`OverrideInit($n = $(repr(v)))`: a tolerance is a nonnegative number")))
+    tol(v, n) = v === nothing ? nothing : (
+            v isa Real && v >= 0 ? Float64(v) :
+            throw(ArgumentError("`OverrideInit($n = $(repr(v)))`: a tolerance is a nonnegative number"))
+        )
     abstol, reltol = tol(alg.abstol, :abstol), tol(alg.reltol, :reltol)
     solvekw = (; (abstol === nothing ? (;) : (; abstol))..., (reltol === nothing ? (;) : (; reltol))...)
     return (; mode = :solve, nlsolve = alg.nlsolve, abstol, reltol = something(reltol, _INIT_RTOL), solvekw)

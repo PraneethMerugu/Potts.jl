@@ -1505,31 +1505,40 @@ _names_words(ks, n = 8) = length(ks) <= n ? join(ks, ", ") : string(join(ks[1:n]
 Base.show(io::IO, st::CPMState) =
     print(io, "CPMState(", join(size(st.ownership), "×"), ", ", _count_words(_live_cells(st), "cell"), ")")
 function Base.show(io::IO, ::MIME"text/plain", st::CPMState)
-    print(io, "CPMState on a ", join(size(st.ownership), "×"), " lattice: ", _count_words(_live_cells(st), "cell"),
-        " in ", _count_words(length(st.cell.kind), "slot"))
+    print(
+        io, "CPMState on a ", join(size(st.ownership), "×"), " lattice: ", _count_words(_live_cells(st), "cell"),
+        " in ", _count_words(length(st.cell.kind), "slot")
+    )
     for (part, nt) in (("cell", st.cell), ("site", st.site), ("model", st.model))
         isempty(nt) || print(io, "\n  ", part, ": ", _names_words(collect(keys(nt))))
     end
+    return
 end
 
 Base.show(io::IO, prob::PottsProblem) =
     print(io, "PottsProblem(", join(prob.lattice.dims, "×"), ", ", _count_words(_live_cells(prob.u0), "cell"), ", tspan ", prob.tspan, ")")
 function Base.show(io::IO, ::MIME"text/plain", prob::PottsProblem)
-    print(io, "PottsProblem on a ", _lattice_words(prob.lattice), ": ", _count_words(_live_cells(prob.u0), "cell"),
-        ", tspan ", prob.tspan, ", seed ", Int(prob.seed))
+    print(
+        io, "PottsProblem on a ", _lattice_words(prob.lattice), ": ", _count_words(_live_cells(prob.u0), "cell"),
+        ", tspan ", prob.tspan, ", seed ", Int(prob.seed)
+    )
     print(io, "\n  u0: ")
     show(io, prob.u0)
     isempty(prob.kwargs) || print(io, "\n  solve keywords: ", join(keys(prob.kwargs), ", "))
+    return nothing
 end
 
-Base.show(io::IO, integ::PottsIntegrator) =
-    print(io, "PottsIntegrator(", nameof(typeof(integ.alg)), ", ", join(integ.prob.lattice.dims, "×"), ", t = ", integ.t,
-        " of ", integ.tstop, ", ", integ.retcode, ")")
+function Base.show(io::IO, integ::PottsIntegrator)
+    dims = join(integ.prob.lattice.dims, "×")
+    return print(io, "PottsIntegrator(", nameof(typeof(integ.alg)), ", ", dims, ", t = ", integ.t, " of ", integ.tstop, ", ", integ.retcode, ")")
+end
 function Base.show(io::IO, ::MIME"text/plain", integ::PottsIntegrator)
-    print(io, "PottsIntegrator on a ", _lattice_words(integ.prob.lattice), ": ", nameof(typeof(integ.alg)),
-        ", t = ", integ.t, " of ", integ.tstop, ", retcode ", integ.retcode)
+    print(
+        io, "PottsIntegrator on a ", _lattice_words(integ.prob.lattice), ": ", nameof(typeof(integ.alg)),
+        ", t = ", integ.t, " of ", integ.tstop, ", retcode ", integ.retcode
+    )
     print(io, "\n  state: ")
-    show(io, integ.state)
+    return show(io, integ.state)
 end
 
 function (sol::PottsSolution)(t::Real; idxs = nothing)

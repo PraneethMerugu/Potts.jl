@@ -336,7 +336,7 @@ function _input_bindings(sys, f, inputs, what, pname)
             k = _binding_target(key, ops)
         end
         k === nothing && throw(ArgumentError(string(what, ": `", _key_text(key), "` is not a dependent variable of ", pname,
-            "; its inputs are ", isempty(names) ? "none" : names, _declared_input(key, ModelingToolkitBase.get_ivs(f)) ?
+                    "; its inputs are ", isempty(names) ? "none" : names, _declared_input(key, ModelingToolkitBase.get_ivs(f)) ?
             string(". `", _key_text(key), "` is declared `[input = true]`, but no equation of ", pname, " reads it: a ",
             "membership test `", _key_text(key), "(t, x, y) ∈ Set(…)` is Julia's `false`, so its term is deleted before ",
             "the PDESystem is built; write `ismember(", _key_text(key), "(t, x, y), (1, 2))`") : "")))

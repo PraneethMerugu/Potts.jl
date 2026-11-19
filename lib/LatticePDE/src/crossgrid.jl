@@ -93,7 +93,8 @@ function crossgrid_form(sys::PDESystem)
     # own row keeps the operator on the grid, `D(c) ~ laplacian(c)`)
     sub(x, l) = substitute(x, Dict{Any, Any}(k => v for (k, v, lo) in rules if lo != l); fold = Val(false))
     eqs = Equation[lhslevel(eq) === nothing ? eq : eq.lhs ~ sub(eq.rhs, lhslevel(eq)) for eq in get_eqs(sys)]
-    return PDESystem([eqs; auxeqs], get_bcs(sys), get_domain(sys), get_ivs(sys), Any[get_dvs(sys); auxs], _params(sys);
+    return PDESystem(
+        [eqs; auxeqs], get_bcs(sys), get_domain(sys), get_ivs(sys), Any[get_dvs(sys); auxs], _params(sys);
         name = nameof(sys), initial_conditions = _ics(sys))
 end
 

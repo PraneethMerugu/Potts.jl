@@ -622,8 +622,8 @@ end
     # base: `problem = :ode` gave a `SteadyStateProblem`)
     ps = discretize(sf, LatticeDiscretization(Grid(BDIMS); T = Float64))
     @test ps isa SciMLBase.LinearProblem
-    # SciML's `hasTime` matches the problem type: `Val(false)` without a time
-    @test !(LFP.lattice_metadata(ps) isa SciMLBase.AbstractDiscretizationMetadata{Val(true)})
+        # SciML's `hasTime` matches the problem type: `Val(false)` without a time
+        @test !(LFP.lattice_metadata(ps) isa SciMLBase.AbstractDiscretizationMetadata{Val(true)})
     @test maximum(abs, ps.A * want .- ps.b) < 1e-10
     # Helmholtz `0 = Δu − 4u + (2π² + 4) sin(πx) sin(πy)` with zero faces: order 2 over three grids
     errs = map((16, 32, 64)) do n

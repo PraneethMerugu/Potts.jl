@@ -118,7 +118,8 @@ function steady_rows(sys::PDESystem)
         at0 = s[1](t0, ivs[2:end]...)
         push!(bcs, (s[2] == 0 ? Symbolics.wrap(at0) : Symbolics.wrap(at0)[s[2]]) ~ 0.0)
     end
-    out = PDESystem(eqs, bcs, get_domain(sys), get_ivs(sys), get_dvs(sys), _params(sys); name = nameof(sys),
+    out = PDESystem(
+        eqs, bcs, get_domain(sys), get_ivs(sys), get_dvs(sys), _params(sys); name = nameof(sys),
         initial_conditions = ic)
     return out, steady
 end
@@ -216,8 +217,10 @@ rows and aux fields (`K ~ rhs`).
 """
 function steady_form(sys::PDESystem, N::Int)
     # (a system with a rate or a map has a time: its first variable, however many axes)
-    timefree = length(get_ivs(sys)) == N && !any(eq -> (l = unwrap(eq.lhs); iscall(l) && operation(l) isa Union{Differential, Shift}),
-        get_eqs(sys))
+    timefree = length(get_ivs(sys)) == N && !any(
+        eq -> (l = unwrap(eq.lhs); iscall(l) && operation(l) isa Union{Differential, Shift}),
+        get_eqs(sys)
+    )
     timefree && (sys = _timed(sys))
     sys, steady = steady_rows(sys)
     return sys, steady, timefree
@@ -227,7 +230,8 @@ const _STEADY_T = unwrap(ModelingToolkitBase.t_nounits)
 const _STEADY_Z = unwrap(only(Symbolics.@variables __steady_z))
 function _timed(sys::PDESystem)
     tt = _STEADY_T
-    any(v -> isequal(unwrap(v), tt), get_ivs(sys)) && _dverr("the system's variables $(Tuple(get_ivs(sys))) have no time but use " *
+    any(v -> isequal(unwrap(v), tt), get_ivs(sys)) && _dverr(
+        "the system's variables $(Tuple(get_ivs(sys))) have no time but use " *
         "`$tt` as an axis; name the axes otherwise (a time-free system gains the time `$tt`)")
     ops = Any[_opof(v) for v in get_dvs(sys)]
     rule = Dict{Any, Any}()
@@ -258,6 +262,8 @@ function _timed(sys::PDESystem)
             _dverr(string("equation `", eq, "`: a system with no time has steady rows `0 ~ rhs` and aux fields `K ~ rhs` only"))
     end
     dom = [tt ∈ Interval(0.0, 0.0); get_domain(sys)]
-    return PDESystem([sub(eq.lhs) ~ sub(eq.rhs) for eq in get_eqs(sys)], [sub(b.lhs) ~ sub(b.rhs) for b in get_bcs(sys)], dom,
-        Any[tt; unwrap.(get_ivs(sys))], Any[sub(v) for v in get_dvs(sys)], _params(sys); name = nameof(sys), initial_conditions = ic)
+    return PDESystem(
+        [sub(eq.lhs) ~ sub(eq.rhs) for eq in get_eqs(sys)], [sub(b.lhs) ~ sub(b.rhs) for b in get_bcs(sys)], dom,
+        Any[tt; unwrap.(get_ivs(sys))], Any[sub(v) for v in get_dvs(sys)], _params(sys); name = nameof(sys), initial_conditions = ic
+    )
 end
