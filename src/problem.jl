@@ -77,7 +77,7 @@ end
 """
     PottsProblem(sys, op, tspan; field_solver = ExplicitEuler(), ode_solver = ExplicitEuler(), solvers = [],
                  backend = nothing, T, capacity, seed = 0, replica = 0, repeat = 0, track = (),
-                 expression = Val(false))
+                 initializealg = nothing, expression = Val(false))
 
 Build the numerical problem from a `PottsSystem` (compiled with `mtkcompile` if
 needed). `op` maps `ownership` to the initial labels (an integer array over the lattice),
@@ -93,6 +93,16 @@ type of the generated code and state: by default `Float64`, or the default float
 the same backend to `init`/`solve`). A field declared `@variables c(..) = 0.5 [lattice_storage = S]` in its PDESystem
 (`Float16`, `Float32` or `Float64`) is stored in `S` and computed in its field solver's
 `compute_type` (default `T`). The generated code is `Potts.generated_code(sys; T)`.
+
+`initializealg` is SciML's initialization algorithm, used here when the problem is built (the
+state is initialized then; `init` and `solve` do not take it). The default solves the
+model's initialization equations (`@initialization_equations`, operating-point values of
+algebraic variables) per entity, as `OverrideInit()` does. `OverrideInit(; abstol, reltol,
+nlsolve)` sets the nonlinear solver (`nlsolve`, run once from the guesses) and its
+tolerances: a condition passes when its residual is at most `abstol`, or at most `reltol`
+(default `1e-9`) times the size of its terms. `CheckInit()` checks the values the state is
+built with against the conditions (a `SciMLBase.CheckInitFailureError` when one fails), and
+`NoInit()` keeps them unchecked. `remake(prob; u0)` initializes the new state the same way.
 
 How fields and ODEs are integrated is part of the problem, compiled into its code:
 - `field_solver = ExplicitEuler(; substeps, lower_bound)` integrates the fields, and is an error
@@ -148,9 +158,10 @@ function CorePotts.PottsProblem(
         c::CompiledPottsSystem, op, tspan; backend = nothing,
         T::Type = backend === nothing ? Float64 : LatticeFields.Exec.default_float(backend), capacity = nothing,
         seed = 0, replica = 0, repeat = 0, expression = Val(false), field_solver = nothing,
-        ode_solver = ExplicitEuler(), solvers = (), track = (), kwargs...
+        ode_solver = ExplicitEuler(), solvers = (), track = (), initializealg = nothing, kwargs...
     )
     sys = getfield(c, :sys)
+    init = _init_options(initializealg)
     spec = _resolve_solvers(c; field_solver, ode_solver, solvers)
     track = _track(track)
     opd = _operating_point(sys, op)
@@ -174,7 +185,7 @@ function CorePotts.PottsProblem(
             "`expression = Val(true)` is not supported; use `Potts.generated_code(sys; T)` to inspect the code"
         )
     )
-    st = _track_layout(_ode_layout(_initial_state(c, opd, T, capacity, values), c, spec), c, track)
+    st = _track_layout(_ode_layout(_initial_state(c, opd, T, capacity, values, init), c, spec), c, track)
     lat = core_lattice(_p(sys, :lattice))
     relations = _with_contact_counts(c, NamedTuple(k => v for (k, v) in _sorted(getfield(c, :relations))))
     spacing = _p(sys, :lattice).spacing === nothing ? nothing : map(T, _p(sys, :lattice).spacing)
@@ -190,7 +201,8 @@ function CorePotts.PottsProblem(
     tangent = isempty(seeds) && isempty(u0seeds) ? nothing : _tangent(c, T, p, seeds, opd; u0 = u0seeds)
     return CorePotts.PottsProblem(
         f, st, lat, tspan, p; contact = getfield(c, :contact_spec), proposal = getfield(c, :proposal_spec), relations,
-        spacing, frozen, seed, replica, repeat, tangent, kwargs...
+        spacing, frozen, seed, replica, repeat, tangent, kwargs...,
+        (initializealg === nothing ? (;) : (; initializealg))...
     )
 end
 
@@ -1091,7 +1103,7 @@ end
 # that does not convert (a Dual, P5 C3/4-1): the CPM takes plain numbers. Metropolis
 # acceptance is piecewise constant in `p`, so a derivative of a CPM run in `p` is zero
 # almost everywhere; CPM parameters belong to likelihood-free inference on the counter RNG
-_cpm_scalar(::Type{T}, v, i::Entity) where {T} = v isa Union{AbstractFloat, Integer, Rational, AbstractIrrational} ? T(v) :
+_cpm_scalar(::Type{T}, v, i::Entity) where {T} = _plain_number(v) ? T(v) :
     try
         T(v)
 catch e
@@ -1117,7 +1129,7 @@ function _valtext(v)
     return string(v, " (a ", T, ")")
 end
 
-function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{Any, Any}())
+function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{Any, Any}(), init = _init_options(nothing))
     sys = getfield(c, :sys)
     haskey(opd, ownership) || throw(ArgumentError("the operating point needs `ownership => labels`"))
     σ = Int32.(opd[ownership])
@@ -1189,7 +1201,7 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
         foreach(n -> push!(site, Symbol(n, :__mask) => zeros(UInt8, _site_dims(_field_info(sys, n), dims))), _masked_fields(sys))
     end
     # `@initialization_equations` and operating-point values of algebraic variables (D-170)
-    _initialize!(c, opd, σ, kinds, ncell, cell, model, pvals)
+    _initialize!(c, opd, σ, kinds, ncell, cell, model, pvals, init)
     for x in _integrals(sys)
         push!(cell, _integral_name(x) => zeros(T, ncell))
     end
@@ -1700,6 +1712,7 @@ function CorePotts.remake_state(info::PottsModelInfo, prob, u0::_SymbolicMap)
     free = count(iszero, prob.u0.cell.volume)
     ncell = maximum(Int32.(get(opd, ownership, Int32[])); init = Int32(0))
     values = _parameter_dict(info.csys, prob.p)
-    st = _ode_layout(_initial_state(info.csys, opd, info.T, max(old, ncell + free), values), info.csys, info.solvers)
+    init = _init_options(get(prob.kwargs, :initializealg, nothing))
+    st = _ode_layout(_initial_state(info.csys, opd, info.T, max(old, ncell + free), values, init), info.csys, info.solvers)
     return _host_init!(prob.f, st, prob.p, info.ctx, prob.seed, prob.replica, prob.repeat, prob.kwargs)
 end
