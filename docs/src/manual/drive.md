@@ -128,8 +128,8 @@ parameters is `WortelAct`.
 !!! note "No `integral` in drives, constraints and on-copy updates"
     `integral(x)`, including `integral(Pre(x))` and an `integral` inside a fold over cells
     or in the arguments of `Chemotaxis`, is not allowed in drives, constraints and
-    [on-copy updates](@ref manual-updates), and building such a model is an
-    `ArgumentError`. Drives and constraints are evaluated at every copy attempt, and
+    [on-copy updates](@ref manual-updates), and compiling such a model is a
+    `PottsCompileError`. Drives and constraints are evaluated at every copy attempt, and
     on-copy updates at every accepted copy, where the cells change, while an integral
     is refreshed only between sweeps. Keep the integral in a cell variable updated at the
     start of the MCS and read it at the copy's cells:
