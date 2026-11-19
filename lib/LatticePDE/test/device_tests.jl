@@ -248,8 +248,7 @@ using .LP_device: fd, kron
         rob = psys([D(ce) ~ Di * laplacian(ce) - ki * ce + 1], [c(0, x, y) ~ x * y, 1.5 * c(t, 1, y) + Differential(x)(c(t, 1, y)) ~ 0.2], [Di, ki])
         cases = [
             ("BackwardEuler, field row", field, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 1, check_div = false))),
-            # max_iter = 8 (up from 6): at iter 6, Float32 η*ndz sits at the κ = 1e-2 threshold so 1-ULP GPU FMA rounding diverges in retcode
-            ("BackwardEuler, advection", adv, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 8))),
+            ("BackwardEuler, advection", adv, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 6))),
             ("BackwardEuler, advection tight κ", adv, BackwardEuler(; nlsolve = LatticeNewton(; κ = 1.0f-4, max_iter = 12))),
             ("BackwardEuler, switch", sw, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 6))),
             ("BackwardEuler, Robin face", rob, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 1, check_div = false))),
@@ -272,7 +271,7 @@ using .LP_device: fd, kron
         sd = solve(mk(adv, PDEV), BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 4)); dt = 0.1, saveat = 0.5)
         sh = solve(mk(adv, KernelAbstractions.CPU()), BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 5)); dt = 0.1, saveat = 0.5)
     @test maximum(abs, Array(sd[ce, end]) .- sh[ce, end]) / maximum(abs, sh[ce, end]) > 1e-12
-        # uncoupled two-field group under LatticeNewton exercises the shared device group buffer (`gpart`/`gcnt`) on pgpu
+        # an uncoupled two-field LatticeNewton group: one group norm over both rows on the device
         @variables b2(..)
         b2e = b2(t, x, y)
         two = PDESystem(
@@ -468,17 +467,16 @@ using .LP_device: fd, kron
         for (lab, s, mkalg) in (
                 ("q1 QS", q1(0.1, 5.0; steady = true), _ -> QuasiSteady()),
                 ("nonlinear QS", nl, _ -> QuasiSteady()),
+                # (Float32 takes κ = 1e-2: at κ = 1e-4 and the default tolerances its Newton iteration
+                # diverges in window 3 after 14 solves, on the device and the host alike; κ = 1e-2
+                # takes 12 solves, and Float64 at κ = 1e-4 takes 7)
                 ("nonlinear QS κ", nl, T -> QuasiSteady(; nlsolve = LatticeNewton(; κ = T === Float32 ? 1.0f-2 : 1.0e-4, max_iter = 20))),
             )
             for T in (Float32, Float64)
                 alg = mkalg(T)
-                # CoupledOperator uses matrix-free FD step sqrt(eps(T)): Float32's ~3.45e-4 FD floor diverges at κ = 1e-4, reltol = 1e-3 (window 3, 14 solves); κ = 1e-2, (1e-3, 1e-2) finishes in 7 solves
-                tols = alg.nlsolve isa LatticeNewton ?
-                    (T === Float32 ? (; abstol = 1.0f-3, reltol = 1.0f-2) : (; abstol = 1.0e-6, reltol = 1.0e-3)) :
-                    (;)
                 mk(bk) = discretize(s, LatticeDiscretization(Grid((24, 20)); T, backend = bk))
-                sd, sd2 = solve(mk(PDEV), alg; dt = 0.1, saveat = 0.1, tols...), solve(mk(PDEV), alg; dt = 0.1, saveat = 0.1, tols...)
-                sh = solve(mk(KernelAbstractions.CPU()), alg; dt = 0.1, saveat = 0.1, tols...)
+                sd, sd2 = solve(mk(PDEV), alg; dt = 0.1, saveat = 0.1), solve(mk(PDEV), alg; dt = 0.1, saveat = 0.1)
+                sh = solve(mk(KernelAbstractions.CPU()), alg; dt = 0.1, saveat = 0.1)
             @test sd.retcode == sh.retcode == SciMLBase.ReturnCode.Success
             same(a, b) = all(i -> Array(a[cae, i]) == Array(b[cae, i]) && Array(a[cbe, i]) == Array(b[cbe, i]), eachindex(sh.t))
             @test same(sd, sh) || (println("12d dev ", lab, " ", T, " ", maximum(abs, Array(sd[cae, end]) .- sh[cae, end])); false)

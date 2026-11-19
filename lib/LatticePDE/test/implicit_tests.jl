@@ -514,7 +514,7 @@ end
         ig_opts = init(p_adv, BackwardEuler(; nlsolve = LatticeNewton()); dt = 0.25)
         @test ig_opts.opts.abstol == 1 // 10^6 && ig_opts.opts.reltol == 1 // 10^3
 
-        # Non-coupled multi-row group (M3): one global group norm avoids spurious ndz/0 divergence when one field hits zero update
+        # Non-coupled multi-row group: one global group norm avoids spurious ndz/0 divergence when one field hits zero update
         sys_m3 = PDESystem(
             [
                 D(bce) ~ 0.1 * laplacian(bce) - bce,
@@ -580,7 +580,8 @@ end
                 @test sb.stats.solves == so.stats.nsolve
             end
         end
-        # Discriminating M3 oracle: two uncoupled fields of very different magnitudes share one group norm (not per-row)
+        # Two uncoupled fields of very different magnitudes share one group norm: the per-step solve counts follow
+        # NLNewton's single norm, and the group stops sooner than the large field alone would under a per-row norm
         sys2d = PDESystem(
             [
                 D(bce) ~ 0.05 * laplacian(bce) - bce + 1.0e-4 * (1.0 + x),
