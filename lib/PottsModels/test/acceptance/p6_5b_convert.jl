@@ -664,11 +664,11 @@ end
     bad = Base.deepcopy(P65B_CONVERT)
     bad.args[2].args[3] = :lifecycle
     e2 = p65b_build_error(p65b_src(:P65bCanon; convert = bad))
-    @test e2 isa ArgumentError && occursin("lifecycle", sprint(showerror, e2))
+    @test e2 isa Potts.PottsCompileError && occursin("lifecycle", sprint(showerror, e2))
     # two passes with one name
     twice = Expr(:block, P65B_CONVERT.args..., P65B_CONVERT.args...)
     e3 = p65b_build_error(p65b_src(:P65bTwice; convert = twice))
-    @test e3 isa ArgumentError && occursin("protrusion", sprint(showerror, e3))
+    @test e3 isa Potts.PottsCompileError && occursin("protrusion", sprint(showerror, e3))
     # control: the plain source builds
     @test p65b_build_error(p65b_src(:P65bOk)) === nothing
 end
