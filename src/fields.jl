@@ -1264,7 +1264,14 @@ function _check_discretized(@nospecialize(f), st)
     for e in f.phases.mcs, t in (e isa CorePotts.Repeat ? e.entries : (e,))
         for ph in (t isa Tuple ? t : (t,))
             ph isa _DiscretizedFields || continue
-            prob = _discretized_problem(ph, _input_values(ph, st))
+            # (a discretizer's own error, e.g. one taking `kwargs...` that cannot build this
+            # system, refused as the contract)
+            prob = try
+                _discretized_problem(ph, _input_values(ph, st))
+            catch err
+                (isfatal(err) || err isa ArgumentError) && rethrow()
+                throw(_discretized_refusal(ph, "its `discretize` failed: " * sprint(showerror, err)))
+            end
             for n in ph.fields
                 SII.is_variable(prob, n) || throw(_discretized_refusal(ph, "its problem has no field `$n`"))
                 l, sites = length(SII.getu(prob, n)(prob)), length(getproperty(st.site, n))
@@ -1317,6 +1324,11 @@ function CorePotts.run_phase(ph::_DiscretizedFields, st, p, ctx, key, mcs, backe
         di = _discretized_integrator(ph, ins, t0)
         lock(() -> _cache_integrator!(ph.integrators, owner, di), ph.lock)
     end
+    return _step_discretized!(di, ph, st, p, ins, t0, mcs, stats)
+end
+
+# One window on the cached integrator (a function barrier: `di` comes from an untyped cache)
+function _step_discretized!(di::_DiscretizedIntegrator, ph::_DiscretizedFields, st, p, ins, t0, mcs, stats)
     integ = di.integ
     # the inputs, the model's parameter values when they change (`remake(prob; p)`,
     # `integ.ps[k] = v`), then the fields; `reinit!` from that state starts the window (and

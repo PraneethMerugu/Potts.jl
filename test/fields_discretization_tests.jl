@@ -145,11 +145,14 @@ end
 @testsetup module BadFDSetup
 using Potts: Potts
 using SciMLBase: SciMLBase
-export NoInputs, WrongLength, NoField
+export NoInputs, WrongLength, NoField, KwFails
 struct NoInputs <: SciMLBase.AbstractDiscretization end
 struct WrongLength <: SciMLBase.AbstractDiscretization end
 struct NoField <: SciMLBase.AbstractDiscretization end
+struct KwFails <: SciMLBase.AbstractDiscretization end
 SciMLBase.discretize(::Potts.ModelingToolkitBase.PDESystem, ::NoInputs) = nothing
+# takes any keyword (as MethodOfLines), then fails with its own error
+SciMLBase.discretize(::Potts.ModelingToolkitBase.PDESystem, ::KwFails; kwargs...) = error("KwFails cannot build this system")
 function SciMLBase.discretize(::Potts.ModelingToolkitBase.PDESystem, d::Union{WrongLength, NoField}; inputs)
     ix = Potts.SymbolicIndexingInterface.SymbolCache(d isa NoField ? [:u] : [:c], [:Dc, :s, :kd, :kind, :χ], :t)
     f = SciMLBase.ODEFunction{true}((du, u, p, t) -> (du .= 0); sys = ix)
@@ -183,7 +186,7 @@ end
     # the host only
     @test occursin("CPU", cp_msg(() -> build(m; discretization = d, field_solver = Tsit5(), backend = DiscGPU())))
     # the contract, checked when the problem is built
-    for (bad, token) in ((NoInputs(), "inputs"), (WrongLength(), "480 sites"), (NoField(), "no field"))
+    for (bad, token) in ((NoInputs(), "does not take"), (WrongLength(), "480 sites"), (NoField(), "no field"), (KwFails(), "cannot build this system"))
         @test occursin(token, cp_msg(() -> build(m; discretization = bad, field_solver = Tsit5())))
     end
     @test occursin("480 sites", cp_msg(() -> remake(p; discretization = WrongLength())))
