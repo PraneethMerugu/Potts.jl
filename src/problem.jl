@@ -1384,11 +1384,10 @@ end
 
 # The at-init phases (integrals, energy snapshots) on a host state, so a problem's `u0` is
 # consistent before `init` (e.g. `total_energy(prob)`).
-function _host_init!(@nospecialize(f), @nospecialize(st), @nospecialize(p), @nospecialize(ctx), seed, replica, repeat, kw = (;))
+function _host_init!(@nospecialize(f), @nospecialize(st), @nospecialize(p), @nospecialize(ctx), seed, replica, repeat, kw)
     key = CorePotts.RNGKey(seed, replica, repeat)
-    atol, rtol = CorePotts._uses_lattice_newton(f.phases) ?
-        CorePotts.Problems.resolve_tols(get(kw, :abstol, nothing), get(kw, :reltol, nothing)) :
-        (1 // 10^6, 1 // 10^3)
+    # (only `LatticeNewton` groups read them; `init` refuses them for the others)
+    atol, rtol = LatticeFields.Problems.resolve_tols(get(kw, :abstol, nothing), get(kw, :reltol, nothing))
     ctx = merge(ctx, CorePotts.phase_contexts(f.phases, st, p, CorePotts.CPU(); abstol = atol, reltol = rtol))
     CorePotts._run_phases(f.phases.at_init, st, p, ctx, key, 0, CorePotts.CPU())
     return st

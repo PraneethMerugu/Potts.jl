@@ -256,7 +256,7 @@ end
         @test rt.ref[].cache.abstol == 1.0e-9 && rt.ref[].cache.reltol == 1.0e-7
         sol = solve(remake(ln_prob; abstol = 1.0e-8, reltol = 1.0e-6), SequentialCPM(); save_everystep = false)
         @test sol.retcode == Potts.SciMLBase.ReturnCode.Success && sol.stats.fields.newton_budget == 0
-        # `_host_init!` resolves and binds prob.kwargs tolerances (m5)
+        # the problem's tolerances reach the at-init phases (checked at construction and in `remake`)
         @test_throws ArgumentError PottsProblem(m, fr_op(), (0, 5); seed = 1, field_solver = ln_alg, abstol = -1.0)
         p_kw = PottsProblem(m, fr_op(), (0, 5); seed = 1, field_solver = ln_alg, abstol = 1.0e-9, reltol = 1.0e-7)
         @test isfinite(total_energy(p_kw))
