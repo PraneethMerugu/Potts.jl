@@ -13,9 +13,9 @@ _symkey(x::Union{Symbol, AbstractString}) = Symbol(x)
 _symkey(x) = unwrap(x)
 
 function _domain_ends(sys::PDESystem)
-    return map(unwrap.(sys.ivs)) do v
-        k = findfirst(d -> isequal(unwrap(d.variables), v), sys.domain)
-        Float64.((leftendpoint(sys.domain[k].domain), rightendpoint(sys.domain[k].domain)))
+    return map(unwrap.(get_ivs(sys))) do v
+        k = findfirst(d -> isequal(unwrap(d.variables), v), get_domain(sys))
+        Float64.((leftendpoint(get_domain(sys)[k].domain), rightendpoint(get_domain(sys)[k].domain)))
     end
 end
 
@@ -1072,7 +1072,7 @@ end
 function _bound_box(cf::CompiledField{N}, sys::PDESystem; ghost::Bool, axes = ntuple(_ -> true, N)) where {N}
     box = Tuple{Any, Tuple{Float64, Float64}, String}[]
     ends = _domain_ends(sys)
-    ivs = unwrap.(sys.ivs)
+    ivs = unwrap.(get_ivs(sys))
     h = cf.program.spacing
     # the ghost sites lie half a spacing past the box on the coarsest grid a field lives on (a
     # `Coarse` field's ghost is `k h / 2` out, F3-16); the fine centers enclose every grid's
@@ -1082,7 +1082,7 @@ function _bound_box(cf::CompiledField{N}, sys::PDESystem; ghost::Bool, axes = nt
         g = ghost && axes[a]
         push!(box, (v, g ? (lo - hg[a] / 2, hi + hg[a] / 2) : (lo + h[a] / 2, hi - h[a] / 2), string(v)))
     end
-    for v in unwrap.(sys.dvs)
+    for v in unwrap.(get_dvs(sys))
         b = _declared_bounds(v)
         b === nothing || push!(box, (v, b, _fieldname(v)))
     end
@@ -1155,7 +1155,7 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
     params = Any[_isclock(q) ? unwrap(Symbolics.variable(:__clock_slot)) : q for q in cf.params]
     states = Set(_states(cf.program))
     dvs = Dict{String, Any}()            # state key → its term (inputs and aux are not rows)
-    for v in sys.dvs, (op, kk) in cf.keys
+    for v in get_dvs(sys), (op, kk) in cf.keys
         isequal(_opof(v), op) || continue
         u = unwrap(v)
         for (i, k) in enumerate(kk)
@@ -1164,7 +1164,7 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
     end
     stateops = unique([_opof(v) for v in values(dvs)])
     staterefs = unique([_ref(v) for v in values(dvs)])          # (an array field by its components)
-    others = [v for v in unwrap.(sys.dvs) if !any(o -> isequal(o, _opof(v)), stateops)]
+    others = [v for v in unwrap.(get_dvs(sys)) if !any(o -> isequal(o, _opof(v)), stateops)]
     inputops = unique([_opof(v) for v in others if ModelingToolkitBase.isinput(v)])
     auxops = unique([_opof(v) for v in others if !ModelingToolkitBase.isinput(v)])   # `K ~ expr` fields
     unknownops = [staterefs; auxops]
@@ -1173,7 +1173,7 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
     anchors = Any[]
     sitefaces = Vector{Tuple{Int, Any, String}}[]
     pidx = Dict{Any, Int}(unwrap(q) => i for (i, q) in enumerate(params))
-    ivs, ends = unwrap.(sys.ivs), _domain_ends(sys)
+    ivs, ends = unwrap.(get_ivs(sys)), _domain_ends(sys)
     window = TimeSpan(Float64(ends[1][1]), Float64(ends[1][1]), nothing)   # (the start time, F4-12b)
     timed = any(sc -> any(x -> x !== nothing && _reads_term(x, ivs[1]), sc), values(cf.sitecoefs))
     crossunseen = String[]
@@ -1184,7 +1184,7 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
     # the scalar inputs with their keys and declared bounds: an index expression's interval is
     # taken over these and over the current values a host-written input carries
     ivars = Tuple{Any, String, Tuple{Float64, Float64}}[]
-    for v in unwrap.(sys.dvs)
+    for v in unwrap.(get_dvs(sys))
         ModelingToolkitBase.isinput(v) || continue
         op = _opof(v)
         vk = get(cf.keys, op, nothing)
@@ -1203,7 +1203,7 @@ function stability_bound(cf::CompiledField{N}, sys::PDESystem) where {N}
     # the aux definitions `K ~ rhs` (F3-13): a term that reads an aux field is bounded through its
     # definition, as the aux kernel evaluates it inside the substep from the state before it
     auxdefs = Dict{Any, Any}()
-    for eq in sys.eqs
+    for eq in get_eqs(sys)
         l = unwrap(eq.lhs)
         iscall(l) && any(o -> isequal(o, operation(l)), auxops) && (auxdefs[l] = unwrap(eq.rhs))
     end
@@ -1433,7 +1433,7 @@ end
 # The state and aux fields with declared finite `bounds = (lo, hi)`, by key (batch 5 review M2)
 function _declared_fields(cf::CompiledField, sys::PDESystem)
     out = Tuple{String, Tuple{Float64, Float64}}[]
-    for v in unwrap.(sys.dvs)
+    for v in unwrap.(get_dvs(sys))
         ModelingToolkitBase.isinput(v) && continue
         b = _declared_bounds(v)
         b === nothing && continue
@@ -1462,7 +1462,7 @@ function _face_values(cf::CompiledField{N}, sys::PDESystem, declared) where {N}
     out = Tuple{String, String, Coef, Coef}[]
     isempty(declared) && return out
     s = cf.program
-    ivs = unwrap.(sys.ivs)
+    ivs = unwrap.(get_ivs(sys))
     ends = _domain_ends(sys)
     for r in s.rules
         k = s.fields[r.field].key
@@ -1482,7 +1482,7 @@ end
 # the state type `T`
 function _initial(cf::CompiledField{N}, sys::PDESystem, state, ::Type{T}) where {N, T}
     ends = _domain_ends(sys)
-    ivs = unwrap.(sys.ivs)
+    ivs = unwrap.(get_ivs(sys))
     vals = Dict{Any, Any}(p => d for (p, d) in zip(cf.params, cf.defaults) if !isnan(d))
     vals[ivs[1]] = ends[1][1]
     # a Dual initial value (a condition's or a default's) promotes the state, as a Dual `u0` does
@@ -1537,7 +1537,7 @@ function _mask_events(sys::PDESystem, ps, tt)
         op in (&, |, !, xor) || return false
         return all(walk, arguments(y))
     end
-    for eq in sys.bcs
+    for eq in get_bcs(sys)
         r = unwrap(eq.rhs)
         iscall(r) && operation(r) === masked || continue
         walk(unwrap(arguments(r)[1])) || (unlocated = true)
@@ -1549,11 +1549,11 @@ function _index(cf::CompiledField, sys::PDESystem, s, state; derived = Pair[], c
         free = nothing)
     slots = Problems.state_layout(s, [fieldid(s, k) for k in state])
     # a system with no time (F3-12b): each field also reads by its time-free term `c(x, y)`
-    alias(v, i, n) = free === nothing ? () : (o = free[findfirst(w -> isequal(unwrap(w), unwrap(v)), sys.dvs)];
+    alias(v, i, n) = free === nothing ? () : (o = free[findfirst(w -> isequal(unwrap(w), unwrap(v)), get_dvs(sys))];
                                              (n == 1 ? unwrap(o) : unwrap(Symbolics.wrap(unwrap(o))[i]),))
     dims(k) = Int.(leveldims(s, s.fields[fieldid(s, k)].levels[1]))      # (a `Coarse` field's grid, F3-16)
     vars, inputs, inputnames, boolinputs, inputbounds, aux = Pair[], Pair[], Pair[], String[], Pair[], Pair[]
-    for v in sys.dvs, (op, ks) in cf.keys
+    for v in get_dvs(sys), (op, ks) in cf.keys
         isequal(_opof(v), op) || continue
         for (i, k) in enumerate(ks)
             term = length(ks) == 1 ? unwrap(v) : unwrap(Symbolics.wrap(unwrap(v))[i])
@@ -1587,7 +1587,7 @@ function _index(cf::CompiledField, sys::PDESystem, s, state; derived = Pair[], c
                        for b in (_input_bounds(unwrap(p)),) if b != (-Inf, Inf)]
     defaults = Dict{Any, Any}(p => d for (p, d) in zip(cf.params, cf.defaults))
     # a computed parameter reads as its folded expression of the parameter slots (SII observed)
-    ps, tt = Any[unwrap(q) for q in cf.params], unwrap(sys.ivs[1])
+    ps, tt = Any[unwrap(q) for q in cf.params], unwrap(get_ivs(sys)[1])
     observed = Pair[syms => Symbolics.build_function(unwrap(e), ps, tt; expression = Val(true)) for (syms, e) in computed]
     # the computed slots (F2-15): a derivation from the base slots and the tables
     # (every computed parameter is derived, so a chain through one without a slot evaluates;
@@ -1606,11 +1606,11 @@ function _index(cf::CompiledField, sys::PDESystem, s, state; derived = Pair[], c
     ends, d0 = _domain_ends(sys), Int.(leveldims(s, 0))
     coordinates = Pair[(unwrap(q), Symbol(string(unwrap(q)))) =>
                        range(ends[d + 1][1] + (ends[d + 1][2] - ends[d + 1][1]) / (2d0[d]);
-                             step = (ends[d + 1][2] - ends[d + 1][1]) / d0[d], length = d0[d]) for (d, q) in enumerate(sys.ivs[2:end])]
+                             step = (ends[d + 1][2] - ends[d + 1][1]) / d0[d], length = d0[d]) for (d, q) in enumerate(get_ivs(sys)[2:end])]
     # the masks' switch times on an OrdinaryDiffEq solve (review F4 b2 #3)
     maskevents, maskunlocated = _mask_events(sys, ps, tt)
     return LatticeIndex(; key = _symkey, variables = vars, parameters = params,
-        independent_variables = [unwrap(sys.ivs[1])], defaults, inputs, inputnames, boolinputs, inputbounds, derived,
+        independent_variables = [unwrap(get_ivs(sys)[1])], defaults, inputs, inputnames, boolinputs, inputbounds, derived,
         observed, parambounds, derive, aux, coordinates, maskevents, maskunlocated,
         tables = Pair[[Any[unwrap(q), Symbol(k)] => k for (k, _) in cf.tables for q in _params(sys) if string(unwrap(q)) == k];
                       [e => (k, i) for (k, _) in cf.tables for q in _params(sys) if string(unwrap(q)) == k
@@ -1621,7 +1621,7 @@ end
 # `key => value` pairs; an input without one has no value until it is given
 function _input_defaults(cf::CompiledField, sys::PDESystem)
     out = Pair{String, Any}[]
-    for v in sys.dvs
+    for v in get_dvs(sys)
         u = unwrap(v)
         ModelingToolkitBase.isinput(u) || continue
         op = _opof(u)
@@ -1669,7 +1669,7 @@ function _fold_computed(sys::PDESystem)
     tabs = Set(unwrap(p) for p in ps if !scalar(p))
     for (k, e) in resolved
         free = [v for v in Symbolics.get_variables(e) if !(v in plain) && !(_tabof(v) in tabs) &&
-                                                          !any(iv -> isequal(iv, v), unwrap.(sys.ivs))]
+                                                          !any(iv -> isequal(iv, v), unwrap.(get_ivs(sys)))]
         isempty(free) || _dverr("the computed parameter `$k = $(comp[k])` reads $(join(("`$f`" for f in free), ", ")), " *
                                 "which $(length(free) == 1 ? "is not a parameter" : "are not parameters") of the system")
     end
@@ -1677,7 +1677,7 @@ function _fold_computed(sys::PDESystem)
     symb(v) = v isa Union{Num, SymbolicUtils.BasicSymbolic}
     ic2 = Dict(k => (symb(v) ? sub(v) : v) for (k, v) in ic if !haskey(comp, k))   # field values read them too
     derived = Pair[(k, Symbol(string(k))) => _computed_message(k, comp[k], resolved[k], plain) for k in keys(comp)]
-    new = PDESystem(sys.eqs, sys.bcs, getfield(sys, :domain), sys.ivs, sys.dvs, ps; name = nameof(sys),
+    new = PDESystem(get_eqs(sys), get_bcs(sys), get_domain(sys), get_ivs(sys), get_dvs(sys), ps; name = nameof(sys),
         initial_conditions = merge(ic2, Dict(k => v for (k, v) in ic if haskey(comp, k))))
     computed = Pair[(k, Symbol(string(k))) => e for (k, e) in resolved]
     return new, derived, computed, Pair[k => comp[k] for k in keys(comp)]
@@ -1917,7 +1917,7 @@ function discretize(sys::PDESystem, disc::LatticeDiscretization{N}; inputs = (),
         ": give the other settings to the discretization (`LatticeDiscretization(…; T, backend, clock)`) or to `solve`"))
     _check_parts(sys)
     # steady rows `0 ~ rhs` as rates of their fields, a system with no time timed (F3-12b)
-    free = sys.dvs
+    free = get_dvs(sys)
     sys, steady, timefree = steady_form(sys, N)
     timefree && tspan !== nothing && _dverr("`tspan`: the system has no time (a steady system, solved once); leave `tspan` out")
     check_one_kind(sys)
@@ -1960,9 +1960,9 @@ rates with no bound, and separate groups would be split stepping (planned, FE-04
 function check_one_kind(sys::PDESystem; route = "discretize them as two systems")
     lhs(eq) = unwrap(eq.lhs)
     name(eq) = (r = lhs(eq); a = iscall(r) ? arguments(r)[1] : r; string(_name(_opof(a))))
-    maps = [name(eq) for eq in sys.eqs if iscall(lhs(eq)) && operation(lhs(eq)) isa Shift]
+    maps = [name(eq) for eq in get_eqs(sys) if iscall(lhs(eq)) && operation(lhs(eq)) isa Shift]
     isempty(maps) && return false
-    rate = [name(eq) for eq in sys.eqs if iscall(lhs(eq)) && operation(lhs(eq)) isa Differential]
+    rate = [name(eq) for eq in get_eqs(sys) if iscall(lhs(eq)) && operation(lhs(eq)) isa Differential]
     isempty(rate) || _dverr("the system mixes rate equations (of $(join(("`$f`" for f in rate), ", "))) and maps " *
                             "(of $(join(("`$f`" for f in maps), ", "))); one problem steps one kind in this version " *
                             "(a map steps at dt = 1, which would step the rates with no bound): $route (split " *
@@ -1981,7 +1981,7 @@ end
 # bound takes the declared interval for a coefficient that reads the field, so a field that
 # starts outside it is refused, naming the first site
 function _check_state_bounds(x0, cf::CompiledField, sys::PDESystem, index)
-    for v in unwrap.(sys.dvs)
+    for v in unwrap.(get_dvs(sys))
         ModelingToolkitBase.isinput(v) && continue
         b = _declared_bounds(v)
         b === nothing && continue

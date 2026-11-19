@@ -108,12 +108,12 @@ end
 # array), with its equations and its conditions (faces, masks, initial values) left out
 function _group_cut(sys::PDESystem, fields)
     keep = Any[_opof(f) for f in fields]
-    dvops = Any[_opof(v) for v in sys.dvs]
+    dvops = Any[_opof(v) for v in get_dvs(sys)]
     for (f, op) in zip(fields, keep)
         any(o -> isequal(o, op), dvops) || _dverr("`fields`: `$f` is not a dependent variable of `$(nameof(sys))`")
     end
     cut, external = Any[], String[]
-    dvs = map(sys.dvs) do v
+    dvs = map(get_dvs(sys)) do v
         u = unwrap(v)
         op = _opof(u)
         (ModelingToolkitBase.isinput(u) || any(o -> isequal(o, op), keep)) && return v
@@ -123,7 +123,7 @@ function _group_cut(sys::PDESystem, fields)
     end
     isempty(cut) && return sys, external
     mine(eq) = (l = unwrap(eq.lhs); !(_reads(l, cut) && !_reads(l, keep)))
-    eqs = filter(mine, sys.eqs)
+    eqs = filter(mine, get_eqs(sys))
     # a cut field that a spatial operator of the group reads keeps its face conditions (F3-22 review r1)
     faced = operand_reads(eqs, cut)
     dvs = map(dvs) do v
@@ -133,7 +133,7 @@ function _group_cut(sys::PDESystem, fields)
     bcmine(eq) = mine(eq) || _reads(unwrap(eq.lhs), faced)
     ics = _ics(sys)
     ic2 = Dict(k => v for (k, v) in ics if !any(o -> isequal(o, _opof(k)), cut))
-    out = PDESystem(eqs, filter(bcmine, sys.bcs), getfield(sys, :domain), sys.ivs, dvs, _params(sys);
+    out = PDESystem(eqs, filter(bcmine, get_bcs(sys)), get_domain(sys), get_ivs(sys), dvs, _params(sys);
         name = nameof(sys), initial_conditions = ic2)
     return out, external
 end
@@ -158,7 +158,7 @@ _table_specs(cf::CompiledField, values::Bool) =
 function _input_specs(cf::CompiledField, sys::PDESystem, s, filled)
     fills = Set{String}(string(f) for f in filled)
     vars = Dict{String, Any}()
-    for v in unwrap.(sys.dvs)
+    for v in unwrap.(get_dvs(sys))
         ModelingToolkitBase.isinput(v) || continue
         ks = get(cf.keys, _opof(v), String[])
         for (i, k) in enumerate(ks)

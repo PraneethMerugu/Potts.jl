@@ -38,7 +38,8 @@ using LatticeFields.Problems: FieldProblem, FieldSlot, LatticeIndex,
     ExplicitEuler, ExplicitMap, LatticeNewton, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, RT_DT,
     substep_counts, steady_fields, field_series, field_jacobian_sparsity,
                               field_report
-using ModelingToolkitBase: ModelingToolkitBase, PDESystem, Pre, ShiftIndex, Shift, Hold, Sample
+using ModelingToolkitBase: ModelingToolkitBase, PDESystem, Pre, ShiftIndex, Shift, Hold, Sample, get_bcs, get_domain, get_dvs,
+                           get_eqs, get_initial_conditions, get_ivs, get_ps, get_systems
 using SciMLBase: AbstractDiscretization, NullParameters, remake
 using SymbolicIndexingInterface: getp, getu, setp, parameter_index
 import SciMLBase: discretize, symbolic_discretize
@@ -382,7 +383,7 @@ every operator's arguments:
 `kindₛ ∈ Set(…)` inside a larger expression cannot be seen: the product `α * false` is
 already `0`, so the term is gone from the equation before any scan runs.
 """
-vocabulary_issues(sys::PDESystem) = vocabulary_issues(sys.eqs, sys.bcs)
+vocabulary_issues(sys::PDESystem) = vocabulary_issues(get_eqs(sys), get_bcs(sys))
 function vocabulary_issues(eqs, bcs = Equation[])
     issues = String[]
     for (where, list) in (("equation", eqs), ("boundary condition", bcs)), (i, e) in enumerate(list)
