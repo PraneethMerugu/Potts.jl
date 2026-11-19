@@ -76,11 +76,6 @@ point patterns) into scope (see [Layouts](@ref manual-layouts)):
 Potts.Layouts
 ```
 
-```@docs
-Potts.PottsCompileError
-Potts.PottsSolveError
-```
-
 ```@autodocs
 Modules = [Potts]
 Private = false
