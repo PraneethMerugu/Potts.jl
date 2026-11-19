@@ -47,6 +47,7 @@ end
         @test_throws ArgumentError Scattered(2, (2, 2); kinds = [:a], seed = 1, gap = -1)
         @test_throws ArgumentError layout(Scattered(1, (6, 6); kinds = [:a], seed = 1), (5, 20))
         @test_throws ArgumentError layout(Frame(:w), (0, 4))
+        @test_throws ArgumentError layout(Frame(:w), "10×10")    # not a size, a lattice or a model
         # negative control: a valid call raises nothing
         @test err(() -> layout(Tiling((2, 2); region = (1:10, 1:10), kinds = [:a]), (10, 10))) == ""
     end

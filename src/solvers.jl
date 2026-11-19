@@ -357,12 +357,26 @@ Base.showerror(io::IO, e::_CanonicalDepthError) =
 # printed key, never their hash slots); types and singleton functions by type; any other
 # struct, closures included (their captures are fields), by type and fields. Leaves print at
 # any depth; a value with parts below `_CANONICAL_DEPTH` throws.
+# leaves, printed by `repr`, and containers, printed element by element
+_canonical_leaf(x) = false
+_canonical_leaf(::Number) = true
+_canonical_leaf(::Symbol) = true
+_canonical_leaf(::AbstractString) = true
+_canonical_leaf(::Nothing) = true
+_canonical_leaf(::Missing) = true
+_canonical_leaf(::Enum) = true
+_canonical_leaf(::AbstractRange) = true
+_canonical_container(x) = false
+_canonical_container(::AbstractDict) = true
+_canonical_container(::AbstractSet) = true
+_canonical_container(::Tuple) = true
+_canonical_container(::NamedTuple) = true
+_canonical_container(::AbstractArray) = true
 function _canonical_value(x, depth = 0)
     T = typeof(x)
-    (x isa Union{Number, Symbol, AbstractString, Nothing, Missing, Enum, AbstractRange} || isprimitivetype(T)) &&
-        return string(_canonical_type(T), ":", repr(x))
+    (_canonical_leaf(x) || isprimitivetype(T)) && return string(_canonical_type(T), ":", repr(x))
     x isa Type && return _canonical_type(x)
-    container = x isa Union{AbstractDict, AbstractSet, Tuple, NamedTuple, AbstractArray}
+    container = _canonical_container(x)
     !container && (!isstructtype(T) || fieldcount(T) == 0) && return _canonical_type(T)
     depth > _CANONICAL_DEPTH && throw(_CanonicalDepthError(_canonical_type(T)))
     item(v) = _canonical_value(v, depth + 1)

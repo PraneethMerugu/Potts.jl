@@ -36,6 +36,32 @@ end
     @sweep Metropolis(; temperature = T)
 end
 
+"""A model with MTK's `@description` and `@metadata` sections."""
+@potts_model DescribedModel begin
+    @description "One cell kind held near a target volume."
+    @metadata begin
+        MTKInterfaceKey = :described
+    end
+    @kinds medium host
+    @lattice Lattice((8, 8); neighborhood = Moore(1))
+    @energy cells(host) => (volume - 9.0)^2
+    @sweep Metropolis(; temperature = 1.0)
+end
+
+"""A name that is not a type, so not a metadata key."""
+const MTKInterfaceNotAType = :key
+
+"""A model whose `@metadata` key is not a type."""
+@potts_model BadMetadataKey begin
+    @metadata begin
+        MTKInterfaceNotAType = 1
+    end
+    @kinds medium host
+    @lattice Lattice((8, 8); neighborhood = Moore(1))
+    @energy cells(host) => (volume - 9.0)^2
+    @sweep Metropolis(; temperature = 1.0)
+end
+
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
@@ -162,4 +188,60 @@ end
     prob = PottsProblem(c, [ownership => σ, kind => [:host]], (0, 2))
     @test prob.ps[c.sys] == 2.0 && prob.ps[c.footprint] == 3.0
     @test solve(prob, SequentialCPM()).retcode == Potts.SciMLBase.ReturnCode.Success
+end
+
+@testitem "`@description` and `@metadata` set MTK's description and metadata" setup = [MTKInterfaceSetup] tags = [:potts, :mtk_interface] begin
+    m = DescribedModel(; name = :m)
+    @test M.description(m) == "One cell kind held near a target volume."
+    @test M.getmetadata(m, MTKInterfaceKey, nothing) === :described
+    @test M.description(FieldNamedQuantities(; name = :q)) == ""
+    @test M.description(mtkcompile(m)) == M.description(m)
+    @test_throws ArgumentError BadMetadataKey(; name = :b)
+    # the model still runs
+    σ = zeros(Int32, 8, 8)
+    σ[3:5, 3:5] .= 1
+    prob = PottsProblem(m, [ownership => σ, kind => [:host]], (0, 2))
+    @test solve(prob, SequentialCPM()).retcode == Potts.SciMLBase.ReturnCode.Success
+    @test_throws ArgumentError macroexpand(
+        @__MODULE__, :(
+            @potts_model BadDescription begin
+                @description "a" "b"
+                @kinds medium host
+            end
+        )
+    )
+end
+
+@testitem "models, problems, integrators and states show in one line and name the lattice" setup = [MTKInterfaceSetup] tags = [:potts, :mtk_interface] begin
+    m = DescribedModel(; name = :m)
+    σ = zeros(Int32, 8, 8)
+    σ[3:5, 3:5] .= 1
+    prob = PottsProblem(m, [ownership => σ, kind => [:host]], (0, 2))
+    integ = init(prob, SequentialCPM())
+    for x in (m, mtkcompile(m), prob, integ, prob.u0)
+        line = sprint(show, x)
+        @test !occursin('\n', line) && length(line) < 200
+        @test occursin("8×8", line)
+        @test occursin("8×8", sprint(show, MIME"text/plain"(), x))
+    end
+    @test length(sprint(show, MIME"text/plain"(), prob)) < 400
+    @test length(sprint(show, MIME"text/plain"(), integ)) < 400
+    @test occursin("cell slot", sprint(show, prob.u0))
+    # a seed past `typemax(Int)` shows as it is
+    big = PottsProblem(m, [ownership => σ, kind => [:host]], (0, 2); seed = typemax(UInt64))
+    @test occursin(string(typemax(UInt64)), sprint(show, MIME"text/plain"(), big))
+end
+
+@testitem "JumpProblem of a Potts model is refused for MTK's argument shapes" setup = [MTKInterfaceSetup] tags = [:potts, :mtk_interface] begin
+    J = Potts.JumpProcesses.JumpProblem
+    m = DescribedModel(; name = :m)
+    σ = zeros(Int32, 8, 8)
+    for sys in (m, mtkcompile(m))
+        for args in (
+                ([ownership => σ], (0, 2)), ([ownership => σ], nothing), ([ownership => σ], [0, 2]),
+                (Dict(ownership => σ), (0, 2)), ([ownership => σ],), (ownership => σ,), (nothing,), (1.0,),
+            )
+            @test_throws ArgumentError J(sys, args...)
+        end
+    end
 end

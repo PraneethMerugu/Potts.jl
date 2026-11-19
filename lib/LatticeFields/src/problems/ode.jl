@@ -63,9 +63,11 @@ problem built at `discretize` (its group, plans and checks, at the values given 
 family (`:ode` or `:map`), and the right side of SciML's solvers, built at its first call
 (`builds` counts the builds: an owned solve builds none). It is the `problem_type` of an
 `ODEProblem` and is held by the problem's function ([`LatticeFunction`](@ref)) in every
-family. A `remake` keeps it, so the plans stay warm.
+family. A `remake` keeps it, so the plans stay warm. SciML's `hasTime` parameter is
+`Val(true)` when the system has a time (an `ODEProblem` of rates, a `DiscreteProblem` of maps)
+and `Val(false)` for a system without one (a `LinearProblem` or `NonlinearProblem`).
 """
-struct LatticeMetadata{P <: FieldProblem} <: SciMLBase.AbstractDiscretizationMetadata{Val(false)}
+struct LatticeMetadata{P <: FieldProblem, H} <: SciMLBase.AbstractDiscretizationMetadata{H}
     problem::P
     family::Symbol
     rhs::Base.RefValue{Any}
@@ -74,15 +76,19 @@ struct LatticeMetadata{P <: FieldProblem} <: SciMLBase.AbstractDiscretizationMet
     sem::Base.RefValue{Any}                    # the semantic program of the right side (built once)
     plans::Any                                 # its init and step plans per value type (shared by the masks of `u0`)
 end
-LatticeMetadata(fp::FieldProblem{N}) where {N} = LatticeMetadata(fp, fp.kind == :map ? :map : :ode, Ref{Any}(nothing),
-    Ref(0), ReentrantLock(), Ref{Any}(nothing), Dict{Type, Tuple{StepPlan{N}, StepPlan{N}}}())
+LatticeMetadata(fp::FieldProblem{N}) where {N} = LatticeMetadata{typeof(fp), Val(!fp.group.spec.timefree)}(
+    fp,
+    fp.kind == :map ? :map : :ode, Ref{Any}(nothing), Ref(0), ReentrantLock(), Ref{Any}(nothing),
+    Dict{Type, Tuple{StepPlan{N}, StepPlan{N}}}()
+)
 _sem(m::LatticeMetadata) = (m.sem[] === nothing && (m.sem[] = semantic(m.problem.group.spec.rate)); m.sem[]::Program)
 # the compile options of the right side: the launches write the step index into the clock's slot
 function _rhs_options(fp::FieldProblem)
     o = fp.options
     return CompileOptions(o.T, o.I, o.float64_ok, o.debug, o.index, o.lanes, clock_slot(fp.group.spec), o.S, o.declared)
 end
-# a solution of SciML's solvers is returned as it is (no eager `PDENoTimeSolution`)
+# a solution of SciML's solvers is returned as it is: no SciMLBase wrapper (a
+# `PDETimeSeriesSolution`, or a `PDENoTimeSolution` without a time) is built eagerly
 SciMLBase.wrap_sol(sol, ::LatticeMetadata) = sol
 
 """

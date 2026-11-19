@@ -211,6 +211,7 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     :remake_function,
     :remake_parameters,
     :remake_state,
+    :check_initializealg, # `remake` hook: the model refuses an initialization algorithm it cannot apply
     :remake_tangent,      # `remake` hook: the Dual seeds of a remade problem (F3-21b)
     :ParameterTangent,    # a problem's parameters with derivative parts (F3-21b)
     :tangent_parameters,  # the Dual parameters after a write on a run with derivative parts (F3-21b r1)
@@ -258,6 +259,12 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     # --- Potts -> MTKBase (C9): a system's own poissonians and noise equations; MTKBase has no
     # public (or recursive) accessor for either, and Potts refuses them rather than drop them
     :get_poissonians, :get_noise_eqs,
+    # --- Potts -> MTKBase: `description(sys)` is MTK's documented accessor of a system's
+    # description (`@description`); MTKBase does not declare it public. Potts forwards it.
+    :description,
+    # --- Potts -> SciMLBase: the error `CheckInit()` throws, as SciML's own initializations do;
+    # SciMLBase does not declare it public
+    :CheckInitFailureError,
 )
 
 # Names imported with `using M: x` that are not public in `M`.

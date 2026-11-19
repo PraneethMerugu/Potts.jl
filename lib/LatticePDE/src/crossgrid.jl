@@ -37,7 +37,7 @@ aux field. A system with no such term is returned as it is.
 function crossgrid_form(sys::PDESystem)
     lev = Dict{Any, Int}()
     meta = Dict{Any, Any}()
-    for v in sys.dvs
+    for v in get_dvs(sys)
         L = get_lattice_level(v)
         lev[_opof(v)] = L isa Coarse ? level_of(L) : 0
         L isa Coarse && (meta[_opof(v)] = L)
@@ -53,7 +53,7 @@ function crossgrid_form(sys::PDESystem)
     auxs = Any[]                                  # the aux variables
     auxeqs = Equation[]
     taken = Set{String}(_name(op) for op in Base.keys(lev))
-    ivs = unwrap.(sys.ivs)
+    ivs = unwrap.(get_ivs(sys))
     function hoist(u, op)
         for (k, v, _) in rules
             isequal(k, u) && return v
@@ -84,7 +84,7 @@ function crossgrid_form(sys::PDESystem)
         foreach(y -> walk(y, level), arguments(u))
         return nothing
     end
-    for eq in sys.eqs
+    for eq in get_eqs(sys)
         l = lhslevel(eq)
         l === nothing || walk(eq.rhs, l)
     end
@@ -92,8 +92,9 @@ function crossgrid_form(sys::PDESystem)
     # (a term reads its aux only in the rows of another grid than its operand's: the operand's
     # own row keeps the operator on the grid, `D(c) ~ laplacian(c)`)
     sub(x, l) = substitute(x, Dict{Any, Any}(k => v for (k, v, lo) in rules if lo != l); fold = Val(false))
-    eqs = Equation[lhslevel(eq) === nothing ? eq : eq.lhs ~ sub(eq.rhs, lhslevel(eq)) for eq in sys.eqs]
-    return PDESystem([eqs; auxeqs], sys.bcs, getfield(sys, :domain), sys.ivs, Any[sys.dvs; auxs], _params(sys);
+    eqs = Equation[lhslevel(eq) === nothing ? eq : eq.lhs ~ sub(eq.rhs, lhslevel(eq)) for eq in get_eqs(sys)]
+    return PDESystem(
+        [eqs; auxeqs], get_bcs(sys), get_domain(sys), get_ivs(sys), Any[get_dvs(sys); auxs], _params(sys);
         name = nameof(sys), initial_conditions = _ics(sys))
 end
 

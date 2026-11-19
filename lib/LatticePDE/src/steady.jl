@@ -11,7 +11,7 @@
 # order of `dvs`
 function _state_slots(sys::PDESystem, isin)
     slots = Tuple{Any, Int}[]
-    for v in sys.dvs
+    for v in get_dvs(sys)
         op = _opof(v)
         isin[op] && continue
         st = SymbolicUtils.symtype(unwrap(v))
@@ -70,20 +70,20 @@ with no initial value starts at 0 (the steady solve's cold start). A row that re
 field is refused, naming the fields that have no equation.
 """
 function steady_rows(sys::PDESystem)
-    any(eq -> _iszero(eq.lhs), sys.eqs) || return sys, String[]
-    ivs = unwrap.(sys.ivs)
-    isin = Dict{Any, Bool}(_opof(v) => ModelingToolkitBase.isinput(v) for v in sys.dvs)
+    any(eq -> _iszero(eq.lhs), get_eqs(sys)) || return sys, String[]
+    ivs = unwrap.(get_ivs(sys))
+    isin = Dict{Any, Bool}(_opof(v) => ModelingToolkitBase.isinput(v) for v in get_dvs(sys))
     slots = _state_slots(sys, isin)
-    taken = [s for eq in sys.eqs if !_iszero(eq.lhs) for s in (_lhs_slot(eq, isin),) if s !== nothing]
+    taken = [s for eq in get_eqs(sys) if !_iszero(eq.lhs) for s in (_lhs_slot(eq, isin),) if s !== nothing]
     free = [s for s in slots if !_hasslot(taken, s)]
-    rows = [i for (i, eq) in enumerate(sys.eqs) if _iszero(eq.lhs)]
+    rows = [i for (i, eq) in enumerate(get_eqs(sys)) if _iszero(eq.lhs)]
     choice = map(rows) do i
-        r = _slot_reads(sys.eqs[i].rhs, isin)
+        r = _slot_reads(get_eqs(sys)[i].rhs, isin)
         (Int[k for (k, f) in enumerate(free) if _hasslot(r.ops, f)], Int[k for (k, f) in enumerate(free) if _hasslot(r.all, f)])
     end
     picks, bad = steady_choice(first.(choice), last.(choice), length(free))
     if bad != 0
-        eq = sys.eqs[rows[bad]]
+        eq = get_eqs(sys)[rows[bad]]
         left = [free[k] for k in eachindex(free) if !(k in picks)]
         _dverr(string("equation `", eq, "`: a steady equation `0 ~ rhs` is solved for a field that it reads and that ",
             "has no other equation, and it reads none", isempty(left) ? " (every field has an equation)" :
@@ -93,9 +93,9 @@ function steady_rows(sys::PDESystem)
         )
     end
     pick = Dict{Int, Tuple{Any, Int}}(q => free[picks[q]] for q in eachindex(rows))
-    term(s) = (v = sys.dvs[findfirst(v -> isequal(_opof(v), s[1]), sys.dvs)]; s[2] == 0 ? v : Symbolics.wrap(v)[s[2]])
-    Dt = Differential(sys.ivs[1])
-    eqs = Equation[eq for eq in sys.eqs]
+    term(s) = (v = get_dvs(sys)[findfirst(v -> isequal(_opof(v), s[1]), get_dvs(sys))]; s[2] == 0 ? v : Symbolics.wrap(v)[s[2]])
+    Dt = Differential(get_ivs(sys)[1])
+    eqs = Equation[eq for eq in get_eqs(sys)]
     for (q, i) in enumerate(rows)
         # (the sign that makes the row's operator, or its local term, a decay: r3 S3)
         tm = term(pick[q])
@@ -104,21 +104,22 @@ function steady_rows(sys::PDESystem)
     steady = String[_slotkey(pick[q]) for q in eachindex(rows)]
     # the cold start of a steady field with no initial value
     ic = _ics(sys)
-    bcs = Equation[b for b in sys.bcs]
-    t0 = leftendpoint(sys.domain[findfirst(d -> isequal(unwrap(d.variables), ivs[1]), sys.domain)].domain)
+    bcs = Equation[b for b in get_bcs(sys)]
+    t0 = leftendpoint(get_domain(sys)[findfirst(d -> isequal(unwrap(d.variables), ivs[1]), get_domain(sys))].domain)
     for q in eachindex(rows)
         s = pick[q]
-        has = any(sys.bcs) do b
+        has = any(get_bcs(sys)) do b
             r = _fieldread(b.lhs, isin)
             r !== nothing && isequal(r.op, s[1]) && r.comp == s[2] && !isempty(r.args) && _cval(r.args[1]) !== nothing
         end
-        v = sys.dvs[findfirst(v -> isequal(_opof(v), s[1]), sys.dvs)]
+        v = get_dvs(sys)[findfirst(v -> isequal(_opof(v), s[1]), get_dvs(sys))]
         given = has || s[2] == 0 && (_icvalue(ic, v) !== nothing || _icvalue(ic, s[1]) !== nothing)
         given && continue
         at0 = s[1](t0, ivs[2:end]...)
         push!(bcs, (s[2] == 0 ? Symbolics.wrap(at0) : Symbolics.wrap(at0)[s[2]]) ~ 0.0)
     end
-    out = PDESystem(eqs, bcs, getfield(sys, :domain), sys.ivs, sys.dvs, _params(sys); name = nameof(sys),
+    out = PDESystem(
+        eqs, bcs, get_domain(sys), get_ivs(sys), get_dvs(sys), _params(sys); name = nameof(sys),
         initial_conditions = ic)
     return out, steady
 end
@@ -216,8 +217,10 @@ rows and aux fields (`K ~ rhs`).
 """
 function steady_form(sys::PDESystem, N::Int)
     # (a system with a rate or a map has a time: its first variable, however many axes)
-    timefree = length(sys.ivs) == N && !any(eq -> (l = unwrap(eq.lhs); iscall(l) && operation(l) isa Union{Differential, Shift}),
-        sys.eqs)
+    timefree = length(get_ivs(sys)) == N && !any(
+        eq -> (l = unwrap(eq.lhs); iscall(l) && operation(l) isa Union{Differential, Shift}),
+        get_eqs(sys)
+    )
     timefree && (sys = _timed(sys))
     sys, steady = steady_rows(sys)
     return sys, steady, timefree
@@ -227,9 +230,10 @@ const _STEADY_T = unwrap(ModelingToolkitBase.t_nounits)
 const _STEADY_Z = unwrap(only(Symbolics.@variables __steady_z))
 function _timed(sys::PDESystem)
     tt = _STEADY_T
-    any(v -> isequal(unwrap(v), tt), sys.ivs) && _dverr("the system's variables $(Tuple(sys.ivs)) have no time but use " *
+    any(v -> isequal(unwrap(v), tt), get_ivs(sys)) && _dverr(
+        "the system's variables $(Tuple(get_ivs(sys))) have no time but use " *
         "`$tt` as an axis; name the axes otherwise (a time-free system gains the time `$tt`)")
-    ops = Any[_opof(v) for v in sys.dvs]
+    ops = Any[_opof(v) for v in get_dvs(sys)]
     rule = Dict{Any, Any}()
     ders = Any[]
     function walk(u)
@@ -241,11 +245,11 @@ function _timed(sys::PDESystem)
         foreach(walk, arguments(u))
         return nothing
     end
-    for eq in [sys.eqs; sys.bcs]
+    for eq in [get_eqs(sys); get_bcs(sys)]
         walk(eq.lhs)
         walk(eq.rhs)
     end
-    foreach(walk, sys.dvs)
+    foreach(walk, get_dvs(sys))
     # `substitute` does not enter a `Differential` (a Robin face's `∂c/∂y`): each derivative is
     # a rule of its own, inner ones first (review r4 N4: a time-free Robin face)
     for u in Iterators.reverse(ders)
@@ -253,11 +257,13 @@ function _timed(sys::PDESystem)
     end
     sub(x) = substitute(x, rule; fold = Val(false))
     ic = Dict{Any, Any}((haskey(rule, unwrap(k)) ? rule[unwrap(k)] : k) => v for (k, v) in _ics(sys))
-    for eq in sys.eqs
+    for eq in get_eqs(sys)
         _iszero(eq.lhs) || _fieldread(eq.lhs, Dict{Any, Bool}(o => true for o in ops)) !== nothing ||
             _dverr(string("equation `", eq, "`: a system with no time has steady rows `0 ~ rhs` and aux fields `K ~ rhs` only"))
     end
-    dom = [tt ∈ Interval(0.0, 0.0); getfield(sys, :domain)]
-    return PDESystem([sub(eq.lhs) ~ sub(eq.rhs) for eq in sys.eqs], [sub(b.lhs) ~ sub(b.rhs) for b in sys.bcs], dom,
-        Any[tt; unwrap.(sys.ivs)], Any[sub(v) for v in sys.dvs], _params(sys); name = nameof(sys), initial_conditions = ic)
+    dom = [tt ∈ Interval(0.0, 0.0); get_domain(sys)]
+    return PDESystem(
+        [sub(eq.lhs) ~ sub(eq.rhs) for eq in get_eqs(sys)], [sub(b.lhs) ~ sub(b.rhs) for b in get_bcs(sys)], dom,
+        Any[tt; unwrap.(get_ivs(sys))], Any[sub(v) for v in get_dvs(sys)], _params(sys); name = nameof(sys), initial_conditions = ic
+    )
 end

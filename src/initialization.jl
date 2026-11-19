@@ -358,7 +358,8 @@ Initialize the cell and model variables of a state being built (`_initial_state`
 model's conditions first, then each cell's. `cell` and `model` are the state's columns
 (name => array) and are written in place.
 """
-function _initialize!(c::CompiledPottsSystem, opd, σ, kinds, ncell, cell, model, pvals)
+function _initialize!(c::CompiledPottsSystem, opd, σ, kinds, ncell, cell, model, pvals, init = _init_options(nothing))
+    init.mode === :none && return nothing
     sys = getfield(c, :sys)
     alg = _algebraic_observed(sys)
     conds = isempty(alg) ? Any[] : Any[o for o in alg if haskey(opd, _unwrap(o.lhs))]
@@ -373,14 +374,14 @@ function _initialize!(c::CompiledPottsSystem, opd, σ, kinds, ncell, cell, model
         cs = Any[o for o in conds if info(o.lhs).options.scope === scope]
         s === nothing && isempty(cs) && continue
         scope === :cell && ncell == 0 && continue
-        _initialize_scope!(c, scope, s, cs, opd, builtins, scope === :cell ? ncell : 1, cell, model, pvals)
+        _initialize_scope!(c, scope, s, cs, opd, builtins, scope === :cell ? ncell : 1, cell, model, pvals, init)
     end
     return nothing
 end
 
 _column(cols, n) = last(cols[findfirst(q -> q.first === n, cols)])
 
-function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builtins, n, cell, model, pvals)
+function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builtins, n, cell, model, pvals, init)
     sys = getfield(c, :sys)
     where_ = scope === :cell ? "the cells" : "the model"
     authored = s === nothing ? Equation[] : s.authored
@@ -471,6 +472,18 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
                   v isa Real || throw(ArgumentError("the guess of `$(info(x).name)` is a number or an expression of " *
                                                     "parameters; got `$g`"));
                   Float64(v)) for x in free]
+    # every result is checked against the conditions themselves (`_InitCheck`): a solve may stop
+    # on a small absolute residual, and a linear solve may return a least-squares answer
+    check = _InitCheck(ieqs, params, free)
+    dst = Any[_column(scope === :cell ? cell : model, info(x).name) for x in free]
+    entity(k) = scope === :cell ? "cell $k" : "the model"
+    if init.mode === :check                            # `CheckInit()`: the values as built
+        for k in 1:n
+            bad = _init_residual(check, vals(k), Float64[d[k] for d in dst], init)
+            bad === nothing || throw(SciMLBase.CheckInitFailureError(abs(bad[2]), _init_tol(init, bad[3]), false))
+        end
+        return nothing
+    end
     ip = try
         isys = ModelingToolkitBase.System(Equation[D(x) ~ 0 for x in free], t, free, params;
             name = Symbol(nameof(sys), :₊, scope, :_initialization), initialization_eqs = ieqs,
@@ -510,11 +523,6 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
         obs = getter === nothing ? () : getter(ip)
         return Float64[i === nothing ? obs[opos[q]] : x[i] for (q, i) in enumerate(index)]
     end
-    # every result is checked against the conditions themselves (`_InitCheck`): a solve may stop
-    # on a small absolute residual, and a linear solve may return a least-squares answer
-    check = _InitCheck(ieqs, params, free)
-    dst = Any[_column(scope === :cell ? cell : model, info(x).name) for x in free]
-    entity(k) = scope === :cell ? "cell $k" : "the model"
     conditions = join((r.text for r in rows), ", ")
     zero_guess = nlp !== nothing && any(x -> ModelingToolkitBase.getguess(x) === nothing, free)
     hint = zero_guess ? " (a variable without a guess starts from 0.0, where the Jacobian of an equation symmetric " *
@@ -533,12 +541,19 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
         retcode = nothing
         out = if explicit                              # MTK's observed values
             getter(ip)
+        elseif nlp !== nothing && init.nlsolve !== nothing    # the user's solver, once from the guess
+            nlp.u0 .= guess
+            sol = solving(() -> SciMLBase.solve(nlp, init.nlsolve; init.solvekw...), k)
+            retcode = sol.retcode
+            at_state(sol.u)
         elseif nlp !== nothing
             # Newton from the guess, stopped on a residual small against the terms of the
             # conditions (`_INIT_NEWTON_RTOL`), restarted with a tighter tolerance and a
             # finite-difference step at the scale of the iterate while the result fails the check
             nlp.u0 .= guess
-            abstol = _INIT_NEWTON_RTOL * max(maximum(_init_scales(check, pk, at_state(guess)); init = 0.0), floatmin(Float64))
+            abstol = init.abstol === nothing ?
+                _INIT_NEWTON_RTOL * max(maximum(_init_scales(check, pk, at_state(guess)); init = 0.0), floatmin(Float64)) :
+                init.abstol
             step = _init_step(guess, guess)
             local x
             for _ in 1:_INIT_ROUNDS
@@ -546,7 +561,7 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
                 retcode = sol.retcode
                 x = at_state(sol.u)
                 all(isfinite, x) || break
-                _init_accept(check, pk, x, gs) === nothing && break
+                _init_accept(check, pk, x, gs, init) === nothing && break
                 tighter = _INIT_NEWTON_RTOL * minimum((v for v in _init_scales(check, pk, x) if v > 0); init = floatmin(Float64))
                 step2 = _init_step(sol.u, guess)
                 (tighter < abstol / 2 || !(step / 2 < step2 < 2step)) || break
@@ -556,7 +571,7 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
             end
             x
         else
-            sol = solving(() -> SciMLBase.solve(ip, _INIT_SOLVER), k)
+            sol = solving(() -> SciMLBase.solve(ip, something(init.nlsolve, _INIT_SOLVER); init.solvekw...), k)
             retcode = sol.retcode
             getter(sol)
         end
@@ -564,7 +579,7 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
             isfinite(v) || failed(k, "it gives `$(info(free[j]).name)` = $v" *
                                      (retcode === nothing ? "" : "; the solve stopped with $retcode"))
         end
-        bad = _init_accept(check, pk, out, gs)
+        bad = _init_accept(check, pk, out, gs, init)
         if bad !== nothing
             r, res, sc = bad
             failed(k, "$(rows[r].text) is not satisfied: residual $res against terms of size $sc" *
@@ -601,6 +616,34 @@ _init_step(x, g) = (s = minimum((m for (v, w) in zip(x, g) for m in (max(abs(v),
 const _INIT_NEWTON_RTOL = 1.0e-13
 const _INIT_RTOL = 1.0e-9
 const _INIT_ROUNDS = 6
+
+# SciML's `initializealg` of a problem as the initialization reads it: `mode` (`:solve`,
+# `:check` or `:none`), the nonlinear solver (`nothing`: the Newton above) and the tolerances.
+# `OverrideInit(; abstol, reltol, nlsolve)`: `nlsolve` solves once from the guesses; `abstol`
+# stops the solve and lets a condition pass when its residual is below it; `reltol` (default
+# `_INIT_RTOL`) bounds a residual against the size of the condition's terms. `NoInit()` keeps
+# the values the state is built with. `CheckInit()` checks them against the conditions.
+function _init_options(alg)
+    plain(mode) = (; mode, nlsolve = nothing, abstol = nothing, reltol = _INIT_RTOL, solvekw = (;))
+    alg === nothing && return plain(:solve)
+    alg isa SciMLBase.NoInit && return plain(:none)
+    alg isa SciMLBase.CheckInit && return plain(:check)
+    alg isa SciMLBase.OverrideInit || throw(
+        ArgumentError(
+            "`initializealg = $(repr(alg))`: a Potts model's state is initialized by `OverrideInit(; abstol, reltol, nlsolve)` " *
+                "(the default), checked by `CheckInit()` or kept by `NoInit()`"
+        )
+    )
+    tol(v, n) = v === nothing ? nothing : (
+            v isa Real && v >= 0 ? Float64(v) :
+            throw(ArgumentError("`OverrideInit($n = $(repr(v)))`: a tolerance is a nonnegative number"))
+        )
+    abstol, reltol = tol(alg.abstol, :abstol), tol(alg.reltol, :reltol)
+    solvekw = (; (abstol === nothing ? (;) : (; abstol))..., (reltol === nothing ? (;) : (; reltol))...)
+    return (; mode = :solve, nlsolve = alg.nlsolve, abstol, reltol = something(reltol, _INIT_RTOL), solvekw)
+end
+# the residual a condition whose terms have size `sc` may keep
+_init_tol(init, sc) = max(init.reltol * sc, something(init.abstol, 0.0))
 # the Jacobian of the conditions, equilibrated, is singular below this ratio of singular values
 const _INIT_SINGULAR = 1.0e-8
 
@@ -717,7 +760,7 @@ function _init_scales(c::_InitCheck, p, x)
 end
 
 """The first condition not satisfied at (`p`, `x`): (row, residual, size of its terms), or `nothing`."""
-function _init_residual(c::_InitCheck, p, x)
+function _init_residual(c::_InitCheck, p, x, init = _init_options(nothing))
     # Treat any non-fatal evaluation failure in user expressions as unsatisfied.
     try
         _init_eval!(c, p, x)
@@ -728,7 +771,7 @@ function _init_residual(c::_InitCheck, p, x)
     for (q, (l, r)) in enumerate(c.rows)
         res = c.v[l] - c.v[r]
         sc = c.m[l] + c.m[r]
-        (isfinite(res) && abs(res) <= _INIT_RTOL * sc) || return (q, res, sc)
+        (isfinite(res) && abs(res) <= _init_tol(init, sc)) || return (q, res, sc)
     end
     return nothing
 end
@@ -791,8 +834,8 @@ condition not satisfied (row, residual, size of its terms). A residual small aga
 of the terms passes; so does one whose Newton correction `J⁻¹ r` is below `_INIT_RTOL` of each
 value (floored at 1e-9 of its guess), which covers roots where the terms themselves vanish (`sin(v) ~ 0` at `π`).
 """
-function _init_accept(c::_InitCheck, p, x, g)
-    bad = _init_residual(c, p, x)
+function _init_accept(c::_InitCheck, p, x, g, init = _init_options(nothing))
+    bad = _init_residual(c, p, x, init)
     bad === nothing && return nothing
     isfinite(bad[2]) || return bad
     n = length(x)
@@ -809,7 +852,7 @@ function _init_accept(c::_InitCheck, p, x, g)
         return bad
     end
     # against the value itself (a large guess must not loosen it), floored far below the guess
-    return all(j -> abs(δ[j]) <= _INIT_RTOL * max(abs(x[j]), 1.0e-9 * abs(g[j]), floatmin(Float64)), 1:n) ? nothing : bad
+    return all(j -> abs(δ[j]) <= init.reltol * max(abs(x[j]), 1.0e-9 * abs(g[j]), floatmin(Float64)), 1:n) ? nothing : bad
 end
 
 """

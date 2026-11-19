@@ -554,3 +554,50 @@ end
         @test Potts._written(Potts.variable(only(Potts.Symbolics.@variables q(Potts.t)), :cell; default = 1.0))
     end
 end
+
+@testitem "initialization: SciML's initializealg" setup = [InitializationSetup] tags = [:potts, :initialization] begin
+    SB = Potts.SciMLBase
+    sys = IniKinds(; name = :k)
+    op = ini_op(; kinds = [:A, :B])
+    solved = [10 + 16 + 6.0, 20 + 12 + 6.0]
+    # the default is `OverrideInit()`, and a user's nonlinear solver gives the same roots
+    base = PottsProblem(sys, op, (0, 1))
+    @test ini_u0(PottsProblem(sys, op, (0, 1); initializealg = SB.OverrideInit()), :p_1) == ini_u0(base, :p_1)
+    broyden = PottsProblem(sys, op, (0, 1); initializealg = SB.OverrideInit(; nlsolve = Potts.SimpleNonlinearSolve.SimpleBroyden()))
+    @test ini_u0(broyden, :p_1) ≈ sqrt.(INI_VOL) rtol = 1.0e-9
+    @test ini_u0(broyden, :y) ≈ solved rtol = 1.0e-12
+    # `abstol` stops the solve: a loose one accepts the guess
+    loose = PottsProblem(sys, op, (0, 1); initializealg = SB.OverrideInit(; abstol = 1.0e6))
+    @test !isapprox(ini_u0(loose, :p_1), sqrt.(INI_VOL); rtol = 1.0e-3)
+    # `NoInit()` keeps the declared values, also on `remake`; `CheckInit()` checks them
+    none = PottsProblem(sys, op, (0, 1); initializealg = SB.NoInit())
+    @test ini_u0(none, :y) == [0.0, 0.0]
+    @test ini_u0(Potts.SciMLBase.remake(none; u0 = op), :y) == [0.0, 0.0]
+    # `remake` keeps the problem's `initializealg` when it replaces the solve keywords, and takes
+    # a new one with `u0`
+    again = Potts.SciMLBase.remake(none; kwargs = (; saveat = 1))
+    @test again.kwargs.initializealg === SB.NoInit() && ini_u0(Potts.SciMLBase.remake(again; u0 = op), :y) == [0.0, 0.0]
+    @test ini_u0(Potts.SciMLBase.remake(base; u0 = op, initializealg = SB.NoInit()), :y) == [0.0, 0.0]
+    @test ini_u0(Potts.SciMLBase.remake(none; u0 = op, initializealg = SB.OverrideInit()), :y) ≈ solved rtol = 1.0e-12
+    # `initializealg = nothing` is stored as the constructor stores it: not at all
+    reset = Potts.SciMLBase.remake(none; u0 = op, initializealg = nothing)
+    @test !haskey(reset.kwargs, :initializealg)
+    @test ini_u0(reset, :y) ≈ solved rtol = 1.0e-12
+    # a new algorithm needs a new `u0`; an unknown one is refused whenever it is given
+    @test_throws ArgumentError Potts.SciMLBase.remake(base; initializealg = SB.NoInit())
+    @test_throws ArgumentError Potts.SciMLBase.remake(base; kwargs = (; initializealg = SB.NoInit()))
+    @test_throws ArgumentError Potts.SciMLBase.remake(base; u0 = op, initializealg = :newton)
+    @test Potts.SciMLBase.remake(none; initializealg = SB.NoInit()).kwargs.initializealg === SB.NoInit()
+    # at `init`/`solve`: the problem's own or `NoInit()` change nothing
+    @test init(base, SequentialCPM(); initializealg = SB.NoInit()).t == 0
+    @test solve(none, SequentialCPM(); initializealg = SB.NoInit()).retcode == SB.ReturnCode.Success
+    @test init(base, SequentialCPM(); initializealg = SB.OverrideInit()).t == 0
+    @test solve(none, SequentialCPM()).retcode == SB.ReturnCode.Success
+    @test_throws SB.CheckInitFailureError PottsProblem(sys, op, (0, 1); initializealg = SB.CheckInit())
+    @test ini_u0(PottsProblem(IniBare(; name = :n), ini_op(), (0, 1); initializealg = SB.CheckInit()), :x) == [0.0, 0.0]
+    # refusals: another algorithm, a negative tolerance, the keyword at `init`
+    @test_throws ArgumentError PottsProblem(sys, op, (0, 1); initializealg = :newton)
+    @test_throws ArgumentError PottsProblem(sys, op, (0, 1); initializealg = SB.OverrideInit(; reltol = -1.0))
+    @test_throws ArgumentError init(base, SequentialCPM(); initializealg = SB.CheckInit())
+    @test_throws ArgumentError solve(none, SequentialCPM(); initializealg = SB.OverrideInit(; abstol = 1.0))
+end

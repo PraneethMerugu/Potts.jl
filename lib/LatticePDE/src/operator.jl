@@ -308,12 +308,12 @@ _coefof(x, params) = (x isa Number ? Coef(Float64(x)) : _coef(x, params))
 
 function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDiscretization) where {N}
     s = cf.program
-    ivs = unwrap.(sys.ivs)
+    ivs = unwrap.(get_ivs(sys))
     xs = ivs[2:end]
     states = Set(_states(s))
     params = Dict{Any, Int}(unwrap(q) => i for (i, q) in enumerate(cf.params))
     dvs = Dict{String, Any}()
-    for v in sys.dvs, (op, kk) in cf.keys
+    for v in get_dvs(sys), (op, kk) in cf.keys
         isequal(_opof(v), op) || continue
         u = unwrap(v)
         for (i, k) in enumerate(kk)
@@ -326,7 +326,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
     NF = hex ? 3 : N
     domain = s.hierarchy[1].grid.domain != 0
     # the coordinates and the inputs: a coefficient that reads them varies by site
-    inputops = unique([_opof(v) for v in unwrap.(sys.dvs) if ModelingToolkitBase.isinput(v)])
+    inputops = unique([_opof(v) for v in unwrap.(get_dvs(sys)) if ModelingToolkitBase.isinput(v)])
     siteops = Any[inputops; xs]
     tabs = Set(unwrap(q) for q in _params(sys) if SymbolicUtils.symtype(unwrap(q)) <: AbstractArray)
     readsx(x) = any(v -> any(y -> isequal(y, v), xs), Symbolics.get_variables(x))
@@ -343,28 +343,30 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
     rowh(k) = level_spacing(s.spacing, fdims, s.fields[fieldid(s, k)].levels[1])
     hg = level_spacing(s.spacing, fdims, length(s.hierarchy) - 1)
     box = map(xs) do v
-        kk = findfirst(d -> isequal(unwrap(d.variables), v), sys.domain)
+        kk = findfirst(d -> isequal(unwrap(d.variables), v), get_domain(sys))
         a = findfirst(isequal(v), xs)
-        v => (Float64(leftendpoint(sys.domain[kk].domain)) - hg[a], Float64(rightendpoint(sys.domain[kk].domain)) + hg[a])
+        v => (Float64(leftendpoint(get_domain(sys)[kk].domain)) - hg[a], Float64(rightendpoint(get_domain(sys)[kk].domain)) + hg[a])
     end
     # the site centers' box (a multiplier is read at the row's own site; a coarse row's centers lie inside)
     cbox = map(xs) do v
-        kk = findfirst(d -> isequal(unwrap(d.variables), v), sys.domain)
+        kk = findfirst(d -> isequal(unwrap(d.variables), v), get_domain(sys))
         a = findfirst(isequal(v), xs)
-        v => (Float64(leftendpoint(sys.domain[kk].domain)) + s.spacing[a] / 2, Float64(rightendpoint(sys.domain[kk].domain)) - s.spacing[a] / 2)
+        v => (Float64(leftendpoint(get_domain(sys)[kk].domain)) + s.spacing[a] / 2, Float64(rightendpoint(get_domain(sys)[kk].domain)) - s.spacing[a] / 2)
     end
     pp0 = Problems.ParamsTables(collect(Any, cf.defaults),
         Pair{String, Vector{Float64}}[first(q) => Float64.(collect(last(q))) for q in cf.tables])
     staterefs = unique([_ref(v) for v in values(dvs)])     # the group's own states (no aux field, no input)
     allops = Any[unique([_ref(v) for v in values(dvs)]);
-                 unique([_opof(v) for v in unwrap.(sys.dvs) if !haskey(cf.keys, _opof(v)) ||
+        unique(
+            [
+                _opof(v) for v in unwrap.(get_dvs(sys)) if !haskey(cf.keys, _opof(v)) ||
                                                                !any(k -> k in states, cf.keys[_opof(v)])])]
     # the group's states each aux field reads, through the aux fields it reads in turn (a term
     # that reads an aux field is a cross term of those states, or a source when it reads none:
     # `0.5 L` with `L ~ laplacian(c)`, F3-22; the residual kernel of a row evaluates the aux kernels it
     # reads at the stored values, so in solve order the term is exact in an acyclic group)
     auxdef = Tuple{Any, Any}[]                  # (aux field, its right side)
-    for eq in sys.eqs
+    for eq in get_eqs(sys)
         l = unwrap(eq.lhs)
         (iscall(l) && !(operation(l) isa Union{Differential, Shift})) || continue
         o = _opof(l)
@@ -582,8 +584,8 @@ function _jac_program(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDiscret
     spacing = Dict{Any, Int}(p => get_lattice_spacing(p) for p in keys(params) if !(SymbolicUtils.symtype(p) <: AbstractArray) &&
                                                                     get_lattice_spacing(p) !== nothing)
     ends = map(xs) do v
-        kk = findfirst(d -> isequal(unwrap(d.variables), v), sys.domain)
-        Float64(leftendpoint(sys.domain[kk].domain))
+        kk = findfirst(d -> isequal(unwrap(d.variables), v), get_domain(sys))
+        Float64(leftendpoint(get_domain(sys)[kk].domain))
     end
     lo = ntuple(d -> ends[d], N)
     h = s.spacing
@@ -594,7 +596,8 @@ function _jac_program(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDiscret
     # the domain on a row's level (a coarse row's: the domain folded onto its grid, F3-16)
     domat(L) = domid == 0 || L == 0 ? domid : fieldid_in(pb, "domain:$L")
     # (a blending coarse row's coefficients fold over the free children, as its rate does: F4-15b)
-    env(kb, L, k) = Env(kb, fids, params, tables, spacing, unwrap(sys.ivs[1]), xs, lo, level_spacing(h, fdims, L), false,
+    env(kb, L, k) = Env(
+        kb, fids, params, tables, spacing, unwrap(get_ivs(sys)[1]), xs, lo, level_spacing(h, fdims, L), false,
         ntuple(_ -> 0, N), RESOLVE, nothing, false, domat(L), Int32[], L, flev, fdims, 0, get(cf.free, k, nothing), cf.domfree)
     for (k, pl) in sort!(collect(plans); by = first)
         id = fieldid_in(pb, k)

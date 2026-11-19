@@ -32,6 +32,9 @@ end
         prob = discretize(sys, fam_disc())
         @test prob isa (name == "ExplicitMap" ? SciMLBase.DiscreteProblem : SciMLBase.ODEProblem)
         name == "ExplicitMap" || @test SciMLBase.problem_type(prob) isa LFP.LatticeMetadata
+            # SciML's `hasTime` (a map's `DiscreteProblem` has a time too)
+            @test (LFP.lattice_metadata(prob) isa SciMLBase.AbstractDiscretizationMetadata{Val(true)}) ==
+                (prob isa Union{SciMLBase.ODEProblem, SciMLBase.DiscreteProblem})
             s = solve(prob, alg; kw...)
         @test s.retcode == SciMLBase.ReturnCode.Success
         # an owned solve never builds the right side of SciML's solvers

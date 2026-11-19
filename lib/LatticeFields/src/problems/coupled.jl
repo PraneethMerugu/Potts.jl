@@ -199,6 +199,10 @@ Its dot product and norm are fixed-order block reductions, so a run repeats bit 
 the host and a device agree; the other vector operations are elementwise kernels. Krylov.jl
 reaches them through its vector functions (`kdot`, `knorm`, `kaxpy!`, `kaxpby!`, `kcopy!`,
 `kdivcopy!`, `kfill!`); it never indexes the vector.
+
+It is an `AbstractVector` because Krylov.jl's solvers take only `AbstractVector`s (an
+upstream gap: Krylov.jl has no vector interface without one). An element access is refused
+with an `ArgumentError`; `parent(v)` is the plain array of the values.
 """
 struct CoupledVector{K, A <: AbstractVector{K}, B} <: AbstractVector{K}
     a::A
@@ -207,10 +211,12 @@ struct CoupledVector{K, A <: AbstractVector{K}, B} <: AbstractVector{K}
     backend::B
 end
 Base.size(v::CoupledVector) = size(v.a)
+Base.parent(v::CoupledVector) = v.a
 # (Krylov.jl reaches the vector through its vector functions only; an element access means a
 # missed dispatch, which would run generic code with other rounding: an error on every backend)
-Base.getindex(::CoupledVector, ::Int) = throw(ArgumentError("a `CoupledVector` is not indexed (Krylov.jl's vector functions only)"))
-Base.setindex!(::CoupledVector, _, ::Int) = throw(ArgumentError("a `CoupledVector` is not indexed (Krylov.jl's vector functions only)"))
+const _CV_INDEX = "a `CoupledVector` is not indexed: Krylov.jl reaches it through its vector functions; `parent(v)` is the array of its values"
+Base.getindex(::CoupledVector, ::Int) = throw(ArgumentError(_CV_INDEX))
+Base.setindex!(::CoupledVector, _, ::Int) = throw(ArgumentError(_CV_INDEX))
 Base.similar(v::CoupledVector) = CoupledVector(similar(v.a), v.part, v.host, v.backend)
 Base.similar(v::CoupledVector, n::Int) = CoupledVector(similar(v.a, n), v.part, v.host, v.backend)
 Base.show(io::IO, v::CoupledVector) = print(io, "CoupledVector(", length(v.a), " × ", eltype(v.a), ")")

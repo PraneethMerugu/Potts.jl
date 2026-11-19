@@ -194,17 +194,18 @@ end
 # (MTKBase's default) is no parameters; `initial_conditions` give parameter values (over the
 # variable defaults) and field initial values (where no `c(0, …) ~ v` condition gives one);
 # subsystems and analytic solutions are refused by name, never ignored
-_params(sys::PDESystem) = sys.ps isa NullParameters ? Any[] : collect(sys.ps)
-_ics(sys::PDESystem) = getfield(sys, :initial_conditions)
+_params(sys::PDESystem) = get_ps(sys) isa NullParameters ? Any[] : collect(get_ps(sys))
+_ics(sys::PDESystem) = get_initial_conditions(sys)
 function _check_parts(sys::PDESystem)
-    sy = getfield(sys, :systems)
+    sy = get_systems(sys)
     isempty(sy) || _dverr("`$(nameof(sys))` has subsystems ($(join(("`$(nameof(x))`" for x in sy), ", "))); " *
                           "`discretize` lowers one flat PDESystem: write their equations into it")
+    # (`analytic`, `analytic_func`: no public MTKBase accessor, an upstream gap)
     (getfield(sys, :analytic) === nothing && getfield(sys, :analytic_func) === nothing) ||
         _dverr("`$(nameof(sys))` has analytic solutions, which `discretize` does not use in this version " *
                "(no solution carries them); compare against them yourself and leave `analytic` out")
     # every `initial_conditions` key is a parameter or a dependent variable (a typo is not ignored)
-    known = Any[unwrap.(_params(sys)); unwrap.(sys.dvs); [_opof(v) for v in sys.dvs]]
+    known = Any[unwrap.(_params(sys)); unwrap.(get_dvs(sys)); [_opof(v) for v in get_dvs(sys)]]
     for k in keys(_ics(sys))
         any(q -> isequal(q, unwrap(k)), known) && continue
         _dverr("`initial_conditions` gives `$k` a value, but `$k` is neither a parameter nor a dependent variable " *
@@ -354,10 +355,10 @@ function _clock_slot(sys::PDESystem, disc::LatticeDiscretization)
     ps = _params(sys)
     any(_isclock, ps) && throw(ArgumentError("`$(Problems.CLOCK_KEY)` is the reserved name of the clock's slot (the " *
                                              "`__tick` suffix is reserved); give the parameter another name"))
-    tt = unwrap(sys.ivs[1])
+    tt = unwrap(get_ivs(sys)[1])
     calls = Any[]
     walk(u) = iscall(u) && (operation(u) === step_index ? push!(calls, u) : foreach(walk, arguments(u)))
-    foreach(eq -> (walk(unwrap(eq.lhs)); walk(unwrap(eq.rhs))), [sys.eqs; sys.bcs])
+    foreach(eq -> (walk(unwrap(eq.lhs)); walk(unwrap(eq.rhs))), [get_eqs(sys); get_bcs(sys)])
     isempty(calls) && return sys
     for u in calls
         isequal(unwrap(only(arguments(u))), tt) ||
@@ -367,8 +368,9 @@ function _clock_slot(sys::PDESystem, disc::LatticeDiscretization)
                                      "declares none; give `LatticeDiscretization(…; clock = τ)` (the period of one step index)")
     rule = Dict{Any, Any}(u => _CLOCK_TICK for u in unique(calls))
     sub(x) = substitute(x, rule; fold = Val(false))
-    return PDESystem([sub(eq.lhs) ~ sub(eq.rhs) for eq in sys.eqs], [sub(b.lhs) ~ sub(b.rhs) for b in sys.bcs],
-        getfield(sys, :domain), sys.ivs, sys.dvs, Any[ps; _CLOCK_TICK]; name = nameof(sys),
+    return PDESystem(
+        [sub(eq.lhs) ~ sub(eq.rhs) for eq in get_eqs(sys)], [sub(b.lhs) ~ sub(b.rhs) for b in get_bcs(sys)],
+        get_domain(sys), get_ivs(sys), get_dvs(sys), Any[ps; _CLOCK_TICK]; name = nameof(sys),
         initial_conditions = _ics(sys))
 end
 
@@ -377,7 +379,7 @@ function _scan_clock(sys)
                                  (operation(u) isa Shift && operation(u).steps != 1)) &&
                                 _dverr("`$eq`: `$(operation(u))` is not supported; only `Shift(t, 1)` maps are; $SHIFT_HINT");
                                 foreach(a -> walk(a, eq), arguments(u)))
-    foreach(eq -> (walk(unwrap(eq.lhs), eq); walk(unwrap(eq.rhs), eq)), [sys.eqs; sys.bcs])
+    return foreach(eq -> (walk(unwrap(eq.lhs), eq); walk(unwrap(eq.rhs), eq)), [get_eqs(sys); get_bcs(sys)])
 end
 
 # The `Coarse` level of each dependent variable (F3-16): `[lattice_level = Coarse(k)]` puts the
@@ -387,8 +389,8 @@ end
 # is not lowered yet and is refused, never ignored. Returns `op => level` for the coarse ones.
 function _field_levels(sys::PDESystem, disc::LatticeDiscretization{N}) where {N}
     lev = Dict{Any, Int}()
-    ivs = unwrap.(sys.ivs)
-    for v in sys.dvs
+    ivs = unwrap.(get_ivs(sys))
+    for v in get_dvs(sys)
         m = get_lattice_placement(v)
         m === nothing || _dverr("`$v` has `lattice_placement = $m`, which this version does not lower (every field " *
                                 "lives at the cell centers); remove the metadata")
@@ -434,18 +436,18 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     ps, ic = _params(sys), _ics(sys)
     any(p -> p isa Pair, ps) && _dverr("parameters are declared natively, `@parameters Dc = 1e-3`; " *
                                        "the `ps` entry `$(first(filter(p -> p isa Pair, ps)))` is a `Pair`")
-    ivs = unwrap.(sys.ivs)
+    ivs = unwrap.(get_ivs(sys))
     length(ivs) == N + 1 || _dverr("the grid has $N axes but the system has $(length(ivs) - 1) spatial variables (the first variable is time)")
     ends = map(ivs) do v
-        k = findfirst(d -> isequal(unwrap(d.variables), v), sys.domain)
+        k = findfirst(d -> isequal(unwrap(d.variables), v), get_domain(sys))
         k === nothing && _dverr("no domain for `$v`")
-        Float64.((leftendpoint(sys.domain[k].domain), rightendpoint(sys.domain[k].domain)))
+        Float64.((leftendpoint(get_domain(sys)[k].domain), rightendpoint(get_domain(sys)[k].domain)))
     end
     T = _statetype(disc)
     lo = ntuple(d -> ends[d + 1][1], N)
     h = ntuple(d -> (ends[d + 1][2] - ends[d + 1][1]) / disc.grid.dims[d], N)
     # dependent variables, keyed by operation (the callable `c`, never the applied term)
-    dvs = Dict{Any, Any}(_opof(v) => unwrap(v) for v in sys.dvs)
+    dvs = Dict{Any, Any}(_opof(v) => unwrap(v) for v in get_dvs(sys))
     isin = Dict{Any, Bool}(op => ModelingToolkitBase.isinput(v) for (op, v) in dvs)
     # another group's field read by a spatial operator: an input with its face conditions (F3-22 review r1)
     cut = Dict{Any, Bool}(op => isin[op] && _meta(v, LatticeCutField) === true for (op, v) in dvs)
@@ -462,7 +464,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     end
     # equations by field component
     eqs = Dict{String, Tuple{Symbol, Any, Int, Any}}()
-    for eq in sys.eqs
+    for eq in get_eqs(sys)
         kind, l = _eqkind(eq, isin, ivs)
         r = _fieldread(l, isin)
         isin[r.op] && _dverr("equation `$eq`: an input is set by the CPM, not by an equation")
@@ -475,7 +477,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
         isin[op] || haskey(eqs, k) || _dverr("field `$k` has no equation")
     end
     # boundary conditions; periodicity from the pairs, shared by every field
-    bcs = parse_bcs(sys.bcs, Dict{Any, Bool}(op => isin[op] && !cut[op] for op in Base.keys(isin)), ivs, ends)
+    bcs = parse_bcs(get_bcs(sys), Dict{Any, Bool}(op => isin[op] && !cut[op] for op in Base.keys(isin)), ivs, ends)
     filter!(b -> !(cut[b.op] && b.kind in (:masked, :initial)), bcs)   # (its own group's)
     seen = Set{Tuple{String, Symbol, Int, Int}}()
     for b in bcs                         # one condition per face, mask and start of each field
@@ -769,10 +771,10 @@ function _check_aux_offsets(prog::Program{N}, sys::PDESystem) where {N}
         d = findfirst(e -> a.offset.a[e] != 0 && !prog.periodic[e], 1:N)
         d === nothing && continue
         kind, k = split(kern.key, ":"; limit = 2)
-        ops = Any[o for o in (_opof(v) for v in sys.dvs) if o !== nothing && string(nameof(o)) == K]
+        ops = Any[o for o in (_opof(v) for v in get_dvs(sys)) if o !== nothing && string(nameof(o)) == K]
         r = nothing
-        for eq in sys.eqs
-            r = _neighbor_read(eq.rhs, ops, sys.ivs, prog.periodic)
+        for eq in get_eqs(sys)
+            r = _neighbor_read(eq.rhs, ops, get_ivs(sys), prog.periodic)
             r === nothing || break
         end
         what = kind == "aux" ? "the expression of the aux field" : kind == "map" ? "the map of" : "the rate of"

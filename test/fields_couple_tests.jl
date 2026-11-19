@@ -517,3 +517,17 @@ end
         @test rp isa Potts.SciMLBase.ODEProblem
     end
 end
+
+@testitem "a coupled solution reads a field by the PDESystem's own variable" setup = [CoupleSetup] tags = [:potts, :fields_couple] begin
+    vol = Potts.value_at(Potts.B.volume, Potts.B.owner)
+    gr = Potts.couple(CpHost(; name = :m), CpPDE.sys(); inputs = [CpPDE.endo => Potts.kind == 1, CpPDE.vol => vol])
+    for m in (gr, CpFields(; name = :m))
+        sol = cp_run(m, ExplicitEuler())
+        @test sol[CpPDE.c] == sol[m.c] == sol[:c]
+        @test sol[CpPDE.c(CpPDE.t, CpPDE.x, CpPDE.y)] == sol[m.c]
+        @test maximum(sol[CpPDE.c][end]) > 0
+        # a foreign variable that only shares the name is not the field
+        foreign = only(Potts.ModelingToolkitBase.@variables c(CpPDE.t, CpPDE.y))
+        @test_throws Potts.PottsCompileError sol[foreign]
+    end
+end

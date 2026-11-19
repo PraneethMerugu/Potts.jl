@@ -332,7 +332,7 @@ function _named_inputs(f::ModelingToolkitBase.PDESystem, sys::PottsSystem)
     isempty(names) && return f
     # the generated input `field1__in` as the variable `vol(t, x, y)`, with its metadata
     renamed = Dict{Any, Any}()
-    for dv in getfield(f, :dvs)
+    for dv in _MTKB.get_dvs(f)
         u = _unwrap(dv)
         (ModelingToolkitBase.isinput(u) && iscall(u)) || continue
         g = nameof(operation(u))
@@ -350,10 +350,12 @@ function _named_inputs(f::ModelingToolkitBase.PDESystem, sys::PottsSystem)
         return isempty(reps) ? x : _unwrap(Symbolics.substitute(_unwrap(x), reps; fold = Val(false)))
     end
     subeq(eqs) = isempty(renamed) ? eqs : Equation[Equation(sub(eq.lhs), sub(eq.rhs)) for eq in eqs]
-    eqs, bcs = subeq(getfield(f, :eqs)), subeq(getfield(f, :bcs))
-    dvs = Any[ModelingToolkitBase.isinput(_unwrap(dv)) ? Symbolics.wrap(rename(sub(dv))) : dv for dv in getfield(f, :dvs)]
-    return ModelingToolkitBase.PDESystem(eqs, bcs, getfield(f, :domain), getfield(f, :ivs), dvs,
-        getfield(f, :ps); name = nameof(f), initial_conditions = getfield(f, :initial_conditions))
+    eqs, bcs = subeq(_MTKB.get_eqs(f)), subeq(_MTKB.get_bcs(f))
+    dvs = Any[ModelingToolkitBase.isinput(_unwrap(dv)) ? Symbolics.wrap(rename(sub(dv))) : dv for dv in _MTKB.get_dvs(f)]
+    return ModelingToolkitBase.PDESystem(
+        eqs, bcs, _MTKB.get_domain(f), _MTKB.get_ivs(f), dvs,
+        _MTKB.get_ps(f); name = nameof(f), initial_conditions = _MTKB.get_initial_conditions(f)
+    )
 end
 # the callable of an input `u = g(t, x, y)` under the name `w`: each call carries `u`'s metadata
 # (input, bounds, storage, level, its CPM read) with `w` as its `lattice_input_name`, not its
@@ -397,15 +399,15 @@ _cpm_read_text(ex) = (s = LatticePDE.as_written(replace(_builtin_text(string(ex)
 # expression of parameters for a computed one). Its parameters are the model's own symbols,
 # whose defaults the payload holds (F1, V13)
 function _with_defaults(f::ModelingToolkitBase.PDESystem, eqs)
-    ic = Dict{Any, Any}(getfield(f, :initial_conditions))
+    ic = Dict{Any, Any}(_MTKB.get_initial_conditions(f))
     put!(k, v) = (v === nothing || any(x -> isequal(x, k), keys(ic)) || (ic[k] = v); nothing)
     byname = Dict{Symbol, Any}(info(x).name => info(x).default for (x, _) in eqs)
-    for dv in getfield(f, :dvs)
+    for dv in _MTKB.get_dvs(f)
         u = _unwrap(dv)
         n = iscall(u) ? nameof(operation(u)) : nothing
         n isa Symbol && haskey(byname, n) && put!(u, byname[n])
     end
-    ps0 = getfield(f, :ps)
+    ps0 = _MTKB.get_ps(f)
     ps = Any[(ps0 isa SciMLBase.NullParameters ? () : ps0)...]
     # a computed default (`k2 = 2k`) reads parameters the equations may not: they join the
     # system's parameters with their own defaults, so `discretize` can fold it (F1)
@@ -425,8 +427,10 @@ function _with_defaults(f::ModelingToolkitBase.PDESystem, eqs)
         end
         k += 1
     end
-    return ModelingToolkitBase.PDESystem(getfield(f, :eqs), getfield(f, :bcs), getfield(f, :domain), getfield(f, :ivs),
-        getfield(f, :dvs), ps; name = nameof(f), initial_conditions = ic)
+    return ModelingToolkitBase.PDESystem(
+        _MTKB.get_eqs(f), _MTKB.get_bcs(f), _MTKB.get_domain(f), _MTKB.get_ivs(f),
+        _MTKB.get_dvs(f), ps; name = nameof(f), initial_conditions = ic
+    )
 end
 # the PDESystem slot of a wrap (a hand-wrapped or compiled one), without building it
 _stored_fields(sys::PottsSystem) = getfield(sys, :fields)
@@ -447,7 +451,8 @@ function wrap_system(
     fields === nothing || nameof(fields) === name ||
         throw(ArgumentError("wrap_system: the PDESystem is named `$(nameof(fields))`, the model `$name`; they must agree"))
     ModelingToolkitBase.iscomplete(sys) || (sys = complete(sys; allow_parameter_eqs = true))
-    isempty(ModelingToolkitBase.get_systems(sys)) || throw(ArgumentError(
+    isempty(_MTKB.get_systems(sys)) || throw(
+        ArgumentError(
         "wrap: `$name` is complete but not flattened (it still has subsystems: a completed system was composed); " *
                 "compose the uncompleted systems, then wrap them"
         )
@@ -862,7 +867,7 @@ function ModelingToolkitBase.compose(p::PottsSystem, systems::AbstractArray; nam
     isempty(systems) && return p
     name isa Symbol || throw(ArgumentError("compose: `name` is a Symbol; got $(repr(name))"))
     cs = Tuple(_as_component(c, p) for c in systems)
-    taken = Set{Symbol}(nameof.(ModelingToolkitBase.get_systems(something(ModelingToolkitBase.get_parent(inner(p)), inner(p)))))
+    taken = Set{Symbol}(nameof.(_MTKB.get_systems(something(ModelingToolkitBase.get_parent(inner(p)), inner(p)))))
     quantities = Set{Symbol}(Symbol(SymbolicIndexingInterface.getname(x)) for x in
                              [ModelingToolkitBase.unknowns(inner(p)); ModelingToolkitBase.parameters(inner(p))])
     for c in cs
@@ -938,28 +943,30 @@ function _merge_fields(name, p, cs)
     fs = [f for f in (_stored_fields(p), map(_stored_fields, cs)...) if f !== nothing]
     isempty(fs) && return nothing
     merged(get) = unique(reduce(vcat, [collect(get(f)) for f in fs]))
-    # read with `getfield`: MTKBase has no public accessor for a PDESystem's `bcs` or
-    # `domain`, and the merge keeps the six stored fields exactly (friction register, HANDOFF §2);
-    # `initial_conditions` are merged (one value per key), and the parts a merge cannot keep
-    # (subsystems, analytic solutions) are refused, never dropped (SX-21)
+    # the merge keeps the six stored fields exactly; `initial_conditions` are merged (one value
+    # per key), and the parts a merge cannot keep (subsystems, analytic solutions) are refused,
+    # never dropped. `analytic` and `analytic_func` are read with `getfield`: MTKBase has no
+    # public accessor for them (an upstream gap)
     for f in fs
-        isempty(getfield(f, :systems)) && getfield(f, :analytic) === nothing && getfield(f, :analytic_func) === nothing ||
+        isempty(_MTKB.get_systems(f)) && getfield(f, :analytic) === nothing && getfield(f, :analytic_func) === nothing ||
             throw(
             ArgumentError(
                 "compose: the PDESystem `$(nameof(f))` has subsystems or analytic solutions, " *
                                 "which a composed model's PDESystem does not carry; leave them out"))
     end
     ic = Dict{Any, Any}()
-    for f in fs, (k, v) in getfield(f, :initial_conditions)
+    for f in fs, (k, v) in _MTKB.get_initial_conditions(f)
         haskey(ic, k) && !isequal(ic[k], v) && throw(ArgumentError(
                 "compose: two PDESystems give `$k` different initial conditions ($(ic[k]) and $v)"
             )
         )
         ic[k] = v
     end
-    ps(f) = (x = getfield(f, :ps); x isa SciMLBase.NullParameters ? Any[] : x)
-    return ModelingToolkitBase.PDESystem(merged(f -> getfield(f, :eqs)), merged(f -> getfield(f, :bcs)), merged(f -> getfield(f, :domain)), merged(f -> getfield(f, :ivs)),
-        merged(f -> getfield(f, :dvs)), merged(ps); name, initial_conditions = ic)
+    ps(f) = (x = _MTKB.get_ps(f); x isa SciMLBase.NullParameters ? Any[] : x)
+    return ModelingToolkitBase.PDESystem(
+        merged(f -> _MTKB.get_eqs(f)), merged(f -> _MTKB.get_bcs(f)), merged(f -> _MTKB.get_domain(f)), merged(f -> _MTKB.get_ivs(f)),
+        merged(f -> _MTKB.get_dvs(f)), merged(ps); name, initial_conditions = ic
+    )
 end
 
 const _STATEMENT_FIELDS = (:energies, :drives, :constraints, :updates, :divisions, :converts, :relationships, :link_rules,
@@ -1176,6 +1183,26 @@ SymbolicUtils.getmetadata(s::PottsSystem, k::DataType, default) = SymbolicUtils.
 SymbolicUtils.hasmetadata(s::PottsSystem, k::DataType) = SymbolicUtils.hasmetadata(getfield(s, :inner), k)
 SymbolicUtils.setmetadata(s::PottsSystem, k::DataType, v) =
     _with_inner(s, getfield(s, :name), SymbolicUtils.setmetadata(getfield(s, :inner), k, v), getfield(s, :fields))
+# MTK's description of a model is its inner System's
+_MTKB.description(s::PottsSystem) = _MTKB.description(getfield(s, :inner))
+
+# `@description` and `@metadata` of `@potts_model` (MTK's `@mtkmodel` sections): the model
+# with its inner System's description and metadata set (`metadata`: `Key => value` pairs, each
+# `Key` a type, as in MTK)
+function _describe(s::PottsSystem, description, metadata)
+    for (k, v) in metadata
+        k isa DataType || throw(
+            ArgumentError("@metadata of $(nameof(s)): the key `$k` is not a type; MTK's metadata keys are types (`struct MyKey end`)")
+        )
+        s = SymbolicUtils.setmetadata(s, k, v)
+    end
+    description === nothing && return s
+    description isa AbstractString || throw(
+        ArgumentError("@description of $(nameof(s)): give a string; got $(repr(description))")
+    )
+    I = ConstructionBase.setproperties(getfield(s, :inner), (; description = String(description)))
+    return _with_inner(s, getfield(s, :name), I, getfield(s, :fields))
+end
 
 # `s` with another name, inner System or PDESystem and the same payload. A model built from its
 # payload stays marked as such (`_built_from_part`), so `mtkcompile` keeps the new inner System
@@ -1200,14 +1227,15 @@ function Symbolics.rename(s::PottsSystem, name::Symbol)
     return _with_inner(s, name, Symbolics.rename(getfield(s, :inner), name), f === nothing ? nothing : _renamed_pde(f, name))
 end
 
-# the PDESystem `f` under `name`, every stored field kept. Read with `getfield`, as in
-# `_merge_fields`: MTKBase's `rename` of a PDESystem (`@set`) fails on its `nothing` metadata.
+# the PDESystem `f` under `name`, every stored field kept (MTKBase's `rename` of a PDESystem,
+# `@set`, fails on its `nothing` metadata). `analytic` and `analytic_func` are read with
+# `getfield`: MTKBase has no public accessor for them (an upstream gap).
 _renamed_pde(f::ModelingToolkitBase.PDESystem, name::Symbol) = ModelingToolkitBase.PDESystem(
-    getfield(f, :eqs), getfield(f, :bcs), getfield(f, :domain), getfield(f, :ivs), getfield(f, :dvs), getfield(f, :ps);
-    name, initial_conditions = getfield(f, :initial_conditions), systems = getfield(f, :systems),
-    connector_type = getfield(f, :connector_type), metadata = getfield(f, :metadata), analytic = getfield(f, :analytic),
-    analytic_func = getfield(f, :analytic_func), gui_metadata = getfield(f, :gui_metadata),
-    description = getfield(f, :description), checks = false
+    _MTKB.get_eqs(f), _MTKB.get_bcs(f), _MTKB.get_domain(f), _MTKB.get_ivs(f), _MTKB.get_dvs(f), _MTKB.get_ps(f);
+    name, initial_conditions = _MTKB.get_initial_conditions(f), systems = _MTKB.get_systems(f),
+    connector_type = _MTKB.get_connector_type(f), metadata = _MTKB.get_metadata(f), analytic = getfield(f, :analytic),
+    analytic_func = getfield(f, :analytic_func), gui_metadata = _MTKB.get_gui_metadata(f),
+    description = _MTKB.get_description(f), checks = false
 )
 
 """
@@ -1241,33 +1269,38 @@ _SII.parameter_observed(s::PottsSystem, sym) = _SII.parameter_observed(getfield(
 # --- Refusals (v3 §7.1, FR-32): SciMLBase's `{iip}` constructors accept any object as `f`, so
 # without these `ODEProblem{true}(sys, …)` and nine other routes return a problem that fails
 # only at `solve`. Every problem constructor MTKBase extends, plus `JumpProblem`, in the plain,
-# `{iip}` and `{iip, spec}` forms: 48 methods (and one disambiguation, below).
+# `{iip}` and `{iip, spec}` forms, on the system argument alone (and the disambiguations below).
 const _REFUSED_PROBLEMS = (:ODEProblem, :NonlinearProblem, :SteadyStateProblem, :SDEProblem, :DAEProblem, :DDEProblem,
     :SDDEProblem, :BVProblem, :DiscreteProblem, :ImplicitDiscreteProblem, :NonlinearLeastSquaresProblem, :LinearProblem,
     :IntervalNonlinearProblem, :HomotopyProblem, :OptimizationProblem)
 _problem_msg(f) = "$f: a Potts model is not an ODE or jump system; build its problem with `PottsProblem(sys, op, tspan)` " *
-                  "and solve it with a CPM algorithm (for the cell/model ODE alone, use `Potts.inner(sys)`)"
-# The second argument is what a problem constructor takes after the system (an operating
-# point, `u0`, a `tspan`, …): typed so that the refusals stay unambiguous with SciMLBase's and
-# JumpProcesses' own methods on a jump set, an aggregator or a jump (Aqua's ambiguity check).
-# Names and symbols are included: `ODEProblem{true}(sys, :x, tspan)` must not build either.
-const _ProblemArg = Union{AbstractArray, AbstractDict, Tuple, NamedTuple, Pair, Number, Nothing, Symbol, AbstractString,
-    AbstractChar, Function, SymbolicUtils.BasicSymbolic}
+    "and solve it with a CPM algorithm (for the cell/model ODE alone, use `Potts.inner(sys)`)"
 for (M, n) in ((:JumpProcesses, :JumpProblem), ((:SciMLBase, n) for n in _REFUSED_PROBLEMS)...)
     P = Expr(:., M, QuoteNode(n))
     msg = String(n)
+    n === :JumpProblem || @eval $P(::PottsSystem, args...; kw...) = throw(ArgumentError(_problem_msg($msg)))
     @eval begin
-        $P(::PottsSystem, ::_ProblemArg, args...; kw...) = throw(ArgumentError(_problem_msg($msg)))
-        $P{iip}(::PottsSystem, ::_ProblemArg, args...; kw...) where {iip} = throw(ArgumentError(_problem_msg($msg)))
-        $P{iip, spec}(::PottsSystem, ::_ProblemArg, args...; kw...) where {iip, spec} =
-            throw(ArgumentError(_problem_msg($msg)))
+        $P{iip}(::PottsSystem, args...; kw...) where {iip} = throw(ArgumentError(_problem_msg($msg)))
+        $P{iip, spec}(::PottsSystem, args...; kw...) where {iip, spec} = throw(ArgumentError(_problem_msg($msg)))
     end
 end
-# SciMLBase's own `ODEProblem{iip, FunctionWrapperSpecialize}(f, u0, tspan[, p])` meets the
-# `{iip, spec}` refusal there: this one method settles that ambiguity (49 methods in all)
-SciMLBase.ODEProblem{iip, SciMLBase.FunctionWrapperSpecialize}(::PottsSystem, ::_ProblemArg, args...; kw...) where {iip} =
+# Two disambiguations. SciMLBase's own `ODEProblem{iip, FunctionWrapperSpecialize}(f, u0,
+# tspan[, p])` meets the `{iip, spec}` refusal. JumpProcesses' `JumpProblem(prob, jumps…)` and
+# `JumpProblem(prob, aggregator, jumps…)` take any `prob`, so the plain `JumpProblem` refusals
+# are typed where a jump set, a jump or an aggregator never is: MTK's `JumpProblem(sys, op,
+# tspan)` with `tspan` a tuple, `nothing` or a vector, and `JumpProblem(sys, op)` with `op` an
+# operating point (a collection, a pair, a number or `nothing`). One method per type, for both
+# system types (compose.jl).
+SciMLBase.ODEProblem{iip, SciMLBase.FunctionWrapperSpecialize}(::PottsSystem, args...; kw...) where {iip} =
     throw(ArgumentError(_problem_msg("ODEProblem")))
-
+const _JUMP_TSPANS = (:Tuple, :Nothing, :AbstractVector)
+const _JUMP_OPS = (:AbstractArray, :AbstractDict, :NamedTuple, :Tuple, :Pair, :Number, :Nothing)
+for T in _JUMP_TSPANS
+    @eval JumpProcesses.JumpProblem(::PottsSystem, op, tspan::$T, args...; kw...) = throw(ArgumentError(_problem_msg("JumpProblem")))
+end
+for T in _JUMP_OPS
+    @eval JumpProcesses.JumpProblem(::PottsSystem, op::$T; kw...) = throw(ArgumentError(_problem_msg("JumpProblem")))
+end
 # MTK's `extend` with a Potts model on one side and another system on the other (D-039): a
 # clear refusal naming the ways that work, not MTK's rebuild of the container.
 _extend_msg(a, b) = "extend($(nameof(a)), $(nameof(b))): a Potts model extends only a Potts model " *
@@ -1316,6 +1349,22 @@ function _foreign(sys::PottsSystem, k)
     return !haskey(_declared_quantities(sys), n)
 end
 
+# A coupled PDESystem's own variable, `c` or `c(t, x, y)` as its author wrote it (one of the
+# PDESystem's dependent variables, or its function), names the model's field `c`: the field
+# variable, or `nothing` for any other key (a foreign variable that only shares the name too)
+function _pde_variable_field(sys::PottsSystem, u, n)
+    n isa Symbol || return nothing
+    f = _field_named(sys, n)
+    f === nothing && return nothing
+    v = _unwrap(f)
+    isequal(u, v) && return nothing
+    pde = _stored_fields(sys)
+    pde === nothing && return nothing
+    any(d -> _is_variable_of(u, _unwrap(d)), _MTKB.get_dvs(pde)) || return nothing
+    return v
+end
+_is_variable_of(u, d) = isequal(u, d) || (iscall(d) && isequal(u, operation(d)))
+
 """The key `k` with this model's namespace (`pr₊x`) removed: the declared quantity (or its
 name, for a `Symbol` key); in an expression, every such symbol. Other keys are returned as
 they are, or with `strict` a key namespaced by another name is an `ArgumentError`."""
@@ -1332,6 +1381,8 @@ function _localize(sys::PottsSystem, k; strict::Bool = false)
     u isa SymbolicUtils.BasicSymbolic || return k
     n = _key_name(u)
     if n !== nothing
+        f = _pde_variable_field(sys, u, n)
+        f === nothing || return f
         n isa Symbol && _namespaced(n) || return k
         declared = _declared_quantities(sys)
         m = _own_name(sys, n, declared)
@@ -1358,6 +1409,10 @@ function _localize(sys::PottsSystem, k; strict::Bool = false)
     return Symbolics.substitute(u, subs; fold = Val(false))
 end
 
+Base.show(io::IO, sys::PottsSystem) = print(
+    io, "PottsSystem(", getfield(sys, :name), ", ", join(_p(sys, :lattice).dims, "×"), ", ",
+    _count_string(length(_p(sys, :kinds)) - 1, "cell kind"), ")"
+)
 function Base.show(io::IO, ::MIME"text/plain", sys::PottsSystem)
     println(io, "PottsSystem ", getfield(sys, :name), " on ", join(_p(sys, :lattice).dims, "×"), " (", length(_p(sys, :lattice).dims), "D)")
     println(io, "  kinds: ", join(_p(sys, :kinds), ", "))
@@ -1405,9 +1460,12 @@ function Base.show(io::IO, ::MIME"text/plain", sys::PottsSystem)
     print(io, "  inner: System ", nameof(s), " with ", _count_string(length(_MTKB.equations(s)), "equation"), ", ",
         _count_string(length(_MTKB.unknowns(s)), "unknown"), ", ", _count_string(length(_MTKB.parameters(s)), "parameter"))
     isempty(_MTKB.unknowns(s)) || print(io, "\n    unknowns: ", join(_MTKB.unknowns(s), ", "))
-    f = _stored_fields(sys)    # the stored slot (not built here); counts read with `getfield`, as in `_merge_fields`
-    f === nothing || print(io, "\n  fields: PDESystem with ", _count_string(length(getfield(f, :eqs)), "equation"), ", ",
-        _count_string(length(getfield(f, :bcs)), "bc"), ", ", _count_string(length(getfield(f, :dvs)), "dependent variable"))
+    f = _stored_fields(sys)    # the stored slot (not built here)
+    f === nothing || print(
+        io, "\n  fields: PDESystem with ", _count_string(length(_MTKB.get_eqs(f)), "equation"), ", ",
+        _count_string(length(_MTKB.get_bcs(f)), "bc"), ", ", _count_string(length(_MTKB.get_dvs(f)), "dependent variable")
+    )
+    return nothing
 end
 
 # a parameter with its MTK description (F2-14): `Dc ("diffusion of c")`

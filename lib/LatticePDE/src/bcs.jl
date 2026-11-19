@@ -186,22 +186,22 @@ _firstdiff(u) = operation(u) isa Differential ? u : _firstdiff(unwrap(arguments(
 # coordinates, the time or an input varies by site or in time and is refused at the face
 # (planned, F4-12b).
 function robin_slots(sys::PDESystem)
-    ivs = unwrap.(sys.ivs)
+    ivs = unwrap.(get_ivs(sys))
     length(ivs) >= 2 || return sys
-    fields = Dict{Any, Bool}(_opof(v) => ModelingToolkitBase.isinput(unwrap(v)) for v in sys.dvs)
+    fields = Dict{Any, Bool}(_opof(v) => ModelingToolkitBase.isinput(unwrap(v)) for v in get_dvs(sys))
     ps = _params(sys)
     params = Set{Any}(unwrap(q) for q in ps)
     taken = Set{String}(string(q) for q in ps)
     lows = map(ivs) do v
-        k = findfirst(d -> isequal(unwrap(d.variables), v), sys.domain)
-        k === nothing ? nothing : Float64(leftendpoint(sys.domain[k].domain))
+        k = findfirst(d -> isequal(unwrap(d.variables), v), get_domain(sys))
+        k === nothing ? nothing : Float64(leftendpoint(get_domain(sys)[k].domain))
     end
     simple(c) = _cval(c) !== nothing || unwrap(c) in params ||
                 (iscall(unwrap(c)) && operation(unwrap(c)) === (*) && count(y -> unwrap(y) in params, arguments(unwrap(c))) == 1 &&
                  all(y -> unwrap(y) in params || _cval(y) !== nothing, arguments(unwrap(c))))
     onlyparams(c) = (vs = Symbolics.get_variables(unwrap(c)); !isempty(vs) && all(v -> v in params, vs))
     extra, ic = Any[], Dict{Any, Any}(_ics(sys))
-    bcs = map(sys.bcs) do eq
+    bcs = map(get_bcs(sys)) do eq
         l = unwrap(eq.lhs)
         terms = iscall(l) && operation(l) === (+) ? collect(Any, arguments(l)) : Any[l]
         # the coefficient of each face read (`c(t, 0, y)`, `Dx(c(t, 0, y))`), summed over its terms
@@ -245,6 +245,7 @@ function robin_slots(sys::PDESystem)
                sum(Symbolics.wrap(c) * Symbolics.wrap(core) for (core, c) in zip(cores, coefs)) ~ eq.rhs
     end
     isempty(extra) && return sys
-    return PDESystem(sys.eqs, bcs, getfield(sys, :domain), sys.ivs, sys.dvs, Any[ps; extra]; name = nameof(sys),
+    return PDESystem(
+        get_eqs(sys), bcs, get_domain(sys), get_ivs(sys), get_dvs(sys), Any[ps; extra]; name = nameof(sys),
         initial_conditions = ic)
 end

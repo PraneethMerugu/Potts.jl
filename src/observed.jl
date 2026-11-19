@@ -417,7 +417,7 @@ _exported(info::PottsModelInfo) = lock(() -> get!(() -> _exported_inputs(info.cs
 # `Potts.fields(model)`
 function _pde_inputs(info::PottsModelInfo, f::ModelingToolkitBase.PDESystem)
     want = Symbol[]
-    for dv in getfield(f, :dvs)
+    for dv in ModelingToolkitBase.get_dvs(f)
         u = _unwrap(dv)
         (iscall(u) && ModelingToolkitBase.isinput(u)) || continue
         push!(want, Symbol(_input_key(u, operation(u))))
@@ -484,7 +484,7 @@ function _exported_inputs(c::CompiledPottsSystem)
     filled = Dict{Symbol, Any}(e[1] => e for e in _field_inputs(c, Float64))
     # (an input `Potts.fields` names by its binding, `vol`: the generated input it holds)
     back = Dict{Symbol, Symbol}(Symbol(w) => g for (g, w) in _input_names(getfield(c, :sys)))
-    for dv in getfield(F, :dvs)
+    for dv in ModelingToolkitBase.get_dvs(F)
         x = _unwrap(dv)
         ModelingToolkitBase.isinput(x) || continue
         op = Symbol(nameof(operation(x)))

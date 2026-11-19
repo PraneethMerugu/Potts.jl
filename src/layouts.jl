@@ -1959,8 +1959,6 @@ end
 # layout
 # ---------------------------------------------------------------------------------------------
 
-const _LayoutTarget = Union{Tuple{Vararg{Integer}}, Lattice, LatticeSpec, PottsSystem, CompiledPottsSystem}
-
 """
     layout(l, x; report = false) -> [ownership => σ, kind => kinds]
     layout(l, x; report = true) -> ([ownership => σ, kind => kinds], report)
@@ -2003,7 +2001,7 @@ contributes its flattened leaves), with the properties
   remaining sites are disconnected after the whole layout, whatever its `splits` setting;
   for `Splits`, plus its own cells left in pieces by its divisions.
 """
-function layout(l::AbstractLayout, x::_LayoutTarget; report::Bool = false)
+function layout(l::AbstractLayout, x; report::Bool = false)
     lat = _layout_spec(x)
     _check_layout_kinds(x, _layer_kinds(l))                # before painting: `into` is never painted
     op = LayoutState(lat.dims)
@@ -2055,7 +2053,10 @@ end
 # The kind names a layout's built-in layers name (cell kinds and `InsertUntil` hosts).
 _layer_kinds(l::AbstractLayout) = ()
 _layer_kinds(l::Overlay) = Any[k for x in l.layers for k in _layer_kinds(x)]
-_layer_kinds(l::Union{Tiling, Scattered, Voronoi, Eden}) = l.kinds
+_layer_kinds(l::Tiling) = l.kinds
+_layer_kinds(l::Scattered) = l.kinds
+_layer_kinds(l::Voronoi) = l.kinds
+_layer_kinds(l::Eden) = l.kinds
 _layer_kinds(l::Splits) = _layer_kinds(l.layer)
 _layer_kinds(l::Frame) = (l.kind,)
 _layer_kinds(l::Fill) = (l.kind,)
@@ -2087,6 +2088,11 @@ _layout_spec(lat::Lattice) = LatticeSpec(lat.dims, map(p -> p ? Periodic() : Clo
 _layout_spec(lat::LatticeSpec) = lat
 _layout_spec(sys::PottsSystem) = _layout_spec(_p(sys, :lattice))
 _layout_spec(sys::CompiledPottsSystem) = _layout_spec(getfield(sys, :sys))
+_layout_spec(x) = throw(
+    ArgumentError(
+        "layout: the target is a lattice size (a tuple of integers), a `Lattice` or a model; got $(repr(x; context = :limit => true))"
+    )
+)
 
 # Drop cells with no site left and renumber the rest in order.
 function _compact(σ, kinds, counts)
