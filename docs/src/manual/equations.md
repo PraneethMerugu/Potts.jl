@@ -309,12 +309,14 @@ There are two distinct Newton modes:
   After iteration 1, `θ = prev_θ = max(0.3 * prev_θ, ndz / ndzprev)` (carried across steps
   and reset on `reinit!` or parameter, table, or state writes) and `η = θ / (1 - θ)` test
   `η * ndz < κ`. Near the floating-point precision limit (`|θ - 1| ≤ 100 * sqrt(eps(T))`,
-  type-faithful in `T`), `ndz ≤ 1` converges (keeping the already-applied update `δ_k`), while
-  `ndz > 1` aborts when `check_div = true`. When `check_div = true` (default), diverging
-  rates (`θ > 2`) or budget hits end the run with `ReturnCode.ConvergenceFailure` (with more
-  substeps as the route); when `check_div = false`, divergence-growth checks are disabled and
-  a budget hit is accepted as converged (`ReturnCode.Success`, still counted and warned; pass
-  `LatticeNewton(; max_iter = 1, check_div = false)` for a single unchecked sweep).
+  type-faithful in `T`), `ndz ≤ 1` converges (keeping the already-applied update `δ_k`
+  without overwriting `prev_θ`), while `ndz > 1` aborts when `check_div = true`. When
+  `check_div = true` (default), diverging rates (`θ > 2`) or budget hits end the run with
+  `ReturnCode.ConvergenceFailure` (with more substeps as the route); when `check_div = false`,
+  divergence-growth checks are disabled and a budget hit is accepted as converged
+  (`ReturnCode.Success`, counted once per group per substep in `stats.newton_budget` and
+  warned, unlike automatic mode's per-row count; pass `LatticeNewton(; max_iter = 1, check_div = false)`
+  for a single unchecked sweep).
 
 Under both modes, a CPU run stops early once the group converges (or fails); a GPU closes its
 convergence gate once the group converges (or fails). On
