@@ -1,6 +1,11 @@
 # Structural verifier. Run on every program a pass returns, so a pass that leaves a dangling
 # operand, a non-topological order, an ill-typed node or a bad store is caught at that pass.
 
+"""
+    IRError(msg)
+
+Exception thrown when field IR construction or verification fails.
+"""
 struct IRError <: Exception
     msg::String
 end

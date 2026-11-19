@@ -71,7 +71,7 @@ include("sparsity.jl")
 include("precond.jl")
 include("report.jl")
 
-# the parameter object of B's SciML problems (F4-00)
+# the parameter object of standalone SciML problems (F4-00)
 public LatticeParameters, TableSlot, InputSlot, with_values, remake_params, remake_u0, is_input_function, input_functions
 # one problem, many algorithms (F4-01)
 public ClockTick, MaskSync, InputRefresh, refresh_inputs!, mask_sync!, sync_masks!, UpdateLatticeAb, steady_start!, lattice_matrix, LatticeODEProblem, LatticeOperator, LatticeLinearProblem, LatticeTimeFreeProblem
@@ -87,7 +87,7 @@ public FieldSeries, field_series, LatticeStats, LatticeSolution, finish!
 public LARGE_SAVE_BYTES
 # the coupling between field groups and the per-group counts (review of F2-06)
 public compute_type, substep_counts, lagged_coupling, group_loops, steady_loop_rates, steady_start, starts_steady, StartText, StartSubsteps
-# the one substep policy of both front ends and its words (F3-01)
+# the shared substep policy and its words (F3-01)
 public AbstractPolicyTexts, ProblemTexts, GroupSubsteps, check_coupling, bound_report, unbounded_text, uncovered_text,
        refuse_parameters, coupling_unknown_text, coupling_unbounded_text, loop_text, steady_loop_text, steady_gain_text,
        steady_why_text, steady_gain_words, rows0_route, reads_time, bound_window!, bound_window, bound_params!, bound_params

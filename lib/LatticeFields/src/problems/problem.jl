@@ -60,7 +60,7 @@ function FieldProblem(prog::Program, u0, tspan, p; state, kind::Symbol,
     )
     kind in (:rate, :map) ||
         throw(ArgumentError("kind must be :rate or :map; got $(repr(kind))"))
-    # the group's description (F2 design §2.2): B's problem is one group of every state field
+    # the group's description (F2 design §2.2): a `FieldProblem` is one group of every state field
     pv = collect(p)
     spec = GroupSpec(prog; state, kind, init, stability, route, terms, linearity,
         tables = String[first(t) for t in tables],
@@ -143,8 +143,8 @@ end
 # the compile options of value type `V` on `backend`; `C`: the compute type (`compute_type`,
 # FE-17; the state lanes hold `V`); `s`: the program, whose fields with a declared Float64
 # storage (`fixed`) need Float64 on the device too. A declared Float64 on a device whose
-# default float is Float32 registers its kernels (D-157 carve-out, `declared`; a front end that
-# plans on the host for every backend, A, sets `o.declared` itself)
+# default float is Float32 registers its kernels (D-157 carve-out, `declared`; a caller that
+# plans on the host for every backend, such as `PottsProblem`, sets `o.declared` itself)
 function _options(o::CompileOptions, ::Type{V}, backend; clock::Int = o.clock, C::Type = V, s = nothing) where {V}
     f64 = s !== nothing && any(f -> f.fixed && f.storage == F64, s.fields)
     wide = C === Float64 || f64
@@ -491,8 +491,8 @@ program, term and cause in a session ([`unbounded_key`](@ref): never once per va
 terms the bound cannot see. A problem with no state (aux fields `K ~ rhs` only, F3 design
 §3.12) takes 0 substeps: its window evaluates the aux fields once, and a count `substeps = n`
 (a minimum) has nothing to step, so it changes nothing. This is the one policy of
-both front ends, [`substeps`](@ref)`(spec, alg, dt, pp)` of the problem's group, in front end
-B's words ([`ProblemTexts`](@ref)).
+both routes, [`substeps`](@ref)`(spec, alg, dt, pp)` of the problem's group, in standalone
+`FieldProblem` words ([`ProblemTexts`](@ref)).
 """
 substeps(
     ::FieldProblem, ::ExplicitMap, p = nothing; tables = nothing, inputs = nothing, stability = nothing, fields = nothing,
@@ -526,7 +526,7 @@ function substeps(
     dt = _window(alg, dt, _clock(prob))
     isempty(prob.state) && return 0                 # aux fields only: one evaluation per window
     pp = with_tables(map(primal, p), tables; inputs)        # a policy: on the primal values
-    # the one policy of both front ends (F3-01), in front end B's words
+    # the shared substep policy (F3-01), in standalone `FieldProblem` words
     return substeps(prob.group.spec, alg, dt, pp; fields, stability, key = why -> _warn_key(prob, why),
         texts = ProblemTexts(prob.group.spec.texts.route), (alg isa ExplicitEuler ? (; span = prob.tspan) : (;))...)
 end
@@ -922,7 +922,7 @@ end
 """
     steady_start(alg) -> QuasiSteady
 
-The steady solve of `alg`'s `init = :steady` (both front ends): `QuasiSteady` with
+The steady solve of `alg`'s `init = :steady` (both routes): `QuasiSteady` with
 `alg`'s `linsolve` and `solver_type` (and `nlsolve` for a `QuasiSteady` group);
 `linsolve = :auto` takes `LatticePCG` to `reltol = 1e-6` within 64 iterations (`STEADY_INNER`), the
 host-checked steady solve of a system with no time.
@@ -935,7 +935,7 @@ steady_start(a) = QuasiSteady(;
 """
     StartSubsteps(rule, keys)
 
-The substep rule of a steady start in front end A (`init = :steady`, F3-12c): `rule(pp)` (the
+The substep rule of a steady start in a coupled `PottsProblem` (`init = :steady`, F3-12c): `rule(pp)` (the
 `QuasiSteady` policy: its steady refusals), whose refusal names `init` and its route.
 """
 struct StartSubsteps{R}
@@ -1378,7 +1378,7 @@ function _finish!(integ::FieldIntegrator)
     _running(integ.retcode) && _check_declared!(integ)
     _running(integ.retcode) && (isempty(integ.ts) ||
      integ.ts[end] != _time(integ)) && (u = _current(integ); !all(isfinite, u)) && Base.inferencebarrier(_unstable!)(integ, u)
-    # a failure stops the run: the state it stopped at is saved (as front end A does)
+    # a failure stops the run: the state it stopped at is saved (as `PottsProblem` does)
     !_running(integ.retcode) && (isempty(integ.ts) || integ.ts[end] != _time(integ)) && _save!(integ)
     integ.retcode == SciMLBase.ReturnCode.Default && (integ.retcode = SciMLBase.ReturnCode.Success)
     return integ
@@ -2066,7 +2066,7 @@ end
 
 function _check_coupling_loops(prob::FieldProblem, groups, p, tables, inputs, dt::Real)
     pp = with_tables(map(primal, p), tables; inputs)
-    # the one coupling rule of both front ends (F3-01), in front end B's words
+    # the shared coupling rule (F3-01), in standalone `FieldProblem` words
     return check_coupling(prob.stability, [collect(String, ks) for (_, ks) in groups], [_explicit_count(a) for (a, _) in groups],
         pp, dt; key = why -> _warn_key(prob, why), texts = ProblemTexts(prob.group.spec.texts.route),
         span = prob.tspan[2] - prob.tspan[1], steady = [a isa QuasiSteady for (a, _) in groups],
@@ -2075,6 +2075,7 @@ end
 
 function SII.finalize_parameters_hook!(integ::FieldIntegrator, _)
     installed = false
+    ok = false
     try
         derive!(integ.p, integ.tables, integ.prob.index)   # the computed slots follow (F2-15)
         check_faces(integ.prob.faces, integ.p)
@@ -2092,12 +2093,14 @@ function SII.finalize_parameters_hook!(integ::FieldIntegrator, _)
         # (the bound parameters first: a new count sets an implicit group's step from them)
         copyto!(integ.pgood, integ.p)
         _set_counts!(integ, ms)
-    catch
-        copyto!(integ.p, integ.pgood)
-        _rerun_init!(integ, integ.pgood)
-        # (a check after the new launches were installed: the old values' launches again)
-        installed && foreach(install_launches!, integ.runtimes, map(rt -> rebind_launches(rt, integ.p), integ.runtimes))
-        rethrow()
+        ok = true
+    finally
+        if !ok
+            copyto!(integ.p, integ.pgood)
+            _rerun_init!(integ, integ.pgood)
+            # (a check after the new launches were installed: the old values' launches again)
+            installed && foreach(install_launches!, integ.runtimes, map(rt -> rebind_launches(rt, integ.p), integ.runtimes))
+        end
     end
     return nothing
 end

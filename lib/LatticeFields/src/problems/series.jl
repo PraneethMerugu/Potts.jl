@@ -1,7 +1,7 @@
 # Solutions of lattice problems (F4-04; F4 design §3.5): an owned solve returns SciML's
 # `ODESolution` (linear interpolation: `sol(t)`, `Array(sol)`, `sol.ps`, `sol.alg`, `sol.stats`).
 # A field read on any solution of a lattice problem (owned, OrdinaryDiffEq, or a FieldProblem
-# solved directly) follows SciML and front end A (ruling Q18): `sol[c]` is one grid per save;
+# solved directly) follows SciML and `PottsProblem` (ruling Q18): `sol[c]` is one grid per save;
 # `field_series(sol, c)` is the time-first lazy view of the saves (MethodOfLines' shape).
 
 """
@@ -65,7 +65,7 @@ The time-first values of the field, aux field or input `c` of a solution (F4-04;
 §3.5, ruling Q4): `size = (length(sol.t), dims...)`, a lazy view of the saves. In both front
 ends `sol[c]` is one grid per save (as SciML reads a variable, ruling Q18), so
 `field_series(sol, c)[i, :, :] == sol[c][i] == sol[c, i]`; this accessor is the time-first
-view, in front end B (an owned, OrdinaryDiffEq or FieldProblem solution) and in front end A
+view, for a standalone `FieldProblem`/ODE solution and for a coupled `PottsProblem`
 (`PottsSolution`, per-MCS states).
 """
 function field_series(sol, sym)
@@ -74,7 +74,7 @@ function field_series(sol, sym)
     ix = _lindex(sol)
     ix isa LatticeIndex && throw(ArgumentError(string("field_series: `", _symtext(sym), "` is not a field of the ",
         "solution's problem; its fields: ", join(("`$(_symtext(v))`" for v in ix.varsyms), ", "))))
-    # another solution (front end A's per-MCS states): the grid of each save through SII's getter
+    # another solution (Potts per-MCS states): the grid of each save through SII's getter
     g = SII.getsym(sol, sym)
     nt = length(sol.t)
     nt == 0 && throw(ArgumentError("field_series: the solution has no saves"))
@@ -254,7 +254,7 @@ function _final_problem(integ::FieldIntegrator, sp)
 end
 
 # Field reads on every solution of a lattice problem (ruling Q18): `sol[c]` of a state or aux
-# field is one grid per save (as SciML and front end A read a variable); `sol[x]` the
+# field is one grid per save (as SciML and `PottsProblem` read a variable); `sol[x]` the
 # coordinates of the site centers; anything else as SciML reads it. (The methods for integer,
 # colon and index-array arguments keep SciML's reads, unambiguously.)
 function Base.getindex(sol::LatticeSolution, sym)

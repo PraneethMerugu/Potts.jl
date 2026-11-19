@@ -1,5 +1,5 @@
 # The computed parameters of a problem (F2 design §2.7, D-F2-1): one compiled function from the
-# base values to the computed values, shared by both front ends.
+# base values to the computed values, shared by both coupled and standalone routes.
 
 """
     Derivation

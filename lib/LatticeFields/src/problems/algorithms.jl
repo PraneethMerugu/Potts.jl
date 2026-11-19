@@ -14,7 +14,7 @@ abstract type AbstractFieldAlgorithm <: SciMLBase.AbstractODEAlgorithm end
 """
     ExplicitEuler(; substeps = nothing, lower_bound = nothing, init = nothing, compute_type = :auto)
 
-Forward Euler: each window `dt` (the `dt` keyword of `solve`) runs `n` substeps of `dt / n`. One type for both front ends
+Forward Euler: each window `dt` (the `dt` keyword of `solve`) runs `n` substeps of `dt / n`. One type for both coupled and standalone routes
 (`Potts` and `LatticePDE` export this binding). `substeps = nothing` takes the automatic
 count `n = ⌈dt ρ(p) / 1.8⌉` from the problem's stability bound `ρ` at the current parameters
 (§6.2); an unknown bound (a rate term it cannot see, a parameter without a value, or rows
@@ -215,7 +215,7 @@ are read there) by Newton iterations on the form `(I/h − J̃) δ = G(u_k)`, `G
 r(u_k)`, `J̃` the group's operator (diffusion faces, linear local terms, face and mask
 conditions; a front end extracts it: `OperatorSpec`), each a linear solve with `linsolve`, and
 `u_{k+1} = u_k + δ`. An operator that reads the time is built at each substep's end time. One
-type for both front ends (Potts and LatticePDE export this binding). On a hexagonal lattice
+type for both coupled and standalone routes (Potts and LatticePDE export this binding). On a hexagonal lattice
 the operator has the lattice's six faces.
 
 - The window `dt` is the `dt` keyword of `solve`, as for [`ExplicitEuler`](@ref) (required on
@@ -248,7 +248,7 @@ the operator has the lattice's six faces.
   storage (`Float64` on a Float32 problem) loads each field value into it and rounds once at
   each store; on a device with Float64 (ROCm, CUDA) its kernels are registered as declared
   Float64 (D-157), and a device without Float64 (Metal) refuses it when the group is bound
-  (`init`, in both front ends; so do `solver_type = Float64` and a field declared
+  (`init`, in both routes; so do `solver_type = Float64` and a field declared
   `lattice_storage = Float64`), naming the field and the routes.
 - `init = :steady`: before the first window (at `init`, and again at `reinit!`), solve the
   group's steady state `0 = r(u)` once with [`QuasiSteady`](@ref), from the initial state at the
@@ -367,7 +367,7 @@ in two halves (first order, at twice Backward Euler's cost). Crank–Nicolson do
 nonnegative (a stiff decay overshoots below 0): `lower_bound` clips each substep (for a consumption
 field, [`BackwardEuler`](@ref) needs no clip). The keywords are those of
 [`BackwardEuler`](@ref), with the same meanings and checks; the automatic counts use the shift
-`2/h`. One type for both front ends.
+`2/h`. One type for both routes.
 """
 struct CrankNicolson <: AbstractImplicitFieldAlgorithm
     substeps::Union{Nothing, Int}
@@ -410,7 +410,7 @@ nonnegative (its right side `(4uⁿ − uⁿ⁻¹)/3` is negative where `uⁿ⁻
 each substep; for a consumption field, [`BackwardEuler`](@ref) needs no clip. The keywords are
 those of [`BackwardEuler`](@ref), with the same meanings and checks; the automatic counts are
 those of the Backward Euler start (shift `1/h`), so they hold for every substep. One type for
-both front ends.
+both routes.
 """
 struct BDF2 <: AbstractImplicitFieldAlgorithm
     substeps::Union{Nothing, Int}
@@ -485,7 +485,7 @@ Robin face, no mask: `0 = rhs` then has no solution or many). A region that the 
 or a mask cut off with neither (an island) is found on the device: its solve cannot reduce the
 residual there, and a budget hit with no real reduction ends the run with
 `ReturnCode.ConvergenceFailure`, naming the field, the window and the route (a decay or a fixed
-value in that region). One type for both front ends.
+value in that region). One type for both routes.
 """
 struct QuasiSteady <: AbstractImplicitFieldAlgorithm
     substeps::Nothing                   # (none: one solve per window)
@@ -660,7 +660,7 @@ const LinearSolver = Union{Solvers.LatticePCG, Solvers.LatticeMultigrid, Solvers
     linear_solver_refusal(what, s, route) -> ArgumentError
 
 The refusal of a linear solver `s` given where a field algorithm goes (`what` names the
-place), with `route` the working spelling. Both front ends and `init` use it.
+place), with `route` the working spelling. Both coupled and standalone routes and `init` use it.
 """
 linear_solver_refusal(what, s, route; implicit = "`BackwardEuler(; linsolve = $(repr(s)))`") = ArgumentError(
     string(
@@ -675,7 +675,7 @@ An algorithm that steps the fields of a problem in groups (F2 design §2.6): eac
 the algorithm of its pair (a field symbol, or a state key), the others `default`. Fields with
 `isequal` algorithms form one group (the comparison covers the whole value). Groups run in
 state order (the order of their first field), each window `dt` (the `solve` keyword): a group reads
-the fields of the other groups from their arrays, as they are when it runs (A's field phases
+the fields of the other groups from their arrays, as they are when it runs (coupled `PottsProblem` field phases
 do the same, v3 §6.1), and ends each step in slot 1, so the next group reads the current
 values.
 
@@ -738,13 +738,13 @@ SciMLBase.alg_order(g::FieldGroups) =
     canonical(alg) -> String
 
 The one canonical text of a field algorithm (or of a solver part: `LatticePCG`, `LatticeMultigrid`,
-`VCycle`, `:auto`, a number), the text both front ends' fingerprints hash: what
+`VCycle`, `:auto`, a number), the text both coupled and standalone fingerprints hash: what
 the algorithm is, not the host object, so equal specifications built afresh print alike.
 `ExplicitEuler` prints `ExplicitEuler(substeps=…,lower_bound=…)`; another algorithm prints
 every field, sorted by
 name, each by `canonical`; `:auto` prints as given (`:auto`, unresolved, so a CPU and a
-device problem print alike). `init = nothing` and `compute_type = :auto` (the defaults) are left out, so the texts recorded before them stay. A `FieldGroups` prints its pairs as given (a front end that
-resolves it per field, front end A, prints the per-field map instead).
+device problem print alike). `init = nothing` and `compute_type = :auto` (the defaults) are left out, so the texts recorded before them stay. A `FieldGroups` prints its pairs as given (a caller that
+resolves it per field, such as `PottsProblem`, prints the per-field map instead).
 """
 canonical(s::ExplicitEuler) = string(
     "ExplicitEuler(substeps=", repr(s.substeps), ",lower_bound=", repr(s.lower_bound),

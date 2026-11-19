@@ -384,6 +384,7 @@ function compile_all!(backend, jobs)
         try
             wait(t)
         catch e
+            e isa TaskFailedException || rethrow()
             err === nothing && (err = e)
         end
     end

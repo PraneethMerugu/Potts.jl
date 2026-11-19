@@ -162,7 +162,8 @@ function _route_line(io, spec, alg, dt::Float64, pp, fields, n)
     be = BackwardEuler()
     k = try
         _implicit_cause(spec, be, dt, pp, fields).n
-    catch
+    catch e
+        e isa Union{ArgumentError, InexactError} || rethrow()
         return nothing
     end
     k < n && _line(io, "route", string(_algtext(be), " steps this group in ", _plural(k, "substep")))

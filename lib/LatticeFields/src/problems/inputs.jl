@@ -383,7 +383,7 @@ unbounded_key(stability, p) = unbounded_reason(stability, p)
 
 The declared `bounds = (lo, hi)` of each parameter of `index` hold for the values `p` (F2-14,
 FE-18): an `ArgumentError` names the first parameter outside them, in slot order, with its
-bounds as front end A prints them (`(0, 2)`). Every write checks it before anything changes.
+bounds as `PottsProblem` prints them (`(0, 2)`). Every write checks it before anything changes.
 """
 function check_bounds(p, index)
     index isa LatticeIndex || return nothing

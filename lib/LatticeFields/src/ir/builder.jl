@@ -151,7 +151,7 @@ function table!(b::KernelBuilder, table::Integer, storage::Scalar, index::Intege
         b, TABLE, loadtype(storage), Int32[cast!(b, index, I32)], table)
 end
 function call!(b::KernelBuilder, f::Symbol, x::Integer)
-    f in CALLS || error("CALL: `$f` is not in the whitelist $(CALLS)")
+    f in CALLS || irerror("CALL: `$f` is not in the whitelist $(CALLS)")
     k = findfirst(==(f), b.calls)
     k === nothing && (push!(b.calls, f); k = length(b.calls))
     return node!(b, CALL, REAL, Int32[cast!(b, x, REAL)], k)
@@ -197,7 +197,7 @@ Lazy conditional (user `ifelse`, D-014): emitted as a branch.
 cond!(b::KernelBuilder, c, x, y) = select!(b, c, x, y; op = COND)
 function bittest!(b::KernelBuilder, x::Integer, bit::Integer)
     (isunsigned_lane(b.nodes[x].type) ||
-            error("BITTEST needs an unsigned operand");
+            irerror("BITTEST needs an unsigned operand");
         node!(b, BITTEST, BOOL, Int32[x], bit))
 end
 
@@ -238,7 +238,7 @@ Base.:-(x::Ex, y::Real) = x + Ex(x.b, constant!(x.b, -y))
 Base.:-(x::Real, y::Ex) = Ex(y.b, constant!(y.b, x)) + (-y)
 function Base.:^(x::Ex, n::Integer)
     t = x.b.nodes[x.id].type
-    n < 0 && !isfloat(t) && error("POWI: negative exponent on an integer ($t) operand")
+    n < 0 && !isfloat(t) && irerror("POWI: negative exponent on an integer ($t) operand")
     return Ex(x.b, node!(x.b, POWI, t, Int32[x.id], n))
 end
 Base.:<(x::Ex, y::Union{Ex, Real}) = Ex(x.b, compare!(x.b, LT, x.id, _id(x.b, y)))
@@ -256,7 +256,7 @@ frequent value of an integer `x` (ties: the smallest nonzero value; 0 only when 
 ties).
 """
 function restrict(x::Ex; op::Symbol = :sum)
-    op in (:sum, :max, :plurality) || error("RESTRICT: op `$op` is not :sum, :max or :plurality")
+    op in (:sum, :max, :plurality) || irerror("RESTRICT: op `$op` is not :sum, :max or :plurality")
     t = x.b.nodes[x.id].type
     return Ex(x.b, node!(x.b, RESTRICT, t, Int32[x.id], op == :sum ? 0 : op == :max ? 1 : 2))
 end
@@ -264,7 +264,7 @@ end
 Reduce `x` over the kernel's sites into the partials table `target` (`op ∈ (:sum, :max)`).
 """
 function reduce!(kb::KernelBuilder, op::Symbol, x::Ex, target::Integer)
-    op in (:sum, :max) || error("reduction op `$op` is not :sum or :max")
+    op in (:sum, :max) || irerror("reduction op `$op` is not :sum or :max")
     push!(kb.reductions, Reduction(op, cast!(kb, x.id, REAL), Int32(target)))
     return nothing
 end

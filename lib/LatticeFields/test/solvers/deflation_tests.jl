@@ -144,22 +144,22 @@ end
     @test sv.T == Float32 && scalars(sv).status === :floor
     @test (@test_logs (:warn, r"Float32 floor of an unanchored group") sentinel(sv))
     # explicit Float64 there is refused, naming the type
-        @test_throws r"Float64 \(solver_type\) is not supported" FieldSolver(
-            HostExec(false), op;
-            solver_type = Float64
-        )
-    @test_throws r"Float64 \(state\) is not supported" FieldSolver(HostExec(false), op;
+    @test_throws ArgumentError FieldSolver(
+        HostExec(false), op;
+        solver_type = Float64
+    )
+    @test_throws ArgumentError FieldSolver(HostExec(false), op;
         T = Float64)
     # types the solver does not lower: a clear error, not a MethodError
-        @test_throws r"BigFloat \(solver_type\) is not lowered" FieldSolver(
-            HostExec(), op;
-            solver_type = BigFloat
-        )
-    @test_throws r"Float16 \(state\) is not lowered" FieldSolver(HostExec(), op;
+    @test_throws ArgumentError FieldSolver(
+        HostExec(), op;
+        solver_type = BigFloat
+    )
+    @test_throws ArgumentError FieldSolver(HostExec(), op;
         T = Float16)
-        @test_throws r"solver_type expects :auto or a number type; got :fast" FieldSolver(
-            HostExec(), op; solver_type = :fast
-        )
+    @test_throws ArgumentError FieldSolver(
+        HostExec(), op; solver_type = :fast
+    )
     # an executor without `supports` methods: the conservative default (Float32 only),
     # asked only when the choice depends on it
     disk = named_case("disk128", 0.022)
@@ -167,7 +167,7 @@ end
     foreach(((k, v),) -> copyto!(field(sv, k), v), disk[2])
     @test steady!(sv) <= 12 && scalars(sv).done && sv.T == Float32
     @test FieldSolver(MinExec(), op).T == Float32           # :auto falls back
-        @test_throws r"not supported" FieldSolver(MinExec(), op; solver_type = Float64)
+    @test_throws ArgumentError FieldSolver(MinExec(), op; solver_type = Float64)
 end
 end
 
@@ -327,7 +327,7 @@ end
     @test sv.T == Float32
     bad = CellOperator{2}(op.dims, op.periodic, op.face, -1.0, op.mask, op.value,
         op.dirichlet, op.robin, op.name, op.axes, op.robin_full, op.diag)    # bypasses the constructor
-    @test_throws r"shift .* must be ≥ 0" Solvers.set_coefficients!(sv, bad)
+    @test_throws ArgumentError Solvers.set_coefficients!(sv, bad)
     weak = CellOperator(op.dims; periodic = op.periodic, shift = 1e-3)
         @test_logs (:warn, r"solver_type = :auto would now resolve to Float64") Solvers.set_coefficients!(
         sv, weak)

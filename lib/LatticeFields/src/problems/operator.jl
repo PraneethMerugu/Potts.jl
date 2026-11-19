@@ -1,6 +1,6 @@
 # The operator of an implicit group (F3 design §3.4): the symmetric Helmholtz part `J̃` of the
 # rate Jacobian that a front end extracts from its linearity table, as plain data (no Symbolics:
-# LatticePDE builds it in `lower_group`'s deferred `operator`, for both front ends). The
+# LatticePDE builds it in `lower_group`'s deferred `operator`, for both coupled and standalone routes). The
 # implicit runtime (`implicit.jl`) turns it into one `Solvers.CellOperator` per row.
 
 """

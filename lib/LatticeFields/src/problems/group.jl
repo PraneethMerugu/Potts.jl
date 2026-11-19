@@ -2,7 +2,7 @@
 # `GroupSpec` (the IR boundary: plain data and compiled functions, no Symbolics), made
 # numerical by a `FieldGroup` (its semantic program and its plans, by update and value type),
 # and stepped by a `GroupRuntime` bound to a store's arrays (`bind_group`, `advance!`).
-# Both front ends step through it: B's `FieldProblem` and A's `CorePotts.FieldPhase`.
+# Coupled `PottsProblem`s and standalone `FieldProblem`s both step through it (`CorePotts.FieldPhase` and `FieldProblem`).
 
 """
     ParamSlot(name; text = name, default = nothing, role = :base, derivation = nothing)
@@ -52,7 +52,7 @@ Base.show(io::IO, t::TableSpec) = print(io, t.key)
 
 An input field of a group (F2 design §2.2): its `key`, its user `name`, its element type
 (`Bool`, `Int32` or a real type), its declared `bounds`, its `default` (or `nothing`) and
-whether it is `filled`: a front end writes it on the device at every step (front end A's CPM
+whether it is `filled`: a caller writes it on the device at every step (coupled `PottsProblem`'s CPM
 reads), so no host check of its values runs between steps and an implicit algorithm treats it
 as moving data (F3). The fields of other groups (`spec.external`) are inputs too, not filled.
 `string(i)` is its key.
@@ -76,7 +76,7 @@ Base.show(io::IO, i::InputSpec) = print(io, i.key)
 """
     GroupSpec
 
-The description of one field group, the same for both front ends (F2 design §2.2):
+The description of one field group, shared by coupled and standalone routes (F2 design §2.2):
 
 - `rate`: the group's rate program before the semantic passes (`rate:c` kernels store the
   rate in a scratch field `∂c`; `map:`, `aux:` and `mask:` kernels as written): a
@@ -158,8 +158,8 @@ end
     CLOCK_KEY
 
 The name of the clock's parameter slot, `"clock__tick"` (F2 design §2.6): a group whose
-kernels read the clock's step index (`mcs` in front end A, `LatticePDE.step_index(t)` in
-front end B) has this slot among its parameters, and its launches write the step index into
+kernels read the clock's step index (`mcs` in a coupled `PottsProblem`, `LatticePDE.step_index(t)` in
+a standalone `FieldProblem`) has this slot among its parameters, and its launches write the step index into
 it at every launch. The `__tick` suffix is reserved, so no user parameter takes the name.
 """
 const CLOCK_KEY = "clock__tick"
@@ -314,9 +314,9 @@ end
 """
     AbstractPolicyTexts
 
-The words of a front end's substep and coupling messages (F3 design §3.7). The policy
-([`substeps`](@ref), [`check_coupling`](@ref)) decides; a front end's texts word the decision
-in the user's terms: front end B's are [`ProblemTexts`](@ref), front end A (Potts) gives its
+The words of a route's substep and coupling messages (F3 design §3.7). The policy
+([`substeps`](@ref), [`check_coupling`](@ref)) decides; the texts word the decision
+in the user's terms: standalone `FieldProblem`s use [`ProblemTexts`](@ref), coupled `PottsProblem`s give their
 own. A subtype defines `unbounded_text`, `uncovered_text`, `refuse_parameters`,
 `coupling_unknown_text`, `coupling_unbounded_text`, `loop_text` and `steady_loop_text`, each of a context
 `NamedTuple` of the decision's facts.
@@ -326,7 +326,7 @@ abstract type AbstractPolicyTexts end
 """
     ProblemTexts(route = "ExplicitEuler(; substeps = n)")
 
-Front end B's words (a `FieldProblem`): `route` is how a count is given.
+Standalone `FieldProblem` words: `route` is how a count is given.
 """
 struct ProblemTexts <: AbstractPolicyTexts
     route::String
@@ -334,7 +334,7 @@ end
 ProblemTexts() = ProblemTexts("ExplicitEuler(; substeps = n)")
 
 # the warnings of the policy, once per key in a session (the key holds no value: a sweep warns
-# once), for both front ends
+# once), for both coupled and standalone routes
 const _SEEN_WARNED = Set{String}()
 const _SEEN_WARNED_LOCK = ReentrantLock()
 _warn_once(key) = Exec.VERBOSE[] && ccall(:jl_generating_output, Cint, ()) == 0 &&
@@ -346,7 +346,7 @@ _warn_once(key) = Exec.VERBOSE[] && ccall(:jl_generating_output, Cint, ()) == 0 
 
 The substep count of the group `spec` (its fields `fields`, whose rows' bound is `stability`)
 stepped by `alg` over a window `dt` at the raw parameters `pp` (with the tables and the bound's
-inputs: [`with_tables`](@ref), primal values). The one policy of both front ends:
+inputs: [`with_tables`](@ref), primal values). The shared substep policy:
 
 - a diffusion coefficient below zero, or a coefficient that is not finite at an entry the
   inputs reach, is refused at any count (`refuse_parameters`);
@@ -359,8 +359,8 @@ inputs: [`with_tables`](@ref), primal values). The one policy of both front ends
   [`unbounded_key`](@ref), no value);
 - a group with no field (aux fields only, F3 design §3.12) takes 0.
 
-`key` makes the warning's once-key from the value-free reason (front end B: the program's
-text, hashed; front end A: the group's fingerprint text); `texts` words the messages.
+`key` makes the warning's once-key from the value-free reason (standalone `FieldProblem`: the program's
+text, hashed; coupled `PottsProblem`: the group's fingerprint text); `texts` words the messages.
 """
 function substeps(spec::GroupSpec, alg::ExplicitEuler, dt::Real, pp; fields = spec.state, stability = spec.stability,
         key = identity, texts::AbstractPolicyTexts = ProblemTexts(spec.texts.route), span = nothing
@@ -406,14 +406,14 @@ _explicit_count(a) = hasproperty(a, :substeps) && getproperty(a, :substeps) !== 
                    texts = ProblemTexts(), span = nothing)
 
 The coupling between field groups (review of F2-06, ruling K-unsafe; round 2: loops only),
-one rule for both front ends. `groups` are the groups' state keys in stepping order,
+one rule for both coupled and standalone routes. `groups` are the groups' state keys in stepping order,
 `explicit[g]` whether group `g` has an explicit count, `stability` the bound of the whole
 field system at the raw parameters `pp`, `dt` the window. Each group in `check` that is in a
 loop of the group read graph ([`group_loops`](@ref)) needs `κ = dt · rate ≤ 1` over the reads
 of groups in its loop ([`lagged_coupling`](@ref)); past it the problem is refused with the
 routes (`loop_text`). A cross coefficient in a loop with no finite bound is refused with an
 automatic count and warns once (`key(why)`) with an explicit one; a bound that does not know
-the cross terms is the same for every group. `span` is the time span (front end B's route).
+the cross terms is the same for every group. `span` is the time span (standalone `FieldProblem` route).
 `steady[g]`: group `g` is solved by `QuasiSteady`. A loop with such a group takes its gain
 ([`steady_loop_rates`](@ref), F3-12c): each group of the loop that is not steady needs
 `κ = dt · rate ≤ 1` with the steady reads through the gain (`steady_gain_text` past it), and a
@@ -468,7 +468,7 @@ function check_coupling(stability, groups, explicit, pp, dt::Real; check = eachi
         end
         # a loop coupled through terms the bound cannot see (F4-13c, user ruling 2026-11-10 (a)):
         # κ covers the seen cross terms only, so the lag through the unseen ones is not checked;
-        # warned once per loop (its fields; by its first group, as front end A checks each group
+        # warned once per loop (its fields; by its first group, as `PottsProblem` checks each group
         # on its own, with its own once-key), never refused. Only the warning reads the unseen
         # terms' own reads: the loops stay the conservative rule's (`group_loops`)
         if g == minimum(loops[g]) && any(h -> parts[h].unseen, loops[g])
@@ -540,7 +540,7 @@ The warning of a loop of groups that meets terms the stability bound cannot see 
 loop is checked as one only because an unseen term counts as reading every group. It names the
 loop's fields, the unseen terms (`c.terms`), what κ covers, and the routes (the loop's fields in
 one group; declared intervals for the state fields the terms read, `c.fields`). One text for
-both front ends (a `AbstractPolicyTexts` may define its own).
+both routes (an `AbstractPolicyTexts` may define its own).
 """
 function coupling_unseen_text(::AbstractPolicyTexts, c)
     head = c.kind === :conservative ?
@@ -561,7 +561,7 @@ The substep rule of one group, a callable of the raw parameters (with the tables
 [`with_tables`](@ref) gives them): `rule(pp)` is [`substeps`](@ref)`(spec, alg, dt, pp; key,
 texts)`, then, with `coupling = (; stability, groups, explicit, index, whole, steady)`, the coupling
 check of group `index` ([`check_coupling`](@ref)) at `whole(pp)`, the parameters of the whole
-field system. Front end A's field phases hold one (a host function, evaluated at build and
+field system. Coupled `PottsProblem` field phases hold one (a host function, evaluated at build and
 when the parameters change, never per MCS). `key` is the group's once-key text.
 """
 struct GroupSubsteps{S, A <: AbstractFieldAlgorithm, T, C}
@@ -589,7 +589,7 @@ function (s::GroupSubsteps)(pp; span = nothing)
     return n
 end
 
-# --- front end B's words (`ProblemTexts`) ---
+# --- standalone `FieldProblem` words (`ProblemTexts`) ---
 _fieldlist(ks) = join(("`$k`" for k in ks), ", ")
 _num(x) = round(x; sigdigits = 6)                  # a value in a message (`dt = 0.003334`)
 function unbounded_text(t::ProblemTexts, c)
@@ -631,7 +631,7 @@ function coupling_unbounded_text(t::ProblemTexts, c; refuse::Bool)
         "`): the count is the user's")
 end
 # why the coupling rule has no bound for a loop with a QuasiSteady group (`steady_loop_rates`'s
-# `why`), in words both front ends share
+# `why`), in words both routes share
 function steady_why_text(why)
     w, k, o = why
     w === :island && return string("`", k, "` has no decay and no Dirichlet or Robin face, so its steady solve has no ",
@@ -667,7 +667,7 @@ function steady_loop_text(t::ProblemTexts, c)
         "steady state within a few windows)", rows0_route(c))
 end
 # the `BackwardEuler` routes' condition when steady fields of the loop have steady rows `0 ~ rhs`
-# (which take only `QuasiSteady`): written as rates first (both front ends)
+# (which take only `QuasiSteady`): written as rates first (both routes)
 function rows0_route(c)
     z = [k for k in c.qs if k in (hasproperty(c, :rows0) ? c.rows0 : String[])]
     isempty(z) && return ""
@@ -881,8 +881,8 @@ the algorithm's cache (`alg_cache`) and the status of its last step. Made by
 [`bind_group`](@ref), stepped by [`advance!`](@ref).
 
 `pending` is the host task that compiles the launches on a device (`nothing` when there is
-none): a front end awaits it before the first step. `host` is the front end's own record of
-the binding (front end A: the parameter object and the state arrays it was bound from).
+none): a caller awaits it before the first step. `host` is the caller's own record of
+the binding (`PottsProblem`: the parameter object and the state arrays it was bound from).
 """
 mutable struct GroupRuntime{ST <: FieldStore, A, B, M, CL, SC, CP, PV, S, H, DC}
     store::ST
@@ -942,7 +942,7 @@ at parameters `p` (the vector is shared: the driver updates it in place before `
 step with algorithm `alg` in `n` substeps per window `dt`. `ends_in = :parity` leaves the
 fields in the slot their last substep wrote (one group: the slots alternate); `:slot1` copies
 them back to slot 1 after an odd count, so a group that runs after it reads current values.
-`kernels = (initids, stepids)` binds those kernels of the group's program alone (front end A's
+`kernels = (initids, stepids)` binds those kernels of the group's program alone (coupled `PottsProblem`'s
 at-init evaluation of the `aux:` kernels, `n = 0`); by default the fields' own kernels.
 """
 function bind_group(g::FieldGroup, alg, st::FieldStore, p; fields = g.spec.state, n::Integer, dt::Real,
@@ -980,7 +980,7 @@ A group that declares Float64 on a backend without it (`Exec.supports(backend, F
 Metal) is refused at the bind, in the user's words (batch 5 review S3): a `compute_type` or
 `solver_type` of Float64, or a field of its program declared `lattice_storage = Float64` (the
 group's own, or one it reads). Without the check the kernel compiler would refuse it in its own
-terms. A Float64 state type `V` is the front ends' own check.
+group's own terms. A Float64 state type `V` is the caller's own check.
 """
 function check_backend_float64(prog, alg, backend, V::Type; fields = String[])
     Exec.supports(backend, Float64) && return nothing
@@ -1033,8 +1033,8 @@ end
 
 Whether the fields of runtime `rt` whose declared `bounds = (lo, hi)` the stability bound used
 are still inside them (batch 5 review M2): the bound, and so the substep count, holds only
-there. Read where a front end reads its status (front end A: after each window on the host,
-at the saves on a device; front end B: at the saves and at the end): one pass over each such
+there. Read where the status is read (coupled `PottsProblem`: after each window on the host,
+at the saves on a device; standalone `FieldProblem`: at the saves and at the end): one pass over each such
 field (no allocation on the host). A value outside warns once, naming the field, the value,
 the site and the routes. An explicit group then makes `rt.status` `ReturnCode.Unstable` (the
 run stops: its count holds only inside the interval). An implicit group goes on (batch 5
@@ -1178,7 +1178,7 @@ One window of the group: with `clock = (t0, k)` (the window's start time and the
 index), the masks and the clamp at the window's start (when the group has masked
 conditions), then `n` substeps of `h = window / n` at `t0 + j h`, alternating the slot
 parity; with `ends_in = :slot1` the fields go back to slot 1 after an odd count. A kernel that
-reads the clock slot (`clock__tick`: `mcs` in front end A, `step_index(t)` in front end B)
+reads the clock slot (`clock__tick`: `mcs` in a coupled `PottsProblem`, `LatticePDE.step_index(t)` in a standalone `FieldProblem`)
 reads `k` at every substep. Returns the algorithm's code for the step (`ReturnCode.Success`
 for the explicit algorithms); `rt.status` keeps the worst code since the bind or the last
 [`clear_status!`](@ref) (a [`reset!`](@ref) keeps it). No allocation on the host executor.
@@ -1561,8 +1561,8 @@ function _mask_fuse(prog::Program, st::FieldStore, p, ids)
 end
 
 # a device: one kernel per field (components: the mask holds for each one), compiled with the
-# group's launches (`compile!` of the runtime: a front end that compiles on a host task, as
-# front end A on a device, compiles it there, not at the first step)
+# group's launches (`compile!` of the runtime: a caller that compiles on a host task, as
+# `PottsProblem` does on a device, compiles it there, not at the first step)
 function _clamp_body!(i, u, m, v, n)
     @inbounds if m[(i - 1) % n + 1] != 0            # i ≤ length(u), and (i - 1) % n + 1 ≤ n = length(m)
         u[i] = v

@@ -892,11 +892,7 @@ LinearAlgebra.ldiv!(y::AbstractVector, n::NegatedPreconditioner, x::AbstractVect
 function _is_cpu_vec(x)
     x isa Array && return true
     hasfield(typeof(x), :backend) && return getfield(x, :backend) isa KA.CPU
-    return try
-        KA.get_backend(x) isa KA.CPU
-    catch
-        false
-    end
+    return applicable(KA.get_backend, x) ? KA.get_backend(x) isa KA.CPU : false
 end
 function _check_precs_device(P, b)
     (P isa LinearAlgebra.Factorization || P isa Array) || return nothing

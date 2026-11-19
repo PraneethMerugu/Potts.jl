@@ -1,5 +1,5 @@
 # The implicit runtime (F3 design §3.3, §3.4): the substep loop of the implicit algorithms
-# (`BackwardEuler`, `CrankNicolson`, `BDF2`) on the group layer, for both front ends. A group's
+# (`BackwardEuler`, `CrankNicolson`, `BDF2`) on the group layer, for both coupled and standalone routes. A group's
 # store holds the arrays of its stepped program (the state's two slots, the inputs, the masks);
 # the runtime's own programs alias them:
 #
@@ -1346,7 +1346,7 @@ end
 # or `γ`), at the window's first stage when it moves, and at every stage's end time when it
 # reads the time.
 function _substeps!(c::ImplicitCache, rt::GroupRuntime, t::Float64, h::Float64, k::Int, n::Integer)
-    # a window of length 0 (front end A's at-init clamp: the masks, and the aux fields of the
+    # a window of length 0 (coupled `PottsProblem`'s at-init clamp: the masks, and the aux fields of the
     # state as it is) and a group with no state step as the explicit program does (`h = 0`
     # leaves the state unchanged)
     (n == 0 || h == 0) && return _substeps!(nothing, rt, t, h, k, n)
@@ -1570,7 +1570,7 @@ function _install_cache!(c::ImplicitCache, rt::GroupRuntime, store::FieldStore, 
             cr.pres = pr
         end
     end
-    # (here, not in `rebind_launches`: front end A writes the tables between the two)
+    # (here, not in `rebind_launches`: `PottsProblem` writes the tables between the two)
     bp = _bound_params(store, rt.program, c.op, c.keys, p)
     b, rb = inexact_bounds(c.op, c.keys, c.cyclic, bp), _robin_bounds(rt.program, c.op, _robin_keys(rt.alg, c.op, c.keys), bp)
     # the classification at the new parameters (a write may turn a Robin face negative), as a
