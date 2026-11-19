@@ -100,7 +100,7 @@ end
 # Hooks for the symbolic layer: translate parameter maps / operating points given to
 # `remake` into the problem's parameter object and state (identity here).
 remake_parameters(sys, prob, p) = p
-remake_state(sys, prob, u0) = u0
+remake_state(sys, prob, u0, kwargs = prob.kwargs) = u0
 # Hook for the symbolic layer: the `tangent` of a problem remade with the parameters `pgiven`
 # (as the user gave them; `pnew` the primal object `remake_parameters` made). Here: none.
 remake_tangent(sys, prob, pgiven, pnew) = nothing
@@ -209,16 +209,22 @@ end
 A new problem with the given parts changed and every other part kept. `p` is a parameter
 object or a map (`[T => 5.0]`, also `[:T => 5.0]` for the fields of a `NamedTuple` parameter
 object). A `solve` keyword (`saveat = 10`) joins the problem's `kwargs`; `kwargs = (; …)`
-replaces them. Other keywords are the symbolic layer's problem keywords (Potts: `field_solver`,
+replaces them, but keeps the problem's `initializealg` unless they set one. `initializealg`
+is kept with the problem: a new `u0` is initialized with the given one, or else with the
+problem's. Other keywords are the symbolic layer's problem keywords (Potts: `field_solver`,
 `solvers`, …).
 """
 function SciMLBase.remake(
         prob::PottsProblem; f = prob.f, u0 = prob.u0, tspan = prob.tspan, p = prob.p, seed = prob.seed,
         replica = prob.replica, repeat = prob.repeat, kwargs = missing, rest...
     )
-    solvekw = NamedTuple(k => v for (k, v) in rest if k in SOLVE_KEYWORDS || k in (:abstol, :reltol))
-    other = NamedTuple(k => v for (k, v) in rest if !(k in SOLVE_KEYWORDS || k in (:abstol, :reltol)))
-    kw = merge(kwargs === missing ? prob.kwargs : NamedTuple(kwargs), solvekw)
+    kept(k) = k in SOLVE_KEYWORDS || k in (:abstol, :reltol, :initializealg)
+    solvekw = NamedTuple(k => v for (k, v) in rest if kept(k))
+    other = NamedTuple(k => v for (k, v) in rest if !kept(k))
+    base = kwargs === missing ? prob.kwargs : NamedTuple(kwargs)
+    (haskey(prob.kwargs, :initializealg) && !haskey(base, :initializealg)) &&
+        (base = merge(base, (; initializealg = prob.kwargs.initializealg)))
+    kw = merge(base, solvekw)
     return _remake(prob, f, u0, tspan, p, seed, replica, repeat, other, kw)
 end
 
@@ -248,7 +254,7 @@ Base.@nospecializeinfer function _remake(
     end
     frozen = prob.frozen
     if u0 !== prob.u0
-        u0 = remake_state(f.sys, prob, u0)
+        u0 = remake_state(f.sys, prob, u0, solvekw)
         frozen = remake_frozen(f.sys, prob, u0)
         tangent = without_initial(tangent)          # (the initial fields' derivative parts were the old state's)
     else
@@ -443,6 +449,24 @@ function _merge_kwargs(pk::NamedTuple, kw::NamedTuple)
     return m
 end
 
+_without_init(kw::NamedTuple) = NamedTuple(k => v for (k, v) in pairs(kw) if k !== :initializealg)
+
+# `initializealg` at `init`/`solve`: the problem's own (no algorithm and `OverrideInit()` are
+# the same default) or `NoInit()`, both no-ops; any other is refused, since the state was
+# initialized when the problem was built
+function _check_initializealg(prob, a)
+    _default_init(x) = x === nothing || x == SciMLBase.OverrideInit()
+    own = get(prob.kwargs, :initializealg, nothing)
+    (a isa SciMLBase.NoInit || isequal(a, own) || (_default_init(a) && _default_init(own))) && return nothing
+    throw(
+        ArgumentError(
+            "`solve`/`init` of a PottsProblem: `initializealg = $a` differs from the problem's " *
+                "($(something(own, "the default"))); the state is initialized when the problem is built: give it to " *
+                "`PottsProblem(sys, op, tspan; initializealg)` or `remake(prob; u0, initializealg)`"
+        )
+    )
+end
+
 function _check_keywords(kw::NamedTuple, prob)
     ln = _uses_lattice_newton(prob.f.phases)
     bad = [k for k in keys(kw) if !(k in SOLVE_KEYWORDS) && !(ln && k in (:abstol, :reltol)) && k !== :_rng_seeds]
@@ -460,12 +484,6 @@ function _check_keywords(kw::NamedTuple, prob)
             )
         )
     end
-    :initializealg in bad && throw(
-        ArgumentError(
-            "`solve`/`init` of a PottsProblem: `initializealg` is a keyword of the problem " *
-                "(`PottsProblem(sys, op, tspan; initializealg)`): its state is initialized when the problem is built"
-        )
-    )
     throw(
         ArgumentError(
             string(
@@ -512,10 +530,15 @@ clock:
 
 Any other keyword is an `ArgumentError` listing these (`SOLVE_KEYWORDS`). The
 problem's `kwargs` are merged in first (except the problem's `initializealg`, which its
-symbolic layer used when it built the state).
+symbolic layer used when it built the state). `initializealg` is accepted when it is the
+problem's own or `NoInit()`, and changes nothing: the state was initialized when the problem
+was built. Any other is an `ArgumentError`: give it to the problem
+(`PottsProblem(sys, op, tspan; initializealg)` or `remake(prob; u0, initializealg)`).
 """
 function CommonSolve.init(prob::PottsProblem, alg::AbstractCPMAlgorithm; kwargs...)
-    kw = _merge_kwargs(Base.structdiff(prob.kwargs, NamedTuple{(:initializealg,)}), NamedTuple(kwargs))
+    call = NamedTuple(kwargs)
+    haskey(call, :initializealg) && _check_initializealg(prob, call.initializealg)
+    kw = _merge_kwargs(_without_init(prob.kwargs), _without_init(call))
     _check_keywords(kw, prob)
     return _init_kw(prob, alg; kw...)
 end
@@ -1498,16 +1521,18 @@ function _lattice_words(l::Lattice)
     return string(join(l.dims, "×"), b, g, " lattice")
 end
 _count_words(n, what) = string(n, " ", what, n == 1 ? "" : "s")
-_live_cells(st::CPMState) = count(>(0), Array(st.cell.volume))
+# The shows print only host-side facts held in the structs (sizes, slot counts, names): a
+# count of live cells would read the volumes, a device-to-host copy on a GPU state
+_slots(st::CPMState) = length(st.cell.kind)
 # up to `n` names, then `…`
 _names_words(ks, n = 8) = length(ks) <= n ? join(ks, ", ") : string(join(ks[1:n], ", "), ", …")
 
 Base.show(io::IO, st::CPMState) =
-    print(io, "CPMState(", join(size(st.ownership), "×"), ", ", _count_words(_live_cells(st), "cell"), ")")
+    print(io, "CPMState(", join(size(st.ownership), "×"), ", ", _count_words(_slots(st), "cell slot"), ")")
 function Base.show(io::IO, ::MIME"text/plain", st::CPMState)
     print(
-        io, "CPMState on a ", join(size(st.ownership), "×"), " lattice: ", _count_words(_live_cells(st), "cell"),
-        " in ", _count_words(length(st.cell.kind), "slot")
+        io, "CPMState on a ", join(size(st.ownership), "×"), " lattice: ", _count_words(_slots(st), "cell slot"),
+        " (", nameof(typeof(st.ownership)), ")"
     )
     for (part, nt) in (("cell", st.cell), ("site", st.site), ("model", st.model))
         isempty(nt) || print(io, "\n  ", part, ": ", _names_words(collect(keys(nt))))
@@ -1516,15 +1541,18 @@ function Base.show(io::IO, ::MIME"text/plain", st::CPMState)
 end
 
 Base.show(io::IO, prob::PottsProblem) =
-    print(io, "PottsProblem(", join(prob.lattice.dims, "×"), ", ", _count_words(_live_cells(prob.u0), "cell"), ", tspan ", prob.tspan, ")")
+    print(io, "PottsProblem(", join(prob.lattice.dims, "×"), ", ", _count_words(_slots(prob.u0), "cell slot"), ", tspan ", prob.tspan, ")")
 function Base.show(io::IO, ::MIME"text/plain", prob::PottsProblem)
     print(
-        io, "PottsProblem on a ", _lattice_words(prob.lattice), ": ", _count_words(_live_cells(prob.u0), "cell"),
-        ", tspan ", prob.tspan, ", seed ", Int(prob.seed)
+        io, "PottsProblem on a ", _lattice_words(prob.lattice), ": ", _count_words(_slots(prob.u0), "cell slot"),
+        ", tspan ", prob.tspan, ", seed ", prob.seed
     )
     print(io, "\n  u0: ")
     show(io, prob.u0)
-    isempty(prob.kwargs) || print(io, "\n  solve keywords: ", join(keys(prob.kwargs), ", "))
+    kw = _without_init(prob.kwargs)
+    isempty(kw) || print(io, "\n  solve keywords: ", join(keys(kw), ", "))
+    haskey(prob.kwargs, :initializealg) &&
+        print(io, "\n  initializealg (used when the problem was built): ", prob.kwargs.initializealg)
     return nothing
 end
 

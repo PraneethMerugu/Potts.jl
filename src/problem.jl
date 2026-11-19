@@ -95,14 +95,16 @@ the same backend to `init`/`solve`). A field declared `@variables c(..) = 0.5 [l
 `compute_type` (default `T`). The generated code is `Potts.generated_code(sys; T)`.
 
 `initializealg` is SciML's initialization algorithm, used here when the problem is built (the
-state is initialized then; `init` and `solve` do not take it). The default solves the
+state is initialized then; `init` and `solve` accept only the problem's own or `NoInit()`,
+which change nothing). The default solves the
 model's initialization equations (`@initialization_equations`, operating-point values of
 algebraic variables) per entity, as `OverrideInit()` does. `OverrideInit(; abstol, reltol,
 nlsolve)` sets the nonlinear solver (`nlsolve`, run once from the guesses) and its
 tolerances: a condition passes when its residual is at most `abstol`, or at most `reltol`
 (default `1e-9`) times the size of its terms. `CheckInit()` checks the values the state is
 built with against the conditions (a `SciMLBase.CheckInitFailureError` when one fails), and
-`NoInit()` keeps them unchecked. `remake(prob; u0)` initializes the new state the same way.
+`NoInit()` keeps them unchecked. `remake(prob; u0)` initializes the new state the same way,
+and `remake(prob; u0, initializealg)` with the given one (which the new problem keeps).
 
 How fields and ODEs are integrated is part of the problem, compiled into its code:
 - `field_solver = ExplicitEuler(; substeps, lower_bound)` integrates the fields, and is an error
@@ -574,7 +576,7 @@ function CorePotts.remake_function(
         ArgumentError(
             "remake: unknown keyword$(length(kwargs) == 1 ? "" : "s") $(join(("`$k`" for k in keys(kwargs)), ", ")); " *
                 "supported keywords are `u0`, `p`, `tspan`, `seed`, `replica`, `repeat`, `field_solver`, `ode_solver`, " *
-                "`solvers`, `track`, `f`"
+                "`solvers`, `track`, `initializealg`, `f`"
         )
     )
     c = mi.csys
@@ -1639,7 +1641,7 @@ CorePotts.frozen_kinds(info::PottsModelInfo) =
 
 # a state given as such (`remake(prob; u0 = st)`, `reinit!(integ, st)`, a saved state of another
 # problem of the model): its values, laid out for this problem's ODE scratch
-CorePotts.remake_state(info::PottsModelInfo, prob, u0::CorePotts.CPMState) =
+CorePotts.remake_state(info::PottsModelInfo, prob, u0::CorePotts.CPMState, kw = prob.kwargs) =
     _track_layout(
     _ode_layout(
         _reduce_layout(_convert_layout(_check_births(u0, info.csys), info.csys), info.csys), info.csys,
@@ -1682,15 +1684,15 @@ function _check_births(st::CorePotts.CPMState, c::CompiledPottsSystem)
 end
 
 # a NamedTuple operating point is the map of its fields (D-115)
-CorePotts.remake_state(info::PottsModelInfo, prob, u0::NamedTuple) =
-    CorePotts.remake_state(info, prob, _field_pairs(u0))
+CorePotts.remake_state(info::PottsModelInfo, prob, u0::NamedTuple, kw = prob.kwargs) =
+    CorePotts.remake_state(info, prob, _field_pairs(u0), kw)
 
 # `u0 = nothing`/`missing` keeps the problem's state (laid out for this model's functions)
-CorePotts.remake_state(info::PottsModelInfo, prob, ::Union{Nothing, Missing}) =
-    CorePotts.remake_state(info, prob, prob.u0)
+CorePotts.remake_state(info::PottsModelInfo, prob, ::Union{Nothing, Missing}, kw = prob.kwargs) =
+    CorePotts.remake_state(info, prob, prob.u0, kw)
 
-function CorePotts.remake_state(info::PottsModelInfo, prob, u0)
-    _is_pairs(u0) && return CorePotts.remake_state(info, prob, Pair[x for x in u0])
+function CorePotts.remake_state(info::PottsModelInfo, prob, u0, kw = prob.kwargs)
+    _is_pairs(u0) && return CorePotts.remake_state(info, prob, Pair[x for x in u0], kw)
     throw(
         ArgumentError(
             "`u0 = $(repr(u0; context = :limit => true))` is not a state or an operating point of $(nameof(info.csys)); " *
@@ -1699,7 +1701,8 @@ function CorePotts.remake_state(info::PottsModelInfo, prob, u0)
     )
 end
 
-function CorePotts.remake_state(info::PottsModelInfo, prob, u0::_SymbolicMap)
+# `kw`: the remade problem's keywords (its `initializealg`)
+function CorePotts.remake_state(info::PottsModelInfo, prob, u0::_SymbolicMap, kw = prob.kwargs)
     any(x -> _has_dual(last(x)), u0) && throw(
         ArgumentError(
             "`remake(prob; u0 = …)` takes plain values: give initial " *
@@ -1712,7 +1715,7 @@ function CorePotts.remake_state(info::PottsModelInfo, prob, u0::_SymbolicMap)
     free = count(iszero, prob.u0.cell.volume)
     ncell = maximum(Int32.(get(opd, ownership, Int32[])); init = Int32(0))
     values = _parameter_dict(info.csys, prob.p)
-    init = _init_options(get(prob.kwargs, :initializealg, nothing))
+    init = _init_options(get(kw, :initializealg, nothing))
     st = _ode_layout(_initial_state(info.csys, opd, info.T, max(old, ncell + free), values, init), info.csys, info.solvers)
     return _host_init!(prob.f, st, prob.p, info.ctx, prob.seed, prob.replica, prob.repeat, prob.kwargs)
 end
