@@ -209,6 +209,7 @@ function _be_kappa_norms_body!(b, part, cnt, off, dst, un, x, smask, v, res, s, 
             if !gated
                 dv = T(res !== nothing ? res[i] / _at(s, i) : (v !== nothing && smask[i] != 0) ? v[i] : x[i])
                 u0 = abs(T(un[i]))
+                # exact pre-update iterate u_k = dst − δ apart from rounding and any final-iteration lower_bound clip
                 uk = abs(T(dst[i]) - dv)
                 um = _nanmax(u0, uk)
                 denom = abstol + um * reltol
@@ -250,13 +251,15 @@ function _be_kappa_newton_body!(
         ndzprev = hist[1]
         fail = UInt32(0)
         conv = false
+        store_θ = true
         θ = prev_θ
         if it > 1
             ratio = (ndz == 0 && ndzprev == 0) ? zero(T) : ndz / ndzprev
-            θ = prev_θ = max(damp * prev_θ, ratio)
+            θ = max(damp * prev_θ, ratio)
             if abs(θ - one(T)) <= eps_one
                 if ndz <= one(T)
                     conv = true
+                    store_θ = false
                 elseif checkdiv
                     fail = UInt32(2)
                 end
@@ -286,7 +289,7 @@ function _be_kappa_newton_body!(
         end
         conv && (w[STATUS_CONVERGED] += conv_inc)
         hist[1] = ndz
-        hist[2] = prev_θ
+        store_θ && (hist[2] = θ)
         hist[3] = η
     end
     return nothing
@@ -1317,39 +1320,23 @@ function _kappa_row_norms!(r::ImplicitRow, backend, dst, un, x, part, cnt, gate,
     end
     return nothing
 end
-function _newton_check!(r::ImplicitRow, backend, word, dst, un, x, it, last, window, steady::Bool, checkdiv::Bool, failbudget::Bool, gate = nothing, auto::Bool = true, κ = 1 // 100, abstol = 1 // 10^6, reltol = 1 // 10^3)
+function _newton_check!(r::ImplicitRow, backend, word, dst, un, x, it, last, window, steady::Bool, checkdiv::Bool, failbudget::Bool, gate = nothing)
     n = length(dst)
     nb = cld(n, NB)
     T = eltype(r.part)
-    if auto
-        if x === nothing
-            Exec.launch!(backend, _be_norms_body!, nb, (r.part, dst, un, nothing, nothing, nothing, r.resarr, r.s, r.mask, n, gate))
-        else
-            Exec.launch!(backend, _be_norms_body!, nb, (r.part, dst, un, x, r.smask, r.v, nothing, nothing, r.mask, n, gate))
-        end
-        # (a field stored in Float16: its rounding at each update is part of the floor, S1)
-        fl = eltype(dst) === Float16 ? T(10 * eps(T) + 2 * eps(Float16)) : T(10 * eps(T))
-        Exec.launch!(
-            backend, _be_newton_body!, 1, (
-                word, r.part, Int32(nb), r.hist, Int32(it), last, T(NEWTON_EPS),
-                fl, window, steady, UInt32(16), checkdiv, failbudget,
-            )
-        )
+    if x === nothing
+        Exec.launch!(backend, _be_norms_body!, nb, (r.part, dst, un, nothing, nothing, nothing, r.resarr, r.s, r.mask, n, gate))
     else
-        atol, rtol = T(abstol), T(reltol)
-        if x === nothing
-            Exec.launch!(backend, _be_kappa_norms_body!, nb, (r.part, r.cnt, 0, dst, un, nothing, nothing, nothing, r.resarr, r.s, r.mask, r.dom, atol, rtol, n, gate))
-        else
-            Exec.launch!(backend, _be_kappa_norms_body!, nb, (r.part, r.cnt, 0, dst, un, x, r.smask, r.v, nothing, nothing, r.mask, r.dom, atol, rtol, n, gate))
-        end
-        Exec.launch!(
-            backend, _be_kappa_newton_body!, 1, (
-                word, r.part, r.cnt, Int32(nb), r.hist, Int32(it), last, T(κ),
-                window, steady, UInt32(16), checkdiv, failbudget, gate, UInt32(1),
-                T(1 // 10^5), T(3) / T(10), T(100) * sqrt(eps(one(T))),
-            )
-        )
+        Exec.launch!(backend, _be_norms_body!, nb, (r.part, dst, un, x, r.smask, r.v, nothing, nothing, r.mask, n, gate))
     end
+    # (a field stored in Float16: its rounding at each update is part of the floor, S1)
+    fl = eltype(dst) === Float16 ? T(10 * eps(T) + 2 * eps(Float16)) : T(10 * eps(T))
+    Exec.launch!(
+        backend, _be_newton_body!, 1, (
+            word, r.part, Int32(nb), r.hist, Int32(it), last, T(NEWTON_EPS),
+            fl, window, steady, UInt32(16), checkdiv, failbudget,
+        )
+    )
     return nothing
 end
 

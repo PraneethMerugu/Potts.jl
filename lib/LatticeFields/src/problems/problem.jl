@@ -730,9 +730,9 @@ end
 """
     resolve_tols(abstol, reltol) -> (atol, rtol)
 
-Validate and resolve `abstol` and `reltol` `solve`/`init` keywords against the SciML
-defaults (`1 // 10^6` and `1 // 10^3`). Throws `ArgumentError` if negative, non-finite,
-non-real, or if both are zero.
+Internal front-end helper: validate and resolve `abstol` and `reltol` `solve`/`init` keywords
+against the SciML defaults (`1 // 10^6` and `1 // 10^3`). Throws `ArgumentError` if
+negative, non-finite, non-real, or if both are zero.
 """
 function resolve_tols(abstol, reltol)
     atol = abstol === nothing ? (1 // 10^6) : _tol_keyword("abstol", abstol)
@@ -1469,7 +1469,6 @@ function _steady_solve(prob::FieldProblem, alg::AbstractFieldAlgorithm; abstol =
             )
         )
     end
-    resolve_tols(abstol, reltol)
     a = QuasiSteady(;
         nlsolve = alg.nlsolve, linsolve = alg.linsolve === :auto ? STEADY_INNER : alg.linsolve,
         solver_type = alg.solver_type

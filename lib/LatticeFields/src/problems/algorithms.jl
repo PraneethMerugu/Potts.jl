@@ -135,7 +135,8 @@ no-wait CPU and device execution:
   contraction rate diverges (`θ > 2`), stalls above the tolerance floor (`θ ≈ 1` with
   `ndz > 1`), or exhausts `max_iter` without converging; when `false`, disable divergence
   growth checks and accept a `max_iter` budget hit as converged (`ReturnCode.Success`, still
-  counted in `stats.newton_budget` and warned; non-finite corrections still stop). Pass
+  counted in `stats.newton_budget` once per group per substep — unlike automatic mode's
+  per-row count — and warned; non-finite corrections still stop). Pass
   `LatticeNewton(; max_iter = 1, check_div = false)` for an unchecked single sweep.
 
 At each iteration `iter`, the scaled update norm `ndz` is the single RMS norm over all active
@@ -150,7 +151,8 @@ for tighter Newton accuracy. On `iter == 1`, convergence requires `ndz < 1e-5`. 
 on `reinit!` or parameter, table, or state writes) and `η = θ / (1 - θ)`; convergence holds
 when `η >= 0 && η * ndz < κ` or at the floating-point precision limit
 `|θ - 1| ≤ 100 * sqrt(eps(T))` when `ndz ≤ 1` (using type-faithful `eps(T)` rather than
-`Float64` promotion, and keeping the already-applied `ndz ≤ 1` update).
+`Float64` promotion, leaving `prev_θ` unchanged, and keeping the already-applied `ndz ≤ 1`
+update).
 
 Unsupported `NLNewton` keywords (`fast_convergence_cutoff`, `new_W_dt_cutoff`,
 `always_new`, `relax`, `predictor`) throw `ArgumentError` explaining why they are not
