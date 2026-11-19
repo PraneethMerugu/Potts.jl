@@ -246,7 +246,8 @@ end
     end
     for (l, v) in P60AV_GOOD
         @testset "md = $l" begin
-            @test isequal(getfield(getfield(P60avODE(; name = :ode, md = v), :part), :sweep).mcs_duration, float(v))
+            md = getfield(getfield(P60avODE(; name = :ode, md = v), :part), :sweep).mcs_duration
+            @test isequal(md, float(v)) && md isa typeof(float(v))
         end
     end
     @test getfield(getfield(P60avExtInherit(; name = :ext, md = 0.5), :part), :sweep).mcs_duration === 0.5

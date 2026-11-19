@@ -356,8 +356,11 @@ function _tcoupled!(c::TangentCache, cs::CoupledKrylov, par, t1, hγ, k)
             end
             b0 = lin.b
             lin.b = bt
-            _solve_cache!(lin)
-            lin.b = b0
+            try
+                _solve_cache!(lin)
+            finally
+                lin.b = b0
+            end
             for (cr, tr) in zip(cs.rows, c.rows)
                 dst = tr.bufs[3 - par]
                 δ = view(ws.x.a, (cr.voff + 1):(cr.voff + cr.n))

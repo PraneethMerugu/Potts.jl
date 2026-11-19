@@ -669,3 +669,25 @@ end
     # control: an integer span is promoted to a float type, as SciML does
     @test LFP.field_problem(discretize(sys64, LatticeDiscretization(Grid((8, 4))); tspan = (0, 1))).tspan === (0.0, 1.0)
 end
+
+@testitem "time types: a Float32 span through sol(t), reinit!, add_tstop! and step!(integ, dt, true)" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
+    sys = nsys()
+    fp = LFP.field_problem(discretize(sys, LatticeDiscretization(Grid((8, 4))); tspan = (0.0f0, 1.0f0)))
+    ref = LFP.field_problem(discretize(sys, LatticeDiscretization(Grid((8, 4))); tspan = (0.0, 1.0)))
+    sol, sol64 = solve(fp, ExplicitEuler(); dt = 0.1f0), solve(ref, ExplicitEuler(); dt = 0.1)
+    # interpolation at a time between saves, in the span's type
+    @test sol(0.35f0) ≈ sol64(0.35) rtol = 1.0e-6     # (the times round to Float32)
+    # a tstop off the window grid is landed on exactly, in Float32
+    integ = init(fp, ExplicitEuler(); dt = 0.1f0)
+    SciMLBase.add_tstop!(integ, 0.25f0)
+    step!(integ); step!(integ); step!(integ)
+    @test integ.t === 0.25f0
+    # step!(integ, dt, true) lands on t + dt
+    step!(integ, 0.13f0, true)
+    @test integ.t === 0.25f0 + 0.13f0
+    # reinit! over a new span keeps the type and runs it
+    SciMLBase.reinit!(integ; t0 = 0.5f0, tf = 0.75f0)
+    @test integ.t === 0.5f0
+    solve!(integ)
+    @test integ.t === 0.75f0 && eltype(integ.sol.t) === Float32
+end

@@ -468,7 +468,7 @@ mutable struct FieldIntegrator{P <: FieldProblem, A, S <: FieldStore, RT <: Tupl
     nsave::Int                          # the next save time's index in `save`
     windows::Int                        # every window stepped (shortened ones too)
     sciml::Any                          # the SciML problem solved (its solution's `prob`), or nothing
-    cbs::Any                            # the callbacks (a `CallbackSet`), or nothing (F4-05)
+    cbs::Any                            # the callbacks (a `CallbackSet`), or nothing
     saveidxs::Any                       # the flat indices saved (`save_idxs`), or nothing
     everystep::Bool                     # save after every window
     maxiters::Int                       # the most windows
@@ -679,9 +679,14 @@ end
 CommonSolve.init(::FieldProblem, alg::LinearSolver; kw...) =
     throw(linear_solver_refusal("`solve`/`init`", alg, "`solve(prob, ExplicitEuler(); dt)`"))
 
-# the save times (F4-05), sorted, one per time within the run's time tolerance (`_ttol`;
+# the save times, sorted, one per time within the run's time tolerance (`_ttol`;
 # concrete arguments: cached by the precompile workload, whatever the problem)
-_floor_count(x) = floor(Int, x + max(oftype(x, 1.0e-9), 4 * eps(x)))
+# (the whole number `x` rounds to when within the tolerance, else its floor: adding the
+# tolerance would overcount once `4 eps(x) ≥ 1`, from 2^21 in Float32)
+function _floor_count(x)
+    n = round(Int, x)
+    return abs(x - n) <= max(oftype(x, 1.0e-9), 4 * eps(x)) ? n : floor(Int, x)
+end
 _saveat_grid(t0::T, tf::T, h::T) where {T} =
     h > 0 ? T[t0 + m * h for m in 1:_floor_count((tf - t0) / h)] : T[]
 function _save_times(t0::T, tf::T, dt::T, save_start::Bool, save_end::Bool, sat::Vector{T}) where {T}
@@ -815,7 +820,7 @@ function _init(
     nsteps = whole ? round(Int, (tf - t0) / w) : floor(Int, (tf - t0) / w)
     TT = typeof(t0)
     dt = whole && nsteps > 0 ? (tf - t0) / nsteps : TT(w)     # (whole: the step that lands on tf exactly)
-    # the save times (F4-05): a time off the grid is the linear interpolation of the states at the
+    # the save times: a time off the grid is the linear interpolation of the states at the
     # ends of its window (Q2 (a): no extra window); a map saves whole steps only
     saveopts = (; saveat = saveat isa Real ? TT(saveat) : TT[s for s in saveat], save_start, save_end, save_on)
     save = _save_list(prob, saveopts, t0, tf, dt, a1, clock)

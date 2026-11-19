@@ -315,6 +315,7 @@ mutable struct CoupledKrylov{RS, WK, OP, PC, WS, A, CT, S, H, L}
     σ::Float64              # (its Cayley shift)
     keys::Vector{String}
     lin::L                  # the LinearSolve cache of the coupled solve (its `cacheval` is `ws`)
+    growth::Any             # the growth check's shifted solve, built on first use (`coupled_growth`)
 end
 
 """
@@ -436,7 +437,7 @@ function _bind_coupled(
     auto_newton || Exec.launch!(backend, _reset_hist_body!, 1, (hist,))
     return CoupledKrylov(
         rws, walk, A, P, ws, _zeros(st.backend, K, off), _zeros(st.backend, UInt32, off), hist, off, scal, zeros(K, GM_SCALARS), m, kr.maxiters,
-        kr.reltol, linear, mkpres, 0, 1.0, collect(String, keys), lin
+        kr.reltol, linear, mkpres, 0, 1.0, collect(String, keys), lin, nothing
     )
 end
 
@@ -725,14 +726,20 @@ function coupled_growth(cs::CoupledKrylov, σ::Real, t; m = 12, par = 1)
     A.it = (par, true, Float64(t), Inf, 0)
     walk(rows, _csop(:residual, (par, true, t, Inf, 0, A.b.a, cs.part, backend, nothing)))
     Exec.launch!(backend, _cs_un_body!, 1, (cs.scal, cs.part, cs.nbt))
-    S = CoupledShift(A, K(σ))
-    V = [similar(A.b) for _ in 1:(m + 1)]
-    y = similar(A.b)
     # the shifted solve as a LinearSolve cache: the group's `LatticeGMRES` to 1e-6, its block
-    # preconditioner (of `A`) on the shifted operator
-    kr = cs.lin.alg
-    alg = LatticeGMRES(; gmres_restart = kr.gmres_restart, maxiters = cs.budget, reltol = 1.0e-6, precs = kr.precs)
-    lin = CommonSolve.init(SciMLBase.LinearProblem(S, y; u0 = similar(y)), alg)
+    # preconditioner (of `A`) on the shifted operator. Built once per shift, size and budget
+    # and kept on the group; setting `A` again rebuilds the preconditioner for the current `A`
+    key = (K(σ), m, cs.budget)
+    if cs.growth === nothing || cs.growth[1] != key
+        S = CoupledShift(A, K(σ))
+        y = similar(A.b)
+        kr = cs.lin.alg
+        alg = LatticeGMRES(; gmres_restart = kr.gmres_restart, maxiters = cs.budget, reltol = 1.0e-6, precs = kr.precs)
+        cs.growth = (key, S, [similar(A.b) for _ in 1:(m + 1)], y, CommonSolve.init(SciMLBase.LinearProblem(S, y; u0 = similar(y)), alg))
+    else
+        cs.growth[5].A = cs.growth[2]
+    end
+    _, S, V, y, lin = cs.growth
     ws = lin.cacheval
     Krylov.kfill!(V[1], one(K))
     _cs_div!(V[1], K(sqrt(_cs_dot(V[1], V[1]))))
