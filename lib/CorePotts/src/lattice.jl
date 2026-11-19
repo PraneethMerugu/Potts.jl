@@ -378,6 +378,14 @@ function try_relation(spec::AbstractRelationSpec, l::Lattice{N}) where {N}
     _aliases(offs, l) && return nothing
     return Relation{N, length(offs)}(Tuple(map(o -> Int32.(o), offs)))
 end
+function try_relation(spec::Weighted, l::Lattice{N}) where {N}
+    offs = _raw_offsets(spec.spec, l)
+    _aliases(offs, l) && return nothing
+    w = Tuple(Float32[_weight(spec.weight, l.geometry, o) for o in offs])
+    all(isfinite, w) || return nothing
+    return Relation{N, length(offs), typeof(w)}(Tuple(map(o -> Int32.(o), offs)), w)
+end
+try_relation(r::Relation, ::Lattice) = r
 has_origin(r::Relation) = any(o -> all(iszero, o), r.offsets)
 
 """Whether every offset's negation is in `r` with the same weight (a symmetric pair relation)."""

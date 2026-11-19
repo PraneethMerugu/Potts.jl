@@ -125,6 +125,7 @@ end
 @testitem "QA: no @generated; tangent_on is inferred" setup = [CP_qa] tags = [:corepotts, :qa] begin
     @testset "QA: no @generated; tangent_on is inferred" begin
         qa_source_rules(pkgdir(CorePotts); banned_pattern = r"(?!)")     # (the `@generated` scan only)
+        qa_error_rules(pkgdir(CorePotts); reviewed_invariants = ["src/fields.jl"])
         primal = (; a = 1, b = 2.0f0)
         @test @inferred(CorePotts.tangent_on(primal)) === Val(false)
         @test @inferred(CorePotts.tangent_on(merge(primal, (; __tangent = nothing)))) === Val(true)
