@@ -33,6 +33,10 @@ end
             nonpublic_qualified = (:get_unit,)
         )
         qa_source_rules(joinpath(@__DIR__, ".."); exclude_files = [@__FILE__])
+        qa_error_rules(
+            joinpath(@__DIR__, "..");
+            reviewed_invariants = ["src/lower.jl", "src/lower.jl", "src/problems.jl"]
+        )
     end
 end
 

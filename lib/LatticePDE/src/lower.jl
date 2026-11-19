@@ -462,8 +462,8 @@ Whether the lattice lowering takes a call of `f` inside a term: arithmetic (`+ -
 `log`, `abs` and the calls of the IR (`sin`, `cos`, `tan`, `tanh`, `sinh`, `cosh`, `cbrt`,
 `exp2`, `log2`, `log10`, `expm1`, `log1p`, `atan`, `floor`, `ceil`, `round`), and `identity`
 (SymbolicUtils keeps `π` and `ℯ` as `identity(π)`). It is the one
-allowlist of both front ends (F2 design §2.11): a front end that converts its own terms (Potts
-`@equations`) asks it, so a call lowers in one front end exactly when it lowers in the other.
+allowlist across callers: any caller that converts its own terms (`Potts`) asks it, so a
+call lowers consistently everywhere.
 The operators (`laplacian`, `DivKGrad`, `Advect`, `Differential`), the reads (`value_at`, `ismember`) and
 the field reads are terms of their own, not calls in this sense.
 """

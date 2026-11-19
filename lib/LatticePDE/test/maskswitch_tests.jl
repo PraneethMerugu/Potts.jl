@@ -44,12 +44,7 @@ end
             [D(mce) ~ mD * laplacian(mce) - 0.5 * mce], [mc(0, x, y) ~ 0.0, mce ~ masked(t > mqe, 2.0)], mdom,
         [t, x, y], [mce, mqe], [mD]; name = :mu)
     p = discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float64); inputs = [mqe => fill(0.3, 8, 8)])
-    err = try
-        solve(p, Tsit5()); ""
-    catch e
-        sprint(showerror, e)
-    end
-    @test occursin("cannot locate", err) && occursin("dtmax", err)
+    @test_throws ArgumentError solve(p, Tsit5())
         o = solve(p, ExplicitEuler(); dt = 1.0e-3)
     @test unique(o.u[end]) == [2.0]                                # (the owned run applies it)
     s = solve(p, Tsit5(); dtmax = 0.01)

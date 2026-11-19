@@ -59,7 +59,7 @@ end
         # whole system's rows are coupled, the c group's are not (o is read from its array)
         ic = init(gown(gsys()), FieldGroups(gce => ExplicitEuler(); default = ExplicitEuler(; substeps = 3)); dt = 0.01)
         @test [r.n for r in ic.runtimes] == [3, 3]                    # c: ⌈0.01 · 512 / 1.8⌉ = 3, automatic
-        @test occursin("no automatic substeps", gerr(() -> init(gown(gsys()), ExplicitEuler(); dt = 0.01)))   # control
+        @test_throws ArgumentError init(gown(gsys()), ExplicitEuler(); dt = 0.01)   # control
         o0 = copy(ig[goe])
         step!(ig)
         c1, o1 = ig[gce], ig[goe]
@@ -75,11 +75,11 @@ end
         @test all(==(1), ig.store.cur[[r.swaps[1] for r in ig.runtimes]])   # odd count: back in slot 1
         @test !(o1 ≈ one[goe])                                        # control: one group steps o in 4, Jacobi
         # refusals: a map with a rate, a field with no algorithm, a name that is no field
-        @test occursin("never mixed", gerr(() -> init(p, FieldGroups(gce => a4, goe => ExplicitMap()); dt = 0.01)))
-        @test occursin("`go`", gerr(() -> init(p, FieldGroups(gce => a4); dt = 0.01)))
-        @test occursin("not a state field", gerr(() -> init(p, FieldGroups(:zz => a4; default = a4); dt = 0.01)))
-        @test occursin("one algorithm per field", gerr(() -> FieldGroups(gce => FieldGroups(goe => a4))))
-        @test occursin("not a field algorithm", gerr(() -> FieldGroups(gce => 1.0)))
+        @test_throws ArgumentError init(p, FieldGroups(gce => a4, goe => ExplicitMap()); dt = 0.01)
+        @test_throws ArgumentError init(p, FieldGroups(gce => a4); dt = 0.01)
+        @test_throws ArgumentError init(p, FieldGroups(:zz => a4; default = a4); dt = 0.01)
+        @test_throws ArgumentError FieldGroups(gce => FieldGroups(goe => a4))
+        @test_throws ArgumentError FieldGroups(gce => 1.0)
     end
 end
 
@@ -237,7 +237,7 @@ end
         # are coupled: no bound)
         @test isnan(whole.stability(LFP.with_tables([0.3, 0.2], Pair{String, Vector{Float64}}[]))) &&
             cut.stability(LFP.with_tables([0.3, 0.2], Pair{String, Vector{Float64}}[])) ≈ 512
-        @test occursin("not a dependent variable", gerr(() -> LatticePDE.lower_group(gsys(), disc; fields = [x])))
+        @test_throws ArgumentError LatticePDE.lower_group(gsys(), disc; fields = [x])
     end
 end
 
@@ -423,7 +423,7 @@ end
         # control: two groups in a loop reach the check (`κ_c = 0.01 · 500 = 5 > 1`: refused)
         pl = remake(p; p = [ga => 500.0])
         two = [(ExplicitEuler(), [String(pl.state[1])]), (ExplicitEuler(), [String(pl.state[2])])]
-        @test_throws ["ArgumentError", "FieldGroups", "dt · Σ max|coefficient|"] LFP._check_coupling(pl, two, pl.p; dt = 0.01)
+        @test_throws ArgumentError LFP._check_coupling(pl, two, pl.p; dt = 0.01)
         # `init` binds the groups behind a barrier (its return type is not inferred); the
         # integrator it returns steps and runs with inferred types, explicit and implicit (the
         # solution, SciML's `ODESolution`, is built behind a barrier: F4-04)

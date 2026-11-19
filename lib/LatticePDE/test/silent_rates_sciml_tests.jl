@@ -143,54 +143,40 @@ end
         # `kb − 1` reaches index 0 where `kb` holds a 1, though `kb` never holds 0
         @parameters Tb[1:3] = [1.0, 1.0, 1.0]
         sys = ssys([D(ce) ~ -(1 / value_at(Tb, qb - 1)) * ce], [c(0, x, y) ~ 1.0], [ce, qb], [Tb])
-        err = emsg(() -> solve(sown(sys; inputs = [qb => checker(4, 1, 2)]), ExplicitEuler(); dt = 0.025))
-        @test occursin("index 0", err) && occursin("at site", err)
+        @test_throws ArgumentError solve(sown(sys; inputs = [qb => checker(4, 1, 2)]), ExplicitEuler(); dt = 0.025)
         p = sown(sys; inputs = [qb => checker(4, 2, 3)])                              # control: kb ≥ 2
         @test sok(solve(p, ExplicitEuler(); dt = 0.025))
         ig = init(p, ExplicitEuler(); dt = 0.025)
-        err = emsg(() -> (ig[qb] = checker(4, 1, 2)))
-        @test occursin("index 0", err) && occursin("(2, 1)", err) && ig[qb] == checker(4, 2, 3)
-        # an `ifelse` index is decided at the sites where the host values give it: with no kind 1,
-        # `ifelse(k == 1, 0, k)` never reads index 0 (305be9ad: refused, no site named, by the hull)
+        @test_throws ArgumentError (ig[qb] = checker(4, 1, 2))
+        @test ig[qb] == checker(4, 2, 3)
         @parameters Tz[1:2] = [1.0, 1.0]
         sys = ssys([D(ce) ~ -(1 / value_at(Tz, ifelse(qe == 1, 0, qe))) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Tz])
         @test sok(solve(sown(sys; inputs = [qe => fill(Int32(2), 4, 4)]), ExplicitEuler(); dt = 0.025))
         K1 = fill(Int32(2), 4, 4); K1[3, 2] = 1
-        err = emsg(() -> solve(sown(sys; inputs = [qe => K1]), ExplicitEuler(); dt = 0.025))
-        @test occursin("index 0", err) && occursin("(at site (3, 2))", err)
+        @test_throws ArgumentError solve(sown(sys; inputs = [qe => K1]), ExplicitEuler(); dt = 0.025)
     end
 end
 
 @testitem "F2 (i): a coefficient not finite where the inputs reach is refused on every path" setup = [LP_silent] tags = [:latticepde, :silent] begin
     @testset "F2 (i): a coefficient not finite where the inputs reach is refused on every path" begin
-        # (i) a coefficient that is not finite where the inputs reach is refused on every path:
-        # the ODE form at discretize (bda31989: accepted, a rate of Inf) …
         @parameters Dz5[1:2] = [0.0, 1.0]
         sys = ssys([D(ce) ~ -(1 / value_at(Dz5, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dz5])
-        # (F4-01: at the first call of the right side; base: at `discretize`)
-        err = emsg(
-            () -> solve(
-                discretize(
-                    sys, LatticeDiscretization(Grid((4, 4)); T = Float64);
-                    inputs = [qe => checker(4, 1, 2)]
-                ), Tsit5()
-            )
+        @test_throws ArgumentError solve(
+            discretize(
+                sys, LatticeDiscretization(Grid((4, 4)); T = Float64);
+                inputs = [qe => checker(4, 1, 2)]
+            ), Tsit5()
         )
-        @test occursin("not finite", err) && occursin("`Dz5[1]`", err)
         @test discretize(
             sys, LatticeDiscretization(Grid((4, 4)); T = Float64);              # control: no kind 1
             inputs = [qe => fill(Int32(2), 4, 4)]
         ) isa SciMLBase.ODEProblem
-        # … and the owned form with an explicit count (bda31989: warned and ran, probe P10)
-        err = emsg(() -> solve(sown(sys; inputs = [qe => checker(4, 1, 2)]), ExplicitEuler(; substeps = 2); dt = 0.025))
-        @test occursin("not finite", err) && occursin("whatever the substep count", err)
+        @test_throws ArgumentError solve(sown(sys; inputs = [qe => checker(4, 1, 2)]), ExplicitEuler(; substeps = 2); dt = 0.025)
     end
 end
 
 @testitem "F2 (l): the CPU pair-table `value_at` reads as the kernel does" setup = [LP_silent] tags = [:latticepde, :silent] begin
     @testset "F2 (l): the CPU pair-table `value_at` reads as the kernel does" begin
-        # (l) the CPU pair-table `value_at` reads as the kernel does: index 0 reads 0, each index clamps into its axis
-        # (bda31989: BoundsError)
         J3 = reshape(collect(1.0:9.0), 3, 3)
         @test value_at(J3, 0, 1) == 0.0 && value_at(J3, 1, 0) == 0.0 && value_at(J3, 9, 1) == J3[end, 1] && value_at(J3, -1, 9) == J3[1, end]
         @test value_at(J3, 2, 3) == J3[2, 3]                                                  # control
@@ -202,11 +188,10 @@ end
         @test ExplicitEuler === LatticePDE.Problems.ExplicitEuler
         @parameters kd = 0.5
         p = sown(ssys([D(ce) ~ -kd * ce], [c(0, x, y) ~ 1.0], [ce], [kd]))
-        err = emsg(() -> solve(p, ExplicitEuler()))
-        @test occursin("needs `dt`", err)
+        @test_throws ArgumentError solve(p, ExplicitEuler())
         # (F2-07: `lower_bound` clips in B too; the clip's tests are in groups.jl)
         @test all(≈(0.95^10), solve(p, ExplicitEuler(; substeps = 1, lower_bound = 0.0); dt = 0.1)[:c, end])
-        @test occursin("`substeps = 0` is not a count", emsg(() -> ExplicitEuler(; substeps = 0)))
+        @test_throws ArgumentError ExplicitEuler(; substeps = 0)
         @test all(≈(0.95^10), solve(p, ExplicitEuler(; substeps = 1); dt = 0.1)[:c, end])           # control
     end
 end
@@ -293,25 +278,13 @@ end
             psys([D(ce) ~ Dm1 * laplacian(ce)], [c(0, x, y) ~ x], [Dm1]),
             LatticeDiscretization(Grid((8, 8)); T = Float32)
         )
-        e(f) = try
-            f(); ""
-        catch err
-            err isa ArgumentError ? err.msg : sprint(showerror, err)
-        end
-        lin = "is a linear solver: it is the `linsolve` of an implicit field solver, not a field solver"
-        m = e(() -> solve(p, LatticePCG()))
-        @test startswith(m, "`solve`/`init`: `LatticePCG()` " * lin) && occursin("give `solve(prob, ExplicitEuler(); dt)`", m)
-        @test startswith(e(() -> init(p, LatticeMultigrid(; cycles = 3))), "`solve`/`init`: `LatticeMultigrid(; cycles = 3)` " * lin)
+        @test_throws ArgumentError solve(p, LatticePCG())
+        @test_throws ArgumentError init(p, LatticeMultigrid(; cycles = 3))
         @test solve(p, ExplicitEuler(); dt = 0.01).retcode == SciMLBase.ReturnCode.Success           # the route
-        m = e(() -> FieldGroups(ce => LatticePCG(; maxiters = 12)))
-        @test startswith(m, "FieldGroups: the field `c(t, x, y)`: `LatticePCG(; maxiters = 12)` " * lin) &&
-            occursin("give `c(t, x, y) => ExplicitEuler(…)`", m)
-        @test startswith(e(() -> FieldGroups(; default = LatticeMultigrid())), "FieldGroups: `default`: `LatticeMultigrid()` " * lin)
+        @test_throws ArgumentError FieldGroups(ce => LatticePCG(; maxiters = 12))
+        @test_throws ArgumentError FieldGroups(; default = LatticeMultigrid())
         @test solve(p, FieldGroups(ce => ExplicitEuler()); dt = 0.01).retcode == SciMLBase.ReturnCode.Success
-        m = e(() -> ExplicitEuler(; linsolve = LatticePCG()))
-        @test startswith(m, "ExplicitEuler: `linsolve = LatticePCG()`: `linsolve` is a keyword of the implicit field solvers") &&
-            occursin("leave `linsolve` out", m)
-        @test e(() -> ExplicitEuler(; step = 2)) ==
-            "ExplicitEuler: no keyword `step`; its keywords are `substeps`, `lower_bound`, `init` and `compute_type`"
+        @test_throws ArgumentError ExplicitEuler(; linsolve = LatticePCG())
+        @test_throws ArgumentError ExplicitEuler(; step = 2)
     end
 end

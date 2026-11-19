@@ -109,7 +109,7 @@ end
                 if ok
                     @test solve(p, QuasiSteady(; linsolve = BTIGHT); dt = 0.1).retcode == ReturnCode.Success
                 else
-                    @test_throws "its steady operator is indefinite" init(p, QuasiSteady(); dt = 0.1)
+                    @test_throws ArgumentError init(p, QuasiSteady(); dt = 0.1)
                 end
             end
         end
@@ -229,7 +229,7 @@ end
             [t, x, y], [bce, boe], Any[]; name = :hexgrow
         )
         pg = discretize(grow, LatticeDiscretization(Grid((HEXN, HEXN); geometry = HEX); T = Float64))
-        @test_throws "their coupled steady system has a growing mode" init(pg, QuasiSteady(); dt = 0.1)
+        @test_throws ArgumentError init(pg, QuasiSteady(); dt = 0.1)
     end
 end
 

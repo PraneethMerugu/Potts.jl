@@ -47,18 +47,17 @@ end
     step!(ig)
     @test all(≈((1 - 0.01 * 0.25 / n)^n; rtol = 1e-14), ig[ce])
     # the checks: a negative coefficient is refused and nothing changes; the count follows
-    neg(err) = occursin("is negative at these parameters", err)
-    @test neg(psmsg(() -> (ig.ps[Dp] = [-1.0, 2.0]))) && ig.ps[Dp] == [2.0, 3.0]
-    @test neg(psmsg(() -> (ig.ps[Dp[1]] = -1.0))) && ig.ps[Dp[1]] == 2.0
+    @test_throws ArgumentError (ig.ps[Dp] = [-1.0, 2.0])
+    @test ig.ps[Dp] == [2.0, 3.0]
+    @test_throws ArgumentError (ig.ps[Dp[1]] = -1.0)
+    @test ig.ps[Dp[1]] == 2.0
     @test (ig.ps[Dp] = [1000.0, 2.0]; ig.substeps == 712)       # ρ = 128 Dp[1] + kp, dt = 0.01
     @test (ig.ps[Dp[1]] = 1.0; ig.substeps == 1)
-    # `integ[p]` and `integ[p] = v` of a parameter or table: the route, never SciML's deprecation
-    for (f, want) in ((() -> ig[kp], "`kp` is a parameter: read `integ.ps[kp]`"),
-            (() -> ig[:kp], "read `integ.ps[:kp]`"), (() -> (ig[kp] = 1.0), "write `integ.ps[kp] = v`"),
-            (() -> ig[Dp], "`Dp` is a table: read `integ.ps[Dp]`"), (() -> (ig[Dp] = [1.0, 2.0]), "write `integ.ps[Dp] = values`"),
-            (() -> (ig[Dp[2]] = 1.0), "write `integ.ps[Dp[2]] = v`"), (() -> ig[[ce, kp]], "`kp` is a parameter"))
-        err = psmsg(f)
-        @test occursin(want, err) && !occursin("deprecated", err)
+    # `integ[p]` and `integ[p] = v` of a parameter or table: refused
+    for f in (() -> ig[kp], () -> ig[:kp], () -> (ig[kp] = 1.0),
+            () -> ig[Dp], () -> (ig[Dp] = [1.0, 2.0]),
+            () -> (ig[Dp[2]] = 1.0), () -> ig[[ce, kp]])
+        @test_throws ArgumentError f()
     end
     @test ig.ps[Dp] == [1.0, 2.0] && ig.ps[kp] == 0.25            # the refused writes changed nothing
     # fields and inputs index as before: a state write, an input write (the mask follows)

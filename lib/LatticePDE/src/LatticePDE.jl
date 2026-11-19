@@ -75,7 +75,7 @@ lowering it is `DivKGrad` with `K ≡ 1`. `Δ` is the same function, for equatio
 mathematical notation (public, not exported).
 """
 function laplacian end
-laplacian(x) = error("`laplacian` is symbolic-only: apply it inside a `PDESystem` equation and discretize with `LatticePDE.discretize`")
+laplacian(x) = throw(ArgumentError("`laplacian` is symbolic-only: apply it inside a `PDESystem` equation and discretize with `LatticePDE.discretize`"))
 @register_symbolic laplacian(x)
 """
     Δ
@@ -102,7 +102,7 @@ struct DivKGrad
         return new(mean)
     end
 end
-(op::DivKGrad)(K, c) = error("`DivKGrad($(repr(op.mean)))` is symbolic-only: apply it inside a `PDESystem` equation and discretize with `LatticePDE.discretize`")
+(op::DivKGrad)(K, c) = throw(ArgumentError("`DivKGrad($(repr(op.mean)))` is symbolic-only: apply it inside a `PDESystem` equation and discretize with `LatticePDE.discretize`"))
 @register_symbolic (op::DivKGrad)(K, c)
 
 """Discretization scheme of an [`Advect`](@ref) term."""
@@ -119,7 +119,7 @@ component, or the velocity array). `scheme` is an [`AbstractAdvectionScheme`](@r
 struct Advect{S <: AbstractAdvectionScheme}
     scheme::S
 end
-(op::Advect)(u, c) = error("`Advect` is symbolic-only: apply it inside a `PDESystem` equation and discretize with `LatticePDE.discretize`")
+(op::Advect)(u, c) = throw(ArgumentError("`Advect` is symbolic-only: apply it inside a `PDESystem` equation and discretize with `LatticePDE.discretize`"))
 # One registration for a velocity component and the velocity array: SymbolicUtils 4 gives
 # scalar and array symbolics one `BasicSymbolic` type, so two registrations (`u` and
 # `u::AbstractVector`) define the same methods twice, an error under precompilation.
@@ -191,9 +191,9 @@ ismember(k::Union{Integer, AbstractFloat}, s::Tuple) = Int(k) in s
 boundary conditions: `c` is held at `v` on the sites where `pred` holds. `pred` is a
 symbolic `Bool` term; arrays are written per component, `u[i] ~ masked(pred, v)`.
 """
-masked(p, v) = error("`masked(pred, v)` is a symbolic boundary-condition marker; its predicate must be a " *
-                     "symbolic Bool term such as `kindₛ == 3` or `ismember(kindₛ, (2, 3))`. A kind set " *
-                     "written with `∈` (`kindₛ ∈ (2, 3)`, `kindₛ ∈ Set(…)`) is not a term: use `ismember`.")
+masked(p, v) = throw(ArgumentError("`masked(pred, v)` is a symbolic boundary-condition marker; its predicate must be a " *
+                                       "symbolic Bool term such as `kindₛ == 3` or `ismember(kindₛ, (2, 3))`. A kind set " *
+                                       "written with `∈` (`kindₛ ∈ (2, 3)`, `kindₛ ∈ Set(…)`) is not a term: use `ismember`."))
 @register_symbolic masked(p::Bool, v::Real)
 
 """
@@ -321,10 +321,10 @@ that generates its input variables (Potts' `kind__in`) sets it to the user's wor
 """
 struct LatticeInputName end
 """
-Metadata key `LatticeCutField` (`true`): an input that is the field of another group (front end
-A's group system, the cut of `lower_group(…; fields)`) and that a spatial operator of the group
-reads. It carries that field's face conditions, so its ghost values are those of its own group
-(F3-22 review r1); its masks and initial values stay with its own group.
+Metadata key `LatticeCutField` (`true`): an input that is the field of another group (such as
+the cut of `lower_group(…; fields)`) and that a spatial operator of the group reads. It
+carries that field's face conditions, so its ghost values are those of its own group; its
+masks and initial values stay with its own group.
 """
 struct LatticeCutField end
 
