@@ -898,7 +898,7 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
     snapshots = isempty(getfield(c, :energy_snapshots)) ? () : (_slots_phase(T, getfield(c, :energy_snapshots), rn),)
     # fields after the synchronous updates (MTK equations advance with the MCS clock): the CPM
     # inputs, then one field phase per solver group (fields.jl)
-    dt = _p(getfield(c, :sys), :sweep).mcs_duration
+    dt = Float64(_p(getfield(c, :sys), :sweep).mcs_duration)   # the run clock is Float64
     fsteps, clamps = _field_phases(c, T, spec)
     append!(groups[:fields], fsteps)
     # cell then model ODEs (model ODEs see the cells' new values; D-077 N3), one phase per

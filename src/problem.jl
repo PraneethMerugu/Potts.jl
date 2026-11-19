@@ -483,13 +483,14 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
     order = _phase_order(sys)
     order == collect(SCHEDULE_PHASES) || push!(cad, "schedule=$(join(order, ","))")
     lifecycle === nothing || lifecycle.every == 1 || push!(cad, "lifecycle($(lifecycle.every))")
-    # the MCS length, which solvers keep as data (`Adaptive`'s dt, a field phase's `dt`)
-    _p(sys, :sweep).mcs_duration == 1 || push!(cad, "mcs_duration=$(repr(_p(sys, :sweep).mcs_duration))")
+    # the MCS length, which solvers keep as data (`Adaptive`'s dt, a field phase's `dt`); the
+    # run clock is Float64, so it is hashed in Float64 (`0.5`, `1//2` and `0.5f0` hash alike)
+    _p(sys, :sweep).mcs_duration == 1 || push!(cad, "mcs_duration=$(repr(Float64(_p(sys, :sweep).mcs_duration)))")
     # the acceptance law and its offset, solver data in `CPMFunction.acceptance` (D-121); only
     # non-default values (Metropolis, offset 0), so the default keeps its fingerprint. The
-    # offset is a Float64 in `SweepSpec`, so `offset = 2` and `offset = 2.0` hash alike.
+    # offset is hashed in Float64, so `offset = 2`, `offset = 2.0` and `offset = 2.0f0` hash alike.
     _p(sys, :sweep).law === :metropolis || push!(cad, "law=$(_p(sys, :sweep).law)")
-    _p(sys, :sweep).offset == 0 || push!(cad, "offset=$(repr(_p(sys, :sweep).offset))")
+    _p(sys, :sweep).offset == 0 || push!(cad, "offset=$(repr(Float64(_p(sys, :sweep).offset)))")
     # the proposal and contact neighbourhoods, run data outside the generated code (D-122):
     # each resolved on the lattice and hashed with its role when it differs from its default
     # (proposal `VonNeumann(1)`, contact the lattice's `neighborhood`). A default that does
