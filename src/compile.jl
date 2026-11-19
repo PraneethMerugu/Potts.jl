@@ -1368,7 +1368,7 @@ function _located(f, sys::PottsSystem, x)
     catch e
         e isa Union{ArgumentError, PottsCompileError, LatticeFields.IR.IRError} || rethrow()
         occursin("\n  in ", e.msg) && rethrow()
-        wrap(m) = throw(e isa Union{PottsCompileError, LatticeFields.IR.IRError} ? PottsCompileError(m) : ArgumentError(m))
+        wrap(m) = throw(PottsCompileError(m))
         ln = get(_p(sys, :sources), _source_key(x), nothing)
         loc = ln === nothing ? "" : " at $(ln.file):$(ln.line)"
         msg = _builtin_text(e.msg)

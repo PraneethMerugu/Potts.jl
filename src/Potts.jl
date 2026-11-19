@@ -67,6 +67,19 @@ end
 Base.showerror(io::IO, e::PottsCompileError) = print(io, e.msg)
 public PottsCompileError
 
+"""
+    PottsSolveError <: Exception
+
+Thrown when a runtime solve step outside a SciML solution return code stops or fails
+(such as an adaptive ODE substep failing during a Monte Carlo sweep or `anneal` hitting
+non-finite dynamics).
+"""
+struct PottsSolveError <: Exception
+    msg::String
+end
+Base.showerror(io::IO, e::PottsSolveError) = print(io, e.msg)
+public PottsSolveError
+
 include("seeds.jl")
 include("draws.jl")
 include("vocabulary.jl")

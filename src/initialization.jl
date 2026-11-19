@@ -478,7 +478,7 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
         ModelingToolkitBase.InitializationProblem(ModelingToolkitBase.complete(isys), 0.0, Dict{Any, Any}(zip(params, vals(1)));
             guesses = Dict{Any, Any}(zip(free, gs)), fully_determined = true, use_scc = false)
     catch e
-        (isfatal(e) || e isa ArgumentError) && rethrow()
+        (isfatal(e) || e isa Union{ArgumentError, PottsCompileError}) && rethrow()
         throw(ArgumentError("initialization of $where_: ModelingToolkit could not build the initialization problem for " *
                             "$names: $(first(sprint(showerror, e), 2000))"))
     end
@@ -524,7 +524,7 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
     solving(f, k) = try
         f()
     catch e
-        (isfatal(e) || e isa ArgumentError) && rethrow()
+        (isfatal(e) || e isa Union{ArgumentError, PottsCompileError}) && rethrow()
         failed(k, "the solve failed: $(first(sprint(showerror, e), 300))")
     end
     for k in 1:n
