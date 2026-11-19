@@ -563,8 +563,13 @@ end
     # the default is `OverrideInit()`, and a user's nonlinear solver gives the same roots
     base = PottsProblem(sys, op, (0, 1))
     @test ini_u0(PottsProblem(sys, op, (0, 1); initializealg = SB.OverrideInit()), :p_1) == ini_u0(base, :p_1)
+    newton = PottsProblem(sys, op, (0, 1); initializealg = SB.OverrideInit(; nlsolve = Potts.SimpleNonlinearSolve.SimpleNewtonRaphson()))
+    @test ini_u0(newton, :p_1) ≈ sqrt.(INI_VOL) rtol = 1.0e-9
+    @test ini_u0(newton, :y) ≈ solved rtol = 1.0e-12
+    # Broyden starts from an identity Jacobian, so which root of `p[1]^2 ~ volume` it reaches
+    # is not the guess's: it solves the equations, at either root
     broyden = PottsProblem(sys, op, (0, 1); initializealg = SB.OverrideInit(; nlsolve = Potts.SimpleNonlinearSolve.SimpleBroyden()))
-    @test ini_u0(broyden, :p_1) ≈ sqrt.(INI_VOL) rtol = 1.0e-9
+    @test ini_u0(broyden, :p_1) .^ 2 ≈ INI_VOL rtol = 1.0e-9
     @test ini_u0(broyden, :y) ≈ solved rtol = 1.0e-12
     # `abstol` stops the solve: a loose one accepts the guess
     loose = PottsProblem(sys, op, (0, 1); initializealg = SB.OverrideInit(; abstol = 1.0e6))

@@ -544,7 +544,34 @@ function _bcs_reads(b, ext)
                       i !== nothing && i.role === :field && push!(fields, i.name)
                   end
               end, _unwrap(b.lhs))
-    return unique!(fields), unique!(pins)
+    # the field the condition sets comes first: a term's own read, not a read in a coefficient
+    # (`(1 + u(t, 0, y)) * c(t, 0, y)` sets `c` whatever the order of the product's factors)
+    own = _bcs_own(_unwrap(b.lhs))
+    unique!(fields)
+    return [filter(in(own), fields); filter(!in(own), fields)], unique!(pins)
+end
+# the fields that the terms of a condition's left side read as their own: `c(t, 0, y)`,
+# `Differential(x)(c(t, 0, y))`, a bare field `c`, or one of these as a factor of a product
+function _bcs_own(lhs)
+    own = Symbol[]
+    read(f) = if iscall(f) && _is_field_at(operation(f))
+        push!(own, _field_at_name(f))
+    elseif iscall(f) && operation(f) isa Differential
+        read(_unwrap(first(arguments(f))))
+    else
+        i = info(f)
+        i !== nothing && i.role === :field && push!(own, i.name)
+    end
+    terms = iscall(lhs) && operation(lhs) === (+) ? arguments(lhs) : (lhs,)
+    for tm in terms
+        tm = _unwrap(tm)
+        if iscall(tm) && operation(tm) === (*)
+            foreach(f -> read(_unwrap(f)), arguments(tm))
+        else
+            read(tm)
+        end
+    end
+    return own
 end
 
 """
