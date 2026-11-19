@@ -75,8 +75,8 @@ using LatticeFields.IR: FaceRule as GFaceRule
 
 # F3-02 (F2 design §2.2): the group's slots are specs, not names. A parameter slot holds its
 # default and role (a computed default: `:computed` with its expression), a table its values, an
-# input its element type, declared bounds, default and whether a front end fills it at every
-# step (`filled`: front end A's CPM reads; none in B). `string` of each is its key, so the
+# input its element type, declared bounds, default and whether a caller fills it at every
+# step (`filled`: coupled CPM reads; none standalone). `string` of each is its key, so the
 # names in order are unchanged.
 @parameters gk = 2ga
 @variables gin(..) [input = true, bounds = (0.0, 2.0)] gki(..)::Int32 [input = true]

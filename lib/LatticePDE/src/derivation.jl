@@ -35,7 +35,7 @@ function derivation(base::AbstractVector, computed::AbstractVector)
         push!(body, :($n = try
             $ex
         catch $er
-                    ($er isa Union{InterruptException, StackOverflowError, OutOfMemoryError}) && rethrow($er)
+                    $(isfatal)($er) && rethrow()
             $(Problems.derive_fail)($(QuoteNode(n)), $(as_written(_deftext(e))), $er)
         end))
     end

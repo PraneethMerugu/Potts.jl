@@ -24,7 +24,7 @@ end
 
 @testitem "a table on the ODE path is the table (F1 round 3)" setup = [LP_silent] tags = [:latticepde, :silent] begin
     @testset "a table on the ODE path is the table (F1 round 3)" begin
-        # round 2 (both front ends): the ODE right side bound the table to the state: at u0 it was
+        # round 2 (coupled and standalone routes): the ODE right side bound the table to the state: at u0 it was
         # −1 where −2, and Tsit5 gave c(1) = 0.5000 where exp(−2) = 0.1353
         @parameters Dq[1:2] = [1.0, 2.0]
         sys = ssys([D(ce) ~ -Dq[2] * ce], [c(0, x, y) ~ 1.0], [ce], [Dq])

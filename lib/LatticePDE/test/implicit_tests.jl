@@ -1,4 +1,4 @@
-# F3-07 (F3 design §3.3, §3.4): `BackwardEuler` in front end B for linear groups. The rate
+# F3-07 (F3 design §3.3, §3.4): `BackwardEuler` in standalone LatticePDE for linear groups. The rate
 # program is the residual (`fuse_residual`), the operator `J̃` comes from the linearity table
 # (`OperatorSpec`, built at the first implicit use only), and each substep solves
 # `(I/h − J̃) δ = G(uⁿ)`, `u = uⁿ + δ` at `tⁿ⁺¹`. The tests compare one window with the hand BE

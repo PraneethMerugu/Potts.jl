@@ -145,7 +145,7 @@ end
 function _level_load(e::Env{N}, u, f, lane, o, rel) where {N}
     lf = e.level + rel
     rel < 0 && e.child == 0 &&
-        _lerr(u, "a field on a finer grid is read in a term of a coarser one only through a fold of fine reads (an internal error: please report it)")
+        throw(AssertionError("a field on a finer grid is read in a term of a coarser one only through a fold of fine reads (an internal error: please report it)"))
     # the map offset in sites of the frame of the access: the kernel's (a coarser field) or the
     # field's own (a finer field, inside a fold)
     fr = rel >= 0 ? e.level : lf
@@ -248,7 +248,7 @@ function _fold(u, e::Env{N}, kind, axes = [d for d in 1:N if e.offset[d] != 0]) 
     isempty(axes) && return _fold_children(u, e, kind)
     ax = axes[1]
     abs(e.offset[ax]) == 1 ||
-        _lerr(u, "a fine read at a coarse neighbor more than one node away (an internal error: please report it)")
+        throw(AssertionError("a fine read at a coarse neighbor more than one node away (an internal error: please report it)"))
     lid = minimum(ids[1] for (op, (ids, _)) in e.fields if !(op isa Tuple) && _flevel(e, op) == e.level)
     ins = node!(e.kb, INSIDE_OP, BOOL, Int32[], access!(e.kb, Access{N}(lid, Int8(0), Sel(Int16(1)),
         Sel(NTuple{N, Int16}(ntuple(d -> d == ax ? e.offset[d] : 0, N))), Int8(0), INSIDE)))
