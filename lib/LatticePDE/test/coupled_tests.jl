@@ -378,8 +378,8 @@ end
     end
     @test_throws ArgumentError v[1]
     @test_throws ArgumentError (v[1] = 1.0)
-    @test parent(v) == zeros(4)
-    K.kfill!(v, 2.0)
-    @test parent(v) == fill(2.0, 4) && K.knorm(4, v) ≈ 4.0
+        @test parent(v) == zeros(4)
+        K.kfill!(v, 2.0)
+        @test parent(v) == fill(2.0, 4) && K.knorm(4, v) ≈ 4.0
 end
 end

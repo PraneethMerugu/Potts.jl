@@ -237,8 +237,10 @@ end
     m = DescribedModel(; name = :m)
     σ = zeros(Int32, 8, 8)
     for sys in (m, mtkcompile(m))
-        for args in (([ownership => σ], (0, 2)), ([ownership => σ], nothing), ([ownership => σ], [0, 2]),
-                     (Dict(ownership => σ), (0, 2)), ([ownership => σ],), (ownership => σ,), (nothing,), (1.0,))
+        for args in (
+                ([ownership => σ], (0, 2)), ([ownership => σ], nothing), ([ownership => σ], [0, 2]),
+                (Dict(ownership => σ), (0, 2)), ([ownership => σ],), (ownership => σ,), (nothing,), (1.0,),
+            )
             @test_throws ArgumentError J(sys, args...)
         end
     end
