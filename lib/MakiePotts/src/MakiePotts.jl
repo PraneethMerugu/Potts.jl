@@ -6,6 +6,7 @@ module MakiePotts
 
 import Makie
 import CorePotts
+using CorePotts: isfatal
 import PrecompileTools
 
 include("errors.jl")

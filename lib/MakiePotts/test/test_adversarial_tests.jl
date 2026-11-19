@@ -205,7 +205,15 @@ end
     available_frame = PottsRenderFrame(0,
         fill(RenderOwner(MediumSite, 1), 2, 2), RenderCellMetadata[];
         channels = (RenderChannel(available_key, zeros(2, 2)),))
-        @test_throws MakiePotts.MissingRenderChannelError frame_channel(available_frame, absent_key)
+    missing_error = try
+            frame_channel(available_frame, absent_key)
+        nothing
+    catch error
+            error isa MakiePotts.MissingRenderChannelError || rethrow()
+        error
+    end
+    @test missing_error isa MakiePotts.MissingRenderChannelError
+        @test occursin(":available", sprint(showerror, missing_error))
 
     fixture_2d = render_fixture()
         @test_throws ArgumentError renderframe(
@@ -324,9 +332,16 @@ end
         tempname() * ".gif", [first(frames)]; framerate = Inf)
         @test_throws ArgumentError record_potts(
         tempname(), [first(frames)])
-        @test_throws MakiePotts.RecordingError MakiePotts._atomic_record(
-            _ -> nothing, joinpath(tempdir(), "empty.mp4")
-        )
+        mktempdir() do dir
+            empty_recording = joinpath(dir, "empty.mp4")
+            @test_throws MakiePotts.RecordingError MakiePotts._atomic_record(
+                _ -> nothing, empty_recording
+            )
+            @test occursin(
+                "nonempty artifact",
+                sprint(showerror, MakiePotts.RecordingError(empty_recording))
+            )
+        end
 
     inspected = explore_potts(
         frames[1:2]; inspector = true, figure = (; size = (180, 140)))

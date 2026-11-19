@@ -286,7 +286,7 @@ Base.isvalid(report::RenderFrameConformance) = report.valid
     try
         return true, f()
     catch error
-        error isa Union{InterruptException, StackOverflowError, OutOfMemoryError} && rethrow()
+        isfatal(error) && rethrow()
         push!(issues, "$label: $(sprint(showerror, error))")
         return false, nothing
     end
