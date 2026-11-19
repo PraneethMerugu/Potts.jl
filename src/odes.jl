@@ -206,7 +206,7 @@ function _check_algebraic_lowering(sys::PottsSystem, rn)
         catch e
             e isa Union{ArgumentError, PottsCompileError} || rethrow()
             msg = "the algebraic equation `$(i.name) ~ $(o.rhs)` cannot be evaluated at " *
-                  "$(cell ? "its cell" : "the model"): $(sprint(showerror, e))"
+                "$(cell ? "its cell" : "the model"): $(sprint(showerror, e))"
             throw(e isa PottsCompileError ? PottsCompileError(msg) : ArgumentError(msg))
         end
     end

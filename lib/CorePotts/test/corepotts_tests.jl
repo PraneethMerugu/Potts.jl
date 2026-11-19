@@ -247,7 +247,8 @@ end
                 @test SciMLBase.successful_retcode(sol)
             end
             # `mcs` is the sweep's own context field (D-188), so a relation may not take it
-            @test_throws ArgumentError PottsProblem(f, initial_state(σ, kinds), lat, (0, 3),
+            @test_throws ArgumentError PottsProblem(
+                f, initial_state(σ, kinds), lat, (0, 3),
                 gg_params(); relations = (; mcs = Moore(1)))
         end
         for (hi, lo, n) in ((0xffffffff, 0xffffffff, 10^9), (0x89abcdef, 0x01234567, 2^24 + 3), (0x00000001, 0x80000000, 7))

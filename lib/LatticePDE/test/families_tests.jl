@@ -149,14 +149,14 @@ end
     @test un ≈ solve(remake(pm; tspan = (0.0, 1.0)), ExplicitMap()).u[end] atol = 1e-14
     @test un != pm.u0                                          # control: one step moves the state
     # `problem` is no keyword: a plain refusal of an unknown keyword (no shim)
-    @test_throws ArgumentError LatticeDiscretization(Grid((8, 8)); problem = :owned)
+        @test_throws ArgumentError LatticeDiscretization(Grid((8, 8)); problem = :owned)
 end
 end
 
 @testitem "F4-01: a state on another backend is refused, naming both (SX-12)" setup = [LP_families] tags = [:latticepde, :families] begin
 @testset "F4-01: a state on another backend is refused, naming both (SX-12)" begin
     prob = discretize(fam_rate, fam_disc())
-    @test_throws ArgumentError remake(prob; u0 = FamDevVec(zeros(64)))
+        @test_throws ArgumentError remake(prob; u0 = FamDevVec(zeros(64)))
     @test remake(prob; u0 = zeros(64)).u0 == zeros(64)        # control: a host state
 end
 end

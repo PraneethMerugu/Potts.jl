@@ -191,9 +191,13 @@ ismember(k::Union{Integer, AbstractFloat}, s::Tuple) = Int(k) in s
 boundary conditions: `c` is held at `v` on the sites where `pred` holds. `pred` is a
 symbolic `Bool` term; arrays are written per component, `u[i] ~ masked(pred, v)`.
 """
-masked(p, v) = throw(ArgumentError("`masked(pred, v)` is a symbolic boundary-condition marker; its predicate must be a " *
-                                       "symbolic Bool term such as `kindₛ == 3` or `ismember(kindₛ, (2, 3))`. A kind set " *
-                                       "written with `∈` (`kindₛ ∈ (2, 3)`, `kindₛ ∈ Set(…)`) is not a term: use `ismember`."))
+masked(p, v) = throw(
+    ArgumentError(
+        "`masked(pred, v)` is a symbolic boundary-condition marker; its predicate must be a " *
+            "symbolic Bool term such as `kindₛ == 3` or `ismember(kindₛ, (2, 3))`. A kind set " *
+            "written with `∈` (`kindₛ ∈ (2, 3)`, `kindₛ ∈ Set(…)`) is not a term: use `ismember`."
+    )
+)
 @register_symbolic masked(p::Bool, v::Real)
 
 """

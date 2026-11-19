@@ -243,7 +243,7 @@ end
         st = with_capacity(initial_state(σ, Int32[1]; cell = init_moments(σ, lat, 1)), 2)
         f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
             lifecycle = Lifecycle((st, p, ctx, key, mcs, c) -> EVENT_DIVIDE_CLUSTER))
-        @test_throws ArgumentError solve(PottsProblem(f, st, lat, (0, 1), gg_params()), SequentialCPM())
+            @test_throws ArgumentError solve(PottsProblem(f, st, lat, (0, 1), gg_params()), SequentialCPM())
     end
 end
 end

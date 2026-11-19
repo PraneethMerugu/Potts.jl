@@ -26,8 +26,8 @@ using .LF_solvers_coefficients: fd
     @test Solvers.solver_solution(sv) == uref                                  # bitwise
     @test coef_values(sv.op) == coef_values(op2)
     # a structural change is refused
-    @test_throws ArgumentError set_coefficients!(
-        sv,
+        @test_throws ArgumentError set_coefficients!(
+            sv,
         with(op; dirichlet = ((0.0, nothing), (nothing, nothing))))
 end
 end
@@ -83,6 +83,6 @@ using .LF_solvers_coefficients: fd
     sp, up = primal_solve(per)
     @test sp.deflate
     @test relmax(tangent!(sp, up, :shift), fd(per, :shift, 1e-6)) <= 1e-5
-    @test_throws ArgumentError tangent!(sp, up, :value => 1)
+        @test_throws ArgumentError tangent!(sp, up, :value => 1)
 end
 end

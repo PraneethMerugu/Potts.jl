@@ -66,7 +66,7 @@ end
         for (lat, ax) in ((Lattice((4, 4, 1)), 3), (Lattice((1, 4)), 1),
                           (Lattice((4, 1); geometry = Hexagonal()), 2))
             σ = zeros(Int32, lat.dims)
-            @test_throws ArgumentError recompute_euler(σ, lat, Val(:face), 1)
+                @test_throws ArgumentError recompute_euler(σ, lat, Val(:face), 1)
         end
         # a closed axis of length 1 and a periodic axis of length 2 are fine (the recount and
         # the per-copy change agree)

@@ -128,9 +128,12 @@ function lower(x, env::LowerEnv)
     op === gather && return _lower_gather(args, env)
     op === _connected && return _lower_connected(args, env)
     op === population && return _lower_population(args, env)
-    op === laplacian && throw(PottsCompileError(
+    op === laplacian && throw(
+        PottsCompileError(
         "`laplacian` is a field operator: the field compiler lowers it in a field's PDESystem (`@fields`, `Potts.couple`); " *
-                      "it is not available in $(_MODE_NAMES[env.mode])"))
+                "it is not available in $(_MODE_NAMES[env.mode])"
+        )
+    )
     # cell references (R6, D-066 item 5): liveness, sources, the enclosing cell of a fold
     op === cell_alive && return :(Potts._alive_slot($(_refst(env)).cell.volume, $(lower(args[1], env))))
     if op === cluster_sibling
@@ -656,8 +659,12 @@ function _ref_default(i::Entity, env)
         kenv = LowerEnv(env.T, :cell, Dict{Symbol, Any}(:kind => :(Int32(0))), env.relname)
         return :($(env.T)($(lower(v, kenv))))
     end
-    throw(PottsCompileError("cell variable `$(i.name)` is read through a reference, so a dead referent reads its declared default; " *
-          "give `$(i.name)` a scalar default (a number or an expression of parameters)"))
+    throw(
+        PottsCompileError(
+            "cell variable `$(i.name)` is read through a reference, so a dead referent reads its declared default; " *
+                "give `$(i.name)` a scalar default (a number or an expression of parameters)"
+        )
+    )
 end
 
 """Whether slot `r` (a reference) holds an alive cell: `0 < r ≤ capacity` and `volume[r] > 0`."""
@@ -774,16 +781,24 @@ function _lower_at(args, env)
         if i.name === :position
             s === :site && throw(PottsCompileError("`position[$(args[2])]` is a vector: write its component `position[$(args[2])][k]`"))
             if !haskey(env.bind, :position)
-                env.mode === :proposal && throw(PottsCompileError("`position` in $(_MODE_NAMES[env.mode]) needs a site: " *
-                                                "write `position[target][k]` or `position[source][k]`"))
+                env.mode === :proposal && throw(
+                    PottsCompileError(
+                        "`position` in $(_MODE_NAMES[env.mode]) needs a site: " *
+                            "write `position[target][k]` or `position[source][k]`"
+                    )
+                )
                 throw(PottsCompileError("`position` is not available in $(_MODE_NAMES[env.mode])"))
             end
             return :($(env.bind[:position])[$j])
         end
         if i.name === :direction
-            haskey(env.bind, :direction) || throw(PottsCompileError("`direction` is not available in $(_MODE_NAMES[env.mode]): it is the " *
+            haskey(env.bind, :direction) || throw(
+                PottsCompileError(
+                    "`direction` is not available in $(_MODE_NAMES[env.mode]): it is the " *
                                                   "copy's source→target offset, read in drives, constraints, on-copy updates and " *
-                                                  "the copy-scope @sweep temperature"))
+                        "the copy-scope @sweep temperature"
+                )
+            )
             return :($(env.bind[:direction])[$j])
         end
         if i.name === :kind

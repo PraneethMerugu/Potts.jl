@@ -66,7 +66,7 @@ end
     @test whole.stats.lifecycle.divisions == rest.stats.lifecycle.divisions
     @test rest.t == [12, 30]
     bad = remake(prob; f = CPMFunction(prob.f.delta_H; temperature = gg_temperature))
-    @test_throws ArgumentError init(bad, alg; checkpoint = ck)
+        @test_throws ArgumentError init(bad, alg; checkpoint = ck)
 
     # reinit! reuses the integrator and reproduces the run
     integ = init(prob, alg)
@@ -86,11 +86,11 @@ end
     @test ck.format == CorePotts.CHECKPOINT_FORMAT == 2
     @test init(prob, SequentialCPM(); checkpoint = ck).t == 1                         # control: current format
     old = PottsCheckpoint(ck.state, ck.t, ck.seed, ck.replica, ck.repeat, ck.p, ck.fingerprint, ck.stats, 1)
-    @test_throws ArgumentError init(prob, SequentialCPM(); checkpoint = old)
+        @test_throws ArgumentError init(prob, SequentialCPM(); checkpoint = old)
     # a file that does not deserialize to a checkpoint of this format: a named error
     path = tempname()
     write(path, "not a checkpoint")
-    @test_throws ArgumentError load_checkpoint(path)
+        @test_throws ArgumentError load_checkpoint(path)
     @test_throws SystemError load_checkpoint(tempname())                              # a missing file is not a format error
 end
 end

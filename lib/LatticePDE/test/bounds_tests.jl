@@ -133,22 +133,22 @@ end
     # enclosure does not show a negative value), the reason names it and its interval
         neg = fown(fsys([D(fue) ~ (x - 0.5) * laplacian(fue)], [fu(0, x, y) ~ 0.5], [fue]), 16)
     @test isnan(neg.stability(neg.p))
-    @test_throws ArgumentError solve(neg, ExplicitEuler(); dt = 0.001)
+        @test_throws ArgumentError solve(neg, ExplicitEuler(); dt = 0.001)
     # a coefficient negative over its whole interval is negative diffusion: refused at any count
-    @test_throws ArgumentError solve(
-        fown(fsys([D(fue) ~ (x - 2) * laplacian(fue)], [fu(0, x, y) ~ 0.5], [fue]), 16),
-        ExplicitEuler(; substeps = 4); dt = 0.001
-    )
+        @test_throws ArgumentError solve(
+            fown(fsys([D(fue) ~ (x - 2) * laplacian(fue)], [fu(0, x, y) ~ 0.5], [fue]), 16),
+            ExplicitEuler(; substeps = 4); dt = 0.001
+        )
     # an interval that is not finite (`1 / (x − 0.5)` over the box): no bound, named, never refused
-    inf = fown(fsys([D(fue) ~ laplacian(fue) - fue / (x - 0.5)], [fu(0, x, y) ~ 0.5], [fue]), 8)
+        inf = fown(fsys([D(fue) ~ laplacian(fue) - fue / (x - 0.5)], [fu(0, x, y) ~ 0.5], [fue]), 8)
     @test occursin("has no finite bound over `x` ∈ [0.0625, 0.9375]", LFP.unbounded_reason(inf.stability, inf.p))
-    # a field that starts outside its declared bounds is refused
-    @test_throws ArgumentError fown(fsys([D(fce) ~ DivKGrad(:harmonic)(fce, fce)], [fc(0, x, y) ~ 1.5 * x], [fce]), 8)
+        # a field that starts outside its declared bounds is refused
+        @test_throws ArgumentError fown(fsys([D(fce) ~ DivKGrad(:harmonic)(fce, fce)], [fc(0, x, y) ~ 1.5 * x], [fce]), 8)
     # field-dependent diffusion with no declared interval: the term stays one the bound cannot see
-    @test_throws ArgumentError solve(
-        fown(fsys([D(fue) ~ DivKGrad(:harmonic)(fue, fue)], [fu(0, x, y) ~ 0.5], [fue]), 8),
-        ExplicitEuler(); dt = 0.001
-    )
+        @test_throws ArgumentError solve(
+            fown(fsys([D(fue) ~ DivKGrad(:harmonic)(fue, fue)], [fu(0, x, y) ~ 0.5], [fue]), 8),
+            ExplicitEuler(); dt = 0.001
+        )
 end
 end
 
@@ -275,20 +275,20 @@ end
 end
 
 @testitem "F3-13 M2: declared intervals after the build" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
-@testset "F3-13 M2: declared intervals after the build" begin
+    @testset "F3-13 M2: declared intervals after the build" begin
     RC = SciMLBase.ReturnCode
-    # a Dirichlet value 3 outside c ∈ (0, 1): refused at the build
+        # a Dirichlet value 3 outside c ∈ (0, 1): refused at the build
     d3 = fsys([D(fce) ~ DivKGrad(:harmonic)(fce, fce)], [fc(0, x, y) ~ 0.5, fc(t, 1, y) ~ 3.0], [fce])
-    @test_throws ArgumentError fown(d3)
-    @test_throws ArgumentError fode(d3)
+        @test_throws ArgumentError fown(d3)
+        @test_throws ArgumentError fode(d3)
     # … a parameter face value, at the build and at `remake(; p)`
     @parameters fx_g = 0.5
     dg = fsys([D(fce) ~ DivKGrad(:harmonic)(fce, fce)], [fc(0, x, y) ~ 0.5, fc(t, 1, y) ~ fx_g], [fce], Any[fx_g])
     pg = fown(dg, 16)
-    @test_throws ArgumentError remake(pg; p = [fx_g => 2.0])
+        @test_throws ArgumentError remake(pg; p = [fx_g => 2.0])
     # … a masked value
-    dm = fsys([D(fce) ~ 0.1 * laplacian(fce)], [fc(0, x, y) ~ 0.5, fc(t, x, y) ~ masked(x < 0.2, 1.5)], [fce])
-    @test_throws ArgumentError fown(dm, 16)
+        dm = fsys([D(fce) ~ 0.1 * laplacian(fce)], [fc(0, x, y) ~ 0.5, fc(t, x, y) ~ masked(x < 0.2, 1.5)], [fce])
+        @test_throws ArgumentError fown(dm, 16)
     # a value inside is accepted, and the run stays in [0.5, 1]
     s = solve(fown(fsys([D(fce) ~ DivKGrad(:harmonic)(fce, fce)], [fc(0, x, y) ~ 0.5, fc(t, 1, y) ~ 1.0], [fce]), 16),
             ExplicitEuler(); dt = 0.01, saveat = 0.1
@@ -309,12 +309,12 @@ end
         nu = fown(fsys([D(fce) ~ 0.1 * laplacian(fce) + 20.0], [fc(0, x, y) ~ 0.5], [fce]), 16)
     @test isempty(nu.stability.used)
         @test solve(nu, ExplicitEuler(); dt = 0.01).retcode == RC.Success
-    # the writes take the start check (values outside refused)
+        # the writes take the start check (values outside refused)
     pr = fown(fsys([D(fce) ~ DivKGrad(:harmonic)(fce, fce)], [fc(0, x, y) ~ 0.5], [fce]), 16)
-    @test_throws ArgumentError remake(pr; u0 = fill(2.0, 256))
-    ig = init(pr, ExplicitEuler(); dt = 0.01)
-    @test_throws ArgumentError (ig[fce] = fill(2.0, 16, 16))
-    @test_throws ArgumentError SciMLBase.reinit!(ig, fill(2.0, 256))
+        @test_throws ArgumentError remake(pr; u0 = fill(2.0, 256))
+        ig = init(pr, ExplicitEuler(); dt = 0.01)
+        @test_throws ArgumentError (ig[fce] = fill(2.0, 16, 16))
+        @test_throws ArgumentError SciMLBase.reinit!(ig, fill(2.0, 256))
     @test maximum(ig[fce]) == 0.5                                    # nothing changed
     ig[fce] = fill(0.75, 16, 16)                                     # a write inside is accepted
     @test maximum(ig[fce]) == 0.75

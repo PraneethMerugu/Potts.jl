@@ -137,13 +137,13 @@ end
 
 @testitem "an explicit options.T that differs from u0 is refused" setup = [LF_problems_types] tags = [:latticefields, :problems] begin
 @testset "an explicit options.T that differs from u0 is refused" begin
-    @test_throws ArgumentError FieldProblem(
-        euler2((8, 8)), zeros(64), (0.0, 0.1), [0.5]; state = ["u"],
+        @test_throws ArgumentError FieldProblem(
+            euler2((8, 8)), zeros(64), (0.0, 0.1), [0.5]; state = ["u"],
         kind = :rate, options = CompileOptions(; T = Float32))
     @test FieldProblem(euler2((8, 8)), zeros(Float32, 64), (0.0, 0.1), [0.5]; state = ["u"],
         kind = :rate, options = CompileOptions(; T = Float32)) isa FieldProblem
-    @test_throws ArgumentError ode_problem(
-        euler2((8, 8); rate = true), zeros(64), (0.0, 1.0), [0.5];
+        @test_throws ArgumentError ode_problem(
+            euler2((8, 8); rate = true), zeros(64), (0.0, 1.0), [0.5];
         state = ["u"], rates = Dict("u" => "∂u"), options = CompileOptions(; T = Float32))
 end
 end

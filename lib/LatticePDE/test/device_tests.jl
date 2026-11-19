@@ -168,7 +168,7 @@ using .LP_device: fd, kron
     @test within(() -> !isempty(sprint(show, MIME"text/plain"(), v)))
     # a write into the copy changes nothing; `.=` is named
     @test within(() -> (v .= 3.0f0; Array(ig[ce]) == h))
-    @test_throws ArgumentError (ig[ce] .= 2.0f0)
+        @test_throws ArgumentError (ig[ce] .= 2.0f0)
 end
 end
 
@@ -190,7 +190,7 @@ using .LP_device: fd, kron
     # a value outside Int32 is named, from a device array of a wider type
     w = KernelAbstractions.allocate(PDEV, Int64, n, n)
     copyto!(w, fill(Int64(3)^30, n, n))
-    @test_throws ArgumentError mk(w)
+        @test_throws ArgumentError mk(w)
 end
 end
 
@@ -209,7 +209,7 @@ using .LP_device: fd, kron
     @test timedwait(() -> istaskdone(r), 300.0) === :ok && fetch(r) ≈ Float32.(half)
     d2 = KernelAbstractions.allocate(PDEV, Int32, n, n)
     copyto!(d2, fill(Int32(2), n, n))
-    @test_throws ArgumentError mk(d2)
+        @test_throws ArgumentError mk(d2)
     # F2-09: the input reads back as a Bool array on the device (base: UInt8; `count` and `any`
     # threw a non-boolean TypeError, `.!` a MethodError)
         m = init(mk(db), ExplicitEuler(); dt = 0.1f0)[dm]

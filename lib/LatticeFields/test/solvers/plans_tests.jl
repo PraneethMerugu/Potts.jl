@@ -240,6 +240,6 @@ end
     kb = kernel(pb)
     store(kb, u, load(kb, u) + IR.runtime(kb, TS))
     add!(pb, kb, "timed")
-    @test_throws LatticeFields.IR.IRError Solvers.check_no_time(program(pb))
+        @test_throws LatticeFields.IR.IRError Solvers.check_no_time(program(pb))
 end
 end

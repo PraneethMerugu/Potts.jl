@@ -63,7 +63,7 @@ end
             integ = init(prob, alg; callback = heat)
             foreach(_ -> step!(integ), 1:3)
             @test integ.p.T == 1.0e6
-        @test_throws ArgumentError init(prob, alg; callback = ContinuousCallback((u, t, i) -> t - 1, i -> nothing))
+            @test_throws ArgumentError init(prob, alg; callback = ContinuousCallback((u, t, i) -> t - 1, i -> nothing))
             # initialize/finalize hooks run once
             calls = Int[]
             cb = DiscreteCallback(

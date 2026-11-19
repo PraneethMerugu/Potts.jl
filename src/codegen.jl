@@ -568,9 +568,13 @@ function _write(lhs, v, env)
     elseif xi.role in (:site, :field)
         # a `Coarse(k)` field's node holds a block of sites (F3-17): one copy cannot set it
         haskey(xi.options, :lattice_level) &&
-            throw(PottsCompileError("@on_copy cannot assign `$(xi.name)`, which has `lattice_level = $(xi.options.lattice_level)`: a node of " *
+            throw(
+            PottsCompileError(
+                "@on_copy cannot assign `$(xi.name)`, which has `lattice_level = $(xi.options.lattice_level)`: a node of " *
                   "its grid holds a block of sites, so one site's copy has no node of its own; write the change as a " *
-                  "source in its equation (a term of `kind` or another site read, folded over the block)"))
+                    "source in its equation (a term of `kind` or another site read, folded over the block)"
+            )
+        )
         a = :(st.site.$(xi.name))
         return :(@inbounds $a[$j] = convert(eltype($a), $v))
     end
@@ -1234,8 +1238,12 @@ function CorePotts._run_phase(ph::_AdaptiveODE, st, p, ctx, key, mcs, backend, s
             SciMLBase.reinit!(integ, u; t0, tf = t0 + ph.dt, erase_sol = true, reset_dt = true)
         end
         SciMLBase.solve!(integ)
-        SciMLBase.successful_retcode(integ.sol) || throw(ArgumentError("Adaptive ODE integration failed at MCS $mcs" *
-                                                         (c == 0 ? "" : " (cell $c)") * ": retcode $(integ.sol.retcode)"))
+        SciMLBase.successful_retcode(integ.sol) || throw(
+            ArgumentError(
+                "Adaptive ODE integration failed at MCS $mcs" *
+                    (c == 0 ? "" : " (cell $c)") * ": retcode $(integ.sol.retcode)"
+            )
+        )
         return integ.u
     end
     if ph.scope === :cell

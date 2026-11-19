@@ -105,10 +105,12 @@ function _to_snapshots(x, snap::Dict{Symbol, Any}, self)
     return _unwrap(Symbolics.substitute(y, Dict{Any, Any}(v => k for (k, v) in ints); fold = Val(false)))
 end
 
-const _POP_CELL_BIND = Set{Symbol}((
-    :volume, :surface, :kind, :id, :generation, :__cell, :birth, :euler, :euler_full,
-    :cluster, :cluster_volume, :cluster_surface,
-))
+const _POP_CELL_BIND = Set{Symbol}(
+    (
+        :volume, :surface, :kind, :id, :generation, :__cell, :birth, :euler, :euler_full,
+        :cluster, :cluster_volume, :cluster_surface,
+    )
+)
 const _POP_SITE_BIND = Set{Symbol}((:owner, :kind, :__site, :position, :site))
 
 _can_lower_literal(v) = v isa Union{Bool, Integer, Real} ||

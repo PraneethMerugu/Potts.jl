@@ -334,7 +334,8 @@ function render_frame_conformance(frame::AbstractPottsRenderFrame{N}) where {N}
                 end
                 ok, by_identity = _probe_frame(
                     issues, "cell_metadata(frame, identity) failed",
-                    () -> cell_metadata(frame, metadata.identity))
+                    () -> cell_metadata(frame, metadata.identity)
+                )
                 ok || break
                 by_identity == metadata || begin
                     push!(issues,

@@ -194,8 +194,8 @@ end
                 [0 ~ 0.1 * laplacian(cae) - cae + k * cbe + x, 0 ~ 0.1 * laplacian(cbe) - cbe + k * cae], [
                     ca(0, x, y) ~ 0.0,
         cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [cae, cbe], Any[]; name = :ind))
-    @test_throws ArgumentError init(ind(2.0), QuasiSteady(); dt = 0.1)
-    @test_throws ArgumentError init(ind(1.0), QuasiSteady(); dt = 0.1)
+        @test_throws ArgumentError init(ind(2.0), QuasiSteady(); dt = 0.1)
+        @test_throws ArgumentError init(ind(1.0), QuasiSteady(); dt = 0.1)
         @test solve(ind(0.5), QuasiSteady(); dt = 0.1).retcode == ReturnCode.Success
     # the route: the rows as rates, stepped by `BackwardEuler` (the growing mode grows)
         indr = cown(
@@ -221,7 +221,7 @@ end
                     ca(0, x, y) ~ 0.0,
         cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [cae, cbe], [ck]; name = :indk))
         ig = init(pk, QuasiSteady(); dt = 0.1)
-    @test_throws ArgumentError (ig.ps[ck] = 3.0)
+        @test_throws ArgumentError (ig.ps[ck] = 3.0)
     @test ig.ps[ck] == 0.5
 end
 end
@@ -245,8 +245,8 @@ end
     @testset "the time steppers refuse `linsolve = LatticeGMRES(…)`, with the default route" begin
         # it was slower than the default linear solver in every case measured (~/lpwork/f312d-g1.txt)
     for A in (BackwardEuler, CrankNicolson, BDF2)
-        @test_throws ArgumentError A(; linsolve = LatticeGMRES())
-        @test A(; linsolve = LatticePCG(; maxiters = 12)) isa A
+            @test_throws ArgumentError A(; linsolve = LatticeGMRES())
+            @test A(; linsolve = LatticePCG(; maxiters = 12)) isa A
     end
         @test QuasiSteady(; linsolve = LatticeGMRES()).linsolve isa LatticeGMRES
 end
@@ -262,12 +262,14 @@ end
             PDESystem(
                 [0 ~ 0.1 * laplacian(cae) - cae + (kv + 0.1 * x) * cbe + x, 0 ~ 0.1 * laplacian(cbe) + 3.0 * cae - cbe + y],
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [cae, cbe], [kv]; name = :sv))
-    @test_throws ArgumentError init(sv(), QuasiSteady(); dt = 0.1)
-    A, _ = cjac(
-        PDESystem(
-            [D(cae) ~ 0.1 * laplacian(cae) - cae + (3.0 + 0.1 * x) * cbe + x, D(cbe) ~ 0.1 * laplacian(cbe) + 3.0 * cae - cbe + y],
-            [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [cae, cbe], Any[]; name = :svr), (8, 8))
-    @test maximum(real, LinearAlgebra.eigvals(A)) > 1
+        @test_throws ArgumentError init(sv(), QuasiSteady(); dt = 0.1)
+        A, _ = cjac(
+            PDESystem(
+                [D(cae) ~ 0.1 * laplacian(cae) - cae + (3.0 + 0.1 * x) * cbe + x, D(cbe) ~ 0.1 * laplacian(cbe) + 3.0 * cae - cbe + y],
+                [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [cae, cbe], Any[]; name = :svr
+            ), (8, 8)
+        )
+        @test maximum(real, LinearAlgebra.eigvals(A)) > 1
     # stable and site-varying (a skew coupling): accepted, and equal to the dense steady solve
         ss = cown(
             PDESystem(
@@ -286,7 +288,7 @@ end
                 [0 ~ 0.1 * laplacian(cae) - cae + (kw + 0.1 * x) * cbe + x, 0 ~ 0.1 * laplacian(cbe) + 3.0 * cae - cbe + y],
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [cae, cbe], [kw]; name = :sw))
         ig = init(sw, QuasiSteady(); dt = 0.1)
-    @test_throws ArgumentError (ig.ps[kw] = 3.0)
+        @test_throws ArgumentError (ig.ps[kw] = 3.0)
     @test ig.ps[kw] == 0.0
     # the refused write left the old launches (r2 S1): its run equals a fresh one's, bit for bit
     for _ in 1:2

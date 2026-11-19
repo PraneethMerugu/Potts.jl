@@ -51,13 +51,13 @@ end
 end
 
 @testitem "F2-08c: step_index refusals name their route (B)" setup = [LP_clock] tags = [:latticepde, :clock] begin
-@testset "step_index refusals" begin
-    @test_throws ArgumentError discretize(ksys(1.0), LatticeDiscretization(Grid((4, 4)); T = Float64))
-    @test_throws ArgumentError discretize(ksys(1.0; rate = step_index(2t)), kdisc())
+    @testset "step_index refusals" begin
+        @test_throws ArgumentError discretize(ksys(1.0), LatticeDiscretization(Grid((4, 4)); T = Float64))
+        @test_throws ArgumentError discretize(ksys(1.0; rate = step_index(2t)), kdisc())
     @parameters clock__tick = 1.0
     bad = PDESystem([D(kce) ~ clock__tick], [kc(0, x, y) ~ 0.0; kperiodic], kdom(1.0), [t, x, y], [kce], [clock__tick]; name = :b)
-    @test_throws ArgumentError discretize(bad, kdisc())
-    @test_throws ArgumentError LatticeDiscretization(Grid((4, 4)); clock = 0.0)
+        @test_throws ArgumentError discretize(bad, kdisc())
+        @test_throws ArgumentError LatticeDiscretization(Grid((4, 4)); clock = 0.0)
     # the step index is the stepper's, not a parameter of the problem
     p = discretize(ksys(1.0), kdisc())
     @test !any(s -> occursin("clock__tick", string(s)), p.f.sys.paramsyms)
@@ -148,10 +148,10 @@ end
     kme = km(t, x, y)
     sysm(T) = PDESystem([Shift(t, 1)(kme) ~ kme + step_index(t)], [km(0, x, y) ~ 0.0; km(t, 0, y) ~ km(t, 1, y);
         km(t, x, 0) ~ km(t, x, 1)], kdom(T), [t, x, y], [kme], [kη]; name = :m)
-    @test_throws ArgumentError solve(discretize(sysm(3.0), kdisc(; clock = 0.5)))
+        @test_throws ArgumentError solve(discretize(sysm(3.0), kdisc(; clock = 0.5)))
     @test solve(discretize(sysm(3.0), kdisc(; clock = 1.0)))[kme, end][1] == 0 + 1 + 2      # k = 0, 1, 2
     @test solve(discretize(sysm(4.0), kdisc(; clock = 2.0)))[kme, end][1] == 0 + 0 + 1 + 1  # k = 0, 0, 1, 1
-    # the slot is not a parameter
-    @test_throws ArgumentError p.ps[:clock__tick]
+        # the slot is not a parameter
+        @test_throws ArgumentError p.ps[:clock__tick]
 end
 end

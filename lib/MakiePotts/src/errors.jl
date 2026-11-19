@@ -32,6 +32,8 @@ struct RecordingError <: Exception
 end
 
 function Base.showerror(io::IO, error::RecordingError)
-    print(io, "Makie recording completed without producing a nonempty artifact at ",
-        repr(error.destination))
+    return print(
+        io, "Makie recording completed without producing a nonempty artifact at ",
+        repr(error.destination)
+    )
 end

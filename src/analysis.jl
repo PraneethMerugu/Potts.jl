@@ -109,9 +109,12 @@ function anneal(prob::CorePotts.PottsProblem, u, mcs::Integer; seed::Integer = 0
         f.footprint, f.fingerprint, f.sys, track = nothing, f.connectivity)
     q = SciMLBase.remake(prob; f = cold, u0 = u, tspan = (0, Int(mcs)), seed)
     sol = solve(q, alg; save_start = false)
-    SciMLBase.successful_retcode(sol) || throw(ArgumentError("anneal: the T = 0 copy dynamics stopped with retcode " *
+    SciMLBase.successful_retcode(sol) || throw(
+        ArgumentError(
+            "anneal: the T = 0 copy dynamics stopped with retcode " *
             "$(sol.retcode) after $(sol.stats.mcs) of $mcs MCS (a non-finite ΔH; the run itself stops the same way); " *
             "inspect the energy terms and initial volumes for singular values"
-    ))
+        )
+    )
     return sol.u[end]
 end

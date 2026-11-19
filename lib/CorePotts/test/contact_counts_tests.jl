@@ -24,9 +24,9 @@ end
             @test all3 == recompute_surface(st.ownership, lat, relation(Moore(1), lat), length(st.cell.kind); T = Int32)
         @test st.cell.n_med != all3[1:end] && any(>(0), st.cell.n_two)          # the masks select
         @test CorePotts.radius(CorePotts.relation(prob.relations.contact_counts, lat)) == 1
-        # masks hold kinds 0–63: more kinds, or a mask beyond the model's kinds, are errors
-        @test_throws ArgumentError ContactCount(:n, Moore(1), 0b1; kinds = 65)
-        @test_throws ArgumentError ContactCount(:n, Moore(1), 0b1000; kinds = 3)
+            # masks hold kinds 0–63: more kinds, or a mask beyond the model's kinds, are errors
+            @test_throws ArgumentError ContactCount(:n, Moore(1), 0b1; kinds = 65)
+            @test_throws ArgumentError ContactCount(:n, Moore(1), 0b1000; kinds = 3)
         @test ContactCount(:n, Moore(1), 0b100; kinds = 3).mask == 0b100
         @test CorePotts._kind_bit(typemax(UInt64), 64) == 0 && CorePotts._kind_bit(typemax(UInt64), 63) == 1
     end

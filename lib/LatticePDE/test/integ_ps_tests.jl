@@ -47,17 +47,19 @@ end
     step!(ig)
     @test all(≈((1 - 0.01 * 0.25 / n)^n; rtol = 1e-14), ig[ce])
     # the checks: a negative coefficient is refused and nothing changes; the count follows
-    @test_throws ArgumentError (ig.ps[Dp] = [-1.0, 2.0])
-    @test ig.ps[Dp] == [2.0, 3.0]
-    @test_throws ArgumentError (ig.ps[Dp[1]] = -1.0)
-    @test ig.ps[Dp[1]] == 2.0
+        @test_throws ArgumentError (ig.ps[Dp] = [-1.0, 2.0])
+        @test ig.ps[Dp] == [2.0, 3.0]
+        @test_throws ArgumentError (ig.ps[Dp[1]] = -1.0)
+        @test ig.ps[Dp[1]] == 2.0
     @test (ig.ps[Dp] = [1000.0, 2.0]; ig.substeps == 712)       # ρ = 128 Dp[1] + kp, dt = 0.01
     @test (ig.ps[Dp[1]] = 1.0; ig.substeps == 1)
-    # `integ[p]` and `integ[p] = v` of a parameter or table: refused
-    for f in (() -> ig[kp], () -> ig[:kp], () -> (ig[kp] = 1.0),
-            () -> ig[Dp], () -> (ig[Dp] = [1.0, 2.0]),
-            () -> (ig[Dp[2]] = 1.0), () -> ig[[ce, kp]])
-        @test_throws ArgumentError f()
+        # `integ[p]` and `integ[p] = v` of a parameter or table: refused
+        for f in (
+                () -> ig[kp], () -> ig[:kp], () -> (ig[kp] = 1.0),
+                () -> ig[Dp], () -> (ig[Dp] = [1.0, 2.0]),
+                () -> (ig[Dp[2]] = 1.0), () -> ig[[ce, kp]],
+            )
+            @test_throws ArgumentError f()
     end
     @test ig.ps[Dp] == [1.0, 2.0] && ig.ps[kp] == 0.25            # the refused writes changed nothing
     # fields and inputs index as before: a state write, an input write (the mask follows)

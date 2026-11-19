@@ -1629,10 +1629,10 @@ function _sweep_offset(offset)
     o = offset isa Real && !_is_symbolic(offset) ? (
             try
                 Float64(offset)
-            catch e
+        catch e
                 e isa Union{InexactError, MethodError, TypeError} || rethrow()
                 NaN
-            end
+        end
         ) : NaN
     isfinite(o) || throw(
         ArgumentError(
@@ -1648,10 +1648,10 @@ function _sweep_mcs_duration(mcs_duration)
     md = mcs_duration isa Real && !_is_symbolic(mcs_duration) ? (
             try
                 Float64(mcs_duration)
-            catch e
+        catch e
                 e isa Union{InexactError, MethodError, TypeError} || rethrow()
                 NaN
-            end
+        end
         ) : NaN
     (isfinite(md) && md > 0) || throw(
         ArgumentError(

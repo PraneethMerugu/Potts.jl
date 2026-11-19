@@ -17,8 +17,8 @@ end
     lat = Lattice((40, 40); boundary = Closed(), domain = disk)
     @test count(lat.mask) == count(disk(Tuple(x)) for x in CartesianIndices((40, 40)))
     @test Lattice((40, 40); boundary = Closed(), domain = lat.mask) == lat
-    @test_throws ArgumentError Lattice((4, 4); domain = falses(4, 4))
-    @test_throws ArgumentError Lattice((4, 4); domain = trues(3, 4))
+        @test_throws ArgumentError Lattice((4, 4); domain = falses(4, 4))
+        @test_throws ArgumentError Lattice((4, 4); domain = trues(3, 4))
     inside, _ = shift(lat, (20, 2), (Int32(0), Int32(-1)))        # (20, 1) is outside the disk
     @test in_domain(lat, linear_index(lat, (20, 3))) && !in_domain(lat, linear_index(lat, (20, 1))) && !inside
     @test !first(shift(lat, (20, 1), (Int32(0), Int32(1))))      # symmetric
@@ -28,7 +28,7 @@ end
     ids = sort!(unique(filter(>(0), σ)))
     σ = map(s -> s == 0 ? Int32(0) : Int32(searchsortedfirst(ids, s)), σ)
     kinds = kinds[ids]
-    @test_throws ArgumentError PottsProblem(GG, initial_state(fill(Int32(1), 40, 40), [1]), lat, (0, 1), gg_params())
+        @test_throws ArgumentError PottsProblem(GG, initial_state(fill(Int32(1), 40, 40), [1]), lat, (0, 1), gg_params())
     st = initial_state(σ, kinds)
     for alg in (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
         prob = PottsProblem(GG, st, lat, (0, 30), gg_params(); seed = 2)

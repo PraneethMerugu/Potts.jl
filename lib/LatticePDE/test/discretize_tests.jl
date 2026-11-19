@@ -55,13 +55,15 @@ end
     end
     r = one(h0 * c(t, x, 0) + Dy(c(t, x, 0)) ~ g0)
     @test isequal(r.alpha, unwrap(h0)) && isequal(r.beta, 1) && isequal(r.value, unwrap(g0))
-    # refusals
-    for bc in (c(t, 0.5, y) ~ 1.0, kindₛ(t, 0, y) ~ 1,
-        c(t, 0, y) + u(t, 0, y)[1] ~ 0.0, c(t, x, 0) ~ c(t, 0, 0),
-        c(t, x, 0) ~ c(t, x, 0), u(t, 0, y) ~ [0.0, 0.0],
-        Dy(c(t, 1, y)) ~ 0.0, c(t, 0, 0) ~ 1.0,
-        kindₛ(t, x, y) ~ masked(ke == 3, 1))
-        @test_throws ArgumentError one(bc)
+        # refusals
+        for bc in (
+                c(t, 0.5, y) ~ 1.0, kindₛ(t, 0, y) ~ 1,
+                c(t, 0, y) + u(t, 0, y)[1] ~ 0.0, c(t, x, 0) ~ c(t, 0, 0),
+                c(t, x, 0) ~ c(t, x, 0), u(t, 0, y) ~ [0.0, 0.0],
+                Dy(c(t, 1, y)) ~ 0.0, c(t, 0, 0) ~ 1.0,
+                kindₛ(t, x, y) ~ masked(ke == 3, 1),
+            )
+            @test_throws ArgumentError one(bc)
     end
 end
 end
@@ -75,25 +77,29 @@ end
     for key in (c, ce, unwrap(ce))                  # the callable, the applied term, unwrapped
         @test ir(symbolic_discretize(sys, LatticeDiscretization(g; methods = Dict(key => FiniteVolume())))) == base
     end
-    @test_throws ArgumentError symbolic_discretize(sys, LatticeDiscretization(g; methods = Dict(o => FiniteVolume())))
-    @test_throws ArgumentError symbolic_discretize(sys, LatticeDiscretization(g; methods = Dict(c => :fem)))
-    @test_throws ArgumentError symbolic_discretize(sys, LatticeDiscretization(Grid((4, 4, 4))))
-    @test_throws ArgumentError symbolic_discretize(pde(eq, Equation[], [ce], [Dc => 1e-3]), LatticeDiscretization(g))
-    @test_throws ArgumentError symbolic_discretize(pde([eq; D(ce) ~ ce], Equation[], [ce], [Dc]), LatticeDiscretization(g))
-    @test_throws ArgumentError symbolic_discretize(pde(eq, Equation[], [ce, oe], [Dc]), LatticeDiscretization(g))
-    @test_throws ArgumentError symbolic_discretize(pde([eq; D(ke) ~ 1], Equation[], [ce, ke], [Dc]), LatticeDiscretization(g))
+        @test_throws ArgumentError symbolic_discretize(sys, LatticeDiscretization(g; methods = Dict(o => FiniteVolume())))
+        @test_throws ArgumentError symbolic_discretize(sys, LatticeDiscretization(g; methods = Dict(c => :fem)))
+        @test_throws ArgumentError symbolic_discretize(sys, LatticeDiscretization(Grid((4, 4, 4))))
+        @test_throws ArgumentError symbolic_discretize(pde(eq, Equation[], [ce], [Dc => 1.0e-3]), LatticeDiscretization(g))
+        @test_throws ArgumentError symbolic_discretize(pde([eq; D(ce) ~ ce], Equation[], [ce], [Dc]), LatticeDiscretization(g))
+        @test_throws ArgumentError symbolic_discretize(pde(eq, Equation[], [ce, oe], [Dc]), LatticeDiscretization(g))
+        @test_throws ArgumentError symbolic_discretize(pde([eq; D(ke) ~ 1], Equation[], [ce, ke], [Dc]), LatticeDiscretization(g))
     # wrong bcs are detected: a face of a periodic axis; periodicity for one field only
-    @test_throws ArgumentError symbolic_discretize(pde(eq, [c(t, x, 0) ~ c(t, x, 1), c(t, x, 0) ~ 1.0], [ce], [Dc]),
-                                       LatticeDiscretization(g))
-    two = pde([eq; D(oe) ~ laplacian(oe)], [c(t, x, 0) ~ c(t, x, 1)], [ce, oe], [Dc])
-    @test_throws ArgumentError symbolic_discretize(two, LatticeDiscretization(g))
+        @test_throws ArgumentError symbolic_discretize(
+            pde(eq, [c(t, x, 0) ~ c(t, x, 1), c(t, x, 0) ~ 1.0], [ce], [Dc]),
+            LatticeDiscretization(g)
+        )
+        two = pde([eq; D(oe) ~ laplacian(oe)], [c(t, x, 0) ~ c(t, x, 1)], [ce, oe], [Dc])
+        @test_throws ArgumentError symbolic_discretize(two, LatticeDiscretization(g))
     # the vocabulary scans run first
-    @test_throws ArgumentError symbolic_discretize(pde([D(ce) ~ Pre(ce)], Equation[], [ce], [Dc]), LatticeDiscretization(g))
+        @test_throws ArgumentError symbolic_discretize(pde([D(ce) ~ Pre(ce)], Equation[], [ce], [Dc]), LatticeDiscretization(g))
     # spellings with no lattice meaning
-    for (rhs, ok) in (Dx(ce) => false, Dx(Dx(ce) * Dy(ce)) => false, value_at(ce, ke) => false,
-        ce^cT => true, Symbolics.Num(unwrap(z)) => false)
+        for (rhs, ok) in (
+                Dx(ce) => false, Dx(Dx(ce) * Dy(ce)) => false, value_at(ce, ke) => false,
+                ce^cT => true, Symbolics.Num(unwrap(z)) => false,
+            )
         f = () -> symbolic_discretize(pde([D(ce) ~ rhs], Equation[], [ce, ke], [Dc, cT]), LatticeDiscretization(g))
-        ok ? (@test f() isa CompiledField) : (@test_throws ArgumentError f())
+            ok ? (@test f() isa CompiledField) : (@test_throws ArgumentError f())
     end
 end
 end

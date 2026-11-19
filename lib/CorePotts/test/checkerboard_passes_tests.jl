@@ -105,10 +105,10 @@ end
     end
 
     @testset "invalid settings" begin
-        @test_throws ArgumentError init(prob, CheckerboardCPM(; region = 0))       # below the footprint
-        @test_throws ArgumentError init(prob, CheckerboardCPM(; parts = 1))
-        @test_throws ArgumentError init(prob, CheckerboardCPM(; region = 3, switches = 0))
-        @test_throws ArgumentError init(prob, CheckerboardCPM(; parts = 2, switches = 2^14))   # 2^16 phases per MCS
+            @test_throws ArgumentError init(prob, CheckerboardCPM(; region = 0))       # below the footprint
+            @test_throws ArgumentError init(prob, CheckerboardCPM(; parts = 1))
+            @test_throws ArgumentError init(prob, CheckerboardCPM(; region = 3, switches = 0))
+            @test_throws ArgumentError init(prob, CheckerboardCPM(; parts = 2, switches = 2^14))   # 2^16 phases per MCS
     end
 
     # a `Global` veto: the gaining side local, the losing side searched in a window of 2 or exactly
@@ -167,7 +167,7 @@ end
         # stay exact, a Global veto without window goes through the host serial pass
         @test init(prob, CheckerboardCPM()).cache.inline              # 900 sites: inline
         @test init(prob, CheckerboardCPM(; threads = false)).cache.inline
-        @test_throws ArgumentError init(prob, CheckerboardCPM(; threads = :many))
+            @test_throws ArgumentError init(prob, CheckerboardCPM(; threads = :many))
         integ = init(prob, CheckerboardCPM(; proposal = Moore(1), threads = true); save_start = false)
         nb = integ.cache.layout.nblocks
         @test !integ.cache.inline && integ.cache.groupsize == (nb[1], cld(nb[2], Threads.nthreads()))

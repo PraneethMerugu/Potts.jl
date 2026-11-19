@@ -49,7 +49,7 @@ end
         catch e
             e
         end
-        @test err isa IRError && occursin("Float64", err.msg)
+            @test err isa IRError && occursin("Float64", err.msg)
     end
 end
 end

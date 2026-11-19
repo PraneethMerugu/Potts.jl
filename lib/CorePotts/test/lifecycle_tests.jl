@@ -184,7 +184,7 @@ end
         @test sol.stats.attempts == 4 * 50                       # sweeps 0 … 3, then none
             @test all(i -> sol.u[i].ownership == sol.u[5].ownership, 5:9)            # nothing moves from t = 4 on
         # at construction a fully frozen lattice is still an error
-        @test_throws ArgumentError init(PottsProblem(GG, st, lat, (0, 1), gg_params(); frozen = trues(10, 10)), alg)
+            @test_throws ArgumentError init(PottsProblem(GG, st, lat, (0, 1), gg_params(); frozen = trues(10, 10)), alg)
     end
 
     @testset "a domain without frozen kinds never refreshes ($(nameof(typeof(alg))))" for alg in (SequentialCPM(), CheckerboardCPM())
@@ -238,7 +238,7 @@ end
         # no `frozen` given: the rule builds it; a different mask is rejected
         lat, st = prob.lattice, prob.u0
         @test PottsProblem(prob.f, st, lat, (0, 1), gg_params()).frozen == fk_mask(st, 2)
-        @test_throws ArgumentError PottsProblem(prob.f, st, lat, (0, 1), gg_params(); frozen = falses(30, 30))
+            @test_throws ArgumentError PottsProblem(prob.f, st, lat, (0, 1), gg_params(); frozen = falses(30, 30))
         integ = init(prob, alg)
         for _ in 1:15
             step!(integ)
@@ -305,7 +305,7 @@ end
             for bad in ((:ownership, :knd), (:ownership, :q), [:ownership], (:ownership, "kind"), (:ownership, :kind, :kind), (:ownership, :ownership))
             @test_throws ArgumentError init(fk_problem(; sys = DeclaredFrozen(2, bad)), alg)
         end
-        @test_throws ArgumentError init(fk_problem(; sys = DeclaredFrozen(2, (:ownership, :kind, :kind))), alg)
+            @test_throws ArgumentError init(fk_problem(; sys = DeclaredFrozen(2, (:ownership, :kind, :kind))), alg)
         # negative control: the standard rule ignores the hook (not even checked)
         integ = init(fk_problem(; sys = KindsBadReads()), alg)
         @test refresh_frozen!(integ).ctx.mobility.frozen == fk_mask(prob.u0, 2)
@@ -350,7 +350,7 @@ end
     for force in (false, true)
         CorePotts._FORCE_DEVICE_LIFECYCLE[] = force
         try
-            @test_throws ArgumentError run_lifecycle(σ, kinds, lat, Lifecycle(bad; kind); tspan = (0, 2), alg = CheckerboardCPM())
+                @test_throws ArgumentError run_lifecycle(σ, kinds, lat, Lifecycle(bad; kind); tspan = (0, 2), alg = CheckerboardCPM())
             u = run_lifecycle(σ, kinds, lat, Lifecycle(good; kind); tspan = (0, 2), alg = CheckerboardCPM()).u[end]
             @test count(>(0), u.cell.volume) == length(kinds) + 1 && u.cell.kind[1] == 3 - kinds[1]
         finally

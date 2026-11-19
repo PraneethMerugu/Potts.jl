@@ -28,14 +28,14 @@ end
     io = IOBuffer(); write_piff(io, σ3d, [:a, :b])
     @test first(read_piff(IOBuffer(String(take!(io))), (5, 4, 3))) == σ3d
     # errors
-    @test_throws ArgumentError read_piff(IOBuffer("1 A 0 1 0 0 0 0"), (10,))
-    @test_throws ArgumentError write_piff(IOBuffer(), zeros(Int32, 2, 2, 2, 2), Dict(1 => :A))
-    @test_throws ArgumentError read_piff(IOBuffer("1 A 0 10 0 0 0 0"), (10, 10))           # outside
-    @test_throws ArgumentError read_piff(IOBuffer("1 A 0 1 0 0 0 0\n2 B 1 2 0 0 0 0"), (10, 10))   # overlap
-    @test_throws ArgumentError read_piff(IOBuffer("1 A 0 1 0 0 0 0\n1 B 3 4 0 0 0 0"), (10, 10))   # two types
-    @test_throws ArgumentError read_piff(IOBuffer("1 A 0 1 0 0 0 1"), (10, 10))           # z in 2D
-    @test_throws ArgumentError read_piff(IOBuffer("1 A 0 1"), (10, 10))
-    @test_throws ArgumentError read_piff(IOBuffer("1 A 0 1 0 0 0 0\n0 Medium 0 3 0 0 0 0"), (10, 10))  # medium over a cell
+        @test_throws ArgumentError read_piff(IOBuffer("1 A 0 1 0 0 0 0"), (10,))
+        @test_throws ArgumentError write_piff(IOBuffer(), zeros(Int32, 2, 2, 2, 2), Dict(1 => :A))
+        @test_throws ArgumentError read_piff(IOBuffer("1 A 0 10 0 0 0 0"), (10, 10))           # outside
+        @test_throws ArgumentError read_piff(IOBuffer("1 A 0 1 0 0 0 0\n2 B 1 2 0 0 0 0"), (10, 10))   # overlap
+        @test_throws ArgumentError read_piff(IOBuffer("1 A 0 1 0 0 0 0\n1 B 3 4 0 0 0 0"), (10, 10))   # two types
+        @test_throws ArgumentError read_piff(IOBuffer("1 A 0 1 0 0 0 1"), (10, 10))           # z in 2D
+        @test_throws ArgumentError read_piff(IOBuffer("1 A 0 1"), (10, 10))
+        @test_throws ArgumentError read_piff(IOBuffer("1 A 0 1 0 0 0 0\n0 Medium 0 3 0 0 0 0"), (10, 10))  # medium over a cell
     # a file on disk
     path = tempname()
     write_piff(path, σ, kinds; ids)

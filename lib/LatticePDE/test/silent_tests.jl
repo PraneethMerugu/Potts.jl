@@ -23,7 +23,7 @@ end
 @testset "SD-04: a rate and a map in one system are refused, naming both" begin
     # base: `ExplicitMap` stepped the rate at dt = 1: c(1) = −4.0 where exp(−5) ≈ 0.0067, Success
     sys = ssys([D(ce) ~ -5ce, Shift(t, 1)(me) ~ me + 1], [c(0, x, y) ~ 1.0, mm(0, x, y) ~ 0.0], [ce, me], Num[])
-    @test_throws ArgumentError sown(sys)
+        @test_throws ArgumentError sown(sys)
     # control: the map alone runs
     m = sown(ssys([Shift(t, 1)(me) ~ me + 1], [mm(0, x, y) ~ 0.0], [me], Num[]))
     @test solve(m, ExplicitMap())[:mm, end][1] == 1.0
@@ -34,16 +34,16 @@ end
 @testset "SD-05, SD-06: parameters with no value are named" begin
     # an array parameter with no default (base: a zero-length table; c stayed 1.0, Success)
     @parameters Dz[1:2]
-    @test_throws ArgumentError sown(ssys([D(ce) ~ -Dz[2] * ce], [c(0, x, y) ~ 1.0], [ce], [Dz]))
-    # a scalar with no default
+        @test_throws ArgumentError sown(ssys([D(ce) ~ -Dz[2] * ce], [c(0, x, y) ~ 1.0], [ce], [Dz]))
+        # a scalar with no default
     @parameters kz
     sys = ssys([D(ce) ~ -kz * ce], [c(0, x, y) ~ 1.0], [ce], [kz])
     p = sown(sys)
-    @test_throws ArgumentError solve(p, ExplicitEuler(); dt = 0.1)
-    # … and remake gives it one
-    s = solve(remake(p; p = [kz => 2.0]), ExplicitEuler(; substeps = 1); dt = 0.1)
+        @test_throws ArgumentError solve(p, ExplicitEuler(); dt = 0.1)
+        # … and remake gives it one
+        s = solve(remake(p; p = [kz => 2.0]), ExplicitEuler(; substeps = 1); dt = 0.1)
     @test s[:c, end][1] ≈ 0.8^10
-    @test_throws ArgumentError solve(discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64)), Tsit5())
+        @test_throws ArgumentError solve(discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64)), Tsit5())
     # setp to NaN is refused and leaves the integrator unchanged
         integ = init(remake(p; p = [kz => 2.0]), ExplicitEuler(); dt = 0.1)
         @test_throws ArgumentError setp(integ, kz)(integ, NaN)
@@ -62,7 +62,7 @@ end
         @test solve(p, alg; dt = 0.01)[:c, end][1] ≈ (1 - 0.02)^100
     # a remake of a0 moves k2 (= 6), never leaving it stale
         @test solve(remake(p; p = [a0 => 3.0]), alg; dt = 0.01)[:c, end][1] ≈ (1 - 0.06)^100
-    @test_throws ArgumentError remake(p; p = [k2 => 5.0])
+        @test_throws ArgumentError remake(p; p = [k2 => 5.0])
     # the ODE path folds it too
     o = discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64))
     os = SciMLBase.solve(o, Tsit5(); abstol = 1e-10, reltol = 1e-10)
@@ -77,14 +77,14 @@ end
     @test getp(o, [a0, k2])(o) == [1.0, 2.0] && getp(o, (k2, a0))(o) == (2.0, 1.0)
         pi1 = init(p, alg; dt = 0.01)
     @test pi1[k2] == 2.0 && getp(pi1, k2)(pi1) == 2.0
-    @test_throws ArgumentError (pi1[:k2] = 5.0)
-    @test_throws ArgumentError pi1[:kd]
+        @test_throws ArgumentError (pi1[:k2] = 5.0)
+        @test_throws ArgumentError pi1[:kd]
     ix = o.f.sys                                                  # SII: parameters agree with their list
     @test all(q -> SymbolicIndexingInterface.is_parameter(ix, q), SymbolicIndexingInterface.parameter_symbols(ix))
     @test !SymbolicIndexingInterface.is_parameter(ix, k2) && SymbolicIndexingInterface.is_observed(ix, k2)
-    @test_throws ArgumentError setp(pi1, k2)(pi1, 5.0)
-    # … and refuses a remake of k2 by name
-    @test_throws ArgumentError remake(o; p = [k2 => 5.0])
+        @test_throws ArgumentError setp(pi1, k2)(pi1, 5.0)
+        # … and refuses a remake of k2 by name
+        @test_throws ArgumentError remake(o; p = [k2 => 5.0])
     # a face value may read a computed parameter (F2-15: a slot; before: refused, "`gs = g1 +
     # g2` … give `gs` a number"), equal to the number, and it follows its inputs
     @parameters g1 = 1.0 g2 = 2.0
@@ -100,7 +100,7 @@ end
     setp(oi, a0)(oi, 3.0)
     SciMLBase.step!(oi, 0.5, true)
     @test isapprox(oi.u[1], exp(-3); rtol = 1e-6) && oi.ps[k2] == 6.0
-    @test_throws ArgumentError remake(p; p = [k2 => 5.0])
+        @test_throws ArgumentError remake(p; p = [k2 => 5.0])
 end
 end
 
@@ -110,10 +110,10 @@ end
     @parameters Dn = -0.01
         sys = ssys([D(ce) ~ Dn * laplacian(ce)], [c(0, x, y) ~ x], [ce], [Dn])
     p = sown(sys)
-    for alg in (ExplicitEuler(), ExplicitEuler(; substeps = 3))
-        @test_throws ArgumentError solve(p, alg; dt = 0.1)
+        for alg in (ExplicitEuler(), ExplicitEuler(; substeps = 3))
+            @test_throws ArgumentError solve(p, alg; dt = 0.1)
     end
-    @test_throws ArgumentError SciMLBase.solve(discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64)), Tsit5())
+        @test_throws ArgumentError SciMLBase.solve(discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64)), Tsit5())
     # setp into the negative range is refused atomically
     q = remake(p; p = [Dn => 0.01])
         integ = init(q, ExplicitEuler(); dt = 0.1)
@@ -127,8 +127,8 @@ end
         LatticeDiscretization(Grid((4, 4)); T = Float64))
     @test SciMLBase.solve(o, Tsit5()).retcode == SciMLBase.ReturnCode.Success          # control
     @test SciMLBase.solve(remake(o; p = [Dp => 0.02]), Tsit5()).retcode == SciMLBase.ReturnCode.Success
-    @test_throws ArgumentError SciMLBase.solve(remake(o; p = [Dp => -1.0]), Tsit5())
-    @test_throws ArgumentError SciMLBase.solve(remake(o; p = [Dp => NaN]), Tsit5())
+        @test_throws ArgumentError SciMLBase.solve(remake(o; p = [Dp => -1.0]), Tsit5())
+        @test_throws ArgumentError SciMLBase.solve(remake(o; p = [Dp => NaN]), Tsit5())
     f = o.f.f
     du = similar(o.u0)
     f(du, o.u0, o.p, 0.0)
@@ -136,10 +136,10 @@ end
     ig = init(remake(o; p = [Dp => 0.01]), Tsit5())
     step!(ig)
     setp(ig, Dp)(ig, -1.0)
-    @test_throws ArgumentError step!(ig)                # the next call refuses it
+        @test_throws ArgumentError step!(ig)                # the next call refuses it
     ig2 = init(remake(o; p = [Dp => 0.01]), Tsit5())
     setp(ig2, Dp)(ig2, NaN)
-    @test_throws ArgumentError step!(ig2)
+        @test_throws ArgumentError step!(ig2)
     # the routes the messages give are LatticePDE's names too (round 1: not exported)
     @test LatticePDE.remake === SciMLBase.remake && LatticePDE.setp === setp && isdefined(LatticePDE, :getp) &&
           isdefined(LatticePDE, :getu)
@@ -219,7 +219,7 @@ end
     half = [i <= 2 for i in 1:n, j in 1:n]
     # a domain mask (base: the field never moved, extrema (0, 0)); `domain` takes the variable
     dsys = ssys([D(ce) ~ 1.0], [c(0, x, y) ~ 0.0], [ce, de], Num[])
-    @test_throws ArgumentError solve(sown(dsys; domain = dm), ExplicitEuler(); dt = 0.1)
+        @test_throws ArgumentError solve(sown(dsys; domain = dm), ExplicitEuler(); dt = 0.1)
         s = solve(sown(dsys; domain = dm, inputs = [dm => half]), ExplicitEuler(); dt = 0.1)
     @test s[:c, end] ≈ Float64.(half)
     @test sown(dsys; domain = "dm", inputs = [dm => half]).inputs == sown(dsys; domain = dm, inputs = [dm => half]).inputs
@@ -235,16 +235,16 @@ end
     step!(integ)
     # round 3: the `.=` message prints the name as written; a list's arrays are read-only too;
     # a fractional value for an integer input is named (round 2: a bare InexactError)
-    @test_throws ArgumentError (integ[:kq] .= 1)
-    # a list's arrays are copies too: writing into one changes nothing
+        @test_throws ArgumentError (integ[:kq] .= 1)
+        # a list's arrays are copies too: writing into one changes nothing
     (l = integ[[ce]]; l[1][1, 1] = 5.0)
     @test integ[ce][1, 1] != 5.0
-    @test_throws ArgumentError (integ[kq] = fill(1.5, n, n))
+        @test_throws ArgumentError (integ[kq] = fill(1.5, n, n))
     integ[kq] = zeros(Int32, n, n)
     @test integ[kq] == zeros(Int32, n, n)
-    # an in-place broadcast is refused, not a silent no-op on a copy
-    @test_throws ArgumentError (integ[kq] .= 1)
-    @test_throws ArgumentError (integ[ce] .= 7.0)
+        # an in-place broadcast is refused, not a silent no-op on a copy
+        @test_throws ArgumentError (integ[kq] .= 1)
+        @test_throws ArgumentError (integ[ce] .= 7.0)
     # a write into one entry of the copy changes nothing; `integ[c]` is a plain array
     v0 = integ[ce][1, 1]
     integ[ce][1, 1] = 5.0
@@ -258,41 +258,41 @@ end
     o = discretize(ssrc, LatticeDiscretization(Grid((n, n)); T = Float64); inputs = [qe => K])
     @test reshape(SciMLBase.solve(o, Tsit5()).u[end], n, n) ≈ Float64.(K)
     # (F4-01: an unset input is named at the solve, as on the owned path; base: at `discretize`)
-    @test_throws ArgumentError SciMLBase.solve(discretize(ssrc, LatticeDiscretization(Grid((n, n)); T = Float64)), Tsit5())
+        @test_throws ArgumentError SciMLBase.solve(discretize(ssrc, LatticeDiscretization(Grid((n, n)); T = Float64)), Tsit5())
     # a declared default needs no value
-    s = solve(sown(ssys([D(ce) ~ 1.0], [c(0, x, y) ~ 0.0], [ce, ddv], Num[]); domain = dd), ExplicitEuler(); dt = 0.1)
+        s = solve(sown(ssys([D(ce) ~ 1.0], [c(0, x, y) ~ 0.0], [ce, ddv], Num[]); domain = dd), ExplicitEuler(); dt = 0.1)
     @test all(≈(1.0), s[:c, end])
-    # wrong names and sizes are refused
-    @test_throws ArgumentError sown(msys; inputs = [ce => K])
-    @test_throws ArgumentError sown(msys; inputs = [qe => zeros(Int32, 3)])
+        # wrong names and sizes are refused
+        @test_throws ArgumentError sown(msys; inputs = [ce => K])
+        @test_throws ArgumentError sown(msys; inputs = [qe => zeros(Int32, 3)])
 end
 end
 
 @testitem "SD-07: lattice_placement is refused; lattice_level takes a grid (F3-16)" setup = [LP_silent] tags = [:latticepde, :silent] begin
-@testset "SD-07: lattice_placement is refused; lattice_level takes a grid (F3-16)" begin
+    @testset "SD-07: lattice_placement is refused; lattice_level takes a grid (F3-16)" begin
     @variables cl(..) [lattice_level = 4] cp(..) [lattice_placement = :node]
-    @test_throws ArgumentError sown(ssys([D(cp(t, x, y)) ~ -cp(t, x, y)], [cp(0, x, y) ~ 1.0], [cp(t, x, y)], Num[]))
-    @test_throws ArgumentError sown(ssys([D(cl(t, x, y)) ~ -cl(t, x, y)], [cl(0, x, y) ~ 1.0], [cl(t, x, y)], Num[]))
+        @test_throws ArgumentError sown(ssys([D(cp(t, x, y)) ~ -cp(t, x, y)], [cp(0, x, y) ~ 1.0], [cp(t, x, y)], Num[]))
+        @test_throws ArgumentError sown(ssys([D(cl(t, x, y)) ~ -cl(t, x, y)], [cl(0, x, y) ~ 1.0], [cl(t, x, y)], Num[]))
 end
 end
 
 @testitem "messages: no stale or misleading diagnosis (F1, M items)" setup = [LP_silent] tags = [:latticepde, :silent] begin
-using LatticeFields: IR
+    using LatticeFields: IR
 @testset "messages: no stale or misleading diagnosis (F1, M items)" begin
-    @test_throws ArgumentError LatticeDiscretization(Grid((4, 4)); problem = :linear)
-    st = PDESystem(
-        [0 ~ laplacian(c(x, y))], Equation[], [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [x, y], [c(x, y)],
+        @test_throws ArgumentError LatticeDiscretization(Grid((4, 4)); problem = :linear)
+        st = PDESystem(
+            [0 ~ laplacian(c(x, y))], Equation[], [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [x, y], [c(x, y)],
         Num[]; name = :st)
-    @test_throws ArgumentError solve(discretize(st, LatticeDiscretization(Grid((4, 4)))))
-    r = solve(
-        discretize(ssys([0 ~ laplacian(ce) - ce], [c(0, x, y) ~ 1.0], [ce], Num[]), LatticeDiscretization(Grid((4, 4)))),
-        QuasiSteady(); dt = 0.1
-    )
+        @test_throws ArgumentError solve(discretize(st, LatticeDiscretization(Grid((4, 4)))))
+        r = solve(
+            discretize(ssys([0 ~ laplacian(ce) - ce], [c(0, x, y) ~ 1.0], [ce], Num[]), LatticeDiscretization(Grid((4, 4)))),
+            QuasiSteady(); dt = 0.1
+        )
     @test r.retcode == SciMLBase.ReturnCode.Success
-    @test_throws ArgumentError solve(sown(ssys([D(ce) ~ laplacian(ce) - ce^3], [c(0, x, y) ~ 0.0], [ce], Num[])), ExplicitEuler(); dt = 0.01)
+        @test_throws ArgumentError solve(sown(ssys([D(ce) ~ laplacian(ce) - ce^3], [c(0, x, y) ~ 0.0], [ce], Num[])), ExplicitEuler(); dt = 0.01)
     asys = ssys([D(ce) ~ -Advect(Upwind1())(ve, ce)], [c(0, x, y) ~ 1.0], [ce, ve], Num[])
-    @test_throws ArgumentError sown(asys; inputs = [vel => zeros(4, 4, 2)])
-    @test_throws IR.IRError sown(ssys([D(ce) ~ Ke, Ke ~ Le + ce, Lc(t, x, y) ~ Ke], [c(0, x, y) ~ 0.0], [ce, Ke, Le], Num[]))
+        @test_throws ArgumentError sown(asys; inputs = [vel => zeros(4, 4, 2)])
+        @test_throws IR.IRError sown(ssys([D(ce) ~ Ke, Ke ~ Le + ce, Lc(t, x, y) ~ Ke], [c(0, x, y) ~ 0.0], [ce, Ke, Le], Num[]))
 end
 end
 
@@ -300,23 +300,27 @@ end
 @testset "SX-21: the other parts of a PDESystem are used or refused" begin
     @parameters kv
     eqs, d = [D(ce) ~ -kv * ce], sdom()
-    # `initial_conditions` give parameter values
+        # `initial_conditions` give parameter values
     s1 = PDESystem(eqs, [c(0, x, y) ~ 1.0], d, [t, x, y], [ce], [kv]; name = :s1, initial_conditions = Dict(kv => 2.0))
-    @test solve(sown(s1), ExplicitEuler(; substeps = 1); dt = 0.1)[:c, end][1] ≈ 0.8^10
+        @test solve(sown(s1), ExplicitEuler(; substeps = 1); dt = 0.1)[:c, end][1] ≈ 0.8^10
     s2 = PDESystem(eqs, Equation[], d, [t, x, y], [ce], [kv]; name = :s2, initial_conditions = Dict(kv => 2.0, ce => 0.5))
-    @test solve(sown(s2), ExplicitEuler(; substeps = 1); dt = 0.1)[:c, 1][1] == 0.5
+        @test solve(sown(s2), ExplicitEuler(; substeps = 1); dt = 0.1)[:c, 1][1] == 0.5
     s3 = PDESystem(eqs, [c(0, x, y) ~ 1.0], d, [t, x, y], [ce], [kv]; name = :s3, initial_conditions = Dict(kv => 2.0, ce => 0.5))
-    @test_throws ArgumentError sown(s3)
+        @test_throws ArgumentError sown(s3)
     @parameters zz
     s3b = PDESystem(eqs, [c(0, x, y) ~ 1.0], d, [t, x, y], [ce], [kv]; name = :s3b, initial_conditions = Dict(kv => 2.0, zz => 3.0))
-    @test_throws ArgumentError sown(s3b)
+        @test_throws ArgumentError sown(s3b)
     s4 = PDESystem([D(ce) ~ -ce], [c(0, x, y) ~ 1.0], d, [t, x, y], [ce]; name = :s4)
-    @test solve(sown(s4), ExplicitEuler(; substeps = 1); dt = 0.1)[:c, end][1] ≈ 0.9^10
-    @test discretize(s4, LatticeDiscretization(Grid((4, 4)); T = Float64)) isa SciMLBase.ODEProblem
+        @test solve(sown(s4), ExplicitEuler(; substeps = 1); dt = 0.1)[:c, end][1] ≈ 0.9^10
+        @test discretize(s4, LatticeDiscretization(Grid((4, 4)); T = Float64)) isa SciMLBase.ODEProblem
     sub = PDESystem([D(ce) ~ -ce], [c(0, x, y) ~ 1.0], d, [t, x, y], [ce]; name = :sub)
     s5 = PDESystem([D(ce) ~ -ce], [c(0, x, y) ~ 1.0], d, [t, x, y], [ce]; name = :s5, systems = [sub])
-    @test_throws ArgumentError sown(s5)
-    @test_throws ArgumentError sown(PDESystem([D(ce) ~ -ce], [c(0, x, y) ~ 1.0], d, [t, x, y], [ce]; name = :s6,
-        analytic = [ce ~ exp(-t)]))
+        @test_throws ArgumentError sown(s5)
+        @test_throws ArgumentError sown(
+            PDESystem(
+                [D(ce) ~ -ce], [c(0, x, y) ~ 1.0], d, [t, x, y], [ce]; name = :s6,
+                analytic = [ce ~ exp(-t)]
+            )
+        )
 end
 end

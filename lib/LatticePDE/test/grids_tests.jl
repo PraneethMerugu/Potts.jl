@@ -63,6 +63,6 @@ end
     end
     # part of a field: the read names `save_idxs` and the routes
         s = solve(p, ExplicitEuler(); dt = 0.01, saveat = 0.1, save_idxs = [2, 3])
-    @test length(s.u[1]) == 2 && occursin("save_idxs", msg(() -> s[qce]))
+        @test length(s.u[1]) == 2 && occursin("save_idxs", msg(() -> s[qce]))
 end
 end

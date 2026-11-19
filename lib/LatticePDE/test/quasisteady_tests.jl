@@ -139,10 +139,10 @@ end
     # the faces that make the steady problem indefinite (max Re λ +3.4, +0.82, +1.1, +5.4) are
     # refused at build, as a growth is, with the eigenvalue and the route; and at a write
     for (kd, β) in ((2.0, 0.5), (0.5, 1.0), (0.2, 1.0), (0.05, 0.5))
-        @test_throws ArgumentError init(rob(kd, β), alg; dt = 0.1)
+            @test_throws ArgumentError init(rob(kd, β), alg; dt = 0.1)
     end
-    ig = init(rob(2.0, 1.0), alg; dt = 0.1)
-    @test_throws ArgumentError (ig.ps[bk] = 0.5)
+        ig = init(rob(2.0, 1.0), alg; dt = 0.1)
+        @test_throws ArgumentError (ig.ps[bk] = 0.5)
         @test init(rob(2.0, 0.5), BackwardEuler(); dt = 0.1) isa Any                      # (the route builds)
     # a field face coefficient with a face-Dirichlet value that varies along the face
     p = bown(bsys([D(bce) ~ DivKGrad(:harmonic)(1 + x * y, bce) - bk * bce], [bc(0, x, y) ~ 0.0, bc(t, 0, y) ~ 1.0 + y], [bk]))
@@ -192,19 +192,19 @@ end
 @testitem "F3-12a: the refusals: growth, no unique steady state; keywords, show" setup = [LP_quasisteady] tags = [:latticepde, :quasisteady] begin
 @testset "F3-12a: the refusals: growth, no unique steady state; keywords, show" begin
     # a growth the operator sees, at build and at a parameter write
-    pg = bown(bsys([D(bce) ~ bD * laplacian(bce) + qg * bce], [bc(0, x, y) ~ x, bc(t, 0, y) ~ 1.0], [bD, qg]))
-    @test_throws ArgumentError init(pg, QuasiSteady(); dt = 0.1)
-    @test init(pg, BackwardEuler(); dt = 0.1) isa Any                  # (the route)
-    pd = bown(bsys([D(bce) ~ bD * laplacian(bce) - qg * bce + x], [bc(0, x, y) ~ x], [bD, qg]))
-    ig = init(pd, QuasiSteady(); dt = 0.1)
+        pg = bown(bsys([D(bce) ~ bD * laplacian(bce) + qg * bce], [bc(0, x, y) ~ x, bc(t, 0, y) ~ 1.0], [bD, qg]))
+        @test_throws ArgumentError init(pg, QuasiSteady(); dt = 0.1)
+        @test init(pg, BackwardEuler(); dt = 0.1) isa Any                  # (the route)
+        pd = bown(bsys([D(bce) ~ bD * laplacian(bce) - qg * bce + x], [bc(0, x, y) ~ x], [bD, qg]))
+        ig = init(pd, QuasiSteady(); dt = 0.1)
     step!(ig)
-    @test_throws ArgumentError (ig.ps[qg] = -2.0)
+        @test_throws ArgumentError (ig.ps[qg] = -2.0)
     # no decay and no fixed value: pure Neumann (refused), at build and when a write takes the
     # decay away; a Dirichlet face anchors it (accepted with no decay)
-    pn = bown(bsys([D(bce) ~ bD * laplacian(bce) + x], [bc(0, x, y) ~ x], [bD]))
-    @test_throws ArgumentError init(pn, QuasiSteady(); dt = 0.1)
-    ig = init(pd, QuasiSteady(); dt = 0.1)
-    @test_throws ArgumentError (ig.ps[qg] = 0.0)
+        pn = bown(bsys([D(bce) ~ bD * laplacian(bce) + x], [bc(0, x, y) ~ x], [bD]))
+        @test_throws ArgumentError init(pn, QuasiSteady(); dt = 0.1)
+        ig = init(pd, QuasiSteady(); dt = 0.1)
+        @test_throws ArgumentError (ig.ps[qg] = 0.0)
         pa = bown(bsys([D(bce) ~ bD * laplacian(bce) - qg * bce + x], [bc(0, x, y) ~ x, bc(t, 0, y) ~ 1.0], [bD, qg]))
         ig = init(pa, QuasiSteady(; linsolve = BTIGHT); dt = 0.1)
     ig.ps[qg] = 0.0
@@ -214,10 +214,10 @@ end
         pm = bown(bsys([D(bce) ~ bD * laplacian(bce) + x], [bc(0, x, y) ~ x, bce ~ masked(bqe == 2, 1.0)], [bD]))
         @test qmsg(() -> init(pm, QuasiSteady(); dt = 0.1)) == ""
     # the keywords
-    @test_throws ArgumentError QuasiSteady(; substeps = 2)
-    @test_throws ArgumentError QuasiSteady(; lower_bound = 0.0)
-    @test_throws ArgumentError QuasiSteady(; theta = 1)
-    @test_throws ArgumentError QuasiSteady(; nlsolve = 0)
+        @test_throws ArgumentError QuasiSteady(; substeps = 2)
+        @test_throws ArgumentError QuasiSteady(; lower_bound = 0.0)
+        @test_throws ArgumentError QuasiSteady(; theta = 1)
+        @test_throws ArgumentError QuasiSteady(; nlsolve = 0)
         a = QuasiSteady(; nlsolve = LatticeNewton(; max_iter = 3))
     @test eval(Meta.parse(repr(a))) == a
 end
@@ -302,7 +302,7 @@ end
         LatticeDiscretization(Grid((8, 8)); T = Float64))
     for (δ, k, s, κ) in ((0.1, 5.0, 1.0, "25.0"), (0.1, 5.0, -1.0, "25.0"), (1.0, 5.0, 1.0, "2.5"), (0.1, 9.0, 1.0, "81.0"))
         p = loop(δ, k, s)
-        @test_throws ArgumentError init(p, FieldGroups(qae => QuasiSteady(), qbe => BackwardEuler()); dt = 0.1)
+            @test_throws ArgumentError init(p, FieldGroups(qae => QuasiSteady(), qbe => BackwardEuler()); dt = 0.1)
         # the routes: one group, or Backward Euler for the steady field
             for alg in (BackwardEuler(), FieldGroups(qae => BackwardEuler(), qbe => BackwardEuler()))
                 r = solve(p, alg; dt = 0.1)
@@ -378,7 +378,7 @@ end
                 [D(qae) ~ 0.1 * laplacian(qae) + k * qbe, D(qbe) ~ 0.1 * laplacian(qbe) - qbe - k * qae],
         [qa(0, x, y) ~ 0.0, qb(0, x, y) ~ 1.0, qa(t, 0, y) ~ 0.0, qa(t, 1, y) ~ 0.0], bdom(1.0), [t, x, y], [qae, qbe], Any[];
         name = :g2))
-    @test_throws ArgumentError init(fa(4.0), gl(); dt = 0.1)
+        @test_throws ArgumentError init(fa(4.0), gl(); dt = 0.1)
     # k = 1: κ = 0.125, accepted. The hand split (a from b at the window's start, then b's
     # Backward Euler step) and the coupled solution `b' = (L_b − I + k² L_a⁻¹) b`, `exp`
     La, _ = hand_rate(; dims = (8, 8), K = (x, y) -> 0.1, faces = Dict((1, -1) => (:dir, 0.0), (1, 1) => (:dir, 0.0)))
@@ -406,7 +406,7 @@ end
         name = :g3)
     pm = discretize(sm, LatticeDiscretization(Grid((8, 8)); T = Float64);
         inputs = [qme => Int32[i == 1 ? 1 : 0 for i in 1:8, j in 1:8]])
-    @test_throws ArgumentError init(pm, gl(); dt = 0.1)
+        @test_throws ArgumentError init(pm, gl(); dt = 0.1)
         @test solve(pm, BackwardEuler(); dt = 0.1).retcode == ReturnCode.Success                     # (the route)
     # two steady groups in a loop with a transient one: a steady field that reads a steady field
     # of the loop is refused, the groups named (review r4 N1: the verb agrees); one way, the
@@ -421,17 +421,19 @@ end
     # compose, so the loop is accepted; as two steady groups it is refused, with the route of one)
         @test solve(cas(0.3), BackwardEuler(); dt = 0.1).retcode == ReturnCode.Success
         two = FieldGroups(qae => QuasiSteady(), qce => QuasiSteady(; nlsolve = LatticeNewton(; max_iter = 3)); default = BackwardEuler())
-    @test_throws ArgumentError init(cas(0.3), two; dt = 0.1)
-    @test solve(cas(0.0), BackwardEuler(); dt = 0.1).retcode == ReturnCode.Success
+        @test_throws ArgumentError init(cas(0.3), two; dt = 0.1)
+        @test solve(cas(0.0), BackwardEuler(); dt = 0.1).retcode == ReturnCode.Success
     # a parameter write is checked again: past the limit it is refused, and nothing changes
     @parameters gk = 0.5
-    pg = own8(
-        PDESystem(
-            [D(qae) ~ 0.1 * laplacian(qae) - qae + gk * qbe, D(qbe) ~ 0.1 * laplacian(qbe) - qbe - gk * qae],
-            [qa(0, x, y) ~ 0.0, qb(0, x, y) ~ 1.0], bdom(1.0), [t, x, y], [qae, qbe], [gk]; name = :g4))
-    ig = init(pg, gl(); dt = 0.1)
-    @test_throws ArgumentError (ig.ps[gk] = 4.0)
-    @test ig.ps[gk] == 0.5
+        pg = own8(
+            PDESystem(
+                [D(qae) ~ 0.1 * laplacian(qae) - qae + gk * qbe, D(qbe) ~ 0.1 * laplacian(qbe) - qbe - gk * qae],
+                [qa(0, x, y) ~ 0.0, qb(0, x, y) ~ 1.0], bdom(1.0), [t, x, y], [qae, qbe], [gk]; name = :g4
+            )
+        )
+        ig = init(pg, gl(); dt = 0.1)
+        @test_throws ArgumentError (ig.ps[gk] = 4.0)
+        @test ig.ps[gk] == 0.5
 end
 end
 
@@ -479,10 +481,10 @@ end
         @test maximum(abs, init(ps, QuasiSteady(; init = :steady, linsolve = BTIGHT); dt = 0.1).sol.u[1] .- want) < 1.0e-9
     # the refusals: a growth has no stable steady state (named with `init` and its route); the
     # step alone is accepted
-    pg = bown(bsys([D(bce) ~ bD * laplacian(bce) + 0.5 * bce], [bc(0, x, y) ~ 0.0, bc(t, 0, y) ~ 1.0], [bD]; T = 0.3))
-    @test_throws ArgumentError init(pg, BackwardEuler(; init = :steady); dt = 0.1)
-    @test init(pg, BackwardEuler(); dt = 0.1) isa Any
-    @test_throws ArgumentError BackwardEuler(; init = :cold)
+        pg = bown(bsys([D(bce) ~ bD * laplacian(bce) + 0.5 * bce], [bc(0, x, y) ~ 0.0, bc(t, 0, y) ~ 1.0], [bD]; T = 0.3))
+        @test_throws ArgumentError init(pg, BackwardEuler(; init = :steady); dt = 0.1)
+        @test init(pg, BackwardEuler(); dt = 0.1) isa Any
+        @test_throws ArgumentError BackwardEuler(; init = :cold)
     # the canonical text: `init` only when set (a default keeps every fingerprint)
     @test LFB.canonical(BackwardEuler(; init = :steady)) != LFB.canonical(BackwardEuler())
     @test LFB.canonical(ExplicitEuler(; init = :steady)) != LFB.canonical(ExplicitEuler())
@@ -517,7 +519,7 @@ end
         r0 = solve(p0, alg; dt = 0.1)
         @test r0.u == solve(p1, alg; dt = 0.1).u && r0.retcode == ReturnCode.Success          # (the cold start: 0)
         @test solve(p0, QuasiSteady(; linsolve = BTIGHT); dt = 0.1).u == r0.u           # (`QuasiSteady` by default)
-    @test_throws ArgumentError solve(p0, BackwardEuler(); dt = 0.1)
+        @test_throws ArgumentError solve(p0, BackwardEuler(); dt = 0.1)
     # a transient field `bo` (first in dvs) reads the steady `bc`: `bc` takes `QuasiSteady` at the
     # window of the given algorithm and steps first; a pair for it must be `QuasiSteady`
         sm = bsys(
@@ -531,7 +533,7 @@ end
             ig = init(pm, a; dt = 0.1)
         @test [(typeof(r.alg), r.keys) for r in ig.runtimes] == [(QuasiSteady, ["bc"]), (BackwardEuler, ["bo"])]
     end
-    @test_throws ArgumentError init(pm, FieldGroups(bce => BackwardEuler(), boe => BackwardEuler()); dt = 0.1)
+        @test_throws ArgumentError init(pm, FieldGroups(bce => BackwardEuler(), boe => BackwardEuler()); dt = 0.1)
     # the steady field is solved first in each window: `bo` reads this window's `bc`
         ig = init(pm, BackwardEuler(; linsolve = BTIGHT); dt = 0.1)
     step!(ig)
@@ -545,7 +547,7 @@ end
             [0 ~ 0.1 * laplacian(qfe) - qfe + bce, 0 ~ bD * laplacian(bce) - bk * bce + x], [bc(t, 0, y) ~ 1.0], bdom(0.3), [t, x, y],
         [bce, qfe], [bD, bk]; name = :which)
     @test last(LatticePDE.steady_rows(sw)) == ["qf", "bc"] && qown(sw).group.spec.steady == ["bc", "qf"]   # (rows; state order)
-    @test_throws ArgumentError qown(bsys([0 ~ x - 1, D(bce) ~ -bce], [bc(0, x, y) ~ 0.0], Any[]; dvs = [bce]))
+        @test_throws ArgumentError qown(bsys([0 ~ x - 1, D(bce) ~ -bce], [bc(0, x, y) ~ 0.0], Any[]; dvs = [bce]))
         # a row's sign does not matter (r3 S3): the elliptic form `0 ~ k c − D laplacian(c) − s` is the row
     # with its operator a diffusion, and a local row `0 ~ qf − c²` (for `qf`) is `0 ~ c² − qf`; a
     # row whose operator and local term disagree is refused as indefinite. Base (e7068add,
@@ -565,7 +567,7 @@ end
     @test rq.retcode == ReturnCode.Success
     # (`qf2` is solved at each window's start, from the `bc` of that start: the window before the end)
     @test maximum(abs, rq[qe2, length(rq.t)] .- rq[bce, length(rq.t) - 1] .^ 2) < 1e-6
-    @test_throws ArgumentError init(bown(bsys([0 ~ -bD * laplacian(bce) - bk * bce + x], [bc(t, 0, y) ~ 1.0], [bD, bk])), alg; dt = 0.1)
+        @test_throws ArgumentError init(bown(bsys([0 ~ -bD * laplacian(bce) - bk * bce + x], [bc(t, 0, y) ~ 1.0], [bD, bk])), alg; dt = 0.1)
     # an OrdinaryDiffEq solver: a steady row is a row of the mass matrix (F4-02; base: "the
     # steady rows of `bc` make the system a DAE", refused); the field algorithms step the same problem
     psm = discretize(sm, LatticeDiscretization(Grid(BDIMS); T = Float64))
@@ -611,11 +613,11 @@ end
     @test s[fce, 1] == s[:fc, 1] == reshape(s.u[1], BDIMS)                       # (the time-free symbol reads)
         @test maximum(abs, solve(pf, QuasiSteady(; linsolve = BTIGHT)).u[1] .- want) < 1.0e-9
     # what a steady system refuses: stepping, a window, a time span, save keywords, a time stepper
-    @test_throws ArgumentError init(pf)
-    @test_throws ArgumentError solve(pf, QuasiSteady(); dt = 0.1)
-    @test_throws ArgumentError solve(pf; saveat = 0.1)
-    @test_throws ArgumentError solve(pf, BackwardEuler(); dt = 0.1)
-    @test_throws ArgumentError discretize(sf, LatticeDiscretization(Grid(BDIMS); T = Float64); tspan = (0, 1))
+        @test_throws ArgumentError init(pf)
+        @test_throws ArgumentError solve(pf, QuasiSteady(); dt = 0.1)
+        @test_throws ArgumentError solve(pf; saveat = 0.1)
+        @test_throws ArgumentError solve(pf, BackwardEuler(); dt = 0.1)
+        @test_throws ArgumentError discretize(sf, LatticeDiscretization(Grid(BDIMS); T = Float64); tspan = (0, 1))
     # the `LinearProblem` of a linear system with no time, `A u = b` at the steady state (F4-02;
     # base: `problem = :ode` gave a `SteadyStateProblem`)
     ps = discretize(sf, LatticeDiscretization(Grid(BDIMS); T = Float64))

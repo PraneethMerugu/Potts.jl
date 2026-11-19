@@ -236,7 +236,7 @@ end
         if alg isa SequentialCPM
                 @test solve(un, alg).stats.accepted_energy_change == sol.stats.accepted_energy_change
         else
-            @test_throws ArgumentError solve(un, alg)
+                @test_throws ArgumentError solve(un, alg)
         end
         # a checkpoint continues only into an equally tracked run (hand-written: fingerprint 0
         # either way), in both directions
@@ -246,7 +246,7 @@ end
         for (from, into) in ((poff, pon), (pon, poff))
             i = init(from, alg); step!(i)
             ck = checkpoint(i)
-            @test_throws ArgumentError init(into, alg; checkpoint = ck)
+                @test_throws ArgumentError init(into, alg; checkpoint = ck)
         end
         i = init(pon, alg); step!(i); step!(i)                  # control: the same track continues
             @test solve!(init(pon, alg; checkpoint = checkpoint(i))).stats.accepted_energy_change == sol.stats.accepted_energy_change

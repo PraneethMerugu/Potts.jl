@@ -205,13 +205,13 @@ end
     available_frame = PottsRenderFrame(0,
         fill(RenderOwner(MediumSite, 1), 2, 2), RenderCellMetadata[];
         channels = (RenderChannel(available_key, zeros(2, 2)),))
-    @test_throws MakiePotts.MissingRenderChannelError frame_channel(available_frame, absent_key)
+        @test_throws MakiePotts.MissingRenderChannelError frame_channel(available_frame, absent_key)
 
     fixture_2d = render_fixture()
-    @test_throws ArgumentError renderframe(
+        @test_throws ArgumentError renderframe(
         fixture_2d.state,
         RenderRequest(extent = OrthogonalSlice(1, 1)))
-    @test_throws ArgumentError renderframe(
+        @test_throws ArgumentError renderframe(
         fixture_2d.state,
         RenderRequest(include_cell_metadata = false))
 
@@ -295,7 +295,7 @@ end
     @test Makie.data_limits(plot) == Makie.Rect3d(
         Makie.Point3d(1.0, -2.0, 0), Makie.Vec3d(1.5, 4.0, 0))
 
-    @test_throws ArgumentError record_potts(
+        @test_throws ArgumentError record_potts(
         tempname() * ".gif", PottsRenderFrame{2}[])
 
     singleton_output = tempname() * ".gif"
@@ -312,20 +312,21 @@ end
             spacing = (0.5, 2.0), origin = (2.0, -2.0)))
     incompatible_output = tempname() * ".gif"
     write(incompatible_output, "previous valid artifact")
-    @test_throws ArgumentError record_potts(
+        @test_throws ArgumentError record_potts(
         incompatible_output, [first(frames), shifted])
     @test read(incompatible_output, String) == "previous valid artifact"
-    @test_throws ArgumentError explore_potts(
+        @test_throws ArgumentError explore_potts(
         [first(frames), shifted]; inspector = false)
 
-    @test_throws ArgumentError record_potts(
+        @test_throws ArgumentError record_potts(
         tempname() * ".gif", [first(frames)]; framerate = 0)
-    @test_throws ArgumentError record_potts(
+        @test_throws ArgumentError record_potts(
         tempname() * ".gif", [first(frames)]; framerate = Inf)
-    @test_throws ArgumentError record_potts(
+        @test_throws ArgumentError record_potts(
         tempname(), [first(frames)])
-    @test_throws MakiePotts.RecordingError MakiePotts._atomic_record(
-        _ -> nothing, joinpath(tempdir(), "empty.mp4"))
+        @test_throws MakiePotts.RecordingError MakiePotts._atomic_record(
+            _ -> nothing, joinpath(tempdir(), "empty.mp4")
+        )
 
     inspected = explore_potts(
         frames[1:2]; inspector = true, figure = (; size = (180, 140)))
