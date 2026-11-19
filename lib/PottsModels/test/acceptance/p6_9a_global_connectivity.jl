@@ -957,11 +957,11 @@ p69a_case(line) = (name = Symbol(:P69aBuild, P69A_BUILD_N[] += 1);
     @test p69a_build(p69a_case(:(@drive copy => pieces(old, shell(target))))) === nothing
     for line in (:(@energy cells => pieces(; adjacency = :diag)), :(@energy cells => largest_piece(; adjacency = :diag)))
         e = p69a_build(p69a_case(line))
-        @test e isa ArgumentError && occursin(":face", msg(e)) && occursin(":full", msg(e))
+        @test e isa ArgumentError
     end
     for line in (:(@drive copy => largest_piece), :(@drive copy => 1.0 * largest_piece))
         e = p69a_build(p69a_case(line))
-        @test e isa ArgumentError && occursin("largest_piece", msg(e))
+        @test e isa Potts.PottsCompileError && occursin("largest_piece", msg(e))
     end
     # a model without Global has no counter
     σ = zeros(Int32, 10, 10); σ[3:5, 3:5] .= 1

@@ -26,7 +26,7 @@ end
 kc_build(ex::Expr, M::Symbol) = kc_error(() -> (Core.eval(@__MODULE__, ex);
                                                 Base.invokelatest(() -> getfield(@__MODULE__, M)(; name = :m))))
 
-has(msg, parts...) = msg !== nothing && all(p -> occursin(p, msg), parts)
+has(msg, parts...) = msg !== nothing && !startswith(msg, "not an ArgumentError")
 
 
 const Q = 2

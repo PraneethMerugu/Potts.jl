@@ -98,7 +98,7 @@ end
 
 function _observed_build(info::PottsModelInfo, c, T, x)
     e = _expand_observed(c, _unwrap(x))
-    _check_integral_pre_outside(e)
+    _check_integral_pre_outside(e, ArgumentError)
     _check_untracked_birth(c, e)
     rn = getfield(c, :gather_names)
     scope = _observed_scope(e)

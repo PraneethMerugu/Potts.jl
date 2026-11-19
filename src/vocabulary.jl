@@ -577,16 +577,16 @@ _lattice_dim() = (d = _build().dim) > 0 ? d :
 """`gather(n, anchor, body, cond)`: fold of `body` over relation neighbors `n` of `anchor`."""
 function gather end
 
-gather(n, a, b, c) = error("`gather` is symbolic-only")
+gather(n, a, b, c) = throw(ArgumentError("`gather` is symbolic-only"))
 """`population(n, body, cond)`: fold of `body` over live cells or sites `n` (`n`'s metadata)."""
-population(n, b, c) = error("`population` is symbolic-only")
+population(n, b, c) = throw(ArgumentError("`population` is symbolic-only"))
 
 Symbolics.@register_symbolic gather(n, a, b, c)
 Symbolics.@register_symbolic population(n, b, c)
 """`cell_centroid(k)`: coordinate `k` of the current cell's centroid (cell scope)."""
-cell_centroid(k) = error("`cell_centroid` is symbolic-only")
+cell_centroid(k) = throw(ArgumentError("`cell_centroid` is symbolic-only"))
 """`copy_displacement(c, k)`: change of cell `c`'s centroid along axis `k` by the copy (proposal scope)."""
-copy_displacement(c, k) = error("`copy_displacement` is symbolic-only")
+copy_displacement(c, k) = throw(ArgumentError("`copy_displacement` is symbolic-only"))
 Symbolics.@register_symbolic cell_centroid(k)
 Symbolics.@register_symbolic copy_displacement(c, k)
 
@@ -662,11 +662,11 @@ one of its variables when something reads it later, and at the MCS boundary.
 cells)`) is the same at every site: it is computed once per recomputation, not per site.
 Folds that draw `rand()`, and folds nested inside a fold that reads the site, stay per site.
 """
-cell_integral(x) = error("`integral` is symbolic-only")
+cell_integral(x) = throw(ArgumentError("`integral` is symbolic-only"))
 Symbolics.@register_symbolic cell_integral(x)
 """`cluster_integral_sum(y)`: `y = cell_integral(x)` summed over the alive members of the
 current cell's compartment cluster (`integral(x; over = cluster)`, E7)."""
-cluster_integral_sum(y) = error("`integral(x; over = cluster)` is symbolic-only")
+cluster_integral_sum(y) = throw(ArgumentError("`integral(x; over = cluster)` is symbolic-only"))
 Symbolics.@register_symbolic cluster_integral_sum(y)
 """Cell-state name of the tracker for `integral(x)`."""
 _integral(x; over = nothing) = over === nothing ? cell_integral(x isa Num ? x : Num(x)) : _integral_over(x, over)
@@ -695,7 +695,7 @@ end
 _integral_name(x) = Symbol(:integral_, string(_fnv64(_symkey(_integral_operand(x))); base = 62))
 
 """`history_lag(x, k)`: `x` at the end of the MCS `k` before the current one."""
-history_lag(x, k) = error("`history_lag` is symbolic-only")
+history_lag(x, k) = throw(ArgumentError("`history_lag` is symbolic-only"))
 Symbolics.@register_symbolic history_lag(x, k)
 
 """
@@ -737,7 +737,7 @@ _nonzero(x::Bool) = x
 Symbolics.@register_symbolic _nonzero(x)::Bool
 
 """`random_uniform(n)`: the `n`-th authored draw of a model, uniform in (0, 1)."""
-random_uniform(n) = error("`random_uniform` is symbolic-only")
+random_uniform(n) = throw(ArgumentError("`random_uniform` is symbolic-only"))
 Symbolics.@register_symbolic random_uniform(n)
 
 """
@@ -1156,7 +1156,7 @@ Base.show(io::IO, r::Global) = print(io, "Global(; window = ", repr(r.window), "
 
 """`_connected(c, code)`: rule `code` (`_rule_code`) holds for cell `c` (`old` or `new`)."""
 function _connected end
-_connected(c, code) = error("`connected` is symbolic-only")
+_connected(c, code) = throw(ArgumentError("`connected` is symbolic-only"))
 Symbolics.@register_symbolic _connected(c, code)::Bool
 
 function _which_cell(who, c)
@@ -1576,9 +1576,8 @@ Base.:(==)(a::LatticeSpec, b::LatticeSpec) = a.dims == b.dims && a.boundary == b
     a.spacing == b.spacing && a.neighborhood == b.neighborhood && a.domain == b.domain && a.geometry == b.geometry
 Base.hash(l::LatticeSpec, h::UInt) = hash((l.dims, l.boundary, l.spacing, l.neighborhood, l.domain, l.geometry), h)
 
-# `ExplicitEuler` is LatticeFields' (`LatticeFields.Problems.ExplicitEuler`, F2-04): one type
-# for both front ends. As a `field_solver` the window is the MCS (`dt` is refused); as an
-# `ode_solver`, `substeps = nothing` is one step.
+# `ExplicitEuler` is LatticeFields' (`LatticeFields.Problems.ExplicitEuler`). As a
+# `field_solver` the window is the MCS (`dt` is refused); as an `ode_solver`, `substeps = nothing` is one step.
 
 """
     Adaptive(alg; kwargs...)
@@ -1588,7 +1587,10 @@ Cell and model ODEs integrated on the host by any SciML ODE algorithm (`Tsit5()`
 …) passed to `init`: a `PottsProblem`'s `ode_solver`, or a variable's entry in its
 `solvers` map. One integrator is created on first use and re-initialized per cell and per
 MCS over `[mcs, mcs + 1) × mcs_duration`: adaptive and stiff solvers for intracellular or
-systemic models, at host speed (a device state is copied once per MCS).
+systemic models, at host speed (a device state is copied once per MCS). If an adaptive ODE
+substep fails to reach a successful return code, the run stops and reports that integrator
+return code on the solution's `retcode` (with a warning unless `verbose = false`, distinguishing
+an ODE `ReturnCode.MaxIters` from Potts's MCS `maxiters`).
 
 Every keyword and algorithm field enters the problem fingerprint, so a checkpoint resumes
 only under an equal solver. Values must be at most 8 levels deep and not cyclic (deeper
@@ -1627,10 +1629,11 @@ struct SweepSpec
 end
 # D-123: a finite real, also after conversion to Float64
 function _sweep_offset(offset)
-    o = offset isa Real ? (
+    o = offset isa Real && !_is_symbolic(offset) ? (
             try
                 Float64(offset)
-        catch
+        catch e
+                e isa Union{InexactError, MethodError, TypeError} || rethrow()
                 NaN
         end
         ) : NaN
@@ -1645,10 +1648,11 @@ end
 # D-126: a positive, finite real, also after conversion to Float64 (a `BigFloat` can overflow
 # to Inf or underflow to 0); a symbolic parameter does not convert and is rejected
 function _sweep_mcs_duration(mcs_duration)
-    md = mcs_duration isa Real ? (
+    md = mcs_duration isa Real && !_is_symbolic(mcs_duration) ? (
             try
                 Float64(mcs_duration)
-        catch
+        catch e
+                e isa Union{InexactError, MethodError, TypeError} || rethrow()
                 NaN
         end
         ) : NaN
@@ -1930,16 +1934,16 @@ is reused, every reference to a dead cell is reset to 0 (D-066 item 5 (a)).
 struct CellRef end
 
 """`cell_alive(r)`: whether the referent `r` is alive (`volume[r] > 0`; false for 0)."""
-cell_alive(r) = error("`alive` is symbolic-only")
+cell_alive(r) = throw(ArgumentError("`alive` is symbolic-only"))
 Symbolics.@register_symbolic cell_alive(r)::Bool
 """`cluster_sibling(cl, k)`: the alive member of kind `k` of cluster `cl`, or 0."""
-cluster_sibling(cl, k) = error("`sibling` is symbolic-only")
+cluster_sibling(cl, k) = throw(ArgumentError("`sibling` is symbolic-only"))
 Symbolics.@register_symbolic cluster_sibling(cl, k)
 """`as_ref(x)`: the cell id `x` read as a reference (`root(cluster)`)."""
-as_ref(x) = error("`root` is symbolic-only")
+as_ref(x) = throw(ArgumentError("`root` is symbolic-only"))
 Symbolics.@register_symbolic as_ref(x)
 """`outer_value(x)`: inside a population fold, `x` of the enclosing cell (`members(cluster)`)."""
-outer_value(x) = error("`members` is symbolic-only")
+outer_value(x) = throw(ArgumentError("`members` is symbolic-only"))
 Symbolics.@register_symbolic outer_value(x)
 
 _symarg(x) = x isa Num ? x : x isa Real ? Num(x) : x

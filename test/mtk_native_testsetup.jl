@@ -9,12 +9,12 @@ using Potts.ModelingToolkitBase: ModelingToolkitBase as MTKB
 using Potts.SymbolicUtils: iscall, operation, arguments
 using Potts.Symbolics: Symbolics, unwrap
 
-function mn_error(f)
+function mn_error(f, E::Type{<:Exception} = ArgumentError)
     try
         f()
     catch e
         e isa LoadError && (e = e.error)
-        return e isa ArgumentError ? sprint(showerror, e) : "not an ArgumentError: " * sprint(showerror, e)
+        return e isa E ? sprint(showerror, e) : "wrong exception $(typeof(e)), expected $E"
     end
     return nothing
 end
@@ -287,10 +287,10 @@ function compmodel(sys)
     return PottsProblem(F2CompRoute(; name = :cr, comp_sys = sys), [ownership => σ, kind => [:A]], (0, 2))
 end
 
-emsg(f) = try
+emsg(f, E::Type{<:Exception} = ArgumentError) = try
     f(); ""
 catch e
-    e isa ArgumentError || return "not an ArgumentError: " * sprint(showerror, e)
+    e isa E || return "wrong exception $(typeof(e)), expected $E"
     sprint(showerror, e)
 end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))

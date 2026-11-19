@@ -133,6 +133,12 @@ end
 end
 end
 
+@testitem "QA: error and message rules" setup = [CP_qa] tags = [:corepotts, :qa] begin
+    @testset "QA: error and message rules" begin
+        qa_error_rules(pkgdir(CorePotts); reviewed_invariants = ["src/fields.jl"])
+    end
+end
+
 @testitem "QA: ExplicitImports (CorePotts)" setup = [CP_qa] tags = [:corepotts, :qa] begin
 @testset "QA: ExplicitImports (CorePotts)" begin
         qa_explicit_imports(CorePotts; nonpublic_qualified = COREPOTTS_NONPUBLIC_QUALIFIED)

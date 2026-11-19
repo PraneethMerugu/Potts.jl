@@ -85,7 +85,7 @@ that variable.
 
 - **Energies** can read a referent's static values only: cell variables, `kind`, `birth`
   and `alive`. They cannot read what a copy changes, such as `volume[partner]`, because
-  ΔH would not see the change. That is an `ArgumentError` that names the alternative.
+  ΔH would not see the change. That is a `PottsCompileError` that names the alternative.
 - **Drives and constraints** can read anything through a reference.
 - **Between sweeps**, everything is available.
 
@@ -138,8 +138,8 @@ end
   - `d` is assumed to be within one period, as any difference of two coordinates is.
   - It is a pure function, so drives and energies can use it, for example
     `@drive copy => κ * minimum_image(position[target][1] - x₀, 1)`.
-  - On a hexagonal lattice a single axis does not carry a displacement, so there it is an
-    `ArgumentError`; use `separation` instead.
+  - On a hexagonal lattice a single axis does not carry a displacement, so there it is a
+    `PottsCompileError`; use `separation` instead.
 - **`integral(x; over = cluster)`** sums `x` over every site of the cluster's alive
   members, and every member reads the same value. `x` is a site expression, so `kind` and
   `volume` inside it are those of the cell that owns each site.

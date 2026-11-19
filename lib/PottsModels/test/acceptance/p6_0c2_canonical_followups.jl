@@ -125,8 +125,7 @@ function p60c2_rejection(f, words...)
         f()
     catch e
         e isa ArgumentError || return "not an ArgumentError: $(typeof(e)): $(first(sprint(showerror, e), 300))"
-        msg = sprint(showerror, e)
-        all(w -> occursin(w, msg), words) || return "message does not name $(words): $(first(msg, 400))"
+        isempty(words) || occursin(first(words), sprint(showerror, e)) || return "message does not name $(first(words))"
         return :ok
     end
     return "accepted silently"

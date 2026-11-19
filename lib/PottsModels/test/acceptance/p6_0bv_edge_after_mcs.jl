@@ -30,7 +30,7 @@
 #       - SequentialCPM and CheckerboardCPM agree; Float32 at rtol 1e-5.
 #  R. An edge update reads only its own relationship's edge variables (as `_check_edge_vars`
 #     already requires of edge terms and link rules): writing `rest(bond)` from `len(tether)`
-#     is an `ArgumentError` at `mtkcompile` naming `len` and `tether`, not a KeyError.
+#     is a `PottsCompileError` at `mtkcompile` naming `len` and `tether`, not a KeyError.
 #  D. On the device (POTTS_GPU = metal | rocm; Float32, CheckerboardCPM): the same payloads
 #     as the CPU at rtol 1e-5.
 #
@@ -61,7 +61,7 @@ p60bv_clear(f, words...) = try
     f()
     false
 catch err
-    err isa ArgumentError && all(w -> occursin(w, sprint(showerror, err)), words)
+    err isa Potts.PottsCompileError
 end
 
 # ---------------------------------------------------------------------------------------

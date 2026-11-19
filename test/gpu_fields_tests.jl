@@ -1,13 +1,13 @@
 # Fields and cell sums on device backends (POTTS_GPU = metal | rocm).
 
-# F2-08b: front end A's field kernels compile in the field phase's pending task
+# A coupled model's field kernels compile in the field phase's pending task
 # (`rt.pending`): the step and the mask launches, whose bodies clamp the sites they mark (the
 # clamp at the step start fused into the mask launch on a device: no separate clamp launch),
 # and the slot-1 copy. Once the task is done, the first MCS adds no LatticeFields kernel to
 # AMDGPU's kernel cache (counted), and the device run equals the host run.
-@testitem "F2-08b: the field kernels compile in the pending task, the clamp fused into the masks (ROCm)" setup = [GpuSetup, FieldsSetup] tags = [:potts, :gpu, :device] begin
+@testitem "field kernels compile in the pending task, the clamp fused into the masks (ROCm)" setup = [GpuSetup, FieldsSetup] tags = [:potts, :gpu, :device] begin
     if PottsDevices.device_name() == "rocm"
-        @testset "F2-08b: the field kernels compile in the pending task, the clamp fused into the masks (ROCm)" begin
+        @testset "field kernels compile in the pending task, the clamp fused into the masks (ROCm)" begin
             AM = PottsDevices.device_package()
             lfkernels() = Set(
                 s for s in (string(typeof(k)) for k in collect(values(AM.Compiler._kernel_instances)))

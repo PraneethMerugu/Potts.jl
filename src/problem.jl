@@ -997,6 +997,7 @@ function _substitute_entry(v, values, who)
     w = try
         _unwrap(Symbolics.substitute(v, values))
     catch e     # substitution folds calls on numbers: `sqrt(-1.0)` fails here
+        isfatal(e) && rethrow()
         throw(ArgumentError("$(_who(who)) = `$v` fails on the parameter values: $(sprint(showerror, e))"))
     end
     SymbolicUtils.isconst(w) && return SymbolicUtils.unwrap_const(w)
@@ -1037,6 +1038,7 @@ function _numeric(x, who)
     try
         return op(vals...)
     catch e
+        isfatal(e) && rethrow()
         throw(ArgumentError("$who: `$x` fails on the parameter values: $(sprint(showerror, e))"))
     end
 end

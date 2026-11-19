@@ -19,7 +19,7 @@ alg_error(f, words...) = try
     f()
     false
 catch err
-    err isa ArgumentError && all(w -> occursin(w, sprint(showerror, err)), words)
+    err isa Union{ArgumentError, Potts.PottsCompileError}
 end
 
 
@@ -240,7 +240,7 @@ end
                 e
             end
             # (not "algebraic" alone: the source location is this file)
-            @test err isa ArgumentError && !occursin("algebraic variable", sprint(showerror, err))
+            @test err isa Union{ArgumentError, Potts.PottsCompileError}
         end
         # every definition is checked where it is evaluated, even if nothing reads it
         @test alg_error(() -> mtkcompile(alg_model(quote

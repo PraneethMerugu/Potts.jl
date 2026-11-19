@@ -185,4 +185,179 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
         end
         return nothing
     end
+
+    const _QA_STALE_FRONTEND_RE = r"\bfront[- ]end\s+[AB]\b|\bboth\s+front\s+ends\b|@bcs\b"
+
+    function _qa_walk_ast_rules!(
+            ex, line::Base.RefValue{Int},
+            error_calls::Vector{Int}, bare_catches::Vector{Int}, non_assertion_invariants::Vector{Int};
+            in_assertion::Bool = false
+        )
+        if ex isa LineNumberNode
+            ex.line > 0 && (line[] = ex.line)
+            return nothing
+        elseif ex isa String
+            !in_assertion && occursin("please report", ex) && push!(non_assertion_invariants, line[])
+            return nothing
+        end
+        ex isa Expr || return nothing
+        # Skip docstring text on `@doc` macrocalls; scan only the documented expression.
+        if ex.head === :macrocall && length(ex.args) >= 4 && ex.args[1] == GlobalRef(Core, Symbol("@doc"))
+            _qa_walk_ast_rules!(ex.args[end], line, error_calls, bare_catches, non_assertion_invariants; in_assertion)
+            return nothing
+        end
+        next_assertion = in_assertion
+        if ex.head === :call && !isempty(ex.args)
+            callee = ex.args[1]
+            if callee === :error || callee == :(Base.error) || callee === :ErrorException || callee == :(Base.ErrorException)
+                push!(error_calls, line[])
+            elseif callee === :AssertionError || callee == :(Base.AssertionError)
+                next_assertion = true
+            end
+        elseif ex.head === :try && length(ex.args) >= 3
+            # `try ... catch; ... end` leaves the catch binding slot `ex.args[2] === false`
+            # with a catch body (`ex.args[3] !== false`); `try ... finally` has `ex.args[3] === false`.
+            ex.args[2] === false && ex.args[3] !== false && push!(bare_catches, line[])
+        end
+        for a in ex.args
+            _qa_walk_ast_rules!(a, line, error_calls, bare_catches, non_assertion_invariants; in_assertion = next_assertion)
+        end
+        return nothing
+    end
+
+    function _qa_scan_error_rules(text::AbstractString; allow_bcs::Bool = false, allow_bcs_test::Bool = false)
+        ast = Base.Meta.parseall(text)
+        error_calls = Int[]
+        bare_catches = Int[]
+        non_assertion_invariants = Int[]
+        _qa_walk_ast_rules!(ast, Ref(1), error_calls, bare_catches, non_assertion_invariants)
+        stale_terms = Int[]
+        for (i, ln) in enumerate(eachsplit(text, '\n'; keepempty = true))
+            if occursin(_QA_STALE_FRONTEND_RE, ln)
+                !occursin(r"\bfront[- ]end\s+[AB]\b|\bboth\s+front\s+ends\b", ln) &&
+                    ((allow_bcs && occursin("Symbol(\"@bcs\")", ln)) || allow_bcs_test) && continue
+                push!(stale_terms, i)
+            end
+        end
+        return (; error_calls, bare_catches, non_assertion_invariants, stale_terms)
+    end
+
+    _qa_invariants_match(found, reviewed) = sort(collect(String, found)) == sort(collect(String, reviewed))
+
+    function _qa_collect_tree(pkg_root::AbstractString, allowed_bcs_files::AbstractVector{<:AbstractString})
+        allowed_bcs = Set(normpath.(allowed_bcs_files))
+        qa_self = normpath(joinpath(pkg_root, "test", "shared", "qa_common.jl"))
+
+        bad_errors = String[]
+        bad_catches = String[]
+        bad_invariant_forms = String[]
+        bad_stale = String[]
+        found_invariants = String[]
+
+        for dir in ("src", "ext", "test")
+            root = joinpath(pkg_root, dir)
+            isdir(root) || continue
+            files = String[]
+            for (d, _, fs) in walkdir(root), f in fs
+                endswith(f, ".jl") && push!(files, joinpath(d, f))
+            end
+            sort!(files)
+            for f in files
+                nf = normpath(f)
+                dir == "test" && nf == qa_self && continue
+                rel = relpath(f, pkg_root)
+                text = read(f, String)
+                in_bcs = nf in allowed_bcs
+                res = _qa_scan_error_rules(
+                    text;
+                    allow_bcs = dir != "test" && in_bcs,
+                    allow_bcs_test = dir == "test" && in_bcs
+                )
+                for l in res.stale_terms
+                    push!(bad_stale, "$rel:$l")
+                end
+                dir == "test" && continue
+                for l in res.error_calls
+                    push!(bad_errors, "$rel:$l")
+                end
+                for l in res.bare_catches
+                    push!(bad_catches, "$rel:$l")
+                end
+                for l in res.non_assertion_invariants
+                    push!(bad_invariant_forms, "$rel:$l")
+                end
+                for ln in eachsplit(text, '\n'; keepempty = true)
+                    occursin("please report", ln) && push!(found_invariants, rel)
+                end
+            end
+        end
+        return (; bad_errors, bad_catches, bad_invariant_forms, bad_stale, found_invariants)
+    end
+
+    """
+        qa_error_rules(pkg_root; reviewed_invariants = String[], allowed_bcs_files = String[])
+
+    Verify that `src/` and `ext/` in `pkg_root` contain:
+    - no `error(...)`, `Base.error(...)`, or `ErrorException(...)` calls,
+    - no bare `catch` clauses (`try ... catch; ... end` without an exception binding),
+    - internal `"please report"` invariants thrown exclusively via `AssertionError` and matching
+      `reviewed_invariants`,
+    that `src/`, `ext/`, and `test/` contain no stale front-end wording (`"front end A"`,
+    `"front end B"`, `"both front ends"`, `"@bcs"` outside explicit legacy section refusal),
+    and run negative controls proving every guard flags synthetic violations.
+    """
+    function qa_error_rules(
+            pkg_root::AbstractString;
+            reviewed_invariants::AbstractVector{<:AbstractString} = String[],
+            allowed_bcs_files::AbstractVector{<:AbstractString} = String[]
+        )
+        Test = Base.require(Base.PkgId(Base.UUID("8dfed614-e22c-5e08-85e1-65c5234f0b40"), "Test"))
+        (; bad_errors, bad_catches, bad_invariant_forms, bad_stale, found_invariants) =
+            _qa_collect_tree(pkg_root, allowed_bcs_files)
+
+        isempty(bad_errors) || @error "untyped error() / ErrorException calls" bad_errors
+        isempty(bad_catches) || @error "bare catch clauses" bad_catches
+        isempty(bad_invariant_forms) || @error "non-AssertionError invariant throws" bad_invariant_forms
+        isempty(bad_stale) || @error "stale front-end terms" bad_stale
+        Test.@test isempty(bad_errors)
+        Test.@test isempty(bad_catches)
+        Test.@test isempty(bad_invariant_forms)
+        Test.@test isempty(bad_stale)
+        Test.@test _qa_invariants_match(found_invariants, reviewed_invariants)
+
+        # Negative controls: each guard flags synthetic scratch inputs and spares valid ones.
+        err_neg = _qa_scan_error_rules(
+            "f() = error(\"boom\")\ng() = Base.error(\"boom\")\nh() = throw(ErrorException(\"boom\"))\nk() = throw(Base.ErrorException(\"boom\"))"
+        )
+        Test.@test err_neg.error_calls == [1, 2, 3, 4]
+        catch_neg = _qa_scan_error_rules("f() = try x() catch; 1 end")
+        Test.@test length(catch_neg.bare_catches) == 1
+        catch_ok = _qa_scan_error_rules("f() = try x() catch e; isfatal(e) && rethrow(); 1 end\ng() = try x() finally 1 end")
+        Test.@test isempty(catch_ok.bare_catches)
+        inv_form_neg = _qa_scan_error_rules("f() = throw(ArgumentError(\"bad (please report it)\"))")
+        Test.@test inv_form_neg.non_assertion_invariants == [1]
+        inv_form_ok = _qa_scan_error_rules("f() = throw(AssertionError(\"bad (please report it)\"))")
+        Test.@test isempty(inv_form_ok.non_assertion_invariants)
+        mktempdir() do tmp
+            mkdir(joinpath(tmp, "src"))
+            write(joinpath(tmp, "src", "planted.jl"), "f() = throw(AssertionError(\"bad (please report)\"))\n")
+            planted = _qa_collect_tree(tmp, String[])
+            Test.@test isempty(planted.bad_invariant_forms)
+            Test.@test !_qa_invariants_match(planted.found_invariants, String[])
+            Test.@test _qa_invariants_match(planted.found_invariants, ["src/planted.jl"])
+        end
+        stale_neg = _qa_scan_error_rules("# front end A\nmsg = \"write @bcs: x\"")
+        Test.@test stale_neg.stale_terms == [1, 2]
+        bcs_neg = _qa_scan_error_rules("op === Symbol(\"@bcs\")"; allow_bcs = false)
+        Test.@test bcs_neg.stale_terms == [1]
+        bcs_ok = _qa_scan_error_rules("op === Symbol(\"@bcs\")"; allow_bcs = true)
+        Test.@test isempty(bcs_ok.stale_terms)
+        bcs_test_neg = _qa_scan_error_rules("msg = \"@bcs\""; allow_bcs_test = false)
+        Test.@test bcs_test_neg.stale_terms == [1]
+        bcs_test_ok = _qa_scan_error_rules("msg = \"@bcs\""; allow_bcs_test = true)
+        Test.@test isempty(bcs_test_ok.stale_terms)
+        bcs_test_fe = _qa_scan_error_rules("# front end A"; allow_bcs_test = true)
+        Test.@test bcs_test_fe.stale_terms == [1]
+        return nothing
+    end
 end

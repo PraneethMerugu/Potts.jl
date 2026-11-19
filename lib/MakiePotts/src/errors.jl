@@ -25,3 +25,15 @@ function Base.showerror(io::IO, error::MissingRenderChannelError)
     end
     print(io, ". Construct the frame with an explicit RenderChannel value")
 end
+
+"""Thrown when a Makie recording finishes without producing a nonempty output file."""
+struct RecordingError <: Exception
+    destination::String
+end
+
+function Base.showerror(io::IO, error::RecordingError)
+    return print(
+        io, "Makie recording completed without producing a nonempty artifact at ",
+        repr(error.destination)
+    )
+end

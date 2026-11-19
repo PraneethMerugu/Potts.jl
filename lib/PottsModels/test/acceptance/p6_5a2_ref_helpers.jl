@@ -48,8 +48,8 @@
 #    fold element). A dead referent or ref 0 reads 0.0 (the medium, as `centroid(k)` of
 #    an empty slot reads today, `_centroid_axis`). Cell scope: updates (`@after_mcs`),
 #    `@observed`, population folds (`sum(centroid(c, 1) for c in cells(nucleus))`).
-#    Refused in `@energy` (ArgumentError naming `centroid`: it has no ΔH, D-032 until R7).
-#    `centroid(c, k)` with k not an axis of the lattice is an ArgumentError naming
+#    Refused in `@energy` (`PottsCompileError` naming `centroid`: it has no ΔH).
+#    `centroid(c, k)` with k not an axis of the lattice is a `PottsCompileError` naming
 #    `centroid`.
 # C. `minimum_image(d, axis)` (E7; the scalar wrap). On a periodic axis of length L, the
 #    representative of `d` modulo L nearest 0; on a closed axis `d` itself. `axis` is a
@@ -71,7 +71,7 @@
 #    alive member of the current cell's cluster (each site weight 1; divide by the
 #    cluster's volume for the mean). The same value for every member. For a cell that is
 #    its own cluster it equals plain `integral(x)`, which stays the cell sum. Cell scope like `integral` (updates,
-#    `@observed`); refused in `@energy` with an ArgumentError (as `integral` is: no ΔH).
+#    `@observed`); refused in `@energy` with a `PottsCompileError` (as `integral` is: no ΔH).
 #    The integrand is in site scope (spec-owner ruling, 2026-10-14): `kind` and `volume`
 #    inside `x` bind to the site's owner, the member cell the site belongs to, so
 #    `integral(volume; over = cluster)` = Σ_members V_m², not (Σ V_m)·V_current. An unknown
@@ -630,7 +630,7 @@ end
     @test occursin("over", p65a2_msg(eo))
     # `over = cluster` outside a cell or cluster context (a site-scope update)
     es = p65a2_build_error(:P65a2BadOverSite, p65a2_bad_expr(:P65a2BadOverSite; update = :(F ~ integral(F; over = cluster))), op)
-    @test es isa ArgumentError                                   # DEFECT CHECK
+    @test es isa Potts.PottsCompileError                                   # DEFECT CHECK
     @test occursin("integral", p65a2_msg(es))
     # CONTROL (DEFECT CHECK today): `over = cluster` in a cell-scope update builds
     eok = p65a2_build_error(:P65a2OkOver, p65a2_bad_expr(:P65a2OkOver; update = :(w ~ integral(F; over = cluster))), op)
@@ -746,9 +746,9 @@ end
     op = p65a2_bad_op
     # CONTROL (passes today): the harness sees today's refusals
     e0 = p65a2_build_error(:P65a2BadOld, p65a2_bad_expr(:P65a2BadOld; energy = :((volume - 9.0)^2 + centroid(1))), op)
-    @test e0 isa ArgumentError && occursin("centroid", p65a2_msg(e0))
+    @test e0 isa Potts.PottsCompileError && occursin("centroid", p65a2_msg(e0))
     e00 = p65a2_build_error(:P65a2BadOldAxis, p65a2_bad_expr(:P65a2BadOldAxis; update = :(w ~ centroid(3))), op)
-    @test e00 isa ArgumentError && occursin("centroid", p65a2_msg(e00))
+    @test e00 isa Potts.PottsCompileError && occursin("centroid", p65a2_msg(e00))
     # CONTROL (DEFECT CHECK today): the template itself builds with the helpers in an update
     eok = p65a2_build_error(:P65a2BadNone, p65a2_bad_expr(:P65a2BadNone;
             update = :(w ~ centroid(sibling(nucleus), 1) + minimum_image(dd, 1) + integral(F; over = cluster))), op)
@@ -756,21 +756,21 @@ end
     # centroid(c, k) in an energy (no ΔH; D-032 until R7, open O5)
     e1 = p65a2_build_error(:P65a2BadCE, p65a2_bad_expr(:P65a2BadCE;
             energy = :((volume - 9.0)^2 + centroid(sibling(nucleus), 1))), op)
-    @test e1 isa ArgumentError                                   # DEFECT CHECK
+    @test e1 isa Potts.PottsCompileError                                   # DEFECT CHECK
     @test occursin("centroid", p65a2_msg(e1))
     # integral(x; over = cluster) in an energy (refreshed once per MCS: no ΔH, as integral)
     e2 = p65a2_build_error(:P65a2BadCI, p65a2_bad_expr(:P65a2BadCI; energy = :((volume - 9.0)^2 + integral(F; over = cluster))), op)
-    @test e2 isa ArgumentError                                   # DEFECT CHECK
+    @test e2 isa Potts.PottsCompileError                                   # DEFECT CHECK
     @test occursin("integral", p65a2_msg(e2))
     # axes: not an axis of the 2D lattice, and not a literal
     e3 = p65a2_build_error(:P65a2BadCA, p65a2_bad_expr(:P65a2BadCA; update = :(w ~ centroid(sibling(nucleus), 3))), op)
-    @test e3 isa ArgumentError                                   # DEFECT CHECK
+    @test e3 isa Potts.PottsCompileError                                   # DEFECT CHECK
     @test occursin("centroid", p65a2_msg(e3))
     e4 = p65a2_build_error(:P65a2BadMA, p65a2_bad_expr(:P65a2BadMA; update = :(w ~ minimum_image(dd, 3))), op)
-    @test e4 isa ArgumentError                                   # DEFECT CHECK
+    @test e4 isa Potts.PottsCompileError                                   # DEFECT CHECK
     @test occursin("minimum_image", p65a2_msg(e4))
     e5 = p65a2_build_error(:P65a2BadML, p65a2_bad_expr(:P65a2BadML; update = :(w ~ minimum_image(dd, ax))), op)
-    @test e5 isa ArgumentError                                   # DEFECT CHECK
+    @test e5 isa Potts.PottsCompileError                                   # DEFECT CHECK
     @test occursin("minimum_image", p65a2_msg(e5))
 end
 

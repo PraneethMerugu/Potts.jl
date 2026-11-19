@@ -153,13 +153,13 @@ function _bind_tangent(
         pp = _primal_params(p)
         pc = bind_cache(alg, g, pst, pp; fields, n, dt, c = primal(c), backend, options, V, abstol, reltol)
     else
-        # (front end A, F3-21b r1 S3: the primal runtime's own cache and store, which solve each
-        # stage once; the Dual store shares their slot parity `cur`, and the front end sets the
+        # (coupled `PottsProblem`: the primal runtime's own cache and store, which solve each
+        # stage once; the Dual store shares their slot parity `cur`, and the caller sets the
         # Dual values from the primal ones before each window, so there is nothing to sync)
         pc, pst = shared
         pst.cur === st.cur || throw(ArgumentError("a shared tangent needs the primal store's slot parity"))
     end
-    pc isa ImplicitCache || error("the primal cache of a tangent solve has derivative parts")
+    pc isa ImplicitCache || throw(AssertionError("the primal cache of a tangent solve has derivative parts (internal error: please report it)"))
     # the Dual side: the residual launches on the store, at the stage's iterate
     rs = residual_program(g, alg)
     swaps = Set(fieldid(s, k) for k in keys)
@@ -387,7 +387,7 @@ end
 """
     advance_shared!(rt, trt, clock, n, window) -> ReturnCode.T
 
-One window of front end A's implicit group `rt` with derivative parts (F3-21b r1 S3): `trt` is
+One window of a coupled `PottsProblem` implicit group `rt` with derivative parts: `trt` is
 the group bound to the Dual store with a [`TangentCache`](@ref) on `rt`'s own cache (`bind_group(…;
 shared = (rt.cache, rt.store))`, the stores sharing their slot parity). The masks and clamps of
 both stores, then each stage's primal solve (once, on `rt`'s store) and its tangent step, then the

@@ -114,11 +114,18 @@ cp_op() = (σ = zeros(Int32, 24, 20); σ[5:8, 5:8] .= 1; σ[14:17, 10:13] .= 2; 
 cp_run(m, fs, k = 12; op = cp_op(), kw...) =
     solve(PottsProblem(m, op, (0, k); field_solver = fs, seed = 3, kw...), SequentialCPM(); saveat = 0:3:k)
 
-cp_msg(f) = try
+cp_msg(f, E::Type{<:Exception} = ArgumentError) = try
     f()
     "built"
 catch e
-    e isa ArgumentError ? sprint(showerror, e) : "not an ArgumentError: " * sprint(showerror, e)
+    e isa E ? sprint(showerror, e) : "wrong exception $(typeof(e)), expected $E"
+end
+
+cp_compile_msg(f) = try
+    f()
+    "built"
+catch e
+    e isa Potts.PottsCompileError ? sprint(showerror, e) : "wrong exception $(typeof(e)), expected Potts.PottsCompileError"
 end
 
 const CP_W = [0.01 * (i + 2j) for i in 1:24, j in 1:20]
@@ -213,7 +220,7 @@ end
     @sweep Metropolis(; temperature = 4.0)
 end
 
-function cp_fresh_err(ex)
+function cp_fresh_err(ex, E::Type{<:Exception} = ArgumentError)
     m = Module(:CpFresh)
     Core.eval(m, :(using Potts))
     return try
@@ -223,7 +230,7 @@ function cp_fresh_err(ex)
         while err isa LoadError
             err = err.error
         end
-        err isa ArgumentError ? sprint(showerror, err) : "not an ArgumentError: " * sprint(showerror, err)
+        err isa E ? sprint(showerror, err) : "wrong exception $(typeof(err)), expected $E"
     end
 end
 

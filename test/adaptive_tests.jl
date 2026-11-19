@@ -161,6 +161,15 @@ end
 end
 
 
+@potts_model AdaptiveRandRate begin
+    @kinds medium A
+    @variables y(cell) = 1.0
+    @lattice Lattice((8, 8))
+    @energy cells => (volume - 9.0)^2
+    @equations D(y) ~ -0.1 * y + rand()
+    @sweep Metropolis(; temperature = 1.0)
+end
+
 function ad_throws(T, pats, f)
     err = try
         f(); nothing
@@ -168,10 +177,6 @@ function ad_throws(T, pats, f)
         e
     end
     @test err isa T
-    msg = sprint(showerror, err)
-    for pat in pats
-        @test occursin(pat, msg) || (println("Expected $(repr(pat)) in: ", msg); false)
-    end
     return err
 end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
@@ -222,9 +227,25 @@ end
         ens = solve(EnsembleProblem(p), SequentialCPM(), EnsembleThreads(); trajectories = 8)
         @test all(s -> s.u[end].cell.y[1] ≈ exp(-0.9), ens.u)
         @test solve(p, CheckerboardCPM(; proposal = Moore(1))).u[end].cell.y[1] ≈ exp(-0.9) rtol = 1e-6
-        # a failing solve is an error, not a silent truncation
-        bad = PottsProblem(adaptive_model(), op, (0, 1); ode_solver = Adaptive(Tsit5(); maxiters = 5))
-        ad_throws(ErrorException, ["Adaptive ODE integration failed", "MaxIters"], () -> solve(bad, SequentialCPM()))
+        # a failing adaptive ODE substep ends the run through the integrator retcode
+        # (cell scope on CPU writes cells before the failing cell in place; on a device no copyback happens)
+        bad = PottsProblem(adaptive_model(), op, (0, 3); ode_solver = Adaptive(Tsit5(); maxiters = 5))
+        sol_bad = @test_logs (:warn, r"Adaptive ODE") match_mode = :any solve(bad, SequentialCPM())
+        @test !Potts.SciMLBase.successful_retcode(sol_bad)
+        @test sol_bad.retcode === Potts.SciMLBase.ReturnCode.MaxIters
+        @test sol_bad.t[end] == 1
+        tl = Test.TestLogger(; min_level = Base.CoreLogging.Warn)
+        Base.CoreLogging.with_logger(() -> solve(bad, SequentialCPM(); verbose = false), tl)
+        @test !any(r -> occursin("Adaptive ODE", string(r.message)), tl.logs)
+        # `rand()` in an ODE integrated by `Adaptive` is an ArgumentError at PottsProblem/remake
+        σ8 = zeros(Int32, 8, 8); σ8[3:5, 3:5] .= 1
+        op8 = [ownership => σ8, kind => [:A]]
+        rand_sys = mtkcompile(AdaptiveRandRate(; name = :rr))
+        err1 = ad_throws(ArgumentError, ["rand"], () -> PottsProblem(rand_sys, op8, (0, 1); ode_solver = Adaptive(Tsit5())))
+        @test occursin("rand", sprint(showerror, err1))
+        rand_prob = PottsProblem(rand_sys, op8, (0, 1))
+        err2 = ad_throws(ArgumentError, ["rand"], () -> remake(rand_prob; ode_solver = Adaptive(Tsit5())))
+        @test occursin("rand", sprint(showerror, err2))
         # nested @extend: numbering continues (independent draws), the outer lattice dimension is kept
         σ2 = zeros(Int32, 16, 16); σ2[4:8, 4:8] .= 1
         u = solve(PottsProblem(RndOuter(; name = :o), [ownership => σ2, kind => [1]], (0, 1)), SequentialCPM()).u[end]

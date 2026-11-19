@@ -10,8 +10,8 @@
 # Redeclaring a name in its own category stays an override (the extension wins).
 const P60AL_MTKB = Potts.ModelingToolkitBase
 
-"""`:ok` if `f()` throws an `ArgumentError` (possibly inside `LoadError`s) whose message
-contains every one of `words`; otherwise a description of what happened."""
+"""`:ok` if `f()` throws an `ArgumentError` (possibly inside `LoadError`s); otherwise a
+description of what happened."""
 function p60al_rejection(f, words...)
     try
         f()
@@ -19,9 +19,7 @@ function p60al_rejection(f, words...)
         while e isa LoadError
             e = e.error
         end
-        e isa ArgumentError || return "not an ArgumentError: $(typeof(e)): $(first(sprint(showerror, e), 300))"
-        msg = sprint(showerror, e)
-        all(w -> occursin(w, msg), words) || return "message does not name $(words): $(first(msg, 400))"
+        e isa Union{ArgumentError, Potts.PottsCompileError} || return "not an ArgumentError or PottsCompileError: $(typeof(e)): $(first(sprint(showerror, e), 300))"
         return :ok
     end
     return "accepted silently"

@@ -32,10 +32,10 @@ function field!(
         pb::ProgramBuilder{N}, key; storage = F32, shape = Int16[], symmetric = false,
         buffers = 1, role = :state, epoch = PERSTEP, levels = Int8[0],
         classes = [Placement{N}()], fixed = false) where {N}
-    any(f -> f.key == key, pb.fields) && error("field `$key` declared twice")
+    any(f -> f.key == key, pb.fields) && irerror("field `$key` declared twice")
     role in (:state, :aux, :input, :output, :scratch) ||
-        error("field `$key`: unknown role `$role`")
-    storage in LANES || error("field `$key`: `$storage` is not a storage lane")
+        irerror("field `$key`: unknown role `$role`")
+    storage in LANES || irerror("field `$key`: `$storage` is not a storage lane")
     push!(pb.fields,
         FieldDecl{N}(String(key), classes, Int16.(shape), symmetric, storage,
             Int8.(levels), epoch, Int8(buffers), role, fixed))
@@ -69,7 +69,7 @@ end
 Finish kernel builder `kb` under `key` and add it to the program.
 """
 function add!(pb::ProgramBuilder, kb::KernelBuilder, key)
-    any(k -> k.key == key, pb.kernels) && error("kernel `$key` declared twice")
+    any(k -> k.key == key, pb.kernels) && irerror("kernel `$key` declared twice")
     push!(pb.kernels, finish(kb, key))
     return nothing
 end

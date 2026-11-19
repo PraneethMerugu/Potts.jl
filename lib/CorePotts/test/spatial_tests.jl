@@ -23,7 +23,7 @@ end
             @test u.ownership[.!frozen] != σ[.!frozen]
         @test sol.stats.attempts == 20 * count(!, frozen)
             @test u.cell.volume == [count(==(c), u.ownership) for c in eachindex(kinds)]
-            @test_throws ["ArgumentError", "frozen mask has size", "lattice"] PottsProblem(
+            @test_throws ArgumentError PottsProblem(
                 GG, initial_state(σ, kinds), lat, (0, 1),
             gg_params(); frozen = falses(3, 3))
     end

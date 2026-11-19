@@ -603,9 +603,9 @@ function (b::StabilityBound)(p)
     return isempty(r.coupled) ? r.ρ : NaN
 end
 
-# The bound of the rows `keep` alone (a field group, F2 design §2.6): a cross term that reads a
+# The bound of the rows `keep` alone (a field group): a cross term that reads a
 # field outside the group reads its array, which does not change during the group's step (a
-# source, as front end A's group sees it); the other terms are the row's own
+# source, as the group sees it); the other terms are the row's own
 function Problems.restrict_bound(b::StabilityBound, keep)
     idx = [i for i in eachindex(b.keys) if b.keys[i] in keep]
     length(idx) == length(b.keys) && return b
@@ -1099,11 +1099,8 @@ function _ghost_axes(cf::CompiledField{N}) where {N}
 end
 # the declared finite bounds of a scalar dependent variable, or nothing
 function _declared_bounds(v)
-    b = try
-        ModelingToolkitBase.getbounds(v)
-    catch
-        return nothing
-    end
+    ModelingToolkitBase.hasbounds(v) || return nothing
+    b = ModelingToolkitBase.getbounds(v)
     (b[1] isa Real && b[2] isa Real && isfinite(b[1]) && isfinite(b[2]) && b[1] <= b[2]) || return nothing
     return (Float64(b[1]), Float64(b[2]))
 end
@@ -1927,8 +1924,8 @@ function discretize(sys::PDESystem, disc::LatticeDiscretization{N}; inputs = (),
     backend = disc.backend === nothing ? KernelAbstractions.CPU() : disc.backend
     T = _statetype(disc)
     # Cartesian indexing on the host: the host loop hands each site its coordinates (a linear
-    # launch decodes them with an integer division per site; D5, as front end A); the option
-    # is outside the fingerprint
+    # launch decodes them with an integer division per site); the option is outside the
+    # fingerprint
     options = CompileOptions(; T, index = Exec.ishost(backend) ? :cartesian : :auto)
     span = tspan === nothing ? _domain_ends(sys)[1] : _given_tspan(tspan)
     # the group, lowered once in rate form (the update is fused by the group, per algorithm)
@@ -2083,7 +2080,7 @@ function _check_fusion(rate::Program, sys::PDESystem, disc)
         pass = fuse_update(rate, Problems.update_rule(alg))
         for T in (Float64, Float32)
             fingerprint_text(pass; T) == fingerprint_text(sym; T) ||
-                error("the update pass differs from the symbolic fusion (`$(nameof(sys))`, lower = $lower, T = $T)")
+                throw(AssertionError("the update pass differs from the symbolic fusion (`$(nameof(sys))`, lower = $lower, T = $T) (internal error: please report it)"))
         end
     end
     return nothing

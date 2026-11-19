@@ -159,11 +159,12 @@ function openvt_submission_package(outdir::AbstractString; bulk = get(ENV, _OPEN
     o1 = _openvt_pkg_o1(joinpath(_OPENVT_PKG_DATA, recs[:o1g]), recs[:o1],
         _openvt_pkg_o2_runs(joinpath(_OPENVT_PKG_DATA, recs[:f5])))
     bulkdir = _openvt_pkg_bulk(bulk, o1)
+    ok = false
     try
         _openvt_pkg_build(out, recs, o1, bulkdir)
-    catch
-        _openvt_pkg_clean(out, existed)
-        rethrow()
+        ok = true
+    finally
+        ok || _openvt_pkg_clean(out, existed)
     end
     return outdir
 end
@@ -1252,6 +1253,7 @@ function _openvt_pkg_split(outdir, out, existed, bulk, allow_pending, tag)
         o1 = _openvt_pkg_o1(joinpath(_OPENVT_PKG_DATA, recs[:o1g]), recs[:o1],
             _openvt_pkg_o2_runs(joinpath(_OPENVT_PKG_DATA, recs[:f5])))
         mono = joinpath("results", _OPENVT_PKG_FW, "Monolayer")
+        ok = false
         try
             mkpath(joinpath(out, "bulk"))
             stage = joinpath(tmp, "core")
@@ -1272,7 +1274,7 @@ function _openvt_pkg_split(outdir, out, existed, bulk, allow_pending, tag)
             io = IOBuffer()
             readme = read(rp, String)
             k = findlast("\n## Licence\n", readme)
-            k === nothing && error("openvt_submission_package: the results README has no Licence section")
+            k === nothing && throw(AssertionError("openvt_submission_package: the results README has no Licence section (internal error: please report it)"))
             print(io, readme[1:first(k)], """
             ## Bulk files
 
@@ -1288,9 +1290,9 @@ function _openvt_pkg_split(outdir, out, existed, bulk, allow_pending, tag)
             write(rp, String(take!(io)))
             _openvt_pkg_zip(stage, joinpath(out, "core.zip"))
             _openvt_pkg_write(joinpath(out, "EMAIL.md"), _openvt_pkg_email(recs, o1, bf, sha, sz, tag))
-        catch
-            _openvt_pkg_clean(out, existed)
-            rethrow()
+            ok = true
+        finally
+            ok || _openvt_pkg_clean(out, existed)
         end
     finally
         rm(tmp; recursive = true, force = true)

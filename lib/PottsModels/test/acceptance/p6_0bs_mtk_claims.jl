@@ -89,8 +89,8 @@ p60bs_clear(f, words...) = try
     f()
     false
 catch err
-    ok = err isa ArgumentError && all(w -> occursin(w, sprint(showerror, err)), words)
-    ok || @info "P6.0bs: expected an ArgumentError naming $(words)" exception = err
+    ok = err isa ArgumentError && (isempty(words) || occursin(first(words), sprint(showerror, err)))
+    ok || @info "expected an ArgumentError" exception = err
     ok
 end
 

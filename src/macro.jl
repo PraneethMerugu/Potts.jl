@@ -153,7 +153,7 @@ function _check_field_body_names(name, body, parts)
     end
     return nothing
 end
-# The old condition sections `@bcs` and `@boundary` are not sections of a model body (F4-B6): a
+# The legacy section macros are not sections of a model body: a
 # field's conditions are the second argument of its PDESystem. A body that uses one meets this
 # error at expansion, with the route (a module that defines the macro uses its own)
 const _OLD_BCS_TEXT = string(
@@ -479,11 +479,13 @@ struct _BaseCall{F, R <: Ref{Bool}}
     failed::R
 end
 function (c::_BaseCall)(args...; kws...)
+    ok = false
     try
-        return c.f(args...; kws...)
-    catch
-        c.failed[] = true
-        rethrow()
+        r = c.f(args...; kws...)
+        ok = true
+        return r
+    finally
+        ok || (c.failed[] = true)
     end
 end
 

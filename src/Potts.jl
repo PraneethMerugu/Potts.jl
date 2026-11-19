@@ -17,7 +17,7 @@ using CorePotts: CorePotts, Footprint, Lattice, embed, PottsProblem, Periodic, C
 using CorePotts: Metropolis, RandomPlane
 using JumpProcesses: JumpProcesses
 using KernelAbstractions: KernelAbstractions
-using LatticeFields: LatticeFields
+using LatticeFields: LatticeFields, isfatal
 using LatticeFields.Problems: ExplicitEuler, ExplicitMap, LatticeNewton, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, AbstractFieldAlgorithm,
                              substep_counts, steady_fields, field_series, field_report
 using LatticeFields.Solvers: LatticePCG, LatticeGMRES, LatticeMultigrid, LatticeBlockSolve, VCycle
@@ -54,6 +54,29 @@ public VCycle                               # `LatticeMultigrid(; cycle = VCycle
 # the declared parameters and variables of a model (MTK's `parameters` lists the compiled ones);
 # `RK4` (OrdinaryDiffEq exports a different `RK4`)
 public declared_parameters, declared_variables, RK4
+
+"""
+    PottsCompileError <: Exception
+
+Thrown when lowering or compiling a `PottsSystem` rejects a model expression or assignment
+that cannot execute in the generated CPM kernels.
+"""
+struct PottsCompileError <: Exception
+    msg::String
+end
+Base.showerror(io::IO, e::PottsCompileError) = print(io, e.msg)
+public PottsCompileError
+
+"""
+    PottsSolveError <: Exception
+
+Thrown when `anneal` stops with non-finite dynamics and cannot return a state.
+"""
+struct PottsSolveError <: Exception
+    msg::String
+end
+Base.showerror(io::IO, e::PottsSolveError) = print(io, e.msg)
+public PottsSolveError
 
 include("seeds.jl")
 include("draws.jl")

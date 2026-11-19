@@ -51,7 +51,7 @@
 #    changes: cell variables no `@on_copy` writes, `kind`, `birth`, `alive(ref)`, e.g.
 #    `λ * (volume - V₀ - q[partner])^2 + μ[kind, kind[partner]] * volume`. Reading a
 #    copy-varying quantity of a referent in an energy (`volume[partner]`) is refused at
-#    `mtkcompile` with D-209's `ArgumentError` (its message contains "a copy changes" and
+#    `mtkcompile` with a `PottsCompileError` (its message contains "a copy changes" and
 #    "in @energy cells"): ΔH evaluates only the copy's two cells, exactly as D-209 already
 #    refuses `volume[id]` and as `cluster_volume` is not readable in cell energies. A
 #    drive may read it (drives are copy-scope work terms, not part of H).
@@ -730,16 +730,7 @@ end
 end
 
 @testset "P6.5a: an energy may not read what a copy changes through a reference (D-209)" begin
-    e = try
-        mtkcompile(p65a_system(:P65aBadEnergy))
-        nothing
-    catch err
-        err
-    end
-    @test e isa ArgumentError
-    msg = e === nothing ? "" : sprint(showerror, e)
-    @test occursin("a copy changes", msg)
-    @test occursin("in @energy cells", msg)
+    @test_throws Potts.PottsCompileError mtkcompile(p65a_system(:P65aBadEnergy))
     # the static reads of the energy fixture compile (control)
     @test mtkcompile(p65a_system(:P65aEnergy)) isa CompiledPottsSystem
 end

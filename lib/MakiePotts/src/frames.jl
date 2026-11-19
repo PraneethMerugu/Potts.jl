@@ -282,6 +282,16 @@ struct RenderFrameConformance
 end
 Base.isvalid(report::RenderFrameConformance) = report.valid
 
+@inline function _probe_frame(issues::Vector{String}, label::AbstractString, f::F) where {F}
+    try
+        return true, f()
+    catch error
+        isfatal(error) && rethrow()
+        push!(issues, "$label: $(sprint(showerror, error))")
+        return false, nothing
+    end
+end
+
 """
     render_frame_conformance(frame)
 
@@ -290,28 +300,13 @@ Exercise the stable accessor protocol without relying on physical frame fields.
 function render_frame_conformance(frame::AbstractPottsRenderFrame{N}) where {N}
     issues = String[]
     N in (2, 3) || push!(issues, "frame dimensionality must be two or three")
-    mcs = try
-        frame_mcs(frame)
-    catch error
-        push!(issues, "frame_mcs failed: $(sprint(showerror, error))")
-        nothing
-    end
+    _, mcs = _probe_frame(issues, "frame_mcs failed", () -> frame_mcs(frame))
     mcs isa Integer && mcs >= 0 ||
         push!(issues, "frame_mcs must return a nonnegative integer")
-    dims = try
-        frame_size(frame)
-    catch error
-        push!(issues, "frame_size failed: $(sprint(showerror, error))")
-        nothing
-    end
+    _, dims = _probe_frame(issues, "frame_size failed", () -> frame_size(frame))
     dims isa NTuple{N, Int} && all(>(0), dims) ||
         push!(issues, "frame_size must return positive Int dimensions")
-    geometry = try
-        frame_geometry(frame)
-    catch error
-        push!(issues, "frame_geometry failed: $(sprint(showerror, error))")
-        nothing
-    end
+    _, geometry = _probe_frame(issues, "frame_geometry failed", () -> frame_geometry(frame))
     if !(geometry isa RenderGeometry{N})
         push!(issues, "frame_geometry must return RenderGeometry{$N}")
     elseif dims !== nothing && geometry.size != dims
@@ -319,24 +314,15 @@ function render_frame_conformance(frame::AbstractPottsRenderFrame{N}) where {N}
     end
     if dims isa NTuple{N, Int}
         for site in CartesianIndices(dims)
-            owner = try
-                owner_at(frame, site)
-            catch error
-                push!(issues, "owner_at failed: $(sprint(showerror, error))")
-                break
-            end
+            ok, owner = _probe_frame(issues, "owner_at failed", () -> owner_at(frame, site))
+            ok || break
             owner isa RenderOwner || begin
                 push!(issues, "owner_at must return RenderOwner")
                 break
             end
             if owner.kind === CellSite
-                metadata = try
-                    cell_metadata(frame, owner)
-                catch error
-                    push!(issues,
-                        "cell_metadata failed: $(sprint(showerror, error))")
-                    break
-                end
+                ok, metadata = _probe_frame(issues, "cell_metadata failed", () -> cell_metadata(frame, owner))
+                ok || break
                 metadata isa RenderCellMetadata || begin
                     push!(issues, "cell_metadata must return RenderCellMetadata")
                     break
@@ -346,14 +332,11 @@ function render_frame_conformance(frame::AbstractPottsRenderFrame{N}) where {N}
                         "cell_metadata(frame, owner) must preserve the owner ID")
                     break
                 end
-                by_identity = try
-                    cell_metadata(frame, metadata.identity)
-                catch error
-                    push!(issues,
-                        "cell_metadata(frame, identity) failed: " *
-                        sprint(showerror, error))
-                    break
-                end
+                ok, by_identity = _probe_frame(
+                    issues, "cell_metadata(frame, identity) failed",
+                    () -> cell_metadata(frame, metadata.identity)
+                )
+                ok || break
                 by_identity == metadata || begin
                     push!(issues,
                         "cell_metadata call forms must return equal metadata")
@@ -362,34 +345,20 @@ function render_frame_conformance(frame::AbstractPottsRenderFrame{N}) where {N}
             end
         end
     end
-    keys = try
-        available_channels(frame)
-    catch error
-        push!(issues, "available_channels failed: $(sprint(showerror, error))")
-        ()
-    end
+    ok, keys = _probe_frame(issues, "available_channels failed", () -> available_channels(frame))
+    ok || (keys = ())
     for key in keys
         key isa RenderChannelKey ||
             push!(issues, "available_channels must contain RenderChannelKey values")
         key isa RenderChannelKey || continue
-        item = try
-            frame_channel(frame, key)
-        catch error
-            push!(issues, "channel failed: $(sprint(showerror, error))")
-            nothing
-        end
-        item === nothing && continue
+        ok, item = _probe_frame(issues, "channel failed", () -> frame_channel(frame, key))
+        ok || continue
         item isa RenderChannel ||
             push!(issues, "channel must return RenderChannel")
         item isa RenderChannel && item.key != key &&
             push!(issues, "channel must return the requested key")
     end
-    provenance = try
-        frame_provenance(frame)
-    catch error
-        push!(issues, "frame_provenance failed: $(sprint(showerror, error))")
-        nothing
-    end
+    _, provenance = _probe_frame(issues, "frame_provenance failed", () -> frame_provenance(frame))
     provenance isa RenderProvenance ||
         push!(issues, "frame_provenance must return RenderProvenance")
     return RenderFrameConformance(isempty(issues), unique(issues))

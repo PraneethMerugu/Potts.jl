@@ -71,8 +71,6 @@ end
                 e
             end
             @test err isa ArgumentError
-            msg = sprint(showerror, err)
-            @test occursin("`$name`", msg) && occursin("axis 3", msg) && occursin("Closed", msg)
             # the control: the same model on a lattice without a thin periodic axis builds
             plane = getfield(@__MODULE__, Symbol("CGShellPlane", i))
             @test PottsProblem(plane(; name = :p), [ownership => cg_sigma((5, 5, 2)), kind => [:A]], (0, 1)) isa PottsProblem

@@ -852,8 +852,7 @@ Potts.ModelingToolkitBase.@variables dz(_tc)[1:2]::Bool = [false, true]
 end
 
 
-# P6.0k2 F4 (moved from the deleted test/mtk_extension.jl, D-256): a failure raised inside
-# MTK's compile of a discrete component becomes an `ArgumentError` naming the component; an
+# MTK's compile of a discrete component raises `PottsCompileError` naming the component; an
 # error raised in Potts' own code propagates unchanged.
 Potts.ModelingToolkitBase.@variables k2X(_tc)::Bool = false k2Y(_tc)::Bool = false
 

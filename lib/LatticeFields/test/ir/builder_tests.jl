@@ -53,8 +53,17 @@ end
     @test kb.nodes[m.id].type == U8
     @test kb.nodes[(m + 1.5).id].type == REAL               # integer operand cast to REAL
     @test kb.nodes[(m + IR.constant(kb, 2, U8)).id].type == U8
-        @test_throws ["BITTEST", "unsigned"] IR.bittest(load(kb, x), 1)  # BITTEST needs an unsigned operand
-        @test_throws ["CALL", "evalfile", "whitelist"] IR.call!(kb, :evalfile, m.id) # CALL whitelist
+        @test_throws IRError IR.bittest(load(kb, x), 1)
+        @test_throws IRError IR.call!(kb, :evalfile, m.id)
+        neg_exp = -1
+        @test_throws IRError m^neg_exp
+        @test_throws IRError IR.restrict(m; op = :bad)
+        @test_throws IRError IR.reduce!(kb, :bad, m, 1)
+        @test_throws IRError IR.field!(pb, "x")
+        @test_throws IRError IR.field!(pb, "y"; role = :bad)
+        @test_throws IRError IR.field!(pb, "y"; storage = IR.REAL)
+        IR.add!(pb, kb, "k")
+        @test_throws IRError IR.add!(pb, kb, "k")
 end
 end
 

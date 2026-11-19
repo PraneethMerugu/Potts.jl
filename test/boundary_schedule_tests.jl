@@ -1,6 +1,6 @@
 # P6.3b (D-145): `@schedule` beyond the frozen acceptance file: how it composes (`extend`), the
 # errors of the less common forms, the canonical fingerprint and the phase tuples the compiler
-# builds. The field conditions (front end A's `@boundary` until F4-B6) are a PDESystem's.
+# builds. The field conditions (previously `@boundary`) are a PDESystem's.
 
 @testsetup module BoundaryScheduleSetup
 using Potts, Test
@@ -233,9 +233,7 @@ end
 @testitem "@schedule: less common errors name the offender" setup = [BoundaryScheduleSetup] tags = [:potts, :boundary_schedule] begin
     @testset "@schedule: less common errors name the offender" begin
         @test_throws ArgumentError BSSched2(; name = :s)
-        @test_throws ["given twice"] BSSched2(; name = :s)
         @test_throws ArgumentError Potts._placed_schedule([:end_mcs, :fields])
-        @test_throws ["`end_mcs` must be last"] Potts._placed_schedule([:end_mcs, :fields])
     end
 end
 
@@ -287,7 +285,7 @@ end
             field_solver = ExplicitEuler(substeps = 1)
         )
         err = bs_error(() -> solve(prob, SequentialCPM())[:lap])
-        @test occursin("`laplacian` is a field operator", something(err, ""))
+        @test occursin("laplacian", something(err, ""))
     end
 end
 

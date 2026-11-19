@@ -4,15 +4,15 @@ using Potts: CorePotts
 
 const B6_LP = Potts.LatticePDE
 
-b6_msg(f) =
+b6_msg(f, E::Type{<:Exception} = ArgumentError) =
 try
     f()
     "built"
 catch e
-    e isa ArgumentError ? sprint(showerror, e) : "not an ArgumentError: " * sprint(showerror, e)
+    e isa E ? sprint(showerror, e) : "wrong exception $(typeof(e)), expected $E"
 end
 
-function b6_build_err(ex)
+function b6_build_err(ex, E::Type{<:Exception} = ArgumentError)
     mod = Module(:B6BuildErr)
     Core.eval(mod, :(using Potts, Potts.Fields))
     Core.eval(mod, :(const B6 = $B6))
@@ -23,7 +23,7 @@ function b6_build_err(ex)
         while err isa LoadError
             err = err.error
         end
-        sprint(showerror, err)
+        err isa E ? sprint(showerror, err) : "wrong exception $(typeof(err)), expected $E"
     end
 end
 

@@ -1,4 +1,4 @@
-# One derivation of computed parameters for both front ends (F2 design §2.7, D-F2-1).
+# One derivation of computed parameters for Potts and discretize.
 
 """
     derivation(base, computed) -> LatticeFields.Problems.Derivation
@@ -10,7 +10,7 @@ the base parameters `base` (names, in the order of the values the derivation tak
 D-117's (`LatticeFields.Problems.Derivation`): the expression is compiled as written
 (Base and registered functions, `÷` as integer division, a lazy `ifelse`), and a kind-table
 read `value_at(t, k)` or `value_at(t, k, l)` takes kind numbers (medium 0). Potts and `discretize` call
-it; a front end that keeps computed values (Potts' parameter object, B's computed slots)
+it; a caller that keeps computed values (Potts' parameter object, `LatticePDE`'s computed slots)
 evaluates it after every write of base values.
 """
 function derivation(base::AbstractVector, computed::AbstractVector)
@@ -35,6 +35,7 @@ function derivation(base::AbstractVector, computed::AbstractVector)
         push!(body, :($n = try
             $ex
         catch $er
+                    $(isfatal)($er) && rethrow()
             $(Problems.derive_fail)($(QuoteNode(n)), $(as_written(_deftext(e))), $er)
         end))
     end

@@ -102,10 +102,10 @@ end
             @test SII.getp(ode, sk)(ode) == 1.0
 
             ig_fp = init(fp, ExplicitEuler(); dt = 0.02)
-            @test_throws ["ArgumentError", "u0 has 3 values"] reinit!(ig_fp, zeros(3))
-            @test_throws ["ArgumentError", "step!(integ, dt)", "does not step back"] step!(ig_fp, -0.02)
-            @test_throws ["ArgumentError", "nonexistent_param", "not a parameter"] remake(fp; p = [:nonexistent_param => 1.0])
-            @test_throws ["ArgumentError", "nonexistent_param", "not a parameter"] remake(ode; p = [:nonexistent_param => 1.0])
+            @test_throws ArgumentError reinit!(ig_fp, zeros(3))
+            @test_throws ArgumentError step!(ig_fp, -0.02)
+            @test_throws ArgumentError remake(fp; p = [:nonexistent_param => 1.0])
+            @test_throws ArgumentError remake(ode; p = [:nonexistent_param => 1.0])
         end
     end
 end

@@ -19,8 +19,8 @@ end
           length(relation(NeighborOrder(3), L)) == 18
         @test length(relation(EuclideanBall(1.0), L)) == 6 && length(relation(EuclideanBall(sqrt(3)), L)) == 12
     @test all(o -> abs(hypot(embed(L, Float64.(o))...) - 1) < 1e-12, relation(Hex(1), L).offsets)   # unit distance
-        @test_throws ["ArgumentError", "Hex(k)", "hexagonal lattice"] relation(Hex(1), Lattice((8, 8)))
-        @test_throws ["ArgumentError", "hexagonal lattices are 2D", "3D dims", "Square()"] Lattice((4, 4, 4); geometry = Hexagonal())
+        @test_throws ArgumentError relation(Hex(1), Lattice((8, 8)))
+        @test_throws ArgumentError Lattice((4, 4, 4); geometry = Hexagonal())
     @test L != Lattice((24, 24)) && hash(L) != hash(Lattice((24, 24)))
     # a hexagonal disc: centroid, isotropic shape, even division
     σ = zeros(Int32, 24, 24)

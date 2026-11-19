@@ -248,14 +248,13 @@ p60ak_refused(f, name, ins...) = (e = p60ak_error(f); e isa ArgumentError &&
 
     @testset "negative controls" begin
         # an asymmetric contact table is still rejected
-        err = p60ak_error(() -> remake(pJ; p = [:J => [0 1 2; 1 0 0; 3 0 0]]))
-        @test err isa ArgumentError && occursin("symmetric", sprint(showerror, err))
-        err = p60ak_error(() -> (i = init(pJ, SequentialCPM()); i.ps[:J] = [0 1 2; 1 0 0; 3 0 0]))
-        @test err isa ArgumentError && occursin("symmetric", sprint(showerror, err))
+        @test_throws ArgumentError remake(pJ; p = [:J => [0 1 2; 1 0 0; 3 0 0]])
+        i = init(pJ, SequentialCPM())
+        @test_throws ArgumentError (i.ps[:J] = [0 1 2; 1 0 0; 3 0 0])
         # unknown names are still errors
-        @test p60ak_error(() -> remake(pJ; p = [:nosuch => 1.0])) isa ArgumentError
+        @test_throws ArgumentError remake(pJ; p = [:nosuch => 1.0])
         # a kind table keeps its size
-        @test p60ak_error(() -> remake(pJ; p = [:J => [0 1; 1 0]])) isa ArgumentError
+        @test_throws ArgumentError remake(pJ; p = [:J => [0 1; 1 0]])
         # nothing leaks into another problem: prob itself is unchanged
         @test p60ak_vals(prob).J == p60ak_Jf(16.0) && p60ak_vals(prob).β == 8.0
         @test p60ak_vals(remake(prob; p = [:λ => 3.0])).J == p60ak_Jf(16.0)

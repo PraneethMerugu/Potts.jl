@@ -111,7 +111,8 @@ function _hoistable(pop, rn)
     try
         lower(pop, _model_env(Float64, rn; key = :key))
         return true
-    catch
+    catch e
+        e isa PottsCompileError || rethrow()
         return false
     end
 end
@@ -134,7 +135,9 @@ function _hoist_populations(x, slots::Vector{Pair{Symbol, Any}}, rn, prefix::Sym
     length(pops) > 1 && (pops = pops[sortperm(map(_symkey, pops))])
     sub = Dict{Any, Any}()
     for p in pops
-        _hoistable(p, rn) || (strict ? throw(ArgumentError(
+        _hoistable(p, rn) || (
+            strict ? throw(
+                    PottsCompileError(
             "a population fold in an energy is computed once per MCS, so its body must not read " *
             "the current cell or site; got `$p`")) : continue)
         j = findfirst(s -> isequal(s.second, p), slots)
@@ -197,7 +200,9 @@ function _check_integral_pre(sys, u::Update, writers)
         bares = unique(first(r) for r in rs if !r[2])
         (isempty(pres) || isempty(bares)) && return
         _located(sys, u) do
-            throw(ArgumentError("`$(replace(string(y), r"\S*cell_integral" => "integral"))` reads $(join(pres, ", ")) through `Pre` (the values before the block) " *
+            throw(
+                PottsCompileError(
+                    "`$(replace(string(y), r"\S*cell_integral" => "integral"))` reads $(join(pres, ", ")) through `Pre` (the values before the block) " *
                                 "and $(join(bares, ", ")) bare (the block's new values), all written in the " *
                                 "same block; split it into `integral(…Pre…)` and `integral(…)` terms, or keep " *
                                 "`Pre(x)` in a site variable (`xp ~ Pre(x)`) and fold that"))
@@ -246,7 +251,9 @@ function _check_edge_block(sys, us)
             (n === me || !haskey(cadences, n)) && continue
             (pre && cadences[n] == Set((u.every,))) && continue
             _located(sys, u) do
-                throw(ArgumentError("the edge update of `$me` reads `$n`, which the same block writes " *
+                throw(
+                    PottsCompileError(
+                        "the edge update of `$me` reads `$n`, which the same block writes " *
                                     (pre ? "at another cadence" : "(a bare read is its new value)") *
                                     "; an edge update reads the edge variables its block writes only as " *
                                     "`Pre(x)`, written at the update's own cadence"))
@@ -285,7 +292,9 @@ function _edge_stage_ranks(sys, us, isedge)
             vars = sort!(unique([n for ((a, b), n) in why if a in left && b in left]))
             j = findfirst(i -> isedge[i] && _update_name(us[i]) in vars, eachindex(us))
             _located(sys, us[j]) do
-                throw(ArgumentError("the edge updates of $(join(("`$v`" for v in vars), ", ")) at cadences " *
+                throw(
+                    PottsCompileError(
+                        "the edge updates of $(join(("`$v`" for v in vars), ", ")) at cadences " *
                                     "$(join(("Every($c)" for c in sort(left)), ", ")) cannot run in declaration " *
                                     "order: each cadence's edge updates run together, and these writers alternate " *
                                     "between them; write each variable's updates at those cadences in the same order"))
@@ -341,7 +350,9 @@ function _schedule_block(sys, us::Vector{Update}, rn, popslots::Vector{Pair{Symb
         if state[j] == 1
             cyc = names[path[findfirst(==(j), path):end]]
             _located(sys, us[j]) do
-                throw(ArgumentError("updates depend on each other's new values in a cycle " *
+                throw(
+                    PottsCompileError(
+                        "updates depend on each other's new values in a cycle " *
                                     "($(join([cyc; names[j]], " → "))); read one of them through `Pre`"))
             end
         end

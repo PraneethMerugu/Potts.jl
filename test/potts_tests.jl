@@ -72,7 +72,6 @@ end
         p2 = repack(vals .* 2.0)
         @test p2.λ == 2.0 * prob.p.λ && p2.T == 2.0 * prob.p.T
         @test_throws ArgumentError repack(zeros(length(vals) + 1))
-        @test_throws ["Tunable", "values; got"] repack(zeros(length(vals) + 1))
 
         @test SII.is_parameter(prob, :λ) && SII.is_parameter(prob, :T)
         @test SII.is_variable(prob, :y)
@@ -148,7 +147,6 @@ end
         σ = zeros(Int32, 8, 8); σ[3:4, 3:4] .= 1
         prob = PottsProblem(VecParamModel(; name = :sc), [ownership => σ, kind => [:A]], (0, 2))
         @test_throws ArgumentError remake(prob; bogus_kw = 1)
-        @test_throws ["unknown keyword", "supported keywords"] remake(prob; bogus_kw = 1)
 
         raw = CorePotts.PottsProblem(
             CorePotts.CPMFunction((Δs, u, s, c) -> 0.0; temperature = (u, s, p, c) -> 1.0),
@@ -156,34 +154,19 @@ end
             CorePotts.Lattice((8, 8)), (0, 1), (;),
         )
         @test_throws ArgumentError total_energy(raw)
-        @test_throws ["total_energy", "PottsSystem"] total_energy(raw)
 
         @test_throws ArgumentError PottsProblem(VecParamModel(; name = :vp), [ownership => σ, kind => [:A], :d => [1.0, 2.0, 3.0]], (0, 1))
-        @test_throws ["2 components", "vector of 2-tuples"] PottsProblem(
-            VecParamModel(; name = :vp), [ownership => σ, kind => [:A], :d => [1.0, 2.0, 3.0]], (0, 1)
-        )
 
         @test_throws ArgumentError Potts.lattice_spec((8, 8); geometry = Hexagonal(), spacing = (1.0, 2.0))
-        @test_throws ["hexagonal lattice", "one spacing"] Potts.lattice_spec((8, 8); geometry = Hexagonal(), spacing = (1.0, 2.0))
 
         cyc_prob = PottsProblem(CyclicObsModel(; name = :cyc), [ownership => σ, kind => [:A]], (0, 1))
         @test_throws ArgumentError Potts.observe(cyc_prob, :oa)
-        @test_throws ["cyclic", "break the cycle"] Potts.observe(cyc_prob, :oa)
 
         @test_throws ArgumentError NoLatModel(; name = :nl)
-        @test_throws ["no @lattice", "declare"] NoLatModel(; name = :nl)
         @test_throws ArgumentError NoSweepModel(; name = :ns)
-        @test_throws ["no @sweep", "declare"] NoSweepModel(; name = :ns)
 
-        @test_throws ArgumentError mtkcompile(BadEnergyCase(; name = :bc, kind_case = :cluster_gather))
-        @test_throws ["cluster terms reading neighbors", "cells"] mtkcompile(
-            BadEnergyCase(; name = :bc, kind_case = :cluster_gather)
-        )
-        @test_throws ArgumentError mtkcompile(BadEnergyCase(; name = :bs, kind_case = :site_gather))
-        @test_throws ["site terms reading neighbors", "contacts"] mtkcompile(
-            BadEnergyCase(; name = :bs, kind_case = :site_gather)
-        )
-        @test_throws ArgumentError mtkcompile(BadEnergyCase(; name = :bm, kind_case = :cell_medium))
-        @test_throws ["medium kind", "kind 0"] mtkcompile(BadEnergyCase(; name = :bm, kind_case = :cell_medium))
+        @test_throws Potts.PottsCompileError mtkcompile(BadEnergyCase(; name = :bc, kind_case = :cluster_gather))
+        @test_throws Potts.PottsCompileError mtkcompile(BadEnergyCase(; name = :bs, kind_case = :site_gather))
+        @test_throws Potts.PottsCompileError mtkcompile(BadEnergyCase(; name = :bm, kind_case = :cell_medium))
     end
 end

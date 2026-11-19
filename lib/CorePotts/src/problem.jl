@@ -288,6 +288,7 @@ Base.@kwdef mutable struct PottsStats
     transfer_bytes::Int = 0
     lifecycle::LifecycleStats = LifecycleStats()
     fields::FieldStats = FieldStats()       # the field solvers' counters (status words, F3)
+    ode_code::SciMLBase.ReturnCode.T = SciMLBase.ReturnCode.Default
     # Σ `f.track` over the committed copies (`CPMFunction(…; track)`, Potts `track = (:energy_change,)`):
     # `nothing` without a track. Exact after every step under `SequentialCPM`; under
     # `CheckerboardCPM` brought up to date at the host read points (D-140)
@@ -405,6 +406,7 @@ function Base.merge(a::PottsStats, b::PottsStats)
         launches = a.launches + b.launches, refreshes = a.refreshes + b.refreshes,
         syncs = a.syncs + b.syncs, transfers = a.transfers + b.transfers,
         transfer_bytes = a.transfer_bytes + b.transfer_bytes, lifecycle = l, fields = fs,
+        ode_code = b.ode_code != SciMLBase.ReturnCode.Default ? b.ode_code : a.ode_code,
         accepted_energy_change = (a.accepted_energy_change === nothing || b.accepted_energy_change === nothing) ? nothing : a.accepted_energy_change + b.accepted_energy_change,
         connectivity_deferred = (a.connectivity_deferred === nothing || b.connectivity_deferred === nothing) ? nothing :
                                 a.connectivity_deferred + b.connectivity_deferred)
@@ -899,7 +901,7 @@ function Base.getproperty(integ::PottsIntegrator, name::Symbol)
     name === :tdir && return 1
     name === :sol && return invokelatest(PottsSolution, integ)
     # a read of `integ.stats`: on a device the field groups' status words are read first (one
-    # synchronization), so `integ.stats.fields` counts every window so far, as B's `field_stats`
+    # synchronization), so `integ.stats.fields` counts every window so far, as `field_stats`
     # does (review r1 N1); the solver itself reads `_stats(integ)`
     name === :stats && !Exec.ishost(getfield(integ, :backend)) && _read_statuses!(_stats(integ), getfield(integ, :ctx))
     return getfield(integ, name)
@@ -956,16 +958,21 @@ function _save!(integ::PottsIntegrator)
 end
 
 # a steady start (`init = :steady`, F3-12c) that failed ends the run before its first MCS
-_start_failed!(integ) = (_fields_failed(_stats(integ).fields.code) && (integ.retcode = _stats(integ).fields.code); nothing)
-# a field code that ends the run: a solve failure, or a field outside its declared bounds (`Unstable`)
+_start_failed!(integ) = ((c = _phase_failed_code(_stats(integ))) != SciMLBase.ReturnCode.Default && (integ.retcode = c); nothing)
+# a field or adaptive-ODE code that ends the run
 _fields_failed(c::SciMLBase.ReturnCode.T) = c == SciMLBase.ReturnCode.ConvergenceFailure || c == SciMLBase.ReturnCode.Unstable
+function _phase_failed_code(stats::PottsStats)
+    stats.ode_code != SciMLBase.ReturnCode.Default && return stats.ode_code
+    _fields_failed(stats.fields.code) && return stats.fields.code
+    return SciMLBase.ReturnCode.Default
+end
 function _check_status!(integ::PottsIntegrator)
     _status_failure!(integ, _model_status(_stats(integ), integ.state.model))
     _check_reduce_status!(_stats(integ), integ.state, integ.t, integ.backend)
     # the field groups' status words (on the host they are read after every window already)
     Exec.ishost(integ.backend) || _read_statuses!(_stats(integ), integ.ctx)
-    _fields_failed(_stats(integ).fields.code) && integ.retcode == SciMLBase.ReturnCode.Default &&
-        (integ.retcode = _stats(integ).fields.code)
+    (c = _phase_failed_code(_stats(integ))) != SciMLBase.ReturnCode.Default &&
+        integ.retcode == SciMLBase.ReturnCode.Default && (integ.retcode = c)
     integ.alg isa CheckerboardCPM || return integ.retcode
     st = _readback(_stats(integ), integ.cache.status)
     _status_failure!(integ, st)
@@ -1001,8 +1008,8 @@ function CommonSolve.step!(integ::PottsIntegrator)
     # recursion here; zero allocations, where `sum` and `foldl` with a closure allocated on
     # SequentialCPM)
     _run_mcs!(integ, integ.f.phases.mcs)
-    # a field solve that failed (its status word, read on the host after each window) ends the run
-    _fields_failed(_stats(integ).fields.code) && (integ.retcode = _stats(integ).fields.code)
+    # a field or adaptive ODE solve that failed ends the run
+    (c = _phase_failed_code(_stats(integ))) != SciMLBase.ReturnCode.Default && (integ.retcode = c)
     integ.t += 1
     integ.iter += 1
     _stats(integ).mcs += 1
@@ -1519,6 +1526,7 @@ function _restore_stats!(dst::PottsStats, src::PottsStats)
     dst.syncs, dst.transfers, dst.transfer_bytes = src.syncs, src.transfers, src.transfer_bytes
     dst.accepted_energy_change = src.accepted_energy_change
     dst.connectivity_deferred = src.connectivity_deferred
+    dst.ode_code = src.ode_code
     for f in fieldnames(LifecycleStats)
         setfield!(dst.lifecycle, f, getfield(src.lifecycle, f))
     end

@@ -74,10 +74,13 @@ end
                 [D(dfc(t, x, y)) ~ dfD * laplacian(dfc(t, x, y)) - dfk * dfc(t, x, y) + 0.1 * x], [], dfdom,
             [t, x, y], [dfc(t, x, y)], [dfD, dfk]; name = :dfi, initial_conditions = Dict(dfc(t, x, y) => 0.9)), dfdisc())
     @test all(==(0.9), r.u0)
-    # a field with no value at all is still refused by name
-    m = dfmsg(() -> discretize(PDESystem([D(dfn(t, x, y)) ~ -dfn(t, x, y)], [], dfdom, [t, x, y], [dfn(t, x, y)], Num[];
-            name = :dfz), dfdisc()))
-    @test occursin("field `dfn` has no initial condition", m) || (println(m); false)
+        # a field with no value at all is still refused
+        @test_throws ArgumentError discretize(
+            PDESystem(
+                [D(dfn(t, x, y)) ~ -dfn(t, x, y)], [], dfdom, [t, x, y], [dfn(t, x, y)], Num[];
+                name = :dfz
+            ), dfdisc()
+        )
 end
 end
 

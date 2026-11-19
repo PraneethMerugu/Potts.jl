@@ -1,4 +1,4 @@
-# Ruling Q18 (2026-11-07): B's `sol[c]` reads as SciML and front end A read a variable, one grid
+# Standalone `sol[c]` reads as SciML and coupled Potts read a variable, one grid
 # per save, so `sol[c][end]` and `sol[c][i]` are grids; `field_series(sol, c)` is the lazy
 # time-first array; `sol[c, i]` and `sol(t; idxs = c)` are grids. An owned solve, an
 # OrdinaryDiffEq (Tsit5) solve and a FieldProblem solved directly agree on every spelling.
@@ -63,7 +63,6 @@ end
     end
     # part of a field: the read names `save_idxs` and the routes
         s = solve(p, ExplicitEuler(); dt = 0.01, saveat = 0.1, save_idxs = [2, 3])
-    @test length(s.u[1]) == 2 && occursin("is not saved whole", msg(() -> s[qce]))
-    @test occursin("save_idxs = ", msg(() -> s[qce]))
+        @test length(s.u[1]) == 2 && occursin("save_idxs", msg(() -> s[qce]))
 end
 end

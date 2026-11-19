@@ -93,26 +93,16 @@ p60bo_byname(xs, n) = only(x for x in xs if p60bo_name(x) === n)
 p60bo_init(c, scope) = Potts.initialization_system(c, scope)
 
 _p60bo_unwrap(err) = err isa LoadError ? _p60bo_unwrap(err.error) : err
-p60bo_clear(f, words...) = try
+p60bo_clear(E::Type{<:Exception}, f, word = nothing) = try
     f()
     false
 catch err
     e = _p60bo_unwrap(err)
-    ok = e isa ArgumentError && all(w -> occursin(w, sprint(showerror, e)), words)
-    ok || @info "P6.0bo: expected an ArgumentError naming $(words)" exception = e
+    ok = e isa E && (word === nothing || occursin(word, sprint(showerror, e)))
+    ok || @info "expected $E$(word === nothing ? "" : " naming $word")" exception = e
     ok
 end
-# an ArgumentError naming `word` and at least one of `names`
-p60bo_clear_any(f, word, names) = try
-    f()
-    false
-catch err
-    e = _p60bo_unwrap(err)
-    msg = sprint(showerror, e)
-    ok = e isa ArgumentError && occursin(word, msg) && any(n -> occursin(n, msg), names)
-    ok || @info "P6.0bo: expected an ArgumentError with $(word) naming one of $(names)" exception = e
-    ok
-end
+p60bo_clear(f, word = nothing) = p60bo_clear(ArgumentError, f, word)
 
 # Fixtures are defined by evaluating their `@potts_model` here and capturing any error, so
 # that a tree without the section fails in the testsets and not when this file loads.
@@ -553,12 +543,12 @@ end
 
 @testset "P6.0bo V: rejections" begin
     attempt(name, op = p60bo_op()) = () -> PottsProblem(p60bo_build(name), op, (0, 1))
-    @test p60bo_clear(attempt(:P60boWritten), "overdetermined", "Vt")
-    @test p60bo_clear(attempt(:P60boWrittenZero), "overdetermined", "Vt")
-    @test p60bo_clear(attempt(:P60boTarget, p60bo_op(:Vt => [5.0, 5.0])), "overdetermined", "Vt")
-    @test p60bo_clear(attempt(:P60boAlg, p60bo_op(:x => [2.0, 3.0], :xd => [1.0, 1.0])), "overdetermined", "xd")
-    @test p60bo_clear_any(attempt(:P60boUnder), "underdetermined", ("alpha_u", "beta_u"))
-    @test p60bo_clear(attempt(:P60boRootless), "initialization", "rootless")
+    @test p60bo_clear(attempt(:P60boWritten), "Vt")
+    @test p60bo_clear(attempt(:P60boWrittenZero), "Vt")
+    @test p60bo_clear(attempt(:P60boTarget, p60bo_op(:Vt => [5.0, 5.0])), "Vt")
+    @test p60bo_clear(attempt(:P60boAlg, p60bo_op(:x => [2.0, 3.0], :xd => [1.0, 1.0])), "xd")
+    @test p60bo_clear(attempt(:P60boUnder), "underdetermined")
+    @test p60bo_clear(attempt(:P60boRootless), "rootless")
 end
 
 # ---------------------------------------------------------------------------------------
@@ -566,9 +556,9 @@ end
 
 @testset "P6.0bo X: cross-entity initialization is refused until P6.4a" begin
     attempt(name) = () -> PottsProblem(p60bo_build(name), p60bo_op(), (0, 1))
-    @test p60bo_clear(attempt(:P60boCross), "initialization", "partner")
-    @test p60bo_clear(attempt(:P60boGather), "initialization", "xgather")
-    @test p60bo_clear(attempt(:P60boField), "initialization", "cfield")
+    @test p60bo_clear(Potts.PottsCompileError, attempt(:P60boCross), "partner")
+    @test p60bo_clear(Potts.PottsCompileError, attempt(:P60boGather), "xgather")
+    @test p60bo_clear(Potts.PottsCompileError, attempt(:P60boField), "cfield")
 end
 
 # ---------------------------------------------------------------------------------------

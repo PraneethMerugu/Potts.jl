@@ -1,4 +1,4 @@
-# F4-14 (F4 design §5, AF-08): Potts' precompile workload runs on front end B (a plain
+# Potts' precompile workload runs on the standalone field path (a plain
 # PDESystem coupled with `couple` and with `@fields`; the coupled model's first MCS with
 # ExplicitEuler and with BackwardEuler, and its `field_report`) without a warning.
 

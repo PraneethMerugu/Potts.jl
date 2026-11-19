@@ -1,13 +1,12 @@
 # F3-10, F3-11 (F3 design §3.3, §3.7): `CrankNicolson` and `BDF2` in a model, through the
-# runtime of front end B (the models and helpers of fields_implicit.jl). With σ frozen the model equals
+# standalone field runtime (the models and helpers of fields_implicit.jl). With σ frozen the model equals
 # B bitwise; Crank–Nicolson damps the first substep of every MCS when the group reads the CPM
 # or its mask moves; BDF2 keeps its history in the runtime (not in `st.site`, saved states or a
 # checkpoint), across σ moves, and restarts after a write, `reinit!` or a restored checkpoint.
 # Base (69bef544, ~/lpwork/f3b4-nc10-a-base.log, f3b4-nc11-a-base.log): `CrankNicolson` and
 # `BDF2` are not defined in Potts (every testset errors).
 
-# the models' fields, coupled with `@fields` (F4-B4t; before, written in `@equations` and
-# `@bcs`); a kind is a bound input, a kind table the model's
+# the models' fields, coupled with `@fields`; a kind is a bound input, a kind table the model's
 
 @testitem "F3-10: CrankNicolson components and binding" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
     @testset "F3-10: CrankNicolson components and binding" begin
@@ -243,8 +242,8 @@ end
     end
 end
 
-@testitem "F3-12b (r3 S3, S4): a steady row's sign; its field by the rule of both front ends" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
-    @testset "F3-12b (r3 S3, S4): a steady row's sign; its field by the rule of both front ends" begin
+@testitem "steady row sign and field solve by the shared rule" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
+    @testset "steady row sign and field solve by the shared rule" begin
         dims, k = (12, 10), 3
         an, _ = fi_runA(FiSteadyNeg, fi_op(dims), k; field_solver = QuasiSteady(; linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 64)))
         a0, _ = fi_runA(FiSteady0, fi_op(dims), k; field_solver = QuasiSteady(; linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 64)))

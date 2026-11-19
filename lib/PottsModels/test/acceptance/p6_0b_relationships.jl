@@ -54,7 +54,7 @@ dist(prob, u, a, b) = CorePotts.centroid_distance(Float64, u.cell, prob.lattice,
 end
 
 @testset "P6.0b: relationship names are checked" begin
-    @test_throws "`bond` is already declared as a relationship" @macroexpand @potts_model DuplicateRelationship begin
+    @test_throws ArgumentError @macroexpand @potts_model DuplicateRelationship begin
         @kinds medium blob
         @relationship bond(cell, cell) capacity = 1
         @relationship bond(cell, cell) capacity = 2

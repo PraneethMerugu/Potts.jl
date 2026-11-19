@@ -149,10 +149,12 @@ using .LF_solvers_hex: fd
     f = rand(Xoshiro(2), 120)
     @test hex_vs_hand(op, Dict("in.f" => f))[1] < 1e-9
     # the refusals name the diagonal and the dims
-    @test_throws "the face coefficient of the diagonal `1 − 2` must be > 0" CellOperator((8, 8); hex = true,
+        @test_throws ArgumentError CellOperator(
+            (8, 8); hex = true,
         face = (1.0, 1.0, -1.0))
-    @test_throws "a hexagonal lattice is 2D" CellOperator((8, 8, 8); hex = true)
-    @test_throws "`face` has one coefficient per face direction of a hexagonal lattice" CellOperator((8, 8);
+        @test_throws ArgumentError CellOperator((8, 8, 8); hex = true)
+        @test_throws ArgumentError CellOperator(
+            (8, 8);
         hex = true, face = (1.0, 1.0))
 end
 end

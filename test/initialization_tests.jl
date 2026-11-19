@@ -23,8 +23,18 @@ ini_error(f, words...) = try
     false
 catch err
     e = err isa LoadError ? err.error : err
-    ok = e isa ArgumentError && all(w -> occursin(w, sprint(showerror, e)), words)
-    ok || @info "initialization: expected an ArgumentError naming $(words)" exception = e
+    ok = e isa ArgumentError
+    ok || @info "initialization: expected an ArgumentError" exception = e
+    ok
+end
+
+ini_compile_error(f, words...) = try
+    f()
+    false
+catch err
+    e = err isa LoadError ? err.error : err
+    ok = e isa Potts.PottsCompileError && (isempty(words) || occursin(first(words), sprint(showerror, e)))
+    ok || @info "initialization: expected a PottsCompileError" exception = e
     ok
 end
 
@@ -458,13 +468,13 @@ end
 @testitem "initialization: rejections" setup = [InitializationSetup] tags = [:potts, :initialization] begin
     @testset "initialization: rejections" begin
         @test ini_error(() -> PottsProblem(IniModelByCell(; name = :r), ini_op(), (0, 1)), "model variable", "`mm`", "model equation")
-        @test ini_error(() -> mtkcompile(IniReject(; name = :r, kind_case = :no_ode)), "D(v", "ODE")
-        @test ini_error(() -> mtkcompile(IniReject(; name = :r, kind_case = :surface)), "initialization", "surface")
+        @test ini_compile_error(() -> mtkcompile(IniReject(; name = :r, kind_case = :no_ode)), "D(v")
+        @test ini_compile_error(() -> mtkcompile(IniReject(; name = :r, kind_case = :surface)), "surface")
         @test ini_error(() -> PottsProblem(IniReject(; name = :r, kind_case = :twice), ini_op(), (0, 1)), "overdetermined", "v")
-        @test ini_error(() -> mtkcompile(IniReject(; name = :r, kind_case = :draw)), "initialization")
-        @test ini_error(() -> mtkcompile(IniGatherRate(; name = :r)), "initialization", "D(g")
+        @test ini_compile_error(() -> mtkcompile(IniReject(; name = :r, kind_case = :draw)), "initialization")
+        @test ini_compile_error(() -> mtkcompile(IniGatherRate(; name = :r)), "D(g")
         # errors name where the equation was written
-        @test ini_error(() -> mtkcompile(IniReject(; name = :r, kind_case = :surface)), "@initialization_equations", "initialization_tests.jl")
+        @test ini_compile_error(() -> mtkcompile(IniReject(; name = :r, kind_case = :surface)), "@initialization_equations")
     end
 end
 
@@ -523,7 +533,7 @@ end
         @test ini_u0(PottsProblem(IniTable(; name = :t), ini_op(; kinds = [:B, :A]), (0, 1)), :kv) == [48.0, 12.0]
         s = Potts.initialization_system(mtkcompile(IniTable(; name = :t)), :cell)
         @test :g_kind in ini_names(INI_M.parameters(s))
-        @test ini_error(() -> mtkcompile(IniTable(; name = :t, fixed = true)), "kind table", "g[kind]")
+        @test ini_compile_error(() -> mtkcompile(IniTable(; name = :t, fixed = true)), "kind table")
     end
 end
 

@@ -227,8 +227,10 @@ function _check_adaptive_draws(c::CompiledPottsSystem, resolved)
         lhs = _unwrap(eq.lhs)
         (iscall(lhs) && operation(lhs) isa Differential) || continue
         get(resolved, _solver_name(arguments(lhs)[1]), nothing) isa Adaptive || continue
-        _has_op(eq.rhs, random_uniform) && _located(getfield(c, :sys), eq) do
-            throw(ArgumentError("`rand()` in an equation integrated by `Adaptive(…)`: the solver re-evaluates " *
+        _has_op(eq.rhs, random_uniform) && _located(getfield(c, :sys), eq; compile = false) do
+            throw(
+                ArgumentError(
+                    "`rand()` in an equation integrated by `Adaptive(…)`: the solver re-evaluates " *
                         "the rate at trial steps; use `Potts.RK4`/`ExplicitEuler`, or draw in an update"
                 )
             )
@@ -315,18 +317,22 @@ end
 # different solvers would fingerprint alike and share one ODE group. A compiler-generated
 # name (`var"#…"`: an anonymous function, a closure, a local function) is accepted; the
 # problem fingerprint then also hashes the session token (`_session_bound`).
-_canonical_solver_part(v, what) = _canonical_checked(() -> "`Adaptive`: $what", v)
+_canonical_solver_part(v, what) = _canonical_checked(() -> "`Adaptive`: $what", v, ArgumentError)
 
-# `_canonical_value(v)`, with a value too deep or cyclic turned into an `ArgumentError` that
-# starts with `describe()` (built only then): every caller that can meet a user value (solver
-# parts, gather relations, symbolic constants and bound options) goes through here, so the
-# private `_CanonicalDepthError` never reaches the user (D-130).
-function _canonical_checked(describe, v)
+# `_canonical_value(v)`, with a value too deep or cyclic turned into `E` (`PottsCompileError`
+# during compilation/lowering, `ArgumentError` for solver arguments) that starts with
+# `describe()` (built only then): every caller that can meet a user value (solver parts,
+# gather relations, symbolic constants and bound options) goes through here, so the private
+# `_CanonicalDepthError` never reaches the user.
+function _canonical_checked(describe, v, E::Type{<:Exception} = PottsCompileError)
     try
         return _canonical_value(v)
     catch e
         e isa _CanonicalDepthError || rethrow()
-        throw(ArgumentError(string(describe(), " holds a value nested deeper than ", _CANONICAL_DEPTH,
+        throw(
+            E(
+                string(
+                    describe(), " holds a value nested deeper than ", _CANONICAL_DEPTH,
             " levels, or a cyclic value (at a `", e.type, "`): too deep to print in the canonical form that ",
             "orders, names and fingerprints the model's parts; pass a flatter value, e.g. a callable struct ",
             "holding only the values that matter")))

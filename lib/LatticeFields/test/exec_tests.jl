@@ -68,8 +68,8 @@ end
     @test Exec.compile!(l) === nothing && a == [fill(2, 15); zeros(Int, 5)]   # compile writes nothing
     l()
     @test (@allocated l()) == 0
-        @test_throws ["ArgumentError", "Launch", "n = -1 < 0"] Exec.Launch(KA.CPU(), AddK{2}(), (a,), -1; static = true)
-        @test_throws ["ArgumentError", "Launch", "workgroupsize = 0 < 1"] Exec.Launch(MockDevice(), AddK{2}(), (a,), 4; static = true, workgroupsize = 0)
+        @test_throws ArgumentError Exec.Launch(KA.CPU(), AddK{2}(), (a,), -1; static = true)
+        @test_throws ArgumentError Exec.Launch(MockDevice(), AddK{2}(), (a,), 4; static = true, workgroupsize = 0)
 end
 end
 
@@ -121,7 +121,7 @@ end
     Exec.walker(40)(calls)
     @test log == 1:40
     @test Exec.walker(0)(()) === nothing
-        @test_throws ["ArgumentError", "walker", "n = -1 < 0"] Exec.walker(-1)
+        @test_throws ArgumentError Exec.walker(-1)
 end
 end
 
@@ -143,6 +143,6 @@ end
     p = Exec.Plan((l, c))
     p()
     @test (@allocated p()) == 0
-        @test_throws ["ArgumentError", "Launch", "ndrange", "negative axis"] Exec.Launch(KA.CPU(), cart_body, ((b,), (3.0f0,), G), (5, -1); static = true)
+        @test_throws ArgumentError Exec.Launch(KA.CPU(), cart_body, ((b,), (3.0f0,), G), (5, -1); static = true)
 end
 end

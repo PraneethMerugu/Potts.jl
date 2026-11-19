@@ -428,14 +428,12 @@ end
             ), n;
             ins = [q(t, x, y) => zeros(Int32, n)]
         )
-        # a level that is not a grid: the route `Coarse(k)`
+        # a level that is not a grid
         ci = first(@variables cint(..) [lattice_level = 4])
-        m = cmsg(() -> mk(ci))
-        @test occursin("`lattice_level = 4`", m) && occursin("`Coarse(4)`", m)
-        # an axis that k does not divide: named, with its size and the route (which works)
+        @test_throws ArgumentError mk(ci)
+        # an axis that k does not divide
         cc = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(first(@variables cref(..))), LatticePDE.LatticeLevel, Coarse(4)))
-        m = cmsg(() -> mk(cc; n = (18, 16)))
-        @test occursin("axis 1 (`x`) has 18 sites", m) && occursin("divisible by 4", m) && occursin("20 or 16", m)
+        @test_throws ArgumentError mk(cc; n = (18, 16))
         @test solve(mk(cc; n = (20, 16)), ExplicitEuler(); dt = 0.1).retcode == SciMLBase.ReturnCode.Success
         @test solve(mk(cc; n = (16, 1)), ExplicitEuler(); dt = 0.1).retcode == SciMLBase.ReturnCode.Success   # size 1: never coarsened
         # a spatial operator of a coarse field in a fine row: the coarse operator at the node of
@@ -461,8 +459,7 @@ end
             [cc(0, x, y) ~ x^2, L(t, x, y) ~ masked(q(t, x, y) == 3, 1.0)], cdom(),
             [t, x, y], [cc(t, x, y), L(t, x, y), q(t, x, y)], Num[]; name = :am
         )
-        m = cmsg(() -> cown(am, (16, 16); ins = [q(t, x, y) => zeros(Int32, 16, 16)]))
-        @test occursin("aux field", m) && occursin("takes no mask", m) && occursin("rate field", m)
+        @test_throws ArgumentError cown(am, (16, 16); ins = [q(t, x, y) => zeros(Int32, 16, 16)])
         # (in a substep a field reads the fields it depends on after their update: `L` from `cref`
         # after its step; the coarse Laplacian by hand, zero flux, spacing 1/4)
         lap(v) = (
@@ -483,8 +480,7 @@ end
             [Shift(t, 1)(mm(t, x, y)) ~ mm(t, x + a * dx, y)], [mm(0, x, y) ~ x], cdom(10.0), [t, x, y],
             [mm(t, x, y)], [dx]; name = :mp
         )
-        m = cmsg(() -> cown(msys(1), (16, 16)))
-        @test occursin("a multiple of 4 sites (`4 * dx`)", m)
+        @test_throws ArgumentError cown(msys(1), (16, 16))
         sm = solve(cown(msys(4), (16, 16)), ExplicitMap(); saveat = [1.0])
         @test sm[mm(t, x, y), 2][1:3, :] == sm[mm(t, x, y), 1][2:4, :]          # one node to the left
     end

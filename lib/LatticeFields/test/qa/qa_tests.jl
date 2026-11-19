@@ -80,5 +80,6 @@ end
 @testset "source rules" begin
     root = dirname(@__DIR__) |> dirname
         qa_source_rules(root; exclude_files = [@__FILE__])
+        qa_error_rules(root; reviewed_invariants = ["src/compile/emit.jl", "src/problems/tangent.jl"])
 end
 end

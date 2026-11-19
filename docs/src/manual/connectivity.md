@@ -174,7 +174,7 @@ cannot decide reads `false`. A rule without a window is exact there too.
 
 - These are exact trackers, like `euler`. A cell term sees the exact values after the copy,
   so ΔH equals the difference of the Hamiltonian. They take no window on any algorithm.
-- A bare `pieces` or `largest_piece` in a drive is an `ArgumentError`, as for `volume`: index
+- A bare `pieces` or `largest_piece` in a drive is a `PottsCompileError`, as for `volume`: index
   it (`pieces[old]`).
 - The shell fold `pieces(c, shell(target))` is a different value and is unchanged.
 - **Cost.** The after-values come from the shell when the cell is one piece and the shell

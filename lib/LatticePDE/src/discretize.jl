@@ -724,8 +724,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
         kb = kern(lv)
         e = env(kind == :map, kb, lv, kind in (:rate, :map) ? get(free, k, nothing) : nothing,
                 kind in (:rate, :map) ? dompred : nothing)
-        # (the equation being lowered, for a front end that names it at a refusal: A's `@equations`
-        # line, review r1 N2; cleared once it lowers)
+        # (the equation being lowered, for callers that name it at a refusal; cleared once it lowers)
         task_local_storage(:lattice_equation, k)
         r = lower(rhs, e)
         delete!(task_local_storage(), :lattice_equation)

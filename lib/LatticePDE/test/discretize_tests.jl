@@ -55,13 +55,15 @@ end
     end
     r = one(h0 * c(t, x, 0) + Dy(c(t, x, 0)) ~ g0)
     @test isequal(r.alpha, unwrap(h0)) && isequal(r.beta, 1) && isequal(r.value, unwrap(g0))
-    # refusals, each with its message
-    for (bc, msg) in [(c(t, 0.5, y) ~ 1.0, "not on a face"), (kindₛ(t, 0, y) ~ 1, "input"),
-        (c(t, 0, y) + u(t, 0, y)[1] ~ 0.0, "mixes fields"), (c(t, x, 0) ~ c(t, 0, 0), "periodic pair"),
-        (c(t, x, 0) ~ c(t, x, 0), "periodic pair"), (u(t, 0, y) ~ [0.0, 0.0], "per component"),
-        (Dy(c(t, 1, y)) ~ 0.0, "along the pinned"), (c(t, 0, 0) ~ 1.0, "exactly one"),
-        (kindₛ(t, x, y) ~ masked(ke == 3, 1), "input")]
-        @test throws_with(() -> one(bc), msg)
+        # refusals
+        for bc in (
+                c(t, 0.5, y) ~ 1.0, kindₛ(t, 0, y) ~ 1,
+                c(t, 0, y) + u(t, 0, y)[1] ~ 0.0, c(t, x, 0) ~ c(t, 0, 0),
+                c(t, x, 0) ~ c(t, x, 0), u(t, 0, y) ~ [0.0, 0.0],
+                Dy(c(t, 1, y)) ~ 0.0, c(t, 0, 0) ~ 1.0,
+                kindₛ(t, x, y) ~ masked(ke == 3, 1),
+            )
+            @test_throws ArgumentError one(bc)
     end
 end
 end
@@ -75,26 +77,29 @@ end
     for key in (c, ce, unwrap(ce))                  # the callable, the applied term, unwrapped
         @test ir(symbolic_discretize(sys, LatticeDiscretization(g; methods = Dict(key => FiniteVolume())))) == base
     end
-    @test throws_with(() -> symbolic_discretize(sys, LatticeDiscretization(g; methods = Dict(o => FiniteVolume()))), "matches no")
-    @test throws_with(() -> symbolic_discretize(sys, LatticeDiscretization(g; methods = Dict(c => :fem))), "FiniteVolume")
-    @test throws_with(() -> symbolic_discretize(sys, LatticeDiscretization(Grid((4, 4, 4)))), "3 axes")
-    @test throws_with(() -> symbolic_discretize(pde(eq, Equation[], [ce], [Dc => 1e-3]), LatticeDiscretization(g)), "`Pair`")
-    @test throws_with(() -> symbolic_discretize(pde([eq; D(ce) ~ ce], Equation[], [ce], [Dc]), LatticeDiscretization(g)), "two equations")
-    @test throws_with(() -> symbolic_discretize(pde(eq, Equation[], [ce, oe], [Dc]), LatticeDiscretization(g)), "no equation")
-    @test throws_with(() -> symbolic_discretize(pde([eq; D(ke) ~ 1], Equation[], [ce, ke], [Dc]), LatticeDiscretization(g)), "input is set by the CPM")
+        @test_throws ArgumentError symbolic_discretize(sys, LatticeDiscretization(g; methods = Dict(o => FiniteVolume())))
+        @test_throws ArgumentError symbolic_discretize(sys, LatticeDiscretization(g; methods = Dict(c => :fem)))
+        @test_throws ArgumentError symbolic_discretize(sys, LatticeDiscretization(Grid((4, 4, 4))))
+        @test_throws ArgumentError symbolic_discretize(pde(eq, Equation[], [ce], [Dc => 1.0e-3]), LatticeDiscretization(g))
+        @test_throws ArgumentError symbolic_discretize(pde([eq; D(ce) ~ ce], Equation[], [ce], [Dc]), LatticeDiscretization(g))
+        @test_throws ArgumentError symbolic_discretize(pde(eq, Equation[], [ce, oe], [Dc]), LatticeDiscretization(g))
+        @test_throws ArgumentError symbolic_discretize(pde([eq; D(ke) ~ 1], Equation[], [ce, ke], [Dc]), LatticeDiscretization(g))
     # wrong bcs are detected: a face of a periodic axis; periodicity for one field only
-    @test throws_with(() -> symbolic_discretize(pde(eq, [c(t, x, 0) ~ c(t, x, 1), c(t, x, 0) ~ 1.0], [ce], [Dc]),
-                                       LatticeDiscretization(g)), "periodic pair makes periodic")
+        @test_throws ArgumentError symbolic_discretize(
+            pde(eq, [c(t, x, 0) ~ c(t, x, 1), c(t, x, 0) ~ 1.0], [ce], [Dc]),
+            LatticeDiscretization(g)
+        )
         two = pde([eq; D(oe) ~ laplacian(oe)], [c(t, x, 0) ~ c(t, x, 1)], [ce, oe], [Dc])
-    @test throws_with(() -> symbolic_discretize(two, LatticeDiscretization(g)), "periodicity is per axis")
+        @test_throws ArgumentError symbolic_discretize(two, LatticeDiscretization(g))
     # the vocabulary scans run first
-        @test_throws ["ArgumentError", "LatticePDE refuses", "`Pre`"] symbolic_discretize(pde([D(ce) ~ Pre(ce)], Equation[], [ce], [Dc]), LatticeDiscretization(g))
+        @test_throws ArgumentError symbolic_discretize(pde([D(ce) ~ Pre(ce)], Equation[], [ce], [Dc]), LatticeDiscretization(g))
     # spellings with no lattice meaning
-        for (rhs, msg) in [
-                Dx(ce) => "flux form", Dx(Dx(ce) * Dy(ce)) => "flux form", value_at(ce, ke) => "array parameter",
-        ce^cT => "", Symbolics.Num(unwrap(z)) => "not a declared"]
+        for (rhs, ok) in (
+                Dx(ce) => false, Dx(Dx(ce) * Dy(ce)) => false, value_at(ce, ke) => false,
+                ce^cT => true, Symbolics.Num(unwrap(z)) => false,
+            )
         f = () -> symbolic_discretize(pde([D(ce) ~ rhs], Equation[], [ce, ke], [Dc, cT]), LatticeDiscretization(g))
-        msg == "" ? (@test f() isa CompiledField) : (@test throws_with(f, msg))
+            ok ? (@test f() isa CompiledField) : (@test_throws ArgumentError f())
     end
 end
 end

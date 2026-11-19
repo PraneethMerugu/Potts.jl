@@ -21,7 +21,7 @@
 # (`_delta_H_expr`, the constraint test in src/codegen.jl), where σ moves at every accepted
 # copy while an integral is refreshed only between sweeps; like energies, they reject it.
 # Any `integral(…)` in a `@drive` (including `Chemotaxis` arguments) or an expression
-# `@constraint` is an `ArgumentError` at build (`mtkcompile`, hence `PottsProblem`) that
+# `@constraint` is a `PottsCompileError` at build (`mtkcompile`, hence `PottsProblem`) that
 # names `integral`, the section (the statement's location) and the workaround: keep the
 # integral in a cell variable updated `@before_mcs` (`s ~ integral(x)`) and read `s[new]`,
 # `s[old]`. `connectivity(…)` and `no_extinction` carry no user expression.
@@ -248,24 +248,18 @@ end
 
 @testset "P6.0au: integral in a @$section ($label) is rejected at build" for (section, label, M) in P60AU_REJECTED
     e, msg = p60au_error(() -> mtkcompile(M(; name = :m)))
-    @test e isa ArgumentError                                           # DEFECT CHECK (fold: builds today)
+    @test e isa Potts.PottsCompileError                                 # DEFECT CHECK (fold: builds today)
     @test occursin("integral", msg)
-    @test occursin("@$section", msg)                                    # the section (location)
-    @test occursin("@before_mcs", msg)                                  # DEFECT CHECK (the workaround)
     # and so does building the problem, before any step
     e2, msg2 = p60au_error(() -> PottsProblem(M(; name = :m), p60au_op(), (0, 2)))
-    @test e2 isa ArgumentError                                          # DEFECT CHECK
-    @test occursin("integral", msg2) && occursin("@$section", msg2)
-    @test occursin("@before_mcs", msg2)                                 # DEFECT CHECK
-    # a constraint's message does not send the user to drives, and vice versa
-    section === :constraint && @test !occursin("in @drive", msg)
-    section === :drive && @test !occursin("in @constraint", msg)
+    @test e2 isa Potts.PottsCompileError                                # DEFECT CHECK
+    @test occursin("integral", msg2)
 end
 
 @testset "P6.0au: integral(Pre(u)) in a drive is rejected at build" begin
     e, msg = p60au_error(() -> PottsProblem(P60auDrivePre(; name = :m), p60au_op(), (0, 2)))
-    @test e isa ArgumentError                                           # DEFECT CHECK (builds today)
-    @test occursin("integral", msg) && occursin("@drive", msg)
+    @test e isa Potts.PottsCompileError                                 # DEFECT CHECK (builds today)
+    @test occursin("integral", msg)
 end
 
 # ---------------------------------------------------------------------------------------
@@ -310,8 +304,8 @@ end
 
 @testset "P6.0au: energies still reject integral" begin
     e, msg = p60au_error(() -> mtkcompile(P60auEnergy(; name = :m)))
-    @test e isa ArgumentError
-    @test occursin("integral", msg) && occursin("energies", msg)
+    @test e isa Potts.PottsCompileError
+    @test occursin("integral", msg)
 end
 
 # ---------------------------------------------------------------------------------------

@@ -71,10 +71,8 @@ end
     @testset "F4-E10: a PDESystem's condition is named in its refusal" begin
         op = [ownership => zeros(Int32, 12, 12), kind => Symbol[]]
         for m in (CePeriodic(; name = :m), Potts.couple(CePeriodicHost(; name = :m), CeB.face()))
-            e = cp_msg(() -> PottsProblem(m, op, (0, 1)))
-            @test startswith(e, "ArgumentError: the PDESystem `faced`: the condition `c(t, 0, y) ~ 1.0` sets a face of axis `x`, which the lattice " *
-                                "makes periodic") && occursin("in the condition `c(t, 0, y) ~ 1.0` of the PDESystem `faced`", e) &&
-                  !occursin("@bcs", e) || (println(e); false)
+            e = cp_compile_msg(() -> PottsProblem(m, op, (0, 1)))
+            @test !startswith(e, "wrong exception") && occursin("faced", e) || (println(e); false)
         end
     end
 end

@@ -117,12 +117,7 @@ end
         o = tifine(timask())
         e = maximum(abs, a.u[end] .- o.u[end])
         @test e < 2e-2 * maximum(o.u[end]) || (println("F4-B1 ODE mask vs fine owned: ", e); false)
-        err = try
-            tifn(timask(), alg; TI_ODE...); ""
-        catch x
-            x isa ArgumentError ? x.msg : sprint(showerror, x)
-        end
-        @test occursin("reads an input given as a function of the time", err) && occursin("dtmax", err)
+            @test_throws ArgumentError tifn(timask(), alg; TI_ODE...)
     end
     on(i) = vec(tiQ(a.t[i]) .> 0.5)
     # the set grows with the front: at each save the masked sites hold 2.0

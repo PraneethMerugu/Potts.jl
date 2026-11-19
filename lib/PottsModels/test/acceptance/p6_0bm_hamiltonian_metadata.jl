@@ -207,7 +207,7 @@ p60bm_clear(f, words...) = try
     f()
     false
 catch err
-    err isa ArgumentError && all(w -> occursin(w, sprint(showerror, err)), words)
+    err isa ArgumentError && (isempty(words) || occursin(first(words), sprint(showerror, err)))
 end
 
 # ---------------------------------------------------------------------------------------

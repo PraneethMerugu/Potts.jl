@@ -770,7 +770,7 @@ end
 The coupled steady group of `rt` (a linear `QuasiSteady` group solved together) at parameters
 `p`: refused when its Jacobian has a growing mode that `coupled_modes` cannot see (a
 coefficient that varies by site), estimated by [`coupled_growth`](@ref). Nothing for any other
-runtime. At the bind (both front ends) and at a parameter write of front end B.
+runtime. At the bind (both routes) and at a parameter write of a standalone `FieldProblem`.
 """
 check_coupled_growth(rt, p) = nothing
 # A nonlinear steady group's growth check (r2 M1, r3): right after the solve that follows its

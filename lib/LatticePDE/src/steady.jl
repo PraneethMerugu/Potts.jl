@@ -126,7 +126,7 @@ end
 """
     steady_choice(ops, reads, n) -> (picks, bad)
 
-The field each steady row is solved for, the one rule of both front ends (F3-12b; r3 S4). The
+The field each steady row is solved for, used across `discretize` and PDE groups. The
 `n` free fields (state fields with no other equation) are numbered in the order of the
 dependent variables; `ops[q]` are the free fields row `q` reads under a spatial operator and
 `reads[q]` every free field it reads. A row's candidates are its `ops`, else its `reads`; a row
@@ -186,10 +186,13 @@ function steady_sign(rhs, c)
     end
     walk(rhs)
     num(x) = (v = _numval(unwrap(x)); v isa Real && isfinite(v) ? Float64(v) : nothing)
+    # Symbolic probes (substituted expressions can raise DomainError, MethodError, InexactError, etc.)
+    # fall back to the conservative steady sign rather than failing analysis.
     at(vz, vc) = try
         e = substitute(substitute(rhs, ops; fold = Val(false)), Dict{Any, Any}(c => vc, z => vz); fold = Val(false))
         num(substitute(e, Dict{Any, Any}(v => 1.0 for v in Symbolics.get_variables(e)); fold = Val(true)))
-    catch
+    catch e
+        isfatal(e) && rethrow()
         nothing
     end
     hasop = any(v -> !(v isa Number), values(ops))            # (an operator on `c`: `z` or `z K`)

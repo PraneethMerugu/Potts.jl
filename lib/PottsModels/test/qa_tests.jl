@@ -29,6 +29,10 @@ include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "qa_common.jl"))
         @test Base.get_extension(PottsModels, :PottsModelsMakieExt) !== nothing
     end
 
+    @testset "Error and message rules" begin
+        qa_error_rules(pkgdir(PottsModels); reviewed_invariants = ["src/benchmarks/openvt_package.jl"])
+    end
+
     @testset "JET and AllocCheck" begin
         @test_opt target_modules = (PottsModels,) akeeb_contacts(2.0)
         σ, kinds = graner_glazier_state()

@@ -15,7 +15,7 @@
 A group of fields stepped by algorithm `alg` (`ExplicitEuler`) over one MCS of length `dt`,
 in `n` substeps of `dt / n`: `group` is the group's `LatticeFields.Problems.FieldGroup` (its
 `GroupSpec`, its fused program and its plans), stepped through the shared runtime
-(`Problems.GroupRuntime`, [`phase_context`](@ref)), as front end B steps its groups.
+(`Problems.GroupRuntime`, [`phase_context`](@ref)), as `LatticeFields` steps standalone groups.
 `program`, `masks` and `step` are the group's semantic program of `alg` and its plans (the
 masks of masked conditions, run once per MCS before the substeps: the masks follow σ; and
 one substep), planned once for value type `T` with `options`. `arrays[f]` binds program field
@@ -194,7 +194,7 @@ end
 # a group with no state field (aux fields `K ~ rhs` only), or a phase of its aux kernels alone
 _stateless(ph::FieldPhase) = ph.aux_only || isempty(ph.group.spec.state)
 
-# The runtime of a field phase bound to the state's arrays at parameters `p` (front end A on
+# The runtime of a field phase bound to the state's arrays at parameters `p` (`PottsProblem` on
 # the shared group runtime: `ends_in = :slot1`, the field back in its `st.site` array after an
 # odd count), with the step's substep count (also when `ph` is the at-init clamp, which runs
 # one substep of length zero from the same launches: the binding is the step's, D-C8 item 8).
@@ -718,7 +718,7 @@ function _part_name(ph::FieldPhase, x, st)
     for a in ph.arrays, q in a
         q === nothing || q isa BindingScratch || q(st) !== x || return _partname(q)
     end
-    error("no state array of the phase is the twin's")
+    throw(AssertionError("no state array of the phase is the twin's (internal error: please report it)"))
 end
 _partname(::Part{A, B}) where {A, B} = B
 

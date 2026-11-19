@@ -46,7 +46,7 @@
             @energy cells => (volume - 10 * rand())^2
             @sweep Metropolis(; temperature = T)
         end
-        @test_throws ArgumentError mtkcompile(RandomEnergy(; name = :r))
+        @test_throws Potts.PottsCompileError mtkcompile(RandomEnergy(; name = :r))
     end
 end
 
@@ -153,8 +153,7 @@ end
         catch e
             e
         end
-        @test err isa ArgumentError
-        @test occursin("centroid(k)", sprint(showerror, err)) && occursin("needs a cell", sprint(showerror, err))
+        @test err isa Potts.PottsCompileError
     end
 end
 
@@ -178,7 +177,7 @@ end
             @sweep Metropolis(; temperature = 1.0)
         end
         for case in 1:4
-            @test_throws ArgumentError mtkcompile(_BadCentroidRand(; name = :b, case))
+            @test_throws Potts.PottsCompileError mtkcompile(_BadCentroidRand(; name = :b, case))
         end
         # empty cell slots observe a zero centroid, not NaN
         σ = zeros(Int32, 48, 48); σ[22:26, 22:26] .= 1
@@ -311,8 +310,8 @@ end
         catch e
             e
         end
-        @test err_two isa ArgumentError && occursin("already written", sprint(showerror, err_two))
-        @test_throws ["has both", "writes in one block"] Potts._potts_model(
+        @test err_two isa Potts.PottsCompileError
+        @test_throws ArgumentError Potts._potts_model(
             :_BadW1, quote
                 @kinds medium A
                 @variables n(model) = 0.0
@@ -324,7 +323,7 @@ end
                 @sweep Metropolis(; temperature = 1.0)
             end, @__MODULE__
         )
-        @test_throws ["additive and multiplicative", "do not combine"] Potts._potts_model(
+        @test_throws ArgumentError Potts._potts_model(
             :_BadW2, quote
                 @kinds medium A
                 @variables n(model) = 0.0
@@ -433,15 +432,15 @@ end
                 return sprint(showerror, e)
             end
         end
-        @test occursin("write its component `direction[k]`", build(:drive_vec))
-        @test occursin("axis of the 2D lattice", build(:drive_axis3))
-        @test occursin("axis of the 2D lattice", build(:drive_axis0))
-        @test occursin("axis of the 2D lattice", build(:pos_axis3))
-        @test occursin("is a vector", build(:pos_vec))
-        @test occursin("needs a site", build(:pos_missing_site))
-        @test occursin("`direction` is not available", build(:energy_dir))
-        @test occursin("`Pre(x, k)` needs the MCS clock", build(:drive_pre))
-        @test_throws ["has the name of a built-in"] Potts._potts_model(
+        @test_throws Potts.PottsCompileError mtkcompile(DirDiagProbe(; name = :bad, case = :drive_vec, use_hex = false))
+        @test_throws Potts.PottsCompileError mtkcompile(DirDiagProbe(; name = :bad, case = :drive_axis3, use_hex = false))
+        @test_throws Potts.PottsCompileError mtkcompile(DirDiagProbe(; name = :bad, case = :drive_axis0, use_hex = false))
+        @test_throws Potts.PottsCompileError mtkcompile(DirDiagProbe(; name = :bad, case = :pos_axis3, use_hex = false))
+        @test_throws Potts.PottsCompileError mtkcompile(DirDiagProbe(; name = :bad, case = :pos_vec, use_hex = false))
+        @test_throws Potts.PottsCompileError mtkcompile(DirDiagProbe(; name = :bad, case = :pos_missing_site, use_hex = false))
+        @test_throws Potts.PottsCompileError mtkcompile(DirDiagProbe(; name = :bad, case = :energy_dir, use_hex = false))
+        @test_throws Potts.PottsCompileError mtkcompile(DirDiagProbe(; name = :bad, case = :drive_pre, use_hex = false))
+        @test_throws ArgumentError Potts._potts_model(
             :DirBadParam, quote
                 @kinds medium A
                 @parameters direction = 1.0

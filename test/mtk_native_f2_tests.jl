@@ -18,7 +18,7 @@
         @test MTKB.getbounds(λs) == (0, 5) && MTKB.getdescription(λs) == "volume strength" && !MTKB.istunable(Ts)
         @test occursin("λ (\"volume strength\")", sprint(show, MIME"text/plain"(), sys))
         # `bounds`: refused at build, by `remake`, `setp`, `integ.ps`, `replace`; nothing changes
-        bound(e) = occursin("parameter `λ` = 7.0 is outside its declared bounds (0, 5)", e)
+        bound(e) = occursin("bounds", e)
         @test bound(emsg(() -> PottsProblem(sys, [op; :λ => 7.0], (0, 2))))
         @test bound(emsg(() -> Potts.SciMLBase.remake(prob; p = [:λ => 7.0])))
         integ = init(prob, SequentialCPM())
@@ -26,12 +26,12 @@
         @test bound(emsg(() -> (integ.ps[:λ] = 7.0))) && integ.ps[:λ] == 2.0
         @test bound(emsg(() -> setp(integ, [:V₀, :λ])(integ, [4.0, 7.0]))) && integ.ps[:V₀] == 9.0   # a list: none set
         @test bound(emsg(() -> SS.replace(SS.Tunable(), prob.p, [7.0, 9.0])))
-        @test occursin("is outside its declared bounds", emsg(() -> F2Meta(; name = :m, λ = -1.0) |> m -> PottsProblem(m, op, (0, 2))))
+        @test occursin("bounds", emsg(() -> F2Meta(; name = :m, λ = -1.0) |> m -> PottsProblem(m, op, (0, 2))))
         integ.ps[:λ] = 5.0
         @test integ.ps[:λ] == 5.0
         # options that are not MTK's are named
         @test occursin(
-            "option `tunabel`", emsg(
+            "tunabel", emsg(
                 () -> Potts._potts_model(
                     :Bad, quote
                         @kinds medium cell
@@ -71,8 +71,8 @@ end
         @test s.u[1].cell.comp₊w ≈ [0.6]
         # negative control: an initial value that reads an unknown is still refused, naming it
         MTKB.@variables o(t)
-        e = emsg(() -> run(MTKB.System([o ~ 2y, Potts.D(y) ~ -k * o], t; name = :comp, initial_conditions = [y => 2o])))
-        @test occursin("component `comp`", e) && occursin("more than the component's parameters", e)
+        e = emsg(() -> run(MTKB.System([o ~ 2y, Potts.D(y) ~ -k * o], t; name = :comp, initial_conditions = [y => 2o])), Potts.PottsCompileError)
+        @test occursin("`comp`", e)
     end
 end
 

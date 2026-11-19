@@ -7,10 +7,10 @@
 # - a fine operand in a coarse row: the block mean of the fine operator, the net flux through
 #   the faces of the block over its volume (the fold of F3-16).
 # The pass runs before the equations are classified, so a hoisted term is an aux row for the
-# rest of the lowering, the solvers and both front ends.
+# rest of the lowering, the solvers, and callers.
 
 """Whether the field key `k` is an aux field that `crossgrid_form` added (`laplacian(c)`, `DivKGrad(c)`: a
-call, which no field of a model is): a front end that stores its fields itself keeps it as scratch
+call, which no field of a model is): callers that manage their fields separately keep it as scratch
 of the binding, not as state."""
 is_crossgrid_key(k::AbstractString) = occursin('(', k)
 

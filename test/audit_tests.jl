@@ -13,7 +13,7 @@
         @test u.model.m[1] == 1 && u.cell.ca[1] == 0 && all(==(0), u.site.s) && u.model.z[1] == 160
         @test u.cell.cb[1] == 11 && u.cell.y[1] == 2
         # cycles of new-value reads are errors
-        @test_throws ArgumentError mtkcompile(AuditCycle(; name = :c))
+        @test_throws Potts.PottsCompileError mtkcompile(AuditCycle(; name = :c))
         # A-60 / D-041: energy folds are per-MCS snapshots; ΔH is exact under that meaning
         p = PottsProblem(AuditEnergyPop(; name = :e), op, (0, 5))
         @test p.u0.model.__snap1[1] == 9
@@ -51,7 +51,7 @@ end
 
 @testitem "A-31 one equation per variable" setup = [AuditSetup] tags = [:potts, :audit] begin
     @testset "A-31 one equation per variable" begin
-        @test_throws ArgumentError mtkcompile(AuditField8(; name = :d, mode = :dup))
+        @test_throws Potts.PottsCompileError mtkcompile(AuditField8(; name = :d, mode = :dup))
     end
 end
 
@@ -128,7 +128,7 @@ end
         σ = audit_blocks()
         p = PottsProblem(AuditOnCopyEnergy(; name = :o), [ownership => σ, kind => fill(1, 16)], (0, 3))
         @test selfcheck(p) < 1.0e-9
-        @test_throws ArgumentError mtkcompile(AuditOnCopyContact(; name = :c))
+        @test_throws Potts.PottsCompileError mtkcompile(AuditOnCopyContact(; name = :c))
     end
 end
 
@@ -159,7 +159,7 @@ end
         ).u0
         @test_throws ArgumentError reinit!(integ, bad_u0)
         # A-36: Every on on-copy updates; Every(0)
-        @test_throws ArgumentError mtkcompile(AuditOnCopyEvery(; name = :e))
+        @test_throws Potts.PottsCompileError mtkcompile(AuditOnCopyEvery(; name = :e))
         @test_throws ArgumentError Potts.Every(0)
     end
 end

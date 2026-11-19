@@ -30,7 +30,7 @@
             @sweep Metropolis(; temperature = 1.0)
         end
         for case in 1:3
-            @test_throws ArgumentError mtkcompile(_BadLag(; name = :b, case))
+            @test_throws Potts.PottsCompileError mtkcompile(_BadLag(; name = :b, case))
         end
     end
 end
@@ -77,8 +77,7 @@ end
             catch e
                 e
             end
-            @test err isa ArgumentError && occursin("integral", sprint(showerror, err)) &&
-                occursin(msg, sprint(showerror, err))
+            @test err isa Potts.PottsCompileError
         end
     end
 end
@@ -257,7 +256,7 @@ end
             @sweep Metropolis(; temperature = 1.0)
         end
         for case in 1:5
-            @test_throws ArgumentError mtkcompile(_BadIntegralPre(; name = :b, case))
+            @test_throws Potts.PottsCompileError mtkcompile(_BadIntegralPre(; name = :b, case))
         end
         p = PottsProblem(IntegralPre(; name = :ip), [ownership => σ, kind => [:A]], (0, 1))
         @test_throws ArgumentError p[Potts._integral(Potts.Pre(w))]

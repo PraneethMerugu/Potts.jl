@@ -111,15 +111,7 @@ end
             @test sort(WLiteMatrix.built(m)) == sort(built)                                            # F2
             @test all(l -> Dict(m)[l] === :LOUD, setdiff(WL_LOUD_REQUIRED, built))                     # F3: no hang, loud
             @test WLiteMatrix.tally(m) == Dict(:REFUSED => 80, :LOUD => 19 - length(built), :BUILT => length(built))
-            @test occursin(
-                "payload cannot build", sprint(
-                    showerror, try
-                        mtkcompile(W)
-                    catch e
-                        e
-                    end
-                )
-            )
+            @test_throws Potts.PottsCompileError mtkcompile(W)
         end
     end
 end

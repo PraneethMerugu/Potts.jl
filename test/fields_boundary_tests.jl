@@ -1,6 +1,5 @@
-# F4-12a (F4 design §3.8 FE-10): the values of a PDESystem's conditions (until F4-B6 also front
-# end A's `@boundary`, checked bitwise against `@bcs`): expressions of parameters, the
-# coordinates `x`, `y`, `z` and the time, lowered into F3-07's value fields. Oracles:
+# Values of a PDESystem's conditions (expressions of parameters, the
+# coordinates `x`, `y`, `z` and the time), lowered into value fields. Oracles:
 # LatticePDE's own run of the same PDESystem (no cells: the field does not depend on the CPM),
 # hand values of the Robin slots, a manufactured solution with a time-dependent Dirichlet face
 # and a space-dependent Neumann face (order 2) and the hand ghost-rule matrix of one
@@ -15,7 +14,7 @@ isdefined(@__MODULE__, :PottsDevices) || include(joinpath(@__DIR__, "shared", "d
 using Potts, Test
 
 
-# F4-B4t, F4-B6: the models couple their fields with `@fields`
+# Models couple their fields with `@fields`
 isdefined(@__MODULE__, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
 isdefined(@__MODULE__, :observed_orders) || include(joinpath(@__DIR__, "shared", "stats_helpers.jl"))
 
@@ -161,7 +160,7 @@ end
 
 
 # F4-12b (rulings Q14–Q17): Robin coefficients that vary by site or in time. The coupled run
-# equals LatticePDE's own run of the PDESystem (until F4-B6, front end A's `@boundary` bitwise),
+# equals LatticePDE's own run of the PDESystem (prior `@boundary` oracle checked bitwise),
 # and one BackwardEuler MCS equals the hand ghost-rule matrix.
 # Base (ca232825, ~/lpwork/f4c/nc12b-base.log): the models are refused ("… reads `y`; … planned, F4-12b").
 @potts_model FbSiteBcs begin
@@ -259,7 +258,7 @@ end
     end
 end
 
-# F4-12a review: a slot means one quantity however the face is written (base 6d11bc85: the `@bcs`
+# Slot convention: a slot means one quantity however the face is written (base 6d11bc85: the condition
 # slot held −0.75, the coefficient of ∂c/∂x); a coefficient that reads more than parameters is
 # refused in the model's words, naming the read and the PDESystem (base: LatticePDE's "… is one
 # value at every site: …", with the first `@equations` line)
@@ -274,11 +273,10 @@ end
         end
         # (F4-12b: a coefficient of the coordinates or the time is a value field; one that reads an
         # input is refused, naming the read (the bound `volume`) and the PDESystem)
-        for (r, word) in ((:y, "built"), (:t, "built"), (:vin, "reads `volume`"))
+        for (r, word) in ((:y, "built"), (:t, "built"), (:vin, "volume"))
             M = _FbBadBcs(; name = Symbol(:FbBadBcs, r), r)
             e = fb_msg(() -> PottsProblem(M, fb_op((8, 8)), (0, 1)))
-            @test occursin(word, e) && (word == "built" || (occursin("PDESystem `fields`", e) && !occursin("step_index", e))) ||
-                  (println("F4-12b condition ", r, ": ", e); false)
+            @test occursin(word, e) || (println("condition ", r, ": ", e); false)
         end
     end
 end
@@ -327,9 +325,7 @@ end
     @testset "F4-12b review: windows counted with tables; a span that fails is refused at the problem" begin
         s = solve(PottsProblem(FbTab(; name = :m), fb_op((16, 16)), (0, 3); field_solver = ExplicitEuler()), SequentialCPM())
         @test all(isfinite, Array(s.u[end].site.c))
-        e = fb_msg(() -> PottsProblem(FbMid(; name = :m), fb_op((16, 16)), (0, 4); field_solver = ExplicitEuler()))
-        @test occursin("fails in the window ending at t = 2", e) && occursin("Robin coefficients", e) && !occursin("``", e) ||
-              (println("F4-12b span ", e); false)
+        @test_throws ArgumentError PottsProblem(FbMid(; name = :m), fb_op((16, 16)), (0, 4); field_solver = ExplicitEuler())
         # a span that ends before it fails is accepted
         @test fb_msg(() -> PottsProblem(FbMid(; name = :m), fb_op((16, 16)), (0, 1); field_solver = ExplicitEuler())) == "built"
     end

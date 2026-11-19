@@ -123,7 +123,7 @@ module WLiteCompose
 end
 
 
-# A condition of a coupled PDESystem (until F4-B6 front end A's `@bcs`, then checked bitwise
+# A condition of a coupled PDESystem (prior legacy condition form, then checked bitwise
 # against a `@boundary` site mask): stored, printed and lowered; the masked sites hold 5.0
 module WLitePDE
     using Potts.Fields

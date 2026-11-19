@@ -233,8 +233,8 @@ function robin_slots(sys::PDESystem)
             push!(taken, n)
             q = unwrap(only(ModelingToolkitBase.@parameters $(Symbol(n))))
             push!(extra, q)
-            # the slot holds β of `α c + β ∂c/∂n = g` (outward normal, as front end A's
-            # `Robin`): on a low face `∂c/∂n = −∂c/∂x`, so the written coefficient is −β
+            # the slot holds β of `α c + β ∂c/∂n = g` (outward normal):
+            # on a low face `∂c/∂n = −∂c/∂x`, so the written coefficient is −β
             flip = isder && side == "low"
             ic[q] = unwrap(flip ? -c : c)
             coefs[i] = flip ? -Symbolics.wrap(q) : Symbolics.wrap(q)

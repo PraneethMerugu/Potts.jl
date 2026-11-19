@@ -894,7 +894,7 @@ function run_lifecycle_device!(lc::Lifecycle, cache, st, p, ctx, key, mcs, backe
             _compile!(compile, backend)
             _run_staged!(D, buf, fns, opt, par, round, lc.rules, CL, st, p, ctx, key, mcs, backend, mode)
         catch e
-            e isa InterruptException && rethrow()
+            isfatal(e) && rethrow()
             D.enqueued[] >= _STAGED_PARTITION && throw(_StagedFailedMidway(D.enqueued[], e))
             _form_failed!(D, e)
         end
@@ -912,7 +912,7 @@ end
 # the host planner takes the MCS from scratch, rerunning the trigger but not `before`
 # (`before_ran[]`), and drops this MCS's device counts (`_drop_device_counts!`)
 function _form_failed!(D, e)
-    e isa InterruptException && throw(e)
+    isfatal(e) && throw(e)
     next = D.form[] == _FORM_FUSED ? "one kernel per stage" : "the host planner"
     @warn "device lifecycle: the $(D.form[] == _FORM_FUSED ? "fused" : "staged") form cannot launch " *
           "($(sprint(showerror, e))); using $next"

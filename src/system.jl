@@ -551,7 +551,10 @@ function _check_robin_coefs(eq, N = 2)
     # a field or site variable as the PDESystem writes it, `u(t, x, y)` (the model's `u(t)`)
     args = join(("t", ("x", "y", "z")[1:N]...), ", ")
     pde(s) = replace(_builtin_text(s), r"\b(\w+)\(t\)" => SubstitutionString("\\1($args)"))
-    refuse(c, what) = throw(ArgumentError(string("@bcs: the Robin coefficient `", pde(string(c)), "` reads `", what,
+    refuse(c, what) = throw(
+        PottsCompileError(
+            string(
+                "the Robin coefficient `", pde(string(c)), "` reads `", what,
         "`; a Robin coefficient α or β is an expression of numbers, parameters, the coordinates `x`, `y`, `z` ",
         "and the time `t`")))
     for c in coefs
@@ -720,6 +723,7 @@ bindings are not compiled into components).
 """
 function _lower_inner(sys::PottsSystem, what::AbstractString)
     _built_from_part(sys) && return sys
+    E = what == "mtkcompile" ? PottsCompileError : ArgumentError
     I, part = getfield(sys, :inner), getfield(sys, :part)
     M = ModelingToolkitBase
     P = something(M.get_parent(I), I)
@@ -727,33 +731,46 @@ function _lower_inner(sys::PottsSystem, what::AbstractString)
     extra = ComponentSpec[]
     subs = M.get_systems(P)
     for n in unique(nameof.(subs))
-        count(s -> nameof(s) === n, subs) > 1 && throw(ArgumentError("$what: `$(nameof(sys))` has two components named " *
-                                                                     "`$n`; give each component its own name"))
+        count(s -> nameof(s) === n, subs) > 1 && throw(
+            E(
+                "$what: `$(nameof(sys))` has two components named " *
+                    "`$n`; give each component its own name"
+            )
+        )
     end
     for s in subs
         nameof(s) in declared && continue          # an `@components` system of the payload
         # a subsystem built from a Potts payload (`get_parent(Potts.inner(m))` wrapped by hand)
         # carries what a `compose` component may not; check it the same way
         m = SymbolicUtils.getmetadata(s, _BuiltFrom, nothing)
-        m isa Tuple && m[1] isa PottsPart && _check_component_part(nameof(s), m[1], what)
+        m isa Tuple && m[1] isa PottsPart && _check_component_part(nameof(s), m[1], what, E)
         for q in M.parameters(s)
             i = info(q)
-            i !== nothing && i.role === :kindtable && throw(ArgumentError(
+            i !== nothing && i.role === :kindtable && throw(
+                E(
                 "$what: component `$(nameof(s))` of `$(nameof(sys))` has the kind table `$q`; a composed component " *
                 "is compiled once for the model, whose parameters are scalars: declare the table in the model"))
         end
         for u in M.unknowns(s)
-            M.isinput(u) && throw(ArgumentError("$what: component `$(nameof(s))` of `$(nameof(sys))` has the input " *
-                                                "`$u`; a component's inputs (field bindings) are not compiled (bind the " *
-                                                "value with `@equations $(nameof(s)).p ~ …` on a parameter instead)"))
+            M.isinput(u) && throw(
+                E(
+                    "$what: component `$(nameof(s))` of `$(nameof(sys))` has the input " *
+                        "`$u`; a component's inputs (field bindings) are not compiled (bind the " *
+                        "value with `@equations $(nameof(s)).p ~ …` on a parameter instead)"
+                )
+            )
             # a composed component is one instance for the model: a quantity declared per site,
             # cell, edge or field would silently become one model-wide value
             i = info(u)
             i !== nothing && i.role in SCOPES && i.role !== :model &&
-                throw(ArgumentError("$what: component `$(nameof(s))` of `$(nameof(sys))` declares `$u` per $(i.role); " *
-                                    "a composed component is compiled once for the model (model scope), so " *
-                                    "per-$(i.role) quantities are not supported in it: declare them in the model, " *
-                                    "or use `@components cells(…) $(nameof(s)) = system` for a per-cell MTK system"))
+                throw(
+                E(
+                    "$what: component `$(nameof(s))` of `$(nameof(sys))` declares `$u` per $(i.role); " *
+                        "a composed component is compiled once for the model (model scope), so " *
+                        "per-$(i.role) quantities are not supported in it: declare them in the model, " *
+                        "or use `@components cells(…) $(nameof(s)) = system` for a per-cell MTK system"
+                )
+            )
         end
         # what a composed component's equations read: its own and model quantities only. A
         # population or site fold, a built-in or another scope's quantity is refused (a fold in a
@@ -761,7 +778,8 @@ function _lower_inner(sys::PottsSystem, what::AbstractString)
         for eq in [M.equations(s); M.observed(s)], side in (eq.lhs, eq.rhs)
             _walk_all(side) do y
                 i = info(y)
-                i === nothing || i.role in (:model, :param) || throw(ArgumentError(
+                i === nothing || i.role in (:model, :param) || throw(
+                    E(
                     "$what: component `$(nameof(s))` of `$(nameof(sys))` reads `$(i.name)` (a $(i.role === :bound_cell ||
                     i.role === :bound_site ? "population fold" : i.role)); a composed component reads its own and model " *
                     "quantities only: write the expression in the model (`@equations $(nameof(s)).p ~ …` on a parameter)"))
@@ -776,14 +794,24 @@ function _lower_inner(sys::PottsSystem, what::AbstractString)
         # a PDESystem that `mtkcompile` built from this payload (a compiled model's `sys` composed
         # again) is the payload's own (`_FieldsFrom` proves Potts' `mtkcompile` built it; fields
         # always compile from the payload, so w has none); any other PDESystem is the model's
-        # fields, moved into the payload under their own names (F4-11)
+        # fields, moved into the payload under their own names
         _foreign_fields(sys) || return w
-        return _wrap_payload(nameof(sys), nothing, _with_pde(w, getfield(w, :part), getfield(sys, :fields), nothing, what))
+        pde_part = try
+            _with_pde(w, getfield(w, :part), getfield(sys, :fields), nothing, what)
+        catch e
+            e isa ArgumentError && E !== ArgumentError && throw(E(e.msg))
+            rethrow()
+        end
+        return _wrap_payload(nameof(sys), nothing, pde_part)
     end
-    throw(ArgumentError("$what: the inner System of `$(nameof(sys))` holds content its Potts payload cannot build (" *
-                        join(diff, "; ") * "). Subsystems are compiled as model-scope components; top-level " *
-                        "quantities, equations and values of a hand-built System are not: declare them in " *
-                        "`@potts_model` or `PottsSystem(; …)`, or compose the hand-built System as a component"))
+    throw(
+        E(
+            "$what: the inner System of `$(nameof(sys))` holds content its Potts payload cannot build (" *
+                join(diff, "; ") * "). Subsystems are compiled as model-scope components; top-level " *
+                "quantities, equations and values of a hand-built System are not: declare them in " *
+                "`@potts_model` or `PottsSystem(; …)`, or compose the hand-built System as a component"
+        )
+    )
 end
 
 """`sys` with some payload fields replaced (the compile pipeline's rewrites: the inner System
@@ -941,19 +969,29 @@ const _STATEMENT_FIELDS = (:energies, :drives, :constraints, :updates, :division
 # payload) cannot carry into the model, refused by name and never dropped: CPM statements; its
 # relations, kind classes, obstacle kinds, schedule and boundary conditions; its own
 # `@components` (a per-cell one would become model-wide; compose components directly).
-function _check_component_part(name::Symbol, part::PottsPart, what)
+function _check_component_part(name::Symbol, part::PottsPart, what, E::Type{<:Exception} = ArgumentError)
     for f in _STATEMENT_FIELDS
-        isempty(getfield(part, f)) || throw(ArgumentError("$what: component `$name` has $f; a component carries " *
-                                                          "quantities, equations and field bindings, not CPM statements " *
-                                                          "(build a component of a model with " *
-                                                          "`Potts.component($(repr(name)), system, model)`)"))
+        isempty(getfield(part, f)) || throw(
+            E(
+                "$what: component `$name` has $f; a component carries " *
+                    "quantities, equations and field bindings, not CPM statements " *
+                    "(build a component of a model with " *
+                    "`Potts.component($(repr(name)), system, model)`)"
+            )
+        )
     end
     for (f, label) in ((:relations, "relations"), (:kind_classes, "kind classes"), (:frozen_kinds, "obstacle kinds"),
             (:schedule, "a @schedule"), (:bcs, "field conditions"), (:components, "@components"))
-        isempty(getfield(part, f)) || throw(ArgumentError("$what: component `$name` has $label; a composed " *
-                                                          "component carries quantities, equations and field bindings only" *
-                                                          (f === :components ? " (compose its components into the model directly, " *
-                                                           "or declare them in the model with `@components`)" : "")))
+        isempty(getfield(part, f)) || throw(
+            E(
+                "$what: component `$name` has $label; a composed " *
+                    "component carries quantities, equations and field bindings only" *
+                    (
+                    f === :components ? " (compose its components into the model directly, " *
+                        "or declare them in the model with `@components`)" : ""
+                )
+            )
+        )
     end
     return nothing
 end
