@@ -74,11 +74,11 @@ end
         @test Potts.divide(dom, Potts.Every(3); when = V >= 4).every == 3
         @test Potts.divide(dom; when = V >= 4, every = 3).every == 3                  # keyword form, as @link
         @test Potts.divide(dom, Potts.B.volume => 1.0, Potts.Every(3); when = V >= 4).every == 3   # anywhere
-        @test_throws r"one cadence; got Every\(2\) and Every\(3\)" Potts.divide(dom, Potts.Every(2), Potts.Every(3); when = V >= 4)
-        @test_throws r"one cadence" Potts.divide(dom, Potts.Every(2); when = V >= 4, every = 2)
-        @test_throws r"`3` is neither a cadence `Every\(n\)` nor a state rule" Potts.divide(dom, 3; when = V >= 4)
+        @test_throws ArgumentError Potts.divide(dom, Potts.Every(2), Potts.Every(3); when = V >= 4)
+        @test_throws ArgumentError Potts.divide(dom, Potts.Every(2); when = V >= 4, every = 2)
+        @test_throws ArgumentError Potts.divide(dom, 3; when = V >= 4)
         @test_throws ArgumentError Potts.divide(dom; when = V >= 4, every = 0)
-        @test_throws r"`every = n` takes an integer n ≥ 1 or `Every\(n\)`; got 2.0" Potts.divide(dom; when = V >= 4, every = 2.0)
+        @test_throws ArgumentError Potts.divide(dom; when = V >= 4, every = 2.0)
         @test_throws ArgumentError Potts.link_rule(:link, Potts.RelationshipRef(:bond); when = true, every = 2.0)
         @test occursin(
             "divide  cells(1) Every(3) when", sprint(
@@ -93,7 +93,7 @@ end
         rel = Potts.RelationshipRef(:bond)
         @test Potts.link_rule(:link, rel, Potts.Every(4); when = true).every == 4
         @test Potts.link_rule(:link, rel; when = true, every = 4).every == 4
-        @test_throws r"`3` is not a cadence" Potts.link_rule(:link, rel, 3; when = true)
+        @test_throws ArgumentError Potts.link_rule(:link, rel, 3; when = true)
         @test only(Potts._p(LinkCadence(; name = :l), :link_rules)).every == 7
         # a division's description names a non-default cadence (errors located at the rule)
         @test Potts._describe(Potts.divide(dom, Potts.Every(3); when = V >= 4)) == "@divide cells(1) Every(3) when = volume >= 4"

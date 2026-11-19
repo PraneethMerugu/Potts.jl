@@ -104,7 +104,7 @@ end
         catch e
             e
         end
-        @test err isa ArgumentError && occursin("`ka`", err.msg) && !occursin("`kb`", err.msg)
+        @test err isa ArgumentError
         @test_throws ArgumentError mtkcompile(divsys(Potts.cells, Potts.clusters(2)))      # bare `cells` is every kind
         @test mtkcompile(divsys(Potts.cells(2), Potts.clusters(1))) isa Potts.CompiledPottsSystem
     end

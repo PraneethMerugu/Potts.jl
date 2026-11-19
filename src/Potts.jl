@@ -55,6 +55,18 @@ public VCycle                               # `LatticeMultigrid(; cycle = VCycle
 # `RK4` (OrdinaryDiffEq exports a different `RK4`)
 public declared_parameters, declared_variables, RK4
 
+"""
+    PottsCompileError <: Exception
+
+Thrown when lowering or compiling a `PottsSystem` rejects a model expression or assignment
+that cannot execute in the generated CPM kernels.
+"""
+struct PottsCompileError <: Exception
+    msg::String
+end
+Base.showerror(io::IO, e::PottsCompileError) = print(io, e.msg)
+public PottsCompileError
+
 include("seeds.jl")
 include("draws.jl")
 include("vocabulary.jl")

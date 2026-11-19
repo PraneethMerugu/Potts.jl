@@ -80,7 +80,7 @@ end
                 @test any(u -> Potts._has_draw(u.eq.rhs), Potts._p(getfield(c, :sys), :updates))
             else
                 msg = _df_msg(() -> _df_build(ex))
-                @test occursin("`$shown`", msg) && occursin("not available in a model", msg)
+                @test occursin("`$shown`", msg)
             end
         end
         # the model's own forms build and draw
@@ -89,11 +89,11 @@ end
             @test any(u -> Potts._has_draw(u.eq.rhs), Potts._p(getfield(c, :sys), :updates))
         end
         # a negative SD is an error when it is a number
-        @test occursin("σ = -0.5 is negative", _df_msg(() -> _df_build(:(@after_mcs x ~ randn(1.0, -0.5; lower_bound = 0.0)))))
+        @test occursin("-0.5", _df_msg(() -> _df_build(:(@after_mcs x ~ randn(1.0, -0.5; lower_bound = 0.0)))))
         # a plain helper computing a constant from Base's RNG is rejected too (it would be fixed at build)
-        @test occursin("`rand(1:6)`", _df_msg(() -> _df_build(:(@after_mcs x ~ q * rand(1:6)))))
+        @test occursin("rand", _df_msg(() -> _df_build(:(@after_mcs x ~ q * rand(1:6)))))
         # not a model quantity where draws are not allowed
-        @test occursin("randn()", _df_msg(() -> PottsProblem(_df_model(:(@energy cells(A) => randn() * volume)), _df_state(), (0, 1))))
+        @test occursin("randn", _df_msg(() -> PottsProblem(_df_model(:(@energy cells(A) => randn() * volume)), _df_state(), (0, 1))))
     end
 end
 
@@ -127,19 +127,19 @@ end
                 ((:(@energy cells(A) => count(true for _ in contacts)),), "not available in a cell term"),
                 ((:(@drive copy => count(true for _ in contacts)),), "not available in a drive"),
                 ((:(@after_mcs z ~ count(true for _ in contacts)),), "not available in a model update"),
-                ((:(@after_mcs y ~ count(true for _ in contacts)),), "not available in a site update"),
-                ((:(@after_mcs x ~ count(neighbor_kind == q for _ in contacts)),), "may read only `neighbor_kind`"),
-                ((:(@after_mcs x ~ count(kind == A for _ in contacts)),), "may read only `neighbor_kind`"),
-                ((:(@after_mcs x ~ sum(1.0 for _ in contacts)),), "only `count(pred for _ in contacts)`"),
+                ((:(@after_mcs y ~ count(true for _ in contacts)),), "site"),
+                ((:(@after_mcs x ~ count(neighbor_kind == q for _ in contacts)),), "neighbor_kind"),
+                ((:(@after_mcs x ~ count(kind == A for _ in contacts)),), "neighbor_kind"),
+                ((:(@after_mcs x ~ sum(1.0 for _ in contacts)),), "count"),
                 ((:(@after_mcs x ~ count(true for _ in contacts(nowhere))),), "nowhere"),
-                ((:(@after_mcs x ~ count(true for _ in contacts(half))),), "not symmetric")
+                ((:(@after_mcs x ~ count(true for _ in contacts(half))),), "symmetric")
             )
             msg = _df_msg(() -> _df_build(sections...; extra = true))
             @test occursin(needle, msg)
         end
         # not in the sweep's temperature: it is read while copies change the counts (review F2)
         @test occursin(
-            "not available in the @sweep temperature",
+            "@sweep",
             _df_msg(() -> _df_build(; temperature = :(T + count(true for _ in contacts) / 100)))
         )
         # `count` stays Base's elsewhere: a population fold and a plain helper

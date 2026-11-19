@@ -30,12 +30,16 @@ struct ComponentSpec
     domain::Union{CellDomain, Symbol}           # a cell domain, or `:model`
 end
 
-_mtkname(x) = (u = _unwrap(x); u isa SymbolicUtils.BasicSymbolic && info(u) === nothing ?
-                                 (try
-                                     _slot_name(u)
-                                 catch
-                                     nothing
-                                 end) : nothing)
+_is_mtk_var(u) = u isa SymbolicUtils.BasicSymbolic && (
+    SymbolicUtils.issym(u) ||
+    (iscall(u) && (
+        (operation(u) === getindex && all(i -> SymbolicUtils.unwrap_const(_unwrap(i)) isa Integer, arguments(u)[2:end]) &&
+         _is_mtk_var(arguments(u)[1])) ||
+        _is_mtk_var(operation(u))
+    ))
+)
+
+_mtkname(x) = (u = _unwrap(x); _is_mtk_var(u) && info(u) === nothing ? _slot_name(u) : nothing)
 
 """
 Name of an MTK variable as a Potts quantity: its name, or `z_i` for element `i` of an array

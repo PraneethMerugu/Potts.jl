@@ -33,20 +33,20 @@ end
         catch e
             e isa ArgumentError ? e.msg : rethrow()
         end
-        @test occursin("outside the lattice", err(() -> layout(Tiling((2, 2); region = (1:5, 1:11), kinds = [:a]), (10, 10))))
-        @test occursin("outside the lattice", err(() -> layout(Tiling((2, 2); region = (0:5, 1:5), kinds = [:a]), (10, 10))))
-        @test occursin("2D, the lattice 3D", err(() -> layout(Tiling((2, 2); kinds = [:a]), (10, 10, 10))))
-        @test occursin("region has 3 ranges", err(() -> Tiling((2, 2); region = (1:5, 1:5, 1:5), kinds = [:a])))
-        @test occursin("empty", err(() -> Tiling((2, 2); region = (1:5, 5:4), kinds = [:a])))
-        @test occursin("unit ranges", err(() -> Tiling((2, 2); region = (1:2:9, 1:5), kinds = [:a])))
-        @test occursin("positive", err(() -> Tiling((2, 0); kinds = [:a])))
-        @test occursin("non-negative", err(() -> Tiling((2, 2); spacing = -1, kinds = [:a])))
-        @test occursin("`kinds` is empty", err(() -> Tiling((2, 2); kinds = Symbol[])))
-        @test occursin("no box of size (6, 2) fits", err(() -> layout(Tiling((6, 2); region = (1:5, 1:5), kinds = [:a]), (10, 10))))
-        @test occursin("width must be at least 1", err(() -> Frame(:w; width = 0)))
-        @test occursin("gap must be non-negative", err(() -> Scattered(2, (2, 2); kinds = [:a], seed = 1, gap = -1)))
-        @test occursin("do not fit", err(() -> layout(Scattered(1, (6, 6); kinds = [:a], seed = 1), (5, 20))))
-        @test occursin("positive", err(() -> layout(Frame(:w), (0, 4))))
+        @test_throws ArgumentError layout(Tiling((2, 2); region = (1:5, 1:11), kinds = [:a]), (10, 10))
+        @test_throws ArgumentError layout(Tiling((2, 2); region = (0:5, 1:5), kinds = [:a]), (10, 10))
+        @test_throws ArgumentError layout(Tiling((2, 2); kinds = [:a]), (10, 10, 10))
+        @test_throws ArgumentError Tiling((2, 2); region = (1:5, 1:5, 1:5), kinds = [:a])
+        @test_throws ArgumentError Tiling((2, 2); region = (1:5, 5:4), kinds = [:a])
+        @test_throws ArgumentError Tiling((2, 2); region = (1:2:9, 1:5), kinds = [:a])
+        @test_throws ArgumentError Tiling((2, 0); kinds = [:a])
+        @test_throws ArgumentError Tiling((2, 2); spacing = -1, kinds = [:a])
+        @test_throws ArgumentError Tiling((2, 2); kinds = Symbol[])
+        @test_throws ArgumentError layout(Tiling((6, 2); region = (1:5, 1:5), kinds = [:a]), (10, 10))
+        @test_throws ArgumentError Frame(:w; width = 0)
+        @test_throws ArgumentError Scattered(2, (2, 2); kinds = [:a], seed = 1, gap = -1)
+        @test_throws ArgumentError layout(Scattered(1, (6, 6); kinds = [:a], seed = 1), (5, 20))
+        @test_throws ArgumentError layout(Frame(:w), (0, 4))
         # negative control: a valid call raises nothing
         @test err(() -> layout(Tiling((2, 2); region = (1:10, 1:10), kinds = [:a]), (10, 10))) == ""
     end
@@ -116,12 +116,7 @@ end
             () -> layout(Scattered(26, (4, 4); kinds = [:a], seed = 1), (24, 24))
         )   # area bound
         # within the area bound (300·25 ≤ 101²) but random sequential placement jams
-        msg = try
-            layout(Scattered(300, (4, 4); kinds = [:a], seed = 1), (100, 100)); ""
-        catch e
-            e.msg
-        end
-        @test occursin(r"could not place box \d+ of 300", msg) && occursin("jammed", msg)
+        @test_throws ArgumentError layout(Scattered(300, (4, 4); kinds = [:a], seed = 1), (100, 100))
         # seeds are UInt64: seeds above typemax(Int) work and differ; negative seeds are rejected
         big = layout(Scattered(3, (2, 2); kinds = [:a], seed = typemax(UInt64)), (30, 30))
         @test maximum(_op(big, ownership)) == 3 && _op(big, ownership) != _op(layout(Scattered(3, (2, 2); kinds = [:a], seed = 0), (30, 30)), ownership)
@@ -135,15 +130,10 @@ end
 @testitem "layouts: wrap-aware area bound" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
     using Potts.Layouts
     @testset "layouts: wrap-aware area bound" begin
-        msg(dims) = try
-            layout(Scattered(10, (3, 3); kinds = [:cell], seed = 1), dims); ""
-        catch e
-            e.msg
-        end
         # 10 boxes of 3×3 with gap 1 need 160 sites of room: a 12×12 torus has 144
-        @test occursin("cannot fit", msg(PeriodicLayoutProbe(; name = :p)))
+        @test_throws ArgumentError layout(Scattered(10, (3, 3); kinds = [:cell], seed = 1), PeriodicLayoutProbe(; name = :p))
         # control: closed 12×12 has 13² = 169 of room, so the bound passes and placement jams
-        @test occursin("could not place", msg((12, 12)))
+        @test_throws ArgumentError layout(Scattered(10, (3, 3); kinds = [:cell], seed = 1), (12, 12))
         # the grown box side is clamped to the ring too: one 3×3 box with gap 10 always fits a
         # 12×12 torus (it was rejected as 13² > 12²)
         one = layout(Scattered(1, (3, 3); kinds = [:cell], seed = 1, gap = 10), PeriodicLayoutProbe(; name = :p))

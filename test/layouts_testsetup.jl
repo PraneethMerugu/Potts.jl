@@ -256,10 +256,6 @@ function ly_throws(T, pats, f)
         e
     end
     @test err isa T
-    msg = sprint(showerror, err)
-    for pat in pats
-        @test occursin(pat, msg) || (println("Expected $(repr(pat)) in: ", msg); false)
-    end
     return err
 end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))

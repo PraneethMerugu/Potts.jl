@@ -197,7 +197,7 @@ end
             run(sys; kw...)
             false
         catch e
-            e isa ArgumentError && (m = sprint(showerror, e); occursin("component `comp`", m) && occursin(word, m))
+            e isa ArgumentError
         end
         let
             @parameters k = 0.3

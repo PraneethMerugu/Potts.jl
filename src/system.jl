@@ -551,7 +551,7 @@ function _check_robin_coefs(eq, N = 2)
     # a field or site variable as the PDESystem writes it, `u(t, x, y)` (the model's `u(t)`)
     args = join(("t", ("x", "y", "z")[1:N]...), ", ")
     pde(s) = replace(_builtin_text(s), r"\b(\w+)\(t\)" => SubstitutionString("\\1($args)"))
-    refuse(c, what) = throw(ArgumentError(string("@bcs: the Robin coefficient `", pde(string(c)), "` reads `", what,
+    refuse(c, what) = throw(ArgumentError(string("the Robin coefficient `", pde(string(c)), "` reads `", what,
         "`; a Robin coefficient α or β is an expression of numbers, parameters, the coordinates `x`, `y`, `z` ",
         "and the time `t`")))
     for c in coefs

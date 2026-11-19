@@ -963,7 +963,7 @@ function _check_fields(sys::PottsSystem, rn)
         throw(
             ArgumentError(
                 string(
-                    "@bcs: the condition `", _bc_text(first(_p(sys, :bcs)), _p(sys, :kinds)), "` of `",
+                    "the condition `", _bc_text(first(_p(sys, :bcs)), _p(sys, :kinds)), "` of `",
                     nameof(sys), "`: the model has no field equation (`Differential(t)(c(",
                     join(("t", ("x", "y", "z")[1:length(_p(sys, :lattice).dims)]...), ", "),
                     ")) ~ …`); a condition applies to a field the model steps"
@@ -982,6 +982,7 @@ function _check_fields(sys::PottsSystem, rn)
     g = try
         _lower_field_group(sys, names, Float64; known, bound = false)
     catch e
+        e isa Union{ArgumentError, PottsCompileError} || rethrow()
         k = pop!(task_local_storage(), :lattice_equation, nothing)
         _located(() -> throw(e), sys, _field_equation_of(sys, k))
     end
@@ -1363,42 +1364,38 @@ function _located(f, sys::PottsSystem, x)
     try
         return f()
     catch e
-        e isa Union{ArgumentError, ErrorException} || rethrow()
+        e isa Union{ArgumentError, PottsCompileError} || rethrow()
         occursin("\n  in ", e.msg) && rethrow()
+        wrap(m) = throw(e isa PottsCompileError ? PottsCompileError(m) : ArgumentError(m))
         ln = get(_p(sys, :sources), _source_key(x), nothing)
         loc = ln === nothing ? "" : " at $(ln.file):$(ln.line)"
         msg = _builtin_text(e.msg)
         # a condition a PDESystem brought (`@fields`, `Potts.couple`) is named as its condition (F4-E10)
         o = x isa _BcsLine ? _bcs_origin(sys, x.eq) : nothing
         if o !== nothing
-            msg = startswith(msg, "@bcs: ") ? string("the PDESystem `", o, "`: ", chopprefix(msg, "@bcs: ")) : msg
-            throw(
-                ArgumentError(
-                    string(
-                        msg, "\n  in the condition `", _bc_text(x.eq, _p(sys, :kinds)), "` of the PDESystem `", o,
-                        "`", loc
-                    )
+            wrap(
+                string(
+                    "the PDESystem `", o, "`: ", msg, "\n  in the condition `",
+                    _bc_text(x.eq, _p(sys, :kinds)), "` of the PDESystem `", o, "`", loc
                 )
             )
         end
         # (a condition with no recorded PDESystem, `PottsSystem(; bcs)`: the fields' PDESystem)
-        startswith(msg, "@bcs: ") && (msg = string("the fields' PDESystem: ", chopprefix(msg, "@bcs: ")))
+        x isa _BcsLine && (msg = string("the fields' PDESystem: ", msg))
         # a field equation is named as the equation of its field in its PDESystem, as the user
         # wrote it (`c(t, x, y)`; batch-end review (d), as F4-E10 names a condition)
         fl = x isa Equation ? _field_lhs(x, sys) : nothing
         if fl !== nothing && fl[1] !== nothing
             o = _bcs_origin(sys, x)
-            throw(
-                ArgumentError(
-                    string(
-                        msg, _algebraic_note(x, msg), "\n  in the equation of `", info(fl[1]).name, "` in ",
-                        o === nothing ? "the fields' PDESystem" : string("the PDESystem `", o, "`"), ": `",
-                        _nopkg(_builtin_text(_field_eq_text(x, sys))), "`", loc
-                    )
+            wrap(
+                string(
+                    msg, _algebraic_note(x, msg), "\n  in the equation of `", info(fl[1]).name, "` in ",
+                    o === nothing ? "the fields' PDESystem" : string("the PDESystem `", o, "`"), ": `",
+                    _nopkg(_builtin_text(_field_eq_text(x, sys))), "`", loc
                 )
             )
         end
-        throw(ArgumentError("$msg$(_algebraic_note(x, msg))\n  in $(_describe(x, _p(sys, :kinds)))$loc"))
+        wrap("$msg$(_algebraic_note(x, msg))\n  in $(_describe(x, _p(sys, :kinds)))$loc")
     end
 end
 

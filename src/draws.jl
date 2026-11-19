@@ -6,9 +6,9 @@
 # number in the model (`_next_number!`), shared by `rand()` and `randn()`.
 
 """`random_normal(n)`: the `n`-th authored draw of a model, standard normal."""
-random_normal(n) = error("`random_normal` is symbolic-only")
+random_normal(n) = throw(ArgumentError("`random_normal` is symbolic-only"))
 """`random_normal_above(n, μ, σ, lower_bound)`: the `n`-th authored draw, `μ + σ z` redrawn while `≤ lower_bound`."""
-random_normal_above(n, μ, σ, lower_bound) = error("`random_normal_above` is symbolic-only")
+random_normal_above(n, μ, σ, lower_bound) = throw(ArgumentError("`random_normal_above` is symbolic-only"))
 Symbolics.@register_symbolic random_normal(n)
 Symbolics.@register_symbolic random_normal_above(n, μ, σ, lower_bound)
 
@@ -114,7 +114,7 @@ Base.show(io::IO, ::_Count) = print(io, "count")
 # its status word in the model state), lowered like `rand()` (lower.jl)
 function _lower_normal(op, args, env)
     haskey(env.bind, :__draw) ||
-        error("`randn()` is only available in updates, equations, division conditions and rules (not in $(_MODE_NAMES[env.mode]))")
+        throw(PottsCompileError("`randn()` is only available in updates, equations, division conditions and rules (not in $(_MODE_NAMES[env.mode]))"))
     key, mcs, entity = env.bind[:__draw]
     stream = CorePotts.stream_id("Potts.draw.$(SymbolicUtils.unwrap_const(_unwrap(args[1])))")
     op === random_normal && return :(CorePotts.normal($(env.T), CorePotts.draw($key, $mcs, $entity, $stream)))

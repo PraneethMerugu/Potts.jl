@@ -23,7 +23,7 @@ the number of the cell's contact pairs over `relation` whose partner satisfies `
 partner's kind `neighbor_kind`, and `relation` is the relation's name (`:contact` for `contacts`).
 Symbolic only: it describes the fold and is never called.
 """
-count_contacts(n, pred, rel) = error("`count_contacts` is symbolic-only")
+count_contacts(n, pred, rel) = throw(ArgumentError("`count_contacts` is symbolic-only"))
 # `rel::Symbol`, so that a literal `pred = true` still builds the symbolic term
 Symbolics.@register_symbolic count_contacts(n, pred, rel::Symbol)
 

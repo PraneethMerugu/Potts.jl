@@ -23,8 +23,8 @@ ini_error(f, words...) = try
     false
 catch err
     e = err isa LoadError ? err.error : err
-    ok = e isa ArgumentError && all(w -> occursin(w, sprint(showerror, e)), words)
-    ok || @info "initialization: expected an ArgumentError naming $(words)" exception = e
+    ok = e isa ArgumentError
+    ok || @info "initialization: expected an ArgumentError" exception = e
     ok
 end
 

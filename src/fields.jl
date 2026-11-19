@@ -51,7 +51,7 @@ function _field_var(name::Symbol, ::Type{E}, ivs; input::Bool = false, entity = 
     entity === nothing || (v = SymbolicUtils.setmetadata(v, PottsEntity, entity))
     S = storage === nothing && entity isa Entity ? get(entity.options, :lattice_storage, nothing) : storage
     S === nothing || (v = SymbolicUtils.setmetadata(v, LatticePDE.LatticeStorage, S))
-    # `[lattice_level = Coarse(k)]` (F3-17): the field's grid, as in front end B
+    # `[lattice_level = Coarse(k)]`: the field's grid
     L = level === nothing && entity isa Entity ? get(entity.options, :lattice_level, nothing) : level
     L === nothing || (v = SymbolicUtils.setmetadata(v, LatticePDE.LatticeLevel, L))
     return v
@@ -356,8 +356,8 @@ function _steady_reads(eq)
     walk(eq.rhs, false)
     return (; all, ops)
 end
-# The field of each steady row of model `sys` (`row => x`, in equation order), by the rule of
-# both front ends (`LatticePDE.steady_choice`): a field variable with no other equation that
+# The field of each steady row of model `sys` (`row => x`, in equation order), by the shared rule
+# (`LatticePDE.steady_choice`): a field variable with no other equation that
 # the row reads, preferably under a spatial operator; ties in declaration order
 function _steady_assign(sys::PottsSystem)
     eqs = _p(sys, :equations)
@@ -389,7 +389,7 @@ _field_equations(sys::PottsSystem) = [(f[1], eq.rhs, f[3]) for eq in _p(sys, :eq
     steady_fields(model) -> Vector{Pair{String, Symbol}}
 
 The steady rows `0 ~ rhs` of `model` and the field each is solved for (`row => field`), by the
-rule of both front ends (`LatticePDE.steady_choice`; review r3 N2).
+shared rule (`LatticePDE.steady_choice`).
 """
 LatticeFields.Problems.steady_fields(sys::PottsSystem) = Pair{String, Symbol}[string(eq) => info(x).name for (eq, x) in _steady_assign(sys)]
 # the steady fields (`0 ~ rhs`) among `names`, as the group's state keys
@@ -406,7 +406,7 @@ function _field_at_term(u, cv)
     # (or another group's field whose face conditions come along, F3-26: marked `LatticeCutField`)
     f = haskey(cv.states, n) ? cv.states[n] : get(cv.direct, n, nothing)
     cut = f !== nothing && SymbolicUtils.getmetadata(f, LatticePDE.LatticeCutField, false) === true
-    (haskey(cv.states, n) || cut) || throw(ArgumentError(string("@bcs: `", _builtin_text(string(u)), "` reads the field `", n,
+    (haskey(cv.states, n) || cut) || throw(ArgumentError(string("`", _builtin_text(string(u)), "` reads the field `", n,
         "` of another solver group; a condition reads the field it sets (give the fields one solver)")))
     args = map(arguments(u)) do y
         w = _unwrap(y)
@@ -414,7 +414,7 @@ function _field_at_term(u, cv)
         _coordinate(w) && return w
         v = SymbolicUtils.isconst(w) ? SymbolicUtils.unwrap_const(w) : w
         v isa Real && return v
-        throw(ArgumentError(string("@bcs: `", _builtin_text(string(u)), "` reads `", n, "` at `", y, "`; a field is read ",
+        throw(ArgumentError(string("`", _builtin_text(string(u)), "` reads `", n, "` at `", y, "`; a field is read ",
             "at `t` and the coordinates, a face fixing one of them to a number (`", n, "(t, 0, y)`)")))
     end
     return operation(f)(args...)
@@ -448,14 +448,14 @@ end
 function _bcs_equation(sys, b, names, cv, core, ext, kinds, N, stepped)
     text = "`" * _bc_text(b, kinds) * "`"
     fields, pins = _bcs_reads(b, ext)
-    isempty(fields) && throw(ArgumentError("@bcs: the condition $text reads no field: a condition sets a field (`c(t, 0, y) ~ v`, " *
+    isempty(fields) && throw(ArgumentError("the condition $text reads no field: a condition sets a field (`c(t, 0, y) ~ v`, " *
                                            "`c ~ masked(pred, v)`)"))
     n = first(fields)
-    n in stepped || throw(ArgumentError("@bcs: the condition $text sets `$n`, which has no equation " *
+    n in stepped || throw(ArgumentError("the condition $text sets `$n`, which has no equation " *
         "`Differential(t)($n($(join(("t", _AXIS_NAMES[1:N]...), ", ")))) ~ …` " *
         "(or map); a condition applies to a field the model steps"))
     n in names || return nothing                 # a field of another group: its own system
-    any(p -> p[1] == 1, pins) && throw(ArgumentError("@bcs: the condition $text sets an initial value; a field's " *
+    any(p -> p[1] == 1, pins) && throw(ArgumentError("the condition $text sets an initial value; a field's " *
         "initial value is its default (`@variables $n(..) = v`) or the operating point (`:$n => values`): " *
         "remove the condition"))
     axes = unique(p[1] - 1 for p in pins)
@@ -468,11 +468,11 @@ function _bcs_equation(sys, b, names, cv, core, ext, kinds, N, stepped)
         ax = _AXIS_NAMES[d]
         if periodic
             core.periodic[d] && (drop = true; break)    # the lattice's own pair
-            throw(ArgumentError("@bcs: the condition $text makes axis `$ax` of `$n` periodic, but the lattice closes " *
+            throw(ArgumentError("the condition $text makes axis `$ax` of `$n` periodic, but the lattice closes " *
                 "`$ax`; periodicity is the lattice's, for every field (per-field periodicity is planned, FE-20): make " *
                 "the lattice periodic on `$ax`, or remove the condition"))
         end
-        core.periodic[d] && throw(ArgumentError("@bcs: the condition $text sets a face of axis `$ax`, which the " *
+        core.periodic[d] && throw(ArgumentError("the condition $text sets a face of axis `$ax`, which the " *
             "lattice makes periodic (per-field periodicity is planned, FE-20); close `$ax` on the lattice, or remove " *
             "the condition"))
     end
@@ -482,7 +482,7 @@ function _bcs_equation(sys, b, names, cv, core, ext, kinds, N, stepped)
     if !periodic && !masked && !isempty(axes)
         any(f -> _has_spatial_op(f[2], n), _field_equations(sys)) || any(f -> _has_spatial_op(f[2], n), _field_aux(sys)) ||
             throw(ArgumentError(
-            "@bcs: the condition $text sets a face of `$n`, which sets the ghost values of a spatial operator of `$n`, " *
+            "the condition $text sets a face of `$n`, which sets the ghost values of a spatial operator of `$n`, " *
                     "but the equation of `$n` has no `laplacian($n)` nor another spatial operator of `$n` (`DivKGrad(…)(K, $n)`, " *
             "`Advect(…)(u, $n)`, a raw flux `Differential(x)(K * Differential(x)($n))`), and no other field's " *
             "equation or aux definition `K ~ …` has one; the condition would do nothing: drop it, or hold sites with a masked condition " *
@@ -691,14 +691,14 @@ const _LOWER_GROUP_CALLS = Threads.Atomic{Int}(0)
     _lower_field_group(sys, names, T; known) -> NamedTuple
 
 The field group of the fields `names` of model `sys` in state type `T`, lowered once by
-`LatticePDE.lower_group` to its `GroupSpec` (`spec`), with what front end A binds: the
+`LatticePDE.lower_group` to its `GroupSpec` (`spec`), with what `Potts` binds: the
 parameter names of its slots (`params`), its tables by id (`tables`) and the generated inputs
 (`filled`, to print a term in the model's words). The fields of other groups are inputs of
 the group, read from their arrays (`_field_system`).
 """
 function _lower_field_group(sys::PottsSystem, names::Vector{Symbol}, T::Type; known, bound::Bool = true)
     pdesys, cv = _field_system(sys, names; T, known)
-    # rates and maps in one model are refused on both front ends (F1's message, with A's route)
+    # rates and maps in one model are refused everywhere
     LatticePDE.check_one_kind(pdesys; route = "write each map as a site update that runs once per MCS (a site " *
                                                "variable `m(site)` with `@after_mcs m ~ rhs`)")
     Threads.atomic_add!(_LOWER_GROUP_CALLS, 1)
@@ -731,7 +731,7 @@ function _field_group_spec(c::CompiledPottsSystem, names::Vector{Symbol}, T::Typ
 end
 
 # The substep rule of a group is LatticeFields' one policy (`Problems.GroupSubsteps`: the
-# count, the refusals, the warnings and the coupling between groups; F3-01). Front end A gives
+# count, the refusals, the warnings and the coupling between groups). `Potts` gives
 # its words (`_PottsTexts`): the fields of the group, its route (`PottsProblem` `field_solver`,
 # the MCS as the window) and its terms in the model's words (`_user_text`). A warning is given
 # once per group, term and cause in a session (the group's fingerprint text with the policy's
@@ -742,7 +742,7 @@ struct _PottsTexts <: LatticeFields.Problems.AbstractPolicyTexts
 end
 _fieldlist(ks) = join(("`$k`" for k in ks), ", ")
 _fs(t::_PottsTexts) = length(t.names) == 1 ? "" : "s"
-const _A_ROUTE = "`PottsProblem` `field_solver = ExplicitEuler(; substeps = n)` with `n ≥ mcs_duration · ρ / 1.8`"
+const _POTTS_ROUTE = "`PottsProblem` `field_solver = ExplicitEuler(; substeps = n)` with `n ≥ mcs_duration · ρ / 1.8`"
 # an advection whose velocity reads the field it moves (`Advect(…)([c, 0.0], c)`, Burgers): no
 # interval bounds it (the velocity grows with the field), so `bounds` is not a route for it
 function _self_advection(x::AbstractString)
@@ -756,7 +756,7 @@ function LatticeFields.Problems.unbounded_text(t::_PottsTexts, c)
     if !isempty(texts) && all(_self_advection, texts)
         return "the substep count of the field$(_fs(t)) $(_fieldlist(t.names)) has no bound (the term" *
                "$(length(texts) == 1 ? "" : "s") $(join(("`$x`" for x in texts), ", ")): an advection whose velocity " *
-               "reads the field it moves, which no interval bounds); give " * _A_ROUTE * ", or step the field" *
+               "reads the field it moves, which no interval bounds); give " * _POTTS_ROUTE * ", or step the field" *
                "$(_fs(t)) with `field_solver = BackwardEuler()`"
     end
     if !isempty(r.terms)
@@ -768,13 +768,13 @@ function LatticeFields.Problems.unbounded_text(t::_PottsTexts, c)
             "table `δ[kind] * laplacian(c)` or a kind set `ismember(kind, g) * laplacian(c)` is bounded), or a coefficient " *
                "that reads `mcs`)" * _infinite_text(t) * "; declare finite `bounds = (lo, hi)` on a field whose " *
                "values stay in an interval (`@variables c(..) = 0.5 [bounds = (0, 1)]` in its PDESystem: the bound then sees its nonlinear " *
-               "terms and coefficients), or give " * _A_ROUTE
+               "terms and coefficients), or give " * _POTTS_ROUTE
     elseif !isempty(r.coupled)
         return "the substep count of the field$(_fs(t)) $(_fieldlist(t.names)) has no bound " *
                "from the parameters: the coupled rate$(length(r.coupled) == 1 ? "" : "s") of $(_fieldlist(r.coupled)) " *
                "(terms that read another field, which reads it back) $(length(r.coupled) == 1 ? "is" : "are") not diagonally dominant; step " *
                "the field$(_fs(t)) with `field_solver = BackwardEuler()` (it solves the fields in the order they read " *
-               "each other, with no substep bound), or give " * _A_ROUTE
+               "each other, with no substep bound), or give " * _POTTS_ROUTE
     end
     return string("the substep bound of the field$(_fs(t)) ", _fieldlist(t.names), " is not finite at the current parameters: ",
         isempty(r.nonfinite) ? "a coefficient is not finite" :
@@ -805,7 +805,7 @@ function LatticeFields.Problems.refuse_parameters(t::_PottsTexts, c)
     throw(ArgumentError(LatticeFields.Problems.unbounded_text(_PottsTexts(t.names, t.cv), (; c..., r = (; r..., terms = String[],
         coupled = String[])))))
 end
-# (a front end A bound always knows the cross terms: LatticePDE's `StabilityBound`)
+# (`LatticePDE.StabilityBound` tracks cross terms across callers)
 LatticeFields.Problems.coupling_unknown_text(t::_PottsTexts, c; refuse::Bool) =
     "the stability bound of the fields $(_fieldlist(t.names)) does not see their coupling to the other solver groups" *
     (refuse ? "; give `solvers` an explicit `ExplicitEuler(; substeps = n)` for the group" : ": the count is the user's")
@@ -991,7 +991,7 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
                 fp, opts))
             continue
         end
-        # the substep rule: LatticeFields' one policy in front end A's words (F3-01); with
+        # the substep rule: LatticeFields' policy phrased for Potts; with
         # several groups, the coupling of this group to the others at the whole system's
         # parameters, mapped by name (a parameter the group does not read is `NaN`: no cross
         # coefficient of its rows reads it; the read graph is the structure, so it needs no value).

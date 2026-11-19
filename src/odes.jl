@@ -204,9 +204,10 @@ function _check_algebraic_lowering(sys::PottsSystem, rn)
                 iscall(y) && operation(y) === cell_integral && lower(arguments(y)[1], _site_env(Float64, :i, rn; mcs = :t))
             end
         catch e
-            e isa Union{ArgumentError, ErrorException} || rethrow()
-            throw(ArgumentError("the algebraic equation `$(i.name) ~ $(o.rhs)` cannot be evaluated at " *
-                                "$(cell ? "its cell" : "the model"): $(sprint(showerror, e))"))
+            e isa Union{ArgumentError, PottsCompileError} || rethrow()
+            msg = "the algebraic equation `$(i.name) ~ $(o.rhs)` cannot be evaluated at " *
+                  "$(cell ? "its cell" : "the model"): $(sprint(showerror, e))"
+            throw(e isa PottsCompileError ? PottsCompileError(msg) : ArgumentError(msg))
         end
     end
     return nothing

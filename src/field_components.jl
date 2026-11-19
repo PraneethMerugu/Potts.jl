@@ -73,7 +73,7 @@ function _pde_content(sys, f::ModelingToolkitBase.PDESystem, prefix, what::Abstr
         "coordinate per axis, in the order of the lattice's axes")))
     tc = length(ivs) == N + 1 ? ivs[1] : nothing
     xc = ivs[(end - N + 1):end]
-    # the time is the first independent variable (as in front end B): the variable of each rate
+    # the time is the first independent variable: the variable of each rate
     # `D(c) ~ …` and map `Shift(t, 1)(c) ~ …`
     for eq in getfield(f, :eqs)
         l = _unwrap(eq.lhs)

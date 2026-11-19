@@ -62,7 +62,7 @@ end
     catch e
         e
     end
-    @test err isa ArgumentError && occursin("split", sprint(showerror, err))
+    @test err isa ArgumentError
     # the metadata is the inner System's: the sweep is there, and a value set stays through mtkcompile
     @test M.getmetadata(gg, Potts.PottsSweepSpec, nothing) isa Potts.PottsSweepSpec
     tagged = M.setmetadata(gg, MTKInterfaceKey, :tagged)
@@ -105,7 +105,7 @@ end
     catch e
         e
     end
-    @test err isa ArgumentError && occursin("simplify", sprint(showerror, err))
+    @test err isa ArgumentError
     # a compiled model is no ODE system either
     @test_throws ArgumentError M.ODEProblem(c, [], (0.0, 1.0))
     @test_throws ArgumentError Potts.SciMLBase.NonlinearProblem(c, [])

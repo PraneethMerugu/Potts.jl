@@ -467,12 +467,7 @@ function _problem_function(c::CompiledPottsSystem, T, spec::SolverSpec, values, 
             ("contact", getfield(c, :contact_spec), _p(sys, :lattice).neighborhood),
         )
         r = CorePotts.relation(nb, lat)
-        d = try
-            CorePotts.relation(default, lat)
-        catch e
-            e isa ArgumentError || rethrow()
-            nothing
-        end
+        d = CorePotts.try_relation(default, lat)
         r == d || push!(cad, "$role=$(r.offsets);$(r.weights)")
     end
     # named and inline gather relations, also run data outside the generated code (D-124):
@@ -997,6 +992,7 @@ function _substitute_entry(v, values, who)
     w = try
         _unwrap(Symbolics.substitute(v, values))
     catch e     # substitution folds calls on numbers: `sqrt(-1.0)` fails here
+        e isa Union{InterruptException, StackOverflowError, OutOfMemoryError} && rethrow()
         throw(ArgumentError("$(_who(who)) = `$v` fails on the parameter values: $(sprint(showerror, e))"))
     end
     SymbolicUtils.isconst(w) && return SymbolicUtils.unwrap_const(w)
@@ -1037,6 +1033,7 @@ function _numeric(x, who)
     try
         return op(vals...)
     catch e
+        e isa Union{InterruptException, StackOverflowError, OutOfMemoryError} && rethrow()
         throw(ArgumentError("$who: `$x` fails on the parameter values: $(sprint(showerror, e))"))
     end
 end

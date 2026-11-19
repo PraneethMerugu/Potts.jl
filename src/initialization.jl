@@ -77,11 +77,12 @@ function _init_located(f, sys::PottsSystem, eq)
     try
         return f()
     catch e
-        e isa Union{ArgumentError, ErrorException} || rethrow()
+        e isa Union{ArgumentError, PottsCompileError} || rethrow()
         occursin("\n  in ", e.msg) && rethrow()
         ln = get(_p(sys, :sources), eq, nothing)
         loc = ln === nothing ? "" : " at $(ln.file):$(ln.line)"
-        throw(ArgumentError("$(e.msg)\n  in @initialization_equations $eq$loc"))
+        msg = "$(e.msg)\n  in @initialization_equations $eq$loc"
+        throw(e isa PottsCompileError ? PottsCompileError(msg) : ArgumentError(msg))
     end
 end
 
@@ -466,7 +467,7 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
         ModelingToolkitBase.InitializationProblem(ModelingToolkitBase.complete(isys), 0.0, Dict{Any, Any}(zip(params, vals(1)));
             guesses = Dict{Any, Any}(zip(free, gs)), fully_determined = true, use_scc = false)
     catch e
-        e isa ArgumentError && rethrow()
+        e isa Union{ArgumentError, InterruptException, StackOverflowError, OutOfMemoryError} && rethrow()
         throw(ArgumentError("initialization of $where_: ModelingToolkit could not build the initialization problem for " *
                             "$names: $(first(sprint(showerror, e), 2000))"))
     end
@@ -512,7 +513,7 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
     solving(f, k) = try
         f()
     catch e
-        (e isa InterruptException || e isa ArgumentError) && rethrow()
+        e isa Union{InterruptException, StackOverflowError, OutOfMemoryError, ArgumentError} && rethrow()
         failed(k, "the solve failed: $(first(sprint(showerror, e), 300))")
     end
     for k in 1:n
@@ -696,7 +697,7 @@ function _init_scales(c::_InitCheck, p, x)
     try
         _init_eval!(c, p, x)
     catch e
-        e isa InterruptException && rethrow()
+        e isa Union{DomainError, DivideError, InexactError} || rethrow()
         return zeros(length(c.rows))
     end
     return Float64[c.m[l] + c.m[r] for (l, r) in c.rows]
@@ -707,7 +708,7 @@ function _init_residual(c::_InitCheck, p, x)
     try
         _init_eval!(c, p, x)
     catch e
-        e isa InterruptException && rethrow()
+        e isa Union{DomainError, DivideError, InexactError} || rethrow()
         return (1, NaN, NaN)
     end
     for (q, (l, r)) in enumerate(c.rows)
@@ -789,7 +790,7 @@ function _init_accept(c::_InitCheck, p, x, g)
         _init_flat!(copy(J)) && return bad
         J \ r
     catch e
-        e isa InterruptException && rethrow()
+        e isa Union{DomainError, DivideError, InexactError} || rethrow()
         return bad
     end
     # against the value itself (a large guess must not loosen it), floored far below the guess
@@ -807,7 +808,7 @@ function _init_singular(c::_InitCheck, p, x, g)
     try
         _init_jacobian!(J, c, p, x, g)
     catch e
-        e isa InterruptException && rethrow()
+        e isa Union{DomainError, DivideError, InexactError} || rethrow()
         return false                                    # not evaluable beside the solution: not judged
     end
     return _init_flat!(J)

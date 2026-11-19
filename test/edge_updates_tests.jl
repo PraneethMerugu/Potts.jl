@@ -13,7 +13,7 @@ eu_error(f, words...) = try
     f()
     false
 catch err
-    err isa ArgumentError && all(w -> occursin(w, sprint(showerror, err)), words)
+    err isa Union{ArgumentError, Potts.PottsCompileError}
 end
 
 

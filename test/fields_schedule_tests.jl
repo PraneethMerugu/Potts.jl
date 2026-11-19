@@ -37,7 +37,7 @@ end
             field_solver = ExplicitEuler(substeps = 2)
         ).f.fingerprint
         # a sweep that cannot split is refused at `init`
-        @test occursin("skip_interior", something(fd_err(() -> init(p, SequentialCPM(; skip_interior = true))), ""))
+        @test_throws ArgumentError init(p, SequentialCPM(; skip_interior = true))
     end
 end
 
