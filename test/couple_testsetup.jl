@@ -121,6 +121,13 @@ catch e
     e isa ArgumentError ? sprint(showerror, e) : "not an ArgumentError: " * sprint(showerror, e)
 end
 
+cp_compile_msg(f) = try
+    f()
+    "built"
+catch e
+    e isa Potts.PottsCompileError ? sprint(showerror, e) : "not a PottsCompileError: " * sprint(showerror, e)
+end
+
 const CP_W = [0.01 * (i + 2j) for i in 1:24, j in 1:20]
 
 cp_q(sol) = sum(CP_W .* sol.u[end].site.c)

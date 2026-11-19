@@ -330,10 +330,10 @@ end
         @test cv_write_error(:ok_to) === nothing                               # controls
         @test cv_write_error(:ok_read_to) === nothing
         e = cv_write_error(:bad_owner)
-        @test e isa ArgumentError
+        @test e isa Potts.PottsCompileError
         for w in (:bad_read_written_cell, :bad_read_written_model, :bad_transfer_per_site)
             e = cv_write_error(w)
-            @test e isa ArgumentError
+            @test e isa Potts.PottsCompileError
         end
     end
 end

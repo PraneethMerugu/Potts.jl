@@ -79,14 +79,14 @@ end
 
 @testitem "compartment validation" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
     @testset "compartment validation" begin
-        @test_throws ArgumentError mtkcompile(
+        @test_throws Potts.PottsCompileError mtkcompile(
             Potts.PottsSystem(;
                 name = :x, kinds = [:medium, :ka],
                 lattice = Potts.lattice_spec((8, 8)), sweep = Potts.sweep_spec(:metropolis; temperature = 1.0),
                 energies = [Potts.EnergyTerm(Potts.CellDomain(Int[]), Potts.B.cluster_volume^2)]
             )
         )
-        @test_throws ArgumentError mtkcompile(
+        @test_throws Potts.PottsCompileError mtkcompile(
             Potts.PottsSystem(;
                 name = :x, kinds = [:medium, :ka],
                 lattice = Potts.lattice_spec((8, 8)), sweep = Potts.sweep_spec(:metropolis; temperature = 1.0),
@@ -104,8 +104,8 @@ end
         catch e
             e
         end
-        @test err isa ArgumentError
-        @test_throws ArgumentError mtkcompile(divsys(Potts.cells, Potts.clusters(2)))      # bare `cells` is every kind
+        @test err isa Potts.PottsCompileError
+        @test_throws Potts.PottsCompileError mtkcompile(divsys(Potts.cells, Potts.clusters(2)))      # bare `cells` is every kind
         @test mtkcompile(divsys(Potts.cells(2), Potts.clusters(1))) isa Potts.CompiledPottsSystem
     end
 end

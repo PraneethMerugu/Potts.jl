@@ -362,7 +362,7 @@ end
         @test Symbol(solve(prob, SequentialCPM()).retcode) === :Unstable         # as in the run
         for alg in (SequentialCPM(), CheckerboardCPM())
             an_throws(
-                ArgumentError, ["Unstable"],
+                Potts.PottsCompileError, ["Unstable"],
                 () -> Potts.anneal(prob, 5; seed = 1, alg)
             )
         end

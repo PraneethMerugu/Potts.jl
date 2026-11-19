@@ -1,5 +1,5 @@
 # F3-08 (F3 design §3.7): `BackwardEuler` in a model. A field group with
-# `field_solver = BackwardEuler()` steps through the same runtime as front end B
+# `field_solver = BackwardEuler()` steps through the same runtime as standalone fields
 # (`Problems.GroupRuntime`, the implicit cache), bound to the state's site arrays: with σ frozen
 # the model equals B (`Potts.fields` → `discretize`) bitwise; a moving σ enters the next window's solve
 # through the CPM's own input array; a parameter write rebinds in place (`reset!`: the hierarchy

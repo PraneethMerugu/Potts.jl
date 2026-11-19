@@ -1,6 +1,6 @@
 # Fields and cell sums on device backends (POTTS_GPU = metal | rocm).
 
-# F2-08b: front end A's field kernels compile in the field phase's pending task
+# F2-08b: a coupled model's field kernels compile in the field phase's pending task
 # (`rt.pending`): the step and the mask launches, whose bodies clamp the sites they mark (the
 # clamp at the step start fused into the mask launch on a device: no separate clamp launch),
 # and the slot-1 copy. Once the task is done, the first MCS adds no LatticeFields kernel to

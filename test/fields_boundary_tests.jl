@@ -1,5 +1,4 @@
-# F4-12a (F4 design §3.8 FE-10): the values of a PDESystem's conditions (until F4-B6 also front
-# end A's `@boundary`, checked bitwise against `@bcs`): expressions of parameters, the
+# F4-12a (F4 design §3.8 FE-10): the values of a PDESystem's conditions (expressions of parameters, the
 # coordinates `x`, `y`, `z` and the time, lowered into F3-07's value fields. Oracles:
 # LatticePDE's own run of the same PDESystem (no cells: the field does not depend on the CPM),
 # hand values of the Robin slots, a manufactured solution with a time-dependent Dirichlet face
@@ -161,7 +160,7 @@ end
 
 
 # F4-12b (rulings Q14–Q17): Robin coefficients that vary by site or in time. The coupled run
-# equals LatticePDE's own run of the PDESystem (until F4-B6, front end A's `@boundary` bitwise),
+# equals LatticePDE's own run of the PDESystem (prior `@boundary` oracle checked bitwise),
 # and one BackwardEuler MCS equals the hand ghost-rule matrix.
 # Base (ca232825, ~/lpwork/f4c/nc12b-base.log): the models are refused ("… reads `y`; … planned, F4-12b").
 @potts_model FbSiteBcs begin
@@ -259,7 +258,7 @@ end
     end
 end
 
-# F4-12a review: a slot means one quantity however the face is written (base 6d11bc85: the `@bcs`
+# F4-12a review: a slot means one quantity however the face is written (base 6d11bc85: the condition
 # slot held −0.75, the coefficient of ∂c/∂x); a coefficient that reads more than parameters is
 # refused in the model's words, naming the read and the PDESystem (base: LatticePDE's "… is one
 # value at every site: …", with the first `@equations` line)

@@ -123,7 +123,7 @@ end
             return PottsProblem(sys, [ownership => σ, kind => [:cell]], (0, 1))
         end
         for rel in (:spacing, :lattice, :mobility)
-            @test_throws ArgumentError build(rel)
+            @test_throws Potts.PottsCompileError build(rel)
         end
         @test build(:far) isa CorePotts.PottsProblem                               # control: any other name
         @test build(:contact; read = false) isa CorePotts.PottsProblem             # declarable roles build
@@ -208,7 +208,7 @@ end
             variables = [c], energies = [Potts.energy(E)], sweep = Potts.sweep_spec(:metropolis; temperature = 1.0)
         )
         c = Potts.variable(only(Potts.Symbolics.@variables c(Potts.t)), :site)
-        @test_throws ArgumentError mtkcompile(bad(Potts.sites => Potts._primed(c)))
+        @test_throws Potts.PottsCompileError mtkcompile(bad(Potts.sites => Potts._primed(c)))
         @test mtkcompile(bad(Potts.contacts => c * Potts._primed(c))) isa Potts.CompiledPottsSystem
         @test_throws ArgumentError Potts._primed(Potts.variable(only(Potts.Symbolics.@variables m(Potts.t)), :cell))
         @test_throws ArgumentError Potts._potts_model(
@@ -248,7 +248,7 @@ end
         @test site_selfcheck(prob, Moore(1); dH = (u, prop) -> energy_change(noclear, u, prop)) > 1.0e-3
         @test site_selfcheck(nowrite, Moore(1)) < 1.0e-9 && site_selfcheck(noclear, Moore(1)) < 1.0e-9
         # a write at the source changes pairs away from the target: rejected
-        @test_throws ArgumentError mtkcompile(SourceWriteContacts(; name = :sw))
+        @test_throws Potts.PottsCompileError mtkcompile(SourceWriteContacts(; name = :sw))
     end
 end
 
@@ -347,7 +347,7 @@ end
         prob = PottsProblem(TwoSiteTermsOnCopy(; name = :t), [ownership => σ, kind => fill(:A, length(kinds)), :mark => cue], (0, 4))
         @test site_selfcheck(prob, Moore(1)) < 1.0e-9
         # names a user cannot write stay out of the error text
-        @test_throws ArgumentError mtkcompile(
+        @test_throws Potts.PottsCompileError mtkcompile(
             Potts.PottsSystem(;
                 name = :bad,
                 kinds = [:medium, :A], lattice = Potts.lattice_spec((8, 8)), energies = [Potts.energy(Potts.contacts => Potts.B.target)],

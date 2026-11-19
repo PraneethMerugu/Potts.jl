@@ -49,7 +49,7 @@ end
         m = [u.cell.clock₊m_c[1] for u in sol.u]
         @test m[1:8] == (0:7) ./ 8                          # exact: 1/8 per MCS at volume 25
         @test m[9] == 0.0 && sol.u[9].cell.clock₊m_c[3] == 0.0 && count(>(0), sol.u[9].cell.volume) == 3
-        @test_throws ArgumentError mtkcompile(
+        @test_throws Potts.PottsCompileError mtkcompile(
             Potts.PottsSystem(;
                 name = :x, kinds = [:medium, :A],
                 lattice = Potts.lattice_spec((8, 8)), sweep = Potts.sweep_spec(:metropolis; temperature = 1.0),
@@ -98,7 +98,7 @@ end
             @lattice Lattice((8, 8))
             @sweep Metropolis(; temperature = T)
         end
-        @test_throws ArgumentError mtkcompile(BadCoupling(; name = :b))
+        @test_throws Potts.PottsCompileError mtkcompile(BadCoupling(; name = :b))
         # component values without defaults must be given
         @potts_model NoDefault begin
             @kinds medium A
@@ -197,7 +197,7 @@ end
             run(sys; kw...)
             false
         catch e
-            e isa ArgumentError
+            e isa Potts.PottsCompileError
         end
         let
             @parameters k = 0.3

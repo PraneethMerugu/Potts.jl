@@ -1,6 +1,6 @@
 # P6.3b (D-145): `@schedule` beyond the frozen acceptance file: how it composes (`extend`), the
 # errors of the less common forms, the canonical fingerprint and the phase tuples the compiler
-# builds. The field conditions (front end A's `@boundary` until F4-B6) are a PDESystem's.
+# builds. The field conditions (previously `@boundary`) are a PDESystem's.
 
 @testsetup module BoundaryScheduleSetup
 using Potts, Test

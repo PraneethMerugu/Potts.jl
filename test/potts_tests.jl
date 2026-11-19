@@ -165,8 +165,8 @@ end
         @test_throws ArgumentError NoLatModel(; name = :nl)
         @test_throws ArgumentError NoSweepModel(; name = :ns)
 
-        @test_throws ArgumentError mtkcompile(BadEnergyCase(; name = :bc, kind_case = :cluster_gather))
-        @test_throws ArgumentError mtkcompile(BadEnergyCase(; name = :bs, kind_case = :site_gather))
-        @test_throws ArgumentError mtkcompile(BadEnergyCase(; name = :bm, kind_case = :cell_medium))
+        @test_throws Potts.PottsCompileError mtkcompile(BadEnergyCase(; name = :bc, kind_case = :cluster_gather))
+        @test_throws Potts.PottsCompileError mtkcompile(BadEnergyCase(; name = :bs, kind_case = :site_gather))
+        @test_throws Potts.PottsCompileError mtkcompile(BadEnergyCase(; name = :bm, kind_case = :cell_medium))
     end
 end

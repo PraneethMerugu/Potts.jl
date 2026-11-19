@@ -40,7 +40,7 @@ end
         @test ticks(discrete_counter_model(ShiftIndex(Clock(1.0)); mcs_duration = 0.5)) == oracle(2, 0, 12)
         @test ticks(discrete_counter_model(_kd; mcs_duration = 0.5)) == 0:12  # a step count, no period
         for bad in (Clock(2.5), Clock(3.0; phase = 0.5), Clock(3.0; phase = 3.0))
-            @test_throws ArgumentError mtkcompile(discrete_counter_model(ShiftIndex(bad)))
+            @test_throws Potts.PottsCompileError mtkcompile(discrete_counter_model(ShiftIndex(bad)))
         end
     end
 end
@@ -115,8 +115,8 @@ end
         end
         # a node evolves only by its ticks (control: the same model without the statement compiles)
         @test mtkcompile(DiscreteBad(; name = :b, case = :ok)) isa CompiledPottsSystem
-        @test_throws ArgumentError mtkcompile(DiscreteBad(; name = :b, case = :write))
-        @test_throws ArgumentError mtkcompile(DiscreteBad(; name = :b, case = :param))
+        @test_throws Potts.PottsCompileError mtkcompile(DiscreteBad(; name = :b, case = :write))
+        @test_throws Potts.PottsCompileError mtkcompile(DiscreteBad(; name = :b, case = :param))
         # a Bool parameter coupled to a Real expression reads it as `!iszero`
         σ = _discrete_blocks(2, 8)
         _DISCRETE_SYS[] = sampler
@@ -290,7 +290,7 @@ end
             @lattice Lattice((8, 8))
             @sweep Metropolis(; temperature = 1.0)
         end
-        @test_throws ArgumentError mtkcompile(DiscreteUndetermined(; name = :u))
+        @test_throws Potts.PottsCompileError mtkcompile(DiscreteUndetermined(; name = :u))
     end
 end
 
@@ -305,14 +305,14 @@ end
         catch e
             e
         end
-        @test err isa ArgumentError
+        @test err isa Potts.PottsCompileError
         # a non-Potts error raised inside the compile call: relabelled
         err = try
             Potts._mtk_compile_call(sys -> throw(DomainError(sys, "outside Potts")), comp); nothing
         catch e
             e
         end
-        @test err isa ArgumentError
+        @test err isa Potts.PottsCompileError
         # a Potts internal broken on purpose (a MethodError raised in components.jl): unchanged
         err = try
             Potts._mtk_compile_call(sys -> Potts._clock_cadence(comp, nothing, Any[], 1.0), comp); nothing
@@ -348,6 +348,6 @@ end
         catch e
             e
         end
-        @test err isa ArgumentError
+        @test err isa Potts.PottsCompileError
     end
 end

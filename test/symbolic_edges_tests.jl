@@ -226,7 +226,7 @@ end
         @test prob.u0.cell.link_rest[1, 1] == 12.0 && prob.u0.cell.link_len[1, 2] == 18.0
         @test selfcheck(prob) < 1.0e-9
         # the rule is per body: one body declaring two relationships still may not use `x(edge)`
-        @test_throws ArgumentError mtkcompile(AmbiguousEdge(; name = :a))
+        @test_throws Potts.PottsCompileError mtkcompile(AmbiguousEdge(; name = :a))
     end
 end
 
@@ -390,18 +390,18 @@ end
             @sweep Metropolis(; temperature = 1.0)
         end
 
-        @test_throws ArgumentError mtkcompile(AmbiguousEdge(; name = :a))
-        @test_throws ArgumentError mtkcompile(UnknownRelationship(; name = :u))
-        @test_throws ArgumentError mtkcompile(CrossRead(; name = :c))
+        @test_throws Potts.PottsCompileError mtkcompile(AmbiguousEdge(; name = :a))
+        @test_throws Potts.PottsCompileError mtkcompile(UnknownRelationship(; name = :u))
+        @test_throws Potts.PottsCompileError mtkcompile(CrossRead(; name = :c))
         c = Chain(; name = :c)
-        @test_throws ArgumentError mtkcompile(
+        @test_throws Potts.PottsCompileError mtkcompile(
             Potts.PottsSystem(;
                 name = :dup, kinds = [:medium, :blob],
                 lattice = Potts.lattice(c), relationships = [Potts.relationship(:bond), Potts.relationship(:bond)], sweep = Potts._p(c, :sweep)
             )
         )
         @test isequal(getfield(mtkcompile(Spring(; name = :s)), :edge_vars)[:bond], Potts.declared_variables(Spring(; name = :s)))   # `rest(edge)`: the only one
-        @test_throws ArgumentError mtkcompile(CellRelationship(; name = :cr))
+        @test_throws Potts.PottsCompileError mtkcompile(CellRelationship(; name = :cr))
     end
 end
 
@@ -440,21 +440,21 @@ end
         @test _count_ast(ex.delta_H, node -> node isa Expr && node.head === :(+=) && node.args[1] === :δs_old) == 1
 
         # quantities that change with the copy are rejected outside cell terms
-        @test_throws ArgumentError mtkcompile(
+        @test_throws Potts.PottsCompileError mtkcompile(
             Potts.PottsSystem(;
                 name = :bad, kinds = [:medium, :A],
                 lattice = Potts.lattice_spec((8, 8)), energies = [Potts.energy(Potts.contacts => Potts._index(Potts.B.volume, Potts.B.owner))],
                 sweep = Potts.sweep_spec(:metropolis; temperature = 1.0)
             )
         )
-        @test_throws ArgumentError mtkcompile(
+        @test_throws Potts.PottsCompileError mtkcompile(
             Potts.PottsSystem(;
                 name = :bad, kinds = [:medium, :A],
                 lattice = Potts.lattice_spec((8, 8)), energies = [Potts.energy(Potts.sites => 0.1 * Potts._index(Potts.B.volume, Potts.B.owner))],
                 sweep = Potts.sweep_spec(:metropolis; temperature = 1.0)
             )
         )
-        @test_throws ArgumentError mtkcompile(
+        @test_throws Potts.PottsCompileError mtkcompile(
             Potts.PottsSystem(;
                 name = :bad, kinds = [:medium, :A],
                 lattice = Potts.lattice_spec((8, 8)), energies = [Potts.energy(Potts.cells(0) => Potts.B.volume)],

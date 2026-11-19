@@ -1,6 +1,6 @@
 # F4-11 (F4 design §3.8 FE-15b): a plain `PDESystem` composes into a model as fields.
 # `compose(model, Potts.component(:drug, pdesys, model))` equals the same field coupled
-# with `@fields` (F4-B4t; before, declared in `@equations` and `@bcs`), bitwise on the CPU with
+# with `@fields` (F4-B4t; before, declared in model `@equations` and boundary sections), bitwise on the CPU with
 # σ frozen (one group); the component reads
 # `kind` by its user word; its fields take `FieldGroups` pairs by name; a domain other than the
 # lattice's (in the model's length unit, `@lattice spacing`) is refused naming both.

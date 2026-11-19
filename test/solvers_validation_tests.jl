@@ -125,8 +125,8 @@ end
     end
 end
 
-@testitem "F2-04: one ExplicitEuler for both front ends" setup = [SolversSetup] tags = [:potts, :solvers] begin
-    @testset "F2-04: one ExplicitEuler for both front ends" begin
+@testitem "F2-04: one ExplicitEuler for coupled and standalone routes" setup = [SolversSetup] tags = [:potts, :solvers] begin
+    @testset "F2-04: one ExplicitEuler for coupled and standalone routes" begin
         m = Module()
         Core.eval(m, :(using Potts; using Potts.LatticePDE))
         @test Core.eval(m, :ExplicitEuler) === Potts.ExplicitEuler === Potts.LatticePDE.ExplicitEuler ===

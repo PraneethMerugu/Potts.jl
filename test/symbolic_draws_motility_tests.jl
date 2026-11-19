@@ -177,7 +177,7 @@ end
             @sweep Metropolis(; temperature = 1.0)
         end
         for case in 1:4
-            @test_throws ArgumentError mtkcompile(_BadCentroidRand(; name = :b, case))
+            @test_throws Potts.PottsCompileError mtkcompile(_BadCentroidRand(; name = :b, case))
         end
         # empty cell slots observe a zero centroid, not NaN
         σ = zeros(Int32, 48, 48); σ[22:26, 22:26] .= 1
@@ -310,7 +310,7 @@ end
         catch e
             e
         end
-        @test err_two isa ArgumentError
+        @test err_two isa Potts.PottsCompileError
         @test_throws ArgumentError Potts._potts_model(
             :_BadW1, quote
                 @kinds medium A
@@ -433,12 +433,12 @@ end
             end
         end
         @test_throws Potts.PottsCompileError mtkcompile(DirDiagProbe(; name = :bad, case = :drive_vec, use_hex = false))
-        @test_throws ArgumentError mtkcompile(DirDiagProbe(; name = :bad, case = :drive_axis3, use_hex = false))
-        @test_throws ArgumentError mtkcompile(DirDiagProbe(; name = :bad, case = :drive_axis0, use_hex = false))
-        @test_throws ArgumentError mtkcompile(DirDiagProbe(; name = :bad, case = :pos_axis3, use_hex = false))
+        @test_throws Potts.PottsCompileError mtkcompile(DirDiagProbe(; name = :bad, case = :drive_axis3, use_hex = false))
+        @test_throws Potts.PottsCompileError mtkcompile(DirDiagProbe(; name = :bad, case = :drive_axis0, use_hex = false))
+        @test_throws Potts.PottsCompileError mtkcompile(DirDiagProbe(; name = :bad, case = :pos_axis3, use_hex = false))
         @test_throws Potts.PottsCompileError mtkcompile(DirDiagProbe(; name = :bad, case = :pos_vec, use_hex = false))
         @test_throws Potts.PottsCompileError mtkcompile(DirDiagProbe(; name = :bad, case = :pos_missing_site, use_hex = false))
-        @test_throws ArgumentError mtkcompile(DirDiagProbe(; name = :bad, case = :energy_dir, use_hex = false))
+        @test_throws Potts.PottsCompileError mtkcompile(DirDiagProbe(; name = :bad, case = :energy_dir, use_hex = false))
         @test_throws Potts.PottsCompileError mtkcompile(DirDiagProbe(; name = :bad, case = :drive_pre, use_hex = false))
         @test_throws ArgumentError Potts._potts_model(
             :DirBadParam, quote

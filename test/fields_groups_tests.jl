@@ -209,7 +209,7 @@ end
     end
 end
 
-# F2-07: front end B's `FieldGroups` steps FdTwo's field system as the model's two solver groups do
+# F2-07: standalone `FieldGroups` steps FdTwo's field system as the model's two solver groups do
 # (c with 2 substeps, then u with 3, reading the new c): σ is frozen (`A[frozen]`), so the
 # kind input is the same at every MCS
 @testitem "F2-07: B FieldGroups equals a model's two groups (FdTwo, σ frozen)" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
@@ -226,7 +226,7 @@ end
         foreach(_ -> step!(integ), 1:3)
         st = current_state(integ)
         @test Array(st.ownership) == σ0 && fd_n(integ, 1) == 2 && fd_n(integ, 2) == 3
-        # the model's field system in front end B: zero initial values, the time span of 3 MCS
+        # the model's field system in standalone LatticePDE: zero initial values, the time span of 3 MCS
         pdesys, _ = Potts._field_system(sys; T = Float64)
         ivs = pdesys.ivs
         isin(v) = MTKB.isinput(Sy.unwrap(v))
@@ -332,7 +332,7 @@ end
 end
 
 # F2-08a: the substep count of each field group of a Potts problem or integrator, in group
-# order (as front end B's `substep_counts`; base: only the internal `CorePotts._runtime(…).n`)
+# order (as LatticePDE's `substep_counts`; base: only the internal `CorePotts._runtime(…).n`)
 @testitem "F2-08a: substep_counts per field group in a model" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
     @testset "F2-08a: substep_counts per field group in a model" begin
         sys = FdTwo(; name = :t)
@@ -343,7 +343,7 @@ end
         integ = init(prob, SequentialCPM())
         @test substep_counts(integ) == [fd_n(integ, 1), fd_n(integ, 2)] == [2, 3]
         @test substep_counts(prob) == [2, 3]
-        @test Potts.substep_counts === Potts.LatticePDE.substep_counts                # one function for both front ends
+        @test Potts.substep_counts === Potts.LatticePDE.substep_counts                # one shared function
         # it follows a parameter write: diffusion 4× raises the automatic part of the count
         p1 = PottsProblem(FdClosed(; name = :c), fd_empty((12, 10)), (0, 2); field_solver = ExplicitEuler())
         i1 = init(p1, SequentialCPM())
@@ -503,7 +503,7 @@ end
 
 # F3-03 (F3 design §3.7): `FieldGroups` is a model's `field_solver` too (its pairs as `solvers`
 # entries of fields, its `default` the other fields' solver), so it resolves and fingerprints
-# as the `solvers` spelling; both front ends print an algorithm by LatticeFields' one canonical
+# as the `solvers` spelling; both coupled and standalone routes print an algorithm by LatticeFields' one canonical
 # text (`Problems.canonical`). Base (eb2efb60): `field_solver = FieldGroups(…)` was an
 # ArgumentError ("`FieldGroups` in a `PottsProblem` is planned").
 @testitem "F3-03: FieldGroups in a model; one canonical text" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
@@ -566,7 +566,7 @@ end
                 )
             )
         )
-        # one canonical text through both front ends (byte for byte)
+        # one canonical text across both routes (byte for byte)
         @test LFP.canonical(ExplicitEuler(substeps = 15, lower_bound = 0.0)) ==
             Potts._canonical(ExplicitEuler(substeps = 15, lower_bound = 0.0))
         # the same objects: every algorithm LatticePDE exports is Potts' own
@@ -576,7 +576,7 @@ end
     end
 end
 
-# the solvers' inner algorithms are the same objects in both front ends
+# the solvers' inner algorithms are the same objects across both routes
 # (`LatticeFields.Solvers`, made public): `LatticePCG` and `LatticeMultigrid` exported, `VCycle` public.
 # Base (1079c4ff): neither Potts nor LatticePDE binds them (`UndefVarError: DevicePCG`).
 @testitem "the inner solvers in a model and in B" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin

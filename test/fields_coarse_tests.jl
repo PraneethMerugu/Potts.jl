@@ -1,6 +1,6 @@
 # F3-17 (F3 design §3.9): `[lattice_level = Coarse(k)]` on a field of `@potts_model`. The
 # field's array is its grid's (one value per node of k×k sites), its equation runs there
-# through the same lowering as front end B (`Potts.fields` → `discretize`), and a CPM read of
+# through the same lowering as standalone fields (`Potts.fields` → `discretize`), and a CPM read of
 # the field at a site reads the node whose block holds the site, so `integral(c) / volume` is
 # the cell's average over its sites. With σ frozen the coupled model equals its PDESystem solved
 # by LatticePDE (`Potts.fields` → `discretize`) bitwise. The fields are coupled with `@fields`
@@ -384,7 +384,7 @@ end
         )
         σw = zeros(Int32, 8, 8); σw[3:5, 3:5] .= 1
         fco_throws(
-            ArgumentError, ["laplacian"],
+            Potts.PottsCompileError, ["laplacian"],
             () -> PottsProblem(_FcWhere(; name = :w), [ownership => σw, kind => [:A]], (0, 1))
         )
         # Coarse(1) is the lattice itself (no option kept)

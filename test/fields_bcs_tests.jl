@@ -182,7 +182,7 @@ end
 @testitem "F2-11: the refusals, each with its route" setup = [FieldsSetup, FieldsOpBcsSetup] tags = [:potts, :fields] begin
     @testset "F2-11: the refusals, each with its route" begin
         # a periodic pair on an axis the lattice closes: per-field periodicity is FE-20 (`Robin`
-        # with β = 0 or α = 0, a face set twice and an initial condition in `@bcs` were front end A's
+        # with β = 0 or α = 0, a face set twice and an initial condition were legacy model refusals
         # refusals, gone with it in F4-B6)
         err = something(fd_err(() -> mtkcompile(FbPeriodicBcs(; name = :f))), "")
         @test occursin("periodic", err) || (println("periodic: ", err); false)

@@ -70,7 +70,7 @@ end
 
 # F2-08b: Merks2006 has a masked field (its `kind == border` frame): the clamp at the step start
 # runs every MCS, and a warm MCS at 500² still allocates nothing on the CPU (a `foreach` closure
-# over the clamps allocated 176 B per MCS on front end A's runtime)
+# over the clamps allocated 176 B per MCS on the coupled model's runtime)
 @testitem "F2-08b: the Merks2006 500² warm MCS (masked, clamped) allocates nothing (CPU)" setup = [FieldsSetup] tags = [:potts, :fields] begin
     @testset "F2-08b: the Merks2006 500² warm MCS (masked, clamped) allocates nothing (CPU)" begin
         warm(integ) = (step!(integ); step!(integ); @allocated step!(integ))

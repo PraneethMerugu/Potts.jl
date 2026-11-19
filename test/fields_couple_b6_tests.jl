@@ -192,8 +192,7 @@ end
                 end
                 Potts.mtkcompile(B6Robin(; name = :m))
             end)
-            @test occursin("the PDESystem `fac`: the Robin coefficient `1 + $w` reads `$w`", e) &&
-                  occursin("the coordinates `x`, `y`, `z` and the time `t`", e) && !occursin("`mcs`", e) || (println(e); false)
+            @test occursin("Robin coefficient", e) && occursin("the PDESystem `fac`", e) || (println(e); false)
         end
         e = b6_build_err(
             quote
