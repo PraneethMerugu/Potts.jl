@@ -69,6 +69,28 @@ using .LF_solvers_device: instances
 end
 end
 
+@testitem "solve(LinearProblem) on a device field's operator equals the field solver" setup = [LF_solvers_device] tags = [:latticefields, :solvers, :gpu_only] begin
+    using LinearSolve: LinearProblem, solve
+    using LatticeFields.Solvers: BoundOperator, solution_key
+    using Random: Xoshiro
+    op, ins = named_case("disk128", 0.022)
+    b = Float32.(rand(Xoshiro(3), 128 * 128))
+    for alg in (LatticePCG(; maxiters = 8, reltol = 1.0e-6), LatticeMultigrid(; cycles = 3))
+        # the in-house solver on the device: the field solver driven directly
+        sv = FieldSolver(DevExec(), op; T = Float32, linsolve = alg, inputs = ("in.f" => devarray(b), ins...))
+        rebuild!(sv)
+        lift!(sv)
+        solve!(sv)
+        x = Array(field(sv, solution_key(sv)))
+        # the LinearSolve route on the device and on the host
+        A = BoundOperator(DevExec(), op; T = Float32, inputs = ins)
+        u = solve(LinearProblem(A, devarray(b)), alg).u
+        uh = solve(LinearProblem(BoundOperator(HostExec(), op; T = Float32, inputs = ins), b), alg).u
+        @test Array(u) == x
+        @test Array(u) ≈ uh rtol = 1.0e-5
+    end
+end
+
 @testitem "no Float64 in device code: the walk on device argument types" setup = [LF_solvers_device] tags = [:latticefields, :solvers, :gpu_only] begin
 using .LF_solvers_device: instances
 @testset "no Float64 in device code: the walk on device argument types" begin
