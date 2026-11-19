@@ -1,4 +1,4 @@
-# F3-11 (F3 design §3.3, §5): `BDF2` in standalone LatticePDE. Each substep solves
+# `BDF2` in standalone LatticePDE. Each substep solves
 # `(u − (4uⁿ − uⁿ⁻¹)/3)/(2h/3) = r(u)` at tⁿ⁺¹ through the implicit runtime (shift `3/(2h)`); a start
 # (init, `reset!`, every change of `h`) is one Backward Euler substep with the Backward Euler
 # operator. `uⁿ⁻¹` lives in the runtime's cache, never in the state. Base (the F3-10 commit,

@@ -1,4 +1,4 @@
-# F4-13 (F4 design §3.9, AF-09), standalone LatticePDE: `field_report` prints each field group's policy
+# Standalone LatticePDE: `field_report` prints each field group's policy
 # (algorithm, window, substep count and its cause, bound, number types, the implicit facts)
 # and a run's counters, for problems, owned integrators and solutions, and SciML solves. It
 # reads what the objects hold: a warm `step!` still allocates nothing after a report.

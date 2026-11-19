@@ -86,7 +86,7 @@ end
 end
 end
 
-# F2-14 (FE-18) in standalone LatticePDE: a parameter's declared `bounds` (MTK metadata) holds at every
+# Standalone LatticePDE: a parameter's declared `bounds` (MTK metadata) holds at every
 # write, refused at the write as in coupled Potts: `setp`, `integ.ps`, owned `remake`,
 # `discretize(…; p)`, ODE `remake` and the ODE integrator's `setp` (nothing changes). The bound
 # prints as A prints it. Base: the metadata was ignored (a write of 3 ran); review S1 of batch 5:

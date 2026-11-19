@@ -1,4 +1,4 @@
-# Ruling Q18 (2026-11-07): standalone `sol[c]` reads as SciML and coupled Potts read a variable, one grid
+# Standalone `sol[c]` reads as SciML and coupled Potts read a variable, one grid
 # per save, so `sol[c][end]` and `sol[c][i]` are grids; `field_series(sol, c)` is the lazy
 # time-first array; `sol[c, i]` and `sol(t; idxs = c)` are grids. An owned solve, an
 # OrdinaryDiffEq (Tsit5) solve and a FieldProblem solved directly agree on every spelling.

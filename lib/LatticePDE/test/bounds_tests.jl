@@ -274,8 +274,8 @@ end
 end
 end
 
-@testitem "F3-13 M2: declared intervals after the build" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
-    @testset "F3-13 M2: declared intervals after the build" begin
+@testitem "bounds: declared intervals after the build" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
+    @testset "bounds: declared intervals after the build" begin
     RC = SciMLBase.ReturnCode
         # a Dirichlet value 3 outside c ∈ (0, 1): refused at the build
     d3 = fsys([D(fce) ~ DivKGrad(:harmonic)(fce, fce)], [fc(0, x, y) ~ 0.5, fc(t, 1, y) ~ 3.0], [fce])

@@ -268,8 +268,8 @@ end
 end
 end
 
-@testitem "SD-07: lattice_placement is refused; lattice_level takes a grid (F3-16)" setup = [LP_silent] tags = [:latticepde, :silent] begin
-    @testset "SD-07: lattice_placement is refused; lattice_level takes a grid (F3-16)" begin
+@testitem "lattice_placement is refused; lattice_level takes a grid" setup = [LP_silent] tags = [:latticepde, :silent] begin
+    @testset "lattice_placement is refused; lattice_level takes a grid" begin
     @variables cl(..) [lattice_level = 4] cp(..) [lattice_placement = :node]
         @test_throws ArgumentError sown(ssys([D(cp(t, x, y)) ~ -cp(t, x, y)], [cp(0, x, y) ~ 1.0], [cp(t, x, y)], Num[]))
         @test_throws ArgumentError sown(ssys([D(cl(t, x, y)) ~ -cl(t, x, y)], [cl(0, x, y) ~ 1.0], [cl(t, x, y)], Num[]))

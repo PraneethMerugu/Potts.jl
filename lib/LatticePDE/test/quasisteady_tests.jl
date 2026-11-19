@@ -1,4 +1,4 @@
-# F3-12a (F3 design §3.5): `QuasiSteady` in standalone LatticePDE. Each window solves `0 = r(u)` at the
+# `QuasiSteady` in standalone LatticePDE. Each window solves `0 = r(u)` at the
 # window's start time, `−J̃ δ = r(u_k)` from the field's current values (no time-step term),
 # one linear solve for a linear exact group, a checked budget of 8 Newton iterations otherwise.
 # It refuses a growth the operator sees and a field with no decay and no fixed value (at build

@@ -1,4 +1,4 @@
-# F3-10 (F3 design §3.3, §5): `CrankNicolson` in standalone LatticePDE. Each substep solves
+# `CrankNicolson` in standalone LatticePDE. Each substep solves
 # `(u − uⁿ)/h = (r(uⁿ) + r(u))/2` (`r(uⁿ)` at tⁿ, `r(u)` at tⁿ⁺¹) through the implicit runtime with
 # the shift `2/h`; a start (init, `reset!`) is damped: two Backward Euler steps of `h/2` at
 # tⁿ + h/2 and tⁿ + h, with the same operator. The tests compare with the hand matrices, the
