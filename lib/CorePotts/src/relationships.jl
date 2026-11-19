@@ -41,6 +41,7 @@ columns belong to `name` is the model's knowledge (generated code builds full vi
 """
 link_store(cell, name::Symbol) = (; links = getfield(cell, adjacency_name(name)))
 
+"""The most links a cell can hold (the link store's capacity per cell)."""
 @inline maxdegree(cell) = size(cell.links, 1)
 
 """Slot of `b` in `a`'s link row, or 0."""

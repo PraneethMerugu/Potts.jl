@@ -178,53 +178,8 @@ using DynamicQuantities: DynamicQuantities
 
 
 const POTTS_NONPUBLIC_QUALIFIED = (
-    # --- Potts -> CorePotts internals. CorePotts is Potts's own numerical layer (same
-    # monorepo, path source, co-versioned); the symbolic layer generates code against its
-    # internal hooks.
-    :AbstractBoundary,    # boundary supertype, dispatch in `layouts.jl`
-    :AbstractRelationSpec,        # relation dispatch in the `Around` vocabulary
-    :_run_phases,         # runs the `at_init` phases when a problem is initialised
-    :link_frame,          # the generated link energy, inline over these two (TS1c)
-    :link_at,
-    :maxdegree,
-    :_derived,            # the `at_init` phases without field clamps (`anneal`'s refresh, D-145)
-    :_snapshot,           # host copy of a device state for the adaptive ODE phase
-    :_run_phase,          # phase entry that receives the integrator's transfer counters (D-085)
-    :_sync!, :_copy!,     # counted synchronize / host↔device copy (D-085) in the adaptive ODE phase
-    :_adapt_host,         # counted `Adapt.adapt(Array, …)` (D-085)
-    :_host_leaves,        # counted host copies of the state leaves a host phase uses (D-092)
-    :_host_buffer,        # uninitialized host buffer (no transfer) for adaptive ODE outputs (D-092)
-    :_host_lattice,       # counted host copy of the lattice's domain mask (D-085)
-    :adjacency_name,      # field name of a relation's adjacency store
-    :always,              # the no-constraint default
-    :is_symmetric,        # `boundary_lengths` counts unordered bonds only on a symmetric relation (D-139)
-    :has_origin,          # a contact fold's relation must exclude the origin (D-150)
-    :MODEL_STATUS,        # the model status word a bounded `randn` sets on exhaustion (D-150)
-    :_bump!,              # atomic diagnostic counter (`track = (:references,)`, P6.5a E4/E5)
-    :_atomic_add!,        # atomic `a[j] += v` of `@convert` transfers (P6.5b, D-233)
-    :_cv_write!,          # a `@convert` compound write into its exact fixed-point sum (F3-23 r1)
-    :_to_host,            # counted host copy of those counters, once per solve (D-085)
-    :report_run,          # once-per-solve report hook Potts extends (P6.5a E4/E5)
-    :no_bias,             # the no-bias default (`copy_step_relations` checks for it, D-208)
-    :no_divide_rule,      # the no-division default
-    :remake_frozen,       # `remake` hooks Potts extends for symbolic problems
-    :remake_function,
-    :remake_parameters,
-    :remake_state,
-    :check_initializealg, # `remake` hook: the model refuses an initialization algorithm it cannot apply
-    :remake_tangent,      # `remake` hook: the Dual seeds of a remade problem (F3-21b)
-    :ParameterTangent,    # a problem's parameters with derivative parts (F3-21b)
-    :tangent_parameters,  # the Dual parameters after a write on a run with derivative parts (F3-21b r1)
-    :copy_step_relations, # the copy-step relations Potts reports for the checkerboard reach (D-208)
-    :set_parameter,       # parameter-update hook Potts extends
-    :set_parameters,      # its batched form (`setp(integ, [x, y])` as one change, then one derivation, D-F2-1)
-    :readonly_message,    # why a name cannot be set (a computed parameter, D-F2-1), for list setters
-    :parameter_setter,    # `setp` with several parameters on a model description (one change)
-    :name_setter,         # `setp` with one name on a model description (the same name check)
-    :symbol_setter,       # `setsym` with a list on a model description (its parameters as one change, D-116)
-    :stream_id,           # named RNG stream for `draw` in generated code
-    :_praw,               # a field phase's raw parameter values, the clock's slot included (F2-08c), for its build-time count
-    :_table_values,       # a field phase's table values for its build-time count, the rule's whole-system tables included (F3-12c)
+    # (Potts -> CorePotts: the interface Potts generates code against is public,
+    # `CorePotts.MODEL_COMPILER_INTERFACE`)
     # --- Potts -> Base: no public equivalent
     Symbol("@__doc__"),   # attaching docstrings to macro-generated components
     :setindex,            # non-mutating tuple `setindex`

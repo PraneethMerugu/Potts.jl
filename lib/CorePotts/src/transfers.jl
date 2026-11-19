@@ -49,8 +49,10 @@ function _spin_until(done::F, timeout::Real) where {F}
     limit = timeout * 1.0e9
     k = 0
     while !done()
+        # the CPU's spin-wait hint (x86 `pause`, ARM `yield`): Julia has no public form of it
+        # (`Base.Threads` uses this ccall in its own spin locks); an upstream gap, see D-294
         ccall(:jl_cpu_pause, Cvoid, ())
-        ccall(:jl_gc_safepoint, Cvoid, ())
+        GC.safepoint()
         k += 1
         if k & 0x0fff == 0
             yield()

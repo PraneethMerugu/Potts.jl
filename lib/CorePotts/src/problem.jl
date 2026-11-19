@@ -97,17 +97,39 @@ Base.@nospecializeinfer function _problem(@nospecialize(f::CPMFunction), @nospec
     )
 end
 
-# Hooks for the symbolic layer: translate parameter maps / operating points given to
-# `remake` into the problem's parameter object and state (identity here).
+"""
+    remake_parameters(sys, prob, p)
+
+Hook for the symbolic layer: the problem's parameter object for the parameter map or
+operating point `p` given to `remake` (`p` itself here).
+"""
 remake_parameters(sys, prob, p) = p
+"""
+    remake_state(sys, prob, u0, kwargs = prob.kwargs)
+
+Hook for the symbolic layer: the problem's state for the `u0` given to `remake` (`u0`
+itself here).
+"""
 remake_state(sys, prob, u0, kwargs = prob.kwargs) = u0
-# Hook for the symbolic layer: refuse an `initializealg` it cannot apply (accepted here)
+"""
+    check_initializealg(sys, alg)
+
+Hook for the symbolic layer: refuses an `initializealg` it cannot apply (accepted here).
+"""
 check_initializealg(sys, alg) = nothing
-# Hook for the symbolic layer: the `tangent` of a problem remade with the parameters `pgiven`
-# (as the user gave them; `pnew` the primal object `remake_parameters` made). Here: none.
+"""
+    remake_tangent(sys, prob, pgiven, pnew)
+
+Hook for the symbolic layer: the `tangent` of a problem remade with the parameters `pgiven`
+(as the user gave them; `pnew` the primal object `remake_parameters` made). Here: none.
+"""
 remake_tangent(sys, prob, pgiven, pnew) = nothing
-# Hook for the symbolic layer: a once-per-solve report of opt-in diagnostics, at the end of
-# `solve!` (nothing here)
+"""
+    report_run(sys, integ)
+
+Hook for the symbolic layer: a once-per-solve report of opt-in diagnostics, at the end of
+`solve!` (nothing here).
+"""
 report_run(sys, integ) = nothing
 """
     frozen_kinds(sys)
@@ -197,9 +219,14 @@ function _standard_frozen(kinds, u)
     k = Array(u.cell.kind)
     return map(s -> s != 0 && _in_kinds(k[s], kinds), Array(u.ownership))
 end
-# `remake` keywords beyond the fixed ones (a symbolic layer's problem-construction keywords,
-# e.g. Potts' solvers): `(f, u0)`, a new `f` built from them and `prob.u0` re-laid out for it
-# if its state layout depends on them (values kept); everything else is kept
+"""
+    remake_function(sys, prob; kwargs...) -> (f, u0)
+
+Hook for the symbolic layer: the `remake` keywords beyond the fixed ones (its
+problem-construction keywords, such as Potts' solvers). Returns a new `f` built from them
+and `prob.u0` re-laid out for it if its state layout depends on them (values kept);
+everything else is kept. Here: every such keyword is an `ArgumentError`.
+"""
 function remake_function(sys, prob; kwargs...)
     throw(ArgumentError("remake: unknown keyword$(length(kwargs) == 1 ? "" : "s") " *
                         "$(join(("`$k`" for k in keys(kwargs)), ", "))"))
@@ -1816,8 +1843,12 @@ SymbolicIndexingInterface.setp(sys::Union{PottsIntegrator, PottsProblem, CPMFunc
 SymbolicIndexingInterface.setp(sys::Union{PottsIntegrator, PottsProblem, CPMFunction}, p; run_hook = true) =
     name_setter(sys, p, run_hook)
 
-# `setp(sys, x)` for one name: SymbolicIndexingInterface's setter, after the same name check
-# as a list (since SII 0.3.56 an unknown name is an `ErrorException` there)
+"""
+    name_setter(sys, p, run_hook)
+
+`setp(sys, x)` for one name: SymbolicIndexingInterface's setter, after the same name check
+as a list (since SII 0.3.56 an unknown name is an `ErrorException` there).
+"""
 function name_setter(sys, p, run_hook)
     SymbolicIndexingInterface.symbolic_type(p) isa SymbolicIndexingInterface.ScalarSymbolic && _check_settable(sys, p)
     return invoke(SymbolicIndexingInterface.setp, Tuple{Any, Any}, sys, p; run_hook)

@@ -125,6 +125,10 @@ const MODEL_PAGE_NAMES = let names = Set{Symbol}()
 end
 on_model_page(x) = x isa Union{Function, Type} && nameof(x) in MODEL_PAGE_NAMES
 
+# CorePotts' interface for model compilers (`CorePotts.MODEL_COMPILER_INTERFACE`): public, but
+# listed apart from the modeling API on the API page
+corepotts_interface(x) = any(n -> getfield(CorePotts, n) === x, CorePotts.MODEL_COMPILER_INTERFACE)
+
 const PAPER_RUNS = joinpath(SRC, "assets", "paper_runs")
 
 # The "Paper models: status" page, generated from the committed verdict records at build

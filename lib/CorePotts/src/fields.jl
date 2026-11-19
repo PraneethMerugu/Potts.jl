@@ -164,13 +164,16 @@ function _same_tables(ph::FieldPhase, b::FieldBinding, p)
     return true
 end
 
-# the phase's tables at `p` by their program keys (the substep bound reads them: a table
-# coefficient, F1)
-# (and the tables only the rule reads: the steady gain of another group, F3-12c)
+"""
+    _table_values(ph::FieldPhase, p)
+
+The field phase's tables at `p` by their program keys (the substep bound reads them: a
+table coefficient), and the tables only its substep rule reads.
+"""
 _table_values(ph::FieldPhase, p) = Pair{String, Vector{Float64}}[
     [ph.program.tables[i].key => Float64.(vec(collect(getproperty(p, name)))) for (i, name) in ph.tables];
     [k => Float64.(vec(collect(getproperty(p, name)))) for (k, name) in ph.rule_tables]]
-# the raw parameter values of the phase's slots at `p`
+"""The raw parameter values of the field phase's slots at `p`."""
 _praw(ph::FieldPhase, p) = Tuple(_param(p, n) for n in ph.params)
 # … as the substep rule reads them, with the phase's tables (`field_substeps`, `field_report`)
 _policy_params(ph::FieldPhase, p) = Problems.with_tables(Float64[_praw(ph, p)...], _table_values(ph, p))
@@ -490,9 +493,13 @@ function _read_statuses!(stats, ctx)
     return nothing
 end
 
-# The at-init phases of a state that is not fresh (a checkpoint restore, `Potts.anneal`'s
-# per-MCS refresh): the derived refreshes without the field clamps and the steady starts,
-# which hold on a fresh initial state only (D-145)
+"""
+    _derived(phases::Tuple)
+
+The at-init phases of a state that is not fresh (a checkpoint restore, `Potts.anneal`'s
+per-MCS refresh): the derived refreshes without the field clamps and the steady starts,
+which hold on a fresh initial state only (D-145).
+"""
 _derived(t::Tuple) = filter(ph -> !(ph isa FieldPhase && (ph.init || ph.start)), t)
 
 # ---------------------------------------------------------------------------------------

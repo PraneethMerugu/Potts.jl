@@ -228,11 +228,13 @@ _hook(h, name) = getfield(h, name)
 """Whether `f` defers some copies to the serial floods (a type-level constant)."""
 @inline has_defer(f) = !(_defer(f) isa Nothing)
 
+"""The no-constraint default: every copy attempt is allowed."""
 @inline always(st, p, prop, ctx) = true
 """Whether the context is the lockless checkerboard's (`lockless = true`; a type-level constant):
 commit hooks that would overwrite a cell value add their change atomically instead."""
 @inline _lockless(::NamedTuple{K}) where {K} = :lockless in K
 @inline _lockless(ctx) = false
+"""The no-bias default: no copy attempt is biased."""
 @inline no_bias(st, p, prop, ctx) = false
 
 """Effective energy change: `ΔH − T·bias` (a bias adds directly to log α)."""
