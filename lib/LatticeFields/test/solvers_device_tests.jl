@@ -74,16 +74,17 @@ end
     using LatticeFields.Solvers: BoundOperator, solution_key
     using Random: Xoshiro
     op, ins = named_case("disk128", 0.022)
+    dins = Tuple(k => devarray(v) for (k, v) in ins)
     b = Float32.(rand(Xoshiro(3), 128 * 128))
     for alg in (LatticePCG(; maxiters = 8, reltol = 1.0e-6), LatticeMultigrid(; cycles = 3))
         # the in-house solver on the device: the field solver driven directly
-        sv = FieldSolver(DevExec(), op; T = Float32, linsolve = alg, inputs = ("in.f" => devarray(b), ins...))
+        sv = FieldSolver(DevExec(), op; T = Float32, linsolve = alg, inputs = ("in.f" => devarray(b), dins...))
         rebuild!(sv)
         lift!(sv)
         solve!(sv)
         x = Array(field(sv, solution_key(sv)))
         # the LinearSolve route on the device and on the host
-        A = BoundOperator(DevExec(), op; T = Float32, inputs = ins)
+        A = BoundOperator(DevExec(), op; T = Float32, inputs = dins)
         u = solve(LinearProblem(A, devarray(b)), alg).u
         uh = solve(LinearProblem(BoundOperator(HostExec(), op; T = Float32, inputs = ins), b), alg).u
         @test Array(u) == x
