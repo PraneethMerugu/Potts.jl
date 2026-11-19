@@ -1234,7 +1234,7 @@ struct _DiscretizedFields{D, A}
     lock::ReentrantLock
 end
 
-(ph::_DiscretizedFields)(st, p, ctx, key, mcs, backend) = CorePotts._run_phase(ph, st, p, ctx, key, mcs, backend, nothing)
+(ph::_DiscretizedFields)(st, p, ctx, key, mcs, backend) = CorePotts.run_phase(ph, st, p, ctx, key, mcs, backend, nothing)
 
 # the inputs by name, converted only when the site array's element type differs
 _input_values(ph::_DiscretizedFields, st) = [
@@ -1252,13 +1252,9 @@ _discretized_refusal(ph::_DiscretizedFields, what) = ArgumentError(
 
 # the discretization's problem for the given inputs (a discretizer without `inputs` refused)
 function _discretized_problem(ph::_DiscretizedFields, ins)
-    return try
-        SciMLBase.discretize(ph.pdesys, ph.disc; inputs = ins)
-    catch e
-        e isa MethodError && (e.f === SciMLBase.discretize ||
-            (e.f === Core.kwcall && length(e.args) >= 2 && e.args[2] === SciMLBase.discretize)) || rethrow()
+    hasmethod(SciMLBase.discretize, Tuple{typeof(ph.pdesys), typeof(ph.disc)}, (:inputs,)) ||
         throw(_discretized_refusal(ph, "`discretize` does not take `inputs` for this discretization"))
-    end
+    return SciMLBase.discretize(ph.pdesys, ph.disc; inputs = ins)
 end
 
 # At build and at `remake`: the problem of each discretized-fields phase meets the contract,
@@ -1290,7 +1286,7 @@ struct _DiscretizedIntegrator{I, SI, SP, SU, GU}
     set_params::SP      # one `setp` per model parameter
     set_fields::SU      # one `setu` per field
     get_fields::GU      # one `getu` per field
-    lastp::Base.RefValue{Any}               # the parameter values last written
+    lastp::Ref{Any}                         # the parameter values last written
 end
 
 function _discretized_integrator(ph::_DiscretizedFields, ins, t0)
@@ -1304,7 +1300,7 @@ function _discretized_integrator(ph::_DiscretizedFields, ins, t0)
     )
 end
 
-function CorePotts._run_phase(ph::_DiscretizedFields, st, p, ctx, key, mcs, backend, stats)
+function CorePotts.run_phase(ph::_DiscretizedFields, st, p, ctx, key, mcs, backend, stats)
     backend isa KernelAbstractions.CPU || throw(
         ArgumentError(
             string(
@@ -1352,7 +1348,7 @@ function _check_field_substeps(@nospecialize(f), @nospecialize(p); tspan = nothi
         for ph in t
             ph isa CorePotts.FieldPhase && !ph.init &&
                 ph.substeps isa Union{LatticeFields.Problems.GroupSubsteps, LatticeFields.Problems.StartSubsteps} || continue
-            pp = LatticeFields.Problems.with_tables(Float64[CorePotts._praw(ph, p)...], CorePotts._table_values(ph, p))
+            pp = LatticeFields.Problems.with_tables(Float64[CorePotts.praw(ph, p)...], CorePotts.table_values(ph, p))
             # (the run's time span, MCS times the step length: a Robin face that reads the time
             # is checked over it, F4-12b review)
             sp = tspan === nothing || !(ph.substeps isa LatticeFields.Problems.GroupSubsteps) ? nothing :
