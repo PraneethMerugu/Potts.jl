@@ -1239,7 +1239,7 @@ function CorePotts._run_phase(ph::_AdaptiveODE, st, p, ctx, key, mcs, backend, s
         end
         SciMLBase.solve!(integ)
         if !SciMLBase.successful_retcode(integ.sol)
-            @warn "Adaptive ODE integration failed at MCS $mcs" *
+            LatticeFields.Exec.VERBOSE[] && @warn "Adaptive ODE integration failed at MCS $mcs" *
                 (c == 0 ? "" : " (cell $c)") * ": retcode $(integ.sol.retcode)"
             stats !== nothing && (stats.ode_code = integ.sol.retcode)
             return nothing

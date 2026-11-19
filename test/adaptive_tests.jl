@@ -228,17 +228,24 @@ end
         @test all(s -> s.u[end].cell.y[1] ≈ exp(-0.9), ens.u)
         @test solve(p, CheckerboardCPM(; proposal = Moore(1))).u[end].cell.y[1] ≈ exp(-0.9) rtol = 1e-6
         # a failing adaptive ODE substep ends the run through the integrator retcode
-        bad = PottsProblem(adaptive_model(), op, (0, 1); ode_solver = Adaptive(Tsit5(); maxiters = 5))
+        # (cell scope on CPU writes cells before the failing cell in place; on a device no copyback happens)
+        bad = PottsProblem(adaptive_model(), op, (0, 3); ode_solver = Adaptive(Tsit5(); maxiters = 5))
         sol_bad = @test_logs (:warn, r"Adaptive ODE") match_mode = :any solve(bad, SequentialCPM())
         @test !Potts.SciMLBase.successful_retcode(sol_bad)
         @test sol_bad.retcode === Potts.SciMLBase.ReturnCode.MaxIters
+        @test sol_bad.t[end] == 1
+        tl = Test.TestLogger(; min_level = Base.CoreLogging.Warn)
+        Base.CoreLogging.with_logger(() -> solve(bad, SequentialCPM(); verbose = false), tl)
+        @test !any(r -> occursin("Adaptive ODE", string(r.message)), tl.logs)
         # `rand()` in an ODE integrated by `Adaptive` is an ArgumentError at PottsProblem/remake
         σ8 = zeros(Int32, 8, 8); σ8[3:5, 3:5] .= 1
         op8 = [ownership => σ8, kind => [:A]]
         rand_sys = mtkcompile(AdaptiveRandRate(; name = :rr))
-        @test_throws ArgumentError PottsProblem(rand_sys, op8, (0, 1); ode_solver = Adaptive(Tsit5()))
+        err1 = ad_throws(ArgumentError, ["rand"], () -> PottsProblem(rand_sys, op8, (0, 1); ode_solver = Adaptive(Tsit5())))
+        @test occursin("rand", sprint(showerror, err1))
         rand_prob = PottsProblem(rand_sys, op8, (0, 1))
-        @test_throws ArgumentError remake(rand_prob; ode_solver = Adaptive(Tsit5()))
+        err2 = ad_throws(ArgumentError, ["rand"], () -> remake(rand_prob; ode_solver = Adaptive(Tsit5())))
+        @test occursin("rand", sprint(showerror, err2))
         # nested @extend: numbering continues (independent draws), the outer lattice dimension is kept
         σ2 = zeros(Int32, 16, 16); σ2[4:8, 4:8] .= 1
         u = solve(PottsProblem(RndOuter(; name = :o), [ownership => σ2, kind => [1]], (0, 1)), SequentialCPM()).u[end]

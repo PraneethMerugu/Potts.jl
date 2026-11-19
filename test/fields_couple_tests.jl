@@ -148,7 +148,7 @@ end
         @test occursin("`vol`", e)
         # a name the model has already: refused (a namespaced component is the route)
         e = cp_msg(() -> Potts.couple(CpFields(; name = :m), CpPDE.sys(); inputs = [CpPDE.endo => Potts.kind == 1, CpPDE.vol => vol]))
-        @test !isempty(e)
+        @test !startswith(e, "wrong exception") && occursin("already has", e)
         # `@fields` syntax
         e = cp_build_err(
             :(

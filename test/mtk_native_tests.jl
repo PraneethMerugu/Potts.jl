@@ -13,7 +13,7 @@
         q = named(Potts.declared_variables(sys), :q)
         @test !MTKB.isparameter(q)
         # a kind table's shape is its default's: a scalar default is refused when the model is built
-        @test mn_error(() -> MNScalarTable(; name = :m)) !== nothing
+        @test has(mn_error(() -> MNScalarTable(; name = :m)), "kind table")
     end
 end
 

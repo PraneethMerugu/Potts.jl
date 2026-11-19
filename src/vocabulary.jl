@@ -1587,7 +1587,10 @@ Cell and model ODEs integrated on the host by any SciML ODE algorithm (`Tsit5()`
 …) passed to `init`: a `PottsProblem`'s `ode_solver`, or a variable's entry in its
 `solvers` map. One integrator is created on first use and re-initialized per cell and per
 MCS over `[mcs, mcs + 1) × mcs_duration`: adaptive and stiff solvers for intracellular or
-systemic models, at host speed (a device state is copied once per MCS).
+systemic models, at host speed (a device state is copied once per MCS). If an adaptive ODE
+substep fails to reach a successful return code, the run stops and reports that integrator
+return code on the solution's `retcode` (with a warning unless `verbose = false`, distinguishing
+an ODE `ReturnCode.MaxIters` from Potts's MCS `maxiters`).
 
 Every keyword and algorithm field enters the problem fingerprint, so a checkpoint resumes
 only under an equal solver. Values must be at most 8 levels deep and not cyclic (deeper

@@ -72,7 +72,7 @@ end
         op = [ownership => zeros(Int32, 12, 12), kind => Symbol[]]
         for m in (CePeriodic(; name = :m), Potts.couple(CePeriodicHost(; name = :m), CeB.face()))
             e = cp_compile_msg(() -> PottsProblem(m, op, (0, 1)))
-            @test !startswith(e, "not a PottsCompileError:") && occursin("faced", e) || (println(e); false)
+            @test !startswith(e, "wrong exception") && occursin("faced", e) || (println(e); false)
         end
     end
 end

@@ -125,7 +125,7 @@ cp_compile_msg(f) = try
     f()
     "built"
 catch e
-    e isa Potts.PottsCompileError ? sprint(showerror, e) : "not a PottsCompileError: " * sprint(showerror, e)
+    e isa Potts.PottsCompileError ? sprint(showerror, e) : "wrong exception $(typeof(e)), expected Potts.PottsCompileError"
 end
 
 const CP_W = [0.01 * (i + 2j) for i in 1:24, j in 1:20]

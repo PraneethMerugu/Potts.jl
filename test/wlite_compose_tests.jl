@@ -72,7 +72,7 @@ end
             f()
             false
         catch e
-            e isa E
+            e isa E && occursin(what, sprint(showerror, e))
         end
         refused = r"payload cannot build|has the input"     # wmodel's top level; wcell's inputs
         for W in (Wb, Wn, wcell)

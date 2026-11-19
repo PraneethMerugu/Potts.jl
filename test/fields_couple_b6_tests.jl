@@ -71,7 +71,8 @@ end
                 @sweep Metropolis(; temperature = 1.0)
             end
             Potts.mtkcompile(B6Lap(; name = :m))
-        end)
+            end, Potts.PottsCompileError
+        )
         @test occursin("applies `laplacian` to `kind == A`, a CPM value", e) && occursin("an input of the PDESystem bound to `kind == A`", e) &&
               occursin("`@after_mcs v ~ kind == A`", e) && !occursin("kind__in", e) && !occursin("cannot lower", e) ||
             (println(e); false)
@@ -155,7 +156,8 @@ end
                 @sweep Metropolis(; temperature = 1.0)
             end
             Potts.mtkcompile(B6Z(; name = :m))
-        end)
+            end
+        )
         @test occursin("differentiates along `z`, which is not one of its independent variables", e) &&
               !occursin("declares its own", e) || (println(e); false)
     end
@@ -174,7 +176,8 @@ end
                     @sweep Metropolis(; temperature = 4.0)
                 end
                 Potts.mtkcompile(B6DriveLap(; name = :m))
-            end
+            end,
+            Potts.PottsCompileError,
         )
         @test occursin("`laplacian(c)` is a field operator", e) && occursin("aux field `L(t, x, y) ~ laplacian(c(t, x, y))`", e) &&
               occursin("read `L[target]`", e) && !occursin("cannot index", e) || (println(e); false)
@@ -191,7 +194,8 @@ end
                     @sweep Metropolis(; temperature = 1.0)
                 end
                 Potts.mtkcompile(B6Robin(; name = :m))
-            end)
+                end, Potts.PottsCompileError
+            )
             @test occursin("Robin coefficient", e) && occursin("the PDESystem `fac`", e) || (println(e); false)
         end
         e = b6_build_err(
@@ -204,7 +208,8 @@ end
                 @sweep Metropolis(; temperature = 1.0)
             end
             PottsProblem(B6Nonlin(; name = :m), [ownership => zeros(Int32, 20, 10), kind => Symbol[]], (0, 1))
-        end)
+            end
+        )
         @test occursin("`@variables c(..) = 0.5 [bounds = (0, 1)]` in its PDESystem", e) && !occursin("c(field)", e) || (println(e); false)
         e = b6_msg(() -> Potts.variable(only(Potts.Symbolics.@variables q), :site; bounds = (0, 1)))
         @test occursin("`@variables c(..) = 0.5 [bounds = (0, 1)]` in a PDESystem", e) && !occursin("q(field)", e) || (println(e); false)

@@ -277,7 +277,7 @@ end
         # a parameter or field name the model has already (a hand-wrapped PDESystem keeps its names)
         hk, hu = FcHostK(; name = :m), FcHostU(; name = :m)
         pk = fc_msg(() -> Potts.ModelingToolkitBase.mtkcompile(Potts.wrap_system(:m, Potts.inner(hk), FcPDE.plain([u(0, X, Y) ~ 0.7]; name = :m), Potts.part(hk))), Potts.PottsCompileError)
-        @test occursin("Potts.component", pk)
+        @test occursin("`kd`", pk)
         pu = fc_msg(() -> Potts.ModelingToolkitBase.mtkcompile(Potts.wrap_system(:m, Potts.inner(hu), FcPDE.plain([u(0, X, Y) ~ 0.7]; name = :m), Potts.part(hu))), Potts.PottsCompileError)
         @test occursin("field `u`", pu)
         # (namespaced as a component, the same PDESystem composes)

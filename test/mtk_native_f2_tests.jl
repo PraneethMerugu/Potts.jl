@@ -72,7 +72,7 @@ end
         # negative control: an initial value that reads an unknown is still refused, naming it
         MTKB.@variables o(t)
         e = emsg(() -> run(MTKB.System([o ~ 2y, Potts.D(y) ~ -k * o], t; name = :comp, initial_conditions = [y => 2o])), Potts.PottsCompileError)
-        @test occursin("comp", e)
+        @test occursin("`comp`", e)
     end
 end
 
