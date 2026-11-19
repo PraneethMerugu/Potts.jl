@@ -164,14 +164,14 @@ end
 # integrator at the event's time and state, the affect, the conditions after it
 @noinline function _event!(integ::FieldIntegrator, ccbs::Tuple, buf::_CondBuf, best, t1)
     θ, j, q, up = best
-    t0, tol = integ.tprev, 1e-9 * integ.dt
+    t0, tol = integ.tprev, integ.ttol
     te = t0 + θ * (t1 - t0)
     if te < t1 - tol
         cur = _current(integ)
         ue = integ.prevu .+ θ .* (cur .- integ.prevu)
         _load_state!(integ.store, ue)
         integ.tnow = te
-        integ.iter = floor(Int, (te - integ.t0) / integ.dt + 1e-9)
+        integ.iter = _floor_count((te - integ.t0) / integ.dt)
         t1 < integ.tend - tol && SciMLBase.add_tstop!(integ, t1)    # (the window's end again, exactly)
     end
     _fire_nth!(integ, ccbs, j, q, up)

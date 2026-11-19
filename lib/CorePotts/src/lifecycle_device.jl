@@ -819,8 +819,9 @@ end
 # ---------------------------------------------------------------------------------------
 # Host orchestration (enqueue only)
 
-# The built-in planes compute in the device's float type (the planner compiles every plane
-# of the model, also those of rules that never fire: a `Float64` default must not reach Metal)
+# The built-in planes compute in the state's float type, on the host and on a device (the
+# planner compiles every plane of the model, also those of rules that never fire: a `Float64`
+# default must not reach Metal)
 _plane(::AlongMinorAxis, ::Type{T}) where {T} = AlongMinorAxis{T}()
 _plane(::AlongMajorAxis, ::Type{T}) where {T} = AlongMajorAxis{T}()
 _plane(::RandomPlane, ::Type{T}) where {T} = RandomPlane{T}()

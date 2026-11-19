@@ -635,3 +635,37 @@ end
         union!(Ex.FLOAT64_KERNELS, saved)
     end
 end
+
+@testitem "time and tolerance types: Float32 and BigFloat time spans keep their type" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
+    using OrdinaryDiffEqTsit5: Tsit5
+    sys64 = nsys()
+    ref = solve(LFP.field_problem(discretize(sys64, LatticeDiscretization(Grid((8, 4))); tspan = (0.0, 1.0))), ExplicitEuler(); dt = 0.1)
+    for TT in (Float32, BigFloat)
+        # the span from `tspan` and from the system's own time domain
+        span = (TT(0), TT(1))
+        disc = LatticeDiscretization(Grid((8, 4)))
+        sysT = PDESystem(
+            sys64.eqs, sys64.bcs, [t ∈ Interval(span...), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)],
+            [t, x, y], [ce], [Dn, kn, gn]; name = :p
+        )
+        for prob in (discretize(sys64, disc; tspan = span), discretize(sysT, disc))
+            @test prob.tspan isa Tuple{TT, TT}
+            fp = LFP.field_problem(prob)
+            @test fp.tspan isa Tuple{TT, TT}
+            sol = solve(fp, ExplicitEuler(); dt = TT(0.1))
+            @test eltype(sol.t) === TT && sol.t ≈ ref.t
+            @test sol.u[end] ≈ ref.u[end]
+            # the implicit steppers with tolerances of the type
+            solb = solve(fp, BackwardEuler(; nlsolve = LatticeNewton()); dt = TT(0.25), abstol = TT(1.0e-8), reltol = TT(1.0e-6), saveat = TT(0.5))
+            @test eltype(solb.t) === TT && solb.t ≈ [0, 0.5, 1]
+            integ = init(fp, ExplicitEuler(); dt = TT(0.1))
+            step!(integ)
+            @test integ.t isa TT && integ.t ≈ 0.1
+        end
+        # the OrdinaryDiffEq path: an `ODEProblem` over the span in its type
+        op = discretize(sys64, disc; tspan = span)
+        @test eltype(solve(op, Tsit5(); abstol = TT(1.0e-8), reltol = TT(1.0e-6)).t) === TT
+    end
+    # control: an integer span is promoted to a float type, as SciML does
+    @test LFP.field_problem(discretize(sys64, LatticeDiscretization(Grid((8, 4))); tspan = (0, 1))).tspan === (0.0, 1.0)
+end

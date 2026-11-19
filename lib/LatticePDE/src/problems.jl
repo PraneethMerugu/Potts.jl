@@ -18,6 +18,14 @@ function _domain_ends(sys::PDESystem)
         Float64.((leftendpoint(get_domain(sys)[k].domain), rightendpoint(get_domain(sys)[k].domain)))
     end
 end
+# a time span in its own float type, the promotion of its ends (SciML's `tType`)
+_float_span(a, b) = (T = float(promote_type(typeof(a), typeof(b))); (T(a), T(b)))
+# the time span of the domain of the first variable, in its own float type
+function _time_ends(sys::PDESystem)
+    v = unwrap(first(get_ivs(sys)))
+    k = findfirst(d -> isequal(unwrap(d.variables), v), get_domain(sys))
+    return _float_span(leftendpoint(get_domain(sys)[k].domain), rightendpoint(get_domain(sys)[k].domain))
+end
 
 # a coefficient expression as a function of the raw parameter vector, over every 0/1
 # assignment of its indicator terms (kind sets, comparisons): an indicator is 0 or 1 at each
@@ -1932,7 +1940,7 @@ function discretize(sys::PDESystem, disc::LatticeDiscretization{N}; inputs = (),
     # launch decodes them with an integer division per site); the option is outside the
     # fingerprint
     options = CompileOptions(; T, index = Exec.ishost(backend) ? :cartesian : :auto)
-    span = tspan === nothing ? _domain_ends(sys)[1] : _given_tspan(tspan)
+    span = tspan === nothing ? _time_ends(sys) : _given_tspan(tspan)
     # the group, lowered once in rate form (the update is fused by the group, per algorithm)
     g = _lower_group(sys, disc; steady, timefree)
     cf, sys, spec = g.cf, g.sys, g.spec
@@ -1980,7 +1988,7 @@ end
 function _given_tspan(ts)
     ts isa Union{Tuple, AbstractVector} && length(ts) == 2 && all(v -> v isa Real, ts) ||
         _dverr("`tspan` is `(t₀, t₁)`, two numbers; got $(repr(ts))")
-    return (Float64(ts[1]), Float64(ts[2]))
+    return _float_span(ts[1], ts[2])
 end
 # The initial values of the fields with declared `bounds = (lo, hi)` (F3-13): the stability
 # bound takes the declared interval for a coefficient that reads the field, so a field that

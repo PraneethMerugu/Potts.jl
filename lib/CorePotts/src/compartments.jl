@@ -204,7 +204,7 @@ function _cluster_planes!(stats, normals, bias, lc, st, p, ctx, key, mcs, roots,
         m1 = _to_host(stats, st.cell.m1))
     nh = zeros(T, N, cap); bh = zeros(T, cap)
     for r in roots
-        n = lc.cluster_normal(stK, p, ctx, key, mcs, Int32(r))
+        n = _plane(lc.cluster_normal, T)(stK, p, ctx, key, mcs, Int32(r))
         cK = centroid(T, cellK, lat, r)
         for m in members[r]
             cm = centroid(T, cell, lat, m)

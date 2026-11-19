@@ -1310,7 +1310,7 @@ function ode_problem(prog::Program, u0, tspan, p; state, rates, init = String[],
     # a system with no time (F3-12b): the steady state of the right side, for SciML's steady
     # solvers (`DynamicSS`, a nonlinear solver)
     steady && return SciMLBase.SteadyStateProblem(fun, U, lp)
-    return SciMLBase.ODEProblem(fun, U, (Float64(tspan[1]), Float64(tspan[2])), lp)
+    return SciMLBase.ODEProblem(fun, U, _tspan(tspan), lp)
 end
 
 # The problems built from a field program's ODE form (an ODEProblem whose right side is a

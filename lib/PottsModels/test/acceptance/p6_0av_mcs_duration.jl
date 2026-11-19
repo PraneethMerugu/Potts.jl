@@ -22,7 +22,7 @@
 #     (positive) as 0.0.
 #
 # Rule (D-126), pinned here:
-#  A. `mcs_duration` must be a `Real` that is finite and > 0 after conversion to Float64.
+#  A. `mcs_duration` must be a `Real` that is finite and > 0 after `float` and in Float64.
 #     Anything else is an `ArgumentError` whose message names `mcs_duration`, thrown by
 #     `@sweep` (`sweep_spec`), so building the system throws, not `PottsProblem` and not the
 #     first `solve`: NaN, Inf, -Inf (Float64 and Float32), 0, 0.0, -0.0, negative values,
@@ -242,11 +242,11 @@ end
 @testset "P6.0av: positive finite durations are accepted" begin
     for law in (:metropolis, :barker), (l, v) in P60AV_GOOD
         s = Potts.sweep_spec(law; temperature = 1.0, mcs_duration = v)
-        @test s.mcs_duration === Float64(v)
+        @test isequal(s.mcs_duration, float(v)) && s.mcs_duration isa typeof(float(v))
     end
     for (l, v) in P60AV_GOOD
         @testset "md = $l" begin
-            @test getfield(getfield(P60avODE(; name = :ode, md = v), :part), :sweep).mcs_duration === Float64(v)
+            @test isequal(getfield(getfield(P60avODE(; name = :ode, md = v), :part), :sweep).mcs_duration, float(v))
         end
     end
     @test getfield(getfield(P60avExtInherit(; name = :ext, md = 0.5), :part), :sweep).mcs_duration === 0.5

@@ -109,7 +109,7 @@ function _time_interval(t, tspan)
     tspan isa Union{Tuple, AbstractVector} && length(tspan) == 2 && all(v -> v isa Real && isfinite(v), tspan) &&
         tspan[1] < tspan[2] || throw(ArgumentError(string("lattice_domain: `tspan` is the time interval `(t₀, t₁)`, ",
         "two finite numbers with t₀ < t₁; got ", repr(tspan))))
-    return t ∈ Interval(Float64(tspan[1]), Float64(tspan[2]))
+    return t ∈ Interval(_float_span(tspan[1], tspan[2])...)
 end
 
 """
