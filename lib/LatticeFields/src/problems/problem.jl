@@ -191,7 +191,9 @@ function _field_problem(s::Program, state, u0, tspan, p, tables, inputs, backend
     ip, sp = group_plans(group, kind == :map ? ExplicitMap() : ExplicitEuler(), value_type(E), backend, options)
     span = _tspan(tspan)
     return FieldProblem{_ndims(s), typeof(backend), typeof(index),
-        typeof(stability), typeof(u0), typeof(p), E, typeof(tables), eltype(span)}(s, ip, sp, state, u0,
+        typeof(stability), typeof(u0), typeof(p), E, typeof(tables), eltype(span),
+    }(
+        s, ip, sp, state, u0,
         span, p, tables, inputs, backend, index, faces, stability,
         kind, initkeys, options, group, Pair{String, Any}[k => f for (k, f) in inputfns])
 end
@@ -246,7 +248,7 @@ function SciMLBase.remake(prob::FieldProblem; u0 = prob.u0, tspan = prob.tspan, 
     check_declared(prob.stability, with_tables(map(primal, pv), tables))
     u0 === prob.u0 || check_declared_state(prob, u0, eachindex(u0), "starts at")
     ins = isempty(inputs) ? prob.inputs :
-          resolve_inputs(prob.program, prob.index, inputs, prob.inputs; t0 = tspan[1])
+        resolve_inputs(prob.program, prob.index, inputs, prob.inputs; t0 = tspan[1])
     fns = isempty(inputs) ? prob.inputfns : input_functions(prob.program, prob.index, inputs, prob.inputfns)
     return _field_problem(prob.program, prob.state, collect(u0), tspan, pv, tables,
         ins, prob.backend, prob.index, prob.faces, prob.stability, prob.kind, prob.initkeys,
@@ -438,7 +440,7 @@ steps, or else leaves the integrator unchanged. Writing `integ.p[i] = v` directl
 keep the values they were bound to.
 """
 mutable struct FieldIntegrator{P <: FieldProblem, A, S <: FieldStore, RT <: Tuple, T, PV, TB, U, TT} <:
-               SciMLBase.DEIntegrator{A, true, U, TT}
+    SciMLBase.DEIntegrator{A, true, U, TT}
     prob::P
     alg::A
     store::S
@@ -856,7 +858,9 @@ function _init(
     tabs = eltype(prob.tables)[k => copy(v) for (k, v) in prob.tables]
     pv = copy(prob.p)
     integ = FieldIntegrator{typeof(prob), typeof(alg), typeof(st), typeof(rts), T, typeof(pv), typeof(tabs),
-                            _utype(st, E), TT}(prob, alg, st, rts, pv, pgood, tabs, t0, 0, dt, ms[1], nsteps,
+        _utype(st, E), TT,
+    }(
+        prob, alg, st, rts, pv, pgood, tabs, t0, 0, dt, ms[1], nsteps,
         _clock(prob) === nothing ? 0 : _per(dt, _clock(prob)), save, TT[], Vector{T}[], SciMLBase.ReturnCode.Default,
         aux, Vector{T}[], Any[], t0, tf, _ttol(dt, t0, tf), TT[], 1, 0, _sciml, nothing, _save_indices(prob, save_idxs),
         save_everystep, Int(maxiters), false, nothing, nothing, t0, 0, nothing, dense, nothing,

@@ -571,10 +571,15 @@ end
 function _per(dt, clock)
     m = round(Int, clock / dt)
     # (to a relative 1e-12, or a few roundings of `dt`'s type when that is coarser: Float32)
-    m >= 1 && abs(m * dt - clock) <= max(1.0e-12, 4 * eps(typeof(float(dt)))) * clock || throw(ArgumentError(string(
-        "dt = ", dt, " does not divide the clock's period ", clock, " (to a relative 1e-12): the stepper lands on every ",
-        "boundary of the clock, so a period holds a whole number of windows; give dt = ", clock, "/n, or leave `dt` out ",
-        "to step windows of ", clock)))
+    m >= 1 && abs(m * dt - clock) <= max(1.0e-12, 4 * eps(typeof(float(dt)))) * clock || throw(
+        ArgumentError(
+            string(
+                "dt = ", dt, " does not divide the clock's period ", clock, " (to a relative 1e-12): the stepper lands on every ",
+                "boundary of the clock, so a period holds a whole number of windows; give dt = ", clock, "/n, or leave `dt` out ",
+                "to step windows of ", clock
+            )
+        )
+    )
     return m
 end
 

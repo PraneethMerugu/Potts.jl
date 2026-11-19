@@ -1182,9 +1182,15 @@ end
 # `field_solver`, from the fields' site arrays and back
 function _discretized_phases(c::CompiledPottsSystem, T, spec::SolverSpec)
     sys = getfield(c, :sys)
-    _field_dt(sys) == Float64(_p(sys, :sweep).mcs_duration) || throw(ArgumentError(string("`discretization = ",
-        repr(spec.discretization), "`: the fields of model `", nameof(sys), "` step in a sub-MCS `repeat`, which the ",
-        "fused lattice fields run; leave `discretization` out")))
+    _field_dt(sys) == Float64(_p(sys, :sweep).mcs_duration) || throw(
+        ArgumentError(
+            string(
+                "`discretization = ",
+                repr(spec.discretization), "`: the fields of model `", nameof(sys), "` step in a sub-MCS `repeat`, which the ",
+                "fused lattice fields run; leave `discretization` out"
+            )
+        )
+    )
     F = fields(sys)
     filled = Dict{Symbol, Type}(n => E for (n, _, E) in _field_inputs(c, T))
     back = Dict{Symbol, Symbol}(Symbol(w) => g for (g, w) in _input_names(sys))
@@ -1201,8 +1207,10 @@ function _discretized_phases(c::CompiledPottsSystem, T, spec::SolverSpec)
     end
     names = Set{Symbol}(info(x).name for x in _p(sys, :parameters))
     params = Symbol[n for n in (Symbol(nameof(_unwrap(q))) for q in ModelingToolkitBase.get_ps(F)) if n in names]
-    ph = _DiscretizedFields(F, spec.discretization, spec.field_solver, Symbol[info(x).name for (x, _) in getfield(c, :fields)],
-        inputs, params, T, Float64(_p(sys, :sweep).mcs_duration), Dict{UInt, Tuple{WeakRef, Any}}(), ReentrantLock())
+    ph = _DiscretizedFields(
+        F, spec.discretization, spec.field_solver, Symbol[info(x).name for (x, _) in getfield(c, :fields)],
+        inputs, params, T, Float64(_p(sys, :sweep).mcs_duration), Dict{UInt, Tuple{WeakRef, Any}}(), ReentrantLock()
+    )
     fill = _field_fill_phase(c, T)
     return fill === nothing ? (Any[ph], Any[]) : (Any[fill, ph], Any[fill])
 end
@@ -1227,12 +1235,20 @@ end
 
 (ph::_DiscretizedFields)(st, p, ctx, key, mcs, backend) = CorePotts._run_phase(ph, st, p, ctx, key, mcs, backend, nothing)
 
-_input_values(ph::_DiscretizedFields, st) = [k => (a = getproperty(st.site, n); E === Bool ? Bool.(a) : E.(a))
-                                             for (k, n, E) in ph.inputs]
+_input_values(ph::_DiscretizedFields, st) = [
+    k => (a = getproperty(st.site, n); E === Bool ? Bool.(a) : E.(a))
+        for (k, n, E) in ph.inputs
+]
 
 function CorePotts._run_phase(ph::_DiscretizedFields, st, p, ctx, key, mcs, backend, stats)
-    backend isa KernelAbstractions.CPU || throw(ArgumentError(string("`discretization = ", repr(ph.disc), "`: its ",
-        "fields step on the host; run the problem on the CPU, or leave `discretization` out")))
+    backend isa KernelAbstractions.CPU || throw(
+        ArgumentError(
+            string(
+                "`discretization = ", repr(ph.disc), "`: its ",
+                "fields step on the host; run the problem on the CPU, or leave `discretization` out"
+            )
+        )
+    )
     owner = st.ownership
     t0 = mcs * ph.dt
     ins = _input_values(ph, st)

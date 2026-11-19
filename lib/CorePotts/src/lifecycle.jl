@@ -167,7 +167,8 @@ struct Lifecycle{TR, NO, CN, KI, DV, CD, RB, RU <: Val, BE, RL, OC}
     release::RL                 # the reference reset of an event round, or `nothing`
     owner_changed::OC           # the site hook at every site whose owner changes, or `nothing`
 end
-Lifecycle(trigger; normal = along_minor_axis, kind = keep_kind, divide! = no_divide_rule,
+Lifecycle(
+    trigger; normal = along_minor_axis, kind = keep_kind, divide! = no_divide_rule,
     rebuild! = no_rebuild, every::Integer = 1, cluster_normal = normal, cluster_divide! = divide!,
     rules::Bool = false, before = nothing, release = nothing, owner_changed = nothing) =
     Lifecycle(trigger, normal, cluster_normal, kind, divide!, cluster_divide!, rebuild!, Int(every), Val(rules), before,
@@ -542,8 +543,12 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
         _cluster_planes!(pstats, cache.normals, cache.bias, lc, st, p, ctx, key, mcs, roots, members)
     end
     if any(c -> daughter[c] > 0 && _base_event(events[c]) == EVENT_DIVIDE, 1:cap)    # after the host planes
-        Exec.launch!(backend, _normal_body!, cap, (cache.normals, cache.events, cache.daughter,
-            _plane(lc.normal, eltype(cache.normals)), st, p, ctx, key, mcs, lc.rules))
+        Exec.launch!(
+            backend, _normal_body!, cap, (
+                cache.normals, cache.events, cache.daughter,
+                _plane(lc.normal, eltype(cache.normals)), st, p, ctx, key, mcs, lc.rules,
+            )
+        )
         launches += 1
     end
     n = length(st.ownership)

@@ -76,9 +76,11 @@ end
     # (control: the field moved)
     @test maximum(cp_run(m, ExplicitEuler()).u[end].site.c) > 0.5
     # what the problem sets is refused, naming the keyword
-    for (bad, token) in ((LP.LatticeDiscretization(LP.Grid((20, 24))), "grid"),
-                         (LP.LatticeDiscretization(LP.Grid((24, 20)); T = Float32), "T = Float32"),
-                         (LP.LatticeDiscretization(LP.Grid((24, 20)); clock = 2.0), "mcs_duration"))
+    for (bad, token) in (
+            (LP.LatticeDiscretization(LP.Grid((20, 24))), "grid"),
+            (LP.LatticeDiscretization(LP.Grid((24, 20)); T = Float32), "T = Float32"),
+            (LP.LatticeDiscretization(LP.Grid((24, 20)); clock = 2.0), "mcs_duration"),
+        )
         @test_throws ArgumentError cp_run(m, ExplicitEuler(); discretization = bad)
         @test occursin(token, cp_msg(() -> PottsProblem(m, cp_op(), (0, 1); discretization = bad)))
     end
@@ -94,7 +96,7 @@ end
     ref(seed, k = 20) = run(seed, k; discretization = d, field_solver = Tsit5())
     # the first window, from the same sweep, against the lattice fields at many substeps
     a, b = run(1, 1; field_solver = ExplicitEuler(substeps = 400)).u[end].site.c, ref(1, 1).u[end].site.c
-    @test b ≈ a rtol = 5e-3
+    @test b ≈ a rtol = 5.0e-3
     @test maximum(b) > 0.1
     # paired over seeds: the mean and the largest field value at MCS 20, against the lattice
     # fields stepped finely in time (the default's one Euler step per MCS has a time error of

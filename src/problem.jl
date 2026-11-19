@@ -51,8 +51,10 @@ update is the model's last after-MCS cell update when the trigger reads the colu
 writes only at its own cell; it then runs with the lifecycle and is not among `phases`.
 Each is `(args…) -> body` and can be `eval`'d into a plain function (e.g. for JET).
 """
-function generated_code(sys; T::Type = Float64, field_solver = nothing, ode_solver = ExplicitEuler(), solvers = (),
-        discretization = nothing)
+function generated_code(
+        sys; T::Type = Float64, field_solver = nothing, ode_solver = ExplicitEuler(), solvers = (),
+        discretization = nothing
+    )
     c = sys isa CompiledPottsSystem ? sys : ModelingToolkitBase.mtkcompile(sys)
     return _with_model_scope(() -> _generated_code(c, T, field_solver, ode_solver, solvers, discretization), c)
 end
@@ -175,9 +177,14 @@ function CorePotts.PottsProblem(
     sys = getfield(c, :sys)
     init = _init_options(initializealg)
     spec = _resolve_solvers(c; field_solver, ode_solver, solvers, discretization, T)
-    spec.discretization === nothing || backend === nothing || backend isa KernelAbstractions.CPU || throw(ArgumentError(
-        string("`discretization = ", repr(spec.discretization), "`: its fields step on the host; give a CPU backend, ",
-        "or leave `discretization` out")))
+    spec.discretization === nothing || backend === nothing || backend isa KernelAbstractions.CPU || throw(
+        ArgumentError(
+            string(
+                "`discretization = ", repr(spec.discretization), "`: its fields step on the host; give a CPU backend, ",
+                "or leave `discretization` out"
+            )
+        )
+    )
     track = _track(track)
     opd = _operating_point(sys, op)
     seeds, u0seeds = _split_tangents!(sys, opd)     # Dual values: their primal values in `opd` (F3-21b)
@@ -595,8 +602,10 @@ function CorePotts.remake_function(
     )
     c = mi.csys
     kept = solvers === nothing                      # the problem's `solvers` (named in a clash)
-    spec = _resolve_solvers(c; field_solver, ode_solver, solvers = kept ? mi.solvers.solvers : solvers, kept, discretization,
-        mi.T)
+    spec = _resolve_solvers(
+        c; field_solver, ode_solver, solvers = kept ? mi.solvers.solvers : solvers, kept, discretization,
+        mi.T
+    )
     values = _parameter_dict(c, prob.p)
     track = _track(track)
     f = _problem_function(c, mi.T, spec, values, mi.ctx, mi.cache; track)

@@ -80,7 +80,8 @@ An ODE's `ExplicitEuler(substeps = nothing)` is one step, the same as `substeps 
 (`_ode_solver`): both resolve, group and fingerprint alike.
 """
 function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_solver = ExplicitEuler(), solvers = (),
-        kept::Bool = false, discretization = nothing, T::Type = Float64)
+        kept::Bool = false, discretization = nothing, T::Type = Float64
+    )
     sys = getfield(c, :sys)
     disc = _discretization(c, discretization, T)
     disc === nothing || return _resolve_discretized(c, disc, field_solver, ode_solver, solvers)
@@ -190,7 +191,8 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
     _check_adaptive_draws(c, resolved)
     canonical = join(("$n=$(_canonical(resolved[n]))" for n in sort!(collect(keys(resolved)))), ";")
     return SolverSpec(field_solver isa LatticeFields.Problems.FieldGroups ? field_solver : fsolver, ode_solver, given, resolved,
-        canonical, nothing)
+        canonical, nothing
+    )
 end
 
 # The `discretization` keyword: `nothing` for the fused lattice fields (left out, or a
@@ -198,24 +200,50 @@ end
 # with), else the discretization itself
 function _discretization(c::CompiledPottsSystem, d, T::Type)
     d === nothing && return nothing
-    d isa SciMLBase.AbstractDiscretization || throw(ArgumentError(string("`discretization` takes a ",
-        "`SciMLBase.AbstractDiscretization` (`LatticeDiscretization(Grid(dims))` or another discretizer); got ", repr(d))))
+    d isa SciMLBase.AbstractDiscretization || throw(
+        ArgumentError(
+            string(
+                "`discretization` takes a ",
+                "`SciMLBase.AbstractDiscretization` (`LatticeDiscretization(Grid(dims))` or another discretizer); got ", repr(d)
+            )
+        )
+    )
     sys = getfield(c, :sys)
     _has_fields(c) || throw(ArgumentError("`discretization`: model `$(nameof(sys))` has no fields; remove the keyword"))
     d isa LatticePDE.LatticeDiscretization || return d
     lat = _p(sys, :lattice)
     want = _field_disc(sys, T)
-    d.grid == want.grid || throw(ArgumentError(string("`discretization`: the grid of a `LatticeDiscretization` is the ",
-        "lattice's, `", repr(want.grid), "`; got `", repr(d.grid), "`")))
-    all(m -> m isa LatticePDE.FiniteVolume, values(d.methods)) || throw(ArgumentError(string("`discretization`: the ",
-        "fields of a model take `FiniteVolume()`; got `methods = ", repr(d.methods), "`")))
-    bad(k, route) = throw(ArgumentError(string("`discretization`: `LatticeDiscretization(…; ", k, ")` is set by the ",
-        "problem: ", route)))
+    d.grid == want.grid || throw(
+        ArgumentError(
+            string(
+                "`discretization`: the grid of a `LatticeDiscretization` is the ",
+                "lattice's, `", repr(want.grid), "`; got `", repr(d.grid), "`"
+            )
+        )
+    )
+    all(m -> m isa LatticePDE.FiniteVolume, values(d.methods)) || throw(
+        ArgumentError(
+            string(
+                "`discretization`: the ",
+                "fields of a model take `FiniteVolume()`; got `methods = ", repr(d.methods), "`"
+            )
+        )
+    )
+    bad(k, route) = throw(
+        ArgumentError(
+            string(
+                "`discretization`: `LatticeDiscretization(…; ", k, ")` is set by the ",
+                "problem: ", route
+            )
+        )
+    )
     d.T === nothing || d.T == T || bad("T = $(d.T)", "give the state type as `PottsProblem(…; T = $(d.T))`")
     d.backend === nothing || bad("backend", "give the backend to `PottsProblem` and `solve`")
     d.domain === nothing || bad("domain", "the lattice's domain is the fields' domain")
-    d.clock === nothing || d.clock == want.clock || bad("clock = $(d.clock)",
-        "the clock of the fields is the MCS, `mcs_duration = $(want.clock)` in `@sweep`")
+    d.clock === nothing || d.clock == want.clock || bad(
+        "clock = $(d.clock)",
+        "the clock of the fields is the MCS, `mcs_duration = $(want.clock)` in `@sweep`"
+    )
     return nothing
 end
 
@@ -224,22 +252,51 @@ end
 # sweep; the ODEs resolve as usual
 function _resolve_discretized(c::CompiledPottsSystem, disc, field_solver, ode_solver, solvers)
     sys = getfield(c, :sys)
-    field_solver === nothing && throw(ArgumentError(string("`discretization = ", repr(disc), "`: give the algorithm ",
-        "that solves its problem as `field_solver` (e.g. `field_solver = Tsit5()`)")))
-    field_solver isa LatticeFields.Problems.FieldGroups && throw(ArgumentError(string("`discretization = ", repr(disc),
-        "`: `FieldGroups` partitions the fused lattice fields; give one algorithm as `field_solver`")))
-    isempty(_field_aux(sys)) || throw(ArgumentError(string("`discretization = ", repr(disc), "`: model `", nameof(sys),
-        "` has aux fields (`K ~ rhs`), which the fused lattice fields evaluate; leave `discretization` out")))
-    any(((x, _, op),) -> op isa ModelingToolkitBase.Shift, _field_equations(sys)) && throw(ArgumentError(string(
-        "`discretization = ", repr(disc), "`: model `", nameof(sys), "` has map fields (`Shift(t, 1)(m) ~ rhs`), which ",
-        "the fused lattice fields apply; leave `discretization` out")))
+    field_solver === nothing && throw(
+        ArgumentError(
+            string(
+                "`discretization = ", repr(disc), "`: give the algorithm ",
+                "that solves its problem as `field_solver` (e.g. `field_solver = Tsit5()`)"
+            )
+        )
+    )
+    field_solver isa LatticeFields.Problems.FieldGroups && throw(
+        ArgumentError(
+            string(
+                "`discretization = ", repr(disc),
+                "`: `FieldGroups` partitions the fused lattice fields; give one algorithm as `field_solver`"
+            )
+        )
+    )
+    isempty(_field_aux(sys)) || throw(
+        ArgumentError(
+            string(
+                "`discretization = ", repr(disc), "`: model `", nameof(sys),
+                "` has aux fields (`K ~ rhs`), which the fused lattice fields evaluate; leave `discretization` out"
+            )
+        )
+    )
+    any(((x, _, op),) -> op isa ModelingToolkitBase.Shift, _field_equations(sys)) && throw(
+        ArgumentError(
+            string(
+                "`discretization = ", repr(disc), "`: model `", nameof(sys), "` has map fields (`Shift(t, 1)(m) ~ rhs`), which ",
+                "the fused lattice fields apply; leave `discretization` out"
+            )
+        )
+    )
     fields = [_solver_name(x) for (x, _) in getfield(c, :fields)]
     odes = [_solver_name(x) for (x, _) in Iterators.flatten((getfield(c, :cell_odes), getfield(c, :model_odes)))]
     given = Pair{Any, Any}[k => v for (k, v) in (solvers isa AbstractDict ? pairs(solvers) : solvers)]
     for (k, _) in given
         any(in(fields), _solver_keys(_localize(sys, k; strict = true), [fields; odes], nameof(sys))) &&
-            throw(ArgumentError(string("`solvers`: with `discretization = ", repr(disc), "`, the fields are solved ",
-            "together by `field_solver`; remove the field from `solvers`")))
+            throw(
+            ArgumentError(
+                string(
+                    "`solvers`: with `discretization = ", repr(disc), "`, the fields are solved ",
+                    "together by `field_solver`; remove the field from `solvers`"
+                )
+            )
+        )
     end
     # the ODEs resolve as without a discretization; the fields' entries are dropped
     ode = _resolve_solvers(c; ode_solver, solvers = given)
