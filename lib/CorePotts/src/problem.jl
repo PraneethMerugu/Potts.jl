@@ -323,7 +323,7 @@ state), `maxiters` (the most MCS one `solve!` takes, counted from `init` or `rei
 [`add_tstop!`](@ref SciMLBase.add_tstop!)), and the save times and stops given to `init`,
 `saveat0` and `tstops0` (`reinit!` restores them, those in its time span).
 """
-struct PottsOptions
+struct PottsOptions{A <: Real, R <: Real}
     saveat::Vector{Int}
     save_start::Bool
     save_end::Bool
@@ -338,11 +338,9 @@ struct PottsOptions
     tstops::Vector{Int}
     saveat0::Vector{Int}
     tstops0::Vector{Int}
-    abstol::Any
-    reltol::Any
+    abstol::A
+    reltol::R
 end
-PottsOptions(a, b, c, d, e, f, g, h, i, j, k, l, m, n) =
-    PottsOptions(a, b, c, d, e, f, g, h, i, j, k, l, m, n, 1 // 10^6, 1 // 10^3)
 
 """
     PottsIntegrator
@@ -360,7 +358,7 @@ while the run goes on, else the code that ended it. It reads a host field and do
 synchronize; a device failure is found at the next synchronization (a save, a host read, the
 end of the run).
 """
-mutable struct PottsIntegrator{Alg, Law, P, S, C, LCC, F, KF, Pa, Ctx, B, CB, MS} <: SciMLBase.DEIntegrator{Alg, true, S, Int}
+mutable struct PottsIntegrator{Alg, Law, P, S, C, LCC, F, KF, Pa, Ctx, B, CB, MS, O <: PottsOptions} <: SciMLBase.DEIntegrator{Alg, true, S, Int}
     const prob::P
     const alg::Alg
     const law::Law
@@ -375,7 +373,7 @@ mutable struct PottsIntegrator{Alg, Law, P, S, C, LCC, F, KF, Pa, Ctx, B, CB, MS
     const key::RNGKey
     t::Int
     tstop::Int                      # the end of the time span (`reinit!(integ; tf)` moves it)
-    const opts::PottsOptions
+    const opts::O
     const saved_t::Vector{Int}
     const saved_u::Vector{Any}
     retcode::SciMLBase.ReturnCode.T
@@ -443,11 +441,11 @@ function _merge_kwargs(pk::NamedTuple, kw::NamedTuple)
     return m
 end
 
-function _check_keywords(kw::NamedTuple, prob = nothing)
-    ln = prob !== nothing && _uses_lattice_newton(prob.f.phases)
+function _check_keywords(kw::NamedTuple, prob)
+    ln = _uses_lattice_newton(prob.f.phases)
     bad = [k for k in keys(kw) if !(k in SOLVE_KEYWORDS) && !(ln && k in (:abstol, :reltol)) && k !== :_rng_seeds]
     isempty(bad) && return nothing
-    if prob !== nothing && !ln && any(in((:abstol, :reltol)), bad) && _has_implicit_field_phase(prob.f.phases)
+    if !ln && any(in((:abstol, :reltol)), bad) && _has_implicit_field_phase(prob.f.phases)
         tolbad = filter(in((:abstol, :reltol)), bad)
         throw(
             ArgumentError(
