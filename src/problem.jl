@@ -51,12 +51,13 @@ update is the model's last after-MCS cell update when the trigger reads the colu
 writes only at its own cell; it then runs with the lifecycle and is not among `phases`.
 Each is `(args…) -> body` and can be `eval`'d into a plain function (e.g. for JET).
 """
-function generated_code(sys; T::Type = Float64, field_solver = nothing, ode_solver = ExplicitEuler(), solvers = ())
+function generated_code(sys; T::Type = Float64, field_solver = nothing, ode_solver = ExplicitEuler(), solvers = (),
+        discretization = nothing)
     c = sys isa CompiledPottsSystem ? sys : ModelingToolkitBase.mtkcompile(sys)
-    return _with_model_scope(() -> _generated_code(c, T, field_solver, ode_solver, solvers), c)
+    return _with_model_scope(() -> _generated_code(c, T, field_solver, ode_solver, solvers, discretization), c)
 end
-function _generated_code(c, T, field_solver, ode_solver, solvers)
-    spec = _resolve_solvers(c; field_solver, ode_solver, solvers)
+function _generated_code(c, T, field_solver, ode_solver, solvers, discretization)
+    spec = _resolve_solvers(c; field_solver, ode_solver, solvers, discretization, T)
     values = Dict{Any, Any}(_unwrap(x) => info(x).default for x in _p(getfield(c, :sys), :parameters))
     (phases0, cand), phases = _recording(() -> _phases_parts(c, T, values, spec))
     lc, lex = _recording(() -> _lifecycle(c, T))
@@ -76,7 +77,7 @@ function _generated_code(c, T, field_solver, ode_solver, solvers)
 end
 """
     PottsProblem(sys, op, tspan; field_solver = ExplicitEuler(), ode_solver = ExplicitEuler(), solvers = [],
-                 backend = nothing, T, capacity, seed = 0, replica = 0, repeat = 0, track = (),
+                 discretization = nothing, backend = nothing, T, capacity, seed = 0, replica = 0, repeat = 0, track = (),
                  initializealg = nothing, expression = Val(false))
 
 Build the numerical problem from a `PottsSystem` (compiled with `mtkcompile` if
@@ -129,9 +130,18 @@ How fields and ODEs are integrated is part of the problem, compiled into its cod
 - `solvers = [x => solver, …]`, keyed by integrated variables (or a component: all its
   unknowns), overrides them for those variables only (a stiff ODE under
   `Adaptive(Rodas5P())` beside explicit ones). Every ODE step reads the state at the start
-  of the step (Jacobi), across solvers too.
+  of the step (Jacobi), across solvers too;
+- `discretization` (any `SciMLBase.AbstractDiscretization`) discretizes the fields. Left out,
+  or a `LatticeDiscretization(Grid(dims))` of the model's lattice, the fields are the fused
+  lattice fields described above. Any other discretization steps the problem
+  `discretize(Potts.fields(model), discretization; inputs)` over each MCS window, solved with
+  `field_solver` (required: a SciML algorithm such as `Tsit5()`), on the CPU. Each window
+  starts from the fields' current values and the CPM inputs at that MCS
+  ([`Potts.field_inputs`](@ref) names them). The discretization must take
+  `inputs = [name => array, …]` and give an integrator that reads and writes each field by
+  name (`getu`, `setu`) and sets each input and parameter by name (`setp`).
 
-`remake(prob; field_solver | ode_solver | solvers = …)` rebuilds the code with the keywords
+`remake(prob; field_solver | ode_solver | solvers | discretization = …)` rebuilds the code with the keywords
 it names and keeps the others, `u0`, `p` and the seed; the problem fingerprint hashes a
 canonical form of the resolved solvers, so a checkpoint loads only into an equally
 discretized problem.
@@ -160,11 +170,14 @@ function CorePotts.PottsProblem(
         c::CompiledPottsSystem, op, tspan; backend = nothing,
         T::Type = backend === nothing ? Float64 : LatticeFields.Exec.default_float(backend), capacity = nothing,
         seed = 0, replica = 0, repeat = 0, expression = Val(false), field_solver = nothing,
-        ode_solver = ExplicitEuler(), solvers = (), track = (), initializealg = nothing, kwargs...
+        ode_solver = ExplicitEuler(), solvers = (), discretization = nothing, track = (), initializealg = nothing, kwargs...
     )
     sys = getfield(c, :sys)
     init = _init_options(initializealg)
-    spec = _resolve_solvers(c; field_solver, ode_solver, solvers)
+    spec = _resolve_solvers(c; field_solver, ode_solver, solvers, discretization, T)
+    spec.discretization === nothing || backend === nothing || backend isa KernelAbstractions.CPU || throw(ArgumentError(
+        string("`discretization = ", repr(spec.discretization), "`: its fields step on the host; give a CPU backend, ",
+        "or leave `discretization` out")))
     track = _track(track)
     opd = _operating_point(sys, op)
     seeds, u0seeds = _split_tangents!(sys, opd)     # Dual values: their primal values in `opd` (F3-21b)
@@ -570,18 +583,20 @@ end
 # Never reached by `remake(prob; p | u0 | seed)`.
 function CorePotts.remake_function(
         mi::PottsModelInfo, prob; field_solver = mi.solvers.field_solver,
-        ode_solver = mi.solvers.ode_solver, solvers = nothing, track = _track_names(prob), kwargs...
+        ode_solver = mi.solvers.ode_solver, solvers = nothing, discretization = mi.solvers.discretization,
+        track = _track_names(prob), kwargs...
     )
     isempty(kwargs) || throw(
         ArgumentError(
             "remake: unknown keyword$(length(kwargs) == 1 ? "" : "s") $(join(("`$k`" for k in keys(kwargs)), ", ")); " *
                 "supported keywords are `u0`, `p`, `tspan`, `seed`, `replica`, `repeat`, `field_solver`, `ode_solver`, " *
-                "`solvers`, `track`, `initializealg`, `f`"
+                "`solvers`, `discretization`, `track`, `initializealg`, `f`"
         )
     )
     c = mi.csys
     kept = solvers === nothing                      # the problem's `solvers` (named in a clash)
-    spec = _resolve_solvers(c; field_solver, ode_solver, solvers = kept ? mi.solvers.solvers : solvers, kept)
+    spec = _resolve_solvers(c; field_solver, ode_solver, solvers = kept ? mi.solvers.solvers : solvers, kept, discretization,
+        mi.T)
     values = _parameter_dict(c, prob.p)
     track = _track(track)
     f = _problem_function(c, mi.T, spec, values, mi.ctx, mi.cache; track)
