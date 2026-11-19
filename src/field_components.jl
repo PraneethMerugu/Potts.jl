@@ -59,8 +59,9 @@ function _pde_content(sys, f::ModelingToolkitBase.PDESystem, prefix, what::Abstr
     M = ModelingToolkitBase
     pname = "the PDESystem `$(nameof(f))`"
     bound = _input_bindings(sys, f, inputs, what, pname)
-    # (`analytic`, `analytic_func`: no public MTKBase accessor, an upstream gap)
-    isempty(ModelingToolkitBase.get_systems(f)) && getfield(f, :analytic) === nothing && getfield(f, :analytic_func) === nothing ||
+    # (`analytic`, `analytic_func`: read as properties, which `PDESystem`'s `getproperty` gives;
+    # switch to `get_analytic` once a ModelingToolkitBase release has it, SciML/ModelingToolkit.jl#5420)
+    isempty(ModelingToolkitBase.get_systems(f)) && f.analytic === nothing && f.analytic_func === nothing ||
         throw(ArgumentError("$what: $pname has subsystems or analytic solutions, which the fields of a model do not " *
                             "carry; leave them out"))
     qname(n) = prefix === nothing ? Symbol(n) : Symbol(prefix, :₊, n)

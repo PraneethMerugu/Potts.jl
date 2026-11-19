@@ -945,10 +945,11 @@ function _merge_fields(name, p, cs)
     merged(get) = unique(reduce(vcat, [collect(get(f)) for f in fs]))
     # the merge keeps the six stored fields exactly; `initial_conditions` are merged (one value
     # per key), and the parts a merge cannot keep (subsystems, analytic solutions) are refused,
-    # never dropped. `analytic` and `analytic_func` are read with `getfield`: MTKBase has no
-    # public accessor for them (an upstream gap)
+    # never dropped. `analytic` and `analytic_func` are read as properties (`PDESystem`'s
+    # `getproperty`); switch to `get_analytic` once a ModelingToolkitBase release has it
+    # (SciML/ModelingToolkit.jl#5420)
     for f in fs
-        isempty(_MTKB.get_systems(f)) && getfield(f, :analytic) === nothing && getfield(f, :analytic_func) === nothing ||
+        isempty(_MTKB.get_systems(f)) && f.analytic === nothing && f.analytic_func === nothing ||
             throw(
             ArgumentError(
                 "compose: the PDESystem `$(nameof(f))` has subsystems or analytic solutions, " *
@@ -1228,13 +1229,14 @@ function Symbolics.rename(s::PottsSystem, name::Symbol)
 end
 
 # the PDESystem `f` under `name`, every stored field kept (MTKBase's `rename` of a PDESystem,
-# `@set`, fails on its `nothing` metadata). `analytic` and `analytic_func` are read with
-# `getfield`: MTKBase has no public accessor for them (an upstream gap).
+# `@set`, fails on its `nothing` metadata). `analytic` and `analytic_func` are read as
+# properties (`PDESystem`'s `getproperty`); switch to `get_analytic` once a ModelingToolkitBase
+# release has it (SciML/ModelingToolkit.jl#5420).
 _renamed_pde(f::ModelingToolkitBase.PDESystem, name::Symbol) = ModelingToolkitBase.PDESystem(
     _MTKB.get_eqs(f), _MTKB.get_bcs(f), _MTKB.get_domain(f), _MTKB.get_ivs(f), _MTKB.get_dvs(f), _MTKB.get_ps(f);
     name, initial_conditions = _MTKB.get_initial_conditions(f), systems = _MTKB.get_systems(f),
-    connector_type = _MTKB.get_connector_type(f), metadata = _MTKB.get_metadata(f), analytic = getfield(f, :analytic),
-    analytic_func = getfield(f, :analytic_func), gui_metadata = _MTKB.get_gui_metadata(f),
+    connector_type = _MTKB.get_connector_type(f), metadata = _MTKB.get_metadata(f), analytic = f.analytic,
+    analytic_func = f.analytic_func, gui_metadata = _MTKB.get_gui_metadata(f),
     description = _MTKB.get_description(f), checks = false
 )
 
