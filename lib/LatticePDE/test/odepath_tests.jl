@@ -90,7 +90,7 @@ end
     @test M isa Diagonal && count(iszero, M.diag) == 64 && count(isone, M.diag) == 64
     s = solve(prob, Rodas5P(); OTOL...)
     @test SciMLBase.successful_retcode(s)
-        o = solve(prob, BackwardEuler(; linsolve = DevicePCG(; reltol = 1.0e-12, maxiters = 64)); dt = 1.0e-5, saveat = 0.1)
+        o = solve(prob, BackwardEuler(; linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 64)); dt = 1.0e-5, saveat = 0.1)
     @test maximum(abs, s.u[end] .- o.u[end]) < 1e-4 || (println("F4-02 steady vs owned ", maximum(abs, s.u[end] .- o.u[end])); false)
     # the steady rows hold at the end (the residual of `v`'s row is 0)
     du = similar(s.u[end])
@@ -107,7 +107,7 @@ end
         sl = PDESystem([0 ~ 0.3 * laplacian(owe) - 2.0 * owe + x], [ow(0, y) ~ 1.0], fdom, [x, y], [owe], Num[]; name = :ol)
     lp = discretize(sl, odisc())
     @test lp isa SciMLBase.LinearProblem && lp.A isa LFP.LatticeOperator
-        q = solve(lp, QuasiSteady(; linsolve = DevicePCG(; reltol = 1.0e-14, maxiters = 400)))
+        q = solve(lp, QuasiSteady(; linsolve = LatticePCG(; reltol = 1.0e-14, maxiters = 400)))
     @test maximum(abs, lp.A * q.u[1] .- lp.b) < 1e-8 * maximum(abs, lp.b)
     @test solve(lp).retcode == SciMLBase.ReturnCode.Success                  # (the default: QuasiSteady)
     # A against the matrix of its columns: the same operator as the right side's Jacobian
@@ -118,7 +118,7 @@ end
         sn = PDESystem([0 ~ 0.3 * laplacian(owe) - owe^3 - owe + x], [ow(0, y) ~ 1.0], fdom, [x, y], [owe], Num[]; name = :on)
     np = discretize(sn, odisc())
     @test np isa SciMLBase.NonlinearProblem
-        r = solve(np, QuasiSteady(; linsolve = DevicePCG(; reltol = 1.0e-14, maxiters = 400)))
+        r = solve(np, QuasiSteady(; linsolve = LatticePCG(; reltol = 1.0e-14, maxiters = 400)))
     du = similar(r.u[1])
     np.f(du, r.u[1], np.p)
     @test maximum(abs, du) < 1e-6                                            # (QuasiSteady's Newton tolerance)
@@ -227,7 +227,7 @@ end
             [0 ~ 0.3 * laplacian(lwe) - la * lwe + ls * x], [lw(0, y) ~ 1.0], [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)],
         [x, y], [lwe], [ls, la]; name = :pl)
     lp = discretize(sl, odisc())
-        qs(p) = solve(p, QuasiSteady(; linsolve = DevicePCG(; reltol = 1.0e-14, maxiters = 400))).u[1]
+        qs(p) = solve(p, QuasiSteady(; linsolve = LatticePCG(; reltol = 1.0e-14, maxiters = 400))).u[1]
     lp.ps[ls] = 3.0                                     # (0a182a0e: "objects of type Nothing are not callable")
     setp(lp, la)(lp, 5.0)
     q = qs(lp)

@@ -10,6 +10,7 @@ problems, solutions and integrators (`LatticeIndex`, `FieldSlot`).
 module Problems
 
 using CommonSolve: CommonSolve
+using LinearSolve: LinearSolve
 using Serialization: Serialization
 using Krylov: Krylov
 using LinearAlgebra: LinearAlgebra
@@ -28,7 +29,7 @@ using ..Compile: CompiledKernel, CompileOptions, body_function, derive_function,
     primal, promote_dual, semantic, value_type, withvaltype, writes, fuse_update, fuse_residual,
                  npartials, dvalue, dpartial, dsetpartial, dreplace
 using ..Schedule: LaunchSpec, StepPlan, plan, fusion_report
-using ..Solvers: Solvers
+using ..Solvers: Solvers, LatticeMultigrid, LatticePCG, LatticeGMRES, LatticeBlockSolve
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
 rgf(ex::Expr) = drop_expr(RuntimeGeneratedFunction(@__MODULE__, @__MODULE__, ex))
@@ -93,8 +94,8 @@ public AbstractPolicyTexts, ProblemTexts, GroupSubsteps, check_coupling, bound_r
 # the field report (F4-13, AF-09)
 public field_report, group_report, coupling_report, substep_cause, implicit_facts, ImplicitFacts, coupling_unseen_text, unseen_reads, unseen_loop, cover_text
 # the implicit algorithms (F3-07)
-public AbstractImplicitFieldAlgorithm, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, OperatorSpec, RowOperator, operator_spec, build_operator, growth, inexact_bounds, ImplicitCache,
-       ImplicitRow, bind_cache, residual_program, residual_rule
+public AbstractImplicitFieldAlgorithm, LatticeNewton, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, OperatorSpec, RowOperator, operator_spec, build_operator, growth, inexact_bounds, ImplicitCache,
+    ImplicitRow, bind_cache, residual_program, residual_rule, resolve_tols
 # steady rows `0 ~ rhs` (F3-12b)
 public steady_alg, steady_fields
 # the clock (F2-08c)

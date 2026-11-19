@@ -819,27 +819,27 @@ whose route follows its `cause` bits ([`STATUS_CAUSES`](@ref)): a linear diverge
 substeps or a larger linear budget; a Newton divergence or a residual that is not finite takes
 more substeps only (a smaller step brings the iteration into its contraction; neither more
 iterations nor a larger linear budget does). `coupled`: the group is solved together (F3-12d:
-a `QuasiSteady` group only), so its linear budget is the `DeviceGMRES`'s.
+a `QuasiSteady` group only), so its linear budget is the `LatticeGMRES`'s.
 """
 function status_route(alg, which::Symbol, cause::Integer = 0; coupled::Bool = false)
-    which === :budget && return "a larger linear budget (`linsolve = DevicePCG(; maxiters = n)`)"
-    which === :newton_budget && return "more Newton iterations (a larger `newton = k`) or more substeps (`substeps = n`)"
-    cause & 0x01 != 0 && return "more substeps (`substeps = n`) or a larger linear budget (`linsolve = DevicePCG(; maxiters = n)`)"
+    which === :budget && return "a larger linear budget (`linsolve = LatticePCG(; maxiters = n)`)"
+    which === :newton_budget && return "more Newton iterations (a larger `nlsolve = LatticeNewton(; max_iter = k)`) or more substeps (`substeps = n`)"
+    cause & 0x01 != 0 && return "more substeps (`substeps = n`) or a larger linear budget (`linsolve = LatticePCG(; maxiters = n)`)"
     cause & 0x6 != 0 && return "more substeps (`substeps = n`): a smaller step brings the Newton iteration into its contraction"
-    return "more substeps (`substeps = n`) or a larger linear budget (`linsolve = DevicePCG(; maxiters = n)`)"
+    return "more substeps (`substeps = n`) or a larger linear budget (`linsolve = LatticePCG(; maxiters = n)`)"
 end
 # a steady solve has no substeps: its routes are the budgets, a fixed value or decay, or a
 # transient solver
 function status_route(::QuasiSteady, which::Symbol, cause::Integer = 0; coupled::Bool = false)
-    which === :budget && return coupled ? "a larger linear budget (`linsolve = DeviceGMRES(; maxiters = n)`)" :
-        "a larger linear budget (`linsolve = DevicePCG(; maxiters = n)`)"
-    which === :newton_budget && return "more Newton iterations (a larger `newton = k`)"
+    which === :budget && return coupled ? "a larger linear budget (`linsolve = LatticeGMRES(; maxiters = n)`)" :
+        "a larger linear budget (`linsolve = LatticePCG(; maxiters = n)`)"
+    which === :newton_budget && return "more Newton iterations (a larger `nlsolve = LatticeNewton(; max_iter = k)`)"
     cause & 0xc0 != 0 && return string("step the fields with `BackwardEuler` (a transient solve needs no unique steady ",
-        "state), or give the coupled solve a larger budget (`linsolve = DeviceGMRES(; maxiters = n)`)"
+        "state), or give the coupled solve a larger budget (`linsolve = LatticeGMRES(; maxiters = n)`)"
     )
     cause & 0x20 != 0 && return "step the field with `BackwardEuler`, or give each region a decay or a fixed value"
     cause & 0x10 != 0 && return "give that region a decay or a fixed value, or step the field with `BackwardEuler`"
-    cause & 0x01 != 0 && return "a larger linear budget (`linsolve = DevicePCG(; maxiters = n)`), or step the field with `BackwardEuler`"
+    cause & 0x01 != 0 && return "a larger linear budget (`linsolve = LatticePCG(; maxiters = n)`), or step the field with `BackwardEuler`"
     return "step the field with `BackwardEuler` (a transient solve converges where the steady Newton iteration does not)"
 end
 
@@ -947,7 +947,8 @@ at-init evaluation of the `aux:` kernels, `n = 0`); by default the fields' own k
 """
 function bind_group(g::FieldGroup, alg, st::FieldStore, p; fields = g.spec.state, n::Integer, dt::Real,
         c, ends_in::Symbol = :parity, backend, options::CompileOptions, V::Type, host = nothing, kernels = nothing,
-        shared = nothing)
+        shared = nothing, abstol = 1 // 10^6, reltol = 1 // 10^3
+    )
     ends_in in (:parity, :slot1) || throw(ArgumentError("ends_in must be :parity or :slot1; got $(repr(ends_in))"))
     prog = group_program(g, alg)
     check_backend_float64(prog, alg, backend, V; fields)
@@ -966,7 +967,8 @@ function bind_group(g::FieldGroup, alg, st::FieldStore, p; fields = g.spec.state
     return GroupRuntime(st, alg, ip, sp, steps, masks, clamps, stepclamps, swaps, copies, ends_in, all_state, collect(String, fields), Int(n),
         Float64(dt), stab, p, c, prog, backend,
         bind_cache(alg, g, st, p; fields = collect(String, fields), n, dt, c, backend, options, V,
-            (shared === nothing ? (;) : (; shared))...), SciMLBase.ReturnCode.Success,
+            abstol, reltol, (shared === nothing ? (;) : (; shared))...
+        ), SciMLBase.ReturnCode.Success,
         nothing, host,
         StatusTotals(), _declared_checks(stab, st, prog, fields),
         alg isa ExplicitEuler && reads_time(stab) ? g.spec : nothing)
@@ -1333,7 +1335,7 @@ end
         "left out of the operator; a growing field's steady state is unstable or not unique: step it with `BackwardEuler`")
     @warn string("field", s, " ", join(("`$k`" for k in rt.keys), ", "), ": the implicit shift was clamped in ",
         window_text(rt, max(w, 1)), " (a local growth `∂f/∂c` above `1/(2h)` that the substep count did not see), so ",
-        "its one Newton step is not the ", _stepname(rt.alg), " step; a larger `newton = k` checks the step at every substep, or ",
+        "its one Newton step is not the ", _stepname(rt.alg), " step; a larger `nlsolve = LatticeNewton(; max_iter = k)` checks the step at every substep, or ",
         "more substeps (`substeps = n`) keep the growth below the shift")
     return nothing
 end
@@ -1345,11 +1347,13 @@ _stepname(a) = a isa BackwardEuler ? "Backward Euler" : a isa CrankNicolson ? "C
     tot = rt.totals
     fs = join(("`$k`" for k in rt.keys), ", ")
     s = length(rt.keys) == 1 ? "" : "s"
-    if !tot.warned && (tot.budget > 0 || tot.newton_budget > 0)
+    if code != SciMLBase.ReturnCode.ConvergenceFailure && !tot.warned && (tot.budget > 0 || tot.newton_budget > 0)
         tot.warned = true
         what = tot.budget > 0 ? ("the linear solve reached its budget $(tot.budget) time$(tot.budget == 1 ? "" : "s")",
                                  status_route(rt.alg, :budget; coupled = coupled_solve(rt.cache))) :
-               (string("the Newton iteration", (k = newton_count(rt.cache)) === nothing ? "" : " (`newton = $k`)",
+            (
+                string(
+                    "the Newton iteration", (k = newton_count(rt.cache)) === nothing ? "" : " (`max_iter = $k`)",
                     " reached its budget $(tot.newton_budget) time$(tot.newton_budget == 1 ? "" : "s")"),
                 status_route(rt.alg, :newton_budget))
         Exec.VERBOSE[] && @warn "field$s $fs: $(what[1]) so far (the result is accepted, `ReturnCode.Success`, and counted in `stats`); " *
@@ -1358,7 +1362,13 @@ _stepname(a) = a isa BackwardEuler ? "Backward Euler" : a isa CrankNicolson ? "C
     if code == SciMLBase.ReturnCode.ConvergenceFailure && tot.window == 0
         tot.window = max(Int64(window), 1)
         why = [r for (bit, r) in STATUS_CAUSES if tot.cause & bit != 0]
-        route = status_route(rt.alg, :failure, tot.cause; coupled = coupled_solve(rt.cache))
+        if isempty(why) && tot.newton_budget > 0
+            k = newton_count(rt.cache)
+            push!(why, string("the Newton iteration", k === nothing ? "" : " (`nlsolve = LatticeNewton(; max_iter = $k)`)", " reached its budget"))
+            route = status_route(rt.alg, :newton_budget)
+        else
+            route = status_route(rt.alg, :failure, tot.cause; coupled = coupled_solve(rt.cache))
+        end
         Exec.VERBOSE[] && @warn "field$s $fs: the solve failed in $(window_text(rt, tot.window))$(isempty(why) ? "" : " (" * join(why, "; ") * ")"), " *
               "`ReturnCode.ConvergenceFailure`: the run stops; $route"
     end

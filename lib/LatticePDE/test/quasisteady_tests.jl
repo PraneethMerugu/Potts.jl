@@ -222,9 +222,9 @@ end
     # the keywords
     @test startswith(qmsg(() -> QuasiSteady(; substeps = 2)), "QuasiSteady: no keyword `substeps`: a steady field is solved once per window")
         @test startswith(qmsg(() -> QuasiSteady(; lower_bound = 0.0)), "QuasiSteady: no keyword `lower_bound`: a steady solve has no substep to clip")
-        @test qmsg(() -> QuasiSteady(; theta = 1)) == "QuasiSteady: no keyword `theta`; its keywords are `newton`, `linsolve`, `solver_type`, `init` and `compute_type`"
-    @test startswith(qmsg(() -> QuasiSteady(; newton = 0)), "QuasiSteady: newton = 0 is the Newton iterations per substep")
-        a = QuasiSteady(; newton = 3)
+        @test qmsg(() -> QuasiSteady(; theta = 1)) == "QuasiSteady: no keyword `theta`; its keywords are `nlsolve`, `linsolve`, `solver_type`, `init` and `compute_type`"
+        @test startswith(qmsg(() -> QuasiSteady(; nlsolve = 0)), "QuasiSteady: nlsolve = 0 must be `nothing`")
+        a = QuasiSteady(; nlsolve = LatticeNewton(; max_iter = 3))
     @test eval(Meta.parse(repr(a))) == a
 end
 end
@@ -236,11 +236,11 @@ end
         p = discretize(
             bsys([D(bce) ~ bD * laplacian(bce) - 0.01 * bce + x], [bc(0, x, y) ~ 0.0, bc(t, 0, y) ~ 1.0], [bD]),
         LatticeDiscretization(Grid((32, 32)); T = Float64); inputs = [bqe => zeros(Int32, 32, 32)])
-        ig = init(p, QuasiSteady(; linsolve = DevicePCG(; maxiters = 2)); dt = 0.1)
+        ig = init(p, QuasiSteady(; linsolve = LatticePCG(; maxiters = 2)); dt = 0.1)
     @test_logs (:warn, r"field `bc`: the linear solve reached its budget 1 time so far .*a larger linear budget") step!(ig)
     sc = LSB.scalars(only(ig.runtimes).cache.rows[1].solver)
         @test sc.status === :budget && sc.rnorm < sc.bnorm / 2 && SciMLBase.check_error(ig) == ReturnCode.Success   # (3.9 of 614)
-        s = solve(p, QuasiSteady(; linsolve = DevicePCG(; maxiters = 2)); dt = 0.1)
+        s = solve(p, QuasiSteady(; linsolve = LatticePCG(; maxiters = 2)); dt = 0.1)
     @test s.retcode == ReturnCode.Success && s.stats.budget > 0
     # an island: the domain (a Bool input) is two strips; the low one touches the Dirichlet face
     # at y = 0, the high one touches no condition and the field has no decay, so the high
@@ -253,13 +253,13 @@ end
             [D(bce) ~ bD * laplacian(bce) + 1.0], [bc(0, x, y) ~ 0.0, bc(t, x, 0) ~ 0.0], bdom(1.0), [t, x, y], [bce, bdme], [bD];
         name = :island)
     pi = discretize(si, LatticeDiscretization(Grid(BDIMS); T = Float64, domain = bdm); inputs = [bdme => dm])
-        ig = init(pi, QuasiSteady(; linsolve = DevicePCG(; maxiters = 16)); dt = 0.1)
+        ig = init(pi, QuasiSteady(; linsolve = LatticePCG(; maxiters = 16)); dt = 0.1)
     @test_logs (:warn, r"field `bc`: the solve failed in window 1 \(t = 0\.0\) \(the steady solve made no real reduction: a region has no decay and no fixed value.*give that region a decay or a fixed value, or step the field with `BackwardEuler`") step!(ig)
     sc = LSB.scalars(only(ig.runtimes).cache.rows[1].solver)
     # the status the island produces (recorded: `:floor` after 7 iterations, the stall test, with
     # the residual grown to 3.7e9 against ‖b‖ = 1: no reduction)
     @test sc.status === :floor && sc.rnorm > sc.bnorm / 2 || (println("island status ", sc); false)
-        s = solve(pi, QuasiSteady(; linsolve = DevicePCG(; maxiters = 16)); dt = 0.1)
+        s = solve(pi, QuasiSteady(; linsolve = LatticePCG(; maxiters = 16)); dt = 0.1)
     @test s.retcode == ReturnCode.ConvergenceFailure && length(s.t) == 2
     # the same strips with a decay in each: unique, solved
         sd = PDESystem(
@@ -436,7 +436,7 @@ end
     # (F3-12d: by default the steady rows of `qa`, `qc` are one QuasiSteady group, whose gains
     # compose, so the loop is accepted; as two steady groups it is refused, with the route of one)
         @test solve(cas(0.3), BackwardEuler(); dt = 0.1).retcode == ReturnCode.Success
-        two = FieldGroups(qae => QuasiSteady(), qce => QuasiSteady(; newton = 3); default = BackwardEuler())
+        two = FieldGroups(qae => QuasiSteady(), qce => QuasiSteady(; nlsolve = LatticeNewton(; max_iter = 3)); default = BackwardEuler())
         m = qmsg(() -> init(cas(0.3), two; dt = 0.1))
     @test startswith(m, "FieldGroups: the QuasiSteady groups of `qa`, `qc` are in a loop of groups that read one another") &&
           occursin("the steady row of `qc` reads the steady field `qa` of another steady group of the loop", m) &&
@@ -455,7 +455,7 @@ end
 
 # F3-12c (F3 design §3.2): `init = :steady` on every algorithm. Before the first window (and at
 # `reinit!`) each such group's steady state is solved once by `QuasiSteady`, with the algorithm's
-# `inner` (`:auto`: DevicePCG to rtol 1e-6 within 64 iterations); its refusals name `init`; a
+# `inner` (`:auto`: LatticePCG to rtol 1e-6 within 64 iterations); its refusals name `init`; a
 # failed steady start ends the run. Base (932c12ce, ~/lpwork/f3b7-nc-12c-base.log): `init` is no
 # keyword (the testset errors). Negative control (mutation, nc-12c-reinit): `reinit!` without
 # the steady starts keeps the zero start (1 fails).
@@ -516,7 +516,7 @@ end
         name = :island)
     pi = discretize(si, LatticeDiscretization(Grid(BDIMS); T = Float64, domain = bdm); inputs = [bdme => dm])
     ig = @test_logs (:warn, r"field `bc`: the solve failed in the steady start \(`init = :steady`, t = 0\.0\)") match_mode = :any init(pi,
-            BackwardEuler(; init = :steady, linsolve = DevicePCG(; maxiters = 16)); dt = 0.1
+            BackwardEuler(; init = :steady, linsolve = LatticePCG(; maxiters = 16)); dt = 0.1
         )
     @test ig.retcode == ReturnCode.ConvergenceFailure
     s = solve!(ig)
@@ -608,7 +608,7 @@ end
         p = discretize(
             bsys([0 ~ 0.1 * laplacian(bce) - bce + f], faces, Any[]; T = 1.0, dvs = [bce]),
         LatticeDiscretization(Grid((n, n)); T = Float64))
-        ig = init(p, QuasiSteady(; linsolve = DevicePCG(; reltol = 1.0e-12, maxiters = 200)); dt = 0.5)
+        ig = init(p, QuasiSteady(; linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 200)); dt = 0.5)
     xs = [(i - 0.5) / n for i in 1:n, j in 1:n]
     ys = [(j - 0.5) / n for i in 1:n, j in 1:n]
     u(tt) = (1 + tt) .* sin.(π .* xs) .* sin.(π .* ys)
@@ -653,7 +653,7 @@ end
                 [0 ~ laplacian(fce) - 4 * fce + (2π^2 + 4) * sin(π * x) * sin(π * y)],
             [fc(0, y) ~ 0.0, fc(1, y) ~ 0.0, fc(x, 0) ~ 0.0, fc(x, 1) ~ 0.0], fdom, [x, y], [fce], Any[]; name = :helm)
         r = solve(discretize(sh, LatticeDiscretization(Grid((n, n)); T = Float64)),
-                QuasiSteady(; linsolve = DevicePCG(; reltol = 1.0e-12, maxiters = 200))
+                QuasiSteady(; linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 200))
             )
         xs = [(i - 0.5) / n for i in 1:n, j in 1:n]
         ys = [(j - 0.5) / n for i in 1:n, j in 1:n]

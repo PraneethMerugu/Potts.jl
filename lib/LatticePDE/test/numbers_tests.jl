@@ -412,12 +412,13 @@ end
             (ExplicitEuler(), ExplicitEuler(), ExplicitEuler(; substeps = 3), true),
             (ExplicitMap(), ExplicitMap(), ExplicitMap(; compute_type = Float64), false),
             (BackwardEuler(), BackwardEuler(), BackwardEuler(; substeps = 2), true),
-            (CrankNicolson(), CrankNicolson(), CrankNicolson(; newton = 2), true),
+            (LatticeNewton(), LatticeNewton(), LatticeNewton(; max_iter = 3), true),
+            (CrankNicolson(), CrankNicolson(), CrankNicolson(; nlsolve = LatticeNewton(; max_iter = 2)), true),
             (BDF2(), BDF2(), BDF2(; substeps = 2), true),
-            (QuasiSteady(), QuasiSteady(), QuasiSteady(; linsolve = DeviceGMRES()), true),
-            (DevicePCG(), DevicePCG(), DevicePCG(; maxiters = 3), true),
-            (Multigrid(), Multigrid(), Multigrid(; cycles = 3), true),
-            (DeviceGMRES(), DeviceGMRES(), DeviceGMRES(; gmres_restart = 8), true),
+            (QuasiSteady(), QuasiSteady(), QuasiSteady(; linsolve = LatticeGMRES()), true),
+            (LatticePCG(), LatticePCG(), LatticePCG(; maxiters = 3), true),
+            (LatticeMultigrid(), LatticeMultigrid(), LatticeMultigrid(; cycles = 3), true),
+            (LatticeGMRES(), LatticeGMRES(), LatticeGMRES(; gmres_restart = 8), true),
         ]
         for (a, b, c, hasdefaults) in canon_cases
             @test isequal(a, b) && LFP.canonical(a) == LFP.canonical(b)
@@ -512,11 +513,14 @@ end
         for s in (kt, Dt, gt)
             @test tok(tad(mr, BackwardEuler(; linsolve = TTIGHT), s; dt = 0.1)...)
         end
-        # `−k c²`: with `newton = k` the run converges each stage, and its derivatives are the tangent's;
+        # `−k c²`: with `nlsolve = LatticeNewton(; max_iter = 8)` the run converges each stage, and its derivatives are the tangent's;
         # by default one unchecked Newton step does not solve the stage, which is warned
         nl = town(tsys([D(ce) ~ Dt * laplacian(ce) - kt * ce^2 + gt], [c(0, x, y) ~ 0.2 + x]), (10, 10))
         for s in (kt, Dt)
-            @test tok(tad(nl, BackwardEuler(; linsolve = TTIGHT, newton = 8), s; dt = 0.1)...)
+            let (ad_v, fd_v) = tad(nl, BackwardEuler(; linsolve = TTIGHT, nlsolve = LatticeNewton(; max_iter = 8)), s; dt = 0.1)
+                @test isapprox(ad_v, fd_v; rtol = 1.0e-5) && ad_v != 0
+            end
+            @test tok(tad(nl, BackwardEuler(; linsolve = TTIGHT, nlsolve = LatticeNewton(; κ = 1.0e-5, max_iter = 12)), s; dt = 0.1)...)
         end
         i = pidx(nl, kt)
         @test_logs (:warn, r"derivative parts are those of each stage's solution") match_mode = :any solve(
@@ -556,7 +560,7 @@ end
             )
         )
         for s in (kt, Dt, gt)
-            @test tok(tad(cp, QuasiSteady(; linsolve = DeviceGMRES(; reltol = 1.0e-12)), s; out = sol -> sol[tae, end] .^ 2, dt = 0.1)...)   # (a sum of `a` alone does not see D: zero flux)
+            @test tok(tad(cp, QuasiSteady(; linsolve = LatticeGMRES(; reltol = 1.0e-12)), s; out = sol -> sol[tae, end] .^ 2, dt = 0.1)...)   # (a sum of `a` alone does not see D: zero flux)
         end
     end
 end

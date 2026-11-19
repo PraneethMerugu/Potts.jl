@@ -113,9 +113,100 @@ The implicit field algorithms (F3 design §3.2): each substep solves the Newton 
 residual and `J̃` the symmetric operator its front end extracts (`OperatorSpec`).
 """
 abstract type AbstractImplicitFieldAlgorithm <: AbstractFieldAlgorithm end
+# (equal keywords: equal algorithms; a `linsolve` that holds a preconditioner's cache compares by value)
+Base.:(==)(a::A, b::A) where {A <: AbstractImplicitFieldAlgorithm} = all(f -> getfield(a, f) == getfield(b, f), fieldnames(A))
+Base.hash(a::AbstractImplicitFieldAlgorithm, h::UInt) =
+    foldl((h, f) -> hash(getfield(a, f), h), fieldnames(typeof(a)); init = hash(typeof(a), h))
 
 """
-    BackwardEuler(; substeps = nothing, newton = nothing, lower_bound = nothing,
+    LatticeNewton(; κ = 1 // 100, max_iter = 10, check_div = true)
+
+Nonlinear solver specification for the owned implicit field algorithms
+([`BackwardEuler`](@ref), [`CrankNicolson`](@ref), [`BDF2`](@ref), [`QuasiSteady`](@ref)).
+Matches OrdinaryDiffEq's `NLNewton` convergence and divergence rules on fixed-step,
+no-wait CPU and device execution:
+
+- `κ`: rate-scaled convergence threshold (`1 // 100` by default, finite positive real).
+- `max_iter`: maximum Newton iterations per step (`10` by default, integer ≥ 1). Unlike
+  automatic mode (`nlsolve = nothing`), even `max_iter = 1` is checked (`ndz < 1e-5`). The
+  solver runs at most `max_iter` iterations and stops early once the group meets the stopping
+  test.
+- `check_div`: when `true` (default), abort with `ReturnCode.ConvergenceFailure` if the
+  contraction rate diverges (`θ > 2`), stalls above the tolerance floor (`θ ≈ 1` with
+  `ndz > 1`), or exhausts `max_iter` without converging; when `false`, disable divergence
+  growth checks and accept a `max_iter` budget hit as converged (`ReturnCode.Success`, still
+  counted in `stats.newton_budget` once per group per substep — unlike automatic mode's
+  per-row count — and warned; non-finite corrections still stop). Pass
+  `LatticeNewton(; max_iter = 1, check_div = false)` for an unchecked single sweep.
+
+At each iteration `iter`, the scaled update norm `ndz` is the single RMS norm over all active
+(unmasked, in-domain) unknowns in the group of `δ ./ (abstol .+ max.(abs.(uⁿ), abs.(u_k)) .* reltol)`
+in the working float type `T`, using the pre-update iterate `u_k` and `abstol`/`reltol` from
+the `solve` keywords (SciML defaults `1 // 10^6` and `1 // 10^3` if unset; refused when no
+group uses `LatticeNewton`, and ignored by automatic groups in mixed problems). Note that
+`NLNewton`'s defaults (`κ = 1 // 100`, `abstol = 1e-6`, `reltol = 1e-3`) are looser than
+automatic mode's `1e-3` step-increment test when steps are small; tighten `κ` or `reltol`
+for tighter Newton accuracy. On `iter == 1`, convergence requires `ndz < 1e-5`. For
+`iter > 1`, `θ = prev_θ = max(0.3 * prev_θ, ndz / ndzprev)` (carried across steps and reset
+on `reinit!` or parameter, table, or state writes) and `η = θ / (1 - θ)`; convergence holds
+when `η >= 0 && η * ndz < κ` or at the floating-point precision limit
+`|θ - 1| ≤ 100 * sqrt(eps(T))` when `ndz ≤ 1` (using type-faithful `eps(T)` rather than
+`Float64` promotion, leaving `prev_θ` unchanged, and keeping the already-applied `ndz ≤ 1`
+update).
+
+Unsupported `NLNewton` keywords (`fast_convergence_cutoff`, `new_W_dt_cutoff`,
+`always_new`, `relax`, `predictor`) throw `ArgumentError` explaining why they are not
+honored.
+"""
+struct LatticeNewton{K}
+    κ::K
+    max_iter::Int
+    check_div::Bool
+    function LatticeNewton(κ, max_iter, check_div)
+        κ isa Real && !(κ isa Bool) && isfinite(κ) && κ > 0 ||
+            throw(ArgumentError("LatticeNewton: κ = $(repr(κ)) must be a finite positive number"))
+        max_iter isa Integer && !(max_iter isa Bool) && max_iter >= 1 ||
+            throw(ArgumentError("LatticeNewton: max_iter = $(repr(max_iter)) is the most Newton iterations per step, an integer ≥ 1 (leave `nlsolve = nothing` on the solver algorithm for the automatic count)"))
+        check_div isa Bool ||
+            throw(ArgumentError("LatticeNewton: check_div = $(repr(check_div)) must be a Bool (`true` or `false`)"))
+        return new{typeof(κ)}(κ, Int(max_iter), check_div)
+    end
+end
+function LatticeNewton(; κ = 1 // 100, max_iter = 10, check_div = true, kw...)
+    if !isempty(kw)
+        reasons = String[]
+        for k in keys(kw)
+            if k in (:fast_convergence_cutoff, :new_W_dt_cutoff, :always_new, :relax, :predictor)
+                push!(reasons, "`$k` drives OrdinaryDiffEq's adaptive host loop with host waits and step-size control, which no-wait fixed-step owned steppers do not use")
+            else
+                push!(reasons, "unknown keyword `$k`")
+            end
+        end
+        throw(
+            ArgumentError(
+                string(
+                    "LatticeNewton: unsupported keyword", length(kw) == 1 ? "" : "s", " ",
+                    join(("`$k`" for k in keys(kw)), ", "), ": ", join(reasons, "; "),
+                    "; honored keywords are `κ`, `max_iter`, and `check_div`"
+                )
+            )
+        )
+    end
+    return LatticeNewton(κ, max_iter, check_div)
+end
+Base.:(==)(a::LatticeNewton, b::LatticeNewton) =
+    a.κ == b.κ && a.max_iter == b.max_iter && a.check_div == b.check_div
+Base.hash(a::LatticeNewton, h::UInt) = hash((a.κ, a.max_iter, a.check_div), hash(:LatticeNewton, h))
+function Base.show(io::IO, n::LatticeNewton)
+    kw = String[]
+    n.κ == 1 // 100 || push!(kw, string("κ = ", repr(n.κ)))
+    n.max_iter == 10 || push!(kw, string("max_iter = ", repr(n.max_iter)))
+    n.check_div || push!(kw, "check_div = false")
+    return isempty(kw) ? print(io, "LatticeNewton()") : print(io, "LatticeNewton(; ", join(kw, ", "), ")")
+end
+
+"""
+    BackwardEuler(; substeps = nothing, nlsolve = nothing, lower_bound = nothing,
                     linsolve = :auto, solver_type = :auto, init = nothing, compute_type = :auto)
 
 Backward Euler: each window `dt` runs `n` substeps of `h = dt / n`, each solving
@@ -125,7 +216,7 @@ r(u_k)`, `J̃` the group's operator (diffusion faces, linear local terms, face a
 conditions; a front end extracts it: `OperatorSpec`), each a linear solve with `linsolve`, and
 `u_{k+1} = u_k + δ`. An operator that reads the time is built at each substep's end time. One
 type for both front ends (Potts and LatticePDE export this binding). On a hexagonal lattice
-the operator has the lattice's six faces (F3-20).
+the operator has the lattice's six faces.
 
 - The window `dt` is the `dt` keyword of `solve`, as for [`ExplicitEuler`](@ref) (required on
   a `FieldProblem` without a clock; in a `PottsProblem` the window is the MCS).
@@ -134,21 +225,22 @@ the operator has the lattice's six faces (F3-20).
   ≥ half its `1/h` part; the terms out of the operator, with their bound `ρ_in`, take
   `n ≥ ⌈2 dt ρ_in⌉`, so their correction contracts by `≤ 1/2` per iteration); `n ≥ 1` is a
   minimum.
-- `newton`: the Newton iterations per substep; `nothing` is automatic: 1 when the operator is
-  exact (one solve is the Backward Euler step of a linear rate), 2 with a switch
+- `nlsolve`: [`LatticeNewton`](@ref) or `nothing`. `nothing` keeps the automatic count: 1 when
+  the operator is exact (one solve is the Backward Euler step of a linear rate), 2 with a switch
   `max(c − c_T, 0)` (a flip pass: the second iteration takes the switch state at the first's
   result; it is no convergence test, so it counts no budget hit), more when a term stays out
   of the operator (a defect correction, `OperatorSpec`: advection, a cycle among the group's
   fields, a Robin face whose diagonal is negative, a second face coefficient of a scaled row),
-  enough for the bound of those terms, 4 when no bound sees one. Under the automatic count a
-  host (CPU) executor stops a substep's iterations once every row meets the Newton tolerance,
-  while a device runs all of them, so CPU and GPU results agree to that tolerance, not
-  bitwise. `k ≥ 1` runs exactly `k`.
+  enough for the bound of those terms, 4 when no bound sees one. `LatticeNewton(; κ, max_iter, check_div)`
+  runs at most `max_iter` iterations per substep, stops early once the group meets the
+  `NLNewton` rate-scaled criterion (weighted by `abstol` and `reltol` from `solve`), and
+  ends with `ReturnCode.ConvergenceFailure` at the window end on a budget hit when
+  `check_div = true` (or accepts as `ReturnCode.Success` when `check_div = false`).
 - `lower_bound`: the clip `max(v, lower_bound)` after each substep (a positivity route; Backward Euler
   keeps nonnegative data nonnegative on M-matrix rows, so it is rarely needed).
-- `linsolve`: the linear solver: `:auto` (`DevicePCG()` with one V(2,2) cycle, `maxiters = 8`), a
-  `DevicePCG(…)` or a `Multigrid(…)` (each row's own solve, the terms out of its operator
-  corrected by the Newton iterations). `DeviceGMRES(…)` is `QuasiSteady`'s only (the coupled
+- `linsolve`: the linear solver: `:auto` (`LatticePCG()` with one V(2,2) cycle, `maxiters = 8`),
+  `LatticePCG(…)`, `LatticeMultigrid(…)`, or any LinearSolve algorithm (such as
+  `KLUFactorization()` on the host). `LatticeGMRES(…)` is `QuasiSteady`'s only (the coupled
   steady solve); a time stepper refuses it.
 - `solver_type`: the solver's number type, `:auto` (the state's), `Float32` or `Float64`.
 - `compute_type`: the number type the group's kernels (rate, residual, operator, update) compute
@@ -160,7 +252,7 @@ the operator has the lattice's six faces (F3-20).
   `lattice_storage = Float64`), naming the field and the routes.
 - `init = :steady`: before the first window (at `init`, and again at `reinit!`), solve the
   group's steady state `0 = r(u)` once with [`QuasiSteady`](@ref), from the initial state at the
-  start time and with this algorithm's `linsolve` and `solver_type` (`:auto` takes `DevicePCG` to
+  start time and with this algorithm's `linsolve` and `solver_type` (`:auto` takes `LatticePCG` to
   `reltol = 1e-6` within 64 iterations), then step from it. The steady state must exist and be
   unique, as for `QuasiSteady` (a growth or a field with no decay and no fixed value is refused);
   a steady solve that fails ends the run with `ReturnCode.ConvergenceFailure`. Every field
@@ -170,28 +262,34 @@ Every value is checked here; a wrong one is an `ArgumentError` naming the keywor
 """
 struct BackwardEuler <: AbstractImplicitFieldAlgorithm
     substeps::Union{Nothing, Int}
-    newton::Union{Nothing, Int}
+    nlsolve::Union{Nothing, LatticeNewton}
     lower_bound::Union{Nothing, Float64}
     linsolve::Any
     solver_type::Any
     init::Union{Nothing, Symbol}
     compute_type::Any
-    BackwardEuler(substeps, newton, lower_bound, linsolve, solver_type, init = nothing, compute_type = :auto) =
+    BackwardEuler(substeps, nlsolve, lower_bound, linsolve, solver_type, init = nothing, compute_type = :auto) =
         new(
-        _implicit_keywords("BackwardEuler", substeps, newton, lower_bound, linsolve, solver_type)..., _init_keyword("BackwardEuler", init),
+        _implicit_keywords("BackwardEuler", substeps, nlsolve, lower_bound, linsolve, solver_type)..., _init_keyword("BackwardEuler", init),
         _compute_keyword("BackwardEuler", compute_type)
     )
 end
 # The keywords of a time-stepping implicit algorithm, each checked (an `ArgumentError` naming
 # the keyword) and converted (`w` names the algorithm in the messages)
-function _implicit_keywords(w, substeps, newton, lower_bound, linsolve, solver_type)
+function _implicit_keywords(w, substeps, nlsolve, lower_bound, linsolve, solver_type)
     substeps isa Integer && !(substeps isa Bool) && substeps == 0 && throw(ArgumentError(
         "$w: `substeps = 0` is not a count; leave `substeps` out for the automatic count"))
     substeps === nothing || (substeps isa Integer && !(substeps isa Bool) && substeps >= 1) ||
         throw(ArgumentError("$w: substeps = $(repr(substeps)) must be an integer ≥ 1 (or left out: automatic)"))
-    newton === nothing || (newton isa Integer && !(newton isa Bool) && newton >= 1) ||
-        throw(ArgumentError("$w: newton = $(repr(newton)) is the Newton iterations per substep, an integer ≥ 1 " *
-                            "(or left out: automatic)"))
+    nlsolve === nothing || nlsolve isa LatticeNewton ||
+        throw(
+        ArgumentError(
+            string(
+                "$w: nlsolve = $(repr(nlsolve)) must be `nothing` (automatic) or a `LatticeNewton(; κ, max_iter, check_div)`",
+                nlsolve isa Integer && !(nlsolve isa Bool) ? "; give `nlsolve = LatticeNewton(; max_iter = $(Int(nlsolve)))`" : ""
+            )
+        )
+    )
     lower_bound === nothing || lower_bound isa Real && !(lower_bound isa Bool) && isfinite(lower_bound) ||
         throw(
         ArgumentError(
@@ -199,22 +297,22 @@ function _implicit_keywords(w, substeps, newton, lower_bound, linsolve, solver_t
                 "clips nothing or every value; leave `lower_bound` out for no clip)"
         )
     )
-    # (`DeviceGMRES` is the coupled steady solve's: on a time stepper it was slower in every case
-    # measured, F3-12d r1, user ruling 2026-11-03)
-    linsolve isa Solvers.DeviceGMRES && w != "QuasiSteady" && throw(
+    # (`LatticeGMRES` is the coupled steady solve's: on a time stepper it was slower in every case
+    # measured, user ruling 2026-11-03)
+    linsolve isa Solvers.LatticeGMRES && w != "QuasiSteady" && throw(
         ArgumentError(
             string(
                 w, ": `linsolve = ", repr(linsolve),
         "` is the solver of a coupled steady group (`QuasiSteady`, whose fields read one another); a time stepper ",
-                "solves each field with `DevicePCG(…)` (the default) or `Multigrid(…)`: leave `linsolve` out, or give ",
-                "`linsolve = DevicePCG(; maxiters = n)`"
+                "solves each field with `LatticePCG(…)` (the default) or `LatticeMultigrid(…)`: leave `linsolve` out, or give ",
+                "`linsolve = LatticePCG(; maxiters = n)`"
             )
         )
     )
-    linsolve === :auto || linsolve isa Solvers.DevicePCG || linsolve isa Solvers.Multigrid || linsolve isa Solvers.DeviceGMRES ||
+    linsolve === :auto || linsolve isa LinearSolve.SciMLLinearSolveAlgorithm ||
         throw(
         ArgumentError(
-            "$w: `linsolve` takes `:auto`, a `DevicePCG(…)`" * (w == "QuasiSteady" ? ", a `Multigrid(…)` or a `DeviceGMRES(…)`" : " or a `Multigrid(…)`") * " (the " *
+            "$w: `linsolve` takes `:auto`, a `LatticePCG(…)`" * (w == "QuasiSteady" ? ", a `LatticeMultigrid(…)` or a `LatticeGMRES(…)`" : " or a `LatticeMultigrid(…)`") * " (the " *
                 "linear solver of each implicit step); got $(repr(linsolve))"
         )
     )
@@ -230,27 +328,27 @@ function _implicit_keywords(w, substeps, newton, lower_bound, linsolve, solver_t
     )
     return (
         substeps === nothing ? nothing : Int(substeps),
-        newton === nothing ? nothing : Int(newton), lower_bound === nothing ? nothing : Float64(lower_bound), linsolve, solver_type,
+        nlsolve, lower_bound === nothing ? nothing : Float64(lower_bound), linsolve, solver_type,
     )
 end
 function _implicit_kwerror(w, kw)
     return ArgumentError(string(w, ": no keyword ", join(("`$k`" for k in keys(kw)), ", "),
-            "; its keywords are `substeps`, `newton`, `lower_bound`, `linsolve`, `solver_type`, `init` and `compute_type`",
+            "; its keywords are `substeps`, `nlsolve`, `lower_bound`, `linsolve`, `solver_type`, `init` and `compute_type`",
             _dt_text(kw)
         )
     )
 end
 function BackwardEuler(;
-        substeps = nothing, newton = nothing, lower_bound = nothing, linsolve = :auto,
+        substeps = nothing, nlsolve = nothing, lower_bound = nothing, linsolve = :auto,
         solver_type = :auto, init = nothing, compute_type = :auto, kw...
     )
     isempty(kw) || throw(_implicit_kwerror("BackwardEuler", kw))
-    return BackwardEuler(substeps, newton, lower_bound, linsolve, solver_type, init, compute_type)
+    return BackwardEuler(substeps, nlsolve, lower_bound, linsolve, solver_type, init, compute_type)
 end
 nbuffers(::BackwardEuler) = 2
 
 """
-    CrankNicolson(; substeps = nothing, newton = nothing, lower_bound = nothing,
+    CrankNicolson(; substeps = nothing, nlsolve = nothing, lower_bound = nothing,
                     linsolve = :auto, solver_type = :auto, init = nothing, compute_type = :auto)
 
 Crank–Nicolson (the trapezoidal rule, second order): each substep of `h = dt / n` solves
@@ -273,29 +371,29 @@ field, [`BackwardEuler`](@ref) needs no clip). The keywords are those of
 """
 struct CrankNicolson <: AbstractImplicitFieldAlgorithm
     substeps::Union{Nothing, Int}
-    newton::Union{Nothing, Int}
+    nlsolve::Union{Nothing, LatticeNewton}
     lower_bound::Union{Nothing, Float64}
     linsolve::Any
     solver_type::Any
     init::Union{Nothing, Symbol}
     compute_type::Any
-    CrankNicolson(substeps, newton, lower_bound, linsolve, solver_type, init = nothing, compute_type = :auto) =
+    CrankNicolson(substeps, nlsolve, lower_bound, linsolve, solver_type, init = nothing, compute_type = :auto) =
         new(
-        _implicit_keywords("CrankNicolson", substeps, newton, lower_bound, linsolve, solver_type)..., _init_keyword("CrankNicolson", init),
+        _implicit_keywords("CrankNicolson", substeps, nlsolve, lower_bound, linsolve, solver_type)..., _init_keyword("CrankNicolson", init),
         _compute_keyword("CrankNicolson", compute_type)
     )
 end
 function CrankNicolson(;
-        substeps = nothing, newton = nothing, lower_bound = nothing, linsolve = :auto,
+        substeps = nothing, nlsolve = nothing, lower_bound = nothing, linsolve = :auto,
         solver_type = :auto, init = nothing, compute_type = :auto, kw...
     )
     isempty(kw) || throw(_implicit_kwerror("CrankNicolson", kw))
-    return CrankNicolson(substeps, newton, lower_bound, linsolve, solver_type, init, compute_type)
+    return CrankNicolson(substeps, nlsolve, lower_bound, linsolve, solver_type, init, compute_type)
 end
 nbuffers(::CrankNicolson) = 2
 
 """
-    BDF2(; substeps = nothing, newton = nothing, lower_bound = nothing,
+    BDF2(; substeps = nothing, nlsolve = nothing, lower_bound = nothing,
            linsolve = :auto, solver_type = :auto, init = nothing, compute_type = :auto)
 
 The two-step backward differentiation formula (second order, L-stable): each substep of
@@ -316,42 +414,44 @@ both front ends.
 """
 struct BDF2 <: AbstractImplicitFieldAlgorithm
     substeps::Union{Nothing, Int}
-    newton::Union{Nothing, Int}
+    nlsolve::Union{Nothing, LatticeNewton}
     lower_bound::Union{Nothing, Float64}
     linsolve::Any
     solver_type::Any
     init::Union{Nothing, Symbol}
     compute_type::Any
-    BDF2(substeps, newton, lower_bound, linsolve, solver_type, init = nothing, compute_type = :auto) =
+    BDF2(substeps, nlsolve, lower_bound, linsolve, solver_type, init = nothing, compute_type = :auto) =
         new(
-        _implicit_keywords("BDF2", substeps, newton, lower_bound, linsolve, solver_type)..., _init_keyword("BDF2", init),
+        _implicit_keywords("BDF2", substeps, nlsolve, lower_bound, linsolve, solver_type)..., _init_keyword("BDF2", init),
         _compute_keyword("BDF2", compute_type)
     )
 end
 function BDF2(;
-        substeps = nothing, newton = nothing, lower_bound = nothing, linsolve = :auto,
+        substeps = nothing, nlsolve = nothing, lower_bound = nothing, linsolve = :auto,
         solver_type = :auto, init = nothing, compute_type = :auto, kw...
     )
     isempty(kw) || throw(_implicit_kwerror("BDF2", kw))
-    return BDF2(substeps, newton, lower_bound, linsolve, solver_type, init, compute_type)
+    return BDF2(substeps, nlsolve, lower_bound, linsolve, solver_type, init, compute_type)
 end
 nbuffers(::BDF2) = 2
 
 """
-    QuasiSteady(; newton = nothing, linsolve = :auto, solver_type = :auto, init = nothing, compute_type = :auto)
+    QuasiSteady(; nlsolve = nothing, linsolve = :auto, solver_type = :auto, init = nothing, compute_type = :auto)
 
-The steady state of a group in each window (F3 design §3.5): `0 = r(u)`, solved once per
+The steady state of a group in each window: `0 = r(u)`, solved once per
 window at the window's start time (A: at the σ of that MCS; B: at the integrator's inputs) by
 the Newton iterations of [`BackwardEuler`](@ref) with no time-step term, `−J̃ δ = r(u_k)`, from
 the field's current values (the previous window's solution: a warm start). A field stepped
 this way follows the inputs at once, as a steady field does.
 
 - The window `dt`: as for [`BackwardEuler`](@ref).
-- `newton`: the Newton iterations per window; `nothing` is automatic: 1 for a linear group
-  whose operator is exact (one linear solve is the steady state), else 8 (a nonlinear or
-  switched row, a term out of the operator), each checked on the device: the run stops early
-  on a CPU once the correction is below `10⁻³` of the field, and a budget hit is counted and
-  warned. `k ≥ 1` runs exactly `k`.
+- `nlsolve`: [`LatticeNewton`](@ref) or `nothing`. `nothing` keeps the automatic count: 1 for a
+  linear group whose operator is exact (one linear solve is the steady state), else 8 (a
+  nonlinear or switched row, a term out of the operator), each checked on the device.
+  `LatticeNewton(; κ, max_iter, check_div)` runs at most `max_iter` iterations per window,
+  stops early on the `NLNewton` rate-scaled tolerance, and ends with
+  `ReturnCode.ConvergenceFailure` on a budget hit when `check_div = true` (or accepts when
+  `check_div = false`).
 - `linsolve`, `solver_type`, `compute_type`: as for [`BackwardEuler`](@ref).
 - `init = :steady`: the initial state too is the steady state (one more solve before the first
   window, as for [`BackwardEuler`](@ref)); without it the state at the start time is the initial
@@ -360,8 +460,8 @@ this way follows the inputs at once, as a steady field does.
 Steady rows that read one another (a cycle in the group, a cross diffusion `Δ(b)` in a's row,
 or a term the operator does not see, such as `c²` in `0 ~ q − c²`) are solved together: one
 Newton iteration solves all of them with every cross term in the operator, by a restarted
-flexible GMRES (`linsolve = DeviceGMRES(; gmres_restart = 20, maxiters = 60, reltol = 1e-6)`
-under `:auto`; a `DevicePCG` or `Multigrid` given here is its preconditioner), with each
+flexible GMRES (`linsolve = LatticeGMRES(; gmres_restart = 20, maxiters = 60, reltol = 1e-6)`
+under `:auto`; a `LatticePCG` or `LatticeMultigrid` given here is its preconditioner), with each
 row's own solve as the preconditioner. There is no gain limit: two steady fields in one
 `QuasiSteady` may read each other as strongly as their steady state allows. Give the fields of
 such a loop one `QuasiSteady`: two steady groups that read each other are lagged by a window,
@@ -376,7 +476,7 @@ bitwise. On a GPU it waits for each dot product of its GMRES (Krylov.jl solves t
 least-squares problem on the host), so a coupled steady group adds about 100–250 GPU waits per
 window, where every other field solve waits for none.
 
-There is no `substeps` (one solve per window; `newton` sets the work) and no `lower_bound` (a steady
+There is no `substeps` (one solve per window; `nlsolve` sets the Newton iterations) and no `lower_bound` (a steady
 solve has no substep to clip). The steady state must exist and be unique: a positive local
 derivative the operator sees (a growth `+ g c`) is refused at build and at every parameter
 write (a growing row's steady state is unstable or not unique: step it with
@@ -389,20 +489,23 @@ value in that region). One type for both front ends.
 """
 struct QuasiSteady <: AbstractImplicitFieldAlgorithm
     substeps::Nothing                   # (none: one solve per window)
-    newton::Union{Nothing, Int}
+    nlsolve::Union{Nothing, LatticeNewton}
     lower_bound::Nothing                      # (none: no substep to clip)
     linsolve::Any
     solver_type::Any
     init::Union{Nothing, Symbol}
     compute_type::Any
-    function QuasiSteady(newton, linsolve, solver_type, init = nothing, compute_type = :auto)
-        _, k, _, i, T = _implicit_keywords("QuasiSteady", nothing, newton, nothing, linsolve, solver_type)
+    function QuasiSteady(nlsolve, linsolve, solver_type, init = nothing, compute_type = :auto)
+        _, k, _, i, T = _implicit_keywords("QuasiSteady", nothing, nlsolve, nothing, linsolve, solver_type)
         return new(nothing, k, nothing, i, T, _init_keyword("QuasiSteady", init), _compute_keyword("QuasiSteady", compute_type))
     end
 end
-function QuasiSteady(; newton = nothing, linsolve = :auto, solver_type = :auto, init = nothing, compute_type = :auto, kw...)
+function QuasiSteady(; nlsolve = nothing, linsolve = :auto, solver_type = :auto, init = nothing, compute_type = :auto, kw...)
     haskey(kw, :substeps) && throw(ArgumentError(string("QuasiSteady: no keyword `substeps`: a steady field is solved ",
-        "once per window; give `newton = k` for more Newton iterations per window")))
+                "once per window; give `nlsolve = LatticeNewton(; max_iter = k)` for more Newton iterations per window"
+            )
+        )
+    )
     haskey(kw, :lower_bound) && throw(
         ArgumentError(
             string(
@@ -410,11 +513,11 @@ function QuasiSteady(; newton = nothing, linsolve = :auto, solver_type = :auto, 
         "clip (a steady state below a bound means the equation allows it; `BackwardEuler` keeps nonnegative data ",
         "nonnegative)")))
     isempty(kw) || throw(ArgumentError(string("QuasiSteady: no keyword ", join(("`$k`" for k in keys(kw)), ", "),
-                "; its keywords are `newton`, `linsolve`, `solver_type`, `init` and `compute_type`", _dt_text(kw)
+                "; its keywords are `nlsolve`, `linsolve`, `solver_type`, `init` and `compute_type`", _dt_text(kw)
             )
         )
     )
-    return QuasiSteady(newton, linsolve, solver_type, init, compute_type)
+    return QuasiSteady(nlsolve, linsolve, solver_type, init, compute_type)
 end
 nbuffers(::QuasiSteady) = 2
 
@@ -548,10 +651,10 @@ step_retcode!(::Nothing, rt) = SciMLBase.ReturnCode.Success
 
 
 """
-The linear solvers (`Solvers.DevicePCG`, `Solvers.Multigrid`, `Solvers.DeviceGMRES`): the `linsolve` of an implicit
+The linear solvers (`Solvers.LatticePCG`, `Solvers.LatticeMultigrid`, `Solvers.LatticeGMRES`): the `linsolve` of an implicit
 field solver, never a field algorithm themselves.
 """
-const LinearSolver = Union{Solvers.DevicePCG, Solvers.Multigrid, Solvers.DeviceGMRES}
+const LinearSolver = Union{Solvers.LatticePCG, Solvers.LatticeMultigrid, Solvers.LatticeGMRES}
 
 """
     linear_solver_refusal(what, s, route) -> ArgumentError
@@ -634,14 +737,13 @@ SciMLBase.alg_order(g::FieldGroups) =
 """
     canonical(alg) -> String
 
-The one canonical text of a field algorithm (or of a solver part: `DevicePCG`, `Multigrid`,
-`VCycle`, `:auto`, a number), the text both front ends' fingerprints hash (F3 design §3.7): what
+The one canonical text of a field algorithm (or of a solver part: `LatticePCG`, `LatticeMultigrid`,
+`VCycle`, `:auto`, a number), the text both front ends' fingerprints hash: what
 the algorithm is, not the host object, so equal specifications built afresh print alike.
 `ExplicitEuler` prints `ExplicitEuler(substeps=…,lower_bound=…)`; another algorithm prints
 every field, sorted by
 name, each by `canonical`; `:auto` prints as given (`:auto`, unresolved, so a CPU and a
-device problem print alike). `init = nothing` and `compute_type = :auto` (the defaults added
-in F3) are left out, so the texts recorded before them stay. A `FieldGroups` prints its pairs as given (a front end that
+device problem print alike). `init = nothing` and `compute_type = :auto` (the defaults) are left out, so the texts recorded before them stay. A `FieldGroups` prints its pairs as given (a front end that
 resolves it per field, front end A, prints the per-field map instead).
 """
 canonical(s::ExplicitEuler) = string(
@@ -652,14 +754,66 @@ canonical(m::ExplicitMap) = m.compute_type === :auto ? "ExplicitMap()" : string(
 canonical(g::FieldGroups) = string("FieldGroups(", join((string(k, "=", canonical(a)) for (k, a) in g.pairs), ","),
     ";default=", g.default === nothing ? "nothing" : canonical(g.default), ")")
 canonical(a::AbstractFieldAlgorithm) = _canonical_fields(a)
-canonical(s::Union{Solvers.DevicePCG, Solvers.Multigrid, Solvers.DeviceGMRES}) = _canonical_fields(s)
+canonical(s::Union{Solvers.LatticePCG, Solvers.LatticeGMRES}) = _canonical_fields(Solvers.owned(s))
 canonical(v::Solvers.VCycle) = "VCycle($(v.nu1),$(v.nu2))"
+function canonical(m::LatticeMultigrid)
+    o = Solvers.owned(m)
+    return string(
+        "LatticeMultigrid(cycle=", canonical(o.cycle), ",cycles=", canonical(o.cycles),
+        ",maxiters=", canonical(o.maxiters), ",reltol=", canonical(o.reltol),
+        ",warn_tol=", canonical(o.warn_tol), ")",
+    )
+end
+canonical(b::LatticeBlockSolve) = string("LatticeBlockSolve(linsolve=", canonical(b.linsolve), ")")
+canonical(n::LatticeNewton) = string("LatticeNewton(κ=", canonical(n.κ), ",max_iter=", canonical(n.max_iter), ",check_div=", n.check_div, ")")
 canonical(s::Symbol) = repr(s)
 canonical(::Nothing) = "nothing"
 canonical(x::Union{Number, AbstractString}) = repr(x)
 canonical(::Type{T}) where {T} = string(T)
-canonical(x) = throw(ArgumentError("no canonical text for $(repr(x)) (a `$(typeof(x))`): a field algorithm's " *
-                                   "keywords are numbers, symbols, types or solver parts"))
+canonical(x) = _canonical_value(x, 0)
+
+const _CANONICAL_DEPTH = 8
+_canonical_type(T) = sprint(show, T; context = :module => Core)
+const _CanonicalKnown = Union{
+    AbstractFieldAlgorithm,
+    Solvers.LatticePCG,
+    Solvers.LatticeGMRES,
+    Solvers.VCycle,
+    LatticeMultigrid,
+    LatticeBlockSolve,
+    LatticeNewton,
+    Symbol,
+    Nothing,
+    Number,
+    AbstractString,
+    Type,
+}
+function _canonical_value(x, depth::Int)
+    x isa _CanonicalKnown && return canonical(x)
+    T = typeof(x)
+    (x isa Union{Enum, Missing, AbstractRange} || isprimitivetype(T)) &&
+        return string(_canonical_type(T), ":", repr(x))
+    container = x isa Union{AbstractDict, AbstractSet, Tuple, NamedTuple, AbstractArray}
+    !container && (!isstructtype(T) || fieldcount(T) == 0) && return _canonical_type(T)
+    depth > _CANONICAL_DEPTH && throw(
+        ArgumentError(
+            "no canonical text for $(repr(x)) (a `$T`): value nested deeper than $_CANONICAL_DEPTH levels or cyclic"
+        )
+    )
+    item(v) = _canonical_value(v, depth + 1)
+    x isa AbstractDict && return string(
+        _canonical_type(T), "{",
+        join(sort!([string(item(k), "=>", item(v)) for (k, v) in pairs(x)]), ","), "}"
+    )
+    x isa AbstractSet && return string(_canonical_type(T), "{", join(sort!([item(v) for v in x]), ","), "}")
+    container && return string(
+        _canonical_type(T), "[", join((string(k, "=", item(v)) for (k, v) in pairs(x)), ","), "]"
+    )
+    return string(
+        _canonical_type(T), "(",
+        join((string(f, "=", item(getfield(x, f))) for f in sort!(collect(fieldnames(T))) if isdefined(x, f)), ","), ")"
+    )
+end
 _canonical_fields(s) = string(nameof(typeof(s)), "(",
     join((string(f, "=", canonical(getfield(s, f))) for f in sort!(collect(fieldnames(typeof(s))))
                 if !(f === :init && getfield(s, f) === nothing) && !(f === :compute_type && getfield(s, f) === :auto)
@@ -674,7 +828,7 @@ function _algtext(a::ExplicitEuler)
     return isempty(kw) ? "ExplicitEuler()" : string("ExplicitEuler(; ", join(kw, ", "), ")")
 end
 function _algtext(a::Union{BackwardEuler, CrankNicolson, BDF2, QuasiSteady})
-    kw = [string(k, " = ", repr(getfield(a, k))) for k in (:substeps, :newton, :lower_bound) if getfield(a, k) !== nothing]
+    kw = [string(k, " = ", repr(getfield(a, k))) for k in (:substeps, :nlsolve, :lower_bound) if getfield(a, k) !== nothing]
     a.linsolve === :auto || push!(kw, string("linsolve = ", repr(a.linsolve)))
     a.solver_type === :auto || push!(kw, string("solver_type = ", a.solver_type))
     a.init === nothing || push!(kw, string("init = ", repr(a.init)))

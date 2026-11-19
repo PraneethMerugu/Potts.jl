@@ -184,7 +184,7 @@ end
     # the owned BackwardEuler run tends to it at first order as dt halves
         e(dt) = maximum(
             abs, solve(
-                prob, BackwardEuler(; substeps = 1, linsolve = DevicePCG(; reltol = 1.0e-10, maxiters = 200)),
+                prob, BackwardEuler(; substeps = 1, linsolve = LatticePCG(; reltol = 1.0e-10, maxiters = 200)),
                 saveat = 0.05; dt
             ).u[end] .- s.u[end]
         )

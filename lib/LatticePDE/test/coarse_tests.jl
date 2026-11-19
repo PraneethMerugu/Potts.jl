@@ -79,7 +79,7 @@ end
         for alg in (
                 ExplicitEuler(), BackwardEuler(), CrankNicolson(), BDF2(),
                 BackwardEuler(; init = :steady), ExplicitEuler(; lower_bound = 0.0),
-                BackwardEuler(; linsolve = Multigrid(; cycles = 4)),
+                BackwardEuler(; linsolve = LatticeMultigrid(; cycles = 4)),
             )
             ic, ih = init(pc, alg; dt = 0.05), init(ph, alg; dt = 0.05)
             for n in 1:6

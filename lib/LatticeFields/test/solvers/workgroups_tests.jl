@@ -42,7 +42,7 @@ end
 @testset "workgroup launches: reversed items give the same bits" begin
     for (case, kw) in ((named_case("sphere42", 0.022), (;)),
         (named_case("per256", 0.022), (;)),
-                (named_case("disk128", 1.9e-3), (; linsolve = Multigrid())),
+                (named_case("disk128", 1.9e-3), (; linsolve = LatticeMultigrid())),
             )
         a = solved(case, HostExec(); kw...)
         HOST_REVERSE[] = true

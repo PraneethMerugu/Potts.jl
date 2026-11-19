@@ -29,19 +29,20 @@ end
     @testset "field libraries: the keywords of the algorithm constructors are ASCII" begin
         P, S = LF.Problems, LF.Solvers
         ctors = (
-            P.ExplicitEuler, P.ExplicitMap, P.BackwardEuler, P.CrankNicolson, P.BDF2, P.QuasiSteady, P.FieldGroups,
-            S.DevicePCG, S.DeviceGMRES, S.Multigrid, LP.LatticeDiscretization,
+            P.ExplicitEuler, P.ExplicitMap, P.LatticeNewton, P.BackwardEuler, P.CrankNicolson, P.BDF2, P.QuasiSteady, P.FieldGroups,
+            S.LatticePCG, S.LatticeGMRES, S.LatticeMultigrid, LP.LatticeDiscretization,
         )
         kwargs(f) = unique!(reduce(vcat, (Base.kwarg_decl(m) for m in methods(f)); init = Symbol[]))
         for f in ctors
             kws = kwargs(f)
             @test !isempty(kws) || f === P.ExplicitMap
-            @test all(k -> isascii(String(k)), kws) || (println(f, ": ", kws); false)
+            @test all(k -> isascii(String(k)) || (f === P.LatticeNewton && k === :κ), kws) || (println(f, ": ", kws); false)
         end
         # the solver keywords have their SciML names; the window `dt` is a keyword of `solve`
         @test :linsolve in kwargs(P.BackwardEuler)
-        @test :maxiters in kwargs(S.DevicePCG) && :reltol in kwargs(S.DevicePCG)
-        @test :gmres_restart in kwargs(S.DeviceGMRES)
+        @test :κ in kwargs(P.LatticeNewton) && :max_iter in kwargs(P.LatticeNewton) && :check_div in kwargs(P.LatticeNewton)
+        @test :maxiters in kwargs(S.LatticePCG) && :reltol in kwargs(S.LatticePCG)
+        @test :gmres_restart in kwargs(S.LatticeGMRES)
         @test :dt ∉ kwargs(P.ExplicitEuler)
     end
 end
@@ -52,9 +53,9 @@ end
         removed = (
             LF.Problems => (:FieldAlgorithm, :ImplicitAlgorithm, :PolicyTexts, :LatticeMG),
             LF.IR => (:BRule,),
-            LF.Solvers => (:V,),
-            LP => (:at, :at2, :AdvectionScheme, :jacobian_sparsity, :LatticeMG, :PottsEntity, :get_potts_entity),
-            Potts => (:at, :at2),
+            LF.Solvers => (:V, :Multigrid),
+            LP => (:at, :at2, :AdvectionScheme, :jacobian_sparsity, :LatticeMG, :PottsEntity, :get_potts_entity, :Multigrid),
+            Potts => (:at, :at2, :Multigrid),
         )
         for (mod, ns) in removed, n in ns
             @test !isdefined(mod, n) || (println(mod, ".", n, " is still defined"); false)

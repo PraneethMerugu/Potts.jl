@@ -195,16 +195,17 @@ function _implicit_facts(alg, c, keys)
     c = _primal_cache(c)
     c isa ImplicitCache || return nothing
     sv = [r.solver for r in c.rows if r.solver !== nothing]
+    algs = unique(Any[r.solver !== nothing ? Solvers.public_form(r.solver.alg) : r.lin.alg for r in c.rows if r.solver !== nothing || r.lin !== nothing])
     rows = [r for r in c.op.rows if r.key in c.keys]
     return ImplicitFacts(
         (
-            collect(String, keys), unique(Any[s.alg for s in sv]), c.cs === nothing ? nothing : _krylov(alg.linsolve),
-        unique([length(s.prog.hierarchy) for s in sv]), unique(Type[s.T for s in sv]), c.newton, alg.newton !== nothing,
+            collect(String, keys), algs, c.cs === nothing ? nothing : _krylov(alg.linsolve),
+            unique([length(s.prog.hierarchy) for s in sv]), unique(Type[s.T for s in sv]), c.newton, !c.auto,
         c.cs !== nothing, c.cs !== nothing && c.cs.linear, c.exact, c.exact0, c.switch, c.iterate, c.seen, c.cyclic, c.h,
         c.ρin, c.θ, c.smin, unique([t for r in rows for t in r.inexact]), unique([t for r in rows for t in r.unseen])))
 end
 function _newton_text(alg, f)
-    f.given && return string(f.newton, ": given (`newton = ", f.newton, "`)")
+    f.given && return string(f.newton, ": given (`nlsolve = ", repr(alg.nlsolve), "`)")
     w = string(f.newton, ", automatic: ")
     f.coupled && return string(w, "the coupled solve's operator is the whole Jacobian (",
         f.linear ? "linear: one solve" : alg isa QuasiSteady ? "nonlinear steady: $QS_NEWTON checked" : "nonlinear", ")")
@@ -253,9 +254,9 @@ function _given_lines(io, spec::GroupSpec, g::FieldGroup, alg::AbstractImplicitF
     rows = [r for r in op.rows if r.key in keys]
     inner = coupled ? string("coupled solve ", repr(_krylov(alg.linsolve))) :
             all(r -> r.local_only, rows) ? "none: every row is local (solved site by site)" :
-        alg.linsolve === :auto ? string(repr(Solvers.DevicePCG()), " (`linsolve = :auto`)") : repr(alg.linsolve)
+        alg.linsolve === :auto ? string(repr(Solvers.LatticePCG()), " (`linsolve = :auto`)") : repr(alg.linsolve)
     _line(io, "linsolve", inner)
-    _line(io, "newton", alg.newton === nothing ? "automatic (set when the group is bound)" : string(alg.newton, ": given"))
+    _line(io, "newton", alg.nlsolve === nothing ? "automatic (set when the group is bound)" : string(alg.nlsolve.max_iter, ": given (`nlsolve = ", repr(alg.nlsolve), "`)"))
     return nothing
 end
 

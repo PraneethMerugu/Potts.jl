@@ -6,13 +6,14 @@ the Any fold, the bottom V-cycle with a fixed-degree Chebyshev coarsest solve, P
 fixed V(2,2) Chebyshev cycle as preconditioner, the stationary budgeted path, the residual
 sentinel and `init = :steady`. Launch plans follow the Schedule/Exec contract.
 
-The public interface (F3-05; the front ends' `linsolve = …` vocabulary and the field solvers'
+The public interface (the front ends' `linsolve = …` vocabulary and the field solvers'
 building block): the operator `CellOperator` (faces, shift, masks with a value or a value
 field, face-Dirichlet and Robin faces), the solver `FieldSolver` with `rebuild!`, `lift!`,
 `solve!`, `steady!`, `tangent!`, `set_coefficients!`, the readers `field`, `solution_key`,
-`solver_solution`, `scalars`, `iterations`, `sentinel`, and the inner solvers `DevicePCG`, `DeviceGMRES`,
-`Multigrid`, `VCycle` (re-exported by Potts and LatticePDE). Messages name the user's field
-(`CellOperator(…; name)`).
+`solver_solution`, `scalars`, `iterations`, `sentinel`, and the inner solvers, LinearSolve.jl
+algorithms `LatticePCG`, `LatticeGMRES`, `LatticeMultigrid` (stationary multigrid and `precs`
+preconditioner), `VCycle`, `LatticeBlockSolve`, and `BoundOperator`, a field's operator as a
+`LinearProblem`'s `A`. Messages name the user's field (`CellOperator(…; name)`).
 """
 module Solvers
 
@@ -29,14 +30,23 @@ using ..Compile: LOWERING, TIME_SLOT, CompileOptions, body_function, compile_ker
 using ..Schedule: Schedule, REDUCE_PHASES, WG, reduce_lds, reduction_blocks, supports
 using ..Exec: Exec
 using KernelAbstractions: KernelAbstractions as KA
+using LinearSolve: LinearSolve
+using SciMLBase: SciMLBase
+using CommonSolve: CommonSolve
+using LinearAlgebra: LinearAlgebra
+using SparseArrays: SparseArrays
+using Krylov: Krylov
+using SciMLOperators: SciMLOperators
 
-public CellOperator, FieldSolver, DevicePCG, DeviceGMRES, Multigrid, VCycle, RuleWeights, robin_parts, rebuild!,
+public CellOperator, FieldSolver, LatticePCG, LatticeGMRES, LatticeMultigrid, LatticeBlockSolve, BoundOperator,
+    VCycle, RuleWeights, robin_parts, rebuild!,
        lift!, solve!, steady!, tangent!, set_coefficients!, field, solution_key, solver_solution,
        scalars, iterations, sentinel
 
 include("levels.jl")
 include("kernels.jl")
 include("solve.jl")
+include("linearsolve.jl")
 include("exec.jl")
 
 end # module Solvers

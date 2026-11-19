@@ -268,26 +268,26 @@ end
     end
 end
 
-# F3-05 (F3 design §3.2): the solvers' inner algorithms reach B by name, the same objects as
-# A's (test/fields.jl): `DevicePCG`, `Multigrid` exported, `LatticePDE.VCycle` public.
+# the solvers' inner algorithms reach B by name, the same objects as
+# A's (`test/fields.jl`): `LatticePCG`, `LatticeMultigrid` exported, `LatticePDE.VCycle` public.
 # Base (1079c4ff): `UndefVarError: DevicePCG`.
-@testitem "F3-05: the inner solvers in B" setup = [LP_silent] tags = [:latticepde, :silent] begin
-    @testset "F3-05: the inner solvers in B" begin
-        @test parentmodule(DevicePCG) === LatticePDE.Problems.Solvers && Multigrid === LatticePDE.Problems.Solvers.Multigrid
-        @test DevicePCG(; precond = Multigrid(; cycle = LatticePDE.VCycle(3, 3))).precond.cycle == LatticePDE.VCycle(3, 3)
+@testitem "the inner solvers in B" setup = [LP_silent] tags = [:latticepde, :silent] begin
+    @testset "the inner solvers in B" begin
+        @test parentmodule(LatticePCG) === LatticePDE.Problems.Solvers && LatticeMultigrid === LatticePDE.Problems.Solvers.LatticeMultigrid
+        @test LatticePCG(; precs = LatticeMultigrid(; cycle = LatticePDE.VCycle(3, 3))).precs.cycle == LatticePDE.VCycle(3, 3)
         @test Base.ispublic(LatticePDE, :VCycle) && !Base.isexported(LatticePDE, :VCycle)
     end
 end
 
-# F3-05 review r1 M1: a linear solver given where a field algorithm goes is refused in B's
+# a linear solver given where a field algorithm goes is refused in B's
 # words, naming it a linear solver (the `linsolve` of an implicit field solver), and the route
 # works when followed. Base (9db10886, ~/lpwork/f3b2r1-nc-b.log, 6 of 8 fail;
 # the 2 that pass are the followed routes): `solve(p, DevicePCG())`
 # is "MethodError: no method matching init(::FieldProblem…, ::DevicePCG)", `FieldGroups` says
 # "`c(t, x, y) => DevicePCG(Multigrid(LatticeFields.Solvers.V(2, 2), …` is not a field
 # algorithm", and `ExplicitEuler(; dt, linsolve)` is a MethodError.
-@testitem "F3-05: a linear solver where B takes a field algorithm" setup = [LP_silent] tags = [:latticepde, :silent] begin
-    @testset "F3-05: a linear solver where B takes a field algorithm" begin
+@testitem "a linear solver where B takes a field algorithm" setup = [LP_silent] tags = [:latticepde, :silent] begin
+    @testset "a linear solver where B takes a field algorithm" begin
         @parameters Dm1 = 0.1
         p = discretize(
             psys([D(ce) ~ Dm1 * laplacian(ce)], [c(0, x, y) ~ x], [Dm1]),
@@ -299,17 +299,17 @@ end
             err isa ArgumentError ? err.msg : sprint(showerror, err)
         end
         lin = "is a linear solver: it is the `linsolve` of an implicit field solver, not a field solver"
-        m = e(() -> solve(p, DevicePCG()))
-        @test startswith(m, "`solve`/`init`: `DevicePCG()` " * lin) && occursin("give `solve(prob, ExplicitEuler(); dt)`", m)
-        @test startswith(e(() -> init(p, Multigrid(; cycles = 3))), "`solve`/`init`: `Multigrid(; cycles = 3)` " * lin)
+        m = e(() -> solve(p, LatticePCG()))
+        @test startswith(m, "`solve`/`init`: `LatticePCG()` " * lin) && occursin("give `solve(prob, ExplicitEuler(); dt)`", m)
+        @test startswith(e(() -> init(p, LatticeMultigrid(; cycles = 3))), "`solve`/`init`: `LatticeMultigrid(; cycles = 3)` " * lin)
         @test solve(p, ExplicitEuler(); dt = 0.01).retcode == SciMLBase.ReturnCode.Success           # the route
-        m = e(() -> FieldGroups(ce => DevicePCG(; maxiters = 12)))
-        @test startswith(m, "FieldGroups: the field `c(t, x, y)`: `DevicePCG(; maxiters = 12)` " * lin) &&
+        m = e(() -> FieldGroups(ce => LatticePCG(; maxiters = 12)))
+        @test startswith(m, "FieldGroups: the field `c(t, x, y)`: `LatticePCG(; maxiters = 12)` " * lin) &&
             occursin("give `c(t, x, y) => ExplicitEuler(…)`", m)
-        @test startswith(e(() -> FieldGroups(; default = Multigrid())), "FieldGroups: `default`: `Multigrid()` " * lin)
+        @test startswith(e(() -> FieldGroups(; default = LatticeMultigrid())), "FieldGroups: `default`: `LatticeMultigrid()` " * lin)
         @test solve(p, FieldGroups(ce => ExplicitEuler()); dt = 0.01).retcode == SciMLBase.ReturnCode.Success
-        m = e(() -> ExplicitEuler(; linsolve = DevicePCG()))
-        @test startswith(m, "ExplicitEuler: `linsolve = DevicePCG()`: `linsolve` is a keyword of the implicit field solvers") &&
+        m = e(() -> ExplicitEuler(; linsolve = LatticePCG()))
+        @test startswith(m, "ExplicitEuler: `linsolve = LatticePCG()`: `linsolve` is a keyword of the implicit field solvers") &&
             occursin("leave `linsolve` out", m)
         @test e(() -> ExplicitEuler(; step = 2)) ==
             "ExplicitEuler: no keyword `step`; its keywords are `substeps`, `lower_bound`, `init` and `compute_type`"

@@ -15,7 +15,7 @@ bsys(eqs, bcs, ps; T = 1.0, dvs = [bce, bqe]) = PDESystem(eqs, bcs, bdom(T), [t,
 # (F4-01: the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
 bown(sys; dims = BDIMS, T = Float64, kw...) =
     LFP.field_problem(discretize(sys, LatticeDiscretization(Grid(dims); T, kw...); inputs = [bqe => BKIND]))
-const BTIGHT = DevicePCG(; reltol = 1.0e-12, maxiters = 64)
+const BTIGHT = LatticePCG(; reltol = 1.0e-12, maxiters = 64)
 bwarm(ig) = (step!(ig); @allocated step!(ig))              # (a function barrier)
 blast(s) = s[bce, length(s.t)]                             # the last save
 
@@ -112,12 +112,12 @@ LFP.substeps(::LFP.FieldProblem, ::StallStub, p = nothing; tables = nothing, inp
 # shift (`push!(jterms, dj)` dropped in LatticePDE's `_build_operator`; the row stays exact, one
 # Newton step) fails the stiff Michaelis–Menten case (an explicit `h ∂f/∂c` up to 32).
 # The orders against the semi-discrete solution (the `:ode` path, Tsit5 at 1e-12), `n²` sites
-function nl_orders(rhs, ic; T, dts, newton = nothing, n = 16)
+function nl_orders(rhs, ic; T, dts, nlsolve = nothing, n = 16)
     sys = PDESystem([D(bce) ~ rhs], [bc(0, x, y) ~ ic], bdom(T), [t, x, y], [bce], Any[]; name = :nl)
     ref = solve(discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64)), Tsit5();
         reltol = 1e-12, abstol = 1e-12).u[end]
     pb = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64))
-    us = [vec(blast(solve(pb, BackwardEuler(; linsolve = BTIGHT, newton); dt))) for dt in dts]
+    us = [vec(blast(solve(pb, BackwardEuler(; linsolve = BTIGHT, nlsolve); dt))) for dt in dts]
     es = [maximum(abs, u .- ref) for u in us]
     return es, log2.(es[1:(end - 1)] ./ es[2:end]), pb, us
 end
@@ -165,7 +165,7 @@ const WARN = Base.CoreLogging.Warn
 
 # F3 batch 3 review r1 (research/field-compiler/f3/reviews/F3-batch3-r1.md). Base 2d213237
 # (~/lpwork/f3r1-nc-base.log) unless a testset names a mutation: each testset fails there.
-r1tight() = DevicePCG(; reltol = 1.0e-13, maxiters = 200)
+r1tight() = LatticePCG(; reltol = 1.0e-13, maxiters = 200)
 r1rel(a, b) = maximum(abs, a .- b) / maximum(abs, b)
 
 # F3-20: a hexagonal lattice (axial coordinates; `laplacian` is `2/(3h²) Σₙ (cₙ − c)` over the six

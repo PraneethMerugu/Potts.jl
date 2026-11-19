@@ -474,6 +474,8 @@ mutable struct FieldIntegrator{P <: FieldProblem, A, S <: FieldStore, RT <: Tupl
     verbose::Bool                       # the run's warnings print (`verbose`; `Exec.VERBOSE` in its calls)
     saveopts::Any                       # the save keywords (`saveat` as given, `save_start`, `save_end`, `save_on`), for `reinit!`
     tstops0::Vector{Float64}            # the `tstops` given to `init`, restored by `reinit!`
+    abstol::Any                         # Newton / implicit absolute tolerance (SciML default 1e-6)
+    reltol::Any                         # Newton / implicit relative tolerance (SciML default 1e-3)
 end
 
 
@@ -720,22 +722,64 @@ function CommonSolve.init(prob::FieldProblem, alg::AbstractFieldAlgorithm; verbo
     verbose && return _init(prob, alg, verbose; kw...)
     return Base.ScopedValues.with(() -> _init(prob, alg, verbose; kw...), Exec.VERBOSE => false)
 end
+function _tol_keyword(name, v)
+    v === nothing && return nothing
+    v isa Real && !(v isa Bool) && isfinite(v) && v >= 0 && return v
+    throw(ArgumentError("`solve`/`init`: `$name` must be a finite real number ≥ 0; got $(repr(v))"))
+end
+"""
+    resolve_tols(abstol, reltol) -> (atol, rtol)
+
+Internal front-end helper: validate and resolve `abstol` and `reltol` `solve`/`init` keywords
+against the SciML defaults (`1 // 10^6` and `1 // 10^3`). Throws `ArgumentError` if
+negative, non-finite, non-real, or if both are zero.
+"""
+function resolve_tols(abstol, reltol)
+    atol = abstol === nothing ? (1 // 10^6) : _tol_keyword("abstol", abstol)
+    rtol = reltol === nothing ? (1 // 10^3) : _tol_keyword("reltol", reltol)
+    (atol == 0 && rtol == 0) && throw(ArgumentError("`solve`/`init`: `abstol` and `reltol` cannot both be zero"))
+    return atol, rtol
+end
 function _init(
         prob::FieldProblem, alg::AbstractFieldAlgorithm, verbose::Bool; dt = nothing, saveat = (), save_start::Bool = true,
         save_end::Bool = true, save_everystep::Bool = isempty(saveat), save_on::Bool = true, save_idxs = nothing,
         callback = nothing, tstops = (), maxiters::Integer = typemax(Int),
         alias::Union{Nothing, SciMLBase.ODEAliasSpecifier} = nothing,
-        dense::Bool = true, _sciml = nothing, kw...)
+        dense::Bool = true, abstol = nothing, reltol = nothing, _sciml = nothing, kw...
+    )
     isempty(kw) || throw(ArgumentError(string("`solve`/`init` with ", _algtext(alg), ": the keyword",
         length(kw) == 1 ? " " : "s ", join(("`$k`" for k in keys(kw)), ", "), length(kw) == 1 ? " is" : " are",
         " not one of a field algorithm's (it steps fixed windows of `dt`): `saveat`, `save_start`, `save_end`, ",
-                "`save_everystep`, `save_on`, `save_idxs`, `callback`, `tstops`, `maxiters`, `verbose`, `alias`, `dense`, `dt`"
+                "`save_everystep`, `save_on`, `save_idxs`, `callback`, `tstops`, `maxiters`, `verbose`, `alias`, `dense`, `dt`, `abstol`, `reltol`"
             )
         )
     )
     prob.group.spec.timefree && prob.tspan == (0.0, 0.0) && throw(ArgumentError(string("`init`: the system has no time ",
         "(a steady system), so there is nothing to step; `solve(prob)` solves it once")))
     groups = _groups(prob, alg)
+    uses_ln = any(g -> g[1] isa AbstractImplicitFieldAlgorithm && g[1].nlsolve isa LatticeNewton, groups)
+    if !uses_ln && (abstol !== nothing || reltol !== nothing)
+        bad = Symbol[]
+        abstol === nothing || push!(bad, :abstol)
+        reltol === nothing || push!(bad, :reltol)
+        has_implicit = any(g -> g[1] isa AbstractImplicitFieldAlgorithm, groups)
+        why = has_implicit ?
+            "automatic `nlsolve = nothing` uses its fixed 1e-3 ∞-norm test and ignores `abstol`/`reltol`; pass `nlsolve = LatticeNewton()` to use them" :
+            string(
+                "not one of a field algorithm's (it steps fixed windows of `dt`): `saveat`, `save_start`, `save_end`, ",
+                "`save_everystep`, `save_on`, `save_idxs`, `callback`, `tstops`, `maxiters`, `verbose`, `alias`, `dense`, `dt`"
+            )
+        throw(
+            ArgumentError(
+                string(
+                    "`solve`/`init` with ", _algtext(alg), ": the keyword",
+                    length(bad) == 1 ? " " : "s ", join(("`$k`" for k in bad), ", "), length(bad) == 1 ? " is " : " are ",
+                    why,
+                )
+            )
+        )
+    end
+    atol, rtol = resolve_tols(abstol, reltol)
     for (a, _) in groups
         alg_family(a) == prob.kind || throw(ArgumentError(string(
             "a ", prob.kind == :map ? "map program is stepped by ExplicitMap()" :
@@ -789,7 +833,8 @@ function _init(
     # own algorithm's type, and inference of an explicit `init` does not walk `bind_cache`'s
     # implicit method, the operator build and the solver; F3 review round 2)
     rts = Tuple(Base.inferencebarrier(bind_group)(prob.group, a, st, pgood; fields = ks, n = m, dt,
-            c = zero(E), ends_in, backend = prob.backend, options = prob.options, V = value_type(E)
+            c = zero(E), ends_in, backend = prob.backend, options = prob.options, V = value_type(E),
+            abstol = atol, reltol = rtol
         )
                 for ((a, ks), m) in zip(groups, ms))
     foreach(clamp_now!, rts)                        # the saved t0 state holds the mask values
@@ -805,7 +850,7 @@ function _init(
         aux, Vector{T}[], Any[], t0, tf, Float64[], 1, 0, _sciml, nothing, _save_indices(prob, save_idxs),
         save_everystep, Int(maxiters), false, nothing, nothing, t0, 0, nothing, dense, nothing,
         isempty(prob.inputfns) ? nothing : Base.inferencebarrier(_input_fns)(prob, st, rts), verbose,
-        saveopts, Float64[]
+        saveopts, Float64[], atol, rtol
     )
     # the inputs given as functions of the time take their values at the start (F4-B1)
     # (`getfield`: the integrator's type is not inferred here, and a `getproperty` called at
@@ -861,7 +906,8 @@ function _steady_starts!(integ::FieldIntegrator, groups)
                 stability = restrict_bound(prob.stability, ks), fields = ks, dt = _iwindow(integ)
             )
             Base.inferencebarrier(bind_group)(prob.group, qa, st, integ.pgood; fields = ks, n = 1,
-                dt = integ.dt, c = zero(E), ends_in = :slot1, backend = prob.backend, options = prob.options, V = value_type(E)
+                dt = integ.dt, c = zero(E), ends_in = :slot1, backend = prob.backend, options = prob.options, V = value_type(E),
+                abstol = getfield(integ, :abstol), reltol = getfield(integ, :reltol)
             )
         end
         rt.totals.where = StartText()
@@ -876,13 +922,13 @@ end
 """
     steady_start(alg) -> QuasiSteady
 
-The steady solve of `alg`'s `init = :steady` (F3-12c, both front ends): `QuasiSteady` with
-`alg`'s `linsolve` and `solver_type` (and `newton` for a `QuasiSteady` group);
-`linsolve = :auto` takes `DevicePCG` to `reltol = 1e-6` within 64 iterations (`STEADY_INNER`), the
+The steady solve of `alg`'s `init = :steady` (both front ends): `QuasiSteady` with
+`alg`'s `linsolve` and `solver_type` (and `nlsolve` for a `QuasiSteady` group);
+`linsolve = :auto` takes `LatticePCG` to `reltol = 1e-6` within 64 iterations (`STEADY_INNER`), the
 host-checked steady solve of a system with no time.
 """
 steady_start(a) = QuasiSteady(;
-    newton = a isa QuasiSteady ? a.newton : nothing,
+    nlsolve = a isa QuasiSteady ? a.nlsolve : nothing,
     linsolve = a isa AbstractImplicitFieldAlgorithm && a.linsolve !== :auto ? a.linsolve : STEADY_INNER,
     solver_type = a isa AbstractImplicitFieldAlgorithm ? a.solver_type : :auto
 )
@@ -1400,20 +1446,34 @@ end
 # A system with no time (F3 design §3.5, F3-12b): one steady solve from the cold `u0`, the
 # host-checked path of `init = :steady` (the inner solver to `reltol = 1e-6` within 64
 # iterations unless `linsolve` is given), returned as a one-state solution at t = 0
-const STEADY_INNER = Solvers.DevicePCG(; maxiters = 64)
-function _steady_solve(prob::FieldProblem, alg::AbstractFieldAlgorithm; kw...)
+const STEADY_INNER = Solvers.LatticePCG(; maxiters = 64)
+function _steady_solve(prob::FieldProblem, alg::AbstractFieldAlgorithm; abstol = nothing, reltol = nothing, kw...)
     alg isa QuasiSteady || throw(ArgumentError(string(_algtext(alg), ": the system has no time (a steady system, ",
-                "solved once by `QuasiSteady`): `solve(prob)` or `solve(prob, QuasiSteady(; linsolve, newton))`"
+                "solved once by `QuasiSteady`): `solve(prob)` or `solve(prob, QuasiSteady(; linsolve, nlsolve))`"
             )
         )
     )
     isempty(kw) || throw(ArgumentError(string("`solve` of a system with no time takes no ",
         join(("`$k`" for k in keys(kw)), ", "), ": it is solved once and returns that one state")))
+    if !(alg.nlsolve isa LatticeNewton) && (abstol !== nothing || reltol !== nothing)
+        bad = Symbol[]
+        abstol === nothing || push!(bad, :abstol)
+        reltol === nothing || push!(bad, :reltol)
+        throw(
+            ArgumentError(
+                string(
+                    "`solve` with ", _algtext(alg), ": the keyword",
+                    length(bad) == 1 ? " " : "s ", join(("`$k`" for k in bad), ", "), length(bad) == 1 ? " is " : " are ",
+                    "ignored under automatic `nlsolve = nothing` (which uses a fixed 1e-3 ∞-norm test); pass `nlsolve = LatticeNewton()` to use `abstol`/`reltol`"
+                )
+            )
+        )
+    end
     a = QuasiSteady(;
-        newton = alg.newton, linsolve = alg.linsolve === :auto ? STEADY_INNER : alg.linsolve,
+        nlsolve = alg.nlsolve, linsolve = alg.linsolve === :auto ? STEADY_INNER : alg.linsolve,
         solver_type = alg.solver_type
     )
-    s = finish!(CommonSolve.init(SciMLBase.remake(prob; tspan = (0.0, 1.0)), a; dt = 1.0, save_start = false))
+    s = finish!(CommonSolve.init(SciMLBase.remake(prob; tspan = (0.0, 1.0)), a; dt = 1.0, save_start = false, abstol, reltol))
     return FieldSolution(
         prob, [0.0], s.us[end:end], s.retcode, s.substeps, substep_counts(s),
         isempty(s.auxu) ? s.auxu : s.auxu[end:end], field_stats(s)
@@ -1644,6 +1704,7 @@ function Base.getproperty(i::FieldIntegrator, f::Symbol)
     f === :opts && return (;
         maxiters = getfield(i, :maxiters), tstops = getfield(i, :tstops),
         save_everystep = getfield(i, :everystep), verbose = getfield(i, :verbose),
+        abstol = getfield(i, :abstol), reltol = getfield(i, :reltol),
     )
     f === :stats && return Base.inferencebarrier(LatticeStats)(i)
     return getfield(i, f)

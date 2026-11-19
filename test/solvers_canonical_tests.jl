@@ -161,18 +161,18 @@ end
                 (ExplicitMap(), ExplicitMap(; compute_type = :auto), ExplicitMap(; compute_type = Float32)),
                 (
                     BackwardEuler(), BackwardEuler(; linsolve = :auto, solver_type = :auto, init = nothing, compute_type = :auto),
-                    BackwardEuler(; newton = 4),
+                    BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 4)),
                 ),
                 (
-                    CrankNicolson(; linsolve = LFS.DevicePCG(; reltol = 1.0e-8)), CrankNicolson(; linsolve = LFS.DevicePCG(; reltol = 1.0e-8)),
-                    CrankNicolson(; linsolve = LFS.Multigrid(; cycle = LFS.VCycle(1, 1))),
+                    CrankNicolson(; linsolve = LFS.LatticePCG(; reltol = 1.0e-8)), CrankNicolson(; linsolve = LFS.LatticePCG(; reltol = 1.0e-8)),
+                    CrankNicolson(; linsolve = LFS.LatticeMultigrid(; cycle = LFS.VCycle(1, 1))),
                 ),
                 (
                     BDF2(; solver_type = Float64), BDF2(; solver_type = Float64, init = nothing),
                     BDF2(; solver_type = Float32),
                 ),
                 (
-                    QuasiSteady(), QuasiSteady(; newton = nothing, linsolve = :auto),
+                    QuasiSteady(), QuasiSteady(; nlsolve = nothing, linsolve = :auto),
                     QuasiSteady(; init = :steady),
                 ),
                 (
@@ -196,9 +196,8 @@ end
                 using Potts
                 const CorePotts = Potts.CorePotts
                 const LatticeFields = Potts.LatticeFields
-                using Potts.LatticeFields.Problems: ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady
-                using Potts.LatticeFields.Solvers: DevicePCG, Multigrid, VCycle
-                using Potts.LatticePDE: LatticeMultigrid
+                using Potts.LatticeFields.Problems: ExplicitEuler, ExplicitMap, LatticeNewton, BackwardEuler, CrankNicolson, BDF2, QuasiSteady
+                using Potts.LatticeFields.Solvers: LatticePCG, LatticeMultigrid, VCycle
             end
         )
         roundtrip(x) = Core.eval(rt_mod, Meta.parse(repr(x)))
@@ -207,8 +206,12 @@ end
                 ExplicitEuler(),
                 ExplicitEuler(; substeps = 4, lower_bound = 0.0),
                 ExplicitMap(),
+                LatticeNewton(),
+                LatticeNewton(; κ = 1.0e-4),
+                LatticeNewton(; max_iter = 3),
+                LatticeNewton(; check_div = false),
                 BackwardEuler(),
-                BackwardEuler(; newton = 3, linsolve = LFS.DevicePCG(; reltol = 1.0e-8)),
+                BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 3), linsolve = LFS.LatticePCG(; reltol = 1.0e-8)),
                 CrankNicolson(; substeps = 2),
                 BDF2(),
                 QuasiSteady(; init = :steady),

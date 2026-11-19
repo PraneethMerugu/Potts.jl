@@ -6,7 +6,7 @@
     VCycle(nu1, nu2)
 
 A V-cycle with `nu1` pre- and `nu2` post-smoothing Chebyshev steps, integers ≥ 1. A
-`Multigrid`'s `cycle` also takes the pair `(nu1, nu2)`, which is how it prints.
+`LatticeMultigrid`'s `cycle` also takes the pair `(nu1, nu2)`, which is how it prints.
 """
 struct VCycle
     nu1::Int
@@ -16,8 +16,8 @@ struct VCycle
             ArgumentError(
                 string(
                     "`VCycle(", nu1, ", ", nu2,
-            ")`: a V-cycle (the `cycle` of a `Multigrid`) needs ν₁, ν₂ ≥ 1 smoothing steps, pre and post; ",
-                    "for example `VCycle(2, 2)`"
+                    ")`: a V-cycle (the `cycle` of a `LatticeMultigrid`) needs ν₁, ν₂ ≥ 1 smoothing steps, pre and post; ",
+                    "for example `VCycle(2, 2)`",
                 )
             )
         )
@@ -38,149 +38,99 @@ _count(x) = x isa Integer && !(x isa Bool) && x >= 1
 # a `cycle` keyword: a `VCycle`, or the pair `(ν₁, ν₂)`
 _cycle(c::VCycle) = c
 _cycle(c::Tuple{Any, Any}) = VCycle(c...)
-_cycle(c) = throw(ArgumentError(string("`Multigrid(; cycle = ", repr(c), ")`: `cycle` is the V-cycle's smoothing ",
+_cycle(c) = throw(
+    ArgumentError(
+        string(
+            "`LatticeMultigrid(; cycle = ", repr(c), ")`: `cycle` is the V-cycle's smoothing ",
             "steps, `(ν₁, ν₂)` or `VCycle(ν₁, ν₂)` (integers ≥ 1); for example `cycle = (2, 2)`"
         )
     )
 )
 
 """
-    Multigrid(; cycle = VCycle(2, 2), cycles = nothing, reltol = 1e-6, maxiters = nothing, warn_tol)
+    LatticeMultigrid(; cycle = VCycle(2, 2), cycles = nothing, reltol = nothing, maxiters = nothing, warn_tol = nothing)
 
-Stationary multigrid. `cycles = k` runs exactly k cycles (no early exit; the sentinel warns
-above `warn_tol`, default 1e-3); otherwise cycles stop on device when
-`‖r‖∞ ≤ reltol·max(‖b‖∞, floor)`, within `maxiters` (default 8, 12 on a masked group).
-`cycle` is `(ν₁, ν₂)` or `VCycle(ν₁, ν₂)`, `cycles` and `maxiters` are integers ≥ 1 (or left out),
-`reltol` and `warn_tol` finite and > 0; any other value is an `ArgumentError` naming the keyword.
+The lattice multigrid, both as a LinearSolve algorithm (stationary multigrid solve) and as a
+LinearSolve `precs` function (`precs(A, p) -> (Pl, Pr)`):
+
+  - As a stationary linear solver (`linsolve = LatticeMultigrid(…)`): `cycles = k` runs
+    exactly `k` cycles (no early exit; the sentinel warns above `warn_tol`, default `1e-3`).
+    With `cycles = nothing`, cycles stop on device when `‖r‖∞ ≤ reltol * max(‖b‖∞, floor)`
+    within `maxiters` (when unset: `reltol` and `maxiters` come from `solve`, or `1e-6` and
+    `8`/`12` on the owned steppers and unset standalone solves; because LinearSolve defaults
+    an unset `maxiters` to `length(b)`, `cache.maxiters == length(b)` is treated as unset, so
+    pass `maxiters` on `LatticeMultigrid` to request `length(b)` cycles explicitly). The
+    fused plan unrolls `cycles` or `maxiters` into segments (cap `1024`).
+  - As a `precs` preconditioner (`precs = LatticeMultigrid(…)`):
+    - Given a lattice field's operator (`BoundOperator`), it returns the V-cycle that
+      [`LatticePCG`](@ref) fuses into its iteration (`cycle` symmetric, `cycles` unset or `1`)
+      and applies `cycles` V-cycles from zero through `ldiv!` for generic Krylov methods.
+    - Given the `W = J − M/γ` of an implicit SciML solver on a problem `discretize` returned
+      (or the operator of a linear system with no time), it binds the owned implicit runtime
+      of the problem at the solver's state and applies `something(cycles, 1)` V-cycles per
+      field as `ldiv!`.
+
+`cycle` is `(ν₁, ν₂)` or `VCycle(ν₁, ν₂)`, `cycles` and `maxiters` are integers ≥ 1 (or left
+out), `reltol` and `warn_tol` finite and > 0; any other value is an `ArgumentError` naming the
+keyword.
 """
-struct Multigrid
+struct LatticeMultigrid <: LinearSolve.SciMLLinearSolveAlgorithm
     cycle::VCycle
     cycles::Union{Nothing, Int}
-    reltol::Float64
+    reltol::Union{Nothing, Float64}
     maxiters::Union{Nothing, Int}
-    warn_tol::Float64
-    function Multigrid(cycle::VCycle, cycles, reltol, maxiters, warn_tol)
-        bad(k, v, want) = throw(ArgumentError(string("`Multigrid(; ", k, " = ", repr(v), ")`: `", k, "` ", want)))
+    warn_tol::Union{Nothing, Float64}
+    engines::Dict{Any, Any}
+    lock::ReentrantLock
+    function LatticeMultigrid(cycle::VCycle, cycles, reltol, maxiters, warn_tol, engines, lock)
+        bad(k, v, want) = throw(ArgumentError(string("`LatticeMultigrid(; ", k, " = ", repr(v), ")`: `", k, "` ", want)))
         cycles === nothing || _count(cycles) ||
             bad(:cycles, cycles, "is the exact number of cycles, an integer ≥ 1 (leave it out to stop on `reltol`)")
-        _positive(reltol) || bad(:reltol, reltol, "is the relative residual a solve stops at, finite and > 0")
+        reltol === nothing || _positive(reltol) ||
+            bad(:reltol, reltol, "is the relative residual a solve stops at, finite and > 0")
         maxiters === nothing || _count(maxiters) ||
             bad(:maxiters, maxiters, "is the most cycles per solve, an integer ≥ 1 (leave it out for the default)")
-        _positive(warn_tol) || bad(:warn_tol, warn_tol, "is the residual the sentinel warns above, finite and > 0")
+        warn_tol === nothing || _positive(warn_tol) ||
+            bad(:warn_tol, warn_tol, "is the residual the sentinel warns above, finite and > 0")
         return new(
-            cycle, cycles === nothing ? nothing : Int(cycles), Float64(reltol),
-            maxiters === nothing ? nothing : Int(maxiters), Float64(warn_tol)
+            cycle,
+            cycles === nothing ? nothing : Int(cycles),
+            reltol === nothing ? nothing : Float64(reltol),
+            maxiters === nothing ? nothing : Int(maxiters),
+            warn_tol === nothing ? nothing : Float64(warn_tol),
+            engines,
+            lock,
         )
     end
 end
-function Multigrid(;
-        cycle = VCycle(2, 2), cycles = nothing, reltol = 1.0e-6, maxiters = nothing,
-        warn_tol = cycles === nothing ? reltol : 1.0e-3
+function LatticeMultigrid(;
+        cycle = VCycle(2, 2), cycles = nothing, reltol = nothing, maxiters = nothing,
+        warn_tol = nothing,
     )
-    return Multigrid(_cycle(cycle), cycles, reltol, maxiters, warn_tol)
+    return LatticeMultigrid(_cycle(cycle), cycles, reltol, maxiters, warn_tol, Dict{Any, Any}(), ReentrantLock())
 end
+LatticeMultigrid(cycle::VCycle, cycles, reltol, maxiters, warn_tol) =
+    LatticeMultigrid(cycle, cycles, reltol, maxiters, warn_tol, Dict{Any, Any}(), ReentrantLock())
+Base.:(==)(a::LatticeMultigrid, b::LatticeMultigrid) =
+    a.cycle == b.cycle && a.cycles == b.cycles && a.reltol == b.reltol &&
+    a.maxiters == b.maxiters && a.warn_tol == b.warn_tol
+Base.hash(a::LatticeMultigrid, h::UInt) =
+    hash((a.cycle.nu1, a.cycle.nu2, a.cycles, a.reltol, a.maxiters, a.warn_tol), hash(:LatticeMultigrid, h))
 
 """
-    DevicePCG(; precond = Multigrid(), maxiters = 8, reltol = 1e-6)
+    FusedPCG(precond::LatticeMultigrid, maxiters, reltol)
 
-Preconditioned CG on device scalars; the preconditioner is one fixed V-cycle from zero
-(a fixed linear SPD operator). K2 computes the true residual every iteration (fused with
-`x += αp`), and `done` is set on it (N-13). `maxiters` is an integer ≥ 1 and `reltol` finite and
-> 0; any other value is an `ArgumentError` naming the keyword.
+The resolved form of a [`LatticePCG`](@ref) that a `FieldSolver` runs: preconditioned CG on
+device scalars, the preconditioner one fixed V-cycle (`precond.cycle`) from zero (a fixed
+linear SPD operator), fused into the iteration. K2 computes the true residual every iteration
+(fused with `x += αp`), and `done` is set on it. `maxiters` is an integer ≥ 1 and `reltol`
+finite and > 0.
 """
-struct DevicePCG
-    precond::Multigrid
+struct FusedPCG
+    precond::LatticeMultigrid
     maxiters::Int
     reltol::Float64
-    function DevicePCG(precond::Multigrid, maxiters, reltol)
-        _count(maxiters) || throw(
-            ArgumentError(
-                string(
-                    "`DevicePCG(; maxiters = ", repr(maxiters),
-                    ")`: `maxiters` is the most CG iterations per solve, an integer ≥ 1"
-                )
-            )
-        )
-        _positive(reltol) || throw(
-            ArgumentError(
-                string(
-                    "`DevicePCG(; reltol = ", repr(reltol),
-                    ")`: `reltol` is the relative residual a solve stops at, finite and > 0"
-                )
-            )
-        )
-        return new(precond, Int(maxiters), Float64(reltol))
-    end
 end
-function DevicePCG(; precond = Multigrid(), maxiters = 8, reltol = 1.0e-6)
-    precond isa Multigrid || throw(ArgumentError(string("`DevicePCG(; precond = ", repr(precond), ")`: `precond` is ",
-        "the preconditioner's cycle, a `Multigrid(…)` (for example `Multigrid(; cycle = (3, 3))`)")))
-    return DevicePCG(precond, maxiters, reltol)
-end
-
-"""
-    DeviceGMRES(; gmres_restart = 20, maxiters = 60, reltol = 1e-6, precond = :auto)
-
-The coupled solve of a `QuasiSteady` group whose fields read one another (F3-12d; the time
-steppers refuse it, their fields take `DevicePCG` or `Multigrid`): restarted
-flexible GMRES (Krylov.jl's `fgmres!`) over all the group's fields at once, its operator the whole
-Jacobian of the group's residual (every term of every row, cross terms included: a directional
-difference of the residual kernels), its preconditioner block-diagonal: each field's own
-operator solved by `precond` (`:auto`: `DevicePCG(; maxiters = 2)`, one per field, on the
-field's multigrid hierarchy). `gmres_restart` is the Krylov basis size (an integer from 2 to 64),
-`maxiters` the most iterations per solve (an integer ≥ 1; a gmres_restart computes the true residual),
-`reltol` the stop `‖r‖₂ ≤ reltol ‖b‖₂` (finite and > 0), `precond` `:auto`, a `DevicePCG(…)` or a
-`Multigrid(…)`. Dot products are block partials summed in a fixed order (no atomics, no BLAS),
-so a run is bitwise repeatable, and the CPU and a GPU give the same bits. Krylov.jl keeps its
-small least-squares problem on the host, so on a GPU each dot product waits for its value
-(about `j + 1` waits at iteration `j` of a cycle; the one exception to the field solvers' rule
-of no GPU wait in a step, user ruling 2026-11-01). Any other value is an `ArgumentError`
-naming the keyword.
-"""
-struct DeviceGMRES
-    gmres_restart::Int
-    maxiters::Int
-    reltol::Float64
-    precond::Union{Symbol, DevicePCG, Multigrid}
-    function DeviceGMRES(gmres_restart, maxiters, reltol, precond)
-        (gmres_restart isa Integer && !(gmres_restart isa Bool) && 2 <= gmres_restart <= 64) || throw(
-            ArgumentError(
-                string(
-                    "`DeviceGMRES(; gmres_restart = ", repr(gmres_restart), ")`: `gmres_restart` is the Krylov basis size, an integer from 2 to 64"
-                )
-            )
-        )
-        _count(maxiters) || throw(
-            ArgumentError(
-                string(
-                    "`DeviceGMRES(; maxiters = ", repr(maxiters),
-                    ")`: `maxiters` is the most GMRES iterations per solve, an integer ≥ 1"
-                )
-            )
-        )
-        _positive(reltol) || throw(
-            ArgumentError(
-                string(
-                    "`DeviceGMRES(; reltol = ", repr(reltol),
-                    ")`: `reltol` is the relative residual a solve stops at, finite and > 0"
-                )
-            )
-        )
-        precond === :auto || precond isa DevicePCG || precond isa Multigrid || throw(ArgumentError(string(
-            "`DeviceGMRES(; precond = ", repr(precond), ")`: `precond` is each field's solve in the block preconditioner, ",
-                    "`:auto`, a `DevicePCG(…)` or a `Multigrid(…)` (for example `DevicePCG(; maxiters = 4)`)"
-                )
-            )
-        )
-        return new(Int(gmres_restart), Int(maxiters), Float64(reltol), precond)
-    end
-end
-DeviceGMRES(; gmres_restart = 20, maxiters = 60, reltol = 1.0e-6, precond = :auto) = DeviceGMRES(gmres_restart, maxiters, reltol, precond)
-"""
-The per-field solver of a `DeviceGMRES`'s block preconditioner (`precond = :auto`: two PCG
-iterations with one V(2, 2) cycle each).
-"""
-gmres_precond(g::DeviceGMRES) = g.precond === :auto ? DevicePCG(; maxiters = 2) : g.precond
 
 # Keyword display (no module path; only the keywords that differ from their defaults), so a
 # message that quotes a solver reads as the user wrote it, and the text runs where the solvers
@@ -192,63 +142,68 @@ function _show_kw(io::IO, name, kws)
     isempty(kws) || print(io, "; ", join((string(k, " = ", repr(v)) for (k, v) in kws), ", "))
     print(io, ")")
 end
-function Base.show(io::IO, m::Multigrid)
+function Base.show(io::IO, m::LatticeMultigrid)
     kws = Pair{Symbol, Any}[]
     m.cycle.nu1 == 2 && m.cycle.nu2 == 2 || push!(kws, :cycle => (m.cycle.nu1, m.cycle.nu2))
     m.cycles === nothing || push!(kws, :cycles => m.cycles)
-    m.reltol == 1.0e-6 || push!(kws, :reltol => m.reltol)
+    m.reltol === nothing || push!(kws, :reltol => m.reltol)
     m.maxiters === nothing || push!(kws, :maxiters => m.maxiters)
-    m.warn_tol == (m.cycles === nothing ? m.reltol : 1.0e-3) || push!(kws, :warn_tol => m.warn_tol)
-    _show_kw(io, "Multigrid", kws)
+    m.warn_tol === nothing || push!(kws, :warn_tol => m.warn_tol)
+    return _show_kw(io, "LatticeMultigrid", kws)
 end
-function Base.show(io::IO, d::DevicePCG)
+function Base.show(io::IO, d::FusedPCG)
     kws = Pair{Symbol, Any}[]
-    d.precond == Multigrid() || push!(kws, :precond => d.precond)
+    c = d.precond.cycle
+    c.nu1 == 2 && c.nu2 == 2 || push!(kws, :precs => LatticeMultigrid(; cycle = c))
     d.maxiters == 8 || push!(kws, :maxiters => d.maxiters)
     d.reltol == 1.0e-6 || push!(kws, :reltol => d.reltol)
-    _show_kw(io, "DevicePCG", kws)
-end
-function Base.show(io::IO, g::DeviceGMRES)
-    kws = Pair{Symbol, Any}[]
-    g.gmres_restart == 20 || push!(kws, :gmres_restart => g.gmres_restart)
-    g.maxiters == 60 || push!(kws, :maxiters => g.maxiters)
-    g.reltol == 1.0e-6 || push!(kws, :reltol => g.reltol)
-    g.precond === :auto || push!(kws, :precond => g.precond)
-    _show_kw(io, "DeviceGMRES", kws)
+    return _show_kw(io, "LatticePCG", kws)
 end
 
 """
-`linsolve = :auto` (§5.6, provisional D-C7b): every group gets `DevicePCG` (maxiters 8), with the
-constant mode deflated on an unanchored group with a constant shift. Stationary V(2, 2)
-needs 12 cycles or more on unanchored periodic groups (per256, per300), so it is used only
-when asked for. An explicit stationary `Multigrid` defaults to maxiters 12 on a group with a
-mask, a Dirichlet face or a non-constant face coefficient, else 8.
+`linsolve = :auto`: every group gets `LatticePCG` (maxiters 8), with the constant mode deflated
+on an unanchored group with a constant shift. Stationary V(2, 2) needs 12 cycles or more on
+unanchored periodic groups, so it is used only when asked for. An explicit stationary
+`LatticeMultigrid` defaults to maxiters 12 on a group with a mask, a Dirichlet face or a
+non-constant face coefficient, else 8. A `LatticePCG` is resolved to the fused form a
+`FieldSolver` runs (`FusedPCG`): its `precs` must be a `LatticeMultigrid` with a symmetric cycle
+and one cycle per iteration, and an unset `maxiters` or `reltol` takes 8 or 1e-6.
 """
 function resolve_inner(op::CellOperator, inner)
-    inner === :auto && return DevicePCG()
-    if inner isa DevicePCG
-        c = inner.precond
+    inner === :auto && return FusedPCG(LatticeMultigrid(), 8, 1.0e-6)
+    inner isa FusedPCG && return inner
+    if inner isa LatticePCG
+        c = inner.precs
+        c isa LatticeMultigrid || _refuse(
+            op, "a lattice field's `LatticePCG` applies the V-cycles of `precs = LatticeMultigrid(…)` inside its ",
+            "fused iteration; got `precs = ", repr(c), "`: leave `precs` out, or give `precs = LatticeMultigrid(; cycle = (ν, ν))`"
+        )
         c.cycle.nu1 == c.cycle.nu2 ||
-            _refuse(op, "`DevicePCG` needs a symmetric preconditioner cycle `(ν, ν)`; got `(",
-                c.cycle.nu1, ", ", c.cycle.nu2, ")`: use `DevicePCG(; precond = Multigrid(; cycle = (",
+            _refuse(
+            op, "`LatticePCG` needs a symmetric preconditioner cycle `(ν, ν)`; got `(",
+            c.cycle.nu1, ", ", c.cycle.nu2, ")`: use `LatticePCG(; precs = LatticeMultigrid(; cycle = (",
                 max(c.cycle.nu1, c.cycle.nu2), ", ", max(c.cycle.nu1, c.cycle.nu2),
-                ")))`, or the stationary `Multigrid(; cycle = (", c.cycle.nu1, ", ", c.cycle.nu2, "))`")
-        c.cycles === nothing || c.cycles == 1 ||
-            _refuse(op, "`DevicePCG` applies one preconditioner cycle per iteration; got `cycles = ",
-                c.cycles, "` in its `precond`: drop `cycles`, or use the stationary `Multigrid(; cycles = ",
+            ")))`, or the stationary `LatticeMultigrid(; cycle = (", c.cycle.nu1, ", ", c.cycle.nu2, "))`"
+        )
+        (c.cycles === nothing || c.cycles == 1) ||
+            _refuse(
+            op, "`LatticePCG` applies one preconditioner cycle per iteration; got `cycles = ",
+            c.cycles, "` in its `precs`: drop `cycles`, or use the stationary `LatticeMultigrid(; cycles = ",
                 c.cycles, ")`")
-        return inner
+        return FusedPCG(LatticeMultigrid(; cycle = c.cycle), something(inner.maxiters, 8), something(inner.reltol, 1.0e-6))
     end
-    inner isa DeviceGMRES && _refuse(
-        op, "`linsolve = ", repr(inner), "` solves an implicit group's fields together (F3-12d); ",
-        "a `FieldSolver` solves one field: give it the `DeviceGMRES`'s per-field solver, `linsolve = ", repr(gmres_precond(inner)), "`"
+    inner isa LatticeGMRES && _refuse(
+        op, "`linsolve = ", repr(inner), "` solves an implicit group's fields together; ",
+        "a `FieldSolver` solves one field: give it the `LatticeGMRES`'s per-field solver, `linsolve = ", repr(gmres_precond(inner)), "`"
     )
-    inner isa Multigrid || _refuse(
-        op, "`linsolve` takes `:auto`, a `DevicePCG(…)` or a `Multigrid(…)`; got ",
+    inner isa LatticeMultigrid || _refuse(
+        op, "`linsolve` takes `:auto`, a `LatticePCG(…)` or a `LatticeMultigrid(…)`; got ",
         repr(inner))
     b = inner.cycles !== nothing ? inner.cycles :
         inner.maxiters !== nothing ? inner.maxiters : jumpy(op) ? 12 : 8
-    return Multigrid(inner.cycle, inner.cycles, inner.reltol, b, inner.warn_tol)
+    r = something(inner.reltol, 1.0e-6)
+    w = something(inner.warn_tol, inner.cycles === nothing ? r : 1.0e-3)
+    return LatticeMultigrid(inner.cycle, inner.cycles, r, b, w)
 end
 
 const COARSE_DEGREE = 8     # fixed Chebyshev degree on the coarsest level
@@ -340,7 +295,7 @@ nlaunches(sp::SolvePlan, seg) = length(sp.segments[seg])
 mutable struct FieldSolver{N, E}
     exec::E
     op::CellOperator{N}
-    alg::Union{Multigrid, DevicePCG}
+    alg::Union{LatticeMultigrid, FusedPCG}
     deflate::Bool
     prog::Program{N}
     ctx::Any
@@ -356,6 +311,10 @@ mutable struct FieldSolver{N, E}
     vals::Tuple                           # the coefficient slot values the bodies hold
     auto::Bool                            # solver_type was :auto
     warned::Bool                          # the set_coefficients! solver_type warning was given
+    rhs::Int32                            # the right-hand side's field (`"in.f"`)
+    xid::Int32                            # the solution's field (`solution_key`)
+    scal::Any                             # the device scalars (`"solve.scal"`)
+    bound::Any                            # the `BoundOperator` a LinearSolve cache built it from, or nothing
 end
 
 """
@@ -393,13 +352,15 @@ solver precision.
 function FieldSolver(
         exec, op::CellOperator{N}; linsolve = :auto, T = Float32,
         solver_type = :auto, rule::RuleWeights = RULE_M, stages = LOWERING,
-        deflate = :auto, inputs = ()) where {N}
+        deflate = :auto, inputs = (), bound = nothing
+    ) where {N}
     state = lowered_type(exec, T, "state"; op)
     T = resolve_solver_T(exec, op, state, solver_type)
     alg = resolve_inner(op, linsolve)
-    dfl = deflate === :auto ? alg isa DevicePCG && deflatable(op) : Bool(deflate)
+    dfl = deflate === :auto ? alg isa FusedPCG && deflatable(op) : Bool(deflate)
     lane(t) = t == Float64 ? F64 : F32
-    p, ctx = solver_program(op, alg isa DevicePCG; lane = lane(T), state = lane(state),
+    p, ctx = solver_program(
+        op, alg isa FusedPCG; lane = lane(T), state = lane(state),
         deflate = dfl)
     s = semantic(p)
     # a Float64 solver on a device whose default float is Float32 (an explicit `solver_type`, or
@@ -429,11 +390,15 @@ function FieldSolver(
     tlen(k) = k == "solve.scal" ? SCALARS : k == "solve.gb" ? 2 : nb
     tables = Dict{Int32, Any}(Int32(i) => alloc(exec, T, tlen(t.key))
     for (i, t) in enumerate(s.tables))
-    return FieldSolver{N, typeof(exec)}(
+    sv = FieldSolver{N, typeof(exec)}(
         exec, op, alg, dfl, s, ctx, T, state, rule, bufs, slot, tables, bodies,
         Dict{Tuple{Symbol, Int, UInt64}, SolvePlan}(), _rotation_fields(bufs), praw,
-        solver_type === :auto, false
+        solver_type === :auto, false, Int32(0), Int32(0), nothing, bound
     )
+    sv.rhs = fid(sv, "in.f")
+    sv.xid = fid(sv, solution_key(sv))
+    sv.scal = sv.tables[tid(sv, "solve.scal")]
+    return sv
 end
 
 function _rotation_fields(bufs)
@@ -541,12 +506,12 @@ solver type differs from the state type, else `pcg.x` under PCG or the finest le
 function solution_key(sv::FieldSolver)
     sv.deflate ? "pcg.u" :
     sv.T != sv.state ? "out.u" :
-    sv.alg isa DevicePCG ? "pcg.x" : lkey(0, "x")
+        sv.alg isa FusedPCG ? "pcg.x" : lkey(0, "x")
 end
 """
 The working field a solve starts from (`steady!` zeroes it).
 """
-working_key(sv::FieldSolver) = sv.alg isa DevicePCG ? "pcg.x" : lkey(0, "x")
+working_key(sv::FieldSolver) = sv.alg isa FusedPCG ? "pcg.x" : lkey(0, "x")
 
 """
     set_coefficients!(sv, op)
@@ -742,7 +707,7 @@ deflation, else `solve.out` when the solver type differs from the state type.
 function _epilogue!(pl::PlanBuilder)
     sv = pl.sv
     ep = Any[]
-    key = sv.deflate && sv.alg isa DevicePCG ? "pcg.out" :
+    key = sv.deflate && sv.alg isa FusedPCG ? "pcg.out" :
           sv.T != sv.state ? "solve.out" : nothing
     if key !== nothing
         gen!(pl, key)
@@ -803,8 +768,10 @@ function fin!(pl::PlanBuilder, op)
     T = sv.T
     alg = sv.alg
     budget = pl.budget                    # the plan's budget, not the algorithm's
-    rtol, warn = alg isa DevicePCG ? (alg.reltol, alg.reltol) :
-        (alg.cycles === nothing ? alg.reltol : 0.0, alg.warn_tol)
+    r0 = alg isa LatticeMultigrid ? something(alg.reltol, 1.0e-6) : alg.reltol
+    w0 = alg isa LatticeMultigrid ? something(alg.warn_tol, alg.cycles === nothing ? r0 : 1.0e-3) : alg.reltol
+    rtol, warn = alg isa FusedPCG ? (alg.reltol, alg.reltol) :
+        (alg.cycles === nothing ? r0 : 0.0, w0)
     tk = ("solve.scal", "solve.pr", "solve.pb", "solve.pd",
         sv.deflate ? "solve.ps" : "solve.pd", sv.deflate ? "solve.pq" : "solve.pd",
         "solve.px")
@@ -814,8 +781,9 @@ function fin!(pl::PlanBuilder, op)
         floor = T(FLOOR),
         budget = Int32(budget), warn = T(warn),
         nsite = T(nsites(sv.prog, 0)), shift = T(sv.op.shift isa Real ? sv.op.shift : 0),
-        deflate = sv.deflate, stall = !(alg isa Multigrid && alg.cycles !== nothing),
-        diverge = alg isa Multigrid)
+        deflate = sv.deflate, stall = !(alg isa LatticeMultigrid && alg.cycles !== nothing),
+        diverge = alg isa LatticeMultigrid,
+    )
     push!(pl.segments[end],
         Launch(sv.exec, T, finish!, 1, S, (), G, "finish.$op"; phases = REDUCE_PHASES,
             ldslen = NCOMBO * WG, tree = true))
@@ -943,7 +911,7 @@ The budgeted solve: a setup segment, then `budget` segments (cycles or PCG itera
 function solve_plan(sv::FieldSolver, budget::Int)
     pl = PlanBuilder(sv; budget)
     fin!(pl, INIT)
-    if sv.alg isa Multigrid
+    if sv.alg isa LatticeMultigrid
         gen!(pl, "resid")
         fin!(pl, SETUP)
         for _ in 1:budget
@@ -982,7 +950,7 @@ One preconditioner application `z = M r` (finest `b` → finest `x`), for the sy
 function precond_plan(sv::FieldSolver)
     pl = PlanBuilder(sv)
     fin!(pl, INIT)
-    ν = sv.alg isa DevicePCG ? sv.alg.precond.cycle : sv.alg.cycle
+    ν = sv.alg isa FusedPCG ? sv.alg.precond.cycle : sv.alg.cycle
     vcycle!(pl, ν; zero_fine = true)
     return SolvePlan(pl)
 end
@@ -1132,7 +1100,7 @@ budgeted solve ended above its tolerance; returns whether it fired.
 function sentinel(sv::FieldSolver)
     s = scalars(sv)
     s.warn || return false
-    hint = sv.alg isa Multigrid ? " Stationary multigrid: use DevicePCG (linsolve = :auto)." :
+    hint = sv.alg isa LatticeMultigrid ? " Stationary multigrid: use LatticePCG (linsolve = :auto)." :
            s.status === :floor && sv.T == Float32 && floor_regime(sv.op) ?
            " Float32 floor of an unanchored group at weak reaction: solve in Float64 " *
         "(solver_type; a backend with Float64)." :
@@ -1169,7 +1137,7 @@ passes. A correction that does not converge warns, naming the field, the faces a
 Returns the total inner iteration count.
 """
 function _defect_solve!(sv::FieldSolver, maxiter::Int)
-    fixed = sv.alg isa Multigrid && sv.alg.cycles !== nothing
+    fixed = sv.alg isa LatticeMultigrid && sv.alg.cycles !== nothing
     budget = fixed ? sv.alg.cycles : maxiter
     k = solve!(sv; host = true, maxiters = budget)
     has_defect(sv.op) || return k

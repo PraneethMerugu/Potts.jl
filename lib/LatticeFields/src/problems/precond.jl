@@ -5,41 +5,8 @@
 # the shift `1/γ`) at the solver's state, and applies one V-cycle per field as `ldiv!`: the
 # block-diagonal preconditioner of the coupled steady solve (F3-12d), on the problem's backend.
 
-"""
-    LatticeMultigrid(; cycle = VCycle(2, 2), cycles = 1)
-
-A preconditioner for the linear solves of implicit SciML solvers on a lattice problem (F4-08):
-a LinearSolve `precs` function, as in
-
-    solve(prob, FBDF(; linsolve = KrylovJL_GMRES(; precs = LatticeMultigrid(), gmres_restart = 10)))
-
-For `W = J − M/γ` it extracts each field's Helmholtz part `J̃` (its diffusion, its linear local
-terms, its faces and masks; the operator of the field algorithms, F3-07) with the shift `1/γ`
-(a steady row `0 ~ rhs`, `M = 0`, takes none), and applies `cycles` V-cycles (`cycle` its
-smoothing steps) of the lattice multigrid per field from zero: a fixed linear operator, so
-GMRES and CG keep their convergence theory. The other terms (advection, cross terms, nonlinear
-local terms) are left to the Krylov method. A masked site (and a site outside the domain) is
-inverted exactly. The operator is rebuilt at each new `W` (state, time, `γ`); on a device it
-runs there, with no host wait.
-
-Give GMRES a small memory, `gmres_restart = 10`. With this preconditioner GMRES takes a few
-iterations per linear solve (3 to 4 for a diffusion–reaction system), and LinearSolve currently
-allocates a new workspace of about `gmres_restart` state vectors at each new `W`
-(`gmres_restart = 0`, the default, takes 20; SciML/LinearSolve.jl#1378 keeps the workspace). For FBDF at 512², 10 instead of the default allocates 17% less, with the
-same steps and iterations. When the terms left to the Krylov method are strong (advection,
-cross terms), increase it.
-"""
-struct LatticeMultigrid
-    cycle::Solvers.VCycle
-    cycles::Int
-    engines::Dict{Any, Any}
-    lock::ReentrantLock
-end
-function LatticeMultigrid(; cycle = Solvers.VCycle(2, 2), cycles::Integer = 1)
-    cycles >= 1 || throw(ArgumentError("`LatticeMultigrid(; cycles = $cycles)`: `cycles` is the number of V-cycles per field, an integer ≥ 1"))
-    return LatticeMultigrid(Solvers._cycle(cycle), Int(cycles), Dict{Any, Any}(), ReentrantLock())
-end
-Base.show(io::IO, mg::LatticeMultigrid) = print(io, "LatticeMultigrid(; cycle = (", mg.cycle.nu1, ", ", mg.cycle.nu2, "), cycles = ", mg.cycles, ")")
+# (`LatticeMultigrid`, defined with the lattice solvers, is `Solvers.LatticeMultigrid`; this file
+# adds its method for the operators of a problem `discretize` returned.)
 
 """
     MGPreconditioner
@@ -80,39 +47,63 @@ function (mg::LatticeMultigrid)(W, p)
         ArgumentError(
             string(
                 "`LatticeMultigrid()` preconditions the linear solves of a problem ",
-        "`discretize` returned (its `W = J − M/γ`, or the operator of a system with no time); got a ", nameof(typeof(W)))))
+                "`discretize` returned (its `W = J − M/γ`, or the operator of a system with no time); got a ", nameof(typeof(W)),
+            )
+        )
+    )
+    inner = Solvers.LatticeMultigrid(; cycle = mg.cycle, cycles = something(mg.cycles, 1))
+    P = _mg_bind_for!(mg.engines, mg.lock, m, W, p, inner)
+    return (P, LinearAlgebra.I)
+end
+
+function (bs::LatticeBlockSolve)(W, p)
+    m = _mg_meta(W)
+    m isa LatticeMetadata || throw(
+        ArgumentError(
+            string(
+                "`LatticeBlockSolve` preconditions the linear solves of a problem ",
+                "`LatticePDE.discretize` returned (its `W = J − M/γ`, or `LatticeOperator`); got a ", nameof(typeof(W)),
+                ": pass `precs = nothing` (or `precs = LatticeMultigrid()` on a discretized lattice problem)",
+            )
+        )
+    )
+    P = _mg_bind_for!(bs.engines, bs.lock, m, W, p, bs.linsolve)
+    return (LinearAlgebra.I, P)
+end
+
+function _mg_bind_for!(engines, lck, m::LatticeMetadata, W, p, inner)
     γ = _mg_gamma(W)
     fp = m.problem
     u, q, t = p isa Tuple && length(p) == 4 ? (p[2], p[3], p[4]) : (nothing, p, fp.tspan[1])
     lp = q isa LatticeParameters ? q : m.problem.p isa LatticeParameters ? m.problem.p :
          LatticeParameters(copy(fp.p), fp.tables, fp.inputs; fns = fp.inputfns)
-    P = lock(mg.lock) do
+    P = lock(lck) do
         key = (objectid(m), current_task())
-        e = get(mg.engines, key, nothing)
+        e = get(engines, key, nothing)
         if e === nothing || !_mg_current(e, lp)
-            e = _mg_engine(mg, m, lp)
-            mg.engines[key] = e
+            e = _mg_engine(m, lp, inner)
+            engines[key] = e
         end
         e
     end
     _mg_bind!(P, u === nothing ? fp.u0 : u, lp, Float64(primal(t)), γ)
-    return (P, LinearAlgebra.I)
+    return P
 end
 _mg_current(e::MGPreconditioner, lp::LatticeParameters) =
     e.p === lp && e.stamp == lp.stamp[] && e.values == Float64[primal(v) for v in lp.values]
 
 # the owned implicit runtime of `m`'s problem at the parameters `lp`
-function _mg_engine(mg::LatticeMultigrid, m::LatticeMetadata, lp::LatticeParameters)
+function _mg_engine(m::LatticeMetadata, lp::LatticeParameters, inner)
     fp = m.problem
     # (a system with no time: one window of a unit span, which `QuasiSteady` takes)
     span = fp.group.spec.timefree ? (0.0, 1.0) : fp.tspan
     g = _field_problem(fp.program, fp.state, Array(fp.u0), span, Vector{Float64}(map(primal, lp.values)), lp.tables,
-        lp.inputs, fp.backend, fp.index, fp.faces, fp.stability, fp.kind, fp.initkeys, fp.options, fp.group)
-    inner = Solvers.Multigrid(; cycle = mg.cycle, cycles = mg.cycles)
+        lp.inputs, fp.backend, fp.index, fp.faces, fp.stability, fp.kind, fp.initkeys, fp.options, fp.group
+    )
     st = fp.group.spec.steady
     h = 1.0
-    be = BackwardEuler(; substeps = 1, newton = 1, linsolve = inner)
-    qs = QuasiSteady(; newton = 1, linsolve = inner)
+    be = BackwardEuler(; substeps = 1, nlsolve = LatticeNewton(; max_iter = 1), linsolve = inner)
+    qs = QuasiSteady(; nlsolve = LatticeNewton(; max_iter = 1), linsolve = inner)
     alg = fp.group.spec.timefree ? qs : isempty(st) ? be : FieldGroups((k => qs for k in st)...; default = be)
     integ = CommonSolve.init(g, alg; dt = h, save_start = false, save_end = false)
     s = fp.program
@@ -185,8 +176,7 @@ function LinearAlgebra.ldiv!(y::AbstractVector, P::MGPreconditioner, r::Abstract
             Exec.launch!(b, _zero_body!, length(w), (w,))
         end
         sv = row.solver
-        Solvers.lift!(sv)
-        Solvers.solve!(sv)
+        _solve_cache!(row.lin)
         x = sv.slot[row.xid] == 1 ? row.xs[1] : row.xs[2]
         Exec.launch!(b, _mg_out_body!, n, (y, off, x, r, row.mask, row.dom, sfix))
     end
@@ -209,15 +199,3 @@ function _mg_local_body!(i, y, off, r, sh, mask, dom, s)
     end
     return nothing
 end
-
-"""
-    LatticePCG(; precs = LatticeMultigrid())
-
-A LinearSolve algorithm for a symmetric `W` (a diffusion–reaction system: `W = J − M/γ` with
-`J` symmetric, or the operator of a linear system with no time): preconditioned conjugate
-gradients on `−W` with [`LatticeMultigrid`](@ref)'s V-cycles, matrix-free (F4-08). Defined when
-LinearSolve is loaded (its extension). The tolerances and the iteration limit are LinearSolve's
-keywords (`reltol`, `abstol`, `maxiters`); a solve that stops at `maxiters` returns
-`ReturnCode.MaxIters`, one that stops otherwise without converging `ReturnCode.ConvergenceFailure`.
-"""
-function LatticePCG end

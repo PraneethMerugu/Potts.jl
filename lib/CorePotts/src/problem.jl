@@ -216,8 +216,8 @@ function SciMLBase.remake(
         prob::PottsProblem; f = prob.f, u0 = prob.u0, tspan = prob.tspan, p = prob.p, seed = prob.seed,
         replica = prob.replica, repeat = prob.repeat, kwargs = missing, rest...
     )
-    solvekw = NamedTuple(k => v for (k, v) in rest if k in SOLVE_KEYWORDS)
-    other = NamedTuple(k => v for (k, v) in rest if !(k in SOLVE_KEYWORDS))
+    solvekw = NamedTuple(k => v for (k, v) in rest if k in SOLVE_KEYWORDS || k in (:abstol, :reltol))
+    other = NamedTuple(k => v for (k, v) in rest if !(k in SOLVE_KEYWORDS || k in (:abstol, :reltol)))
     kw = merge(kwargs === missing ? prob.kwargs : NamedTuple(kwargs), solvekw)
     return _remake(prob, f, u0, tspan, p, seed, replica, repeat, other, kw)
 end
@@ -323,7 +323,7 @@ state), `maxiters` (the most MCS one `solve!` takes, counted from `init` or `rei
 [`add_tstop!`](@ref SciMLBase.add_tstop!)), and the save times and stops given to `init`,
 `saveat0` and `tstops0` (`reinit!` restores them, those in its time span).
 """
-struct PottsOptions
+struct PottsOptions{A <: Real, R <: Real}
     saveat::Vector{Int}
     save_start::Bool
     save_end::Bool
@@ -338,6 +338,8 @@ struct PottsOptions
     tstops::Vector{Int}
     saveat0::Vector{Int}
     tstops0::Vector{Int}
+    abstol::A
+    reltol::R
 end
 
 """
@@ -356,7 +358,7 @@ while the run goes on, else the code that ended it. It reads a host field and do
 synchronize; a device failure is found at the next synchronization (a save, a host read, the
 end of the run).
 """
-mutable struct PottsIntegrator{Alg, Law, P, S, C, LCC, F, KF, Pa, Ctx, B, CB, MS} <: SciMLBase.DEIntegrator{Alg, true, S, Int}
+mutable struct PottsIntegrator{Alg, Law, P, S, C, LCC, F, KF, Pa, Ctx, B, CB, MS, O <: PottsOptions} <: SciMLBase.DEIntegrator{Alg, true, S, Int}
     const prob::P
     const alg::Alg
     const law::Law
@@ -371,7 +373,7 @@ mutable struct PottsIntegrator{Alg, Law, P, S, C, LCC, F, KF, Pa, Ctx, B, CB, MS
     const key::RNGKey
     t::Int
     tstop::Int                      # the end of the time span (`reinit!(integ; tf)` moves it)
-    const opts::PottsOptions
+    const opts::O
     const saved_t::Vector{Int}
     const saved_u::Vector{Any}
     retcode::SciMLBase.ReturnCode.T
@@ -439,9 +441,23 @@ function _merge_kwargs(pk::NamedTuple, kw::NamedTuple)
     return m
 end
 
-function _check_keywords(kw::NamedTuple)
-    bad = [k for k in keys(kw) if !(k in SOLVE_KEYWORDS) && k !== :_rng_seeds]
+function _check_keywords(kw::NamedTuple, prob)
+    ln = _uses_lattice_newton(prob.f.phases)
+    bad = [k for k in keys(kw) if !(k in SOLVE_KEYWORDS) && !(ln && k in (:abstol, :reltol)) && k !== :_rng_seeds]
     isempty(bad) && return nothing
+    if !ln && any(in((:abstol, :reltol)), bad) && _has_implicit_field_phase(prob.f.phases)
+        tolbad = filter(in((:abstol, :reltol)), bad)
+        throw(
+            ArgumentError(
+                string(
+                    "`solve`/`init` of a PottsProblem: the keyword", length(tolbad) == 1 ? " " : "s ",
+                    join(("`$k`" for k in tolbad), ", "), length(tolbad) == 1 ? " is" : " are ",
+                    "ignored under automatic `nlsolve = nothing` (which uses a fixed 1e-3 ∞-norm test); ",
+                    "pass `nlsolve = LatticeNewton()` on `field_solver` to use `abstol`/`reltol`"
+                )
+            )
+        )
+    end
     throw(
         ArgumentError(
             string(
@@ -491,7 +507,7 @@ problem's `kwargs` are merged in first.
 """
 function CommonSolve.init(prob::PottsProblem, alg::AbstractCPMAlgorithm; kwargs...)
     kw = _merge_kwargs(prob.kwargs, NamedTuple(kwargs))
-    _check_keywords(kw)
+    _check_keywords(kw, prob)
     return _init_kw(prob, alg; kw...)
 end
 
@@ -500,8 +516,9 @@ function _init_kw(
         save_end::Bool = true, save_everystep::Union{Nothing, Bool} = nothing, save_idxs = nothing, tstops = Int[],
         maxiters::Integer = typemax(Int), callback = nothing, checkpoint = nothing, seed = nothing, rng = nothing,
         verbose::Bool = true, progress::Bool = false, progress_steps::Integer = 1000, progress_name = "CPM",
-        progress_id = :CorePotts, alias = nothing, dense::Bool = false, _rng_seeds::Bool = true
+        progress_id = :CorePotts, alias = nothing, dense::Bool = false, abstol = nothing, reltol = nothing, _rng_seeds::Bool = true
     )
+    atol, rtol = Problems.resolve_tols(abstol, reltol)
     dense && throw(
         ArgumentError(
             "`dense = true`: a Potts solution has no interpolation between MCS (a label field has no " *
@@ -530,6 +547,7 @@ function _init_kw(
     o = (;
         saveat, save_start, save_end, save_everystep, save_idxs, tstops, maxiters = Int(maxiters), verbose, progress,
         progress_steps = Int(progress_steps), progress_name = string(progress_name), progress_id = Symbol(progress_id),
+        abstol = atol, reltol = rtol,
     )
     verbose || return Base.ScopedValues.with(Exec.VERBOSE => false) do
         _init_run(prob, alg, backend, checkpoint, callback, o)
@@ -567,7 +585,8 @@ function _options(@nospecialize(prob::PottsProblem), o::NamedTuple)
     o.verbose && _warn_large_saves(prob, saveat, o.save_start, o.save_end, o.save_everystep, leaves)
     return PottsOptions(
         saveat, o.save_start, o.save_end, o.save_everystep, leaves, o.maxiters, o.verbose, o.progress,
-        o.progress_steps, o.progress_name, o.progress_id, _in_span(tstops, t0, t1), copy(saveat), tstops
+        o.progress_steps, o.progress_name, o.progress_id, _in_span(tstops, t0, t1), copy(saveat), tstops,
+        o.abstol, o.reltol,
     )
 end
 
@@ -727,7 +746,7 @@ Base.@nospecializeinfer function _init(
     state = _to_backend(backend, deepcopy(prob.u0))
     p = _to_backend(backend, prob.p)
     # the trajectory's launch state of its phases (field steps bind to the state's arrays)
-    ctx = merge(ctx, phase_contexts(prob.f.phases, state, p, backend))
+    ctx = merge(ctx, phase_contexts(prob.f.phases, state, p, backend; abstol = opts.abstol, reltol = opts.reltol))
     # a problem with derivative parts (F3-21b): the shadow tangent store of the field phases
     ctx = with_tangent(ctx, prob.tangent, prob.f.phases, state, p, backend, fresh)
     cache = alg isa CheckerboardCPM ?

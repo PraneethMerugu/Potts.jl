@@ -186,7 +186,7 @@ function CorePotts.PottsProblem(
     f = _problem_function(c, T, spec, values, hctx, Dict{Any, Any}(); track)
     _check_field_substeps(f, p; tspan)
     frozen = _frozen_mask(sys, st)
-    _host_init!(f, st, p, hctx, seed, replica, repeat)
+    _host_init!(f, st, p, hctx, seed, replica, repeat, NamedTuple(kwargs))
     tangent = isempty(seeds) && isempty(u0seeds) ? nothing : _tangent(c, T, p, seeds, opd; u0 = u0seeds)
     return CorePotts.PottsProblem(
         f, st, lat, tspan, p; contact = getfield(c, :contact_spec), proposal = getfield(c, :proposal_spec), relations,
@@ -1384,9 +1384,11 @@ end
 
 # The at-init phases (integrals, energy snapshots) on a host state, so a problem's `u0` is
 # consistent before `init` (e.g. `total_energy(prob)`).
-function _host_init!(@nospecialize(f), @nospecialize(st), @nospecialize(p), @nospecialize(ctx), seed, replica, repeat)
+function _host_init!(@nospecialize(f), @nospecialize(st), @nospecialize(p), @nospecialize(ctx), seed, replica, repeat, kw)
     key = CorePotts.RNGKey(seed, replica, repeat)
-    ctx = merge(ctx, CorePotts.phase_contexts(f.phases, st, p, CorePotts.CPU()))
+    # (only `LatticeNewton` groups read them; `init` refuses them for the others)
+    atol, rtol = LatticeFields.Problems.resolve_tols(get(kw, :abstol, nothing), get(kw, :reltol, nothing))
+    ctx = merge(ctx, CorePotts.phase_contexts(f.phases, st, p, CorePotts.CPU(); abstol = atol, reltol = rtol))
     CorePotts._run_phases(f.phases.at_init, st, p, ctx, key, 0, CorePotts.CPU())
     return st
 end
@@ -1697,5 +1699,5 @@ function CorePotts.remake_state(info::PottsModelInfo, prob, u0::_SymbolicMap)
     ncell = maximum(Int32.(get(opd, ownership, Int32[])); init = Int32(0))
     values = _parameter_dict(info.csys, prob.p)
     st = _ode_layout(_initial_state(info.csys, opd, info.T, max(old, ncell + free), values), info.csys, info.solvers)
-    return _host_init!(prob.f, st, prob.p, info.ctx, prob.seed, prob.replica, prob.repeat)
+    return _host_init!(prob.f, st, prob.p, info.ctx, prob.seed, prob.replica, prob.repeat, prob.kwargs)
 end

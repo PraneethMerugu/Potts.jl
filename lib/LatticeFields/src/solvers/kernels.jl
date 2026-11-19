@@ -384,9 +384,10 @@ and there is no deflated `pcg.u`, the solution is copied into `out.u` (kernel `s
 function solver_program(op::CellOperator{N}, pcg::Bool; lane = F32, state = lane,
         deflate::Bool = false) where {N}
     deflate && !(pcg && deflatable(op)) &&
-        _refuse(op, "`deflate = true` needs `DevicePCG` on a group with no mask, no Dirichlet or ",
+        _refuse(
+        op, "`deflate = true` needs `LatticePCG` on a group with no mask, no Dirichlet or ",
             "Robin face and a constant shift (the constant mode is then an eigenvector); this group ",
-            pcg ? "is anchored or has a field-valued shift" : "uses stationary `Multigrid`",
+        pcg ? "is anchored or has a field-valued shift" : "uses stationary `LatticeMultigrid`",
             ": use `deflate = :auto`")
     L, lb = depth(op)
     cs = coef_slots(op)

@@ -116,16 +116,16 @@ using .LP_report: fd
     c = only(ig.runtimes).cache
     sv = only(r.solver for r in c.rows)
     @test length(sv.prog.hierarchy) > 1
-        @test rline(rep, "linsolve") == "  linsolve   DevicePCG() (`linsolve = :auto`), multigrid levels $(length(sv.prog.hierarchy))"
+        @test rline(rep, "linsolve") == "  linsolve   LatticePCG() (`linsolve = :auto`), multigrid levels $(length(sv.prog.hierarchy))"
         @test rline(rep, "numbers") == "  numbers    state Float64, compute Float64, solver $(sv.T) (`solver_type = :auto`)"
     @test rline(rep, "newton") == "  newton     1, automatic: the operator is exact" && c.newton == 1
     @test rline(rep, "operator") == "  operator   J̃ exact"
     @test rline(rep, "run") == "  run        1 window; 1 solve; status Success"
     # a given count and inner print as given, in keyword form
-        r2 = sprint(field_report, init(p, BackwardEuler(; newton = 3, substeps = 2, linsolve = Multigrid(; cycles = 2)); dt = 0.01))
-    @test rline(r2, "newton") == "  newton     3: given (`newton = 3`)"
+        r2 = sprint(field_report, init(p, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 3), substeps = 2, linsolve = LatticeMultigrid(; cycles = 2)); dt = 0.01))
+        @test rline(r2, "newton") == "  newton     3: given (`nlsolve = LatticeNewton(; max_iter = 3)`)"
     # (as resolved: `cycles = k` sets the budget)
-        @test startswith(rline(r2, "linsolve"), "  linsolve   Multigrid(; cycles = 2, maxiters = 2), multigrid levels") && !occursin("linsolve = :auto", r2)
+        @test startswith(rline(r2, "linsolve"), "  linsolve   LatticeMultigrid(; cycles = 2, maxiters = 2), multigrid levels") && !occursin("linsolve = :auto", r2)
     @test endswith(rline(r2, "substeps"), "[user]") && occursin("2 substeps", rline(r2, "window"))
 end
 end
@@ -203,9 +203,11 @@ using .LP_report: fd
     n0 = length(gq.plans)
         rb = sprint(io -> field_report(io, q, BackwardEuler(); dt = 0.01))
     @test length(gq.plans) == n0 && LFP.lattice_metadata(q).builds[] == 0
-        @test endswith(rline(rb, "substeps"), "[least]") && rline(rb, "linsolve") == "  linsolve   DevicePCG() (`linsolve = :auto`)"
+        @test endswith(rline(rb, "substeps"), "[least]") && rline(rb, "linsolve") == "  linsolve   LatticePCG() (`linsolve = :auto`)"
     @test rline(rb, "newton") == "  newton     automatic (set when the group is bound)"
-        @test rline(sprint(io -> field_report(io, q, BackwardEuler(; newton = 3); dt = 0.01)), "newton") == "  newton     3: given"
+        @test rline(sprint(io -> field_report(io, q, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 3)); dt = 0.01)), "newton") ==
+            "  newton     3: given (`nlsolve = LatticeNewton(; max_iter = 3)`)"
+        @test occursin("κ = 0.0001", rline(sprint(io -> field_report(io, q, BackwardEuler(; nlsolve = LatticeNewton(; κ = 1.0e-4, max_iter = 3)); dt = 0.01)), "newton"))
     # groups and the coupling rule, as the integrator prints them; local rows as `init` binds them (review S4)
     p2 = discretize(rsys2(), LatticeDiscretization(Grid((8, 8))))
         r2 = sprint(io -> field_report(io, p2, FieldGroups(rce => ExplicitEuler(), roe => BackwardEuler()); dt = 0.01))
@@ -235,13 +237,13 @@ using .LP_report: fd
         ig = init(q, BackwardEuler(); dt = 0.01)
     sv = only(r.solver for r in only(ig.runtimes).cache.rows)
     @test f isa LFP.ImplicitFacts && f.keys == ["rc"] && f.newton == 1 && f.levels == [length(sv.prog.hierarchy)]
-        @test f.solver_type == [sv.T] && f.exact && !f.coupled && !f.given && f.linsolve == Any[DevicePCG()] && f.h == 0.01
+        @test f.solver_type == [sv.T] && f.exact && !f.coupled && !f.given && f.linsolve == Any[LatticePCG()] && f.h == 0.01
     @test f == LFP.implicit_facts(only(ig.runtimes))
         @test solve(q, ExplicitEuler(); dt = 0.01).stats.implicit == [nothing]
     p2 = discretize(rsys2(), LatticeDiscretization(Grid((8, 8))))
-        s2 = solve(p2, FieldGroups(rce => ExplicitEuler(), roe => BackwardEuler(; newton = 2)); dt = 0.01)
+        s2 = solve(p2, FieldGroups(rce => ExplicitEuler(), roe => BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 2))); dt = 0.01)
     @test s2.stats.implicit[1] === nothing && s2.stats.implicit[2].newton == 2 && s2.stats.implicit[2].given
-    @test occursin("2: given (`newton = 2`)", sprint(field_report, s2))
+        @test occursin("2: given (`nlsolve = LatticeNewton(; max_iter = 2)`)", sprint(field_report, s2))
 end
 end
 
@@ -281,7 +283,7 @@ using .LP_report: fd
     @test LFP._primal_cache(only(ig.runtimes).cache).cs !== nothing
     @test rline(rq_, "operator") == "  operator   J̃ the whole Jacobian (coupled solve: exact)"
     @test rline(rq_, "newton") == "  newton     1, automatic: the coupled solve's operator is the whole Jacobian (linear: one solve)"
-        @test startswith(rline(rq_, "linsolve"), "  linsolve   coupled solve DeviceGMRES(), each field preconditioned by DevicePCG(; maxiters = 2)")
+        @test startswith(rline(rq_, "linsolve"), "  linsolve   coupled solve LatticeGMRES(), each field preconditioned by LatticePCG(; maxiters = 2)")
     # (QuasiSteady: one solve per window, no substep line and no explicit bound, review N3)
     @test rline(rq_, "window") == "  window     dt = 0.05, one steady solve per window" && rline(rq_, "substeps") == "" &&
           rline(rq_, "bound") == ""

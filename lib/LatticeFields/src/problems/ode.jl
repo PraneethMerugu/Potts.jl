@@ -91,7 +91,7 @@ SciMLBase.wrap_sol(sol, ::LatticeMetadata) = sol
 The default start of a problem with steady rows `0 ~ rhs` on an OrdinaryDiffEq solver (its
 `DefaultInit`; review R2): the steady fields of `u` are solved at `t` from the other fields of
 `u`, by the owned `QuasiSteady` solve of those rows on the lattice (sparse: the operator of the
-rows, `DevicePCG` to `reltol = 1e-10`), so the solver starts on the algebraic constraint. The
+rows, `LatticePCG` to `reltol = 1e-10`), so the solver starts on the algebraic constraint. The
 other fields are kept. `initializealg = BrownFullBasicInit()` or `CheckInit()` given to `solve`
 takes the place of this.
 """
@@ -108,7 +108,7 @@ function steady_start!(u, prob, p, t)
     g = _field_problem(fp.program, fp.state, u isa Vector ? copy(u) : Array(u), (Float64(primal(t)), Float64(primal(t)) + δ),
         collect(p.values), p.tables, p.inputs, fp.backend, fp.index, fp.faces, fp.stability, fp.kind, fp.initkeys,
         fp.options, fp.group)
-    inner = Solvers.DevicePCG(; reltol = 1.0e-10, maxiters = 400)
+    inner = Solvers.LatticePCG(; reltol = 1.0e-10, maxiters = 400)
     alg = FieldGroups((k => QuasiSteady(; linsolve = inner) for k in st)...; default = ExplicitEuler())
     ig = CommonSolve.init(g, alg; dt = δ, save_start = false)
     CommonSolve.step!(ig)          # (the steady rows are solved first, from the fields at `t`)
@@ -1652,6 +1652,9 @@ const LatticeTimeFreeProblem = Union{LatticeLinearProblem, LatticeResidualProble
 CommonSolve.solve(prob::LatticeTimeFreeProblem, alg::Union{AbstractFieldAlgorithm, LinearSolver}; kw...) =
     CommonSolve.solve(field_problem(prob), alg; kw...)
 CommonSolve.solve(prob::LatticeTimeFreeProblem; kw...) = CommonSolve.solve(field_problem(prob); kw...)
+# `LatticePCG` and `LatticeGMRES` on the `LinearProblem` itself are LinearSolve solves
+CommonSolve.solve(prob::LatticeLinearProblem, alg::Union{Solvers.LatticePCG, Solvers.LatticeGMRES}; kw...) =
+    CommonSolve.solve!(CommonSolve.init(prob, alg; kw...))
 # a remake builds the problem again at the new values (`A` and `b` are the parameters')
 function SciMLBase.remake(prob::LatticeLinearProblem; p = missing, u0 = missing, inputs = (), kw...)
     isempty(kw) || throw(ArgumentError(string("`remake` of a system with no time takes `p`, `u0` and `inputs`; got ",

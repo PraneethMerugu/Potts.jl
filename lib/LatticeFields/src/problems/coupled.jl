@@ -1,11 +1,11 @@
 # The coupled solve of an implicit group (F3-12d): a QuasiSteady group whose fields read one
-# another, or given `linsolve = DeviceGMRES(…)`, solves its rows together. Each
+# another, or given `linsolve = LatticeGMRES(…)`, solves its rows together. Each
 # Newton iteration solves `A δ = G(u_k)` over every field of the group at once, `A` the whole
 # Jacobian of the residual (`A v = −(G(u_k + εv) − G(u_k))/ε`: the residual kernels themselves,
 # every term of every row, the cross terms included; exact at any ε for a group that is linear
 # in its state, so ε is then as large as the iterate, else `√eps` of it), by Krylov.jl's restarted
 # flexible GMRES, preconditioned block by block (each field's own operator `J̃_ii`, solved by its
-# `FieldSolver` with the `DeviceGMRES`'s `precond`). The update, the clip, the Newton check and
+# `FieldSolver` with the `LatticeGMRES`'s `precs`). The update, the clip, the Newton check and
 # the status word are the per-row path's.
 #
 # Krylov.jl runs on the host and keeps the Hessenberg matrix there; the vectors are a
@@ -255,9 +255,10 @@ mutable struct CoupledRow{IR, P, G, L}
     pres::L
 end
 
-# the operator `A` and the preconditioner of a coupled solve, as Krylov.jl takes them (`mul!`);
+# the operator `A` (a SciML operator: the `A` of the coupled `LinearProblem`) and the preconditioner
+# of a coupled solve, as Krylov.jl takes them (`mul!`);
 # `it` holds the Newton iteration's arguments `(par, first, t1, h, k)`
-mutable struct CoupledOperator{RS, WK, A, S, B, K}
+mutable struct CoupledOperator{RS, WK, A, S, B, K} <: SciMLOperators.AbstractSciMLOperator{K}
     rows::RS
     walk::WK
     b::A
@@ -280,20 +281,22 @@ Base.size(P::CoupledPrecond) = (0, 0)
 """
     CoupledKrylov
 
-The coupled solve of a `QuasiSteady` group (F3-12d, [`Solvers.DeviceGMRES`](@ref
-LatticeFields.Solvers.DeviceGMRES)): its rows ([`CoupledRow`](@ref)), the operator and the
+The coupled solve of a `QuasiSteady` group ([`Solvers.LatticeGMRES`](@ref
+LatticeFields.Solvers.LatticeGMRES)): its rows ([`CoupledRow`](@ref)), the operator and the
 preconditioner, the Krylov.jl FGMRES workspace (restart `m`), the iterate's partials, the
 scalars (device), their host copy, the `budget`, `rtol`, whether the group is linear in its
 state, `mkpres`, which binds the perturbed residual launches at new parameters (a rebind), and
-a nonlinear steady group's pending growth check (`pending`, `σ`, `keys`; r2 M1).
+a nonlinear steady group's pending growth check (`pending`, `σ`, `keys`).
 """
-mutable struct CoupledKrylov{RS, WK, OP, PC, WS, A, S, H}
+mutable struct CoupledKrylov{RS, WK, OP, PC, WS, A, CT, S, H, L}
     rows::RS
     walk::WK
     A::OP
     P::PC
     ws::WS
     part::A
+    cnt::CT
+    hist::A
     nbt::Int
     scal::S
     hscal::H
@@ -305,13 +308,14 @@ mutable struct CoupledKrylov{RS, WK, OP, PC, WS, A, S, H}
     pending::Int            # a nonlinear steady group's growth check: 1 due after its next solve
     σ::Float64              # (its Cayley shift)
     keys::Vector{String}
+    lin::L                  # the LinearSolve cache of the coupled solve (its `cacheval` is `ws`)
 end
 
 """
     coupled_solve(alg, op, s, keys) -> Bool
 
 Whether the implicit group of the fields `keys` (its operator `op`, its stepped program `s`)
-takes the coupled solve (F3-12d): a `QuasiSteady` group with `linsolve = DeviceGMRES(…)` always, or
+takes the coupled solve: a `QuasiSteady` group with `linsolve = LatticeGMRES(…)` always, or
 when its rows read one another in a cycle, or a row reads another field of the group through a
 term the operator does not take as a source (a cross diffusion `D laplacian(o)`, a nonlinear term such
 as `c²`, a term that reads its own field and another): its steady rows are then solved together,
@@ -320,8 +324,8 @@ reads (exact for an acyclic group with linear cross terms).
 """
 function coupled_solve(alg, op::OperatorSpec, s::Program, keys)
     alg isa AbstractImplicitFieldAlgorithm || return false
-    alg isa QuasiSteady || return false                # (a time stepper refuses `DeviceGMRES`)
-    alg.linsolve isa Solvers.DeviceGMRES && return true
+    alg isa QuasiSteady || return false                # (a time stepper refuses `LatticeGMRES`)
+    alg.linsolve isa Solvers.LatticeGMRES && return true
     length(keys) >= 2 || return false
     deps = _group_deps(s, keys)
     _, cyclic = _solve_order(s, keys)
@@ -336,26 +340,36 @@ coupled_solve(c::ImplicitCache) = c.cs !== nothing
 _primal_cache(c) = c
 coupled_solve(::Any) = false
 
-# the Krylov solver of a coupled group from its `linsolve`: a `DeviceGMRES` as given; `:auto` (and
-# the steady start's default) its defaults; a `DevicePCG` or `Multigrid` given for the group
-# becomes each field's preconditioner
+# the Krylov solver of a coupled group from its `linsolve`: a `LatticeGMRES` as given; `:auto` (and
+# the steady start's default) its defaults; a `LatticePCG` or `LatticeMultigrid` given for the
+# group becomes each field's preconditioner
 function _krylov(inner)
-    inner isa Solvers.DeviceGMRES && return inner
-    inner === :auto && return Solvers.DeviceGMRES()
+    inner isa LatticeGMRES && return inner
+    inner === :auto && return LatticeGMRES()
     inner === STEADY_INNER && return STEADY_GMRES
-    return Solvers.DeviceGMRES(; precond = inner)
+    LinearSolve.needs_concrete_A(inner) && throw(
+        ArgumentError(
+            string(
+                "QuasiSteady: coupled steady fields have no concrete sparse matrix; `", repr(inner),
+                "` cannot solve the coupled operator: leave `linsolve` out or give `linsolve = LatticeGMRES()`"
+            )
+        )
+    )
+    return LatticeGMRES(; precs = LatticeBlockSolve(inner))
 end
 # the per-field solver of a row of a group (its preconditioner when the group is coupled)
 _row_inner(alg, coupled::Bool) = coupled ? Solvers.gmres_precond(_krylov(alg.linsolve)) : alg.linsolve
 # the steady start's and the time-free solve's coupled solver (as `STEADY_INNER`, 64 PCG
 # iterations to 1e-6: a larger budget, its fields' preconditioners at their default)
-const STEADY_GMRES = Solvers.DeviceGMRES(; gmres_restart = 30, maxiters = 240)
+const STEADY_GMRES = LatticeGMRES(; gmres_restart = 30, maxiters = 240)
 
 # A coupled solve's arrays and launches for the rows `rows` (in solve order) of a group bound to
 # store `st` (stepped program `s`, residual program `rs`, its store `rst`, the residual plans
-# `sps`, the slot sets `rcurs` per row), `kr` its `DeviceGMRES`
-function _bind_coupled(rows, kr::Solvers.DeviceGMRES, st::FieldStore, s::Program, rs::Program, rst::FieldStore, sps, rcurss,
-        swaps, keys, init, backend, p, c, op::OperatorSpec, alg)
+# `sps`, the slot sets `rcurs` per row), `kr` its `LatticeGMRES`
+function _bind_coupled(
+        rows, kr::LatticeGMRES, st::FieldStore, s::Program, rs::Program, rst::FieldStore, sps, rcurss,
+        swaps, keys, init, backend, p, c, op::OperatorSpec, alg, auto_newton::Bool = true
+    )
     K = mapreduce(r -> eltype(r.resarr), promote_type, rows)
     for r in rows
         eltype(r.bufs[1]) === Float16 && throw(ArgumentError(string(_algname(alg), ": the fields ", join(("`$k`" for k in keys), ", "),
@@ -397,13 +411,26 @@ function _bind_coupled(rows, kr::Solvers.DeviceGMRES, st::FieldStore, s::Program
     linear = all(r -> r.op.linear, rows)
     f = K(linear ? 1.0 : sqrt(Float64(eps(K))))
     A = CoupledOperator(rws, walk, b, _zeros(st.backend, K, cld(ntot, NB) + 1), scal, f, ntot, st.backend, (1, true, 0.0, 1.0, 0))
-    P = CoupledPrecond(rws, walk, st.backend)
+    # the coupled solve as a LinearSolve cache: `LatticeGMRES` (its FGMRES workspace the cache),
+    # its `precs` the block preconditioner `P` (a right preconditioner)
+    kr = Solvers.owned(kr)
+    kr.precs isa LatticeBlockSolve || throw(
+        ArgumentError(
+            string(
+                _algname(alg), ": the coupled solve of ", join(("`$k`" for k in keys), ", "), " takes the block preconditioner ",
+                "`precs = LatticeBlockSolve(…)`; got `precs = ", repr(kr.precs), "`"
+            )
+        )
+    )
+    u0 = _cvec(_zeros(st.backend, K, ntot), vpart, st.backend)
+    lin = CommonSolve.init(SciMLBase.LinearProblem(A, b; u0), kr)
+    P, ws = lin.Pr, lin.cacheval
     m = min(kr.gmres_restart, kr.maxiters)
-    ws = Krylov.FgmresWorkspace(Krylov.KrylovConstructor(b); memory = m)
-    sizehint!(ws.stats.residuals, kr.maxiters + cld(kr.maxiters, m) + 2)
+    hist = _zeros(st.backend, K, 4)
+    auto_newton || Exec.launch!(backend, _reset_hist_body!, 1, (hist,))
     return CoupledKrylov(
-        rws, walk, A, P, ws, _zeros(st.backend, K, off), off, scal, zeros(K, GM_SCALARS), m, kr.maxiters,
-        kr.reltol, linear, mkpres, 0, 1.0, collect(String, keys)
+        rws, walk, A, P, ws, _zeros(st.backend, K, off), _zeros(st.backend, UInt32, off), hist, off, scal, zeros(K, GM_SCALARS), m, kr.maxiters,
+        kr.reltol, linear, mkpres, 0, 1.0, collect(String, keys), lin
     )
 end
 
@@ -443,8 +470,7 @@ function (cr::CoupledRow)(o::_CsOp{:precond})
         Exec.launch!(backend, _zero_body!, length(w), (w,))
     end
     sv = r.solver
-    Solvers.lift!(sv)
-    Solvers.solve!(sv)
+    _solve_cache!(r.lin)
     x = sv.slot[r.xid] == 1 ? r.xs[1] : r.xs[2]
     Exec.launch!(backend, _cs_pout_body!, cr.n, (y, cr.voff, x, r.mask, r.dom))
     return nothing
@@ -465,20 +491,28 @@ end
 # masks and clip, and with `check` the Newton check of iteration `it` (a steady group: no real
 # reduction is cause 64)
 function (cr::CoupledRow)(o::_CsOp{:update})
-    (x, par, first, last, check, it, hits, window, steady, word, backend) = o.a
+    (x, par, first, last, check, it, hits, window, steady, word, backend, checkdiv, failbudget, gate, auto, part, cnt, atol, rtol) = o.a
     r = cr.row
     dst = r.bufs[3 - par]
     src = first ? r.bufs[par] : dst
     n = cr.n
     δ = view(x, (cr.voff + 1):(cr.voff + n))
-    Exec.launch!(backend, _be_update_body!, n, (dst, src, δ, nothing, nothing, nothing, nothing, r.mask, r.mval, r.mvf, r.lo, last))
+    Exec.launch!(backend, _be_update_body!, n, (dst, src, δ, nothing, nothing, nothing, nothing, r.mask, r.mval, r.mvf, r.lo, last, gate))
     check || return nothing
     nb = cld(n, NB)
-    T = eltype(r.part)
-    Exec.launch!(backend, _be_norms_body!, nb, (r.part, dst, r.bufs[par], δ, nothing, nothing, nothing, nothing, r.mask, n))
-    fl = eltype(dst) === Float16 ? T(10 * eps(T) + 2 * eps(Float16)) : T(10 * eps(T))
-    Exec.launch!(backend, _be_newton_body!, 1, (word, r.part, Int32(nb), r.hist, Int32(it), hits, T(NEWTON_EPS), fl, window,
-        steady, UInt32(64)))
+    if auto
+        T = eltype(r.part)
+        Exec.launch!(backend, _be_norms_body!, nb, (r.part, dst, r.bufs[par], δ, nothing, nothing, nothing, nothing, r.mask, n, gate))
+        fl = eltype(dst) === Float16 ? T(10 * eps(T) + 2 * eps(Float16)) : T(10 * eps(T))
+        Exec.launch!(
+            backend, _be_newton_body!, 1, (
+                word, r.part, Int32(nb), r.hist, Int32(it), hits, T(NEWTON_EPS), fl, window,
+                steady, UInt32(64), checkdiv, failbudget,
+            )
+        )
+    else
+        Exec.launch!(backend, _be_kappa_norms_body!, nb, (part, cnt, cr.off, dst, r.bufs[par], δ, nothing, nothing, nothing, nothing, r.mask, r.dom, atol, rtol, n, gate))
+    end
     return nothing
 end
 
@@ -495,6 +529,11 @@ function LinearAlgebra.mul!(y::CoupledVector, P::CoupledPrecond, v::CoupledVecto
     P.walk(P.rows, _csop(:precond, (y.a, v.a, P.backend)))
     return y
 end
+# (as LinearSolve applies a preconditioner)
+LinearAlgebra.ldiv!(y::CoupledVector, P::CoupledPrecond, v::CoupledVector) = LinearAlgebra.mul!(y, P, v)
+# the block preconditioner of a coupled solve: each field's own solve (`bs.linsolve`, bound on its
+# row when the group was built), a right preconditioner
+(bs::LatticeBlockSolve)(A::CoupledOperator, p) = (LinearAlgebra.I, CoupledPrecond(A.rows, A.walk, A.backend))
 
 # stop a solve whose residual is not finite (it cannot recover)
 struct _CsStop end
@@ -505,7 +544,7 @@ struct _CsStop end
 # status, every row's update and check. `a` as the rows' iteration (`(par, first, t1, h, k, last,
 # window, backend, γ, word, it, check, hits, gate)`).
 function _coupled_iteration!(cs::CoupledKrylov, c, a)
-    par, first, t1, h, k, last, window, backend, _, word, it, check, hits, gate = a
+    par, first, t1, h, k, last, window, backend, _, word, it, check, hits, gate, checkdiv, failbudget, auto, κ, abstol, reltol, _, _ = a
     rows, walk, A, scal, ws = cs.rows, cs.walk, cs.A, cs.scal, cs.ws
     K = eltype(scal)
     steady = isinf(h)
@@ -524,8 +563,7 @@ function _coupled_iteration!(cs::CoupledKrylov, c, a)
         Krylov.kdivcopy!(A.n, x, A.b, one(K))
         Krylov.kfill!(x, zero(K))
     else
-        Krylov.fgmres!(ws, A, A.b; N = cs.P, restart = true, rtol = K(cs.rtol), atol = K(cs.rtol * Solvers.FLOOR),
-            itmax = cs.budget, history = true, callback = _CsStop())
+        _solve_cache!(cs.lin)                    # FGMRES (`LatticeGMRES`), from the cache's workspace `ws`
         st = ws.stats
         rn = st.residuals
         hs = cs.hscal
@@ -541,7 +579,16 @@ function _coupled_iteration!(cs::CoupledKrylov, c, a)
         copyto!(scal, 1, hs, 1, _GM_TOL)
     end
     Exec.launch!(backend, _cs_status_body!, 1, (word, scal, Int32(window), steady, gate))
-    walk(rows, _csop(:update, (ws.x.a, par, first, last, check, it, hits, window, steady, word, backend)))
+    walk(rows, _csop(:update, (ws.x.a, par, first, last, check, it, hits, window, steady, word, backend, checkdiv, failbudget, gate, auto, cs.part, cs.cnt, K(abstol), K(reltol))))
+    if check && !auto
+        Exec.launch!(
+            backend, _be_kappa_newton_body!, 1, (
+                word, cs.part, cs.cnt, Int32(cs.nbt), cs.hist, Int32(it), hits, K(κ),
+                window, steady, UInt32(64), checkdiv, failbudget, gate, UInt32(length(rows)),
+                K(1 // 10^5), K(3) / K(10), K(100) * sqrt(eps(one(K))),
+            )
+        )
+    end
     return nothing
 end
 

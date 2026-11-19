@@ -27,7 +27,7 @@ ODEs. It differentiates only the fields' response to the parameters along the pa
 - A parameter that only the CPM or an ODE reads has derivative 0, and a warning says so. The
   acceptance of a copy is piecewise constant in it: use likelihood-free inference for it.
 - An implicit field solver gives the derivative of each converged stage. For a nonlinear term,
-  give `newton = k` (k ≥ 2), so that the run converges too; a warning names the case.
+  give `nlsolve = LatticeNewton(; max_iter = k)` (k ≥ 2), so that the run converges too; a warning names the case.
 - Central differences of the run agree with it at the same seed, as long as the ± runs keep the
   same path. Check that `sol.u[i].ownership` is equal across them.
 

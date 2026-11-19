@@ -31,12 +31,12 @@ using LatticeFields.IR: F16, Grid, Program, ProgramBuilder, Coef, FaceRule, Node
 using CommonSolve: solve, init, step!, solve!
 using KernelAbstractions: KernelAbstractions
 using LatticeFields: Exec, Problems
-using LatticeFields.Solvers: DevicePCG, DeviceGMRES, Multigrid, VCycle
+using LatticeFields.Solvers: LatticePCG, LatticeGMRES, LatticeMultigrid, LatticeBlockSolve, VCycle
 using LatticeFields.Compile: CompileOptions, fingerprint_text, fuse_update, promote_dual, primal
 using LatticeFields.IR: fieldid, RESOLVE, degenerate, leveldims, sitecoefs
 using LatticeFields.Problems: FieldProblem, FieldSlot, LatticeIndex,
-                              ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, RT_DT,
-    substep_counts, steady_fields, field_series, field_jacobian_sparsity, LatticeMultigrid, LatticePCG,
+    ExplicitEuler, ExplicitMap, LatticeNewton, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, RT_DT,
+    substep_counts, steady_fields, field_series, field_jacobian_sparsity,
                               field_report
 using ModelingToolkitBase: ModelingToolkitBase, PDESystem, Pre, ShiftIndex, Shift, Hold, Sample
 using SciMLBase: AbstractDiscretization, NullParameters, remake
@@ -57,10 +57,11 @@ export get_lattice_placement, get_lattice_storage, get_lattice_level, get_lattic
 export vocabulary_issues, check_vocabulary
 export LatticeDiscretization, FiniteVolume, CompiledField, discretize, symbolic_discretize,
        parse_bcs, linearity, Grid, HEX, Interval, lattice_domain
-export ExplicitEuler, ExplicitMap, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, solve, init, step!, solve!, stability_bound,
+export ExplicitEuler, ExplicitMap, LatticeNewton, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, solve, init, step!, solve!, stability_bound,
        substep_counts, steady_fields, field_series, field_report
-export DevicePCG, DeviceGMRES, Multigrid    # the linear solvers (`linsolve = …`); `VCycle` is public
-export field_jacobian_sparsity, LatticeMultigrid, LatticePCG   # the Jacobian's pattern, the preconditioner and the linear solver of SciML's implicit solvers (F4-07, F4-08)
+export LatticePCG, LatticeGMRES, LatticeMultigrid   # the linear solvers (LinearSolve algorithms; `linsolve = …`); `VCycle` is public
+export LatticeBlockSolve                          # coupled block preconditioner (LinearSolve `precs` function)
+export field_jacobian_sparsity              # the Jacobian's pattern
 export remake, getp, getu, setp            # the routes its messages give (SciMLBase, SymbolicIndexingInterface)
 
 # ---------------------------------------------------------------------------------------

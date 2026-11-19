@@ -22,7 +22,7 @@ fam_chain = PDESystem(
     [fu(0, x, y) ~ x; fv(0, x, y) ~ y; fam_faces; fv(t, x, 0) ~ fv(t, x, 1)], fam_dom, [t, x, y], [fam_u, fam_v], [fDc, fk]; name = :famc)
 fam_map = PDESystem([Shift(t, 1)(fam_N) ~ (fN(t, x + fdx, y) + fN(t, x - fdx, y)) / 2], [fN(0, x, y) ~ x],
     [t ∈ Interval(0.0, 3.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [fam_N], [fdx]; name = :famm)
-const FAM_INNER = DevicePCG(; reltol = 1.0e-12, maxiters = 64)
+const FAM_INNER = LatticePCG(; reltol = 1.0e-12, maxiters = 64)
 # (name, system, algorithm, the keywords of `solve`: the window `dt`)
 const FAM_CASES = [
     ("ExplicitEuler", fam_rate, ExplicitEuler(), (; dt = 0.01)),

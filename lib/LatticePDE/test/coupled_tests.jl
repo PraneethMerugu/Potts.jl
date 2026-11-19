@@ -1,14 +1,14 @@
 # F3-12d: the coupled steady solve. A QuasiSteady group whose fields read one another (a cycle,
 # a cross diffusion `D laplacian(o)`, a nonlinear cross term such as `c²`) solves its rows together:
-# each Newton iteration is one restarted flexible GMRES solve (`DeviceGMRES`) of the whole
+# each Newton iteration is one restarted flexible GMRES solve (`LatticeGMRES`) of the whole
 # Jacobian of the group's residual, preconditioned by each field's own multigrid solve. Every
 # testset checks against an oracle that does not use the solver: the dense steady Jacobian of
 # the `:ode` rate (assembled by columns), an exact solution, or a dense split recursion.
 # Base (c40a68f8, ~/lpwork/f312d/nc-base-lp.log): the q1 loops in one steady group end
 # `ConvergenceFailure` (block iteration ratio ≈ k/√(δμ) = 15.8, 1.6), the N5 rows warn
-# (`newton = 40`), the feedback loop is refused ("reads the steady field … of the loop"), the
+# (`nlsolve = LatticeNewton(; max_iter = 40)`), the feedback loop is refused ("reads the steady field … of the loop"), the
 # indefinite pair is accepted (each row decays) and diverges, the strong `init = :steady` loop
-# fails at t = 0, and `DeviceGMRES` is not defined.
+# fails at t = 0, and `LatticeGMRES` is not defined.
 
 @testsetup module LP_coupled
 using Test, LatticePDE
@@ -37,8 +37,8 @@ include("shared/coupled.jl")
 include("shared/export_all.jl")
 end
 
-@testitem "F3-12d: the q1 loops in one QuasiSteady group equal the dense steady solve" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
-@testset "F3-12d: the q1 loops in one QuasiSteady group equal the dense steady solve" begin
+@testitem "the q1 loops in one QuasiSteady group equal the dense steady solve" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
+    @testset "the q1 loops in one QuasiSteady group equal the dense steady solve" begin
     # every system is well posed (max Re λ < 0, reviewer probe s3); the block iteration's ratio
     # k/√(δμ) is 5, 15.8, 0.5 and 1.6: the coupled solve does not depend on it
     for (δ, k) in ((1.0, 5.0), (0.1, 5.0), (1.0, 0.5), (0.1, 0.5))
@@ -62,27 +62,27 @@ end
         ig = init(cown(q1(0.1, 5.0)), QuasiSteady(); dt = 0.1, save_end = false, save_everystep = false)
     @test bwarm(ig) == 0
     # the solve's words: a budget hit names the GMRES budget; `show`, the keywords
-        r = @test_logs (:warn, r"the linear solve reached its budget .*`linsolve = DeviceGMRES\(; maxiters = n\)`") match_mode = :any solve(
-            cown(q1(0.1, 5.0)), QuasiSteady(; linsolve = DeviceGMRES(; maxiters = 2)); dt = 0.1
+        r = @test_logs (:warn, r"the linear solve reached its budget .*`linsolve = LatticeGMRES\(; maxiters = n\)`") match_mode = :any solve(
+            cown(q1(0.1, 5.0)), QuasiSteady(; linsolve = LatticeGMRES(; maxiters = 2)); dt = 0.1
         )
     @test r.retcode == ReturnCode.Success
-        g = DeviceGMRES(; gmres_restart = 8, maxiters = 40, reltol = 1.0e-8, precond = DevicePCG(; maxiters = 3))
+        g = LatticeGMRES(; gmres_restart = 8, maxiters = 40, reltol = 1.0e-8, precs = LatticeBlockSolve(LatticePCG(; maxiters = 3)))
     @test eval(Meta.parse(repr(g))) == g
-        @test !occursin("maxiters", repr(DeviceGMRES()))               # a default stays out of the display
-        @test startswith(cmsg(() -> DeviceGMRES(; gmres_restart = 1)), "`DeviceGMRES(; gmres_restart = 1)`: `gmres_restart` is the Krylov basis size")
-        @test startswith(cmsg(() -> DeviceGMRES(; maxiters = 0)), "`DeviceGMRES(; maxiters = 0)`: `maxiters` is the most GMRES iterations")
-        @test startswith(cmsg(() -> DeviceGMRES(; reltol = -1.0)), "`DeviceGMRES(; reltol = -1.0)`: `reltol` is the relative residual")
-    @test startswith(cmsg(() -> DeviceGMRES(; precond = :pcg)), "`DeviceGMRES(; precond = :pcg)`: `precond` is each field's solve")
+        @test !occursin("maxiters", repr(LatticeGMRES()))               # a default stays out of the display
+        @test startswith(cmsg(() -> LatticeGMRES(; gmres_restart = 1)), "`LatticeGMRES(; gmres_restart = 1)`: `gmres_restart` is the Krylov basis size")
+        @test startswith(cmsg(() -> LatticeGMRES(; maxiters = 0)), "`LatticeGMRES(; maxiters = 0)`: `maxiters` is the most GMRES iterations")
+        @test startswith(cmsg(() -> LatticeGMRES(; reltol = -1.0)), "`LatticeGMRES(; reltol = -1.0)`: `reltol` is the relative residual")
+        @test startswith(cmsg(() -> LatticeBlockSolve(:pcg)), "`LatticeBlockSolve(:pcg)`: the block preconditioner solves each field with")
     op = LSB.CellOperator((8, 8); shift = 1.0)
         @test occursin(
-            "solves an implicit group's fields together (F3-12d); a `FieldSolver` solves one field: give it the `DeviceGMRES`'s per-field solver, `linsolve = DevicePCG(; maxiters = 2)`",
-            cmsg(() -> LSB.FieldSolver(KernelAbstractions.CPU(), op; linsolve = DeviceGMRES()))
+            "solves an implicit group's fields together; a `FieldSolver` solves one field: give it the `LatticeGMRES`'s per-field solver, `linsolve = LatticePCG(; maxiters = 2)`",
+            cmsg(() -> LSB.FieldSolver(KernelAbstractions.CPU(), op; linsolve = LatticeGMRES()))
         )
 end
 end
 
-@testitem "F3-12d (r4 N5): a cross Δ in a steady row and `0 ~ q − c²`: no warning on a default run, equal to the oracle" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
-@testset "F3-12d (r4 N5): a cross Δ in a steady row and `0 ~ q − c²`: no warning on a default run, equal to the oracle" begin
+@testitem "a cross Δ in a steady row and `0 ~ q − c²`: no warning on a default run, equal to the oracle" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
+    @testset "a cross Δ in a steady row and `0 ~ q − c²`: no warning on a default run, equal to the oracle" begin
     # a cross Δ in a cycle and one way; both linear: the dense steady solve of their rate form
         for (eqs, rates) in (
                 (
@@ -178,7 +178,7 @@ end
     # steady groups that read one another only (two `QuasiSteady` with other keywords): one
     # `QuasiSteady` is the route, and it solves
     pq = cown(q1(0.1, 5.0; steady = true))
-        m = cmsg(() -> init(pq, FieldGroups(cae => QuasiSteady(), cbe => QuasiSteady(; newton = 3)); dt = 0.1))
+        m = cmsg(() -> init(pq, FieldGroups(cae => QuasiSteady(), cbe => QuasiSteady(; nlsolve = LatticeNewton(; max_iter = 3))); dt = 0.1))
     @test occursin("every group of the loop is steady, so no window damps the lag between them", m) &&
           occursin("Give `ca`, `cb` one `QuasiSteady` (the same keywords: one group, whose steady rows are solved together)", m) ||
           (println("qs only ", m); false)
@@ -244,22 +244,22 @@ end
 end
 end
 
-@testitem "F3-12d r1 (user ruling 2026-11-03): the time steppers refuse `linsolve = DeviceGMRES(…)`, with the default route" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
-    @testset "F3-12d r1 (user ruling 2026-11-03): the time steppers refuse `linsolve = DeviceGMRES(…)`, with the default route" begin
+@testitem "the time steppers refuse `linsolve = LatticeGMRES(…)`, with the default route" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
+    @testset "the time steppers refuse `linsolve = LatticeGMRES(…)`, with the default route" begin
         # it was slower than the default linear solver in every case measured (~/lpwork/f312d-g1.txt)
     for A in (BackwardEuler, CrankNicolson, BDF2)
-            m = cmsg(() -> A(; linsolve = DeviceGMRES()))
-            @test startswith(m, "$(nameof(A)): `linsolve = DeviceGMRES(") &&
+            m = cmsg(() -> A(; linsolve = LatticeGMRES()))
+            @test startswith(m, "$(nameof(A)): `linsolve = LatticeGMRES(") &&
               occursin("is the solver of a coupled steady group (`QuasiSteady`, whose fields read one another)", m) &&
-                endswith(m, "leave `linsolve` out, or give `linsolve = DevicePCG(; maxiters = n)`") || (println("r1 S2 ", m); false)
-            @test A(; linsolve = DevicePCG(; maxiters = 12)) isa A                  # (the route)
+                endswith(m, "leave `linsolve` out, or give `linsolve = LatticePCG(; maxiters = n)`") || (println("r1 S2 ", m); false)
+            @test A(; linsolve = LatticePCG(; maxiters = 12)) isa A                  # (the route)
     end
-        @test QuasiSteady(; linsolve = DeviceGMRES()).linsolve isa DeviceGMRES
+        @test QuasiSteady(; linsolve = LatticeGMRES()).linsolve isa LatticeGMRES
 end
 end
 
-@testitem "F3-12d r1 M2: a site-varying coupled system with a growing mode is refused (estimated through the operator)" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
-@testset "F3-12d r1 M2: a site-varying coupled system with a growing mode is refused (estimated through the operator)" begin
+@testitem "a site-varying coupled system with a growing mode is refused (estimated through the operator)" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
+    @testset "a site-varying coupled system with a growing mode is refused (estimated through the operator)" begin
     # the reviewer's case (~/lpwork/f3rev17/p1.jl): `(3 + 0.1x) b`, dense max Re λ = +2.03; the
     # constant-coefficient check cannot see it (a coefficient that varies by site). Base (51d1f386):
     # `Success` at the unstable steady state, no warning
@@ -353,8 +353,8 @@ end
 end
 end
 
-@testitem "F3-12d r1 M1, S1: no coupled code compiles for one field; every Krylov.jl hook is ours" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
-@testset "F3-12d r1 M1, S1: no coupled code compiles for one field; every Krylov.jl hook is ours" begin
+@testitem "no coupled code compiles for one field; every Krylov.jl hook is ours" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
+    @testset "no coupled code compiles for one field; every Krylov.jl hook is ours" begin
     # M1: a single-field QuasiSteady `init` in a fresh process compiles no `coupled_modes` and no
     # `_bind_coupled` (both behind barriers). Base (51d1f386): coupled_modes compiled
         # runic: off

@@ -62,7 +62,7 @@ end
         step!(b)
         @test Array(a.u) == Array(b.u)                  # the report changed nothing in the run
         if alg isa BackwardEuler
-                @test occursin("DevicePCG() (`linsolve = :auto`), multigrid levels", rd) && occursin("1 window; 1 solve; status Success", rd)
+                @test occursin("LatticePCG() (`linsolve = :auto`), multigrid levels", rd) && occursin("1 window; 1 solve; status Success", rd)
         end
     end
         s = solve(mk(32, PDEV), BackwardEuler(); dt = 0.01)

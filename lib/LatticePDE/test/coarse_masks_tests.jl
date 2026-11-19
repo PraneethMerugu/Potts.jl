@@ -328,10 +328,13 @@ end
         A = [0.05 * lap(4, 0.25) - I 0.7 * R; 0.4 * P 0.02 * lap(8, 0.125) - I]
         h = 0.1
         for alg in (
-                BackwardEuler(; linsolve = DevicePCG(; reltol = 1.0e-12, maxiters = 64), newton = 30),
+                BackwardEuler(;
+                    linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 64),
+                    nlsolve = LatticeNewton(; κ = 1.0e-6, max_iter = 30),
+                ),
                 ExplicitEuler(; substeps = 1),
             )
-            ig = init(p, alg; dt = alg isa BackwardEuler ? h : h / 200)
+            ig = alg isa BackwardEuler ? init(p, alg; dt = h, reltol = 1.0e-6, abstol = 1.0e-8) : init(p, alg; dt = h / 200)
             for _ in 1:(alg isa BackwardEuler ? 1 : 200)
                 step!(ig)
             end

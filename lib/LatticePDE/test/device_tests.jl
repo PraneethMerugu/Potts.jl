@@ -232,8 +232,8 @@ end
 end
 
 # F3-15: the implicit algorithms of F3-07…F3-12 on the device in Float32 against the host form
-# of the same problem (the host executor, the same Float32 program; a fixed `newton`, so the
-# host's early stop does not enter): field and numeric rows, advection (a defect correction), a
+# of the same problem (the host executor, the same Float32 program; with explicit `max_iter`,
+# host and device share early stopping via the device convergence gate): field and numeric rows, advection (a defect correction), a
 # switch, a Robin face, Crank–Nicolson's and BDF2's stages, a QuasiSteady window and a steady
 # start. The device and the host run the same reduction trees (the host's emulated form), so
 # they agree to the D-158 tolerance (`rtol = 1e-12` of the field's scale; measured below).
@@ -247,14 +247,15 @@ using .LP_device: fd, kron
         sw = psys([D(ce) ~ Di * laplacian(ce) - ki * max(ce - 0.3, 0) + 0.5], [c(0, x, y) ~ x * y], [Di, ki])
         rob = psys([D(ce) ~ Di * laplacian(ce) - ki * ce + 1], [c(0, x, y) ~ x * y, 1.5 * c(t, 1, y) + Differential(x)(c(t, 1, y)) ~ 0.2], [Di, ki])
         cases = [
-            ("BackwardEuler, field row", field, BackwardEuler(; newton = 1)),
-            ("BackwardEuler, advection", adv, BackwardEuler(; newton = 6)),
-            ("BackwardEuler, switch", sw, BackwardEuler(; newton = 2)),
-            ("BackwardEuler, Robin face", rob, BackwardEuler(; newton = 1)),
-            ("CrankNicolson", field, CrankNicolson(; newton = 1)),
-            ("BDF2", field, BDF2(; newton = 1)),
-            ("QuasiSteady", field, QuasiSteady(; newton = 1)),
-            ("BackwardEuler, steady start", field, BackwardEuler(; newton = 1, init = :steady)),
+            ("BackwardEuler, field row", field, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 1, check_div = false))),
+            ("BackwardEuler, advection", adv, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 6))),
+            ("BackwardEuler, advection tight κ", adv, BackwardEuler(; nlsolve = LatticeNewton(; κ = 1.0f-4, max_iter = 12))),
+            ("BackwardEuler, switch", sw, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 6))),
+            ("BackwardEuler, Robin face", rob, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 1, check_div = false))),
+            ("CrankNicolson", field, CrankNicolson(; nlsolve = LatticeNewton(; max_iter = 1, check_div = false))),
+            ("BDF2", field, BDF2(; nlsolve = LatticeNewton(; max_iter = 1, check_div = false))),
+            ("QuasiSteady", field, QuasiSteady(; nlsolve = LatticeNewton(; max_iter = 1, check_div = false))),
+            ("BackwardEuler, steady start", field, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 1, check_div = false), init = :steady)),
         ]
     mk(sys, be) = discretize(sys, LatticeDiscretization(Grid((32, 32)); T = Float32, backend = be))
     for (name, sys, alg) in cases
@@ -267,9 +268,28 @@ using .LP_device: fd, kron
         @test rel <= 1e-12
     end
     # control: the comparison sees a change of one Newton iteration (the advection case)
-        sd = solve(mk(adv, PDEV), BackwardEuler(; newton = 5); dt = 0.1, saveat = 0.5)
-        sh = solve(mk(adv, KernelAbstractions.CPU()), BackwardEuler(; newton = 6); dt = 0.1, saveat = 0.5)
+        sd = solve(mk(adv, PDEV), BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 4)); dt = 0.1, saveat = 0.5)
+        sh = solve(mk(adv, KernelAbstractions.CPU()), BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 5)); dt = 0.1, saveat = 0.5)
     @test maximum(abs, Array(sd[ce, end]) .- sh[ce, end]) / maximum(abs, sh[ce, end]) > 1e-12
+        # an uncoupled two-field LatticeNewton group: one group norm over both rows on the device
+        @variables b2(..)
+        b2e = b2(t, x, y)
+        two = PDESystem(
+            [
+                D(ce) ~ 0.05f0 * laplacian(ce) - 0.5f0 * ce^2 + 0.2f0,
+                D(b2e) ~ 0.05f0 * laplacian(b2e) - 0.5f0 * b2e^2 + 10.0f0,
+            ],
+            [c(0, x, y) ~ 0.1f0 * x, b2(0, x, y) ~ 0.1f0 + 0.1f0 * y],
+            [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)],
+            [t, x, y], [ce, b2e], Any[]; name = :two15,
+        )
+        two_alg = BackwardEuler(; linsolve = LatticePCG(; reltol = 1.0f-5, maxiters = 32), nlsolve = LatticeNewton(; κ = 1.0f-3, max_iter = 12))
+        sd2 = solve(mk(two, PDEV), two_alg; dt = 0.1, saveat = 0.5)
+        sh2 = solve(mk(two, KernelAbstractions.CPU()), two_alg; dt = 0.1, saveat = 0.5)
+        @test sd2.retcode == sh2.retcode == SciMLBase.ReturnCode.Success
+        @test sd2.t ≈ sh2.t && sd2.stats.solves == sh2.stats.solves
+        @test maximum(i -> maximum(abs, Array(sd2[ce, i]) .- sh2[ce, i]) / maximum(abs, sh2[ce, i]), eachindex(sd2.t)) <= 1.0e-12
+        @test maximum(i -> maximum(abs, Array(sd2[b2e, i]) .- sh2[b2e, i]) / maximum(abs, sh2[b2e, i]), eachindex(sd2.t)) <= 1.0e-12
 end
 end
 
@@ -301,11 +321,11 @@ using .LP_device: fd, kron
         igd, igh = init(mk(PDEV, 32), alg; dt = 0.05), init(mk(KernelAbstractions.CPU(), 32), alg; dt = 0.05)
     foreach(_ -> (step!(igd); step!(igh)), 1:2)
     @test LatticeFields.Problems.field_stats(igd).solves == LatticeFields.Problems.field_stats(igh).solves > 0
-    # the time of two windows at 128² with the gate and with every iteration run (`newton = k`)
+        # the time of two windows at 128² with the gate (automatic vs explicit `max_iter = k`)
     p = mk(PDEV, 128)
         run(a) = (solve(p, a; dt = 0.05); KernelAbstractions.synchronize(PDEV); @elapsed (solve(p, a; dt = 0.05); KernelAbstractions.synchronize(PDEV)))
         k = only(init(p, alg; dt = 0.05).runtimes).cache.newton
-        tg, tk = minimum(_ -> run(alg), 1:3), minimum(_ -> run(BackwardEuler(; newton = k)), 1:3)
+        tg, tk = minimum(_ -> run(alg), 1:3), minimum(_ -> run(BackwardEuler(; nlsolve = LatticeNewton(; max_iter = k))), 1:3)
         @info "F3-15 R1 at 128² ($pgpu), $(init(p, alg; dt = 0.05).substeps) substeps per window: the gated run $(round(tg; digits = 3)) s, every iteration ($k) $(round(tk; digits = 3)) s"
 end
 end
@@ -320,7 +340,7 @@ using .LP_device: fd, kron
     cd4 = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(first(@variables cdev(..))), LatticePDE.LatticeLevel, Coarse(4)))
     q, g = @variables q(..)::Int32 [input = true] g(..) [input = true]
     mk(be) = cown(csys(cd4, q, g), CDIMS; T = Float32, backend = be, ins = [q(t, x, y) => CQ1, g(t, x, y) => CG])
-        for alg in (ExplicitEuler(), BackwardEuler(; newton = 2))
+        for alg in (ExplicitEuler(), BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 2)))
             id, ih = init(mk(PDEV), alg; dt = 0.05), init(mk(KernelAbstractions.CPU()), alg; dt = 0.05)
         for n in 1:6
             n == 4 && (id[q(t, x, y)] = CQ2; ih[q(t, x, y)] = CQ2)          # the mask moves
@@ -426,7 +446,7 @@ using .LP_device: fd, kron
         [dvc(t, x, y), dvq(t, x, y), dvk(t, x, y), dvm(t, x, y)], Num[]; name = :dv4)
     mk(be) = cown(dvsys, CDIMS; T = Float32, backend = be, domain = dvm,
         ins = [dvq(t, x, y) => dvQ, dvk(t, x, y) => dvK, dvm(t, x, y) => dvD])
-        for alg in (ExplicitEuler(), BackwardEuler(; newton = 2))
+        for alg in (ExplicitEuler(), BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 2)))
             sd, sh = solve(mk(PDEV), alg; dt = 0.05), solve(mk(KernelAbstractions.CPU()), alg; dt = 0.05)
         a, b = Array(sd[dvc(t, x, y), end]), sh[dvc(t, x, y), end]
         @test size(a) == (4, 4) && maximum(abs, a .- b) / maximum(abs, b) <= 1e-6
@@ -444,9 +464,17 @@ using .LP_device: fd, kron
         nl = PDESystem(
             [D(cae) ~ 0.1 * laplacian(cae) - 2.0 * cae / (0.5 + cae) + cbe + x, D(cbe) ~ 0.1 * laplacian(cbe) - cbe + 0.5 * cae^2],
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.3), [t, x, y], [cae, cbe], Any[]; name = :nldev)
-        for (lab, s, alg) in (("q1 QS", q1(0.1, 5.0; steady = true), QuasiSteady()), ("nonlinear QS", nl, QuasiSteady()))
-        for T in (Float32, Float64)
-            mk(bk) = discretize(s, LatticeDiscretization(Grid((24, 20)); T, backend = bk))
+        for (lab, s, mkalg) in (
+                ("q1 QS", q1(0.1, 5.0; steady = true), _ -> QuasiSteady()),
+                ("nonlinear QS", nl, _ -> QuasiSteady()),
+                # (Float32 takes κ = 1e-2: at κ = 1e-4 and the default tolerances its Newton iteration
+                # diverges in window 3 after 14 solves, on the device and the host alike; κ = 1e-2
+                # takes 12 solves, and Float64 at κ = 1e-4 takes 7)
+                ("nonlinear QS κ", nl, T -> QuasiSteady(; nlsolve = LatticeNewton(; κ = T === Float32 ? 1.0f-2 : 1.0e-4, max_iter = 20))),
+            )
+            for T in (Float32, Float64)
+                alg = mkalg(T)
+                mk(bk) = discretize(s, LatticeDiscretization(Grid((24, 20)); T, backend = bk))
                 sd, sd2 = solve(mk(PDEV), alg; dt = 0.1, saveat = 0.1), solve(mk(PDEV), alg; dt = 0.1, saveat = 0.1)
                 sh = solve(mk(KernelAbstractions.CPU()), alg; dt = 0.1, saveat = 0.1)
             @test sd.retcode == sh.retcode == SciMLBase.ReturnCode.Success
@@ -506,7 +534,7 @@ pgpu == "rocm" && @testset "F3-21a: Dual results on $pgpu equal the host's" begi
         ddom, [t, x, y], [dae, dbe], [kd, Dd, gd]; name = :dc)
         for (sys, alg, v) in (
                 (mr, BackwardEuler(), ce), (mr, CrankNicolson(), ce),
-                (cp, QuasiSteady(; linsolve = DeviceGMRES(; reltol = 1.0e-12)), dae),
+                (cp, QuasiSteady(; linsolve = LatticeGMRES(; reltol = 1.0e-12)), dae),
             )
         u = map((KernelAbstractions.CPU(), PDEV)) do be
             pr = discretize(sys, LatticeDiscretization(Grid((16, 16)); T = Float64, backend = be))
@@ -527,7 +555,7 @@ end
 @testitem "F3-22: cross-grid operators on pgpu equal the host" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
 using .LP_device: fd, kron
 @testset "F3-22: cross-grid operators on $pgpu equal the host" begin
-        tight = DevicePCG(; reltol = 1.0f-6, maxiters = 64)
+        tight = LatticePCG(; reltol = 1.0f-6, maxiters = 64)
     for (name, op) in (("Δ", XOPS[1][2]), ("DivKGrad harmonic", XOPS[2][2]), ("Advect", XOPS[4][2]))
         p = xpair(op)
             for (pr, row) in ((p.cf, xu), (p.fc, xcc)), (alg, dt) in ((ExplicitEuler(; substeps = 1), 2.0f-3), (BackwardEuler(; substeps = 1, linsolve = tight), 1.0f-2))
@@ -576,10 +604,10 @@ using .LP_device: fd, kron
             [D(ce) ~ Dr * laplacian(ce) - kr * ce], [c(0, x, y) ~ x * y, (-1 - 4t) * c(t, 0, y) - Differential(x)(c(t, 0, y)) ~ 0.0],
         [Dr, kr])
         cases = [
-            ("per site, BackwardEuler", site, BackwardEuler(; newton = 1), 0.1),
+            ("per site, BackwardEuler", site, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 1, check_div = false)), 0.1),
             ("per site, ExplicitEuler", site, ExplicitEuler(), 0.05),
-            ("mixed sign, BackwardEuler", mixed, BackwardEuler(; newton = 4), 0.1),
-            ("time, BackwardEuler", timed, BackwardEuler(; newton = 3), 0.1),
+            ("mixed sign, BackwardEuler", mixed, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 4)), 0.1),
+            ("time, BackwardEuler", timed, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 10)), 0.1),
             ("time, ExplicitEuler (re-bounded)", timed, ExplicitEuler(), 0.05),
         ]
     mk(sys, be) = discretize(sys, LatticeDiscretization(Grid((32, 32)); T = Float32, backend = be))
@@ -592,6 +620,12 @@ using .LP_device: fd, kron
         @info "F4-12b $name: device vs host (Float32) max relative difference $rel"
         @test rel <= 1e-5
     end
+        # Robin-defect row with explicit max_iter enables the device gate and matches host solve count
+        ig_rob = init(mk(timed, PDEV), BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 10)); dt = 0.1)
+        @test only(ig_rob.runtimes).cache.gate !== nothing
+        sd_rob = solve(mk(timed, PDEV), BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 10)); dt = 0.1)
+        sh_rob = solve(mk(timed, KernelAbstractions.CPU()), BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 10)); dt = 0.1)
+        @test sd_rob.stats.solves == sh_rob.stats.solves
 end
 end
 

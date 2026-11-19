@@ -272,7 +272,7 @@ end
 @testitem "TS1-1: cross-grid operator coupled models equal LatticePDE owned run" setup = [FieldsCoarseSetup] tags = [:potts, :fields_coarse] begin
     @testset "TS1-1: cross-grid operator coupled models equal LatticePDE owned run" begin
         # Cross-grid operators (`FcXd`, `FcXr`, `FcCut`, `FcCutBcs`)
-        tight = DevicePCG(; reltol = 1.0e-12, maxiters = 64)
+        tight = LatticePCG(; reltol = 1.0e-12, maxiters = 64)
         for fs in (ExplicitEuler(; substeps = 40), BackwardEuler(; linsolve = tight), CrankNicolson(; linsolve = tight))
             ax, rx = fx_run(FcXd, 3, fs), fx_run(FcXr, 3, fs)
             @test ax == rx && all(maximum(abs, ax[end][i]) > 0 for i in 1:3)
@@ -429,7 +429,7 @@ end
 
 @testitem "F3-22: a Dual runs through a cross-grid term in a model (against central differences)" setup = [FieldsCoarseSetup] tags = [:potts, :fields_coarse] begin
     @testset "F3-22: a Dual runs through a cross-grid term in a model (against central differences)" begin
-        tight = DevicePCG(; reltol = 1.0e-11, maxiters = 60)
+        tight = LatticePCG(; reltol = 1.0e-11, maxiters = 60)
         W = [0.01 * (i + 2j) for i in 1:16, j in 1:12]
         q(sol) = sum(W .* sol.u[end].site.u)
         drun(fs, p) = solve(PottsProblem(FcXd(; name = :x), [fc_op(); :Dc => p], (0, 6); field_solver = fs, seed = 3), SequentialCPM(); saveat = 0:2:6)

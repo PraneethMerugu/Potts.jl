@@ -1844,7 +1844,7 @@ initial value starts at 0.
 
 **Systems with no time** (F3-12b). A system whose variables are the axes only (`[x, y]`, every
 row `0 ~ rhs` or an aux field) is a steady system, and
-`solve(prob)` (or `solve(prob, QuasiSteady(; inner, newton))`) solves it once from the cold
+`solve(prob)` (or `solve(prob, QuasiSteady(; linsolve, nlsolve))`) solves it once from the cold
 `u0`, with the inner solver to `reltol = 1e-6` within 64 iterations unless `linsolve` is given. It
 returns a one-state solution at t = 0, read by the time-free symbol (`sol[c(x, y)]`). The
 problem is a `LinearProblem` when every row is linear (`A` a `LatticeOperator`, which applies

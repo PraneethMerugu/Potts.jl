@@ -51,7 +51,8 @@ end
 # GPUArrays' fill, registered for the D-157 scan once a store on a device whose default float
 # is Float32 holds Float64 (a declared `lattice_storage`, or a declared T = Float64: R-F3c)
 _generic_bodies() = (_copy_body!, _clamp_body!, _clamp_field_body!, _zero_body!, _clip_body!, _be_norms_body!,
-    _be_newton_body!, _be_gate_iter_body!, _be_gate_body!, _be_update_body!, _be_shift_body!, _be_rhs_body!,
+    _be_newton_body!, _be_kappa_norms_body!, _be_kappa_newton_body!, _reset_hist_body!,
+    _be_gate_iter_body!, _be_gate_body!, _be_update_body!, _be_shift_body!, _be_rhs_body!,
     _be_status_body!, _bdf2_q_body!)
 function _register_float64_store!(backend, bufs)
     (Exec.ishost(backend) || Exec.default_float(backend) === Float64) && return nothing

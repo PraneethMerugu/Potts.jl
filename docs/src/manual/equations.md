@@ -248,14 +248,14 @@ sol[:q][end], sol[:g][end]
 
 | Keyword | Values | Default |
 |---|---|---|
-| `field_solver` | `ExplicitEuler(; substeps, lower_bound)`: `substeps` explicit steps per MCS, values clipped at `lower_bound`; `BackwardEuler(; substeps, newton, lower_bound, linsolve, solver_type)`: implicit steps, each a linear solve with `linsolve`; `CrankNicolson(…)`, `BDF2(…)`: second-order implicit steps, the same keywords; `QuasiSteady(; newton, linsolve, solver_type)`: the steady state in each MCS; each takes `init = :steady` (a steady start) and `compute_type` (`Float32` or `Float64`: the number type its kernels compute in; default the problem's `T`) | `ExplicitEuler()`: the automatic count, no clip |
+| `field_solver` | `ExplicitEuler(; substeps, lower_bound)`: `substeps` explicit steps per MCS, values clipped at `lower_bound`; `BackwardEuler(; substeps, nlsolve, lower_bound, linsolve, solver_type)`: implicit steps, each a linear solve with `linsolve`; `CrankNicolson(…)`, `BDF2(…)`: second-order implicit steps, the same keywords; `QuasiSteady(; nlsolve, linsolve, solver_type)`: the steady state in each MCS; each takes `init = :steady` (a steady start) and `compute_type` (`Float32` or `Float64`: the number type its kernels compute in; default the problem's `T`) | `ExplicitEuler()`: the automatic count, no clip |
 | `ode_solver` | `ExplicitEuler(; substeps)`, `Potts.RK4(; substeps)`, `Adaptive(alg; kwargs...)` | `ExplicitEuler()`, one step per MCS |
 | `solvers` | `[x => solver, …]`, per variable or component | — |
 
-The linear solvers `DevicePCG(; maxiters, reltol, precond)`, `Multigrid(; cycle = (2, 2), cycles, reltol, maxiters)`
-and `DeviceGMRES(; gmres_restart, maxiters, reltol, precond)` are the `LatticeFields.Solvers` objects, the same in Potts and LatticePDE. They are the
+The linear solvers `LatticePCG(; precs = LatticeMultigrid(), maxiters, reltol)`, `LatticeMultigrid(; cycle = (2, 2), cycles, reltol, maxiters)`
+and `LatticeGMRES(; gmres_restart, maxiters, reltol, precs = LatticeBlockSolve())` are the `LatticeFields.Solvers` objects, the same in Potts and LatticePDE. They are the
 `linsolve` linear solver of the implicit field solvers:
-`field_solver = BackwardEuler(; linsolve = DevicePCG(; maxiters = 12))`. They are not field
+`field_solver = BackwardEuler(; linsolve = LatticePCG(; maxiters = 12))`. They are not field
 solvers themselves: `field_solver`, `solvers` and `FieldGroups` refuse them and give that
 route.
 
@@ -276,19 +276,50 @@ another in a loop, or a second face coefficient next to a kind-dependent multipl
 solve), are
 corrected by more Newton iterations. Their substep count keeps the correction converging (for
 the sum of their bounds; advection with a constant velocity: `substeps ≥ 2 · mcs_duration ·
-Σ_a 2|u_a|/h_a`), and `newton` defaults to the iterations that this bound needs. A second
+Σ_a 2|u_a|/h_a`), and `nlsolve = nothing` chooses the automatic Newton iteration count that this bound needs. A second
 diffusion term that is at most half the one in the solve, face by face (with a multiplier in
 the solve that is positive everywhere), needs no extra substeps at all, only a few more
 Newton iterations. When these rules raise a `substeps = n` you gave, a warning says which
-rule and which terms. `DeviceGMRES` is not a time stepper's `linsolve` (it is the coupled steady
+rule and which terms. `LatticeGMRES` is not a time stepper's `linsolve` (it is the coupled steady
 solve's, below): on BackwardEuler, CrankNicolson and BDF2 it was slower in every case measured,
-so they refuse it. Each substep
-checks the Newton correction: a correction that does not reach the tolerance in `newton`
-iterations is counted in `integ.stats` and warned once with the route (a larger `newton = k`,
-or more substeps). A correction that diverges ends the run with
-`ReturnCode.ConvergenceFailure`, and the warning gives more substeps as the route. Under the
-automatic count, a CPU run stops a substep's Newton iterations once the correction meets the
-tolerance; a GPU runs them all, so CPU and GPU results agree to the tolerance, not bitwise. On
+so they refuse it. Each substep checks the Newton correction `δ_k = u_{k+1} − u_k` in the working float type `T`.
+There are two distinct Newton modes:
+
+- **Automatic mode (`nlsolve = nothing`)**: the solver picks the iteration count from the
+  contraction bound of any out-of-operator terms and runs its own infinity-norm stopping rule
+  (not `NLNewton`'s criterion):
+  `‖δ_k‖∞ ≤ 1e-3 ‖u_k − uⁿ‖∞ + 10 eps(T) ‖u_k‖∞` (for `QuasiSteady`, which has no `uⁿ` step
+  increment, `‖δ_k‖∞ ≤ 1e-3 ‖u_k‖∞ + 10 eps(T) ‖u_k‖∞`; Float16 storage adds the update's
+  rounding floor; on an exact switch group, the second iteration is a flip pass with no check).
+  If all iterations run without meeting the rule, the step is still accepted (`ReturnCode.Success`),
+  counted in `integ.stats.newton_budget`, and warned once with the route
+  (`nlsolve = LatticeNewton(; κ, max_iter)` or more substeps). Passing `abstol` or `reltol`
+  to `solve`/`init` when no group uses `LatticeNewton` is refused with an `ArgumentError`,
+  because automatic mode ignores them.
+- **`LatticeNewton` mode (`nlsolve = LatticeNewton(; κ = 1 // 100, max_iter = 10, check_div = true)`)**:
+  uses OrdinaryDiffEq's `NLNewton` criterion over all active unknowns in the group (one global
+  norm for both row-by-row and coupled groups). At iteration `k`, `ndz` is the RMS norm of
+  `δ_k / (abstol + max(|uⁿ|, |u_k|) * reltol)` using the pre-update iterate `u_k` and the
+  `abstol` and `reltol` keywords from `solve` (SciML defaults `1e-6` and `1e-3` when unset,
+  forwarded through both `LatticePDE` and `Potts` front ends; on mixed `FieldGroups`, only
+  `LatticeNewton` groups read them). Note that `NLNewton`'s defaults (`κ = 1 // 100`,
+  `abstol = 1e-6`, `reltol = 1e-3`) are looser than the automatic `1e-3 ‖u_k − uⁿ‖∞` test
+  when steps are small; pass a smaller `κ` or tighter `reltol` when tight accuracy is needed.
+  On iteration 1, convergence requires `ndz < 1e-5` (checked even when `max_iter = 1`).
+  After iteration 1, `θ = prev_θ = max(0.3 * prev_θ, ndz / ndzprev)` (carried across steps
+  and reset on `reinit!` or parameter, table, or state writes) and `η = θ / (1 - θ)` test
+  `η * ndz < κ`. Near the floating-point precision limit (`|θ - 1| ≤ 100 * sqrt(eps(T))`,
+  type-faithful in `T`), `ndz ≤ 1` converges (keeping the already-applied update `δ_k`
+  without overwriting `prev_θ`), while `ndz > 1` aborts when `check_div = true`. When
+  `check_div = true` (default), diverging rates (`θ > 2`) or budget hits end the run with
+  `ReturnCode.ConvergenceFailure` (with more substeps as the route); when `check_div = false`,
+  divergence-growth checks are disabled and a budget hit is accepted as converged
+  (`ReturnCode.Success`, counted once per group per substep in `stats.newton_budget` and
+  warned, unlike automatic mode's per-row count; pass `LatticeNewton(; max_iter = 1, check_div = false)`
+  for a single unchecked sweep).
+
+Under both modes, a CPU run stops early once the group converges (or fails); a GPU closes its
+convergence gate once the group converges (or fails). On
 a hexagonal lattice every implicit solver runs on the six-neighbor Laplacian. A face condition
 there applies along each link that leaves the box: a diagonal link takes the condition of
 axis 1's face when it leaves along axis 1, else axis 2's. Explicit and implicit steps use the
@@ -324,16 +355,17 @@ solved for a field it reads that has no other equation, the one under its operat
 with `QuasiSteady` by default (another solver for it is an error). Its sign does not matter:
 `0 ~ kd * c - Dc * laplacian(c) - s` is the same row. A local row such as `0 ~ -2c + 0.5e`, with
 `D(e) ~ …`, is `c`'s. Steady fields are solved first in each MCS, so the other fields read their
-values of that MCS. `QuasiSteady` also solves a rate row `D(c) ~ rhs` as `0 = rhs`. It takes `newton`, `linsolve` and `solver_type` with the meanings above, and has no
-`substeps` and no `lower_bound`. A linear field takes one linear solve per MCS; a nonlinear or
-switched one takes up to 8 Newton iterations, checked as above. When a term stays out of the
-operator (advection), the count comes from the bound on that term against the decay, from 8
-to at most 40 iterations; give `newton = k` if the warning says the budget is hit. Steady
+values of that MCS. `QuasiSteady` also solves a rate row `D(c) ~ rhs` as `0 = rhs`. It takes `nlsolve`, `linsolve` and `solver_type` with the meanings above, and has no
+`substeps` and no `lower_bound`. A linear field takes one linear solve per MCS. A nonlinear or switched field takes up to 8 Newton iterations in automatic mode (`‖δ_k‖∞ ≤ 1e-3 ‖u_k‖∞ + 10 eps(T) ‖u_k‖∞`), or up to
+`max_iter` with `nlsolve = LatticeNewton(; κ, max_iter, check_div)` using the rate-scaled
+`NLNewton` criterion above (with one global RMS norm across all unknowns in the group). When a term stays out of the operator (advection), the automatic count comes from
+the bound on that term against the decay, from 8 to at most 40 iterations; give
+`nlsolve = LatticeNewton(; κ, max_iter)` if the warning says the budget is hit. Steady
 fields of one `QuasiSteady` that read one another (`0 ~ laplacian(a) - a + 0.5b` and
 `0 ~ laplacian(b) - b - 0.5a`, a cross diffusion `laplacian(b)` in `a`'s row), and a row with a term the
 operator does not see (`c²` in `0 ~ q - c^2`), are solved together: one Newton iteration
 solves all their rows with every cross term in the operator, by a restarted GMRES
-(`DeviceGMRES()`; a `DevicePCG` or `Multigrid` given as `linsolve` is its preconditioner). There
+(`LatticeGMRES()`; a `LatticePCG` or `LatticeMultigrid` given as `linsolve` is its preconditioner). There
 is no gain limit inside one group. On a GPU this solve waits for each dot product of its GMRES
 (about 100–250 waits per MCS for a strong pair), where every other field solver waits for none;
 a model whose fields are not coupled this way keeps a GPU step free of waits. A coupled steady system whose slowest mode grows or is

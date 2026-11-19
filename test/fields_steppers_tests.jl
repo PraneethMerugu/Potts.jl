@@ -143,7 +143,7 @@ end
     @testset "F3-12a: QuasiSteady steady state and binding" begin
         dims = (12, 10)
         # the steady state: an MCS later the field is unchanged to the solver's tolerance
-        a, _ = fi_runA(FiSteady, fi_op(dims), 3; field_solver = QuasiSteady(; linsolve = DevicePCG(; reltol = 1.0e-12, maxiters = 64)))
+        a, _ = fi_runA(FiSteady, fi_op(dims), 3; field_solver = QuasiSteady(; linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 64)))
         @test maximum(abs, a[3] .- a[2]) < 1.0e-10 && maximum(a[3]) > 0
         m = Module()
         Core.eval(m, :(using Potts; using Potts.LatticePDE))
@@ -246,8 +246,8 @@ end
 @testitem "F3-12b (r3 S3, S4): a steady row's sign; its field by the rule of both front ends" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
     @testset "F3-12b (r3 S3, S4): a steady row's sign; its field by the rule of both front ends" begin
         dims, k = (12, 10), 3
-        an, _ = fi_runA(FiSteadyNeg, fi_op(dims), k; field_solver = QuasiSteady(; linsolve = DevicePCG(; reltol = 1.0e-12, maxiters = 64)))
-        a0, _ = fi_runA(FiSteady0, fi_op(dims), k; field_solver = QuasiSteady(; linsolve = DevicePCG(; reltol = 1.0e-12, maxiters = 64)))
+        an, _ = fi_runA(FiSteadyNeg, fi_op(dims), k; field_solver = QuasiSteady(; linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 64)))
+        a0, _ = fi_runA(FiSteady0, fi_op(dims), k; field_solver = QuasiSteady(; linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 64)))
         @test maximum(abs, an[end] .- a0[end]) < 1e-10
         al, integ = fi_runA(FiLocal, fi_op(dims), k)
         @test substep_counts(integ)[1] == 1 && maximum(al[end]) > 0
@@ -259,7 +259,7 @@ end
 @testitem "F3-12c: the QuasiSteady gain in a model: an accepted loop is the split recursion; a write past it is refused" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
     @testset "F3-12c: the QuasiSteady gain in a model: an accepted loop is the split recursion; a write past it is refused" begin
         dims = (12, 10)
-        tight = DevicePCG(; reltol = 1.0e-12, maxiters = 64)
+        tight = LatticePCG(; reltol = 1.0e-12, maxiters = 64)
         fs = FieldGroups(:u => QuasiSteady(; linsolve = tight), :w => BackwardEuler(; linsolve = tight))
         integ = init(PottsProblem(FiLoopK(; name = :f), fi_op(dims), (0, 3); field_solver = fs), SequentialCPM())
         for n in 1:3
@@ -314,7 +314,7 @@ end
 @testitem "F3-12c: `init = :steady` in a model: the field starts at its steady state; refusals name `init`" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
     @testset "F3-12c: `init = :steady` in a model: the field starts at its steady state; refusals name `init`" begin
         dims = (12, 10)
-        tight = DevicePCG(; reltol = 1.0e-12, maxiters = 64)
+        tight = LatticePCG(; reltol = 1.0e-12, maxiters = 64)
         # the steady state: one QuasiSteady MCS (σ frozen: the same inputs)
         ref, _ = fi_runA(FiSteady, fi_op(dims), 1; field_solver = QuasiSteady(; linsolve = tight))
         for fs in (
