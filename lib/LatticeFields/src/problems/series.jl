@@ -221,6 +221,25 @@ function Base.show(io::IO, s::LatticeStats)
         s.newton_budget > 0 ? string(", ", s.newton_budget, " Newton budget hits") : "", s.syncs > 0 ? string(", ", s.syncs, " host syncs") : "",
         ni > 0 ? string(", implicit facts of ", ni, " of ", length(s.implicit), " groups") : "", ")")
 end
+"""
+    LatticeSolution
+
+The solution of a lattice problem in time: SciML's `ODESolution` of the problem `discretize`
+returns, from a field algorithm or from an OrdinaryDiffEq solver (`solve` keeps SciML's
+solution and does not wrap it in a `PDETimeSeriesSolution`). `sol.t` and `sol.u` are SciML's:
+`sol.u[i]` is the flat state vector at `sol.t[i]`, the state fields one after another.
+
+The field reads differ from `PDETimeSeriesSolution`'s layout:
+
+- `sol[c]` of a state or auxiliary field `c` is a vector with one array per save, each of the
+  lattice's size (`sol[c][i][j, k]` is `c` at `sol.t[i]` on site `(j, k)`), where a
+  `PDETimeSeriesSolution` returns one array with time as its first dimension;
+- `sol[x]` of a coordinate is the coordinates of the site centers;
+- `sol(t, x, y…; idxs = c)` interpolates linearly in time and multilinearly in space;
+- an integer, colon, index-array or `CartesianIndex` index reads `sol.u` as SciML does.
+
+[`field_series`](@ref) gives a field as one array with time first.
+"""
 const LatticeSolution = typewith(SciMLBase.ODESolution, :prob, LatticeProblem)
 field_stats(s::LatticeSolution) = _stats(s.stats)
 _stats(t::LatticeStats) = (; solves = t.solves, budget = t.budget, floor = t.floor, newton_budget = t.newton_budget)
