@@ -478,6 +478,8 @@ end
             submodules = (Potts.Fields,),
             docs_dir = joinpath(@__DIR__, "..", "docs")
         )
+        root = joinpath(@__DIR__, "..")
+        qa_error_rules(root; allowed_bcs_files = [joinpath(root, "src", "macro.jl")])
         @test Base.get_extension(Potts, :PottsDynamicQuantitiesExt) !== nothing
         if PottsDevices.device_name() == "rocm"
             @test Base.get_extension(Potts, :PottsAMDGPUExt) !== nothing
