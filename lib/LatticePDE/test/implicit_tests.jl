@@ -526,25 +526,27 @@ end
         s_m3 = solve(p_m3, BackwardEuler(; linsolve = BTIGHT, nlsolve = LatticeNewton(; κ = 1.0e-3, max_iter = 20)); dt = 0.1)
         @test s_m3.retcode == ReturnCode.Success && s_m3.stats.newton_budget == 0 && maximum(abs, s_m3[bce, end]) == 0.0
 
-        # Precision-limit branch: Float32 run converges when reachable rounding hits |θ - 1| <= 100 * sqrt(eps(T)), ndz <= 1,
-        # and diverges when tolerances lie below Float32 rounding (ndz > 1 at |θ - 1| <= 100 * sqrt(eps(T)))
+        # Precision-limit branch: at Float32 rounding (κ = 1e-12 impossible via η*ndz < κ, and it > 1),
+        # only the precision-limit window (|θ - 1| ≤ 100*sqrt(eps(T)), ndz ≤ 1) can stop early with Success;
+        # below Float32 rounding (ndz > 1) check_div = true stops with ConvergenceFailure.
         sys_pl = PDESystem(
             [D(bce) ~ 0.1f0 * laplacian(bce) - 0.5f0 * bce^2 + 0.2f0],
-            [bc(0, x, y) ~ 0.5f0 + 0.2f0 * x], bdom(0.1), [t, x, y], [bce], Any[]; name = :nl_pl,
+            [bc(0, x, y) ~ 0.5f0 + 0.2f0 * x], [t ∈ Interval(0.0f0, 0.1f0), x ∈ Interval(0.0f0, 1.0f0), y ∈ Interval(0.0f0, 1.0f0)],
+            [t, x, y], [bce], Any[]; name = :nl_pl,
         )
         p_pl = discretize(sys_pl, LatticeDiscretization(Grid((8, 8)); T = Float32))
         s_pl = solve(
-            p_pl, BackwardEuler(; linsolve = LatticePCG(; reltol = 1.0f-7, maxiters = 64), nlsolve = LatticeNewton(; κ = 1.0f-8, max_iter = 10));
-            dt = 0.1, abstol = 1.0f-6, reltol = 1.0f-6,
+            p_pl, BackwardEuler(; linsolve = LatticePCG(; reltol = 1.0f-7, maxiters = 64), nlsolve = LatticeNewton(; κ = 1.0f-12, max_iter = 10));
+            dt = 0.1, abstol = 1.0f-7, reltol = 1.0f-7,
         )
-        @test s_pl.retcode == ReturnCode.Success && s_pl.stats.newton_budget == 0
+        @test s_pl.retcode == ReturnCode.Success && s_pl.stats.newton_budget == 0 && s_pl.stats.solves < 10
         s_pl_div = @test_logs (:warn, r"diverged") solve(
-            p_pl, BackwardEuler(; linsolve = LatticePCG(; reltol = 1.0f-7, maxiters = 64), nlsolve = LatticeNewton(; κ = 1.0f-8, max_iter = 10));
+            p_pl, BackwardEuler(; linsolve = LatticePCG(; reltol = 1.0f-7, maxiters = 64), nlsolve = LatticeNewton(; κ = 1.0f-12, max_iter = 10));
             dt = 0.1, abstol = 1.0f-12, reltol = 1.0f-12,
         )
-        @test s_pl_div.retcode == ReturnCode.ConvergenceFailure
+        @test s_pl_div.retcode == ReturnCode.ConvergenceFailure && s_pl_div.stats.solves < 10
 
-        # OrdinaryDiffEq NLNewton oracle on a 1D nonlinear reaction-diffusion problem (states and solve counts)
+        # OrdinaryDiffEq NLNewton oracle on a 1D nonlinear reaction-diffusion problem (per-step counts and states)
         @variables u1(..)
         u1e = u1(t, x)
         for ic_zero in (false, true)
@@ -556,19 +558,74 @@ end
             p_ode = discretize(sys1d, LatticeDiscretization(Grid((16,)); T = Float64))
             p_own = LFP.field_problem(p_ode)
             for kv in (1.0e-1, 1.0e-2, 1.0e-5)
-                so = solve(
+                igo = init(
                     p_ode,
                     ImplicitEuler(; linsolve = LUFactorization(), nlsolve = OrdinaryDiffEqSDIRK.NLNewton(; κ = kv, always_new = true));
                     dt = 0.05, adaptive = false, abstol = 1.0e-7, reltol = 1.0e-4,
                 )
-                sb = solve(
+                igb = init(
                     p_own,
                     BackwardEuler(; substeps = 1, linsolve = LUFactorization(), nlsolve = LatticeNewton(; κ = kv));
                     dt = 0.05, abstol = 1.0e-7, reltol = 1.0e-4,
                 )
+                prev_o, prev_b = 0, 0
+                for _ in 1:10
+                    step!(igo); step!(igb)
+                    @test igb.stats.solves - prev_b == igo.stats.nsolve - prev_o
+                    prev_o, prev_b = igo.stats.nsolve, igb.stats.solves
+                end
+                so, sb = solve!(igo), solve!(igb)
                 @test sb.retcode == ReturnCode.Success && so.retcode == ReturnCode.Success
-                @test vec(sb[u1e, end]) ≈ so.u[end] rtol = 1.0e-12 atol = 1.0e-12
+                @test vec(sb[u1e, end]) ≈ Array(so.u[end]) rtol = 1.0e-12 atol = 1.0e-12
                 @test sb.stats.solves == so.stats.nsolve
+            end
+        end
+        # Discriminating M3 oracle: two uncoupled fields of very different magnitudes share one group norm (not per-row)
+        sys2d = PDESystem(
+            [
+                D(bce) ~ 0.05 * laplacian(bce) - bce + 1.0e-4 * (1.0 + x),
+                D(boe) ~ 0.05 * laplacian(boe) - 0.5 * boe^2 + 100.0,
+            ],
+            [
+                bc(0, x, y) ~ 0.0, bo(0, x, y) ~ 0.0, bc(t, 0, y) ~ bc(t, 1, y), bc(t, x, 0) ~ bc(t, x, 1),
+                bo(t, 0, y) ~ bo(t, 1, y), bo(t, x, 0) ~ bo(t, x, 1),
+            ],
+            [t ∈ Interval(0.0, 0.5), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [bce, boe], Any[]; name = :ode2d,
+        )
+        sys_bo = PDESystem(
+            [D(boe) ~ 0.05 * laplacian(boe) - 0.5 * boe^2 + 100.0],
+            [bo(0, x, y) ~ 0.0, bo(t, 0, y) ~ bo(t, 1, y), bo(t, x, 0) ~ bo(t, x, 1)],
+            [t ∈ Interval(0.0, 0.5), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [boe], Any[]; name = :ode_bo,
+        )
+        p2_ode = discretize(sys2d, LatticeDiscretization(Grid((6, 6)); T = Float64))
+        p2_own = LFP.field_problem(p2_ode)
+        p_bo = LFP.field_problem(discretize(sys_bo, LatticeDiscretization(Grid((6, 6)); T = Float64)))
+        for kv in (1.0e-2, 1.0e-3, 1.0e-5)
+            igo = init(
+                p2_ode,
+                ImplicitEuler(; linsolve = LUFactorization(), nlsolve = OrdinaryDiffEqSDIRK.NLNewton(; κ = kv, always_new = true));
+                dt = 0.05, adaptive = false, abstol = 1.0e-7, reltol = 1.0e-4,
+            )
+            igb = init(
+                p2_own,
+                BackwardEuler(; substeps = 1, linsolve = LUFactorization(), nlsolve = LatticeNewton(; κ = kv));
+                dt = 0.05, abstol = 1.0e-7, reltol = 1.0e-4,
+            )
+            prev_o, prev_b = 0, 0
+            for _ in 1:10
+                step!(igo); step!(igb)
+                @test igb.stats.solves - prev_b == 2 * (igo.stats.nsolve - prev_o)
+                prev_o, prev_b = igo.stats.nsolve, igb.stats.solves
+            end
+            so, sb = solve!(igo), solve!(igb)
+            @test sb.retcode == ReturnCode.Success && so.retcode == ReturnCode.Success
+            @test vcat(vec(sb[bce, end]), vec(sb[boe, end])) ≈ Array(so.u[end]) rtol = 1.0e-12 atol = 1.0e-12
+            if kv >= 1.0e-3
+                s_bo = solve(
+                    p_bo, BackwardEuler(; substeps = 1, linsolve = LUFactorization(), nlsolve = LatticeNewton(; κ = kv));
+                    dt = 0.05, abstol = 1.0e-7, reltol = 1.0e-4,
+                )
+                @test div(sb.stats.solves, 2) < s_bo.stats.solves
             end
         end
     end

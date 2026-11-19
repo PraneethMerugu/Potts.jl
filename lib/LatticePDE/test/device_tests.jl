@@ -248,6 +248,7 @@ using .LP_device: fd, kron
         rob = psys([D(ce) ~ Di * laplacian(ce) - ki * ce + 1], [c(0, x, y) ~ x * y, 1.5 * c(t, 1, y) + Differential(x)(c(t, 1, y)) ~ 0.2], [Di, ki])
         cases = [
             ("BackwardEuler, field row", field, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 1, check_div = false))),
+            # max_iter = 8 (up from 6): at iter 6, Float32 η*ndz sits at the κ = 1e-2 threshold so 1-ULP GPU FMA rounding diverges in retcode
             ("BackwardEuler, advection", adv, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 8))),
             ("BackwardEuler, advection tight κ", adv, BackwardEuler(; nlsolve = LatticeNewton(; κ = 1.0f-4, max_iter = 12))),
             ("BackwardEuler, switch", sw, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 6))),
@@ -271,6 +272,25 @@ using .LP_device: fd, kron
         sd = solve(mk(adv, PDEV), BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 4)); dt = 0.1, saveat = 0.5)
         sh = solve(mk(adv, KernelAbstractions.CPU()), BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 5)); dt = 0.1, saveat = 0.5)
     @test maximum(abs, Array(sd[ce, end]) .- sh[ce, end]) / maximum(abs, sh[ce, end]) > 1e-12
+        # uncoupled two-field group under LatticeNewton exercises the shared device group buffer (`gpart`/`gcnt`) on pgpu
+        @variables b2(..)
+        b2e = b2(t, x, y)
+        two = PDESystem(
+            [
+                D(ce) ~ 0.05f0 * laplacian(ce) - 0.5f0 * ce^2 + 0.2f0,
+                D(b2e) ~ 0.05f0 * laplacian(b2e) - 0.5f0 * b2e^2 + 10.0f0,
+            ],
+            [c(0, x, y) ~ 0.1f0 * x, b2(0, x, y) ~ 0.1f0 + 0.1f0 * y],
+            [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)],
+            [t, x, y], [ce, b2e], Any[]; name = :two15,
+        )
+        two_alg = BackwardEuler(; linsolve = LatticePCG(; reltol = 1.0f-5, maxiters = 32), nlsolve = LatticeNewton(; κ = 1.0f-3, max_iter = 12))
+        sd2 = solve(mk(two, PDEV), two_alg; dt = 0.1, saveat = 0.5)
+        sh2 = solve(mk(two, KernelAbstractions.CPU()), two_alg; dt = 0.1, saveat = 0.5)
+        @test sd2.retcode == sh2.retcode == SciMLBase.ReturnCode.Success
+        @test sd2.t ≈ sh2.t && sd2.stats.solves == sh2.stats.solves
+        @test maximum(i -> maximum(abs, Array(sd2[ce, i]) .- sh2[ce, i]) / maximum(abs, sh2[ce, i]), eachindex(sd2.t)) <= 1.0e-12
+        @test maximum(i -> maximum(abs, Array(sd2[b2e, i]) .- sh2[b2e, i]) / maximum(abs, sh2[b2e, i]), eachindex(sd2.t)) <= 1.0e-12
 end
 end
 
@@ -452,6 +472,7 @@ using .LP_device: fd, kron
             )
             for T in (Float32, Float64)
                 alg = mkalg(T)
+                # CoupledOperator uses matrix-free FD step sqrt(eps(T)): Float32's ~3.45e-4 FD floor diverges at κ = 1e-4, reltol = 1e-3 (window 3, 14 solves); κ = 1e-2, (1e-3, 1e-2) finishes in 7 solves
                 tols = alg.nlsolve isa LatticeNewton ?
                     (T === Float32 ? (; abstol = 1.0f-3, reltol = 1.0f-2) : (; abstol = 1.0e-6, reltol = 1.0e-3)) :
                     (;)
