@@ -252,7 +252,7 @@ end
 
 @testset "P6.0b2: the re-declared variable is the base relationship's, not the extension's" begin
     # the extension's own edge term may not read it (it has no slot on `tether` links)
-    @test_throws ArgumentError p60b2_compile(P60b2RedeclareOwnRead)
+    @test_throws Potts.PottsCompileError p60b2_compile(P60b2RedeclareOwnRead)
 end
 
 @testset "P6.0b2: an explicit re-scope to another relationship is rejected when built" begin
@@ -266,7 +266,7 @@ end
 @testset "P6.0b2: new unscoped edge variables keep D-058 (controls)" begin
     c = p60b2_compile(P60b2NewUnscoped)
     @test p60b2_names(c, :tether) == [:len] && p60b2_names(c, :bond) == [:rest]
-    @test_throws ArgumentError p60b2_compile(P60b2NewAmbiguous)
+    @test_throws Potts.PottsCompileError p60b2_compile(P60b2NewAmbiguous)
     c = p60b2_compile(P60b2RedeclareNoRel)
     @test p60b2_names(c, :bond) == [:rest]
     prob = p60b2_problem(P60b2RedeclareNoRel, p60b2_op())

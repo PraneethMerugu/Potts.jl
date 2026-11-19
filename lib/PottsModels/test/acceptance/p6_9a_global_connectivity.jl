@@ -961,7 +961,7 @@ p69a_case(line) = (name = Symbol(:P69aBuild, P69A_BUILD_N[] += 1);
     end
     for line in (:(@drive copy => largest_piece), :(@drive copy => 1.0 * largest_piece))
         e = p69a_build(p69a_case(line))
-        @test e isa ArgumentError && occursin("largest_piece", msg(e))
+        @test e isa Potts.PottsCompileError && occursin("largest_piece", msg(e))
     end
     # a model without Global has no counter
     σ = zeros(Int32, 10, 10); σ[3:5, 3:5] .= 1

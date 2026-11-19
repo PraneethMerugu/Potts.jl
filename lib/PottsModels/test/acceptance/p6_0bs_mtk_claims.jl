@@ -90,7 +90,7 @@ p60bs_clear(f, words...) = try
     false
 catch err
     ok = err isa ArgumentError && (isempty(words) || occursin(first(words), sprint(showerror, err)))
-    ok || @info "P6.0bs: expected an ArgumentError" exception = err
+    ok || @info "expected an ArgumentError" exception = err
     ok
 end
 

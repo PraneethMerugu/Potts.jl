@@ -488,7 +488,7 @@ end
         e = p60ca_compile_error("indexed kind[id] == A")
         @test e isa Potts.PottsCompileError
         @test e isa Potts.PottsCompileError && occursin("bare", e.msg)
-        e isa Potts.PottsCompileError || @info "P6.0ca: `kind[id]` at mtkcompile: $(e === nothing ? "compiles" : sprint(showerror, e))"
+        e isa Potts.PottsCompileError || @info "indexed `kind[id]` at mtkcompile: $(e === nothing ? "compiles" : sprint(showerror, e))"
     end
 end
 

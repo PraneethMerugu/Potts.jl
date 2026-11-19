@@ -801,10 +801,10 @@ end
     # controls on the harness (the base): a surface energy builds; a bare `volume` in a drive
     # is an ArgumentError
     @test p63j_build(p63j_build_case(sqlat, :(@energy cells => surface)), σ) === nothing
-    @test p63j_build(p63j_build_case(sqlat, :(@drive copy => volume)), σ) isa ArgumentError
-    # a bare `euler` in a drive is an ArgumentError (index it, as `volume`)
+    @test p63j_build(p63j_build_case(sqlat, :(@drive copy => volume)), σ) isa Potts.PottsCompileError
+    # a bare `euler` in a drive is a PottsCompileError (index it, as `volume`)
     e = p63j_build(p63j_build_case(sqlat, :(@drive copy => euler)), σ)
-    @test e isa ArgumentError && occursin("euler", msg(e))
+    @test e isa Potts.PottsCompileError && occursin("euler", msg(e))
 end
 
 # ---------------------------------------------------------------------------------------

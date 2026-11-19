@@ -87,7 +87,7 @@ p60bn_clear(f, words...) = try
 catch err
     ok = err isa Union{ArgumentError, Potts.PottsCompileError} &&
         (isempty(words) || occursin(first(words), sprint(showerror, err)))
-    ok || @info "P6.0bn: expected an ArgumentError" exception = err
+    ok || @info "expected ArgumentError or PottsCompileError" exception = err
     ok
 end
 
