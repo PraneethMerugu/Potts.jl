@@ -61,9 +61,9 @@ end
 """
     field_series(sol, c) -> FieldSeries
 
-The time-first values of the field, aux field or input `c` of a solution (F4-04; F4 design
-§3.5, ruling Q4): `size = (length(sol.t), dims...)`, a lazy view of the saves. In both front
-ends `sol[c]` is one grid per save (as SciML reads a variable, ruling Q18), so
+The time-first values of the field, aux field or input `c` of a solution (MethodOfLines'
+shape): `size = (length(sol.t), dims...)`, a lazy view of the saves. In both coupled and
+standalone routes `sol[c]` is one grid per save (as SciML reads a variable), so
 `field_series(sol, c)[i, :, :] == sol[c][i] == sol[c, i]`; this accessor is the time-first
 view, for a standalone `FieldProblem`/ODE solution and for a coupled `PottsProblem`
 (`PottsSolution`, per-MCS states).

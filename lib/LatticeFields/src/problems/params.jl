@@ -1,4 +1,4 @@
-# The parameter object of `FieldProblem` and `discretize` SciML problems (F4 design §3.3): the scalar
+# The parameter object of `FieldProblem` and `discretize` SciML problems: the scalar
 # parameters, the tables, the input arrays and the clock's step index in one container, so
 # inputs and tables are written on every solver (`integ.ps[k] = v`, `remake(prob; p)`, a
 # callback), not only on the owned one.

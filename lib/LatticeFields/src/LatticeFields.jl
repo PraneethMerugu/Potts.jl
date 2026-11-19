@@ -16,6 +16,15 @@ own directory.
 """
 module LatticeFields
 
+"""
+    isfatal(e) -> Bool
+
+True for fatal runtime exceptions (`InterruptException`, `StackOverflowError`,
+`OutOfMemoryError`) that must always be rethrown rather than swallowed by a broad
+probe or diagnostic catch.
+"""
+isfatal(e) = e isa Union{InterruptException, StackOverflowError, OutOfMemoryError}
+
 include("exec.jl")
 include("ir/IR.jl")
 include("compile/Compile.jl")
@@ -23,6 +32,6 @@ include("schedule/Schedule.jl")
 include("solvers/Solvers.jl")
 include("problems/Problems.jl")
 
-public Exec, IR, Compile, Schedule, Solvers, Problems
+public isfatal, Exec, IR, Compile, Schedule, Solvers, Problems
 
 end # module LatticeFields

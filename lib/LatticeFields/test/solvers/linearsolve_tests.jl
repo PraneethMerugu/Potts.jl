@@ -28,6 +28,11 @@ Solvers.to_host(::MockDevExec, A) = copy(A)
 Solvers.launch!(::MockDevExec, l::Solvers.Launch) = Solvers.launch!(HostExec(), l)
 Solvers.host_scalars(::MockDevExec, scal) = false
 struct MockGPUBackend <: Backend end
+struct _NoBackendVec <: AbstractVector{Float64}
+    n::Int
+end
+Base.size(v::_NoBackendVec) = (v.n,)
+Base.getindex(v::_NoBackendVec, ::Int) = 0.0
 
 # a masked disk with a random right-hand side (`homog_disk`: zero boundary data, linear `A * x = b`)
 function disk(T, n = 48; s = 0.02)
@@ -231,4 +236,13 @@ end
     ldiv!(y, P2, b)
     sv2 = only(values(mg.engines))[]
     @test sv2 === sv1 && sv2.op.shift == 0.05
+end
+
+@testitem "_is_cpu_vec handles SubArray and custom arrays without KA fallback error" setup = [LF_solvers_linearsolve] tags = [:latticefields, :solvers] begin
+    using LatticeFields.Solvers: _is_cpu_vec, _check_precs_device
+    @test _is_cpu_vec(view(zeros(4), 1:2))
+    v = _NoBackendVec(2)
+    @test !_is_cpu_vec(v)
+    @test_throws ArgumentError _check_precs_device(zeros(2, 2), v)
+    @test occursin("preconditioner", err_msg(() -> _check_precs_device(zeros(2, 2), v)))
 end

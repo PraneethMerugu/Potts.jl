@@ -6,7 +6,7 @@ the Any fold, the bottom V-cycle with a fixed-degree Chebyshev coarsest solve, P
 fixed V(2,2) Chebyshev cycle as preconditioner, the stationary budgeted path, the residual
 sentinel and `init = :steady`. Launch plans follow the Schedule/Exec contract.
 
-The public interface (the front ends' `linsolve = …` vocabulary and the field solvers'
+The public interface (the coupled and standalone `linsolve = …` vocabulary and the field solvers'
 building block): the operator `CellOperator` (faces, shift, masks with a value or a value
 field, face-Dirichlet and Robin faces), the solver `FieldSolver` with `rebuild!`, `lift!`,
 `solve!`, `steady!`, `tangent!`, `set_coefficients!`, the readers `field`, `solution_key`,

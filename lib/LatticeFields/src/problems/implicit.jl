@@ -1,4 +1,4 @@
-# The implicit runtime (F3 design §3.3, §3.4): the substep loop of the implicit algorithms
+# The implicit runtime: the substep loop of the implicit algorithms
 # (`BackwardEuler`, `CrankNicolson`, `BDF2`) on the group layer, for both coupled and standalone routes. A group's
 # store holds the arrays of its stepped program (the state's two slots, the inputs, the masks);
 # the runtime's own programs alias them:

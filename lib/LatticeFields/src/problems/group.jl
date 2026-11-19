@@ -50,11 +50,11 @@ Base.show(io::IO, t::TableSpec) = print(io, t.key)
 """
     InputSpec(key; name = key, eltype = Real, bounds = (-Inf, Inf), default = nothing, filled = false)
 
-An input field of a group (F2 design §2.2): its `key`, its user `name`, its element type
+An input field of a group: its `key`, its user `name`, its element type
 (`Bool`, `Int32` or a real type), its declared `bounds`, its `default` (or `nothing`) and
 whether it is `filled`: a caller writes it on the device at every step (coupled `PottsProblem`'s CPM
 reads), so no host check of its values runs between steps and an implicit algorithm treats it
-as moving data (F3). The fields of other groups (`spec.external`) are inputs too, not filled.
+as moving data. The fields of other groups (`spec.external`) are inputs too, not filled.
 `string(i)` is its key.
 """
 struct InputSpec
@@ -76,7 +76,7 @@ Base.show(io::IO, i::InputSpec) = print(io, i.key)
 """
     GroupSpec
 
-The description of one field group, shared by coupled and standalone routes (F2 design §2.2):
+The description of one field group, shared by coupled and standalone routes:
 
 - `rate`: the group's rate program before the semantic passes (`rate:c` kernels store the
   rate in a scratch field `∂c`; `map:`, `aux:` and `mask:` kernels as written): a
@@ -157,7 +157,7 @@ end
 """
     CLOCK_KEY
 
-The name of the clock's parameter slot, `"clock__tick"` (F2 design §2.6): a group whose
+The name of the clock's parameter slot, `"clock__tick"`: a group whose
 kernels read the clock's step index (`mcs` in a coupled `PottsProblem`, `LatticePDE.step_index(t)` in
 a standalone `FieldProblem`) has this slot among its parameters, and its launches write the step index into
 it at every launch. The `__tick` suffix is reserved, so no user parameter takes the name.
@@ -314,7 +314,7 @@ end
 """
     AbstractPolicyTexts
 
-The words of a route's substep and coupling messages (F3 design §3.7). The policy
+The words of a route's substep and coupling messages. The policy
 ([`substeps`](@ref), [`check_coupling`](@ref)) decides; the texts word the decision
 in the user's terms: standalone `FieldProblem`s use [`ProblemTexts`](@ref), coupled `PottsProblem`s give their
 own. A subtype defines `unbounded_text`, `uncovered_text`, `refuse_parameters`,

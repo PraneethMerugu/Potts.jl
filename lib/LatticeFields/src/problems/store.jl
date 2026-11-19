@@ -24,8 +24,8 @@ and `st.flat[st.cur[f]]` is the whole current state. `nbuf` is the buffer count 
 declares for them (`nbuffers(alg)`): with more than the program's two, the extra buffers are
 the algorithm's (history, `c__prev`); the steps use the first two.
 
-State fields with different storage (a declared `lattice_storage` beside the problem's type,
-batch 5 review S2) are not packed: each has its own arrays, as in a coupled `PottsProblem`; `st.flat` is
+State fields with different storage (a declared `lattice_storage` beside the problem's type)
+are not packed: each has its own arrays, as in a coupled `PottsProblem`; `st.flat` is
 empty and `st.slots` still places each in the flat state vector ([`mixed_state`](@ref)).
 """
 struct FieldStore{B}
