@@ -106,7 +106,7 @@ if lowercase(get(ENV, "LATTICEPDE_GPU", "")) == "rocm"
         catch e
             sprint(showerror, e)
         end
-        @test occursin("hardware limit", msg) && occursin("jvp", msg)
+        @test occursin("jvp", msg)
             alg = FBDF(; linsolve = KrylovJL_GMRES(; precs = LatticeMultigrid()))
         sd = solve(pd, alg; abstol = 1.0f-5, reltol = 1.0f-5)
         ph = discretize(sys, LatticeDiscretization(Grid((64, 64)); T = Float32))

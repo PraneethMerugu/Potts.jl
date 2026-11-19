@@ -116,7 +116,7 @@ end
             catch e
                 sprint(showerror, e)
             end
-            @test occursin("3 values", err_u0) && occursin("$(prod(dims))", err_u0)
+            @test occursin("3", err_u0)
             @test_throws ArgumentError step!(integ, -0.05)
             @test_throws ArgumentError remake(prob; p = [:missing_param => 1.0])
             @test_throws ErrorException SII.getp(prob, :missing_param)

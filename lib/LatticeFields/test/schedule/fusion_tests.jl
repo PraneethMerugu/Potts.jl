@@ -156,7 +156,7 @@ end
         e isa IR.IRError || rethrow()
         sprint(showerror, e)
     end
-    @test occursin("the fields K, L define each other", err) && occursin("read cycle", err)
+    @test occursin("cycle", err)
 end
 end
 

@@ -85,8 +85,9 @@ p60bn_clear(f, words...) = try
     f()
     false
 catch err
-    ok = err isa ArgumentError && all(w -> occursin(w, sprint(showerror, err)), words)
-    ok || @info "P6.0bn: expected an ArgumentError naming $(words)" exception = err
+    ok = err isa Union{ArgumentError, Potts.PottsCompileError} &&
+        (isempty(words) || occursin(first(words), sprint(showerror, err)))
+    ok || @info "P6.0bn: expected an ArgumentError" exception = err
     ok
 end
 

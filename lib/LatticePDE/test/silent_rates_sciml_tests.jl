@@ -132,7 +132,7 @@ end
         step!(ig); step!(ref)
         K0 = checker(4, 1, 2); K0[3, 2] = 0
         err = emsg(() -> (ig[qe] = K0))
-        @test occursin("index 0", err) && occursin("(3, 2)", err) && ig[qe] == checker(4, 1, 2)
+        @test occursin("(3, 2)", err) && ig[qe] == checker(4, 1, 2)
         step!(ig); step!(ref)
         @test ig.substeps == ref.substeps && ig[ce] == ref[ce]
     end

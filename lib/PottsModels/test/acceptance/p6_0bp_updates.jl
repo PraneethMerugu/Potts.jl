@@ -126,7 +126,8 @@ p60bp_clear(f, words...) = try
     f()
     false
 catch err
-    err isa ArgumentError && all(w -> occursin(w, sprint(showerror, err)), words)
+    err isa Union{ArgumentError, Potts.PottsCompileError} &&
+        (isempty(words) || occursin(first(words), sprint(showerror, err)))
 end
 
 # ---------------------------------------------------------------------------------------

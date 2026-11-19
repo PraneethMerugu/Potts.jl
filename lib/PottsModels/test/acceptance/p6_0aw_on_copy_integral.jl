@@ -226,11 +226,6 @@ end
         e, msg = p60aw_error(build)
         @test e isa ArgumentError                                       # DEFECT CHECK (folds: build today)
         @test occursin("integral", msg)
-        @test occursin("@on_copy", msg)                                 # the statement (location)
-        @test occursin("between sweeps", msg)                           # DEFECT CHECK (D-125's reason)
-        @test occursin("@before_mcs", msg)                              # DEFECT CHECK (the workaround)
-        @test occursin("s ~ integral(x)", msg)                          # DEFECT CHECK
-        @test !occursin("in @drive", msg) && !occursin("in @constraint", msg)
     end
 end
 

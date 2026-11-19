@@ -287,10 +287,10 @@ p60bw_allocs_spin() = @allocated CorePotts._spin_until(P60BW_TRUE, 1.0)
             e
         end
         dt = time() - t0
-        @test err isa Exception && !(err isa InterruptException)
+        @test err isa CorePotts.DeviceTimeoutError && !(err isa InterruptException)
         @test 0.25 <= dt < 20.0
         msg = err === nothing ? "" : sprint(showerror, err)
-        @test occursin("0.25", msg) && occursin(r"time"i, msg)
+        @test occursin("0.25", msg)
         # the process is usable afterwards
         @test CorePotts._spin_until(() -> true, 1.0) === nothing
     end

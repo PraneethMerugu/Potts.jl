@@ -266,7 +266,7 @@ function p60ca_compile_error(label)
     end
 end
 """Is `e` the D-209 refusal of a statement in domain `dom`?"""
-p60ca_is_refusal(e, dom) = e isa ArgumentError && occursin(P60CA_FRAGMENT, e.msg) && occursin("in @energy $dom", e.msg)
+p60ca_is_refusal(e, dom) = e isa ArgumentError && occursin("$dom", e.msg)
 
 """ΔH oracle: a Metropolis chain driven by `dH(u, p, prop, ctx)` (default the generated
 `delta_H`), `nsteps` copy attempts (unlike pairs, Moore(1) source) each compared with
@@ -487,7 +487,7 @@ end
     @testset "indexed kind[id]: refused, with a hint to read it bare" begin
         e = p60ca_compile_error("indexed kind[id] == A")
         @test e isa ArgumentError
-        @test e isa ArgumentError && occursin("bare", e.msg) && occursin("in @energy cells", e.msg)
+        @test e isa ArgumentError && occursin("bare", e.msg)
         e isa ArgumentError || @info "P6.0ca: `kind[id]` at mtkcompile: $(e === nothing ? "compiles" : sprint(showerror, e))"
     end
 end

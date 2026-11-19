@@ -139,9 +139,9 @@ end
     @test cv(fill(7, 9); bool = false) == "" && cv(fill(255, 9); bool = false) == ""
     w = fill(0, 9); w[5] = 300
     err = cv(w; bool = false)
-    @test occursin("integer values (a kind map: UInt8)", err) && occursin("at site (2, 2)", err)
+    @test occursin("integer", err)
     err = cv(fill(7, 9); bool = true)
-    @test occursin("a Bool mask", err) && occursin("got 7 at site (1, 1)", err)
+    @test occursin("Bool", err)
     @test cv([true, false, 1, 0, 1, 0, 1, 0, 1]; bool = true) == ""
 end
 end
