@@ -104,10 +104,10 @@ _euler(; adjacency = :face) = _euler_builtin(adjacency)
 _euler(c; adjacency = :face) = _index(_euler_builtin(adjacency), c)
 function _euler(args...; kwargs...)
     throw(
-            ArgumentError(
-                "`euler` takes at most one cell (`euler(old; adjacency)`) and only the keyword `adjacency`"
-            )
+        ArgumentError(
+            "`euler` takes at most one cell (`euler(old; adjacency)`) and only the keyword `adjacency`"
         )
+    )
 end
 
 # Cell-scope `pieces` and `largest_piece` (D-189 ruling 9): the number of connected
@@ -128,10 +128,10 @@ _largest_piece(; adjacency = :face) = _pieces_builtin(:largest_piece, adjacency)
 _largest_piece(c; adjacency = :face) = _index(_pieces_builtin(:largest_piece, adjacency), c)
 function _largest_piece(args...; kwargs...)
     throw(
-            ArgumentError(
-                "`largest_piece` takes at most one cell (`largest_piece(old; adjacency)`) and only the keyword `adjacency`"
-            )
+        ArgumentError(
+            "`largest_piece` takes at most one cell (`largest_piece(old; adjacency)`) and only the keyword `adjacency`"
         )
+    )
 end
 
 # ---------------------------------------------------------------------------------------
@@ -146,13 +146,13 @@ write) and `description` (shown with the model). The metadata is MTK's own, so
 """
 function parameter(name::Symbol, default; unit = nothing, tunable = true, bounds = nothing, description = nothing, origin = nothing)
     return _with_meta(
-            _tag(
-                _param(name; tunable = _tunable(name, tunable)), Entity(
-                    :param, name, default,
-                    _origin(_meta_options(name, tunable, bounds, description), origin)
-                )
-            ), unit, bounds, description
-        )
+        _tag(
+            _param(name; tunable = _tunable(name, tunable)), Entity(
+                :param, name, default,
+                _origin(_meta_options(name, tunable, bounds, description), origin)
+            )
+        ), unit, bounds, description
+    )
 end
 # a component's bound parameter keeps where it was bound, `(component, name)`, for its messages
 _origin(opts, ::Nothing) = opts
@@ -258,11 +258,11 @@ function Pairs(entries::Pair...; default = nothing, symmetric::Bool = true)
 end
 function Pairs(args...; kws...)
     throw(
-            ArgumentError(
-                "`Pairs` takes kind pairs `(k₁, k₂) => v` and the keywords `default`, " *
-                    "`symmetric`; got $(join(map(repr, args), ", "))"
-            )
+        ArgumentError(
+            "`Pairs` takes kind pairs `(k₁, k₂) => v` and the keywords `default`, " *
+                "`symmetric`; got $(join(map(repr, args), ", "))"
         )
+    )
 end
 
 _pairs_kind_name(k) = (u = _unwrap(k); i = u isa SymbolicUtils.BasicSymbolic ? info(u) : nothing; i === nothing ? repr(k) : string(i.name))
@@ -955,11 +955,11 @@ Base.in(x::Integer, g::KindClass) = x in g.kinds
 # `kind == g` would otherwise fall back to `===` and silently become `false` (`!=`: `true`)
 function _class_compare(g::KindClass)
     throw(
-            ArgumentError(
-                "`$(g.name)` is a kind class; test membership with " *
-                    "`ismember(kind, $(g.name))` (or `kind ∈ $(g.name)` outside @equations)"
-            )
+        ArgumentError(
+            "`$(g.name)` is a kind class; test membership with " *
+                "`ismember(kind, $(g.name))` (or `kind ∈ $(g.name)` outside @equations)"
         )
+    )
 end
 Base.:(==)(::Num, g::KindClass) = _class_compare(g)
 Base.:(==)(g::KindClass, ::Num) = _class_compare(g)
@@ -1347,20 +1347,20 @@ _bare_pieces(::_Pieces) = B.pieces
 _bare_pieces(x) = x
 function (::_Pieces)(args...; kws...)
     throw(
-            ArgumentError(
-                "pieces: write `pieces(c, shell(target))`, " *
-                    "`pieces(n for n in shell(target) if cond)`, or the cell's `pieces`, " *
-                    "`pieces(; adjacency)`, `pieces[c]`, `pieces(c; adjacency)`"
-            )
+        ArgumentError(
+            "pieces: write `pieces(c, shell(target))`, " *
+                "`pieces(n for n in shell(target) if cond)`, or the cell's `pieces`, " *
+                "`pieces(; adjacency)`, `pieces[c]`, `pieces(c; adjacency)`"
         )
+    )
 end
 function _not_shell()
     throw(
-            ArgumentError(
-                "pieces: the relation must be `shell` (`pieces(c, shell(target))`); " *
-                    "no other relation is a shell in v1"
-            )
+        ArgumentError(
+            "pieces: the relation must be `shell` (`pieces(c, shell(target))`); " *
+                "no other relation is a shell in v1"
         )
+    )
 end
 
 """
@@ -1485,11 +1485,11 @@ end
 constraint(c::Constraint) = c
 function constraint(::ConnectivityPenalty)
     throw(
-            ArgumentError(
-                "@constraint connectivity(…; penalty): a `penalty` is the soft form, which goes in @drive " *
-                    "(`@drive connectivity(k; rule, penalty)`); @constraint takes the veto form, without `penalty`"
-            )
+        ArgumentError(
+            "@constraint connectivity(…; penalty): a `penalty` is the soft form, which goes in @drive " *
+                "(`@drive connectivity(k; rule, penalty)`); @constraint takes the veto form, without `penalty`"
         )
+    )
 end
 constraint(x) = Constraint(:expr, Int[], x)
 
@@ -1682,11 +1682,11 @@ end
 function _sweep_offset(offset)
     o = if offset isa Real && !_is_symbolic(offset)
         try
-                    float(offset)
-            catch e
-                    e isa Union{InexactError, MethodError, TypeError} || rethrow()
-                    NaN
-            end
+            float(offset)
+        catch e
+            e isa Union{InexactError, MethodError, TypeError} || rethrow()
+            NaN
+        end
     else
         NaN
     end
@@ -1704,11 +1704,11 @@ end
 function _sweep_mcs_duration(mcs_duration)
     md = if mcs_duration isa Real && !_is_symbolic(mcs_duration)
         try
-                    float(mcs_duration)
-            catch e
-                    e isa Union{InexactError, MethodError, TypeError} || rethrow()
-                    NaN
-            end
+            float(mcs_duration)
+        catch e
+            e isa Union{InexactError, MethodError, TypeError} || rethrow()
+            NaN
+        end
     else
         NaN
     end
@@ -1729,13 +1729,13 @@ end
 _stable_callable(f) = !occursin("var\"#", string(:($f(a, b))))
 function _sweep_combine(combine)
     return _stable_callable(combine) || throw(
-            ArgumentError(
-                "`@sweep`: `combine` must print without a compiler-generated name, got $combine: an anonymous " *
-                    "function or closure, or a wrapper holding one, is named differently in every session, so " *
-                    "checkpoints could not be matched. Use a top-level named function, `f(a, b) = …` and " *
-                    "`combine = f`, or a callable struct whose fields are values, not anonymous functions"
-            )
+        ArgumentError(
+            "`@sweep`: `combine` must print without a compiler-generated name, got $combine: an anonymous " *
+                "function or closure, or a wrapper holding one, is named differently in every session, so " *
+                "checkpoints could not be matched. Use a top-level named function, `f(a, b) = …` and " *
+                "`combine = f`, or a callable struct whose fields are values, not anonymous functions"
         )
+    )
 end
 """
     sweep_spec(law; temperature, combine = min, offset = 0.0, mcs_duration = 1.0)
@@ -1861,7 +1861,7 @@ function schedule_repeat(ex::Expr)
             end
             kw = q isa Expr && q.head in (:kw, :(=)) && q.args[1] === :fraction ? q.args[2] : nothing
             frac = if kw isa Expr && kw.head === :call && kw.args[1] === :// && length(kw.args) == 3 &&
-                all(x -> x isa Integer, kw.args[2:3])
+                    all(x -> x isa Integer, kw.args[2:3])
                 kw.args[2] // kw.args[3]
             else
                 nothing
@@ -2028,10 +2028,10 @@ function _ref_kind(who, k)
         return k
     else
         throw(
-                ArgumentError(
-                    "`$who`: the kind is a cell kind (a kind name of `@kinds`, not the medium or a kind class), got $(repr(k))"
-                )
+            ArgumentError(
+                "`$who`: the kind is a cell kind (a kind name of `@kinds`, not the medium or a kind class), got $(repr(k))"
             )
+        )
     end
 end
 
@@ -2125,11 +2125,11 @@ function transfer(x, pair::Pair; per_site)
 end
 function transfer(args...; per_site = nothing)
     throw(
-            ArgumentError(
-                "`transfer` takes a cell variable, a pair `from => to` and `per_site = …`: " *
-                    "`transfer(x, from => to, per_site = 1.0)`"
-            )
+        ArgumentError(
+            "`transfer` takes a cell variable, a pair `from => to` and `per_site = …`: " *
+                "`transfer(x, from => to, per_site = 1.0)`"
         )
+    )
 end
 
 """
@@ -2303,12 +2303,12 @@ end
 function _portion_keys(::SciMLStructures.Constants, p)
     nt = NamedTuple(p)
     return Tuple(
-            k for k in keys(nt) if (
-                    nt[k] isa StaticArrays.StaticArray ||
-                    (nt[k] isa Number && !(nt[k] isa AbstractFloat)) ||
-                    (nt[k] isa AbstractFloat && k in _nontunable(p))
-                ) && !(k in _computed(p))
-        )
+        k for k in keys(nt) if (
+                nt[k] isa StaticArrays.StaticArray ||
+                (nt[k] isa Number && !(nt[k] isa AbstractFloat)) ||
+                (nt[k] isa AbstractFloat && k in _nontunable(p))
+            ) && !(k in _computed(p))
+    )
 end
 _flat(x::Number) = (x,)
 _flat(x) = Tuple(x)

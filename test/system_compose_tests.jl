@@ -70,11 +70,11 @@ end
         # `cbar`, `vol`) are refused by name, never dropped
         function loud(f, what, E::Type{<:Exception} = ArgumentError)
             return try
-                    f()
-                    false
-                catch e
-                    e isa E && occursin(what, sprint(showerror, e))
-                end
+                f()
+                false
+            catch e
+                e isa E && occursin(what, sprint(showerror, e))
+            end
         end
         refused = r"payload cannot build|has the input"     # wmodel's top level; wcell's inputs
         for W in (Wb, Wn, wcell)
@@ -123,17 +123,17 @@ end
         @variables z(Potts.t)
         function rebuilt(; kw...)
             return System(
-                    equations(ref), Potts.t, unknowns(ref), parameters(ref); name = :g,
-                    observed = observed(ref), initialization_eqs = WL_MTKB.initialization_equations(ref), kw...
-                )
+                equations(ref), Potts.t, unknowns(ref), parameters(ref); name = :g,
+                observed = observed(ref), initialization_eqs = WL_MTKB.initialization_equations(ref), kw...
+            )
         end
         function c9(f, E::Type{<:Exception} = ArgumentError)
             return try
-                    f()
-                    false
-                catch e
-                    e isa E
-                end
+                f()
+                false
+            catch e
+                e isa E
+            end
         end
         @test mtkcompile(Potts.wrap_system(:g, rebuilt(), nothing, part)) isa CompiledPottsSystem
         @test c9(() -> mtkcompile(Potts.wrap_system(:g, rebuilt(; initialization_eqs = [x ~ 9.0]), nothing, part)), Potts.PottsCompileError)
@@ -213,11 +213,11 @@ end
         M = WL_MTKB
         function msg(f, E::Type{<:Exception} = ArgumentError)
             return try
-                    f()
-                    "built"
-                catch e
-                    e isa E ? sprint(showerror, e) : "wrong exception $(typeof(e)), expected $E"
-                end
+                f()
+                "built"
+            catch e
+                e isa E ? sprint(showerror, e) : "wrong exception $(typeof(e)), expected $E"
+            end
         end
         g = ContainerGuard(; name = :g)
         wdec = Potts.wrap_system(:decay, ComposeSys.decay(), nothing, part())
@@ -333,11 +333,11 @@ end
     @testset "Potts.component composes an MTK System into a model with an energy" begin
         function msg(f, E::Type{<:Exception} = ArgumentError)
             return try
-                    f()
-                    "built"
-                catch e
-                    e isa E ? sprint(showerror, e) : "wrong exception $(typeof(e)), expected $E"
-                end
+                f()
+                "built"
+            catch e
+                e isa E ? sprint(showerror, e) : "wrong exception $(typeof(e)), expected $E"
+            end
         end
         m = DecayWithEnergy(; name = :m)
         @test !isempty(Potts.hamiltonian(m))

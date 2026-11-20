@@ -16,46 +16,50 @@ using Potts, Test
 
 
 module FcPDE
-using Potts: Potts
-using Potts.ModelingToolkitBase: PDESystem, System, Equation, Differential, @variables, @parameters
-const Interval = Potts.ModelingToolkitBase.DomainSets.Interval
-const t = Potts.t
-const Dt = Differential(t)
-@parameters x y Dd = 0.2 kd = 0.5
-@variables u(..) kin(..)::Int32 [input = true, lattice_input_name = "kind"]
-@variables nut(..) [input = true, lattice_input_name = "nutrient"]
-@variables kind(..)::Int32 [input = true]
-@variables vol(..) [input = true, lattice_input_name = "volume"]
-@variables zq(t) = 1.0
-zz() = System([Dt(zq) ~ -zq], t; name = :zz)
+    using Potts: Potts
+    using Potts.ModelingToolkitBase: PDESystem, System, Equation, Differential, @variables, @parameters
+    const Interval = Potts.ModelingToolkitBase.DomainSets.Interval
+    const t = Potts.t
+    const Dt = Differential(t)
+    @parameters x y Dd = 0.2 kd = 0.5
+    @variables u(..) kin(..)::Int32 [input = true, lattice_input_name = "kind"]
+    @variables nut(..) [input = true, lattice_input_name = "nutrient"]
+    @variables kind(..)::Int32 [input = true]
+    @variables vol(..) [input = true, lattice_input_name = "volume"]
+    @variables zq(t) = 1.0
+    zz() = System([Dt(zq) ~ -zq], t; name = :zz)
     # `D(u) ~ Dd Δu − kd u` with the conditions `bcs` (for the checks of names, start values, ivs)
-const DOM = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 12.0), y ∈ Interval(0.0, 10.0)]
-function plain(bcs; name = :drug, ivs = [t, x, y], ps = [Dd, kd], dom = DOM)
-    return PDESystem([Dt(u(t, x, y)) ~ Dd * Potts.LatticePDE.laplacian(u(t, x, y)) - kd * u(t, x, y)], bcs, dom, ivs, [u(t, x, y)], ps; name)
-end
-const Dx = Differential(x)
-# `D(u) ~ Dd Δu − kd u + [kind = 1]`, `u = 1` on the low x face, zero flux on the others
-function drug(L; name = :drug, extra = Equation[], dvs = [u(t, x, y), kin(t, x, y)],
+    const DOM = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 12.0), y ∈ Interval(0.0, 10.0)]
+    function plain(bcs; name = :drug, ivs = [t, x, y], ps = [Dd, kd], dom = DOM)
+        return PDESystem([Dt(u(t, x, y)) ~ Dd * Potts.LatticePDE.laplacian(u(t, x, y)) - kd * u(t, x, y)], bcs, dom, ivs, [u(t, x, y)], ps; name)
+    end
+    const Dx = Differential(x)
+    # `D(u) ~ Dd Δu − kd u + [kind = 1]`, `u = 1` on the low x face, zero flux on the others
+    function drug(
+            L; name = :drug, extra = Equation[], dvs = [u(t, x, y), kin(t, x, y)],
             rhs = Dd * Potts.LatticePDE.laplacian(u(t, x, y)) - kd * u(t, x, y) + ifelse(kin(t, x, y) == 1, 1.0, 0.0)
         )
-    return PDESystem([Dt(u(t, x, y)) ~ rhs], [u(0, x, y) ~ 0.0; u(t, 0, y) ~ 1.0; extra],
-        [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, L[1]), y ∈ Interval(0.0, L[2])], [t, x, y], dvs, [Dd, kd]; name)
-end
+        return PDESystem(
+            [Dt(u(t, x, y)) ~ rhs], [u(0, x, y) ~ 0.0; u(t, 0, y) ~ 1.0; extra],
+            [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, L[1]), y ∈ Interval(0.0, L[2])], [t, x, y], dvs, [Dd, kd]; name
+        )
+    end
     # the references, coupled with `@fields`: `drug` with the kind as the bound input `kA`
-@variables kA(..)::Bool [input = true]
-function ref(L)
-    return drug(L; name = :fields, dvs = [u(t, x, y), kA(t, x, y)],
+    @variables kA(..)::Bool [input = true]
+    function ref(L)
+        return drug(
+            L; name = :fields, dvs = [u(t, x, y), kA(t, x, y)],
             rhs = Dd * Potts.LatticePDE.laplacian(u(t, x, y)) - kd * u(t, x, y) + ifelse(kA(t, x, y), 1.0, 0.0)
         )
-end
-# a host field `zz` with its own `kd`, and a host field `u`
-function hostk()
-    @parameters kd = 0.9
-    @variables zz(..)
-    Z = zz(t, x, y)
-    return PDESystem([Dt(Z) ~ -kd * Z], [zz(0, x, y) ~ 3.0], DOM, [t, x, y], [Z], [kd]; name = :fields)
-end
-hostu() = PDESystem([Dt(u(t, x, y)) ~ -u(t, x, y)], [u(0, x, y) ~ 3.0], DOM, [t, x, y], [u(t, x, y)], Any[]; name = :fields)
+    end
+    # a host field `zz` with its own `kd`, and a host field `u`
+    function hostk()
+        @parameters kd = 0.9
+        @variables zz(..)
+        Z = zz(t, x, y)
+        return PDESystem([Dt(Z) ~ -kd * Z], [zz(0, x, y) ~ 3.0], DOM, [t, x, y], [Z], [kd]; name = :fields)
+    end
+    hostu() = PDESystem([Dt(u(t, x, y)) ~ -u(t, x, y)], [u(0, x, y) ~ 3.0], DOM, [t, x, y], [u(t, x, y)], Any[]; name = :fields)
 end
 
 
@@ -100,11 +104,11 @@ end
 
 function fc_msg(f, E::Type{<:Exception} = ArgumentError)
     return try
-            f()
-            "built"
-        catch e
-            e isa E ? sprint(showerror, e) : "wrong exception $(typeof(e)), expected $E"
-        end
+        f()
+        "built"
+    catch e
+        e isa E ? sprint(showerror, e) : "wrong exception $(typeof(e)), expected $E"
+    end
 end
 
 
@@ -155,7 +159,8 @@ end
         host = FcHost(; name = :m)
         w = Potts.wrap_system(
             :drug, FcPDE.System(FcPDE.Equation[], FcPDE.t; name = :drug), FcPDE.drug((12, 10)),
-            Potts.part(Potts.component(:zz, FcPDE.zz(), host)))
+            Potts.part(Potts.component(:zz, FcPDE.zz(), host))
+        )
         e = fc_msg(() -> fc_run(compose(host, w), :drug₊u, 3))
         @test e == "built" || (println(e); false)
     end
@@ -213,8 +218,10 @@ end
         T, X, Y = FcPDE.t, FcPDE.x, FcPDE.y
         hand = FcPDE.drug((6, 5))
         function with(dom)
-            return FcPDE.PDESystem(getfield(hand, :eqs), getfield(hand, :bcs), dom, getfield(hand, :ivs),
-                getfield(hand, :dvs), getfield(hand, :ps); name = :drug)
+            return FcPDE.PDESystem(
+                getfield(hand, :eqs), getfield(hand, :bcs), dom, getfield(hand, :ivs),
+                getfield(hand, :dvs), getfield(hand, :ps); name = :drug
+            )
         end
         a = fc_run(
             compose(
@@ -222,7 +229,12 @@ end
                     :drug, with(
                         Potts.LatticePDE.lattice_domain(
                             T, (X, Y), (12, 10);
-            spacing = 0.5)), hosth)), :drug₊u, 5)
+                            spacing = 0.5
+                        )
+                    ), hosth
+                )
+            ), :drug₊u, 5
+        )
         @test a == fc_run(FcRefH(; name = :m), :u, 5)
         # (control: the lattice's sites without its spacing are refused, naming the spacing)
         e = fc_msg(
@@ -231,7 +243,12 @@ end
                     :drug, with(
                         Potts.LatticePDE.lattice_domain(
                             T, (X, Y),
-            (12, 10))), hosth)))
+                            (12, 10)
+                        )
+                    ), hosth
+                )
+            )
+        )
         @test occursin("spans [0, 6]", e) && occursin("spacing 0.5", e)
     end
 end
@@ -240,13 +257,16 @@ end
     @testset "inputs by their CPM word; refusals name the PDESystem" begin
         host = FcHost(; name = :m)
         # an input with no word the CPM fills
-        bad = FcPDE.drug((12, 10); dvs = [FcPDE.u(FcPDE.t, FcPDE.x, FcPDE.y), FcPDE.nut(FcPDE.t, FcPDE.x, FcPDE.y)],
-            rhs = -FcPDE.kd * FcPDE.u(FcPDE.t, FcPDE.x, FcPDE.y) + FcPDE.nut(FcPDE.t, FcPDE.x, FcPDE.y))
+        bad = FcPDE.drug(
+            (12, 10); dvs = [FcPDE.u(FcPDE.t, FcPDE.x, FcPDE.y), FcPDE.nut(FcPDE.t, FcPDE.x, FcPDE.y)],
+            rhs = -FcPDE.kd * FcPDE.u(FcPDE.t, FcPDE.x, FcPDE.y) + FcPDE.nut(FcPDE.t, FcPDE.x, FcPDE.y)
+        )
         e = fc_msg(() -> compose(host, Potts.component(:drug, bad, host)))
         @test occursin("`nutrient`", e) && occursin("lattice_input_name = \"kind\"", e)
         # an input with no `lattice_input_name` goes by its own name: `kind`
         T, X, Y, kd = FcPDE.t, FcPDE.x, FcPDE.y, FcPDE.kd
-        pk = FcPDE.drug((12, 10); dvs = [FcPDE.u(T, X, Y), FcPDE.kind(T, X, Y)],
+        pk = FcPDE.drug(
+            (12, 10); dvs = [FcPDE.u(T, X, Y), FcPDE.kind(T, X, Y)],
             rhs = FcPDE.Dd * Potts.LatticePDE.laplacian(FcPDE.u(T, X, Y)) - kd * FcPDE.u(T, X, Y) + ifelse(FcPDE.kind(T, X, Y) == 1, 1.0, 0.0)
         )
         @test fc_run(compose(host, Potts.component(:drug, pk, host)), :drug₊u, 3) == fc_run(FcRef(; name = :m), :u, 3)
@@ -258,7 +278,11 @@ end
                 () -> compose(
                     host, Potts.wrap_system(
                         :drug,
-            FcPDE.System(FcPDE.Equation[], FcPDE.t; name = :drug), FcPDE.drug((12, 10)), Potts.part(host)))))
+                        FcPDE.System(FcPDE.Equation[], FcPDE.t; name = :drug), FcPDE.drug((12, 10)), Potts.part(host)
+                    )
+                )
+            )
+        )
     end
 end
 
@@ -272,7 +296,7 @@ end
                 prob = PottsProblem(m, fcm_op(), (0, 6); field_solver = fs, T = Float32, seed = 1)
                 a = solve(prob, CheckerboardCPM()).u[end].site.drug₊u
                 b = solve(prob, CheckerboardCPM(); backend).u[end].site.drug₊u
-                @test Array(b) ≈ a rtol = 1e-5
+                @test Array(b) ≈ a rtol = 1.0e-5
             end
         end
     end

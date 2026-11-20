@@ -53,11 +53,11 @@ end
         c0 = rand(StableRNG(3), 8, 6)
         function run(M)
             return solve(
-                    PottsProblem(
-                        M(; name = :f), [fd_empty((8, 6)); :c => c0], (0, 2);
-                        field_solver = ExplicitEuler(; substeps = 4)
-                    ), SequentialCPM()
-                ).u[end].site.c
+                PottsProblem(
+                    M(; name = :f), [fd_empty((8, 6)); :c => c0], (0, 2);
+                    field_solver = ExplicitEuler(; substeps = 4)
+                ), SequentialCPM()
+            ).u[end].site.c
         end
         @test run(FpAdvectConst) == run(FpAdvect)
         # M3: a module global `y` read in a body (here a binding of `@fields`) warns (base: the
@@ -236,9 +236,9 @@ end
         s3[4:7, 4:7] .= 1
         function run(m0, n)
             ig = init(
-                    PottsProblem(FaBlock(; name = :a), [ownership => s3, kind => [:A], :m0 => m0], (0, n); seed = 5),
-                    SequentialCPM()
-                )
+                PottsProblem(FaBlock(; name = :a), [ownership => s3, kind => [:A], :m0 => m0], (0, n); seed = 5),
+                SequentialCPM()
+            )
             return [(step!(ig); Array(st(ig).ownership)) for _ in 1:n]
         end
         @test all(==(s3), run(0.0, 2))

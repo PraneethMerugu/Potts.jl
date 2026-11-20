@@ -131,10 +131,12 @@ function parse_ab(args)
     inprocess = haskey(opts, "inprocess")
     n = inprocess ? 3 : 4
     length(pos) in (n, n + 1) ||
-        error(inprocess ?
-              "usage: ab.jl --inprocess <checkout> <variants.jl> <backend> [rounds] [options]" :
-              "usage: ab.jl <base> <candidate> <cases> <backend> [rounds] [options] " *
-              "(the backend is required: cpu, rocm or metal)")
+        error(
+        inprocess ?
+            "usage: ab.jl --inprocess <checkout> <variants.jl> <backend> [rounds] [options]" :
+            "usage: ab.jl <base> <candidate> <cases> <backend> [rounds] [options] " *
+            "(the backend is required: cpu, rocm or metal)"
+    )
     backend = pos[n]
     algs = get(opts, "alg", "sequential,checkerboard")
     backend in ("cpu", "metal", "rocm") ||
@@ -170,7 +172,8 @@ function parse_ab(args)
     ready_timeout = parse(Float64, get(opts, "ready-timeout", "600"))
     ready_timeout > 0 || error("--ready-timeout must be positive")
     default_rounds = backend == "cpu" ? "16" : "8"
-    return (; inprocess, pos, backend, variants = backend == "cpu" ? algs : backend,
+    return (;
+        inprocess, pos, backend, variants = backend == "cpu" ? algs : backend,
         rounds = parse(Int, get(opts, "rounds", length(pos) > n ? pos[n + 1] : default_rounds)),
         machine = m, seed, pin, cpu, stat, wait, parallel, ready_timeout,
         tolerance = parse(Float64, get(opts, "tolerance", "0.05")),
@@ -214,8 +217,10 @@ end
 function require_toplevel(dir, what)
     t = toplevel(dir)
     t == realpath(dir) ||
-        error("$what $dir is not the top level of a git checkout",
-            t === nothing ? "" : " (it lies inside $t)")
+        error(
+        "$what $dir is not the top level of a git checkout",
+        t === nothing ? "" : " (it lies inside $t)"
+    )
     return dir
 end
 
@@ -234,13 +239,16 @@ function control_checkout(dir)
     isdir(ctl) && require_toplevel(ctl, "the control checkout")
     sha = git(dir, "rev-parse", "HEAD")
     isclean(dir) ||
-        error("the checkout $dir has uncommitted changes: a same-commit control needs a ",
-            "clean checkout (commit them, or pass --no-control)")
+        error(
+        "the checkout $dir has uncommitted changes: a same-commit control needs a ",
+        "clean checkout (commit them, or pass --no-control)"
+    )
     gitdir = common_dir(dir)
     if !isdir(ctl)
         println(
             "creating control $ctl: `git worktree add --detach` writes a worktree entry ",
-            "into $gitdir")
+            "into $gitdir"
+        )
         run(`git -C $dir worktree add --quiet --detach $ctl $sha`)
     else
         common_dir(ctl) == gitdir ||
@@ -262,10 +270,14 @@ The environment of a child run in checkout `dir`: the same shape for every side.
 """
 function child_env(dir, o)
     sep = Sys.iswindows() ? ';' : ':'
-    return merge(ENV,
-        Dict{String, String}("JULIA_NUM_THREADS" => "1",
+    return merge(
+        ENV,
+        Dict{String, String}(
+            "JULIA_NUM_THREADS" => "1",
             "POTTS_BENCH_PINNED" => o.pin ? "1" : "0",
-            "JULIA_LOAD_PATH" => join(["@", joinpath(dir, "test"), "@stdlib"], sep)))
+            "JULIA_LOAD_PATH" => join(["@", joinpath(dir, "test"), "@stdlib"], sep)
+        )
+    )
 end
 
 julia_bin() = joinpath(Sys.BINDIR, Base.julia_exename())
@@ -715,9 +727,13 @@ function verdict(R, D, o)
     else
         Tuple{String, String}[]
     end
-    keys_ = sort([k
-                  for k in keys(b)
-                  if haskey(c, k) && all(haskey(get(R, s, none), k) for (s, _) in ctls)])
+    keys_ = sort(
+        [
+            k
+                for k in keys(b)
+                if haskey(c, k) && all(haskey(get(R, s, none), k) for (s, _) in ctls)
+        ]
+    )
     isempty(keys_) && error("no case was timed on every side")
     point(x, y) = o.stat == "paired" ? paired(x, y) : fastest(y) / fastest(x)
     iv(x, y) = boot_interval(ratios(x, y))
@@ -735,9 +751,11 @@ function verdict(R, D, o)
     end
     margin = 1 + o.tolerance - dev
     slow, unread = String[], String[]
-    @printf("\n%-34s %9s %9s | %-26s",
+    @printf(
+        "\n%-34s %9s %9s | %-26s",
         "case (ns/site, fastest median)", "base", "candidate",
-        "candidate/base ($(o.stat)) 95%")
+        "candidate/base ($(o.stat)) 95%"
+    )
     for (s, ref) in ctls
         @printf(" | %-26s", "$s/$ref ($(o.stat)) 95%")
     end
@@ -752,8 +770,10 @@ function verdict(R, D, o)
             push!(unread, k)
             push!(flags, "UNREADABLE")
         end
-        @printf("%-34s %9.2f %9.2f | %.4f %s", k, fastest(b[k]), fastest(c[k]), rc,
-            fmt(iv(b[k], c[k])))
+        @printf(
+            "%-34s %9.2f %9.2f | %.4f %s", k, fastest(b[k]), fastest(c[k]), rc,
+            fmt(iv(b[k], c[k]))
+        )
         for (s, ref) in ctls
             rk, (lo, hi) = ctlv[(k, s)]
             lo <= 1 <= hi || push!(flags, "$s interval excludes 1")
@@ -763,10 +783,14 @@ function verdict(R, D, o)
     end
     nd = length(D)
     o.control &&
-        @printf("resolution: largest control deviation %.4f, largest control interval half-width %.4f\n",
-            dev, half)
-    @printf("pass margin: candidate/base <= %.4f (1 + tolerance %.3f - largest control deviation %.4f)\n",
-        margin, o.tolerance, dev)
+        @printf(
+        "resolution: largest control deviation %.4f, largest control interval half-width %.4f\n",
+        dev, half
+    )
+    @printf(
+        "pass margin: candidate/base <= %.4f (1 + tolerance %.3f - largest control deviation %.4f)\n",
+        margin, o.tolerance, dev
+    )
     nd == 0 || println("disturbed runs ($nd):\n  ", join(D, "\n  "))
     code = if nd > 0
         3
@@ -808,8 +832,8 @@ function ab_main(args)
         "machine %s (%s); backend %s (%s); %s; Tuple cache seeded to %s; %d rounds; wait %s%s%s\n",
         m.key, BenchMachine.cpu_model(), o.backend, o.variants,
         o.pin ?
-        "pinned to logical CPU $(o.cpu), siblings $(BenchMachine.siblings(o.cpu)) idle" :
-        "not pinned", o.seed > 0 ? string(o.seed) : "– (off)", o.rounds, o.wait,
+            "pinned to logical CPU $(o.cpu), siblings $(BenchMachine.siblings(o.cpu)) idle" :
+            "not pinned", o.seed > 0 ? string(o.seed) : "– (off)", o.rounds, o.wait,
         o.gctrial ? "; gctrial on" : "; gctrial off", mode
     )
     println("harness: $(o.child) (checkout $harness at $(describe(harness)))")
@@ -822,8 +846,12 @@ function ab_main(args)
     else
         base, cand, cases = o.pos[1], o.pos[2], o.pos[3]
         sides = ["base" => base, "candidate" => cand]
-        o.control && append!(sides, ["base-ctl" => control_checkout(base),
-            "cand-ctl" => control_checkout(cand)])
+        o.control && append!(
+            sides, [
+                "base-ctl" => control_checkout(base),
+                "cand-ctl" => control_checkout(cand),
+            ]
+        )
         for (s, d) in sides
             println(@sprintf("%-9s %s at %s", s, d, describe(d)))
         end

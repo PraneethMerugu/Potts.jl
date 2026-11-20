@@ -20,26 +20,26 @@ ini_names(xs) = Set{Symbol}(Potts.SymbolicIndexingInterface.getname(x) for x in 
 
 function ini_error(f, words...)
     return try
-            f()
-            false
-        catch err
-            e = err isa LoadError ? err.error : err
-            ok = e isa ArgumentError
-            ok || @info "initialization: expected an ArgumentError" exception = e
-            ok
-        end
+        f()
+        false
+    catch err
+        e = err isa LoadError ? err.error : err
+        ok = e isa ArgumentError
+        ok || @info "initialization: expected an ArgumentError" exception = e
+        ok
+    end
 end
 
 function ini_compile_error(f, words...)
     return try
-            f()
-            false
-        catch err
-            e = err isa LoadError ? err.error : err
-            ok = e isa Potts.PottsCompileError && (isempty(words) || occursin(first(words), sprint(showerror, e)))
-            ok || @info "initialization: expected a PottsCompileError" exception = e
-            ok
-        end
+        f()
+        false
+    catch err
+        e = err isa LoadError ? err.error : err
+        ok = e isa Potts.PottsCompileError && (isempty(words) || occursin(first(words), sprint(showerror, e)))
+        ok || @info "initialization: expected a PottsCompileError" exception = e
+        ok
+    end
 end
 
 const INI_VOL = [16.0, 12.0]

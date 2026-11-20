@@ -57,8 +57,12 @@ const _BOUNDED_BUILT = Threads.Atomic{Int}(0)
 struct _BuiltFeatures end
 _feature_counts() = (_FOLDS_BUILT[], _BOUNDED_BUILT[])
 function _built_metadata(c0)
-    return Base.ImmutableDict(Base.ImmutableDict{DataType, Any}(), _BuiltFeatures => (; folds = _FOLDS_BUILT[] != c0[1],
-        bounded = _BOUNDED_BUILT[] != c0[2]))
+    return Base.ImmutableDict(
+        Base.ImmutableDict{DataType, Any}(), _BuiltFeatures => (;
+            folds = _FOLDS_BUILT[] != c0[1],
+            bounded = _BOUNDED_BUILT[] != c0[2],
+        )
+    )
 end
 """Whether `sys` may contain feature `k` (`:folds`, `:bounded`): `false` only if its constructor built none."""
 function _may_have(sys, k::Symbol)
@@ -68,15 +72,21 @@ end
 
 function _rng_error(name, args, kws)
     shown = join(Iterators.flatten((map(repr, args), ("$k = $(repr(v))" for (k, v) in pairs(kws)))), ", ")
-    throw(ArgumentError("`$name($shown)` is not available in a model: the model's random draws are `rand()` " *
+    throw(
+        ArgumentError(
+            "`$name($shown)` is not available in a model: the model's random draws are `rand()` " *
                 "(uniform on (0, 1)), `randn()` and `randn(μ, σ; lower_bound)`, each fresh per MCS and per " *
-                        "cell or site. A Base RNG call would run once, when the model is built"))
+                "cell or site. A Base RNG call would run once, when the model is built"
+        )
+    )
 end
 
 # Random-number functions a model body may not call (Base and the Random stdlib): `rand`
 # and `randn` are the model's own (`_rand`, `_randn`) unless qualified, the others are errors
-const _RNG_NAMES = (:rand, :randn, :randexp, :rand!, :randn!, :randexp!, :randperm, :randperm!, :randcycle,
-    :randcycle!, :shuffle, :shuffle!, :bitrand, :randstring, :randsubseq, :randsubseq!, :seed!)
+const _RNG_NAMES = (
+    :rand, :randn, :randexp, :rand!, :randn!, :randexp!, :randperm, :randperm!, :randcycle,
+    :randcycle!, :shuffle, :shuffle!, :bitrand, :randstring, :randsubseq, :randsubseq!, :seed!,
+)
 
 """
 `_rng_call(name, args...; kws...)`: a call of an RNG function `name` written in a model body,
@@ -121,6 +131,10 @@ function _lower_normal(op, args, env)
     stream = CorePotts.stream_id("Potts.draw.$(SymbolicUtils.unwrap_const(_unwrap(args[1])))")
     op === random_normal && return :(CorePotts.normal($(env.T), CorePotts.draw($key, $mcs, $entity, $stream)))
     μ, σ, lo = map(a -> lower(a, env), args[2:4])
-    return :(CorePotts.bounded_normal($(env.T), $key, $mcs, $entity, $stream, $μ, $σ, $lo,
-        st.model.$(CorePotts.MODEL_STATUS)))
+    return :(
+        CorePotts.bounded_normal(
+            $(env.T), $key, $mcs, $entity, $stream, $μ, $σ, $lo,
+            st.model.$(CorePotts.MODEL_STATUS)
+        )
+    )
 end

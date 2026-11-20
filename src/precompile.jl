@@ -80,16 +80,19 @@ function _precompile_workload()
     T = parameter(:T, 10.0)
     J = kind_parameter(:J, [0 16; 16 2])
     mark = variable(only(Symbolics.@variables mark(t)), :site; default = 0.0)
-    host = PottsSystem(; name = :precompile, kinds = [:medium, :cell],
+    host = PottsSystem(;
+        name = :precompile, kinds = [:medium, :cell],
         lattice = lattice_spec((16, 16); neighborhood = Moore(1)), parameters = Any[λ, V₀, T, J],
         variables = Any[mark],
-        energies = [energy(cells(1) => λ * (volume - V₀)^2 + λ * (surface - V₀)^2),
+        energies = [
+            energy(cells(1) => λ * (volume - V₀)^2 + λ * (surface - V₀)^2),
             energy(CONTACTS => _index(J, kind, neighbor_kind)),
         ],
         drives = [drive(COPY => ifelse(_index(kind, new) == 1, -λ * (_index(mark, target) - _index(mark, source)), 0.0))],
         constraints = [connectivity(1)],
         updates = [update(:after_mcs, mark ~ max(Pre(mark) - 1, 0)), update(:on_copy, _index(mark, target) ~ λ)],
-        sweep = sweep_spec(:metropolis; temperature = T))
+        sweep = sweep_spec(:metropolis; temperature = T)
+    )
     sys = couple(host, _precompile_fields(2); inputs = [:src => kind == 1])
     csys = ModelingToolkitBase.mtkcompile(sys)
     σ = zeros(Int32, 16, 16)
@@ -111,11 +114,15 @@ function _precompile_workload()
     # the host): the field compiler's 3D Float32 lowering and the checkerboard sweep
     σ3 = zeros(Int32, 8, 8, 8)
     σ3[3:5, 3:5, 3:5] .= 1
-    prob3 = PottsProblem(mtkcompile(_PrecompileModel(; name = :precompile, lattice = (8, 8, 8))),
-        [CorePotts.ownership => σ3, B.kind => [:cell]], (0, 1); T = Float32, field_solver = ExplicitEuler(), capacity = 8)
+    prob3 = PottsProblem(
+        mtkcompile(_PrecompileModel(; name = :precompile, lattice = (8, 8, 8))),
+        [CorePotts.ownership => σ3, B.kind => [:cell]], (0, 1); T = Float32, field_solver = ExplicitEuler(), capacity = 8
+    )
     step!(init(prob3, CorePotts.CheckerboardCPM(); save_start = false))
-    PottsProblem(mtkcompile(_PrecompileModel(; name = :precompile, explicit_init = true)),
-        [CorePotts.ownership => σ, B.kind => [:cell]], (0, 1); field_solver = ExplicitEuler(), capacity = 8)
+    PottsProblem(
+        mtkcompile(_PrecompileModel(; name = :precompile, explicit_init = true)),
+        [CorePotts.ownership => σ, B.kind => [:cell]], (0, 1); field_solver = ExplicitEuler(), capacity = 8
+    )
     return nothing
 end
 PrecompileTools.@setup_workload begin

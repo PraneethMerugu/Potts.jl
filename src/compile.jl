@@ -113,28 +113,28 @@ inner(c::CompiledPottsSystem) = inner(getfield(c, :sys))
 # `namespacing` flag).
 function Symbolics.rename(c::CompiledPottsSystem, name::Symbol)
     throw(
-            ArgumentError(
-                "rename($(nameof(c)), :$name): a compiled system is read-only; rename the model, then compile it: " *
-                    "`mtkcompile(rename(sys, :$name))`"
-            )
+        ArgumentError(
+            "rename($(nameof(c)), :$name): a compiled system is read-only; rename the model, then compile it: " *
+                "`mtkcompile(rename(sys, :$name))`"
         )
+    )
 end
 function ModelingToolkitBase.compose(c::CompiledPottsSystem, ::AbstractArray; kw...)
     throw(
-            ArgumentError(
-                "compose($(nameof(c)), …): a compiled system is read-only; compose the model, then compile it: " *
-                    "`mtkcompile(compose(sys, components))`"
-            )
+        ArgumentError(
+            "compose($(nameof(c)), …): a compiled system is read-only; compose the model, then compile it: " *
+                "`mtkcompile(compose(sys, components))`"
         )
+    )
 end
 # a compiled system among an MTK System's components (`clock ∘ csys`, `System(…; systems)`)
 function Base.convert(::Type{ModelingToolkitBase.System}, c::CompiledPottsSystem)
     throw(
-            ArgumentError(
-                "the compiled system `$(nameof(c))` is not a component of an MTK System; compose the model the other way " *
-                    "round, `compose(sys, [system])`, then compile it"
-            )
+        ArgumentError(
+            "the compiled system `$(nameof(c))` is not a component of an MTK System; compose the model the other way " *
+                "round, `compose(sys, [system])`, then compile it"
         )
+    )
 end
 
 Base.show(io::IO, c::CompiledPottsSystem) = (print(io, "Compiled"); show(io, getfield(c, :authored)))
@@ -568,11 +568,11 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
     cluster_division = any(d -> d.domain isa ClusterDomain, _p(sys, :divisions))
     function domain_kinds(D)
         return unique(
-                Iterators.flatten(
-                    isempty(d.domain.kinds) ? (1:(length(_p(sys, :kinds)) - 1)) : d.domain.kinds
-                        for d in _p(sys, :divisions) if d.domain isa D
-                )
+            Iterators.flatten(
+                isempty(d.domain.kinds) ? (1:(length(_p(sys, :kinds)) - 1)) : d.domain.kinds
+                    for d in _p(sys, :divisions) if d.domain isa D
             )
+        )
     end
     both = intersect(domain_kinds(CellDomain), domain_kinds(ClusterDomain))
     isempty(both) || throw(
@@ -834,9 +834,9 @@ _convert_names(sys::PottsSystem) = Symbol[v.name for v in _p(sys, :converts)]
 # the expressions of a pass, as they are evaluated against the state (tracker flags, gathers)
 function _convert_exprs(v::ConvertSpec)
     return Any[
-            v.from, v.to, (v.at isa Bool ? () : (v.at,))..., v.p,
-            (x for t in v.transfers for x in (t.from, t.to, t.per_site))..., (x for (a, b) in v.writes for x in (a, b))...,
-        ]
+        v.from, v.to, (v.at isa Bool ? () : (v.at,))..., v.p,
+        (x for t in v.transfers for x in (t.from, t.to, t.per_site))..., (x for (a, b) in v.writes for x in (a, b))...,
+    ]
 end
 
 const _CONVERT_SITE_BUILTINS = (_SITE_BUILTINS..., :from, :to)
@@ -1119,9 +1119,9 @@ const _COPY_VARYING_INDEXED = (:volume, :surface, :euler, :euler_full, _PIECES_N
 function _explicit_index(i)
     r = info(i)
     return r === nothing || !(
-            r.role in (:bound, :bound_cell, :bound_site) ||
-                (r.role === :builtin && r.name in (:site, :neighbor_site))
-        )
+        r.role in (:bound, :bound_cell, :bound_site) ||
+            (r.role === :builtin && r.name in (:site, :neighbor_site))
+    )
 end
 
 # The first read in `x` that a copy changes (outermost first), as (read as written, bare form
@@ -1675,10 +1675,10 @@ _is_hex(sys) = core_lattice(_p(sys, :lattice)).geometry isa CorePotts.Hexagonal
 
 function _energy_centroid_error(name)
     return PottsCompileError(
-            "`$name` is not available in energies: a copy moves the centroids it " *
-                "reads and that shift is not part of ΔH; read it in cell " *
-                "updates or @observed, or use `displacement(c, k)` in a @drive"
-        )
+        "`$name` is not available in energies: a copy moves the centroids it " *
+            "reads and that shift is not part of ΔH; read it in cell " *
+            "updates or @observed, or use `displacement(c, k)` in a @drive"
+    )
 end
 
 # The E7 helpers an energy may not read (D-243), refused before the reference checks so the

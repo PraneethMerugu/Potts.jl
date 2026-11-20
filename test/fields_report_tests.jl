@@ -17,27 +17,29 @@ using Potts, Test
 
 
 module FrPDE
-using Potts: Potts
-using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters
-const t = Potts.t
-const Dt = Differential(t)
+    using Potts: Potts
+    using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters
+    const t = Potts.t
+    const Dt = Differential(t)
     const laplacian = Potts.LatticePDE.laplacian
-const lattice_domain = Potts.LatticePDE.lattice_domain
-@parameters x y Do = 50.0 sc = 0.01 ec = 0.05 Du = 0.2 ka = 0.3 kb = 0.2
-@variables c(..) = 0.0 u(..) = 0.0 endo(..)::Bool [input = true]
-const C, U, E = c(t, x, y), u(t, x, y), endo(t, x, y)
-# Merks' VEGF: secreted by the endothelial cells, decaying in the medium, `Do = 50` (the audit's
-# case: ⌈8 Do / 1.8⌉ = 223 substeps per MCS, 2026-10-18 usability audit, item 12)
+    const lattice_domain = Potts.LatticePDE.lattice_domain
+    @parameters x y Do = 50.0 sc = 0.01 ec = 0.05 Du = 0.2 ka = 0.3 kb = 0.2
+    @variables c(..) = 0.0 u(..) = 0.0 endo(..)::Bool [input = true]
+    const C, U, E = c(t, x, y), u(t, x, y), endo(t, x, y)
+    # Merks' VEGF: secreted by the endothelial cells, decaying in the medium, `Do = 50` (the audit's
+    # case: ⌈8 Do / 1.8⌉ = 223 substeps per MCS, 2026-10-18 usability audit, item 12)
     function vegf()
         return PDESystem(
-                [Dt(C) ~ Do * laplacian(C) + sc * E - ec * (1 - E) * C], [], lattice_domain(t, (x, y), (24, 20)), [t, x, y],
-            [C, E], [Do, sc, ec]; name = :vegf)
+            [Dt(C) ~ Do * laplacian(C) + sc * E - ec * (1 - E) * C], [], lattice_domain(t, (x, y), (24, 20)), [t, x, y],
+            [C, E], [Do, sc, ec]; name = :vegf
+        )
     end
-# two fields that read each other (a loop of two groups under `solvers`)
+    # two fields that read each other (a loop of two groups under `solvers`)
     function loop()
         return PDESystem(
-                [Dt(C) ~ Du * laplacian(C) + ka * U - 0.1 * C + sc * E, Dt(U) ~ -kb * U + 0.1 * C], [],
-            lattice_domain(t, (x, y), (24, 20)), [t, x, y], [C, U, E], [Du, ka, kb, sc]; name = :loop)
+            [Dt(C) ~ Du * laplacian(C) + ka * U - 0.1 * C + sc * E, Dt(U) ~ -kb * U + 0.1 * C], [],
+            lattice_domain(t, (x, y), (24, 20)), [t, x, y], [C, U, E], [Du, ka, kb, sc]; name = :loop
+        )
     end
 end
 
@@ -75,7 +77,7 @@ fr_warm(ig) = (step!(ig); step!(ig); @allocated step!(ig))
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-   # (a function barrier)
+# (a function barrier)
 @testitem "field_report of a Merks-like model at Do = 50 shows the 223 substeps and their cause" setup = [FieldsReportSetup] tags = [:potts, :fields_report] begin
     @testset "field_report of a Merks-like model at Do = 50 shows the 223 substeps and their cause" begin
         @test isdefined(Potts, :field_report) && Base.isexported(Potts, :field_report)
@@ -186,7 +188,8 @@ end
         cases = (
             (FrMerks(; name = :m), ExplicitEuler(), ExplicitEuler(), 1),
             (FrMerks(; name = :m), BackwardEuler(; linsolve = LatticeMultigrid()), BackwardEuler(; linsolve = LatticeMultigrid()), 1),
-            (FrLoop(; name = :m), FieldGroups(:u => ExplicitEuler(; substeps = 4); default = ExplicitEuler()),
+            (
+                FrLoop(; name = :m), FieldGroups(:u => ExplicitEuler(; substeps = 4); default = ExplicitEuler()),
                 FieldGroups(:u => ExplicitEuler(; substeps = 4); default = ExplicitEuler()), 2,
             ),
         )
@@ -195,8 +198,10 @@ end
         nodt(s) = replace(s, "(; dt = 1.0)" => "()", "dt = 1.0, " => "", ", dt = 1.0" => "")
         for (m, fs, own, ngroups) in cases
             integ = init(fr_prob(m; field_solver = fs), SequentialCPM())
-            bare = LP.discretize(Potts.fields(m), LP.LatticeDiscretization(LP.Grid((24, 20)); T = Float64);
-                inputs = collect(Potts.field_inputs(integ)))
+            bare = LP.discretize(
+                Potts.fields(m), LP.LatticeDiscretization(LP.Grid((24, 20)); T = Float64);
+                inputs = collect(Potts.field_inputs(integ))
+            )
             oi = init(bare, own; dt = 1.0)
             step!(integ)
             step!(oi)
@@ -206,13 +211,21 @@ end
         end
         # the loop's κ (two groups that read each other), at the parameters of both groups (`ka` is
         # read by the group of `c` only)
-        rep = sprint(field_report, fr_prob(FrLoop(; name = :m); field_solver = FieldGroups(:u => ExplicitEuler(; substeps = 4);
-            default = ExplicitEuler())))
-        @test occursin("""
-    coupling:
-      group 1: loop [1, 2], κ = dt · rate = 1.0 × 0.3 = 0.3 (≤ 1); worst row c reads u through ka
-      group 2: loop [1, 2], κ = dt · rate = 1.0 × 0.1 = 0.1 (≤ 1); worst row u reads c through 0.1
-    """, rep) || (print(rep); false)
+        rep = sprint(
+            field_report, fr_prob(
+                FrLoop(; name = :m); field_solver = FieldGroups(
+                    :u => ExplicitEuler(; substeps = 4);
+                    default = ExplicitEuler()
+                )
+            )
+        )
+        @test occursin(
+            """
+            coupling:
+              group 1: loop [1, 2], κ = dt · rate = 1.0 × 0.3 = 0.3 (≤ 1); worst row c reads u through ka
+              group 2: loop [1, 2], κ = dt · rate = 1.0 × 0.1 = 0.1 (≤ 1); worst row u reads c through 0.1
+            """, rep
+        ) || (print(rep); false)
     end
 end
 

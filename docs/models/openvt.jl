@@ -75,8 +75,10 @@
 #     end
 #     @before_mcs X ~ ifelse(Pre(X) > 0, Pre(X), randn(μ_X, σ_X; lower_bound = 0.0))
 #     @after_mcs begin
-#         f ~ ifelse(count(true for _ in contacts) > 0,
-#             count(neighbor_kind == medium for _ in contacts) / count(true for _ in contacts), 1.0)
+#         f ~ ifelse(
+#             count(true for _ in contacts) > 0,
+#             count(neighbor_kind == medium for _ in contacts) / count(true for _ in contacts), 1.0
+#         )
 #         A_star ~ ifelse((volume / Pre(A_star) >= β) && (f >= γ), Pre(A_star) + α, Pre(A_star))
 #     end
 #     @divide cells(cell) when = volume >= X * A₀, along = RandomPlane(), A_star => Split(),
@@ -119,8 +121,10 @@ sol_ref = solve(prob_ref, SequentialCPM(); saveat = 0:15:(3 * 775), callback = g
 
 # The colony, colored by cell:
 
-record_potts("openvt/reference.mp4", sol_ref; framerate = 15, title = "Table S1 monolayer",
-    encoding = CellIdentityEncoding(), figure = (; size = (440, 440)), axis = (; limits = (20, 100, 20, 100)))
+record_potts(
+    "openvt/reference.mp4", sol_ref; framerate = 15, title = "Table S1 monolayer",
+    encoding = CellIdentityEncoding(), figure = (; size = (440, 440)), axis = (; limits = (20, 100, 20, 100))
+)
 nothing #hide
 
 # ```@raw html
@@ -266,8 +270,10 @@ sol = solve(prob, SequentialCPM(); saveat = 0:8:840)
 # (`CellIdentityEncoding`), and zooms in on the central 180 × 180 sites, where the colony
 # grows, through the `axis` limits:
 
-record_potts("openvt/monolayer.mp4", sol; framerate = 15, title = "Growing monolayer",
-    encoding = CellIdentityEncoding(), figure = (; size = (440, 440)), axis = (; limits = (110, 290, 110, 290)))
+record_potts(
+    "openvt/monolayer.mp4", sol; framerate = 15, title = "Growing monolayer",
+    encoding = CellIdentityEncoding(), figure = (; size = (440, 440)), axis = (; limits = (110, 290, 110, 290))
+)
 nothing #hide
 
 # ```@raw html
@@ -377,4 +383,3 @@ fig
 # read_openvt
 # openvt_filename
 # ```
-

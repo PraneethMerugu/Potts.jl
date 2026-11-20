@@ -85,10 +85,10 @@ solver_var(sys, n) = only(filter(x -> string(x) in (string(n), string(n, "(t)"))
 
 function solver_err(f)
     return try
-            f(); nothing
-        catch e
-            e
-        end
+        f(); nothing
+    catch e
+        e
+    end
 end
 
 function sv_throws(T, pats, f)

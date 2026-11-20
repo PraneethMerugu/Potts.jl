@@ -33,8 +33,10 @@ const _VAR_ROLES = (:site, :field, :cell, :model)
 # `integral_pre = false`, `Pre` reads inside an `integral` are left out: `integral(Pre(w))`
 # is its own cell slot, refreshed at the start of the block's phases while `w` still holds
 # its block-start value (D-042), so it needs neither a snapshot nor a writer dependency.
-function _reads!(out, x, pre::Bool = false, nonlocal::Bool = false, inint::Bool = false;
-        integral_pre::Bool = true)
+function _reads!(
+        out, x, pre::Bool = false, nonlocal::Bool = false, inint::Bool = false;
+        integral_pre::Bool = true
+    )
     x = _unwrap(x)
     x isa SymbolicUtils.BasicSymbolic || return out
     i = info(x)
@@ -128,7 +130,7 @@ function _hoist_populations(x, slots::Vector{Pair{Symbol, Any}}, rn, prefix::Sym
         (y isa SymbolicUtils.BasicSymbolic && iscall(y)) || return
         operation(y) === cell_integral && return
         operation(y) === population && push!(pops, y)
-        foreach(visit, arguments(y))
+        return foreach(visit, arguments(y))
     end
     visit(x)
     isempty(pops) && return x
@@ -176,7 +178,7 @@ function _integral_hoist(x)
             sub[y] = _standin(:model, n)               # (a `count`, `any`, `all` stored exactly)
             return
         end
-        foreach(visit, arguments(y))
+        return foreach(visit, arguments(y))
     end
     visit(x)
     isempty(sub) && return x, slots
@@ -189,8 +191,10 @@ _integral_operand(x) = first(_integral_hoist(x))
 
 function _integral_hoistable(pop)
     _has_op(pop, random_uniform) && return false
-    rn = Dict{Any, Symbol}(ni.options.relation => :__gather for (ni, _) in _gathers(pop)
-                           if !(ni.options.relation isa Union{RelationRef, ShellRelation}))
+    rn = Dict{Any, Symbol}(
+        ni.options.relation => :__gather for (ni, _) in _gathers(pop)
+            if !(ni.options.relation isa Union{RelationRef, ShellRelation})
+    )
     return _hoistable(pop, rn)
 end
 
@@ -207,9 +211,11 @@ function _check_integral_pre(sys, u::Update, writers)
             throw(
                 PottsCompileError(
                     "`$(replace(string(y), r"\S*cell_integral" => "integral"))` reads $(join(pres, ", ")) through `Pre` (the values before the block) " *
-                                "and $(join(bares, ", ")) bare (the block's new values), all written in the " *
-                                "same block; split it into `integral(…Pre…)` and `integral(…)` terms, or keep " *
-                                "`Pre(x)` in a site variable (`xp ~ Pre(x)`) and fold that"))
+                        "and $(join(bares, ", ")) bare (the block's new values), all written in the " *
+                        "same block; split it into `integral(…Pre…)` and `integral(…)` terms, or keep " *
+                        "`Pre(x)` in a site variable (`xp ~ Pre(x)`) and fold that"
+                )
+            )
         end
     end
     return nothing
@@ -258,9 +264,11 @@ function _check_edge_block(sys, us)
                 throw(
                     PottsCompileError(
                         "the edge update of `$me` reads `$n`, which the same block writes " *
-                                    (pre ? "at another cadence" : "(a bare read is its new value)") *
-                                    "; an edge update reads the edge variables its block writes only as " *
-                                    "`Pre(x)`, written at the update's own cadence"))
+                            (pre ? "at another cadence" : "(a bare read is its new value)") *
+                            "; an edge update reads the edge variables its block writes only as " *
+                            "`Pre(x)`, written at the update's own cadence"
+                    )
+                )
             end
         end
     end
@@ -299,9 +307,11 @@ function _edge_stage_ranks(sys, us, isedge)
                 throw(
                     PottsCompileError(
                         "the edge updates of $(join(("`$v`" for v in vars), ", ")) at cadences " *
-                                    "$(join(("Every($c)" for c in sort(left)), ", ")) cannot run in declaration " *
-                                    "order: each cadence's edge updates run together, and these writers alternate " *
-                                    "between them; write each variable's updates at those cadences in the same order"))
+                            "$(join(("Every($c)" for c in sort(left)), ", ")) cannot run in declaration " *
+                            "order: each cadence's edge updates run together, and these writers alternate " *
+                            "between them; write each variable's updates at those cadences in the same order"
+                    )
+                )
             end
         end
         rank[cads[k]] = length(rank) + 1
@@ -357,7 +367,9 @@ function _schedule_block(sys, us::Vector{Update}, rn, popslots::Vector{Pair{Symb
                 throw(
                     PottsCompileError(
                         "updates depend on each other's new values in a cycle " *
-                                    "($(join([cyc; names[j]], " → "))); read one of them through `Pre`"))
+                            "($(join([cyc; names[j]], " → "))); read one of them through `Pre`"
+                    )
+                )
             end
         end
         state[j] = 1
@@ -375,8 +387,10 @@ function _schedule_block(sys, us::Vector{Update}, rn, popslots::Vector{Pair{Symb
     # referent reads `q`'s default, and `Pre(partner)` is still a reference
     function snapinfo(n)
         i = infos[n]
-        return Entity(roles[n] === :field ? :site : roles[n], Symbol(n, :__pre), i.default,
-            get(i.options, :reference, false) === true ? (; reference = true) : (;))
+        return Entity(
+            roles[n] === :field ? :site : roles[n], Symbol(n, :__pre), i.default,
+            get(i.options, :reference, false) === true ? (; reference = true) : (;)
+        )
     end
     snap = Dict{Symbol, Any}(n => _unwrap(_tag(_sym(Symbol(n, :__pre)), snapinfo(n))) for n in snapnames)
     order = Dict(:model => 1, :cell => 2, :site => 3, :edge => 4)

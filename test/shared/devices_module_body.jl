@@ -40,4 +40,3 @@ function device_arraytype()
 end
 
 device_array(x::AbstractArray) = device_arraytype()(x)
-

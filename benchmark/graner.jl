@@ -29,7 +29,8 @@ st = current_state(integ)
 const WARM = time() - t
 
 t = time()
-integ2 = init(remake(prob; p = merge(graner_params(T), (; λ = T(2))), seed = 1), alg;
+integ2 = init(
+    remake(prob; p = merge(graner_params(T), (; λ = T(2))), seed = 1), alg;
     backend, save_start = false, save_everystep = false
 )
 step!(integ2); current_state(integ2)
@@ -41,5 +42,6 @@ println(
     " load=", round(LOAD; digits = 2), "s build=", round(BUILD; digits = 3),
     "s first_mcs=", round(FIRST; digits = 2), "s remake_first=", round(REMAKE; digits = 3),
     "s warm=", round((nmcs - 1) / WARM; digits = 1), " MCS/s (",
-    round(WARM / (nmcs - 1) / nsite * 1e9; digits = 2), " ns/attempt) retcode=",
-    integ.retcode, " total=", round(time() - T0; digits = 1), "s")
+    round(WARM / (nmcs - 1) / nsite * 1.0e9; digits = 2), " ns/attempt) retcode=",
+    integ.retcode, " total=", round(time() - T0; digits = 1), "s"
+)

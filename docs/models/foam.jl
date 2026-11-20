@@ -40,17 +40,22 @@ shaken = solve(remake(prob; p = [:T => 3.0]), alg; save_everystep = false).u[end
 relaxed = solve(remake(prob; u0 = [ownership => Array(shaken.ownership); start[2:3]], tspan = (0, 300)), alg; save_everystep = false).u[end]
 sheared = solve(
     remake(prob; u0 = [ownership => Array(relaxed.ownership); start[2:3]], p = [:γ0 => 36.0], tspan = (0, 4000)),
-    alg; saveat = 0:20:4000)
+    alg; saveat = 0:20:4000
+)
 nothing #hide
 
 # The run, one color per bubble, the lattice filling the frame:
 
-bare = (; limits = (0, L[1], 0, L[2]), titlevisible = false, xticksvisible = false, yticksvisible = false,
+bare = (;
+    limits = (0, L[1], 0, L[2]), titlevisible = false, xticksvisible = false, yticksvisible = false,
     xticklabelsvisible = false, yticklabelsvisible = false, xgridvisible = false, ygridvisible = false,
-    leftspinevisible = false, rightspinevisible = false, topspinevisible = false, bottomspinevisible = false)
+    leftspinevisible = false, rightspinevisible = false, topspinevisible = false, bottomspinevisible = false,
+)
 frame = (; size = 4 .* L, figure_padding = 0)
-record_potts("foam/boundary_shear.mp4", sheared; framerate = 20, encoding = CellIdentityEncoding(),
-    plot = (; boundaries = false), figure = frame, axis = bare)
+record_potts(
+    "foam/boundary_shear.mp4", sheared; framerate = 20, encoding = CellIdentityEncoding(),
+    plot = (; boundaries = false), figure = frame, axis = bare
+)
 nothing #hide
 
 # ```@raw html
@@ -130,9 +135,13 @@ fig
 bulk = solve(
     remake(
         prob; u0 = [ownership => Array(relaxed.ownership); start[2:3]], p = [:β => 0.2, :bulk => 1.0],
-        tspan = (0, 1500)), alg; saveat = 0:20:1500)
-record_potts("foam/bulk_shear.mp4", bulk; framerate = 20, encoding = CellIdentityEncoding(),
-    plot = (; boundaries = false), figure = frame, axis = bare)
+        tspan = (0, 1500)
+    ), alg; saveat = 0:20:1500
+)
+record_potts(
+    "foam/bulk_shear.mp4", bulk; framerate = 20, encoding = CellIdentityEncoding(),
+    plot = (; boundaries = false), figure = frame, axis = bare
+)
 nothing #hide
 
 # ```@raw html

@@ -111,10 +111,12 @@ end
 # D-051 R0: no model- or author-named code in the core packages. Identifiers, macro names,
 # symbols and non-doc strings are scanned (comments and docstrings may cite sources);
 # identifiers are split on `_` and camel case. Exceptions live in `privileged_allow.txt`.
-const _DENY = ["merks", "wortel", "niculescu", "graner", "glazier", "akeeb", "jiang", "bauer", "zajac",
+const _DENY = [
+    "merks", "wortel", "niculescu", "graner", "glazier", "akeeb", "jiang", "bauer", "zajac",
     "starruss", "myxo", "fortuna", "osborne", "chaste", "artistoo", "openvt", "cc3d", "compucell", "morpheus",
     "savill", "hogeweg", "act", "leader", "follower", "endothelial", "tumor", "tumour", "vasculo", "angiogen",
-    "keratocyte", "amoeboid"]
+    "keratocyte", "amoeboid",
+]
 
 _tokens(s) = [lowercase(t) for t in split(s, r"[^A-Za-z0-9]+|(?<=[a-z])(?=[A-Z])") if !isempty(t)]
 
@@ -129,10 +131,10 @@ const JS = Base.JuliaSyntax
 # hits on the same lines.
 function _js_kind(name)
     return try
-            JS.Kind(name)
-        catch
-            nothing
-        end
+        JS.Kind(name)
+    catch
+        nothing
+    end
 end
 const _K_IDENT = _js_kind("Identifier")
 const _K_STRING = _js_kind("String")
@@ -269,17 +271,41 @@ end
             ("graner", () -> symbolic_graner_problem(; nmcs = 5)),
             ("wortel", symbolic_wortel_problem), ("merks", symbolic_merks_problem),
             ("openvt", symbolic_openvt_problem),
-            ("compartments", () -> (c = compartment_state(); PottsProblem(Compartments(; name = :comp),
-                [ownership => c[1], kind => c[2], cluster => c[3]], (0, 5)))),
-            ("components", () -> (σ = zeros(Int32, 20, 20); σ[3:7, 3:7] .= 1; σ[12:16, 12:16] .= 2;
-                PottsProblem(component_model(), [ownership => σ, kind => [:A, :B]], (0, 5); ode_solver = Potts.RK4(substeps = 2)))),
-            ("persistent", () -> (σ = zeros(Int32, 48, 48); σ[22:26, 22:26] .= 1;
-                remake(PottsProblem(Persistent(; name = :p), [ownership => σ, kind => [1]], (0, 5)); p = [:μ => 500.0]))),
-            ("lags", () -> (σ = zeros(Int32, 8, 8); σ[3:5, 3:5] .= 1;
-                PottsProblem(Lags(; name = :l), [ownership => σ, kind => [1]], (0, 5)))),
-            ("integrals", () -> (σ = zeros(Int32, 20, 20); σ[3:6, 3:6] .= 1;
-                PottsProblem(Integrals(; name = :i), [ownership => σ, kind => [1]], (0, 5)))),
-            ("systemic", () -> (σ = zeros(Int32, 20, 20); σ[2:4, 2:4] .= 1;
+            (
+                "compartments", () -> (
+                    c = compartment_state(); PottsProblem(
+                        Compartments(; name = :comp),
+                        [ownership => c[1], kind => c[2], cluster => c[3]], (0, 5)
+                    )
+                ),
+            ),
+            (
+                "components", () -> (
+                    σ = zeros(Int32, 20, 20); σ[3:7, 3:7] .= 1; σ[12:16, 12:16] .= 2;
+                    PottsProblem(component_model(), [ownership => σ, kind => [:A, :B]], (0, 5); ode_solver = Potts.RK4(substeps = 2))
+                ),
+            ),
+            (
+                "persistent", () -> (
+                    σ = zeros(Int32, 48, 48); σ[22:26, 22:26] .= 1;
+                    remake(PottsProblem(Persistent(; name = :p), [ownership => σ, kind => [1]], (0, 5)); p = [:μ => 500.0])
+                ),
+            ),
+            (
+                "lags", () -> (
+                    σ = zeros(Int32, 8, 8); σ[3:5, 3:5] .= 1;
+                    PottsProblem(Lags(; name = :l), [ownership => σ, kind => [1]], (0, 5))
+                ),
+            ),
+            (
+                "integrals", () -> (
+                    σ = zeros(Int32, 20, 20); σ[3:6, 3:6] .= 1;
+                    PottsProblem(Integrals(; name = :i), [ownership => σ, kind => [1]], (0, 5))
+                ),
+            ),
+            (
+                "systemic", () -> (
+                    σ = zeros(Int32, 20, 20); σ[2:4, 2:4] .= 1;
                     PottsProblem(Systemic(; name = :s), [ownership => σ, kind => [1]], (0, 5); ode_solver = Potts.RK4(substeps = 4))
                 ),
             ),
@@ -317,13 +343,20 @@ end
 
 @testitem "QA: generated code of label (T)" setup = [QaSetup, PortsSetup] tags = [:potts, :qa] begin
     @testset "QA: generated code of $label ($T)" for (label, make) in (
-            ("Graner–Glazier", () -> (GranerGlazier(; name = :gg), (s = graner_glazier_state(); [ownership => s[1], kind => s[2]]), nothing)),
-            ("Wortel", () -> (WortelAct(; name = :w, lattice = (16, 16)), [ownership => wortel_state(), kind => [:cell, :cell]], nothing)),
-            ("Merks", () -> (MerksVasculogenesis(; name = :m, lattice = (8, 8)), [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s),
-                kind => [:endothelial]], nothing, (; field_solver = MERKS_SOLVER))),
-            ("OpenVT", () -> (OpenVTGrowingMonolayer(; name = :o, lattice = (24, 24)), openvt_monolayer_state(; lattice = (24, 24)), 16)),
-            ("Akeeb", () -> (AkeebInvasion(; name = :a, lattice = (99, 60)), akeeb_state(; lattice = (99, 60)), 1000))),
-        T in (Float64, Float32)
+                ("Graner–Glazier", () -> (GranerGlazier(; name = :gg), (s = graner_glazier_state(); [ownership => s[1], kind => s[2]]), nothing)),
+                ("Wortel", () -> (WortelAct(; name = :w, lattice = (16, 16)), [ownership => wortel_state(), kind => [:cell, :cell]], nothing)),
+                (
+                    "Merks", () -> (
+                        MerksVasculogenesis(; name = :m, lattice = (8, 8)), [
+                            ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s),
+                            kind => [:endothelial],
+                        ], nothing, (; field_solver = MERKS_SOLVER),
+                    ),
+                ),
+                ("OpenVT", () -> (OpenVTGrowingMonolayer(; name = :o, lattice = (24, 24)), openvt_monolayer_state(; lattice = (24, 24)), 16)),
+                ("Akeeb", () -> (AkeebInvasion(; name = :a, lattice = (99, 60)), akeeb_state(; lattice = (99, 60)), 1000)),
+            ),
+            T in (Float64, Float32)
         sys, op, cap, kw... = make()
         skw = get(kw, 1, (;))      # solver keywords (D-075)
         prob = PottsProblem(sys, op, (0, 3); T, capacity = cap, skw...)
@@ -368,12 +401,17 @@ end
 
 @testitem "QA: discrete components (label, T)" setup = [QaSetup] tags = [:potts, :qa] begin
     @testset "QA: discrete components ($label, $T)" for (label, make) in (
-            ("scratch", () -> (QADiscreteScratch(; name = :s), [ownership => _discrete_blocks(2), kind => [1, 1]])),
-            ("kinds", () -> (QADiscreteKinds(; name = :k), [ownership => _discrete_blocks(4), kind => [1, 2, 1, 2], :inp => [0, 1, 0, 1]])),
-            ("hybrid", () -> (DiscreteHybrid(; name = :h), [ownership => _discrete_blocks(2), kind => [1, 1]])),
-            ("model clock", () -> (discrete_counter_model(ShiftIndex(Clock(2.0)); scope = :model),
-                [ownership => _discrete_blocks(3), kind => [1, 1, 1]]))),
-        T in (Float64, Float32)
+                ("scratch", () -> (QADiscreteScratch(; name = :s), [ownership => _discrete_blocks(2), kind => [1, 1]])),
+                ("kinds", () -> (QADiscreteKinds(; name = :k), [ownership => _discrete_blocks(4), kind => [1, 2, 1, 2], :inp => [0, 1, 0, 1]])),
+                ("hybrid", () -> (DiscreteHybrid(; name = :h), [ownership => _discrete_blocks(2), kind => [1, 1]])),
+                (
+                    "model clock", () -> (
+                        discrete_counter_model(ShiftIndex(Clock(2.0)); scope = :model),
+                        [ownership => _discrete_blocks(3), kind => [1, 1, 1]],
+                    ),
+                ),
+            ),
+            T in (Float64, Float32)
         sys, op = make()
         prob = PottsProblem(sys, op, (0, 100); T)
         for alg in (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
@@ -407,8 +445,10 @@ end
 @testitem "QA: no model-named code in the core packages" setup = [QaSetup] tags = [:potts, :qa] begin
     @testset "QA: no model-named code in the core packages" begin
         root = joinpath(@__DIR__, "..")
-        allow = Set(strip(first(split(l, "   #"))) for l in eachline(joinpath(@__DIR__, "privileged_allow.txt"))
-                    if !startswith(l, "#") && !isempty(strip(l)))
+        allow = Set(
+            strip(first(split(l, "   #"))) for l in eachline(joinpath(@__DIR__, "privileged_allow.txt"))
+                if !startswith(l, "#") && !isempty(strip(l))
+        )
         bad = String[]
         for d in ("src", "lib/CorePotts/src", "lib/LatticeFields/src", "lib/MakiePotts/src"), (dir, _, fs) in walkdir(joinpath(root, d)), f in fs
             endswith(f, ".jl") || continue
@@ -532,13 +572,16 @@ end
     using Potts.Layouts
     @testset "QA: Voronoi and shape regions are type stable ($label)" for (label, L) in (
             ("hex periodic", Lattice((30, 30); geometry = Hexagonal())), ("square closed", Lattice((30, 30); boundary = Closed())),
-            ("3D", Lattice((12, 12, 12); boundary = Closed())))
+            ("3D", Lattice((12, 12, 12); boundary = Closed())),
+        )
         lat = Potts._layout_spec(L)
         N = length(lat.dims)
         S = HyperSphere{N, Float64}
         @test_opt target_modules = (Potts,) Potts._region_sites(S(Point(ntuple(_ -> 6.0, N)), 4.0), lat, "")
-        @test_opt target_modules = (Potts,) Potts.paint!(Potts.LayoutState(lat.dims),
-            Voronoi(RandomPoints(10; region = S(Point(ntuple(_ -> 6.0, N)), 4.0), seed = 1); lloyd = 3, kinds = [:a]), lat)
+        @test_opt target_modules = (Potts,) Potts.paint!(
+            Potts.LayoutState(lat.dims),
+            Voronoi(RandomPoints(10; region = S(Point(ntuple(_ -> 6.0, N)), 4.0), seed = 1); lloyd = 3, kinds = [:a]), lat
+        )
     end
 end
 
@@ -548,7 +591,8 @@ end
     using Potts.Layouts
     @testset "QA: Eden and Splits are type stable ($label)" for (label, L) in (
             ("hex periodic", Lattice((30, 30); geometry = Hexagonal())), ("square closed", Lattice((30, 30); boundary = Closed())),
-            ("3D", Lattice((12, 12, 12); boundary = Closed())))
+            ("3D", Lattice((12, 12, 12); boundary = Closed())),
+        )
         lat = Potts._layout_spec(L)
         e = Eden(RandomPoints(5; replace = true, seed = 1); rounds = 3, kinds = [:a], seed = 1, shortfall = :allow)
         @test_opt target_modules = (Potts,) Potts.paint!(Potts.LayoutState(lat.dims), e, lat)

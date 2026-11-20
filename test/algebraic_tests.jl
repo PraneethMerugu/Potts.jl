@@ -17,11 +17,11 @@ alg_names(xs) = Set{Symbol}(Potts.SymbolicIndexingInterface.getname(x) for x in 
 
 function alg_error(f, words...)
     return try
-            f()
-            false
-        catch err
-            err isa Union{ArgumentError, Potts.PottsCompileError}
-        end
+        f()
+        false
+    catch err
+        err isa Union{ArgumentError, Potts.PottsCompileError}
+    end
 end
 
 
@@ -123,19 +123,23 @@ end
 
 
 function alg_model(body)
-    m = eval(:(@potts_model _AlgBad begin
-        @kinds medium A
-        @variables begin
-            x(cell) = 1.0
-            y(cell) = 0.0
-            m(model) = 0.0
-            c(field) = 0.0
-        end
-        @lattice Lattice((12, 8))
-        @energy cells => (volume - 16.0)^2
-        $(body.args...)
-        @sweep Metropolis(; temperature = 1.0)
-    end))
+    m = eval(
+        :(
+            @potts_model _AlgBad begin
+                @kinds medium A
+                @variables begin
+                    x(cell) = 1.0
+                    y(cell) = 0.0
+                    m(model) = 0.0
+                    c(field) = 0.0
+                end
+                @lattice Lattice((12, 8))
+                @energy cells => (volume - 16.0)^2
+                $(body.args...)
+                @sweep Metropolis(; temperature = 1.0)
+            end
+        )
+    )
     return Base.invokelatest(m; name = :bad)
 end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
@@ -155,9 +159,9 @@ end
             s = solve(PottsProblem(AlgCross(; name = :a), alg_op(), (0, 6); seed = 3, ode_solver = solver), SequentialCPM(); saveat = 1)
             h = solve(PottsProblem(AlgCrossHand(; name = :h), alg_op(), (0, 6); seed = 3, ode_solver = solver), SequentialCPM(); saveat = 1)
             @test [u.ownership for u in s.u] == [u.ownership for u in h.u]
-            @test all(isapprox.(s[:x], h[:x]; rtol = 1e-12)) && all(isapprox.(s[:seen], h[:seen]; rtol = 1e-12))
-            @test all(isapprox.(s[:half], s[:m] ./ 2; rtol = 1e-12))
-            @test all(isapprox.(s[:twice], 2 .* s[:drive]; rtol = 1e-12))
+            @test all(isapprox.(s[:x], h[:x]; rtol = 1.0e-12)) && all(isapprox.(s[:seen], h[:seen]; rtol = 1.0e-12))
+            @test all(isapprox.(s[:half], s[:m] ./ 2; rtol = 1.0e-12))
+            @test all(isapprox.(s[:twice], 2 .* s[:drive]; rtol = 1.0e-12))
             @test all(v -> length(v) == 2, s[:drive])                       # one value per cell
         end
     end
@@ -178,64 +182,126 @@ end
 
 @testitem "algebraic equations: rejections" setup = [AlgebraicSetup] tags = [:potts, :algebraic] begin
     @testset "algebraic equations: rejections" begin
-        ok = alg_model(quote
-            @equations begin
-                D(x) ~ -y
-                y ~ x
-            end
-        end)
-        @test mtkcompile(ok) isa CompiledPottsSystem                                   # control
-        @test alg_error(() -> mtkcompile(alg_model(quote
-            @equations begin
-                D(x) ~ -y[3 - id]
-                y ~ x
-            end
-        end)), "algebraic", "`y`", "bare")
-        @test alg_error(() -> mtkcompile(alg_model(quote
-            @equations y ~ x
-            @after_mcs x ~ Pre(y)
-        end)), "algebraic", "`y`")
-        @test alg_error(() -> mtkcompile(alg_model(quote
-            @equations y ~ x * rand()
-        end)), "algebraic", "rand()")
-        @test alg_error(() -> mtkcompile(alg_model(quote
-            @equations y ~ Pre(x)
-        end)), "algebraic", "previous")
-        @test alg_error(() -> mtkcompile(alg_model(quote
-            @equations y ~ x
-            @divide cells(A) when = volume > 30, along = RandomPlane(), y => 0.0
-        end)), "algebraic", "`y`", "division rule")
-        @test alg_error(() -> mtkcompile(alg_model(quote
-            @equations y ~ x
-            @on_copy y[new] ~ 1.0
-        end)), "algebraic", "`y`")
-        @test alg_error(() -> mtkcompile(alg_model(quote
-            @equations m ~ x                                           # a model definition reading a cell variable bare
-        end)), "algebraic", "`x`", "bare")
-        # a cell definition reads a field over the cell or at a site, not bare
-        @test alg_error(() -> mtkcompile(alg_model(quote
-            @equations y ~ c + x
-        end)), "algebraic", "`y`", "`c`", "integral(c)")
-        @test mtkcompile(alg_model(quote
-            @equations y ~ integral(c) / volume + c[1] + x
-        end)) isa CompiledPottsSystem                                                  # control
-        # an error about a definition's quantities names the algebraic variable read
-        @test alg_error(() -> mtkcompile(alg_model(quote
-            @equations begin
-                D(m) ~ y
-                y ~ 2x
-            end
-        end)), "algebraic variable", "`y ~")
-        # ... and only for a statement that reads one: no note on an unrelated error
-        for body in (quote
+        ok = alg_model(
+            quote
                 @equations begin
-                    D(m) ~ x
-                    y ~ 2x
+                    D(x) ~ -y
+                    y ~ x
                 end
-            end, quote
-                @drive copy => volume
-                @equations y ~ volume
-            end)
+            end
+        )
+        @test mtkcompile(ok) isa CompiledPottsSystem                                   # control
+        @test alg_error(
+            () -> mtkcompile(
+                alg_model(
+                    quote
+                        @equations begin
+                            D(x) ~ -y[3 - id]
+                            y ~ x
+                        end
+                    end
+                )
+            ), "algebraic", "`y`", "bare"
+        )
+        @test alg_error(
+            () -> mtkcompile(
+                alg_model(
+                    quote
+                        @equations y ~ x
+                        @after_mcs x ~ Pre(y)
+                    end
+                )
+            ), "algebraic", "`y`"
+        )
+        @test alg_error(
+            () -> mtkcompile(
+                alg_model(
+                    quote
+                        @equations y ~ x * rand()
+                    end
+                )
+            ), "algebraic", "rand()"
+        )
+        @test alg_error(
+            () -> mtkcompile(
+                alg_model(
+                    quote
+                        @equations y ~ Pre(x)
+                    end
+                )
+            ), "algebraic", "previous"
+        )
+        @test alg_error(
+            () -> mtkcompile(
+                alg_model(
+                    quote
+                        @equations y ~ x
+                        @divide cells(A) when = volume > 30, along = RandomPlane(), y => 0.0
+                    end
+                )
+            ), "algebraic", "`y`", "division rule"
+        )
+        @test alg_error(
+            () -> mtkcompile(
+                alg_model(
+                    quote
+                        @equations y ~ x
+                        @on_copy y[new] ~ 1.0
+                    end
+                )
+            ), "algebraic", "`y`"
+        )
+        @test alg_error(
+            () -> mtkcompile(
+                alg_model(
+                    quote
+                        @equations m ~ x                                           # a model definition reading a cell variable bare
+                    end
+                )
+            ), "algebraic", "`x`", "bare"
+        )
+        # a cell definition reads a field over the cell or at a site, not bare
+        @test alg_error(
+            () -> mtkcompile(
+                alg_model(
+                    quote
+                        @equations y ~ c + x
+                    end
+                )
+            ), "algebraic", "`y`", "`c`", "integral(c)"
+        )
+        @test mtkcompile(
+            alg_model(
+                quote
+                    @equations y ~ integral(c) / volume + c[1] + x
+                end
+            )
+        ) isa CompiledPottsSystem                                                  # control
+        # an error about a definition's quantities names the algebraic variable read
+        @test alg_error(
+            () -> mtkcompile(
+                alg_model(
+                    quote
+                        @equations begin
+                            D(m) ~ y
+                            y ~ 2x
+                        end
+                    end
+                )
+            ), "algebraic variable", "`y ~"
+        )
+        # ... and only for a statement that reads one: no note on an unrelated error
+        for body in (
+                quote
+                    @equations begin
+                        D(m) ~ x
+                        y ~ 2x
+                    end
+                end, quote
+                    @drive copy => volume
+                    @equations y ~ volume
+                end
+            )
             err = try
                 mtkcompile(alg_model(body)); nothing
             catch e
@@ -245,19 +311,37 @@ end
             @test err isa Union{ArgumentError, Potts.PottsCompileError}
         end
         # every definition is checked where it is evaluated, even if nothing reads it
-        @test alg_error(() -> mtkcompile(alg_model(quote
-            @equations y ~ integral(x)
-        end)), "algebraic", "`y")
-        @test alg_error(() -> mtkcompile(alg_model(quote
-            @equations y ~ sum(c for n in Moore(1)(42)) + x
-        end)), "algebraic", "`y")
+        @test alg_error(
+            () -> mtkcompile(
+                alg_model(
+                    quote
+                        @equations y ~ integral(x)
+                    end
+                )
+            ), "algebraic", "`y"
+        )
+        @test alg_error(
+            () -> mtkcompile(
+                alg_model(
+                    quote
+                        @equations y ~ sum(c for n in Moore(1)(42)) + x
+                    end
+                )
+            ), "algebraic", "`y"
+        )
         # a declared value is not used (D-165, kept by D-170): its value follows from its definition
         @test alg_error(() -> mtkcompile(AlgDefault(; name = :d)), "`y`", "initial value")
         # input names: a built-in keeps its name; a compound input never takes a declared name
-        let s = Potts.ode_system(mtkcompile(alg_model(quote
-                @variables input(cell) = 0.0
-                @equations D(x) ~ volume + sum(volume[owner[n]] for n in Moore(1)(42)) - input
-            end)), :cell)
+        let s = Potts.ode_system(
+                mtkcompile(
+                    alg_model(
+                        quote
+                            @variables input(cell) = 0.0
+                            @equations D(x) ~ volume + sum(volume[owner[n]] for n in Moore(1)(42)) - input
+                        end
+                    )
+                ), :cell
+            )
             ps = alg_names(ALG_M.parameters(s))
             @test :volume in ps && :input in ps && length(ps) == 3
         end

@@ -20,8 +20,10 @@ const EVERY = 39
 const CYCLE = 775                                     # 5T = A*(0)/α MCS
 
 sys = OpenVTReferenceMonolayer(; name = :openvt_ref, lattice = (L, L))
-prob = PottsProblem(sys, openvt_reference_state(; lattice = (L, L)), (0, 100_000);
-    capacity = ceil(Int, 1.3N_STOP) + 100, seed = SEED)
+prob = PottsProblem(
+    sys, openvt_reference_state(; lattice = (L, L)), (0, 100_000);
+    capacity = ceil(Int, 1.3N_STOP) + 100, seed = SEED
+)
 prob = remake(prob; p = [:β => 0.0, :γ => 0.0, :σ_X => 0.4])
 alg = SequentialCPM(; proposal = Moore(1))
 ncells(u) = count(>(0), u.cell.volume)
@@ -29,9 +31,11 @@ ncells(u) = count(>(0), u.cell.volume)
 solve(remake(prob; tspan = (0, 2)), alg; save_everystep = false)          # compile
 
 fig = Figure(; size = (720, 760), fontsize = 14, backgroundcolor = :white)
-Label(fig[0, 1], "OpenVT reference monolayer (Table S1), case (b): β = γ = 0, X ~ N(2, 0.4)\n" *
-                 "OpenVTReferenceMonolayer, closed $(L)×$(L), seed $SEED; one frame every $EVERY MCS";
-    fontsize = 15, font = :bold, tellwidth = false)
+Label(
+    fig[0, 1], "OpenVT reference monolayer (Table S1), case (b): β = γ = 0, X ~ N(2, 0.4)\n" *
+        "OpenVTReferenceMonolayer, closed $(L)×$(L), seed $SEED; one frame every $EVERY MCS";
+    fontsize = 15, font = :bold, tellwidth = false
+)
 ax = Axis(fig[1, 1]; aspect = DataAspect())
 hidedecorations!(ax)
 frame = Observable(renderframe(prob.u0; mcs = 0))
@@ -57,11 +61,14 @@ function rec(integ)
     end
     return nothing
 end
-cb = CorePotts.DiscreteCallback((u, t, integ) -> t % EVERY == 0 || ncells(u) >= N_STOP, rec;
-    initialize = (cb, u, t, integ) -> rec(integ), save_positions = (false, false))
+cb = CorePotts.DiscreteCallback(
+    (u, t, integ) -> t % EVERY == 0 || ncells(u) >= N_STOP, rec;
+    initialize = (cb, u, t, integ) -> rec(integ), save_positions = (false, false)
+)
 wall = @elapsed sol = solve(
     prob, alg; save_start = false, save_everystep = false,
-    callback = CorePotts.CallbackSet(cb, PottsModels.stop_at_cells(N_STOP), PottsModels.edge_guard(5; terminate = true)))
+    callback = CorePotts.CallbackSet(cb, PottsModels.stop_at_cells(N_STOP), PottsModels.edge_guard(5; terminate = true))
+)
 wall -= rec_wall[]
 mp4 = joinpath(ASSETS, "openvt_monolayer.mp4")
 save(mp4, vs)
@@ -70,22 +77,25 @@ u = sol.u[end]
 N, T_STOP = ncells(u), Int(sol.t[end])
 @assert N >= N_STOP "stopped at N = $N ($(sol.retcode))"
 info = run_info("openvt_monolayer"; wall, rec = rec_wall[], mp4)
-merge!(info, Dict{String, Any}(
-    "model" => "OpenVTReferenceMonolayer",
-    "title" => "OpenVT reference monolayer (Table S1), case (b)",
-    "lattice" => [L, L], "tspan" => [0, T_STOP], "frames" => nframes[], "framerate" => 24,
-    "recorded_mcs" => [0, T_STOP], "save_every_mcs" => EVERY, "seed" => SEED,
-    "algorithm" => string(alg), "retcode" => string(sol.retcode),
-    "final_cells" => N, "final_mcs" => T_STOP, "final_cycles" => round(T_STOP / CYCLE; digits = 2),
-    "parameters" => "Table S1 defaults: A*(0) = 50, λ = 2, T = 20, α = 50/775, J_cc = 20, J_cM = 10, μ_X = 2, σ_X = 0.4; β = γ = 0",
-    "initial_state" => "openvt_reference_state(; lattice = ($L, $L)): one disc of area A*(0) at the center",
-    "stop_rule" => "end of the first MCS with N ≥ $N_STOP (stop_at_cells), edge_guard(5; terminate = true)",
-    "paper" => "OpenVT consortium, Reference Model for the Simulation of a Growing Tissue Monolayer with Contact Inhibition (in preparation), §2.1 and Table S1; reproduction 15, case (b)",
-    "deviations" => "None in the model (Table S1). The unbounded plane is a closed 1400² lattice the colony never reaches (edge guard). The full list is on reproduction page 15.",
-    "caption" => "Paper run — OpenVTReferenceMonolayer (the manuscript's Table S1: A*(0) = 50, λ = 2, T = 20, " *
-                 "α = 50/775 per MCS, J_cc = 20, J_cM = 10, X ~ N(2, 0.4)), case (b) of reproduction 15 " *
-                 "(β = γ = 0, no contact inhibition): one cell to N = $N cells at MCS $T_STOP " *
-                 "($(round(T_STOP / CYCLE; digits = 2)) cell cycles of 775 MCS) on a closed $(L)×$(L) lattice, seed $SEED, " *
-                 "SequentialCPM(; proposal = Moore(1)), one frame every $EVERY MCS. Each cell has its own color. " *
-                 rendered_on()))
+merge!(
+    info, Dict{String, Any}(
+        "model" => "OpenVTReferenceMonolayer",
+        "title" => "OpenVT reference monolayer (Table S1), case (b)",
+        "lattice" => [L, L], "tspan" => [0, T_STOP], "frames" => nframes[], "framerate" => 24,
+        "recorded_mcs" => [0, T_STOP], "save_every_mcs" => EVERY, "seed" => SEED,
+        "algorithm" => string(alg), "retcode" => string(sol.retcode),
+        "final_cells" => N, "final_mcs" => T_STOP, "final_cycles" => round(T_STOP / CYCLE; digits = 2),
+        "parameters" => "Table S1 defaults: A*(0) = 50, λ = 2, T = 20, α = 50/775, J_cc = 20, J_cM = 10, μ_X = 2, σ_X = 0.4; β = γ = 0",
+        "initial_state" => "openvt_reference_state(; lattice = ($L, $L)): one disc of area A*(0) at the center",
+        "stop_rule" => "end of the first MCS with N ≥ $N_STOP (stop_at_cells), edge_guard(5; terminate = true)",
+        "paper" => "OpenVT consortium, Reference Model for the Simulation of a Growing Tissue Monolayer with Contact Inhibition (in preparation), §2.1 and Table S1; reproduction 15, case (b)",
+        "deviations" => "None in the model (Table S1). The unbounded plane is a closed 1400² lattice the colony never reaches (edge guard). The full list is on reproduction page 15.",
+        "caption" => "Paper run — OpenVTReferenceMonolayer (the manuscript's Table S1: A*(0) = 50, λ = 2, T = 20, " *
+            "α = 50/775 per MCS, J_cc = 20, J_cM = 10, X ~ N(2, 0.4)), case (b) of reproduction 15 " *
+            "(β = γ = 0, no contact inhibition): one cell to N = $N cells at MCS $T_STOP " *
+            "($(round(T_STOP / CYCLE; digits = 2)) cell cycles of 775 MCS) on a closed $(L)×$(L) lattice, seed $SEED, " *
+            "SequentialCPM(; proposal = Moore(1)), one frame every $EVERY MCS. Each cell has its own color. " *
+            rendered_on()
+    )
+)
 write_sidecar("openvt_monolayer", info)

@@ -130,9 +130,9 @@ end
         u = solve(prob, SequentialCPM()).u[end]
         function link_energy(store, k, ℓ)
             return sum(
-                    k * (CorePotts.centroid_distance(Float64, u.cell, prob.lattice, a, b) - ℓ)^2
-                        for (a, b) in store
-                )
+                k * (CorePotts.centroid_distance(Float64, u.cell, prob.lattice, a, b) - ℓ)^2
+                    for (a, b) in store
+            )
         end
         oracle = link_energy(((1, 2), (3, 4)), 0.7, 6.0) + link_energy(((2, 3), (1, 4)), 1.3, 9.0)
         diff = total_energy(prob, u) - total_energy(bare, u)
@@ -239,10 +239,10 @@ end
         rest_sym = only(Potts.Symbolics.@variables rest(Potts.t))
         function ext(scope; rels = [Potts.relationship(:tether; capacity = 1)])
             return Potts.PottsSystem(;
-                    name = :x,
-                    kinds = Potts._p(base, :kinds), lattice = Potts.lattice(base), sweep = Potts._p(base, :sweep), relationships = rels,
-                    variables = Any[Potts.variable(rest_sym, scope; default = 9.0)]
-                )
+                name = :x,
+                kinds = Potts._p(base, :kinds), lattice = Potts.lattice(base), sweep = Potts._p(base, :sweep), relationships = rels,
+                variables = Any[Potts.variable(rest_sym, scope; default = 9.0)]
+            )
         end
         σ = zeros(Int32, 60, 30); σ[5:10, 12:17] .= 1; σ[20:25, 12:17] .= 2
         op = [ownership => σ, kind => [:blob, :blob], :bond => [(1, 2)]]

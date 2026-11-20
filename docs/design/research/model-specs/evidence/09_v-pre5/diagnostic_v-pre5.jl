@@ -28,8 +28,10 @@ function bond_counts(σ, k)
     return n
 end
 function annealed(σ, k; seed = 1)
-    q = PottsProblem(GranerGlazier(; name = :anneal, lattice = size(σ)),
-        [ownership => copy(σ), kind => k, :T => 0.0], (0, 2PAPER_MCS); seed)
+    q = PottsProblem(
+        GranerGlazier(; name = :anneal, lattice = size(σ)),
+        [ownership => copy(σ), kind => k, :T => 0.0], (0, 2PAPER_MCS); seed
+    )
     return ownership(solve(q, SequentialCPM(); saveat = 2PAPER_MCS).u[end])
 end
 function cell_areas(σ, k)
@@ -72,8 +74,10 @@ Threads.@threads for j in eachindex(jobs)
     σ0, k0 = graner_glazier_aggregate(1000; seed = i, margin = 60)
     gg = GranerGlazier(; name = Symbol(:gg, j), lattice = size(σ0))
     if relaxed
-        r = PottsProblem(gg, [ownership => σ0, kind => fill(eltype(k0)(2), length(k0)), :J => [0 8 8; 8 2 2; 8 2 2], :T => 5.0],
-            (0, 400PAPER_MCS); seed = 500 + i)
+        r = PottsProblem(
+            gg, [ownership => σ0, kind => fill(eltype(k0)(2), length(k0)), :J => [0 8 8; 8 2 2; 8 2 2], :T => 5.0],
+            (0, 400PAPER_MCS); seed = 500 + i
+        )
         σ0 = ownership(solve(r, alg; saveat = 400PAPER_MCS).u[end])
     end
     q = PottsProblem(gg, [ownership => σ0, kind => k0], (0, PAPER_MCS * last(ts)); seed = 100 + i)

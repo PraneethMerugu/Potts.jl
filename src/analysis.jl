@@ -30,7 +30,9 @@ function boundary_lengths(prob::CorePotts.PottsProblem, u = prob.u0; relation = 
         throw(ArgumentError("boundary_lengths: not a problem of a Potts model; construct `prob` from a compiled `@potts_model` with `PottsProblem`"))
     names = _p(getfield(info.csys, :sys), :kinds)
     r = relation === nothing ? prob.contact : CorePotts.relation(relation, prob.lattice)
-    CorePotts.is_symmetric(r) || throw(ArgumentError("boundary_lengths: the relation is not symmetric " *
+    CorePotts.is_symmetric(r) || throw(
+        ArgumentError(
+            "boundary_lengths: the relation is not symmetric " *
                 "(each offset needs its negation with the same weight), so its bonds are not unordered pairs; " *
                 "pass a symmetric relation such as `VonNeumann(1)` or `Moore(1)`"
         )
@@ -104,16 +106,18 @@ function anneal(prob::CorePotts.PottsProblem, u, mcs::Integer; seed::Integer = 0
     # no field clamp (masked conditions hold on a fresh initial state and in field steps)
     refresh = CorePotts.Phases(; before_mcs = CorePotts.derived(f.phases.at_init))
     # no track (D-140): the relaxation is a measurement, its accepted ΔH is not the run's
-    cold = CorePotts.CPMFunction(f.delta_H; f.commit!, f.constraint,
+    cold = CorePotts.CPMFunction(
+        f.delta_H; f.commit!, f.constraint,
         temperature = _ZeroTemperature(f.temperature), f.bias, phases = refresh, f.acceptance,
-        f.footprint, f.fingerprint, f.sys, track = nothing, f.connectivity)
+        f.footprint, f.fingerprint, f.sys, track = nothing, f.connectivity
+    )
     q = SciMLBase.remake(prob; f = cold, u0 = u, tspan = (0, Int(mcs)), seed)
     sol = solve(q, alg; save_start = false)
     SciMLBase.successful_retcode(sol) || throw(
         PottsSolveError(
             "anneal: the T = 0 copy dynamics stopped with retcode " *
-            "$(sol.retcode) after $(sol.stats.mcs) of $mcs MCS (a non-finite ΔH; the run itself stops the same way); " *
-            "inspect the energy terms and initial volumes for singular values"
+                "$(sol.retcode) after $(sol.stats.mcs) of $mcs MCS (a non-finite ΔH; the run itself stops the same way); " *
+                "inspect the energy terms and initial volumes for singular values"
         )
     )
     return sol.u[end]

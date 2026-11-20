@@ -39,14 +39,25 @@ _field_solver_names() = "`ExplicitEuler(…)`, `BackwardEuler(…)`, `CrankNicol
 # field refuses `ExplicitMap`, a map field (`map = true`) a
 # rate algorithm
 function _check_field_solver(s, what; map::Bool = false)
-    map && !(s isa ExplicitMap) && !(s isa LatticeFields.Problems.FieldGroups) && throw(ArgumentError(string(
-        what, ": `", nameof(typeof(s)), "(…)` steps rates `D(c) ~ rhs`; a map field ",
-        "(`Shift(t, 1)(m) ~ rhs`) is stepped by `ExplicitMap()`, once per MCS (or leave the keyword out)")))
-    s isa LatticeFields.Problems.FieldGroups && throw(ArgumentError(string(
-        what, ": `FieldGroups(…)` assigns algorithms to fields: give it as `field_solver = FieldGroups(c => …; ",
-        "default = …)`, or give this field one algorithm")))
-    s isa ExplicitMap && !map && throw(ArgumentError(
-        "$what: `ExplicitMap()` steps discrete maps `Shift(t, 1)(m) ~ rhs`; a rate field `D(c) ~ rhs` is stepped by " *
+    map && !(s isa ExplicitMap) && !(s isa LatticeFields.Problems.FieldGroups) && throw(
+        ArgumentError(
+            string(
+                what, ": `", nameof(typeof(s)), "(…)` steps rates `D(c) ~ rhs`; a map field ",
+                "(`Shift(t, 1)(m) ~ rhs`) is stepped by `ExplicitMap()`, once per MCS (or leave the keyword out)"
+            )
+        )
+    )
+    s isa LatticeFields.Problems.FieldGroups && throw(
+        ArgumentError(
+            string(
+                what, ": `FieldGroups(…)` assigns algorithms to fields: give it as `field_solver = FieldGroups(c => …; ",
+                "default = …)`, or give this field one algorithm"
+            )
+        )
+    )
+    s isa ExplicitMap && !map && throw(
+        ArgumentError(
+            "$what: `ExplicitMap()` steps discrete maps `Shift(t, 1)(m) ~ rhs`; a rate field `D(c) ~ rhs` is stepped by " *
                 "`ExplicitEuler(…)`, `BackwardEuler(…)`, `CrankNicolson(…)`, `BDF2(…)` or `QuasiSteady(…)`"
         )
     )
@@ -55,9 +66,14 @@ end
 # an ODE's explicit Euler steps over the MCS window too; `init = :steady` is a field group's
 # steady start: an ODE starts from its initial values
 function _check_ode_init(s, what)
-    s isa ExplicitEuler && s.init !== nothing && throw(ArgumentError(string(
-        "$what: `ExplicitEuler(; init = ", repr(s.init), ")`: `init = :steady` starts a field group at its steady state; ",
-        "an ODE starts from its initial values (`@variables x(t) = x0`); leave `init` out")))
+    s isa ExplicitEuler && s.init !== nothing && throw(
+        ArgumentError(
+            string(
+                "$what: `ExplicitEuler(; init = ", repr(s.init), ")`: `init = :steady` starts a field group at its steady state; ",
+                "an ODE starts from its initial values (`@variables x(t) = x0`); leave `init` out"
+            )
+        )
+    )
     return s
 end
 
@@ -79,7 +95,8 @@ Resolve the solver keywords against compiled model `c`:
 An ODE's `ExplicitEuler(substeps = nothing)` is one step, the same as `substeps = 1`
 (`_ode_solver`): both resolve, group and fingerprint alike.
 """
-function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_solver = ExplicitEuler(), solvers = (),
+function _resolve_solvers(
+        c::CompiledPottsSystem; field_solver = nothing, ode_solver = ExplicitEuler(), solvers = (),
         kept::Bool = false, discretization = nothing, T::Type = Float64
     )
     sys = getfield(c, :sys)
@@ -93,9 +110,15 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
     QS = LatticeFields.Problems.QuasiSteady
     function steady_only(n, s, where)
         (n in steady && !(s isa QS)) || return nothing
-        throw(ArgumentError(string(where, ": the field `", n, "` has a steady equation `0 ~ rhs`, which `QuasiSteady` ",
-            "solves (a steady row's one solver); got ", repr(s), ": give `", n, " => QuasiSteady()` or leave it out (a ",
-            "steady field takes `QuasiSteady` by default), or write its row as a rate `D(", n, ") ~ rhs` to step it")))
+        throw(
+            ArgumentError(
+                string(
+                    where, ": the field `", n, "` has a steady equation `0 ~ rhs`, which `QuasiSteady` ",
+                    "solves (a steady row's one solver); got ", repr(s), ": give `", n, " => QuasiSteady()` or leave it out (a ",
+                    "steady field takes `QuasiSteady` by default), or write its row as a rate `D(", n, ") ~ rhs` to step it"
+                )
+            )
+        )
     end
     odes = [_solver_name(x) for (x, _) in Iterators.flatten((getfield(c, :cell_odes), getfield(c, :model_odes)))]
     fgpairs, fsolver = Pair{Any, Any}[], field_solver
@@ -126,76 +149,112 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
             fsolver = field_solver
         end
         fsolver === nothing && (fsolver = isempty(maps) ? ExplicitEuler() : ExplicitMap())
-        fsolver isa LatticeFields.Problems.LinearSolver && throw(LatticeFields.Problems.linear_solver_refusal(
-            "`field_solver`", fsolver, "`field_solver = ExplicitEuler()` (or `ExplicitMap()` for a map)";
+        fsolver isa LatticeFields.Problems.LinearSolver && throw(
+            LatticeFields.Problems.linear_solver_refusal(
+                "`field_solver`", fsolver, "`field_solver = ExplicitEuler()` (or `ExplicitMap()` for a map)";
                 implicit = "`field_solver = BackwardEuler(; linsolve = $(repr(fsolver)))`"
             )
         )
-        _is_field_solver(fsolver) || throw(ArgumentError(
-            "`field_solver` takes a field solver ($(_field_solver_names())); got $(repr(fsolver))"))
+        _is_field_solver(fsolver) || throw(
+            ArgumentError(
+                "`field_solver` takes a field solver ($(_field_solver_names())); got $(repr(fsolver))"
+            )
+        )
         label = field_solver isa LatticeFields.Problems.FieldGroups ? "`FieldGroups`: `default`" : "`field_solver`"
         _check_field_solver(fsolver, label; map = !isempty(maps))
     end
-    ode_solver isa _ODESolver || throw(ArgumentError(
+    ode_solver isa _ODESolver || throw(
+        ArgumentError(
             "`ode_solver` takes `ExplicitEuler(; substeps)`, `Potts.RK4(; substeps)` or `Adaptive(alg; …)`; got $(repr(ode_solver))"
         )
     )
     _check_ode_init(ode_solver, "`ode_solver`")
     resolved = Dict{Symbol, Any}()
     if !isempty(fields) && all(n -> n in steady, fields) && field_solver !== nothing &&
-       !(field_solver isa LatticeFields.Problems.FieldGroups) && !(fsolver isa QS)
-        throw(ArgumentError(string("`field_solver = ", repr(fsolver), "`: every field of model `", nameof(sys), "` has a ",
-            "steady equation `0 ~ rhs` (", join(("`$n`" for n in sort!(collect(steady))), ", "), "), which `QuasiSteady` ",
-            "solves; give `field_solver = QuasiSteady()` or leave it out, or write the rows as rates `D(c) ~ rhs`")))
+            !(field_solver isa LatticeFields.Problems.FieldGroups) && !(fsolver isa QS)
+        throw(
+            ArgumentError(
+                string(
+                    "`field_solver = ", repr(fsolver), "`: every field of model `", nameof(sys), "` has a ",
+                    "steady equation `0 ~ rhs` (", join(("`$n`" for n in sort!(collect(steady))), ", "), "), which `QuasiSteady` ",
+                    "solves; give `field_solver = QuasiSteady()` or leave it out, or write the rows as rates `D(c) ~ rhs`"
+                )
+            )
+        )
     end
     foreach(n -> resolved[n] = n in steady ? LatticeFields.Problems.steady_alg(fsolver) : fsolver, fields)
     foreach(n -> resolved[n] = _ode_solver(ode_solver), odes)
     given = Pair{Any, Any}[k => v for (k, v) in (solvers isa AbstractDict ? pairs(solvers) : solvers)]
     named = Set{Symbol}()
     for (k, s) in fgpairs, n in _solver_keys(_localize(sys, k; strict = true), [fields; odes], nameof(sys))
-        n in fields || throw(ArgumentError("`FieldGroups`: `$n` is not a field of model `$(nameof(sys))` (no " *
-                                           "`D($n) ~ …` field equation); its fields are $(join(("`$m`" for m in sort(fields)), ", "))" *
-                                           (n in odes ? "; an ODE takes its solver in `solvers` or `ode_solver`" : "")))
+        n in fields || throw(
+            ArgumentError(
+                "`FieldGroups`: `$n` is not a field of model `$(nameof(sys))` (no " *
+                    "`D($n) ~ …` field equation); its fields are $(join(("`$m`" for m in sort(fields)), ", "))" *
+                    (n in odes ? "; an ODE takes its solver in `solvers` or `ode_solver`" : "")
+            )
+        )
         n in named && throw(ArgumentError("`FieldGroups`: `$n` is given twice"))
         push!(named, n)
-        _is_field_solver(s) || throw(ArgumentError(
-            "`FieldGroups`: the field `$n` takes a field solver ($(_field_solver_names())); got $(repr(s))"))
+        _is_field_solver(s) || throw(
+            ArgumentError(
+                "`FieldGroups`: the field `$n` takes a field solver ($(_field_solver_names())); got $(repr(s))"
+            )
+        )
         _check_field_solver(s, "`FieldGroups`: the field `$n`"; map = n in maps)
         steady_only(n, s, "`FieldGroups`")
         resolved[n] = s
     end
     fgnamed = copy(named)
     for (k, s) in given, n in _solver_keys(_localize(sys, k; strict = true), [fields; odes], nameof(sys))
-        n in fgnamed && throw(ArgumentError("`solvers`: `$n` is given twice (once in `field_solver = FieldGroups(…)`" *
-                                            (kept ? "; `solvers` is kept from the problem: pass `solvers = []`)" : ")")))
-        n in named && throw(ArgumentError("`solvers`: `$n` is given twice" *
-                                          (k isa ModelingToolkitBase.AbstractSystem ? " (once through component `$(nameof(k))`)" : "")))
+        n in fgnamed && throw(
+            ArgumentError(
+                "`solvers`: `$n` is given twice (once in `field_solver = FieldGroups(…)`" *
+                    (kept ? "; `solvers` is kept from the problem: pass `solvers = []`)" : ")")
+            )
+        )
+        n in named && throw(
+            ArgumentError(
+                "`solvers`: `$n` is given twice" *
+                    (k isa ModelingToolkitBase.AbstractSystem ? " (once through component `$(nameof(k))`)" : "")
+            )
+        )
         push!(named, n)
         if n in fields
-            s isa LatticeFields.Problems.LinearSolver && throw(LatticeFields.Problems.linear_solver_refusal(
-                "`solvers`: the field `$n`", s, "`solvers = [$n => ExplicitEuler()]`";
+            s isa LatticeFields.Problems.LinearSolver && throw(
+                LatticeFields.Problems.linear_solver_refusal(
+                    "`solvers`: the field `$n`", s, "`solvers = [$n => ExplicitEuler()]`";
                     implicit = "`solvers = [$n => BackwardEuler(; linsolve = $(repr(s)))]`"
                 )
             )
-            _is_field_solver(s) || throw(ArgumentError(
-                "`solvers`: the field `$n` takes a field solver ($(_field_solver_names())); got $(repr(s))"))
+            _is_field_solver(s) || throw(
+                ArgumentError(
+                    "`solvers`: the field `$n` takes a field solver ($(_field_solver_names())); got $(repr(s))"
+                )
+            )
             _check_field_solver(s, "`solvers`: the field `$n`"; map = n in maps)
             steady_only(n, s, "`solvers`")
         elseif n in odes
-            s isa _ODESolver || throw(ArgumentError(
+            s isa _ODESolver || throw(
+                ArgumentError(
                     "`solvers`: `$n` takes `ExplicitEuler(; substeps)`, `Potts.RK4(; substeps)` or `Adaptive(alg; …)`; got $(repr(s))"
                 )
             )
             _check_ode_init(s, "`solvers`: `$n`")
         else
-            throw(ArgumentError("`solvers`: `$n` is not integrated (no `D($n) ~ …` equation); the keys are the " *
-                                "integrated variables $(join(("`$m`" for m in sort!([fields; odes])), ", "))"))
+            throw(
+                ArgumentError(
+                    "`solvers`: `$n` is not integrated (no `D($n) ~ …` equation); the keys are the " *
+                        "integrated variables $(join(("`$m`" for m in sort!([fields; odes])), ", "))"
+                )
+            )
         end
         resolved[n] = n in odes ? _ode_solver(s) : s
     end
     _check_adaptive_draws(c, resolved)
     canonical = join(("$n=$(_canonical(resolved[n]))" for n in sort!(collect(keys(resolved)))), ";")
-    return SolverSpec(field_solver isa LatticeFields.Problems.FieldGroups ? field_solver : fsolver, ode_solver, given, resolved,
+    return SolverSpec(
+        field_solver isa LatticeFields.Problems.FieldGroups ? field_solver : fsolver, ode_solver, given, resolved,
         canonical, nothing
     )
 end
@@ -236,13 +295,13 @@ function _discretization(c::CompiledPottsSystem, d, T::Type)
     )
     function bad(k, route)
         throw(
-                ArgumentError(
-                    string(
-                        "`discretization`: `LatticeDiscretization(…; ", k, ")` is set by the ",
-                        "problem: ", route
-                    )
+            ArgumentError(
+                string(
+                    "`discretization`: `LatticeDiscretization(…; ", k, ")` is set by the ",
+                    "problem: ", route
                 )
             )
+        )
     end
     d.T === nothing || d.T == T || bad("T = $(d.T)", "give the state type as `PottsProblem(…; T = $(d.T))`")
     d.backend === nothing || bad("backend", "give the backend to `PottsProblem` and `solve`")
@@ -334,27 +393,42 @@ _ode_solver(s) = s isa ExplicitEuler && s.substeps === nothing ? ExplicitEuler(;
 function _solver_keys(k, integrated, model::Symbol)
     k isa Symbol && return (k,)
     # a PottsSystem is an AbstractSystem too (D-137), but not a component
-    k isa PottsSystem && throw(ArgumentError("`solvers`: the key is the Potts model `$(nameof(k))`; key by a variable " *
-                                             "(`x => solver`) or a component system"))
+    k isa PottsSystem && throw(
+        ArgumentError(
+            "`solvers`: the key is the Potts model `$(nameof(k))`; key by a variable " *
+                "(`x => solver`) or a component system"
+        )
+    )
     if k isa ModelingToolkitBase.AbstractSystem
         # `sys.dc` of an uncompleted model is `pr₊dc` (D-137): the component `dc`
         cname = string(nameof(k))
         startswith(cname, string(model, '₊')) && (cname = cname[(ncodeunits(string(model)) + ncodeunits("₊") + 1):end])
         prefix = string(cname, "₊")
         ns = sort!([n for n in integrated if startswith(string(n), prefix)])
-        isempty(ns) && throw(ArgumentError("`solvers`: the component `$(nameof(k))` has no integrated variable in this " *
-                                           "model (no component of that name, or no `D(x) ~ …` equation)"))
+        isempty(ns) && throw(
+            ArgumentError(
+                "`solvers`: the component `$(nameof(k))` has no integrated variable in this " *
+                    "model (no component of that name, or no `D(x) ~ …` equation)"
+            )
+        )
         return ns
     end
     i = info(k)
     if i === nothing
         n = _mtkname(k)
         n isa Symbol && return (n,)
-        throw(ArgumentError("`solvers`: the key `$(_key_string(k))` is not a model quantity; key by the variable " *
-                            "(`x => solver`) or a component"))
+        throw(
+            ArgumentError(
+                "`solvers`: the key `$(_key_string(k))` is not a model quantity; key by the variable " *
+                    "(`x => solver`) or a component"
+            )
+        )
     end
-    i.role in (:param, :kindtable) && throw(ArgumentError(
-        "`solvers`: `$(i.name)` is a parameter; the keys are integrated variables"))
+    i.role in (:param, :kindtable) && throw(
+        ArgumentError(
+            "`solvers`: `$(i.name)` is a parameter; the keys are integrated variables"
+        )
+    )
     return (i.name,)
 end
 _key_string(k) = (s = sprint(show, k; context = :limit => true); length(s) > 60 ? first(s, 60) * "…" : s)
@@ -478,9 +552,12 @@ function _canonical_checked(describe, v, E::Type{<:Exception} = PottsCompileErro
             E(
                 string(
                     describe(), " holds a value nested deeper than ", _CANONICAL_DEPTH,
-            " levels, or a cyclic value (at a `", e.type, "`): too deep to print in the canonical form that ",
-            "orders, names and fingerprints the model's parts; pass a flatter value, e.g. a callable struct ",
-            "holding only the values that matter")))
+                    " levels, or a cyclic value (at a `", e.type, "`): too deep to print in the canonical form that ",
+                    "orders, names and fingerprints the model's parts; pass a flatter value, e.g. a callable struct ",
+                    "holding only the values that matter"
+                )
+            )
+        )
     end
 end
 
@@ -494,8 +571,10 @@ struct _CanonicalDepthError <: Exception
     type::String
 end
 function Base.showerror(io::IO, e::_CanonicalDepthError)
-    return print(io, "a value nested deeper than $(_CANONICAL_DEPTH) levels, or a cyclic value (at a `", e.type,
-        "`), too deep to print in canonical form; pass a flatter value")
+    return print(
+        io, "a value nested deeper than $(_CANONICAL_DEPTH) levels, or a cyclic value (at a `", e.type,
+        "`), too deep to print in canonical form; pass a flatter value"
+    )
 end
 
 # Values print with their full type. Scalars, enums and other primitives, strings and
@@ -526,13 +605,17 @@ function _canonical_value(x, depth = 0)
     !container && (!isstructtype(T) || fieldcount(T) == 0) && return _canonical_type(T)
     depth > _CANONICAL_DEPTH && throw(_CanonicalDepthError(_canonical_type(T)))
     item(v) = _canonical_value(v, depth + 1)
-    x isa AbstractDict && return string(_canonical_type(T), "{",
-        join(sort!([string(item(k), "=>", item(v)) for (k, v) in pairs(x)]), ","), "}")
+    x isa AbstractDict && return string(
+        _canonical_type(T), "{",
+        join(sort!([string(item(k), "=>", item(v)) for (k, v) in pairs(x)]), ","), "}"
+    )
     x isa AbstractSet && return string(_canonical_type(T), "{", join(sort!([item(v) for v in x]), ","), "}")
     container &&
         return string(_canonical_type(T), "[", join((string(k, "=", item(v)) for (k, v) in pairs(x)), ","), "]")
-    return string(_canonical_type(T), "(",
-        join((string(n, "=", item(getfield(x, n))) for n in fieldnames(T) if isdefined(x, n)), ","), ")")
+    return string(
+        _canonical_type(T), "(",
+        join((string(n, "=", item(getfield(x, n))) for n in fieldnames(T) if isdefined(x, n)), ","), ")"
+    )
 end
 
 # The per-session token (D-130), drawn in `__init__` (Potts.jl) at every load, never baked

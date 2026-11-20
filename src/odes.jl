@@ -46,8 +46,11 @@ function ode_system(c::CompiledPottsSystem, scope::Symbol)
     return get(getfield(c, :ode_systems), scope, nothing)
 end
 function ode_system(sys::PottsSystem, ::Symbol)
-    throw(ArgumentError(
-        "ode_system: `$(nameof(sys))` has not been compiled; call `ode_system(mtkcompile(sys), scope)`"))
+    throw(
+        ArgumentError(
+            "ode_system: `$(nameof(sys))` has not been compiled; call `ode_system(mtkcompile(sys), scope)`"
+        )
+    )
 end
 
 const _ODE_SCOPES = (:cell, :model)
@@ -92,8 +95,10 @@ function _compile_odes(sys::PottsSystem)
             i = info(l)
             i === nothing && throw(
                 PottsCompileError(
-                "`$eq` is an implicit algebraic equation; an algebraic equation defines a declared cell or " *
-                "model variable explicitly, `y ~ expr` (Potts accepts explicit, acyclic definitions only)"))
+                    "`$eq` is an implicit algebraic equation; an algebraic equation defines a declared cell or " *
+                        "model variable explicitly, `y ~ expr` (Potts accepts explicit, acyclic definitions only)"
+                )
+            )
             if !(i.role in _ODE_SCOPES)
                 role = if i.role in (:site, :field, :edge)
                     "a $(i.role) variable"
@@ -104,7 +109,9 @@ function _compile_odes(sys::PottsSystem)
                 end
                 throw(
                     PottsCompileError(
-                        "`$eq`: an algebraic equation defines a cell or model variable; `$(i.name)` is " * role))
+                        "`$eq`: an algebraic equation defines a cell or model variable; `$(i.name)` is " * role
+                    )
+                )
             end
             push!(get!(aeqs, i.role, Equation[]), eq)
         end
@@ -151,13 +158,21 @@ function _compile_odes(sys::PottsSystem)
     m === nothing && return _replace(sys; equations, sources = merge(srcs, src)), odes, origin
     names = Set{Symbol}(info(x).name for x in keys(alg))
     variables = Any[x for x in _p(sys, :variables) if !(info(x).name in names)]
-    observed = [m.observed;
-                [_observed_eq(_tag(_sym(info(x).name), Entity(:observed, info(x).name, nothing, (; scope = info(x).role))),
-                     Symbolics.wrap(defs[x])) for x in _algebraic_order(alg)]]
-    return _replace(sys; variables, equations, observed, energies = m.energies, drives = m.drives,
-               constraints = m.constraints, updates = m.updates, divisions = m.divisions,
-               converts = m.converts, link_rules = m.link_rules, discrete = m.discrete, sweep = m.sweep,
-               sources = merge(srcs, m.sources, src)), odes, origin
+    observed = [
+        m.observed;
+        [
+            _observed_eq(
+                _tag(_sym(info(x).name), Entity(:observed, info(x).name, nothing, (; scope = info(x).role))),
+                Symbolics.wrap(defs[x])
+            ) for x in _algebraic_order(alg)
+        ]
+    ]
+    return _replace(
+            sys; variables, equations, observed, energies = m.energies, drives = m.drives,
+            constraints = m.constraints, updates = m.updates, divisions = m.divisions,
+            converts = m.converts, link_rules = m.link_rules, discrete = m.discrete, sweep = m.sweep,
+            sources = merge(srcs, m.sources, src)
+        ), odes, origin
 end
 
 # The algebraic variables of a model with its ODEs simplified (`_compile_odes`), as the
@@ -193,8 +208,8 @@ function _algebraic_note(x, msg)
     filter!(n -> !occursin("`$n`", msg), read)
     isempty(read) && return ""
     return "\n  (this statement reads the algebraic variable$(length(read) == 1 ? "" : "s") " *
-           join(("`$n ~ $(ctx.defs[n])`" for n in read), ", ") * ", which stand$(length(read) == 1 ? "s" : "") " *
-           "for $(length(read) == 1 ? "its definition" : "their definitions"))"
+        join(("`$n ~ $(ctx.defs[n])`" for n in read), ", ") * ", which stand$(length(read) == 1 ? "s" : "") " *
+        "for $(length(read) == 1 ? "its definition" : "their definitions"))"
 end
 
 # every symbolic value of a statement (its expressions, equations, rules and conditions)
@@ -269,10 +284,14 @@ function _check_algebraic(sys::PottsSystem, deqs, aeqs)
         _located(sys, eq) do
             name in differential && throw(
                 PottsCompileError(
-                "`$name` has both `D($name) ~ …` and the algebraic equation `$eq`; an algebraic variable has no derivative"))
+                    "`$name` has both `D($name) ~ …` and the algebraic equation `$eq`; an algebraic variable has no derivative"
+                )
+            )
             haskey(byname, name) && throw(
                 PottsCompileError(
-                "`$name` has two algebraic equations, `$(alg[byname[name]].eq)` and `$eq`; one definition per variable"))
+                    "`$name` has two algebraic equations, `$(alg[byname[name]].eq)` and `$eq`; one definition per variable"
+                )
+            )
             what = "an algebraic equation of a $scope variable"
             _check_names(eq.rhs, scope === :cell ? (_CELL_BUILTINS..., :time) : (:mcs, :time), what; between_copies = true)
             # the variable's own scope: a model value folds cell quantities, a cell value reads
@@ -281,39 +300,51 @@ function _check_algebraic(sys::PottsSystem, deqs, aeqs)
                 r = info(v).role
                 scope === :model && r in (:cell, :site, :field) && throw(
                     PottsCompileError(
-                    "the algebraic equation `$eq` of the model variable `$name` reads the $r variable " *
-                    "`$(info(v).name)` bare; fold it, e.g. `sum($(info(v).name) for c in cells)`"))
+                        "the algebraic equation `$eq` of the model variable `$name` reads the $r variable " *
+                            "`$(info(v).name)` bare; fold it, e.g. `sum($(info(v).name) for c in cells)`"
+                    )
+                )
                 scope === :cell && r in (:site, :field) && throw(
                     PottsCompileError(
-                    "the algebraic equation `$eq` of the cell variable `$name` reads the $r variable `$(info(v).name)` " *
-                    "bare, which has one value per site; read it over the cell (`integral($(info(v).name))`) or at a " *
-                    "site (`$(info(v).name)[…]`)"))
+                        "the algebraic equation `$eq` of the cell variable `$name` reads the $r variable `$(info(v).name)` " *
+                            "bare, which has one value per site; read it over the cell (`integral($(info(v).name))`) or at a " *
+                            "site (`$(info(v).name)[…]`)"
+                    )
+                )
             end
             d = getfield(info(x), :default)
             (d === nothing || (d isa Real && iszero(d))) || throw(
                 PottsCompileError(
-                "`$name` is defined by the algebraic equation `$eq` and has the declared initial value `$d`; an " *
-                "algebraic variable's value follows from its definition. Declare `$name($scope)` without a value; to " *
-                "start it at a value, give `$name => value` in the operating point (the initial condition " *
+                    "`$name` is defined by the algebraic equation `$eq` and has the declared initial value `$d`; an " *
+                        "algebraic variable's value follows from its definition. Declare `$name($scope)` without a value; to " *
+                        "start it at a value, give `$name => value` in the operating point (the initial condition " *
                         "`$name ~ value`) or write the condition in @initialization_equations"
                 )
             )
             _has_op(eq.rhs, random_uniform) && throw(
                 PottsCompileError(
-                "the algebraic equation `$eq` draws `rand()`; an algebraic variable is a function of the current state " *
-                "(MTK observed): keep the draw in an update or an ODE"))
+                    "the algebraic equation `$eq` draws `rand()`; an algebraic variable is a function of the current state " *
+                        "(MTK observed): keep the draw in an update or an ODE"
+                )
+            )
             (_has_op(eq.rhs, history_lag) || _has_operator(eq.rhs, ModelingToolkitBase.Pre)) && throw(
                 PottsCompileError(
-                "the algebraic equation `$eq` reads a previous value (`Pre`); an algebraic variable is a function of " *
-                "the current state (MTK observed)"))
+                    "the algebraic equation `$eq` reads a previous value (`Pre`); an algebraic variable is a function of " *
+                        "the current state (MTK observed)"
+                )
+            )
         end
         byname[name] = x
         alg[x] = (; eq, order = (n += 1))
     end
     # self-references and cycles, by depth-first search over the definitions
     function reads(x)
-        return unique!(Symbol[i.name for i in (info(y) for y in _leaves(alg[x].eq.rhs))
-            if i !== nothing && i.role in _ODE_SCOPES && haskey(byname, i.name)])
+        return unique!(
+            Symbol[
+                i.name for i in (info(y) for y in _leaves(alg[x].eq.rhs))
+                    if i !== nothing && i.role in _ODE_SCOPES && haskey(byname, i.name)
+            ]
+        )
     end
     state = Dict{Symbol, Int}()                        # 1: on the path, 2: done
     function visit(name, path)
@@ -362,8 +393,10 @@ function _check_algebraic(sys::PottsSystem, deqs, aeqs)
             throw(
                 PottsCompileError(
                     "`$(i.name)` is defined by an algebraic equation (`$(alg[byname[i.name]].eq)`) and is read " *
-                                "as `$y`; an algebraic variable is read bare (its definition at the current cell or model), " *
-                                "not at another index or as a previous value"))
+                        "as `$y`; an algebraic variable is read bare (its definition at the current cell or model), " *
+                        "not at another index or as a previous value"
+                )
+            )
         end
         return x
     end
@@ -403,7 +436,7 @@ function _ode_template(sys::PottsSystem, scope::Symbol, d, a, rates, defs)
         return n
     end
     function input(y; declared = false)
-        get!(inputs, y) do
+        return get!(inputs, y) do
             v = declared ? y : Symbolics.variable(name(y); T = SymbolicUtils.symtype(y))
             p = _unwrap(ModelingToolkitBase.toparam(v))
             push!(params, p)
@@ -428,15 +461,20 @@ function _ode_template(sys::PottsSystem, scope::Symbol, d, a, rates, defs)
     end
     foreach(eq -> scan(eq.rhs), Iterators.flatten((d, a)))
     # (`substitute` replaces the outermost match, so an input's own subexpressions stay in it)
-    eqs = Equation[eq.lhs ~ (isempty(inputs) ? eq.rhs : Symbolics.substitute(eq.rhs, inputs; fold = Val(false)))
-                   for eq in Iterators.flatten((d, a))]
+    eqs = Equation[
+        eq.lhs ~ (isempty(inputs) ? eq.rhs : Symbolics.substitute(eq.rhs, inputs; fold = Val(false)))
+            for eq in Iterators.flatten((d, a))
+    ]
     # component checks only: Potts checks units itself (`_check_units`), and the inputs carry none
     template = ModelingToolkitBase.System(eqs, t, targets, params; name = Symbol(nameof(sys), :₊, scope), checks = ModelingToolkitBase.CheckComponents)
     compiled = ModelingToolkitBase.mtkcompile(template)
     obs = Dict{Any, Any}(_unwrap(o.lhs) => _unwrap(o.rhs) for o in ModelingToolkitBase.observed(compiled))
     function restore(x)
-        return _unwrap(Symbolics.substitute(
-            _fixpoint(y -> _unwrap(Symbolics.substitute(y, obs; fold = Val(false))), _unwrap(x)), back; fold = Val(false)))
+        return _unwrap(
+            Symbolics.substitute(
+                _fixpoint(y -> _unwrap(Symbolics.substitute(y, obs; fold = Val(false))), _unwrap(x)), back; fold = Val(false)
+            )
+        )
     end
     differential = Set{Symbol}(info(x).name for x in targets[1:length(d)])
     for eq in ModelingToolkitBase.equations(compiled)
@@ -444,18 +482,24 @@ function _ode_template(sys::PottsSystem, scope::Symbol, d, a, rates, defs)
         x = _is_derivative(l) ? arguments(l)[1] : nothing
         (x !== nothing && SymbolicIndexingInterface.getname(x) in differential) || throw(
             PottsCompileError(
-            "the $scope equations of `$(nameof(sys))`: mtkcompile left `$eq`, which is not the ODE of a " *
-            "differential variable; Potts accepts explicit, acyclic algebraic definitions only"))
+                "the $scope equations of `$(nameof(sys))`: mtkcompile left `$eq`, which is not the ODE of a " *
+                    "differential variable; Potts accepts explicit, acyclic algebraic definitions only"
+            )
+        )
         rates[SymbolicIndexingInterface.getname(x)] = restore(eq.rhs)
     end
     length(ModelingToolkitBase.equations(compiled)) == length(d) || throw(
         PottsCompileError(
-        "the $scope equations of `$(nameof(sys))`: mtkcompile kept $(length(ModelingToolkitBase.equations(compiled))) " *
-        "of $(length(d)) ODEs"))
+            "the $scope equations of `$(nameof(sys))`: mtkcompile kept $(length(ModelingToolkitBase.equations(compiled))) " *
+                "of $(length(d)) ODEs"
+        )
+    )
     for x in targets[(length(d) + 1):end]
         haskey(obs, x) || throw(
             PottsCompileError(
-            "the $scope equations of `$(nameof(sys))`: mtkcompile did not eliminate the algebraic variable `$(info(x).name)`"))
+                "the $scope equations of `$(nameof(sys))`: mtkcompile did not eliminate the algebraic variable `$(info(x).name)`"
+            )
+        )
         defs[x] = restore(obs[x])
     end
     return compiled

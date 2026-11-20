@@ -16,7 +16,9 @@ _same(a, b) = DQ.dimension(a) == DQ.dimension(b)
 
 # unit rules for Potts' symbolic operations
 MTK.get_unit(::Union{typeof(Potts.history_lag), typeof(Potts.cell_integral)}, args) = get_unit(args[1])
-function MTK.get_unit(::Union{typeof(Potts.cell_centroid), typeof(Potts.copy_displacement),
+function MTK.get_unit(
+        ::Union{
+            typeof(Potts.cell_centroid), typeof(Potts.copy_displacement),
             typeof(Potts.random_uniform),
         }, args
     )
@@ -114,7 +116,9 @@ function Potts._check_units(sys::PottsSystem)
         else
             _same(u, first_term[2]) || throw(
                 Potts.PottsCompileError(
-                "units: the terms of H disagree: [$(first_term[2])] in $(first_term[1]), [$u] in $label"))
+                    "units: the terms of H disagree: [$(first_term[2])] in $(first_term[1]), [$u] in $label"
+                )
+            )
         end
     end
     for u in Potts._p(sys, :updates)

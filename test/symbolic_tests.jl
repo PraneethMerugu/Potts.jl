@@ -426,11 +426,11 @@ end
         # naming one is refused whole
         function err(f)
             return try
-                    f(); ""
-                catch e
-                    e isa ArgumentError || rethrow()
-                    sprint(showerror, e)
-                end
+                f(); ""
+            catch e
+                e isa ArgumentError || rethrow()
+                sprint(showerror, e)
+            end
         end
         e = err(() -> remake(prob; p = [:p₄ => 0.0, :p₁ => 3.0]))
         @test !isempty(e)

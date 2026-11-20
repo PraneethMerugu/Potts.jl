@@ -114,20 +114,20 @@ end
 fd_source_op(dims) = (σ = zeros(Int32, dims...); σ[4:6, 3:5] .= 1; [ownership => σ, kind => [:A]])
 function fd_err(f)
     return try
-            f(); nothing
-        catch e
-            sprint(showerror, e)
-        end
+        f(); nothing
+    catch e
+        sprint(showerror, e)
+    end
 end
 fd_n(integ, j = 1) = CorePotts._runtime(getfield(integ.ctx, Symbol(:__fields, j))).n
 fdvar(sys, n) = only(filter(x -> string(x) in (n, n * "(t)"), Potts.declared_variables(sys)))
 function fdargerr(f)
     return try
-            f(); ""
-        catch err
-            err isa ArgumentError || rethrow()
-            replace(sprint(showerror, err), r"\s+" => " ")
-        end
+        f(); ""
+    catch err
+        err isa ArgumentError || rethrow()
+        replace(sprint(showerror, err), r"\s+" => " ")
+    end
 end
 
 const FD_HEX6 = ((1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1))

@@ -21,7 +21,7 @@ using JumpProcesses: JumpProcesses
 using KernelAbstractions: KernelAbstractions
 using LatticeFields: LatticeFields, isfatal
 using LatticeFields.Problems: ExplicitEuler, ExplicitMap, LatticeNewton, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, AbstractFieldAlgorithm,
-                             substep_counts, steady_fields, field_series, field_report
+    substep_counts, steady_fields, field_series, field_report
 using LatticeFields.Solvers: LatticePCG, LatticeGMRES, LatticeMultigrid, LatticeBlockSolve, VCycle
 using LatticePDE: LatticePDE, laplacian, value_at, ismember, Coarse
 using LinearAlgebra: Symmetric, eigen, svdvals

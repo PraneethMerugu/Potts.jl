@@ -41,8 +41,10 @@ function an_boundary_oracle(σ, kinds, lat, r)
         (indom(x) && indom(y)) || continue
         a, b = σ[x], σ[y]
         a == b && continue
-        cands = [lat.periodic[d] ? unique((y[d] - x[d], y[d] - x[d] - lat.dims[d], y[d] - x[d] + lat.dims[d])) : (y[d] - x[d],)
-                 for d in 1:length(lat.dims)]
+        cands = [
+            lat.periodic[d] ? unique((y[d] - x[d], y[d] - x[d] - lat.dims[d], y[d] - x[d] + lat.dims[d])) : (y[d] - x[d],)
+                for d in 1:length(lat.dims)
+        ]
         hits = [offs[o] for o in Iterators.product(cands...) if haskey(offs, o)]
         isempty(hits) && continue
         @assert length(hits) == 1 || allequal(hits)        # o and −o both reach y only on a period-2 axis
@@ -189,10 +191,12 @@ end
 
 @testitem "boundary_lengths against the all-pairs oracle" setup = [AnalysisSetup] tags = [:potts, :analysis] begin
     @testset "boundary_lengths against the all-pairs oracle" begin
-        relations = Dict(:sq_periodic => (nothing, VonNeumann(2), Moore(2), Weighted(Moore(1), o -> 1 / sqrt(sum(abs2, o)))),
+        relations = Dict(
+            :sq_periodic => (nothing, VonNeumann(2), Moore(2), Weighted(Moore(1), o -> 1 / sqrt(sum(abs2, o)))),
             :sq_disk => (nothing, EuclideanBall(2), Weighted(NeighborOrder(2), o -> 2.0 + abs(o[1]))),
             :hex_periodic => (nothing, Hex(2)),
-            :cube_mixed => (nothing, VonNeumann(1), NeighborOrder(2)))
+            :cube_mixed => (nothing, VonNeumann(1), NeighborOrder(2))
+        )
         for key in keys(AN_LATTICES), seed in 1:2, rel in relations[key]
             prob, kinds = an_random_problem(key, seed)
             lat = prob.lattice
@@ -347,8 +351,10 @@ end
         # negative control: the same copy dynamics with the snapshot frozen at u's value (no
         # phases at all) is not the run's
         f = prob.f
-        frozen = CorePotts.CPMFunction(f.delta_H; f.commit!, f.constraint,
-            temperature = Potts._ZeroTemperature(f.temperature), f.bias, f.acceptance, f.footprint, f.fingerprint, f.sys)
+        frozen = CorePotts.CPMFunction(
+            f.delta_H; f.commit!, f.constraint,
+            temperature = Potts._ZeroTemperature(f.temperature), f.bias, f.acceptance, f.footprint, f.fingerprint, f.sys
+        )
         for alg in (SequentialCPM(), CheckerboardCPM())
             differs = 0
             for s in 1:3

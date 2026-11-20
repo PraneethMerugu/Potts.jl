@@ -20,7 +20,7 @@ using PottsModels: AkeebInvasion, akeeb_state, OpenVTGrowingMonolayer, openvt_mo
 
 isdefined(@__MODULE__, :SingleDivisionFixture) ||
     include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "fixtures.jl"))
-   # test-only models (D-254)
+# test-only models (D-254)
 
 # the problem `prob` with the serial layout (initial cells 1:n, the counter at n + 1)
 function bs_with_serials(prob)
@@ -30,24 +30,30 @@ function bs_with_serials(prob)
     birth[1:n] .= Int32.(1:n)
     stb = CorePotts.CPMState(
         st.ownership, merge(st.cell, (; birth)), st.site,
-        merge(st.model, NamedTuple{(CorePotts.NEXT_BIRTH,)}((Int32[n + 1],))), st.history)
-    return CorePotts.PottsProblem(prob.f, stb, prob.lattice, prob.tspan, prob.p; prob.contact, prob.proposal,
-        prob.relations, prob.spacing, prob.frozen, prob.seed, prob.replica, prob.repeat)
+        merge(st.model, NamedTuple{(CorePotts.NEXT_BIRTH,)}((Int32[n + 1],))), st.history
+    )
+    return CorePotts.PottsProblem(
+        prob.f, stb, prob.lattice, prob.tspan, prob.p; prob.contact, prob.proposal,
+        prob.relations, prob.spacing, prob.frozen, prob.seed, prob.replica, prob.repeat
+    )
 end
 
 
 # Akeeb on 24 × 30 with early divisions (clock threshold 10–20 MCS, V_max = 5): ~50 in 60 MCS
 function bs_akeeb(; T = Float64, tspan = (0, 60), seed = 0)
-    return PottsProblem(AkeebInvasion(; name = :a, lattice = (24, 30)),
+    return PottsProblem(
+        AkeebInvasion(; name = :a, lattice = (24, 30)),
         [akeeb_state(; lattice = (24, 30)); :clock_min => 10.0; :clock_spread => 10.0; :V_max => 5.0], tspan;
-        T, seed, capacity = 200)
+        T, seed, capacity = 200
+    )
 end
 
 # the growing OpenVT monolayer on 24² with τ = 4 (divisions within 60 MCS)
 function bs_openvt(; T = Float64, tspan = (0, 60), seed = 0)
     return PottsProblem(
         OpenVTGrowingMonolayer(; name = :o, lattice = (24, 24), τ = 4.0), openvt_monolayer_state(; lattice = (24, 24)),
-        tspan; T, seed, capacity = 64)
+        tspan; T, seed, capacity = 64
+    )
 end
 
 
@@ -172,8 +178,10 @@ end
 bs_sigma() = (σ = zeros(Int32, 24, 24); σ[3:6, 3:6] .= 1; σ[12:15, 12:15] .= 2; σ[3:6, 16:19] .= 3; σ)
 
 function bs_blob(model; tspan = (0, 30), seed = 1, kw...)
-    return PottsProblem(model, [ownership => bs_sigma(), kind => fill(:blob, 3)],
-        tspan; seed, capacity = 64, kw...)
+    return PottsProblem(
+        model, [ownership => bs_sigma(), kind => fill(:blob, 3)],
+        tspan; seed, capacity = 64, kw...
+    )
 end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end

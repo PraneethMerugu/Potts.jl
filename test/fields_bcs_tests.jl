@@ -5,11 +5,11 @@
         c0 = rand(StableRNG(5), dims...)
         function run(M; k = 2)
             integ = init(
-                    PottsProblem(
-                        M(; name = :f), [fd_empty(dims); :c => c0], (0, k);
-                        field_solver = ExplicitEuler(; substeps = n)
-                    ), SequentialCPM()
-                )
+                PottsProblem(
+                    M(; name = :f), [fd_empty(dims); :c => c0], (0, k);
+                    field_solver = ExplicitEuler(; substeps = n)
+                ), SequentialCPM()
+            )
             foreach(_ -> step!(integ), 1:k)
             return Array(current_state(integ).site.c)
         end
@@ -68,11 +68,11 @@ end
         c0 = rand(StableRNG(9), 8, 6)
         function run(M; k = 3, n = 1)
             return solve(
-                    PottsProblem(
-                        M(; name = :f), [fd_empty((8, 6)); :c => c0], (0, k);
-                        field_solver = ExplicitEuler(; substeps = n)
-                    ), SequentialCPM()
-                ).u[end].site.c
+                PottsProblem(
+                    M(; name = :f), [fd_empty((8, 6)); :c => c0], (0, k);
+                    field_solver = ExplicitEuler(; substeps = n)
+                ), SequentialCPM()
+            ).u[end].site.c
         end
         hand = map(v -> v >= 0.8 ? 0.8 : v, c0)
         for _ in 1:3

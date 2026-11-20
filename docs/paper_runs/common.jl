@@ -11,11 +11,11 @@ mkpath(ASSETS)
 
 function git_commit()
     return try
-            strip(read(`git -C $REPO rev-parse --short HEAD`, String)) *
+        strip(read(`git -C $REPO rev-parse --short HEAD`, String)) *
             (isempty(strip(read(`git -C $REPO status --porcelain -- lib src`, String))) ? "" : "-dirty")
-        catch
-            "unknown"
-        end
+    catch
+        "unknown"
+    end
 end
 
 """
@@ -37,8 +37,10 @@ end
 Panel(name; kw...) = Panel(; name, kw...)
 
 """Record the saved states of `sol` as an mp4: one axis per panel, a fixed title, an MCS clock."""
-function record_run(file, sol, panels; title, framerate = 30, size = (720, 760),
-        clock = t -> "t = $t MCS", frames = eachindex(sol.u), state = nothing)
+function record_run(
+        file, sol, panels; title, framerate = 30, size = (720, 760),
+        clock = t -> "t = $t MCS", frames = eachindex(sol.u), state = nothing
+    )
     function frame(p, i)
         if state === nothing
             return renderframe(sol; index = i, channels = p.channels(sol.u[i]))
@@ -85,9 +87,11 @@ CRF 28, yuv420p) when it is larger than 5 MB, and write the sidecar `<name>.toml
 `sol` and the recorded frame indices. `state(u, i)` maps saved state `i` to the state drawn
 (default: `u` itself; the Graner–Glazier run draws a T = 0 annealed copy).
 """
-function paper_run(name; prob, alg, saveat, title, panels, framerate = 30, size = (720, 760),
+function paper_run(
+        name; prob, alg, saveat, title, panels, framerate = 30, size = (720, 760),
         clock = t -> "t = $t MCS", frames = sol -> eachindex(sol.u), meta = Dict{String, Any}(), solve_kw = (;),
-        state = nothing)
+        state = nothing
+    )
     t0, t1 = prob.tspan
     solve(remake(prob; tspan = (t0, t0 + 2)), alg; solve_kw...)          # compile
     wall = @elapsed sol = solve(prob, alg; saveat, save_start = true, solve_kw...)
@@ -98,7 +102,8 @@ function paper_run(name; prob, alg, saveat, title, panels, framerate = 30, size 
     meta isa Function && (meta = meta(sol, idx))
     rec = @elapsed record_run(mp4, sol, panels; title, framerate, size, clock, frames = idx, state)
     reencode(mp4)
-    info = merge(run_info(name; wall, rec, mp4), Dict{String, Any}(
+    info = merge(
+        run_info(name; wall, rec, mp4), Dict{String, Any}(
             "title" => title,
             "lattice" => collect(Base.size(sol.u[1].ownership)),
             "tspan" => [t0, t1],
@@ -106,7 +111,9 @@ function paper_run(name; prob, alg, saveat, title, panels, framerate = 30, size 
             "recorded_mcs" => [sol.t[first(idx)], sol.t[last(idx)]],
             "framerate" => framerate,
             "seed" => Int(prob.seed),
-            "algorithm" => string(alg)), meta)
+            "algorithm" => string(alg)
+        ), meta
+    )
     write_sidecar(name, info)
     return sol, info
 end
@@ -134,7 +141,8 @@ function run_info(name; wall, rec, mp4)
         "git_commit" => git_commit(),
         "julia" => string(VERSION),
         "date" => string(now()),
-        "script" => "docs/paper_runs/$name.jl")
+        "script" => "docs/paper_runs/$name.jl"
+    )
 end
 
 """Write the sidecar `docs/src/assets/paper_runs/<name>.toml`."""

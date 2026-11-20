@@ -17,8 +17,10 @@ function cubes(L, a)
 end
 function problem3(L)
     s = cubes(L, 5)
-    return PottsProblem(GRANER, initial_state(s...), Lattice((L, L, L)), (0, NMCS),
-        merge(graner_params(), (; V0 = 64.0)); contact = Moore(1), seed = 5)
+    return PottsProblem(
+        GRANER, initial_state(s...), Lattice((L, L, L)), (0, NMCS),
+        merge(graner_params(), (; V0 = 64.0)); contact = Moore(1), seed = 5
+    )
 end
 
 function rate(prob, alg)
@@ -32,9 +34,11 @@ end
 
 println("threads = $(Threads.nthreads())")
 @printf("%-14s %9s %8s %10s %10s %10s %8s\n", "case", "sites", "blocks", "seq", "cb inline", "cb thread", "speedup")
-for (label, prob) in [("2D 144²", graner_problem(; scale = 2)), ("2D 288²", graner_problem(; scale = 4)),
+for (label, prob) in [
+        ("2D 144²", graner_problem(; scale = 2)), ("2D 288²", graner_problem(; scale = 4)),
         ("2D 576²", graner_problem(; scale = 8)), ("2D 1152²", graner_problem(; scale = 16)),
-        ("3D 40³", problem3(40)), ("3D 80³", problem3(80)), ("3D 160³", problem3(160))]
+        ("3D 40³", problem3(40)), ("3D 80³", problem3(80)), ("3D 160³", problem3(160)),
+    ]
     s, _ = rate(prob, SequentialCPM(; proposal = Moore(1)))
     i, integ = rate(prob, CheckerboardCPM(; proposal = Moore(1), threads = false))
     t, _ = rate(prob, CheckerboardCPM(; proposal = Moore(1), threads = true))

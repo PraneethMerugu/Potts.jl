@@ -5,8 +5,10 @@
     using Potts.Layouts
     @testset "layouts: Tiling" begin
         # counts, volumes and bounds, checked against the arithmetic of whole boxes
-        for (sz, sp, reg, dims) in (((3, 2), (1, 0), (2:19, 4:11), (20, 12)), ((4, 4), (2, 2), (1:17, 1:17), (17, 17)),
-            ((2, 3, 2), (1, 1, 0), (1:9, 2:10, 1:6), (10, 10, 6)))
+        for (sz, sp, reg, dims) in (
+                ((3, 2), (1, 0), (2:19, 4:11), (20, 12)), ((4, 4), (2, 2), (1:17, 1:17), (17, 17)),
+                ((2, 3, 2), (1, 1, 0), (1:9, 2:10, 1:6), (10, 10, 6)),
+            )
             op = layout(Tiling(sz; spacing = sp, region = reg, kinds = [:a, :b, :c]), dims)
             σ, k = _op(op, ownership), _op(op, kind)
             nper = map((r, s, p) -> fld(length(r) - s, s + p) + 1, reg, sz, sp)
@@ -30,10 +32,10 @@ end
     @testset "layouts: invalid arguments" begin
         function err(f)
             return try
-                    f(); ""
-                catch e
-                    e isa ArgumentError ? e.msg : rethrow()
-                end
+                f(); ""
+            catch e
+                e isa ArgumentError ? e.msg : rethrow()
+            end
         end
         @test_throws ArgumentError layout(Tiling((2, 2); region = (1:5, 1:11), kinds = [:a]), (10, 10))
         @test_throws ArgumentError layout(Tiling((2, 2); region = (0:5, 1:5), kinds = [:a]), (10, 10))
@@ -74,8 +76,12 @@ end
         op = layout(overlay(Frame(:w), tiles), (6, 6))
         @test _op(op, kind) == fill(:a, 9) && [length(_sites(_op(op, ownership), c)) for c in 1:9] == fill(4, 9)
         # a fully covered cell is dropped and ids stay consecutive
-        op = layout(overlay(Tiling((1, 1); region = (1:1, 1:1), kinds = [:x]), Tiling((1, 1); region = (3:3, 3:3), kinds = [:y]),
-            Frame(:w)), (5, 5))
+        op = layout(
+            overlay(
+                Tiling((1, 1); region = (1:1, 1:1), kinds = [:x]), Tiling((1, 1); region = (3:3, 3:3), kinds = [:y]),
+                Frame(:w)
+            ), (5, 5)
+        )
         @test _op(op, kind) == [:y, :w] && sort(unique(_op(op, ownership))) == Int32[0, 1, 2]
         # a later layer that cuts a cell in two warns, naming the cell (Moore(1) neighbourhood)
         bar = Tiling((6, 2); region = (1:6, 3:4), kinds = [:a])
@@ -97,8 +103,10 @@ end
     @testset "layouts: Scattered" begin
         # 3D, gap 2: every pair of cells is more than two sites apart, volumes by counting
         for seed in 1:3
-            σ = _op(layout(Scattered(8, (3, 3, 3); region = (2:19, 2:19, 2:19), kinds = [:a, :b], seed, gap = 2), (20, 20, 20)),
-                ownership)
+            σ = _op(
+                layout(Scattered(8, (3, 3, 3); region = (2:19, 2:19, 2:19), kinds = [:a, :b], seed, gap = 2), (20, 20, 20)),
+                ownership
+            )
             @test maximum(σ) == 8 && all(c -> length(_sites(σ, c)) == 27, 1:8)
             @test all(i -> all(d -> 2 <= i[d] <= 19, 1:3), findall(>(0), σ))
             @test _separated(σ, 2)
@@ -188,7 +196,7 @@ end
         σ = _op(op, ownership)
         @test size(σ) == (18, 14) && maximum(σ) == 1 + 3 * 2
         @test _same(layout(l, mtkcompile(sys)), op) && _same(layout(l, (18, 14)), op) &&
-              _same(layout(l, Lattice((18, 14); boundary = Closed(), geometry = Hexagonal())), op)
+            _same(layout(l, Lattice((18, 14); boundary = Closed(), geometry = Hexagonal())), op)
         prob = PottsProblem(sys, op, (0, 5))
         @test prob.lattice.geometry isa Hexagonal
         u = solve(prob, SequentialCPM(proposal = Hex(1))).u[end]
@@ -221,8 +229,12 @@ end
             # interior site is a Moore(1) neighbour of a site outside the domain)
             inner = mask .& .!ring
             @test !any(ring .& .!mask) && any(inner)
-            @test !any(i -> inner[i] && any(o -> (j = i + o; !checkbounds(Bool, mask, j) || !mask[j]),
-                CartesianIndices((-w:w, -w:w))), CartesianIndices(mask))
+            @test !any(
+                i -> inner[i] && any(
+                    o -> (j = i + o; !checkbounds(Bool, mask, j) || !mask[j]),
+                    CartesianIndices((-w:w, -w:w))
+                ), CartesianIndices(mask)
+            )
             # the ring is w sites thick along the axes through the centre (row 12 of the disk: 2:23)
             row = findall(mask[:, 12])
             @test findall(ring[:, 12]) == [row[1:w]; row[(end - w + 1):end]]
@@ -244,8 +256,10 @@ end
         # hex (axial indices): a concave domain (a disk minus a wedge) gets the oracle ring, and
         # no in-domain site off the ring has a Hex(1) neighbour outside the domain (it seals)
         function domain_frame(mask, bnd, w; geometry = Potts.CorePotts.Square())
-            return _op(layout(Frame(:w; width = w), Potts.lattice_spec(size(mask); boundary = bnd, domain = mask, geometry)),
-                ownership) .== 1
+            return _op(
+                layout(Frame(:w; width = w), Potts.lattice_spec(size(mask); boundary = bnd, domain = mask, geometry)),
+                ownership
+            ) .== 1
         end
         pacman = [(x - 9)^2 + (y - 9)^2 <= 49 && !(x > 9 && abs(y - 9) <= 2) for x in 1:18, y in 1:18]
         hexlat = Lattice((18, 18); boundary = Closed(), geometry = Hexagonal())
@@ -255,8 +269,10 @@ end
             @test ring == _frame_oracle(pacman, (false, false), w)
             inner = pacman .& .!ring
             @test any(inner)
-            @test all(i -> !inner[i] || all(o -> ((in, y) = Potts.CorePotts.shift(hexlat, Tuple(i), o); in && pacman[y...]), hoffs),
-                CartesianIndices(pacman))
+            @test all(
+                i -> !inner[i] || all(o -> ((in, y) = Potts.CorePotts.shift(hexlat, Tuple(i), o); in && pacman[y...]), hoffs),
+                CartesianIndices(pacman)
+            )
         end
         # 3D with mixed boundaries: random masks against the oracle
         rng = Potts.StableRNG(3)
@@ -307,14 +323,30 @@ end
         # cost: one pass over σ, boxes trimmed by a frame are skipped (was 22 s at 200³)
         layout(overlay(Tiling((5, 5, 5); kinds = [:a]), Frame(:w; width = 3)), (12, 12, 12))
         # the best of up to 3 timed calls: a busy machine slows one call, the regression slows all
-        best_under(f, limit) = (t = Inf; for _ in 1:3; t = min(t, @elapsed f()); t < limit && break; end; t)
+        best_under(f, limit) = (
+            t = Inf; for _ in 1:3
+                t = min(t, @elapsed f()); t < limit && break
+            end; t
+        )
         t = best_under(() -> layout(overlay(Tiling((5, 5, 5); kinds = [:a]), Frame(:w; width = 3)), (60, 60, 60)), 5)
         @test t < 5
         # many genuinely split cells still flood-fill in linear time (warmed on a small 2D call)
-        _warnings(() -> layout(overlay(Tiling((3, 3); kinds = [:a]), Tiling((1, 1); spacing = 2, region = (2:11, 2:11), kinds = [:b])),
-            (12, 12)))
-        t = best_under(() -> layout(overlay(Tiling((3, 3); kinds = [:a]), Tiling((1, 1); spacing = 2, region = (2:299, 2:299),
-            kinds = [:b])), (300, 300)), 5)
+        _warnings(
+            () -> layout(
+                overlay(Tiling((3, 3); kinds = [:a]), Tiling((1, 1); spacing = 2, region = (2:11, 2:11), kinds = [:b])),
+                (12, 12)
+            )
+        )
+        t = best_under(
+            () -> layout(
+                overlay(
+                    Tiling((3, 3); kinds = [:a]), Tiling(
+                        (1, 1); spacing = 2, region = (2:299, 2:299),
+                        kinds = [:b]
+                    )
+                ), (300, 300)
+            ), 5
+        )
         @test t < 5
         # The lattice-sized `visited` array is allocated only for a flood fill. Every
         # cut cell below is a box trimmed by a frame, so the check allocates only per-cell
@@ -355,4 +387,3 @@ end
         @test _op(layout(Tiling((3, 3); region = (1:X, 1:(slab - 3)), kinds = [:follower]), (X, Y)), ownership) != σ
     end
 end
-

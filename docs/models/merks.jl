@@ -138,11 +138,15 @@ mkpath("merks") #hide
 
 lat = (200, 200)
 @named m6 = Merks2006(; lattice = lat)
-prob06 = PottsProblem(m6, layout(merks2006_layout(; lattice = lat, n = 100, seed = 1), lat), (0, 480);
-    seed = 1, field_solver = ExplicitEuler(substeps = 15))
+prob06 = PottsProblem(
+    m6, layout(merks2006_layout(; lattice = lat, n = 100, seed = 1), lat), (0, 480);
+    seed = 1, field_solver = ExplicitEuler(substeps = 15)
+)
 sol06 = solve(prob06, SequentialCPM(); saveat = 0:10:480)
-record_potts("merks/merks2006.mp4", sol06; framerate = 15, title = "Merks2006, 200², to 4 h",
-    encoding = CellIdentityEncoding(), figure = (; size = (420, 420)), axis = (; limits = (1.5, 199.5, 1.5, 199.5)))
+record_potts(
+    "merks/merks2006.mp4", sol06; framerate = 15, title = "Merks2006, 200², to 4 h",
+    encoding = CellIdentityEncoding(), figure = (; size = (420, 420)), axis = (; limits = (1.5, 199.5, 1.5, 199.5))
+)
 nothing #hide
 
 # ```@raw html
@@ -171,11 +175,15 @@ nothing #hide
 # Eden blob divided into 128 cells on 202 × 202. Here it runs 600 MCS (500 after relaxation):
 
 @named m8 = Merks2008()
-prob08 = PottsProblem(m8, layout(merks2008_sprout(; seed = 1), (202, 202)), (0, 600);
-    seed = 1, field_solver = ExplicitEuler(substeps = 15))
+prob08 = PottsProblem(
+    m8, layout(merks2008_sprout(; seed = 1), (202, 202)), (0, 600);
+    seed = 1, field_solver = ExplicitEuler(substeps = 15)
+)
 sol08 = solve(prob08, SequentialCPM(); saveat = 0:10:600)
-record_potts("merks/merks2008.mp4", sol08; framerate = 15, title = "Merks2008 sprout, 600 MCS",
-    encoding = CellIdentityEncoding(), figure = (; size = (420, 420)), axis = (; limits = (2.5, 200.5, 2.5, 200.5)))
+record_potts(
+    "merks/merks2008.mp4", sol08; framerate = 15, title = "Merks2008 sprout, 600 MCS",
+    encoding = CellIdentityEncoding(), figure = (; size = (420, 420)), axis = (; limits = (2.5, 200.5, 2.5, 200.5))
+)
 nothing #hide
 
 # ```@raw html
@@ -337,10 +345,14 @@ round_cells = solve(remake(prob; p = [:λ_L => 0.0]), SequentialCPM(); saveat = 
 #
 # `record_potts` writes a solution as a movie; each cell has its own color.
 
-record_potts("merks/elongated.mp4", sol; framerate = 15, title = "elongated cells (λ_L = 5)",
-    encoding = CellIdentityEncoding(), figure = (; size = (400, 400)))
-record_potts("merks/round.mp4", round_cells; framerate = 15, title = "round cells (λ_L = 0)",
-    encoding = CellIdentityEncoding(), figure = (; size = (400, 400)))
+record_potts(
+    "merks/elongated.mp4", sol; framerate = 15, title = "elongated cells (λ_L = 5)",
+    encoding = CellIdentityEncoding(), figure = (; size = (400, 400))
+)
+record_potts(
+    "merks/round.mp4", round_cells; framerate = 15, title = "round cells (λ_L = 0)",
+    encoding = CellIdentityEncoding(), figure = (; size = (400, 400))
+)
 nothing #hide
 
 # ```@raw html

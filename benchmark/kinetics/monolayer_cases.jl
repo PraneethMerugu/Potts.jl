@@ -14,9 +14,9 @@ const MONOLAYER_ALG = if isempty(MONOLAYER_SETTINGS)
     CheckerboardCPM(; proposal = Moore(1))
 else
     CheckerboardCPM(;
-            proposal = Moore(1), region = parse(Int, MONOLAYER_SETTINGS[1]),
-            switches = parse(Int, MONOLAYER_SETTINGS[2]), parts = parse(Int, MONOLAYER_SETTINGS[3])
-        )
+        proposal = Moore(1), region = parse(Int, MONOLAYER_SETTINGS[1]),
+        switches = parse(Int, MONOLAYER_SETTINGS[2]), parts = parse(Int, MONOLAYER_SETTINGS[3])
+    )
 end
 const MONOLAYER_OUT = abspath(expanduser(get(ARGS, 4, "monolayer_cases")))
 const MONOLAYER_CASES = Tuple(Symbol.(split(get(ARGS, 3, "b,f"), ',')))

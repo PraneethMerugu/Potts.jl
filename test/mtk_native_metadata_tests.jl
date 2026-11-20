@@ -50,9 +50,9 @@ end
         op = [ownership => σ, kind => [:A]]
         function run(sys; with_obs = false)
             return solve(
-                    PottsProblem(BindParity(; name = :bp, comp_sys = sys, with_obs), op, (0, 2)),
-                    SequentialCPM(),
-                )
+                PottsProblem(BindParity(; name = :bp, comp_sys = sys, with_obs), op, (0, 2)),
+                SequentialCPM(),
+            )
         end
         MTKB.@parameters k = 0.3
         MTKB.@parameters k2 = 2k

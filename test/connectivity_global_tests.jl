@@ -77,7 +77,7 @@ end
         end
         # a model reading no shell quantity is unaffected by the thin axis
         @test PottsProblem(CGNoShellThin(; name = :n), [ownership => cg_sigma((5, 5, 1)), kind => [:A]], (0, 1)) isa
-              PottsProblem
+            PottsProblem
         # the one check, in CorePotts (also `recompute_euler`'s)
         lat = Potts.CorePotts.Lattice((5, 5, 1); boundary = (Potts.CorePotts.Closed(), Potts.CorePotts.Closed(), Potts.CorePotts.Periodic()))
         @test_throws ArgumentError Potts.CorePotts.check_shell_lattice(lat, "Global")
@@ -119,7 +119,13 @@ end
         σ[5:12, 5:12] .= 1
         σ[14:20, 6:14] .= 2
         prob = PottsProblem(CGWindow(; name = :w), [ownership => σ, kind => [:A, :A]], (0, 20); seed = 4)
-        wide(f) = (Potts.CorePotts._FORCE_WIDE_SITES[] = true; try f() finally Potts.CorePotts._FORCE_WIDE_SITES[] = false end)
+        wide(f) = (
+            Potts.CorePotts._FORCE_WIDE_SITES[] = true; try
+                f()
+            finally
+                Potts.CorePotts._FORCE_WIDE_SITES[] = false
+            end
+        )
         for alg in (SequentialCPM(), CheckerboardCPM())
             a = solve(prob, alg; saveat = 1)
             b = wide(() -> solve(prob, alg; saveat = 1))

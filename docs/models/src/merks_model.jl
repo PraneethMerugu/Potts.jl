@@ -12,8 +12,10 @@ function chemoattractant(lattice)
     @variables c(..) cell(..)::Bool [input = true] ecm(..)::Bool [input = true]
     C = c(t, x, y)
     eq = Differential(t)(C) ~ Dc * laplacian(C) + σc * cell(t, x, y) - δc * C * ecm(t, x, y)
-    return PDESystem([eq], [c(0, x, y) ~ 0.0], lattice_domain(t, (x, y), lattice), [t, x, y],
-        [C, cell(t, x, y), ecm(t, x, y)], [Dc, σc, δc]; name = :merks_field)
+    return PDESystem(
+        [eq], [c(0, x, y) ~ 0.0], lattice_domain(t, (x, y), lattice), [t, x, y],
+        [C, cell(t, x, y), ecm(t, x, y)], [Dc, σc, δc]; name = :merks_field
+    )
 end
 #<
 

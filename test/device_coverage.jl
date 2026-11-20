@@ -16,9 +16,13 @@ const ALLOWLIST = Dict{String, String}()
     files = isempty(dir) ? String[] : filter(f -> endswith(f, ".txt"), readdir(dir; join = true))
     @test length(files) == 2                                 # both suites wrote their scan
     sigs = join(read.(files, String), '\n')
-    defined = sort!([string(n) for n in names(CorePotts; all = true)
-                     if (startswith(string(n), "gpu_") || endswith(string(n), "_body!")) &&
-                        isdefined(CorePotts, n) && getfield(CorePotts, n) isa Function])
+    defined = sort!(
+        [
+            string(n) for n in names(CorePotts; all = true)
+                if (startswith(string(n), "gpu_") || endswith(string(n), "_body!")) &&
+                isdefined(CorePotts, n) && getfield(CorePotts, n) isa Function
+        ]
+    )
     seen(n) = occursin(Regex("CorePotts\\." * replace(n, "!" => "\\!") * "(?![\\w!])"), sigs)
     missing_ = filter(n -> !seen(n) && !haskey(ALLOWLIST, n), defined)
     stale = filter(n -> !(n in defined) || seen(n), collect(keys(ALLOWLIST)))

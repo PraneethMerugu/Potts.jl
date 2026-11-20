@@ -106,7 +106,7 @@ end
 # passes the guard). On ROCm: the hook sees the kernel, the array is untouched, and the
 # launch that follows compiles nothing new (`_kernel_instances` does not grow).
 @inline devir_write!(i, a) = (@inbounds a[i] = 2.0f0; nothing)
-      # i ≤ length(a)
+# i ≤ length(a)
 @inline devir_write3!(i, a) = (@inbounds a[i] = 3.0f0; nothing)
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
@@ -124,7 +124,7 @@ end
     end
 end
 
-     # i ≤ length(a)
+# i ≤ length(a)
 @testitem "device IR: a compile-only launch compiles and does not dispatch (ROCm)" setup = [DeviceIR] tags = [:potts, :device_ir, :gpu, :rocm, :device] begin
     @testset "device IR: a compile-only launch compiles and does not dispatch (ROCm)" begin
         backend = AMDGPU.ROCBackend()

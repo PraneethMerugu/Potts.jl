@@ -51,8 +51,10 @@ function _fragment(lines, fragment, name)
 end
 
 # the paper-run video of each page (file stem in docs/src/assets/paper_runs/)
-const PAPER_RUN_STEMS = Dict("graner_glazier" => "graner_glazier", "merks" => "merks_vasculogenesis",
-    "akeeb" => "akeeb_invasion", "wortel_act" => "wortel_act", "openvt" => "openvt_monolayer")
+const PAPER_RUN_STEMS = Dict(
+    "graner_glazier" => "graner_glazier", "merks" => "merks_vasculogenesis",
+    "akeeb" => "akeeb_invasion", "wortel_act" => "wortel_act", "openvt" => "openvt_monolayer"
+)
 
 # the sidecar's one-line `caption` entry (the other entries are provenance, not for readers)
 _caption(meta) = replace(strip(get(meta, "caption", "")), r"\s*\n\s*" => " ")
@@ -64,10 +66,12 @@ function _paper_run(name)
         caption = isfile(sidecar) ? _caption(TOML.parsefile(sidecar)) : ""
         # raw HTML, not Markdown emphasis: `A*(0)` and `J_cc` would otherwise read as emphasis
         html = replace(caption, "&" => "&amp;", "<" => "&lt;", ">" => "&gt;", "*" => "&#42;", "_" => "&#95;")
-        lines = ["```@raw html",
+        lines = [
+            "```@raw html",
             "<video src=\"../../assets/paper_runs/$stem.mp4\" controls loop muted playsinline width=\"560\"></video>",
             isempty(caption) ? "" : "<p><em>$html</em></p>",
-            "```"]
+            "```",
+        ]
     else
         lines = ["!!! note \"Paper run\"", "    The video of the paper run is being generated and will appear here."]
     end
@@ -105,8 +109,10 @@ relative to `docs/src` (without the hand-written `models/index.md`), in section 
 function render_models(; outdir = joinpath(dirname(MODELS_DIR), "src", "models"), names = MODEL_PAGES)
     pages = String[]
     for name in names
-        Literate.markdown(joinpath(MODELS_DIR, name * ".jl"), outdir; documenter = true, credit = false,
-            preprocess = s -> _expand(s, name))
+        Literate.markdown(
+            joinpath(MODELS_DIR, name * ".jl"), outdir; documenter = true, credit = false,
+            preprocess = s -> _expand(s, name)
+        )
         push!(pages, joinpath("models", name * ".md"))
     end
     return pages
@@ -121,16 +127,20 @@ moved to its paper's page. Its URL, `models/<name>/`, keeps working. `id` is the
 page's `@id` (normally `nothing`: the moved page carries `model-<name>`). The stub has no
 `@docs` block. Returns the stub's path relative to `docs/src`.
 """
-function render_model_stub(name, target, title; id = nothing,
-                           outdir = joinpath(dirname(MODELS_DIR), "src", "models"))
+function render_model_stub(
+        name, target, title; id = nothing,
+        outdir = joinpath(dirname(MODELS_DIR), "src", "models")
+    )
     heading = id === nothing ? "# $title (moved)" : "# [$title (moved)](@id $id)"
-    write(joinpath(outdir, name * ".md"), """
-    $heading
+    write(
+        joinpath(outdir, name * ".md"), """
+        $heading
 
-    !!! note "This page has moved"
-        This model is now documented on its paper's page, **[$title]($(relpath(target, "models")))**,
-        which builds the model, runs it and compares it with the paper. All paper models are
-        listed on [Paper models: status](../status.md).
-    """)
+        !!! note "This page has moved"
+            This model is now documented on its paper's page, **[$title]($(relpath(target, "models")))**,
+            which builds the model, runs it and compares it with the paper. All paper models are
+            listed on [Paper models: status](../status.md).
+        """
+    )
     return joinpath("models", name * ".md")
 end

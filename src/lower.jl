@@ -7,8 +7,10 @@
 
 const CP = CorePotts
 
-const _FLOAT_OPS = (sqrt, cbrt, exp, exp2, exp10, expm1, log, log2, log10, log1p, sin, cos, tan,
-    sinh, cosh, tanh, asin, acos, atan, (/), inv, hypot)
+const _FLOAT_OPS = (
+    sqrt, cbrt, exp, exp2, exp10, expm1, log, log2, log10, log1p, sin, cos, tan,
+    sinh, cosh, tanh, asin, acos, atan, (/), inv, hypot,
+)
 
 struct LowerEnv
     T::Type                          # scalar type of the generated code
@@ -19,8 +21,10 @@ struct LowerEnv
 end
 LowerEnv(T, mode, bind, relname) = LowerEnv(T, mode, bind, relname, IdDict{Any, String}())
 
-const _MODE_NAMES = Dict(:cell => "a cell term (`cells(…) => …`)", :site => "a site term or site update",
-    :contact => "a contact term (`contacts => …`)", :model => "a model-scope expression (model update, observed)", :edge => "an edge term or link rule (`edges(rel) => …`, `@link`)", :edge_update => "an edge update (`@before_mcs`/`@after_mcs` writing an edge variable)", :proposal => "a copy-scoped expression (drive, constraint, on-copy update, temperature)")
+const _MODE_NAMES = Dict(
+    :cell => "a cell term (`cells(…) => …`)", :site => "a site term or site update",
+    :contact => "a contact term (`contacts => …`)", :model => "a model-scope expression (model update, observed)", :edge => "an edge term or link rule (`edges(rel) => …`, `@link`)", :edge_update => "an edge update (`@before_mcs`/`@after_mcs` writing an edge variable)", :proposal => "a copy-scoped expression (drive, constraint, on-copy update, temperature)"
+)
 
 _unwrap(x) = Symbolics.unwrap(x)
 
@@ -83,8 +87,10 @@ function _symkey!(names, x)
     if i !== nothing
         i.role in (:bound, :bound_cell, :bound_site) || return string(i.role, ":", i.name)
         push!(names, string(nameof(x)))
-        return string(i.role, ":", i.name,
-            _canonical_checked(() -> "the bound variable `$(i.name)` (its relation or options)", i.options))
+        return string(
+            i.role, ":", i.name,
+            _canonical_checked(() -> "the bound variable `$(i.name)` (its relation or options)", i.options)
+        )
     end
     issym(x) && return string("sym:", nameof(x))
     op = operation(x)
@@ -128,7 +134,7 @@ function lower(x, env::LowerEnv)
     op === population && return _lower_population(args, env)
     op === laplacian && throw(
         PottsCompileError(
-        "`laplacian` is a field operator: the field compiler lowers it in a field's PDESystem (`@fields`, `Potts.couple`); " *
+            "`laplacian` is a field operator: the field compiler lowers it in a field's PDESystem (`@fields`, `Potts.couple`); " *
                 "it is not available in $(_MODE_NAMES[env.mode])"
         )
     )
@@ -163,8 +169,10 @@ function lower(x, env::LowerEnv)
     if op === cluster_integral_sum
         haskey(env.bind, :__cell) || throw(
             PottsCompileError(
-            "`integral(x; over = cluster)` is per cell (the sum over the cell's cluster): use it in cell updates, " *
-            "division conditions or observed quantities, not in $(_MODE_NAMES[env.mode])"))
+                "`integral(x; over = cluster)` is per cell (the sum over the cell's cluster): use it in cell updates, " *
+                    "division conditions or observed quantities, not in $(_MODE_NAMES[env.mode])"
+            )
+        )
         y = _unwrap(args[1])
         return :(Potts._over_cluster(st.cell, st.cell.$(_integral_name(arguments(y)[1])), $(env.bind[:__cell])))
     end
@@ -174,8 +182,10 @@ function lower(x, env::LowerEnv)
         # decisions, @observed); energies are refused before lowering (`_check_energy_geometry`)
         env.mode in (:cell, :model, :site) || throw(
             PottsCompileError(
-            "`$name` reads cell centroids, which a copy changes: it is available between sweeps (cell and site " *
-            "updates, field equations, division conditions and rules, @convert, @observed), not in $(_MODE_NAMES[env.mode])"))
+                "`$name` reads cell centroids, which a copy changes: it is available between sweeps (cell and site " *
+                    "updates, field equations, division conditions and rules, @convert, @observed), not in $(_MODE_NAMES[env.mode])"
+            )
+        )
         k = _literal_axis(op === ref_centroid ? "centroid" : "separation", args[end])
         op === ref_centroid &&
             return :(Potts._ref_centroid_axis($(env.T), st.cell, ctx.lattice, $(lower(args[1], env)), $k))
@@ -247,11 +257,11 @@ end
 function _site_read(i::Entity, j)
     L = get(i.options, :lattice_level, nothing)
     return if L === nothing
-            # bounds: j is a site index ≤ nsites (compile accepts only site-valued indices)
-            :(@inbounds st.site.$(i.name)[$j])
-        else
-            :(@inbounds st.site.$(i.name)[Potts._coarse_site($j, size(st.ownership), $(trailing_zeros(L.k)))])
-        end
+        # bounds: j is a site index ≤ nsites (compile accepts only site-valued indices)
+        :(@inbounds st.site.$(i.name)[$j])
+    else
+        :(@inbounds st.site.$(i.name)[Potts._coarse_site($j, size(st.ownership), $(trailing_zeros(L.k)))])
+    end
 end
 """
     _coarse_site(j, dims, s) -> Int
@@ -336,9 +346,11 @@ _integrals(sys::PottsSystem; observed = false) = first(_integrals_folds(sys; obs
 function _integrals_folds(sys::PottsSystem; observed = false)
     out = Any[]
     folds = Vector{Pair{Symbol, Any}}[]
-    head = Any[(u.eq.rhs for u in _p(sys, :updates))..., (eq.rhs for eq in _p(sys, :equations))...,
+    head = Any[
+        (u.eq.rhs for u in _p(sys, :updates))..., (eq.rhs for eq in _p(sys, :equations))...,
         (d.when for d in _p(sys, :divisions))..., (r for d in _p(sys, :divisions) for (_, r) in d.rules if !(r isa Split))...,
-        (r.when for r in _p(sys, :link_rules))...]
+        (r.when for r in _p(sys, :link_rules))...,
+    ]
     tail = Any[_p(sys, :sweep).temperature, (x for b in _p(sys, :discrete) for x in b.next)...]
     xs = Any[head..., (o.rhs for o in _p(sys, :observed))..., tail...]
     # operands read by a statement other than `@observed`
@@ -369,9 +381,13 @@ end
 
 """Largest lag `k` of `Pre(x, k)` per site/model variable name in the model's statements."""
 function _history_depths(sys::PottsSystem)
-    return _history_depths(Any[(u.eq.rhs for u in _p(sys, :updates))..., (eq.rhs for eq in _p(sys, :equations))...,
-        (d.when for d in _p(sys, :divisions))..., (r for d in _p(sys, :divisions) for (_, r) in d.rules if !(r isa Split))...,
-        (r.when for r in _p(sys, :link_rules))..., (x for b in _p(sys, :discrete) for x in b.next)...])
+    return _history_depths(
+        Any[
+            (u.eq.rhs for u in _p(sys, :updates))..., (eq.rhs for eq in _p(sys, :equations))...,
+            (d.when for d in _p(sys, :divisions))..., (r for d in _p(sys, :divisions) for (_, r) in d.rules if !(r isa Split))...,
+            (r.when for r in _p(sys, :link_rules))..., (x for b in _p(sys, :discrete) for x in b.next)...,
+        ]
+    )
 end
 function _history_depths(xs::Vector{Any})
     depths = Dict{Symbol, Int}()
@@ -401,7 +417,7 @@ function _literal_axis(name, x)
     return Int(k)
 end
 const _HEX_MINIMUM_IMAGE = "`minimum_image` wraps one lattice axis, which is not a displacement on a hexagonal lattice " *
-                           "(the nearest image may be a diagonal one); use `separation(a, b)`"
+    "(the nearest image may be a diagonal one); use `separation(a, b)`"
 
 """Coordinate `k` of the centroid of referent `r` in `centroid(k)`'s convention (embedded,
 periodic axes wrapped); 0 when `r` is 0, out of range or dead."""
@@ -542,8 +558,10 @@ function _is_ref(x)
             _is_cell_index(b) || throw(
                 PottsCompileError(
                     "`$(Symbolics.wrap(x))`: one branch of this `ifelse` is a " *
-                "reference, so the other must be a cell too (a reference, `old`, `new`, `id`, `owner[s]`, " *
-                "`cluster`, or 0 for none); got `$(Symbolics.wrap(b))`"))
+                        "reference, so the other must be a cell too (a reference, `old`, `new`, `id`, `owner[s]`, " *
+                        "`cluster`, or 0 for none); got `$(Symbolics.wrap(b))`"
+                )
+            )
         end
         return true
     end
@@ -775,9 +793,11 @@ function _operator_read_text(x)
     o = _unwrap(arguments(x)[end])
     n = info(o) === nothing ? "c" : string(info(o).name)
     op = _nopkg(replace(_builtin_text(string(x)), r"\b(\w+)\(t\)" => s"\1"))
-    return string("`", op, "` is a field operator, a term of the fields' PDESystem; a model statement reads a field, not an ",
+    return string(
+        "`", op, "` is a field operator, a term of the fields' PDESystem; a model statement reads a field, not an ",
         "operator of it: give the PDESystem an aux field `L(t, x, y) ~ ", replace(op, Regex("\\b" * n * "\\b") => "$n(t, x, y)"),
-        "` (with `L(t, x, y)` among its dependent variables), name it in `@fields $n, L = pdesys`, and read `L[target]`")
+        "` (with `L(t, x, y)` among its dependent variables), name it in `@fields $n, L = pdesys`, and read `L[target]`"
+    )
 end
 
 function _lower_at(args, env)
@@ -829,7 +849,7 @@ function _lower_at(args, env)
             haskey(env.bind, :direction) || throw(
                 PottsCompileError(
                     "`direction` is not available in $(_MODE_NAMES[env.mode]): it is the " *
-                                                  "copy's source→target offset, read in drives, constraints, on-copy updates and " *
+                        "copy's source→target offset, read in drives, constraints, on-copy updates and " *
                         "the copy-scope @sweep temperature"
                 )
             )
@@ -878,23 +898,29 @@ function _lower_population(args, env)
     bind = copy(env.bind)
     if ni.role === :bound_cell
         # bounds: the bound cell is a cell id ≤ capacity
-        merge!(bind, Dict{Symbol, Any}(:volume => :($T(@inbounds st.cell.volume[$nsym])),
-            :surface => :(@inbounds st.cell.surface[$nsym]), :kind => :(Potts._cellkind(st, $nsym)),
-            :id => nsym, :generation => :(@inbounds st.cell.generation[$nsym]), :__cell => nsym,
-            :birth => :(Potts._birth(st.cell, $nsym)),
-            :euler => :($T(@inbounds st.cell.euler[$nsym])),
-            :euler_full => :($T(@inbounds st.cell.$(_euler_column(:euler_full))[$nsym])),
-            (n => :($T(@inbounds st.cell.$(_pieces_column(n))[$nsym])) for n in _PIECES_NAMES)...,
-            :cluster => :(CorePotts.cluster_of(st.cell, $nsym)),
-            :cluster_volume => :($T(Potts._cellval(st.cell.cluster_volume, CorePotts.cluster_of(st.cell, $nsym)))),
-            :cluster_surface => :(Potts._cellval(st.cell.cluster_surface, CorePotts.cluster_of(st.cell, $nsym)))))
+        merge!(
+            bind, Dict{Symbol, Any}(
+                :volume => :($T(@inbounds st.cell.volume[$nsym])),
+                :surface => :(@inbounds st.cell.surface[$nsym]), :kind => :(Potts._cellkind(st, $nsym)),
+                :id => nsym, :generation => :(@inbounds st.cell.generation[$nsym]), :__cell => nsym,
+                :birth => :(Potts._birth(st.cell, $nsym)),
+                :euler => :($T(@inbounds st.cell.euler[$nsym])),
+                :euler_full => :($T(@inbounds st.cell.$(_euler_column(:euler_full))[$nsym])),
+                (n => :($T(@inbounds st.cell.$(_pieces_column(n))[$nsym])) for n in _PIECES_NAMES)...,
+                :cluster => :(CorePotts.cluster_of(st.cell, $nsym)),
+                :cluster_volume => :($T(Potts._cellval(st.cell.cluster_volume, CorePotts.cluster_of(st.cell, $nsym)))),
+                :cluster_surface => :(Potts._cellval(st.cell.cluster_surface, CorePotts.cluster_of(st.cell, $nsym)))
+            )
+        )
         range = :(1:length(st.cell.kind))
         skip = :((@inbounds st.cell.volume[$nsym]) > 0 && $(_kindtest(:(Potts._cellkind(st, $nsym)), ni.options.kinds)))
     else
         merge!(
             bind, Dict{Symbol, Any}(
                 :owner => :(@inbounds st.ownership[$nsym]), :kind => :(CorePotts.owner_kind(st, $nsym)),
-            :__site => nsym, :position => :(Potts._position($T, ctx, $nsym)), :site => nsym))
+                :__site => nsym, :position => :(Potts._position($T, ctx, $nsym)), :site => nsym
+            )
+        )
         range = :(1:length(st.ownership))
         skip = :(CorePotts.in_domain(ctx.lattice, $nsym))
     end
@@ -958,7 +984,7 @@ function _lower_gather(args, env)
         :(zero($T)), :($acc += $v), :($cnt == 0 ? zero($T) : $acc / $T($cnt))
     elseif op === :geomean
         :(zero($T)), :(($v > 0 ? ($acc += log($T($v))) : ($flag = true))),
-        :(($cnt == 0 || $flag) ? zero($T) : exp($acc / $T($cnt)))
+            :(($cnt == 0 || $flag) ? zero($T) : exp($acc / $T($cnt)))
     elseif op === :log1p_geomean
         :(zero($T)), :($acc += log1p(max(zero($T), $T($v)))), :($cnt == 0 ? zero($T) : expm1($acc / $T($cnt)))
     elseif op === :minimum
@@ -986,9 +1012,11 @@ function _lower_gather(args, env)
             for $k2 in 1:($k - 1)
                 # bounds: k2 < k ≤ length(offs)
                 $in2, $y2 = CorePotts.shift(ctx.lattice, $x0, @inbounds $offs[$k2])
-                $in2 && ($dup |= let $nsym = CorePotts.linear_index(ctx.lattice, $y2)
-                    $condc && ($bodyc == $v)
-                end)
+                $in2 && (
+                    $dup |= let $nsym = CorePotts.linear_index(ctx.lattice, $y2)
+                        $condc && ($bodyc == $v)
+                    end
+                )
             end
             $acc += Int32(!$dup)
         end
@@ -1078,7 +1106,11 @@ _has_op(x, op) = (found = Ref(false); _walk(y -> (iscall(y) && operation(y) === 
 # whether `x` reads `connected(…; rule = Global(…))`
 function _reads_global(x)
     found = Ref(false)
-    _walk(y -> (iscall(y) && operation(y) === _connected &&
-        _global_rule(Int(SymbolicUtils.unwrap_const(_unwrap(arguments(y)[2])))) !== nothing && (found[] = true)), x)
+    _walk(
+        y -> (
+            iscall(y) && operation(y) === _connected &&
+                _global_rule(Int(SymbolicUtils.unwrap_const(_unwrap(arguments(y)[2])))) !== nothing && (found[] = true)
+        ), x
+    )
     return found[]
 end

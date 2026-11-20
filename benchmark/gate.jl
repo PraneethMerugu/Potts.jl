@@ -92,9 +92,9 @@ device_backend() = isempty(DEVICE) ? nothing : Base.invokelatest(PottsDevices.de
 const TOLERANCE = 0.05
 const BASELINE = joinpath(@__DIR__, "baseline.toml")
 const BASELINE_HEADER = """
-    # Informational per-machine baselines (D-157): [<machine>.<backend>], rows <case>.<alg> in ns/site per warm MCS.
-    # Written by `gate.jl ... update`; machines are defined in machine.jl. A slowdown is decided by ab.jl, not by these.
-    """
+# Informational per-machine baselines (D-157): [<machine>.<backend>], rows <case>.<alg> in ns/site per warm MCS.
+# Written by `gate.jl ... update`; machines are defined in machine.jl. A slowdown is decided by ab.jl, not by these.
+"""
 
 # ExplicitEuler with a lower clamp (the keyword is `lower` in older checkouts: an A/B base may be one)
 # The old name is accepted only so an A/B can run against a base older than the renames; drop it once no base predates them.
@@ -111,44 +111,65 @@ function cases(T)
     return [
         "graner_glazier_72" =>
             () -> PottsProblem(
-                GranerGlazier(; name = :gg), [
-                    ownership => gg[1], kind => gg[2]], (0, 10^6); T),
+            GranerGlazier(; name = :gg), [
+                ownership => gg[1], kind => gg[2],
+            ], (0, 10^6); T
+        ),
         "wortel_act_100" =>
-            () -> (σ = zeros(Int32, 100, 100); σ[40:62, 40:62] .= 1;
-                PottsProblem(WortelAct(; name = :w, lattice = (100, 100)),
-                    [ownership => σ, kind => [:cell]], (0, 10^6); T)),
+            () -> (
+            σ = zeros(Int32, 100, 100); σ[40:62, 40:62] .= 1;
+            PottsProblem(
+                WortelAct(; name = :w, lattice = (100, 100)),
+                [ownership => σ, kind => [:cell]], (0, 10^6); T
+            )
+        ),
         "merks_100" =>
-            () -> PottsProblem(MerksVasculogenesis(; name = :m, lattice = (100, 100)),
-                merks_state(; lattice = (100, 100), n = 25), (0, 10^6); T,          # 10² cells, ≈ 25 % cover
+            () -> PottsProblem(
+            MerksVasculogenesis(; name = :m, lattice = (100, 100)),
+            merks_state(; lattice = (100, 100), n = 25), (0, 10^6); T,          # 10² cells, ≈ 25 % cover
             field_solver = clamped_euler(15, 0.0)
         ),
         "openvt_monolayer_100" =>
             () -> PottsProblem(
-                OpenVTGrowingMonolayer(; name = :o, lattice = (100, 100), τ = 1e6),
-                openvt_monolayer_state(; lattice = (100, 100)), (0, 10^6); T, capacity = 64),
+            OpenVTGrowingMonolayer(; name = :o, lattice = (100, 100), τ = 1.0e6),
+            openvt_monolayer_state(; lattice = (100, 100)), (0, 10^6); T, capacity = 64
+        ),
         "akeeb_99x60" =>
-            () -> PottsProblem(AkeebInvasion(; name = :a, lattice = (99, 60)),
-                akeeb_state(; lattice = (99, 60)), (0, 10^6); T, capacity = 1000),
+            () -> PottsProblem(
+            AkeebInvasion(; name = :a, lattice = (99, 60)),
+            akeeb_state(; lattice = (99, 60)), (0, 10^6); T, capacity = 1000
+        ),
         # D-150: the Table S1 model, a 6 × 6 colony of 7 × 7 cells (every cell reads the two
         # contact folds after every MCS); X ≡ 2, so no cell reaches its threshold while timed
         "openvt_reference_100" =>
-            () -> (σ = zeros(Int32, 100, 100);
-                foreach(((k, (a, b)),) -> σ[29 + 7a .+ (1:7), 29 + 7b .+ (1:7)] .= k,
-                    enumerate(Iterators.product(0:5, 0:5)));
-                PottsProblem(OpenVTReferenceMonolayer(; name = :r, lattice = (100, 100)),
-                    [ownership => σ, kind => fill(:cell, 36), :σ_X => 0.0], (0, 10^6); T, capacity = 128)),
+            () -> (
+            σ = zeros(Int32, 100, 100);
+            foreach(
+                ((k, (a, b)),) -> σ[29 + 7a .+ (1:7), 29 + 7b .+ (1:7)] .= k,
+                enumerate(Iterators.product(0:5, 0:5))
+            );
+            PottsProblem(
+                OpenVTReferenceMonolayer(; name = :r, lattice = (100, 100)),
+                [ownership => σ, kind => fill(:cell, 36), :σ_X => 0.0], (0, 10^6); T, capacity = 128
+            )
+        ),
         # D-153: the 2006 set on merks_100's start inside its 1-site frame (soft E₀ drive,
         # length energy, absorbing field), and the 2008 sprout of the released files on 202²
         # (20 neighbours, 2-site frame) with the field on from MCS 0 (t_relax = 0)
         "merks2006_100" =>
-            () -> PottsProblem(Merks2006(; name = :m6, lattice = (100, 100)),
+            () -> PottsProblem(
+            Merks2006(; name = :m6, lattice = (100, 100)),
             Potts.layout(merks2006_layout(; lattice = (100, 100), n = 25), (100, 100)), (
-                    0, 10^6); T,
-                field_solver = ExplicitEuler(substeps = 15)),
+                0, 10^6,
+            ); T,
+            field_solver = ExplicitEuler(substeps = 15)
+        ),
         "merks2008_202" =>
-            () -> PottsProblem(Merks2008(; name = :m8),
+            () -> PottsProblem(
+            Merks2008(; name = :m8),
             [Potts.layout(merks2008_sprout(), (202, 202)); :t_relax => 0.0], (0, 10^6); T,
-                field_solver = ExplicitEuler(substeps = 15))
+            field_solver = ExplicitEuler(substeps = 15)
+        ),
     ]
 end
 
@@ -202,7 +223,7 @@ function measure(make, alg; backend = nothing)
     integ = fresh_integrator(prob, alg, backend)
     timed_step!(integ, backend)
     allocs = backend === nothing ? warm_allocs(integ) : 0
-    b = run(@benchmarkable timed_step!(i, $backend) setup=(i=fresh_integrator($prob, $alg, $backend)) evals=1 samples=40 seconds=30)
+    b = run(@benchmarkable timed_step!(i, $backend) setup = (i = fresh_integrator($prob, $alg, $backend)) evals = 1 samples = 40 seconds = 30)
     # `σ` is accepted only so an A/B can run against a base older than the renames; drop it once no base predates them
     n = length(hasproperty(integ.state, :ownership) ? integ.state.ownership : integ.state.σ)
     return minimum(b).time / n, allocs
@@ -210,7 +231,7 @@ end
 
 # The baseline table of one backend on one machine: `baseline.toml` → [machine.backend].
 function rows(table, machine, backend)
-    get(get(table, machine, Dict{String, Any}()), backend, Dict{String, Any}())
+    return get(get(table, machine, Dict{String, Any}()), backend, Dict{String, Any}())
 end
 
 function main(args; baseline = BASELINE)
@@ -222,23 +243,28 @@ function main(args; baseline = BASELINE)
     strict = "--strict" in args
     "--no-wait" in args || BenchMachine.wait_idle(; gpu = DEVICE == "rocm")
     tc = BenchMachine.seed_type_cache!()
-    algs = Pair{String, Any}["sequential" => (SequentialCPM(), nothing, Float64),
+    algs = Pair{String, Any}[
+        "sequential" => (SequentialCPM(), nothing, Float64),
         "checkerboard" => (CheckerboardCPM(), nothing, Float64),
-        "boundary" => (SequentialCPM(; skip_interior = true), nothing, Float64)]  # D-177, D-198
+        "boundary" => (SequentialCPM(; skip_interior = true), nothing, Float64),
+    ]  # D-177, D-198
     "--no-cpu" in args && empty!(algs)
     isempty(DEVICE) || push!(algs, DEVICE => (CheckerboardCPM(), device_backend(), Float32))
     table = isfile(baseline) ? TOML.parsefile(baseline) : Dict{String, Any}()
     c = something(BenchMachine.allowed_cpus(), Int[])
     dist = if BenchMachine.pins(m)
-        BenchMachine.disturbances(length(c) == 1 ? only(c) : -1, m.bench; gpu = DEVICE ==
-            "rocm")
+        BenchMachine.disturbances(
+            length(c) == 1 ? only(c) : -1, m.bench; gpu = DEVICE ==
+                "rocm"
+        )
     else
         String[]
     end
     println(
         "machine $(m.key) ($(BenchMachine.cpu_model())); CPUs $(isempty(c) ? "all" : c); ",
         "Tuple cache $(tc.entries)/$(tc.capacity)", isempty(dist) ? "" :
-                                                    "; DISTURBED: " * join(dist, "; "))
+            "; DISTURBED: " * join(dist, "; ")
+    )
     new = Dict{String, Dict{String, Any}}()
     failed = String[]
     flagged = String[]
@@ -255,10 +281,12 @@ function main(args; baseline = BASELINE)
         bad = allocs > 0 || (strict && slow && backend === nothing)
         bad && push!(failed, key)
         slow && !bad && push!(flagged, key)
-        @printf("%-36s %8.2f ns/site  baseline %8s  ratio %6s  allocs %d%s\n", key, ns,
+        @printf(
+            "%-36s %8.2f ns/site  baseline %8s  ratio %6s  allocs %d%s\n", key, ns,
             old === nothing ? "–" : @sprintf("%.2f", old),
             isnan(ratio) ? "–" : @sprintf("%.3f", ratio), allocs,
-            bad ? "  FAIL" : key in flagged ? "  A/B" : "")
+            bad ? "  FAIL" : key in flagged ? "  A/B" : ""
+        )
     end
     if update
         mt = get!(table, m.key, Dict{String, Any}())
@@ -267,7 +295,8 @@ function main(args; baseline = BASELINE)
         end
         mt["meta"] = Dict(
             "cpu" => BenchMachine.cpu_model(), "threads" => Threads.nthreads(),
-            "julia" => string(VERSION), "cpus" => isempty(c) ? "all" : join(c, ","))
+            "julia" => string(VERSION), "cpus" => isempty(c) ? "all" : join(c, ",")
+        )
         open(baseline, "w") do io
             println(io, BASELINE_HEADER)
             TOML.print(io, table; sorted = true)

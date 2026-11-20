@@ -198,11 +198,11 @@ end
         end
         function rejected(sys, word; kw...)
             return try
-                    run(sys; kw...)
-                    false
-                catch e
-                    e isa Potts.PottsCompileError
-                end
+                run(sys; kw...)
+                false
+            catch e
+                e isa Potts.PottsCompileError
+            end
         end
         let
             @parameters k = 0.3

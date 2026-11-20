@@ -21,7 +21,7 @@ end
 function _assert_checkpoint_refused(base_prob, mut_prob)
     integ = init(base_prob, SequentialCPM(); save_start = false)
     ck = checkpoint(integ)
-    @test_throws ArgumentError init(mut_prob, SequentialCPM(); checkpoint = ck)
+    return @test_throws ArgumentError init(mut_prob, SequentialCPM(); checkpoint = ck)
 end
 
 function _assert_checkpoint_accepted(base_prob, eq_prob)
@@ -44,13 +44,15 @@ Verify fingerprint properties for a problem family without stored literal pins:
 - optional algorithm independence (`SequentialCPM` vs `CheckerboardCPM`)
 - optional fresh-subprocess determinism (`subprocess_expr` prints `repr(fp)` or `string(fp)`).
 """
-function fp_props(make_base;
+function fp_props(
+        make_base;
         variants = (),
         invariants = (),
         check_checkpoint::Bool = true,
         check_algorithms::Bool = false,
         subprocess_expr::Union{Nothing, AbstractString} = nothing,
-        project::AbstractString = dirname(@__DIR__))
+        project::AbstractString = dirname(@__DIR__)
+    )
     base = make_base()
     fp0 = base.f.fingerprint
     @test make_base().f.fingerprint == fp0
@@ -97,8 +99,10 @@ function tiny_oracle_sample(prob, alg, R::Integer)
     return counts
 end
 
-function tiny_oracle_check(tiny::Oracle.Tiny, σ0::Vector{Int8}, nmcs::Integer, step, prob, alg;
-        R::Integer = 40_000)
+function tiny_oracle_check(
+        tiny::Oracle.Tiny, σ0::Vector{Int8}, nmcs::Integer, step, prob, alg;
+        R::Integer = 40_000
+    )
     ex = Oracle.exact(tiny, σ0, nmcs, step)
     counts = tiny_oracle_sample(prob, alg, R)
     d, noise = Oracle.tv(ex, counts, R)

@@ -10,8 +10,8 @@
             prob = PottsProblem(sys, solver_op(), (0, n); solvers = [solver_var(sys, :s) => Potts.RK4()])
             @test haskey(prob.u0.cell, :y__ode) && haskey(prob.u0.cell, :s__ode)          # two groups: scratch
             u = solve(prob, alg).u[end]
-            @test u.cell.y[1] ≈ oy rtol = 1e-12
-            @test u.cell.s[1] ≈ os rtol = 1e-12
+            @test u.cell.y[1] ≈ oy rtol = 1.0e-12
+            @test u.cell.s[1] ≈ os rtol = 1.0e-12
         end
         # one group: no scratch, and `ExplicitEuler(substeps = 1)` is the default `ExplicitEuler()`
         sys = SolverPairYS(; name = :p)
@@ -27,7 +27,9 @@
         prob = PottsProblem(
             sys, solver_op(), (0, 3); solvers = [
                 v(:s) => Potts.RK4(), v(:h) => Potts.RK4(),
-            v(:w) => Adaptive(Tsit5(); reltol = 1e-12, abstol = 1e-14)])
+                v(:w) => Adaptive(Tsit5(); reltol = 1.0e-12, abstol = 1.0e-14),
+            ]
+        )
         y, s, w, g, h = 1.0, 0.0, 0.5, 1.0, 0.0
         for _ in 1:3
             # w' = −0.2 w + 0.1 y with y frozen at its pre-step value: exact
@@ -37,8 +39,8 @@
         end
         for alg in (SequentialCPM(), CheckerboardCPM())
             u = solve(prob, alg).u[end]
-            @test all(isapprox.((u.cell.y[1], u.cell.s[1], u.model.g[1], u.model.h[1]), (y, s, g, h); rtol = 1e-12))
-            @test u.cell.w[1] ≈ w rtol = 1e-9
+            @test all(isapprox.((u.cell.y[1], u.cell.s[1], u.model.g[1], u.model.h[1]), (y, s, g, h); rtol = 1.0e-12))
+            @test u.cell.w[1] ≈ w rtol = 1.0e-9
         end
     end
 end
@@ -89,7 +91,7 @@ end
         @test two.f.fingerprint != plain.f.fingerprint                                           # negative control
         # with `solvers` covering every field, `field_solver` takes its default
         @test PottsProblem(fs, op, (0, 2); solvers = [:c => ExplicitEuler()]).f.fingerprint ==
-              PottsProblem(fs, op, (0, 2); field_solver = ExplicitEuler(), solvers = [:c => ExplicitEuler()]).f.fingerprint
+            PottsProblem(fs, op, (0, 2); field_solver = ExplicitEuler(), solvers = [:c => ExplicitEuler()]).f.fingerprint
         # components: the system (all its integrated unknowns), `comp.x`, or `Symbol("comp₊x")`
         cs = component_model()
         cop = [ownership => (σ = zeros(Int32, 20, 20); σ[3:7, 3:7] .= 1; σ[12:16, 12:16] .= 2; σ), kind => [:A, :B]]
@@ -194,19 +196,25 @@ end
         @test Potts.anneal(prob, 2; alg = CheckerboardCPM()) isa Potts.CorePotts.CPMState
         # a bias reading `far` (reach 2) against footprint 1: the spacing widens to cover it (D-271)
         farbias = (st, p, prop, ctx) -> length(ctx.far) < 0
-        biased = Potts.CorePotts.CPMFunction(f.delta_H; f.commit!, f.constraint, f.temperature,
-            bias = farbias, f.phases, f.lifecycle, f.acceptance, f.footprint, f.fingerprint, f.sys, f.track, f.connectivity)
+        biased = Potts.CorePotts.CPMFunction(
+            f.delta_H; f.commit!, f.constraint, f.temperature,
+            bias = farbias, f.phases, f.lifecycle, f.acceptance, f.footprint, f.fingerprint, f.sys, f.track, f.connectivity
+        )
         @test Potts.CorePotts.copy_step_relations(f.sys, biased) === nothing
         @test spacing(remake(prob; f = biased)) >= 2
         @test Symbol(solve(remake(prob; f = biased), CheckerboardCPM()).retcode) === :Success
         @test Symbol(solve(remake(prob; f = biased), SequentialCPM()).retcode) === :Success
         # a swapped ΔH (or temperature) likewise
         dH = (st, p, prop, ctx) -> f.delta_H(st, p, prop, ctx) + 0.0 * length(ctx.far)
-        swapped = Potts.CorePotts.CPMFunction(dH; f.commit!, f.constraint, f.temperature,
-            f.phases, f.lifecycle, f.acceptance, f.footprint, f.fingerprint, f.sys, f.track, f.connectivity)
+        swapped = Potts.CorePotts.CPMFunction(
+            dH; f.commit!, f.constraint, f.temperature,
+            f.phases, f.lifecycle, f.acceptance, f.footprint, f.fingerprint, f.sys, f.track, f.connectivity
+        )
         @test spacing(remake(prob; f = swapped)) >= 2
-        Tswap = Potts.CorePotts.CPMFunction(f.delta_H; f.commit!, f.constraint,
-            temperature = (st, p, prop, ctx) -> 2.0, f.phases, f.lifecycle, f.acceptance, f.footprint, f.fingerprint, f.sys, f.track, f.connectivity)
+        Tswap = Potts.CorePotts.CPMFunction(
+            f.delta_H; f.commit!, f.constraint,
+            temperature = (st, p, prop, ctx) -> 2.0, f.phases, f.lifecycle, f.acceptance, f.footprint, f.fingerprint, f.sys, f.track, f.connectivity
+        )
         @test Potts.CorePotts.copy_step_relations(f.sys, Tswap) === nothing
     end
 end

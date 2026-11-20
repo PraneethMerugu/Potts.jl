@@ -579,10 +579,10 @@ end
 # would fall back to `objectid` for package structs and tie the fingerprint to the build.
 function _fingerprint_seed(sys::PottsSystem, T)
     return string(
-            "lattice=", _canonical_value(core_lattice(_p(sys, :lattice))),
-            ";spacing=", _canonical_value(_p(sys, :lattice).spacing), ";neighborhood=", _canonical_neighborhood(sys),
-            ";T=", string(T)
-        )
+        "lattice=", _canonical_value(core_lattice(_p(sys, :lattice))),
+        ";spacing=", _canonical_value(_p(sys, :lattice).spacing), ";neighborhood=", _canonical_neighborhood(sys),
+        ";T=", string(T)
+    )
 end
 # The neighbourhood by content. A neighbourhood that holds a compiler-generated name (an
 # anonymous weight, `Weighted(Moore(1), o -> 1 / norm(o))`) printed as `var"#24#25"`, a number
@@ -1164,20 +1164,20 @@ function _cpm_scalar(::Type{T}, v, i::Entity) where {T}
         return T(v)
     else
         return try
-                    T(v)
-            catch e
-                    e isa Union{MethodError, InexactError, ArgumentError} || rethrow()
-                    throw(
-                        ArgumentError(
-                            "parameter `$(i.name)` = $(_valtext(v)) does not convert to the problem's scalar type $T: " *
-                            "a parameter object holds plain numbers (no Duals). A Dual goes to the problem: " *
-                            "`PottsProblem(sys, op, tspan)` or `remake(prob; p = [k => Dual])`, whose fields then carry derivative " *
-                            "parts along the run's CPM path; an integrator write takes a plain number. A parameter the " *
-                            "CPM reads has a derivative that is zero almost everywhere (the acceptance of a copy is piecewise " *
-                            "constant in it), so it belongs to likelihood-free inference"
-                        )
-                    )
-            end
+            T(v)
+        catch e
+            e isa Union{MethodError, InexactError, ArgumentError} || rethrow()
+            throw(
+                ArgumentError(
+                    "parameter `$(i.name)` = $(_valtext(v)) does not convert to the problem's scalar type $T: " *
+                        "a parameter object holds plain numbers (no Duals). A Dual goes to the problem: " *
+                        "`PottsProblem(sys, op, tspan)` or `remake(prob; p = [k => Dual])`, whose fields then carry derivative " *
+                        "parts along the run's CPM path; an integrator write takes a plain number. A parameter the " *
+                        "CPM reads has a derivative that is zero almost everywhere (the acceptance of a copy is piecewise " *
+                        "constant in it), so it belongs to likelihood-free inference"
+                )
+            )
+        end
     end
 end
 
@@ -1484,15 +1484,15 @@ end
 # among its members of these kinds, so the filters select it.
 function _cluster_kinds(c::CompiledPottsSystem)
     return Tuple(
-            unique(
-                Iterators.flatten(
-                    (
-                        first.(getfield(c, :cluster_terms))...,
-                        (d.domain.kinds for d in getfield(c, :divisions) if d.domain isa ClusterDomain)...,
-                    )
+        unique(
+            Iterators.flatten(
+                (
+                    first.(getfield(c, :cluster_terms))...,
+                    (d.domain.kinds for d in getfield(c, :divisions) if d.domain isa ClusterDomain)...,
                 )
             )
         )
+    )
 end
 
 # Sites of cells of frozen kinds never change owner (walls, obstacles).
@@ -1516,10 +1516,10 @@ end
 # with the flood scratch of a model with whole-cell connectivity, exact (`GlobalExact`)
 function _host_ctx(prob)
     return (;
-            lattice = prob.lattice, contact = prob.contact, prob.relations...,
-            (prob.spacing === nothing ? (;) : (; spacing = prob.spacing))...,
-            CorePotts.connectivity_ctx(CorePotts.CPU(), prob.f, prob.lattice, CorePotts.GlobalExact())...,
-        )
+        lattice = prob.lattice, contact = prob.contact, prob.relations...,
+        (prob.spacing === nothing ? (;) : (; spacing = prob.spacing))...,
+        CorePotts.connectivity_ctx(CorePotts.CPU(), prob.f, prob.lattice, CorePotts.GlobalExact())...,
+    )
 end
 
 """
@@ -1721,11 +1721,11 @@ end
 # problem of the model): its values, laid out for this problem's ODE scratch
 function CorePotts.remake_state(info::PottsModelInfo, prob, u0::CorePotts.CPMState, kw = prob.kwargs)
     return _track_layout(
-            _ode_layout(
-                _reduce_layout(_convert_layout(_check_births(u0, info.csys), info.csys), info.csys), info.csys,
-                info.solvers
-            ), info.csys, _track_names(prob)
-        )
+        _ode_layout(
+            _reduce_layout(_convert_layout(_check_births(u0, info.csys), info.csys), info.csys), info.csys,
+            info.solvers
+        ), info.csys, _track_names(prob)
+    )
 end
 
 # `@convert` (D-233): the allocations deferred for want of a free slot and the entities

@@ -243,12 +243,12 @@ function defs(files)
     d = Dict{Symbol, Vector{Any}}()
     function walk(ex)
         return ex isa Expr && begin
-                if ex.head in (:function, :(=)) && ex.args[1] isa Expr && ex.args[1].head == :call
-                    f = ex.args[1].args[1]
-                    f isa Symbol && push!(get!(d, f, Any[]), ex.args[2])
-                end
-                foreach(walk, ex.args)
+            if ex.head in (:function, :(=)) && ex.args[1] isa Expr && ex.args[1].head == :call
+                f = ex.args[1].args[1]
+                f isa Symbol && push!(get!(d, f, Any[]), ex.args[2])
             end
+            foreach(walk, ex.args)
+        end
     end
     for f in files
         walk(Meta.parseall(read(f, String)))
@@ -408,11 +408,11 @@ end
                 fresh()
                 function ref()
                     return run(
-                            @benchmarkable(
-                                (GateUnderTest.step!(i); KernelAbstractions.synchronize($be)),
-                                setup = (i = $fresh()), evals = 1, samples = 40, seconds = 20
-                            )
+                        @benchmarkable(
+                            (GateUnderTest.step!(i); KernelAbstractions.synchronize($be)),
+                            setup = (i = $fresh()), evals = 1, samples = 40, seconds = 20
                         )
+                    )
                 end
                 # interleaved, so both sides see the same GPU power states; min vs min
                 r1 = ref(); g1 = first(GateUnderTest.measure(gg32, alg; backend = be))

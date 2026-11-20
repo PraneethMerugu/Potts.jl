@@ -29,9 +29,9 @@ module AuPDE
     function two(e1, e2)
         @parameters Dc = 0.5 Dx = 0.5
         return pdesys(
-                [Dt(C) ~ e1(Dc, Dx), Dt(U) ~ e2(Dc, Dx)],
-                [c(0, x, y) ~ 0.0, u(0, x, y) ~ 0.0], (8, 8), [C, U], [Dc, Dx]
-            )
+            [Dt(C) ~ e1(Dc, Dx), Dt(U) ~ e2(Dc, Dx)],
+            [c(0, x, y) ~ 0.0, u(0, x, y) ~ 0.0], (8, 8), [C, U], [Dc, Dx]
+        )
     end
     cross_field() = two((Dc, Dx) -> Dc * laplacian(C) - Dx * laplacian(U), (Dc, Dx) -> Dc * laplacian(U))
     cross_linear() = two((Dc, Dx) -> Dc * laplacian(C) - Dx * U, (Dc, Dx) -> Dc * laplacian(U))
@@ -41,16 +41,16 @@ module AuPDE
     function gate_rotation()
         @parameters t0 = 1000.0 k = 4.0
         return pdesys(
-                [Dt(C) ~ ifelse(MCS >= t0, -10 * C, -k * U), Dt(U) ~ ifelse(MCS >= t0, -10 * U, k * C)],
-                [c(0, x, y) ~ 0.0, u(0, x, y) ~ 0.0], (8, 8), [C, U], [t0, k]
-            )
+            [Dt(C) ~ ifelse(MCS >= t0, -10 * C, -k * U), Dt(U) ~ ifelse(MCS >= t0, -10 * U, k * C)],
+            [c(0, x, y) ~ 0.0, u(0, x, y) ~ 0.0], (8, 8), [C, U], [t0, k]
+        )
     end
     function gate_dominant()
         @parameters t0 = 1000.0
         return pdesys(
-                [Dt(C) ~ ifelse(MCS >= t0, -10 * C - U, -10 * C + U), Dt(U) ~ ifelse(MCS >= t0, -10 * U, -5 * U)],
-                [c(0, x, y) ~ 0.0, u(0, x, y) ~ 0.0], (8, 8), [C, U], [t0]
-            )
+            [Dt(C) ~ ifelse(MCS >= t0, -10 * C - U, -10 * C + U), Dt(U) ~ ifelse(MCS >= t0, -10 * U, -5 * U)],
+            [c(0, x, y) ~ 0.0, u(0, x, y) ~ 0.0], (8, 8), [C, U], [t0]
+        )
     end
 end
 
@@ -58,8 +58,8 @@ end
 function audit_blocks()
     σ = zeros(Int32, 20, 20)
     for (k, (i, j)) in enumerate(Iterators.product(1:5:16, 1:5:16))
-            σ[i:(i + 2), j:(j + 2)] .= k
-        end
+        σ[i:(i + 2), j:(j + 2)] .= k
+    end
     return σ
 end
 
@@ -68,10 +68,10 @@ audit_n(integ, j = 1) = CorePotts._runtime(getfield(integ.ctx, Symbol(:__fields,
 
 function audit_err(f)
     return try
-            f(); nothing
-        catch e
-            e
-        end
+        f(); nothing
+    catch e
+        e
+    end
 end
 
 # the field phase of a problem

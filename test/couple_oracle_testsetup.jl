@@ -18,40 +18,40 @@ module CrPDE
     C, Q, W = c(t, x, y), q(t, x, y), w(t, x, y)
     function rich()
         return PDESystem(
-                [Dt(C) ~ Dc * laplacian(C) + s * endo(t, x, y) - kd * C + 0.01 * vol(t, x, y), 0 ~ 0.5 * laplacian(Q) - kq * Q + C],
-                [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 0.5, Differential(x)(c(t, 24, y)) ~ 0.0, C ~ masked(isB(t, x, y) == 1, 1.0)],
-                DOM, [t, x, y], [C, Q, endo(t, x, y), isB(t, x, y), vol(t, x, y)], [Dc, s, kd, kq]; name = :rich
-            )
+            [Dt(C) ~ Dc * laplacian(C) + s * endo(t, x, y) - kd * C + 0.01 * vol(t, x, y), 0 ~ 0.5 * laplacian(Q) - kq * Q + C],
+            [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 0.5, Differential(x)(c(t, 24, y)) ~ 0.0, C ~ masked(isB(t, x, y) == 1, 1.0)],
+            DOM, [t, x, y], [C, Q, endo(t, x, y), isB(t, x, y), vol(t, x, y)], [Dc, s, kd, kq]; name = :rich
+        )
     end
     function first_sys()
         return PDESystem(
-                [Dt(C) ~ Dc * laplacian(C) + s * endo(t, x, y) - kd * C], [c(0, x, y) ~ 0.0], DOM, [t, x, y],
-                [C, endo(t, x, y)], [Dc, s, kd]; name = :one
-            )
+            [Dt(C) ~ Dc * laplacian(C) + s * endo(t, x, y) - kd * C], [c(0, x, y) ~ 0.0], DOM, [t, x, y],
+            [C, endo(t, x, y)], [Dc, s, kd]; name = :one
+        )
     end
     function second_unbound()
         return PDESystem(
-                [Dt(W) ~ 0.3 * laplacian(W) - W + 0.7 * cnm(t, x, y)], [w(0, x, y) ~ 0.0], DOM, [t, x, y],
-                [W, cnm(t, x, y)], Any[]; name = :two
-            )
+            [Dt(W) ~ 0.3 * laplacian(W) - W + 0.7 * cnm(t, x, y)], [w(0, x, y) ~ 0.0], DOM, [t, x, y],
+            [W, cnm(t, x, y)], Any[]; name = :two
+        )
     end
     function second_bound()
         return PDESystem(
-                [Dt(W) ~ 0.3 * laplacian(W) - W + 0.7 * cin(t, x, y)], [w(0, x, y) ~ 0.0], DOM, [t, x, y],
-                [W, cin(t, x, y)], Any[]; name = :twob
-            )
+            [Dt(W) ~ 0.3 * laplacian(W) - W + 0.7 * cin(t, x, y)], [w(0, x, y) ~ 0.0], DOM, [t, x, y],
+            [W, cin(t, x, y)], Any[]; name = :twob
+        )
     end
     function coarse_sys()
         return PDESystem(
-                [Dt(cc(t, x, y)) ~ Dc * laplacian(cc(t, x, y)) + s * endo(t, x, y) - kd * cc(t, x, y)], [cc(0, x, y) ~ 0.0],
-                DOM, [t, x, y], [cc(t, x, y), endo(t, x, y)], [Dc, s, kd]; name = :crs
-            )
+            [Dt(cc(t, x, y)) ~ Dc * laplacian(cc(t, x, y)) + s * endo(t, x, y) - kd * cc(t, x, y)], [cc(0, x, y) ~ 0.0],
+            DOM, [t, x, y], [cc(t, x, y), endo(t, x, y)], [Dc, s, kd]; name = :crs
+        )
     end
     function kind_real()
         return PDESystem(
-                [Dt(C) ~ Dc * laplacian(C) + s * kr(t, x, y) - kd * C], [c(0, x, y) ~ 0.0], DOM, [t, x, y],
-                [C, kr(t, x, y)], [Dc, s, kd]; name = :krs
-            )
+            [Dt(C) ~ Dc * laplacian(C) + s * kr(t, x, y) - kd * C], [c(0, x, y) ~ 0.0], DOM, [t, x, y],
+            [C, kr(t, x, y)], [Dc, s, kd]; name = :krs
+        )
     end
 end
 
@@ -119,18 +119,18 @@ end
 
 function cr_hand(σ, kind)
     return [
-            :endo => [s != 0 && kind[s] == 1 for s in σ], :isB => [s != 0 && kind[s] == 2 for s in σ],
-            :vol => [s == 0 ? 0.0 : Float64(count(==(s), σ)) for s in σ],
-        ]
+        :endo => [s != 0 && kind[s] == 1 for s in σ], :isB => [s != 0 && kind[s] == 2 for s in σ],
+        :vol => [s == 0 ? 0.0 : Float64(count(==(s), σ)) for s in σ],
+    ]
 end
 
 cr_divided(σ0, σ) = maximum(σ) != maximum(σ0)
 
 function cr_partial(σ, k)
     return count(
-            ((I, J),) -> (b = σ[I:(I + k - 1), J:(J + k - 1)]; any(!=(0), b) && any(==(0), b)),
-            Iterators.product(1:k:size(σ, 1), 1:k:size(σ, 2))
-        )
+        ((I, J),) -> (b = σ[I:(I + k - 1), J:(J + k - 1)]; any(!=(0), b) && any(==(0), b)),
+        Iterators.product(1:k:size(σ, 1), 1:k:size(σ, 2))
+    )
 end
 
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))

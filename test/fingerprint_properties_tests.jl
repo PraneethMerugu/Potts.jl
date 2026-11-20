@@ -102,9 +102,9 @@ end
 
         function make_base(; sys = FPBase(; name = :fp), dims = (12, 12), kw...)
             return PottsProblem(
-                    sys, base_state(dims), (0, 4);
-                    ode_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0), kw...
-                )
+                sys, base_state(dims), (0, 4);
+                ode_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0), kw...
+            )
         end
 
         res = fp_props(
@@ -319,15 +319,15 @@ end
         @test fp_m != fp_b
         function naive_no_law(sys)
             return hash(
-                    (
-                        nameof(sys),
-                        string.(Potts.declared_parameters(sys)),
-                        Potts.part(sys).kinds,
-                        string(Potts.part(sys).lattice),
-                        string.(Potts.part(sys).energies),
-                        string(Potts.part(sys).relations),
-                    )
+                (
+                    nameof(sys),
+                    string.(Potts.declared_parameters(sys)),
+                    Potts.part(sys).kinds,
+                    string(Potts.part(sys).lattice),
+                    string.(Potts.part(sys).energies),
+                    string(Potts.part(sys).relations),
                 )
+            )
         end
         @test naive_no_law(sys_m) == naive_no_law(sys_b)   # negative control: omitting law collides
 
@@ -338,15 +338,15 @@ end
             PottsProblem(sys_mo, op, (0, 2)).f.fingerprint
         function naive_no_prop(sys)
             return hash(
-                    (
-                        nameof(sys),
-                        string.(Potts.declared_parameters(sys)),
-                        Potts.part(sys).kinds,
-                        string(Potts.part(sys).lattice),
-                        string.(Potts.part(sys).energies),
-                        string(Potts.part(sys).sweep),
-                    )
+                (
+                    nameof(sys),
+                    string.(Potts.declared_parameters(sys)),
+                    Potts.part(sys).kinds,
+                    string(Potts.part(sys).lattice),
+                    string.(Potts.part(sys).energies),
+                    string(Potts.part(sys).sweep),
                 )
+            )
         end
         @test naive_no_prop(sys_vn) == naive_no_prop(sys_mo)  # negative control: omitting proposal collides
 

@@ -99,7 +99,7 @@ function warn_if_dirty(checkout)
         return nothing                                   # not a git checkout: nothing to compare
     end
     isempty(strip(status)) || @warn "$checkout has uncommitted changes; they are not in the `git archive HEAD` " *
-                                    "copy B, so the problems they touch show as DIFFER" status
+        "copy B, so the problems they touch show as DIFFER" status
     return nothing
 end
 

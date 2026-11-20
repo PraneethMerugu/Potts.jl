@@ -96,11 +96,11 @@ end
         function big(prob)
             ph = audit_phase(prob)
             return (
-                    ph.substeps, CorePotts.Problems.with_tables(
-                        Float64[getproperty(prob.p, n) for n in ph.params],
-                        Pair{String, Vector{Float64}}[ph.program.tables[i].key => fill(1.0, 5000) for (i, _) in ph.tables]
-                    ),
-                )
+                ph.substeps, CorePotts.Problems.with_tables(
+                    Float64[getproperty(prob.p, n) for n in ph.params],
+                    Pair{String, Vector{Float64}}[ph.program.tables[i].key => fill(1.0, 5000) for (i, _) in ph.tables]
+                ),
+            )
         end
         s3, b3 = big(p3)
         # warned once per group, term and cause; the warning has no error route (

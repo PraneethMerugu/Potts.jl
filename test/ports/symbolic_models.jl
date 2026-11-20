@@ -23,14 +23,22 @@ end
 function symbolic_wortel_problem(; tspan = (0, 40), seed = 0)
     σ = wortel_state()
     q = WORTEL_PORT_P
-    return PottsProblem(WORTEL, [ownership => σ, kind => [:cell, :cell], :J => Matrix(q.J), :λ => q.λ, :V₀ => q.V0,
-        :λₛ => q.λs, :S₀ => q.S0, :λ_act => q.λact, :max_act => q.maxact, :T => q.T], tspan; seed)
+    return PottsProblem(
+        WORTEL, [
+            ownership => σ, kind => [:cell, :cell], :J => Matrix(q.J), :λ => q.λ, :V₀ => q.V0,
+            :λₛ => q.λs, :S₀ => q.S0, :λ_act => q.λact, :max_act => q.maxact, :T => q.T,
+        ], tspan; seed
+    )
 end
 function symbolic_merks_problem(; tspan = (0, 40), seed = 0)
     q = MERKS_PORT_P
-    return PottsProblem(MERKS, [ownership => merks_state(), kind => [:endothelial, :endothelial], :J => Matrix(q.J),
-        :λ => q.λ, :V₀ => q.V0, :λ_L => q.λL, :L => q.L, :χ => q.χ, :Dc => q.D, :σc => q.s, :δc => q.k, :T => q.T],
-        tspan; seed, field_solver = MERKS_SOLVER)
+    return PottsProblem(
+        MERKS, [
+            ownership => merks_state(), kind => [:endothelial, :endothelial], :J => Matrix(q.J),
+            :λ => q.λ, :V₀ => q.V0, :λ_L => q.λL, :L => q.L, :χ => q.χ, :Dc => q.D, :σc => q.s, :δc => q.k, :T => q.T,
+        ],
+        tspan; seed, field_solver = MERKS_SOLVER
+    )
 end
 function symbolic_openvt_problem(; tspan = (0, 20), seed = 0)
     σ = zeros(Int32, 12, 8); σ[5:8, 4:5] .= 1

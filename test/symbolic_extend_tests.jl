@@ -119,10 +119,10 @@ end
 
         function msg(f)
             return try
-                    f(); ""
-                catch e
-                    sprint(showerror, e)
-                end
+                f(); ""
+            catch e
+                sprint(showerror, e)
+            end
         end
         m = msg(() -> mtkcompile(BadSiteVar(; name = :bad)))
         @test occursin("symbolic_extend_tests.jl:$BAD_ENERGY_LINE", m)

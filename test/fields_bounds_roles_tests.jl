@@ -51,18 +51,18 @@ end
         dom = [tt ∈ LP.Interval(0.0, 2.0), x ∈ LP.Interval(0.0, 16.0), y ∈ LP.Interval(0.0, 16.0)]
         function bcount(eqs, dvs, ps, ic)
             p = LP.discretize(
-                    MTKB.PDESystem(eqs, ic, dom, [tt, x, y], dvs, ps; name = :b),
-                    LP.LatticeDiscretization(LP.Grid(dims); T = Float64)
-                )
+                MTKB.PDESystem(eqs, ic, dom, [tt, x, y], dvs, ps; name = :b),
+                LP.LatticeDiscretization(LP.Grid(dims); T = Float64)
+            )
             return LP.Problems.substeps(LP.Problems.field_problem(p), LP.ExplicitEuler(); dt = 1.0)
         end
         function acount(M; kw...)
             return substep_counts(
-                    init(
-                        PottsProblem(M(; name = :f), fd_empty(dims), (0, 2); field_solver = ExplicitEuler(), kw...),
-                        SequentialCPM()
-                    )
+                init(
+                    PottsProblem(M(; name = :f), fd_empty(dims), (0, 2); field_solver = ExplicitEuler(), kw...),
+                    SequentialCPM()
                 )
+            )
         end
         # `DivKGrad(c, c)` with c ∈ (0, 1): ρ = 8 max K = 8, n = ⌈8/1.8⌉ = 5, as B
         @test acount(FbIvDivK) == [5] == [bcount([DD(ce) ~ LP.DivKGrad(:harmonic)(ce, ce)], [ce], Any[], [c(0, x, y) ~ 0.5])]
@@ -108,18 +108,18 @@ end
         c0 = rand(StableRNG(14), 12, 10)
         function prob(T, alg)
             return PottsProblem(
-                    FwRoles(; name = :w), [ownership => σ, kind => [:A, :A], :c => c0, :h => c0, :s => c0], (0, 3);
-                    T, seed = 3, field_solver = alg
-                )
+                FwRoles(; name = :w), [ownership => σ, kind => [:A, :A], :c => c0, :h => c0, :s => c0], (0, 3);
+                T, seed = 3, field_solver = alg
+            )
         end
         function run(T, alg; M = FwRoles)
             integ = init(
-                    M === FwRoles ? prob(T, alg) :
-                        PottsProblem(
-                            FwWide(; name = :w), [ownership => σ, kind => [:A, :A], :c => c0], (0, 3);
-                            T, seed = 3, field_solver = alg
-                        ), SequentialCPM()
-                )
+                M === FwRoles ? prob(T, alg) :
+                    PottsProblem(
+                        FwWide(; name = :w), [ownership => σ, kind => [:A, :A], :c => c0], (0, 3);
+                        T, seed = 3, field_solver = alg
+                    ), SequentialCPM()
+            )
             foreach(_ -> step!(integ), 1:3)
             return integ
         end
@@ -164,9 +164,9 @@ end
     @testset "compute_type = Float64 reaches a Float32 model's field kernels" begin
         function run1(T, alg)
             integ = init(
-                    PottsProblem(FwNarrow(; name = :w), fd_empty((12, 10)), (0, 1); T, seed = 3, field_solver = alg),
-                    SequentialCPM()
-                )
+                PottsProblem(FwNarrow(; name = :w), fd_empty((12, 10)), (0, 1); T, seed = 3, field_solver = alg),
+                SequentialCPM()
+            )
             step!(integ)
             return Array(current_state(integ).site.c)
         end

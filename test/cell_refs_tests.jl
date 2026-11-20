@@ -161,9 +161,9 @@ end
 # a state of the dividing model without its serial column and counter: another layout
 function cr_old_layout(st)
     return CorePotts.CPMState(
-            st.ownership, Base.structdiff(st.cell, NamedTuple{(:birth,)}),
-            st.site, Base.structdiff(st.model, NamedTuple{(CorePotts.NEXT_BIRTH,)}), st.history
-        )
+        st.ownership, Base.structdiff(st.cell, NamedTuple{(:birth,)}),
+        st.site, Base.structdiff(st.model, NamedTuple{(CorePotts.NEXT_BIRTH,)}), st.history
+    )
 end
 
 
@@ -419,11 +419,11 @@ end
         σ = zeros(Int32, 16, 16); σ[3:9, 3:9] .= 1; σ[4:5, 4:5] .= 2; σ[7:8, 7:8] .= 3
         function mk(track)
             return PottsProblem(
-                    CRSibling(; name = :s), [
-                        ownership => σ, kind => [:cyto, :nucleus, :nucleus],
-                        cluster => [1, 1, 1],
-                    ], (0, 1); capacity = 6, track
-                )
+                CRSibling(; name = :s), [
+                    ownership => σ, kind => [:cyto, :nucleus, :nucleus],
+                    cluster => [1, 1, 1],
+                ], (0, 1); capacity = 6, track
+            )
         end
         p = mk(())
         @test solve(p, SequentialCPM()).u[end].cell.nuc[1] == 2                  # birth = slot: 2 is older

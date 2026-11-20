@@ -52,9 +52,9 @@ end
 
 function ctx_of(prob)
     return (;
-            lattice = prob.lattice, contact = prob.contact, prob.relations...,
-            (prob.spacing === nothing ? (;) : (; spacing = prob.spacing))...,
-        )
+        lattice = prob.lattice, contact = prob.contact, prob.relations...,
+        (prob.spacing === nothing ? (;) : (; spacing = prob.spacing))...,
+    )
 end
 
 
@@ -756,27 +756,27 @@ _count_ast(ex, pred) = (pred(ex) ? 1 : 0) + (ex isa Expr ? sum(a -> _count_ast(a
 _trigger_ast(sys) = Potts.generated_code(sys).lifecycle.trigger
 function _has_modulo_gate(ex, n)
     return _has_ast(
-            ex,
-            x -> x isa Expr && x.head === :call && length(x.args) == 3 && x.args[1] === :(==) && x.args[3] == 0 &&
-                x.args[2] isa Expr && x.args[2].head === :call && length(x.args[2].args) == 3 &&
-                x.args[2].args[1] === :% && x.args[2].args[2] === :mcs && x.args[2].args[3] == n
-        )
+        ex,
+        x -> x isa Expr && x.head === :call && length(x.args) == 3 && x.args[1] === :(==) && x.args[3] == 0 &&
+            x.args[2] isa Expr && x.args[2].head === :call && length(x.args[2].args) == 3 &&
+            x.args[2].args[1] === :% && x.args[2].args[2] === :mcs && x.args[2].args[3] == n
+    )
 end
 function _has_any_modulo_gate(ex)
     return _has_ast(
-            ex,
-            x -> x isa Expr && x.head === :call && length(x.args) == 3 &&
-                x.args[1] === :% && x.args[2] === :mcs
-        )
+        ex,
+        x -> x isa Expr && x.head === :call && length(x.args) == 3 &&
+            x.args[1] === :% && x.args[2] === :mcs
+    )
 end
 _has_ruled_event(ex) = _has_ast(ex, x -> x isa Expr && x.head === :call && x.args[1] == :(CorePotts.ruled_event))
 _has_true_and(ex) = _has_ast(ex, x -> x isa Expr && x.head === :&& && !isempty(x.args) && x.args[1] === true)
 function _has_ruled_divide(sys)
     return any(
-            e -> e isa Expr && e.head === :(->) && e.args[1] isa Expr && e.args[1].head === :tuple &&
-                :daughter in e.args[1].args && :rule in e.args[1].args,
-            Potts.generated_code(sys).phases
-        )
+        e -> e isa Expr && e.head === :(->) && e.args[1] isa Expr && e.args[1].head === :tuple &&
+            :daughter in e.args[1].args && :rule in e.args[1].args,
+        Potts.generated_code(sys).phases
+    )
 end
 
 
@@ -891,10 +891,10 @@ end
 function with_hash_salt(f, s)
     HASH_SALT[] = s
     return try
-            f()
-        finally
-            HASH_SALT[] = 0
-        end
+        f()
+    finally
+        HASH_SALT[] = 0
+    end
 end
 
 
@@ -902,10 +902,10 @@ function tie_code(M, solver)
     function strip!(x)
         if x isa Expr
             return (
-                    Base.remove_linenums!(x);
-                    x.head === :macrocall && length(x.args) >= 2 && x.args[2] isa LineNumberNode && (x.args[2] = nothing);
-                    x.args .= strip!.(x.args); x
-                )
+                Base.remove_linenums!(x);
+                x.head === :macrocall && length(x.args) >= 2 && x.args[2] isa LineNumberNode && (x.args[2] = nothing);
+                x.args .= strip!.(x.args); x
+            )
         elseif x isa NamedTuple
             return NamedTuple{keys(x)}(map(strip!, values(x)))
         elseif x isa Tuple

@@ -24,15 +24,20 @@
             fp_opmask() = (σ = zeros(Int32, 10, 8); σ[1, :] .= 1; σ[5:6, 4:5] .= 2; [ownership => σ, kind => [:wall, :A]])
             # (label, system, operating point, keywords): the models the device gate runs
             dev = [
-                ("MerksVasculogenesis", () -> MerksVasculogenesis(; name = :merks, lattice = (8, 8)),
+                (
+                    "MerksVasculogenesis", () -> MerksVasculogenesis(; name = :merks, lattice = (8, 8)),
                     [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]],
                     (; field_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0)),
                 ),
-                ("Merks2006", () -> Merks2006(; name = :m, lattice = (16, 16)), fp_op2006(),
-                    (; field_solver = ExplicitEuler(substeps = 15))),
+                (
+                    "Merks2006", () -> Merks2006(; name = :m, lattice = (16, 16)), fp_op2006(),
+                    (; field_solver = ExplicitEuler(substeps = 15)),
+                ),
                 # two solver groups; `u` reads `c` from its array (fields_tests.jl, FdTwo)
-                ("FdTwo", () -> FdTwo(; name = :t), fd_source_op((12, 10)),
-                    (; field_solver = ExplicitEuler(substeps = 2), solvers = [:u => ExplicitEuler(substeps = 3)])),
+                (
+                    "FdTwo", () -> FdTwo(; name = :t), fd_source_op((12, 10)),
+                    (; field_solver = ExplicitEuler(substeps = 2), solvers = [:u => ExplicitEuler(substeps = 3)]),
+                ),
                 ("FdMask", () -> FdMask(; name = :m), fp_opmask(), (; field_solver = ExplicitEuler())),
             ]
             # Float32 only: the Potts device suite ends with a scan that no kernel it compiled holds
@@ -42,7 +47,7 @@
                 cpu = solve(prob, CheckerboardCPM()).u[end]
                 dev_sol = solve(prob, CheckerboardCPM(); backend).u[end]
                 ok = Array(dev_sol.ownership) == Array(cpu.ownership)
-                tol = T === Float32 ? 1e-5 : 1e-12
+                tol = T === Float32 ? 1.0e-5 : 1.0e-12
                 for k in keys(cpu.site)
                     a, b = Float64.(Array(getproperty(cpu.site, k))), Float64.(Array(getproperty(dev_sol.site, k)))
                     ok &= maximum(abs, a .- b; init = 0.0) <= tol * max(1.0, maximum(abs, a; init = 0.0))
@@ -60,7 +65,8 @@ end
     @testset "the Merks 500² warm MCS allocates nothing (CPU)" begin
         warm(integ) = (step!(integ); step!(integ); @allocated step!(integ))
         σ = zeros(Int32, 500, 500); σ[200:215, 200:215] .= 1; σ[300:312, 280:300] .= 2
-        prob = PottsProblem(MerksVasculogenesis(; name = :m, lattice = (500, 500)), [ownership => σ, kind => [:endothelial, :endothelial]],
+        prob = PottsProblem(
+            MerksVasculogenesis(; name = :m, lattice = (500, 500)), [ownership => σ, kind => [:endothelial, :endothelial]],
             (0, 100); field_solver = ExplicitEuler(substeps = 15, lower_bound = 0.0)
         )
         integ = init(prob, SequentialCPM(); save_start = false, save_end = false, save_everystep = false)
@@ -76,8 +82,10 @@ end
         warm(integ) = (step!(integ); step!(integ); @allocated step!(integ))
         σ = zeros(Int32, 500, 500); σ[1, :] .= 1; σ[end, :] .= 1; σ[:, 1] .= 1; σ[:, end] .= 1
         σ[200:215, 200:215] .= 2; σ[300:312, 280:300] .= 3
-        prob = PottsProblem(Merks2006(; name = :m, lattice = (500, 500)), [ownership => σ, kind => [:border, :endothelial, :endothelial]],
-            (0, 100); field_solver = ExplicitEuler(substeps = 15))
+        prob = PottsProblem(
+            Merks2006(; name = :m, lattice = (500, 500)), [ownership => σ, kind => [:border, :endothelial, :endothelial]],
+            (0, 100); field_solver = ExplicitEuler(substeps = 15)
+        )
         integ = init(prob, SequentialCPM(); save_start = false, save_end = false, save_everystep = false)
         @test warm(integ) == 0
     end
@@ -91,8 +99,12 @@ end
         warm(integ) = (step!(integ); step!(integ); @allocated step!(integ))
         σ = zeros(Int32, 500, 500); σ[1:2, :] .= 1; σ[(end - 1):end, :] .= 1; σ[:, 1:2] .= 1; σ[:, (end - 1):end] .= 1
         σ[200:215, 200:215] .= 2; σ[300:312, 280:300] .= 3
-        prob = PottsProblem(Merks2008(; name = :m, lattice = (500, 500)), [ownership => σ, kind => [:border, :endothelial, :endothelial],
-            :t_relax => 1.0], (0, 100); field_solver = ExplicitEuler(substeps = 15))
+        prob = PottsProblem(
+            Merks2008(; name = :m, lattice = (500, 500)), [
+                ownership => σ, kind => [:border, :endothelial, :endothelial],
+                :t_relax => 1.0,
+            ], (0, 100); field_solver = ExplicitEuler(substeps = 15)
+        )
         integ = init(prob, SequentialCPM(); save_start = false, save_end = false, save_everystep = false)
         @test warm(integ) == 0
     end

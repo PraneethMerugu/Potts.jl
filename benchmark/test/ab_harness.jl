@@ -283,10 +283,10 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
         # disturbances with injected CPU load and topology
         function dist(load; reasons = () -> String[])
             return BenchMachine.disturbances(
-                    12, 12:15;
-                    busy = cpus -> Dict(k => get(load, k, 0.0) for k in cpus), siblings = sibs,
-                    linux = true, reasons
-                )
+                12, 12:15;
+                busy = cpus -> Dict(k => get(load, k, 0.0) for k in cpus), siblings = sibs,
+                linux = true, reasons
+            )
         end
         @test dist(Dict()) == String[]
         @test dist(Dict(28 => 0.1)) == ["SMT sibling cpu28 10% busy"]

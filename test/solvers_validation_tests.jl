@@ -55,9 +55,9 @@ end
         hand(o, md) = Potts.SweepSpec(:metropolis, 1.0, min, o, md)
         function sys(sw)
             return Potts.PottsSystem(;
-                    name = :hand, kinds = [:medium, :A], lattice = Potts.lattice_spec((8, 8)),
-                    energies = [Potts.energy(Potts.cells(1) => (Potts.B.volume - 9.0)^2)], sweep = sw
-                )
+                name = :hand, kinds = [:medium, :A], lattice = Potts.lattice_spec((8, 8)),
+                energies = [Potts.energy(Potts.cells(1) => (Potts.B.volume - 9.0)^2)], sweep = sw
+            )
         end
         isoff(e) = e isa ArgumentError
         ismd(e) = e isa ArgumentError

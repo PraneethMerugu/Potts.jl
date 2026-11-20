@@ -11,11 +11,11 @@ const EU_CP = Potts.CorePotts
 
 function eu_error(f, words...)
     return try
-            f()
-            false
-        catch err
-            err isa Union{ArgumentError, Potts.PottsCompileError}
-        end
+        f()
+        false
+    catch err
+        err isa Union{ArgumentError, Potts.PottsCompileError}
+    end
 end
 
 

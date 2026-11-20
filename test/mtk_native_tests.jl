@@ -70,17 +70,17 @@ end
     @testset "MTK-native: a kind set in @equations is `ismember`, never `∈`" begin
         function eq_check(M, eq)
             return mn_error(
-                    () -> Potts._potts_model(
-                        M, quote
-                            @kinds medium tip stalk fluid endothelial = (tip, stalk)
-                            @variables q(cell) = 0.0
-                            @lattice Lattice((12, 12))
-                            @energy cells => (volume - 9)^2
-                            @equations $eq
-                            @sweep Metropolis(; temperature = 2.0)
-                        end, @__MODULE__
-                    )
+                () -> Potts._potts_model(
+                    M, quote
+                        @kinds medium tip stalk fluid endothelial = (tip, stalk)
+                        @variables q(cell) = 0.0
+                        @lattice Lattice((12, 12))
+                        @energy cells => (volume - 9)^2
+                        @equations $eq
+                        @sweep Metropolis(; temperature = 2.0)
+                    end, @__MODULE__
                 )
+            )
         end
         @test has(eq_check(:MNIn, :(D(q) ~ 0.25 * (kind ∈ endothelial))), "@equations", "∈", "ismember(kind, endothelial)")
         @test has(eq_check(:MNNotIn, :(D(q) ~ 0.25 * (kind ∉ endothelial))), "!ismember(kind, endothelial)")

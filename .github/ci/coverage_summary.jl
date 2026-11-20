@@ -134,7 +134,7 @@ function main(args)
         end
     end
 
-    if clean
+    return if clean
         n = clean_cov(root)
         println("Cleaned $n .cov file(s).")
     end

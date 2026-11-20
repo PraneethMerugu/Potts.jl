@@ -3,8 +3,10 @@
 using TOML
 
 function versions(path)
-    return Dict(name => get(first(entries), "version", "stdlib")
-        for (name, entries) in TOML.parsefile(path)["deps"])
+    return Dict(
+        name => get(first(entries), "version", "stdlib")
+            for (name, entries) in TOML.parsefile(path)["deps"]
+    )
 end
 
 old, new = versions(ARGS[1]), versions(ARGS[2])

@@ -82,11 +82,11 @@ const _PRIMED_ALIASES = (Symbol("kind′") => :neighbor_kind, Symbol("owner′")
 # forms: reserved, not bound
 function _reserved_names()
     return Set{Symbol}(
-            [
-                _BOUND_BUILTINS..., first.(_PRIMED_ALIASES)..., keys(DSL)..., :t, :D, :Pre, :name, :euler_full, :pieces_full,
-                :largest_piece_full,
-            ]
-        )
+        [
+            _BOUND_BUILTINS..., first.(_PRIMED_ALIASES)..., keys(DSL)..., :t, :D, :Pre, :name, :euler_full, :pieces_full,
+            :largest_piece_full,
+        ]
+    )
 end
 # DSL names added after published models used them as structural parameters
 # (`WortelAct(; connected)`): a structural parameter may take one of these names, and then it
@@ -588,20 +588,20 @@ function _conditional!(parts::_Parts, ex)
             return _conditional!(parts, b)
         else
             return begin
-                    sub = _Parts(parts.structural, parts.params, Any[], parts.mod, parts.declared)
-                    for st in (b isa Expr && b.head === :block ? b.args : Any[b])
-                        if st isa LineNumberNode
-                            push!(sub.code, st)
+                sub = _Parts(parts.structural, parts.params, Any[], parts.mod, parts.declared)
+                for st in (b isa Expr && b.head === :block ? b.args : Any[b])
+                    if st isa LineNumberNode
+                        push!(sub.code, st)
                     elseif _is_section(st)
-                            st.args[1] in _UNCONDITIONAL &&
+                        st.args[1] in _UNCONDITIONAL &&
                             throw(ArgumentError("$(st.args[1]) cannot be conditional; declare it unconditionally"))
-                            _section!(sub, st.args[1], filter(a -> !(a isa LineNumberNode), st.args[3:end]), st.args[2])
+                        _section!(sub, st.args[1], filter(a -> !(a isa LineNumberNode), st.args[3:end]), st.args[2])
                     else
-                            push!(sub.code, rewrite(st))
+                        push!(sub.code, rewrite(st))
                     end
                 end
-                    Expr(:block, sub.code...)
-                end
+                Expr(:block, sub.code...)
+            end
         end
     end
     return Expr(ex.head, ex.args[1], map(branch, ex.args[2:end])...)
@@ -771,7 +771,7 @@ function _section!(parts, sec, args, ln = nothing)
             # `λ = 1.0, [unit = u"…", tunable = false, bounds = (0, 2), description = "…"]` (MTK
             # metadata)
             val, opts = if val isa Expr && val.head === :tuple && length(val.args) == 2 && val.args[2] isa Expr &&
-                val.args[2].head === :vect
+                    val.args[2].head === :vect
                 (val.args[1], val.args[2])
             else
                 (val, nothing)
@@ -850,7 +850,7 @@ function _section!(parts, sec, args, ln = nothing)
             _declare!(parts, k, "variable")
             # `= default, [options…]`; a tuple without an options vector is the default itself
             default, opts = if rhs isa Expr && rhs.head === :tuple && length(rhs.args) == 2 && rhs.args[2] isa Expr &&
-                rhs.args[2].head === :vect
+                    rhs.args[2].head === :vect
                 (rhs.args[1], rhs.args[2])
             else
                 (rhs, nothing)
@@ -1198,10 +1198,10 @@ end
 # declaration can be named `a`/`b` (`_ENDPOINT_NAMES`), so nothing is shadowed.
 function _edge_scope(ex)
     return :(
-            let a = Potts.B.a, b = Potts.B.b
-                $ex
-            end
-        )
+        let a = Potts.B.a, b = Potts.B.b
+            $ex
+        end
+    )
 end
 
 function _is_edges(l)

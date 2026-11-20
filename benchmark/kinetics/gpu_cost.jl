@@ -17,26 +17,44 @@ function graner_problem(; scale, nmcs, T)
     σ1 = Int32.(readtsv(joinpath(dir, "pre_equilibrated_ownership.tsv")))
     k1 = Int32.(vec(readtsv(joinpath(dir, "cell_kinds.tsv"))))
     nc = length(k1)
-    σ = reduce(vcat, [reduce(hcat, [map(s -> s == 0 ? Int32(0) : s + Int32(nc * (i * scale + j)), σ1)
-        for j in 0:(scale - 1)]) for i in 0:(scale - 1)])
-    return PottsProblem(GRANER, initial_state(σ, repeat(k1, scale^2)), Lattice(size(σ)), (0, nmcs),
-        graner_params(T); contact = Moore(1))
+    σ = reduce(
+        vcat, [
+            reduce(
+                hcat, [
+                    map(s -> s == 0 ? Int32(0) : s + Int32(nc * (i * scale + j)), σ1)
+                        for j in 0:(scale - 1)
+                ]
+            ) for i in 0:(scale - 1)
+        ]
+    )
+    return PottsProblem(
+        GRANER, initial_state(σ, repeat(k1, scale^2)), Lattice(size(σ)), (0, nmcs),
+        graner_params(T); contact = Moore(1)
+    )
 end
 const backend = ROCBackend()
-arms = [("default", (;)), ("b1_k6", (; region = 1, parts = 6)), ("b1_k4", (; region = 1, parts = 4)),
-    ("b2_k3", (; region = 2, parts = 3))]
+arms = [
+    ("default", (;)), ("b1_k6", (; region = 1, parts = 6)), ("b1_k4", (; region = 1, parts = 4)),
+    ("b2_k3", (; region = 2, parts = 3)),
+]
 for scale in (14, 28)
     for (name, kw) in arms
         prob = graner_problem(; scale, nmcs = 10^6, T = Float32)
         integ = init(prob, CheckerboardCPM(; proposal = Moore(1), kw...); backend, save_start = false, save_everystep = false)
-        for _ in 1:20; step!(integ); end
+        for _ in 1:20
+            step!(integ)
+        end
         KernelAbstractions.synchronize(backend)
         n = 200
         t = @elapsed begin
-            for _ in 1:n; step!(integ); end
+            for _ in 1:n
+                step!(integ)
+            end
             KernelAbstractions.synchronize(backend)
         end
-        println(rpad("$(72scale)²", 7), rpad(name, 12), " ", round(1e3 * t / n, digits = 3), " ms/MCS  launches/MCS ",
-            integ.stats.launches ÷ integ.stats.mcs)
+        println(
+            rpad("$(72scale)²", 7), rpad(name, 12), " ", round(1.0e3 * t / n, digits = 3), " ms/MCS  launches/MCS ",
+            integ.stats.launches ÷ integ.stats.mcs
+        )
     end
 end

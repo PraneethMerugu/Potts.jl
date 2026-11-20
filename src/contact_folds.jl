@@ -37,9 +37,12 @@ _fold_description(i::Entity) = _unwrap(count_contacts(_CONTACT_PARTNER, i.option
 predicate may read `neighbor_kind` and constants; the result is the cell quantity of the tracker.
 """
 function _contact_fold(fold, body, d::ContactDomain, cond)
-    nameof(fold) === :count || throw(ArgumentError(
-        "`$(nameof(fold))(… for _ in contacts)`: over a cell's contact pairs only `count(pred for _ in contacts)` " *
-        "is available (the number of pairs whose partner satisfies `pred`)"))
+    nameof(fold) === :count || throw(
+        ArgumentError(
+            "`$(nameof(fold))(… for _ in contacts)`: over a cell's contact pairs only `count(pred for _ in contacts)` " *
+                "is available (the number of pairs whose partner satisfies `pred`)"
+        )
+    )
     pred = _fold_predicate(body(_CONTACT_PARTNER))
     if cond !== nothing
         c = _fold_predicate(cond(_CONTACT_PARTNER))
@@ -60,15 +63,20 @@ end
 # A predicate of a contact fold: `Bool` or a symbolic expression of `neighbor_kind` and constants
 function _fold_predicate(p)
     p isa Bool && return p
-    p isa Num || p isa SymbolicUtils.BasicSymbolic || throw(ArgumentError(
-        "`count(pred for _ in contacts)`: the predicate must be true or false for each pair, got $(repr(p))"))
+    p isa Num || p isa SymbolicUtils.BasicSymbolic || throw(
+        ArgumentError(
+            "`count(pred for _ in contacts)`: the predicate must be true or false for each pair, got $(repr(p))"
+        )
+    )
     _walk(p) do y
         i = info(y)
         if i !== nothing
             (i.role === :builtin && i.name === :neighbor_kind) || throw(
                 ArgumentError(
                     "`count(pred for _ in contacts)`: the predicate may read only `neighbor_kind` (the partner's kind; " *
-                "the medium for owner 0) and constants, not `$(i.name)`"))
+                        "the medium for owner 0) and constants, not `$(i.name)`"
+                )
+            )
         elseif SymbolicUtils.issym(y)
             throw(ArgumentError("`count(pred for _ in contacts)`: the predicate reads `$y`; it may read only `neighbor_kind` and constants"))
         end
@@ -86,7 +94,9 @@ function _fold_mask(pred, nk::Integer, name)
         v isa Bool || throw(
             PottsCompileError(
                 "`count(pred for _ in contacts)` (`$name`): the predicate is not true or " *
-                                          "false for partner kind $k (it gives `$v`)"))
+                    "false for partner kind $k (it gives `$v`)"
+            )
+        )
         v && (m |= UInt64(1) << k)
     end
     return m
@@ -95,13 +105,15 @@ end
 """The distinct contact folds read by the statements of `sys`, sorted by name: `(name, relation, pred)`."""
 function _contact_folds(sys::PottsSystem)
     found = Dict{Symbol, Entity}()
-    xs = Any[(u.eq.rhs for u in _p(sys, :updates))..., (u.eq.lhs for u in _p(sys, :updates))...,
+    xs = Any[
+        (u.eq.rhs for u in _p(sys, :updates))..., (u.eq.lhs for u in _p(sys, :updates))...,
         (eq.rhs for eq in _p(sys, :equations))..., (d.when for d in _p(sys, :divisions))...,
         (r for d in _p(sys, :divisions) for (_, r) in d.rules if !(r isa Split))...,
         (r.when for r in _p(sys, :link_rules))..., (o.rhs for o in _p(sys, :observed))...,
         (e.expr for e in _p(sys, :energies))..., (d.expr for d in _p(sys, :drives))...,
         (c.expr for c in _p(sys, :constraints) if c.kind === :expr)..., _p(sys, :sweep).temperature,
-        (x for b in _p(sys, :discrete) for x in b.next)...]
+        (x for b in _p(sys, :discrete) for x in b.next)...,
+    ]
     for x in xs
         _walk(x) do y
             i = info(y)
@@ -137,8 +149,10 @@ function _check_contact_folds(sys::PottsSystem, relations, contact_spec, lat)
         i = info(y)
         i !== nothing && i.role === :contact_count && throw(
             PottsCompileError(
-            "`count(… for _ in contacts)` is not available in the @sweep temperature: it is a cell quantity, exact " *
-            "between sweeps, and the temperature is read during the sweep"))
+                "`count(… for _ in contacts)` is not available in the @sweep temperature: it is a cell quantity, exact " *
+                    "between sweeps, and the temperature is read during the sweep"
+            )
+        )
     end
     nk = length(_p(sys, :kinds))
     rad = 0
@@ -146,16 +160,22 @@ function _check_contact_folds(sys::PottsSystem, relations, contact_spec, lat)
     for (name, rel, pred) in folds
         rel === :contact || haskey(relations, rel) || throw(
             PottsCompileError(
-            "`count(… for _ in contacts($rel))`: relation `$rel` is not declared in @relations"))
+                "`count(… for _ in contacts($rel))`: relation `$rel` is not declared in @relations"
+            )
+        )
         r = CorePotts.relation(_fold_spec(rel, relations, contact_spec), lat)
         CorePotts.has_origin(r) && throw(
             PottsCompileError(
                 "`count(… for _ in contacts$(rel === :contact ? "" : "($rel)"))`: " *
-                                                       "the relation includes the origin (a site is not its own partner)"))
+                    "the relation includes the origin (a site is not its own partner)"
+            )
+        )
         CorePotts.is_symmetric(r) || throw(
             PottsCompileError(
                 "`count(… for _ in contacts$(rel === :contact ? "" : "($rel)"))`: " *
-                                                         "the relation is not symmetric (each offset needs its negation)"))
+                    "the relation is not symmetric (each offset needs its negation)"
+            )
+        )
         push!(trackers, (name, rel, _fold_mask(pred, nk, name)))
         rad = max(rad, CorePotts.radius(r))
     end
@@ -168,15 +188,21 @@ function _contact_count_commits(c::CompiledPottsSystem)
         :(
             CorePotts.commit_contact_count!(
                 st.cell.$n, st.ownership, st.cell.kind, $(r === :contact ? :(ctx.contact) : :(ctx.$r)),
-                  $m, ctx.lattice, prop)) for (n, r, m) in _contact_trackers(c)]
+                $m, ctx.lattice, prop
+            )
+        ) for (n, r, m) in _contact_trackers(c)
+    ]
 end
 
 """The initial count columns (`Int32`) of the model's folds, from σ."""
 function _contact_count_columns(c::CompiledPottsSystem, σ, kinds, lat, ncell)
-    return Pair{Symbol, Any}[n => CorePotts.recompute_contact_count(σ, kinds, lat,
+    return Pair{Symbol, Any}[
+        n => CorePotts.recompute_contact_count(
+            σ, kinds, lat,
             _fold_spec(r, getfield(c, :relations), getfield(c, :contact_spec)), m, ncell
         )
-                             for (n, r, m) in _contact_trackers(c)]
+            for (n, r, m) in _contact_trackers(c)
+    ]
 end
 
 """
@@ -191,7 +217,9 @@ function _with_contact_counts(c::CompiledPottsSystem, @nospecialize(relations::N
     cc = CorePotts.ContactCounts(
         Tuple(
             CorePotts.ContactCount(n, _fold_spec(r, getfield(c, :relations), getfield(c, :contact_spec)), m; kinds = nk)
-                                       for (n, r, m) in ts))
+                for (n, r, m) in ts
+        )
+    )
     return merge(relations, (; contact_counts = cc))
 end
 

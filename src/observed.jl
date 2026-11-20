@@ -293,11 +293,11 @@ end
 # only so that `sol[:u]` reaches `SII.observed`, which names its components
 function SII.is_observed(sys::PottsModelInfo, x::Symbol)
     return !SII.is_parameter(sys, x) && !SII.is_variable(sys, x) &&
-            (
-            _named_quantity(sys, _localize(getfield(sys.csys, :sys), x)) !== nothing ||
-                _computed_info(sys, x) !== nothing ||
-                !isempty(_vector_components(getfield(sys.csys, :sys), _localize(getfield(sys.csys, :sys), x)))
-        )
+        (
+        _named_quantity(sys, _localize(getfield(sys.csys, :sys), x)) !== nothing ||
+            _computed_info(sys, x) !== nothing ||
+            !isempty(_vector_components(getfield(sys.csys, :sys), _localize(getfield(sys.csys, :sys), x)))
+    )
 end
 function SII.observed(sys::PottsModelInfo, x::Symbol)
     ci = _computed_info(sys, x)
@@ -309,9 +309,9 @@ end
 # the component names of the vector quantity `x` of model `m` (`[:u_1, :u_2]`), or none
 function _vector_components(m, x)
     return Symbol[
-            info(v).name for v in Iterators.flatten((_p(m, :parameters), _p(m, :variables)))
-                if get(info(v).options, :vector, nothing) === x
-        ]
+        info(v).name for v in Iterators.flatten((_p(m, :parameters), _p(m, :variables)))
+            if get(info(v).options, :vector, nothing) === x
+    ]
 end
 function _vector_message(m, x)
     return "`$x` is a vector quantity of $(nameof(m)): read its components " *

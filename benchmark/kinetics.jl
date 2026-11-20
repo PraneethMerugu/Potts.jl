@@ -31,8 +31,10 @@ const STATIC = ["vol_mean", "vol_sd", "per_mean", "per_sd"]
 const MARGIN = Dict(vcat([o => 0.05 for o in KINETIC], [o => 0.02 for o in STATIC]))
 # sorting never reaches a steady state, so its volume and perimeter statistics follow the
 # sorting progress: they are not static observables there (controls of 2026-11-03)
-const CASE_OBS = Dict("sort" => vcat(["committed"], ["H$(t)" for t in CHECKPOINTS]),
-    "foam" => vcat(["committed", "D", "tauV"], STATIC))
+const CASE_OBS = Dict(
+    "sort" => vcat(["committed"], ["H$(t)" for t in CHECKPOINTS]),
+    "foam" => vcat(["committed", "D", "tauV"], STATIC)
+)
 
 # checkerboard variants: `cb` plus `_`-separated options, e.g. `cb_b1_k8_w2` (region = 1, parts = 8,
 # switches = 2); `cb` alone is the default
@@ -97,7 +99,7 @@ function snapshot(σ, kinds, ncell)
         end
     end
     cen = [mod(atan(cs[c, 2], cs[c, 1]), 2π) * L1 / 2π for c in 1:ncell],
-          [mod(atan(cs[c, 4], cs[c, 3]), 2π) * L2 / 2π for c in 1:ncell]
+        [mod(atan(cs[c, 4], cs[c, 3]), 2π) * L2 / 2π for c in 1:ncell]
     return per, het, cen
 end
 
@@ -108,8 +110,10 @@ function run_one(case, arm, seed)
     f = arm_clock(arm)
     every, nmcs = round(Int, EVERY * f), round(Int, NMCS * f)
     lat = Lattice(size(σ0))
-    prob = PottsProblem(GRANER, initial_state(σ0, kinds), lat, (0, nmcs), graner_params();
-        contact = Moore(1), seed)
+    prob = PottsProblem(
+        GRANER, initial_state(σ0, kinds), lat, (0, nmcs), graner_params();
+        contact = Moore(1), seed
+    )
     alg = arm_alg(arm)
     # (no saves; `save_everystep` only where `init` takes it, so that an older base runs this file)
     nosave = hasmethod(init, Tuple{typeof(prob), typeof(alg)}, (:save_everystep,)) ? (; save_everystep = false) : (;)
@@ -151,8 +155,10 @@ function run_one(case, arm, seed)
     obs["per_mean"], obs["per_sd"] = mean(p), std(p)
     # MSD over time origins in the stationary part, a linear fit over LAGS (labelled MCS)
     msd = map(LAGS) do l
-        mean((xs[s + l][c] - xs[s][c])^2 + (ys[s + l][c] - ys[s][c])^2
-             for s in first(keep):(last(keep) - l) for c in alive)
+        mean(
+            (xs[s + l][c] - xs[s][c])^2 + (ys[s + l][c] - ys[s][c])^2
+                for s in first(keep):(last(keep) - l) for c in alive
+        )
     end
     τ = EVERY .* LAGS
     obs["D"] = cov(τ, msd) / var(τ) / 4
@@ -206,8 +212,10 @@ end
 function compare(out, case, arm, ref = "seq")
     A, B = load(out, case, arm), load(out, case, ref)
     println("$case: $arm against $ref ($(length(A["wall"])) and $(length(B["wall"])) seeds)")
-    println(rpad("observable", 12), rpad("arm", 12), rpad("ref", 12), rpad("r", 8),
-        rpad("95% interval", 20), rpad("margin", 8), "verdict")
+    println(
+        rpad("observable", 12), rpad("arm", 12), rpad("ref", 12), rpad("r", 8),
+        rpad("95% interval", 20), rpad("margin", 8), "verdict"
+    )
     rows = []
     for o in CASE_OBS[case]
         r, lo, hi = ratio_ci(A[o], B[o])
@@ -221,12 +229,16 @@ function compare(out, case, arm, ref = "seq")
         end
         resolved = (hi - lo) / 2 <= m / 2
         resolved || (verdict *= " (unresolved)")
-        @printf("%-12s%-12.4g%-12.4g%-8.3f[%.3f, %.3f]      %-8.2f%s\n", o, mean(A[o]), mean(B[o]),
-            r, lo, hi, m, verdict)
+        @printf(
+            "%-12s%-12.4g%-12.4g%-8.3f[%.3f, %.3f]      %-8.2f%s\n", o, mean(A[o]), mean(B[o]),
+            r, lo, hi, m, verdict
+        )
         push!(rows, (o, mean(A[o]), mean(B[o]), r, lo, hi, m, verdict))
     end
-    @printf("wall per labelled MCS: arm %.3g s, ref %.3g s (one thread per run)\n",
-        mean(A["wall"]), mean(B["wall"]))
+    @printf(
+        "wall per labelled MCS: arm %.3g s, ref %.3g s (one thread per run)\n",
+        mean(A["wall"]), mean(B["wall"])
+    )
     open(joinpath(out, "compare_$(case)_$(arm)_vs_$(ref).tsv"), "w") do io
         println(io, join(("observable", "arm", "ref", "r", "lo", "hi", "margin", "verdict"), '\t'))
         foreach(r -> println(io, join(r, '\t')), rows)

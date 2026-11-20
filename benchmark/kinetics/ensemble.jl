@@ -11,15 +11,18 @@ base(L) = remake(cb_problem(L); p = [:β => c.beta, :γ => c.gamma, :σ_X => c.s
 cbs(cells) = Potts.CorePotts.CallbackSet(PottsModels.stop_at_cells(cells), PottsModels.edge_guard(P615F_GUARD; terminate = true))
 out(sol, i) = ((Int(sol.t[end]), sol.stats.lifecycle.divisions + 1 - count(>(0), Array(sol.u[end].cell.volume))), false)
 function ens(L, cells, n)
-    return solve(EnsembleProblem(base(L); output_func = out), ALG, EnsembleThreads(); backend = cb_backend(),
-            trajectories = n, callback = cbs(cells), save_start = false, save_everystep = false
-        )
+    return solve(
+        EnsembleProblem(base(L); output_func = out), ALG, EnsembleThreads(); backend = cb_backend(),
+        trajectories = n, callback = cbs(cells), save_start = false, save_everystep = false
+    )
 end
 t = @elapsed ens(400, 2, 2 * Threads.nthreads())      # cold: compiled inside the concurrent trajectories
 @info "cold ensemble (compile in the trajectories)" t threads = Threads.nthreads()
 for n in parse.(Int, split(ARGS[2], ','))
     t = @elapsed r = ens(c.L, c.cells, n)
     s = sum(first, r.u)
-    @printf("in flight %2d (threads %d)  %5.1f s  %6.0f MCS/s total  %4.0f per run  lost %s\n", min(n, Threads.nthreads()),
-        Threads.nthreads(), t, s / t, s / t / min(n, Threads.nthreads()), string(last.(r.u)))
+    @printf(
+        "in flight %2d (threads %d)  %5.1f s  %6.0f MCS/s total  %4.0f per run  lost %s\n", min(n, Threads.nthreads()),
+        Threads.nthreads(), t, s / t, s / t / min(n, Threads.nthreads()), string(last.(r.u))
+    )
 end

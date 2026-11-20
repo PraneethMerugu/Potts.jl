@@ -21,11 +21,11 @@ module BsPDE
     function base()
         @parameters Dc = 0.2 S = 1.0
         return pdesys(
-                [Dt(C) ~ Dc * laplacian(C)], [
-                    c(0, x, y) ~ 0.0, c(t, 0, y) ~ S, Differential(x)(c(t, 12, y)) ~ 0.0,
-                    C ~ masked(wall(X...), 0.0),
-                ], (12, 10), [C, wall(X...)], [Dc, S]
-            )
+            [Dt(C) ~ Dc * laplacian(C)], [
+                c(0, x, y) ~ 0.0, c(t, 0, y) ~ S, Differential(x)(c(t, 12, y)) ~ 0.0,
+                C ~ masked(wall(X...), 0.0),
+            ], (12, 10), [C, wall(X...)], [Dc, S]
+        )
     end
     relax() = pdesys([Dt(C) ~ 1.0 - C], [c(0, x, y) ~ 0.0], (8, 8), [C])
     function clamp_ck()
@@ -87,13 +87,13 @@ end
 
 function bs_error(f)
     return try
-            f(); nothing
-        catch e
-            while e isa LoadError
-                e = e.error
-            end
-            sprint(showerror, e)
+        f(); nothing
+    catch e
+        while e isa LoadError
+            e = e.error
         end
+        sprint(showerror, e)
+    end
 end
 
 

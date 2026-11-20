@@ -11,9 +11,9 @@
         function fibs(a, b, n)
             out = [a]
             for _ in 1:n
-                    a, b = a + b, a
-                    push!(out, a)
-                end
+                a, b = a + b, a
+                push!(out, a)
+            end
             return out
         end
         for alg in _DISCRETE_ALGS

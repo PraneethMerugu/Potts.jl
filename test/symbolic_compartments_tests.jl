@@ -96,10 +96,10 @@ end
         # Cell and cluster divisions mix per kind, but one kind divides by one domain
         function divsys(cellk, clusterk)
             return Potts.PottsSystem(;
-                    name = :x, kinds = [:medium, :ka, :kb],
-                    lattice = Potts.lattice_spec((8, 8)), sweep = Potts.sweep_spec(:metropolis; temperature = 1.0),
-                    divisions = [Potts.divide(cellk; when = Potts.B.volume > 1), Potts.divide(clusterk; when = Potts.B.volume > 1)]
-                )
+                name = :x, kinds = [:medium, :ka, :kb],
+                lattice = Potts.lattice_spec((8, 8)), sweep = Potts.sweep_spec(:metropolis; temperature = 1.0),
+                divisions = [Potts.divide(cellk; when = Potts.B.volume > 1), Potts.divide(clusterk; when = Potts.B.volume > 1)]
+            )
         end
         err = try
             mtkcompile(divsys(Potts.cells(1), Potts.clusters(1, 2)))
@@ -185,25 +185,25 @@ end
         @test getfield(
             mtkcompile(
                 Potts.PottsSystem(;
-                base..., divisions = [
-                    Potts.divide(
-                        Potts.cells(1);
-                        when = Potts.B.cluster == Potts.B.id
-                    ),
-                ]
-            )
+                    base..., divisions = [
+                        Potts.divide(
+                            Potts.cells(1);
+                            when = Potts.B.cluster == Potts.B.id
+                        ),
+                    ]
+                )
             ), :uses_clusters
         )
         @test getfield(
             mtkcompile(
                 Potts.PottsSystem(;
-                base..., observed = [
-                    Potts._observed_eq(
-                        Potts.observed_var(:cv),
-                        Potts.B.cluster_volume
-                    ),
-                ]
-            )
+                    base..., observed = [
+                        Potts._observed_eq(
+                            Potts.observed_var(:cv),
+                            Potts.B.cluster_volume
+                        ),
+                    ]
+                )
             ), :uses_clusters
         )
     end

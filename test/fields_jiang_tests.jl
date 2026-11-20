@@ -23,18 +23,30 @@ end
         σ, kinds = jiang_state(JG_DIMS)
         @test Set(kinds) == Set([:N, :Q, :P])
         k = 2
-        integ = init(PottsProblem(JiangLike(; name = :j), [ownership => σ, kind => kinds], (0, k);
-            field_solver = BackwardEuler()), SequentialCPM(); save_start = false)
+        integ = init(
+            PottsProblem(
+                JiangLike(; name = :j), [ownership => σ, kind => kinds], (0, k);
+                field_solver = BackwardEuler()
+            ), SequentialCPM(); save_start = false
+        )
         names = (:o, :g, :l, :gf, :inh)
-        a = [(step!(integ); st = current_state(integ); (; (n => copy(Array(getproperty(st.site, n))) for n in names)...,
-                                                         ocell = copy(st.cell.ocell))) for _ in 1:k]
+        a = [
+            (
+                step!(integ); st = current_state(integ); (;
+                    (n => copy(Array(getproperty(st.site, n))) for n in names)...,
+                    ocell = copy(st.cell.ocell),
+                )
+            ) for _ in 1:k
+        ]
         @test integ.retcode in (Potts.SciMLBase.ReturnCode.Default, Potts.SciMLBase.ReturnCode.Success)
         @test size(a[1].o) == JG_DIMS .÷ 4
         # B: the same fields at the same window (a quarter MCS), the kind map of the frozen cells
         kmap = Int32[s == 0 ? 0 : findfirst(==(kinds[s]), [:P, :Q, :N]) for s in σ]
-        bp = Potts.LatticePDE.discretize(Potts.fields(JiangLike(; name = :j)),
+        bp = Potts.LatticePDE.discretize(
+            Potts.fields(JiangLike(; name = :j)),
             Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(JG_DIMS); T = Float64);
-            u0 = [n => zeros(JG_DIMS .÷ 4) for n in names], tspan = (0, k), inputs = [:kind => kmap])
+            u0 = [n => zeros(JG_DIMS .÷ 4) for n in names], tspan = (0, k), inputs = [:kind => kmap]
+        )
         sb = Potts.LatticePDE.solve(bp, BackwardEuler(); dt = 0.25, saveat = 1.0)
         for n in names
             @test [x[n] for x in a] == [sb[n, i] for i in 2:length(sb.t)]
@@ -47,9 +59,11 @@ end
         @test maximum(a[end].l) > 0 && maximum(a[end].inh) > 0
         # the cell average of O₂ through the coarse read (`after_mcs` runs after the MCS's field windows)
         o1 = a[2].o
-        hand = [sum(o1[((Tuple(I) .- 1) .÷ 4 .+ 1)...] for I in CartesianIndices(σ) if σ[I] == n) / count(==(n), σ)
-                for n in 1:length(kinds)]
-        @test a[2].ocell ≈ hand rtol = 1e-13
+        hand = [
+            sum(o1[((Tuple(I) .- 1) .÷ 4 .+ 1)...] for I in CartesianIndices(σ) if σ[I] == n) / count(==(n), σ)
+                for n in 1:length(kinds)
+        ]
+        @test a[2].ocell ≈ hand rtol = 1.0e-13
     end
 end
 
@@ -63,15 +77,20 @@ end
     @testset "the Jiang-like model equals its PDESystem with field_inputs (blocks covered in part)" begin
         σ, kinds = jiang_state(JG_DIMS)
         names = (:o, :g, :l, :gf, :inh)
-        integ = init(PottsProblem(JiangLike(; name = :j), [ownership => σ, kind => kinds], (0, 3);
-            field_solver = BackwardEuler()), SequentialCPM(); save_start = false)
+        integ = init(
+            PottsProblem(
+                JiangLike(; name = :j), [ownership => σ, kind => kinds], (0, 3);
+                field_solver = BackwardEuler()
+            ), SequentialCPM(); save_start = false
+        )
         step!(integ)
         pde = JgPDE.jiang(JG_DIMS)
         fi = Potts.field_inputs(integ, pde)
         # (the rim: 4×4×4 blocks the cells cover in part)
         blk = [fi[:pq][(4i - 3):(4i), (4j - 3):(4j), (4k - 3):(4k)] for i in 1:8, j in 1:8, k in 1:8]
         @test count(b -> any(b) && !all(b), blk) > 50
-        prob = Potts.LatticePDE.discretize(pde, Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(JG_DIMS); T = Float64);
+        prob = Potts.LatticePDE.discretize(
+            pde, Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(JG_DIMS); T = Float64);
             inputs = collect(fi), u0 = [n => copy(Array(getproperty(current_state(integ).site, n))) for n in names], tspan = (0.0, 1.0)
         )
         s = Potts.LatticePDE.solve(prob, BackwardEuler(); dt = 0.25)
@@ -84,15 +103,17 @@ end
         nq = count(s -> s != 0 && kinds[s] == :Q, σ) + 2 * count(s -> s != 0 && kinds[s] == :N, σ)
         @test nq == 1593
         nfree = [count(!, fi[:med][(4i - 3):(4i), (4j - 3):(4j), (4k - 3):(4k)]) for i in 1:8, j in 1:8, k in 1:8]
-        p0 = Potts.LatticePDE.discretize(pde, Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(JG_DIMS); T = Float64);
-            inputs = collect(fi), u0 = [n => zeros(JG_DIMS .÷ 4) for n in names], tspan = (0.0, 1e-6))
+        p0 = Potts.LatticePDE.discretize(
+            pde, Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(JG_DIMS); T = Float64);
+            inputs = collect(fi), u0 = [n => zeros(JG_DIMS .÷ 4) for n in names], tspan = (0.0, 1.0e-6)
+        )
         # (one window: the bound cannot see the `max(· − ·, 0)` switches, so the count is explicit)
         s0 = Potts.LatticePDE.solve(p0, ExplicitEuler(; substeps = 1); dt = 1.0e-6)
-        @test sum(nfree .* s0[:inh, length(s0.t)]) / 1e-6 ≈ 3 * nq rtol = 1e-8
+        @test sum(nfree .* s0[:inh, length(s0.t)]) / 1.0e-6 ≈ 3 * nq rtol = 1.0e-8
         step!(integ)
         for n in names
             got, want = s[n, length(s.t)], Array(getproperty(current_state(integ).site, n))
-            @test maximum(abs, got .- want) <= 1e-14 * max(1.0, maximum(abs, want)) ||
+            @test maximum(abs, got .- want) <= 1.0e-14 * max(1.0, maximum(abs, want)) ||
                 (println("Jiang $n: ", maximum(abs, got .- want)); false)
         end
     end
@@ -105,8 +126,12 @@ end
 @testitem "the Jiang-like default BackwardEuler is exact (newton = 2, no warning)" setup = [FieldsJiangSetup] tags = [:potts, :fields_jiang] begin
     @testset "the Jiang-like default BackwardEuler is exact (newton = 2, no warning)" begin
         σ, kinds = jiang_state(JG_DIMS)
-        @test_logs min_level = Base.CoreLogging.Warn init(PottsProblem(JiangLike(; name = :j), [ownership => σ, kind => kinds], (0, 1);
-            field_solver = BackwardEuler()), SequentialCPM(); save_start = false)
+        @test_logs min_level = Base.CoreLogging.Warn init(
+            PottsProblem(
+                JiangLike(; name = :j), [ownership => σ, kind => kinds], (0, 1);
+                field_solver = BackwardEuler()
+            ), SequentialCPM(); save_start = false
+        )
         # Lactate reads O₂ and glucose one way (they do not read it back), so the
         # default ExplicitEuler count is bounded (before 9afaac05: refused with
         # the route `field_solver = BackwardEuler()`, now checked on a loop in audit.jl)
@@ -118,9 +143,11 @@ end
         @test m == ""
         kmap = Int32[s == 0 ? 0 : findfirst(==(kinds[s]), [:P, :Q, :N]) for s in σ]
         names = (:o, :g, :l, :gf, :inh)
-        bp = Potts.LatticePDE.discretize(Potts.fields(JiangLike(; name = :j)),
+        bp = Potts.LatticePDE.discretize(
+            Potts.fields(JiangLike(; name = :j)),
             Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(JG_DIMS); T = Float64);
-            u0 = [n => zeros(JG_DIMS .÷ 4) for n in names], tspan = (0, 2), inputs = [:kind => kmap])
+            u0 = [n => zeros(JG_DIMS .÷ 4) for n in names], tspan = (0, 2), inputs = [:kind => kmap]
+        )
         shifted = [circshift(kmap, (s, 0, 0)) for s in 0:3]
         function run(alg)
             ig = init(bp, alg; dt = 0.25)
@@ -152,7 +179,7 @@ end
         # the 12-step comparison stays the real check and the scale keeps a red run visible without
         # pinning the toolchain.
         for n in names
-            @test maximum(abs, a2[n] .- b[n]) <= 1e-5 * max(1.0, maximum(abs, b[n]))
+            @test maximum(abs, a2[n] .- b[n]) <= 1.0e-5 * max(1.0, maximum(abs, b[n]))
         end
     end
 end
@@ -168,8 +195,12 @@ end
     @testset "the fold differs on partial blocks; one step moves the one-hop closure" begin
         σ, kinds = jiang_state(JG_DIMS)
         names = (:o, :g, :l, :gf, :inh)
-        integ = init(PottsProblem(JiangLike(; name = :j), [ownership => σ, kind => kinds], (0, 3);
-            field_solver = BackwardEuler()), SequentialCPM(); save_start = false)
+        integ = init(
+            PottsProblem(
+                JiangLike(; name = :j), [ownership => σ, kind => kinds], (0, 3);
+                field_solver = BackwardEuler()
+            ), SequentialCPM(); save_start = false
+        )
         step!(integ)
         pde = JgPDE.jiang(JG_DIMS)
         fi = Potts.field_inputs(integ, pde)
@@ -197,21 +228,25 @@ end
         # so a held node and a free node differ in both runs too
         u0 = [n => (n === :o ? fill(0.05, n8) : n === :g ? fill(4.0, n8) : n === :gf ? fill(0.5, n8) : fill(1.0, n8)) for n in names]
         disc = Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(JG_DIMS); T = Float64)
-        pnew = Potts.LatticePDE.discretize(pde, disc; inputs = collect(fi), u0 = u0, tspan = (0.0, 1e-6))
+        pnew = Potts.LatticePDE.discretize(pde, disc; inputs = collect(fi), u0 = u0, tspan = (0.0, 1.0e-6))
         # the majority twin: the same model with the mask at the coarse node (no fine read), so every
         # fold is the whole-block mean and a node the majority rule holds (more than half medium) is
         # held at v. These are the majority-rule semantics, built from the same fine inputs.
         medm = [nm[I] > nt ÷ 2 for I in CartesianIndices(nb)]
-        pmaj = Potts.LatticePDE.discretize(JgPDE.jiang(JG_DIMS; coarsemask = true), disc;
+        pmaj = Potts.LatticePDE.discretize(
+            JgPDE.jiang(JG_DIMS; coarsemask = true), disc;
             inputs = vcat([k2 => v2 for (k2, v2) in collect(fi) if k2 != :med], [:medc => medm]),
-            u0 = u0, tspan = (0.0, 1e-6))
+            u0 = u0, tspan = (0.0, 1.0e-6)
+        )
         inew = init(pnew, ExplicitEuler(; substeps = 1); dt = 1.0e-6); step!(inew)
         imaj = init(pmaj, ExplicitEuler(; substeps = 1); dt = 1.0e-6); step!(imaj)
         # (one explicit step: its value difference is the support of the rate difference; no diffusion
         # solve spreads it, and h = 1e-6 keeps Do, Dg and Dl stable)
         function nbhd(J)
-            d = (CartesianIndex(1, 0, 0), CartesianIndex(-1, 0, 0), CartesianIndex(0, 1, 0),
-                 CartesianIndex(0, -1, 0), CartesianIndex(0, 0, 1), CartesianIndex(0, 0, -1))
+            d = (
+                CartesianIndex(1, 0, 0), CartesianIndex(-1, 0, 0), CartesianIndex(0, 1, 0),
+                CartesianIndex(0, -1, 0), CartesianIndex(0, 0, 1), CartesianIndex(0, 0, -1),
+            )
             return [J + x for x in d if all(1 .<= Tuple(J + x) .<= Tuple(nb))]
         end
         closure = [nm[I] == 0 && any(held[K] for K in nbhd(I)) for I in CartesianIndices(nb)]

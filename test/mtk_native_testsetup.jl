@@ -289,11 +289,11 @@ end
 
 function emsg(f, E::Type{<:Exception} = ArgumentError)
     return try
-            f(); ""
-        catch e
-            e isa E || return "wrong exception $(typeof(e)), expected $E"
-            sprint(showerror, e)
-        end
+        f(); ""
+    catch e
+        e isa E || return "wrong exception $(typeof(e)), expected $E"
+        sprint(showerror, e)
+    end
 end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end

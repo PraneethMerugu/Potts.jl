@@ -6,11 +6,11 @@ using Potts: LatticePDE
 
 function check_msg(f, E::Type{<:Exception} = ArgumentError)
     return try
-            f()
-            "built"
-        catch e
-            e isa E ? sprint(showerror, e) : "wrong exception $(typeof(e)), expected $E"
-        end
+        f()
+        "built"
+    catch e
+        e isa E ? sprint(showerror, e) : "wrong exception $(typeof(e)), expected $E"
+    end
 end
 
 function check_build_err(ex, E::Type{<:Exception} = ArgumentError)
@@ -46,16 +46,16 @@ module Check
     lapsite() = pdesystem([Differential(t)(C) ~ 0.1 * laplacian(C) + 0.1 * laplacian(v(t, x, y))]; name = :lapsite)
     function faces()
         return pdesystem(
-                [Differential(t)(C) ~ 0.3 * laplacian(C) - 0.2 * C + 0.05 * x],
-                [c(0, x, y) ~ 1.0, c(t, 0, y) ~ 0.0, ra * c(t, x, 0) + rb * Differential(y)(c(t, x, 0)) ~ g]; name = :faces
-            )
+            [Differential(t)(C) ~ 0.3 * laplacian(C) - 0.2 * C + 0.05 * x],
+            [c(0, x, y) ~ 1.0, c(t, 0, y) ~ 0.0, ra * c(t, x, 0) + rb * Differential(y)(c(t, x, 0)) ~ g]; name = :faces
+        )
     end
     function faces_owned()
         return pdesystem(
-                [Differential(t)(C) ~ 0.3 * laplacian(C) - 0.2 * C + 0.05 * x],
-                [c(0, x, y) ~ 1.0, c(t, 0, y) ~ 0.0, ra * c(t, x, 0) + rb * Differential(y)(c(t, x, 0)) ~ g]; name = :faces,
-                domain = lattice_domain(t, (x, y), (8, 8))
-            )
+            [Differential(t)(C) ~ 0.3 * laplacian(C) - 0.2 * C + 0.05 * x],
+            [c(0, x, y) ~ 1.0, c(t, 0, y) ~ 0.0, ra * c(t, x, 0) + rb * Differential(y)(c(t, x, 0)) ~ g]; name = :faces,
+            domain = lattice_domain(t, (x, y), (8, 8))
+        )
     end
     xflux() = pdesystem([Differential(t)(C) ~ 0.1 * Differential(x)(Differential(x)(C)) + 0.01 * x]; name = :xflux)
     zflux() = pdesystem([Differential(t)(C) ~ 0.1 * Differential(z)(Differential(z)(C))]; name = :zflux)
@@ -63,9 +63,9 @@ module Check
     plain() = pdesystem([Differential(t)(C) ~ Dc * laplacian(C) - 0.1 * C + 0.1]; name = :plain)
     function robinu(a = u(t, x, y))
         return pdesystem(
-                [Differential(t)(C) ~ Dc * laplacian(C), Differential(t)(u(t, x, y)) ~ -0.1 * u(t, x, y)],
-                [(1 + a) * c(t, 0, y) - Differential(x)(c(t, 0, y)) ~ 0.3]; name = :fac
-            )
+            [Differential(t)(C) ~ Dc * laplacian(C), Differential(t)(u(t, x, y)) ~ -0.1 * u(t, x, y)],
+            [(1 + a) * c(t, 0, y) - Differential(x)(c(t, 0, y)) ~ 0.3]; name = :fac
+        )
     end
     nonlin() = pdesystem([Differential(t)(C) ~ Dc * laplacian(C) - 0.1 * C^3]; name = :nonlin)
 end
@@ -165,11 +165,11 @@ end
 
 function check_names(m)
     return sort!(
-            [
-                String(Potts.LatticePDE.get_lattice_input_name(Potts.Symbolics.unwrap(d)))
-                    for d in Potts.fields(m).dvs if Potts.ModelingToolkitBase.isinput(Potts.Symbolics.unwrap(d))
-            ]
-        )
+        [
+            String(Potts.LatticePDE.get_lattice_input_name(Potts.Symbolics.unwrap(d)))
+                for d in Potts.fields(m).dvs if Potts.ModelingToolkitBase.isinput(Potts.Symbolics.unwrap(d))
+        ]
+    )
 end
 
 function check_owned(f)

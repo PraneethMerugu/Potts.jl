@@ -44,13 +44,13 @@ end
         # LatticePDE's own run of the same system (no cells: σ is the medium), `k` windows of length 1
         function own(sys, u0, k, alg)
             return reshape(
-                    LP.solve(
-                        LP.remake(
-                            LP.discretize(sys, LP.LatticeDiscretization(LP.Grid(size(u0)); T = Float64));
-                            u0 = vec(u0), tspan = (0.0, Float64(k))
-                        ), alg; dt = 1.0
-                    ).u[end], size(u0)
-                )
+                LP.solve(
+                    LP.remake(
+                        LP.discretize(sys, LP.LatticeDiscretization(LP.Grid(size(u0)); T = Float64));
+                        u0 = vec(u0), tspan = (0.0, Float64(k))
+                    ), alg; dt = 1.0
+                ).u[end], size(u0)
+            )
         end
         c0 = [0.01 * (i + 3j) for i in 1:8, j in 1:6]
         for (B, sys) in ((CeAdvB, CeAdv.adv((8, 6))), (CeAdvConstB, CeAdv.advconst((8, 6))))

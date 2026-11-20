@@ -77,7 +77,8 @@ function _sentinel_state(st, ph; drop = nothing)
     model = setdiff((r.model..., (ph.scope === :model ? ph.names : ())...), (drop,))
     return CorePotts.CPMState(
         r.ownership && drop !== :ownership ? deepcopy(st.ownership) : _sentinel(st.ownership), _keep_only(st.cell, cell),
-        _keep_only(st.site, setdiff(r.site, (drop,))), _keep_only(st.model, model), _keep_only(st.history, r.history))
+        _keep_only(st.site, setdiff(r.site, (drop,))), _keep_only(st.model, model), _keep_only(st.history, r.history)
+    )
 end
 
 # Runs every adaptive phase of `prob` on the state after 3 MCS, on a copy and on a sentinel
@@ -121,7 +122,7 @@ end
     @energy cells => (volume - 16.0)^2
     @equations begin
         D(y) ~ -k * J[kind] * y + 0.01 * centroid(1) + 0.001 * integral(h) + 0.01 * w[max(id - 1, 1)] +
-               0.001 * g + 0.001 * surface + 0.001 * major_length
+            0.001 * g + 0.001 * surface + 0.001 * major_length
         D(g) ~ -0.1 * g + 0.001 * sum(h for s in sites) + 0.01 * count(true for c in cells(B))
     end
     @sweep Metropolis(; temperature = 1.0)
@@ -140,7 +141,7 @@ end
     @energy cells => (volume - 16.0)^2
     @equations begin
         D(y) ~ -0.1 * y + 0.01 * sum(z[c] for c in cells) * (1 + 0 * time) + 0.01 * y[max(id - 1, 1)] +
-               0.01 * sum(v[owner[n]] * kind[n] for n in Moore(1)(64) if owner[n] != id)
+            0.01 * sum(v[owner[n]] * kind[n] for n in Moore(1)(64) if owner[n] != id)
         D(z) ~ -0.2 * z
         D(g) ~ -0.1 * g + 0.01 * Pre(gm, 1) + 0.001 * sum(kind == 1 for s in sites)
     end
@@ -223,11 +224,11 @@ end
     @testset "adaptive ODE substeps: ensembles, failures, refusals, nesting and cadence" begin
         σ = zeros(Int32, 20, 20); σ[3:6, 3:6] .= 1; σ[12:15, 12:15] .= 2
         op = [ownership => σ, kind => [:A, :B]]
-        p = PottsProblem(adaptive_model(), op, (0, 3); ode_solver = Adaptive(Tsit5(); reltol = 1e-8))
+        p = PottsProblem(adaptive_model(), op, (0, 3); ode_solver = Adaptive(Tsit5(); reltol = 1.0e-8))
         # one integrator per trajectory (ensembles), rebuilt for another parameter-tuple type
         ens = solve(EnsembleProblem(p), SequentialCPM(), EnsembleThreads(); trajectories = 8)
         @test all(s -> s.u[end].cell.y[1] ≈ exp(-0.9), ens.u)
-        @test solve(p, CheckerboardCPM(; proposal = Moore(1))).u[end].cell.y[1] ≈ exp(-0.9) rtol = 1e-6
+        @test solve(p, CheckerboardCPM(; proposal = Moore(1))).u[end].cell.y[1] ≈ exp(-0.9) rtol = 1.0e-6
         # a failing adaptive ODE substep ends the run through the integrator retcode
         # (cell scope on CPU writes cells before the failing cell in place; on a device no copyback happens)
         bad = PottsProblem(adaptive_model(), op, (0, 3); ode_solver = Adaptive(Tsit5(); maxiters = 5))
@@ -262,8 +263,12 @@ end
                 ], (0, 1)
             )
         )
-        r = PottsProblem(VectorBits(; name = :v), [ownership => (s = zeros(Int32, 12, 12); s[4:6, 4:6] .= 1; s), kind => [1],
-            :q => [4.0, 5.0, 6.0]], (0, 1))
+        r = PottsProblem(
+            VectorBits(; name = :v), [
+                ownership => (s = zeros(Int32, 12, 12); s[4:6, 4:6] .= 1; s), kind => [1],
+                :q => [4.0, 5.0, 6.0],
+            ], (0, 1)
+        )
         @test r.u0.cell.q_2[1] == 5.0                                       # a flat vector: the vector itself
         σf = zeros(Int32, 16, 16); σf[3:8, 3:8] .= 1
         integ = init(PottsProblem(Fresh(; name = :f), [ownership => σf, kind => [1]], (0, 4); capacity = 8), SequentialCPM())
@@ -318,8 +323,10 @@ end
         lat = CorePotts.Lattice((20, 20))
         σ = zeros(Int32, 20, 20); σ[3:7, 4:6] .= 1; σ[12:15, 9:16] .= 2
         mom = CorePotts.init_moments(σ, lat, 2)
-        cell = (; kind = Int32[1, 2], volume = Int32[count(==(c), σ) for c in 1:2], anchor = mom.anchor, m1 = mom.m1,
-            m2 = mom.m2, cluster = Int32[2, 2], surface = Int32[16, 24], z = [1.0, 2.0])
+        cell = (;
+            kind = Int32[1, 2], volume = Int32[count(==(c), σ) for c in 1:2], anchor = mom.anchor, m1 = mom.m1,
+            m2 = mom.m2, cluster = Int32[2, 2], surface = Int32[16, 24], z = [1.0, 2.0],
+        )
         prop = CorePotts.Proposal{2}(1, 2, (2, 7), 1, Int32(0), Int32(1))
         calls = Dict(
             "CorePotts.centroid_distance" => c -> CorePotts.centroid_distance(Float64, c, lat, 1, 2),
@@ -328,7 +335,8 @@ end
             "Potts._centroid_axis" => c -> Potts._centroid_axis(Float64, c, lat, 2, 1),
             "Potts._displacement_axis" => c -> Potts._displacement_axis(Float64, c, lat, prop, 1, 1),
             "CorePotts.major_length" => c -> CorePotts.major_length(Float64, c, lat, 2),
-            "CorePotts.cluster_of" => c -> CorePotts.cluster_of(c, 1))
+            "CorePotts.cluster_of" => c -> CorePotts.cluster_of(c, 1)
+        )
         @test Set(keys(calls)) == Set(keys(Potts._CELL_HELPER_READS))       # every listed helper is pinned
         for (name, f) in calls
             listed = Potts._CELL_HELPER_READS[name]
@@ -350,7 +358,7 @@ end
     @testset "adaptive phases: leaves outside the scanned reads do not matter" begin
         σ = zeros(Int32, 20, 20); σ[3:6, 3:6] .= 1; σ[7:10, 3:6] .= 2; σ[12:15, 12:15] .= 3
         op = [ownership => σ, kind => [:A, :B, :A]]
-        AD = Adaptive(Tsit5(); reltol = 1e-8)
+        AD = Adaptive(Tsit5(); reltol = 1.0e-8)
         pa = PottsProblem(SentinelA(; name = :a), op, (0, 5); ode_solver = AD)
         pb = PottsProblem(SentinelB(; name = :b), op, (0, 5); ode_solver = AD)
         for prob in (pa, pb), (ok, ph) in _sentinel_probe(prob)

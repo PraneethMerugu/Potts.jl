@@ -83,7 +83,8 @@ function ab_disturbances(; exclude = Int[])
     BenchMachine.pins(m) ||
         return BenchMachine.busy_reasons(; gpu = AB_GPU, ci = AB_WAIT == "all", exclude)
     c = something(BenchMachine.allowed_cpus(), Int[])
-    return BenchMachine.disturbances(length(c) == 1 ? only(c) : -1, m.bench;
+    return BenchMachine.disturbances(
+        length(c) == 1 ? only(c) : -1, m.bench;
         gpu = AB_GPU, ci = AB_WAIT == "all", exclude
     )
 end
@@ -102,10 +103,12 @@ include(joinpath(@__DIR__, "gate.jl"))
 using Statistics: median
 
 # `boundary` (D-177, D-198): sequential copy attempts at boundary sites only
-const AB_ALGS = Dict("sequential" => (SequentialCPM(), false),
+const AB_ALGS = Dict(
+    "sequential" => (SequentialCPM(), false),
     "checkerboard" => (CheckerboardCPM(), false),
     "boundary" => (SequentialCPM(; skip_interior = true), false),
-    "metal" => (CheckerboardCPM(), true), "rocm" => (CheckerboardCPM(), true))
+    "metal" => (CheckerboardCPM(), true), "rocm" => (CheckerboardCPM(), true)
+)
 
 function ab_variant(v; load_backend = true)
     haskey(AB_ALGS, v) ||
@@ -122,7 +125,7 @@ nsites(u) = length(hasproperty(u, :ownership) ? u.ownership : u.σ)
 
 function ab_time(prob, alg, backend; samples, seconds, gctrial = backend !== nothing)
     fresh_integrator(prob, alg, backend)
-    b = run(@benchmarkable timed_step!(i, $backend) setup=(i=fresh_integrator($prob, $alg, $backend)) evals=1 samples=samples seconds=seconds gctrial=gctrial)
+    b = run(@benchmarkable timed_step!(i, $backend) setup = (i = fresh_integrator($prob, $alg, $backend)) evals = 1 samples = samples seconds = seconds gctrial = gctrial)
     n = nsites(prob.u0)
     # the largest per-sample GC time, and the allocations and bytes (BenchmarkTools keeps the
     # minimum over samples, so these only show allocation in every sample; the GC field is the check)
@@ -220,11 +223,11 @@ function ab_run_prepared!(
     )
     items = if resolve_dev
         [
-                (;
-                    item.label, item.prob, item.alg,
-                    backend = item.dev ? device_backend() : nothing,
-                ) for item in prepared
-            ]
+            (;
+                item.label, item.prob, item.alg,
+                backend = item.dev ? device_backend() : nothing,
+            ) for item in prepared
+        ]
     else
         prepared
     end
@@ -303,8 +306,10 @@ function ab_one_main(pos, opts)
             haskey(opts, "no-control") ||
                 append!(sides, ["base-ctl" => vs[1][2](T), "cand-ctl" => vs[2][2](T)])
             for r in 1:rounds, (label, prob) in circshift(sides, -(r - 1))
-                med, mn, k, gc, al, mem = ab_time(prob, alg, backend; samples, seconds,
-                    gctrial = gctrial_for(backend))
+                med, mn, k, gc, al, mem = ab_time(
+                    prob, alg, backend; samples, seconds,
+                    gctrial = gctrial_for(backend)
+                )
                 ab_check_gc!("$label:$v", backend, gc)
                 println("ABR $label:$v $med $mn $k $gc $al $mem")
                 flush(stdout)

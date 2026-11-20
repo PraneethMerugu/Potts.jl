@@ -110,8 +110,10 @@ end
     @testset "BDF2's history survives σ moves; writes, reinit! and checkpoints restart it" begin
         dims = (16, 16)
         σ = zeros(Int32, dims...); σ[4:8, 4:8] .= 1
-        integ = init(PottsProblem(FiMoving(; name = :f), [ownership => σ, kind => [:A]], (0, 8); field_solver = BDF2()),
-            SequentialCPM(); save_start = false)
+        integ = init(
+            PottsProblem(FiMoving(; name = :f), [ownership => σ, kind => [:A]], (0, 8); field_solver = BDF2()),
+            SequentialCPM(); save_start = false
+        )
         step!(integ)
         rt = fi_rt(integ)
         σs = [copy(Array(current_state(integ).ownership))]
@@ -203,8 +205,10 @@ end
         s = @test_logs (:warn, r"field `c`: the solve failed in the field step of MCS 1 .*\(the steady solve made no real reduction.*`ReturnCode.ConvergenceFailure`: the run stops; give that region a decay or a fixed value, or step the field with `BackwardEuler`") match_mode = :any solve!(integ)
         @test s.retcode == Potts.SciMLBase.ReturnCode.ConvergenceFailure && integ.t == 1
         # with a decay everywhere, solved
-        s = solve(PottsProblem(FiNoIsland(; name = :f), [ownership => σ, kind => [:A]], (0, 3); field_solver = QuasiSteady()),
-            SequentialCPM())
+        s = solve(
+            PottsProblem(FiNoIsland(; name = :f), [ownership => σ, kind => [:A]], (0, 3); field_solver = QuasiSteady()),
+            SequentialCPM()
+        )
         @test s.retcode == Potts.SciMLBase.ReturnCode.Success
     end
 end
@@ -256,7 +260,7 @@ end
         dims, k = (12, 10), 3
         an, _ = fi_runA(FiSteadyNeg, fi_op(dims), k; field_solver = QuasiSteady(; linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 64)))
         a0, _ = fi_runA(FiSteady0, fi_op(dims), k; field_solver = QuasiSteady(; linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 64)))
-        @test maximum(abs, an[end] .- a0[end]) < 1e-10
+        @test maximum(abs, an[end] .- a0[end]) < 1.0e-10
         al, integ = fi_runA(FiLocal, fi_op(dims), k)
         @test substep_counts(integ)[1] == 1 && maximum(al[end]) > 0
         @test al == fi_runB(FiLocal, dims, k; u0 = [:c => zeros(dims), :e => zeros(dims)])
@@ -273,7 +277,7 @@ end
         for n in 1:3
             step!(integ)
             st = current_state(integ).site
-            @test maximum(abs, Array(st.w) .- 0.375^n) < 1e-9 && maximum(abs, Array(st.u) .- 0.5 * 0.375^(n - 1)) < 1e-9
+            @test maximum(abs, Array(st.w) .- 0.375^n) < 1.0e-9 && maximum(abs, Array(st.u) .- 0.5 * 0.375^(n - 1)) < 1.0e-9
         end
         fi_throws(
             ArgumentError,
@@ -327,15 +331,16 @@ end
         ref, _ = fi_runA(FiSteady, fi_op(dims), 1; field_solver = QuasiSteady(; linsolve = tight))
         for fs in (
                 BackwardEuler(; init = :steady, linsolve = tight), ExplicitEuler(; init = :steady), CrankNicolson(; init = :steady),
-                   BDF2(; init = :steady), QuasiSteady(; init = :steady))
+                BDF2(; init = :steady), QuasiSteady(; init = :steady),
+            )
             integ = init(PottsProblem(FiSteady(; name = :f), fi_op(dims), (0, 3); field_solver = fs), SequentialCPM())
             c0 = copy(Array(current_state(integ).site.c))
-            @test maximum(abs, c0 .- ref[1]) < (fs isa BackwardEuler ? 1e-9 : 1e-5) || (println("12c A init ", fs); false)
+            @test maximum(abs, c0 .- ref[1]) < (fs isa BackwardEuler ? 1.0e-9 : 1.0e-5) || (println("12c A init ", fs); false)
             @test integ.stats.fields.solves >= 1 && integ.retcode == FiRC.Default
             s = solve!(integ)
-            @test s.retcode == FiRC.Success && maximum(abs, Array(current_state(integ).site.c) .- ref[1]) < 1e-5
+            @test s.retcode == FiRC.Success && maximum(abs, Array(current_state(integ).site.c) .- ref[1]) < 1.0e-5
             reinit!(integ)
-            @test maximum(abs, Array(current_state(integ).site.c) .- c0) < 1e-12
+            @test maximum(abs, Array(current_state(integ).site.c) .- c0) < 1.0e-12
         end
         # without it the start is the initial value
         integ = init(PottsProblem(FiSteady(; name = :f), fi_op(dims), (0, 3); field_solver = BackwardEuler()), SequentialCPM())
@@ -388,8 +393,12 @@ end
             () -> PottsProblem(FiRobinN(; name = :f), fi_op(dims), (0, 3); field_solver = QuasiSteady())
         )
         σ = zeros(Int32, 16, 16); σ[4:7, 4:7] .= 1; σ[10:13, 9:12] .= 2
-        integ = init(PottsProblem(FiMoving(; name = :f), [ownership => σ, kind => [:A, :A]], (0, 20);
-            field_solver = QuasiSteady(), seed = 3), SequentialCPM(); save_start = false)
+        integ = init(
+            PottsProblem(
+                FiMoving(; name = :f), [ownership => σ, kind => [:A, :A]], (0, 20);
+                field_solver = QuasiSteady(), seed = 3
+            ), SequentialCPM(); save_start = false
+        )
         foreach(_ -> step!(integ), 1:3)
         c3, σ3 = copy(Array(current_state(integ).site.c)), copy(Array(current_state(integ).ownership))
         step!(integ)
@@ -397,7 +406,8 @@ end
         @test Array(st.ownership) != σ3
         K4 = Int32.(Array(st.ownership) .!= 0)
         @test Array(st.site.c) == fi_runB(FiMoving, (16, 16), 1; u0 = [:c => c3], inputs = [:kind => K4], alg = QuasiSteady())[1]
-        @test Array(st.site.c) != fi_runB(FiMoving, (16, 16), 1; u0 = [:c => c3], inputs = [:kind => Int32.(σ3 .!= 0)],
+        @test Array(st.site.c) != fi_runB(
+            FiMoving, (16, 16), 1; u0 = [:c => c3], inputs = [:kind => Int32.(σ3 .!= 0)],
             alg = QuasiSteady()
         )[1]
     end

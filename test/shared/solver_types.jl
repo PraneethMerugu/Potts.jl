@@ -6,18 +6,22 @@
 # and passed. They are defined once per process in a module with a deterministic name and imported
 # here, so the printed form is the same in a 4-worker run and in a single item run.
 if !isdefined(Main, :PottsSolverTestTypes)
-    Core.eval(Main, :(module PottsSolverTestTypes
-        struct SweepHolder{F}
-            f::F
-        end
-        (h::SweepHolder)(a, b) = h.f(a, b)
-        struct SweepFnSub <: Function end
-        (::SweepFnSub)(a, b) = min(a, b)
-        struct SweepMix
-            w::Float64
-        end
-        (m::SweepMix)(a, b) = m.w * a + (1 - m.w) * b
-    end))
+    Core.eval(
+        Main, :(
+            module PottsSolverTestTypes
+            struct SweepHolder{F}
+                f::F
+            end
+            (h::SweepHolder)(a, b) = h.f(a, b)
+            struct SweepFnSub <: Function end
+            (::SweepFnSub)(a, b) = min(a, b)
+            struct SweepMix
+                w::Float64
+            end
+            (m::SweepMix)(a, b) = m.w * a + (1 - m.w) * b
+            end
+        )
+    )
 end
 import Main.PottsSolverTestTypes
 using Main.PottsSolverTestTypes: SweepHolder, SweepFnSub, SweepMix

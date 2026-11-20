@@ -41,7 +41,8 @@ function transfer_divide_problem(; T = Float64, tspan = (0, 4))
     σ[10:13, 5:6] .= 2
     return PottsProblem(
         TransferDivide(; name = :transfer), [ownership => σ, kind => [:A, :A]], tspan;
-        T, capacity = 6)
+        T, capacity = 6
+    )
 end
 
 
@@ -69,8 +70,10 @@ function transfer_hostphase_problem(; T = Float64)
     σ[8:11, 7:10] .= 2
     u0 = CorePotts.initial_state(σ, Int32[1, 1]; cell = (; x = zeros(T, 2), y = zeros(T, 2)))
     dH(st, p, prop, ctx) = CorePotts.volume_delta(st.cell.volume, prop, (v, c) -> p.λ * (v - p.V0)^2)
-    f = CorePotts.CPMFunction(dH; temperature = (st, p, prop, ctx) -> p.T,
-        phases = CorePotts.Phases(; after_mcs = (CorePotts.HostPhase((cell, st, p, ctx, mcs) -> nothing),)))
+    f = CorePotts.CPMFunction(
+        dH; temperature = (st, p, prop, ctx) -> p.T,
+        phases = CorePotts.Phases(; after_mcs = (CorePotts.HostPhase((cell, st, p, ctx, mcs) -> nothing),))
+    )
     return CorePotts.PottsProblem(f, u0, CorePotts.Lattice(size(σ)), (0, 4), (; λ = T(1), V0 = T(16), T = T(2)))
 end
 
@@ -90,8 +93,10 @@ function transfer_declared_problem(; T = Float64)
     u0 = CorePotts.initial_state(σ, Int32[1, 1]; cell = (; x = ones(T, 2), y = zeros(T, 2), z = zeros(T, 2)))
     dH(st, p, prop, ctx) = CorePotts.volume_delta(st.cell.volume, prop, (v, c) -> p.λ * (v - p.V0)^2)
     body!(cell, st, p, ctx, mcs) = (cell.y .+= cell.x; nothing)
-    f = CorePotts.CPMFunction(dH; temperature = (st, p, prop, ctx) -> p.T,
-        phases = CorePotts.Phases(; after_mcs = (CorePotts.HostPhase(body!; reads = (:x,), writes = (:y,)),)))
+    f = CorePotts.CPMFunction(
+        dH; temperature = (st, p, prop, ctx) -> p.T,
+        phases = CorePotts.Phases(; after_mcs = (CorePotts.HostPhase(body!; reads = (:x,), writes = (:y,)),))
+    )
     lat = CorePotts.Lattice(size(σ); domain = trues(size(σ)))
     return CorePotts.PottsProblem(f, u0, lat, (0, 4), (; λ = T(1), V0 = T(16), T = T(2)))
 end
@@ -109,10 +114,14 @@ function transfer_param_problem(body!; T = Float32, declared = true)
     u0 = CorePotts.initial_state(σ, Int32[1, 1]; cell = (; y = zeros(T, 2)))
     dH(st, p, prop, ctx) = CorePotts.volume_delta(st.cell.volume, prop, (v, c) -> p.λ * (v - p.V0)^2)
     ph = declared ? CorePotts.HostPhase(body!; reads = (), writes = (:y,)) : CorePotts.HostPhase(body!)
-    f = CorePotts.CPMFunction(dH; temperature = (st, p, prop, ctx) -> p.T,
-        phases = CorePotts.Phases(; after_mcs = (ph,)))
-    return CorePotts.PottsProblem(f, u0, CorePotts.Lattice(size(σ)), (0, 4),
-        (; λ = T(1), V0 = T(16), T = T(2), Q = T[1, 1], acc = T[0]))
+    f = CorePotts.CPMFunction(
+        dH; temperature = (st, p, prop, ctx) -> p.T,
+        phases = CorePotts.Phases(; after_mcs = (ph,))
+    )
+    return CorePotts.PottsProblem(
+        f, u0, CorePotts.Lattice(size(σ)), (0, 4),
+        (; λ = T(1), V0 = T(16), T = T(2), Q = T[1, 1], acc = T[0])
+    )
 end
 
 transfer_read_q!(cell, st, p, ctx, mcs) = (cell.y[1] += Array(p.Q)[1]; nothing)
@@ -174,7 +183,9 @@ if PottsDevices.device_name() == "metal"
                 module TransferCountersOnDevice
                     include($runner)
                     PottsModelsTestFile.run_file(@__MODULE__, $counters_path)
-        end))
+                end
+            )
+        )
     end
 end
 const TRANSFER_ON_METAL = PottsDevices.device_name() == "metal" && isdefined(@__MODULE__, :TransferCountersOnDevice)
@@ -184,7 +195,7 @@ const TRANSFER_METAL_VERSION = TRANSFER_ON_METAL ? pkgversion(PottsDevices.devic
 const TRANSFER_WAITS_ON = TRANSFER_ON_METAL && TRANSFER_METAL_VERSION == v"1.10.0"
 
 TRANSFER_WAITS_ON && transfer_instrument_waits!()
-      # at top level: the testsets must see the new methods
+# at top level: the testsets must see the new methods
 
 """GPU waits and counter deltas of `f()`."""
 function transfer_waits(f)

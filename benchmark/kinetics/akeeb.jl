@@ -9,13 +9,17 @@ const OUT = expanduser(ARGS[2])
 mkpath(OUT)
 const POINTS = (P1 = (2.0, 24.0, 0.5), P4 = (-2.0, 15.0, 0.5), P5 = (5.0, 3.0, 0.5))     # (J_LF, λ, PP), the page's
 const METRICS = (:invasive, :infiltrative, :singles, :fingers, :detached, :clusters)
-const ARMS = [("seq", SequentialCPM(; proposal = VonNeumann(1)), false),
+const ARMS = [
+    ("seq", SequentialCPM(; proposal = VonNeumann(1)), false),
     ("cb", CheckerboardCPM(; proposal = VonNeumann(1)), true),
-    ("cb_cpu", CheckerboardCPM(; proposal = VonNeumann(1)), false)]
+    ("cb_cpu", CheckerboardCPM(; proposal = VonNeumann(1)), false),
+]
 function problem(pt, seed)
     p = POINTS[pt]
-    return PottsProblem(AkeebInvasion(; name = :akeeb, J = akeeb_contacts(p[1]), μ = p[2]),
-        akeeb_state(; pp = p[3], seed = 0x5cd2609 + seed), (0, 701); capacity = 4000, seed)
+    return PottsProblem(
+        AkeebInvasion(; name = :akeeb, J = akeeb_contacts(p[1]), μ = p[2]),
+        akeeb_state(; pp = p[3], seed = 0x05cd2609 + seed), (0, 701); capacity = 4000, seed
+    )
 end
 function run_one(pt, alg, gpu, seed)
     sol = if gpu

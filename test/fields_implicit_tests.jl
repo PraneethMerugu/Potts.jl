@@ -16,11 +16,11 @@
     @testset "BackwardEuler coupled models equal LatticePDE owned run" begin
         fi_check_table_rows(
             (
-            (FiMix, BackwardEuler(), 8, (:c, :e), true, true),
-            (FiRobinP, BackwardEuler(), 3, (:c,), false, false),
-            (FiFieldFace, BackwardEuler(), 3, (:c,), false, false),
-            (FiMaskField, BackwardEuler(), 3, (:c,), true, false),
-            (FiRobinN, BackwardEuler(), 3, (:c,), false, false),
+                (FiMix, BackwardEuler(), 8, (:c, :e), true, true),
+                (FiRobinP, BackwardEuler(), 3, (:c,), false, false),
+                (FiFieldFace, BackwardEuler(), 3, (:c,), false, false),
+                (FiMaskField, BackwardEuler(), 3, (:c,), true, false),
+                (FiRobinN, BackwardEuler(), 3, (:c,), false, false),
             )
         )
     end
@@ -30,10 +30,10 @@ end
     @testset "CrankNicolson and BDF2 coupled models equal LatticePDE owned run" begin
         fi_check_table_rows(
             (
-            (FiStill, CrankNicolson(), 4, (:c,), false, false),
-            (FiMix, CrankNicolson(), 4, (:c, :e), true, true),
-            (FiStill, BDF2(), 4, (:c,), false, false),
-            (FiMix, BDF2(), 4, (:c, :e), true, true),
+                (FiStill, CrankNicolson(), 4, (:c,), false, false),
+                (FiMix, CrankNicolson(), 4, (:c, :e), true, true),
+                (FiStill, BDF2(), 4, (:c,), false, false),
+                (FiMix, BDF2(), 4, (:c, :e), true, true),
             )
         )
     end
@@ -43,12 +43,12 @@ end
     @testset "QuasiSteady coupled models equal LatticePDE owned run" begin
         fi_check_table_rows(
             (
-            (FiStill, QuasiSteady(), 4, (:c,), false, true),
-            (FiSteady, QuasiSteady(), 4, (:c,), true, true),
-            (FiRobinP, QuasiSteady(), 4, (:c,), false, false),
-            (FiRobinQ, QuasiSteady(), 4, (:c,), false, false),
-            (FiFieldFace, QuasiSteady(), 4, (:c,), false, false),
-            (FiMaskField, QuasiSteady(), 4, (:c,), true, false),
+                (FiStill, QuasiSteady(), 4, (:c,), false, true),
+                (FiSteady, QuasiSteady(), 4, (:c,), true, true),
+                (FiRobinP, QuasiSteady(), 4, (:c,), false, false),
+                (FiRobinQ, QuasiSteady(), 4, (:c,), false, false),
+                (FiFieldFace, QuasiSteady(), 4, (:c,), false, false),
+                (FiMaskField, QuasiSteady(), 4, (:c,), true, false),
             )
         )
     end
@@ -74,16 +74,22 @@ end
         # Hexagonal lattice (`FiHexF`, `FiHex`)
         k = 4
         ah, ih = fi_runA(FiHexF, fi_op(dims), k)
-        bp = Potts.LatticePDE.discretize(Potts.fields(FiHexF(; name = :f)),
-            Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(dims; geometry = Potts.LatticeFields.IR.HEX);
-                T = Float64); u0 = [:c => zeros(dims)], tspan = (0, k), inputs = [:kind => fi_kin(dims)])
+        bp = Potts.LatticePDE.discretize(
+            Potts.fields(FiHexF(; name = :f)),
+            Potts.LatticePDE.LatticeDiscretization(
+                Potts.LatticePDE.Grid(dims; geometry = Potts.LatticeFields.IR.HEX);
+                T = Float64
+            ); u0 = [:c => zeros(dims)], tspan = (0, k), inputs = [:kind => fi_kin(dims)]
+        )
         @test ah == (s -> [s[:c, i] for i in 2:length(s.t)])(Potts.LatticePDE.solve(bp, BackwardEuler(); dt = 1.0, saveat = 1.0))
         @test fi_rt(ih).cache.newton == 1 && ih.stats.fields.solves == k && all(ah[end][fi_kin(dims) .== 1] .== 1.5)
         ahe, _ = fi_runA(FiHexF, fi_op(dims), k; field_solver = ExplicitEuler())
-        @test maximum(abs, ahe[end] .- ah[end]) > 1e-3
+        @test maximum(abs, ahe[end] .- ah[end]) > 1.0e-3
         σ = zeros(Int32, 16, 16); σ[4:6, 4:6] .= 1
-        @test solve(PottsProblem(FiHex(; name = :f), [ownership => σ, kind => [:A]], (0, 3); field_solver = BackwardEuler()),
-            SequentialCPM()).retcode == FiRC.Success
+        @test solve(
+            PottsProblem(FiHex(; name = :f), [ownership => σ, kind => [:A]], (0, 3); field_solver = BackwardEuler()),
+            SequentialCPM()
+        ).retcode == FiRC.Success
     end
 end
 
@@ -91,7 +97,9 @@ end
     @testset "a moving σ enters the next window's solve through the CPM's array" begin
         dims = (16, 16)
         σ = zeros(Int32, dims...); σ[4:7, 4:7] .= 1; σ[10:13, 9:12] .= 2
-        integ = init(PottsProblem(FiMoving(; name = :f), [ownership => σ, kind => [:A, :A]], (0, 20);
+        integ = init(
+            PottsProblem(
+                FiMoving(; name = :f), [ownership => σ, kind => [:A, :A]], (0, 20);
                 field_solver = BackwardEuler(), seed = 3
             ), SequentialCPM(); save_start = false, save_everystep = false
         )
@@ -130,8 +138,10 @@ end
         fresh, _ = fi_runA(FiMix, [fi_op(dims); :c => c2; :e => e2; :Dc => 0.8], 2)
         @test Array(current_state(integ).site.c) == fresh[end]
         # the same where nothing moves (the hierarchy is rebuilt only because of the write)
-        integ = init(PottsProblem(FiStill(; name = :f), fi_op(dims), (0, 6); field_solver = BackwardEuler()), SequentialCPM();
-            save_start = false)
+        integ = init(
+            PottsProblem(FiStill(; name = :f), fi_op(dims), (0, 6); field_solver = BackwardEuler()), SequentialCPM();
+            save_start = false
+        )
         foreach(_ -> step!(integ), 1:2)
         rt = CorePotts._runtime(getfield(integ.ctx, :__fields1))
         @test !rt.cache.moving
@@ -144,7 +154,8 @@ end
         # a growth term the operator does not see diverges: `ConvergenceFailure`, the warning names
         # the field, the MCS and the route
         s = @test_logs (:warn, r"field `c`: the solve failed in the field step of MCS \d.*`ReturnCode.ConvergenceFailure`.*substeps = n") match_mode = :any solve(
-            PottsProblem(FiBlowup(; name = :f), fi_op((8, 6)), (0, 5); field_solver = BackwardEuler()), SequentialCPM())
+            PottsProblem(FiBlowup(; name = :f), fi_op((8, 6)), (0, 5); field_solver = BackwardEuler()), SequentialCPM()
+        )
         @test s.retcode == FiRC.ConvergenceFailure
     end
 end
@@ -164,10 +175,10 @@ end
         mk(; kw...) = PottsProblem(FiPeriodic(; name = :f), op, (0, 1); kw...)
         function e(f)
             return try
-                    f(); ""
-                catch err
-                    err isa ArgumentError ? err.msg : sprint(showerror, err)
-                end
+                f(); ""
+            catch err
+                err isa ArgumentError ? err.msg : sprint(showerror, err)
+            end
         end
         @test_throws ArgumentError mk(; field_solver = LatticePCG())
         @test solve(mk(; field_solver = BackwardEuler(; linsolve = LatticePCG())), SequentialCPM()).retcode == FiRC.Success
@@ -180,8 +191,10 @@ end
     @testset "(in a model): a write to a mask's value equals a restart at the write" begin
         # FiMix's mask `c ~ masked(e ≥ 0.5, v)`: base (79af8c69) the implicit update kept the old `v`
         dims = (12, 10)
-        integ = init(PottsProblem(FiMix(; name = :f), fi_op(dims), (0, 8); field_solver = BackwardEuler()), SequentialCPM();
-            save_start = false)
+        integ = init(
+            PottsProblem(FiMix(; name = :f), fi_op(dims), (0, 8); field_solver = BackwardEuler()), SequentialCPM();
+            save_start = false
+        )
         foreach(_ -> step!(integ), 1:3)
         st = current_state(integ)
         c3, e3 = copy(Array(st.site.c)), copy(Array(st.site.e))
@@ -218,7 +231,7 @@ end
                 end
             end
             Id = Float64.((1:(n1 * n2)) .== (1:(n1 * n2))')
-            @test maximum(abs, vec(a[1]) .- (Id - L) \ b) < 1e-9
+            @test maximum(abs, vec(a[1]) .- (Id - L) \ b) < 1.0e-9
         end
     end
 end
@@ -227,12 +240,14 @@ end
     @testset "(in a model): an operator that reads the time is built at each substep's end time" begin
         # one MCS of length 0.2 in 4 substeps: c = Π_j 1/(1 + h(1 + 20 t_j)) (base: 0.49638, the
         # first substep's operator at every substep)
-        s = solve(PottsProblem(FiTimed(; name = :f), [ownership => zeros(Int32, 8, 8), kind => Symbol[]], (0, 1);
+        s = solve(
+            PottsProblem(
+                FiTimed(; name = :f), [ownership => zeros(Int32, 8, 8), kind => Symbol[]], (0, 1);
                 field_solver = BackwardEuler(; substeps = 4, linsolve = LatticePCG(; reltol = 1.0e-13, maxiters = 200))
             ), SequentialCPM()
         )
         h = 0.05
-        @test maximum(abs, s.u[end].site.c .- prod(1 / (1 + h * (1 + 20 * j * h)) for j in 1:4)) < 1e-12
+        @test maximum(abs, s.u[end].site.c .- prod(1 / (1 + h * (1 + 20 * j * h)) for j in 1:4)) < 1.0e-12
     end
 end
 
@@ -240,8 +255,10 @@ end
     @testset "(in a model): a write that turns a Robin face negative reclassifies the group" begin
         dims = (12, 10)
         for (b0, b1) in ((-1.0, 1.0), (1.0, -1.0))
-            integ = init(PottsProblem(FiRobinW(; name = :f), [fi_op(dims); :rb => b0], (0, 4); field_solver = BackwardEuler()),
-                SequentialCPM(); save_start = false)
+            integ = init(
+                PottsProblem(FiRobinW(; name = :f), [fi_op(dims); :rb => b0], (0, 4); field_solver = BackwardEuler()),
+                SequentialCPM(); save_start = false
+            )
             step!(integ)
             c1 = copy(Array(current_state(integ).site.c))
             integ.ps[:rb] = b1
@@ -249,7 +266,7 @@ end
             fresh, fi = fi_runA(FiRobinW, [fi_op(dims); :c => c1; :rb => b1], 2)
             rt, rf = CorePotts._runtime(getfield(integ.ctx, :__fields1)), CorePotts._runtime(getfield(fi.ctx, :__fields1))
             @test (rt.cache.exact, rt.cache.newton) == (rf.cache.exact, rf.cache.newton)
-            @test maximum(abs, Array(current_state(integ).site.c) .- fresh[end]) < 1e-12   # (base, −1 → +1: exact, newton = 1)
+            @test maximum(abs, Array(current_state(integ).site.c) .- fresh[end]) < 1.0e-12   # (base, −1 → +1: exact, newton = 1)
         end
     end
 end
@@ -262,9 +279,13 @@ end
         dims, k = (12, 10), 1
         tight = BackwardEuler(; linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 64))
         a, integ = fi_runA(FiHexFace, fi_op(dims), k; field_solver = tight)
-        bp = Potts.LatticePDE.discretize(Potts.fields(FiHexFace(; name = :f)),
-            Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid(dims; geometry = Potts.LatticeFields.IR.HEX);
-                T = Float64); u0 = [:c => zeros(dims)], tspan = (0, k), inputs = [])
+        bp = Potts.LatticePDE.discretize(
+            Potts.fields(FiHexFace(; name = :f)),
+            Potts.LatticePDE.LatticeDiscretization(
+                Potts.LatticePDE.Grid(dims; geometry = Potts.LatticeFields.IR.HEX);
+                T = Float64
+            ); u0 = [:c => zeros(dims)], tspan = (0, k), inputs = []
+        )
         @test a == (s -> [s[:c, i] for i in 2:length(s.t)])(Potts.LatticePDE.solve(bp, BackwardEuler(; linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 64)); dt = 1.0, saveat = 1.0))
         # the hand BE matrix (h = 1, the site (i, j) at (i − ½, j − ½))
         n1, n2 = dims
@@ -292,7 +313,7 @@ end
             end
         end
         Id = Float64.((1:(n1 * n2)) .== (1:(n1 * n2))')
-        @test maximum(abs, vec(a[1]) .- (Id - L) \ b) < 1e-9
+        @test maximum(abs, vec(a[1]) .- (Id - L) \ b) < 1.0e-9
     end
 end
 
@@ -333,12 +354,12 @@ end
         q(x) = fi_dq(fi_drun(BackwardEuler(; linsolve = tight), [:Dc => x[1], :s => x[2], :kd => x[3]]))
         g = ForwardDiff.gradient(q, [0.2, 0.5, 0.1])
         for (i, (name, v)) in enumerate(((:Dc, 0.2), (:s, 0.5), (:kd, 0.1)))
-            h = 1e-4 * v
+            h = 1.0e-4 * v
             fd = (
                 fi_dq(fi_drun(BackwardEuler(; linsolve = tight), [name => v + h])) -
                     fi_dq(fi_drun(BackwardEuler(; linsolve = tight), [name => v - h]))
             ) / 2h
-            @test g[i] ≈ fd rtol = 1e-6
+            @test g[i] ≈ fd rtol = 1.0e-6
         end
     end
 end
@@ -357,15 +378,17 @@ end
         tight = LatticePCG(; reltol = 1.0e-11, maxiters = 60)
         # a group reading another group's field: ∂w/∂ra through `u`'s twin, ∂w/∂rb in `w`'s own group
         function two(ps)
-            return solve(PottsProblem(FiDualTwo(; name = :m), [fi_dop(); ps], (0, 12); field_solver = ExplicitEuler(),
-                        solvers = [:w => BackwardEuler(; linsolve = tight)], seed = 3
-                    ), SequentialCPM()
-                ).u[end].site.w
+            return solve(
+                PottsProblem(
+                    FiDualTwo(; name = :m), [fi_dop(); ps], (0, 12); field_solver = ExplicitEuler(),
+                    solvers = [:w => BackwardEuler(; linsolve = tight)], seed = 3
+                ), SequentialCPM()
+            ).u[end].site.w
         end
         for (name, v) in ((:ra, 0.3), (:rb, 0.2))
             d = two([name => ForwardDiff.Dual(v, 1.0)])
-            fd = (sum(FI_DW .* two([name => v + 1e-4 * v])) - sum(FI_DW .* two([name => v - 1e-4 * v]))) / (2e-4 * v)
-            @test sum(FI_DW .* ForwardDiff.partials.(d, 1)) ≈ fd rtol = 1e-6
+            fd = (sum(FI_DW .* two([name => v + 1.0e-4 * v])) - sum(FI_DW .* two([name => v - 1.0e-4 * v]))) / (2.0e-4 * v)
+            @test sum(FI_DW .* ForwardDiff.partials.(d, 1)) ≈ fd rtol = 1.0e-6
         end
         # a masked value's derivative (the masked sites take ∂v/∂v = 1), `remake` with a Dual
         σ = zeros(Int32, 12, 10); σ[4:6, 3:5] .= 1
@@ -374,9 +397,11 @@ end
             prob = PottsProblem(FiDualMask(; name = :m), op, (0, 6); field_solver = fs)
             d = solve(remake(prob; p = [:v => ForwardDiff.Dual(1.5, 1.0)]), SequentialCPM()).u[end].site.c
             @test all(ForwardDiff.partials.(d[σ .== 1], 1) .== 1.0)
-            fd = (sum(solve(remake(prob; p = [:v => 1.5 + 1e-4]), SequentialCPM()).u[end].site.c) -
-                  sum(solve(remake(prob; p = [:v => 1.5 - 1e-4]), SequentialCPM()).u[end].site.c)) / 2e-4
-            @test sum(ForwardDiff.partials.(d, 1)) ≈ fd rtol = 1e-8
+            fd = (
+                sum(solve(remake(prob; p = [:v => 1.5 + 1.0e-4]), SequentialCPM()).u[end].site.c) -
+                    sum(solve(remake(prob; p = [:v => 1.5 - 1.0e-4]), SequentialCPM()).u[end].site.c)
+            ) / 2.0e-4
+            @test sum(ForwardDiff.partials.(d, 1)) ≈ fd rtol = 1.0e-8
         end
     end
 end
@@ -392,11 +417,12 @@ end
         FieldPDE.@variables endo_c(T_c, X_c, Y_c) [input = true]
         csys = FieldPDE.pdesys(
             [FieldPDE.Dt(c_c(T_c, X_c, Y_c)) ~ Dc_c * FieldPDE.laplacian(c_c(T_c, X_c, Y_c)) - kd_c * c_c(T_c, X_c, Y_c) + 0.5 * endo_c],
-            [c_c(0, X_c, Y_c) ~ 0.0], (24, 20), [c_c(T_c, X_c, Y_c), endo_c], [Dc_c, kd_c])
+            [c_c(0, X_c, Y_c) ~ 0.0], (24, 20), [c_c(T_c, X_c, Y_c), endo_c], [Dc_c, kd_c]
+        )
         cm = Potts.couple(FiCoupleHost(; name = :m), csys; inputs = [endo_c => Potts.kind == 1])
         σ_c = zeros(Int32, 24, 20); σ_c[5:8, 5:8] .= 1
         fc(k) = sum(FI_DW .* solve(PottsProblem(cm, [ownership => σ_c, kind => [:A], :kd_c => k], (0, 4); seed = 3), SequentialCPM()).u[end].site.c_c)
-        @test ForwardDiff.derivative(fc, 0.1) ≈ (fc(0.1 + 1e-5) - fc(0.1 - 1e-5)) / 2e-5 rtol = 1e-6
+        @test ForwardDiff.derivative(fc, 0.1) ≈ (fc(0.1 + 1.0e-5) - fc(0.1 - 1.0e-5)) / 2.0e-5 rtol = 1.0e-6
         integ = init(PottsProblem(FiDual(; name = :m), [fi_dop(); :kd => ForwardDiff.Dual(0.1, 1.0)], (0, 6)), SequentialCPM())
         step!(integ)
         @test eltype(integ[:c]) <: ForwardDiff.Dual && eltype(integ.state.site.c) === Float64     # the live state is primal
@@ -448,21 +474,23 @@ end
         σ = zeros(Int32, 12, 10); σ[4:6, 3:5] .= 1
         msum(sol) = sum(FI_DW[1:12, 1:10] .* sol.u[end].site.c)
         function mrun(fs, ops)
-            return solve(PottsProblem(FiDualMask(; name = :m), vcat([ownership => σ, kind => [:A]], ops), (0, 6); field_solver = fs),
-                SequentialCPM())
+            return solve(
+                PottsProblem(FiDualMask(; name = :m), vcat([ownership => σ, kind => [:A]], ops), (0, 6); field_solver = fs),
+                SequentialCPM()
+            )
         end
         for fs in (ExplicitEuler(), BackwardEuler(; linsolve = tight), CrankNicolson(; linsolve = tight))
             # a Dual initial value: ∂/∂(a uniform shift of c's start)
             c0 = [0.1 + 0.01 * (i - j) for i in 1:12, j in 1:10]
             d = mrun(fs, [:c => ForwardDiff.Dual.(c0, 1.0)])
             @test ForwardDiff.value.(d.u[end].site.c) == mrun(fs, [:c => c0]).u[end].site.c
-            fd = (msum(mrun(fs, [:c => c0 .+ 1e-4])) - msum(mrun(fs, [:c => c0 .- 1e-4]))) / 2e-4
-            @test ForwardDiff.partials(msum(d), 1) ≈ fd rtol = 1e-6
+            fd = (msum(mrun(fs, [:c => c0 .+ 1.0e-4])) - msum(mrun(fs, [:c => c0 .- 1.0e-4]))) / 2.0e-4
+            @test ForwardDiff.partials(msum(d), 1) ≈ fd rtol = 1.0e-6
             # a default that reads a seeded parameter (`c = c0`): ∂u₀/∂c0 = 1 enters
             d = mrun(fs, [:c0 => ForwardDiff.Dual(0.2, 1.0)])
-            fd = (msum(mrun(fs, [:c0 => 0.2 + 1e-4])) - msum(mrun(fs, [:c0 => 0.2 - 1e-4]))) / 2e-4
+            fd = (msum(mrun(fs, [:c0 => 0.2 + 1.0e-4])) - msum(mrun(fs, [:c0 => 0.2 - 1.0e-4]))) / 2.0e-4
             @test abs(fd) > 1
-            @test ForwardDiff.partials(msum(d), 1) ≈ fd rtol = 1e-6
+            @test ForwardDiff.partials(msum(d), 1) ≈ fd rtol = 1.0e-6
             # a write mid-run: of another field parameter (∂/∂Dc keeps running), and of the seeded one
             # (plain from then on), each against the same write in the ± runs
             function wrun(pairs, name, v)
@@ -475,14 +503,14 @@ end
             for (seed, name, v) in ((:Dc, :kd, 0.15), (:kd, :kd, 0.15))
                 x = seed === :Dc ? 0.2 : 0.1
                 ad = ForwardDiff.partials(wrun([seed => ForwardDiff.Dual(x, 1.0)], name, v), 1)
-                fd = (wrun([seed => x + 1e-4 * x], name, v) - wrun([seed => x - 1e-4 * x], name, v)) / (2e-4 * x)
-                @test ad ≈ fd rtol = 1e-6
+                fd = (wrun([seed => x + 1.0e-4 * x], name, v) - wrun([seed => x - 1.0e-4 * x], name, v)) / (2.0e-4 * x)
+                @test ad ≈ fd rtol = 1.0e-6
             end
         end
         # a CPM read beside a seeded parameter differentiates (V0 is read by the field program)
         vrun(ps) = fi_dq(solve(PottsProblem(FiDualVol(; name = :m), [fi_dop(); ps], (0, 12); seed = 3), SequentialCPM()))
         @test ForwardDiff.partials(vrun([:V0 => ForwardDiff.Dual(14.0, 1.0)]), 1) ≈
-              (vrun([:V0 => 14.0 + 1e-3]) - vrun([:V0 => 14.0 - 1e-3])) / 2e-3 rtol = 1e-6
+            (vrun([:V0 => 14.0 + 1.0e-3]) - vrun([:V0 => 14.0 - 1.0e-3])) / 2.0e-3 rtol = 1.0e-6
         # … and one the CPM fills whole is refused
         e = fi_derr(() -> PottsProblem(FiDualFill(; name = :m), [fi_dop(); :s0 => ForwardDiff.Dual(0.5, 1.0)], (0, 2)))
         @test occursin("which the CPM computes each MCS from `s0`", e)
@@ -511,8 +539,8 @@ end
                 a = solve(prob, CheckerboardCPM()).u[end].site.c
                 b = solve(prob, CheckerboardCPM(); backend).u[end].site.c
                 @test eltype(b) <: ForwardDiff.Dual{<:Any, Float32}
-                @test ForwardDiff.value.(a) ≈ ForwardDiff.value.(b) rtol = 1e-5
-                @test ForwardDiff.partials.(a, 1) ≈ ForwardDiff.partials.(b, 1) rtol = 1e-4
+                @test ForwardDiff.value.(a) ≈ ForwardDiff.value.(b) rtol = 1.0e-5
+                @test ForwardDiff.partials.(a, 1) ≈ ForwardDiff.partials.(b, 1) rtol = 1.0e-4
                 @test maximum(abs, ForwardDiff.partials.(b, 1)) > 0
             end
             # a Dual initial value (its parts set by `_tpart_body!`) and `reinit!` (the parts zeroed by
@@ -526,7 +554,7 @@ end
                 foreach(_ -> step!(ig), 1:4)
             end
             a, b = Array(ia[:c]), Array(ib[:c])
-            @test ForwardDiff.partials.(a, 1) ≈ ForwardDiff.partials.(b, 1) rtol = 1e-4
+            @test ForwardDiff.partials.(a, 1) ≈ ForwardDiff.partials.(b, 1) rtol = 1.0e-4
             @test maximum(abs, ForwardDiff.partials.(b, 1)) > 0
         else
             @test_skip "device (POTTS_GPU=metal|rocm)"

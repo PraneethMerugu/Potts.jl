@@ -85,8 +85,10 @@ mutable struct LayoutState{N}
     groups::Int                      # the `Group`s painted so far (their labels)
 end
 function LayoutState(dims::NTuple{N, Int}) where {N}
-    return LayoutState{N}(zeros(Int32, dims), Any[], Int32[], Bool[], _LayerRow[], Tuple{Int, Int, Bool}[], Dict{Int, Any}(),
-        Symbol[], Dict{Int, Any}[], 0, 0, true, 0)
+    return LayoutState{N}(
+        zeros(Int32, dims), Any[], Int32[], Bool[], _LayerRow[], Tuple{Int, Int, Bool}[], Dict{Int, Any}(),
+        Symbol[], Dict{Int, Any}[], 0, 0, true, 0
+    )
 end
 
 """
@@ -200,8 +202,10 @@ reports `requested = painted =` the cells it allocated and `clipped = 0`. A laye
 paints built-in layers inside its own `paint!` calls `record!` last: their entries go to the
 same row.
 """
-function record!(op::LayoutState; requested::Integer, painted::Integer, misses::Integer = 0,
-        counted::Integer = painted, clipped::Integer = 0)
+function record!(
+        op::LayoutState; requested::Integer, painted::Integer, misses::Integer = 0,
+        counted::Integer = painted, clipped::Integer = 0
+    )
     op.layer == 0 && throw(ArgumentError("record!: called outside a layer's paint!; invoke only inside `Potts.paint!`"))
     r = op.rows[op.layer]
     r.requested, r.painted, r.misses, r.counted, r.clipped, r.recorded = requested, painted, misses, counted, clipped, true
@@ -370,8 +374,10 @@ function Tiling(size; spacing = 0, region = nothing, kinds, partial::Symbol = :s
     all(>=(0), sp) || throw(ArgumentError("Tiling: spacing must be non-negative, got $sp; pass spacing >= 0"))
     partial in (:skip, :clip) ||
         throw(ArgumentError("Tiling: `partial` must be :skip or :clip, got $(repr(partial))"))
-    return Tiling(sz, sp, _region_arg(region, N, "Tiling"), _kinds_arg(kinds, "Tiling"), partial,
-        _splits_arg(splits, "Tiling"))
+    return Tiling(
+        sz, sp, _region_arg(region, N, "Tiling"), _kinds_arg(kinds, "Tiling"), partial,
+        _splits_arg(splits, "Tiling")
+    )
 end
 _splits(l::Tiling) = l.splits
 
@@ -454,15 +460,19 @@ struct Scattered{N, K} <: AbstractLayout
     gap::Int
     splits::Symbol
 end
-function Scattered(n::Integer, size; region = nothing, kinds, seed::Integer, gap::Integer = 1,
-        splits::Symbol = :warn)
+function Scattered(
+        n::Integer, size; region = nothing, kinds, seed::Integer, gap::Integer = 1,
+        splits::Symbol = :warn
+    )
     N = length(size)
     n >= 0 || throw(ArgumentError("Scattered: the number of boxes must be non-negative, got $n"))
     gap >= 0 || throw(ArgumentError("Scattered: gap must be non-negative, got $gap"))
     0 <= seed <= typemax(UInt64) || throw(ArgumentError("Scattered: seed must be in 0:typemax(UInt64), got $seed"))
     sz = _check_size(_tuple(size, N), "Scattered")
-    return Scattered(Int(n), sz, _region_arg(region, N, "Scattered"), _kinds_arg(kinds, "Scattered"), UInt64(seed),
-        Int(gap), _splits_arg(splits, "Scattered"))
+    return Scattered(
+        Int(n), sz, _region_arg(region, N, "Scattered"), _kinds_arg(kinds, "Scattered"), UInt64(seed),
+        Int(gap), _splits_arg(splits, "Scattered")
+    )
 end
 _splits(l::Scattered) = l.splits
 
@@ -534,9 +544,13 @@ function paint!(op::LayoutState, l::Scattered{N}, lat) where {N}
             placed = true
             break
         end
-        placed || throw(ArgumentError("Scattered: could not place box $k of $(l.n) (size $(l.size), gap $(l.gap)) " *
-                                      "in the region $reg after $_SCATTER_ATTEMPTS draws (random sequential placement " *
-                                      "jammed); use fewer or smaller boxes, a smaller gap or a larger region"))
+        placed || throw(
+            ArgumentError(
+                "Scattered: could not place box $k of $(l.n) (size $(l.size), gap $(l.gap)) " *
+                    "in the region $reg after $_SCATTER_ATTEMPTS draws (random sequential placement " *
+                    "jammed); use fewer or smaller boxes, a smaller gap or a larger region"
+            )
+        )
     end
     for (k, o) in enumerate(corners)
         id = new_cell!(op, l.kinds[mod1(k, length(l.kinds))])
@@ -678,8 +692,10 @@ struct InsertUntil{K} <: AbstractLayout
     count_misses::Bool
     splits::Symbol
 end
-function InsertUntil(kind; into, fraction = nothing, number = nothing, seed::Integer, region = nothing,
-        misses::Symbol = :retry, splits::Symbol = :warn)
+function InsertUntil(
+        kind; into, fraction = nothing, number = nothing, seed::Integer, region = nothing,
+        misses::Symbol = :retry, splits::Symbol = :warn
+    )
     (fraction === nothing) == (number === nothing) &&
         throw(ArgumentError("InsertUntil: give exactly one stop rule, `fraction` or `number`"))
     fraction === nothing || (fraction isa Real && 0 < fraction < 1) ||
@@ -691,8 +707,10 @@ function InsertUntil(kind; into, fraction = nothing, number = nothing, seed::Int
     0 <= seed <= typemax(UInt64) ||
         throw(ArgumentError("InsertUntil: seed must be in 0:typemax(UInt64), got $seed"))
     reg = region === nothing ? nothing : _region_arg(region, length(region), "InsertUntil")
-    return InsertUntil(kind, collect(Any, _kinds_arg(into, "InsertUntil")), fraction,
-        number === nothing ? -1 : Int(number), UInt64(seed), reg, misses === :count, _splits_arg(splits, "InsertUntil"))
+    return InsertUntil(
+        kind, collect(Any, _kinds_arg(into, "InsertUntil")), fraction,
+        number === nothing ? -1 : Int(number), UInt64(seed), reg, misses === :count, _splits_arg(splits, "InsertUntil")
+    )
 end
 _splits(l::InsertUntil) = l.splits
 
@@ -729,7 +747,9 @@ function paint!(op::LayoutState, l::InsertUntil, lat)
     painted = misses = 0
     done = _insert_done(l, N, K, 0)
     while !done
-        free == 0 && throw(ArgumentError("InsertUntil: the region ran out of sites of the kinds $(l.into) after " *
+        free == 0 && throw(
+            ArgumentError(
+                "InsertUntil: the region ran out of sites of the kinds $(l.into) after " *
                     "$painted insertions, before the stop rule was met; reduce `fraction`/`number` or enlarge `region`"
             )
         )
@@ -872,8 +892,8 @@ _residues(lo, hi, n) = hi - lo + 1 >= n ? collect(1:n) : sort!([mod1(x, n) for x
 
 # Closed membership with a relative rounding tolerance (D-138); strict membership with the
 # mirrored tolerance (`Interior`).
-_in_closed(p::Point, s::HyperSphere) = sqrt(sum(abs2, p - s.center)) <= s.r * (1 + 1e-12)
-_in_open(p::Point, s::HyperSphere) = sqrt(sum(abs2, p - s.center)) < s.r * (1 - 1e-12)
+_in_closed(p::Point, s::HyperSphere) = sqrt(sum(abs2, p - s.center)) <= s.r * (1 + 1.0e-12)
+_in_open(p::Point, s::HyperSphere) = sqrt(sum(abs2, p - s.center)) < s.r * (1 - 1.0e-12)
 _member(p::Point, s::HyperSphere) = _in_closed(p, s)
 _member(p::Point, s::Interior) = _in_open(p, s.shape)
 
@@ -942,7 +962,7 @@ end
 
 # A generator's coordinates are finite and small enough to round to lattice indices.
 function _check_point(p::Point, what)
-    all(x -> isfinite(x) && abs(x) < 1e15, p) ||
+    all(x -> isfinite(x) && abs(x) < 1.0e15, p) ||
         throw(ArgumentError("$what: point coordinates must be finite and below 1e15 in magnitude, got $p"))
     return p
 end
@@ -1058,8 +1078,10 @@ struct Voronoi{P, R, K} <: AbstractLayout
 end
 function Voronoi(points; region = nothing, lloyd::Integer = 0, kinds, splits::Symbol = :warn)
     lloyd >= 0 || throw(ArgumentError("Voronoi: lloyd must be non-negative, got $lloyd"))
-    return Voronoi(_pattern_arg(points, "Voronoi"), _place_arg(region, "Voronoi"), Int(lloyd), _kinds_arg(kinds, "Voronoi"),
-        _splits_arg(splits, "Voronoi"))
+    return Voronoi(
+        _pattern_arg(points, "Voronoi"), _place_arg(region, "Voronoi"), Int(lloyd), _kinds_arg(kinds, "Voronoi"),
+        _splits_arg(splits, "Voronoi")
+    )
 end
 _splits(l::Voronoi) = l.splits
 _layout_args(l::Voronoi) = (Voronoi, (:points,), (; l.points, l.region, l.lloyd, l.kinds, l.splits))
@@ -1154,6 +1176,7 @@ function _voronoi_assign!(owner, best, image, index::Array{Int, N}, gens, clat, 
         maximum(best) <= h^2 && return h
         h *= 2
     end
+    return
 end
 
 # The nearest-neighbor steps of the geometry: the offsets in {-1, 0, 1}ᴺ of shortest
@@ -1161,7 +1184,7 @@ end
 function _nearest_steps(clat, ::Val{N}) where {N}
     offs = [o for o in Iterators.product(ntuple(_ -> -1:1, Val(N))...) if any(!=(0), o)]
     len = [sum(abs2, embed(clat, map(Float64, o))) for o in offs]
-    return offs[len .<= minimum(len) + 1e-9]
+    return offs[len .<= minimum(len) + 1.0e-9]
 end
 
 # The position in `sites` of the site one step `o` from `x` (wrapping on periodic axes; 0 off
@@ -1234,6 +1257,7 @@ function _connect_pieces!(owner, sites, index, n, steps, per)
             g == 0 || (owner[i] = g)
         end
     end
+    return
 end
 
 # piece => the cell it shares the most bonds with (ties: the lower id), for every piece in
@@ -1326,14 +1350,18 @@ struct Eden{P, R, K, H} <: AbstractLayout
     shortfall::Symbol
     splits::Symbol
 end
-function Eden(points; rounds::Integer, region = nothing, kinds, seed::Integer, neighborhood = nothing,
-        shortfall::Symbol = :error, splits::Symbol = :warn)
+function Eden(
+        points; rounds::Integer, region = nothing, kinds, seed::Integer, neighborhood = nothing,
+        shortfall::Symbol = :error, splits::Symbol = :warn
+    )
     rounds >= 0 || throw(ArgumentError("Eden: rounds must be non-negative, got $rounds"))
     _check_seed(seed, "Eden")
     (neighborhood === nothing || neighborhood isa CorePotts.AbstractRelationSpec) ||
         throw(ArgumentError("Eden: `neighborhood` must be a relation spec such as Moore(1), got $(repr(neighborhood))"))
-    return Eden(_pattern_arg(points, "Eden"), _place_arg(region, "Eden"), Int(rounds), _kinds_arg(kinds, "Eden"),
-        UInt64(seed), neighborhood, _shortfall_arg(shortfall, "Eden"), _splits_arg(splits, "Eden"))
+    return Eden(
+        _pattern_arg(points, "Eden"), _place_arg(region, "Eden"), Int(rounds), _kinds_arg(kinds, "Eden"),
+        UInt64(seed), neighborhood, _shortfall_arg(shortfall, "Eden"), _splits_arg(splits, "Eden")
+    )
 end
 _splits(l::Eden) = l.splits
 
@@ -1347,8 +1375,10 @@ function paint!(op::LayoutState, l::Eden, lat)
     return nothing
 end
 
-function _eden!(op::LayoutState{N}, l::Eden, lat::LatticeSpec{N}, region::Vector{CartesianIndex{N}},
-        pts::Vector{NTuple{N, Float64}}) where {N}
+function _eden!(
+        op::LayoutState{N}, l::Eden, lat::LatticeSpec{N}, region::Vector{CartesianIndex{N}},
+        pts::Vector{NTuple{N, Float64}}
+    ) where {N}
     dims = size(lat)
     per = _periodic(lat)
     σ = op.ownership
@@ -1546,7 +1576,7 @@ end
 # and it must stay with the mother.
 function _daughter_side(P, cen, v)
     d = [_dot_from(p, cen, v) for p in P]
-    tol = 1e-9 * maximum(abs, d)
+    tol = 1.0e-9 * maximum(abs, d)
     return [x > tol for x in d]
 end
 
@@ -1580,7 +1610,7 @@ function _split_axis(P::Vector{NTuple{N, Float64}}) where {N}
     end
     v = N == 2 ? _major_axis_2d(C) : _major_axis(C)
     v ./= sqrt(sum(abs2, v))
-    f = findfirst(x -> abs(x) > 1e-9, v)
+    f = findfirst(x -> abs(x) > 1.0e-9, v)
     f !== nothing && v[f] < 0 && (v .*= -1)
     return c, ntuple(d -> v[d], Val(N))
 end
@@ -1605,12 +1635,12 @@ function _major_axis(C)
     N = size(C, 1)
     E = eigen(Symmetric(C))
     λ = E.values                                 # ascending
-    tied = findall(x -> λ[end] - x <= 1e-9 * max(λ[end], 1e-300), λ)
+    tied = findall(x -> λ[end] - x <= 1.0e-9 * max(λ[end], 1.0e-300), λ)
     length(tied) == 1 && return E.vectors[:, end]
     B = E.vectors[:, tied]
     for e in 1:N
         u = B * B[e, :]                          # the projection of eₑ onto span(B)
-        sqrt(sum(abs2, u)) > 1e-6 && return u
+        sqrt(sum(abs2, u)) > 1.0e-6 && return u
     end
     return E.vectors[:, end]
 end
@@ -1625,8 +1655,12 @@ _layout_args(l::Tiling) = (Tiling, (:size,), (; l.size, l.spacing, l.region, l.k
 _layout_args(l::Scattered) = (Scattered, (:n, :size), (; l.n, l.size, l.region, l.kinds, l.seed, l.gap, l.splits))
 _layout_args(l::Frame) = (Frame, (:kind,), (; l.kind, l.width, l.splits))
 function _layout_args(l::InsertUntil)
-    return (InsertUntil, (:kind,), (; l.kind, l.into, l.fraction,
-        number = l.number >= 0 ? l.number : nothing, l.seed, l.region, misses = l.count_misses ? :count : :retry, l.splits))
+    return (
+        InsertUntil, (:kind,), (;
+            l.kind, l.into, l.fraction,
+            number = l.number >= 0 ? l.number : nothing, l.seed, l.region, misses = l.count_misses ? :count : :retry, l.splits,
+        ),
+    )
 end
 _layout_args(l::Eden) = (Eden, (:points,), (; l.points, l.region, l.rounds, l.kinds, l.seed, l.neighborhood, l.shortfall, l.splits))
 _layout_args(l::Splits) = (Splits, (:layer, :k), (; l.layer, l.k, l.shortfall, l.splits))
@@ -1792,10 +1826,16 @@ struct Objects{S, P, K} <: AbstractLayout
 end
 function Objects(shape, points = nothing; kinds, splits::Symbol = :warn)
     shape isa _Round ||
-        throw(ArgumentError("Objects: the shape must be round (Circle, Sphere, HyperSphere or an Interior of one), " *
-                            "got $(repr(shape))"))
-    return Objects(_place_arg(shape, "Objects"), points === nothing ? nothing : _pattern_arg(points, "Objects"),
-        _kinds_arg(kinds, "Objects"), _splits_arg(splits, "Objects"))
+        throw(
+        ArgumentError(
+            "Objects: the shape must be round (Circle, Sphere, HyperSphere or an Interior of one), " *
+                "got $(repr(shape))"
+        )
+    )
+    return Objects(
+        _place_arg(shape, "Objects"), points === nothing ? nothing : _pattern_arg(points, "Objects"),
+        _kinds_arg(kinds, "Objects"), _splits_arg(splits, "Objects")
+    )
 end
 _splits(l::Objects) = l.splits
 _layout_args(l::Objects) = (Objects, (:shape, :points), (; l.shape, l.points, l.kinds, l.splits))
@@ -1859,9 +1899,13 @@ struct Group <: AbstractLayout
 end
 Group(layers::AbstractLayout...) = Group(AbstractLayout[layers...])
 @noinline function _group_placement()
-    throw(ArgumentError("Group: a Group is the top-level layout or a member of a top-level overlay; it cannot be " *
-        "inside another Group, the layer of a Splits or painted by a custom layer's paint! (a custom " *
-        "layer groups its cells with Potts.set_column!(op, :cluster, label))"))
+    throw(
+        ArgumentError(
+            "Group: a Group is the top-level layout or a member of a top-level overlay; it cannot be " *
+                "inside another Group, the layer of a Splits or painted by a custom layer's paint! (a custom " *
+                "layer groups its cells with Potts.set_column!(op, :cluster, label))"
+        )
+    )
 end
 
 # A group's cluster label: never `isequal` to a user's (the type is private).
@@ -1979,7 +2023,7 @@ function _report_pieces!(op::LayoutState, lat::LatticeSpec, counts, warned)
     any(check) || return nothing
     _disconnected(op.ownership, check, lat) do c
         @warn "layout: cell $(_final_id(counts, c)) (kind $(op.kinds[c])) of a Splits layer is not one piece " *
-              "(pass `splits = :allow` to that Splits to accept it)"
+            "(pass `splits = :allow` to that Splits to accept it)"
     end
     return nothing
 end
@@ -2050,8 +2094,12 @@ function layout(l::AbstractLayout, x; report::Bool = false)
             throw(ArgumentError("layout: cell $(σ[bad]) covers site $(Tuple(bad)), outside the lattice domain; ensure the layer's `paint!` assigns only in-domain sites"))
     end
     rows = if report
-        [(; layer = j, r.type, r.requested, r.painted, dropped = count(c -> counts[c] == 0, r.first:r.last),
-            r.misses, r.counted, r.clipped, r.splits) for (j, r) in enumerate(op.rows)]
+        [
+            (;
+                layer = j, r.type, r.requested, r.painted, dropped = count(c -> counts[c] == 0, r.first:r.last),
+                r.misses, r.counted, r.clipped, r.splits,
+            ) for (j, r) in enumerate(op.rows)
+        ]
     else
         nothing
     end
@@ -2076,8 +2124,12 @@ function _push_columns!(point, op::LayoutState, counts)
     end
     for (name, vals) in zip(op.colnames, op.colvals)
         missed = [f for (f, c) in enumerate(alive) if !haskey(vals, c)]
-        isempty(missed) || throw(ArgumentError("layout: the column `$name` (set_column!) has no value for the cells " *
-                                               "$missed (final ids); every cell that survives the layout needs one"))
+        isempty(missed) || throw(
+            ArgumentError(
+                "layout: the column `$name` (set_column!) has no value for the cells " *
+                    "$missed (final ids); every cell that survives the layout needs one"
+            )
+        )
         push!(point, name => identity.(Any[vals[c] for c in alive]))
     end
     return point
@@ -2117,18 +2169,20 @@ function _layout_spec(dims::Tuple{Vararg{Integer}})
     return lattice_spec(dims; boundary = Closed())
 end
 function _layout_spec(lat::Lattice)
-    return LatticeSpec(lat.dims, map(p -> p ? Periodic() : Closed(), lat.periodic), nothing,
-        Moore(1), lat.mask, lat.geometry)
+    return LatticeSpec(
+        lat.dims, map(p -> p ? Periodic() : Closed(), lat.periodic), nothing,
+        Moore(1), lat.mask, lat.geometry
+    )
 end
 _layout_spec(lat::LatticeSpec) = lat
 _layout_spec(sys::PottsSystem) = _layout_spec(_p(sys, :lattice))
 _layout_spec(sys::CompiledPottsSystem) = _layout_spec(getfield(sys, :sys))
 function _layout_spec(x)
     throw(
-            ArgumentError(
-                "layout: the target is a lattice size (a tuple of integers), a `Lattice` or a model; got $(repr(x; context = :limit => true))"
-            )
+        ArgumentError(
+            "layout: the target is a lattice size (a tuple of integers), a `Lattice` or a model; got $(repr(x; context = :limit => true))"
         )
+    )
 end
 
 # Drop cells with no site left and renumber the rest in order.

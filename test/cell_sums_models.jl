@@ -3,9 +3,9 @@
 isdefined(@__MODULE__, :JiangLike) || include(joinpath(@__DIR__, "fields_jiang_model.jl"))
 isdefined(@__MODULE__, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
 module CsPDE
-using ..FieldPDE
-@variables c(..) src(..)::Bool [input = true]
-const C = c(t, x, y)
+    using ..FieldPDE
+    @variables c(..) src(..)::Bool [input = true]
+    const C = c(t, x, y)
     threshold() = pdesys([Dt(C) ~ 0.2 * laplacian(C) + 0.05 * src(t, x, y) - 0.02 * C], [c(0, x, y) ~ 0.0], (200, 200), [C, src(t, x, y)])
 end
 
@@ -48,11 +48,17 @@ function cs_digests1(ctl::Bool; run = CorePotts._CR_RUN_HOST[])
     CorePotts._CR_RUN_HOST[] = run
     try
         σ, kinds = jiang_state(JG_DIMS)
-        j = init(PottsProblem(JiangLike(; name = :j), [ownership => σ, kind => kinds], (0, 2); seed = 7,
-            field_solver = BackwardEuler()), SequentialCPM())
+        j = init(
+            PottsProblem(
+                JiangLike(; name = :j), [ownership => σ, kind => kinds], (0, 2); seed = 7,
+                field_solver = BackwardEuler()
+            ), SequentialCPM()
+        )
         foreach(_ -> step!(j), 1:2)
-        m = solve(PottsProblem(CsThreshold(; name = :m), cs_threshold_op(), (0, 8); seed = 7), SequentialCPM();
-            save_start = false).u[end]
+        m = solve(
+            PottsProblem(CsThreshold(; name = :m), cs_threshold_op(), (0, 8); seed = 7), SequentialCPM();
+            save_start = false
+        ).u[end]
         return [cs_digest(current_state(j).cell.ocell), cs_digest(m.ownership), cs_digest(m.cell.cavg)]
     finally
         CorePotts._FLOAT_ATOMICS[] = false
@@ -186,9 +192,9 @@ function cs_site_sum_digests(backend = CorePotts.CPU(); ctl::Bool = false, mcs =
         # regardless of `inline_max_blocks`.
         function run(m, op, t; kw...)
             return solve(
-                    PottsProblem(m, op, (0, t); T = Float32, seed = 7, capacity = 2000),
-                    CheckerboardCPM(; threads = false, kw...); backend, save_start = false
-                )
+                PottsProblem(m, op, (0, t); T = Float32, seed = 7, capacity = 2000),
+                CheckerboardCPM(; threads = false, kw...); backend, save_start = false
+            )
         end
         # the weighted surface in the staged device lifecycle (one kernel per stage), the
         # compartments in the fused one (one workgroup: `fused_lifecycle_max_sites`)
@@ -208,8 +214,10 @@ function cs_conv_digests(backend = CorePotts.CPU(); ctl::Bool = false)
     CorePotts._FLOAT_ATOMICS[] = ctl
     try
         # Pin `threads = false` so `:auto` does not switch to threaded execution under `-t 4`.
-        v = solve(PottsProblem(CsConv(; name = :v), cs_conv_op(), (0, 30); T = Float32, seed = 7, capacity = 8),
-            CheckerboardCPM(; threads = false); backend, save_start = false).u[end]
+        v = solve(
+            PottsProblem(CsConv(; name = :v), cs_conv_op(), (0, 30); T = Float32, seed = 7, capacity = 8),
+            CheckerboardCPM(; threads = false); backend, save_start = false
+        ).u[end]
         return [cs_digest(v.ownership), cs_bits(v.model.tot), cs_bits(v.cell.V_target)]
     finally
         CorePotts._FLOAT_ATOMICS[] = false
@@ -221,7 +229,7 @@ end
     @lattice Lattice((1536, 1536))
     @energy cells => (volume - 64.0)^2 + 0.01 * (surface - 32.0)^2
     @energy contacts => 4.0
-    @schedule repeat(2, sweep(fraction = 1//2))
+    @schedule repeat(2, sweep(fraction = 1 // 2))
     @sweep Metropolis(; temperature = 2.0)
 end
 

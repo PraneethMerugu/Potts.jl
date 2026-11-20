@@ -21,8 +21,10 @@
         T, X, Y = CpPDE.t, CpPDE.x, CpPDE.y
         vol = Potts.value_at(Potts.B.volume, Potts.B.owner)
         # keys as the callable, the applied variable and the name
-        for ins in ([CpPDE.endo => Potts.kind == 1, CpPDE.vol => vol],
-                    [CpPDE.endo(T, X, Y) => Potts.kind == 1, :vol => vol])
+        for ins in (
+                [CpPDE.endo => Potts.kind == 1, CpPDE.vol => vol],
+                [CpPDE.endo(T, X, Y) => Potts.kind == 1, :vol => vol],
+            )
             m = Potts.couple(CpHost(; name = :m), CpPDE.sys(); inputs = ins)
             @test any(x -> Potts.info(x).name === :c, Potts.declared_variables(m))                 # `c`, not `fields₊c`
             @test Set(Potts.info(q).name for q in Potts.declared_parameters(m)) == Set([:Dc, :s, :kd, :av])
@@ -40,7 +42,8 @@
         @test a[:c][end] == a.u[end].site.c
         err, n = cp_replay(
             m, CpPDE.sys(), cp_hand, BackwardEuler(); fs = FieldGroups(:c => BackwardEuler()),
-            op = [cp_op(); :s => 0.9], p = [CpPDE.s => 0.9])
+            op = [cp_op(); :s => 0.9], p = [CpPDE.s => 0.9]
+        )
         @test n == 12 && err <= cp_tol(BackwardEuler()) || (println("FieldGroups s = 0.9: $err"); false)
     end
 end
@@ -60,7 +63,8 @@ end
         k = cp_run(CpFields(; name = :m), ExplicitEuler(); op = [cp_op(); :kd => 0.3]).u[end].site.c
         err, n = cp_replay(
             CpFields(; name = :m), CpPDE.sys(), cp_hand, ExplicitEuler(); op = [cp_op(); :kd => 0.3],
-            p = [CpPDE.kd => 0.3])
+            p = [CpPDE.kd => 0.3]
+        )
         @test n == 12 && err == 0 || (println("kd = 0.3: $err"); false)
         # and so do the constructor keywords; an unknown keyword is refused
         @test k == cp_run(CpFields(; name = :m, kd = 0.3), ExplicitEuler()).u[end].site.c
@@ -89,16 +93,16 @@ end
         @test cp_replay(CpWrong(; name = :m), CpPDE.sys(), cp_hand, ExplicitEuler())[1] > 1.0e-3
         function body(line; pre = :(), post = :())
             return quote
-                    @potts_model CpBadNames begin
-                        @kinds medium A
-                        $pre
-                        @lattice Lattice((24, 20); boundary = Closed())
-                        $line
-                        $post
-                        @sweep Metropolis(; temperature = 4.0)
-                    end
-                    CpBadNames(; name = :m)
+                @potts_model CpBadNames begin
+                    @kinds medium A
+                    $pre
+                    @lattice Lattice((24, 20); boundary = Closed())
+                    $line
+                    $post
+                    @sweep Metropolis(; temperature = 4.0)
                 end
+                CpBadNames(; name = :m)
+            end
         end
         # a name that is not a field of the PDESystem (an input is not a field)
         for n in (:w, :endo)
@@ -116,15 +120,17 @@ end
         e = cp_build_err(body(:(@fields c = CpPDE.sys2() (CpPDE.endo => kind == A)); pre = :(@parameters kd = 1.0)))
         @test occursin("`kd`", e) || (println(e); false)
         # before the lattice
-        e = cp_build_err(quote
-            @potts_model CpBadNames begin
-                @kinds medium A
-                @fields c = CpPDE.sys2() (CpPDE.endo => kind == A)
-                @lattice Lattice((24, 20); boundary = Closed())
-                @sweep Metropolis(; temperature = 4.0)
+        e = cp_build_err(
+            quote
+                @potts_model CpBadNames begin
+                    @kinds medium A
+                    @fields c = CpPDE.sys2() (CpPDE.endo => kind == A)
+                    @lattice Lattice((24, 20); boundary = Closed())
+                    @sweep Metropolis(; temperature = 4.0)
+                end
+                CpBadNames(; name = :m)
             end
-            CpBadNames(; name = :m)
-        end)
+        )
         @test occursin("@lattice", e) || (println(e); false)
     end
 end
@@ -183,19 +189,19 @@ end
                 @test all(d.u[i].ownership == base.u[i].ownership for i in eachindex(base.u))
                 @test all(ForwardDiff.value.(d.u[i].site.c) == base.u[i].site.c for i in eachindex(base.u))
                 @test eltype(d.u[end].site.c) <: ForwardDiff.Dual
-                h = 1e-4 * v
+                h = 1.0e-4 * v
                 rp = cp_run(M(; name = :m), fs; op = [cp_op(); name => v + h])
                 rm = cp_run(M(; name = :m), fs; op = [cp_op(); name => v - h])
                 @test all(rp.u[i].ownership == base.u[i].ownership == rm.u[i].ownership for i in eachindex(base.u))   # the path is fixed
                 fd = (cp_q(rp) - cp_q(rm)) / 2h
-                @test ForwardDiff.partials(cp_q(d), 1) ≈ fd rtol = 1e-6
-                @test abs(fd) > 1e-6                                                          # (not a zero derivative)
+                @test ForwardDiff.partials(cp_q(d), 1) ≈ fd rtol = 1.0e-6
+                @test abs(fd) > 1.0e-6                                                          # (not a zero derivative)
             end
         end
         # `ForwardDiff.derivative` through `solve` of a `Potts.couple` model
         m = Potts.couple(CpHost(; name = :m), CpPDE.sys2(); inputs = [CpPDE.endo => Potts.kind == 1])
         f(k) = cp_q(cp_run(m, ExplicitEuler(); op = [cp_op(); :kd => k]))
-        @test ForwardDiff.derivative(f, 0.1) ≈ (f(0.1 + 1e-5) - f(0.1 - 1e-5)) / 2e-5 rtol = 1e-6
+        @test ForwardDiff.derivative(f, 0.1) ≈ (f(0.1 + 1.0e-5) - f(0.1 - 1.0e-5)) / 2.0e-5 rtol = 1.0e-6
     end
 end
 
@@ -224,21 +230,25 @@ end
         @test isempty(Potts.field_inputs(PottsProblem(CpHost(; name = :m), cp_op(), (0, 1))))
         # the ODE path: σ frozen, the PDESystem discretized with those inputs and solved by Tsit5 over
         # one MCS from the field at MCS 5, against the owned explicit run at many substeps
-        integ = init(PottsProblem(CpFrozen(; name = :m), cp_op(), (0, 6); seed = 3, field_solver = ExplicitEuler(; substeps = 400)),
-            SequentialCPM())
+        integ = init(
+            PottsProblem(CpFrozen(; name = :m), cp_op(), (0, 6); seed = 3, field_solver = ExplicitEuler(; substeps = 400)),
+            SequentialCPM()
+        )
         for _ in 1:5
             step!(integ)
         end
         c5 = copy(Array(current_state(integ).site.c))
-        prob = Potts.LatticePDE.discretize(Potts.fields(CpFrozen(; name = :m)),
-            Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid((24, 20)); T = Float64); inputs = collect(Potts.field_inputs(integ)))
-        s = solve(remake(prob; u0 = vec(c5), tspan = (0.0, 1.0)), Tsit5(); abstol = 1e-11, reltol = 1e-11)
+        prob = Potts.LatticePDE.discretize(
+            Potts.fields(CpFrozen(; name = :m)),
+            Potts.LatticePDE.LatticeDiscretization(Potts.LatticePDE.Grid((24, 20)); T = Float64); inputs = collect(Potts.field_inputs(integ))
+        )
+        s = solve(remake(prob; u0 = vec(c5), tspan = (0.0, 1.0)), Tsit5(); abstol = 1.0e-11, reltol = 1.0e-11)
         step!(integ)
         c6 = Array(current_state(integ).site.c)
         err = maximum(abs, reshape(s.u[end], 24, 20) .- c6)
         @info "ODE path: Tsit5 vs the owned run at 400 substeps, max difference $err"
         @test err < CP_ODE_TOL
-        @test maximum(abs, c6 .- c5) > 1e-2                                                 # (the field moved)
+        @test maximum(abs, c6 .- c5) > 1.0e-2                                                 # (the field moved)
     end
 end
 
@@ -252,7 +262,8 @@ end
             fs isa FieldGroups && continue
             err, n = cp_replay(
                 CrLife(; name = :m), CpCases.rich(), cr_hand, fs; fs, k = 20, op = cr_rich_op(), seed = 5,
-                fields = (:c, :q), skip = cr_divided)
+                fields = (:c, :q), skip = cr_divided
+            )
             @test n >= 10 && err <= cp_tol(fs) || (println("CrLife $fs: $err over $n windows"); false)
         end
     end
@@ -282,23 +293,25 @@ end
                 CrCrs(; name = :m), CpCases.coarse_sys(), (σ, kind) -> [:endo => [s != 0 && kind[s] == 1 for s in σ]],
                 fs; fs, k = 10, seed = 5, fields = (:cc,)
             )
-            @test n == 10 && err <= max(cp_tol(fs), 1e-14) || (println("CrCrs $fs: $err"); false)
+            @test n == 10 && err <= max(cp_tol(fs), 1.0e-14) || (println("CrCrs $fs: $err"); false)
         end
     end
 end
 
 @testitem "an unbound Bool input filled by a non-Bool word is refused" setup = [CoupleSetup, CoupleOracleSetup] tags = [:potts, :fields_couple] begin
     @testset "an unbound Bool input filled by a non-Bool word is refused" begin
-        e = cp_build_err(quote
-            @potts_model CrKindBool begin
-                @kinds medium A B
-                @lattice Lattice((24, 20); boundary = Closed())
-                @energy cells => (volume - 16.0)^2
+        e = cp_build_err(
+            quote
+                @potts_model CrKindBool begin
+                    @kinds medium A B
+                    @lattice Lattice((24, 20); boundary = Closed())
+                    @energy cells => (volume - 16.0)^2
                     @fields CpCases.kind_bool()
-                @sweep Metropolis(; temperature = 4.0)
+                    @sweep Metropolis(; temperature = 4.0)
+                end
+                CrKindBool(; name = :m)
             end
-            CrKindBool(; name = :m)
-        end)
+        )
         @test occursin("`Bool` input `kind`", e) && occursin("bind it: `kb => kind == A`", e) || (println(e); false)
         e = cp_msg(() -> Potts.couple(CrHost2(; name = :m), CpCases.kind_bool()))
         @test occursin("bind it: `kb => Potts.kind == :A`", e) || (println(e); false)
@@ -307,7 +320,7 @@ end
             CrKindReal(; name = :m), CpCases.kind_real(), (σ, kind) -> [:kind => [s == 0 ? 0.0 : Float64(kind[s]) for s in σ]],
             ExplicitEuler(); k = 10, seed = 5, op = cr_kop()
         )
-        @test n == 10 && err <= 1e-14 || (println("CrKindReal: $err"); false)   # (measured 4.4e-16, 2026-11-10)
+        @test n == 10 && err <= 1.0e-14 || (println("CrKindReal: $err"); false)   # (measured 4.4e-16, 2026-11-10)
         fi = Potts.field_inputs(PottsProblem(CrKindReal(; name = :m), cr_kop(), (0, 1)))
         @test fi[:kind][6, 6] === Int32(1) && fi[:kind][15, 11] === Int32(2) && fi[:kind][1, 1] === Int32(0)
     end
@@ -315,29 +328,33 @@ end
 
 @testitem "a name @fields brought in, declared again after it, is refused" setup = [CoupleSetup] tags = [:potts, :fields_couple] begin
     @testset "a name @fields brought in, declared again after it, is refused" begin
-        e = cp_build_err(quote
-            @potts_model CrAfter begin
-                @kinds medium A
-                @lattice Lattice((24, 20); boundary = Closed())
-                @energy cells => (volume - 16.0)^2
+        e = cp_build_err(
+            quote
+                @potts_model CrAfter begin
+                    @kinds medium A
+                    @lattice Lattice((24, 20); boundary = Closed())
+                    @energy cells => (volume - 16.0)^2
                     @fields CpCases.first_sys() (CpCases.endo => kind == A)
-                @parameters kd = 5.0
-                @sweep Metropolis(; temperature = 4.0)
+                    @parameters kd = 5.0
+                    @sweep Metropolis(; temperature = 4.0)
+                end
+                CrAfter(; name = :m)
             end
-            CrAfter(; name = :m)
-        end)
+        )
         @test occursin("`kd` is already declared by `@fields` (the PDESystem `one`)", e) || (println(e); false)
-        e = cp_build_err(quote
-            @potts_model CrAfterField begin
-                @kinds medium A
-                @lattice Lattice((24, 20); boundary = Closed())
-                @energy cells => (volume - 16.0)^2
+        e = cp_build_err(
+            quote
+                @potts_model CrAfterField begin
+                    @kinds medium A
+                    @lattice Lattice((24, 20); boundary = Closed())
+                    @energy cells => (volume - 16.0)^2
                     @fields CpCases.first_sys() (CpCases.endo => kind == A)
-                @variables c(site) = 0.0
-                @sweep Metropolis(; temperature = 4.0)
+                    @variables c(site) = 0.0
+                    @sweep Metropolis(; temperature = 4.0)
+                end
+                CrAfterField(; name = :m)
             end
-            CrAfterField(; name = :m)
-        end)
+        )
         @test occursin("`c` is already declared by `@fields`", e) || (println(e); false)
     end
 end
@@ -349,8 +366,8 @@ end
         host = CrHost2(; name = :m)
         e = cp_msg(() -> Potts.couple(host, CpCases.first_sys(); inputs = [CpCases.endo => Potts.kind == :A]))
         @test occursin("bound to the constant `false`", e) && occursin("a binding to a constant is the same at every site", e) &&
-              occursin("Potts.is_kind(model, :A)", e) ||
-              (println(e); false)
+            occursin("Potts.is_kind(model, :A)", e) ||
+            (println(e); false)
         e = cp_msg(() -> Potts.couple(host, CpCases.first_sys(); inputs = [CpCases.endo => true]))
         @test occursin("a binding to a constant is the same at every site", e) && !occursin("kind name", e) || (println(e); false)
         ma = Potts.couple(host, CpCases.first_sys(); inputs = [CpCases.endo => Potts.kind == Potts.lookup(host, :A)])
@@ -365,42 +382,46 @@ end
     @testset "messages name the @fields binding and line order" begin
         function hdr(line; first = :(@kinds medium A))
             return quote
-                    @potts_model CrMsg begin
-                        $first
-                        @lattice Lattice((24, 20); boundary = Closed())
-                        @energy cells => (volume - 16.0)^2
-                        $line
-                        @sweep Metropolis(; temperature = 4.0)
-                    end
-                    CrMsg(; name = :m)
+                @potts_model CrMsg begin
+                    $first
+                    @lattice Lattice((24, 20); boundary = Closed())
+                    @energy cells => (volume - 16.0)^2
+                    $line
+                    @sweep Metropolis(; temperature = 4.0)
                 end
+                CrMsg(; name = :m)
+            end
         end
         e = cp_build_err(hdr(:(@fields CpPDE.sys() (CpPDE.endo => kind == A, CpPDE.vol => volume))))
         @test occursin("@fields: the input `vol` is bound to `volume`", e) && occursin("`volume[owner]`", e) &&
-              !occursin("@equations", e) || (println(e); false)
+            !occursin("@equations", e) || (println(e); false)
         # a name read before the line that binds it
-        e = cp_build_err(quote
-            @potts_model CrEarly begin
-                @kinds medium A
-                @parameters χ = 400.0
-                @lattice Lattice((24, 20); boundary = Closed())
-                @energy cells(A) => (volume - 16.0)^2
-                @drive Chemotaxis(c; strength = χ, kinds = (A,))
-                @fields c = CpPDE.sys2() (CpPDE.endo => kind == A)
-                @sweep Metropolis(; temperature = 4.0)
+        e = cp_build_err(
+            quote
+                @potts_model CrEarly begin
+                    @kinds medium A
+                    @parameters χ = 400.0
+                    @lattice Lattice((24, 20); boundary = Closed())
+                    @energy cells(A) => (volume - 16.0)^2
+                    @drive Chemotaxis(c; strength = χ, kinds = (A,))
+                    @fields c = CpPDE.sys2() (CpPDE.endo => kind == A)
+                    @sweep Metropolis(; temperature = 4.0)
+                end
             end
-        end)
+        )
         @test occursin("`c` is read on a line before `@fields c = …`", e) && occursin("move the `@fields` line above", e) ||
-              (println(e); false)
+            (println(e); false)
         # before `@kinds`
-        e = cp_build_err(quote
-            @potts_model CrNoKinds begin
-                @lattice Lattice((24, 20); boundary = Closed())
-                @fields CpPDE.sys2() (CpPDE.endo => kind == A)
-                @kinds medium A
-                @sweep Metropolis(; temperature = 4.0)
+        e = cp_build_err(
+            quote
+                @potts_model CrNoKinds begin
+                    @lattice Lattice((24, 20); boundary = Closed())
+                    @fields CpPDE.sys2() (CpPDE.endo => kind == A)
+                    @kinds medium A
+                    @sweep Metropolis(; temperature = 4.0)
+                end
             end
-        end)
+        )
         @test occursin("write `@fields` after `@kinds`", e) || (println(e); false)
     end
 end
@@ -410,8 +431,8 @@ end
         for (line, what) in ((:(@equations D(c) ~ -0.1 * c), "D(c)"), (:(@equations 0 ~ 1.0 - c), "0 ~"), (:(@equations c ~ 1.0), "c ~"))
             e = cp_fresh_err(cp_a_model(line))
             @test occursin("@equations: `", e) && occursin(what, e) && occursin("is an equation of the field `c`", e) &&
-                  occursin("`@equations` holds cell and model equations", e) && occursin("using Potts.Fields", e) &&
-                  occursin("`@fields c = pdesys", e) || (println(e); false)
+                occursin("`@equations` holds cell and model equations", e) && occursin("using Potts.Fields", e) &&
+                occursin("`@fields c = pdesys", e) || (println(e); false)
         end
         # control: a cell equation, and the static field read by a drive, build
         @test cp_fresh_err(cp_a_model(:(@equations D(x) ~ -0.1 * x), :(@drive Chemotaxis(c; strength = 1.0, kinds = (A,))))) == "built"
@@ -423,7 +444,7 @@ end
         for s in (:laplacian, :Δ, :DivKGrad, :Advect, :Upwind1, :masked, :Differential, :Shift)
             e = cp_fresh_err(cp_a_model(:(@observed q ~ $s(1.0))))
             @test occursin("`$s` is not defined in the model body", e) && occursin("using Potts.Fields", e) &&
-                  occursin("@fields", e) || (println(s, ": ", e); false)
+                occursin("@fields", e) || (println(s, ": ", e); false)
         end
         # the A field line is refused at expansion with the same route
         e = cp_fresh_err(cp_a_model(:(@equations D(c) ~ 0.1 * laplacian(c))))
@@ -440,11 +461,13 @@ end
 @testitem "a field equation in PottsSystem(; equations) is refused, pointing to Potts.couple" setup = [CoupleSetup] tags = [:potts, :fields_couple] begin
     @testset "a field equation in PottsSystem(; equations) is refused, pointing to Potts.couple" begin
         c = Potts.variable(only(Potts.Symbolics.@variables c(Potts.t)), :field; default = 0.0)
-        base = (; name = :p, kinds = [:medium, :A], lattice = Potts.lattice_spec((24, 20); boundary = Closed()),
-            sweep = Potts.sweep_spec(:metropolis; temperature = 4.0))
+        base = (;
+            name = :p, kinds = [:medium, :A], lattice = Potts.lattice_spec((24, 20); boundary = Closed()),
+            sweep = Potts.sweep_spec(:metropolis; temperature = 4.0),
+        )
         e = cp_msg(() -> Potts.PottsSystem(; base..., variables = Any[c], equations = [Potts.D(c) ~ -0.1 * c]))
         @test occursin("PottsSystem: the equation `", e) && occursin("is an equation of the field `c`", e) &&
-              occursin("no coupled PDESystem brought", e) && occursin("Potts.couple(model, pdesys; inputs", e) || (println(e); false)
+            occursin("no coupled PDESystem brought", e) && occursin("Potts.couple(model, pdesys; inputs", e) || (println(e); false)
         # control: the route runs, and a coupled model rebuilt through the keyword constructor (an
         # extension) keeps its fields
         host = Potts.PottsSystem(; base...)

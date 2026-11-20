@@ -18,7 +18,15 @@ fv_exports() = [n for n in names(Potts.Fields) if n !== :Fields]
 function fv_ambiguous(mods...)
     m = Module()
     foreach(p -> Core.eval(m, Expr(:using, Expr(:., p...))), mods)
-    return [n for n in fv_exports() if (try; Core.eval(m, n); false; catch e; e isa UndefVarError; end)]
+    return [
+        n for n in fv_exports() if (
+                try
+                    Core.eval(m, n); false
+            catch e
+                    e isa UndefVarError
+            end
+            )
+    ]
 end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
@@ -40,7 +48,8 @@ end
         @test Potts.Fields.t === Potts.t && isequal(Potts.Fields.t, MB.t_nounits)
         @test all(n -> getfield(Potts.Fields, n) === getfield(Potts.FIELD_NAMES, n), (:x, :y, :z))
         @test Potts.Fields.PDESystem === MB.PDESystem && Potts.Fields.Differential === MB.Differential
-        @test all(n -> getfield(Potts.Fields, n) === getfield(LP, n),
+        @test all(
+            n -> getfield(Potts.Fields, n) === getfield(LP, n),
             (:Interval, :laplacian, :Δ, :DivKGrad, :Advect, :Upwind1, :value_at, :ismember, :masked, :step_index, :lattice_domain, :pdesystem)
         )
         # the names clash check: a name another package exports is the same binding. ModelingToolkit
@@ -53,6 +62,14 @@ end
         # opt-in: `using Potts` alone has no `t`, `x`, `y`, `z`
         m = Module()
         Core.eval(m, :(using Potts))
-        @test !any(n -> (try; Core.eval(m, n); true; catch; false; end), (:t, :x, :y, :z))
+        @test !any(
+            n -> (
+                try
+                    Core.eval(m, n); true
+                catch
+                    false
+                end
+            ), (:t, :x, :y, :z)
+        )
     end
 end

@@ -15,10 +15,13 @@ makedocs(;
     build = joinpath(@__DIR__, "build", "models-preview"),
     modules = [PottsModels],
     remotes = nothing,
-    format = Documenter.HTML(; prettyurls = true, edit_link = nothing, repolink = nothing,
-        size_threshold = nothing, size_threshold_warn = nothing),
+    format = Documenter.HTML(;
+        prettyurls = true, edit_link = nothing, repolink = nothing,
+        size_threshold = nothing, size_threshold_warn = nothing
+    ),
     checkdocs = :none,
     pagesonly = true,
     # the links to the status and reproduction pages point outside this preview
     warnonly = [:cross_references],
-    pages = ["Models" => ["models/index.md"; model_pages]])
+    pages = ["Models" => ["models/index.md"; model_pages]]
+)

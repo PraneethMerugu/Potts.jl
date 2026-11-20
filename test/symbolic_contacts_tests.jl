@@ -17,9 +17,9 @@
 
         function allows(local_only, σ, x, y)
             p = PottsProblem(
-                    ConnectivityProbe(; name = :r, local_only),
-                    [ownership => σ, kind => fill(:A, maximum(σ))], (0, 1)
-                )
+                ConnectivityProbe(; name = :r, local_only),
+                [ownership => σ, kind => fill(:A, maximum(σ))], (0, 1)
+            )
             prop = CorePotts.Proposal(CorePotts.linear_index(p.lattice, x), CorePotts.linear_index(p.lattice, y), x, 1, σ[x...], σ[y...])
             return p.f.constraint(p.u0, p.p, prop, Potts._host_ctx(p))
         end
@@ -144,12 +144,12 @@ end
             )
             body = if decl.args[1] === Symbol("@kinds")
                 quote
-                        $decl
-                    end
+                    $decl
+                end
             else
                 quote
-                        @kinds medium A; $decl
-                    end
+                    @kinds medium A; $decl
+                end
             end
             @test_throws ArgumentError expand(body)
         end
@@ -161,10 +161,10 @@ end
         V = Potts.B.volume
         function prog(; kinds = [:medium, :cell], variables = Any[])
             return Potts.PottsSystem(;
-                    name = :prog, kinds,
-                    lattice = Potts.lattice_spec((12, 12)), variables, energies = [Potts.energy(Potts.cells(1) => (V - 16)^2)],
-                    sweep = Potts.sweep_spec(:metropolis; temperature = 1.0)
-                )
+                name = :prog, kinds,
+                lattice = Potts.lattice_spec((12, 12)), variables, energies = [Potts.energy(Potts.cells(1) => (V - 16)^2)],
+                sweep = Potts.sweep_spec(:metropolis; temperature = 1.0)
+            )
         end
         @test prog() isa Potts.PottsSystem                                               # control
         @test_throws ArgumentError prog(; variables = Any[Potts.variable(only(Potts.Symbolics.@variables b(Potts.t)), :cell; default = 0.0)])
@@ -217,9 +217,9 @@ end
     @testset "x′ outside contact terms is rejected" begin
         function bad(E)
             return Potts.PottsSystem(;
-                    name = :bad, kinds = [:medium, :A], lattice = Potts.lattice_spec((8, 8)),
-                    variables = [c], energies = [Potts.energy(E)], sweep = Potts.sweep_spec(:metropolis; temperature = 1.0)
-                )
+                name = :bad, kinds = [:medium, :A], lattice = Potts.lattice_spec((8, 8)),
+                variables = [c], energies = [Potts.energy(E)], sweep = Potts.sweep_spec(:metropolis; temperature = 1.0)
+            )
         end
         c = Potts.variable(only(Potts.Symbolics.@variables c(Potts.t)), :site)
         @test_throws Potts.PottsCompileError mtkcompile(bad(Potts.SITES => Potts._primed(c)))
@@ -251,9 +251,9 @@ end
         σ, kinds, cue = site_contact_state((20, 20); side = 4)
         function mk(; kw...)
             return PottsProblem(
-                    SiteContactsOnCopy(; name = :oc, kw...),
-                    [ownership => σ, kind => fill(:A, length(kinds)), :mark => cue, :tag => 2 .* cue], (0, 4)
-                )
+                SiteContactsOnCopy(; name = :oc, kw...),
+                [ownership => σ, kind => fill(:A, length(kinds)), :mark => cue, :tag => 2 .* cue], (0, 4)
+            )
         end
         prob = mk()
         @test site_selfcheck(prob, Moore(1)) < 1.0e-9
@@ -473,11 +473,11 @@ end
 
         function rejects(f, n, what)
             return try
-                    f()
-                    false
-                catch e
-                    e isa ArgumentError
-                end
+                f()
+                false
+            catch e
+                e isa ArgumentError
+            end
         end
         # locals named `x′` (x declared) are ordinary Julia and build
         for case in 1:5

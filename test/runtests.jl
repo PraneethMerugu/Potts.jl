@@ -41,6 +41,7 @@ function resolve_group_alias(groups, name)
         target == cur && return cur
         cur = String(target)
     end
+    return
 end
 
 function in_all_groups(groups)
@@ -72,7 +73,7 @@ function run_group(project, file, args...; env = ())
     bounds = Base.JLOptions().check_bounds == 0 ? ["--check-bounds=auto"] : String[]
     cmd = addenv(`$(Base.julia_cmd()) --startup-file=no $bounds --project=$project $file $args`, env...)
     @info "Running $(relpath(file, ROOT)) $(join(map(a -> relpath(a, ROOT), args), ' '))"
-    run(cmd)
+    return run(cmd)
 end
 
 function run_sublib(sublib::AbstractString, subgroup::AbstractString, raw_group::AbstractString)
@@ -145,7 +146,8 @@ function run_gpu_group()
     env = ("POTTS_GPU" => gpu, "COREPOTTS_GPU" => gpu, "POTTS_DEVICE_IR_DIR" => irdir)
     only = get(ENV, "POTTS_DEVICE_ONLY", "true") == "true"
     sub_group = only ? "gpu" : "All"
-    run_group(joinpath(ROOT, "lib/LatticeFields/test"), joinpath(ROOT, "lib/LatticeFields/test/runtests.jl");
+    run_group(
+        joinpath(ROOT, "lib/LatticeFields/test"), joinpath(ROOT, "lib/LatticeFields/test/runtests.jl");
         env = ("GROUP" => sub_group, "LATTICEFIELDS_GPU" => gpu, "LATTICEFIELDS_QA" => "false")
     )
     run_group(
@@ -159,7 +161,7 @@ function run_gpu_group()
     withenv(env..., "POTTS_QA" => "false") do
         only ? PottsRTI.device_suite() : PottsRTI.potts_suite(; nworkers = 1, gpu = true)
     end
-    only && gpu == "rocm" && run_group(joinpath(ROOT, "test"), joinpath(ROOT, "test/device_coverage.jl"); env)
+    return only && gpu == "rocm" && run_group(joinpath(ROOT, "test"), joinpath(ROOT, "test/device_coverage.jl"); env)
 end
 
 function run_root_group(groups, name::AbstractString)
@@ -177,7 +179,7 @@ end
 function dispatch(group_name::AbstractString)
     groups = load_test_groups(joinpath(@__DIR__, "test_groups.toml"))
     lib_dir = joinpath(ROOT, "lib")
-    if group_name == "All"
+    return if group_name == "All"
         for name in in_all_groups(groups)
             run_root_group(groups, name)
         end

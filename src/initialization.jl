@@ -49,8 +49,9 @@ of that problem alone and builds no system here. Any other scope, or a `PottsSys
 not been through `mtkcompile`, is an `ArgumentError`.
 """
 function initialization_system(c::CompiledPottsSystem, scope::Symbol)
-    scope in _ODE_SCOPES || throw(ArgumentError(
-        "initialization_system: the scope is `:cell` or `:model`; got `:$scope` (site, field and edge " *
+    scope in _ODE_SCOPES || throw(
+        ArgumentError(
+            "initialization_system: the scope is `:cell` or `:model`; got `:$scope` (site, field and edge " *
                 "initialization reads across entities, which is not supported yet)"
         )
     )
@@ -58,8 +59,11 @@ function initialization_system(c::CompiledPottsSystem, scope::Symbol)
     return s === nothing ? nothing : s.template
 end
 function initialization_system(sys::PottsSystem, ::Symbol)
-    throw(ArgumentError(
-        "initialization_system: `$(nameof(sys))` has not been compiled; call `initialization_system(mtkcompile(sys), scope)`"))
+    throw(
+        ArgumentError(
+            "initialization_system: `$(nameof(sys))` has not been compiled; call `initialization_system(mtkcompile(sys), scope)`"
+        )
+    )
 end
 
 """One scope's `@initialization_equations`, compiled (`_compile_initialization`)."""
@@ -73,7 +77,7 @@ end
 const _INIT_BUILTINS = (:volume, :id, :kind)
 
 const _INIT_LOCAL = "initialization equations are entity-local: they read a cell's own variables, its built-ins " *
-                    "`volume`, `id` and `kind`, parameters, model variables and `D(x)` of ODE variables"
+    "`volume`, `id` and `kind`, parameters, model variables and `D(x)` of ODE variables"
 
 # `f()`, an error naming initialization equation `eq` and where it was written
 function _init_located(f, sys::PottsSystem, eq)
@@ -115,8 +119,10 @@ function _compile_initialization(sys::PottsSystem)
     for scope in _ODE_SCOPES
         list = get(byscope, scope, nothing)
         list === nothing && continue
-        out[scope] = _InitScope([x[1] for x in list], [x[3] for x in list],
-            _init_template(sys, scope, [x[2] for x in list], rates))
+        out[scope] = _InitScope(
+            [x[1] for x in list], [x[3] for x in list],
+            _init_template(sys, scope, [x[2] for x in list], rates)
+        )
     end
     return out
 end
@@ -182,8 +188,10 @@ function _check_init_reads(x, what)
                 throw(
                     PottsCompileError(
                         "$what reads the kind table `$n` at `$(join(args[2:end], ", "))`; in initialization " *
-                                    "equations a kind table is read at the cell's own kind (`$n[kind]`, or " *
-                                    "`$n[kind, kind]` for a matrix); $(_INIT_LOCAL)"))
+                            "equations a kind table is read at the cell's own kind (`$n[kind]`, or " *
+                            "`$n[kind, kind]` for a matrix); $(_INIT_LOCAL)"
+                    )
+                )
             end
             i = info(y)
             if i !== nothing
@@ -191,16 +199,20 @@ function _check_init_reads(x, what)
                 i.role === :builtin && i.name in _INIT_BUILTINS && return
                 i.role === :kindtable && throw(
                     PottsCompileError(
-                    "$what reads the kind table `$(i.name)` as a whole; read it at the cell's own kind (`$(i.name)[kind]`)"))
+                        "$what reads the kind table `$(i.name)` as a whole; read it at the cell's own kind (`$(i.name)[kind]`)"
+                    )
+                )
                 i.role in (:site, :field, :edge) && throw(
                     PottsCompileError(
-                    "$what reads the $(i.role) variable `$(i.name)`; $(_INIT_LOCAL). Initialization of site, field " *
+                        "$what reads the $(i.role) variable `$(i.name)`; $(_INIT_LOCAL). Initialization of site, field " *
                             "and edge variables reads across entities and is not supported yet"
                     )
                 )
                 i.role === :builtin && throw(
                     PottsCompileError(
-                    "$what reads the built-in `$(i.name)`, which has no value at initialization; $(_INIT_LOCAL)"))
+                        "$what reads the built-in `$(i.name)`, which has no value at initialization; $(_INIT_LOCAL)"
+                    )
+                )
                 throw(PottsCompileError("$what reads `$(i.name)` (a $(i.role) quantity); $(_INIT_LOCAL)"))
             end
             if !iscall(y)
@@ -212,8 +224,10 @@ function _check_init_reads(x, what)
             _template_op(op) && return
             op isa Function || throw(
                 PottsCompileError(
-                "$what reads `$y`, which is not a cell or model variable of the model (a component's variables are " *
-                "initialized by the component); $(_INIT_LOCAL)"))
+                    "$what reads `$y`, which is not a cell or model variable of the model (a component's variables are " *
+                        "initialized by the component); $(_INIT_LOCAL)"
+                )
+            )
             if op === value_at
                 v = info(_unwrap(arguments(y)[1]))
                 n = v === nothing ? string(arguments(y)[1]) : string(v.name)
@@ -227,7 +241,7 @@ function _check_init_reads(x, what)
             throw(
                 PottsCompileError(
                     "$what reads `$y`, which reads across entities (a neighbor gather, a fold over " *
-                                "cells, an integral, a draw or a previous value); $(_INIT_LOCAL). Cross-entity " *
+                        "cells, an integral, a draw or a previous value); $(_INIT_LOCAL). Cross-entity " *
                         "initialization is not supported yet"
                 )
             )
@@ -247,8 +261,10 @@ function _init_with_rates(eq::Equation, rates, what)
             dx = "D($(i === nothing ? a : i.name))"
             (i !== nothing && i.role in _ODE_SCOPES && haskey(rates, i.name)) || throw(
                 PottsCompileError(
-                "$what reads `$dx`, but `$(i === nothing ? a : i.name)` has no ODE; `D(x)` is read for a cell or model " *
-                "variable `x` with an ODE `D(x) ~ rate` in @equations"))
+                    "$what reads `$dx`, but `$(i === nothing ? a : i.name)` has no ODE; `D(x)` is read for a cell or model " *
+                        "variable `x` with an ODE `D(x) ~ rate` in @equations"
+                )
+            )
             r = rates[i.name][2]
             _check_init_reads(r, "`$dx` (the rate `$r` of `$(i.name)`) in $what")
             sub[y] = r
@@ -342,8 +358,10 @@ function _init_template(sys::PottsSystem, scope::Symbol, eqs, rates)
         end
     end
     sub(x) = isempty(inputs) ? _unwrap(x) : _init_substitute(x, inputs)
-    deqs = Equation[n in dread && info(rates[n][1]).role === scope ? (D(rates[n][1]) ~ sub(rates[n][2])) : (D(x) ~ 0)
-                    for x in vars for n in (info(x).name,)]
+    deqs = Equation[
+        n in dread && info(rates[n][1]).role === scope ? (D(rates[n][1]) ~ sub(rates[n][2])) : (D(x) ~ 0)
+            for x in vars for n in (info(x).name,)
+    ]
     guesses = Dict{Any, Any}()
     for x in vars
         if _written(x)
@@ -353,9 +371,11 @@ function _init_template(sys::PottsSystem, scope::Symbol, eqs, rates)
             guesses[x] = _init_guess(x)
         end
     end
-    template = ModelingToolkitBase.System(deqs, t, vars, params; name = Symbol(nameof(sys), :₊, scope, :_init),
+    template = ModelingToolkitBase.System(
+        deqs, t, vars, params; name = Symbol(nameof(sys), :₊, scope, :_init),
         initialization_eqs = Equation[sub(eq.lhs) ~ sub(eq.rhs) for eq in eqs], guesses, initial_conditions = ics,
-        checks = ModelingToolkitBase.CheckComponents)
+        checks = ModelingToolkitBase.CheckComponents
+    )
     return ModelingToolkitBase.complete(template)
 end
 
@@ -418,12 +438,16 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
     free = Any[x for x in vars if !fixed(x)]
     # the count, by a matching of conditions to free variables: names what is over- or
     # underdetermined (MTK would refuse it too, `fully_determined`, without naming it)
-    rows = [(; text = i <= length(eqs) ? "`$(authored[i])`" : "the operating-point value of the algebraic variable `$(info(conds[i - length(eqs)].lhs).name)`",
-                label = i <= length(eqs) ? nothing : info(conds[i - length(eqs)].lhs).name,
-                free = Set{Symbol}(info(x).name for x in _scope_vars((exprs[i],), scope) if !fixed(x)),
-                fixed = Symbol[info(x).name for x in _scope_vars((exprs[i],), scope) if fixed(x)],
-                model = scope === :cell ? Symbol[info(x).name for x in _scope_vars((exprs[i],), :model)] : Symbol[])
-            for i in eachindex(exprs)]
+    rows = [
+        (;
+            text = i <= length(eqs) ? "`$(authored[i])`" : "the operating-point value of the algebraic variable `$(info(conds[i - length(eqs)].lhs).name)`",
+            label = i <= length(eqs) ? nothing : info(conds[i - length(eqs)].lhs).name,
+            free = Set{Symbol}(info(x).name for x in _scope_vars((exprs[i],), scope) if !fixed(x)),
+            fixed = Symbol[info(x).name for x in _scope_vars((exprs[i],), scope) if fixed(x)],
+            model = scope === :cell ? Symbol[info(x).name for x in _scope_vars((exprs[i],), :model)] : Symbol[],
+        )
+            for i in eachindex(exprs)
+    ]
     _check_determined(where_, rows, Symbol[info(x).name for x in free])
     # what is fixed for this problem is a parameter of the problem: built-ins, fixed values,
     # the model's values (in a cell), parameters and the conditions' values
@@ -491,10 +515,18 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
     vals(k) = Float64[value(src, k) for src in sources]
     names = join(("`$(info(x).name)`" for x in free), ", ")
     # a guess may be an expression of parameters (as in MTK): its value for this problem
-    gs = Float64[(g = _init_guess(x); v = _evaluate(g, pvals, "the guess `$g` of `$(info(x).name)`");
-                  v isa Real || throw(ArgumentError("the guess of `$(info(x).name)` is a number or an expression of " *
-                                                    "parameters; got `$g`"));
-                  Float64(v)) for x in free]
+    gs = Float64[
+        (
+            g = _init_guess(x); v = _evaluate(g, pvals, "the guess `$g` of `$(info(x).name)`");
+            v isa Real || throw(
+                ArgumentError(
+                    "the guess of `$(info(x).name)` is a number or an expression of " *
+                        "parameters; got `$g`"
+                )
+            );
+            Float64(v)
+        ) for x in free
+    ]
     # every result is checked against the conditions themselves (`_InitCheck`): a solve may stop
     # on a small absolute residual, and a linear solve may return a least-squares answer
     check = _InitCheck(ieqs, params, free)
@@ -508,15 +540,23 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
         return nothing
     end
     ip = try
-        isys = ModelingToolkitBase.System(Equation[D(x) ~ 0 for x in free], t, free, params;
+        isys = ModelingToolkitBase.System(
+            Equation[D(x) ~ 0 for x in free], t, free, params;
             name = Symbol(nameof(sys), :₊, scope, :_initialization), initialization_eqs = ieqs,
-            checks = ModelingToolkitBase.CheckComponents)
-        ModelingToolkitBase.InitializationProblem(ModelingToolkitBase.complete(isys), 0.0, Dict{Any, Any}(zip(params, vals(1)));
-            guesses = Dict{Any, Any}(zip(free, gs)), fully_determined = true, use_scc = false)
+            checks = ModelingToolkitBase.CheckComponents
+        )
+        ModelingToolkitBase.InitializationProblem(
+            ModelingToolkitBase.complete(isys), 0.0, Dict{Any, Any}(zip(params, vals(1)));
+            guesses = Dict{Any, Any}(zip(free, gs)), fully_determined = true, use_scc = false
+        )
     catch e
         (isfatal(e) || e isa Union{ArgumentError, PottsCompileError}) && rethrow()
-        throw(ArgumentError("initialization of $where_: ModelingToolkit could not build the initialization problem for " *
-                            "$names: $(first(sprint(showerror, e), 2000))"))
+        throw(
+            ArgumentError(
+                "initialization of $where_: ModelingToolkit could not build the initialization problem for " *
+                    "$names: $(first(sprint(showerror, e), 2000))"
+            )
+        )
     end
     # the parameters are written by index into MTK's parameter object (its type is the same
     # for these templates, so the workload's compiled `setindex!` serves every model)
@@ -541,8 +581,11 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
     nlp = if guess === nothing
         nothing
     else
-        SciMLBase.NonlinearProblem(SciMLBase.NonlinearFunction{true, SciMLBase.FullSpecialize}(
-            _InitResidual(ip.f, SymbolicIndexingInterface.parameter_values(ip))), copy(guess), nothing)
+        SciMLBase.NonlinearProblem(
+            SciMLBase.NonlinearFunction{true, SciMLBase.FullSpecialize}(
+                _InitResidual(ip.f, SymbolicIndexingInterface.parameter_values(ip))
+            ), copy(guess), nothing
+        )
     end
     # the free values at the state `x` of the nonlinear problem (the observed ones by MTK)
     function at_state(x)
@@ -559,16 +602,19 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
         ""
     end
     function failed(k, why)
-        throw(ArgumentError(
-            "initialization of $(entity(k)) found no solution for $names ($why); check $conditions and the guesses$hint"))
+        throw(
+            ArgumentError(
+                "initialization of $(entity(k)) found no solution for $names ($why); check $conditions and the guesses$hint"
+            )
+        )
     end
     function solving(f, k)
         return try
-                f()
-            catch e
-                (isfatal(e) || e isa Union{ArgumentError, PottsCompileError}) && rethrow()
-                failed(k, "the solve failed: $(first(sprint(showerror, e), 300))")
-            end
+            f()
+        catch e
+            (isfatal(e) || e isa Union{ArgumentError, PottsCompileError}) && rethrow()
+            failed(k, "the solve failed: $(first(sprint(showerror, e), 300))")
+        end
     end
     for k in 1:n
         pk = vals(k)
@@ -613,20 +659,27 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
             getter(sol)
         end
         for (j, v) in enumerate(out)
-            isfinite(v) || failed(k, "it gives `$(info(free[j]).name)` = $v" *
-                                     (retcode === nothing ? "" : "; the solve stopped with $retcode"))
+            isfinite(v) || failed(
+                k, "it gives `$(info(free[j]).name)` = $v" *
+                    (retcode === nothing ? "" : "; the solve stopped with $retcode")
+            )
         end
         bad = _init_accept(check, pk, out, gs, init)
         if bad !== nothing
             r, res, sc = bad
-            failed(k, "$(rows[r].text) is not satisfied: residual $res against terms of size $sc" *
-                      (retcode === nothing ? "" : "; the solve stopped with $retcode"))
+            failed(
+                k, "$(rows[r].text) is not satisfied: residual $res against terms of size $sc" *
+                    (retcode === nothing ? "" : "; the solve stopped with $retcode")
+            )
         end
-        _init_singular(check, pk, out, gs) && throw(ArgumentError(
-            "initialization of $(entity(k)) does not determine $names uniquely: their Jacobian at the solution is " *
-            "singular (dependent conditions, as for `a + b ~ volume` with `2a + 2b ~ 2volume`; a coefficient that is " *
-            "zero for this $(scope === :cell ? "cell" : "model"); or conditions that are flat in a variable there); " *
-            "check $conditions"))
+        _init_singular(check, pk, out, gs) && throw(
+            ArgumentError(
+                "initialization of $(entity(k)) does not determine $names uniquely: their Jacobian at the solution is " *
+                    "singular (dependent conditions, as for `a + b ~ volume` with `2a + 2b ~ 2volume`; a coefficient that is " *
+                    "zero for this $(scope === :cell ? "cell" : "model"); or conditions that are flat in a variable there); " *
+                    "check $conditions"
+            )
+        )
         for (j, v) in enumerate(out)
             dst[j][k] = v
         end
@@ -645,7 +698,8 @@ const _INIT_FD = cbrt(eps(Float64))
 # (one concrete solver type for every scale, compiled once)
 function _init_solver(scale::Float64)
     return SimpleNewtonRaphson(;
-        autodiff = AutoFiniteDiff(; fdtype = Val(:central), relstep = _INIT_FD, absstep = _INIT_FD * scale))
+        autodiff = AutoFiniteDiff(; fdtype = Val(:central), relstep = _INIT_FD, absstep = _INIT_FD * scale)
+    )
 end
 const _INIT_SOLVER = _init_solver(1.0)
 # the scale of the step: the smallest nonzero scale among the values, each its magnitude or its
@@ -955,29 +1009,44 @@ function _check_determined(where_, rows, free::Vector{Symbol})
         row = rows[r]
         if isempty(row.fixed) && isempty(row.free) && !isempty(row.model)
             vs = join(("`$v`" for v in row.model), ", ")
-            throw(ArgumentError("initialization of $where_: $(row.text) names no cell variable to solve for, and a cell " *
-                                "equation does not determine the model variable$(length(row.model) == 1 ? "" : "s") $vs " *
-                                "(it would give one value per cell); determine $vs by a model equation (one that reads " *
-                                "no cell quantity), or give $(length(row.model) == 1 ? "it" : "them") a value"))
+            throw(
+                ArgumentError(
+                    "initialization of $where_: $(row.text) names no cell variable to solve for, and a cell " *
+                        "equation does not determine the model variable$(length(row.model) == 1 ? "" : "s") $vs " *
+                        "(it would give one value per cell); determine $vs by a model equation (one that reads " *
+                        "no cell quantity), or give $(length(row.model) == 1 ? "it" : "them") a value"
+                )
+            )
         end
         if isempty(row.fixed)
-            throw(ArgumentError("initialization of $where_ is overdetermined: $(row.text) adds a condition on " *
-                                (isempty(row.free) ? "no variable" : join(("`$v`" for v in row.free), ", ")) *
-                                " beyond the others; remove one condition"))
+            throw(
+                ArgumentError(
+                    "initialization of $where_ is overdetermined: $(row.text) adds a condition on " *
+                        (isempty(row.free) ? "no variable" : join(("`$v`" for v in row.free), ", ")) *
+                        " beyond the others; remove one condition"
+                )
+            )
         end
         vs = join(("`$v`" for v in row.fixed), ", ")
         has = length(row.fixed) == 1 ? "has" : "have"
-        throw(ArgumentError("initialization of $where_ is overdetermined: $(row.text)" *
-                            (row.label === nothing ? "" : " (the condition `$(row.label) ~ value`)") * " names $vs, which already $has a value " *
-                            "(written in @variables, `= 0.0` included, or given in the operating point), and no free " *
-                            "variable is left for it; declare $vs without a value to have initialization solve for it, or " *
-                            "remove the condition"))
+        throw(
+            ArgumentError(
+                "initialization of $where_ is overdetermined: $(row.text)" *
+                    (row.label === nothing ? "" : " (the condition `$(row.label) ~ value`)") * " names $vs, which already $has a value " *
+                    "(written in @variables, `= 0.0` included, or given in the operating point), and no free " *
+                    "variable is left for it; declare $vs without a value to have initialization solve for it, or " *
+                    "remove the condition"
+            )
+        )
     end
     left = [v for v in free if !haskey(match, v)]
-    isempty(left) || throw(ArgumentError(
-        "initialization of $where_ is underdetermined: $(length(rows)) condition$(length(rows) == 1 ? "" : "s") for " *
-        "$(length(free)) free variables, and $(join(("`$v`" for v in left), ", ")) $(length(left) == 1 ? "is" : "are") " *
-        "not determined; give $(length(left) == 1 ? "it" : "them") a value (in @variables or the operating point) or add " *
-        "an equation to @initialization_equations"))
+    isempty(left) || throw(
+        ArgumentError(
+            "initialization of $where_ is underdetermined: $(length(rows)) condition$(length(rows) == 1 ? "" : "s") for " *
+                "$(length(free)) free variables, and $(join(("`$v`" for v in left), ", ")) $(length(left) == 1 ? "is" : "are") " *
+                "not determined; give $(length(left) == 1 ? "it" : "them") a value (in @variables or the operating point) or add " *
+                "an equation to @initialization_equations"
+        )
+    )
     return nothing
 end

@@ -13,12 +13,16 @@ const backend = ROCBackend()
 const kern = touch!(backend)
 function seqof(a, n, m)
     return for k in 1:n
-            kern(a, k; ndrange = m)
-        end
+        kern(a, k; ndrange = m)
+    end
 end
 function direct(a, n, m)
     seqof(a, n, m); AMDGPU.synchronize()
-    t = @elapsed (for _ in 1:20; seqof(a, n, m); end; AMDGPU.synchronize())
+    t = @elapsed (
+        for _ in 1:20
+            seqof(a, n, m)
+        end; AMDGPU.synchronize()
+    )
     return t / (20n)
 end
 function graph(a, n, m)
@@ -26,13 +30,17 @@ function graph(a, n, m)
     g = AMDGPU.HIP.capture(() -> seqof(a, n, m))
     ex = AMDGPU.HIP.instantiate(g)
     AMDGPU.HIP.launch(ex); AMDGPU.synchronize()
-    t = @elapsed (for _ in 1:20; AMDGPU.HIP.launch(ex); end; AMDGPU.synchronize())
+    t = @elapsed (
+        for _ in 1:20
+            AMDGPU.HIP.launch(ex)
+        end; AMDGPU.synchronize()
+    )
     return t / (20n)
 end
 for m in (1, 7_500, 250_000, 1_000_000)
     a = AMDGPU.ones(Float32, m)
     n = 480
-    @printf("work items %8d: direct %6.2f µs/launch, graph %6.2f µs/launch\n", m, 1e6 * direct(a, n, m), 1e6 * graph(a, n, m))
+    @printf("work items %8d: direct %6.2f µs/launch, graph %6.2f µs/launch\n", m, 1.0e6 * direct(a, n, m), 1.0e6 * graph(a, n, m))
 end
 
 # raw AMDGPU launches (no KernelAbstractions launch path) and the grid-wide barrier of one
@@ -47,11 +55,15 @@ function rawlaunch(a, n, m)
     k = @roc launch = false rtouch!(a, 1)
     function run()
         return for j in 1:n
-                k(a, j; groupsize = g, gridsize = b)
-            end
+            k(a, j; groupsize = g, gridsize = b)
+        end
     end
     run(); AMDGPU.synchronize()
-    t = @elapsed (for _ in 1:20; run(); end; AMDGPU.synchronize())
+    t = @elapsed (
+        for _ in 1:20
+            run()
+        end; AMDGPU.synchronize()
+    )
     return t / (20n)
 end
 function gsync!(a, nsync)
@@ -87,10 +99,14 @@ function maxcoop()
     return lo
 end
 const NCOOP = maxcoop()
-@printf("cooperative launch: at most %d workgroups of 256 (%d work items); %d compute units\n", NCOOP, 256NCOOP,
-    AMDGPU.HIP.properties(AMDGPU.device()).multiProcessorCount)
+@printf(
+    "cooperative launch: at most %d workgroups of 256 (%d work items); %d compute units\n", NCOOP, 256NCOOP,
+    AMDGPU.HIP.properties(AMDGPU.device()).multiProcessorCount
+)
 for m in (7_500, 256 * NCOOP)
     a = AMDGPU.ones(Float32, m)
-    @printf("work items %8d: raw @roc %6.2f µs/launch, grid barrier %6.2f µs/sync\n", m,
-        1e6 * rawlaunch(a, 480, m), 1e6 * gridsync(a, 2000, m))
+    @printf(
+        "work items %8d: raw @roc %6.2f µs/launch, grid barrier %6.2f µs/sync\n", m,
+        1.0e6 * rawlaunch(a, 480, m), 1.0e6 * gridsync(a, 2000, m)
+    )
 end

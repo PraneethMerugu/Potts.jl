@@ -23,5 +23,5 @@ function pdesys(eqs, bcs, dims, dvs, ps = Any[]; spacing = 1, name = :fields)
 end
 
 export PDESystem, Differential, Shift, @variables, @parameters, laplacian, masked, lattice_domain, pdesystem, DivKGrad, Advect, Upwind1,
-       Coarse, step_index, ismember, t, Dt, x, y, z, pdesys
+    Coarse, step_index, ismember, t, Dt, x, y, z, pdesys
 end

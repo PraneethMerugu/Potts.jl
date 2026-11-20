@@ -50,7 +50,7 @@ function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name::S
     for u in _p(sys, :divisions), b in _p(base, :divisions)
         typeof(u.domain) == typeof(b.domain) && u.every != b.every && _kinds_overlap(u.domain, b.domain) &&
             @warn "extend: $(_describe(u)) adds to the base's $(_describe(b)) (division rules accumulate: " *
-                  "both fire at their own cadence; the base's rule is not replaced)"
+            "both fire at their own cadence; the base's rule is not replaced)"
     end
     # a name keeps its category: say which side came from the base
     # (`@extend Base()` without a name calls the base `__base`)
@@ -65,8 +65,10 @@ function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name::S
     # a vector replaces the base's vector of its name as a whole, so it may not be shorter
     # (the base's statements may read the components it would drop)
     key(x) = (i = info(x); something(get(i.options, :vector, nothing), i.name))
-    _check_vector_lengths(name, inbase, Iterators.flatten((_p(base, :parameters), _p(base, :variables))),
-        Iterators.flatten((_p(sys, :parameters), _p(sys, :variables))))
+    _check_vector_lengths(
+        name, inbase, Iterators.flatten((_p(base, :parameters), _p(base, :variables))),
+        Iterators.flatten((_p(sys, :parameters), _p(sys, :variables)))
+    )
     byname(xs, ys) = (seen = Set(key(y) for y in ys); Any[filter(x -> !(key(x) in seen), xs); ys])
     # kind classes (D-135): the base's, then the extension's new ones; a restated class must
     # keep its members in order (`x ∈ g` unrolls in member order)
@@ -77,11 +79,16 @@ function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name::S
             push!(classes, g)
         elseif classes[i].kinds != g.kinds
             here, there = (Tuple(get(_p(sys, :kinds), k + 1, k) for k in h.kinds) for h in (g, classes[i]))   # kind names
-            throw(ArgumentError("extend: kind class `$(g.name)` is $here in $(nameof(sys)) but $there $inbase; " *
-                                "restate it with the same members in the same order (the order is in the generated code), or rename it"))
+            throw(
+                ArgumentError(
+                    "extend: kind class `$(g.name)` is $here in $(nameof(sys)) but $there $inbase; " *
+                        "restate it with the same members in the same order (the order is in the generated code), or rename it"
+                )
+            )
         end
     end
-    return PottsSystem(; name, kinds = _p(sys, :kinds), frozen_kinds = sort!(union(_p(base, :frozen_kinds), _p(sys, :frozen_kinds))),
+    return PottsSystem(;
+        name, kinds = _p(sys, :kinds), frozen_kinds = sort!(union(_p(base, :frozen_kinds), _p(sys, :frozen_kinds))),
         kind_classes = classes,
         lattice = _p(sys, :lattice), parameters = byname(_p(base, :parameters), _p(sys, :parameters)),
         variables = map(_settle_edge_scope, byname(_p(base, :variables), svars)), relations = merge(_p(base, :relations), _p(sys, :relations)),
@@ -101,7 +108,8 @@ function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name::S
         schedule = isempty(_p(sys, :schedule)) ? _p(base, :schedule) : _p(sys, :schedule),
         sources = merge(_p(base, :sources), _p(sys, :sources)),
         bcs = [_p(base, :bcs); _p(sys, :bcs)], bindings = [_p(base, :bindings); _p(sys, :bindings)],
-        metadata = _merged_metadata(base, sys))
+        metadata = _merged_metadata(base, sys)
+    )
 end
 
 # `@convert` passes (R8, D-233): a pass of the extension replaces the base's pass of its name
@@ -167,10 +175,13 @@ function _inherit_edge_scope(model, inbase, xs, bxs)
         i = info(x)
         i === nothing && return x
         old = get(roles, i.name, nothing)
-        (old === :edge) == (i.role === :edge) || old === nothing || throw(ArgumentError(
-            "$model: `$(i.name)` is $(_scope_description(old, get(inherited, i.name, nothing))) $inbase; " *
-            "re-declaring it as $(_scope_description(i.role, get(i.options, :relationship, nothing))) would change " *
-            "its scope (an edge variable's values live on links); keep its scope or choose another name"))
+        (old === :edge) == (i.role === :edge) || old === nothing || throw(
+            ArgumentError(
+                "$model: `$(i.name)` is $(_scope_description(old, get(inherited, i.name, nothing))) $inbase; " *
+                    "re-declaring it as $(_scope_description(i.role, get(i.options, :relationship, nothing))) would change " *
+                    "its scope (an edge variable's values live on links); keep its scope or choose another name"
+            )
+        )
         (i.role === :edge && haskey(inherited, i.name)) || return x
         rb = inherited[i.name]
         r = get(i.options, :relationship, nothing)
@@ -178,9 +189,13 @@ function _inherit_edge_scope(model, inbase, xs, bxs)
             opts = _without_implicit(i.options)
             return _tag(x, Entity(:edge, i.name, i.default, (; opts..., relationship = rb)))
         end
-        r === rb || throw(ArgumentError("$model: `$(i.name)` is an edge variable of relationship `$rb` $inbase; " *
-            "re-declaring it as `$(i.name)($r)` would move it to relationship `$r`. Re-declare it as " *
-            "`$(i.name)($rb)` or `$(i.name)(edge)`, or give the `$r` variable another name"))
+        r === rb || throw(
+            ArgumentError(
+                "$model: `$(i.name)` is an edge variable of relationship `$rb` $inbase; " *
+                    "re-declaring it as `$(i.name)($r)` would move it to relationship `$r`. Re-declare it as " *
+                    "`$(i.name)($rb)` or `$(i.name)(edge)`, or give the `$r` variable another name"
+            )
+        )
         return x
     end
 end
@@ -203,9 +218,12 @@ function _check_primed_names(sys::PottsSystem)
         s = string(n)
         endswith(s, '′') || continue
         x = Symbol(chop(s))
-        _is_site_quantity(sys, x) && throw(ArgumentError(
-            "$(nameof(sys)): `$n` is declared, but `$n` already means the contact-pair value of the " *
-            "site variable `$x` (primes exist only for site/field variables); rename one of them"))
+        _is_site_quantity(sys, x) && throw(
+            ArgumentError(
+                "$(nameof(sys)): `$n` is declared, but `$n` already means the contact-pair value of the " *
+                    "site variable `$x` (primes exist only for site/field variables); rename one of them"
+            )
+        )
     end
     return sys
 end
@@ -263,10 +281,10 @@ function _check_vector_lengths(model, inbase, theirs, mine)
     function components(xs)
         out = Dict{Symbol, Vector{Symbol}}()
         for x in xs
-                i = info(x)
-                v = i === nothing ? nothing : get(i.options, :vector, nothing)
-                v === nothing || push!(get!(out, v, Symbol[]), i.name)
-            end
+            i = info(x)
+            v = i === nothing ? nothing : get(i.options, :vector, nothing)
+            v === nothing || push!(get!(out, v, Symbol[]), i.name)
+        end
         return out
     end
     ours = components(mine)
@@ -274,8 +292,12 @@ function _check_vector_lengths(model, inbase, theirs, mine)
         new = get(ours, v, nothing)
         (new === nothing || length(new) >= length(names)) && continue
         dropped = join(("`$n`" for n in names if !(n in new)), ", ")
-        throw(ArgumentError("$model: `$v` has $(length(names)) components $inbase; the extension's " *
-                            "`$v[1:$(length(new))]` would drop $dropped (an extension's vector may be longer, not shorter)"))
+        throw(
+            ArgumentError(
+                "$model: `$v` has $(length(names)) components $inbase; the extension's " *
+                    "`$v[1:$(length(new))]` would drop $dropped (an extension's vector may be longer, not shorter)"
+            )
+        )
     end
     return nothing
 end
@@ -284,16 +306,17 @@ end
 function _labelled(what, n)
     i = findfirst(" (", what)
     return if i === nothing
-            "$what `$n`"
-        else
-            "$(what[1:prevind(what, first(i))]) `$n`$(what[first(i):end])"
-        end
+        "$what `$n`"
+    else
+        "$(what[1:prevind(what, first(i))]) `$n`$(what[first(i):end])"
+    end
 end
 
 function _category_clash(model, n, what, old)
     return ArgumentError(
         "$model: $(_labelled(what, n)): `$n` is already declared as $(_with_article(old)) (kinds, parameters, variables, " *
-        "observed quantities, relations, relationships and components share one namespace); rename one of them")
+            "observed quantities, relations, relationships and components share one namespace); rename one of them"
+    )
 end
 
 _kinds_overlap(a, b) = isempty(a.kinds) || isempty(b.kinds) || !isempty(intersect(a.kinds, b.kinds))
@@ -308,14 +331,22 @@ _target_key(u::Update) = (u.phase, string(u.eq.lhs))
 # at 1, so the extension's draws move past the base's to keep their streams independent.
 function _draw_indices(xs)
     out = Int[]
-    foreach(x -> _walk_all(y -> (iscall(y) && operation(y) === random_uniform &&
-        push!(out, Int(SymbolicUtils.unwrap_const(_unwrap(arguments(y)[1]))))), x), xs)
+    foreach(
+        x -> _walk_all(
+            y -> (
+                iscall(y) && operation(y) === random_uniform &&
+                    push!(out, Int(SymbolicUtils.unwrap_const(_unwrap(arguments(y)[1]))))
+            ), x
+        ), xs
+    )
     return out
 end
 function _random_exprs(s::PottsSystem)
-    return Any[(u.eq.rhs for u in _p(s, :updates))..., (eq.rhs for eq in _p(s, :equations))...,
+    return Any[
+        (u.eq.rhs for u in _p(s, :updates))..., (eq.rhs for eq in _p(s, :equations))...,
         (d.when for d in _p(s, :divisions))..., (r for d in _p(s, :divisions) for (_, r) in d.rules)..., (r.when for r in _p(s, :link_rules))...,
-        (x for b in _p(s, :discrete) for x in b.next)...]
+        (x for b in _p(s, :discrete) for x in b.next)...,
+    ]
 end
 function _renumber_draws(sys::PottsSystem, base::PottsSystem)
     mine = _draw_indices(_random_exprs(sys))
@@ -329,7 +360,7 @@ function _renumber_draws(sys::PottsSystem, base::PottsSystem)
             k = Int(SymbolicUtils.unwrap_const(_unwrap(arguments(y)[1])))
             sub[y] = _unwrap(random_uniform(Num(k + off)))
         end
-        isempty(sub) ? x : Symbolics.substitute(x, sub; fold = Val(false))
+        return isempty(sub) ? x : Symbolics.substitute(x, sub; fold = Val(false))
     end
     m = _map_statements(shift, sys)
     return _replace(sys; merge(m, (; sources = merge(_p(sys, :sources), m.sources)))...)
@@ -373,6 +404,8 @@ function _lookup_primed(sys::PottsSystem, name::Symbol)
     return _primed(lookup(sys, base))
 end
 function _is_site_quantity(sys::PottsSystem, name::Symbol)
-    return any(x -> (i = info(x); i !== nothing && i.role in (:site, :field) && (i.name === name || get(i.options, :vector, nothing) === name)),
-        _p(sys, :variables))
+    return any(
+        x -> (i = info(x); i !== nothing && i.role in (:site, :field) && (i.name === name || get(i.options, :vector, nothing) === name)),
+        _p(sys, :variables)
+    )
 end

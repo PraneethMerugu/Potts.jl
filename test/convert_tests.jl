@@ -230,10 +230,10 @@ end
         function wide(f)
             CorePotts._FORCE_WIDE_SITES[] = true
             return try
-                    f()
-                finally
-                    CorePotts._FORCE_WIDE_SITES[] = false
-                end
+                f()
+            finally
+                CorePotts._FORCE_WIDE_SITES[] = false
+            end
         end
         prob = wide(cv_device_problem)
         @test eltype(getfield(prob.u0.cell, CorePotts._CV_FIRST)) === Int64

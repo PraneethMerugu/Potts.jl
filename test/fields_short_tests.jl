@@ -25,18 +25,26 @@
         host = CpHost(; name = :m)
         @test Potts.couple(host, FsShort.SYS; inputs = [FsShort.endo => Potts.kind == 1]) isa Potts.PottsSystem
         # a given interval must still match: refused as before
-        e = cp_msg(() -> Potts.couple(host, FsMerks.chemoattractant((40, 30));
-            inputs = [FsMerks.cell => Potts.kind == 1, FsMerks.ecm => Potts.kind == 0]))
+        e = cp_msg(
+            () -> Potts.couple(
+                host, FsMerks.chemoattractant((40, 30));
+                inputs = [FsMerks.cell => Potts.kind == 1, FsMerks.ecm => Potts.kind == 0]
+            )
+        )
         @test occursin("spans `x ∈ [0, 40]`", e) && occursin("axis 1 of the lattice", e) || (println(e); false)
         # one axis given (matching), the other left out
-        one = Potts.ModelingToolkitBase.PDESystem([FsMerks.eq()], [], [FsMerks.x ∈ Potts.LatticePDE.Interval(0.0, 24.0)],
+        one = Potts.ModelingToolkitBase.PDESystem(
+            [FsMerks.eq()], [], [FsMerks.x ∈ Potts.LatticePDE.Interval(0.0, 24.0)],
             [Potts.t, FsMerks.x, FsMerks.y], [FsMerks.C, FsMerks.cell(Potts.t, FsMerks.x, FsMerks.y), FsMerks.ecm(Potts.t, FsMerks.x, FsMerks.y)],
-            [FsMerks.Dc, FsMerks.σc, FsMerks.δc]; name = :one)
+            [FsMerks.Dc, FsMerks.σc, FsMerks.δc]; name = :one
+        )
         ins = [FsMerks.cell => Potts.kind == 1, FsMerks.ecm => Potts.kind == 0]
         @test Potts.couple(host, one; inputs = ins) isa Potts.PottsSystem
-        bad = Potts.ModelingToolkitBase.PDESystem([FsMerks.eq()], [], [FsMerks.y ∈ Potts.LatticePDE.Interval(0.0, 5.0)],
+        bad = Potts.ModelingToolkitBase.PDESystem(
+            [FsMerks.eq()], [], [FsMerks.y ∈ Potts.LatticePDE.Interval(0.0, 5.0)],
             [Potts.t, FsMerks.x, FsMerks.y], [FsMerks.C, FsMerks.cell(Potts.t, FsMerks.x, FsMerks.y), FsMerks.ecm(Potts.t, FsMerks.x, FsMerks.y)],
-            [FsMerks.Dc, FsMerks.σc, FsMerks.δc]; name = :bad)
+            [FsMerks.Dc, FsMerks.σc, FsMerks.δc]; name = :bad
+        )
         e = cp_msg(() -> Potts.couple(host, bad; inputs = ins))
         @test occursin("spans `y ∈ [0, 5]`", e) || (println(e); false)
     end

@@ -145,15 +145,19 @@ struct PottsSweepSpec
 end
 
 function _sweep_spec(sys::PottsSystem)
-    return PottsSweepSpec(hamiltonian(sys), drives(sys), copy(_p(sys, :constraints)),
-        _wrapped(_p(sys, :sweep).temperature), _proposal_spec(sys))
+    return PottsSweepSpec(
+        hamiltonian(sys), drives(sys), copy(_p(sys, :constraints)),
+        _wrapped(_p(sys, :sweep).temperature), _proposal_spec(sys)
+    )
 end
 
 _count_string(n, what) = string(n, " ", what, n == 1 ? "" : "s")
 function Base.show(io::IO, s::PottsSweepSpec)
-    print(io, "PottsSweepSpec(", _count_string(length(s.hamiltonian), "term"), ", ",
+    return print(
+        io, "PottsSweepSpec(", _count_string(length(s.hamiltonian), "term"), ", ",
         _count_string(length(s.drives), "drive"), ", ", _count_string(length(s.constraints), "constraint"),
-        "; temperature = ", s.temperature, ", proposal = ", s.proposal, ")")
+        "; temperature = ", s.temperature, ", proposal = ", s.proposal, ")"
+    )
 end
 function Base.show(io::IO, ::MIME"text/plain", s::PottsSweepSpec)
     println(io, "PottsSweepSpec")
@@ -167,7 +171,7 @@ function Base.show(io::IO, ::MIME"text/plain", s::PottsSweepSpec)
         println(io, "  constraint ", c.kind === :expr ? c.expr : string(c.kind, c.kinds))
     end
     println(io, "  temperature ", s.temperature)
-    print(io, "  proposal ", s.proposal)
+    return print(io, "  proposal ", s.proposal)
 end
 
 # MTK's typed metadata (D-137): the payload is the inner System's (`Potts.wrap_system` sets it). A
@@ -175,6 +179,9 @@ end
 SymbolicUtils.getmetadata(c::CompiledPottsSystem, k::DataType, default) = SymbolicUtils.getmetadata(inner(getfield(c, :authored)), k, default)
 SymbolicUtils.hasmetadata(c::CompiledPottsSystem, k::DataType) = SymbolicUtils.hasmetadata(inner(getfield(c, :authored)), k)
 function SymbolicUtils.setmetadata(::CompiledPottsSystem, k::DataType, v)
-    throw(ArgumentError(
-        "setmetadata(…, $k, …) on a CompiledPottsSystem: a compiled system is read-only; set metadata before mtkcompile"))
+    throw(
+        ArgumentError(
+            "setmetadata(…, $k, …) on a CompiledPottsSystem: a compiled system is read-only; set metadata before mtkcompile"
+        )
+    )
 end

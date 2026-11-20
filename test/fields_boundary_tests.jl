@@ -19,19 +19,20 @@ isdefined(@__MODULE__, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field
 isdefined(@__MODULE__, :observed_orders) || include(joinpath(@__DIR__, "shared", "stats_helpers.jl"))
 
 module FbPDE
-using ..FieldPDE
-@variables c(..) dk(..) [input = true]
-const X = (t, x, y)
-const C = c(X...)
-const Dx, Dy = Differential(x), Differential(y)
-# the manufactured solution on `n × n` sites of spacing 1/n
-function mms(n)
-    @parameters Dd = 1.0
+    using ..FieldPDE
+    @variables c(..) dk(..) [input = true]
+    const X = (t, x, y)
+    const C = c(X...)
+    const Dx, Dy = Differential(x), Differential(y)
+    # the manufactured solution on `n × n` sites of spacing 1/n
+    function mms(n)
+        @parameters Dd = 1.0
         return pdesys(
             [Dt(C) ~ Dd * laplacian(C) + (cos(π * x / 2) + x * y^2) - Dd * (1 + t) * (2x - (π^2 / 4) * cos(π * x / 2))],
-        [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1 + t, c(t, 1, y) ~ (1 + t) * y^2, Dy(c(t, x, 1)) ~ 2 * (1 + t) * x], (n, n), [C], [Dd];
-        spacing = 1 / n)
-end
+            [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1 + t, c(t, 1, y) ~ (1 + t) * y^2, Dy(c(t, x, 1)) ~ 2 * (1 + t) * x], (n, n), [C], [Dd];
+            spacing = 1 / n
+        )
+    end
     # temporal MMS for ExplicitEuler: u = (1 + t)^2 * φ on 8 × 8 with small Dd so temporal error O(dt) dominates
     function mms_ee(n = 8)
         @parameters Dd = 0.002
@@ -43,43 +44,49 @@ end
             (n, n), [C], [Dd]; spacing = 1 / n
         )
     end
-function site()
-    @parameters Dc = 0.2 g1 = 1.0
-    return pdesys(
-        [Dt(C) ~ Dc * laplacian(C) - 0.1 * C],
-          [c(0, x, y) ~ 0.0, (1 + 0.1y) * c(t, 0, y) - Dx(c(t, 0, y)) ~ 1.0,
-              g1 * (1 + 0.5 * t) * c(t, 16, y) + 2.0 * Dx(c(t, 16, y)) ~ 0.0,
-              2.0 * c(t, x, 16) + (0.5 + 0.05x) * Dy(c(t, x, 16)) ~ 0.5], (16, 16), [C], [Dc, g1])
-end
+    function site()
+        @parameters Dc = 0.2 g1 = 1.0
+        return pdesys(
+            [Dt(C) ~ Dc * laplacian(C) - 0.1 * C],
+            [
+                c(0, x, y) ~ 0.0, (1 + 0.1y) * c(t, 0, y) - Dx(c(t, 0, y)) ~ 1.0,
+                g1 * (1 + 0.5 * t) * c(t, 16, y) + 2.0 * Dx(c(t, 16, y)) ~ 0.0,
+                2.0 * c(t, x, 16) + (0.5 + 0.05x) * Dy(c(t, x, 16)) ~ 0.5,
+            ], (16, 16), [C], [Dc, g1]
+        )
+    end
     function tab()
         return pdesys(
-                [Dt(C) ~ dk(X...) * laplacian(C) - 0.05 * C], [c(0, x, y) ~ 1.0, (-0.5 - 0.1 * t) * c(t, 0, y) - 1.0 * Dx(c(t, 0, y)) ~ 0.0],
-            (16, 16), [C, dk(X...)])
+            [Dt(C) ~ dk(X...) * laplacian(C) - 0.05 * C], [c(0, x, y) ~ 1.0, (-0.5 - 0.1 * t) * c(t, 0, y) - 1.0 * Dx(c(t, 0, y)) ~ 0.0],
+            (16, 16), [C, dk(X...)]
+        )
     end
-# the faces: Dirichlet values of parameters, a coordinate and the time; a Neumann flux of a coordinate
-function faces()
-    @parameters Dc = 0.2 g1 = 1.0 g2 = 0.5 c0 = 2.0 ω = 0.3
-    return pdesys(
-        [Dt(C) ~ Dc * laplacian(C)], [
-            c(0, x, y) ~ 0.0, c(t, 0, y) ~ g1 + g2, c(t, 12, y) ~ 0.5y, c(t, x, 0) ~ c0 * sin(ω * t),
-               Dy(c(t, x, 10)) ~ 0.1x], (12, 10), [C], [Dc, g1, g2, c0, ω])
-end
-# Robin coefficients of parameters: α (`g1 + g2`) and β (`h1 + h2`, of ∂c/∂x on the low face)
-function robin()
-    @parameters Dc = 0.2 g1 = 1.0 g2 = 0.5
-    return pdesys([Dt(C) ~ Dc * laplacian(C)], [c(0, x, y) ~ 0.0, (g1 + g2) * c(t, 0, y) - Dx(c(t, 0, y)) ~ 1.0], (12, 10), [C], [Dc, g1, g2])
-end
-function robin_beta()
-    @parameters Dc = 0.2 h1 = 0.5 h2 = 0.25
-    return pdesys([Dt(C) ~ Dc * laplacian(C)], [c(0, x, y) ~ 0.0, c(t, 0, y) - (h1 + h2) * Dx(c(t, 0, y)) ~ 1.0], (12, 10), [C], [Dc, h1, h2])
-end
-# a Robin coefficient `g1 + r` that reads `r`: a coordinate (`:y`), the time (`:t`) or an input (`:vin`)
-@variables vin(..) [input = true]
-function bad(r)
-    @parameters g1 = 1.0
-    coef = g1 + (r === :y ? y : r === :t ? t : vin(X...))
+    # the faces: Dirichlet values of parameters, a coordinate and the time; a Neumann flux of a coordinate
+    function faces()
+        @parameters Dc = 0.2 g1 = 1.0 g2 = 0.5 c0 = 2.0 ω = 0.3
+        return pdesys(
+            [Dt(C) ~ Dc * laplacian(C)], [
+                c(0, x, y) ~ 0.0, c(t, 0, y) ~ g1 + g2, c(t, 12, y) ~ 0.5y, c(t, x, 0) ~ c0 * sin(ω * t),
+                Dy(c(t, x, 10)) ~ 0.1x,
+            ], (12, 10), [C], [Dc, g1, g2, c0, ω]
+        )
+    end
+    # Robin coefficients of parameters: α (`g1 + g2`) and β (`h1 + h2`, of ∂c/∂x on the low face)
+    function robin()
+        @parameters Dc = 0.2 g1 = 1.0 g2 = 0.5
+        return pdesys([Dt(C) ~ Dc * laplacian(C)], [c(0, x, y) ~ 0.0, (g1 + g2) * c(t, 0, y) - Dx(c(t, 0, y)) ~ 1.0], (12, 10), [C], [Dc, g1, g2])
+    end
+    function robin_beta()
+        @parameters Dc = 0.2 h1 = 0.5 h2 = 0.25
+        return pdesys([Dt(C) ~ Dc * laplacian(C)], [c(0, x, y) ~ 0.0, c(t, 0, y) - (h1 + h2) * Dx(c(t, 0, y)) ~ 1.0], (12, 10), [C], [Dc, h1, h2])
+    end
+    # a Robin coefficient `g1 + r` that reads `r`: a coordinate (`:y`), the time (`:t`) or an input (`:vin`)
+    @variables vin(..) [input = true]
+    function bad(r)
+        @parameters g1 = 1.0
+        coef = g1 + (r === :y ? y : r === :t ? t : vin(X...))
         return pdesys([Dt(C) ~ laplacian(C)], [c(0, x, y) ~ 0.0, coef * c(t, 0, y) - Dx(c(t, 0, y)) ~ 1.0], (8, 8), [C, vin(X...)], [g1])
-end
+    end
     mid() = pdesys([Dt(C) ~ 0.2 * laplacian(C)], [c(0, x, y) ~ 1.0, (1 - t) * c(t, 0, y) - 0.5 * Dx(c(t, 0, y)) ~ 0.0], (16, 16), [C])
 end
 
@@ -109,8 +116,12 @@ end
 fb_op(dims, p = []) = [ownership => zeros(Int32, dims...), kind => Symbol[], p...]
 
 function fb_run(M, k, fs; p = [])
-    return Array(solve(PottsProblem(M(; name = :m), fb_op((12, 10), p), (0, k); field_solver = fs),
-        SequentialCPM()).u[end].site.c)
+    return Array(
+        solve(
+            PottsProblem(M(; name = :m), fb_op((12, 10), p), (0, k); field_solver = fs),
+            SequentialCPM()
+        ).u[end].site.c
+    )
 end
 
 # LatticePDE's own run of `sys` over `k` MCS (one window of length 1 each), parameters `p`
@@ -124,15 +135,15 @@ end
 
 # the coupled run against the owned one: bitwise for the explicit step, to the inner solver's
 # tolerance for the implicit one
-fb_same(a, o, fs) = fs isa ExplicitEuler ? a == o : maximum(abs, a .- o) <= 1e-9
+fb_same(a, o, fs) = fs isa ExplicitEuler ? a == o : maximum(abs, a .- o) <= 1.0e-9
 
 function fb_msg(f)
     return try
-            f()
-            "built"
-        catch e
-            sprint(showerror, e)
-        end
+        f()
+        "built"
+    catch e
+        sprint(showerror, e)
+    end
 end
 
 
@@ -236,8 +247,10 @@ end
             M = getfield(@__MODULE__, Symbol(:FbMMS, n))
             xs = ((1:n) .- 0.5) ./ n
             φ0 = [φ(x, y) for x in xs, y in xs]
-            s = solve(PottsProblem(M(; name = :m), fb_op((n, n), [:c => φ0]), (0, 1); field_solver = BackwardEuler(; substeps = 20)),
-                SequentialCPM())
+            s = solve(
+                PottsProblem(M(; name = :m), fb_op((n, n), [:c => φ0]), (0, 1); field_solver = BackwardEuler(; substeps = 20)),
+                SequentialCPM()
+            )
             maximum(abs, Array(s.u[end].site.c) .- 2 .* φ0)
         end
         hs = [1 / n for n in (16, 32, 64)]
@@ -296,8 +309,12 @@ end
 @testitem "per-site and time-varying Robin coefficients" setup = [FieldsBoundarySetup] tags = [:potts, :fields_boundary] begin
     @testset "per-site and time-varying Robin coefficients" begin
         function run(M, k, fs; p = [])
-            return Array(solve(PottsProblem(M(; name = :m), fb_op((16, 16), p), (0, k); field_solver = fs),
-                SequentialCPM()).u[end].site.c)
+            return Array(
+                solve(
+                    PottsProblem(M(; name = :m), fb_op((16, 16), p), (0, k); field_solver = fs),
+                    SequentialCPM()
+                ).u[end].site.c
+            )
         end
         tight = BackwardEuler(; linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 64))
         for fs in (ExplicitEuler(; substeps = 4), tight)
@@ -338,7 +355,7 @@ end
             end
         end
         a = run(FbSiteBcs, 1, BackwardEuler(; substeps = 1, linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 64)))
-        @test maximum(abs, vec(a) .- (Float64.((1:(n^2)) .== (1:(n^2))') - L) \ b) < 1e-10
+        @test maximum(abs, vec(a) .- (Float64.((1:(n^2)) .== (1:(n^2))') - L) \ b) < 1.0e-10
     end
 end
 

@@ -183,8 +183,10 @@ sol = solve(prob, SequentialCPM(); saveat = 0:32:1600)
 
 using MakiePotts, CairoMakie
 mkpath("graner_glazier") #hide
-record_potts("graner_glazier/sorting.mp4", sol; framerate = 10, title = "Cell sorting, 200 cells",
-    figure = (; size = (400, 400)))
+record_potts(
+    "graner_glazier/sorting.mp4", sol; framerate = 10, title = "Cell sorting, 200 cells",
+    figure = (; size = (400, 400))
+)
 nothing #hide
 
 # ```@raw html
@@ -215,8 +217,10 @@ function heterotypic_fraction(u)
 end
 CairoMakie.activate!(type = "png")
 paper_t = sol.t[2:end] ./ 16                       # in paper MCS
-lines(paper_t, heterotypic_fraction.(sol.u[2:end]);
-    axis = (xscale = log10, xlabel = "time (paper MCS)", ylabel = "heterotypic boundary fraction"))
+lines(
+    paper_t, heterotypic_fraction.(sol.u[2:end]);
+    axis = (xscale = log10, xlabel = "time (paper MCS)", ylabel = "heterotypic boundary fraction")
+)
 
 # The fraction falls about linearly in the logarithm of time, the slow coarsening the
 # papers report (PRL Fig. 2, PRE Fig. 13).
