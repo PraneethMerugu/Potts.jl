@@ -198,7 +198,7 @@ deviations_md = """
 | V-PRE8–V-PRE12, V-PRE14, V-PRE15 (pre-registered, not yet on this page) | not run | λ scan (Fig. 16, Table III), checkerboard start (Figs. 7–8), T dependence (Fig. 9, Table I), slow engulfment (Figs. 18–19), J_lM = 30 (Figs. 20–21), dispersal (Fig. 25), J_ld scan (Figs. 26–27) | not built on this page yet; the targets are in the pre-registered table under Details | not an author question |
 | Time unit | 1 MCS = N attempts; paper t = our $(PAPER_MCS)t | 1 MCS = 16N attempts (PRL p.2014) | a convention only (INTERNALS F8). Both samplers pick target sites uniformly over the whole lattice, so verdicts are read at the paper's nominal times (spec §8.5) | not an author question |
 | Aggregate size | $(n_state) cells on $(dims_state) (`graner_glazier_state`) in the reduced build; $(FULL ? "this run uses" : "the full run uses") `graner_glazier_aggregate(1000)`, one per replicate | ≈ 1000 cells (PRE p.2129) | cost of the docs build. With the small aggregate, boundary fractions scale with perimeter/area and sorting levels off long before 10⁴ paper MCS; the full run tests this deviation | not an author question |
-| Log-law window | also reported over 4–512 (an extra row, not a replacement) | 5–4000 paper MCS (spec §9.1 V-PRE1) | the window of `test/papers.jl`, which ends before our small aggregate levels off | not an author question |
+| Log-law window | also reported over 4–512 (an extra row, not a replacement) | 5–4000 paper MCS (spec §9.1 V-PRE1) | the window of `test/papers_tests.jl`, which ends before our small aggregate levels off | not an author question |
 | Boundary conditions and lattice size | periodic, $(join(size(σ0), " × "))$(FULL ? ", medium margin $MARGIN sites" : ""); variant: the `lattice` keyword | unstated | unstated in the papers. The aggregate stays clear of its image: no replicate has a save without an all-medium row and column (isolation guard, under Details), and the same starts embedded in a $(dims_pad) lattice give the same bond counts to 10³ (variant run under Details). The first full run (P6.1d) used a margin of 10, chosen by a check that ran only to 10³ (spec §9.1 ruling 3); over 2×10⁴ paper MCS the aggregates drift and deform by ≈ 30 sites, and some touched their image after ≈ 3000 paper MCS, which removed light–medium boundary and failed V-PRE3 (b) (spec §9.4). The margin is now $MARGIN, which dispersal runs need anyway (spec §8.6 D2, §9.1 V-PRE14/15) | $AQ |
 | Type fraction | $(FULL ? "equal numbers, randomly placed (`graner_glazier_aggregate`, one draw per replicate)" : "probability ½ per cell (recorded in `data/graner/provenance.toml`)") ($ndark dark / $nlight light) | unstated (spec §8.4) | an assumption; PRE's t = 1 fractions match a dark share of 0.50 (D-151) | $AQ |
 | Initial state | $(FULL ? "a round aggregate of $ncells centroidal Voronoi cells, not Potts-relaxed (`graner_glazier_aggregate`)" : "the PRE recipe with $ncells cells (D-049 F-2; `data/graner/generate.jl`); variant `graner_glazier_aggregate(n)`") | square aggregate of staggered bricks relaxed 400 paper MCS (PRE §II D3) | $(FULL ? "paper size. " : "")The paper-size aggregate is not relaxed: its cell-area SD is $(round(sd_voronoi; digits = 1)) sites (mean over the $(length(voronoi_starts)) paper-size start(s) built on this page), against $(round(sd_relaxed; digits = 1)) for the Potts-relaxed `graner_glazier_state`. Heterotypic fractions from a Voronoi and from a relaxed start agree at 1, 10 and 100 paper MCS (D-063; P6.1b2 review), and so does the V-PRE4 boundary drop (spec §9.1 V-PRE4) | not an author question |
@@ -476,7 +476,7 @@ nothing #hide
 # Fractional boundary length is the number of mismatched Moore bonds between two kinds,
 # divided by all mismatched bonds (medium included). It is measured on a copy annealed for
 # 2 paper MCS at T = 0 with the run's own contact energies. The definitions follow
-# `lib/PottsModels/test/papers.jl` and spec §9.0.
+# `lib/PottsModels/test/papers_tests.jl` and spec §9.0.
 #
 # planned: a `graner_glazier_observables(sol)` (feature G12, observables library) will
 # replace these helpers.
@@ -520,7 +520,7 @@ function radius_ratio(σ, k)    # mean distance to the aggregate centroid, dark 
     return r(1) / r(2)
 end
 
-## engulfment as in `papers.jl`: dark–medium boundary below 0.003, dark cells nearer the center
+## engulfment as in `papers_tests.jl`: dark–medium boundary below 0.003, dark cells nearer the center
 engulfed(σ, k, run) = fractions(σ, k, run)[:dM] < 0.003 && radius_ratio(σ, k) < 0.75
 
 ## dark clusters (spec §9.0): connected components of the dark cells, two cells adjacent

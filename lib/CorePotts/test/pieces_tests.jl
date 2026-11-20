@@ -1,7 +1,7 @@
 # Whole-cell connectivity (P6.9a, `src/pieces.jl`): ordinary tests (D-048). `recompute_pieces`
 # and the per-copy after-values against an independent flood fill; `global_keeps` (exact
 # and windowed) and `global_gains` against brute force; the window's three outcomes on a
-# loop. The model-level acceptance is PottsModels' frozen `p6_9a_global_connectivity.jl`.
+# loop. The model-level acceptance is PottsModels' `lib/PottsModels/test/acceptance/global_connectivity_tests.jl`.
 
 @testsetup module CP_pieces
 using Test, CorePotts, StaticArrays, Statistics, Random

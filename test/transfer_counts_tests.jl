@@ -4,7 +4,7 @@
 # sites. Later rows that remove transfers update the formulas here (P6.0v1 did: the
 # lifecycle on the device; P6.0v2: column-only HostPhase / _AdaptiveODE copies). Device only
 # (POTTS_GPU = metal | rocm, test/shared/devices.jl); on the CPU nothing is counted (the frozen
-# acceptance file `lib/PottsModels/test/acceptance/p6_0v_transfer_counters.jl` checks that).
+# acceptance file `lib/PottsModels/test/acceptance/transfer_counters_tests.jl` checks that).
 #
 # Counting rules (frozen file header): one contiguous host↔device array copy is one
 # transfer, including each array leaf of an `Adapt.adapt(Array, …)` snapshot; bytes are
@@ -166,10 +166,11 @@ end
 # The gate models are the frozen P6.0v file's (the old runner had `P60vOnDevice` in `Main` from
 # test/gpu.jl); on Metal this setup includes the file itself, which runs its testsets once more.
 if PottsDevices.device_name() == "metal"
-    let p60v_path = joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0v_transfer_counters.jl")
+    let p60v_path = joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "transfer_counters_tests.jl"),
+            runner = joinpath(@__DIR__, "shared", "pottsmodels_test_file.jl")
         Core.eval(@__MODULE__, :(module P60vOnDevice
-            using Test, Potts, PottsModels
-            include($p60v_path)
+                    include($runner)
+                    PottsModelsTestFile.run_file(@__MODULE__, $p60v_path)
         end))
     end
 end
@@ -270,7 +271,7 @@ end
             backend = PottsDevices.device_backend()
             alg = CheckerboardCPM()
             # quiet MCS of every gate model
-            for (label, _, make) in P60vOnDevice.p60v_gate_models(Float32)
+            for (label, _, make) in P60vOnDevice.TransferCountersSetup.gate_models(Float32)
                 integ = init(make(), alg; backend, save_start = false, save_everystep = false, save_end = false)
                 P60VX_STATS[] = integ.stats
                 step!(integ); step!(integ)

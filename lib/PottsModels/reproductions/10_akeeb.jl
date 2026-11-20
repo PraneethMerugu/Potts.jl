@@ -461,7 +461,7 @@ akeeb_observables(sol_one.u[end])
 #
 # The rules pass the authors' independent ensembles against each other (R1: B and C
 # against A at P1–P8, 96/96; B against C over MCS 0–500, 24/24; R2, R3 on B and C against
-# A); the test `lib/PottsModels/test/reproductions/10_akeeb.jl` repeats that
+# A); the test `lib/PottsModels/test/reproductions/10_akeeb_tests.jl` repeats that
 # check when the data are on disk. Verdict classes: **SMOKE+FULL** rows bind in both
 # builds; **FULL** rows bind only in the full run and are reported as "in band" or "out
 # of band" here.

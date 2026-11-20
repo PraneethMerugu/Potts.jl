@@ -1,5 +1,5 @@
 # Kind classes (`@kinds … g = (k, …)`): rejections around the frozen acceptance file
-# (lib/PottsModels/test/acceptance/p6_0g_kind_classes.jl): comparisons with a class, members
+# (lib/PottsModels/test/acceptance/kind_classes_tests.jl): comparisons with a class, members
 # resolved at expansion, layouts against a model, programmatic classes.
 
 @testsetup module KindClassTests

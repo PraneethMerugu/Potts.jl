@@ -12,7 +12,7 @@
 # `docs/src/models/index.md` (hand-written, committed) is a short page at the old URL of the
 # former Models section, linking to the pages. Each script builds one model,
 # whose finished `@potts_model` lives in `docs/models/src/<name>_model.jl`; that file is
-# also included by lib/PottsModels/test/tutorial_models.jl, which checks that it compiles to
+# also included by lib/PottsModels/test/tutorial_models_tests.jl, which checks that it compiles to
 # the same problem as the shipped constructor. Two placeholders in the scripts read it:
 #
 # - a markdown line `# <<fragment NAME>>` becomes a (non-executed) code listing of the lines

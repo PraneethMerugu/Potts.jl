@@ -1,5 +1,5 @@
 # D-150: the contact fold `count(pred for _ in contacts)` and `randn()` in the DSL. The frozen
-# acceptance file (lib/PottsModels/test/acceptance/p6_15c_openvt_table_s1.jl) checks their
+# acceptance file (lib/PottsModels/test/acceptance/openvt_table_s1_tests.jl) checks their
 # values; this file checks what the DSL rejects, by name (ruling 5: a Base RNG call never
 # silently becomes a build-time constant), and that models without them are unchanged.
 

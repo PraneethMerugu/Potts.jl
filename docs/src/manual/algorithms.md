@@ -172,8 +172,8 @@ bnd = solve(prob, SequentialCPM(; skip_interior = true); save_everystep = false)
 
 ### Measured evidence
 
-The acceptance test is `lib/PottsModels/test/acceptance/p6_4b1_boundary_site.jl` (frozen,
-D-177). It passes at both tiers (SMOKE: 102 checks, 2 skipped by tier; FULL on the PC:
+The acceptance test is `lib/PottsModels/test/acceptance/boundary_site_proposal_tests.jl`
+(D-177). It passes at both tiers (SMOKE: 102 checks, 2 skipped by tier; FULL on the PC:
 106 checks, every ``|z| \le 2.4``). Each check is held to a false-failure probability of
 at most 10⁻³ and has a negative control.
 

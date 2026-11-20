@@ -1,5 +1,5 @@
 # Cell references (R6, P6.5a): regressions found in review of the D-231 implementation. The
-# specification is the frozen acceptance test lib/PottsModels/test/acceptance/p6_5a_cell_refs.jl;
+# specification is the frozen acceptance test lib/PottsModels/test/acceptance/cell_references_tests.jl;
 # these cover forms it does not reach.
 
 @testsetup module CellRefsSetup

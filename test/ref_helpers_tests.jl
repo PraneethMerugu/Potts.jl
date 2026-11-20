@@ -1,5 +1,5 @@
 # Named pairs (E2) and the E7 geometry helpers (P6.5a2, D-243): forms the frozen acceptance
-# test lib/PottsModels/test/acceptance/p6_5a2_ref_helpers.jl does not reach.
+# test lib/PottsModels/test/acceptance/cell_reference_helpers_tests.jl does not reach.
 
 @testsetup module RefHelpersSetup
 using Potts, Test

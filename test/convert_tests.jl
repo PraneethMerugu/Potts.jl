@@ -1,5 +1,6 @@
 # `@convert` passes (R8, D-233), beyond the frozen acceptance files
-# (lib/PottsModels/test/acceptance/p6_5b_*.jl, the behavioural contract): every stage of
+# (lib/PottsModels/test/acceptance/convert_tests.jl and ownership_delta_tests.jl, the
+# behavioural contract): every stage of
 # `CorePotts.ConvertPass` on the CPU and on the device (reset, entity, decide, allocate with
 # the reference reset of a dead referent and the unlinking of the reused slot, transfer,
 # writes, paint with the ownership hook, σ, finalize), which the GPU group must compile
