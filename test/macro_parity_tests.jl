@@ -1,7 +1,11 @@
-# `@potts_model` is sugar over the keyword constructor: every model it builds is reachable through
-# `PottsSystem(; name, <the PottsPart fields>...)`. Each model below uses a group of the macro's
-# sections; the test rebuilds it from its payload (`Potts.part`) with the keyword constructor and
-# requires the same problem and the same run, step by step.
+# Round trip through the keyword constructor: every model `@potts_model` builds is rebuilt by
+# `PottsSystem(; name, <the PottsPart fields>...)` from its own payload (`Potts.part`), and the
+# test requires the same problem and the same run, step by step. Each model below uses a
+# group of the macro's sections. This shows that the macro adds nothing outside the payload
+# and that the keyword constructor takes every payload field. It does not show that a user
+# can write each section by hand with public constructors (a separate test, not here). The
+# system metadata of `@description` and `@metadata` lives in the inner system, not in the
+# payload, so the round trip does not carry it and the test does not check it.
 
 @testsetup module MacroParitySetup
 using Potts, Test
@@ -185,8 +189,8 @@ mp_leaves(x) = isstructtype(typeof(x)) ? reduce(vcat, (mp_leaves(getfield(x, i))
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "@potts_model and PottsSystem(...) build the same model" setup = [MacroParitySetup] tags = [:potts, :symbolic] begin
-    @testset "@potts_model and PottsSystem(...) build the same model" begin
+@testitem "@potts_model models round-trip through PottsSystem(...)" setup = [MacroParitySetup] tags = [:potts, :symbolic] begin
+    @testset "@potts_model models round-trip through PottsSystem(...)" begin
         for (sys, op, tspan, kw) in mp_cases()
             again = mp_rebuild(sys)
             @test again isa PottsSystem && nameof(again) === nameof(sys)
