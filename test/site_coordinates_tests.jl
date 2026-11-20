@@ -28,7 +28,7 @@ end
             prob = PottsProblem(SiteCoordinate(; name = :s), [ownership => σ, kind => [:A]], (0, 1))
             solve(prob, SequentialCPM(); saveat = 1).u[end].site.h
         catch e
-            e isa Potts.PottsCompileError || rethrow()
+            e isa Potts.PottsCompileError && occursin("`x`", sprint(showerror, e)) || rethrow()
             nothing
         end
         @test_broken h !== nothing && h ≈ [i - 0.5 for i in 1:6, j in 1:4]
