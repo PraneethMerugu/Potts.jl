@@ -294,9 +294,6 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
         return (; bad_errors, bad_catches, bad_invariant_forms, bad_stale, found_invariants)
     end
 
-    # qa_error_rules also checks that `src/`, `ext/` and `test/` hold no stale front-end wording:
-    # a front end named by a letter, "both front ends", or `@bcs` outside the explicit legacy
-    # section refusal.
     """
         qa_error_rules(pkg_root; reviewed_invariants = String[], allowed_bcs_files = String[])
 
@@ -305,6 +302,8 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
     - no bare `catch` clauses (`try ... catch; ... end` without an exception binding),
     - internal `"please report"` invariants thrown exclusively via `AssertionError` and matching
       `reviewed_invariants`,
+    that `src/`, `ext/`, and `test/` contain no stale front-end wording (`"front end A"`,
+    `"front end B"`, `"both front ends"`, `"@bcs"` outside explicit legacy section refusal),
     and run negative controls proving every guard flags synthetic violations.
     """
     function qa_error_rules(
@@ -347,8 +346,7 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
             Test.@test !_qa_invariants_match(planted.found_invariants, String[])
             Test.@test _qa_invariants_match(planted.found_invariants, ["src/planted.jl"])
         end
-        lettered = "# front " * "end A"    # built by concatenation so the phase-name guard spares this file
-        stale_neg = _qa_scan_error_rules(lettered * "\nmsg = \"write @bcs: x\"")
+        stale_neg = _qa_scan_error_rules("# front end A\nmsg = \"write @bcs: x\"")
         Test.@test stale_neg.stale_terms == [1, 2]
         bcs_neg = _qa_scan_error_rules("op === Symbol(\"@bcs\")"; allow_bcs = false)
         Test.@test bcs_neg.stale_terms == [1]
@@ -358,7 +356,7 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
         Test.@test bcs_test_neg.stale_terms == [1]
         bcs_test_ok = _qa_scan_error_rules("msg = \"@bcs\""; allow_bcs_test = true)
         Test.@test isempty(bcs_test_ok.stale_terms)
-        bcs_test_fe = _qa_scan_error_rules(lettered; allow_bcs_test = true)
+        bcs_test_fe = _qa_scan_error_rules("# front end A"; allow_bcs_test = true)
         Test.@test bcs_test_fe.stale_terms == [1]
         return nothing
     end

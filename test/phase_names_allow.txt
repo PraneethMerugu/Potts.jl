@@ -38,3 +38,5 @@ lib/PottsModels/test/reproductions/15_openvt_page_tests.jl	P6.15f	the `item` val
 lib/PottsModels/test/reproductions/15_openvt_page_tests.jl	P6.15g	the `item` value of a committed record's provenance.toml, compared with the record
 lib/PottsModels/test/reproductions/15_openvt_page_tests.jl	P6.15h	the `item` value of a committed record's provenance.toml, compared with the record
 lib/PottsModels/test/reproductions/15_openvt_page_tests.jl	P6.15k	the `item` value of a committed record's provenance.toml, compared with the record
+test/shared/qa_common.jl	front end A	qa_error_rules bans this stale wording; its docstring and negative controls name it
+test/shared/qa_common.jl	front end B	qa_error_rules bans this stale wording; its docstring and negative controls name it
