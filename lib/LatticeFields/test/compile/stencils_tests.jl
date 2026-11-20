@@ -104,3 +104,26 @@ end
     @test (@allocated run!(prep)) == 0
 end
 end
+
+@testitem "an integer power emits products, not `^`" setup = [LF_compile_stencils] tags = [:latticefields, :compile] begin
+@testset "an integer power emits products, not `^`" begin
+    function powprog(n)
+        pb = ProgramBuilder(Grid((7, 5)); periodic = (true, true), nparams = 1)
+        u = field!(pb, "u"; buffers = 2)
+        kb = kernel(pb)
+        store(kb, u, load(kb, u)^n)
+        add!(pb, kb, "pow")
+        return pb
+    end
+    is_pow(x) = x isa Expr && x.head === :call && (x.args[1] === :^ || x.args[1] === ^)
+    has(x, pred) = pred(x) || (x isa Expr && any(a -> has(a, pred), x.args))
+    @test has(:(a + b^5), is_pow)                       # control: the detector sees a `^`
+    u0 = 0.5f0 .+ rand(Xoshiro(2), Float32, 7, 5)
+    for n in (-3, 4, 5, 7), options in (CompileOptions(), debug_options())
+        s, sp = build(powprog(n); options)
+        @test !has(sp.launches[1].kernel.body, is_pow)
+        ref = Float32.(Float64.(u0) .^ n)
+        @test run_field(s, sp, u0, (1.0,)) ≈ ref rtol = 2 * abs(n) * eps(Float32)
+    end
+end
+end

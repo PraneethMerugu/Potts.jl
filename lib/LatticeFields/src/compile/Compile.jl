@@ -31,7 +31,7 @@ using ..IR: IR, Access, BOOL, CALL, CAST, CLAMP, COND, CONST, COORD, Coef, DIV,
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
-public CompileOptions, semantic, fingerprint_text, fuse_update, fuse_residual, lanecast, value_type, primal, withvaltype, promote_dual, lanetype, npartials, dvalue, dpartial, dsetpartial, dreplace
+public CompileOptions, semantic, fingerprint_text, fuse_update, fuse_residual, lanecast, powi, value_type, primal, withvaltype, promote_dual, lanetype, npartials, dvalue, dpartial, dsetpartial, dreplace
 
 include("numbers.jl")
 include("semantic.jl")

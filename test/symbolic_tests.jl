@@ -62,19 +62,57 @@ end
 
 @testitem "symbolic surface: a constant integer power is a product chain" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
     @testset "symbolic surface: a constant integer power is a product chain" begin
-        # values: ≈ Base's `^`, in the argument's own type
-        for T in (Float32, Float64), n in (-3, -1, 0, 1, 2, 4, 5, 7, 13), x in T[0.37, 1.9, -2.3]
-            @test Potts._powi(x, n) isa T
-            @test Potts._powi(x, n) ≈ x^n rtol = 8 * eps(T)
+        # values through a solved problem, against Base's `^` in Float64
+        @potts_model PowerValues begin
+            @kinds medium A
+            @variables begin
+                z(cell) = 1.3
+                p4(cell) = 0.0
+                p5(cell) = 0.0
+                p7(cell) = 0.0
+                p13(cell) = 0.0
+                m3(cell) = 0.0
+                vol(cell) = 0.0
+                vm3(cell) = 0.0
+            end
+            @lattice Lattice((12, 8))
+            @energy cells => (volume - 16.0)^2
+            @after_mcs begin
+                p4 ~ z^4
+                p5 ~ z^5
+                p7 ~ z^7
+                p13 ~ z^13
+                m3 ~ z^-3
+                vol ~ volume
+                vm3 ~ volume^-3
+            end
+            @sweep Metropolis(; temperature = 1.0)
         end
-        @test Potts._powi(3, 4) === 81
+        σ = zeros(Int32, 12, 8)
+        σ[2:5, 2:5] .= 1
+        σ[7:10, 2:5] .= 2
+        for T in (Float32, Float64)
+            sol = solve(PottsProblem(PowerValues(; name = :m), [ownership => σ, kind => [:A, :A]], (0, 2); T, seed = 1), SequentialCPM())
+            z = Float64(T(1.3))
+            for (name, n) in ((:p4, 4), (:p5, 5), (:p7, 7), (:p13, 13), (:m3, -3))
+                v = last(sol[name])
+                @test eltype(v) === T
+                @test all(isapprox.(v, z^n; rtol = abs(n) * eps(T)))
+            end
+            # an integer base with a negative power computes in the model's float type
+            vm3 = last(sol[:vm3])
+            @test eltype(vm3) === T
+            @test all(isapprox.(vm3, Float64.(last(sol[:vol])) .^ -3; rtol = 3 * eps(T)))
+        end
+        # the generated code: no `^` for a constant integer (also an integer-valued float);
+        # a float or a parameter exponent still calls `^`
         @potts_model IntPowers begin
             @kinds medium A
             @variables y(cell) = 1.0 z(cell) = 1.0
             @lattice Lattice((12, 8))
             @energy cells => (volume - 16.0)^2
             @equations begin
-                D(y) ~ 2.0 * z^4 / (0.5^4 + z^5) - 0.3 * y^7
+                D(y) ~ 2.0 * z^4 / (0.5^4 + z^5) - 0.3 * y^7 + y^2.0
                 D(z) ~ -0.2 * z^-3
             end
             @sweep Metropolis(; temperature = 1.0)
@@ -87,13 +125,25 @@ end
             @equations D(y) ~ 0.1 * y^2.5
             @sweep Metropolis(; temperature = 1.0)
         end
+        @potts_model ParameterPower begin
+            @kinds medium A
+            @parameters k = 1.5
+            @variables y(cell) = 1.0
+            @lattice Lattice((12, 8))
+            @energy cells => (volume - 16.0)^2
+            @equations D(y) ~ 0.1 * y^k
+            @sweep Metropolis(; temperature = 1.0)
+        end
         is_pow(x) = x isa Expr && x.head === :call && (x.args[1] === :^ || x.args[1] === ^)
-        is_powi(x) = x isa Expr && x.head === :call && x.args[1] == :(Potts._powi)
         has(x, pred) = x isa Union{Tuple, NamedTuple, AbstractVector} ? any(y -> has(y, pred), x) : _has_ast(x, pred)
-        ints, floats = generated_code(IntPowers(; name = :m)), generated_code(FloatPower(; name = :m))
-        @test !has(ints, is_pow) && has(ints, is_powi)
-        # control: a float exponent still calls `^`
-        @test has(floats, is_pow)
+        code(M) = generated_code(M(; name = :m))
+        @test !has(code(IntPowers), is_pow)
+        # the negative power of the integer `volume` takes a float base in the model's type
+        reads_volume(x) = x == :(st.cell.volume)
+        is_float_volume_power(x) = x isa Expr && x.head === :call && x.args[1] == :(Potts.LatticeFields.Compile.powi) &&
+            _has_ast(x.args[2], reads_volume) && _has_ast(x.args[2], y -> y == :(Potts._tofloat))
+        @test has(code(PowerValues), is_float_volume_power)
+        @test has(code(FloatPower), is_pow) && has(code(ParameterPower), is_pow)
     end
 end
 

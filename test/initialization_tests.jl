@@ -571,14 +571,14 @@ end
     broyden = PottsProblem(sys, op, (0, 1); initializealg = SB.OverrideInit(; nlsolve = Potts.SimpleNonlinearSolve.SimpleBroyden()))
     @test ini_u0(broyden, :p_1) .^ 2 ≈ INI_VOL rtol = 1.0e-9
     @test ini_u0(broyden, :y) ≈ solved rtol = 1.0e-12
-    # control: `nlsolve` reaches SciML's `solve`, which refuses a value that is no solver
+    # control: `nlsolve` reaches the solve, which fails on a value that is no solver
     err = try
         PottsProblem(sys, op, (0, 1); initializealg = SB.OverrideInit(; nlsolve = :no_solver))
         nothing
     catch e
         e
     end
-    @test err isa ArgumentError && occursin("arguments to solve are incorrect", sprint(showerror, err))
+    @test err isa ArgumentError && occursin("found no solution", sprint(showerror, err))
     # `abstol` stops the solve: a loose one accepts the guess
     loose = PottsProblem(sys, op, (0, 1); initializealg = SB.OverrideInit(; abstol = 1.0e6))
     @test !isapprox(ini_u0(loose, :p_1), sqrt.(INI_VOL); rtol = 1.0e-3)

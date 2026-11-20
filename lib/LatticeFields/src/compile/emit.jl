@@ -83,7 +83,7 @@ function opexpr(op::Op, a::Vector{Any}, n::Node, k::Kernel, T::Type)
     op == SELECT && return :(ifelse($(a[1]), promote($(a[2]), $(a[3]))...))
     op == SQRT && return _guarded(:sqrt, a[1], T)
     op == LOG && return _guarded(:log, a[1], T)
-    op == POWI && return :($(a[1])^$(Int(n.imm)))
+    op == POWI && return :(powi($(a[1]), $(Int(n.imm))))   # no library `pow`
     op == CALL && return _guarded(k.calls[n.imm], a[1], T)
     op == BITTEST && return :((($(a[1]) >> $(Int(n.imm))) & one($(a[1]))) != zero($(a[1])))
     if op == CAST

@@ -14,6 +14,26 @@ primitive of emitted bodies.
 @inline lanecast(::Type{T}, x) where {T} = convert(T, x)
 
 """
+    powi(x, n::Int)
+
+`x^n` for an integer `n`, by squaring and multiplying, with one reciprocal for `n < 0`. No
+library `pow` is called on any backend (Base's `Float32 ^ Int` and the ROCm device libraries'
+`pow` compute in Float64), so a float or Dual `x` keeps its type. An integer `x` with `n < 0`
+gives `inv` of an integer; convert it to the compute type first. The relative error grows
+to about `(|n| - 1) * eps` against a correctly rounded power. A leaf primitive of emitted
+bodies and of Potts' generated code.
+"""
+@inline function powi(x, n::Int)
+    m, r, b = abs(n), one(x), x
+    while m > 0
+        isodd(m) && (r *= b)
+        m >>= 1
+        m > 0 && (b *= b)
+    end
+    return n < 0 ? inv(r) : r
+end
+
+"""
     plurality(vals, oks)
 
 The most frequent of the values `vals[i]` whose `oks[i]` holds (a RESTRICT's `:plurality` over
