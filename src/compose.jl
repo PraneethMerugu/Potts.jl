@@ -67,7 +67,7 @@ function ModelingToolkitBase.extend(sys::PottsSystem, base::PottsSystem; name::S
     key(x) = (i = info(x); something(get(i.options, :vector, nothing), i.name))
     _check_vector_lengths(name, inbase, Iterators.flatten((_p(base, :parameters), _p(base, :variables))),
         Iterators.flatten((_p(sys, :parameters), _p(sys, :variables))))
-    byname(xs, ys) = (seen = Set(key(y) for y in ys); Any[filter(x -> !(key(x) in seen), xs)..., ys...])
+    byname(xs, ys) = (seen = Set(key(y) for y in ys); Any[filter(x -> !(key(x) in seen), xs); ys])
     # kind classes (D-135): the base's, then the extension's new ones; a restated class must
     # keep its members in order (`x ∈ g` unrolls in member order)
     classes = copy(_p(base, :kind_classes))

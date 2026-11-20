@@ -67,7 +67,7 @@ function _may_have(sys, k::Symbol)
 end
 
 function _rng_error(name, args, kws)
-    shown = join([map(repr, args)..., ("$k = $(repr(v))" for (k, v) in pairs(kws))...], ", ")
+    shown = join(Iterators.flatten((map(repr, args), ("$k = $(repr(v))" for (k, v) in pairs(kws)))), ", ")
     throw(ArgumentError("`$name($shown)` is not available in a model: the model's random draws are `rand()` " *
                 "(uniform on (0, 1)), `randn()` and `randn(μ, σ; lower_bound)`, each fresh per MCS and per " *
                         "cell or site. A Base RNG call would run once, when the model is built"))

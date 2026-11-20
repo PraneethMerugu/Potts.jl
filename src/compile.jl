@@ -992,7 +992,7 @@ function _check_fields(sys::PottsSystem, rn)
                 string(
                     "the condition `", _bc_text(first(_p(sys, :bcs)), _p(sys, :kinds)), "` of `",
                     nameof(sys), "`: the model has no field equation (`Differential(t)(c(",
-                    join(("t", ("x", "y", "z")[1:length(_p(sys, :lattice).dims)]...), ", "),
+                    join(("t", "x", "y", "z")[1:(length(_p(sys, :lattice).dims) + 1)], ", "),
                     ")) ~ …`); a condition applies to a field the model steps"
                 )
             )

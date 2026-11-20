@@ -850,7 +850,7 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
     blocks = (:before_mcs, :after_mcs)
     block_reads(n) = _integrals_read(Any[u.eq.rhs for u in _p(s, :updates) if u.phase === n], ints)
     # an operand's reads include those of its hoisted folds
-    operands = [Set(n for y in Any[x, last.(folds[j])...] for (n, pre, _) in _reads(y) if !pre) for (j, x) in enumerate(ints)]
+    operands = [Set(n for y in Iterators.flatten(((x,), last.(folds[j]))) for (n, pre, _) in _reads(y) if !pre) for (j, x) in enumerate(ints)]
     written(phase) = Set{Symbol}(_update_name(u) for u in _p(s, :updates) if u.phase === phase)
     dirtied(phase) = [j for j in eachindex(ints) if !isempty(intersect(operands[j], written(phase)))]
     moves(n) = n === :sweep || (n === :lifecycle && hasdiv) || haskey(convs, n)

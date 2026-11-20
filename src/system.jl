@@ -564,7 +564,7 @@ _params_only(c) = (ls = _param_leaves(c); !isempty(ls) && all(y -> (j = info(y);
 function _check_robin_coefs(eq, N = 2)
     _, cores, coefs = _face_terms(eq)
     # a field or site variable as the PDESystem writes it, `u(t, x, y)` (the model's `u(t)`)
-    args = join(("t", ("x", "y", "z")[1:N]...), ", ")
+    args = join(("t", "x", "y", "z")[1:(N + 1)], ", ")
     pde(s) = replace(_builtin_text(s), r"\b(\w+)\(t\)" => SubstitutionString("\\1($args)"))
     function refuse(c, what)
         throw(
@@ -989,7 +989,7 @@ function _with_pde_components(p::PottsSystem, pdes, name::Symbol)
 end
 
 function _merge_fields(name, p, cs)
-    fs = [f for f in (_stored_fields(p), map(_stored_fields, cs)...) if f !== nothing]
+    fs = [f for f in Iterators.flatten(((_stored_fields(p),), map(_stored_fields, cs))) if f !== nothing]
     isempty(fs) && return nothing
     merged(get) = unique(reduce(vcat, [collect(get(f)) for f in fs]))
     # the merge keeps the six stored fields exactly; `initial_conditions` are merged (one value
