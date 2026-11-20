@@ -1,17 +1,19 @@
 # The interval bound. A coefficient that reads the coordinates or
 # a field with declared `bounds = (lo, hi)` is bounded over those intervals by the interval
-# evaluator of the implicit operator's bounds (`_interval`), upwind advection adds its CFL part
-# `Σ_a 2 max|m v_a| / h_a`, a term that reads an aux field `K ~ rhs` is bounded through its
-# definition, and a local term's Jacobian entries `∂f/∂u` are bounded over the intervals they read.
-# The explicit count `⌈dt ρ / 1.8⌉` is then at least the spectral radius of the assembled Jacobian
-# times dt / 1.8 and at most 1.1 times it; half the count's substeps blow up.
-# Before the fix (b41b73c1): every case below has no bound (`ρ = NaN`, the
-# automatic count refused), so every testset fails or errors.
+# evaluator of the implicit operator's bounds (`_interval`), upwind advection adds its CFL
+# part `Σ_a 2 max|m v_a| / h_a`, a term that reads an aux field `K ~ rhs` is bounded through
+# its definition, and a local term's Jacobian entries `∂f/∂u` are bounded over the intervals
+# they read. The explicit count `⌈dt ρ / 1.8⌉` is then at least the spectral radius of the
+# assembled Jacobian times dt / 1.8 and at most 1.1 times it; half the count's substeps blow
+# up. Before the fix (b41b73c1): every case below has no bound (`ρ = NaN`, the automatic
+# count refused), so every testset fails or errors.
 
 @testsetup module LP_bounds
 using Test, LatticePDE
-using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
-    System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables,
+    Differential, PDESystem,
+    System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex,
+    Shift, Pre,
     t_nounits as t, D_nounits as D
 using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
 using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
@@ -25,15 +27,31 @@ include("shared/bounds.jl")
 include("shared/export_all.jl")
 end
 
-@testitem "counts against the spectral radius; half the count blows up" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
+@testitem "counts against the spectral radius; half the count blows up" setup = [
+    LP_bounds,
+] tags = [
+    :latticepde, :bounds,
+] begin
     @testset "counts against the spectral radius; half the count blows up" begin
         per = [fc(t, x, 0) ~ fc(t, x, 1), fc(t, 0, y) ~ fc(t, 1, y)]
         cases = [
-            ("(1 + x) laplacian(c)", D(fce) ~ (1 + x) * laplacian(fce), [fc(0, x, y) ~ 0.5], 0.5),
-            ("DivKGrad(1 + x, c)", D(fce) ~ DivKGrad(:harmonic)(1 + x, fce), [fc(0, x, y) ~ 0.5], 0.5),
+            (
+                "(1 + x) laplacian(c)", D(fce) ~ (1 + x) * laplacian(fce),
+                [fc(0, x, y) ~ 0.5], 0.5,
+            ),
+            (
+                "DivKGrad(1 + x, c)", D(fce) ~ DivKGrad(:harmonic)(1 + x, fce),
+                [fc(0, x, y) ~ 0.5], 0.5,
+            ),
             # c ∈ (0, 1) declared: the coefficient over [0, 1]; the Jacobian at c ≡ 1 is Δ's
-            ("DivKGrad(c, c)", D(fce) ~ DivKGrad(:harmonic)(fce, fce), [fc(0, x, y) ~ 1.0], 1.0),
-            ("Advect([0.3, 0.0], c)", D(fce) ~ -Advect(Upwind1())([0.3, 0.0], fce), [fc(0, x, y) ~ 0.5; per], 0.5),
+            (
+                "DivKGrad(c, c)", D(fce) ~ DivKGrad(:harmonic)(fce, fce),
+                [fc(0, x, y) ~ 1.0], 1.0,
+            ),
+            (
+                "Advect([0.3, 0.0], c)", D(fce) ~ -Advect(Upwind1())([0.3, 0.0], fce),
+                [fc(0, x, y) ~ 0.5; per], 0.5,
+            ),
         ]
         for (name, eq, bcs, c0) in cases
             sys = fsys([eq], bcs, [fce])
@@ -45,51 +63,99 @@ end
             n = LFP.substeps(pr, ExplicitEuler(), pr.p; dt)
             @test n >= r * dt / 1.8                              # the count is stable
             @test n <= 1.1 * r * dt / 1.8                        # and not over-pessimistic
-            # (measured on 32²: (1 + x) Δ 1.070, DivKGrad(1 + x) 1.087, DivKGrad(c, c) 1.002, Advect 1.000)
-            # the count's step stays bounded; twice its step (half the count) blows up from a small
-            # perturbation of the worst mode's sign pattern
+            # (measured on 32²: (1 + x) Δ 1.070, DivKGrad(1 + x) 1.087, DivKGrad(c, c)
+            # 1.002, Advect 1.000) the count's step stays bounded; twice its step (half the
+            # count) blows up from a small perturbation of the worst mode's sign pattern
             w = c0 .- 0.01 .* [isodd(i + j) ? 1.0 : 0.0 for i in 1:32, j in 1:32][:]
-            name == "Advect([0.3, 0.0], c)" && (w = c0 .+ 0.01 .* [sin(2π * i / 32 * 15) for i in 1:32, j in 1:32][:])
+            name == "Advect([0.3, 0.0], c)" &&
+                (w = c0 .+ 0.01 .* [sin(2π * i / 32 * 15) for i in 1:32, j in 1:32][:])
             @test feuler(po, copy(w), dt / n, 4n) <= 2 * maximum(abs, w)
             @test feuler(po, copy(w), 2dt / n, 2n) > 1.0e3
         end
     end
 end
 
-@testitem "aux fields, switches, declared intervals, site-varying velocities" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
+@testitem "aux fields, switches, declared intervals, site-varying velocities" setup = [
+    LP_bounds,
+] tags = [
+    :latticepde, :bounds,
+] begin
     @testset "aux fields, switches, declared intervals, site-varying velocities" begin
         s4 = 4 * 2 * 16^2                                         # Σ_a 4/h_a² on 16²
         b(sys) = (p = fown(sys, 16); p.stability(p.p))
-        # an aux field through its definition (`K ~ k c`, `D(c) ~ D laplacian(c) − K`): the decay `k`
-        # (before the fix: no bound)
-        aux = fsys([D(fue) ~ fx_D * laplacian(fue) - fKe, fKe ~ fx_k * fue], [fu(0, x, y) ~ 0.5], [fue, fKe])
+        # an aux field through its definition (`K ~ k c`, `D(c) ~ D laplacian(c) − K`): the
+        # decay `k` (before the fix: no bound)
+        aux = fsys(
+            [D(fue) ~ fx_D * laplacian(fue) - fKe, fKe ~ fx_k * fue], [
+                fu(0, x, y) ~
+                    0.5,
+            ], [
+                fue, fKe,
+            ]
+        )
         @test b(aux) ≈ 0.1 * s4 + 2.0
         pa = fown(aux, 16)
-        @test LFP.substeps(pa, ExplicitEuler(), pa.p; dt = 0.1) == ceil(Int, 0.1 * (0.1 * s4 + 2.0) / 1.8)
+        @test LFP.substeps(pa, ExplicitEuler(), pa.p; dt = 0.1) ==
+            ceil(Int, 0.1 * (0.1 * s4 + 2.0) / 1.8)
         # … and a write of `k` recounts through it
-        @test LFP.substeps(remake(pa; p = [fx_k => 20.0]), ExplicitEuler(); dt = 0.1) == ceil(Int, 0.1 * (0.1 * s4 + 20.0) / 1.8)
-        # an aux field that reads another field: a cross term of the row (`K ~ k o`, `D(u) ~ −K`)
+        @test LFP.substeps(remake(pa; p = [fx_k => 20.0]), ExplicitEuler(); dt = 0.1) ==
+            ceil(Int, 0.1 * (0.1 * s4 + 20.0) / 1.8)
+        # an aux field that reads another field: a cross term of the row (`K ~ k o`, `D(u) ~
+        # −K`)
         xaux = fsys(
-            [D(fue) ~ fx_D * laplacian(fue) - fKe - fue, D(foe) ~ fx_D * laplacian(foe) - foe, fKe ~ 0.5 * foe],
+            [
+                D(fue) ~ fx_D * laplacian(fue) - fKe - fue,
+                D(foe) ~ fx_D * laplacian(foe) - foe, fKe ~ 0.5 * foe,
+            ],
             [fu(0, x, y) ~ 0.5, fo(0, x, y) ~ 0.5], [fue, foe, fKe]
         )
         @test b(xaux) ≈ 0.1 * s4 + 1.5
         # a switch `a max(c − c_T, 0)`: its Jacobian entry is `a` or 0 (no interval needed)
-        @test b(fsys([D(fue) ~ fx_D * laplacian(fue) - fx_a * max(fue - 0.3, 0)], [fu(0, x, y) ~ 0.5], [fue])) ≈ 0.1 * s4 + 3.0
-        # a nonlinear local term over the declared interval: `∂(a c (1 − c))/∂c = a (1 − 2c)` over c ∈ [0, 1]
-        @test b(fsys([D(fce) ~ fx_D * laplacian(fce) + fx_a * fce * (1 - fce)], [fc(0, x, y) ~ 0.5], [fce])) ≈ 0.1 * s4 + 3.0
+        @test b(
+            fsys(
+                [D(fue) ~ fx_D * laplacian(fue) - fx_a * max(fue - 0.3, 0)], [
+                    fu(0, x, y) ~
+                        0.5,
+                ], [fue]
+            )
+        ) ≈
+            0.1 * s4 + 3.0
+        # a nonlinear local term over the declared interval: `∂(a c (1 − c))/∂c = a (1 −
+        # 2c)` over c ∈ [0, 1]
+        @test b(
+            fsys(
+                [D(fce) ~ fx_D * laplacian(fce) + fx_a * fce * (1 - fce)], [
+                    fc(0, x, y) ~
+                        0.5,
+                ], [fce]
+            )
+        ) ≈
+            0.1 * s4 + 3.0
         # … with no declared interval, no bound (the term stays one the bound cannot see)
-        nb = fsys([D(fue) ~ fx_D * laplacian(fue) + fx_a * fue * (1 - fue)], [fu(0, x, y) ~ 0.5], [fue])
+        nb = fsys(
+            [D(fue) ~ fx_D * laplacian(fue) + fx_a * fue * (1 - fue)], [
+                fu(0, x, y) ~
+                    0.5,
+            ], [fue]
+        )
         @test isnan(b(nb))
-        @test occursin("cannot see", LFP.unbounded_reason(fown(nb, 16).stability, fown(nb, 16).p))
+        @test occursin(
+            "cannot see",
+            LFP.unbounded_reason(fown(nb, 16).stability, fown(nb, 16).p)
+        )
         # a site-varying velocity: `Σ_a 2 max|v_a| / h_a` over the box (16²:
         # x ∈ [−1/32, 1 + 1/32], a face mean reads a ghost site)
-        v = fsys([D(fue) ~ 0.01 * laplacian(fue) - Advect(Upwind1())([50 * (1 + x), 0.0], fue)], [fu(0, x, y) ~ 0.5], [fue])
+        v = fsys(
+            [D(fue) ~ 0.01 * laplacian(fue) - Advect(Upwind1())([50 * (1 + x), 0.0], fue)],
+            [fu(0, x, y) ~ 0.5], [fue]
+        )
         @test b(v) ≈ 0.01 * s4 + 2 * 50 * (2 + 1 / 32) * 16
         # a velocity that reads another field with a declared interval: its frozen velocity
         @test b(
             fsys(
-                [D(fue) ~ -Advect(Upwind1())([fce, 0.0], fue), D(fce) ~ 0.0 * fce], [fu(0, x, y) ~ 0.5, fc(0, x, y) ~ 0.5],
+                [D(fue) ~ -Advect(Upwind1())([fce, 0.0], fue), D(fce) ~ 0.0 * fce], [
+                    fu(0, x, y) ~ 0.5, fc(0, x, y) ~ 0.5,
+                ],
                 [fue, fce]
             )
         ) ≈ 2 * 1.0 * 16
@@ -98,87 +164,136 @@ end
 
 # A velocity that reads the advected field (Burgers, `Advect([c, 0], c)`) is
 # not bounded by its frozen velocity. The face-mean flux's Jacobian has the central part
-# `∂v/∂c · c`, so the rows are not diagonally dominant and no step is certified; the term stays
-# unseen, as in the implicit operator. Before the fix (97045a1b): ρ = 64 (the
-# frozen bound 2 max|c|/h), count 18, and that count amplifies (max|1 + hλ| = 1.78 at c ≡ 1).
-@testitem "Burgers stays unseen; the frozen count amplifies" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
+# `∂v/∂c · c`, so the rows are not diagonally dominant and no step is certified; the term
+# stays unseen, as in the implicit operator. Before the fix (97045a1b): ρ = 64 (the frozen
+# bound 2 max|c|/h), count 18, and that count amplifies (max|1 + hλ| = 1.78 at c ≡ 1).
+@testitem "Burgers stays unseen; the frozen count amplifies" setup = [LP_bounds] tags = [
+    :latticepde, :bounds,
+] begin
     @testset "Burgers stays unseen; the frozen count amplifies" begin
         per = [fc(t, x, 0) ~ fc(t, x, 1), fc(t, 0, y) ~ fc(t, 1, y)]
-        burg = fsys([D(fce) ~ -Advect(Upwind1())([fce, 0.0], fce)], [fc(0, x, y) ~ 0.5 + 0.4 * sin(2π * x); per], [fce])
+        burg = fsys(
+            [D(fce) ~ -Advect(Upwind1())([fce, 0.0], fce)],
+            [fc(0, x, y) ~ 0.5 + 0.4 * sin(2π * x); per], [fce]
+        )
         pr, po = fown(burg), fode(burg)
         @test isnan(pr.stability(pr.p))
         @test "fc" in pr.stability.unbounded
         @test occursin("Advect", LFP.unbounded_reason(pr.stability, pr.p))
         # the automatic count is refused in words, with a route (not a silent count)
         @test_throws ArgumentError LFP.substeps(pr, ExplicitEuler(), pr.p; dt = 0.5)
-        # why: the count the frozen velocity gives (ρ = 2 · 1 · 32 = 64, n = ⌈0.5 · 64 / 1.8⌉ = 18)
-        # amplifies at c ≡ 1 (the linearized face-mean scheme needs h ≲ Δx/4 there)
+        # why: the count the frozen velocity gives (ρ = 2 · 1 · 32 = 64, n = ⌈0.5 · 64 /
+        # 1.8⌉ = 18) amplifies at c ≡ 1 (the linearized face-mean scheme needs h ≲ Δx/4
+        # there)
         J = fjac(po, fill(1.0, length(po.u0)))
         h = 0.5 / ceil(Int, 0.5 * 64 / 1.8)
         @test maximum(λ -> abs(1 + h * λ), eigvals(J)) > 1.5
-        # with the user's count past that limit (h ≤ Δx/8), amplification ≤ 1 at c ≡ 1 and c ≡ 0.5
+        # with the user's count past that limit (h ≤ Δx/8), amplification ≤ 1 at c ≡ 1 and c
+        # ≡ 0.5
         hs = (1 / 32) / 8
         @test maximum(λ -> abs(1 + hs * λ), eigvals(J)) <= 1 + 1.0e-9
-        @test maximum(λ -> abs(1 + hs * λ), eigvals(fjac(po, fill(0.5, length(po.u0))))) <= 1 + 1.0e-9
-        # and the run with that count stays bounded (measured: max 0.902 from 0.9, the face mean's
-        # small overshoot; 1.549 at 32 substeps and 1.0001 at 64)
+        @test maximum(λ -> abs(1 + hs * λ), eigvals(fjac(po, fill(0.5, length(po.u0))))) <=
+            1 + 1.0e-9
+        # and the run with that count stays bounded (measured: max 0.902 from 0.9, the face
+        # mean's small overshoot; 1.549 at 32 substeps and 1.0001 at 64)
         s = solve(pr, ExplicitEuler(; substeps = 128); dt = 0.5, saveat = 0.5)
         @test SciMLBase.successful_retcode(s.retcode)
         @test 0.1 - 1.0e-6 <= minimum(minimum, s.u) && maximum(maximum, s.u) <= 0.91
     end
 end
 
-@testitem "refusals and messages in the user's words" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
+@testitem "refusals and messages in the user's words" setup = [LP_bounds] tags = [
+    :latticepde, :bounds,
+] begin
     @testset "refusals and messages in the user's words" begin
         function emsg(f)
             return try
-                f(); ""
+                f()
+                ""
             catch e
                 sprint(showerror, e)
             end
         end
-        # a diffusion coefficient whose interval holds negative values: no bound (not a refusal: the
-        # enclosure does not show a negative value), the reason names it and its interval
-        neg = fown(fsys([D(fue) ~ (x - 0.5) * laplacian(fue)], [fu(0, x, y) ~ 0.5], [fue]), 16)
+        # a diffusion coefficient whose interval holds negative values: no bound (not a
+        # refusal: the enclosure does not show a negative value), the reason names it and
+        # its interval
+        neg = fown(
+            fsys([D(fue) ~ (x - 0.5) * laplacian(fue)], [fu(0, x, y) ~ 0.5], [fue]),
+            16
+        )
         @test isnan(neg.stability(neg.p))
         @test_throws ArgumentError solve(neg, ExplicitEuler(); dt = 0.001)
-        # a coefficient negative over its whole interval is negative diffusion: refused at any count
+        # a coefficient negative over its whole interval is negative diffusion: refused at
+        # any count
         @test_throws ArgumentError solve(
             fown(fsys([D(fue) ~ (x - 2) * laplacian(fue)], [fu(0, x, y) ~ 0.5], [fue]), 16),
             ExplicitEuler(; substeps = 4); dt = 0.001
         )
-        # an interval that is not finite (`1 / (x − 0.5)` over the box): no bound, named, never refused
-        inf = fown(fsys([D(fue) ~ laplacian(fue) - fue / (x - 0.5)], [fu(0, x, y) ~ 0.5], [fue]), 8)
-        @test occursin("has no finite bound over `x` ∈ [0.0625, 0.9375]", LFP.unbounded_reason(inf.stability, inf.p))
+        # an interval that is not finite (`1 / (x − 0.5)` over the box): no bound, named,
+        # never refused
+        inf = fown(
+            fsys([D(fue) ~ laplacian(fue) - fue / (x - 0.5)], [fu(0, x, y) ~ 0.5], [fue]),
+            8
+        )
+        @test occursin(
+            "has no finite bound over `x` ∈ [0.0625, 0.9375]",
+            LFP.unbounded_reason(inf.stability, inf.p)
+        )
         # a field that starts outside its declared bounds is refused
-        @test_throws ArgumentError fown(fsys([D(fce) ~ DivKGrad(:harmonic)(fce, fce)], [fc(0, x, y) ~ 1.5 * x], [fce]), 8)
-        # field-dependent diffusion with no declared interval: the term stays one the bound cannot see
+        @test_throws ArgumentError fown(
+            fsys([D(fce) ~ DivKGrad(:harmonic)(fce, fce)], [fc(0, x, y) ~ 1.5 * x], [fce]),
+            8
+        )
+        # field-dependent diffusion with no declared interval: the term stays one the bound
+        # cannot see
         @test_throws ArgumentError solve(
-            fown(fsys([D(fue) ~ DivKGrad(:harmonic)(fue, fue)], [fu(0, x, y) ~ 0.5], [fue]), 8),
+            fown(
+                fsys([D(fue) ~ DivKGrad(:harmonic)(fue, fue)], [fu(0, x, y) ~ 0.5], [fue]),
+                8
+            ),
             ExplicitEuler(); dt = 0.001
         )
     end
 end
 
-# A condition's value with a derivative of the coordinates (`Dy(sin(x y))` on an `x` face): the
-# derivative is worked out before the face's own coordinate is substituted, which `substitute`
-# would not do inside a `Differential` (the steady.jl `_timed` pattern). Before the fix (f5641ce1): every case refused, "cannot lower
-# `Differential(y, 1)(x*y)`: a raw derivative that is not a flux form".
-@testitem "a derivative of the coordinates in a condition's value" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
+# A condition's value with a derivative of the coordinates (`Dy(sin(x y))` on an `x` face):
+# the derivative is worked out before the face's own coordinate is substituted, which
+# `substitute` would not do inside a `Differential` (the steady.jl `_timed` pattern). Before
+# the fix (f5641ce1): every case refused, "cannot lower `Differential(y, 1)(x*y)`: a raw
+# derivative that is not a flux form".
+@testitem "a derivative of the coordinates in a condition's value" setup = [
+    LP_bounds,
+] tags = [
+    :latticepde, :bounds,
+] begin
     @testset "a derivative of the coordinates in a condition's value" begin
         Dx, Dy = Differential(x), Differential(y)
         @variables fk(..) [input = true]
         function run(g)
-            p = fown(fsys([D(fue) ~ 0.1 * laplacian(fue)], [fu(0, x, y) ~ 0.0, fu(t, 1, y) ~ g], [fue]), 8)
+            p = fown(
+                fsys(
+                    [D(fue) ~ 0.1 * laplacian(fue)], [
+                        fu(0, x, y) ~ 0.0, fu(t, 1, y) ~ g,
+                    ], [fue]
+                ), 8
+            )
             return solve(p, ExplicitEuler(); dt = 0.01)[:fu, end]
         end
-        # `Dy(x y)` is `x`, which is 1 on the face x = 1: the run equals the plain value, bitwise
+        # `Dy(x y)` is `x`, which is 1 on the face x = 1: the run equals the plain value,
+        # bitwise
         @test run(Dy(x * y)) == run(1.0)
         @test maximum(abs, run(Dy(sin(x * y))) .- run(x * cos(x * y))) < 1.0e-14
         @test maximum(abs, run(Dx(x^2) / 2)) > 0 && run(Dx(x^2) / 2) == run(x)
         # … and in a Robin face's value and an initial value
         function rob(g)
-            p = fown(fsys([D(fue) ~ 0.1 * laplacian(fue)], [fu(0, x, y) ~ Dy(x * y^2) / 2, fu(t, 1, y) + Dx(fu(t, 1, y)) ~ g], [fue]), 8)
+            p = fown(
+                fsys(
+                    [D(fue) ~ 0.1 * laplacian(fue)],
+                    [fu(0, x, y) ~ Dy(x * y^2) / 2, fu(t, 1, y) + Dx(fu(t, 1, y)) ~ g],
+                    [fue]
+                ),
+                8
+            )
             return solve(p, ExplicitEuler(); dt = 0.01)[:fu, end]
         end
         @test rob(Dy(y^2)) == rob(2y)
@@ -186,7 +301,11 @@ end
         m = try
             fown(
                 PDESystem(
-                    [D(fue) ~ 0.1 * laplacian(fue)], [fu(0, x, y) ~ 0.0, fu(t, 1, y) ~ Dy(fk(t, x, y))], fdom(), [t, x, y],
+                    [D(fue) ~ 0.1 * laplacian(fue)], [
+                        fu(0, x, y) ~ 0.0, fu(t, 1, y) ~ Dy(fk(t, x, y)),
+                    ], fdom(), [
+                        t, x, y,
+                    ],
                     [fue, fk(t, x, y)], Any[]; name = :fb
                 ), 8
             )
@@ -201,7 +320,11 @@ end
         m = try
             fown(
                 PDESystem(
-                    [D(fue) ~ 0.1 * laplacian(fue)], [fu(0, x, y) ~ 0.0, fu(t, 1, y) ~ Dy(fu(t, 1, y))], fdom(), [t, x, y],
+                    [D(fue) ~ 0.1 * laplacian(fue)], [
+                        fu(0, x, y) ~ 0.0, fu(t, 1, y) ~ Dy(fu(t, 1, y)),
+                    ], fdom(), [
+                        t, x, y,
+                    ],
                     [fue], Any[]; name = :fb
                 ), 8
             )
@@ -209,21 +332,26 @@ end
         catch e
             sprint(showerror, e)
         end
-        @test occursin("the field's own normal derivative is its flux form", m) && occursin("`Dx(c) ~ g` (Neumann)", m)
+        @test occursin("the field's own normal derivative is its flux form", m) &&
+            occursin("`Dx(c) ~ g` (Neumann)", m)
         s = solve(
             fown(
                 PDESystem(
-                    [D(fue) ~ 0.1 * laplacian(fue)], [fu(0, x, y) ~ 0.0, Dx(fu(t, 1, y)) ~ 1.0], fdom(), [t, x, y],
+                    [D(fue) ~ 0.1 * laplacian(fue)], [
+                        fu(0, x, y) ~ 0.0, Dx(fu(t, 1, y)) ~ 1.0,
+                    ], fdom(), [t, x, y],
                     [fue], Any[]; name = :fb
                 ), 8
             ), ExplicitEuler(); dt = 0.01
         )
         @test SciMLBase.successful_retcode(s.retcode) && maximum(s[:fu, end]) > 0
-        # a face value that reads another field is a face value, not a periodic pair: an input
-        # runs; an aux field of the state is refused in words
+        # a face value that reads another field is a face value, not a periodic pair: an
+        # input runs; an aux field of the state is refused in words
         pk = fown(
             PDESystem(
-                [D(fue) ~ 0.1 * laplacian(fue)], [fu(0, x, y) ~ 0.0, fu(t, 1, y) ~ fk(t, 1, y)], fdom(), [t, x, y],
+                [D(fue) ~ 0.1 * laplacian(fue)], [
+                    fu(0, x, y) ~ 0.0, fu(t, 1, y) ~ fk(t, 1, y),
+                ], fdom(), [t, x, y],
                 [fue, fk(t, x, y)], Any[]; name = :fb
             ), 8
         )
@@ -232,7 +360,9 @@ end
         m = try
             fown(
                 PDESystem(
-                    [D(fue) ~ 0.1 * laplacian(fue), fKe ~ 2 * fue], [fu(0, x, y) ~ 0.0, fu(t, 1, y) ~ fK(t, 1, y)], fdom(),
+                    [D(fue) ~ 0.1 * laplacian(fue), fKe ~ 2 * fue], [
+                        fu(0, x, y) ~ 0.0, fu(t, 1, y) ~ fK(t, 1, y),
+                    ], fdom(),
                     [t, x, y], [fue, fKe], Any[]; name = :fb
                 ), 8
             )
@@ -245,104 +375,174 @@ end
 end
 
 # The declared interval is checked after the build. A constant face value
-# outside the bounds is refused at the build; `remake(; u0)`, `reinit!` and state writes take the
-# start check; and a field that leaves the interval the bound used ends the run with
-# `ReturnCode.Unstable` and one warning (checked at the saves and at the end). Base 97045a1b:
-# the Dirichlet-3 case returns `Success` with max 3.587 (the
-# reference 2.978), the source case `Unstable` with no warning, every write is accepted.
-# For an implicit group the declared interval sets only the solve's counts,
-# so a leak warns once (the route `lower = lo` first) and the run goes on; an explicit leak still
-# ends `Unstable` (a source drift). A harder case: CrankNicolson and BDF2
-# undershoot 0 by about 2% next to a step (6a46731f: `Unstable` at
-# window 2 with "-0.0207…" and "-0.0233…").
-@testitem "an implicit leak warns and goes on" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
+# outside the bounds is refused at the build; `remake(; u0)`, `reinit!` and state writes
+# take the start check; and a field that leaves the interval the bound used ends the run
+# with `ReturnCode.Unstable` and one warning (checked at the saves and at the end). Base
+# 97045a1b: the Dirichlet-3 case returns `Success` with max 3.587 (the reference 2.978), the
+# source case `Unstable` with no warning, every write is accepted. For an implicit group the
+# declared interval sets only the solve's counts, so a leak warns once (the route `lower =
+# lo` first) and the run goes on; an explicit leak still ends `Unstable` (a source drift). A
+# harder case: CrankNicolson and BDF2 undershoot 0 by about 2% next to a step (6a46731f:
+# `Unstable` at window 2 with "-0.0207…" and "-0.0233…").
+@testitem "an implicit leak warns and goes on" setup = [LP_bounds] tags = [
+    :latticepde,
+    :bounds,
+] begin
     @testset "an implicit leak warns and goes on" begin
         RC = SciMLBase.ReturnCode
         us = PDESystem(
-            [D(fce) ~ 0.01 * laplacian(fce) - 10 * fce + 0.5 * fce * (1 - fce)], [fc(0, x, y) ~ ifelse(x < 0.5, 1.0, 0.0)],
+            [D(fce) ~ 0.01 * laplacian(fce) - 10 * fce + 0.5 * fce * (1 - fce)], [
+                fc(0, x, y) ~
+                    ifelse(
+                    x <
+                        0.5, 1.0, 0.0
+                ),
+            ],
             fdom(4.0), [t, x, y], [fce], Any[]; name = :us
         )
         pu = fown(us)
         for alg in (CrankNicolson(), BDF2())
-            s = @test_logs (:warn, r"field `fc` left its declared bounds \(0\.0, 1\.0\): it holds -0\.02\d* at site .* Give `lower_bound = 0\.0` to the algorithm") solve(
+            s = @test_logs (
+                :warn,
+                r"field `fc` left its declared bounds \(0\.0, 1\.0\): it holds -0\.02\d* at site .* Give `lower_bound = 0\.0` to the algorithm",
+            ) solve(
                 pu,
                 alg; dt = 1.0, saveat = 1.0
             )
-            @test s.retcode == RC.Success && s.t[end] == 4.0 && -0.03 < minimum(minimum, s.u) < 0
+            @test s.retcode == RC.Success && s.t[end] == 4.0 &&
+                -0.03 < minimum(minimum, s.u) < 0
             @test s.stats.newton_budget == 0
             # following the route: no warning, the values stay ≥ 0
-            a2 = alg isa BDF2 ? BDF2(; lower_bound = 0.0) : CrankNicolson(; lower_bound = 0.0)
+            a2 = if alg isa BDF2
+                BDF2(; lower_bound = 0.0)
+            else
+                CrankNicolson(; lower_bound = 0.0)
+            end
             s2 = @test_logs solve(pu, a2; dt = 1.0, saveat = 1.0)
             @test s2.retcode == RC.Success && minimum(minimum, s2.u) >= 0
         end
         # Backward Euler keeps the values in (0, 1) here: no warning
-        @test (@test_logs solve(pu, BackwardEuler(); dt = 1.0, saveat = 1.0)).retcode == RC.Success
-        # a growth past the interval that the count did not see is caught by the solve's own check:
-        # a source and `3c²` carry c above 1 (a blow-up), and with one Newton step per substep the
-        # shift clamp warns (with `newton > 1` the Newton check counts it)
+        @test (@test_logs solve(pu, BackwardEuler(); dt = 1.0, saveat = 1.0)).retcode ==
+            RC.Success
+        # a growth past the interval that the count did not see is caught by the solve's own
+        # check: a source and `3c²` carry c above 1 (a blow-up), and with one Newton step
+        # per substep the shift clamp warns (with `newton > 1` the Newton check counts it)
         gr = fown(
             PDESystem(
-                [D(fce) ~ 0.01 * laplacian(fce) + 3 * fce^2 + 0.5], [fc(0, x, y) ~ 0.5], fdom(3.0), [t, x, y], [fce], Any[];
+                [D(fce) ~ 0.01 * laplacian(fce) + 3 * fce^2 + 0.5], [fc(0, x, y) ~ 0.5],
+                fdom(3.0), [
+                    t, x, y,
+                ], [fce], Any[];
                 name = :gr
             ), 16
         )
-        @test_logs (:warn, r"left its declared bounds .* Widen `bounds`") (:warn, r"the implicit shift was clamped") match_mode = :any solve(
+        @test_logs (:warn, r"left its declared bounds .* Widen `bounds`") (
+            :warn, r"the implicit shift was clamped",
+        ) match_mode = :any solve(
             gr,
             BackwardEuler(); dt = 0.5, saveat = 0.5
         )
     end
 end
 
-@testitem "bounds: declared intervals after the build" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
+@testitem "bounds: declared intervals after the build" setup = [LP_bounds] tags = [
+    :latticepde, :bounds,
+] begin
     @testset "bounds: declared intervals after the build" begin
         RC = SciMLBase.ReturnCode
         # a Dirichlet value 3 outside c ∈ (0, 1): refused at the build
-        d3 = fsys([D(fce) ~ DivKGrad(:harmonic)(fce, fce)], [fc(0, x, y) ~ 0.5, fc(t, 1, y) ~ 3.0], [fce])
+        d3 = fsys(
+            [D(fce) ~ DivKGrad(:harmonic)(fce, fce)], [
+                fc(0, x, y) ~ 0.5, fc(t, 1, y) ~ 3.0,
+            ], [fce]
+        )
         @test_throws ArgumentError fown(d3)
         @test_throws ArgumentError fode(d3)
         # … a parameter face value, at the build and at `remake(; p)`
         @parameters fx_g = 0.5
-        dg = fsys([D(fce) ~ DivKGrad(:harmonic)(fce, fce)], [fc(0, x, y) ~ 0.5, fc(t, 1, y) ~ fx_g], [fce], Any[fx_g])
+        dg = fsys(
+            [D(fce) ~ DivKGrad(:harmonic)(fce, fce)],
+            [fc(0, x, y) ~ 0.5, fc(t, 1, y) ~ fx_g], [fce], Any[fx_g]
+        )
         pg = fown(dg, 16)
         @test_throws ArgumentError remake(pg; p = [fx_g => 2.0])
         # … a masked value
-        dm = fsys([D(fce) ~ 0.1 * laplacian(fce)], [fc(0, x, y) ~ 0.5, fc(t, x, y) ~ masked(x < 0.2, 1.5)], [fce])
+        dm = fsys(
+            [D(fce) ~ 0.1 * laplacian(fce)],
+            [fc(0, x, y) ~ 0.5, fc(t, x, y) ~ masked(x < 0.2, 1.5)], [fce]
+        )
         @test_throws ArgumentError fown(dm, 16)
         # a value inside is accepted, and the run stays in [0.5, 1]
         s = solve(
-            fown(fsys([D(fce) ~ DivKGrad(:harmonic)(fce, fce)], [fc(0, x, y) ~ 0.5, fc(t, 1, y) ~ 1.0], [fce]), 16),
+            fown(
+                fsys(
+                    [D(fce) ~ DivKGrad(:harmonic)(fce, fce)], [
+                        fc(0, x, y) ~ 0.5, fc(t, 1, y) ~ 1.0,
+                    ], [fce]
+                ),
+                16
+            ),
             ExplicitEuler(); dt = 0.01, saveat = 0.1
         )
-        @test s.retcode == RC.Success && 0.5 - 1.0e-12 <= minimum(minimum, s.u) && maximum(maximum, s.u) <= 1 + 1.0e-12
-        # a source drives c out of (0, 1): `Unstable` with one warning that names the field and routes
-        src = fown(fsys([D(fce) ~ DivKGrad(:harmonic)(fce, fce) + 20.0], [fc(0, x, y) ~ 0.5], [fce]), 16)
-        s = @test_logs (:warn, r"field `fc` left its declared bounds \(0\.0, 1\.0\): it holds .* by the end of window .*`ReturnCode\.Unstable`, the run stops\. Give more substeps \(`substeps = n`\), or widen `bounds`") solve(
+        @test s.retcode == RC.Success && 0.5 - 1.0e-12 <= minimum(minimum, s.u) &&
+            maximum(maximum, s.u) <= 1 + 1.0e-12
+        # a source drives c out of (0, 1): `Unstable` with one warning that names the field
+        # and routes
+        src = fown(
+            fsys(
+                [D(fce) ~ DivKGrad(:harmonic)(fce, fce) + 20.0], [
+                    fc(0, x, y) ~
+                        0.5,
+                ], [fce]
+            ), 16
+        )
+        s = @test_logs (
+            :warn,
+            r"field `fc` left its declared bounds \(0\.0, 1\.0\): it holds .* by the end of window .*`ReturnCode\.Unstable`, the run stops\. Give more substeps \(`substeps = n`\), or widen `bounds`",
+        ) solve(
             src,
             ExplicitEuler(); dt = 0.01, saveat = 0.05
         )
         @test s.retcode == RC.Unstable && s.t[end] < 1.0 && maximum(s.u[end]) > 1
         # a source that keeps it inside runs to the end with no warning
         s = @test_logs solve(
-            fown(fsys([D(fce) ~ DivKGrad(:harmonic)(fce, fce) + 0.2 * (1 - fce)], [fc(0, x, y) ~ 0.5], [fce]), 16),
+            fown(
+                fsys(
+                    [D(fce) ~ DivKGrad(:harmonic)(fce, fce) + 0.2 * (1 - fce)], [
+                        fc(0, x, y) ~
+                            0.5,
+                    ], [fce]
+                ),
+                16
+            ),
             ExplicitEuler(); dt = 0.01, saveat = 0.05
         )
         @test s.retcode == RC.Success && s.t[end] == 1.0
         # a field with declared bounds that no coefficient reads is not checked in the run
-        nu = fown(fsys([D(fce) ~ 0.1 * laplacian(fce) + 20.0], [fc(0, x, y) ~ 0.5], [fce]), 16)
+        nu = fown(
+            fsys([D(fce) ~ 0.1 * laplacian(fce) + 20.0], [fc(0, x, y) ~ 0.5], [fce]),
+            16
+        )
         @test isempty(nu.stability.used)
         @test solve(nu, ExplicitEuler(); dt = 0.01).retcode == RC.Success
         # the writes take the start check (values outside refused)
-        pr = fown(fsys([D(fce) ~ DivKGrad(:harmonic)(fce, fce)], [fc(0, x, y) ~ 0.5], [fce]), 16)
+        pr = fown(
+            fsys([D(fce) ~ DivKGrad(:harmonic)(fce, fce)], [fc(0, x, y) ~ 0.5], [fce]), 16
+        )
         @test_throws ArgumentError remake(pr; u0 = fill(2.0, 256))
         ig = init(pr, ExplicitEuler(); dt = 0.01)
         @test_throws ArgumentError (ig[fce] = fill(2.0, 16, 16))
         @test_throws ArgumentError SciMLBase.reinit!(ig, fill(2.0, 256))
         @test maximum(ig[fce]) == 0.5                                    # nothing changed
-        ig[fce] = fill(0.75, 16, 16)                                     # a write inside is accepted
+        # a write inside is accepted
+        ig[fce] = fill(0.75, 16, 16)
         @test maximum(ig[fce]) == 0.75
         # a state that is not finite warns once, naming the field
         un = fown(fsys([D(fue) ~ 100 * fue^3], [fu(0, x, y) ~ 0.5], [fue]), 8)
-        s = @test_logs (:warn, r"field `fu`: the state is not finite at t = .*`ReturnCode\.Unstable`, the run stops\. Give more substeps") match_mode = :any solve(
+        s = @test_logs (
+            :warn,
+            r"field `fu`: the state is not finite at t = .*`ReturnCode\.Unstable`, the run stops\. Give more substeps",
+        ) match_mode = :any solve(
             un,
             ExplicitEuler(; substeps = 1); dt = 0.1, saveat = 0.1
         )
@@ -350,57 +550,81 @@ end
     end
 end
 
-# F3-ghost (user OK 2026-10-26): at a Dirichlet face, a face coefficient that reads the field
-# takes the field's ghost value `2g − c`, the value the face rule gives the gradient, not the
-# boundary site's value. The porous-medium equation `∂c/∂t = ∇·(c³ ∇c)` from `c = 0` with
-# `c = 1` on the face `x = 0`: with the boundary site's value the face coefficient is
-# `(0³ + 0³)/2 = 0` and nothing enters (before the fix, a40ff91b: c stays 0);
-# with the ghost value the front enters and spreads as a fine 1D reference with the exact face
-# value `K(1)` does. The automatic count bounds the coefficient over the ghost values too.
-@testitem "a Dirichlet face coefficient reads the ghost value" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
+# F3-ghost (user OK 2026-10-26): at a Dirichlet face, a face coefficient that reads the
+# field takes the field's ghost value `2g − c`, the value the face rule gives the gradient,
+# not the boundary site's value. The porous-medium equation `∂c/∂t = ∇·(c³ ∇c)` from `c = 0`
+# with `c = 1` on the face `x = 0`: with the boundary site's value the face coefficient is
+# `(0³ + 0³)/2 = 0` and nothing enters (before the fix, a40ff91b: c stays 0); with the ghost
+# value the front enters and spreads as a fine 1D reference with the exact face value `K(1)`
+# does. The automatic count bounds the coefficient over the ghost values too.
+@testitem "a Dirichlet face coefficient reads the ghost value" setup = [LP_bounds] tags = [
+    :latticepde, :bounds,
+] begin
     @testset "a Dirichlet face coefficient reads the ghost value" begin
         RC = SciMLBase.ReturnCode
         T = 0.05
         pm = PDESystem(
-            [D(fce) ~ DivKGrad(:arithmetic)(fce^3, fce)], [fc(0, x, y) ~ 0.0, fc(t, 0, y) ~ 1.0],
+            [D(fce) ~ DivKGrad(:arithmetic)(fce^3, fce)], [
+                fc(0, x, y) ~ 0.0, fc(t, 0, y) ~ 1.0,
+            ],
             fdom(T), [t, x, y], [fce], Any[]; name = :pm
         )
         n = 32
         po = fown(pm, n)
-        # the count covers the ghost values (c ∈ (0, 1): ghosts 2 − c ∈ (1, 2), K up to 8): from
-        # rough data inside the bounds the automatic count's run stays inside them (each explicit
-        # update a convex combination; the run's check would end it `Unstable` otherwise). Also
-        # `exp(3c)` with `c = 0` on the face (ghost −c ∈ (−1, 0)). The frozen-form
-        # claim, not the linearized radius, which `K′(c)∇c` terms of rough states exceed (0.80 for
-        # exp(3c)). The mutation that keeps the old bound gives 46 substeps where 114 are needed and
-        # ends `Unstable`.
-        rough = vec([isodd(i + j) ? 1.0 : mod(7919i + 104729j, 101) / 100 for i in 1:n, j in 1:n])
+        # the count covers the ghost values (c ∈ (0, 1): ghosts 2 − c ∈ (1, 2), K up to 8):
+        # from rough data inside the bounds the automatic count's run stays inside them
+        # (each explicit update a convex combination; the run's check would end it
+        # `Unstable` otherwise). Also `exp(3c)` with `c = 0` on the face (ghost −c ∈ (−1,
+        # 0)). The frozen-form claim, not the linearized radius, which `K′(c)∇c` terms of
+        # rough states exceed (0.80 for exp(3c)). The mutation that keeps the old bound
+        # gives 46 substeps where 114 are needed and ends `Unstable`.
+        rough = vec(
+            [
+                isodd(i + j) ? 1.0 : mod(7919i + 104729j, 101) / 100
+                    for i in 1:n, j in 1:n
+            ]
+        )
         ex = PDESystem(
-            [D(fce) ~ DivKGrad(:arithmetic)(exp(3 * fce), fce)], [fc(0, x, y) ~ 0.5, fc(t, 0, y) ~ 0.0],
+            [D(fce) ~ DivKGrad(:arithmetic)(exp(3 * fce), fce)], [
+                fc(0, x, y) ~ 0.5, fc(t, 0, y) ~ 0.0,
+            ],
             fdom(T), [t, x, y], [fce], Any[]; name = :ex
         )
-        for (name, pr) in (("c³, c = 1 on the face", po), ("exp(3c), c = 0 on the face", fown(ex, n)))
-            sr = @test_logs solve(remake(pr; u0 = rough), ExplicitEuler(); dt = 0.01, saveat = T)
+        for (name, pr) in (
+                ("c³, c = 1 on the face", po), (
+                    "exp(3c), c = 0 on the face", fown(ex, n),
+                ),
+            )
+            sr = @test_logs solve(
+                remake(pr; u0 = rough), ExplicitEuler(); dt = 0.01,
+                saveat = T
+            )
             @test sr.retcode == RC.Success && sr.t[end] == T
             @test all(u -> -1.0e-12 <= minimum(u) && maximum(u) <= 1 + 1.0e-12, sr.u)
         end
-        # a coefficient that goes negative at the ghost (`c(1 − c) + 0.01`, ghost 2 − c): no bound,
-        # and the reason names the ghost values, not only c's interval
+        # a coefficient that goes negative at the ghost (`c(1 − c) + 0.01`, ghost 2 − c): no
+        # bound, and the reason names the ghost values, not only c's interval
         neg = PDESystem(
-            [D(fce) ~ DivKGrad(:arithmetic)(fce * (1 - fce) + 0.01, fce)], [fc(0, x, y) ~ 0.5, fc(t, 0, y) ~ 1.0],
+            [D(fce) ~ DivKGrad(:arithmetic)(fce * (1 - fce) + 0.01, fce)], [
+                fc(0, x, y) ~ 0.5, fc(t, 0, y) ~ 1.0,
+            ],
             fdom(T), [t, x, y], [fce], Any[]; name = :neg
         )
         mneg = try
-            solve(fown(neg, 16), ExplicitEuler(); dt = 0.01); ""
+            solve(fown(neg, 16), ExplicitEuler(); dt = 0.01)
+            ""
         catch e
             sprint(showerror, e)
         end
         @info "N4" mneg
-        @test occursin("may be negative", mneg) && occursin("ghost values of the faces", mneg) && occursin("`fc` → `", mneg)
+        @test occursin("may be negative", mneg) &&
+            occursin("ghost values of the faces", mneg) && occursin("`fc` → `", mneg)
         s = solve(po, ExplicitEuler(); dt = 0.01, saveat = T)
         @test s.retcode == RC.Success
-        prof = vec(sum(reshape(s.u[end], n, n); dims = 2)) ./ n                 # the x profile
-        # fine 1D reference: finite volumes, 12 cells per coarse cell, the face value K(1) = 1 at x = 0
+        # the x profile
+        prof = vec(sum(reshape(s.u[end], n, n); dims = 2)) ./ n
+        # fine 1D reference: finite volumes, 12 cells per coarse cell, the face value K(1) =
+        # 1 at x = 0
         m = 12n
         h = 1 / m
         u = zeros(m)
@@ -416,21 +640,46 @@ end
         ref = vec(sum(reshape(u, 12, n); dims = 1)) ./ 12
         err = sum(abs, prof .- ref) / n
         @info "F3-ghost" maximum(prof) err ref[1:6] prof[1:6]
-        @test maximum(prof) > 0.3 && err < 0.015                         # (measured 0.0068, max 0.977)
+        # (measured 0.0068, max 0.977)
+        @test maximum(prof) > 0.3 && err < 0.015
     end
 end
 
 # A read through a coefficient bounded over a declared interval is
-# an edge of the loop graph. `fc` reads `fo` by `5 fo` (no decay: not dominant); `fo` reads `fc`
-# only through its face coefficient `DivKGrad(:harmonic)(fc, fo)`, so the two read each other in a
-# loop and `fc`'s row is refused. With a coordinate coefficient instead, `fo` does not read `fc`:
-# one way, bounded. Base 1ec7b424: the loop was missed (a bound)
-@testitem "a loop through a coefficient over a declared interval" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
+# an edge of the loop graph. `fc` reads `fo` by `5 fo` (no decay: not dominant); `fo` reads
+# `fc` only through its face coefficient `DivKGrad(:harmonic)(fc, fo)`, so the two read each
+# other in a loop and `fc`'s row is refused. With a coordinate coefficient instead, `fo`
+# does not read `fc`: one way, bounded. Base 1ec7b424: the loop was missed (a bound)
+@testitem "a loop through a coefficient over a declared interval" setup = [
+    LP_bounds,
+] tags = [
+    :latticepde, :bounds,
+] begin
     @testset "a loop through a coefficient over a declared interval" begin
         ic = [fc(0, x, y) ~ 0.5, fo(0, x, y) ~ 0.0]
-        loop = fown(fsys([D(fce) ~ 0.1 * laplacian(fce) + 5 * foe, D(foe) ~ DivKGrad(:harmonic)(fce, foe) - foe], ic, [fce, foe]), 8)
+        loop = fown(
+            fsys(
+                [
+                    D(fce) ~ 0.1 * laplacian(fce) + 5 * foe,
+                    D(foe) ~ DivKGrad(:harmonic)(fce, foe) - foe,
+                ],
+                ic,
+                [fce, foe]
+            ),
+            8
+        )
         @test isnan(loop.stability(loop.p))
-        one = fown(fsys([D(fce) ~ 0.1 * laplacian(fce) + 5 * foe, D(foe) ~ DivKGrad(:harmonic)(1 + x, foe) - foe], ic, [fce, foe]), 8)
+        one = fown(
+            fsys(
+                [
+                    D(fce) ~ 0.1 * laplacian(fce) + 5 * foe,
+                    D(foe) ~ DivKGrad(:harmonic)(1 + x, foe) - foe,
+                ],
+                ic,
+                [fce, foe]
+            ),
+            8
+        )
         @test isfinite(one.stability(one.p))
     end
 end

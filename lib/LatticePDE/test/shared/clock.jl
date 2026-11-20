@@ -17,7 +17,8 @@ end
 kdisc(; clock = 1.0) = LatticeDiscretization(Grid((4, 4)); T = Float64, clock)
 function kerr(f)
     return try
-        f(); ""
+        f()
+        ""
     catch e
         e isa ArgumentError || rethrow()
         sprint(showerror, e)

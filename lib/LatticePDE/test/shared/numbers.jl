@@ -8,7 +8,10 @@ using SciMLStructures: SciMLStructures, Tunable
 function nsys(; T = 0.1)
     return psys(
         [D(ce) ~ Dn * laplacian(ce) - kn * ce],
-        [c(0, x, y) ~ 0.0, c(t, 0, y) ~ gn, Differential(x)(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)],
+        [
+            c(0, x, y) ~ 0.0, c(t, 0, y) ~ gn,
+            Differential(x)(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1),
+        ],
         [Dn, kn, gn]; T
     )
 end
@@ -17,19 +20,23 @@ pidx(prob, s) = LatticePDE.Problems.SII.parameter_index(prob, s)
 withp(p, i, v) = (q = collect(promote_type(eltype(p), typeof(v)), p); q[i] = v; q)
 
 # Derivatives through the implicit solve. A Dual state runs the primal solve and, after
-# each stage, its tangent step: the derivative parts solve the stage's linearization with the
-# primal operator, one solve per part (no Dual enters a solver). Each case against central
-# differences of the run. Base (57ea1baa): every case is refused ("holds ForwardDiff Duals").
-# Negative controls (mutations): the parameter part of the operator
-# (`(∂A/∂k) u`, the parameters of the face coefficients) dropped from the tangent fails ∂/∂D; the
-# right side's (the parameters of no face and no local term) dropped fails ∂/∂g
+# each stage, its tangent step: the derivative parts solve the stage's linearization with
+# the primal operator, one solve per part (no Dual enters a solver). Each case against
+# central differences of the run. Base (57ea1baa): every case is refused ("holds ForwardDiff
+# Duals"). Negative controls (mutations): the parameter part of the operator (`(∂A/∂k) u`,
+# the parameters of the face coefficients) dropped from the tangent fails ∂/∂D; the right
+# side's (the parameters of no face and no local term) dropped fails ∂/∂g
 @parameters kt = 0.7 Dt = 0.3 gt = 0.4
 @variables ta(..) tb(..)
 tae, tbe = ta(t, x, y), tb(t, x, y)
 tdom = [t ∈ Interval(0.0, 0.3), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
-tsys(eqs, bcs; dvs = [ce]) = PDESystem(eqs, bcs, tdom, [t, x, y], dvs, [kt, Dt, gt]; name = :tg)
+function tsys(eqs, bcs; dvs = [ce])
+    return PDESystem(eqs, bcs, tdom, [t, x, y], dvs, [kt, Dt, gt]; name = :tg)
+end
 function town(sys, dims = (8, 6); geometry = LatticeFields.IR.CUBIC)
-    return LFP.field_problem(discretize(sys, LatticeDiscretization(Grid(dims; geometry); T = Float64)))
+    return LFP.field_problem(
+        discretize(sys, LatticeDiscretization(Grid(dims; geometry); T = Float64))
+    )
 end
 const TTIGHT = LatticePCG(; reltol = 1.0e-13, maxiters = 200)
 # AD and central differences of `sum(out(solve))` in parameter `s`

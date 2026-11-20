@@ -6,8 +6,10 @@
 
 @testsetup module LP_pdesystem_ctor
 using Test, LatticePDE
-using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
-    System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables,
+    Differential, PDESystem,
+    System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex,
+    Shift, Pre,
     t_nounits as t, D_nounits as D
 using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
 using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
@@ -42,8 +44,11 @@ const PS_M = Int32[1 + (i > 4) for i in 1:8, j in 1:8]
 psdisc() = LatticeDiscretization(Grid((8, 8)); T = Float64)
 function pseq()
     return [
-        D(psc(t, x, y)) ~ psD * laplacian(psc(t, x, y)) + 0.5 * psin(t, x, y) - psk * psc(t, x, y),
-        D(psu(t, x, y)) ~ 0.2 * laplacian(psu(t, x, y)) + value_at(psJ, psm(t, x, y)) * psc(t, x, y) - psu(t, x, y),
+        D(psc(t, x, y)) ~
+            psD * laplacian(psc(t, x, y)) + 0.5 * psin(t, x, y) - psk * psc(t, x, y),
+        D(psu(t, x, y)) ~
+            0.2 * laplacian(psu(t, x, y)) + value_at(psJ, psm(t, x, y)) * psc(t, x, y) -
+            psu(t, x, y),
     ]
 end
 psbc() = [psc(0, x, y) ~ x, psu(0, x, y) ~ 0.0, psc(t, 0, y) ~ 1.0]
@@ -64,30 +69,45 @@ end
 include("shared/export_all.jl")
 end
 
-@testitem "pdesystem works out the lists of the hand-built PDESystem" setup = [LP_pdesystem_ctor] tags = [:latticepde, :pdesystem_ctor] begin
+@testitem "pdesystem works out the lists of the hand-built PDESystem" setup = [
+    LP_pdesystem_ctor,
+] tags = [
+    :latticepde, :pdesystem_ctor,
+] begin
     using .LP_pdesystem_ctor: fd
     @testset "pdesystem works out the lists of the hand-built PDESystem" begin
         a = LatticePDE.pdesystem(pseq(), psbc(); name = :ps, domain = psdom)
         @test a isa PDESystem && nameof(a) === :ps
         @test isequal(collect(a.ivs), [t, x, y])
         # the fields with equations first (each equation's left side), then the inputs
-        @test isequal(a.dvs[1], psc(t, x, y)) && isequal(a.dvs[2], psu(t, x, y)) && length(a.dvs) == 4
+        @test isequal(a.dvs[1], psc(t, x, y)) && isequal(a.dvs[2], psu(t, x, y)) &&
+            length(a.dvs) == 4
         @test all(v -> any(w -> isequal(w, v), a.dvs), [psin(t, x, y), psm(t, x, y)])
-        @test length(a.ps) == 3 && all(p -> any(q -> isequal(unwrap(q), unwrap(p)), a.ps), [psD, psk, psJ])
+        @test length(a.ps) == 3 &&
+            all(p -> any(q -> isequal(unwrap(q), unwrap(p)), a.ps), [psD, psk, psJ])
         @test isequal(a.eqs, pseq()) && isequal(a.bcs, psbc()) && isequal(a.domain, psdom)
         # the hand-built system in the order pdesystem gives: the same problem, bitwise runs
-        b = PDESystem(pseq(), psbc(), psdom, [t, x, y], collect(a.dvs), collect(a.ps); name = :ps)
+        b = PDESystem(
+            pseq(), psbc(), psdom, [t, x, y], collect(a.dvs), collect(a.ps); name = :ps
+        )
         ins = [psin => PS_K, psm => PS_M]
-        pa, pb = discretize(a, psdisc(); inputs = ins), discretize(b, psdisc(); inputs = ins)
+        pa, pb = discretize(a, psdisc(); inputs = ins),
+            discretize(b, psdisc(); inputs = ins)
         @test pa.u0 == pb.u0 && isequal(pa.p.values, pb.p.values)
-        ra, rb = solve(pa, ExplicitEuler(); dt = 1.0e-3), solve(pb, ExplicitEuler(); dt = 1.0e-3)
+        ra, rb = solve(pa, ExplicitEuler(); dt = 1.0e-3),
+            solve(pb, ExplicitEuler(); dt = 1.0e-3)
         @test ra.u[end] == rb.u[end] && maximum(abs, ra.u[end] .- ra.u[1]) > 1.0e-3
         # and the hand-built one in the written order (the lists are the same as sets)
         c = PDESystem(
-            pseq(), psbc(), psdom, [t, x, y], [psc(t, x, y), psu(t, x, y), psin(t, x, y), psm(t, x, y)],
+            pseq(), psbc(), psdom, [t, x, y],
+            [psc(t, x, y), psu(t, x, y), psin(t, x, y), psm(t, x, y)],
             [psD, psk, psJ]; name = :ps
         )
-        @test solve(discretize(c, psdisc(); inputs = ins), ExplicitEuler(); dt = 1.0e-3).u[end] == ra.u[end]
+        @test solve(
+            discretize(c, psdisc(); inputs = ins), ExplicitEuler();
+            dt = 1.0e-3
+        ).u[end] ==
+            ra.u[end]
         # keywords go to PDESystem; no parameters gives an empty list
         i = LatticePDE.pdesystem(
             [D(psc(t, x, y)) ~ -psc(t, x, y)]; name = :pi, domain = psdom,
@@ -100,10 +120,18 @@ end
     end
 end
 
-@testitem "pdesystem refusals" setup = [LP_pdesystem_ctor] tags = [:latticepde, :pdesystem_ctor] begin
+@testitem "pdesystem refusals" setup = [LP_pdesystem_ctor] tags = [
+    :latticepde,
+    :pdesystem_ctor,
+] begin
     using .LP_pdesystem_ctor: fd
     @testset "pdesystem refusals" begin
-        m = psmsg(() -> LatticePDE.pdesystem([D(psc(t, x, y)) ~ psu(t, x) - psc(t, x, y)]; name = :bad))
+        m = psmsg(
+            () -> LatticePDE.pdesystem(
+                [D(psc(t, x, y)) ~ psu(t, x) - psc(t, x, y)];
+                name = :bad
+            )
+        )
         @test occursin("different independent variables", m) || (println(m); false)
         m = psmsg(() -> LatticePDE.pdesystem(Equation[]; name = :bad))
         @test occursin("at least one equation", m) || (println(m); false)
@@ -112,16 +140,28 @@ end
     end
 end
 
-@testitem "pdesystem orders the inputs by name" setup = [LP_pdesystem_ctor] tags = [:latticepde, :pdesystem_ctor] begin
+@testitem "pdesystem orders the inputs by name" setup = [LP_pdesystem_ctor] tags = [
+    :latticepde, :pdesystem_ctor,
+] begin
     using .LP_pdesystem_ctor: fd
     @testset "pdesystem orders the inputs by name" begin
         dvnames(s) = [string(nameof(operation(unwrap(u)))) for u in s.dvs]
-        for rhs in (psz(t, x, y) - psc(t, x, y), psc(t, x, y) * psz(t, x, y), 2.0 * psz(t, x, y) - psc(t, x, y))
-            s = LatticePDE.pdesystem([D(psc(t, x, y)) ~ rhs], [psc(t, 0, y) ~ psa(t, 0, y)]; name = :pso)
+        for rhs in (
+                psz(t, x, y) - psc(t, x, y), psc(t, x, y) * psz(t, x, y), 2.0 *
+                    psz(t, x, y) -
+                    psc(t, x, y),
+            )
+            s = LatticePDE.pdesystem(
+                [D(psc(t, x, y)) ~ rhs], [psc(t, 0, y) ~ psa(t, 0, y)];
+                name = :pso
+            )
             @test dvnames(s) == ["psc", "psa", "psz"] || (println(dvnames(s)); false)
         end
         # two fields keep the order of their equations, before the inputs
-        s = LatticePDE.pdesystem([D(psu(t, x, y)) ~ psz(t, x, y) + psa(t, x, y), D(psc(t, x, y)) ~ psu(t, x, y)]; name = :pso)
+        s = LatticePDE.pdesystem(
+            [D(psu(t, x, y)) ~ psz(t, x, y) + psa(t, x, y), D(psc(t, x, y)) ~ psu(t, x, y)];
+            name = :pso
+        )
         @test dvnames(s) == ["psu", "psc", "psa", "psz"] || (println(dvnames(s)); false)
         # a front end's refusal hook: nothing by default (any metadata value is accepted)
         @test LatticePDE.pdesystem_refusal(:any, psc(t, x, y)) === nothing

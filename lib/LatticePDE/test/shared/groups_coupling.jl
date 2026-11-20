@@ -12,16 +12,25 @@ r1e, r2e = gr1(t, x, y), gr2(t, x, y)
 function rsys()
     return PDESystem(
         [D(r1e) ~ -gk * r2e, D(r2e) ~ gk * r1e], [gr1(0, x, y) ~ 1.0, gr2(0, x, y) ~ 0.0],
-        [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [r1e, r2e], [gk]; name = :rot
+        [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y],
+        [
+            r1e, r2e,
+        ], [gk]; name = :rot
     )
 end
 # two groups (two algorithms: equal ones would be one group)
-rtwo(n) = FieldGroups(r1e => ExplicitEuler(; substeps = n), r2e => ExplicitEuler(; substeps = n + 1))
+function rtwo(n)
+    return FieldGroups(
+        r1e => ExplicitEuler(; substeps = n), r2e =>
+            ExplicitEuler(; substeps = n + 1)
+    )
+end
 
 # Only groups in a loop of the group read graph are limited.
 @parameters gwk = 300.0 gwr = 5.0
 @variables gwc(..) gwu(..) gwo(..) gwv(..) gwa(..)
-wce, wue, woe, wve, wae = gwc(t, x, y), gwu(t, x, y), gwo(t, x, y), gwv(t, x, y), gwa(t, x, y)
+wce, wue, woe, wve, wae = gwc(t, x, y), gwu(t, x, y), gwo(t, x, y), gwv(t, x, y),
+    gwa(t, x, y)
 const GW_DOM = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
 gwdisc() = LatticeDiscretization(Grid((4, 4)); T = Float64)
 gwerr(f) = (e = gerr(f); replace(e, r"\s+" => " "))

@@ -4,11 +4,13 @@
 
 @testsetup module LP_sciml_conformance
 using Test, LatticePDE
-using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables,
+    Differential, PDESystem,
     System, ODEProblem, t_nounits as t, D_nounits as D
 using Symbolics: Num
 using DomainSets: Interval
-using SciMLBase: SciMLBase, solve, solve!, init, step!, reinit!, remake, ReturnCode, DiscreteCallback
+using SciMLBase: SciMLBase, solve, solve!, init, step!, reinit!, remake, ReturnCode,
+    DiscreteCallback
 using SymbolicIndexingInterface: SymbolicIndexingInterface as SII
 using LatticeFields: LatticeFields, Problems as LFP
 using OrdinaryDiffEqTsit5: Tsit5
@@ -27,14 +29,21 @@ include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "qa_common.jl"))
 include("shared/export_all.jl")
 end
 
-@testitem "LatticePDE SciML conformance on FieldProblem and ODEProblem paths" setup = [LP_sciml_conformance] tags = [:latticepde, :sciml] begin
+@testitem "LatticePDE SciML conformance on FieldProblem and ODEProblem paths" setup = [
+    LP_sciml_conformance,
+] tags = [
+    :latticepde, :sciml,
+] begin
     @testset "LatticePDE SciML conformance" begin
         @parameters sD = 0.05 sk = 1.0
         @variables sc(..)
         sce = sc(t, x, y)
         sys = PDESystem(
             [D(sce) ~ sD * laplacian(sce) - sk * sce],
-            [sc(0, x, y) ~ 1.0 + x * y, sc(t, 0, y) ~ 0.0, sc(t, 1, y) ~ 0.0, sc(t, x, 0) ~ 0.0, sc(t, x, 1) ~ 0.0],
+            [
+                sc(0, x, y) ~ 1.0 + x * y, sc(t, 0, y) ~ 0.0,
+                sc(t, 1, y) ~ 0.0, sc(t, x, 0) ~ 0.0, sc(t, x, 1) ~ 0.0,
+            ],
             [t ∈ Interval(0.0, 0.4), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)],
             [t, x, y], [sce], [sD, sk]; name = :sciml_conf
         )
@@ -45,9 +54,18 @@ end
 
         @testset "solve vs solve!(init), step!, reinit!, remake on both paths" begin
             for (label, prob, alg, kw) in (
-                    ("FieldProblem ExplicitEuler", fp, ExplicitEuler(; substeps = 1), (; dt = 0.02)),
-                    ("FieldProblem BackwardEuler", fp, BackwardEuler(; linsolve = BTIGHT), (; dt = 0.02)),
-                    ("ODEProblem Tsit5", ode, Tsit5(), (; abstol = 1.0e-10, reltol = 1.0e-10)),
+                    (
+                        "FieldProblem ExplicitEuler", fp,
+                        ExplicitEuler(; substeps = 1), (; dt = 0.02),
+                    ),
+                    (
+                        "FieldProblem BackwardEuler", fp,
+                        BackwardEuler(; linsolve = BTIGHT), (; dt = 0.02),
+                    ),
+                    (
+                        "ODEProblem Tsit5", ode, Tsit5(),
+                        (; abstol = 1.0e-10, reltol = 1.0e-10),
+                    ),
                 )
                 @testset "$label" begin
                     s1 = solve(prob, alg; saveat = 0.1, kw...)
@@ -82,14 +100,30 @@ end
             end
         end
 
-        @testset "parameter-mutating DiscreteCallback parity across FieldProblem and ODEProblem" begin
-            cb = DiscreteCallback((u, t, i) -> t == 0.2, i -> (i.ps[sk] = 4.0; nothing); save_positions = (false, false))
-            s_fp = solve(remake(fp; p = [sk => 1.0]), ExplicitEuler(; substeps = 1); dt = 5.0e-5, callback = cb, tstops = [0.2])
-            s_ode = solve(remake(ode; p = [sk => 1.0]), Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10, callback = cb, tstops = [0.2])
+        @testset "parameter-mutating DiscreteCallback parity across FieldProblem and \
+            ODEProblem" begin
+            cb = DiscreteCallback(
+                (u, t, i) -> t == 0.2, i -> (i.ps[sk] = 4.0; nothing);
+                save_positions = (false, false)
+            )
+            s_fp = solve(
+                remake(fp; p = [sk => 1.0]), ExplicitEuler(; substeps = 1);
+                dt = 5.0e-5, callback = cb, tstops = [0.2]
+            )
+            s_ode = solve(
+                remake(ode; p = [sk => 1.0]), Tsit5(); abstol = 1.0e-10,
+                reltol = 1.0e-10, callback = cb, tstops = [0.2]
+            )
             @test maximum(abs, s_fp.u[end] .- s_ode.u[end]) < 1.0e-4
             # Compare against two chained solves on the ODE path
-            a = solve(remake(ode; tspan = (0.0, 0.2)), Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
-            b = solve(remake(ode; u0 = a.u[end], tspan = (0.2, 0.4), p = [sk => 4.0]), Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+            a = solve(
+                remake(ode; tspan = (0.0, 0.2)), Tsit5(); abstol = 1.0e-10,
+                reltol = 1.0e-10
+            )
+            b = solve(
+                remake(ode; u0 = a.u[end], tspan = (0.2, 0.4), p = [sk => 4.0]),
+                Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10
+            )
             @test maximum(abs, s_ode.u[end] .- b.u[end]) < 1.0e-10
             # Negative control: without the callback, final state differs substantially
             s_nocb = solve(ode, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
@@ -113,7 +147,11 @@ end
 
 # SciMLBase's integrator and solution interface on a discretized PDESystem solved by a field
 # algorithm (the shared check), with DiffEqCallbacks' timed callbacks
-@testitem "discretized ODEProblem: the shared SciMLBase interface check" setup = [LP_sciml_conformance] tags = [:latticepde, :sciml] begin
+@testitem "discretized ODEProblem: the shared SciMLBase interface check" setup = [
+    LP_sciml_conformance,
+] tags = [
+    :latticepde, :sciml,
+] begin
     using DiffEqCallbacks: PresetTimeCallback, PeriodicCallback
     @testset "discretized ODEProblem: the shared SciMLBase interface check" begin
         @parameters iD = 0.05 ik = 1.0
@@ -125,10 +163,16 @@ end
             [t, x, y], [ice], [iD, ik]; name = :sciml_shared
         )
         ode = discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float64))
-        callbacks = (; preset = PresetTimeCallback, periodic = PeriodicCallback, times = [0.1, 0.3], period = 0.1, want = [0.1, 0.2, 0.3])
+        callbacks = (;
+            preset = PresetTimeCallback, periodic = PeriodicCallback,
+            times = [0.1, 0.3], period = 0.1, want = [0.1, 0.2, 0.3],
+        )
         qa_sciml_interface(
-            ode, ExplicitEuler(); kw = (; dt = 0.1), h = 0.1, stop = 0.25, nwin = 4, tf = 0.4,
-            state_copy = integ -> copy(Array(integ.u)), live_write! = integ -> (integ.u .= 2.0; nothing), callbacks
+            ode, ExplicitEuler(); kw = (; dt = 0.1), h = 0.1, stop = 0.25, nwin = 4,
+            tf = 0.4,
+            state_copy = integ -> copy(Array(integ.u)), live_write! = integ -> (
+                integ.u .= 2.0; nothing
+            ), callbacks
         )
     end
 end

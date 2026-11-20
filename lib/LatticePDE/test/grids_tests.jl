@@ -2,15 +2,18 @@
 # per save, so `sol[c][end]` and `sol[c][i]` are grids; `field_series(sol, c)` is the lazy
 # time-first array; `sol[c, i]` and `sol(t; idxs = c)` are grids. An owned solve, an
 # OrdinaryDiffEq (Tsit5) solve and a FieldProblem solved directly agree on every spelling.
-# `save_idxs` that hold part of a field name it when the field is read; `save_idxs = c` works
-# under Tsit5 too. Negative control at 70400aba: `sol[c][end]`
-# is a number on the owned and Tsit5 paths, `field_series` refuses a FieldSolution, a FieldSolution
-# is not callable, a partial `save_idxs` is a BoundsError, Tsit5 with `save_idxs = c` a MethodError.
+# `save_idxs` that hold part of a field name it when the field is read; `save_idxs = c`
+# works under Tsit5 too. Negative control at 70400aba: `sol[c][end]` is a number on the
+# owned and Tsit5 paths, `field_series` refuses a FieldSolution, a FieldSolution is not
+# callable, a partial `save_idxs` is a BoundsError, Tsit5 with `save_idxs = c` a
+# MethodError.
 
 @testsetup module LP_grids
 using Test, LatticePDE
-using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
-    System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables,
+    Differential, PDESystem,
+    System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex,
+    Shift, Pre,
     t_nounits as t, D_nounits as D
 using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
 using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
@@ -23,7 +26,11 @@ include("shared/grids.jl")
 include("shared/export_all.jl")
 end
 
-@testitem "sol[c] is one grid per save on the owned, Tsit5 and FieldProblem paths" setup = [LP_grids] tags = [:latticepde, :grids] begin
+@testitem "sol[c] is one grid per save on the owned, Tsit5 and FieldProblem paths" setup = [
+    LP_grids,
+] tags = [
+    :latticepde, :grids,
+] begin
     @testset "sol[c] is one grid per save on the owned, Tsit5 and FieldProblem paths" begin
         p = discretize(qsys(), LatticeDiscretization(Grid((6, 4)); T = Float64))
         so = solve(p, ExplicitEuler(); dt = 0.01, saveat = 0.1)
@@ -39,8 +46,10 @@ end
             @test s[qce, 2] == v[2] && s[qce, length(s.t)] == last
             @test s(0.1; idxs = qce) ≈ v[2] && s(0.15; idxs = qce) ≈ (v[2] .+ v[3]) ./ 2
             f = field_series(s, qce)
-            @test f isa LFP.FieldSeries && size(f) == (4, 6, 4) && f[end, :, :] == last && f[2, 3, 2] == v[2][3, 2]
-            @test s[:qc] == v && s[qc] == v                        # the name and the bare callable
+            @test f isa LFP.FieldSeries && size(f) == (4, 6, 4) && f[end, :, :] == last &&
+                f[2, 3, 2] == v[2][3, 2]
+            # the name and the bare callable
+            @test s[:qc] == v && s[qc] == v
         end
         # the owned and the FieldProblem solutions are the same run
         @test so[qce] == sf[qce] && so.t == sf.t
@@ -48,12 +57,16 @@ end
     end
 end
 
-@testitem "save_idxs on owned and Tsit5 solves" setup = [LP_grids] tags = [:latticepde, :grids] begin
+@testitem "save_idxs on owned and Tsit5 solves" setup = [LP_grids] tags = [
+    :latticepde,
+    :grids,
+] begin
     @testset "save_idxs on owned and Tsit5 solves" begin
         p = discretize(qsys(), LatticeDiscretization(Grid((6, 4)); T = Float64))
         function msg(f)
             return try
-                f(); ""
+                f()
+                ""
             catch e
                 sprint(showerror, e)
             end
@@ -61,7 +74,8 @@ end
         # a field saved whole: its grids, on both paths
         for alg in (ExplicitEuler(), Tsit5())
             s = solve(p, alg; dt = 0.01, saveat = 0.1, save_idxs = qce)
-            @test length(s.u[1]) == 24 && size(s[qce][end]) == (6, 4) && s[qce][end] == reshape(s.u[end], 6, 4)
+            @test length(s.u[1]) == 24 && size(s[qce][end]) == (6, 4) &&
+                s[qce][end] == reshape(s.u[end], 6, 4)
         end
         # part of a field: the read names `save_idxs` and the routes
         s = solve(p, ExplicitEuler(); dt = 0.01, saveat = 0.1, save_idxs = [2, 3])
