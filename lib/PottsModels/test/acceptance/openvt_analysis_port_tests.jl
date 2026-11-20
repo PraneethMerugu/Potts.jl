@@ -1,4 +1,4 @@
-# `openvt_analysis_port_tests.jl` (spec research/model-specs/15_openvt_monolayer.md v3 §3, §4.0 A3,
+# `openvt_analysis_port_tests.jl` (spec research/model-specs/15_openvt_monolayer.md §3, §4.0 A3,
 # §6 G8; D-147, D-146, D-048): the OpenVT monolayer analysis port. A concaveman port, a
 # byte-faithful port of the consortium's `metrics.cpp`, the M Category 3 inhibition fractions
 # (A3) and the O1–O6 writers. Decision: D-149.

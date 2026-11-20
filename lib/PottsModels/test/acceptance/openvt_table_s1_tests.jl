@@ -1,4 +1,4 @@
-# `openvt_table_s1_tests.jl` (spec research/model-specs/15_openvt_monolayer.md v3 §2, §5, §6
+# `openvt_table_s1_tests.jl` (spec research/model-specs/15_openvt_monolayer.md §2, §5, §6
 # G1, G2, G5, G6, G7, G11, §1.1 C3, C9, C13, C14; D-147, D-048): the OpenVT monolayer model
 # updated to M's Table S1, as a NEW published model beside the 2024 Artistoo set, which is
 # kept unchanged as a documented variant (`OpenVTGrowingMonolayer`, kept bit for bit
