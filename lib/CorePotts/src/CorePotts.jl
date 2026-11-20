@@ -17,7 +17,7 @@ using SciMLBase: SciMLBase, remake, reinit!, derivative_discontinuity!, Ensemble
     DiscreteCallback, CallbackSet, terminate!
 using Base.ScopedValues: ScopedValue, @with
 using Serialization: Serialization
-using StaticArrays: MVector
+using StaticArrays: MVector, SMatrix
 using SymbolicIndexingInterface: SymbolicIndexingInterface, getu, setu, getp, setp
 
 export Lattice, Periodic, Closed, nsites, Moore, VonNeumann, NeighborOrder, EuclideanBall, Stencil,
@@ -109,5 +109,6 @@ include("boundary_site.jl")
 include("checkerboard.jl")
 include("problem.jl")
 include("checkpoint.jl")
+include("precompile.jl")
 
 end
