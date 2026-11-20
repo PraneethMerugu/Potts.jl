@@ -18,3 +18,5 @@ lib/PottsModels/test/acceptance/inline_gather_numbering_tests.jl	EuclideanBall(3
 lib/PottsModels/test/acceptance/inline_gather_numbering_tests.jl	Moore(2)   c1 8	a row of the hand-count table whose c1 and c2 columns are aligned
 lib/PottsModels/test/acceptance/openvt_analysis_port_tests.jl	Parameter_Plane_Morpheus_Centroids.zip	a file path in the consortium repository, quoted whole in a code span
 lib/PottsModels/test/acceptance/openvt_analysis_port_tests.jl	"0.0515463917525773,3,0.654039	one CSV row of the expected output that the test compares, kept whole
+lib/PottsModels/reproductions/01_merks.jl	*	the page tests read this Literate page as text (table rows, banner, helper definitions), so its lines keep their layout
+lib/PottsModels/reproductions/15_openvt_monolayer.jl	*	the page tests read this Literate page as text (figure calls, machine names in prose), so its lines keep their layout

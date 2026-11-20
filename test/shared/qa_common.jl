@@ -811,7 +811,8 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
 
     Read an allowlist of `path<TAB>text<TAB>reason` lines (`#` lines and blank lines are
     skipped): a long line of the file `path` that contains `text` passes
-    [`qa_long_lines`](@ref). Every entry needs a reason.
+    [`qa_long_lines`](@ref); the text `*` passes every line of the file. Every entry needs a
+    reason.
     """
     function qa_line_allowlist(path::AbstractString)
         allow = Tuple{String, String}[]
@@ -860,7 +861,7 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
                 end
                 (textwidth(ln) <= limit || wasraw) && continue
                 any(r -> occursin(r, ln), _QA_LINE_KINDS) && continue
-                k = findfirst(((q, t),) -> q == p && occursin(t, ln), allow)
+                k = findfirst(((q, t),) -> q == p && (t == "*" || occursin(t, ln)), allow)
                 if k === nothing
                     push!(bad, "$p:$i: $(textwidth(ln))")
                 else

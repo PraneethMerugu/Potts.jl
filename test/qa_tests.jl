@@ -702,6 +702,8 @@ end
             allow = joinpath(tmp, "allow.txt")
             write(allow, "src/planted.jl\t1 + 1\ta planted control\n")
             @test isempty(qa_long_lines(tmp; allow = qa_line_allowlist(allow)))
+            write(allow, "src/planted.jl\t*\ta planted control, whole file\n")
+            @test isempty(qa_long_lines(tmp; allow = qa_line_allowlist(allow)))
             write(allow, "src/planted.jl\t1 + 1\ta planted control\nsrc/url.jl\tz\tstale\n")
             @test qa_long_lines(tmp; allow = qa_line_allowlist(allow)) ==
                 ["allowlist: src/url.jl: z"]
