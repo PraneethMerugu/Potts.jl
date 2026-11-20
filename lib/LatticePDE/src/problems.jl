@@ -2664,9 +2664,9 @@ end
 
 Whether `sys` has maps (`Shift(t, 1)(m) ~ rhs`); a system with rate equations and maps both
 is refused, naming the fields of each, with the front end's route (`route`; LatticePDE's:
-two systems). One problem steps one kind in this version, in both front ends and however its
-fields are grouped: a map steps one unit of time, which would step the rates with no bound,
-and separate groups would be split stepping (planned).
+two systems). One problem steps one kind in this version, whichever front end builds it and
+however its fields are grouped: a map steps one unit of time, which would step the rates
+with no bound, and separate groups would be split stepping (planned).
 """
 function check_one_kind(sys::PDESystem; route = "discretize them as two systems")
     lhs(eq) = unwrap(eq.lhs)

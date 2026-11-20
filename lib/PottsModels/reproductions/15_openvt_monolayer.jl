@@ -121,9 +121,12 @@ nothing #hide
 #     @after_mcs begin                   # f, then growth unless inhibited (type 1 and type 2)
 #         f ~ ifelse(
 #             count(true for _ in contacts) > 0,
-#             count(neighbor_kind == medium for _ in contacts) / count(true for _ in contacts), 1.0
+#             count(neighbor_kind == medium for _ in contacts) /
+#                 count(true for _ in contacts),
+#             1.0
 #         )
-#         A_star ~ ifelse((volume / Pre(A_star) >= β) && (f >= γ), Pre(A_star) + α, Pre(A_star))
+#         A_star ~
+#             ifelse((volume / Pre(A_star) >= β) && (f >= γ), Pre(A_star) + α, Pre(A_star))
 #     end
 #     # division on the actual area; each daughter draws its own X
 #     @divide cells(cell) when = volume >= X * A₀, along = RandomPlane(), A_star => Split(),
