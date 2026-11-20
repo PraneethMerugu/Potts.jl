@@ -17,8 +17,9 @@ concentration: `identity` (linear), `saturating(s)` = `c/(s + c)`,
 `saturating_linear(s)` = `c/(s c + 1)`, or any function. Gate it by kind and copy type in
 the model.
 """
-@inline chemotaxis_delta(c, prop, χ; response::F = identity) where {F} =
-    -χ * (response(@inbounds(c[prop.target])) - response(@inbounds(c[prop.source])))
+@inline function chemotaxis_delta(c, prop, χ; response::F = identity) where {F}
+    return -χ * (response(@inbounds(c[prop.target])) - response(@inbounds(c[prop.source])))
+end
 
 """`saturating(s)`: the response `c -> c/(s + c)`."""
 saturating(s) = c -> c / (s + c)
@@ -93,8 +94,9 @@ cell. Zero for the medium, when the target is the cell's last site, or when it i
 isolated fragment. Connectivity rules are expressions over it: `local_components == 1`
 (hard, exactly one piece as in CompuCell3D), `λ * (local_components > 1)` (soft).
 """
-@inline local_components(σ, ctx, prop::Proposal) =
-    prop.old == 0 ? 0 : Int(_old_pieces(read_shell(σ, ctx, prop), ctx.lattice, prop))
+@inline function local_components(σ, ctx, prop::Proposal)
+    return prop.old == 0 ? 0 : Int(_old_pieces(read_shell(σ, ctx, prop), ctx.lattice, prop))
+end
 
 """
 `locally_connected(σ, ctx, prop)`: the losing cell stays exactly one local piece,

@@ -21,8 +21,9 @@ _law(alg, f) = something(alg.acceptance, f.acceptance, Metropolis())
 # Device code stays in the default float type (`Exec.default_float`, a policy): Float32 on
 # every device, so backends without doubles (Metal) never see a Float64 field.
 _device_law(law, backend) = law
-_device_law(law::Metropolis{Float64}, backend) =
-    Exec.default_float(backend) === Float64 ? law : Metropolis(Float32(law.offset))
+function _device_law(law::Metropolis{Float64}, backend)
+    return Exec.default_float(backend) === Float64 ? law : Metropolis(Float32(law.offset))
+end
 
 """
     Barker(; offset = 0)
@@ -37,8 +38,9 @@ struct Barker{T} <: AbstractAcceptanceLaw
 end
 Barker(; offset = 0) = Barker(offset)
 
-_device_law(law::Barker{Float64}, backend) =
-    Exec.default_float(backend) === Float64 ? law : Barker(Float32(law.offset))
+function _device_law(law::Barker{Float64}, backend)
+    return Exec.default_float(backend) === Float64 ? law : Barker(Float32(law.offset))
+end
 
 @inline function accept(law::Metropolis, dH::T, temperature::T, u::T) where {T}
     x = dH - T(law.offset)
@@ -91,8 +93,9 @@ struct SequentialCPM{A, R, S} <: AbstractCPMAlgorithm
         return new{A, R, skip_interior}(acceptance, proposal, skip_interior)
     end
 end
-SequentialCPM(; acceptance = nothing, proposal = nothing, skip_interior::Bool = false) =
-    SequentialCPM(acceptance, proposal, skip_interior)
+function SequentialCPM(; acceptance = nothing, proposal = nothing, skip_interior::Bool = false)
+    return SequentialCPM(acceptance, proposal, skip_interior)
+end
 
 # Printed as the keyword call that rebuilds it (the type parameter `S` is not a keyword);
 # keywords at their defaults are left out.

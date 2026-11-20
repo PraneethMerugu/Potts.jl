@@ -79,8 +79,11 @@ end
     st = with_capacity(st, 4)
         rebuild!(st, p, ctx, backend) = copyto!(st.cell.vsum, recompute_site_sum(Array(st.ownership), v, length(st.cell.kind)))
     lc = Lifecycle((st, p, ctx, key, mcs, c) -> (mcs == 0 && c == 1) ? EVENT_DIVIDE : EVENT_NONE; rebuild!)
-    commit!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx, prop);
-        commit_site_sum!(st.cell.vsum, prop, @inbounds v[prop.target]))
+    function commit!(st, p, prop, ctx)
+        commit_volume!(st, p, prop, ctx)
+        commit_moments!(st.cell, ctx, prop)
+        return commit_site_sum!(st.cell.vsum, prop, @inbounds v[prop.target])
+    end
     f = CPMFunction(gg_delta_H; commit!, temperature = (a...) -> 0.0, lifecycle = lc)
     u = solve(PottsProblem(f, st, lat, (0, 1), gg_params()), SequentialCPM()).u[end]
     @test u.cell.volume[2] > 0

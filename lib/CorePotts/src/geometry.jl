@@ -269,10 +269,12 @@ end
 cell_shape(cell, l::Lattice, c) = cell_shape(Float64, cell, l, c)
 
 # Major length from the covariance upper triangle (square-lattice axes), as in `shape`
-@inline _major_length(l::Lattice{2}, C::NTuple{3, T}) where {T} =
-    4sqrt(max(first(principal_moments(embed_covariance(l, C))), zero(T)))
-@inline _major_length(::Lattice{3}, C::NTuple{6, T}) where {T} =
-    2sqrt(5max(first(principal_moments(C)), zero(T)))
+@inline function _major_length(l::Lattice{2}, C::NTuple{3, T}) where {T}
+    return 4sqrt(max(first(principal_moments(embed_covariance(l, C))), zero(T)))
+end
+@inline function _major_length(::Lattice{3}, C::NTuple{6, T}) where {T}
+    return 2sqrt(5max(first(principal_moments(C)), zero(T)))
+end
 
 """
     major_length(T, cell, lattice, c)

@@ -36,8 +36,9 @@ const _SCRATCH_PREFIX = "#cv_"
 Whether cell column `name` is scratch (`convert_scratch`, or the cell-sum scratch of
 `reduce_scratch`, the contact sums of `empty_contacts`): no daughter copies it.
 """
-_is_scratch_column(name::Symbol) =
-    startswith(String(name), _SCRATCH_PREFIX) || startswith(String(name), "#cr_") || startswith(String(name), "#ct_")
+function _is_scratch_column(name::Symbol)
+    return startswith(String(name), _SCRATCH_PREFIX) || startswith(String(name), "#cr_") || startswith(String(name), "#ct_")
+end
 
 const _CV_FROM = Symbol("#cv_from")        # entity c's `from` (0: c is no entity this pass)
 const _CV_TO = Symbol("#cv_to")            # entity c's `to` (0: none yet; the new slot once allocated)
@@ -201,8 +202,10 @@ end
     return nothing
 end
 
-@inline _surface_delta!(
-    ::Nothing, rel, lat, σ, i, x, old, new, after::A, sc, u) where {A} = nothing
+@inline function _surface_delta!(
+    ::Nothing, rel, lat, σ, i, x, old, new, after::A, sc, u) where {A}
+    return nothing
+end
 @inline function _surface_delta!(surf, rel, lat, σ, i, x, old, new, after::A, sc, u) where {A}
     T = eltype(surf)
     for k in 1:length(rel)
@@ -498,8 +501,10 @@ struct _WriteAtomic end
 @inline cv_write!(::_WriteAtomic, ::Val{j}, dst, idx, w) where {j} = atomic_add!(dst, idx, w)
 # host only (any other number type): the writes in site order
 struct _WriteSeq end
-@inline cv_write!(::_WriteSeq, ::Val{j}, dst, idx, w) where {j} =
-    (((0 < idx) & (idx <= length(dst))) && (@inbounds dst[idx] += convert(eltype(dst), w)); nothing)
+@inline function cv_write!(::_WriteSeq, ::Val{j}, dst, idx, w) where {j}
+    ((0 < idx) & (idx <= length(dst))) && (@inbounds dst[idx] += convert(eltype(dst), w))
+    return nothing
+end
 
 @inline function _cv_wzero_body!(c, sc)
     for j in 1:size(sc.wexp, 1)

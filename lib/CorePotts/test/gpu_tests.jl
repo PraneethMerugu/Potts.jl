@@ -43,8 +43,10 @@ function global_post_exact(st, p, prop, ctx, stage)
     end
 end
 global_defer_check(st, p, prop, ctx) = CorePotts.global_defer(st.ownership, ctx, prop, Val(false))
-global_penalty_dH(st, p, prop, ctx) = gg_delta_H(st, p, prop, ctx) +
-    40.0f0 * (CorePotts.global_keeps(st.ownership, ctx, prop, Val(false), Val(nothing), Val(0), CorePotts.GlobalSearch()) != Int32(0))
+function global_penalty_dH(st, p, prop, ctx)
+    return gg_delta_H(st, p, prop, ctx) +
+        40.0f0 * (CorePotts.global_keeps(st.ownership, ctx, prop, Val(false), Val(nothing), Val(0), CorePotts.GlobalSearch()) != Int32(0))
+end
 
 # ROCm, last: no `double` in any kernel this suite compiled (full scan of the kernel cache,
 # D-157); the scan lives with the monorepo's shared test helpers
@@ -66,9 +68,11 @@ end
     sspec = Weighted(Moore(1), o -> 1 / sqrt(sum(abs2, o)))
     cell = merge(init_moments(σ, lat, length(kinds)),
         (; surface = recompute_surface(σ, lat, relation(sspec, lat), length(kinds); T = Float32)))
-    commit!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx);
-            commit_surface!(st.cell.surface, prop, surface_change(st.ownership, ctx, prop; T = Float32));
-        commit_moments!(st.cell, ctx, prop))
+    function commit!(st, p, prop, ctx)
+        commit_volume!(st, p, prop, ctx)
+        commit_surface!(st.cell.surface, prop, surface_change(st.ownership, ctx, prop; T = Float32))
+        return commit_moments!(st.cell, ctx, prop)
+    end
     function delta_H(st, p, prop, ctx)
         J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
         E(v, c) = p.λ * (v - p.V0)^2
@@ -173,8 +177,11 @@ end
         σd = zeros(Int32, 48, 48); σd[20:27, 20:27] .= 1
         grow!(st, p, ctx, key, mcs, c) = (@inbounds st.cell.target[c] += 1.0f0; nothing)
         big(st, p, ctx, key, mcs, c) = st.cell.volume[c] >= 80 ? EVENT_DIVIDE : EVENT_NONE
-        reset!(st, p, ctx, key, mcs, parent, daughter) =
-            (st.cell.target[parent] = 40.0f0; st.cell.target[daughter] = 40.0f0; nothing)
+        function reset!(st, p, ctx, key, mcs, parent, daughter)
+            st.cell.target[parent] = 40.0f0
+            st.cell.target[daughter] = 40.0f0
+            return nothing
+        end
         function dH(st, p, prop, ctx)
             J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
             E(v, c) = p.λ * (v - @inbounds(st.cell.target[c]))^2
@@ -215,10 +222,11 @@ end
             chem = is_extension(prop) ? chemotaxis_delta(st.site.c, prop, p.χ) : 0.0f0
             return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) + act + chem
         end
-        commitA!(st, p, prop, ctx) = (
-            commit_volume!(st, p, prop, ctx);
-            @inbounds st.site.act[prop.target] = prop.new == 0 ? 0.0f0 : p.maxact; nothing
-        )
+        function commitA!(st, p, prop, ctx)
+            commit_volume!(st, p, prop, ctx)
+            @inbounds st.site.act[prop.target] = prop.new == 0 ? 0.0f0 : p.maxact
+            return nothing
+        end
         decay!(st, p, ctx, key, mcs, i) = (@inbounds st.site.act[i] = max(st.site.act[i] - 1.0f0, 0.0f0); nothing)
         okA(st, p, prop, ctx) = locally_connected(st.ownership, ctx, prop) && forbid_extinction(st.cell.volume, prop)
         biasA(st, p, prop, ctx) = is_extension(prop) ? 0.05f0 : 0.0f0
@@ -257,8 +265,10 @@ end
     @testset "ring connectivity rule and Barker on the device" begin
         σM, kM = blocks((48, 48), 5; gap = 1)
         latM = Lattice((48, 48))
-        okM(st, p, prop, ctx) = ring_arcs(st.ownership, ctx, prop) <= 1 ||
-            (ring_cells(st.ownership, ctx, prop) == 2 && ring_medium(st.ownership, ctx, prop) == 0)
+        function okM(st, p, prop, ctx)
+            return ring_arcs(st.ownership, ctx, prop) <= 1 ||
+                (ring_cells(st.ownership, ctx, prop) == 2 && ring_medium(st.ownership, ctx, prop) == 0)
+        end
         f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = okM)
         pM = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 25.0f0, T = 12.0f0)
         prob = PottsProblem(f, initial_state(σM, kM), latM, (0, 40), pM; contact = Moore(1))
@@ -285,11 +295,11 @@ end
             init_moments(σ3, lat3, n3),
             (; surface = recompute_surface(σ3, lat3, relation(sspec, lat3), n3; T = Float32))
         )
-        commit3!(st, p, prop, ctx) = (
-            commit_volume!(st, p, prop, ctx);
-            commit_surface!(st.cell.surface, prop, surface_change(st.ownership, ctx, prop; T = Float32));
-            commit_moments!(st.cell, ctx, prop)
-        )
+        function commit3!(st, p, prop, ctx)
+            commit_volume!(st, p, prop, ctx)
+            commit_surface!(st.cell.surface, prop, surface_change(st.ownership, ctx, prop; T = Float32))
+            return commit_moments!(st.cell, ctx, prop)
+        end
         function dH3(st, p, prop, ctx)
             J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
             E(v, c) = p.λ * (v - p.V0)^2
@@ -428,10 +438,11 @@ end
             J = SMatrix{3, 3, Float32}(0, 16, 0, 16, 2, 16, 0, 16, 2), λ = 1.0f0, V0 = 36.0f0, λd = 50.0f0,
             T = 1.0f0, k = 1.0f0,
         )
-        st(linkit) = (
-            cell = merge(init_moments(σK, latK, 2), empty_links(1, 2; rest = Float32));
-            linkit && add_link!(cell, 1, 2; rest = 3.0f0); initial_state(σK, [1, 2]; cell)
-        )
+        function st(linkit)
+            cell = merge(init_moments(σK, latK, 2), empty_links(1, 2; rest = Float32))
+            linkit && add_link!(cell, 1, 2; rest = 3.0f0)
+            return initial_state(σK, [1, 2]; cell)
+        end
         p0 = PottsProblem(f, st(true), latK, (0, 20), pK)
         li = LinearIndices(σK)
         props = [Proposal(li[29, 15 + j], li[29, 15], (29, 15 + j), 1, Int32(0), Int32(2)) for j in (-1, 1)]

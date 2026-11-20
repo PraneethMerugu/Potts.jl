@@ -1,7 +1,9 @@
 # Definitions of lifecycle_tests.jl that other test files use.
 frozen_dynamics(st, p, prop, ctx) = false
-lc_state(σ, kinds, lat; capacity = length(kinds), cell = (;)) = with_capacity(
-    initial_state(σ, kinds; cell = merge(init_moments(σ, lat, length(kinds)), cell)), capacity)
+function lc_state(σ, kinds, lat; capacity = length(kinds), cell = (;))
+    return with_capacity(
+        initial_state(σ, kinds; cell = merge(init_moments(σ, lat, length(kinds)), cell)), capacity)
+end
 
 function run_lifecycle(σ, kinds, lat, lifecycle; capacity = length(kinds) + 4, tspan = (0, 1),
         cell = (;), constraint = frozen_dynamics, p = gg_params(), alg = SequentialCPM(),

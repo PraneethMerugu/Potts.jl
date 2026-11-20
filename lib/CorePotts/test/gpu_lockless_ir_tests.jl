@@ -110,12 +110,14 @@ end
         pR(k) = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 36.0f0, T = 10.0f0, k = Float32(k))
         prob(g, k, seed) = PottsProblem(g, initial_state(σR, [1, 1, 1]; cell = deepcopy(cellR)), latR, (0, 1500), pR(k); seed)
         dist(u) = (centroid_distance(Float64, u.cell, latR, 1, 2), centroid_distance(Float64, u.cell, latR, 2, 3))
-        runs(k, dev, seeds) = map(seeds) do seed
-            integ = init(prob(f, k, seed), CheckerboardCPM(); save_start = false, (dev ? (; backend) : (;))...)
-            dev && @test integ.state.ownership isa PottsDevices.device_arraytype() && integ.state.cell.links__bond isa PottsDevices.device_arraytype()
-            sol = solve!(integ)
-            @test sol.retcode == ReturnCode.Success
-            sol.u[end]
+        function runs(k, dev, seeds)
+            return map(seeds) do seed
+                    integ = init(prob(f, k, seed), CheckerboardCPM(); save_start = false, (dev ? (; backend) : (;))...)
+                    dev && @test integ.state.ownership isa PottsDevices.device_arraytype() && integ.state.cell.links__bond isa PottsDevices.device_arraytype()
+                    sol = solve!(integ)
+                    @test sol.retcode == ReturnCode.Success
+                    sol.u[end]
+                end
         end
         us = runs(2, true, 1:4)
         for u in us
@@ -177,13 +179,14 @@ end
         # D-253: the Int64 width (forced; it is the width above 2³¹ − 1 sites) on the device.
         # With 64-bit atomic adds the counted run equals its Int32 run; without them (Metal)
         # a mask that follows the state is refused at `init`, and a run without one still runs
-        wide(f) = (
-            CorePotts._FORCE_WIDE_SITES[] = true; try
-                f()
-            finally
-                CorePotts._FORCE_WIDE_SITES[] = false
-            end
-        )
+        function wide(f)
+            CorePotts._FORCE_WIDE_SITES[] = true
+            return try
+                    f()
+                finally
+                    CorePotts._FORCE_WIDE_SITES[] = false
+                end
+        end
         fk32 = fk_problem(rm2; T = Float32)
         if CorePotts._atomic64(backend)
             # the device run is not reproducible (lockless): both widths run the event
@@ -219,8 +222,10 @@ end
         # the arc-or-pair rule on the 26-site shell compiles for the device
         lat3 = Lattice((18, 18, 18))
         σ3, k3 = blocks((18, 18, 18), 4; gap = 1)
-        ok3(st, p, prop, ctx) = ring_arcs(st.ownership, ctx, prop) <= 1 ||
-            (ring_cells(st.ownership, ctx, prop) == 2 && ring_medium(st.ownership, ctx, prop) == 0)
+        function ok3(st, p, prop, ctx)
+            return ring_arcs(st.ownership, ctx, prop) <= 1 ||
+                (ring_cells(st.ownership, ctx, prop) == 2 && ring_medium(st.ownership, ctx, prop) == 0)
+        end
         f3 = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = ok3)
         p3 = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 64.0f0, T = 12.0f0)
         u3 = solve(
@@ -489,11 +494,11 @@ end
         n = Int(maximum(σ))
         lat = Lattice(dims)
         ctx = (; lattice = lat, touch = relation(Weighted(Moore(1), o -> 1 / sqrt(sum(abs2, o))), lat))
-        run(b) = begin
+        function run(b)
             st = initial_state(σ, ones(Int32, n); cell = empty_contacts(12, n; T = Float32))
             b isa CPU || (st = CorePotts._to_backend(b, st))
             ContactPhase(:touch)(st, nothing, ctx, RNGKey(0), 0, b)
-            (Array(st.cell.contact_nbr), Array(st.cell.contact_measure), Array(st.cell.contact_medium))
+            return (Array(st.cell.contact_nbr), Array(st.cell.contact_measure), Array(st.cell.contact_medium))
         end
         hn, hm, hd = run(CPU())
         meas(nbr, m, a, b) = (k = findfirst(==(b), view(nbr, :, a)); k === nothing ? 0.0f0 : m[k, a])

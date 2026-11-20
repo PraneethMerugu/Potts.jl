@@ -66,8 +66,9 @@ function CorePotts._copy_to_host!(dst::Array{T}, doff::Integer, src::ROCArray{T}
     CorePotts._device_wait(ROCBackend())
     return dst
 end
-CorePotts._copy_to_host!(dst::Array{T}, src::ROCArray{T}) where {T} =
-    CorePotts._copy_to_host!(dst, 1, src, 1, length(src))
+function CorePotts._copy_to_host!(dst::Array{T}, src::ROCArray{T}) where {T}
+    return CorePotts._copy_to_host!(dst, 1, src, 1, length(src))
+end
 CorePotts._host_copy(a::ROCArray{T, N}) where {T, N} = CorePotts._copy_to_host!(Array{T, N}(undef, size(a)), a)
 
 end # module CorePottsAMDGPUExt

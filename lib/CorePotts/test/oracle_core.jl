@@ -23,8 +23,9 @@ struct Tiny
     periodic::Bool
     drive_x::Float64
 end
-Tiny(dims, proposal, contact, kinds, J, λ, V0, T, periodic = false) =
-    Tiny(dims, proposal, contact, kinds, J, λ, V0, T, periodic, 0.0)
+function Tiny(dims, proposal, contact, kinds, J, λ, V0, T, periodic = false)
+    return Tiny(dims, proposal, contact, kinds, J, λ, V0, T, periodic, 0.0)
+end
 
 nsite(m::Tiny) = prod(m.dims)
 lin(m::Tiny, x, y) = x + (y - 1) * m.dims[1]

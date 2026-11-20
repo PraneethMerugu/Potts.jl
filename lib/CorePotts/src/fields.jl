@@ -84,9 +84,10 @@ end
 _aux_ids(prog) = [i for (i, k) in enumerate(prog.kernels) if startswith(k.key, "aux:")]
 _aux_ids(ph::FieldPhase) = _aux_ids(ph.program)
 """The masked-condition clamp of field phase `ph` (its at-init form)."""
-field_clamp(ph::FieldPhase{K}) where {K} =
-    FieldPhase{K}(ph.group, ph.alg, ph.arrays; ph.tables, ph.params, ph.substeps, ph.dt, ph.period, ph.options, ph.T,
+function field_clamp(ph::FieldPhase{K}) where {K}
+    return FieldPhase{K}(ph.group, ph.alg, ph.arrays; ph.tables, ph.params, ph.substeps, ph.dt, ph.period, ph.options, ph.T,
         init = true, ph.aux_only, ph.rule_tables)
+end
 
 """
 The front end's record of a field runtime's binding (`Problems.GroupRuntime`'s `host`): the
@@ -142,8 +143,10 @@ _param(p, n::Symbol) = n === _CLOCK ? 0.0 : getproperty(p, n)
 
 # the parameter values and table contents a binding depends on (copies: a table written in
 # place is a change)
-_bound_values(ph::FieldPhase, p) = (Any[_param(p, n) for n in ph.params],
-                                    Any[copy(vec(collect(getproperty(p, name)))) for name in _table_names(ph)])
+function _bound_values(ph::FieldPhase, p)
+    return (Any[_param(p, n) for n in ph.params],
+        Any[copy(vec(collect(getproperty(p, name)))) for name in _table_names(ph)])
+end
 # the tables a phase depends on: its program's, then those only its substep rule reads
 _table_names(ph::FieldPhase) = Iterators.flatten((last.(ph.tables), last.(ph.rule_tables)))
 
@@ -172,9 +175,11 @@ end
 The field phase's tables at `p` by their program keys (the substep bound reads them: a
 table coefficient), and the tables only its substep rule reads.
 """
-table_values(ph::FieldPhase, p) = Pair{String, Vector{Float64}}[
-    [ph.program.tables[i].key => Float64.(vec(collect(getproperty(p, name)))) for (i, name) in ph.tables];
-    [k => Float64.(vec(collect(getproperty(p, name)))) for (k, name) in ph.rule_tables]]
+function table_values(ph::FieldPhase, p)
+    return Pair{String, Vector{Float64}}[
+        [ph.program.tables[i].key => Float64.(vec(collect(getproperty(p, name)))) for (i, name) in ph.tables];
+        [k => Float64.(vec(collect(getproperty(p, name)))) for (k, name) in ph.rule_tables]]
+end
 """The raw parameter values of the field phase's slots at `p`."""
 praw(ph::FieldPhase, p) = Tuple(_param(p, n) for n in ph.params)
 # … as the substep rule reads them, with the phase's tables (`field_substeps`, `field_report`)
@@ -294,10 +299,12 @@ function phase_contexts(phases::Phases, st, p, backend; abstol = 1 // 10^6, relt
     return ctx
 end
 
-_has_implicit_field_phase(phases::Phases) =
-    any(ph -> !ph.aux_only && ph.alg isa Problems.AbstractImplicitFieldAlgorithm, _field_phases(phases))
-_uses_lattice_newton(phases::Phases) =
-    any(ph -> !ph.aux_only && ph.alg isa Problems.AbstractImplicitFieldAlgorithm && ph.alg.nlsolve isa Problems.LatticeNewton, _field_phases(phases))
+function _has_implicit_field_phase(phases::Phases)
+    return any(ph -> !ph.aux_only && ph.alg isa Problems.AbstractImplicitFieldAlgorithm, _field_phases(phases))
+end
+function _uses_lattice_newton(phases::Phases)
+    return any(ph -> !ph.aux_only && ph.alg isa Problems.AbstractImplicitFieldAlgorithm && ph.alg.nlsolve isa Problems.LatticeNewton, _field_phases(phases))
+end
 
 # every field phase of the MCS order of `phases` (the steps, not the at-init clamps), each once
 function _field_phases(phases::Phases)
@@ -470,8 +477,10 @@ Base.@kwdef mutable struct FieldStats
     implicit::Vector{Union{Nothing, Problems.ImplicitFacts}} = Union{Nothing, Problems.ImplicitFacts}[]
     backend::String = ""
 end
-Base.show(io::IO, s::FieldStats) = print(io, "FieldStats(solves = ", s.solves, ", budget = ", s.budget, ", floor = ",
-    s.floor, ", newton_budget = ", s.newton_budget, ", code = ", s.code, ")")
+function Base.show(io::IO, s::FieldStats)
+    return print(io, "FieldStats(solves = ", s.solves, ", budget = ", s.budget, ", floor = ",
+        s.floor, ", newton_budget = ", s.newton_budget, ", code = ", s.code, ")")
+end
 function _rank(c::SciMLBase.ReturnCode.T)
     if c == SciMLBase.ReturnCode.Success
         return 0
@@ -610,14 +619,17 @@ tangent_on(::NamedTuple{K}) where {K} = Val(:__tangent in K)
 # the run context with the shadow store of `tg` (none for a primal problem: no entry, so the
 # phases compile no tangent path); `fresh`: the initial state's derivative parts are seeded
 with_tangent(ctx, ::Nothing, phases, st, p, backend, fresh = true) = ctx
-with_tangent(ctx, tg::ParameterTangent, phases, st, p, backend, fresh = true) =
-    merge(ctx, (; __tangent = TangentHandle(Ref{Any}(Base.invokelatest(tangent_run, phases, st, p, tg, backend, ctx, fresh)))))
+function with_tangent(ctx, tg::ParameterTangent, phases, st, p, backend, fresh = true)
+    return merge(ctx, (; __tangent = TangentHandle(Ref{Any}(Base.invokelatest(tangent_run, phases, st, p, tg, backend, ctx, fresh)))))
+end
 
 # One window of field phase `ph` on its primal runtime `rt` (a primal run: `advance!` alone)
 @inline _field_advance!(ctx::NamedTuple, ph, st, rt, tm, n, h) = _field_advance!(tangent_on(ctx), ctx, ph, st, rt, tm, n, h)
 _field_advance!(::Val{false}, ctx, ph, st, rt, tm, n, h) = (Problems.advance!(rt, tm, n, h); nothing)
-_field_advance!(::Val{true}, ctx, ph, st, rt, tm, n, h) =
-    (Base.invokelatest(_tangent_advance!, getfield(ctx, :__tangent), ph, st, rt, tm, n, h); nothing)
+function _field_advance!(::Val{true}, ctx, ph, st, rt, tm, n, h)
+    Base.invokelatest(_tangent_advance!, getfield(ctx, :__tangent), ph, st, rt, tm, n, h)
+    return nothing
+end
 
 _tvalue_body!(i, tw, a) = (@inbounds tw[i] = LatticeFields.Compile.dreplace(tw[i], a[i]); nothing)   # i ≤ length(tw)
 # the window with derivative parts: the twins take the primal values, then an implicit group's
@@ -709,8 +721,10 @@ function _shadow!(run::TangentRun, ph::FieldPhase{K}, st, prt) where {K}
     E = run.E
     s = ph.program
     arrs = _arrays(ph.arrays, st)
-    twin(x) = get!(() -> fill!(KernelAbstractions.allocate(backend, LatticeFields.Compile.withvaltype(E, eltype(x)), size(x)),
-                               zero(LatticeFields.Compile.withvaltype(E, eltype(x)))), run.twins, x)
+    function twin(x)
+        return get!(() -> fill!(KernelAbstractions.allocate(backend, LatticeFields.Compile.withvaltype(E, eltype(x)), size(x)),
+            zero(LatticeFields.Compile.withvaltype(E, eltype(x)))), run.twins, x)
+    end
     nf(i) = LatticeFields.IR.nsites(s, s.fields[i].levels[1])
     bufs = map(enumerate(arrs)) do (i, a)
         if a[1] === nothing                 # a face or masked value: Dual scratch for a float

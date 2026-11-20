@@ -150,8 +150,9 @@ end
 # neighbours is filled in (the two are diagonal neighbours)
 @inline _fill8(m::UInt32) = m | (_RING_CORNERS8 & _rotl8(m) & _rotr8(m))
 # face pieces that contain a face neighbour of x: the runs less the isolated corners
-@inline _runs8_touching(m::UInt32) =
-    _runs8(m) - (count_ones(m & _RING_CORNERS8 & ~(_rotl8(m) | _rotr8(m))) % Int32)
+@inline function _runs8_touching(m::UInt32)
+    return _runs8(m) - (count_ones(m & _RING_CORNERS8 & ~(_rotl8(m) | _rotr8(m))) % Int32)
+end
 
 # pieces of a mask in the lattice's bit order
 @inline _pieces(m::UInt32, full::Bool, ::Val{:ring8}, t) = _runs8(ifelse(full, _fill8(m), m))
@@ -226,8 +227,9 @@ position in the domain and owned by `old`), and, if `gain`, `new` owns a shell s
 to the target (a face neighbor, or any shell site when `full`). σ may be a
 [`ShellRead`](@ref).
 """
-@inline local_rule(σ, ctx, prop::Proposal, gain::Bool, full::Bool) =
-    prop.old == 0 || _local_rule(read_shell(σ, ctx, prop), ctx.lattice, prop, gain, full)
+@inline function local_rule(σ, ctx, prop::Proposal, gain::Bool, full::Bool)
+    return prop.old == 0 || _local_rule(read_shell(σ, ctx, prop), ctx.lattice, prop, gain, full)
+end
 @inline function _local_rule(s::ShellRead, lat, prop::Proposal, gain::Bool, full::Bool)
     r = _ring_bits(lat)
     t = _shell_tables(lat)
@@ -271,8 +273,9 @@ end
 8-component of the background; `full = true` swaps the adjacencies. 3D: the same with 6
 (over the 18-neighborhood) and 26. Hex: one arc of each. σ may be a [`ShellRead`](@ref).
 """
-@inline simple_point(σ, ctx, prop::Proposal, c, full::Bool) =
-    c == 0 || _simple_point(read_shell(σ, ctx, prop), ctx.lattice, c, full)
+@inline function simple_point(σ, ctx, prop::Proposal, c, full::Bool)
+    return c == 0 || _simple_point(read_shell(σ, ctx, prop), ctx.lattice, c, full)
+end
 @inline function _simple_point(s::ShellRead, lat, c, full::Bool)
     r = _ring_bits(lat)
     t = _shell_tables(lat)

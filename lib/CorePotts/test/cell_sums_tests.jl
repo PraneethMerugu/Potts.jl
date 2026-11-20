@@ -185,16 +185,16 @@ end
         lat = Lattice(dims)
         rel = relation(Weighted(Moore(1), o -> 1 / sqrt(sum(abs2, o))), lat)
         ctx = (; lattice = lat, touch = rel)
-        table(ctl) = begin
+        function table(ctl)
             st = initial_state(σc, ones(Int32, k); cell = empty_contacts(12, k; T = Float32))
             CorePotts._FLOAT_ATOMICS[] = ctl
             try
-                @test ContactPhase(:touch)(st, nothing, ctx, RNGKey(0), 0, CPU()) == (ctl ? 5 : 6)
-            finally
-                CorePotts._FLOAT_ATOMICS[] = false
-            end
+                    @test ContactPhase(:touch)(st, nothing, ctx, RNGKey(0), 0, CPU()) == (ctl ? 5 : 6)
+                finally
+                    CorePotts._FLOAT_ATOMICS[] = false
+                end
             @test all(iszero, st.cell.contact_overflow) && all(iszero, st.cell[Symbol("#ct_acc")])
-            st.cell
+            return st.cell
         end
         u = CorePotts._weight_units(rel, length(σc))
         exact = Dict{Tuple{Int, Int}, Int64}()

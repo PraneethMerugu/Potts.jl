@@ -20,8 +20,9 @@ struct CPMState{A, C, S, M, H}
     model::M
     history::H
 end
-CPMState(ownership, cell; site = (;), model = (;), history = (;)) =
-    CPMState(ownership, cell, site, model, history)
+function CPMState(ownership, cell; site = (;), model = (;), history = (;))
+    return CPMState(ownership, cell, site, model, history)
+end
 Adapt.@adapt_structure CPMState
 
 ncells(st::CPMState) = length(st.cell.kind)
@@ -191,9 +192,11 @@ accumulates them per site in this type between host read points. Define it for a
 track (`CorePotts.track_eltype(::MyTrack) = Float64`; `Float32` on Metal).
 """
 track_eltype(::TrackEnergyChange{T}) where {T} = T
-track_eltype(track) = throw(ArgumentError(
-    "CheckerboardCPM needs the scalar type of the custom track $(typeof(track)): define " *
-    "`CorePotts.track_eltype(::$(typeof(track))) = Float64` (Float32 on a device)"))
+function track_eltype(track)
+    throw(ArgumentError(
+        "CheckerboardCPM needs the scalar type of the custom track $(typeof(track)): define " *
+        "`CorePotts.track_eltype(::$(typeof(track))) = Float64` (Float32 on a device)"))
+end
 
 """
 The device-side part of a `CPMFunction`: the per-proposal functions, without host-only
@@ -208,14 +211,16 @@ struct DeviceFunctions{DH, CM, CN, TT, BI, PO, DF}
     post::PO            # the `Global` veto after the draw (`ConnectivityHooks`), or `nothing`
     defer::DF           # copies the checkerboard runs serially, or `nothing`
 end
-DeviceFunctions(delta_H, commit!, constraint, temperature, bias) =
-    DeviceFunctions(delta_H, commit!, constraint, temperature, bias, nothing, nothing)
+function DeviceFunctions(delta_H, commit!, constraint, temperature, bias)
+    return DeviceFunctions(delta_H, commit!, constraint, temperature, bias, nothing, nothing)
+end
 # The track (D-140) is not part of it: the checkerboard carries it with its buffers and
 # `SequentialCPM` takes it as an argument, so untracked kernels see exactly these fields
 # (`post` and `defer` are `nothing`, zero-size, without whole-cell connectivity).
-device_functions(f::CPMFunction) =
-    DeviceFunctions(f.delta_H, f.commit!, f.constraint, f.temperature, f.bias,
+function device_functions(f::CPMFunction)
+    return DeviceFunctions(f.delta_H, f.commit!, f.constraint, f.temperature, f.bias,
         _hook(f.connectivity, :post), _hook(f.connectivity, :defer))
+end
 _hook(::Nothing, name) = nothing
 _hook(h, name) = getfield(h, name)
 # the hooks of `DeviceFunctions` (or of a `CPMFunction` passed directly)
@@ -354,8 +359,9 @@ end
 Surfaces from scratch (initialization and tracker checks). Weighted surfaces default to
 `Float32` (device-portable); pass `T = Float64` for long CPU runs.
 """
-recompute_surface(σ, lat::Lattice, r::Relation, ncell::Integer; T::Type = typeof(weight(r, 1))) =
-    _recompute_surface(T, σ, lat, r, ncell)
+function recompute_surface(σ, lat::Lattice, r::Relation, ncell::Integer; T::Type = typeof(weight(r, 1)))
+    return _recompute_surface(T, σ, lat, r, ncell)
+end
 
 function _recompute_surface(::Type{T}, σ, lat::Lattice, r::Relation, ncell::Integer) where {T}
     S = zeros(T, ncell)
@@ -389,8 +395,9 @@ function _recompute_surface(::Type{T}, σ, lat::Lattice, r::Relation, ncell::Int
     end
     return [_wvalue(T, a, u.e) for a in A]
 end
-_recompute_surface(::Type{T}, σ, lat::Lattice, r::Relation, ncell::Integer, ::Nothing) where {T} =
-    _recompute_surface(T, σ, lat, r, ncell)
+function _recompute_surface(::Type{T}, σ, lat::Lattice, r::Relation, ncell::Integer, ::Nothing) where {T}
+    return _recompute_surface(T, σ, lat, r, ncell)
+end
 
 """Change of `Σ_cells E(volume, cell)` when `prop` moves one site from `old` to `new`."""
 @inline function volume_delta(volume, prop, E::F) where {F}

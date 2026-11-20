@@ -70,8 +70,9 @@ Exception thrown when waiting for queued device work exceeds `timeout` seconds.
 struct DeviceTimeoutError <: Exception
     timeout::Float64
 end
-Base.showerror(io::IO, e::DeviceTimeoutError) =
-    print(io, "device wait timed out after $(e.timeout) s: the work queued on the device is not done")
+function Base.showerror(io::IO, e::DeviceTimeoutError)
+    return print(io, "device wait timed out after $(e.timeout) s: the work queued on the device is not done")
+end
 
 @noinline _wait_timed_out(timeout) = throw(DeviceTimeoutError(Float64(timeout)))
 
@@ -79,8 +80,9 @@ Base.showerror(io::IO, e::DeviceTimeoutError) =
 on return: enqueued without waiting and then waited for (`_device_wait`) where the backend
 allows (ROCm: the AMDGPU extension); elsewhere the backend's own copy waits as
 `_device_wait` would."""
-_copy_to_host!(dst::AbstractArray, doff::Integer, src::AbstractArray, soff::Integer, n::Integer) =
-    copyto!(dst, doff, src, soff, n)
+function _copy_to_host!(dst::AbstractArray, doff::Integer, src::AbstractArray, soff::Integer, n::Integer)
+    return copyto!(dst, doff, src, soff, n)
+end
 _copy_to_host!(dst::AbstractArray, src::AbstractArray) = copyto!(dst, src)
 
 """`Array(a)` for device array `a`, finished on return (through `_copy_to_host!`)."""
@@ -142,8 +144,9 @@ host leaf is kept as `Adapt.adapt(Array, …)` keeps it."""
 struct _HostCopy{S}
     stats::S
 end
-Adapt.adapt_storage(h::_HostCopy, a::AbstractArray) =
-    _ondevice(a) ? to_host(h.stats, a) : Adapt.adapt_storage(Array, a)
+function Adapt.adapt_storage(h::_HostCopy, a::AbstractArray)
+    return _ondevice(a) ? to_host(h.stats, a) : Adapt.adapt_storage(Array, a)
+end
 
 """`Adapt.adapt(Array, x)`, counting every device array leaf of `x`."""
 adapt_host(stats, x) = Adapt.adapt(_HostCopy(stats), x)

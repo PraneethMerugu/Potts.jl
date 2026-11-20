@@ -237,8 +237,10 @@ end
         st = initial_state(σ, kinds; cell)
         E1(a, b, k, d) = 0.7 * (d - st.cell.link_rest[k, a])^2
         E2(a, b, k, d) = 1.3 * (d - st.cell.link_len[k, a])^2
-        brute(u) = brute_link_energy(u.ownership, lat, CorePotts.link_store(u.cell, :bond), E1) +
-            brute_link_energy(u.ownership, lat, CorePotts.link_store(u.cell, :tether), E2)
+        function brute(u)
+            return brute_link_energy(u.ownership, lat, CorePotts.link_store(u.cell, :bond), E1) +
+                brute_link_energy(u.ownership, lat, CorePotts.link_store(u.cell, :tether), E2)
+        end
         ctx = (; lattice = lat, proposal = relation(VonNeumann(1), lat))
         checked = 0; both = 0; one_store_off = 0
         for t in 1:nsites(lat), dir in 1:4

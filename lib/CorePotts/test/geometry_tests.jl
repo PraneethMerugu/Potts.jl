@@ -133,9 +133,11 @@ end
         recompute_site_min!(vmin, falses(length(kinds)), σ, v; all = true)
         st = initial_state(σ, kinds; cell = (; vsum = recompute_site_sum(σ, v, length(kinds)),
             vmin, stale = falses(length(kinds))))
-        commit!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx);
-            commit_site_sum!(st.cell.vsum, prop, v[prop.target]);
-            commit_site_min!(st.cell.vmin, st.cell.stale, prop, v[prop.target]))
+        function commit!(st, p, prop, ctx)
+            commit_volume!(st, p, prop, ctx)
+            commit_site_sum!(st.cell.vsum, prop, v[prop.target])
+            return commit_site_min!(st.cell.vmin, st.cell.stale, prop, v[prop.target])
+        end
         f = CPMFunction(gg_delta_H; commit!, temperature = gg_temperature)
         u = solve(PottsProblem(f, st, lat, (0, 10), gg_params()), SequentialCPM()).u[end]
             @test u.cell.vsum ≈ recompute_site_sum(u.ownership, v, length(kinds))
@@ -148,8 +150,10 @@ end
         # structured (vector-valued) owner sums use the same tracker with any additive type
         w = [SVector(Float64(i), Float64(j), 1.0) for i in 1:30, j in 1:30]
         st2 = initial_state(σ, kinds; cell = (; wsum = recompute_site_sum(σ, w, length(kinds))))
-        c2!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx);
-            commit_site_sum!(st.cell.wsum, prop, w[prop.target]))
+        function c2!(st, p, prop, ctx)
+            commit_volume!(st, p, prop, ctx)
+            return commit_site_sum!(st.cell.wsum, prop, w[prop.target])
+        end
         f2 = CPMFunction(gg_delta_H; commit! = c2!, temperature = gg_temperature)
         u2 = solve(PottsProblem(f2, st2, lat, (0, 10), gg_params()), CheckerboardCPM()).u[end]
             @test u2.cell.wsum ≈ recompute_site_sum(u2.ownership, w, length(kinds))

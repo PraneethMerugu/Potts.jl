@@ -41,8 +41,10 @@ end
 
     @testset "randomness in phases is address-keyed" begin
         const_stream = CorePotts.stream_id("test.noise")
-        noise!(st, p, ctx, key, mcs, i) =
-            (@inbounds st.site.u[i] = CorePotts.uniform(Float64, CorePotts.draw(key, mcs, i, const_stream)[1]); nothing)
+        function noise!(st, p, ctx, key, mcs, i)
+            @inbounds st.site.u[i] = CorePotts.uniform(Float64, CorePotts.draw(key, mcs, i, const_stream)[1])
+            return nothing
+        end
         st = initial_state(σ, kinds; site = (; u = zeros(24, 24)))
         f = CPMFunction(gg_delta_H; temperature = gg_temperature,
             phases = Phases(after_mcs = (SitePhase(noise!),)))
@@ -83,9 +85,12 @@ end
 
     @testset "accepted-copy affect: clear on ownership change" begin
         age!(st, p, ctx, key, mcs, i) = (@inbounds st.site.age[i] += 1; nothing)
-        commit!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx);
-            clear_on_copy!(st.site.age, prop, 0);
-            @inbounds(st.site.copies[prop.target] += 1); nothing)
+        function commit!(st, p, prop, ctx)
+            commit_volume!(st, p, prop, ctx)
+            clear_on_copy!(st.site.age, prop, 0)
+            @inbounds(st.site.copies[prop.target] += 1)
+            return nothing
+        end
         st = initial_state(σ, kinds; site = (; age = zeros(Int32, 24, 24), copies = zeros(Int32, 24, 24)))
         f = CPMFunction(gg_delta_H; commit!, temperature = gg_temperature,
             phases = Phases(after_mcs = (SitePhase(age!),)))

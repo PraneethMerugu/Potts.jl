@@ -74,10 +74,14 @@ _domain_mask(f::OnIndices, dims, g) = Bool[f.f(Tuple(x)) for x in CartesianIndic
 _embed(::Square, v) = v
 _embed(::Hexagonal, v) = (v[1] + v[2] / 2, v[2] * sqrt(3) / 2)
 
-Adapt.adapt_structure(to, l::Lattice{N}) where {N} =
-    (m = Adapt.adapt(to, l.mask); Lattice{N, typeof(m), typeof(l.geometry)}(l.dims, l.periodic, m, l.geometry))
-Base.:(==)(a::Lattice, b::Lattice) = a.dims == b.dims && a.periodic == b.periodic && a.geometry == b.geometry &&
-    (a.mask === b.mask || (a.mask !== nothing && b.mask !== nothing && Array(a.mask) == Array(b.mask)))
+function Adapt.adapt_structure(to, l::Lattice{N}) where {N}
+    m = Adapt.adapt(to, l.mask)
+    return Lattice{N, typeof(m), typeof(l.geometry)}(l.dims, l.periodic, m, l.geometry)
+end
+function Base.:(==)(a::Lattice, b::Lattice)
+    return a.dims == b.dims && a.periodic == b.periodic && a.geometry == b.geometry &&
+        (a.mask === b.mask || (a.mask !== nothing && b.mask !== nothing && Array(a.mask) == Array(b.mask)))
+end
 Base.hash(l::Lattice, h::UInt) = hash((l.dims, l.periodic, l.mask === nothing ? nothing : Array(l.mask), l.geometry), h)
 
 """
@@ -176,8 +180,9 @@ end
 # a pair interacts only if both sites are in the domain (symmetric, so brute-force sums
 # over all sites agree with per-copy deltas)
 """`true` if `x + off` stays within the lattice faces (ignoring the domain mask)."""
-@inline _within_faces(l::Lattice{N}, x, off) where {N} =
-    all(ntuple(d -> l.periodic[d] || 1 <= x[d] + Int(off[d]) <= l.dims[d], Val(N)))
+@inline function _within_faces(l::Lattice{N}, x, off) where {N}
+    return all(ntuple(d -> l.periodic[d] || 1 <= x[d] + Int(off[d]) <= l.dims[d], Val(N)))
+end
 @inline _in_domain(::Nothing, l, x, w) = true
 @inline _in_domain(m, l, x, w) = @inbounds(m[linear_index(l, x)]) && @inbounds(m[linear_index(l, w)])
 
@@ -465,8 +470,10 @@ function _set_mobility!(stats, m::MaskMobility, frozen::AbstractArray{Bool})
     m.sites === nothing || _mobile_sites!(m.sites, frozen)
     return nothing
 end
-_set_mobility!(stats, m, frozen) = throw(ArgumentError(
-    "the frozen mask changed from $(frozen === nothing ? "a mask to none" : "none to a mask"); use `remake` and `init`"))
+function _set_mobility!(stats, m, frozen)
+    throw(ArgumentError(
+        "the frozen mask changed from $(frozen === nothing ? "a mask to none" : "none to a mask"); use `remake` and `init`"))
+end
 
 # The standard rule, one work item per site: a site is frozen when it lies outside the
 # lattice domain or its owner's kind is one of `kinds`. Counts, in `counter`, the change of

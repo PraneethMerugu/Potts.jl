@@ -276,8 +276,10 @@ end
         # SequentialCPM: attempt a's target from its draw's first and fourth words
         solve(bprob, SequentialCPM())
         @test cnt[] == K
-        seq(m, a, wide) = (w = draw(key, m, a, CorePotts.STREAM_SEQUENTIAL_TARGET);
-            (wide ? CorePotts.bounded64(w[1], w[4], n) : bounded(w[1], n)) + 1)
+        function seq(m, a, wide)
+            w = draw(key, m, a, CorePotts.STREAM_SEQUENTIAL_TARGET)
+            return (wide ? CorePotts.bounded64(w[1], w[4], n) : bounded(w[1], n)) + 1
+        end
         ms = filter(m -> all(a -> rec[a] == seq(m, a, true), 1:K), 0:1)       # the MCS index used
         @test length(ms) == 1
         m = only(ms)
@@ -289,9 +291,11 @@ end
         step!(integ)
         @test cnt[] == K && integ.cache.n == n
         list = integ.cache.list
-        bnd(j, wide) = (w = draw(key, m, j, CorePotts.STREAM_BOUNDARY_SITE);
-            lo = draw(key, m, j, CorePotts.STREAM_BOUNDARY_SITE, 1)[1];
-            Int(list[(wide ? CorePotts.bounded64(w[2], lo, n) : bounded(w[2], n)) + 1]))
+        function bnd(j, wide)
+            w = draw(key, m, j, CorePotts.STREAM_BOUNDARY_SITE)
+            lo = draw(key, m, j, CorePotts.STREAM_BOUNDARY_SITE, 1)[1]
+            return Int(list[(wide ? CorePotts.bounded64(w[2], lo, n) : bounded(w[2], n)) + 1])
+        end
         @test all(j -> rec[j] == bnd(j, true), 1:K)
         @test count(j -> rec[j] != bnd(j, false), 1:K) > 100
     end

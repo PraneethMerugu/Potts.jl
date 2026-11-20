@@ -328,14 +328,16 @@ end
         tick!(st, p, ctx, key, mcs, c) = (st.cell.volume[c] > 0 && (st.cell.g[c] += 1.0); nothing)
         ripe(st, p, ctx, key, mcs, c) = st.cell.g[c] >= 4.0 ? EVENT_DIVIDE : EVENT_NONE    # its own `g`
         restart!(st, p, ctx, key, mcs, parent, daughter) = (st.cell.g[parent] = 0.0; st.cell.g[daughter] = 0.0; nothing)
-        make(fused, every) = PottsProblem(
-            CPMFunction(
-                gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
-                phases = Phases(after_mcs = fused ? () : (CellPhase(tick!),)),
-                lifecycle = Lifecycle(ripe; divide! = restart!, every, before = fused ? tick! : nothing)
-            ),
-            stb, latb, (0, 9), gg_params()
-        )
+        function make(fused, every)
+            return PottsProblem(
+                    CPMFunction(
+                        gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
+                        phases = Phases(after_mcs = fused ? () : (CellPhase(tick!),)),
+                        lifecycle = Lifecycle(ripe; divide! = restart!, every, before = fused ? tick! : nothing)
+                    ),
+                    stb, latb, (0, 9), gg_params()
+                )
+        end
         fuse = CheckerboardCPM().fused_lifecycle_max_sites
         try
             for every in (1, 2), (form, device, sites, fault) in (

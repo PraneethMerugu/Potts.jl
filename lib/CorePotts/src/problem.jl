@@ -46,14 +46,15 @@ mutable struct PottsProblem{F <: CPMFunction, S <: CPMState, L <: Lattice, R, Q,
     const kwargs::K                     # the problem's `solve` keywords (a NamedTuple)
 end
 
-PottsProblem(
-    f::CPMFunction, u0::CPMState, lattice::Lattice, tspan, p; contact = Moore(1), proposal = VonNeumann(1),
-    relations = (;), spacing = nothing, frozen = nothing, seed = 0, replica = 0, repeat = 0, tangent = nothing, kwargs...
-) =
-    _problem(
-    f, u0, lattice, tspan, p, contact, proposal, relations, spacing, frozen, seed, replica, repeat, tangent,
-    NamedTuple(kwargs)
-)
+function PottsProblem(
+        f::CPMFunction, u0::CPMState, lattice::Lattice, tspan, p; contact = Moore(1), proposal = VonNeumann(1),
+        relations = (;), spacing = nothing, frozen = nothing, seed = 0, replica = 0, repeat = 0, tangent = nothing, kwargs...
+    )
+    return _problem(
+            f, u0, lattice, tspan, p, contact, proposal, relations, spacing, frozen, seed, replica, repeat, tangent,
+            NamedTuple(kwargs)
+        )
+end
 
 # The checks and the resolved relations of a new problem, compiled once for every model:
 # nothing here is specialized on the model's types (the problem type itself is built at the end)
@@ -470,8 +471,10 @@ function Base.merge(a::PottsStats, b::PottsStats)
         connectivity_deferred = _sum_or_nothing(a.connectivity_deferred, b.connectivity_deferred))
 end
 
-_to_backend(backend, x) = Adapt.adapt(KernelAbstractions.allocate(backend, Int32, 0) |>
-                                      typeof |> _array_adaptor, x)
+function _to_backend(backend, x)
+    return Adapt.adapt(KernelAbstractions.allocate(backend, Int32, 0) |>
+        typeof |> _array_adaptor, x)
+end
 _array_adaptor(::Type{<:Array}) = Array
 _array_adaptor(A::Type) = Base.typename(A).wrapper
 
@@ -739,17 +742,21 @@ end
 
 # a host copy of the leaves `l` of the host state `u` (all of it for `nothing`)
 _select(u, ::Nothing) = u
-_select(u, l::SavedLeaves) = CPMState(
-    l.ownership ? u.ownership : nothing, _pick(u.cell, l.cell), _pick(u.site, l.site), _pick(u.model, l.model), (;)
-)
+function _select(u, l::SavedLeaves)
+    return CPMState(
+            l.ownership ? u.ownership : nothing, _pick(u.cell, l.cell), _pick(u.site, l.site), _pick(u.model, l.model), (;)
+        )
+end
 _pick(nt::NamedTuple, names::Vector{Symbol}) = NamedTuple{Tuple(names)}(map(n -> getfield(nt, n), Tuple(names)))
 
 # a device run that saves every MCS by default copies the whole state to the host after each
 # MCS: a hint, once per session
-@noinline _hint_device_saves() = @info string(
-    "this device run saves every MCS (`save_everystep` defaults to `isempty(saveat)`, as in SciML), ",
-    "a host copy of the state each time; pass `saveat` or `save_everystep = false` to save less"
-) maxlog = 1
+@noinline function _hint_device_saves()
+    return @info string(
+            "this device run saves every MCS (`save_everystep` defaults to `isempty(saveat)`, as in SciML), ",
+            "a host copy of the state each time; pass `saveat` or `save_everystep = false` to save less"
+        ) maxlog = 1
+end
 function _warn_large_saves(prob, saveat, save_start, save_end, everystep, leaves)
     t0, t1 = prob.tspan
     n = everystep ? t1 - t0 + save_start : count(t -> t0 <= t <= t1, saveat) + save_start + save_end
@@ -907,19 +914,23 @@ function _fire!(integ::PottsIntegrator, cb)
     return nothing
 end
 # the MCS is a `saveat` time not saved yet (nothing is saved at an MCS before its callbacks run)
-_saveat_due(integ::PottsIntegrator) =
-    insorted(integ.t, integ.opts.saveat) && (isempty(integ.saved_t) || last(integ.saved_t) != integ.t)
+function _saveat_due(integ::PottsIntegrator)
+    return insorted(integ.t, integ.opts.saveat) && (isempty(integ.saved_t) || last(integ.saved_t) != integ.t)
+end
 # a save is due after the MCS: a `saveat` time, or every MCS (`save_everystep`)
-_save_due(integ::PottsIntegrator) =
-    (integ.opts.save_everystep || insorted(integ.t, integ.opts.saveat)) &&
-    (isempty(integ.saved_t) || last(integ.saved_t) != integ.t)
+function _save_due(integ::PottsIntegrator)
+    return (integ.opts.save_everystep || insorted(integ.t, integ.opts.saveat)) &&
+        (isempty(integ.saved_t) || last(integ.saved_t) != integ.t)
+end
 
 # `derivative_discontinuity!(integ, true)` after writing the state (what a callback's affect
 # does): the frozen mask follows (D-081) and the field groups' algorithms take the state as a
 # start (`reset!`: Crank–Nicolson damps its next substep, BDF2 restarts with a Backward Euler
 # substep). SciMLBase forwards its deprecated `u_modified!` here.
-SciMLBase.derivative_discontinuity!(integ::PottsIntegrator, modified::Bool) =
-    (modified && (refresh_frozen!(integ); reset_fields!(integ.ctx)); nothing)
+function SciMLBase.derivative_discontinuity!(integ::PottsIntegrator, modified::Bool)
+    modified && (refresh_frozen!(integ); reset_fields!(integ.ctx))
+    return nothing
+end
 
 """
     copy_step_relations(sys, f::CPMFunction) -> collection of Symbols or nothing
@@ -957,13 +968,15 @@ end
 
 # the read distance the checkerboard spacing must cover beyond the declared footprint: the
 # contact relation and the relations the copy step reads (all of them when unknown)
-_copy_step_reach(prob::PottsProblem, ctx) =
-    max(radius(ctx.contact), _copy_reach(prob.relations, copy_step_relations(prob.f.sys, prob.f)))
+function _copy_step_reach(prob::PottsProblem, ctx)
+    return max(radius(ctx.contact), _copy_reach(prob.relations, copy_step_relations(prob.f.sys, prob.f)))
+end
 
 # the largest radius of the relations the copy step reads (all of them for `nothing`)
 _copy_reach(relations, ::Nothing) = maximum(radius, values(relations); init = 0)
-_copy_reach(relations, names) =
-    maximum(k -> k in names ? radius(getfield(relations, k)) : 0, keys(relations); init = 0)
+function _copy_reach(relations, names)
+    return maximum(k -> k in names ? radius(getfield(relations, k)) : 0, keys(relations); init = 0)
+end
 
 """
 Host snapshot of the current state: independent of the live state on every backend
@@ -1122,8 +1135,9 @@ end
 # the last MCS `solve!` runs to: the end of the time span, or a later stop
 _final_stop(integ::PottsIntegrator) = (ts = integ.opts.tstops; isempty(ts) ? integ.tstop : max(integ.tstop, last(ts)))
 # `maxiters` MCS taken before the end: the run stops
-_past_maxiters(integ::PottsIntegrator) =
-    integ.iter >= integ.opts.maxiters && integ.retcode == SciMLBase.ReturnCode.Default && integ.t < _final_stop(integ)
+function _past_maxiters(integ::PottsIntegrator)
+    return integ.iter >= integ.opts.maxiters && integ.retcode == SciMLBase.ReturnCode.Default && integ.t < _final_stop(integ)
+end
 @noinline function _maxiters!(integ::PottsIntegrator)
     integ.opts.verbose && @warn string(
         "the run stopped after maxiters = ", integ.opts.maxiters, " MCS at MCS ", integ.t,
@@ -1298,9 +1312,11 @@ end
 
 # Statistics of a new run: `accepted_energy_change` is 0.0 when `f` tracks, else `nothing`;
 # `connectivity_deferred` is 0 when the model uses `Global`, else `nothing`.
-_initial_stats(f) = PottsStats(;
-    accepted_energy_change = f.track === nothing ? nothing : 0.0,
-    connectivity_deferred = (f.connectivity === nothing || !f.connectivity.uses_global) ? nothing : 0)
+function _initial_stats(f)
+    return PottsStats(;
+        accepted_energy_change = f.track === nothing ? nothing : 0.0,
+        connectivity_deferred = (f.connectivity === nothing || !f.connectivity.uses_global) ? nothing : 0)
+end
 
 # Whole-cell connectivity on a device: a device lifecycle does not maintain the
 # `pieces` columns.
@@ -1515,15 +1531,18 @@ function SciMLBase.done(integ::PottsIntegrator)
     return true
 end
 SciMLBase.has_stats(::PottsIntegrator) = true
-SciMLBase.get_du(::PottsIntegrator) = throw(
-    ArgumentError(
-        "get_du: a Potts state is a label field and has no derivative; compare two states instead"
-    )
-)
+function SciMLBase.get_du(::PottsIntegrator)
+    throw(
+            ArgumentError(
+                "get_du: a Potts state is a label field and has no derivative; compare two states instead"
+            )
+        )
+end
 
 # SciML's contract: `Success` while the run is healthy, else the code that ended it
-SciMLBase.check_error(integ::PottsIntegrator) =
-    integ.retcode == SciMLBase.ReturnCode.Default ? SciMLBase.ReturnCode.Success : integ.retcode
+function SciMLBase.check_error(integ::PottsIntegrator)
+    return integ.retcode == SciMLBase.ReturnCode.Default ? SciMLBase.ReturnCode.Success : integ.retcode
+end
 function SciMLBase.terminate!(integ::PottsIntegrator, retcode = SciMLBase.ReturnCode.Terminated)
     integ.retcode = retcode
     return integ
@@ -1584,8 +1603,9 @@ function Base.show(io::IO, ::MIME"text/plain", sol::PottsSolution)
         ", ", sol.stats.mcs, " MCS")
     print(io, "t: ", n <= 12 ? sol.t : "[$(join(sol.t[1:5], ", ")), …, $(join(sol.t[(end - 4):end], ", "))]")
 end
-Base.show(io::IO, sol::PottsSolution) =
-    print(io, "PottsSolution(", sol.retcode, ", ", length(sol.t), " states)")
+function Base.show(io::IO, sol::PottsSolution)
+    return print(io, "PottsSolution(", sol.retcode, ", ", length(sol.t), " states)")
+end
 
 # a lattice in a few words: `24×20 periodic lattice`, `16×16 closed hexagonal lattice`
 function _lattice_words(l::Lattice)
@@ -1606,8 +1626,9 @@ _slots(st::CPMState) = length(st.cell.kind)
 # up to `n` names, then `…`
 _names_words(ks, n = 8) = length(ks) <= n ? join(ks, ", ") : string(join(ks[1:n], ", "), ", …")
 
-Base.show(io::IO, st::CPMState) =
-    print(io, "CPMState(", join(size(st.ownership), "×"), ", ", _count_words(_slots(st), "cell slot"), ")")
+function Base.show(io::IO, st::CPMState)
+    return print(io, "CPMState(", join(size(st.ownership), "×"), ", ", _count_words(_slots(st), "cell slot"), ")")
+end
 function Base.show(io::IO, ::MIME"text/plain", st::CPMState)
     print(
         io, "CPMState on a ", join(size(st.ownership), "×"), " lattice: ", _count_words(_slots(st), "cell slot"),
@@ -1619,8 +1640,9 @@ function Base.show(io::IO, ::MIME"text/plain", st::CPMState)
     return
 end
 
-Base.show(io::IO, prob::PottsProblem) =
-    print(io, "PottsProblem(", join(prob.lattice.dims, "×"), ", ", _count_words(_slots(prob.u0), "cell slot"), ", tspan ", prob.tspan, ")")
+function Base.show(io::IO, prob::PottsProblem)
+    return print(io, "PottsProblem(", join(prob.lattice.dims, "×"), ", ", _count_words(_slots(prob.u0), "cell slot"), ", tspan ", prob.tspan, ")")
+end
 function Base.show(io::IO, ::MIME"text/plain", prob::PottsProblem)
     print(
         io, "PottsProblem on a ", _lattice_words(prob.lattice), ": ", _count_words(_slots(prob.u0), "cell slot"),
@@ -1670,18 +1692,22 @@ function (sol::PottsSolution)(t::Real; idxs = nothing)
 end
 (sol::PottsSolution)(ts::AbstractVector{<:Real}; idxs = nothing) = [sol(t; idxs) for t in ts]
 
-Base.Array(::PottsSolution) = throw(
-    ArgumentError(
-        "`Array(sol)`: a Potts state is a label lattice and cell tables, not one array; read a " *
-            "quantity by name (`sol[x]`) or a saved state's arrays (`sol.u[i].ownership`)"
-    )
-)
-Base.getindex(::PottsSolution, j::Int, i::Int) = throw(
-    ArgumentError(
-        "sol[j, i]: a Potts state is not one array, so it has no component `j`; read a quantity " *
-            "by name, `sol[x, i]`"
-    )
-)
+function Base.Array(::PottsSolution)
+    throw(
+            ArgumentError(
+                "`Array(sol)`: a Potts state is a label lattice and cell tables, not one array; read a " *
+                    "quantity by name (`sol[x]`) or a saved state's arrays (`sol.u[i].ownership`)"
+            )
+        )
+end
+function Base.getindex(::PottsSolution, j::Int, i::Int)
+    throw(
+            ArgumentError(
+                "sol[j, i]: a Potts state is not one array, so it has no component `j`; read a quantity " *
+                    "by name, `sol[x, i]`"
+            )
+        )
+end
 
 function _restore_stats!(dst::PottsStats, src::PottsStats)
     dst.mcs, dst.attempts, dst.accepted, dst.launches = src.mcs, src.attempts, src.accepted, src.launches
@@ -1734,8 +1760,9 @@ once). A waiting trajectory spins on its CPU thread, so start Julia with no more
 free CPUs. `EnsembleSerial()` runs them one after another. Each trajectory has its own
 random stream, whichever ensemble runs it.
 """
-SciMLBase.__solve(prob::SciMLBase.AbstractEnsembleProblem, alg::AbstractCPMAlgorithm; backend = CPU(), kwargs...) =
-    SciMLBase.__solve(prob, alg, EnsembleThreads(); backend, kwargs...)
+function SciMLBase.__solve(prob::SciMLBase.AbstractEnsembleProblem, alg::AbstractCPMAlgorithm; backend = CPU(), kwargs...)
+    return SciMLBase.__solve(prob, alg, EnsembleThreads(); backend, kwargs...)
+end
 
 # a parallel ensemble's trajectories run with `IN_THREADED_ENSEMBLE` set (the tasks inherit it).
 # SciMLBase hands every trajectory an `rng`; it seeds the trajectories only when the ensemble
@@ -1744,9 +1771,11 @@ function SciMLBase.__solve(
         prob::SciMLBase.AbstractEnsembleProblem, alg::AbstractCPMAlgorithm,
         ensemble::SciMLBase.BasicEnsembleAlgorithm; kwargs...)
     seeded = haskey(kwargs, :seed) || haskey(kwargs, :rng)
-    generic() = invoke(SciMLBase.__solve, Tuple{SciMLBase.AbstractEnsembleProblem, Any, SciMLBase.BasicEnsembleAlgorithm},
-        prob, alg, ensemble; kwargs..., _rng_seeds = seeded
-    )
+    function generic()
+        return invoke(SciMLBase.__solve, Tuple{SciMLBase.AbstractEnsembleProblem, Any, SciMLBase.BasicEnsembleAlgorithm},
+                prob, alg, ensemble; kwargs..., _rng_seeds = seeded
+            )
+    end
     ensemble isa EnsembleSerial && return generic()
     return @with IN_THREADED_ENSEMBLE => true generic()
 end
@@ -1870,10 +1899,13 @@ function (s::ParameterSetter)(valp, vals)
     s.run_hook && SymbolicIndexingInterface.finalize_parameters_hook!(valp, s.original)
     return nothing
 end
-SymbolicIndexingInterface.setp(sys::Union{PottsIntegrator, PottsProblem, CPMFunction}, ps::Union{Tuple, AbstractVector};
-                               run_hook = true) = parameter_setter(sys, ps, run_hook)
-SymbolicIndexingInterface.setp(sys::Union{PottsIntegrator, PottsProblem, CPMFunction}, p; run_hook = true) =
-    name_setter(sys, p, run_hook)
+function SymbolicIndexingInterface.setp(sys::Union{PottsIntegrator, PottsProblem, CPMFunction}, ps::Union{Tuple, AbstractVector};
+    run_hook = true)
+    return parameter_setter(sys, ps, run_hook)
+end
+function SymbolicIndexingInterface.setp(sys::Union{PottsIntegrator, PottsProblem, CPMFunction}, p; run_hook = true)
+    return name_setter(sys, p, run_hook)
+end
 
 """
     name_setter(sys, p, run_hook)
@@ -1948,8 +1980,9 @@ function (s::SymbolSetter)(valp, vals)
     s.sset(valp, map(k -> vals[k], s.sk))
     return nothing
 end
-SymbolicIndexingInterface.setsym(sys::Union{PottsIntegrator, PottsProblem, CPMFunction}, syms::Union{Tuple, AbstractVector}) =
-    symbol_setter(sys, syms)
+function SymbolicIndexingInterface.setsym(sys::Union{PottsIntegrator, PottsProblem, CPMFunction}, syms::Union{Tuple, AbstractVector})
+    return symbol_setter(sys, syms)
+end
 
 """
     symbol_setter(sys, syms)

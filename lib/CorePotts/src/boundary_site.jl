@@ -77,8 +77,11 @@ end
     end
     return nothing
 end
-@inline _recount!(B::BoundaryCache, σ, mob, lat, offsets, u::Int, x) =
-    (c = _unlike(σ, mob, lat, offsets, u, x); @inbounds B.unlike[u] = c; _set_boundary!(B, u, c > 0 && is_mobile(mob, u)))
+@inline function _recount!(B::BoundaryCache, σ, mob, lat, offsets, u::Int, x)
+    c = _unlike(σ, mob, lat, offsets, u, x)
+    @inbounds B.unlike[u] = c
+    return _set_boundary!(B, u, c > 0 && is_mobile(mob, u))
+end
 
 # The committed copy t: a → b (t mobile, nothing else changed): t is recounted, and every
 # site u whose proposal reaches t gains or loses one unlike neighbour.
@@ -249,5 +252,6 @@ end
 
 # the boundary sweep's pick (D-247): the two-word regime draws its second word only when used
 @inline _boundary_pick(::Nothing, rt::UInt32, key, mcs, j, n) = Int((UInt64(rt) * UInt64(n)) >> 32)   # `bounded`, inlined (see `site_pick`)
-@inline _boundary_pick(::TwoWordPick, rt::UInt32, key, mcs, j, n) =
-    bounded64(rt, draw(key, mcs, j, STREAM_BOUNDARY_SITE, 1)[1], n)
+@inline function _boundary_pick(::TwoWordPick, rt::UInt32, key, mcs, j, n)
+    return bounded64(rt, draw(key, mcs, j, STREAM_BOUNDARY_SITE, 1)[1], n)
+end

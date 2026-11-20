@@ -50,10 +50,14 @@ the host (an `ArgumentError` at the MCS's read point for any other event).
 public transitioning
 
 # a trigger value whose transition bit is on an event other than a division (host check)
-@inline _bad_transition(e) = (e & _TRANSITIONING) != Int32(0) &&
-                             !(_base_event(e) == EVENT_DIVIDE || _base_event(e) == EVENT_DIVIDE_CLUSTER)
-_bad_transition_error(n) = ArgumentError("lifecycle: $n trigger value(s) with `transitioning(event)` on an event " *
-                                         "other than EVENT_DIVIDE or EVENT_DIVIDE_CLUSTER")
+@inline function _bad_transition(e)
+    return (e & _TRANSITIONING) != Int32(0) &&
+        !(_base_event(e) == EVENT_DIVIDE || _base_event(e) == EVENT_DIVIDE_CLUSTER)
+end
+function _bad_transition_error(n)
+    return ArgumentError("lifecycle: $n trigger value(s) with `transitioning(event)` on an event " *
+        "other than EVENT_DIVIDE or EVENT_DIVIDE_CLUSTER")
+end
 
 # the event without its transition bit, and whether the cell transitions
 @inline _base_event(e) = e & ~_TRANSITIONING
@@ -76,10 +80,12 @@ public ruled_event
 @inline _event(::Val{true}, raw) = raw & _EVENT_MASK
 @inline _rule(raw) = raw >> _RULE_SHIFT
 # the daughter state rule: with rule-carrying events it also gets the index of the rule
-@inline _divide_rule!(::Val{false}, f::F, st, p, ctx, key, mcs, parent, daughter, raw) where {F} =
-    f(st, p, ctx, key, mcs, parent, daughter)
-@inline _divide_rule!(::Val{true}, f::F, st, p, ctx, key, mcs, parent, daughter, raw) where {F} =
-    f(st, p, ctx, key, mcs, parent, daughter, _rule(raw))
+@inline function _divide_rule!(::Val{false}, f::F, st, p, ctx, key, mcs, parent, daughter, raw) where {F}
+    return f(st, p, ctx, key, mcs, parent, daughter)
+end
+@inline function _divide_rule!(::Val{true}, f::F, st, p, ctx, key, mcs, parent, daughter, raw) where {F}
+    return f(st, p, ctx, key, mcs, parent, daughter, _rule(raw))
+end
 
 """
     Lifecycle(trigger; normal, kind, divide!, rebuild!, every = 1, rules = false,
@@ -167,12 +173,13 @@ struct Lifecycle{TR, NO, CN, KI, DV, CD, RB, RU <: Val, BE, RL, OC}
     release::RL                 # the reference reset of an event round, or `nothing`
     owner_changed::OC           # the site hook at every site whose owner changes, or `nothing`
 end
-Lifecycle(
+function Lifecycle(
     trigger; normal = AlongMinorAxis(), kind = keep_kind, divide! = no_divide_rule,
     rebuild! = no_rebuild, every::Integer = 1, cluster_normal = normal, cluster_divide! = divide!,
-    rules::Bool = false, before = nothing, release = nothing, owner_changed = nothing) =
-    Lifecycle(trigger, normal, cluster_normal, kind, divide!, cluster_divide!, rebuild!, Int(every), Val(rules), before,
+    rules::Bool = false, before = nothing, release = nothing, owner_changed = nothing)
+    return Lifecycle(trigger, normal, cluster_normal, kind, divide!, cluster_divide!, rebuild!, Int(every), Val(rules), before,
         release, owner_changed)
+end
 
 # the ownership hook at site `i` (`Lifecycle.owner_changed`)
 @inline _owner_changed!(::Nothing, st, i) = nothing
@@ -256,10 +263,12 @@ unit normal addressed by cell id and generation.
 struct RandomPlane{T} end
 RandomPlane() = RandomPlane{Float64}()
 
-@inline (::AlongMinorAxis{T})(st, p, ctx, key, mcs, c) where {T} =
-    principal_axis(T, st.cell, ctx.lattice, c, 1)
-@inline (::AlongMajorAxis{T})(st, p, ctx, key, mcs, c) where {T} =
-    principal_axis(T, st.cell, ctx.lattice, c, ndims(ctx.lattice))
+@inline function (::AlongMinorAxis{T})(st, p, ctx, key, mcs, c) where {T}
+    return principal_axis(T, st.cell, ctx.lattice, c, 1)
+end
+@inline function (::AlongMajorAxis{T})(st, p, ctx, key, mcs, c) where {T}
+    return principal_axis(T, st.cell, ctx.lattice, c, ndims(ctx.lattice))
+end
 @inline function (::RandomPlane{T})(st, p, ctx, key, mcs, c) where {T}
     r = draw(key, mcs, cell_entity(c, @inbounds st.cell.generation[c]), STREAM_DIVISION_PLANE)
     return _random_unit(T, r, Val(ndims(ctx.lattice)))

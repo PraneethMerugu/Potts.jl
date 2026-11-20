@@ -47,8 +47,10 @@ end
 @inline _euler_d4(m::UInt32) = Int32(1) - _popcount32(m & _EULER_FACE4) + _count_has(m, _EULER_TRIOS2)
 @inline _euler_d8(m::UInt32) = _euler_d4(~m & UInt32(0xff))                 # 2D duality
 @inline _euler_dhex(m::UInt32) = Int32(1) - _popcount32(m) + _popcount32(m & ((m >> 1) | ((m & UInt32(1)) << 5)))
-@inline _euler_d6(m::UInt32) = Int32(1) - _popcount32(m & _EULER_FACE6) + _count_has(m, _EULER_TRIOS3) -
-                               _count_has(m, _EULER_OCTANTS)
+@inline function _euler_d6(m::UInt32)
+    return Int32(1) - _popcount32(m & _EULER_FACE6) + _count_has(m, _EULER_TRIOS3) -
+        _count_has(m, _EULER_OCTANTS)
+end
 @inline _euler_d26(m::UInt32) = -_euler_d6(~m & _EULER_ALL26)              # 3D: χ(X) = χ(Xᶜ)
 
 """
@@ -81,8 +83,9 @@ end
     return _euler_sides(prop, _euler_d6(mo), _euler_d6(mn))
 end
 # the old cell loses the target, the new one gains it; the medium has no entry
-@inline _euler_sides(prop, dold::Int32, dnew::Int32) =
-    (ifelse(prop.old == 0, Int32(0), -dold), ifelse(prop.new == 0, Int32(0), dnew))
+@inline function _euler_sides(prop, dold::Int32, dnew::Int32)
+    return (ifelse(prop.old == 0, Int32(0), -dold), ifelse(prop.new == 0, Int32(0), dnew))
+end
 
 """Apply `δ = euler_change(…)` to an Euler tracker (the old and new cells only)."""
 @inline function commit_euler!(euler, prop, δ)
@@ -210,8 +213,10 @@ end
 
 # the Euler columns present in a cell state: `(face, full)`, each a column or `nothing`;
 # `nothing` when there is none (no code runs)
-@inline _euler_columns(cell) = _euler_columns(haskey(cell, :euler) ? cell.euler : nothing,
-    haskey(cell, :euler_full) ? cell.euler_full : nothing)
+@inline function _euler_columns(cell)
+    return _euler_columns(haskey(cell, :euler) ? cell.euler : nothing,
+        haskey(cell, :euler_full) ? cell.euler_full : nothing)
+end
 @inline _euler_columns(::Nothing, ::Nothing) = nothing
 @inline _euler_columns(a, b) = (a, b)
 

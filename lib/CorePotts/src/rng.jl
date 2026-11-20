@@ -102,8 +102,9 @@ end
 @inline bounded(x::UInt32, n::Integer) = Int((UInt64(x) * UInt64(n)) >> 32)
 
 """Multiply-shift draw on `0:n-1` from two words, `hi` and `lo` (bias ≤ n / 2⁶⁴; host only)."""
-@inline bounded64(hi::UInt32, lo::UInt32, n::Integer) =
-    Int((UInt128((UInt64(hi) << 32) | lo) * UInt128(n)) >> 64)
+@inline function bounded64(hi::UInt32, lo::UInt32, n::Integer)
+    return Int((UInt128((UInt64(hi) << 32) | lo) * UInt128(n)) >> 64)
+end
 
 # Site picks of the sequential sweeps over `n` sites (D-247): one word up to 2^24 mobile sites,
 # where the bias n / 2³² is at most 2⁻⁸ and every existing run keeps its draws; two words
@@ -133,8 +134,9 @@ _two_word_pick(n) = _FORCE_TWO_WORD_PICK[] || n > PICK_ONE_WORD_MAX
 The `draw` entity of a cell: `(id << 8) | (generation & 0xff)`, 64-bit so that ids at
 or above 2²⁴ do not wrap onto smaller ids (equal to the old 32-bit value below 2²⁴).
 """
-@inline cell_entity(id::Integer, generation::Integer) =
-    ((id % UInt64) << 8) | ((generation % UInt64) & 0xff)
+@inline function cell_entity(id::Integer, generation::Integer)
+    return ((id % UInt64) << 8) | ((generation % UInt64) & 0xff)
+end
 
 """
     normal(T, a::UInt32, b::UInt32)

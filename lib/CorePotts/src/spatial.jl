@@ -74,8 +74,10 @@ _identity(::typeof(min), T) = typemax(T)
     end
 end
 @inline _atomic!(::typeof(+), a, c, v) = (Atomix.@atomic a[c] += v; nothing)
-@inline _atomic!(op::Union{typeof(max), typeof(min)}, a, c, v::Integer) =
-    (op === max ? (Atomix.@atomic a[c] max v) : (Atomix.@atomic a[c] min v); nothing)
+@inline function _atomic!(op::Union{typeof(max), typeof(min)}, a, c, v::Integer)
+    op === max ? (Atomix.@atomic a[c] max v) : (Atomix.@atomic a[c] min v)
+    return nothing
+end
 # floats: a CAS loop that writes `op(old, v)` and stops when that equals `old` (`isequal`: a
 # NaN stays, as `max` and `min` propagate it in either order)
 @inline function _atomic!(op::Union{typeof(max), typeof(min)}, a, c, v)
@@ -94,10 +96,12 @@ function (ph::CellReduce{D, F, O})(st, p, ctx, key, mcs, backend) where {D, F, O
 end
 
 # integer sums, and max/min of any type: one atomic per site (exact, order-free)
-_cell_reduce!(op::O, f::F, dst, ::Type, st, p, ctx, key, mcs, backend) where {O, F} =
-    _cell_reduce_atomic!(op, f, dst, st, p, ctx, key, mcs, backend)
-_cell_reduce!(::typeof(+), f::F, dst::AbstractArray{<:Integer}, ::Type, st, p, ctx, key, mcs, backend) where {F} =
-    _cell_reduce_atomic!(+, f, dst, st, p, ctx, key, mcs, backend)
+function _cell_reduce!(op::O, f::F, dst, ::Type, st, p, ctx, key, mcs, backend) where {O, F}
+    return _cell_reduce_atomic!(op, f, dst, st, p, ctx, key, mcs, backend)
+end
+function _cell_reduce!(::typeof(+), f::F, dst::AbstractArray{<:Integer}, ::Type, st, p, ctx, key, mcs, backend) where {F}
+    return _cell_reduce_atomic!(+, f, dst, st, p, ctx, key, mcs, backend)
+end
 function _cell_reduce_atomic!(op::O, f::F, dst, st, p, ctx, key, mcs, backend) where {O, F}
     _device_fill!(backend, dst, _identity(op, eltype(dst)))
     Exec.launch!(backend, _cell_reduce_body!, length(st.ownership), (f, op, dst, st, p, ctx, key, mcs))
@@ -142,10 +146,12 @@ The state a float-sum `CellReduce` needs, as two `NamedTuple`s to merge into the
 Names start with `#cr_`; a division daughter never copies them. The scratch is zero between
 reductions.
 """
-reduce_scratch(ncell::Integer) = (;
-    cell = NamedTuple{(_CR_ACC, _CR_LO, _CR_HI, _CR_EXP, _CR_FLAG)}((zeros(Int64, ncell), zeros(UInt32, ncell),
-        zeros(Int32, ncell), zeros(Int32, ncell), zeros(Int32, ncell))),
-    model = NamedTuple{(REDUCE_STATUS,)}((zeros(UInt32, 1),)))
+function reduce_scratch(ncell::Integer)
+    return (;
+        cell = NamedTuple{(_CR_ACC, _CR_LO, _CR_HI, _CR_EXP, _CR_FLAG)}((zeros(Int64, ncell), zeros(UInt32, ncell),
+            zeros(Int32, ncell), zeros(Int32, ncell), zeros(Int32, ncell))),
+        model = NamedTuple{(REDUCE_STATUS,)}((zeros(UInt32, 1),)))
+end
 
 # Without 64-bit atomics (`_atomic64`, Metal) the sum takes the paired 32-bit form;
 # `_FORCE_PAIRED` (tests) takes it on any backend
@@ -156,8 +162,10 @@ _paired(backend) = _FORCE_PAIRED[] || !_atomic64(backend)
 const _FLOAT_ATOMICS = Ref(false)
 
 _has_reduce_scratch(st) = haskey(st.cell, _CR_ACC) && haskey(st.model, REDUCE_STATUS)
-@inline _cr(st) = (; acc = getfield(st.cell, _CR_ACC), lo = getfield(st.cell, _CR_LO), hi = getfield(st.cell, _CR_HI),
-    exp = getfield(st.cell, _CR_EXP), flag = getfield(st.cell, _CR_FLAG), status = getfield(st.model, REDUCE_STATUS))
+@inline function _cr(st)
+    return (; acc = getfield(st.cell, _CR_ACC), lo = getfield(st.cell, _CR_LO), hi = getfield(st.cell, _CR_HI),
+        exp = getfield(st.cell, _CR_EXP), flag = getfield(st.cell, _CR_FLAG), status = getfield(st.model, REDUCE_STATUS))
+end
 
 # ⌈log₂ N⌉ for N lattice sites (every cell has at most N); refused above 2^61 sites, where
 # the Int64 sum could no longer hold N terms below 2^(62 − L)
@@ -181,8 +189,9 @@ end
 # the scale e_c of a cell whose largest biased exponent is `b`
 @inline _cr_shift(::Type{W}, b::Int32, L::Int) where {W} = 62 - (Int(b) - _cr_bits(W)[3] + 1) - L
 # the value of site `i` in the column's type, then in the work type
-@inline _cr_value(f::F, ::Type{T}, st, p, ctx, key, mcs, i) where {F, T} =
-    _cr_work(T)(convert(T, f(st, p, ctx, key, mcs, i)))
+@inline function _cr_value(f::F, ::Type{T}, st, p, ctx, key, mcs, i) where {F, T}
+    return _cr_work(T)(convert(T, f(st, p, ctx, key, mcs, i)))
+end
 
 @inline function _cr_zero_body!(c, sc)
     @inbounds begin                                  # c ≤ capacity = length of every column
@@ -501,11 +510,12 @@ because `c`'s row was full; nonzero means `maxdeg` is too small, and which bonds
 then depends on the order). The `#ct_` columns are the scratch of a weighted relation's
 exact sums (integer weight units).
 """
-empty_contacts(maxdeg::Integer, ncell::Integer; T::Type = Float32) =
-    (; contact_nbr = zeros(Int32, maxdeg, ncell), contact_measure = zeros(T, maxdeg, ncell),
+function empty_contacts(maxdeg::Integer, ncell::Integer; T::Type = Float32)
+    return (; contact_nbr = zeros(Int32, maxdeg, ncell), contact_measure = zeros(T, maxdeg, ncell),
         contact_medium = zeros(T, ncell), contact_overflow = zeros(Int32, ncell),
         _CT_ACC => zeros(Int64, maxdeg + 1, ncell), _CT_LO => zeros(UInt32, maxdeg + 1, ncell),
         _CT_HI => zeros(Int32, maxdeg + 1, ncell))
+end
 const _CT_ACC = Symbol("#ct_acc")         # row maxdeg + 1: the medium
 const _CT_LO = Symbol("#ct_lo")
 const _CT_HI = Symbol("#ct_hi")
@@ -559,8 +569,9 @@ end
 
 # a weight into the table: an atomic add, or its units into row `s` of column `a` of the scratch
 @inline _ct_add!(::Nothing, sc, col, I, s, a, w) = (Atomix.@atomic col[I] += w; nothing)
-@inline _ct_add!(u::NamedTuple, sc, col, I, s, a, w) =
-    _cr_add!(sc, (a - 1) * size(sc.acc, 1) + s, w, u.paired)
+@inline function _ct_add!(u::NamedTuple, sc, col, I, s, a, w)
+    return _cr_add!(sc, (a - 1) * size(sc.acc, 1) + s, w, u.paired)
+end
 # cell a's measures from their units, the scratch cleared (s ≤ maxdeg + 1 = size(sc.acc, 1))
 @inline function _contact_fold_body!(a, measure, medium, sc, u)
     M = size(sc.acc, 1)

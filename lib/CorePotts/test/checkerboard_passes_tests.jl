@@ -204,12 +204,13 @@ end
             threaded = CheckerboardCPM(; inline_max_blocks = 0)
             seen = Channel{Bool}(Inf)
             cb = DiscreteCallback((u, t, i) -> t == 1, i -> put!(seen, i.cache.inline); save_positions = (false, false))
-            inline_in(e) = (
+            function inline_in(e)
                 solve(
-                    EnsembleProblem(remake(prob; tspan = (0, 2))), threaded, e; trajectories = 3,
-                    callback = cb
-                ); [take!(seen) for _ in 1:3]
-            )
+                        EnsembleProblem(remake(prob; tspan = (0, 2))), threaded, e; trajectories = 3,
+                        callback = cb
+                    )
+                return [take!(seen) for _ in 1:3]
+            end
             @test all(inline_in(EnsembleThreads()))
             @test inline_in(EnsembleSerial()) == fill(Threads.nthreads() == 1, 3)
             @test init(prob, threaded).cache.inline == (Threads.nthreads() == 1)

@@ -83,10 +83,12 @@ end
         prob = PottsProblem(GG, initial_state(σ, kinds), Lattice((30, 30)), (0, 12), gg_params(); seed = 5)
         # a Union of callback types, or (beyond the union-splitting limit) an abstract one
         is_cb_union(T) = T !== Union{} && T <: DiscreteCallback && !isconcretetype(T)
-        cb_unions(f, types) = count(
-            is_cb_union ∘ CorePotts.Core.Compiler.widenconst,
-            only(code_typed(f, types; optimize = true)).first.ssavaluetypes
-        )
+        function cb_unions(f, types)
+            return count(
+                    is_cb_union ∘ CorePotts.Core.Compiler.widenconst,
+                    only(code_typed(f, types; optimize = true)).first.ssavaluetypes
+                )
+        end
         @testset "$(nameof(typeof(alg)))" for alg in (CheckerboardCPM(; proposal = Moore(1)), SequentialCPM(; proposal = Moore(1)))
             calls = Tuple{Symbol, Int}[]
             snap = Ref(0)
@@ -119,11 +121,12 @@ end
             @test true
         end
         # negative control: a plain `for` loop over the same tuple does carry the Union
-        loop(cbs) = (
+        function loop(cbs)
             for cb in cbs
-                cb.condition(nothing, 0, nothing)
-            end; nothing
-        )
+                    cb.condition(nothing, 0, nothing)
+                end
+            return nothing
+        end
         m = DiscreteCallback((u, t, i) -> t == 1, i -> nothing; save_positions = (false, false))
         h = DiscreteCallback((u, t, i) -> t == 2, i -> nothing)
         @test cb_unions(loop, (Tuple{typeof(m), typeof(h)},)) > 0

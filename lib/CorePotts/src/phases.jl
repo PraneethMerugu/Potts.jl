@@ -60,10 +60,14 @@ function _device_fill!(backend, dst::AbstractArray, v)
 end
 _device_fill!(::KernelAbstractions.CPU, dst::AbstractArray, v) = (fill!(dst, v); nothing)
 
-@inline _site_phase_body!(i, f!::F, st, p, ctx, key, mcs) where {F} =
-    (in_domain(ctx.lattice, i) && f!(st, p, ctx, key, mcs, i); nothing)
-@inline _cell_phase_body!(c, f!::F, st, p, ctx, key, mcs) where {F} =
-    (f!(st, p, ctx, key, mcs, c % Int32); nothing)         # c ≤ ncells < 2^31
+@inline function _site_phase_body!(i, f!::F, st, p, ctx, key, mcs) where {F}
+    in_domain(ctx.lattice, i) && f!(st, p, ctx, key, mcs, i)
+    return nothing
+end
+@inline function _cell_phase_body!(c, f!::F, st, p, ctx, key, mcs) where {F}
+    f!(st, p, ctx, key, mcs, c % Int32)
+    return nothing
+end         # c ≤ ncells < 2^31
 
 function (ph::SitePhase{F})(st, p, ctx, key, mcs, backend) where {F}
     Exec.launch!(backend, _site_phase_body!, nsites(ctx.lattice), (ph.f!, st, p, ctx, key, mcs))
@@ -153,8 +157,9 @@ end
 
 A ring buffer for snapshots of array `x` (all slots start as copies of `x`).
 """
-history_buffer(x::AbstractArray, depth::Integer) =
-    repeat(x, ntuple(_ -> 1, ndims(x))..., depth)
+function history_buffer(x::AbstractArray, depth::Integer)
+    return repeat(x, ntuple(_ -> 1, ndims(x))..., depth)
+end
 
 """
     SweepPhase()
@@ -226,8 +231,9 @@ struct Phases{B, A, E, I, M}
         return new{B, A, E, I, M}(before_mcs, after_mcs, end_mcs, at_init, mcs)
     end
 end
-Phases(before_mcs, after_mcs, end_mcs, at_init) =
-    Phases(before_mcs, after_mcs, end_mcs, at_init, default_order(before_mcs, after_mcs, end_mcs))
+function Phases(before_mcs, after_mcs, end_mcs, at_init)
+    return Phases(before_mcs, after_mcs, end_mcs, at_init, default_order(before_mcs, after_mcs, end_mcs))
+end
 function Phases(; before_mcs = (), after_mcs = (), end_mcs = (), at_init = (), mcs = nothing)
     b, a, e = Tuple(before_mcs), Tuple(after_mcs), Tuple(end_mcs)
     return Phases(b, a, e, Tuple(at_init), mcs === nothing ? default_order(b, a, e) : Tuple(mcs))
@@ -257,8 +263,9 @@ const NO_PHASES = Phases((), (), (), ())
 Enqueue every phase; returns the number of launches. `stats` (the integrator's
 `PottsStats`, or `nothing`) counts the host transfers of phases that make them.
 """
-run_phases(phases::Tuple, st, p, ctx, key, mcs, backend, stats = nothing, part::NTuple{2, Int} = (1, 1)) =
-    sum(ph -> run_phase(ph, st, p, ctx, key, mcs, backend, stats, part), phases; init = 0)
+function run_phases(phases::Tuple, st, p, ctx, key, mcs, backend, stats = nothing, part::NTuple{2, Int} = (1, 1))
+    return sum(ph -> run_phase(ph, st, p, ctx, key, mcs, backend, stats, part), phases; init = 0)
+end
 
 """
     run_phase(phase, st, p, ctx, key, mcs, backend, stats)

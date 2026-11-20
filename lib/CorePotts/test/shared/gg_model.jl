@@ -14,8 +14,10 @@ function gg_delta_H(st, p, prop, ctx)
 end
 gg_temperature(st, p, prop, ctx) = p.T
 const GG = CPMFunction(gg_delta_H; temperature = gg_temperature)
-gg_params(T = Float64) = (; J = SMatrix{3, 3, T}(0, 16, 16, 16, 2, 11, 16, 11, 14),
-    λ = T(1), V0 = T(40), T = T(10))
+function gg_params(T = Float64)
+    return (; J = SMatrix{3, 3, T}(0, 16, 16, 16, 2, 11, 16, 11, 14),
+        λ = T(1), V0 = T(40), T = T(10))
+end
 
 """Blocky initial condition with cells of `side` sites per axis and alternating kinds."""
 function blocks(dims::NTuple{N}, side; gap = 1) where {N}
@@ -95,5 +97,7 @@ function total_H_surface(st, lat, ctx, p)
     S = brute_surface(st.ownership, lat, ctx.surface, n)
     return H + sum(p.λ * (v - p.V0)^2 for v in vol) + sum(p.λs * (s - p.S0)^2 for s in S)
 end
-surface_state(σ, kinds, lat, r; T = Float64) = initial_state(σ, kinds;
-    cell = (; surface = recompute_surface(σ, lat, relation(r, lat), length(kinds); T)))
+function surface_state(σ, kinds, lat, r; T = Float64)
+    return initial_state(σ, kinds;
+        cell = (; surface = recompute_surface(σ, lat, relation(r, lat), length(kinds); T)))
+end

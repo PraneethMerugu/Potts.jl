@@ -135,10 +135,13 @@ end
     # a one-wide square loop of side s: removing a site never splits it, but the way round
     # leaves the box of radius W unless s ≤ W + 1
     lat = Lattice((12, 12); boundary = Closed())
-    loop(s) = (σ = zeros(Int32, 12, 12);
+    function loop(s)
+        σ = zeros(Int32, 12, 12)
         for i in 4:(3 + s), j in 4:(3 + s)
-            (i in (4, 3 + s) || j in (4, 3 + s)) && (σ[i, j] = 1)
-        end; σ)
+                (i in (4, 3 + s) || j in (4, 3 + s)) && (σ[i, j] = 1)
+            end
+        return σ
+    end
     for W in (2, 3)
         cap = CorePotts._box_size(lat, W)
         ctx = (; lattice = lat, flood = FloodScratch(CPU(), lat, 0),

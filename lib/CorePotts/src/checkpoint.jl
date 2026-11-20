@@ -25,8 +25,9 @@ struct PottsCheckpoint{S, P}
     stats::PottsStats
     format::Int
 end
-PottsCheckpoint(state, t, seed, replica, repeat, p, fingerprint, stats) =
-    PottsCheckpoint(state, t, seed, replica, repeat, p, fingerprint, stats, CHECKPOINT_FORMAT)
+function PottsCheckpoint(state, t, seed, replica, repeat, p, fingerprint, stats)
+    return PottsCheckpoint(state, t, seed, replica, repeat, p, fingerprint, stats, CHECKPOINT_FORMAT)
+end
 
 """
     CHECKPOINT_FORMAT
@@ -53,8 +54,9 @@ function checkpoint(integ::PottsIntegrator)
 end
 
 """Write a checkpoint to `path` (Julia `Serialization`; same package versions to read)."""
-save_checkpoint(path::AbstractString, ck::PottsCheckpoint) =
-    open(io -> Serialization.serialize(io, ck), path, "w")
+function save_checkpoint(path::AbstractString, ck::PottsCheckpoint)
+    return open(io -> Serialization.serialize(io, ck), path, "w")
+end
 """Read a checkpoint written by `save_checkpoint`."""
 function load_checkpoint(path::AbstractString)
     # opening the file is outside the `try`: a missing file is a `SystemError`, not a format error
@@ -164,8 +166,10 @@ function _reset_cache!(cache::CheckerboardCache, integ)
     cache.serial === nothing || (fill!(cache.serial.count, 0); fill!(cache.serial.deferred, 0))
     return nothing
 end
-_reset_cache!(B::BoundaryCache, integ) =
-    (_rebuild_boundary!(B, integ.state.ownership, integ.ctx.mobility, integ.ctx.lattice, integ.ctx.proposal.offsets); nothing)
+function _reset_cache!(B::BoundaryCache, integ)
+    _rebuild_boundary!(B, integ.state.ownership, integ.ctx.mobility, integ.ctx.lattice, integ.ctx.proposal.offsets)
+    return nothing
+end
 
 function _key_difference(a::CPMState, b::CPMState)
     parts = String[]

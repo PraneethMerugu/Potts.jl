@@ -56,17 +56,23 @@ end
 
 # the shell pieces of the mask `m` (shell order) that meet its touches `touch`, with the
 # shell kernels: runs of the ring in 2D, dilation in the 3×3×3 box in 3D
-@inline _touched_pieces(lat::Lattice, m::UInt32, touch::UInt32, ::Val{F}) where {F} = _touched_pieces(
-    _ring_bits(lat), m, touch, F)
+@inline function _touched_pieces(lat::Lattice, m::UInt32, touch::UInt32, ::Val{F}) where {F}
+    return _touched_pieces(
+        _ring_bits(lat), m, touch, F)
+end
 @inline function _touched_pieces(r::Val{:ring8}, m::UInt32, touch::UInt32, full::Bool)
     mr = _to_ring8(m)
     # full: every position of m is a touch; face: the runs holding a face neighbour
     return full ? _pieces(mr, true, r, nothing) : _runs8_touching(mr)
 end
-@inline _touched_pieces(r::Val{:ring6}, m::UInt32, touch::UInt32, full::Bool) = _pieces(
-    m, full, r, nothing)                     # every hex position is a touch
-@inline _touched_pieces(::Val{:box}, m::UInt32, touch::UInt32, full::Bool) = _components27(
-    m, full, touch)
+@inline function _touched_pieces(r::Val{:ring6}, m::UInt32, touch::UInt32, full::Bool)
+    return _pieces(
+        m, full, r, nothing)
+end                     # every hex position is a touch
+@inline function _touched_pieces(::Val{:box}, m::UInt32, touch::UInt32, full::Bool)
+    return _components27(
+        m, full, touch)
+end
 
 """
 Evaluation mode for `Global`: exact floods everywhere (`GlobalExact`, used by host
@@ -272,9 +278,11 @@ end
     end
     return idx
 end
-@inline _box_size(lat::Lattice{N}, W::Int) where {N} = prod(ntuple(
-    d -> min(lat.dims[d], 2W +
-                          1), Val(N)))
+@inline function _box_size(lat::Lattice{N}, W::Int) where {N}
+    return prod(ntuple(
+        d -> min(lat.dims[d], 2W +
+                              1), Val(N)))
+end
 
 @inline _bit(v, i::Int) = (@inbounds(v[(i >> 5) + 1]) >> (i & 31)) & UInt32(1) != 0      # i < 32 length(v)
 @inline _setbit!(v, i::Int) = (@inbounds(v[(i >> 5) + 1] |= UInt32(1) << (i & 31)); nothing)
@@ -373,11 +381,15 @@ end
         return GLOBAL_REFUSED
     end
 end
-@inline _keeps_search(
-    ::GlobalBoard, σ, ctx, prop, touch, adj, ::Val{nothing}, cap) = _keeps_search(
-    GlobalExact(), σ, ctx, prop, touch, adj, Val(nothing), cap)
-@inline _keeps_search(::GlobalBoard, σ, ctx, prop, touch, adj, w::Val, cap) = _keeps_window(
-    σ, ctx.lattice, prop.x, prop.target, prop.old, touch, adj, w, cap, eltype(ctx.flood.stack))
+@inline function _keeps_search(
+    ::GlobalBoard, σ, ctx, prop, touch, adj, ::Val{nothing}, cap)
+    return _keeps_search(
+        GlobalExact(), σ, ctx, prop, touch, adj, Val(nothing), cap)
+end
+@inline function _keeps_search(::GlobalBoard, σ, ctx, prop, touch, adj, w::Val, cap)
+    return _keeps_window(
+        σ, ctx.lattice, prop.x, prop.target, prop.old, touch, adj, w, cap, eltype(ctx.flood.stack))
+end
 
 """
     global_gains(σ, ctx, prop, Val(full)) -> Bool
@@ -395,9 +407,11 @@ end
 """
 Whether `global_keeps` needs the search for this copy (the local test fails).
 """
-@inline global_defer(σ, ctx, prop::Proposal, adj::Val) = prop.old != 0 &&
-                                                         !_losing_shell(
-    σ, ctx.lattice, prop.x, prop.old, adj)[3]
+@inline function global_defer(σ, ctx, prop::Proposal, adj::Val)
+    return prop.old != 0 &&
+                                                             !_losing_shell(
+        σ, ctx.lattice, prop.x, prop.old, adj)[3]
+end
 
 # ---------------------------------------------------------------------------------------
 # Cell-scope pieces and largest_piece

@@ -46,8 +46,9 @@ which the lifecycle (host and device) recomputes the counts after events.
 struct ContactCounts{C <: Tuple}
     counts::C
 end
-relation(c::ContactCounts, l::Lattice) =
-    ContactCounts(map(x -> ContactCount(x.column, relation(x.relation, l), x.mask), c.counts))
+function relation(c::ContactCounts, l::Lattice)
+    return ContactCounts(map(x -> ContactCount(x.column, relation(x.relation, l), x.mask), c.counts))
+end
 radius(c::ContactCounts) = maximum(x -> radius(x.relation), c.counts; init = 0)
 
 """Whether partner kind `k` (0 = medium) is in the kind set `mask`, as 0 or 1."""
@@ -103,8 +104,9 @@ end
 
 A contact count from scratch (initialization, lifecycle rebuilds and checks).
 """
-recompute_contact_count(σ, kind, lat::Lattice, r, mask::Integer, ncell::Integer; T::Type = Int32) =
-    _recompute_contact_count(T, σ, kind, lat, relation(r, lat), UInt64(mask), ncell)
+function recompute_contact_count(σ, kind, lat::Lattice, r, mask::Integer, ncell::Integer; T::Type = Int32)
+    return _recompute_contact_count(T, σ, kind, lat, relation(r, lat), UInt64(mask), ncell)
+end
 
 function _recompute_contact_count(::Type{T}, σ, kind, lat::Lattice, rel::Relation, mask::UInt64, ncell::Integer) where {T}
     S = zeros(T, ncell)

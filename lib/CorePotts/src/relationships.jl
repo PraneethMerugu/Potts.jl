@@ -20,12 +20,15 @@ Link storage to merge into the cell state: the adjacency (`links`, or
 `links__<name>` for relationship `name`, see `adjacency_name`) plus `link_<p>` payload
 matrices (`payloads` gives the element type of each, e.g. `rest = Float64`).
 """
-empty_links(maxdeg::Integer, ncell::Integer; payloads...) =
-    merge((; links = zeros(Int32, maxdeg, ncell)), _empty_payloads(maxdeg, ncell, payloads))
-empty_links(maxdeg::Integer, ncell::Integer, name::Symbol; payloads...) =
-    merge(NamedTuple{(adjacency_name(name),)}((zeros(Int32, maxdeg, ncell),)), _empty_payloads(maxdeg, ncell, payloads))
-_empty_payloads(maxdeg, ncell, payloads) =
-    NamedTuple(Symbol(:link_, k) => zeros(T, maxdeg, ncell) for (k, T) in payloads)
+function empty_links(maxdeg::Integer, ncell::Integer; payloads...)
+    return merge((; links = zeros(Int32, maxdeg, ncell)), _empty_payloads(maxdeg, ncell, payloads))
+end
+function empty_links(maxdeg::Integer, ncell::Integer, name::Symbol; payloads...)
+    return merge(NamedTuple{(adjacency_name(name),)}((zeros(Int32, maxdeg, ncell),)), _empty_payloads(maxdeg, ncell, payloads))
+end
+function _empty_payloads(maxdeg, ncell, payloads)
+    return NamedTuple(Symbol(:link_, k) => zeros(T, maxdeg, ncell) for (k, T) in payloads)
+end
 
 """`adjacency_name(name)`: the cell-state column of relationship `name`'s adjacency, `links__<name>`."""
 adjacency_name(name::Symbol) = Symbol(:links__, name)
@@ -279,8 +282,9 @@ struct HostPhase{F, R, W}
     reads::R                     # `nothing` or a tuple of Symbols
     writes::W
 end
-HostPhase(f!; every::Integer = 1, reads = nothing, writes = nothing) =
-    HostPhase(f!, Int(every), _declared(reads), _declared(writes))
+function HostPhase(f!; every::Integer = 1, reads = nothing, writes = nothing)
+    return HostPhase(f!, Int(every), _declared(reads), _declared(writes))
+end
 _declared(::Nothing) = nothing
 _declared(s::Symbol) = (s,)
 function _declared(names)
@@ -289,8 +293,9 @@ function _declared(names)
     return t
 end
 
-(ph::HostPhase{F})(st, p, ctx, key, mcs, backend) where {F} =
-    run_phase(ph, st, p, ctx, key, mcs, backend, nothing)
+function (ph::HostPhase{F})(st, p, ctx, key, mcs, backend) where {F}
+    return run_phase(ph, st, p, ctx, key, mcs, backend, nothing)
+end
 
 function run_phase(ph::HostPhase{F}, st, p, ctx, key, mcs, backend, stats) where {F}
     _check_declared(ph.reads, st)

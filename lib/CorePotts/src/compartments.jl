@@ -78,8 +78,9 @@ function recompute_cluster_volume(σ, cluster)
 end
 
 """Cluster surfaces (bonds to sites outside the cluster) over `relation`, from scratch."""
-recompute_cluster_surface(σ, cluster, lat::Lattice, r; T::Type = Float64) =
-    _recompute_cluster_surface(T, σ, cluster, lat, r isa Relation ? r : relation(r, lat))
+function recompute_cluster_surface(σ, cluster, lat::Lattice, r; T::Type = Float64)
+    return _recompute_cluster_surface(T, σ, cluster, lat, r isa Relation ? r : relation(r, lat))
+end
 
 function _recompute_cluster_surface(::Type{T}, σ, cluster, lat::Lattice, rel::Relation) where {T}
     σK = map(s -> s == 0 ? Int32(0) : Int32(cluster[s]), σ)

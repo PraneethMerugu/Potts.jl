@@ -52,6 +52,8 @@ function eu_problem()
     return PottsProblem(f, st, lat, (0, 16), merge(gg_params(), (; V0 = 30.0, T = 8.0)); contact = Moore(1),
         proposal = Moore(1), seed = 3)
 end
-eu_bad(cell, σ, lat) = (n = length(cell.kind);
-    count(cell.euler .!= recompute_euler(σ, lat, Val(:face), n)) +
-    count(cell.euler_full .!= recompute_euler(σ, lat, Val(:full), n)))
+function eu_bad(cell, σ, lat)
+    n = length(cell.kind)
+    return count(cell.euler .!= recompute_euler(σ, lat, Val(:face), n)) +
+        count(cell.euler_full .!= recompute_euler(σ, lat, Val(:full), n))
+end

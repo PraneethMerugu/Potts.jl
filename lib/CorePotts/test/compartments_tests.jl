@@ -40,8 +40,11 @@ end
             new = Int32(rand(rng, 0:5))
             new == σ[t] && continue
             prop = Proposal(t, t, x, 1, σ[t], new)
-            H(σ) = (cv = recompute_cluster_volume(σ, cell.cluster); cs = recompute_cluster_surface(σ, cell.cluster, lat, r);
-                sum(k -> cell.cluster[k] == k ? EC(cv[k], k) + ES(cs[k], k) : 0.0, 1:5))
+            function H(σ)
+                cv = recompute_cluster_volume(σ, cell.cluster)
+                cs = recompute_cluster_surface(σ, cell.cluster, lat, r)
+                return sum(k -> cell.cluster[k] == k ? EC(cv[k], k) + ES(cs[k], k) : 0.0, 1:5)
+            end
             σ2 = copy(σ); σ2[t] = new
             δ = cluster_surface_change(σ, cell, ctx, prop)
             dH = cluster_volume_delta(cell, prop, EC) + cluster_surface_delta(cell, prop, δ, ES)
@@ -84,8 +87,10 @@ end
         σ = zeros(Int32, 40, 40); σ[11:30, 15:22] .= 1; σ[18:23, 17:20] .= 2   # elongated in x
         cluster = Int32[1, 1]
         tr(st, p, ctx, key, mcs, c) = mcs == 0 ? EVENT_DIVIDE_CLUSTER : EVENT_NONE
-        half!(st, p, ctx, key, mcs, parent, daughter) =
-            (st.cell.mass[daughter] = st.cell.mass[parent] /= 2; nothing)
+        function half!(st, p, ctx, key, mcs, parent, daughter)
+            st.cell.mass[daughter] = st.cell.mass[parent] /= 2
+            return nothing
+        end
         cell = merge(init_moments(σ, lat, 2), init_clusters(σ, cluster, lat), (; mass = [8.0, 2.0]))
         st = with_capacity(initial_state(σ, Int32[1, 2]; cell), 6)
         @test st.cell.cluster == Int32[1, 1, 3, 4, 5, 6]
@@ -153,11 +158,15 @@ end
             (; alone = zeros(5), together = zeros(5)))
         st = with_capacity(initial_state(σ, Int32[1, 2, 2, 1, 2]; cell), 10)
         alone!(st, p, ctx, key, mcs, parent, daughter) = (st.cell.alone[parent] = st.cell.alone[daughter] = 1.0; nothing)
-        together!(st, p, ctx, key, mcs, parent, daughter) =
-            (st.cell.together[parent] = st.cell.together[daughter] = 1.0; nothing)
-        run(tr) = solve(PottsProblem(CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
+        function together!(st, p, ctx, key, mcs, parent, daughter)
+            st.cell.together[parent] = st.cell.together[daughter] = 1.0
+            return nothing
+        end
+        function run(tr)
+            return solve(PottsProblem(CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
                 lifecycle = Lifecycle(tr; normal = (st, p, ctx, key, mcs, c) -> (0.0, 1.0), divide! = alone!,
                     cluster_normal = AlongMinorAxis(), cluster_divide! = together!)), st, lat, (0, 1), gg_params()), alg)
+        end
         # root 1 divides its cluster (member 2's own EVENT_DIVIDE yields to it); 3 and 5 alone
         function tr(st, p, ctx, key, mcs, c)
             if mcs != 0
@@ -228,13 +237,13 @@ end
                 return EVENT_DIVIDE
             end
         end
-        run(capacity) = begin
+        function run(capacity)
             cell = merge(init_moments(σ, lat, 4), init_clusters(σ, Int32[1, 1, 1, 4], lat))
             st = with_capacity(initial_state(σ, Int32[1, 2, 2, 1]; cell), capacity)
             f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
                 lifecycle = Lifecycle(tr; normal = (st, p, ctx, key, mcs, c) -> (0.0, 1.0),
                     cluster_normal = (st, p, ctx, key, mcs, c) -> (0.0, 1.0)))
-            solve(PottsProblem(f, st, lat, (0, 1), gg_params()), alg)
+            return solve(PottsProblem(f, st, lat, (0, 1), gg_params()), alg)
         end
             brute(u, cap) = Int32[count(==(c), u.ownership) for c in 1:cap]
 

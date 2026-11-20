@@ -73,10 +73,12 @@ nblocks(l::BlockLayout) = prod(l.nblocks)
 phase_offset(l::BlockLayout{N}, ph::Int) where {N} = ntuple(d -> rem(div(ph - 1, l.k^(d - 1)), l.k), Val(N))
 
 # block number `blk` (1-based, first axis fastest) and its coordinates `bc` (0-based)
-@inline block_index(l::BlockLayout{N}, bc::NTuple{N, Int}) where {N} =
-    1 + foldl((a, d) -> a * l.nblocks[d] + bc[d], ntuple(d -> N + 1 - d, Val(N)); init = 0)
-block_coords(l::BlockLayout{N}, blk::Int) where {N} =
-    ntuple(d -> rem(div(blk - 1, prod(ntuple(e -> e < d ? l.nblocks[e] : 1, Val(N)))), l.nblocks[d]), Val(N))
+@inline function block_index(l::BlockLayout{N}, bc::NTuple{N, Int}) where {N}
+    return 1 + foldl((a, d) -> a * l.nblocks[d] + bc[d], ntuple(d -> N + 1 - d, Val(N)); init = 0)
+end
+function block_coords(l::BlockLayout{N}, blk::Int) where {N}
+    return ntuple(d -> rem(div(blk - 1, prod(ntuple(e -> e < d ? l.nblocks[e] : 1, Val(N)))), l.nblocks[d]), Val(N))
+end
 
 # the active sub-region of the block at `bc` in a phase with offset `off`: its start (0-based)
 # and side per axis
@@ -258,8 +260,9 @@ end
 _claim_columns(::KernelAbstractions.CPU, cell) = (; stamp = zeros(UInt64, length(cell.volume)), token = Ref(UInt32(0)))
 _claim_columns(backend, cell) = nothing
 
-_phase_conflict!(st, cache::CheckerboardCache, lat, layout, off) =
-    _phase_conflict!(st, cache.claim, cache.reach, lat, layout, off)
+function _phase_conflict!(st, cache::CheckerboardCache, lat, layout, off)
+    return _phase_conflict!(st, cache.claim, cache.reach, lat, layout, off)
+end
 _phase_conflict!(st, ::Nothing, reach, lat, layout, off) = false    # a device: no colouring guarantee
 function _phase_conflict!(st, claim::NamedTuple, reach::Int, lat::Lattice{N}, layout::BlockLayout{N}, off) where {N}
     tok = UInt64(claim.token[])
@@ -314,12 +317,14 @@ const DEVICE_MIN_BLOCKS = 256
 # ensemble, whose trajectories already hold the threads), `false` (always inline:
 # reproducible), `true` (always the threaded launch)
 _block_inline(backend, n, threads, max_blocks) = false
-_block_inline(::KernelAbstractions.CPU, n, threads, max_blocks) =
-    threads === :auto ? (Threads.nthreads() == 1 || n <= max_blocks || IN_THREADED_ENSEMBLE[]) : !threads
+function _block_inline(::KernelAbstractions.CPU, n, threads, max_blocks)
+    return threads === :auto ? (Threads.nthreads() == 1 || n <= max_blocks || IN_THREADED_ENSEMBLE[]) : !threads
+end
 # CPU: one workgroup per thread, the grid of blocks split along its last axis
 _block_groupsize(backend, nb) = nothing
-_block_groupsize(::KernelAbstractions.CPU, nb::NTuple{N, Int}) where {N} =
-    ntuple(d -> d < N ? nb[d] : cld(nb[N], Threads.nthreads()), Val(N))
+function _block_groupsize(::KernelAbstractions.CPU, nb::NTuple{N, Int}) where {N}
+    return ntuple(d -> d < N ? nb[d] : cld(nb[N], Threads.nthreads()), Val(N))
+end
 
 """
 The default `parts` of a `d`-dimensional lattice: about 64 phases per MCS (8 in 2D, 4 in 3D),

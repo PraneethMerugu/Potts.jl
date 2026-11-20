@@ -66,8 +66,11 @@ end
                 return EVENT_NONE
             end
         end
-        halve!(st, p, ctx, key, mcs, parent, daughter) =
-            (st.cell.target[parent] /= 2; st.cell.target[daughter] = st.cell.target[parent]; nothing)
+        function halve!(st, p, ctx, key, mcs, parent, daughter)
+            st.cell.target[parent] /= 2
+            st.cell.target[daughter] = st.cell.target[parent]
+            return nothing
+        end
         sol = run_lifecycle(σ, [1, 2], lat, Lifecycle(ev; divide! = halve!); capacity = 2,
             tspan = (0, 2), cell = (; target = [36.0, 60.0], tag = [7.0, 9.0]))
         u = sol.u[end]
@@ -88,8 +91,11 @@ end
         σ = zeros(Int32, 48, 48); σ[20:27, 20:27] .= 1
         grow!(st, p, ctx, key, mcs, c) = (@inbounds st.cell.target[c] += 1.0; nothing)
         big(st, p, ctx, key, mcs, c) = st.cell.volume[c] >= 80 ? EVENT_DIVIDE : EVENT_NONE
-        reset!(st, p, ctx, key, mcs, parent, daughter) =
-            (st.cell.target[parent] = 40.0; st.cell.target[daughter] = 40.0; nothing)
+        function reset!(st, p, ctx, key, mcs, parent, daughter)
+            st.cell.target[parent] = 40.0
+            st.cell.target[daughter] = 40.0
+            return nothing
+        end
         function dH(st, p, prop, ctx)
             J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
             E(v, c) = p.λ * (v - @inbounds(st.cell.target[c]))^2
@@ -250,8 +256,10 @@ end
     end
 
     @testset "frozen kinds build the mask: construction, remake, checkpoint resume ($(nameof(typeof(alg))))" for alg in (SequentialCPM(), CheckerboardCPM())
-        mobile_ok(integ) = (fz = Array(integ.ctx.mobility.frozen);
-            fz == frozen_sites(integ.prob, integ.state) && integ.nmobile == count(!, fz))
+        function mobile_ok(integ)
+            fz = Array(integ.ctx.mobility.frozen)
+            return fz == frozen_sites(integ.prob, integ.state) && integ.nmobile == count(!, fz)
+        end
         prob = fk_problem(fk_flip(S); kind = fk_swap, tspan = (0, 20))
         # no `frozen` given: the rule builds it; a different mask is rejected
         lat, st = prob.lattice, prob.u0

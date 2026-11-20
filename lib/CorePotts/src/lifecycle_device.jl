@@ -128,8 +128,10 @@ end
 # the trigger of `c` reads only `c`'s own values of what it writes (its contract), so no
 # barrier is needed between them (D-101)
 @inline _before!(::Nothing, c, st, p, ctx, key, mcs) = nothing
-@inline _before!(f::F, c, st, p, ctx, key, mcs) where {F} =
-    (c <= ncells(st) && f(st, p, ctx, key, mcs, c % Int32); nothing)
+@inline function _before!(f::F, c, st, p, ctx, key, mcs) where {F}
+    c <= ncells(st) && f(st, p, ctx, key, mcs, c % Int32)
+    return nothing
+end
 @inline function _dtrigger_body!(c, events, dv, par, round, before::B, trigger::F, st, p, ctx, key, mcs,
         ::Val{CL}) where {B, F, CL}
     _before!(before, c, st, p, ctx, key, mcs)
@@ -156,8 +158,9 @@ end
     return lo, min(t * K, cap)
 end
 
-@inline _is_free(st, dv, round, e, c, ::Val{CL}) where {CL} =
-    @inbounds(st.cell.volume[c]) == 0 && e == EVENT_NONE && (!CL || @inbounds(dv.held[c]) != round)
+@inline function _is_free(st, dv, round, e, c, ::Val{CL}) where {CL}
+    return @inbounds(st.cell.volume[c]) == 0 && e == EVENT_NONE && (!CL || @inbounds(dv.held[c]) != round)
+end
 
 # exclusive prefix sum of `cnt[1:PLAN_WG, j]` in place; returns the total (one item runs it)
 @inline function _scan!(cnt, j)
@@ -971,14 +974,22 @@ function _stage!(m::_CompileOnly, body::B, backend, n, args::A) where {B, A}
 end
 
 _stage_plan!(::_Enqueue, D, backend, args::A) where {A} = (D.plan!(true, args...; ndrange = PLAN_WG); nothing)
-_stage_plan!(m::_Counted, D, backend, args::A) where {A} =
-    (_fault_point(m); D.plan!(true, args...; ndrange = PLAN_WG); m.n[] += 1; nothing)
+function _stage_plan!(m::_Counted, D, backend, args::A) where {A}
+    _fault_point(m)
+    D.plan!(true, args...; ndrange = PLAN_WG)
+    m.n[] += 1
+    return nothing
+end
 # the planner's compile: one workgroup with `live = false` (no stage runs)
-_stage_plan!(m::_CompileOnly, D, backend, args::A) where {A} =
-    (push!(m.jobs, () -> D.plan!(false, args...; ndrange = PLAN_WG)); nothing)
+function _stage_plan!(m::_CompileOnly, D, backend, args::A) where {A}
+    push!(m.jobs, () -> D.plan!(false, args...; ndrange = PLAN_WG))
+    return nothing
+end
 
-_fault_point(m::_Counted) =
-    (m.n[] == m.k && throw(ArgumentError("launch refused (test: `_STAGED_FAULT_AFTER`)")); nothing)
+function _fault_point(m::_Counted)
+    m.n[] == m.k && throw(ArgumentError("launch refused (test: `_STAGED_FAULT_AFTER`)"))
+    return nothing
+end
 
 """The staged form's first launch failed after its partition kernel was enqueued: σ may be
 partly divided and the trackers stale, so no form can take the MCS over."""
@@ -986,10 +997,11 @@ struct _StagedFailedMidway <: Exception
     enqueued::Int
     cause::Any
 end
-Base.showerror(io::IO, e::_StagedFailedMidway) =
-    print(io, "device lifecycle: the staged form failed after $(e.enqueued) of its kernels were enqueued, ",
+function Base.showerror(io::IO, e::_StagedFailedMidway)
+    return print(io, "device lifecycle: the staged form failed after $(e.enqueued) of its kernels were enqueued, ",
         "the partition (which writes σ) among them; the state is no longer consistent and cannot be ",
         "handed to the host planner. Cause: ", sprint(showerror, e.cause))
+end
 
 _enqueues(mode) = true
 _enqueues(::_CompileOnly) = false
@@ -1070,15 +1082,18 @@ end
     return nothing
 end
 # the stages after the trigger (`args` start with `dv, par`): a quiet round skips the loop
-@inline _each_on!(body::B, t, n, args::A) where {B, A} =
-    (_on(args[1], args[2]) && _each!(body, t, n, args); nothing)
+@inline function _each_on!(body::B, t, n, args::A) where {B, A}
+    _on(args[1], args[2]) && _each!(body, t, n, args)
+    return nothing
+end
 @inline _each_if!(body::B, t, n, x::Nothing, args::A) where {B, A} = nothing
 @inline _each_if!(body::B, t, n, x, args::A) where {B, A} = _each_on!(body, t, n, args)
 @inline _clusters_each!(::Val{false}, body::B, t, n, args::A) where {B, A} = nothing
 @inline _clusters_each!(::Val{true}, body::B, t, n, args::A) where {B, A} = _each_on!(body, t, n, args)
 @inline _refresh_each!(body::B, t, n, ::Nothing, dv, par, st, lat) where {B} = nothing
-@inline _refresh_each!(body::B, t, n, r, dv, par, st, lat) where {B} =
-    _each_on!(body, t, n, (dv, par, r.frozen, st.ownership, st.cell.kind, r.kinds, lat))
+@inline function _refresh_each!(body::B, t, n, r, dv, par, st, lat) where {B}
+    return _each_on!(body, t, n, (dv, par, r.frozen, st.ownership, st.cell.kind, r.kinds, lat))
+end
 @inline _refresh_fold!(t, ::Nothing, dv, par, mcs) = nothing
 @inline _refresh_fold!(t, r, dv, par, mcs) = (t == 1 && _dmask_fold_body!(1, dv, par, mcs); nothing)
 
