@@ -309,7 +309,7 @@ end
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.3), [t, x, y], [cae, cbe], Any[]; name = :nlg))
         m = cmsg(() -> solve(nl(3.0), QuasiSteady(); dt = 0.1))
     @test occursin("has a growing mode: an eigenvalue of its Jacobian with positive real part", m) &&
-            occursin(", at the steady state its solve found)", m) || (println("", m); false)
+            occursin(", at the steady state its solve found)", m) || (println("growing-mode message: ", m); false)
         # right after the first solve: a one-window run and a steady start are refused too.
     # Base (5005083e, the check deferred to the next window): one window `Success`, the steady
     # start not checked
@@ -323,7 +323,7 @@ end
                 [D(cae) ~ 0.1 * laplacian(cae) - cae + 3.0 * cbe + x + 0.01 * cae^2, D(cbe) ~ 0.1 * laplacian(cbe) + 3.0 * cae - cbe + y],
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.3), [t, x, y], [cae, cbe], Any[]; name = :nlr))
         m = cmsg(() -> init(nlr, BackwardEuler(; init = :steady); dt = 0.1))
-        @test occursin("has a growing mode", m) && occursin(", at the steady state its solve found)", m) || (println("", m); false)
+        @test occursin("has a growing mode", m) && occursin(", at the steady state its solve found)", m) || (println("growing-mode message: ", m); false)
         # a write from stable to unstable: every later step is refused, not only the first.
     # Control (the old order, `pending` cleared before the check): the second `step!` succeeds
     @parameters kn = 0.0

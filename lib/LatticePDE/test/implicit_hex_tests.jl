@@ -461,6 +461,6 @@ end
         @test r.retcode == ReturnCode.Success
         po = discretize(sx, LatticeDiscretization(Grid((8, 8)); T = Float64))
         ro = SciMLBase.solve(po, ImplicitEuler(); adaptive = false, dt = 0.1, abstol = 1.0e-12, reltol = 1.0e-12)
-        @test maximum(abs, ro.u[end] .- r.u[end]) < 1.0e-6 || (println("", maximum(abs, ro.u[end] .- r.u[end])); false)
+        @test maximum(abs, ro.u[end] .- r.u[end]) < 1.0e-6 || (println("BackwardEuler against ImplicitEuler: ", maximum(abs, ro.u[end] .- r.u[end])); false)
     end
 end

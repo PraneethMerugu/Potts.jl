@@ -407,10 +407,10 @@ _explicit_count(a) = hasproperty(a, :substeps) && getproperty(a, :substeps) !== 
     check_coupling(stability, groups, explicit, pp, dt; check = eachindex(groups), key = identity,
                    texts = ProblemTexts(), span = nothing)
 
-The coupling between field groups,
-one rule for both coupled and standalone routes. `groups` are the groups' state keys in stepping order,
-`explicit[g]` whether group `g` has an explicit count, `stability` the bound of the whole
-field system at the raw parameters `pp`, `dt` the window. Each group in `check` that is in a
+The coupling between field groups: one rule for both coupled and standalone routes. `groups`
+are the groups' state keys in stepping order, `explicit[g]` whether group `g` has an
+explicit count, `stability` the bound of the whole field system at the raw parameters `pp`,
+`dt` the window. Each group in `check` that is in a
 loop of the group read graph ([`group_loops`](@ref)) needs `κ = dt · rate ≤ 1` over the reads
 of groups in its loop ([`lagged_coupling`](@ref)); past it the problem is refused with the
 routes (`loop_text`). A cross coefficient in a loop with no finite bound is refused with an

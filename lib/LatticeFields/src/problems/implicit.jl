@@ -447,7 +447,7 @@ rebuilt at each stage's end time), the `iterate` flag (a row's local Jacobian re
 field, a local nonlinear term or a switch: that row's operator is rebuilt at every Newton
 iteration, at the iterate), Crank–Nicolson's right-side launches (`qres`, per slot parity, or
 nothing), the status word, the operator spec and the coupled solve (`cs`: a [`CoupledKrylov`](@ref)
-when the group's rows are solved together, `nothing` when they are solved one by one).
+when the group's rows are solved together; `nothing` when they are solved one by one).
 """
 mutable struct ImplicitCache{RS, WK, JL, W, BK, QL, GT, CS, KT, AT, RT, GP, GC, GH}
     rows::RS

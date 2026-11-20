@@ -34,7 +34,7 @@ Jacobian that the linear solve sees:
 - `adv`: the bound of the row's advection terms: entries whose absolute values sum to
   the upwind bound `Σ_a 2 max|u_a| / h_a`, each a `Coef` (a velocity of numbers and
   parameters) or `(; f, text)`, `f` a function of the parameters (a velocity that varies by
-  site, bounded over the box by the interval evaluator, NaN when not finite, and the
+  site, bounded over the box by the interval evaluator; NaN when not finite, and the
   term `text` is then one no bound sees);
 - `cross`: the row's cross terms `a · o` (`CrossLinear`): the other field's key, `a` as a
   `Coef` (`NaN` when no number or parameter bounds it), the term's text;
@@ -52,7 +52,7 @@ Jacobian that the linear solve sees:
   face coefficient per axis (`Σ max|m| max|K| / h_a²`, NaN when not finite), or `nothing`: it
   bounds the part of a Robin face with a negative diagonal left out of the operator;
 - `jmax`: for a field row with local terms, a function of the parameters giving the largest
-  value of its local Jacobian over the sites (the interval evaluator over the box, NaN
+  value of its local Jacobian over the sites (the interval evaluator over the box; NaN
   when not finite), or `nothing`: the growth that count rule 1 keeps out of the shift;
 - `linear`: every term of the row is linear in the group's state (diffusion, linear local,
   advection, cross-linear terms and sources: a coupled solve's directional difference
