@@ -11,10 +11,11 @@
   always, plus the named device backend). It exits 1 when a CPU row allocates; a row
   slower than its baseline is only flagged (`--strict` restores the old 5 % CPU rule).
   Whether a change is slower is decided by `ab.jl`.
-- `ab.jl` / `ab_one.jl` — the paired A/B (AUTONOMY §7.4, P6.0bb), below.
+- `ab.jl` / `ab_one.jl` — the paired A/B (AUTONOMY §7.4), below.
 - `machine.jl` — the machine table (keys of `baseline.toml`, pinning) and the Tuple type
   cache seeding shared by the gate and the A/B.
-- `test/p6_0s_v7_tooling.jl` (frozen, D-090) and `test/p6_0bb_ab.jl` — tests of the lock, the gate's timing and the A/B harness.
+- `test/lock_and_gpu_timing.jl` (D-090) and `test/ab_harness.jl` — tests of the lock, the
+  gate's timing and the A/B harness.
 
 ### Machines and baselines (D-157)
 
@@ -23,7 +24,7 @@
 `<case>.<alg>` in ns/site per warm MCS (device rows are checkerboard). A machine is matched
 by CPU model in `machine.jl` (or named with `POTTS_MACHINE`); an unknown one gets a key from
 its CPU model, and `gate.jl ... update` writes only its own table. The `mac` rows are the
-Apple M1 Pro; a new machine (the Mac Studio of P6.0bi) gets its own key and rows.
+Apple M1 Pro; a new machine (a Mac Studio, for example) gets its own key and rows.
 
 On the NucBox (Ryzen AI Max+ 395, 16 cores / 32 threads; logical n and n + 16 share
 physical core n) a timed process runs pinned to one logical CPU of the reserved cores 12–15
@@ -37,7 +38,7 @@ while a CI job (`Runner.Worker`) runs, and for ROCm while another process holds 
 47 ns/site. Unpinned, under load, an Akeeb sequential run read 40 or 71 ns/site depending
 on SMT sharing (a same-commit control of 1.729).
 
-### The paired A/B (`ab.jl`, P6.0bb)
+### The paired A/B (`ab.jl`)
 
     julia benchmark/ab.jl <base> <candidate> <cases|all> <cpu|rocm|metal> [rounds] [options]
     julia benchmark/ab.jl --inprocess <checkout> <variants.jl> <cpu|rocm|metal> [rounds] [options]
@@ -53,7 +54,7 @@ By default it:
 - **runs two same-commit controls**: `<base>-abctl` and `<candidate>-abctl`, detached
   worktrees of the base's and the candidate's commits (created, or checked to be clean
   worktrees of the same repository and moved there; both checkouts must be clean). Two
-  checkouts of one commit read up to 16 % apart unseeded on Metal (P6.2b); the controls
+  checkouts of one commit read up to 16 % apart unseeded on Metal (the Akeeb μ study); the controls
   show how far apart they read here.
 - **interleaves**: every round runs each side once, each in a fresh process, and the
   order rotates, so each side runs first equally often (default 16 rounds on CPU, 8 on
@@ -71,7 +72,7 @@ By default it:
   inside the lock before loading). When only the workload or the parameters change, `--inprocess` times both in
   one process, with second copies of the base and the candidate as the controls:
   `<variants.jl>` defines `AB_VARIANTS`, a vector of `label => T -> PottsProblem`, base
-  first (example: `ab_variants_akeeb_mu.jl`, P6.2b's μ = 30 vs 24).
+  first (example: `ab_variants_akeeb_mu.jl`, the Akeeb study's μ = 30 vs 24).
 - **gives every side the same environment**: `--project=<side>/benchmark` with the side's
   test project stacked on JULIA_LOAD_PATH (the device packages come from there, for every
   side alike).
@@ -117,7 +118,7 @@ untimed CPUs (0-11,16-27), so it and the lock's keeper never run on the reserved
 
 It also prints the resolution: the largest control deviation from 1 and the largest control
 interval half-width. Measured on the NucBox (pinned CPU 12, 8 rounds, machine idle;
-P6.0bb, 2026-10-07, at bbc39f07 against 9efdf924, 16 CPU and 8 ROCm cases, no disturbed
+2026-10-07, at bbc39f07 against 9efdf924, 16 CPU and 8 ROCm cases, no disturbed
 run):
 
 | backend | control ratios (paired), range | largest deviation | largest interval half-width | controls whose interval excludes 1 |
@@ -159,7 +160,7 @@ directory lock by `mkdir`. Waiters poll about once a second, so a run queued bef
 gets the lock before the A/B's next round. Waiters touch their ticket every poll and holders
 every minute, so a ticket untouched for 5 minutes (e.g. of a SIGKILLed waiter) is removed;
 queue entries whose names are not numbers are ignored. A lock untouched for 3 hours is
-stale (the frozen `test/p6_0s_v7_tooling.jl` checks this rule). The command's exit status
+stale (`test/lock_and_gpu_timing.jl` checks this rule). The command's exit status
 is passed through, and the ticket and lock are removed on exit, HUP, INT, QUIT, PIPE or
 TERM.
 

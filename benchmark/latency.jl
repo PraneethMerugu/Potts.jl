@@ -1,7 +1,7 @@
-# P6.0o latency acceptance (D-137): `@potts_model` construction, `mtkcompile` and
+# Latency acceptance (D-137): `@potts_model` construction, `mtkcompile` and
 # `PottsProblem` build time on the five gate models, and fresh-process time to first MCS.
 #
-#     tools/exclusive.sh julia --project=benchmark benchmark/p6_0o_latency.jl [reps] [warm] [base]
+#     tools/exclusive.sh julia --project=benchmark benchmark/latency.jl [reps] [warm] [base]
 #
 # Each repetition of each case is a fresh `julia` process (Potts and PottsModels already
 # precompiled: one untimed process per checkout runs first). A child times, in order:
@@ -20,7 +20,7 @@
 # With a third argument, a base checkout (e.g. a `git worktree` of 33f681df with the
 # workspace Manifest copied in), the children alternate base, this, base, this … and the
 # script also prints the ratio this/base of every median. That paired form decides the
-# acceptance (ROADMAP P6.0o: construction, `mtkcompile` and `PottsProblem` build time and
+# acceptance (construction, `mtkcompile` and `PottsProblem` build time and
 # the fresh-process time to first MCS each within +5 %), because absolute numbers move with
 # machine load; the baseline recorded on 33f681df (D-137) is the reference for a quiet run.
 #

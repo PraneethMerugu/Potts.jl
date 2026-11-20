@@ -1,5 +1,5 @@
 #     julia --project=benchmark -t <threads> benchmark/kinetics/cpu_threads.jl [<nmcs>]
-# CheckerboardCPM on the CPU (P6.0bl): MCS per second of SequentialCPM, the checkerboard with its
+# CheckerboardCPM on the CPU: MCS per second of SequentialCPM, the checkerboard with its
 # phases inline (one after another) and with each phase one threaded KA launch, on
 # Graner–Glazier tiles in 2D and cubes in 3D. Measures `inline_max_blocks` of `CheckerboardCPM` (the phase size
 # below which `threads = :auto` runs a phase inline).

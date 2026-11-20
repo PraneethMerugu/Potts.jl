@@ -1,12 +1,12 @@
-# Tests of the paired A/B harness and the gate (P6.0bb, D-157): machine table and pinning
+# Tests of the paired A/B harness and the gate (D-157): machine table and pinning
 # helpers, Tuple type cache seeding, `ab.jl` arguments, round rotation, statistics,
 # intervals and verdicts (with per-round stub timings), skips, disturbed runs, the
 # in-process form, the same-commit control checkouts, `gate.jl` with a mocked `measure`, and
 # the per-machine `baseline.toml`.
 #
-#     julia --project=benchmark benchmark/test/p6_0bb_ab.jl
+#     julia --project=benchmark benchmark/test/ab_harness.jl
 #
-# No timing and no GPU. Like the frozen P6.0s test, `ab.jl` runs in a sandbox whose lock
+# No timing and no GPU. Like the lock test (lock_and_gpu_timing.jl), `ab.jl` runs in a sandbox whose lock
 # prefix points into a private directory, with a stub timed child (`--child`), so it never
 # takes the real machine lock.
 using Test, TOML
@@ -157,7 +157,7 @@ function run_ab(sb, sd, args)
 end
 setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
 
-@testset "P6.0bb paired A/B harness" begin
+@testset "paired A/B harness" begin
     @testset "machine table" begin
         @test BenchMachine.cpulist("0-11,16-27") == [0:11; 16:27]
         @test BenchMachine.cpulist("12") == [12]

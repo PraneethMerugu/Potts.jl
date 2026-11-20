@@ -1,5 +1,5 @@
-#     julia --project=lib/PottsModels/test -t 12 benchmark/kinetics/k3_chain.jl <repo> <runs> [<variants> <out>]
-# K3 (P6.0bl): the OpenVT P1b chain relaxation time T (D-218/D-224 protocol, λ = 2) for
+#     julia --project=lib/PottsModels/test -t 12 benchmark/kinetics/chain_relaxation.jl <repo> <runs> [<variants> <out>]
+# The OpenVT P1b chain relaxation time T (D-218/D-224 protocol, λ = 2) for
 # CheckerboardCPM variants on the CPU, against the record's 100 SequentialCPM runs.
 include(joinpath(ARGS[1], "lib/PottsModels/reproductions/data/15/checkerboard-2026-10-10/run_checkerboard.jl"))
 using Random, Printf
@@ -12,7 +12,7 @@ seqT = [parse(Float64, split(l, '\t')[3]) for l in Iterators.drop(eachline(joinp
 prob = p1b_problem()
 saves = 0:(CAL_BURNIN + CAL_TMAX)
 boot(a, b; rng = Xoshiro(3)) = [mean(rand(rng, a, length(a))) / mean(rand(rng, b, length(b))) for _ in 1:4000]
-out = expanduser(get(ARGS, 4, "~/lpwork/cbk/k3-2026-11-03.tsv"))
+out = expanduser(get(ARGS, 4, "chain_relaxation.tsv"))
 open(out, "w") do io
     println(io, "arm\tseed\tT_run")
 end

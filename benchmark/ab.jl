@@ -1,4 +1,4 @@
-# Paired A/B timing of gate cases (AUTONOMY §7.4, D-157, P6.0bb). Absolute baselines are
+# Paired A/B timing of gate cases (AUTONOMY §7.4, D-157). Absolute baselines are
 # informational; a slowdown is decided here, against two same-commit controls.
 #
 #     julia benchmark/ab.jl <base> <candidate> <cases> <backend> [rounds] [options]
@@ -12,7 +12,7 @@
 #  - Two same-commit controls. Besides the base and the candidate, every round times
 #    `<base>-abctl` and `<candidate>-abctl`: detached worktrees of the base's and the
 #    candidate's commits (created or moved there; both checkouts must be clean). Two
-#    checkouts of one commit read up to 16 % apart unseeded on Metal (P6.2b), so the
+#    checkouts of one commit read up to 16 % apart unseeded on Metal, so the
 #    controls show what the A/B can resolve.
 #  - Type cache seeding. Every timed process fills the global Tuple type cache to the same
 #    number of entries before it builds anything (`machine.jl`, D-145; except ROCm

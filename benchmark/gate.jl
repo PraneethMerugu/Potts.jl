@@ -51,7 +51,7 @@ const _DEVICE_LOADED = Ref(false)
 function load_device!(dev = DEVICE)
     (isempty(dev) || _DEVICE_LOADED[]) && return nothing
     ENV["POTTS_GPU"] = dev
-    # The device packages are dependencies of the test projects (P6.0bg), not of the
+    # The device packages are dependencies of the test projects, not of the
     # benchmark project, so that every A/B side has the same environment (`ab.jl` stacks the
     # side's test project on JULIA_LOAD_PATH). Run directly, stack this checkout's.
     let pkg = dev == "metal" ? "Metal" : "AMDGPU"
