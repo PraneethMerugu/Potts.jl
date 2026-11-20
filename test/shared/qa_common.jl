@@ -111,6 +111,89 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
         return nothing
     end
 
+    const _QA_JET = Base.PkgId(Base.UUID("c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"), "JET")
+
+    """
+        qa_jet_reports(mod) -> (; errors, locals)
+
+    JET's error analysis of the whole package `mod` (`JET.report_package` in `:typo` mode, with
+    `target_modules = (mod,)`): references to undefined names and fields. `locals` are the
+    reports of a local variable that "may be" or "is not" defined; JET does not follow a
+    variable that a closure captures and the enclosing function assigns again (a `Core.Box`),
+    so these are reported where the code is correct, and `qa_jet_package` does not fail on
+    them. `errors` are the other reports, each as its message text.
+    """
+    function qa_jet_reports(mod::Module)
+        JET = Base.require(_QA_JET)
+        result = Base.invokelatest(
+            JET.report_package, mod; target_modules = (mod,), mode = :typo, toplevel_logger = nothing
+        )
+        reports = Base.invokelatest(JET.get_reports, result)
+        is_local(r) = r isa JET.UndefVarErrorReport && r.var isa Symbol
+        message(r) = sprint(JET.JETInterface.print_report_message, r)
+        return (;
+            errors = String[Base.invokelatest(message, r) for r in reports if !is_local(r)],
+            locals = String[Base.invokelatest(message, r) for r in reports if is_local(r)],
+        )
+    end
+
+    """
+        qa_jet_package(mod; broken = Pair{Regex, String}[])
+
+    Fail on every report of [`qa_jet_reports`](@ref) that is not a local variable. `broken`
+    lists known reports as `pattern => reason`: the reports a pattern matches are a
+    `@test_broken` (which turns into an error, an unexpected pass, once the report is gone).
+    """
+    function qa_jet_package(mod::Module; broken = Pair{Regex, String}[])
+        Test = Base.require(_QA_TEST)
+        (; errors) = qa_jet_reports(mod)
+        unexpected = filter(m -> !any(((p, _),) -> occursin(p, m), broken), errors)
+        isempty(unexpected) || @error "JET reports in $mod" unexpected
+        Test.@test isempty(unexpected)
+        for (p, _) in broken
+            Test.@test_broken !any(m -> occursin(p, m), errors)
+        end
+        return nothing
+    end
+
+    """
+        qa_jet_control()
+
+    The negative control of [`qa_jet_package`](@ref): a scratch package, written to a
+    temporary directory and loaded, whose functions read an undefined global and a field their
+    argument's type does not have (through `getfield`: JET does not report `p.y` on Julia
+    1.13, where `getproperty` throws the `FieldError`). Both are reported.
+    """
+    function qa_jet_control()
+        Test = Base.require(_QA_TEST)
+        mktempdir() do dir
+            uuid = Base.UUID("6a1c4b2e-9d3f-4e8a-b7c5-0f2e1d3c4b5a")
+            write(joinpath(dir, "Project.toml"), "name = \"ScratchJET\"\nuuid = \"$uuid\"\n")
+            mkdir(joinpath(dir, "src"))
+            write(
+                joinpath(dir, "src", "ScratchJET.jl"), """
+                module ScratchJET
+                struct Point
+                    x::Float64
+                end
+                reads_undefined(p::Point) = p.x + undefined_global_name
+                reads_missing_field(p::Point) = getfield(p, :y)
+                end
+                """
+            )
+            pushfirst!(LOAD_PATH, dir)
+            try
+                scratch = Base.require(Base.PkgId(uuid, "ScratchJET"))
+                (; errors) = qa_jet_reports(scratch)
+                Test.@test any(m -> occursin("undefined_global_name", m), errors)
+                Test.@test any(m -> occursin("no field `y`", m), errors)
+            finally
+                filter!(!=(dir), LOAD_PATH)
+            end
+        end
+        return nothing
+    end
+
     """
         qa_explicit_imports(mod; nonpublic_explicit = (), nonpublic_qualified = (),
                             skip_owners = false)

@@ -155,3 +155,10 @@ end
     end
 end
 end
+
+# JET's error analysis of the whole package: undefined names and fields (D-298)
+@testitem "QA: JET package analysis (CorePotts)" setup = [CP_qa] tags = [:corepotts, :qa] begin
+    @testset "QA: JET package analysis (CorePotts)" begin
+        qa_jet_package(CorePotts)
+    end
+end

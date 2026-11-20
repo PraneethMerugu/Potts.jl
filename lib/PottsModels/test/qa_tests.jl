@@ -51,3 +51,10 @@ end
         end
     end
 end
+
+# JET's error analysis of the whole package: undefined names and fields (D-298)
+@testitem "PottsModels QA: JET package analysis" setup = [QualitySetup] tags = [:pottsmodels, :qa] begin
+    @testset "PottsModels QA: JET package analysis" begin
+        qa_jet_package(PottsModels)
+    end
+end

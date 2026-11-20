@@ -321,3 +321,10 @@ end
     end
 end
 end
+
+# JET's error analysis of the whole package: undefined names and fields (D-298)
+@testitem "QA: JET package analysis (MakiePotts)" setup = [MP_makiepotts] tags = [:makiepotts, :qa] begin
+    @testset "QA: JET package analysis (MakiePotts)" begin
+        qa_jet_package(MakiePotts)
+    end
+end

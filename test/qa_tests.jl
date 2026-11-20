@@ -550,3 +550,11 @@ end
         @test_opt target_modules = (Potts,) Potts.paint!(Potts.LayoutState(lat.dims), Splits(e, 2; shortfall = :allow, splits = :allow), lat)
     end
 end
+
+# JET's error analysis of the whole package: undefined names and fields (D-298)
+@testitem "QA: JET package analysis (Potts)" setup = [QaSetup] tags = [:potts, :qa] begin
+    @testset "QA: JET package analysis (Potts)" begin
+        qa_jet_package(Potts)
+        qa_jet_control()
+    end
+end

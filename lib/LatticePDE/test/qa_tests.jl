@@ -66,3 +66,10 @@ end
         end
     end
 end
+
+# JET's error analysis of the whole package: undefined names and fields (D-298)
+@testitem "QA: JET package analysis (LatticePDE)" setup = [LP_qa] tags = [:latticepde, :qa] begin
+    @testset "QA: JET package analysis (LatticePDE)" begin
+        qa_jet_package(LatticePDE)
+    end
+end
