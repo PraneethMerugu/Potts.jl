@@ -142,11 +142,15 @@ end
                 :(@kinds medium a), :(@kinds medium A b), :(@observed b ~ volume), :(@relations a = Moore(1)),
                 :(@structural_parameters a = 1), :(@relationship b(cell, cell) capacity = 1)
             )
-            body = decl.args[1] === Symbol("@kinds") ? quote
-                    $decl
-                end : quote
-                    @kinds medium A; $decl
-                end
+            body = if decl.args[1] === Symbol("@kinds")
+                quote
+                        $decl
+                    end
+            else
+                quote
+                        @kinds medium A; $decl
+                    end
+            end
             @test_throws ArgumentError expand(body)
         end
         @test expand(
@@ -175,11 +179,17 @@ end
     )
 
     function swapped_sites_delta(sys)
-        swap(ex) = ex isa Expr ?
-            (
-                ex.head === :ref && ex.args[1] == :(st.site.cue) && ex.args[2] in (:target, :sn) ?
-                Expr(:ref, ex.args[1], ex.args[2] === :target ? :sn : :target) : Expr(ex.head, map(swap, ex.args)...)
-            ) : ex
+        function swap(ex)
+            if ex isa Expr
+                if ex.head === :ref && ex.args[1] == :(st.site.cue) && ex.args[2] in (:target, :sn)
+                    return Expr(:ref, ex.args[1], ex.args[2] === :target ? :sn : :target)
+                else
+                    return Expr(ex.head, map(swap, ex.args)...)
+                end
+            else
+                return ex
+            end
+        end
         has_cue_ref(ex, idx) = _has_ast(ex, n -> n isa Expr && n.head === :ref && n.args[1] == :(st.site.cue) && n.args[2] === idx)
         code = Potts.generated_code(sys).delta_H
         @assert has_cue_ref(code, :sn) && has_cue_ref(code, :target)

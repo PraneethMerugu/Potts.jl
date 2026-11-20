@@ -163,8 +163,11 @@ function _field_term(x, cv)
         # the fill then evaluates only the taken branch (a neighbor fold under a kind test
         # runs on the sites of that kind only, as the CPM code does)
         f === ifelse && !_reads_fieldvar(u) && _has_cpm_fill(u) && return _filled_or_refuse(cv, u)
-        return f === ifelse ? _unwrap(ifelse(map(y -> Symbolics.wrap(_field_term(y, cv)), a)...)) :
-               _unwrap(f(map(y -> Symbolics.wrap(_field_term(y, cv)), a)...))
+        if f === ifelse
+            return _unwrap(ifelse(map(y -> Symbolics.wrap(_field_term(y, cv)), a)...))
+        else
+            return _unwrap(f(map(y -> Symbolics.wrap(_field_term(y, cv)), a)...))
+        end
     elseif f isa ModelingToolkitBase.Shift
         # a map's own left side (`Shift(t, 1)(m) ~ rhs`); on a right side it has no meaning
         throw(
@@ -262,17 +265,30 @@ function _filled_or_refuse(cv, u)
     return _filled_input!(cv, u, cv.filled[k][1], cv.filled[k][3])
 end
 
+# the number type of an input read as `E`: `Bool`, `Int32` for an integer, else `other`
+function _input_number_type(E, other)
+    E <: Bool && return Bool
+    E <: Integer && return Int32
+    return other
+end
 function _filled_input!(cv, u, name, E)
     any(e -> e[1] === name, cv.filled) || push!(cv.filled, (name, u, E))
     # a kind is never negative: a kind table read `value_at(δ, kind + 1)` never takes index 0 (which
     # reads 0), and the stability bound leaves it out
-    return get!(() -> _field_var(name, E === Bool ? Bool : E <: Integer ? Int32 : Real, cv.ivs; input = true,
+    return get!(() -> _field_var(name, _input_number_type(E, Real), cv.ivs; input = true,
             entity = Entity(:cpm_read, name, u, (;)), username = _input_word(name, u),
             bounds = name === :kind__in ? (0, Inf) : nothing), cv.inputs, name)
 end
 # the user's word for a generated input: `kind`, `domain`, or the CPM read as written (`volume`)
-_input_word(name::Symbol, ex) = name === :kind__in ? "kind" : name === :domain__in ? "domain" :
-                                _builtin_text(string(ex))
+function _input_word(name::Symbol, ex)
+    if name === :kind__in
+        return "kind"
+    elseif name === :domain__in
+        return "domain"
+    else
+        return _builtin_text(string(ex))
+    end
+end
 
 # a generated input goes by its word (`domain`, `kind`, a CPM read as written), and the field
 # compiler routes reads and writes by name: a field, site variable or parameter with the same
@@ -287,8 +303,13 @@ function _refuse_input_words(cv, names, ps)
         w = _input_word(e[1], e[2])
         what = get(taken, w, nothing)
         what === nothing && continue
-        src = e[1] === :domain__in ? "the lattice's domain mask" : e[1] === :kind__in ? "the site's kind" :
-              "the CPM read `$w`"
+        src = if e[1] === :domain__in
+            "the lattice's domain mask"
+        elseif e[1] === :kind__in
+            "the site's kind"
+        else
+            "the CPM read `$w`"
+        end
         throw(
             PottsCompileError(
                 "the field equations read `$w` ($src), and `$w` is also $what of the model; " *
@@ -381,12 +402,16 @@ function _steady_assign(sys::PottsSystem)
     picks, bad = LatticePDE.steady_choice([idx(r.ops) for r in reads], [idx(r.all) for r in reads], length(free))
     if bad != 0
         left = [info(free[k]).name for k in eachindex(free) if !(k in picks)]
+        unread = if isempty(left)
+            " (every field has an equation)"
+        else
+            string(" of the fields with no equation (", join(("`$n`" for n in left), ", "), ")")
+        end
         throw(
             PottsCompileError(
                 string(
                     "`", rows[bad], "`: a steady row `0 ~ rhs` is solved for a field that it reads and that ",
-            "has no other equation, and it reads none", isempty(left) ? " (every field has an equation)" :
-            string(" of the fields with no equation (", join(("`$n`" for n in left), ", "), ")"),
+                    "has no other equation, and it reads none", unread,
                     "; write the field's operator into the row (`0 ~ D * laplacian(c) - k * c + …` for `c`)"
                 )
             )
@@ -536,8 +561,13 @@ function _bcs_reads(b, ext)
                           v = SymbolicUtils.isconst(w) ? SymbolicUtils.unwrap_const(w) : w
                           # a face only at 0 or the extent; another number is `parse_bcs`'s to name
                           v isa Real || continue
-                          k == 1 ? push!(pins, (1, -1)) : iszero(v) ? push!(pins, (k, -1)) :
-                          k - 1 <= length(ext) && isapprox(v, ext[k - 1]) && push!(pins, (k, 1))
+                          if k == 1
+                              push!(pins, (1, -1))
+                          elseif iszero(v)
+                              push!(pins, (k, -1))
+                          else
+                              k - 1 <= length(ext) && isapprox(v, ext[k - 1]) && push!(pins, (k, 1))
+                          end
                       end
                   else
                       i = info(y)
@@ -653,9 +683,13 @@ end
 The filled inputs of model `sys`: `(name, expr, eltype)`, the site arrays the CPM writes for
 the fields every MCS (`T` is the state type).
 """
-_field_inputs(sys::PottsSystem, T::Type = Float64) =
-    isempty(_field_equations(sys)) && isempty(_field_aux(sys)) ? Tuple{Symbol, Any, Type}[] :
-    _canonical_filled(_field_system(sys; T, known = Tuple{Symbol, Any, Type}[])[2].filled)
+function _field_inputs(sys::PottsSystem, T::Type = Float64)
+    if isempty(_field_equations(sys)) && isempty(_field_aux(sys))
+        return Tuple{Symbol, Any, Type}[]
+    else
+        return _canonical_filled(_field_system(sys; T, known = Tuple{Symbol, Any, Type}[])[2].filled)
+    end
+end
 # those of compiled model `c`, made once per state type (cached on `c`)
 _field_inputs(c::CompiledPottsSystem, T::Type = Float64) =
     _field_cached(() -> _field_inputs(getfield(c, :sys), T), c, (:inputs, T))
@@ -726,7 +760,15 @@ struct _MapSteps end
 struct _AuxSteps end
 (::_AuxSteps)(praw) = 0
 # the least count and the bounded flag of a group's rule, as the fingerprint records them
-_least(s) = s isa _MapSteps ? 1 : s isa _AuxSteps ? 0 : something(_given_count(s.alg), 1)
+function _least(s)
+    if s isa _MapSteps
+        return 1
+    elseif s isa _AuxSteps
+        return 0
+    else
+        return something(_given_count(s.alg), 1)
+    end
+end
 # the count an algorithm was given (`substeps = n`), or `nothing` (automatic, or no such keyword)
 _given_count(a) = hasproperty(a, :substeps) ? a.substeps : nothing
 _bounded(s) = s isa Union{_MapSteps, _AuxSteps} || (isempty(s.spec.stability.unbounded) && isempty(s.spec.stability.expanded))
@@ -831,9 +873,13 @@ function LatticeFields.Problems.unbounded_text(t::_PottsTexts, c)
                "the field$(_fs(t)) with `field_solver = BackwardEuler()` (it solves the fields in the order they read " *
             "each other, with no substep bound), or give " * _POTTS_ROUTE
     end
+    why = if isempty(r.nonfinite)
+        "a coefficient is not finite"
+    else
+        join((_nonfinite_text(text, w, t.cv) for (_, text, w) in r.nonfinite), "; ")
+    end
     return string("the substep bound of the field$(_fs(t)) ", _fieldlist(t.names), " is not finite at the current parameters: ",
-        isempty(r.nonfinite) ? "a coefficient is not finite" :
-        join((_nonfinite_text(text, w, t.cv) for (_, text, w) in r.nonfinite), "; "))
+        why)
 end
 # the fields of a group whose declared bounds are not finite (`bounds = (0, Inf)`), in words
 function _infinite_text(t::_PottsTexts)
@@ -878,8 +924,12 @@ function LatticeFields.Problems.coupling_unbounded_text(t::_PottsTexts, c; refus
 end
 function LatticeFields.Problems.steady_loop_text(t::_PottsTexts, c)
     w = c.why[1]
-    one = w in (:steady_only, :steady) ? string("Give ", _fieldlist(c.qs), " one `QuasiSteady` solver (one group, whose ",
-                                                "steady rows are solved together), or give ") : "Give "
+    one = if w in (:steady_only, :steady)
+        string("Give ", _fieldlist(c.qs), " one `QuasiSteady` solver (one group, whose ",
+            "steady rows are solved together), or give ")
+    else
+        "Give "
+    end
     return string("the fields ", _fieldlist(c.lf), " are in solver groups that read one another in a loop, and ",
         _fieldlist(c.qs), length(c.qs) == 1 ? " is" : " are", " solved with `QuasiSteady`: a steady field answers its ",
         "inputs at once, with the gain of its steady solve, so the lag of one field window between the groups can grow ",
@@ -889,8 +939,12 @@ function LatticeFields.Problems.steady_loop_text(t::_PottsTexts, c)
 end
 function LatticeFields.Problems.steady_gain_text(t::_PottsTexts, c)
     x = c.x
-    via = isempty(x.qs) ? "" : string(" (`", x.qs, "` answers at once with a gain up to ", round(x.gain; sigdigits = 6),
-        ", from its smallest decay and its faces, times ", round(x.kout; sigdigits = 6), ", the sum of its reads of the loop)")
+    via = if isempty(x.qs)
+        ""
+    else
+        string(" (`", x.qs, "` answers at once with a gain up to ", round(x.gain; sigdigits = 6),
+            ", from its smallest decay and its faces, times ", round(x.kout; sigdigits = 6), ", the sum of its reads of the loop)")
+    end
     return string("the fields ", _fieldlist(c.lf), " are in solver groups that read one another in a loop, and ",
         _fieldlist(c.qs), length(c.qs) == 1 ? " is" : " are", " solved with `QuasiSteady`, each group holding the others' ",
         "values over each field window (", c.dt, " MCS): the terms of `", x.row, "` that read other groups of the loop (the ",
@@ -907,16 +961,24 @@ function LatticeFields.Problems.loop_text(t::_PottsTexts, c)
     # one solver for the loop: an automatic count needs dominant rows (a parameter of
     # another group has no value here: then the explicit route, which always holds)
     ρ = Float64(LatticeFields.Problems.restrict_bound(c.stability, lf)(c.pp))
-    one = isfinite(ρ) && ρ >= 0 ? string("Give ", _fieldlist(lf), " one solver (one group; `solvers`)") :
-          string("Give ", _fieldlist(lf), " one solver with an explicit count (one group, `ExplicitEuler(; ",
-                 "substeps = n)`; their coupled rows have no automatic count)")
+    one = if isfinite(ρ) && ρ >= 0
+        string("Give ", _fieldlist(lf), " one solver (one group; `solvers`)")
+    else
+        string("Give ", _fieldlist(lf), " one solver with an explicit count (one group, `ExplicitEuler(; ",
+            "substeps = n)`; their coupled rows have no automatic count)")
+    end
+    unseen_note = if isempty(unseen)
+        ""
+    else
+        string(" (the terms of ", _fieldlist(unseen), " that the stability bound cannot ",
+            "see and that read another field count as reading every other group)")
+    end
     return string("the fields ", _fieldlist(lf), " are in solver groups that read one another in a ",
         "loop, each holding the others' values over each field window (", c.dt, " MCS): the terms of ", u(q.row),
         " that read other groups of the loop (the largest: the coefficient `", _user_text(q.raw, t.cv), "` of ", u(q.other),
         ") give window · Σ max|coefficient| = ", round(κ; sigdigits = 4), " > 1, and the loop can then grow ",
         "without bound at any substep count",
-        isempty(unseen) ? "" : string(" (the terms of ", _fieldlist(unseen), " that the stability bound cannot ",
-                                      "see and that read another field count as reading every other group)"),
+        unseen_note,
         ". ", one, ", or step the fields over a shorter window (`repeat(n, …)` of the fields, or a smaller ",
         "`mcs_duration`; window ≤ ", floor(1 / q.rate; sigdigits = 4), ")")
 end
@@ -937,12 +999,25 @@ function _nonfinite_text(text, w, cv; warning::Bool = false)
     w isa Tuple || return string(t, " is not finite at the current parameters")
     combos, more = w
     all(isempty, combos) && return string(t, " is not finite; give its parameters values that make it finite")
-    ent(tb, i) = i == 0 ? "index 0 of `$tb` (which reads 0)" :
-                 i == 1 ? "the medium's entry of `$tb` (kind 0)" : "the entry of kind $(i - 1) of `$tb`"
+    function ent(tb, i)
+        if i == 0
+            return "index 0 of `$tb` (which reads 0)"
+        elseif i == 1
+            return "the medium's entry of `$tb` (kind 0)"
+        else
+            return "the entry of kind $(i - 1) of `$tb`"
+        end
+    end
     # the route by cause: a zero under a division, a negative value under `sqrt` or `log`
-    fix(v) = v == 0 ? "make it nonzero (a zero entry: a division by it is not finite)" :
-             v < 0 ? "make it ≥ 0 (a negative entry under `sqrt` or `log` is not finite)" :
-             "give it a value where the coefficient is finite"
+    function fix(v)
+        if v == 0
+            return "make it nonzero (a zero entry: a division by it is not finite)"
+        elseif v < 0
+            return "make it ≥ 0 (a negative entry under `sqrt` or `log` is not finite)"
+        else
+            return "give it a value where the coefficient is finite"
+        end
+    end
     rd = unique(reduce(vcat, combos))
     return string(t, " is not finite at ", join((join((ent(tb, i) for (tb, i, _) in c), " with ") for c in combos), ", at "),
         more > 0 ? " (and $more more)" : "", "; ",
@@ -1051,23 +1126,31 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
         # parameters, mapped by name (a parameter the group does not read is `NaN`: no cross
         # coefficient of its rows reads it; the read graph is the structure, so it needs no value).
         # An implicit group's fingerprint is its residual program's (the program it runs)
-        fp = solver isa LatticeFields.Problems.AbstractImplicitFieldAlgorithm ?
-             LatticeFields.Compile.fingerprint_text(LatticeFields.Compile.fuse_residual(gspec.rate,
-                 LatticeFields.Problems.residual_rule(solver); widen16 = true); T) :
-             LatticeFields.Compile.fingerprint_text(fused; T)
+        fp = if solver isa LatticeFields.Problems.AbstractImplicitFieldAlgorithm
+            LatticeFields.Compile.fingerprint_text(LatticeFields.Compile.fuse_residual(gspec.rate,
+                LatticeFields.Problems.residual_rule(solver); widen16 = true); T)
+        else
+            LatticeFields.Compile.fingerprint_text(fused; T)
+        end
         # with a QuasiSteady group among several, every group's phase holds the whole system's
         # parameters (after its own, which its launches read by slot): the steady gain in the
         # coupling rule reads the steady rows' decay and faces, which another group's rule
         # needs
         withqs = coupling !== nothing && any(o -> o[2] isa LatticeFields.Problems.QuasiSteady, order)
         params = withqs ? [lg.params; [n for n in coupling.wnames if !(n in lg.params)]] : lg.params
-        rtabs = withqs ? Pair{String, Symbol}[k => n for (k, n) in coupling.wtables if !(n in last.(lg.tables))] :
-                Pair{String, Symbol}[]
-        cp = coupling === nothing ? nothing :
-             (; stability = coupling.bound, coupling.groups, explicit = [i == gi && _given_count(solver) !== nothing for i in eachindex(order)],
+        rtabs = if withqs
+            Pair{String, Symbol}[k => n for (k, n) in coupling.wtables if !(n in last.(lg.tables))]
+        else
+            Pair{String, Symbol}[]
+        end
+        cp = if coupling === nothing
+            nothing
+        else
+            (; stability = coupling.bound, coupling.groups, explicit = [i == gi && _given_count(solver) !== nothing for i in eachindex(order)],
                 index = gi, whole = _WholeParams(coupling.wnames, params),
                 steady = [order[i][2] isa LatticeFields.Problems.QuasiSteady for i in eachindex(order)],
                 rows0 = _steady_names(sys, allnames))
+        end
         rule = LatticeFields.Problems.GroupSubsteps(gspec, solver, dt; key = fp,
             texts = _PottsTexts(names, (; filled = copy(cv.filled), infinite = _infinite_bounds(c, names))),
             coupling = cp)
@@ -1117,9 +1200,11 @@ function _aux_group(c::CompiledPottsSystem, T::Type, dt)
     group = LatticeFields.Problems.FieldGroup(gspec; alg = solver, program = LatticeFields.Compile.semantic(fused))
     prog = group.program
     mplan, splan = LatticeFields.Problems.group_plans(group, solver, T, KernelAbstractions.CPU(), opts)
-    arrays = Tuple((startswith(f.key, "domain:") || _hidden_aux(f.key) ?
-                    CorePotts.BindingScratch() : CorePotts.Part((:site, Symbol(f.key))), nothing)
-                   for f in prog.fields)
+    function field_array(f)
+        hidden = startswith(f.key, "domain:") || _hidden_aux(f.key)
+        return (hidden ? CorePotts.BindingScratch() : CorePotts.Part((:site, Symbol(f.key))), nothing)
+    end
+    arrays = Tuple(field_array(f) for f in prog.fields)
     fp = LatticeFields.Compile.fingerprint_text(fused; T)
     return _FieldGroup(Symbol[], group, solver, prog, mplan, splan, arrays, lg.tables, lg.params, _AuxSteps(), fp, opts)
 end
@@ -1227,7 +1312,7 @@ function _discretized_phases(c::CompiledPottsSystem, T, spec::SolverSpec)
         op = get(back, op, op)
         key = Symbol(something(LatticePDE.get_lattice_input_name(x), string(op)))
         st = SymbolicUtils.symtype(x)
-        E = get(filled, op, st <: Bool ? Bool : st <: Integer ? Int32 : T)
+        E = get(filled, op, _input_number_type(st, T))
         push!(inputs, (key, op, E))
     end
     names = Set{Symbol}(info(x).name for x in _p(sys, :parameters))
@@ -1388,8 +1473,11 @@ function _check_field_substeps(@nospecialize(f), @nospecialize(p); tspan = nothi
             pp = LatticeFields.Problems.with_tables(Float64[CorePotts.praw(ph, p)...], CorePotts.table_values(ph, p))
             # (the run's time span, MCS times the step length: a Robin face that reads the time
             # is checked over it)
-            sp = tspan === nothing || !(ph.substeps isa LatticeFields.Problems.GroupSubsteps) ? nothing :
-                 (Float64(tspan[1]) * ph.period, Float64(tspan[2]) * ph.period)
+            sp = if tspan === nothing || !(ph.substeps isa LatticeFields.Problems.GroupSubsteps)
+                nothing
+            else
+                (Float64(tspan[1]) * ph.period, Float64(tspan[2]) * ph.period)
+            end
             sp === nothing ? ph.substeps(pp) : ph.substeps(pp; span = sp)
         end
     end

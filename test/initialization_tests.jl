@@ -541,8 +541,15 @@ end
     @testset "initialization: no value written changes nothing else" begin
         a, b = IniBare(; name = :n), IniZero(; name = :n)
         @test !Potts._written(only(Potts.declared_variables(a))) && Potts._written(only(Potts.declared_variables(b)))
-        strip_expr(x) = x isa Expr ? Base.remove_linenums!(deepcopy(x)) :
-            x isa Tuple ? map(strip_expr, x) : x
+        function strip_expr(x)
+            if x isa Expr
+                return Base.remove_linenums!(deepcopy(x))
+            elseif x isa Tuple
+                return map(strip_expr, x)
+            else
+                return x
+            end
+        end
         ga, gb = generated_code(a), generated_code(b)
         @test keys(ga) == keys(gb)
         @test all(k -> strip_expr(getfield(ga, k)) == strip_expr(getfield(gb, k)), keys(ga))

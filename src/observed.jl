@@ -436,13 +436,18 @@ function _pde_inputs(info::PottsModelInfo, f::ModelingToolkitBase.PDESystem)
     all(k -> any(e -> e[1] === k, ex), want) && return [e for e in ex if e[1] in want]
     lst(ks) = isempty(ks) ? "none" : join(("`$k`" for k in ks), ", ")
     names = unique(Symbol[e[4] for e in get(md, _FieldInputs, ()) if length(e) >= 4])
+    coupled_names = isempty(names) ? "it has none" : string("its coupled PDESystems: ", lst(names))
+    coupled_note = if isempty(coupled)
+        ""
+    else
+        string("; `", nameof(f), "` has ", lst(unique(Symbol[e[1] for e in coupled])))
+    end
     throw(
         ArgumentError(
             string(
                 "Potts.field_inputs: the inputs of the PDESystem `", nameof(f), "` (", lst(want), ") are ",
                 "neither those of a PDESystem of that name coupled into the model (",
-                isempty(names) ? "it has none" : string("its coupled PDESystems: ", lst(names)), isempty(coupled) ? "" :
-                    string("; `", nameof(f), "` has ", lst(unique(Symbol[e[1] for e in coupled]))), ") nor those of `Potts.fields(model)` (",
+                coupled_names, coupled_note, ") nor those of `Potts.fields(model)` (",
                 lst([e[1] for e in ex]), "); give the PDESystem that `@fields` or `Potts.couple` took, or `Potts.fields(model)`"
             )
         )
@@ -469,7 +474,13 @@ function _field_inputs_at(info::PottsModelInfo, u, p, t, ins)
         end
         # the values the field compiler uses, converted exactly (a value the element type cannot
         # hold is an InexactError, never a rounded or truncated value)
-        out[key] = E === Bool ? Bool.(v) : E <: Integer ? E.(v) : info.T.(v)
+        out[key] = if E === Bool
+            Bool.(v)
+        elseif E <: Integer
+            E.(v)
+        else
+            info.T.(v)
+        end
     end
     return out
 end
@@ -491,7 +502,13 @@ function _exported_inputs(c::CompiledPottsSystem)
         op = get(back, op, op)
         key = Symbol(something(LatticePDE.get_lattice_input_name(x), string(op)))
         st = SymbolicUtils.symtype(x)
-        E = st <: Bool ? Bool : st <: Integer ? Int32 : Real
+        E = if st <: Bool
+            Bool
+        elseif st <: Integer
+            Int32
+        else
+            Real
+        end
         if op === :domain__in
             push!(out, (key, :domain, nothing, Bool))
         elseif haskey(filled, op)

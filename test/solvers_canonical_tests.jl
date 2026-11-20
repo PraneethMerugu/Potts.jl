@@ -31,8 +31,15 @@ end
         exprs = Any[values(Base.structdiff(generated_code(SolverPairYS(; name = :p)), (; phases = nothing)))...]
         append!(exprs, generated_code(SolverPairYS(; name = :p)).phases)
         exprs = filter(!isnothing, exprs)
-        moved(ex) = ex isa LineNumberNode ? LineNumberNode(ex.line + 100, Symbol("/elsewhere/src/codegen.jl")) :
-            ex isa Expr ? Expr(ex.head, map(moved, ex.args)...) : ex
+        function moved(ex)
+            if ex isa LineNumberNode
+                return LineNumberNode(ex.line + 100, Symbol("/elsewhere/src/codegen.jl"))
+            elseif ex isa Expr
+                return Expr(ex.head, map(moved, ex.args)...)
+            else
+                return ex
+            end
+        end
         hasmacroline(ex) = ex isa Expr && ((ex.head === :macrocall && ex.args[2] isa LineNumberNode) || any(hasmacroline, ex.args))
         @test any(hasmacroline, exprs)                                   # the case the hash must ignore
         @test Potts._code_hash(exprs) == Potts._code_hash(map(moved, exprs))

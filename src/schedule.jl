@@ -135,11 +135,15 @@ function _hoist_populations(x, slots::Vector{Pair{Symbol, Any}}, rn, prefix::Sym
     length(pops) > 1 && (pops = pops[sortperm(map(_symkey, pops))])
     sub = Dict{Any, Any}()
     for p in pops
-        _hoistable(p, rn) || (
-            strict ? throw(
-                    PottsCompileError(
-            "a population fold in an energy is computed once per MCS, so its body must not read " *
-            "the current cell or site; got `$p`")) : continue)
+        if !_hoistable(p, rn)
+            strict || continue
+            throw(
+                PottsCompileError(
+                    "a population fold in an energy is computed once per MCS, so its body must not read " *
+                        "the current cell or site; got `$p`"
+                )
+            )
+        end
         j = findfirst(s -> isequal(s.second, p), slots)
         if j === nothing
             push!(slots, Symbol(prefix, length(slots) + 1) => p)
@@ -384,8 +388,11 @@ function _schedule_block(sys, us::Vector{Update}, rn, popslots::Vector{Pair{Symb
     rank = _edge_stage_ranks(sys, us, isedge)
     groups = Dict{NTuple{4, Int}, Vector{Int}}()
     for (j, u) in enumerate(us)
-        key = isedge[j] ? (last_level, order[:edge], rank[u.every], u.every) :
-              (level[j], order[_update_scope(u)], 0, u.every)
+        key = if isedge[j]
+            (last_level, order[:edge], rank[u.every], u.every)
+        else
+            (level[j], order[_update_scope(u)], 0, u.every)
+        end
         push!(get!(groups, key, Int[]), j)
     end
     stages = Stage[]

@@ -103,11 +103,16 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
         # a model whose only fields are aux fields (`K ~ rhs`) evaluates them once per MCS, with
         # no solver
         aux = _field_aux(sys)
-        field_solver === nothing || throw(ArgumentError(isempty(aux) ?
-            "`field_solver`: model `$(nameof(sys))` has no field to integrate; remove the keyword" :
-            "`field_solver`: model `$(nameof(sys))` has no field to integrate: " *
-            "$(join(("`$(info(x).name) ~ …`" for (x, _) in aux), ", ")) $(length(aux) == 1 ? "is an aux field" : "are aux fields"), " *
-            "evaluated once per MCS with no solver; remove the keyword"))
+        if field_solver !== nothing
+            msg = if isempty(aux)
+                "`field_solver`: model `$(nameof(sys))` has no field to integrate; remove the keyword"
+            else
+                "`field_solver`: model `$(nameof(sys))` has no field to integrate: " *
+                    "$(join(("`$(info(x).name) ~ …`" for (x, _) in aux), ", ")) $(length(aux) == 1 ? "is an aux field" : "are aux fields"), " *
+                    "evaluated once per MCS with no solver; remove the keyword"
+            end
+            throw(ArgumentError(msg))
+        end
     else
         # the default: explicit Euler with the automatic substep count; for maps
         # `ExplicitMap()`, one application per MCS
@@ -128,8 +133,8 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
         )
         _is_field_solver(fsolver) || throw(ArgumentError(
             "`field_solver` takes a field solver ($(_field_solver_names())); got $(repr(fsolver))"))
-        _check_field_solver(fsolver, field_solver isa LatticeFields.Problems.FieldGroups ? "`FieldGroups`: `default`" :
-                                     "`field_solver`"; map = !isempty(maps))
+        label = field_solver isa LatticeFields.Problems.FieldGroups ? "`FieldGroups`: `default`" : "`field_solver`"
+        _check_field_solver(fsolver, label; map = !isempty(maps))
     end
     ode_solver isa _ODESolver || throw(ArgumentError(
             "`ode_solver` takes `ExplicitEuler(; substeps)`, `Potts.RK4(; substeps)` or `Adaptive(alg; …)`; got $(repr(ode_solver))"
@@ -417,8 +422,11 @@ function _ode_reads_other_cells(c::CompiledPottsSystem)
             # an indexed read crosses cells through its variable, not its index (this cell's
             # expression; a read nested in it is visited on its own); a gather's body reads
             # this cell's unknowns unless indexed; a fold's body reads every cell's
-            hit[] = op === value_at ? !_is_own_read(y) && reads(arguments(y)[1]) :
-                    op === population && reads(y)
+            hit[] = if op === value_at
+                !_is_own_read(y) && reads(arguments(y)[1])
+            else
+                op === population && reads(y)
+            end
         end
     end
     return hit[]

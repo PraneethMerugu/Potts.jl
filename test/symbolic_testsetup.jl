@@ -890,15 +890,23 @@ with_hash_salt(f, s) = (
 
 
 function tie_code(M, solver)
-    strip!(x) = x isa Expr ?
-        (
-            Base.remove_linenums!(x);
-            x.head === :macrocall && length(x.args) >= 2 && x.args[2] isa LineNumberNode && (x.args[2] = nothing);
-            x.args .= strip!.(x.args); x
-        ) :
-        x isa NamedTuple ? NamedTuple{keys(x)}(map(strip!, values(x))) :
-        x isa Tuple ? map(strip!, x) :
-        x isa AbstractVector ? map(strip!, x) : x
+    function strip!(x)
+        if x isa Expr
+            return (
+                    Base.remove_linenums!(x);
+                    x.head === :macrocall && length(x.args) >= 2 && x.args[2] isa LineNumberNode && (x.args[2] = nothing);
+                    x.args .= strip!.(x.args); x
+                )
+        elseif x isa NamedTuple
+            return NamedTuple{keys(x)}(map(strip!, values(x)))
+        elseif x isa Tuple
+            return map(strip!, x)
+        elseif x isa AbstractVector
+            return map(strip!, x)
+        else
+            return x
+        end
+    end
     g = Potts.generated_code(M(; name = :x); ode_solver = solver)
     return [
         strip!(deepcopy(x)) for k in propertynames(g) for x in (

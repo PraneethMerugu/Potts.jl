@@ -241,7 +241,13 @@ function _exact_daughter_2d(S)
         a = sum((p[1] - c[1])^2 for p in P); d = sum((p[2] - c[2])^2 for p in P)
         b = sum((p[1] - c[1]) * (p[2] - c[2]) for p in P)
         λ = (a + d) / 2 + sqrt(((a - d) / 2)^2 + b^2)
-        v = abs(b) > 1.0e-60 ? [λ - d, b] : (a >= d ? [big(1.0), big(0.0)] : [big(0.0), big(1.0)])
+        v = if abs(b) > 1.0e-60
+            [λ - d, b]
+        elseif a >= d
+            [big(1.0), big(0.0)]
+        else
+            [big(0.0), big(1.0)]
+        end
         v ./= sqrt(sum(abs2, v))
         v[findfirst(x -> abs(x) > 1.0e-9, v)] < 0 && (v .*= -1)
         Set(S[i] for i in eachindex(S) if (P[i][1] - c[1]) * v[1] + (P[i][2] - c[2]) * v[2] > 1.0e-60)

@@ -340,8 +340,11 @@ function _named_inputs(f::ModelingToolkitBase.PDESystem, sys::PottsSystem)
         (w === nothing || !Base.isidentifier(w) || w == string(g)) && continue
         renamed[operation(u)] = _renamed_input(u, Symbol(w))
     end
-    rename(u) = (u = _unwrap(u); iscall(u) && haskey(names, nameof(operation(u))) ?
-                                 SymbolicUtils.setmetadata(u, LatticePDE.LatticeInputName, names[nameof(operation(u))]) : u)
+    rename(u) = (u = _unwrap(u); if iscall(u) && haskey(names, nameof(operation(u)))
+        SymbolicUtils.setmetadata(u, LatticePDE.LatticeInputName, names[nameof(operation(u))])
+    else
+        u
+    end)
     function sub(x)
         reps = Dict{Any, Any}()
         _walk_all(x) do y
@@ -573,7 +576,14 @@ function _check_robin_coefs(eq, N = 2)
             j = info(y)
             j !== nothing && (j.role === :param || (j.role === :builtin && j.name in (:time, :mcs))) && continue
             j === nothing && _coordinate(y) && continue
-            refuse(c, j === nothing ? string(y) : j.role in (:field, :site) ? "$(j.name)($args)" : string(j.name))
+            read_name = if j === nothing
+                string(y)
+            elseif j.role in (:field, :site)
+                "$(j.name)($args)"
+            else
+                string(j.name)
+            end
+            refuse(c, read_name)
         end
     end
     return nothing
@@ -783,11 +793,14 @@ function _lower_inner(sys::PottsSystem, what::AbstractString)
         for eq in [M.equations(s); M.observed(s)], side in (eq.lhs, eq.rhs)
             _walk_all(side) do y
                 i = info(y)
-                i === nothing || i.role in (:model, :param) || throw(
+                (i === nothing || i.role in (:model, :param)) && return
+                read_kind = i.role === :bound_cell || i.role === :bound_site ? "population fold" : i.role
+                throw(
                     E(
-                    "$what: component `$(nameof(s))` of `$(nameof(sys))` reads `$(i.name)` (a $(i.role === :bound_cell ||
-                    i.role === :bound_site ? "population fold" : i.role)); a composed component reads its own and model " *
-                    "quantities only: write the expression in the model (`@equations $(nameof(s)).p ~ …` on a parameter)"))
+                        "$what: component `$(nameof(s))` of `$(nameof(sys))` reads `$(i.name)` (a $(read_kind)); a composed component reads its own and model " *
+                            "quantities only: write the expression in the model (`@equations $(nameof(s)).p ~ …` on a parameter)"
+                    )
+                )
             end
         end
         push!(extra, ComponentSpec(nameof(s), s, :model))
@@ -990,14 +1003,17 @@ function _check_component_part(name::Symbol, part::PottsPart, what, E::Type{<:Ex
     end
     for (f, label) in ((:relations, "relations"), (:kind_classes, "kind classes"), (:frozen_kinds, "obstacle kinds"),
             (:schedule, "a @schedule"), (:bcs, "field conditions"), (:components, "@components"))
-        isempty(getfield(part, f)) || throw(
+        isempty(getfield(part, f)) && continue
+        note = if f === :components
+            " (compose its components into the model directly, " *
+                "or declare them in the model with `@components`)"
+        else
+            ""
+        end
+        throw(
             E(
                 "$what: component `$name` has $label; a composed " *
-                    "component carries quantities, equations and field bindings only" *
-                    (
-                    f === :components ? " (compose its components into the model directly, " *
-                        "or declare them in the model with `@components`)" : ""
-                )
+                    "component carries quantities, equations and field bindings only" * note
             )
         )
     end

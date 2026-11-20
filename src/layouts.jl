@@ -293,10 +293,12 @@ function _region_arg(region, N, what)
     region === nothing && return nothing
     length(region) == N ||
         throw(ArgumentError("$what: region has $(length(region)) ranges, the box is $(N)D; match region length to $(N)D"))
-    r = map(x -> (x isa AbstractUnitRange ? UnitRange{Int}(x) :
-                throw(ArgumentError("$what: region ranges must be unit ranges, got $x; pass contiguous ranges such as `1:10`"))
-        ), Tuple(region)
-    )
+    function unit_range(x)
+        x isa AbstractUnitRange ||
+            throw(ArgumentError("$what: region ranges must be unit ranges, got $x; pass contiguous ranges such as `1:10`"))
+        return UnitRange{Int}(x)
+    end
+    r = map(unit_range, Tuple(region))
     any(isempty, r) && throw(ArgumentError("$what: region $r is empty; pass non-empty ranges"))
     return r
 end
@@ -692,8 +694,13 @@ _splits(l::InsertUntil) = l.splits
 
 # The stop rule, from the cells painted before the layer that still own a site (`N`, `K`
 # of them of the inserted kind) and the count so far.
-_insert_done(l::InsertUntil, N, K, counted) = l.number >= 0 ? counted >= l.number :
-                                               K + counted >= l.fraction * (N + counted)
+function _insert_done(l::InsertUntil, N, K, counted)
+    if l.number >= 0
+        return counted >= l.number
+    else
+        return K + counted >= l.fraction * (N + counted)
+    end
+end
 
 function paint!(op::LayoutState, l::InsertUntil, lat)
     dims = size(lat)
@@ -1107,6 +1114,11 @@ end
 
 # A coordinate moved back into [½, n + ½) on a periodic axis (unchanged when already inside).
 _wrap_coord(g, n, periodic) = periodic && !(0.5 <= g < n + 0.5) ? g - n * fld(g - 0.5, n) : g
+# the index range `c ± w` on an axis of `n` sites, cut to `1:n` on a closed axis
+function _window(periodic, c, w, n)
+    periodic && return (c - w):(c + w)
+    return max(1, c - w):min(n, c + w)
+end
 
 # Nearest generator of every site. Each generator scans the index box that holds its
 # Cartesian `h`-ball (`_box_scale`, plus ½ for rounding its position), wrapping on periodic
@@ -1122,8 +1134,7 @@ function _voronoi_assign!(owner, best, image, index::Array{Int, N}, gens, clat, 
         w = map(s -> ceil(Int, hh * s + 0.5), scale)
         for (k, g) in enumerate(gens)
             c = map(x -> round(Int, x), g)
-            box = CartesianIndices(ntuple(d -> per[d] ? ((c[d] - w[d]):(c[d] + w[d])) :
-                                               (max(1, c[d] - w[d]):min(dims[d], c[d] + w[d])), Val(N)))
+            box = CartesianIndices(ntuple(d -> _window(per[d], c[d], w[d], dims[d]), Val(N)))
             for y in box
                 x = ntuple(d -> per[d] ? mod1(y[d], dims[d]) : y[d], Val(N))
                 i = index[x...]
@@ -1572,7 +1583,13 @@ end
 function _major_axis_2d(C)
     a, b, d = C[1, 1], C[1, 2], C[2, 2]
     λ = (a + d) / 2 + sqrt(((a - d) / 2)^2 + b^2)
-    return abs(b) > eps() * (abs(a) + abs(d)) ? [λ - d, b] : (a >= d ? [1.0, 0.0] : [0.0, 1.0])
+    if abs(b) > eps() * (abs(a) + abs(d))
+        return [λ - d, b]
+    elseif a >= d
+        return [1.0, 0.0]
+    else
+        return [0.0, 1.0]
+    end
 end
 
 # Any dimension: the top eigenvector; for a repeated top eigenvalue, the first standard axis
@@ -2020,8 +2037,12 @@ function layout(l::AbstractLayout, x; report::Bool = false)
         bad === nothing ||
             throw(ArgumentError("layout: cell $(σ[bad]) covers site $(Tuple(bad)), outside the lattice domain; ensure the layer's `paint!` assigns only in-domain sites"))
     end
-    rows = report ? [(; layer = j, r.type, r.requested, r.painted, dropped = count(c -> counts[c] == 0, r.first:r.last),
-                         r.misses, r.counted, r.clipped, r.splits) for (j, r) in enumerate(op.rows)] : nothing
+    rows = if report
+        [(; layer = j, r.type, r.requested, r.painted, dropped = count(c -> counts[c] == 0, r.first:r.last),
+            r.misses, r.counted, r.clipped, r.splits) for (j, r) in enumerate(op.rows)]
+    else
+        nothing
+    end
     σc, kindsc = _compact(σ, kinds, counts)
     point = [ownership => σc, kind => identity.(kindsc)]
     _push_columns!(point, op, counts)

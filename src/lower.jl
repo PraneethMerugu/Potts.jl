@@ -247,8 +247,11 @@ end
 # The read of site variable `i` at site `j`. A `Coarse(k)` field holds one value per node
 # of its grid: the site reads the node whose block holds it
 _site_read(i::Entity, j) = (L = get(i.options, :lattice_level, nothing);
-                            L === nothing ? :(@inbounds st.site.$(i.name)[$j]) :
-        :(@inbounds st.site.$(i.name)[Potts._coarse_site($j, size(st.ownership), $(trailing_zeros(L.k)))])
+                            if L === nothing
+                                :(@inbounds st.site.$(i.name)[$j])
+                            else
+                                :(@inbounds st.site.$(i.name)[Potts._coarse_site($j, size(st.ownership), $(trailing_zeros(L.k)))])
+                            end
 )
 """
     _coarse_site(j, dims, s) -> Int
@@ -475,7 +478,13 @@ end
 @inline function _min_image(a::Int, b::Int, L::Int, periodic::Bool)
     v = a - b
     periodic || return v
-    return 2v > L ? v - L : 2v < -L ? v + L : v
+    if 2v > L
+        return v - L
+    elseif 2v < -L
+        return v + L
+    else
+        return v
+    end
 end
 
 """The number of completed MCS during a sweep (the sweep's `ctx.mcs`); 0 outside one
@@ -578,8 +587,13 @@ function _ref_reads!(out, y)
     # a population fold reads every cell's referents, as a fold reads every cell (snapshot
     # or not): its bound cells cannot be lowered outside it
     op === population && return out
-    r = op === value_at && length(arguments(y)) == 2 && _is_ref(arguments(y)[2]) ? arguments(y)[2] :
-        op === cell_alive ? arguments(y)[1] : nothing
+    r = if op === value_at && length(arguments(y)) == 2 && _is_ref(arguments(y)[2])
+        arguments(y)[2]
+    elseif op === cell_alive
+        arguments(y)[1]
+    else
+        nothing
+    end
     r === nothing || _push_ref!(out, r)
     foreach(a -> _ref_reads!(out, _unwrap(a)), arguments(y))
     return out
@@ -725,8 +739,11 @@ function _sort(x)
     if i !== nothing
         i.role in (:bound, :bound_site) && return :site
         i.role === :bound_cell && return :cell
-        i.role === :builtin && return i.name in (:source, :target, :site, :neighbor_site) ? :site :
-            i.name in (:old, :new, :owner, :neighbor_owner, :id, :a, :b) ? :cell : :unknown
+        if i.role === :builtin
+            i.name in (:source, :target, :site, :neighbor_site) && return :site
+            i.name in (:old, :new, :owner, :neighbor_owner, :id, :a, :b) && return :cell
+            return :unknown
+        end
     end
     if x isa SymbolicUtils.BasicSymbolic && iscall(x) && operation(x) === value_at && length(arguments(x)) == 2
         a = info(arguments(x)[1])
@@ -998,8 +1015,13 @@ end
 
 # `Global` inline, in a drive or a constraint: exact on the host algorithms, in the
 # window on the checkerboard (an undecided copy reads `false`); the gaining side is local
-_lower_global(who, g) = who === :new ? :(CorePotts.global_gains(st.ownership, ctx, prop, $(_global_adj(g)))) :
-    :(CorePotts.global_keeps(st.ownership, ctx, prop, $(_global_vals(g)...), CorePotts.GlobalSearch()) == Int32(0))
+function _lower_global(who, g)
+    if who === :new
+        return :(CorePotts.global_gains(st.ownership, ctx, prop, $(_global_adj(g))))
+    else
+        return :(CorePotts.global_keeps(st.ownership, ctx, prop, $(_global_vals(g)...), CorePotts.GlobalSearch()) == Int32(0))
+    end
+end
 # `Val(full)` (hex has one adjacency: `:face`), and with it `Val(window)`, `Val(box capacity)`
 _global_adj(g) = :(Val($(g.adjacency === :full && !_PIECES_HEX[])))
 function _global_vals(g)

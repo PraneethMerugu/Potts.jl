@@ -150,8 +150,13 @@ function fd_oldpath(c0, lat, D, n; h = 1.0, bc = nothing, lower = nothing)
                     o = ntuple(k -> Int32(k == d ? s : 0), N)
                     inside, y = CorePotts.shift(lat, x, o)
                     v = bc === nothing ? nothing : bc[d][side]
-                    nb = inside ? c[CorePotts.linear_index(lat, y)] :
-                        CorePotts._within_faces(lat, x, o) || v === nothing ? ci : 2v - ci
+                    nb = if inside
+                        c[CorePotts.linear_index(lat, y)]
+                    elseif CorePotts._within_faces(lat, x, o) || v === nothing
+                        ci
+                    else
+                        2v - ci
+                    end
                     lap += (nb - ci) / h^2
                 end
             end

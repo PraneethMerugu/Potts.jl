@@ -264,14 +264,23 @@ function _split_tangents!(sys::PottsSystem, opd)
 end
 function _refuse_dual_value(name, role, v)
     w = v isa AbstractArray ? first(x for x in v if _is_dual(x)) : v
-    what = role === :kindtable ? "kind table `$name` holds" : role === :param ? "parameter `$name` holds" :
+    what = if role === :kindtable
+        "kind table `$name` holds"
+    elseif role === :param
+        "parameter `$name` holds"
+    else
         "the initial value of `$name` holds"
+    end
+    through = if role === :kindtable
+        "kind tables (not supported yet)"
+    else
+        "the initial values of cell, model or site variables (the CPM's state, held fixed)"
+    end
     throw(
         ArgumentError(
             string(
                 what, " ", _valtext(w), ": derivatives run through scalar parameters and the ",
-                "initial values of fields; not through ", role === :kindtable ? "kind tables (not supported yet)" :
-                    "the initial values of cell, model or site variables (the CPM's state, held fixed)",
+                "initial values of fields; not through ", through,
                 ". Take finite differences, or give the derivative's direction a scalar parameter"
             )
         )
@@ -640,8 +649,11 @@ _track_names(prob::CorePotts.PottsProblem) =
 function _track_layout(st::CorePotts.CPMState, c::CompiledPottsSystem, track)
     on = :references in track
     on == haskey(st.model, REF_COUNTS) && return st
-    model = on ? merge(st.model, NamedTuple{(REF_COUNTS,)}((fill!(similar(st.cell.kind, UInt32, length(_ref_count_labels(c))), 0),))) :
+    model = if on
+        merge(st.model, NamedTuple{(REF_COUNTS,)}((fill!(similar(st.cell.kind, UInt32, length(_ref_count_labels(c))), 0),)))
+    else
         NamedTuple(k => v for (k, v) in pairs(st.model) if k !== REF_COUNTS)
+    end
     return CorePotts.CPMState(st.ownership, st.cell, st.site, model, st.history)
 end
 
@@ -656,10 +668,12 @@ function CorePotts.report_run(info::PottsModelInfo, integ)
     lines = String[]
     for (j, n) in enumerate(counts)
         n > 0 || continue
-        push!(
-            lines, labels[j] == _SIBLING_LABEL || endswith(labels[j], "(it converts nothing)") ? "$(labels[j]): $n time(s)" :
-                "$(labels[j]) read a dead referent $n time(s) (it reads as the medium; guard with `alive(ref)`)"
-        )
+        line = if labels[j] == _SIBLING_LABEL || endswith(labels[j], "(it converts nothing)")
+            "$(labels[j]): $n time(s)"
+        else
+            "$(labels[j]) read a dead referent $n time(s) (it reads as the medium; guard with `alive(ref)`)"
+        end
+        push!(lines, line)
     end
     @warn "references in $(nameof(info.csys)) (track = (:references,)):\n  " * join(lines, "\n  ")
     fill!(getfield(model, REF_COUNTS), 0)
@@ -759,7 +773,13 @@ function _expand_vectors(sys::PottsSystem, op)
     isempty(vecs) && return op
     out = Pair{Any, Any}[]
     for (k, v) in (op isa AbstractDict ? pairs(op) : op)
-        name = k isa QuantityVector ? k.name : k isa Symbol ? k : nothing
+        name = if k isa QuantityVector
+            k.name
+        elseif k isa Symbol
+            k
+        else
+            nothing
+        end
         if name !== nothing && haskey(vecs, name)
             comps = vecs[name]
             append!(out, [c => _vector_entry(name, v, i, length(comps), info(c).role) for (i, c) in enumerate(comps)])
@@ -898,14 +918,12 @@ function _derive(ps, T, p::PottsParameters)
     d = _derivation(ps)
     nt = NamedTuple(p)
     out = Dict{Symbol, Any}(zip(d.computed, d(Tuple(nt[b] for b in d.base))))
-    return _with_values(
-        p, NamedTuple(
-            info(x).name => (
-                haskey(out, info(x).name) ? _param_value(T, out[info(x).name], info(x); ps) :
-                    nt[info(x).name]
-            ) for x in ps
-        )
-    )
+    function param_value(x)
+        n = info(x).name
+        haskey(out, n) && return _param_value(T, out[n], info(x); ps)
+        return nt[n]
+    end
+    return _with_values(p, NamedTuple(info(x).name => param_value(x) for x in ps))
 end
 # the refusal of a write of computed parameter `i`: its expression, its base inputs
 # (through chains) and the routes
@@ -926,8 +944,11 @@ function _computed_message(ps, i::Entity)
     ins = join(("`$b`" for b in base), ", ")
     # a component's binding (`k2 = 2k` in `comp`): the number goes into the component
     o = get(i.options, :origin, nothing)
-    route = o === nothing ? string("(the model constructor's keyword `", i.name, " = v` does)") :
+    route = if o === nothing
+        string("(the model constructor's keyword `", i.name, " = v` does)")
+    else
         string("in the component: give `", o[2], "` a number in `", o[1], "`'s parameters, in place of its binding")
+    end
     return string(
         "`", i.name, "` is computed from ", ins, " (`", i.name, " = ", _builtin_text(_default_text(i.default)),
         "`): set ", length(base) == 1 ? ins : "its inputs", "; for a fixed `", i.name, "`, declare it with a number ", route
@@ -963,8 +984,11 @@ function _computed_tag(ps)
     # MTK metadata: `tunable = false` names and declared bounds, in the type only when present
     nt = Tuple(info(x).name for x in ps if get(info(x).options, :tunable, true) === false)
     bs = Tuple((info(x).name, info(x).options.bounds...) for x in ps if haskey(info(x).options, :bounds))
-    tag = isempty(cs) ? ((), UInt64(0)) :
+    tag = if isempty(cs)
+        ((), UInt64(0))
+    else
         (Tuple(info(x).name for x in cs), hash([(info(x).name, _canon_default(info(x).default)) for x in cs]))
+    end
     isempty(nt) && isempty(bs) && return isempty(cs) ? () : tag
     return (tag..., (nt, bs))
 end
@@ -1132,21 +1156,26 @@ end
 # that does not convert (a Dual, P5 C3/4-1): the CPM takes plain numbers. Metropolis
 # acceptance is piecewise constant in `p`, so a derivative of a CPM run in `p` is zero
 # almost everywhere; CPM parameters belong to likelihood-free inference on the counter RNG
-_cpm_scalar(::Type{T}, v, i::Entity) where {T} = _plain_number(v) ? T(v) :
-    try
-        T(v)
-catch e
-        e isa Union{MethodError, InexactError, ArgumentError} || rethrow()
-        throw(
-            ArgumentError(
-                "parameter `$(i.name)` = $(_valtext(v)) does not convert to the problem's scalar type $T: " *
-                "a parameter object holds plain numbers (no Duals). A Dual goes to the problem: " *
-                "`PottsProblem(sys, op, tspan)` or `remake(prob; p = [k => Dual])`, whose fields then carry derivative " *
-                "parts along the run's CPM path; an integrator write takes a plain number. A parameter the " *
-                "CPM reads has a derivative that is zero almost everywhere (the acceptance of a copy is piecewise " *
-                "constant in it), so it belongs to likelihood-free inference"
-            )
-        )
+function _cpm_scalar(::Type{T}, v, i::Entity) where {T}
+    if _plain_number(v)
+        return T(v)
+    else
+        return try
+                    T(v)
+            catch e
+                    e isa Union{MethodError, InexactError, ArgumentError} || rethrow()
+                    throw(
+                        ArgumentError(
+                            "parameter `$(i.name)` = $(_valtext(v)) does not convert to the problem's scalar type $T: " *
+                            "a parameter object holds plain numbers (no Duals). A Dual goes to the problem: " *
+                            "`PottsProblem(sys, op, tspan)` or `remake(prob; p = [k => Dual])`, whose fields then carry derivative " *
+                            "parts along the run's CPM path; an integrator write takes a plain number. A parameter the " *
+                            "CPM reads has a derivative that is zero almost everywhere (the acceptance of a copy is piecewise " *
+                            "constant in it), so it belongs to likelihood-free inference"
+                        )
+                    )
+            end
+    end
 end
 
 # a value in a message: a ForwardDiff Dual by its value and value type, not its type (whose tag
@@ -1186,9 +1215,11 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
     for x in _p(sys, :variables)
         i = info(x)
         # a kind-conditional default (E1) is evaluated per cell from its kind, below
-        v = i.role === :cell && !haskey(opd, _unwrap(x)) && _kind_default(i.default) ?
-            [_evaluate(_substitute_kind(i.default, k), pvals, "the default of `$(i.name)` for kind $k") for k in kinds] :
+        v = if i.role === :cell && !haskey(opd, _unwrap(x)) && _kind_default(i.default)
+            [_evaluate(_substitute_kind(i.default, k), pvals, "the default of `$(i.name)` for kind $k") for k in kinds]
+        else
             _evaluate(get(opd, _unwrap(x), i.default), pvals, "the default of `$(i.name)`")
+        end
         if i.role === :site || i.role === :field
             S = get(i.options, :lattice_storage, T)                  # a field's own storage (Float16)
             _check_field_bounds(i, v)
@@ -1284,7 +1315,13 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
     end
     # previous-value snapshots and population slots (D-041, D-042)
     for (scope, n) in unique(Iterators.flatten(values(getfield(c, :pre_snapshots))))
-        dst = scope === :site ? site : scope === :cell ? cell : model
+        dst = if scope === :site
+            site
+        elseif scope === :cell
+            cell
+        else
+            model
+        end
         push!(dst, Symbol(n, :__pre) => copy(last(dst[findfirst(q -> q.first === n, dst)])))
     end
     # scratch slots of discrete components ticking in several phases
@@ -1316,7 +1353,11 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
         σ, kinds; cell = NamedTuple(cell), site = sitent, model = modelnt, history,
         shapes = NamedTuple(shapes)
     )
-    cap = capacity === nothing ? (_numbers_cells(c) ? 2ncell + 64 : ncell) : capacity
+    cap = if capacity === nothing
+        _numbers_cells(c) ? 2ncell + 64 : ncell
+    else
+        capacity
+    end
     st = cap > ncell ? CorePotts.with_capacity(st, cap) : st
     return _reduce_layout(_convert_layout(st, c), c)
 end
@@ -1513,15 +1554,14 @@ end
 const _SymbolicMap = Union{AbstractVector{<:Pair}, AbstractDict}
 
 # (a Dual value: its primal value here, the Dual in the problem's tangent: `remake_tangent`)
-CorePotts.remake_parameters(@nospecialize(info::PottsModelInfo), @nospecialize(prob), p::_SymbolicMap) =
-    _set_parameter_map(
-    info, prob.p, Pair{Any, Any}[
-        k => (
-            _is_dual(v) ? _tprimal(v) : _has_dual(v) ?
-                _refuse_dual_value(string(k), :kindtable, v) : v
-        ) for (k, v) in p
-    ]
-)
+function _primal_entry(k, v)
+    _is_dual(v) && return _tprimal(v)
+    _has_dual(v) && return _refuse_dual_value(string(k), :kindtable, v)
+    return v
+end
+function CorePotts.remake_parameters(@nospecialize(info::PottsModelInfo), @nospecialize(prob), p::_SymbolicMap)
+    return _set_parameter_map(info, prob.p, Pair{Any, Any}[k => _primal_entry(k, v) for (k, v) in p])
+end
 
 # parameter object `old` with the parameter map `p` applied as one change, then every computed
 # parameter derived again
@@ -1698,13 +1738,14 @@ function _check_births(st::CorePotts.CPMState, c::CompiledPottsSystem)
     want = _tracks_births(c)
     col, ctr = haskey(st.cell, :birth), haskey(st.model, CorePotts.NEXT_BIRTH)
     col == ctr == want && return st
+    needs = if want
+        "the model reads `birth`, so a state needs the `birth` cell column and its counter"
+    else
+        "the model keeps no cell serials, so a state has no `birth` cell column or counter"
+    end
     throw(
         ArgumentError(
-            "the given state does not fit model `$(nameof(c))`: " *
-                (
-                want ? "the model reads `birth`, so a state needs the `birth` cell column and its counter" :
-                    "the model keeps no cell serials, so a state has no `birth` cell column or counter"
-            ) *
+            "the given state does not fit model `$(nameof(c))`: " * needs *
                 " (the state has $(col ? "a" : "no") `birth` column and $(ctr ? "a" : "no") counter)"
         )
     )

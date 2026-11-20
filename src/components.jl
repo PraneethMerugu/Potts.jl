@@ -479,8 +479,11 @@ function _mtk_compile_call(compile::F, comp) where {F}
     catch e
         (isfatal(e) || e isa Union{ArgumentError, PottsCompileError}) && rethrow()
         _raised_in_potts(catch_backtrace()) && rethrow()
-        hint = nameof(typeof(e)) === :ExtraVariablesSystemException ?
-               "every discrete variable needs an update `x(k) ~ …`; " : ""
+        hint = if nameof(typeof(e)) === :ExtraVariablesSystemException
+            "every discrete variable needs an update `x(k) ~ …`; "
+        else
+            ""
+        end
         throw(
             PottsCompileError(
                 "component `$(comp.name)`: $(hint)ModelingToolkit cannot compile this discrete system: " *
@@ -564,8 +567,11 @@ end
 
 # the default of a slot: its own, or its entry in the default of its array variable (G11)
 function _element_default(ics, x)
-    const_of(y) = (v = get(ics, _unwrap(y), nothing); v === nothing ? nothing :
-                                                      (w = _unwrap(v); SymbolicUtils.isconst(w) ? SymbolicUtils.unwrap_const(w) : nothing))
+    const_of(y) = (v = get(ics, _unwrap(y), nothing); if v === nothing
+        nothing
+    else
+        (w = _unwrap(v); SymbolicUtils.isconst(w) ? SymbolicUtils.unwrap_const(w) : nothing)
+    end)
     v = const_of(x)
     v isa Real && return Float64(v)
     u = _unwrap(x)

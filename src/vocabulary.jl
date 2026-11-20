@@ -153,10 +153,10 @@ parameter(name::Symbol, default; unit = nothing, tunable = true, bounds = nothin
 _origin(opts, ::Nothing) = opts
 _origin(opts, o) = (; opts..., origin = o)
 # (`tunable = false` through MTK's own declaration: its metadata key is not public)
-_param(name::Symbol; tunable::Bool = true) = Symbolics.unwrap(
-    tunable ? only(ModelingToolkitBase.@parameters $name) :
-        only(ModelingToolkitBase.@parameters $name [tunable = false])
-)
+function _param(name::Symbol; tunable::Bool = true)
+    tunable && return Symbolics.unwrap(only(ModelingToolkitBase.@parameters $name))
+    return Symbolics.unwrap(only(ModelingToolkitBase.@parameters $name [tunable = false]))
+end
 _tunable(name, t) = t isa Bool ? t : throw(ArgumentError("parameter `$name`: `tunable` is `true` or `false`; got $(repr(t))"))
 
 _with_unit(x, ::Nothing) = x
@@ -219,8 +219,11 @@ function kind_parameter(name::Symbol, values; unit = nothing, tunable = true, bo
     x = if _tunable(name, tunable)
         length(n) == 1 ? only(ModelingToolkitBase.@parameters $name[1:n[1]]) : only(ModelingToolkitBase.@parameters $name[1:n[1], 1:n[2]])
     else
-        length(n) == 1 ? only(ModelingToolkitBase.@parameters $name[1:n[1]] [tunable = false]) :
+        if length(n) == 1
+            only(ModelingToolkitBase.@parameters $name[1:n[1]] [tunable = false])
+        else
             only(ModelingToolkitBase.@parameters $name[1:n[1], 1:n[2]] [tunable = false])
+        end
     end
     return _with_meta(
         _tag(x, Entity(:kindtable, name, values, _meta_options(name, tunable, bounds, description))),
@@ -276,15 +279,15 @@ function _pairs_matrix(t::Pairs, nk::Integer, name::Symbol)
         end
         a, b = key[1] + 1, key[2] + 1
         cells = t.symmetric ? unique([(a, b), (b, a)]) : [(a, b)]
-        any(((i, j),) -> given[i, j], cells) && throw(
-            ArgumentError(
-                "kind table `$name = Pairs(…)`: the pair $(repr(key)) is given twice" *
-                    (
-                    t.symmetric && a != b ? " (with `symmetric = true`, (k₁, k₂) also sets (k₂, k₁); pass `symmetric = false` " *
-                        "for an asymmetric table)" : ""
-                )
-            )
-        )
+        if any(((i, j),) -> given[i, j], cells)
+            twice_note = if t.symmetric && a != b
+                " (with `symmetric = true`, (k₁, k₂) also sets (k₂, k₁); pass `symmetric = false` " *
+                    "for an asymmetric table)"
+            else
+                ""
+            end
+            throw(ArgumentError("kind table `$name = Pairs(…)`: the pair $(repr(key)) is given twice" * twice_note))
+        end
         for (i, j) in cells
             A[i, j] = v
             given[i, j] = true
@@ -566,8 +569,13 @@ function _nested(f, args...; kws...)
 end
 _set_dim!(d) = (_build().dim = d)
 _next_number!() = (_build().count += 1)
-_lattice_dim() = (d = _build().dim) > 0 ? d :
-    throw(ArgumentError("`centroid()` and `displacement(c)` need the model's @lattice declared before them"))
+function _lattice_dim()
+    if (d = _build().dim) > 0
+        return d
+    else
+        throw(ArgumentError("`centroid()` and `displacement(c)` need the model's @lattice declared before them"))
+    end
+end
 
 # ---------------------------------------------------------------------------------------
 # Symbolic operations recognised by lowering (the field operator `laplacian` is LatticePDE's)
@@ -857,9 +865,13 @@ function _shell_fold(fold, body, a::Around, cond; kws...)
     if isequal(_unwrap(anchor), _unwrap(B.target))
         own = _unwrap(_index(B.owner, n))
         op = nameof(fold)
-        alias = op === :distinct && isequal(_unwrap(b), own) && isequal(_unwrap(c), _unwrap(_index(B.owner, n) != 0)) ? B.ring_cells :
-            op === :count && isequal(_unwrap(b), _unwrap(_index(B.owner, n) == 0)) && _is_true(c) ? B.ring_medium :
+        alias = if op === :distinct && isequal(_unwrap(b), own) && isequal(_unwrap(c), _unwrap(_index(B.owner, n) != 0))
+            B.ring_cells
+        elseif op === :count && isequal(_unwrap(b), _unwrap(_index(B.owner, n) == 0)) && _is_true(c)
+            B.ring_medium
+        else
             nothing
+        end
         if alias !== nothing
             _build().count = count0            # the fold numbers nothing, as the builtin
             return alias
@@ -886,8 +898,11 @@ function _gather(fold, body, a::Around, cond = nothing; adjacency = nothing)
     op === :pieces && !(a.relation isa ShellRelation) && _not_shell()
     adjacency === nothing || op === :pieces ||
         throw(ArgumentError("`$op` over a relation takes no `adjacency`; only `pieces` does"))
-    opts = op === :pieces ? (; relation = a.relation, op, full = _check_adjacency("pieces", something(adjacency, :face)) === :full) :
+    opts = if op === :pieces
+        (; relation = a.relation, op, full = _check_adjacency("pieces", something(adjacency, :face)) === :full)
+    else
         (; relation = a.relation, op)
+    end
     n = _tag(_sym(Symbol(:n_, _next_number!())), Entity(:bound, :n, nothing, opts))
     b = body(n)
     c = cond === nothing ? true : cond(n)
@@ -1150,8 +1165,13 @@ _rule_code(::ArcOrPair) = 4
 _rule_code(r::Simple) = 5 + Int(r.adjacency === :full)
 _rule_code(r::Global) = 7 + Int(r.adjacency === :full) + 2 * something(r.window, 0)
 """The `Global` rule of rule code `code` (`_rule_code`), or `nothing` for a local rule."""
-_global_rule(code::Integer) = code < 7 ? nothing :
-    Global(; window = (code - 7) ÷ 2 == 0 ? nothing : (code - 7) ÷ 2, adjacency = isodd(code - 7) ? :full : :face)
+function _global_rule(code::Integer)
+    if code < 7
+        return nothing
+    else
+        return Global(; window = (code - 7) ÷ 2 == 0 ? nothing : (code - 7) ÷ 2, adjacency = isodd(code - 7) ? :full : :face)
+    end
+end
 Base.show(io::IO, r::Global) = print(io, "Global(; window = ", repr(r.window), ", adjacency = ", repr(r.adjacency), ")")
 
 """`_connected(c, code)`: rule `code` (`_rule_code`) holds for cell `c` (`old` or `new`)."""
@@ -1436,13 +1456,15 @@ new_contact(a, b) = true
 drive(p::Pair{CopyDomain}) = Drive(p.second)
 drive(p::Pair) = throw(ArgumentError("a drive must be `copy => expr`"))
 drive(p::ConnectivityPenalty) = Drive(p.expr)
-drive(c::Constraint) = throw(
-    ArgumentError(
-        c.kind === :connectivity ?
+function drive(c::Constraint)
+    c.kind === :connectivity && throw(
+        ArgumentError(
             "@drive connectivity(…) needs a `penalty` (the soft form: ΔH += penalty for every copy the rule refuses); " *
-            "the veto form, without `penalty`, goes in @constraint" : "a drive must be `copy => expr`"
+                "the veto form, without `penalty`, goes in @constraint"
+        )
     )
-)
+    throw(ArgumentError("a drive must be `copy => expr`"))
+end
 constraint(c::Constraint) = c
 constraint(::ConnectivityPenalty) = throw(
     ArgumentError(
@@ -1510,6 +1532,12 @@ _random_plane() = AlongRandom()
 struct Split end
 
 divide(d::Union{typeof(cells), typeof(clusters)}, args...; kw...) = divide(_domain(d), args...; kw...)
+# a cadence keyword `every`: an `Every`, or an integer n for `Every(n)`
+_as_cadence(what, every::Every) = every
+_as_cadence(what, every::Integer) = Every(every)
+function _as_cadence(what, every)
+    throw(ArgumentError("$what: `every = n` takes an integer n ≥ 1 or `Every(n)`; got $(repr(every))"))
+end
 """
 The cadence of a rule from its positional `Every(n)` or its `every = n` keyword (at
 most one of them; default 1), and the other positional arguments. Every rule that takes a
@@ -1517,10 +1545,7 @@ cadence (`@divide`, `@link`/`@unlink`, and future lifecycle rules) parses it her
 """
 function _rule_cadence(what, args, every)
     cadences = Every[a for a in args if a isa Every]
-    every === nothing || push!(
-        cadences, every isa Every ? every : every isa Integer ? Every(every) :
-            throw(ArgumentError("$what: `every = n` takes an integer n ≥ 1 or `Every(n)`; got $(repr(every))"))
-    )
+    every === nothing || push!(cadences, _as_cadence(what, every))
     length(cadences) <= 1 || throw(
         ArgumentError(
             "$what: a rule has one cadence; got " *
@@ -1536,8 +1561,11 @@ function divide(d::Union{CellDomain, ClusterDomain}, args...; when, along = Alon
     for a in rest
         a isa Pair || throw(ArgumentError("@divide: `$a` is neither a cadence `Every(n)` nor a state rule `x => rule`"))
         x, r = a       # vector quantities: component-wise (a scalar or `Split()` applies to all)
-        x isa AbstractVector ? append!(rules, [c => (r isa AbstractVector ? r[i] : r) for (i, c) in enumerate(x)]) :
+        if x isa AbstractVector
+            append!(rules, [c => (r isa AbstractVector ? r[i] : r) for (i, c) in enumerate(x)])
+        else
             push!(rules, x => r)
+        end
     end
     return DivideRule(d, when, along, rules, n)
 end
@@ -1631,14 +1659,16 @@ end
 # D-123: a finite real, also after `float` and in `Float64` (the state converts it to its
 # float type)
 function _sweep_offset(offset)
-    o = offset isa Real && !_is_symbolic(offset) ? (
-            try
-                float(offset)
-        catch e
-                e isa Union{InexactError, MethodError, TypeError} || rethrow()
-                NaN
-        end
-        ) : NaN
+    o = if offset isa Real && !_is_symbolic(offset)
+        try
+                    float(offset)
+            catch e
+                    e isa Union{InexactError, MethodError, TypeError} || rethrow()
+                    NaN
+            end
+    else
+        NaN
+    end
     (isfinite(o) && isfinite(Float64(o))) || throw(
         ArgumentError(
             "`@sweep`: `offset` must be a finite real number, got $(repr(offset))::$(typeof(offset)); " *
@@ -1651,14 +1681,16 @@ end
 # `BigFloat` beyond the `Float64` range is refused; a symbolic parameter does not convert and
 # is rejected
 function _sweep_mcs_duration(mcs_duration)
-    md = mcs_duration isa Real && !_is_symbolic(mcs_duration) ? (
-            try
-                float(mcs_duration)
-        catch e
-                e isa Union{InexactError, MethodError, TypeError} || rethrow()
-                NaN
-        end
-        ) : NaN
+    md = if mcs_duration isa Real && !_is_symbolic(mcs_duration)
+        try
+                    float(mcs_duration)
+            catch e
+                    e isa Union{InexactError, MethodError, TypeError} || rethrow()
+                    NaN
+            end
+    else
+        NaN
+    end
     (isfinite(md) && md > 0 && isfinite(Float64(md)) && Float64(md) > 0) || throw(
         ArgumentError(
             "`@sweep`: `mcs_duration` must be a positive, finite real number, got $(repr(mcs_duration))::$(typeof(mcs_duration)); " *
@@ -1796,11 +1828,20 @@ function schedule_repeat(ex::Expr)
     names = Symbol[]
     for a in args[2:end]
         if a isa Expr && a.head === :call && a.args[1] === :sweep
-            q = length(a.args) == 2 && a.args[2] isa Expr && a.args[2].head === :parameters && length(a.args[2].args) == 1 ?
-                a.args[2].args[1] : (length(a.args) == 2 ? a.args[2] : nothing)
+            q = if length(a.args) == 2 && a.args[2] isa Expr && a.args[2].head === :parameters && length(a.args[2].args) == 1
+                a.args[2].args[1]
+            elseif length(a.args) == 2
+                a.args[2]
+            else
+                nothing
+            end
             kw = q isa Expr && q.head in (:kw, :(=)) && q.args[1] === :fraction ? q.args[2] : nothing
-            frac = kw isa Expr && kw.head === :call && kw.args[1] === :// && length(kw.args) == 3 &&
-                all(x -> x isa Integer, kw.args[2:3]) ? kw.args[2] // kw.args[3] : nothing
+            frac = if kw isa Expr && kw.head === :call && kw.args[1] === :// && length(kw.args) == 3 &&
+                all(x -> x isa Integer, kw.args[2:3])
+                kw.args[2] // kw.args[3]
+            else
+                nothing
+            end
             frac == 1 // n || throw(
                 ArgumentError(
                     "@schedule: in `repeat($n, …)` the sweep is `sweep(fraction = 1//$n)` (each pass sweeps 1/$n of the MCS); got `$a`"
@@ -1949,12 +1990,26 @@ Symbolics.@register_symbolic as_ref(x)
 outer_value(x) = throw(ArgumentError("`members` is symbolic-only"))
 Symbolics.@register_symbolic outer_value(x)
 
-_symarg(x) = x isa Num ? x : x isa Real ? Num(x) : x
-_ref_kind(who, k) = (k isa Integer && !(k isa Bool) && k >= 1) ? k : throw(
-        ArgumentError(
-            "`$who`: the kind is a cell kind (a kind name of `@kinds`, not the medium or a kind class), got $(repr(k))"
-        )
-    )
+function _symarg(x)
+    if x isa Num
+        return x
+    elseif x isa Real
+        return Num(x)
+    else
+        return x
+    end
+end
+function _ref_kind(who, k)
+    if k isa Integer && !(k isa Bool) && k >= 1
+        return k
+    else
+        throw(
+                ArgumentError(
+                    "`$who`: the kind is a cell kind (a kind name of `@kinds`, not the medium or a kind class), got $(repr(k))"
+                )
+            )
+    end
+end
 
 """
     alive(ref)
@@ -2090,7 +2145,13 @@ function _implicit_fresh(to)
     isequal(_unwrap(cl), _unwrap(B.cluster)) || return 0
     k = _unwrap(k)
     SymbolicUtils.isconst(k) && (k = SymbolicUtils.unwrap_const(k))
-    return k isa Integer ? Int(k) : k isa Real && isinteger(k) ? Int(k) : 0
+    if k isa Integer
+        return Int(k)
+    elseif k isa Real && isinteger(k)
+        return Int(k)
+    else
+        return 0
+    end
 end
 
 """`@convert` (the macro's call): the pass `name` over `domain` (see `ConvertSpec`)."""

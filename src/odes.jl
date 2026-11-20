@@ -33,12 +33,16 @@ its own system. Any other scope, or a `PottsSystem` that has not been through
 `mtkcompile`, is an `ArgumentError`.
 """
 function ode_system(c::CompiledPottsSystem, scope::Symbol)
-    scope in (:cell, :model) || throw(ArgumentError(
-        "ode_system: the scope is `:cell` or `:model`; got `:$scope`" * (scope === :field ?
-        " (field equations are stepped by Potts on the lattice and are not an ODE system; their PDESystem is " *
-        "`Potts.fields(csys)`: `discretize(Potts.fields(csys), disc; inputs = " *
-        "collect(Potts.field_inputs(integ)))` solves it with a SciML solver at the CPM state of `integ`)" :
-        " (field equations are stepped by Potts on the lattice and are not an ODE system)")))
+    if !(scope in (:cell, :model))
+        note = if scope === :field
+            " (field equations are stepped by Potts on the lattice and are not an ODE system; their PDESystem is " *
+                "`Potts.fields(csys)`: `discretize(Potts.fields(csys), disc; inputs = " *
+                "collect(Potts.field_inputs(integ)))` solves it with a SciML solver at the CPM state of `integ`)"
+        else
+            " (field equations are stepped by Potts on the lattice and are not an ODE system)"
+        end
+        throw(ArgumentError("ode_system: the scope is `:cell` or `:model`; got `:$scope`" * note))
+    end
     return get(getfield(c, :ode_systems), scope, nothing)
 end
 ode_system(sys::PottsSystem, ::Symbol) = throw(ArgumentError(
@@ -86,11 +90,18 @@ function _compile_odes(sys::PottsSystem)
                 PottsCompileError(
                 "`$eq` is an implicit algebraic equation; an algebraic equation defines a declared cell or " *
                 "model variable explicitly, `y ~ expr` (Potts accepts explicit, acyclic definitions only)"))
-            i.role in _ODE_SCOPES || throw(
-                PottsCompileError(
-                "`$eq`: an algebraic equation defines a cell or model variable; `$(i.name)` is " *
-                (i.role in (:site, :field, :edge) ? "a $(i.role) variable" :
-                 i.role === :param ? "a parameter" : "not a declared variable ($(i.role))")))
+            if !(i.role in _ODE_SCOPES)
+                role = if i.role in (:site, :field, :edge)
+                    "a $(i.role) variable"
+                elseif i.role === :param
+                    "a parameter"
+                else
+                    "not a declared variable ($(i.role))"
+                end
+                throw(
+                    PottsCompileError(
+                        "`$eq`: an algebraic equation defines a cell or model variable; `$(i.name)` is " * role))
+            end
             push!(get!(aeqs, i.role, Equation[]), eq)
         end
     end
@@ -106,8 +117,13 @@ function _compile_odes(sys::PottsSystem)
         odes[scope] = _ode_template(sys, scope, d, a, rates, defs)
     end
     # definitions may read other scopes' algebraic variables (acyclic: checked above)
-    expand(x) = isempty(defs) ? _unwrap(x) :
-                _fixpoint(y -> _unwrap(Symbolics.substitute(y, defs; fold = Val(false))), _unwrap(x))
+    function expand(x)
+        if isempty(defs)
+            return _unwrap(x)
+        else
+            return _fixpoint(y -> _unwrap(Symbolics.substitute(y, defs; fold = Val(false))), _unwrap(x))
+        end
+    end
     for (x, r) in defs
         defs[x] = expand(r)
     end
@@ -300,12 +316,13 @@ function _check_algebraic(sys::PottsSystem, deqs, aeqs)
             loop = path[findfirst(==(name), path):end]
             eq = alg[byname[name]].eq
             _located(sys, eq) do
-                throw(
-                    PottsCompileError(
-                        length(loop) == 1 ?
-                    "the algebraic equation `$eq` reads `$name` itself (an algebraic loop); Potts accepts explicit, acyclic definitions only" :
+                msg = if length(loop) == 1
+                    "the algebraic equation `$eq` reads `$name` itself (an algebraic loop); Potts accepts explicit, acyclic definitions only"
+                else
                     "the algebraic equations of $(join(("`$v`" for v in loop), ", ")) read each other in a cycle " *
-                    "(an algebraic loop); Potts accepts explicit, acyclic definitions only"))
+                        "(an algebraic loop); Potts accepts explicit, acyclic definitions only"
+                end
+                throw(PottsCompileError(msg))
             end
         end
         state[name] = 1
@@ -379,8 +396,8 @@ function _ode_template(sys::PottsSystem, scope::Symbol, d, a, rates, defs)
     end
     function input(y; declared = false)
         get!(inputs, y) do
-            p = _unwrap(ModelingToolkitBase.toparam(declared ? y :
-                 Symbolics.variable(name(y); T = SymbolicUtils.symtype(y))))
+            v = declared ? y : Symbolics.variable(name(y); T = SymbolicUtils.symtype(y))
+            p = _unwrap(ModelingToolkitBase.toparam(v))
             push!(params, p)
             back[p] = y
             p

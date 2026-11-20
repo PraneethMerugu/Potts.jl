@@ -307,8 +307,15 @@ end
                     L[r, r] -= 0.2
                     continue
                 end
-                face = di < 0 ? (1 + 0.1 * (j - 0.5), 1.0, 1.0) : di > 0 ? (1 + 0.5 * 1.0, 2.0, 0.0) :
-                       dj > 0 ? (2.0, 0.5 + 0.05 * (i - 0.5), 0.5) : nothing
+                face = if di < 0
+                    (1 + 0.1 * (j - 0.5), 1.0, 1.0)
+                elseif di > 0
+                    (1 + 0.5 * 1.0, 2.0, 0.0)
+                elseif dj > 0
+                    (2.0, 0.5 + 0.05 * (i - 0.5), 0.5)
+                else
+                    nothing
+                end
                 face === nothing && continue
                 α, β, g = face
                 den = α / 2 + β

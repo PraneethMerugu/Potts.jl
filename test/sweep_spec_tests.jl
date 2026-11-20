@@ -55,8 +55,11 @@ function ss_names(e)
                    push!(out, Potts.SymbolicIndexingInterface.getname(y))
                elseif SU.iscall(y)
                    op = SU.operation(y)
-                   op isa SU.BasicSymbolic && SU.issym(op) ? push!(out, Potts.SymbolicIndexingInterface.getname(op)) :
-                   foreach(walk, SU.arguments(y))
+                   if op isa SU.BasicSymbolic && SU.issym(op)
+                       push!(out, Potts.SymbolicIndexingInterface.getname(op))
+                   else
+                       foreach(walk, SU.arguments(y))
+                   end
                end)
     walk(e)
     return out

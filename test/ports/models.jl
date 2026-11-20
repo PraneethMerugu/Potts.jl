@@ -11,9 +11,14 @@ function merks_delta_H(st, p, prop, ctx)
     J(a, b) = @inbounds p.J[a == 0 ? 1 : 2, b == 0 ? 1 : 2]
     E(v, c) = p.λ * (v - p.V0)^2
     Tf = typeof(p.λ)
-    ℓ(c, s) = c == 0 ? zero(Tf) :
-              p.λL * ((major_length_after(Tf, st.cell, ctx.lattice, c, prop.x, s) - p.L)^2 -
-                      (major_length(Tf, st.cell, ctx.lattice, c) - p.L)^2)
+    function ℓ(c, s)
+        if c == 0
+            return zero(Tf)
+        else
+            return p.λL * ((major_length_after(Tf, st.cell, ctx.lattice, c, prop.x, s) - p.L)^2 -
+                (major_length(Tf, st.cell, ctx.lattice, c) - p.L)^2)
+        end
+    end
     return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
            ℓ(prop.old, -1) + ℓ(prop.new, 1) + chemotaxis_delta(st.site.c, prop, p.χ)   # every copy
 end

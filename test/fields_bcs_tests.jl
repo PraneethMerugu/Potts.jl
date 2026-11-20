@@ -20,7 +20,15 @@
         # a flux and a Robin face: a hand FTCS with the ghost-node rule: low x, ∂c/∂n = q gives c + q h; high x,
         a = run(FbFluxRobin; k = 1)
         # α (c + g′)/2 + β (g′ − c)/h = g gives g′ = (g − c (α/2 − β/h)) / (α/2 + β/h); y zero flux
-        ghost(d, s, ce) = d == 2 ? ce : s < 0 ? ce + 0.2 : (0.5 - ce * (1.0 - 1.0)) / (1.0 + 1.0)
+        function ghost(d, s, ce)
+            if d == 2
+                return ce
+            elseif s < 0
+                return ce + 0.2
+            else
+                return (0.5 - ce * (1.0 - 1.0)) / (1.0 + 1.0)
+            end
+        end
         hand = fb_ftcs(c0, 0.5, 1.0, 1.0, n, ghost)
         @test isapprox(a, hand; rtol = 1.0e-13)
         # (control: the low side's sign flipped misses the oracle)

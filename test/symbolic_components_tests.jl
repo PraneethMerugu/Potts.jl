@@ -188,8 +188,11 @@ end
             @sweep Metropolis(; temperature = 1.0e-6)
         end
         function run(sys; scope = :cells, with_obs = false)
-            m = scope === :model ? BindProbeModel(; name = :bp, comp_sys = sys) :
+            m = if scope === :model
+                BindProbeModel(; name = :bp, comp_sys = sys)
+            else
                 BindProbeCell(; name = :bp, comp_sys = sys, with_obs)
+            end
             mtkcompile(m)
             return solve(PottsProblem(m, op, (0, 2)), SequentialCPM())
         end

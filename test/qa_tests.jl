@@ -386,8 +386,11 @@ end
             ex = Potts._tick_expr([b], T, getfield(c, :gather_names), b.scope; scratch = Potts._tick_scratch(c))
             @test _qa_closure_heads(ex) == 0
             fn = Core.eval(_QA_MOD, ex)
-            args = b.scope === :cell ? (integ.state, integ.p, integ.ctx, integ.key, 1, Int32(1)) :
-                   (integ.state, integ.p, integ.ctx, integ.key, 1)
+            args = if b.scope === :cell
+                (integ.state, integ.p, integ.ctx, integ.key, 1, Int32(1))
+            else
+                (integ.state, integ.p, integ.ctx, integ.key, 1)
+            end
             types = Tuple{typeof.(args)...}
             @test isempty(JET.get_reports(Base.invokelatest(JET.report_opt, fn, types; target_modules = (CorePotts, Potts))))
             @test isempty(Base.invokelatest(check_allocs, fn, types))

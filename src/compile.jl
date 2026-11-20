@@ -202,8 +202,13 @@ function _check_names(x, allowed, what; between_copies::Bool = false)
     x, pops = _strip_populations(x)
     for p in pops                                  # population bodies have their own scope
         n, body, cond = arguments(p)
-        inner = info(n).role !== :bound_cell ? _SITE_BUILTINS :
-            between_copies ? (_CELL_ENERGY_BUILTINS..., :cluster_volume, :cluster_surface) : _CELL_ENERGY_BUILTINS
+        inner = if info(n).role !== :bound_cell
+            _SITE_BUILTINS
+        elseif between_copies
+            (_CELL_ENERGY_BUILTINS..., :cluster_volume, :cluster_surface)
+        else
+            _CELL_ENERGY_BUILTINS
+        end
         _check_names(body, (allowed..., inner...), what; between_copies)
         _check_names(cond, (allowed..., inner...), what; between_copies)
     end
@@ -462,7 +467,13 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
                     )
                     _check_edge_vars(u.eq.rhs, edge_rel[i.name], edge_rel, "an edge update of `$(i.name)($(edge_rel[i.name]))`")
                 else
-                    allowed = i.role === :cell ? _CELL_BUILTINS : i.role === :model ? (:mcs,) : _SITE_BUILTINS
+                    allowed = if i.role === :cell
+                        _CELL_BUILTINS
+                    elseif i.role === :model
+                        (:mcs,)
+                    else
+                        _SITE_BUILTINS
+                    end
                     _check_names(u.eq.rhs, allowed, "a $(i.role) update"; between_copies = true)
                     _is_ref_var(lhs) && _check_ref_value(i.name, u.eq.rhs)
                 end
@@ -771,14 +782,14 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
     cell_odes = Tuple{Any, Any}[(x, _hoist_populations(r, cell_ode_pops, gather_names, :__odepop)) for (x, r) in cell_odes]
     # folds in a cell-scope tick are computed once per tick, before it (as for cell ODEs)
     discrete_pops = Pair{Symbol, Any}[]
-    discrete = DiscreteBlock[
-        b.scope === :cell ?
-            DiscreteBlock(
-                b.name, b.scope, b.kinds, b.slots,
-                Any[_hoist_populations(x, discrete_pops, gather_names, :__tickpop) for x in b.next], b.every, b.offset
-            ) : b
-            for b in _p(sys, :discrete)
-    ]
+    function hoisted(b)
+        b.scope === :cell || return b
+        return DiscreteBlock(
+            b.name, b.scope, b.kinds, b.slots,
+            Any[_hoist_populations(x, discrete_pops, gather_names, :__tickpop) for x in b.next], b.every, b.offset
+        )
+    end
+    discrete = DiscreteBlock[hoisted(b) for b in _p(sys, :discrete)]
 
     _dry_lower(sys, gather_names, fields, cell_odes)
     _check_algebraic_lowering(sys, gather_names)
@@ -1450,10 +1461,15 @@ end
 _iscondition(y) = iscall(y) && any(f -> operation(y) === f, (==, !=, <, <=, >, >=))
 function _paren_conditions(x)
     reps = Dict{Any, Any}()
-    walk(y, top) = iscall(y) && (
-        _iscondition(y) && !top ? (reps[y] = Symbolics.unwrap(Symbolics.variable(Symbol("(", y, ")")))) :
+    function walk(y, top)
+        iscall(y) || return
+        if _iscondition(y) && !top
+            reps[y] = Symbolics.unwrap(Symbolics.variable(Symbol("(", y, ")")))
+        else
             foreach(a -> walk(Symbolics.unwrap(a), false), arguments(y))
-    )
+        end
+        return
+    end
     walk(Symbolics.unwrap(x), true)
     return isempty(reps) ? x : Symbolics.substitute(x, reps; fold = Val(false))
 end
@@ -1474,11 +1490,19 @@ function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
     for e in _p(sys, :energies)
         _located(sys, e) do
             d = e.domain
-            d isa CellDomain ? lower(e.expr, _cell_env(T, :c, rn)) :
-                d isa ClusterDomain ? lower(e.expr, _cluster_env(T, :r, rn)) :
-                d isa ContactDomain ? lower(_cellvars_at_owner(e.expr), _contact_env(T, :a, :ka, :n, :kn, :w, :i, :j, rn)) :
-                d isa SiteDomain ? lower(e.expr, _site_env(T, :i, rn)) :
-                d isa EdgeDomain ? lower(e.expr, _edge_env(T, :ea, :eb, :ek, :ed, rn)) : nothing
+            if d isa CellDomain
+                lower(e.expr, _cell_env(T, :c, rn))
+            elseif d isa ClusterDomain
+                lower(e.expr, _cluster_env(T, :r, rn))
+            elseif d isa ContactDomain
+                lower(_cellvars_at_owner(e.expr), _contact_env(T, :a, :ka, :n, :kn, :w, :i, :j, rn))
+            elseif d isa SiteDomain
+                lower(e.expr, _site_env(T, :i, rn))
+            elseif d isa EdgeDomain
+                lower(e.expr, _edge_env(T, :ea, :eb, :ek, :ed, rn))
+            else
+                nothing
+            end
         end
     end
     # The integral check runs before lowering, which would otherwise fail on a bare
@@ -1503,11 +1527,16 @@ function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
                 _write(_unwrap(u.eq.lhs), :v, env)
             else
                 r = info(_unwrap(u.eq.lhs)).role
-                lower(
-                    u.eq.rhs, r === :cell ? cellenv : r === :model ? _model_env(T, rn; key = :key) :
-                        r === :edge ? _edge_env(T, :ea, :eb, :ek, :ed, rn; mcs = :mcs, mode = :edge_update) :
-                        _site_env(T, :i, rn; mcs = :mcs, key = :key)
-                )
+                renv = if r === :cell
+                    cellenv
+                elseif r === :model
+                    _model_env(T, rn; key = :key)
+                elseif r === :edge
+                    _edge_env(T, :ea, :eb, :ek, :ed, rn; mcs = :mcs, mode = :edge_update)
+                else
+                    _site_env(T, :i, rn; mcs = :mcs, key = :key)
+                end
+                lower(u.eq.rhs, renv)
             end
         end
     end
@@ -1516,10 +1545,11 @@ function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
             _field_lhs(eq) === nothing || return   # the field compiler lowers these (`_check_fields`)
             x = arguments(_unwrap(eq.lhs))[1]
             r = info(x).role
-            lower(
-                eq.rhs, r === :cell ? _cell_env(T, :c, rn; mcs = :mcs, key = :key, extra = (:time => :tt,)) :
-                    _model_env(T, rn; key = :key, extra = (:time => :tt,))
-            )
+            if r === :cell
+                lower(eq.rhs, _cell_env(T, :c, rn; mcs = :mcs, key = :key, extra = (:time => :tt,)))
+            else
+                lower(eq.rhs, _model_env(T, rn; key = :key, extra = (:time => :tt,)))
+            end
         end
     end
     for d in _p(sys, :divisions)
@@ -1651,7 +1681,13 @@ function _check_geometry(x, N; energy = false, hex = false)
         iscall(y) || return
         op = operation(y)
         if op === ref_centroid || op === ref_separation || op === axis_minimum_image
-            name = op === ref_centroid ? "centroid" : op === ref_separation ? "separation" : "minimum_image"
+            name = if op === ref_centroid
+                "centroid"
+            elseif op === ref_separation
+                "separation"
+            else
+                "minimum_image"
+            end
             energy && op !== axis_minimum_image && throw(_energy_centroid_error(name))
             hex && op === axis_minimum_image && throw(PottsCompileError(_HEX_MINIMUM_IMAGE))
             k = SymbolicUtils.unwrap_const(_unwrap(arguments(y)[end]))
@@ -1671,8 +1707,13 @@ function _check_geometry(x, N; energy = false, hex = false)
         if op === value_at && length(arguments(y)) == 2                     # `direction[k]`, `position[s][k]` (D-188): an axis
             a = _unwrap(arguments(y)[1])
             ai = info(a)
-            name = ai !== nothing && ai.role === :builtin && ai.name === :direction ? "direction[k]" :
-                _is_site_position(a) ? "position[s][k]" : nothing
+            name = if ai !== nothing && ai.role === :builtin && ai.name === :direction
+                "direction[k]"
+            elseif _is_site_position(a)
+                "position[s][k]"
+            else
+                nothing
+            end
             name === nothing && return
             k = SymbolicUtils.unwrap_const(_unwrap(arguments(y)[2]))
             (k isa Real && isinteger(k) && 1 <= k <= N) ||

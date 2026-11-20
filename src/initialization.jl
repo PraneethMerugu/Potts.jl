@@ -400,12 +400,12 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
         what = "the operating-point value of the algebraic variable `$name` (the condition `$name ~ value`, `$name ~ $(o.rhs)`)"
         _check_init_reads(o.rhs, what)
         v = _evaluate(opd[_unwrap(o.lhs)], pvals, "the operating-point value of `$name`")
-        v isa AbstractArray ?
-            (
-                length(v) == n ||
+        if v isa AbstractArray
+            length(v) == n ||
                 throw(ArgumentError("the operating-point value of `$name`: got $(length(v)) values for $n entities; pass a scalar or a length-$n vector"))
-            ) :
-        v isa Real || throw(ArgumentError("the operating-point value of `$name`: a number or one number per cell; got $(repr(v))"))
+        else
+            v isa Real || throw(ArgumentError("the operating-point value of `$name`: a number or one number per cell; got $(repr(v))"))
+        end
         push!(values, v)
     end
     exprs = Any[eqs; [o.rhs for o in conds]]
@@ -448,9 +448,13 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
             else
                 i = info(y)
                 (i === nothing || (i.role === scope && !fixed(y))) && return
-                src = i.role === :builtin ? (:builtin, i.name) :
-                      i.role === :param ? (:param, Float64(_numeric(pvals[_unwrap(y)], "parameter `$(i.name)`"))) :
-                      (i.role, i.name)
+                src = if i.role === :builtin
+                    (:builtin, i.name)
+                elseif i.role === :param
+                    (:param, Float64(_numeric(pvals[_unwrap(y)], "parameter `$(i.name)`")))
+                else
+                    (i.role, i.name)
+                end
                 p = fresh(i.name)
             end
             pmap[y] = p
@@ -467,11 +471,21 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
     end
     sub(x) = isempty(pmap) ? _unwrap(x) : _init_substitute(x, pmap)
     ieqs = Equation[[sub(eq.lhs) ~ sub(eq.rhs) for eq in eqs]; [sub(o.rhs) ~ p for (o, p) in zip(conds, targets)]]
-    value(src, k) = src[1] === :builtin ? getproperty(builtins, src[2])[k] :
-                    src[1] === :param ? src[2] :
-                    src[1] === :table ? Float64(_table_entry(src[4], src[2], ntuple(_ -> Int(builtins.kind[k]), src[3])...)) :
-                    src[1] === :condition ? (v = values[src[2]]; Float64(v isa AbstractArray ? v[k] : v)) :
-                    src[1] === :cell ? Float64(_column(cell, src[2])[k]) : Float64(_column(model, src[2])[1])
+    function value(src, k)
+        if src[1] === :builtin
+            return getproperty(builtins, src[2])[k]
+        elseif src[1] === :param
+            return src[2]
+        elseif src[1] === :table
+            return Float64(_table_entry(src[4], src[2], ntuple(_ -> Int(builtins.kind[k]), src[3])...))
+        elseif src[1] === :condition
+            return (v = values[src[2]]; Float64(v isa AbstractArray ? v[k] : v))
+        elseif src[1] === :cell
+            return Float64(_column(cell, src[2])[k])
+        else
+            return Float64(_column(model, src[2])[1])
+        end
+    end
     vals(k) = Float64[value(src, k) for src in sources]
     names = join(("`$(info(x).name)`" for x in free), ", ")
     # a guess may be an expression of parameters (as in MTK): its value for this problem
@@ -522,8 +536,12 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
     guess = plain && !explicit ? Float64.(u0) : nothing
     # MTK's residual behind one fixed function type, so the nonlinear solve compiled by the
     # precompile workload serves every model (the residual's own type changes per model)
-    nlp = guess === nothing ? nothing : SciMLBase.NonlinearProblem(SciMLBase.NonlinearFunction{true, SciMLBase.FullSpecialize}(
-        _InitResidual(ip.f, SymbolicIndexingInterface.parameter_values(ip))), copy(guess), nothing)
+    nlp = if guess === nothing
+        nothing
+    else
+        SciMLBase.NonlinearProblem(SciMLBase.NonlinearFunction{true, SciMLBase.FullSpecialize}(
+            _InitResidual(ip.f, SymbolicIndexingInterface.parameter_values(ip))), copy(guess), nothing)
+    end
     # the free values at the state `x` of the nonlinear problem (the observed ones by MTK)
     function at_state(x)
         u0 .= x
@@ -532,8 +550,12 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
     end
     conditions = join((r.text for r in rows), ", ")
     zero_guess = nlp !== nothing && any(x -> ModelingToolkitBase.getguess(x) === nothing, free)
-    hint = zero_guess ? " (a variable without a guess starts from 0.0, where the Jacobian of an equation symmetric " *
-                        "in it, such as `r^2 ~ volume`, is singular: give it one, `r(cell), [guess = 1.0]`)" : ""
+    hint = if zero_guess
+        " (a variable without a guess starts from 0.0, where the Jacobian of an equation symmetric " *
+            "in it, such as `r^2 ~ volume`, is singular: give it one, `r(cell), [guess = 1.0]`)"
+    else
+        ""
+    end
     failed(k, why) = throw(ArgumentError(
         "initialization of $(entity(k)) found no solution for $names ($why); check $conditions and the guesses$hint"))
     solving(f, k) = try
@@ -558,9 +580,11 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
             # conditions (`_INIT_NEWTON_RTOL`), restarted with a tighter tolerance and a
             # finite-difference step at the scale of the iterate while the result fails the check
             nlp.u0 .= guess
-            abstol = init.abstol === nothing ?
-                _INIT_NEWTON_RTOL * max(maximum(_init_scales(check, pk, at_state(guess)); init = 0.0), floatmin(Float64)) :
+            abstol = if init.abstol === nothing
+                _INIT_NEWTON_RTOL * max(maximum(_init_scales(check, pk, at_state(guess)); init = 0.0), floatmin(Float64))
+            else
                 init.abstol
+            end
             step = _init_step(guess, guess)
             local x
             for _ in 1:_INIT_ROUNDS
@@ -641,10 +665,15 @@ function _init_options(alg)
                 "(the default), checked by `CheckInit()` or kept by `NoInit()`"
         )
     )
-    tol(v, n) = v === nothing ? nothing : (
-            v isa Real && v >= 0 ? Float64(v) :
+    function tol(v, n)
+        if v === nothing
+            return nothing
+        elseif v isa Real && v >= 0
+            return Float64(v)
+        else
             throw(ArgumentError("`OverrideInit($n = $(repr(v)))`: a tolerance is a nonnegative number"))
-        )
+        end
+    end
     abstol, reltol = tol(alg.abstol, :abstol), tol(alg.reltol, :reltol)
     solvekw = (; (abstol === nothing ? (;) : (; abstol))..., (reltol === nothing ? (;) : (; reltol))...)
     return (; mode = :solve, nlsolve = alg.nlsolve, abstol, reltol = something(reltol, _INIT_RTOL), solvekw)
@@ -744,7 +773,13 @@ function _init_eval!(c::_InitCheck, p, x)
                 v[i] = v[a[1]] / v[a[2]]
                 m[i] = m[a[1]] / abs(v[a[2]])
             else
-                r = length(a) == 1 ? f(v[a[1]]) : length(a) == 2 ? f(v[a[1]], v[a[2]]) : f((v[j] for j in a)...)
+                r = if length(a) == 1
+                    f(v[a[1]])
+                elseif length(a) == 2
+                    f(v[a[1]], v[a[2]])
+                else
+                    f((v[j] for j in a)...)
+                end
                 v[i] = Float64(r)
                 m[i] = abs(v[i])
             end

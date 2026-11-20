@@ -43,7 +43,13 @@ function _contact_fold(fold, body, d::ContactDomain, cond)
     pred = _fold_predicate(body(_CONTACT_PARTNER))
     if cond !== nothing
         c = _fold_predicate(cond(_CONTACT_PARTNER))
-        pred = pred isa Bool ? (pred ? c : false) : c isa Bool ? (c ? pred : false) : pred & c
+        pred = if pred isa Bool
+            pred ? c : false
+        elseif c isa Bool
+            c ? pred : false
+        else
+            pred & c
+        end
     end
     rel = d.relation
     Threads.atomic_add!(_FOLDS_BUILT, 1)

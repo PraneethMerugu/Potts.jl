@@ -76,8 +76,13 @@ function _unit(label, x)
     try
         return get_unit(_zero_free(x))
     catch err
-        msg = err isa ValidationError ? err.message : err isa DQ.DimensionError ?
-              ": $(err.q1) and $(err.q2) are not dimensionally compatible." : nothing
+        msg = if err isa ValidationError
+            err.message
+        elseif err isa DQ.DimensionError
+            ": $(err.q1) and $(err.q2) are not dimensionally compatible."
+        else
+            nothing
+        end
         msg === nothing && rethrow()
         throw(Potts.PottsCompileError("units: in $label$msg"))
     end

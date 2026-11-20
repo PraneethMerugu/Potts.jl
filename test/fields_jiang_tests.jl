@@ -176,7 +176,17 @@ end
         k = 4; nb = size(fi[:med]) .÷ k; nt = k^3
         sl(J) = (k * (J[1] - 1) + 1):(k * J[1]), (k * (J[2] - 1) + 1):(k * J[2]), (k * (J[3] - 1) + 1):(k * J[3])
         nm = [count(fi[:med][sl(J)...]) for J in CartesianIndices(nb)]
-        cls(n) = n == 0 ? 1 : n <= nt ÷ 2 ? 2 : n < nt ? 3 : 4
+        function cls(n)
+            if n == 0
+                return 1
+            elseif n <= nt ÷ 2
+                return 2
+            elseif n < nt
+                return 3
+            else
+                return 4
+            end
+        end
         # the census: 35 fully free, 39 partial free (1..32 medium), 47 partial held (33..63),
         # 391 fully masked (64)
         @test [count(i -> cls(nm[i]) == c, 1:length(nm)) for c in 1:4] == [35, 39, 47, 391]

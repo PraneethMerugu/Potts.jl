@@ -83,10 +83,14 @@ function _pde_content(sys, f::ModelingToolkitBase.PDESystem, prefix, what::Abstr
         v = _unwrap(operation(l) isa Differential ? operation(l).x : operation(l).t)
         (tc !== nothing && isequal(v, tc)) && continue
         k = findfirst(w -> isequal(w, v), ivs)
-        throw(ArgumentError(string(what, ": ", pname, " has the rate `", eq.lhs, "`, a time rate along `", v, "`, ",
-            k === nothing ? "which is not one of its independent variables" :
+        along = if k === nothing
+            "which is not one of its independent variables"
+        else
             "its independent variable $k; the time is the first independent variable: give `[$(v), " *
-            join((string(w) for w in ivs if !isequal(w, v)), ", ") * "]`")))
+                join((string(w) for w in ivs if !isequal(w, v)), ", ") * "]`"
+        end
+        throw(ArgumentError(string(what, ": ", pname, " has the rate `", eq.lhs, "`, a time rate along `", v, "`, ",
+            along)))
     end
     # the spatial domain is the lattice's in the model's length unit: axis `d` spans
     # `[0, dims[d] · spacing[d]]`, which is also the domain `Potts.fields` gives. An axis the
@@ -141,7 +145,15 @@ function _pde_content(sys, f::ModelingToolkitBase.PDESystem, prefix, what::Abstr
             "`; a kind table is the model's: declare it in the model (`@parameters ", u, "[kind] = …`) and read it there")))
     end
     pmap = Dict{Any, Any}()
-    value(u) = haskey(ic, u) ? ic[u] : M.hasdefault(u) ? M.getdefault(u) : nothing
+    function value(u)
+        if haskey(ic, u)
+            return ic[u]
+        elseif M.hasdefault(u)
+            return M.getdefault(u)
+        else
+            return nothing
+        end
+    end
     symbolic(v) = v isa Union{Num, SymbolicUtils.BasicSymbolic} && !SymbolicUtils.isconst(_unwrap(v))
     reads(v) = symbolic(v) ? [w for w in Symbolics.get_variables(_unwrap(v)) if any(q -> isequal(q, w), raw)] : Any[]
     pending = copy(raw)
@@ -180,22 +192,29 @@ function _pde_content(sys, f::ModelingToolkitBase.PDESystem, prefix, what::Abstr
             w = something(LatticePDE.get_lattice_input_name(u), string(nameof(op)))
             target = _input_target(sys, Symbol(w))
             k = _example_kind(sys)
-            target === nothing && throw(ArgumentError(string(what, ": ", pname, " has the input `", u, "`, named `", w,
-                "`, which no binding fills and the CPM of `", _hostname(sys), "` does not fill at a site; bind it to a CPM ",
-                "expression, `@fields … (", nameof(op), " => kind == ", k, ")` in the model, or `inputs = [", nameof(op),
-                " => Potts.is_kind(model, :", k, ")]` in `Potts.couple`; or name it by a word the CPM fills (`[input = ",
-                "true, lattice_input_name = \"kind\"]` for the kind of each site; the words are ",
-                join(("`$x`" for x in _SITE_WORDS), ", "), "), or by a field or site variable of the model",
-                Symbol(w) in BUILTIN_NAMES ? string(" (`", w, "` is a cell property: hold it in a site variable, `@variables ",
-                "s(site)`, `@after_mcs s ~ ", w, "[owner]`, and name the input `s`)") : "")))
+            if target === nothing
+                hint = if Symbol(w) in BUILTIN_NAMES
+                    string(" (`", w, "` is a cell property: hold it in a site variable, `@variables ",
+                        "s(site)`, `@after_mcs s ~ ", w, "[owner]`, and name the input `s`)")
+                else
+                    ""
+                end
+                throw(ArgumentError(string(what, ": ", pname, " has the input `", u, "`, named `", w,
+                    "`, which no binding fills and the CPM of `", _hostname(sys), "` does not fill at a site; bind it to a CPM ",
+                    "expression, `@fields … (", nameof(op), " => kind == ", k, ")` in the model, or `inputs = [", nameof(op),
+                    " => Potts.is_kind(model, :", k, ")]` in `Potts.couple`; or name it by a word the CPM fills (`[input = ",
+                    "true, lattice_input_name = \"kind\"]` for the kind of each site; the words are ",
+                    join(("`$x`" for x in _SITE_WORDS), ", "), "), or by a field or site variable of the model", hint)))
+            end
             if _input_eltype(u, op) === Bool && !(SymbolicUtils.symtype(_unwrap(target)) <: Bool)
                 # a word that is not a truth value (`kind` is the kind number) would reach the
                 # equations as the number itself
                 k = _example_kind(sys)
                 route = what == "@fields" ? "$(nameof(op)) => $w == $k" : "$(nameof(op)) => Potts.$w == :$k"
+                word_value = w == "kind" ? "the kind number of each site" : "a number"
                 throw(ArgumentError(string(what, ": ", pname, " has the `Bool` input `", _input_key(u, op), "`, filled by ",
-                    "the CPM word `", w, "`, which is not a truth value (", w == "kind" ? "the kind number of each site" :
-                    "a number", "); bind it: `", route, "`, or declare the input without `::Bool`")))
+                    "the CPM word `", w, "`, which is not a truth value (", word_value,
+                    "); bind it: `", route, "`, or declare the input without `::Bool`")))
             end
             imap[op] = _unwrap(target)
             push!(filled, (Symbol(_input_key(u, op)), _unwrap(target), _input_eltype(u, op), nameof(f)))
@@ -236,8 +255,17 @@ function _pde_content(sys, f::ModelingToolkitBase.PDESystem, prefix, what::Abstr
     end
     variables = Any[]
     for (u, op) in fields
-        v = haskey(ic, u) ? ic[u] : haskey(ic, op) ? ic[op] : haskey(start, op) ? start[op] :
-            M.hasdefault(u) ? M.getdefault(u) : nothing
+        v = if haskey(ic, u)
+            ic[u]
+        elseif haskey(ic, op)
+            ic[op]
+        elseif haskey(start, op)
+            start[op]
+        elseif M.hasdefault(u)
+            M.getdefault(u)
+        else
+            nothing
+        end
         if SymbolicUtils.symtype(u) <: AbstractArray
             # an array field `u(..)[1:n]`: its components `u_1, …, u_n`, as `@variables
             # u(field)[1:n]` declares them; `u[i]` reads component `i`
@@ -306,7 +334,13 @@ _input_key(u, op) = something(LatticePDE.get_lattice_input_name(u), string(nameo
 # the element type of an input's values: `Bool` (`endo(..)::Bool`), an integer type, else Real
 function _input_eltype(u, op)
     S = SymbolicUtils.symtype(u)
-    return S <: Bool ? Bool : S <: Integer ? S : Real
+    if S <: Bool
+        return Bool
+    elseif S <: Integer
+        return S
+    else
+        return Real
+    end
 end
 
 """
@@ -336,11 +370,17 @@ function _input_bindings(sys, f, inputs, what, pname)
         else
             k = _binding_target(key, ops)
         end
-        k === nothing && throw(ArgumentError(string(what, ": `", _key_text(key), "` is not a dependent variable of ", pname,
-                    "; its inputs are ", isempty(names) ? "none" : names, _declared_input(key, ModelingToolkitBase.get_ivs(f)) ?
-            string(". `", _key_text(key), "` is declared `[input = true]`, but no equation of ", pname, " reads it: a ",
-            "membership test `", _key_text(key), "(t, x, y) ∈ Set(…)` is Julia's `false`, so its term is deleted before ",
-            "the PDESystem is built; write `ismember(", _key_text(key), "(t, x, y), (1, 2))`") : "")))
+        if k === nothing
+            declared = if _declared_input(key, ModelingToolkitBase.get_ivs(f))
+                string(". `", _key_text(key), "` is declared `[input = true]`, but no equation of ", pname, " reads it: a ",
+                    "membership test `", _key_text(key), "(t, x, y) ∈ Set(…)` is Julia's `false`, so its term is deleted before ",
+                    "the PDESystem is built; write `ismember(", _key_text(key), "(t, x, y), (1, 2))`")
+            else
+                ""
+            end
+            throw(ArgumentError(string(what, ": `", _key_text(key), "` is not a dependent variable of ", pname,
+                "; its inputs are ", isempty(names) ? "none" : names, declared)))
+        end
         u, op = ops[k]
         M.isinput(u) || throw(ArgumentError(string(what, ": `", _key_text(key), "` is a dependent variable of ", pname,
             " but not an input; declare it `[input = true]` to bind it to a CPM expression")))
@@ -351,12 +391,24 @@ function _input_bindings(sys, f, inputs, what, pname)
         # `Potts.kind == :A` is Julia's `==` of a symbol and a Symbol: the constant `false`, built
         # before any symbolic term exists, so the kind name cannot be recovered here
         k = _example_kind(sys)
-        e isa Bool && throw(ArgumentError(string(what, ": the input `", _input_key(u, op), "` is bound to the constant `", e,
-            "`; a binding to a constant is the same at every site: bind a test of a cell property (`kind == 1`, ",
-            "`volume[owner] > v`), or write the constant in the equation", e ? "" : string(". Two tests are `false` in ",
-            "Julia (no symbolic term is built): `kind` against a kind name, `Potts.kind == :", k, "`, and a membership ",
-            "test, `Potts.kind ∈ Set(…)`; write `Potts.is_kind(model, :", k, ")` (several kinds: `Potts.is_kind(model, :",
-            k, ", …)`)", what == "@fields" ? string(", or in `@fields`, `kind == ", k, "` and `ismember(kind, (a, b))`") : ""))))
+        if e isa Bool
+            fields_form = if what == "@fields"
+                string(", or in `@fields`, `kind == ", k, "` and `ismember(kind, (a, b))`")
+            else
+                ""
+            end
+            tests = if e
+                ""
+            else
+                string(". Two tests are `false` in ",
+                    "Julia (no symbolic term is built): `kind` against a kind name, `Potts.kind == :", k, "`, and a membership ",
+                    "test, `Potts.kind ∈ Set(…)`; write `Potts.is_kind(model, :", k, ")` (several kinds: `Potts.is_kind(model, :",
+                    k, ", …)`)", fields_form)
+            end
+            throw(ArgumentError(string(what, ": the input `", _input_key(u, op), "` is bound to the constant `", e,
+                "`; a binding to a constant is the same at every site: bind a test of a cell property (`kind == 1`, ",
+                "`volume[owner] > v`), or write the constant in the equation", tests)))
+        end
         # `Potts.kind ∈ (a, b)`: Symbolics builds an interval pairing, not a membership test
         ex isa Symbolics.VarDomainPairing && throw(ArgumentError(string(what, ": the input `", _input_key(u, op),
             "` is bound to `", _builtin_text(string(ex.variables)), " ∈ ", ex.domain, "`, which Symbolics builds as an ",
@@ -463,7 +515,13 @@ function _binding_kind(f, name::Symbol, kinds)
         "; its kinds are ", join(("`$k`" for k in kinds), ", "))))
 end
 # a kind name of model `sys` for messages (its second kind, else its first, else `A`)
-_example_kind(sys) = (ks = _p(sys, :kinds); length(ks) >= 2 ? ks[2] : isempty(ks) ? :A : ks[1])
+_example_kind(sys) = (ks = _p(sys, :kinds); if length(ks) >= 2
+    ks[2]
+elseif isempty(ks)
+    :A
+else
+    ks[1]
+end)
 
 # a bare-symbol key of an `@fields` binding (`cell => kind == cell`): its name, matched against
 # the inputs of the PDESystem first, and its value in the constructor (a closure), read only when
@@ -519,9 +577,16 @@ function _pde_term(x, m)
     haskey(m.pmap, u) && return m.pmap[u]
     i = info(u)
     i !== nothing && i.role === :builtin && throw(ArgumentError(string(m.what, " reads ", _cell_quantity_text(i.name, m.kind))))
-    iscall(u) || throw(ArgumentError(string(m.what, " reads `", u, "`, which is not one of its dependent variables, ",
-        "parameters or independent variables", m.noparams ? "; list it in the 6th argument of `PDESystem` (its " *
-        "parameters, empty here), or build the system with `pdesystem`, which lists them" : "")))
+    if !iscall(u)
+        listing = if m.noparams
+            "; list it in the 6th argument of `PDESystem` (its " *
+                "parameters, empty here), or build the system with `pdesystem`, which lists them"
+        else
+            ""
+        end
+        throw(ArgumentError(string(m.what, " reads `", u, "`, which is not one of its dependent variables, ",
+            "parameters or independent variables", listing)))
+    end
     f, a = operation(u), arguments(u)
     # `u[i]` of an array field: component `i`, at its site or a face
     if f === getindex && length(a) == 2 && iscall(_unwrap(a[1])) && (g = operation(_unwrap(a[1])); haskey(m.fmap, g)) &&
@@ -537,9 +602,14 @@ function _pde_term(x, m)
     end
     if haskey(m.fmap, f) || haskey(m.imap, f)
         all(i -> isequal(a[i], m.ivs[i]), eachindex(a)) && return haskey(m.fmap, f) ? m.fmap[f] : m.imap[f]
-        (haskey(m.fmap, f) && m.face) || throw(ArgumentError(string(m.what, " reads `", u, "` at a point; ",
-            haskey(m.fmap, f) ? "an equation reads a field at its site (a condition reads it at a face)" :
-            "an input is read at its site")))
+        if !(haskey(m.fmap, f) && m.face)
+            site_note = if haskey(m.fmap, f)
+                "an equation reads a field at its site (a condition reads it at a face)"
+            else
+                "an input is read at its site"
+            end
+            throw(ArgumentError(string(m.what, " reads `", u, "` at a point; ", site_note)))
+        end
         args = map(a) do y
             w = _unwrap(y)
             m.tc !== nothing && isequal(w, m.tc) && return _unwrap(t)
@@ -551,8 +621,14 @@ function _pde_term(x, m)
     if f isa Differential
         v = _unwrap(f.x)
         j = findfirst(w -> isequal(w, v), m.xc)
-        nx = m.tc !== nothing && isequal(v, m.tc) ? _unwrap(t) : j === nothing ? throw(ArgumentError(string(m.what,
-            " differentiates along `", v, "`, which is not one of its independent variables"))) : _FIELD_X[j]
+        nx = if m.tc !== nothing && isequal(v, m.tc)
+            _unwrap(t)
+        elseif j === nothing
+            throw(ArgumentError(string(m.what,
+                " differentiates along `", v, "`, which is not one of its independent variables")))
+        else
+            _FIELD_X[j]
+        end
         return _unwrap(Differential(nx, f.order)(Symbolics.wrap(_pde_term(only(a), m))))
     elseif f isa ModelingToolkitBase.Shift
         return _unwrap(ModelingToolkitBase.Shift(_unwrap(t), f.steps)(Symbolics.wrap(_pde_term(only(a), m))))
@@ -638,9 +714,13 @@ function _fields_name(c, n::Symbol, f)
     end
     comps = [x for x in c.variables if get(info(x).options, :vector, nothing) === n]      # an array field
     isempty(comps) || return QuantityVector(n, Num[Symbolics.wrap(x) for x in comps])
+    params = if isempty(c.parameters)
+        ""
+    else
+        string(", and its parameters (a name may be one too) ", join(("`$(info(x).name)`" for x in c.parameters), ", "))
+    end
     throw(ArgumentError(string("@fields ", n, " = ", nameof(f), ": `", n, "` is not a field of the PDESystem `", nameof(f),
-        "`; its fields are ", join(("`$(info(x).name)`" for x in c.variables), ", "), isempty(c.parameters) ? "" :
-        string(", and its parameters (a name may be one too) ", join(("`$(info(x).name)`" for x in c.parameters), ", ")))))
+        "`; its fields are ", join(("`$(info(x).name)`" for x in c.variables), ", "), params)))
 end
 # the build record of a model with the inputs of its `@fields` PDESystems (`Potts.field_inputs`),
 # the PDESystem each of its conditions came from and the fields they brought

@@ -27,7 +27,15 @@ function an_boundary_oracle(σ, kinds, lat, r)
     L = Dict((names[a], names[b]) => 0.0 for a in 1:3 for b in a:3)
     sites = vec(collect(CartesianIndices(lat.dims)))
     indom(x) = lat.mask === nothing || lat.mask[x]
-    slot(c) = c == 0 ? 1 : (kinds[c] === :A ? 2 : 3)
+    function slot(c)
+        if c == 0
+            return 1
+        elseif kinds[c] === :A
+            return 2
+        else
+            return 3
+        end
+    end
     for i in eachindex(sites), j in (i + 1):length(sites)
         x, y = sites[i], sites[j]
         (indom(x) && indom(y)) || continue

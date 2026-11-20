@@ -112,8 +112,17 @@ _euler_column(name::Symbol) = name === :euler_full ? _EULER_FULL[] : name
 # (the window's box capacity)
 const _PIECES_HEX = Base.ScopedValues.ScopedValue{Bool}(false)
 const _LATTICE_DIMS = Base.ScopedValues.ScopedValue{Tuple}(())
-_pieces_column(name::Symbol) = !_PIECES_HEX[] ? name : name === :pieces_full ? :pieces :
-                               name === :largest_piece_full ? :largest_piece : name
+function _pieces_column(name::Symbol)
+    if !_PIECES_HEX[]
+        return name
+    elseif name === :pieces_full
+        return :pieces
+    elseif name === :largest_piece_full
+        return :largest_piece
+    else
+        return name
+    end
+end
 
 _proposal_env(T, relname) = LowerEnv(T, :proposal, Dict{Symbol, Any}(:source => :source,
     :target => :target, :old => :old, :new => :new, :__kind_of => (:old => :k_old, :new => :k_new),
@@ -187,8 +196,17 @@ _is_shell_call(x) = x isa Expr && x.head === :call && length(x.args) >= 4 && x.a
                     x.args[1].head === :. && x.args[1].args[1] === :CorePotts &&
     x.args[1].args[2] in QuoteNode.(_SHELL_KERNELS) && x.args[2] == :(st.ownership)
 _count_shell_calls(x) = x isa Expr ? Int(_is_shell_call(x)) + sum(_count_shell_calls, x.args; init = 0) : 0
-_on_shell(x) = x isa Expr ? (_is_shell_call(x) ? Expr(:call, x.args[1], :shell_read, map(_on_shell, x.args[3:end])...) :
-                             Expr(x.head, map(_on_shell, x.args)...)) : x
+function _on_shell(x)
+    if x isa Expr
+        if _is_shell_call(x)
+            return Expr(:call, x.args[1], :shell_read, map(_on_shell, x.args[3:end])...)
+        else
+            return Expr(x.head, map(_on_shell, x.args)...)
+        end
+    else
+        return x
+    end
+end
 
 """
 `f` with every shell kernel reading one `CorePotts.read_shell` bound at its top, when two
@@ -296,11 +314,15 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
         pairbinds = [:($(nameof(_unwrap(v))) = $(lower(x, newenv))) for (v, x) in pair]
         fuse = getfield(c, :uses_surface) && !fused_surface && _same_relation(c, ctxname, :surface)
         fused_surface |= fuse
-        surfacc = fuse ? quote
-            ws = eltype(st.cell.surface)(w)
-            δs_old += ifelse(n == old, ws, -ws)
-            δs_new += ifelse(n == new, -ws, ws)
-        end : nothing
+        surfacc = if fuse
+            quote
+                    ws = eltype(st.cell.surface)(w)
+                    δs_old += ifelse(n == old, ws, -ws)
+                    δs_new += ifelse(n == new, -ws, ws)
+                end
+        else
+            nothing
+        end
         # a target at least the relation's radius from every face takes its neighbors as
         # `target + linear offset`, without the wrap arithmetic (found by profiling the kernel)
         inner = Symbol(:__interior_, rel)            # fixed names: the code's hash must not change between builds
@@ -408,7 +430,11 @@ function _pieces_binds(c::CompiledPottsSystem, T, side)
     (getfield(c, :uses_pieces) || getfield(c, :uses_pieces_full)) || return ()
     o = side === :old
     face = o ? (:pa_old, :la_old) : (:pa_new, :la_new)
-    full = getfield(c, :uses_pieces_full) ? (o ? (:pf_old, :lf_old) : (:pf_new, :lf_new)) : face
+    full = if getfield(c, :uses_pieces_full)
+        o ? (:pf_old, :lf_old) : (:pf_new, :lf_new)
+    else
+        face
+    end
     return (:δpieces => :($T($(face[1]))), :δlargest_piece => :($T($(face[2]))),
         :δpieces_full => :($T($(full[1]))), :δlargest_piece_full => :($T($(full[2]))))
 end
@@ -752,8 +778,13 @@ _stage_writes(stage) = Set{Symbol}(_update_name(u) for u in stage.updates)
 _phases(c::CompiledPottsSystem, T, values, spec::SolverSpec) = first(_phases_parts(c, T, values, spec))
 
 """The model's MCS phase order: its `@schedule` placed, or the default order."""
-_phase_order(sys::PottsSystem) = isempty(_p(sys, :schedule)) ? _default_order(_convert_names(sys)) :
-                                  _placed_schedule(_p(sys, :schedule), _convert_names(sys))
+function _phase_order(sys::PottsSystem)
+    if isempty(_p(sys, :schedule))
+        return _default_order(_convert_names(sys))
+    else
+        return _placed_schedule(_p(sys, :schedule), _convert_names(sys))
+    end
+end
 
 # The phases, and the last cell update phase with the columns it writes and its expression
 # (`(; phase, writes, expr)`, or `nothing`): a candidate to run with the lifecycle trigger (`_fuse_before`)
@@ -915,9 +946,14 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
             # a host phase right after another one finds the queue idle (the previous one
             # synchronized and only copied since): it skips its sync (D-101)
             sync = isempty(comps) || !(last(comps) isa _AdaptiveODE)
-            push!(comps, solver isa Adaptive ? _adaptive_phase(c, T, dt, scope, odes, solver; scratch, sync) :
-                         scope === :cell ? CorePotts.CellPhase(_rgf(_cell_ode_expr(c, T, dt, odes, solver; scratch))) :
-                         CorePotts.ModelPhase(_rgf(_model_ode_expr(c, T, dt, odes, solver; scratch))))
+            phase = if solver isa Adaptive
+                _adaptive_phase(c, T, dt, scope, odes, solver; scratch, sync)
+            elseif scope === :cell
+                CorePotts.CellPhase(_rgf(_cell_ode_expr(c, T, dt, odes, solver; scratch)))
+            else
+                CorePotts.ModelPhase(_rgf(_model_ode_expr(c, T, dt, odes, solver; scratch)))
+            end
+            push!(comps, phase)
         end
         scratch || continue
         for (x, _) in (scope === :cell ? getfield(c, :cell_odes) : getfield(c, :model_odes))
@@ -1027,8 +1063,14 @@ end
 # them) or of the whole state (except `Potts._cellkind(st, c)` with `kind` unwritten) is not.
 function _reads_own_only(ex, writes)
     ok = Ref(true)
-    column(x) = x isa Expr && x.head === :. && length(x.args) == 2 && x.args[1] == :(st.cell) &&
-                x.args[2] isa QuoteNode ? x.args[2].value : nothing
+    function column(x)
+        if x isa Expr && x.head === :. && length(x.args) == 2 && x.args[1] == :(st.cell) &&
+            x.args[2] isa QuoteNode
+            return x.args[2].value
+        else
+            return nothing
+        end
+    end
     own(col, i) = column(col) !== nothing && i === :c
     function visit(x)
         ok[] || return
@@ -1050,8 +1092,11 @@ function _reads_own_only(ex, writes)
             visit(x.args[3])
         elseif x.head === :call && haskey(_CELL_HELPER_READS, string(x.args[1]))
             for a in x.args[2:end]
-                a == :(st.cell) ? (isempty(intersect(_CELL_HELPER_READS[string(x.args[1])], writes)) || (ok[] = false)) :
-                visit(a)
+                if a == :(st.cell)
+                    isempty(intersect(_CELL_HELPER_READS[string(x.args[1])], writes)) || (ok[] = false)
+                else
+                    visit(a)
+                end
             end
         else
             foreach(visit, x.args)
@@ -1083,10 +1128,14 @@ function _cell_ode_expr(c::CompiledPottsSystem, T, dt, odes, solver; scratch = f
     names = [info(x).name for (x, _) in odes]
     outs = scratch ? _ode_scratch_name.(names) : names
     body = _ode_steps(solver, T, dt, ys, [lower(_substitute_locals(rate, locals), env) for (_, rate) in odes])
-    live = scratch ? :(if !(@inbounds st.cell.volume[c] > 0)
-                         $([:(@inbounds st.cell.$(outs[i])[c] = st.cell.$(names[i])[c]) for i in eachindex(ys)]...)
-                         return nothing
-                     end) : :(@inbounds st.cell.volume[c] > 0 || return nothing)
+    live = if scratch
+        :(if !(@inbounds st.cell.volume[c] > 0)
+                $([:(@inbounds st.cell.$(outs[i])[c] = st.cell.$(names[i])[c]) for i in eachindex(ys)]...)
+                return nothing
+            end)
+    else
+        :(@inbounds st.cell.volume[c] > 0 || return nothing)
+    end
     return :((st, p, ctx, key, mcs, c) -> begin
         $live
         $([:($(ys[i]) = $T(@inbounds st.cell.$(names[i])[c])) for i in eachindex(ys)]...)
@@ -1117,8 +1166,11 @@ end
 # use) and re-initializes it per cell / per MCS.
 function _adaptive_phase(c::CompiledPottsSystem, T, dt, scope, odes, solver; scratch = false, sync = true)
     ys, locals, bind = _ode_locals(odes)
-    env = scope === :cell ? _cell_env(T, :c, getfield(c, :gather_names); mcs = :mcs, extra = (bind..., :time => :tt)) :
+    env = if scope === :cell
+        _cell_env(T, :c, getfield(c, :gather_names); mcs = :mcs, extra = (bind..., :time => :tt))
+    else
         _model_env(T, getfield(c, :gather_names); extra = (bind..., :time => :tt))
+    end
     rates = [lower(_substitute_locals(rate, locals, scope), env) for (_, rate) in odes]
     f = _rgf(:((du, u, P, tt) -> begin
         (st, p, ctx, mcs, c) = P
@@ -1296,8 +1348,11 @@ function _adaptive_host_state(ph::_AdaptiveODE, stats, backend, st)
     fresh = Tuple(n for n in ph.outs if !(n in (ph.scope === :cell ? cell : model)))    # not copied down
     isempty(fresh) && return host
     bufs(nt) = merge(nt, NamedTuple{fresh}(map(n -> CorePotts.host_buffer(getfield(nt, n)), fresh)))
-    return ph.scope === :cell ? CorePotts.CPMState(host.ownership, bufs(host.cell), host.site, host.model, host.history) :
-        CorePotts.CPMState(host.ownership, host.cell, host.site, bufs(host.model), host.history)
+    if ph.scope === :cell
+        return CorePotts.CPMState(host.ownership, bufs(host.cell), host.site, host.model, host.history)
+    else
+        return CorePotts.CPMState(host.ownership, host.cell, host.site, bufs(host.model), host.history)
+    end
 end
 
 function _cached_integrator(cache, owner)
@@ -1544,8 +1599,11 @@ function _link_phases(c::CompiledPottsSystem, T)
         # D-092: the body writes only its relationship's columns; it reads what the scan finds
         writes = (CorePotts.adjacency_name(r.relationship), (Symbol(:link_, info(x).name) for x in getfield(c, :edge_vars)[r.relationship])...)
         rd = _state_reads((body,); alias = :cell)
-        reads = rd === nothing || !all(isempty, (rd.site, rd.model, rd.history)) ? nothing :
+        reads = if rd === nothing || !all(isempty, (rd.site, rd.model, rd.history))
+            nothing
+        else
             Tuple(n for n in ((rd.ownership ? (:ownership,) : ())..., rd.cell...) if !(n in writes))
+        end
         push!(out, CorePotts.HostPhase(f; every = r.every, reads, writes))
     end
     return out
@@ -1566,8 +1624,8 @@ function _site_update_phases(c, T, us, every, rn)
     phases = Any[CorePotts.SitePhase(f)]
     if buffered
         for n in names
-            push!(phases, every == 1 ? CorePotts.CopyPhase((:site, n) => (:site, Symbol(n, :__next))) :
-                          _Gated(every, CorePotts.CopyPhase((:site, n) => (:site, Symbol(n, :__next)))))
+            copier = CorePotts.CopyPhase((:site, n) => (:site, Symbol(n, :__next)))
+            push!(phases, every == 1 ? copier : _Gated(every, copier))
         end
     end
     return phases
@@ -1771,14 +1829,22 @@ function _convert_pass_fns(c::CompiledPottsSystem, T, v::ConvertSpec)
     # previous-value snapshot (`x__pre`) and its tick scratch (`x__tick`) where it has them
     kenv = LowerEnv(T, :cell, Dict{Symbol, Any}(:kind => :k), rn)
     pre = Set{Symbol}(n for (scope, n) in Iterators.flatten(values(getfield(c, :pre_snapshots))) if scope === :cell)
-    tick = _tick_scratch(c) ? Set{Symbol}(info(x).name for b in getfield(c, :discrete) if b.scope === :cell for x in b.slots) :
-           Set{Symbol}()
+    tick = if _tick_scratch(c)
+        Set{Symbol}(info(x).name for b in getfield(c, :discrete) if b.scope === :cell for x in b.slots)
+    else
+        Set{Symbol}()
+    end
     inits = Any[]
     for x in _p(getfield(c, :sys), :variables)
         i = info(x)
         i.role === :cell || continue
-        val = get(i.options, :reference, false) === true ? :(Int32($(Int(i.default)))) :
-              (i.default isa Real && !_is_symbolic(i.default)) ? T(i.default) : :($T($(lower(i.default, kenv))))
+        val = if get(i.options, :reference, false) === true
+            :(Int32($(Int(i.default))))
+        elseif i.default isa Real && !_is_symbolic(i.default)
+            T(i.default)
+        else
+            :($T($(lower(i.default, kenv))))
+        end
         cols = Symbol[i.name]
         i.name in pre && push!(cols, Symbol(i.name, :__pre))
         i.name in tick && push!(cols, _tick_scratch_name(i.name))
@@ -1927,10 +1993,15 @@ function _division_normal(divisions, T)
     alongs = unique(d -> d.along isa Tuple ? ("tuple", d.along) : typeof(d.along), divisions)
     length(alongs) == 1 || throw(ArgumentError("divisions of one domain with different planes are not supported yet"))
     along = divisions[1].along
-    return along isa AlongMinor ? CorePotts.AlongMinorAxis{T}() :
-           along isa AlongMajor ? CorePotts.AlongMajorAxis{T}() :
-           along isa AlongRandom ? CorePotts.RandomPlane{T}() :
-           _rgf(:((st, p, ctx, key, mcs, c) -> $(Expr(:tuple, map(v -> T(v), along)...))))
+    if along isa AlongMinor
+        return CorePotts.AlongMinorAxis{T}()
+    elseif along isa AlongMajor
+        return CorePotts.AlongMajorAxis{T}()
+    elseif along isa AlongRandom
+        return CorePotts.RandomPlane{T}()
+    else
+        return _rgf(:((st, p, ctx, key, mcs, c) -> $(Expr(:tuple, map(v -> T(v), along)...))))
+    end
 end
 
 # daughter state rules of one domain (the rules `ids` of the model). Each runs for the rule

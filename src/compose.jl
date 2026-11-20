@@ -276,8 +276,11 @@ function _check_vector_lengths(model, inbase, theirs, mine)
 end
 
 """`parameter `bias_2` (a component of the vector `bias`)`: a category label with its name."""
-_labelled(what, n) = (i = findfirst(" (", what); i === nothing ? "$what `$n`" :
-                                                 "$(what[1:prevind(what, first(i))]) `$n`$(what[first(i):end])")
+_labelled(what, n) = (i = findfirst(" (", what); if i === nothing
+    "$what `$n`"
+else
+    "$(what[1:prevind(what, first(i))]) `$n`$(what[first(i):end])"
+end)
 
 _category_clash(model, n, what, old) = ArgumentError(
     "$model: $(_labelled(what, n)): `$n` is already declared as $(_with_article(old)) (kinds, parameters, variables, " *
