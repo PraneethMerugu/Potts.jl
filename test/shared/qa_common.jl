@@ -407,7 +407,7 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
     # A file whose comments are not code comments: docs pages, READMEs, and the Literate pages
     # (reproductions and model pages), whose comments render as the page's prose.
     function _qa_prose_file(p::AbstractString)
-        endswith(p, _QA_CODE_EXTS) || return true
+        any(e -> endswith(p, e), _QA_CODE_EXTS) || return true
         occursin(r"^lib/[^/]+/reproductions/[^/]+\.jl$", p) && return true
         return occursin(r"^docs/models/[^/]+\.jl$", p) && basename(p) != "render.jl"
     end
