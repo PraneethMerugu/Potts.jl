@@ -74,11 +74,14 @@ end
 
 # Aqua's ambiguity check loads only LatticeFields' own dependencies. A user's session also
 # loads array and polynomial packages whose generic methods (`==` on any AbstractArray) can be
-# ambiguous with LatticeFields' own (f2d9c774 had 8 such, with these three loaded): load them
-# here and require LatticeFields to add none (a guard).
+# ambiguous with LatticeFields' own (f2d9c774 had 8 such, with three of these loaded, and
+# `getindex` on a solution was ambiguous with BlockArrays' and BandedMatrices' index types until
+# D-298): load them here and require LatticeFields to add none (a guard).
 @testitem "no ambiguities with common array packages loaded" setup = [LF_qa_qa] tags = [:latticefields, :qa] begin
 @testset "no ambiguities with common array packages loaded" begin
     @eval using ArrayLayouts: ArrayLayouts
+    @eval using BandedMatrices: BandedMatrices
+    @eval using BlockArrays: BlockArrays
     @eval using DynamicPolynomials: DynamicPolynomials
     @eval using SparseArrays: SparseArrays
     @test isempty(Test.detect_ambiguities(LatticeFields; recursive = true))
