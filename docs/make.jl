@@ -61,15 +61,14 @@ if WITH_PUBLISHED
         endswith(f, ".jl") || continue
         stem = splitext(f)[1]
         k = findfirst(p -> p[1] == stem, PAPER_PAGES)
-        Literate.markdown(
-            joinpath(REPRODUCTIONS, f), PUBLISHED; documenter = true, credit = false,
-            preprocess = s -> begin
-                k === nothing && return s
-                s, ok = _with_model_id(s, PAPER_PAGES[k][2])
-                ok && push!(has_model_id, stem)
-                s
-            end
-        )
+        pre = s -> begin
+            k === nothing && return s
+            s, ok = _with_model_id(s, PAPER_PAGES[k][2])
+            ok && push!(has_model_id, stem)
+            s
+        end
+        kw = (; documenter = true, credit = false, preprocess = pre)
+        Literate.markdown(joinpath(REPRODUCTIONS, f), PUBLISHED; kw...)
         push!(published, joinpath("published", stem * ".md"))
     end
     # the old index page of the "Published models" section, now a page linking onward

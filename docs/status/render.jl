@@ -275,8 +275,7 @@ function render_status(; published::Bool = false)
 
         ## Status
 
-        | # | Model | Status | PASS | FAIL | PARKED | Controls as required | Open \
-        deviations | Page |
+        | # | Model | Status | PASS | FAIL | PARKED | Controls as required | Open deviations | Page |
         |:--|:------|:-------|-----:|-----:|-------:|---------------------:|:----------------|:-----|"""
     )
     details = IOBuffer()
