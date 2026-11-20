@@ -65,7 +65,7 @@ function Grid(dims::NTuple{N, Integer}; geometry = CUBIC, domain = 0) where {N}
 end
 
 """
-A grid level: `shift` coarsenings by 2 (D-051 coarse fields and MG levels).
+A grid level: `shift` coarsenings by 2 (coarse fields and multigrid levels).
 """
 struct Level{N}
     grid::Grid{N}
@@ -74,7 +74,7 @@ struct Level{N}
 end
 Level(g::Grid{N}, shift = 0) where {N} = Level{N}(g, Int8(shift), nothing)
 # Coarse levels: each coarsening halves an axis with floor, `n ÷ 2`; the last aggregate of an
-# odd axis takes width 3 (high end, P4-mg42; contract.jl). An axis of size 1 is never
+# odd axis takes width 3 (at the high end; see contract.jl). An axis of size 1 is never
 # coarsened (it stays 1, identity map); an axis that would reach 0 sites makes the level
 # illegal (`coarsenable`, checked by legality).
 leveldims(l::Level) = map(d -> Int32(d == 1 ? 1 : max(d >> l.shift, 1)), l.grid.dims)

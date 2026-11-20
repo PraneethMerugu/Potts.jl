@@ -437,7 +437,7 @@ end
     end
 end
 
-# Batch 5 review S1: a field stored in Float16 under the implicit algorithms is solved in the
+# A field stored in Float16 under the implicit algorithms is solved in the
 # state's value type (its residual held there; each update rounds once to Float16), with any
 # `compute_T`; accurate to its storage against the Float64 run. Base 97045a1b:
 # refused, "an implicit solve runs in Float32 or Float64".

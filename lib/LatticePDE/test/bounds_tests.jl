@@ -90,7 +90,7 @@ end
 end
 end
 
-# Batch 5 review M1: a velocity that reads the advected field (Burgers, `Advect([c, 0], c)`) is
+# A velocity that reads the advected field (Burgers, `Advect([c, 0], c)`) is
 # not bounded by its frozen velocity. The face-mean flux's Jacobian has the central part
 # `∂v/∂c · c`, so the rows are not diagonally dominant and no step is certified; the term stays
 # unseen, as in the implicit operator. Before the fix (97045a1b): ρ = 64 (the
@@ -228,7 +228,7 @@ end
 end
 end
 
-# Batch 5 review M2: the declared interval is checked after the build. A constant face value
+# The declared interval is checked after the build. A constant face value
 # outside the bounds is refused at the build; `remake(; u0)`, `reinit!` and state writes take the
 # start check; and a field that leaves the interval the bound used ends the run with
 # `ReturnCode.Unstable` and one warning (checked at the saves and at the end). Base 97045a1b:

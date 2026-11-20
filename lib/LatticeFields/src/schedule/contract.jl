@@ -42,8 +42,8 @@
 #
 # Conventions the front end and the solvers build on:
 # - Coarse levels. Each coarsening halves every axis with floor: `nc = n ÷ 2` (at least 1).
-#   Fine sites pair up; on an odd axis the last aggregate takes width 3 at the high end
-#   (P4-mg42). A fine `x` maps to coarse `min((x − 1) ÷ 2 + 1, nc)`; a coarse `x` has its
+#   Fine sites pair up; on an odd axis the last aggregate takes width 3 at the high end.
+#   A fine `x` maps to coarse `min((x − 1) ÷ 2 + 1, nc)`; a coarse `x` has its
 #   children at `2(x − 1) + 1 + o`, `o ∈ 0:1` (also `o = 2` at the last site of an odd axis).
 #   Access offsets are in the finer frame: a level +1 access at offset `o` reads the parent of
 #   the fine site `x + o` (wrapped or clamped first). An axis of size 1 is never coarsened;

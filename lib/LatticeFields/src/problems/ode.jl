@@ -268,7 +268,7 @@ function lattice_problem(fp::FieldProblem; jac::Bool = false, sparse::Bool = fal
     lp = LatticeParameters(copy(fp.p), fp.tables, fp.inputs; fns = fp.inputfns)
     E = problem_eltype(fp.u0, fp.p, lp.tables)          # (a Dual `u0` or parameter promotes the state)
     U = copyto!(KA.allocate(fp.backend, E, length(fp.u0)), convert(Vector{E}, fp.u0))
-    _clamp_masks!(U, meta, lp)                           # `prob.u0` holds the masked values (review 2)
+    _clamp_masks!(U, meta, lp)                           # `prob.u0` holds the masked values
     meta.family == :map && (jac || sparse) && throw(ArgumentError(string("`", jac ? "jac" : "sparse",
         " = true`: a map `Shift(t, 1)(m) ~ rhs` gives a `DiscreteProblem`, which has no Jacobian")))
     fp.group.spec.timefree && return _timefree_problem(meta, f, U, lp; jac, sparse, jvp)
@@ -642,7 +642,7 @@ function _write_masked!(u, m, prev, v, vf, all)
     return changed
 end
 
-# The masked values in a state `U` (review 2): the mask kernels of `m`'s right side run at `t`
+# The masked values in a state `U`: the mask kernels of `m`'s right side run at `t`
 # with the parameters, tables and inputs of `lp`, on a store of their own (the init plan is the
 # right side's, kept in the metadata), and `U` takes the value at each masked site. A state with
 # an unset input is left as it is (its solve names the input).
@@ -774,7 +774,7 @@ function lattice_matrix(A::LatticeOperator)
     end
     return M
 end
-# a factorization asks for a matrix the operator does not store (review 4): the routes
+# a factorization asks for a matrix the operator does not store: the routes
 Base.convert(::Type{AbstractMatrix}, ::LatticeOperator) = throw(ArgumentError(string("a `LatticeOperator` stores no ",
     "matrix (it applies the compiled right side), so a factorization (`LUFactorization`, `QRFactorization`) has none ",
     "to factor: solve with a Krylov method (`KrylovJL_GMRES()`, `KrylovJL_CG()`) or `QuasiSteady()`, or factor the ",
@@ -784,7 +784,7 @@ SciMLOperators.isconvertible(::LatticeOperator) = false
 """
     UpdateLatticeAb()
 
-The `update_Ab` of a time-free `LinearProblem` (review 4): a parameter write on the problem
+The `update_Ab` of a time-free `LinearProblem`: a parameter write on the problem
 (`lp.ps[k] = v`, `setp`) takes effect in place, so `r(0)` (in `A`) and `b = -r(0)` are computed
 again from the written parameters (the operator applies the right side at them already).
 """

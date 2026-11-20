@@ -218,8 +218,8 @@ end
     end
 end
 
-@testitem "review 5 regressions" setup = [AdaptiveSetup, SymbolicSetup] tags = [:potts, :adaptive] begin
-    @testset "review 5 regressions" begin
+@testitem "adaptive ODE substeps: ensembles, failures, refusals, nesting and cadence" setup = [AdaptiveSetup, SymbolicSetup] tags = [:potts, :adaptive] begin
+    @testset "adaptive ODE substeps: ensembles, failures, refusals, nesting and cadence" begin
         σ = zeros(Int32, 20, 20); σ[3:6, 3:6] .= 1; σ[12:15, 12:15] .= 2
         op = [ownership => σ, kind => [:A, :B]]
         p = PottsProblem(adaptive_model(), op, (0, 3); ode_solver = Adaptive(Tsit5(); reltol = 1e-8))

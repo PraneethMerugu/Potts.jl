@@ -36,7 +36,7 @@ function tad(prob, alg, s; dt, out = sol -> sol.u[end])
 end
 tok(ad, f) = isapprox(ad, f; rtol = 1e-7) && ad != 0
 
-# Batch 5 review S3 and N4: a group that declares Float64 on a backend without it (Metal) is
+# A group that declares Float64 on a backend without it (Metal) is
 # refused at the bind in words; a stub backend whose `supports_float64` is false stands in.
 # The D-157 registry of a store's generic bodies is keyed on a Float64 device array.
 struct NoF64Backend <: LatticeFields.Exec.KernelAbstractions.GPU end

@@ -92,7 +92,7 @@ end
         @test dkg(s5).mean === :arithmetic
         s6 = simplify(substitute(masked(ke == 3, α), Dict(α => 0.0)))
         @test has_op(s6, masked)
-        # registered predicates fold only with `fold = Val(true)` (P3-mtk O)
+        # registered predicates fold only with `fold = Val(true)`
         r = eqs[1].rhs
         @test has_op(substitute(r, Dict(ke => 2)), ismember)
         folded = substitute(r, Dict(ke => 2); fold = Val(true))

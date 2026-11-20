@@ -729,7 +729,7 @@ function _resid!(ctx)
 end
 
 """
-PCG kernels (P3-mg §6): K1 (`p ← z + βp` at the stencil points, partial `p·Ap`), K2 (`x ← x
+PCG kernels of the masked multigrid solver: K1 (`p ← z + βp` at the stencil points, partial `p·Ap`), K2 (`x ← x
 
   - αp`into the other buffer, the true residual`r = b − A(x + αp)`from the stencil points, partial ‖r‖∞; N-13 on every iteration) and the setup residual`pcg.true` (`r = b − A x`, partial ‖r‖∞ and ‖b‖∞). Under deflation `z`, `x`and`b` enter minus their means.
 """

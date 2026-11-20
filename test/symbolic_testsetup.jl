@@ -823,7 +823,7 @@ isdefined(@__MODULE__, :discrete_counter_model) || include(joinpath(@__DIR__, "s
 
 
 # A tick reading another cell's node sees its pre-tick value (Jacobi across cells), under both
-# algorithms: a shift register moves one cell per tick (B1).
+# algorithms: a shift register moves one cell per tick.
 @named shiftcell = System([dX(_kd) ~ ds], _tc)
 
 @potts_model DiscreteShiftRegister begin

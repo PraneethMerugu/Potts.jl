@@ -225,7 +225,7 @@ end
 end
 
 
-@potts_model ComposePerCellComp begin           # a per-cell `@components` (review B2)
+@potts_model ComposePerCellComp begin           # a per-cell `@components`
     @kinds medium cell
     @components cells(cell) clock = ComposeNeg.clock()
     @lattice Lattice((8, 8))

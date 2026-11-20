@@ -1,4 +1,4 @@
-# Solver test geometries (the reference cases of the masked-multigrid study, P3-mg/P4-mg42):
+# Solver test geometries (the reference cases of the masked multigrid design):
 # a masked disk or sphere (Dirichlet value 1 in the medium and on the box layer), a box with
 # face Dirichlet on x (0 at the low face, 1 at the high face) and periodic y, optionally with
 # masked islands, and a periodic box. Face coefficients 1, shift `s` (scaled form).

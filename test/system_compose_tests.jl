@@ -4,7 +4,7 @@
     @testset "system container: wrap checks" begin
         @test_throws ArgumentError Potts.wrap_system(:other, complete(inner_all), nothing, ContainerModels.part())
         @test_throws ArgumentError Potts.wrap_system(:allparts, complete(inner_all), ContainerModels.pde(:x), ContainerModels.part())
-        # P3-wlite trap 2: a completed system composed again is complete but not flat
+        # A completed system composed again is complete but not flat
         trap = compose(complete(ContainerModels.inner_top), [decay])
         @test iscomplete(trap) && !isempty(WL_MTKB.get_systems(trap))
         @test_throws ArgumentError Potts.wrap_system(:allparts, trap, nothing, ContainerModels.part())

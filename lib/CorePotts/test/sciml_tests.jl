@@ -22,7 +22,7 @@ struct AtMCS{K} end                     # a condition type per MCS: distinct cal
 
 # D-009: without an algorithm, SequentialCPM() on the CPU; a device backend has no
 # default and says to pass CheckerboardCPM
-struct P60ccDevice <: CorePotts.KernelAbstractions.Backend end
+struct TestDevice <: CorePotts.KernelAbstractions.Backend end
 include("shared/export_all.jl")
 end
 
@@ -190,8 +190,8 @@ end
         prob = PottsProblem(GG, initial_state(σ, kinds), Lattice((20, 20)), (0, 4), gg_params(); seed = 3)
         @test solve(prob).u[end].ownership == solve(prob, SequentialCPM()).u[end].ownership
         @test init(prob).alg isa SequentialCPM
-        @test_throws ArgumentError solve(prob; backend = P60ccDevice())
-        @test_throws ArgumentError init(prob; backend = P60ccDevice())
+        @test_throws ArgumentError solve(prob; backend = TestDevice())
+        @test_throws ArgumentError init(prob; backend = TestDevice())
     end
 end
 
@@ -296,12 +296,12 @@ end
         @test_throws ArgumentError CorePotts._cell_reduce!(
             +, (st, p, ctx, key, mcs, i) -> Dual{Nothing}(1.0, 0.5),
             fill(Dual{Nothing}(0.0, 0.0), length(kinds)), CorePotts.Part{:cell, :w},
-            st_dual_col, gg_params(), nothing, RNGKey(1), 0, P60ccDevice()
+            st_dual_col, gg_params(), nothing, RNGKey(1), 0, TestDevice()
         )
         @test_throws ArgumentError CorePotts._cell_reduce!(
             +, (st, p, ctx, key, mcs, i) -> BigFloat(1.0),
             fill(BigFloat(0.0), length(kinds)), CorePotts.Part{:cell, :w},
-            st_dual_col, gg_params(), nothing, RNGKey(1), 0, P60ccDevice()
+            st_dual_col, gg_params(), nothing, RNGKey(1), 0, TestDevice()
         )
     end
 end

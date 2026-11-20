@@ -6,7 +6,7 @@
 #
 # Spatial operators lower to the face-flux form (§5.2): one per-axis second difference
 # `(1/h²) Σ± K_face (c± − c)`, summed over axes for `laplacian` and `DivKGrad`. A raw `Dx(Dx(c))` or
-# `Dx(K * Dx(c))` lowers through the same primitive, so it gives the same IR (P3-rev item 5).
+# `Dx(K * Dx(c))` lowers through the same primitive, so it gives the same IR.
 # Neighbor values of `c` are `RESOLVE` loads (pass 2 applies the face rules). A face
 # coefficient is evaluated at the neighbor with `RESOLVE` loads of the fields that have face
 # rules (the rate fields: at a face of the box it takes the field's ghost value, the value the

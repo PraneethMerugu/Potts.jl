@@ -194,7 +194,7 @@ end
         st(integ) = CorePotts.current_state(integ)
         σ0 = zeros(Int32, 12, 8)
         σ0[3:6, 3:6] .= 1
-        # P60bnFieldAlg's shape: builds; `cfield = 1` at init (declared 0) and after each MCS; no substep
+        # The shape of the custom field algorithm: builds; `cfield = 1` at init (declared 0) and after each MCS; no substep
         integ = init(PottsProblem(FaOne(; name = :a), [ownership => σ0, kind => [:A]], (0, 3)), SequentialCPM())
         @test all(==(1.0), Array(st(integ).site.cfield)) && substep_counts(integ) == [0]
         step!(integ)

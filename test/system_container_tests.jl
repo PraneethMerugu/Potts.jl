@@ -21,10 +21,10 @@ end
 @testitem "system container: show" setup = [SystemContainerSetup] tags = [:potts, :system_container] begin
     @testset "system container: show" begin
         s = sprint(show, MIME"text/plain"(), W_all)
-        @test occursin("PottsSystem allparts", s) && occursin("fields: PDESystem", s) && occursin("decay₊yd", s)   # B1
+        @test occursin("PottsSystem allparts", s) && occursin("fields: PDESystem", s) && occursin("decay₊yd", s)
         @test !occursin("fields:", sprint(show, MIME"text/plain"(), W_empty))
-        @test !isempty(sprint(show, W_all)) && !isempty(string(W_all))                                          # B2
-        @test !isempty(sprint(print, W_all))                                                                    # B3
+        @test !isempty(sprint(show, W_all)) && !isempty(string(W_all))
+        @test !isempty(sprint(print, W_all))
     end
 end
 

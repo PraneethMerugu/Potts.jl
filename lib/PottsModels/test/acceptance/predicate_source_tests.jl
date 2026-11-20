@@ -50,9 +50,9 @@
 # `@constraint mobile > 0.5` with `mobile = 0` (the `convert_tests.jl` trick), so σ is constant;
 # k_d = k_s = 1/2, F₀ = 0, `ExplicitEuler(substeps = 1)`.
 #
-# Sections: 1 the fixtures build; 2 gating (B1); 3 mass balance and the stencil oracle (B2);
-# 4 negative controls (B3); 5 spellings (B4); 6 Fortuna's values (B5); 7 phase order with
-# `@convert` (B6); 8 the device (B7); 9 fingerprints (B8); 10 docs.
+# Sections: 1 the fixtures build; 2 gating; 3 mass balance and the stencil oracle;
+# 4 negative controls; 5 spellings; 6 Fortuna's values; 7 phase order with
+# `@convert`; 8 the device; 9 fingerprints; 10 docs.
 
 @testsetup module PredicateSourceSetup
 include(joinpath(@__DIR__, "..", "shared", "common.jl"))
@@ -197,7 +197,7 @@ function predicate_oracle(src, nsteps; D, kd = 0.5, ks = 0.5, T = Float64)
     return out
 end
 # ---------------------------------------------------------------------------------------
-# 7. Phase order with `@convert` (B6): fields run before the conversion pass
+# 7. Phase order with `@convert`: fields run before the conversion pass
 const CONVERT_BODY = quote
     @kinds medium substrate[frozen] cyto lam
     @lattice Lattice((6, 6, 4); boundary = (Periodic(), Periodic(), Closed()), neighborhood = VonNeumann(1))
@@ -252,7 +252,7 @@ end
 
 @testitem "initial state predicate source: the source is gated by the predicate (D_F = 0)" setup = [PredicateSourceSetup] tags = [:pottsmodels, :acceptance] begin
     # ---------------------------------------------------------------------------------------
-    # 2. Gating, D_F = 0 (B1)
+    # 2. Gating, D_F = 0
     @testset "initial state predicate source: the source is gated by the predicate (D_F = 0)" begin
         Fs = predicate_run()
         σ = sigma()
@@ -269,7 +269,7 @@ end
 
 @testitem "initial state predicate source: mass balance and the 7-point oracle (D_F = 1/16)" setup = [PredicateSourceSetup] tags = [:pottsmodels, :acceptance] begin
     # ---------------------------------------------------------------------------------------
-    # 3. Mass balance with diffusion, and the stencil oracle (B2)
+    # 3. Mass balance with diffusion, and the stencil oracle
     @testset "initial state predicate source: mass balance and the 7-point oracle (D_F = 1/16)" begin
         D = 0.0625
         # the automatic count is 1: ceil((D·12 + k_d)/1.8) = ceil(1.25/1.8) = 1
@@ -296,7 +296,7 @@ end
 
 @testitem "initial state predicate source: negative controls (no contact, kind-only, wrap)" setup = [PredicateSourceSetup] tags = [:pottsmodels, :acceptance] begin
     # ---------------------------------------------------------------------------------------
-    # 4. Negative controls (B3)
+    # 4. Negative controls
     @testset "initial state predicate source: negative controls (no contact, kind-only, wrap)" begin
         # (a) lam lifted to (2:3, 2:3, 3:4): no site touches the substrate, ΣF ≡ 0
         σa = sigma(; lamz = 3:4)
@@ -318,7 +318,7 @@ end
 
 @testitem "initial state predicate source: the helper and position spellings agree" setup = [PredicateSourceSetup] tags = [:pottsmodels, :acceptance] begin
     # ---------------------------------------------------------------------------------------
-    # 5. Spellings (B4)
+    # 5. Spellings
     @testset "initial state predicate source: the helper and position spellings agree" begin
         base = predicate_run(; p = (:D_F => 0.0625,))
         @test predicate_run(:Helper; p = (:D_F => 0.0625,)) == base                    # control: `count(…) > 0` helper
@@ -335,7 +335,7 @@ end
 
 @testitem "initial state predicate source: Fortuna's values (one substep, F → 0.9, 0.99, 0.999)" setup = [PredicateSourceSetup] tags = [:pottsmodels, :acceptance] begin
     # ---------------------------------------------------------------------------------------
-    # 6. Fortuna's values (B5): D_F = 1e-4, k_d = k_s = 0.9, 3D, h = 1, dt = 1
+    # 6. Fortuna's values: D_F = 1e-4, k_d = k_s = 0.9, 3D, h = 1, dt = 1
     @testset "initial state predicate source: Fortuna's values (one substep, F → 0.9, 0.99, 0.999)" begin
         # the automatic count with the reaction bound: ceil((1e-4·12 + 0.9)/1.8) = 1
         @test live_n(; p = (:D_F => 1.0e-4, :k_d => 0.9, :k_s => 0.9)) == 1        # control (the live count, the field-compiler switch)
@@ -388,15 +388,15 @@ end
 
 @testitem "initial state predicate source: on the device, Float32, bitwise" setup = [PredicateSourceSetup] tags = [:pottsmodels, :acceptance] begin
     # ---------------------------------------------------------------------------------------
-    # 8. The device (B7)
+    # 8. The device
     @testset "initial state predicate source: on the device ($(DEVICE)), Float32, bitwise" begin
         if ON_DEVICE
             backend = PottsDevices.device_backend()
             alg = CheckerboardCPM()
             cases = [
-                ("B1 gating", (; p = ())),
-                ("B2 diffusion", (; p = (:D_F => 0.0625,))),
-                ("B3(a) no contact", (; σ = sigma(; lamz = 3:4), p = (:D_F => 0.0625,))),
+                ("gating", (; p = ())),
+                ("diffusion", (; p = (:D_F => 0.0625,))),
+                ("no contact", (; σ = sigma(; lamz = 3:4), p = (:D_F => 0.0625,))),
             ]
             for (label, kw) in cases
                 cpu = solve(problem(; T = Float32, kw...), SequentialCPM(); saveat = 1)

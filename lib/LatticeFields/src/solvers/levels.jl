@@ -60,7 +60,7 @@ below a finest axis of `n0` cells: 2^ℓ, the last cell takes the rest.
                                                           (one(Int32) << ℓ)
 
 """
-Rule-M weights (P3-mg §3) of the hierarchy build: `inside` for a mask face inside a coarse
+Rule-M weights of the hierarchy build: `inside` for a mask face inside a coarse
 cell, `plane` for a mask face on a plane between two active coarse cells, `inherited` for
 absorption folded on a finer level, `box` for box face-Dirichlet absorption; `majority`
 selects the Majority fold (real child count) instead of Any; `diagonal` weighs the diagonal

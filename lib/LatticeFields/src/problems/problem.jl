@@ -1872,7 +1872,7 @@ function _input_fns(prob::FieldProblem, st::FieldStore, rts)
 end
 
 # Write `f(t)` of every input function into its input at the current time, as
-# `integ.ps[q] = f(t)` does, but keeping what the input does not touch (review B1 #1): a mask
+# `integ.ps[q] = f(t)` does, but keeping what the input does not touch: a mask
 # that reads one runs again with the clamps, and the groups start again (Crank–Nicolson damps,
 # BDF2 restarts: the masked data jump); an implicit operator that reads one is rebuilt (stale)
 # with its history kept; a read by the rates alone changes nothing else. An input the stability

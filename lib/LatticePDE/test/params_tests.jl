@@ -142,8 +142,8 @@ end
 end
 end
 
-@testitem "(review 5): a plain parameter vector holds no inputs, which are not read as zero" setup = [LP_params] tags = [:latticepde, :params] begin
-    @testset "(review 5): a plain parameter vector holds no inputs, which are not read as zero" begin
+@testitem "a plain parameter vector holds no inputs, which are not read as zero" setup = [LP_params] tags = [:latticepde, :params] begin
+    @testset "a plain parameter vector holds no inputs, which are not read as zero" begin
     o = discretize(wsys(), wdisc(); inputs = [wke => WK1])
     raw = SciMLBase.ODEProblem(o.f, o.u0, o.tspan, copy(o.p.values))
         # (at 0a182a0e: no error; the input read as zero, so `value_at(Dw, 0)` gave the rate 0)

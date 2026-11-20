@@ -199,8 +199,8 @@ end
 end
 end
 
-@testitem "(review 2): prob.u0 holds the masked values, on every route" setup = [LP_odepath] tags = [:latticepde, :odepath] begin
-    @testset "(review 2): prob.u0 holds the masked values, on every route" begin
+@testitem "prob.u0 holds the masked values, on every route" setup = [LP_odepath] tags = [:latticepde, :odepath] begin
+    @testset "prob.u0 holds the masked values, on every route" begin
     prob = discretize(omsys(), odisc(); inputs = [ode_k => OK1])
     M1 = vec(OK1 .== 1)
     # (0a182a0e: u0 at the masked sites 0.25 … the initial value x, f4b1-rev/pC.log)
@@ -218,8 +218,8 @@ end
 end
 end
 
-@testitem "(review 4): parameter writes on a time-free LinearProblem; factorizations" setup = [LP_odepath] tags = [:latticepde, :odepath] begin
-    @testset "(review 4): parameter writes on a time-free LinearProblem; factorizations" begin
+@testitem "parameter writes on a time-free LinearProblem; factorizations" setup = [LP_odepath] tags = [:latticepde, :odepath] begin
+    @testset "parameter writes on a time-free LinearProblem; factorizations" begin
     @parameters ls = 1.0 la = 2.0
     @variables lw(..)
     lwe = lw(x, y)

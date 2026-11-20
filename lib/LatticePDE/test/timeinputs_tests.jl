@@ -60,7 +60,7 @@ tiint() = PDESystem(
 const TI_ODE = (; saveat = 0.1, abstol = 1e-8, reltol = 1e-8)
 tifine(sys) = tifn(sys, ExplicitEuler(); dt = 1.0e-4, saveat = 0.1)
 
-# Review B1 #1: a refresh keeps what the input does not touch. With `t -> 1.0` read by the rates
+# A refresh keeps what the input does not touch. With `t -> 1.0` read by the rates
 # alone, Crank–Nicolson and BDF2 equal their constant-input runs bit for bit, and with a smooth
 # source `sin(6t)` in the equation they stay second order (a reset every window made BDF2
 # Backward Euler and CN two half steps)
@@ -152,17 +152,17 @@ end
     @test occursin("takes no time argument", msg(() -> discretize(tisrc(), tidisc(); inputs = [tiqe => () -> 1.0])))
     @test occursin("has 4 values", msg(() -> discretize(tisrc(), tidisc(); inputs = [tiqe => s -> zeros(2, 2)])))
         @test occursin("has 4 values", msg(() -> solve(discretize(tisrc(), tidisc(); inputs = [tiqe => s -> s < 0.1 ? zeros(8, 8) : zeros(2, 2)]), alg; dt = 0.01)))
-    # a write of an input a function gives is refused on both paths, naming `remake` (review B1 #4)
+    # a write of an input a function gives is refused on both paths, naming `remake`
         for ig in (init(fp, alg; dt = 0.01), init(fp, Tsit5()))
         step!(ig)
         @test occursin("remake(prob; inputs = [:tiq => K])", msg(() -> (ig.ps[tiqe] = fill(7.0, TI_N, TI_N))))
     end
-    # a new time span re-evaluates the input at its start (review B1 #7)
+    # a new time span re-evaluates the input at its start
     @test remake(fp; tspan = (0.3, 0.5)).ps[tiqe] == tiQ(0.3)
-    # values with derivative parts are refused in words (review B1 #5)
+    # values with derivative parts are refused in words
     @test occursin("plain numbers", msg(() -> discretize(tisrc(), tidisc();
         inputs = [tiqe => s -> fill(ForwardDiff.Dual(s, 1.0), TI_N, TI_N)])))
-    # an out-of-type result on the ODE path is named as such (review B1 #7)
+    # an out-of-type result on the ODE path is named as such
     ip = discretize(tiint(), tidisc(); inputs = [tike => s -> fill(s < 0.1 ? Int64(1) : Int64(2)^40, TI_N, TI_N)])
     @test occursin("integer values in its type's range", msg(() -> solve(ip, Tsit5())))
     # the warm step of constant inputs allocates nothing; with a function, only what it returns
@@ -224,7 +224,7 @@ end
 end
 end
 
-# Review B1 #2, #3: a mask that reads an input function reruns its init launches with no
+# A mask that reads an input function reruns its init launches with no
 # allocation (owned window, ODE call), and a fixed step counts as bounded
 @testitem "masks that read an input function: bytes and a fixed step" setup = [LP_timeinputs] tags = [:latticepde, :timeinputs] begin
     @testset "masks that read an input function: bytes and a fixed step" begin

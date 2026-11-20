@@ -463,8 +463,8 @@ _rank(c::SciMLBase.ReturnCode.T) = c == SciMLBase.ReturnCode.Success ? 0 : c == 
 # one group's status word into the run's counters and code (`Problems.check_status!`)
 function _read_status!(stats, rt::Problems.GroupRuntime)
     c = Problems.check_status!(rt, stats.fields)
-    # the fields whose declared bounds the stability bound used, still inside them (batch 5
-    # review M2): `Unstable` past them, with one warning
+    # the fields whose declared bounds the stability bound used, still inside them:
+    # `Unstable` past them, with one warning
     c = Problems.check_declared!(rt)
     _rank(c) > _rank(stats.fields.code) && (stats.fields.code = c)
     return nothing

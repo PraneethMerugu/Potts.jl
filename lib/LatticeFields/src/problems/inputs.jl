@@ -396,7 +396,7 @@ end
 function _bounds_message(index, i, v, lo, hi)
     head = string("parameter `", parameter_name(index, i), "` = ", v, " is outside its declared bounds (", _bnum(lo), ", ",
         _bnum(hi), ")")
-    # a computed parameter: the inputs to change (review S4 of batch 5)
+    # a computed parameter: the inputs to change
     k = computed_slot(index, i)
     why = k === nothing ? nothing : get(index.derived, index.key(k), nothing)
     why === nothing || return string(head, ": ", why)

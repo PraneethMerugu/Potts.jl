@@ -54,7 +54,7 @@ end
     end
     @test maximum(abs, w[:, 1] .- u) < 1e-4
     @test maximum(abs, w[:, 1] .- (cosh.(10 .* (1 .- ((1:n) .- 0.5) ./ n)) ./ cosh(10))) > 1e-3  # not the steady state yet
-    # the raw `Differential` spelling lowers to the same program (§7.4, P3-rev item 5)
+    # the raw `Differential` spelling lowers to the same program (§7.4)
     raw = Core.eval(m, quote
         Dx, Dy = Differential(x), Differential(y)
         @named rd2 = PDESystem(Differential(t)(c(t, x, y)) ~ Dc * (Dx(Dx(c(t, x, y))) + Dy(Dy(c(t, x, y)))) - k * c(t, x, y),
