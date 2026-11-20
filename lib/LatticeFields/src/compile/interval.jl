@@ -1,8 +1,8 @@
 # Interval coefficient evaluator, emitted as host code: given parameter
 # bounds it returns enclosures of chosen nodes with no allocation, which is what stability
-# bounds and stage counts need. A load takes its field's declared state interval; a load with
-# no declared interval is a build error naming the field. Bounds are widened outward by one
-# ulp per operation, so they enclose the Float64 values.
+# bounds and stage counts need. A load takes its field's declared state interval; a load
+# with no declared interval is a build error naming the field. Bounds are widened outward by
+# one ulp per operation, so they enclose the Float64 values.
 
 const Iv = Tuple{Float64, Float64}
 _out(lo, hi) = (prevfloat(Float64(lo)), nextfloat(Float64(hi)))
@@ -57,8 +57,7 @@ function _ivexpr(k::Kernel, i, p::Program, bounds, a)
         else
             "runtime#$(n.imm)"
         end
-        haskey(bounds, key) ||
-            irerror(
+        haskey(bounds, key) || irerror(
             "interval evaluator: `", key, "` has no declared interval",
             " (kernel `", k.key, "`, node v", i, ")"
         )

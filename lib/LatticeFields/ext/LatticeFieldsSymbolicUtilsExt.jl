@@ -5,6 +5,8 @@ module LatticeFieldsSymbolicUtilsExt
 using LatticeFields: Problems
 using SymbolicUtils: BasicSymbolic
 
-Base.getindex(sol::Problems.LatticeSolution, sym::BasicSymbolic) = Problems._lattice_getindex(sol, sym)
+function Base.getindex(sol::Problems.LatticeSolution, sym::BasicSymbolic)
+    return Problems._lattice_getindex(sol, sym)
+end
 
 end # module LatticeFieldsSymbolicUtilsExt

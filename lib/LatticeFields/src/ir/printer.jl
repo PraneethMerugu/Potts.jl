@@ -1,6 +1,6 @@
 # The printer: one stable text form, used for `inspect`, error messages and as the
-# fingerprint source. It prints op and enum *names*, never codes, and keys, never ids, so a new
-# op or a new declaration elsewhere never changes an existing program's text.
+# fingerprint source. It prints op and enum *names*, never codes, and keys, never ids, so a
+# new op or a new declaration elsewhere never changes an existing program's text.
 
 _lc(x) = lowercase(string(x))
 _fmt(x::Float64) = repr(x)
@@ -13,7 +13,8 @@ function print_rule(io::IO, p::Program, r::FaceRule)
         r.axis, " side=", r.side > 0 ? "+" : "-",
         " alpha=", _fmt(r.alpha), " beta=", _fmt(r.beta), " g=", _fmt(r.g)
     )
-    r.gfield == 0 || print(io, " gfield=", p.fields[r.gfield].key)      # (printed only when set)
+    # (printed only when set)
+    r.gfield == 0 || print(io, " gfield=", p.fields[r.gfield].key)
     r.afield == 0 || print(io, " afield=", p.fields[r.afield].key)
     return r.bfield == 0 || print(io, " bfield=", p.fields[r.bfield].key)
 end
@@ -22,7 +23,8 @@ function print_rule(io::IO, p::Program, r::DomainEdgeRule)
         io, "rule domain_edge ",
         p.fields[r.field].key, " kind=", r.kind
     )
-    return r.mask == 0 || print(io, " mask=", p.masks[r.mask].key)              # (printed only when set)
+    # (printed only when set)
+    return r.mask == 0 || print(io, " mask=", p.masks[r.mask].key)
 end
 function print_rule(io::IO, p::Program, r::ImmersedRule)
     return print(
@@ -35,7 +37,8 @@ function print_rule(io::IO, p::Program, r::NodeValueRule)
         io, "rule node_value ", p.fields[r.field].key,
         " mask=", p.masks[r.mask].key, " value=", _fmt(r.value), " face=", r.face
     )
-    return r.vfield == 0 || print(io, " vfield=", p.fields[r.vfield].key)      # (printed only when set)
+    # (printed only when set)
+    return r.vfield == 0 || print(io, " vfield=", p.fields[r.vfield].key)
 end
 
 """
@@ -60,7 +63,8 @@ function print_layout(io::IO, p::Program{N}) where {N}
             io, "field ", f.key, " lane=", f.storage,
             " shape=[", join(f.shape, ","), "]", " symmetric=",
             f.symmetric, " buffers=", f.buffers, " role=", f.role, " epoch=", _lc(f.epoch),
-            " classes=", [Int.(c.half) for c in f.classes], " levels=[", join(f.levels, ","), "]",
+            " classes=", [Int.(c.half) for c in f.classes], " levels=[",
+            join(f.levels, ","), "]",
             f.fixed ? " fixed" : ""
         )
     end

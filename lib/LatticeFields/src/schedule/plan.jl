@@ -9,16 +9,14 @@ two-buffer fields). Ties break by kernel key, so the order is canonical.
 
 A one-buffer field (an aux field `K ~ rhs`) has no old value: inside a Jacobi group its
 readers run after its writer (they read the new value). The members of a group are
-ordered by these reads (ties by key); only a cycle of one-buffer reads (fields that define each
-other within one step) is a read cycle, refused.
+ordered by these reads (ties by key); only a cycle of one-buffer reads (fields that define
+each other within one step) is a read cycle, refused.
 """
 function step_order(p::Program, ids::Vector{Int})
     ks = p.kernels
     w = Dict{Int32, Int}()
     for i in ids, f in writes(ks[i])
-
-        haskey(w, f) &&
-            irerror(
+        haskey(w, f) && irerror(
             "field `", p.fields[f].key, "` is written by kernels `", ks[w[f]].key,
             "` and `", ks[i].key, "` in one step"
         )
@@ -57,20 +55,23 @@ function step_order(p::Program, ids::Vector{Int})
     for (n, c) in enumerate(comps)
         length(c) > 1 && (comps[n] = _one_buffer_order(p, c, w))
     end
-    return comps   # writers precede readers: Tarjan emits sinks of reader->writer edges first
+    # writers precede readers: Tarjan emits sinks of reader->writer edges first
+    return comps
 end
 
-# The members `c` (sorted by key) of a Jacobi group in the order of their one-buffer reads: a
-# reader of a one-buffer field after its writer, ties by key (Kahn's algorithm); a cycle of
-# one-buffer reads is refused, naming the fields on it
+# The members `c` (sorted by key) of a Jacobi group in the order of their one-buffer reads:
+# a reader of a one-buffer field after its writer, ties by key (Kahn's algorithm); a cycle
+# of one-buffer reads is refused, naming the fields on it
 function _one_buffer_order(p::Program, c::Vector{Int}, w::Dict{Int32, Int})
     ks = p.kernels
     deps = Dict(
         i => sort!(
             unique!(
                 [
-                    w[f] for f in reads(ks[i])
-                        if haskey(w, f) && w[f] != i && w[f] in c && p.fields[f].buffers == 1
+                    w[f]
+                        for f in reads(ks[i])
+                        if haskey(w, f) && w[f] != i && w[f] in c && p.fields[f].buffers ==
+                        1
                 ]
             )
         ) for i in c
@@ -86,13 +87,19 @@ function _one_buffer_order(p::Program, c::Vector{Int}, w::Dict{Int32, Int})
                 deleteat!(cyc, k)
             end
             f = first(
-                f for i in cyc for f in reads(ks[i])
+                f for i in cyc
+                    for f in reads(ks[i])
                     if haskey(w, f) && w[f] in cyc && w[f] != i && p.fields[f].buffers == 1
             )
             irerror(
-                "the fields ", join(sort!(unique!([p.fields[g].key for j in cyc for g in writes(ks[j])])), ", "),
-                " define each other within one step (a read cycle: each reads another's new value); an ",
-                "algebraic field cannot depend on itself through other fields: break the cycle ",
+                "the fields ", join(
+                    sort!(unique!([p.fields[g].key for j in cyc for g in writes(ks[j])])),
+                    ", "
+                ),
+                " define each other within one step (a read cycle: each reads another's \
+                    new value); an ",
+                "algebraic field cannot depend on itself through other fields: break the \
+                    cycle ",
                 "(in the IR, field `", p.fields[f].key, "` would need buffers = 2)"
             )
         end
@@ -175,7 +182,9 @@ function merge_kernels(p::Program{N}, ids::Vector{Int}, scc; forward::Bool = tru
             n = k.nodes[j]
             a = n.op == LOAD ? k.accesses[n.imm] : nothing
             src = a === nothing ? nothing : get(out, (a.field, a.comp.a), nothing)
-            new[j] = if forward && src !== nothing && (scc[src[2]] != scc[i] || p.fields[a.field].buffers == 1) && zero_offset(a) &&
+            new[j] = if forward && src !== nothing &&
+                    (scc[src[2]] != scc[i] || p.fields[a.field].buffers == 1) &&
+                    zero_offset(a) &&
                     a.comp.cond == 0
                 _rounded!(b, p, a.field, src[1])
             else
@@ -246,8 +255,8 @@ end
 """
     plan(p, ids = all kernels; options, cost) -> StepPlan
 
-Order the kernels of one step, fuse by the cost model (`t_fused < Σ t_split`; legality first,
-every split reported), lower each launch and bind buffers. Debug mode never fuses.
+Order the kernels of one step, fuse by the cost model (`t_fused < Σ t_split`; legality
+first, every split reported), lower each launch and bind buffers. Debug mode never fuses.
 """
 function plan(
         p::Program{N}, ids::Vector{Int} = collect(eachindex(p.kernels));
@@ -307,7 +316,14 @@ function plan(
         legality(with_kernels(p, [k]))
         ck = compile_kernel(p, k, options; stages)
         # a field another component of the group writes is read from its next slot
-        rebind(id, role) = role == :cur && haskey(written, id) && all(i -> scc[i] != written[id], g) ? :next : role
+        function rebind(id, role)
+            return if role == :cur && haskey(written, id) &&
+                    all(i -> scc[i] != written[id], g)
+                :next
+            else
+                role
+            end
+        end
         bind = [[(id, rebind(id, role)) for (id, role) in lane] for lane in ck.args]
         push!(
             launches,
@@ -333,8 +349,8 @@ end
 """
     fusion_report(io, plan::StepPlan)
 
-The fusion decisions of a step plan, one line per decision: `fuse` or `split`, the kernels, the
-candidate and the reason (the modeled fused and split times of a cost decision). Part of
+The fusion decisions of a step plan, one line per decision: `fuse` or `split`, the kernels,
+the candidate and the reason (the modeled fused and split times of a cost decision). Part of
 `Problems.field_report`, which prints it per field group.
 """
 function fusion_report(io::IO, sp::StepPlan)
@@ -350,5 +366,8 @@ end
 # the detail of a fusion decision: the modeled times of a cost decision, else its text
 function _decision_detail(d)
     d.reason == :cost || return string(": ", d.detail)
-    return string(" fused=", round(d.t_fused * 1.0e6; digits = 2), "µs split=", round(d.t_split * 1.0e6; digits = 2), "µs")
+    return string(
+        " fused=", round(d.t_fused * 1.0e6; digits = 2),
+        "µs split=", round(d.t_split * 1.0e6; digits = 2), "µs"
+    )
 end

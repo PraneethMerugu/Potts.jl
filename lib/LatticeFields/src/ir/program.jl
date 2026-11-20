@@ -1,6 +1,6 @@
-# Program assembly. Front ends declare fields, masks, tables and rules in any order and build
-# kernels against provisional ids; `program` sorts every table by key, renumbers the ids and
-# rebuilds each kernel canonically, so declaration order never reaches the IR.
+# Program assembly. Front ends declare fields, masks, tables and rules in any order and
+# build kernels against provisional ids; `program` sorts every table by key, renumbers the
+# ids and rebuilds each kernel canonically, so declaration order never reaches the IR.
 
 mutable struct ProgramBuilder{N}
     hierarchy::Vector{Level{N}}
@@ -110,9 +110,13 @@ function _rulemap(r::FaceRule, fm, mm)
         fm(r.afield), fm(r.bfield)
     )
 end
-_rulemap(r::DomainEdgeRule, fm, mm) = DomainEdgeRule(fm(r.field), r.kind, r.mask == 0 ? Int32(0) : mm(r.mask))
+function _rulemap(r::DomainEdgeRule, fm, mm)
+    return DomainEdgeRule(fm(r.field), r.kind, r.mask == 0 ? Int32(0) : mm(r.mask))
+end
 _rulemap(r::ImmersedRule, fm, mm) = ImmersedRule(fm(r.field), mm(r.mask), r.kind)
-_rulemap(r::NodeValueRule, fm, mm) = NodeValueRule(fm(r.field), mm(r.mask), r.value, r.face, fm(r.vfield))
+function _rulemap(r::NodeValueRule, fm, mm)
+    return NodeValueRule(fm(r.field), mm(r.mask), r.value, r.face, fm(r.vfield))
+end
 
 """
 Sort fields, masks, tables, rules and kernels by key and rebuild every kernel canonically.
@@ -149,7 +153,8 @@ function program(pb::ProgramBuilder{N}) where {N}
     )
     return Program{N}(
         hier, fields, tables, masks, p.flags,
-        sort(rules; by = r -> sprint(print_rule, p, r)), kernels, pb.periodic, pb.spacing, pb.nparams
+        sort(rules; by = r -> sprint(print_rule, p, r)), kernels, pb.periodic, pb.spacing,
+        pb.nparams
     )
 end
 
@@ -163,5 +168,7 @@ function with_kernels(p::Program{N}, ks) where {N}
     )
 end
 function buildkeys(p::Program)
-    return ([f.key for f in p.fields], [f.storage for f in p.fields], [t.key for t in p.tables])
+    return (
+        [f.key for f in p.fields], [f.storage for f in p.fields], [t.key for t in p.tables],
+    )
 end

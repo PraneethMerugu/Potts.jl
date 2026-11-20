@@ -31,7 +31,6 @@ function host_workgroups!(
         reverse::Bool = false
     ) where {F}
     for g in Int32(1):Int32(ngroups), ph in Int32(1):Int32(phases)
-
         if reverse
             for t in Int32(wg):Int32(-1):Int32(1)
                 body(ph, g, t, lds, S, P, G)
@@ -57,16 +56,22 @@ workers (`@batch`: no task is created, a warm launch allocates nothing), chunk `
 `c` of `lds` (`chunks · ldslen` elements). Every block computes the same values in the same
 order whatever the chunk, so the result does not depend on `chunks` or the thread count.
 """
-function host_reduce!(body::F, ngroups, wg, lds, ldslen, S, P, G; chunks::Integer = 1) where {F}
+function host_reduce!(
+        body::F, ngroups, wg, lds, ldslen, S, P, G; chunks::Integer = 1
+    ) where {F}
     if chunks <= 1
         _reduce_blocks!(body, 1, Int(ngroups), wg, lds, S, P, G)
     else
-        _host_reduce_threaded!(body, Int(ngroups), Int(chunks), wg, lds, Int(ldslen), S, P, G)
+        _host_reduce_threaded!(
+            body, Int(ngroups), Int(chunks), wg, lds, Int(ldslen), S, P, G
+        )
     end
     return nothing
 end
 
-@noinline function _host_reduce_threaded!(body::F, ngroups, nc, wg, lds, ldslen, S, P, G) where {F}
+@noinline function _host_reduce_threaded!(
+        body::F, ngroups, nc, wg, lds, ldslen, S, P, G
+    ) where {F}
     per = cld(ngroups, nc)
     @batch per = thread for c in 1:nc
         _reduce_chunk!(body, c, per, ngroups, wg, lds, ldslen, S, P, G)

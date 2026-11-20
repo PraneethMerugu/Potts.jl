@@ -21,25 +21,33 @@ values`, `integ.ps[kind] = K`, `remake(prob; p = [k => v, Dk => values, kind => 
 table or input write checks the values (finite entries, one value per site, the input's
 declared type and bounds); the stability bound runs at the next call of the right side.
 
-An OrdinaryDiffEq integrator holds the problem's own `LatticeParameters` (SciML aliases `p` by
-default), so `integ.ps[k] = v` on it writes `prob.p` too: `remake(prob)` (or `copy(prob.p)`)
-gives a problem whose parameters a run does not change. An owned integrator holds a copy.
+An OrdinaryDiffEq integrator holds the problem's own `LatticeParameters` (SciML aliases `p`
+by default), so `integ.ps[k] = v` on it writes `prob.p` too: `remake(prob)` (or
+`copy(prob.p)`) gives a problem whose parameters a run does not change. An owned integrator
+holds a copy.
 """
-mutable struct LatticeParameters{V <: AbstractVector, TB <: AbstractVector, IN <: AbstractVector}
+mutable struct LatticeParameters{
+        V <: AbstractVector, TB <: AbstractVector, IN <: AbstractVector,
+    }
     values::V
     tables::TB
     inputs::IN
     tick::Base.RefValue{Int}
     stamp::Base.RefValue{Int}
-    fns::Vector{Pair{String, Any}}      # the inputs given as functions of the time, `key => f`
+    # the inputs given as functions of the time, `key => f`
+    fns::Vector{Pair{String, Any}}
 end
 function LatticeParameters(
-        values::AbstractVector, tables = Pair{String, Vector{Float64}}[], inputs = Pair{String, Any}[];
+        values::AbstractVector, tables = Pair{String, Vector{Float64}}[], inputs = Pair{
+            String, Any,
+        }[];
         tick::Integer = 0, fns = Pair{String, Any}[]
     )
     return LatticeParameters(
         values, _table_list(tables),
-        Pair{String, Any}[k => v for (k, v) in inputs], Ref(Int(tick)), Ref(0), Pair{String, Any}[k => f for (k, f) in fns]
+        Pair{String, Any}[k => v for (k, v) in inputs], Ref(Int(tick)), Ref(0), Pair{
+            String, Any,
+        }[k => f for (k, f) in fns]
     )
 end
 
@@ -53,7 +61,8 @@ Base.eltype(::Type{<:LatticeParameters{V}}) where {V} = eltype(V)
 function Base.copy(p::LatticeParameters)
     return LatticeParameters(
         copy(p.values), eltype(p.tables)[k => copy(v) for (k, v) in p.tables],
-        Pair{String, Any}[k => (v === nothing ? v : copy(v)) for (k, v) in p.inputs], Ref(p.tick[]), Ref(p.stamp[]), copy(p.fns)
+        Pair{String, Any}[k => (v === nothing ? v : copy(v)) for (k, v) in p.inputs],
+        Ref(p.tick[]), Ref(p.stamp[]), copy(p.fns)
     )
 end
 function Base.:(==)(a::LatticeParameters, b::LatticeParameters)
@@ -64,16 +73,24 @@ end
 # so `isequal` objects hash equal (`-0.0` and `0.0` are `==` but not `isequal`)
 function Base.isequal(a::LatticeParameters, b::LatticeParameters)
     return isequal(a.values, b.values) && isequal(a.tables, b.tables) &&
-        isequal(a.inputs, b.inputs) && isequal(a.tick[], b.tick[]) && isequal(a.fns, b.fns)
+        isequal(a.inputs, b.inputs) && isequal(a.tick[], b.tick[]) &&
+        isequal(a.fns, b.fns)
 end
 function Base.hash(p::LatticeParameters, h::UInt)
-    return hash(p.fns, hash(p.tick[], hash(p.inputs, hash(p.tables, hash(p.values, hash(:LatticeParameters, h))))))
+    return hash(
+        p.fns,
+        hash(
+            p.tick[],
+            hash(p.inputs, hash(p.tables, hash(p.values, hash(:LatticeParameters, h))))
+        )
+    )
 end
 # the same tables and inputs with other scalar values (SciMLStructures' `replace`, a remake)
 function with_values(p::LatticeParameters, v::AbstractVector)
     return LatticeParameters(
         v, eltype(p.tables)[k => copy(x) for (k, x) in p.tables],
-        Pair{String, Any}[k => (x === nothing ? x : copy(x)) for (k, x) in p.inputs], Ref(p.tick[]), Ref(p.stamp[]),
+        Pair{String, Any}[k => (x === nothing ? x : copy(x)) for (k, x) in p.inputs],
+        Ref(p.tick[]), Ref(p.stamp[]),
         copy(p.fns)
     )
 end
@@ -125,7 +142,8 @@ function SII.parameter_values(p::LatticeParameters, s::InputSlot)
     v === nothing && return nothing
     return _input_shaped(s, v isa Number ? v : copy(v))
 end
-# an input's values shaped by site (as `integ[kind]` reads it), when the index knows its program
+# an input's values shaped by site (as `integ[kind]` reads it), when the index knows its
+# program
 function _input_shaped(s::InputSlot, v)
     prog = s.index isa LatticeIndex ? s.index.program[] : nothing
     v isa AbstractArray && prog isa Program || return v
@@ -143,16 +161,19 @@ function SII.set_parameter!(p::LatticeParameters, v, s::TableSlot)
             throw(
                 ArgumentError(
                     string(
-                        "the table `", s.key, "` has ", length(vals), " entries; give ", length(vals),
+                        "the table `", s.key, "` has ", length(vals), " entries; give ",
+                        length(vals),
                         " values (got ", got, ")"
                     )
                 )
             )
         end
-        all(x -> x isa Real && isfinite(x), v) || throw(ArgumentError("the table `$(s.key)` must hold finite values (got $v)"))
+        all(x -> x isa Real && isfinite(x), v) ||
+            throw(ArgumentError("the table `$(s.key)` must hold finite values (got $v)"))
         vals .= vec(collect(v))
     else
-        v isa Real && isfinite(v) || throw(ArgumentError("the table `$(s.key)` must hold finite values (got $v)"))
+        v isa Real && isfinite(v) ||
+            throw(ArgumentError("the table `$(s.key)` must hold finite values (got $v)"))
         vals[s.entry] = v
     end
     p.stamp[] += 1
@@ -164,7 +185,8 @@ function SII.set_parameter!(p::LatticeParameters, v, s::InputSlot)
     prog = s.index.program[]
     w = if prog isa Program
         _input_value(
-            prog, s.key, v, input_name(s.index, s.key); bool = is_bool_input(s.index, s.key),
+            prog, s.key, v, input_name(s.index, s.key);
+            bool = is_bool_input(s.index, s.key),
             bounds = input_bounds(s.index, s.key)
         )
     else
@@ -189,7 +211,9 @@ function SS.replace!(::SS.Tunable, p::LatticeParameters, v)
     p.values .= v
     return nothing
 end
-_flat_tables(p::LatticeParameters) = reduce(vcat, (last(t) for t in p.tables); init = _tabeltype(p.tables)[])
+function _flat_tables(p::LatticeParameters)
+    return reduce(vcat, (last(t) for t in p.tables); init = _tabeltype(p.tables)[])
+end
 function SS.canonicalize(::SS.Constants, p::LatticeParameters)
     return _flat_tables(p), v -> SS.replace(SS.Constants(), p, v), false
 end
@@ -231,7 +255,9 @@ function SS.replace(::SS.Discrete, p::LatticeParameters, v)
 end
 function SS.replace!(::SS.Discrete, p::LatticeParameters, v)
     n = sum(((_, x),) -> x isa Number ? 1 : length(x), _set_inputs(p); init = 0) + 1
-    length(v) == n || throw(ArgumentError("the inputs and the step index hold $n values; got $(length(v))"))
+    length(v) == n ||
+        throw(ArgumentError("the inputs and the step index hold $n values; \
+            got $(length(v))"))
     i = 0
     for (j, (k, x)) in enumerate(p.inputs)
         x === nothing && continue

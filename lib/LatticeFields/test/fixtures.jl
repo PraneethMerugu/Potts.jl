@@ -1,7 +1,8 @@
 # Programs shared by the tests: FV-style explicit diffusion steps built through the builder,
 # and their hand-written loops. The hand loops follow the canonical operand order the IR
 # documents (loads by offset, then products, then boundary selects by offset), with Float32
-# literals rounded once from Float64 and hoisted coefficients computed in Float64 on the host.
+# literals rounded once from Float64 and hoisted coefficients computed in Float64 on the
+# host.
 
 using Random
 
@@ -46,7 +47,6 @@ function hand2!(out, u, P)
     nx, ny = size(u)
     k, m4 = coefk(P), Float32(-4.0)
     for j in 1:ny, i in 1:nx
-
         c = u[i, j]
         w, e = u[mod1(i - 1, nx), j], u[mod1(i + 1, nx), j]
         s, n = u[i, mod1(j - 1, ny)], u[i, mod1(j + 1, ny)]

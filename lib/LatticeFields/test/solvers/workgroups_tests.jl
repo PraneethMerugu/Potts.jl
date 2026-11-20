@@ -40,7 +40,11 @@ end
 include("../shared/export_all.jl")
 end
 
-@testitem "workgroup launches: reversed items give the same bits" setup = [LF_solvers_workgroups] tags = [:latticefields, :solvers] begin
+@testitem "workgroup launches: reversed items give the same bits" setup = [
+    LF_solvers_workgroups,
+] tags = [
+    :latticefields, :solvers,
+] begin
     @testset "workgroup launches: reversed items give the same bits" begin
         for (case, kw) in (
                 (named_case("sphere42", 0.022), (;)),
@@ -59,7 +63,11 @@ end
     end
 end
 
-@testitem "device wrapper on the KA CPU backend equals the host form" setup = [LF_solvers_workgroups] tags = [:latticefields, :solvers] begin
+@testitem "device wrapper on the KA CPU backend equals the host form" setup = [
+    LF_solvers_workgroups,
+] tags = [
+    :latticefields, :solvers,
+] begin
     @testset "device wrapper on the KA CPU backend equals the host form" begin
         for (case, kw) in (
                 (named_case("disk128", 0.022), (;)),
@@ -71,15 +79,25 @@ end
     end
 end
 
-@testitem "Exec runs the solvers: the KA CPU backend as executor equals the host form" setup = [LF_solvers_workgroups] tags = [:latticefields, :solvers] begin
-    @testset "Exec runs the solvers: the KA CPU backend as executor equals the host form" begin
+@testitem "Exec runs the solvers: the KA CPU backend as executor equals the host \
+    form" setup = [LF_solvers_workgroups] tags = [
+    :latticefields, :solvers,
+] begin
+    @testset "Exec runs the solvers: the KA CPU backend as executor equals the host \
+        form" begin
         # the production executor protocol (alloc, fetch, launch!, supports on a KA backend)
-        for (case, kw) in ((named_case("disk128", 0.022), (;)), (named_case("per128", 0.022), (;)))
+        for (case, kw) in (
+                (named_case("disk128", 0.022), (;)), (
+                    named_case("per128", 0.022), (;),
+                ),
+            )
             a, b = solved(case, HostExec(); kw...), solved(case, KA.CPU(); kw...)
             @test a[1] == b[1] && a[2] == b[2] && a[3] == b[3]
         end
-        # capability: the host executor has Float64, so `:auto` takes it for an unanchored weak group
+        # capability: the host executor has Float64, so `:auto` takes it for an unanchored
+        # weak group
         @test Schedule.supports(KA.CPU(), Float64)
-        @test FieldSolver(KA.CPU(), named_case("per256", 5.5e-6)[1]; T = Float32).T == Float64
+        @test FieldSolver(KA.CPU(), named_case("per256", 5.5e-6)[1]; T = Float32).T ==
+            Float64
     end
 end

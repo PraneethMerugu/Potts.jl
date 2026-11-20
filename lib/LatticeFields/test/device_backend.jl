@@ -1,4 +1,5 @@
-# The device of the GPU tests (LATTICEFIELDS_GPU = metal | rocm), loaded once by runtests.jl.
+# The device of the GPU tests (LATTICEFIELDS_GPU = metal | rocm), loaded once by
+# runtests.jl.
 if gpu == "metal"
     using Metal: Metal
     const DEV = Metal.MetalBackend()

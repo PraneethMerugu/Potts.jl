@@ -11,7 +11,11 @@ using Random: Xoshiro
 include("../shared/export_all.jl")
 end
 
-@testitem "Exec binding: oracle comparison detects one ulp (negative control)" setup = [LF_schedule_exec_binding] tags = [:latticefields, :schedule] begin
+@testitem "Exec binding: oracle comparison detects one ulp (negative control)" setup = [
+    LF_schedule_exec_binding,
+] tags = [
+    :latticefields, :schedule,
+] begin
     @testset "Exec binding: oracle comparison detects one ulp (negative control)" begin
         s, sp = build(diffusion2((9, 7)))
         st = HostStore(s; init = (k, A) -> (A .= rand(Xoshiro(3), Float32, length(A))))
@@ -24,11 +28,16 @@ end
         u, r = current(st, s, "u"), current(ref, s, "u")
         @test _same(u, r)
         r[17] = nextfloat(r[17])
-        @test !_same(u, r)                                          # one ulp is a difference
+        # one ulp is a difference
+        @test !_same(u, r)
     end
 end
 
-@testitem "Exec binding follows the launch description" setup = [LF_schedule_exec_binding] tags = [:latticefields, :schedule] begin
+@testitem "Exec binding follows the launch description" setup = [
+    LF_schedule_exec_binding,
+] tags = [
+    :latticefields, :schedule,
+] begin
     @testset "Exec binding follows the launch description" begin
         s, sp = build(diffusion2((9, 7)))
         l = only(sp.launches)
@@ -36,7 +45,8 @@ end
         P = Problems.launch_parameters(l.kernel, (0.1, 1.0, 1.0))
         L = Problems.bind_program(HOST, s, l, Problems.launch_arrays(st, l), P, (0.0, 0.0))
         S, P2, G = L.params[2]
-        @test L.params[3] == Int(G.n) == 63 && G.n isa Int32        # n is G.n, in the index type
+        # n is G.n, in the index type
+        @test L.params[3] == Int(G.n) == 63 && G.n isa Int32
         @test G.rt === (0.0f0, 0.0f0) && P2 === P
         L2 = Problems.retime(L, (1.5, 0.25))
         @test L2.params[2][3].rt === (1.5f0, 0.25f0) && L2.kernel === L.kernel
@@ -52,7 +62,9 @@ end
         lx = only(spx.launches)
         @test lx.kernel.strategy == :cartesian
         stx = HostStore(sx)
-        Lx = Problems.bind_program(HOST, sx, lx, Problems.launch_arrays(stx, lx), (2.0f0,), (0.0, 0.0))
+        Lx = Problems.bind_program(
+            HOST, sx, lx, Problems.launch_arrays(stx, lx), (2.0f0,), (0.0, 0.0)
+        )
         @test Lx.params[3] == (6, 5)
         copyto!(current(stx, sx, "u"), Float32.(1:30))
         Lx()

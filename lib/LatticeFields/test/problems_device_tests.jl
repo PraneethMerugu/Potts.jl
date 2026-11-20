@@ -1,6 +1,6 @@
-# Generated FV kernels on a device (Metal or ROCm), Float32: the bit-exactness checks (fused vs
-# split on the device, device vs host executor, one-ulp negative control), and the owned and
-# ODE problems on device arrays against the host. Included by runtests.jl when
+# Generated FV kernels on a device (Metal or ROCm), Float32: the bit-exactness checks (fused
+# vs split on the device, device vs host executor, one-ulp negative control), and the owned
+# and ODE problems on device arrays against the host. Included by runtests.jl when
 # LATTICEFIELDS_GPU is set (device_backend.jl defines DEV).
 
 @testsetup module LF_problems_device
@@ -39,9 +39,16 @@ end
 include("shared/export_all.jl")
 end
 
-@testitem "bit-exact kernels on a device (gpu): K=K T=T length(dims)D" setup = [LF_problems_device] tags = [:latticefields, :problems, :gpu_only] begin
+@testitem "bit-exact kernels on a device (gpu): K=K T=T length(dims)D" setup = [
+    LF_problems_device,
+] tags = [
+    :latticefields, :problems, :gpu_only,
+] begin
     using .LF_problems_device: instances
-    @testset "bit-exact kernels on a device ($gpu): K=$K T=$T $(length(dims))D" for (dims, K, T) in (
+    @testset "bit-exact kernels on a device ($gpu): K=$K T=$T $(length(dims))D" for (
+            dims,
+            K, T,
+        ) in (
             ((64, 48), 4, 3), ((64, 48), 8, 0), ((16, 12, 10), 4, 3),
         )
         X, P = inputs(dims, K), speciesP(K, T)
@@ -50,18 +57,23 @@ end
         split = plan(s; options = devopts(), fuse = false)
         @test length(fused.launches) < length(split.launches) == K
         ref = step_on(DEV, s, fused, X, P)
-        @test step_on(DEV, s, split, X, P) == ref                       # fusion on the device
+        # fusion on the device
+        @test step_on(DEV, s, split, X, P) == ref
         host = step_on(KA.CPU(), s, fused, X, P)
         d = count(host .!= ref)
-        @info "bit-exact kernels, device vs host executor ($gpu, $(length(dims))D K=$K T=$T): $d differing words of $(length(ref))"
-        @test d == 0                                                     # same body, same bits
+        @info "bit-exact kernels, device vs host executor ($gpu, $(length(dims))D K=$K \
+            T=$T): $d differing words of $(length(ref))"
+        # same body, same bits
+        @test d == 0
         Xp = deepcopy(X)
         Xp[1][length(X[1]) ÷ 2 + 7] = nextfloat(Xp[1][length(X[1]) ÷ 2 + 7])
         @test count(step_on(DEV, s, fused, Xp, P) .!= ref) > 0          # negative control
     end
 end
 
-@testitem "owned and ODE problems on gpu" setup = [LF_problems_device] tags = [:latticefields, :problems, :gpu_only] begin
+@testitem "owned and ODE problems on gpu" setup = [LF_problems_device] tags = [
+    :latticefields, :problems, :gpu_only,
+] begin
     using .LF_problems_device: instances
     @testset "owned and ODE problems on $gpu" begin
         dims = (40, 30)
@@ -75,16 +87,19 @@ end
         host = FieldProblem(args...; state = ["u"], kind = :rate, index = ix)
         sd = solve(dev, ExplicitEuler(; substeps = 1); dt = 0.05, saveat = 0.1)
         sh = solve(host, ExplicitEuler(; substeps = 1); dt = 0.05, saveat = 0.1)
-        @test sd.t == sh.t && all(i -> sd[:u, i] == sh[:u, i], eachindex(sd.t))   # bit for bit
+        # bit for bit
+        @test sd.t == sh.t && all(i -> sd[:u, i] == sh[:u, i], eachindex(sd.t))
         @test sd[:u][end] != sd[:u][1]
         integ, hi = init(dev, ExplicitEuler(; substeps = 1); dt = 0.05),
             init(host, ExplicitEuler(; substeps = 1); dt = 0.05)
         step!(integ)
         step!(hi)
         KA.synchronize(DEV)
-        @test Array(integ[:u]) == hi[:u]                                # device state, indexed by symbol
+        # device state, indexed by symbol
+        @test Array(integ[:u]) == hi[:u]
         b = @allocated (step!(integ); KA.synchronize(DEV))
-        @info "owned warm step on $gpu: $b host bytes (KA 0.9 launch cost; the host executor is 0)"
+        @info "owned warm step on $gpu: $b host bytes (KA 0.9 launch cost; the host \
+            executor is 0)"
         # the ODE right side on device arrays equals the host one
         ixr = LatticeIndex(; variables = [:u => FieldSlot(1:prod(dims), dims)])
         od = ode_problem(
@@ -103,12 +118,19 @@ end
     end
 end
 
-@testitem "Dual{Float32} parameters on gpu" setup = [LF_problems_device] tags = [:latticefields, :problems, :gpu_only] begin
+@testitem "Dual{Float32} parameters on gpu" setup = [LF_problems_device] tags = [
+    :latticefields, :problems, :gpu_only,
+] begin
     using .LF_problems_device: instances
     @testset "Dual{Float32} parameters on $gpu" begin
         dims = (16, 12)
         u0 = rand(Xoshiro(7), Float32, prod(dims))
-        ix = LatticeIndex(; variables = [:u => FieldSlot(1:prod(dims), dims)], parameters = [:D => 1])
+        ix = LatticeIndex(;
+            variables = [:u => FieldSlot(1:prod(dims), dims)], parameters = [
+                :D =>
+                    1,
+            ]
+        )
         function mk(backend)
             return FieldProblem(
                 euler2(dims), u0, (0.0, 0.2), [0.05]; state = ["u"], kind = :rate,
@@ -116,11 +138,15 @@ end
             )
         end
         alg = ExplicitEuler(; substeps = 1)
-        Jdev(prob) = D -> sum(abs2, Array(solve(SciMLBase.remake(prob; p = [D]), alg; dt = 0.05).u[end]))
-        dd, dh = ForwardDiff.derivative(Jdev(mk(DEV)), 0.05), ForwardDiff.derivative(Jdev(mk(KA.CPU())), 0.05)
+        function Jdev(prob)
+            return D ->
+            sum(abs2, Array(solve(SciMLBase.remake(prob; p = [D]), alg; dt = 0.05).u[end]))
+        end
+        dd, dh = ForwardDiff.derivative(Jdev(mk(DEV)), 0.05),
+            ForwardDiff.derivative(Jdev(mk(KA.CPU())), 0.05)
         @test dd isa Float32 && isapprox(dd, dh; rtol = 1.0e-5) && dd != 0
-        # Float64 values are refused on a backend without Float64 hardware (Metal); where the
-        # hardware has it (ROCm) a Float64 problem runs on the device (capability)
+        # Float64 values are refused on a backend without Float64 hardware (Metal); where
+        # the hardware has it (ROCm) a Float64 problem runs on the device (capability)
         Exec.supports(DEV, Float64) || @test_throws ArgumentError FieldProblem(
             euler2(dims), Float64.(u0),
             (0.0, 0.2), [0.05]; state = ["u"], kind = :rate, index = ix, backend = DEV
@@ -132,13 +158,18 @@ end
                     kind = :rate, index = ix, backend
                 )
             end
-            ud, uh = Array(solve(p64(DEV), alg; dt = 0.05).u[end]), solve(p64(KA.CPU()), alg; dt = 0.05).u[end]
+            ud, uh = Array(solve(p64(DEV), alg; dt = 0.05).u[end]),
+                solve(p64(KA.CPU()), alg; dt = 0.05).u[end]
             @test eltype(ud) == Float64 && isapprox(ud, uh; rtol = 1.0e-13)
         end
     end
 end
 
-@testitem "Dual{Float64} into a Float32 ODE on gpu: the message names the fix" setup = [LF_problems_device] tags = [:latticefields, :problems, :gpu_only] begin
+@testitem "Dual{Float64} into a Float32 ODE on gpu: the message names the fix" setup = [
+    LF_problems_device,
+] tags = [
+    :latticefields, :problems, :gpu_only,
+] begin
     using .LF_problems_device: instances
     @testset "Dual{Float64} into a Float32 ODE on $gpu: the message names the fix" begin
         if !Exec.supports(DEV, Float64)

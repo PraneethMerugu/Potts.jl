@@ -8,16 +8,20 @@
 #   julia --project=lib/LatticeFields/test lib/LatticeFields/test/runtests.jl [groups...]
 #
 # groups (tags): exec, ir, compile, schedule, problems, solvers, qa (all by default);
-# `solvers_gate` (the solver iteration budget sweep over sizes, about 10 minutes) and `gpu` are opt-in.
-# Environment:
-#   GROUP = All (default) | exec | ir | compile | schedule | problems | solvers | qa | solvers_gate | gpu
-#   LATTICEFIELDS_GPU (or POTTS_GPU) = metal | rocm   also run the device items (`:gpu_only`)
+# `solvers_gate` (the solver iteration budget sweep over sizes, about 10 minutes) and `gpu`
+# are opt-in. Environment:
+#   GROUP = All (default) | exec | ir | compile | schedule | problems | solvers | qa |
+#   solvers_gate | gpu
+#   LATTICEFIELDS_GPU (or POTTS_GPU) = metal | rocm   also run the device items
+#                                                     (`:gpu_only`)
 #   LATTICEFIELDS_QA = false            skip the qa group when running All
 #   LATTICEFIELDS_TEST_NAME = regex     only items whose name matches
-#   RETESTITEMS_NWORKERS                worker processes (default 3, sized for the 24G scope;
-#                                       0 runs in this process); workers get this process's
-#                                       thread count. With a device: 0 (one process on the device).
-#   POTTS_TEST_END_EXPR_FILE            a file whose expression runs after each item (gate tooling)
+#   RETESTITEMS_NWORKERS                worker processes (default 3, sized for the 24G
+#                                       scope; 0 runs in this process); workers get this
+#                                       process's thread count. With a device: 0 (one
+#                                       process on the device).
+#   POTTS_TEST_END_EXPR_FILE            a file whose expression runs after each item (gate
+#                                       tooling)
 # Items tagged `:timing` run after the others, one at a time in one worker.
 # test/Project.toml is not a package's test env, so `runtests` is told the env is active.
 using ReTestItems, Pkg
@@ -28,7 +32,9 @@ function _load_lf_groups()
     raw = Pkg.TOML.parsefile(joinpath(LATTICEFIELDS_TESTDIR, "test_groups.toml"))
     out = Dict{String, Dict{String, Any}}()
     for (name, val) in raw
-        val isa AbstractDict || throw(ArgumentError("Invalid entry \"$name\" in LatticeFields test_groups.toml"))
+        val isa AbstractDict ||
+            throw(ArgumentError("Invalid entry \"$name\" in LatticeFields \
+                test_groups.toml"))
         out[string(name)] = Dict{String, Any}(string(k) => v for (k, v) in val)
     end
     return out
@@ -54,7 +60,11 @@ function _resolve_lf_groups(groups_table, raw_groups)
             push!(selected, target)
         else
             valid = join(["All"; sort!(collect(keys(groups_table)))], ", ")
-            throw(ArgumentError("Unknown LatticeFields test group \"$g\". Valid groups: $valid"))
+            throw(
+                ArgumentError(
+                    "Unknown LatticeFields test group \"$g\". Valid groups: $valid"
+                )
+            )
         end
     end
     return unique(selected)
@@ -68,7 +78,10 @@ elseif !isempty(strip(get(ENV, "GROUP", "")))
 else
     ["All"]
 end
-const LATTICEFIELDS_SELECTED_GROUPS = _resolve_lf_groups(LATTICEFIELDS_GROUPS_TABLE, LATTICEFIELDS_RAW_GROUPS)
+const LATTICEFIELDS_SELECTED_GROUPS = _resolve_lf_groups(
+    LATTICEFIELDS_GROUPS_TABLE,
+    LATTICEFIELDS_RAW_GROUPS
+)
 
 if "gpu" in LATTICEFIELDS_SELECTED_GROUPS &&
         isempty(strip(get(ENV, "LATTICEFIELDS_GPU", ""))) &&
@@ -94,10 +107,15 @@ function latticefields_tests(
     end
     name = (n = get(ENV, "LATTICEFIELDS_TEST_NAME", ""); isempty(n) ? nothing : Regex(n))
     endfile = get(ENV, "POTTS_TEST_END_EXPR_FILE", "")
-    test_end_expr = isempty(endfile) ? Expr(:block) : Meta.parse("begin\n" * read(endfile, String) * "\nend")
+    test_end_expr = if isempty(endfile)
+        Expr(:block)
+    else
+        Meta.parse("begin\n" * read(endfile, String) * "\nend")
+    end
     picked(ti) = any(in(ti.tags), gs) && (!isempty(gpu) || !(:gpu_only in ti.tags))
     kw = (;
-        name, test_end_expr, testitem_timeout = 3600, retries = 0, nworker_threads = string(Threads.nthreads()),
+        name, test_end_expr, testitem_timeout = 3600, retries = 0,
+        nworker_threads = string(Threads.nthreads()),
         logs = :batched,
     )
     failed = Any[]
@@ -106,7 +124,10 @@ function latticefields_tests(
             (ti -> picked(ti) && :timing in ti.tags, min(nworkers, 1)),
         )
         try
-            task_local_storage(:SOURCE_PATH, Pkg.Operations.testfile(dirname(Base.active_project()))) do
+            task_local_storage(
+                :SOURCE_PATH,
+                Pkg.Operations.testfile(dirname(Base.active_project()))
+            ) do
                 runtests(f, LATTICEFIELDS_TESTDIR; nworkers = nw, kw...)
             end
         catch e

@@ -1,6 +1,7 @@
 # Solver vocabulary (§5.6), `linsolve = :auto`, launch plans and the driver (§6.3–§6.4). The
 # driver only builds `Launch` objects and hands them to an executor through the protocol
-# below (`alloc`, `launch!`, `to_host`); the CPU host runner of the tests and Exec implement it.
+# below (`alloc`, `launch!`, `to_host`); the CPU host runner of the tests and Exec implement
+# it.
 
 """
     VCycle(nu1, nu2)
@@ -16,8 +17,9 @@ struct VCycle
             ArgumentError(
                 string(
                     "`VCycle(", nu1, ", ", nu2,
-                    ")`: a V-cycle (the `cycle` of a `LatticeMultigrid`) needs ν₁, ν₂ ≥ 1 smoothing steps, pre and post; ",
-                    "for example `VCycle(2, 2)`",
+                    ")`: a V-cycle (the `cycle` of a `LatticeMultigrid`) needs ν₁, ν₂ ≥ 1 \
+                        smoothing steps, pre and post; ",
+                    "for example `VCycle(2, 2)`"
                 )
             )
         )
@@ -28,7 +30,8 @@ function VCycle(nu1, nu2)
     throw(
         ArgumentError(
             string(
-                "`VCycle(", repr(nu1), ", ", repr(nu2), ")`: a V-cycle's smoothing steps ν₁, ν₂ ",
+                "`VCycle(", repr(nu1), ", ", repr(nu2),
+                ")`: a V-cycle's smoothing steps ν₁, ν₂ ",
                 "(pre and post) are integers ≥ 1; for example `VCycle(2, 2)`"
             )
         )
@@ -44,15 +47,18 @@ function _cycle(c)
     throw(
         ArgumentError(
             string(
-                "`LatticeMultigrid(; cycle = ", repr(c), ")`: `cycle` is the V-cycle's smoothing ",
-                "steps, `(ν₁, ν₂)` or `VCycle(ν₁, ν₂)` (integers ≥ 1); for example `cycle = (2, 2)`"
+                "`LatticeMultigrid(; cycle = ", repr(c),
+                ")`: `cycle` is the V-cycle's smoothing ",
+                "steps, `(ν₁, ν₂)` or `VCycle(ν₁, ν₂)` (integers ≥ 1); for example `cycle \
+                    = (2, 2)`"
             )
         )
     )
 end
 
 """
-    LatticeMultigrid(; cycle = VCycle(2, 2), cycles = nothing, reltol = nothing, maxiters = nothing, warn_tol = nothing)
+    LatticeMultigrid(; cycle = VCycle(2, 2), cycles = nothing, reltol = nothing,
+        maxiters = nothing, warn_tol = nothing)
 
 The lattice multigrid, both as a LinearSolve algorithm (stationary multigrid solve) and as a
 LinearSolve `precs` function (`precs(A, p) -> (Pl, Pr)`):
@@ -62,21 +68,22 @@ LinearSolve `precs` function (`precs(A, p) -> (Pl, Pr)`):
     With `cycles = nothing`, cycles stop on device when `‖r‖∞ ≤ reltol * max(‖b‖∞, floor)`
     within `maxiters` (when unset: `reltol` and `maxiters` come from `solve`, or `1e-6` and
     `8`/`12` on the owned steppers and unset standalone solves; because LinearSolve defaults
-    an unset `maxiters` to `length(b)`, `cache.maxiters == length(b)` is treated as unset, so
-    pass `maxiters` on `LatticeMultigrid` to request `length(b)` cycles explicitly). The
+    an unset `maxiters` to `length(b)`, `cache.maxiters == length(b)` is treated as unset,
+    so pass `maxiters` on `LatticeMultigrid` to request `length(b)` cycles explicitly). The
     fused plan unrolls `cycles` or `maxiters` into segments (cap `1024`).
   - As a `precs` preconditioner (`precs = LatticeMultigrid(…)`):
     - Given a lattice field's operator (`BoundOperator`), it returns the V-cycle that
-      [`LatticePCG`](@ref) fuses into its iteration (`cycle` symmetric, `cycles` unset or `1`)
-      and applies `cycles` V-cycles from zero through `ldiv!` for generic Krylov methods.
+      [`LatticePCG`](@ref) fuses into its iteration (`cycle` symmetric, `cycles` unset or
+      `1`) and applies `cycles` V-cycles from zero through `ldiv!` for generic Krylov
+      methods.
     - Given the `W = J − M/γ` of an implicit SciML solver on a problem `discretize` returned
       (or the operator of a linear system with no time), it binds the owned implicit runtime
       of the problem at the solver's state and applies `something(cycles, 1)` V-cycles per
       field as `ldiv!`.
 
 `cycle` is `(ν₁, ν₂)` or `VCycle(ν₁, ν₂)`, `cycles` and `maxiters` are integers ≥ 1 (or left
-out), `reltol` and `warn_tol` finite and > 0; any other value is an `ArgumentError` naming the
-keyword.
+out), `reltol` and `warn_tol` finite and > 0; any other value is an `ArgumentError` naming
+the keyword.
 """
 struct LatticeMultigrid <: LinearSolve.SciMLLinearSolveAlgorithm
     cycle::VCycle
@@ -86,16 +93,35 @@ struct LatticeMultigrid <: LinearSolve.SciMLLinearSolveAlgorithm
     warn_tol::Union{Nothing, Float64}
     engines::Dict{Any, Any}
     lock::ReentrantLock
-    function LatticeMultigrid(cycle::VCycle, cycles, reltol, maxiters, warn_tol, engines, lock)
-        bad(k, v, want) = throw(ArgumentError(string("`LatticeMultigrid(; ", k, " = ", repr(v), ")`: `", k, "` ", want)))
-        cycles === nothing || _count(cycles) ||
-            bad(:cycles, cycles, "is the exact number of cycles, an integer ≥ 1 (leave it out to stop on `reltol`)")
+    function LatticeMultigrid(
+            cycle::VCycle, cycles, reltol, maxiters, warn_tol, engines, lock
+        )
+        function bad(k, v, want)
+            throw(
+                ArgumentError(
+                    string(
+                        "`LatticeMultigrid(; ", k, " = ", repr(v), ")`: `", k, "` ", want
+                    )
+                )
+            )
+        end
+        cycles === nothing || _count(cycles) || bad(
+            :cycles,
+            cycles,
+            "is the exact number of cycles, an integer ≥ 1 (leave it out to stop on \
+                `reltol`)"
+        )
         reltol === nothing || _positive(reltol) ||
-            bad(:reltol, reltol, "is the relative residual a solve stops at, finite and > 0")
-        maxiters === nothing || _count(maxiters) ||
-            bad(:maxiters, maxiters, "is the most cycles per solve, an integer ≥ 1 (leave it out for the default)")
+            bad(:reltol, reltol, "is the relative residual a solve stops at, finite and > \
+                0")
+        maxiters === nothing || _count(maxiters) || bad(
+            :maxiters,
+            maxiters,
+            "is the most cycles per solve, an integer ≥ 1 (leave it out for the default)"
+        )
         warn_tol === nothing || _positive(warn_tol) ||
-            bad(:warn_tol, warn_tol, "is the residual the sentinel warns above, finite and > 0")
+            bad(:warn_tol, warn_tol, "is the residual the sentinel warns above, finite \
+                and > 0")
         return new(
             cycle,
             cycles === nothing ? nothing : Int(cycles),
@@ -103,25 +129,33 @@ struct LatticeMultigrid <: LinearSolve.SciMLLinearSolveAlgorithm
             maxiters === nothing ? nothing : Int(maxiters),
             warn_tol === nothing ? nothing : Float64(warn_tol),
             engines,
-            lock,
+            lock
         )
     end
 end
 function LatticeMultigrid(;
         cycle = VCycle(2, 2), cycles = nothing, reltol = nothing, maxiters = nothing,
-        warn_tol = nothing,
+        warn_tol = nothing
     )
-    return LatticeMultigrid(_cycle(cycle), cycles, reltol, maxiters, warn_tol, Dict{Any, Any}(), ReentrantLock())
+    return LatticeMultigrid(
+        _cycle(cycle), cycles, reltol, maxiters,
+        warn_tol, Dict{Any, Any}(), ReentrantLock()
+    )
 end
 function LatticeMultigrid(cycle::VCycle, cycles, reltol, maxiters, warn_tol)
-    return LatticeMultigrid(cycle, cycles, reltol, maxiters, warn_tol, Dict{Any, Any}(), ReentrantLock())
+    return LatticeMultigrid(
+        cycle, cycles, reltol, maxiters, warn_tol, Dict{Any, Any}(), ReentrantLock()
+    )
 end
 function Base.:(==)(a::LatticeMultigrid, b::LatticeMultigrid)
     return a.cycle == b.cycle && a.cycles == b.cycles && a.reltol == b.reltol &&
         a.maxiters == b.maxiters && a.warn_tol == b.warn_tol
 end
 function Base.hash(a::LatticeMultigrid, h::UInt)
-    return hash((a.cycle.nu1, a.cycle.nu2, a.cycles, a.reltol, a.maxiters, a.warn_tol), hash(:LatticeMultigrid, h))
+    return hash(
+        (a.cycle.nu1, a.cycle.nu2, a.cycles, a.reltol, a.maxiters, a.warn_tol),
+        hash(:LatticeMultigrid, h)
+    )
 end
 
 """
@@ -129,9 +163,9 @@ end
 
 The resolved form of a [`LatticePCG`](@ref) that a `FieldSolver` runs: preconditioned CG on
 device scalars, the preconditioner one fixed V-cycle (`precond.cycle`) from zero (a fixed
-linear SPD operator), fused into the iteration. K2 computes the true residual every iteration
-(fused with `x += αp`), and `done` is set on it. `maxiters` is an integer ≥ 1 and `reltol`
-finite and > 0.
+linear SPD operator), fused into the iteration. K2 computes the true residual every
+iteration (fused with `x += αp`), and `done` is set on it. `maxiters` is an integer ≥ 1 and
+`reltol` finite and > 0.
 """
 struct FusedPCG
     precond::LatticeMultigrid
@@ -140,13 +174,14 @@ struct FusedPCG
 end
 
 # Keyword display (no module path; only the keywords that differ from their defaults), so a
-# message that quotes a solver reads as the user wrote it, and the text runs where the solvers
-# are bound (`using Potts` or `using LatticePDE`: a cycle prints as the pair `(ν₁, ν₂)`).
-# `canonical` is the hashed text.
+# message that quotes a solver reads as the user wrote it, and the text runs where the
+# solvers are bound (`using Potts` or `using LatticePDE`: a cycle prints as the pair `(ν₁,
+# ν₂)`). `canonical` is the hashed text.
 Base.show(io::IO, v::VCycle) = print(io, "VCycle(", v.nu1, ", ", v.nu2, ")")
 function _show_kw(io::IO, name, kws)
     print(io, name, "(")
-    isempty(kws) || print(io, "; ", join((string(k, " = ", repr(v)) for (k, v) in kws), ", "))
+    isempty(kws) ||
+        print(io, "; ", join((string(k, " = ", repr(v)) for (k, v) in kws), ", "))
     return print(io, ")")
 end
 function Base.show(io::IO, m::LatticeMultigrid)
@@ -168,13 +203,14 @@ function Base.show(io::IO, d::FusedPCG)
 end
 
 """
-`linsolve = :auto`: every group gets `LatticePCG` (maxiters 8), with the constant mode deflated
-on an unanchored group with a constant shift. Stationary V(2, 2) needs 12 cycles or more on
-unanchored periodic groups, so it is used only when asked for. An explicit stationary
-`LatticeMultigrid` defaults to maxiters 12 on a group with a mask, a Dirichlet face or a
-non-constant face coefficient, else 8. A `LatticePCG` is resolved to the fused form a
-`FieldSolver` runs (`FusedPCG`): its `precs` must be a `LatticeMultigrid` with a symmetric cycle
-and one cycle per iteration, and an unset `maxiters` or `reltol` takes 8 or 1e-6.
+`linsolve = :auto`: every group gets `LatticePCG` (maxiters 8), with the constant mode
+deflated on an unanchored group with a constant shift. Stationary V(2, 2) needs 12 cycles or
+more on unanchored periodic groups, so it is used only when asked for. An explicit
+stationary `LatticeMultigrid` defaults to maxiters 12 on a group with a mask, a Dirichlet
+face or a non-constant face coefficient, else 8. A `LatticePCG` is resolved to the fused
+form a `FieldSolver` runs (`FusedPCG`): its `precs` must be a `LatticeMultigrid` with a
+symmetric cycle and one cycle per iteration, and an unset `maxiters` or `reltol` takes 8 or
+1e-6.
 """
 function resolve_inner(op::CellOperator, inner)
     inner === :auto && return FusedPCG(LatticeMultigrid(), 8, 1.0e-6)
@@ -182,27 +218,35 @@ function resolve_inner(op::CellOperator, inner)
     if inner isa LatticePCG
         c = inner.precs
         c isa LatticeMultigrid || _refuse(
-            op, "a lattice field's `LatticePCG` applies the V-cycles of `precs = LatticeMultigrid(…)` inside its ",
-            "fused iteration; got `precs = ", repr(c), "`: leave `precs` out, or give `precs = LatticeMultigrid(; cycle = (ν, ν))`"
+            op, "a lattice field's `LatticePCG` applies the V-cycles of `precs = \
+                LatticeMultigrid(…)` inside its ",
+            "fused iteration; got `precs = ", repr(c),
+            "`: leave `precs` out, or give `precs = LatticeMultigrid(; cycle = (ν, ν))`"
         )
-        c.cycle.nu1 == c.cycle.nu2 ||
-            _refuse(
+        c.cycle.nu1 == c.cycle.nu2 || _refuse(
             op, "`LatticePCG` needs a symmetric preconditioner cycle `(ν, ν)`; got `(",
-            c.cycle.nu1, ", ", c.cycle.nu2, ")`: use `LatticePCG(; precs = LatticeMultigrid(; cycle = (",
+            c.cycle.nu1, ", ", c.cycle.nu2,
+            ")`: use `LatticePCG(; precs = LatticeMultigrid(; cycle = (",
             max(c.cycle.nu1, c.cycle.nu2), ", ", max(c.cycle.nu1, c.cycle.nu2),
-            ")))`, or the stationary `LatticeMultigrid(; cycle = (", c.cycle.nu1, ", ", c.cycle.nu2, "))`"
+            ")))`, or the stationary `LatticeMultigrid(; cycle = (", c.cycle.nu1, ", ",
+            c.cycle.nu2, "))`"
         )
-        (c.cycles === nothing || c.cycles == 1) ||
-            _refuse(
-            op, "`LatticePCG` applies one preconditioner cycle per iteration; got `cycles = ",
-            c.cycles, "` in its `precs`: drop `cycles`, or use the stationary `LatticeMultigrid(; cycles = ",
+        (c.cycles === nothing || c.cycles == 1) || _refuse(
+            op, "`LatticePCG` applies one preconditioner cycle per iteration; got `cycles \
+                = ",
+            c.cycles, "` in its `precs`: drop `cycles`, or use the stationary \
+                `LatticeMultigrid(; cycles = ",
             c.cycles, ")`"
         )
-        return FusedPCG(LatticeMultigrid(; cycle = c.cycle), something(inner.maxiters, 8), something(inner.reltol, 1.0e-6))
+        return FusedPCG(
+            LatticeMultigrid(; cycle = c.cycle),
+            something(inner.maxiters, 8), something(inner.reltol, 1.0e-6)
+        )
     end
     inner isa LatticeGMRES && _refuse(
         op, "`linsolve = ", repr(inner), "` solves an implicit group's fields together; ",
-        "a `FieldSolver` solves one field: give it the `LatticeGMRES`'s per-field solver, `linsolve = ", repr(gmres_precond(inner)), "`"
+        "a `FieldSolver` solves one field: give it the `LatticeGMRES`'s per-field solver, \
+            `linsolve = ", repr(gmres_precond(inner)), "`"
     )
     inner isa LatticeMultigrid || _refuse(
         op, "`linsolve` takes `:auto`, a `LatticePCG(…)` or a `LatticeMultigrid(…)`; got ",
@@ -225,7 +269,8 @@ end
 const COARSE_DEGREE = 8     # fixed Chebyshev degree on the coarsest level
 const FLOOR = 1.0e-30         # ‖b‖∞ floor of the stop test
 
-# ---- executor protocol ----------------------------------------------------------------------
+# ---- executor protocol
+# ----------------------------------------------------------------------
 """
     alloc(exec, T, n)
 
@@ -305,7 +350,9 @@ struct SolvePlan
     epilogue::Vector{Vector{Any}}
     stop::Vector{Bool}
 end
-SolvePlan(segments, slots, epilogue) = SolvePlan(segments, slots, epilogue, [s == slots[end] for s in slots])
+function SolvePlan(segments, slots, epilogue)
+    return SolvePlan(segments, slots, epilogue, [s == slots[end] for s in slots])
+end
 nlaunches(sp::SolvePlan, seg) = length(sp.segments[seg])
 
 mutable struct FieldSolver{N, E}
@@ -323,14 +370,17 @@ mutable struct FieldSolver{N, E}
     tables::Dict{Int32, Any}
     bodies::Dict{String, Any}
     plans::Dict{Tuple{Symbol, Int, UInt64}, SolvePlan}   # (kind, budget or flag, rotation)
-    rot::Vector{Int32}                    # the two-buffer fields, in id order (the rotation)
+    # the two-buffer fields, in id order (the rotation)
+    rot::Vector{Int32}
     vals::Tuple                           # the coefficient slot values the bodies hold
     auto::Bool                            # solver_type was :auto
-    warned::Bool                          # the set_coefficients! solver_type warning was given
+    # the set_coefficients! solver_type warning was given
+    warned::Bool
     rhs::Int32                            # the right-hand side's field (`"in.f"`)
     xid::Int32                            # the solution's field (`solution_key`)
     scal::Any                             # the device scalars (`"solve.scal"`)
-    bound::Any                            # the `BoundOperator` a LinearSolve cache built it from, or nothing
+    # the `BoundOperator` a LinearSolve cache built it from, or nothing
+    bound::Any
 end
 
 """
@@ -340,9 +390,9 @@ end
 Build the solver group of `op`: the program, its compiled bodies and its arrays on `exec`.
 
 `inputs` binds input fields to the caller's arrays, with no copy: `key => A` for the
-right-hand side `"in.f"` and for each input key of `op` (mask, mask value, shift, faces). The
-solver then reads `A` itself: a write into `A` enters the next `lift!` (the right-hand side,
-mask values) or `rebuild!` (mask, shift, faces). `A` holds one value per site, in the
+right-hand side `"in.f"` and for each input key of `op` (mask, mask value, shift, faces).
+The solver then reads `A` itself: a write into `A` enters the next `lift!` (the right-hand
+side, mask values) or `rebuild!` (mask, shift, faces). `A` holds one value per site, in the
 lattice's linear order (axis 1 fastest; a `Vector` or an array of size `op.dims`), of the
 state type `T` (`UInt8` for the mask), on the executor's device. An input not bound is
 allocated by the solver (zeros) and reached by `field(sv, key)`.
@@ -380,13 +430,21 @@ function FieldSolver(
         deflate = dfl
     )
     s = semantic(p)
-    # a Float64 solver on a device whose default float is Float32 (an explicit `solver_type`, or
-    # `:auto` in the floor regime): its kernels are registered (D-157 carve-out)
+    # a Float64 solver on a device whose default float is Float32 (an explicit
+    # `solver_type`, or `:auto` in the floor regime): its kernels are registered (D-157
+    # carve-out)
     declared = T <: Float64 && !(Exec.default_float(exec) <: Float64)
-    # (a solver launch passes the linear site index: a hexagonal lattice's diagonal reads would
-    # otherwise select the Cartesian index form)
-    o = ishex(op) ? CompileOptions(; T, declared, index = :linear) : CompileOptions(; T, declared)
-    declared && foreach(f -> Exec.register_float64!(string(typeof(f)), Exec.FLOAT64_ARRAY), (finish!, bottom!, gershgorin!, ishex(op) ? build_hex! : build_site!))
+    # (a solver launch passes the linear site index: a hexagonal lattice's diagonal reads
+    # would otherwise select the Cartesian index form)
+    o = if ishex(op)
+        CompileOptions(; T, declared, index = :linear)
+    else
+        CompileOptions(; T, declared)
+    end
+    declared && foreach(
+        f -> Exec.register_float64!(string(typeof(f)), Exec.FLOAT64_ARRAY),
+        (finish!, bottom!, gershgorin!, ishex(op) ? build_hex! : build_site!)
+    )
     bodies = Dict{String, Any}()
     praw = coef_values(op)                # coefficients are runtime parameters
     for k in s.kernels
@@ -435,9 +493,9 @@ function _rotation_fields(bufs)
 end
 
 """
-Bind the caller's arrays to input fields (`FieldSolver(…; inputs)`): each `key => A` replaces
-the solver's own array of input `key`, after the checks (an input key of the program, one
-value per site of the field's number type, on the executor's device).
+Bind the caller's arrays to input fields (`FieldSolver(…; inputs)`): each `key => A`
+replaces the solver's own array of input `key`, after the checks (an input key of the
+program, one value per site of the field's number type, on the executor's device).
 """
 function _bind_inputs!(bufs, exec, op, p, inputs)
     keys_in = [f.key for f in p.fields if f.role === :input]
@@ -450,21 +508,37 @@ function _bind_inputs!(bufs, exec, op, p, inputs)
         id = fieldid(p, key)
         f = p.fields[id]
         S, n = juliatype(f.storage), nsites(p, f.levels[1])
-        A isa AbstractArray || _refuse(op, "`inputs`: `", key, "` takes an array; got ", typeof(A))
+        A isa AbstractArray ||
+            _refuse(op, "`inputs`: `", key, "` takes an array; got ", typeof(A))
         eltype(A) === S || _refuse(
             op, "`inputs`: `", key, "` holds ", eltype(A), " values; this solver's ",
-            key == op.mask ? "mask is `UInt8`" : string("state type is `", S, "` (`T = ", S, "`)"),
-            ": pass an array of ", S, key == op.mask ? "" : string(", or build the solver with `T = ", eltype(A), "`"),
-            inputs isa AbstractVector ? " (a vector `[k => A, …]` converts its arrays to one element type: pass the pairs as a tuple or a `Dict`)" : ""
+            if key == op.mask
+                "mask is `UInt8`"
+            else
+                string("state type is `", S, "` (`T = ", S, "`)")
+            end,
+            ": pass an array of ", S,
+            if key == op.mask
+                ""
+            else
+                string(", or build the solver with `T = ", eltype(A), "`")
+            end,
+            if inputs isa AbstractVector
+                " (a vector `[k => A, …]` converts its arrays to one element type: pass \
+                    the pairs as a tuple or a `Dict`)"
+            else
+                ""
+            end
         )
-        (length(A) == n && (ndims(A) == 1 || size(A) == op.dims)) ||
-            _refuse(
-            op, "`inputs`: `", key, "` has size ", size(A), "; this solver needs one value per site: ",
+        (length(A) == n && (ndims(A) == 1 || size(A) == op.dims)) || _refuse(
+            op, "`inputs`: `", key, "` has size ", size(A),
+            "; this solver needs one value per site: ",
             "a vector of ", n, " or an array of size ", op.dims
         )
         _same_device(exec, A) || _refuse(
             op, "`inputs`: `", key, "` is not on the solver's device (",
-            exec, "): allocate it there (`KernelAbstractions.allocate(backend, ", S, ", ", n, ")`)"
+            exec, "): allocate it there (`KernelAbstractions.allocate(backend, ",
+            S, ", ", n, ")`)"
         )
         bufs[id] = Any[vec(A)]
     end
@@ -492,14 +566,16 @@ function lowered_type(exec, S, role; op = nothing)
         role, " expects ", role == "solver_type" ? ":auto or " : "",
         "a number type; got ", repr(S)
     )
-    S in LOWERED_TYPES ||
-        bad(
+    S in LOWERED_TYPES || bad(
         "number type ", S, " (", role, ") is not lowered for this solver; ",
         "lowered: ", join(LOWERED_TYPES, ", "),
-        S <: AbstractFloat ? "" : " (a Dual or BigFloat implicit solve is not supported yet)"
+        if S <: AbstractFloat
+            ""
+        else
+            " (a Dual or BigFloat implicit solve is not supported yet)"
+        end
     )
-    S <: Float32 || supports(exec, S) ||
-        bad(
+    S <: Float32 || supports(exec, S) || bad(
         "number type ", S, " (", role, ") is not supported by this executor ",
         "(supports(exec, ", S, ") is false: the device has no ", S, "); use Float32"
     )
@@ -568,8 +644,8 @@ Replace the numeric coefficients of the group (face, shift, value, Dirichlet val
 those of `op`, which must have the same structure (dims, periodicity, mask, field keys, the
 same coefficients numeric): new parameter values for every body, no recompile. The held
 plans are dropped and rebuilt at their next use (the set keeps its size: one plan per
-kind, budget and rotation); the next `rebuild!`/`lift!` (or `steady!`) uses the new values. The solver
-number type (`solver_type = :auto`) stays as resolved at build.
+kind, budget and rotation); the next `rebuild!`/`lift!` (or `steady!`) uses the new values.
+The solver number type (`solver_type = :auto`) stays as resolved at build.
 """
 function set_coefficients!(sv::FieldSolver, op::CellOperator)
     o = sv.op
@@ -626,7 +702,8 @@ function _set_raw!(sv::FieldSolver, praw)
         sv.bodies[k] = (ck, fn, d(praw, zero(sv.T), 0.0, nothing), d)
     end
     sv.vals = Tuple(praw)
-    empty!(sv.plans)                      # the held plans' parameters are rebuilt on next use
+    # the held plans' parameters are rebuilt on next use
+    empty!(sv.plans)
     return sv
 end
 
@@ -634,20 +711,20 @@ end
     tangent!(sv, u, coef; homogeneous = true, maxiter = 64) -> u̇
 
 The derivative of the solution `u` of the group's operator `A(θ) u = b(θ)` with respect to
-one numeric coefficient `θ` (`coef`: `:shift`, `:value`, `(:face, a)` (`a = 3`: the diagonal face of
-a hexagonal lattice), `(:dirichlet, a, k)`
-or `(:robin, a, k, :alpha | :beta | :g)`), by a tangent solve with the same solver (no Dual
+one numeric coefficient `θ` (`coef`: `:shift`, `:value`, `(:face, a)` (`a = 3`: the diagonal
+face of a hexagonal lattice), `(:dirichlet, a, k)` or
+`(:robin, a, k, :alpha | :beta | :g)`), by a tangent solve with the same solver (no Dual
 enters PCG or multigrid, P5 §3.4): `A u̇ = ∂b/∂θ − (∂A/∂θ) u` with homogeneous boundary
 values. `u` is the primal solution in solver precision (`solver_solution`). The right-hand
-side is exact because `A` and `b` are affine in each coefficient slot: `r(θ + v, u) − r(θ, u)`
-with `v` the slots' derivative in `θ` (one slot, or a Robin face's `(d⁺, d⁻, q)`, which are
-affine together), both residuals computed on the device by the `tangent.*` kernels after
-rebuilding the operator, and written straight into the solver's right-hand side (the
-boundary data of `lift` is left out: homogeneous). A Robin face's negative part is iterated
-as in `steady!`. The coefficients, the right-hand side, the working field and the solution
-array are restored afterwards, so a warm re-solve continues from the primal state; `u̇` is
-only returned (a host copy). `homogeneous = false` keeps the primal boundary values (the
-negative control of the tests).
+side is exact because `A` and `b` are affine in each coefficient slot:
+`r(θ + v, u) − r(θ, u)` with `v` the slots' derivative in `θ` (one slot, or a Robin face's
+`(d⁺, d⁻, q)`, which are affine together), both residuals computed on the device by the
+`tangent.*` kernels after rebuilding the operator, and written straight into the solver's
+right-hand side (the boundary data of `lift` is left out: homogeneous). A Robin face's
+negative part is iterated as in `steady!`. The coefficients, the right-hand side, the
+working field and the solution array are restored afterwards, so a warm re-solve continues
+from the primal state; `u̇` is only returned (a host copy). `homogeneous = false` keeps the
+primal boundary values (the negative control of the tests).
 """
 function tangent!(
         sv::FieldSolver, u::AbstractVector, coef; homogeneous::Bool = true,
@@ -722,7 +799,8 @@ function _direction(op::CellOperator, coef)
         (0.0, 1 / den)
     end
     s = cs.robin[a][k]
-    v[op.robin_full || α / den >= 0 ? s[1] : s[2]] = dd     # d's sign picks its part (one-sided at d = 0)
+    # d's sign picks its part (one-sided at d = 0)
+    v[op.robin_full || α / den >= 0 ? s[1] : s[2]] = dd
     v[s[3]] = dq
     return v
 end
@@ -733,7 +811,8 @@ function _coef_slot(op, cs, coef)
     coef isa Tuple && length(coef) == 2 && coef[1] === :face && return cs.face[coef[2]]
     coef isa Tuple && length(coef) == 3 && coef[1] === :dirichlet &&
         return cs.dirichlet[coef[2]][coef[3]]
-    if coef isa Tuple && length(coef) == 4 && coef[1] === :robin && coef[4] in (:alpha, :beta, :g)
+    if coef isa Tuple && length(coef) == 4 && coef[1] === :robin &&
+            coef[4] in (:alpha, :beta, :g)
         a, k = coef[2], coef[3]
         op.robin[a][k] === nothing && _refuse(
             op, "tangent!: ", _face_words(op, a, k),
@@ -742,8 +821,10 @@ function _coef_slot(op, cs, coef)
         return (a, k, coef[4])
     end
     return _refuse(
-        op, "tangent!: unknown coefficient ", repr(coef), "; give `:shift`, `:value`, `(:face, a)`, ",
-        "`(:dirichlet, a, k)` or `(:robin, a, k, :alpha | :beta | :g)` (axis `a`, side `k` = 1 low, 2 high)"
+        op, "tangent!: unknown coefficient ", repr(coef),
+        "; give `:shift`, `:value`, `(:face, a)`, ",
+        "`(:dirichlet, a, k)` or `(:robin, a, k, :alpha | :beta | :g)` (axis `a`, side \
+            `k` = 1 low, 2 high)"
     )
 end
 
@@ -759,7 +840,8 @@ function solver_solution(sv::FieldSolver)
     return x .- sum(x) / length(x) .+ sv.T(scalars(sv).mean)
 end
 
-# ---- plan building --------------------------------------------------------------------------
+# ---- plan building
+# --------------------------------------------------------------------------
 struct PlanBuilder
     sv::Any
     budget::Int
@@ -769,7 +851,9 @@ struct PlanBuilder
     epilogue::Vector{Vector{Any}}
 end
 function PlanBuilder(sv; budget = sv.alg.maxiters)
-    return PlanBuilder(sv, budget, copy(sv.slot), [Any[]], Dict{Int32, Int}[], Vector{Any}[])
+    return PlanBuilder(
+        sv, budget, copy(sv.slot), [Any[]], Dict{Int32, Int}[], Vector{Any}[]
+    )
 end
 function segment!(pl::PlanBuilder)
     _epilogue!(pl)
@@ -861,7 +945,11 @@ function fin!(pl::PlanBuilder, op)
     alg = sv.alg
     budget = pl.budget                    # the plan's budget, not the algorithm's
     r0 = alg isa LatticeMultigrid ? something(alg.reltol, 1.0e-6) : alg.reltol
-    w0 = alg isa LatticeMultigrid ? something(alg.warn_tol, alg.cycles === nothing ? r0 : 1.0e-3) : alg.reltol
+    w0 = if alg isa LatticeMultigrid
+        something(alg.warn_tol, alg.cycles === nothing ? r0 : 1.0e-3)
+    else
+        alg.reltol
+    end
     rtol, warn = if alg isa FusedPCG
         (alg.reltol, alg.reltol)
     else
@@ -934,7 +1022,8 @@ function _bottom!(pl::PlanBuilder, ν)
     sv, ctx = pl.sv, pl.sv.ctx
     ls = ctx.lv[(ctx.lb + 1):(ctx.L + 1)]
     get(f) = Tuple(_arr(pl, f(F), :cur) for F in ls)
-    nf = length(faces(sv.op))             # faces per direction: `ws[a][l]` (no tuple of tuples)
+    # faces per direction: `ws[a][l]` (no tuple of tuples)
+    nf = length(faces(sv.op))
     S = (
         get(F -> F.active), ntuple(a -> Tuple(_arr(pl, F.w[a], :cur) for F in ls), nf),
         get(F -> F.s), get(F -> F.sbox), get(F -> F.sint), get(F -> F.x), get(F -> F.b),
@@ -1012,11 +1101,15 @@ function rebuild_plan(sv::FieldSolver)
             dimsc = Int32.(Tuple(ctx.dims[l + 1])), n0 = Int32.(sv.op.dims),
             level = Int32(l), per = sv.op.periodic, majority = r.majority,
         )
-        # (a hexagonal lattice's build behind a barrier: a Cartesian solver never compiles it)
+        # (a hexagonal lattice's build behind a barrier: a Cartesian solver never compiles
+        # it)
         build = if hex
             Base.inferencebarrier(_hex_build)(sv.T, r, nsites(sv.prog, l), S, G)
         else
-            Launch(build_site!, nsites(sv.prog, l), S, map(sv.T, (r.inside, r.plane, r.inherited, r.box)), G, "build")
+            Launch(
+                build_site!, nsites(sv.prog, l), S,
+                map(sv.T, (r.inside, r.plane, r.inherited, r.box)), G, "build"
+            )
         end
         push!(pl.segments[end], build)
     end
@@ -1033,7 +1126,12 @@ function rebuild_plan(sv::FieldSolver)
     return SolvePlan(pl)
 end
 
-_hex_build(T, r, n, S, G) = Launch(build_hex!, n, S, map(T, (r.inside, r.plane, r.inherited, r.box, r.diagonal)), G, "build")
+function _hex_build(T, r, n, S, G)
+    return Launch(
+        build_hex!, n, S,
+        map(T, (r.inside, r.plane, r.inherited, r.box, r.diagonal)), G, "build"
+    )
+end
 
 """
 The budgeted solve: a setup segment, then `budget` segments (cycles or PCG iterations).
@@ -1058,7 +1156,8 @@ function solve_plan(sv::FieldSolver, budget::Int)
         end
         gen!(pl, "pcg.true")
         fin!(pl, SETUP)
-        # (a segment of its own: a solve converged at its setup stops before the first cycle)
+        # (a segment of its own: a solve converged at its setup stops before the first
+        # cycle)
         segment!(pl)
         vcycle!(pl, ν; zero_fine = true, rz = true)
         fin!(pl, FIN_RZ)
@@ -1101,7 +1200,9 @@ function _plan(f::F, sv::FieldSolver, name) where {F}
 end
 _kind(name::Symbol) = (name, 0)
 _kind(name::Tuple{Symbol, Int}) = name
-_kind(name::Tuple{String, NTuple{2, Float64}}) = (Symbol(name[1]), name[2] == (0.0, 0.0) ? 0 : 1 + _rtcode(name[2]))
+function _kind(name::Tuple{String, NTuple{2, Float64}})
+    return (Symbol(name[1]), name[2] == (0.0, 0.0) ? 0 : 1 + _rtcode(name[2]))
+end
 _rtcode(rt) = rt == (1.0, 0.0) ? 0 : irerror("solver run with runtime values ", rt)
 """
 The rotation: bit `i` set when the `i`-th two-buffer field's current slot is 2.
@@ -1116,12 +1217,12 @@ end
 
 """
 Run plan `sp`; with `host = true` read the `done` flag after every segment and stop when it
-is set (a declared host pass). On a host executor (`host_scalars`) the device mode stops there
-too, after the segments whose slots are the plan's last (`sp.stop`): its scalars are host
-memory, so the read is free (a solve that is done, at its setup or
-after an iteration, skips the gated launches that would follow, about 4.9 ms of a
-0-iteration solve at 256² on 8 threads); the result is the same, every later launch being
-gated off, and the solve ends in the plan's last rotation. Returns the number of segments run.
+is set (a declared host pass). On a host executor (`host_scalars`) the device mode stops
+there too, after the segments whose slots are the plan's last (`sp.stop`): its scalars are
+host memory, so the read is free (a solve that is done, at its setup or after an iteration,
+skips the gated launches that would follow, about 4.9 ms of a 0-iteration solve at 256² on 8
+threads); the result is the same, every later launch being gated off, and the solve ends in
+the plan's last rotation. Returns the number of segments run.
 """
 function run!(sv::FieldSolver, sp::SolvePlan; host::Bool = false)
     scal = sv.tables[tid(sv, "solve.scal")]
@@ -1131,7 +1232,8 @@ function run!(sv::FieldSolver, sp::SolvePlan; host::Bool = false)
         _run_seg!(sv, seg)
         k < nseg || break
         if free
-            @inbounds sp.stop[k] && _isdone(scal) && (nseg = k; break)     # (k ≤ nseg = length(sp.stop))
+            # (k ≤ nseg = length(sp.stop))
+            @inbounds sp.stop[k] && _isdone(scal) && (nseg = k; break)
         elseif host && to_host(sv.exec, scal)[DONE] != 0
             nseg = k
             break
@@ -1151,8 +1253,8 @@ host_scalars(exec, scal) = false
 # (a function barrier: `scal` is untyped in the solver's tables)
 _isdone(scal::Array) = @inbounds scal[DONE] != 0          # DONE ≤ SCALARS = length(scal)
 host_scalars(b::KA.Backend, scal) = Exec.ishost(b) && scal isa Array
-# The launches of a plan are untyped (`Vector{Any}`): the dynamic call takes the solver (a heap
-# object), not its executor, which an isbits executor would box (16 B per launch).
+# The launches of a plan are untyped (`Vector{Any}`): the dynamic call takes the solver (a
+# heap object), not its executor, which an isbits executor would box (16 B per launch).
 _launch!(sv::FieldSolver, l::Launch) = launch!(sv.exec, l)
 function _run_seg!(sv::FieldSolver, seg::Vector{Any})
     for l in seg
@@ -1203,9 +1305,11 @@ end
 """
     scalars(sv)
 
-Device scalars on the host (a sync): `(; status, done, iter, rnorm, bnorm, tol, warn, mean, best, scale)` (`best`: the best true residual; `scale`: the rounding scale max(|b| + |A||x|)
-of the last check). `status` is `:done` (converged), `:floor` (stagnated at rounding level
-above the tolerance), `:diverged` (the residual grew) or `:budget`.
+Device scalars on the host (a sync):
+`(; status, done, iter, rnorm, bnorm, tol, warn, mean, best, scale)` (`best`: the best true
+residual; `scale`: the rounding scale max(|b| + |A||x|) of the last check). `status` is
+`:done` (converged), `:floor` (stagnated at rounding level above the tolerance), `:diverged`
+(the residual grew) or `:budget`.
 """
 function scalars(sv::FieldSolver)
     s = to_host(sv.exec, sv.tables[tid(sv, "solve.scal")])
@@ -1277,8 +1381,8 @@ The host-checked solve of `steady!` and `tangent!`; with a Robin face's negative
 sign rule, `CellOperator`), the defect correction around it: `robin.b` takes the right-hand
 side at the new iterate and the inner solve runs again from it, until a solve is converged
 at its setup (then the full operator's residual is at the tolerance), within `maxiter` outer
-passes. A correction that does not converge warns, naming the field, the faces and the route.
-Returns the total inner iteration count.
+passes. A correction that does not converge warns, naming the field, the faces and the
+route. Returns the total inner iteration count.
 """
 function _defect_solve!(sv::FieldSolver, maxiter::Int)
     fixed = sv.alg isa LatticeMultigrid && sv.alg.cycles !== nothing
@@ -1293,14 +1397,17 @@ function _defect_solve!(sv::FieldSolver, maxiter::Int)
     end
     Exec.VERBOSE[] && @warn string(
         _who(sv.op), ": the defect correction of the Robin faces with a negative diagonal ",
-        "(α and β of opposite sign, |β| > α/2) did not converge in ", maxiter, " passes: the face ",
-        "condition is too strong for this operator; a larger `α/2 + β`, or a larger shift or face ",
+        "(α and β of opposite sign, |β| > α/2) did not converge in ", maxiter,
+        " passes: the face ",
+        "condition is too strong for this operator; a larger `α/2 + β`, or a larger shift \
+            or face ",
         "coefficient, makes it converge"
     )
     return k
 end
 
-# ---- the finishing pass (device scalars; one workgroup) -------------------------------------
+# ---- the finishing pass (device scalars; one workgroup)
+# -------------------------------------
 """
     finish!(ph, g, t, lds, S, P, G)
 
@@ -1337,7 +1444,8 @@ function finish!(ph, g, t, lds, S, P, G)
             end
         end
         if (ph == Int32(9)) & (t == one(t))
-            @inbounds v = (lds[1], lds[1 + W], lds[1 + 2W], lds[1 + 3W], lds[1 + 4W])   # NCOMBO = 5
+            # NCOMBO = 5
+            @inbounds v = (lds[1], lds[1 + W], lds[1 + 2W], lds[1 + 3W], lds[1 + 4W])
             _update!(S[1], G, v)
         end
     end
@@ -1361,7 +1469,8 @@ function _update!(scal, G, v)
         if op == FIN_MEAN
             bm, xm = v[1] / G.nsite, v[2] / G.nsite
             scal[BMEAN], scal[XMEAN] = bm, xm
-            scal[MEAN] = G.shift == zero(T) ? zero(T) : bm / G.shift   # s = 0: the zero-mean solution
+            # s = 0: the zero-mean solution
+            scal[MEAN] = G.shift == zero(T) ? zero(T) : bm / G.shift
         elseif op == SETUP
             rn, bn = v[1], v[2]
             tol = G.rtol * max(bn, G.floor)
@@ -1396,7 +1505,8 @@ end
 """
 @inline function _beta!(scal, G, rz, sz, sr)
     T = eltype(scal)
-    @inbounds begin                                                  # scal has SCALARS entries
+    # scal has SCALARS entries
+    @inbounds begin
         if G.deflate
             zm = sz / G.nsite
             rz -= zm * sr
@@ -1425,7 +1535,8 @@ A stopped solve never reports `done`; fixed-cycle solves never stop early.
 """
 @inline function _stop!(scal, G, rn, sc)
     T = eltype(scal)
-    @inbounds begin                                                  # scal has SCALARS entries
+    # scal has SCALARS entries
+    @inbounds begin
         stalled = rn > T(STALL_GAIN) * scal[BEST]
         scal[STALL] = stalled ? scal[STALL] + one(T) : zero(T)
         scal[GROW] = rn > scal[PREV] ? scal[GROW] + one(T) : zero(T)
@@ -1454,7 +1565,8 @@ const GROW_FACTOR = 2
 
 @inline function _sentinel!(scal, G, rn)
     T = eltype(scal)
-    @inbounds if scal[DONE] == one(T)                               # scal has SCALARS entries
+    # scal has SCALARS entries
+    @inbounds if scal[DONE] == one(T)
         scal[WARN] = zero(T)
     elseif scal[DONE] >= T(2) || scal[ITER] >= T(G.budget)
         scal[WARN] = rn > G.warn * max(scal[BNORM], G.floor) ? one(T) : zero(T)

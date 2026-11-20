@@ -38,7 +38,10 @@ coef(p, u) = p[1] * u^2 - p[2] / (1 + u) + exp(-p[1]) * abs(u - p[3])
 include("../shared/export_all.jl")
 end
 
-@testitem "interval evaluator" setup = [LF_compile_interval] tags = [:latticefields, :compile] begin
+@testitem "interval evaluator" setup = [LF_compile_interval] tags = [
+    :latticefields,
+    :compile,
+] begin
     @testset "interval evaluator" begin
         s = reaction_prog()
         k = s.kernels[1]
@@ -73,8 +76,8 @@ end
             e
         end
         @test err isa IRError && occursin("`u`", err.msg)
-        # negative control: on the tight product, the evaluator's enclosure shrunk by 1% of its
-        # width at each end fails the same sampling check (corners included)
+        # negative control: on the tight product, the evaluator's enclosure shrunk by 1% of
+        # its width at each end fails the same sampling check (corners included)
         ps = [(2.0 + 3rand(rng)) * (3.0 + 4rand(rng)) for _ in 1:2_000]
         append!(ps, [a * b for a in (2.0, 5.0) for b in (3.0, 7.0)])
         @test all(v -> e2[1] <= v <= e2[2], ps)

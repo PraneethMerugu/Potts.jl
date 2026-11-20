@@ -9,7 +9,10 @@ include("../shared/ir_builder.jl")
 include("../shared/export_all.jl")
 end
 
-@testitem "interning and canonical order" setup = [LF_ir_builder] tags = [:latticefields, :ir] begin
+@testitem "interning and canonical order" setup = [LF_ir_builder] tags = [
+    :latticefields,
+    :ir,
+] begin
     @testset "interning and canonical order" begin
         pb = ProgramBuilder(Grid((4, 4)); periodic = (true, true), nparams = 2)
         u = field!(pb, "u")
@@ -18,12 +21,16 @@ end
         a, b = load(kb, u; offset = (1, 0)), load(kb, u; offset = (-1, 0))
         @test (a + b).id == (b + a).id                        # commutative operands sorted
         @test load(kb, u; offset = (1, 0)).id == a.id          # loads deduplicated
-        @test ((a + b) + param(kb, 1)).id == (a + (b + param(kb, 1))).id   # n-ary flattening
+        # n-ary flattening
+        @test ((a + b) + param(kb, 1)).id == (a + (b + param(kb, 1))).id
         s3 = a + b + param(kb, 1)
         @test kb.nodes[s3.id].op == ADD && length(nodeargs(kb, s3.id)) == 3
-        @test scmp(kb, b.id, a.id) < 0                         # (-1,0) before (+1,0): structural
-        @test (2 * a).id != (2.0f0 * a + 0).id                 # identities wait for the fold pass
-        @test IR.constant!(kb, 0.0) != IR.constant!(kb, -0.0)  # constants interned by bit pattern
+        # (-1,0) before (+1,0): structural
+        @test scmp(kb, b.id, a.id) < 0
+        # identities wait for the fold pass
+        @test (2 * a).id != (2.0f0 * a + 0).id
+        # constants interned by bit pattern
+        @test IR.constant!(kb, 0.0) != IR.constant!(kb, -0.0)
         @test kb.nodes[(a < b).id].type == IR.BOOL
         # finish: the same expression built in two orders gives identical kernels
         function build_once(order)
@@ -46,7 +53,10 @@ end
     end
 end
 
-@testitem "typing: integer lanes and casts" setup = [LF_ir_builder] tags = [:latticefields, :ir] begin
+@testitem "typing: integer lanes and casts" setup = [LF_ir_builder] tags = [
+    :latticefields,
+    :ir,
+] begin
     @testset "typing: integer lanes and casts" begin
         pb = ProgramBuilder(Grid((3, 3)))
         k8 = field!(pb, "k"; storage = U8, role = :input)
@@ -54,7 +64,8 @@ end
         kb = kernel(pb)
         m = load(kb, k8)
         @test kb.nodes[m.id].type == U8
-        @test kb.nodes[(m + 1.5).id].type == REAL               # integer operand cast to REAL
+        # integer operand cast to REAL
+        @test kb.nodes[(m + 1.5).id].type == REAL
         @test kb.nodes[(m + IR.constant(kb, 2, U8)).id].type == U8
         @test_throws IRError IR.bittest(load(kb, x), 1)
         @test_throws IRError IR.call!(kb, :evalfile, m.id)
@@ -70,7 +81,10 @@ end
     end
 end
 
-@testitem "legality and verifier refusals" setup = [LF_ir_builder] tags = [:latticefields, :ir] begin
+@testitem "legality and verifier refusals" setup = [LF_ir_builder] tags = [
+    :latticefields,
+    :ir,
+] begin
     @testset "legality and verifier refusals" begin
         function msg(f)
             return try
@@ -97,7 +111,10 @@ end
         )
         @test semantic(p) isa IR.Program                        # two buffers: legal
         # a store to an input field
-        p = tiny([("a", (; role = :input)), ("b", (;))], (kb, a, b) -> store(kb, a, load(kb, b)))
+        p = tiny(
+            [("a", (; role = :input)), ("b", (;))],
+            (kb, a, b) -> store(kb, a, load(kb, b))
+        )
         @test occursin("input field", msg(() -> semantic(p)))
         # a REAL value into an integer lane needs an explicit cast
         p = tiny(
@@ -107,7 +124,10 @@ end
             )
         )
         @test occursin("lane I32", msg(() -> verify(p)))
-        p = tiny([("n", (; storage = I32)), ("x", (;))], (kb, n, x) -> store(kb, n, IR.cast(load(kb, x), I32)))
+        p = tiny(
+            [("n", (; storage = I32)), ("x", (;))],
+            (kb, n, x) -> store(kb, n, IR.cast(load(kb, x), I32))
+        )
         @test verify(p) isa IR.Program
         # a non-periodic axis without a boundary rule names the field and the face
         p = tiny(
@@ -116,7 +136,12 @@ end
         )
         @test occursin("`u` has no boundary rule on axis 2 side +", msg(() -> semantic(p)))
         # Float64 on a backend without Float64 names the field
-        p = semantic(tiny([("d", (; storage = F64)), ("x", (;))], (kb, d, x) -> store(kb, x, load(kb, d))))
+        p = semantic(
+            tiny(
+                [("d", (; storage = F64)), ("x", (;))],
+                (kb, d, x) -> store(kb, x, load(kb, d))
+            )
+        )
         @test occursin(
             "field `d` has lane F64",
             msg(

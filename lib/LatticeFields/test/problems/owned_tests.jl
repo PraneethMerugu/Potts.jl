@@ -11,7 +11,11 @@ include("../shared/problems_owned.jl")
 include("../shared/export_all.jl")
 end
 
-@testitem "FieldProblem: steps equal the hand loop; warm steps allocate nothing" setup = [LF_problems_owned] tags = [:latticefields, :problems] begin
+@testitem "FieldProblem: steps equal the hand loop; warm steps allocate nothing" setup = [
+    LF_problems_owned,
+] tags = [
+    :latticefields, :problems,
+] begin
     @testset "FieldProblem: steps equal the hand loop; warm steps allocate nothing" begin
         dims = (12, 10)
         u0 = rand(Xoshiro(5), Float32, prod(dims))
@@ -28,7 +32,8 @@ end
         sol = solve(prob, ExplicitEuler(; substeps = 1); dt = 0.05, saveat = 0.05)
         v = reshape(u0, dims)
         for _ in 1:2
-            v = hand2!(similar(v), v, (0.05, 0.5, 1.0))               # u + (dt D/h²)(Σ nb − 4u)
+            # u + (dt D/h²)(Σ nb − 4u)
+            v = hand2!(similar(v), v, (0.05, 0.5, 1.0))
         end
         @test isapprox(sol[:u][end], v; rtol = 1.0e-5) &&
             !isapprox(sol[:u][end], reshape(u0, dims); rtol = 1.0e-3)
@@ -40,32 +45,51 @@ end
     end
 end
 
-@testitem "substeps follow the stability bound at the current parameters" setup = [LF_problems_owned] tags = [:latticefields, :problems] begin
+@testitem "substeps follow the stability bound at the current parameters" setup = [
+    LF_problems_owned,
+] tags = [
+    :latticefields, :problems,
+] begin
     @testset "substeps follow the stability bound at the current parameters" begin
         dims = (8, 8)
-        ix = LatticeIndex(; variables = [:u => FieldSlot(1:prod(dims), dims)], parameters = [:D => 1])
+        ix = LatticeIndex(;
+            variables = [:u => FieldSlot(1:prod(dims), dims)], parameters = [
+                :D =>
+                    1,
+            ]
+        )
         S = LatticeFields.Problems.substeps
-        unknown = FieldProblem(euler2(dims), zeros(64), (0.0, 0.1), [0.5]; state = ["u"], kind = :rate, index = ix)
-        @test_throws ArgumentError S(unknown, ExplicitEuler(); dt = 0.05)       # no bound, no count
+        unknown = FieldProblem(
+            euler2(dims), zeros(64), (0.0, 0.1), [0.5];
+            state = ["u"], kind = :rate, index = ix
+        )
+        # no bound, no count
+        @test_throws ArgumentError S(unknown, ExplicitEuler(); dt = 0.05)
         @test S(unknown, ExplicitEuler(; substeps = 3); dt = 0.05) == 3
         prob = FieldProblem(
             euler2(dims), zeros(64), (0.0, 0.1), [0.5]; state = ["u"], kind = :rate,
             index = ix, stability = p -> 8 * p[1]
         )
         @test S(prob, ExplicitEuler(); dt = 0.5) == ceil(Int, 0.5 * 4 / 1.8)
-        @test S(SciMLBase.remake(prob; p = [2.0]), ExplicitEuler(); dt = 0.5) == ceil(Int, 0.5 * 16 / 1.8)
+        @test S(SciMLBase.remake(prob; p = [2.0]), ExplicitEuler(); dt = 0.5) ==
+            ceil(Int, 0.5 * 16 / 1.8)
         integ = init(prob, ExplicitEuler(); dt = 0.05)
         LatticeFields.Problems.SII.setp(integ, :D)(integ, 100.0)
         @test integ.substeps == ceil(Int, 0.05 * 800 / 1.8)
         # a user count is a minimum: raised to the bound's count, kept above it, and
-        # used as given when there is no bound (`unknown` above). On f9a77dd3 the count was used
-        # as given below the bound too: substeps = 1 gave 1 here, not 2
-        @test S(prob, ExplicitEuler(; substeps = 1); dt = 0.5) == ceil(Int, 0.5 * 4 / 1.8) == 2
+        # used as given when there is no bound (`unknown` above). On f9a77dd3 the count was
+        # used as given below the bound too: substeps = 1 gave 1 here, not 2
+        @test S(prob, ExplicitEuler(; substeps = 1); dt = 0.5) ==
+            ceil(Int, 0.5 * 4 / 1.8) == 2
         @test S(prob, ExplicitEuler(; substeps = 5); dt = 0.5) == 5
     end
 end
 
-@testitem "PG-13: a plan of more than 32 launches allocates nothing" setup = [LF_problems_owned] tags = [:latticefields, :problems] begin
+@testitem "PG-13: a plan of more than 32 launches allocates nothing" setup = [
+    LF_problems_owned,
+] tags = [
+    :latticefields, :problems,
+] begin
     @testset "PG-13: a plan of more than 32 launches allocates nothing" begin
         pb = ProgramBuilder(Grid((8, 8)); periodic = (true, true), nparams = 1)
         fs = [field!(pb, "u$(lpad(k, 2, '0'))"; buffers = 2) for k in 1:40]
@@ -80,11 +104,14 @@ end
         bs = BoundStep(HOST, s, sp, st, (1.0,))
         bs((0.0, 0.0))
         @test (@allocated bs((1.0, 0.0))) == 0
-        @test array(st, IR.fieldid(s, "u01"), :next)[1] == 1.0f0     # G.rt[1] reached the body
+        # G.rt[1] reached the body
+        @test array(st, IR.fieldid(s, "u01"), :next)[1] == 1.0f0
     end
 end
 
-@testitem "Robin faces: parameter checks" setup = [LF_problems_owned] tags = [:latticefields, :problems] begin
+@testitem "Robin faces: parameter checks" setup = [LF_problems_owned] tags = [
+    :latticefields, :problems,
+] begin
     @testset "Robin faces: parameter checks" begin
         pb = ProgramBuilder(Grid((4, 4)); periodic = (false, true), nparams = 2)
         u = field!(pb, "u"; buffers = 2)
@@ -105,12 +132,16 @@ end
         @test_throws ArgumentError FieldProblem(
             p, zeros(16), (0.0, 1.0), [-0.5, 1.0]; state = ["u"], kind = :rate
         )
-        prob = FieldProblem(p, zeros(16), (0.0, 1.0), [1.0, 1.0]; state = ["u"], kind = :rate)
+        prob = FieldProblem(
+            p, zeros(16), (0.0, 1.0), [1.0, 1.0]; state = ["u"], kind = :rate
+        )
         @test_throws ArgumentError SciMLBase.remake(prob; p = [1.0, -2.0])
     end
 end
 
-@testitem "ODE form: the right side is the rate" setup = [LF_problems_owned] tags = [:latticefields, :problems] begin
+@testitem "ODE form: the right side is the rate" setup = [LF_problems_owned] tags = [
+    :latticefields, :problems,
+] begin
     @testset "ODE form: the right side is the rate" begin
         dims = (12, 10)
         u0 = rand(Xoshiro(6), prod(dims))
@@ -130,7 +161,9 @@ end
     end
 end
 
-@testitem "a U8 input takes 0…255 unless declared Bool" setup = [LF_problems_owned] tags = [:latticefields, :problems] begin
+@testitem "a U8 input takes 0…255 unless declared Bool" setup = [LF_problems_owned] tags = [
+    :latticefields, :problems,
+] begin
     @testset "a U8 input takes 0…255 unless declared Bool" begin
         # Every U8 input was held to 0/1, so a raw U8 IR input refused 7
         pb = ProgramBuilder(Grid((3, 3)); nparams = 0)
@@ -142,13 +175,15 @@ end
         prog = program(pb)
         function cv(v; bool)
             return try
-                LatticeFields.Problems._check_integer(prog, "k", "k", v; bool); ""
+                LatticeFields.Problems._check_integer(prog, "k", "k", v; bool)
+                ""
             catch e
                 sprint(showerror, e)
             end
         end
         @test cv(fill(7, 9); bool = false) == "" && cv(fill(255, 9); bool = false) == ""
-        w = fill(0, 9); w[5] = 300
+        w = fill(0, 9)
+        w[5] = 300
         err = cv(w; bool = false)
         @test occursin("integer", err)
         err = cv(fill(7, 9); bool = true)
@@ -159,12 +194,18 @@ end
 
 # The report's route line for an explicit group past 20 substeps: when the implicit count
 # cannot be computed (the implicit rules throw), the report leaves the line out instead of
-# failing. Before the fix (D-298) the fallback itself threw an `UndefVarError` (`isfatal` was
-# not imported). The group here is no group at all, so the rules throw a `MethodError`.
-@testitem "the report leaves the route line out when the implicit count fails" setup = [LF_problems_owned] tags = [:latticefields, :problems] begin
+# failing. Before the fix (D-298) the fallback itself threw an `UndefVarError` (`isfatal`
+# was not imported). The group here is no group at all, so the rules throw a `MethodError`.
+@testitem "the report leaves the route line out when the implicit count fails" setup = [
+    LF_problems_owned,
+] tags = [
+    :latticefields, :problems,
+] begin
     @testset "the report leaves the route line out when the implicit count fails" begin
         io = IOBuffer()
-        @test LatticeFields.Problems._route_line(io, nothing, ExplicitEuler(), 0.1, nothing, ["u"], 25) === nothing
+        @test LatticeFields.Problems._route_line(
+            io, nothing, ExplicitEuler(), 0.1, nothing, ["u"], 25
+        ) === nothing
         @test isempty(take!(io))
     end
 end

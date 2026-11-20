@@ -4,7 +4,8 @@
 # a field declaration with two time slots (a stepped field)
 function _two_slot(f::FieldDecl{N}) where {N}
     return FieldDecl{N}(
-        f.key, f.classes, f.shape, f.symmetric, f.storage, f.levels, f.epoch, Int8(2), f.role, f.fixed
+        f.key, f.classes, f.shape, f.symmetric, f.storage,
+        f.levels, f.epoch, Int8(2), f.role, f.fixed
     )
 end
 
@@ -13,17 +14,17 @@ end
 
 The program that steps rate program `rate` (before the semantic passes) with the update
 `rule`. Each `rate:c` kernel stores the rate `r` of field `c` into its scratch field `∂c`;
-here the store goes to `c` itself, of `rule(kb, c, r)` (`kb` the kernel builder, `c` the load
-of the field's current value and `r` the rate, both `Ex` handles; `rule` returns an `Ex`).
-With an irregular domain the rate's `select(inside, r, 0)` becomes
+here the store goes to `c` itself, of `rule(kb, c, r)` (`kb` the kernel builder, `c` the
+load of the field's current value and `r` the rate, both `Ex` handles; `rule` returns an
+`Ex`). With an irregular domain the rate's `select(inside, r, 0)` becomes
 `select(inside, rule(kb, c, r), c)`: a site outside keeps its value. The scratch fields are
 dropped and the stepped fields get two buffers. The other kernels (`map:`, `aux:`, `mask:`),
 the masks and the rules pass through, renumbered. `rule === nothing` returns `rate`.
 
 The result is node for node the program a front end fuses symbolically
 (`symbolic_discretize(…; update = rule)`): the builder interns and orders every node
-structurally, and kernels are renumbered canonically (`finish`), so `fingerprint_text` of the
-two is the same.
+structurally, and kernels are renumbered canonically (`finish`), so `fingerprint_text` of
+the two is the same.
 """
 function fuse_update(p::Program{N}, rule) where {N}
     rule === nothing && return p
@@ -34,7 +35,8 @@ function fuse_update(p::Program{N}, rule) where {N}
         c = k.key[(ncodeunits("rate:") + 1):end]
         s = findfirst(==("∂" * c), keys)
         j = findfirst(==(c), keys)
-        # a kernel with no scratch field stores into its field already (a program written fused)
+        # a kernel with no scratch field stores into its field already (a program written
+        # fused)
         (s === nothing || j === nothing) && continue
         step[Int32(s)] = Int32(j)
     end
@@ -52,20 +54,30 @@ function fuse_update(p::Program{N}, rule) where {N}
             return newid[i]
         end
     end
-    fields = [i in stepped ? _two_slot(f) : f for (i, f) in enumerate(p.fields) if i in keep]
+    fields = [
+        i in stepped ? _two_slot(f) : f
+            for (i, f) in enumerate(p.fields) if i in keep
+    ]
     bk = ([f.key for f in fields], [f.storage for f in fields], [t.key for t in p.tables])
     dom = p.hierarchy[1].grid.domain != 0
     kernels = map(p.kernels) do k
         startswith(k.key, "rate:") || return rebuild(copy_node!, k, bk; fieldmap = fm)
-        rebuild(copy_node!, k, bk; fieldmap = fm, storefn = (b, s, v) -> _fused_store(b, s, v, rule, dom))
+        rebuild(
+            copy_node!, k, bk; fieldmap = fm,
+            storefn = (b, s, v) -> _fused_store(b, s, v, rule, dom)
+        )
     end
     masks = [MaskDecl(m.key, fm(m.field), m.epoch) for m in p.masks]
     flags = [FlagDecl(g.key, fm(g.field), g.bits, g.epoch) for g in p.flags]
     rules = AbstractBoundaryRule[_rulemap(r, fm, identity) for r in p.rules]
-    return Program{N}(p.hierarchy, fields, p.tables, masks, flags, rules, kernels, p.periodic, p.spacing, p.nparams)
+    return Program{N}(
+        p.hierarchy, fields, p.tables, masks, flags,
+        rules, kernels, p.periodic, p.spacing, p.nparams
+    )
 end
 
-# the store of a fused rate kernel: `rule(c, r)` into `c`, inside the domain when there is one
+# the store of a fused rate kernel: `rule(c, r)` into `c`, inside the domain when there is
+# one
 function _fused_store(b::KernelBuilder, s::Store, v, rule, dom::Bool)
     f = s.access.field
     lane = b.fieldlanes[f]
@@ -89,17 +101,17 @@ end
 
 The residual program of an implicit stepper: the fields of
 `fuse_update(rate, …)` in the same order and at the same ids (the state fields with two
-buffers, no scratch `∂c`), so a runtime's store of the stepped program serves it, followed by
-one residual field `res:c` and one history field `c__n` (a one-buffer input: the state at the
-substep's start, `uⁿ`) per rate field `c`, in the order of the `rate:c` kernels. Each `rate:c`
-kernel stores `rule(kb, c, r, cn)` into `res:c` (`c` the load of the field, the iterate `u_k`;
-`r` the rate; `cn` the load of `c__n`; IR handles), and nothing into `c`: the state is read,
-never written. With an irregular domain a site outside stores 0. The other kernels and the
-rules pass through, renumbered (as `fuse_update`).
+buffers, no scratch `∂c`), so a runtime's store of the stepped program serves it, followed
+by one residual field `res:c` and one history field `c__n` (a one-buffer input: the state at
+the substep's start, `uⁿ`) per rate field `c`, in the order of the `rate:c` kernels. Each
+`rate:c` kernel stores `rule(kb, c, r, cn)` into `res:c` (`c` the load of the field, the
+iterate `u_k`; `r` the rate; `cn` the load of `c__n`; IR handles), and nothing into `c`: the
+state is read, never written. With an irregular domain a site outside stores 0. The other
+kernels and the rules pass through, renumbered (as `fuse_update`).
 
 `widen16 = true` (the solve's residual): the residual of a field stored in
-Float16 is held in the state's value type (a float lane, not fixed), the type the solver reads,
-so the solve sees no Float16 rounding beyond the state's own.
+Float16 is held in the state's value type (a float lane, not fixed), the type the solver
+reads, so the solve sees no Float16 rounding beyond the state's own.
 """
 function fuse_residual(p::Program{N}, rule; widen16::Bool = false) where {N}
     keys = [f.key for f in p.fields]
@@ -118,7 +130,10 @@ function fuse_residual(p::Program{N}, rule; widen16::Bool = false) where {N}
     newid = zeros(Int32, length(p.fields))
     newid[keep] .= Int32.(1:length(keep))
     stepped = Set(values(step))
-    fields = [i in stepped ? _two_slot(f) : f for (i, f) in enumerate(p.fields) if i in keep]
+    fields = [
+        i in stepped ? _two_slot(f) : f
+            for (i, f) in enumerate(p.fields) if i in keep
+    ]
     nk = length(fields)
     # the residual and history fields, appended: `res:c` at `nk + j`, `c__n` at `nk + n + j`
     res = Dict{String, Int32}()
@@ -128,7 +143,8 @@ function fuse_residual(p::Program{N}, rule; widen16::Bool = false) where {N}
         wide = widen16 && f.storage == F16
         push!(
             fields, FieldDecl{N}(
-                "res:" * c, f.classes, f.shape, f.symmetric, wide ? F32 : f.storage, f.levels, f.epoch,
+                "res:" * c, f.classes, f.shape, f.symmetric, wide ? F32 : f.storage,
+                f.levels, f.epoch,
                 Int8(1), :scratch, wide ? false : f.fixed
             )
         )
@@ -136,7 +152,13 @@ function fuse_residual(p::Program{N}, rule; widen16::Bool = false) where {N}
     end
     for (j, c) in enumerate(order)
         f = p.fields[findfirst(==(c), keys)]
-        push!(fields, FieldDecl{N}(c * "__n", f.classes, f.shape, f.symmetric, f.storage, f.levels, f.epoch, Int8(1), :input, f.fixed))
+        push!(
+            fields,
+            FieldDecl{N}(
+                c * "__n", f.classes, f.shape, f.symmetric, f.storage,
+                f.levels, f.epoch, Int8(1), :input, f.fixed
+            )
+        )
         hist[c] = Int32(nk + length(order) + j)
     end
     function fm(i)
@@ -155,17 +177,23 @@ function fuse_residual(p::Program{N}, rule; widen16::Bool = false) where {N}
         c = k.key[(ncodeunits("rate:") + 1):end]
         haskey(res, c) || return rebuild(copy_node!, k, bk; fieldmap = fm)
         cid, hid = newid[findfirst(==(c), keys)], hist[c]
-        rebuild(copy_node!, k, bk; fieldmap = fm, storefn = (b, s, v) -> _residual_store(b, s, v, rule, dom, cid, hid))
+        rebuild(
+            copy_node!, k, bk; fieldmap = fm,
+            storefn = (b, s, v) -> _residual_store(b, s, v, rule, dom, cid, hid)
+        )
     end
     # (a rule never names a scratch field: `fm` maps the others to their new ids)
     masks = [MaskDecl(m.key, fm(m.field), m.epoch) for m in p.masks]
     flags = [FlagDecl(g.key, fm(g.field), g.bits, g.epoch) for g in p.flags]
     rules = AbstractBoundaryRule[_rulemap(r, fm, identity) for r in p.rules]
-    return Program{N}(p.hierarchy, fields, p.tables, masks, flags, rules, kernels, p.periodic, p.spacing, p.nparams)
+    return Program{N}(
+        p.hierarchy, fields, p.tables, masks, flags,
+        rules, kernels, p.periodic, p.spacing, p.nparams
+    )
 end
 
-# the store of a residual kernel: `rule(c, r, cn)` into `res:c` (the store's field), 0 outside the
-# domain when there is one
+# the store of a residual kernel: `rule(c, r, cn)` into `res:c` (the store's field), 0
+# outside the domain when there is one
 function _residual_store(b::KernelBuilder, s::Store, v, rule, dom::Bool, cid, hid)
     lane = b.fieldlanes[s.access.field]
     x, inside = v, Int32(0)

@@ -42,7 +42,11 @@ function launch_geometry(
     ) where {N}
     dims = Tuple(map(Int32, leveldims(p, lv)) for lv in ck.levels)
     n = ck.I(nsites(p, ck.space.level))
-    return Geom{N, length(dims), 2, ck.I, R}(n, dims, (lanecast(R, rt[1]), lanecast(R, rt[2])))
+    return Geom{N, length(dims), 2, ck.I, R}(
+        n, dims, (
+            lanecast(R, rt[1]), lanecast(R, rt[2]),
+        )
+    )
 end
 
 """
@@ -59,9 +63,9 @@ end
 """
     bind_program(backend, p, spec, S, P, rt; R = spec.kernel.T) -> Exec.Launch
 
-The prebuilt launch of `spec` with arrays `S`, parameters `P` and `rt = (t, dt)` in `R`: a static
-ndrange when `spec.static`, the workgroup of the spec, the Cartesian wrapper for Cartesian
-bodies. `n` is `G.n`.
+The prebuilt launch of `spec` with arrays `S`, parameters `P` and `rt = (t, dt)` in `R`: a
+static ndrange when `spec.static`, the workgroup of the spec, the Cartesian wrapper for
+Cartesian bodies. `n` is `G.n`.
 """
 function bind_program(
         backend, p::Program{N}, spec::LaunchSpec{N}, S::Tuple, P::Tuple, rt;
@@ -69,7 +73,8 @@ function bind_program(
     ) where {N, W}
     ck = spec.kernel
     G = launch_geometry(p, ck, rt; R)
-    body = wrap(body_function(ck))          # `wrap`: a body around the kernel's (a fused clamp, group.jl)
+    # `wrap`: a body around the kernel's (a fused clamp, group.jl)
+    body = wrap(body_function(ck))
     if ck.strategy == :cartesian
         return Exec.Launch(
             backend, body, (S, P, G), spec.ndrange; cartesian = true,

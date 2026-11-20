@@ -1,10 +1,11 @@
 # Solver test geometries (the reference cases of the masked multigrid design):
 # a masked disk or sphere (Dirichlet value 1 in the medium and on the box layer), a box with
-# face Dirichlet on x (0 at the low face, 1 at the high face) and periodic y, optionally with
-# masked islands, and a periodic box. Face coefficients 1, shift `s` (scaled form).
+# face Dirichlet on x (0 at the low face, 1 at the high face) and periodic y, optionally
+# with masked islands, and a periodic box. Face coefficients 1, shift `s` (scaled form).
 
 using Random
-using LatticeFields.Solvers: CellOperator, FieldSolver, LatticePCG, LatticeMultigrid, LatticeBlockSolve, VCycle, steady!,
+using LatticeFields.Solvers: CellOperator, FieldSolver, LatticePCG, LatticeMultigrid,
+    LatticeBlockSolve, VCycle, steady!,
     field, scalars, rebuild!, lift!, solve!, lkey, RuleWeights,
     solution_key
 
@@ -157,7 +158,6 @@ function level_matrix(sv, l)
     for (q, i) in enumerate(cells)
         A[q, q] += s[i]
         for a in 1:N, σ in (1, -1)
-
             c = Tuple(CI[i])
             v = c[a] + σ
             (1 <= v <= d[a]) || per[a] || continue
@@ -190,7 +190,6 @@ function true_residual(sv, xs = field(sv, Solvers.solution_key(sv)))
     for i in findall(act)
         Ax = s[i] * x[i]
         for a in 1:N, σ in (1, -1)
-
             c = Tuple(CI[i])
             v = c[a] + σ
             (1 <= v <= d[a]) || per[a] || continue

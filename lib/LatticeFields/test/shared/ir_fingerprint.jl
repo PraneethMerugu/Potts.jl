@@ -25,8 +25,11 @@ function fp_prog(;
         store(
             kb,
             u,
-            flip ? (param(kb, 1) * coef) * (sum(ts) - 4c) + c :
+            if flip
+                (param(kb, 1) * coef) * (sum(ts) - 4c) + c
+            else
                 c + coef * param(kb, 1) * (sum(ts) - 4c)
+            end
         )
         return add!(pb, kb, "diffuse")
     end

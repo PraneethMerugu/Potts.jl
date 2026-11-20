@@ -1,6 +1,7 @@
-# Fusion decisions against the cost model (its regime table, as measured on the field-kernel benchmarks), with the
-# shared-reads rule and a fixed stream cap as negative controls; fusion legality; ordering;
-# fused execution bit-exact with split execution; static ndrange marking.
+# Fusion decisions against the cost model (its regime table, as measured on the field-kernel
+# benchmarks), with the shared-reads rule and a fixed stream cap as negative controls;
+# fusion legality; ordering; fused execution bit-exact with split execution; static ndrange
+# marking.
 
 @testsetup module LF_schedule_fusion
 using Test, LatticeFields
@@ -14,13 +15,18 @@ include("../shared/schedule_fusion.jl")
 include("../shared/export_all.jl")
 end
 
-@testitem "cost model reproduces the measured regime table" setup = [LF_schedule_fusion] tags = [:latticefields, :schedule] begin
+@testitem "cost model reproduces the measured regime table" setup = [
+    LF_schedule_fusion,
+] tags = [
+    :latticefields, :schedule,
+] begin
     @testset "cost model reproduces the measured regime table" begin
         # launch-bound 42³: merge every component, independent fields included
         @test nlaunch(smoother((42, 42, 42), 4)) == 1
         @test nlaunch(residual((42, 42, 42), 4)) == 1
         @test nlaunch(restrict((42, 42, 42), 4)) == 1
-        # 3D 128³ (≈ 44 MB per split component): fused still wins for smoother, restrict, prolong
+        # 3D 128³ (≈ 44 MB per split component): fused still wins for smoother, restrict,
+        # prolong
         @test nlaunch(smoother((128, 128, 128), 4)) == 1
         @test nlaunch(restrict((128, 128, 128), 4)) == 1
         @test nlaunch(prolong((128, 128, 128), 4)) == 1
@@ -39,15 +45,22 @@ end
     end
 end
 
-@testitem "negative controls: shared-reads rule and a fixed stream cap disagree" setup = [LF_schedule_fusion] tags = [:latticefields, :schedule] begin
+@testitem "negative controls: shared-reads rule and a fixed stream cap disagree" setup = [
+    LF_schedule_fusion,
+] tags = [
+    :latticefields, :schedule,
+] begin
     @testset "negative controls: shared-reads rule and a fixed stream cap disagree" begin
         s = restrict((42, 42, 42), 4)
-        @test !shares_read(s) && nlaunch(s) == 1          # shared reads would split; cost merges
+        # shared reads would split; cost merges
+        @test !shares_read(s) && nlaunch(s) == 1
         s = smoother((256, 256, 256), 4)
-        @test shares_read(s) && nlaunch(s) > 1            # shared reads would merge; cost splits
+        # shared reads would merge; cost splits
+        @test shares_read(s) && nlaunch(s) > 1
         s = smoother((42, 42, 42), 4)
         @test !stream_cap_ok(s, 16) && nlaunch(s) == 1    # a 16-stream cap would split
-        # and the cost model itself is what decides: a launch-free model splits the 42³ smoother
+        # and the cost model itself is what decides: a launch-free model splits the 42³
+        # smoother
         @test length(
             plan(
                 s;
@@ -60,11 +73,14 @@ end
     end
 end
 
-@testitem "fusion legality and order" setup = [LF_schedule_fusion] tags = [:latticefields, :schedule] begin
+@testitem "fusion legality and order" setup = [LF_schedule_fusion] tags = [
+    :latticefields, :schedule,
+] begin
     @testset "fusion legality and order" begin
         s = producer_consumer((0, 0, 0))
         sp = plan(s)
-        @test length(sp.launches) == 1 && sp.launches[1].members == ["z_produce", "a_consume"]
+        @test length(sp.launches) == 1 &&
+            sp.launches[1].members == ["z_produce", "a_consume"]
         s = producer_consumer((1, 0, 0))
         sp = plan(s)
         @test length(sp.launches) == 2 &&
@@ -77,7 +93,11 @@ end
     end
 end
 
-@testitem "Jacobi groups: a read cycle reads old values" setup = [LF_schedule_fusion] tags = [:latticefields, :schedule] begin
+@testitem "Jacobi groups: a read cycle reads old values" setup = [
+    LF_schedule_fusion,
+] tags = [
+    :latticefields, :schedule,
+] begin
     @testset "Jacobi groups: a read cycle reads old values" begin
         function cycle(buffers)
             pb = ProgramBuilder(Grid((5, 4)); periodic = (true, true))
@@ -104,10 +124,13 @@ end
     end
 end
 
-@testitem "a one-buffer field inside a Jacobi group is read new (its writer first)" setup = [LF_schedule_fusion] tags = [:latticefields, :schedule] begin
+@testitem "a one-buffer field inside a Jacobi group is read new (its writer first)" setup =
+    [LF_schedule_fusion] tags = [
+    :latticefields, :schedule,
+] begin
     @testset "a one-buffer field inside a Jacobi group is read new (its writer first)" begin
-        # x, y two-buffer, K one-buffer: `z_K` (K ← x) sorts last by key, but `fy` reads K's new
-        # value, so `z_K` runs before it; x and y keep the Jacobi rule (old values)
+        # x, y two-buffer, K one-buffer: `z_K` (K ← x) sorts last by key, but `fy` reads K's
+        # new value, so `z_K` runs before it; x and y keep the Jacobi rule (old values)
         function auxloop(off)
             pb = ProgramBuilder(Grid((5, 4)); periodic = (true, true))
             x = field!(pb, "x"; buffers = 2)
@@ -128,7 +151,8 @@ end
         for off in ((0, 0), (1, 0))
             s = auxloop(off)
             order = only(step_order(s, [1, 2, 3]))
-            @test [s.kernels[i].key for i in order] == ["fx", "z_K", "fy"]   # (fx reads no one-buffer field)
+            # (fx reads no one-buffer field)
+            @test [s.kernels[i].key for i in order] == ["fx", "z_K", "fy"]
             for fuse in (true, false)
                 st = HostStore(s)
                 copyto!(current(st, s, "x"), x0)
@@ -138,8 +162,10 @@ end
                 @test reshape(current(st, s, "K"), 5, 4) == x0 .- 3
                 @test reshape(current(st, s, "y"), 5, 4) == circshift(x0 .- 3, .-off) .* 2
                 @test reshape(current(st, s, "x"), 5, 4) == y0 .+ 1
-                # an offset read of K is not fused with its writer (it would read other sites' old K)
-                fuse && off != (0, 0) && @test !any(l -> "z_K" in l.members && "fy" in l.members, sp.launches)
+                # an offset read of K is not fused with its writer (it would read other
+                # sites' old K)
+                fuse && off != (0, 0) &&
+                    @test !any(l -> "z_K" in l.members && "fy" in l.members, sp.launches)
             end
         end
         # control: one-buffer fields that define each other are refused, naming only them
@@ -157,7 +183,8 @@ end
         add!(pb, kb, "fx")
         s = semantic(program(pb))
         err = try
-            step_order(s, [1, 2, 3]); ""
+            step_order(s, [1, 2, 3])
+            ""
         catch e
             e isa IR.IRError || rethrow()
             sprint(showerror, e)
@@ -166,11 +193,18 @@ end
     end
 end
 
-@testitem "fused execution is bit-exact with split execution" setup = [LF_schedule_fusion] tags = [:latticefields, :schedule] begin
+@testitem "fused execution is bit-exact with split execution" setup = [
+    LF_schedule_fusion,
+] tags = [
+    :latticefields, :schedule,
+] begin
     @testset "fused execution is bit-exact with split execution" begin
         s = producer_consumer((0, 0, 0); dims = (7, 5, 3))
         function exec(sp)
-            st = HostStore(s; init = (k, A) -> (A .= rand(Xoshiro(16), eltype(A), length(A))))
+            st = HostStore(
+                s;
+                init = (k, A) -> (A .= rand(Xoshiro(16), eltype(A), length(A)))
+            )
             run_step!(s, sp, st, (0.3,))
             return (
                 copy(current(st, s, "v")), copy(current(st, s, "w")),
@@ -182,7 +216,9 @@ end
     end
 end
 
-@testitem "content addressing and static ndrange" setup = [LF_schedule_fusion] tags = [:latticefields, :schedule] begin
+@testitem "content addressing and static ndrange" setup = [LF_schedule_fusion] tags = [
+    :latticefields, :schedule,
+] begin
     @testset "content addressing and static ndrange" begin
         pb = ProgramBuilder(Grid((8, 8)); periodic = (true, true), levels = 2)
         f0, g0 = field!(pb, "a0"; role = :input), field!(pb, "b0"; role = :output)

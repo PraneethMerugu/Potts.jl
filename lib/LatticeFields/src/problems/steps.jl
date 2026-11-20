@@ -12,10 +12,10 @@ end
 (x::Timed)(rt) = (retime(x.launch, (rt[1], rt[2]))(); nothing)
 
 """
-A prebuilt launch whose parameters are derived again at each launch (a hoisted value reads the
-time, or the kernel reads the clock slot): `l(rt)` derives `P` on the host at `t = rt[1]` and,
-with `rt = (t, dt, k)`, with the step index `k` in the clock slot (no allocation), sets `G.rt`
-and enqueues it.
+A prebuilt launch whose parameters are derived again at each launch (a hoisted value reads
+the time, or the kernel reads the clock slot): `l(rt)` derives `P` on the host at
+`t = rt[1]` and, with `rt = (t, dt, k)`, with the step index `k` in the clock slot (no
+allocation), sets `G.rt` and enqueues it.
 """
 struct TimedDerived{L, D, P, C}
     launch::L
@@ -26,7 +26,11 @@ end
 function (x::TimedDerived)(rt)
     S, _, G = x.launch.params[2]
     k = length(rt) >= 3 ? rt[3] : nothing
-    rebind(x.launch, (S, x.derive(x.Praw, x.c, rt[1], k), typeof(G)(G.n, G.dims, (rt[1], rt[2]))))()
+    rebind(
+        x.launch, (
+            S, x.derive(x.Praw, x.c, rt[1], k), typeof(G)(G.n, G.dims, (rt[1], rt[2])),
+        )
+    )()
     return nothing
 end
 
@@ -54,13 +58,20 @@ function BoundStep(
             ck = l.kernel
             # the parameters in the kernel's compute type (its `compute_type`), wrapped
             # like `c` (a Dual of it under Dual parameters)
-            cc = c === nothing ? zero(ck.T) : zero(withvaltype(typeof(c), value_type(ck.T)))
+            cc = if c === nothing
+                zero(ck.T)
+            else
+                zero(withvaltype(typeof(c), value_type(ck.T)))
+            end
             S = launch_arrays(st, l, cur)
             f = fuse === nothing ? nothing : fuse(l, cur)
             b = if f === nothing
                 bind_program(backend, p, l, S, launch_parameters(ck, P0, cc), (0, 0))
             else
-                bind_program(backend, p, l, (S..., f[1]), launch_parameters(ck, P0, cc), (0, 0); wrap = f[2])
+                bind_program(
+                    backend, p, l, (S..., f[1]),
+                    launch_parameters(ck, P0, cc), (0, 0); wrap = f[2]
+                )
             end
             ck.timed ? TimedDerived(b, derive_function(ck), P0, cc) : Timed(b)
         end

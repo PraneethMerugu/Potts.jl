@@ -43,7 +43,11 @@ end
 include("../shared/export_all.jl")
 end
 
-@testitem "masked space is write-complete (odd substeps, moving mask)" setup = [LF_compile_lanes_masks] tags = [:latticefields, :compile] begin
+@testitem "masked space is write-complete (odd substeps, moving mask)" setup = [
+    LF_compile_lanes_masks,
+] tags = [
+    :latticefields, :compile,
+] begin
     @testset "masked space is write-complete (odd substeps, moving mask)" begin
         u0 = rand(Xoshiro(4), Float32, 8, 5)
         P = (0.1, 0.7, 1.3)
@@ -58,7 +62,11 @@ end
     end
 end
 
-@testitem "integer lanes: U8 mask counts into I32, U32 bit test into U8" setup = [LF_compile_lanes_masks] tags = [:latticefields, :compile] begin
+@testitem "integer lanes: U8 mask counts into I32, U32 bit test into U8" setup = [
+    LF_compile_lanes_masks,
+] tags = [
+    :latticefields, :compile,
+] begin
     @testset "integer lanes: U8 mask counts into I32, U32 bit test into U8" begin
         dims = (6, 5)
         pb = ProgramBuilder(Grid(dims); periodic = (true, true))
@@ -73,7 +81,10 @@ end
                 for o in OFFS2
         )
         store(kb, cnt, load(kb, cnt) + hits)
-        store(kb, bit, select(bittest(load(kb, fl), 3), constant(kb, 1, U8), constant(kb, 0, U8)))
+        store(
+            kb, bit,
+            select(bittest(load(kb, fl), 3), constant(kb, 1, U8), constant(kb, 0, U8))
+        )
         add!(pb, kb, "count")
         s, sp = build(pb)
         rng = Xoshiro(5)
@@ -96,7 +107,11 @@ end
     end
 end
 
-@testitem "tables: per-kind lookup with zero at index 0" setup = [LF_compile_lanes_masks] tags = [:latticefields, :compile] begin
+@testitem "tables: per-kind lookup with zero at index 0" setup = [
+    LF_compile_lanes_masks,
+] tags = [
+    :latticefields, :compile,
+] begin
     @testset "tables: per-kind lookup with zero at index 0" begin
         pb = ProgramBuilder(Grid((5, 4)))
         kind = field!(pb, "kind"; storage = I32, role = :input)
@@ -116,7 +131,11 @@ end
     end
 end
 
-@testitem "immersed zero-flux rule conserves mass outside the obstacle" setup = [LF_compile_lanes_masks] tags = [:latticefields, :compile] begin
+@testitem "immersed zero-flux rule conserves mass outside the obstacle" setup = [
+    LF_compile_lanes_masks,
+] tags = [
+    :latticefields, :compile,
+] begin
     @testset "immersed zero-flux rule conserves mass outside the obstacle" begin
         function prog(rule::Bool)
             pb = ProgramBuilder(Grid((9, 8)); periodic = (true, true), nparams = 3)
@@ -152,7 +171,11 @@ end
     end
 end
 
-@testitem "node-value rule: masked sites store the value (identity row)" setup = [LF_compile_lanes_masks] tags = [:latticefields, :compile] begin
+@testitem "node-value rule: masked sites store the value (identity row)" setup = [
+    LF_compile_lanes_masks,
+] tags = [
+    :latticefields, :compile,
+] begin
     @testset "node-value rule: masked sites store the value (identity row)" begin
         pb = ProgramBuilder(Grid((6, 6)); periodic = (true, true), nparams = 4)
         u = field!(pb, "u"; buffers = 2)

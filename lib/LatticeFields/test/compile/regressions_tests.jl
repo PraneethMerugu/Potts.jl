@@ -1,7 +1,7 @@
-# Regressions found in review of the emitter, each against an independent oracle written here with `mod1` and
-# `clamp` (not the emitter's index code): periodic wrap with |offset| ≥ the axis, box
-# stencils on corners and degenerate axes, the ZERO policy, the coarse-level convention,
-# and the refusals added by the review.
+# Regressions found in review of the emitter, each against an independent oracle written
+# here with `mod1` and `clamp` (not the emitter's index code): periodic wrap with |offset| ≥
+# the axis, box stencils on corners and degenerate axes, the ZERO policy, the coarse-level
+# convention, and the refusals added by the review.
 
 @testsetup module LF_compile_regressions
 using Test, LatticeFields
@@ -41,7 +41,6 @@ function boxnf(dims, per)
     u = field!(pb, "u"; role = :input)
     v = field!(pb, "v"; role = :output)
     for d in 1:N, s in (-1, 1)
-
         per[d] || rule!(pb, FaceRule(u, d, s, Coef(0), Coef(1), Coef(0)))
     end
     kb = kernel(pb)
@@ -63,8 +62,11 @@ function boxoracle(u, per)
     for I in CartesianIndices(u), o in CartesianIndices(ntuple(_ -> -1:1, N))
         # no-flux ghost of a cell-centered face is the nearest inside value, axis by axis
         J = ntuple(
-            d -> per[d] ? mod1(I[d] + o[d], size(u, d)) :
-                clamp(I[d] + o[d], 1, size(u, d)), N
+            d -> if per[d]
+                mod1(I[d] + o[d], size(u, d))
+            else
+                clamp(I[d] + o[d], 1, size(u, d))
+            end, N
         )
         out[I] += u[J...] * (1 + sum(abs, Tuple(o)) + 0.1 * o[1])
     end
@@ -73,7 +75,11 @@ end
 include("../shared/export_all.jl")
 end
 
-@testitem "periodic wrap with offsets as large as the axis" setup = [LF_compile_regressions] tags = [:latticefields, :compile] begin
+@testitem "periodic wrap with offsets as large as the axis" setup = [
+    LF_compile_regressions,
+] tags = [
+    :latticefields, :compile,
+] begin
     @testset "periodic wrap with offsets as large as the axis" begin
         for off in ((5, 0), (-7, 0), (2, 3), (0, -4))
             pb = ProgramBuilder(Grid((2, 3)); periodic = (true, true))
@@ -90,7 +96,11 @@ end
     end
 end
 
-@testitem "box stencils on corners and degenerate axes" setup = [LF_compile_regressions] tags = [:latticefields, :compile] begin
+@testitem "box stencils on corners and degenerate axes" setup = [
+    LF_compile_regressions,
+] tags = [
+    :latticefields, :compile,
+] begin
     @testset "box stencils on corners and degenerate axes" begin
         for (dims, per) in (
                 ((5, 3), (false, false)), ((5, 3, 3), (false, false, false)),
@@ -107,13 +117,18 @@ end
     end
 end
 
-@testitem "ZERO policy reads 0 outside, on the unclamped coordinate" setup = [LF_compile_regressions] tags = [:latticefields, :compile] begin
+@testitem "ZERO policy reads 0 outside, on the unclamped coordinate" setup = [
+    LF_compile_regressions,
+] tags = [
+    :latticefields, :compile,
+] begin
     @testset "ZERO policy reads 0 outside, on the unclamped coordinate" begin
         pb = ProgramBuilder(Grid((4,)))
         r, o = field!(pb, "r"; role = :input), field!(pb, "v"; role = :output)
         kb = kernel(pb)
         store(
-            kb, o, load(kb, r; offset = (1,), policy = ZERO) +
+            kb, o,
+            load(kb, r; offset = (1,), policy = ZERO) +
                 10 * load(kb, r; offset = (-2,), policy = ZERO)
         )
         add!(pb, kb, "k")
@@ -126,10 +141,14 @@ end
     end
 end
 
-@testitem "coarse levels: n ÷ 2 sites, last aggregate of an odd axis has width 3" setup = [LF_compile_regressions] tags = [:latticefields, :compile] begin
+@testitem "coarse levels: n ÷ 2 sites, last aggregate of an odd axis has width 3" setup = [
+    LF_compile_regressions,
+] tags = [
+    :latticefields, :compile,
+] begin
     @testset "coarse levels: n ÷ 2 sites, last aggregate of an odd axis has width 3" begin
-        # restriction 5 → 2: aggregates {1,2} and {3,4,5}; the width-3 tail reads offset 2 only
-        # at the last coarse site (gated on the coarse coordinate)
+        # restriction 5 → 2: aggregates {1,2} and {3,4,5}; the width-3 tail reads offset 2
+        # only at the last coarse site (gated on the coarse coordinate)
         pb = ProgramBuilder(Grid((5,)); levels = 2)
         r = field!(pb, "r"; role = :input)
         rc = field!(pb, "v"; role = :output, levels = [1])
@@ -138,8 +157,10 @@ end
             eq(coord(kb, 1), constant(kb, 2, I32)),
             load(kb, r; level = -1, offset = (2,), policy = ZERO), constant(kb, 0.0)
         )
-        pair = load(kb, r; level = -1, offset = (0,), policy = IR.INSIDE) +   # inside by the
-            load(kb, r; level = -1, offset = (1,), policy = IR.INSIDE)     # n ÷ 2 convention
+        # inside by the
+        pair = load(kb, r; level = -1, offset = (0,), policy = IR.INSIDE) +
+            # n ÷ 2 convention
+            load(kb, r; level = -1, offset = (1,), policy = IR.INSIDE)
         store(kb, rc, pair + tail)
         add!(pb, kb, "restrict")
         r0 = Float32[1, 2, 3, 4, 5]
@@ -160,7 +181,9 @@ end
     end
 end
 
-@testitem "review refusals and hygiene" setup = [LF_compile_regressions] tags = [:latticefields, :compile] begin
+@testitem "review refusals and hygiene" setup = [LF_compile_regressions] tags = [
+    :latticefields, :compile,
+] begin
     @testset "review refusals and hygiene" begin
         # :accumulate adds to the current value at the own site
         pb = ProgramBuilder(Grid((4,)); periodic = (true,))
@@ -168,7 +191,11 @@ end
         kb = kernel(pb)
         IR.store(kb, o, load(kb, r); law = :accumulate)
         add!(pb, kb, "acc")
-        for got in each_mode(pb, ("r" => Float32[1, 2, 3, 4], "v" => Float32[10, 20, 30, 40]))
+        for got in each_mode(
+                pb, (
+                    "r" => Float32[1, 2, 3, 4], "v" => Float32[10, 20, 30, 40],
+                )
+            )
             @test got == Float32[11, 22, 33, 44]
         end
         # α = β = 0 face rule
@@ -195,15 +222,23 @@ end
     end
 end
 
-@testitem "fusion hard limits: array arguments and the register prefilter" setup = [LF_compile_regressions] tags = [:latticefields, :compile] begin
+@testitem "fusion hard limits: array arguments and the register prefilter" setup = [
+    LF_compile_regressions,
+] tags = [
+    :latticefields, :compile,
+] begin
     @testset "fusion hard limits: array arguments and the register prefilter" begin
         src = read(joinpath(@__DIR__, "..", "shared", "schedule_fusion.jl"), String)
         @isdefined(smoother) || include_string(@__MODULE__, split(src, "nlaunch(s) =")[1])
-        s = smoother((42, 42, 42), 20)                    # η = 1 at this size: cost alone fuses all
+        # η = 1 at this size: cost alone fuses all
+        s = smoother((42, 42, 42), 20)
         sp = plan(s)
         @test length(sp.launches) > 1
         @test any(d -> d.reason == :limit, sp.decisions)
-        @test all(l -> length(Schedule.traffic(s, l.kernel.kernel).arrays) <= 32, sp.launches)
+        @test all(
+            l -> length(Schedule.traffic(s, l.kernel.kernel).arrays) <= 32,
+            sp.launches
+        )
         @test length(plan(smoother((42, 42, 42), 4)).launches) == 1
         @test length(
             plan(

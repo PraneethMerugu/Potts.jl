@@ -32,8 +32,7 @@ function _verify_node(p::Program, k::Kernel, i::Int, n::Node)
                 irerror(where_(), ": select condition is not Bool")
         end
         f = p.fields[a.field]
-        n.op == LOAD && n.type != loadtype(f.storage) &&
-            irerror(
+        n.op == LOAD && n.type != loadtype(f.storage) && irerror(
             where_(), ": type ", n.type,
             " for a load of lane ", f.storage
         )
@@ -83,8 +82,7 @@ function verify(p::Program)
         end
         for r in k.reductions
             0 < r.value <= length(k.nodes) && k.nodes[r.value].type == REAL &&
-                1 <= r.target <= length(p.tables) ||
-                irerror(
+                1 <= r.target <= length(p.tables) || irerror(
                 "kernel `", k.key, "`: bad reduction (value v", r.value,
                 ", target #", r.target, ")"
             )

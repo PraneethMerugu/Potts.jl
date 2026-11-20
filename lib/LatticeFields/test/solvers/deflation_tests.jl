@@ -1,8 +1,7 @@
-# Constant-mode deflation on unanchored groups (a provisional rule) and the stop statuses: the
-# mean coefficient, the zero-mean solve, the warm start, s = 0, the Float32 floor and the
-# Float64 solver of unanchored weak-reaction groups (`solver_type`), a slow solve that is not a
-# floor, and
-# divergence (stationary only).
+# Constant-mode deflation on unanchored groups (a provisional rule) and the stop statuses:
+# the mean coefficient, the zero-mean solve, the warm start, s = 0, the Float32 floor and
+# the Float64 solver of unanchored weak-reaction groups (`solver_type`), a slow solve that
+# is not a floor, and divergence (stationary only).
 
 @testsetup module LF_solvers_deflation
 using Test, LatticeFields
@@ -71,7 +70,11 @@ end
 include("../shared/export_all.jl")
 end
 
-@testitem "linsolve = :auto: PCG with deflation on unanchored groups" setup = [LF_solvers_deflation] tags = [:latticefields, :solvers] begin
+@testitem "linsolve = :auto: PCG with deflation on unanchored groups" setup = [
+    LF_solvers_deflation,
+] tags = [
+    :latticefields, :solvers,
+] begin
     @testset "linsolve = :auto: PCG with deflation on unanchored groups" begin
         per, disk = periodic_case(64, 64; s = 1.0e-3), named_case("disk128", 0.022)
         @test resolve_inner(per[1], :auto) isa Solvers.FusedPCG && deflatable(per[1])
@@ -82,19 +85,25 @@ end
     end
 end
 
-@testitem "deflated solve: mean coefficient and solution (Float64)" setup = [LF_solvers_deflation] tags = [:latticefields, :solvers] begin
+@testitem "deflated solve: mean coefficient and solution (Float64)" setup = [
+    LF_solvers_deflation,
+] tags = [
+    :latticefields, :solvers,
+] begin
     @testset "deflated solve: mean coefficient and solution (Float64)" begin
         case = named_case("per256", 5.5e-6)
         sv, ref = case_solver(case, Float64), case_solver(case, Float64; deflate = false)
         k = steady!(sv)
-        @test scalars(sv).done && k <= 12 && scalars(sv).rnorm <= 1.0e-6 * scalars(sv).bnorm   # PCG <= 12
+        # PCG <= 12
+        @test scalars(sv).done && k <= 12 && scalars(sv).rnorm <= 1.0e-6 * scalars(sv).bnorm
         @test scalars(sv).mean ≈ 0.5 / 5.5e-6 rtol = 1.0e-12 # mean(b)/s
         steady!(ref)
         u, uref = field(sv, "pcg.u"), field(ref, "pcg.x")
         @test maximum(abs, u .- uref) / maximum(abs, uref) < 1.0e-6
-        @test abs(sum(field(sv, "pcg.x"))) / length(u) < 1.0e-9 * maximum(abs, u)   # zero-mean part
-        # The iteration budget on odd periodic axes is ≤ 12 (user ruling). per300 (75 → 37): measured
-        # 11 deflated (12 undeflated); 3D per45 (45 → 22): measured 12.
+        # zero-mean part
+        @test abs(sum(field(sv, "pcg.x"))) / length(u) < 1.0e-9 * maximum(abs, u)
+        # The iteration budget on odd periodic axes is ≤ 12 (user ruling). per300 (75 → 37):
+        # measured 11 deflated (12 undeflated); 3D per45 (45 → 22): measured 12.
         sv = case_solver(named_case("per300", 5.5e-6), Float64)
         @test steady!(sv) <= 12 && scalars(sv).done
         sv = case_solver(per45_case(), Float64)
@@ -102,7 +111,10 @@ end
     end
 end
 
-@testitem "solver_type = :auto: Float64 solver for unanchored weak-reaction groups" setup = [LF_solvers_deflation] tags = [:latticefields, :solvers] begin
+@testitem "solver_type = :auto: Float64 solver for unanchored weak-reaction groups" setup =
+    [LF_solvers_deflation] tags = [
+    :latticefields, :solvers,
+] begin
     @testset "solver_type = :auto: Float64 solver for unanchored weak-reaction groups" begin
         # Float32 state; the solver runs in Float64 and reaches 1e-6 at weak reaction; the
         # caller-facing arrays stay Float32 (converted at the boundary)
@@ -122,7 +134,8 @@ end
             @test maximum(abs, u .- x) <= eps(Float32) * maximum(abs, x)   # rounding only
             @test !sentinel(sv)
         end
-        # negative control: the Neumann-x group with a Float32 solver floors (measured 1.1e-4)
+        # negative control: the Neumann-x group with a Float32 solver floors (measured
+        # 1.1e-4)
         sv = case_solver(neumann_x_case(), Float32; solver_type = Float32)
         steady!(sv)
         @test sv.T == Float32 && scalars(sv).status === :floor
@@ -131,9 +144,10 @@ end
         @test sv.T == Float32 && steady!(sv) <= 12 && scalars(sv).done
         @test case_solver(named_case("disk128", 0.022), Float32).T == Float32
         @test case_solver(named_case("box128", 5.5e-6), Float32).T == Float32
-        # explicit types: Float32 keeps (the floor testset below); Float64 forces, the solution
-        # stays in the state type (`out.u`)
-        @test case_solver(named_case("per128", 0.022), Float32; solver_type = Float32).T == Float32
+        # explicit types: Float32 keeps (the floor testset below); Float64 forces, the
+        # solution stays in the state type (`out.u`)
+        @test case_solver(named_case("per128", 0.022), Float32; solver_type = Float32).T ==
+            Float32
         sv = case_solver(named_case("disk128", 0.022), Float32; solver_type = Float64)
         steady!(sv)
         @test sv.T == Float64 && solution_key(sv) == "out.u" && scalars(sv).done
@@ -141,7 +155,9 @@ end
     end
 end
 
-@testitem "solver_type: backends and number types" setup = [LF_solvers_deflation] tags = [:latticefields, :solvers] begin
+@testitem "solver_type: backends and number types" setup = [LF_solvers_deflation] tags = [
+    :latticefields, :solvers,
+] begin
     @testset "solver_type: backends and number types" begin
         op, inputs = named_case("per256", 5.5e-6)
         # a backend without Float64 (Metal): documented Float32 fallback under :auto
@@ -182,7 +198,11 @@ end
     end
 end
 
-@testitem "s = 0: the zero-mean solution of a compatible right-hand side" setup = [LF_solvers_deflation] tags = [:latticefields, :solvers] begin
+@testitem "s = 0: the zero-mean solution of a compatible right-hand side" setup = [
+    LF_solvers_deflation,
+] tags = [
+    :latticefields, :solvers,
+] begin
     @testset "s = 0: the zero-mean solution of a compatible right-hand side" begin
         n = 128
         f = zeros(n, n)
@@ -198,7 +218,11 @@ end
     end
 end
 
-@testitem "warm re-solve keeps the zero-mean part (Float32)" setup = [LF_solvers_deflation] tags = [:latticefields, :solvers] begin
+@testitem "warm re-solve keeps the zero-mean part (Float32)" setup = [
+    LF_solvers_deflation,
+] tags = [
+    :latticefields, :solvers,
+] begin
     @testset "warm re-solve keeps the zero-mean part (Float32)" begin
         sv = case_solver(named_case("per300", 1.0), Float32; solver_type = Float32)
         @test steady!(sv) <= 12 && scalars(sv).done
@@ -207,7 +231,11 @@ end
     end
 end
 
-@testitem "Float32 floor: status :floor, never :done (solver_type = Float32)" setup = [LF_solvers_deflation] tags = [:latticefields, :solvers] begin
+@testitem "Float32 floor: status :floor, never :done (solver_type = Float32)" setup = [
+    LF_solvers_deflation,
+] tags = [
+    :latticefields, :solvers,
+] begin
     @testset "Float32 floor: status :floor, never :done (solver_type = Float32)" begin
         case = named_case("per256", 5.5e-6)                # ‖x̃‖∞ ≈ 1e3: floor ≈ ε‖A‖‖x̃‖/‖b‖
         sv = case_solver(case, Float32; solver_type = Float32)
@@ -215,30 +243,43 @@ end
         sc = scalars(sv)
         @test sc.status === :floor && !sc.done && sc.warn
         @test sc.best / sc.bnorm < 3.0e-4                    # measured 1.0e-4
-        @test sc.best <= Solvers.FLOOR_ULPS * eps(Float32) * sc.scale   # measured 0.11 ε·scale
+        # measured 0.11 ε·scale
+        @test sc.best <= Solvers.FLOOR_ULPS * eps(Float32) * sc.scale
         @test (@test_logs (:warn, r"stagnated") sentinel(sv))
-        ref = case_solver(case, Float32; deflate = false, solver_type = Float32)   # no deflation
+        # no deflation
+        ref = case_solver(case, Float32; deflate = false, solver_type = Float32)
         steady!(ref)
         @test scalars(ref).status === :floor
-        @test maximum(abs, true_residual(ref)) / scalars(ref).bnorm > 1.0e-2   # offset in F32
+        # offset in F32
+        @test maximum(abs, true_residual(ref)) / scalars(ref).bnorm > 1.0e-2
     end
 end
 
-@testitem "a slow solve far above rounding level is not :floor" setup = [LF_solvers_deflation] tags = [:latticefields, :solvers] begin
+@testitem "a slow solve far above rounding level is not :floor" setup = [
+    LF_solvers_deflation,
+] tags = [
+    :latticefields, :solvers,
+] begin
     @testset "a slow solve far above rounding level is not :floor" begin
-        # The max-norm residual stalls for more than three checks (the stall test alone stopped
-        # this at k = 10, ‖r‖/‖b‖ = 37), but the best residual is ~1e7 ε·scale: it runs on.
+        # The max-norm residual stalls for more than three checks (the stall test alone
+        # stopped this at k = 10, ‖r‖/‖b‖ = 37), but the best residual is ~1e7 ε·scale: it
+        # runs on.
         sv = case_solver(jumpy_case(), Float64)
         k = steady!(sv; maxiter = 60)
         sc = scalars(sv)
         @test k == 60 && sc.status === :budget && sc.warn
-        @test sc.best / sc.bnorm < 1.0e-2                    # measured 3.6e-3 (was 37 at :floor)
+        # measured 3.6e-3 (was 37 at :floor)
+        @test sc.best / sc.bnorm < 1.0e-2
         @test sc.best > 1.0e3 * Solvers.FLOOR_ULPS * eps(Float64) * sc.scale
         @test (@test_logs (:warn, r"ended") sentinel(sv))
     end
 end
 
-@testitem "divergence is reported as :diverged, transient growth is not" setup = [LF_solvers_deflation] tags = [:latticefields, :solvers] begin
+@testitem "divergence is reported as :diverged, transient growth is not" setup = [
+    LF_solvers_deflation,
+] tags = [
+    :latticefields, :solvers,
+] begin
     @testset "divergence is reported as :diverged, transient growth is not" begin
         # stationary V(1,1) on the 512² disk diverges (‖r‖/‖b‖ 0.46 → 0.93 by cycle 10)
         sv = case_solver(
@@ -250,8 +291,9 @@ end
         @test sc.status === :diverged && !sc.done && sc.warn && k < 30
         @test sc.rnorm > 2 * sc.best
         @test (@test_logs (:warn, r"diverged") sentinel(sv))
-        # negative control: V(2,2) on the jumpy field grows 27 → 41 over ten cycles, then falls;
-        # the growth counter reaches 3 (rn stays below 2·best), the solve runs to its budget
+        # negative control: V(2,2) on the jumpy field grows 27 → 41 over ten cycles, then
+        # falls; the growth counter reaches 3 (rn stays below 2·best), the solve runs to its
+        # budget
         sv = case_solver(jumpy_case(), Float64; linsolve = LatticeMultigrid())
         rebuild!(sv)
         lift!(sv)
@@ -265,11 +307,16 @@ end
     end
 end
 
-@testitem "a slow PCG solve that wanders is not :diverged (stationary only)" setup = [LF_solvers_deflation] tags = [:latticefields, :solvers] begin
+@testitem "a slow PCG solve that wanders is not :diverged (stationary only)" setup = [
+    LF_solvers_deflation,
+] tags = [
+    :latticefields, :solvers,
+] begin
     @testset "a slow PCG solve that wanders is not :diverged (stationary only)" begin
-        # σ = 4: the max-norm residual wanders between 150 and 310 for tens of iterations (round
-        # 2 stopped it as :diverged at 45) and reaches 2.5 at 300; PCG cannot diverge in the
-        # A-norm. The growth test fires on this history (checked here) but is stationary-only.
+        # σ = 4: the max-norm residual wanders between 150 and 310 for tens of iterations
+        # (round 2 stopped it as :diverged at 45) and reaches 2.5 at 300; PCG cannot diverge
+        # in the A-norm. The growth test fires on this history (checked here) but is
+        # stationary-only.
         sv = case_solver(jumpy_case(4.0), Float64)
         rebuild!(sv)
         lift!(sv)
@@ -282,12 +329,17 @@ end
                 scal[Solvers.RNORM] > Solvers.GROW_FACTOR * scal[Solvers.BEST]
         end
         sc = scalars(sv)
-        @test fired                                        # the old rule would have stopped it
+        # the old rule would have stopped it
+        @test fired
         @test sc.status === :budget && sc.iter == 60
     end
 end
 
-@testitem "solver_type = :auto: the floor regime is s relative to the faces" setup = [LF_solvers_deflation] tags = [:latticefields, :solvers] begin
+@testitem "solver_type = :auto: the floor regime is s relative to the faces" setup = [
+    LF_solvers_deflation,
+] tags = [
+    :latticefields, :solvers,
+] begin
     @testset "solver_type = :auto: the floor regime is s relative to the faces" begin
         n = 256
         f = zeros(n, n)
@@ -298,7 +350,8 @@ end
                 ("in.f" => vec(f),),
             )
         end
-        # face = 100, s = 1: s/face = 0.01, floors in Float32 (measured 4.8e-6), Float64 :done
+        # face = 100, s = 1: s/face = 0.01, floors in Float32 (measured 4.8e-6), Float64
+        # :done
         sv = case_solver(per(100.0, 1.0), Float32; solver_type = Float32)
         steady!(sv)
         @test scalars(sv).status === :floor
@@ -318,12 +371,17 @@ end
     end
 end
 
-@testitem "coefficients are validated; set_coefficients! warns once about solver_type" setup = [LF_solvers_deflation] tags = [:latticefields, :solvers] begin
-    @testset "coefficients are validated; set_coefficients! warns once about solver_type" begin
+@testitem "coefficients are validated; set_coefficients! warns once about \
+    solver_type" setup = [LF_solvers_deflation] tags = [
+    :latticefields, :solvers,
+] begin
+    @testset "coefficients are validated; set_coefficients! warns once about \
+        solver_type" begin
         # refusals in the user's words: an ArgumentError naming the field and the axis
         function E(f)
             return try
-                f(); ""
+                f()
+                ""
             catch e
                 e isa ArgumentError || rethrow()
                 sprint(showerror, e)
@@ -333,7 +391,10 @@ end
         e = E(() -> CellOperator((8, 8); shift = -1.0, nm...))
         @test occursin("field `c`: the shift", e) && occursin("must be ≥ 0; got -1.0", e) &&
             occursin("step the field with an explicit method (`ExplicitEuler`)", e)
-        @test occursin("field `c`: the shift", E(() -> CellOperator((8, 8); shift = Inf, nm...)))
+        @test occursin(
+            "field `c`: the shift",
+            E(() -> CellOperator((8, 8); shift = Inf, nm...))
+        )
         @test occursin(
             "field `c`: the face coefficient of axis `x` must be > 0; got 0.0",
             E(() -> CellOperator((8, 8); face = (0.0, 1.0), nm...))
@@ -342,14 +403,32 @@ end
             "the face coefficient of axis `y` must be > 0; got -2.0",
             E(() -> CellOperator((8, 8); face = (1.0, -2.0), nm...))
         )
-        @test occursin("the face coefficient of axis `x` must be finite", E(() -> CellOperator((8, 8); face = (Inf, 1.0), nm...)))
-        @test occursin("the face coefficient of axis `y` must be finite", E(() -> CellOperator((8, 8); face = (1.0, NaN), nm...)))
-        @test occursin("field `c`: the mask value must be finite", E(() -> CellOperator((8, 8); mask = "m", value = Inf, nm...)))
+        @test occursin(
+            "the face coefficient of axis `x` must be finite",
+            E(() -> CellOperator((8, 8); face = (Inf, 1.0), nm...))
+        )
+        @test occursin(
+            "the face coefficient of axis `y` must be finite",
+            E(() -> CellOperator((8, 8); face = (1.0, NaN), nm...))
+        )
+        @test occursin(
+            "field `c`: the mask value must be finite",
+            E(() -> CellOperator((8, 8); mask = "m", value = Inf, nm...))
+        )
         @test occursin(
             "the Dirichlet value on the high face of axis `x` must be finite",
-            E(() -> CellOperator((8, 8); dirichlet = ((0.0, Inf), (nothing, nothing)), nm...))
+            E(
+                () -> CellOperator(
+                    (8, 8); dirichlet = ((0.0, Inf), (nothing, nothing)),
+                    nm...
+                )
+            )
         )
-        @test occursin("the solver group: the shift", E(() -> CellOperator((8, 8); shift = -1.0)))   # no name given
+        # no name given
+        @test occursin(
+            "the solver group: the shift",
+            E(() -> CellOperator((8, 8); shift = -1.0))
+        )
         op, inputs = named_case("per256", 1.0)               # :auto resolves to Float32
         sv = case_solver((op, inputs), Float32)
         @test sv.T == Float32
@@ -359,12 +438,17 @@ end
         )    # bypasses the constructor
         @test_throws ArgumentError Solvers.set_coefficients!(sv, bad)
         weak = CellOperator(op.dims; periodic = op.periodic, shift = 1.0e-3)
-        @test_logs (:warn, r"solver_type = :auto would now resolve to Float64") Solvers.set_coefficients!(
+        @test_logs (
+            :warn,
+            r"solver_type = :auto would now resolve to Float64",
+        ) Solvers.set_coefficients!(
             sv, weak
         )
-        @test sv.T == Float32 && sv.op.shift == 1.0e-3         # not re-resolved, not refused
+        # not re-resolved, not refused
+        @test sv.T == Float32 && sv.op.shift == 1.0e-3
         @test_logs Solvers.set_coefficients!(sv, weak)       # once per solver
-        sv = case_solver((op, inputs), Float32; solver_type = Float32)   # explicit: no warning
+        # explicit: no warning
+        sv = case_solver((op, inputs), Float32; solver_type = Float32)
         @test_logs Solvers.set_coefficients!(sv, weak)
     end
 end

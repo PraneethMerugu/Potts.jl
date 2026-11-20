@@ -61,7 +61,10 @@ function species(dims::NTuple{N}, K, T; layout = :sep, kernels = :one) where {N}
 end
 
 function speciesP(K, T)
-    return (0.01, (x for k in 1:K for x in (1.0 + 0.1k, 0.3, (0.05 * j for j in 1:T)...))...)
+    return (
+        0.01,
+        (x for k in 1:K for x in (1.0 + 0.1k, 0.3, (0.05 * j for j in 1:T)...))...,
+    )
 end
 function inputs(dims, K; seed = 11)
     (rng = Xoshiro(seed); [rand(rng, Float32, prod(dims)) .* 0.1f0 for _ in 1:K])

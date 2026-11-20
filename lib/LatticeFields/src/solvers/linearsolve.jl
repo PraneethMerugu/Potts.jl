@@ -1,21 +1,23 @@
-# The lattice solvers as LinearSolve.jl algorithms: `LatticePCG`, `LatticeGMRES` and the stationary
-# `LatticeMultigrid` take a `LinearProblem` through `init`/`solve!`, with their preconditioners
-# given by LinearSolve's `precs` contract (`LatticeMultigrid`, `LatticeBlockSolve`). On a lattice
-# field's operator (`BoundOperator`) with `precs = LatticeMultigrid(…)` (symmetric, 1 cycle),
-# `LatticePCG` and `LatticeMultigrid` use the field's `FieldSolver` as their cache and keep the
-# iteration and V-cycle fused into one program. Any other `precs` (including `precs = nothing`)
-# or any other operator (OrdinaryDiffEq's `W`, `LatticeOperator`) takes the generic Krylov.jl path.
+# The lattice solvers as LinearSolve.jl algorithms: `LatticePCG`, `LatticeGMRES` and the
+# stationary `LatticeMultigrid` take a `LinearProblem` through `init`/`solve!`, with their
+# preconditioners given by LinearSolve's `precs` contract (`LatticeMultigrid`,
+# `LatticeBlockSolve`). On a lattice field's operator (`BoundOperator`) with `precs =
+# LatticeMultigrid(…)` (symmetric, 1 cycle), `LatticePCG` and `LatticeMultigrid` use the
+# field's `FieldSolver` as their cache and keep the iteration and V-cycle fused into one
+# program. Any other `precs` (including `precs = nothing`) or any other operator
+# (OrdinaryDiffEq's `W`, `LatticeOperator`) takes the generic Krylov.jl path.
 
 const FUSED_MAXITERS_CAP = 1024
 
 """
     BoundOperator(exec, op::CellOperator; T = Float32, solver_type = :auto, inputs = ())
 
-A lattice field's operator `op` bound to an executor and to its coefficient arrays (the inputs
-of [`FieldSolver`](@ref) other than the right-hand side `"in.f"`): the `A` of a
+A lattice field's operator `op` bound to an executor and to its coefficient arrays (the
+inputs of [`FieldSolver`](@ref) other than the right-hand side `"in.f"`): the `A` of a
 `LinearProblem(A, b)` that [`LatticePCG`](@ref), [`LatticeMultigrid`](@ref) and generic
-LinearSolve algorithms (`KrylovJL_CG`, `KrylovJL_GMRES`) solve. It has a size, an element type
-(`T`, the state type), `mul!` and `*` (one stencil kernel on `exec`, identity on masked sites).
+LinearSolve algorithms (`KrylovJL_CG`, `KrylovJL_GMRES`) solve. It has a size, an element
+type (`T`, the state type), `mul!` and `*` (one stencil kernel on `exec`, identity on masked
+sites).
 """
 struct BoundOperator{T, N, E, I} <: SciMLOperators.AbstractSciMLOperator{T}
     exec::E
@@ -23,10 +25,14 @@ struct BoundOperator{T, N, E, I} <: SciMLOperators.AbstractSciMLOperator{T}
     solver_type::Any
     inputs::I
 end
-function BoundOperator(exec, op::CellOperator{N}, ::Type{T}, solver_type, inputs) where {T, N}
+function BoundOperator(
+        exec, op::CellOperator{N}, ::Type{T}, solver_type, inputs
+    ) where {T, N}
     return BoundOperator{T, N, typeof(exec), typeof(inputs)}(exec, op, solver_type, inputs)
 end
-function BoundOperator(exec, op::CellOperator; T = Float32, solver_type = :auto, inputs = ())
+function BoundOperator(
+        exec, op::CellOperator; T = Float32, solver_type = :auto, inputs = ()
+    )
     return BoundOperator(exec, op, T, solver_type, Tuple(inputs))
 end
 Base.size(A::BoundOperator) = (n = prod(A.op.dims); (n, n))
@@ -52,8 +58,11 @@ function _check_host_factorization(exec, alg)
     throw(
         ArgumentError(
             string(
-                "`", name, "` needs a concrete sparse matrix on the host and is not supported on device backend ",
-                nameof(typeof(exec)), "; pass a matrix-free solver (`linsolve = LatticePCG()` or `linsolve = LatticeMultigrid()`)"
+                "`", name,
+                "` needs a concrete sparse matrix on the host and is not supported on \
+                    device backend ",
+                nameof(typeof(exec)), "; pass a matrix-free solver (`linsolve = \
+                    LatticePCG()` or `linsolve = LatticeMultigrid()`)"
             )
         )
     )
@@ -179,12 +188,22 @@ function _bound_mul_body!(i, S, P, G)
     return nothing
 end
 
-function LinearAlgebra.mul!(y::AbstractVector, A::BoundOperator{ET, N}, x::AbstractVector) where {ET, N}
+function LinearAlgebra.mul!(
+        y::AbstractVector, A::BoundOperator{ET, N},
+        x::AbstractVector
+    ) where {
+        ET, N,
+    }
     n = prod(A.op.dims)
     length(y) == n && length(x) == n ||
-        throw(DimensionMismatch("BoundOperator has size ($n, $n); got y of length $(length(y)) and x of length $(length(x))"))
-    _, mask, sh, fs, dims, strides, per, hex, s_scalar, f_scalars, dir, rob = _bound_stencil(A, eltype(y))
-    G = (; n = Int32(n), dims, strides, per, hex, shift = s_scalar, faces = f_scalars, dir, rob)
+        throw(DimensionMismatch("BoundOperator has size ($n, $n); got y of \
+            length $(length(y)) and x of length $(length(x))"))
+    _, mask, sh, fs, dims, strides, per, hex, s_scalar, f_scalars, dir,
+        rob = _bound_stencil(A, eltype(y))
+    G = (;
+        n = Int32(n), dims, strides, per, hex,
+        shift = s_scalar, faces = f_scalars, dir, rob,
+    )
     launch!(A.exec, Launch(_bound_mul_body!, n, (y, x, mask, sh, fs), (), G, "bound.mul"))
     return y
 end
@@ -197,14 +216,26 @@ function _bound_stencil(A::BoundOperator{ET, N}, ::Type{T}) where {ET, N, T}
     fs = map(f -> _bound_input(A, f), faces(op))
     dims = Int32.(op.dims)
     strides = ntuple(a -> Int32(prod(op.dims[1:(a - 1)])), N)
-    rob = ntuple(a -> ntuple(k -> (r = op.robin[a][k]; r === nothing ? zero(T) : T(_robin_slots(op, r)[1])), 2), N)
+    rob = ntuple(
+        a -> ntuple(
+            k -> (
+                r = op.robin[a][k]; r === nothing ? zero(T) : T(_robin_slots(op, r)[1])
+            ), 2
+        ),
+        N
+    )
     dir = ntuple(a -> ntuple(k -> op.dirichlet[a][k] !== nothing, 2), N)
     return n, mask, sh, fs, dims, strides, op.periodic, ishex(op),
-        T(op.shift isa Real ? op.shift : 0), map(f -> T(f isa Real ? f : 0), faces(op)), dir, rob
+        T(op.shift isa Real ? op.shift : 0), map(
+            f -> T(f isa Real ? f : 0),
+            faces(op)
+        ), dir,
+        rob
 end
 
 function _visit_bound_entries(emit!, A::BoundOperator{ET, N}, ::Type{T}) where {ET, N, T}
-    n, mask, sh, fs, dims, strides, per, hex, s_scalar, f_scalars, dir, rob = _bound_stencil(A, T)
+    n, mask, sh, fs, dims, strides, per, hex, s_scalar, f_scalars, dir,
+        rob = _bound_stencil(A, T)
     for idx in 1:n
         if mask !== nothing && mask[idx] != 0
             emit!(idx, idx, one(T))
@@ -344,7 +375,9 @@ function sparse_operator!(M::SparseArrays.SparseMatrixCSC{T}, A::BoundOperator) 
     end
     return M
 end
-function LinearAlgebra.mul!(y::AbstractVector, A::BoundOperator, x::AbstractVector, α::Number, β::Number)
+function LinearAlgebra.mul!(
+        y::AbstractVector, A::BoundOperator, x::AbstractVector, α::Number, β::Number
+    )
     if α == 1 && β == 0
         return LinearAlgebra.mul!(y, A, x)
     end
@@ -360,10 +393,10 @@ end
 """
     FusedVCycle(cycle, cycles, op, cache)
 
-What [`LatticeMultigrid`](@ref) returns as the left preconditioner of a [`BoundOperator`](@ref):
-the V-cycle `cycle` on the hierarchy of the field solver. [`LatticePCG`](@ref) fuses one
-symmetric cycle into its iteration; generic Krylov algorithms apply `cycles` V-cycles from
-zero through `ldiv!`.
+What [`LatticeMultigrid`](@ref) returns as the left preconditioner of a
+[`BoundOperator`](@ref): the V-cycle `cycle` on the hierarchy of the field solver.
+[`LatticePCG`](@ref) fuses one symmetric cycle into its iteration; generic Krylov algorithms
+apply `cycles` V-cycles from zero through `ldiv!`.
 """
 struct FusedVCycle{A}
     cycle::VCycle
@@ -372,11 +405,17 @@ struct FusedVCycle{A}
     cache::Base.RefValue{Any}
     dirty::Base.RefValue{Bool}
 end
-FusedVCycle(cycle::VCycle, cycles::Int, op = nothing) = FusedVCycle(cycle, cycles, op, Ref{Any}(nothing), Ref(true))
-function _same_bound_structure(sv::FieldSolver, A::BoundOperator, h_op::CellOperator, h_ins::Tuple)
+function FusedVCycle(cycle::VCycle, cycles::Int, op = nothing)
+    return FusedVCycle(cycle, cycles, op, Ref{Any}(nothing), Ref(true))
+end
+function _same_bound_structure(
+        sv::FieldSolver, A::BoundOperator, h_op::CellOperator,
+        h_ins::Tuple
+    )
     sv.exec == A.exec || return false
     sv.state === eltype(A) || return false
-    (A.solver_type === :auto ? sv.auto : (!sv.auto && sv.T === A.solver_type)) || return false
+    (A.solver_type === :auto ? sv.auto : (!sv.auto && sv.T === A.solver_type)) ||
+        return false
     o = sv.op
     h_op.dims == o.dims && h_op.periodic == o.periodic && ishex(h_op) == ishex(o) &&
         h_op.mask == o.mask && h_op.name == o.name && h_op.robin_full == o.robin_full &&
@@ -397,7 +436,10 @@ function (mg::LatticeMultigrid)(A::BoundOperator, p)
     h_ins = _homog_inputs(A.op, A.inputs)
     cycles = something(mg.cycles, 1)
     in_ids = Tuple((String(k), objectid(v)) for (k, v) in h_ins)
-    key = (:bound, in_ids, A.op.name, A.op.dims, eltype(A), A.solver_type, mg.cycle.nu1, mg.cycle.nu2, cycles, current_task())
+    key = (
+        :bound, in_ids, A.op.name, A.op.dims, eltype(A), A.solver_type,
+        mg.cycle.nu1, mg.cycle.nu2, cycles, current_task(),
+    )
     cache_ref = lock(mg.lock) do
         r = get!(() -> Ref{Any}(nothing), mg.engines, key)
         sv = r[]
@@ -415,11 +457,17 @@ end
 
 function _homog_op(op::CellOperator{N}) where {N}
     dir = ntuple(a -> ntuple(k -> op.dirichlet[a][k] === nothing ? nothing : 0.0, 2), N)
-    rob = ntuple(a -> ntuple(k -> (r = op.robin[a][k]; r === nothing ? nothing : (r[1], r[2], 0.0)), 2), N)
+    rob = ntuple(
+        a -> ntuple(
+            k -> (
+                r = op.robin[a][k]; r === nothing ? nothing : (r[1], r[2], 0.0)
+            ), 2
+        ), N
+    )
     return CellOperator(
         op.dims; periodic = op.periodic, face = faces(op), shift = op.shift,
         mask = op.mask, value = 0.0, dirichlet = dir, robin = rob, name = op.name,
-        axes = op.axes, robin_full = op.robin_full, hex = ishex(op),
+        axes = op.axes, robin_full = op.robin_full, hex = ishex(op)
     )
 end
 function _homog_inputs(op::CellOperator, ins)
@@ -433,14 +481,18 @@ function _copy_masked_body!(i, S, P, G)
     @inbounds mask[idx] != 0 && (y[idx] = eltype(y)(r[idx]))
     return nothing
 end
-function LinearAlgebra.ldiv!(y::AbstractVector, P::FusedVCycle{<:BoundOperator}, r::AbstractVector)
+function LinearAlgebra.ldiv!(
+        y::AbstractVector, P::FusedVCycle{<:BoundOperator},
+        r::AbstractVector
+    )
     A = P.op
     sv = P.cache[]
     if sv === nothing
         sv = FieldSolver(
             A.exec, _homog_op(A.op);
             linsolve = LatticeMultigrid(; cycle = P.cycle, cycles = P.cycles),
-            T = eltype(A), solver_type = A.solver_type, inputs = _homog_inputs(A.op, A.inputs),
+            T = eltype(A), solver_type = A.solver_type,
+            inputs = _homog_inputs(A.op, A.inputs)
         )
         rebuild!(sv)
         P.cache[] = sv
@@ -459,7 +511,11 @@ function LinearAlgebra.ldiv!(y::AbstractVector, P::FusedVCycle{<:BoundOperator},
     copyto!(y, field(sv, solution_key(sv)))
     if A.op.mask !== nothing
         mask = _bound_input(A, A.op.mask)
-        mask === nothing || launch!(A.exec, Launch(_copy_masked_body!, length(y), (y, r, mask), (), (;), "bound.mask"))
+        mask === nothing || launch!(
+            A.exec, Launch(
+                _copy_masked_body!, length(y), (y, r, mask), (), (;), "bound.mask"
+            )
+        )
     end
     return y
 end
@@ -470,14 +526,14 @@ end
 """
     LatticePCG(; precs = LatticeMultigrid(), maxiters = nothing, reltol = nothing)
 
-Preconditioned conjugate gradients, a LinearSolve algorithm for a symmetric operator: a lattice
-field's operator (the owned implicit steppers' `linsolve`, a [`BoundOperator`](@ref)), the
-`W = J − M/γ` of an implicit SciML solver on a diffusion-reaction system, or the operator of a
-linear system with no time.
+Preconditioned conjugate gradients, a LinearSolve algorithm for a symmetric operator: a
+lattice field's operator (the owned implicit steppers' `linsolve`, a
+[`BoundOperator`](@ref)), the `W = J − M/γ` of an implicit SciML solver on a
+diffusion-reaction system, or the operator of a linear system with no time.
 
-On a lattice field's operator with `precs = LatticeMultigrid(; cycle = (ν, ν))` (one cycle per
-iteration), the cache is the field's [`FieldSolver`](@ref): CG on device scalars with the
-V-cycle from zero fused into each iteration, with no host wait. The stop test is
+On a lattice field's operator with `precs = LatticeMultigrid(; cycle = (ν, ν))` (one cycle
+per iteration), the cache is the field's [`FieldSolver`](@ref): CG on device scalars with
+the V-cycle from zero fused into each iteration, with no host wait. The stop test is
 `‖r‖∞ ≤ reltol * max(‖b‖∞, floor)` (no `abstol`); the true residual is computed every
 iteration. On a device the solve returns `ReturnCode.Default` with `iters = 0` (the status
 stays in the device's status word); a host executor returns `Success`, `MaxIters` or
@@ -493,9 +549,9 @@ diffusion-reaction system), preconditioned by `precs`.
 
 `maxiters` and `reltol` left out take the solve's `maxiters` and `reltol` (LinearSolve's
 keywords); the owned steppers give 8 and 1e-6. A solve that stops at `maxiters` returns
-`ReturnCode.MaxIters`, one that stops otherwise without converging `ReturnCode.ConvergenceFailure`.
-`maxiters` is an integer ≥ 1 and `reltol` finite and > 0; any other value is an `ArgumentError`
-naming the keyword.
+`ReturnCode.MaxIters`, one that stops otherwise without converging
+`ReturnCode.ConvergenceFailure`. `maxiters` is an integer ≥ 1 and `reltol` finite and > 0;
+any other value is an `ArgumentError` naming the keyword.
 """
 struct LatticePCG{P} <: LinearSolve.AbstractKrylovSubspaceMethod
     precs::P
@@ -518,13 +574,19 @@ struct LatticePCG{P} <: LinearSolve.AbstractKrylovSubspaceMethod
                 )
             )
         )
-        return new{P}(precs, maxiters === nothing ? nothing : Int(maxiters), reltol === nothing ? nothing : Float64(reltol))
+        return new{P}(
+            precs, maxiters === nothing ? nothing : Int(maxiters),
+            reltol === nothing ? nothing : Float64(reltol)
+        )
     end
 end
-LatticePCG(; precs = LatticeMultigrid(), maxiters = nothing, reltol = nothing) = LatticePCG(precs, maxiters, reltol)
+function LatticePCG(; precs = LatticeMultigrid(), maxiters = nothing, reltol = nothing)
+    return LatticePCG(precs, maxiters, reltol)
+end
 function Base.show(io::IO, d::LatticePCG)
     kws = Pair{Symbol, Any}[]
-    d.precs isa LatticeMultigrid && d.precs == LatticeMultigrid() || push!(kws, :precs => d.precs)
+    d.precs isa LatticeMultigrid && d.precs == LatticeMultigrid() ||
+        push!(kws, :precs => d.precs)
     d.maxiters === nothing || push!(kws, :maxiters => d.maxiters)
     d.reltol === nothing || push!(kws, :reltol => d.reltol)
     return _show_kw(io, "LatticePCG", kws)
@@ -535,8 +597,9 @@ end
 
 The block-diagonal preconditioner of a [`LatticeGMRES`](@ref) solve, a LinearSolve `precs`
 function: each field's own operator solved from zero by `linsolve` (a `LatticePCG(…)` or a
-`LatticeMultigrid(…)`) on the field's multigrid hierarchy. Applies to coupled steady groups and
-to the operators of a problem `LatticePDE.discretize` returned (`W` and `LatticeOperator`).
+`LatticeMultigrid(…)`) on the field's multigrid hierarchy. Applies to coupled steady groups
+and to the operators of a problem `LatticePDE.discretize` returned (`W` and
+`LatticeOperator`).
 """
 struct LatticeBlockSolve{L}
     linsolve::L
@@ -546,8 +609,10 @@ struct LatticeBlockSolve{L}
         linsolve isa Union{LatticePCG, LatticeMultigrid} || throw(
             ArgumentError(
                 string(
-                    "`LatticeBlockSolve(", repr(linsolve), ")`: the block preconditioner solves each field with a ",
-                    "`LatticePCG(…)` or a `LatticeMultigrid(…)` (for example `LatticeBlockSolve(LatticePCG(; maxiters = 4))`)"
+                    "`LatticeBlockSolve(", repr(linsolve),
+                    ")`: the block preconditioner solves each field with a ",
+                    "`LatticePCG(…)` or a `LatticeMultigrid(…)` (for example \
+                        `LatticeBlockSolve(LatticePCG(; maxiters = 4))`)"
                 )
             )
         )
@@ -564,31 +629,38 @@ function Base.show(io::IO, b::LatticeBlockSolve)
         return print(io, "LatticeBlockSolve(", b.linsolve, ")")
     end
 end
-Base.:(==)(a::LatticePCG, b::LatticePCG) = a.precs == b.precs && a.maxiters == b.maxiters && a.reltol == b.reltol
+function Base.:(==)(a::LatticePCG, b::LatticePCG)
+    return a.precs == b.precs && a.maxiters == b.maxiters && a.reltol == b.reltol
+end
 Base.hash(a::LatticeBlockSolve, h::UInt) = hash(a.linsolve, hash(:LatticeBlockSolve, h))
-Base.hash(a::LatticePCG, h::UInt) = hash((a.precs, a.maxiters, a.reltol), hash(:LatticePCG, h))
+function Base.hash(a::LatticePCG, h::UInt)
+    return hash((a.precs, a.maxiters, a.reltol), hash(:LatticePCG, h))
+end
 
 """
-    LatticeGMRES(; gmres_restart = 20, maxiters = nothing, reltol = nothing, precs = LatticeBlockSolve())
+    LatticeGMRES(; gmres_restart = 20, maxiters = nothing, reltol = nothing,
+        precs = LatticeBlockSolve())
 
 Restarted flexible GMRES (Krylov.jl's `fgmres!`), a LinearSolve algorithm. It is the coupled
-solve of a `QuasiSteady` group whose fields read one another (the time steppers refuse it, their
-fields take `LatticePCG` or `LatticeMultigrid`): its operator is the whole Jacobian of the
-group's residual (every term of every row, cross terms included: a directional difference of the
-residual kernels), its preconditioner `precs`, by default [`LatticeBlockSolve`](@ref)`()`
-(block-diagonal: each field's own operator solved by `LatticePCG(; maxiters = 2)` on the
-field's multigrid hierarchy). Each solve starts from zero (cold start, matching
-`KrylovJL_GMRES()`'s default). Standalone `solve!` honors `cache.abstol` and `cache.reltol`.
+solve of a `QuasiSteady` group whose fields read one another (the time steppers refuse it,
+their fields take `LatticePCG` or `LatticeMultigrid`): its operator is the whole Jacobian of
+the group's residual (every term of every row, cross terms included: a directional
+difference of the residual kernels), its preconditioner `precs`, by default
+[`LatticeBlockSolve`](@ref)`()` (block-diagonal: each field's own operator solved by
+`LatticePCG(; maxiters = 2)` on the field's multigrid hierarchy). Each solve starts from
+zero (cold start, matching `KrylovJL_GMRES()`'s default). Standalone `solve!` honors
+`cache.abstol` and `cache.reltol`.
 
 `gmres_restart` is the Krylov basis size (an integer from 2 to 64), `maxiters` the most
-iterations per solve (an integer ≥ 1; a restart computes the true residual), `reltol` the stop
-`‖r‖₂ ≤ atol + reltol ‖b‖₂` (finite and > 0). Left out, `maxiters` and `reltol` take the
-solve's values; the owned steppers give 60 and 1e-6. The coupled solve's dot products are block
-partials summed in a fixed order (no atomics, no BLAS), so a run is bitwise repeatable, and the
-CPU and a GPU give the same bits. Krylov.jl keeps its small least-squares problem on the host,
-so on a GPU each dot product waits for its value (about `j + 1` waits at iteration `j` of a
-cycle; the one exception to the field solvers' rule of no GPU wait in a step, user ruling
-2026-11-01). Any other value is an `ArgumentError` naming the keyword.
+iterations per solve (an integer ≥ 1; a restart computes the true residual), `reltol` the
+stop `‖r‖₂ ≤ atol + reltol ‖b‖₂` (finite and > 0). Left out, `maxiters` and `reltol` take
+the solve's values; the owned steppers give 60 and 1e-6. The coupled solve's dot products
+are block partials summed in a fixed order (no atomics, no BLAS), so a run is bitwise
+repeatable, and the CPU and a GPU give the same bits. Krylov.jl keeps its small
+least-squares problem on the host, so on a GPU each dot product waits for its value (about
+`j + 1` waits at iteration `j` of a cycle; the one exception to the field solvers' rule of
+no GPU wait in a step, user ruling 2026-11-01). Any other value is an `ArgumentError` naming
+the keyword.
 """
 struct LatticeGMRES{P} <: LinearSolve.AbstractKrylovSubspaceMethod
     gmres_restart::Int
@@ -596,10 +668,14 @@ struct LatticeGMRES{P} <: LinearSolve.AbstractKrylovSubspaceMethod
     reltol::Union{Nothing, Float64}
     precs::P
     function LatticeGMRES(gmres_restart, maxiters, reltol, precs::P) where {P}
-        (gmres_restart isa Integer && !(gmres_restart isa Bool) && 2 <= gmres_restart <= 64) || throw(
+        (
+            gmres_restart isa Integer && !(gmres_restart isa Bool) &&
+                2 <= gmres_restart <= 64
+        ) || throw(
             ArgumentError(
                 string(
-                    "`LatticeGMRES(; gmres_restart = ", repr(gmres_restart), ")`: `gmres_restart` is the Krylov basis size, an integer from 2 to 64"
+                    "`LatticeGMRES(; gmres_restart = ", repr(gmres_restart),
+                    ")`: `gmres_restart` is the Krylov basis size, an integer from 2 to 64"
                 )
             )
         )
@@ -625,7 +701,10 @@ struct LatticeGMRES{P} <: LinearSolve.AbstractKrylovSubspaceMethod
         )
     end
 end
-function LatticeGMRES(; gmres_restart = 20, maxiters = nothing, reltol = nothing, precs = LatticeBlockSolve())
+function LatticeGMRES(;
+        gmres_restart = 20, maxiters = nothing, reltol = nothing,
+        precs = LatticeBlockSolve()
+    )
     return LatticeGMRES(gmres_restart, maxiters, reltol, precs)
 end
 function Base.show(io::IO, g::LatticeGMRES)
@@ -633,29 +712,43 @@ function Base.show(io::IO, g::LatticeGMRES)
     g.gmres_restart == 20 || push!(kws, :gmres_restart => g.gmres_restart)
     g.maxiters === nothing || push!(kws, :maxiters => g.maxiters)
     g.reltol === nothing || push!(kws, :reltol => g.reltol)
-    g.precs isa LatticeBlockSolve && g.precs == LatticeBlockSolve() || push!(kws, :precs => g.precs)
+    g.precs isa LatticeBlockSolve && g.precs == LatticeBlockSolve() ||
+        push!(kws, :precs => g.precs)
     return _show_kw(io, "LatticeGMRES", kws)
 end
 function Base.:(==)(a::LatticeGMRES, b::LatticeGMRES)
-    return a.gmres_restart == b.gmres_restart && a.maxiters == b.maxiters && a.reltol == b.reltol && a.precs == b.precs
+    return a.gmres_restart == b.gmres_restart && a.maxiters == b.maxiters &&
+        a.reltol == b.reltol && a.precs == b.precs
 end
-Base.hash(a::LatticeGMRES, h::UInt) = hash((a.gmres_restart, a.maxiters, a.reltol, a.precs), hash(:LatticeGMRES, h))
+function Base.hash(a::LatticeGMRES, h::UInt)
+    return hash((a.gmres_restart, a.maxiters, a.reltol, a.precs), hash(:LatticeGMRES, h))
+end
 
 """
-The per-field solver of a `LatticeGMRES`'s block preconditioner (the default `LatticeBlockSolve()`:
-two PCG iterations with one V(2, 2) cycle each).
+The per-field solver of a `LatticeGMRES`'s block preconditioner (the default
+`LatticeBlockSolve()`: two PCG iterations with one V(2, 2) cycle each).
 """
-gmres_precond(g::LatticeGMRES) = g.precs isa LatticeBlockSolve ? g.precs.linsolve : LatticePCG(; maxiters = 2)
+function gmres_precond(g::LatticeGMRES)
+    return g.precs isa LatticeBlockSolve ? g.precs.linsolve : LatticePCG(; maxiters = 2)
+end
 
 """
     owned(alg[, op])
 
-`alg` with the owned steppers' values of an unset `maxiters` and `reltol` (`LatticePCG`: 8 and
-1e-6; `LatticeGMRES`: 60 and 1e-6; `LatticeMultigrid`: `reltol = 1e-6`, `warn_tol = 1e-6` or
-`1e-3`, and with `op`, `maxiters = jumpy(op) ? 12 : 8`). Other algorithms are returned as given.
+`alg` with the owned steppers' values of an unset `maxiters` and `reltol` (`LatticePCG`: 8
+and 1e-6; `LatticeGMRES`: 60 and 1e-6; `LatticeMultigrid`: `reltol = 1e-6`,
+`warn_tol = 1e-6` or `1e-3`, and with `op`, `maxiters = jumpy(op) ? 12 : 8`). Other
+algorithms are returned as given.
 """
-owned(a::LatticePCG) = LatticePCG(a.precs, something(a.maxiters, 8), something(a.reltol, 1.0e-6))
-owned(a::LatticeGMRES) = LatticeGMRES(a.gmres_restart, something(a.maxiters, 60), something(a.reltol, 1.0e-6), a.precs)
+function owned(a::LatticePCG)
+    return LatticePCG(a.precs, something(a.maxiters, 8), something(a.reltol, 1.0e-6))
+end
+function owned(a::LatticeGMRES)
+    return LatticeGMRES(
+        a.gmres_restart, something(a.maxiters, 60),
+        something(a.reltol, 1.0e-6), a.precs
+    )
+end
 function owned(a::LatticeMultigrid)
     r = something(a.reltol, 1.0e-6)
     w = something(a.warn_tol, a.cycles === nothing ? r : 1.0e-3)
@@ -669,7 +762,8 @@ function owned(a::LatticeMultigrid, op::CellOperator)
     m = something(o.maxiters, jumpy(op) ? 12 : 8)
     return LatticeMultigrid(o.cycle, nothing, o.reltol, m, o.warn_tol, o.engines, o.lock)
 end
-# … and back: the public algorithm of a field solver's resolved one (the owned budgets unset)
+# … and back: the public algorithm of a field solver's resolved one (the owned budgets
+# unset)
 function public_form(a::FusedPCG)
     return LatticePCG(
         LatticeMultigrid(; cycle = (a.precond.cycle.nu1, a.precond.cycle.nu2)),
@@ -684,7 +778,8 @@ function public_form(a::LatticeMultigrid)
 end
 public_form(a) = a
 
-# ---- traits (in the module that owns the types, as LinearSolve requires) -----------------------
+# ---- traits (in the module that owns the types, as LinearSolve requires)
+# -----------------------
 LinearSolve.needs_concrete_A(::LatticePCG) = false
 LinearSolve.needs_concrete_A(::LatticeGMRES) = false
 LinearSolve.needs_concrete_A(::LatticeMultigrid) = false
@@ -696,16 +791,18 @@ LinearSolve.update_tolerances_internal!(cache, ::LatticeGMRES, abstol, reltol) =
 LinearSolve.update_tolerances_internal!(cache, ::LatticeMultigrid, abstol, reltol) = nothing
 
 """
-    field_cache(exec, op::CellOperator, linsolve; T = Float32, solver_type = :auto, inputs) -> LinearCache
+    field_cache(exec, op::CellOperator, linsolve; T = Float32, solver_type = :auto, \
+inputs) -> LinearCache
 
-The linear solve of one field of the owned implicit steppers: `init(LinearProblem(A, b), alg)`
-with `A` the [`BoundOperator`](@ref) of `op` and its coefficient `inputs`, `b` the input `"in.f"`
-of `inputs`, and `alg` `linsolve` (`:auto`: `LatticePCG()`) with the owned values of an unset
-`maxiters` and `reltol` ([`owned`](@ref)). Its cache (`cacheval`) is the field's
-[`FieldSolver`](@ref) on the fused path; the owner rebuilds its hierarchy (`rebuild!`), so the
-cache is not fresh.
+The linear solve of one field of the owned implicit steppers:
+`init(LinearProblem(A, b), alg)` with `A` the [`BoundOperator`](@ref) of `op` and its
+coefficient `inputs`, `b` the input `"in.f"` of `inputs`, and `alg` `linsolve` (`:auto`:
+`LatticePCG()`) with the owned values of an unset `maxiters` and `reltol` ([`owned`](@ref)).
+Its cache (`cacheval`) is the field's [`FieldSolver`](@ref) on the fused path; the owner
+rebuilds its hierarchy (`rebuild!`), so the cache is not fresh.
 """
-# SuiteSparse / BLAS sparse factorizations in LinearSolve 5.18 require Float64/ComplexF64 CSC matrices.
+# SuiteSparse / BLAS sparse factorizations in LinearSolve 5.18 require Float64/ComplexF64
+# CSC matrices.
 function _needs_float64_csc(alg)
     return alg isa Union{
         LinearSolve.KLUFactorization,
@@ -716,7 +813,9 @@ function _needs_float64_csc(alg)
     }
 end
 
-function bound_field_cache(exec, op::CellOperator, linsolve; T = Float32, solver_type = :auto, inputs = ())
+function bound_field_cache(
+        exec, op::CellOperator, linsolve; T = Float32, solver_type = :auto, inputs = ()
+    )
     if linsolve === :auto || linsolve isa LatticeMultigrid ||
             (linsolve isa LatticePCG && linsolve.precs isa LatticeMultigrid) ||
             !(linsolve isa LinearSolve.SciMLLinearSolveAlgorithm)
@@ -724,14 +823,16 @@ function bound_field_cache(exec, op::CellOperator, linsolve; T = Float32, solver
     end
     alg = owned(linsolve === :auto ? LatticePCG() : linsolve, op)
     i = findfirst(p -> first(p) == "in.f", inputs)
-    i === nothing && irerror("a field's linear solve needs its right-hand side `in.f` among the inputs")
+    i === nothing &&
+        irerror("a field's linear solve needs its right-hand side `in.f` among the inputs")
     b = last(inputs[i])
     ins = Tuple(inputs[j] for j in eachindex(inputs) if j != i)
     if LinearSolve.needs_concrete_A(alg)
         _check_host_factorization(exec, alg)
         solver_type === Float32 && _needs_float64_csc(alg) && throw(
             ArgumentError(
-                "`$(nameof(typeof(alg)))` only supports `Float64` sparse matrices; leave `solver_type` out (`:auto`) or pass `solver_type = Float64`"
+                "`$(nameof(typeof(alg)))` only supports `Float64` sparse matrices; leave \
+                    `solver_type` out (`:auto`) or pass `solver_type = Float64`"
             )
         )
         S = if solver_type === :auto
@@ -744,19 +845,21 @@ function bound_field_cache(exec, op::CellOperator, linsolve; T = Float32, solver
         b_buf = eltype(b) === S ? b : copyto!(Vector{S}(undef, length(b)), b)
         c = CommonSolve.init(
             SciMLBase.LinearProblem(M, b_buf), alg;
-            alias = SciMLBase.LinearAliasSpecifier(alias_A = true, alias_b = true),
+            alias = SciMLBase.LinearAliasSpecifier(alias_A = true, alias_b = true)
         )
         return c, Aop
     end
     A = BoundOperator(exec, op, T, solver_type, ins)
     c = CommonSolve.init(
         SciMLBase.LinearProblem(A, b), alg;
-        alias = SciMLBase.LinearAliasSpecifier(alias_A = true, alias_b = true),
+        alias = SciMLBase.LinearAliasSpecifier(alias_A = true, alias_b = true)
     )
     c.isfresh = false
     return c, A
 end
-function field_cache(exec, op::CellOperator, linsolve; T = Float32, solver_type = :auto, inputs = ())
+function field_cache(
+        exec, op::CellOperator, linsolve; T = Float32, solver_type = :auto, inputs = ()
+    )
     return first(bound_field_cache(exec, op, linsolve; T, solver_type, inputs))
 end
 
@@ -776,8 +879,9 @@ function _check_fused_cap(m::Int)
     m <= FUSED_MAXITERS_CAP || throw(
         ArgumentError(
             string(
-                "the fused lattice solver unrolls `maxiters` into its solve plan (cap ", FUSED_MAXITERS_CAP,
-                "); got `maxiters = ", m, "`: pass a smaller `maxiters`",
+                "the fused lattice solver unrolls `maxiters` into its solve plan \
+                    (cap ", FUSED_MAXITERS_CAP,
+                "); got `maxiters = ", m, "`: pass a smaller `maxiters`"
             )
         )
     )
@@ -790,7 +894,8 @@ function _fused_budget(alg_max, cache_max::Int, n::Int, default_m::Int)
     return cache_max == n ? default_m : _check_fused_cap(cache_max)
 end
 
-# ---- the fused path: a lattice field's operator, the `FieldSolver` as the cache -----------------
+# ---- the fused path: a lattice field's operator, the `FieldSolver` as the cache
+# -----------------
 function _field_solver(alg, A::BoundOperator, b, linsolve, bound)
     return FieldSolver(
         A.exec, A.op; linsolve, T = eltype(A), solver_type = A.solver_type,
@@ -798,7 +903,8 @@ function _field_solver(alg, A::BoundOperator, b, linsolve, bound)
     )
 end
 function LinearSolve.init_cacheval(
-        alg::LatticePCG, A::BoundOperator, b, u, Pl, Pr, maxiters::Int, abstol, reltol, verbose,
+        alg::LatticePCG, A::BoundOperator, b, u, Pl, Pr, maxiters::Int, abstol, reltol,
+        verbose,
         assumptions::LinearSolve.OperatorAssumptions
     )
     (Pl isa FusedVCycle && Pl.cycle.nu1 == Pl.cycle.nu2 && Pl.cycles == 1) || return nothing
@@ -810,7 +916,8 @@ function LinearSolve.init_cacheval(
     return _field_solver(alg, A, b, pcg, A)
 end
 function LinearSolve.init_cacheval(
-        alg::LatticeMultigrid, A::BoundOperator, b, u, Pl, Pr, maxiters::Int, abstol, reltol, verbose,
+        alg::LatticeMultigrid, A::BoundOperator, b, u, Pl, Pr, maxiters::Int, abstol,
+        reltol, verbose,
         assumptions::LinearSolve.OperatorAssumptions
     )
     default_m = jumpy(A.op) ? 12 : 8
@@ -837,18 +944,24 @@ function LinearSolve.init_cacheval(
     throw(
         ArgumentError(
             string(
-                "`LatticeMultigrid` solves a lattice field's operator (a `BoundOperator`); got a ", nameof(typeof(A)),
-                ": use `LatticePCG()`, `LatticeGMRES()`, or a Krylov method with `precs = LatticeMultigrid()`"
+                "`LatticeMultigrid` solves a lattice field's operator (a \
+                    `BoundOperator`); got a ", nameof(typeof(A)),
+                ": use `LatticePCG()`, `LatticeGMRES()`, or a Krylov method with `precs = \
+                    LatticeMultigrid()`"
             )
         )
     )
 end
 
-SciMLBase.solve!(cache::LinearSolve.LinearCache, alg::LatticePCG; kwargs...) = _solve!(cache, alg, cache.cacheval)
-SciMLBase.solve!(cache::LinearSolve.LinearCache, alg::LatticeMultigrid; kwargs...) = _solve!(cache, alg, cache.cacheval)
+function SciMLBase.solve!(cache::LinearSolve.LinearCache, alg::LatticePCG; kwargs...)
+    return _solve!(cache, alg, cache.cacheval)
+end
+function SciMLBase.solve!(cache::LinearSolve.LinearCache, alg::LatticeMultigrid; kwargs...)
+    return _solve!(cache, alg, cache.cacheval)
+end
 
-# the fused solve: rebind a new right-hand side, the hierarchy after a new `A`, the tolerance;
-# then `lift!` and the budgeted solve, as the owned steppers ran them
+# the fused solve: rebind a new right-hand side, the hierarchy after a new `A`, the
+# tolerance; then `lift!` and the budgeted solve, as the owned steppers ran them
 function _solve!(cache, alg, sv::FieldSolver)
     sv = _fused!(cache, alg, sv)
     retcode, iters = _retcode(sv)
@@ -856,7 +969,8 @@ function _solve!(cache, alg, sv::FieldSolver)
 end
 # (the solve without its `LinearSolution`: the owned steppers' warm steps allocate nothing)
 function _fused!(cache, alg, sv::FieldSolver)
-    cache.precsisfresh && (cache.precsisfresh = false)   # (the V-cycle is the solver's own hierarchy)
+    # (the V-cycle is the solver's own hierarchy)
+    cache.precsisfresh && (cache.precsisfresh = false)
     if cache.isfresh
         if cache.A !== sv.bound                          # a new operator: a new solver
             sv = LinearSolve.init_cacheval(
@@ -909,7 +1023,8 @@ function _bind_rhs!(sv::FieldSolver, b)
     bs[1] === b && return nothing
     old = bs[1]
     (typeof(b) == typeof(old) && length(b) == length(old)) || _refuse(
-        sv.op, "the right-hand side `b` is a ", typeof(b), " of ", length(b), " values; the solver's is a ",
+        sv.op, "the right-hand side `b` is a ", typeof(b),
+        " of ", length(b), " values; the solver's is a ",
         typeof(old), " of ", length(old)
     )
     bs[1] = b
@@ -917,8 +1032,15 @@ function _bind_rhs!(sv::FieldSolver, b)
     return nothing
 end
 # the solution into `cache.u`: the solver's own array (no copy) when its type is `u`'s
-_set_u!(cache, x) = x isa typeof(cache.u) ? (cache.u === x || (cache.u = x); nothing) : (copyto!(cache.u, x); nothing)
-# the return code and the iteration count: read on a host executor (free), else `Default` and 0
+function _set_u!(cache, x)
+    return if x isa typeof(cache.u)
+        (cache.u === x || (cache.u = x); nothing)
+    else
+        (copyto!(cache.u, x); nothing)
+    end
+end
+# the return code and the iteration count: read on a host executor (free), else `Default`
+# and 0
 function _retcode(sv::FieldSolver)
     fixed = sv.alg isa LatticeMultigrid && sv.alg.cycles !== nothing
     return _retcode_scal(sv.exec, sv.scal, fixed)
@@ -938,14 +1060,17 @@ function _retcode_scal(exec, scal, fixed::Bool)
 end
 _scal_int(scal::Array, i) = @inbounds Int(scal[i])       # (i ≤ SCALARS = length(scal))
 
-# ---- the generic path: CG on `A` (`BoundOperator`) or `−A` for any other operator -------------
+# ---- the generic path: CG on `A` (`BoundOperator`) or `−A` for any other operator
+# -------------
 struct NegatedOperator{A}
     a::A
 end
 Base.size(n::NegatedOperator) = size(n.a)
 Base.size(n::NegatedOperator, i) = size(n.a, i)
 Base.eltype(n::NegatedOperator) = eltype(n.a)
-LinearAlgebra.mul!(y::AbstractVector, n::NegatedOperator, x::AbstractVector) = (LinearAlgebra.mul!(y, n.a, x); y .= .-y; y)
+function LinearAlgebra.mul!(y::AbstractVector, n::NegatedOperator, x::AbstractVector)
+    (LinearAlgebra.mul!(y, n.a, x); y .= .-y; y)
+end
 struct NegatedPreconditioner{P}
     p::P
 end
@@ -959,7 +1084,8 @@ function _is_cpu_vec(x)
     x isa Array && return true
     hasfield(typeof(x), :backend) && return getfield(x, :backend) isa KA.CPU
     x isa AbstractArray && parent(x) !== x && return _is_cpu_vec(parent(x))
-    return which(KA.get_backend, Tuple{typeof(x)}) !== which(KA.get_backend, Tuple{AbstractArray}) &&
+    return which(KA.get_backend, Tuple{typeof(x)}) !==
+        which(KA.get_backend, Tuple{AbstractArray}) &&
         KA.get_backend(x) isa KA.CPU
 end
 function _check_precs_device(P, b)
@@ -968,8 +1094,10 @@ function _check_precs_device(P, b)
     throw(
         ArgumentError(
             string(
-                "the preconditioner (", nameof(typeof(P)), ") lives on the host while the linear problem's vectors ",
-                "live on a device: pass a device preconditioner (`precs = LatticeMultigrid()`) or `precs = nothing`"
+                "the preconditioner (", nameof(typeof(P)),
+                ") lives on the host while the linear problem's vectors ",
+                "live on a device: pass a device preconditioner (`precs = \
+                    LatticeMultigrid()`) or `precs = nothing`"
             )
         )
     )
@@ -988,14 +1116,19 @@ function _solve!(cache, alg::LatticePCG, ::Nothing)
     P = _krylov_precond(cache.Pl)
     _check_precs_device(P, cache.b)
     if cache.A isa BoundOperator
-        x, stats = Krylov.cg(cache.A, cache.b; M = P, ldiv = true, atol = float(cache.abstol), rtol, itmax)
+        x, stats = Krylov.cg(
+            cache.A, cache.b; M = P, ldiv = true, atol = float(cache.abstol), rtol, itmax
+        )
     else
         M = P === LinearAlgebra.I ? LinearAlgebra.I : NegatedPreconditioner(P)
-        x, stats = Krylov.cg(NegatedOperator(cache.A), .-cache.b; M, ldiv = true, atol = float(cache.abstol), rtol, itmax)
+        x, stats = Krylov.cg(
+            NegatedOperator(cache.A), .-cache.b; M, ldiv = true,
+            atol = float(cache.abstol), rtol, itmax
+        )
     end
     copyto!(cache.u, x)
-    # (not converged: `MaxIters` at the iteration limit, else `ConvergenceFailure`, as LinearSolve's
-    # Krylov methods report it)
+    # (not converged: `MaxIters` at the iteration limit, else `ConvergenceFailure`, as
+    # LinearSolve's Krylov methods report it)
     retcode = if stats.solved
         SciMLBase.ReturnCode.Success
     elseif stats.niter >= itmax
@@ -1003,10 +1136,13 @@ function _solve!(cache, alg::LatticePCG, ::Nothing)
     else
         SciMLBase.ReturnCode.ConvergenceFailure
     end
-    return SciMLBase.build_linear_solution(alg, cache.u, nothing, cache; retcode, iters = stats.niter, stats)
+    return SciMLBase.build_linear_solution(
+        alg, cache.u, nothing, cache; retcode, iters = stats.niter, stats
+    )
 end
 
-# ---- LatticeGMRES: the FGMRES workspace as the cache ---------------------------------------------
+# ---- LatticeGMRES: the FGMRES workspace as the cache
+# ---------------------------------------------
 function LinearSolve.init_cacheval(
         alg::LatticeGMRES, A, b, u, Pl, Pr, maxiters::Int, abstol, reltol, verbose,
         assumptions::LinearSolve.OperatorAssumptions
@@ -1021,7 +1157,13 @@ end
 # stop a solve whose residual is not finite (it cannot recover)
 struct NonFiniteStop end
 (::NonFiniteStop)(ws) = (r = ws.stats.residuals; !isempty(r) && !isfinite(r[end]))
-_krylov_precond(P) = P isa Union{LinearAlgebra.UniformScaling, SciMLOperators.IdentityOperator} ? LinearAlgebra.I : P
+function _krylov_precond(P)
+    return if P isa Union{LinearAlgebra.UniformScaling, SciMLOperators.IdentityOperator}
+        LinearAlgebra.I
+    else
+        P
+    end
+end
 
 function SciMLBase.solve!(cache::LinearSolve.LinearCache, alg::LatticeGMRES; kwargs...)
     budget = _gmres!(cache, alg; owned_atol = false)
@@ -1033,7 +1175,9 @@ function SciMLBase.solve!(cache::LinearSolve.LinearCache, alg::LatticeGMRES; kwa
     else
         SciMLBase.ReturnCode.ConvergenceFailure
     end
-    return SciMLBase.build_linear_solution(alg, cache.u, nothing, cache; retcode, iters = st.niter)
+    return SciMLBase.build_linear_solution(
+        alg, cache.u, nothing, cache; retcode, iters = st.niter
+    )
 end
 function _gmres!(cache, alg::LatticeGMRES; owned_atol::Bool = false)
     if cache.precsisfresh
@@ -1054,7 +1198,8 @@ function _gmres!(cache, alg::LatticeGMRES; owned_atol::Bool = false)
     _check_precs_device(N, cache.b)
     Krylov.fgmres!(
         ws, cache.A, cache.b; M, N, ldiv = true,
-        restart = true, rtol = K(rtol), atol, itmax = budget, history = true, callback = NonFiniteStop()
+        restart = true, rtol = K(rtol), atol, itmax = budget, history = true,
+        callback = NonFiniteStop()
     )
     owned_atol ? _set_u!(cache, ws.x) : copyto!(cache.u, ws.x)
     return budget
@@ -1064,10 +1209,16 @@ end
     solve_owned!(cache::LinearSolve.LinearCache)
 
 Internal zero-allocation solve for the owned steppers: runs the solve of `solve!(cache)`
-without building a `LinearSolution` (so warm steps allocate nothing). The solution is written
-to `cache.u` (and the field solver's solution buffer).
+without building a `LinearSolution` (so warm steps allocate nothing). The solution is
+written to `cache.u` (and the field solver's solution buffer).
 """
-solve_owned!(cache::LinearSolve.LinearCache) = (_solve_owned!(cache, cache.alg, cache.cacheval); nothing)
-_solve_owned!(cache, alg::Union{LatticePCG, LatticeMultigrid}, sv::FieldSolver) = (_fused!(cache, alg, sv); nothing)
-_solve_owned!(cache, alg::LatticeGMRES, ws) = (_gmres!(cache, alg; owned_atol = true); nothing)
+function solve_owned!(cache::LinearSolve.LinearCache)
+    (_solve_owned!(cache, cache.alg, cache.cacheval); nothing)
+end
+function _solve_owned!(cache, alg::Union{LatticePCG, LatticeMultigrid}, sv::FieldSolver)
+    (_fused!(cache, alg, sv); nothing)
+end
+function _solve_owned!(cache, alg::LatticeGMRES, ws)
+    (_gmres!(cache, alg; owned_atol = true); nothing)
+end
 _solve_owned!(cache, alg, cv) = (SciMLBase.solve!(cache); nothing)

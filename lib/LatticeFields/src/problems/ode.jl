@@ -29,7 +29,8 @@ end
 function (r::RHSLaunch)(args)
     du, u, p, t, k = args
     S = map(lane -> map(a -> _resolve(a, u, du), lane), r.S0)
-    P = r.derive(ntuple(i -> p[i], r.np), r.c, t, k)      # (`k`: the clock's step index, or nothing)
+    # (`k`: the clock's step index, or nothing)
+    P = r.derive(ntuple(i -> p[i], r.np), r.c, t, k)
     G = r.launch.params[2][3]
     rebind(r.launch, (S, P, typeof(G)(G.n, G.dims, (t, zero(t)))))()
     return nothing
@@ -49,9 +50,11 @@ struct RHSContext{N, B}
     plans::Dict{Type, Tuple{StepPlan{N}, StepPlan{N}}}
     index::Any                                 # for the parameter checks (names)
     stability::Any                             # … and the front end's `check_parameters`
-    binputs::Vector{Pair{String, Any}}         # … with the inputs it reads in an index (host, by site)
+    # … with the inputs it reads in an index (host, by site)
+    binputs::Vector{Pair{String, Any}}
     steady::Vector{String}                     # the steady rows' fields (`0 ~ rhs`)
-    moving::Bool                               # the init kernels read the time or the clock: run at every call
+    # the init kernels read the time or the clock: run at every call
+    moving::Bool
 end
 const MAX_VARIANTS = 8
 
@@ -64,8 +67,8 @@ family (`:ode` or `:map`), and the right side of SciML's solvers, built at its f
 (`builds` counts the builds: an owned solve builds none). It is the `problem_type` of an
 `ODEProblem` and is held by the problem's function ([`LatticeFunction`](@ref)) in every
 family. A `remake` keeps it, so the plans stay warm. SciML's `hasTime` parameter is
-`Val(true)` when the system has a time (an `ODEProblem` of rates, a `DiscreteProblem` of maps)
-and `Val(false)` for a system without one (a `LinearProblem` or `NonlinearProblem`).
+`Val(true)` when the system has a time (an `ODEProblem` of rates, a `DiscreteProblem` of
+maps) and `Val(false)` for a system without one (a `LinearProblem` or `NonlinearProblem`).
 """
 struct LatticeMetadata{P <: FieldProblem, H} <: SciMLBase.AbstractDiscretizationMetadata{H}
     problem::P
@@ -73,21 +76,33 @@ struct LatticeMetadata{P <: FieldProblem, H} <: SciMLBase.AbstractDiscretization
     rhs::Base.RefValue{Any}
     builds::Base.RefValue{Int}
     lock::ReentrantLock
-    sem::Base.RefValue{Any}                    # the semantic program of the right side (built once)
-    plans::Any                                 # its init and step plans per value type (shared by the masks of `u0`)
+    # the semantic program of the right side (built once)
+    sem::Base.RefValue{Any}
+    # its init and step plans per value type (shared by the masks of `u0`)
+    plans::Any
 end
 function LatticeMetadata(fp::FieldProblem{N}) where {N}
     return LatticeMetadata{typeof(fp), Val(!fp.group.spec.timefree)}(
         fp,
-        fp.kind == :map ? :map : :ode, Ref{Any}(nothing), Ref(0), ReentrantLock(), Ref{Any}(nothing),
+        fp.kind == :map ? :map : :ode, Ref{Any}(nothing), Ref(0), ReentrantLock(),
+        Ref{Any}(nothing),
         Dict{Type, Tuple{StepPlan{N}, StepPlan{N}}}()
     )
 end
-_sem(m::LatticeMetadata) = (m.sem[] === nothing && (m.sem[] = semantic(m.problem.group.spec.rate)); m.sem[]::Program)
-# the compile options of the right side: the launches write the step index into the clock's slot
+function _sem(m::LatticeMetadata)
+    (
+        m.sem[] === nothing && (m.sem[] = semantic(m.problem.group.spec.rate));
+        m.sem[]::Program
+    )
+end
+# the compile options of the right side: the launches write the step index into the clock's
+# slot
 function _rhs_options(fp::FieldProblem)
     o = fp.options
-    return CompileOptions(o.T, o.I, o.float64_ok, o.debug, o.index, o.lanes, clock_slot(fp.group.spec), o.S, o.declared)
+    return CompileOptions(
+        o.T, o.I, o.float64_ok, o.debug, o.index, o.lanes,
+        clock_slot(fp.group.spec), o.S, o.declared
+    )
 end
 # a solution of SciML's solvers is returned as it is: no SciMLBase wrapper (a
 # `PDETimeSeriesSolution`, or a `PDENoTimeSolution` without a time) is built eagerly
@@ -98,10 +113,10 @@ SciMLBase.wrap_sol(sol, ::LatticeMetadata) = sol
 
 The default start of a problem with steady rows `0 ~ rhs` on an OrdinaryDiffEq solver (its
 `DefaultInit`): the steady fields of `u` are solved at `t` from the other fields of
-`u`, by the owned `QuasiSteady` solve of those rows on the lattice (sparse: the operator of the
-rows, `LatticePCG` to `reltol = 1e-10`), so the solver starts on the algebraic constraint. The
-other fields are kept. `initializealg = BrownFullBasicInit()` or `CheckInit()` given to `solve`
-takes the place of this.
+`u`, by the owned `QuasiSteady` solve of those rows on the lattice (sparse: the operator of
+the rows, `LatticePCG` to `reltol = 1e-10`), so the solver starts on the algebraic
+constraint. The other fields are kept. `initializealg = BrownFullBasicInit()` or
+`CheckInit()` given to `solve` takes the place of this.
 """
 function steady_start!(u, prob, p, t)
     m = lattice_metadata(prob)
@@ -114,14 +129,20 @@ function steady_start!(u, prob, p, t)
     τ = fp.group.spec.clock                       # (a window divides the clock's period)
     τ === nothing || (δ = τ / ceil(τ / δ))
     g = _field_problem(
-        fp.program, fp.state, u isa Vector ? copy(u) : Array(u), (Float64(primal(t)), Float64(primal(t)) + δ),
-        collect(p.values), p.tables, p.inputs, fp.backend, fp.index, fp.faces, fp.stability, fp.kind, fp.initkeys,
+        fp.program, fp.state, u isa Vector ? copy(u) : Array(u),
+        (Float64(primal(t)), Float64(primal(t)) + δ),
+        collect(p.values), p.tables, p.inputs, fp.backend, fp.index,
+        fp.faces, fp.stability, fp.kind, fp.initkeys,
         fp.options, fp.group
     )
     inner = Solvers.LatticePCG(; reltol = 1.0e-10, maxiters = 400)
-    alg = FieldGroups((k => QuasiSteady(; linsolve = inner) for k in st)...; default = ExplicitEuler())
+    alg = FieldGroups(
+        (k => QuasiSteady(; linsolve = inner) for k in st)...;
+        default = ExplicitEuler()
+    )
     ig = CommonSolve.init(g, alg; dt = δ, save_start = false)
-    CommonSolve.step!(ig)          # (the steady rows are solved first, from the fields at `t`)
+    # (the steady rows are solved first, from the fields at `t`)
+    CommonSolve.step!(ig)
     s = fp.program
     slots = state_layout(s, Int[fieldid(s, k) for k in fp.state])
     for k in st
@@ -135,8 +156,8 @@ end
 
 The function of a problem `discretize` returns: `f(du, u, p, t)` is the right side of the
 rates (an `ODEFunction`) or the next state of a map (a `DiscreteFunction`), built from
-`meta` ([`LatticeMetadata`](@ref)) at its first call, so a problem that only field algorithms
-step never builds it. A call with a `Float64` time allocates nothing once built.
+`meta` ([`LatticeMetadata`](@ref)) at its first call, so a problem that only field
+algorithms step never builds it. A call with a `Float64` time allocates nothing once built.
 """
 struct LatticeFunction{M}
     meta::M
@@ -146,15 +167,16 @@ function (f::LatticeFunction)(du, u, p, t)
     t isa Float64 || return _call_any(g, du, u, p, t)
     # the build this task runs, its time cell set, then a call with no unboxed argument (a
     # call of the `Any`-typed build boxes a Float64 time, 16 bytes, and a function that
-    # returns the build boxes the build, about 600 bytes): every step here reads `Any` values
+    # returns the build boxes the build, about 600 bytes): every step here reads `Any`
+    # values
     o = getfield(g, :owner)::Vector{Any}
     h = o[1] === current_task() ? g : _task_copy_any(g, o)
     (getfield(h, :tcell)::Base.RefValue{Float64})[] = t
     _call_cell(h, du, u, p)
     return nothing
 end
-# the copy of the build `g` (owner vector `o`) for this task, found in the task-local storage
-# as an `Any` (no boxing), else built
+# the copy of the build `g` (owner vector `o`) for this task, found in the task-local
+# storage as an `Any` (no boxing), else built
 function _task_copy_any(g, o::Vector{Any})
     tls = current_task().storage
     w = tls === nothing ? nothing : get(tls::IdDict{Any, Any}, o, nothing)
@@ -192,8 +214,8 @@ _lmeta(f) = nothing
 """
     rhs_build(prob) -> LatticeRHS
 
-The right side SciML's solvers call for `prob` (a problem `discretize` returned), built now if
-it was not yet; `nothing` for a problem with no field groups.
+The right side SciML's solvers call for `prob` (a problem `discretize` returned), built now
+if it was not yet; `nothing` for a problem with no field groups.
 """
 function rhs_build(prob)
     m = lattice_metadata(prob)
@@ -216,26 +238,35 @@ function _build_rhs(m::LatticeMetadata, u, p, t)
     fp = m.problem
     _check_backend(fp.backend, u, "the solver's state")
     s = _sem(m)
-    rates = m.family == :map ? Dict{String, String}() : Dict{String, String}(k => "∂$k" for k in fp.state)
+    rates = if m.family == :map
+        Dict{String, String}()
+    else
+        Dict{String, String}(k => "∂$k" for k in fp.state)
+    end
     N = _ndims(s)
     # the launches write the step index `p.tick` into the clock's slot; the init
     # kernels run at every call when they read the time or the clock (`moving`)
     ctx = RHSContext{N, typeof(fp.backend)}(
         s, fp.backend, copy(fp.state), rates, copy(fp.initkeys), _rhs_options(fp),
         fp.tables, fp.faces, fp.tspan[1], m.plans, fp.index, fp.stability,
-        Pair{String, Any}[], copy(fp.group.spec.steady), _masks_moving(fp.program, fp.group.spec)
+        Pair{String, Any}[], copy(fp.group.spec.steady),
+        _masks_moving(fp.program, fp.group.spec)
     )
     E = _rhs_eltype(u, u, p, t)
     _check_eltype(E, fp.backend)
-    for k in fp.state                            # the solver's state is one vector of the state type
+    # the solver's state is one vector of the state type
+    for k in fp.state
         f = s.fields[fieldid(s, k)]
         f.fixed && juliatype(f.storage) !== value_type(E) && throw(
             ArgumentError(
                 string(
                     "field `", k,
-                    "`: `lattice_storage = ", juliatype(f.storage), "` differs from the state's number type ", value_type(E),
-                    "; an OrdinaryDiffEq solver's state is one vector of that type, so its fields are stored in it. Discretize ",
-                    "with T = ", juliatype(f.storage), ", or solve with a field algorithm (each field stored in its own type)"
+                    "`: `lattice_storage = ", juliatype(f.storage),
+                    "` differs from the state's number type ", value_type(E),
+                    "; an OrdinaryDiffEq solver's state is one vector of that type, so \
+                        its fields are stored in it. Discretize ",
+                    "with T = ", juliatype(f.storage),
+                    ", or solve with a field algorithm (each field stored in its own type)"
                 )
             )
         )
@@ -250,7 +281,8 @@ function _check_backend(backend, u, what)
         ArgumentError(
             string(
                 what, " is on the backend ", nameof(typeof(b)),
-                "; the problem's backend is ", nameof(typeof(backend)), ": give the values on ", nameof(typeof(backend)),
+                "; the problem's backend is ", nameof(typeof(backend)),
+                ": give the values on ", nameof(typeof(backend)),
                 " (`copyto!` into an array of that backend)"
             )
         )
@@ -262,41 +294,48 @@ end
     lattice_problem(fp::FieldProblem) -> SciML problem
 
 The SciML problem of the owned problem `fp`: an `ODEProblem` for rates (with
-a `mass_matrix` when it has steady rows), a `DiscreteProblem` for maps, and for a system with no
-time a `LinearProblem` (every row linear: `A` a [`LatticeOperator`](@ref), `b` the constant
-part) or a `NonlinearProblem` of the right side. `p` is a [`LatticeParameters`](@ref), the
-state is on `fp`'s backend and the function a [`LatticeFunction`](@ref) whose metadata holds
-`fp`. The built-in callbacks (the clock's step index, [`ClockTick`](@ref); the masks,
-[`MaskSync`](@ref)) are in the problem's keywords, so every OrdinaryDiffEq solve runs them.
+a `mass_matrix` when it has steady rows), a `DiscreteProblem` for maps, and for a system
+with no time a `LinearProblem` (every row linear: `A` a [`LatticeOperator`](@ref), `b` the
+constant part) or a `NonlinearProblem` of the right side. `p` is a
+[`LatticeParameters`](@ref), the state is on `fp`'s backend and the function a
+[`LatticeFunction`](@ref) whose metadata holds `fp`. The built-in callbacks (the clock's
+step index, [`ClockTick`](@ref); the masks, [`MaskSync`](@ref)) are in the problem's
+keywords, so every OrdinaryDiffEq solve runs them.
 
 The Jacobian keywords set the `ODEFunction`'s (and a nonlinear
 system's `NonlinearFunction`'s) Jacobian fields:
 
-- `jvp = true` (the default): `jvp` is a [`LatticeJVP`](@ref), one Dual evaluation of the right
-  side, which Krylov linear solvers use; on a device it is also the `jac_prototype`, a
+- `jvp = true` (the default): `jvp` is a [`LatticeJVP`](@ref), one Dual evaluation of the
+  right side, which Krylov linear solvers use; on a device it is also the `jac_prototype`, a
   matrix-free [`JacobianOperator`](@ref);
-- `sparse = true`: `jac_prototype` is the sparse pattern of [`field_jacobian_sparsity`](@ref) with
-  its diagonal, and `colorvec` a distance-2 coloring of it ([`column_colors`](@ref)), so
-  OrdinaryDiffEq forms the Jacobian with one colored evaluation per color (host only);
+- `sparse = true`: `jac_prototype` is the sparse pattern of
+  [`field_jacobian_sparsity`](@ref) with its diagonal, and `colorvec` a distance-2 coloring
+  of it ([`column_colors`](@ref)), so OrdinaryDiffEq forms the Jacobian with one colored
+  evaluation per color (host only);
 - `jac = true`: `jac` is a [`LatticeJacobian`](@ref), the colored Dual Jacobian (host only).
 
 A map's problem has no Jacobian; a linear system with no time keeps its operator (its
 matrix is `lattice_matrix(prob.A)`).
 """
-function lattice_problem(fp::FieldProblem; jac::Bool = false, sparse::Bool = false, jvp::Bool = true)
+function lattice_problem(
+        fp::FieldProblem; jac::Bool = false, sparse::Bool = false,
+        jvp::Bool = true
+    )
     meta = LatticeMetadata(fp)
     f = LatticeFunction(meta)
     ix = fp.index
     ix isa LatticeIndex && !isempty(ix.aux) && (ix.auxeval[] = ODEAux(f, fp.program))
     lp = LatticeParameters(copy(fp.p), fp.tables, fp.inputs; fns = fp.inputfns)
-    E = problem_eltype(fp.u0, fp.p, lp.tables)          # (a Dual `u0` or parameter promotes the state)
+    # (a Dual `u0` or parameter promotes the state)
+    E = problem_eltype(fp.u0, fp.p, lp.tables)
     U = copyto!(KA.allocate(fp.backend, E, length(fp.u0)), convert(Vector{E}, fp.u0))
     _clamp_masks!(U, meta, lp)                           # `prob.u0` holds the masked values
     meta.family == :map && (jac || sparse) && throw(
         ArgumentError(
             string(
                 "`", jac ? "jac" : "sparse",
-                " = true`: a map `Shift(t, 1)(m) ~ rhs` gives a `DiscreteProblem`, which has no Jacobian"
+                " = true`: a map `Shift(t, 1)(m) ~ rhs` gives a `DiscreteProblem`, which \
+                    has no Jacobian"
             )
         )
     )
@@ -304,14 +343,19 @@ function lattice_problem(fp::FieldProblem; jac::Bool = false, sparse::Bool = fal
     cbs = _builtin_callbacks(fp)
     kw = isempty(cbs) ? (;) : (; callback = SciMLBase.CallbackSet(cbs...))
     if meta.family == :map
-        return SciMLBase.DiscreteProblem(SciMLBase.DiscreteFunction{true}(f; sys = ix), U, fp.tspan, lp; kw...)
+        return SciMLBase.DiscreteProblem(
+            SciMLBase.DiscreteFunction{true}(f; sys = ix), U, fp.tspan, lp; kw...
+        )
     end
     M = _mass_matrix(fp, E)
     jkw = _jacobian_kw(meta, U, lp; jac, sparse, jvp)
     fun = if M === LinearAlgebra.I
         SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize}(f; sys = ix, jkw...)
     else
-        SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize}(f; sys = ix, mass_matrix = M, jkw...)
+        SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize}(
+            f; sys = ix, mass_matrix = M,
+            jkw...
+        )
     end
     return SciMLBase.ODEProblem(fun, U, fp.tspan, lp, meta; kw...)
 end
@@ -328,18 +372,27 @@ function _mass_matrix(fp::FieldProblem, ::Type{E}) where {E}
     for k in fp.state
         k in st && (m[slots[fieldid(s, k)]] .= 0)
     end
-    return LinearAlgebra.Diagonal(copyto!(KA.allocate(fp.backend, value_type(E), length(m)), m))
+    return LinearAlgebra.Diagonal(
+        copyto!(KA.allocate(fp.backend, value_type(E), length(m)), m)
+    )
 end
 
-# the built-in callbacks of `fp`'s SciML problem: the clock's step index when the group reads
-# it, and the masks when a state field has one (`_builtin_specs`: their descriptions, which
-# `field_report` names)
+# the built-in callbacks of `fp`'s SciML problem: the clock's step index when the group
+# reads it, and the masks when a state field has one (`_builtin_specs`: their descriptions,
+# which `field_report` names)
 _builtin_callbacks(fp::FieldProblem) = Any[_callback(c) for c in _builtin_specs(fp)]
 function _builtin_specs(fp::FieldProblem)
     cbs = Any[]
     # (first: the masks and the clock read the inputs it writes)
-    any(f -> f.role == :input, fp.program.fields) &&
-        push!(cbs, InputRefresh(_has_masks(fp) && fp.kind != :map ? _mask_inputs(fp) : String[]))
+    any(f -> f.role == :input, fp.program.fields) && push!(
+        cbs, InputRefresh(
+            if _has_masks(fp) && fp.kind != :map
+                _mask_inputs(fp)
+            else
+                String[]
+            end
+        )
+    )
     clock_slot(fp.group.spec) == 0 || fp.group.spec.clock === nothing ||
         push!(cbs, ClockTick(fp.group.spec.clock))
     ix = fp.index
@@ -347,23 +400,30 @@ function _builtin_specs(fp::FieldProblem)
         moving = _masks_moving(fp.program, fp.group.spec)
         push!(cbs, MaskSync(moving, moving && ix isa LatticeIndex && ix.maskunlocated))
         # each located switch of a moving mask set: a continuous callback at its root
-        moving && ix isa LatticeIndex && foreach(f -> push!(cbs, MaskEvent(f)), ix.maskevents)
+        moving && ix isa LatticeIndex &&
+            foreach(f -> push!(cbs, MaskEvent(f)), ix.maskevents)
     end
     return cbs
 end
 # (no allocation: the input refresh asks at every step)
 function _has_masks(fp::FieldProblem)
     s = fp.program
-    return any(r -> r isa NodeValueRule && any(k -> fieldid(s, k) == r.field, fp.state), s.rules)
+    return any(
+        r -> r isa NodeValueRule && any(k -> fieldid(s, k) == r.field, fp.state),
+        s.rules
+    )
 end
 
-# the affect of a built-in callback (the clock, the masks: the ODE path's), marked so that an
-# owned solve, which steps them itself, leaves them out of the problem's callbacks
+# the affect of a built-in callback (the clock, the masks: the ODE path's), marked so that
+# an owned solve, which steps them itself, leaves them out of the problem's callbacks
 struct _Builtin{F} <: Function
     f::F
 end
 (b::_Builtin)(integ) = b.f(integ)
-_builtin(cb) = cb isa Union{SciMLBase.DiscreteCallback, SciMLBase.ContinuousCallback} && cb.affect! isa _Builtin
+function _builtin(cb)
+    return cb isa Union{SciMLBase.DiscreteCallback, SciMLBase.ContinuousCallback} &&
+        cb.affect! isa _Builtin
+end
 
 """
     InputRefresh(masks)
@@ -375,11 +435,12 @@ preconditioner's bind too), so the solver sees the input at its own times. After
 accepted step this callback writes `f(t)` into `p.inputs` (what `integ.ps[q]` and `sol.ps`
 read) and, when the problem has masks, writes the masked values at the sites that became
 masked (as for a mask that reads the time); such a mask needs a bounded step (`dtmax`) or
-`tstops`, as an unlocated switch of [`MaskSync`](@ref) does. A problem with no input function
-skips it (its condition is false).
+`tstops`, as an unlocated switch of [`MaskSync`](@ref) does. A problem with no input
+function skips it (its condition is false).
 """
 struct InputRefresh
-    masks::Vector{String}               # the inputs the masks read (their sets move with them)
+    # the inputs the masks read (their sets move with them)
+    masks::Vector{String}
 end
 # the input fields the mask kernels of `fp` load
 function _mask_inputs(fp::FieldProblem)
@@ -392,7 +453,9 @@ function _mask_inputs(fp::FieldProblem)
     end
     return out
 end
-_masks_follow(c::InputRefresh, p) = !isempty(c.masks) && any(x -> first(x) in c.masks, p.fns)
+function _masks_follow(c::InputRefresh, p)
+    return !isempty(c.masks) && any(x -> first(x) in c.masks, p.fns)
+end
 _has_fns(p) = p isa LatticeParameters && !isempty(p.fns)
 function _callback(c::InputRefresh)
     cond(u, t, integ) = _has_fns(integ.p)
@@ -400,21 +463,27 @@ function _callback(c::InputRefresh)
         refresh_inputs!(integ)
         # (the input is a function of the time the right side reads at every call: a step is
         # no discontinuity unless a masked value is written)
-        _masks_follow(c, integ.p) && mask_sync!(integ) || SciMLBase.derivative_discontinuity!(integ, false)
+        _masks_follow(c, integ.p) && mask_sync!(integ) ||
+            SciMLBase.derivative_discontinuity!(integ, false)
         return nothing
     end
     function start(cb, u, t, integ)
         _has_fns(integ.p) || return nothing
-        # a mask set that moves with an input function switches where the input does: a masked
-        # value jumps there (a discrete event no rate carries), written after the step, and over a
-        # quiet state an adaptive step can pass the switch (the rule of `MaskSync`'s unlocated sets)
+        # a mask set that moves with an input function switches where the input does: a
+        # masked value jumps there (a discrete event no rate carries), written after the
+        # step, and over a quiet state an adaptive step can pass the switch (the rule of
+        # `MaskSync`'s unlocated sets)
         _masks_follow(c, integ.p) && !_step_bounded(integ) && throw(
             ArgumentError(
                 string(
                     "a masked condition reads ",
-                    "an input given as a function of the time (", join(("`$k`" for (k, _) in integ.p.fns if k in c.masks), ", "),
-                    "): its masked values are written after each accepted step, and over a quiet state an adaptive step can ",
-                    "pass a switch. Bound the step (`dtmax`) or give `tstops` at the input's changes, or solve with a field ",
+                    "an input given as a function of the time (", join(
+                        ("`$k`" for (k, _) in integ.p.fns if k in c.masks), ", "
+                    ),
+                    "): its masked values are written after each accepted step, and over \
+                        a quiet state an adaptive step can ",
+                    "pass a switch. Bound the step (`dtmax`) or give `tstops` at the \
+                        input's changes, or solve with a field ",
                     "algorithm (`solve(prob, ExplicitEuler(); dt)`)"
                 )
             )
@@ -422,7 +491,9 @@ function _callback(c::InputRefresh)
         refresh_inputs!(integ)
         return nothing
     end
-    return SciMLBase.DiscreteCallback(cond, _Builtin(affect!); initialize = start, save_positions = (false, false))
+    return SciMLBase.DiscreteCallback(
+        cond, _Builtin(affect!); initialize = start, save_positions = (false, false)
+    )
 end
 """
     refresh_inputs!(integ)
@@ -436,8 +507,8 @@ functions return.
 function refresh_inputs!(integ)
     p = integ.p::LatticeParameters
     for (k, f) in p.fns
-        # (the time and the index are read inside: a Float64 or an immutable struct through this
-        # dynamic call would be boxed)
+        # (the time and the index are read inside: a Float64 or an immutable struct through
+        # this dynamic call would be boxed)
         _refresh_input!(integ, p, k, f)
     end
     return true
@@ -451,7 +522,8 @@ function _refresh_input!(integ, p::LatticeParameters, k::String, f::F) where {F}
     j = _inpos(p, k)
     x = last(p.inputs[j])
     if x isa Vector && (v isa Number || length(v) == length(x))
-        # (the host types of an input, written without a dynamic call that would box a number)
+        # (the host types of an input, written without a dynamic call that would box a
+        # number)
         if x isa Vector{Float64}
             _write_host!(x, v)
         elseif x isa Vector{Int32}
@@ -488,7 +560,11 @@ function _input_spec(ctx::RHSContext, k::String)
     prog, ix = ctx.program, ctx.index
     st = prog.fields[fieldid(prog, k)].storage
     fid = fieldid(prog, k)
-    mask = any(kk -> kk.key in ctx.initkeys && any(n -> n.op == LOAD && kk.accesses[n.imm].field == fid, kk.nodes), prog.kernels)
+    mask = any(
+        kk -> kk.key in ctx.initkeys &&
+            any(n -> n.op == LOAD && kk.accesses[n.imm].field == fid, kk.nodes),
+        prog.kernels
+    )
     return FnInputCheck(
         fid, _input_length(prog, k), isfloat(st), _int_range(st), is_bool_input(ix, k),
         input_bounds(ix, k), input_name(ix, k), mask
@@ -497,10 +573,11 @@ end
 """
     ClockTick(τ)
 
-The built-in callback of the clock's step index on an OrdinaryDiffEq solve: at `init` it sets `p.tick` to 0 and adds a `tstop` at every boundary `t₀ + kτ` of the
-time span, and at each boundary it sets `p.tick = k`, so the solver lands on every boundary and
-reads `step_index(t)` as the owned steppers do (the right side has one value per period). A
-new step index is a discrete event: every masked site takes its value again (a value that reads
+The built-in callback of the clock's step index on an OrdinaryDiffEq solve: at `init` it
+sets `p.tick` to 0 and adds a `tstop` at every boundary `t₀ + kτ` of the time span, and at
+each boundary it sets `p.tick = k`, so the solver lands on every boundary and reads
+`step_index(t)` as the owned steppers do (the right side has one value per period). A new
+step index is a discrete event: every masked site takes its value again (a value that reads
 `step_index(t)` jumps; its rate `∂v/∂t` cannot carry the jump).
 """
 struct ClockTick
@@ -509,7 +586,11 @@ end
 _ticks(c::ClockTick, integ, t) = floor(Int, (t - integ.sol.prob.tspan[1]) / c.τ + 1.0e-9)
 function _callback(c::ClockTick)
     cond(u, t, integ) = _ticks(c, integ, t) != integ.p.tick[]
-    affect!(integ) = (integ.p.tick[] = _ticks(c, integ, integ.t); sync_masks!(integ); nothing)
+    function affect!(integ)
+        integ.p.tick[] = _ticks(c, integ, integ.t)
+        sync_masks!(integ)
+        return nothing
+    end
     function start(cb, u, t, integ)
         integ.p.tick[] = 0
         t1 = integ.sol.prob.tspan[2]
@@ -521,7 +602,9 @@ function _callback(c::ClockTick)
         SciMLBase.derivative_discontinuity!(integ, false)
         return nothing
     end
-    return SciMLBase.DiscreteCallback(cond, _Builtin(affect!); initialize = start, save_positions = (false, false))
+    return SciMLBase.DiscreteCallback(
+        cond, _Builtin(affect!); initialize = start, save_positions = (false, false)
+    )
 end
 
 """
@@ -542,21 +625,21 @@ where the mask *set* changes, which no rate can carry:
   `integ.ps[k] = v` on the integrator (the OrdinaryDiffEqCore extension).
 A step that writes nothing is no discontinuity (the solver keeps its FSAL derivative).
 
-**Moving sets.** A predicate that reads the time switches where one of its comparisons changes
-sign. A comparison whose sides read only `t`, scalar parameters and constants (`t > t0`,
-`sin(ω t) < 0.5`) is located exactly: a continuous callback ([`MaskEvent`](@ref)) finds its
-root and every masked site takes its value there, so a set that switches on over a quiet state
-(where an adaptive solver takes long steps) switches at the right time. A read of
-`step_index(t)` switches at the clock's boundaries, which [`ClockTick`](@ref) lands on. Any
-other read of the time in a predicate (a comparison with a field, an input or a coordinate,
-`t == t0`, a bare `t`) has no located switch: the set moves at the end of the step it moved in,
-and over a quiet state the solver can step over the switch. An OrdinaryDiffEq solve of such a
-predicate is refused at `init` (`unlocated`) unless it bounds the step (`dtmax`) or gives
-`tstops`; with them the switch is first order in time. (A `tstops` at a located switch alone
-does not apply a mask such as `t > 0.3`: the predicate is false at exactly 0.3.)
-A user callback that writes `integ.p` directly (not through `setp` or `integ.ps`) and changes a
-value that a mask reads must call [`sync_masks!`](@ref)`(integ)` itself: such a write is not
-seen by the masks until then.
+**Moving sets.** A predicate that reads the time switches where one of its comparisons
+changes sign. A comparison whose sides read only `t`, scalar parameters and constants
+(`t > t0`, `sin(ω t) < 0.5`) is located exactly: a continuous callback ([`MaskEvent`](@ref))
+finds its root and every masked site takes its value there, so a set that switches on over a
+quiet state (where an adaptive solver takes long steps) switches at the right time. A read
+of `step_index(t)` switches at the clock's boundaries, which [`ClockTick`](@ref) lands on.
+Any other read of the time in a predicate (a comparison with a field, an input or a
+coordinate, `t == t0`, a bare `t`) has no located switch: the set moves at the end of the
+step it moved in, and over a quiet state the solver can step over the switch. An
+OrdinaryDiffEq solve of such a predicate is refused at `init` (`unlocated`) unless it bounds
+the step (`dtmax`) or gives `tstops`; with them the switch is first order in time. (A
+`tstops` at a located switch alone does not apply a mask such as `t > 0.3`: the predicate is
+false at exactly 0.3.) A user callback that writes `integ.p` directly (not through `setp` or
+`integ.ps`) and changes a value that a mask reads must call [`sync_masks!`](@ref)`(integ)`
+itself: such a write is not seen by the masks until then.
 """
 struct MaskSync
     moving::Bool
@@ -564,31 +647,43 @@ struct MaskSync
 end
 MaskSync(moving::Bool) = MaskSync(moving, false)
 function _callback(c::MaskSync)
-    affect!(integ) = (mask_sync!(integ) || SciMLBase.derivative_discontinuity!(integ, false); nothing)
-    # at `init`: the first save (taken before the callbacks start) holds the masked values too
+    function affect!(integ)
+        mask_sync!(integ) || SciMLBase.derivative_discontinuity!(integ, false)
+        return nothing
+    end
+    # at `init`: the first save (taken before the callbacks start) holds the masked values
+    # too
     function start(cb, u, t, integ)
         c.unlocated && !_step_bounded(integ) && throw(
             ArgumentError(
                 string(
                     "a masked condition's predicate reads ",
-                    "the time in a switch an OrdinaryDiffEq solver cannot locate (a comparison of `t` with a field, an input ",
-                    "or a coordinate, an equality, or a bare `t`): over a quiet state an adaptive step can pass the switch, ",
-                    "and the mask is never applied. Bound the step (`dtmax`) or give `tstops` at the switch, write the ",
-                    "switch as a comparison of `t` with parameters and constants (`t > t0`: located exactly), or solve ",
+                    "the time in a switch an OrdinaryDiffEq solver cannot locate (a \
+                        comparison of `t` with a field, an input ",
+                    "or a coordinate, an equality, or a bare `t`): over a quiet state an \
+                        adaptive step can pass the switch, ",
+                    "and the mask is never applied. Bound the step (`dtmax`) or give \
+                        `tstops` at the switch, write the ",
+                    "switch as a comparison of `t` with parameters and constants (`t > \
+                        t0`: located exactly), or solve ",
                     "with a field algorithm (`solve(prob, ExplicitEuler(); dt)`)"
                 )
             )
         )
-        mask_sync!(integ; all = true) || return SciMLBase.derivative_discontinuity!(integ, false)
+        mask_sync!(integ; all = true) ||
+            return SciMLBase.derivative_discontinuity!(integ, false)
         sol = integ.sol
-        !isempty(sol.t) && sol.t[end] == t && length(sol.u[end]) == length(integ.u) && copyto!(sol.u[end], integ.u)
+        !isempty(sol.t) && sol.t[end] == t && length(sol.u[end]) == length(integ.u) &&
+            copyto!(sol.u[end], integ.u)
         return nothing
     end
     cond = c.moving ? (u, t, integ) -> true : (u, t, integ) -> false
-    return SciMLBase.DiscreteCallback(cond, _Builtin(affect!); initialize = start, save_positions = (false, false))
+    return SciMLBase.DiscreteCallback(
+        cond, _Builtin(affect!); initialize = start, save_positions = (false, false)
+    )
 end
-# an OrdinaryDiffEq solve that bounds its step (`dtmax` below the span) or gives `tstops` (more
-# than the span's end and the clock's boundaries, which the built-in callbacks add)
+# an OrdinaryDiffEq solve that bounds its step (`dtmax` below the span) or gives `tstops`
+# (more than the span's end and the clock's boundaries, which the built-in callbacks add)
 function _step_bounded(integ)
     hasproperty(integ, :opts) || return true
     o = integ.opts
@@ -611,8 +706,8 @@ end
 The built-in callback of one located switch of a moving mask set on an OrdinaryDiffEq solve
 ([`MaskSync`](@ref)): a continuous callback on `f(p, t)` (a comparison's
 `lhs - rhs` of the time and the parameters) whose root the solver finds; at the root every
-masked site takes its value, with the masks evaluated just past it (at `nextfloat(t)`: a root
-of `t - t0` is `t0` itself, where `t > t0` is still false).
+masked site takes its value, with the masks evaluated just past it (at `nextfloat(t)`: a
+root of `t - t0` is `t0` itself, where `t > t0` is still false).
 """
 struct MaskEvent
     f::Any
@@ -620,7 +715,8 @@ end
 function _callback(c::MaskEvent)
     f = c.f
     cond(u, t, integ) = f(_pvals(integ.p), t)
-    # the masks just past the root (a root of `t - 0.3` is 0.3 itself, where `t > 0.3` is false)
+    # the masks just past the root (a root of `t - 0.3` is 0.3 itself, where `t > 0.3` is
+    # false)
     function affect!(integ)
         t = integ.t
         changed = mask_sync!(integ; all = true, t = t isa AbstractFloat ? nextfloat(t) : t)
@@ -637,8 +733,8 @@ end
     mask_sync!(integ; all = false, t = integ.t) -> Bool
 
 Run the masks of an OrdinaryDiffEq integrator's right side at time `t` (its own by default),
-its step index and inputs, and write the masked values into `integ.u` at the sites that became
-masked since the last write (`all = true`: at every masked site; the work of
+its step index and inputs, and write the masked values into `integ.u` at the sites that
+became masked since the last write (`all = true`: at every masked site; the work of
 [`MaskSync`](@ref)): whether a value changed.
 """
 function mask_sync!(integ; all::Bool = false, t = integ.t)
@@ -661,10 +757,10 @@ end
 """
     sync_masks!(integ)
 
-A discrete event on an OrdinaryDiffEq integrator of a lattice problem with masks: every masked
-site takes its value again at the integrator's time, step index, parameters, tables and inputs
-(`mask_sync!(integ; all = true)`), and the solver restarts its derivative when a value changed.
-A no-op on a problem with no masks.
+A discrete event on an OrdinaryDiffEq integrator of a lattice problem with masks: every
+masked site takes its value again at the integrator's time, step index, parameters, tables
+and inputs (`mask_sync!(integ; all = true)`), and the solver restarts its derivative when a
+value changed. A no-op on a problem with no masks.
 """
 function sync_masks!(integ)
     m = lattice_metadata(integ.sol.prob)
@@ -673,11 +769,12 @@ function sync_masks!(integ)
     changed && SciMLBase.derivative_discontinuity!(integ, true)
     return changed
 end
-# write `v` (or `v vf`) at the masked sites that were not masked at the last write (`all`: at
-# every masked site): whether a value changed
+# write `v` (or `v vf`) at the masked sites that were not masked at the last write (`all`:
+# at every masked site): whether a value changed
 function _write_masked!(u, m, prev, v, vf, all)
     n = length(m)
-    if !(KA.get_backend(u) isa KA.CPU)          # a device: one reduction (one host sync), then the writes
+    # a device: one reduction (one host sync), then the writes
+    if !(KA.get_backend(u) isa KA.CPU)
         U = reshape(u, n, :)
         new = all ? (m .!= 0) : (m .!= 0) .& (prev .== 0)
         any(new) || return false
@@ -694,9 +791,9 @@ function _write_masked!(u, m, prev, v, vf, all)
 end
 
 # The masked values in a state `U`: the mask kernels of `m`'s right side run at `t`
-# with the parameters, tables and inputs of `lp`, on a store of their own (the init plan is the
-# right side's, kept in the metadata), and `U` takes the value at each masked site. A state with
-# an unset input is left as it is (its solve names the input).
+# with the parameters, tables and inputs of `lp`, on a store of their own (the init plan is
+# the right side's, kept in the metadata), and `U` takes the value at each masked site. A
+# state with an unset input is left as it is (its solve names the input).
 function _clamp_masks!(U, m::LatticeMetadata, lp::LatticeParameters, t = m.problem.tspan[1])
     fp = m.problem
     _has_masks(fp) || return U
@@ -704,29 +801,41 @@ function _clamp_masks!(U, m::LatticeMetadata, lp::LatticeParameters, t = m.probl
     E = eltype(U)
     (isbitstype(E) || Exec.ishost(fp.backend)) || return U
     s = _sem(m)
-    ip, _ = lock(() -> _plans!(m.plans, s, fp.initkeys, _rhs_options(fp), value_type(E), fp.backend), _PLANS_LOCK)
+    ip, _ = lock(
+        () -> _plans!(m.plans, s, fp.initkeys, _rhs_options(fp), value_type(E), fp.backend),
+        _PLANS_LOCK
+    )
     st = FieldStore(fp.backend, s; E, TE = _tabeltype(lp.tables))
     foreach(((k, v),) -> settable!(st, s, k, v), lp.tables)
     foreach(((k, v),) -> _set_input!(st, s, k, v), lp.inputs)
     pv = lp.values
-    isempty(ip.launches) || run_step!(fp.backend, s, ip, st, pv; rt = (Float64(primal(t)), 0.0, lp.tick[]), c = zero(E))
+    isempty(ip.launches) || run_step!(
+        fp.backend, s, ip, st, pv;
+        rt = (Float64(primal(t)), 0.0, lp.tick[]), c = zero(E)
+    )
     slots = state_layout(s, Int[fieldid(s, k) for k in fp.state])
     for r in s.rules
-        r isa NodeValueRule && isassigned(slots, r.field) && !isempty(slots[r.field]) || continue
+        r isa NodeValueRule && isassigned(slots, r.field) && !isempty(slots[r.field]) ||
+            continue
         mk = array(st, s.masks[r.mask].field, :cur)
         v = convert(E, _coefdual(r.value, pv))
         u = view(U, slots[r.field])
-        r.vfield == 0 ? _clamp_masked!(u, mk, v) : _clamp_masked!(u, mk, v, array(st, r.vfield, :cur))
+        if r.vfield == 0
+            _clamp_masked!(u, mk, v)
+        else
+            _clamp_masked!(u, mk, v, array(st, r.vfield, :cur))
+        end
     end
     return U
 end
-# the state of a remake with new parameters, inputs or `u0`: a copy with the masked values. A
-# mask value reads the parameters and tables, so a Dual parameter or table promotes the state
-# (as SciML promotes `u0` to the parameters' element type at `solve`) instead of a conversion of
-# the Dual value to the state's type
+# the state of a remake with new parameters, inputs or `u0`: a copy with the masked values.
+# A mask value reads the parameters and tables, so a Dual parameter or table promotes the
+# state (as SciML promotes `u0` to the parameters' element type at `solve`) instead of a
+# conversion of the Dual value to the state's type
 function _masked_u0(prob, u0, q)
     m = lattice_metadata(prob)
-    (m === nothing || (u0 === missing && q === missing) || !_has_masks(m.problem)) && return u0
+    (m === nothing || (u0 === missing && q === missing) || !_has_masks(m.problem)) &&
+        return u0
     u = u0 === missing ? prob.u0 : u0
     lp = q === missing ? prob.p : q
     E = lp isa LatticeParameters ? problem_eltype(u, lp.values, lp.tables) : eltype(u)
@@ -736,14 +845,19 @@ end
 
 # A system with no time: every row linear gives a `LinearProblem` of the
 # right side's operator, any other a `NonlinearProblem` of the right side at `t₀`
-function _timefree_problem(meta, f, U, lp; jac::Bool = false, sparse::Bool = false, jvp::Bool = true)
+function _timefree_problem(
+        meta, f, U, lp; jac::Bool = false, sparse::Bool = false, jvp::Bool = true
+    )
     fp = meta.problem
     ix = fp.index
     if all(r -> r.linear, operator_spec(fp.group.spec).rows)
         A = LatticeOperator(f, lp, U)
         b = -A.r0
         return SciMLBase.LinearProblem{true}(
-            A, b, lp; u0 = U, f = SciMLBase.SymbolicLinearInterface(;
+            A, b,
+            lp;
+            u0 = U,
+            f = SciMLBase.SymbolicLinearInterface(;
                 update_Ab = UpdateLatticeAb(), sys = ix, observed = nothing, metadata = meta
             )
         )
@@ -753,7 +867,9 @@ function _timefree_problem(meta, f, U, lp; jac::Bool = false, sparse::Bool = fal
         v -> v isa Union{LatticeJacobian, LatticeJVP} ? _AtStart(v, fp.tspan[1]) : v,
         _jacobian_kw(meta, U, lp; jac, sparse, jvp)
     )
-    return SciMLBase.NonlinearProblem(SciMLBase.NonlinearFunction{true}(f; sys = ix, jkw...), U, lp)
+    return SciMLBase.NonlinearProblem(
+        SciMLBase.NonlinearFunction{true}(f; sys = ix, jkw...), U, lp
+    )
 end
 # a Jacobian function of the right side as one of a residual `r(u, p)`: at time `t`
 struct _AtStart{F}
@@ -799,9 +915,13 @@ function LinearAlgebra.mul!(w::AbstractVector, A::LatticeOperator, v::AbstractVe
     w .= α .* t .+ β .* w
     return w
 end
-Base.:*(A::LatticeOperator, v::AbstractVector) = LinearAlgebra.mul!(similar(v, promote_type(eltype(A), eltype(v))), A, v)
+function Base.:*(A::LatticeOperator, v::AbstractVector)
+    return LinearAlgebra.mul!(similar(v, promote_type(eltype(A), eltype(v))), A, v)
+end
 (A::LatticeOperator)(v::AbstractVector, u, p, t; kw...) = A * v
-(A::LatticeOperator)(w::AbstractVector, v::AbstractVector, u, p, t; kw...) = LinearAlgebra.mul!(w, A, v)
+function (A::LatticeOperator)(w::AbstractVector, v::AbstractVector, u, p, t; kw...)
+    return LinearAlgebra.mul!(w, A, v)
+end
 SciMLOperators.islinear(::LatticeOperator) = true
 SciMLOperators.isconstant(::LatticeOperator) = true
 SciMLOperators.has_mul(::LatticeOperator) = true
@@ -810,13 +930,17 @@ SciMLOperators.iscached(::LatticeOperator) = true
 SciMLOperators.update_coefficients!(A::LatticeOperator, u, p, t; kw...) = A
 SciMLOperators.update_coefficients(A::LatticeOperator, u, p, t; kw...) = A
 _lmeta(A::LatticeOperator) = A.f.meta
-# a copy shares the right side and the parameters (the operator is the same), not its vectors
-Base.copy(A::LatticeOperator{T, F, P, V}) where {T, F, P, V} = LatticeOperator{T, F, P, V}(A.f, A.p, copy(A.r0), copy(A.zero))
+# a copy shares the right side and the parameters (the operator is the same), not its
+# vectors
+function Base.copy(A::LatticeOperator{T, F, P, V}) where {T, F, P, V}
+    return LatticeOperator{T, F, P, V}(A.f, A.p, copy(A.r0), copy(A.zero))
+end
 """
     lattice_matrix(A::LatticeOperator) -> AbstractMatrix
 
 The matrix of `A`, column by column (`n` applications of the right side, an `n × n` array on
-its backend): the route to a factorization, `solve(LinearProblem(lattice_matrix(lp.A), lp.b),
+its backend): the route to a factorization,
+`solve(LinearProblem(lattice_matrix(lp.A), lp.b),
 LUFactorization())`, for a small system. A Krylov method applies `A` itself.
 """
 function lattice_matrix(A::LatticeOperator)
@@ -836,9 +960,12 @@ function Base.convert(::Type{AbstractMatrix}, ::LatticeOperator)
         ArgumentError(
             string(
                 "a `LatticeOperator` stores no ",
-                "matrix (it applies the compiled right side), so a factorization (`LUFactorization`, `QRFactorization`) has none ",
-                "to factor: solve with a Krylov method (`KrylovJL_GMRES()`, `KrylovJL_CG()`) or `QuasiSteady()`, or factor the ",
-                "assembled matrix, `LinearProblem(Problems.lattice_matrix(lp.A), lp.b)` (n² values)"
+                "matrix (it applies the compiled right side), so a factorization \
+                    (`LUFactorization`, `QRFactorization`) has none ",
+                "to factor: solve with a Krylov method (`KrylovJL_GMRES()`, \
+                    `KrylovJL_CG()`) or `QuasiSteady()`, or factor the ",
+                "assembled matrix, `LinearProblem(Problems.lattice_matrix(lp.A), lp.b)` \
+                    (n² values)"
             )
         )
     )
@@ -849,8 +976,9 @@ SciMLOperators.isconvertible(::LatticeOperator) = false
     UpdateLatticeAb()
 
 The `update_Ab` of a time-free `LinearProblem`: a parameter write on the problem
-(`lp.ps[k] = v`, `setp`) takes effect in place, so `r(0)` (in `A`) and `b = -r(0)` are computed
-again from the written parameters (the operator applies the right side at them already).
+(`lp.ps[k] = v`, `setp`) takes effect in place, so `r(0)` (in `A`) and `b = -r(0)` are
+computed again from the written parameters (the operator applies the right side at them
+already).
 """
 struct UpdateLatticeAb end
 function (::UpdateLatticeAb)(A::LatticeOperator, b, p)
@@ -869,9 +997,9 @@ end
 """
     field_problem(prob) -> FieldProblem
 
-The owned problem that field algorithms step for `prob` (a problem `discretize` returned): the
-metadata's group at `prob`'s state (on the host), time span and parameters. A `FieldProblem`
-is its own.
+The owned problem that field algorithms step for `prob` (a problem `discretize` returned):
+the metadata's group at `prob`'s state (on the host), time span and parameters. A
+`FieldProblem` is its own.
 """
 field_problem(fp::FieldProblem) = fp
 function field_problem(prob)
@@ -888,10 +1016,13 @@ function field_problem(prob)
     U = prob.u0 === nothing ? fp.u0 : prob.u0
     _check_backend(fp.backend, U, "u0")
     u0 = U isa Vector ? copy(U) : Array(U)
-    span = hasproperty(prob, :tspan) ? prob.tspan : fp.tspan        # (a system with no time: none)
+    # (a system with no time: none)
+    span = hasproperty(prob, :tspan) ? prob.tspan : fp.tspan
     return _field_problem(
-        fp.program, fp.state, u0, span, collect(lp.values), lp.tables, lp.inputs, fp.backend,
-        fp.index, fp.faces, fp.stability, fp.kind, fp.initkeys, fp.options, fp.group; inputfns = lp.fns
+        fp.program, fp.state, u0, span, collect(lp.values), lp.tables, lp.inputs,
+        fp.backend,
+        fp.index, fp.faces, fp.stability, fp.kind, fp.initkeys,
+        fp.options, fp.group; inputfns = lp.fns
     )
 end
 
@@ -899,8 +1030,8 @@ end
     LatticeRHS
 
 The in-place right side `f(du, u, p, t)` of a field program's ODE form. Each call checks the
-parameter-dependent Robin faces (no allocation), then enqueues the rate launches; it does not
-synchronize (device work is stream-ordered with the solver's own array operations).
+parameter-dependent Robin faces (no allocation), then enqueues the rate launches; it does
+not synchronize (device work is stream-ordered with the solver's own array operations).
 
 The launches are built for one element type `E` (the eltype of `u0`, promoted with Dual
 parameters). A call whose `u`, `du`, `p` or `t` gives another compute element type (a
@@ -911,21 +1042,22 @@ not state (aux, scratch) and its tables in its value type, the integer inputs sh
 
 Init kernels (masks, aux values from parameters) run on each build's own store with that
 build's parameters. With plain Float32/Float64 parameters they re-run whenever the vector
-changes (a new `p` object, as `remake` gives, or new values in place) and are skipped for the
-same unchanged `p`, so the native type stays the allocation-free path. Any other parameter
-type (Duals, BigFloat) re-runs them on every call: ForwardDiff's chunk mode re-seeds the
-partials of one vector in place.
+changes (a new `p` object, as `remake` gives, or new values in place) and are skipped for
+the same unchanged `p`, so the native type stays the allocation-free path. Any other
+parameter type (Duals, BigFloat) re-runs them on every call: ForwardDiff's chunk mode
+re-seeds the partials of one vector in place.
 
 **Threads.** The aux, scratch and table arrays live in the build's store, which every call
 writes. A build belongs to the first task that calls it (until that task ends); a call from
 another task (a threaded `EnsembleProblem` whose trajectories share the function, as with
-`safetycopy = false`) runs a copy of its own, built once per task (under a lock) with its own
-store and variants, held by this build (a finished task's copy is dropped when the next copy
-is built) and found through a weak reference in the task's local storage, so concurrent
+`safetycopy = false`) runs a copy of its own, built once per task (under a lock) with its
+own store and variants, held by this build (a finished task's copy is dropped when the next
+copy is built) and found through a weak reference in the task's local storage, so concurrent
 trajectories never write one store and a dropped build frees its copies. A finished task's
 copy is dropped only when the next copy is built, so a build keeps the stores of up to one
-copy per task that called it (about `nthreads()` under `EnsembleThreads`) until then. The owner's calls take no lock; a task's later calls of its copy take no lock
-either, and neither allocates.
+copy per task that called it (about `nthreads()` under `EnsembleThreads`) until then. The
+owner's calls take no lock; a task's later calls of its copy take no lock either, and
+neither allocates.
 """
 struct LatticeRHS{L <: Tuple, W, E, X, I}
     launches::L
@@ -941,16 +1073,26 @@ struct LatticeRHS{L <: Tuple, W, E, X, I}
     variants::Dict{Type, Any}                  # element type → LatticeRHS (bounded, LRU)
     order::Vector{Type}
     owner::Vector{Any}                         # [the task that runs this build, or nothing]
-    copies::Dict{Task, Any}                    # the builds of other tasks (finished ones dropped)
+    # the builds of other tasks (finished ones dropped)
+    copies::Dict{Task, Any}
     lock::ReentrantLock                        # guards `owner` changes and `copies`
-    synced::Vector{Any}                        # [the `LatticeParameters` whose tables and inputs the store holds]
+    # [the `LatticeParameters` whose tables and inputs the store holds]
+    synced::Vector{Any}
     stamp::Vector{Int}                         # … at its write count
-    tcell::Base.RefValue{Float64}              # the time of a call through a `LatticeFunction` (no boxing)
-    masked::Vector{Tuple{UnitRange{Int}, Any, Coef, Any, Symbol, Any, Any}} # the masked state fields (`_masked`)
-    fnspecs::Dict{String, FnInputCheck}           # the checks of the input functions' results, by key
-    initbs::Vector{Any}                        # [the init launches bound, the parameter vector they hold]
+    # the time of a call through a `LatticeFunction` (no boxing)
+    tcell::Base.RefValue{Float64}
+    # the masked state fields (`_masked`)
+    masked::Vector{Tuple{UnitRange{Int}, Any, Coef, Any, Symbol, Any, Any}}
+    # the checks of the input functions' results, by key
+    fnspecs::Dict{String, FnInputCheck}
+    # [the init launches bound, the parameter vector they hold]
+    initbs::Vector{Any}
 end
-_rhs_eltype(du, u, p, t) = promote_dual(promote_dual(promote_type(eltype(u), eltype(du)), eltype(_pvals(p))), typeof(t))
+function _rhs_eltype(du, u, p, t)
+    return promote_dual(
+        promote_dual(promote_type(eltype(u), eltype(du)), eltype(_pvals(p))), typeof(t)
+    )
+end
 function (f::LatticeRHS{L, W, E})(du, u, p, t) where {L, W, E}
     f.owner[1] === current_task() || return _other_task(f, du, u, p, t)
     pv = _pvals(p)
@@ -963,10 +1105,14 @@ function (f::LatticeRHS{L, W, E})(du, u, p, t) where {L, W, E}
     _fns_at!(f, p, t)
     # the computed slots: derived again when the values change, and on every call for
     # parameters with derivative parts (a reseeded Dual vector keeps its primal values)
-    _derives(f) && (_plainp(pv) && _checked(f, pv) || derive!(pv, _ptables(p, f.ctx.tables), f.ctx.index))
+    _derives(f) && (
+        _plainp(pv) && _checked(f, pv) ||
+            derive!(pv, _ptables(p, f.ctx.tables), f.ctx.index)
+    )
     _checked(f, pv) || _check!(f, p)
     k = _ptick(p)
-    isempty(f.init.launches) || (!f.ctx.moving && _same_params(f, pv)) || _init!(f, pv, t, k)
+    isempty(f.init.launches) || (!f.ctx.moving && _same_params(f, pv)) ||
+        _init!(f, pv, t, k)
     f.walk(f.launches, (du, u, pv, t, k))
     isempty(f.masked) || _masked_rates!(du, u, pv, f.masked)
     return nothing
@@ -999,30 +1145,51 @@ function _masked_rates!(du, u, p, masked)
     end
     return nothing
 end
-# `d = v - u` (or `v vf - u`) at the masked sites (a broadcast over the components of a site)
+# `d = v - u` (or `v vf - u`) at the masked sites (a broadcast over the components of a
+# site)
 function _mask_residual!(d, u, m, v, vf)
     n = length(m)
     D, U = reshape(d, n, :), reshape(u, n, :)
-    vf === nothing ? (D .= ifelse.(m .!= 0, v .- U, D)) : (D .= ifelse.(m .!= 0, v .* vf .- U, D))
+    if vf === nothing
+        D .= ifelse.(m .!= 0, v .- U, D)
+    else
+        D .= ifelse.(m .!= 0, v .* vf .- U, D)
+    end
     return nothing
 end
-_clamp_masked!(u, m, v) = KA.get_backend(u) isa KA.CPU ? _clamp_host!(u, m, v) : _clamp_device!(u, m, v)
-_clamp_masked!(u, m, v, vf) = KA.get_backend(u) isa KA.CPU ? _clamp_host!(u, m, v, vf) : _clamp_device!(u, m, v, vf)
+function _clamp_masked!(u, m, v)
+    return KA.get_backend(u) isa KA.CPU ? _clamp_host!(u, m, v) : _clamp_device!(u, m, v)
+end
+function _clamp_masked!(u, m, v, vf)
+    return if KA.get_backend(u) isa KA.CPU
+        _clamp_host!(u, m, v, vf)
+    else
+        _clamp_device!(u, m, v, vf)
+    end
+end
 
 # the store holds the tables and inputs of `p` (a raw parameter vector: the build's own)
 # a plain vector holds no input values: the store's inputs are those given at the build (an
 # eager `ode_problem`), or of a `LatticeParameters` an earlier call synced; else the inputs
 # would read as zero, which is refused (review finding 5)
-_synced(f::LatticeRHS, p) = f.synced[1] !== nothing || _no_inputs(f.ctx.program) || _raw_inputs(f)
+function _synced(f::LatticeRHS, p)
+    return f.synced[1] !== nothing || _no_inputs(f.ctx.program) || _raw_inputs(f)
+end
 _no_inputs(s::Program) = !any(fd -> fd.role == :input, s.fields)
 function _raw_inputs(f::LatticeRHS)
-    ks = [input_name(f.ctx.index, fd.key) for fd in f.ctx.program.fields if fd.role == :input]
+    ks = [
+        input_name(f.ctx.index, fd.key)
+            for fd in f.ctx.program.fields if fd.role == :input
+    ]
     throw(
         ArgumentError(
             string(
-                "the parameters are a plain vector, which holds no input values: the input field",
-                length(ks) == 1 ? " " : "s ", join(("`$k`" for k in ks), ", "), " would read as zero. Give the problem's ",
-                "parameters, `prob.p` (a `LatticeParameters`, with the inputs), or `remake(prob; p = values)`"
+                "the parameters are a plain vector, which holds no input values: the \
+                    input field",
+                length(ks) == 1 ? " " : "s ", join(("`$k`" for k in ks), ", "),
+                " would read as zero. Give the problem's ",
+                "parameters, `prob.p` (a `LatticeParameters`, with the inputs), or \
+                    `remake(prob; p = values)`"
             )
         )
     )
@@ -1046,8 +1213,8 @@ function _sync!(f::LatticeRHS, p::LatticeParameters)
     f.stamp[1] = p.stamp[]
     return nothing
 end
-# the inputs given as functions of the time at the time `t` of a right-side call, written into
-# the build's store; the init kernels (the masks) run again at this call
+# the inputs given as functions of the time at the time `t` of a right-side call, written
+# into the build's store; the init kernels (the masks) run again at this call
 _fns_at!(f, p, t) = nothing
 function _fns_at!(f::LatticeRHS, p::LatticeParameters, t)
     isempty(p.fns) && return nothing
@@ -1060,12 +1227,14 @@ function _fns_at!(f::LatticeRHS, p::LatticeParameters, t)
         _eval_input!(g, f.tcell, array(f.store, s.fid, :cur), s)
         mask |= s.mask
     end
-    mask && (f.lastp[1] = nothing)          # the masks that read an input run again at this call
+    # the masks that read an input run again at this call
+    mask && (f.lastp[1] = nothing)
     return nothing
 end
 function _eval_input!(g::G, cell::Base.RefValue{Float64}, a, s::FnInputCheck) where {G}
     v = g(cell[])
-    ok = (v isa Number || (v isa AbstractArray && length(v) == s.n)) && _values_ok(v, s.fl, s.r, s.bool, s.bounds)
+    ok = (v isa Number || (v isa AbstractArray && length(v) == s.n)) &&
+        _values_ok(v, s.fl, s.r, s.bool, s.bounds)
     ok || _input_fn_error(v, s, cell[])
     v isa Number ? fill!(a, v) : _copy_input!(a, v)
     return nothing
@@ -1096,8 +1265,8 @@ end
     )
 end
 
-# the tables of the right side under a SciML function (an ODEFunction, or one wrapping it), or
-# `nothing` (then the computed slots are not derived for a bound check)
+# the tables of the right side under a SciML function (an ODEFunction, or one wrapping it),
+# or `nothing` (then the computed slots are not derived for a bound check)
 rhs_tables(f::LatticeRHS) = f.ctx.tables
 rhs_tables(f) = hasproperty(f, :f) ? rhs_tables(getproperty(f, :f)) : nothing
 _derives(f::LatticeRHS) = _hasderive(f.ctx.index)
@@ -1105,24 +1274,26 @@ _hasderive(ix) = false
 _hasderive(ix::LatticeIndex) = ix.derive !== nothing
 _plainp(p) = p isa AbstractVector{<:Union{Float32, Float64}}
 
-# Init is skipped only for plain Float32/Float64 parameters that are the same object with the
-# same values (exact in Float64). Any other type re-runs init on every call: ForwardDiff's
-# chunk mode re-seeds the partials of one Dual vector in place (same object, same primal
-# values), and a BigFloat changed below Float64 resolution would compare equal.
+# Init is skipped only for plain Float32/Float64 parameters that are the same object with
+# the same values (exact in Float64). Any other type re-runs init on every call:
+# ForwardDiff's chunk mode re-seeds the partials of one Dual vector in place (same object,
+# same primal values), and a BigFloat changed below Float64 resolution would compare equal.
 _same_params(::LatticeRHS, p) = false
 function _same_params(f::LatticeRHS, p::AbstractVector{<:Union{Float32, Float64}})
     return f.lastp[1] === p && length(f.lastv) == length(p) &&
         all(i -> f.lastv[i] == Float64(p[i]), eachindex(f.lastv))
 end
 function _init!(f::LatticeRHS{L, W, E}, p, t = f.ctx.t0, k = nothing) where {L, W, E}
-    # the init launches bound once per parameter vector and values (a rerun at the same values,
-    # as an input function's call makes, allocates nothing)
+    # the init launches bound once per parameter vector and values (a rerun at the same
+    # values, as an input function's call makes, allocates nothing)
     b = f.initbs
     if b[1] === nothing || b[2] !== p || !_bound_same(f, p)
         b[1] = BoundStep(f.ctx.backend, f.ctx.program, f.init, f.store, p; c = zero(E))
         b[2] = p
     end
-    _run_init!(b[1], f.store, f.init, Float64(primal(t)), k === nothing ? nothing : Float64(k))
+    _run_init!(
+        b[1], f.store, f.init, Float64(primal(t)), k === nothing ? nothing : Float64(k)
+    )
     f.lastp[1] = p
     resize!(f.lastv, length(p))
     for i in eachindex(p)
@@ -1130,15 +1301,22 @@ function _init!(f::LatticeRHS{L, W, E}, p, t = f.ctx.t0, k = nothing) where {L, 
     end
     return nothing
 end
-_bound_same(f::LatticeRHS, p) = _plainp(p) && length(f.lastv) == length(p) && all(i -> f.lastv[i] == Float64(p[i]), eachindex(p))
-# (a dynamic call with heap arguments only: the bound step from its `Any` slot, the time in a cell)
-_run_init!(bs, st, sp, t::Float64, k) = (k === nothing ? bs((t, 0.0)) : bs((t, 0.0, k)); swap!(st, sp); nothing)
+function _bound_same(f::LatticeRHS, p)
+    return _plainp(p) && length(f.lastv) == length(p) &&
+        all(i -> f.lastv[i] == Float64(p[i]), eachindex(p))
+end
+# (a dynamic call with heap arguments only: the bound step from its `Any` slot, the time in
+# a cell)
+function _run_init!(bs, st, sp, t::Float64, k)
+    (k === nothing ? bs((t, 0.0)) : bs((t, 0.0, k)); swap!(st, sp); nothing)
+end
 
-# The parameter checks (a NaN value, the front end's `check_parameters`, as negative diffusion)
-# run whenever the parameters change: a new `p` object (`remake`, a solver's own copy) or new
-# primal values in place (`setp` on an integrator, which takes effect at the next call). The
-# same unchanged `p` skips them without allocating. On any change of primal values the checks
-# run (Dual parameters reseeded in place keep their primal values, so they are checked once).
+# The parameter checks (a NaN value, the front end's `check_parameters`, as negative
+# diffusion) run whenever the parameters change: a new `p` object (`remake`, a solver's own
+# copy) or new primal values in place (`setp` on an integrator, which takes effect at the
+# next call). The same unchanged `p` skips them without allocating. On any change of primal
+# values the checks run (Dual parameters reseeded in place keep their primal values, so they
+# are checked once).
 function _checked(f::LatticeRHS, p)
     return f.checkp[1] === p && length(f.checkv) == length(p) &&
         all(i -> f.checkv[i] == Float64(primal(p[i])), eachindex(f.checkv))
@@ -1146,24 +1324,30 @@ end
 function _check!(f::LatticeRHS, p)
     pv = _pvals(p)
     check_values(pv, f.ctx.index)
-    check_parameters(f.ctx.stability, with_tables(map(primal, pv), _ptables(p, f.ctx.tables); inputs = _binputs(f.ctx, p)))
+    check_parameters(
+        f.ctx.stability,
+        with_tables(map(primal, pv), _ptables(p, f.ctx.tables); inputs = _binputs(f.ctx, p))
+    )
     f.checkp[1] = pv
     resize!(f.checkv, length(pv))
     f.checkv .= [Float64(primal(x)) for x in pv]
     return nothing
 end
-# the inputs the stability bound reads in an index, shaped by site: those of `p`, or the ones
-# the problem was built with
+# the inputs the stability bound reads in an index, shaped by site: those of `p`, or the
+# ones the problem was built with
 _binputs(ctx, p) = ctx.binputs
 function _binputs(ctx, p::LatticeParameters)
     bks = bound_inputs(ctx.stability)
     isempty(bks) && return ctx.binputs
-    return Pair{String, Any}[k => _site_shaped(ctx.program, k, v) for (k, v) in p.inputs if k in bks && v !== nothing]
+    return Pair{String, Any}[
+        k => _site_shaped(ctx.program, k, v)
+            for (k, v) in p.inputs if k in bks && v !== nothing
+    ]
 end
 
-# A deep copy (SciML's `safetycopy` of an ensemble's problem) is a new build: it has no owner
-# and its own lock. Serializing writes the same: a build with no owner (a running task does
-# not serialize), which the task that first calls the deserialized function claims.
+# A deep copy (SciML's `safetycopy` of an ensemble's problem) is a new build: it has no
+# owner and its own lock. Serializing writes the same: a build with no owner (a running task
+# does not serialize), which the task that first calls the deserialized function claims.
 function _unowned(f::LatticeRHS, val)
     return typeof(f)(
         map(fieldnames(typeof(f))) do k
@@ -1192,13 +1376,16 @@ function Base.deepcopy_internal(f::LatticeRHS, d::IdDict)
     return g
 end
 function Serialization.serialize(s::Serialization.AbstractSerializer, f::LatticeRHS)
-    return invoke(Serialization.serialize, Tuple{Serialization.AbstractSerializer, Any}, s, _unowned(f, identity))
+    return invoke(
+        Serialization.serialize, Tuple{Serialization.AbstractSerializer, Any},
+        s, _unowned(f, identity)
+    )
 end
 
 # A call from a task that does not own the build: the build itself once the task claims it
-# (it has no owner, or its owner has ended), else the task's own copy, built once and kept in
-# `copies`, found through a `WeakRef` in its task-local storage keyed by this build's `owner`
-# vector: a mutable key, whose identity is its address (the build itself is an
+# (it has no owner, or its owner has ended), else the task's own copy, built once and kept
+# in `copies`, found through a `WeakRef` in its task-local storage keyed by this build's
+# `owner` vector: a mutable key, whose identity is its address (the build itself is an
 # immutable struct, whose `objectid` hashes its contents and allocates). The build holds the
 # copy; the task holds only the weak reference, so a dropped build frees its copies. The
 # lookup takes no lock and does not allocate; the copy has this build's type, so the call is
@@ -1239,15 +1426,19 @@ function _variant(f::LatticeRHS, ::Type{C}) where {C}
         V <: Union{Float16, Float32} || Exec.supports(ctx.backend, Float64) || throw(
             ArgumentError(
                 string(
-                    "the solver passed values of type ", C, " (SciMLBase promotes u0 to the ",
-                    "parameters' value type for ForwardDiff); this backend has no Float64: ",
-                    "differentiate with respect to Float32 parameters (θ::Vector{Float32}) here"
+                    "the solver passed values of type ", C,
+                    " (SciMLBase promotes u0 to the ",
+                    "parameters' value type for ForwardDiff); this backend has no \
+                        Float64: ",
+                    "differentiate with respect to Float32 parameters \
+                        (θ::Vector{Float32}) here"
                 )
             )
         )
         _check_eltype(C, ctx.backend)
         v = _lattice_rhs(ctx, C, f.store)
-        f.synced[1] === nothing || (v.synced[1] = :given)      # (the integer inputs are shared)
+        # (the integer inputs are shared)
+        f.synced[1] === nothing || (v.synced[1] = :given)
         v.owner[1] = f.owner[1]                  # the variant runs on its build's task
         f.variants[C] = v
         push!(f.order, C)
@@ -1262,22 +1453,23 @@ function _variant(f::LatticeRHS, ::Type{C}) where {C}
 end
 
 # the rate launches of element type `E` on a store of their own; `base` is another build's
-# store, or `nothing` for the native build. With `shared = :all` (a variant of the same task,
-# called in turn with its build) the integer arrays are shared and the float inputs copied; with
-# `shared = :inputs` (another task's copy) every input is copied into arrays of its own, so
-# threads that run trajectories with other inputs, or input functions written at each call,
-# never write one array. Init kernels run at the first call (with that call's `p`),
-# or here for the native build (`Pinit`).
+# store, or `nothing` for the native build. With `shared = :all` (a variant of the same
+# task, called in turn with its build) the integer arrays are shared and the float inputs
+# copied; with `shared = :inputs` (another task's copy) every input is copied into arrays of
+# its own, so threads that run trajectories with other inputs, or input functions written at
+# each call, never write one array. Init kernels run at the first call (with that call's
+# `p`), or here for the native build (`Pinit`).
 const _PLANS_LOCK = ReentrantLock()
 # the masked state fields of program `s` on store `st` (a `NodeValueRule` on a state field):
 # each field's slot in the state, its mask array, the rule's value, its value field (or
-# `nothing`), the row's mode (`:hold` a rate, `:steady` a steady row, `:next` a map), the value's
-# time rate field (`maskrate:…`, a value that reads the time; or `nothing`) and the mask the last
-# sync wrote (zeros: none yet)
+# `nothing`), the row's mode (`:hold` a rate, `:steady` a steady row, `:next` a map), the
+# value's time rate field (`maskrate:…`, a value that reads the time; or `nothing`) and the
+# mask the last sync wrote (zeros: none yet)
 function _masked(s::Program, st::FieldStore, slots, ctx)
     out = Tuple{UnitRange{Int}, Any, Coef, Any, Symbol, Any, Any}[]
     for r in s.rules
-        r isa NodeValueRule && isassigned(slots, r.field) && !isempty(slots[r.field]) || continue
+        r isa NodeValueRule && isassigned(slots, r.field) && !isempty(slots[r.field]) ||
+            continue
         mode = if isempty(ctx.rates)
             :next
         elseif s.fields[r.field].key in ctx.steady
@@ -1286,7 +1478,11 @@ function _masked(s::Program, st::FieldStore, slots, ctx)
             :hold
         end
         vf = r.vfield == 0 ? nothing : array(st, r.vfield, :cur)
-        rk = r.vfield == 0 ? "" : replace(s.fields[r.vfield].key, r"^maskvalue:" => "maskrate:")
+        rk = if r.vfield == 0
+            ""
+        else
+            replace(s.fields[r.vfield].key, r"^maskvalue:" => "maskrate:")
+        end
         ri = rk == "" ? nothing : findfirst(fd -> fd.key == rk, s.fields)
         rf = ri === nothing ? nothing : array(st, ri, :cur)
         mk = array(st, s.masks[r.mask].field, :cur)
@@ -1299,10 +1495,15 @@ function _lattice_rhs(
         shared::Symbol = :all
     ) where {E}
     s, backend = ctx.program, ctx.backend
-    ip, sp = lock(() -> _plans!(ctx.plans, s, ctx.initkeys, ctx.options, value_type(E), backend), _PLANS_LOCK)
+    ip, sp = lock(
+        () -> _plans!(
+            ctx.plans, s, ctx.initkeys, ctx.options, value_type(E), backend
+        ), _PLANS_LOCK
+    )
     ids = Int[fieldid(s, k) for k in ctx.state]
-    # a rate program writes each rate into a scratch field (one buffer per field); a map program
-    # writes the next value of each state field (its `:next` role: the solver's `du`)
+    # a rate program writes each rate into a scratch field (one buffer per field); a map
+    # program writes the next value of each state field (its `:next` role: the solver's
+    # `du`)
     sort(sp.swaps) == (isempty(ctx.rates) ? sort(ids) : Int[]) ||
         throw(ArgumentError("the ODE form has one buffer per field"))
     slots = state_layout(s, ids)
@@ -1320,10 +1521,20 @@ function _lattice_rhs(
     if base !== nothing                        # share what the element type does not change
         for (i, f) in enumerate(s.fields)
             if !isfloat(f.storage)
-                shared === :all ? (st.bufs[i] = base.bufs[i]) : f.role == :input && (st.bufs[i][1] .= base.bufs[i][1])
+                if shared === :all
+                    st.bufs[i] = base.bufs[i]
+                else
+                    f.role == :input && (st.bufs[i][1] .= base.bufs[i][1])
+                end
             elseif f.role == :input                # a float input, in this build's type (a
-                b = base.bufs[i][1]                #  Float64 build after a Dual one: the primal)
-                st.bufs[i][1] .= promote_type(eltype(st.bufs[i][1]), eltype(b)) == eltype(st.bufs[i][1]) ? b : primal.(b)
+                #  Float64 build after a Dual one: the primal)
+                b = base.bufs[i][1]
+                st.bufs[i][1] .= if promote_type(eltype(st.bufs[i][1]), eltype(b)) ==
+                        eltype(st.bufs[i][1])
+                    b
+                else
+                    primal.(b)
+                end
             end
         end
     end
@@ -1334,24 +1545,31 @@ function _lattice_rhs(
     ls = map(Tuple(sp.launches)) do l
         # a table's id numbers the tables, not the fields: it is never a state slot (a
         # table whose index equalled a state field's id was once bound to the state)
-        S0 = Tuple(Tuple(_rhs_binding(st, marks, id, role) for (id, role) in lane) for lane in l.bind)
+        S0 = Tuple(
+            Tuple(_rhs_binding(st, marks, id, role) for (id, role) in lane)
+                for lane in l.bind
+        )
         S = map(lane -> map(a -> _resolve(a, U, dU), lane), S0)
         np = s.nparams
         P = launch_parameters(l.kernel, ntuple(_ -> zero(E), np), c)
         RHSLaunch(
-            bind_program(backend, s, l, S, P, (0.0, 0.0); R = E), S0, derive_function(l.kernel),
+            bind_program(backend, s, l, S, P, (0.0, 0.0); R = E), S0,
+            derive_function(l.kernel),
             Val(np), c
         )
     end
     Exec.compile_all!(backend, [r.launch for r in ls])
     f = LatticeRHS{typeof(ls), typeof(each(length(ls))), E, typeof(ctx), typeof(ip)}(
         ls,
-        each(length(ls)), ctx.faces, st, ctx, ip, Any[nothing], Float64[], Any[nothing], Float64[],
+        each(length(ls)), ctx.faces, st, ctx, ip, Any[nothing], Float64[], Any[nothing],
+        Float64[],
         Dict{Type, Any}(), Type[],
-        Any[nothing], Dict{Task, Any}(), ReentrantLock(), Any[nothing], Int[0], Ref(0.0), _masked(s, st, slots, ctx),
+        Any[nothing], Dict{Task, Any}(), ReentrantLock(), Any[nothing],
+        Int[0], Ref(0.0), _masked(s, st, slots, ctx),
         Dict{String, FnInputCheck}(), Any[nothing, nothing]
     )
-    isempty(inputs) || (f.synced[1] = :given)                # (the inputs given at the build)
+    # (the inputs given at the build)
+    isempty(inputs) || (f.synced[1] = :given)
     Pinit === nothing || isempty(ip.launches) || _init!(f, Pinit)
     return f
 end
@@ -1371,11 +1589,12 @@ struct ODEAux{F, P}
 end
 _build_eltype(::LatticeRHS{L, W, E}) where {L, W, E} = E
 function (a::ODEAux)(u, p, t, key)
-    # a saved state of an owned solve on a device is a host vector: the aux kernels read it on
-    # the problem's backend
+    # a saved state of an owned solve on a device is a host vector: the aux kernels read it
+    # on the problem's backend
     if a.f isa LatticeFunction
         be = a.f.meta.problem.backend
-        typeof(KA.get_backend(u)) == typeof(be) || (u = copyto!(KA.allocate(be, eltype(u), length(u)), u))
+        typeof(KA.get_backend(u)) == typeof(be) ||
+            (u = copyto!(KA.allocate(be, eltype(u), length(u)), u))
     end
     f = a.f isa LatticeFunction ? _built(a.f.meta, u, p, t) : a.f
     g = f.owner[1] === current_task() ? f : _for_task(f)
@@ -1392,7 +1611,8 @@ end
 
 """
     ode_problem(program, u0, tspan, p; state, rates, init = String[], index, tables = [],
-                inputs = [], stability = p -> NaN, backend = CPU(), options = CompileOptions())
+                inputs = [], stability = p -> NaN, backend = CPU(),
+                    options = CompileOptions())
 
 The `ODEProblem` of a field program in ODE form. `state` are the state field keys (flat
 order), `rates[k]` the scratch field holding the rate of state field `k`; `init` kernels run
@@ -1400,16 +1620,17 @@ once (on the problem's store) before the problem is returned. `u0` is the flat h
 state, `p` the raw parameter vector, both kept in their element types (P5 role model: the
 eltype of `u0`, promoted with Dual `p`, decides the bodies' value type; an explicit
 `options.T` that differs is refused). The `ODEFunction` carries `sys = index`, so solutions
-and integrators index fields by symbol. `inputs` are `symbol => values` for every input field
-(an unset one, or a parameter that is NaN, is an error here: an ODE problem has no `init`).
-`stability` is the front end's stability bound, whose [`check_parameters`](@ref) runs here and
-at every call of the right side with new parameter values (`remake`, `setp`): a refused value
-is an error from `solve` or `step!`, never a run. With `steady = true` (a system with no time)
-it is the `SteadyStateProblem` of the right side.
+and integrators index fields by symbol. `inputs` are `symbol => values` for every input
+field (an unset one, or a parameter that is NaN, is an error here: an ODE problem has no
+`init`). `stability` is the front end's stability bound, whose [`check_parameters`](@ref)
+runs here and at every call of the right side with new parameter values (`remake`, `setp`):
+a refused value is an error from `solve` or `step!`, never a run. With `steady = true` (a
+system with no time) it is the `SteadyStateProblem` of the right side.
 """
 function ode_problem(
         prog::Program, u0, tspan, p; state, rates, init = String[],
-        index = LatticeIndex(), tables = Pair{String, Vector{Float64}}[], inputs = Pair[], stability = p -> NaN,
+        index = LatticeIndex(), tables = Pair{String, Vector{Float64}}[], inputs = Pair[],
+        stability = p -> NaN,
         backend = KA.CPU(),
         options::CompileOptions = CompileOptions(), steady::Bool = false
     )
@@ -1420,12 +1641,18 @@ function ode_problem(
     s = semantic(prog)
     ins = resolve_inputs(s, index, inputs)
     check_inputs_set(ins; built = false, index)
-    # the inputs are fixed here (the ODE path takes them at `discretize` only): the checks see
-    # their values, so a rate that is not finite where they reach is refused now
+    # the inputs are fixed here (the ODE path takes them at `discretize` only): the checks
+    # see their values, so a rate that is not finite where they reach is refused now
     bks = bound_inputs(stability)
-    binputs = Pair{String, Any}[k => _site_shaped(s, k, v) for (k, v) in ins if k in bks && v !== nothing]
+    binputs = Pair{String, Any}[
+        k => _site_shaped(s, k, v)
+            for (k, v) in ins if k in bks && v !== nothing
+    ]
     tabs = _table_list(tables)
-    check_parameters(stability, with_tables(map(primal, collect(p)), tabs; inputs = binputs))
+    check_parameters(
+        stability,
+        with_tables(map(primal, collect(p)), tabs; inputs = binputs)
+    )
     N = _ndims(s)
     E = problem_eltype(u0, p, tabs)
     _check_eltype(E, backend)
@@ -1434,7 +1661,8 @@ function ode_problem(
         s, backend, collect(String, state),
         Dict{String, String}(rates), collect(String, init), options,
         tabs, faces, Float64(tspan[1]),
-        Dict{Type, Tuple{StepPlan{N}, StepPlan{N}}}(), index, stability, binputs, String[], false
+        Dict{Type, Tuple{StepPlan{N}, StepPlan{N}}}(), index, stability, binputs, String[],
+        false
     )
     ids = Int[fieldid(s, k) for k in state]
     slots = state_layout(s, ids)
@@ -1445,7 +1673,8 @@ function ode_problem(
     U = copyto!(KA.allocate(backend, E, n), convert(Vector{E}, collect(u0)))
     # aux fields `K ~ rhs` read as observed quantities (`sol[K]`, `integ[K]`)
     index isa LatticeIndex && !isempty(index.aux) && (index.auxeval[] = ODEAux(f, s))
-    index isa LatticeIndex && (index.program[] = s)          # (the checks of an input write)
+    # (the checks of an input write)
+    index isa LatticeIndex && (index.program[] = s)
     fun = SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize}(f; sys = index)
     lp = LatticeParameters(pv, tabs, ins)
     # a system with no time: the steady state of the right side, for SciML's steady
@@ -1458,11 +1687,11 @@ end
 # `LatticeRHS`, a SteadyStateProblem of it, a NonlinearProblem of that, whose function wraps
 # the right side and keeps its `sys`): a parameter map given to `remake` names parameters
 # only. SciMLBase skips a key whose `parameter_index` is `nothing` (SII's answer for an
-# expression such as `2k`), so `remake(o; p = [2k => 1.0])` would run with the old values; it
-# is refused here.
+# expression such as `2k`), so `remake(o; p = [2k => 1.0])` would run with the old values;
+# it is refused here.
 
-# `T` with the type parameter of its field `field` bounded by `S` (a parameter found by name,
-# not by position)
+# `T` with the type parameter of its field `field` bounded by `S` (a parameter found by
+# name, not by position)
 function typewith(T::UnionAll, field::Symbol, S)
     U = T
     while U isa UnionAll
@@ -1477,15 +1706,24 @@ function typewith(T::UnionAll, field::Symbol, S)
     end
     return body
 end
-const LatticeODEFunction = SciMLBase.ODEFunction{<:Any, <:Any, <:Union{LatticeRHS, LatticeFunction}}
-# (the problem type bounded: SciMLBase's `remake` of a dynamical or second-order problem stays its own)
+const LatticeODEFunction = SciMLBase.ODEFunction{
+    <:Any, <:Any, <:Union{LatticeRHS, LatticeFunction},
+}
+# (the problem type bounded: SciMLBase's `remake` of a dynamical or second-order problem
+# stays its own)
 const LatticeODEProblem = SciMLBase.ODEProblem{
     <:Any, <:Any, <:Any, <:Any, <:LatticeODEFunction, <:Any,
     <:Union{SciMLBase.StandardODEProblem, LatticeMetadata},
 }
 const LatticeDiscreteFunction = SciMLBase.DiscreteFunction{<:Any, <:Any, <:LatticeFunction}
-const LatticeDiscreteProblem = typewith(SciMLBase.DiscreteProblem, :f, LatticeDiscreteFunction)
-const LatticeSteadyStateProblem = typewith(SciMLBase.SteadyStateProblem, :f, LatticeODEFunction)
+const LatticeDiscreteProblem = typewith(
+    SciMLBase.DiscreteProblem, :f,
+    LatticeDiscreteFunction
+)
+const LatticeSteadyStateProblem = typewith(
+    SciMLBase.SteadyStateProblem, :f,
+    LatticeODEFunction
+)
 const LatticeNonlinearProblem = typewith(
     SciMLBase.NonlinearProblem, :f,
     typewith(SciMLBase.NonlinearFunction, :sys, LatticeIndex)
@@ -1496,11 +1734,11 @@ const LatticeSciMLProblem = Union{
 }
 
 # The parameters of a remake of a lattice problem: `p` a `LatticeParameters`, a vector
-# of every scalar parameter, or a map whose keys name scalar parameters, whole tables (`Dk =>
-# values`) and inputs (`kind => K`); `inputs` more input pairs. Every key names a parameter (a
-# typo, an expression or a computed parameter is refused), each write is checked (a
-# declared bound, finite table values, one input value per site) and the computed slots
-# follow. A plain value is written into the parameter type, a Dual promotes it.
+# of every scalar parameter, or a map whose keys name scalar parameters, whole tables (`Dk
+# => values`) and inputs (`kind => K`); `inputs` more input pairs. Every key names a
+# parameter (a typo, an expression or a computed parameter is refused), each write is
+# checked (a declared bound, finite table values, one input value per site) and the computed
+# slots follow. A plain value is written into the parameter type, a Dual promotes it.
 # `missing`: the problem's own object.
 function remake_params(prob, p, inputs = ())
     lp = prob.p
@@ -1513,15 +1751,18 @@ function remake_params(prob, p, inputs = ())
         p
     elseif p isa AbstractVector{<:Real}
         length(p) == length(lp.values) ||
-            throw(ArgumentError("`p` has $(length(p)) values; the problem has $(length(lp.values)) parameters"))
+            throw(ArgumentError("`p` has $(length(p)) values; the problem \
+                has $(length(lp.values)) parameters"))
         with_values(lp, collect(p))
-    elseif p isa AbstractDict || (p isa Union{AbstractVector, Tuple} && all(x -> x isa Pair, p))
+    elseif p isa AbstractDict ||
+            (p isa Union{AbstractVector, Tuple} && all(x -> x isa Pair, p))
         _params_from_map(lp, ix, p, _start_time(prob))
     else
         throw(
             ArgumentError(
                 string(
-                    "`p` is a `LatticeParameters`, a vector of every parameter or `parameter => value` ",
+                    "`p` is a `LatticeParameters`, a vector of every parameter or \
+                        `parameter => value` ",
                     "pairs; got a ", typeof(p)
                 )
             )
@@ -1537,15 +1778,27 @@ function remake_params(prob, p, inputs = ())
 end
 # the input key of `s` among the inputs of `q`, else an error listing them
 function _input_of(ix, s, q::LatticeParameters)
-    k = ix isa LatticeIndex && !(s isa Union{AbstractArray, Tuple, Integer}) ? input_key(ix, s) : nothing
-    k === nothing && s isa AbstractString && any(x -> first(x) == s, q.inputs) && (k = String(s))
+    k = if ix isa LatticeIndex && !(s isa Union{AbstractArray, Tuple, Integer})
+        input_key(ix, s)
+    else
+        nothing
+    end
+    k === nothing && s isa AbstractString && any(x -> first(x) == s, q.inputs) &&
+        (k = String(s))
     k === nothing && _not_input(s, [input_name(ix, first(x)) for x in q.inputs])
     return k
 end
 # the start of a problem's time span (an input function's first value), or nothing (no time)
-_start_time(prob) = hasproperty(prob, :tspan) && prob.tspan isa Tuple ? Float64(prob.tspan[1]) : nothing
-# a given input of a remake: a value (the input is constant from now on), or a function of the
-# time, kept in `q.fns` with its value at `t0`
+function _start_time(prob)
+    if hasproperty(prob, :tspan) &&
+            prob.tspan isa Tuple
+        return Float64(prob.tspan[1])
+    else
+        return nothing
+    end
+end
+# a given input of a remake: a value (the input is constant from now on), or a function of
+# the time, kept in `q.fns` with its value at `t0`
 function _write_given_input!(q::LatticeParameters, ix, slot::InputSlot, v, t0)
     k = slot.key
     filter!(x -> first(x) != k, q.fns)
@@ -1568,7 +1821,8 @@ end
 # the element type of a parameter table after the values `p` (pairs) are written into it
 function _table_eltype(ix, p, T)
     for x in p
-        if SII.parameter_index(ix, first(x)) isa TableSlot && last(x) isa Union{AbstractArray, Tuple}
+        if SII.parameter_index(ix, first(x)) isa TableSlot &&
+                last(x) isa Union{AbstractArray, Tuple}
             T = promote_type(T, _tabelt(collect(last(x))))
         end
     end
@@ -1598,7 +1852,10 @@ function _rhs_binding(st, marks, id, role)
 end
 function _params_from_map(lp::LatticeParameters, ix, p, t0 = nothing)
     ix isa LatticeIndex && check_parameter_keys(ix, (first(x) for x in p))
-    T = foldl((T, x) -> last(x) isa Real ? promote_dual(T, typeof(last(x))) : T, p; init = eltype(lp.values))
+    T = foldl(
+        (T, x) -> last(x) isa Real ? promote_dual(T, typeof(last(x))) : T, p;
+        init = eltype(lp.values)
+    )
     q = with_values(lp, Vector{T}(lp.values))
     # a whole table of a wider type (BigFloat values for Float64 defaults) widens the tables
     TT0 = _tabeltype(lp.tables)
@@ -1629,14 +1886,17 @@ function _params_from_map(lp::LatticeParameters, ix, p, t0 = nothing)
     end
     return q
 end
-# `u0` of a remake: a flat state, or `field => values` pairs (a number or one value per site)
-# over the problem's state, on its backend; a Dual value promotes the state
+# `u0` of a remake: a flat state, or `field => values` pairs (a number or one value per
+# site) over the problem's state, on its backend; a Dual value promotes the state
 function remake_u0(prob, u0)
     # a state on another backend than the problem's is refused, naming both
-    u0 isa AbstractArray && !(u0 isa AbstractArray{<:Pair}) && _check_backend(KA.get_backend(prob.u0), u0, "u0")
+    u0 isa AbstractArray && !(u0 isa AbstractArray{<:Pair}) &&
+        _check_backend(KA.get_backend(prob.u0), u0, "u0")
     u0 isa Union{AbstractVector{<:Pair}, Tuple, AbstractDict} && !isempty(u0) || return u0
     ix = SII.symbolic_container(prob.f)
-    all(x -> x isa Pair, u0) || throw(ArgumentError("`u0` is a flat vector of the state or `field => values` pairs"))
+    all(x -> x isa Pair, u0) ||
+        throw(ArgumentError("`u0` is a flat vector of the state or `field => values` \
+            pairs"))
     E = _pairs_eltype(u0, eltype(prob.u0))
     out = Vector{E}(Array(prob.u0))
     for (k, v) in u0
@@ -1645,7 +1905,14 @@ function remake_u0(prob, u0)
             ArgumentError(
                 string(
                     "`u0`: `", _symtext(k), "` is not a field of the state",
-                    ix isa LatticeIndex ? string("; its fields: ", join(("`$(_symtext(f))`" for f in ix.varsyms), ", ")) : ""
+                    if ix isa LatticeIndex
+                        string(
+                            "; its fields: ",
+                            join(("`$(_symtext(f))`" for f in ix.varsyms), ", ")
+                        )
+                    else
+                        ""
+                    end
                 )
             )
         )
@@ -1657,8 +1924,13 @@ function remake_u0(prob, u0)
             throw(
                 ArgumentError(
                     string(
-                        "`u0`: give `", _symtext(k), "` one value per site (", length(slot.range),
-                        ") or a number; got ", v isa AbstractArray ? "$(length(v)) values" : repr(v)
+                        "`u0`: give `", _symtext(k), "` one value per site (",
+                        length(slot.range),
+                        ") or a number; got ", if v isa AbstractArray
+                            "$(length(v)) values"
+                        else
+                            repr(v)
+                        end
                     )
                 )
             )
@@ -1678,24 +1950,33 @@ function _retime_fns(prob, q, kw)
     end
     return q
 end
-function SciMLBase.remake(prob::LatticeODEProblem; p = missing, u0 = missing, inputs = (), kw...)
+function SciMLBase.remake(
+        prob::LatticeODEProblem; p = missing, u0 = missing, inputs = (), kw...
+    )
     q = _retime_fns(prob, remake_params(prob, p, inputs), kw)
     return invoke(
-        SciMLBase.remake, Tuple{SciMLBase.ODEProblem}, prob; p = q, u0 = _masked_u0(prob, remake_u0(prob, u0), q),
+        SciMLBase.remake, Tuple{SciMLBase.ODEProblem}, prob; p = q,
+        u0 = _masked_u0(prob, remake_u0(prob, u0), q),
         _remake_kw(prob, kw)...
     )
 end
-function SciMLBase.remake(prob::LatticeDiscreteProblem; p = missing, u0 = missing, inputs = (), kw...)
+function SciMLBase.remake(
+        prob::LatticeDiscreteProblem; p = missing, u0 = missing, inputs = (), kw...
+    )
     q = _retime_fns(prob, remake_params(prob, p, inputs), kw)
     return invoke(
-        SciMLBase.remake, Tuple{SciMLBase.DiscreteProblem}, prob; p = q, u0 = _masked_u0(prob, remake_u0(prob, u0), q),
+        SciMLBase.remake, Tuple{SciMLBase.DiscreteProblem}, prob; p = q,
+        u0 = _masked_u0(prob, remake_u0(prob, u0), q),
         _remake_kw(prob, kw)...
     )
 end
-function SciMLBase.remake(prob::LatticeSteadyStateProblem; p = missing, u0 = missing, inputs = (), kw...)
+function SciMLBase.remake(
+        prob::LatticeSteadyStateProblem; p = missing, u0 = missing, inputs = (), kw...
+    )
     q = remake_params(prob, p, inputs)
     return invoke(
-        SciMLBase.remake, Tuple{SciMLBase.SteadyStateProblem}, prob; p = q, u0 = _masked_u0(prob, remake_u0(prob, u0), q),
+        SciMLBase.remake, Tuple{SciMLBase.SteadyStateProblem}, prob; p = q,
+        u0 = _masked_u0(prob, remake_u0(prob, u0), q),
         kw...
     )
 end
@@ -1703,16 +1984,19 @@ end
 # Jacobian keywords in residual form. (SciMLBase 3.58's own conversion wraps a `jvp` as
 # `(Jv, u, p)`, dropping the vector, so its `NonlinearFunction` refuses an in-place `jvp` as
 # nonconforming; every problem sets one.)
-# Upstream: https://github.com/SciML/SciMLBase.jl/issues/1663; drop this method once a fixed SciMLBase is required.
+# Upstream: https://github.com/SciML/SciMLBase.jl/issues/1663; drop this method once a fixed
+# SciMLBase is required.
 function SciMLBase.NonlinearProblem(prob::LatticeSteadyStateProblem)
     f = prob.f
     kw = (; sys = f.sys)
     f.jac === nothing || (kw = (; kw..., jac = _AtStart(f.jac, Inf)))
     f.jvp === nothing || (kw = (; kw..., jvp = _AtStart(f.jvp, Inf)))
-    f.jac_prototype isa SparseArrays.SparseMatrixCSC && (kw = (; kw..., jac_prototype = f.jac_prototype, colorvec = f.colorvec))
+    f.jac_prototype isa SparseArrays.SparseMatrixCSC &&
+        (kw = (; kw..., jac_prototype = f.jac_prototype, colorvec = f.colorvec))
     r = _SteadyResidual(f.f)
     return SciMLBase.NonlinearProblem(
-        SciMLBase.NonlinearFunction{true, SciMLBase.FullSpecialize}(r; kw...), prob.u0, prob.p;
+        SciMLBase.NonlinearFunction{true, SciMLBase.FullSpecialize}(r; kw...), prob.u0,
+        prob.p;
         prob.kwargs...
     )
 end
@@ -1720,10 +2004,13 @@ struct _SteadyResidual{F}
     f::F
 end
 (r::_SteadyResidual)(du, u, p) = (r.f(du, u, p, Inf); nothing)
-function SciMLBase.remake(prob::LatticeNonlinearProblem; p = missing, u0 = missing, inputs = (), kw...)
+function SciMLBase.remake(
+        prob::LatticeNonlinearProblem; p = missing, u0 = missing, inputs = (), kw...
+    )
     q = remake_params(prob, p, inputs)
     return invoke(
-        SciMLBase.remake, Tuple{SciMLBase.NonlinearProblem}, prob; p = q, u0 = _masked_u0(prob, remake_u0(prob, u0), q),
+        SciMLBase.remake, Tuple{SciMLBase.NonlinearProblem}, prob; p = q,
+        u0 = _masked_u0(prob, remake_u0(prob, u0), q),
         kw...
     )
 end
@@ -1733,7 +2020,8 @@ function check_setp(sys, sym)
     # (a resolved index: SII's setter of an array symbol calls `setp` again with its index)
     sym isa Union{TableSlot, InputSlot, Integer} && return nothing
     ix = SII.symbolic_container(sys isa Union{FieldProblem, FieldIntegrator} ? sys : sys.f)
-    ix isa LatticeIndex && !(sym isa Union{AbstractArray, Tuple}) && check_parameter_keys(ix, (sym,))
+    ix isa LatticeIndex && !(sym isa Union{AbstractArray, Tuple}) &&
+        check_parameter_keys(ix, (sym,))
     # an owned problem holds its tables and inputs as given: `remake` gives new ones
     if sys isa FieldProblem && ix isa LatticeIndex
         t = table_key(ix, sym)
@@ -1741,7 +2029,9 @@ function check_setp(sys, sym)
             ArgumentError(
                 string(
                     "`", t, "` is a table (an array parameter) of an owned problem: ",
-                    "`remake(prob; p = [", t, " => values])` gives it new values, and on its integrator `integ.ps[", t, "] = values`"
+                    "`remake(prob; p = [", t, " => values])` gives it new values, and on \
+                        its integrator `integ.ps[",
+                    t, "] = values`"
                 )
             )
         )
@@ -1750,7 +2040,8 @@ function check_setp(sys, sym)
             ArgumentError(
                 string(
                     "`", input_name(ix, k), "` is an input of an owned problem: ",
-                    "`remake(prob; inputs = [", _route(input_name(ix, k)), " => values])` gives it new values, and on its integrator ",
+                    "`remake(prob; inputs = [", _route(input_name(ix, k)),
+                    " => values])` gives it new values, and on its integrator ",
                     "`integ.ps[", input_name(ix, k), "] = values`"
                 )
             )
@@ -1759,14 +2050,22 @@ function check_setp(sys, sym)
     return nothing
 end
 # (the clock's slot of a SciML problem `discretize` returned is no parameter either)
-SII.getp(sys::LatticeSciMLProblem, sym) = (_not_clock(sym); invoke(SII.getp, Tuple{Any, Any}, sys, sym))
-function SII.setp(sys::Union{FieldProblem, FieldIntegrator, LatticeSciMLProblem}, sym; kw...)
-    # a table (or an entry of one) of an integrator: its write, with the checks (`integ.ps[Dk] = values`)
-    if sys isa FieldIntegrator && sys.prob.index isa LatticeIndex && table_key(sys.prob.index, sym) !== nothing
+function SII.getp(sys::LatticeSciMLProblem, sym)
+    (_not_clock(sym); invoke(SII.getp, Tuple{Any, Any}, sys, sym))
+end
+function SII.setp(
+        sys::Union{FieldProblem, FieldIntegrator, LatticeSciMLProblem}, sym;
+        kw...
+    )
+    # a table (or an entry of one) of an integrator: its write, with the checks
+    # (`integ.ps[Dk] = values`)
+    if sys isa FieldIntegrator && sys.prob.index isa LatticeIndex &&
+            table_key(sys.prob.index, sym) !== nothing
         return (i, v) -> (_write_table!(i, v, sym); v)
     end
     # an input of an integrator: the input write (`integ.ps[kind] = K` is `integ[kind] = K`)
-    if sys isa FieldIntegrator && sys.prob.index isa LatticeIndex && !(sym isa Union{AbstractArray, Tuple, Integer}) &&
+    if sys isa FieldIntegrator && sys.prob.index isa LatticeIndex &&
+            !(sym isa Union{AbstractArray, Tuple, Integer}) &&
             input_key(sys.prob.index, sym) !== nothing
         return (i, v) -> (i[sym] = v; v)
     end
@@ -1778,36 +2077,62 @@ end
 # (its right side has no group to step): the route to an OrdinaryDiffEq solver
 function _ode_refusal(alg)
     name = if alg isa LinearSolver
-        string("`", repr(alg), "` is a linear solver, the `linsolve` of an implicit field solver")
+        string(
+            "`", repr(alg),
+            "` is a linear solver, the `linsolve` of an implicit field solver"
+        )
     else
-        string("`", _algtext(alg), "` is a field solver: it steps the problem of a discretized system")
+        string(
+            "`", _algtext(alg),
+            "` is a field solver: it steps the problem of a discretized system"
+        )
     end
     return ArgumentError(
         string(
-            "`solve`/`init` of an `ODEProblem`: ", name, ". This `ODEProblem` was not built by ",
-            "`LatticePDE.discretize` (it has no field groups to step): give it an OrdinaryDiffEq solver (`ImplicitEuler()` ",
+            "`solve`/`init` of an `ODEProblem`: ", name,
+            ". This `ODEProblem` was not built by ",
+            "`LatticePDE.discretize` (it has no field groups to step): give it an \
+                OrdinaryDiffEq solver (`ImplicitEuler()` ",
             "is Backward Euler), or solve the problem `discretize` returns"
         )
     )
 end
-CommonSolve.solve(::SciMLBase.AbstractODEProblem, alg::Union{AbstractFieldAlgorithm, LinearSolver}; kw...) = throw(_ode_refusal(alg))
-CommonSolve.init(::SciMLBase.AbstractODEProblem, alg::Union{AbstractFieldAlgorithm, LinearSolver}; kw...) = throw(_ode_refusal(alg))
+function CommonSolve.solve(
+        ::SciMLBase.AbstractODEProblem,
+        alg::Union{AbstractFieldAlgorithm, LinearSolver}; kw...
+    )
+    throw(_ode_refusal(alg))
+end
+function CommonSolve.init(
+        ::SciMLBase.AbstractODEProblem,
+        alg::Union{AbstractFieldAlgorithm, LinearSolver}; kw...
+    )
+    throw(_ode_refusal(alg))
+end
 
 # The problems `discretize` returns: one problem, many algorithms. A field algorithm
 # (or no algorithm: the default of the group's kind) steps the owned problem built from the
-# metadata and the problem's state, time span and parameters; any other algorithm is SciML's.
+# metadata and the problem's state, time span and parameters; any other algorithm is
+# SciML's.
 const LatticeProblem = Union{LatticeODEProblem, LatticeDiscreteProblem}
 function _owned_or_refuse(prob, alg)
     lattice_metadata(prob) === nothing && throw(_ode_refusal(alg))
     return field_problem(prob)
 end
-# `save_idxs` of state fields on an OrdinaryDiffEq solve: a field is a grid of indices, which
-# SciML's saved subsystem cannot take, so the fields become their flat indices (and `sol[c]`
-# finds the field in the saves)
+# `save_idxs` of state fields on an OrdinaryDiffEq solve: a field is a grid of indices,
+# which SciML's saved subsystem cannot take, so the fields become their flat indices (and
+# `sol[c]` finds the field in the saves)
 function SciMLBase.get_save_idxs_and_saved_subsystem(prob::LatticeProblem, save_idxs)
     idx = _field_save_idxs(prob, save_idxs)
-    idx === save_idxs && return invoke(SciMLBase.get_save_idxs_and_saved_subsystem, Tuple{Any, Any}, prob, save_idxs)
-    return invoke(SciMLBase.get_save_idxs_and_saved_subsystem, Tuple{Any, Vector{Int}}, prob, idx)
+    idx === save_idxs &&
+        return invoke(
+        SciMLBase.get_save_idxs_and_saved_subsystem, Tuple{Any, Any}, prob,
+        save_idxs
+    )
+    return invoke(
+        SciMLBase.get_save_idxs_and_saved_subsystem, Tuple{Any, Vector{Int}},
+        prob, idx
+    )
 end
 function SciMLBase.get_save_idxs_and_saved_subsystem(prob::LatticeProblem, i::Nothing)
     return invoke(SciMLBase.get_save_idxs_and_saved_subsystem, Tuple{Any, Nothing}, prob, i)
@@ -1816,7 +2141,10 @@ function SciMLBase.get_save_idxs_and_saved_subsystem(prob::LatticeProblem, i::In
     return invoke(SciMLBase.get_save_idxs_and_saved_subsystem, Tuple{Any, Int}, prob, i)
 end
 function SciMLBase.get_save_idxs_and_saved_subsystem(prob::LatticeProblem, i::Vector{Int})
-    return invoke(SciMLBase.get_save_idxs_and_saved_subsystem, Tuple{Any, Vector{Int}}, prob, i)
+    return invoke(
+        SciMLBase.get_save_idxs_and_saved_subsystem, Tuple{Any, Vector{Int}},
+        prob, i
+    )
 end
 function _field_save_idxs(prob, save_idxs)
     m = lattice_metadata(prob)
@@ -1824,12 +2152,13 @@ function _field_save_idxs(prob, save_idxs)
     ix = m.problem.index
     ix isa LatticeIndex || return save_idxs
     isfield(i) = !(i isa Integer) && get(ix.vars, ix.key(i), nothing) isa FieldSlot
-    any(isfield, save_idxs isa Union{AbstractVector, Tuple} ? save_idxs : (save_idxs,)) || return save_idxs
+    any(isfield, save_idxs isa Union{AbstractVector, Tuple} ? save_idxs : (save_idxs,)) ||
+        return save_idxs
     return _save_indices(m.problem, save_idxs)
 end
 # (the integrator keeps `prob`: its solution is SciML's, of `prob`, the problem's own
-# keywords join the call's as DiffEqBase merges them, its callbacks before the call's, without
-# the built-in ones of the ODE path, which an owned run steps itself)
+# keywords join the call's as DiffEqBase merges them, its callbacks before the call's,
+# without the built-in ones of the ODE path, which an owned run steps itself)
 function _owned_init(fp::FieldProblem, alg, prob; callback = nothing, kw...)
     pk = Dict{Symbol, Any}(pairs(prob.kwargs))
     pcb = _user_callbacks(pop!(pk, :callback, nothing))
@@ -1855,7 +2184,10 @@ function _builtin_set(prob)
     cb = get(prob.kwargs, :callback, nothing)
     cb === nothing && return nothing
     cs = cb isa SciMLBase.CallbackSet ? cb : SciMLBase.CallbackSet(cb)
-    b = Any[c for c in (cs.continuous_callbacks..., cs.discrete_callbacks...) if _builtin(c)]
+    b = Any[
+        c
+            for c in (cs.continuous_callbacks..., cs.discrete_callbacks...) if _builtin(c)
+    ]
     return isempty(b) ? nothing : b
 end
 # `remake(prob; callback = cb)`: the built-in callbacks stay, the given ones join them (a
@@ -1868,32 +2200,49 @@ function _remake_kw(prob, kw)
     cb = u === nothing ? SciMLBase.CallbackSet(b...) : SciMLBase.CallbackSet(b..., u)
     return merge(NamedTuple(kw), (; callback = cb))
 end
-CommonSolve.init(prob::LatticeProblem, alg::AbstractFieldAlgorithm; kw...) = _owned_init(_owned_or_refuse(prob, alg), alg, prob; kw...)
-CommonSolve.init(prob::LatticeProblem, alg::LinearSolver; kw...) = CommonSolve.init(_owned_or_refuse(prob, alg), alg; kw...)
-CommonSolve.solve(prob::LatticeProblem, alg::AbstractFieldAlgorithm; kw...) = CommonSolve.solve!(CommonSolve.init(prob, alg; kw...))
-CommonSolve.solve(prob::LatticeProblem, alg::LinearSolver; kw...) = CommonSolve.solve(_owned_or_refuse(prob, alg), alg; kw...)
-# With no algorithm (D-287 R7): a problem whose window is fixed, by a clock (`Shift`, sampled
-# inputs) or by the map's step (a map: `ExplicitMap`, SciML's `FunctionMap`), runs the owned
-# default; any other is DiffEqBase's, as for every `ODEProblem` (its default algorithm, when a
-# package that provides one is loaded)
+function CommonSolve.init(prob::LatticeProblem, alg::AbstractFieldAlgorithm; kw...)
+    return _owned_init(_owned_or_refuse(prob, alg), alg, prob; kw...)
+end
+function CommonSolve.init(prob::LatticeProblem, alg::LinearSolver; kw...)
+    return CommonSolve.init(_owned_or_refuse(prob, alg), alg; kw...)
+end
+function CommonSolve.solve(prob::LatticeProblem, alg::AbstractFieldAlgorithm; kw...)
+    return CommonSolve.solve!(CommonSolve.init(prob, alg; kw...))
+end
+function CommonSolve.solve(prob::LatticeProblem, alg::LinearSolver; kw...)
+    return CommonSolve.solve(_owned_or_refuse(prob, alg), alg; kw...)
+end
+# With no algorithm (D-287 R7): a problem whose window is fixed, by a clock (`Shift`,
+# sampled inputs) or by the map's step (a map: `ExplicitMap`, SciML's `FunctionMap`), runs
+# the owned default; any other is DiffEqBase's, as for every `ODEProblem` (its default
+# algorithm, when a package that provides one is loaded)
 _fixed_window(fp) = fp.kind == :map || _clock(fp) !== nothing
 function CommonSolve.init(prob::LatticeProblem; kw...)
     fp = field_problem(prob)
     _fixed_window(fp) && return _owned_init(fp, _default_alg(fp), prob; kw...)
     _check_default_alg()
-    return invoke(CommonSolve.init, Tuple{SciMLBase.AbstractDEProblem, Vararg{Any}}, prob; kw...)
+    return invoke(
+        CommonSolve.init, Tuple{SciMLBase.AbstractDEProblem, Vararg{Any}}, prob;
+        kw...
+    )
 end
 function CommonSolve.solve(prob::LatticeProblem; kw...)
-    _fixed_window(field_problem(prob)) && return CommonSolve.solve!(CommonSolve.init(prob; kw...))
+    _fixed_window(field_problem(prob)) &&
+        return CommonSolve.solve!(CommonSolve.init(prob; kw...))
     _check_default_alg()
-    return invoke(CommonSolve.solve, Tuple{SciMLBase.AbstractDEProblem, Vararg{Any}}, prob; kw...)
+    return invoke(
+        CommonSolve.solve, Tuple{SciMLBase.AbstractDEProblem, Vararg{Any}}, prob;
+        kw...
+    )
 end
 function _check_default_alg()
     return hasmethod(CommonSolve.solve, Tuple{SciMLBase.AbstractDEProblem}) || throw(
         ArgumentError(
             string(
-                "`solve(prob)` with no algorithm uses DiffEqBase's default algorithm, and no package that provides it is loaded: ",
-                "give an algorithm, `solve(prob, ExplicitEuler(); dt)` or `solve(prob, Tsit5())`, or load OrdinaryDiffEq"
+                "`solve(prob)` with no algorithm uses DiffEqBase's default algorithm, and \
+                    no package that provides it is loaded: ",
+                "give an algorithm, `solve(prob, ExplicitEuler(); dt)` or `solve(prob, \
+                    Tsit5())`, or load OrdinaryDiffEq"
             )
         )
     )
@@ -1907,16 +2256,26 @@ const LatticeResidualProblem = typewith(
     typewith(SciMLBase.NonlinearFunction, :f, LatticeFunction)
 )
 const LatticeTimeFreeProblem = Union{LatticeLinearProblem, LatticeResidualProblem}
-function CommonSolve.solve(prob::LatticeTimeFreeProblem, alg::Union{AbstractFieldAlgorithm, LinearSolver}; kw...)
+function CommonSolve.solve(
+        prob::LatticeTimeFreeProblem,
+        alg::Union{AbstractFieldAlgorithm, LinearSolver}; kw...
+    )
     return CommonSolve.solve(field_problem(prob), alg; kw...)
 end
-CommonSolve.solve(prob::LatticeTimeFreeProblem; kw...) = CommonSolve.solve(field_problem(prob); kw...)
+function CommonSolve.solve(prob::LatticeTimeFreeProblem; kw...)
+    return CommonSolve.solve(field_problem(prob); kw...)
+end
 # `LatticePCG` and `LatticeGMRES` on the `LinearProblem` itself are LinearSolve solves
-function CommonSolve.solve(prob::LatticeLinearProblem, alg::Union{Solvers.LatticePCG, Solvers.LatticeGMRES}; kw...)
+function CommonSolve.solve(
+        prob::LatticeLinearProblem,
+        alg::Union{Solvers.LatticePCG, Solvers.LatticeGMRES}; kw...
+    )
     return CommonSolve.solve!(CommonSolve.init(prob, alg; kw...))
 end
 # a remake builds the problem again at the new values (`A` and `b` are the parameters')
-function SciMLBase.remake(prob::LatticeLinearProblem; p = missing, u0 = missing, inputs = (), kw...)
+function SciMLBase.remake(
+        prob::LatticeLinearProblem; p = missing, u0 = missing, inputs = (), kw...
+    )
     isempty(kw) || throw(
         ArgumentError(
             string(
@@ -1935,8 +2294,10 @@ function SciMLBase.remake(prob::LatticeLinearProblem; p = missing, u0 = missing,
         remake_u0(prob, u0)
     end
     g = _field_problem(
-        fp.program, fp.state, U isa Vector ? copy(U) : Array(U), fp.tspan, collect(lp.values), lp.tables,
-        lp.inputs, fp.backend, fp.index, fp.faces, fp.stability, fp.kind, fp.initkeys, fp.options, fp.group
+        fp.program, fp.state, U isa Vector ? copy(U) : Array(U),
+        fp.tspan, collect(lp.values), lp.tables,
+        lp.inputs, fp.backend, fp.index, fp.faces, fp.stability,
+        fp.kind, fp.initkeys, fp.options, fp.group
     )
     return lattice_problem(g)
 end

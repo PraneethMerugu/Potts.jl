@@ -1,8 +1,8 @@
 # The tests run generated bodies through Exec's host executor (LatticeFields.Problems binds
 # each launch description of a step plan to an Exec.Launch). The padded host loop below is
-# kept only as an oracle: it pads launches as a device does (linear: up to a multiple of 256,
-# guarded `s <= G.n`; Cartesian: the padded box, each axis guarded by the body), and every
-# test step compares Exec's result with it bit for bit.
+# kept only as an oracle: it pads launches as a device does (linear: up to a multiple of
+# 256, guarded `s <= G.n`; Cartesian: the padded box, each axis guarded by the body), and
+# every test step compares Exec's result with it bit for bit.
 
 using LatticeFields
 using LatticeFields: IR, Compile, Schedule, Problems
@@ -57,7 +57,10 @@ function HostStore(p::IR.Program; init = (key, A) -> nothing)
         foreach(a -> init(f.key, a), A)
         length(A) == 2 && copyto!(A[2], A[1])
     end
-    foreach(i -> st.tables[i] = zeros(IR.juliatype(p.tables[i].storage), 4), eachindex(st.tables))
+    foreach(
+        i -> st.tables[i] = zeros(IR.juliatype(p.tables[i].storage), 4),
+        eachindex(st.tables)
+    )
     return st
 end
 function _rt2(rt)
@@ -70,9 +73,13 @@ function _rt2(rt)
     end
 end
 function _snapshot(st)
-    return FieldStore(st.backend, Vector{Any}[Any[copy(a) for a in b] for b in st.bufs], copy(st.cur), copy(st.tables))
+    return FieldStore(
+        st.backend, Vector{Any}[Any[copy(a) for a in b] for b in st.bufs],
+        copy(st.cur), copy(st.tables)
+    )
 end
-_same(a, b) = length(a) == length(b) && all(i -> isequal(a[i], b[i]), eachindex(a))   # -0.0 ≠ 0.0, NaN = NaN
+# -0.0 ≠ 0.0, NaN = NaN
+_same(a, b) = length(a) == length(b) && all(i -> isequal(a[i], b[i]), eachindex(a))
 
 """
 A launch bound through Exec (host executor); `run!` is the warm call.
@@ -83,7 +90,9 @@ function prepare(p::IR.Program, l::LaunchSpec, st, Praw; rt = ())
         body_function(ck), l.ndrange[1] ÷ Schedule.WG, zeros(ck.T, Schedule.reduce_lds(ck)),
         launch_arrays(st, l), launch_parameters(ck, Praw), launch_geometry(p, ck, _rt2(rt))
     )
-    return Problems.bind_program(HOST, p, l, launch_arrays(st, l), launch_parameters(ck, Praw), _rt2(rt))
+    return Problems.bind_program(
+        HOST, p, l, launch_arrays(st, l), launch_parameters(ck, Praw), _rt2(rt)
+    )
 end
 run!(l) = (l(); nothing)
 
@@ -245,10 +254,12 @@ function build(
     return s, sp
 end
 
-# The executor protocol of LatticeFields.Solvers on the host (Exec implements it at the merge).
+# The executor protocol of LatticeFields.Solvers on the host (Exec implements it at the
+# merge).
 using LatticeFields: Solvers
 struct HostExec
-    f64::Bool                             # false: a host stand-in for a backend without Float64
+    # false: a host stand-in for a backend without Float64
+    f64::Bool
 end
 HostExec() = HostExec(true)
 Solvers.alloc(::HostExec, ::Type{T}, n) where {T} = zeros(T, n)

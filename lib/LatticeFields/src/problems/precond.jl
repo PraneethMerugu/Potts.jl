@@ -1,20 +1,23 @@
-# The lattice multigrid as a preconditioner of SciML's linear solves: `LatticeMultigrid()` is a LinearSolve `precs` function. Given the `W = J − M/γ`
-# of an implicit OrdinaryDiffEq solver (or the operator `A` of a linear system with no time),
-# it binds the owned implicit runtime of the problem (the rows' operators `J̃` of the implicit algorithms, with
-# the shift `1/γ`) at the solver's state, and applies one V-cycle per field as `ldiv!`: the
+# The lattice multigrid as a preconditioner of SciML's linear solves: `LatticeMultigrid()`
+# is a LinearSolve `precs` function. Given the `W = J − M/γ` of an implicit OrdinaryDiffEq
+# solver (or the operator `A` of a linear system with no time), it binds the owned implicit
+# runtime of the problem (the rows' operators `J̃` of the implicit algorithms, with the shift
+# `1/γ`) at the solver's state, and applies one V-cycle per field as `ldiv!`: the
 # block-diagonal preconditioner of the coupled steady solve, on the problem's backend.
 
-# (`LatticeMultigrid`, defined with the lattice solvers, is `Solvers.LatticeMultigrid`; this file
-# adds its method for the operators of a problem `discretize` returned.)
+# (`LatticeMultigrid`, defined with the lattice solvers, is `Solvers.LatticeMultigrid`; this
+# file adds its method for the operators of a problem `discretize` returned.)
 
 """
     MGPreconditioner
 
-What [`LatticeMultigrid`](@ref) returns as the left preconditioner: the owned implicit runtime of a
-lattice problem bound at a state, time and shift; `ldiv!(y, P, r)` applies its V-cycles.
+What [`LatticeMultigrid`](@ref) returns as the left preconditioner: the owned implicit
+runtime of a lattice problem bound at a state, time and shift; `ldiv!(y, P, r)` applies its
+V-cycles.
 """
 mutable struct MGPreconditioner{I, B}
-    integ::I                           # the owned integrator of the runtime (`BackwardEuler`, steady rows `QuasiSteady`)
+    # the owned integrator of the runtime (`BackwardEuler`, steady rows `QuasiSteady`)
+    integ::I
     rows::Vector{Any}                  # (implicit row, its state range, steady row?)
     backend::B
     p::Any                             # the parameters it was built at …
@@ -37,7 +40,9 @@ end
 _mg_meta(x) = hasproperty(x, :f) ? _mg_meta(getproperty(x, :f)) : nothing
 # … and its `γ` (`W = J − M/γ`; a linear system's `A = J`: no shift)
 # (a solver's prototype `W` may hold a placeholder `γ`, such as 0, before its first step)
-_mg_gamma(x::SciMLOperators.WOperator) = (γ = Float64(primal(x.gamma)); γ > 0 && isfinite(γ) ? γ : 1.0)
+function _mg_gamma(x::SciMLOperators.WOperator)
+    (γ = Float64(primal(x.gamma)); γ > 0 && isfinite(γ) ? γ : 1.0)
+end
 _mg_gamma(::LatticeOperator) = Inf
 
 function (mg::LatticeMultigrid)(W, p)
@@ -46,7 +51,8 @@ function (mg::LatticeMultigrid)(W, p)
         ArgumentError(
             string(
                 "`LatticeMultigrid()` preconditions the linear solves of a problem ",
-                "`discretize` returned (its `W = J − M/γ`, or the operator of a system with no time); got a ", nameof(typeof(W)),
+                "`discretize` returned (its `W = J − M/γ`, or the operator of a system \
+                    with no time); got a ", nameof(typeof(W))
             )
         )
     )
@@ -61,8 +67,10 @@ function (bs::LatticeBlockSolve)(W, p)
         ArgumentError(
             string(
                 "`LatticeBlockSolve` preconditions the linear solves of a problem ",
-                "`LatticePDE.discretize` returned (its `W = J − M/γ`, or `LatticeOperator`); got a ", nameof(typeof(W)),
-                ": pass `precs = nothing` (or `precs = LatticeMultigrid()` on a discretized lattice problem)",
+                "`LatticePDE.discretize` returned (its `W = J − M/γ`, or \
+                    `LatticeOperator`); got a ", nameof(typeof(W)),
+                ": pass `precs = nothing` (or `precs = LatticeMultigrid()` on a \
+                    discretized lattice problem)"
             )
         )
     )
@@ -94,7 +102,8 @@ function _mg_bind_for!(engines, lck, m::LatticeMetadata, W, p, inner)
     return P
 end
 function _mg_current(e::MGPreconditioner, lp::LatticeParameters)
-    return e.p === lp && e.stamp == lp.stamp[] && e.values == Float64[primal(v) for v in lp.values]
+    return e.p === lp && e.stamp == lp.stamp[] &&
+        e.values == Float64[primal(v) for v in lp.values]
 end
 
 # the owned implicit runtime of `m`'s problem at the parameters `lp`
@@ -103,12 +112,17 @@ function _mg_engine(m::LatticeMetadata, lp::LatticeParameters, inner)
     # (a system with no time: one window of a unit span, which `QuasiSteady` takes)
     span = fp.group.spec.timefree ? (0.0, 1.0) : fp.tspan
     g = _field_problem(
-        fp.program, fp.state, Array(fp.u0), span, Vector{Float64}(map(primal, lp.values)), lp.tables,
-        lp.inputs, fp.backend, fp.index, fp.faces, fp.stability, fp.kind, fp.initkeys, fp.options, fp.group
+        fp.program, fp.state, Array(fp.u0), span, Vector{Float64}(map(primal, lp.values)),
+        lp.tables,
+        lp.inputs, fp.backend, fp.index, fp.faces, fp.stability,
+        fp.kind, fp.initkeys, fp.options, fp.group
     )
     st = fp.group.spec.steady
     h = 1.0
-    be = BackwardEuler(; substeps = 1, nlsolve = LatticeNewton(; max_iter = 1), linsolve = inner)
+    be = BackwardEuler(;
+        substeps = 1, nlsolve = LatticeNewton(; max_iter = 1),
+        linsolve = inner
+    )
     qs = QuasiSteady(; nlsolve = LatticeNewton(; max_iter = 1), linsolve = inner)
     alg = if fp.group.spec.timefree
         qs
@@ -128,11 +142,15 @@ function _mg_engine(m::LatticeMetadata, lp::LatticeParameters, inner)
             push!(rows, (r, slots[fieldid(s, r.key)], rt.alg isa QuasiSteady))
         end
     end
-    return MGPreconditioner(integ, rows, fp.backend, lp, lp.stamp[], Float64[primal(v) for v in lp.values], Inf, 0)
+    return MGPreconditioner(
+        integ, rows, fp.backend, lp, lp.stamp[],
+        Float64[primal(v) for v in lp.values], Inf, 0
+    )
 end
 
-# bind the runtime at the solver's state `u`, time `t` and step `γ`: the state in both slots,
-# each row's shift `1/γ` (a steady row's none), the operator program at `u` and the hierarchies
+# bind the runtime at the solver's state `u`, time `t` and step `γ`: the state in both
+# slots, each row's shift `1/γ` (a steady row's none), the operator program at `u` and the
+# hierarchies
 function _mg_bind!(P::MGPreconditioner, u, lp, t, γ)
     ig = P.integ
     _load_state!(ig.store, u)
@@ -142,7 +160,8 @@ function _mg_bind!(P::MGPreconditioner, u, lp, t, γ)
     for rt in ig.runtimes
         c = rt.cache
         c isa ImplicitCache || continue
-        steady = rt.alg isa QuasiSteady            # (no time-step term: `1/(γh) = 0`, built so)
+        # (no time-step term: `1/(γh) = 0`, built so)
+        steady = rt.alg isa QuasiSteady
         steady || _set_step!(c, rt, γ)
         _rebuild!(c, rt, 1, t, steady ? Inf : γ, k)
     end
@@ -163,9 +182,9 @@ function _mg_inputs!(ig::FieldIntegrator, lp::LatticeParameters, t)
     return nothing
 end
 
-# `y = P r`: each field's V-cycles from zero on its part of `r` (`(I/γ − J̃) x = r`, and `W⁻¹ r ≈
-# −x`), a row with no diffusion `−r/s`; a masked site or one outside the domain `−s r` (its row
-# of `W` is `−1/γ`, or `−1` for a steady row's `0 = v − u`)
+# `y = P r`: each field's V-cycles from zero on its part of `r` (`(I/γ − J̃) x = r`, and `W⁻¹
+# r ≈ −x`), a row with no diffusion `−r/s`; a masked site or one outside the domain `−s r`
+# (its row of `W` is `−1/γ`, or `−1` for a steady row's `0 = v − u`)
 function LinearAlgebra.ldiv!(y::AbstractVector, P::MGPreconditioner, r::AbstractVector)
     b = P.backend
     γ = P.γ
@@ -182,7 +201,15 @@ function LinearAlgebra.ldiv!(y::AbstractVector, P::MGPreconditioner, r::Abstract
         if row.f !== nothing
             F = eltype(row.f)
             ih = steady || isinf(γ) ? zero(F) : F(1 / γ)
-            Exec.launch!(b, _cs_rhs_body!, n, (row.f, row.v, row.resarr, row.j, row.m, row.smask, row.rmask, row.dom, ih, ih / 2))
+            Exec.launch!(
+                b,
+                _cs_rhs_body!,
+                n,
+                (
+                    row.f, row.v, row.resarr, row.j, row.m,
+                    row.smask, row.rmask, row.dom, ih, ih / 2,
+                )
+            )
         end
         for w in row.work
             Exec.launch!(b, _zero_body!, length(w), (w,))
@@ -195,7 +222,9 @@ function LinearAlgebra.ldiv!(y::AbstractVector, P::MGPreconditioner, r::Abstract
     P.applies += 1
     return y
 end
-LinearAlgebra.ldiv!(P::MGPreconditioner, r::AbstractVector) = LinearAlgebra.ldiv!(r, P, copy(r))
+function LinearAlgebra.ldiv!(P::MGPreconditioner, r::AbstractVector)
+    return LinearAlgebra.ldiv!(r, P, copy(r))
+end
 Base.eltype(P::MGPreconditioner) = eltype(P.integ.prob)
 
 # i ≤ n: the row's part at offset `off` (`x` the solver's solution, `r` the right side)

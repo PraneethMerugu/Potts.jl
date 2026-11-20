@@ -46,12 +46,17 @@ Boundary policy of an access: `RESOLVE` (pass 2 rewrites out-of-domain reads), `
 
 # The op set. Printing and fingerprints use the names, never the codes, so adding
 # an op never changes an existing program's text.
-@enum Op::UInt8 CONST PARAM LOAD TABLE COORD INSIDE_OP BITTEST RUNTIME ADD MUL NEG DIV FMA MIN MAX ABS POWI SQRT EXP LOG CALL EQ LT LE AND OR NOT XOR SELECT COND CAST IDX RESTRICT ELEMENT_SUM
+@enum(
+    Op::UInt8,
+    CONST, PARAM, LOAD, TABLE, COORD, INSIDE_OP, BITTEST, RUNTIME, ADD, MUL, NEG, DIV, FMA,
+    MIN, MAX, ABS, POWI, SQRT, EXP, LOG, CALL, EQ, LT, LE, AND, OR, NOT, XOR, SELECT, COND,
+    CAST, IDX, RESTRICT, ELEMENT_SUM
+)
 
-# RESTRICT(x; imm = 0 sum | 1 max | 2 plurality) at a coarse site combines `x` over the site's
-# children (plurality: the most frequent value, ties to the smallest nonzero value, 0 last)
-# (2 per coarsened axis, 3 at the last site of an odd axis): inside `x`, an access at level −1
-# is taken relative to each child in turn (offset in the fine frame).
+# RESTRICT(x; imm = 0 sum | 1 max | 2 plurality) at a coarse site combines `x` over the
+# site's children (plurality: the most frequent value, ties to the smallest nonzero value, 0
+# last) (2 per coarsened axis, 3 at the last site of an odd axis): inside `x`, an access at
+# level −1 is taken relative to each child in turn (offset in the fine frame).
 opname(op::Op) = op == INSIDE_OP ? "inside" : lowercase(string(op))
 const COMMUTATIVE = (ADD, MUL, MIN, MAX, EQ, AND, OR, XOR)
 const CALLS = (
@@ -85,8 +90,8 @@ struct Level{N}
     widths::Union{Nothing, NTuple{N, Vector{Int8}}}
 end
 Level(g::Grid{N}, shift = 0) where {N} = Level{N}(g, Int8(shift), nothing)
-# Coarse levels: each coarsening halves an axis with floor, `n ÷ 2`; the last aggregate of an
-# odd axis takes width 3 (at the high end; see contract.jl). An axis of size 1 is never
+# Coarse levels: each coarsening halves an axis with floor, `n ÷ 2`; the last aggregate of
+# an odd axis takes width 3 (at the high end; see contract.jl). An axis of size 1 is never
 # coarsened (it stays 1, identity map); an axis that would reach 0 sites makes the level
 # illegal (`coarsenable`, checked by legality).
 leveldims(l::Level) = map(d -> Int32(d == 1 ? 1 : max(d >> l.shift, 1)), l.grid.dims)
@@ -103,18 +108,24 @@ Placement{N}() where {N} = Placement{N}(ntuple(_ -> Int8(0), N))
 struct FieldDecl{N}
     key::String
     classes::Vector{Placement{N}}
-    shape::Vector{Int16}             # empty: scalar; `[k]`: k components (flat, after symmetry)
+    # empty: scalar; `[k]`: k components (flat, after symmetry)
+    shape::Vector{Int16}
     symmetric::Bool
     storage::Scalar
     levels::Vector{Int8}
     epoch::Epoch
     buffers::Int8                    # 1, or 2 for host ping-pong
     role::Symbol                     # :state | :aux | :input | :output | :scratch
-    fixed::Bool                      # a declared storage (`lattice_storage`): the float lane
-    # holds its own type under `lanes = :state` (`lanetype`)
+    # a declared storage (`lattice_storage`): the float lane holds its own type under `lanes
+    # = :state` (`lanetype`)
+    fixed::Bool
 end
-function FieldDecl{N}(key, classes, shape, symmetric, storage, levels, epoch, buffers, role) where {N}
-    return FieldDecl{N}(key, classes, shape, symmetric, storage, levels, epoch, buffers, role, false)
+function FieldDecl{N}(
+        key, classes, shape, symmetric, storage, levels, epoch, buffers, role
+    ) where {N}
+    return FieldDecl{N}(
+        key, classes, shape, symmetric, storage, levels, epoch, buffers, role, false
+    )
 end
 ncomp(f::FieldDecl) = isempty(f.shape) ? 1 : Int(prod(f.shape))
 
@@ -246,12 +257,12 @@ Coef(v::Real) = Coef(Float64(v), Int32(0))
 
 """
 `α c + β ∂c/∂n = g` on the face (`axis`, `side = ±1`) of a cell-centered field. Dirichlet:
-α = 1, β = 0. No flux: α = 0, β = 1, g = 0. `β` is in lattice units (the front end divides by h).
-`gfield` (0: none) is a field holding the value at each boundary site (a value that reads the
-time, the coordinates or an input): then `g` is that field's value times the
-coefficient `g` (a kernel of the program computes the field at the step's time). `afield` and
-`bfield` (0: none) do the same for `α` and `β`: a Robin coefficient that varies by
-site or in time is that field's value at the boundary site times the coefficient.
+α = 1, β = 0. No flux: α = 0, β = 1, g = 0. `β` is in lattice units (the front end divides
+by h). `gfield` (0: none) is a field holding the value at each boundary site (a value that
+reads the time, the coordinates or an input): then `g` is that field's value times the
+coefficient `g` (a kernel of the program computes the field at the step's time). `afield`
+and `bfield` (0: none) do the same for `α` and `β`: a Robin coefficient that varies by site
+or in time is that field's value at the boundary site times the coefficient.
 """
 struct FaceRule <: AbstractBoundaryRule
     field::Int32
@@ -308,9 +319,9 @@ struct ImmersedRule <: AbstractBoundaryRule
     kind::Symbol
 end
 """
-Masked node value: stores at masked sites write `value` (identity row). `vfield` (0: none) is
-a field holding the value at each site (a value that reads the time, the coordinates or an
-input): the value is then that field's value times the coefficient `value` (the mask's
+Masked node value: stores at masked sites write `value` (identity row). `vfield` (0: none)
+is a field holding the value at each site (a value that reads the time, the coordinates or
+an input): the value is then that field's value times the coefficient `value` (the mask's
 kernel computes the field with the mask).
 """
 struct NodeValueRule <: AbstractBoundaryRule
@@ -320,7 +331,9 @@ struct NodeValueRule <: AbstractBoundaryRule
     face::Symbol                     # :harmonic | :active
     vfield::Int32
 end
-NodeValueRule(field, mask, value::Coef, face::Symbol) = NodeValueRule(field, mask, value, face, Int32(0))
+function NodeValueRule(field, mask, value::Coef, face::Symbol)
+    return NodeValueRule(field, mask, value, face, Int32(0))
+end
 
 struct Program{N}
     hierarchy::Vector{Level{N}}
@@ -335,6 +348,9 @@ struct Program{N}
     nparams::Int
 end
 leveldims(p::Program, level::Integer) = leveldims(p.hierarchy[level + 1])
-"""`nsites(p, level)`: the number of nodes of program `p` on grid level `level` (0: the lattice)."""
+"""
+`nsites(p, level)`: the number of nodes of program `p` on grid level `level` (0: the
+lattice).
+"""
 nsites(p::Program, level::Integer) = Int(prod(leveldims(p, level)))
 fieldid(p::Program, key::AbstractString) = Int32(findfirst(f -> f.key == key, p.fields))

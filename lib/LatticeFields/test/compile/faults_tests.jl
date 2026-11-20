@@ -30,12 +30,14 @@ function differential(pb, P; stages = LOWERING, kw...)
     init = (k, A) -> (A .= rand(rng, eltype(A), length(A)))
     st, std = HostStore(s; init), HostStore(sd)
     for f in keys(st.bufs), j in eachindex(st.bufs[f])
-
         copyto!(std.bufs[f][j], st.bufs[f][j])
     end
     run_step!(s, sp, st, P)
     run_step!(sd, spd, std, P)
-    return all(f -> isapprox(array(st, f, :cur), array(std, f, :cur); rtol = 1.0e-5), keys(st.bufs))
+    return all(
+        f -> isapprox(array(st, f, :cur), array(std, f, :cur); rtol = 1.0e-5),
+        keys(st.bufs)
+    )
 end
 
 """
@@ -57,7 +59,9 @@ end
 include("../shared/export_all.jl")
 end
 
-@testitem "fault: wrong derived parameter" setup = [LF_compile_faults] tags = [:latticefields, :compile] begin
+@testitem "fault: wrong derived parameter" setup = [LF_compile_faults] tags = [
+    :latticefields, :compile,
+] begin
     @testset "fault: wrong derived parameter" begin
         P = (0.1, 0.7, 1.3, 0.25, 2.0)
         @test differential(diffusion3(), P)
@@ -66,19 +70,23 @@ end
     end
 end
 
-@testitem "fault: lost forwarding in a fused kernel" setup = [LF_compile_faults] tags = [:latticefields, :compile] begin
+@testitem "fault: lost forwarding in a fused kernel" setup = [LF_compile_faults] tags = [
+    :latticefields, :compile,
+] begin
     @testset "fault: lost forwarding in a fused kernel" begin
         s, sp = build(chain2())
         @test length(sp.launches) == 1                     # fused, so forwarding matters
         @test differential(chain2(), (0.5,))
-        # (one Jacobi group for every kernel no longer drops the forwarding of a one-buffer field,
-        # The fault drops it outright)
+        # (one Jacobi group for every kernel no longer drops the forwarding of a one-buffer
+        # field, The fault drops it outright)
         noforward = (p, ids, scc) -> Schedule.merge_kernels(p, ids, scc; forward = false)
         @test !differential(chain2(), (0.5,); merge = noforward)
     end
 end
 
-@testitem "fault: off-by-one target index" setup = [LF_compile_faults] tags = [:latticefields, :compile] begin
+@testitem "fault: off-by-one target index" setup = [LF_compile_faults] tags = [
+    :latticefields, :compile,
+] begin
     @testset "fault: off-by-one target index" begin
         P = (0.1, 0.7, 1.3, 0.25, 2.0)
         shifted = (c, a) -> (
@@ -88,15 +96,22 @@ end
     end
 end
 
-@testitem "fault: wrong Dirichlet ghost is invisible to the differential, caught by the oracle" setup = [LF_compile_faults] tags = [:latticefields, :compile] begin
-    @testset "fault: wrong Dirichlet ghost is invisible to the differential, caught by the oracle" begin
+@testitem "fault: wrong Dirichlet ghost is invisible to the differential, caught by the \
+    oracle" setup = [LF_compile_faults] tags = [
+    :latticefields, :compile,
+] begin
+    @testset "fault: wrong Dirichlet ghost is invisible to the differential, caught by \
+        the oracle" begin
         function bad_boundary(p::Program)
             rules = IR.AbstractBoundaryRule[
-                r isa FaceRule && r.beta.value == 0 ?
+                if r isa FaceRule && r.beta.value == 0
                     FaceRule(
                         r.field, r.axis, r.side, Coef(2.0),
                         r.beta, r.g
-                    ) : r for r in p.rules
+                    )
+                else
+                    r
+                end for r in p.rules
             ]
             q = Program(
                 p.hierarchy, p.fields, p.tables, p.masks, p.flags, rules, p.kernels,
@@ -118,7 +133,9 @@ end
     end
 end
 
-@testitem "fault: dangling and non-topological nodes" setup = [LF_compile_faults] tags = [:latticefields, :compile] begin
+@testitem "fault: dangling and non-topological nodes" setup = [LF_compile_faults] tags = [
+    :latticefields, :compile,
+] begin
     @testset "fault: dangling and non-topological nodes" begin
         function scramble(p::Program{N}) where {N}
             ks = map(p.kernels) do k
@@ -135,7 +152,9 @@ end
     end
 end
 
-@testitem "fault: loads not ordered before stores" setup = [LF_compile_faults] tags = [:latticefields, :compile] begin
+@testitem "fault: loads not ordered before stores" setup = [LF_compile_faults] tags = [
+    :latticefields, :compile,
+] begin
     @testset "fault: loads not ordered before stores" begin
         pb = ProgramBuilder(Grid((5, 3)))
         a = field!(pb, "a"; role = :aux)

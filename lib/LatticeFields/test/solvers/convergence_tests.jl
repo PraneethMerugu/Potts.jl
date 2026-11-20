@@ -1,5 +1,5 @@
-# Mesh-independent MG convergence / contraction-factor bounds across refined grids (h, h/2, h/4),
-# the rule-M negative control, the analytic Helmholtz oracle, and init = :steady
+# Mesh-independent MG convergence / contraction-factor bounds across refined grids (h, h/2,
+# h/4), the rule-M negative control, the analytic Helmholtz oracle, and init = :steady
 # residual-reduction checks.
 
 @testsetup module LF_solvers_convergence
@@ -10,22 +10,32 @@ include("../../../../test/shared/convergence_helpers.jl")
 include("../shared/export_all.jl")
 end
 
-@testitem "mesh-independent MG contraction across refined grids and PCG/MG convergence" setup = [LF_solvers_convergence] tags = [:latticefields, :solvers] begin
-    @testset "mesh-independent MG contraction across refined grids and PCG/MG convergence" begin
-        # Refined grids (h, h/2, h/4) with shift scaled by h^2 so the physical Helmholtz length
-        # 1 / sqrt(s_phys) is constant across refinements: V(2,2) contraction stays bounded and
-        # mesh-independent within 0.05.
-        for (kind, ns, s0) in (("box", (64, 128, 256), 5.5e-6), ("disk", (64, 128, 256), 5.5e-6))
+@testitem "mesh-independent MG contraction across refined grids and PCG/MG \
+    convergence" setup = [LF_solvers_convergence] tags = [
+    :latticefields, :solvers,
+] begin
+    @testset "mesh-independent MG contraction across refined grids and PCG/MG \
+        convergence" begin
+        # Refined grids (h, h/2, h/4) with shift scaled by h^2 so the physical Helmholtz
+        # length 1 / sqrt(s_phys) is constant across refinements: V(2,2) contraction stays
+        # bounded and mesh-independent within 0.05.
+        for (kind, ns, s0) in (
+                ("box", (64, 128, 256), 5.5e-6), (
+                    "disk", (64, 128, 256), 5.5e-6,
+                ),
+            )
             rhos = [cycle_factor(named_case("$(kind)$(n)", s0 * (128 / n)^2)) for n in ns]
             @test all(<(0.35), rhos)
             @test maximum(rhos) - minimum(rhos) <= 0.05
         end
 
         # PCG and stationary V(2,2) convergence across geometries, shifts, and precisions:
-        # PCG takes <= 12 iterations; stationary V(2,2) with rho < 0.35 reaches 1e-6 within 15-20 cycles.
+        # PCG takes <= 12 iterations; stationary V(2,2) with rho < 0.35 reaches 1e-6 within
+        # 15-20 cycles.
         for (name, ss) in (
                 ("disk128", (5.5e-6, 1.9e-3, 0.022, 0.063)),
-                ("sphere42", (5.5e-6, 1.9e-3, 0.022, 0.063)), ("box300x192", (5.5e-6, 1.9e-3)),
+                ("sphere42", (5.5e-6, 1.9e-3, 0.022, 0.063)),
+                ("box300x192", (5.5e-6, 1.9e-3)),
             )
             for s in ss
                 case = named_case(name, s)
@@ -47,7 +57,11 @@ end
     end
 end
 
-@testitem "rule M against ½Σ with the Any fold, factors" setup = [LF_solvers_convergence] tags = [:latticefields, :solvers] begin
+@testitem "rule M against ½Σ with the Any fold, factors" setup = [
+    LF_solvers_convergence,
+] tags = [
+    :latticefields, :solvers,
+] begin
     @testset "rule M against ½Σ with the Any fold, factors" begin
         half = RuleWeights(inside = 0.5, plane = 0.5, inherited = 0.5)
         sph = named_case("sphere42", 5.5e-6)
@@ -61,7 +75,11 @@ end
     end
 end
 
-@testitem "analytic oracle: 1D Helmholtz between Dirichlet faces (T-4)" setup = [LF_solvers_convergence] tags = [:latticefields, :solvers] begin
+@testitem "analytic oracle: 1D Helmholtz between Dirichlet faces (T-4)" setup = [
+    LF_solvers_convergence,
+] tags = [
+    :latticefields, :solvers,
+] begin
     @testset "analytic oracle: 1D Helmholtz between Dirichlet faces (T-4)" begin
         nx, ny, s = 300, 192, 5.5e-6
         ℓ = 1 / sqrt(s)                                    # cells
@@ -73,14 +91,19 @@ end
             u = reshape(field(sv, "pcg.x"), nx, ny)
             @test maximum(abs, u .- exact) / maximum(exact) < 1.0e-4
         end
-        sv = case_solver(box_case(nx, ny; s), Float64; linsolve = LatticeMultigrid(cycles = 2))
+        sv = case_solver(
+            box_case(nx, ny; s), Float64;
+            linsolve = LatticeMultigrid(cycles = 2)
+        )
         steady!(sv)                                        # negative control: two cycles
         u = reshape(field(sv, lkey(0, "x")), nx, ny)
         @test maximum(abs, u .- exact) / maximum(exact) > 1.0e-4
     end
 end
 
-@testitem "init = :steady from zero" setup = [LF_solvers_convergence] tags = [:latticefields, :solvers] begin
+@testitem "init = :steady from zero" setup = [LF_solvers_convergence] tags = [
+    :latticefields, :solvers,
+] begin
     @testset "init = :steady from zero" begin
         for (name, s) in (("box300x192", 5.5e-6), ("sphere42", 0.022))
             sv = case_solver(named_case(name, s), Float32)
@@ -94,10 +117,15 @@ end
     end
 end
 
-@testitem "1D Helmholtz discrete solver spatial refinement order (O(h^2))" setup = [LF_solvers_convergence] tags = [:latticefields, :solvers] begin
+@testitem "1D Helmholtz discrete solver spatial refinement order (O(h^2))" setup = [
+    LF_solvers_convergence,
+] tags = [
+    :latticefields, :solvers,
+] begin
     @testset "1D Helmholtz discrete solver spatial refinement order" begin
-        # Physical domain [0, 1] with u(0) = 0, u(1) = 1 and Helmholtz parameter s_phys = 4.0:
-        # discrete shift is s_phys * h^2. Cell-centered FD gives O(h^2) convergence to exact sinh.
+        # Physical domain [0, 1] with u(0) = 0, u(1) = 1 and Helmholtz parameter s_phys =
+        # 4.0: discrete shift is s_phys * h^2. Cell-centered FD gives O(h^2) convergence to
+        # exact sinh.
         s_phys = 4.0
         lam = sqrt(s_phys)
         ns = [32, 64, 128]

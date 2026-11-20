@@ -9,18 +9,28 @@ include("../shared/solvers_hierarchy.jl")
 include("../shared/export_all.jl")
 end
 
-@testitem "depth: coarsen to the first axis of size 1; bottom at ≤ 4096 sites" setup = [LF_solvers_hierarchy] tags = [:latticefields, :solvers] begin
+@testitem "depth: coarsen to the first axis of size 1; bottom at ≤ 4096 sites" setup = [
+    LF_solvers_hierarchy,
+] tags = [
+    :latticefields, :solvers,
+] begin
     @testset "depth: coarsen to the first axis of size 1; bottom at ≤ 4096 sites" begin
-        @test depth((42, 42, 42)) == (5, 2)              # 42 21 10 5 2 1; 10³ is the first ≤ 4096
+        # 42 21 10 5 2 1; 10³ is the first ≤ 4096
+        @test depth((42, 42, 42)) == (5, 2)
         @test depth((512, 512)) == (9, 3)                # 64² = 4096 starts the bottom
         @test depth((300, 192)) == (7, 2)                # coarsest (2, 1)
-        @test depth((8, 1)) == (3, 1)                    # the size-1 axis is never coarsened
+        # the size-1 axis is never coarsened
+        @test depth((8, 1)) == (3, 1)
         sv = built(box_case(300, 192; s = 1.0e-3)...)
         @test sv.ctx.dims[end] == (2, 1)
     end
 end
 
-@testitem "widths: level-ℓ cells are 2^ℓ wide, the last takes the rest" setup = [LF_solvers_hierarchy] tags = [:latticefields, :solvers] begin
+@testitem "widths: level-ℓ cells are 2^ℓ wide, the last takes the rest" setup = [
+    LF_solvers_hierarchy,
+] tags = [
+    :latticefields, :solvers,
+] begin
     @testset "widths: level-ℓ cells are 2^ℓ wide, the last takes the rest" begin
         function w(n0, ℓ)
             n = n0 >> ℓ
@@ -34,7 +44,9 @@ end
     end
 end
 
-@testitem "rule M on hand-computed coarse operators" setup = [LF_solvers_hierarchy] tags = [:latticefields, :solvers] begin
+@testitem "rule M on hand-computed coarse operators" setup = [LF_solvers_hierarchy] tags = [
+    :latticefields, :solvers,
+] begin
     @testset "rule M on hand-computed coarse operators" begin
         function one_d(mask)
             return (
@@ -42,7 +54,8 @@ end
                 ("in.mask" => mask,),
             )
         end
-        # site 4 masked: its face to site 3 lies inside coarse cell {3,4}: Σ (rule M), not ½Σ
+        # site 4 masked: its face to site 3 lies inside coarse cell {3,4}: Σ (rule M), not
+        # ½Σ
         for (rule, absorb) in (
                 (RULE_M, 1.0), (
                     SV.RuleWeights(
@@ -54,8 +67,8 @@ end
             sv = built(one_d(UInt8[0, 0, 0, 1])...; rule)
             @test level_matrix(sv, 1) ≈ [0.5 -0.5; -0.5 0.5 + absorb]
         end
-        # site 3 masked: face 2–3 lies on the plane between two active coarse cells (Σ into the
-        # active side) and face 3–4 inside {3,4}; the coarse cells decouple
+        # site 3 masked: face 2–3 lies on the plane between two active coarse cells (Σ into
+        # the active side) and face 3–4 inside {3,4}; the coarse cells decouple
         sv = built(one_d(UInt8[0, 0, 1, 0])...)
         @test level_matrix(sv, 1) ≈ [1.0 0.0; 0.0 1.0]
         # Majority fold drops {3,4} (1 of 2 children active is not a majority)
@@ -71,7 +84,11 @@ end
     end
 end
 
-@testitem "coarse operators are symmetric (sphere 42³, random islands)" setup = [LF_solvers_hierarchy] tags = [:latticefields, :solvers] begin
+@testitem "coarse operators are symmetric (sphere 42³, random islands)" setup = [
+    LF_solvers_hierarchy,
+] tags = [
+    :latticefields, :solvers,
+] begin
     @testset "coarse operators are symmetric (sphere 42³, random islands)" begin
         for case in (
                 ball_case((42, 42, 42); s = 0.022, R = 15.8, ctr = (21.13, 20.87, 21.41)),

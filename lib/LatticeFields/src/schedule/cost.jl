@@ -1,11 +1,12 @@
 # The fusion cost model. Not a shared-reads rule and no stream cap:
 #   t = max(bytes / (η(streams, ws) · BW(ws)), flops / F) + launch_dep(arrays)
-# Calibration values live in `CostModel` (DECISIONS item; the crossover between 128³ and 256³
-# is not measured finely). `ws` is the working set of the whole candidate sequence, the same
-# for both arms, so fused and split are compared in one regime.
+# Calibration values live in `CostModel` (DECISIONS item; the crossover between 128³ and
+# 256³ is not measured finely). `ws` is the working set of the whole candidate sequence, the
+# same for both arms, so fused and split are compared in one regime.
 
 """
-Measured η tables as `(streams, η)` points (fused, DRAM; measured on the field-kernel benchmarks).
+Measured η tables as `(streams, η)` points (fused, DRAM; measured on the field-kernel
+benchmarks).
 """
 const ETA_GENERATOR = Dict(
     2 => [(2, 0.99), (8, 0.91), (16, 0.85), (32, 0.8), (64, 0.64)],
@@ -29,7 +30,8 @@ Base.@kwdef struct CostModel
     realistic_reads::Float64 = 0.75   # read fraction from which the realistic table applies
     # Hard limits (blockers, not costs): kernel arguments and the register prefilter. Below
     # 256 MiB η = 1, so without them the model would fuse any number of components.
-    max_arrays::Int = 32              # array arguments per kernel (the benchmarks measured up to 26)
+    # array arguments per kernel (the benchmarks measured up to 26)
+    max_arrays::Int = 32
     arg_bytes_per_array::Int = 48     # device array descriptor (pointer, dims, length)
     max_arg_bytes::Int = 4096         # kernel-argument budget (4 KiB on ROCm and Metal)
     max_live::Int = 96                # live-value estimate; x2/x3 kernels had VGPR ≤ 78
@@ -42,7 +44,6 @@ PG-17 checks the real VGPR count and scratch = 0 after compile).
 function live_estimate(k::Kernel)
     last = collect(1:length(k.nodes))
     for (i, n) in enumerate(k.nodes), a in args(k, n)
-
         last[a] = max(last[a], i)
     end
     foreach(s -> last[s.value] = length(k.nodes) + 1, k.stores)
@@ -125,7 +126,8 @@ function traffic(p::Program{N}, k::Kernel{N}) where {N}
     for s in k.stores
         f = p.fields[s.access.field]
         key = (s.access.field, s.access.comp.a, Int8(k.space.level), :r)
-        if f.buffers == 1 && key in arr     # read and written in place: one array, both bytes
+        # read and written in place: one array, both bytes
+        if f.buffers == 1 && key in arr
             delete!(arr, key)
             push!(arr, (key[1], key[2], key[3], :rw))
             bytes[] += n * lanebytes(f.storage)
@@ -147,10 +149,12 @@ Working set (bytes) of the arrays touched by a set of traffics.
 function working_set(p::Program{N}, ts) where {N}
     u = Set{Tuple{Int32, Int16, Int8, Bool}}()
     for t in ts, (f, c, l, rw) in t.arrays
-
         push!(u, (f, c, l, rw == :w && p.fields[f].buffers == 2))
     end
-    return sum((nsites(p, l) * lanebytes(p.fields[f].storage) for (f, c, l, _) in u); init = 0.0)
+    return sum(
+        (nsites(p, l) * lanebytes(p.fields[f].storage) for (f, c, l, _) in u);
+        init = 0.0
+    )
 end
 
 """

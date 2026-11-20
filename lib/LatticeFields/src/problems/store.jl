@@ -2,20 +2,21 @@
 # one array per table. A two-buffer field has a current slot; a step's slot swaps flip it.
 
 """
-    FieldStore(backend, p::Program; flat = String[], E = nothing, nbuf = nothing, TE = nothing)
+    FieldStore(backend, p::Program; flat = String[], E = nothing, nbuf = nothing,
+        TE = nothing)
 
 Zero-filled arrays for every field of `p` on `backend` (KernelAbstractions allocation), one
 per buffer, `nsites × ncomp` elements of the field's storage lane; and an empty slot per
 table (set with [`settable!`](@ref)). `cur[f]` is the current slot of field `f` (1 or 2).
 
 `E` is the problem's element type (P5 role model): a float lane holds
-[`lanetype`](@ref LatticeFields.Compile.lanetype)`(lane, value_type(E), :state, fixed)` wrapped like `E`
-(a field with a declared storage, `fixed`, holds its own lane type)
-(a Dual of it when `E` is a Dual): the state lanes hold the problem's value type (BigFloat
-under `T = BigFloat`, Float64 after a Float64 `u0`), and Dual parameters give Dual fields.
-Integer lanes keep their type; tables take the value type, and a Dual of it only when the
-tables themselves carry derivative parts (`TE`, the element type of the problem's table
-values, is a Dual; then `E` is one too). `nothing`: each lane's own Julia type.
+[`lanetype`](@ref LatticeFields.Compile.lanetype)`(lane, value_type(E), :state, fixed)`
+wrapped like `E` (a field with a declared storage, `fixed`, holds its own lane type) (a Dual
+of it when `E` is a Dual): the state lanes hold the problem's value type (BigFloat under
+`T = BigFloat`, Float64 after a Float64 `u0`), and Dual parameters give Dual fields. Integer
+lanes keep their type; tables take the value type, and a Dual of it only when the tables
+themselves carry derivative parts (`TE`, the element type of the problem's table values, is
+a Dual; then `E` is one too). `nothing`: each lane's own Julia type.
 
 The fields named in `flat` (the state, in that order) are packed: each buffer slot is one
 flat array per slot (`st.flat[slot]`), and the field's buffers are contiguous views of it at
@@ -48,40 +49,63 @@ function _tabletype(lane, ::Type{E}, TE) where {E}
     return TE === nothing || value_type(TE) === TE ? V : withvaltype(E, V)
 end
 # The front ends' generic device bodies (copies, clamps, the implicit steps' bodies) and
-# GPUArrays' fill, registered for the D-157 scan once a store on a device whose default float
-# is Float32 holds Float64 (a declared `lattice_storage`, or a declared T = Float64: R-F3c)
+# GPUArrays' fill, registered for the D-157 scan once a store on a device whose default
+# float is Float32 holds Float64 (a declared `lattice_storage`, or a declared T = Float64:
+# R-F3c)
 function _generic_bodies()
     return (
-        _copy_body!, _clamp_body!, _clamp_field_body!, _zero_body!, _clip_body!, _be_norms_body!,
+        _copy_body!, _clamp_body!, _clamp_field_body!, _zero_body!, _clip_body!,
+        _be_norms_body!,
         _be_newton_body!, _be_kappa_norms_body!, _be_kappa_newton_body!, _reset_hist_body!,
-        _be_gate_iter_body!, _be_gate_body!, _be_update_body!, _be_shift_body!, _be_rhs_body!,
+        _be_gate_iter_body!, _be_gate_body!, _be_update_body!, _be_shift_body!,
+        _be_rhs_body!,
         _be_status_body!, _bdf2_q_body!,
     )
 end
 function _register_float64_store!(backend, bufs)
     (Exec.ishost(backend) || Exec.default_float(backend) <: Float64) && return nothing
-    any(b -> any(a -> eltype(a) <: AbstractFloat && value_type(eltype(a)) <: Float64, b), bufs) || return nothing
+    any(
+        b -> any(a -> eltype(a) <: AbstractFloat && value_type(eltype(a)) <: Float64, b),
+        bufs
+    ) ||
+        return nothing
     # keyed on a Float64 device array in the signature: an instance of these
     # bodies over Float32 arrays that reaches a Float64 scalar is still flagged
-    foreach(f -> Exec.register_float64!(string(typeof(f)), Exec.FLOAT64_ARRAY), _generic_bodies())
+    foreach(
+        f -> Exec.register_float64!(string(typeof(f)), Exec.FLOAT64_ARRAY),
+        _generic_bodies()
+    )
     Exec.register_float64!("gpu_fill_kernel", Exec.FLOAT64_ARRAY)
     return nothing
 end
-function FieldStore(backend, p::Program; flat = String[], E = nothing, nbuf = nothing, TE = nothing)
+function FieldStore(
+        backend, p::Program; flat = String[], E = nothing, nbuf = nothing, TE = nothing
+    )
     ids = Int[fieldid(p, k) for k in flat]
     slots, flatbufs = state_layout(p, ids), Any[]
     packed = false
     if !isempty(ids)
         fs = p.fields[ids]
         all(f -> f.buffers == fs[1].buffers, fs) ||
-            throw(ArgumentError("the state fields need one buffer count (a stepped field has two)"))
-        # one element type: packed in one flat array per slot; mixed storage: each field its own
-        packed = all(f -> _eltype(f.storage, E, f.fixed) === _eltype(fs[1].storage, E, fs[1].fixed), fs)
+            throw(ArgumentError("the state fields need one buffer count (a stepped field \
+                has two)"))
+        # one element type: packed in one flat array per slot; mixed storage: each field its
+        # own
+        packed = all(
+            f -> _eltype(f.storage, E, f.fixed) ===
+                _eltype(fs[1].storage, E, fs[1].fixed), fs
+        )
         if packed
             n = maximum(last, slots[ids])
             flatbufs = Any[
                 _zeros(backend, _eltype(fs[1].storage, E, fs[1].fixed), n)
-                    for _ in 1:(nbuf === nothing ? fs[1].buffers : max(fs[1].buffers, nbuf))
+                    for _ in 1:(
+                        if nbuf === nothing
+                            fs[1].buffers
+                    else
+                            max(fs[1].buffers, nbuf)
+                    end
+                    )
             ]
         end
     end
@@ -106,18 +130,23 @@ end
 """
     mixed_state(st) -> Bool
 
-Whether the state fields of store `st` have different storage (no flat arrays; each field its
-own arrays, placed in the flat state vector by `st.slots`).
+Whether the state fields of store `st` have different storage (no flat arrays; each field
+its own arrays, placed in the flat state vector by `st.slots`).
 """
 mixed_state(st::FieldStore) = isempty(st.flat) && any(!isempty, st.slots)
 # the state fields of a mixed store, in flat order (by their slots)
-_state_ids(st::FieldStore) = sort!([i for i in eachindex(st.slots) if !isempty(st.slots[i])]; by = i -> first(st.slots[i]))
+function _state_ids(st::FieldStore)
+    return sort!(
+        [i for i in eachindex(st.slots) if !isempty(st.slots[i])];
+        by = i -> first(st.slots[i])
+    )
+end
 
 """
     MixedState(st, E)
 
-The current state of a mixed store ([`mixed_state`](@ref)) as one flat vector of element type
-`E` (SciML's `state_values`): a read gathers from each field's current array, a write
+The current state of a mixed store ([`mixed_state`](@ref)) as one flat vector of element
+type `E` (SciML's `state_values`): a read gathers from each field's current array, a write
 scatters into it (each field in its own storage type). A host copy per access: a write path,
 not a step path.
 """

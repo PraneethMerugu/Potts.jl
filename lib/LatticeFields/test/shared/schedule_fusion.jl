@@ -4,7 +4,8 @@ using LatticeFields.Schedule: traffic, modeled_time, working_set, merge_kernels,
 
 """
 K masked-Helmholtz smoother components sharing one byte mask (6 streams each: u stencil,
-u_prev, b, uⁿ, mask, out), the launch-bound and DRAM test family of the field-kernel benchmarks.
+u_prev, b, uⁿ, mask, out), the launch-bound and DRAM test family of the field-kernel
+benchmarks.
 """
 function smoother(dims, K)
     N = length(dims)
@@ -12,7 +13,10 @@ function smoother(dims, K)
     m = mask!(pb, "kind")
     offs = [ntuple(e -> e == d ? s : 0, N) for d in 1:N for s in (-1, 1)]
     for k in 1:K
-        u, up, b, un = (field!(pb, "$(x)$k"; role = :input) for x in ("u", "uprev", "b", "un"))
+        u, up, b, un = (
+            field!(pb, "$(x)$k"; role = :input)
+                for x in ("u", "uprev", "b", "un")
+        )
         out = field!(pb, "out$k"; role = :output)
         kb = kernel(pb)
         c = load(kb, u)
@@ -43,7 +47,10 @@ function residual(dims, K)
         c = load(kb, u)
         res = load(kb, b) -
             param(kb, 1) * (2N * c - sum(load(kb, u; offset = o) for o in offs))
-        store(kb, r, select(eq(load(kb, m), IR.constant(kb, 0, U8)), IR.constant(kb, 0), res))
+        store(
+            kb, r,
+            select(eq(load(kb, m), IR.constant(kb, 0, U8)), IR.constant(kb, 0), res)
+        )
         add!(pb, kb, "residual$k")
     end
     return semantic(program(pb))

@@ -1,5 +1,6 @@
-# Edge cases: idempotent semantic passes, level checks, the automatic Int64 index, throw-free
-# domain-restricted math and lazy COND, multi-component planes, rounded forwarding.
+# Edge cases: idempotent semantic passes, level checks, the automatic Int64 index,
+# throw-free domain-restricted math and lazy COND, multi-component planes, rounded
+# forwarding.
 
 @testsetup module LF_compile_edges
 using Test, LatticeFields
@@ -18,7 +19,9 @@ end
 include("../shared/export_all.jl")
 end
 
-@testitem "semantic passes are idempotent" setup = [LF_compile_edges] tags = [:latticefields, :compile] begin
+@testitem "semantic passes are idempotent" setup = [LF_compile_edges] tags = [
+    :latticefields, :compile,
+] begin
     @testset "semantic passes are idempotent" begin
         pb = ProgramBuilder(Grid((6, 5)); periodic = (true, false), nparams = 1)
         u = field!(pb, "u"; buffers = 2)
@@ -36,26 +39,34 @@ end
     end
 end
 
-@testitem "levels: accesses and stores must match the field's levels" setup = [LF_compile_edges] tags = [:latticefields, :compile] begin
+@testitem "levels: accesses and stores must match the field's levels" setup = [
+    LF_compile_edges,
+] tags = [
+    :latticefields, :compile,
+] begin
     @testset "levels: accesses and stores must match the field's levels" begin
         pb = ProgramBuilder(Grid((8, 8)); periodic = (true, true), levels = 2)
         fine = field!(pb, "fine"; role = :input)
         coarse = field!(pb, "coarse"; role = :output, levels = [1])
-        kb = kernel(pb)                                     # level-0 space storing a level-1 field
+        # level-0 space storing a level-1 field
+        kb = kernel(pb)
         store(kb, coarse, load(kb, fine))
         add!(pb, kb, "wrong_store")
         @test occursin("store to `coarse` at level 0", errmsg(() -> semantic(program(pb))))
         pb = ProgramBuilder(Grid((8, 8)); periodic = (true, true), levels = 2)
         fine = field!(pb, "fine"; role = :input)
         coarse = field!(pb, "coarse"; role = :output, levels = [1])
-        kb = kernel(pb, Space{2}(; level = 1))              # reads the fine field at relative level 0
+        # reads the fine field at relative level 0
+        kb = kernel(pb, Space{2}(; level = 1))
         store(kb, coarse, load(kb, fine))
         add!(pb, kb, "wrong_read")
         @test occursin("access to `fine` at level 1", errmsg(() -> semantic(program(pb))))
     end
 end
 
-@testitem "Int64 site index above 2³¹ − 1 elements" setup = [LF_compile_edges] tags = [:latticefields, :compile] begin
+@testitem "Int64 site index above 2³¹ − 1 elements" setup = [LF_compile_edges] tags = [
+    :latticefields, :compile,
+] begin
     @testset "Int64 site index above 2³¹ − 1 elements" begin
         pb = ProgramBuilder(Grid((50_000, 50_000)); periodic = (true, true))
         u, v = field!(pb, "u"; role = :input), field!(pb, "v"; role = :output)
@@ -64,12 +75,19 @@ end
         add!(pb, kb, "shift")
         s = semantic(program(pb))
         @test compile_kernel(s, s.kernels[1]).I == Int64
-        @test compile_kernel(semantic(program(diffusion2())), semantic(program(diffusion2())).kernels[1]).I ==
+        @test compile_kernel(
+            semantic(program(diffusion2())),
+            semantic(program(diffusion2())).kernels[1]
+        ).I ==
             Int32
     end
 end
 
-@testitem "domain-restricted math returns NaN; COND is lazy" setup = [LF_compile_edges] tags = [:latticefields, :compile] begin
+@testitem "domain-restricted math returns NaN; COND is lazy" setup = [
+    LF_compile_edges,
+] tags = [
+    :latticefields, :compile,
+] begin
     @testset "domain-restricted math returns NaN; COND is lazy" begin
         pb = ProgramBuilder(Grid((4, 3)))
         u = field!(pb, "u"; role = :input)
@@ -85,7 +103,8 @@ end
         st = HostStore(s)
         uv = Float32[-2, -1, 0, 0.5, 1, 2, 3, -0.5, 4, 5, -3, 7]
         copyto!(current(st, s, "u"), uv)
-        run_step!(s, sp, st, ())                            # does not throw on negative inputs
+        # does not throw on negative inputs
+        run_step!(s, sp, st, ())
         want = [v > 0 ? log(v) : 0.0f0 for v in uv]
         @test current(st, s, "a") == want
         @test current(st, s, "c") == want
@@ -94,8 +113,12 @@ end
     end
 end
 
-@testitem "multi-component fields are planes; two-buffer partial writes are refused" setup = [LF_compile_edges] tags = [:latticefields, :compile] begin
-    @testset "multi-component fields are planes; two-buffer partial writes are refused" begin
+@testitem "multi-component fields are planes; two-buffer partial writes are refused" setup =
+    [LF_compile_edges] tags = [
+    :latticefields, :compile,
+] begin
+    @testset "multi-component fields are planes; two-buffer partial writes are \
+        refused" begin
         pb = ProgramBuilder(Grid((5, 4)); periodic = (true, true))
         v = field!(pb, "v"; shape = [2], buffers = 2)
         kb = kernel(pb)
@@ -119,7 +142,11 @@ end
     end
 end
 
-@testitem "forwarding keeps the lane rounding (F16 aux, Float32 compute)" setup = [LF_compile_edges] tags = [:latticefields, :compile] begin
+@testitem "forwarding keeps the lane rounding (F16 aux, Float32 compute)" setup = [
+    LF_compile_edges,
+] tags = [
+    :latticefields, :compile,
+] begin
     @testset "forwarding keeps the lane rounding (F16 aux, Float32 compute)" begin
         pb = ProgramBuilder(Grid((7, 5)); periodic = (true, true), nparams = 1)
         u = field!(pb, "u"; role = :input)

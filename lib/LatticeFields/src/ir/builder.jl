@@ -2,8 +2,8 @@
 # interned on (op, type, operands, imm); commutative operands are flattened (ADD, MUL) and
 # sorted by a structural order that never looks at node ids, so equal expressions get equal
 # ids whatever the build order. `finish` renumbers nodes, accesses and constants in a
-# canonical depth-first order from the sorted stores. Passes never mutate nodes: they rebuild
-# through this builder (`rebuild`), so a folded DAG is canonical again.
+# canonical depth-first order from the sorted stores. Passes never mutate nodes: they
+# rebuild through this builder (`rebuild`), so a folded DAG is canonical again.
 
 mutable struct KernelBuilder{N}
     fieldkeys::Vector{String}
@@ -172,7 +172,8 @@ function call!(b::KernelBuilder, f::Symbol, x::Integer)
     return node!(b, CALL, REAL, Int32[cast!(b, x, REAL)], k)
 end
 
-# ---- typing -------------------------------------------------------------------------------
+# ---- typing
+# -------------------------------------------------------------------------------
 function cast!(b::KernelBuilder, x::Integer, t::Scalar)
     b.nodes[x].type == t && return Int32(x)
     n = b.nodes[x]
@@ -233,7 +234,8 @@ function store!(
     return nothing
 end
 
-# ---- operators on handles -----------------------------------------------------------------
+# ---- operators on handles
+# -----------------------------------------------------------------
 _id(b, x::Ex) = x.id
 _id(b, x::Real) = constant!(b, x)
 # Written out (no `@eval Base.$f`): the frozen seed scan reads definition names literally.
@@ -281,11 +283,12 @@ cond(c::Ex, x, y) = Ex(c.b, cond!(c.b, c.id, _id(c.b, x), _id(c.b, y)))
 """
 `RESTRICT`: combine `x` (built with level −1 accesses relative to a child) over the
 children of the coarse site, `op ∈ (:sum, :max, :plurality)`. `:plurality` takes the most
-frequent value of an integer `x` (ties: the smallest nonzero value; 0 only when no nonzero value
-ties).
+frequent value of an integer `x` (ties: the smallest nonzero value; 0 only when no nonzero
+value ties).
 """
 function restrict(x::Ex; op::Symbol = :sum)
-    op in (:sum, :max, :plurality) || irerror("RESTRICT: op `$op` is not :sum, :max or :plurality")
+    op in (:sum, :max, :plurality) ||
+        irerror("RESTRICT: op `$op` is not :sum, :max or :plurality")
     t = x.b.nodes[x.id].type
     code = if op == :sum
         0
@@ -309,7 +312,8 @@ Gate the kernel on the `BOOL` expression `c` (see `Kernel`).
 """
 gate!(kb::KernelBuilder, c::Ex) = (kb.gate = c.id; nothing)
 
-# ---- canonical finish ---------------------------------------------------------------------
+# ---- canonical finish
+# ---------------------------------------------------------------------
 """
 Node dependencies, including `Sel` conditions carried by accesses.
 """
@@ -388,10 +392,11 @@ end
 """
     rebuild(f, k, keys; space, fieldmap, tablemap)
 
-Rebuild kernel `k` through a fresh builder. For each node in order, `f(b, k, i, newargs, ctx)`
-returns the new id, with `ctx = (newids, fieldmap, tablemap)`; `copy_node!` re-interns it unchanged. `fieldmap`/`tablemap` renumber
-field and table ids; `keys = (fieldkeys, fieldlanes, tablekeys)` of the target program.
-This is how every semantic pass changes a kernel.
+Rebuild kernel `k` through a fresh builder. For each node in order,
+`f(b, k, i, newargs, ctx)` returns the new id, with `ctx = (newids, fieldmap, tablemap)`;
+`copy_node!` re-interns it unchanged. `fieldmap`/`tablemap` renumber field and table ids;
+`keys = (fieldkeys, fieldlanes, tablekeys)` of the target program. This is how every
+semantic pass changes a kernel.
 """
 function rebuild(
         f::F, k::Kernel{N}, keys::Tuple; space = k.space, fieldmap = identity,

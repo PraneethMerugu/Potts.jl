@@ -1,9 +1,10 @@
-# Pass 3 (non-semantic, after the fingerprint): POWI ≤ 4 to products, and parameter hoisting.
-# A maximal subtree whose leaves are only parameters, constants and the time `t` (and that
-# holds a parameter or `t`) becomes a derived parameter, computed on the host in at least
-# Float64 and rounded once to the compute type (`D/h²`, `sin(ω t)`). A subtree that reads `t`
-# (a bare `t` included) is derived again at each launch on the host, so the device never
-# holds the runtime slot of absolute time (P5 §3.3); the step `dt` stays a runtime value. The debug emission mode skips this pass.
+# Pass 3 (non-semantic, after the fingerprint): POWI ≤ 4 to products, and parameter
+# hoisting. A maximal subtree whose leaves are only parameters, constants and the time `t`
+# (and that holds a parameter or `t`) becomes a derived parameter, computed on the host in
+# at least Float64 and rounded once to the compute type (`D/h²`, `sin(ω t)`). A subtree that
+# reads `t` (a bare `t` included) is derived again at each launch on the host, so the device
+# never holds the runtime slot of absolute time (P5 §3.3); the step `dt` stays a runtime
+# value. The debug emission mode skips this pass.
 
 const _NOT_HOSTABLE = (
     LOAD, INSIDE_OP, COORD, RUNTIME, TABLE, BITTEST, IDX, RESTRICT, ELEMENT_SUM,
@@ -23,8 +24,8 @@ function _powi_node!(b, k::Kernel, i, a, ctx)
     return node!(b, MUL, n.type, fill(x, n.imm))
 end
 """
-`x^n` for 2 ≤ n ≤ 4 becomes a product chain (`x^4 = (x·x)·(x·x)`, shared by interning); other
-exponents, and all of them in the debug mode, emit `powi`.
+`x^n` for 2 ≤ n ≤ 4 becomes a product chain (`x^4 = (x·x)·(x·x)`, shared by interning);
+other exponents, and all of them in the debug mode, emit `powi`.
 """
 expand_powi(p::Program, k::Kernel) = rebuild(_powi_node!, k, buildkeys(p))
 
@@ -77,7 +78,6 @@ function hoist_params(p::Program, k::Kernel)
     host, hasp = _hostflags(k)
     used_by_device = falses(length(k.nodes))
     for (i, n) in enumerate(k.nodes), a in args(k, n)
-
         host[i] || (used_by_device[a] = true)
     end
     foreach(s -> used_by_device[s.value] = true, k.stores)

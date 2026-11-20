@@ -30,7 +30,11 @@ end
 include("../shared/export_all.jl")
 end
 
-@testitem "5-point 2D, periodic: bit-exact with the hand loop" setup = [LF_compile_stencils] tags = [:latticefields, :compile] begin
+@testitem "5-point 2D, periodic: bit-exact with the hand loop" setup = [
+    LF_compile_stencils,
+] tags = [
+    :latticefields, :compile,
+] begin
     @testset "5-point 2D, periodic: bit-exact with the hand loop" begin
         rng = Xoshiro(1)
         u0 = rand(rng, Float32, 7, 5)
@@ -53,8 +57,12 @@ end
     end
 end
 
-@testitem "7-point 3D, periodic / no flux / Dirichlet: bit-exact with the hand loop" setup = [LF_compile_stencils] tags = [:latticefields, :compile] begin
-    @testset "7-point 3D, periodic / no flux / Dirichlet: bit-exact with the hand loop" begin
+@testitem "7-point 3D, periodic / no flux / Dirichlet: bit-exact with the hand loop" setup =
+    [LF_compile_stencils] tags = [
+    :latticefields, :compile,
+] begin
+    @testset "7-point 3D, periodic / no flux / Dirichlet: bit-exact with the hand \
+        loop" begin
         rng = Xoshiro(2)
         u0 = rand(rng, Float32, 6, 5, 4)
         P = (0.05, 0.9, 1.1, 0.25, 2.0)
@@ -71,14 +79,17 @@ end
         @test run_field(s, sp, u0, P) ≈ nv rtol = 1.0e-5
         sd, spd = build(diffusion3(); options = debug_options())
         @test !has_f64(sp.launches[1].kernel.body) && has_f64(spd.launches[1].kernel.body)
-        @test run_field(sd, spd, u0, P) ≈ nv rtol = 1.0e-7   # Float64 compute, one rounding at the store
+        # Float64 compute, one rounding at the store
+        @test run_field(sd, spd, u0, P) ≈ nv rtol = 1.0e-7
         # Int64 site index (above 2³¹ sites) gives the same bits
         s64, sp64 = build(diffusion3(); options = CompileOptions(; I = Int64))
         @test run_field(s64, sp64, u0, P; steps = 3) == got
     end
 end
 
-@testitem "Cartesian index strategy for box stencils" setup = [LF_compile_stencils] tags = [:latticefields, :compile] begin
+@testitem "Cartesian index strategy for box stencils" setup = [LF_compile_stencils] tags = [
+    :latticefields, :compile,
+] begin
     @testset "Cartesian index strategy for box stencils" begin
         for dims in ((9, 7), (5, 4, 3))
             rng = Xoshiro(3)
@@ -94,14 +105,17 @@ end
                 run_step!(sx, spx, st, (0.5,))
                 return copy(current(st, sx, "v"))
             end
-            @test runbox(s, sp) == runbox(sl, spl)                        # same IR, same order: same bits
+            # same IR, same order: same bits
+            @test runbox(s, sp) == runbox(sl, spl)
             sd, spd = build(boxprog(dims); options = debug_options())
             @test runbox(s, sp) ≈ runbox(sd, spd) rtol = 1.0e-5
         end
     end
 end
 
-@testitem "warm host launch allocates nothing" setup = [LF_compile_stencils] tags = [:latticefields, :compile] begin
+@testitem "warm host launch allocates nothing" setup = [LF_compile_stencils] tags = [
+    :latticefields, :compile,
+] begin
     @testset "warm host launch allocates nothing" begin
         s, sp = build(diffusion3())
         st = HostStore(s)
@@ -111,7 +125,9 @@ end
     end
 end
 
-@testitem "an integer power emits products, not `^`" setup = [LF_compile_stencils] tags = [:latticefields, :compile] begin
+@testitem "an integer power emits products, not `^`" setup = [LF_compile_stencils] tags = [
+    :latticefields, :compile,
+] begin
     @testset "an integer power emits products, not `^`" begin
         function powprog(n)
             pb = ProgramBuilder(Grid((7, 5)); periodic = (true, true), nparams = 1)
@@ -123,7 +139,8 @@ end
         end
         is_pow(x) = x isa Expr && x.head === :call && (x.args[1] === :^ || x.args[1] === ^)
         has(x, pred) = pred(x) || (x isa Expr && any(a -> has(a, pred), x.args))
-        @test has(:(a + b^5), is_pow)                       # control: the detector sees a `^`
+        # control: the detector sees a `^`
+        @test has(:(a + b^5), is_pow)
         u0 = 0.5f0 .+ rand(Xoshiro(2), Float32, 7, 5)
         for n in (-3, 4, 5, 7), options in (CompileOptions(), debug_options())
             s, sp = build(powprog(n); options)
