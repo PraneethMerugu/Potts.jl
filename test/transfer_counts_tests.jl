@@ -169,8 +169,8 @@ if PottsDevices.device_name() == "metal"
     let p60v_path = joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "transfer_counters_tests.jl"),
             runner = joinpath(@__DIR__, "shared", "pottsmodels_test_file.jl")
         Core.eval(@__MODULE__, :(module P60vOnDevice
-            include($runner)
-            PottsModelsTestFile.run_file(@__MODULE__, $p60v_path)
+                    include($runner)
+                    PottsModelsTestFile.run_file(@__MODULE__, $p60v_path)
         end))
     end
 end

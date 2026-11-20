@@ -400,7 +400,8 @@ end
         backend = PottsDevices.device_backend()
         σ = zeros(Int32, 30, 30); σ[5:10, 5:10] .= 1; σ[18:23, 18:23] .= 2
         function device_problem(moves...)
-            prob = PottsProblem(M.Kinds(; name = :p60d), [ownership => σ, kind => [:cell, :wall]], (0, M.FROZEN_T1);
+            prob = PottsProblem(
+                M.Kinds(; name = :p60d), [ownership => σ, kind => [:cell, :wall]], (0, M.FROZEN_T1);
                 seed = 1, T = Float32)
             f = prob.f
             sw = M.Switch(moves)
