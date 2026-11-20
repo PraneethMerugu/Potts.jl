@@ -37,24 +37,20 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - name: Julia on PATH
         run: echo "$HOME/.juliaup/bin" >> "$GITHUB_PATH"
-      - name: Check changed lines in .jl files with GitRunic
+      - name: Check every .jl file with Runic
         env:
           JULIA_PKG_OFFLINE: "true"
         run: |
-          BASE_REF="${{ github.event.before }}"
-          if [ -z "$BASE_REF" ] || [ "$BASE_REF" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${BASE_REF}^{commit}" 2>/dev/null; then
-            BASE_REF="HEAD~1"
-          fi
-          $PIN julia --startup-file=no --project=.github/ci/runic -e '
-            using Pkg
-            Pkg.instantiate(; io = devnull)
-            using Runic
-            exit(Runic.GitRunic.main(["--diff", ARGS[1], "HEAD"]))
-          ' -- "$BASE_REF"
+          # every tracked Julia file except recorded run data and vendored references
+          git ls-files -z -- '*.jl' ':!:lib/PottsModels/reproductions/data/**' ':!:docs/references/**' |
+            xargs -0 $PIN julia --startup-file=no --project=.github/ci/runic -e '
+              using Pkg
+              Pkg.instantiate(; io = devnull)
+              using Runic
+              exit(Runic.main(["--check", "--diff", ARGS...]))
+            ' --
 
   test:
     name: CPU suites and ROCm GPU group
