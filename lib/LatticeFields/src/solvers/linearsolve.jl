@@ -236,7 +236,10 @@ end
 function _visit_bound_entries(emit!, A::BoundOperator{ET, N}, ::Type{T}) where {ET, N, T}
     n, mask, sh, fs, dims, strides, per, hex, s_scalar, f_scalars, dir,
         rob = _bound_stencil(A, T)
-    for idx in 1:n
+    # bounds: idx ∈ 1:n = prod(dims), the length of mask, sh and each face array; a
+    # neighbor j is idx ± a stride (or its periodic wrap), kept inside 1:n by the coordinate
+    # tests
+    @inbounds for idx in 1:n
         if mask !== nothing && mask[idx] != 0
             emit!(idx, idx, one(T))
             coords = _bound_coords(idx, dims)
@@ -364,7 +367,9 @@ function _csc_add!(M::SparseArrays.SparseMatrixCSC{T}, i::Int, j::Int, v::T) whe
     lo = Int(M.colptr[j])
     hi = Int(M.colptr[j + 1]) - 1
     k = searchsortedfirst(rv, i, lo, hi, Base.Order.Forward)
-    nz[k] += v
+    k <= hi && rv[k] == i || error("entry ($i, $j) is not in the sparsity pattern")
+    # bounds: the guard above gives lo ≤ k ≤ hi, inside the column's slots of nz
+    @inbounds nz[k] += v
     return nothing
 end
 function sparse_operator!(M::SparseArrays.SparseMatrixCSC{T}, A::BoundOperator) where {T}
