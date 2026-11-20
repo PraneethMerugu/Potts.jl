@@ -68,6 +68,7 @@ end
         @test Array(c) == permutedims(reshape(reduce(hcat, s.u), 8, 8, 4), (3, 1, 2))
         @test c[2, :, :] == v[2] && c[end, 3, 5] == s.u[end][3 + 8 * 4]
         @test s[bc] == v && s[:bc] == v                           # the bare callable and the name
+        @test s[unwrap(bce)] == v                                 # the unwrapped term
         @test s[x] == range(1 / 16; step = 1 / 8, length = 8) && s[y] == s[x]
     end
     # lazy: `field_series` copies no grid (a 32×32 run: one grid is 8 KiB)
