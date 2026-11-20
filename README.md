@@ -1,5 +1,8 @@
 # Potts.jl
 
+[![Code Style: SciML](https://img.shields.io/static/v1?label=code%20style&message=SciML&color=9558b2&labelColor=389826)](https://github.com/SciML/SciMLStyle)
+[![ColPrac: Contributor's Guide on Collaborative Practices for Community Packages](https://img.shields.io/badge/ColPrac-Contributor's%20Guide-blueviolet)](https://github.com/SciML/ColPrac)
+
 Cellular Potts models written as equations, in the style of ModelingToolkit, and solved with
 SciML-style problems, solvers and solutions, on the CPU or a GPU.
 
