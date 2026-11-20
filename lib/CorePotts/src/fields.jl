@@ -6,6 +6,7 @@
 # in its run context (`ctx`), built when an integrator is created (`phase_context`).
 
 """Kind of the cell owning site `i` (`0` for the medium)."""
+# bounds: i ≤ nsites; the owner c is a cell id ≤ capacity
 @inline owner_kind(st, i) = (c = @inbounds st.ownership[i]; c == 0 ? Int32(0) : @inbounds st.cell.kind[c])
 
 """
@@ -790,7 +791,9 @@ function _tangent_snapshot(::Val{true}, stats, ctx, snap::CPMState)
     return CPMState(snap.ownership, snap.cell, merge(snap.site, NamedTuple{ks}(vs)), snap.model, snap.history)
 end
 
+# bounds: launched over i ∈ eachindex(tw), and src has tw's length
 _tpart_body!(i, tw, src, j) = (@inbounds tw[i] = LatticeFields.Compile.dsetpartial(tw[i], j, LatticeFields.Compile.dpartial(src[i], j)); nothing)
+# bounds: launched over i ∈ eachindex(tw)
 _tzero_body!(i, tw) = (@inbounds tw[i] = zero(tw[i]); nothing)
 # the derivative parts of `v` (an array or a number of Duals; 0 for plain values) into twin `tw`
 function _set_parts!(stats, run::TangentRun, tw, v, name)

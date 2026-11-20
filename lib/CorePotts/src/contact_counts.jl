@@ -54,6 +54,7 @@ radius(c::ContactCounts) = maximum(x -> radius(x.relation), c.counts; init = 0)
 """Whether partner kind `k` (0 = medium) is in the kind set `mask`, as 0 or 1."""
 @inline _kind_bit(mask::UInt64, k) = Int32(ifelse(UInt32(k) < UInt32(64), (mask >> (UInt32(k) & 0x3f)) & UInt64(1), UInt64(0)))   # kind ≥ 64: never
 """Kind of owner `q` (0 for the medium)."""
+# bounds: q is an owner from σ, so q ≤ capacity = length(kind)
 @inline _owner_kind(kind, q) = q == 0 ? Int32(0) : Int32(@inbounds kind[q])
 
 """
@@ -71,6 +72,7 @@ origin). Atomic, so concurrent checkerboard copies may share third cells.
     δo = Int32(0)
     δn = Int32(0)
     for k in 1:length(rel)
+        # bounds: k ≤ length(rel); inside sites have linear indices ≤ nsites
         inside, y = shift(lat, prop.x, @inbounds rel.offsets[k])
         inside || continue
         q = @inbounds σ[linear_index(lat, y)]
@@ -91,6 +93,7 @@ end
     x = coordinates(lat, i)
     a = Int32(0)
     for k in 1:length(rel)
+        # bounds: k ≤ length(rel); inside sites have linear indices ≤ nsites
         inside, y = shift(lat, x, @inbounds rel.offsets[k])
         inside || continue
         q = @inbounds σ[linear_index(lat, y)]
@@ -166,6 +169,7 @@ end
 
 @inline function _dcount_body!(i, dv, par, σ, kind, cc, cols, lat)
     _on(dv, par) || return nothing
+    # bounds: i ≤ nsites = length(σ); owners s ≤ capacity
     s = @inbounds σ[i]
     s > 0 || return nothing
     map(_AddContacts(σ, kind, lat, i, s), cols, cc.counts)

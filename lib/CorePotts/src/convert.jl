@@ -280,6 +280,7 @@ end
 
 @inline function _cv_reset_body!(c, sc)
     if c == 1
+        # bounds: the flag column has the _FLAG_* entries; c ≤ capacity (cell columns)
         @inbounds sc.flag[_FLAG_CONVERTED] = zero(eltype(sc.flag))
         @inbounds sc.flag[_FLAG_ALLOCATE] = zero(eltype(sc.flag))
     end
@@ -300,6 +301,7 @@ end
 @inline function _cv_entity_body!(
         c, entity::E, st, p, ctx, key, mcs, sc, limit, ::Val{CL}) where {E, CL}
     vol = st.cell.volume
+    # bounds: c ≤ capacity; cluster ids and from/to are cell ids, also ≤ capacity
     @inbounds(vol[c]) > 0 || return nothing
     # a live cell's cluster id is not a free slot, even when that slot's cell is dead
     CL && (@inbounds sc.held[st.cell.cluster[c]] = Int32(1))
@@ -325,6 +327,7 @@ end
     q = limit ÷ 4
     ok = true
     for k in 1:N
+        # bounds: f is a live cell id ≤ capacity; _pair(N, k, k) ≤ npairs(N) rows of m2
         ok &= Int64(@inbounds(cell.m2[_pair(N, k, k), f])) <= q
     end
     if t > 0
@@ -336,9 +339,11 @@ end
     end
     return ok
 end
+# bounds: 0 < r ≤ length(vol), checked first
 @inline _live_slot(vol, r) = (0 < r) & (r <= length(vol)) && @inbounds(vol[r] > 0)
 
 @inline function _cv_decide_body!(i, decide::D, st, p, ctx, key, mcs, sc, fresh) where {D}
+    # bounds: i ≤ nsites; owners, sources and targets are cell ids ≤ capacity
     @inbounds sc.site[i] = Int32(0)
     in_domain(ctx.lattice, i) || return nothing
     c = @inbounds st.ownership[i]
@@ -359,6 +364,7 @@ end
 # one item: the reference reset, then the slots, lowest first, in entity (slot) order
 @inline function _cv_allocate_body!(_, ph::P, st, p, ctx, key, mcs, sc, links::LI,
         surf, births, ::Val{CL}) where {P, LI, CL}
+    # bounds: the flag entry exists; r, cursor ≤ cap = length(cell.kind) (loop guards)
     @inbounds(sc.flag[_FLAG_ALLOCATE]) == 0 && return nothing
     cell = st.cell
     cap = length(cell.kind)
@@ -399,6 +405,7 @@ end
 @inline function _fresh_slot!(
         cell, d, k, r, f, links::LI, surf, births, lat, ::Val{CL}) where {LI, CL}
     N = ndims(lat)
+    # bounds: d, r, f ≤ capacity; births.next has one entry; q ≤ N rows of anchor
     @inbounds cell.kind[d] = k
     @inbounds cell.generation[d] += one(eltype(cell.generation))
     if births !== nothing
@@ -421,6 +428,7 @@ end
 @inline function _unlink_slot!(L, d)
     for c in 1:size(L, 2), k in 1:size(L, 1)
 
+        # bounds: k, c run over axes(L); d ≤ capacity = size(L, 2)
         @inbounds L[k, c] == d && (@inbounds L[k, c] = zero(eltype(L)))
     end
     for k in 1:size(L, 1)
@@ -430,6 +438,7 @@ end
 end
 
 @inline function _cv_transfer_body!(c, transfer!::F, st, p, ctx, key, mcs, sc) where {F}
+    # bounds: c ≤ capacity (cell scratch columns)
     n = @inbounds sc.n[c]
     n > 0 || return nothing
     t = @inbounds sc.to[c]
@@ -439,6 +448,7 @@ end
 end
 
 @inline function _cv_writes_body!(i, writes!::F, st, p, ctx, key, mcs, sc, acc::A) where {F, A}
+    # bounds: i ≤ nsites; r > 0 is a cell id ≤ capacity
     r = @inbounds sc.site[i]
     r > 0 || return nothing
     t = @inbounds sc.to[r]
@@ -498,6 +508,7 @@ end
     _wfloat(T) || return atomic_add!(dst, idx, w)        # integer columns: exact in any order
     W = _cr_work(T)
     r = _wrow(m.sc, j, idx)
+    # bounds: r = _wrow(sc, j, idx) with j ≤ size(wexp, 1) and idx ≤ capacity
     e = _cr_shift(W, @inbounds(m.sc.wexp[r]), m.L)
     _cr_add!(_wsc_sum(m.sc), r, _cr_term(W(convert(T, w)), e), m.paired)
     return nothing
@@ -507,6 +518,7 @@ struct _WriteAtomic end
 # host only (any other number type): the writes in site order
 struct _WriteSeq end
 @inline function cv_write!(::_WriteSeq, ::Val{j}, dst, idx, w) where {j}
+    # bounds: 0 < idx ≤ length(dst), checked first
     ((0 < idx) & (idx <= length(dst))) && (@inbounds dst[idx] += convert(eltype(dst), w))
     return nothing
 end
@@ -514,6 +526,7 @@ end
 @inline function _cv_wzero_body!(c, sc)
     for j in 1:size(sc.wexp, 1)
         r = _wrow(sc, j, c)                                # c ≤ capacity: in bounds
+        # bounds: j ≤ size(wexp, 1) and c ≤ capacity give a row of every write scratch
         @inbounds begin
             sc.wexp[r] = 0; sc.wflag[r] = 0; sc.wsum[r] = 0; sc.wslo[r] = 0; sc.wshi[r] = 0
         end
@@ -526,6 +539,7 @@ end
     T = eltype(dst)
     _wfloat(T) || return nothing
     r = _wrow(sc, j, c)
+    # bounds: c ≤ length(dst) (checked above); r = _wrow(sc, j, c) as in cv_write!
     fl = @inbounds sc.wflag[r]
     b = @inbounds sc.wexp[r]
     if fl != 0
@@ -592,6 +606,7 @@ struct _ConvertAfter{S, A, B}
     to::B
 end
 @inline function (a::_ConvertAfter)(j)
+    # bounds: j ≤ nsites; r > 0 and t > 0 are cell ids ≤ capacity
     r = @inbounds a.site[j]
     r > 0 || return @inbounds a.ownership[j]
     t = @inbounds a.to[r]
@@ -599,6 +614,7 @@ end
 end
 
 @inline function _cv_paint_body!(i, st, ctx, sc, surf, rel, hook::H, u) where {H}
+    # bounds: the flag entry exists; i ≤ nsites; r > 0 is a cell id ≤ capacity
     @inbounds(sc.flag[_FLAG_CONVERTED]) == 0 && return nothing
     r = @inbounds sc.site[i]
     r > 0 || return nothing
@@ -613,6 +629,7 @@ end
 end
 
 @inline function _cv_write_sigma_body!(i, σ, sc)
+    # bounds: the flag entry exists; i ≤ nsites; r > 0 is a cell id ≤ capacity
     @inbounds(sc.flag[_FLAG_CONVERTED]) == 0 && return nothing
     r = @inbounds sc.site[i]
     r > 0 || return nothing
@@ -622,6 +639,7 @@ end
 end
 
 @inline function _cv_finalize_body!(c, cell, sc, lat, surf, u)
+    # bounds: the flag column has the _FLAG_* entries
     @inbounds(sc.flag[_FLAG_CONVERTED]) == 0 && return nothing
     _ownership_finalize!(c, cell, sc, lat, surf, u)
     return nothing
@@ -630,6 +648,7 @@ end
 # CPU: the flags are host memory, so a quiet pass skips its later stages without a
 # transfer; a device enqueues them (their work items return at once)
 _quiet(backend, flag, j) = false
+# bounds: j is one of the _FLAG_* entries of the flag column
 _quiet(::KernelAbstractions.CPU, flag, j) = @inbounds(flag[j]) == 0
 
 function (ph::ConvertPass)(st, p, ctx, key, mcs, backend)

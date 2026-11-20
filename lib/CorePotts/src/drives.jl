@@ -18,6 +18,7 @@ concentration: `identity` (linear), `saturating(s)` = `c/(s + c)`,
 the model.
 """
 @inline function chemotaxis_delta(c, prop, χ; response::F = identity) where {F}
+    # bounds: the proposal's target and source are sites ≤ nsites = length(c)
     return -χ * (response(@inbounds(c[prop.target])) - response(@inbounds(c[prop.source])))
 end
 
@@ -57,6 +58,7 @@ family is `−(λ/max)(mean(source, new) − mean(target, old))`.
     total = zero(T)
     n = 0
     zero_seen = false
+    # bounds: site and inside neighbours have linear indices ≤ nsites
     if @inbounds(σ[site]) == owner
         a = @inbounds x[site]
         total += _fold_term(fold, a)
@@ -78,6 +80,7 @@ family is `−(λ/max)(mean(source, new) − mean(target, old))`.
 end
 
 """Extinction policy `ForbidExtinction`: veto a copy that would remove a cell's last site."""
+# bounds: prop.old is a cell id ≤ capacity = length(volume)
 @inline forbid_extinction(volume, prop) = prop.old == 0 || @inbounds(volume[prop.old]) > 1
 
 # ---------------------------------------------------------------------------------------

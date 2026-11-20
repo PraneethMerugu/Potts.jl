@@ -22,6 +22,7 @@ npairs(N) = N * (N + 1) ÷ 2
     end
 end
 
+# bounds: c ≤ capacity and d ≤ N, the rows of anchor
 @inline anchor(cell, c, ::Val{N}) where {N} = ntuple(d -> Int(@inbounds cell.anchor[d, c]), Val(N))
 
 """
@@ -67,6 +68,7 @@ end
 
 @inline function _accumulate!(m1, m2, c, δ::NTuple{N, Int}, s::Int) where {N}
     for d in 1:N
+        # bounds: c ≤ capacity; d, e ≤ N index the N rows of m1 and npairs(N) of m2
         @inbounds m1[d, c] += s * δ[d]
         for e in d:N
             @inbounds m2[_pair(N, d, e), c] += s * δ[d] * δ[e]
@@ -161,11 +163,13 @@ end
 # Queries (host or device). `T` is the float type of the result.
 
 """Centroid of cell `c` in lattice coordinates, wrapped into `[1, n + 1)` on periodic axes."""
+# bounds: c is a cell id ≤ capacity (callers pass ids from σ or a proposal)
 @inline centroid(::Type{T}, cell, l::Lattice, c) where {T} = _centroid(T, cell, l, c, @inbounds cell.volume[c])
 # … from an already-loaded volume `V` (one load for a caller that also tests `V`, e.g.
 # `link_delta`'s dead-partner skip: no second, possibly racing, read of the volume)
 @inline function _centroid(::Type{T}, cell, l::Lattice{N}, c, V) where {T, N}
     return ntuple(Val(N)) do d
+        # bounds: c ≤ capacity; d ≤ N, the rows of anchor and m1
         x = T(@inbounds cell.anchor[d, c]) + T(@inbounds cell.m1[d, c]) / T(V)
         l.periodic[d] ? mod(x - one(T), T(l.dims[d])) + one(T) : x
     end
@@ -183,6 +187,7 @@ Centroid displacement of cell `c` if site `x` is added (`s = +1`) or removed (`s
 """
 @inline function centroid_shift(::Type{T}, cell, l::Lattice{N}, c, x::NTuple{N, Int},
         s::Int) where {T, N}
+    # bounds: c is a cell id ≤ capacity; k ≤ N rows (and pairs) of the moments
     V = Int(@inbounds cell.volume[c])
     V + s <= 0 && return ntuple(_ -> zero(T), Val(N))
     δ = min_image(l, x, anchor(cell, c, Val(N)))
@@ -194,6 +199,7 @@ end
 
 """Covariance of cell `c`'s site coordinates, as the `npairs(N)` upper-triangle entries."""
 @inline function covariance(::Type{T}, cell, c, ::Val{N}) where {T, N}
+    # bounds: c is a cell id ≤ capacity; p ≤ npairs(N) rows of m2
     V = T(@inbounds cell.volume[c])
     return ntuple(Val(npairs(N))) do p
         d, e = _unpair(N, p)
@@ -283,6 +289,7 @@ end
 al. 2006, Eq. 5: `4√(λ_max(I)/a)`), `2√(5λ₁)` in 3D. Zero for an empty cell.
 """
 @inline function major_length(::Type{T}, cell, l::Lattice{N}, c) where {T, N}
+    # bounds: c is a cell id ≤ capacity
     @inbounds(cell.volume[c]) > 0 || return zero(T)
     return _major_length(l, covariance(T, cell, c, Val(N)))
 end
@@ -295,6 +302,7 @@ from the moment sums without committing: the ΔH of a length constraint.
 """
 @inline function major_length_after(::Type{T}, cell, l::Lattice{N}, c, x::NTuple{N, Int},
         s::Int) where {T, N}
+    # bounds: c is a cell id ≤ capacity; the moment rows as in centroid_shift
     V = Int(@inbounds cell.volume[c]) + s
     V > 0 || return zero(T)
     δ = V == 1 && s > 0 ? ntuple(_ -> 0, Val(N)) : min_image(l, x, anchor(cell, c, Val(N)))

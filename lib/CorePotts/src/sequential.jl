@@ -22,6 +22,7 @@ function sequential_mcs!(st, f::F, p, ctx, law::L, key::RNGKey, mcs::Integer, tr
         t = mobile_site(mob, site_pick(_pick_regime(ctx), rt, rx, nsite) + 1)
         x = coordinates(lat, t)
         dir = bounded(rd, K) + 1
+        # bounds: dir ∈ 1:K, K = length(ctx.proposal); site indices ≤ nsites
         inside, y = shift(lat, x, @inbounds ctx.proposal.offsets[dir])
         inside || continue
         s = linear_index(lat, y)

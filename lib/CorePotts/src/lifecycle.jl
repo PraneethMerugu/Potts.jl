@@ -223,6 +223,7 @@ _run_before(f::F, st, p, ctx, key, mcs, backend) where {F} = CellPhase(f)(st, p,
 
 no_rebuild(st, p, ctx, backend) = nothing
 
+# bounds: c is a live cell id ≤ capacity (the lifecycle calls it per cell)
 @inline keep_kind(st, p, ctx, key, mcs, c) = @inbounds st.cell.kind[c]
 """The no-division-rule default: a daughter keeps the default copy of its parent's values."""
 @inline no_divide_rule(st, p, ctx, key, mcs, parent, daughter) = nothing
@@ -270,6 +271,7 @@ end
     return principal_axis(T, st.cell, ctx.lattice, c, ndims(ctx.lattice))
 end
 @inline function (::RandomPlane{T})(st, p, ctx, key, mcs, c) where {T}
+    # bounds: c is a live cell id ≤ capacity (the lifecycle calls it per cell)
     r = draw(key, mcs, cell_entity(c, @inbounds st.cell.generation[c]), STREAM_DIVISION_PLANE)
     return _random_unit(T, r, Val(ndims(ctx.lattice)))
 end
@@ -386,6 +388,7 @@ end
 # parent's, the daughter holds their copy), both halves take the new kind, and the daughter
 # state rule reads it.
 @inline function _cell_rule_body!(c, events, daughter, kindf, divide!, cluster_divide!, st, p, ctx, key, mcs, ruled)
+    # bounds: launched over c ∈ 1:capacity; daughters are cell ids ≤ capacity
     raw = @inbounds events[c]
     e = _event(ruled, raw)
     b = _base_event(e)

@@ -6,6 +6,7 @@
 # cluster as a unit.
 
 """Cluster of cell `c` (`0` for the medium)."""
+# bounds: c is a cell id from σ or a copy proposal, ≤ capacity
 @inline cluster_of(cell, c) = c == 0 ? Int32(0) : @inbounds cell.cluster[c]
 
 """`true` if `a` and `b` are cells of the same cluster (use for internal contact energies)."""
@@ -111,6 +112,7 @@ Change of `Σ_clusters E(cluster_volume, k)` when `prop` moves the target betwee
     V = cell.cluster_volume
     dH = zero(typeof(E(zero(eltype(V)), Int32(1))))
     a == b && return dH
+    # bounds: a, b are cluster ids of cells, ≤ capacity = length(V)
     a != 0 && (v = @inbounds V[a]; dH += E(v - one(v), a) - E(v, a))
     b != 0 && (v = @inbounds V[b]; dH += E(v + one(v), b) - E(v, b))
     return dH
@@ -129,6 +131,7 @@ cluster): `surface_change` with owners replaced by their clusters.
     δb = δa
     a == b && return δa, δb
     for k in 1:length(relation)
+        # bounds: k ≤ length(relation); inside sites have linear indices ≤ nsites
         inside, y = shift(ctx.lattice, prop.x, @inbounds relation.offsets[k])
         inside || continue
         n = cluster_of(cell, @inbounds σ[linear_index(ctx.lattice, y)])
@@ -145,6 +148,7 @@ end
     S = cell.cluster_surface
     dH = zero(typeof(E(zero(eltype(S)), Int32(1))))
     a == b && return dH
+    # bounds: a, b are cluster ids of cells, ≤ capacity = length(S)
     a != 0 && (s = @inbounds S[a]; dH += E(s + δ[1], a) - E(s, a))
     b != 0 && (s = @inbounds S[b]; dH += E(s + δ[2], b) - E(s, b))
     return dH

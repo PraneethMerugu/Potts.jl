@@ -24,6 +24,11 @@
 # Lifecycle statistics and the mask counts accumulate on the device and are folded into
 # `integ.stats` only at host read points (saves, `current_state`, `checkpoint`, the end of
 # `solve!`), which synchronize anyway (`_fold_lifecycle!`).
+#
+# Index bounds of the `@inbounds` below: cell ids (`c`, `d`, `k`, `r`, `m`: live cells,
+# daughters, free slots and cluster ids) are ≤ cap, the length of every cell column and of
+# each per-cell scratch of `dv` (`_device_scratch`); a site index `i` is ≤ length(σ); a
+# planner item `t` is ≤ PLAN_WG, the rows of `cnt`; `par` ∈ (1, 2) = axes(dv.flag).
 
 # Items of the planner's (and the fused form's) single workgroup. Fewer cost time on a
 # quiet MCS (each item runs the trigger of capacity/PLAN_WG slots; 128 measured about 1.2×
@@ -146,6 +151,7 @@ end
     return nothing
 end
 
+# bounds: par ∈ (1, 2) = axes(dv.flag)
 @inline _on(dv, par) = @inbounds(dv.flag[par]) != Int32(0)
 
 # ---------------------------------------------------------------------------------------
@@ -159,6 +165,7 @@ end
 end
 
 @inline function _is_free(st, dv, round, e, c, ::Val{CL}) where {CL}
+    # bounds: c ≤ cap (cell columns and dv.held; see the file header)
     return @inbounds(st.cell.volume[c]) == 0 && e == EVENT_NONE && (!CL || @inbounds(dv.held[c]) != round)
 end
 
@@ -166,6 +173,7 @@ end
 @inline function _scan!(cnt, j)
     s = Int32(0)
     for t in 1:PLAN_WG
+        # bounds: t ≤ PLAN_WG rows and j ≤ 3 columns of cnt
         v = @inbounds cnt[t, j]
         @inbounds cnt[t, j] = s
         s += v
@@ -216,6 +224,7 @@ end
     (CL && _on(dv, par)) || return nothing
     lo, hi = _chunk(t, length(events))
     for c in lo:hi
+        # bounds: c ∈ _chunk(t, cap) ⊆ 1:cap; cluster ids r ≤ cap (file header)
         @inbounds(st.cell.volume[c]) > 0 || continue
         r = @inbounds st.cell.cluster[c]
         Atomix.@atomic dv.nlive[r] += Int32(1)
@@ -233,6 +242,7 @@ end
     if CL && _on(dv, par)
         lo, hi = _chunk(t, length(events))
         for c in lo:hi
+            # bounds: c ∈ _chunk(t, cap) ⊆ 1:cap; t ≤ PLAN_WG rows of cnt
             _base_event(_event(ruled, @inbounds events[c])) == EVENT_DIVIDE_CLUSTER && (dem += @inbounds dv.nmem[c])
         end
     end
@@ -385,6 +395,7 @@ end
 @inline function _scratch_ok(dv, cell, c, ::Val{N}) where {N}
     ok = true
     for k in 1:N
+        # bounds: c ≤ cap; _pair(N, k, k) ≤ npairs(N), the rows of m2
         ok &= @inbounds(cell.m2[_pair(N, k, k), c]) <= dv.limit
     end
     return ok
@@ -405,6 +416,7 @@ end
 struct _OneColumn{V}
     v::V
 end
+# bounds: a.v is one cell's column (anchor, m1 or m2); d runs over that column's rows
 @inline Base.getindex(a::_OneColumn, d, c) = @inbounds a.v[d]
 
 @inline function _plan_cluster!(r, events, daughter, normals, bias, dv, cnormal::CF, ruled, st, p, ctx, key,
@@ -479,6 +491,7 @@ end
     ntrans = Int32(0)
     nrem = Int32(0)
     for c in lo:hi
+        # bounds: c ∈ _chunk(t, cap); daughters d ≤ cap (file header)
         d = @inbounds daughter[c]
         if d > 0
             @inbounds dv.newborn[d] = c % Int32
@@ -602,12 +615,14 @@ end
 @inline (f::_CleanLinks)(L) = _clean_links!(L, f.c, f.removed, f.newborn)
 
 @inline function _copy_column!(a::AbstractVector, c, d)
+    # bounds: c, d ≤ cap = length(a)
     @inbounds a[d] = a[c]
     return nothing
 end
 @inline function _copy_column!(a::AbstractArray, c, d)
     n = length(a) ÷ size(a, ndims(a))               # entries per cell
     for k in 1:n
+        # bounds: n entries per cell and c, d ≤ cap cells: both ranges are in a
         @inbounds a[(d - 1) * n + k] = a[(c - 1) * n + k]
     end
     return nothing
@@ -616,6 +631,7 @@ end
 # links: a removed cell and a daughter (whose slot may be reused) lose every link; their
 # partners drop them (each item writes only its own row: the store is symmetric)
 @inline function _clean_links!(L, c, removed, newborn)
+    # bounds: c ≤ cap columns of L; partners b > 0 are cell ids ≤ cap
     clear = @inbounds(removed[c]) || @inbounds(newborn[c]) > 0
     for k in 1:size(L, 1)
         b = @inbounds L[k, c]
@@ -634,6 +650,7 @@ end
     # this stage, so a slot reused this round still reads as dead), and the daughter copies
     # the reset value; only a live cell's own columns are written (`Lifecycle.release`)
     _release!(release, st, c)
+    # bounds: c, d, k ≤ cap (file header)
     d = @inbounds daughter[c]
     if d > 0
         map(_CopyColumn(c, d), cols)
@@ -668,6 +685,7 @@ end
 
 @inline function _dsurface_body!(i, dv, par, σ, surf, rel, lat, u)
     _on(dv, par) || return nothing
+    # bounds: i ≤ length(σ); owners and newborn parents ≤ cap; k ≤ length(rel)
     s = @inbounds σ[i]
     s > 0 || return nothing
     pc = @inbounds dv.newborn[s]
@@ -718,6 +736,7 @@ end
     _on(dv, par) || return nothing
     _wfold!(u, dv, surf, c, Val(false))                   # the surface stage's units (before a removal's reset)
     N = ndims(lat)
+    # bounds: c, d ≤ cap; k ≤ N and q ≤ npairs(N) rows of the moment columns
     if @inbounds(removed[c])
         @inbounds cell.volume[c] = zero(eltype(cell.volume))
         for k in 1:N
@@ -761,6 +780,7 @@ end
 
 @inline function _dcluster_mark_body!(c, dv, par, cell)
     _on(dv, par) || return nothing
+    # bounds: c and its cluster id k ≤ cap (file header)
     @inbounds(cell.volume[c]) > 0 || return nothing
     k = @inbounds cell.cluster[c]
     ok = @inbounds(cell.volume[k]) > 0 && @inbounds(cell.cluster[k]) == k
@@ -774,6 +794,7 @@ end
 
 @inline function _dcluster_root_body!(c, dv, par, cell, cvol, csurf)
     _on(dv, par) || return nothing
+    # bounds: c and its cluster id k ≤ cap (file header)
     if @inbounds(cell.volume[c]) == 0
         @inbounds cell.cluster[c] = c % Int32
     elseif !@inbounds(dv.okc[c])
@@ -788,6 +809,7 @@ end
 
 @inline function _dcluster_volume_body!(c, dv, par, cell, cvol)
     _on(dv, par) || return nothing
+    # bounds: c ≤ cap (file header)
     V = @inbounds cell.volume[c]
     V > 0 || return nothing
     k = @inbounds cell.cluster[c]
@@ -797,6 +819,7 @@ end
 
 @inline function _dcluster_surface_body!(i, dv, par, σ, cell, csurf, rel, lat, u)
     _on(dv, par) || return nothing
+    # bounds: i ≤ length(σ); owners s > 0 ≤ cap (file header)
     s = @inbounds σ[i]
     s > 0 || return nothing
     K = @inbounds cell.cluster[s]

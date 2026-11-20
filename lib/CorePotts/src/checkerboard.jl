@@ -119,6 +119,7 @@ end
 # (`exact`). A copy is listed at most once per phase, so count ≤ length(blk).
 @inline function _push_serial!(sl, blk, lid)
     i = Atomix.@atomic sl.count[1] += UInt32(1)          # count has one entry
+    # bounds: a copy is listed at most once per phase, so i ≤ length(blk) = length(lid)
     @inbounds sl.blk[i] = Int32(blk)
     @inbounds sl.lid[i] = lid
     return nothing
@@ -199,6 +200,7 @@ end
 
 # the phase's listed copies in list order, then the list is emptied (one work item, or the host)
 function serial_pass!(st, f, p, ctx, law, key, mcs, layout, off, tk, cnt, status, sl)
+    # bounds: count[1] ≤ length(sl.blk) = length(sl.lid) (see `_push_serial!`)
     for i in 1:Int(@inbounds sl.count[1])
         blk = Int(@inbounds sl.blk[i])
         lo, side = block_region(layout, block_coords(layout, blk), off)
@@ -216,6 +218,7 @@ end
 # moments re-center once per MCS (the commits only accumulate, `lockless`); c ≤ capacity
 @kernel function recenter_kernel!(cell, lat)
     c = @index(Global, Linear)
+    # bounds: launched over 1:capacity, the length of the cell columns
     _recenter!(cell, lat, c, @inbounds cell.volume[c])
 end
 
@@ -284,6 +287,7 @@ function _phase_conflict!(st, claim::NamedTuple, reach::Int, lat::Lattice{N}, la
             for δ in box
                 inside, z = shift(lat, x, ntuple(d -> Int32(δ[d]), Val(N)))   # wraps, or the medium
                 inside || continue
+                # bounds: linear_index of an inside site is ≤ nsites = length(σ)
                 c = @inbounds σ[linear_index(lat, z)]
                 c == 0 && continue                                 # the medium holds no cell columns
                 v = @inbounds stamp[c]

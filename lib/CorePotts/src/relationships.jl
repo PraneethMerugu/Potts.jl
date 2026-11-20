@@ -50,6 +50,7 @@ link_store(cell, name::Symbol) = (; links = getfield(cell, adjacency_name(name))
 """Slot of `b` in `a`'s link row, or 0."""
 @inline function link_slot(cell, a, b)
     for k in 1:maxdegree(cell)
+        # bounds: k ≤ maxdegree(cell), the rows of links; a ≤ capacity
         @inbounds(cell.links[k, a]) == b && return k
     end
     return 0
@@ -66,6 +67,7 @@ Return `true` if cells `a` and `b` are nonzero and linked in link store `cell`.
 
 Number of active links incident on cell `a` in link store `cell`.
 """
+# bounds: k ≤ maxdegree(cell), the rows of links; a ≤ capacity
 @inline link_count(cell, a) = count(k -> @inbounds(cell.links[k, a]) != 0, 1:maxdegree(cell))
 
 _payload_names(cell) = Tuple(k for k in keys(cell) if startswith(String(k), "link_"))
@@ -216,6 +218,7 @@ end
 @inline function link_frame(::Type{T}, cell, lat::Lattice{N}, prop::Proposal{N}) where {T, N}
     a, b = prop.old, prop.new
     z = ntuple(_ -> zero(T), Val(N))
+    # bounds: nonzero owners a, b are cell ids ≤ capacity = length(volume)
     Va = a == 0 ? zero(eltype(cell.volume)) : @inbounds cell.volume[a]
     Vb = b == 0 ? zero(eltype(cell.volume)) : @inbounds cell.volume[b]
     kill = Va == 1                                    # the copy takes a's last site: a dies (D-083)

@@ -79,6 +79,7 @@ end
 end
 @inline function _recount!(B::BoundaryCache, σ, mob, lat, offsets, u::Int, x)
     c = _unlike(σ, mob, lat, offsets, u, x)
+    # bounds: u ≤ nsites = length(B.unlike)
     @inbounds B.unlike[u] = c
     return _set_boundary!(B, u, c > 0 && is_mobile(mob, u))
 end
@@ -162,8 +163,10 @@ end
     return d
 end
 @inline _mask_changed(::Nothing, mob, i) = false
+# bounds: i ≤ nsites, the length of the mask and of its copy f0
 @inline _mask_changed(f0::AbstractVector{Bool}, mob::MaskMobility, i) = @inbounds(mob.frozen[i]) != @inbounds(f0[i])
 @inline _note_mask!(::Nothing, mob, i) = nothing
+# bounds: i ≤ nsites, the length of the mask and of its copy f0
 @inline _note_mask!(f0::AbstractVector{Bool}, mob::MaskMobility, i) = (@inbounds f0[i] = mob.frozen[i]; nothing)
 
 # log(1 - n/N) of the geometric skip, cached for the pair (n, N): a mask change can move N

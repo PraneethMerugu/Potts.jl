@@ -134,6 +134,7 @@ struct HistoryPush{D <: Part, S <: Part}
 end
 HistoryPush(pair::Pair) = HistoryPush(Part((:history, pair.first)), Part(pair.second))
 
+# bounds: i ≤ n = length(src); slot ≤ the ring's depth, so the index ≤ length(ring)
 @inline _history_body!(i, ring, src, slot, n) = (@inbounds ring[i + (slot - 1) * n] = src[i]; nothing)
 
 function (ph::HistoryPush)(st, p, ctx, key, mcs, backend)
@@ -294,4 +295,5 @@ run_phase(ph::P, st, p, ctx, key, mcs, backend, stats) where {P} = ph(st, p, ctx
 run_phase(ph::P, st, p, ctx, key, mcs, backend, stats, part) where {P} = run_phase(ph, st, p, ctx, key, mcs, backend, stats)
 
 """Accepted-copy affect: reset `array[target]` to `value` when ownership changes."""
+# bounds: prop.target is a site index ≤ nsites = length(array)
 @inline clear_on_copy!(array, prop, value) = (@inbounds array[prop.target] = value; nothing)

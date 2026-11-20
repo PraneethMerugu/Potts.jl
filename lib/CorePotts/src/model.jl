@@ -259,6 +259,7 @@ column gets the change `v - pre` by an atomic add, so concurrent copies to one c
     if _lockless(ctx) && T <: Union{Integer, AbstractFloat} && !(T <: Bool)
         Atomix.@atomic a[j] += convert(T, v) - convert(T, pre)     # a cell id is in 1:capacity
     else
+        # bounds: j is a cell id in 1:capacity = length(a)
         @inbounds a[j] = convert(T, v)
     end
     return nothing
@@ -267,6 +268,7 @@ end
 """Default `commit!`: maintain `st.cell.volume` (atomic adds: shared-cell checkerboard copies
 to one cell commit concurrently)."""
 @inline function commit_volume!(st, p, prop, ctx)
+    # bounds: nonzero owners are cell ids ≤ capacity = length(volume)
     prop.old != 0 && @inbounds(Atomix.@atomic st.cell.volume[prop.old] -= Int32(1))
     prop.new != 0 && @inbounds(Atomix.@atomic st.cell.volume[prop.new] += Int32(1))
     return nothing
@@ -287,6 +289,7 @@ Change of `Σ_{unordered pairs} w·J(owner, neighbor_owner)` over a (possibly we
     a, b = prop.old, prop.new
     dH = zero(typeof(J(a, b)))
     for k in 1:length(relation)
+        # bounds: k ≤ length(relation); inside sites have linear indices ≤ nsites
         inside, y = shift(ctx.lattice, prop.x, @inbounds relation.offsets[k])
         inside || continue
         n = @inbounds σ[linear_index(ctx.lattice, y)]
@@ -310,6 +313,7 @@ Float32 weights convert exactly). Only these two cells' surfaces change.
     δa = zero(T)
     δb = δa
     for k in 1:length(relation)
+        # bounds: k ≤ length(relation); inside sites have linear indices ≤ nsites
         inside, y = shift(ctx.lattice, prop.x, @inbounds relation.offsets[k])
         inside || continue
         n = @inbounds σ[linear_index(ctx.lattice, y)]
@@ -330,6 +334,7 @@ Change of `Σ_cells E(surface, cell)` given `δ = surface_change(…)`.
     δa, δb = δ
     dH = zero(typeof(E(zero(eltype(surface)), Int32(1))))
     if a != 0
+        # bounds: nonzero owners a, b are cell ids ≤ capacity = length(surface)
         s = @inbounds surface[a]
         dH += E(s + δa, a) - E(s, a)
     end
@@ -404,6 +409,7 @@ end
     a, b = prop.old, prop.new
     dH = zero(typeof(E(Int32(1), Int32(1))))
     if a != 0
+        # bounds: nonzero owners a, b are cell ids ≤ capacity = length(volume)
         v = @inbounds volume[a]
         dH += E(v - Int32(1), a) - E(v, a)
     end

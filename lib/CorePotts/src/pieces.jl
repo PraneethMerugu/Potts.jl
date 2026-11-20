@@ -175,6 +175,7 @@ end
 
 # the site of shell position k (1-based) of x; a touch is always in the domain
 @inline function _shell_site(lat, x, k)
+    # bounds: k ≤ the shell's size, the length of shell_offsets(lat)
     _, y = shift(lat, x, @inbounds shell_offsets(lat)[k])
     return linear_index(lat, y)
 end
@@ -250,6 +251,7 @@ function _keeps_exact(
     S = _stamps!(fl, UInt32(2))
     n, s0 = _mark_touches!(lat, fl, x, touch, S)
     n <= 1 && return true
+    # bounds: s0 is a window position from `_mark_touches!`, ≤ length(fl.mark)
     @inbounds fl.mark[s0] = S
     _, found = _flood!(σ, lat, fl, s0, c, t, S, adj, 1, n)
     return found == n
@@ -285,6 +287,7 @@ end
 end
 
 @inline _bit(v, i::Int) = (@inbounds(v[(i >> 5) + 1]) >> (i & 31)) & UInt32(1) != 0      # i < 32 length(v)
+# bounds: i < 32 length(v), as for `_bit`
 @inline _setbit!(v, i::Int) = (@inbounds(v[(i >> 5) + 1] |= UInt32(1) << (i & 31)); nothing)
 
 """
@@ -468,6 +471,7 @@ end
 # after-values of the gaining cell `b`
 function _pieces_gain(σ, ctx, prop::Proposal, P, L, V, adj::Val)
     b = prop.new
+    # bounds: b = prop.new is a cell id ≤ capacity = length(V) = length(P)
     v = Int(@inbounds V[b])
     p0 = Int(@inbounds P[b])
     l0 = Int(@inbounds L[b])
@@ -514,6 +518,7 @@ run with nothing in flight.
     t = prop.target
     # rows 4·slot ≤ size(after, 1); t in 1:nsites = size(after, 2)
     if _lockless(ctx)
+        # bounds: rows 4·slot ≤ size(after, 1); t in 1:nsites = size(after, 2)
         @inbounds a[r + 1, t] = po - Int32(p0)
         @inbounds a[r + 2, t] = p0 == 1 && po == 1 ? Int32(-1) : lo - Int32(l0)
         @inbounds a[r + 3, t] = pn - Int32(q0)
@@ -540,6 +545,7 @@ other copies of its cells are in flight (no flood runs outside the serial pass).
         a = prop.old
         m = shell_mask(owners, a)
         touch = m & _touch_bits(lat, adj)
+        # bounds: a = prop.old is a cell id ≤ capacity = length(V) = length(P)
         fast = @inbounds(V[a]) == 1 || touch == 0 ||
                (@inbounds(P[a]) == 1 && _touched_pieces(lat, m, touch, adj) <= 1)
         fast || return true
@@ -561,6 +567,7 @@ lockless checkerboard, add the stored changes atomically).
     t = prop.target
     if _lockless(ctx)
         if prop.old != 0                       # a nonzero owner is a cell id in 1:capacity
+            # bounds: rows r + 1, r + 2 ≤ size(a, 1); t ≤ nsites = size(a, 2)
             Atomix.@atomic P[prop.old] += @inbounds(a[r + 1, t])
             Atomix.@atomic L[prop.old] += @inbounds(a[r + 2, t])
         end

@@ -46,6 +46,7 @@ or outside the domain mask, whatever σ's eltype.
     ax = ntuple(d -> _box_axis(lat, x, d), Val(N))
     xin = _mask_at(lat.mask, linear_index(lat, x))
     return ntuple(Val(length(offs))) do k
+        # bounds: k ≤ length(offs); o[d] ∈ -1:1, so o[d] + 2 ∈ 1:3, the axis entries
         o = @inbounds offs[k]
         i = 1 + sum(ntuple(d -> @inbounds(ax[d][1][o[d] + 2]), Val(N)))
         inside = all(ntuple(d -> @inbounds(ax[d][2][o[d] + 2]), Val(N)))
@@ -108,6 +109,7 @@ end
 @inline function shell_mask(owners::NTuple{K, Int32}, c) where {K}
     m = UInt32(0)
     for k in 1:K
+        # bounds: k ≤ K = length(owners)
         m |= ifelse(@inbounds(owners[k]) == c, UInt32(1) << (k - 1), UInt32(0))
     end
     return m
@@ -134,6 +136,7 @@ const _RING_ALL6 = UInt32(0x3f)
 @inline _bitpos(::Val{:ring8}, k) = @inbounds _RING_BIT2[k]
 @inline _bitpos(::Val, k) = Int32(k - 1)
 @inline function _masks2(owners::NTuple{K, Int32}, a, b, r::Val) where {K}
+    # bounds: k ≤ K = length(owners)
     ma = reduce(|, ntuple(k -> UInt32(@inbounds(owners[k]) == a) << _bitpos(r, k), Val(K)))
     mb = reduce(|, ntuple(k -> UInt32(@inbounds(owners[k]) == b) << _bitpos(r, k), Val(K)))
     return ma, mb

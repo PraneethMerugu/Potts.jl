@@ -108,6 +108,7 @@ end
 
 """`true` if site `i` is in the lattice's domain."""
 @inline in_domain(::Lattice{N, Nothing}, i) where {N} = true
+# bounds: i is a site index ≤ nsites = length(l.mask)
 @inline in_domain(l::Lattice, i) = @inbounds l.mask[i]
 
 """The lattice with its domain mask on the host (for host code given a device context). The
@@ -184,6 +185,7 @@ end
     return all(ntuple(d -> l.periodic[d] || 1 <= x[d] + Int(off[d]) <= l.dims[d], Val(N)))
 end
 @inline _in_domain(::Nothing, l, x, w) = true
+# bounds: x and w are lattice sites (shifted inside), so ≤ nsites = length(m)
 @inline _in_domain(m, l, x, w) = @inbounds(m[linear_index(l, x)]) && @inbounds(m[linear_index(l, w)])
 
 # ---------------------------------------------------------------------------------------
@@ -202,6 +204,7 @@ Base.length(::Relation{N, K}) where {N, K} = K
 
 """Weight of the `k`-th offset (`Int32(1)` when unweighted, so counts stay integers)."""
 @inline weight(::Relation{N, K, Nothing}, k) where {N, K} = Int32(1)
+# bounds: k ≤ K = length(r.weights), one weight per offset
 @inline weight(r::Relation, k) = @inbounds r.weights[k]
 """
     radius(relation) -> Int
@@ -217,6 +220,7 @@ Return `true` when site `x` lies at least `radius(relation)` sites from every fa
 lattice with no domain mask.
 """
 @inline function interior(l::Lattice{N, Nothing}, x, rel::Relation{N, K}) where {N, K}
+    # bounds: k ≤ K offsets of rel, each with N components
     r = foldl(max, ntuple(k -> foldl(max, ntuple(d -> abs(Int(@inbounds rel.offsets[k][d])), Val(N))), Val(K)))
     return all(ntuple(d -> r < x[d] <= l.dims[d] - r, Val(N)))
 end
@@ -231,6 +235,7 @@ otherwise calls [`shift`](@ref) and [`linear_index`](@ref), returning `(false, t
 outside the domain.
 """
 @inline function neighbor_index(l::Lattice{N}, x, t::Int, rel::Relation{N}, k, inner::Bool) where {N}
+    # bounds: k ≤ length(rel), an offset of the relation
     inner && return true, t + _linear_offset(l, @inbounds rel.offsets[k])
     inside, y = shift(l, x, @inbounds rel.offsets[k])
     return inside, inside ? linear_index(l, y) : t
@@ -454,6 +459,7 @@ _backend_mobility(backend, m::MaskMobility) = MaskMobility(_to_backend(backend, 
 function _mobile_sites!(sites::Union{Vector{Int32}, Vector{Int64}}, frozen)
     resize!(sites, length(frozen))
     j = 0
+    # bounds: i ∈ eachindex(frozen); j ≤ i ≤ length(sites) after the resize!
     @inbounds for i in eachindex(IndexLinear(), frozen)
         frozen[i] && continue
         j += 1
@@ -481,6 +487,7 @@ end
 # lifecycle's event count, read in the same transfer. The counter has the site lists' width
 # (`site_index_type`), so neither count wraps on any lattice.
 @inline function _frozen_body!(i, frozen, counter, σ, kind, kinds, lat)
+    # bounds: i ≤ nsites = length(σ) = length(frozen); owners s ≤ capacity
     s = @inbounds σ[i]
     f = !in_domain(lat, i) || (s != 0 && _in_kinds(@inbounds(kind[s]), kinds))
     if f != @inbounds(frozen[i])
@@ -499,8 +506,10 @@ Return `true` if site `i` may change owner under `mobility` ([`AllMobile`](@ref)
 [`MaskMobility`](@ref)).
 """
 @inline is_mobile(::AllMobile, i) = true
+# bounds: i is a site index ≤ nsites = length(m.frozen)
 @inline is_mobile(m::MaskMobility, i) = !@inbounds(m.frozen[i])
 nmobile(::AllMobile, l::Lattice) = nsites(l)
 nmobile(m::MaskMobility{<:Any, <:AbstractVector}, l::Lattice) = length(m.sites)
 @inline mobile_site(::AllMobile, j) = j
+# bounds: j ≤ nmobile(m) = length(m.sites) (the sweep draws j in that range)
 @inline mobile_site(m::MaskMobility, j) = Int(@inbounds m.sites[j])

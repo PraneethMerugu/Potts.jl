@@ -5,6 +5,7 @@
 additive isbits type works, e.g. `SVector` for structured (vector-valued) owner sums.
 """
 @inline function commit_site_sum!(sum, prop, v)
+    # bounds: nonzero owners are cell ids ≤ capacity = length(sum)
     prop.old != 0 && @inbounds(sum[prop.old] -= v)
     prop.new != 0 && @inbounds(sum[prop.new] += v)
     return nothing
@@ -28,6 +29,7 @@ minimum marks the cell `stale` (the true minimum can only rise), and
 """
 @inline function commit_site_min!(minimum, stale, prop, v)
     if prop.new != 0
+        # bounds: nonzero owners are cell ids ≤ capacity = length(minimum) = length(stale)
         @inbounds minimum[prop.new] = min(minimum[prop.new], v)
     end
     if prop.old != 0 && v <= @inbounds(minimum[prop.old])

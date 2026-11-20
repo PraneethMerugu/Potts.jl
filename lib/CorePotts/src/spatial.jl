@@ -6,6 +6,7 @@
 @inline function is_boundary_site(σ, ctx, i; relation = ctx.contact)
     lat = ctx.lattice
     x = coordinates(lat, i)
+    # bounds: i ≤ nsites = length(σ); inside neighbours are ≤ nsites as well
     a = @inbounds σ[i]
     for k in 1:length(relation)
         inside, y = shift(lat, x, @inbounds relation.offsets[k])
@@ -20,6 +21,7 @@ end
     x = coordinates(lat, i)
     n = zero(weight(relation, 1))
     for k in 1:length(relation)
+        # bounds: k ≤ length(relation); inside sites have linear indices ≤ nsites
         inside, y = shift(lat, x, @inbounds relation.offsets[k])
         (inside && pred(@inbounds σ[linear_index(lat, y)])) && (n += weight(relation, k))
     end
@@ -67,6 +69,7 @@ _identity(::typeof(max), T) = typemin(T)
 _identity(::typeof(min), T) = typemax(T)
 
 @inline function _cell_reduce_body!(i, f, op, dst, st, p, ctx, key, mcs)
+    # bounds: launched over i ∈ 1:nsites = length(st.ownership)
     c = @inbounds st.ownership[i]
     if c != 0
         v = convert(eltype(dst), f(st, p, ctx, key, mcs, i))
@@ -81,6 +84,7 @@ end
 # floats: a CAS loop that writes `op(old, v)` and stops when that equals `old` (`isequal`: a
 # NaN stays, as `max` and `min` propagate it in either order)
 @inline function _atomic!(op::Union{typeof(max), typeof(min)}, a, c, v)
+    # bounds: c is a cell id ≤ capacity = length(a)
     old = @inbounds a[c]
     while true
         new = op(old, v)
@@ -223,6 +227,7 @@ end
     cur = zero(eltype(σ))
     b = Int32(0)
     for i in _cr_run(j, length(σ), k)                       # i ≤ length(σ)
+        # bounds: i ≤ length(σ), from the run's range
         c = @inbounds σ[i]
         c != cur && (_cr_exp_flush!(sc, cur, b); cur = c; b = Int32(0))
         c == 0 && continue
@@ -268,6 +273,7 @@ end
     q = Int64(0)
     e = 0
     for i in _cr_run(j, length(σ), k)                       # i ≤ length(σ)
+        # bounds: i ≤ length(σ), from the run's range
         c = @inbounds σ[i]
         if c != cur
             cur != 0 && _cr_add!(sc, cur, q, paired)
@@ -282,7 +288,9 @@ end
     return nothing
 end
 
+# bounds: c ≤ length of the accumulator columns (a cell id, or a cell's pair row)
 @inline _cr_acc(sc, c, ::Val{false}) = @inbounds sc.acc[c]
+# bounds: as above, for the paired (hi, lo) accumulator columns
 @inline _cr_acc(sc, c, ::Val{true}) = (Int64(@inbounds sc.hi[c]) << 32) + Int64(@inbounds sc.lo[c])
 
 @inline function _cr_final_body!(c, dst, L, sc, paired::Val, col::UInt32)
@@ -398,6 +406,7 @@ function _unit_weights(::Relation{N, K}, n) where {N, K}
 end
 # the k-th weight as added: units, or the weight in the column's type
 @inline _wt(::Nothing, rel, k, ::Type{T}) where {T} = T(weight(rel, k))
+# bounds: k ≤ length(rel) = length(u.q), one unit weight per offset
 @inline _wt(u::NamedTuple, rel, k, ::Type{T}) where {T} = @inbounds u.q[k]
 @inline _wzero(::Nothing, ::Type{T}) where {T} = zero(T)
 @inline _wzero(::NamedTuple, ::Type{T}) where {T} = Int64(0)
@@ -533,6 +542,7 @@ struct ContactPhase{R} end
 ContactPhase(relation::Symbol = :contact) = ContactPhase{relation}()
 
 @inline function _contact_body!(i, nbr, measure, medium, overflow, σ, lat, r, u, sc)
+    # bounds: i ≤ nsites = length(σ); a ≤ capacity, the columns of nbr and measure
     a = @inbounds σ[i]
     if a != 0
         x = coordinates(lat, i)
@@ -579,6 +589,7 @@ end
         j = (a - 1) * M + s
         v = _wvalue(eltype(measure), _cr_acc(sc, j, u.paired), u.e)
         if s < M
+            # bounds: s ≤ M = size(measure, 1); a ≤ capacity = size(measure, 2)
             @inbounds measure[s, a] = v
         else
             @inbounds medium[a] = v
@@ -613,12 +624,14 @@ end
 """Slot of `b` in `a`'s contact row, or 0 (device or host)."""
 @inline function contact_slot(cell, a, b)
     for k in 1:size(cell.contact_nbr, 1)
+        # bounds: k over the rows of contact_nbr; a is a cell id ≤ capacity
         @inbounds(cell.contact_nbr[k, a]) == b && return k
     end
     return 0
 end
 """Shared interface measure of cells `a` and `b` from the contact table (`b = 0`: medium)."""
 @inline function contact_measure(cell, a, b)
+    # bounds: a is a cell id ≤ capacity = length(cell.contact_medium)
     b == 0 && return @inbounds cell.contact_medium[a]
     k = contact_slot(cell, a, b)
     return k == 0 ? zero(eltype(cell.contact_measure)) : @inbounds cell.contact_measure[k, a]
