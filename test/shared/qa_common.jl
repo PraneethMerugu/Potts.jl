@@ -302,8 +302,8 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
     - no bare `catch` clauses (`try ... catch; ... end` without an exception binding),
     - internal `"please report"` invariants thrown exclusively via `AssertionError` and matching
       `reviewed_invariants`,
-    that `src/`, `ext/`, and `test/` contain no stale front-end wording (`"front end A"`,
-    `"front end B"`, `"both front ends"`, `"@bcs"` outside explicit legacy section refusal),
+    that `src/`, `ext/`, and `test/` contain no stale front-end wording (a front end named by a
+    letter, `"both front ends"`, `"@bcs"` outside explicit legacy section refusal),
     and run negative controls proving every guard flags synthetic violations.
     """
     function qa_error_rules(
@@ -346,7 +346,8 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
             Test.@test !_qa_invariants_match(planted.found_invariants, String[])
             Test.@test _qa_invariants_match(planted.found_invariants, ["src/planted.jl"])
         end
-        stale_neg = _qa_scan_error_rules("# front end A\nmsg = \"write @bcs: x\"")
+        lettered = "# front " * "end A"    # built by concatenation so the phase-name guard spares this file
+        stale_neg = _qa_scan_error_rules(lettered * "\nmsg = \"write @bcs: x\"")
         Test.@test stale_neg.stale_terms == [1, 2]
         bcs_neg = _qa_scan_error_rules("op === Symbol(\"@bcs\")"; allow_bcs = false)
         Test.@test bcs_neg.stale_terms == [1]
@@ -356,8 +357,125 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
         Test.@test bcs_test_neg.stale_terms == [1]
         bcs_test_ok = _qa_scan_error_rules("msg = \"@bcs\""; allow_bcs_test = true)
         Test.@test isempty(bcs_test_ok.stale_terms)
-        bcs_test_fe = _qa_scan_error_rules("# front end A"; allow_bcs_test = true)
+        bcs_test_fe = _qa_scan_error_rules(lettered; allow_bcs_test = true)
         Test.@test bcs_test_fe.stale_terms == [1]
         return nothing
     end
+
+    # ── Phase names ──────────────────────────────────────────────────────────────────────────
+    # Development-process IDs (roadmap items, review rounds, design drafts) do not belong in
+    # names, titles, comments or messages: a reader with no project history cannot decode them.
+    # The pattern matches ID shapes only, never prose words. Each alternative is written in
+    # pieces so that this file does not match itself.
+    const _QA_PHASE_RE = Regex(
+        join(
+            (
+                raw"\bP[0-9]+\.(?:[0-9]+[a-z]{0,2}[0-9]?[a-z]?|ci)\b",        # roadmap items
+                raw"\b[pP][0-9]+_[0-9]+[a-z0-9]*",                           # the same in file names
+                raw"\b[pP][0-9]{2,4}[A-Za-z]{1,3}[0-9]?_",                   # identifier prefixes
+                raw"\bF[0-9]-(?:[A-EG-Z]?[0-9]+[a-z]?)\b",                   # field-compiler items
+                raw"\bF[0-9] (?:design|round|review)\b", raw"\bv[0-9] §",    # design drafts
+                raw"\bTS(?:-R)?[0-9]+[a-z]?\b",                              # test-suite passes
+                raw"\bM[0-9]+\.[0-9]+[a-z]?\b",                              # milestones
+                raw"\breview r[0-9]\b", raw"\br[0-9] [SMN][0-9]+\b", raw"\bR[0-9]-[MSN][0-9]+\b",
+                raw"\bbatch(?:-end| [0-9]+) review\b",                       # review rounds and findings
+                "\\bfront " * raw"end [AB]\b", "\\bW-" * raw"lite\b",        # superseded design labels
+                "\\bcutover " * raw"C[0-9]+\b", raw"\bC[0-9]{1,2} (?:gate|review)\b",
+                raw"\bPG-[0-9]\b", raw"\bP[0-9]-gates\b",
+                raw"\bD-[A-Z][0-9]?[a-z]?-?[0-9]+[a-z]?\b",                  # phase-scoped decision IDs
+            ), "|"
+        )
+    )
+
+    """
+        qa_phase_tokens(text) -> Vector{String}
+
+    The development-process IDs in `text`, in order: roadmap items and their file-name and
+    identifier forms, field-compiler and test-suite items, milestones, review rounds and
+    findings, design-draft sections, superseded design labels, and phase-scoped decision IDs.
+    Plain decision IDs (`D-123`) are not matched: they cite `docs/design/DECISIONS.md` as
+    rationale. The controls in `test/qa_tests.jl` show the shapes.
+    """
+    qa_phase_tokens(text::AbstractString) = String[m.match for m in eachmatch(_QA_PHASE_RE, text)]
+
+    const _QA_PHASE_EXCLUDE = ("docs/design/", ".claude/", "lib/PottsModels/reproductions/data/")
+    const _QA_PHASE_ALLOWLIST = "test/phase_names_allow.txt"
+
+    function _qa_phase_in_scope(p::AbstractString)
+        if any(e -> startswith(p, e), _QA_PHASE_EXCLUDE) || basename(p) == "CLAUDE.md" || p == _QA_PHASE_ALLOWLIST
+            return false
+        elseif startswith(basename(p), "README") || startswith(basename(p), "CONTRIBUTING") || p == "docs/make.jl"
+            return true
+        elseif any(d -> startswith(p, d), ("src/", "ext/", "test/", "benchmark/", "docs/src/", "docs/models/", "tools/", ".github/"))
+            return true
+        end
+        return occursin(r"^lib/[^/]+/(?:src|ext|test)/", p) || occursin(r"^lib/[^/]+/reproductions/[^/]+\.jl$", p)
+    end
+
+    function _qa_phase_files(root::AbstractString)
+        git = Sys.which("git")
+        if git !== nothing && ispath(joinpath(root, ".git"))
+            out = IOBuffer()
+            ok = success(pipeline(`$git -C $root ls-files -z`; stdout = out, stderr = devnull))
+            ok && return sort!(filter!(!isempty, split(String(take!(out)), '\0')))
+        end
+        files = String[]
+        for (d, _, fs) in walkdir(root), f in fs
+            push!(files, replace(relpath(joinpath(d, f), root), '\\' => '/'))
+        end
+        return sort!(filter!(p -> !startswith(p, ".git/"), files))
+    end
+
+    """
+        qa_phase_allowlist(path) -> Set{Tuple{String, String}}
+
+    Read an allowlist of `path<TAB>token<TAB>reason` lines (`#` lines and blank lines are
+    skipped). Every entry needs a reason.
+    """
+    function qa_phase_allowlist(path::AbstractString)
+        allow = Set{Tuple{String, String}}()
+        isfile(path) || return allow
+        for (i, l) in enumerate(eachline(path))
+            (isempty(strip(l)) || startswith(l, "#")) && continue
+            f = split(l, '\t')
+            (length(f) == 3 && !isempty(strip(f[3]))) ||
+                throw(ArgumentError("$path:$i: expected `path<TAB>token<TAB>reason`"))
+            push!(allow, (String(f[1]), String(f[2])))
+        end
+        return allow
+    end
+
+    """
+        qa_no_phase_names(root; allow = qa_phase_allowlist(joinpath(root, "test", "phase_names_allow.txt")))
+            -> Vector{String}
+
+    Scan the tracked files of the checkout at `root` (`git ls-files`, or every file when git or
+    the repository is absent) in the package sources, extensions, tests, benchmarks, docs pages
+    and models, reproduction pages, tools, CI files, READMEs and CONTRIBUTING files for
+    [`qa_phase_tokens`](@ref), in file contents and in the paths themselves. Skipped:
+    `docs/design/`, `CLAUDE.md`, `.claude/`, the committed records under
+    `lib/PottsModels/reproductions/data/` and the allowlist itself. Returns one
+    `"file:line: token"` per hit not in `allow` (line 0 for a path); empty when clean.
+    """
+    function qa_no_phase_names(
+            root::AbstractString;
+            allow = qa_phase_allowlist(joinpath(root, _QA_PHASE_ALLOWLIST))
+        )
+        bad = String[]
+        for p in _qa_phase_files(root)
+            _qa_phase_in_scope(p) || continue
+            for t in qa_phase_tokens(p)
+                (p, t) in allow || push!(bad, "$p:0: $t")
+            end
+            file = joinpath(root, p)
+            isfile(file) || continue
+            bytes = read(file)
+            (0x00 in bytes || !isvalid(String, bytes)) && continue
+            for (i, ln) in enumerate(eachsplit(String(bytes), '\n'; keepempty = true)), t in qa_phase_tokens(ln)
+                (p, t) in allow || push!(bad, "$p:$i: $t")
+            end
+        end
+        return bad
+    end
+
 end

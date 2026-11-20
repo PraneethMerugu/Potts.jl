@@ -413,6 +413,50 @@ end
     end
 end
 
+@testitem "QA: no development-process IDs in names, titles, comments or messages" setup = [QaSetup] tags = [:potts, :qa] begin
+    @testset "QA: no development-process IDs in names, titles, comments or messages" begin
+        # Positive controls, built by concatenation so that this file does not match itself.
+        for (s, tok) in (
+                ("see " * "P6" * ".0as here", "P6" * ".0as"), ("p6" * "_0as_x.jl", "p6" * "_0as"),
+                ("P60" * "AS_NAMED", "P60" * "AS_"), ("p64" * "r_rate", "p64" * "r_"),
+                ("F4" * "-E15", "F4" * "-E15"), ("F3" * "-21b", "F3" * "-21b"), ("TS" * "1b", "TS" * "1b"),
+                ("review" * " r1", "review" * " r1"), ("r3" * " S1", "r3" * " S1"),
+                ("front " * "end A", "front " * "end A"), ("W-" * "lite", "W-" * "lite"),
+                ("cutover " * "C8", "cutover " * "C8"), ("F3 " * "design §3.4", "F3 " * "design"),
+                ("v3 " * "§7.1", "v3 " * "§"), ("D-" * "F2" * "-1", "D-" * "F2" * "-1"),
+            )
+            @test qa_phase_tokens(s) == [tok]
+        end
+        # Negative controls: domain names of the same shape.
+        for s in (
+                "before_mcs", "frozen_kinds", "Float64", "RK4", "BDF2", "F1-F4", "V-C12", "O5",
+                "C12(curve, k)", "T1 transition", "## Step 1: the lattice", "paired A/B", "D-157",
+            )
+            @test isempty(qa_phase_tokens(s))
+        end
+        # Scratch-directory control: a planted ID fails, and an allowlist entry lets it pass.
+        mktempdir() do tmp
+            mkpath(joinpath(tmp, "src"))
+            write(joinpath(tmp, "src", "planted.jl"), "# see " * "P6" * ".0as\nx = 1\n")
+            write(joinpath(tmp, "src", "clean.jl"), "# the copy sweep, D-157\n")
+            @test qa_no_phase_names(tmp) == ["src/planted.jl:1: " * "P6" * ".0as"]
+            allow = joinpath(tmp, "allow.txt")
+            write(allow, "src/planted.jl\t" * "P6" * ".0as\ta planted control\n")
+            @test isempty(qa_no_phase_names(tmp; allow = qa_phase_allowlist(allow)))
+            write(allow, "src/planted.jl\t" * "P6" * ".0as\n")
+            @test_throws ArgumentError qa_phase_allowlist(allow)
+        end
+        # The repository: every hit not in test/phase_names_allow.txt.
+        bad = qa_no_phase_names(joinpath(@__DIR__, ".."))
+        isempty(bad) || @error "development-process IDs (rename them, or add an allowlist entry with a reason)" bad
+        if isempty(bad)
+            @test isempty(bad)
+        else
+            @test_broken isempty(bad)    # report mode: lists the remaining work
+        end
+    end
+end
+
 @testitem "QA: ExplicitImports (Potts)" setup = [QaSetup] tags = [:potts, :qa] begin
     @testset "QA: ExplicitImports (Potts)" begin
         qa_explicit_imports(

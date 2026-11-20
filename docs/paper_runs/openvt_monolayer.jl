@@ -4,7 +4,7 @@
 # center of a closed 1400² lattice, grown until the end of the first MCS with N ≥ 10⁴ cells.
 # Reproduction 15 runs case (b) to 10³ cells (Figures 3 and 5) and the same parameters to 10⁴
 # as case (a); this video follows the 10⁴ stop. The problem is the reproduction's
-# (`p615f_problem` in its frozen test; `video_f3_f8.jl` in `data/15/f3-f8-2026-10-08/`):
+# (as in `video_f3_f8.jl` in `data/15/f3-f8-2026-10-08/`):
 # SequentialCPM(; proposal = Moore(1)), `edge_guard(5; terminate = true)`, run seed 15001
 # (case (b), run 1). Frames are recorded during the run (no states kept), one every 39 MCS
 # (≈ 1/20 cycle) and at the stop; the view zooms out with the colony.

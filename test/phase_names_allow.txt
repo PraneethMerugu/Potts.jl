@@ -1,0 +1,3 @@
+# Exceptions to the phase-name guard (`qa_no_phase_names`, test/qa_tests.jl): one
+# path<TAB>token<TAB>reason per line. Target: empty. Every entry names a string that committed
+# data or a design document fixes, so it cannot be renamed here.
