@@ -24,28 +24,32 @@ struct VCycle
         return new(nu1, nu2)
     end
 end
-VCycle(nu1, nu2) = throw(
-    ArgumentError(
-        string(
-            "`VCycle(", repr(nu1), ", ", repr(nu2), ")`: a V-cycle's smoothing steps ν₁, ν₂ ",
-            "(pre and post) are integers ≥ 1; for example `VCycle(2, 2)`"
+function VCycle(nu1, nu2)
+    throw(
+            ArgumentError(
+                string(
+                    "`VCycle(", repr(nu1), ", ", repr(nu2), ")`: a V-cycle's smoothing steps ν₁, ν₂ ",
+                    "(pre and post) are integers ≥ 1; for example `VCycle(2, 2)`"
+                )
+            )
         )
-    )
-)
+end
 
 _positive(x) = x isa Real && !(x isa Bool) && isfinite(x) && x > 0
 _count(x) = x isa Integer && !(x isa Bool) && x >= 1
 # a `cycle` keyword: a `VCycle`, or the pair `(ν₁, ν₂)`
 _cycle(c::VCycle) = c
 _cycle(c::Tuple{Any, Any}) = VCycle(c...)
-_cycle(c) = throw(
-    ArgumentError(
-        string(
-            "`LatticeMultigrid(; cycle = ", repr(c), ")`: `cycle` is the V-cycle's smoothing ",
-            "steps, `(ν₁, ν₂)` or `VCycle(ν₁, ν₂)` (integers ≥ 1); for example `cycle = (2, 2)`"
+function _cycle(c)
+    throw(
+            ArgumentError(
+                string(
+                    "`LatticeMultigrid(; cycle = ", repr(c), ")`: `cycle` is the V-cycle's smoothing ",
+                    "steps, `(ν₁, ν₂)` or `VCycle(ν₁, ν₂)` (integers ≥ 1); for example `cycle = (2, 2)`"
+                )
+            )
         )
-    )
-)
+end
 
 """
     LatticeMultigrid(; cycle = VCycle(2, 2), cycles = nothing, reltol = nothing, maxiters = nothing, warn_tol = nothing)
@@ -109,13 +113,16 @@ function LatticeMultigrid(;
     )
     return LatticeMultigrid(_cycle(cycle), cycles, reltol, maxiters, warn_tol, Dict{Any, Any}(), ReentrantLock())
 end
-LatticeMultigrid(cycle::VCycle, cycles, reltol, maxiters, warn_tol) =
-    LatticeMultigrid(cycle, cycles, reltol, maxiters, warn_tol, Dict{Any, Any}(), ReentrantLock())
-Base.:(==)(a::LatticeMultigrid, b::LatticeMultigrid) =
-    a.cycle == b.cycle && a.cycles == b.cycles && a.reltol == b.reltol &&
-    a.maxiters == b.maxiters && a.warn_tol == b.warn_tol
-Base.hash(a::LatticeMultigrid, h::UInt) =
-    hash((a.cycle.nu1, a.cycle.nu2, a.cycles, a.reltol, a.maxiters, a.warn_tol), hash(:LatticeMultigrid, h))
+function LatticeMultigrid(cycle::VCycle, cycles, reltol, maxiters, warn_tol)
+    return LatticeMultigrid(cycle, cycles, reltol, maxiters, warn_tol, Dict{Any, Any}(), ReentrantLock())
+end
+function Base.:(==)(a::LatticeMultigrid, b::LatticeMultigrid)
+    return a.cycle == b.cycle && a.cycles == b.cycles && a.reltol == b.reltol &&
+        a.maxiters == b.maxiters && a.warn_tol == b.warn_tol
+end
+function Base.hash(a::LatticeMultigrid, h::UInt)
+    return hash((a.cycle.nu1, a.cycle.nu2, a.cycles, a.reltol, a.maxiters, a.warn_tol), hash(:LatticeMultigrid, h))
+end
 
 """
     FusedPCG(precond::LatticeMultigrid, maxiters, reltol)

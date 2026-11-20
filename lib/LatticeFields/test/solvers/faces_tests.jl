@@ -86,11 +86,13 @@ function solve_vs_hand(op, inp; linsolve = LatticePCG(; maxiters = 64, reltol = 
 end
 
 relerr(a, b) = maximum(abs, a .- b) / maximum(abs, b)
-msg(f) = try
-    f(); ""
-catch e
-    e isa ArgumentError || rethrow()
-    sprint(showerror, e)
+function msg(f)
+    return try
+            f(); ""
+        catch e
+            e isa ArgumentError || rethrow()
+            sprint(showerror, e)
+        end
 end
 
 const NM = (; name = "c", axes = ("x", "y"))
@@ -342,10 +344,12 @@ end
 # 2), nothing, 1.0e-6, nothing, 1.0e-6), 8, 1.0e-6)".
 @testitem "the inner solvers check their keywords when built" setup = [LF_solvers_faces] tags = [:latticefields, :solvers] begin
 @testset "the inner solvers check their keywords when built" begin
-    e(f) = try
-        f(); ""
-    catch err
-        err isa ArgumentError ? err.msg : sprint(showerror, err)
+    function e(f)
+        return try
+                f(); ""
+            catch err
+                err isa ArgumentError ? err.msg : sprint(showerror, err)
+            end
     end
     for (f, want) in (
                 (() -> LatticePCG(; maxiters = 0), "`LatticePCG(; maxiters = 0)`: `maxiters` is the most CG iterations per solve, an integer ≥ 1"),
@@ -387,10 +391,12 @@ end
 # `Multigrid(; cycle = (2, 2))` are MethodErrors; `precond = :mg` builds; `budget = true` builds.
 @testitem "inner solver keywords: cycles, preconditioners and Bool counts" setup = [LF_solvers_faces] tags = [:latticefields, :solvers] begin
 @testset "inner solver keywords: cycles, preconditioners and Bool counts" begin
-    e(f) = try
-        f(); ""
-    catch err
-        err isa ArgumentError ? err.msg : sprint(showerror, err)
+    function e(f)
+        return try
+                f(); ""
+            catch err
+                err isa ArgumentError ? err.msg : sprint(showerror, err)
+            end
     end
     m = Module()
         Core.eval(m, :(using LatticeFields.Solvers: LatticePCG, LatticeMultigrid))    # no `VCycle` in scope

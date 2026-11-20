@@ -40,8 +40,10 @@ function derive_at(name, t, ks...)
 end
 
 # an evaluation of computed parameter `name` (its default written `text`) that failed
-derive_fail(name, text, e) = throw(ArgumentError(string("parameter `", name, "` = `", text,
-    "` fails on the parameter values: ", e isa ArgumentError ? e.msg : sprint(showerror, e))))
+function derive_fail(name, text, e)
+    throw(ArgumentError(string("parameter `", name, "` = `", text,
+        "` fails on the parameter values: ", e isa ArgumentError ? e.msg : sprint(showerror, e))))
+end
 
 # the computed slots of a problem's parameter vector `p`, from its base slots and tables (B:
 # the index's `derive`, `(d, sources, slots)`; a source is a slot number or a table key, a

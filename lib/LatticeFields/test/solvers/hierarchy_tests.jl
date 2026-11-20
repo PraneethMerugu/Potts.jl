@@ -22,8 +22,10 @@ end
 
 @testitem "widths: level-ℓ cells are 2^ℓ wide, the last takes the rest" setup = [LF_solvers_hierarchy] tags = [:latticefields, :solvers] begin
 @testset "widths: level-ℓ cells are 2^ℓ wide, the last takes the rest" begin
-    w(n0, ℓ) = (
-        n = n0 >> ℓ; [SV._width(Int32(i), Int32(n), Int32(n0), Int32(ℓ)) for i in 1:n])
+    function w(n0, ℓ)
+        n = n0 >> ℓ
+        return [SV._width(Int32(i), Int32(n), Int32(n0), Int32(ℓ)) for i in 1:n]
+    end
     @test w(42, 1) == fill(2, 21)
     @test w(42, 2)[(end - 1):end] == [4, 6]
     @test w(42, 3)[(end - 1):end] == [8, 10]
@@ -34,8 +36,10 @@ end
 
 @testitem "rule M on hand-computed coarse operators" setup = [LF_solvers_hierarchy] tags = [:latticefields, :solvers] begin
 @testset "rule M on hand-computed coarse operators" begin
-    one_d(mask) = (CellOperator((4, 1); shift = 0.0, mask = "in.mask", value = 0.0),
-        ("in.mask" => mask,))
+    function one_d(mask)
+        return (CellOperator((4, 1); shift = 0.0, mask = "in.mask", value = 0.0),
+            ("in.mask" => mask,))
+    end
     # site 4 masked: its face to site 3 lies inside coarse cell {3,4}: Σ (rule M), not ½Σ
     for (rule, absorb) in ((RULE_M, 1.0), (
         SV.RuleWeights(inside = 0.5, plane = 0.5,

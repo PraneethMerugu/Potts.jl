@@ -72,13 +72,14 @@ end
 
 @testitem "legality and verifier refusals" setup = [LF_ir_builder] tags = [:latticefields, :ir] begin
 @testset "legality and verifier refusals" begin
-    msg(f) =
-        try
-            f()
-            ""
-        catch e
-            e isa IRError ? e.msg : rethrow()
-        end
+    function msg(f)
+        return try
+                f()
+                ""
+            catch e
+                e isa IRError ? e.msg : rethrow()
+            end
+    end
     # two writes of one field
     p = tiny([("a", (;))], (kb, a) -> (store(kb, a, 1.0); store(kb, a, param(kb, 1))))
     @test occursin("written twice", msg(() -> semantic(p)))

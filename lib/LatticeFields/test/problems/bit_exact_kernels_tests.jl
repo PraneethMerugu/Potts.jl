@@ -23,9 +23,10 @@ end
             ),
         )
         X, P = inputs(dims, K), speciesP(K, T)
-        one(layout; stages = LOWERING) = (
-            b = build(species(dims, K, T; layout); stages); run_species(b..., X, P, layout)
-        )
+        function one(layout; stages = LOWERING)
+            b = build(species(dims, K, T; layout); stages)
+            return run_species(b..., X, P, layout)
+        end
         ref = one(:sep)
         @test one(:slab) == ref                                           # layout
         @test one(:sep; stages = stores_last) == ref                      # store order

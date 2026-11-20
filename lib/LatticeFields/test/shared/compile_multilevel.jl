@@ -1,13 +1,14 @@
 # Definitions of compile/multilevel_tests.jl that other test files use.
 using LatticeFields.IR: reduce!, gate!, table!, table, constant, CLAMP, I32
 
-ml_msg(f) =
-    try
-        f()
-        ""
-    catch e
-        sprint(showerror, e)
-    end
+function ml_msg(f)
+    return try
+            f()
+            ""
+        catch e
+            sprint(showerror, e)
+        end
+end
 function ml_modes(pb, inputs; out = "v")
     map((CompileOptions(), CompileOptions(; index = :linear), debug_options())) do o
         s, sp = build(pb; options = o)

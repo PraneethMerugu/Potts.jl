@@ -49,8 +49,9 @@ executor runs every type. A device runs `Float32`, and `Float64` where the hardw
 only when a choice depends on the hardware (a Float64 solver group, an explicit Float64
 problem); the type device code gets by default is [`default_float`](@ref).
 """
-supports(backend, ::Type{T}) where {T} =
-    ishost(backend) || T === Float32 || (T === Float64 && KernelAbstractions.supports_float64(backend))
+function supports(backend, ::Type{T}) where {T}
+    return ishost(backend) || T === Float32 || (T === Float64 && KernelAbstractions.supports_float64(backend))
+end
 
 """
     default_float(backend) -> Type
@@ -86,8 +87,9 @@ const _FLOAT64_LOCK = ReentrantLock()
 
 Whether a kernel signature text holds every part of a [`register_float64!`](@ref) entry.
 """
-float64_registered(sig::AbstractString) =
-    lock(() -> any(e -> all(q -> _holds(sig, q), e), FLOAT64_KERNELS), _FLOAT64_LOCK)
+function float64_registered(sig::AbstractString)
+    return lock(() -> any(e -> all(q -> _holds(sig, q), e), FLOAT64_KERNELS), _FLOAT64_LOCK)
+end
 """
 The part of a [`register_float64!`](@ref) entry that stands for a Float64 device array in the
 signature, whatever its dimension: Julia prints a 1D or 2D device array by its alias

@@ -163,10 +163,12 @@ end
 @testitem "fused execution is bit-exact with split execution" setup = [LF_schedule_fusion] tags = [:latticefields, :schedule] begin
 @testset "fused execution is bit-exact with split execution" begin
     s = producer_consumer((0, 0, 0); dims = (7, 5, 3))
-    exec(sp) = (
-        st = HostStore(s; init = (k, A) -> (A .= rand(Xoshiro(16), eltype(A), length(A))));
-        run_step!(s, sp, st, (0.3,)); (
-            copy(current(st, s, "v")), copy(current(st, s, "w"))))
+    function exec(sp)
+        st = HostStore(s; init = (k, A) -> (A .= rand(Xoshiro(16), eltype(A), length(A))))
+        run_step!(s, sp, st, (0.3,))
+        return (
+            copy(current(st, s, "v")), copy(current(st, s, "w")))
+    end
     fused, split = plan(s), plan(s; fuse = false)
     @test length(fused.launches) == 1 && length(split.launches) == 2
     @test exec(fused) == exec(split)

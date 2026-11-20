@@ -111,8 +111,9 @@ struct FieldDecl{N}
     fixed::Bool                      # a declared storage (`lattice_storage`): the float lane
                                      # holds its own type under `lanes = :state` (`lanetype`)
 end
-FieldDecl{N}(key, classes, shape, symmetric, storage, levels, epoch, buffers, role) where {N} =
-    FieldDecl{N}(key, classes, shape, symmetric, storage, levels, epoch, buffers, role, false)
+function FieldDecl{N}(key, classes, shape, symmetric, storage, levels, epoch, buffers, role) where {N}
+    return FieldDecl{N}(key, classes, shape, symmetric, storage, levels, epoch, buffers, role, false)
+end
 ncomp(f::FieldDecl) = isempty(f.shape) ? 1 : Int(prod(f.shape))
 
 """
@@ -258,8 +259,9 @@ struct FaceRule <: AbstractBoundaryRule
     afield::Int32
     bfield::Int32
 end
-FaceRule(field, axis, side, alpha::Coef, beta::Coef, g::Coef, gfield = 0) =
-    FaceRule(field, axis, side, alpha, beta, g, Int32(gfield), Int32(0), Int32(0))
+function FaceRule(field, axis, side, alpha::Coef, beta::Coef, g::Coef, gfield = 0)
+    return FaceRule(field, axis, side, alpha, beta, g, Int32(gfield), Int32(0), Int32(0))
+end
 
 """
 Does the face rule `r` have a coefficient `α` or `β` that varies by site or in time (a value

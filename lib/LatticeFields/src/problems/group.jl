@@ -178,9 +178,10 @@ clock_slot(spec::GroupSpec) = something(findfirst(q -> q.name == CLOCK_KEY, spec
 The semantic program of group `g` stepped by `alg`: its update fused into the rate program,
 once per `update_key(alg)` (thread-safe).
 """
-group_program(g::FieldGroup, alg) =
-    lock(() -> get!(() -> semantic(fuse_update(g.spec.rate, update_rule(alg))), g.programs, update_key(alg)),
+function group_program(g::FieldGroup, alg)
+    return lock(() -> get!(() -> semantic(fuse_update(g.spec.rate, update_rule(alg))), g.programs, update_key(alg)),
         _PLANS_LOCK)
+end
 
 # the kernels of the group fields `ids` (field ids of state fields), `(init, step)`: the step
 # kernels that write one of them, and those that write no state field (auxiliary values, read
@@ -339,8 +340,10 @@ ProblemTexts() = ProblemTexts("ExplicitEuler(; substeps = n)")
 # gap, D-294)
 const _SEEN_WARNED = Set{String}()
 const _SEEN_WARNED_LOCK = ReentrantLock()
-_warn_once(key) = Exec.VERBOSE[] && ccall(:jl_generating_output, Cint, ()) == 0 &&
-                  lock(() -> key in _SEEN_WARNED ? false : (push!(_SEEN_WARNED, key); true), _SEEN_WARNED_LOCK)
+function _warn_once(key)
+    return Exec.VERBOSE[] && ccall(:jl_generating_output, Cint, ()) == 0 &&
+        lock(() -> key in _SEEN_WARNED ? false : (push!(_SEEN_WARNED, key); true), _SEEN_WARNED_LOCK)
+end
 
 """
     substeps(spec::GroupSpec, alg::ExplicitEuler, dt, pp; fields = spec.state, stability = spec.stability,
@@ -531,8 +534,10 @@ end
 # a bound's term as the user wrote it (`u: -u*(v^2)`, not `u: -u(t, x, y)*(v(t, x, y)^2)`)
 _termtext(t) = replace(string(t), r"\(t(, \w+)*\)" => "", "LatticePDE." => "")
 # what κ covers when a loop meets unseen terms (the warning and `field_report` say it alike)
-cover_text(terms) = string("κ covers only the cross terms the bound sees (unseen: ",
-    isempty(terms) ? "a term that reads another field" : join(terms, ", "), ")")
+function cover_text(terms)
+    return string("κ covers only the cross terms the bound sees (unseen: ",
+        isempty(terms) ? "a term that reads another field" : join(terms, ", "), ")")
+end
 
 """
     coupling_unseen_text(texts, c) -> String
@@ -576,8 +581,9 @@ struct GroupSubsteps{S, A <: AbstractFieldAlgorithm, T, C}
     texts::T
     coupling::C
 end
-GroupSubsteps(spec::GroupSpec, alg::AbstractFieldAlgorithm, dt::Real; key::AbstractString, texts::AbstractPolicyTexts, coupling = nothing) =
-    GroupSubsteps(spec, alg, Float64(dt), String(key), texts, coupling)
+function GroupSubsteps(spec::GroupSpec, alg::AbstractFieldAlgorithm, dt::Real; key::AbstractString, texts::AbstractPolicyTexts, coupling = nothing)
+    return GroupSubsteps(spec, alg, Float64(dt), String(key), texts, coupling)
+end
 # a group's once-key for one cause `why` (a type, not a closure per call)
 struct _OnceKey
     key::String
@@ -609,9 +615,11 @@ function unbounded_text(t::ProblemTexts, c)
         "). Give an explicit count: ", t.route, " (a minimum; the bound over ",
         "the terms it sees can raise it)")
 end
-uncovered_text(::ProblemTexts, c) = string("ExplicitEuler(substeps = ", c.least, "): ", c.n, " substeps (the request, or more for ",
-    "the terms the bound sees); the stability bound does not cover ", unbounded_reason(c.stability, c.pp),
-    ": the count is the user's")
+function uncovered_text(::ProblemTexts, c)
+    return string("ExplicitEuler(substeps = ", c.least, "): ", c.n, " substeps (the request, or more for ",
+        "the terms the bound sees); the stability bound does not cover ", unbounded_reason(c.stability, c.pp),
+        ": the count is the user's")
+end
 # the parameter check of the bound (LatticePDE: negative diffusion, a coefficient not finite
 # at an entry), with its own words
 function refuse_parameters(::ProblemTexts, c)
@@ -950,8 +958,9 @@ end
 
 # the current slots a launch of the group binds at slot parity `parity`: the group's fields
 # at `parity`, every other field at its own slot (slot 1 for the fields of other groups)
-_cur(st::FieldStore, swaps, parity, all_state::Bool) =
-    all_state ? fill(parity, length(st.cur)) : [f in swaps ? parity : st.cur[f] for f in eachindex(st.cur)]
+function _cur(st::FieldStore, swaps, parity, all_state::Bool)
+    return all_state ? fill(parity, length(st.cur)) : [f in swaps ? parity : st.cur[f] for f in eachindex(st.cur)]
+end
 
 function _bind_steps(backend, prog, sp::StepPlan, st, p, swaps, all_state, c)
     return (BoundStep(backend, prog, sp, st, p; cur = _cur(st, swaps, 1, all_state), c),
@@ -1155,10 +1164,11 @@ The first part of [`rebind!`](@ref): the runtime's launches bound to the paramet
 `p`, returned and not installed. It may throw (a parameter refused); the runtime is then
 unchanged. Install the result with [`install_launches!`](@ref).
 """
-rebind_launches(rt::GroupRuntime, p) =
-    (_bind_steps(rt.backend, rt.program, rt.step, rt.store, p, rt.swaps, rt.all_state, rt.c),
-     _bind_masks(rt.backend, rt.program, rt.init, rt.store, p, rt.swaps, rt.all_state, rt.c,
-         Set(fieldid(rt.program, k) for k in rt.keys)))
+function rebind_launches(rt::GroupRuntime, p)
+    return (_bind_steps(rt.backend, rt.program, rt.step, rt.store, p, rt.swaps, rt.all_state, rt.c),
+        _bind_masks(rt.backend, rt.program, rt.init, rt.store, p, rt.swaps, rt.all_state, rt.c,
+            Set(fieldid(rt.program, k) for k in rt.keys)))
+end
 """
     install_launches!(rt::GroupRuntime, launches)
 

@@ -48,8 +48,9 @@ synchronize, so call it outside a timed loop; it changes nothing in the run.
 """
 function field_report end
 field_report(x) = field_report(stdout, x)
-field_report(prob::SciMLBase.AbstractSciMLProblem, alg::AbstractFieldAlgorithm; dt = nothing) =
-    field_report(stdout, prob, alg; dt)
+function field_report(prob::SciMLBase.AbstractSciMLProblem, alg::AbstractFieldAlgorithm; dt = nothing)
+    return field_report(stdout, prob, alg; dt)
+end
 
 # --- text helpers ---
 _rtext(x::Real) = isfinite(x) ? string(_num(Float64(x))) : string(x)
@@ -60,8 +61,10 @@ _line(io, label, text) = println(io, "  ", rpad(label, 11), text)
 # an algorithm in the report's headers: `FieldGroups` by field name, a map as its canonical text
 _headtext(a) = _algtext(a)
 _headtext(m::ExplicitMap) = canonical(m)
-_headtext(g::FieldGroups) = string("FieldGroups(", join((string(_symtext(k), " => ", _headtext(a)) for (k, a) in g.pairs), ", "),
-    g.default === nothing ? "" : string("; default = ", _headtext(g.default)), ")")
+function _headtext(g::FieldGroups)
+    return string("FieldGroups(", join((string(_symtext(k), " => ", _headtext(a)) for (k, a) in g.pairs), ", "),
+        g.default === nothing ? "" : string("; default = ", _headtext(g.default)), ")")
+end
 # the clauses of a line that hold something (`"name: a, b"`), joined by `; `
 _clauses(ps...) = join((p for p in ps if !isempty(p)), "; ")
 _clause(name, xs) = isempty(xs) ? "" : string(name, ": ", join(xs, ", "))
@@ -306,9 +309,11 @@ function _fusion_lines(io, sp)
     return nothing
 end
 
-_runtext(t::StatusTotals, status) = _clauses(_plural(t.windows, "window"), t.solves > 0 ? _plural(t.solves, "solve") : "",
-    t.budget > 0 ? string(t.budget, " linear budget hits") : "", t.floor > 0 ? string(t.floor, " floors") : "",
-    t.newton_budget > 0 ? string(t.newton_budget, " Newton budget hits") : "", string("status ", status))
+function _runtext(t::StatusTotals, status)
+    return _clauses(_plural(t.windows, "window"), t.solves > 0 ? _plural(t.solves, "solve") : "",
+        t.budget > 0 ? string(t.budget, " linear budget hits") : "", t.floor > 0 ? string(t.floor, " floors") : "",
+        t.newton_budget > 0 ? string(t.newton_budget, " Newton budget hits") : "", string("status ", status))
+end
 
 """
     group_report(io, rt::GroupRuntime, pp; title = "group", dt = rt.dt, spec, stability = rt.stability, E)
@@ -428,8 +433,9 @@ read graph, the coupling rule's `κ = dt · rate` ([`lagged_coupling`](@ref),
 [`check_coupling`](@ref)) of the whole system's bound `stability` at its raw parameters `pp`.
 Nothing for one group.
 """
-coupling_report(io::IO, stability, keys::Vector{Vector{String}}, algs, pp, dt::Real) =
-    _coupling_lines(io, stability, keys, algs, pp, Float64(dt))
+function coupling_report(io::IO, stability, keys::Vector{Vector{String}}, algs, pp, dt::Real)
+    return _coupling_lines(io, stability, keys, algs, pp, Float64(dt))
+end
 
 # the coupling rule's κ per group in a loop of the group read graph (`check_coupling`)
 function _coupling_lines(io, stability, keys::Vector{Vector{String}}, algs, pp, dt::Float64)
@@ -594,8 +600,10 @@ end
 # --- integrators ---
 _raw_params(integ::FieldIntegrator) = with_tables(map(primal, integ.pgood), integ.tables; inputs = _bound_inputs(integ))
 _namedcounts(keys, counts) = join((string(_keystext(k), " ", n) for (k, n) in zip(keys, counts)), ", ")
-_countertext(f) = _clauses(f.solves > 0 ? _plural(f.solves, "solve") : "", f.budget > 0 ? string(f.budget, " linear budget hits") : "",
-    f.floor > 0 ? string(f.floor, " floors") : "", f.newton_budget > 0 ? string(f.newton_budget, " Newton budget hits") : "")
+function _countertext(f)
+    return _clauses(f.solves > 0 ? _plural(f.solves, "solve") : "", f.budget > 0 ? string(f.budget, " linear budget hits") : "",
+        f.floor > 0 ? string(f.floor, " floors") : "", f.newton_budget > 0 ? string(f.newton_budget, " Newton budget hits") : "")
+end
 function field_report(io::IO, integ::FieldIntegrator)
     prob = integ.prob
     f = field_stats(integ)                          # (a device reads the status words first)

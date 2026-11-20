@@ -247,14 +247,22 @@ end
 _cs_n(v::CoupledVector) = length(v.a)
 Krylov.kdot(n::Integer, x::CoupledVector{K}, y::CoupledVector{K}) where {K <: AbstractFloat} = _cs_dot(x, y)
 Krylov.knorm(n::Integer, x::CoupledVector{K}) where {K <: AbstractFloat} = sqrt(_cs_dot(x, x))
-Krylov.kaxpy!(n::Integer, s::K, x::CoupledVector{K}, y::CoupledVector{K}) where {K <: AbstractFloat} =
-    (Exec.launch!(y.backend, _cs_axpy_body!, _cs_n(y), (y.a, s, x.a)); y)
-Krylov.kaxpby!(n::Integer, s::K, x::CoupledVector{K}, t::K, y::CoupledVector{K}) where {K <: AbstractFloat} =
-    (Exec.launch!(y.backend, _cs_axpby_body!, _cs_n(y), (y.a, s, x.a, t)); y)
-Krylov.kcopy!(n::Integer, y::CoupledVector{K}, x::CoupledVector{K}) where {K <: AbstractFloat} =
-    (Exec.launch!(y.backend, _cs_copy_body!, _cs_n(y), (y.a, x.a)); y)
-Krylov.kdivcopy!(n::Integer, y::CoupledVector{K}, x::CoupledVector{K}, s::K) where {K <: AbstractFloat} =
-    (Exec.launch!(y.backend, _cs_div_body!, _cs_n(y), (y.a, x.a, s)); y)
+function Krylov.kaxpy!(n::Integer, s::K, x::CoupledVector{K}, y::CoupledVector{K}) where {K <: AbstractFloat}
+    Exec.launch!(y.backend, _cs_axpy_body!, _cs_n(y), (y.a, s, x.a))
+    return y
+end
+function Krylov.kaxpby!(n::Integer, s::K, x::CoupledVector{K}, t::K, y::CoupledVector{K}) where {K <: AbstractFloat}
+    Exec.launch!(y.backend, _cs_axpby_body!, _cs_n(y), (y.a, s, x.a, t))
+    return y
+end
+function Krylov.kcopy!(n::Integer, y::CoupledVector{K}, x::CoupledVector{K}) where {K <: AbstractFloat}
+    Exec.launch!(y.backend, _cs_copy_body!, _cs_n(y), (y.a, x.a))
+    return y
+end
+function Krylov.kdivcopy!(n::Integer, y::CoupledVector{K}, x::CoupledVector{K}, s::K) where {K <: AbstractFloat}
+    Exec.launch!(y.backend, _cs_div_body!, _cs_n(y), (y.a, x.a, s))
+    return y
+end
 Krylov.kfill!(x::CoupledVector{K}, v::K) where {K <: AbstractFloat} = (Exec.launch!(x.backend, _cs_fill_body!, _cs_n(x), (x.a, v)); x)
 
 """
@@ -644,13 +652,16 @@ function coupled_modes(s::Program{N}, op::OperatorSpec, keys, p) where {N}
     # first solve decides (its refusal is tested on a periodic hexagonal pair)
     _ishex(s) && return nothing
     # the face conditions per axis and side, the same for every row (as the 1D ghost rule's factor)
-    ghost(id, a, k) = (f = _face_kind(s, id, a, k, p); if f[1] === :none
-        0.0
-    elseif f[1] === :dirichlet
-        2.0
-    else
-        f[2] / (f[2] / 2 + f[3])
-    end)
+    function ghost(id, a, k)
+        f = _face_kind(s, id, a, k, p)
+        return if f[1] === :none
+                0.0
+            elseif f[1] === :dirichlet
+                2.0
+            else
+                f[2] / (f[2] / 2 + f[3])
+            end
+    end
     for a in 1:N, k in 1:2
         s.periodic[a] && continue
         g0 = ghost(ids[1], a, k)
@@ -834,8 +845,10 @@ function _after_solve!(cs::CoupledKrylov, par, t, h)
     return nothing
 end
 _after_solve!(::Nothing, par, t, h) = nothing
-check_coupled_growth(rt::GroupRuntime{<:FieldStore, <:QuasiSteady}, p) =
-    (c = _primal_cache(rt.cache); c isa ImplicitCache && c.cs !== nothing ? _check_growth(c.cs, rt.alg, rt.program, c.op, c.keys, p) : nothing)
+function check_coupled_growth(rt::GroupRuntime{<:FieldStore, <:QuasiSteady}, p)
+    c = _primal_cache(rt.cache)
+    return c isa ImplicitCache && c.cs !== nothing ? _check_growth(c.cs, rt.alg, rt.program, c.op, c.keys, p) : nothing
+end
 # the check of a bound coupled solve `cs` (algorithm `alg`, program `s`, operator `op`, fields
 # `keys`) at parameters `p`
 function _check_growth(cs, alg, s::Program, op::OperatorSpec, keys, p)

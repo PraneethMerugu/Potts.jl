@@ -199,8 +199,10 @@ SII.variable_symbols(ix::LatticeIndex) = ix.varsyms
 _scalar(sym) = !(sym isa Union{AbstractArray, Tuple})
 # A table (or an entry) and an input are parameters too (`Constants` and
 # `Discrete` of `LatticeParameters`), indexed by a `TableSlot` and an `InputSlot`
-SII.is_parameter(ix::LatticeIndex, sym) = (_scalar(sym) && haskey(ix.params, ix.key(sym))) || table_key(ix, sym) !== nothing ||
-                                          (!(sym isa Union{AbstractArray, Tuple, Integer}) && input_key(ix, sym) !== nothing)
+function SII.is_parameter(ix::LatticeIndex, sym)
+    return (_scalar(sym) && haskey(ix.params, ix.key(sym))) || table_key(ix, sym) !== nothing ||
+        (!(sym isa Union{AbstractArray, Tuple, Integer}) && input_key(ix, sym) !== nothing)
+end
 SII.is_observed(ix::LatticeIndex, sym) = _scalar(sym) && (haskey(ix.observed, ix.key(sym)) || _ode_aux(ix, sym) !== nothing)
 # an aux field on the ODE path: observed, `rhs(u(t), t)` from the solver's state
 _ode_aux(ix::LatticeIndex, sym) = ix.auxeval[] === nothing ? nothing : aux_key(ix, sym)

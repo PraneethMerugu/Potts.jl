@@ -131,10 +131,12 @@ end
     store(kb, x, load(kb, x) + load(kb, k8))
     add!(pb, kb, "k")
     prog = program(pb)
-    cv(v; bool) = try
-        LatticeFields.Problems._check_integer(prog, "k", "k", v; bool); ""
-    catch e
-        sprint(showerror, e)
+    function cv(v; bool)
+        return try
+                LatticeFields.Problems._check_integer(prog, "k", "k", v; bool); ""
+            catch e
+                sprint(showerror, e)
+            end
     end
     @test cv(fill(7, 9); bool = false) == "" && cv(fill(255, 9); bool = false) == ""
     w = fill(0, 9); w[5] = 300

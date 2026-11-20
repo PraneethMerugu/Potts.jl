@@ -93,8 +93,9 @@ function _mg_bind_for!(engines, lck, m::LatticeMetadata, W, p, inner)
     _mg_bind!(P, u === nothing ? fp.u0 : u, lp, Float64(primal(t)), γ)
     return P
 end
-_mg_current(e::MGPreconditioner, lp::LatticeParameters) =
-    e.p === lp && e.stamp == lp.stamp[] && e.values == Float64[primal(v) for v in lp.values]
+function _mg_current(e::MGPreconditioner, lp::LatticeParameters)
+    return e.p === lp && e.stamp == lp.stamp[] && e.values == Float64[primal(v) for v in lp.values]
+end
 
 # the owned implicit runtime of `m`'s problem at the parameters `lp`
 function _mg_engine(m::LatticeMetadata, lp::LatticeParameters, inner)

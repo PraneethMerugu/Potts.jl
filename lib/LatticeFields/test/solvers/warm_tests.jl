@@ -138,8 +138,10 @@ end
 using .LF_solvers_warm: fd
 @testset "a coefficient write takes effect: steady! and tangent! equal a fresh solver bitwise" begin
     op0, inputs = box_case(64, 32; s = 0.01, islands = 0.1)
-    mk(s, d = 1.0 + s) = CellOperator(op0.dims; periodic = op0.periodic, shift = s, mask = op0.mask, value = op0.value,
-        dirichlet = ((0.0, d), (nothing, nothing)))
+    function mk(s, d = 1.0 + s)
+        return CellOperator(op0.dims; periodic = op0.periodic, shift = s, mask = op0.mask, value = op0.value,
+            dirichlet = ((0.0, d), (nothing, nothing)))
+    end
     rob(β, _ = nothing) = CellOperator((40, 24); shift = 0.05, robin = (((0.4, β, 0.3), (0.1, -1.0, 0.4)), (nothing, nothing)))
         for exec in (HostExec(), KA_.CPU()), linsolve in (:auto, LatticeMultigrid()),
         (make, vals, coef) in ((mk, (0.01, 0.035, 0.02), :shift), (rob, (0.25, 0.6, 0.4), (:robin, 1, 1, :beta)))

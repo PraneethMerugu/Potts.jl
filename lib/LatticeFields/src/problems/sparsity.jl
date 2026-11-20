@@ -295,10 +295,12 @@ function _sparsity(m::LatticeMetadata)
     return SparseArrays.sparse(I, J, true, n, n, |)
 end
 # a rate that reads a reduction of the state: every row is dense
-_dense_refusal(s, t) = throw(ArgumentError(string("the rates read a reduction (a sum over the lattice) of the state, table `",
-    s.tables[t].key, "`: every rate then depends on every site, so the Jacobian is dense and `sparse = true` and ",
-    "`jac = true` are refused; the Jacobian-vector product (`jvp = true`, the default) with a Krylov linear solver ",
-    "(`linsolve = KrylovJL_GMRES()`) is the route")))
+function _dense_refusal(s, t)
+    throw(ArgumentError(string("the rates read a reduction (a sum over the lattice) of the state, table `",
+        s.tables[t].key, "`: every rate then depends on every site, so the Jacobian is dense and `sparse = true` and ",
+        "`jac = true` are refused; the Jacobian-vector product (`jvp = true`, the default) with a Krylov linear solver ",
+        "(`linsolve = KrylovJL_GMRES()`) is the route")))
+end
 
 """
     column_colors(S[, coords]) -> Vector{Int}
@@ -388,8 +390,9 @@ struct LatticeJacobian{M}
     cache::Dict{Type, Any}
     lock::ReentrantLock
 end
-LatticeJacobian(meta, pattern, colors; chunk = min(maximum(colors; init = 1), 12)) =
-    LatticeJacobian(meta, pattern, colors, chunk, Dict{Type, Any}(), ReentrantLock())
+function LatticeJacobian(meta, pattern, colors; chunk = min(maximum(colors; init = 1), 12))
+    return LatticeJacobian(meta, pattern, colors, chunk, Dict{Type, Any}(), ReentrantLock())
+end
 Base.deepcopy_internal(j::LatticeJacobian, ::IdDict) = LatticeJacobian(j.meta, j.pattern, j.colors; chunk = j.chunk)
 (j::LatticeJacobian)(J, u, p, t) = colored_jacobian!(J, j, u, p, t)
 

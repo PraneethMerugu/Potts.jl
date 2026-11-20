@@ -156,8 +156,9 @@ end
 
 # Float64 in device code: allowed on the host, and for a Float64 problem on hardware that has
 # it (`Exec.supports`); a Float32 problem on a device keeps the D-157 double scan
-_float64_ok(::Type{V}, backend) where {V} =
-    Exec.default_float(backend) === Float64 || (V === Float64 && Exec.supports(backend, Float64))
+function _float64_ok(::Type{V}, backend) where {V}
+    return Exec.default_float(backend) === Float64 || (V === Float64 && Exec.supports(backend, Float64))
+end
 
 # the init and step plans of value type `V` (planned and emitted once per family; the ODE
 # path's, `ode.jl`: the owned path's are the group's, `group_plans`)
@@ -293,13 +294,16 @@ function _tables(prob::FieldProblem, p::Union{AbstractVector{<:Pair}, Tuple, Abs
     end
     return tables, filter(!istab, p)
 end
-_newtab(::Type{TT}, ::Type{Pair{K, V}}, ix, p) where {TT, K, V <: AbstractArray} =
-    isconcretetype(eltype(V)) ? promote_type(TT, eltype(V)) : _newtab(TT, Any, ix, p)
-_newtab(::Type{TT}, ::Type{Pair{K, V}}, ix, p) where {TT, K, V <: Real} =
-    isconcretetype(V) ? TT : _newtab(TT, Any, ix, p)
-_newtab(::Type{TT}, _, ix, p) where {TT} =
-    foldl((T, x) -> table_key(ix, first(x)) !== nothing && last(x) isa AbstractArray ? promote_type(T, _tabelt(last(x))) : T,
+function _newtab(::Type{TT}, ::Type{Pair{K, V}}, ix, p) where {TT, K, V <: AbstractArray}
+    return isconcretetype(eltype(V)) ? promote_type(TT, eltype(V)) : _newtab(TT, Any, ix, p)
+end
+function _newtab(::Type{TT}, ::Type{Pair{K, V}}, ix, p) where {TT, K, V <: Real}
+    return isconcretetype(V) ? TT : _newtab(TT, Any, ix, p)
+end
+function _newtab(::Type{TT}, _, ix, p) where {TT}
+    return foldl((T, x) -> table_key(ix, first(x)) !== nothing && last(x) isa AbstractArray ? promote_type(T, _tabelt(last(x))) : T,
         p; init = TT)
+end
 # `u0` as a vector, or a map of state fields to values (`[c => grid, d => 0.0]`: the fields not
 # named keep the problem's values)
 _u0_vector(::FieldProblem, u0) = u0
@@ -514,10 +518,12 @@ terms the bound cannot see. A problem with no state (aux fields `K ~ rhs` only) 
 both routes, [`substeps`](@ref)`(spec, alg, dt, pp)` of the problem's group, in standalone
 `FieldProblem` words ([`ProblemTexts`](@ref)).
 """
-substeps(
-    ::FieldProblem, ::ExplicitMap, p = nothing; tables = nothing, inputs = nothing, stability = nothing, fields = nothing,
-    dt = nothing
-) = 1
+function substeps(
+        ::FieldProblem, ::ExplicitMap, p = nothing; tables = nothing, inputs = nothing, stability = nothing, fields = nothing,
+        dt = nothing
+    )
+    return 1
+end
 
 # the host values of the inputs the stability bound reads in an index (`bound_inputs`), each
 # shaped by site (a number stays a number): from the problem, or from an integrator's store
@@ -703,8 +709,9 @@ function _state_key(prob::FieldProblem, k)
         join(("`$s`" for s in prob.state), ", "))))
 end
 
-CommonSolve.init(::FieldProblem, alg::LinearSolver; kw...) =
+function CommonSolve.init(::FieldProblem, alg::LinearSolver; kw...)
     throw(linear_solver_refusal("`solve`/`init`", alg, "`solve(prob, ExplicitEuler(); dt)`"))
+end
 
 # the save times, sorted, one per time within the run's time tolerance (`_ttol`;
 # concrete arguments: cached by the precompile workload, whatever the problem)
@@ -714,8 +721,9 @@ function _floor_count(x)
     n = round(Int, x)
     return abs(x - n) <= max(oftype(x, 1.0e-9), 4 * eps(x)) ? n : floor(Int, x)
 end
-_saveat_grid(t0::T, tf::T, h::T) where {T} =
-    h > 0 ? T[t0 + m * h for m in 1:_floor_count((tf - t0) / h)] : T[]
+function _saveat_grid(t0::T, tf::T, h::T) where {T}
+    return h > 0 ? T[t0 + m * h for m in 1:_floor_count((tf - t0) / h)] : T[]
+end
 function _save_times(t0::T, tf::T, dt::T, save_start::Bool, save_end::Bool, sat::Vector{T}) where {T}
     tol = _ttol(dt, t0, tf)
     save = T[]
@@ -763,10 +771,12 @@ const LARGE_SAVE_BYTES = 2^31
     return nothing
 end
 # a map saves whole steps only
-_map_saveat(sat, t0, dt, a1, clock) = foreach(s -> _whole(s - t0, dt) || _count(s - t0, dt, "a saveat time";
-        window = _wtext(a1, dt), route = _count_route(a1, clock, dt, s - t0, "the saveat times")
-    ), sat
-)
+function _map_saveat(sat, t0, dt, a1, clock)
+    return foreach(s -> _whole(s - t0, dt) || _count(s - t0, dt, "a saveat time";
+                window = _wtext(a1, dt), route = _count_route(a1, clock, dt, s - t0, "the saveat times")
+            ), sat
+        )
+end
 
 function CommonSolve.init(prob::FieldProblem, alg::AbstractFieldAlgorithm; verbose::Bool = true, kw...)
     verbose && return _init(prob, alg, verbose; kw...)
@@ -993,11 +1003,13 @@ The steady solve of `alg`'s `init = :steady` (both routes): `QuasiSteady` with
 `linsolve = :auto` takes `LatticePCG` to `reltol = 1e-6` within 64 iterations (`STEADY_INNER`), the
 host-checked steady solve of a system with no time.
 """
-steady_start(a) = QuasiSteady(;
-    nlsolve = a isa QuasiSteady ? a.nlsolve : nothing,
-    linsolve = a isa AbstractImplicitFieldAlgorithm && a.linsolve !== :auto ? a.linsolve : STEADY_INNER,
-    solver_type = a isa AbstractImplicitFieldAlgorithm ? a.solver_type : :auto
-)
+function steady_start(a)
+    return QuasiSteady(;
+            nlsolve = a isa QuasiSteady ? a.nlsolve : nothing,
+            linsolve = a isa AbstractImplicitFieldAlgorithm && a.linsolve !== :auto ? a.linsolve : STEADY_INNER,
+            solver_type = a isa AbstractImplicitFieldAlgorithm ? a.solver_type : :auto
+        )
+end
 """
     StartSubsteps(rule, keys)
 
@@ -1040,8 +1052,10 @@ function _bind_aux(prob::FieldProblem, st::FieldStore, p)
     return _bind_steps(prob.backend, s, sp, st, p, prob.step.swaps, true, zero(E))
 end
 # evaluate the aux fields now, from the current state at the current time and step index
-_eval_aux!(integ::FieldIntegrator) =
-    (integ.aux === nothing || integ.aux[_parity(integ)]((Float64(_time(integ)), Float64(integ.dt), _tick(integ))); nothing)
+function _eval_aux!(integ::FieldIntegrator)
+    integ.aux === nothing || integ.aux[_parity(integ)]((Float64(_time(integ)), Float64(integ.dt), _tick(integ)))
+    return nothing
+end
 # the aux fields' current values, flat (`_aux_layout`), on the host
 function _aux_values(integ::FieldIntegrator)
     prog = integ.prob.program
@@ -1161,8 +1175,9 @@ end
     end
     return iter
 end
-_past_maxiters(windows::Int, maxiters::Int, code::SciMLBase.ReturnCode.T, tnow::T, tend::T, tol::T) where {T} =
-    windows >= maxiters && _running(code) && tnow < tend - tol
+function _past_maxiters(windows::Int, maxiters::Int, code::SciMLBase.ReturnCode.T, tnow::T, tend::T, tol::T) where {T}
+    return windows >= maxiters && _running(code) && tnow < tend - tol
+end
 @noinline function _maxiters!(integ::FieldIntegrator)
     Exec.VERBOSE[] && @warn string(
         "the run stopped after maxiters = ", integ.maxiters, " windows at t = ", _num(_time(integ)),
@@ -1265,8 +1280,10 @@ _check_all(::Tuple{}, code) = code
 _check_all(rts::Tuple, code) = _check_all(Base.tail(rts), _worse(code, check_status!(first(rts))))
 # a run goes on while its code is `Default` (no step has ended it, SciML's code of a run in
 # progress), `Success` or `StalledSuccess` (a rounding floor, accepted)
-_running(c::SciMLBase.ReturnCode.T) = c == SciMLBase.ReturnCode.Default || c == SciMLBase.ReturnCode.Success ||
-    c == SciMLBase.ReturnCode.StalledSuccess
+function _running(c::SciMLBase.ReturnCode.T)
+    return c == SciMLBase.ReturnCode.Default || c == SciMLBase.ReturnCode.Success ||
+        c == SciMLBase.ReturnCode.StalledSuccess
+end
 _advance_all(::Tuple{}, clock) = SciMLBase.ReturnCode.Success
 # the groups in order; a failing group stops the step (the later groups do not run), a
 # `StalledSuccess` (a rounding floor, accepted) does not: the step returns the worst code
@@ -1562,8 +1579,9 @@ function _steady_solve(prob::FieldProblem, alg::AbstractFieldAlgorithm; abstol =
 end
 
 SII.symbolic_container(i::FieldIntegrator) = i.prob.index
-SII.state_values(i::FieldIntegrator) =
-    mixed_state(i.store) ? MixedState(i.store, _ueltype(i.store, eltype(i.prob))) : i.store.flat[_parity(i)]
+function SII.state_values(i::FieldIntegrator)
+    return mixed_state(i.store) ? MixedState(i.store, _ueltype(i.store, eltype(i.prob))) : i.store.flat[_parity(i)]
+end
 SII.parameter_values(i::FieldIntegrator) = i.p
 SII.current_time(i::FieldIntegrator) = _time(i)
 """
@@ -1629,9 +1647,11 @@ end
 # `getp` of a table reads it from the problem (a table is not in the parameter vector); a list
 # with a table in it reads each entry with its own `getp`
 # the clock's slot is the stepper's, not a parameter
-_not_clock(sym) = sym isa Union{Symbol, AbstractString} && String(sym) == CLOCK_KEY && throw(ArgumentError(string(
-    "`", CLOCK_KEY, "` is the clock's slot, which the stepper writes at every launch, not a parameter of the ",
-    "problem: an equation reads the step index as `step_index(t)`")))
+function _not_clock(sym)
+    return sym isa Union{Symbol, AbstractString} && String(sym) == CLOCK_KEY && throw(ArgumentError(string(
+        "`", CLOCK_KEY, "` is the clock's slot, which the stepper writes at every launch, not a parameter of the ",
+        "problem: an equation reads the step index as `step_index(t)`")))
+end
 function SII.getp(sys::Union{FieldProblem, FieldIntegrator, FieldSolution}, sym)
     prob = sys isa FieldProblem ? sys : sys.prob
     ix = prob.index
@@ -1671,8 +1691,10 @@ end
 # a write of an aux field (`integ[K] = v`): refused in the user's words, on the owned path
 # (`_check_symbol`) and on the ODE path (`setsym` on an OrdinaryDiffEq integrator, the
 # OrdinaryDiffEqCore extension; SII would say "Invalid symbol … for `setsym`")
-_aux_write_text(sym) = string("`", _symtext(sym), "` is an aux field (`", _symtext(sym), " ~ rhs`), ",
-    "evaluated from the state at each read and save; it cannot be written: write the fields it reads")
+function _aux_write_text(sym)
+    return string("`", _symtext(sym), "` is an aux field (`", _symtext(sym), " ~ rhs`), ",
+        "evaluated from the state at each read and save; it cannot be written: write the fields it reads")
+end
 """
     check_aux_write(ix, sym)
 
@@ -1869,9 +1891,11 @@ function SciMLBase.savevalues!(i::FieldIntegrator, force_save = false)
     return (true, true)
 end
 SciMLBase.get_proposed_dt(i::FieldIntegrator) = i.dt
-SciMLBase.set_proposed_dt!(i::FieldIntegrator, dt) = throw(ArgumentError(string("set_proposed_dt!: an owned run steps ",
-    "a fixed window (dt = ", i.dt, "); land on a time with `add_tstop!` or `step!(integ, dt, true)`, or give the ",
-    "algorithm another `dt`")))
+function SciMLBase.set_proposed_dt!(i::FieldIntegrator, dt)
+    throw(ArgumentError(string("set_proposed_dt!: an owned run steps ",
+        "a fixed window (dt = ", i.dt, "); land on a time with `add_tstop!` or `step!(integ, dt, true)`, or give the ",
+        "algorithm another `dt`")))
+end
 # The end of an iteration (`for i in integ`): at the end of the time span, or when the run
 # ended. The end of the run is taken then, once (`finish!`, as `solve!` does and as SciML's
 # integrators do), so the solution carries its return code
@@ -1883,8 +1907,9 @@ function SciMLBase.done(i::FieldIntegrator)
 end
 # SciML's contract: `Success` while the run is healthy, else the code that ended it (a
 # `StalledSuccess` too: the run goes on with it)
-SciMLBase.check_error(i::FieldIntegrator) =
-    i.retcode == SciMLBase.ReturnCode.Default ? SciMLBase.ReturnCode.Success : i.retcode
+function SciMLBase.check_error(i::FieldIntegrator)
+    return i.retcode == SciMLBase.ReturnCode.Default ? SciMLBase.ReturnCode.Success : i.retcode
+end
 
 # an input symbol writes the input's array (the masks run again); a parameter or table is an
 # error naming `integ.ps`; any other goes to SII

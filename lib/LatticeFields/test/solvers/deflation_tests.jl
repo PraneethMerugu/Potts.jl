@@ -282,8 +282,10 @@ end
     n = 256
     f = zeros(n, n)
     f[1:(n ÷ 2), :] .= 1
-    per(w, s) = (CellOperator((n, n); periodic = (true, true), shift = s, face = (w, w)),
-        ("in.f" => vec(f),))
+    function per(w, s)
+        return (CellOperator((n, n); periodic = (true, true), shift = s, face = (w, w)),
+            ("in.f" => vec(f),))
+    end
     # face = 100, s = 1: s/face = 0.01, floors in Float32 (measured 4.8e-6), Float64 :done
         sv = case_solver(per(100.0, 1.0), Float32; solver_type = Float32)
     steady!(sv)
@@ -303,11 +305,13 @@ end
 @testitem "coefficients are validated; set_coefficients! warns once about solver_type" setup = [LF_solvers_deflation] tags = [:latticefields, :solvers] begin
     @testset "coefficients are validated; set_coefficients! warns once about solver_type" begin
         # refusals in the user's words: an ArgumentError naming the field and the axis
-    E(f) = try
-        f(); ""
-    catch e
-        e isa ArgumentError || rethrow()
-        sprint(showerror, e)
+    function E(f)
+        return try
+                f(); ""
+            catch e
+                e isa ArgumentError || rethrow()
+                sprint(showerror, e)
+            end
     end
     nm = (; name = "c", axes = ("x", "y"))
     e = E(() -> CellOperator((8, 8); shift = -1.0, nm...))

@@ -86,8 +86,12 @@ end
         @test sp.launches[1].workgroup == (length(dims) == 3 ? (64, 2, 2) : (64, 4))
         sl, spl = build(boxprog(dims); options = CompileOptions(; index = :linear))
         @test spl.launches[1].kernel.strategy == :linear
-        runbox(sx, spx) = (st = HostStore(sx); copyto!(current(st, sx, "u"), u0);
-            run_step!(sx, spx, st, (0.5,)); copy(current(st, sx, "v")))
+        function runbox(sx, spx)
+            st = HostStore(sx)
+            copyto!(current(st, sx, "u"), u0)
+            run_step!(sx, spx, st, (0.5,))
+            return copy(current(st, sx, "v"))
+        end
         @test runbox(s, sp) == runbox(sl, spl)                        # same IR, same order: same bits
         sd, spd = build(boxprog(dims); options = debug_options())
         @test runbox(s, sp) ≈ runbox(sd, spd) rtol = 1e-5

@@ -10,13 +10,14 @@ include("../fixtures.jl")
 using LatticeFields.IR: IRError, ZERO, coord, constant
 using LatticeFields.Schedule: live_estimate
 
-regmsg(f) =
-    try
-        f()
-        ""
-    catch e
-        e isa IRError ? e.msg : rethrow()
-    end
+function regmsg(f)
+    return try
+            f()
+            ""
+        catch e
+            e isa IRError ? e.msg : rethrow()
+        end
+end
 
 """
 Run a one-output program under every emission mode; returns the outputs.

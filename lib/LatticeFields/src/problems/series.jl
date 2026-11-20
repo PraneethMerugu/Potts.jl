@@ -23,11 +23,13 @@ end
 FieldSeries{T}(size::NTuple{N, Int}, slice::F) where {T, N, F} = FieldSeries{T, N, F}(size, slice)
 Base.size(s::FieldSeries) = s.size
 Base.IndexStyle(::Type{<:FieldSeries}) = IndexCartesian()
-Base.@propagate_inbounds Base.getindex(s::FieldSeries{T, N}, I::Vararg{Int, N}) where {T, N} =
-    s.slice(I[1])[Base.tail(I)...]
+Base.@propagate_inbounds function Base.getindex(s::FieldSeries{T, N}, I::Vararg{Int, N}) where {T, N}
+    return s.slice(I[1])[Base.tail(I)...]
+end
 # a whole grid at save `i` (a copy, on the saves' device)
-Base.getindex(s::FieldSeries{T, N}, i::Int, c::Colon, cs::Colon...) where {T, N} =
-    length(cs) == N - 2 ? copy(s.slice(i)) : invoke(getindex, Tuple{AbstractArray, Vararg{Any}}, s, i, c, cs...)
+function Base.getindex(s::FieldSeries{T, N}, i::Int, c::Colon, cs::Colon...) where {T, N}
+    return length(cs) == N - 2 ? copy(s.slice(i)) : invoke(getindex, Tuple{AbstractArray, Vararg{Any}}, s, i, c, cs...)
+end
 function Base.Array(s::FieldSeries{T}) where {T}
     out = Array{T}(undef, s.size)
     for i in 1:s.size[1]
@@ -303,10 +305,12 @@ function _lattice_getindex(sol, sym)
 end
 Base.getindex(sol::LatticeSolution, i::Int) = invoke(getindex, Tuple{SciMLBase.AbstractTimeseriesSolution, Int}, sol, i)
 Base.getindex(sol::LatticeSolution, i::Colon) = invoke(getindex, Tuple{SciMLBase.AbstractTimeseriesSolution, Colon}, sol, i)
-Base.getindex(sol::LatticeSolution, i::AbstractArray{Int}) =
-    invoke(getindex, Tuple{SciMLBase.AbstractTimeseriesSolution, AbstractArray{Int}}, sol, i)
-Base.getindex(sol::LatticeSolution, i::CartesianIndex) =
-    invoke(getindex, Tuple{SciMLBase.AbstractTimeseriesSolution, CartesianIndex}, sol, i)
+function Base.getindex(sol::LatticeSolution, i::AbstractArray{Int})
+    return invoke(getindex, Tuple{SciMLBase.AbstractTimeseriesSolution, AbstractArray{Int}}, sol, i)
+end
+function Base.getindex(sol::LatticeSolution, i::CartesianIndex)
+    return invoke(getindex, Tuple{SciMLBase.AbstractTimeseriesSolution, CartesianIndex}, sol, i)
+end
 _grids(s::FieldSeries) = [s[i, ntuple(_ -> Colon(), ndims(s) - 1)...] for i in 1:size(s, 1)]
 function _coordinate(sol, sym)
     ix = _lindex(sol)
@@ -353,9 +357,11 @@ function _multilinear(g, ranges, pt)
     return acc
 end
 # (an ensemble's statistics: the sums; the counts of the first)
-Base.merge(a::LatticeStats, b::LatticeStats) = LatticeStats(a.nf + b.nf, a.nsolve + b.nsolve, a.counts, a.solves + b.solves,
-    a.budget + b.budget, a.floor + b.floor, a.newton_budget + b.newton_budget, a.syncs + b.syncs, a.implicit, a.dt
-)
+function Base.merge(a::LatticeStats, b::LatticeStats)
+    return LatticeStats(a.nf + b.nf, a.nsolve + b.nsolve, a.counts, a.solves + b.solves,
+            a.budget + b.budget, a.floor + b.floor, a.newton_budget + b.newton_budget, a.syncs + b.syncs, a.implicit, a.dt
+        )
+end
 Base.:(==)(a::LatticeStats, b::LatticeStats) = all(f -> getfield(a, f) == getfield(b, f), fieldnames(LatticeStats))
 Base.isequal(a::LatticeStats, b::LatticeStats) = all(f -> isequal(getfield(a, f), getfield(b, f)), fieldnames(LatticeStats))
 Base.hash(s::LatticeStats, h::UInt) = foldl((h, f) -> hash(getfield(s, f), h), fieldnames(LatticeStats); init = hash(:LatticeStats, h))

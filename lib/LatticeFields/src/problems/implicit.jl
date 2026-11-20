@@ -61,13 +61,15 @@ _algname(a) = string(nameof(typeof(a)))
 The semantic residual program of group `g` for implicit algorithm `alg` (`fuse_residual` of
 its rate program, once per residual key; thread-safe).
 """
-residual_program(g::FieldGroup, alg::AbstractImplicitFieldAlgorithm) =
-    lock(() -> get!(() -> semantic(fuse_residual(g.spec.rate, residual_rule(alg); widen16 = true)), g.programs,
+function residual_program(g::FieldGroup, alg::AbstractImplicitFieldAlgorithm)
+    return lock(() -> get!(() -> semantic(fuse_residual(g.spec.rate, residual_rule(alg); widen16 = true)), g.programs,
         (:residual, residual_key(alg))),
         _PLANS_LOCK)
+end
 # … of Crank–Nicolson's right side (`QRule`)
-_q_program(g::FieldGroup) =
-    lock(() -> get!(() -> semantic(fuse_residual(g.spec.rate, QRule())), g.programs, (:residual, :q)), _PLANS_LOCK)
+function _q_program(g::FieldGroup)
+    return lock(() -> get!(() -> semantic(fuse_residual(g.spec.rate, QRule())), g.programs, (:residual, :q)), _PLANS_LOCK)
+end
 # the semantic operator program of `g` (`nothing`: every row numeric)
 function _jac_program(g::FieldGroup, op::OperatorSpec)
     op.jac === nothing && return nothing
@@ -121,8 +123,10 @@ end
 _zero_body!(i, a) = (@inbounds a[i] = zero(eltype(a)); nothing)      # i ≤ length(a)
 _clip_body!(i, a, lower) = (@inbounds a[i] = max(a[i], lower); nothing)  # i ≤ length(a)
 # BDF2's right side `q = (4uⁿ − uⁿ⁻¹)/3` (i ≤ length(q) == length(un) == length(prev))
-_bdf2_q_body!(i, q, un, prev) =
-    (@inbounds q[i] = (4 * un[i] - prev[i]) / 3; nothing)
+function _bdf2_q_body!(i, q, un, prev)
+    @inbounds q[i] = (4 * un[i] - prev[i]) / 3
+    return nothing
+end
 
 # The Newton check: after each iteration's update, under `nlsolve = nothing` (automatic mode),
 # the norms of the row's correction ‖δ_k‖∞, increment ‖u_k − uⁿ‖∞ and value ‖u_k‖∞ over its
@@ -1091,8 +1095,9 @@ const NEWTON_CAP_THETA = 26
 # on the device; a host executor stops at the tolerance.
 const QS_NEWTON = 8
 const QS_NEWTON_CAP = 40
-_auto_newton(alg::AbstractImplicitFieldAlgorithm, exact, switch, iterate, seen, ρin, h, θ, smin) =
-    _newton_count(exact, switch, seen, ρin, _gamma_count(alg), h, θ)
+function _auto_newton(alg::AbstractImplicitFieldAlgorithm, exact, switch, iterate, seen, ρin, h, θ, smin)
+    return _newton_count(exact, switch, seen, ρin, _gamma_count(alg), h, θ)
+end
 function _auto_newton(::QuasiSteady, exact, switch, iterate, seen, ρin, h, θ, smin)
     exact && return switch || iterate ? QS_NEWTON : 1
     seen || return QS_NEWTON_CAP
@@ -1114,12 +1119,14 @@ end
 _coupled_newton(::QuasiSteady, linear::Bool, switch::Bool) = linear ? 1 : QS_NEWTON
 # the smallest shift the operator of the rows `keys` keeps with no time-step term at `p` (the
 # decay `−J_loc`); NaN when a row's operator varies by site (no number bounds it)
-_steady_shift(op::OperatorSpec, keys, p) =
-    minimum((r.field ? NaN : max(-_coefsum(r.jloc, p), 0.0) for r in op.rows if r.key in keys); init = Inf)
+function _steady_shift(op::OperatorSpec, keys, p)
+    return minimum((r.field ? NaN : max(-_coefsum(r.jloc, p), 0.0) for r in op.rows if r.key in keys); init = Inf)
+end
 # whether the automatic count's second iteration is a switch's flip pass (no budget hit): the
 # time steppers' exact switch groups; a steady solve's iterations are all checked
-_flips(alg::AbstractImplicitFieldAlgorithm, exact, switch) =
-    (alg.nlsolve === nothing) && exact && switch
+function _flips(alg::AbstractImplicitFieldAlgorithm, exact, switch)
+    return (alg.nlsolve === nothing) && exact && switch
+end
 _flips(::QuasiSteady, exact, switch) = false
 function _newton_count(exact::Bool, switch::Bool, seen::Bool, ρin::Float64, γ::Float64, h::Float64, θ::Float64 = 0.0)
     exact && return switch ? 2 : 1
@@ -1929,9 +1936,14 @@ function _tridiag_min(d::Vector{Float64}, w::Float64)
     n = length(d)
     n == 1 && return d[1]
     lo, hi = minimum(d) - 2abs(w), maximum(d) + 2abs(w)
-    below(x) = (q = d[1] - x; c = Int(q < 0); for i in 2:n
-                    q = d[i] - x - w^2 / (q == 0 ? eps() : q); c += q < 0
-                end; c)
+    function below(x)
+        q = d[1] - x
+        c = Int(q < 0)
+        for i in 2:n
+                q = d[i] - x - w^2 / (q == 0 ? eps() : q); c += q < 0
+            end
+        return c
+    end
     for _ in 1:200
         m = (lo + hi) / 2
         below(m) >= 1 ? (hi = m) : (lo = m)

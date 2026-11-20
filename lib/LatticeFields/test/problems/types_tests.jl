@@ -105,16 +105,20 @@ end
     @test rhs(u0, q) ≈ rate_hand(u0, 0.1, 3.0)
     # dJ/dk through init only, against finite differences; also with Rodas5P (Jacobian and
     # time gradient variants run init)
-    J(k; alg = Rodas5P()) = sum(SciMLBase.solve(SciMLBase.remake(ode; p = [0.1, k],
-        u0 = promote_type(Float64, typeof(k)).(u0)), alg; abstol = 1e-10, reltol = 1e-10).u[end])
+    function J(k; alg = Rodas5P())
+        return sum(SciMLBase.solve(SciMLBase.remake(ode; p = [0.1, k],
+            u0 = promote_type(Float64, typeof(k)).(u0)), alg; abstol = 1e-10, reltol = 1e-10).u[end])
+    end
     h = 1e-6
     dk = ForwardDiff.derivative(J, 2.0)
     @test isapprox(dk, (J(2.0 + h) - J(2.0 - h)) / 2h; rtol = 1e-5) && dk != 0
     # chunked ForwardDiff re-seeds the partials of one Dual vector in place (same object, same
         # primal values): init must re-run. Negative control: the old skip rule,
     # which compared primal values only, would leave ∂a/∂k from chunk 1 and give dJ/dk = 0.
-    Jp(θ) = sum(SciMLBase.solve(SciMLBase.remake(ode; p = θ, u0 = eltype(θ).(u0)), Rodas5P();
-        abstol = 1e-10, reltol = 1e-10).u[end])
+    function Jp(θ)
+        return sum(SciMLBase.solve(SciMLBase.remake(ode; p = θ, u0 = eltype(θ).(u0)), Rodas5P();
+            abstol = 1e-10, reltol = 1e-10).u[end])
+    end
     g1 = ForwardDiff.gradient(Jp, p0, ForwardDiff.GradientConfig(Jp, p0, ForwardDiff.Chunk{1}()))
     @test isapprox(g1[2], dk; rtol = 1e-6)
     pv = [Dual{Nothing}(0.1, 1.0), Dual{Nothing}(2.0, 0.0)]
@@ -154,13 +158,15 @@ end
         u0_64 = rand(Xoshiro(19), prod(dims))
         ix = LatticeIndex(; variables = [:u => FieldSlot(1:prod(dims), dims)], parameters = [:D => 1])
         alg = ExplicitEuler(; substeps = 1)
-        run_T(T) = solve(
-            FieldProblem(
-                euler2(dims; storage = LatticeFields.IR.F32), T.(u0_64),
-                (0.0, 0.2), T[0.05]; state = ["u"], kind = :rate, index = ix
-            ), alg
-            ; dt = 0.05
-        )
+        function run_T(T)
+            return solve(
+                    FieldProblem(
+                        euler2(dims; storage = LatticeFields.IR.F32), T.(u0_64),
+                        (0.0, 0.2), T[0.05]; state = ["u"], kind = :rate, index = ix
+                    ), alg
+                    ; dt = 0.05
+                )
+        end
         s64 = run_T(Float64)
         sbig = run_T(BigFloat)
         s32 = run_T(Float32)

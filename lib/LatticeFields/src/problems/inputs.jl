@@ -155,9 +155,11 @@ function _value_ok(x, fl::Bool, r::Tuple{Float64, Float64}, bool::Bool, bounds::
     return x isa Bool || (bool ? (x == 0 || x == 1) : isinteger(x) && r[1] <= x <= r[2])
 end
 # a write of an input that a function of the time gives (the function would take it over)
-@noinline _fn_write_error(name) = throw(ArgumentError(string("input `", name, "` is given as a function of the time, ",
-    "which sets it at every window or call; give it a constant with `remake(prob; inputs = [", _route(name),
-    " => K])` (or another function the same way)")))
+@noinline function _fn_write_error(name)
+    throw(ArgumentError(string("input `", name, "` is given as a function of the time, ",
+        "which sets it at every window or call; give it a constant with `remake(prob; inputs = [", _route(name),
+        " => K])` (or another function the same way)")))
+end
 
 # an input's values are plain numbers: a value with derivative parts (a ForwardDiff Dual that an
 # input function closes over) has no input store to go to in this version
@@ -200,8 +202,10 @@ function _not_input(s, ks)
 end
 # a name a Potts model's `Potts.fields` gives a CPM input: a CPM word, or a
 # CPM read as the model writes it (`volume[owner]`)
-_cpm_word(n::AbstractString) = n in ("kind", "domain", "owner", "position", "site", "mcs", "time") ||
-                               occursin(r"^\w+\[\w+\]$", n)
+function _cpm_word(n::AbstractString)
+    return n in ("kind", "domain", "owner", "position", "site", "mcs", "time") ||
+        occursin(r"^\w+\[\w+\]$", n)
+end
 
 # an integer input (a kind map, a mask) takes integer values in its type's range, a Bool input
 # (`bool`: declared `::Bool`) only Bool or 0/1; a bad value is named with its site
@@ -379,8 +383,10 @@ see (`"key: term"`). A bound may add `worst`, the row that gives the bound and i
 `(; key, diffusion, advection, reaction, cross)`, which the report prints. The default reports
 none (LatticePDE's `StabilityBound` reports them).
 """
-bound_report(stability, p) = (; negative = String[], coupled = String[], nonfinite = Tuple{String, String, Any}[],
-    terms = String[])
+function bound_report(stability, p)
+    return (; negative = String[], coupled = String[], nonfinite = Tuple{String, String, Any}[],
+        terms = String[])
+end
 
 """
     unbounded_reason(stability, p) -> Union{Nothing, String}

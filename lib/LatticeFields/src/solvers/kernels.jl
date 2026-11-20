@@ -329,8 +329,10 @@ _scal(kb, t, i) = table(kb, t, F32, constant(kb, i, I32))
 −1 inside a RESTRICT); `xget(o)` is `x` at offset `o`. Flux-difference form.
 """
 function _apply(kb::KernelBuilder{N}, F::LevelFields{N}, per, dims, xget; lev = 0) where {N}
-    L(f; o = ntuple(_ -> 0, N), pol = IR.RESOLVE) = load(kb, f; offset = o, level = lev,
-        policy = all(iszero, o) ? IR.RESOLVE : pol)
+    function L(f; o = ntuple(_ -> 0, N), pol = IR.RESOLVE)
+        return load(kb, f; offset = o, level = lev,
+            policy = all(iszero, o) ? IR.RESOLVE : pol)
+    end
     c = L(F.s) + L(F.sbox) + L(F.sint)
     x0 = xget(ntuple(_ -> 0, N))
     D, Ax = c, c * x0
@@ -362,8 +364,10 @@ The rounding scale of the residual `b − A x` at the kernel's site: `|b| + (|A|
 `aget(o)` the stored `x` at offset `o` (the floor test, `Solvers._stop!`).
 """
 function _roundscale(kb::KernelBuilder{N}, F::LevelFields{N}, per, dims, b, aget) where {N}
-    L(f; o = ntuple(_ -> 0, N), pol = IR.RESOLVE) = load(kb, f; offset = o,
-        policy = all(iszero, o) ? IR.RESOLVE : pol)
+    function L(f; o = ntuple(_ -> 0, N), pol = IR.RESOLVE)
+        return load(kb, f; offset = o,
+            policy = all(iszero, o) ? IR.RESOLVE : pol)
+    end
     x0 = abs(aget(ntuple(_ -> 0, N)))
     sc = abs(b) + (L(F.s) + L(F.sbox) + L(F.sint)) * x0
     for a in 1:N, σ in (1, -1)

@@ -224,8 +224,10 @@ _id(b, x::Real) = constant!(b, x)
 # Written out (no `@eval Base.$f`): the frozen seed scan reads definition names literally.
 _bin(op, x::Ex, y::Union{Ex, Real}) = Ex(x.b, arith!(x.b, op, x.id, _id(x.b, y)))
 _bin(op, x::Real, y::Ex) = Ex(y.b, arith!(y.b, op, _id(y.b, x), y.id))
-_un(op, x::Ex) = Ex(x.b, arith!(x.b, op, x.id;
-    type = op in (NEG, ABS) ? jointype(x.b, (x.id,)) : REAL))
+function _un(op, x::Ex)
+    return Ex(x.b, arith!(x.b, op, x.id;
+        type = op in (NEG, ABS) ? jointype(x.b, (x.id,)) : REAL))
+end
 Base.:+(x::Ex, y::Union{Ex, Real}) = _bin(ADD, x, y)
 Base.:+(x::Real, y::Ex) = _bin(ADD, x, y)
 Base.:*(x::Ex, y::Union{Ex, Real}) = _bin(MUL, x, y)
@@ -316,8 +318,12 @@ function finish(b::KernelBuilder{N}, key::AbstractString) where {N}
     stores = sort(b.stores; lt = (s, t) -> _storeless(b, s, t))
     order = Int32[]
     seen = falses(length(b.nodes))
-    visit(i) = (
-        seen[i] && return; seen[i] = true; foreach(visit, deps(b, i)); push!(order, i))
+    function visit(i)
+        seen[i] && return
+        seen[i] = true
+        foreach(visit, deps(b, i))
+        return push!(order, i)
+    end
     foreach(s -> visit(s.value), stores)
     foreach(r -> visit(r.value), b.reductions)
     b.gate != 0 && visit(b.gate)

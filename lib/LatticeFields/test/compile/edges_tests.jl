@@ -7,13 +7,14 @@ include("../host_runner.jl")
 include("../fixtures.jl")
 using LatticeFields.IR: IRError, ImmersedRule, mask!, constant, cond
 
-errmsg(f) =
-    try
-        f()
-        ""
-    catch e
-        e isa IRError ? e.msg : rethrow()
-    end
+function errmsg(f)
+    return try
+            f()
+            ""
+        catch e
+            e isa IRError ? e.msg : rethrow()
+        end
+end
 include("../shared/export_all.jl")
 end
 
@@ -133,9 +134,12 @@ end
     s = semantic(program(pb))
     fused, split = plan(s), plan(s; fuse = false)
     @test length(fused.launches) == 1 && length(split.launches) == 2
-    exec(sp) = (
-        st = HostStore(s); copyto!(current(st, s, "u"), rand(Xoshiro(18), Float32, 35));
-        run_step!(s, sp, st, (0.37,)); copy(current(st, s, "v")))
+    function exec(sp)
+        st = HostStore(s)
+        copyto!(current(st, s, "u"), rand(Xoshiro(18), Float32, 35))
+        run_step!(s, sp, st, (0.37,))
+        return copy(current(st, s, "v"))
+    end
     @test exec(fused) == exec(split)
 end
 end

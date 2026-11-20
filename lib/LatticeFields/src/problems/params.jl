@@ -33,9 +33,11 @@ mutable struct LatticeParameters{V <: AbstractVector, TB <: AbstractVector, IN <
     stamp::Base.RefValue{Int}
     fns::Vector{Pair{String, Any}}      # the inputs given as functions of the time, `key => f`
 end
-LatticeParameters(values::AbstractVector, tables = Pair{String, Vector{Float64}}[], inputs = Pair{String, Any}[];
-    tick::Integer = 0, fns = Pair{String, Any}[]) = LatticeParameters(values, _table_list(tables),
-    Pair{String, Any}[k => v for (k, v) in inputs], Ref(Int(tick)), Ref(0), Pair{String, Any}[k => f for (k, f) in fns])
+function LatticeParameters(values::AbstractVector, tables = Pair{String, Vector{Float64}}[], inputs = Pair{String, Any}[];
+    tick::Integer = 0, fns = Pair{String, Any}[])
+    return LatticeParameters(values, _table_list(tables),
+        Pair{String, Any}[k => v for (k, v) in inputs], Ref(Int(tick)), Ref(0), Pair{String, Any}[k => f for (k, f) in fns])
+end
 
 # the scalar values of a parameter object (a raw vector is its own)
 _pvals(p::LatticeParameters) = p.values
@@ -44,21 +46,29 @@ _ptables(p::LatticeParameters, fallback) = p.tables
 _ptables(p, fallback) = fallback
 
 Base.eltype(::Type{<:LatticeParameters{V}}) where {V} = eltype(V)
-Base.copy(p::LatticeParameters) = LatticeParameters(copy(p.values), eltype(p.tables)[k => copy(v) for (k, v) in p.tables],
-    Pair{String, Any}[k => (v === nothing ? v : copy(v)) for (k, v) in p.inputs], Ref(p.tick[]), Ref(p.stamp[]), copy(p.fns))
-Base.:(==)(a::LatticeParameters, b::LatticeParameters) = a.values == b.values && a.tables == b.tables &&
-                                                         a.inputs == b.inputs && a.tick[] == b.tick[] && a.fns == b.fns
+function Base.copy(p::LatticeParameters)
+    return LatticeParameters(copy(p.values), eltype(p.tables)[k => copy(v) for (k, v) in p.tables],
+        Pair{String, Any}[k => (v === nothing ? v : copy(v)) for (k, v) in p.inputs], Ref(p.tick[]), Ref(p.stamp[]), copy(p.fns))
+end
+function Base.:(==)(a::LatticeParameters, b::LatticeParameters)
+    return a.values == b.values && a.tables == b.tables &&
+        a.inputs == b.inputs && a.tick[] == b.tick[] && a.fns == b.fns
+end
 # `isequal` and `hash` over the same fields `==` compares (the tick's value, not its `Ref`),
 # so `isequal` objects hash equal (`-0.0` and `0.0` are `==` but not `isequal`)
-Base.isequal(a::LatticeParameters, b::LatticeParameters) = isequal(a.values, b.values) && isequal(a.tables, b.tables) &&
-    isequal(a.inputs, b.inputs) && isequal(a.tick[], b.tick[]) && isequal(a.fns, b.fns)
-Base.hash(p::LatticeParameters, h::UInt) =
-    hash(p.fns, hash(p.tick[], hash(p.inputs, hash(p.tables, hash(p.values, hash(:LatticeParameters, h))))))
+function Base.isequal(a::LatticeParameters, b::LatticeParameters)
+    return isequal(a.values, b.values) && isequal(a.tables, b.tables) &&
+        isequal(a.inputs, b.inputs) && isequal(a.tick[], b.tick[]) && isequal(a.fns, b.fns)
+end
+function Base.hash(p::LatticeParameters, h::UInt)
+    return hash(p.fns, hash(p.tick[], hash(p.inputs, hash(p.tables, hash(p.values, hash(:LatticeParameters, h))))))
+end
 # the same tables and inputs with other scalar values (SciMLStructures' `replace`, a remake)
-with_values(p::LatticeParameters, v::AbstractVector) =
-    LatticeParameters(v, eltype(p.tables)[k => copy(x) for (k, x) in p.tables],
+function with_values(p::LatticeParameters, v::AbstractVector)
+    return LatticeParameters(v, eltype(p.tables)[k => copy(x) for (k, x) in p.tables],
         Pair{String, Any}[k => (x === nothing ? x : copy(x)) for (k, x) in p.inputs], Ref(p.tick[]), Ref(p.stamp[]),
         copy(p.fns))
+end
 function Base.show(io::IO, p::LatticeParameters)
     print(io, "LatticeParameters(", p.values)
     isempty(p.tables) || print(io, "; tables ", join(("`$k`" for (k, _) in p.tables), ", "))
@@ -87,10 +97,14 @@ struct InputSlot{X}
     index::X
 end
 
-_tabpos(p::LatticeParameters, k) = (j = findfirst(x -> first(x) == k, p.tables);
-                                    j === nothing ? throw(ArgumentError("`$k` is not a table of the problem")) : j)
-_inpos(p::LatticeParameters, k) = (j = findfirst(x -> first(x) == k, p.inputs);
-                                   j === nothing ? throw(ArgumentError("`$k` is not an input of the problem")) : j)
+function _tabpos(p::LatticeParameters, k)
+    j = findfirst(x -> first(x) == k, p.tables)
+    return j === nothing ? throw(ArgumentError("`$k` is not a table of the problem")) : j
+end
+function _inpos(p::LatticeParameters, k)
+    j = findfirst(x -> first(x) == k, p.inputs)
+    return j === nothing ? throw(ArgumentError("`$k` is not an input of the problem")) : j
+end
 
 SII.parameter_values(p::LatticeParameters, i::Integer) = p.values[i]
 SII.parameter_values(p::LatticeParameters, i::AbstractVector{<:Integer}) = p.values[i]

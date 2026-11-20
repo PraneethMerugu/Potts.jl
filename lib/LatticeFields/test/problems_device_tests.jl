@@ -100,8 +100,10 @@ using .LF_problems_device: instances
     dims = (16, 12)
     u0 = rand(Xoshiro(7), Float32, prod(dims))
     ix = LatticeIndex(; variables = [:u => FieldSlot(1:prod(dims), dims)], parameters = [:D => 1])
-    mk(backend) = FieldProblem(euler2(dims), u0, (0.0, 0.2), [0.05]; state = ["u"], kind = :rate,
-        index = ix, backend)
+    function mk(backend)
+        return FieldProblem(euler2(dims), u0, (0.0, 0.2), [0.05]; state = ["u"], kind = :rate,
+            index = ix, backend)
+    end
         alg = ExplicitEuler(; substeps = 1)
         Jdev(prob) = D -> sum(abs2, Array(solve(SciMLBase.remake(prob; p = [D]), alg; dt = 0.05).u[end]))
     dd, dh = ForwardDiff.derivative(Jdev(mk(DEV)), 0.05), ForwardDiff.derivative(Jdev(mk(KA.CPU())), 0.05)
@@ -112,8 +114,10 @@ using .LF_problems_device: instances
             euler2(dims), Float64.(u0),
         (0.0, 0.2), [0.05]; state = ["u"], kind = :rate, index = ix, backend = DEV)
     if Exec.supports(DEV, Float64)
-        p64(backend) = FieldProblem(euler2(dims), Float64.(u0), (0.0, 0.2), [0.05]; state = ["u"],
-            kind = :rate, index = ix, backend)
+        function p64(backend)
+            return FieldProblem(euler2(dims), Float64.(u0), (0.0, 0.2), [0.05]; state = ["u"],
+                kind = :rate, index = ix, backend)
+        end
             ud, uh = Array(solve(p64(DEV), alg; dt = 0.05).u[end]), solve(p64(KA.CPU()), alg; dt = 0.05).u[end]
         @test eltype(ud) == Float64 && isapprox(ud, uh; rtol = 1e-13)
     end

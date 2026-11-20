@@ -42,9 +42,11 @@ end
     t = i - one(Int32)
     return ntuple(d -> rem(div(t, _stride(dims, d)), dims[d]) + one(Int32), N)
 end
-@inline _lin(x::NTuple{N, Int32}, dims::NTuple{N, Int32}) where {N} = one(Int32) +
-                                                                      foldl(
-    +, ntuple(d -> (x[d] - one(Int32)) * _stride(dims, d), N))
+@inline function _lin(x::NTuple{N, Int32}, dims::NTuple{N, Int32}) where {N}
+    return one(Int32) +
+                                                                          foldl(
+        +, ntuple(d -> (x[d] - one(Int32)) * _stride(dims, d), N))
+end
 """
 Neighbor of `x` along axis `a` by `σ = ±1`: `(x′, exists)`; periodic axes wrap.
 """

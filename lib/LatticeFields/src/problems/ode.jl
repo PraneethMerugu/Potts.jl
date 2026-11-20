@@ -76,11 +76,13 @@ struct LatticeMetadata{P <: FieldProblem, H} <: SciMLBase.AbstractDiscretization
     sem::Base.RefValue{Any}                    # the semantic program of the right side (built once)
     plans::Any                                 # its init and step plans per value type (shared by the masks of `u0`)
 end
-LatticeMetadata(fp::FieldProblem{N}) where {N} = LatticeMetadata{typeof(fp), Val(!fp.group.spec.timefree)}(
-    fp,
-    fp.kind == :map ? :map : :ode, Ref{Any}(nothing), Ref(0), ReentrantLock(), Ref{Any}(nothing),
-    Dict{Type, Tuple{StepPlan{N}, StepPlan{N}}}()
-)
+function LatticeMetadata(fp::FieldProblem{N}) where {N}
+    return LatticeMetadata{typeof(fp), Val(!fp.group.spec.timefree)}(
+            fp,
+            fp.kind == :map ? :map : :ode, Ref{Any}(nothing), Ref(0), ReentrantLock(), Ref{Any}(nothing),
+            Dict{Type, Tuple{StepPlan{N}, StepPlan{N}}}()
+        )
+end
 _sem(m::LatticeMetadata) = (m.sem[] === nothing && (m.sem[] = semantic(m.problem.group.spec.rate)); m.sem[]::Program)
 # the compile options of the right side: the launches write the step index into the clock's slot
 function _rhs_options(fp::FieldProblem)
@@ -331,8 +333,10 @@ function _builtin_specs(fp::FieldProblem)
     return cbs
 end
 # (no allocation: the input refresh asks at every step)
-_has_masks(fp::FieldProblem) = (s = fp.program;
-                                any(r -> r isa NodeValueRule && any(k -> fieldid(s, k) == r.field, fp.state), s.rules))
+function _has_masks(fp::FieldProblem)
+    s = fp.program
+    return any(r -> r isa NodeValueRule && any(k -> fieldid(s, k) == r.field, fp.state), s.rules)
+end
 
 # the affect of a built-in callback (the clock, the masks: the ODE path's), marked so that an
 # owned solve, which steps them itself, leaves them out of the problem's callbacks
@@ -793,10 +797,12 @@ function lattice_matrix(A::LatticeOperator)
     return M
 end
 # a factorization asks for a matrix the operator does not store: the routes
-Base.convert(::Type{AbstractMatrix}, ::LatticeOperator) = throw(ArgumentError(string("a `LatticeOperator` stores no ",
-    "matrix (it applies the compiled right side), so a factorization (`LUFactorization`, `QRFactorization`) has none ",
-    "to factor: solve with a Krylov method (`KrylovJL_GMRES()`, `KrylovJL_CG()`) or `QuasiSteady()`, or factor the ",
-    "assembled matrix, `LinearProblem(Problems.lattice_matrix(lp.A), lp.b)` (n² values)")))
+function Base.convert(::Type{AbstractMatrix}, ::LatticeOperator)
+    throw(ArgumentError(string("a `LatticeOperator` stores no ",
+        "matrix (it applies the compiled right side), so a factorization (`LUFactorization`, `QRFactorization`) has none ",
+        "to factor: solve with a Krylov method (`KrylovJL_GMRES()`, `KrylovJL_CG()`) or `QuasiSteady()`, or factor the ",
+        "assembled matrix, `LinearProblem(Problems.lattice_matrix(lp.A), lp.b)` (n² values)")))
+end
 SciMLOperators.isconvertible(::LatticeOperator) = false
 
 """
@@ -1038,9 +1044,10 @@ _plainp(p) = p isa AbstractVector{<:Union{Float32, Float64}}
 # chunk mode re-seeds the partials of one Dual vector in place (same object, same primal
 # values), and a BigFloat changed below Float64 resolution would compare equal.
 _same_params(::LatticeRHS, p) = false
-_same_params(f::LatticeRHS, p::AbstractVector{<:Union{Float32, Float64}}) =
-    f.lastp[1] === p && length(f.lastv) == length(p) &&
-    all(i -> f.lastv[i] == Float64(p[i]), eachindex(f.lastv))
+function _same_params(f::LatticeRHS, p::AbstractVector{<:Union{Float32, Float64}})
+    return f.lastp[1] === p && length(f.lastv) == length(p) &&
+        all(i -> f.lastv[i] == Float64(p[i]), eachindex(f.lastv))
+end
 function _init!(f::LatticeRHS{L, W, E}, p, t = f.ctx.t0, k = nothing) where {L, W, E}
     # the init launches bound once per parameter vector and values (a rerun at the same values,
     # as an input function's call makes, allocates nothing)
@@ -1066,8 +1073,10 @@ _run_init!(bs, st, sp, t::Float64, k) = (k === nothing ? bs((t, 0.0)) : bs((t, 0
 # primal values in place (`setp` on an integrator, which takes effect at the next call). The
 # same unchanged `p` skips them without allocating. On any change of primal values the checks
 # run (Dual parameters reseeded in place keep their primal values, so they are checked once).
-_checked(f::LatticeRHS, p) = f.checkp[1] === p && length(f.checkv) == length(p) &&
-                             all(i -> f.checkv[i] == Float64(primal(p[i])), eachindex(f.checkv))
+function _checked(f::LatticeRHS, p)
+    return f.checkp[1] === p && length(f.checkv) == length(p) &&
+        all(i -> f.checkv[i] == Float64(primal(p[i])), eachindex(f.checkv))
+end
 function _check!(f::LatticeRHS, p)
     pv = _pvals(p)
     check_values(pv, f.ctx.index)
@@ -1089,31 +1098,34 @@ end
 # A deep copy (SciML's `safetycopy` of an ensemble's problem) is a new build: it has no owner
 # and its own lock. Serializing writes the same: a build with no owner (a running task does
 # not serialize), which the task that first calls the deserialized function claims.
-_unowned(f::LatticeRHS, val) = typeof(f)(map(fieldnames(typeof(f))) do k
-    if k === :owner
-        Any[nothing]
-    elseif k === :copies
-        Dict{Task, Any}()
-    elseif k === :lock
-        ReentrantLock()
-    elseif k === :synced
-        Any[getfield(f, :synced)[1] === nothing ? nothing : :given]
-    elseif k === :tcell
-        Ref(0.0)
-    elseif k === :masked
-        val(getfield(f, :masked))
-    else
-        val(getfield(f, k))
-    end
-end...)
+function _unowned(f::LatticeRHS, val)
+    return typeof(f)(map(fieldnames(typeof(f))) do k
+            if k === :owner
+                Any[nothing]
+            elseif k === :copies
+                Dict{Task, Any}()
+            elseif k === :lock
+                ReentrantLock()
+            elseif k === :synced
+                Any[getfield(f, :synced)[1] === nothing ? nothing : :given]
+            elseif k === :tcell
+                Ref(0.0)
+            elseif k === :masked
+                val(getfield(f, :masked))
+            else
+                val(getfield(f, k))
+            end
+        end...)
+end
 function Base.deepcopy_internal(f::LatticeRHS, d::IdDict)
     haskey(d, f) && return d[f]
     g = _unowned(f, x -> Base.deepcopy_internal(x, d))
     d[f] = g
     return g
 end
-Serialization.serialize(s::Serialization.AbstractSerializer, f::LatticeRHS) =
-    invoke(Serialization.serialize, Tuple{Serialization.AbstractSerializer, Any}, s, _unowned(f, identity))
+function Serialization.serialize(s::Serialization.AbstractSerializer, f::LatticeRHS)
+    return invoke(Serialization.serialize, Tuple{Serialization.AbstractSerializer, Any}, s, _unowned(f, identity))
+end
 
 # A call from a task that does not own the build: the build itself once the task claims it
 # (it has no owner, or its owner has ended), else the task's own copy, built once and kept in
@@ -1649,12 +1661,15 @@ function SciMLBase.get_save_idxs_and_saved_subsystem(prob::LatticeProblem, save_
     idx === save_idxs && return invoke(SciMLBase.get_save_idxs_and_saved_subsystem, Tuple{Any, Any}, prob, save_idxs)
     return invoke(SciMLBase.get_save_idxs_and_saved_subsystem, Tuple{Any, Vector{Int}}, prob, idx)
 end
-SciMLBase.get_save_idxs_and_saved_subsystem(prob::LatticeProblem, i::Nothing) =
-    invoke(SciMLBase.get_save_idxs_and_saved_subsystem, Tuple{Any, Nothing}, prob, i)
-SciMLBase.get_save_idxs_and_saved_subsystem(prob::LatticeProblem, i::Int) =
-    invoke(SciMLBase.get_save_idxs_and_saved_subsystem, Tuple{Any, Int}, prob, i)
-SciMLBase.get_save_idxs_and_saved_subsystem(prob::LatticeProblem, i::Vector{Int}) =
-    invoke(SciMLBase.get_save_idxs_and_saved_subsystem, Tuple{Any, Vector{Int}}, prob, i)
+function SciMLBase.get_save_idxs_and_saved_subsystem(prob::LatticeProblem, i::Nothing)
+    return invoke(SciMLBase.get_save_idxs_and_saved_subsystem, Tuple{Any, Nothing}, prob, i)
+end
+function SciMLBase.get_save_idxs_and_saved_subsystem(prob::LatticeProblem, i::Int)
+    return invoke(SciMLBase.get_save_idxs_and_saved_subsystem, Tuple{Any, Int}, prob, i)
+end
+function SciMLBase.get_save_idxs_and_saved_subsystem(prob::LatticeProblem, i::Vector{Int})
+    return invoke(SciMLBase.get_save_idxs_and_saved_subsystem, Tuple{Any, Vector{Int}}, prob, i)
+end
 function _field_save_idxs(prob, save_idxs)
     m = lattice_metadata(prob)
     m === nothing && return save_idxs
@@ -1725,14 +1740,16 @@ function CommonSolve.solve(prob::LatticeProblem; kw...)
     _check_default_alg()
     return invoke(CommonSolve.solve, Tuple{SciMLBase.AbstractDEProblem, Vararg{Any}}, prob; kw...)
 end
-_check_default_alg() = hasmethod(CommonSolve.solve, Tuple{SciMLBase.AbstractDEProblem}) || throw(
-    ArgumentError(
-        string(
-            "`solve(prob)` with no algorithm uses DiffEqBase's default algorithm, and no package that provides it is loaded: ",
-            "give an algorithm, `solve(prob, ExplicitEuler(); dt)` or `solve(prob, Tsit5())`, or load OrdinaryDiffEq"
+function _check_default_alg()
+    return hasmethod(CommonSolve.solve, Tuple{SciMLBase.AbstractDEProblem}) || throw(
+            ArgumentError(
+                string(
+                    "`solve(prob)` with no algorithm uses DiffEqBase's default algorithm, and no package that provides it is loaded: ",
+                    "give an algorithm, `solve(prob, ExplicitEuler(); dt)` or `solve(prob, Tsit5())`, or load OrdinaryDiffEq"
+                )
+            )
         )
-    )
-)
+end
 
 # A system with no time: its `LinearProblem` or `NonlinearProblem`; a field algorithm
 # (or none: `QuasiSteady()`) solves the owned problem once
@@ -1740,12 +1757,14 @@ const LatticeLinearProblem = typewith(SciMLBase.LinearProblem, :A, LatticeOperat
 const LatticeResidualProblem = typewith(SciMLBase.NonlinearProblem, :f,
                                          typewith(SciMLBase.NonlinearFunction, :f, LatticeFunction))
 const LatticeTimeFreeProblem = Union{LatticeLinearProblem, LatticeResidualProblem}
-CommonSolve.solve(prob::LatticeTimeFreeProblem, alg::Union{AbstractFieldAlgorithm, LinearSolver}; kw...) =
-    CommonSolve.solve(field_problem(prob), alg; kw...)
+function CommonSolve.solve(prob::LatticeTimeFreeProblem, alg::Union{AbstractFieldAlgorithm, LinearSolver}; kw...)
+    return CommonSolve.solve(field_problem(prob), alg; kw...)
+end
 CommonSolve.solve(prob::LatticeTimeFreeProblem; kw...) = CommonSolve.solve(field_problem(prob); kw...)
 # `LatticePCG` and `LatticeGMRES` on the `LinearProblem` itself are LinearSolve solves
-CommonSolve.solve(prob::LatticeLinearProblem, alg::Union{Solvers.LatticePCG, Solvers.LatticeGMRES}; kw...) =
-    CommonSolve.solve!(CommonSolve.init(prob, alg; kw...))
+function CommonSolve.solve(prob::LatticeLinearProblem, alg::Union{Solvers.LatticePCG, Solvers.LatticeGMRES}; kw...)
+    return CommonSolve.solve!(CommonSolve.init(prob, alg; kw...))
+end
 # a remake builds the problem again at the new values (`A` and `b` are the parameters')
 function SciMLBase.remake(prob::LatticeLinearProblem; p = missing, u0 = missing, inputs = (), kw...)
     isempty(kw) || throw(ArgumentError(string("`remake` of a system with no time takes `p`, `u0` and `inputs`; got ",

@@ -82,9 +82,10 @@ end
 The value type the kernels of a group stepped by `alg` compute in, for problem value type `V`:
 `V` under `compute_type = :auto`, else `compute_type`.
 """
-compute_type(a, ::Type{V}) where {V} = (
-    c = hasfield(typeof(a), :compute_type) ? getfield(a, :compute_type) : :auto;
-                                         c === :auto ? V : c)
+function compute_type(a, ::Type{V}) where {V}
+    c = hasfield(typeof(a), :compute_type) ? getfield(a, :compute_type) : :auto
+    return c === :auto ? V : c
+end
 function ExplicitEuler(; substeps = nothing, lower_bound = nothing, init = nothing, compute_type = :auto, kw...)
     isempty(kw) || throw(ArgumentError(string("ExplicitEuler: ", _explicit_euler_keywords(kw))))
     return ExplicitEuler(substeps, lower_bound, init, compute_type)
@@ -125,8 +126,9 @@ residual and `J̃` the symmetric operator its front end extracts (`OperatorSpec`
 abstract type AbstractImplicitFieldAlgorithm <: AbstractFieldAlgorithm end
 # (equal keywords: equal algorithms; a `linsolve` that holds a preconditioner's cache compares by value)
 Base.:(==)(a::A, b::A) where {A <: AbstractImplicitFieldAlgorithm} = all(f -> getfield(a, f) == getfield(b, f), fieldnames(A))
-Base.hash(a::AbstractImplicitFieldAlgorithm, h::UInt) =
-    foldl((h, f) -> hash(getfield(a, f), h), fieldnames(typeof(a)); init = hash(typeof(a), h))
+function Base.hash(a::AbstractImplicitFieldAlgorithm, h::UInt)
+    return foldl((h, f) -> hash(getfield(a, f), h), fieldnames(typeof(a)); init = hash(typeof(a), h))
+end
 
 """
     LatticeNewton(; κ = 1 // 100, max_iter = 10, check_div = true)
@@ -204,8 +206,9 @@ function LatticeNewton(; κ = 1 // 100, max_iter = 10, check_div = true, kw...)
     end
     return LatticeNewton(κ, max_iter, check_div)
 end
-Base.:(==)(a::LatticeNewton, b::LatticeNewton) =
-    a.κ == b.κ && a.max_iter == b.max_iter && a.check_div == b.check_div
+function Base.:(==)(a::LatticeNewton, b::LatticeNewton)
+    return a.κ == b.κ && a.max_iter == b.max_iter && a.check_div == b.check_div
+end
 Base.hash(a::LatticeNewton, h::UInt) = hash((a.κ, a.max_iter, a.check_div), hash(:LatticeNewton, h))
 function Base.show(io::IO, n::LatticeNewton)
     kw = String[]
@@ -278,11 +281,12 @@ struct BackwardEuler <: AbstractImplicitFieldAlgorithm
     solver_type::Any
     init::Union{Nothing, Symbol}
     compute_type::Any
-    BackwardEuler(substeps, nlsolve, lower_bound, linsolve, solver_type, init = nothing, compute_type = :auto) =
-        new(
-        _implicit_keywords("BackwardEuler", substeps, nlsolve, lower_bound, linsolve, solver_type)..., _init_keyword("BackwardEuler", init),
-        _compute_keyword("BackwardEuler", compute_type)
-    )
+    function BackwardEuler(substeps, nlsolve, lower_bound, linsolve, solver_type, init = nothing, compute_type = :auto)
+        return new(
+                _implicit_keywords("BackwardEuler", substeps, nlsolve, lower_bound, linsolve, solver_type)..., _init_keyword("BackwardEuler", init),
+                _compute_keyword("BackwardEuler", compute_type)
+            )
+    end
 end
 # The keywords of a time-stepping implicit algorithm, each checked (an `ArgumentError` naming
 # the keyword) and converted (`w` names the algorithm in the messages)
@@ -386,11 +390,12 @@ struct CrankNicolson <: AbstractImplicitFieldAlgorithm
     solver_type::Any
     init::Union{Nothing, Symbol}
     compute_type::Any
-    CrankNicolson(substeps, nlsolve, lower_bound, linsolve, solver_type, init = nothing, compute_type = :auto) =
-        new(
-        _implicit_keywords("CrankNicolson", substeps, nlsolve, lower_bound, linsolve, solver_type)..., _init_keyword("CrankNicolson", init),
-        _compute_keyword("CrankNicolson", compute_type)
-    )
+    function CrankNicolson(substeps, nlsolve, lower_bound, linsolve, solver_type, init = nothing, compute_type = :auto)
+        return new(
+                _implicit_keywords("CrankNicolson", substeps, nlsolve, lower_bound, linsolve, solver_type)..., _init_keyword("CrankNicolson", init),
+                _compute_keyword("CrankNicolson", compute_type)
+            )
+    end
 end
 function CrankNicolson(;
         substeps = nothing, nlsolve = nothing, lower_bound = nothing, linsolve = :auto,
@@ -429,11 +434,12 @@ struct BDF2 <: AbstractImplicitFieldAlgorithm
     solver_type::Any
     init::Union{Nothing, Symbol}
     compute_type::Any
-    BDF2(substeps, nlsolve, lower_bound, linsolve, solver_type, init = nothing, compute_type = :auto) =
-        new(
-        _implicit_keywords("BDF2", substeps, nlsolve, lower_bound, linsolve, solver_type)..., _init_keyword("BDF2", init),
-        _compute_keyword("BDF2", compute_type)
-    )
+    function BDF2(substeps, nlsolve, lower_bound, linsolve, solver_type, init = nothing, compute_type = :auto)
+        return new(
+                _implicit_keywords("BDF2", substeps, nlsolve, lower_bound, linsolve, solver_type)..., _init_keyword("BDF2", init),
+                _compute_keyword("BDF2", compute_type)
+            )
+    end
 end
 function BDF2(;
         substeps = nothing, nlsolve = nothing, lower_bound = nothing, linsolve = :auto,
@@ -677,11 +683,13 @@ const LinearSolver = Union{Solvers.LatticePCG, Solvers.LatticeMultigrid, Solvers
 The refusal of a linear solver `s` given where a field algorithm goes (`what` names the
 place), with `route` the working spelling. Both coupled and standalone routes and `init` use it.
 """
-linear_solver_refusal(what, s, route; implicit = "`BackwardEuler(; linsolve = $(repr(s)))`") = ArgumentError(
-    string(
-        what,
-        ": `", repr(s), "` is a linear solver: it is the `linsolve` of an implicit field solver, not a field solver; give it to ",
-    "one, ", implicit, ", or step the field with an explicit field algorithm: give ", route))
+function linear_solver_refusal(what, s, route; implicit = "`BackwardEuler(; linsolve = $(repr(s)))`")
+    return ArgumentError(
+        string(
+            what,
+            ": `", repr(s), "` is a linear solver: it is the `linsolve` of an implicit field solver, not a field solver; give it to ",
+        "one, ", implicit, ", or step the field with an explicit field algorithm: give ", route))
+end
 
 """
     FieldGroups(field => alg, …; default = nothing)
@@ -746,8 +754,9 @@ SciMLBase.has_step(::AbstractFieldAlgorithm) = true
 SciMLBase.alg_order(::Union{ExplicitEuler, BackwardEuler, QuasiSteady}) = 1
 SciMLBase.alg_order(::Union{CrankNicolson, BDF2}) = 2
 SciMLBase.alg_order(::ExplicitMap) = 0
-SciMLBase.alg_order(g::FieldGroups) =
-    minimum(SciMLBase.alg_order, [last.(g.pairs); g.default === nothing ? AbstractFieldAlgorithm[] : [g.default]])
+function SciMLBase.alg_order(g::FieldGroups)
+    return minimum(SciMLBase.alg_order, [last.(g.pairs); g.default === nothing ? AbstractFieldAlgorithm[] : [g.default]])
+end
 
 """
     canonical(alg) -> String
@@ -761,13 +770,17 @@ name, each by `canonical`; `:auto` prints as given (`:auto`, unresolved, so a CP
 device problem print alike). `init = nothing` and `compute_type = :auto` (the defaults) are left out, so the texts recorded before them stay. A `FieldGroups` prints its pairs as given (a caller that
 resolves it per field, such as `PottsProblem`, prints the per-field map instead).
 """
-canonical(s::ExplicitEuler) = string(
-    "ExplicitEuler(substeps=", repr(s.substeps), ",lower_bound=", repr(s.lower_bound),
-    s.init === nothing ? "" : string(",init=", repr(s.init)), s.compute_type === :auto ? "" : string(",compute_type=", s.compute_type), ")"
-)
+function canonical(s::ExplicitEuler)
+    return string(
+            "ExplicitEuler(substeps=", repr(s.substeps), ",lower_bound=", repr(s.lower_bound),
+            s.init === nothing ? "" : string(",init=", repr(s.init)), s.compute_type === :auto ? "" : string(",compute_type=", s.compute_type), ")"
+        )
+end
 canonical(m::ExplicitMap) = m.compute_type === :auto ? "ExplicitMap()" : string("ExplicitMap(compute_type=", m.compute_type, ")")
-canonical(g::FieldGroups) = string("FieldGroups(", join((string(k, "=", canonical(a)) for (k, a) in g.pairs), ","),
-    ";default=", g.default === nothing ? "nothing" : canonical(g.default), ")")
+function canonical(g::FieldGroups)
+    return string("FieldGroups(", join((string(k, "=", canonical(a)) for (k, a) in g.pairs), ","),
+        ";default=", g.default === nothing ? "nothing" : canonical(g.default), ")")
+end
 canonical(a::AbstractFieldAlgorithm) = _canonical_fields(a)
 canonical(s::Union{Solvers.LatticePCG, Solvers.LatticeGMRES}) = _canonical_fields(Solvers.owned(s))
 canonical(v::Solvers.VCycle) = "VCycle($(v.nu1),$(v.nu2))"
@@ -829,12 +842,14 @@ function _canonical_value(x, depth::Int)
         join((string(f, "=", item(getfield(x, f))) for f in sort!(collect(fieldnames(T))) if isdefined(x, f)), ","), ")"
     )
 end
-_canonical_fields(s) = string(nameof(typeof(s)), "(",
-    join((string(f, "=", canonical(getfield(s, f))) for f in sort!(collect(fieldnames(typeof(s))))
-                if !(f === :init && getfield(s, f) === nothing) && !(f === :compute_type && getfield(s, f) === :auto)
-        ), ","
-    ), ")"
-)
+function _canonical_fields(s)
+    return string(nameof(typeof(s)), "(",
+            join((string(f, "=", canonical(getfield(s, f))) for f in sort!(collect(fieldnames(typeof(s))))
+                        if !(f === :init && getfield(s, f) === nothing) && !(f === :compute_type && getfield(s, f) === :auto)
+                ), ","
+            ), ")"
+        )
+end
 
 # an algorithm in messages, in its keyword form (`ExplicitEuler(; substeps = 2)`)
 function _algtext(a::ExplicitEuler)
