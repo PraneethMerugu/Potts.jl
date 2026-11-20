@@ -193,10 +193,10 @@ end
 function _lane(st, T)
     st <: Bool && return U8
     st <: Integer && return st <: Unsigned ? U32 : I32
-    T === Float64 && return F64
-    T === Float32 && return F32
-    T === Float16 && return F16
-    T === BigFloat && return F64          # host only: an F64 lane holds BigFloat (`lanetype`)
+    T <: Float64 && return F64
+    T <: Float32 && return F32
+    T <: Float16 && return F16
+    T <: BigFloat && return F64          # host only: an F64 lane holds BigFloat (`lanetype`)
     _dverr("T = $T is not a state type: use Float16, Float32, Float64 or BigFloat (host)")
 end
 # the state type: `disc.T`, else Float64 on a host backend and Float32 on a device
