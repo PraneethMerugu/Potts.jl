@@ -113,8 +113,7 @@ end
 
 @testitem "QA: Aqua (CorePotts)" setup = [CP_qa] tags = [:corepotts, :qa] begin
 @testset "QA: Aqua (CorePotts)" begin
-        # `persistent_tasks = false`: KernelAbstractions/GPU backends register background tasks.
-        qa_aqua(CorePotts; persistent_tasks = false)
+        qa_aqua(CorePotts)
         qa_extension_piracies(CorePotts)                # inside the GPU extensions, when loaded
     end
 end
