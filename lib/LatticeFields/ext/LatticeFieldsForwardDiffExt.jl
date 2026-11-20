@@ -16,9 +16,11 @@ function Compile.withvaltype(::Type{Dual{G, W, N}}, ::Type{V}) where {G, W, N, V
 end
 Compile.npartials(::Type{<:Dual{G, V, N}}) where {G, V, N} = N
 @inline Compile.dvalue(d::Dual) = value(d)
+# bounds: callers pass j ≤ npartials(typeof(d)) = N, the partials' length
 @inline Compile.dpartial(d::Dual, j) = @inbounds partials(d).values[j]
 @inline function Compile.dsetpartial(d::Dual{G, V, N}, j, v) where {G, V, N}
     ps = partials(d).values
+    # bounds: q ≤ N = length(ps)
     return Dual{G}(value(d), Partials(ntuple(q -> q == j ? convert(V, v) : (@inbounds ps[q]), Val(N))))
 end
 @inline Compile.dreplace(d::Dual{G, V, N}, v) where {G, V, N} = Dual{G}(convert(V, v), partials(d))

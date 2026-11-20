@@ -298,6 +298,7 @@ function _inside(c::Ctx{N}, a::Access{N}) where {N}
     return isempty(ts) ? true : foldl((x, y) -> :($x & $y), ts)
 end
 
+# bounds: idx comes from `_target`, in range by construction (see its docstring)
 _ref(c::Ctx, A, idx) = c.o.debug ? :($A[$idx]) : :(@inbounds $A[$idx])
 
 # ---- pass 6: emission ---------------------------------------------------------------------
@@ -462,6 +463,7 @@ function _store(c::Ctx, s::Store)
         v = :($cur + $v)
     end
     isfloat(f.storage) && L != c.o.T && (v = :(lanecast($L, $v)))
+    # bounds: idx comes from `_target`, in range by construction (see its docstring)
     return c.o.debug ? :($A[$idx] = $v) : :(@inbounds $A[$idx] = $v)
 end
 
@@ -488,6 +490,7 @@ function passthrough(c::Ctx)
         idx = c.index(c, s.access)
         src = _ref(c, c.names[(s.access.field, :cur)], idx)
         dst = c.names[(s.access.field, :next)]
+        # bounds: idx comes from `_target`, in range by construction (see its docstring)
         push!(out, c.o.debug ? :($dst[$idx] = $src) : :(@inbounds $dst[$idx] = $src))
     end
     return out

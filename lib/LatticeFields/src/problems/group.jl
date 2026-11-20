@@ -1492,6 +1492,7 @@ function _copy!(d::AbstractArray, s::AbstractArray)
     return d
 end
 function _copy!(d::Union{Array, SubArray{<:Any, 1, <:Array}}, s::Union{Array, SubArray{<:Any, 1, <:Array}})
+    # bounds: i ∈ eachindex(d, s), which checks that both have the same axes
     @inbounds for i in eachindex(d, s)
         d[i] = s[i]
     end

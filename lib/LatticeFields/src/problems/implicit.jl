@@ -410,6 +410,7 @@ _jat(j::AbstractArray, i, ih) = @inbounds j[i]                         # i ≤ l
 # (inside the domain, not masked) its own `δ = G/max(1/(γh) − J, 1/(2γh))` as the solver's
 # mask value (the two-stage solve, M3)
 function _be_rhs_body!(i, f, v, res, j, m, smask, rmask, dom, ih, ih2)
+    # bounds: i ≤ n, the length of every per-site array of the row
     @inbounds begin
         g = res[i]
         if smask[i] != 0
@@ -1314,6 +1315,7 @@ function _rebuild_row!(r::ImplicitRow, backend, h, γ, word, window)
     return nothing
 end
 
+# bounds: launched over i ∈ eachindex(b), and mask has b's length
 _zero_masked_body!(i, b, mask) = (@inbounds mask[i] != 0 && (b[i] = zero(eltype(b))); nothing)
 function _lin_status!(word, sol, window, gate)
     (gate !== nothing && Array(gate)[1] != 0) && return nothing
@@ -1914,6 +1916,7 @@ function _hex_steady_min(r::RowOperator, kinds, dims, per, shift, p)
 end
 const _HEXLINKS = ((1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1))
 function _hex_apply!(y, x, dg, w, n1, n2, per::NTuple{2,Bool})
+    # bounds: i ≤ n1, j ≤ n2, so q ≤ n1·n2 = length(x) = length(y) = length(dg)
     @inbounds for j in 1:n2, i in 1:n1
         q = i + (j - 1) * n1
         acc = dg[q] * x[q]

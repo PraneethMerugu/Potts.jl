@@ -88,6 +88,7 @@ function _bound_mul_body!(i, S, P, G)
     y, x, mask, sh, fs = S
     T = eltype(y)
     idx = Int(i)
+    # bounds: launched over i ∈ 1:n, the length of y, x, mask, sh and the face arrays
     @inbounds begin
         if mask !== nothing && mask[idx] != 0
             y[idx] = T(x[idx])
@@ -204,7 +205,7 @@ end
 
 function _visit_bound_entries(emit!, A::BoundOperator{ET, N}, ::Type{T}) where {ET, N, T}
     n, mask, sh, fs, dims, strides, per, hex, s_scalar, f_scalars, dir, rob = _bound_stencil(A, T)
-    @inbounds for idx in 1:n
+    for idx in 1:n
         if mask !== nothing && mask[idx] != 0
             emit!(idx, idx, one(T))
             coords = _bound_coords(idx, dims)
@@ -332,7 +333,7 @@ function _csc_add!(M::SparseArrays.SparseMatrixCSC{T}, i::Int, j::Int, v::T) whe
     lo = Int(M.colptr[j])
     hi = Int(M.colptr[j + 1]) - 1
     k = searchsortedfirst(rv, i, lo, hi, Base.Order.Forward)
-    @inbounds nz[k] += v
+    nz[k] += v
     return nothing
 end
 function sparse_operator!(M::SparseArrays.SparseMatrixCSC{T}, A::BoundOperator) where {T}
@@ -428,6 +429,7 @@ end
 function _copy_masked_body!(i, S, P, G)
     y, r, mask = S
     idx = Int(i)
+    # bounds: launched over i ∈ 1:n = length(y) = length(r) = length(mask)
     @inbounds mask[idx] != 0 && (y[idx] = eltype(y)(r[idx]))
     return nothing
 end
@@ -1018,7 +1020,7 @@ end
 
 # stop a solve whose residual is not finite (it cannot recover)
 struct NonFiniteStop end
-(::NonFiniteStop)(ws) = (r = ws.stats.residuals; !isempty(r) && !isfinite(@inbounds r[end]))
+(::NonFiniteStop)(ws) = (r = ws.stats.residuals; !isempty(r) && !isfinite(r[end]))
 _krylov_precond(P) = P isa Union{LinearAlgebra.UniformScaling, SciMLOperators.IdentityOperator} ? LinearAlgebra.I : P
 
 function SciMLBase.solve!(cache::LinearSolve.LinearCache, alg::LatticeGMRES; kwargs...)

@@ -31,6 +31,7 @@ _tpart_body!(i, out, res, j) = (@inbounds out[i] = dpartial(res[i], j); nothing)
 # solution `x` (a row solved on its own: `v`; a row with no diffusion: `res/s`); a masked site
 # takes the part of its value, a clipped site 0
 function _tupdate_body!(i, dst, x, smask, v, res, s, mask, mval, mvf, lo, j)
+    # bounds: i ≤ n, the length of every per-site array of the row
     @inbounds begin
         d = dst[i]
         if mask !== nothing && mask[i] != 0
@@ -53,6 +54,7 @@ function _tupdate_body!(i, dst, x, smask, v, res, s, mask, mval, mvf, lo, j)
 end
 # derivative part `j` of a coupled row's residual into the right side `b` (0 at the fixed sites)
 function _tcload_body!(i, b, off, res, j, mask, dom)
+    # bounds: i ≤ n = length(res); off + n ≤ length(b)
     @inbounds b[off + i] = _cs_fixed(mask, dom, i) ? zero(eltype(b)) : eltype(b)(dpartial(res[i], j))
     return nothing
 end

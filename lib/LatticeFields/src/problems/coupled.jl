@@ -23,16 +23,19 @@ const GM_EPS, GM_UN, GM_SCALARS = 10, 11, 16
 const _GM_DONE, _GM_ITER, _GM_RNORM, _GM_BNORM, _GM_TOL = Solvers.DONE, Solvers.ITER, Solvers.RNORM, Solvers.BNORM, Solvers.TOL
 
 # a site of a row that the solve holds at 0 (its mask, or outside the domain)
+# bounds: i ≤ n, the row's length, which `mask` and `dom` (when given) have
 @inline _cs_fixed(mask, dom, i) = @inbounds (mask !== nothing && mask[i] != 0) || (dom !== nothing && dom[i] == 0)
 
 # the right side `b = G(u_k)` (0 at the fixed sites; `b` at offset `off`)
 function _cs_load_body!(i, b, off, res, mask, dom)
+    # bounds: i ≤ n = length(res); the row's part of b is off+1:off+n
     @inbounds b[off + i] = _cs_fixed(mask, dom, i) ? zero(eltype(b)) : eltype(b)(res[i])
     return nothing
 end
 # block partials (`b ≤ cld(n, NB)`, `off + b ≤ length(part)`): the largest magnitude of `a`
 # (offset `aoff`; a NaN stays) …
 function _cs_max_body!(b, part, off, a, aoff, n)
+    # bounds: b ≤ cld(n, NB), i ≤ n, off + b ≤ length(part), aoff + n ≤ length(a)
     @inbounds begin
         K = eltype(part)
         acc = zero(K)
@@ -45,6 +48,7 @@ function _cs_max_body!(b, part, off, a, aoff, n)
 end
 # … and the dot product of `x` and `y`
 function _cs_dot_body!(b, part, x, y, n)
+    # bounds: b ≤ cld(n, NB) ≤ length(part), i ≤ n = length(x) = length(y)
     @inbounds begin
         K = eltype(part)
         acc = zero(K)
@@ -57,6 +61,7 @@ function _cs_dot_body!(b, part, x, y, n)
 end
 # the sum of the partials `1:nb` into `part[nb + 1]`, in block order (one item)
 function _cs_sum_body!(i, part, nb)
+    # bounds: part holds nb + 1 entries (the partials and their sum)
     @inbounds begin
         acc = zero(eltype(part))
         for k in 1:nb
@@ -69,6 +74,7 @@ end
 function _cs_maxsum(part, nb)
     K = eltype(part)
     acc = zero(K)
+    # bounds: k ≤ nb ≤ length(part)
     @inbounds for k in 1:nb
         acc = _nanmax(acc, part[k])
     end
@@ -76,6 +82,7 @@ function _cs_maxsum(part, nb)
 end
 # the iterate's size `‖u_k‖∞` from the rows' partials (one item)
 function _cs_un_body!(i, scal, part, nb)
+    # bounds: GM_UN ≤ GM_SCALARS = length(scal)
     @inbounds scal[GM_UN] = _cs_maxsum(part, nb)
     return nothing
 end
@@ -83,6 +90,7 @@ end
 # linear group, √eps otherwise; `part` holds the partials of ‖z‖∞); a zero (or not finite) z
 # takes ε = 1 (its product is then exactly 0, or not finite, which the solve detects)
 function _cs_eps_body!(i, scal, part, nb, f)
+    # bounds: GM_EPS, GM_UN ≤ GM_SCALARS = length(scal)
     @inbounds begin
         K = eltype(scal)
         zm = _cs_maxsum(part, nb)
@@ -92,12 +100,14 @@ function _cs_eps_body!(i, scal, part, nb, f)
 end
 # the perturbed state `u_k + ε z` (z at offset `off`; the fixed sites keep `u_k`)
 function _cs_pert_body!(i, pert, u, z, off, mask, dom, scal)
+    # bounds: i ≤ n = length(pert) = length(u); off + n ≤ length(z)
     @inbounds pert[i] = _cs_fixed(mask, dom, i) ? u[i] : u[i] + scal[GM_EPS] * z[off + i]
     return nothing
 end
 # the product `w = A z = −(G(u_k + εz) − G(u_k))/ε` (`b` holds `G(u_k)`; all at offset `off`);
 # the fixed sites map `z` to itself (their `z` is 0)
 function _cs_av_body!(i, w, g2, b, z, off, mask, dom, scal)
+    # bounds: i ≤ n = length(g2); off + n ≤ length(w), length(b), length(z)
     @inbounds begin
         K = eltype(w)
         w[off + i] = _cs_fixed(mask, dom, i) ? z[off + i] : -(K(g2[i]) - b[off + i]) / scal[GM_EPS]
@@ -106,37 +116,41 @@ function _cs_av_body!(i, w, g2, b, z, off, mask, dom, scal)
 end
 # the vector kernels of a [`CoupledVector`](@ref)
 function _cs_axpy_body!(i, y, s, x)
+    # bounds: launched over i ∈ eachindex(y), and x has y's length (as below)
     @inbounds y[i] += s * x[i]
     return nothing
 end
 function _cs_axpby_body!(i, y, s, x, t)
-    @inbounds y[i] = s * x[i] + t * y[i]
+    @inbounds y[i] = s * x[i] + t * y[i]   # i ∈ eachindex(y) = eachindex(x)
     return nothing
 end
 function _cs_copy_body!(i, y, x)
-    @inbounds y[i] = x[i]
+    @inbounds y[i] = x[i]   # i ∈ eachindex(y) = eachindex(x)
     return nothing
 end
 function _cs_div_body!(i, y, x, s)
-    @inbounds y[i] = x[i] / s
+    @inbounds y[i] = x[i] / s   # i ∈ eachindex(y) = eachindex(x)
     return nothing
 end
 function _cs_fill_body!(i, x, v)
-    @inbounds x[i] = v
+    @inbounds x[i] = v                  # i ∈ eachindex(x)
     return nothing
 end
 # the preconditioner's input: a row's part of `v` (offset `off`) into its right side (its `res:`
 # array), and its output into `z`
 function _cs_pin_body!(i, dst, v, off)
+    # bounds: i ≤ n = length(dst); off + n ≤ length(v)
     @inbounds dst[i] = v[off + i]
     return nothing
 end
 function _cs_pout_body!(i, z, off, x, mask, dom)
+    # bounds: i ≤ n = length(x); off + n ≤ length(z)
     @inbounds z[off + i] = _cs_fixed(mask, dom, i) ? zero(eltype(z)) : x[i]
     return nothing
 end
 # a row with no diffusion: `z = v / s` (a shift that is not positive: `z = v`)
 function _cs_plocal_body!(i, z, off, v, s, mask, dom)
+    # bounds: i ≤ n, the row's length; off + n ≤ length(z), length(v)
     @inbounds begin
         K = eltype(z)
         d = K(_at(s, i))
@@ -153,6 +167,7 @@ end
 # a scaled row's preconditioner right side (as `_be_rhs_body!`): `v/m` where `m > 0`, and at a
 # row with `m = 0` its own `v/(shift)` as the solver's mask value (a shift that is not positive: v)
 function _cs_rhs_body!(i, f, v, res, j, m, smask, rmask, dom, ih, ih2)
+    # bounds: i ≤ n, the length of every per-site array of the row
     @inbounds begin
         g = res[i]
         if smask[i] != 0
@@ -242,7 +257,7 @@ function _cs_dot(x::CoupledVector, y::CoupledVector)
     Exec.launch!(x.backend, _cs_dot_body!, nb, (x.part, x.a, y.a, n))
     Exec.launch!(x.backend, _cs_sum_body!, 1, (x.part, nb))
     copyto!(x.host, 1, x.part, nb + 1, 1)       # (on a device: the wait, D-101's exception)
-    return @inbounds x.host[1]
+    return x.host[1]
 end
 _cs_n(v::CoupledVector) = length(v.a)
 Krylov.kdot(n::Integer, x::CoupledVector{K}, y::CoupledVector{K}) where {K <: AbstractFloat} = _cs_dot(x, y)
@@ -592,8 +607,8 @@ function _coupled_iteration!(cs::CoupledKrylov, c, a)
         st = ws.stats
         rn = st.residuals
         hs = cs.hscal
-        r1 = isempty(rn) ? zero(K) : K(@inbounds rn[1])
-        re = isempty(rn) ? zero(K) : K(@inbounds rn[end])
+        r1 = isempty(rn) ? zero(K) : K(rn[1])
+        re = isempty(rn) ? zero(K) : K(rn[end])
         # (1 converged; 5 a breakdown: the operator is singular on the Krylov space; 3 diverged:
         # a residual that is not finite, or an early stop; 0 a budget hit)
         hs[_GM_DONE] = if st.solved

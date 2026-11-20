@@ -129,6 +129,7 @@ const RULE_M = RuleWeights()
     nch = zero(Int32)
     for c in CartesianIndices(ntuple(d -> lo[d]:hi[d], length(X)))
         nch += one(Int32)
+        # bounds: c runs over the fine children of X, inside dimsf, so _lin ≤ length(active)
         @inbounds cnt += active[_lin(Int32.(Tuple(c)), dimsf)] != 0 ? one(Int32) : zero(Int32)
     end
     return majority ? Int32(2) * cnt > nch : cnt > zero(Int32)
@@ -156,6 +157,7 @@ function build_site!(j, S::Tuple{F, C}, P, G) where {F, C}
     for ci in CartesianIndices(ntuple(d -> lo[d]:hi[d], N))
         c = Int32.(Tuple(ci))
         i = _lin(c, dimsf)
+        # bounds: ci runs over the fine children of the coarse site, inside dimsf, so i ≤ nf
         @inbounds active = af[i] != 0
         if active
             @inbounds s += sf[i]
@@ -258,6 +260,7 @@ function build_hex!(j, S::Tuple{F, C}, P, G) where {F, C}
     for ci in CartesianIndices((lo[1]:hi[1], lo[2]:hi[2]))
         c = Int32.(Tuple(ci))
         i = _lin(c, dimsf)
+        # bounds: ci runs over the fine children of the coarse site, inside dimsf, so i ≤ nf
         @inbounds active = af[i] != 0
         if active
             @inbounds s += sf[i]
@@ -328,6 +331,7 @@ end
 """
 @inline function _resid(i::Int32, active, w, s, sb, si, x, b, dims, per)
     T = eltype(x)
+    # bounds: i ≤ prod(dims), every level array's length; neighbours wrap or are checked
     @inbounds active[i] != 0 || return zero(T), one(T)
     X = _coords(i, dims)
     @inbounds xi = x[i]
@@ -492,6 +496,7 @@ or singular row).
 """
 @inline function _gersh_site(i::Int32, active, w, s, sb, si, dims, per)
     T = eltype(s)
+    # bounds: i ≤ prod(dims), every level array's length; neighbours wrap or are checked
     @inbounds active[i] != 0 || return floatmax(T), zero(T)
     X = _coords(i, dims)
     @inbounds D = s[i] + sb[i] + si[i]

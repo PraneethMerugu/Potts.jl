@@ -203,6 +203,7 @@ function _mg_out_body!(i, y, off, x, r, mask, dom, s)
     return nothing
 end
 function _mg_local_body!(i, y, off, r, sh, mask, dom, s)
+    # bounds: i ≤ n, the row's length; off + n ≤ length(y), length(r)
     @inbounds begin
         K = eltype(y)
         d = K(_at(sh, i))
