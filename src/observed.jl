@@ -485,7 +485,7 @@ function _field_inputs_at(info::PottsModelInfo, u, p, t, ins)
         end
         # the values the field compiler uses, converted exactly (a value the element type cannot
         # hold is an InexactError, never a rounded or truncated value)
-        out[key] = if E === Bool
+        out[key] = if E <: Bool
             Bool.(v)
         elseif E <: Integer
             E.(v)

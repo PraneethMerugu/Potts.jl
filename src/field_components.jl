@@ -206,7 +206,7 @@ function _pde_content(sys, f::ModelingToolkitBase.PDESystem, prefix, what::Abstr
                     "true, lattice_input_name = \"kind\"]` for the kind of each site; the words are ",
                     join(("`$x`" for x in _SITE_WORDS), ", "), "), or by a field or site variable of the model", hint)))
             end
-            if _input_eltype(u, op) === Bool && !(SymbolicUtils.symtype(_unwrap(target)) <: Bool)
+            if _input_eltype(u, op) <: Bool && !(SymbolicUtils.symtype(_unwrap(target)) <: Bool)
                 # a word that is not a truth value (`kind` is the kind number) would reach the
                 # equations as the number itself
                 k = _example_kind(sys)
@@ -427,7 +427,7 @@ function _input_bindings(sys, f, inputs, what, pname)
                 "`, which reads the cell property `", n, "` bare; an input is a value at each site: read it at the site's ",
                 "owner, `", n, "[owner]`")))
         end
-        if _input_eltype(u, op) === Bool
+        if _input_eltype(u, op) <: Bool
             _truth_valued(e) || throw(ArgumentError(string(what, ": the input `", _input_key(u, op), "` is a `Bool`, and `",
                 _builtin_text(string(ex)), "` is not a truth value; bind it to a test (`kind == k`, `volume[owner] > v`, ",
                 "`any(kind[n] == k for n in R(site))`) or declare the input without `::Bool`")))

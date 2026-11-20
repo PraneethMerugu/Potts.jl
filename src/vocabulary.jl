@@ -772,7 +772,7 @@ _rand() = random_uniform(Num(_next_number!()))
 
 """`x[i...]` inside a model: indexing of symbolic quantities, `getindex` otherwise."""
 # a Bool quantity (a node of a discrete component) read at a cell stays a Bool
-_index(x::Num, i) = (_no_class_index(i); SymbolicUtils.symtype(Symbolics.unwrap(x)) === Bool ? _nonzero(value_at(x, i)) : value_at(x, i))
+_index(x::Num, i) = (_no_class_index(i); SymbolicUtils.symtype(Symbolics.unwrap(x)) <: Bool ? _nonzero(value_at(x, i)) : value_at(x, i))
 _index(x::QuantityVector, i::Num) = Num[value_at(c, i) for c in x.components]   # the vector at a cell/site
 _index(x::QuantityVector, i::Integer) = x.components[i]
 _index(x::Symbolics.Arr, i) = (_no_class_index(i); value_at(x, i))           # a kind table

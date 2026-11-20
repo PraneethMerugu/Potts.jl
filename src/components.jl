@@ -551,7 +551,7 @@ function _discrete_plan(comp, cs, mcs_duration)
     for o in sort(obs; by = o -> string(_slot_name(o.lhs)))
         x = _unwrap(o.lhs)
         r = expand(o.rhs)
-        SymbolicUtils.symtype(x) === Bool && SymbolicUtils.symtype(r) !== Bool && throw(
+        SymbolicUtils.symtype(x) <: Bool && !(SymbolicUtils.symtype(r) <: Bool) && throw(
             PottsCompileError(
             "component `$name`: the Bool node `$x` has the non-Bool rule `$r`; write a Bool expression " *
             "(`&`, `|`, `!`, `xor`, comparisons, `ifelse` of Bools) or declare the node Real"))
@@ -571,7 +571,7 @@ function _discrete_plan(comp, cs, mcs_duration)
         haskey(slot_of, v) || throw(PottsCompileError("component `$name`: the lag `$ℓ` holds `$v`, which is not a discrete variable"))
         push!(lags, ℓ => slot_of[v])
     end
-    standins = [SymbolicUtils.symtype(x) === Bool ? (v -> _unwrap(_nonzero(Symbolics.wrap(v)))) : identity for x in slots]
+    standins = [SymbolicUtils.symtype(x) <: Bool ? (v -> _unwrap(_nonzero(Symbolics.wrap(v)))) : identity for x in slots]
     every, offset = _clock_cadence(comp, cs, slots, mcs_duration)
     return (; slots, rules, lags, standins, every, offset)
 end
@@ -601,8 +601,8 @@ _standin_var(x) = (u = _unwrap(x); iscall(u) && operation(u) === _nonzero ? _unw
 # `x` with the symtype of the MTK quantity it replaces (G7: a Real leaf cannot stand in for a Bool one)
 function _as_symtype(x, ::Type{S}) where {S}
     s = x isa SymbolicUtils.BasicSymbolic ? SymbolicUtils.symtype(x) : typeof(x)
-    S === Bool && s !== Bool && return _unwrap(_nonzero(Symbolics.wrap(x)))
-    S !== Bool && s === Bool && return _unwrap(ifelse(Symbolics.wrap(x), 1.0, 0.0))
+    S <: Bool && !(s <: Bool) && return _unwrap(_nonzero(Symbolics.wrap(x)))
+    !(S <: Bool) && s <: Bool && return _unwrap(ifelse(Symbolics.wrap(x), 1.0, 0.0))
     return x
 end
 

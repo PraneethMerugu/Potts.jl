@@ -1210,7 +1210,7 @@ function _field_options(c::CompiledPottsSystem, T::Type, solver, rate)
     narrow = T <: Union{Float16, Float32}
     # the group's own program: its fields (its own and those it reads) declared Float64
     # (not every group of the model when one field declares it)
-    wide = LatticeFields.Problems.compute_type(solver, T) === Float64 ||
+    wide = LatticeFields.Problems.compute_type(solver, T) <: Float64 ||
            any(f -> f.fixed && f.storage == LatticeFields.IR.F64, rate.fields)
     return LatticeFields.Compile.CompileOptions(; T, float64_ok = !narrow || wide, lanes = :state, index = :cartesian,
         declared = narrow && wide)
@@ -1256,7 +1256,7 @@ function _field_fill_phase(c::CompiledPottsSystem, T)
     env = _site_env(T, :i, getfield(c, :gather_names); mcs = :mcs, key = :key)
     body = map(filled) do (name, ex, E)
         v = _fill_value(ex, env)
-        E === Bool ? :(@inbounds st.site.$name[i] = UInt8($v)) : :(@inbounds st.site.$name[i] = $E($v))
+        E <: Bool ? :(@inbounds st.site.$name[i] = UInt8($v)) : :(@inbounds st.site.$name[i] = $E($v))
     end
     return CorePotts.SitePhase(_rgf(:((st, p, ctx, key, mcs, i) -> begin
         $(body...)

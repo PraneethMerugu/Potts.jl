@@ -1259,7 +1259,7 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
     if _has_fields(c)
         dims = _p(sys, :lattice).dims
         for (name, _, E) in _field_inputs(c, T)
-            push!(site, name => zeros(E === Bool ? UInt8 : E, dims))
+            push!(site, name => zeros(E <: Bool ? UInt8 : E, dims))
         end
         foreach(n -> push!(site, Symbol(n, :__mask) => zeros(UInt8, _site_dims(_field_info(sys, n), dims))), _masked_fields(sys))
     end
