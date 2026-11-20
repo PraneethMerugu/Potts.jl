@@ -12,6 +12,7 @@ using Atomix: Atomix
 using CommonSolve: CommonSolve, init, solve, solve!, step!
 using KernelAbstractions: KernelAbstractions, @kernel, @index, @localmem, @synchronize, CPU
 using Logging: @logmsg, LogLevel
+using PrecompileTools: @setup_workload, @compile_workload
 using LatticeFields: LatticeFields, Exec, Problems, isfatal
 using SciMLBase: SciMLBase, remake, reinit!, derivative_discontinuity!, EnsembleProblem, EnsembleSerial, EnsembleThreads,
     DiscreteCallback, CallbackSet, terminate!

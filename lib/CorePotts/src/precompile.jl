@@ -4,7 +4,6 @@
 # `CPMFunction` then does not compile the problem setup, the state and the solution in the
 # session. (A user turns the workload off with PrecompileTools' preference
 # `precompile_workload = false`.) The tests call it too.
-using PrecompileTools: @setup_workload, @compile_workload
 
 _workload_kind(st, c) = c == 0 ? 1 : Int(st.cell.kind[c]) + 1
 function _workload_delta_H(st, p, prop, ctx)
