@@ -54,9 +54,9 @@ function MediumChannelKey(name::Symbol, ::Type{T} = Any) where {T}
 end
 
 function Base.show(io::IO, key::RenderChannelKey{S, T}) where {S, T}
-    scope = if S === SiteChannelScope
+    scope = if S <: SiteChannelScope
         "site"
-    elseif S === CellChannelScope
+    elseif S <: CellChannelScope
         "cell"
     else
         "medium"
