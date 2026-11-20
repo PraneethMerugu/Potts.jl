@@ -78,14 +78,14 @@ end
 # `getindex` on a solution was ambiguous with BlockArrays' and BandedMatrices' index types until
 # D-298): load them here and require LatticeFields to add none (a guard).
 @testitem "no ambiguities with common array packages loaded" setup = [LF_qa_qa] tags = [:latticefields, :qa] begin
-@testset "no ambiguities with common array packages loaded" begin
-    @eval using ArrayLayouts: ArrayLayouts
-    @eval using BandedMatrices: BandedMatrices
-    @eval using BlockArrays: BlockArrays
-    @eval using DynamicPolynomials: DynamicPolynomials
-    @eval using SparseArrays: SparseArrays
-    @test isempty(Test.detect_ambiguities(LatticeFields; recursive = true))
-end
+    @testset "no ambiguities with common array packages loaded" begin
+        @eval using ArrayLayouts: ArrayLayouts
+        @eval using BandedMatrices: BandedMatrices
+        @eval using BlockArrays: BlockArrays
+        @eval using DynamicPolynomials: DynamicPolynomials
+        @eval using SparseArrays: SparseArrays
+        @test isempty(Test.detect_ambiguities(LatticeFields; recursive = true))
+    end
 end
 
 @testitem "source rules" setup = [LF_qa_qa] tags = [:latticefields, :qa] begin
