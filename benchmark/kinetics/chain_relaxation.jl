@@ -35,7 +35,13 @@ for (name, kw) in filter(v -> first(v) in USE, VARIANTS)
     end
     b = boot(Truns, seqT)
     r, lo, hi = mean(Truns) / mean(seqT), quantile(b, 0.025), quantile(b, 0.975)
-    verdict = (lo >= 0.95 && hi <= 1.05) ? "PASS" : (hi < 0.95 || lo > 1.05) ? "FAIL" : "UNDECIDED"
+    verdict = if lo >= 0.95 && hi <= 1.05
+        "PASS"
+    elseif hi < 0.95 || lo > 1.05
+        "FAIL"
+    else
+        "UNDECIDED"
+    end
     @printf(
         "%-10s colours %3d  T_run mean %6.1f (seq %.1f)  r %.3f [%.3f, %.3f]  %s  mean-curve T %.1f  wall %.0f s\n",
         name, ncol, mean(Truns), mean(seqT), r, lo, hi, verdict, Tc, wall

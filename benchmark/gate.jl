@@ -98,8 +98,13 @@ const BASELINE_HEADER = """
 
 # ExplicitEuler with a lower clamp (the keyword is `lower` in older checkouts: an A/B base may be one)
 # The old name is accepted only so an A/B can run against a base older than the renames; drop it once no base predates them.
-clamped_euler(n, lo) = :lower_bound in fieldnames(ExplicitEuler) ? ExplicitEuler(; substeps = n, lower_bound = lo) :
-    ExplicitEuler(; substeps = n, lower = lo)
+function clamped_euler(n, lo)
+    if :lower_bound in fieldnames(ExplicitEuler)
+        return ExplicitEuler(; substeps = n, lower_bound = lo)
+    else
+        return ExplicitEuler(; substeps = n, lower = lo)
+    end
+end
 
 function cases(T)
     gg = graner_glazier_state()
@@ -224,10 +229,12 @@ function main(args; baseline = BASELINE)
     isempty(DEVICE) || push!(algs, DEVICE => (CheckerboardCPM(), device_backend(), Float32))
     table = isfile(baseline) ? TOML.parsefile(baseline) : Dict{String, Any}()
     c = something(BenchMachine.allowed_cpus(), Int[])
-    dist = BenchMachine.pins(m) ?
-           BenchMachine.disturbances(length(c) == 1 ? only(c) : -1, m.bench; gpu = DEVICE ==
-                                                                                   "rocm") :
-           String[]
+    dist = if BenchMachine.pins(m)
+        BenchMachine.disturbances(length(c) == 1 ? only(c) : -1, m.bench; gpu = DEVICE ==
+            "rocm")
+    else
+        String[]
+    end
     println(
         "machine $(m.key) ($(BenchMachine.cpu_model())); CPUs $(isempty(c) ? "all" : c); ",
         "Tuple cache $(tc.entries)/$(tc.capacity)", isempty(dist) ? "" :

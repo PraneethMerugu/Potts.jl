@@ -42,9 +42,15 @@ function arm_alg(arm)
     first(tok) == "cb" || throw(ArgumentError("unknown arm $arm"))
     kw = Dict{Symbol, Any}()
     for t in tok[2:end]
-        startswith(t, "b") ? (kw[:region] = parse(Int, t[2:end])) : startswith(t, "w") ? (kw[:switches] = parse(Int, t[2:end])) :
-        startswith(t, "k") ? (kw[:parts] = parse(Int, t[2:end])) :
-        throw(ArgumentError("unknown option $t in arm $arm"))
+        if startswith(t, "b")
+            kw[:region] = parse(Int, t[2:end])
+        elseif startswith(t, "w")
+            kw[:switches] = parse(Int, t[2:end])
+        elseif startswith(t, "k")
+            kw[:parts] = parse(Int, t[2:end])
+        else
+            throw(ArgumentError("unknown option $t in arm $arm"))
+        end
     end
     return CheckerboardCPM(; proposal = Moore(1), kw...)
 end
@@ -206,8 +212,13 @@ function compare(out, case, arm, ref = "seq")
     for o in CASE_OBS[case]
         r, lo, hi = ratio_ci(A[o], B[o])
         m = MARGIN[o]
-        verdict = (lo >= 1 - m && hi <= 1 + m) ? "PASS" : (hi < 1 - m || lo > 1 + m) ? "FAIL" :
-                  "UNDECIDED"
+        verdict = if lo >= 1 - m && hi <= 1 + m
+            "PASS"
+        elseif hi < 1 - m || lo > 1 + m
+            "FAIL"
+        else
+            "UNDECIDED"
+        end
         resolved = (hi - lo) / 2 <= m / 2
         resolved || (verdict *= " (unresolved)")
         @printf("%-12s%-12.4g%-12.4g%-8.3f[%.3f, %.3f]      %-8.2f%s\n", o, mean(A[o]), mean(B[o]),

@@ -37,8 +37,13 @@ Panel(name; kw...) = Panel(; name, kw...)
 """Record the saved states of `sol` as an mp4: one axis per panel, a fixed title, an MCS clock."""
 function record_run(file, sol, panels; title, framerate = 30, size = (720, 760),
         clock = t -> "t = $t MCS", frames = eachindex(sol.u), state = nothing)
-    frame(p, i) = state === nothing ? renderframe(sol; index = i, channels = p.channels(sol.u[i])) :
-                  (u = state(sol.u[i], i); renderframe(u; mcs = sol.t[i], channels = p.channels(u)))
+    function frame(p, i)
+        if state === nothing
+            return renderframe(sol; index = i, channels = p.channels(sol.u[i]))
+        else
+            return (u = state(sol.u[i], i); renderframe(u; mcs = sol.t[i], channels = p.channels(u)))
+        end
+    end
     fig = Figure(; size, fontsize = 14)
     Label(fig[0, 1:length(panels)], title; fontsize = 15, font = :bold, tellwidth = false)
     clk = Observable(clock(sol.t[first(frames)]))

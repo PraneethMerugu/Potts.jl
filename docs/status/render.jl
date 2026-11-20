@@ -90,8 +90,15 @@ function _count(rows, all_rows)
     return c
 end
 
-_short_machine(cpu) = occursin(r"ryzen"i, cpu) ? "PC (AMD Ryzen AI Max+ 395)" :
-                      occursin("Apple", cpu) ? "Mac ($(strip(cpu)))" : strip(cpu)
+function _short_machine(cpu)
+    if occursin(r"ryzen"i, cpu)
+        return "PC (AMD Ryzen AI Max+ 395)"
+    elseif occursin("Apple", cpu)
+        return "Mac ($(strip(cpu)))"
+    else
+        return strip(cpu)
+    end
+end
 
 function _provenance(dir)
     p = joinpath(dir, "provenance.toml")
@@ -99,13 +106,24 @@ function _provenance(dir)
     t = TOML.parsefile(p)
     m = get(t, "machine", nothing)
     cpu = m isa AbstractDict ? get(m, "cpu", "—") : get(t, "cpu", "—")
-    backend = m isa AbstractDict && haskey(m, "backend") ? m["backend"] :
-              haskey(t, "threads") ? "CPU, $(t["threads"]) thread$(t["threads"] == 1 ? "" : "s")" : "CPU"
-    wall = haskey(t, "wall_s") ? "$(round(t["wall_s"] / 60; digits = 1)) min wall" :
-           haskey(t, "main_wall_s") ? "$(round(t["main_wall_s"] / 60; digits = 1)) min wall" :
-           haskey(get(t, "execution", Dict()), "replicate_wall_summed_h") ?
-           "$(t["execution"]["replicate_wall_summed_h"]) h summed over replicate processes" :
-           haskey(t, "replicate_wall_summed_h") ? "$(t["replicate_wall_summed_h"]) h summed over replicates" : "—"
+    backend = if m isa AbstractDict && haskey(m, "backend")
+        m["backend"]
+    elseif haskey(t, "threads")
+        "CPU, $(t["threads"]) thread$(t["threads"] == 1 ? "" : "s")"
+    else
+        "CPU"
+    end
+    wall = if haskey(t, "wall_s")
+        "$(round(t["wall_s"] / 60; digits = 1)) min wall"
+    elseif haskey(t, "main_wall_s")
+        "$(round(t["main_wall_s"] / 60; digits = 1)) min wall"
+    elseif haskey(get(t, "execution", Dict()), "replicate_wall_summed_h")
+        "$(t["execution"]["replicate_wall_summed_h"]) h summed over replicate processes"
+    elseif haskey(t, "replicate_wall_summed_h")
+        "$(t["replicate_wall_summed_h"]) h summed over replicates"
+    else
+        "—"
+    end
     return (; machine = _short_machine(cpu) * ", " * backend, run = wall,
             commit = haskey(t, "commit") ? "`" * t["commit"][1:8] * "`" : "—")
 end

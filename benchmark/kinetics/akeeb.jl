@@ -15,8 +15,11 @@ const ARMS = [("seq", SequentialCPM(; proposal = VonNeumann(1)), false),
 problem(pt, seed) = (p = POINTS[pt]; PottsProblem(AkeebInvasion(; name = :akeeb, J = akeeb_contacts(p[1]), μ = p[2]),
     akeeb_state(; pp = p[3], seed = 0x5cd2609 + seed), (0, 701); capacity = 4000, seed))
 function run_one(pt, alg, gpu, seed)
-    sol = gpu ? solve(problem(pt, seed), alg; backend = ROCBackend(), save_start = false, save_everystep = false) :
+    sol = if gpu
+        solve(problem(pt, seed), alg; backend = ROCBackend(), save_start = false, save_everystep = false)
+    else
         solve(problem(pt, seed), alg; save_start = false, save_everystep = false)
+    end
     o = akeeb_observables(sol.u[end])
     return Dict(String(m) => Float64(getproperty(o, m)) for m in METRICS)
 end

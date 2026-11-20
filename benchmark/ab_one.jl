@@ -188,8 +188,11 @@ function ab_wait_go()
     fields = split(strip(line))
     fields[1] == "GO" || error("expected GO, got $(repr(line))")
     target_cpu = length(fields) >= 2 ? parse(Int, fields[2]) : -1
-    exclude_pids = length(fields) >= 3 ?
-        parse.(Int, split(fields[3], ','; keepempty = false)) : Int[]
+    exclude_pids = if length(fields) >= 3
+        parse.(Int, split(fields[3], ','; keepempty = false))
+    else
+        Int[]
+    end
     if target_cpu >= 0 && BenchMachine.pins(BenchMachine.machine())
         allowed = BenchMachine.allowed_cpus()
         allowed == [target_cpu] ||
@@ -215,14 +218,16 @@ function ab_run_prepared!(
         prepared, tc_start, go, samples, seconds, gctrial_for;
         resolve_dev = false
     )
-    items = resolve_dev ?
+    items = if resolve_dev
         [
-            (;
-                item.label, item.prob, item.alg,
-                backend = item.dev ? device_backend() : nothing,
-            ) for item in prepared
-        ] :
+                (;
+                    item.label, item.prob, item.alg,
+                    backend = item.dev ? device_backend() : nothing,
+                ) for item in prepared
+            ]
+    else
         prepared
+    end
     start_dist = ab_disturbances(; exclude = go.exclude_pids)
     ab_burnin!(items)
     println("TC ", join(tc_start, " "))
@@ -247,7 +252,13 @@ function ab_one_main(pos, opts)
     samples = parse(Int, get(opts, "samples", "60"))
     seconds = parse(Float64, get(opts, "seconds", "40"))
     # D-252: no scrub for the CPU variants; device variants keep it
-    gctrial_opt = haskey(opts, "gctrial") ? true : haskey(opts, "no-gctrial") ? false : nothing
+    gctrial_opt = if haskey(opts, "gctrial")
+        true
+    elseif haskey(opts, "no-gctrial")
+        false
+    else
+        nothing
+    end
     gctrial_for(backend) = something(gctrial_opt, backend !== nothing)
     if AB_PREPARE
         haskey(opts, "variants") && error("--prepare cannot be combined with --variants")

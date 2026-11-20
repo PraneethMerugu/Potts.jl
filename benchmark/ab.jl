@@ -150,11 +150,17 @@ function parse_ab(args)
     haskey(opts, "serial") && haskey(opts, "parallel") &&
         error("--serial and --parallel cannot both be set")
     m = BenchMachine.machine()
-    seed = haskey(opts, "no-seed") ? 0 :
-           parse(Int, get(opts, "seed", string(BenchMachine.SEED_ENTRIES)))
+    seed = if haskey(opts, "no-seed")
+        0
+    else
+        parse(Int, get(opts, "seed", string(BenchMachine.SEED_ENTRIES)))
+    end
     pin = !haskey(opts, "no-pin") && BenchMachine.pins(m)
-    cpu = pin ?
-          (haskey(opts, "cpu") ? parse(Int, opts["cpu"]) : BenchMachine.bench_cpu(m)) : -1
+    cpu = if pin
+        haskey(opts, "cpu") ? parse(Int, opts["cpu"]) : BenchMachine.bench_cpu(m)
+    else
+        -1
+    end
     child = get(opts, "child", CHILD)
     parallel = !haskey(opts, "serial") && !inprocess &&
         (
@@ -265,8 +271,13 @@ end
 julia_bin() = joinpath(Sys.BINDIR, Base.julia_exename())
 
 function warm(dir, o)
-    dev = o.backend == "metal" ? "; import Metal" :
-          o.backend == "rocm" ? "; import AMDGPU" : ""
+    dev = if o.backend == "metal"
+        "; import Metal"
+    elseif o.backend == "rocm"
+        "; import AMDGPU"
+    else
+        ""
+    end
     code = "using BenchmarkTools, Potts, PottsModels, KernelAbstractions$dev"
     proj = joinpath(dir, "benchmark")
     cmd = `$(BenchMachine.mem_cmd(o.machine)) $(BenchMachine.work_cmd(o.machine)) $(julia_bin()) --startup-file=no --project=$proj -e $code`
@@ -298,8 +309,13 @@ function child_cmd(
         dir, childargs, o, deadline; pin_cpu = o.cpu, prepare = false,
         use_work = false
     )
-    pin = pin_cpu >= 0 ? BenchMachine.pin_cmd(o.machine, pin_cpu) :
-        (use_work ? BenchMachine.work_cmd(o.machine) : ``)
+    pin = if pin_cpu >= 0
+        BenchMachine.pin_cmd(o.machine, pin_cpu)
+    elseif use_work
+        BenchMachine.work_cmd(o.machine)
+    else
+        ``
+    end
     mem = BenchMachine.mem_cmd(o.machine)
     proj = joinpath(dir, "benchmark")
     prep = prepare ? ["--prepare"] : String[]
@@ -694,8 +710,11 @@ end
 function verdict(R, D, o)
     none = Dict{String, Vector{Tuple{Float64, Float64}}}()
     b, c = get(R, "base", none), get(R, "candidate", none)
-    ctls = o.control ? [("base-ctl", "base"), ("cand-ctl", "candidate")] :
-           Tuple{String, String}[]
+    ctls = if o.control
+        [("base-ctl", "base"), ("cand-ctl", "candidate")]
+    else
+        Tuple{String, String}[]
+    end
     keys_ = sort([k
                   for k in keys(b)
                   if haskey(c, k) && all(haskey(get(R, s, none), k) for (s, _) in ctls)])
@@ -749,13 +768,25 @@ function verdict(R, D, o)
     @printf("pass margin: candidate/base <= %.4f (1 + tolerance %.3f - largest control deviation %.4f)\n",
         margin, o.tolerance, dev)
     nd == 0 || println("disturbed runs ($nd):\n  ", join(D, "\n  "))
-    code = nd > 0 ? 3 : !isempty(slow) ? 1 : !isempty(unread) ? 2 : 0
-    msg = code == 3 ? "$nd disturbed run(s): time again with the machine idle" :
-          code == 1 ? "REGRESSION: " * join(slow, ", ") :
-          code == 2 ?
-          "UNREADABLE: $(join(unread, ", ")) above the margin " *
-          "$(@sprintf("%.4f", margin)): re-run, or judge with the controls' range stated" :
-          "pass"
+    code = if nd > 0
+        3
+    elseif !isempty(slow)
+        1
+    elseif !isempty(unread)
+        2
+    else
+        0
+    end
+    msg = if code == 3
+        "$nd disturbed run(s): time again with the machine idle"
+    elseif code == 1
+        "REGRESSION: " * join(slow, ", ")
+    elseif code == 2
+        "UNREADABLE: $(join(unread, ", ")) above the margin " *
+            "$(@sprintf("%.4f", margin)): re-run, or judge with the controls' range stated"
+    else
+        "pass"
+    end
     println("verdict ($(o.stat)): ", msg)
     return code
 end
@@ -766,7 +797,13 @@ function ab_main(args)
     BenchMachine.pin_self_to_work!(m)     # the parent and the lock's keeper stay off 12–15
     harness = dirname(@__DIR__)
     deadline = time() + o.maxwait
-    mode = o.inprocess ? "; inprocess" : o.parallel ? "; parallel compile" : "; serial"
+    mode = if o.inprocess
+        "; inprocess"
+    elseif o.parallel
+        "; parallel compile"
+    else
+        "; serial"
+    end
     @printf(
         "machine %s (%s); backend %s (%s); %s; Tuple cache seeded to %s; %d rounds; wait %s%s%s\n",
         m.key, BenchMachine.cpu_model(), o.backend, o.variants,
