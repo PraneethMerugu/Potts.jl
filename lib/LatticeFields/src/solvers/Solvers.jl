@@ -1,7 +1,7 @@
 """
     LatticeFields.Solvers
 
-Implicit field solves (v3 §6.3–§6.4): the cell-centered multigrid hierarchy with rule M and
+Implicit field solves: the cell-centered multigrid hierarchy with rule M and
 the Any fold, the bottom V-cycle with a fixed-degree Chebyshev coarsest solve, PCG with one
 fixed V(2,2) Chebyshev cycle as preconditioner, the stationary budgeted path, the residual
 sentinel and `init = :steady`. Launch plans follow the Schedule/Exec contract.

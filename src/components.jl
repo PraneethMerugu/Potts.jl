@@ -1,11 +1,11 @@
-# Components (ROADMAP M4.1, D-017/D-038): MTK systems instantiated per cell. A component's
+# Components (D-017/D-038): MTK systems instantiated per cell. A component's
 # unknowns become cell variables (`clock.m` is the cell variable `clock₊m`), its parameters
 # become model parameters (`clock₊τ`) unless coupled to a cell-scope expression with
 # `@equations clock.τ ~ …`, and its equations become cell ODEs, advanced for every cell of
 # the component's kinds by the problem's `ode_solver` (or its `solvers` entry) in one batched
 # kernel (CPU or GPU).
 #
-# A discrete-time component (clocked, `Shift`; D-065 Q9, P6.0k) is `mtkcompile`d the same
+# A discrete-time component (clocked, `Shift`; D-065 Q9) is `mtkcompile`d the same
 # way; each of its discrete variables `x` becomes the cell variable `name₊x` holding the value
 # of the latest tick (a `Bool` node as exact 0/1 in the model's scalar type), and its rules
 # become a `DiscreteBlock`: one tick per period of its clock, after the ODEs (codegen.jl).
@@ -107,9 +107,9 @@ function _bind_components(sys::PottsSystem)
         bnd = Dict{Any, Any}(_unwrap(x) => _unwrap(v) for (x, v) in ModelingToolkitBase.bindings(cs))
         local_sub = Dict{Any, Any}(_unwrap(t) => time)
         # a missing value stays `nothing`: the operating point must give it (checked there)
-        # an MTK value; else, for a quantity of a composed Potts model (C9), its written numeric default;
+        # an MTK value; else, for a quantity of a composed Potts model, its written numeric default;
         # an expression of the component's parameters (an initial value `y => 2k` or a binding
-        # `y(t) = 2k`; F2-14, FE-18) is the default `2 comp₊k`, evaluated when a problem is built
+        # `y(t) = 2k`) is the default `2 comp₊k`, evaluated when a problem is built
         function value(x)
             v = get(ics, _unwrap(x), nothing)
             v === nothing && (v = get(bnd, _unwrap(x), nothing))
@@ -139,7 +139,7 @@ function _bind_components(sys::PottsSystem)
             discrete && (names[nm] = _as_symtype(names[nm], SymbolicUtils.symtype(_unwrap(p))))
             local_sub[_unwrap(p)] = names[nm]
         end
-        # a bound parameter (`k2 = 2k`, an MTK binding; F2-14, FE-18) is a computed model
+        # a bound parameter (`k2 = 2k`, an MTK binding) is a computed model
         # parameter `comp₊k2 = 2 comp₊k`, in the order its inputs allow (`k3 = 3k2` after `k2`)
         pending = [(x, v) for (x, v) in bnd if ModelingToolkitBase.isparameter(x) && _reads_params_only(v)]
         while !isempty(pending)
@@ -237,10 +237,10 @@ function _bind_components(sys::PottsSystem)
     return _check_primed_names(_check_name_categories(_check_reserved_names(bound)))
 end
 
-# a component quantity's MTK unit and guess, kept on the Potts quantity that stands for it (C9 review S3)
+# a component quantity's MTK unit and guess, kept on the Potts quantity that stands for it
 _unit_of(x) = SymbolicUtils.getmetadata(_unwrap(x), ModelingToolkitBase.VariableUnit, nothing)
 _guess_of(x) = ModelingToolkitBase.hasguess(x) ? ModelingToolkitBase.getguess(x) : nothing
-# … and a component parameter's MTK `tunable`, `bounds` and `description` (F2-14, FE-18)
+# … and a component parameter's MTK `tunable`, `bounds` and `description`
 function _meta_of(x)
     u = _unwrap(x)
     d = ModelingToolkitBase.getdescription(u)
@@ -249,7 +249,7 @@ function _meta_of(x)
         description = d isa AbstractString && !isempty(d) ? d : nothing)
 end
 
-# What an MTK System can carry that Potts would otherwise drop silently (P6.0k2 F7). MTK
+# What an MTK System can carry that Potts would otherwise drop silently. MTK
 # `guesses` only seed MTK's initialisation, which Potts does not run (G8): they are ignored.
 function _reject_ignored_features(comp)
     sys = comp.system
@@ -301,7 +301,7 @@ _all_tstops(sys) = Any[ModelingToolkitBase.get_tstops(sys); (x for s in Modeling
 # An MTK binding (a variable's or parameter's value given as an expression, `y(t) = 2k`,
 # `k2 = 2k`) is evaluated by MTK against the parameter's own value; a coupled parameter has no
 # value of its own (it is a per-cell or model expression), so such a binding would be wrong or
-# dropped (P6.0k2 F7). Bindings of parameters alone are evaluated (`_reject_bindings`).
+# dropped. Bindings of parameters alone are evaluated (`_reject_bindings`).
 function _reject_coupled_bindings(comp, cs, couplings)
     namespaced(y) = Symbol(comp.name, :₊, SymbolicIndexingInterface.getname(y))
     leafname(y) = (SymbolicUtils.issym(y) || (iscall(y) && SymbolicUtils.issym(operation(y)))) ? namespaced(y) : nothing
@@ -327,8 +327,8 @@ end
 
 # Any other binding Potts reads (D-133): Potts does not run MTK initialization, so it evaluates
 # a value given as an expression of the component's parameters itself (`k2 = 2k`, a computed
-# parameter; `y(t) = 2k` or `initial_conditions = [y => 2k]`, a continuous unknown's default;
-# F2-14, FE-18), and rejects any other expression (one that reads an unknown, a discrete
+# parameter; `y(t) = 2k` or `initial_conditions = [y => 2k]`, a continuous unknown's default),
+# and rejects any other expression (one that reads an unknown, a discrete
 # `X(t) = !Y`) here, naming the component, instead of failing later as a missing value or an
 # unknown symbol. Only
 # bindings of what Potts reads count: unknowns, parameters, symbols the equations or observed
@@ -358,7 +358,7 @@ function _reject_bindings(comp, cs, discrete::Bool, unread = Dict{Symbol, String
     for (x, v) in ModelingToolkitBase.bindings(cs)
         u = _unwrap(x)
         # an expression of the component's parameters: a computed parameter (`k2 = 2k`) or the
-        # initial value of a continuous unknown (`y(t) = 2k`), evaluated at build (F2-14, FE-18)
+        # initial value of a continuous unknown (`y(t) = 2k`), evaluated at build
         _reads_params_only(v) && (ModelingToolkitBase.isparameter(u) || !discrete && !(u in observed)) && continue
         msg = "component `$(comp.name)`: `$x` is bound to the expression `$v` (an MTK binding), which reads " *
               "more than the component's parameters; Potts evaluates a binding of parameters (`k2 = 2k`, " *
@@ -430,7 +430,7 @@ function _walk_all(f, x)
 end
 
 # ---------------------------------------------------------------------------------------
-# Discrete-time components (P6.0k, D-065 Q9)
+# Discrete-time components (D-065 Q9)
 
 """Whether an MTK system is discrete-time: it uses `Shift`, `Sample` or `Hold`, or a clocked variable."""
 function _is_discrete(sys)
@@ -472,7 +472,7 @@ end
 
 # ModelingToolkit's compile of a discrete component. Only errors ModelingToolkit raises become
 # `PottsCompileError`s naming the component: an error raised in Potts' own code (a unit-check hook
-# of an extension runs inside MTK's compile) is a Potts bug and propagates unchanged (P6.0k2 F4).
+# of an extension runs inside MTK's compile) is a Potts bug and propagates unchanged.
 function _mtk_compile_call(compile::F, comp) where {F}
     try
         return compile(comp.system)

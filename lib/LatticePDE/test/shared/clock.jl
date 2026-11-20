@@ -1,4 +1,4 @@
-# Definitions of clock_tests.jl that other test files use (moved here by TS1b).
+# Definitions of clock_tests.jl that other test files use.
 using LatticeFields: Problems as LFP
 using LatticeFields.Compile: CompileOptions
 

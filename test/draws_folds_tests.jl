@@ -65,8 +65,8 @@ end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "D-150: Base RNG calls in a model are rejected by name" setup = [DrawsFoldsSetup] tags = [:potts, :draws_folds] begin
-    @testset "D-150: Base RNG calls in a model are rejected by name" begin
+@testitem "Base RNG calls in a model are rejected by name" setup = [DrawsFoldsSetup] tags = [:potts, :draws_folds] begin
+    @testset "Base RNG calls in a model are rejected by name" begin
         for (call, shown) in (
                 (:(rand(1:3)), "rand(1:3)"), (:(rand(2)), "rand(2)"), (:(randn(3)), "randn(3)"),
                 (:(randn(Float32)), "randn(Float32)"), (:(randexp()), "randexp()"), (:(Base.rand()), nothing),
@@ -97,8 +97,8 @@ end
     end
 end
 
-@testitem "D-150: the contact fold's scope and predicate" setup = [DrawsFoldsSetup] tags = [:potts, :draws_folds] begin
-    @testset "D-150: the contact fold's scope and predicate" begin
+@testitem "the contact fold's scope and predicate" setup = [DrawsFoldsSetup] tags = [:potts, :draws_folds] begin
+    @testset "the contact fold's scope and predicate" begin
         # fine: cell updates, division conditions, cell observed, a population over cells
         c = _df_build(
             :(@after_mcs x ~ count(neighbor_kind == medium for _ in contacts) + count(neighbor_kind == B for _ in contacts(vn))),
@@ -149,8 +149,8 @@ end
     end
 end
 
-@testitem "D-150: models without folds or draws generate what they did" setup = [DrawsFoldsSetup] tags = [:potts, :draws_folds] begin
-    @testset "D-150: models without folds or draws generate what they did" begin
+@testitem "models without folds or draws generate what they did" setup = [DrawsFoldsSetup] tags = [:potts, :draws_folds] begin
+    @testset "models without folds or draws generate what they did" begin
         c = _df_build(:(@after_mcs x ~ volume + 1))
         # the constructor records that it built neither, so mtkcompile and PottsProblem skip the walks (review F1)
         @test !Potts._may_have(getfield(c, :sys), :folds) && !Potts._may_have(getfield(c, :sys), :bounded)

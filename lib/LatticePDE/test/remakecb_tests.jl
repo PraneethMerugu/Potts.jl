@@ -1,7 +1,7 @@
 # Review F4 b2 (#2, #5): `remake(prob; callback = cb)` keeps the built-in callbacks of the ODE path
 # (the clock's step index, the masks) and adds `cb`; an owned solve honors `dense = false`; a warm
 # window with a discrete or a continuous callback that does not fire allocates nothing (CPU).
-# Negative control at 70400aba (~/lpwork/f4b2-rev2/nc-remakecb.log): the remade step_index model
+# Negative control at 70400aba: the remade step_index model
 # under Tsit5 is off by 0.139, `sol.dense` is true, the warm windows allocate 240 B and 2.7 KB.
 
 @testsetup module LP_remakecb

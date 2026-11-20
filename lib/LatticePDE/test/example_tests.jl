@@ -1,4 +1,4 @@
-# The standalone MTK form of v3 §7.4, verbatim, solved on 512² (12 automatic substeps per
+# A standalone MTK reaction-diffusion example (decay with a fixed end), solved on 512² (12 automatic substeps per
 # step). The field is uniform in y (periodic pair), so every row is the 1D problem
 # D c″ − k c with c = 1 at x = 0 and no flux at x = 1, which a Float64 host loop with the
 # same steps checks; the raw `Differential` spelling lowers to the same program.
@@ -35,13 +35,13 @@ end
     m = Module(:Example74)
     foreach(e -> e isa LineNumberNode || Core.eval(m, e), ex.args)    # `using` before the macros expand
     prob, sol = m.prob, m.sol
-    fp = LFP.field_problem(prob)                                       # (F4-01: the owned problem)
+        fp = LFP.field_problem(prob)                                       # (the owned problem)
     p = fp.program
     @test p.spacing == (1 / 512, 1 / 512) && p.periodic == (false, true)   # from the domain and the bc pair
     @test prob.p.values == [1e-3, 0.1] && fp.stability(fp.p) ≈ 1e-3 * 8 * 512^2 + 0.1
     @test substep_counts(sol)[1] == 12 && sol.t == 0:10
     v = Core.eval(m, :(sol[c(t, x, y)]))
-    w = v[end]                                                      # (one grid per save: Q18)
+        w = v[end]                                                      # (one grid per save)
     @test length(v) == 11 && size(w) == (512, 512) && all(isfinite, w)
     @test all(j -> w[:, j] == w[:, 1], 1:512)                      # periodic in y: no y dependence
     # the 1D oracle, Float64, same 12 000 substeps
@@ -54,7 +54,7 @@ end
     end
     @test maximum(abs, w[:, 1] .- u) < 1e-4
     @test maximum(abs, w[:, 1] .- (cosh.(10 .* (1 .- ((1:n) .- 0.5) ./ n)) ./ cosh(10))) > 1e-3  # not the steady state yet
-    # the raw `Differential` spelling lowers to the same program (§7.4, P3-rev item 5)
+        # the raw `Differential` spelling lowers to the same program (§7.4)
     raw = Core.eval(m, quote
         Dx, Dy = Differential(x), Differential(y)
         @named rd2 = PDESystem(Differential(t)(c(t, x, y)) ~ Dc * (Dx(Dx(c(t, x, y))) + Dy(Dy(c(t, x, y)))) - k * c(t, x, y),

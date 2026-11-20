@@ -1,14 +1,14 @@
-# F3-16 (F3 design §3.9, FE-08): `[lattice_level = Coarse(k)]` in the IR and LatticePDE. A
+# `[lattice_level = Coarse(k)]` in the IR and LatticePDE. A
 # coarse field lives on level log2(k) of the program's hierarchy: its rate, conditions, masks,
 # operator (`jac:`) and residual kernels run there with the spacing `k h`, and its fine reads
 # (the inputs, an irregular domain) are folded over each node's block (every fine read, an integer
-# input too, by the mean of the part of the term that reads it; the domain by Majority; review r1
-# M2, F4-15). A field with a mask whose predicate reads fine fields blends (F4-15b): a node is
+# input too, by the mean of the part of the term that reads it; the domain by Majority).
+# A field with a mask whose predicate reads fine fields blends: a node is
 # masked when its whole block is, and elsewhere its equation folds over the block's free children
 # (the node holds the value of its free part). The oracle is the hand-coarsened problem: the same
 # system discretized on the coarse grid, with its inputs folded by hand (a kind expression as the
 # real input of its mean over the free children, the mask's kind only on whole blocks); the two
-# agree to rounding under every algorithm. Base 85794414 (~/lpwork/f3b6-nc-lp.log): `Coarse` is not defined, and
+# agree to rounding under every algorithm. Before the fix (85794414): `Coarse` is not defined, and
 # `lattice_level` was refused ("does not lower"), so every testset errors.
 
 @testsetup module LP_coarse
@@ -44,7 +44,7 @@ include("shared/coarse.jl")
 include("shared/export_all.jl")
 end
 
-@testitem "F3-16: Coarse(1) is the lattice itself, bitwise" setup = [LP_coarse] tags = [:latticepde, :coarse] begin
+@testitem "Coarse(1) is the lattice itself, bitwise" setup = [LP_coarse] tags = [:latticepde, :coarse] begin
     using .LP_coarse: fd
     @testset "Coarse(1) is the lattice itself, bitwise" begin
         # (distinct names per testset: SymbolicUtils interns an applied term `c(t, x, y)`
@@ -65,7 +65,7 @@ end
 
 end
 
-@testitem "F3-16: a coarse field equals the hand-coarsened problem under every algorithm" setup = [LP_coarse] tags = [:latticepde, :coarse] begin
+@testitem "a coarse field equals the hand-coarsened problem under every algorithm" setup = [LP_coarse] tags = [:latticepde, :coarse] begin
     using .LP_coarse: fd
     @testset "a coarse field equals the hand-coarsened problem under every algorithm" begin
         # (blocks are mixed: the mean is not the majority; blocks are masked, free and blended)
@@ -94,8 +94,8 @@ end
             @test capprox(ic[c(t, x, y)], ih[ch(t, x, y)]; rtol = alg isa ExplicitEuler ? 1.0e-13 : 1.0e-10)
             @test LatticePDE.substep_counts(ic) == LatticePDE.substep_counts(ih)
         end
-        # the masked nodes hold the masked value, and only where the whole block is kind 3 (F4-15b;
-        # 15 of 16 sites leave the node free)
+        # the masked nodes hold the masked value, and only where the whole block is kind 3
+        # (15 of 16 sites leave the node free)
         ic = init(pc, BackwardEuler(); dt = 0.05); step!(ic)
         whole = cwhole(CQB1) .== 3
         @test count(whole) == 2 && all(ic[c(t, x, y)][whole] .== 1.0) && all(ic[c(t, x, y)][.!whole] .!= 1.0)
@@ -103,7 +103,7 @@ end
 
 end
 
-@testitem "F3-16: steady rows, number types and the ODE path on a coarse grid" setup = [LP_coarse] tags = [:latticepde, :coarse] begin
+@testitem "steady rows, number types and the ODE path on a coarse grid" setup = [LP_coarse] tags = [:latticepde, :coarse] begin
     using .LP_coarse: fd
     @testset "steady rows, number types and the ODE path on a coarse grid" begin
         pc, ph, (c, ch, _...) = ctwins(; steady = true)
@@ -157,7 +157,7 @@ end
 
 end
 
-@testitem "F3-16: the folds: the restriction conserves mass, kind expressions included" setup = [LP_coarse] tags = [:latticepde, :coarse] begin
+@testitem "the folds: the restriction conserves mass, kind expressions included" setup = [LP_coarse] tags = [:latticepde, :coarse] begin
     using .LP_coarse: fd
     @testset "the folds: the restriction conserves mass, kind expressions included" begin
         # an aux field of a real input, `K ~ g`: Σ K · k² is the fine sum (the block mean)
@@ -173,7 +173,7 @@ end
         s = solve(p, ExplicitEuler(); dt = 0.25)
         Kv = s[K(t, x, y), length(s.t)]
         @test size(Kv) == (4, 4)
-        @test sum(Kv) * CK^2 ≈ sum(G) + count(==(2), CQ1) rtol = 1.0e-14      # the means (F4-15: the kind's too)
+        @test sum(Kv) * CK^2 ≈ sum(G) + count(==(2), CQ1) rtol = 1.0e-14      # the means (the kind's too)
         @test sum(s[c(t, x, y), length(s.t)]) * CK^2 ≈ sum(G) rtol = 1.0e-13    # Σ over the run (t = 1)
         # 3D, factor 2: 8 children per node
         c3 = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(first(@variables cmass3(..))), LatticePDE.LatticeLevel, Coarse(2)))
@@ -194,11 +194,11 @@ end
 
 end
 
-@testitem "F3-16: review r1 M2: a nonlinear fine read is restricted by the mean of the whole subterm" setup = [LP_coarse] tags = [:latticepde, :coarse] begin
+@testitem "a nonlinear fine read is restricted by the mean of the whole subterm" setup = [LP_coarse] tags = [:latticepde, :coarse] begin
     using .LP_coarse: fd
-    @testset "review r1 M2: a nonlinear fine read is restricted by the mean of the whole subterm" begin
-        # `D(c) ~ f` on Coarse(4) over 16²: Σ c · k² after t = 1 is the fine Σ f (base cb20be97,
-        # ~/lpwork/f3b6r-nc-m2.log: `f(mean g)`, off by −25% for g², −75% for max(g − 0.5, 0),
+    @testset "a nonlinear fine read is restricted by the mean of the whole subterm" begin
+        # `D(c) ~ f` on Coarse(4) over 16²: Σ c · k² after t = 1 is the fine Σ f (before the fix,
+        # cb20be97: `f(mean g)`, off by −25% for g², −75% for max(g − 0.5, 0),
         # −4% for exp(g), +2% for value_at(S, q) g, +25% for g/(0.2 + g))
         q, g = @variables q(..)::Int32 [input = true] g(..) [input = true]
         G = rand(Xoshiro(5), 16, 16)
@@ -228,14 +228,14 @@ end
 
 end
 
-@testitem "F3-16: F4-15: a kind expression folds by its block mean (blocks a kind covers in part); S2: the coarse-frame clamp" setup = [LP_coarse] tags = [:latticepde, :coarse] begin
+@testitem "a kind expression folds by its block mean (blocks a kind covers in part); the coarse-frame clamp" setup = [LP_coarse] tags = [:latticepde, :coarse] begin
     using .LP_coarse: fd
-    @testset "F4-15: a kind expression folds by its block mean (blocks a kind covers in part); S2: the coarse-frame clamp" begin
+    @testset "a kind expression folds by its block mean (blocks a kind covers in part); the coarse-frame clamp" begin
         # blocks with ties and mixes: 8 P + 8 Q, 9 P + 7 Q, 6 P + 6 Q + 4 medium, 8 medium + 8 Q,
         # 8 Q + 8 N, ... Every spelling of a kind-dependent rate is the block mean of its fine
         # values, so the coarse total times the block size is the fine total (exact: the means are
-        # multiples of 1/16) and complementary conditions sum to 1. Base 5e972579
-        # (~/lpwork/f4F15/nc.log): the block's plurality owner, off by up to the full rate
+        # multiples of 1/16) and complementary conditions sum to 1. Base 5e972579:
+        # the block's plurality owner, off by up to the full rate
         Q = CQT
         lvl(n) = Symbolics.wrap(
             SymbolicUtils.setmetadata(
@@ -279,7 +279,7 @@ end
         @test capprox(so[cop(t, x, y), length(so.t)], sh[hop(t, x, y), length(sh.t)]; rtol = 1.0e-14)
         # S2: a kind-dependent face coefficient (and a real one) at a face of the box equals the
         # hand-coarsened twin bitwise: the neighbor block clamped in the coarse frame (base
-        # cb20be97, ~/lpwork/f3b6r-nc-s2.log: the fine-frame clamp reads the boundary layer)
+        # cb20be97: the fine-frame clamp reads the boundary layer)
         Ki = 0.5 .+ rand(Xoshiro(41), 16, 16)
         @parameters cKv[1:4] = [1.0, 4.0, 0.25, 2.0]
         ki = first(@variables ki(..) [input = true])

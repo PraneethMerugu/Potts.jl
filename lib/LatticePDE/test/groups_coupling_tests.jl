@@ -1,5 +1,5 @@
-# F2-06 review: every group keeps its own substep count through a rebind; the coupling between
-# groups has a bound (ruling K-unsafe); `setu` drops the algorithm's history; the per-group
+# Every group keeps its own substep count through a rebind; the coupling between
+# groups has a bound; `setu` drops the algorithm's history; the per-group
 # counts are reported; the messages print an algorithm in its keyword form.
 
 @testsetup module LP_groups_coupling
@@ -21,8 +21,8 @@ include("shared/groups_coupling.jl")
 include("shared/export_all.jl")
 end
 
-@testitem "F2-06 review: each group keeps its count through setp, an input write and a table write" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
-@testset "F2-06 review: each group keeps its count through setp, an input write and a table write" begin
+@testitem "each group keeps its count through setp, an input write and a table write" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
+    @testset "each group keeps its count through setp, an input write and a table write" begin
     # c decays at a rate read through a kind table; o diffuses (its count is the larger)
         sys = PDESystem(
             [D(pce) ~ -gkc * value_at(gKt, pqe) * pce, D(poe) ~ gDo * laplacian(poe)],
@@ -52,8 +52,8 @@ end
 end
 end
 
-@testitem "F2-06 review: the coupling between groups is bounded (K-unsafe: refused with the routes)" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
-@testset "F2-06 review: the coupling between groups is bounded (K-unsafe: refused with the routes)" begin
+@testitem "the coupling between groups is bounded (K-unsafe: refused with the routes)" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
+    @testset "the coupling between groups is bounded (K-unsafe: refused with the routes)" begin
     rp = discretize(rsys(), LatticeDiscretization(Grid((4, 4)); T = Float64))
     # k dt = 3 in two groups (base: counts [1, 1], Success at 3.3e41)
         @test_throws ArgumentError init(rp, rtwo(1); dt = 0.01)
@@ -81,8 +81,8 @@ end
 end
 end
 
-@testitem "F2-06 review: setu drops the history; FieldGroups and clip messages" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
-@testset "F2-06 review: setu drops the history; FieldGroups and clip messages" begin
+@testitem "setu drops the history; FieldGroups and clip messages" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
+    @testset "setu drops the history; FieldGroups and clip messages" begin
     p = gown(gsys())
         ig = init(p, GStub(0); dt = 0.01)
     c = only(ig.runtimes).cache
@@ -98,15 +98,15 @@ end
 end
 end
 
-@testitem "F2-06 round 2: a one-way chain between groups is not limited (B)" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
-@testset "F2-06 round 2: a one-way chain between groups is not limited (B)" begin
+@testitem "a one-way chain between groups is not limited (B)" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
+    @testset "a one-way chain between groups is not limited (B)" begin
     # c decays alone; the reader (u, or a: stepped before c, the groups run in state order, by
     # key) reads c in its own group: block triangular, stable for any split
     for (cfirst, rv, re, rk) in ((true, gwu, wue, "gwu"), (false, gwa, wae, "gwa"))
         sys = PDESystem([D(wce) ~ -0.1 * wce, D(re) ~ gwk * wce - re], [gwc(0, x, y) ~ 1.0, rv(0, x, y) ~ 0.0], GW_DOM,
             [t, x, y], [wce, re], [gwk]; name = :oneway)
         p = discretize(sys, gwdisc())
-        for k in (300.0, 3000.0)                                  # k dt = 3 and 30 (refused before round 2)
+            for k in (300.0, 3000.0)                                  # k dt = 3 and 30 (formerly refused)
                 alg = FieldGroups(wce => ExplicitEuler(; substeps = 2), re => ExplicitEuler(; substeps = 3))
                 ig = init(remake(p; p = [gwk => k]), alg; dt = 0.01)
             @test [rt.keys for rt in ig.runtimes] == (cfirst ? [["gwc"], [rk]] : [[rk], ["gwc"]])
@@ -134,8 +134,8 @@ end
 end
 end
 
-@testitem "F2-06 round 2: loops of groups are limited, chains next to them are not (B)" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
-@testset "F2-06 round 2: loops of groups are limited, chains next to them are not (B)" begin
+@testitem "loops of groups are limited, chains next to them are not (B)" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
+    @testset "loops of groups are limited, chains next to them are not (B)" begin
     # a 3-group loop: a reads b, b reads c, c reads a
     sys3 = PDESystem([D(wce) ~ -gwk * woe, D(woe) ~ -gwk * wve, D(wve) ~ gwk * wce],
         [gwc(0, x, y) ~ 1.0, gwo(0, x, y) ~ 0.0, gwv(0, x, y) ~ 0.0], GW_DOM, [t, x, y], [wce, woe, wve], [gwk]; name = :loop3)
@@ -169,8 +169,8 @@ end
 end
 end
 
-@testitem "F2-06 round 3: an unseen term that reads another field counts as reading every group (B)" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
-@testset "F2-06 round 3: an unseen term that reads another field counts as reading every group (B)" begin
+@testitem "an unseen term that reads another field counts as reading every group (B)" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
+    @testset "an unseen term that reads another field counts as reading every group (B)" begin
     # c's rate has a nonlinear term that reads o (unseen: the bound does not record what it
     # reads); o decays alone, u reads c. The true graph is the chain o → c → u, but c counts as
     # reading every group, so c ⇄ u is a loop and u's κ is limited (conservative), with the cause
@@ -189,9 +189,9 @@ end
 end
 end
 
-@testitem "F2-06 round 3: an unseen term on the row's own field couples no group (B)" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
-@testset "F2-06 round 3: an unseen term on the row's own field couples no group (B)" begin
-    # `-a^3` reads only a: the chain a → c is one-way (k dt = 3; refused in round 2)
+@testitem "an unseen term on the row's own field couples no group (B)" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
+    @testset "an unseen term on the row's own field couples no group (B)" begin
+        # `-a^3` reads only a: the chain a → c is one-way (k dt = 3; formerly refused)
     for selfterm in (-wae^3, -0.1 * wae - 1e-9 * wae^3)
         sys = PDESystem([D(wae) ~ selfterm, D(woe) ~ -woe, D(wce) ~ gwk * wae - wce],
             [gwa(0, x, y) ~ 1.0, gwo(0, x, y) ~ 1.0, gwc(0, x, y) ~ 0.0], GW_DOM, [t, x, y], [wae, woe, wce], [gwk];
@@ -208,9 +208,9 @@ end
 end
 end
 
-@testitem "F2-06 round 3: a loop counts only the reads inside it (B)" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
-@testset "F2-06 round 3: a loop counts only the reads inside it (B)" begin
-    # a is a one-way source (k dt = 3) of the loop b ⇄ c (w dt = 0.005): accepted (refused in round 2)
+@testitem "a loop counts only the reads inside it (B)" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
+    @testset "a loop counts only the reads inside it (B)" begin
+        # a is a one-way source (k dt = 3) of the loop b ⇄ c (w dt = 0.005): accepted (formerly refused)
     @parameters gxk = 300.0 gxw = 0.5
     @variables gxa(..) gxb(..) gxc(..)
     xa, xb, xc = gxa(t, x, y), gxb(t, x, y), gxc(t, x, y)
@@ -238,8 +238,8 @@ end
 end
 end
 
-@testitem "F2-06 round 2: following the printed routes is accepted (B)" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
-@testset "F2-06 round 2: following the printed routes is accepted (B)" begin
+@testitem "following the printed routes is accepted (B)" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
+    @testset "following the printed routes is accepted (B)" begin
     rp = discretize(rsys(), LatticeDiscretization(Grid((4, 4)); T = Float64))
     for k in (150.0, 1 / 0.0033335, 300.0, 7.0e3 / 3, 1234.5)
         pk = remake(rp; p = [gk => k])
@@ -271,8 +271,8 @@ end
 end
 end
 
-@testitem "F2-06 round 2: the message prints the user's text and a short dt (B)" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
-@testset "F2-06 round 2: the message prints the user's text and a short dt (B)" begin
+@testitem "the message prints the user's text and a short dt (B)" setup = [LP_groups_coupling] tags = [:latticepde, :groups_coupling] begin
+    @testset "the message prints the user's text and a short dt (B)" begin
     @parameters gwKt[1:2] = [1.0, 2.0]
     @variables gwq(..)::Int32 [input = true, bounds = (1, 2)]
     qe = gwq(t, x, y)

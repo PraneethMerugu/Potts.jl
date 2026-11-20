@@ -1,4 +1,4 @@
-# SciML interface conformance for FieldProblem and FieldIntegrator (TS2-2):
+# SciML interface conformance for FieldProblem and FieldIntegrator:
 # solve vs solve!(init), step!(integ, dt, true), reinit!(integ) and reinit!(integ, u0),
 # remake, SciMLStructures (Tunable), SymbolicIndexingInterface, and negative controls.
 

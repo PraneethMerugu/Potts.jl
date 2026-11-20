@@ -21,7 +21,7 @@ isdefined(@__MODULE__, :stat_accept) || include(joinpath(@__DIR__, "shared", "st
 # (PottsDevices.device_name() == "rocm" && include("device_ir.jl"): now its own item file)
 
 
-# P6.0b: two relationships, each with its own store, law and shared read claims, on the device
+# Two relationships, each with its own store, law and shared read claims, on the device
 @potts_model MetalSprings begin
     @kinds medium blob
     @parameters begin
@@ -46,9 +46,9 @@ isdefined(@__MODULE__, :stat_accept) || include(joinpath(@__DIR__, "shared", "st
 end
 
 
-# P6.0ag: every fixed-step ODE system expanded in place. The acceptance file's device testsets
+# Every fixed-step ODE system expanded in place. The acceptance file's device testsets
 # (each rate shape compiles on the device and equals the CPU Float32 run; a gather ODE runs)
-# P6.0ao: `÷`/`div` in generated code stays in Float32 on the device (Base's Float32 `div`
+# `÷`/`div` in generated code stays in Float32 on the device (Base's Float32 `div`
 # goes through Float64): a parameter, a variable, a literal and the Int32 `volume`, in an
 # energy and in updates, against `div` on the host.
 @potts_model MetalIntDiv begin
@@ -73,9 +73,7 @@ end
 end
 
 
-# P6.0v: exact host-transfer counts of the current device paths (an ordinary test; P6.0v1/v2
-# update its formulas)
-# (include("transfer_counts.jl"): now its own item file)
+# Exact host-transfer counts of the current device paths: transfer_counts_tests.jl
 
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end

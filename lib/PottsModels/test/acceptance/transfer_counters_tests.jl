@@ -113,7 +113,7 @@ function gate_models(T)
 end
 lifecycle_total(s) = sum(f -> getfield(s.lifecycle, f), fieldnames(typeof(s.lifecycle)))
 """Per-MCS counter deltas of `step!` (no saves): a vector of `(quiet, (syncs, transfers, bytes))`.
-The window is quiet when a `checkpoint` (a host read point, D-089) before and after it shows
+The window is quiet when a `checkpoint` (a host read point) before and after it shows
 no lifecycle event; then every MCS in it is quiet, otherwise none is counted as quiet. The
 checkpoints lie outside the measured deltas."""
 function step_deltas(prob, alg; backend, nwarm = 1, nstep = 4)

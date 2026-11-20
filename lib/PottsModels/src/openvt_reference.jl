@@ -194,7 +194,7 @@ end
 Terminate a run (`ReturnCode.Terminated`) at the end of the first checked MCS whose number of
 live cells (volume > 0, after the lifecycle) is at least `n`; the state of that MCS is the
 last one saved. Checked every `every` MCS: on a device each check is one host read (a count
-over the cell volumes), a declared host pass (D-145).
+over the cell volumes), a declared host pass.
 """
 function stop_at_cells(n::Integer; every::Integer = 1)
     every >= 1 || throw(ArgumentError("stop_at_cells: `every` must be ≥ 1, got $every"))
@@ -210,7 +210,7 @@ if a cell comes within `margin` sites of the lattice edge
 ([`Analysis.near_edge`](@ref PottsModels.Analysis.near_edge)), throw a `DomainError` (the
 default) or, with `terminate = true`, stop the run with `ReturnCode.Failure` (the state of
 that MCS is the last one saved). Checked every `every` MCS: on a device each check is one
-host read (a masked reduction over σ), a declared host pass (D-145).
+host read (a masked reduction over σ), a declared host pass.
 """
 function edge_guard(margin::Integer; terminate::Bool = false, every::Integer = 1)
     every >= 1 || throw(ArgumentError("edge_guard: `every` must be ≥ 1, got $every"))

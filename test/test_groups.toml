@@ -89,11 +89,11 @@ tags = ["potts"]
 exclude_tags = [
     "qa", "gpu", "gpu_only", "multithreaded",
     "field_vocabulary", "fields", "fields_boundary", "fields_coarse", "fields_components",
-    "fields_couple", "fields_couple_b6", "fields_couple_e", "fields_couple_e8", "fields_couple_e11",
-    "fields_couple_w2", "fields_implicit", "fields_jiang", "fields_report", "fields_short",
+    "fields_couple", "fields_couple_checks", "fields_couple_bindings", "fields_couple_names", "fields_couple_arrays_faces",
+    "fields_couple_inputs", "fields_implicit", "fields_jiang", "fields_report", "fields_short",
     "fields_steppers",
     "adaptive", "algebraic", "draws_folds", "edge_updates", "initialization", "kind_classes",
-    "mtk_native", "solvers", "sweep_spec", "symbolic", "units", "wlite",
+    "mtk_native", "solvers", "sweep_spec", "symbolic", "units", "system_container",
 ]
 versions = ["1.12", "1.13"]
 os = ["self-hosted"]
@@ -106,8 +106,8 @@ group = "Potts_fields"
 in_all = false
 tags = [
     "field_vocabulary", "fields", "fields_boundary", "fields_coarse", "fields_components",
-    "fields_couple", "fields_couple_b6", "fields_couple_e", "fields_couple_e8", "fields_couple_e11",
-    "fields_couple_w2", "fields_implicit", "fields_jiang", "fields_report", "fields_short",
+    "fields_couple", "fields_couple_checks", "fields_couple_bindings", "fields_couple_names", "fields_couple_arrays_faces",
+    "fields_couple_inputs", "fields_implicit", "fields_jiang", "fields_report", "fields_short",
     "fields_steppers",
 ]
 exclude_tags = ["qa", "gpu", "gpu_only", "multithreaded"]
@@ -122,7 +122,7 @@ group = "Potts_symbolic"
 in_all = false
 tags = [
     "adaptive", "algebraic", "draws_folds", "edge_updates", "initialization", "kind_classes",
-    "mtk_native", "solvers", "sweep_spec", "symbolic", "units", "wlite",
+    "mtk_native", "solvers", "sweep_spec", "symbolic", "units", "system_container",
 ]
 exclude_tags = ["qa", "gpu", "gpu_only", "multithreaded"]
 versions = ["1.12", "1.13"]

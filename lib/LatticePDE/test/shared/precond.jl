@@ -1,4 +1,4 @@
-# Definitions of precond_tests.jl that other test files use (moved here by TS1b).
+# Definitions of precond_tests.jl that other test files use.
 using LinearAlgebra: norm
 using SparseArrays: SparseArrays
 using LinearSolve: LinearSolve, KrylovJL_GMRES

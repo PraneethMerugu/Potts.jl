@@ -1,4 +1,4 @@
-# Layouts (P6.3c, D-141): Eden, RandomPoints(replace = true), shortfall and Splits.
+# Layouts (D-141): Eden, RandomPoints(replace = true), shortfall and Splits.
 
 @testitem "layouts: Eden fills its connected component, and only it" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
     using Potts.Layouts

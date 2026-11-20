@@ -12,7 +12,7 @@
 
 The stored energy φ of Eq. (8) (04b p.5823; spec 04 §2.8),
 φ ≡ Σ_{i,j} θ (1 − δ_{σ_i, σ_j}): `θ` times the number of unordered neighbor pairs
-`{i, j}` under `neighborhood` with `σ_i ≠ σ_j`, each pair counted once (D-187 reading (a):
+`{i, j}` under `neighborhood` with `σ_i ≠ σ_j`, each pair counted once (reading (a):
 only φ/φ(0) is plotted, so the factor 2 of the ordered sum cancels). The default shell is the
 paper's fourth-nearest neighborhood (04b p.5822; spec §8). Pairs wrap on `Periodic()` axes;
 a pair that leaves a `Closed()` axis, or the lattice domain, does not exist. Every owner
@@ -81,7 +81,7 @@ The number of sides `n` of each bubble `1:maximum(σ)` (04b p.5823: a bubble's s
 distinct neighbors; spec 04 §2.8): `length.(cell_graph(σ, lattice; neighborhood))`. Edge
 sharing (`VonNeumann(1)`) is the default; `Moore(1)` also counts corner-only contacts, which
 inflates n (spec §2.8, topology audit 2026-10-01). Contacts wrap on `Periodic()` axes; a
-`Closed()` wall is not a side (D-187 reading (b)), and neither is the medium.
+`Closed()` wall is not a side, and neither is the medium.
 
 !!! warning
 
@@ -146,7 +146,7 @@ end
 ⟨n⟩, μ2(n), ⟨a⟩ and μ2(a) (04b p.5823; spec 04 §2.8, [`central_moment`](@ref)) over the
 bubbles of `σ`: the ids in `1:maximum(σ)` that own at least one site (an id with no site is
 not a bubble). `n` is from [`side_counts`](@ref) with `neighborhood`, `a` is the bubble's
-site count (areas stay in sites; any rescaling of μ2(a) is a calibration, D-187).
+site count (areas stay in sites; any rescaling of μ2(a) is a calibration).
 """
 function topology_moments(σ::AbstractArray{<:Integer}, lat::Lattice; neighborhood = VonNeumann(1))
     n = side_counts(σ, lat; neighborhood)

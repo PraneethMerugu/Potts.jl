@@ -1,12 +1,12 @@
-# Tests of the paired A/B harness and the gate (P6.0bb, D-157): machine table and pinning
+# Tests of the paired A/B harness and the gate (D-157): machine table and pinning
 # helpers, Tuple type cache seeding, `ab.jl` arguments, round rotation, statistics,
 # intervals and verdicts (with per-round stub timings), skips, disturbed runs, the
 # in-process form, the same-commit control checkouts, `gate.jl` with a mocked `measure`, and
 # the per-machine `baseline.toml`.
 #
-#     julia --project=benchmark benchmark/test/p6_0bb_ab.jl
+#     julia --project=benchmark benchmark/test/ab_harness.jl
 #
-# No timing and no GPU. Like the frozen P6.0s test, `ab.jl` runs in a sandbox whose lock
+# No timing and no GPU. Like the lock test (lock_and_gpu_timing.jl), `ab.jl` runs in a sandbox whose lock
 # prefix points into a private directory, with a stub timed child (`--child`), so it never
 # takes the real machine lock.
 using Test, TOML
@@ -22,14 +22,18 @@ function sandbox()
     root = mktempdir(; cleanup = true)
     lockroot = joinpath(root, "lockroot")
     mkpath(lockroot)
-    for (src, dst) in ((joinpath(REPO, "tools"), joinpath(root, "tools")),
-        (joinpath(REPO, "benchmark"), joinpath(root, "benchmark")))
+    for (src, dst) in (
+            (joinpath(REPO, "tools"), joinpath(root, "tools")),
+            (joinpath(REPO, "benchmark"), joinpath(root, "benchmark")),
+        )
         mkpath(dst)
         for f in readdir(src)
             p = joinpath(src, f)
             isfile(p) || continue
-            write(joinpath(dst, f),
-                replace(read(p, String), PREFIX => joinpath(lockroot, "potts-exclusive")))
+            write(
+                joinpath(dst, f),
+                replace(read(p, String), PREFIX => joinpath(lockroot, "potts-exclusive"))
+            )
             chmod(joinpath(dst, f), filemode(p) | 0o700)
         end
     end
@@ -153,11 +157,11 @@ function run_ab(sb, sd, args)
     p = run(pipeline(ignorestatus(cmd); stdout = out, stderr = out))
     log = joinpath(sd, "log")
     return p.exitcode, String(take!(out)),
-    isfile(log) ? split.(readlines(log)) : Vector{SubString{String}}[]
+        isfile(log) ? split.(readlines(log)) : Vector{SubString{String}}[]
 end
 setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
 
-@testset "P6.0bb paired A/B harness" begin
+@testset "paired A/B harness" begin
     @testset "machine table" begin
         @test BenchMachine.cpulist("0-11,16-27") == [0:11; 16:27]
         @test BenchMachine.cpulist("12") == [12]
@@ -169,8 +173,10 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
                 # with a user service manager (a login or SSH session) the cap applies;
                 # without one (a CI job) it is dropped, tested below
                 @test BenchMachine.mem_cmd(m) ==
-                      (BenchMachine.user_scope_works() ?
-                       `systemd-run --user --scope -q -p MemoryMax=8G` : ``)
+                    (
+                    BenchMachine.user_scope_works() ?
+                        `systemd-run --user --scope -q -p MemoryMax=8G` : ``
+                )
                 withenv(() -> (@test BenchMachine.mem_cmd(m) == ``), "POTTS_BENCH_MEMMAX" => "0")
             end
             withenv(() -> (@test BenchMachine.bench_cpu(m) == 14), "POTTS_BENCH_CPU" => "14")
@@ -182,11 +188,11 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
             @test BenchMachine.mem_cmd(m; works = () -> false) == ``
             if Sys.islinux() && Sys.which("systemd-run") !== nothing
                 @test BenchMachine.mem_cmd(m; works = () -> true) ==
-                      `systemd-run --user --scope -q -p MemoryMax=8G`
+                    `systemd-run --user --scope -q -p MemoryMax=8G`
                 # the real probe, in a process without a user bus, as under the runner
                 mj = joinpath(REPO, "benchmark", "machine.jl")
                 code = "include($(repr(mj))); m = BenchMachine.machine(); " *
-                       "print(BenchMachine.user_scope_works(), \" \", isempty(BenchMachine.mem_cmd(m).exec))"
+                    "print(BenchMachine.user_scope_works(), \" \", isempty(BenchMachine.mem_cmd(m).exec))"
                 env = filter(p -> !(first(p) in ("XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS")), ENV)
                 env["POTTS_MACHINE"] = "nucbox"
                 out = read(setenv(`$(jl()) -e $code`, env), String)
@@ -197,9 +203,16 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
                 write(joinpath(stubco, "benchmark", "Project.toml"), "")
                 write(joinpath(stubco, "benchmark", "ab_one.jl"), "println(\"ABR c.sequential 1.0 1.0 60 0 0 0\")")
                 sbx = sandbox()
-                p = run(pipeline(ignorestatus(setenv(
-                        `$(jl()) $(joinpath(sbx, "benchmark", "ab.jl")) $stubco $stubco c cpu 1 --alg=sequential --no-control --no-warm --child=benchmark/ab_one.jl`,
-                        env; dir = sbx)); stdout = devnull, stderr = devnull))
+                p = run(
+                    pipeline(
+                        ignorestatus(
+                            setenv(
+                                `$(jl()) $(joinpath(sbx, "benchmark", "ab.jl")) $stubco $stubco c cpu 1 --alg=sequential --no-control --no-warm --child=benchmark/ab_one.jl`,
+                                env; dir = sbx
+                            )
+                        ); stdout = devnull, stderr = devnull
+                    )
+                )
                 @test success(p)
             end
         end
@@ -207,10 +220,10 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
             m = BenchMachine.machine()
             @test m.key == "elsewhere" && isempty(m.bench) && !BenchMachine.pins(m)
             @test BenchMachine.pin_cmd(m, 12) == `` && BenchMachine.work_cmd(m) == `` &&
-                  BenchMachine.mem_cmd(m) == ``
+                BenchMachine.mem_cmd(m) == ``
         end
         @test BenchMachine.slug("AMD RYZEN AI MAX+ 395 w/ Radeon 8060S") ==
-              "amd-ryzen-ai-max-395-w-radeon-8060s"
+            "amd-ryzen-ai-max-395-w-radeon-8060s"
         @test BenchMachine.gpu_users() isa Vector{Int}
         @test BenchMachine.busy_reasons(; ci = false) == String[]
         @test BenchMachine.wait_idle(; ci = false, gpu = false)          # nothing to wait for
@@ -268,24 +281,30 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
             end
         end
         # disturbances with injected CPU load and topology
-        dist(load; reasons = () -> String[]) = BenchMachine.disturbances(12, 12:15;
+        dist(load; reasons = () -> String[]) = BenchMachine.disturbances(
+            12, 12:15;
             busy = cpus -> Dict(k => get(load, k, 0.0) for k in cpus), siblings = sibs,
-            linux = true, reasons)
+            linux = true, reasons
+        )
         @test dist(Dict()) == String[]
-        @test dist(Dict(28 => 0.10)) == ["SMT sibling cpu28 10% busy"]
+        @test dist(Dict(28 => 0.1)) == ["SMT sibling cpu28 10% busy"]
         @test dist(Dict(28 => 0.03)) == String[]                     # below 5 %: idle enough
-        @test dist(Dict(14 => 0.90, 30 => 0.40)) == ["reserved cpu14 90% busy"]
-        @test dist(Dict(13 => 0.30)) == String[]                     # below 50 %
+        @test dist(Dict(14 => 0.9, 30 => 0.4)) == ["reserved cpu14 90% busy"]
+        @test dist(Dict(13 => 0.3)) == String[]                     # below 50 %
         @test dist(Dict(); reasons = () -> ["a CI job (Runner.Worker) is running"]) ==
-              ["a CI job (Runner.Worker) is running"]
-        @test BenchMachine.disturbances(12, 12:15; linux = false,
-            reasons = () -> String[], busy = _ -> error("not called")) == String[]
+            ["a CI job (Runner.Worker) is running"]
+        @test BenchMachine.disturbances(
+            12, 12:15; linux = false,
+            reasons = () -> String[], busy = _ -> error("not called")
+        ) == String[]
     end
 
     @testset "Tuple type cache seeding is equal whatever the session made before" begin
         mj = joinpath(REPO, "benchmark", "machine.jl")
-        mk(pre,
-            body) = "include($(repr(mj))); for i in 1:$pre; Core.apply_type(Tuple, Val{i}, Val{:other}); end; $body"
+        mk(
+            pre,
+            body
+        ) = "include($(repr(mj))); for i in 1:$pre; Core.apply_type(Tuple, Val{i}, Val{:other}); end; $body"
         probe(pre) = split(readchomp(`$(jl()) -e $(mk(pre, "s = BenchMachine.seed_type_cache!(); println(s.entries, \" \", s.capacity)"))`))
         a, b = probe(0), probe(25_000)                       # the second session made 25k more types
         @test parse(Int, a[2]) == parse(Int, b[2])           # same table size
@@ -301,7 +320,7 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
         @test_throws ErrorException parse_ab(["b", "c", "gg"])        # the 3-argument form errors
         o = withenv(() -> parse_ab(["b", "c", "all", "cpu"]), "POTTS_MACHINE" => "nucbox")
         @test o.variants == "sequential,checkerboard" && o.rounds == 16 && o.control &&
-              o.seed == BenchMachine.SEED_ENTRIES
+            o.seed == BenchMachine.SEED_ENTRIES
         @test o.tolerance == 0.05 && o.warm && o.wait == "all" && o.maxwait == 4 * 3600
         @test o.pin == (Sys.islinux() && Sys.which("taskset") !== nothing)
         @test o.stat == "paired" && parse_ab(["b", "c", "gg", "metal"]).stat == "fastest"
@@ -314,14 +333,17 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
         @test parse_ab(["b", "c", "gg", "metal", "3"]).rounds == 3
         @test parse_ab(["b", "c", "gg", "cpu", "--stat=fastest"]).stat == "fastest"
         @test parse_ab(["b", "c", "gg", "cpu", "--wait=gpu", "--max-wait=0.5"]).maxwait ==
-              1800
+            1800
         @test_throws ErrorException parse_ab(["b", "c", "gg", "cpu", "--stat=mean"])
         @test_throws ErrorException parse_ab(["b", "c", "gg", "cpu", "--wait=sometimes"])
-        o = parse_ab([
-            "b", "c", "gg", "cpu", "--alg=sequential", "--no-control", "--no-seed", "--rounds=3"])
+        o = parse_ab(
+            [
+                "b", "c", "gg", "cpu", "--alg=sequential", "--no-control", "--no-seed", "--rounds=3",
+            ]
+        )
         @test o.backend == "cpu" && o.variants == "sequential" && !o.control &&
-              o.seed == 0 &&
-              o.rounds == 3
+            o.seed == 0 &&
+            o.rounds == 3
         o = parse_ab(["b", "c", "gg", "rocm", "8", "--no-pin"])
         @test o.variants == "rocm" && o.rounds == 8 && !o.pin
         o = parse_ab(["--inprocess", "d", "v.jl", "cpu", "--alg=checkerboard"])
@@ -364,53 +386,71 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
         # (factor lists per side, expected exit code, extra args)
         scen = [
             (Dict(), 0, String[]),                                   # all equal: pass
-            (Dict("cand" => (1.10,), "cand-abctl" => (1.10,)), 1, String[]),          # 10 % slower
+            (Dict("cand" => (1.1,), "cand-abctl" => (1.1,)), 1, String[]),          # 10 % slower
             # an offset control (3 %) narrows the pass margin to 1.02: 1.03 is unreadable
-            (Dict("base-abctl" => (1.03,), "cand" => (1.03,), "cand-abctl" => (1.03,)),
+            (
+                Dict("base-abctl" => (1.03,), "cand" => (1.03,), "cand-abctl" => (1.03,)),
                 2,
-                String[]),
+                String[],
+            ),
             # probe B: controls offset by 1 %, candidate 1.03 <= margin 1.04: pass
-            (Dict("base-abctl" => (1.01,), "cand" => (1.03,), "cand-abctl" => (1.0403,)),
+            (
+                Dict("base-abctl" => (1.01,), "cand" => (1.03,), "cand-abctl" => (1.0403,)),
                 0,
-                String[]),
+                String[],
+            ),
             # probe A: a noisy control (point 1.04, its interval containing 1) and a
             # candidate at 1.048, inside 1 + tolerance but above the margin 1.01: unreadable
             (
-                Dict("base-abctl" => (0.95, 0.96, 1.03, 1.04, 1.04, 1.05, 1.10, 1.10),
-                    "cand" => (1.048,), "cand-abctl" => (1.048,)),
+                Dict(
+                    "base-abctl" => (0.95, 0.96, 1.03, 1.04, 1.04, 1.05, 1.1, 1.1),
+                    "cand" => (1.048,), "cand-abctl" => (1.048,)
+                ),
                 2,
-                ["--rounds=8"]),
+                ["--rounds=8"],
+            ),
             # drift: the base's first run is fast, so paired (1.0) and fastest (1.1) differ
             (
-                Dict("base" => (1.0, 1.1, 1.1, 1.1), "base-abctl" => (1.0, 1.1, 1.1, 1.1),
-                    "cand" => (1.1,), "cand-abctl" => (1.1,)),
+                Dict(
+                    "base" => (1.0, 1.1, 1.1, 1.1), "base-abctl" => (1.0, 1.1, 1.1, 1.1),
+                    "cand" => (1.1,), "cand-abctl" => (1.1,)
+                ),
                 0,
-                String[]),
+                String[],
+            ),
             (
-                Dict("base" => (1.0, 1.1, 1.1, 1.1), "base-abctl" => (1.0, 1.1, 1.1, 1.1),
-                    "cand" => (1.1,), "cand-abctl" => (1.1,)),
+                Dict(
+                    "base" => (1.0, 1.1, 1.1, 1.1), "base-abctl" => (1.0, 1.1, 1.1, 1.1),
+                    "cand" => (1.1,), "cand-abctl" => (1.1,)
+                ),
                 1,
-                ["--stat=fastest"])
+                ["--stat=fastest"],
+            ),
         ]
         for (fs, code, extra) in scen
             root, b, c, sd = checkouts()
             for (n, f) in fs
                 setf(sd, n, f...)
             end
-            st, out, ev = run_ab(sb, sd,
-                [b, c, "gg,wa", "cpu", "--rounds=4", common..., extra...])
+            st, out, ev = run_ab(
+                sb, sd,
+                [b, c, "gg,wa", "cpu", "--rounds=4", common..., extra...]
+            )
             @test st == code
             code == 0 && @test occursin("verdict (paired): pass", out)
             code == 2 && @test occursin("UNREADABLE", out)
             @test occursin("pass margin: candidate/base <=", out)
             @test isdir(b * "-abctl") && isdir(c * "-abctl")
             @test length(ev) == 4 * ("--rounds=8" in extra ? 8 : 4)    # 4 sides × rounds
-            @test first.(ev[1:8]) == ["base", "cand", "base-abctl", "cand-abctl",
-                "cand", "base-abctl", "cand-abctl", "base"]
+            @test first.(ev[1:8]) == [
+                "base", "cand", "base-abctl", "cand-abctl",
+                "cand", "base-abctl", "cand-abctl", "base",
+            ]
             @test all(
                 e -> "--seed=$(BenchMachine.SEED_ENTRIES)" in e && "threads=1" in e &&
-                     "--wait=none" in e && any(startswith("--deadline="), e),
-                ev)
+                    "--wait=none" in e && any(startswith("--deadline="), e),
+                ev
+            )
             @test occursin("gg.sequential", out) && occursin("wa.sequential", out)
             @test occursin("resolution: largest control deviation", out)
             @test occursin("harness: ", out)
@@ -445,10 +485,13 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
         st, out, _ = run_ab(sb, sd, [b, c, "gg", "cuda", common...])
         @test st == 4 && occursin("harness error", out)
         root, b, c, sd = checkouts()
-        st, out, ev = run_ab(sb, sd, [
-            b, c, "gg", "cpu", "--rounds=4", "--no-control", common...])
+        st, out, ev = run_ab(
+            sb, sd, [
+                b, c, "gg", "cpu", "--rounds=4", "--no-control", common...,
+            ]
+        )
         @test st == 0 &&
-              first.(ev) == ["base", "cand", "cand", "base", "base", "cand", "cand", "base"]
+            first.(ev) == ["base", "cand", "cand", "base", "base", "cand", "cand", "base"]
         @test !isdir(b * "-abctl") && !occursin("resolution:", out)
         root, b, c, sd = checkouts()
         write(joinpath(c, "a.txt"), "dirty")                         # a control needs a clean checkout
@@ -464,11 +507,14 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
         st, out, ev = run_ab(sb, sd, ["--inprocess", b, vf, "cpu", "--rounds=4", common...])
         @test st == 1 && occursin("REGRESSION", out)
         @test length(ev) == 1 && any(startswith("--variants="), ev[1]) &&
-              !("--no-control" in ev[1])
+            !("--no-control" in ev[1])
         @test !isdir(b * "-abctl")                                   # in process: no control checkout
         root, b, c, sd = checkouts()
-        st, out, ev = run_ab(sb, sd, [
-            "--inprocess", b, vf, "cpu", "--rounds=4", "--no-control", common...])
+        st, out, ev = run_ab(
+            sb, sd, [
+                "--inprocess", b, vf, "cpu", "--rounds=4", "--no-control", common...,
+            ]
+        )
         @test st == 0 && "--no-control" in ev[1] && !occursin("base-ctl", out)
     end
 
@@ -633,7 +679,8 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
 
     @testset "ab_one.jl with a mocked gate" begin
         sb2 = sandbox()
-        write(joinpath(sb2, "benchmark", "gate.jl"), """
+        write(
+            joinpath(sb2, "benchmark", "gate.jl"), """
             using BenchmarkTools
             const DEVICE = ""
             device_backend() = nothing
@@ -645,29 +692,37 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
             cases(T) = ["fake" => () -> (; u0 = (; σ = zeros(T, 10)))]
             fresh_integrator(prob, alg, backend) = nothing
             timed_step!(i, backend) = (t = time_ns(); while time_ns() - t < 500_000 end; nothing)    # busy wait: sleep allocates a Timer and yields
-            """)
+            """
+        )
         one = joinpath(sb2, "benchmark", "ab_one.jl")
         proj = joinpath(REPO, "benchmark")
         run1(args...) = read(ignorestatus(`$(jl()) --project=$proj $one $args`), String)
-        out = run1("fake", "sequential,checkerboard", "--samples=3", "--seconds=1",
-            "--wait=none", "--seed=0")
+        out = run1(
+            "fake", "sequential,checkerboard", "--samples=3", "--seconds=1",
+            "--wait=none", "--seed=0"
+        )
         l = filter(!isempty, split(out, '\n'))
         @test count(startswith("ABR fake.sequential "), l) == 1
         @test count(startswith("ABR fake.checkerboard "), l) == 1
         @test count(startswith("TC "), l) == 2 && !any(startswith("DISTURBED"), l)
         r = split(only(filter(startswith("ABR fake.sequential "), l)))
         @test length(r) == 8 && r[7] == "0"           # ABR name med min k maxgc allocs memory
-        @test 2e3 < parse(Float64, r[3]) < 1e6        # ~0.5 ms per MCS over 10 sites, in ns
+        @test 2.0e3 < parse(Float64, r[3]) < 1.0e6        # ~0.5 ms per MCS over 10 sites, in ns
         out = run1(
-            "fake", "sequential", "--samples=3", "--seconds=1", "--wait=gpu", "--seed=0")
+            "fake", "sequential", "--samples=3", "--seconds=1", "--wait=gpu", "--seed=0"
+        )
         @test occursin("ABR fake.sequential", out)    # nothing to wait for without a device
         out = run1(
-            "all", "sequential", "--samples=3", "--seconds=1", "--wait=none", "--seed=0")
+            "all", "sequential", "--samples=3", "--seconds=1", "--wait=none", "--seed=0"
+        )
         @test occursin("ABR fake.sequential", out)
         buf = IOBuffer()
-        p = run(pipeline(
-            ignorestatus(`$(jl()) --project=$proj $one nope sequential --wait=none --seed=0`);
-            stdout = buf, stderr = buf))
+        p = run(
+            pipeline(
+                ignorestatus(`$(jl()) --project=$proj $one nope sequential --wait=none --seed=0`);
+                stdout = buf, stderr = buf
+            )
+        )
         @test !success(p) && occursin("unknown case", String(take!(buf)))
         # --prepare READY/GO/DONE handshake
         inp = Pipe()
@@ -696,15 +751,18 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
     @testset "gate.jl with a mocked measure" begin
         G = Core.eval(Main, :(module GateMock end))
         Base.include(G, joinpath(REPO, "benchmark", "gate.jl"))
-        Core.eval(G, quote
-            const MOCK = Ref{Any}(nothing)
-            cases(T) = ["c1" => () -> 1, "c2" => () -> 2]
-            measure(make, alg; backend = nothing) = MOCK[](make(), nameof(typeof(alg)))
-        end)
+        Core.eval(
+            G, quote
+                const MOCK = Ref{Any}(nothing)
+                cases(T) = ["c1" => () -> 1, "c2" => () -> 2]
+                measure(make, alg; backend = nothing) = MOCK[](make(), nameof(typeof(alg)))
+            end
+        )
         withenv("POTTS_MACHINE" => "test-machine") do
             dir = mktempdir(; cleanup = true)
             bl = joinpath(dir, "baseline.toml")
-            write(bl, """
+            write(
+                bl, """
                 [other.cpu]
                 "c1.sequential" = 99.0
                 [test-machine.metal]
@@ -714,7 +772,8 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
                 "c2.sequential" = 10.0
                 "c1.checkerboard" = 10.0
                 "c2.checkerboard" = 10.0
-                """)
+                """
+            )
             G.MOCK[] = (c, a) -> (10.0, 0)
             @test G.main(["--no-wait"]; baseline = bl) == 0
             G.MOCK[] = (c, a) -> (c == 2 && a == :SequentialCPM ? 13.0 : 10.0, 0)   # 30 % slower
@@ -728,9 +787,11 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
             @test t["other"]["cpu"]["c1.sequential"] == 99.0                       # other machines kept
             @test t["test-machine"]["metal"]["c1.checkerboard"] == 5.0              # other backends kept
             @test t["test-machine"]["cpu"] ==
-                  Dict("c1.sequential" => 7.0, "c2.sequential" => 8.0,
+                Dict(
+                "c1.sequential" => 7.0, "c2.sequential" => 8.0,
                 "c1.checkerboard" => 7.0, "c2.checkerboard" => 8.0,
-                "c1.boundary" => 7.0, "c2.boundary" => 8.0)                          # D-177's row
+                "c1.boundary" => 7.0, "c2.boundary" => 8.0
+            )                          # D-177's row
             @test t["test-machine"]["meta"]["threads"] == 1
             @test startswith(read(bl, String), "# Informational per-machine baselines")
         end

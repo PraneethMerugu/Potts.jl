@@ -1,11 +1,11 @@
-# Spatial operators across `Coarse` grids (F3-22; F3 design §5). A spatial operator reads its
+# Spatial operators across `Coarse` grids. A spatial operator reads its
 # operand on the operand's own grid, so one whose operand lives on another grid than the row
 # (`D(u) ~ 0.5 laplacian(c)` with `c` on `Coarse(4)`, or the reverse) is written as the aux field of
 # the manual route: `X ~ laplacian(c)` on the grid of `c`, and the row reads `X` as it reads any field
 # of another grid:
 # - a coarse operand in a fine row: the coarse operator read at the node of the site's block;
 # - a fine operand in a coarse row: the block mean of the fine operator, the net flux through
-#   the faces of the block over its volume (the fold of F3-16).
+#   the faces of the block over its volume (the fold of `Coarse` fields).
 # The pass runs before the equations are classified, so a hoisted term is an aux row for the
 # rest of the lowering, the solvers, and callers.
 
@@ -104,7 +104,7 @@ end
 The fields of `ops` (operations, `c`) that a spatial operator in the right sides of `eqs` reads
 as its operand (`laplacian(c)`, `DivKGrad(K, c)`, `Advect(v, c)`, a raw flux): its value past a face
 needs the field's face conditions. A group that reads another group's field so marks it
-`LatticeCutField` (F3-22 review r1).
+`LatticeCutField`.
 """
 function operand_reads(eqs, ops)
     out = Any[]

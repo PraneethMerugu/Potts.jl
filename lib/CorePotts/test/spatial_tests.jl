@@ -1,4 +1,4 @@
-# Frozen sites, spatial queries, contact graph and per-face field BCs (ROADMAP M2.7).
+# Frozen sites, spatial queries, contact graph and per-face field BCs.
 
 @testsetup module CP_spatial
 using Test, CorePotts, StaticArrays, Statistics, Random

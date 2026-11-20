@@ -1,4 +1,4 @@
-# Definitions of groups_tests.jl that other test files use (moved here by TS1b).
+# Definitions of groups_tests.jl that other test files use.
 using LatticeFields: Problems as LFP
 using SciMLBase: SciMLBase, remake, reinit!, ReturnCode
 using SymbolicIndexingInterface: setp
@@ -31,7 +31,7 @@ gsys(; T = 0.1) = PDESystem(
     [gc(0, x, y) ~ x * y, go(0, x, y) ~ 1.0 + x, gc(t, 0, y) ~ gc(t, 1, y), gc(t, x, 0) ~ gc(t, x, 1),
      go(t, 0, y) ~ go(t, 1, y), go(t, x, 0) ~ go(t, x, 1)],
     [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [gce, goe], [ga, gb]; name = :g)
-# (F4-01: the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
+# (the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
 gown(sys; n = 8) = LFP.field_problem(discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64)))
 gwarm(ig) = (step!(ig); step!(ig); @allocated step!(ig))      # (a function barrier)
 gerr(f) = try
@@ -67,13 +67,13 @@ function g_ftcs(c0, D, h, dt, n; periodic, rate = (c, i, j) -> 0.0, lower = noth
     return c
 end
 
-# F3-22 review r1: a group that reads another group's field through a spatial operator (`laplacian(o)` in
+# A group that reads another group's field through a spatial operator (`laplacian(o)` in
 # `c`'s rate) keeps that field's face conditions in the cut, so the input `o` has the face rules
 # of the whole system (here a Dirichlet face on x = 0). Base 9afaac05: IRError "field `go` has no
 # boundary rule on axis 1".
 using LatticeFields.IR: FaceRule as GFaceRule
 
-# F3-02 (F2 design §2.2): the group's slots are specs, not names. A parameter slot holds its
+# The group's slots are specs, not names. A parameter slot holds its
 # default and role (a computed default: `:computed` with its expression), a table its values, an
 # input its element type, declared bounds, default and whether a caller fills it at every
 # step (`filled`: coupled CPM reads; none standalone). `string` of each is its key, so the
@@ -81,14 +81,14 @@ using LatticeFields.IR: FaceRule as GFaceRule
 @parameters gk = 2ga
 @variables gin(..) [input = true, bounds = (0.0, 2.0)] gki(..)::Int32 [input = true]
 
-# F3-02 review r1 S6: an aux field read at neighbor sites by a rate (`K ~ k c`, `D(c) ~ laplacian(K)`)
+# An aux field read at neighbor sites by a rate (`K ~ k c`, `D(c) ~ laplacian(K)`)
 # has no value beyond a closed face: refused in the equation's words with the route (`k laplacian(c)`),
 # which builds and gives the same run on a periodic box. A face condition on an aux field is
 # refused naming it. Base (8f658abd): "IRError: field `K` has no boundary rule on axis 1 side -";
-# a face on `K`: "face conditions apply to rate fields (a map's offset …)" (reviewer probe u3_b §5b).
+# a face on `K`: "face conditions apply to rate fields (a map's offset …)".
 @variables gsc(..) gsK(..)
 
-# F3-02 (F3 design §3.11): an aux field that carries one state into another's rate (`K ~ c`,
+# An aux field that carries one state into another's rate (`K ~ c`,
 # `D(a) ~ -k K`, `D(c) ~ k a`) is a one-buffer field read new inside the group's Jacobi step:
 # its kernel runs first. One group equals the hand-stepped Jacobi step; two groups the split
 # (a's group, holding c, then c's group reading the new a). Base (eb2efb60): `discretize`
@@ -96,7 +96,7 @@ using LatticeFields.IR: FaceRule as GFaceRule
 @parameters gkl = 1.0
 @variables gla(..) glc(..) glK(..)
 
-# F3-04 (F3 design §3.3, §3.4): the status word and its readers. A stub with a solve (`WStub`)
+# The status word and its readers. A stub with a solve (`WStub`)
 # steps as Euler and writes into its cache's word what an implicit solver would: a solve per
 # window, a linear budget hit per window when `need > budget`, and code `code` from window `at`
 # (sticky, with the window and a cause bit). B reads the word on the host after every step,
@@ -128,7 +128,7 @@ function LFP.step_retcode!(c::WStubCache, rt)
     c.a.need > c.a.budget && wbump!(c.word, LFP.STATUS_BUDGET, 1)
     if c.a.code > 0 && c.steps == c.a.at
         wset!(c.word, LFP.STATUS_CODE, c.a.code)
-        # the window, as a solver writes it: the runtime's window count (review r1 S3)
+        # the window, as a solver writes it: the runtime's window count
         c.a.code >= 2 && (wset!(c.word, LFP.STATUS_WINDOW, rt.totals.windows); wset!(c.word, LFP.STATUS_CAUSE, 1))
     end
     return ReturnCode.Success

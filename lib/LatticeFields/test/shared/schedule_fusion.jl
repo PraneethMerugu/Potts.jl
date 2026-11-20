@@ -1,10 +1,10 @@
-# Definitions of schedule/fusion_tests.jl that other test files use (moved here by TS1b).
+# Definitions of schedule/fusion_tests.jl that other test files use.
 using LatticeFields.Schedule: traffic, modeled_time, working_set, merge_kernels, step_order,
                               fusion_report, CostModel
 
 """
 K masked-Helmholtz smoother components sharing one byte mask (6 streams each: u stencil,
-u_prev, b, uⁿ, mask, out), the launch-bound and DRAM test family of P3-gates §3.
+u_prev, b, uⁿ, mask, out), the launch-bound and DRAM test family of the field-kernel benchmarks.
 """
 function smoother(dims, K)
     N = length(dims)

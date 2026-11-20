@@ -4,7 +4,7 @@
 # filled by every `hipfunction`, including compile-only launches) is rebuilt as a GPUCompiler
 # job with the device's default config (what a KA launch uses) and its optimized LLVM module
 # is scanned for the LLVM type `double`. Metal refuses such kernels itself; ROCm would run
-# them, so this stands in for Metal while Metal verification is deferred (P6.0bi).
+# them, so this stands in for Metal while Metal verification is deferred.
 #
 # Negative control in the same route: two Float64-touching kernels and their Float32 twin
 # are launched first, so they sit in the same cache; the scan must flag exactly the
@@ -64,7 +64,7 @@ end
 # the deliberate controls: this file's and the hook-based ones of test/device_ir_tests.jl (Potts)
 iscontrol(sig) = occursin("DeviceIRScan.gpu_scan_", sig) || occursin(r"DeviceIR(?:#\d+\")?\.gpu_devir_", sig)
 
-# The D-157 carve-out (F3 design §3.8, R-F3c): kernels whose Float64 a user declared (a group's
+# The D-157 carve-out: kernels whose Float64 a user declared (a group's
 # `compute_type` or `solver_type`, a field's `lattice_storage` of Float64) are registered in
 # LatticeFields' Exec registry, and the scan skips exactly those
 function _exec()

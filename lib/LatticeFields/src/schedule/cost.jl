@@ -1,11 +1,11 @@
-# The fusion cost model (v3 §4.3; P3-gates x2, x3). Not a shared-reads rule and no stream cap:
+# The fusion cost model. Not a shared-reads rule and no stream cap:
 #   t = max(bytes / (η(streams, ws) · BW(ws)), flops / F) + launch_dep(arrays)
 # Calibration values live in `CostModel` (DECISIONS item; the crossover between 128³ and 256³
 # is not measured finely). `ws` is the working set of the whole candidate sequence, the same
 # for both arms, so fused and split are compared in one regime.
 
 """
-Measured η tables as `(streams, η)` points (fused, DRAM, P3-gates §2–§3).
+Measured η tables as `(streams, η)` points (fused, DRAM; measured on the field-kernel benchmarks).
 """
 const ETA_GENERATOR = Dict(2 => [(2, 0.99), (8, 0.91), (16, 0.85), (32, 0.80), (64, 0.64)],
     3 => [(2, 0.97), (4, 0.87), (8, 0.87), (16, 0.84)])   # monotone envelope (8: 0.92 measured)
@@ -26,7 +26,7 @@ Base.@kwdef struct CostModel
     realistic_reads::Float64 = 0.75   # read fraction from which the realistic table applies
     # Hard limits (blockers, not costs): kernel arguments and the register prefilter. Below
     # 256 MiB η = 1, so without them the model would fuse any number of components.
-    max_arrays::Int = 32              # array arguments per kernel (P3-gates measured up to 26)
+    max_arrays::Int = 32              # array arguments per kernel (the benchmarks measured up to 26)
     arg_bytes_per_array::Int = 48     # device array descriptor (pointer, dims, length)
     max_arg_bytes::Int = 4096         # kernel-argument budget (4 KiB on ROCm and Metal)
     max_live::Int = 96                # live-value estimate; x2/x3 kernels had VGPR ≤ 78

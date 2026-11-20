@@ -1,5 +1,5 @@
 #     julia --project=lib/PottsModels/test -t <threads> benchmark/kinetics/act.jl <runs> [<nmcs> <out>]
-# Act (P6.0bl): one Act cell (Niculescu et al. 2015; `WortelAct`, 200² torus, amoeboid
+# Act: one Act cell (Niculescu et al. 2015; `WortelAct`, 200² torus, amoeboid
 # defaults) at several λ_act, CheckerboardCPM against SequentialCPM. Sultan et al. (arXiv
 # 2312.09317, Fig. 5B) found the Act cell's persistence the most sensitive to the
 # checkerboard's update order. Observables per run (centroid every MCS, after BURN):
@@ -12,7 +12,7 @@ using Potts, PottsModels, Random, Printf
 using Statistics: mean, std, quantile
 const NRUN = parse(Int, ARGS[1])
 const NMCS = parse(Int, get(ARGS, 2, "1500"))
-const OUT = expanduser(get(ARGS, 3, "~/lpwork/cbk/act-2026-11-05.tsv"))
+const OUT = expanduser(get(ARGS, 3, "kinetics_act.tsv"))
 const BURN, LAG, L = 100, 10, 200
 const LAMBDAS = (100.0, 200.0, 300.0)
 const ALGS = (("seq", SequentialCPM(; proposal = Moore(1))), ("cb", CheckerboardCPM(; proposal = Moore(1), threads = false)))

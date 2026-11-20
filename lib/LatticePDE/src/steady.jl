@@ -1,4 +1,4 @@
-# Steady rows and time-free systems (F3-12b; F3 design §3.5). A steady equation `0 ~ rhs` is
+# Steady rows and time-free systems. A steady equation `0 ~ rhs` is
 # solved for the field it determines: a state field with no other equation that the row
 # reads, preferably under a spatial operator (`laplacian`, `DivKGrad`, `Advect`, `Differential`). The
 # pass rewrites each such row as the rate `D(c) ~ rhs` of its field, so the rest of the lowering
@@ -97,7 +97,7 @@ function steady_rows(sys::PDESystem)
     Dt = Differential(get_ivs(sys)[1])
     eqs = Equation[eq for eq in get_eqs(sys)]
     for (q, i) in enumerate(rows)
-        # (the sign that makes the row's operator, or its local term, a decay: r3 S3)
+        # (the sign that makes the row's operator, or its local term, a decay)
         tm = term(pick[q])
         eqs[i] = Dt(tm) ~ steady_sign(eqs[i].rhs, unwrap(tm)) * eqs[i].rhs
     end
@@ -159,7 +159,7 @@ end
 The sign that writes the steady row `0 ~ rhs` of field `c` with its operator a diffusion (a
 positive coefficient of `laplacian(c)`, of `K` in `DivKGrad(K, c)`) or, with no operator on `c`, its
 local derivative `∂rhs/∂c` negative (a decay): `0 ~ k c − D laplacian(c) − s` and `0 ~ q − c²` (for `q`)
-are the rows `0 ~ D laplacian(c) − k c + s` and `0 ~ c² − q` (r3 S3). The coefficients are judged at 1
+are the rows `0 ~ D laplacian(c) − k c + s` and `0 ~ c² − q`. The coefficients are judged at 1
 for every parameter, coordinate and other field; a sign that this does not settle is left as
 written (then the steady refusals judge the row at its values).
 """
@@ -211,7 +211,7 @@ end
     steady_form(sys, N) -> (sys, steady, timefree)
 
 The lowering's form of `sys` on an `N`-axis grid: a system whose variables are the axes only
-(no time) gains the time `t` over `(0, 0)` in every read (a time-free system, F3 design §3.5),
+(no time) gains the time `t` over `(0, 0)` in every read (a time-free system),
 and its steady rows become rates (`steady_rows`). A time-free system has only steady
 rows and aux fields (`K ~ rhs`).
 """
@@ -251,7 +251,7 @@ function _timed(sys::PDESystem)
     end
     foreach(walk, get_dvs(sys))
     # `substitute` does not enter a `Differential` (a Robin face's `∂c/∂y`): each derivative is
-    # a rule of its own, inner ones first (review r4 N4: a time-free Robin face)
+    # a rule of its own, inner ones first (a time-free Robin face)
     for u in Iterators.reverse(ders)
         rule[u] = operation(u)(substitute(only(arguments(u)), rule; fold = Val(false)))
     end

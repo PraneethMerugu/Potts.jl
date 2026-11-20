@@ -31,8 +31,8 @@
     end
 end
 
-@testitem "fields: the coupling between solver groups is bounded (F2-06 review, K-unsafe)" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
-    @testset "fields: the coupling between solver groups is bounded (F2-06 review, K-unsafe)" begin
+@testitem "fields: the coupling between solver groups is bounded (K-unsafe)" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
+    @testset "fields: the coupling between solver groups is bounded (K-unsafe)" begin
         sys = FdRot(; name = :r)
         ovar = only(filter(x -> string(x) in ("o", "o(t)"), Potts.declared_variables(sys)))
         two(k; n = 1) = PottsProblem(
@@ -60,15 +60,15 @@ end
         end
         @test all(≈(c; rtol = 1.0e-12), sol.u[end].site.c) && all(≈(o; rtol = 1.0e-12), sol.u[end].site.o)
         @test abs(c - cos(2.0)) < 0.5 && abs(o - sin(2.0)) < 0.5      # the splitting's truncation at k dt = 0.5
-        # `FieldGroups` as A's `field_solver` (F3-03): the same two groups as the `solvers` spelling
+        # `FieldGroups` as A's `field_solver`: the same two groups as the `solvers` spelling
         fg = FieldGroups(ovar => ExplicitEuler(substeps = 2); default = ExplicitEuler(substeps = 1))
         sg = solve(PottsProblem(sys, [fd_empty((6, 6)); :k => 0.5], (0, 4); field_solver = fg), SequentialCPM())
         @test sg.u[end].site.c == sol.u[end].site.c && sg.u[end].site.o == sol.u[end].site.o
     end
 end
 
-@testitem "fields: a one-way chain of solver groups is not limited (F2-06 round 2)" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
-    @testset "fields: a one-way chain of solver groups is not limited (F2-06 round 2)" begin
+@testitem "fields: a one-way chain of solver groups is not limited" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
+    @testset "fields: a one-way chain of solver groups is not limited" begin
         sys = FdOneWay(; name = :w)
         # the values at 2c91f854, before the coupling check (u at k = 3 and 30)
         base = Dict(3.0 => 0.4039093699527255, 30.0 => 4.039093699527256)
@@ -96,8 +96,8 @@ end
     end
 end
 
-@testitem "fields: loops of solver groups are limited, chains next to them are not (F2-06 round 2)" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
-    @testset "fields: loops of solver groups are limited, chains next to them are not (F2-06 round 2)" begin
+@testitem "fields: loops of solver groups are limited, chains next to them are not" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
+    @testset "fields: loops of solver groups are limited, chains next to them are not" begin
         s3 = FdLoop3(; name = :l3)
         three(k) = PottsProblem(
             s3, [fd_empty((6, 6)); :k => k], (0, 2); field_solver = ExplicitEuler(substeps = 1),
@@ -120,8 +120,8 @@ end
     end
 end
 
-@testitem "fields: an unseen term that reads another field counts as reading every group (F2-06 round 3)" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
-    @testset "fields: an unseen term that reads another field counts as reading every group (F2-06 round 3)" begin
+@testitem "fields: an unseen term that reads another field counts as reading every group" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
+    @testset "fields: an unseen term that reads another field counts as reading every group" begin
         sys = FdUnseenChain(; name = :uc)
         three(k) = PottsProblem(
             sys, [fd_empty((6, 6)); :k => k], (0, 2); field_solver = ExplicitEuler(substeps = 2),
@@ -135,8 +135,8 @@ end
     end
 end
 
-@testitem "fields: an unseen term on its own field couples no group (F2-06 round 3)" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
-    @testset "fields: an unseen term on its own field couples no group (F2-06 round 3)" begin
+@testitem "fields: an unseen term on its own field couples no group" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
+    @testset "fields: an unseen term on its own field couples no group" begin
         sys = FdSelfSrc(; name = :ss)
         sol = solve(
             PottsProblem(
@@ -149,8 +149,8 @@ end
     end
 end
 
-@testitem "fields: a loop of solver groups counts only the reads inside it (F2-06 round 3)" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
-    @testset "fields: a loop of solver groups counts only the reads inside it (F2-06 round 3)" begin
+@testitem "fields: a loop of solver groups counts only the reads inside it" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
+    @testset "fields: a loop of solver groups counts only the reads inside it" begin
         sys = FdChainLoop(; name = :cl)
         cl(w) = PottsProblem(
             sys, [fd_empty((6, 6)); :w => w], (0, 10); field_solver = ExplicitEuler(substeps = 1),
@@ -166,8 +166,8 @@ end
     end
 end
 
-@testitem "fields: following the printed window limit is accepted (F2-06 round 2)" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
-    @testset "fields: following the printed window limit is accepted (F2-06 round 2)" begin
+@testitem "fields: following the printed window limit is accepted" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
+    @testset "fields: following the printed window limit is accepted" begin
         sys = FdRot(; name = :r)
         for k in (150.0, 1 / 0.0033335, 300.0, 7.0e3 / 3, 1234.5)
             e = fdargerr(
@@ -197,8 +197,8 @@ end
 # R-F2b (2026-10-20): the filled inputs take one canonical order, whatever order the converter
 # meets the CPM reads in (the hash order of a term's arguments): `kind__in` first, the CPM
 # reads by expression text (`field1__in`, `field2__in`, … in that order), `domain__in` last
-@testitem "R-F2b: the filled inputs take a canonical order" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
-    @testset "R-F2b: the filled inputs take a canonical order" begin
+@testitem "the filled inputs take a canonical order" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
+    @testset "the filled inputs take a canonical order" begin
         raw = Tuple{Symbol, Any, Type}[
             (:kind__in, :kind, Int32), (:field1__in, :zz, Float64),
             (:field2__in, :aa, Float64), (:domain__in, :dom, Bool),
@@ -212,8 +212,8 @@ end
 # Standalone `FieldGroups` steps FdTwo's field system as the model's two solver groups do
 # (c with 2 substeps, then u with 3, reading the new c): σ is frozen (`A[frozen]`), so the
 # kind input is the same at every MCS
-@testitem "F2-07: B FieldGroups equals a model's two groups (FdTwo, σ frozen)" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
-    @testset "F2-07: B FieldGroups equals a model's two groups (FdTwo, σ frozen)" begin
+@testitem "B FieldGroups equals a model's two groups (FdTwo, σ frozen)" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
+    @testset "B FieldGroups equals a model's two groups (FdTwo, σ frozen)" begin
         LP, Sy, SU, MTKB = Potts.LatticePDE, Potts.Symbolics, Potts.SymbolicUtils, Potts.ModelingToolkitBase
         sys = FdTwo(; name = :t)
         op = fd_source_op((12, 10))
@@ -254,8 +254,8 @@ end
     end
 end
 
-@testitem "F2-08a: a refused parameter write changes nothing (S1)" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
-    @testset "F2-08a: a refused parameter write changes nothing (S1)" begin
+@testitem "a refused parameter write changes nothing" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
+    @testset "a refused parameter write changes nothing" begin
         sys = FdRotCells(; name = :r)
         σ = zeros(Int32, 6, 6); σ[2:3, 2:3] .= 1
         pw = PottsProblem(
@@ -291,12 +291,12 @@ end
     end
 end
 
-# F2-13 (F2 design §2.13): `integ.ps[x] = v` writes a scalar or a kind table of a Potts
+# `integ.ps[x] = v` writes a scalar or a kind table of a Potts
 # integrator, with the checks of `setp`; `integ[p]` and `integ[p] = v` of a parameter are
 # errors with the `integ.ps` route (base: SciMLBase's "Indexing with parameters is deprecated"
 # ErrorException); states index as before
-@testitem "F2-13: integ.ps in a model; integ[p] gives the route" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
-    @testset "F2-13: integ.ps in a model; integ[p] gives the route" begin
+@testitem "integ.ps in a model; integ[p] gives the route" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
+    @testset "integ.ps in a model; integ[p] gives the route" begin
         sys = FdRotCells(; name = :r)
         σ = zeros(Int32, 6, 6); σ[2:3, 2:3] .= 1
         ig = init(
@@ -331,10 +331,10 @@ end
     end
 end
 
-# F2-08a: the substep count of each field group of a Potts problem or integrator, in group
+# The substep count of each field group of a Potts problem or integrator, in group
 # order (as LatticePDE's `substep_counts`; base: only the internal `CorePotts._runtime(…).n`)
-@testitem "F2-08a: substep_counts per field group in a model" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
-    @testset "F2-08a: substep_counts per field group in a model" begin
+@testitem "substep_counts per field group in a model" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
+    @testset "substep_counts per field group in a model" begin
         sys = FdTwo(; name = :t)
         prob = PottsProblem(
             sys, fd_source_op((12, 10)), (0, 3); field_solver = ExplicitEuler(substeps = 2),
@@ -350,7 +350,7 @@ end
         n1 = only(substep_counts(i1))
         setp(i1, :Dc)(i1, 4.0)
         # right after the write, before any step: the count of a fresh integrator at the new value
-        # (review M2 of batch 3; base: the last step's count until the next step)
+        # (before the fix: the last step's count until the next step)
         fresh = substep_counts(init(remake(p1; p = [:Dc => 4.0]), SequentialCPM()))
         @test substep_counts(i1) == fresh && only(fresh) > n1
         step!(i1)
@@ -358,11 +358,11 @@ end
     end
 end
 
-# F2-08a: the field groups of a model are lowered by `LatticePDE.lower_group`, and
+# The field groups of a model are lowered by `LatticePDE.lower_group`, and
 # `mtkcompile`'s lowering of the group of all fields is reused by a one-group `PottsProblem`
 # (one `lower_group` call for the model); another state type or a split lowers again
-@testitem "F2-08a: mtkcompile's GroupSpec is reused (one lower_group call)" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
-    @testset "F2-08a: mtkcompile's GroupSpec is reused (one lower_group call)" begin
+@testitem "mtkcompile's GroupSpec is reused (one lower_group call)" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
+    @testset "mtkcompile's GroupSpec is reused (one lower_group call)" begin
         calls() = Potts._LOWER_GROUP_CALLS[]
         n0 = calls()
         c = mtkcompile(FdClosed(; name = :c))
@@ -385,8 +385,8 @@ end
     end
 end
 
-@testitem "F2-08b: a moving mask is clamped at the step start (in a model)" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
-    @testset "F2-08b: a moving mask is clamped at the step start (in a model)" begin
+@testitem "a moving mask is clamped at the step start (in a model)" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
+    @testset "a moving mask is clamped at the step start (in a model)" begin
         σ = zeros(Int32, 12, 12); σ[5:7, 5:7] .= 1
         prob = PottsProblem(
             FdMovingMask(; name = :m), [ownership => σ, kind => [:A]], (0, 40); seed = 5,
@@ -411,8 +411,8 @@ end
     end
 end
 
-@testitem "F2-08c: REAL forms of mcs over several MCS (in a model)" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
-    @testset "F2-08c: REAL forms of mcs over several MCS (in a model)" begin
+@testitem "REAL forms of mcs over several MCS (in a model)" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
+    @testset "REAL forms of mcs over several MCS (in a model)" begin
         # `η mcs` is hoisted into a derived parameter: derived again at each launch with the MCS number
         integ = init(
             PottsProblem(FdMcsSource(; name = :s), fd_empty((6, 6)), (0, 4); field_solver = ExplicitEuler(substeps = 4)),
@@ -440,8 +440,8 @@ end
     end
 end
 
-@testitem "F2-08c: repeat(4, fields): one step index per MCS, windows mcs_duration/4 apart (in a model)" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
-    @testset "F2-08c: repeat(4, fields): one step index per MCS, windows mcs_duration/4 apart (in a model)" begin
+@testitem "repeat(4, fields): one step index per MCS, windows mcs_duration/4 apart (in a model)" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
+    @testset "repeat(4, fields): one step index per MCS, windows mcs_duration/4 apart (in a model)" begin
         sol = solve(
             PottsProblem(FdClockRepeat(; name = :r), fd_empty((4, 4)), (0, 3); field_solver = ExplicitEuler(substeps = 1)),
             SequentialCPM()
@@ -452,8 +452,8 @@ end
     end
 end
 
-@testitem "F2-08c: time in a field reads t0 + j h per substep (in a model)" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
-    @testset "F2-08c: time in a field reads t0 + j h per substep (in a model)" begin
+@testitem "time in a field reads t0 + j h per substep (in a model)" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
+    @testset "time in a field reads t0 + j h per substep (in a model)" begin
         integ = init(
             PottsProblem(FdTimeRead(; name = :t), fd_empty((4, 4)), (0, 3); field_solver = ExplicitEuler(substeps = 4)),
             SequentialCPM()
@@ -469,8 +469,8 @@ end
     end
 end
 
-@testitem "F2-08c: repeat(4, fields) with mcs_duration = 0.5 from MCS 2 (in a model)" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
-    @testset "F2-08c: repeat(4, fields) with mcs_duration = 0.5 from MCS 2 (in a model)" begin
+@testitem "repeat(4, fields) with mcs_duration = 0.5 from MCS 2 (in a model)" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
+    @testset "repeat(4, fields) with mcs_duration = 0.5 from MCS 2 (in a model)" begin
         u = solve(
             PottsProblem(FdClockHalf(; name = :h), fd_empty((4, 4)), (2, 5); field_solver = ExplicitEuler(substeps = 1)),
             SequentialCPM()
@@ -485,10 +485,10 @@ end
     end
 end
 
-# F3-02 (F2 design §2.2): the group's inputs are specs. A model's CPM inputs are filled (the
+# The group's inputs are specs. A model's CPM inputs are filled (the
 # model writes them on the device every MCS), another group's field read from its array is not.
-@testitem "F3-02: InputSpec.filled: a model's CPM inputs are filled, another group's field is not" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
-    @testset "F3-02: InputSpec.filled: a model's CPM inputs are filled, another group's field is not" begin
+@testitem "InputSpec.filled: a model's CPM inputs are filled, another group's field is not" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
+    @testset "InputSpec.filled: a model's CPM inputs are filled, another group's field is not" begin
         op = fd_source_op((12, 10))
         sys = FdTwo(; name = :t)
         uvar = only(filter(x -> string(x) in ("u", "u(t)"), Potts.declared_variables(sys)))
@@ -501,13 +501,13 @@ end
     end
 end
 
-# F3-03 (F3 design §3.7): `FieldGroups` is a model's `field_solver` too (its pairs as `solvers`
+# `FieldGroups` is a model's `field_solver` too (its pairs as `solvers`
 # entries of fields, its `default` the other fields' solver), so it resolves and fingerprints
 # as the `solvers` spelling; both coupled and standalone routes print an algorithm by LatticeFields' one canonical
 # text (`Problems.canonical`). Base (eb2efb60): `field_solver = FieldGroups(…)` was an
 # ArgumentError ("`FieldGroups` in a `PottsProblem` is planned").
-@testitem "F3-03: FieldGroups in a model; one canonical text" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
-    @testset "F3-03: FieldGroups in a model; one canonical text" begin
+@testitem "FieldGroups in a model; one canonical text" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
+    @testset "FieldGroups in a model; one canonical text" begin
         LFP, LP = Potts.LatticeFields.Problems, Potts.LatticePDE
         msg(f) = try
             f(); ""
@@ -542,8 +542,8 @@ end
             )
         )
         @test occursin("`u` is given twice (once in `field_solver = FieldGroups(…)`)", e)
-        # at `remake` the problem's `solvers` are kept, and the clash says so with the route (review r1
-        # nit); the route works
+        # at `remake` the problem's `solvers` are kept, and the clash says so with the route; the
+        # route works
         e = msg(() -> remake(sp; field_solver = FieldGroups(:u => ExplicitEuler(substeps = 3))))
         @test occursin("`u` is given twice (once in `field_solver = FieldGroups(…)`; `solvers` is kept from the problem: pass `solvers = []`)", e)
         @test remake(
@@ -595,7 +595,7 @@ end
 
 # a linear solver given as A's `field_solver`, in `solvers` or in
 # `FieldGroups` is refused in A's words (a linear solver, the `linsolve` of an implicit field
-# solver) with a route that works when followed. Base (9db10886, ~/lpwork/f3b2r1-nc-a.log, 4 of 7 fail;
+# solver) with a route that works when followed. Before the fix (9db10886, 4 of 7 fail;
 # the 3 that pass are the followed routes):
 # "`field_solver` takes a field solver (…); got DevicePCG(Multigrid(LatticeFields.Solvers.V(2,
 # 2), nothing, 1.0e-6, nothing, 1.0e-6), 8, 1.0e-6)", the same positional text for `solvers`,
@@ -619,8 +619,8 @@ end
     end
 end
 
-@testitem "F3-04: a model reads the status word (host: after every window)" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
-    @testset "F3-04: a model reads the status word (host: after every window)" begin
+@testitem "a model reads the status word (host: after every window)" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
+    @testset "a model reads the status word (host: after every window)" begin
         RC = Potts.SciMLBase.ReturnCode
         op = fd_source_op((12, 10))
         sys = FdTwo(; name = :t)
@@ -629,7 +629,7 @@ end
         s = @test_logs (:warn, r"fields `c`, `u`: the solve failed in the field step of MCS 3 \(t = 2\.0\) \(the Newton iteration diverged\).*ConvergenceFailure") solve!(integ)
         @test s.retcode == RC.ConvergenceFailure && integ.t == 3 && integ.stats.fields.solves == 3
         @test s.t[end] == 3                                   # the state it stopped at is saved
-        # `reinit!` starts a clean run (review r1 M2): the word, the totals, the code and the counters
+        # `reinit!` starts a clean run: the word, the totals, the code and the counters
         # are cleared; the stub fails at its 3rd step only, so the new run succeeds. Control: without
         # the clearing the word's failure is read again at the first window and the run stops at MCS 1
         reinit!(integ)

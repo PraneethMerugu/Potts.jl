@@ -1,4 +1,4 @@
-# LatticePDE vocabulary (v3 §5.1, §5.5): registered operators, metadata keys and scans
+# LatticePDE vocabulary: registered operators, metadata keys and scans
 # (the inline testsets of the old runtests.jl).
 @testsetup module LP_latticepde
 using Test, LatticePDE
@@ -27,7 +27,7 @@ end
         @test opof(value_at(J, ke, ke)) === value_at
         @test opof(ismember(ke, (2, 3))) === ismember
         @test opof(masked(ke == 3, 0.0)) === masked
-        # options are struct fields, never keywords (S-3)
+        # options are struct fields, never keywords
         @test_throws MethodError DivKGrad(; mean = :harmonic)
         @test_throws MethodError Advect(; scheme = Upwind1())
         @test_throws ArgumentError DivKGrad(:geometric)                     # negative control: the mean is checked
@@ -92,7 +92,7 @@ end
         @test dkg(s5).mean === :arithmetic
         s6 = simplify(substitute(masked(ke == 3, α), Dict(α => 0.0)))
         @test has_op(s6, masked)
-        # registered predicates fold only with `fold = Val(true)` (P3-mtk O)
+        # registered predicates fold only with `fold = Val(true)`
         r = eqs[1].rhs
         @test has_op(substitute(r, Dict(ke => 2)), ismember)
         folded = substitute(r, Dict(ke => 2); fold = Val(true))
@@ -100,8 +100,8 @@ end
     end
 end
 
-@testitem "mtkcompile(; inputs) with value_at / ismember (F-5)" setup = [LP_latticepde] tags = [:latticepde, :vocabulary] begin
-    @testset "mtkcompile(; inputs) with value_at / ismember (F-5)" begin
+@testitem "mtkcompile(; inputs) with value_at / ismember" setup = [LP_latticepde] tags = [:latticepde, :vocabulary] begin
+    @testset "mtkcompile(; inputs) with value_at / ismember" begin
         @variables q(t) = 1.0 kc(t)::Int [input = true] kcp(t)::Int [input = true]
         @parameters Jk[1:3] = [10.0, 20.0, 30.0] J2[1:3, 1:3] = reshape(collect(1.0:9.0), 3, 3)
         du(prob) = (u = copy(prob.u0); d = similar(u); prob.f(d, u, prob.p, 0.0); d)

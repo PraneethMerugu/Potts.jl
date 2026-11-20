@@ -1,4 +1,4 @@
-# `lower_group` (F2 design §2.5): a PDESystem's field group lowered once to the IR boundary,
+# `lower_group`: a PDESystem's field group lowered once to the IR boundary,
 # a `GroupSpec`: the rate program (no update: a `FieldGroup` fuses each algorithm's update
 # into it, LatticeFields' `fuse_update`), its state, the fields it reads from other groups,
 # the stability bound and the texts of the terms the bound does not see.
@@ -81,10 +81,10 @@ function _lower_group(sys::PDESystem, disc::LatticeDiscretization; fields = noth
     _check_parts(sys)
     sys, rows, tf = steady_form(sys, length(disc.grid.dims))
     steady, timefree = unique!(String[collect(String, steady); rows]), timefree || tf
-    sys = crossgrid_form(sys)                           # an operator across `Coarse` grids as an aux field (F3-22)
+    sys = crossgrid_form(sys)                           # an operator across `Coarse` grids as an aux field
     check_one_kind(sys)                                 # (the whole system, before any cut)
     derived, computed, defaults = Pair[], Pair[], Pair[]
-    values && (sys = robin_slots(sys))                  # a Robin coefficient of parameters: a computed one (F4-12a)
+    values && (sys = robin_slots(sys))                  # a Robin coefficient of parameters: a computed one
     values && ((sys, derived, computed, defaults) = _fold_computed(sys))
     external = String[]
     fields === nothing || ((sys, external) = _group_cut(sys, fields))
@@ -124,7 +124,7 @@ function _group_cut(sys::PDESystem, fields)
     isempty(cut) && return sys, external
     mine(eq) = (l = unwrap(eq.lhs); !(_reads(l, cut) && !_reads(l, keep)))
     eqs = filter(mine, get_eqs(sys))
-    # a cut field that a spatial operator of the group reads keeps its face conditions (F3-22 review r1)
+    # a cut field that a spatial operator of the group reads keeps its face conditions
     faced = operand_reads(eqs, cut)
     dvs = map(dvs) do v
         any(o -> isequal(o, _opof(unwrap(v))), faced) || return v
@@ -139,7 +139,7 @@ function _group_cut(sys::PDESystem, fields)
     return out, external
 end
 
-# The spec's slots (F2 design §2.2, F3-02), in the program's order: the parameter slots (the
+# The spec's slots, in the program's order: the parameter slots (the
 # default as given when `values`; a computed parameter's expression as written), the tables
 # (their values when `values`) and the inputs (element type, declared bounds, default, filled)
 function _param_slots(cf::CompiledField, computed, values::Bool)

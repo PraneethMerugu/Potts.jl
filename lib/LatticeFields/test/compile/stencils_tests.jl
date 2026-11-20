@@ -11,7 +11,7 @@ Does an expression hold a Float64 literal or the symbol `Float64`?
 has_f64(x) = x isa Float64 || x === :Float64 || (x isa Expr && any(has_f64, x.args))
 
 """
-2D 9-point / 3D 27-point box stencil (the Q1-like access pattern), periodic.
+2D 9-point / 3D 27-point box stencil (the access pattern of Q1 finite elements), periodic.
 """
 function boxprog(dims)
     N = length(dims)

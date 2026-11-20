@@ -330,8 +330,8 @@ end
 end
 
 
-@testitem "P6.0k2 review: stdlib frames are not Potts', brownians are rejected" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "P6.0k2 review: stdlib frames are not Potts', brownians are rejected" begin
+@testitem "stdlib frames are not Potts', brownians are rejected" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "stdlib frames are not Potts', brownians are rejected" begin
         # a stdlib frame (recorded under the build machine's path) is not Potts code
         bt = try
             Statistics.quantile([1.0], 2.0)

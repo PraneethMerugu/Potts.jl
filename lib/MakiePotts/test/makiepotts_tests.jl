@@ -205,8 +205,8 @@ end
 end
 end
 
-@testitem "Float32 render frames and channels (TS2-7)" setup = [MP_makiepotts] tags = [:makiepotts, :core] begin
-    @testset "Float32 render frames and channels (TS2-7)" begin
+@testitem "Float32 render frames and channels" setup = [MP_makiepotts] tags = [:makiepotts, :core] begin
+    @testset "Float32 render frames and channels" begin
         CairoMakie.activate!(type = "png")
         owners = fill(RenderOwner(MediumSite, 1), 3, 3)
         owners[2, 2] = RenderOwner(CellSite, 1)
@@ -239,8 +239,8 @@ end
     end
 end
 
-@testitem "clean install-to-PNG journey (TS3-3)" setup = [MP_makiepotts] tags = [:makiepotts, :core] begin
-    @testset "clean install-to-PNG journey (TS3-3)" begin
+@testitem "clean install-to-PNG journey" setup = [MP_makiepotts] tags = [:makiepotts, :core] begin
+    @testset "clean install-to-PNG journey" begin
         CairoMakie.activate!(type = "png")
         frame = PottsRenderFrame(
             0,

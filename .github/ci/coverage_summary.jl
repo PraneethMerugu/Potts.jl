@@ -1,10 +1,10 @@
-# Summarize Julia `--code-coverage` `.cov` files across the workspace (H4, non-gating).
+# Summarize Julia `--code-coverage` `.cov` files across the workspace (non-gating).
 # Usage: julia --startup-file=no .github/ci/coverage_summary.jl [--clean] [--root=DIR]
 #
 # Merges per-worker `*.jl.<pid>.cov` (and `*.jl.cov`) files per source line without external
 # dependencies. Writes a plain-text table to stdout and appends a Markdown table to
 # `$GITHUB_STEP_SUMMARY` when set. `PottsModels` and `GPU` are excluded by design
-# (`TS0-audit.md`: `PottsModels` exceeds 9000 s under `--code-coverage`).
+# (`PottsModels` exceeds 9000 s under `--code-coverage`).
 using Printf: @sprintf
 
 const PACKAGES = [
@@ -118,7 +118,7 @@ function main(args)
         println(@sprintf("  %-15s %9d %9d %8s  %d/%d", name, s.covered, s.tracked, fmt_pct(s.covered, s.tracked), s.files_cov, s.files_total))
     end
     println(@sprintf("  %-15s %9d %9d %8s  %d/%d", "Total", tot_cov, tot_trk, fmt_pct(tot_cov, tot_trk), tot_fcov, tot_ftot))
-    println("  Note: PottsModels and GPU are excluded from --code-coverage (TS0-audit.md: PottsModels > 9000 s).")
+    println("  Note: PottsModels and GPU are excluded from --code-coverage (PottsModels takes over 9000 s under coverage).")
 
     summary_path = get(ENV, "GITHUB_STEP_SUMMARY", "")
     if !isempty(summary_path)
@@ -130,7 +130,7 @@ function main(args)
                 println(io, "| `$name` | $(s.covered) | $(s.tracked) | $(fmt_pct(s.covered, s.tracked)) | $(s.files_cov)/$(s.files_total) |")
             end
             println(io, "| **Total** | **$(tot_cov)** | **$(tot_trk)** | **$(fmt_pct(tot_cov, tot_trk))** | **$(tot_fcov)/$(tot_ftot)** |\n")
-            println(io, "> `PottsModels` and `GPU` are excluded from `--code-coverage` (`TS0-audit.md`: `PottsModels` exceeds 9000 s under coverage).")
+            println(io, "> `PottsModels` and `GPU` are excluded from `--code-coverage` (`PottsModels` exceeds 9000 s under coverage).")
         end
     end
 

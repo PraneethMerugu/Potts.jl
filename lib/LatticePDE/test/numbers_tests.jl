@@ -197,13 +197,13 @@ end
     end
 end
 
-# F2-09 (F2 design §2.9): number types per role. Tables keep their element type (a BigFloat
+# Number types per role. Tables keep their element type (a BigFloat
 # table stays BigFloat, a Dual table promotes the problem as a Dual `p` does), BigFloat
 # defaults are kept, a Bool input reads back as Bool, and a pair-keyed `remake` infers. The
 # comments give the base (c2583722) value of each.
-@testitem "F2-09: number types per role" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
+@testitem "number types per role" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
     using .LP_numbers: fd
-    @testset "F2-09: number types per role" begin
+    @testset "number types per role" begin
         @parameters Dt[1:2] = [0.5, 1.0] Dq = 0.1
         tsys = ssys([D(ce) ~ Dq * laplacian(ce) - value_at(Dt, qe) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dq, Dt])
         K = Int32[i <= 2 ? 1 : 2 for i in 1:4, j in 1:4]
@@ -281,15 +281,15 @@ end
     end
 end
 
-# F3-14 (FE-17, F3 design §3.8): number types per role. A field's declared `lattice_storage`
+# Number types per role. A field's declared `lattice_storage`
 # holds its own type whatever the problem's (an aux field here: a `FieldProblem`'s state is
 # one vector, so its state fields are stored in T and a different declared storage is refused
 # in words); `compute_T` compiles a group's kernels in a wider type than its storage; Duals
 # keep their partials through a declared storage. Base f5641ce1: `compute_T` is no keyword, a
 # declared Float64 storage holds the problem's Float32, so every test fails or errors.
-@testitem "F3-14: lattice_storage, compute_type and solver_type in B (FE-17)" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
+@testitem "lattice_storage, compute_type and solver_type in B" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
     using .LP_numbers: fd
-    @testset "F3-14: lattice_storage, compute_type and solver_type in B (FE-17)" begin
+    @testset "lattice_storage, compute_type and solver_type in B" begin
         @parameters kw = 0.25
         @variables wu(..) wK(..) [lattice_storage = Float64] wh(..) [lattice_storage = Float16] wc(..) [lattice_storage = Float64]
         wue, wKe, whe, wce = wu(t, x, y), wK(t, x, y), wh(t, x, y), wc(t, x, y)
@@ -305,8 +305,8 @@ end
             i = run(T, ExplicitEuler(); dt = 0.05)
             @test eltype(i[wue]) == T && eltype(i[wKe]) == Float64 && eltype(i[whe]) == Float16
         end
-        # a state field whose declared storage differs from T keeps it on the owned path (batch 5
-        # review S2: each state field its own arrays, as A's), and equals the all-Float64 run: a
+        # a state field whose declared storage differs from T keeps it on the owned path (each
+        # state field has its own arrays), and equals the all-Float64 run: a
         # Float64 field on a Float32 problem; a Float16 and a Float64 field beside a T field
         csys = PDESystem([D(wce) ~ 0.0625 * laplacian(wce) - 0.125 * wce], [wc(0, x, y) ~ x], wdom, [t, x, y], [wce], Any[]; name = :w)
         c32 = solve(
@@ -346,8 +346,8 @@ end
         SciMLBase.reinit!(im)
         i0 = init(pm, ExplicitEuler(); dt = 0.05)
         @test im[whe] == i0[whe] && im[wce] == i0[wce] && im[wue] == i0[wue]
-        # an OrdinaryDiffEq solver's state is one vector of T: refused there, with the route (F4-01:
-        # at the solve, the field algorithms take the same problem)
+        # an OrdinaryDiffEq solver's state is one vector of T: refused there, with the route
+        # (at the solve, the field algorithms take the same problem)
         e = try
             solve(discretize(csys, LatticeDiscretization(Grid((8, 8)); T = Float32)), Tsit5())
             ""
@@ -437,13 +437,13 @@ end
     end
 end
 
-# Batch 5 review S1: a field stored in Float16 under the implicit algorithms is solved in the
+# A field stored in Float16 under the implicit algorithms is solved in the
 # state's value type (its residual held there; each update rounds once to Float16), with any
-# `compute_T`; accurate to its storage against the Float64 run. Base 97045a1b
-# (~/lpwork/b5r1-nc-s1.log): refused, "an implicit solve runs in Float32 or Float64".
-@testitem "F3-14 S1: Float16 storage under the implicit algorithms" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
+# `compute_T`; accurate to its storage against the Float64 run. Base 97045a1b:
+# refused, "an implicit solve runs in Float32 or Float64".
+@testitem "Float16 storage under the implicit algorithms" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
     using .LP_numbers: fd
-    @testset "F3-14 S1: Float16 storage under the implicit algorithms" begin
+    @testset "Float16 storage under the implicit algorithms" begin
         @variables sh(..) [lattice_storage = Float16] s64(..)
         she, s64e = sh(t, x, y), s64(t, x, y)
         sdom = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
@@ -468,7 +468,7 @@ end
             @test maximum(abs, Float64.(s.u[end]) .- r) <= 4.0e-3 * maximum(abs, r)      # (Float16: eps 9.8e-4)
         end
         @test SciMLBase.successful_retcode(solve(mk(she, Float32), QuasiSteady(); dt = 0.1).retcode)
-        # a Dual state under an implicit solve (F3-21a: refused before): ∂ sum(u(t))/∂s of the start
+        # a Dual state under an implicit solve (refused before): ∂ sum(u(t))/∂s of the start
         # `s u0` runs, the tangent against central differences
         pr = mk(s64e, Float64)
         Js(v) = sum(solve(remake(pr; u0 = v .* pr.u0), BackwardEuler(); dt = 0.1).u[end])
@@ -476,9 +476,9 @@ end
     end
 end
 
-@testitem "F3-21a: ∂u/∂k through BackwardEuler, CrankNicolson, BDF2 and QuasiSteady" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
+@testitem "∂u/∂k through BackwardEuler, CrankNicolson, BDF2 and QuasiSteady" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
     using .LP_numbers: fd
-    @testset "F3-21a: ∂u/∂k through BackwardEuler, CrankNicolson, BDF2 and QuasiSteady" begin
+    @testset "∂u/∂k through BackwardEuler, CrankNicolson, BDF2 and QuasiSteady" begin
         bcs = [c(0, x, y) ~ x * y, c(t, 0, y) ~ gt]
         lin = town(tsys([D(ce) ~ Dt * laplacian(ce) - kt * ce + gt * x], bcs))
         for alg in (BackwardEuler(; linsolve = TTIGHT), CrankNicolson(; linsolve = TTIGHT), BDF2(; linsolve = TTIGHT))
@@ -497,9 +497,9 @@ end
     end
 end
 
-@testitem "F3-21a: a mask and a Robin face; a nonlinear term; a hexagonal lattice; the coupled steady solve" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
+@testitem "a mask and a Robin face; a nonlinear term; a hexagonal lattice; the coupled steady solve" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
     using .LP_numbers: fd
-    @testset "F3-21a: a mask and a Robin face; a nonlinear term; a hexagonal lattice; the coupled steady solve" begin
+    @testset "a mask and a Robin face; a nonlinear term; a hexagonal lattice; the coupled steady solve" begin
         # the mask's value and the Robin face's β read k
         mr = town(
             tsys(
@@ -533,7 +533,7 @@ end
         for s in (kt, Dt)
             @test tok(tad(hx, BackwardEuler(; linsolve = TTIGHT), s; dt = 0.1)...)
         end
-        # r1 M1: a write to the parameter a mask's value reads (`2k`), then windows: equal to a restart
+        # A write to the parameter a mask's value reads (`2k`), then windows: equal to a restart
         # at the write, and the tangent after it against central differences. Base (79af8c69): the
         # implicit update kept the old value (Σu off), and the tangent disagreed with the run
         function wrun(v)
@@ -551,7 +551,7 @@ end
         @test any(==(1.6), uw) && maximum(abs, uw .- vec(ir[ce])) < 1.0e-12
         Jw(v) = sum(first(wrun(v)))
         @test tok(ForwardDiff.derivative(Jw, mr.p[pidx(mr, Dt)]), fd(Jw, mr.p[pidx(mr, Dt)]; h = 1.0e-5))
-        # a coupled steady pair (F3-12d): one FGMRES per derivative part
+        # a coupled steady pair: one FGMRES per derivative part
         cp = town(
             tsys(
                 [0 ~ Dt * laplacian(tae) - tae + kt * tbe + x, 0 ~ 0.1 * laplacian(tbe) - tbe - gt * tae + y],
@@ -566,12 +566,12 @@ end
 
 # A declared storage on a row whose operator varies by site (a field row: a face coefficient of
 # the coordinates). Its `jac:` site values are in the row's solve type: a declared Float32 or
-# Float64 storage's own, a Float16 field's the problem's type (found while building F3-16).
-# Base 85794414 (~/lpwork/f3b6-nc-f314.log): every case errors ("`inputs`: `w1` holds Float64
+# Float64 storage's own, a Float16 field's the problem's type.
+# Before the fix (85794414): every case errors ("`inputs`: `w1` holds Float64
 # values; this solver's state type is `Float32`", and the Float16 and Float64 forms).
-@testitem "F3-14: a declared storage on a field row under the implicit algorithms" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
+@testitem "a declared storage on a field row under the implicit algorithms" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
     using .LP_numbers: fd
-    @testset "F3-14: a declared storage on a field row under the implicit algorithms" begin
+    @testset "a declared storage on a field row under the implicit algorithms" begin
         @variables sfr(..) sfr32(..) [lattice_storage = Float32] sfr16(..) [lattice_storage = Float16] sfr64(..) [lattice_storage = Float64]
         sdom = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
         mk(f, T) = discretize(
@@ -591,9 +591,9 @@ end
     end
 end
 
-@testitem "F3-14 S3, N4: Float64 on a backend without it; the registry's keys" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
+@testitem "Float64 on a backend without it; the registry's keys" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
     using .LP_numbers: fd
-    @testset "F3-14 S3, N4: Float64 on a backend without it; the registry's keys" begin
+    @testset "Float64 on a backend without it; the registry's keys" begin
         LFP = LatticePDE.Problems
         @variables nw(..) [lattice_storage = Float64] nv(..)
         nwe, nve = nw(t, x, y), nv(t, x, y)

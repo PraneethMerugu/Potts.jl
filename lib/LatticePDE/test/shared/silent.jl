@@ -1,4 +1,4 @@
-# Definitions of silent_tests.jl that other test files use (moved here by TS1b).
+# Definitions of silent_tests.jl that other test files use.
 using SciMLBase: SciMLBase, remake
 using SymbolicIndexingInterface: SymbolicIndexingInterface, getp, setp
 using OrdinaryDiffEqTsit5: Tsit5
@@ -6,7 +6,7 @@ using Serialization: Serialization
 
 sdom(T = 1.0) = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
 ssys(eqs, bcs, dvs, ps; T = 1.0) = PDESystem(eqs, bcs, sdom(T), [t, x, y], dvs, ps; name = :s)
-# (F4-01: the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
+# (the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
 sown(sys; n = 4, inputs = (), kw...) =
     LFP.field_problem(discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64, kw...); inputs))
 emsg(f) = try

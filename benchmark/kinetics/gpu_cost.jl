@@ -1,5 +1,5 @@
 #     julia --project=lib/CorePotts/test -t 4 benchmark/kinetics/gpu_cost.jl <repo>   # ROCm
-# Warm wall time per MCS of CheckerboardCPM variants on ROCm (P6.0bl), Graner–Glazier tiles.
+# Warm wall time per MCS of CheckerboardCPM variants on ROCm, Graner–Glazier tiles.
 using AMDGPU, KernelAbstractions, CorePotts, StaticArrays
 # models.jl without DelimitedFiles (not in this environment)
 readtsv(f) = permutedims(reduce(hcat, [parse.(Int, split(l, '\t')) for l in eachline(f) if !isempty(l)]))

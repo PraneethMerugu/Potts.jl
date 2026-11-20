@@ -13,8 +13,8 @@ include("shared/lifecycle.jl")
 include("shared/export_all.jl")
 end
 
-@testitem "site lists widen above 2³¹ − 1 sites (D-253)" setup = [CP_site_lists] tags = [:corepotts, :site_lists] begin
-@testset "site lists widen above 2³¹ − 1 sites (D-253)" begin
+@testitem "site lists widen above 2³¹ − 1 sites" setup = [CP_site_lists] tags = [:corepotts, :site_lists] begin
+    @testset "site lists widen above 2³¹ − 1 sites" begin
     @test CorePotts.site_index_type(typemax(Int32)) === Int32
     @test CorePotts.site_index_type(Int64(typemax(Int32)) + 1) === Int64
     function forced(f, wide::Bool; device = false)

@@ -207,7 +207,7 @@ end
             sol = run(System([Potts.D(y) ~ -k * y], t, [y], [k, k2]; name = :comp))
             @test sol.u[end].cell.comp₊y[1] ≈ (1 - 0.3)^2
             # the same parameter used by the component, or read by the model, is the computed parameter
-            # `comp₊k2 = 2 comp₊k` (F2-14; before: rejected naming `k2`)
+            # `comp₊k2 = 2 comp₊k` (before: rejected naming `k2`)
             sol = run(System([Potts.D(y) ~ -k2 * y], t, [y], [k, k2]; name = :comp))
             @test sol.u[end].cell.comp₊y[1] ≈ (1 - 0.6)^2
             sol = run(System([Potts.D(y) ~ -k * y], t, [y], [k, k2]; name = :comp); with_obs = true)
@@ -221,7 +221,7 @@ end
             @test sol.u[end].cell.comp₊y[1] ≈ (1 - 0.6)^2
             sol = run(System([o ~ 2y, Potts.D(y) ~ -k * o], t; name = :comp, initial_conditions = [o => 2y]))
             @test sol.u[end].cell.comp₊y[1] ≈ (1 - 0.6)^2
-            # an unknown's initial value given as an expression of parameters is evaluated (F2-14);
+            # an unknown's initial value given as an expression of parameters is evaluated;
             # negative control: one that reads an unknown is rejected
             sol = run(System([o ~ 2y, Potts.D(y) ~ -k * o], t; name = :comp, initial_conditions = [y => 2k]))
             @test sol.u[end].cell.comp₊y[1] ≈ 0.6 * (1 - 0.6)^2

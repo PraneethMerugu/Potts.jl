@@ -1,7 +1,7 @@
 """
     LatticeFields.Problems
 
-Running compiled programs (v3 §8): the arrays of a program on a backend (`FieldStore`), the
+Running compiled programs: the arrays of a program on a backend (`FieldStore`), the
 binding of a step plan's launch descriptions to `Exec` launches (`bind_program`, `BoundStep`), the
 owned `FieldProblem` with its steppers (`ExplicitEuler`, `ExplicitMap`, the implicit ones), the SciML
 `ODEProblem` of a program's ODE form (`ode_problem`, `LatticeRHS`), and symbolic indexing of
@@ -73,35 +73,35 @@ include("report.jl")
 
 # the parameter object of standalone SciML problems
 public LatticeParameters, TableSlot, InputSlot, with_values, remake_params, remake_u0, is_input_function, input_functions
-# one problem, many algorithms (F4-01)
+# one problem, many algorithms
 public ClockTick, MaskSync, InputRefresh, refresh_inputs!, mask_sync!, sync_masks!, UpdateLatticeAb, steady_start!, lattice_matrix, LatticeODEProblem, LatticeOperator, LatticeLinearProblem, LatticeTimeFreeProblem
 public LatticeMetadata, LatticeFunction, LatticeProblem, LatticeDiscreteProblem, lattice_metadata, lattice_problem,
        field_problem, rhs_build
-# the Jacobian of the ODE right side (F4-07)
+# the Jacobian of the ODE right side
 public field_jacobian_sparsity, column_colors, LatticeJacobian, LatticeJVP, JacobianOperator, colored_jacobian!, lattice_jvp!
-# the lattice multigrid as a LinearSolve preconditioner and algorithm (F4-08)
+# the lattice multigrid as a LinearSolve preconditioner and algorithm
 public LatticeMultigrid, MGPreconditioner, LatticePCG
-# solutions (F4-04)
+# solutions
 public FieldSeries, field_series, LatticeStats, LatticeSolution, finish!
 # the saved size above which a run that saves every step warns (field runs and Potts runs)
 public LARGE_SAVE_BYTES
-# the coupling between field groups and the per-group counts (review of F2-06)
+# the coupling between field groups and the per-group counts
 public compute_type, substep_counts, lagged_coupling, group_loops, steady_loop_rates, steady_start, starts_steady, StartText, StartSubsteps
 # the shared substep policy and its words
 public AbstractPolicyTexts, ProblemTexts, GroupSubsteps, check_coupling, bound_report, unbounded_text, uncovered_text,
        refuse_parameters, coupling_unknown_text, coupling_unbounded_text, loop_text, steady_loop_text, steady_gain_text,
        steady_why_text, steady_gain_words, rows0_route, reads_time, bound_window!, bound_window, bound_params!, bound_params
-# the field report (F4-13, AF-09)
+# the field report
 public field_report, group_report, coupling_report, substep_cause, implicit_facts, ImplicitFacts, coupling_unseen_text, unseen_reads, unseen_loop, cover_text
-# the implicit algorithms (F3-07)
+# the implicit algorithms
 public AbstractImplicitFieldAlgorithm, LatticeNewton, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, OperatorSpec, RowOperator, operator_spec, build_operator, growth, inexact_bounds, ImplicitCache,
     ImplicitRow, bind_cache, residual_program, residual_rule, resolve_tols
-# steady rows `0 ~ rhs` (F3-12b)
+# steady rows `0 ~ rhs`
 public steady_alg, steady_fields
-# the clock (F2-08c)
+# the clock
 public CLOCK_KEY, clock_slot
 public rebind_launches, install_launches!   # the two parts of `rebind!` (an atomic update of several groups)
-# computed parameters (F2-15, D-F2-1)
+# computed parameters
 public Derivation, derive_at, derive_fail, derive!, rgf, computed_slot, rhs_tables
 
 end # module Problems

@@ -1,4 +1,4 @@
-# Definitions of ir/fingerprint_tests.jl that other test files use (moved here by TS1b).
+# Definitions of ir/fingerprint_tests.jl that other test files use.
 using LatticeFields.Compile: fingerprint_text, IR_FORMAT
 
 """

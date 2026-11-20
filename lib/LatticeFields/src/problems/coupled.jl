@@ -1,4 +1,4 @@
-# The coupled solve of an implicit group (F3-12d): a QuasiSteady group whose fields read one
+# The coupled solve of an implicit group: a QuasiSteady group whose fields read one
 # another, or given `linsolve = LatticeGMRES(…)`, solves its rows together. Each
 # Newton iteration solves `A δ = G(u_k)` over every field of the group at once, `A` the whole
 # Jacobian of the residual (`A v = −(G(u_k + εv) − G(u_k))/ε`: the residual kernels themselves,
@@ -595,7 +595,7 @@ function _coupled_iteration!(cs::CoupledKrylov, c, a)
     return nothing
 end
 
-# The coupled steady system's modes (F3-12d, invalid input): a coupled QuasiSteady group whose
+# The coupled steady system's modes (invalid input): a coupled QuasiSteady group whose
 # rows are numeric (constant coefficients: faces, decay, cross reactions and cross diffusion as
 # numbers or parameters), linear, on one grid, with the same face conditions per field, has the
 # Laplacian's eigenvectors as its modes, so its Jacobian is block diagonal over them:
@@ -616,7 +616,7 @@ function coupled_modes(s::Program{N}, op::OperatorSpec, keys, p) where {N}
     ids = [fieldid(s, r.key) for r in rows]
     dims = Tuple(Int.(leveldims(s, s.fields[ids[1]].levels[1])))
     all(i -> Tuple(Int.(leveldims(s, s.fields[i].levels[1]))) == dims, ids) || return nothing
-    # a hexagonal lattice (F3-20): its modes are not the per-axis ones; the growth check after the
+    # a hexagonal lattice: its modes are not the per-axis ones; the growth check after the
     # first solve decides (its refusal is tested on a periodic hexagonal pair)
     _ishex(s) && return nothing
     # the face conditions per axis and side, the same for every row (as the 1D ghost rule's factor)
@@ -697,7 +697,7 @@ end
 
 # The coupled steady system's rightmost eigenvalue where `coupled_modes` cannot give it (a
 # coefficient that varies by site, a mask, other faces per field): estimated through the same
-# operator (r1 M2). Arnoldi with `m` steps on the Cayley transform `C = (σ − J)⁻¹(σ + J)` of the
+# operator. Arnoldi with `m` steps on the Cayley transform `C = (σ − J)⁻¹(σ + J)` of the
 # Jacobian `J = −A`, `σ > 0` the group's local scale: `C` maps the right half plane outside the
 # unit circle and the left half plane inside it, the fast diffusive modes near −1, so its
 # dominant eigenvalues are the growing modes. Each step is one product and one coupled solve of
@@ -705,7 +705,7 @@ end
 # (deterministic), the Hessenberg on the host in Float64. Returns the eigenvalue `λ = σ(μ − 1)/(μ + 1)`
 # of the Ritz value `μ` of largest modulus when `|μ| > 1 + 1e-6` (a growing mode), else nothing.
 # A linear group is checked at the bind and at a parameter write; a nonlinear one (its Jacobian
-# depends on the state) right after its first solve after either, or after the steady start (r2 M1). Cost: `m`
+# depends on the state) right after its first solve after either, or after the steady start. Cost: `m`
 # coupled solves, with their waits on a device.
 struct CoupledShift{OP, K} <: SciMLOperators.AbstractSciMLOperator{K}
     A::OP
@@ -788,16 +788,16 @@ coefficient that varies by site), estimated by [`coupled_growth`](@ref). Nothing
 runtime. At the bind (both routes) and at a parameter write of a standalone `FieldProblem`.
 """
 check_coupled_growth(rt, p) = nothing
-# A nonlinear steady group's growth check (r2 M1, r3): right after the solve that follows its
+# A nonlinear steady group's growth check: right after the solve that follows its
 # bind, a parameter write or the steady start, at the steady state that solve found (current
-# slot `par`), when the solve converged. On a device its dot products wait (D-F3-1); no launch
+# slot `par`), when the solve converged. On a device its dot products wait; no launch
 # is rebuilt.
 function _after_solve!(cs::CoupledKrylov, par, t, h)
     (isinf(h) && cs.pending > 0 && !Exec.compiling()) || return nothing
     @inbounds cs.hscal[_GM_DONE] == 1 || return nothing            # (pending: the next solve checks)
     λ = coupled_growth(cs, cs.σ, t; par)
     λ === nothing || throw(_growth_refusal(cs.keys, λ, 0.0, ", at the steady state its solve found"))
-    cs.pending = 0                          # (cleared only by a converged solve that passes, r3 S1)
+    cs.pending = 0                          # (cleared only by a converged solve that passes)
     return nothing
 end
 _after_solve!(::Nothing, par, t, h) = nothing

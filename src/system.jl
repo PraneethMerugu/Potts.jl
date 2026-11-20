@@ -1,5 +1,5 @@
 # `PottsSystem`: the authored model, an MTK `AbstractSystem` wrapping a complete inner `System`
-# (W-lite LA, v3 §7.1). `mtkcompile` turns it into a `CompiledPottsSystem` (compile.jl).
+# (a light container: Potts keeps its own payload next to it). `mtkcompile` turns it into a `CompiledPottsSystem` (compile.jl).
 
 """
     DiscreteBlock
@@ -24,7 +24,7 @@ end
 """
     Potts.FieldBinding(path, name, source)
 
-A coupling of a model input to the field side (S-2): the input `name` of the component at
+A coupling of a model input to the field side: the input `name` of the component at
 `path` (a vector of component names, empty for the model itself) is driven by `source`.
 Bindings are stored per component as `(path, name)`; `compose` prefixes the
 path by the component name, and the input resolves after the wrap as
@@ -309,7 +309,7 @@ PDESystem (`Potts.wrap_system`) is returned as given.
 function fields(sys::PottsSystem)
     f = _stored_fields(sys)
     eqs = _field_equations(sys)
-    # a model whose only fields are aux fields `K ~ rhs` has a PDESystem of aux equations (F3-00)
+    # a model whose only fields are aux fields `K ~ rhs` has a PDESystem of aux equations
     none = isempty(eqs) && isempty(_field_aux(sys))
     f === nothing && none && return nothing
     f === nothing && (f = first(_field_system(sys)))
@@ -318,14 +318,14 @@ function fields(sys::PottsSystem)
 end
 
 # The CPM inputs of `Potts.fields(sys)` by the names a user gives their values
-# (`lattice_input_name`; F4-B6 review), which `Potts.field_inputs` uses as its keys: `kind` and
+# (`lattice_input_name`), which `Potts.field_inputs` uses as its keys: `kind` and
 # `domain` stay; a filled CPM read (`field1__in`) is named by the PDESystem input bound to
 # exactly that read (`vol => volume[owner]` names it `vol`), else by the read as the model
 # writes it (`volume[owner]`). A name another input, a field, a site variable or a parameter has
 # falls back to the read's text. The field compiler's own PDESystem is not renamed (its program,
 # input routing and fingerprint keep the generated names).
 # A name that is an identifier (`vol`, a binding's name) is the input variable's own name too, in
-# the equations, the conditions and every report (batch-end review S2: before, the variable kept
+# the equations, the conditions and every report (before, the variable kept
 # its generated name `field1__in` and only its `lattice_input_name` was `vol`).
 function _named_inputs(f::ModelingToolkitBase.PDESystem, sys::PottsSystem)
     names = _input_names(sys)
@@ -397,7 +397,7 @@ _cpm_read_text(ex) = (s = LatticePDE.as_written(replace(_builtin_text(string(ex)
 # `initial_conditions` (a value already there is kept): the initial value of each field
 # (`@variables c(field) = v`) and the value of each parameter (`@parameters k = v`, an
 # expression of parameters for a computed one). Its parameters are the model's own symbols,
-# whose defaults the payload holds (F1, V13)
+# whose defaults the payload holds (V13)
 function _with_defaults(f::ModelingToolkitBase.PDESystem, eqs)
     ic = Dict{Any, Any}(_MTKB.get_initial_conditions(f))
     put!(k, v) = (v === nothing || any(x -> isequal(x, k), keys(ic)) || (ic[k] = v); nothing)
@@ -410,7 +410,7 @@ function _with_defaults(f::ModelingToolkitBase.PDESystem, eqs)
     ps0 = _MTKB.get_ps(f)
     ps = Any[(ps0 isa SciMLBase.NullParameters ? () : ps0)...]
     # a computed default (`k2 = 2k`) reads parameters the equations may not: they join the
-    # system's parameters with their own defaults, so `discretize` can fold it (F1)
+    # system's parameters with their own defaults, so `discretize` can fold it
     k = 1
     while k <= length(ps)
         q = ps[k]
@@ -480,14 +480,14 @@ end
 # Differential(x)(c(t, 0, y)) ~ g` in a coupled PDESystem's conditions) is one value at every
 # site; the field compiler binds a coefficient that is a number, a parameter or a number times
 # one, so the expression becomes a computed parameter of its face, `c_x_low_α = g1 + g2`, read
-# only and derived again after every write (F4-12a)
+# only and derived again after every write
 function _robin_slots(part::PottsPart)
     taken = Set{Symbol}(info(x).name for x in [part.parameters; part.variables] if info(x) !== nothing)
     extra = Any[]
     function slot(c, base)
         (_isnumber(c) || _robin_simple(_unwrap(c))) && return c
         # (a coefficient that reads the coordinates or the time varies by site: LatticePDE
-        # lowers it into a value field, F4-12b)
+        # lowers it into a value field)
         _params_only(c) || return c
         n = Symbol(base)
         k = 1
@@ -549,7 +549,7 @@ end
 # whether `c` is an expression of parameters alone (at least one): a computed parameter holds it
 _params_only(c) = (ls = _param_leaves(c); !isempty(ls) && all(y -> (j = info(y); j !== nothing && j.role === :param), ls))
 # A Robin coefficient of a condition reads the parameters, the coordinates and the time
-# (F4-12b: one that varies by site or in time is a value field); one that reads a field is
+# (one that varies by site or in time is a value field); one that reads a field is
 # refused in the model's words (the condition would be another equation)
 function _check_robin_coefs(eq, N = 2)
     _, cores, coefs = _face_terms(eq)
@@ -610,7 +610,7 @@ _empty_inner(name) = ModelingToolkitBase.System(Equation[], _unwrap(t); name)
 # The fields stay out of it: an MTK `System` has one independent variable, the time, so
 # a field equation there would be a scalar ODE with free spatial symbols. The field variables
 # and every field equation (a rate, a map, a steady row, an aux field `K ~ rhs`, and any
-# equation with a raw spatial derivative, F2 design §2.11) are in the model's PDESystem
+# equation with a raw spatial derivative) are in the model's PDESystem
 # (`Potts.fields`) only.
 _is_field_variable(x) = (i = info(x); i !== nothing && i.role === :field)
 function _inner_system(sys::PottsSystem)
@@ -722,7 +722,7 @@ end
 
 `sys` itself when its inner System is the one its payload builds; otherwise the model rebuilt
 from its payload with every undeclared subsystem of the inner System's hierarchy as a
-model-scope component (cutover C9: components rebuilt from `compose`). An
+model-scope component (components rebuilt from `compose`). An
 `ArgumentError` when the inner System holds anything else, or a component has inputs (field
 bindings are not compiled into components).
 """
@@ -779,7 +779,7 @@ function _lower_inner(sys::PottsSystem, what::AbstractString)
         end
         # what a composed component's equations read: its own and model quantities only. A
         # population or site fold, a built-in or another scope's quantity is refused (a fold in a
-        # composed component is not lowered by the CPM compiler; review round 2)
+        # composed component is not lowered by the CPM compiler)
         for eq in [M.equations(s); M.observed(s)], side in (eq.lhs, eq.rhs)
             _walk_all(side) do y
                 i = info(y)
@@ -881,7 +881,7 @@ function ModelingToolkitBase.compose(p::PottsSystem, systems::AbstractArray; nam
                                                        "`$(nameof(c))`; give the component another name"))
         push!(taken, nameof(c))
     end
-    # a component's PDESystem joins the payload as fields (F4-11); its System, when it has
+    # a component's PDESystem joins the payload as fields; its System, when it has
     # content, is composed as any other
     if any(c -> _stored_fields(c) !== nothing, cs)
         pdes = [c for c in cs if _stored_fields(c) !== nothing]
@@ -1125,7 +1125,7 @@ is not a field read: `sys.<name>` is a declared symbol.
 """
 lattice(sys::PottsSystem) = _p(sys, :lattice)
 
-# --- The container's owned methods (W-lite LA, v3 §7.1); a test lists them. Each accessor
+# --- The container's owned methods; a test lists them. Each accessor
 # forwards to the complete inner System. `nameof` is MTK's generic method on the `name`
 # field. MTKBase's own SymbolicIndexingInterface methods on `::AbstractSystem` would read the
 # container's (absent) index cache, so the five SII methods below route them to the inner
@@ -1268,7 +1268,7 @@ _SII.observed(s::PottsSystem, sym; kw...) = _SII.observed(getfield(s, :inner), s
 _SII.parameter_observed(s::PottsSystem, sym) = _SII.parameter_observed(getfield(s, :inner), sym)
 # (+ `Base.show(io, ::MIME"text/plain", ::PottsSystem)` below)
 
-# --- Refusals (v3 §7.1, FR-32): SciMLBase's `{iip}` constructors accept any object as `f`, so
+# --- Refusals: SciMLBase's `{iip}` constructors accept any object as `f`, so
 # without these `ODEProblem{true}(sys, …)` and nine other routes return a problem that fails
 # only at `solve`. Every problem constructor MTKBase extends, plus `JumpProblem`, in the plain,
 # `{iip}` and `{iip, spec}` forms, on the system argument alone (and the disambiguations below).
@@ -1313,7 +1313,7 @@ ModelingToolkitBase.extend(a::PottsSystem, b::ModelingToolkitBase.AbstractSystem
 ModelingToolkitBase.extend(a::ModelingToolkitBase.AbstractSystem, b::PottsSystem; kw...) =
     throw(ArgumentError(_extend_msg(a, b)))
 
-# --- Keys namespaced by the model itself (D-137 review SF1). `sys.x` of an uncompleted `sys`
+# --- Keys namespaced by the model itself (D-137). `sys.x` of an uncompleted `sys`
 # is `pr₊x`; wherever a key names a model quantity (operating point, `remake`, `getu`/`setu`/
 # `getp`, `observe`, `prob[…]`/`sol[…]`, `solvers`) it means the declared `x`. A key
 # namespaced by another name names nothing here: with `strict`, an `ArgumentError`.
@@ -1470,7 +1470,7 @@ function Base.show(io::IO, ::MIME"text/plain", sys::PottsSystem)
     return nothing
 end
 
-# a parameter with its MTK description (F2-14): `Dc ("diffusion of c")`
+# a parameter with its MTK description: `Dc ("diffusion of c")`
 _param_show(p) = (d = SymbolicUtils.getmetadata(_unwrap(p), ModelingToolkitBase.VariableDescription, nothing);
                   d === nothing ? string(info(p).name) : string(info(p).name, " (", repr(d), ")"))
 

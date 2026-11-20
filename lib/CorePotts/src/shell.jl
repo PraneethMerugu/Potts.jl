@@ -1,12 +1,12 @@
 # ---------------------------------------------------------------------------------------
-# The target's neighbour shell and the local connectivity rules over it (P6.3g, D-189)
+# The target's neighbour shell and the local connectivity rules over it (D-189)
 #
 # The SHELL of a target x is the 8 sites of its 3×3 box (square 2D), its 6 neighbours (hex)
 # or the 26 sites of its 3×3×3 box (cubic 3D), whatever the model's neighbourhood. A shell
 # position off a closed face (or outside the domain mask) is out of domain: its owner reads
 # −1 (an `Int32`, whatever σ's eltype), never the medium (0) nor a cell (> 0). The rules
 # below work on bit masks over the shell positions: runs of a ring in 2D, whole-mask
-# dilation in a 3×3×3 box in 3D (P6.3h); no `Float64`, no `throw`, no allocation.
+# dilation in a 3×3×3 box in 3D; no `Float64`, no `throw`, no allocation.
 
 # Shell offsets: ternary order (axis 1 fastest, the origin left out) on square and cubic
 # lattices, angular order on the hexagonal one.
@@ -42,7 +42,7 @@ or outside the domain mask, whatever σ's eltype.
 """
 @inline function shell_owners(lat::Lattice{N}, σ, x) where {N}
     offs = shell_offsets(lat)
-    # one wrap per axis (x[d] − 1, x[d], x[d] + 1) instead of one `shift` per position (P6.3h)
+    # one wrap per axis (x[d] − 1, x[d], x[d] + 1) instead of one `shift` per position
     ax = ntuple(d -> _box_axis(lat, x, d), Val(N))
     xin = _mask_at(lat.mask, linear_index(lat, x))
     return ntuple(Val(length(offs))) do k
@@ -114,7 +114,7 @@ end
 end
 
 # ---------------------------------------------------------------------------------------
-# Ring masks (P6.3h). On the square 2D shell the kernels place position k at bit
+# Ring masks. On the square 2D shell the kernels place position k at bit
 # `_RING_BIT2[k]`: round the box from (−1, −1) (`_SQUARE_RING`, the Euler tracker's order), so corners sit at the even
 # bits, face neighbours at the odd ones, and consecutive bits (cyclically) are exactly the
 # face-adjacent pairs. Face pieces are then runs; the hexagonal 6-ring (`_HEX_SHELL`, angular
@@ -167,7 +167,7 @@ end
 # ternary-order square mask → ring order
 @inline _to_ring8(m::UInt32) = reduce(|, ntuple(k -> ((m >> (k - 1)) & UInt32(1)) << _bitpos(Val(:ring8), k), Val(8)))
 
-# Pieces of a cubic shell mask (P6.3h): the 26 positions sit in a 27-bit 3×3×3 box (bit
+# Pieces of a cubic shell mask: the 26 positions sit in a 27-bit 3×3×3 box (bit
 # i + 3j + 9k, the empty centre at bit 13), where one face step is a shift by 1, 3 or 9 and a
 # full step the product of the three axis dilations. Each piece grows from its lowest bit by
 # whole-mask dilation until it stops; no table, no division. The pieces counted are those

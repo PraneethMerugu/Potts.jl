@@ -8,7 +8,7 @@ using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordin
 using CorePotts: Proposal
 include("shared/gg_model.jl")
 
-# The host executor (LatticeFields.Exec, v3 §9.1): a site phase of more than `HOST_GRAIN`
+# The host executor (LatticeFields.Exec): a site phase of more than `HOST_GRAIN`
 # sites runs in threaded chunks when Julia has threads. The checkerboard runs its phases inline
 # (`threads = false`): a threaded lockless phase is not reproducible (D-271). The trajectory
 # must not depend on the chunks: a 4-thread process (chunks) reproduces this process's

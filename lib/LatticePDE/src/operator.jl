@@ -1,4 +1,4 @@
-# The operator of an implicit group (F3 design §3.4): the symmetric Helmholtz part `J̃` of each
+# The operator of an implicit group: the symmetric Helmholtz part `J̃` of each
 # row's rate Jacobian, from the linearity table, as a LatticeFields `OperatorSpec`. A row whose
 # coefficients are numbers and parameters is numeric (`Coef` sums); a row whose face
 # coefficient, multiplier or local coefficient varies by site (coordinates, inputs, tables at
@@ -70,7 +70,7 @@ function _optext(k, term)
     return _term_text(string(k, ": ", t))
 end
 
-# whether `term` is local in the field `c` (F3-09a): it reads `c` at the site only (offset 0),
+# whether `term` is local in the field `c`: it reads `c` at the site only (offset 0),
 # the inputs `I` at the site only, no other field (`others`), and no spatial operator
 function _local_term(term, c, I, ivs, others)
     _reads(term, others) && return false
@@ -95,7 +95,7 @@ function _local_derivative(term, c)
 end
 _hasdiff(u) = iscall(u) && (operation(u) isa Differential || any(a -> _hasdiff(unwrap(a)), arguments(u)))
 
-# The bound of an advection term `m Advect(u, c)` for the defect correction (F3-09b, FE-11): the
+# The bound of an advection term `m Advect(u, c)` for the defect correction: the
 # upwind Gershgorin bound `Σ_a 2 |m u_a| / h_a` as one `Coef` per axis (`2 m u_a / h_a`; its
 # absolute value counts), when the multiplier and each velocity component are numbers or a
 # number times a parameter; else nothing (a velocity field or an expression: no bound sees it)
@@ -116,7 +116,7 @@ function _advection_bound(term, params, h)
     end
     return out
 end
-# The same bound for a velocity that varies by site (F3-13; batch 3 review R2: `50(1 + x)`): per
+# The same bound for a velocity that varies by site (`50(1 + x)`): per
 # axis `(; f, text)`, `f(pp) = 2 max|m u_a| / h_a` over the box by the interval evaluator (NaN
 # when not finite); nothing when a velocity component or the multiplier reads a field (its
 # Jacobian has a cross part the bound does not see) or has no interval rule
@@ -153,7 +153,7 @@ function _cross_bound(k, term, others, cf, params, bysite)
         c = nothing
         u = unwrap(term)
         # an operator of the other field (`D laplacian(o)`, cross-diffusion): no coefficient bounds it
-        # here; it stays in the residual (a defect term the Newton check covers, r3 N1)
+        # here; it stays in the residual (a defect term the Newton check covers)
         _operator_of(u, o) && return (only(kk), Coef(NaN), _optext(k, term))
         # `a · o(t, x, y)`: the coefficient is the term with the read replaced by 1
         reads = Any[]
@@ -169,7 +169,7 @@ function _cross_bound(k, term, others, cf, params, bysite)
 end
 # a cross diffusion term `m Op(o)` of another field `o` (key `key`) with a numeric face
 # coefficient (a number or a number times a parameter, free of the coordinates and the inputs):
-# its faces per axis `m K / h_a²` (a hexagonal lattice: per face direction, `2m/(3h²)`) as `Coef`s (F3-12d: the coupled steady system's modes);
+# its faces per axis `m K / h_a²` (a hexagonal lattice: per face direction, `2m/(3h²)`) as `Coef`s (the coupled steady system's modes);
 # `nothing` otherwise
 function _cross_faces(term, key, xs, params, bysite, h, N; hex::Bool = false)
     key == "" && return nothing
@@ -183,7 +183,7 @@ function _cross_faces(term, key, xs, params, bysite, h, N; hex::Bool = false)
     end
     return faces
 end
-# An interval bound of a coefficient (M3): a function `pp -> (lo, hi)` of the parameters (a
+# An interval bound of a coefficient: a function `pp -> (lo, hi)` of the parameters (a
 # `Problems.ParamsTables`, or the raw vector: a table read is then unbounded), with a parameter
 # at its value, a coordinate over the box, a table read over the table's entries (and the 0 an
 # index 0 reads), an indicator in [0, 1] and a switch over both arms; `nothing` when the
@@ -214,7 +214,7 @@ function _interval(x, params::Dict{Any, Int}, tabs, box)
     v isa Real && return _ -> (Float64(v), Float64(v))
     haskey(params, u) && return (i = params[u]; pp -> (v = Float64(primal(pp[i])); (v, v)))
     for (xv, b) in box
-        # (a `TimeSpan` is read at each evaluation: the time window of F4-12b)
+        # (a `TimeSpan` is read at each evaluation: the time window of a bound that reads the time)
         isequal(xv, u) && return b isa TimeSpan ? (_ -> (b.lo, b.hi)) : (_ -> b)
     end
     iscall(u) || return nothing
@@ -266,7 +266,7 @@ function _diffusion_bound(p, params, tabs, box, h)
     return pp -> (v = 4 * s * _iabs(bm(pp))[2] * _iabs(bK(pp))[2]; isfinite(v) ? v : NaN)
 end
 # The face-wise ratio θ of a diffusion term `p` left out of a scaled row to the row's kept
-# term `q` (R2-M1): `max|m_p| max|K_p| / (min m_q min K_q)` over the box, as a function of the
+# term `q`: `max|m_p| max|K_p| / (min m_q min K_q)` over the box, as a function of the
 # parameters (NaN when the kept term's multiplier or face coefficient is not bounded below by
 # a positive value there, or the ratio is not finite); nothing when the left-out term acts on
 # an axis the kept one does not, or a coefficient has no interval bound. With
@@ -286,7 +286,7 @@ end
 # The largest face coefficient of a field row on each axis (rate units: `Σ max|m| max|K| / h_a²`
 # over the row's operator terms), as a function of the parameters (NaN entries when not finite),
 # or nothing when a coefficient has no interval bound: it bounds the part `w |d⁻|` of a Robin
-# face with a negative diagonal left out of the operator (R2-S1)
+# face with a negative diagonal left out of the operator
 function _face_max(diff, params, tabs, box, h, N)
     parts = Any[]
     for p in diff
@@ -320,7 +320,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
             k in states && (dvs[k] = length(kk) == 1 ? u : unwrap(Symbolics.wrap(u)[i]))
         end
     end
-    # a hexagonal lattice (F3-20): its Laplacian `2/(3h²) Σₙ (cₙ − c)` has three face directions,
+    # a hexagonal lattice: its Laplacian `2/(3h²) Σₙ (cₙ − c)` has three face directions,
     # `+e₁`, `+e₂` and `+e₁ − e₂`, each with the face `2/(3h²)` (only `laplacian` lowers there)
     hex = s.hierarchy[1].grid.geometry == HEX
     NF = hex ? 3 : N
@@ -337,7 +337,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
     # slot, the tables by key, the coordinates over the box and one spacing past it (the
     # ghost sites), and the defaults that choose the term kept
     tabset = Dict{Any, String}(u => string(u) for u in tabs if string(u) in first.(cf.tables))
-    # each row's grid spacing (a `Coarse` field's `k h`, F3-16); the box reaches one spacing of the
+    # each row's grid spacing (a `Coarse` field's `k h`); the box reaches one spacing of the
     # coarsest grid past the domain
     fdims = Int.(Tuple(s.hierarchy[1].grid.dims))
     rowh(k) = level_spacing(s.spacing, fdims, s.fields[fieldid(s, k)].levels[1])
@@ -363,7 +363,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
                                                                !any(k -> k in states, cf.keys[_opof(v)])])]
     # the group's states each aux field reads, through the aux fields it reads in turn (a term
     # that reads an aux field is a cross term of those states, or a source when it reads none:
-    # `0.5 L` with `L ~ laplacian(c)`, F3-22; the residual kernel of a row evaluates the aux kernels it
+    # `0.5 L` with `L ~ laplacian(c)`, the residual kernel of a row evaluates the aux kernels it
     # reads at the stored values, so in solve order the term is exact in an acyclic group)
     auxdef = Tuple{Any, Any}[]                  # (aux field, its right side)
     for eq in get_eqs(sys)
@@ -383,7 +383,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
         end
     end
     auxof(term) = [j for (j, (o, _)) in enumerate(auxdef) if _reads(term, (o,))]
-    t0 = Float64(_domain_ends(sys)[1][1])     # (a face's time from the system's start, F4-12b)
+    t0 = Float64(_domain_ends(sys)[1][1])     # (a face's time from the system's start)
     rows = Problems.RowOperator[]
     plans = Dict{String, Any}()                 # field rows: what their `jac:` kernel writes
     for k in _states(s)
@@ -399,11 +399,11 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
         field = domain
         iterate = switch = false                # a local Jacobian at the iterate; a switch term
         others = [o for o in allops if !isequal(o, _ref(c)) && !any(i -> isequal(i, o), inputops)]
-        adv = Any[]                             # the advection bound (F3-09b, F3-13), per term and axis
+        adv = Any[]                             # the advection bound, per term and axis
         cross = Tuple{String, Coef, String}[]   # the cross terms: (field, coefficient, text)
         crossfaces = Tuple{String, Vector{Vector{Coef}}}[]  # a cross diffusion `D laplacian(o)`: (field, faces per axis)
         unseen = String[]                       # terms out of the operator that no bound sees
-        # linear in the group's state: every term's class is (F3-12d: the coupled solve's
+        # linear in the group's state: every term's class is (the coupled solve's
         # directional difference is then exact at any step)
         linear = all(x -> last(x) in (:Diffusion, :SiteDiffusion, :LinearLocal, :Advection, :CrossLinear, :Source), cf.linearity[k])
         for (term, class) in cf.linearity[k]
@@ -416,7 +416,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
                 end
                 # a multiplier that reads the coordinates (`(1 + x) laplacian(c)`, a `Diffusion` term) is a
                 # site multiplier as well: its Jacobian row is `m_i Σ_f K_f (c_n − c_i)`, not a
-                # symmetric face `m K` (F3-24), so the row is scaled by `1/m` as `SiteDiffusion`
+                # symmetric face `m K`, so the row is scaled by `1/m` as `SiteDiffusion`
                 (class == :SiteDiffusion || readsx(p.m)) && (scaled = true)
                 push!(diff, p)
             elseif class == :LinearLocal
@@ -432,12 +432,12 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
             elseif class == :Advection && (ab = something(_advection_bound(term, params, hk),
                                                           _advection_ibound(k, term, params, tabset, box, hk), Some(nothing))) !== nothing
                 # out of the operator (a defect correction) with a bound: the count rule 2 (a
-                # velocity that varies by site, bounded over the box: F3-13, review R2 of batch 3)
+                # velocity that varies by site, bounded over the box)
                 push!(inexact, _optext(k, term))
                 append!(adv, ab)
             elseif class in (:LaggedSwitch, :Other) && _local_term(term, c, inputops, ivs, others) &&
                    (dj = _local_derivative(term, c)) !== nothing
-                # a local nonlinear term `f(c)` or a switch: `∂f/∂c` at the iterate (F3-09a),
+                # a local nonlinear term `f(c)` or a switch: `∂f/∂c` at the iterate,
                 # exact as a Newton step; the `jac:` kernel runs at every Newton iteration
                 push!(jterms, dj)
                 iterate = true
@@ -452,7 +452,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
                 end
             elseif class in (:LaggedSwitch, :Other) && !_reads(term, (_ref(c),)) &&
                    (rd = [o for o in others if _reads(term, (o,))]; !isempty(rd) && all(o -> any(r -> isequal(r, o), staterefs), rd))
-                # a term of other rows' fields only, whatever its form (design §3.4, review r1 M3):
+                # a term of other rows' fields only, whatever its form:
                 # a source when the row is solved after them (exact in an acyclic group); one
                 # cross entry per field it reads, with no coefficient (a cycle leaves it unseen)
                 for o in rd
@@ -467,8 +467,8 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
         # combine (`m laplacian(c) + D laplacian(c)` is `(m + D) laplacian(c)`). The face coefficient kept is the one
         # whose terms have the largest bound at the defaults (a term with no bound counts as
         # the largest: no bound could cover it out of the operator); the others stay out with
-        # their Gershgorin bound (count rule 2), or unseen when they have none (M3), and their
-        # face-wise ratio θ to the kept term (R2-M1: with a kept multiplier bounded below, the
+        # their Gershgorin bound (count rule 2), or unseen when they have none, and their
+        # face-wise ratio θ to the kept term (with a kept multiplier bounded below, the
         # correction contracts by θ at any step, and the bound is used only when θ > 1/2)
         bounds = Tuple{Any, String, Any}[]
         msign = Tuple{Any, String, String}[]
@@ -489,7 +489,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
                 push!(bounds, (bs[i], _optext(k, p.term), _diffusion_ratio(p, kept, params, tabset, box)))
             end
             diff = Any[kept]
-            # a coordinate multiplier that may be negative over the site centers (F3-24): the
+            # a coordinate multiplier that may be negative over the site centers: the
             # scaled row drops the diffusion at a site with `m < 0`, so the operator is not the
             # Jacobian there; its smallest value at the parameters, checked at bind and at writes
             if readsx(kept.m)
@@ -513,7 +513,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
             cj === nothing ? (field = true) : push!(jloc, cj)
         end
         field |= scaled | iterate
-        # a Robin face whose α or β varies by site or in time (F4-12b): the row writes its
+        # a Robin face whose α or β varies by site or in time: the row writes its
         # boundary diagonal per site (its `jac:` kernel evaluates the coefficients there)
         field |= any(q -> q[1] == k, Base.keys(cf.sitecoefs))
         # a numeric row needs a face on every axis that has neighbors (a raw `Dx(Dx(c))` in 2D
@@ -524,7 +524,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
         end
         local_only = !hasdiff
         facemax = field && hasdiff ? _face_max(diff, params, tabset, box, hk, N) : nothing
-        # a field row's largest local Jacobian over the box (F3-13: `8(1 + x) c`), so count rule 1
+        # a field row's largest local Jacobian over the box (`8(1 + x) c`), so count rule 1
         # keeps its growth out of the shift instead of the clamp
         jmax = nothing
         if field && !isempty(jterms)
@@ -537,7 +537,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
             plans[k] = (; diff, jterms, scaled, local_only)
         end
         # the faces whose α or β varies by site or in time: the ghost diagonal over the face's
-        # sites at any time (F4-12b)
+        # sites at any time
         sitefaces = Tuple{Int, Int, Any}[(a, side < 0 ? 1 : 2, _site_diag(cf, k, a, side, params, tabset,
                                               Any[cbox; (ivs[1], (t0, Inf), "")]))
                                          for (kk, a, side) in sort!(collect(Base.keys(cf.sitecoefs))) if kk == k]
@@ -549,7 +549,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
 end
 
 # The operator program: the rate program's fields (no scratch `∂c`, no kernels, no rules) and
-# per field row a kernel `jac:<key>` that writes its site values (F3 design §3.4): the faces
+# per field row a kernel `jac:<key>` that writes its site values: the faces
 # `jac:<key>.w<a>` (to `+e_a`, `K_f/h_a²`, 0 across the edge of an irregular domain; a
 # boundary face of the box is not a face of the solver), the local Jacobian `.j`, the boundary
 # diagonal `.d` of the face conditions (`w_b d⁺`, `w_b` the boundary face `K(i)/h²` and `d⁺`
@@ -590,12 +590,12 @@ function _jac_program(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDiscret
     lo = ntuple(d -> ends[d], N)
     h = s.spacing
     domid = s.hierarchy[1].grid.domain == 0 ? Int32(0) : fieldid_in(pb, s.fields[s.masks[s.hierarchy[1].grid.domain].field].key)
-    # a row's kernel runs on its field's grid (a `Coarse` field's, with its spacing, F3-16)
+    # a row's kernel runs on its field's grid (a `Coarse` field's, with its spacing)
     fdims = ntuple(d -> Int(s.hierarchy[1].grid.dims[d]), N)
     flev = Dict{Any, Int}(op => Int(pb.fields[ids[1]].levels[1]) for (op, (ids, _)) in fids if !(op isa Tuple))
-    # the domain on a row's level (a coarse row's: the domain folded onto its grid, F3-16)
+    # the domain on a row's level (a coarse row's: the domain folded onto its grid)
     domat(L) = domid == 0 || L == 0 ? domid : fieldid_in(pb, "domain:$L")
-    # (a blending coarse row's coefficients fold over the free children, as its rate does: F4-15b)
+    # (a blending coarse row's coefficients fold over the free children, as its rate does)
     env(kb, L, k) = Env(
         kb, fids, params, tables, spacing, unwrap(get_ivs(sys)[1]), xs, lo, level_spacing(h, fdims, L), false,
         ntuple(_ -> 0, N), RESOLVE, nothing, false, domat(L), Int32[], L, flev, fdims, 0, get(cf.free, k, nothing), cf.domfree)
@@ -722,7 +722,7 @@ function _jac_program(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDiscret
     return program(pb)
 end
 # The ghost diagonal `d = α/(α/2 + β)` of field `k`'s face (axis `a`, `side`) whose α or β
-# varies by site or in time (F4-12b), bounded over `box` (the coordinates along the face, the
+# varies by site or in time, bounded over `box` (the coordinates along the face, the
 # time; the clock, a count from 0, over [0, ∞)): a function of the parameters giving `(lo, hi)`,
 # `(NaN, NaN)` when no interval bounds it or `α/2 + β` may vanish (`|r| = |d − 1|` is the ghost
 # ratio of the explicit bound). α and β of one sign at every site (not both 0) give `0 ≤ d ≤ 2`
@@ -749,9 +749,9 @@ function _diag_bounds(A, B, D)
     return fin ? D : (NaN, NaN)
 end
 # A face's Robin coefficients `(α, β)` as nodes of the `jac:` kernel: a number or a parameter
-# from the face rule, a coefficient that varies by site or in time (F4-12b) lowered from its
+# from the face rule, a coefficient that varies by site or in time lowered from its
 # expression at the site (so an operator whose face reads the time is `timed`: rebuilt at each
-# stage's end time, F4 ruling Q16)
+# stage's end time)
 function _facecoefs(e, kb, cf::CompiledField, k, a, side, fr)
     sc = get(cf.sitecoefs, (k, a, side), (nothing, nothing))
     node(c, x) = x === nothing ? _coefnode(kb, c) : _op(e, MUL, _coefnode(kb, c), _real(e, lower(x, e)))

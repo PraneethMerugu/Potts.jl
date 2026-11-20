@@ -71,7 +71,7 @@ fidelity reference. `acceptance = nothing` uses the
 model's law (`CPMFunction(…; acceptance)`), else `Metropolis()`; `proposal = nothing` uses
 the problem's copy neighborhood (`PottsProblem(…; proposal)`, default `VonNeumann(1)`).
 
-`skip_interior = true` draws only boundary sites (D-177, D-198): mobile sites with a mobile
+`skip_interior = true` draws only boundary sites: mobile sites with a mobile
 proposal neighbor of another owner. Every other pick would propose a copy of its own owner
 (a null move), so the run of such picks between two boundary picks is drawn at once,
 geometric in the boundary fraction. One MCS is still `N` attempts over all mobile sites
@@ -179,7 +179,7 @@ they run one after another. A copy whose decision needs a whole-cell search (a `
 without window, pieces off their local fast path) is decided after its phase by one work item,
 with no copy in flight.
 
-The kinetics match `SequentialCPM` within the statistical resolution of the P6.0bl checks
+The kinetics match `SequentialCPM` within the statistical resolution of the checkerboard kinetics checks
 (foam, cell sorting, the OpenVT chain and monolayer, Akeeb invasion, a 3D RPE sheet, the
 Act cell's persistence); the Act cell moves up to 6 % faster at weak activity. See
 `docs/design/research/checkerboard-kinetics.md`.

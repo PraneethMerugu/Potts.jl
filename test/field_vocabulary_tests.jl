@@ -1,9 +1,8 @@
-# F4-E4 (research/field-compiler/f4/F4-ergonomics.md item 1, user ruling 2026-11-10): the opt-in
-# vocabulary `using Potts.Fields`. Checks: `using Potts, Potts.Fields` leaves no name
+# The opt-in vocabulary `using Potts.Fields`. Checks: `using Potts, Potts.Fields` leaves no name
 # ambiguous; every exported name is the binding of its source (MTKBase, LatticePDE, Potts); a
 # name it shares with LatticePDE, ModelingToolkitBase, SciMLBase or the OrdinaryDiffEq solver
 # packages of this environment is the same binding; `using Potts` alone brings in no `t`, `x`,
-# `y`, `z`. Negative control at the base 4ca38af7: `Potts.Fields` does not exist (~/lpwork/f4E/nc-e4e7.log).
+# `y`, `z`. Negative control at the base 4ca38af7: `Potts.Fields` does not exist.
 
 @testsetup module FieldVocabularySetup
 using Potts, Test
@@ -21,8 +20,8 @@ fv_ambiguous(mods...) = (m = Module(); foreach(p -> Core.eval(m, Expr(:using, Ex
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "F4-E4: using Potts.Fields" setup = [FieldVocabularySetup] tags = [:potts, :field_vocabulary] begin
-    @testset "F4-E4: using Potts.Fields" begin
+@testitem "using Potts.Fields" setup = [FieldVocabularySetup] tags = [:potts, :field_vocabulary] begin
+    @testset "using Potts.Fields" begin
         ex = fv_exports()
         @test issetequal(
             ex, [
@@ -43,7 +42,7 @@ end
         )
         # the names clash check: a name another package exports is the same binding. ModelingToolkit
         # and OrdinaryDiffEq are not in this environment; a one-off check with both loaded found no
-        # clash and no ambiguity (2026-11-10, ~/lpwork/f4E/e4-mtk.jl and e4-mtk.log)
+        # clash and no ambiguity (2026-11-10 and e4-mtk.log)
         for M in (LP, MB, Potts.SciMLBase, OrdinaryDiffEqTsit5, OrdinaryDiffEqRosenbrock, Potts)
             clash = [n for n in ex if Base.isexported(M, n) && isdefined(M, n) && getfield(M, n) !== getfield(Potts.Fields, n)]
             @test isempty(clash) || (println(M, ": ", clash); false)

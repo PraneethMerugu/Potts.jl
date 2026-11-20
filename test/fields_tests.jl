@@ -1,4 +1,4 @@
-# Fields after the field-compiler cutover (C8): a model's field (a coupled PDESystem) is lowered
+# Fields after the field-compiler cutover: a model's field (a coupled PDESystem) is lowered
 # by the field compiler (LatticePDE → LatticeFields) and stepped by explicit Euler over each MCS.
 # Oracles: the discrete Fourier factor of FTCS, mass conservation, a hand FTCS stepper; each
 # with a negative control (D-048).
@@ -384,10 +384,10 @@ end
     end
 end
 
-@testitem "F1 SD-14, F4-12a: a boundary value is an expression of parameters" setup = [FieldsSetup] tags = [:potts, :fields] begin
-    @testset "F1 SD-14, F4-12a: a boundary value is an expression of parameters" begin
-        # F1: refused at the model with the computed-parameter route ("… is an expression of
-        # parameters; … `@parameters g = g1 + g2`"); F4-12a (FE-10): it runs, and equals the
+@testitem "a boundary value is an expression of parameters" setup = [FieldsSetup] tags = [:potts, :fields] begin
+    @testset "a boundary value is an expression of parameters" begin
+        # Before, refused at the model with the computed-parameter route ("… is an expression of
+        # parameters; … `@parameters g = g1 + g2`"); now it runs, and equals the
         # computed parameter's run bitwise, also after a write
         @test fd_err(() -> FdExprFace(; name = :f)) === nothing
         run(M, p = []) = solve(PottsProblem(M(; name = :f), [fd_empty((8, 8)); p], (0, 2); field_solver = ExplicitEuler())).u[end].site.c
@@ -407,7 +407,7 @@ end
             Potts.ModelingToolkitBase.equations(Potts.fields(FdClosed(; name = :f))),
             Potts.ModelingToolkitBase.equations(Potts.fields(mtkcompile(FdClosed(; name = :f))))
         )
-        # … with the model's defaults, so `discretize` takes it as it is (base, round 0: the field
+        # … with the model's defaults, so `discretize` takes it as it is (before: the field
         # and the parameters had no value, "no initial condition" / NaN): c(1) = 2 (1 − 0.05)^10
         LP = Potts.LatticePDE
         for m in (FdDefaults(; name = :f), mtkcompile(FdDefaults(; name = :f)))
@@ -417,7 +417,7 @@ end
             o = LP.discretize(Potts.fields(m), LP.LatticeDiscretization(LP.Grid((6, 4)); T = Float64))
             @test o isa Potts.SciMLBase.ODEProblem && o.p.values == [1.0, 0.5] && all(==(2.0), o.u0)
         end
-        # a computed parameter folds and reads (round 1: reading threw): c(1) = (1 − 0.1)^10
+        # a computed parameter folds and reads: c(1) = (1 − 0.1)^10
         prob = LP.discretize(
             Potts.fields(FdComputedRate(; name = :f)), LP.LatticeDiscretization(
                 LP.Grid((6, 4));
@@ -427,7 +427,7 @@ end
         @test LP.getp(prob, :k2)(prob) == 1.0
         @test all(≈(0.9^10), LP.solve(prob, LP.ExplicitEuler(; substeps = 1); dt = 0.1)[:c, end])
         @test LP.getp(LP.remake(prob; p = [:k => 1.0]), :k2)(LP.remake(prob; p = [:k => 1.0])) == 2.0
-        # a kind table on the ODE path is the table (round 2: the right side read the state for
+        # a kind table on the ODE path is the table (the right side read the state for
         # it); c = 1 on medium sites: dc/dt = −δ[medium] = −0.5
         o = LP.discretize(
             Potts.fields(FdTab(; name = :f)), LP.LatticeDiscretization(LP.Grid((10, 8)); T = Float64);
@@ -436,17 +436,17 @@ end
         du = similar(o.u0)
         o.f(du, o.u0, o.p, 0.0)
         @test all(≈(-0.5), du)
-        # a field named like a generated input is refused in the model's words (round 4 via A:
-        # "the input field `domain__in` has the name `domain`")
+        # a field named like a generated input is refused in the model's words (before, through
+        # the removed field syntax: "the input field `domain__in` has the name `domain`")
         err = something(fd_err(() -> Potts.fields(FdDomainWord(; name = :f))), "(no error)")
         @test occursin("`domain`", err)
-        # … and reads back on the owned path (round 3: "`:δ` names nothing of this problem")
+        # … and reads back on the owned path ("`:δ` names nothing of this problem")
         po = LP.discretize(Potts.fields(FdTab(; name = :f)), LP.LatticeDiscretization(LP.Grid((10, 8)); T = Float64); inputs = [:kind => zeros(Int32, 10, 8)])
         ig = LP.init(po, LP.ExplicitEuler(; substeps = 1); dt = 0.1)
         @test ig.ps[:δ] == [0.5, 0.0] && LP.getp(po, :δ)(po) == [0.5, 0.0]
-        LP.setp(ig, :δ)(ig, [1.0, 0.0])                     # an integrator's table is set (F2-13)
+        LP.setp(ig, :δ)(ig, [1.0, 0.0])                     # an integrator's table is set
         @test ig.ps[:δ] == [1.0, 0.0] && LP.getp(po, :δ)(po) == [0.5, 0.0]
-        # a problem's table is set as SciML sets a parameter, in place (F4-00; base: refused, "`δ` is a table")
+        # a problem's table is set as SciML sets a parameter, in place (base: refused, "`δ` is a table")
         pw = LP.remake(po; p = [:δ => [0.5, 0.0]])
         LP.setp(pw, :δ)(pw, [1.0, 0.0])
         @test LP.getp(pw, :δ)(pw) == [1.0, 0.0] && LP.getp(po, :δ)(po) == [0.5, 0.0]
@@ -455,7 +455,7 @@ end
         prob = LP.discretize(Potts.fields(FdSource(; name = :f)), LP.LatticeDiscretization(LP.Grid((12, 10)); T = Float64); inputs = [:kind => K])
         s = LP.solve(prob, LP.ExplicitEuler(; substeps = 1); dt = 0.1, saveat = 0.1)
         @test s[:c, 2] ≈ 0.1 * 0.05 .* (K .== 1)
-        # … by the model's word (round 1: only the generated key "kind__in"); "kind" too, and the
+        # … by the model's word (only the generated key "kind__in"); "kind" too, and the
         # messages print routes that run, never `__in`
         fe(f) = something(fd_err(f), "(no error)")
         fsrc = Potts.fields(FdSource(; name = :f))
@@ -463,14 +463,14 @@ end
         @test LP.discretize(fsrc, disc; inputs = ["kind" => K]).p.inputs == prob.p.inputs
         err = fe(() -> LP.solve(LP.discretize(fsrc, disc), LP.ExplicitEuler(); dt = 0.1))
         @test occursin("`kind`", err)
-        # (F4-01: an unset input is named when the problem is solved, by a field algorithm or an
+        # (an unset input is named when the problem is solved, by a field algorithm or an
         # OrdinaryDiffEq solver; base: at `discretize` of the ODE problem)
         err = fe(() -> (q = LP.discretize(fsrc, LP.LatticeDiscretization(LP.Grid((12, 10)); T = Float64)); q.f(similar(q.u0), q.u0, q.p, 0.0)))
         @test occursin("kind", err)
         err = fe(() -> LP.discretize(fsrc, disc; inputs = [:kd => K]))
         @test occursin("`kind`", err)
         # (the input of a bound CPM read is named by the PDESystem's input bound to it, `volume`;
-        # F4-B6 review: before, by the expression text "LatticePDE.value_at(volume, owner)")
+        # before, by the expression text "LatticePDE.value_at(volume, owner)")
         fvol = Potts.fields(FdVolumeRead(; name = :f))
         V = fill(2.0, 6, 4)
         s = LP.solve(
@@ -497,7 +497,7 @@ end
             ), ""
         )
         @test occursin("kind", err)
-        # PO02: LatticePDE's operators lower in `@equations` (F2-10; F1 named them "does not lower",
+        # PO02: LatticePDE's operators lower in `@equations` (F1 named them "does not lower",
         # base f9a77dd3: "reads a field or site variable inside a CPM read")
         @test fd_err(() -> mtkcompile(FdDivK(; name = :f))) === nothing
     end
@@ -514,10 +514,10 @@ end
     end
 end
 
-# F2-12 (F2 design §2.8): `Potts.fields(model)` → `discretize(…; p = [:k => 2.0])` runs with no
+# `Potts.fields(model)` → `discretize(…; p = [:k => 2.0])` runs with no
 # `remake` (base: a `MethodError`, the keyword did not exist)
-@testitem "F2-12: Potts.fields then discretize with keywords" setup = [FieldsSetup] tags = [:potts, :fields] begin
-    @testset "F2-12: Potts.fields then discretize with keywords" begin
+@testitem "Potts.fields then discretize with keywords" setup = [FieldsSetup] tags = [:potts, :fields] begin
+    @testset "Potts.fields then discretize with keywords" begin
         LP = Potts.LatticePDE
         disc = LP.LatticeDiscretization(LP.Grid((12, 10)); T = Float64)
         prob = LP.discretize(Potts.fields(FdClosed(; name = :f)), disc; p = [:k => 0.5], u0 = [:c => 1.0], tspan = (0, 1))
@@ -527,8 +527,8 @@ end
     end
 end
 
-@testitem "F2-15: computed parameters read-only and derived, in a model and in B" setup = [FieldsSetup] tags = [:potts, :fields] begin
-    @testset "F2-15: computed parameters read-only and derived, in a model and in B" begin
+@testitem "computed parameters read-only and derived, in a model and in B" setup = [FieldsSetup] tags = [:potts, :fields] begin
+    @testset "computed parameters read-only and derived, in a model and in B" begin
         LP, SII = Potts.LatticePDE, Potts.SymbolicIndexingInterface
         err(f) = something(fd_err(f), "")
         c0 = rand(StableRNG(15), 8, 6)
@@ -546,7 +546,7 @@ end
         # one table of writes against the model, B owned and B ODE: equal values, equal refusals
         pa = PottsProblem(FdChainK(; name = :k), [fd_empty((8, 6)); :c => c0], (0, 1))
         sysb = Potts.fields(FdChainK(; name = :k))
-        # (F4-01: `po` is the owned problem of the one problem `discretize` returns, `pd` that problem)
+        # (`po` is the owned problem of the one problem `discretize` returns, `pd` that problem)
         disc() = LP.LatticeDiscretization(LP.Grid((8, 6)); T = Float64)
         po, pd = LP.Problems.field_problem(LP.discretize(sysb, disc())), LP.discretize(sysb, disc())
         reads(q) = (getp(q, :β)(q), getp(q, :γ)(q))

@@ -1,10 +1,10 @@
-# F4-11 (F4 design §3.8 FE-15b): a plain `PDESystem` composes into a model as fields.
+# A plain `PDESystem` composes into a model as fields.
 # `compose(model, Potts.component(:drug, pdesys, model))` equals the same field coupled
 # with `@fields`, bitwise on the CPU with
 # σ frozen (one group); the component reads
 # `kind` by its user word; its fields take `FieldGroups` pairs by name; a domain other than the
 # lattice's (in the model's length unit, `@lattice spacing`) is refused naming both.
-# Base (the F4-10 commit, ~/lpwork/f4c/nc11-base.log): `Potts.component` takes no PDESystem
+# Before this feature `Potts.component` took no PDESystem
 # (a MethodError in every testset that builds one); a component carrying a PDESystem is refused
 # with "has a PDESystem; a component's fields are not compiled".
 
@@ -28,7 +28,7 @@ const Dt = Differential(t)
 @variables vol(..) [input = true, lattice_input_name = "volume"]
 @variables zq(t) = 1.0
 zz() = System([Dt(zq) ~ -zq], t; name = :zz)
-# `D(u) ~ Dd Δu − kd u` with the conditions `bcs` (review fixups: names, start values, ivs)
+    # `D(u) ~ Dd Δu − kd u` with the conditions `bcs` (for the checks of names, start values, ivs)
 const DOM = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 12.0), y ∈ Interval(0.0, 10.0)]
 plain(bcs; name = :drug, ivs = [t, x, y], ps = [Dd, kd], dom = DOM) =
         PDESystem([Dt(u(t, x, y)) ~ Dd * Potts.LatticePDE.laplacian(u(t, x, y)) - kd * u(t, x, y)], bcs, dom, ivs, [u(t, x, y)], ps; name)
@@ -40,7 +40,7 @@ function drug(L; name = :drug, extra = Equation[], dvs = [u(t, x, y), kin(t, x, 
     return PDESystem([Dt(u(t, x, y)) ~ rhs], [u(0, x, y) ~ 0.0; u(t, 0, y) ~ 1.0; extra],
         [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, L[1]), y ∈ Interval(0.0, L[2])], [t, x, y], dvs, [Dd, kd]; name)
 end
-# the references, coupled with `@fields` (F4-B4t): `drug` with the kind as the bound input `kA`
+    # the references, coupled with `@fields`: `drug` with the kind as the bound input `kA`
 @variables kA(..)::Bool [input = true]
 ref(L) = drug(L; name = :fields, dvs = [u(t, x, y), kA(t, x, y)],
         rhs = Dd * Potts.LatticePDE.laplacian(u(t, x, y)) - kd * u(t, x, y) + ifelse(kA(t, x, y), 1.0, 0.0)
@@ -102,12 +102,12 @@ catch e
 end
 
 
-# F4-11 review fixups: names the model has already are refused (they were appended: a host
+# Names the model has already are refused (they were appended: a host
 # `kd = 0.9` and a PDESystem `kd = 0.5` gave the parameters [kd, Dd, kd], and one field read
 # the wrong kd); the initial value from a start condition `u(0, x, y) ~ v`; a condition at
 # another fixed time, `Pair` parameters, a time that is not the first variable and a CPM word
 # a site does not read are refused at compose, naming the PDESystem.
-# Base (a457bf8a, ~/lpwork/f4c/nc11r-base.log): 4 pass, 6 fail (both clashes, the time-5 condition,
+# Before the fix (a457bf8a): 4 pass, 6 fail (both clashes, the time-5 condition,
 # the `Pair`, the time last, `volume`); the start-value cases already held (a test gap).
 @potts_model FcHostK begin
     @kinds medium A[frozen]
@@ -143,9 +143,9 @@ end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "F4-11: a component that carries a PDESystem composes" setup = [FieldsComponentsSetup] tags = [:potts, :fields_components] begin
-    @testset "F4-11: a component that carries a PDESystem composes" begin
-        # (before F4-11: "has a PDESystem; a component's fields are not compiled")
+@testitem "a component that carries a PDESystem composes" setup = [FieldsComponentsSetup] tags = [:potts, :fields_components] begin
+    @testset "a component that carries a PDESystem composes" begin
+        # (before this feature: "has a PDESystem; a component's fields are not compiled")
         host = FcHost(; name = :m)
         w = Potts.wrap_system(
             :drug, FcPDE.System(FcPDE.Equation[], FcPDE.t; name = :drug), FcPDE.drug((12, 10)),
@@ -155,8 +155,8 @@ end
     end
 end
 
-@testitem "F4-11: a PDESystem component equals the coupled field (bitwise, σ frozen)" setup = [FieldsComponentsSetup] tags = [:potts, :fields_components] begin
-    @testset "F4-11: a PDESystem component equals the coupled field (bitwise, σ frozen)" begin
+@testitem "a PDESystem component equals the coupled field (bitwise, σ frozen)" setup = [FieldsComponentsSetup] tags = [:potts, :fields_components] begin
+    @testset "a PDESystem component equals the coupled field (bitwise, σ frozen)" begin
         host = FcHost(; name = :m)
         comp = Potts.component(:drug, FcPDE.drug((12, 10)), host)
         m = compose(host, comp)
@@ -186,8 +186,8 @@ end
     end
 end
 
-@testitem "F4-11: the domain is the lattice's, in the model's length unit" setup = [FieldsComponentsSetup] tags = [:potts, :fields_components] begin
-    @testset "F4-11: the domain is the lattice's, in the model's length unit" begin
+@testitem "the domain is the lattice's, in the model's length unit" setup = [FieldsComponentsSetup] tags = [:potts, :fields_components] begin
+    @testset "the domain is the lattice's, in the model's length unit" begin
         host, hosth = FcHost(; name = :m), FcHostH(; name = :m)
         # lattice units on a lattice without spacing; dims × spacing on one with spacing
         wide = fc_msg(() -> compose(host, Potts.component(:drug, FcPDE.drug((24, 10)), host)))
@@ -199,10 +199,10 @@ end
     end
 end
 
-# F4-B1: `lattice_domain(t, (x, y), dims; spacing)` is the domain the check takes. Negative
+# `lattice_domain(t, (x, y), dims; spacing)` is the domain the check takes. Negative
 # control at 8c3f01cf: `lattice_domain` is not defined (an UndefVarError).
-@testitem "F4-B1: lattice_domain passes the component's domain check" setup = [FieldsComponentsSetup] tags = [:potts, :fields_components] begin
-    @testset "F4-B1: lattice_domain passes the component's domain check" begin
+@testitem "lattice_domain passes the component's domain check" setup = [FieldsComponentsSetup] tags = [:potts, :fields_components] begin
+    @testset "lattice_domain passes the component's domain check" begin
         hosth = FcHostH(; name = :m)
         T, X, Y = FcPDE.t, FcPDE.x, FcPDE.y
         hand = FcPDE.drug((6, 5))
@@ -228,8 +228,8 @@ end
     end
 end
 
-@testitem "F4-11: inputs by their CPM word; refusals name the PDESystem" setup = [FieldsComponentsSetup] tags = [:potts, :fields_components] begin
-    @testset "F4-11: inputs by their CPM word; refusals name the PDESystem" begin
+@testitem "inputs by their CPM word; refusals name the PDESystem" setup = [FieldsComponentsSetup] tags = [:potts, :fields_components] begin
+    @testset "inputs by their CPM word; refusals name the PDESystem" begin
         host = FcHost(; name = :m)
         # an input with no word the CPM fills
         bad = FcPDE.drug((12, 10); dvs = [FcPDE.u(FcPDE.t, FcPDE.x, FcPDE.y), FcPDE.nut(FcPDE.t, FcPDE.x, FcPDE.y)],
@@ -254,8 +254,8 @@ end
     end
 end
 
-@testitem "F4-11: a PDESystem component on the device agrees with the CPU" setup = [FieldsComponentsSetup] tags = [:potts, :fields_components, :device] begin
-    @testset "F4-11: a PDESystem component on the device agrees with the CPU" begin
+@testitem "a PDESystem component on the device agrees with the CPU" setup = [FieldsComponentsSetup] tags = [:potts, :fields_components, :device] begin
+    @testset "a PDESystem component on the device agrees with the CPU" begin
         if isdefined(@__MODULE__, :PottsDevices) && PottsDevices.on_device() && PottsDevices.device_name() == "rocm"
             backend = PottsDevices.device_backend()
             host = FcHost(; name = :m)
@@ -270,8 +270,8 @@ end
     end
 end
 
-@testitem "F4-11 review: names, start values and compose-time refusals" setup = [FieldsComponentsSetup] tags = [:potts, :fields_components] begin
-    @testset "F4-11 review: names, start values and compose-time refusals" begin
+@testitem "names, start values and compose-time refusals" setup = [FieldsComponentsSetup] tags = [:potts, :fields_components] begin
+    @testset "names, start values and compose-time refusals" begin
         T, X, Y, u, kd = FcPDE.t, FcPDE.x, FcPDE.y, FcPDE.u, FcPDE.kd
         host = FcHost(; name = :m)
         # a parameter or field name the model has already (a hand-wrapped PDESystem keeps its names)
@@ -282,8 +282,8 @@ end
         @test occursin("field `u`", pu)
         # (namespaced as a component, the same PDESystem composes)
         @test fc_msg(() -> compose(hk, Potts.component(:drug, FcPDE.plain([u(0, X, Y) ~ 0.7]), hk))) == "built"
-        # the initial value from a start condition, bitwise against the coupled one (before F4-B4t,
-        # A's default): a number, a parameter expression, and that expression after an
+        # the initial value from a start condition, bitwise against the coupled one (before, the
+        # removed field syntax's default): a number, a parameter expression, and that expression after an
         # operating-point write
         run(pde, k; op = fcm_op()) = fc_run(compose(host, Potts.component(:drug, pde, host)), :drug₊u, k; op)
         @test run(FcPDE.plain([u(0, X, Y) ~ 0.7]), 3) == fc_run(FcRefIC(; name = :m), :u, 3)

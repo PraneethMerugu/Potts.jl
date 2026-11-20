@@ -1,4 +1,4 @@
-@testsetup module CoupleReviewSetup
+@testsetup module CoupleOracleSetup
 using Potts, Test
 
 module CrPDE

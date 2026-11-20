@@ -1,5 +1,4 @@
-# A model's own cell and model ODEs through ModelingToolkit (P6.0bn, route A2 of the
-# MTK-native plan). The `@equations` of each scope (cell, model) become one MTK `System`, the
+# A model's own cell and model ODEs through ModelingToolkit. The `@equations` of each scope (cell, model) become one MTK `System`, the
 # per-cell template: the scope's variables are its unknowns, the declared parameters its
 # parameters, and everything else the equations read (built-ins, other scopes' variables,
 # gathers, population folds, cross-cell reads) an input parameter standing for that
@@ -58,7 +57,7 @@ _is_coupling(l) = l isa SymbolicUtils.BasicSymbolic && !SymbolicUtils.isconst(l)
 # `ifelse`, registered user functions). Potts' own operations (`gather`, `population`,
 # `cell_integral`, …), LatticePDE's reads `value_at` (a kind-table entry or a value at a
 # cell), operators (`D`, `Pre`, `Shift`: SymbolicUtils operators, not functions) and
-# `getindex` stand for a quantity MTK cannot express: the whole call is an input (S-4: an
+# `getindex` stand for a quantity MTK cannot express: the whole call is an input (an
 # input never indexes an array parameter inside a template).
 _template_op(op) = op isa Function && op !== getindex && op !== value_at && parentmodule(op) !== (@__MODULE__)
 
@@ -276,7 +275,9 @@ function _check_algebraic(sys::PottsSystem, deqs, aeqs)
                 "`$name` is defined by the algebraic equation `$eq` and has the declared initial value `$d`; an " *
                 "algebraic variable's value follows from its definition. Declare `$name($scope)` without a value; to " *
                 "start it at a value, give `$name => value` in the operating point (the initial condition " *
-                "`$name ~ value`, D-170) or write the condition in @initialization_equations"))
+                        "`$name ~ value`) or write the condition in @initialization_equations"
+                )
+            )
             _has_op(eq.rhs, random_uniform) && throw(
                 PottsCompileError(
                 "the algebraic equation `$eq` draws `rand()`; an algebraic variable is a function of the current state " *

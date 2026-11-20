@@ -31,7 +31,7 @@ The run is deterministic for a given seed, commit and Julia version. All runs us
 `SequentialCPM` with the model's declared proposal neighbourhood. Captions name the
 constructor, parameters, machine, backend and commit (`rendered_on()` in `common.jl`). `common.jl` holds the shared
 solve, record and sidecar code. The re-encode step uses Makie's bundled ffmpeg (`FFMPEG_jll`).
-Cells are drawn without outlines (D-156): one categorical colour per cell (D-172), or per
+Cells are drawn without outlines: one categorical colour per cell, or per
 phenotype where the paper reads the run by kind (cell sorting, leaders and followers). The wall times below are rough figures from the first runs on
 a shared 8-core Apple Silicon machine; each sidecar records the producing machine (`cpu`, `machine`,
 `threads`) and its measured times. The 2026-10-07 renders ran on the maintainer's PC

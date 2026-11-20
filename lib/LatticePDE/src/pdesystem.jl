@@ -1,4 +1,4 @@
-# `pdesystem(eqs, bcs = []; name, domain = [])` (F4-E6): a plain MTK `PDESystem` whose lists
+# `pdesystem(eqs, bcs = []; name, domain = [])`: a plain MTK `PDESystem` whose lists
 # are worked out from its equations (MTK's constructor takes them all; a new `PDESystem` method
 # from here would be piracy).
 
@@ -96,7 +96,7 @@ function pdesystem(eqs, bcs = Equation[]; name, domain = Any[], kwargs...)
                    op(ivs...))
     end
     # the fields with equations in the order of the equations, then the inputs by name (the
-    # term order of an expression is SymbolicUtils', F4-E6 review)
+    # term order of an expression is SymbolicUtils')
     isfield(u) = any(w -> isequal(operation(w), operation(u)), terms[1:nlhs])
     dvs = Any[filter(isfield, dvs); sort!(filter(!isfield, dvs); by = u -> string(nameof(operation(u))))]
     ps = Any[v for v in leaves if !seen(v, ivs)]

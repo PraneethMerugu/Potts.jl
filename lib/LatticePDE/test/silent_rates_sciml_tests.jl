@@ -1,4 +1,4 @@
-# Split from silent_tests.jl (Wave T3b); uses LP_silent setup.
+# Split from silent_tests.jl; uses LP_silent setup.
 
 @testitem "F2 (g): a table-read diffusion multiplier takes an automatic count" setup = [LP_silent] tags = [:latticepde, :silent] begin
     @testset "F2 (g): a table-read diffusion multiplier takes an automatic count" begin
@@ -84,7 +84,7 @@ end
             @test sok(solve(sown(sys; inputs = [qe => checker(4, 1, 2)]), ExplicitEuler(); dt = 0.025))
         end
         # … and a row that is not dominant (the cross term outweighs the reaction) on a loop is still
-        # refused (`o` reads `c` back; one way it is bounded since F3-25)
+        # refused (`o` reads `c` back; one way it is bounded)
         sys = ssys([D(ce) ~ value_at(Dk2, qe) * laplacian(ce) - 0.05ce - 0.1oe, D(oe) ~ -oe + 0.1ce], [c(0, x, y) ~ 1.0, o(0, x, y) ~ 1.0], [ce, oe, qe], [Dk2])
         @test occursin("coupled", emsg(() -> solve(sown(sys; inputs = [qe => checker(4, 1, 2)]), ExplicitEuler(); dt = 0.025)))
     end
@@ -183,28 +183,28 @@ end
     end
 end
 
-@testitem "F2-04: one ExplicitEuler; a FieldProblem needs its dt" setup = [LP_silent] tags = [:latticepde, :silent] begin
-    @testset "F2-04: one ExplicitEuler; a FieldProblem needs its dt" begin
+@testitem "one ExplicitEuler; a FieldProblem needs its dt" setup = [LP_silent] tags = [:latticepde, :silent] begin
+    @testset "one ExplicitEuler; a FieldProblem needs its dt" begin
         @test ExplicitEuler === LatticePDE.Problems.ExplicitEuler
         @parameters kd = 0.5
         p = sown(ssys([D(ce) ~ -kd * ce], [c(0, x, y) ~ 1.0], [ce], [kd]))
         @test_throws ArgumentError solve(p, ExplicitEuler())
-        # (F2-07: `lower_bound` clips in B too; the clip's tests are in groups.jl)
+        # (`lower_bound` clips in B too; the clip's tests are in groups.jl)
         @test all(≈(0.95^10), solve(p, ExplicitEuler(; substeps = 1, lower_bound = 0.0); dt = 0.1)[:c, end])
         @test_throws ArgumentError ExplicitEuler(; substeps = 0)
         @test all(≈(0.95^10), solve(p, ExplicitEuler(; substeps = 1); dt = 0.1)[:c, end])           # control
     end
 end
 
-@testitem "SX-37: trajectories on other tasks never share a right side's store" setup = [LP_silent] tags = [:latticepde, :silent] begin
-    @testset "SX-37: trajectories on other tasks never share a right side's store" begin
+@testitem "trajectories on other tasks never share a right side's store" setup = [LP_silent] tags = [:latticepde, :silent] begin
+    @testset "trajectories on other tasks never share a right side's store" begin
         @parameters kx = 0.05
         sys = ssys(
             [D(ce) ~ DivKGrad(:arithmetic)(Ke, ce) - ce, Ke ~ kx * (1 + ce^2)], [c(0, x, y) ~ 1.0 + x], [ce, Ke], [kx];
             T = 0.01
         )
         o = discretize(sys, LatticeDiscretization(Grid((16, 16)); T = Float64))
-        f = LFP.rhs_build(o)                                          # (F4-01: the build behind `o.f.f`)
+        f = LFP.rhs_build(o)                                          # (the build behind `o.f.f`)
         du, u = similar(o.u0), copy(o.u0)
         f(du, u, o.p, 0.0)                                            # the calling task owns the build
         @test (@allocated f(du, u, o.p, 0.0)) == 0                   # … and its calls stay allocation-free
@@ -216,10 +216,10 @@ end
         task = Threads.@spawn other(f, u, pk)                          # builds the task's copy, then a warm call
         d2, g, b = fetch(task)
         @test g isa typeof(f) && g.store !== f.store && g.owner[1] === task
-        @test b == 0                                                   # (round 0: 16 B per call, a lock)
+        @test b == 0                                                   # (16 B per call, a lock)
         @test d2 ≈ (h = similar(du); f(h, u, pk, 0.0); h)
         @test only(values(f.copies)) === g                             # the build holds the copy
-        # a dropped build frees its copies while the other task lives on (round 1: the task's
+        # a dropped build frees its copies while the other task lives on (the task's
         # local storage held them: 20 builds ≈ 11 MiB kept while the Task was reachable)
         function dropped(f, u, pk)
             r = Ref{Any}(deepcopy(f))
@@ -233,7 +233,7 @@ end
         GC.gc(); GC.gc()
         @test istaskdone(t3) && w3.value === nothing
         # a deep copy (SciML's safetycopy) is a build of its own, with no owner; so is a serialized
-        # one (round 0: "cannot serialize a running Task" once a task owned the build)
+        # one ("cannot serialize a running Task" once a task owned the build)
         @test deepcopy(f).owner[1] === nothing
         io = IOBuffer()
         Serialization.serialize(io, f)
@@ -266,7 +266,7 @@ end
 
 # a linear solver given where a field algorithm goes is refused in B's
 # words, naming it a linear solver (the `linsolve` of an implicit field solver), and the route
-# works when followed. Base (9db10886, ~/lpwork/f3b2r1-nc-b.log, 6 of 8 fail;
+# works when followed. Before the fix (9db10886, 6 of 8 fail;
 # the 2 that pass are the followed routes): `solve(p, DevicePCG())`
 # is "MethodError: no method matching init(::FieldProblem…, ::DevicePCG)", `FieldGroups` says
 # "`c(t, x, y) => DevicePCG(Multigrid(LatticeFields.Solvers.V(2, 2), …` is not a field

@@ -1,4 +1,4 @@
-# Definitions of solvers/coefficients_tests.jl that other test files use (moved here by TS1b).
+# Definitions of solvers/coefficients_tests.jl that other test files use.
 using LatticeFields.Solvers: set_coefficients!, tangent!, coef_values
 
 """

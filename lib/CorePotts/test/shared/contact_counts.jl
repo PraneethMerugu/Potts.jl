@@ -1,4 +1,4 @@
-# Definitions of contact_counts_tests.jl that other test files use (moved here by TS1b).
+# Definitions of contact_counts_tests.jl that other test files use.
 function cc_brute(σ, kind, lat, rel, kinds, n)
     out = zeros(Int32, n)
     for i in 1:nsites(lat)

@@ -1,4 +1,4 @@
-# Units (M3.1): dimensional analysis of `@potts_model`s whose parameters or variables carry
+# Units: dimensional analysis of `@potts_model`s whose parameters or variables carry
 # `[unit = …]` metadata, on ModelingToolkitBase's DynamicQuantities unit inference. Potts'
 # symbolic operations get their unit rules here; `mtkcompile` calls `_check_units`.
 module PottsDynamicQuantitiesExt

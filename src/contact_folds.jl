@@ -191,7 +191,7 @@ end
 # One walker for every op set: the ops sit in a `Vector{Any}`, so all calls share one closure
 # type and one compiled `_walk` (the precompile workload's `PottsProblem` compiles it).
 # A closure capturing a function would compile a fresh walk per function: +0.1 s on a cold
-# `PottsProblem` (P6.0o latency, D-137).
+# `PottsProblem` (D-137).
 const _DRAW_OPS = Any[random_uniform, random_normal, random_normal_above]
 const _BOUNDED_DRAW_OPS = Any[random_normal_above]
 function _has_any_op(x, ops::Vector{Any})

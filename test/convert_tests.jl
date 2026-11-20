@@ -129,7 +129,7 @@ function cv_many_problem(model = CVMany; capacity = 5, σ3 = 3)
 end
 
 
-# The Int32 moment scratch (S1 of the P6.5b review): an entity whose cells' second moments
+# The Int32 moment scratch: an entity whose cells' second moments
 # exceed the bound converts nothing and is counted (the bound lowered here, as the device
 # lifecycle's tests lower it)
 @potts_model CVLarge begin
@@ -225,8 +225,8 @@ end
 # D-253: the lowest converted site (`#cv_first`, which decides `created`) and the flags are
 # `site_index_type`, Int64 above 2³¹ − 1 sites. Forced at construction on 24²: the same run
 # exactly, one `created` among the 4 conversions; unforced, Int32.
-@testitem "@convert: `created` at the Int64 site width (D-253)" setup = [ConvertSetup] tags = [:potts, :convert] begin
-    @testset "@convert: `created` at the Int64 site width (D-253)" begin
+@testitem "@convert: `created` at the Int64 site width" setup = [ConvertSetup] tags = [:potts, :convert] begin
+    @testset "@convert: `created` at the Int64 site width" begin
         wide(f) = (
             CorePotts._FORCE_WIDE_SITES[] = true; try
                 f()

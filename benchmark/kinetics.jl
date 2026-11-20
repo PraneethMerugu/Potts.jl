@@ -1,4 +1,4 @@
-# Kinetic closeness harness (P6.0bl, docs/design/research/checkerboard-kinetics.md): runs one
+# Kinetic closeness harness (docs/design/research/checkerboard-kinetics.md): runs one
 # arm (an algorithm or a control) on one case over many seeds, and compares every observable
 # with SequentialCPM as the ratio r = mean(arm) / mean(reference), with a 95% bootstrap interval
 # over seeds and the pre-registered verdict (§4).

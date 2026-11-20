@@ -1,4 +1,4 @@
-# The benchmark machine (D-157, P6.0bb): which machine this is, how timed processes are
+# The benchmark machine (D-157): which machine this is, how timed processes are
 # pinned on it, and the global Tuple type cache seeding of every timed process (D-145).
 #
 # Included by `gate.jl`, `ab.jl` and `ab_one.jl`. Uses the standard library only: `ab.jl`
@@ -285,7 +285,7 @@ end
 Wait until no CI job runs on this host (`ci`) and, with `gpu`, no other process holds the
 GPU, polling every `poll` s until `deadline` (a `time()` value). Returns `true` when the
 machine is idle, `false` when the deadline passed while it was still busy (the caller then
-times anyway and counts the run as disturbed). D-157: benchmarks on the NucBox run with the
+times anyway and counts the run as disturbed). Benchmarks on the NucBox run with the
 runner idle; a CI job's GPU group made a ROCm Graner–Glazier MCS read 2500 instead of
 47 ns/site (2026-10-07). Off Linux it returns at once.
 """
@@ -379,7 +379,7 @@ function pin_or_reexec(m, args)
 end
 
 # --------------------------------------------------------------------- Tuple type cache
-# Steady-state speed depends on the global Tuple type cache (D-145, P6.0bc): kernel launches
+# Steady-state speed depends on the global Tuple type cache (D-145): kernel launches
 # look up Tuple types, and a lookup in a nearly full hash table probes further. A session
 # that happens to have created more unrelated types reads up to ~10 % different (the Metal
 # OpenVT A/B read 1.07–1.115 unseeded, 0.996 seeded). Every timed process therefore first

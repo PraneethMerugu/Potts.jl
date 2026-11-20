@@ -1,23 +1,23 @@
-# F4-E11 to F4-E15 (gaps found by the Potts test port F4-B4t, ~/lpwork/f4B4t/EVIDENCE.txt). Until
-# F4-B6 each model here was checked bitwise against its A form; now the oracles are an
+# Array fields and face conditions of a coupled PDESystem (gaps found when the Potts tests moved
+# to `@fields`). Each model here was once checked bitwise against the removed field syntax; now
+# the oracles are an
 # independent spelling (an array field against the same fields as scalars) and LatticePDE's own
-# run of the same PDESystem (σ frozen: no cells). Uses `cp_msg` and `CpHost` of fields_couple.jl.
-# Negative controls (each item's src change reverted alone in the test copy):
-# ~/lpwork/f4E/nc-e11e15.log.
+# run of the same PDESystem (σ frozen: no cells). Uses `cp_msg` and `CpHost` of couple_testsetup.jl.
+# Negative controls: each source change reverted alone makes its testset fail.
 
-@testitem "F4-E11: array fields of a PDESystem are the components u_1, …, u_n" setup = [CoupleSetup] tags = [:potts, :fields_couple_e11] begin
-    @testset "F4-E11: array fields of a PDESystem are the components u_1, …, u_n" begin
+@testitem "array fields of a PDESystem are the components u_1, …, u_n" setup = [CoupleSetup] tags = [:potts, :fields_couple_arrays_faces] begin
+    @testset "array fields of a PDESystem are the components u_1, …, u_n" begin
         op = ce_op((12, 10))
         for fs in (BackwardEuler(), CrankNicolson())
-            a, b = ce_steps(CeFiCompB(; name = :f), op, 3; field_solver = fs), ce_steps(CeFiScal(; name = :f), op, 3; field_solver = fs)
+            a, b = ce_steps(ArrayFieldsComponent(; name = :f), op, 3; field_solver = fs), ce_steps(CeFiScal(; name = :f), op, 3; field_solver = fs)
             @test filter(n -> !endswith(string(n), "__next"), first.(a[end])) == [:u_1, :u_2] && ce_values(a) == ce_values(b)   # bitwise, by component
         end
-        a, b = ce_steps(CeFcCompB(; name = :f), op, 3), ce_steps(CeFcScal(; name = :f), op, 3)
+        a, b = ce_steps(ArrayConstraintsComponent(; name = :f), op, 3), ce_steps(CeFcScal(; name = :f), op, 3)
         @test ce_values(a) == ce_values(b) && maximum(abs, last(a[end][1])) > 0.01
         # `Potts.couple` too, and `@fields u = …` bound the vector of the components
         m = Potts.couple(CeHostArr(; name = :h), CeArr.fi())
-        @test ce_steps(m, op, 3; field_solver = BackwardEuler()) == ce_steps(CeFiCompB(; name = :f), op, 3; field_solver = BackwardEuler())
-        d = ce_steps(CeFiDriveB(; name = :f), op, 3; field_solver = BackwardEuler(), seed = 3)
+        @test ce_steps(m, op, 3; field_solver = BackwardEuler()) == ce_steps(ArrayFieldsComponent(; name = :f), op, 3; field_solver = BackwardEuler())
+        d = ce_steps(ArrayFieldsDrive(; name = :f), op, 3; field_solver = BackwardEuler(), seed = 3)
         @test ce_values(d) == ce_values(ce_steps(CeFiDriveScal(; name = :f), op, 3; field_solver = BackwardEuler(), seed = 3))
         # only vectors: a matrix of fields is refused by its shape
         e = cp_msg(() -> Potts.couple(CeHostArr(; name = :h), CeArr.mat()))
@@ -25,8 +25,8 @@
     end
 end
 
-@testitem "F4-E11: a face condition on a component of an array field" setup = [CoupleSetup] tags = [:potts, :fields_couple_e11] begin
-    @testset "F4-E11: a face condition on a component of an array field" begin
+@testitem "a face condition on a component of an array field" setup = [CoupleSetup] tags = [:potts, :fields_couple_arrays_faces] begin
+    @testset "a face condition on a component of an array field" begin
         op = ce_op((12, 10))
         for fs in (ExplicitEuler(), BackwardEuler())
             ra = ce_steps(Potts.couple(CeHostArr(; name = :h), CeArrF.arr()), op, 3; field_solver = fs)
@@ -36,13 +36,16 @@ end
     end
 end
 
-@testitem "F4-E12: Advect with a velocity vector in a coupled PDESystem" setup = [CoupleSetup] tags = [:potts, :fields_couple_e11] begin
-    @testset "F4-E12: Advect with a velocity vector in a coupled PDESystem" begin
+@testitem "Advect with a velocity vector in a coupled PDESystem" setup = [CoupleSetup] tags = [:potts, :fields_couple_arrays_faces] begin
+    @testset "Advect with a velocity vector in a coupled PDESystem" begin
         LP = Potts.LatticePDE
         e0(dims) = [ownership => zeros(Int32, dims...), kind => Symbol[]]
         run(M, op, k, fs) = solve(PottsProblem(M(; name = :f), op, (0, k); field_solver = fs, seed = 1), SequentialCPM()).u[end].site
         # LatticePDE's own run of the same system (no cells: σ is the medium), `k` windows of length 1
-        own(sys, u0, k, alg) = reshape(LP.solve(LP.remake(LP.discretize(sys, LP.LatticeDiscretization(LP.Grid(size(u0)); T = Float64));
+        own(sys, u0, k, alg) = reshape(
+            LP.solve(
+                LP.remake(
+                    LP.discretize(sys, LP.LatticeDiscretization(LP.Grid(size(u0)); T = Float64));
                     u0 = vec(u0), tspan = (0.0, Float64(k))
                 ), alg; dt = 1.0
             ).u[end], size(u0)
@@ -65,11 +68,13 @@ end
     end
 end
 
-@testitem "F4-E13: a centroid in a masked condition allocates the moment trackers" setup = [CoupleSetup] tags = [:potts, :fields_couple_e11] begin
-    @testset "F4-E13: a centroid in a masked condition allocates the moment trackers" begin
+@testitem "a centroid in a masked condition allocates the moment trackers" setup = [CoupleSetup] tags = [:potts, :fields_couple_arrays_faces] begin
+    @testset "a centroid in a masked condition allocates the moment trackers" begin
         for M in (CeMaskB,)
-            prob = PottsProblem(M(; name = :bm), [ownership => ce_mask_sigma(), kind => [:ka, :ka]], (0, 1); T = Float64,
-                field_solver = ExplicitEuler(substeps = 1))
+            prob = PottsProblem(
+                M(; name = :bm), [ownership => ce_mask_sigma(), kind => [:ka, :ka]], (0, 1); T = Float64,
+                field_solver = ExplicitEuler(substeps = 1)
+            )
             @test hasproperty(prob.u0.cell, :anchor)
             u = solve(prob, SequentialCPM()).u[end]
             @test Array(u.ownership) == ce_mask_sigma() && Array(u.site.c) == 7.0 .* (ce_mask_sigma() .== 1)
@@ -77,18 +82,18 @@ end
     end
 end
 
-@testitem "F4-E14: a face condition on a field with no spatial operator is refused" setup = [CoupleSetup] tags = [:potts, :fields_couple_e11] begin
-    @testset "F4-E14: a face condition on a field with no spatial operator is refused" begin
+@testitem "a face condition on a field with no spatial operator is refused" setup = [CoupleSetup] tags = [:potts, :fields_couple_arrays_faces] begin
+    @testset "a face condition on a field with no spatial operator is refused" begin
         op = [ownership => zeros(Int32, 8, 6), kind => Symbol[]]
         e = cp_msg(() -> PottsProblem(CeFaceB(; name = :f), op, (0, 1)), Potts.PottsCompileError)
         @test occursin("the PDESystem `nolap`", e) && occursin("has no `laplacian(c)`", e) && occursin("would do nothing", e) ||
-              (println(e); false)
+            (println(e); false)
         @test PottsProblem(CeFaceLapB(; name = :f), op, (0, 1)) isa PottsProblem          # control: with `laplacian(c)`
     end
 end
 
-@testitem "F4-E15: a neighbourhood's anonymous weight does not enter the fingerprint by name" setup = [CoupleSetup] tags = [:potts, :fields_couple_e11] begin
-    @testset "F4-E15: a neighbourhood's anonymous weight does not enter the fingerprint by name" begin
+@testitem "a neighbourhood's anonymous weight does not enter the fingerprint by name" setup = [CoupleSetup] tags = [:potts, :fields_couple_arrays_faces] begin
+    @testset "a neighbourhood's anonymous weight does not enter the fingerprint by name" begin
         @test typeof(CE_W1.weight) != typeof(CE_W2.weight)
         op = (σ = zeros(Int32, 20, 20); σ[3:6, 3:6] .= 1; [ownership => σ, kind => [:A]])
         f1, f2 = (PottsProblem(M(; name = :w), op, (0, 1)).f.fingerprint for M in (CeW1, CeW2))

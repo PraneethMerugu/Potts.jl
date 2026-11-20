@@ -1,4 +1,4 @@
-# Definitions of phases_tests.jl that other test files use (moved here by TS1b).
+# Definitions of phases_tests.jl that other test files use.
 function jacobi!(st, p, ctx, key, mcs, i)
     lat = ctx.lattice
     x = coordinates(lat, i)

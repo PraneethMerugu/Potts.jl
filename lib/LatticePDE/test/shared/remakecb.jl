@@ -1,4 +1,4 @@
-# Definitions of remakecb_tests.jl that other test files use (moved here by TS1b).
+# Definitions of remakecb_tests.jl that other test files use.
 using OrdinaryDiffEqTsit5: Tsit5
 
 @parameters rD = 0.2

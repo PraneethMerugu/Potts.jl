@@ -1,4 +1,4 @@
-# Definitions of compartments_tests.jl that other test files use (moved here by TS1b).
+# Definitions of compartments_tests.jl that other test files use.
 """Nucleus/cytoplasm pairs: a `side`-box of kind 1 with a central nucleus of kind 2."""
 function compartment_cells(dims, side, core)
     σ, kinds = blocks(dims, side; gap = 2)
@@ -40,7 +40,7 @@ function compartment_model(; λc = 1.0, Vc = 64.0, λs = 0.0, Sc = 32.0, Jint = 
 end
 
 """Moment trackers of `u` exact: on the host planner equal to a recount from σ; on the device
-planner (D-089), which keeps the parent's anchor for a daughter (a representation choice),
+planner, which keeps the parent's anchor for a daughter (a representation choice),
 the same centroid and covariance of every live cell as the recount."""
 function same_moments(u, lat::Lattice{N}, cap, alg) where {N}
     m = init_moments(u.ownership, lat, cap)

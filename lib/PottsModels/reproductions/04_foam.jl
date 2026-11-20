@@ -288,7 +288,7 @@ end #hide
 
 # ### Verdicts at a glance
 #
-# The rows are pre-registered in the test (`test/reproductions/04_foam_tests.jl`, D-190),
+# The rows are pre-registered in the test (`test/reproductions/04_foam_tests.jl`),
 # with the paper's acceptance bands, and judged on the full run: 10 ordered foams, 30
 # disordered ones and every shear row on 5 replicates. The test recomputes every
 # value below from the committed record.
@@ -313,7 +313,7 @@ Markdown.parse(join([ #hide
 
 # ### Deviations
 #
-# One row per failed target and per labeled difference from the paper (D-154). The
+# One row per failed target and per labeled difference from the paper. The
 # columns are our value, the paper's value, the suspected cause and the status of the
 # question to the authors: "not an author question", "not asked" (the question is on our
 # open question list; spec 04 §7 names it), "asked on ⟨date⟩" or "answered → ⟨D-entry⟩".
@@ -333,11 +333,11 @@ Markdown.parse(join([ #hide
     "|---|---|---|---|---|", #hide
     ("| $(r["id"]): $(cellesc(r["target"])) (**FAIL**) | $(cellesc(r["ours"])) | $(cellesc(r["paper"])) | $(cellesc(r["suspected_cause"])) | $(cellesc(r["author_question"])) |" #hide
      for r in rec_rows(isfile(joinpath(rec_dir, "deviations_amended.tsv")) ? "deviations_amended.tsv" : "deviations.tsv"))..., #hide
-    "| DV1 proposal law and time scale τ | a uniform neighbor among the 20, at wall sites (`SequentialCPM(; skip_interior = true)`); like neighbors are null draws, so a wall site is updated less often per MCS than in the paper. One paper MCS is τ = 1/ū of our MCS, ū the mean unlike share of the wall sites' 20 neighbors: τ = $(fmt(τ_brick; d = 2)) on the brick wall; the full run measured τ = $(fmt(τ_rec; d = 2)) on its 5 relaxed ordered foams, and every shear time is in paper MCS | a wall site picked at random, a copy only to an unlike neighbor, every pick counted as a trial (p.5822) | the paper's unlike-neighbor proposal (`UnlikeNeighbor`) is not in the engine yet (D-186). τ corrects the mean rate, not the per-site spread | $(NA("A-4, A-5")) |", #hide
+            "| DV1 proposal law and time scale τ | a uniform neighbor among the 20, at wall sites (`SequentialCPM(; skip_interior = true)`); like neighbors are null draws, so a wall site is updated less often per MCS than in the paper. One paper MCS is τ = 1/ū of our MCS, ū the mean unlike share of the wall sites' 20 neighbors: τ = $(fmt(τ_brick; d = 2)) on the brick wall; the full run measured τ = $(fmt(τ_rec; d = 2)) on its 5 relaxed ordered foams, and every shear time is in paper MCS | a wall site picked at random, a copy only to an unlike neighbor, every pick counted as a trial (p.5822) | the paper's unlike-neighbor proposal (`UnlikeNeighbor`) is not in the engine yet. τ corrects the mean rate, not the per-site spread | $(NA("A-4, A-5")) |", #hide
     "| DV2 T = 0 | T = 10⁻⁶ (the T → 0⁺ limit: ties accepted, uphill rejected) | T = 0 in Eq. 3, the ΔH = 0 case typeset ambiguously | Eq. 3 (A-6) | $(NA("A-6")) |", #hide
     "| DV3 shear form and scale κ | the bias γ(y, t)·(x_target − x_source) per copy, minimum image in x; model γ = κ × paper γ, κ calibrated so that the first T1 per cycle at J = 3 falls at the paper's γ0/J ≈ 1.9 (two-stage, pre-registered) | Eq. 2 written with an absolute x_i and a free index j | a literal reading makes the bias grow with x and breaks Fig. 3(c)'s lines through the origin (A-1) | $(NA("A-1")) |", #hide
     "| DV4 lattice of the low-μ2(a) foams | d095 and d107 on 320² (400 bricks) | 377 and 380 bubbles (Fig. 9) | 256² holds only 256 bricks of 16² (A-14) | $(NA("A-14")) |", #hide
-    "| DV5 unstated values | steady boundary γ0 = 7 (Figs. 2, 6), β = 0.01 for Fig. 11(b), run lengths 2¹⁵ (N̄) and 10⁴ (μ2(n) rise); anneal 10 MCS at T = 3, relax 1000 MCS, coarsen at Γ = 0, T = 3 to the μ2(n) target | not stated | pre-registered choices (D-155, D-156) | $(NA("A-8, A-12")) |", #hide
+            "| DV5 unstated values | steady boundary γ0 = 7 (Figs. 2, 6), β = 0.01 for Fig. 11(b), run lengths 2¹⁵ (N̄) and 10⁴ (μ2(n) rise); anneal 10 MCS at T = 3, relax 1000 MCS, coarsen at Γ = 0, T = 3 to the μ2(n) target | not stated | pre-registered choices | $(NA("A-8, A-12")) |", #hide
     "| Wall type (A-2) | closed y edges without wall cells; a wall is not a side: μ2(n) = 7/16 = 0.4375 on the brick wall | 0.437 (Fig. 11(c)); the wall type is not stated | the reading that matches the paper's baseline (0.109 if the wall counted as a side, 0 with periodic y) | $(NA("A-2")) |", #hide
     "| T1 counting unit (A-15) | one T1 = 1 (`t1_events(…; unit = :t1)`); only ratios are targets | even-valued T1 bars (Figs. 4(b), 5(b)) | the paper seems to count each T1 twice | $(NA("A-15")) |", #hide
 ], "\n")) #hide
@@ -375,8 +375,8 @@ Markdown.parse(join([ #hide
 #   5819–5832 (1999), doi:[10.1103/PhysRevE.59.5819](https://doi.org/10.1103/PhysRevE.59.5819);
 #   the arXiv version cond-mat/9902111 has the same text without the figures.
 # - Spec: `docs/design/research/model-specs/04_foam.md` (§2 mechanics, §5 targets, §7
-#   ambiguities, §8 build plan). Test: `lib/PottsModels/test/reproductions/04_foam_tests.jl`
-#   (D-190), which fixes every row, band, seed and run length below.
+#   ambiguities, §8 build plan). Test: `lib/PottsModels/test/reproductions/04_foam_tests.jl`,
+#   which fixes every row, band, seed and run length below.
 #
 # ### Protocol
 #
@@ -460,7 +460,8 @@ Markdown.parse("Record `$(only(rec_dirs))`, written by the test's FULL tier at c
                "on an AMD Ryzen AI Max+ 395 CPU; wall time $(round(rec_prov["wall_s_this_launch"] / 3600; digits = 1)) h " * #hide
                "($(rec_prov["started"][1:16]) to $(rec_prov["finished"][1:16])). Jobs: " * #hide
                join(["$(v) $(k)" for (k, v) in sort(collect(rec_prov["jobs"]))], ", ") * ". " * #hide
-               "The run used `BoundarySiteCPM()`, now `SequentialCPM(; skip_interior = true)` (D-198, same semantics).") #hide
+        "The run used `BoundarySiteCPM()`, now `SequentialCPM(; skip_interior = true)` (same semantics)."
+) #hide
 
 # ### Provenance of the page's own runs (videos)
 
@@ -475,8 +476,8 @@ Markdown.parse("PottsModels $(pkgversion(PottsModels)), Julia $(VERSION), on $(s
 
 # | Date | Change | Reason |
 # |---|---|---|
-# | 2026-10-08 | First version, provisional: the model, the ordered and disordered foams, smoke-scale verdicts, a short bulk shear, videos, the deviations table and the full-run command | P6.4r; D-186, D-190 |
-# | 2026-10-09 | The full-run record replaces the smoke-scale verdicts: verdict table, deviations from the record, the pinning finding (under review); the videos stay | P6.4r; D-154, D-190 |
+# | 2026-10-08 | First version, provisional: the model, the ordered and disordered foams, smoke-scale verdicts, a short bulk shear, videos, the deviations table and the full-run command | the pre-registered test |
+# | 2026-10-09 | The full-run record replaces the smoke-scale verdicts: verdict table, deviations from the record, the pinning finding (under review); the videos stay | deviations as a table per model |
 #
 # ```@raw html
 # </details>

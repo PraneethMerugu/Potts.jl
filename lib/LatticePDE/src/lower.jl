@@ -1,4 +1,4 @@
-# The canonical lowering (moved from Potts `lower.jl`, v3 §5.1): an MTK term becomes IR nodes
+# The canonical lowering (moved from Potts `lower.jl`): an MTK term becomes IR nodes
 # in a `KernelBuilder`. Order independence (D-107) comes from the builder: every node is
 # interned and the operands of a commutative op are sorted structurally, so Symbolics' hash
 # order of a sum's operands never reaches the IR. Literals stay Float64 in the IR and are
@@ -6,11 +6,11 @@
 #
 # Spatial operators lower to the face-flux form (§5.2): one per-axis second difference
 # `(1/h²) Σ± K_face (c± − c)`, summed over axes for `laplacian` and `DivKGrad`. A raw `Dx(Dx(c))` or
-# `Dx(K * Dx(c))` lowers through the same primitive, so it gives the same IR (P3-rev item 5).
+# `Dx(K * Dx(c))` lowers through the same primitive, so it gives the same IR.
 # Neighbor values of `c` are `RESOLVE` loads (pass 2 applies the face rules). A face
 # coefficient is evaluated at the neighbor with `RESOLVE` loads of the fields that have face
 # rules (the rate fields: at a face of the box it takes the field's ghost value, the value the
-# face rule gives the gradient; F3-ghost, user OK 2026-10-26) and `CLAMP` loads of the others
+# face rule gives the gradient; user OK 2026-10-26) and `CLAMP` loads of the others
 # (an input or aux field takes the inner value).
 
 const RAW_HINT = "write a spatial operator as `laplacian(c)`, `DivKGrad(:harmonic)(K, c)`, `Dx(Dx(c))` or `Dx(K * Dx(c))`"
@@ -39,7 +39,7 @@ struct Env{N, B, L}
     hex::Bool                          # hexagonal grid (axial coordinates, 2D)
     domain::Int32                      # field id of the domain's Bool input, 0 for the box
     ghosted::Vector{Int32}             # the fields whose face-coefficient reads take the ghost value
-    # `Coarse` levels (F3-16): the kernel's level (`h` is its spacing), each field's level by
+    # `Coarse` levels: the kernel's level (`h` is its spacing), each field's level by
     # its operation (a field missing from it is fine), the fine dims (an axis of size 1 is never
     # coarsened), and `child > 0` inside a fold over the children `child` levels down
     level::Int
@@ -47,11 +47,11 @@ struct Env{N, B, L}
     dims::NTuple{N, Int}
     child::Int
     # the mask predicate of the coarse field whose equation (or operator row) is lowered, when it
-    # reads fine fields (F4-15b): every fold averages over the block's free children, the
+    # reads fine fields: every fold averages over the block's free children, the
     # children where the predicate is false; `nothing` elsewhere
     free::Any
     # the irregular domain's Bool input, when it is finer than the field's level and the fold is a
-    # blending field's (F4-15b ruling): the free support intersects the in-domain children. The
+    # blending field's: the free support intersects the in-domain children. The
     # mask is a per-site modelling choice, the domain is where the equation is defined.
     domfree::Any
 end
@@ -69,7 +69,7 @@ Env(kb, fields, params, tables, spacing, t, xs, lo::NTuple{N}, h, map, offset, p
 _shift(e::Env{N}, o; face::Bool = false) where {N} = Env(e.kb, e.fields, e.params, e.tables, e.spacing, e.t, e.xs, e.lo, e.h,
     e.map, ntuple(d -> e.offset[d] + o[d], N), face ? RESOLVE : CLAMP, e.leaf, e.hex, e.domain, e.ghosted, e.level,
     e.flev, e.dims, e.child, e.free, e.domfree)
-# the environment inside a fold over the children `m` levels down (F3-16)
+# the environment inside a fold over the children `m` levels down
 _infold(e::Env, m) = Env(e.kb, e.fields, e.params, e.tables, e.spacing, e.t, e.xs, e.lo, e.h, e.map, e.offset, e.policy,
     e.leaf, e.hex, e.domain, e.ghosted, e.level, e.flev, e.dims, m, e.free, e.domfree)
 _flevel(e::Env, op) = get(e.flev, op, 0)
@@ -81,7 +81,7 @@ The spacing of `Coarse` level `level` (the factor `2^level`) of a grid of spacin
 """
 level_spacing(h::NTuple{N}, dims, level::Integer) where {N} = ntuple(d -> dims[d] == 1 ? h[d] : h[d] * 2^level, N)
 _unit(::Env{N}, d, s) where {N} = ntuple(i -> i == d ? s : 0, N)
-_lerr(x, msg) = throw(ArgumentError(as_written("cannot lower `$x`: $msg")))   # the term as written (review R3)
+_lerr(x, msg) = throw(ArgumentError(as_written("cannot lower `$x`: $msg")))   # the term as written
 _type(e::Env, i) = e.kb.nodes[i].type
 
 # numeric operands: a Bool counts as 0/1 (I32, or REAL next to a float)
@@ -135,7 +135,7 @@ function _load(e::Env{N}, u, comp) where {N}
     pol = any(!iszero, e.offset) ? (e.policy == RESOLVE && f in e.ghosted ? RESOLVE : CLAMP) : e.policy
     return load!(e.kb, f, lane; offset = e.offset, policy = pol)
 end
-# A read of a field on another `Coarse` level than the kernel's (F3-16). A coarser field (`rel >
+# A read of a field on another `Coarse` level than the kernel's. A coarser field (`rel >
 # 0`) reads the node whose block holds the site (piecewise-constant prolongation), at a neighbor
 # the node of the neighbor's block (no ghost value: the boundary node). A finer field (`rel < 0`)
 # is read inside a fold only (`_fold`), at each child; its offsets are in its own level's sites.
@@ -163,11 +163,11 @@ function _level_offset(e::Env{N}, u, o, fr) where {N}
     return ntuple(d -> e.dims[d] == 1 ? o[d] : o[d] ÷ 2^fr, N)
 end
 
-# Folds of fine reads in a term on a `Coarse` grid (F3-16; F3 design §3.9, review r1 M2; F4-15).
+# Folds of fine reads in a term on a `Coarse` grid.
 # A term of a coarse field that reads fields of a finer grid (the CPM inputs, a fine field)
 # reads them through the block of children of each coarse node. One rule holds for every fine
 # read, real, Bool or integer (`kind`), so a CPM value bound to an input and the same value
-# written in the equation fold alike (F4-15, user ruling 2026-11-11):
+# written in the equation fold alike (user ruling 2026-11-11):
 # - the largest subterm that reads a fine field and is not linear in its fine reads is folded as
 #   a whole by the mean over the children, each fine read at the child and each read of the
 #   term's own grid at the node. A sum is folded per summand and a product keeps its factors
@@ -177,13 +177,13 @@ end
 #   sum, a product, an operator coefficient, the right side itself) is a 0/1 value and folds by
 #   the mean too: `kind == P` on a block a third of whose sites are P is 1/3;
 # - in the equation (and the operator row) of a coarse field with a mask whose predicate reads
-#   fine fields (F4-15b, user ruling 2026-11-12), the mean is over the block's free children (the
+#   fine fields (user ruling 2026-11-12), the mean is over the block's free children (the
 #   children where the predicate is false): the node holds the value of its free part, and its
 #   free volume times the folded term is the fine sum of the term over the free sites. On a
 #   block no child of which is free (the node is masked: it holds the mask value) the mean is
 #   over every child, as on a block with no masked child;
 # - a condition where a condition is used is folded by count: a mask's predicate holds at a node
-#   when it holds at every child (`:all`, F4-15b), the domain when it holds at more than half of
+#   when it holds at every child (`:all`), the domain when it holds at more than half of
 #   them (`:majority`, `_cond`).
 function _fold_kind(u, e::Env)
     (e.level > 0 && e.child == 0) || return nothing
@@ -224,7 +224,7 @@ end
 The condition `u` where a condition is used (a mask's predicate, the domain). On a `Coarse`
 grid a condition that reads fine fields is true at a node when it holds on more than half of
 the node's block (`fold = :majority`, the domain) or on all of it (`fold = :all`, a mask's
-predicate: F4-15b); as a number it folds by the mean (`_fold_kind`).
+predicate); as a number it folds by the mean (`_fold_kind`).
 """
 function _cond(u, e::Env; fold::Symbol = :majority)
     v = unwrap(u)
@@ -238,12 +238,12 @@ end
 
 Whether the term `pred` (a mask's predicate) reads a field of a finer grid than `level`, by the
 fields' levels `flev` (operation => level; a field missing from it is on the fine grid): then a
-coarse field masked by it blends (F4-15b).
+coarse field masked by it blends.
 """
 reads_fine(pred, flev, level) = level > 0 && _reads(unwrap(pred), Any[op for (op, l) in flev if l < level])
 # at a neighbor (an operator coefficient, a velocity), the fold reads the neighbor node's block,
 # clamped onto the box in the coarse frame: across a closed face of the box, the node's own block
-# (as a field of the coarse grid is read there; review r1 S2), one select per shifted axis
+# (as a field of the coarse grid is read there), one select per shifted axis
 function _fold(u, e::Env{N}, kind, axes = [d for d in 1:N if e.offset[d] != 0]) where {N}
     isempty(axes) && return _fold_children(u, e, kind)
     ax = axes[1]
@@ -268,7 +268,7 @@ function _fold_children(u, e::Env{N}, kind) where {N}
     end
     whole = _op(e, MUL, constant!(e.kb, 1 / n), node!(e.kb, RESTRICT, REAL, Int32[_real(e, v)], 0))
     (e.free === nothing || !_reads(unwrap(e.free), _fine_ops(e))) && return whole
-    # the mean over the free children (F4-15b): Σ_free v / #free, the whole block's mean where no
+    # the mean over the free children: Σ_free v / #free, the whole block's mean where no
     # child is free. With no masked child the free mean is the whole mean; when the predicate's
     # fold depth equals the term's (`mf == m`) it is the whole mean bitwise (`#free = n`, a power
     # of two, and the same children in the same order); a predicate read at a finer depth
@@ -281,7 +281,7 @@ function _fold_children(u, e::Env{N}, kind) where {N}
     ef = _infold(e, mf)
     held = _bool(e, lower(e.free, ef))
     zero_, one_ = constant!(e.kb, 0.0), constant!(e.kb, 1.0)
-    # the irregular domain intersects the free support (F4-15b ruling 2026-11-12): a child outside
+    # the irregular domain intersects the free support: a child outside
     # the domain never contributes to an owned node's value, whatever its mask state. The mask is
     # a per-site modelling choice, the domain is where the equation is defined; the fold honours
     # both. With no in-domain free child, the support is the whole in-domain set (the block where
@@ -308,7 +308,7 @@ function _fold_children(u, e::Env{N}, kind) where {N}
         select!(e.kb, nofree, select!(e.kb, noind, whole, _op(e, DIV, sind, nind)), _op(e, DIV, sfree, nfree)))
 end
 # a spatial operator reads its field on the field's own grid. In an equation of a field on another
-# `Coarse` level `crossgrid_form` (F3-22) has already made it an aux field of the operand's grid;
+# `Coarse` level `crossgrid_form` has already made it an aux field of the operand's grid;
 # the places it does not reach (a face value, a mask) keep this refusal
 function _same_level!(e::Env, u, what)
     _flevel(e, operation(u)) == e.level && return nothing
@@ -355,7 +355,7 @@ const HEX6 = ((1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1))
 
 """
 Hexagonal `Δc ≈ 2/(3h²) Σₙ (cₙ − c)`. A neighbor outside the domain reads `c` (zero flux). A
-neighbor outside the box reads the ghost of the face it leaves through (F3-20; a field with no
+neighbor outside the box reads the ghost of the face it leaves through (a field with no
 face condition, `e.ghosted` without it, reads `c` there: zero flux): an axial
 neighbor its own face's, a diagonal neighbor `±(e₁ − e₂)` axis 1's face when it leaves along
 axis 1 (a corner site's too), else axis 2's; the ghost is the `RESOLVE` read one step along that
@@ -484,7 +484,7 @@ function lower(x, e::Env{N}) where {N}
         r = e.leaf(u, e)
         r === nothing || return r
     end
-    fk = _fold_kind(u, e)                                  # fine reads in a coarse term (F3-16)
+    fk = _fold_kind(u, e)                                  # fine reads in a coarse term
     fk === :product && return _fold_product(u, e)
     fk === nothing || return _fold(u, e, fk)
     if SymbolicUtils.issym(u)

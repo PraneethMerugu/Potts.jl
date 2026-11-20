@@ -1,9 +1,9 @@
-# F4-04 (F4 design §3.5, §5): an owned solve returns SciML's `ODESolution` (`build_solution`, linear
-# interpolation). A field read on a solution of a lattice problem follows SciML (ruling Q18): `sol[c]`
+# An owned solve returns SciML's `ODESolution` (`build_solution`, linear
+# interpolation). A field read on a solution of a lattice problem follows SciML: `sol[c]`
 # is one grid per save, `field_series(sol, c)` a lazy `FieldSeries` of size `(nt, dims…)`
 # (MethodOfLines' shape); `sol[x]` the site centers; the bare callable `c`
 # a key; `sol(t, x, y)` multilinear; `sol.ps` the parameters at the end; `sol.stats` a
-# `LatticeStats`. Negative control at the F4-03 commit (~/lpwork/f4b5/nc04.log): `sol(0.05)` is
+# `LatticeStats`. Negative control before the fix: `sol(0.05)` is
 # not callable (a `FieldSolution`), `sol[c]` a vector of grids, `sol[u]` "Invalid symbol".
 
 @testsetup module LP_solution
@@ -34,8 +34,8 @@ cbsys32() = bsys([D(bce) ~ 0.01 * laplacian(bce) - bce], [bc(0, x, y) ~ x * y], 
 include("shared/export_all.jl")
 end
 
-@testitem "F4-04: the owned solution is an ODESolution: sol(t), Array, stats, ps" setup = [LP_solution] tags = [:latticepde, :solution] begin
-@testset "F4-04: the owned solution is an ODESolution: sol(t), Array, stats, ps" begin
+@testitem "the owned solution is an ODESolution: sol(t), Array, stats, ps" setup = [LP_solution] tags = [:latticepde, :solution] begin
+    @testset "the owned solution is an ODESolution: sol(t), Array, stats, ps" begin
         sp = discretize(
             bsys([D(bce) ~ bD * laplacian(bce) - bk * bce + x], [bc(0, x, y) ~ x * y], [bD, bk]; T = 0.3, dvs = [bce]),
         LatticeDiscretization(Grid((8, 8)); T = Float64))
@@ -52,8 +52,8 @@ end
 end
 end
 
-@testitem "F4-04 (Q18): sol[c] is one grid per save; field_series is time first; sol[x]; sol[c] by the callable" setup = [LP_solution] tags = [:latticepde, :solution] begin
-@testset "F4-04 (Q18): sol[c] is one grid per save; field_series is time first; sol[x]; sol[c] by the callable" begin
+@testitem "sol[c] is one grid per save; field_series is time first; sol[x]; sol[c] by the callable" setup = [LP_solution] tags = [:latticepde, :solution] begin
+    @testset "sol[c] is one grid per save; field_series is time first; sol[x]; sol[c] by the callable" begin
         sp = discretize(
             bsys([D(bce) ~ bD * laplacian(bce) - bk * bce + x], [bc(0, x, y) ~ x * y], [bD, bk]; T = 0.3, dvs = [bce]),
         LatticeDiscretization(Grid((8, 8)); T = Float64))
@@ -76,7 +76,7 @@ end
         saveat = 0.1)
     lazy(s) = @allocated field_series(s, bce)
     lazy(s32)
-    @test lazy(s32) < 8 * 32^2 || (println("F4-04 lazy ", lazy(s32)); false)
+        @test lazy(s32) < 8 * 32^2 || (println("lazy ", lazy(s32)); false)
     @test maximum(abs, Array(field_series(so, bce)) .- Array(field_series(st, bce))) < 0.05  # (EE against Tsit5)
     # sol(t, x, y): multilinear between the site centers, linear in time between the saves
     g = reshape(so(0.15), 8, 8)

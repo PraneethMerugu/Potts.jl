@@ -244,7 +244,7 @@ function _literal(v, env)
     throw(PottsCompileError("cannot lower constant $v"))
 end
 
-# The read of site variable `i` at site `j`. A `Coarse(k)` field (F3-17) holds one value per node
+# The read of site variable `i` at site `j`. A `Coarse(k)` field holds one value per node
 # of its grid: the site reads the node whose block holds it
 _site_read(i::Entity, j) = (L = get(i.options, :lattice_level, nothing);
                             L === nothing ? :(@inbounds st.site.$(i.name)[$j]) :
@@ -398,7 +398,7 @@ const _HEX_MINIMUM_IMAGE = "`minimum_image` wraps one lattice axis, which is not
                            "(the nearest image may be a diagonal one); use `separation(a, b)`"
 
 """Coordinate `k` of the centroid of referent `r` in `centroid(k)`'s convention (embedded,
-periodic axes wrapped); 0 when `r` is 0, out of range or dead (D-066)."""
+periodic axes wrapped); 0 when `r` is 0, out of range or dead."""
 @inline function _ref_centroid_axis(::Type{T}, cell, lat, r, k) where {T}
     _alive_slot(cell.volume, r) || return zero(T)
     return CorePotts.centroid_position(T, cell, lat, Int(r))[k]
@@ -421,7 +421,7 @@ a tie |d| = L/2 keeps `d`), on a closed axis `d`."""
 end
 
 """Column `col` (an integral) summed over the alive members of cell `c`'s compartment
-cluster (`c` alone in a model without clusters); 0 for the medium and a dead slot (D-066)."""
+cluster (`c` alone in a model without clusters); 0 for the medium and a dead slot."""
 # O(capacity) per cell, so O(capacity²) per refresh; member lists could replace the scan.
 @inline function _over_cluster(cell, col, c)
     s = zero(eltype(col))
@@ -462,7 +462,7 @@ spacing (on a square lattice with unit spacing, the coordinates themselves).
 end
 
 """
-Source→target offset of a copy (P6.4a1, D-188): the coordinate difference of `t` and `s`,
+Source→target offset of a copy: the coordinate difference of `t` and `s`,
 the minimum image along periodic axes (a plain difference along closed ones), embedded and
 scaled as `_position`. A function of the two sites alone; the tie |d| = L/2 keeps `d`.
 """
@@ -478,7 +478,7 @@ end
     return 2v > L ? v - L : 2v < -L ? v + L : v
 end
 
-"""The number of completed MCS during a sweep (the sweep's `ctx.mcs`, P6.4a1); 0 outside one
+"""The number of completed MCS during a sweep (the sweep's `ctx.mcs`); 0 outside one
 (the host hook)."""
 @inline _copy_mcs(ctx) = haskey(ctx, :mcs) ? ctx.mcs : 0
 
@@ -683,7 +683,7 @@ end
 @inline _deref_volume(vol, r) = _alive_slot(vol, r) ? @inbounds(vol[r]) : zero(eltype(vol))
 @inline _deref_kind(cell, r) = _alive_slot(cell.volume, r) ? Int32(@inbounds cell.kind[r]) : Int32(0)
 @inline _deref_cluster(cell, r) = _alive_slot(cell.volume, r) ? @inbounds(cell.cluster[r]) : Int32(0)
-"""`birth` of cell `c` (D-066 item 3): its serial with a lifecycle (`cell.birth`), else its slot."""
+"""`birth` of cell `c`: its serial with a lifecycle (`cell.birth`), else its slot."""
 # (`c` is a cell slot in 1:capacity: the env's cell, `_birth_at` with c ≠ 0, or a referent
 # `_alive_slot` checked; every column has the capacity's length)
 @inline _birth(cell, c) = haskey(cell, :birth) ? @inbounds(cell.birth[c]) : Int32(c)
@@ -762,7 +762,7 @@ function _lower_at(args, env)
     iscall(x) && operation(x) isa ModelingToolkitBase.Pre && (x = _unwrap(arguments(x)[1]))
     # a Bool node of a discrete component (`grn.A[new]`): its slot there, read as a Bool
     iscall(x) && operation(x) === _nonzero && return :(Potts._nonzero($(_lower_at(Any[arguments(x)[1], args[2:end]...], env))))
-    # `position[s][k]` (P6.4a1): component `k` of site `s`'s position
+    # `position[s][k]`: component `k` of site `s`'s position
     if _is_site_position(x)
         length(args) == 2 || throw(PottsCompileError("`position[s][k]` takes one axis"))
         return :(Potts._position($(env.T), ctx, $(lower(arguments(x)[2], env)))[$(lower(args[2], env))])
@@ -911,7 +911,7 @@ function _lower_gather(args, env)
     ni = info(n)
     spec = ni.options.relation
     T = env.T
-    # the target's shell (`shell(s)`, P6.3g) is a fixed offset table of the lattice, not a
+    # the target's shell (`shell(s)`) is a fixed offset table of the lattice, not a
     # context relation
     if spec isa ShellRelation
         len, offs = :(length(CorePotts.shell_offsets(ctx.lattice))), :(CorePotts.shell_offsets(ctx.lattice))
@@ -984,7 +984,7 @@ function _lower_gather(args, env)
     end
 end
 
-# `connected(c; rule)` (P6.3g): the rule's CorePotts kernel on the copy, for `old` or `new`
+# `connected(c; rule)`: the rule's CorePotts kernel on the copy, for `old` or `new`
 function _lower_connected(args, env)
     env.mode === :proposal || throw(PottsCompileError("`connected(…)` and `connectivity(…)` read a copy: use them in @constraint or @drive"))
     who = isequal(_unwrap(args[1]), _unwrap(B.old)) ? :old : :new
@@ -996,7 +996,7 @@ function _lower_connected(args, env)
     return :(CorePotts.simple_point(st.ownership, ctx, prop, $who, $(code == 6)))
 end
 
-# `Global` (P6.9a) inline, in a drive or a constraint: exact on the host algorithms, in the
+# `Global` inline, in a drive or a constraint: exact on the host algorithms, in the
 # window on the checkerboard (an undecided copy reads `false`); the gaining side is local
 _lower_global(who, g) = who === :new ? :(CorePotts.global_gains(st.ownership, ctx, prop, $(_global_adj(g)))) :
     :(CorePotts.global_keeps(st.ownership, ctx, prop, $(_global_vals(g)...), CorePotts.GlobalSearch()) == Int32(0))
@@ -1043,6 +1043,6 @@ function _gathers(x)
 end
 
 _has_op(x, op) = (found = Ref(false); _walk(y -> (iscall(y) && operation(y) === op && (found[] = true)), x); found[])
-# whether `x` reads `connected(…; rule = Global(…))` (P6.9a)
+# whether `x` reads `connected(…; rule = Global(…))`
 _reads_global(x) = (found = Ref(false); _walk(y -> (iscall(y) && operation(y) === _connected &&
     _global_rule(Int(SymbolicUtils.unwrap_const(_unwrap(arguments(y)[2])))) !== nothing && (found[] = true)), x); found[])

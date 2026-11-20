@@ -1,8 +1,8 @@
 # Regression tests for docs/design/AUDIT.md findings (IDs A-xx) and decisions D-041..D-045.
 # Uses `selfcheck` and `proposal_states` from SymbolicSetup.
 
-@testitem "D-041/D-042 update semantics and population folds" setup = [AuditSetup, SymbolicSetup] tags = [:potts, :audit] begin
-    @testset "D-041/D-042 update semantics and population folds" begin
+@testitem "update semantics and population folds" setup = [AuditSetup, SymbolicSetup] tags = [:potts, :audit] begin
+    @testset "update semantics and population folds" begin
         σ = audit_blocks()
         op = [ownership => σ, kind => fill(1, 16)]
         # A-62: a fold in a cell update reads previous values, once per stage
@@ -35,8 +35,8 @@ end
     end
 end
 
-@testitem "D-043 position is Cartesian, site is the current site" setup = [AuditSetup] tags = [:potts, :audit] begin
-    @testset "D-043 position is Cartesian, site is the current site" begin
+@testitem "position is Cartesian, site is the current site" setup = [AuditSetup] tags = [:potts, :audit] begin
+    @testset "position is Cartesian, site is the current site" begin
         σ = zeros(Int32, 8, 6); σ[2:3, 2:3] .= 1
         p = PottsProblem(AuditPosition(; name = :p), [ownership => σ, kind => [1]], (0, 1))
         u = solve(p, SequentialCPM()).u[end]
@@ -123,8 +123,8 @@ end
     end
 end
 
-@testitem "A-67 energies see on-copy writes (D-045)" setup = [AuditSetup, SymbolicSetup] tags = [:potts, :audit] begin
-    @testset "A-67 energies see on-copy writes (D-045)" begin
+@testitem "A-67 energies see on-copy writes" setup = [AuditSetup, SymbolicSetup] tags = [:potts, :audit] begin
+    @testset "A-67 energies see on-copy writes" begin
         σ = audit_blocks()
         p = PottsProblem(AuditOnCopyEnergy(; name = :o), [ownership => σ, kind => fill(1, 16)], (0, 3))
         @test selfcheck(p) < 1.0e-9
@@ -141,7 +141,7 @@ end
         @test PottsProblem(AuditDerived(; name = :d, V₀ = 4.0), op, (0, 2)).p.V2 == 8
         q = remake(p; p = [:pa => 10.0])
         @test (q.p.pa, q.p.pb) == (10, 30)                                     # pb follows pa (MTK)
-        # pb is computed, so read-only (D-F2-1; before: a given value was kept)
+        # pb is computed, so read-only (before: a given value was kept)
         @test_throws ArgumentError remake(p; p = [:pa => 10.0, :pb => 1.0])
         integ = init(p, SequentialCPM())
         setp(integ, :pa)(integ, 7.0)
@@ -202,8 +202,8 @@ end
     end
 end
 
-@testitem "D-014/D-016: binary sums, fingerprints over all code" setup = [AuditSetup] tags = [:potts, :audit] begin
-    @testset "D-014/D-016: binary sums, fingerprints over all code" begin
+@testitem "binary sums, fingerprints over all code" setup = [AuditSetup] tags = [:potts, :audit] begin
+    @testset "binary sums, fingerprints over all code" begin
         # a wide energy: 40 terms lower to binary `+`, allocation-free
         ex = Potts.lower(
             sum(Potts.B.volume^k for k in 1:40) |> Potts._unwrap,
@@ -220,8 +220,8 @@ end
     end
 end
 
-@testitem "D-049: conditional sections and model proposals" setup = [AuditSetup] tags = [:potts, :audit] begin
-    @testset "D-049: conditional sections and model proposals" begin
+@testitem "conditional sections and model proposals" setup = [AuditSetup] tags = [:potts, :audit] begin
+    @testset "conditional sections and model proposals" begin
         σ = zeros(Int32, 12, 12); σ[4:6, 4:6] .= 1
         prob(mode) = PottsProblem(AuditBranches(; name = :b, mode), [ownership => σ, kind => [1]], (0, 1))
         grow = CorePotts.Proposal(
@@ -251,8 +251,8 @@ end
     end
 end
 
-@testitem "D-049: major_length in energies (square, hex, 3D)" setup = [AuditSetup, SymbolicSetup] tags = [:potts, :audit] begin
-    @testset "D-049: major_length in energies (square, hex, 3D)" begin
+@testitem "major_length in energies (square, hex, 3D)" setup = [AuditSetup, SymbolicSetup] tags = [:potts, :audit] begin
+    @testset "major_length in energies (square, hex, 3D)" begin
         for (lattice, geometry, σ) in (
                 ((16, 16), Square(), (s = zeros(Int32, 16, 16); s[3:8, 4:5] .= 1; s[10:12, 9:12] .= 2; s)),
                 ((16, 16), Hexagonal(), (s = zeros(Int32, 16, 16); s[3:8, 4:5] .= 1; s[10:12, 9:12] .= 2; s)),

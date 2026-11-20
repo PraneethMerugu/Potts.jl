@@ -49,8 +49,8 @@
 end
 
 
-@testitem "@extend: a bound vector parameter redeclared keeps its own default (D-114)" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "@extend: a bound vector parameter redeclared keeps its own default (D-114)" begin
+@testitem "@extend: a bound vector parameter redeclared keeps its own default" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "@extend: a bound vector parameter redeclared keeps its own default" begin
         @potts_model ExtVecBase begin
             @kinds medium A B
             @parameters begin
@@ -305,8 +305,8 @@ end
 end
 
 
-@testitem "D-137: a key namespaced by the model itself is the declared quantity" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "D-137: a key namespaced by the model itself is the declared quantity" begin
+@testitem "a key namespaced by the model itself is the declared quantity" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "a key namespaced by the model itself is the declared quantity" begin
         @potts_model NsComp begin
             @kinds medium host
             @variables x(cell) = 1.5
@@ -363,7 +363,7 @@ end
             end
             @test e isa ArgumentError
         end
-        # … and wherever else a key is resolved (review round 2): `getp`, `prob.ps[…]`, `solvers`,
+        # … and wherever else a key is resolved: `getp`, `prob.ps[…]`, `solvers`,
         # and inside an expression
         for f in (
                 () -> Potts.SymbolicIndexingInterface.getp(p1, other.λ)(p1), () -> p1.ps[other.λ],

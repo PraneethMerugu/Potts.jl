@@ -1,5 +1,5 @@
-# The boundary-condition parser (v3 §5.1, S-5). PDEBase's `parse_bcs` cannot read masked
-# markers or per-component array bcs (R2 S-5), so the classification is ours: initial,
+# The boundary-condition parser. PDEBase's `parse_bcs` cannot read masked
+# markers or per-component array bcs, so the classification is ours: initial,
 # Dirichlet, Neumann, Robin, periodic and masked interior conditions, arrays per component.
 # The first independent variable is time; endpoints are compared numerically.
 
@@ -116,7 +116,7 @@ function parse_bcs(bcs, fields, ivs, ends)
             length(p) == 1 || _bcerr(eq, "a face condition pins exactly one variable")
             axis == 0 || (axis, side) == p[1] || _bcerr(eq, "its terms sit on different faces")
             axis, side = p[1]
-            # (terms on one read add up: `g1 c + g2 c` has α = g1 + g2; F4-12a, the last one was kept)
+            # (terms on one read add up: `g1 c + g2 c` has α = g1 + g2; the last one was once kept)
             if isder
                 d = operation(core)
                 (d.order == 1 && isequal(d.x, ivs[axis])) ||
@@ -128,7 +128,7 @@ function parse_bcs(bcs, fields, ivs, ends)
         end
         rr = _fieldread(rhs, fields)
         # a periodic pair reads the same field on the other face; a read of another field (an
-        # input, an aux field) is a face value (batch 5 review N5: `c(t, 1, y) ~ G(t, 1, y)` was
+        # input, an aux field) is a face value (`c(t, 1, y) ~ G(t, 1, y)` was
         # taken for a pair)
         if rr !== nothing && isequal(β, 0) && isequal(α, 1) && isequal((rr.op, rr.comp), (r.op, r.comp))
             p2 = _pins(eq, rr.args, ivs, ends)
@@ -163,7 +163,7 @@ function _bc_value(eq, v, op = nothing, fields = Dict{Any, Bool}())
         walk(unwrap(d))
         own = op !== nothing && any(o -> isequal(o, op), ops)
         input = !isempty(ops) && all(o -> fields[o], ops)          # (`fields`: operation → is an input)
-        # the route (batch 5 review N5): an input's derivative is an input of its own; the
+        # the route: an input's derivative is an input of its own; the
         # condition's own field takes its flux form; another state field has none yet
         route = own ? "a condition on the field's own normal derivative is its flux form, with the derivative on " *
                       "the left: `Dx(c) ~ g` (Neumann) or `α c + β Dx(c) ~ g` (Robin); a derivative along the face " *
@@ -182,9 +182,9 @@ _firstdiff(u) = operation(u) isa Differential ? u : _firstdiff(unwrap(arguments(
 # A Robin coefficient α or β that is an expression of parameters (`(g1 + g2) c + ∂c/∂x ~ g`)
 # is one value at every site; the face rule binds a number, a parameter or a number times one,
 # so the expression becomes a computed parameter of its face, `c_x_low_α = g1 + g2` (read
-# only, derived after every write, `_fold_computed`; F4-12a). A coefficient that reads the
-# coordinates, the time or an input varies by site or in time and is refused at the face
-# (planned, F4-12b).
+# only, derived after every write, `_fold_computed`). A coefficient that reads the
+# coordinates, the time or an input varies by site or in time: it is left as written here,
+# and the discretizer makes it a value field (`_coef`).
 function robin_slots(sys::PDESystem)
     ivs = unwrap.(get_ivs(sys))
     length(ivs) >= 2 || return sys

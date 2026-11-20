@@ -1,17 +1,16 @@
-# Exact host-transfer counts of the CURRENT device code paths (P6.0v; not frozen). An
-# ordinary regression test proving `stats.syncs`, `stats.transfers` and
-# `stats.transfer_bytes` count exactly: each expected value is hand-counted from the call
-# sites. Later rows that remove transfers update the formulas here (P6.0v1 did: the
-# lifecycle on the device; P6.0v2: column-only HostPhase / _AdaptiveODE copies). Device only
-# (POTTS_GPU = metal | rocm, test/shared/devices.jl); on the CPU nothing is counted (the frozen
-# acceptance file `lib/PottsModels/test/acceptance/transfer_counters_tests.jl` checks that).
+# Exact host-transfer counts of the current device code paths. A regression test proving
+# `stats.syncs`, `stats.transfers` and `stats.transfer_bytes` count exactly: each expected
+# value is hand-counted from the call sites. Changes that remove transfers update the formulas
+# here (the lifecycle on the device did; so did column-only HostPhase / _AdaptiveODE copies).
+# Device only (POTTS_GPU = metal | rocm, test/shared/devices.jl); on the CPU nothing is counted
+# (the acceptance file `lib/PottsModels/test/acceptance/transfer_counters_tests.jl` checks that).
 #
-# Counting rules (frozen file header): one contiguous host↔device array copy is one
+# Counting rules: one contiguous host↔device array copy is one
 # transfer, including each array leaf of an `Adapt.adapt(Array, …)` snapshot; bytes are
 # `sizeof` of the device array; device→device copies and device `fill!` are not counted.
 #
-# Included from `test/gpu.jl` (POTTS_GPU = metal | rocm). Names carry a `p60vx_` / `P60vx` prefix so
-# this file can share a session with the acceptance file.
+# Runs in the device suite of `test/runtests.jl` (POTTS_GPU = metal | rocm). Its names carry a
+# `transfer` prefix so that this file can share a session with the acceptance file.
 
 @testsetup module TransferCountsSetup
 using Potts, Test
@@ -22,12 +21,12 @@ using Test, Potts
 using Potts: CorePotts
 
 
-p60vx_counts(s) = (s.syncs, s.transfers, s.transfer_bytes)
+transfer_counts(s) = (s.syncs, s.transfers, s.transfer_bytes)
 
 
 # Division fixture: both 4×2 cells divide at MCS 0 (T = 0, weight-100 volume constraint:
 # every copy of MCS 0 is rejected), plane normal (1, 0), split 4 | 4.
-@potts_model P60vxDivide begin
+@potts_model TransferDivide begin
     @kinds medium A
     @variables m(cell) = 1.0
     @lattice Lattice((16, 8))
@@ -36,19 +35,20 @@ p60vx_counts(s) = (s.syncs, s.transfers, s.transfer_bytes)
     @sweep Metropolis(; temperature = 0.0)
 end
 
-function p60vx_divide_problem(; T = Float64, tspan = (0, 4))
+function transfer_divide_problem(; T = Float64, tspan = (0, 4))
     σ = zeros(Int32, 16, 8)
     σ[3:6, 2:3] .= 1
     σ[10:13, 5:6] .= 2
-    return PottsProblem(P60vxDivide(; name = :p60vx), [ownership => σ, kind => [:A, :A]], tspan;
+    return PottsProblem(
+        TransferDivide(; name = :transfer), [ownership => σ, kind => [:A, :A]], tspan;
         T, capacity = 6)
 end
 
 
-"""Hand count of the event MCS of the division fixture on a device backend. Since P6.0v1
-(D-089) the lifecycle is planned and applied on the device (`run_lifecycle_device!`
-enqueues kernels only): (0, 0, 0). Before it, the D-035 host plan made (2, 18, 1098)."""
-p60vx_division_counts(u0) = (0, 0, 0)
+"""Hand count of the event MCS of the division fixture on a device backend. Since
+the lifecycle is planned and applied on the device (`run_lifecycle_device!`
+enqueues kernels only): (0, 0, 0). Before it, the host plan made (2, 18, 1098)."""
+transfer_division_counts(u0) = (0, 0, 0)
 
 
 """Hand count of `current_state(integ)` (a host read point) for a model with a device lifecycle: one
@@ -56,14 +56,14 @@ sync (`current_state`), the fold of the device lifecycle statistics (`_fold_life
 one transfer of the `Int32` accumulators), the fold of the checkerboard's copy counts (one
 transfer of its per-block `Int32` counters, `nblocks`), and the snapshot (one transfer per
 array leaf of the state, `sizeof` bytes each). `u0` is the problem's host state."""
-function p60vx_read_counts(u0, nblocks)
+function transfer_read_counts(u0, nblocks)
     leaves = Any[u0.ownership, values(u0.cell)..., values(u0.site)..., values(u0.model)..., values(u0.history)...]
     return (1, 2 + length(leaves), (CorePotts._NACC + nblocks) * sizeof(Int32) + sum(sizeof, leaves))
 end
 
 
 # HostPhase fixture (CorePotts level): a no-op host phase after every sweep.
-function p60vx_hostphase_problem(; T = Float64)
+function transfer_hostphase_problem(; T = Float64)
     σ = zeros(Int32, 12, 12)
     σ[3:6, 3:6] .= 1
     σ[8:11, 7:10] .= 2
@@ -76,13 +76,13 @@ end
 
 """`HostPhase` (relationships.jl): 1 sync; the snapshot (σ and every cell column) down;
 every cell column up. (1, 11, 656) for this fixture with Float32."""
-p60vx_hostphase_counts(u0) =
+transfer_hostphase_counts(u0) =
     (1, 1 + 2 * length(u0.cell), sizeof(u0.ownership) + 2 * sum(sizeof, values(u0.cell)))
 
 
-# Declared HostPhase on a domain-masked lattice (P6.0v2, D-092): y += x, reads (:x,),
+# Declared HostPhase on a domain-masked lattice (D-092): y += x, reads (:x,),
 # writes (:y,).
-function p60vx_declared_problem(; T = Float64)
+function transfer_declared_problem(; T = Float64)
     σ = zeros(Int32, 12, 12)
     σ[3:6, 3:6] .= 1
     σ[8:11, 7:10] .= 2
@@ -97,12 +97,12 @@ end
 
 """Declared `HostPhase`: 1 sync; `x` and `y` down, `y` up. The domain mask (for
 `ctx.lattice`) comes down on the first run only (then cached)."""
-p60vx_declared_counts(u0) = (1, 3, sizeof(u0.cell.x) + 2 * sizeof(u0.cell.y))
+transfer_declared_counts(u0) = (1, 3, sizeof(u0.cell.x) + 2 * sizeof(u0.cell.y))
 
 
-# A HostPhase body gets the live `p` (P6.0v2 review): an in-place change of a parameter array
+# A HostPhase body gets the live `p`: an in-place change of a parameter array
 # between MCS is seen (no stale host copy), and a body's writes to a parameter array persist.
-function p60vx_param_problem(body!; T = Float32, declared = true)
+function transfer_param_problem(body!; T = Float32, declared = true)
     σ = zeros(Int32, 12, 12)
     σ[3:6, 3:6] .= 1
     u0 = CorePotts.initial_state(σ, Int32[1, 1]; cell = (; y = zeros(T, 2)))
@@ -114,39 +114,39 @@ function p60vx_param_problem(body!; T = Float32, declared = true)
         (; λ = T(1), V0 = T(16), T = T(2), Q = T[1, 1], acc = T[0]))
 end
 
-p60vx_read_q!(cell, st, p, ctx, mcs) = (cell.y[1] += Array(p.Q)[1]; nothing)
+transfer_read_q!(cell, st, p, ctx, mcs) = (cell.y[1] += Array(p.Q)[1]; nothing)
 
-p60vx_write_acc!(cell, st, p, ctx, mcs) = (p.acc .+= 1; nothing)
+transfer_write_acc!(cell, st, p, ctx, mcs) = (p.acc .+= 1; nothing)
 
 
-# Every GPU wait of a quiet MCS is a counted one (P6.0v3 / proposed P6.0v8). On Metal a
+# Every GPU wait of a quiet MCS is a counted one. On Metal a
 # counted sync waits once and a counted transfer twice (Metal.jl synchronizes before the copy
 # and waits for its blit), so the waits of an MCS must equal `syncs + 2 transfers`. Waits the
 # counters cannot see (Metal.jl's device→device `copyto!`, `UInt8`/`Int8` `fill!`) break the
-# identity (P6.0v3 removed them from the step path: kernel copies and fills, D-101).
+# identity (D-101 removed them from the step path: kernel copies and fills).
 # Test-only instrumentation: `Metal.wait_cmdbuf!` gains a counter; the queue-depth
 # back-pressure of `wait_oldest_cleanup!` (the host running ahead of the GPU) is not a sync
 # and is excluded. The redefinitions copy Metal.jl 1.10.0's bodies, hence the version guard.
-const P60VX_WAITS = Ref(0)
+const TRANSFER_WAITS = Ref(0)
 
-const P60VX_INFLIGHT = Ref(false)
+const TRANSFER_INFLIGHT = Ref(false)
 
-function p60vx_instrument_waits!()
+function transfer_instrument_waits!()
     M = PottsDevices.device_package()
     @eval M function wait_oldest_cleanup!(bq::BatchedCommandQueue)
         isempty(bq.cleanups) && return
         cmdbuf = first(bq.cleanups).cmdbuf
-        $(P60VX_INFLIGHT)[] = true
+        $(TRANSFER_INFLIGHT)[] = true
         try
             wait_cmdbuf!(cmdbuf)
         finally
-            $(P60VX_INFLIGHT)[] = false
+            $(TRANSFER_INFLIGHT)[] = false
         end
         drain_cleanups!(bq)
         return
     end
     @eval M function wait_cmdbuf!(cmdbuf::MTL.MTLCommandBufferLike)
-        $(P60VX_INFLIGHT)[] || ($(P60VX_WAITS)[] += 1)
+        $(TRANSFER_INFLIGHT)[] || ($(TRANSFER_WAITS)[] += 1)
         is_completed(cmdbuf) && return
         precompiling = ccall(:jl_generating_output, Cint, ()) != 0
         if use_nonblocking_synchronization && !precompiling
@@ -160,72 +160,74 @@ function p60vx_instrument_waits!()
 end
 
 
-# On Metal (from test/gpu.jl) the instrumentation must apply: a Metal upgrade fails here
+# On Metal the instrumentation must apply: a Metal upgrade fails here
 # loudly instead of silently disabling the Merks reminder (update the copied bodies above).
 # The wait counter wraps Metal.jl internals, so it is Metal-only; ROCm skips it (D-157).
-# The gate models are the frozen P6.0v file's (the old runner had `P60vOnDevice` in `Main` from
-# test/gpu.jl); on Metal this setup includes the file itself, which runs its testsets once more.
+# The gate models are the acceptance file's (`transfer_counters_tests.jl`); on Metal this
+# setup includes the file itself, which runs its testsets once more.
 if PottsDevices.device_name() == "metal"
-    let p60v_path = joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "transfer_counters_tests.jl"),
+    let counters_path = joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "transfer_counters_tests.jl"),
             runner = joinpath(@__DIR__, "shared", "pottsmodels_test_file.jl")
-        Core.eval(@__MODULE__, :(module P60vOnDevice
+        Core.eval(
+            @__MODULE__, :(
+                module TransferCountersOnDevice
                     include($runner)
-                    PottsModelsTestFile.run_file(@__MODULE__, $p60v_path)
+                    PottsModelsTestFile.run_file(@__MODULE__, $counters_path)
         end))
     end
 end
-const P60VX_ON_METAL = PottsDevices.device_name() == "metal" && isdefined(@__MODULE__, :P60vOnDevice)
+const TRANSFER_ON_METAL = PottsDevices.device_name() == "metal" && isdefined(@__MODULE__, :TransferCountersOnDevice)
 
-const P60VX_METAL_VERSION = P60VX_ON_METAL ? pkgversion(PottsDevices.device_package()) : nothing
+const TRANSFER_METAL_VERSION = TRANSFER_ON_METAL ? pkgversion(PottsDevices.device_package()) : nothing
 
-const P60VX_WAITS_ON = P60VX_ON_METAL && P60VX_METAL_VERSION == v"1.10.0"
+const TRANSFER_WAITS_ON = TRANSFER_ON_METAL && TRANSFER_METAL_VERSION == v"1.10.0"
 
-P60VX_WAITS_ON && p60vx_instrument_waits!()
+TRANSFER_WAITS_ON && transfer_instrument_waits!()
       # at top level: the testsets must see the new methods
 
 """GPU waits and counter deltas of `f()`."""
-function p60vx_waits(f)
-    c0, w0 = p60vx_counts(P60VX_STATS[]), P60VX_WAITS[]
+function transfer_waits(f)
+    c0, w0 = transfer_counts(TRANSFER_STATS[]), TRANSFER_WAITS[]
     f()
-    d = p60vx_counts(P60VX_STATS[]) .- c0
-    return P60VX_WAITS[] - w0, d
+    d = transfer_counts(TRANSFER_STATS[]) .- c0
+    return TRANSFER_WAITS[] - w0, d
 end
 
-const P60VX_STATS = Ref{Any}(nothing)
+const TRANSFER_STATS = Ref{Any}(nothing)
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "P6.0v: exact transfer counts of the current paths (device)" setup = [TransferCountsSetup] tags = [:potts, :transfer_counts, :gpu, :device] begin
-    @testset "P6.0v: exact transfer counts of the current paths (device)" begin
+@testitem "exact transfer counts of the current paths (device)" setup = [TransferCountsSetup] tags = [:potts, :transfer_counts, :gpu, :device] begin
+    @testset "exact transfer counts of the current paths (device)" begin
         if PottsDevices.on_device()
             backend = PottsDevices.device_backend()
             alg = CheckerboardCPM()
-            prob = p60vx_divide_problem(; T = Float32)
+            prob = transfer_divide_problem(; T = Float32)
             integ = init(prob, alg; backend, save_start = false, save_everystep = false, save_end = false)
-            c0 = p60vx_counts(integ.stats)
+            c0 = transfer_counts(integ.stats)
             step!(integ)                                                     # MCS 0: both cells divide
-            @test p60vx_counts(integ.stats) .- c0 == p60vx_division_counts(prob.u0)
-            c1 = p60vx_counts(integ.stats)
+            @test transfer_counts(integ.stats) .- c0 == transfer_division_counts(prob.u0)
+            c1 = transfer_counts(integ.stats)
             u = current_state(integ)                                                      # a host read point
-            @test p60vx_counts(integ.stats) .- c1 == p60vx_read_counts(prob.u0, CorePotts.nblocks(integ.cache.layout))
+            @test transfer_counts(integ.stats) .- c1 == transfer_read_counts(prob.u0, CorePotts.nblocks(integ.cache.layout))
             @test integ.stats.lifecycle.divisions == 2                       # folded at the read
             @test count(>(0), u.cell.volume) == 4
-            prob = p60vx_hostphase_problem(; T = Float32)
+            prob = transfer_hostphase_problem(; T = Float32)
             integ = init(prob, alg; backend, save_start = false, save_everystep = false, save_end = false)
             for _ in 1:3
-                c0 = p60vx_counts(integ.stats)
+                c0 = transfer_counts(integ.stats)
                 step!(integ)
-                @test p60vx_counts(integ.stats) .- c0 == p60vx_hostphase_counts(prob.u0)
+                @test transfer_counts(integ.stats) .- c0 == transfer_hostphase_counts(prob.u0)
             end
-            prob = p60vx_declared_problem(; T = Float32)
+            prob = transfer_declared_problem(; T = Float32)
             integ = init(prob, alg; backend, save_start = false, save_everystep = false, save_end = false)
-            c0 = p60vx_counts(integ.stats)
+            c0 = transfer_counts(integ.stats)
             step!(integ)                                                     # the mask comes down once
-            @test p60vx_counts(integ.stats) .- c0 == p60vx_declared_counts(prob.u0) .+ (0, 1, sizeof(prob.lattice.mask))
+            @test transfer_counts(integ.stats) .- c0 == transfer_declared_counts(prob.u0) .+ (0, 1, sizeof(prob.lattice.mask))
             for _ in 1:2
-                c0 = p60vx_counts(integ.stats)
+                c0 = transfer_counts(integ.stats)
                 step!(integ)
-                @test p60vx_counts(integ.stats) .- c0 == p60vx_declared_counts(prob.u0)
+                @test transfer_counts(integ.stats) .- c0 == transfer_declared_counts(prob.u0)
             end
             @test Array(integ.state.cell.y) == 3 .* Array(integ.state.cell.x)    # the body ran
         else
@@ -234,17 +236,18 @@ end
     end
 end
 
-@testitem "P6.0v2: HostPhase bodies see and write the live p (device)" setup = [TransferCountsSetup] tags = [:potts, :transfer_counts, :gpu, :device] begin
-    @testset "P6.0v2: HostPhase bodies see and write the live p (device)" begin
+@testitem "HostPhase bodies see and write the live p (device)" setup = [TransferCountsSetup] tags = [:potts, :transfer_counts, :gpu, :device] begin
+    @testset "HostPhase bodies see and write the live p (device)" begin
         if PottsDevices.on_device()
             alg = CheckerboardCPM()
             out = map((CorePotts.CPU(), PottsDevices.device_backend())) do backend
-                integ = init(p60vx_param_problem(p60vx_read_q!), alg; backend, save_start = false, save_everystep = false, save_end = false)
+                integ = init(transfer_param_problem(transfer_read_q!), alg; backend, save_start = false, save_everystep = false, save_end = false)
                 step!(integ); step!(integ)
                 integ.p.Q .= 10                                  # in place, between MCS
                 step!(integ); step!(integ)
                 y = Array(integ.state.cell.y)[1]
-                integ = init(p60vx_param_problem(p60vx_write_acc!; declared = false), alg; backend,
+                integ = init(
+                    transfer_param_problem(transfer_write_acc!; declared = false), alg; backend,
                     save_start = false, save_everystep = false, save_end = false
                 )
                 foreach(_ -> step!(integ), 1:3)
@@ -258,45 +261,45 @@ end
     end
 end
 
-@testitem "P6.0v: every GPU wait is counted (Metal; quiet, event and HostPhase MCS)" setup = [TransferCountsSetup] tags = [:potts, :transfer_counts, :gpu, :device] begin
-    @testset "P6.0v: every GPU wait is counted (Metal; quiet, event and HostPhase MCS)" begin
-        if P60VX_ON_METAL
-            @test P60VX_METAL_VERSION == v"1.10.0"
-            P60VX_METAL_VERSION == v"1.10.0" || @error "test/transfer_counts.jl copies Metal.jl 1.10.0's " *
-                "`wait_cmdbuf!`/`wait_oldest_cleanup!`; Metal is $P60VX_METAL_VERSION: update the copies and the version"
+@testitem "every GPU wait is counted (Metal; quiet, event and HostPhase MCS)" setup = [TransferCountsSetup] tags = [:potts, :transfer_counts, :gpu, :device] begin
+    @testset "every GPU wait is counted (Metal; quiet, event and HostPhase MCS)" begin
+        if TRANSFER_ON_METAL
+            @test TRANSFER_METAL_VERSION == v"1.10.0"
+            TRANSFER_METAL_VERSION == v"1.10.0" || @error "test/transfer_counts_tests.jl copies Metal.jl 1.10.0's " *
+                "`wait_cmdbuf!`/`wait_oldest_cleanup!`; Metal is $TRANSFER_METAL_VERSION: update the copies and the version"
         else
-            @test_skip "device (POTTS_GPU=metal, from test/gpu.jl; Metal.jl wait counter)"
+            @test_skip "device (POTTS_GPU=metal; Metal.jl wait counter)"
         end
-        if P60VX_WAITS_ON
+        if TRANSFER_WAITS_ON
             backend = PottsDevices.device_backend()
             alg = CheckerboardCPM()
             # quiet MCS of every gate model
-            for (label, _, make) in P60vOnDevice.TransferCountersSetup.gate_models(Float32)
+            for (label, _, make) in TransferCountersOnDevice.TransferCountersSetup.gate_models(Float32)
                 integ = init(make(), alg; backend, save_start = false, save_everystep = false, save_end = false)
-                P60VX_STATS[] = integ.stats
+                TRANSFER_STATS[] = integ.stats
                 step!(integ); step!(integ)
                 PottsDevices.device_sync()
                 for _ in 1:3
-                    waits, d = p60vx_waits(() -> step!(integ))
-                    @test waits == d[1] + 2 * d[2]    # Merks too: the field phase copies by kernel (P6.0v3, D-101)
+                    waits, d = transfer_waits(() -> step!(integ))
+                    @test waits == d[1] + 2 * d[2]    # Merks too: the field phase copies by kernel (D-101)
                 end
             end
-            # the event MCS of the division fixture: planned on the device (P6.0v1, D-089), no
+            # the event MCS of the division fixture: planned on the device (D-089), no
             # wait at all (2 syncs + 2 × 18 transfers = 38 waits on the D-035 host plan)
-            prob = p60vx_divide_problem(; T = Float32)
+            prob = transfer_divide_problem(; T = Float32)
             integ = init(prob, alg; backend, save_start = false, save_everystep = false, save_end = false)
-            P60VX_STATS[] = integ.stats
+            TRANSFER_STATS[] = integ.stats
             PottsDevices.device_sync()
-            waits, d = p60vx_waits(() -> step!(integ))
+            waits, d = transfer_waits(() -> step!(integ))
             @test waits == d[1] + 2 * d[2]
             @test waits == 0
             @test checkpoint(integ).stats.lifecycle.divisions == 2           # control: the event fired
             # HostPhase MCS
-            integ = init(p60vx_hostphase_problem(; T = Float32), alg; backend, save_start = false, save_everystep = false, save_end = false)
-            P60VX_STATS[] = integ.stats
+            integ = init(transfer_hostphase_problem(; T = Float32), alg; backend, save_start = false, save_everystep = false, save_end = false)
+            TRANSFER_STATS[] = integ.stats
             PottsDevices.device_sync()
             for _ in 1:2
-                waits, d = p60vx_waits(() -> step!(integ))
+                waits, d = transfer_waits(() -> step!(integ))
                 @test d[2] > 0 && waits == d[1] + 2 * d[2]
             end
         end

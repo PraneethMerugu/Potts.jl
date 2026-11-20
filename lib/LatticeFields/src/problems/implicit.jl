@@ -84,12 +84,12 @@ function _implicit_plan(g::FieldGroup, s::Program, tag, ids::Vector{Int}, ::Type
     end
 end
 
-# The status word's update after one solve (one work item; F3 design §3.3): [4] solves, [5]
+# The status word's update after one solve (one work item): [4] solves, [5]
 # budget hits (`done` still 0), [6] floors (`done` 2: `StalledSuccess`), and a failure
 # (`done` 3, diverged; a residual that is not finite; a steady solve's budget hit with no real
 # reduction) into [1] code 2, [3] its cause and [2] the window when none is recorded yet. A
 # solve the device's convergence gate closed (`gate[1] ≠ 0`: done at its setup, nothing ran) is
-# not counted (batch 5 review N3: the device counts the solves the host runs)
+# not counted (the device counts the solves the host runs)
 function _be_status_body!(i, w, scal, window, steady, gate)
     @inbounds begin                             # i = 1; w has 8 entries, scal SCALARS ≥ 7, gate 1
         (gate !== nothing && gate[1] != 0) && return nothing
@@ -101,14 +101,14 @@ function _be_status_body!(i, w, scal, window, steady, gate)
         elseif d == 0
             w[STATUS_BUDGET] += UInt32(1)
             # a steady solve that did not halve its residual (δ from 0: the setup residual is
-            # ‖b‖): a singular region, F3 design §3.5 S-a
+            # ‖b‖): a singular region
             steady && rn > scal[Solvers.BNORM] / 2 && (fail = UInt32(16))
         elseif d == 2
             w[STATUS_FLOOR] += UInt32(1)
             w[STATUS_CODE] = max(w[STATUS_CODE], UInt32(1))
             steady && rn > scal[Solvers.BNORM] / 2 && (fail = UInt32(16))     # (a stall above the tolerance, the same)
         elseif d == 3
-            fail = steady ? UInt32(1 | 32) : UInt32(1)    # (a steady divergence: indefinite, or an island; r3 S2)
+            fail = steady ? UInt32(1 | 32) : UInt32(1)    # (a steady divergence: indefinite, or an island)
         end
         if fail != 0
             w[STATUS_CODE] = UInt32(2)
@@ -305,7 +305,7 @@ function _reset_hist_body!(i, hist)
     return nothing
 end
 
-# The device's convergence gate (batch 3 R1, F3-15): at each Newton iteration's start, the gate
+# The device's convergence gate: at each Newton iteration's start, the gate
 # closes once the previous iteration's check counted every row converged (`w[8] = nrows`), and
 # the count restarts; a closed gate zeroes each row's residual (`_be_gate_body!`), so the solve
 # is done at its setup and the update adds 0 (the host's early stop, on the device)
@@ -325,7 +325,7 @@ _at(x::Number, i) = x
 _at(x::AbstractArray, i) = @inbounds x[i]                              # i ≤ length(x) (one value per site)
 _at(::Nothing, i) = false
 
-# The update of one row at site `i` (F3 design §3.3 step 5): δ from the solver's solution `x`
+# The update of one row at site `i`: δ from the solver's solution `x`
 # (or, at a row solved on its own, the value `v`; a row with no diffusion: `res/s`), `dst =
 # src + δ`; a masked site takes its value (`mval`, times its value field `mvf`), and the clip
 # `lower` (or `nothing`). Every array has one value per site (i ≤ length(dst)).
@@ -347,7 +347,7 @@ end
 
 # The shift of a row whose operator varies by site (`OperatorSpec` field mode): `s =
 # max(1/(γh) − J, 1/(2γh))/m + d` (the clamp keeps the solve positive definite where the
-# local Jacobian grows faster than the step: F3 design §3.4 Positivity; it sets the status
+# local Jacobian grows faster than the step; it sets the status
 # word's cause bit 8, counted, not a failure), and the solver's mask: a masked site, a site
 # outside the domain, a site with multiplier `m = 0` (solved on its own)
 function _be_shift_body!(i, s, j, d, m, smask, rmask, dom, ih, ih2, w, window)
@@ -434,7 +434,7 @@ _solve_cache!(c) = Solvers.solve_owned!(c)
 """
     ImplicitCache
 
-The cache of an implicit runtime (F3 design §3.3): its rows in solve order
+The cache of an implicit runtime: its rows in solve order
 ([`ImplicitRow`](@ref)), the operator program's launches per slot parity (or `nothing`), the
 Newton count, the step `h` and the `γ` the coefficients hold (the shift `1/(γh)`), the `stale`
 flag (the hierarchy is rebuilt before the next stage: set at bind, by [`reset!`](@ref) and by a
@@ -447,7 +447,7 @@ rebuilt at each stage's end time), the `iterate` flag (a row's local Jacobian re
 field, a local nonlinear term or a switch: that row's operator is rebuilt at every Newton
 iteration, at the iterate), Crank–Nicolson's right-side launches (`qres`, per slot parity, or
 nothing), the status word, the operator spec and the coupled solve (`cs`: a [`CoupledKrylov`](@ref)
-when the group's rows are solved together, F3-12d; `nothing` when they are solved one by one).
+when the group's rows are solved together; `nothing` when they are solved one by one).
 """
 mutable struct ImplicitCache{RS, WK, JL, W, BK, QL, GT, CS, KT, AT, RT, GP, GC, GH}
     rows::RS
@@ -478,7 +478,7 @@ mutable struct ImplicitCache{RS, WK, JL, W, BK, QL, GT, CS, KT, AT, RT, GP, GC, 
     switch::Bool
     seen::Bool                          # every term out of the operator has a bound
     ρin::Float64                        # … their bound `ρ_adv + κ_in + ρ_rob` at the bound parameters
-    θ::Float64                          # … the face-wise ratio of the diffusion left out of a scaled row (R2-M1)
+    θ::Float64                          # … the face-wise ratio of the diffusion left out of a scaled row
     smin::Float64                       # the smallest shift the operator keeps with no time-step term (the
                                         #   decay; NaN when a row varies by site): QuasiSteady's count
     keys::Vector{String}
@@ -487,8 +487,8 @@ mutable struct ImplicitCache{RS, WK, JL, W, BK, QL, GT, CS, KT, AT, RT, GP, GC, 
     rebind::Any                         # `p -> (residual launches per row, operator launches, q launches)` (a rebind)
     backend::BK
     qres::QL                            # Crank–Nicolson's right-side launches per slot parity, or nothing
-    gate::GT                            # a device's convergence gate (batch 3 R1, F3-15), or nothing
-    cs::CS                              # the coupled solve (F3-12d, `CoupledKrylov`), or nothing: row by row
+    gate::GT                            # a device's convergence gate, or nothing
+    cs::CS                              # the coupled solve (`CoupledKrylov`), or nothing: row by row
     gpart::GP                           # group-wide LatticeNewton partials, block counts, history, block count
     gcnt::GC
     ghist::GH
@@ -519,9 +519,9 @@ algorithms; an [`ImplicitCache`](@ref) for the implicit ones).
 bind_cache(alg, g, st, p; kw...) = alg_cache(alg, g, st)
 
 # the work type of a row's arrays (a lowered float type for the solver), with the refusal of
-# the others (FE-26, R-F3f). A field stored in Float16 is solved in the state's value type `V`
+# the others. A field stored in Float16 is solved in the state's value type `V`
 # (its residual is held there, `fuse_residual(…; widen16)`; each update rounds once to the
-# storage, batch 5 review S1)
+# storage)
 function _implicit_eltype(u, key, alg, V)
     T = eltype(u)
     T === Float16 && V in (Float32, Float64) && return V
@@ -531,16 +531,16 @@ function _implicit_eltype(u, key, alg, V)
         "field `lattice_storage = Float16` (it is then solved in Float32, each update rounded to Float16), or step it ",
         "with `ExplicitEuler`")))
     throw(ArgumentError(string(_algname(alg), ": the field `", key, "` holds ", _typetext(T), "; an implicit solve runs in ",
-        "Float32 or Float64 (BigFloat through the implicit solve is planned after the paper, FE-26). ",
+                "Float32 or Float64 (BigFloat through the implicit solve is not supported yet). ",
         "Give the field `lattice_storage = Float32` or Float64, or step it with `ExplicitEuler`")))
 end
-# a number type in messages: a ForwardDiff Dual by its value type, not its full tag (batch 5 review S4)
+# a number type in messages: a ForwardDiff Dual by its value type, not its full tag
 _typetext(T::Type) = (T <: Real && T !== value_type(T)) ? string("ForwardDiff Duals of ", value_type(T)) : string(T)
 
 # the face conditions of field `id` of program `s` on axis `a` side `k` (1 low, 2 high), at
 # parameters `p`, in the solver's homogeneous form: `(:none,)`, `(:dirichlet,)`,
 # `(:robin, α, β)` (lattice units) or `(:site,)`, a Robin face whose α or β varies by site or in
-# time (F4-12b: its row's `sitefaces` bound its diagonal)
+# time (its row's `sitefaces` bound its diagonal)
 function _face_kind(s::Program, id, a, k, p)
     r = findfirst(x -> x isa FaceRule && x.field == id && x.axis == a && x.side == (k == 1 ? -1 : 1), s.rules)
     r === nothing && return (:none, 0.0, 0.0)
@@ -555,13 +555,13 @@ end
 # the numeric operator of a row at parameters `p` and step `h`: faces, shift, face conditions
 # (homogeneous: δ has zero boundary data), the row's mask with value 0 (its update writes the
 # value). Whether the shift was clamped (a growth the count rule did not cover) is returned too.
-# `coupled`: the row is a block of a coupled solve's preconditioner (F3-12d); a steady row with
+# `coupled`: the row is a block of a coupled solve's preconditioner; a steady row with
 # no positive shift then takes its local block's size `|J_loc| + Σ |cross coefficients|`, so the
 # block is not singular where the coupling, not the row, sets the steady state (a growth or no
 # decay that the coupling damps)
 function _numeric_operator(s::Program{N}, r::RowOperator, id, p, h, γ, mask::Bool; coupled::Bool = false) where {N}
-    dims = Tuple(Int.(leveldims(s, s.fields[id].levels[1])))      # (a `Coarse` field's grid, F3-16)
-    # (a hexagonal lattice: three face directions, F3-20)
+    dims = Tuple(Int.(leveldims(s, s.fields[id].levels[1])))      # (a `Coarse` field's grid)
+    # (a hexagonal lattice: three face directions)
     face = _ishex(s) ? ntuple(a -> _coefsum(r.faces[a], p), 3) : ntuple(a -> _coefsum(r.faces[a], p), N)
     ih = 1 / (γ * h)
     s0 = ih - _coefsum(r.jloc, p)
@@ -574,7 +574,7 @@ function _numeric_operator(s::Program{N}, r::RowOperator, id, p, h, γ, mask::Bo
     rob = ntuple(a -> s.periodic[a] ? (nothing, nothing) :
                       ntuple(k -> (f = _face_kind(s, id, a, k, p); f[1] === :robin ? (f[2], f[3], 0.0) : nothing), 2), N)
     # a steady solve (γh = ∞) takes a Robin face's negative part into its operator too: with no
-    # time-step shift to keep dominant, it stays symmetric and exact (batch 4 review r3 S1)
+    # time-step shift to keep dominant, it stays symmetric and exact
     op = Solvers.CellOperator(dims; periodic = s.periodic, face, shift, mask = mask ? "mask" : nothing, value = 0.0,
         dirichlet = dir, robin = rob, name = r.key, robin_full = isinf(γ * h), hex = _ishex(s))
     return op, shift > s0
@@ -592,9 +592,9 @@ end
 # field rows (whose operator varies by site) keep the defect correction
 _robin_keys(alg, op::OperatorSpec, keys) = alg isa QuasiSteady ? String[r.key for r in op.rows if r.key in keys && r.field] : keys
 # The Robin faces with a negative diagonal of the rows `keys` at `p` (their part `w_a d⁻` stays
-# out of the operator: a defect correction, S1): whether there is one (`neg`), the bound of the
+# out of the operator: a defect correction): whether there is one (`neg`), the bound of the
 # part left out, `ρ = Σ_a max_side w_a |d⁻|` (`w_a` the row's face coefficient `K/h_a²`; a
-# field row's largest over the sites, `facemax`, R2-S1), and the faces no bound sees
+# field row's largest over the sites, `facemax`), and the faces no bound sees
 # (`unseen`, with their texts: a field row whose face coefficient has no interval bound)
 function _robin_bounds(s::Program{N}, op::OperatorSpec, keys, p) where {N}
     neg, ρ = false, 0.0
@@ -609,7 +609,7 @@ function _robin_bounds(s::Program{N}, op::OperatorSpec, keys, p) where {N}
             for k in 1:2
                 f = _face_kind(s, id, a, k, p)
                 f[1] in (:robin, :site) || continue
-                # (a face that varies by site: its smallest diagonal over the sites, F4-12b)
+                # (a face that varies by site: its smallest diagonal over the sites)
                 dm = f[1] === :robin ? Solvers.robin_parts(f[2], f[3], 0.0)[2] : min(_site_dmin(r, a, k, p), 0.0)
                 (dm < 0 || isnan(dm)) || continue
                 neg = true
@@ -631,7 +631,7 @@ function _robin_bounds(s::Program{N}, op::OperatorSpec, keys, p) where {N}
 end
 
 # the smallest ghost diagonal of row `r`'s face (axis `a`, side `k`) whose α or β varies by site
-# or in time, over its sites at parameters `p` (NaN when no bound: F4-12b)
+# or in time, over its sites at parameters `p` (NaN when no bound)
 function _site_dmin(r::RowOperator, a, k, p)
     j = findfirst(x -> x[1] == a && x[2] == k, r.sitefaces)
     j === nothing && return NaN
@@ -640,7 +640,7 @@ end
 
 # the fields kernel `i` of `s` reads, through the `aux:` kernels of the aux fields it reads (an
 # aux field is evaluated from its own reads in the row's residual, so the row depends on them:
-# `0.5 L` with `L ~ laplacian(c)` reads `c`, F3-22)
+# `0.5 L` with `L ~ laplacian(c)` reads `c`)
 function _reads_through_aux(s::Program, i)
     out, todo, seen = Int32[], Int[i], Set{Int}()
     while !isempty(todo)
@@ -731,7 +731,7 @@ function bind_cache(
     )
     s = group_program(g, alg)                       # the stepped program: the store's
     # a state with derivative parts (Dual parameters or a Dual start): the primal solve on a
-    # primal copy of the store, and the tangent steps after it (F3-21a; behind a barrier: a
+    # primal copy of the store, and the tangent steps after it (behind a barrier: a
     # primal run compiles none of it)
     any(k -> npartials(eltype(st.bufs[fieldid(s, k)][1])) > 0, fields) &&
         return Base.inferencebarrier(_bind_tangent)(alg, g, st, p; fields, n, dt, c, backend, options, V, shared, abstol, reltol)
@@ -739,7 +739,7 @@ function bind_cache(
     rs = residual_program(g, alg)
     keys = collect(String, fields)
     order, cyclic = _solve_order(s, keys)
-    # a coupled solve (F3-12d): the rows solved together, each Newton iteration's residuals all
+    # a coupled solve: the rows solved together, each Newton iteration's residuals all
     # at the iterate (no row solved before another)
     coupled = coupled_solve(alg, op, s, keys)
     swaps = Set(fieldid(s, k) for k in keys)
@@ -855,7 +855,7 @@ function bind_cache(
             v = r.scaled ? _zeros(st.backend, T, nsite) : nothing
             f = r.scaled ? _zeros(st.backend, T, nsite) : nothing
             jj, mm, dd, dm = jarr("j"), r.scaled ? jarr("m") : nothing, jarr("d"), r.domain ? jarr("dom") : nothing
-            nf = _ishex(s) ? 3 : N                   # (a hexagonal lattice: three face directions, F3-20)
+            nf = _ishex(s) ? 3 : N                   # (a hexagonal lattice: three face directions)
             cop = Solvers.CellOperator(dims; periodic = s.periodic, face = ntuple(a -> "w$a", nf), shift = "s",
                 mask = usemask ? "mask" : nothing, value = r.scaled ? "v" : 0.0, name = key, hex = _ishex(s))
             ins = Any["in.f" => (r.scaled ? f : resarr), "s" => sh]
@@ -922,7 +922,7 @@ function bind_cache(
     coupled || _warn_antidiffusion(keys, sb.texts, alg)
     iterate = any(r -> r.op.iterate, rows)
     smin = _steady_shift(op, keys, p)
-    # (behind a barrier: a group that is not coupled compiles none of it, r1 M1)
+    # (behind a barrier: a group that is not coupled compiles none of it)
     cs = coupled ? Base.inferencebarrier(_bind_coupled)(
             rows, _krylov(alg.linsolve), st, s, rs, rst, sps, rcurss, swaps, keys,
             g.spec.init, backend, p, c, op, alg, auto_newton
@@ -962,12 +962,12 @@ function bind_cache(
         iterate, check, _flips(alg, exact, switch), auto_newton, check_div, fail_budget, κ, abstol, reltol, switch, seen, ρin, b.θ, smin, keys,
         cyclic, 0, rebind, backend, qres, gate, cs, gpart, gcnt, ghist, gnbt
     )
-    # a growing mode that the constant-coefficient check cannot see (r1 M2)
+    # a growing mode that the constant-coefficient check cannot see
     cs === nothing || Base.inferencebarrier(_check_growth)(cs, alg, s, op, keys, p)
     return cache
 end
 
-# whether program `s` lives on a hexagonal lattice (its operator has three face directions, F3-20)
+# whether program `s` lives on a hexagonal lattice (its operator has three face directions)
 _ishex(s::Program) = s.hierarchy[1].grid.geometry == HEX
 # the operator of `spec` for algorithm `alg`: a front end's refusal (a map) names the algorithm
 function _operator(spec::GroupSpec, alg)
@@ -979,7 +979,7 @@ function _operator(spec::GroupSpec, alg)
     end
 end
 
-# whether the data of a Crank–Nicolson group can jump between its windows (F3 design §3.3): its
+# whether the data of a Crank–Nicolson group can jump between its windows: its
 # residual kernels (the rows' `rate:` kernels and the aux kernels they read) load an input the
 # CPM fills, a field of another group or the clock's step index, or it has a mask (a row's own,
 # or the domain's) that moves
@@ -998,16 +998,16 @@ function _jumps(s::Program, rs::Program, keys, spec::GroupSpec, masked::Bool)
     return false
 end
 
-# The automatic Newton count (`nlsolve = nothing` or `max_iter = nothing`, F3 design §3.4): 1 for an exact operator, 2 with a
-# switch (one flip pass, S1); a defect correction whose terms have bounds takes
+# The automatic Newton count (`nlsolve = nothing` or `max_iter = nothing`): 1 for an exact operator, 2 with a
+# switch (one flip pass); a defect correction whose terms have bounds takes
 # `clamp(⌈log ε_N / log ρ_c⌉ + [θ > 0], 2, cap)` from its contraction `ρ_c = γ h ρ_in + θ` (`θ`
-# the face-wise ratio of the diffusion left out of a scaled row, which no step size changes,
-# R2-M1; with `θ > 0` one more iteration, since the ratio bound is close to the actual
+# the face-wise ratio of the diffusion left out of a scaled row, which no step size changes;
+# with `θ > 0` one more iteration, since the ratio bound is close to the actual
 # contraction and the Newton check measures the last correction against the step:
 # `θ^(k−1) ≤ ε_N`), else 4. The cap: rule 2 keeps `γ h ρ_in ≤ (1 − θ)/2`, so `ρ_c ≤ (1 + θ)/2`:
 # at most 1/2 with no left-out diffusion (k ≤ 10, cap 12), at most 3/4 with one
 # (`⌈log 1e-3 / log ¾⌉ + 1 = 26`, cap 26: a lower cap could not meet ε_N where both bounds are
-# tight, batch 3 review r3 N3). Raising the cap, not the substeps, keeps the cost bounded: the
+# tight). Raising the cap, not the substeps, keeps the cost bounded: the
 # alternative rule `n ≥ ⌈2γ dt ρ / (1 − 2θ)⌉` grows without bound as θ → 1/2, while the cap
 # costs at most 26 iterations, only where a left-out diffusion and another out-of-operator
 # term meet, and a host executor stops once the tolerance holds.
@@ -1018,7 +1018,7 @@ const NEWTON_CAP_THETA = 26
 # `QS_NEWTON` with nonlinear or switched rows; with terms out of the operator, the count from
 # their contraction bound `ρ̂ = ρ_in / s_min + θ` (`s_min` the smallest shift the operator
 # keeps: the decay), `clamp(⌈log ε_N / log ρ̂⌉ + 1, QS_NEWTON, QS_NEWTON_CAP)`, and the cap
-# when `ρ̂ ≥ 1` or no bound sees a term (F3 design §3.5; batch 4 review r2 S1). Each is checked
+# when `ρ̂ ≥ 1` or no bound sees a term. Each is checked
 # on the device; a host executor stops at the tolerance.
 const QS_NEWTON = 8
 const QS_NEWTON_CAP = 40
@@ -1031,7 +1031,7 @@ function _auto_newton(::QuasiSteady, exact, switch, iterate, seen, ρin, h, θ, 
     ρ < 1 || return QS_NEWTON_CAP
     return clamp(ceil(Int, log(NEWTON_EPS) / log(ρ)) + 1, QS_NEWTON, QS_NEWTON_CAP)
 end
-# the automatic Newton count of a coupled solve (F3-12d): its operator is the whole Jacobian, so
+# the automatic Newton count of a coupled solve: its operator is the whole Jacobian, so
 # a group linear in its state takes 1 (the solve is the step, or the steady state); a nonlinear
 # steady group the checked `QS_NEWTON` (8; a host executor stops at the tolerance); a nonlinear
 # time stepper 1, 2 with a switch (one Newton step with the exact Jacobian keeps the method's
@@ -1054,10 +1054,10 @@ function _newton_count(exact::Bool, switch::Bool, seen::Bool, ρin::Float64, γ:
     k = ρc <= 0 ? 2 : ρc >= 1 ? cap : clamp(ceil(Int, log(NEWTON_EPS) / log(ρc)) + (θ > 0), 2, cap)
     return switch ? max(k, 2) : k
 end
-# once per group and term (the F2 key): a term no bound sees is corrected by Newton iterations,
+# once per group and term: a term no bound sees is corrected by Newton iterations,
 # checked on the device
 # The rows' diffusion multipliers that read the coordinates and may be negative at a site center
-# at parameters `p` (F3-24): the scaled row drops the diffusion where `m < 0` (anti-diffusion), so
+# at parameters `p`: the scaled row drops the diffusion where `m < 0` (anti-diffusion), so
 # the operator is not exact there; `texts` name each term and its multiplier
 function _sign_bounds(op::OperatorSpec, keys, p)
     texts = Tuple{String, String, Float64}[]
@@ -1122,7 +1122,7 @@ _masks_moving(s::Program, spec) = _reads_moving(s, [k for k in s.kernels if k.ke
 
 # the step `h` of the coefficients (a count change, a rebind): the numeric shifts follow; the
 # hierarchy is rebuilt before the next stage, and the next substep is a start (BDF2's formula
-# holds for one `h`: every change of `h` restarts it, F3 design §3.3 Step changes)
+# holds for one `h`: every change of `h` restarts it)
 function _set_step!(c::ImplicitCache, rt::GroupRuntime, h::Float64)
     c.h = h
     c.start = true
@@ -1141,7 +1141,7 @@ function _set_shift!(c::ImplicitCache, rt::GroupRuntime, γ::Float64; force::Boo
     c.stale = true
     return nothing
 end
-# a new count (a parameter write's recount): the step and the Newton count follow at once (R2-N3)
+# a new count (a parameter write's recount): the step and the Newton count follow at once
 function _count_set!(c::ImplicitCache, rt::GroupRuntime)
     rt.n == 0 && return nothing
     h = rt.dt / rt.n
@@ -1274,7 +1274,7 @@ function (r::ImplicitRow)(a)
 end
 # the solve of a row with a solver from its residual `resarr` (a scaled row: the right side `G/m`
 # and the own rows' δ first): the correction δ, the solver's solution array (also the tangent
-# steps' solve of one derivative part, F3-21a)
+# steps' solve of one derivative part)
 function _row_correction!(r::ImplicitRow, backend, γ, h; word = nothing, window = Int32(0), gate = nothing)
     sv = r.solver
     if r.f !== nothing
@@ -1329,7 +1329,7 @@ function _newton_check!(r::ImplicitRow, backend, word, dst, un, x, it, last, win
     else
         Exec.launch!(backend, _be_norms_body!, nb, (r.part, dst, un, x, r.smask, r.v, nothing, nothing, r.mask, n, gate))
     end
-    # (a field stored in Float16: its rounding at each update is part of the floor, S1)
+    # (a field stored in Float16: its rounding at each update is part of the floor)
     fl = eltype(dst) === Float16 ? T(10 * eps(T) + 2 * eps(Float16)) : T(10 * eps(T))
     Exec.launch!(
         backend, _be_newton_body!, 1, (
@@ -1340,7 +1340,7 @@ function _newton_check!(r::ImplicitRow, backend, word, dst, un, x, it, last, win
     return nothing
 end
 
-# The substeps of a window (F3 design §3.3): per substep the algorithm's stages (`_substep!`),
+# The substeps of a window: per substep the algorithm's stages (`_substep!`),
 # each the Newton iterations over the rows in solve order from slot `par` into the other slot,
 # then the slot swap. The operator is rebuilt at a stage when stale (bind, `reset!`, a new `h`
 # or `γ`), at the window's first stage when it moves, and at every stage's end time when it
@@ -1421,7 +1421,7 @@ function _stage!(c::ImplicitCache, rt::GroupRuntime, t1::Float64, γ::Float64, h
     _after_solve!(c.cs, _parity(rt), t1, γ * h)          # (a nonlinear coupled steady group's growth check)
     return nothing
 end
-# … its Newton iterations (the tangent steps run after them, before the swap: F3-21a)
+# … its Newton iterations (the tangent steps run after them, before the swap)
 function _stage_iterations!(c::ImplicitCache, rt::GroupRuntime, t1::Float64, γ::Float64, h::Float64, k::Int, w::Int32, first::Bool)
     γ == c.γ || _set_shift!(c, rt, γ)
     hγ = γ * h
@@ -1450,7 +1450,7 @@ function _stage_iterations!(c::ImplicitCache, rt::GroupRuntime, t1::Float64, γ:
     return nothing
 end
 
-# one Newton iteration of the group's rows: one by one, or coupled (F3-12d)
+# one Newton iteration of the group's rows: one by one, or coupled
 function _iterate!(::Nothing, c::ImplicitCache, a)
     c.walk(c.rows, a)
     if !c.auto && a[12]
@@ -1470,7 +1470,7 @@ _iterate!(cs, c::ImplicitCache, a) = _coupled_iteration!(cs, c, a)
 """
     compile_cache!(c::ImplicitCache, rt)
 
-Compile the device kernels of an implicit runtime's substeps ahead of its first step (F3-15):
+Compile the device kernels of an implicit runtime's substeps ahead of its first step:
 its launch sequence walked once per slot parity in compile mode (`Exec.COMPILE_ONLY`: each
 device launch compiles its kernel and runs no work item): the operator program, each row's
 rebuild (shift, solver hierarchy), a Newton iteration from the stage's start and after it
@@ -1550,7 +1550,7 @@ end
 function _install_cache!(c::ImplicitCache, rt::GroupRuntime, store::FieldStore, (res, jac, ops, shifts, p, qres, pres, mvals))
     for (i, r) in enumerate(c.rows)
         r.res = res[i]
-        r.mval = mvals[i]                       # (a coupled row's update reads its row's, F3-21a r1 M1)
+        r.mval = mvals[i]                       # (a coupled row's update reads its row's)
         if ops[i] !== nothing
             r.solver === nothing || Solvers.set_coefficients!(r.solver, ops[i])
             r.numeric = ops[i]
@@ -1574,8 +1574,8 @@ function _install_cache!(c::ImplicitCache, rt::GroupRuntime, store::FieldStore, 
     bp = _bound_params(store, rt.program, c.op, c.keys, p)
     b, rb = inexact_bounds(c.op, c.keys, c.cyclic, bp), _robin_bounds(rt.program, c.op, _robin_keys(rt.alg, c.op, c.keys), bp)
     # the classification at the new parameters (a write may turn a Robin face negative), as a
-    # fresh problem's (M2)
-    sb = _sign_bounds(c.op, c.keys, bp)        # (and a coordinate multiplier turned negative, F3-24 r1 M1)
+    # fresh problem's
+    sb = _sign_bounds(c.op, c.keys, bp)        # (and a coordinate multiplier turned negative)
     c.exact = c.exact0 && !rb.neg && !sb.neg
     c.seen = isempty(b.unseen) && !rb.unseen && !sb.neg
     c.ρin = b.ρ + b.κ + rb.ρ
@@ -1591,7 +1591,7 @@ end
     substeps(spec::GroupSpec, alg::AbstractImplicitFieldAlgorithm, dt, pp; fields = spec.state, stability = spec.stability,
              key = identity, texts = ProblemTexts(spec.texts.route)) -> Int
 
-The substep count of an implicit algorithm (F3 design §3.7), the same policy as the explicit
+The substep count of an implicit algorithm, the same policy as the explicit
 one with the implicit rule (§3.6): the parameter refusals first (a negative diffusion
 coefficient, a coefficient that is not finite where the inputs reach), then
 `n = max(m, ⌈2γ dt g⌉, ⌈2γ dt (ρ_adv + κ_in + ρ_rob) / (1 − θ)⌉)`: `m` the user's count (when
@@ -1659,7 +1659,7 @@ function _raise_text(op::OperatorSpec, keys, alg, n, rule, cycle, robin)
 end
 substeps(g::FieldGroup, alg::AbstractImplicitFieldAlgorithm, dt::Real, pp; kw...) = substeps(g.spec, alg, dt, pp; kw...)
 # QuasiSteady: one solve per window (no count), after the parameter refusals and the steady
-# refusals (F3 design §3.5), at build and at every parameter write
+# refusals, at build and at every parameter write
 function substeps(spec::GroupSpec, alg::QuasiSteady, dt::Real, pp; fields = spec.state, stability = spec.stability,
         key = identity, texts::AbstractPolicyTexts = ProblemTexts(spec.texts.route)
     )
@@ -1673,14 +1673,14 @@ function substeps(spec::GroupSpec, alg::QuasiSteady, dt::Real, pp; fields = spec
     if coupled_solve(alg, op, spec.rate, keys)
         # the rows solved together: the coupled system decides (its modes, where they are known;
         # else the device), not each row on its own (a row's growth that the coupling damps is a
-        # well-posed steady system, F3-12d)
-        Base.inferencebarrier(_coupled_refusal)(spec.rate, op, keys, pp)      # (no compile for a single field, r1 M1)
+        # well-posed steady system)
+        Base.inferencebarrier(_coupled_refusal)(spec.rate, op, keys, pp)      # (no compile for a single field)
     else
         _steady_refusals(spec, op, keys, pp)
     end
     return 1
 end
-# The steady refusals of the rows `keys` at raw parameters `p` (invalid input, F3 design §3.5):
+# The steady refusals of the rows `keys` at raw parameters `p` (invalid input):
 # a positive local derivative the operator sees (a growth: the steady solve is indefinite and a
 # growing row's steady state unstable or not unique), and a row with no shift (no decay, no
 # nonlinear or switched local term) and no anchor (no Dirichlet or Robin face, no mask), whose
@@ -1710,7 +1710,7 @@ end
 # A numeric row with a Robin face whose diagonal is negative: the steady operator (which takes
 # that part, `robin_full`) is `s + Σ_a A_a`, one symmetric tridiagonal `A_a` per axis (faces
 # `w_a`, the boundary rows' face terms), so its smallest eigenvalue is `s + Σ_a λ_min(A_a)`.
-# Not positive: the steady state is unstable or not unique, as with a growth (r3 S1; a mask only
+# Not positive: the steady state is unstable or not unique, as with a growth (a mask only
 # raises it, so a masked row is checked without its mask, and accepted when that passes)
 function _steady_indefinite(s::Program{N}, r::RowOperator, id, shift, p) where {N}
     kinds = [ntuple(k -> s.periodic[a] ? (:none, 0.0, 0.0) : _face_kind(s, id, a, k, p), 2) for a in 1:N]
@@ -1742,7 +1742,7 @@ function _steady_refuse(r::RowOperator, λ, scale)
         "feeds the field more than its diffusion and decay remove, so the steady state is unstable or not unique; ",
         "step the field with `BackwardEuler`, or give the face a smaller |β| (or a larger decay)")))
 end
-# The smallest eigenvalue of a numeric hexagonal row's steady operator (F3-20 r2 M1): `s u + Σ_links
+# The smallest eigenvalue of a numeric hexagonal row's steady operator: `s u + Σ_links
 # w (u − u_n)`, a link that leaves the box taking its face's ghost diagonal `w d` (axis 1's face for a
 # diagonal link that leaves along axis 1, else axis 2's; Dirichlet `d = 2`, Robin `α/(α/2 + β)`,
 # either sign), by Lanczos from a fixed start (the operator is symmetric). A Ritz value θ is never
@@ -1821,6 +1821,6 @@ function _tridiag_min(d::Vector{Float64}, w::Float64)
 end
 # the least automatic count: 1; Crank–Nicolson on data that can jump every window takes 2, so
 # that each window has one Crank–Nicolson substep after its damped one (with one substep the
-# window is Backward Euler in two halves: first order at twice the cost, batch 4 review r1 S1)
+# window is Backward Euler in two halves: first order at twice the cost)
 _least_count(spec::GroupSpec, alg::AbstractImplicitFieldAlgorithm, keys) = 1
 _least_count(spec::GroupSpec, alg::CrankNicolson, keys) = _jumps(spec.rate, spec.rate, keys, spec, true) ? 2 : 1

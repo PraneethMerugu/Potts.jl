@@ -1,4 +1,4 @@
-# The contract between Schedule and Exec (v3 §4.4). Schedule builds descriptions only;
+# The contract between Schedule and Exec. Schedule builds descriptions only;
 # `Problems.bind` turns a `LaunchSpec` into an `Exec.Launch` (linear: the guarded wrapper
 # with `n = G.n`; Cartesian: the Cartesian wrapper), and nothing in Schedule depends on Exec.
 # Exec passes the site `s` (or `x`) as `Int`; the body converts it to its index type `I`.
@@ -40,10 +40,10 @@
 #    Gated kernels (`Kernel.gate`) read their flag from a table; Exec may skip a gated
 #    block but must keep the pass-through.
 #
-# Conventions the front end (C6) and the solvers (C7b) build on:
+# Conventions the front end and the solvers build on:
 # - Coarse levels. Each coarsening halves every axis with floor: `nc = n ÷ 2` (at least 1).
-#   Fine sites pair up; on an odd axis the last aggregate takes width 3 at the high end
-#   (P4-mg42). A fine `x` maps to coarse `min((x − 1) ÷ 2 + 1, nc)`; a coarse `x` has its
+#   Fine sites pair up; on an odd axis the last aggregate takes width 3 at the high end.
+#   A fine `x` maps to coarse `min((x − 1) ÷ 2 + 1, nc)`; a coarse `x` has its
 #   children at `2(x − 1) + 1 + o`, `o ∈ 0:1` (also `o = 2` at the last site of an odd axis).
 #   Access offsets are in the finer frame: a level +1 access at offset `o` reads the parent of
 #   the fine site `x + o` (wrapped or clamped first). An axis of size 1 is never coarsened;

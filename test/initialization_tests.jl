@@ -139,7 +139,7 @@ end
 end
 
 
-# rejections the frozen file leaves to the implementer
+# further rejections
 @potts_model IniReject begin
     @structural_parameters begin
         kind_case = :surface

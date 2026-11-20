@@ -1,4 +1,4 @@
-# Canonical solver strings, D-016 / D-118 / D-122 fingerprint invariants, and TS-R2 §2.6 repr round-trips.
+# Canonical solver strings, fingerprint invariants (D-016, D-118, D-122), and repr round-trips.
 
 @testitem "canonical solver strings: no collisions, no host details" setup = [SolversSetup] tags = [:potts, :solvers] begin
     @testset "canonical solver strings: no collisions, no host details" begin
@@ -26,8 +26,8 @@
     end
 end
 
-@testitem "D-016: fingerprints do not depend on the checkout path" setup = [SolversSetup] tags = [:potts, :solvers] begin
-    @testset "D-016: fingerprints do not depend on the checkout path" begin
+@testitem "fingerprints do not depend on the checkout path" setup = [SolversSetup] tags = [:potts, :solvers] begin
+    @testset "fingerprints do not depend on the checkout path" begin
         exprs = Any[values(Base.structdiff(generated_code(SolverPairYS(; name = :p)), (; phases = nothing)))...]
         append!(exprs, generated_code(SolverPairYS(; name = :p)).phases)
         exprs = filter(!isnothing, exprs)
@@ -61,8 +61,8 @@ end
     end
 end
 
-@testitem "D-016: the structural seed is a canonical string" setup = [SolversSetup, PortsSetup] tags = [:potts, :solvers] begin
-    @testset "D-016: the structural seed is a canonical string" begin
+@testitem "the structural seed is a canonical string" setup = [SolversSetup, PortsSetup] tags = [:potts, :solvers] begin
+    @testset "the structural seed is a canonical string" begin
         gg = graner_state()
         sys = mtkcompile(GranerGlazier(; name = :gg))
         seed = Potts._fingerprint_seed(getfield(sys, :sys), Float64)
@@ -77,8 +77,8 @@ end
     end
 end
 
-@testitem "D-118: a non-default mcs_duration is in the fingerprint" setup = [SolversSetup] tags = [:potts, :solvers] begin
-    @testset "D-118: a non-default mcs_duration is in the fingerprint" begin
+@testitem "a non-default mcs_duration is in the fingerprint" setup = [SolversSetup] tags = [:potts, :solvers] begin
+    @testset "a non-default mcs_duration is in the fingerprint" begin
         md_sigma() = (s = zeros(Int32, 12, 12); s[3:5, 3:5] .= 1; s)
         refused(p, ck) = try
             init(p, SequentialCPM(); checkpoint = ck); false
@@ -121,8 +121,8 @@ end
     end
 end
 
-@testitem "D-122: thin lattices whose default neighbourhood aliases" setup = [SolversSetup] tags = [:potts, :solvers] begin
-    @testset "D-122: thin lattices whose default neighbourhood aliases" begin
+@testitem "thin lattices whose default neighbourhood aliases" setup = [SolversSetup] tags = [:potts, :solvers] begin
+    @testset "thin lattices whose default neighbourhood aliases" begin
         line = Stencil([[0, 1], [0, -1]])
         line2 = Stencil([[0, 1], [0, -1], [0, 2], [0, -2]])
         for (dims, nbhd) in (((2, 12), VonNeumann(1)), ((1, 12), VonNeumann(1)), ((2, 12), Moore(1)))
@@ -141,8 +141,8 @@ end
     end
 end
 
-@testitem "TS-R2 §2.6: canonical solver-spec properties and repr round-trips" setup = [SolversSetup] tags = [:potts, :solvers] begin
-    @testset "TS-R2 §2.6: canonical solver-spec properties and repr round-trips" begin
+@testitem "canonical solver-spec properties and repr round-trips" setup = [SolversSetup] tags = [:potts, :solvers] begin
+    @testset "canonical solver-spec properties and repr round-trips" begin
         LFP = Potts.LatticeFields.Problems
         LFS = Potts.LatticeFields.Solvers
         LP = Potts.LatticePDE

@@ -1,4 +1,4 @@
-# Definitions of grids_tests.jl that other test files use (moved here by TS1b).
+# Definitions of grids_tests.jl that other test files use.
 using OrdinaryDiffEqTsit5: Tsit5
 
 @parameters qD = 0.1 qk = 1.0

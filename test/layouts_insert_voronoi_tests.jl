@@ -1,4 +1,4 @@
-# Layouts (P6.1a5, P6.2a, D-138): InsertUntil, layer_rng, point patterns and Voronoi.
+# Layouts (D-138): InsertUntil, layer_rng, point patterns and Voronoi.
 
 @testitem "layouts: InsertUntil stop rules (hand-derived counts)" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
     using Potts.Layouts
@@ -130,7 +130,7 @@ end
 end
 
 # ---------------------------------------------------------------------------------------------
-# Shapes, point patterns and Voronoi (P6.1a5, D-138); the frozen acceptance file holds the
+# Shapes, point patterns and Voronoi (D-138); the frozen acceptance file holds the
 # hand counts, the VoronoiBall pins and the brute-force oracle
 # ---------------------------------------------------------------------------------------------
 @testitem "layouts: layer_rng" setup = [LayoutsSetup] tags = [:potts, :layouts] begin

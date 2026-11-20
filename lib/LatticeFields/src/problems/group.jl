@@ -1,4 +1,4 @@
-# The shared group layer (F2 design §2.2, §2.6). A field group is described once, by its
+# The shared group layer. A field group is described once, by its
 # `GroupSpec` (the IR boundary: plain data and compiled functions, no Symbolics), made
 # numerical by a `FieldGroup` (its semantic program and its plans, by update and value type),
 # and stepped by a `GroupRuntime` bound to a store's arrays (`bind_group`, `advance!`).
@@ -7,7 +7,7 @@
 """
     ParamSlot(name; text = name, default = nothing, role = :base, derivation = nothing)
 
-A parameter slot of a group (F2 design §2.2): its `name` (the slot's key), the parameter as
+A parameter slot of a group: its `name` (the slot's key), the parameter as
 the user wrote it (`text`), its default as given (any `Real`, or `nothing` when the front end
 binds the values itself), its `role` (`:base`, `:computed`, or `:clock` for
 [`CLOCK_KEY`](@ref)) and, for `:computed`, its `derivation`: the expression of the base
@@ -34,7 +34,7 @@ Base.show(io::IO, s::ParamSlot) = print(io, s.name)
 """
     TableSpec(key; name = key, values = nothing)
 
-A table of a group (F2 design §2.2): its `key`, its user `name` and its values as given (the
+A table of a group: its `key`, its user `name` and its values as given (the
 element type kept), or `nothing` when the front end binds them itself. `string(t)` is its key.
 """
 struct TableSpec
@@ -89,16 +89,16 @@ The description of one field group, shared by coupled and standalone routes:
   (`string(slot)` is the slot's name, so `string.(spec.params)` are the names of the slots);
 - `init`: the kernels that run at a step's start (the masks of masked conditions);
 - `kind`: `:rate` or `:map`;
-- `clock`: the period of the discretization's clock, or `nothing` (F2-08c);
+- `clock`: the period of the discretization's clock, or `nothing`;
 - `stability`: the front end's stability bound (a function of the raw parameters);
 - `texts`: `route`, how to give a count in this front end, and `terms`, the terms the bound
   does not see in the user's words;
-- `linearity`: the front end's linearity classes, carried for operator extraction (F3);
+- `linearity`: the front end's linearity classes, carried for operator extraction;
 - `operator`: the front end's builder of the group's [`OperatorSpec`](@ref) for the implicit
   algorithms (`operator_spec(spec)` builds it once, at the first implicit use; `nothing`: the
   front end extracts no operator, and an implicit algorithm is refused);
 - `steady`: the state fields written as steady rows `0 ~ rhs` (their rate rows hold `rhs`):
-  their groups take [`QuasiSteady`](@ref) only (F3-12b);
+  their groups take [`QuasiSteady`](@ref) only;
 - `timefree`: the system has no time (every row steady): a problem of it is solved once.
 """
 struct GroupSpec{N}
@@ -195,7 +195,7 @@ function _group_kernels(g::FieldGroup, ids)
     stateids = Set(fieldid(s, k) for k in g.spec.state)
     issubset(stateids, ids) && return initids, stepids
     maskfields = Set(s.masks[r.mask].field for r in s.rules if r isa NodeValueRule && r.field in ids)
-    # (and the domain folded onto a coarse field's level, F3-16)
+    # (and the domain folded onto a coarse field's level)
     union!(maskfields, (s.masks[r.mask].field for r in s.rules if r isa DomainEdgeRule && r.mask != 0 && r.field in ids))
     return [i for i in initids if any(f -> f in maskfields, writes(s.kernels[i]))],
            [i for i in stepids if (w = writes(s.kernels[i]); any(f -> f in ids, w) || !any(f -> f in stateids, w))]
@@ -255,7 +255,7 @@ lagged_coupling(stability, groups, p; within = nothing) = nothing
 """
     steady_loop_rates(stability, groups, p, steady, loops) -> Union{Nothing, Vector}
 
-The QuasiSteady gain in the coupling rule (F3-12c, F3 design §3.6): for the field groups
+The QuasiSteady gain in the coupling rule: for the field groups
 `groups` at parameters `p`, with `steady[g]` (group `g` is solved by `QuasiSteady`) and the
 loops of the read graph (`group_loops`), per group `(; rate, row, other, text, raw, gain, kout,
 qs, why)`. A steady group answers its lagged inputs at once with gain `G` (a bound on the norm
@@ -305,7 +305,7 @@ function group_loops(parts)
 end
 
 # ---------------------------------------------------------------------------------------
-# The substep policy (F3 design §1.2 item 1, §3.6, §3.7; F3-01): one function for both front
+# The substep policy: one function for both front
 # ends. Its decisions (the count, when a count is refused or warned, the coupling limit
 # between groups, the once-keys of the warnings) are made here; the front end gives only the
 # words of its messages (`AbstractPolicyTexts`: its route and how it prints a term), so each front end
@@ -359,7 +359,7 @@ inputs: [`with_tables`](@ref), primal values). The shared substep policy:
   ([`seen_bound`](@ref); `m` when that is not finite); when the full bound is unknown, a warning
   names what it does not cover (`uncovered_text`), once per `key(why)` in a session (`why`:
   [`unbounded_key`](@ref), no value);
-- a group with no field (aux fields only, F3 design §3.12) takes 0.
+- a group with no field (aux fields only) takes 0.
 
 `key` makes the warning's once-key from the value-free reason (standalone `FieldProblem`: the program's
 text, hashed; coupled `PottsProblem`: the group's fingerprint text); `texts` words the messages.
@@ -369,7 +369,7 @@ function substeps(spec::GroupSpec, alg::ExplicitEuler, dt::Real, pp; fields = sp
     )
     isempty(fields) && return 0                     # aux fields only: one evaluation per window
     dt = Float64(dt)
-    # (a bound that reads the time, F4-12b: its windows are counted again at these parameters,
+    # (a bound that reads the time: its windows are counted again at these parameters,
     # tables and inputs; with the run's time span, the automatic count is checked over it now)
     if reads_time(stability)
         bound_params!(stability, pp)
@@ -407,17 +407,17 @@ _explicit_count(a) = hasproperty(a, :substeps) && getproperty(a, :substeps) !== 
     check_coupling(stability, groups, explicit, pp, dt; check = eachindex(groups), key = identity,
                    texts = ProblemTexts(), span = nothing)
 
-The coupling between field groups (review of F2-06, ruling K-unsafe; round 2: loops only),
-one rule for both coupled and standalone routes. `groups` are the groups' state keys in stepping order,
-`explicit[g]` whether group `g` has an explicit count, `stability` the bound of the whole
-field system at the raw parameters `pp`, `dt` the window. Each group in `check` that is in a
+The coupling between field groups: one rule for both coupled and standalone routes. `groups`
+are the groups' state keys in stepping order, `explicit[g]` whether group `g` has an
+explicit count, `stability` the bound of the whole field system at the raw parameters `pp`,
+`dt` the window. Each group in `check` that is in a
 loop of the group read graph ([`group_loops`](@ref)) needs `κ = dt · rate ≤ 1` over the reads
 of groups in its loop ([`lagged_coupling`](@ref)); past it the problem is refused with the
 routes (`loop_text`). A cross coefficient in a loop with no finite bound is refused with an
 automatic count and warns once (`key(why)`) with an explicit one; a bound that does not know
 the cross terms is the same for every group. `span` is the time span (standalone `FieldProblem` route).
 `steady[g]`: group `g` is solved by `QuasiSteady`. A loop with such a group takes its gain
-([`steady_loop_rates`](@ref), F3-12c): each group of the loop that is not steady needs
+([`steady_loop_rates`](@ref)): each group of the loop that is not steady needs
 `κ = dt · rate ≤ 1` with the steady reads through the gain (`steady_gain_text` past it), and a
 loop whose gain the rule does not bound is refused (`steady_loop_text`).
 """
@@ -436,7 +436,7 @@ function check_coupling(stability, groups, explicit, pp, dt::Real; check = eachi
     loops = group_loops(parts)
     all(g -> isempty(loops[g]), check) && return nothing
     # a QuasiSteady group answers its inputs at once, with the gain of its steady solve: its
-    # loop takes that gain, `κ_QS = dt · Σ k_in · G · k_out` (F3-12c; batch 4 review r2 M1), and
+    # loop takes that gain, `κ_QS = dt · Σ k_in · G · k_out`, and
     # is refused when the rule has no bound for it
     withqs(g) = steady !== nothing && !isempty(loops[g]) && any(h -> steady[h], loops[g])
     if any(withqs, check)
@@ -454,7 +454,7 @@ function check_coupling(stability, groups, explicit, pp, dt::Real; check = eachi
         end
     end
     # the rates over the reads inside each group's loop: a read of a group outside it is a
-    # one-way source of the loop, which cannot feed growth back (round 3)
+    # one-way source of the loop, which cannot feed growth back
     parts = lagged_coupling(stability, keys, pp; within = loops)
     for g in check
         (isempty(loops[g]) || withqs(g)) && continue
@@ -468,7 +468,7 @@ function check_coupling(stability, groups, explicit, pp, dt::Real; check = eachi
         elseif κ > 1 + _COUPLING_RTOL
             throw(ArgumentError(loop_text(texts, c)))
         end
-        # a loop coupled through terms the bound cannot see (F4-13c, user ruling 2026-11-10 (a)):
+        # a loop coupled through terms the bound cannot see (user ruling 2026-11-10 (a)):
         # κ covers the seen cross terms only, so the lag through the unseen ones is not checked;
         # warned once per loop (its fields; by its first group, as `PottsProblem` checks each group
         # on its own, with its own once-key), never refused. Only the warning reads the unseen
@@ -496,7 +496,7 @@ unseen_reads(stability) = nothing
     unseen_loop(stability, pp, keys, parts, loop) -> (; kind, terms, fields)
 
 How the loop `loop` of the group read graph (`group_loops` of `parts`, [`lagged_coupling`](@ref))
-meets the terms the bound cannot see (F4-13c), from each unseen term's reads
+meets the terms the bound cannot see, from each unseen term's reads
 ([`unseen_reads`](@ref)): `kind` is `:direct` (an unseen term of a group of the loop reads a field
 of another group of the loop: the loop runs through it), `:conservative` (the loop exists only
 because the rule counts an unseen term that reads another field as reading every group), or
@@ -537,7 +537,7 @@ cover_text(terms) = string("κ covers only the cross terms the bound sees (unsee
 """
     coupling_unseen_text(texts, c) -> String
 
-The warning of a loop of groups that meets terms the stability bound cannot see (F4-13c),
+The warning of a loop of groups that meets terms the stability bound cannot see,
 `c.kind` from [`unseen_loop`](@ref): `:direct`, the loop runs through them; `:conservative`, the
 loop is checked as one only because an unseen term counts as reading every group. It names the
 loop's fields, the unseen terms (`c.terms`), what κ covers, and the routes (the loop's fields in
@@ -654,7 +654,7 @@ function steady_why_text(why)
     return "the stability bound does not know the gain of a steady solve"
 end
 # the refusal of a loop with a QuasiSteady group whose gain the rule does not bound, with its routes:
-# steady groups that read one another take one `QuasiSteady` (one group: solved together, F3-12d)
+# steady groups that read one another take one `QuasiSteady` (one group: solved together)
 function steady_loop_text(t::ProblemTexts, c)
     w = c.why[1]
     one = w === :steady_only ? string("Give ", _fieldlist(c.qs), " one `QuasiSteady` (the same keywords: one group, whose ",
@@ -721,13 +721,13 @@ function loop_text(t::ProblemTexts, c)
         ", such as dt = ", _num(span), "/", n)
 end
 
-# The status word (F3 design §3.3, S9): an algorithm with a solve keeps a sticky device word
+# The status word: an algorithm with a solve keeps a sticky device word
 # `UInt32[8]` in its cache, and the drivers read it where they synchronize anyway.
 
 """
     STATUS_CODE
 
-Entry [1] of the status word (`UInt32[8]`, F3 design §3.3), the worst code: 0 `Success`,
+Entry [1] of the status word (`UInt32[8]`), the worst code: 0 `Success`,
 1 `StalledSuccess`, 2 `ConvergenceFailure`. Sticky. The other entries are
 [`STATUS_WINDOW`](@ref), [`STATUS_CAUSE`](@ref), [`STATUS_SOLVES`](@ref),
 [`STATUS_BUDGET`](@ref), [`STATUS_FLOOR`](@ref) and [`STATUS_NEWTON_BUDGET`](@ref), and [8],
@@ -787,7 +787,7 @@ The cause bits of the status word's entry [3], in words: 1 the linear solve dive
 Newton iteration diverged, 4 a residual was not finite, 8 the shift was clamped, 16 a steady
 solve's budget hit made no real reduction (`QuasiSteady`: a singular region), 32 a steady
 linear solve diverged (an indefinite steady problem, or an island), 64 a coupled steady solve
-(F3-12d) diverged or made no real reduction (the coupled system has no unique steady state, or
+ diverged or made no real reduction (the coupled system has no unique steady state, or
 its budget is short), 128 a coupled solve broke down (its operator is singular on its Krylov steps).
 """
 const STATUS_CAUSES = (0x00000001 => "the linear solve diverged", 0x00000002 => "the Newton iteration diverged",
@@ -820,8 +820,8 @@ linear solve reached its budget), `:newton_budget` (the Newton iteration did) or
 whose route follows its `cause` bits ([`STATUS_CAUSES`](@ref)): a linear divergence takes more
 substeps or a larger linear budget; a Newton divergence or a residual that is not finite takes
 more substeps only (a smaller step brings the iteration into its contraction; neither more
-iterations nor a larger linear budget does). `coupled`: the group is solved together (F3-12d:
-a `QuasiSteady` group only), so its linear budget is the `LatticeGMRES`'s.
+iterations nor a larger linear budget does). `coupled`: the group is solved together
+(a `QuasiSteady` group only), so its linear budget is the `LatticeGMRES`'s.
 """
 function status_route(alg, which::Symbol, cause::Integer = 0; coupled::Bool = false)
     which === :budget && return "a larger linear budget (`linsolve = LatticePCG(; maxiters = n)`)"
@@ -848,7 +848,7 @@ end
 """
     StatusTotals
 
-The host totals of a runtime's status word (F3 design §3.3): `solves`, `budget` (linear
+The host totals of a runtime's status word: `solves`, `budget` (linear
 budget hits), `floor` (rounding floors), `newton_budget` (Newton budget hits), the first
 failing `window` (0: none), the `cause` bits seen so far (a failure's, and the shift clamp's,
 which is not one), and whether the budget warning was given
@@ -866,7 +866,7 @@ Base.@kwdef mutable struct StatusTotals
     window::Int64 = 0
     cause::UInt32 = 0
     warned::Bool = false
-    clamped::Bool = false               # the shift clamp's warning was given (S2)
+    clamped::Bool = false               # the shift clamp's warning was given
     leaked::Bool = false                # a field left its declared bounds (`check_declared!`)
     windows::Int64 = 0                  # the windows advanced since the bind or `clear_status!`
     t1::Float64 = NaN                   # … the start time of the first of them
@@ -876,7 +876,7 @@ end
 """
     GroupRuntime
 
-One group bound to a store's arrays at parameters `p` (F2 design §2.6): the mask launches
+One group bound to a store's arrays at parameters `p`: the mask launches
 and the step launches at both slot parities, the clamps of its masked fields, the copies that
 bring its fields back to slot 1 (`ends_in = :slot1`), its substep count `n` and window `dt`,
 the algorithm's cache (`alg_cache`) and the status of its last step. Made by
@@ -914,8 +914,8 @@ mutable struct GroupRuntime{ST <: FieldStore, A, B, M, CL, SC, CP, PV, S, H, DC}
     host::H
     totals::StatusTotals                # the status word's host totals (`check_status!`)
     declared::DC                        # the fields whose declared interval the bound used, with
-                                        # their buffers (`check_declared!`; batch 5 review M2)
-    recount::Any                        # an explicit group whose bound reads the time (F4-12b, Q15):
+    # their buffers (`check_declared!`)
+    recount::Any                        # an explicit group whose bound reads the time:
                                         # its group spec, the count re-bounded each window; or nothing
 end
 
@@ -979,7 +979,7 @@ end
     check_backend_float64(prog, alg, backend, V; fields)
 
 A group that declares Float64 on a backend without it (`Exec.supports(backend, Float64)` false:
-Metal) is refused at the bind, in the user's words (batch 5 review S3): a `compute_type` or
+Metal) is refused at the bind, in the user's words: a `compute_type` or
 `solver_type` of Float64, or a field of its program declared `lattice_storage = Float64` (the
 group's own, or one it reads). Without the check the kernel compiler would refuse it in its own
 group's own terms. A Float64 state type `V` is the caller's own check.
@@ -1014,7 +1014,7 @@ function check_backend_float64(prog, alg, backend, V::Type; fields = String[])
     return nothing
 end
 
-# The fields of a runtime whose declared interval a coefficient bound read (batch 5 review M2):
+# The fields of a runtime whose declared interval a coefficient bound read:
 # its state fields and the aux fields of its program, each with its buffers and interval
 function _declared_checks(stab, st::FieldStore, prog, fields)
     used = used_intervals(stab)
@@ -1034,13 +1034,12 @@ end
     check_declared!(rt) -> ReturnCode.T
 
 Whether the fields of runtime `rt` whose declared `bounds = (lo, hi)` the stability bound used
-are still inside them (batch 5 review M2): the bound, and so the substep count, holds only
+are still inside them: the bound, and so the substep count, holds only
 there. Read where the status is read (coupled `PottsProblem`: after each window on the host,
 at the saves on a device; standalone `FieldProblem`: at the saves and at the end): one pass over each such
 field (no allocation on the host). A value outside warns once, naming the field, the value,
 the site and the routes. An explicit group then makes `rt.status` `ReturnCode.Unstable` (the
-run stops: its count holds only inside the interval). An implicit group goes on (batch 5
-review r2 S1): there the interval sets only the counts (substeps, Newton iterations), and a
+run stops: its count holds only inside the interval). An implicit group goes on: there the interval sets only the counts (substeps, Newton iterations), and a
 growth past what they saw is caught by the solve's own checks. With `newton > 1` the Newton
 check of every substep (the host stop, the device check) counts an iteration that does not
 converge (a budget hit, warned and counted in `field_stats`) or a divergence
@@ -1185,13 +1184,13 @@ reads `k` at every substep. Returns the algorithm's code for the step (`ReturnCo
 for the explicit algorithms); `rt.status` keeps the worst code since the bind or the last
 [`clear_status!`](@ref) (a [`reset!`](@ref) keeps it). No allocation on the host executor.
 
-A group with no state (aux fields `K ~ rhs` only, F3 design §3.12) takes `n = 0`: its kernels
+A group with no state (aux fields `K ~ rhs` only) takes `n = 0`: its kernels
 run once, at the window's start `(t0, k)`, with the window as their step length.
 """
 function advance!(rt::GroupRuntime, clock::Tuple{Real, Integer}, n::Integer = rt.n, window::Real = rt.dt)
     t = Float64(clock[1])
     k = Int(clock[2])
-    # (an explicit group whose bound reads the time: the window's count, F4-12b)
+    # (an explicit group whose bound reads the time: the window's count)
     # (behind a barrier: a group whose bound does not read the time compiles none of it)
     m = rt.recount === nothing ? Int(n) : Base.inferencebarrier(_recount!)(rt, Int(n), t, Float64(window))::Int
     h = m == 0 ? Float64(window) : Float64(window) / m
@@ -1215,8 +1214,7 @@ function advance!(rt::GroupRuntime, clock::Tuple{Real, Integer}, n::Integer = rt
     return code
 end
 
-# The substep count of explicit runtime `rt` over the window `[t, t + window]` (F4-12b, ruling
-# Q15): its bound reads the time (a Robin coefficient of the time), so the count is the
+# The substep count of explicit runtime `rt` over the window `[t, t + window]`: its bound reads the time (a Robin coefficient of the time), so the count is the
 # policy's at the bound over this window, at the parameters the steps are bound to (primal
 # values; a bound that reads tables sees none here, so it has no finite bound and the policy
 # refuses or warns as at the bind). Allocates (once per window, only for such groups)
@@ -1230,8 +1228,7 @@ function _recount!(rt::GroupRuntime, n::Int, t::Float64, window::Float64)::Int
     return m
 end
 
-# The automatic count over the run's time span `span` of a bound that reads the time (F4-12b
-# review): the bound over the whole span; when it has none, the first window `[t, t + dt]`
+# The automatic count over the run's time span `span` of a bound that reads the time: the bound over the whole span; when it has none, the first window `[t, t + dt]`
 # (bisection to one window) where it fails is named, so the run is refused at the bind, not
 # partway through. The window goes back to what it was
 function _check_span(stability, pp, dt::Float64, span, texts, ctx)
@@ -1270,7 +1267,7 @@ bound_window(stability) = nothing
 """
     reads_time(stability) -> Bool
 
-Whether a stability bound depends on the time (a Robin coefficient of the time, F4-12b): an
+Whether a stability bound depends on the time (a Robin coefficient of the time): an
 explicit group then takes its count again at each window, over the window's span
 ([`bound_window!`](@ref)). A front end's bound defines it; `false` by default.
 """
@@ -1308,7 +1305,7 @@ function _check_status!(w, rt::GroupRuntime, acc)
     end
     tot.cause |= h[STATUS_CAUSE]                # (the causes so far: a clamp is recorded, not a failure)
     # a clamped shift with one Newton step and no check: the step is not the Backward Euler step,
-    # and nothing else tells (S2)
+    # and nothing else tells
     !tot.clamped && h[STATUS_CAUSE] & 0x8 != 0 && newton_count(rt.cache) == 1 && _clamp_warn(rt, h)
     code = h[STATUS_CODE] == 0 ? SciMLBase.ReturnCode.Success :
            h[STATUS_CODE] == 1 ? SciMLBase.ReturnCode.StalledSuccess : SciMLBase.ReturnCode.ConvergenceFailure
@@ -1435,13 +1432,13 @@ end
 # its mask marks, `u = ifelse(mask, v, u)` on the current slot, and nothing else changes (no
 # launch of the step plan, no slot swap). It runs after init (before the t0 save), after every
 # input write and parameter change, and after the masks at the start of every step, so a
-# step's first fluxes read the clamped values, for rate and map programs alike (F1). The step
+# step's first fluxes read the clamped values, for rate and map programs alike. The step
 # kernels still store the value at masked sites (the store-side rule).
 # The masked fields of program `prog` among the field ids `ids` on store `st`, as a tuple (one
 # entry per `NodeValueRule`: the field's buffers, its id, its mask array and the value), so the
 # clamp is type-stable and allocation-free on the host (the store's own arrays are untyped)
 # (a rule whose value is a field, `vfield`, carries that field's array: each masked site takes
-# its own value, F3-07)
+# its own value)
 function _clamps(prog::Program, st::FieldStore, ids = Set(eachindex(prog.fields)))
     return Tuple((Tuple(st.bufs[r.field]), Int(r.field), array(st, prog.masks[r.mask].field, :cur), r.value,
                   r.vfield == 0 ? nothing : array(st, r.vfield, :cur))
@@ -1480,8 +1477,7 @@ function _clamp_host!(u, m, v, vf)
     end
     return nothing
 end
-# The clamp fused into the mask launch on a device (F2 design §2.6, the fallback of the F2-08b
-# gate): a separate clamp kernel was one more launch per step, about 4 % of a warm Merks2006
+# The clamp fused into the mask launch on a device: a separate clamp kernel was one more launch per step, about 4 % of a warm Merks2006
 # MCS at 100² on ROCm (paired A/B). A mask launch that writes the mask of a masked field gets
 # the field's current buffer and the mask as an extra lane of its arrays, and its body, after
 # it has stored the masks of a site, stores the masked value at that site where the mask
@@ -1595,7 +1591,7 @@ end
 
 Compile every device kernel a step of `rt` launches before its first step: the step launches,
 the mask launches, the clamp of each masked field and the slot-1 copies (`Exec.compile!`:
-compile-only launches, which write nothing), and an implicit runtime's launches (F3-15: the
+compile-only launches, which write nothing), and an implicit runtime's launches (the
 operator program, the residuals, the shift, update, status and Newton-check bodies, the
 right sides and history copies, and the solver's rebuild, lift and solve plans, by
 [`compile_cache!`](@ref) in compile mode). Nothing on the host executor.

@@ -18,7 +18,7 @@ function _site_slice_oracle(values, axis, index)
     ]
 end
 
-# P6.0d (D-081): a solution's frames draw each saved state's own obstacles. A frozen cell
+# D-081: a solution's frames draw each saved state's own obstacles. A frozen cell
 # released at MCS 5 leaves its sites; they are medium, not obstacles, in the last frame.
 struct _ReleasedFrozenKind
     k::Int32

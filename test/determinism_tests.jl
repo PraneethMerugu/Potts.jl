@@ -1,4 +1,4 @@
-# Direct determinism properties (TS-R2 §5):
+# Direct determinism properties:
 # D1 same-session fingerprints and CPU solves, D2 fresh subprocess parity,
 # D3 model definition order (A,B vs B,A + unrelated model), and
 # D5 structural scan for objectid / hex-address / gensym / build-path leaks.

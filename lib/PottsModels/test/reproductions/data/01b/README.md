@@ -2,7 +2,7 @@
 
 R.M.H. Merks, E.D. Perryn, A. Shirinifard, J.A. Glazier, "Contact-Inhibited Chemotaxis in De Novo and Sprouting Blood-Vessel Growth", *PLoS Comput Biol* 4(9): e1000163 (2008), doi:10.1371/journal.pcbi.1000163. These files contain numbers only. No figure images and no source PDFs are included.
 
-The targets in `test/reproductions/01_merks_01b.jl` (P6.3f) are copied from these files, and its always tier checks that the two still agree.
+The targets in `test/reproductions/01_merks_2008_figures_tests.jl` are copied from these files, and its always tier checks that the two still agree.
 
 | File | Figure (PDF page) | Curves | x | y |
 |---|---|---|---|---|
@@ -20,7 +20,7 @@ ER and EO are the extension–retraction and extension-only chemotaxis modes, an
 - `sd` is the paper's spread: the error-bar half-length (Fig 5), or the grey ±1 SD curve read at that x (Figs 7–10, 12). `NA` means it was not read.
 - `unc_x` and `unc_y` are our digitisation uncertainty, in the axis units.
 
-**Method (2026-10-09, P6.3f test author).**
+**Method (2026-10-09, the test author).**
 1. The figures are 150-ppi raster images embedded in the publisher PDF. They were extracted losslessly with `pdfimages -png`.
 2. Each axis was calibrated from its tick marks, located to the pixel; the residual is under 0.5 px on every axis.
 3. Fig 5 (error bars). Each bar is the longest dark vertical run within ±1 px of the bar's x. The mean is the run's midpoint and the SD is its half-length. Two readings were taken, one with a black threshold and one with a grey-inclusive threshold, and they agree to 0.002. At 0.77 the longest run is an inset's leader line, so the bar value from the black-threshold reading is used. The bar at 0.98 is found only by the grey-inclusive reading. Bars at 0 and 1 are hidden by the frame.

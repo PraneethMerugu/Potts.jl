@@ -2,7 +2,7 @@
 # Results 2026-11-04 (gfx1151): KA launch 5.8–8 µs, HIP graph replay 1.9–5 µs, raw @roc 2.7–5.7 µs
 # (16k–400k work items); cooperative launches hold at most 160 workgroups of 256; sync_grid
 # 0.8 µs (30 groups) to 2.1 µs (160 groups).
-# P6.0bl: per-launch cost on the PC's GPU. A sequence of `n` small KernelAbstractions launches, run
+# Per-launch cost on the PC's GPU. A sequence of `n` small KernelAbstractions launches, run
 # directly and replayed as one captured HIP graph; per launch, for several work sizes.
 using AMDGPU, KernelAbstractions, Printf
 @kernel function touch!(a, k)

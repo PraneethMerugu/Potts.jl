@@ -118,7 +118,8 @@
 #   (scratch, no R-tree) reproduced all 25 rows, all 8 fields, byte for byte in ≈ 7 s.
 #   Before it was committed, this whole file ran green against that scratch port (184 passes with
 #   the repo set; 128 + 1 broken without), and the port's `muladd` variant failed the FMA
-#   guard (AUTONOMY §7.2 stub run; the port itself is not committed).
+#   guard (a test is run against a stand-in of the code it tests before it is committed; the
+#   port itself is not committed).
 
 @testsetup module OpenVTAnalysisPortSetup
 include(joinpath(@__DIR__, "..", "shared", "common.jl"))

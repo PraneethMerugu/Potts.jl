@@ -1,9 +1,9 @@
-# F4-03 (F4 design §3.4, §5): the owned integrator is a `SciMLBase.DEIntegrator`. `integ.t` is the
+# The owned integrator is a `SciMLBase.DEIntegrator`. `integ.t` is the
 # current time and `integ.u` the current state; `step!(integ, dt, true)`, `add_tstop!` and the
 # end of a time span off the window grid land by one shortened window (each group `⌈n w/dt⌉`
 # substeps; an implicit group rebuilds for it, BDF2 starts again); `derivative_discontinuity!`
-# drops the groups' history; `terminate!`, `savevalues!`, `done`. Negative control at 25d14c8a
-# (~/lpwork/f4b5/nc03.log): every testset errors (`step!(integ, dt, true)` and the methods are
+# drops the groups' history; `terminate!`, `savevalues!`, `done`. Negative control at 25d14c8a:
+# every testset errors (`step!(integ, dt, true)` and the methods are
 # MethodErrors, `integ.t` is the vector of saved times, a time span off the grid is refused).
 
 @testsetup module LP_integrator
@@ -32,8 +32,8 @@ include("shared/cranknicolson.jl")
 include("shared/export_all.jl")
 end
 
-@testitem "F4-03: integ.t, integ.u and a shortened window, explicit (against a run at dt/2)" setup = [LP_integrator] tags = [:latticepde, :integrator] begin
-@testset "F4-03: integ.t, integ.u and a shortened window, explicit (against a run at dt/2)" begin
+@testitem "integ.t, integ.u and a shortened window, explicit (against a run at dt/2)" setup = [LP_integrator] tags = [:latticepde, :integrator] begin
+    @testset "integ.t, integ.u and a shortened window, explicit (against a run at dt/2)" begin
     p, λ, u0 = eig_problem(16)
         ig = init(p, ExplicitEuler(); dt = 0.01)
     @test ig isa SciMLBase.DEIntegrator && ig.t == 0.0 && ig.u ≈ vec(u0) && ig.sol.t == [0.0]
@@ -58,8 +58,8 @@ end
 end
 end
 
-@testitem "F4-03: a shortened window of Backward Euler equals a chained run; BDF2 keeps order 2" setup = [LP_integrator] tags = [:latticepde, :integrator] begin
-@testset "F4-03: a shortened window of Backward Euler equals a chained run; BDF2 keeps order 2" begin
+@testitem "a shortened window of Backward Euler equals a chained run; BDF2 keeps order 2" setup = [LP_integrator] tags = [:latticepde, :integrator] begin
+    @testset "a shortened window of Backward Euler equals a chained run; BDF2 keeps order 2" begin
     p, λ, u0 = eig_problem(16)
         ib = init(p, BackwardEuler(; linsolve = BTIGHT); dt = 0.01)
     step!(ib, 0.055, true)
@@ -78,12 +78,12 @@ end
                maximum(abs, ig.u .- exp(0.3λ * 0.4) .* vec(u0)))
     es = [err(0.4 / 2^k) for k in 4:7]
     os = log2.(es[1:(end - 1)] ./ es[2:end])
-    @test all(o -> abs(o - 2) < 0.15, os) || (println("F4-03 BDF2 orders ", os, " ", es); false)
+        @test all(o -> abs(o - 2) < 0.15, os) || (println("BDF2 orders ", os, " ", es); false)
 end
 end
 
-@testitem "F4-03: derivative_discontinuity! re-damps Crank–Nicolson; terminate!, add_tstop!, savevalues!" setup = [LP_integrator] tags = [:latticepde, :integrator] begin
-@testset "F4-03: derivative_discontinuity! re-damps Crank–Nicolson; terminate!, add_tstop!, savevalues!" begin
+@testitem "derivative_discontinuity! re-damps Crank–Nicolson; terminate!, add_tstop!, savevalues!" setup = [LP_integrator] tags = [:latticepde, :integrator] begin
+    @testset "derivative_discontinuity! re-damps Crank–Nicolson; terminate!, add_tstop!, savevalues!" begin
     pe, _, _ = eig_problem(16)
         ig = init(pe, CrankNicolson(; linsolve = BTIGHT); dt = 0.05, save_everystep = false)
     step!(ig)

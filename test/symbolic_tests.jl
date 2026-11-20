@@ -174,8 +174,8 @@ end
 end
 
 
-@testitem "remake: whole parameter objects, keep sentinels, non-maps (D-115)" setup = [SymbolicSetup, PortsSetup] tags = [:potts, :symbolic] begin
-    @testset "remake: whole parameter objects, keep sentinels, non-maps (D-115)" begin
+@testitem "remake: whole parameter objects, keep sentinels, non-maps" setup = [SymbolicSetup, PortsSetup] tags = [:potts, :symbolic] begin
+    @testset "remake: whole parameter objects, keep sentinels, non-maps" begin
         prob = symbolic_graner_problem(; nmcs = 5)
         # a whole object of this problem's type is taken as given
         q = remake(prob; p = [:λ => 3.0])
@@ -492,7 +492,7 @@ end
 
 @testitem "div and ÷ in energies; variable defaults with functions" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
     @testset "div and ÷ in energies; variable defaults with functions" begin
-        @potts_model P60aoDivEnergy begin
+        @potts_model DivEnergy begin
             @kinds medium A
             @parameters begin
                 n = 7.0
@@ -509,7 +509,7 @@ end
         end
 
         σ = zeros(Int32, 12, 12); σ[3:5, 3:5] .= 1; σ[8:9, 8:9] .= 2
-        prob = PottsProblem(P60aoDivEnergy(; name = :x), [ownership => σ, kind => [:A, :A]], (0, 20); seed = 3)
+        prob = PottsProblem(DivEnergy(; name = :x), [ownership => σ, kind => [:A, :A]], (0, 20); seed = 3)
         @test prob.u0.cell.goal[1:2] == [3.0, 3.0]                       # sqrt(7 + 2)
         oracle(V, n) = sum((v - div(n, 2) - 3)^2 + div(v, 4) for v in V if v > 0)
         @test total_energy(prob) == oracle([9, 4], 7.0)                     # 9 + 2 + 4 + 1

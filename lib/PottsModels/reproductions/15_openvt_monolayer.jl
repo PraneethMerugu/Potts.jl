@@ -5,7 +5,7 @@
 # optional contact inhibition of growth. The consortium's manuscript defines the model, the
 # protocols, the analysis and the figures that every framework contributes to: OpenVT
 # consortium, *Reference Model for the Simulation of a Growing Tissue Monolayer with Contact
-# Inhibition*, in preparation (called **M** below; the 9 Oct 2026 draft, D-211). PottsModels ships the model as
+# Inhibition*, in preparation (called **M** below; the 9 Oct 2026 draft). PottsModels ships the model as
 # `OpenVTReferenceMonolayer`, and this page is Potts.jl's contribution to M's lineup.
 #
 # The page shows, in order:
@@ -20,7 +20,7 @@
 #    Tables S1 and S5, the differences table and provenance.
 #
 # Every result comes from a committed record under `lib/PottsModels/reproductions/data/15/`,
-# made offline (D-146); the page reads the records and reruns nothing but the minimal run.
+# made offline; the page reads the records and reruns nothing but the minimal run.
 # **Calibration and growth over time pass every pre-registered target. Three of the seven
 # Figure 5 distribution targets fail. The threshold sweeps pass 15 of 18 targets: the
 # uninhibited colony reaches 10⁴ cells 10 % later than M (just outside the ± 10 % band),
@@ -164,7 +164,7 @@ o2 = PottsModels.openvt_snapshot(sol.u[end])
 #
 # Each result names its record (`data/15/…`), the commit and machine it ran on, and the
 # figure file the record's plotting script drew. The verdict rules and bands were frozen
-# before each run (D-148, D-168, D-173, D-174, D-175).
+# before each run.
 #
 # ### Figure 2: mechanical calibration on 1D cell chains
 #
@@ -172,7 +172,7 @@ o2 = PottsModels.openvt_snapshot(sol.u[end])
 # t = 0 towards 10 cell diameters (CD); the time T at which the mean crosses 90 % of the
 # relaxation is the framework's time unit (panel b, Table S5). Panels d and e test the
 # calibrated T, without refitting, on a 21-cell chain. Dashed: the spring–dashpot
-# reference. Record `data/15/calibration-2026-10-05/` (ROADMAP P6.15b), commit `30c39601`,
+# reference. Record `data/15/calibration-2026-10-05/`, commit `30c39601`,
 # Apple M1 Pro, 4 threads, 14 s; figure `fig2_bde.png`.
 
 record("calibration-2026-10-05"; commit = "30c39601") #hide
@@ -200,7 +200,7 @@ end
 # from the initial cell. Rows: the consortium's TST runs (M's data), Potts.jl case (b) (seeds
 # 15001–15100) and the γ = 10⁻⁴ negative control (seeds 15501–15520). The verdict rules
 # were also run on the consortium's TST and Morpheus data, and both pass all seven rows.
-# Record `data/15/f5-2026-10-07/` (ROADMAP P6.15e), commit `3af81ae8`,
+# Record `data/15/f5-2026-10-07/`, commit `3af81ae8`,
 # AMD Ryzen AI Max+ 395 PC, 12 threads, 120 runs in 468 s.
 #
 # M now draws every row on one set of distance bins, edges 0, 18.6, 37.2, 55.8, 74.4 and
@@ -229,13 +229,13 @@ record_figure("f5-2026-10-07", "fig5.png"; alt = "Figure 5: f and a distribution
 # 11600, N = 10001. As in the CompuCell3D, TST and Artistoo close-ups, each cell is colored
 # by its area (`coolwarm`, scaled to the panel's own cell-area min–max; the areas come from
 # the full state, so cells cut by the window keep their full area), with thin black
-# boundaries between cells (D-185). The scale limits are our provisional reading. The
+# boundaries between cells. The scale limits are our provisional reading. The
 # block sits on the colony rim, moved inward along the 45° ray from the colony centroid
 # until it is 70 % tissue (offset (971, 969), 53 cells), so that the rim enters at the top
-# edge and leaves at the right edge as in the other frameworks' panels (D-229; the first,
+# edge and leaves at the right edge as in the other frameworks' panels (the first,
 # rim-centered block was 56 % tissue). The banner color RGB(8, 29, 88) is our proposal for
 # Potts.jl. Record
-# `data/15/f1-f4-2026-10-08/` (ROADMAP P6.15h), commit `c6ca4bc4`, AMD Ryzen AI Max+ 395
+# `data/15/f1-f4-2026-10-08/`, commit `c6ca4bc4`, AMD Ryzen AI Max+ 395
 # PC, one thread; figure `fig1.png`, drawn by `plot_f1.jl` from
 # `window.tsv` and `window_cells.tsv` (written by `run_f1_reframe.jl`). The rerun's stop
 # equals case (a) run 1 of the Figure 3/9 record.
@@ -255,7 +255,7 @@ record_figure("f1-f4-2026-10-08", "fig1_colony.png"; alt = "the 10^4-cell colony
 # (uninhibited) and (e) (β = 0.8), 10 runs each to 10⁴ cells, with the bulk and
 # boundary-limited growth laws and the CompuCell3D and Morpheus curves of M's draft
 # (earlier β = 0.8 runs in their own cycle lengths, footnoted). Record
-# `data/15/f3-f8-2026-10-08/` (ROADMAP P6.15f), commit `a64ae188`, AMD Ryzen AI Max+ 395 PC,
+# `data/15/f3-f8-2026-10-08/`, commit `a64ae188`, AMD Ryzen AI Max+ 395 PC,
 # 12 threads, 240 runs in 9.2 core-hours; figures `fig3.png` and `fig8.png` (M's metrics
 # figure was Figure 8 in the 2 Oct draft; the record keeps its names).
 
@@ -290,9 +290,9 @@ record_figure("checkerboard-2026-11-05", "fig9.png"; alt = "Figure 9 panels for 
 # 13.57 cycles. Table 1 lists the threshold at which each multiple is reached; Figure 7 shows
 # the colony at 10⁴ cells at each multiple's γ threshold. Rings: the Potts.jl thresholds;
 # diamonds and crosses: TST's and Artistoo's Table 1 values. Record
-# `data/15/sweeps-2026-10-08/` (ROADMAP P6.15g), commit `41fb2ba6`, AMD Ryzen AI Max+ 395 PC,
+# `data/15/sweeps-2026-10-08/`, commit `41fb2ba6`, AMD Ryzen AI Max+ 395 PC,
 # 12 threads, 160 runs (6 capped at 20×) in 68.7 core-hours, with
-# `SequentialCPM(; skip_interior = true)` (equal in law to `SequentialCPM()`, D-177, D-198);
+# `SequentialCPM(; skip_interior = true)` (equal in law to `SequentialCPM()`);
 # figures `fig6.png` and `fig7_grid.png`, thresholds `table1.tsv`.
 
 sweeps = tsv("sweeps-2026-10-08", "verdicts.tsv") #hide
@@ -373,8 +373,8 @@ record_figure("sweeps-2026-10-08", "fig7_cells.png"; alt = "the five sweep colon
 # 1.0212, cells yellow (no inhibition) or red (area-inhibited, a < β), with the black concave
 # hull of `metrics.cpp` (concavity 1.5). The sweeps record did not keep these colonies, so
 # each is replayed from its seed: replicate 1 of that T1 point, which stopped at the same MCS
-# with the same cell count as its sweeps row. Record `data/15/f8beta-2026-10-09/` (ROADMAP
-# P6.15k), commit `97c326bf`, AMD Ryzen AI Max+ 395 PC, 5 threads, 5 runs in 24 min; figure
+# with the same cell count as its sweeps row. Record `data/15/f8beta-2026-10-09/`,
+# commit `97c326bf`, AMD Ryzen AI Max+ 395 PC, 5 threads, 5 runs in 24 min; figure
 # `fig8_grid.png` (`plot_f8_grid.jl`).
 
 record("f8beta-2026-10-09"; commit = "97c326bf") #hide
@@ -430,7 +430,7 @@ end
 
 # ### Deviations
 #
-# One row per failed or provisional target (D-154). The columns are our value, M's value,
+# One row per failed or provisional target. The columns are our value, M's value,
 # the suspected cause and the status of the question to the authors: "not asked" (the
 # question is on our open question list, spec 15 §7) or "not an author question". Where
 # another framework's code departs from M, M is the reference and the departure is recorded,
@@ -443,11 +443,11 @@ end
 # | V4.2 peak of nonzero f (FAIL) | 0.425 (100 runs, 11,226 cells with f > 0); 0.395–0.435 for smoothing windows of 1–11 bins; mean nonzero f 0.346 | 0.25–0.35 (TST and Morpheus pooled); TST alone 0.295, mean nonzero f 0.288 | leading: TST departs from the manuscript: divides on target area (the released TST OpenVT model, sbr-shakibi/Tissue-Simulation-Toolkit@7ae1636, src/models/openvt-monolayer-type1-tst.cpp:169); Potts.jl follows M and divides on actual area (C13). Not the Morpheus f definition or σ_X (C17): TST alone uses our f and σ_X = 0.4 and passes. Ruled out on 20 runs each: the division axis and a connectivity constraint | not asked (maintainer ruling: M over TST); any other TST detail behind the shift is Q23 on our open question list |
 # | V4.3 max f (FAIL) | 0.847; 606 of 11,226 rim cells (5.4 %) above 0.56 | at most 0.56, no cell above (TST max 0.553) | the same upward shift of the rim cells' f as V4.2; causes as for V4.2. Leading: TST departs from the manuscript: divides on target area (the released TST OpenVT model, sbr-shakibi/Tissue-Simulation-Toolkit@7ae1636, src/models/openvt-monolayer-type1-tst.cpp:169) (C13) | not asked (maintainer ruling: M over TST); any other TST detail is Q23 on our open question list |
 # | V4.5 range of a (FAIL) | 0.066–1.130; 30 of 100,029 cells below 0.42, all small interior cells born shortly before, 10 of them sister pairs | 0.42–1.09; TST 0.425–1.092 with no cell below 0.42 | squeezed young daughters, cause unresolved. Leading candidate: TST departs from the manuscript: divides on target area (the released TST OpenVT model, sbr-shakibi/Tissue-Simulation-Toolkit@7ae1636, src/models/openvt-monolayer-type1-tst.cpp:169), which changes the daughters' state at birth (C13). A connectivity constraint raises the minimum but not the count | not asked (maintainer ruling: M over TST); whether the frameworks remove crushed cells is Q24 on our open question list |
-# | V1 time to 10⁴ cells, uninhibited, sweeps (FAIL) | 14.945 cycles (β = γ = 0, 10 runs, 14.48–15.31, sd 0.27), 0.12 % above the band's upper edge 14.927, +10.1 % on 13.57; our low-β plateau 14.72–14.77 for β = 0.25–0.6 | 13.57 cycles (PhysiCell's γ = 0 value), band ± 10 % = 12.213–14.927; TST plateau 13.77, Artistoo 13.856 | as for the Figure 3/9 measurement below (15.17 cycles with `SequentialCPM` on other seeds; the difference, 0.22 cycles, is about 1.9 standard errors, consistent with D-177). Leading candidate: TST departs from the manuscript: divides on target area (the released TST OpenVT model, sbr-shakibi/Tissue-Simulation-Toolkit@7ae1636, src/models/openvt-monolayer-type1-tst.cpp:169); we follow M and divide on actual area (C13) | not asked (maintainer ruling: M over TST) |
-# | V2.1.1x β threshold at 1.1× (FAIL) | 0.625 (bracket 0.625 / 0.6375, 14.831 / 15.120 cycles over 6 runs each); against our own uninhibited time the rule gives 0.80 (information) | lattice spread 0.687–0.704 (TST 0.7037, Artistoo 0.698); band 0.667–0.724 | a consequence of V1, as D-174 anticipated: the 1.1× time 14.927 lies on our flat low-β plateau (14.7–15.1 for β ≤ 0.65), so its first crossing is set by run-to-run noise (sd 0.27 cycles), not by the inhibition curve. The 2×–20× β thresholds pass, within 0.002 of TST | not asked (M over the framework's code) |
+# | V1 time to 10⁴ cells, uninhibited, sweeps (FAIL) | 14.945 cycles (β = γ = 0, 10 runs, 14.48–15.31, sd 0.27), 0.12 % above the band's upper edge 14.927, +10.1 % on 13.57; our low-β plateau 14.72–14.77 for β = 0.25–0.6 | 13.57 cycles (PhysiCell's γ = 0 value), band ± 10 % = 12.213–14.927; TST plateau 13.77, Artistoo 13.856 | as for the Figure 3/9 measurement below (15.17 cycles with `SequentialCPM` on other seeds; the difference, 0.22 cycles, is about 1.9 standard errors, consistent with the two samplers being statistically identical). Leading candidate: TST departs from the manuscript: divides on target area (the released TST OpenVT model, sbr-shakibi/Tissue-Simulation-Toolkit@7ae1636, src/models/openvt-monolayer-type1-tst.cpp:169); we follow M and divide on actual area (C13) | not asked (maintainer ruling: M over TST) |
+# | V2.1.1x β threshold at 1.1× (FAIL) | 0.625 (bracket 0.625 / 0.6375, 14.831 / 15.120 cycles over 6 runs each); against our own uninhibited time the rule gives 0.80 (information) | lattice spread 0.687–0.704 (TST 0.7037, Artistoo 0.698); band 0.667–0.724 | a consequence of V1, as anticipated when the sweeps were pre-registered: the 1.1× time 14.927 lies on our flat low-β plateau (14.7–15.1 for β ≤ 0.65), so its first crossing is set by run-to-run noise (sd 0.27 cycles), not by the inhibition curve. The 2×–20× β thresholds pass, within 0.002 of TST | not asked (M over the framework's code) |
 # | V3b time to 10⁴ cells at γ = 10⁻⁴ (FAIL) | 58.755 cycles (5 runs, 58.42–59.11, sd 0.25), 3.7 % below the band's lower edge 61; −4.3 % on TST | TST 61.37 (γ = 10⁻⁴, one run), Artistoo 63.09 (γ = 0.0195); band 61–70 | unverified. Only cells with free surface grow here, so this measures rim-limited growth; we are faster than TST here but slower at γ = 0 (V1), which a plain rate offset cannot cause. Candidates: the division rule, where TST departs from the manuscript: divides on target area (the released TST OpenVT model, sbr-shakibi/Tissue-Simulation-Toolkit@7ae1636, src/models/openvt-monolayer-type1-tst.cpp:169) (C13), which changes rim cell shapes (V4.2 and V4.3 point the same way), and the band, which sits 0.6 % below TST's single run. Every γ threshold passes | not asked (maintainer ruling: M over TST) |
 # | V1 time to 10⁴ cells, uninhibited, Figure 3/9 record | 15.17 cycles (case (a), 10 runs, 14.92–15.49); 9 of 10 runs above the band; case (e) at β = 0.8: 16.26 | 13.57 cycles (PhysiCell's γ = 0 value), band ± 10 % = 12.21–14.93; TST low-β plateau 13.61–13.86; TST at β = 0.8: 16.15 | about 11.8 % slow. The gap opens beyond 10³ cells (TST takes about 3.4–3.6 cycles from 10³ to 10⁴ cells, we take 4.6–4.8), past the Figure 3 window. Leading candidate, as for V4: TST departs from the manuscript: divides on target area (the released TST OpenVT model, sbr-shakibi/Tissue-Simulation-Toolkit@7ae1636, src/models/openvt-monolayer-type1-tst.cpp:169); we follow M and divide on actual area (C13) | not asked (maintainer ruling: M over TST); whether 13.57 is pooled or one framework's value is Q17 on our open question list |
-# | F1 panel color scale (provisional) | cells colored by area with coolwarm, scaled to the panel's own cell-area min–max (areas from the full state); thin black pixel-edge boundaries; white medium | the CompuCell3D, TST and Artistoo close-ups color cells blue to red by area (coolwarm) with thin boundaries; the limits of their color scales are not stated | the style follows the other frameworks' panels (D-185); the scale limits are our provisional reading | not asked; on our open question list as Q10 (the color variable and its limits) and Q18 (the Potts.jl color, RGB(8, 29, 88) proposed) |
+# | F1 panel color scale (provisional) | cells colored by area with coolwarm, scaled to the panel's own cell-area min–max (areas from the full state); thin black pixel-edge boundaries; white medium | the CompuCell3D, TST and Artistoo close-ups color cells blue to red by area (coolwarm) with thin boundaries; the limits of their color scales are not stated | the style follows the other frameworks' panels; the scale limits are our provisional reading | not asked; on our open question list as Q10 (the color variable and its limits) and Q18 (the Potts.jl color, RGB(8, 29, 88) proposed) |
 #
 # **Reading the division rows.** Where we differ from TST, the manuscript is the reference
 # (M over code). Our model follows M: a cell divides when its actual area reaches X·A\*(0),
@@ -470,15 +470,15 @@ end
 #
 # ### Potts.jl (checkerboard)
 #
-# A characterization of the algorithm, not part of the OpenVT consortium submission (D-225):
+# A characterization of the algorithm, not part of the OpenVT consortium submission:
 # the same model, Table S1 parameters and cases (a), (b) and (f), solved with
 # `CheckerboardCPM(; proposal = Moore(1))` on a GPU (ROCm) on its own seeds, and compared
-# metric by metric with the sequential runs above. Record `data/15/checkerboard-2026-11-05/`
-# (ROADMAP P6.15m), commit `e1c963d3`, AMD Ryzen AI Max+ 395 PC and its GPU; its figures
+# metric by metric with the sequential runs above. Record `data/15/checkerboard-2026-11-05/`,
+# commit `e1c963d3`, AMD Ryzen AI Max+ 395 PC and its GPU; its figures
 # follow the sequential Figures 2, 3 and 9 above.
 #
 # **The algorithm.** `CheckerboardCPM` is the lockless block checkerboard (after Sultan et
-# al., arXiv 2312.09317; D-271). The lattice is cut into blocks of 8 × 8 one-site
+# al., arXiv 2312.09317). The lattice is cut into blocks of 8 × 8 one-site
 # sub-regions. A phase activates the same sub-region in every block, with one work item per
 # block. Each MCS draws 64 phases at random. An accepted copy commits at once, and per-cell
 # totals change by atomic adds. Nothing is claimed and no copy is dropped. Device runs depend
@@ -486,23 +486,23 @@ end
 # counts the committed copies of each GPU run from its own `stats.committed`.
 #
 # **Time scale.** M measures time in each framework's own mechanical T and sets the growth
-# rate per T (C1, C16), so these runs calibrate their own T first (D-220). The calibration
-# uses spec 15 §4.2 variant P1b, the 150 × 7 chain between two frozen border rows (D-224),
+# rate per T (C1, C16), so these runs calibrate their own T first. The calibration
+# uses spec 15 §4.2 variant P1b, the 150 × 7 chain between two frozen border rows,
 # with 64 phases per MCS on the chain and 64 on the monolayer. On the chain the checkerboard
 # commits 100 % of the sequential copies (relaxation phase, 100 runs per arm).
 # T(λ = 2) = 158 MCS, against the sequential 158 MCS on the same chain (z = -0.57) and
-# 156 MCS on the sequential record's P1 strip (z = -0.12): within the spread (D-218). So
+# 156 MCS on the sequential record's P1 strip (z = -0.12): within the spread. So
 # these runs keep the sequential cycle of 775 MCS and α = 50/775 px per MCS.
 #
 # **Comparison.** 0 of 102 metrics of cases (a), (b) and (f) lie beyond the seed spread of
-# the sequential runs (D-218), so the section has no deviations table. The largest |z| per
+# the sequential runs, so the section has no deviations table. The largest |z| per
 # case is 2.29 (a), 2.91 (b, `O1.n6`) and 2.90 (f, `r@4.5`), against the critical values
 # 8.86 (a) and 4.66 (b, f). Lost cells: 841.9 per run against 865.0 (a), 0.28 against 0.24
 # (b) and 0 against 0 (f).
 #
 # **The earlier record.** `data/15/checkerboard-2026-10-10/` measured the previous,
-# colored `CheckerboardCPM` (4 colors, stride 2). Its claim rule (D-008) dropped conflicting
-# accepted copies, and this thinning (D-220) put 28 of 102 metrics beyond the spread with a
+# colored `CheckerboardCPM` (4 colors, stride 2). Its claim rule dropped conflicting
+# accepted copies, and this thinning put 28 of 102 metrics beyond the spread with a
 # T(λ = 2) of 219 MCS. The lockless scheme replaced it, and that record is kept unchanged as
 # the measurement of the old scheme.
 
@@ -536,7 +536,7 @@ nothing #hide
 #   No run did.
 # - Every run uses `SequentialCPM(; proposal = Moore(1))` and saves every 39 MCS
 #   (≈ 1/20 cycle) and at the stop. The sweeps add `skip_interior = true`, equal in law
-#   (D-177, D-198).
+#   to the plain sequential sweep.
 # - The calibration follows the CPM frameworks: 5-site-high periodic strip, CD = 10 px, both
 #   chain ends free, 100 replicates per λ, a 100-MCS burn-in.
 #
@@ -555,7 +555,7 @@ nothing #hide
 # the growth and distribution targets, and case (b) against the synchrony rule that only
 # the deterministic case (f) can meet.
 #
-# **The sweeps (Figure 6, Table 1, Figure 7; D-174).** M's Figure 6 plots the mean time to
+# **The sweeps (Figure 6, Table 1, Figure 7).** M's Figure 6 plots the mean time to
 # 10⁴ cells against β (γ = 0, case (c)) and γ (β = 0, case (d)), with dashed lines at 1.1,
 # 2, 5, 10 and 20 times the uninhibited time of 13.57 cycles; Table 1 lists the thresholds
 # where those multiples are reached (lattice frameworks: β = 0.687–0.704, 0.936–0.943,
@@ -619,7 +619,7 @@ verdict_table(filter(r -> r["case"] in ("b", "control") && startswith(r["target"
 # The V4.2 rule was re-frozen once after the run, because the record showed that the
 # lowest f bin also holds 26 cells with 0 < f < 0.01: V4.2 now drops exactly the f = 0
 # cells instead of the whole bin. No band, seed or run changed, and every verdict is the
-# same under both rules (D-168). Two candidate causes of the failures were ruled out on 20
+# same under both rules. Two candidate causes of the failures were ruled out on 20
 # runs each: dividing along TST's minor axis instead of a random plane, and a connectivity
 # constraint. The rim cells carry more free surface than TST's: their mean nonzero f is
 # 0.346 against TST's 0.288. The control's a peaks at 0.965 with mean 0.957.
@@ -631,7 +631,7 @@ verdict_table(filter(r -> r["case"] in ("b", "control") && startswith(r["target"
 # and 25 cell pairs on Moore(1), so fᵢ = 13/(13 + 25) = 0.342. The marks are decoded from the
 # rendered figure and checked against a brute-force count and against the f the model
 # computes during a run (`openvt_snapshot`), for all four cells. Record
-# `data/15/f1-f4-2026-10-08/` (ROADMAP P6.15h), commit `c6ca4bc4`; figure `fig4.png`,
+# `data/15/f1-f4-2026-10-08/`, commit `c6ca4bc4`; figure `fig4.png`,
 # rendered by `plot_f4.jl` on a Mac (the record's runner ran on the
 # AMD Ryzen AI Max+ 395 PC).
 
@@ -700,13 +700,13 @@ Markdown.parse(s5)
 #
 # | Item | Ours | Manuscript (M) | Suspected cause | Author question |
 # |---|---|---|---|---|
-# | F1 window | a 64 × 64-site block (about 8 cell diameters) on the colony rim, 70 % tissue, the rim entering at the top edge and leaving at the right edge | 45 × 45 mm close-ups; the window size is not stated | the size is estimated from the TST close-up; the block is moved inward along the 45° ray from the colony centroid to frame the rim as the other panels do (about 65–75 % tissue; D-229) | not an author question |
+# | F1 window | a 64 × 64-site block (about 8 cell diameters) on the colony rim, 70 % tissue, the rim entering at the top edge and leaving at the right edge | 45 × 45 mm close-ups; the window size is not stated | the size is estimated from the TST close-up; the block is moved inward along the 45° ray from the colony centroid to frame the rim as the other panels do (about 65–75 % tissue) | not an author question |
 # | F2 consortium curves | Potts.jl curves and the spring–dashpot reference only | panels b, d, e overlay all frameworks | the consortium's curves are compared through the frozen spread values (Table S5 above), not redrawn | not an author question |
 # | F3 time axis and framework | t in 775-MCS cycles; TST shown as the comparison row | axis "[T]"; the framework of M's Figure 3 is not named | read as cycles, as the TST data imply | not asked; on our open question list as Q2 (open part) and Q13 |
 # | F3.4 colony area, case (f) | 14.3 % above TST at t = 8.5 (passes the 20 % band, the largest margin used) | TST deterministic | division on actual area (C13): cells of one generation divide over 0.23–0.41 cycles, not in one MCS | not asked (M over the framework's code) |
-# | F4 drawing | cell i's outline and the in-panel names left out; counts as numbers | a black outline of cell i, names, colored count glyphs | no outlines on this schematic (D-156) | not an author question |
+# | F4 drawing | cell i's outline and the in-panel names left out; counts as numbers | a black outline of cell i, names, colored count glyphs | no outlines on this schematic | not an author question |
 # | F5 distance bins and origin | M's shared edges 0, 18.6, 37.2, 55.8, 74.4, 93 for our row (`fig5_shared.png`), binned in R (provisional). M's axis is consistent with distance in units of R/2 (fitted 1.84–2.23 units per R across all nine consortium rows); the unit and origin are Q15 on our open question list. The verdict figure keeps 5 equal bins from 0 to 1.05 times the furthest distance (0–8, …, 35–44 R); distances from the initial cell's center | one set of edges for all rows (0–18, …, 74–93 "radii"); how they were derived is not stated; the notebook uses 7 bins from the pooled centroid | M's figure and text taken over its notebook (C11, C12) | not asked; on our open question list as Q15 |
-# | F6, T1, F7 set-up | `SequentialCPM(; skip_interior = true)` (equal in law to `SequentialCPM()`, D-177, D-198); γ sweep on 1800², β on 1400²; runs capped at 20×; thresholds: the nearer end (6 runs each) of the bisected first bracketing pair, not the globally nearest sample | Figure 6, Table 1, Figure 7; sampling and replicates per point not stated | an adaptive grid with bisection, pre-registered (D-174), so that each threshold is bracketed to the grid step | not an author question |
+# | F6, T1, F7 set-up | `SequentialCPM(; skip_interior = true)` (equal in law to `SequentialCPM()`); γ sweep on 1800², β on 1400²; runs capped at 20×; thresholds: the nearer end (6 runs each) of the bisected first bracketing pair, not the globally nearest sample | Figure 6, Table 1, Figure 7; sampling and replicates per point not stated | an adaptive grid with bisection, pre-registered, so that each threshold is bracketed to the grid step | not an author question |
 # | F7, F8 drawing | each cell a filled disc of its radius at its centroid, yellow or teal (Figure 7) / red (Figure 8, β), no strokes; the black concave hull of `metrics.cpp`; one length scale per figure; a row of lattice stills as information | M's grids, one colony per framework and multiple | M's form from our O5 files | not an author question |
 # | F7, F8 panel labels | no number in the panels; each colony's C/C_circle of the concave hull in the caption (1.38, 1.91, 2.22 for Figure 7) | a centered number per panel (1.37–3.45); its quantity is not stated | no candidate we tried matched M's printed values, so we do not guess | not asked; on our open question list |
 # | F9 consortium curves | CompuCell3D and Morpheus curves of M's draft overlaid, converted from px to R; only final values compared | lengths in R, time in cycles | the draft curves are earlier β = 0.8 runs in each framework's own cycle length | not asked; on our open question list as Q7 and Q14 |
@@ -765,15 +765,15 @@ Markdown.parse("PottsModels $(pkgversion(PottsModels)); records at commits `30c3
 
 # | Date | Change | Reason |
 # |---|---|---|
-# | 2026-10-08 | First version: Figures 1–5 and 8 and Tables S1 and S5 from the committed records; Figure 6, Table 1 and Figure 7 shown as parked; the differences table with C1–C17, the three V4 failures and the V1 slow growth | ROADMAP P6.15i; D-178 |
-# | 2026-10-08 | Rewritten in the D-185 order: intro, the `@potts_model` code, a minimal run, the results (calibration, Figure 5, the Figure 1 panel, Figures 3 and 8, the sweeps in one line, the videos, a verdict summary and the four-column deviations table) and this collapsed Details section with everything else. The Figure 1 panel restyled as the other frameworks' close-ups: cells colored by area (coolwarm, the panel's own min–max, provisional) with thin black boundaries. No target, band, seed or verdict changed | D-185 |
-# | 2026-10-08 | Figures 6 and 7 and Table 1 rendered from the sweeps record: 15 of 18 rows pass; V1, V2.1.1x and V3b are deviation rows. Nothing was tuned | ROADMAP P6.15g; D-174 |
-# | 2026-10-09 | Deviation rows V1, V3b and V4.2/V4.3/V4.5 name TST's departure from M (division on target area, the released TST OpenVT model, sbr-shakibi/Tissue-Simulation-Toolkit@7ae1636, src/models/openvt-monolayer-type1-tst.cpp:169); a note on the other frameworks' departures from Table S1. No target, tolerance or verdict changed | D-154 |
-# | 2026-10-09 | The 9 Oct 2026 draft is M: the metrics figure is now Figure 9 (the record keeps `fig8.png`); Figure 7 in M's grid form with the concave hull and C/C_circle in the caption (`fig7_grid.png`); Figure 5 on M's shared distance-bin edges (`fig5_shared.png`, binned in R; the unit comparison provisional); M's new Figure 8 (β colonies) added as pending. Renders only; no run, target or verdict changed | ROADMAP P6.15k; D-211, D-212 |
-# | 2026-10-09 | M's new Figure 8 (β colonies) rendered from the P6.15k record: five replays of the sweeps record's replicate 1 at our T1 β values, each equal to its sweeps row; C/C_circle in the caption. No target or verdict changed | ROADMAP P6.15k; D-211, D-212 |
-# | 2026-10-10 | The division rule stated as a ruling: M is followed (actual area); the released TST model divides on target area, recorded and not queried. The rows that cited the closed questions on the division trigger, the TST build, the TST and Morpheus departures and σ_X (V1, V2.1.1x, V3b, V4.2, V4.3, V4.5, F3.4, C13, C17) now say "not asked (maintainer ruling: M over TST)" or "not asked (M over the framework's code)". Figure 5: M's axis is consistent with distance in units of R/2 (fitted 1.84–2.23 units per R across all nine consortium rows), Q15 on our open question list; our row stays in R and provisional. No target, tolerance or verdict changed | ROADMAP P6.15l; D-213, D-215, D-217 |
-# | 2026-10-10 | The Potts.jl (checkerboard) section: a characterization of `CheckerboardCPM` against the sequential runs (its own T on the P1b chain at the monolayer's 4 colors, the comparison, the claim-thinning cause and the ΔH brute-force check), not part of the consortium submission; its Figure 2, 3 and 9 renders after the sequential ones. Every number is checked against the record when the page is built | ROADMAP P6.15m; D-220, D-221, D-224, D-225, D-226 |
-# | 2026-11-05 | The Potts.jl (checkerboard) section regenerated for the lockless block `CheckerboardCPM` (record `checkerboard-2026-11-05`): T(λ = 2) = 158 MCS, the sequential cycle of 775 MCS, 0 of 102 metrics beyond the spread, so no deviations table. The colors, claims, thinning cause, ablation and ΔH check of the 2026-10-10 record no longer apply and are removed. The Figure 2, 3 and 9 renders come from the new record | ROADMAP P6.0bl, P6.15m; D-271 |
+# | 2026-10-08 | First version: Figures 1–5 and 8 and Tables S1 and S5 from the committed records; Figure 6, Table 1 and Figure 7 shown as parked; the differences table with C1–C17, the three V4 failures and the V1 slow growth | the pre-registered page test |
+# | 2026-10-08 | Rewritten in the order shared by the paper-model pages: intro, the `@potts_model` code, a minimal run, the results (calibration, Figure 5, the Figure 1 panel, Figures 3 and 8, the sweeps in one line, the videos, a verdict summary and the four-column deviations table) and this collapsed Details section with everything else. The Figure 1 panel restyled as the other frameworks' close-ups: cells colored by area (coolwarm, the panel's own min–max, provisional) with thin black boundaries. No target, band, seed or verdict changed | one layout for every paper-model page; the other frameworks' figure style |
+# | 2026-10-08 | Figures 6 and 7 and Table 1 rendered from the sweeps record: 15 of 18 rows pass; V1, V2.1.1x and V3b are deviation rows. Nothing was tuned | the sweeps, pre-registered |
+# | 2026-10-09 | Deviation rows V1, V3b and V4.2/V4.3/V4.5 name TST's departure from M (division on target area, the released TST OpenVT model, sbr-shakibi/Tissue-Simulation-Toolkit@7ae1636, src/models/openvt-monolayer-type1-tst.cpp:169); a note on the other frameworks' departures from Table S1. No target, tolerance or verdict changed | deviations as a table per model |
+# | 2026-10-09 | The 9 Oct 2026 draft is M: the metrics figure is now Figure 9 (the record keeps `fig8.png`); Figure 7 in M's grid form with the concave hull and C/C_circle in the caption (`fig7_grid.png`); Figure 5 on M's shared distance-bin edges (`fig5_shared.png`, binned in R; the unit comparison provisional); M's new Figure 8 (β colonies) added as pending. Renders only; no run, target or verdict changed | the 9 Oct 2026 manuscript draft is the target |
+# | 2026-10-09 | M's new Figure 8 (β colonies) rendered from the β-colonies record (`data/15/f8beta-2026-10-09/`): five replays of the sweeps record's replicate 1 at our T1 β values, each equal to its sweeps row; C/C_circle in the caption. No target or verdict changed | the 9 Oct 2026 manuscript draft is the target |
+# | 2026-10-10 | The division rule stated as a ruling: M is followed (actual area); the released TST model divides on target area, recorded and not queried. The rows that cited the closed questions on the division trigger, the TST build, the TST and Morpheus departures and σ_X (V1, V2.1.1x, V3b, V4.2, V4.3, V4.5, F3.4, C13, C17) now say "not asked (maintainer ruling: M over TST)" or "not asked (M over the framework's code)". Figure 5: M's axis is consistent with distance in units of R/2 (fitted 1.84–2.23 units per R across all nine consortium rows), Q15 on our open question list; our row stays in R and provisional. No target, tolerance or verdict changed | the maintainer's rulings on the division rule and the package |
+# | 2026-10-10 | The Potts.jl (checkerboard) section: a characterization of `CheckerboardCPM` against the sequential runs (its own T on the P1b chain at the monolayer's 4 colors, the comparison, the claim-thinning cause and the ΔH brute-force check), not part of the consortium submission; its Figure 2, 3 and 9 renders after the sequential ones. Every number is checked against the record when the page is built | the checkerboard's extra crushing is claim-conflict thinning, not a bug |
+# | 2026-11-05 | The Potts.jl (checkerboard) section regenerated for the lockless block `CheckerboardCPM` (record `checkerboard-2026-11-05`): T(λ = 2) = 158 MCS, the sequential cycle of 775 MCS, 0 of 102 metrics beyond the spread, so no deviations table. The colors, claims, thinning cause, ablation and ΔH check of the 2026-10-10 record no longer apply and are removed. The Figure 2, 3 and 9 renders come from the new record | the lockless block checkerboard replaced the claiming one |
 #
 # ```@raw html
 # </details>

@@ -1,4 +1,4 @@
-# Callbacks on the owned path (F4-05, F4-06; F4 design §3.4). They run after each window, in
+# Callbacks on the owned path. They run after each window, in
 # SciML's order: the continuous callbacks (an event located inside the window), then the
 # discrete ones, then the saves due. A callback whose affect changes the state, the parameters
 # or the data drops every group's history ([`reset!`](@ref): Crank–Nicolson damps again, BDF2
@@ -125,7 +125,7 @@ function _fire!(integ::FieldIntegrator, cb, affect!, args...)
     return nothing
 end
 
-# Continuous callbacks (F4-06; Q3 (a)): each condition at the window's end against its value at
+# Continuous callbacks: each condition at the window's end against its value at
 # the window's start; a sign change is an event, located by linear interpolation of the
 # condition (the solution is linear between the window's ends), so its time is first-order
 # accurate. The earliest event of the window fires: the integrator moves to its time with the

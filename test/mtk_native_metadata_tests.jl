@@ -1,16 +1,16 @@
 # F2 metadata parity (`tunable`, `bounds`, `description`), component bindings/initial values,
 # and computed parameter routes & diagnostic messages.
 
-@testitem "F2-14: tunable, bounds, description" setup = [F2MetadataSetup] tags = [:potts, :mtk_native] begin
-    @testset "F2-14: tunable, bounds, description" begin
+@testitem "tunable, bounds, description" setup = [MetadataSetup] tags = [:potts, :mtk_native] begin
+    @testset "tunable, bounds, description" begin
         σ = zeros(Int32, 12, 12); σ[2:5, 2:5] .= 1
         op = [ownership => σ, kind => [1]]
-        sys = F2Meta(; name = :m)
+        sys = WithMeta(; name = :m)
         prob = PottsProblem(sys, op, (0, 2))
         # `tunable = false`: T is a constant (control: the model without metadata tunes T)
         @test SS.canonicalize(SS.Tunable(), prob.p)[1] == [2.0, 9.0]
         @test SS.canonicalize(SS.Constants(), prob.p)[1] == [1.0]
-        p0 = PottsProblem(F2NoMeta(; name = :m), op, (0, 2)).p
+        p0 = PottsProblem(NoMeta(; name = :m), op, (0, 2)).p
         @test SS.canonicalize(SS.Tunable(), p0)[1] == [1.0, 2.0, 9.0] && typeof(p0) == typeof(Potts.PottsParameters(NamedTuple(p0)))
         # the metadata is MTK's
         λs = only(x for x in MTKB.parameters(sys) if Symbol(x) === :λ)
@@ -26,7 +26,7 @@
         @test bound(emsg(() -> (integ.ps[:λ] = 7.0))) && integ.ps[:λ] == 2.0
         @test bound(emsg(() -> setp(integ, [:V₀, :λ])(integ, [4.0, 7.0]))) && integ.ps[:V₀] == 9.0   # a list: none set
         @test bound(emsg(() -> SS.replace(SS.Tunable(), prob.p, [7.0, 9.0])))
-        @test occursin("bounds", emsg(() -> F2Meta(; name = :m, λ = -1.0) |> m -> PottsProblem(m, op, (0, 2))))
+        @test occursin("bounds", emsg(() -> WithMeta(; name = :m, λ = -1.0) |> m -> PottsProblem(m, op, (0, 2))))
         integ.ps[:λ] = 5.0
         @test integ.ps[:λ] == 5.0
         # options that are not MTK's are named
@@ -43,8 +43,8 @@
     end
 end
 
-@testitem "F2-14: component bindings and initial values of parameters" setup = [F2MetadataSetup] tags = [:potts, :mtk_native] begin
-    @testset "F2-14: component bindings and initial values of parameters" begin
+@testitem "component bindings and initial values of parameters" setup = [MetadataSetup] tags = [:potts, :mtk_native] begin
+    @testset "component bindings and initial values of parameters" begin
         t = Potts.t
         σ = zeros(Int32, 10, 10); σ[3:5, 3:5] .= 1
         op = [ownership => σ, kind => [:A]]
@@ -76,17 +76,17 @@ end
     end
 end
 
-@testitem "F2-15: Foam has no computed parameter" setup = [F2MetadataSetup] tags = [:potts, :mtk_native] begin
-    @testset "F2-15: Foam has no computed parameter" begin
+@testitem "Foam has no computed parameter" setup = [MetadataSetup] tags = [:potts, :mtk_native] begin
+    @testset "Foam has no computed parameter" begin
         c = Potts.ModelingToolkitBase.mtkcompile(ShearedFoam(; name = :f, lattice = (32, 32)))
         @test isempty(Potts._computed_params(Potts._p(getfield(c, :sys), :parameters)))
     end
 end
 
-@testitem "F2-15 review: routes and messages of computed parameters" setup = [F2MetadataSetup] tags = [:potts, :mtk_native] begin
-    @testset "F2-15 review: routes and messages of computed parameters" begin
+@testitem "routes and messages of computed parameters" setup = [MetadataSetup] tags = [:potts, :mtk_native] begin
+    @testset "routes and messages of computed parameters" begin
         σ = zeros(Int32, 12, 12); σ[2:5, 2:5] .= 1
-        prob = PottsProblem(F2BoundChain(; name = :b), [ownership => σ, kind => [1]], (0, 2))
+        prob = PottsProblem(BoundChain(; name = :b), [ownership => σ, kind => [1]], (0, 2))
         e = emsg(() -> Potts.SciMLBase.remake(prob; p = [:α => 1.0]))
         @test occursin("parameter `γ` = 2.05 is outside its declared bounds (0, 1): `γ` is computed from `α`", e) &&
             occursin("set `α`", e)

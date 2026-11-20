@@ -1,4 +1,4 @@
-# C5 review regressions, each against an independent oracle written here with `mod1` and
+# Regressions found in review of the emitter, each against an independent oracle written here with `mod1` and
 # `clamp` (not the emitter's index code): periodic wrap with |offset| ≥ the axis, box
 # stencils on corners and degenerate axes, the ZERO policy, the coarse-level convention,
 # and the refusals added by the review.
@@ -149,7 +149,7 @@ end
 
 @testitem "review refusals and hygiene" setup = [LF_compile_regressions] tags = [:latticefields, :compile] begin
 @testset "review refusals and hygiene" begin
-    # :accumulate adds to the current value at the own site (C7b)
+        # :accumulate adds to the current value at the own site
     pb = ProgramBuilder(Grid((4,)); periodic = (true,))
     r, o = field!(pb, "r"; role = :input), field!(pb, "v"; role = :output)
     kb = kernel(pb)

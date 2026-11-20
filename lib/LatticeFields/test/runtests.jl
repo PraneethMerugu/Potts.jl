@@ -1,4 +1,4 @@
-# LatticeFields tests on ReTestItems (TS1b). Test items are in `*_tests.jl` (the group
+# LatticeFields tests on ReTestItems. Test items are in `*_tests.jl` (the group
 # directories ir/, compile/, schedule/, problems/, solvers/, qa/, solvers_gate/, and exec at
 # the top); each file's definitions are in its `@testsetup` module, which includes the
 # helpers it uses (exec_helpers.jl, host_runner.jl, fixtures.jl, solvers_cases.jl,
@@ -8,7 +8,7 @@
 #   julia --project=lib/LatticeFields/test lib/LatticeFields/test/runtests.jl [groups...]
 #
 # groups (tags): exec, ir, compile, schedule, problems, solvers, qa (all by default);
-# `solvers_gate` (the PG-4 size sweep, about 10 minutes) and `gpu` are opt-in.
+# `solvers_gate` (the solver iteration budget sweep over sizes, about 10 minutes) and `gpu` are opt-in.
 # Environment:
 #   GROUP = All (default) | exec | ir | compile | schedule | problems | solvers | qa | solvers_gate | gpu
 #   LATTICEFIELDS_GPU (or POTTS_GPU) = metal | rocm   also run the device items (`:gpu_only`)

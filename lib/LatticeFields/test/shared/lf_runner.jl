@@ -1,4 +1,4 @@
-# Definitions of the old runtests.jl (its preamble) that other test files use (moved here by TS1b).
+# Definitions of the old runtests.jl (its preamble) that other test files use.
 using Test, LatticeFields
 
 # device tests: LATTICEFIELDS_GPU (or POTTS_GPU) = metal | rocm

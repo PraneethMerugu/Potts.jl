@@ -1,5 +1,5 @@
-@testitem "F2-11: conditions lowered: a Dirichlet face, Flux and Robin" setup = [FieldsSetup, FieldsOpBcsSetup] tags = [:potts, :fields] begin
-    @testset "F2-11: conditions lowered: a Dirichlet face, Flux and Robin" begin
+@testitem "conditions lowered: a Dirichlet face, Flux and Robin" setup = [FieldsSetup, FieldsOpBcsSetup] tags = [:potts, :fields] begin
+    @testset "conditions lowered: a Dirichlet face, Flux and Robin" begin
         LP, MTKB = Potts.LatticePDE, Potts.ModelingToolkitBase
         dims, n = (8, 6), 4
         c0 = rand(StableRNG(5), dims...)
@@ -48,8 +48,8 @@
     end
 end
 
-@testitem "F2-11 review: off-face lines, a self-reading mask, h = 2" setup = [FieldsSetup, FieldsOpBcsSetup] tags = [:potts, :fields] begin
-    @testset "F2-11 review: off-face lines, a self-reading mask, h = 2" begin
+@testitem "off-face lines, a self-reading mask, h = 2" setup = [FieldsSetup, FieldsOpBcsSetup] tags = [:potts, :fields] begin
+    @testset "off-face lines, a self-reading mask, h = 2" begin
         # S1: a condition off a face is `parse_bcs`'s, with the faces named (base: "the high side
         # of `x`, which `@boundary c` sets too"); the location names the PDESystem
         err = something(fd_err(() -> mtkcompile(FbInterior(; name = :f))), "")
@@ -103,13 +103,13 @@ end
     end
 end
 
-# Review round 2 of F2 batch 4, open question (accepted): a mask reads the state at its group's
+# A mask reads the state at its group's
 # window start. A mask on `c` that reads `e`, stepped after `c`, reads `e` before its step,
 # with one solver group or two (`c`'s first), and equals LatticePDE's own run; a mask on `e` that reads `c`,
 # stepped earlier in another solver group, reads `c` as stepped in this MCS (as a rate reads
 # another group). The controls (the other oracle in each case) miss.
-@testitem "F2-11 review: a mask reads its group's window start" setup = [FieldsSetup, FieldsOpBcsSetup] tags = [:potts, :fields] begin
-    @testset "F2-11 review: a mask reads its group's window start" begin
+@testitem "a mask reads its group's window start" setup = [FieldsSetup, FieldsOpBcsSetup] tags = [:potts, :fields] begin
+    @testset "a mask reads its group's window start" begin
         LP = Potts.LatticePDE
         dims, K, N = (8, 6), 3, 4
         c0 = rand(StableRNG(21), dims...)
@@ -179,11 +179,11 @@ end
     end
 end
 
-@testitem "F2-11: the refusals, each with its route" setup = [FieldsSetup, FieldsOpBcsSetup] tags = [:potts, :fields] begin
-    @testset "F2-11: the refusals, each with its route" begin
-        # a periodic pair on an axis the lattice closes: per-field periodicity is FE-20 (`Robin`
-        # with β = 0 or α = 0, a face set twice and an initial condition were legacy model refusals
-        # refusals, gone with it in F4-B6)
+@testitem "the refusals, each with its route" setup = [FieldsSetup, FieldsOpBcsSetup] tags = [:potts, :fields] begin
+    @testset "the refusals, each with its route" begin
+        # a periodic pair on an axis the lattice closes: per-field periodicity is not supported
+        # yet (`Robin` with β = 0 or α = 0, a face set twice and an initial condition were
+        # refusals of the removed boundary-condition section, gone with it)
         err = something(fd_err(() -> mtkcompile(FbPeriodicBcs(; name = :f))), "")
         @test occursin("periodic", err) || (println("periodic: ", err); false)
     end

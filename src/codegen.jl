@@ -107,7 +107,7 @@ _with_model_scope(f, c::CompiledPottsSystem) =
 const _EULER_FULL = Base.ScopedValues.ScopedValue{Symbol}(:euler_full)
 _euler_column(name::Symbol) = name === :euler_full ? _EULER_FULL[] : name
 
-# P6.9a: the model being generated is on a hexagonal lattice (`pieces(; adjacency = :full)`
+# The model being generated is on a hexagonal lattice (`pieces(; adjacency = :full)`
 # reads the `:face` columns, `Global(; adjacency = :full)` is `:face`), and its lattice size
 # (the window's box capacity)
 const _PIECES_HEX = Base.ScopedValues.ScopedValue{Bool}(false)
@@ -121,7 +121,7 @@ _proposal_env(T, relname) = LowerEnv(T, :proposal, Dict{Symbol, Any}(:source => 
         :ring_arcs => :(Int32(CorePotts.ring_arcs(st.ownership, ctx, prop))),
         :ring_cells => :(Int32(CorePotts.ring_cells(st.ownership, ctx, prop))),
         :ring_medium => :(Int32(CorePotts.ring_medium(st.ownership, ctx, prop))),
-    # P6.4a1 (D-188): functions of (source, target) and of the sweep's MCS alone; code is
+        # D-188: functions of (source, target) and of the sweep's MCS alone; code is
     # emitted only where a model reads them (`direction[k]`, `position[s][k]`, `mcs`)
     :direction => :(Potts._direction($T, ctx, source, target)), :mcs => :(Potts._copy_mcs(ctx))), relname)
 
@@ -158,7 +158,7 @@ _edge_energies(c::CompiledPottsSystem) =
 ]
 
 # ---------------------------------------------------------------------------------------
-# One shell read per generated function (P6.3h, connectivity doc §9.2)
+# One shell read per generated function
 
 # CorePotts kernels that read the target's shell from their first argument, σ or a
 # `CorePotts.ShellRead`
@@ -288,7 +288,7 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
         ctxname = rel === :contact ? :contact : rel
         Ea = isempty(contact_after) ? E : Symbolics.substitute(E, contact_after; fold = Val(false))
         # the pair-only parts (no kind, owner or cell value) are the same for the old and the
-        # new owner: bound once per neighbor, before the energy's branches (P6.0bl profile)
+        # new owner: bound once per neighbor, before the energy's branches (found by profiling)
         Ea, E, pair = _hoist_pair_terms(Ea, E, rel)
         newenv = _contact_env(T, :new, :k_new, :n, :k_n, :w, :target, :sn, rn; extra = oc_binds)
         Enew = lower(Ea, newenv)
@@ -302,7 +302,7 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
             δs_new += ifelse(n == new, -ws, ws)
         end : nothing
         # a target at least the relation's radius from every face takes its neighbors as
-        # `target + linear offset`, without the wrap arithmetic (P6.0bl kernel profile)
+        # `target + linear offset`, without the wrap arithmetic (found by profiling the kernel)
         inner = Symbol(:__interior_, rel)            # fixed names: the code's hash must not change between builds
         push!(body, quote
             $inner = CorePotts.interior(ctx.lattice, prop.x, $R)
@@ -323,10 +323,10 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
     if getfield(c, :uses_surface) && !fused_surface
         push!(body, :((δs_old, δs_new) = CorePotts.surface_change(st.ownership, ctx, prop; T = eltype(st.cell.surface))))
     end
-    # Euler characteristics (P6.3j): exact Int32 changes of the two cells, from the shell
+    # Euler characteristics: exact Int32 changes of the two cells, from the shell
     getfield(c, :uses_euler) && push!(body, :((δe_old, δe_new) = CorePotts.euler_change(st.ownership, ctx, prop, Val(:face))))
     getfield(c, :uses_euler_full) && push!(body, :((δf_old, δf_new) = CorePotts.euler_change(st.ownership, ctx, prop, Val(:full))))
-    # cell-scope pieces (P6.9a): the exact after-values of both cells, kept for the commit
+    # cell-scope pieces: the exact after-values of both cells, kept for the commit
     append!(body, _pieces_prelude(c))
     # cell terms, grouped by kind filter
     groups = Dict{Vector{Int}, Any}()
@@ -351,7 +351,7 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
     for (r, E) in _edge_energies(c)
         Ecode = lower(E, _edge_env(T, :ea, :eb, :ek, :ed, rn))
         # `CorePotts.link_delta` with the edge energy inline, not as a closure (a closure here
-        # becomes an opaque closure, which a downstream package cannot precompile; TS1c)
+        # becomes an opaque closure, which a downstream package cannot precompile)
         push!(body, quote
             dH += let ˍfr = CorePotts.link_frame($T, st.cell, ctx.lattice, prop), ˍstore = $(_link_store(c, r)), ˍdH = zero($T)
                 for ˍside in 1:2, ek in 1:CorePotts.maxdegree(ˍstore)
@@ -384,7 +384,7 @@ end
 
 _group_terms(terms) = (g = Dict{Vector{Int}, Any}(); foreach(((k, E),) -> (g[k] = haskey(g, k) ? g[k] + E : E), terms); g)
 
-# Cell-scope pieces (P6.9a): one `pieces_after!` per adjacency read, slot 1 for the first.
+# Cell-scope pieces: one `pieces_after!` per adjacency read, slot 1 for the first.
 # Nothing for a model that reads neither (its code is unchanged).
 function _pieces_slots(c::CompiledPottsSystem)
     fulls = Bool[f for (u, f) in ((getfield(c, :uses_pieces), false), (getfield(c, :uses_pieces_full), true)) if u]
@@ -500,7 +500,7 @@ function _commit_expr(c::CompiledPottsSystem, T)
     body = Any[_PROP_LOCALS]
     vals = Any[]; writes = Any[]
     for (j, u) in enumerate(get(getfield(c, :updates), (:on_copy, :proposal), Update[]))
-        # the commit may run in parallel (checkerboard): no whole-cell search there (P6.9a)
+        # the commit may run in parallel (checkerboard): no whole-cell search there
         _reads_global(u.eq.rhs) && throw(ArgumentError("@on_copy: `connected(…; rule = Global())` reads the whole cell; use it in @constraint or @drive"))
         v = Symbol(:v_, j)
         push!(vals, :($v = $(_with_ref_term(() -> lower(u.eq.rhs, env), _update_label(u)))))
@@ -523,13 +523,13 @@ function _commit_expr(c::CompiledPottsSystem, T)
     append!(body, _contact_count_commits(c))            # contact folds (D-150; none: no code)
     getfield(c, :uses_surface) && push!(body, :(CorePotts.commit_surface!(st.cell.surface, prop, δs)))
     # recomputed, as `surface_change` is: the checkerboard commits in a separate launch from
-    # ΔH, so reusing ΔH's value would need a per-copy buffer (P6.3h declined it)
+    # ΔH, so reusing ΔH's value would need a per-copy buffer (not done)
     getfield(c, :uses_euler) && push!(body, :(CorePotts.commit_euler!(st.cell.euler, prop, CorePotts.euler_change(st.ownership, ctx, prop, Val(:face)))))
     getfield(c, :uses_euler_full) && push!(
         body,
         :(CorePotts.commit_euler!(st.cell.euler_full, prop, CorePotts.euler_change(st.ownership, ctx, prop, Val(:full))))
     )
-    for (full, slot) in _pieces_slots(c)            # the after-values ΔH stored (P6.9a)
+    for (full, slot) in _pieces_slots(c)            # the after-values ΔH stored
         P, L = full ? (:pieces_full, :largest_piece_full) : (:pieces, :largest_piece)
         push!(body, :(CorePotts.commit_pieces!(st.cell.$P, st.cell.$L, prop, ctx, $slot)))
     end
@@ -566,7 +566,7 @@ function _write(lhs, v, env)
         a = :(st.cell.$(xi.name))
         return :(($j) != 0 && (@inbounds $a[$j] = convert(eltype($a), $v)))
     elseif xi.role in (:site, :field)
-        # a `Coarse(k)` field's node holds a block of sites (F3-17): one copy cannot set it
+        # a `Coarse(k)` field's node holds a block of sites: one copy cannot set it
         haskey(xi.options, :lattice_level) &&
             throw(
             PottsCompileError(
@@ -602,7 +602,7 @@ function _constraint_expr(c::CompiledPottsSystem, T)
 end
 
 # ---------------------------------------------------------------------------------------
-# Whole-cell connectivity (P6.9a): the `Global` veto after the acceptance draw, and the copies
+# Whole-cell connectivity: the `Global` veto after the acceptance draw, and the copies
 # the checkerboard runs serially (exact floods)
 
 # the rule code of a connectivity constraint (`_connected(old, code)`), or `nothing`
@@ -751,7 +751,7 @@ _stage_writes(stage) = Set{Symbol}(_update_name(u) for u in stage.updates)
 
 _phases(c::CompiledPottsSystem, T, values, spec::SolverSpec) = first(_phases_parts(c, T, values, spec))
 
-"""The model's MCS phase order (D-145): its `@schedule` placed, or the default order."""
+"""The model's MCS phase order: its `@schedule` placed, or the default order."""
 _phase_order(sys::PottsSystem) = isempty(_p(sys, :schedule)) ? _default_order(_convert_names(sys)) :
                                   _placed_schedule(_p(sys, :schedule), _convert_names(sys))
 
@@ -905,7 +905,7 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
     # solver (`_ode_groups`; one group unless `solvers` sets a variable apart), after the
     # population folds their rates read. Several groups in a scope, or cell ODEs that read
     # another cell's unknowns (`_ode_scratch`), write scratch `x__ode`, published after the
-    # scope's last group, so every rate reads the pre-step state (Jacobi, P6.0n).
+    # scope's last group, so every rate reads the pre-step state (Jacobi).
     comps = groups[:components]
     isempty(getfield(c, :cell_ode_pops)) || push!(comps, _slots_phase(T, getfield(c, :cell_ode_pops), rn))
     for scope in (:cell, :model)
@@ -913,7 +913,7 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
         scratch = _ode_scratch(c, spec, scope)
         for (solver, odes) in ogroups
             # a host phase right after another one finds the queue idle (the previous one
-            # synchronized and only copied since): it skips its sync (P6.0v3, D-101)
+            # synchronized and only copied since): it skips its sync (D-101)
             sync = isempty(comps) || !(last(comps) isa _AdaptiveODE)
             push!(comps, solver isa Adaptive ? _adaptive_phase(c, T, dt, scope, odes, solver; scratch, sync) :
                          scope === :cell ? CorePotts.CellPhase(_rgf(_cell_ode_expr(c, T, dt, odes, solver; scratch))) :
@@ -1000,7 +1000,7 @@ function _phases_parts(c::CompiledPottsSystem, T, values, spec::SolverSpec)
     return phases, cand
 end
 
-# F1 (P6.0v3, D-101): when the phase right before the lifecycle in the MCS order is a cell
+# D-101: when the phase right before the lifecycle in the MCS order is a cell
 # update (`cand`) and the trigger reads the columns it writes only at the trigger's own cell,
 # the update moves into the lifecycle as `Lifecycle.before`: on a device, update and trigger
 # of a cell then run in one work item, one launch for both. Same code, same order (the host
@@ -1327,7 +1327,7 @@ end
 # The ODE locals replace the current entity's unknowns, but not inside population folds nor
 # as the variable of an indexed read: `sum(h for c in cells)` and `h[j]` read the cells'
 # stored values (the state at the start of the MCS step, D-029, held over the whole step
-# through scratch `x__ode`, P6.0n), not `ncells` copies of this cell's local. The index of
+# through scratch `x__ode`), not `ncells` copies of this cell's local. The index of
 # a read is this cell's expression, so it does see the locals (`w[ifelse(h > 0, id, j)]`
 # follows the stepped `h`; `_index_reads!`). A literal `h[id]` is this cell's own
 # unknown, so it is the local (`_own_read`). (Model unknowns are one value everywhere, so
@@ -1404,7 +1404,7 @@ function _ode_steps(solver, T, dt, ys, rates)
     end
 end
 
-# Discrete components (P6.0k, D-065 Q9): one fused phase per clock and scope, after the ODEs
+# Discrete components (D-065 Q9): one fused phase per clock and scope, after the ODEs
 # and before the links and the lifecycle. Every new value is computed from the pre-tick state
 # before any slot is written (Jacobi; a same-step read `x(k)` arrives already substituted by
 # `mtkcompile`), for live cells of each component's kinds. With several phases (cell and model
@@ -1416,7 +1416,7 @@ _tick_scratch(c::CompiledPottsSystem) = length(_tick_groups(c)) > 1 || _reads_ot
 
 # A cell-scope tick that reads a discrete slot of another cell (`x[j]`, a gather, a fold that is
 # not hoisted, a link partner) must not see cells that already ticked: it needs scratch slots
-# even in a single phase (review P6.0k round 2). Reads of the cell's own slots do not.
+# even in a single phase. Reads of the cell's own slots do not.
 function _reads_other_cells_slots(c::CompiledPottsSystem)
     slots = Set{Symbol}(info(x).name for b in getfield(c, :discrete) if b.scope === :cell for x in b.slots)
     isempty(slots) && return false
@@ -1674,7 +1674,7 @@ end
 # ---------------------------------------------------------------------------------------
 # Lifecycle
 
-# Rule cadences (P6.0f). Every lifecycle rule has its own `Every(n)`: it is checked at MCS
+# Rule cadences. Every lifecycle rule has its own `Every(n)`: it is checked at MCS
 # where `mcs % n == 0`. The whole lifecycle pass runs every `g = gcd(n…)` MCS
 # (`Lifecycle.every`: the other MCS skip the trigger kernel and its host sync), and a rule
 # whose `n` is not `g` is gated inside the trigger by `_cadence_gate`. A model whose rules
@@ -1704,7 +1704,7 @@ function _trigger_expr(c::CompiledPottsSystem, T)
     g = _lifecycle_every(getfield(c, :divisions))
     ruled = _overlapping_rules(getfield(c, :divisions))
     event(e, i) = ruled ? :(CorePotts.ruled_event($e, $i)) : e
-    # each rule divides by its own domain (P6.0a): cells(k…) → the cell alone, clusters(k…) →
+    # each rule divides by its own domain: cells(k…) → the cell alone, clusters(k…) →
     # the whole cluster of the root (only the root's rule fires; compile.jl keeps kinds disjoint)
     tests = map(enumerate(getfield(c, :divisions))) do (i, d)
         gate = _cadence_gate(d.every, g)
@@ -1813,7 +1813,7 @@ function _convert_pass_fns(c::CompiledPottsSystem, T, v::ConvertSpec)
             return nothing
         end))
     end
-    # the compound writes, once per conversion: exact sums over the pass (F3-23 r1, CorePotts
+    # the compound writes, once per conversion: exact sums over the pass (CorePotts
     # runs `writes!` in an exponent and a fixed-point pass), so they do not depend on the order
     writes! = nothing
     wcols = ()
@@ -2120,7 +2120,7 @@ Self-check credit of copy `prop` from state `u` to state `a`: the energy that le
 that `energy_change(prob, u, prop) == total_energy(prob, a) − total_energy(prob, u) +
 credit` for every copy. Internal, host.
 
-With cell terms reading references (R6, D-231 item 2) ΔH reads every referent before the
+With cell terms reading references, ΔH reads every referent before the
 copy, so the credit is `E_cell(o, empty state; referents in u)` plus, over every other cell `c`
 alive in `a`, `E_c(c's values in a; referents in u) − E_c(a)`: the readers of the dead cell.
 """

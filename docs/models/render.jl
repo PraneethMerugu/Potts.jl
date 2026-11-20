@@ -117,7 +117,7 @@ end
 
 Write `docs/src/models/<name>.md` as a short page that links to `target` (a page path
 relative to `docs/src`, e.g. `"published/01_merks.md"`), for a Models page whose content
-moved to its paper's page (D-185). Its URL, `models/<name>/`, keeps working. `id` is the
+moved to its paper's page. Its URL, `models/<name>/`, keeps working. `id` is the
 page's `@id` (normally `nothing`: the moved page carries `model-<name>`). The stub has no
 `@docs` block. Returns the stub's path relative to `docs/src`.
 """

@@ -3,8 +3,8 @@
 # LatticePDE's own run of the same PDESystem (no cells: the field does not depend on the CPM),
 # hand values of the Robin slots, a manufactured solution with a time-dependent Dirichlet face
 # and a space-dependent Neumann face (order 2) and the hand ghost-rule matrix of one
-# BackwardEuler step (F4-12b).
-# Base (925110cc, ~/lpwork/f4c/nc12-base.log): 3 errors; each expression is refused at the model ("… is an
+# BackwardEuler step.
+# Before the fix (925110cc): 3 errors; each expression is refused at the model ("… is an
 # expression of parameters; …"); the coordinates and `mcs` were refused there too.
 
 @testsetup module FieldsBoundarySetup
@@ -159,10 +159,10 @@ end
 end
 
 
-# F4-12b (rulings Q14–Q17): Robin coefficients that vary by site or in time. The coupled run
+# Robin coefficients that vary by site or in time. The coupled run
 # equals LatticePDE's own run of the PDESystem (prior `@boundary` oracle checked bitwise),
 # and one BackwardEuler MCS equals the hand ghost-rule matrix.
-# Base (ca232825, ~/lpwork/f4c/nc12b-base.log): the models are refused ("… reads `y`; … planned, F4-12b").
+# Before the fix (ca232825): the models are refused ("… reads `y`; … planned").
 @potts_model FbSiteBcs begin
     @kinds medium A
     @lattice Lattice((16, 16); boundary = Closed())
@@ -171,7 +171,7 @@ end
 end
 
 
-# F4-12b review: a kind table with a time-varying Robin face under the automatic explicit count
+# A kind table with a time-varying Robin face under the automatic explicit count
 # (each window is counted with the tables and inputs of the bind; base 895c1a02: "reads tables
 # that were not given" in the first window), and a face whose bound fails within the run's time
 # span is refused at the problem, naming the time (base: the run threw partway through `solve`)
@@ -192,8 +192,8 @@ end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "F4-12a: condition values of parameters, coordinates and the time" setup = [FieldsBoundarySetup] tags = [:potts, :fields_boundary] begin
-    @testset "F4-12a: condition values of parameters, coordinates and the time" begin
+@testitem "condition values of parameters, coordinates and the time" setup = [FieldsBoundarySetup] tags = [:potts, :fields_boundary] begin
+    @testset "condition values of parameters, coordinates and the time" begin
         for fs in (ExplicitEuler(; substeps = 2), BackwardEuler())
             a = fb_run(FbFaces, 6, fs)
             @test fb_same(a, fb_own(FbPDE.faces(), (12, 10), 6, fs), fs) && maximum(a) > 0.5
@@ -203,8 +203,8 @@ end
     end
 end
 
-@testitem "F4-12a: a Robin coefficient of parameters" setup = [FieldsBoundarySetup] tags = [:potts, :fields_boundary] begin
-    @testset "F4-12a: a Robin coefficient of parameters" begin
+@testitem "a Robin coefficient of parameters" setup = [FieldsBoundarySetup] tags = [:potts, :fields_boundary] begin
+    @testset "a Robin coefficient of parameters" begin
         SII = Potts.SymbolicIndexingInterface
         slotv(M, s; p = []) = (pr = PottsProblem(M(; name = :m), fb_op((12, 10), p), (0, 1)); SII.getp(pr, s)(pr))
         @test slotv(FbRobin, :c_x_low_α) == 1.5 && slotv(FbRobin, :c_x_low_α; p = [:g1 => 3.0]) == 3.5   # g1 + g2
@@ -217,8 +217,8 @@ end
     end
 end
 
-@testitem "F4-12a: manufactured solution, order 2 (time-dependent Dirichlet, space-dependent Neumann)" setup = [FieldsBoundarySetup] tags = [:potts, :fields_boundary] begin
-    @testset "F4-12a: manufactured solution, order 2 (time-dependent Dirichlet, space-dependent Neumann)" begin
+@testitem "manufactured solution, order 2 (time-dependent Dirichlet, space-dependent Neumann)" setup = [FieldsBoundarySetup] tags = [:potts, :fields_boundary] begin
+    @testset "manufactured solution, order 2 (time-dependent Dirichlet, space-dependent Neumann)" begin
         φ(x, y) = cos(π * x / 2) + x * y^2
         errs = map([16, 32, 64]) do n
             M = getfield(@__MODULE__, Symbol(:FbMMS, n))
@@ -230,13 +230,13 @@ end
         end
         hs = [1 / n for n in (16, 32, 64)]
         om = observed_orders(hs, errs)
-        @test all(o -> abs(o - 2) < 0.1, om) || (println("F4-12a manufactured errors ", errs, " orders ", om); false)
+        @test all(o -> abs(o - 2) < 0.1, om) || (println("manufactured errors ", errs, " orders ", om); false)
         @test abs(observed_order(hs, errs) - 2) < 0.1
     end
 end
 
-@testitem "TS2-1: ExplicitEuler manufactured solution temporal convergence order 1" setup = [FieldsBoundarySetup] tags = [:potts, :fields_boundary] begin
-    @testset "TS2-1: ExplicitEuler manufactured solution temporal convergence order 1" begin
+@testitem "ExplicitEuler manufactured solution temporal convergence order 1" setup = [FieldsBoundarySetup] tags = [:potts, :fields_boundary] begin
+    @testset "ExplicitEuler manufactured solution temporal convergence order 1" begin
         φ(x, y) = cos(π * x / 2) + x * y^2
         n = 8
         xs = ((1:n) .- 0.5) ./ n
@@ -253,7 +253,7 @@ end
             maximum(abs, Array(s.u[end].site.c) .- 4 .* φ0)
         end
         om = observed_orders(dts, errs)
-        @test all(o -> abs(o - 1.0) < 0.15, om) || (println("TS2-1 EE MMS errors ", errs, " orders ", om); false)
+        @test all(o -> abs(o - 1.0) < 0.15, om) || (println("EE MMS errors ", errs, " orders ", om); false)
         @test abs(observed_order(dts, errs) - 1.0) < 0.15
     end
 end
@@ -262,8 +262,8 @@ end
 # slot held −0.75, the coefficient of ∂c/∂x); a coefficient that reads more than parameters is
 # refused in the model's words, naming the read and the PDESystem (base: LatticePDE's "… is one
 # value at every site: …", with the first `@equations` line)
-@testitem "F4-12a review: one slot convention; the refusal names the read" setup = [FieldsBoundarySetup] tags = [:potts, :fields_boundary] begin
-    @testset "F4-12a review: one slot convention; the refusal names the read" begin
+@testitem "one slot convention; the refusal names the read" setup = [FieldsBoundarySetup] tags = [:potts, :fields_boundary] begin
+    @testset "one slot convention; the refusal names the read" begin
         SII = Potts.SymbolicIndexingInterface
         slotv(M) = (pr = PottsProblem(M(; name = :m), fb_op((12, 10)), (0, 1)); SII.getp(pr, :c_x_low_β)(pr))
         @test slotv(FbRobinBeta) == 0.75                                   # β of ∂c/∂n: h1 + h2
@@ -271,7 +271,7 @@ end
             a = fb_run(FbRobinBeta, 6, fs)
             @test fb_same(a, fb_own(FbPDE.robin_beta(), (12, 10), 6, fs), fs) && maximum(a) > 0
         end
-        # (F4-12b: a coefficient of the coordinates or the time is a value field; one that reads an
+        # (a coefficient of the coordinates or the time is a value field; one that reads an
         # input is refused, naming the read (the bound `volume`) and the PDESystem)
         for (r, word) in ((:y, "built"), (:t, "built"), (:vin, "volume"))
             M = _FbBadBcs(; name = Symbol(:FbBadBcs, r), r)
@@ -281,8 +281,8 @@ end
     end
 end
 
-@testitem "F4-12b: per-site and time-varying Robin coefficients" setup = [FieldsBoundarySetup] tags = [:potts, :fields_boundary] begin
-    @testset "F4-12b: per-site and time-varying Robin coefficients" begin
+@testitem "per-site and time-varying Robin coefficients" setup = [FieldsBoundarySetup] tags = [:potts, :fields_boundary] begin
+    @testset "per-site and time-varying Robin coefficients" begin
         run(M, k, fs; p = []) = Array(solve(PottsProblem(M(; name = :m), fb_op((16, 16), p), (0, k); field_solver = fs),
             SequentialCPM()).u[end].site.c)
         tight = BackwardEuler(; linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 64))
@@ -321,8 +321,8 @@ end
     end
 end
 
-@testitem "F4-12b review: windows counted with tables; a span that fails is refused at the problem" setup = [FieldsBoundarySetup] tags = [:potts, :fields_boundary] begin
-    @testset "F4-12b review: windows counted with tables; a span that fails is refused at the problem" begin
+@testitem "windows counted with tables; a span that fails is refused at the problem" setup = [FieldsBoundarySetup] tags = [:potts, :fields_boundary] begin
+    @testset "windows counted with tables; a span that fails is refused at the problem" begin
         s = solve(PottsProblem(FbTab(; name = :m), fb_op((16, 16)), (0, 3); field_solver = ExplicitEuler()), SequentialCPM())
         @test all(isfinite, Array(s.u[end].site.c))
         @test_throws ArgumentError PottsProblem(FbMid(; name = :m), fb_op((16, 16)), (0, 4); field_solver = ExplicitEuler())

@@ -1,4 +1,4 @@
-# Definitions of compile/multilevel_tests.jl that other test files use (moved here by TS1b).
+# Definitions of compile/multilevel_tests.jl that other test files use.
 using LatticeFields.IR: reduce!, gate!, table!, table, constant, CLAMP, I32
 
 ml_msg(f) =

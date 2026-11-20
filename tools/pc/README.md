@@ -1,11 +1,11 @@
-# PC job queue (D-248)
+# PC job queue
 
-Branch checks on the PC (D-157) run in two lanes of a [pueue](https://github.com/Nukesor/pueue) queue. The queue is installed on the PC at `~/potts-queue` (a copy of this directory), with `pueue`/`pueued` 4.0.4 in `~/.local/bin`, and the daemon runs as the user service `pueued.service`.
+Branch checks on the PC run in two lanes of a [pueue](https://github.com/Nukesor/pueue) queue. The queue is installed on the PC at `~/potts-queue` (a copy of this directory), with `pueue`/`pueued` 4.0.4 in `~/.local/bin`, and the daemon runs as the user service `pueued.service`.
 
 | Lane | pueue group | Cores | Runs | Gives way to |
 |---|---|---|---|---|
-| S: suites | `suites`, one at a time | 0-11/16-27 (D-232's `parallel.sh` layout) | `item.sh`: instantiate, `.github/ci/parallel.sh`, optional docs and extras | CI (kill and re-run the step), an A/B (drain) |
-| A: A/B | `ab`, one at a time | 12-15/28-31 (`ab.jl`'s own pinning) | `ab.sh`: drains lane S, then `benchmark/ab.jl` | nothing; D-242 quiet window |
+| S: suites | `suites`, one at a time | 0-11/16-27 (the `parallel.sh` layout) | `item.sh`: instantiate, `.github/ci/parallel.sh`, optional docs and extras | CI (kill and re-run the step), an A/B (drain) |
+| A: A/B | `ab`, one at a time | 12-15/28-31 (`ab.jl`'s own pinning) | `ab.sh`: drains lane S, then `benchmark/ab.jl` | nothing; the machine stays quiet during an A/B |
 
 ## Queueing an item
 

@@ -1,4 +1,4 @@
-# PIFF (CompuCell3D's Potts Initial File Format, ROADMAP M4.4): one line per box of sites,
+# PIFF (CompuCell3D's Potts Initial File Format): one line per box of sites,
 #     cell_id  cell_type  x_low x_high  y_low y_high  z_low z_high
 # with 0-based inclusive coordinates (z is 0 in 2D). The medium may be listed (type `Medium`)
 # or left implicit. Cell ids are arbitrary integers; a cell may span several lines.

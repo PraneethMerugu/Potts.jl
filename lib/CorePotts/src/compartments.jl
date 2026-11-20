@@ -1,4 +1,4 @@
-# Compartments (ROADMAP M2.10a, D-036): cells grouped into clusters (CompuCell3D's
+# Compartments (D-036): cells grouped into clusters (CompuCell3D's
 # clusterId). `st.cell.cluster[c]` is the cluster of cell `c`, named by one of its live
 # members (the root, `cluster[r] == r`); a cell alone is its own cluster. Internal vs
 # external contact energies are plain model code (`same_cluster`); cluster volume and
@@ -146,7 +146,7 @@ end
 """
 Apply `δ = cluster_surface_change(…)` to `cell.cluster_surface` (atomic). With a weighted
 relation in a float column the adds of two copies into one cluster round in their order, which
-a threaded or device checkerboard phase does not fix (lockless cells, D-271).
+a threaded or device checkerboard phase does not fix (lockless cells).
 """
 @inline function commit_cluster_surface!(cell, prop, δ)
     a, b = cluster_of(cell, prop.old), cluster_of(cell, prop.new)
@@ -175,7 +175,7 @@ function _rebuild_cluster_trackers!(stats, st, σ, ctx)
     cl = to_host(stats, st.cell.cluster)
     haskey(st.cell, :cluster_volume) && counted_copy!(stats, st.cell.cluster_volume, recompute_cluster_volume(σ, cl))
     if haskey(st.cell, :cluster_surface) && haskey(ctx, :surface)
-        # in integer weight units for a weighted float column (as the device lifecycle; F3-23 r2)
+        # in integer weight units for a weighted float column (as the device lifecycle)
         T = eltype(st.cell.cluster_surface)
         σK = map(s -> s == 0 ? Int32(0) : Int32(cl[s]), σ)
         counted_copy!(

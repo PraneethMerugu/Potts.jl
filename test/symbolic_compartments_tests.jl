@@ -93,7 +93,7 @@ end
                 energies = [Potts.EnergyTerm(Potts.ContactDomain(:contact), Potts.B.cluster_volume)]
             )
         )
-        # P6.0a: cell and cluster divisions mix per kind, but one kind divides by one domain
+        # Cell and cluster divisions mix per kind, but one kind divides by one domain
         divsys(cellk, clusterk) = Potts.PottsSystem(;
             name = :x, kinds = [:medium, :ka, :kb],
             lattice = Potts.lattice_spec((8, 8)), sweep = Potts.sweep_spec(:metropolis; temperature = 1.0),
@@ -309,9 +309,9 @@ end
 end
 
 
-@testitem "P6.0r: free slots add nothing to total_energy" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "P6.0r: free slots add nothing to total_energy" begin
-        @potts_model P60rFreeSlots begin
+@testitem "free slots add nothing to total_energy" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "free slots add nothing to total_energy" begin
+        @potts_model FreeSlots begin
             @kinds medium cytoplasm nucleus
             @parameters begin
                 V₀[kind] = [0.0, 6.0, 3.0]
@@ -327,8 +327,8 @@ end
 
         σc = zeros(Int32, 20, 20); σc[5, 5] = 1; σc[5, 6] = 2; σc[12:14, 12:14] .= 3; σc[13, 13] = 4
         op = [ownership => σc, kind => [:cytoplasm, :nucleus, :cytoplasm, :nucleus], cluster => [1, 1, 3, 3]]
-        a = PottsProblem(P60rFreeSlots(; name = :c), op, (0, 5))
-        b = PottsProblem(P60rFreeSlots(; name = :c), op, (0, 5); capacity = 50)
+        a = PottsProblem(FreeSlots(; name = :c), op, (0, 5))
+        b = PottsProblem(FreeSlots(; name = :c), op, (0, 5); capacity = 50)
         @test length(b.u0.cell.volume) == 50
         @test total_energy(b) ≈ total_energy(a)
     end

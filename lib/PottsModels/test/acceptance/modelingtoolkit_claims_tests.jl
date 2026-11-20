@@ -194,48 +194,48 @@ claims_files(dir, exts) = isdir(dir) ? String[joinpath(r, f) for (r, _, fs) in w
 # The approved sentences (D-159 / plan §5 as amended by D-162, D-165, D-170). Each must
 # appear in the docs (and in an in-repo paper source), whitespace-normalized.
 const APPROVED = [
-    ("built on ModelingToolkit (D-159)", r"Potts\.jl is built on ModelingToolkit"),
+    ("built on ModelingToolkit", r"Potts\.jl is built on ModelingToolkit"),
     (
-        "every model an AbstractSystem (D-137, D-159)",
+        "every model an AbstractSystem",
         r"[Ee]very Potts model is a(?:n MTK| ModelingToolkit)(?: system:? an)? `AbstractSystem`",
     ),
-    ("Hamiltonian as Symbolics (D-160)", r"Hamiltonian are Symbolics expressions that ModelingToolkit's generic tools can inspect"),
+    ("Hamiltonian as Symbolics", r"Hamiltonian are Symbolics expressions that ModelingToolkit's generic tools can inspect"),
     (
-        "ODEs through mtkcompile (D-165)",
+        "ODEs through mtkcompile",
         r"The continuous parts of a model, its cell- and model-scale ODEs, are ModelingToolkit systems compiled by `mtkcompile`; Potts\.jl lowers the simplified equations into its batched kernels",
     ),
     ("components (plan §5)", r"ModelingToolkit models plug in as components"),
-    ("update rules (D-162)", r"update rules are Symbolics equations in ModelingToolkit's `Pre` form"),
+    ("update rules", r"update rules are Symbolics equations in ModelingToolkit's `Pre` form"),
     (
-        "initialization (D-170)",
+        "initialization",
         r"Entity-local initialization equations are ModelingToolkit initialization systems, solved per cell by MTK's `InitializationProblem`",
     ),
     ("the sweep is Potts.jl's (plan §5)", r"compiled from the symbolic Hamiltonian by Potts\.jl's own code generator"),
 ]
 # The forbidden claims (D-159 "do not claim", D-162, D-165, plan §5). Case-insensitive.
 const FORBIDDEN = [
-    ("fully MTK-native (D-159)", r"fully (?:MTK|ModelingToolkit)[- ]native"i),
-    ("native as a whole (D-159)", r"(?:MTK|ModelingToolkit)[- ]native as a whole"i),
-    ("events compiled by MTK (D-162)", r"events,? (?:are )?compiled by (?:MTK|ModelingToolkit|`?mtkcompile`?)"i),
-    ("event parts (D-159 superseded by D-162)", r"\bevent parts\b"i),
-    ("events in the Symbolics list (plan §5 superseded by D-162)", r"\bevents,? and (?:the )?Hamiltonian"i),
+    ("fully MTK-native", r"fully (?:MTK|ModelingToolkit)[- ]native"i),
+    ("native as a whole", r"(?:MTK|ModelingToolkit)[- ]native as a whole"i),
+    ("events compiled by MTK", r"events,? (?:are )?compiled by (?:MTK|ModelingToolkit|`?mtkcompile`?)"i),
+    ("event parts (superseded wording)", r"\bevent parts\b"i),
+    ("events in the Symbolics list (superseded wording)", r"\bevents,? and (?:the )?Hamiltonian"i),
     (
-        "events as MTK callbacks before symbolic events (D-162)",
+        "events as MTK callbacks before symbolic events",
         r"events (?:are|as) (?:MTK|ModelingToolkit)(?:'s)? `?Symbolic(?:Discrete|Continuous)Callback"i,
     ),
     (
-        "fields compiled by MTK (D-165)",
+        "fields compiled by MTK",
         r"\bfields? (?:are |is )?(?:compiled|simulated|solved|integrated|stepped|discretized) by (?:MTK|ModelingToolkit|`?mtkcompile`?)"i,
     ),
     # "fields are written as `PDESystem`s" was forbidden here (MTK field compilation not adopted, D-159); it is
     # true under the field front-end ruling and is allowed. The rule above, that MTK
     # does not compile, solve or step the fields, stays.
     (
-        "MTK simulates the CPM (D-159)",
+        "MTK simulates the CPM",
         r"(?:MTK|ModelingToolkit) (?:compiles|simulates|runs|solves) the (?:CPM|lattice|sweep|cellular Potts|Potts model)"i,
     ),
     (
-        "models are MTK Systems (D-159)",
+        "models are MTK Systems",
         r"(?:Potts(?:\.jl)? models?|every (?:Potts )?model) (?:is|are) (?:an? )?(?:MTK|ModelingToolkit) `System`"i,
     ),
 ]

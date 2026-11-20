@@ -133,7 +133,7 @@ zsol[:zdecay₊z][end]
 A problem's `p` implements SciMLStructures: `Tunable` is
 the floating-point scalar parameters, `Constants` the kind tables (and integer scalars), and CPM
 parameters stay plain numbers. A `tunable = false` parameter is in `Constants`. Computed
-parameters (a default such as `λ2 = 2λ`) are in neither portion: they are read-only (D-F2-1),
+parameters (a default such as `λ2 = 2λ`) are in neither portion: they are read-only,
 and `SciMLStructures.replace` and `repack` derive them again through the model's derivation,
 which is registered when a problem of the model is built in the process. Distributed workers
 must therefore build the problem themselves before they `repack`; each `repack` of a model with

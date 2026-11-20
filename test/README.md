@@ -82,10 +82,10 @@ julia --project=test -i test/dev.jl
 ```
 
 ```julia
-ti("F4-E5")                    # items whose name contains "F4-E5"
-ti(r"^F3-17: a Coarse")        # items whose name matches a regex
+ti("coarse field")             # items whose name contains "coarse field"
+ti(r"^a Coarse\(4\)")          # items whose name matches a regex
 ti(; tags = :fields_coarse)    # the items of fields_coarse_tests.jl
-ti("F4-E7"; nworkers = 1)      # in a fresh worker process
+ti("is_kind"; nworkers = 1)    # in a fresh worker process
 tf("fields_short_tests.jl")    # every item of one file
 ```
 
@@ -99,7 +99,7 @@ VS Code test explorer also runs single `@testitem`s.
 - `:qa`: Aqua, JET, ExplicitImports and the other quality checks (qa_tests.jl).
 - `:gpu`: the device files (gpu_tests.jl, transfer_counts_tests.jl, device_ir_tests.jl); `:rocm`: ROCm only.
 - `:device`: an item that names a device; it also runs in GROUP=GPU.
-- `:device_scan`: the D-157 no-`double` scan; it runs last in GROUP=GPU, in the process that
+- `:device_scan`: the scan for `double` in device code; it runs last in GROUP=GPU, in the process that
   compiled the kernels (`PottsRTI.device_suite`).
 - `:gpu_only`: an item that cannot run in a fresh worker (the scan reads the process cache);
   GROUP=GPU without `POTTS_DEVICE_ONLY=false` only.

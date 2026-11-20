@@ -1,4 +1,4 @@
-# Named pairs (E2) and the E7 geometry helpers (P6.5a2, D-243): forms the frozen acceptance
+# Named pairs (E2) and the E7 geometry helpers (D-243): forms the frozen acceptance
 # test lib/PottsModels/test/acceptance/cell_reference_helpers_tests.jl does not reach.
 
 @testsetup module RefHelpersSetup
@@ -8,7 +8,7 @@ isdefined(@__MODULE__, :PottsDevices) || include(joinpath(@__DIR__, "shared", "d
 using Potts: CorePotts
 
 
-# the field models' PDESystems (F4-B4t): the CPM terms are bound inputs
+# the field models' PDESystems: the CPM terms are bound inputs
 isdefined(@__MODULE__, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
 
 module RhPDE
@@ -55,7 +55,7 @@ function rh_pairs_op()
 end
 
 
-# --- the E7 helpers in forms the frozen file leaves out ------------------------------------
+# --- the reference helpers in further forms -------------------------------------------------
 @potts_model RHE7Case begin
     @structural_parameters begin
         hex = false
@@ -169,7 +169,7 @@ function rh_device_problem(hex; T = Float64)
 end
 
 
-# --- between-sweep site scope (P6.5d's forms): a @convert gate, a field equation, site updates
+# --- between-sweep site scope (the Fortuna model's forms): a @convert gate, a field equation, site updates
 # Sketch 14c's gate Q = minimum_image(position[1] − centroid(sibling(owner, cytoplasm), 1), 1)
 # (14_nucleus_migration.md) with a `separation` factor S. Fixture on 20 × 12, axis 1 periodic:
 # cytoplasm 1 across the seam (x ∈ {18, 19, 20, 1, 2, 3}, y 3:4), centroid x 20.5; nucleus 2
@@ -262,7 +262,7 @@ function rh_conv_check(u, nx; converted)
 end
 
 
-# --- review regressions (P6.5a2) -----------------------------------------------------------
+# --- review regressions -----------------------------------------------------------
 # A model whose only cluster read is `integral(x; over = cluster)` keeps the cluster column:
 # with `cluster => [1, 1]` both cells read V₁² + V₂² = 4² + 2² = 20; without it each cell is its
 # own cluster (16, 4). The energy holds the volumes (λ = 10⁶, T = 0.01).
@@ -385,7 +385,7 @@ rh_msg(e, s) = e isa Potts.PottsCompileError && occursin(s, sprint(showerror, e)
 end
 
 
-# A masked condition of a coupled PDESystem (until F4-B6 a `@boundary` site mask) is lowered in
+# A masked condition of a coupled PDESystem (once a site mask of the removed `@boundary` section) is lowered in
 # site scope at the field step: when it is the model's only centroid read, the moment trackers
 # must still be allocated (re-review of 20b9a546). Two 3 × 3 cells held in place (λ = 10⁶,
 # T = 0.01): cell 1 at x 5:7 (centroid 6), cell 2 at x 1:3 (centroid 2). The mask
@@ -597,8 +597,8 @@ end
     end
 end
 
-@testitem "_over_cluster: a dead or out-of-range slot reads 0 (D-066)" setup = [RefHelpersSetup] tags = [:potts, :ref_helpers] begin
-    @testset "_over_cluster: a dead or out-of-range slot reads 0 (D-066)" begin
+@testitem "_over_cluster: a dead or out-of-range slot reads 0" setup = [RefHelpersSetup] tags = [:potts, :ref_helpers] begin
+    @testset "_over_cluster: a dead or out-of-range slot reads 0" begin
         cell = (; volume = Int32[2, 0, 1, 3], cluster = Int32[1, 1, 1, 4])
         col = [1.0, 5.0, 2.0, 7.0]
         @test Potts._over_cluster(cell, col, 1) == 3.0              # alive members 1 and 3; dead 2 left out

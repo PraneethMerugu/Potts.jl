@@ -1,4 +1,4 @@
-# Cell motility (P6.5c, review R16): unwrapped tracks, the mean squared displacement and the
+# Cell motility: unwrapped tracks, the mean squared displacement and the
 # modified Fürth model of a persistent random walk with a fast diffusive part (Fortuna et al.
 # 2020, Eq. 1–2 and the fit procedure of their S1). Plain Julia on vectors of points.
 

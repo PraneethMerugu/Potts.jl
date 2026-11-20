@@ -1,9 +1,9 @@
-# F4-E3 (research/field-compiler/f4/F4-ergonomics.md item 7): `discretize` takes a field's
+# `discretize` takes a field's
 # default `@variables c(..) = v` as its initial value when no condition `c(0, …) ~ v` gives one;
 # with both, the condition wins (as the coupling into a model does). Oracles: the same system
 # with the value written as a condition (bitwise, owned path and Tsit5), and a Dual default's
 # derivative against central differences. Negative control (the base 4ca38af7): every testset
-# fails, "field `dfc` has no initial condition `dfc(0, …) ~ value`" (~/lpwork/f4E/nc-e3.log).
+# fails, "field `dfc` has no initial condition `dfc(0, …) ~ value`".
 
 @testsetup module LP_fielddefaults
 using Test, LatticePDE
@@ -37,8 +37,8 @@ end
 include("shared/export_all.jl")
 end
 
-@testitem "F4-E3: a field's default is its initial value (owned path and Tsit5)" setup = [LP_fielddefaults] tags = [:latticepde, :fielddefaults] begin
-@testset "F4-E3: a field's default is its initial value (owned path and Tsit5)" begin
+@testitem "a field's default is its initial value (owned path and Tsit5)" setup = [LP_fielddefaults] tags = [:latticepde, :fielddefaults] begin
+    @testset "a field's default is its initial value (owned path and Tsit5)" begin
     pd = discretize(dfsys(), dfdisc())
     pc = discretize(dfsys([dfc(0, x, y) ~ 0.3]), dfdisc())
     @test pd.u0 == pc.u0 && all(==(0.3), pd.u0)
@@ -58,8 +58,8 @@ end
 end
 end
 
-@testitem "F4-E3: with a default and a condition, the condition wins" setup = [LP_fielddefaults] tags = [:latticepde, :fielddefaults] begin
-@testset "F4-E3: with a default and a condition, the condition wins" begin
+@testitem "with a default and a condition, the condition wins" setup = [LP_fielddefaults] tags = [:latticepde, :fielddefaults] begin
+    @testset "with a default and a condition, the condition wins" begin
     p = discretize(dfsys([dfc(0, x, y) ~ x]), dfdisc())
         q = discretize(
             PDESystem(
@@ -84,8 +84,8 @@ end
 end
 end
 
-@testitem "F4-E3: a Dual default: the derivative against central differences" setup = [LP_fielddefaults] tags = [:latticepde, :fielddefaults] begin
-@testset "F4-E3: a Dual default: the derivative against central differences" begin
+@testitem "a Dual default: the derivative against central differences" setup = [LP_fielddefaults] tags = [:latticepde, :fielddefaults] begin
+    @testset "a Dual default: the derivative against central differences" begin
     function J(v)
         @variables dfv(..) = v
             s = PDESystem(

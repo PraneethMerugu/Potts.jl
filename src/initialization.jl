@@ -1,5 +1,4 @@
-# Entity-local initialization through ModelingToolkit (P6.0bo, D-170; route A1 of the
-# MTK-native plan). The `@initialization_equations` of each scope (cell, model) are the
+# Entity-local initialization through ModelingToolkit (D-170). The `@initialization_equations` of each scope (cell, model) are the
 # `initialization_eqs` of one MTK `System`, the template of one cell (or the model), built at
 # `mtkcompile` (`initialization_system`). When a problem is built, Potts builds MTK's
 # `InitializationProblem` of that scope once, with what is fixed for this problem (written
@@ -16,7 +15,7 @@
 # the size of the terms, and a Jacobian that is not singular), so a condition without a
 # solution, or without a unique one, is an error rather than a least-squares answer or the
 # guess. Cross-entity reads (another cell, gathers, folds, site, field and edge variables) are
-# refused until P6.4a (R17).
+# not supported yet.
 
 """
     Potts.initialization_system(csys::CompiledPottsSystem, scope::Symbol)
@@ -52,7 +51,9 @@ not been through `mtkcompile`, is an `ArgumentError`.
 function initialization_system(c::CompiledPottsSystem, scope::Symbol)
     scope in _ODE_SCOPES || throw(ArgumentError(
         "initialization_system: the scope is `:cell` or `:model`; got `:$scope` (site, field and edge " *
-        "initialization reads across entities, planned in P6.4a)"))
+                "initialization reads across entities, which is not supported yet)"
+        )
+    )
     s = get(getfield(c, :initialization), scope, nothing)
     return s === nothing ? nothing : s.template
 end
@@ -192,7 +193,9 @@ function _check_init_reads(x, what)
                 i.role in (:site, :field, :edge) && throw(
                     PottsCompileError(
                     "$what reads the $(i.role) variable `$(i.name)`; $(_INIT_LOCAL). Initialization of site, field " *
-                    "and edge variables reads across entities and is planned (P6.4a)"))
+                            "and edge variables reads across entities and is not supported yet"
+                    )
+                )
                 i.role === :builtin && throw(
                     PottsCompileError(
                     "$what reads the built-in `$(i.name)`, which has no value at initialization; $(_INIT_LOCAL)"))
@@ -215,13 +218,17 @@ function _check_init_reads(x, what)
                 throw(
                     PottsCompileError(
                         "$what reads `$n` of another cell (`$y`); $(_INIT_LOCAL). Cross-entity " *
-                                    "initialization is planned (P6.4a)"))
+                            "initialization is not supported yet"
+                    )
+                )
             end
             throw(
                 PottsCompileError(
                     "$what reads `$y`, which reads across entities (a neighbor gather, a fold over " *
                                 "cells, an integral, a draw or a previous value); $(_INIT_LOCAL). Cross-entity " *
-                                "initialization is planned (P6.4a)"))
+                        "initialization is not supported yet"
+                )
+            )
         end
     end
     return nothing

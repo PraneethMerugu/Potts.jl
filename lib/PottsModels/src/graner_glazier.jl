@@ -78,7 +78,7 @@ aggregate is rebuilt on the larger lattice, not embedded: a different `margin` c
 few boundary sites between cells (32 sites for `n = 1000`, `seed = 9`, margin 60 against
 10), so compare margins statistically, not site by site. Built with the
 [`Voronoi`](@ref) layout over a disk of area `40n` (`n` generators drawn by `RandomPoints` in
-the disk, 30 Lloyd steps: a centroidal Voronoi tessellation, every cell one piece; D-063),
+the disk, 30 Lloyd steps: a centroidal Voronoi tessellation, every cell one piece),
 with the kinds cycled over the random generators, so dark and light are mixed at random in
 equal numbers (±1). Deterministic in `seed`.
 

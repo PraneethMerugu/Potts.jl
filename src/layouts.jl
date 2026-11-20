@@ -1,4 +1,4 @@
-# Layouts (ROADMAP P6.1a, review §3 R2; protocol P6.1a6, D-075/D-091): host-side initial
+# Layouts (D-075, D-091): host-side initial
 # conditions composed from layers and returned as an SII operating point
 # `[ownership => σ, kind => kinds]`.
 #
@@ -9,7 +9,7 @@
 # `indomain` (plus `core_lattice` for CorePotts' `shift`, `relation` and `embed`). Randomized
 # layouts own their seed, so adding a layer never changes another layer's draws. Box
 # coordinates are lattice indices: axial `(q, r)` on a hexagonal lattice, where a box is a
-# rhombus. Shapes and points (`Circle`, `Point`, …; P6.1a5) are Cartesian (`embed`).
+# rhombus. Shapes and points (`Circle`, `Point`, …) are Cartesian (`embed`).
 
 """
     AbstractLayout
@@ -744,7 +744,7 @@ function paint!(op::LayoutState, l::InsertUntil, lat)
 end
 
 # ---------------------------------------------------------------------------------------------
-# Shapes and point patterns (P6.1a5, D-138)
+# Shapes and point patterns (D-138)
 # ---------------------------------------------------------------------------------------------
 #
 # Shapes are GeometryBasics' `HyperSphere`s (`Circle`, `Sphere`) in Cartesian coordinates:
@@ -860,7 +860,7 @@ end
 _residues(lo, hi, n) = hi - lo + 1 >= n ? collect(1:n) : sort!([mod1(x, n) for x in lo:hi])
 
 # Closed membership with a relative rounding tolerance (D-138); strict membership with the
-# mirrored tolerance (`Interior`, P6.5c).
+# mirrored tolerance (`Interior`).
 _in_closed(p::Point, s::HyperSphere) = sqrt(sum(abs2, p - s.center)) <= s.r * (1 + 1e-12)
 _in_open(p::Point, s::HyperSphere) = sqrt(sum(abs2, p - s.center)) < s.r * (1 - 1e-12)
 _member(p::Point, s::HyperSphere) = _in_closed(p, s)
@@ -1027,7 +1027,7 @@ still medium, so earlier layers are never cut (Morpheus' InitVoronoi).
   never moves.
 
 `Voronoi(RandomPoints(n; region = ball, seed); region = ball, lloyd = 30, kinds)` with
-`ball = Circle(Point(c), r)` is a round aggregate of `n` compact cells (D-063, the former
+`ball = Circle(Point(c), r)` is a round aggregate of `n` compact cells (the former
 `VoronoiBall`). The report row has `requested = painted =` the generators, `dropped` those
 left with no site and `clipped` the region's points lost to closed edges and the domain.
 With a domain, `clipped` depends on whether a region is given: the default (the whole
@@ -1676,7 +1676,7 @@ function _paint_leaf!(op::LayoutState, l::AbstractLayout, lat)
 end
 
 # ---------------------------------------------------------------------------------------------
-# Fill, Objects and Group (P6.5c, D-087: in place of `Plane` and `Spheres`)
+# Fill, Objects and Group (D-087: in place of `Plane` and `Spheres`)
 # ---------------------------------------------------------------------------------------------
 
 """
@@ -1940,7 +1940,7 @@ _final_id(counts, c) = count(>(0), view(counts, 1:c))
 # The cells a `Splits` left in pieces at the end of its paint: counted in its row, and
 # warned (under `splits = :warn`, by their final id) unless dropped later, already named by
 # the split warning above, or one piece again in the final σ (a later layer removed or
-# filled the other pieces; D-141 review, D-153).
+# filled the other pieces; D-141, D-153).
 function _report_pieces!(op::LayoutState, lat::LatticeSpec, counts, warned)
     check = falses(length(counts))
     for (c, row, warn) in op.pieces

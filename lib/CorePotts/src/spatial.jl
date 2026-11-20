@@ -1,4 +1,4 @@
-# Spatial queries (ROADMAP M2.7): site predicates, per-cell reductions and the cell contact
+# Spatial queries: site predicates, per-cell reductions and the cell contact
 # graph. Site predicates are device functions; `CellReduce` and `ContactPhase` are phases; the
 # host `contact_graph` (CSR) is built at a synchronization point.
 
@@ -33,8 +33,7 @@ Phase: `st.cell.name[c] = op_{i ∈ c} f(st, p, ctx, key, mcs, i)` over every ce
 (`op ∈ (+, max, min)`). Covers owner sums, means (divide by volume), counts of sites
 satisfying a predicate (return a `Bool`/`Int32`), and structured owner sums.
 
-The result is the same for every order of the sites, so for every thread count and backend
-(F3-23, user ruling 2026-10-28; D-029):
+The result is the same for every order of the sites, so for every thread count and backend:
 
   - an integer column, and `max`/`min`, use atomics, which are exact;
   - a float sum (Float16, Float32, Float64) is an exact Int64 fixed-point sum with a power-of-two
@@ -106,7 +105,7 @@ function _cell_reduce_atomic!(op::O, f::F, dst, st, p, ctx, key, mcs, backend) w
 end
 
 # ---------------------------------------------------------------------------------------
-# Float sums in Int64 fixed point (F3-23; research/field-compiler/f3/F3-23-integer-cell-sums.md)
+# Float sums in Int64 fixed point
 #
 #   zero      (cells)  the scratch
 #   exponent  (sites)  `exp[c]` = the largest biased exponent of a finite nonzero value in c
@@ -197,7 +196,7 @@ end
 # contiguous along the first axis): one atomic per run of a cell instead of one per site. A local
 # integer sum is exact, so the result is unchanged; a partial sum is bounded by the cell's.
 # Measured on ROCm (300³, Float32): runs of 1, 4, 8, 16 sites take 3.8, 2.9, 4.0, 8.2 ms; on the
-# CPU (-t 8, Float64) runs of 1, 64, 256, 1024 take 48, 23, 22, 40 ms (~/lpwork/f3x23/crprof2.jl).
+# CPU (-t 8, Float64) runs of 1, 64, 256, 1024 take 48, 23, 22, 40 ms.
 # `_CR_RUN_DEVICE` / `_CR_RUN_HOST` are Refs for such probes.
 const _CR_RUN_HOST = Ref(256)
 const _CR_RUN_DEVICE = Ref(4)
@@ -333,7 +332,7 @@ end
 _part_name(::Type{Part{A, B}}) where {A, B} = B
 
 # ---------------------------------------------------------------------------------------
-# Integer weight units (F3-23 r1). A float sum of relation weights over the sites (the device
+# Integer weight units. A float sum of relation weights over the sites (the device
 # lifecycle's surface and cluster surface recomputes, `ContactPhase`) adds each weight as an
 # integer number of units 2^-e, in Int64, so the sum is exact and does not depend on the order.
 # The scale is static: one site adds at most W = Σ_k |w_k| to an entry and at most n sites add
@@ -484,7 +483,7 @@ Device-resident contact table to merge into the cell state, filled by `ContactPh
 (shared weighted bond count), `contact_medium[c]` and `contact_overflow[c]` (bonds dropped
 because `c`'s row was full; nonzero means `maxdeg` is too small, and which bonds were dropped
 then depends on the order). The `#ct_` columns are the scratch of a weighted relation's
-exact sums (integer weight units, F3-23).
+exact sums (integer weight units).
 """
 empty_contacts(maxdeg::Integer, ncell::Integer; T::Type = Float32) =
     (; contact_nbr = zeros(Int32, maxdeg, ncell), contact_measure = zeros(T, maxdeg, ncell),

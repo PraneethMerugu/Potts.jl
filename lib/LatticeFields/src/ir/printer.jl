@@ -1,4 +1,4 @@
-# The printer (v3 §4.5): one stable text form, used for `inspect`, error messages and as the
+# The printer: one stable text form, used for `inspect`, error messages and as the
 # fingerprint source. It prints op and enum *names*, never codes, and keys, never ids, so a new
 # op or a new declaration elsewhere never changes an existing program's text.
 

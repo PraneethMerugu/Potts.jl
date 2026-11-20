@@ -1,4 +1,4 @@
-# The top-level definitions of fields_implicit.jl, fields_steppers.jl (converted from the include-into-Main suite, TS1a).
+# The top-level definitions of fields_implicit.jl, fields_steppers.jl (converted from the include-into-Main suite).
 
 @testsetup module ImplicitSetup
 using Potts, Test

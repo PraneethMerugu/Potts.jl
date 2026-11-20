@@ -6,7 +6,7 @@
 alloc(b::KA.Backend, ::Type{T}, n) where {T} = fill!(KA.allocate(b, T, max(n, 1)), zero(T))
 to_host(b::KA.Backend, A) = Exec.ishost(b) ? copy(A) : (KA.synchronize(b); Array(A))
 
-# capability, not policy (P5 C2-1): a Float64 solver group runs where the hardware has
+# capability, not policy: a Float64 solver group runs where the hardware has
 # Float64 (ROCm, CUDA, the host), so `solver_type = :auto` keeps its Float64 path on ROCm
 Schedule.supports(b::KA.Backend, ::Type{S}) where {S} = Exec.supports(b, S)
 
@@ -19,7 +19,7 @@ function launch!(b::KA.Backend, l::Launch)
     if l.wg == 0
         Exec.launch!(b, _solver_site!, l.n, (l.body, l.S, l.P, l.G))
     elseif Exec.ishost(b) && l.tree
-        # the host fast path (F3-06): the halving tree's idle items skipped, blocks threaded
+        # the host fast path: the halving tree's idle items skipped, blocks threaded
         # over chunks when the launch has more than `HOST_GRAIN` items; bitwise equal to the
         # emulated form (the same calls in the same order within each block)
         nc = l.n * l.wg <= Exec.HOST_GRAIN ? 1 : min(Threads.nthreads(), l.n, length(l.lds) ÷ l.ldslen)

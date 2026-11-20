@@ -1,11 +1,11 @@
-# F3-12d: the coupled steady solve. A QuasiSteady group whose fields read one another (a cycle,
+# The coupled steady solve. A QuasiSteady group whose fields read one another (a cycle,
 # a cross diffusion `D laplacian(o)`, a nonlinear cross term such as `c²`) solves its rows together:
 # each Newton iteration is one restarted flexible GMRES solve (`LatticeGMRES`) of the whole
 # Jacobian of the group's residual, preconditioned by each field's own multigrid solve. Every
 # testset checks against an oracle that does not use the solver: the dense steady Jacobian of
 # the `:ode` rate (assembled by columns), an exact solution, or a dense split recursion.
-# Base (c40a68f8, ~/lpwork/f312d/nc-base-lp.log): the q1 loops in one steady group end
-# `ConvergenceFailure` (block iteration ratio ≈ k/√(δμ) = 15.8, 1.6), the N5 rows warn
+# Before the fix (c40a68f8): the q1 loops in one steady group end
+# `ConvergenceFailure` (block iteration ratio ≈ k/√(δμ) = 15.8, 1.6), the cross Δ and `c²` rows warn
 # (`nlsolve = LatticeNewton(; max_iter = 40)`), the feedback loop is refused ("reads the steady field … of the loop"), the
 # indefinite pair is accepted (each row decays) and diverges, the strong `init = :steady` loop
 # fails at t = 0, and `LatticeGMRES` is not defined.
@@ -39,7 +39,7 @@ end
 
 @testitem "the q1 loops in one QuasiSteady group equal the dense steady solve" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
     @testset "the q1 loops in one QuasiSteady group equal the dense steady solve" begin
-    # every system is well posed (max Re λ < 0, reviewer probe s3); the block iteration's ratio
+        # every system is well posed (max Re λ < 0); the block iteration's ratio
     # k/√(δμ) is 5, 15.8, 0.5 and 1.6: the coupled solve does not depend on it
     for (δ, k) in ((1.0, 5.0), (0.1, 5.0), (1.0, 0.5), (0.1, 0.5))
         A, b0 = cjac(q1(δ, k), (8, 8))
@@ -57,8 +57,8 @@ end
     # the same seed and backend repeat a run bit for bit (fixed-order reductions)
         run() = (s = solve(cown(q1(0.1, 5.0)), QuasiSteady(); dt = 0.1); (s[cae, end], s[cbe, end]))
     @test run() == run()
-    # a warm window allocates nothing (CPU), and its solve starts at the last solution (F4-03:
-    # the second window ends the span, where the end save copies the state: `save_end = false`)
+        # a warm window allocates nothing (CPU), and its solve starts at the last solution
+        # (the second window ends the span, where the end save copies the state: `save_end = false`)
         ig = init(cown(q1(0.1, 5.0)), QuasiSteady(); dt = 0.1, save_end = false, save_everystep = false)
     @test bwarm(ig) == 0
     # the solve's words: a budget hit names the GMRES budget; `show`, the keywords
@@ -136,8 +136,8 @@ end
 end
 end
 
-@testitem "F3-12d: a coupled steady pair feeding back through a transient field" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
-@testset "F3-12d: a coupled steady pair feeding back through a transient field" begin
+@testitem "a coupled steady pair feeding back through a transient field" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
+    @testset "a coupled steady pair feeding back through a transient field" begin
     # `a`, `b` steady and coupled (0.5 each way), `e` transient: `a` reads `e`, `e` reads `b`. The
     # loop's gain composes through the steady pair, `X = (I − M)⁻¹ (G ∘ e)`, M = G k = [0 ½; ½ 0]
         rates = [0.1 * laplacian(cae) - cae + 0.5 * cbe + 0.2 * cze, 0.1 * laplacian(cbe) - cbe - 0.5 * cae, 0.1 * laplacian(cze) - cze + 0.5 * cbe + x]
@@ -186,8 +186,8 @@ end
 end
 end
 
-@testitem "F3-12d: a coupled steady system with no unique stable steady state is refused, with its eigenvalue" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
-@testset "F3-12d: a coupled steady system with no unique stable steady state is refused, with its eigenvalue" begin
+@testitem "a coupled steady system with no unique stable steady state is refused, with its eigenvalue" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
+    @testset "a coupled steady system with no unique stable steady state is refused, with its eigenvalue" begin
     # each row decays (−a, −b), the coupling `k` grows: mode 0 of `[−1 k; k −1]` has λ = k − 1
         ind(k) = cown(
             PDESystem(
@@ -226,8 +226,8 @@ end
 end
 end
 
-@testitem "F3-12d: `init = :steady` with a coupled loop starts at the coupled steady state" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
-@testset "F3-12d: `init = :steady` with a coupled loop starts at the coupled steady state" begin
+@testitem "`init = :steady` with a coupled loop starts at the coupled steady state" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
+    @testset "`init = :steady` with a coupled loop starts at the coupled steady state" begin
     # a Backward Euler group with the strong q1 coupling: its steady start is one coupled steady
     # solve (the block iteration of the per-row path diverged, ratio 15.8)
     A, b0 = cjac(q1(0.1, 5.0), (8, 8))
@@ -243,7 +243,7 @@ end
 
 @testitem "the time steppers refuse `linsolve = LatticeGMRES(…)`, with the default route" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
     @testset "the time steppers refuse `linsolve = LatticeGMRES(…)`, with the default route" begin
-        # it was slower than the default linear solver in every case measured (~/lpwork/f312d-g1.txt)
+        # it was slower than the default linear solver in every case measured
     for A in (BackwardEuler, CrankNicolson, BDF2)
             @test_throws ArgumentError A(; linsolve = LatticeGMRES())
             @test A(; linsolve = LatticePCG(; maxiters = 12)) isa A
@@ -254,7 +254,7 @@ end
 
 @testitem "a site-varying coupled system with a growing mode is refused (estimated through the operator)" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
     @testset "a site-varying coupled system with a growing mode is refused (estimated through the operator)" begin
-    # the reviewer's case (~/lpwork/f3rev17/p1.jl): `(3 + 0.1x) b`, dense max Re λ = +2.03; the
+        # a harder case: `(3 + 0.1x) b`, dense max Re λ = +2.03; the
     # constant-coefficient check cannot see it (a coefficient that varies by site). Base (51d1f386):
     # `Success` at the unstable steady state, no warning
     @parameters kv = 3.0
@@ -290,7 +290,7 @@ end
         ig = init(sw, QuasiSteady(); dt = 0.1)
         @test_throws ArgumentError (ig.ps[kw] = 3.0)
     @test ig.ps[kw] == 0.0
-    # the refused write left the old launches (r2 S1): its run equals a fresh one's, bit for bit
+        # the refused write left the old launches: its run equals a fresh one's, bit for bit
     for _ in 1:2
         step!(ig)
     end
@@ -300,7 +300,7 @@ end
     end
     @test ig.retcode == ReturnCode.Default || ig.retcode == ReturnCode.Success
     @test ig[cae] == fr[cae] && ig[cbe] == fr[cbe]
-    # nonlinear (r2 M1, the reviewer's probe2): `+ 0.01a²` turns the constant-coefficient check
+        # nonlinear (a second case): `+ 0.01a²` turns the constant-coefficient check
     # off; the Jacobian at the steady state the solve finds has max Re λ ≈ +2.0, found at the
     # first window after that solve. Base (3f9d5909): `Success`, no warning
         nl(c) = cown(
@@ -309,8 +309,8 @@ end
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.3), [t, x, y], [cae, cbe], Any[]; name = :nlg))
         m = cmsg(() -> solve(nl(3.0), QuasiSteady(); dt = 0.1))
     @test occursin("has a growing mode: an eigenvalue of its Jacobian with positive real part", m) &&
-          occursin(", at the steady state its solve found)", m) || (println("r2 M1 ", m); false)
-    # right after the first solve (r3): a one-window run and a steady start are refused too.
+            occursin(", at the steady state its solve found)", m) || (println("growing-mode message: ", m); false)
+        # right after the first solve: a one-window run and a steady start are refused too.
     # Base (5005083e, the check deferred to the next window): one window `Success`, the steady
     # start not checked
         nl1 = cown(
@@ -323,8 +323,8 @@ end
                 [D(cae) ~ 0.1 * laplacian(cae) - cae + 3.0 * cbe + x + 0.01 * cae^2, D(cbe) ~ 0.1 * laplacian(cbe) + 3.0 * cae - cbe + y],
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.3), [t, x, y], [cae, cbe], Any[]; name = :nlr))
         m = cmsg(() -> init(nlr, BackwardEuler(; init = :steady); dt = 0.1))
-    @test occursin("has a growing mode", m) && occursin(", at the steady state its solve found)", m) || (println("r3 init ", m); false)
-    # a write from stable to unstable (r3 S1): every later step is refused, not only the first.
+        @test occursin("has a growing mode", m) && occursin(", at the steady state its solve found)", m) || (println("growing-mode message: ", m); false)
+        # a write from stable to unstable: every later step is refused, not only the first.
     # Control (the old order, `pending` cleared before the check): the second `step!` succeeds
     @parameters kn = 0.0
         nlw = cown(

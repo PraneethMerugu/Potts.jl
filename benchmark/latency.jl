@@ -1,7 +1,7 @@
-# P6.0o latency acceptance (D-137): `@potts_model` construction, `mtkcompile` and
+# Latency acceptance (D-137): `@potts_model` construction, `mtkcompile` and
 # `PottsProblem` build time on the five gate models, and fresh-process time to first MCS.
 #
-#     tools/exclusive.sh julia --project=benchmark benchmark/p6_0o_latency.jl [reps] [warm] [base]
+#     tools/exclusive.sh julia --project=benchmark benchmark/latency.jl [reps] [warm] [base]
 #
 # Each repetition of each case is a fresh `julia` process (Potts and PottsModels already
 # precompiled: one untimed process per checkout runs first). A child times, in order:
@@ -20,7 +20,7 @@
 # With a third argument, a base checkout (e.g. a `git worktree` of 33f681df with the
 # workspace Manifest copied in), the children alternate base, this, base, this … and the
 # script also prints the ratio this/base of every median. That paired form decides the
-# acceptance (ROADMAP P6.0o: construction, `mtkcompile` and `PottsProblem` build time and
+# acceptance (construction, `mtkcompile` and `PottsProblem` build time and
 # the fresh-process time to first MCS each within +5 %), because absolute numbers move with
 # machine load; the baseline recorded on 33f681df (D-137) is the reference for a quiet run.
 #
@@ -45,8 +45,10 @@ const LOAD = time() - T0
 using Printf: @printf, @sprintf
 median(x) = (y = sort(x); n = length(y); isodd(n) ? y[(n + 1) ÷ 2] : (y[n ÷ 2] + y[n ÷ 2 + 1]) / 2)
 
-const CASES = ["graner_glazier_72", "wortel_act_100", "merks_100", "openvt_monolayer_100", "akeeb_99x60",
-    "akeeb_f32_first_mcs"]
+const CASES = [
+    "graner_glazier_72", "wortel_act_100", "merks_100", "openvt_monolayer_100", "akeeb_99x60",
+    "akeeb_f32_first_mcs",
+]
 
 # the gate's cases (benchmark/gate.jl), split into constructor, operating point and keywords
 function spec(case)
@@ -61,7 +63,7 @@ function spec(case)
         return () -> MerksVasculogenesis(; name = :m, lattice = (100, 100)), merks_state(; lattice = (100, 100), n = 25),
             (; field_solver = ExplicitEuler(substeps = 15, lower_bound = 0.0))
     elseif case == "openvt_monolayer_100"
-        return () -> OpenVTGrowingMonolayer(; name = :o, lattice = (100, 100), τ = 1e6),
+        return () -> OpenVTGrowingMonolayer(; name = :o, lattice = (100, 100), τ = 1.0e6),
             openvt_monolayer_state(; lattice = (100, 100)), (; capacity = 64)
     else                                      # akeeb_99x60, akeeb_f32_first_mcs
         return () -> AkeebInvasion(; name = :a, lattice = (99, 60)), akeeb_state(; lattice = (99, 60)), (; capacity = 1000)
@@ -92,14 +94,22 @@ function child(case, nwarm)
         push!(wm, @elapsed(cc = mtkcompile(s)))
         push!(wp, @elapsed(PottsProblem(cc, op, (0, 10); T, kw...)))
     end
-    println("RESULT ", join(("load=$LOAD", "construct=$tc", "mtkcompile=$tm", "problem=$tp", "first_mcs=$tf",
-        "first_mcs_checkerboard=$tf2", "to_first_mcs=$first_total", "warm_construct=$(median(wc))",
-        "warm_mtkcompile=$(median(wm))", "warm_problem=$(median(wp))"), " "))
+    println(
+        "RESULT ", join(
+            (
+                "load=$LOAD", "construct=$tc", "mtkcompile=$tm", "problem=$tp", "first_mcs=$tf",
+                "first_mcs_checkerboard=$tf2", "to_first_mcs=$first_total", "warm_construct=$(median(wc))",
+                "warm_mtkcompile=$(median(wm))", "warm_problem=$(median(wp))",
+            ), " "
+        )
+    )
     return nothing
 end
 
-const KEYS = ["to_first_mcs", "total", "load", "construct", "mtkcompile", "problem", "first_mcs",
-    "first_mcs_checkerboard", "warm_construct", "warm_mtkcompile", "warm_problem"]
+const KEYS = [
+    "to_first_mcs", "total", "load", "construct", "mtkcompile", "problem", "first_mcs",
+    "first_mcs_checkerboard", "warm_construct", "warm_mtkcompile", "warm_problem",
+]
 
 function parent(reps, nwarm, other)
     jl = Base.julia_cmd()
@@ -127,12 +137,20 @@ function parent(reps, nwarm, other)
         println(side, ",", case, ",", join((@sprintf("%.4g", med(side, case, k)) for k in KEYS), ","))
     end
     if other !== nothing
-        println("\n# ratio this/base of the medians (acceptance: construct, mtkcompile, problem, ",
-            "warm_* and to_first_mcs each <= 1.05)")
+        println(
+            "\n# ratio this/base of the medians (acceptance: construct, mtkcompile, problem, ",
+            "warm_* and to_first_mcs each <= 1.05)"
+        )
         println("case,", join(KEYS, ","))
         for case in CASES
-            println(case, ",", join((@sprintf("%.3f", med("this", case, k) / max(med("base", case, k), eps()))
-                                     for k in KEYS), ","))
+            println(
+                case, ",", join(
+                    (
+                        @sprintf("%.3f", med("this", case, k) / max(med("base", case, k), eps()))
+                            for k in KEYS
+                    ), ","
+                )
+            )
         end
     end
     println("\n# min,max of to_first_mcs per side and case")

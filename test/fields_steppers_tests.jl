@@ -1,15 +1,15 @@
-# F3-10, F3-11 (F3 design §3.3, §3.7): `CrankNicolson` and `BDF2` in a model, through the
+# `CrankNicolson` and `BDF2` in a model, through the
 # standalone field runtime (the models and helpers of fields_implicit.jl). With σ frozen the model equals
 # B bitwise; Crank–Nicolson damps the first substep of every MCS when the group reads the CPM
 # or its mask moves; BDF2 keeps its history in the runtime (not in `st.site`, saved states or a
 # checkpoint), across σ moves, and restarts after a write, `reinit!` or a restored checkpoint.
-# Base (69bef544, ~/lpwork/f3b4-nc10-a-base.log, f3b4-nc11-a-base.log): `CrankNicolson` and
+# Before the fix (69bef544, f3b4-nc11-a-base.log): `CrankNicolson` and
 # `BDF2` are not defined in Potts (every testset errors).
 
 # the models' fields, coupled with `@fields`; a kind is a bound input, a kind table the model's
 
-@testitem "F3-10: CrankNicolson components and binding" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
-    @testset "F3-10: CrankNicolson components and binding" begin
+@testitem "CrankNicolson components and binding" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
+    @testset "CrankNicolson components and binding" begin
         dims = (12, 10)
         run(M) = (i = init(PottsProblem(M(; name = :f), fi_op(dims), (0, 3); field_solver = CrankNicolson()), SequentialCPM());
                   foreach(_ -> step!(i), 1:3); st = current_state(i).site; [Array(getproperty(st, n)) for n in sort!(collect(propertynames(st)))])
@@ -20,8 +20,8 @@
     end
 end
 
-@testitem "F3-10: a moving mask: the damped start beats Backward Euler" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
-    @testset "F3-10: a moving mask: the damped start beats Backward Euler" begin
+@testitem "a moving mask: the damped start beats Backward Euler" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
+    @testset "a moving mask: the damped start beats Backward Euler" begin
         # P1 (c): cells move every MCS; against 20 Backward Euler substeps per MCS, Crank–Nicolson
         # (one substep: two Backward Euler halves) is closer than one Backward Euler substep
         σ = zeros(Int32, 24, 24); σ[5:8, 5:8] .= 1; σ[14:17, 12:15] .= 2
@@ -42,9 +42,9 @@ end
     end
 end
 
-@testitem "F3-10 r1 S1: CrankNicolson on CPM-coupled data takes 2 substeps by default (order 2 in the count)" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
-    @testset "F3-10 r1 S1: CrankNicolson on CPM-coupled data takes 2 substeps by default (order 2 in the count)" begin
-        # base 00326b72 (~/lpwork/f3b5-nc-s1.log, the count of 1): `CrankNicolson()` takes 1 substep,
+@testitem "CrankNicolson on CPM-coupled data takes 2 substeps by default (order 2 in the count)" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
+    @testset "CrankNicolson on CPM-coupled data takes 2 substeps by default (order 2 in the count)" begin
+        # base 00326b72 (the count of 1): `CrankNicolson()` takes 1 substep,
         # one damped substep per MCS (Backward Euler in two halves); its error then equals
         # `substeps = 1`'s, and the count assertion fails
         σ = zeros(Int32, 24, 24); σ[4:7, 4:7] .= 1; σ[4:7, 15:18] .= 2; σ[15:18, 9:12] .= 3
@@ -76,8 +76,8 @@ end
     end
 end
 
-@testitem "F3-11: BDF2 history is no state; components and binding" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
-    @testset "F3-11: BDF2 history is no state; components and binding" begin
+@testitem "BDF2 history is no state; components and binding" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
+    @testset "BDF2 history is no state; components and binding" begin
         dims = (12, 10)
         run(M) = (i = init(PottsProblem(M(; name = :f), fi_op(dims), (0, 3); field_solver = BDF2()), SequentialCPM());
                   foreach(_ -> step!(i), 1:3); st = current_state(i).site; [Array(getproperty(st, n)) for n in sort!(collect(propertynames(st)))])
@@ -97,8 +97,8 @@ end
     end
 end
 
-@testitem "F3-11: BDF2's history survives σ moves; writes, reinit! and checkpoints restart it" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
-    @testset "F3-11: BDF2's history survives σ moves; writes, reinit! and checkpoints restart it" begin
+@testitem "BDF2's history survives σ moves; writes, reinit! and checkpoints restart it" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
+    @testset "BDF2's history survives σ moves; writes, reinit! and checkpoints restart it" begin
         dims = (16, 16)
         σ = zeros(Int32, dims...); σ[4:8, 4:8] .= 1
         integ = init(PottsProblem(FiMoving(; name = :f), [ownership => σ, kind => [:A]], (0, 8); field_solver = BDF2()),
@@ -119,7 +119,7 @@ end
         reinit!(integ)
         @test rt.cache.start                                      # … and `reinit!`
         # a restored checkpoint restarts the history (one Backward Euler substep): it does not
-        # continue a BDF2 run bitwise, while a Backward Euler run does (F3 design §3.3 Checkpoints)
+        # continue a BDF2 run bitwise, while a Backward Euler run does
         function restored(fs)
             p = PottsProblem(FiStill(; name = :f), fi_op((12, 10)), (0, 6); field_solver = fs)
             i = init(p, SequentialCPM())
@@ -138,8 +138,8 @@ end
     end
 end
 
-@testitem "F3-12a: QuasiSteady steady state and binding" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
-    @testset "F3-12a: QuasiSteady steady state and binding" begin
+@testitem "QuasiSteady steady state and binding" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
+    @testset "QuasiSteady steady state and binding" begin
         dims = (12, 10)
         # the steady state: an MCS later the field is unchanged to the solver's tolerance
         a, _ = fi_runA(FiSteady, fi_op(dims), 3; field_solver = QuasiSteady(; linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 64)))
@@ -150,8 +150,8 @@ end
     end
 end
 
-@testitem "F3-12a (r2 M1): QuasiSteady in a loop of solver groups in a model is refused, with its routes" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
-    @testset "F3-12a (r2 M1): QuasiSteady in a loop of solver groups in a model is refused, with its routes" begin
+@testitem "QuasiSteady in a loop of solver groups in a model is refused, with its routes" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
+    @testset "QuasiSteady in a loop of solver groups in a model is refused, with its routes" begin
         dims = (12, 10)
         fi_throws(
             ArgumentError,
@@ -171,8 +171,8 @@ end
     end
 end
 
-@testitem "F3-12a: QuasiSteady in a model: the refusals; an island ends the run" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
-    @testset "F3-12a: QuasiSteady in a model: the refusals; an island ends the run" begin
+@testitem "QuasiSteady in a model: the refusals; an island ends the run" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
+    @testset "QuasiSteady in a model: the refusals; an island ends the run" begin
         dims = (12, 10)
         # a growth the operator sees (`g < 0` makes `- g c` a growth): at build and at a write
         fi_throws(
@@ -200,8 +200,8 @@ end
     end
 end
 
-@testitem "F3-12b: steady rows `0 ~ rhs` in a model: QuasiSteady by default, equal to the rate row and to B" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
-    @testset "F3-12b: steady rows `0 ~ rhs` in a model: QuasiSteady by default, equal to the rate row and to B" begin
+@testitem "steady rows `0 ~ rhs` in a model: QuasiSteady by default, equal to the rate row and to B" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
+    @testset "steady rows `0 ~ rhs` in a model: QuasiSteady by default, equal to the rate row and to B" begin
         dims, k = (12, 10), 3
         a0, integ = fi_runA(FiSteady0, fi_op(dims), k; field_solver = nothing)
         a1, _ = fi_runA(FiSteady, fi_op(dims), k; field_solver = QuasiSteady())
@@ -251,12 +251,12 @@ end
         al, integ = fi_runA(FiLocal, fi_op(dims), k)
         @test substep_counts(integ)[1] == 1 && maximum(al[end]) > 0
         @test al == fi_runB(FiLocal, dims, k; u0 = [:c => zeros(dims), :e => zeros(dims)])
-        @test only(steady_fields(FiLocal(; name = :f))) == ("0 ~ -2.0c(t) + 0.5e(t)" => :c)      # (r3 N2)
+        @test only(steady_fields(FiLocal(; name = :f))) == ("0 ~ -2.0c(t) + 0.5e(t)" => :c)      #
     end
 end
 
-@testitem "F3-12c: the QuasiSteady gain in a model: an accepted loop is the split recursion; a write past it is refused" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
-    @testset "F3-12c: the QuasiSteady gain in a model: an accepted loop is the split recursion; a write past it is refused" begin
+@testitem "the QuasiSteady gain in a model: an accepted loop is the split recursion; a write past it is refused" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
+    @testset "the QuasiSteady gain in a model: an accepted loop is the split recursion; a write past it is refused" begin
         dims = (12, 10)
         tight = LatticePCG(; reltol = 1.0e-12, maxiters = 64)
         fs = FieldGroups(:u => QuasiSteady(; linsolve = tight), :w => BackwardEuler(; linsolve = tight))
@@ -310,8 +310,8 @@ end
     end
 end
 
-@testitem "F3-12c: `init = :steady` in a model: the field starts at its steady state; refusals name `init`" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
-    @testset "F3-12c: `init = :steady` in a model: the field starts at its steady state; refusals name `init`" begin
+@testitem "`init = :steady` in a model: the field starts at its steady state; refusals name `init`" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
+    @testset "`init = :steady` in a model: the field starts at its steady state; refusals name `init`" begin
         dims = (12, 10)
         tight = LatticePCG(; reltol = 1.0e-12, maxiters = 64)
         # the steady state: one QuasiSteady MCS (σ frozen: the same inputs)
@@ -352,21 +352,21 @@ end
         )
         # the canonical text names `init` when it is set, and keeps the default's otherwise
         @test Potts._canonical(BackwardEuler(; init = :steady)) != Potts._canonical(BackwardEuler())
-        # the PCG count of `ExplicitEuler(init = :steady)` from zero (design §5; review r4 N4): one
+        # the PCG count of `ExplicitEuler(init = :steady)` from zero (design §5): one
         # solve, 5 iterations of the default inner (rtol 1e-6) on the CPU (the design's "6, as C7b":
         # at most 6)
         integ = init(PottsProblem(FiSteady(; name = :f), fi_op(dims), (0, 3); field_solver = ExplicitEuler(; init = :steady)), SequentialCPM())
         rt = CorePotts._runtime(getfield(integ.ctx, :__fields1_start))
         ne = Potts.LatticeFields.Solvers.iterations(rt.cache.rows[1].solver)
-        @test rt.totals.solves == 1 && 1 <= ne <= 6 || (println("r4 N4 A EE start PCG ", ne); false)
+        @test rt.totals.solves == 1 && 1 <= ne <= 6 || (println("A EE start PCG ", ne); false)
     end
 end
 
-# F3-12a (design §5; review r4 N4): the F3-05 capabilities in a QuasiSteady group in a model, each
+# The face and mask capabilities in a QuasiSteady group in a model, each
 # equal to B bitwise (σ frozen): a Robin face of each sign, a field face, a mask value field;
 # and an input bound by aliasing, the CPM's moving σ, read by the next window's steady solve
-@testitem "F3-12a: QuasiSteady indefinite refusal and moving σ in a model" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
-    @testset "F3-12a: QuasiSteady indefinite refusal and moving σ in a model" begin
+@testitem "QuasiSteady indefinite refusal and moving σ in a model" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
+    @testset "QuasiSteady indefinite refusal and moving σ in a model" begin
         dims = (12, 10)
         # FiRobinN's face (α 1, β 1 at unit spacing: +0.8 on the diagonal against the decay 0.3) makes
         # the steady operator indefinite: refused, as in B
@@ -394,8 +394,8 @@ end
     end
 end
 
-@testitem "F3-12d: coupled steady pair strong-gain refusal" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
-    @testset "F3-12d: coupled steady pair strong-gain refusal" begin
+@testitem "coupled steady pair strong-gain refusal" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
+    @testset "coupled steady pair strong-gain refusal" begin
         # strong (k = 5): the rule's bound on the pair's joint gain does not hold; the routes say that
         # the steady rows must be rates for `BackwardEuler`
         fi_throws(
@@ -409,8 +409,8 @@ end
     end
 end
 
-@testitem "F3-12d: a coupled steady group with a Float16 field is refused" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
-    @testset "F3-12d: a coupled steady group with a Float16 field is refused" begin
+@testitem "a coupled steady group with a Float16 field is refused" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
+    @testset "a coupled steady group with a Float16 field is refused" begin
         fi_throws(
             ArgumentError,
             [

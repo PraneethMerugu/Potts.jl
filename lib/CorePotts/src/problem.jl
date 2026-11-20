@@ -55,7 +55,7 @@ PottsProblem(
     NamedTuple(kwargs)
 )
 
-# The checks and the resolved relations of a new problem, compiled once for every model (TS1c):
+# The checks and the resolved relations of a new problem, compiled once for every model:
 # nothing here is specialized on the model's types (the problem type itself is built at the end)
 Base.@nospecializeinfer function _problem(@nospecialize(f::CPMFunction), @nospecialize(u0::CPMState),
         @nospecialize(lattice::Lattice), @nospecialize(tspan), @nospecialize(p), @nospecialize(contact),
@@ -183,7 +183,7 @@ standard rule (`frozen_kinds`) runs on the integrator's backend and ignores this
 frozen_reads(sys) = nothing
 
 # A custom `remake_frozen` without `frozen_varies(sys) = true` gives a static mask: say so.
-function _check_frozen_hooks(@nospecialize(sys))         # (host, once per `init`; TS1c)
+function _check_frozen_hooks(@nospecialize(sys))         # (host, once per `init`)
     frozen_varies(sys) && return nothing
     which(remake_frozen, Tuple{typeof(sys), Any, Any}).module === CorePotts && return nothing
     # a `frozen_varies` defined outside CorePotts (even `false`, also on a supertype) is a choice (D-133)
@@ -275,7 +275,7 @@ function _remake_initializealg(prob, f, u0, a)
     return nothing
 end
 
-# `remake`, compiled once for every model (TS1c): specialized on the problem's type it was
+# `remake`, compiled once for every model: specialized on the problem's type it was
 # 0.7–1.3 s of compile for every model, although the remade problem has the same type
 Base.@nospecializeinfer function _remake(
         @nospecialize(prob::PottsProblem), @nospecialize(f), @nospecialize(u0),
@@ -331,7 +331,7 @@ Base.@kwdef mutable struct PottsStats
     mcs::Int = 0
     attempts::Int = 0
     accepted::Int = -1          # -1: not counted by this algorithm
-    committed::Int = -1         # CheckerboardCPM only (P6.0bl), else -1: copies committed
+    committed::Int = -1         # CheckerboardCPM only, else -1: copies committed
     launches::Int = 0
     refreshes::Int = 0          # frozen-mask recomputations (`refresh_frozen!`)
     # host↔device traffic (D-085; never counted on the CPU): explicit synchronizations,
@@ -340,13 +340,13 @@ Base.@kwdef mutable struct PottsStats
     transfers::Int = 0
     transfer_bytes::Int = 0
     lifecycle::LifecycleStats = LifecycleStats()
-    fields::FieldStats = FieldStats()       # the field solvers' counters (status words, F3)
+    fields::FieldStats = FieldStats()       # the field solvers' counters (status words)
     ode_code::SciMLBase.ReturnCode.T = SciMLBase.ReturnCode.Default
     # Σ `f.track` over the committed copies (`CPMFunction(…; track)`, Potts `track = (:energy_change,)`):
     # `nothing` without a track. Exact after every step under `SequentialCPM`; under
     # `CheckerboardCPM` brought up to date at the host read points (D-140)
     accepted_energy_change::Union{Nothing, Float64} = nothing
-    # copies the `Global` veto refused only for want of window (P6.9a, D-197): `nothing` for
+    # copies the `Global` veto refused only for want of window (D-197): `nothing` for
     # a model without `Global`, else an `Int` (always 0 on SequentialCPM, with or without
     # `skip_interior`, and without a window); under `CheckerboardCPM` brought up to date at
     # the host read points
@@ -479,7 +479,7 @@ _proposal(alg, prob) = something(alg.proposal, prob.proposal)
 The keywords `solve` and `init` of a `PottsProblem` take (SciML's common keywords that have
 a meaning on the MCS clock, and `backend` and `checkpoint`). Any other keyword is an
 `ArgumentError` that lists these: a Monte Carlo sweep has no step size or truncation error,
-so `dt`, `abstol` and `reltol` are among the refused ones (D-287 X3).
+so `dt`, `abstol` and `reltol` are among the refused ones.
 """
 const SOLVE_KEYWORDS = (
     :backend, :saveat, :save_start, :save_end, :save_everystep, :save_idxs, :tstops, :maxiters,
@@ -571,7 +571,7 @@ clock:
 - `verbose = false` silences the warnings of `init` and `solve!`; `progress = true` logs the
   progress (SciML's progress logging).
 - `alias`: accepted; the state is always copied.
-- `dense`: only `false` (no interpolation between MCS, D-287 X4).
+- `dense`: only `false` (no interpolation between MCS).
 - `backend`: the KernelAbstractions backend the run executes on; `checkpoint`: a
   [`PottsCheckpoint`](@ref) to continue.
 
@@ -757,7 +757,7 @@ end
     init(prob::PottsProblem; backend = CPU(), kwargs...)
     solve(prob::PottsProblem; backend = CPU(), kwargs...)
 
-Without an algorithm (D-009): `SequentialCPM()` on the CPU. A device backend has no default,
+Without an algorithm: `SequentialCPM()` on the CPU. A device backend has no default,
 since `SequentialCPM` is CPU-only. Pass `CheckerboardCPM()` there; anything else throws an
 `ArgumentError` that says so.
 """
@@ -766,7 +766,7 @@ function CommonSolve.init(prob::PottsProblem; backend = CPU(), kwargs...)
         ArgumentError(
             "no default algorithm on the $(nameof(typeof(backend))) " *
                 "backend: pass one explicitly, e.g. `solve(prob, CheckerboardCPM(); backend)` " *
-                "(SequentialCPM, the CPU default, runs only on the CPU; D-009)"
+                "(SequentialCPM, the CPU default, runs only on the CPU)"
         )
     )
     return CommonSolve.init(prob, SequentialCPM(); backend, kwargs...)
@@ -798,11 +798,11 @@ function _device_float_notice(prob::PottsProblem, backend)
     return true
 end
 
-# The host setup of a run, inferred and compiled once for every model (TS1c): the problem,
+# The host setup of a run, inferred and compiled once for every model: the problem,
 # the algorithm, `saveat` and the callbacks are not specialized on, so each call below is a
 # dynamic dispatch that compiles only that callee for the model's types (the setup runs once
 # per run; `step!` and the kernels stay fully specialized). Specialized on the model, this
-# body was 0.3–0.9 s of inference for every model (TS-R1 §1.1b).
+# body was 0.3–0.9 s of inference for every model (measured).
 Base.@nospecializeinfer function _init(
         @nospecialize(prob::PottsProblem), @nospecialize(alg::AbstractCPMAlgorithm), fresh::Bool,
         backend, opts::PottsOptions, @nospecialize(callback)
@@ -815,7 +815,7 @@ Base.@nospecializeinfer function _init(
     ctx = (; lattice = _to_backend(backend, lat), proposal = relation(_proposal(alg, prob), lat), contact = prob.contact,
         mobility = _backend_mobility(backend, mobility(prob.frozen, lat)), prob.relations...)
     prob.spacing === nothing || (ctx = merge(ctx, (; spacing = prob.spacing)))
-    # whole-cell connectivity (P6.9a): the flood scratch and the evaluation mode; nothing otherwise
+    # whole-cell connectivity: the flood scratch and the evaluation mode; nothing otherwise
     ctx = merge(ctx, connectivity_ctx(backend, prob.f, lat, alg isa CheckerboardCPM ? GlobalBoard() : GlobalExact()))
     # the lockless checkerboard: commit hooks add their changes atomically (`_lockless`)
     alg isa CheckerboardCPM && (ctx = merge(ctx, (; lockless = true)))
@@ -826,7 +826,7 @@ Base.@nospecializeinfer function _init(
     p = _to_backend(backend, prob.p)
     # the trajectory's launch state of its phases (field steps bind to the state's arrays)
     ctx = merge(ctx, phase_contexts(prob.f.phases, state, p, backend; abstol = opts.abstol, reltol = opts.reltol))
-    # a problem with derivative parts (F3-21b): the shadow tangent store of the field phases
+    # a problem with derivative parts: the shadow tangent store of the field phases
     ctx = with_tangent(ctx, prob.tangent, prob.f.phases, state, p, backend, fresh)
     cache = alg isa CheckerboardCPM ?
             CheckerboardCache(backend, lat, prob.f, relation(_proposal(alg, prob), lat); alg.region, alg.parts, alg.switches,
@@ -845,7 +845,7 @@ Base.@nospecializeinfer function _init(
     )
     # compile the handler of each MCS entry before `step!` is compiled: if `step!` is inferred while
     # a field-step entry's handler is still in an inference cycle, the call stays dynamic and
-    # boxes the entry (16 B per MCS, Merks Float32 under CheckerboardCPM, P6.0bl)
+    # boxes the entry (16 B per MCS, Merks Float32 under CheckerboardCPM)
     _each(e -> precompile(_run_entry!, (typeof(integ), typeof(e))), prob.f.phases.mcs)
     _stats(integ).launches += run_phases(
         fresh ? prob.f.phases.at_init : derived(prob.f.phases.at_init), integ.state, integ.p, integ.ctx,
@@ -877,7 +877,7 @@ _callbacks(cb) = throw(ArgumentError("unsupported callback $(typeof(cb)); use Di
 # and `Base.afoldl` beyond 31 elements calls itself dynamically. For a CallbackSet of
 # differently typed callbacks (closures and a BitVector next to bits fields), Julia 1.12's
 # optimized code for that loop corrupted the GC heap (segfaults in a later `_save!` with
-# `saveat`; P6.15m m3).
+# `saveat`).
 _each(f::F, t::Tuple{Vararg{Any, N}}) where {F, N} = (ntuple(@inline(i -> (f(t[i]); nothing)), Val(N)); nothing)
 
 function _apply_callbacks!(integ::PottsIntegrator)
@@ -967,7 +967,7 @@ function current_state(integ::PottsIntegrator)
     _fold_deferred!(integ)
     _fold_counts!(integ)
     snap = snapshot(_stats(integ), integ.backend, integ.state)
-    # (a run with derivative parts: its fields as Duals, F3-21b)
+    # (a run with derivative parts: its fields as Duals)
     return tangent_snapshot(_stats(integ), integ.ctx, snap)
 end
 
@@ -980,7 +980,7 @@ function Base.getproperty(integ::PottsIntegrator, name::Symbol)
     name === :sol && return invokelatest(PottsSolution, integ)
     # a read of `integ.stats`: on a device the field groups' status words are read first (one
     # synchronization), so `integ.stats.fields` counts every window so far, as `field_stats`
-    # does (review r1 N1); the solver itself reads `_stats(integ)`
+    # does; the solver itself reads `_stats(integ)`
     name === :stats && !Exec.ishost(getfield(integ, :backend)) && _read_statuses!(_stats(integ), getfield(integ, :ctx))
     return getfield(integ, name)
 end
@@ -993,7 +993,7 @@ _stats(integ) = getfield(integ, :stats)
 SymbolicIndexingInterface.state_values(integ::PottsIntegrator) = current_state(integ)
 
 # `integ[p]` and `integ[p] = v` of a parameter (a kind table too; a list naming one): an error
-# with SciML's route, `integ.ps[p]` (F2 design §2.13; before: SciMLBase's "Indexing with
+# with SciML's route, `integ.ps[p]` (before: SciMLBase's "Indexing with
 # parameters is deprecated" error). States, fields, inputs and observed quantities index as before.
 function _parameter_route(integ::PottsIntegrator, sym, write::Bool)
     SII = SymbolicIndexingInterface
@@ -1001,7 +1001,7 @@ function _parameter_route(integ::PottsIntegrator, sym, write::Bool)
         foreach(s -> _parameter_route(integ, s, write), sym)
         return nothing
     end
-    # a computed parameter (D-F2-1) reads as observed; a write names it with its routes
+    # a computed parameter reads as observed; a write names it with its routes
     write && (m = _readonly(integ, sym); m === nothing || throw(ArgumentError(m)))
     SII.is_parameter(integ, sym) || return nothing
     t = sym isa Symbol ? repr(sym) : string(sym)
@@ -1035,7 +1035,7 @@ function _save!(integ::PottsIntegrator)
     return nothing
 end
 
-# a steady start (`init = :steady`, F3-12c) that failed ends the run before its first MCS
+# a steady start (`init = :steady`) that failed ends the run before its first MCS
 _start_failed!(integ) = ((c = _phase_failed_code(_stats(integ))) != SciMLBase.ReturnCode.Default && (integ.retcode = c); nothing)
 # a field or adaptive-ODE code that ends the run
 _fields_failed(c::SciMLBase.ReturnCode.T) = c == SciMLBase.ReturnCode.ConvergenceFailure || c == SciMLBase.ReturnCode.Unstable
@@ -1264,7 +1264,7 @@ function _mobility_scratch(backend, prob, ::MaskMobility)
     I = site_index_type(nsites(prob.lattice))
     I === Int64 && !_atomic64(backend) && throw(ArgumentError(
         "this lattice has $(nsites(prob.lattice)) sites and a frozen mask that follows the state: its refresh " *
-        "counts sites in Int64 atomics, which $(nameof(typeof(backend))) does not have (D-253); " *
+                "counts sites in Int64 atomics, which $(nameof(typeof(backend))) does not have; " *
         "run it on the CPU or on ROCm or CUDA"))
     return MobileCounters(KernelAbstractions.zeros(backend, I, 3), zeros(I, 3))
 end
@@ -1275,7 +1275,9 @@ function _check_convert_atomics(backend, u0)
     haskey(u0.model, CONVERT_FLAGS) || return nothing
     (eltype(getfield(u0.model, CONVERT_FLAGS)) === Int64 && !_atomic64(backend)) && throw(ArgumentError(
             "this lattice has $(length(u0.ownership)) sites and an @convert pass: it keeps site indices in Int64 atomics, " *
-        "which $(nameof(typeof(backend))) does not have (D-253); run it on the CPU or on ROCm or CUDA"))
+                "which $(nameof(typeof(backend))) does not have; run it on the CPU or on ROCm or CUDA"
+        )
+    )
     return nothing
 end
 
@@ -1285,7 +1287,7 @@ _initial_stats(f) = PottsStats(;
     accepted_energy_change = f.track === nothing ? nothing : 0.0,
     connectivity_deferred = (f.connectivity === nothing || !f.connectivity.uses_global) ? nothing : 0)
 
-# Whole-cell connectivity on a device (P6.9a): a device lifecycle does not maintain the
+# Whole-cell connectivity on a device: a device lifecycle does not maintain the
 # `pieces` columns.
 function _check_connectivity(prob, alg, ctx)
     h = prob.f.connectivity
@@ -1493,7 +1495,7 @@ end
 SciMLBase.has_stats(::PottsIntegrator) = true
 SciMLBase.get_du(::PottsIntegrator) = throw(
     ArgumentError(
-        "get_du: a Potts state is a label field and has no derivative (D-287 X5); compare two states instead"
+        "get_du: a Potts state is a label field and has no derivative; compare two states instead"
     )
 )
 
@@ -1512,10 +1514,10 @@ end
 
 Saved states at integer MCS: `t`, `u` (host states), `prob`, `alg`, `retcode`, `stats`.
 `sol[i]` is the `i`-th saved state and `sol(t)` the state saved at MCS `t`; `sol(t; idxs)`
-reads `idxs` there. There is no interpolation between MCS (`dense` is `false`, D-287 X4): a
+reads `idxs` there. There is no interpolation between MCS (`dense` is `false`): a
 time that was not saved, or is not a whole MCS, is an `ArgumentError`. A state is a label
-lattice and cell tables, not one array, so `Array(sol)` and `sol[j, i]` are refused (D-287
-X9); read a quantity by name, `sol[x]` or `sol[x, i]`.
+lattice and cell tables, not one array, so `Array(sol)` and `sol[j, i]` are refused;
+read a quantity by name, `sol[x]` or `sol[x, i]`.
 """
 struct PottsSolution{S, P, A} <: SciMLBase.AbstractTimeseriesSolution{S, 1, Vector{S}}
     u::Vector{S}
@@ -1536,7 +1538,7 @@ function PottsSolution(integ::PottsIntegrator)
     )
 end
 # what the field report of the solution reads, at the end of the run (`FieldStats`): the counts the
-# groups used, their resolved implicit facts and the backend (batch-end review (e))
+# groups used, their resolved implicit facts and the backend
 function _record_fields!(integ::PottsIntegrator)
     f = _stats(integ).fields
     rts = [_runtime(getfield(integ.ctx, _ctxkey(ph))) for ph in _field_phases(integ.f.phases)]
@@ -1622,7 +1624,7 @@ function (sol::PottsSolution)(t::Real; idxs = nothing)
     (isinteger(t) && !isempty(sol.t) && first(sol.t) <= t <= last(sol.t)) || throw(
         ArgumentError(
             string(
-                "sol(t): t = ", t, " is not a saved MCS (there is no interpolation between MCS; D-287 X4); saved ",
+                "sol(t): t = ", t, " is not a saved MCS (there is no interpolation between MCS); saved ",
                 length(sol.t) <= 12 ? "times are $(sol.t)" : "MCS run from $(first(sol.t)) to $(last(sol.t))"
             )
         )
@@ -1631,7 +1633,7 @@ function (sol::PottsSolution)(t::Real; idxs = nothing)
     (i <= length(sol.t) && sol.t[i] == t) || throw(
         ArgumentError(
             string(
-                "sol(t): MCS ", Int(t), " was not saved (there is no interpolation between MCS; D-287 X4); save it with ",
+                "sol(t): MCS ", Int(t), " was not saved (there is no interpolation between MCS); save it with ",
                 "`saveat`"
             )
         )
@@ -1642,13 +1644,13 @@ end
 
 Base.Array(::PottsSolution) = throw(
     ArgumentError(
-        "`Array(sol)`: a Potts state is a label lattice and cell tables, not one array (D-287 X9); read a " *
+        "`Array(sol)`: a Potts state is a label lattice and cell tables, not one array; read a " *
             "quantity by name (`sol[x]`) or a saved state's arrays (`sol.u[i].ownership`)"
     )
 )
 Base.getindex(::PottsSolution, j::Int, i::Int) = throw(
     ArgumentError(
-        "sol[j, i]: a Potts state is not one array, so it has no component `j` (D-287 X9); read a quantity " *
+        "sol[j, i]: a Potts state is not one array, so it has no component `j`; read a quantity " *
             "by name, `sol[x, i]`"
     )
 )

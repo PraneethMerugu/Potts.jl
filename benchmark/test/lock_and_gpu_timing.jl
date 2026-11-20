@@ -1,8 +1,8 @@
-# Frozen acceptance test for P6.0s (fair machine lock) and P6.0v7 (Metal gate and A/B
-# timings to GPU completion). AUTONOMY §7.2 step 2.
+# Acceptance test for the fair machine lock and for Metal gate and A/B timings to GPU
+# completion, written before the code it tests.
 #
-#     julia --project=benchmark benchmark/test/p6_0s_v7_tooling.jl
-#     tools/exclusive.sh env POTTS_GPU=metal julia --project=benchmark benchmark/test/p6_0s_v7_tooling.jl
+#     julia --project=benchmark benchmark/test/lock_and_gpu_timing.jl
+#     tools/exclusive.sh env POTTS_GPU=metal julia --project=benchmark benchmark/test/lock_and_gpu_timing.jl
 #
 # The first command needs no GPU and never touches the machine lock. The second command
 # also runs the Metal part.
@@ -36,7 +36,7 @@
 # 86–140 for step! + synchronize. The 0.5 factor covers the GPU's power states, which
 # differ by about 1.6×.
 #
-# P6.0s accept line: "a waiter queued before an A/B starts runs before the A/B's second
+# The lock's accept line: "a waiter queued before an A/B starts runs before the A/B's second
 # round". Scenario: a holder H holds the lock. A waiter W queues while H holds it. H
 # releases, then an A/B with 4 rounds starts, using stub checkouts whose `ab_one.jl` only
 # sleeps. Today W polls every 20 s, the A/B's runs re-take the lock at once, and W starves
@@ -54,8 +54,10 @@ function sandbox()
     root = mktempdir(; cleanup = true)
     lockroot = joinpath(root, "lockroot")
     mkpath(lockroot)
-    for (src, dst) in ((joinpath(REPO, "tools"), joinpath(root, "tools")),
-                       (joinpath(REPO, "benchmark"), joinpath(root, "benchmark")))
+    for (src, dst) in (
+            (joinpath(REPO, "tools"), joinpath(root, "tools")),
+            (joinpath(REPO, "benchmark"), joinpath(root, "benchmark")),
+        )
         mkpath(dst)
         for f in readdir(src)
             p = joinpath(src, f)
@@ -98,6 +100,7 @@ function reap!(procs)
     for p in procs
         process_running(p) && kill(p, Base.SIGKILL)
     end
+    return
 end
 
 """Intervals `(start, end)` per run; `tags` as written by the stamps (each tag once)."""
@@ -116,8 +119,8 @@ end
 disjoint(iv) = all(iv[k][3] <= iv[k + 1][2] for k in 1:(length(iv) - 1))
 
 const STUB_AB_ONE = raw"""
-# stub ab_one for the P6.0s acceptance test: holds whatever lock it runs under for 3 s
-log = ENV["P60S_LOG"]
+# stub ab_one for the lock acceptance test: holds whatever lock it runs under for 3 s
+log = ENV["STUB_LOG"]
 tag = basename(dirname(@__DIR__))
 st(w) = open(io -> println(io, tag, " ", w, " ", round(time(); digits = 6)), log, "a")
 st("start"); sleep(3.0); st("end")
@@ -148,13 +151,17 @@ function fairness_scenario()
         wait_until(() -> stamp_of(events(log), "H", "end") !== nothing, 60) || return (; error = "H never ended")
         sleep(0.5)
         tab = time()                                              # the A/B starts after W queued
-        abcmd = setenv(`$(Base.julia_cmd()) --startup-file=no $(joinpath(sb.root, "benchmark", "ab.jl")) $base $cand fake_case cpu 4 --alg=sequential --no-control --no-warm --child=benchmark/ab_one.jl`,
-            merge(ENV, Dict("P60S_LOG" => log)); dir = sb.root)
+        abcmd = setenv(
+            `$(Base.julia_cmd()) --startup-file=no $(joinpath(sb.root, "benchmark", "ab.jl")) $base $cand fake_case cpu 4 --alg=sequential --no-control --no-warm --child=benchmark/ab_one.jl`,
+            merge(ENV, Dict("STUB_LOG" => log)); dir = sb.root
+        )
         ab = spawn(abcmd; out = about)
         push!(procs, ab)
         ok = wait_until(() -> !any(process_running, procs), 300)
-        return (; error = ok ? nothing : "timeout after 300 s", ev = events(log), tq, tab,
-            ab_ok = success(ab), abtxt = isfile(about) ? read(about, String) : "")
+        return (;
+            error = ok ? nothing : "timeout after 300 s", ev = events(log), tq, tab,
+            ab_ok = success(ab), abtxt = isfile(about) ? read(about, String) : "",
+        )
     finally
         reap!(procs)
     end
@@ -207,7 +214,7 @@ function stale_scenario()
     end
 end
 
-# ---------------------------------------------------------------------------- P6.0v7 setup
+# ------------------------------------------------------------- Metal gate and A/B timing setup
 module GateUnderTest end
 Base.include(GateUnderTest, joinpath(REPO, "benchmark", "gate.jl"))
 import KernelAbstractions
@@ -269,12 +276,12 @@ function times_with_sync(ex, d, seen = Set{Symbol}())
 end
 
 # ---------------------------------------------------------------------------- tests
-@testset "P6.0s and P6.0v7 tooling acceptance" begin
-    @testset "P6.0s fair machine lock" begin
+@testset "tooling acceptance" begin
+    @testset "fair machine lock" begin
         sb = sandbox()
         # L1: the sandbox is private. No `/tmp/` path is left except the sandbox's own: on
         # Linux `mktempdir` is itself under /tmp, so the rewritten prefix (inside
-        # `sb.lockroot`) is masked before the search (P6.0bx).
+        # `sb.lockroot`) is masked before the search.
         private(txt) = !occursin(PREFIX, txt) && !occursin("/tmp/", replace(txt, sb.lockroot => "<sandbox>"))
         for f in ("tools/exclusive.sh", "benchmark/ab.jl")
             @test private(read(joinpath(sb.root, f), String))
@@ -301,7 +308,7 @@ end
             @test wstart !== nothing && wend !== nothing
             r2 = length(children) >= 3 ? children[3][3] : -Inf
             if wend !== nothing
-                @info @sprintf("P6.0s: W ran %.1f s after the A/B started; round 2 started %.1f s after it", wend - fair.tab, r2 - fair.tab)
+                @info @sprintf("fair lock: W ran %.1f s after the A/B started; round 2 started %.1f s after it", wend - fair.tab, r2 - fair.tab)
             end
             @test wend !== nothing && wend <= r2                             # the accept line
             iv = intervals(ev)
@@ -326,7 +333,7 @@ end
         end
     end
 
-    @testset "P6.0v7 timing to GPU completion" begin
+    @testset "timing to GPU completion" begin
         gatejl, abonejl = joinpath(REPO, "benchmark", "gate.jl"), joinpath(REPO, "benchmark", "ab_one.jl")
         gg = Dict(GateUnderTest.cases(Float64))["graner_glazier_72"]
         n = 72^2
@@ -338,8 +345,10 @@ end
             ns_cpu, allocs = GateUnderTest.measure(gg, alg)
             ns_seq, _ = GateUnderTest.measure(gg, GateUnderTest.SequentialCPM())
             SPIN_NS[] = 0
-            @info @sprintf("P6.0v7 mock: device row %.1f µs per MCS (spin %.1f µs); CPU rows %.1f / %.1f µs",
-                ns_dev * n / 1e3, SPIN / 1e3, ns_cpu * n / 1e3, ns_seq * n / 1e3)
+            @info @sprintf(
+                "GPU timing mock: device row %.1f µs per MCS (spin %.1f µs); CPU rows %.1f / %.1f µs",
+                ns_dev * n / 1.0e3, SPIN / 1.0e3, ns_cpu * n / 1.0e3, ns_seq * n / 1.0e3
+            )
             @test ns_dev * n >= SPIN                     # the synchronize is inside the timing
             @test ns_cpu * n < SPIN / 2                  # CPU rows add no synchronize
             @test ns_seq * n < SPIN / 2
@@ -360,18 +369,20 @@ end
 
         @testset "ab_one: the CPU timing adds no synchronize (mock device)" begin
             pre = tempname() * ".jl"
-            write(pre, """
+            write(
+                pre, """
                 import KernelAbstractions
                 KernelAbstractions.synchronize(::KernelAbstractions.CPU) =
                     (t = time_ns(); while time_ns() - t < $SPIN end; nothing)
-                """)
+                """
+            )
             code = "include(popfirst!(ARGS)); include($(repr(abonejl)))"
             cmd = Cmd(`$(Base.julia_cmd()) --startup-file=no --project=$(Base.active_project()) -e $code $pre graner_glazier_72 checkerboard --seed=0 --samples=60 --seconds=40 --wait=none --no-gctrial`; dir = REPO)
             out = read(cmd, String)
             line = filter(startswith("ABR "), split(out, '\n'))
             @test length(line) == 1
             ab = parse(Float64, split(only(line))[3])
-            @info @sprintf("P6.0v7 mock: ab_one CPU %.1f µs per MCS", ab * n / 1e3)
+            @info @sprintf("GPU timing mock: ab_one CPU %.1f µs per MCS", ab * n / 1.0e3)
             @test ab * n < SPIN / 2
         end
 
@@ -382,26 +393,31 @@ end
                 prob = gg32()
                 fresh() = (
                     i = GateUnderTest.init(prob, alg; backend = be, save_start = false, save_end = false, save_everystep = false);
-                    GateUnderTest.step!(i); GateUnderTest.step!(i); KernelAbstractions.synchronize(be); i)
+                    GateUnderTest.step!(i); GateUnderTest.step!(i); KernelAbstractions.synchronize(be); i
+                )
                 fresh()
-                ref() = run(@benchmarkable((GateUnderTest.step!(i); KernelAbstractions.synchronize($be)),
-                    setup = (i = $fresh()), evals = 1, samples = 40, seconds = 20))
+                ref() = run(
+                    @benchmarkable(
+                        (GateUnderTest.step!(i); KernelAbstractions.synchronize($be)),
+                        setup = (i = $fresh()), evals = 1, samples = 40, seconds = 20
+                    )
+                )
                 # interleaved, so both sides see the same GPU power states; min vs min
                 r1 = ref(); g1 = first(GateUnderTest.measure(gg32, alg; backend = be))
                 r2 = ref(); g2 = first(GateUnderTest.measure(gg32, alg; backend = be))
                 rmin = min(minimum(r1).time, minimum(r2).time) / n
                 gmin = min(g1, g2)
-                @info @sprintf("P6.0v7 Metal GG 72: gate %.2f ns/site, step!+synchronize %.2f ns/site", gmin, rmin)
+                @info @sprintf("Metal GG 72: gate %.2f ns/site, step!+synchronize %.2f ns/site", gmin, rmin)
                 @test gmin >= 0.5 * rmin
                 out = read(Cmd(`$(Base.julia_cmd()) --startup-file=no --project=$(Base.active_project()) $abonejl graner_glazier_72 metal --seed=0 --samples=60 --seconds=40 --wait=none --gctrial`; dir = REPO), String)
                 ab = parse(Float64, split(only(filter(startswith("ABR "), split(out, '\n'))))[3])
                 r3 = ref()
                 rmed = minimum(median(r).time for r in (r1, r2, r3)) / n
-                @info @sprintf("P6.0v7 Metal GG 72: ab_one median %.2f ns/site, step!+synchronize median %.2f ns/site", ab, rmed)
+                @info @sprintf("Metal GG 72: ab_one median %.2f ns/site, step!+synchronize median %.2f ns/site", ab, rmed)
                 @test ab >= 0.5 * rmed
             end
         else
-            @info "P6.0v7 Metal part skipped (set POTTS_GPU=metal and run under tools/exclusive.sh)"
+            @info "Metal part skipped (set POTTS_GPU=metal and run under tools/exclusive.sh)"
         end
     end
 end

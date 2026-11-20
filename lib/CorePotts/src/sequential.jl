@@ -37,7 +37,7 @@ function sequential_mcs!(st, f::F, p, ctx, law::L, key::RNGKey, mcs::Integer, tr
         dH = _effective_dH(f, dH0, temperature, st, p, prop, ctx)
         isfinite(dH) || return accepted, STATUS_NONFINITE, tracked
         if accept(law, T(dH), temperature, uniform(T, ra))
-            # the whole-cell veto (`Global`, P6.9a) after the draw: the same trajectory as
+            # the whole-cell veto (`Global`) after the draw: the same trajectory as
             # before ΔH, at a fraction of the cost (no code without it)
             has_post(f) && _post(f)(st, p, prop, ctx, GlobalSearch()) != GLOBAL_PASS && continue
             track === nothing || (tracked += Float64(track(st, p, prop, ctx, dH0)))

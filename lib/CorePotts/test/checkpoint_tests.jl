@@ -1,4 +1,4 @@
-# Checkpoint/continuation and reinit! (ROADMAP M2.10): continuation is exact.
+# Checkpoint/continuation and reinit!: continuation is exact.
 
 @testsetup module CP_checkpoint
 using Test, CorePotts, StaticArrays, Statistics, Random

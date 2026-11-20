@@ -1,7 +1,7 @@
 """
     LatticeFields.Compile
 
-The compiler passes (v3 §4.1): legality, fold, semantic boundary resolution (passes 0–2,
+The compiler passes: legality, fold, semantic boundary resolution (passes 0–2,
 the semantic normal form and fingerprint source), then POWI and parameter hoisting, types,
 index lowering and emission (passes 3–6, with the debug emission flag), and the interval
 coefficient evaluator.

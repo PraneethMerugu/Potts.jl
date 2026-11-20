@@ -1,4 +1,4 @@
-# Sub-stream seeds (ROADMAP P6.0w, D-093). StableRNG streams at seeds `s` and `s + 1` are
+# Sub-stream seeds (D-093). StableRNG streams at seeds `s` and `s + 1` are
 # draw-wise shifted copies of each other (D-082), so a seed derived from another seed must
 # go through a mixer, never `seed + k`. The mixer is pinned so that a sub-stream is the same
 # on every Julia version (D-075).
@@ -24,7 +24,7 @@ The seed of sub-stream `stream` of the top-level seed `seed` (`0 ≤ seed ≤ ty
 goes through `stream_id` (FNV-1a), which is stable across sessions, unlike `hash`. For a
 fixed stream distinct seeds give distinct sub-seeds, and for a fixed seed distinct stream
 ids do too. Use it wherever a seed is derived from another seed, e.g.
-`StableRNG(Potts._substream_seed(seed, :clock))` (D-093).
+`StableRNG(Potts._substream_seed(seed, :clock))`.
 """
 function _substream_seed(seed::Integer, stream::Union{Symbol, AbstractString})
     return _splitmix64(_splitmix64(UInt64(seed)) ⊻ UInt64(CorePotts.stream_id(stream)))
@@ -36,8 +36,8 @@ end
 
 The random stream of a randomized layout layer or initial-state builder with top-level seed
 `seed` (an integer in `0:typemax(UInt64)`): `StableRNG(UInt64(seed))`, or, for the named
-sub-stream `stream` (a `Symbol` or string), `StableRNG(Potts._substream_seed(seed, stream))`
-(D-093). Both are the same on every Julia version (StableRNGs). Use the two-argument form for
+sub-stream `stream` (a `Symbol` or string), `StableRNG(Potts._substream_seed(seed, stream))`.
+Both are the same on every Julia version (StableRNGs). Use the two-argument form for
 a second, independent stream drawn from the same seed (for example a builder's clocks next
 to its layout): a seed derived as `seed + 1` would give a shifted copy of the first stream.
 Throws an `ArgumentError` for a seed outside `0:typemax(UInt64)`.

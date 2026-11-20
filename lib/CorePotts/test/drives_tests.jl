@@ -1,4 +1,4 @@
-# Drives, biases and local connectivity (ROADMAP M2.5, M2.6).
+# Drives, biases and local connectivity.
 
 @testsetup module CP_drives
 using Test, CorePotts, StaticArrays, Statistics, Random

@@ -1,4 +1,4 @@
-# Definitions of euler_tests.jl that other test files use (moved here by TS1b).
+# Definitions of euler_tests.jl that other test files use.
 function euler_brute(X::AbstractArray{Bool}, adj, hex::Bool = false)
     N = ndims(X)
     L = size(X)

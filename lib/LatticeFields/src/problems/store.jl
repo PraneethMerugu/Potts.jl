@@ -10,7 +10,7 @@ table (set with [`settable!`](@ref)). `cur[f]` is the current slot of field `f` 
 
 `E` is the problem's element type (P5 role model): a float lane holds
 [`lanetype`](@ref LatticeFields.Compile.lanetype)`(lane, value_type(E), :state, fixed)` wrapped like `E`
-(a field with a declared storage, `fixed`, holds its own lane type, FE-17)
+(a field with a declared storage, `fixed`, holds its own lane type)
 (a Dual of it when `E` is a Dual): the state lanes hold the problem's value type (BigFloat
 under `T = BigFloat`, Float64 after a Float64 `u0`), and Dual parameters give Dual fields.
 Integer lanes keep their type; tables take the value type, and a Dual of it only when the
@@ -57,7 +57,7 @@ _generic_bodies() = (_copy_body!, _clamp_body!, _clamp_field_body!, _zero_body!,
 function _register_float64_store!(backend, bufs)
     (Exec.ishost(backend) || Exec.default_float(backend) === Float64) && return nothing
     any(b -> any(a -> eltype(a) <: AbstractFloat && value_type(eltype(a)) === Float64, b), bufs) || return nothing
-    # keyed on a Float64 device array in the signature (batch 5 review N4): an instance of these
+    # keyed on a Float64 device array in the signature: an instance of these
     # bodies over Float32 arrays that reaches a Float64 scalar is still flagged
     foreach(f -> Exec.register_float64!(string(typeof(f)), Exec.FLOAT64_ARRAY), _generic_bodies())
     Exec.register_float64!("gpu_fill_kernel", Exec.FLOAT64_ARRAY)
@@ -99,7 +99,7 @@ end
     mixed_state(st) -> Bool
 
 Whether the state fields of store `st` have different storage (no flat arrays; each field its
-own arrays, placed in the flat state vector by `st.slots`; batch 5 review S2).
+own arrays, placed in the flat state vector by `st.slots`).
 """
 mixed_state(st::FieldStore) = isempty(st.flat) && any(!isempty, st.slots)
 # the state fields of a mixed store, in flat order (by their slots)

@@ -1,4 +1,4 @@
-# The field report (AF-09, F4 design §3.9): each field group's policy and a run's counters, read
+# The field report: each field group's policy and a run's counters, read
 # from what a problem, an integrator or a solution already holds. Nothing here runs in `step!`.
 
 """
@@ -153,7 +153,7 @@ function _bound_line(io, stability, pp)
     return nothing
 end
 
-# an explicit group whose count the bound sets past 20 substeps (batch-end review S1): the count an
+# an explicit group whose count the bound sets past 20 substeps: the count an
 # implicit step takes, when it is smaller (the implicit rules at these parameters). A group the
 # implicit rules cannot count (an error building its operator) gets no route line: the report
 # never fails for want of it
@@ -406,7 +406,7 @@ function _coupling_lines(io, stability, keys::Vector{Vector{String}}, algs, pp, 
         else
             κ = dt * q.rate
             # (a term the bound cannot see that reads another field: κ covers the cross terms it sees
-            # only; the words of the coupling rule's warning, F4-13c)
+            # only; the words of the coupling rule's warning)
             ul = !qs && any(h -> within[h].unseen, loops[g]) ? unseen_loop(stability, pp, keys, within, loops[g]) : nothing
             unseen = ul !== nothing && ul.kind !== :none
             println(io, "  group ", g, ": loop ", loops[g], ", κ = dt · rate = ", _rtext(dt), " × ", _rtext(q.rate), " = ",
@@ -496,7 +496,7 @@ function field_report(io::IO, prob::SciMLBase.AbstractSciMLProblem, alg::Abstrac
     return nothing
 end
 
-# the SciML function's keywords of a lattice problem (F4-07): the Jacobian, the mass matrix, the
+# the SciML function's keywords of a lattice problem: the Jacobian, the mass matrix, the
 # built-in callbacks, the right side's builds
 function _function_lines(io, prob, m::LatticeMetadata)
     f = hasproperty(prob, :f) ? prob.f : nothing

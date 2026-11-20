@@ -1,4 +1,4 @@
-# The last line of every `@testsetup` module of the Potts suite (TS1a):
+# The last line of every `@testsetup` module of the Potts suite:
 #
 #     include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 #

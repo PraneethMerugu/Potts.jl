@@ -28,7 +28,7 @@ end
         @test err isa ArgumentError
         # an explicit count is kept (at least the bound of the diffusion, 0.1·8/1.8 → 1), with one
         # warning naming the term the bound does not cover
-        # (in the model's words: the term, not the key-prefixed `c: …` of round 0)
+        # (in the model's words: the term, not the key-prefixed `c: …` of an earlier version)
         prob = @test_logs (:warn, r"field `c`: 4 substeps.*does not cover `(?!c: )[^`]*c\^2[^`]*`") PottsProblem(
             AuditField16(; name = :n, mode = :nonlinear), op, (0, 1); field_solver = ExplicitEuler(substeps = 4)
         )
@@ -42,9 +42,9 @@ end
         op = [ownership => zeros(Int32, 16, 16), kind => Symbol[], :c => cb]
         m = AuditTableField(; name = :b, mode = :bounded, d0 = 5.0, d1 = 0.0)
         prob = PottsProblem(m, op, (0, 30); field_solver = ExplicitEuler())
-        @test audit_n(init(prob, SequentialCPM())) == 8                  # (round 5: refused, "no bound")
+        @test audit_n(init(prob, SequentialCPM())) == 8                  # ("no bound")
         prob1 = @test_logs PottsProblem(m, op, (0, 30); field_solver = ExplicitEuler(substeps = 1))
-        @test audit_n(init(prob1, SequentialCPM())) == 8                 # raised (round 5: 5, the diffusion only)
+        @test audit_n(init(prob1, SequentialCPM())) == 8                 # raised (5, the diffusion only)
         c = Array(solve(prob1, SequentialCPM()).u[end].site.c)
         @test all(isfinite, c) && maximum(abs, c) < 1.0e-3               # stable at 8 (13 · 1/8 ≤ 2)
         # control: a request above the bound is kept
@@ -103,12 +103,12 @@ end
             )
         )
         s3, b3 = big(p3)
-        # warned once per group, term and cause; the warning has no error route (F2 record (c):
+        # warned once per group, term and cause; the warning has no error route (
         # bda31989 printed "with no count, give `PottsProblem` `field_solver = …`" inside it)
         logs, n3 = Test.collect_test_logs(() -> s3(b3))
         @test n3 == 3 && length(logs) == 1 && occursin(r"3 substeps.*does not cover.*4096", string(logs[1].message))
         @test !occursin("with no count", string(logs[1].message))
-        # … raised by the bound over the terms it sees (round 9: Dc = 4.5 with 3 stayed at 3 past
+        # … raised by the bound over the terms it sees (Dc = 4.5 with 3 stayed at 3 past
         # the cap, against 22 with the 2-entry table; now 4.5·8/1.8 = 20; the group has warned)
         p45 = PottsProblem(AuditInvTable(; name = :v), [op; :Dc => 4.5], (0, 1); field_solver = ExplicitEuler(substeps = 3))
         @test audit_n(init(p45, SequentialCPM())) == 22                                    # control: 2 entries
@@ -124,7 +124,7 @@ end
     @testset "÷ of parameters in a field rate has no bound: refused without a count" begin
         op = [ownership => zeros(Int32, 16), kind => Symbol[], :c => [isodd(i) ? 1.0 : -1.0 for i in 1:16]]
         err = audit_err(() -> PottsProblem(AuditIntDivField(; name = :b), op, (0, 30); field_solver = ExplicitEuler()))
-        # the term is printed in the model's words (F1, PO06: on f9a77dd3 the message printed the
+        # the term is printed in the model's words (PO06: on f9a77dd3 the message printed the
         # key prefix and the internal `Potts._intdiv(k₀, 2)`)
         @test err isa ArgumentError
         # with a count: kept as a minimum over the diffusion bound (0.25·4 / 1.8 → 1)
@@ -166,7 +166,7 @@ end
         @test audit_n(init(one, SequentialCPM())) == 3
         @test maximum(abs, Array(solve(one, SequentialCPM()).u[end].site.c)) < 1.0e-3
         # one way (`u` does not read `c`): block triangular, so the Gershgorin bound with no dominance
-        # test (F3-22 review r1, D-C7a item 2 amended; base 9afaac05: refused), ceil((0.5·8 + 0.5·8) / 1.8)
+        # test (before 9afaac05: refused), ceil((0.5·8 + 0.5·8) / 1.8)
         # and ceil((0.5·8 + 0.5) / 1.8)
         for (mode, n) in ((:cross_field, 5), (:cross_linear, 3))
             prob = @test_logs min_level = Base.CoreLogging.Warn PottsProblem(
@@ -202,7 +202,7 @@ end
             )
             @test err isa ArgumentError
         end
-        # after a parameter change: refused by the write itself, which changes nothing (F2-08a)
+        # after a parameter change: refused by the write itself, which changes nothing
         @test audit_err(() -> remake(one; p = [:Dc => -0.1])) isa ArgumentError
         integ = init(one, SequentialCPM())
         p0 = integ.p

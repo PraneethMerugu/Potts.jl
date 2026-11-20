@@ -67,7 +67,7 @@ end
 """
     is_input_function(v) -> Bool
 
-Whether an input value `v` is a function of the time (F4-B1): anything that is not a number,
+Whether an input value `v` is a function of the time: anything that is not a number,
 an array or `nothing` (an anonymous function `t -> values`, a named function, an
 interpolation object). The run calls it as `v(t)`, which returns an array with one value per
 site or a number.
@@ -151,7 +151,7 @@ end
     " => K])` (or another function the same way)")))
 
 # an input's values are plain numbers: a value with derivative parts (a ForwardDiff Dual that an
-# input function closes over) has no input store to go to in this version (F4-B1 review)
+# input function closes over) has no input store to go to in this version
 _plain(x) = x isa Union{AbstractFloat, Integer, Rational}
 function _check_plain(v, name)
     x = v isa AbstractArray ? (isempty(v) ? 0.0 : first(v isa Union{Array, AbstractRange} ? v : Array(v))) : v
@@ -181,7 +181,7 @@ function _not_input(s, ks)
             "input, and a coupled PDESystem's inputs are its own: `Potts.field_inputs(integ, pdesys)` gives the values of ",
             "exactly the inputs of `pdesys`") : "")))
 end
-# a name a Potts model's `Potts.fields` gives a CPM input (batch-end review S3): a CPM word, or a
+# a name a Potts model's `Potts.fields` gives a CPM input: a CPM word, or a
 # CPM read as the model writes it (`volume[owner]`)
 _cpm_word(n::AbstractString) = n in ("kind", "domain", "owner", "position", "site", "mcs", "time") ||
                                occursin(r"^\w+\[\w+\]$", n)
@@ -314,7 +314,7 @@ check_parameters(stability, p) = nothing
     check_declared(stability, p)
 
 The declared intervals of the stability bound against the constant face and mask values at
-raw parameters `p` (batch 5 review M2): a value outside its field's declared `bounds` drives
+raw parameters `p`: a value outside its field's declared `bounds` drives
 the field out of the interval the bound takes, and is refused in the user's words (LatticePDE).
 Run with [`check_parameters`](@ref)'s policy, before stepping and at every parameter change.
 The default checks nothing.
@@ -324,7 +324,7 @@ check_declared(stability, p) = nothing
 """
     declared_intervals(stability) -> Vector{Tuple{String, Tuple{Float64, Float64}}}
 
-The fields (state or aux, by key) with declared finite `bounds = (lo, hi)` (batch 5 review M2):
+The fields (state or aux, by key) with declared finite `bounds = (lo, hi)`:
 a write of a state field outside its interval is refused, as at the start. The default is none.
 """
 declared_intervals(stability) = Tuple{String, Tuple{Float64, Float64}}[]
@@ -332,8 +332,7 @@ declared_intervals(stability) = Tuple{String, Tuple{Float64, Float64}}[]
 """
     used_intervals(stability) -> Vector{String}
 
-The keys of [`declared_intervals`](@ref) whose interval a coefficient bound read (batch 5 review
-M2): a run checks that those fields stay in their intervals where it reads its status. The
+The keys of [`declared_intervals`](@ref) whose interval a coefficient bound read: a run checks that those fields stay in their intervals where it reads its status. The
 default is none.
 """
 used_intervals(stability) = String[]
@@ -381,13 +380,12 @@ unbounded_key(stability, p) = unbounded_reason(stability, p)
 """
     check_bounds(p, index)
 
-The declared `bounds = (lo, hi)` of each parameter of `index` hold for the values `p` (F2-14,
-FE-18): an `ArgumentError` names the first parameter outside them, in slot order, with its
+The declared `bounds = (lo, hi)` of each parameter of `index` hold for the values `p`: an `ArgumentError` names the first parameter outside them, in slot order, with its
 bounds as `PottsProblem` prints them (`(0, 2)`). Every write checks it before anything changes.
 """
 function check_bounds(p, index)
     index isa LatticeIndex || return nothing
-    # base parameters first (a write names the parameter written), then computed ones (F2-15)
+    # base parameters first (a write names the parameter written), then computed ones
     for i in sort!(collect(keys(index.parambounds)); by = i -> (computed_slot(index, i) !== nothing, i))
         lo, hi = index.parambounds[i]
         v = primal(p[i])
@@ -398,7 +396,7 @@ end
 function _bounds_message(index, i, v, lo, hi)
     head = string("parameter `", parameter_name(index, i), "` = ", v, " is outside its declared bounds (", _bnum(lo), ", ",
         _bnum(hi), ")")
-    # a computed parameter: the inputs to change (review S4 of batch 5)
+    # a computed parameter: the inputs to change
     k = computed_slot(index, i)
     why = k === nothing ? nothing : get(index.derived, index.key(k), nothing)
     why === nothing || return string(head, ": ", why)
@@ -414,14 +412,14 @@ function check_bounds(p, index, kv; tables = nothing)
         i = SII.parameter_index(index, k)
         i isa Integer && v isa Real && (q[i] = v)
     end
-    tables === nothing || derive!(q, tables, index)    # the computed slots follow (F2-15)
+    tables === nothing || derive!(q, tables, index)    # the computed slots follow
     return check_bounds(q, index)
 end
 
 # a parameter whose value is NaN (no value given) is an error naming it; `built` as for
 # `check_inputs_set` (a problem being built has no `remake` yet)
 function check_values(p, index; built::Bool = true)
-    check_bounds(p, index)          # a declared `bounds = (lo, hi)` holds at every write (F2-14, FE-18)
+    check_bounds(p, index)          # a declared `bounds = (lo, hi)` holds at every write
     for i in eachindex(p)
         isnan(primal(p[i])) || continue
         name = index isa LatticeIndex ? parameter_name(index, i) : "#$i"

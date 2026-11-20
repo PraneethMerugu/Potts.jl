@@ -46,7 +46,7 @@ end
 """`rand()` inside a model (`_rand()`, vocabulary.jl); any other form of `rand` is an error naming the call."""
 _rand(args...) = _rng_error(:rand, args, (;))
 
-# What a model's construction built (D-150 review F1): every contact fold and bounded draw
+# What a model's construction built (D-150): every contact fold and bounded draw
 # bumps a counter, and the constructor records whether its own window saw any in the
 # system's metadata, so models without them skip the walks that look for them at
 # `mtkcompile` and `PottsProblem`. A concurrent build can only turn a `false` into `true`
@@ -102,7 +102,7 @@ end
 
 """
 The binding of `count` inside a model: `Base.count`, and the fold over a cell's contact pairs
-`count(pred for _ in contacts)` / `count(pred for _ in contacts(rel))` (D-150 G1; the macro
+`count(pred for _ in contacts)` / `count(pred for _ in contacts(rel))` (the macro
 routes generator folds to `_fold_iter`/`_fold_or_gather`, which recognize `contacts`).
 """
 struct _Count end

@@ -10,7 +10,7 @@ include("shared/gg_model.jl")
 include("shared/phases.jl")
 using JET, AllocCheck, Aqua
 
-# P6.0j: ExplicitImports guardrails (CLAUDE.md code rules). Every name CorePotts uses is
+# ExplicitImports guardrails (CLAUDE.md code rules). Every name CorePotts uses is
 # imported explicitly and by its owner. The allowlist names each non-public access the
 # package genuinely needs; add to it only by review, with the reason.
 using ExplicitImports: ExplicitImports, check_no_implicit_imports, check_all_explicit_imports_are_public,
@@ -25,9 +25,9 @@ const COREPOTTS_NONPUBLIC_QUALIFIED = (
     :RefValue,                  # Base.RefValue: concrete `Ref` type for type-stable fields
     :typename,                  # Base.typename(A).wrapper: the unparameterised device array type for Adapt
     :afoldl,                    # Base.afoldl: unrolled fold over the MCS-order tuple; public `foldl`
-                                # and `sum` allocate there on SequentialCPM (P6.3b review round 2)
+    # and `sum` allocate there on SequentialCPM
     Symbol("@nospecializeinfer"), # Base.@nospecializeinfer (documented, not declared public): the host
-                                  # setup of `init`, `remake` and `PottsProblem` inferred once for every model (TS1c)
+    # setup of `init`, `remake` and `PottsProblem` inferred once for every model
 )
 include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "qa_common.jl"))
 include("shared/export_all.jl")

@@ -1,5 +1,5 @@
 # Cell lifecycle: division, removal, kind transition, creation and id reuse
-# (ROADMAP M2.8, INTERNALS §1.7 as amended by D-035 and D-089).
+# (INTERNALS §1.7 as amended by D-035 and D-089).
 #
 # Two planners with the same semantics:
 # - On the CPU (the host path, D-035): per checked MCS one trigger kernel over cells writes
@@ -12,7 +12,7 @@
 #   folded into `integ.stats` at host read points.
 #
 # Cell ids are `1:capacity`; an id is free when its volume is zero. Reusing an id increments
-# its generation, so cell-addressed randomness never replays (F2).
+# its generation, so cell-addressed randomness never replays.
 
 """Lifecycle trigger code (`Int32(0)`) indicating no lifecycle event for the cell."""
 const EVENT_NONE = Int32(0)
@@ -117,19 +117,19 @@ hand-written):
   only if `before` does not write them). Then the device lifecycle runs `before` and the
   trigger of each cell in one work item, one launch for both; the host
   planner runs `before` as its own launch.
-- `release(st, c)` — the boundary of a model's cell references (D-066 item 5 (a)): run for
+- `release(st, c)` — the boundary of a model's cell references: run for
   every cell `c` of an event round before any id is allocated (on a device in the copy stage,
   before the daughter column copies, while every volume is still the pre-event one), it
   resets each reference of a live cell `c` whose referent is dead (volume 0) to 0, so no
   reference aliases the cell that reuses the slot, and daughters copy the reset value. It
   writes only cell `c`'s own columns and reads `volume`; `nothing` (the default) for a model
   without references.
-- `owner_changed(st, i)` — the ownership hook (R8, D-075): run at every site `i` whose owner
+- `owner_changed(st, i)` — the ownership hook (R8): run at every site `i` whose owner
   the lifecycle changes (a removed cell's sites, a daughter's sites), e.g. to reset site
   variables declared `clear_on_ownership_change`. It writes only site `i`'s own site values.
   `nothing` (the default): no hook. Copy hooks (`@on_copy`) never run from the lifecycle.
 
-Cell serials (D-066 item 3): when `st.cell` has a `birth` column (`Int32`, never copied to a
+Cell serials: when `st.cell` has a `birth` column (`Int32`, never copied to a
 daughter) and `st.model` the counter `NEXT_BIRTH` (a 1-element `Int32` array), every daughter
 takes the next serial, in increasing daughter-slot order (the allocation order), and the
 counter advances; a serial is never reused, and a checkpoint keeps the counter.
@@ -181,7 +181,7 @@ Lifecycle(
 """
     NEXT_BIRTH
 
-The `st.model` key of the cell-serial counter (D-066 item 3): a 1-element `Int32` array
+The `st.model` key of the cell-serial counter: a 1-element `Int32` array
 holding the serial the next daughter takes. A model state that has it and a `birth` cell
 column gets serials at every division (`Lifecycle`).
 """
@@ -628,7 +628,7 @@ rebuild_trackers!(st, ctx, backend) = _rebuild_trackers!(nothing, st, ctx, backe
 # `stats`: the integrator's `PottsStats` counting the host transfers (D-085), or `nothing`
 # `division = (daughter, removed)` (the host lifecycle round): a weighted float `surface` takes
 # the round's changes in integer weight units, added to the tracker, as the device lifecycle
-# does (`_dsurface_body!`, F3-23 r2), so the host and a device agree bitwise; otherwise (and
+# does (`_dsurface_body!`), so the host and a device agree bitwise; otherwise (and
 # for every other tracker) the trackers are recomputed from σ
 function _rebuild_trackers!(stats, st, ctx, backend; division = nothing)
     sync!(stats, backend)

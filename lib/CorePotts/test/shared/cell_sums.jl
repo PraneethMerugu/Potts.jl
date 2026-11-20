@@ -1,4 +1,4 @@
-# Definitions of cell_sums_tests.jl that other test files use (moved here by TS1b).
+# Definitions of cell_sums_tests.jl that other test files use.
 using CorePotts: CellReduce, reduce_scratch, REDUCE_STATUS, STATUS_SUM_RANGE
 
 # a stand-in for a backend without 64-bit atomics (Metal; `CorePotts._atomic64` is false there)
@@ -27,7 +27,7 @@ function cs_owners(dims)
     return σ
 end
 
-# the old float CAS loop of `max`/`min` (before F3-23): writes `v`, stops on `op(old, v) == old`;
+# the old float CAS loop of `max`/`min` (before integer cell sums): writes `v`, stops on `op(old, v) == old`;
 # its compare-and-swap compares bits (`===`)
 function cs_old_max!(a, c, v)
     old = a[c]

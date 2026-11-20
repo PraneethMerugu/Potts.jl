@@ -1,5 +1,5 @@
-# Checkerboard dynamics (KernelAbstractions; CPU or GPU): the lockless block scheme (P6.0bl;
-# after Sultan et al., arXiv 2312.09317).
+# Checkerboard dynamics (KernelAbstractions; CPU or GPU): the lockless block scheme
+# (after Sultan et al., arXiv 2312.09317).
 #
 # Layout. Each axis of length L is cut into nb = max(1, L ÷ kb) blocks of k sub-regions each
 # (`parts`), the k·nb sub-regions of side `base` = L ÷ k·nb or base + 1 (the first L mod k·nb),
@@ -19,7 +19,7 @@
 # every site is attempted once per MCS on average. Attempts are never skipped: drawing over a
 # common box and skipping sites past a smaller sub-region's end bunches attempts on one site
 # (a one-site sub-region in a 2 × 2 box got Binomial(4, 1/4) attempts in a row), which slowed
-# Akeeb invasion and the K3 chain (docs/design/research/checkerboard-kinetics.md).
+# Akeeb invasion and the OpenVT chain relaxation (docs/design/research/checkerboard-kinetics.md).
 #
 # Lockless cells. Nothing is claimed: per-cell totals change by atomic adds. The context carries
 # `lockless = true`, so the commit hooks that would otherwise overwrite a cell value use
@@ -323,7 +323,7 @@ _block_groupsize(::KernelAbstractions.CPU, nb::NTuple{N, Int}) where {N} =
 
 """
 The default `parts` of a `d`-dimensional lattice: about 64 phases per MCS (8 in 2D, 4 in 3D),
-the density that matched `SequentialCPM` kinetics in 2D and 3D (P6.0bl).
+the density that matched `SequentialCPM` kinetics in 2D and 3D.
 """
 default_parts(N::Int) = max(2, round(Int, 64^(1 / N)))
 

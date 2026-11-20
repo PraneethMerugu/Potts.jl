@@ -1,7 +1,7 @@
 """
     LatticeFields.IR
 
-The host-side field IR (v3 §3): grids, levels, placements, fields, tables, masks, flags,
+The host-side field IR: grids, levels, placements, fields, tables, masks, flags,
 accesses, hash-consed kernel DAGs, boundary rules and storage lanes; the interning builder,
 the printer and the structural verifier.
 """

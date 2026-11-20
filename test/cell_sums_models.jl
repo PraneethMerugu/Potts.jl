@@ -1,4 +1,4 @@
-# F3-23: the models of test/cell_sums.jl, also loaded by its `-t 4` / `-t 8` processes and by
+# The models of test/cell_sums.jl, also loaded by its `-t 4` / `-t 8` processes and by
 # the device tests (test/gpu.jl).
 isdefined(@__MODULE__, :JiangLike) || include(joinpath(@__DIR__, "fields_jiang_model.jl"))
 isdefined(@__MODULE__, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
@@ -80,9 +80,9 @@ cs_site_values(dims = (200, 200)) =
     Float32[(0.5 + sin(1.3i + 0.7j)) * 10.0f0^((3i + 5j) % 9 - 4) for i in 1:dims[1], j in 1:dims[2]]
 cs_site_op() = (op = cs_threshold_op(); [op[1], op[2], :h => cs_site_values()])
 
-# F3-23 review r1: the other sums over sites. Weighted surfaces after divisions (the device
-# lifecycle's recomputes, R-23a), cluster surfaces of a weighted relation, and the compound
-# writes of a `@convert` pass (R-23b). The reviewer's models (~/lpwork/f3rev14/w2.jl, c1.jl).
+# The other sums over sites. Weighted surfaces after divisions (the device
+# lifecycle's recomputes), cluster surfaces of a weighted relation, and the compound
+# writes of a `@convert` pass.
 const CS_W = Weighted(Moore(1), o -> 1 / sqrt(sum(abs2, o)))
 @potts_model CsWSurf begin
     @kinds medium A
@@ -174,9 +174,9 @@ cs_bits(x) = string(hash(reinterpret(UInt32, Float32.(vec(Array(x))))); base = 1
 # in Float32 with CheckerboardCPM on `backend` (on the CPU with the device lifecycle, as a
 # device runs it; the weighted surface model staged, the compartments fused); `ctl = true` restores the float atomics (negative control). Also returns
 # the division counts (checked > 0).
-# `host = true`: on the CPU, the host lifecycle planner instead (review r2: the same unit
+# `host = true`: on the CPU, the host lifecycle planner instead (the same unit
 # arithmetic, so the same bits)
-function cs_r1_digests(backend = CorePotts.CPU(); ctl::Bool = false, mcs = 80, host::Bool = false)
+function cs_site_sum_digests(backend = CorePotts.CPU(); ctl::Bool = false, mcs = 80, host::Bool = false)
     CorePotts._FLOAT_ATOMICS[] = ctl
     f0 = CorePotts._FORCE_DEVICE_LIFECYCLE[]
     CorePotts._FORCE_DEVICE_LIFECYCLE[] = !host

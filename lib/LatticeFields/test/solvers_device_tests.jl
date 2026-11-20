@@ -1,6 +1,6 @@
 # Solvers on a GPU (LATTICEFIELDS_GPU = metal | rocm): Float32 solves equal the host form
 # bitwise and repeat bitwise; the no-Float64 walk on the device argument types; the Float64
-# solver of unanchored weak-reaction groups (user ruling, D-C7b): `:done` at weak reaction where
+# solver of unanchored weak-reaction groups (user ruling): `:done` at weak reaction where
 # the backend has Float64, the documented Float32 fallback (and the refusal) where it has not.
 
 @testsetup module LF_solvers_device
@@ -135,9 +135,9 @@ using .LF_solvers_device: instances
 end
 end
 
-@testitem "Exec as the solver executor on gpu: capability, not policy (P5 C2-1)" setup = [LF_solvers_device] tags = [:latticefields, :solvers, :gpu_only] begin
+@testitem "Exec as the solver executor on gpu: capability, not policy" setup = [LF_solvers_device] tags = [:latticefields, :solvers, :gpu_only] begin
 using .LF_solvers_device: instances
-@testset "Exec as the solver executor on $gpu: capability, not policy (P5 C2-1)" begin
+    @testset "Exec as the solver executor on $gpu: capability, not policy" begin
     # `Schedule.supports(DEV, Float64)` is the hardware capability (`Exec.supports`), never the
     # Float32 default-float policy: on ROCm `:auto` keeps the periodic Float64 solve
     case = named_case("per256", 5.5e-6)

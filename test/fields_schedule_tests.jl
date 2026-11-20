@@ -62,7 +62,7 @@ end
     end
 end
 
-# TS1c: `init` compiles the handler of each MCS entry before `step!` (the 2-argument
+# `init` compiles the handler of each MCS entry before `step!` (the 2-argument
 # `_run_entry!`); a `Repeat` calls the 3-argument one, `(integ, e, (j, n))`, once per pass,
 # which must not box its entry: a warm MCS allocates nothing on either algorithm
 @testitem "@schedule repeat: a warm MCS allocates nothing" setup = [FieldsSetup, FieldsScheduleSetup] tags = [:potts, :fields] begin

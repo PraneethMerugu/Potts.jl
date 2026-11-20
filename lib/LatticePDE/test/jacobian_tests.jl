@@ -1,4 +1,4 @@
-# F4-07 (F4 design §3.7, AF-01, SX-13): the Jacobian of the right side from the IR. The
+# The Jacobian of the right side from the IR. The
 # pattern `field_jacobian_sparsity` reads off the rate program equals the nonzero pattern of the dense
 # ForwardDiff Jacobian on 8×8 (at a random state, so no entry is zero by accident) for every
 # face kind, an advection row with Robin faces, masks, a `Coarse(2)` field, a hexagonal lattice, a cross-grid read, an aux chain and a
@@ -9,8 +9,8 @@
 # `ODEFunction` keywords `jac` and `sparse` are planned") and `field_jacobian_sparsity` is undefined,
 # so every testset errors; a pattern that reads past a face as if the axis were periodic fails
 # the face cases, and one that takes a restriction's third child at every coarse site fails
-# `Coarse(2)` (~/lpwork/f4b3/nc-*.log); the untyped walk (`_Walk.k::Any`) allocates 256 MiB at
-# 128² and fails the pattern's bound (~/lpwork/f4b3fix/nc-untyped.log).
+# `Coarse(2)`; the untyped walk (`_Walk.k::Any`) allocates 256 MiB at
+# 128² and fails the pattern's bound.
 
 @testsetup module LP_jacobian
 using Test, LatticePDE
@@ -98,8 +98,8 @@ jpattern(J) = sparse(J .!= 0)
 include("shared/export_all.jl")
 end
 
-@testitem "F4-07: the pattern from the IR equals the dense Jacobian's" setup = [LP_jacobian] tags = [:latticepde, :jacobian] begin
-@testset "F4-07: the pattern from the IR equals the dense Jacobian's" begin
+@testitem "the pattern from the IR equals the dense Jacobian's" setup = [LP_jacobian] tags = [:latticepde, :jacobian] begin
+    @testset "the pattern from the IR equals the dense Jacobian's" begin
     for (label, sys, disc, ins) in jcases()
         prob = jprob(sys, disc, ins)
             P = LFP.field_jacobian_sparsity(prob)
@@ -110,20 +110,22 @@ end
             free = jprob(sys, disc, (jk(t, x, y) => zeros(Int32, 8, 8),))
             want = jpattern(jdense(free, u))
             got = jpattern(jdense(prob, u))
-            @test P == want || (println("F4-07 pattern ", label, ": ", nnz(P), " vs ", nnz(want)); false)
+                @test P == want || (println("pattern ", label, ": ", nnz(P), " vs ", nnz(want)); false)
             @test all(P[got])
             @test nnz(got) < nnz(want)                     # control: the masked rows are empty in the run
         else
             want = jpattern(jdense(prob, u))
-            @test P == want || (println("F4-07 pattern ", label, ": ", nnz(P), " vs ", nnz(want), " missing ",
+                @test P == want || (
+                    println(
+                        "pattern ", label, ": ", nnz(P), " vs ", nnz(want), " missing ",
                 count(want .& .!P), " extra ", count(P .& .!want)); false)
         end
     end
 end
 end
 
-@testitem "F4-07: jac = true is the dense Jacobian; jvp is J v" setup = [LP_jacobian] tags = [:latticepde, :jacobian] begin
-@testset "F4-07: jac = true is the dense Jacobian; jvp is J v" begin
+@testitem "jac = true is the dense Jacobian; jvp is J v" setup = [LP_jacobian] tags = [:latticepde, :jacobian] begin
+    @testset "jac = true is the dense Jacobian; jvp is J v" begin
     for (label, sys, disc, ins) in jcases()
         prob = jprob(sys, disc, ins; jac = true, sparse = true)
         @test prob.f.jac_prototype isa SparseArrays.SparseMatrixCSC && prob.f.colorvec isa Vector{Int}
@@ -132,7 +134,7 @@ end
         J = copy(prob.f.jac_prototype)
         prob.f.jac(J, u, prob.p, prob.tspan[1])
         @test maximum(abs, Matrix(J) .- Jd) <= 1e-12 * max(1, maximum(abs, Jd)) ||
-              (println("F4-07 jac ", label, " ", maximum(abs, Matrix(J) .- Jd)); false)
+                (println("jac ", label, " ", maximum(abs, Matrix(J) .- Jd)); false)
         Jm = zeros(size(Jd))                               # a dense matrix takes the same entries
         prob.f.jac(Jm, u, prob.p, prob.tspan[1])
         @test Jm == Matrix(J)
@@ -163,8 +165,8 @@ end
 end
 end
 
-@testitem "F4-07: Rodas5P with sparse = true at 128² runs in bounded memory" setup = [LP_jacobian] tags = [:latticepde, :jacobian] begin
-@testset "F4-07: Rodas5P with sparse = true at 128² runs in bounded memory" begin
+@testitem "Rodas5P with sparse = true at 128² runs in bounded memory" setup = [LP_jacobian] tags = [:latticepde, :jacobian] begin
+    @testset "Rodas5P with sparse = true at 128² runs in bounded memory" begin
     @parameters jr = 2.0
     c = jc(t, x, y)
         sys = PDESystem(
@@ -175,12 +177,12 @@ end
     # the pattern walk is type-stable: ~12 MiB at 128² (an untyped walk, a dynamic dispatch per
     # node visit, allocated 256 MiB)
         pb = @allocated LFP.field_jacobian_sparsity(prob)
-        @test pb < 64 * 2^20 || (println("F4-07 field_jacobian_sparsity 128² allocated ", pb / 2^20, " MiB"); false)
+        @test pb < 64 * 2^20 || (println("field_jacobian_sparsity 128² allocated ", pb / 2^20, " MiB"); false)
     s = solve(prob, Rodas5P(); abstol = 1e-8, reltol = 1e-8)              # (warm)
     bytes = @allocated s = solve(prob, Rodas5P(); abstol = 1e-8, reltol = 1e-8)
     @test SciMLBase.successful_retcode(s)
     # a dense Jacobian alone would take 128⁴ × 8 B = 2.1 GB
-    @test bytes < 400 * 2^20 || (println("F4-07 Rodas5P 128² allocated ", bytes / 2^20, " MiB"); false)
+        @test bytes < 400 * 2^20 || (println("Rodas5P 128² allocated ", bytes / 2^20, " MiB"); false)
     # the owned BackwardEuler run tends to it at first order as dt halves
         e(dt) = maximum(
             abs, solve(
@@ -189,6 +191,6 @@ end
             ).u[end] .- s.u[end]
         )
     e1, e2, e3 = e(0.01), e(0.005), e(0.0025)
-    @test e1 > e2 > e3 && 1.6 < e1 / e2 < 2.4 && 1.6 < e2 / e3 < 2.4 || (println("F4-07 BE errors ", (e1, e2, e3)); false)
+        @test e1 > e2 > e3 && 1.6 < e1 / e2 < 2.4 && 1.6 < e2 / e3 < 2.4 || (println("BE errors ", (e1, e2, e3)); false)
 end
 end

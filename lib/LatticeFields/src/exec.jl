@@ -1,7 +1,7 @@
 """
     LatticeFields.Exec
 
-The execution layer (v3 §4.4, §9.1): one host executor for every CPU kernel and one generic
+The execution layer: one host executor for every CPU kernel and one generic
 device wrapper for every device kernel. A kernel is a body `body(i, args...)` run for
 `i in 1:n`.
 
@@ -58,7 +58,7 @@ supports(backend, ::Type{T}) where {T} =
 Policy: the float type of code emitted for `backend` when the caller names none. `Float64`
 on the host executor, `Float32` on every device: default device code stays `Float32`, so it
 runs unchanged on backends without doubles (Metal) and gives the same results on every
-device (D-157 scans production Float32 paths for doubles). This is not a query of the
+device (the device scan checks production Float32 paths for doubles). This is not a query of the
 hardware; ask [`supports`](@ref) for that.
 """
 default_float(backend) = ishost(backend) ? Float64 : Float32
@@ -66,7 +66,7 @@ default_float(backend) = ishost(backend) ? Float64 : Float32
 """
     register_float64!(parts::String...)
 
-The D-157 carve-out (F3 design §3.8, R-F3c): a kernel whose Float64 its user declared (a
+The carve-out: a kernel whose Float64 its user declared (a
 group's `compute_type` or `solver_type` of Float64, or a field's `lattice_storage = Float64`, on a
 device whose default float is Float32) is registered by the parts of its signature text: a
 kernel signature that holds every part is skipped by the no-`double` scan of the device test
@@ -188,7 +188,7 @@ end
 Whether the current task runs in compile mode ([`COMPILE_ONLY`](@ref)): every device launch
 of [`launch!`](@ref), of a prebuilt [`Launch`](@ref) and of a solver's workgroup launch
 compiles its kernel instead (a launch that runs no work item), so a host task can walk a
-runtime's launch sequence to compile it ahead of the first step (F3-15: the implicit
+runtime's launch sequence to compile it ahead of the first step (the implicit
 launches in the pending compile task). The host executor ignores it.
 """
 compiling() = COMPILE_ONLY[]
@@ -245,7 +245,7 @@ end
 const LinearLaunch{K, WG} = Launch{K, WG, <:Tuple{Any, Tuple, Int}}
 const CartesianLaunch{K, WG} = Launch{K, WG, <:Tuple{Any, Tuple, Tuple}}
 
-# The Cartesian device kernel (v3 §4.4, the C5 contract): `body(x, args...)` with
+# The Cartesian device kernel (the Schedule–Exec contract, contract.jl): `body(x, args...)` with
 # `x::NTuple{N, Int}` 1-based; the body guards every axis itself (padded items are no-ops).
 # `live = false` is the compile launch: no item calls the body.
 @kernel unsafe_indices = true function _kernel_cart!(body, args, live)

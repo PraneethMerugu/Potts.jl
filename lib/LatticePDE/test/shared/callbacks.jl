@@ -1,4 +1,4 @@
-# Definitions of callbacks_tests.jl that other test files use (moved here by TS1b).
+# Definitions of callbacks_tests.jl that other test files use.
 using DiffEqCallbacks: PresetTimeCallback, PeriodicCallback
 
 cbsys(T = 1.0) = bsys([D(bce) ~ bD * laplacian(bce) - bk * bce + x], [bc(0, x, y) ~ x * y], [bD, bk]; T, dvs = [bce])

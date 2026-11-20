@@ -1,4 +1,4 @@
-# LatticePDE tests on ReTestItems (TS1b). Test items are in `*_tests.jl`; each file's
+# LatticePDE tests on ReTestItems. Test items are in `*_tests.jl`; each file's
 # definitions are in its `@testsetup` module. A setup includes, in the old include order, the
 # definitions of every earlier file it uses (shared/; shared/lp_runner.jl is the old runner's
 # preamble: imports, LATTICEPDE_CHECK_FUSION, term helpers and the vocabulary system), so a

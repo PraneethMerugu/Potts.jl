@@ -37,11 +37,11 @@ compiled here), so `getp(sol, k2)`, `sol.ps[k2]` and `integ.ps[k2]` read them wh
 `setp` refuse them (their `parameter_index` throws); `tables` maps the symbols of array
 parameters to their table keys, or an entry's symbol to `(key, i)` (`remake(prob::FieldProblem;
 p = [Dk => values])` gives new values; `integ.ps[Dk]`, `getp(prob, Dk)` read them); `aux` maps
-`symbols => key`, the aux fields of the program (`K ~ rhs`, F3 design §3.12): not part of the
+`symbols => key`, the aux fields of the program (`K ~ rhs`): not part of the
 state, they are evaluated from it and read by `sol[K]` and `integ[K]` ([`aux_key`](@ref); on the
 ODE path they are observed, `rhs(u(t), t)`, through the evaluator `ode_problem` sets); `coordinates`
 maps `symbols => centers`, each spatial coordinate to its site centers (a range: `sol[x]`, and
-`sol(t, x, y)` interpolates between them, F4-04); `maskevents` holds the switch functions of the
+`sol(t, x, y)` interpolates between them); `maskevents` holds the switch functions of the
 moving masks, `(p, t) -> lhs - rhs` from the raw parameters (an `Expr` is compiled here), whose
 roots an OrdinaryDiffEq solve locates, and `maskunlocated` says that a mask predicate reads the
 time in a switch with no such function ([`MaskSync`](@ref)). Any
@@ -63,13 +63,13 @@ struct LatticeIndex{F}
     derived::Dict{Any, String}
     observed::Dict{Any, Any}
     tables::Dict{Any, Tuple{String, Int}}       # symbol → (table key, entry; 0 for the whole table)
-    parambounds::Dict{Int, Tuple{Float64, Float64}}   # slot → declared `bounds` (F2-14), checked at every write
-    derive::Any                                 # `nothing`, or `(Derivation, sources, slots)`: the computed slots (F2-15)
-    aux::Dict{Any, String}                      # symbol → aux field key (F3-00)
+    parambounds::Dict{Int, Tuple{Float64, Float64}}   # slot → declared `bounds`, checked at every write
+    derive::Any                                 # `nothing`, or `(Derivation, sources, slots)`: the computed slots
+    aux::Dict{Any, String}                      # symbol → aux field key
     auxsyms::Vector{Any}                        # the canonical symbol of each aux field
     auxeval::Ref{Any}                           # the ODE path's aux evaluator `(u, p, t, key)`, or nothing
     program::Ref{Any}                           # the semantic program (the checks of an input write), or nothing
-    coords::Dict{Any, Any}                      # a spatial coordinate → its site centers (a range; `sol[x]`, F4-04)
+    coords::Dict{Any, Any}                      # a spatial coordinate → its site centers (a range; `sol[x]`)
     coordsyms::Vector{Any}                      # the spatial coordinates, in order
     maskevents::Vector{Any}                     # the masks' switch functions `(p, t) -> lhs - rhs` (an ODE path's events)
     maskunlocated::Bool                         # a mask predicate reads the time in a switch with no event
@@ -91,7 +91,7 @@ function LatticeIndex(; key::F = identity, variables = Pair[], parameters = Pair
         foreach(s -> params[key(s)] = i, syms(ss))
     end
     # an input's names never shadow another input, a variable or a parameter: lookups try the
-    # inputs first, so a shared name would route a read or write to the wrong one (F1)
+    # inputs first, so a shared name would route a read or write to the wrong one
     names = Dict{String, String}(String(k) => String(v) for (k, v) in inputnames)
     ins = Dict{Any, String}()
     for (ss, k) in inputs, s in syms(ss)
@@ -167,11 +167,11 @@ function parameter_name(ix::LatticeIndex, i::Integer)
     for s in ix.paramsyms
         get(ix.params, ix.key(s), 0) == i && return string(s)
     end
-    k = computed_slot(ix, i)                     # a computed parameter's slot (F2-15): its name
+    k = computed_slot(ix, i)                     # a computed parameter's slot: its name
     k === nothing || return string(k)
     return "#$i"
 end
-# the computed parameter that slot `i` holds (F2-15), or `nothing`
+# the computed parameter that slot `i` holds, or `nothing`
 function computed_slot(ix::LatticeIndex, i::Integer)
     ix.derive === nothing && return nothing
     d, _, slots = ix.derive
@@ -189,14 +189,14 @@ end
 SII.variable_symbols(ix::LatticeIndex) = ix.varsyms
 # A derived symbol (a computed parameter) is observed, not a parameter: it reads through
 # `parameter_observed`, and its `parameter_index` is an error that says why, so a remake
-# (SciMLBase's `fill_p` asks `parameter_index` for every key) or `setp` of it is refused (F1)
+# (SciMLBase's `fill_p` asks `parameter_index` for every key) or `setp` of it is refused
 _scalar(sym) = !(sym isa Union{AbstractArray, Tuple})
-# A table (or an entry) and an input are parameters too (F4 design §3.3: `Constants` and
+# A table (or an entry) and an input are parameters too (`Constants` and
 # `Discrete` of `LatticeParameters`), indexed by a `TableSlot` and an `InputSlot`
 SII.is_parameter(ix::LatticeIndex, sym) = (_scalar(sym) && haskey(ix.params, ix.key(sym))) || table_key(ix, sym) !== nothing ||
                                           (!(sym isa Union{AbstractArray, Tuple, Integer}) && input_key(ix, sym) !== nothing)
 SII.is_observed(ix::LatticeIndex, sym) = _scalar(sym) && (haskey(ix.observed, ix.key(sym)) || _ode_aux(ix, sym) !== nothing)
-# an aux field on the ODE path (F3-00 review M1): observed, `rhs(u(t), t)` from the solver's state
+# an aux field on the ODE path: observed, `rhs(u(t), t)` from the solver's state
 _ode_aux(ix::LatticeIndex, sym) = ix.auxeval[] === nothing ? nothing : aux_key(ix, sym)
 SII.parameter_observed(ix::LatticeIndex, sym) = _scalar(sym) ? _on_values(get(ix.observed, ix.key(sym), nothing)) :
                                                _observed_list(ix, sym)
@@ -239,7 +239,7 @@ function SII.parameter_index(ix::LatticeIndex, sym)
     ki === nothing || return InputSlot(ki, ix)
     i = get(ix.params, k, nothing)
     i === nothing || return i
-    haskey(ix.derived, k) && throw(ArgumentError(ix.derived[k]))     # a computed parameter (D-F2-1): read-only
+    haskey(ix.derived, k) && throw(ArgumentError(ix.derived[k]))     # a computed parameter: read-only
     # a variable, an input or the time is not a parameter (`nothing`); any other symbol is a
     # typo, an error rather than a key `remake` would skip
     (haskey(ix.vars, k) || SII.is_independent_variable(ix, sym)) && return nothing
@@ -250,7 +250,7 @@ function SII.parameter_index(ix::LatticeIndex, sym)
 end
 # every key of a parameter map names a parameter: `parameter_index` throws for a table, a
 # computed parameter or an unknown name, and gives `nothing` for what is no parameter (a field,
-# an input, an expression such as `2k`), which SciMLBase's `remake` would skip silently (F1)
+# an input, an expression such as `2k`), which SciMLBase's `remake` would skip silently
 function check_parameter_keys(ix::LatticeIndex, keys)
     for k in keys
         SII.parameter_index(ix, k) === nothing || continue

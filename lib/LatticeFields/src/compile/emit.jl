@@ -12,13 +12,13 @@ automatically when an array has more than 2³¹ − 1 elements);
 lane holds ([`lanetype`](@ref)): `:fixed` (its own type) or `:state` (problems: the F32/F64
 lanes hold `T`). `T = nothing` (the default) compiles raw IR in Float32; problems take the
 value type from their state (`eltype(u0)`) and refuse an explicit `T` that differs.
-`clock`: the parameter slot of the clock's step index (`clock__tick`, F2 design §2.6), or 0
+`clock`: the parameter slot of the clock's step index (`clock__tick`), or 0
 for none: a kernel that reads it derives its parameters again at each launch, with the step
 index written into the slot (`derive(Praw, c, t, k)`). `S`: the value type the state lanes
 hold under `lanes = :state` (`nothing`: `T`); a group's `compute_type` wider than its storage
-compiles in `T` and loads and stores through `lanecast` (FE-17). `declared`: the group
+compiles in `T` and loads and stores through `lanecast`. `declared`: the group
 declared its Float64 (`compute_type`, `lattice_storage`): a kernel that computes in or touches
-Float64 is registered in Exec's D-157 registry ([`Exec.register_float64!`](@ref)).
+Float64 is registered in Exec's Float64 registry ([`Exec.register_float64!`](@ref)).
 """
 Base.@kwdef struct CompileOptions
     T::Union{Type, Nothing} = nothing
@@ -74,7 +74,7 @@ Julia expression of a value node from its operand expressions (`T`: compute type
 function opexpr(op::Op, a::Vector{Any}, n::Node, k::Kernel, T::Type)
     haskey(_BINOPS, op) && return foldl((x, y) -> Expr(:call, _BINOPS[op], x, y), a)
     haskey(_UNOPS, op) && return Expr(:call, _UNOPS[op], a[1])
-    # (`and`, `or` take every operand: the hexagonal Laplacian's domain test has three, F3-20)
+    # (`and`, `or` take every operand: the hexagonal Laplacian's domain test has three)
     op in (AND, OR) && return Expr(:call, _CMPOPS[op], a...)
     haskey(_CMPOPS, op) && return Expr(:call, _CMPOPS[op], a[1], a[2])
     op == DIV && return :($(a[1]) / $(a[2]))

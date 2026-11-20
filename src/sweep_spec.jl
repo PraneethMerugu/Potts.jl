@@ -1,4 +1,4 @@
-# The sweep's definition as an MTK-visible object (D-160, P6.0bm): `hamiltonian(sys)`,
+# The sweep's definition as an MTK-visible object (D-160): `hamiltonian(sys)`,
 # `drives(sys)` and the `PottsSweepSpec` metadata payload, read with MTK's own
 # `getmetadata`/`hasmetadata`; and the update rules as written, `updates(sys)` (D-164).
 # Descriptions only: they are derived from the system on every read, so they always
@@ -112,7 +112,7 @@ end
 """
     Potts.PottsSweepSpec
 
-The lattice sweep of a Potts model as typed system metadata (D-160): both the metadata key
+The lattice sweep of a Potts model as typed system metadata: both the metadata key
 and the value type. It is metadata of the model's inner System (`Potts.inner(sys)`), set when
 the model is built (`Potts.wrap_system`), so generic code that holds the System detects a Potts model
 with MTK's metadata API:

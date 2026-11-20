@@ -3,10 +3,10 @@
 #
 #     julia --project=test -i test/dev.jl
 #
-#     ti("F4-E5")                  # items whose name contains "F4-E5"
-#     ti(r"^F3-17: a Coarse")      # items whose name matches a regex
+#     ti("coarse field")           # items whose name contains "coarse field"
+#     ti(r"^a Coarse\(4\)")        # items whose name matches a regex
 #     ti(; tags = :fields_coarse)  # the items of fields_coarse_tests.jl (the file's tag)
-#     ti("F4-E7"; nworkers = 1)    # in a fresh worker process instead of this session
+#     ti("is_kind"; nworkers = 1)  # in a fresh worker process instead of this session
 #     tf("fields_short_tests.jl")  # every item of one file
 #
 # Edits to src (Revise) and to the test files are picked up by the next call; `@testsetup`

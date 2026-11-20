@@ -1,4 +1,4 @@
-# Symbolic front end (ROADMAP M3.1–M3.3): generated models equal the hand-written oracle
+# Symbolic front end: generated models equal the hand-written oracle
 # ports proposal by proposal, and the derived ΔH equals H(after) − H(before) of the
 # generated total energy.
 
@@ -13,7 +13,7 @@ using Random: Xoshiro
 using InteractiveUtils: code_llvm
 
 
-# the field models' PDESystems (F4-B4t)
+# the field models' PDESystems
 isdefined(@__MODULE__, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
 
 module SyPDE
@@ -92,7 +92,7 @@ end
 
 
 # ---------------------------------------------------------------------------------------
-# Several named relationships (P6.0b): a link store, law and rules per name
+# Several named relationships: a link store, law and rules per name
 
 @potts_model Chain begin
     @kinds medium blob
@@ -264,7 +264,7 @@ function compartment_state()
 end
 
 
-# P6.0a: a nucleus dividing alone inside a cluster runs only its cell rule, and its daughter
+# A nucleus dividing alone inside a cluster runs only its cell rule, and its daughter
 # stays in the cluster; the cluster division runs only the cluster rule
 @potts_model NucleusDivision begin
     @kinds medium cytoplasm nucleus
@@ -333,7 +333,7 @@ end
 # the base without the `d` terms is 9 + 52 + 10.5 = 71.5, and the `d` terms add 9 d₁ + 12 d₂.
 
 
-# Components (M4.1): MTK systems instantiated per cell, advanced by a batched cell ODE kernel.
+# Components: MTK systems instantiated per cell, advanced by a batched cell ODE kernel.
 using Potts.ModelingToolkitBase: System, @parameters
 
 const _tc = Potts.t
@@ -521,17 +521,17 @@ end
 end
 
 
-# P6.0m (D-042): an integral read in a block that writes its operand bare folds the new
+# D-042: an integral read in a block that writes its operand bare folds the new
 # values; readers after the block (equations, the temperature) see them too.
 
 
-# P6.0m3 (D-042, D-076): `integral(Pre(w))` is its own slot, refreshed at the start of the
+# D-042, D-076: `integral(Pre(w))` is its own slot, refreshed at the start of the
 # after block (σ post-sweep, w at its block-start value). It needs no `w__pre` snapshot and
 # is left intact when another read does snapshot `w`; in @before_mcs the boundary refresh is
 # already the block-start fold.
 
 
-# P6.0m: the ring rule is TST's `ConnectivityPreservedP` (Merks reference), not CC3D's local
+# The ring rule is TST's `ConnectivityPreservedP` (Merks reference), not CC3D's local
 # rule, so D-074 leaves it alone: at most one arc (zero included) or exactly two ring cells
 
 
@@ -572,7 +572,7 @@ end
 
 
 # ---------------------------------------------------------------------------------------
-# P6.0e: contact energies read site values `x` (at s) and `x′` (at s′)
+# Contact energies read site values `x` (at s) and `x′` (at s′)
 
 using Statistics: Statistics
 
@@ -705,12 +705,12 @@ end
 # two site terms and an on-copy write both read: each site term sees the written value
 
 
-# P6.0e2: `x′` of a quantity that is not a site/field variable is a Potts error, raised when
+# `x′` of a quantity that is not a site/field variable is a Potts error, raised when
 # the constructor reads the unbound `x′`; a local named `x′` is ordinary Julia
 
 
 # ---------------------------------------------------------------------------------------
-# P6.0f: `Every(n)` per lifecycle rule
+# `Every(n)` per lifecycle rule
 
 @potts_model RuleCadences begin
     @structural_parameters begin
@@ -772,7 +772,7 @@ _has_ruled_divide(sys) = any(
 )
 
 
-# Only the rule that fired writes the daughters' state (P6.0f review): rules sharing a kind
+# Only the rule that fired writes the daughters' state: rules sharing a kind
 # are tried in model order, and the first whose cadence, kinds and `when` hold wins, its
 # division and its state rules.
 @potts_model SameKindCadences begin
@@ -823,7 +823,7 @@ isdefined(@__MODULE__, :discrete_counter_model) || include(joinpath(@__DIR__, "s
 
 
 # A tick reading another cell's node sees its pre-tick value (Jacobi across cells), under both
-# algorithms: a shift register moves one cell per tick (review P6.0k round 2, B1).
+# algorithms: a shift register moves one cell per tick.
 @named shiftcell = System([dX(_kd) ~ ds], _tc)
 
 @potts_model DiscreteShiftRegister begin
@@ -857,39 +857,39 @@ end
 Potts.ModelingToolkitBase.@variables k2X(_tc)::Bool = false k2Y(_tc)::Bool = false
 
 
-# P6.0r (D-083): free slots (capacity > n; kind 1, their own cluster roots) add nothing to H
+# D-083: free slots (capacity > n; kind 1, their own cluster roots) add nothing to H
 
 
-# P6.0v3 (F1, D-101): the last after-MCS cell update moves into `Lifecycle.before` (one
+# D-101: the last after-MCS cell update moves into `Lifecycle.before` (one
 # device launch with the trigger) exactly when the trigger reads what it writes only at its
 # own cell; otherwise it stays a phase of its own
 
 
 # ---------------------------------------------------------------------------------------
-# P6.0ah (D-107): textually equal folds over different bound variables in one statement keep
+# D-107: textually equal folds over different bound variables in one statement keep
 # a canonical slot numbering (their key carries the variables' names), and integrals of
 # such folds stay distinct and are not hoisted apart from their trackers. A salted
 # `Base.hash` of the Potts operators stands for another package build (inert at salt 0).
 
-const P60AH_TIE_SALT = Ref{UInt}(0)
+const HASH_SALT = Ref{UInt}(0)
 
 for f in (Potts.population, Potts.gather, Potts.value_at, Potts.cell_integral)
     @eval function Base.hash(g::typeof($f), h::UInt)
-        P60AH_TIE_SALT[] == 0 && return invoke(hash, Tuple{Function, UInt}, g, h)
-        return hash(P60AH_TIE_SALT[], hash(:p60ah_tie_salt, h))
+        HASH_SALT[] == 0 && return invoke(hash, Tuple{Function, UInt}, g, h)
+        return hash(HASH_SALT[], hash(:hash_salt, h))
     end
 end
 
-p60ah_tie_salted(f, s) = (
-    P60AH_TIE_SALT[] = s; try
+with_hash_salt(f, s) = (
+    HASH_SALT[] = s; try
         f()
     finally
-        P60AH_TIE_SALT[] = 0
+        HASH_SALT[] = 0
     end
 )
 
 
-function p60ah_tie_code(M, solver)
+function tie_code(M, solver)
     strip!(x) = x isa Expr ?
         (
             Base.remove_linenums!(x);
@@ -935,13 +935,13 @@ end
 
 
 # ---------------------------------------------------------------------------------------
-# P6.0ai (D-110): a population fold inside `integral(x)` that reads neither the site nor the
+# D-110: a population fold inside `integral(x)` that reads neither the site nor the
 # cell is computed once per refresh of the integral (a model slot), not at every site. The
 # slot must be current at every refresh: in a block after a write to what the fold reads, at
 # the MCS boundary after the lifecycle, at init, and for observed integrals.
 
 
-function p60ai_init(dims)
+function hoisted_init(dims)
     σ = zeros(Int32, dims)
     if length(dims) == 2
         σ[3:6, 3:6] .= 1; σ[10:13, 9:12] .= 2
@@ -956,7 +956,7 @@ end
 # Every refresh point of a hoisted fold's slot: at init (read by a before-MCS update in the
 # first MCS), a gated reader of a fold whose operand the block writes, an equation reading
 # such an integral after the block, and a checkpoint continuation.
-@potts_model P60aiRefresh begin
+@potts_model HoistedRefresh begin
     @kinds medium A
     @variables begin
         w(site) = 1.0
@@ -981,7 +981,7 @@ end
 
 
 # ---------------------------------------------------------------------------------------
-# P6.0t (D-120): the start-of-after refresh covers the integrals read after the sweep, and
+# D-120: the start-of-after refresh covers the integrals read after the sweep, and
 # a tick reads its population folds through slots (`__tickpop`), so an integral read only
 # inside a tick's fold must still count as read after the sweep. Twin: the same fold over
 # `volume` (w ≡ 1 makes `integral(w)` the volume); a stale integral lags one MCS.
@@ -992,7 +992,7 @@ end
 
 
 # ---------------------------------------------------------------------------------------
-# D-137 review (P6.0o): namespaced keys of the model's own `sys.x`, `@set` on the MTK mirror
+# D-137 review: namespaced keys of the model's own `sys.x`, `@set` on the MTK mirror
 # names, metadata precedence in `extend`, property errors naming the category
 
 @potts_model NsCell begin
@@ -1028,7 +1028,7 @@ struct NsKey end
 using Potts.ModelingToolkitBase: Setfield as NsSetfield
 
 
-# P6.4a1 (D-188): the copy scope reads `direction[k]`, `position[s][k]` and `mcs`.
+# D-188: the copy scope reads `direction[k]`, `position[s][k]` and `mcs`.
 # The acceptance file pins the values on the host hook and the kernel path; here: the
 # `mcs` convention read back through an on-copy write, and the diagnostics.
 

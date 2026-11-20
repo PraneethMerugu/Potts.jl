@@ -1,4 +1,4 @@
-# The Euler-characteristic tracker (P6.3j, D-192; design note
+# The Euler-characteristic tracker (D-192; design note
 # `docs/design/research/euler-tracker.md`). A cell's site set X is a cell complex whose
 # topology the adjacency names; its complement is read with the dual adjacency (the
 # Rosenfeld pairing):

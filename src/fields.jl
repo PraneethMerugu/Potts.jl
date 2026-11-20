@@ -1,4 +1,4 @@
-# Fields (v3 §2.3, §7; cutover C8). A model's field equations `D(c) ~ rate` and their
+# Fields. A model's field equations `D(c) ~ rate` and their
 # conditions, from its coupled PDESystems (`@fields`, `Potts.couple`, `compose`), are a
 # ModelingToolkitBase `PDESystem` (`Potts.fields(csys)`) over
 # the lattice's coordinates; LatticePDE discretizes it into a LatticeFields program and
@@ -11,20 +11,20 @@
 #   - any other term that reads the CPM and no field (an owner's cell variable, `position`, a
 #     helper over the neighbourhood, …) is one input `fieldₖ__in`, the term's value at each
 #     site, written by one site phase before the field step every MCS.
-# The clock (F2 design §2.6): the discretization's clock is `mcs_duration`. `mcs` is its step
+# The clock: the discretization's clock is `mcs_duration`. `mcs` is its step
 # index, `LatticePDE.step_index(t)` (the reserved slot `clock__tick`, the MCS number at every
 # substep), and `time` is the PDESystem's time `t`: the CPM's time at the start of the field
 # window, advancing by `h` per substep.
 
 # the spatial independent variables, one per lattice axis
 const _FIELD_X = Tuple(Symbolics.unwrap(only(ModelingToolkitBase.@parameters $n)) for n in (:x, :y, :z))
-# the lattice coordinates `x`, `y`, `z` (F2 design §2.11), the spatial variables of the fields'
+# the lattice coordinates `x`, `y`, `z`, the spatial variables of the fields'
 # PDESystem: a model body binds them (an `@fields` binding may read them), and `Potts.Fields`
 # exports them. A model that declares a quantity of one of these names keeps its own.
 const FIELD_NAMES = (; x = Symbolics.wrap(_FIELD_X[1]), y = Symbolics.wrap(_FIELD_X[2]), z = Symbolics.wrap(_FIELD_X[3]))
 _coordinate(u) = any(v -> v === u || isequal(v, u), _FIELD_X)
 
-# A field read at a face in a condition, `c(t, 0, y)` (F2 design §2.12): a coupled PDESystem's
+# A field read at a face in a condition, `c(t, 0, y)`: a coupled PDESystem's
 # face read of a field goes through `_bcs_call` (`_pde_read`), which builds the read when the
 # callee is a field variable (a call of a callable symbol named as the field, tagged `_FieldAt`,
 # printed as written) and calls the callee otherwise
@@ -67,18 +67,18 @@ _site_dims(i, dims) = (L = get(i.options, :lattice_level, nothing);
 # the `lattice_storage` of field `name` of `sys` (`nothing`: the state type)
 _field_storage(sys, name) = (x = only(x for x in _p(sys, :variables) if info(x) !== nothing && info(x).name === name);
                              get(info(x).options, :lattice_storage, nothing))
-# the declared `bounds` of field `name` of `sys` (F3-13; `nothing`: none), MTK's bounds metadata
+# the declared `bounds` of field `name` of `sys` (`nothing`: none), MTK's bounds metadata
 # of the PDESystem's field, which the stability bound reads
 _field_bounds(sys, name) = (x = only(x for x in _p(sys, :variables) if info(x) !== nothing && info(x).name === name);
                             get(info(x).options, :bounds, nothing))
 
-# the calls the lattice compiler lowers: LatticePDE's one allowlist (F2 design §2.11), so a
+# the calls the lattice compiler lowers: LatticePDE's one allowlist, so a
 # call lowers in `@equations` exactly when it lowers in a PDESystem
 _field_op(f) = LatticePDE.lowers_call(f)
-# LatticePDE's spatial operators, passed through to the PDESystem (F2 design §2.11)
+# LatticePDE's spatial operators, passed through to the PDESystem
 _spatial_op(f) = f === laplacian || f isa LatticePDE.DivKGrad || f isa LatticePDE.Advect || f isa Differential
 # whether `rate` applies a spatial operator to the field `n` (`laplacian`, `DivKGrad`, `Advect`, a raw
-# flux `Differential(x)(K * Differential(x)(c))`; F2 design §2.11): the operators whose ghost
+# flux `Differential(x)(K * Differential(x)(c))`): the operators whose ghost
 # values a face condition sets
 function _has_spatial_op(rate, n::Symbol)
     found = Ref(false)
@@ -297,7 +297,7 @@ function _refuse_input_words(cv, names, ps)
     return nothing
 end
 
-# The canonical order of the filled inputs (R-F2b, 2026-10-20): `kind__in` first, then the CPM
+# The canonical order of the filled inputs (2026-10-20): `kind__in` first, then the CPM
 # reads sorted by their expression text and numbered `field1__in`, `field2__in`, … in that
 # order, then `domain__in`. The converter meets the reads in the hash order of a term's
 # arguments (`*`, `+`), which changes with the package code; this order does not.
@@ -314,17 +314,17 @@ _field_conv(ivs, states, T, known, kinds = nothing) = (; ivs, states, direct = D
     filled = Tuple{Symbol, Any, Type}[known...], inputs = Dict{Symbol, Any}(), params = Set{Any}(), T,
     bcsrc = Pair{Any, Any}[])           # each translated condition => the condition as written
 
-# The field equations of a model (F2 design §2.11): `(x, kind, op)` for a rate `D(c) ~ rhs`
+# The field equations of a model: `(x, kind, op)` for a rate `D(c) ~ rhs`
 # (`:rate`) or a map `Shift(t, 1)(m) ~ rhs` (`:map`, one application per MCS) of a field or
 # site variable, an aux definition `K ~ rhs` of a field variable (`:aux`, its value at every
 # substep from the others), or a steady row `0 ~ rhs` (`:rate` with `op = :steady`, solved by
-# `QuasiSteady` for the field its operator acts on, F3-12b); `op` is the left side's operator
+# `QuasiSteady` for the field its operator acts on); `op` is the left side's operator
 # (`nothing` for aux); else `nothing`
 function _field_lhs(eq, sys = nothing)
     l = _unwrap(eq.lhs)
     if _zero_lhs(eq)
         isempty(_steady_reads(eq).all) && return nothing        # (no field read: not a field equation)
-        # the field: the model's one rule with B (`LatticePDE.steady_choice`, r3 S4); with no
+        # the field: the model's one rule with B (`LatticePDE.steady_choice`); with no
         # model at hand, the row is a field row (its field unknown here)
         sys === nothing && return (nothing, :rate, :steady)
         k = findfirst(p -> p[1] === eq || isequal(p[1], eq), _steady_assign(sys))
@@ -416,7 +416,7 @@ _field_aux(sys::PottsSystem) = [(f[1], eq.rhs) for eq in _p(sys, :equations) for
 # the coordinates or numbers (a face)
 function _field_at_term(u, cv)
     n = _field_at_name(u)
-    # (or another group's field whose face conditions come along, F3-26: marked `LatticeCutField`)
+    # (or another group's field whose face conditions come along: marked `LatticeCutField`)
     f = haskey(cv.states, n) ? cv.states[n] : get(cv.direct, n, nothing)
     cut = f !== nothing && SymbolicUtils.getmetadata(f, LatticePDE.LatticeCutField, false) === true
     (haskey(cv.states, n) || cut) || throw(
@@ -439,10 +439,10 @@ function _field_at_term(u, cv)
     return operation(f)(args...)
 end
 
-# The conditions of the fields `names` as PDESystem conditions (F2 design §2.12), after the
+# The conditions of the fields `names` as PDESystem conditions, after the
 # checks that need the model's words: an initial condition is refused (a field's initial
 # value is its default); a face on an axis the lattice makes periodic, or a periodic pair on an
-# axis it closes, is refused (per-field periodicity is planned, FE-20); a periodic pair on an
+# axis it closes, is refused (per-field periodicity is planned); a periodic pair on an
 # axis the lattice makes periodic is the lattice's own and is dropped
 function _bcs_equations(sys, names, cv, core, ext; faced = Symbol[])
     out = Equation[]
@@ -496,18 +496,18 @@ function _bcs_equation(sys, b, names, cv, core, ext, kinds, N, stepped)
             throw(
                 PottsCompileError(
                     "the condition $text makes axis `$ax` of `$n` periodic, but the lattice closes " *
-                "`$ax`; periodicity is the lattice's, for every field (per-field periodicity is planned, FE-20): make " *
+                        "`$ax`; periodicity is the lattice's, for every field (per-field periodicity is not supported yet): make " *
                 "the lattice periodic on `$ax`, or remove the condition"))
         end
         core.periodic[d] && throw(
             PottsCompileError(
                 "the condition $text sets a face of axis `$ax`, which the " *
-            "lattice makes periodic (per-field periodicity is planned, FE-20); close `$ax` on the lattice, or remove " *
+                    "lattice makes periodic (per-field periodicity is not supported yet); close `$ax` on the lattice, or remove " *
             "the condition"))
     end
     # a face condition sets the ghost values of a spatial operator of `n`: with none in any
     # field's equation (`D(u) ~ laplacian(n)` reads the ghosts of `n` too, and so does an aux field
-    # `K ~ laplacian(n)`) it would do nothing (F4-E14)
+    # `K ~ laplacian(n)`) it would do nothing
     if !periodic && !masked && !isempty(axes)
         any(f -> _has_spatial_op(f[2], n), _field_equations(sys)) || any(f -> _has_spatial_op(f[2], n), _field_aux(sys)) ||
             throw(
@@ -584,7 +584,7 @@ function _field_system(sys::PottsSystem, names = Symbol[info(x).name for (x, _) 
         known = nothing)
     # the model-wide filled inputs in their canonical order: lowering finds each CPM read in
     # `known` by its expression, so the names and the order (the dvs, the fill phase) do not
-    # depend on the order in which the converter meets the reads (R-F2b)
+    # depend on the order in which the converter meets the reads
     known === nothing && (known = _canonical_filled(_field_system(sys; T, known = Tuple{Symbol, Any, Type}[])[2].filled))
     lat = _p(sys, :lattice)
     N = length(lat.dims)
@@ -602,24 +602,24 @@ function _field_system(sys::PottsSystem, names = Symbol[info(x).name for (x, _) 
     for (x, rate, op) in _field_equations(sys)
         n = info(x).name
         n in names || continue
-        # (a refusal of a term names this field's equation, not the first one; F3-17 review r1 N2)
+        # (a refusal of a term names this field's equation, not the first one)
         r = Symbolics.wrap(_located(() -> _field_term(rate, cv), sys, _field_equation_of(sys, string(n))))
         # (a steady row stays `0 ~ rhs`: LatticePDE solves it for the same field, the one free field
-        # its operator acts on in the group, F3-12b)
+        # its operator acts on in the group)
         op === :steady && (push!(eqs, 0 ~ r); continue)
         lhs = op isa ModelingToolkitBase.Shift ? op(Symbolics.wrap(states[n])) : Differential(tt)(Symbolics.wrap(states[n]))
         push!(eqs, lhs ~ r)
     end
-    # every group computes the aux fields from the values it reads (F2 design §2.11)
+    # every group computes the aux fields from the values it reads
     for (x, rhs) in aux
         push!(eqs, Symbolics.wrap(states[info(x).name]) ~ Symbolics.wrap(_field_term(rhs, cv)))
     end
     core = core_lattice(lat)
     ext = ntuple(d -> lat.dims[d] * Float64(h[d]), N)
     # another group's field that a spatial operator here reads (`laplacian(v)`, v stepped elsewhere): an
-    # input that carries its face conditions, so its ghost values are its own group's (F3-22 review r1).
+    # input that carries its face conditions, so its ghost values are its own group's.
     # A site variable or a field with no equation that an operator reads is such an input too, with
-    # no face conditions: a closed face has no flux (F4-B6 review; before, LatticeFields refused it
+    # no face conditions: a closed face has no flux (before, LatticeFields refused it
     # for want of a boundary rule). On a lattice periodic on every axis it needs none, and its
     # program stays as it was
     stepped = Symbol[info(x).name for (x, _) in _field_equations(sys)]
@@ -635,7 +635,7 @@ function _field_system(sys::PottsSystem, names = Symbol[info(x).name for (x, _) 
     for n in names, d in 1:N
         core.periodic[d] && push!(bcs, Symbolics.wrap(at_face(n, d, 0.0)) ~ Symbolics.wrap(at_face(n, d, ext[d])))
     end
-    # the conditions (F2 design §2.12): each condition of a field of this group, translated as the
+    # the conditions: each condition of a field of this group, translated as the
     # equations are and appended, so `lower_group` parses it with `parse_bcs` as LatticePDE does
     append!(bcs, _bcs_equations(sys, names, cv, core, ext; faced))
     _has_domain(lat) && _filled_input!(cv, _DOMAIN_FILL, :domain__in, Bool)
@@ -683,7 +683,7 @@ _fill_value(ex, env) = ex === _DOMAIN_FILL ? :(CorePotts.in_domain(ctx.lattice, 
 function _field_disc(sys::PottsSystem, T)
     lat = _p(sys, :lattice)
     geometry = lat.geometry isa CorePotts.Hexagonal ? LatticeFields.IR.HEX : LatticeFields.IR.CUBIC
-    # the clock is the MCS: `mcs` reads its step index (F2 design §2.6)
+    # the clock is the MCS: `mcs` reads its step index
     return LatticePDE.LatticeDiscretization(LatticePDE.Grid(lat.dims; geometry); T,
         domain = _has_domain(lat) ? "domain__in" : nothing, clock = Float64(_p(sys, :sweep).mcs_duration))
 end
@@ -717,12 +717,12 @@ _FieldGroup(names, group, alg, program, masks, step, arrays, tables, params, sub
     _FieldGroup(names, group, alg, program, masks, step, arrays, tables, params, substeps, fingerprint, options,
         Pair{String, Symbol}[])
 
-# The substep rule of a map group (F2 design §2.11): one application per field window (the
+# The substep rule of a map group: one application per field window (the
 # MCS), whatever the parameters; a map has no stability bound
 struct _MapSteps end
 (::_MapSteps)(praw) = 1
-# The substep rule of the group of a model whose only fields are aux fields `K ~ rhs` (F3
-# design §3.12): no state, so no substep; the phase evaluates them once per MCS
+# The substep rule of the group of a model whose only fields are aux fields `K ~ rhs`: no
+# state, so no substep; the phase evaluates them once per MCS
 struct _AuxSteps end
 (::_AuxSteps)(praw) = 0
 # the least count and the bounded flag of a group's rule, as the fingerprint records them
@@ -735,7 +735,7 @@ _has_fields(c::CompiledPottsSystem) = !isempty(getfield(c, :fields)) || !isempty
 
 # The cache of the lowered field groups of a compiled model (`CompiledPottsSystem.field_specs`):
 # `mtkcompile` lowers the group of all fields once, in Float64, and a `PottsProblem` whose
-# partition and state type match reuses it (F2 design §2.5)
+# partition and state type match reuses it
 const _FIELD_SPEC_LOCK = ReentrantLock()
 _field_cached(f, c::CompiledPottsSystem, key) = lock(() -> get!(f, getfield(c, :field_specs), key), _FIELD_SPEC_LOCK)
 
@@ -762,7 +762,7 @@ function _lower_field_group(sys::PottsSystem, names::Vector{Symbol}, T::Type; kn
             steady = _steady_names(sys, names))
     catch e
         # an error about a condition (`parse_bcs`, a second condition on a face) names the
-        # condition and its PDESystem (review R4 of F2 batch 4, F4-E10)
+        # condition and its PDESystem
         e isa ArgumentError || rethrow()
         i = findfirst(p -> occursin("`$(p[1])`", e.msg), cv.bcsrc)
         i === nothing && rethrow()
@@ -926,7 +926,7 @@ end
 function _nonfinite_text(text, w, cv; warning::Bool = false)
     # a kind table read `value_at(τ, 1 + kind)` as the model writes it, `τ[kind]`
     u = replace(_user_text(text, cv), r"value_at\((\w+), (?:1 \+ kind|kind \+ 1)\)" => s"\1[kind]")
-    # (a Robin face whose coefficients vary by site or in time, F4-12b: the face in words)
+    # (a Robin face whose coefficients vary by site or in time: the face in words)
     w === :robin && return string("the Robin coefficients of ", u, " give the ghost value no finite bound (α/2 + β/h ",
         "may vanish at a site, or a coefficient grows without bound in time)")
     t = "`" * u * "`"
@@ -950,7 +950,7 @@ function _nonfinite_text(text, w, cv; warning::Bool = false)
         " (every kind's entry is read, the medium's too)")
 end
 
-# A term of the field system in the model's words (F1, PO06): a generated input
+# A term of the field system in the model's words: a generated input
 # (`kind__in(t, x, y)`, `field1__in(…)`) prints as the CPM read it holds, a field read
 # `c(t, x, y)` as `c`; the key's `"c: "` prefix is dropped
 function _user_text(term::AbstractString, cv)
@@ -981,7 +981,7 @@ end
 The field groups of compiled model `c` for state type `T` and solvers `spec`: fields with
 equal solvers (canonical form) form one group, in order of first appearance; inside a group
 the plan orders the fields topologically by what they read (strongly connected fields step
-together, Jacobi; v3 §6.1). A field of another group is read from its own array. Each group
+together, Jacobi). A field of another group is read from its own array. Each group
 is lowered once by `LatticePDE.lower_group` (cached on `c`: the group of all fields comes from
 `mtkcompile`), and its algorithm's update is fused by the IR pass (`fuse_update`).
 """
@@ -995,14 +995,14 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
         j = findfirst(g -> g[1] == k, order)
         j === nothing ? push!(order, (k, s, Symbol[n])) : push!(order[j][3], n)
     end
-    # the QuasiSteady groups first (F3 design §3.5): a steady field is solved before the
+    # the QuasiSteady groups first: a steady field is solved before the
     # transient fields that read it, from their MCS-start values
     qs(g) = g[2] isa LatticeFields.Problems.QuasiSteady
     order = [filter(qs, order); filter(!qs, order)]
     dt = _field_dt(sys)
     groups = _FieldGroup[]
-    # aux fields only (F3 design §3.12): one group with no state, stepped by the default
-    # algorithm (no `field_solver` applies: PO07), with no substep
+    # aux fields only: one group with no state, stepped by the default
+    # algorithm (no `field_solver` applies), with no substep
     isempty(order) && return [_aux_group(c, T, dt)]
     allnames = Symbol[info(x).name for (x, _) in _field_equations(sys)]
     # with several groups, the coupling between them (`Problems.check_coupling`): the bound of
@@ -1014,7 +1014,7 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
             wnames = whole.params, wtables = Pair{String, Symbol}[whole.spec.rate.tables[i].key => n for (i, n) in whole.tables])
     end
     # Cartesian indexing: the host loop hands each site its coordinates (a linear launch
-    # decodes them with an integer division per site, about 3x slower on the CPU; PG-3)
+    # decodes them with an integer division per site, about 3x slower on the CPU)
     for (gi, (_, solver, names)) in enumerate(order)
         lg = _field_group_spec(c, names, T)
         opts = _field_options(c, T, solver, lg.spec.rate)
@@ -1058,7 +1058,7 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
         # with a QuasiSteady group among several, every group's phase holds the whole system's
         # parameters (after its own, which its launches read by slot): the steady gain in the
         # coupling rule reads the steady rows' decay and faces, which another group's rule
-        # needs (F3-12c)
+        # needs
         withqs = coupling !== nothing && any(o -> o[2] isa LatticeFields.Problems.QuasiSteady, order)
         params = withqs ? [lg.params; [n for n in coupling.wnames if !(n in lg.params)]] : lg.params
         rtabs = withqs ? Pair{String, Symbol}[k => n for (k, n) in coupling.wtables if !(n in last.(lg.tables))] :
@@ -1076,7 +1076,7 @@ function _field_groups(c::CompiledPottsSystem, T::Type, spec::SolverSpec)
     return groups
 end
 
-# the fields of `names` whose declared `bounds` are not finite (batch 5 review N1)
+# the fields of `names` whose declared `bounds` are not finite
 function _infinite_bounds(c::CompiledPottsSystem, names)
     out = Symbol[]
     for x in _p(getfield(c, :sys), :variables)
@@ -1088,24 +1088,24 @@ function _infinite_bounds(c::CompiledPottsSystem, names)
     return out
 end
 
-# The group of a model whose only fields are aux fields `K ~ rhs` (F3 design §3.12): no state
+# The group of a model whose only fields are aux fields `K ~ rhs`: no state
 # field, only `aux:` kernels; its phase evaluates them once per MCS (`_AuxSteps`: 0 substeps)
 # The compile options of a field group (planned on the host for every backend): Float64 in its
-# kernels only for a Float64 state, or when the group declares it (FE-17: a `compute_type` or a
+# kernels only for a Float64 state, or when the group declares it (a `compute_type` or a
 # field's `lattice_storage` of Float64), and then its kernels are registered as declared Float64
 # (the D-157 carve-out of the device scan). Cartesian indexing: the host loop hands each site
 # its coordinates (a linear launch decodes them with an integer division per site, about 3x
-# slower on the CPU; PG-3)
+# slower on the CPU)
 function _field_options(c::CompiledPottsSystem, T::Type, solver, rate)
     narrow = T <: Union{Float16, Float32}
-    # the group's own program: its fields (its own and those it reads) declared Float64 (batch 5
-    # review N4: not every group of the model when one field declares it)
+    # the group's own program: its fields (its own and those it reads) declared Float64
+    # (not every group of the model when one field declares it)
     wide = LatticeFields.Problems.compute_type(solver, T) === Float64 ||
            any(f -> f.fixed && f.storage == LatticeFields.IR.F64, rate.fields)
     return LatticeFields.Compile.CompileOptions(; T, float64_ok = !narrow || wide, lanes = :state, index = :cartesian,
         declared = narrow && wide)
 end
-# an aux field that LatticePDE added for a spatial operator across `Coarse` grids (`laplacian(c)`, F3-22):
+# an aux field that LatticePDE added for a spatial operator across `Coarse` grids (`laplacian(c)`):
 # no model variable holds it, so the binding allocates it and its `aux:` kernel fills it every window
 _hidden_aux(k::AbstractString) = LatticePDE.is_crossgrid_key(k)
 function _aux_group(c::CompiledPottsSystem, T::Type, dt)
@@ -1174,15 +1174,15 @@ function _field_phases(c::CompiledPottsSystem, T, spec::SolverSpec)
         # the at-init phase: the masked-condition clamp (one substep of length zero; it also
         # evaluates the group's aux fields). For a group with aux fields (`K ~ rhs`) and no
         # mask, the aux fields evaluated at t0, so the first sweep reads `rhs`, not the declared
-        # value (§3.12, F3 review S1): a group with no state takes its own step (0 substeps); a
-        # rate group with state its `aux:` kernels alone, which never write the state (review r2
-        # N1: no update rule, no `lower_bound` clip); a map group none (it would apply the map)
+        # value: a group with no state takes its own step (0 substeps); a
+        # rate group with state its `aux:` kernels alone, which never write the state (no update
+        # rule, no `lower_bound` clip); a map group none (it would apply the map)
         mcs = Float64(_p(getfield(c, :sys), :sweep).mcs_duration)
         start = LatticeFields.Problems.starts_steady(g.alg)
         if !isempty(g.masks.launches) || g.substeps isa _AuxSteps
             push!(clamps, CorePotts.field_clamp(ph))
         end
-        # the steady start (`init = :steady`, F3-12c): the group's steady state solved once by
+        # the steady start (`init = :steady`): the group's steady state solved once by
         # `QuasiSteady` on the step's arrays, after the clamp (the masked values hold), then its
         # aux fields evaluated from it
         if start
@@ -1378,8 +1378,8 @@ end
 
 # At build: each field phase's substep count at the problem's parameters (the policy's
 # refusals, and its warning for an explicit count the bound does not cover)
-function _check_field_substeps(@nospecialize(f), @nospecialize(p); tspan = nothing)     # (host, once per problem; TS1c)
-    # (the steady starts too, `init = :steady`: their steady refusals, F3-12c)
+function _check_field_substeps(@nospecialize(f), @nospecialize(p); tspan = nothing)     # (host, once per problem)
+    # (the steady starts too, `init = :steady`: their steady refusals)
     for e in (f.phases.mcs..., f.phases.at_init), t in (e isa CorePotts.Repeat ? e.entries : (e,))
         t isa Tuple || continue
         for ph in t
@@ -1387,7 +1387,7 @@ function _check_field_substeps(@nospecialize(f), @nospecialize(p); tspan = nothi
                 ph.substeps isa Union{LatticeFields.Problems.GroupSubsteps, LatticeFields.Problems.StartSubsteps} || continue
             pp = LatticeFields.Problems.with_tables(Float64[CorePotts.praw(ph, p)...], CorePotts.table_values(ph, p))
             # (the run's time span, MCS times the step length: a Robin face that reads the time
-            # is checked over it, F4-12b review)
+            # is checked over it)
             sp = tspan === nothing || !(ph.substeps isa LatticeFields.Problems.GroupSubsteps) ? nothing :
                  (Float64(tspan[1]) * ph.period, Float64(tspan[2]) * ph.period)
             sp === nothing ? ph.substeps(pp) : ph.substeps(pp; span = sp)

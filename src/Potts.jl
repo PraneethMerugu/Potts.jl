@@ -9,7 +9,7 @@ module Potts
 
 # The bare `using CorePotts` only backs the re-export loop below (`export $name` needs each
 # exported CorePotts name to resolve in Potts); every name Potts itself uses is listed
-# explicitly on the next line (ExplicitImports, P6.0j).
+# explicitly on the next line (ExplicitImports).
 using ADTypes: AutoFiniteDiff
 using ConstructionBase: ConstructionBase
 using CorePotts
@@ -92,7 +92,7 @@ include("contact_folds.jl")
 include("solvers.jl")
 include("fields.jl")
 include("field_components.jl")
-include("field_vocabulary.jl")       # `using Potts.Fields` (F4-E4)
+include("field_vocabulary.jl")       # `using Potts.Fields`
 include("codegen.jl")
 include("problem.jl")
 include("analysis.jl")
@@ -150,10 +150,10 @@ public KindClass
 # the sweep as MTK-visible metadata (D-160): the Hamiltonian terms, the drives and the payload
 # read with `ModelingToolkitBase.getmetadata(Potts.inner(sys), Potts.PottsSweepSpec, default)`
 public hamiltonian, drives, PottsSweepSpec
-# the container (W-lite LA, v3 §7.1): the inner System, the field PDESystem, the payload; wrap_system
+# the container around MTK's System: the inner System, the field PDESystem, the payload; wrap_system
 # and components (`compose` and `extend` are MTK's, exported above); the field bindings
 public inner, fields, part, component, wrap_system, PottsPart, FieldBinding, resolve
-# a plain PDESystem as the model's fields, its inputs bound to CPM expressions (F4-B2); the
+# a plain PDESystem as the model's fields, its inputs bound to CPM expressions; the
 # current values of those inputs, for SciML solvers of the PDESystem
 public couple, field_inputs, is_kind
 # the metadata key a model quantity carries (`[potts_entity = …]`) and its reader

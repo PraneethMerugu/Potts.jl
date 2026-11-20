@@ -1,15 +1,15 @@
-# W-lite wrap checks, compose, PDESystem conditions, hand-built inner guard, C9 components and Potts.component.
+# Wrap checks, compose, PDESystem conditions, hand-built inner guard, composed components and Potts.component.
 
-@testitem "W-lite: wrap checks" setup = [WliteSetup] tags = [:potts, :wlite] begin
-    @testset "W-lite: wrap checks" begin
-        @test_throws ArgumentError Potts.wrap_system(:other, complete(inner_all), nothing, WLiteModels.part())
-        @test_throws ArgumentError Potts.wrap_system(:allparts, complete(inner_all), WLiteModels.pde(:x), WLiteModels.part())
-        # P3-wlite trap 2: a completed system composed again is complete but not flat
-        trap = compose(complete(WLiteModels.inner_top), [decay])
+@testitem "system container: wrap checks" setup = [SystemContainerSetup] tags = [:potts, :system_container] begin
+    @testset "system container: wrap checks" begin
+        @test_throws ArgumentError Potts.wrap_system(:other, complete(inner_all), nothing, ContainerModels.part())
+        @test_throws ArgumentError Potts.wrap_system(:allparts, complete(inner_all), ContainerModels.pde(:x), ContainerModels.part())
+        # A completed system composed again is complete but not flat
+        trap = compose(complete(ContainerModels.inner_top), [decay])
         @test iscomplete(trap) && !isempty(WL_MTKB.get_systems(trap))
-        @test_throws ArgumentError Potts.wrap_system(:allparts, trap, nothing, WLiteModels.part())
+        @test_throws ArgumentError Potts.wrap_system(:allparts, trap, nothing, ContainerModels.part())
         # an uncompleted system is completed (flattened) by wrap
-        w = Potts.wrap_system(:allparts, inner_all, nothing, WLiteModels.part())
+        w = Potts.wrap_system(:allparts, inner_all, nothing, ContainerModels.part())
         @test iscomplete(Potts.inner(w)) && isempty(WL_MTKB.get_systems(Potts.inner(w))) &&
             issetequal(unknowns(w), unknowns(complete(inner_all)))
         @test Potts.fields(W_all) isa PDESystem && Potts.fields(W_empty) === nothing
@@ -19,10 +19,10 @@
     end
 end
 
-@testitem "W-lite: compose equals the raw reference" setup = [WliteSetup] tags = [:potts, :wlite] begin
-    @testset "W-lite: compose equals the raw reference" begin
-        C, M_, T_ = WLiteCompose.cell(), WLiteCompose.model(), WLiteCompose.top()
-        part = WLiteModels.part
+@testitem "system container: compose equals the raw reference" setup = [SystemContainerSetup] tags = [:potts, :system_container] begin
+    @testset "system container: compose equals the raw reference" begin
+        C, M_, T_ = ContainerCompose.cell(), ContainerCompose.model(), ContainerCompose.top()
+        part = ContainerModels.part
         bind(n) = [Potts.FieldBinding(Symbol[], :vol, :volume)]
         wcell = Potts.wrap_system(
             :cell, C, nothing, part(;
@@ -40,19 +40,19 @@ end
                 issetequal(parameters(I), parameters(ref)) &&
                 length(parameters(I; initial_parameters = true)) == length(parameters(ref; initial_parameters = true))
         end
-        ref = complete(compose(WLiteCompose.model(), [WLiteCompose.cell()]))
+        ref = complete(compose(ContainerCompose.model(), [ContainerCompose.cell()]))
         Wb = compose(wmodel, wcell)
         @test same(Wb, ref)                                                    # b7
         @test any(isequal(unwrap(Wb.cell.xc)), unknowns(Wb))
         # nested: top ∘ (model ∘ cell)
-        nref = complete(compose(WLiteCompose.top(), [compose(WLiteCompose.model(), [WLiteCompose.cell()])]))
+        nref = complete(compose(ContainerCompose.top(), [compose(ContainerCompose.model(), [ContainerCompose.cell()])]))
         Wn = compose(wtop, compose(wmodel, wcell))
         @test same(Wn, nref)                                                   # b8
         @test any(isequal(unwrap(Wn.model.cell.xc)), unknowns(Wn))
         # negative control: unwrapping the flattened inner (not `get_parent`) loses the hierarchy (trap 1)
         flat = Potts.wrap_system(:model, complete(compose(Potts.inner(wmodel), [Potts.inner(wcell)]; name = :model)), nothing, part())
         @test_throws ArgumentError flat.cell
-        # S-2: (path, name) bindings, prefixed at compose, resolve to bound inputs of unknowns(W)
+        # (path, name) bindings, prefixed at compose, resolve to bound inputs of unknowns(W)
         bs = Potts.getfield(Potts.getfield(Wn, :part), :bindings)
         @test sort([(b.path, b.name) for b in bs]) ==
             sort([(Symbol[:model], :vol), (Symbol[:model, :cell], :cbar), (Symbol[:model, :cell], :vol)])
@@ -65,7 +65,7 @@ end
         @test occursin("binding model.cell.cbar ← c_mean", sprint(show, MIME"text/plain"(), Wn))
         # the resolved terms are template-compile inputs
         @test Potts.ModelingToolkitBase.mtkcompile(Potts.inner(Wn); inputs) isa System
-        # C4 review B1 / C9: subsystems are lowered into the payload as model-scope components;
+        # Subsystems are lowered into the payload as model-scope components;
         # top-level content of a hand-built System (wmodel's `D(w)`) and component inputs (wcell's
         # `cbar`, `vol`) are refused by name, never dropped
         loud(f, what, E::Type{<:Exception} = ArgumentError) = try
@@ -91,13 +91,13 @@ end
     end
 end
 
-@testitem "W-lite: a PDESystem's condition is stored, printed and lowered (F1, V4; F2-11)" setup = [WliteSetup] tags = [:potts, :wlite] begin
-    @testset "W-lite: a PDESystem's condition is stored, printed and lowered (F1, V4; F2-11)" begin
-        sys = WLiteBcs(; name = :b, with_bcs = true)
+@testitem "system container: a PDESystem's condition is stored, printed and lowered" setup = [SystemContainerSetup] tags = [:potts, :system_container] begin
+    @testset "system container: a PDESystem's condition is stored, printed and lowered" begin
+        sys = ContainerBcs(; name = :b, with_bcs = true)
         bcs = Potts.getfield(Potts.getfield(sys, :part), :bcs)
         @test length(bcs) == 1 && occursin("masked", string(bcs[1]))
         @test occursin("bc      ", sprint(show, MIME"text/plain"(), sys))
-        # F2-11: lowered. The sites of the border cell after the last sweep hold 5.0
+        # Lowered. The sites of the border cell after the last sweep hold 5.0
         σ = zeros(Int32, 8, 8); σ[1, :] .= 1
         op = [ownership => σ, kind => [:border]]
         u = solve(PottsProblem(sys, op, (0, 2); field_solver = ExplicitEuler(substeps = 1)), SequentialCPM()).u[end]
@@ -105,13 +105,13 @@ end
         @test any(own) && all(a[own] .== 5.0) && maximum(a) == 5.0
         @test any(!=(0.0), a[.!own]) && all(a[.!own] .!= 5.0)
         @test any(b -> occursin("masked", string(b)), getfield(Potts.fields(sys), :bcs))
-        @test isempty(Potts.getfield(Potts.getfield(WLiteBcs(; name = :n, with_bcs = false), :part), :bcs))
+        @test isempty(Potts.getfield(Potts.getfield(ContainerBcs(; name = :n, with_bcs = false), :part), :bcs))
     end
 end
 
-@testitem "W-lite: a hand-built inner System with other values or extra statements is refused" setup = [WliteSetup] tags = [:potts, :wlite] begin
-    @testset "W-lite: a hand-built inner System with other values or extra statements is refused" begin
-        g = WLiteGuard(; name = :g)
+@testitem "system container: a hand-built inner System with other values or extra statements is refused" setup = [SystemContainerSetup] tags = [:potts, :system_container] begin
+    @testset "system container: a hand-built inner System with other values or extra statements is refused" begin
+        g = ContainerGuard(; name = :g)
         part = Potts.getfield(g, :part)
         m = WL_MTKB.getmetadata(Potts.inner(g), Potts._BuiltFrom, nothing)
         @test m[1] === part && m[2][] === Potts.inner(g)                       # the identity path
@@ -154,11 +154,11 @@ end
     end
 end
 
-@testitem "W-lite C9: compose results compile, solve and extend" setup = [WliteSetup] tags = [:potts, :wlite] begin
-    @testset "W-lite C9: compose results compile, solve and extend" begin
-        part = WLiteModels.part
-        wdec = Potts.wrap_system(:decay, WLiteC9.decay(), nothing, part())
-        W = compose(WLiteGuard(; name = :g), wdec)
+@testitem "composed systems: compose results compile, solve and extend" setup = [SystemContainerSetup] tags = [:potts, :system_container] begin
+    @testset "composed systems: compose results compile, solve and extend" begin
+        part = ContainerModels.part
+        wdec = Potts.wrap_system(:decay, ComposeSys.decay(), nothing, part())
+        W = compose(ContainerGuard(; name = :g), wdec)
         @test any(isequal(unwrap(W.decay.yd)), unknowns(W))
         c = mtkcompile(W)
         @test c isa CompiledPottsSystem
@@ -170,15 +170,15 @@ end
         @test u.model.decay₊yd[1] ≈ 2.0 * rk4(0.3 / 4)^40 rtol = 1.0e-12
         @test u.model.decay₊yd[1] ≈ 2.0 * exp(-0.3 * 10) rtol = 1.0e-5
         @test u.model.x[1] ≈ rk4(2.0 / 4)^40 rtol = 1.0e-12
-        p0 = PottsProblem(WLiteGuard(; name = :g), [Potts.ownership => σ, Potts.kind => [1]], (0, 1))
+        p0 = PottsProblem(ContainerGuard(; name = :g), [Potts.ownership => σ, Potts.kind => [1]], (0, 1))
         @test !(:decay₊yd in propertynames(p0.u0.model))
-        w2 = Potts.wrap_system(:inner2, WLiteC9.inner2(), nothing, part())
+        w2 = Potts.wrap_system(:inner2, ComposeSys.inner2(), nothing, part())
         Wn = compose(W, w2)
         pn = PottsProblem(Wn, [Potts.ownership => σ, Potts.kind => [1]], (0, 10); ode_solver = Potts.RK4(substeps = 4))
         un = solve(pn, SequentialCPM()).u[end]
         @test un.model.decay₊yd[1] ≈ u.model.decay₊yd[1] rtol = 1.0e-12
         @test un.model.inner2₊zz[1] ≈ rk4(0.1 / 4)^40 rtol = 1.0e-12
-        Wd = compose(WLiteGuard(; name = :g), compose(wdec, w2))
+        Wd = compose(ContainerGuard(; name = :g), compose(wdec, w2))
         @test any(isequal(unwrap(Wd.decay.inner2.zz)), unknowns(Wd))
         pd = PottsProblem(Wd, [Potts.ownership => σ, Potts.kind => [1]], (0, 10); ode_solver = Potts.RK4(substeps = 4))
         @test solve(pd, SequentialCPM()).u[end].model.decay₊inner2₊zz[1] ≈ rk4(0.1 / 4)^40 rtol = 1.0e-12
@@ -187,13 +187,13 @@ end
         @test occursin(
             "per cell", sprint(
                 showerror, try
-                    mtkcompile(compose(WLiteGuard(; name = :g), WLiteC9Cell(; name = :cc)))
+                    mtkcompile(compose(ContainerGuard(; name = :g), ComposeCell(; name = :cc)))
                 catch e
                     e
                 end
             )
         )
-        for E in (extend(WLiteGuard(; name = :g), W), extend(W, WLiteGuard(; name = :g)))
+        for E in (extend(ContainerGuard(; name = :g), W), extend(W, ContainerGuard(; name = :g)))
             pe = PottsProblem(E, [Potts.ownership => σ, Potts.kind => [1]], (0, 10); ode_solver = Potts.RK4(substeps = 4))
             @test :decay₊kd in propertynames(pe.p) && pe.p.decay₊kd == 0.3
             @test solve(pe, SequentialCPM()).u[end].model.decay₊yd[1] ≈ 2.0 * rk4(0.3 / 4)^40 rtol = 1.0e-12
@@ -201,9 +201,9 @@ end
     end
 end
 
-@testitem "W-lite C9: composed content that cannot be compiled is refused by name" setup = [WliteSetup] tags = [:potts, :wlite] begin
-    @testset "W-lite C9: composed content that cannot be compiled is refused by name" begin
-        part = WLiteModels.part
+@testitem "composed systems: composed content that cannot be compiled is refused by name" setup = [SystemContainerSetup] tags = [:potts, :system_container] begin
+    @testset "composed systems: composed content that cannot be compiled is refused by name" begin
+        part = ContainerModels.part
         M = WL_MTKB
         msg(f, E::Type{<:Exception} = ArgumentError) = try
             f()
@@ -211,30 +211,30 @@ end
         catch e
             e isa E ? sprint(showerror, e) : "wrong exception $(typeof(e)), expected $E"
         end
-        g = WLiteGuard(; name = :g)
-        wdec = Potts.wrap_system(:decay, WLiteC9.decay(), nothing, part())
-        @test occursin("@components", msg(() -> compose(g, WLiteC9PerCellComp(; name = :pc))))
+        g = ContainerGuard(; name = :g)
+        wdec = Potts.wrap_system(:decay, ComposeSys.decay(), nothing, part())
+        @test occursin("@components", msg(() -> compose(g, ComposePerCellComp(; name = :pc))))
         @test msg(() -> mtkcompile(compose(g, wdec))) == "built"
-        @test occursin("kind", msg(() -> mtkcompile(compose(g, WLiteC9Table(; name = :tab))), Potts.PottsCompileError))
+        @test occursin("kind", msg(() -> mtkcompile(compose(g, ComposeTable(; name = :tab))), Potts.PottsCompileError))
         W = compose(g, wdec)
         @test occursin("`decay`", msg(() -> compose(W, wdec)))
-        @test occursin("`decay`", msg(() -> compose(WLiteC9ModelComp(; name = :mc), wdec)))
+        @test occursin("`decay`", msg(() -> compose(ComposeModelComp(; name = :mc), wdec)))
         two = msg(
             () -> mtkcompile(
                 Potts.wrap_system(
                     :g, complete(
                         M.compose(
                             M.toggle_namespacing(M.get_parent(Potts.inner(g)), true),
-                            [WLiteC9.decay(), WLiteC9.decay()]
+                            [ComposeSys.decay(), ComposeSys.decay()]
                         )
                     ), nothing, Potts.getfield(g, :part)
                 )
             ), Potts.PottsCompileError
         )
         @test occursin("`decay`", two)
-        dec = WLiteC9.decay()
+        dec = ComposeSys.decay()
         yd = dec.yd
-        with(; kw...) = Potts.wrap_system(:h, System(Potts.Equation[], Potts.t; name = :h, systems = [WLiteC9.decay()], kw...), nothing, part())
+        with(; kw...) = Potts.wrap_system(:h, System(Potts.Equation[], Potts.t; name = :h, systems = [ComposeSys.decay()], kw...), nothing, part())
         @test msg(() -> mtkcompile(with())) == "built"
         @test occursin("continuous", msg(() -> mtkcompile(with(; continuous_events = [[yd ~ 1.0] => [yd ~ M.Pre(yd) + 1.0]])), Potts.PottsCompileError))
         @test occursin("discrete", msg(() -> mtkcompile(with(; discrete_events = [1.0 => [yd ~ M.Pre(yd) + 1.0]])), Potts.PottsCompileError))
@@ -254,10 +254,10 @@ end
         )
         @test occursin("costs", msg(() -> mtkcompile(with(; costs = [2.0])), Potts.PottsCompileError))
         for (f, what) in (
-                (WLiteC9Neg.noisy, "noise equations"), (WLiteC9Neg.constrained, "constraints"),
-                (WLiteC9Neg.costly, "costs"), (WLiteC9Neg.poisson, "poissonians"),
+                (ComposeNeg.noisy, "noise equations"), (ComposeNeg.constrained, "constraints"),
+                (ComposeNeg.costly, "costs"), (ComposeNeg.poisson, "poissonians"),
             )
-            top = msg(() -> mtkcompile(Potts.wrap_system(:h, f(:h; systems = [WLiteC9.decay()]), nothing, part())), Potts.PottsCompileError)
+            top = msg(() -> mtkcompile(Potts.wrap_system(:h, f(:h; systems = [ComposeSys.decay()]), nothing, part())), Potts.PottsCompileError)
             comp = msg(() -> mtkcompile(compose(g, Potts.wrap_system(:hz, f(:hz), nothing, part()))), Potts.PottsCompileError)
             @test occursin(what, top)
             @test occursin(what, comp)
@@ -266,7 +266,7 @@ end
         @test_throws MethodError Potts.wrap_system(:x, 1.0, nothing, part())
         @test occursin(
             "spans",
-            msg(() -> compose(g, Potts.wrap_system(:decay, WLiteC9.decay(), WLiteModels.pde(:decay), part())))
+            msg(() -> compose(g, Potts.wrap_system(:decay, ComposeSys.decay(), ContainerModels.pde(:decay), part())))
         )
         @test occursin(
             "spans", msg(
@@ -274,38 +274,38 @@ end
                     Potts.wrap_system(
                         :h, System(
                             Potts.Equation[], Potts.t;
-                            name = :h, systems = [WLiteC9.decay()]
-                        ), WLiteModels.pde(:h), part()
+                            name = :h, systems = [ComposeSys.decay()]
+                        ), ContainerModels.pde(:h), part()
                     )
                 ), Potts.PottsCompileError
             )
         )
-        fsys = getfield(mtkcompile(WLiteC9Field(; name = :wf)), :sys)
+        fsys = getfield(mtkcompile(ComposeField(; name = :wf)), :sys)
         @test Potts.fields(fsys) !== nothing
-        @test msg(() -> mtkcompile(compose(fsys, Potts.wrap_system(:decay, WLiteC9.decay(), nothing, part())))) == "built"
+        @test msg(() -> mtkcompile(compose(fsys, Potts.wrap_system(:decay, ComposeSys.decay(), nothing, part())))) == "built"
         @test occursin(
             "kinds", msg(
                 () -> compose(
                     g, Potts.wrap_system(
-                        :decay, WLiteC9.decay(), nothing,
+                        :decay, ComposeSys.decay(), nothing,
                         part(; kinds = [:medium, :ka, :kb])
                     )
                 )
             )
         )
-        @test occursin("kinds", msg(() -> compose(g, WLiteC9FoldOther(; name = :pf))))
+        @test occursin("kinds", msg(() -> compose(g, ComposeFoldOther(; name = :pf))))
         @test occursin(
             "lattice", msg(
                 () -> compose(
                     g, Potts.wrap_system(
-                        :decay, WLiteC9.decay(), nothing,
+                        :decay, ComposeSys.decay(), nothing,
                         part(; lattice = Potts.lattice_spec((6, 6)))
                     )
                 )
             )
         )
-        @test occursin("fold", msg(() -> mtkcompile(compose(g, WLiteC9FoldSame(; name = :pf))), Potts.PottsCompileError))
-        pc = WLiteC9PerCellComp(; name = :pc)
+        @test occursin("fold", msg(() -> mtkcompile(compose(g, ComposeFoldSame(; name = :pf))), Potts.PottsCompileError))
+        pc = ComposePerCellComp(; name = :pc)
         hand = Potts.wrap_system(
             :g, complete(
                 M.compose(
@@ -315,23 +315,23 @@ end
             ), nothing, Potts.getfield(g, :part)
         )
         @test occursin("@components", msg(() -> mtkcompile(hand), Potts.PottsCompileError))
-        @test occursin("`x`", msg(() -> compose(g, Potts.wrap_system(:x, WLiteC9Neg.xsys(), nothing, part()))))
-        @test occursin("input", msg(() -> mtkcompile(compose(g, Potts.wrap_system(:vv, WLiteC9Neg.vsys(), nothing, part()))), Potts.PottsCompileError))
-        @test occursin("input", msg(() -> mtkcompile(compose(g, Potts.wrap_system(:cell, WLiteCompose.cell(), nothing, part()))), Potts.PottsCompileError))
+        @test occursin("`x`", msg(() -> compose(g, Potts.wrap_system(:x, ComposeNeg.xsys(), nothing, part()))))
+        @test occursin("input", msg(() -> mtkcompile(compose(g, Potts.wrap_system(:vv, ComposeNeg.vsys(), nothing, part()))), Potts.PottsCompileError))
+        @test occursin("input", msg(() -> mtkcompile(compose(g, Potts.wrap_system(:cell, ContainerCompose.cell(), nothing, part()))), Potts.PottsCompileError))
     end
 end
 
-@testitem "F4-10: Potts.component composes an MTK System into a model with an energy" setup = [WliteSetup] tags = [:potts, :wlite] begin
-    @testset "F4-10: Potts.component composes an MTK System into a model with an energy" begin
+@testitem "Potts.component composes an MTK System into a model with an energy" setup = [SystemContainerSetup] tags = [:potts, :system_container] begin
+    @testset "Potts.component composes an MTK System into a model with an energy" begin
         msg(f, E::Type{<:Exception} = ArgumentError) = try
             f()
             "built"
         catch e
             e isa E ? sprint(showerror, e) : "wrong exception $(typeof(e)), expected $E"
         end
-        m = WLiteF410(; name = :m)
+        m = DecayWithEnergy(; name = :m)
         @test !isempty(Potts.hamiltonian(m))
-        comp = Potts.component(:decay, WLiteC9.decay(), m)
+        comp = Potts.component(:decay, ComposeSys.decay(), m)
         @test isempty(Potts.hamiltonian(comp)) && Potts.lattice(comp) == Potts.lattice(m)
         W = compose(m, comp)
         @test any(isequal(unwrap(W.decay.yd)), unknowns(W)) && !isempty(Potts.hamiltonian(W))
@@ -342,15 +342,15 @@ end
         @test sol.u[end].model.decay₊yd[1] ≈ 2.0 * rk4(0.3 / 4)^40 rtol = 1.0e-12
         @test sol.u[end].model.x[1] ≈ rk4(2.0 / 4)^40 rtol = 1.0e-12
         @test sol.u[end].ownership != σ
-        old = msg(() -> compose(m, Potts.wrap_system(:decay, WLiteC9.decay(), nothing, Potts.part(m))))
+        old = msg(() -> compose(m, Potts.wrap_system(:decay, ComposeSys.decay(), nothing, Potts.part(m))))
         @test occursin("energies", old)
-        part = WLiteModels.part
-        g = WLiteGuard(; name = :g)
-        kinds = msg(() -> compose(g, Potts.wrap_system(:decay, WLiteC9.decay(), nothing, part(; kinds = [:medium, :ka]))))
-        lat = msg(() -> compose(g, Potts.wrap_system(:decay, WLiteC9.decay(), nothing, part(; lattice = Potts.lattice_spec((6, 6))))))
+        part = ContainerModels.part
+        g = ContainerGuard(; name = :g)
+        kinds = msg(() -> compose(g, Potts.wrap_system(:decay, ComposeSys.decay(), nothing, part(; kinds = [:medium, :ka]))))
+        lat = msg(() -> compose(g, Potts.wrap_system(:decay, ComposeSys.decay(), nothing, part(; lattice = Potts.lattice_spec((6, 6))))))
         @test occursin("kinds", kinds)
         @test occursin("lattice", lat)
-        @test !startswith(msg(() -> Potts.component(:other, WLiteC9.decay(), m)), "not an ArgumentError") &&
-            msg(() -> Potts.component(:other, WLiteC9.decay(), m)) != "built"
+        @test !startswith(msg(() -> Potts.component(:other, ComposeSys.decay(), m)), "not an ArgumentError") &&
+            msg(() -> Potts.component(:other, ComposeSys.decay(), m)) != "built"
     end
 end

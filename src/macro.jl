@@ -86,8 +86,8 @@ _reserved_names() = Set{Symbol}(
         :largest_piece_full,
     ]
 )
-# DSL names added after published models used them as structural parameters (P6.3g:
-# `WortelAct(; connected)`): a structural parameter may take one of these names, and then it
+# DSL names added after published models used them as structural parameters
+# (`WortelAct(; connected)`): a structural parameter may take one of these names, and then it
 # shadows the DSL name in its model (which cannot use that helper)
 const _SHADOWABLE_DSL_NAMES = (:connected, :shell, :pieces, :distinct, :Local, :ArcOrPair, :Simple)
 # The link endpoints `a`, `b` are reserved globally (D-075 Q8): no declaration (kind,
@@ -113,10 +113,10 @@ end
 _dsl_bound(parts) = [k for k in keys(DSL) if !any(p -> first(p) === k, parts.structural)]
 _field_bound(parts) = [k for k in keys(FIELD_NAMES) if !any(p -> first(p) === k, parts.structural)]
 
-# The model body binds the lattice coordinates `x`, `y`, `z` (F2 design §2.11), which hide a
+# The model body binds the lattice coordinates `x`, `y`, `z`, which hide a
 # global of the model's module with that name. When the module defines one, the body reads the
 # name where no local binding of it is in scope and the model does not declare it, warn once at
-# expansion, naming the binding and how to keep the global (review M3 of F2 batch 4: before, the
+# expansion, naming the binding and how to keep the global (before, the
 # coordinate replaced it silently)
 function _warn_coordinate_globals(name, body, parts)
     for s in (:x, :y, :z)
@@ -180,7 +180,7 @@ function _check_old_condition_sections(name, body, mod)
     return nothing
 end
 _uses_macro(ex, s) = ex isa Expr && ((ex.head === :macrocall && ex.args[1] === s) || any(a -> _uses_macro(a, s), ex.args))
-# Whether `ex` reads `s` outside every scope that binds `s` itself (review R1 of F2 batch 4: a
+# Whether `ex` reads `s` outside every scope that binds `s` itself (a
 # helper `g(x) = 2x` binds `x` in its own body only, so a binding `src => g(1.0) * x` still
 # reads the coordinate). Scopes: a function definition (its arguments, keywords included), an
 # anonymous function, `let`, a `for` loop and a generator or comprehension. A keyword name
@@ -293,7 +293,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
     inits = _has_section(body, Symbol("@initialization_equations"))
     # likewise `@convert` (R8, D-233)
     convs = _has_section(body, Symbol("@convert"))
-    # likewise `@fields` (F4-B2: a plain PDESystem's fields; its conditions are stored, printed and
+    # likewise `@fields` (a plain PDESystem's fields; its conditions are stored, printed and
     # classified by the field compiler)
     coupled = _has_section(body, Symbol("@fields"))
     # likewise `@description` and `@metadata` (MTK's `@mtkmodel` sections: the inner System's)
@@ -311,7 +311,7 @@ function _potts_model(name::Symbol, body::Expr, mod)
         D = $P._D
         Pre = $P._pre
         $(Expr(:(=), Expr(:tuple, Expr(:parameters, _dsl_bound(parts)...)), :($P.DSL)))
-        # the field equations' names (F2 design §2.11): the lattice coordinates and `masked`
+        # the field equations' names: the lattice coordinates and `masked`
         $(Expr(:(=), Expr(:tuple, Expr(:parameters, _field_bound(parts)...)), :($P.FIELD_NAMES)))
         __kinds = Symbol[]
         __frozen = Int[]
@@ -719,7 +719,7 @@ function _section!(parts, sec, args, ln = nothing)
         for l in _lines(args)
             lhs, val = l isa Expr && l.head === :(=) ? (l.args[1], _strip(l.args[2])) : (l, nothing)
             # `λ = 1.0, [unit = u"…", tunable = false, bounds = (0, 2), description = "…"]` (MTK
-            # metadata; F2-14, FE-18)
+            # metadata)
             val, opts = val isa Expr && val.head === :tuple && length(val.args) == 2 && val.args[2] isa Expr &&
                 val.args[2].head === :vect ? (val.args[1], val.args[2]) : (val, nothing)
             all(o -> o isa Expr && o.head === :(=) && o.args[1] isa Symbol, opts === nothing ? () : opts.args) ||
@@ -950,10 +950,10 @@ function _section!(parts, sec, args, ln = nothing)
     elseif sec === Symbol("@initialization_equations")
         foreach(((l, lln),) -> push!(code, _located_push(:__init_eqs, _rewrite_eq(l), lln)), _lines_ln(args, ln))
     elseif sec === Symbol("@fields")
-        # `@fields c, u = pdesys (endo => kind == A, vol => volume[owner])` (F4-B2): the
+        # `@fields c, u = pdesys (endo => kind == A, vol => volume[owner])`: the
         # PDESystem's fields, parameters, equations and conditions join the model here, under
         # their own names (as `Potts.couple`), each binding an input of it to a CPM expression;
-        # the names before `=` are bound to those fields (or parameters, F4-E8) for the
+        # the names before `=` are bound to those fields (or parameters) for the
         # statements after this line.
         # The names and the bindings are optional.
         usage = "@fields takes optional field names, a PDESystem and its input bindings: " *
@@ -985,7 +985,7 @@ function _section!(parts, sec, args, ln = nothing)
             # a binding tests a kind set with `ismember`: `kind ∈ (a, b)` is an interval and
             # `kind ∈ Set(…)` the constant `false`
             _no_membership_sugar(b.args[3], "@fields $(sysex)", "a binding")
-            # a bare-symbol key is an input's name first, its local value second (F4-E2)
+            # a bare-symbol key is an input's name first, its local value second
             k = b.args[2]
             :($(k isa Symbol ? :($P._NamedKey($(QuoteNode(k)), () -> $k)) : k) => $(rewrite(_checked_kind_names(b.args[3]))))
         end
@@ -1288,7 +1288,7 @@ function rewrite(ex)
     elseif h === :quote || h === :macrocall && ex.args[1] === Symbol("@variables")
         return ex
     elseif h === :call
-        # a bare `pieces` argument is the cell-scope built-in (P6.9a); a call keeps its head
+        # a bare `pieces` argument is the cell-scope built-in; a call keeps its head
         return Expr(h, rewrite(ex.args[1]), map(_rewrite_arg, ex.args[2:end])...)
     end
     return Expr(h, map(_rewrite_arg, ex.args)...)

@@ -7,13 +7,14 @@
 # - The per-model rows (status, open deviations, links) come from `docs/status/models.toml`.
 # - The PASS / FAIL / PARKED counts are computed from the committed verdict TSVs,
 #   `lib/PottsModels/reproductions/data/<NN>/<record>/verdicts*.tsv` (D-146).
-# - The remaining build order marks each ROADMAP item open or done from `docs/design/ROADMAP.md`.
+# - The remaining build order is kept by hand in `BUILD_ORDER` below, each item with its state
+#   as the ROADMAP (`docs/design/ROADMAP.md`) gives it.
 #
 # Counting rules (stated on the page):
 # - the `result` column is read; PASS, FAIL and PARKED are counted, every other value
 #   (`info: …`, `reported`) is information, as is a row of `kind` `info` (record 04);
 # - a control row is one with a non-empty `required` column: the result (PASS or FAIL) the
-#   control must show (P6.0cb). It is not a verdict on the model; controls are counted apart,
+#   control must show. It is not a verdict on the model; controls are counted apart,
 #   as "N of M as required". Records without the column (the byte-pinned 15 records) are read
 #   by their own convention: a band saying "control: must FAIL" requires FAIL; a `case`
 #   `control` row whose target names the control's own verdict requires PASS; the other rows
@@ -123,77 +124,93 @@ function _records(nn)
     return out
 end
 
-# ROADMAP checkbox state of an item: "done", "open" or "planned" (Steps 6–12 bullets)
-function _roadmap_state(roadmap, id)
-    for l in roadmap
-        occursin("**$id**", l) || continue
-        s = lstrip(l)
-        startswith(s, "- [x]") && return "done"
-        startswith(s, "- [ ]") && return "open"
-        return "planned"
-    end
-    return "not in ROADMAP"
-end
-
+# The remaining work, by topic: (topic, state, what). The state ("done", "open" or "planned")
+# is kept by hand; update it when the ROADMAP item it follows changes.
 const BUILD_ORDER = [
-    ("In flight (offline FULL runs on the PC)", [
-        ("P6.15g", "OpenVT Figure 6, Table 1 and Figure 7: the threshold sweeps (V1–V3b). Estimated about 45 core-hours with `SequentialCPM(; skip_interior = true)` (PC, AMD Ryzen AI Max+ 395, CPU; from the 2.83× case (a) speed-up, D-174)."),
-        ("P6.3f", "Merks: the FULL run and the digitised 01b figure targets."),
-    ]),
-    ("Step 4: foam", [
-        ("P6.4a", "copy-scope `direction`, `time`, `mcs`; initialization at `at_init`"),
-        ("P6.4b", "general proposal laws with Hastings acceptance"),
-        ("P6.4c", "`@retire`, `@transition`, discrete events, `@terminate`"),
-        ("P6.4d", "brick-wall tilings; T1 counts and topology moments"),
-        ("P6.4e", "reproduction 04 (ships with the provisional F1 default)"),
-    ]),
-    ("Step 5: Fortuna, 3D", [
-        ("P6.5a", "cell references; liveness"),
-        ("P6.5b", "the shared ownership-delta routine; `@convert`"),
-        ("P6.5c", "`Fill`, `Objects`, `Group`; predicate-sourced PDEs; MSD fits"),
-        ("P6.5d", "reproduction 14a / 14b (and 14c)"),
-    ]),
-    ("Steps 6–12 (expanded into items when Step 5 merges)", [
-        ("P6.6", "myxobacteria (13)"),
-        ("P6.7", "Zajac convergent extension (12)"),
-        ("P6.7b", "the 14c chemotaxis variant"),
-        ("P6.8", "Bauer 2007 sprouting (07)"),
-        ("P6.9", "Bauer 2009 ECM topography (05)"),
-        ("P6.10", "Andasari / Jafari Nivlouei multiscale (11)"),
-        ("P6.11", "Jiang 2005 tumour, 3D (06)"),
-        ("P6.12", "FBCA (08)"),
-    ]),
-    ("After all paper models", [
-        ("P6.0bi", "Metal verification batch"),
-    ]),
+    (
+        "Full runs on the PC",
+        [
+            ("OpenVT threshold sweeps", "done", "OpenVT Figure 6, Table 1 and Figure 7: the threshold sweeps (V1–V3b). Estimated about 45 core-hours with `SequentialCPM(; skip_interior = true)` (PC, AMD Ryzen AI Max+ 395, CPU; from the 2.83× case (a) speed-up)."),
+            ("Merks full run", "open", "Merks: the FULL run and the digitised 01b figure targets."),
+        ],
+    ),
+    (
+        "Foam (model 04)",
+        [
+            ("Copy scopes", "open", "copy-scope `direction`, `time`, `mcs`; initialization at `at_init`"),
+            ("Proposal laws", "open", "general proposal laws with Hastings acceptance"),
+            ("Cell lifecycle events", "open", "`@retire`, `@transition`, discrete events, `@terminate`"),
+            ("Brick-wall tilings", "open", "brick-wall tilings; T1 counts and topology moments"),
+            ("Foam reproduction", "done", "reproduction 04 (ships with the provisional shear-form default)"),
+        ],
+    ),
+    (
+        "Cell nucleus and migration, 3D (model 14)",
+        [
+            ("Cell references", "done", "cell references; liveness"),
+            ("Ownership changes", "done", "the shared ownership-delta routine; `@convert`"),
+            ("Object geometry", "done", "`Fill`, `Objects`, `Group`; predicate-sourced PDEs; MSD fits"),
+            ("Nucleus and migration reproduction", "open", "reproduction 14a / 14b (and 14c)"),
+        ],
+    ),
+    (
+        "The other paper models (expanded into items when model 14 is done)",
+        [
+            ("Myxobacteria", "planned", "myxobacteria (13)"),
+            ("Convergent extension", "planned", "Zajac convergent extension (12)"),
+            ("Chemotaxis variant", "planned", "the 14c chemotaxis variant"),
+            ("Sprouting angiogenesis", "planned", "Bauer 2007 sprouting (07)"),
+            ("ECM topography", "planned", "Bauer 2009 ECM topography (05)"),
+            ("2D multiscale", "planned", "Andasari / Jafari Nivlouei multiscale (11)"),
+            ("3D avascular tumour", "planned", "Jiang 2005 tumour, 3D (06)"),
+            ("Flux balance analysis", "planned", "FBCA (08)"),
+        ],
+    ),
+    (
+        "After all paper models",
+        [
+            ("Metal verification", "open", "Metal verification batch"),
+        ],
+    ),
 ]
+
+const STATUS_HEADER = """
+# [Paper models: status](@id paper-status)
+
+One row per model of the Potts.jl paper: the 12 reference models and the OpenVT monolayer
+benchmark. The PASS, FAIL and PARKED counts are computed from the committed verdict tables of
+the full reproduction runs (`lib/PottsModels/reproductions/data/<NN>/`) each time these docs
+are built, so they always match the records. The status and the open deviations are kept by
+hand in `docs/status/models.toml`.
+
+!!! note "Policy"
+    - **All 12 models.** The paper covers all 12 reference models; there is no reduced
+      fallback set.
+    - **Provisional defaults.** No open question to a paper's authors holds a model back.
+      The model ships with a labelled provisional default, and every provisional default is
+      a row of the deviations table on that model's page, with its author-question status.
+    - **Author letters are sent by the PI.** Questions for the authors are collected on our
+      open question list. Nothing on these pages is an answer from an author or from the
+      OpenVT consortium unless its deviations row says "answered".
+"""
+
+const BUILD_ORDER_INTRO = """
+
+## Remaining build order
+
+The work left, by topic, in build order. Each item's state (done, open or planned) is kept
+by hand in `docs/status/render.jl` and follows the project roadmap.
+"""
 
 _cell(s) = replace(String(s), "|" => "∣")
 _controls(c) = c === nothing || c["controls"] == 0 ? "—" : "$(c["controls_as_required"]) of $(c["controls"])"
 
 function render_status(; published::Bool = false)
     models = TOML.parsefile(joinpath(STATUS_DIR, "models.toml"))["model"]
-    roadmap = readlines(joinpath(STATUS_ROOT, "docs", "design", "ROADMAP.md"))
     io = IOBuffer()
-    println(io, """
-    # [Paper models: status](@id paper-status)
-
-    One row per model of the Potts.jl paper: the 12 reference models and the OpenVT monolayer
-    benchmark. The PASS, FAIL and PARKED counts are computed from the committed verdict tables of
-    the full reproduction runs (`lib/PottsModels/reproductions/data/<NN>/`) each time these docs
-    are built, so they always match the records. The status and the open deviations are kept by
-    hand in `docs/status/models.toml`.
-
-    !!! note "Policy"
-        - **All 12 models.** The paper covers all 12 reference models; there is no reduced
-          fallback set (D-154).
-        - **Provisional defaults.** No open question to a paper's authors holds a model back.
-          The model ships with a labelled provisional default, and every provisional default is
-          a row of the deviations table on that model's page, with its author-question status
-          (D-154, D-155).
-        - **Author letters are sent by the PI.** Questions for the authors are collected on our
-          open question list. Nothing on these pages is an answer from an author or from the
-          OpenVT consortium unless its deviations row says "answered".
+    print(io, STATUS_HEADER)
+    println(
+        io, """
 
     ## Status
 
@@ -277,17 +294,11 @@ function render_status(; published::Bool = false)
     Every timing names its machine and backend. "PC" is an AMD Ryzen AI Max+ 395 workstation
     (16 cores, Ubuntu 24.04); "Mac" is an Apple M1 Pro. All records ran on the CPU.""")
     print(io, String(take!(details)))
-    println(io, """
-
-    ## Remaining build order
-
-    In the order of the ROADMAP (`docs/design/ROADMAP.md`, Phase 6); each item's state is read
-    from it when these docs are built.
-    """)
+    println(io, BUILD_ORDER_INTRO)
     for (step, items) in BUILD_ORDER
         println(io, "**$step**\n")
-        for (id, what) in items
-            println(io, "- `$id` ($(_roadmap_state(roadmap, id))): $what")
+        for (topic, state, what) in items
+            println(io, "- **$topic** ($state): $what")
         end
         println(io)
     end

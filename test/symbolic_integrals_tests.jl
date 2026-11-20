@@ -108,8 +108,8 @@ end
 end
 
 
-@testitem "integral(x) is fresh after a write in the same block (P6.0m, D-042)" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "integral(x) is fresh after a write in the same block (P6.0m, D-042)" begin
+@testitem "integral(x) is fresh after a write in the same block" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "integral(x) is fresh after a write in the same block" begin
         @potts_model FreshIntegrals begin
             @kinds medium A
             @variables begin
@@ -164,8 +164,8 @@ end
 end
 
 
-@testitem "integral(Pre(w)) folds the block-start values (P6.0m3, D-042)" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "integral(Pre(w)) folds the block-start values (P6.0m3, D-042)" begin
+@testitem "integral(Pre(w)) folds the block-start values" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "integral(Pre(w)) folds the block-start values" begin
         @potts_model IntegralPre begin
             @kinds medium A
             @variables begin
@@ -264,9 +264,9 @@ end
 end
 
 
-@testitem "P6.0ah: equal folds over different variables, independent of operator hashes" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "P6.0ah: equal folds over different variables, independent of operator hashes" begin
-        @potts_model P60ahTieModel begin
+@testitem "equal folds over different variables, independent of operator hashes" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "equal folds over different variables, independent of operator hashes" begin
+        @potts_model TieModel begin
             @kinds medium A
             @variables z(cell) = 1.0 g(model) = 0.5
             @lattice Lattice((12, 8))
@@ -275,7 +275,7 @@ end
             @sweep Metropolis(; temperature = 1.0)
         end
 
-        @potts_model P60ahTieCell begin
+        @potts_model TieCell begin
             @kinds medium A
             @variables z(cell) = 1.0 y(cell) = 0.0
             @lattice Lattice((12, 8))
@@ -284,7 +284,7 @@ end
             @sweep Metropolis(; temperature = 1.0)
         end
 
-        @potts_model P60ahTieUpd begin
+        @potts_model TieUpd begin
             @kinds medium A
             @variables z(cell) = 1.0 y(cell) = 0.0
             @lattice Lattice((12, 8))
@@ -293,7 +293,7 @@ end
             @sweep Metropolis(; temperature = 1.0)
         end
 
-        @potts_model P60ahTieIntegral begin
+        @potts_model TieIntegral begin
             @kinds medium A
             @variables c(site) = 1.0 y(cell) = 0.0 w(cell) = 0.0
             @lattice Lattice((12, 8))
@@ -305,46 +305,46 @@ end
             @sweep Metropolis(; temperature = 1.0)
         end
 
-        function p60ah_tie_problem(M)
+        function tie_problem(M)
             s = zeros(Int32, 12, 8)
             s[3:6, 3:6] .= 1
             s[7:10, 3:6] .= 2
             return PottsProblem(M(; name = :x), [ownership => s, kind => [:A, :A]], (0, 3); seed = 7, ode_solver = Potts.RK4())
         end
 
-        for M in (P60ahTieModel, P60ahTieCell, P60ahTieUpd, P60ahTieIntegral), solver in (Potts.ExplicitEuler(), Potts.RK4())
-            base = p60ah_tie_code(M, solver)
-            @test all(s -> p60ah_tie_salted(() -> p60ah_tie_code(M, solver), s) == base, 1:4)
+        for M in (TieModel, TieCell, TieUpd, TieIntegral), solver in (Potts.ExplicitEuler(), Potts.RK4())
+            base = tie_code(M, solver)
+            @test all(s -> with_hash_salt(() -> tie_code(M, solver), s) == base, 1:4)
         end
         state(u) = (Array(u.ownership), map(Array, u.cell), map(Array, u.site), map(Array, u.model))
-        for M in (P60ahTieModel, P60ahTieCell, P60ahTieUpd, P60ahTieIntegral)
-            prob = p60ah_tie_problem(M)
+        for M in (TieModel, TieCell, TieUpd, TieIntegral)
+            prob = tie_problem(M)
             u = state(solve(prob, SequentialCPM()).u[end])
             for s in 1:4
-                p = p60ah_tie_salted(() -> p60ah_tie_problem(M), s)
+                p = with_hash_salt(() -> tie_problem(M), s)
                 @test p.f.fingerprint == prob.f.fingerprint
                 @test state(solve(p, SequentialCPM()).u[end]) == u
             end
         end
         # the two integrals are distinct trackers (each fold, hoisted to its own slot, keeps its
         # bound variable's name in the key): integral(c · Σ volume) = (Σ_cell volume)², w = 2y
-        xs = Potts._integrals(getfield(Potts.ModelingToolkitBase.mtkcompile(P60ahTieIntegral(; name = :x)), :sys))
+        xs = Potts._integrals(getfield(Potts.ModelingToolkitBase.mtkcompile(TieIntegral(; name = :x)), :sys))
         @test length(xs) == 2 && Potts._integral_name(xs[1]) != Potts._integral_name(xs[2])
         s = zeros(Int32, 12, 8)
         s[3:6, 3:6] .= 1
-        u = solve(PottsProblem(P60ahTieIntegral(; name = :x), Any[ownership => s, kind => [:A]], (0, 3)), SequentialCPM()).u[end]
+        u = solve(PottsProblem(TieIntegral(; name = :x), Any[ownership => s, kind => [:A]], (0, 3)), SequentialCPM()).u[end]
         @test u.cell.y == [Float64(u.cell.volume[1])^2]
         @test u.cell.w == 2 .* u.cell.y
     end
 end
 
-# D-F2-1 (F2-15): a computed parameter is read-only and derived again from the base parameters
+# A computed parameter is read-only and derived again from the base parameters
 # after every write, transitively (the diamond p₁ → p₂ → p₄ ← p₃ → p₅). Before: settable, an
 # explicit value kept (D-112).
 
 
-@testitem "P6.0ai: integral folds are hoisted, fresh at every refresh (geom, nameof(typeof(alg)))" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @potts_model P60ai begin
+@testitem "integral folds are hoisted, fresh at every refresh (geom, nameof(typeof(alg)))" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @potts_model HoistedFolds begin
         @structural_parameters geom = :square
         @kinds medium A
         @variables begin
@@ -377,17 +377,17 @@ end
         @sweep Metropolis(; temperature = 2.0)
     end
 
-    @testset "P6.0ai: integral folds are hoisted, fresh at every refresh ($geom, $(nameof(typeof(alg))))" for
+    @testset "integral folds are hoisted, fresh at every refresh ($geom, $(nameof(typeof(alg))))" for
         (geom, dims) in ((:square, (16, 16)), (:hex, (16, 16)), (:cube, (8, 8, 8))),
             alg in (SequentialCPM(), CheckerboardCPM())
-        c = mtkcompile(P60ai(; name = :x, geom))
+        c = mtkcompile(HoistedFolds(; name = :x, geom))
         xs = Potts._integrals(getfield(c, :sys); observed = true)
         hoisted = [!Potts._has_op(x, Potts.population) for x in xs]
         @test count(hoisted) == 4                    # s, bo, q and the observed o; not n, r
         @test count(!, hoisted) == 2
         @test length(Potts._integrals(getfield(c, :sys))) == 5    # o is read only by `@observed`: not stored (D-120)
-        σ0, w0 = p60ai_init(dims)
-        prob = PottsProblem(P60ai(; name = :x, geom), [ownership => σ0, kind => [:A, :A], :w => w0], (0, 4); capacity = 8, seed = 3)
+        σ0, w0 = hoisted_init(dims)
+        prob = PottsProblem(HoistedFolds(; name = :x, geom), [ownership => σ0, kind => [:A, :A], :w => w0], (0, 4); capacity = 8, seed = 3)
         @test count(n -> startswith(String(n), "__ifold_"), propertynames(prob.u0.model)) == 4
         @test !hasproperty(prob.u0.cell, Potts._integral_name(last(xs)))   # (o has its fold slot, no column)
         live(u) = findall(>(0), Array(u.cell.volume))
@@ -426,15 +426,15 @@ end
 end
 
 
-@testitem "P6.0ai: hoisted folds are fresh at every refresh point (nameof(typeof(alg)))" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "P6.0ai: hoisted folds are fresh at every refresh point ($(nameof(typeof(alg))))" for
+@testitem "hoisted folds are fresh at every refresh point (nameof(typeof(alg)))" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "hoisted folds are fresh at every refresh point ($(nameof(typeof(alg))))" for
         alg in (SequentialCPM(), CheckerboardCPM())
-        σ0, w0 = p60ai_init((16, 16))
-        prob = PottsProblem(P60aiRefresh(; name = :x), [ownership => σ0, kind => [:A, :A], :w => w0], (0, 4); seed = 5)
+        σ0, w0 = hoisted_init((16, 16))
+        prob = PottsProblem(HoistedRefresh(; name = :x), [ownership => σ0, kind => [:A, :A], :w => w0], (0, 4); seed = 5)
         per(u, f) = [sum((f(i) for i in findall(==(k), Array(u.ownership))); init = 0.0) for k in eachindex(u.cell.volume)]
         vsum(u) = sum(Array(u.cell.v)[Array(u.cell.volume) .> 0])
         # at init: the stored tracker of the before-MCS operand, and its reader in MCS 1
-        names = [Potts._integral_name(x) for x in Potts._integrals(getfield(mtkcompile(P60aiRefresh(; name = :x)), :sys))]
+        names = [Potts._integral_name(x) for x in Potts._integrals(getfield(mtkcompile(HoistedRefresh(; name = :x)), :sys))]
         sb0 = per(prob.u0, i -> w0[i] * 32)
         @test count(n -> getfield(prob.u0.cell, n) ≈ sb0, names) == 1      # the tracker, in u0
         sol = solve(prob, alg; saveat = 0:4)
@@ -460,10 +460,10 @@ end
 end
 
 
-@testitem "P6.0ai: observed integrals leave the state unchanged" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "P6.0ai: observed integrals leave the state unchanged" begin
-        σ0, w0 = p60ai_init((16, 16))
-        prob = PottsProblem(P60aiRefresh(; name = :x), [ownership => σ0, kind => [:A, :A], :w => w0], (0, 2); seed = 5)
+@testitem "observed integrals leave the state unchanged" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "observed integrals leave the state unchanged" begin
+        σ0, w0 = hoisted_init((16, 16))
+        prob = PottsProblem(HoistedRefresh(; name = :x), [ownership => σ0, kind => [:A, :A], :w => w0], (0, 2); seed = 5)
         slots = filter(n -> startswith(String(n), "__ifold_"), propertynames(prob.u0.model))
         @test length(slots) == 4
         mark!(u) = foreach(n -> fill!(getfield(u.model, n), -7.0), slots)
@@ -488,10 +488,10 @@ end
 end
 
 
-@testitem "P6.0t: an integral read only in a tick's population fold is fresh (nameof(typeof(alg)))" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @named p60t_ctr = System([dn(_kd) ~ dn(_kd - 1) + dinc], _tc)
+@testitem "an integral read only in a tick's population fold is fresh (nameof(typeof(alg)))" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @named tick_counter = System([dn(_kd) ~ dn(_kd - 1) + dinc], _tc)
 
-    @potts_model P60tTick begin
+    @potts_model TickFoldIntegral begin
         @structural_parameters use_integral = true
         @kinds medium A
         @variables begin
@@ -499,7 +499,7 @@ end
             u(site) = 0.0
             sa(cell) = 0.0
         end
-        @components cells(A) ctr = p60t_ctr
+        @components cells(A) ctr = tick_counter
         if use_integral
             @equations ctr.dinc ~ sum(integral(w)^2 for c in cells)
         else
@@ -511,11 +511,11 @@ end
         @sweep Metropolis(; temperature = 20.0)
     end
 
-    @testset "P6.0t: an integral read only in a tick's population fold is fresh ($(nameof(typeof(alg))))" for
+    @testset "an integral read only in a tick's population fold is fresh ($(nameof(typeof(alg))))" for
         alg in (SequentialCPM(), CheckerboardCPM())
         σ = zeros(Int32, 16, 16); σ[3:5, 3:5] .= 1; σ[10:12, 10:12] .= 2
         dn(use_integral) = (
-            sol = solve(PottsProblem(P60tTick(; name = :x, use_integral), [ownership => σ, kind => [:A, :A]], (0, 12); seed = 1), alg; saveat = 0:12);
+            sol = solve(PottsProblem(TickFoldIntegral(; name = :x, use_integral), [ownership => σ, kind => [:A, :A]], (0, 12); seed = 1), alg; saveat = 0:12);
             [Array(u.cell.ctr₊dn)[1] for u in sol.u]
         )
         a, b = dn(true), dn(false)
@@ -525,17 +525,17 @@ end
 end
 
 
-@testitem "P6.0t: stored integrals keep their order without observed-only readers" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "P6.0t: stored integrals keep their order without observed-only readers" begin
-        @named p60t_rctr = System([dn(_kd) ~ dn(_kd - 1) + dinc], _tc)
+@testitem "stored integrals keep their order without observed-only readers" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "stored integrals keep their order without observed-only readers" begin
+        @named order_counter = System([dn(_kd) ~ dn(_kd - 1) + dinc], _tc)
 
-        @potts_model P60tOrder begin
+        @potts_model StoredIntegralOrder begin
             @kinds medium A
             @variables begin
                 pa(site) = 1.0
                 pb(site) = 1.0
             end
-            @components cells(A) ctr = p60t_rctr
+            @components cells(A) ctr = order_counter
             @equations ctr.dinc ~ integral(pa)
             @observed o(cell) ~ integral(pa) + integral(pb)
             @lattice Lattice((16, 16))
@@ -543,7 +543,7 @@ end
             @sweep Metropolis(; temperature = integral(pb) / 9)
         end
 
-        c = mtkcompile(P60tOrder(; name = :x))
+        c = mtkcompile(StoredIntegralOrder(; name = :x))
         @test [Potts.info(x).name for x in Potts._integrals(getfield(c, :sys))] == [:pa, :pb]
         @test isequal(Potts._integrals(getfield(c, :sys); observed = true), Potts._integrals(getfield(c, :sys)))
     end

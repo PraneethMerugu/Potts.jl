@@ -1,6 +1,6 @@
 # Plans and device control: preconditioner symmetry (§4.5), Krylov symmetry of the eliminated
 # operator (T-3), the budget skip with its pass-through, the sentinel, `linsolve = :auto`,
-# launch counts (PG-5) and Float32/allocation hygiene of every launch.
+# launch counts and Float32/allocation hygiene of every launch.
 
 @testsetup module LF_solvers_plans
 using Test, LatticeFields
@@ -153,8 +153,8 @@ end
 end
 end
 
-@testitem "launches per cycle and iteration (PG-5 ≤ 25)" setup = [LF_solvers_plans] tags = [:latticefields, :solvers] begin
-@testset "launches per cycle and iteration (PG-5 ≤ 25)" begin
+@testitem "launches per cycle and iteration (≤ 25)" setup = [LF_solvers_plans] tags = [:latticefields, :solvers] begin
+    @testset "launches per cycle and iteration (≤ 25)" begin
     per = periodic_case(256, 256; s = 0.022)
         sv = case_solver(per, Float32; linsolve = LatticeMultigrid())
     @test nlaunches(solve_plan(sv, 2), 2) == 13        # 2 levels × 5 + bottom + norm + finish
@@ -163,7 +163,7 @@ end
           nlaunches(solve_plan(sv, 2), 2) ==
           nlaunches(solve_plan(case_solver(per, Float32; deflate = false), 2), 2)
     sv = case_solver(named_case("sphere42", 0.022), Float32)
-    # (segment 1: the setup; 2: the first V-cycle, its own segment since F3-07, so a solve done
+        # (segment 1: the setup; 2: the first V-cycle, its own segment, so a solve done
     # at its setup stops before it on the host; 3: the first iteration)
     @test nlaunches(solve_plan(sv, 2), 2) == 12        # V 11 + finish
     @test nlaunches(solve_plan(sv, 2), 3) == 15        # V 11 + K1, α, K2 (true residual), finish

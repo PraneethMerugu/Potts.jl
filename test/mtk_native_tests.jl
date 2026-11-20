@@ -66,8 +66,8 @@ end
     end
 end
 
-@testitem "MTK-native: a kind set in @equations is `ismember`, never `∈` (D-257 item 5)" setup = [MTKNativeTests] tags = [:potts, :mtk_native] begin
-    @testset "MTK-native: a kind set in @equations is `ismember`, never `∈` (D-257 item 5)" begin
+@testitem "MTK-native: a kind set in @equations is `ismember`, never `∈`" setup = [MTKNativeTests] tags = [:potts, :mtk_native] begin
+    @testset "MTK-native: a kind set in @equations is `ismember`, never `∈`" begin
         eq_check(M, eq) = mn_error(
             () -> Potts._potts_model(
                 M, quote
@@ -176,7 +176,7 @@ end
 @testitem "SciMLStructures: computed parameters are re-derived by replace; remake takes an object as given" setup = [PottsParametersStructures] tags = [:potts, :mtk_native] begin
     @testset "SciMLStructures: computed parameters are re-derived by replace; remake takes an object as given" begin
         σ = zeros(Int32, 12, 12); σ[2:5, 2:5] .= 1
-        prob = PottsProblem(C9Computed(; name = :c), [ownership => σ, kind => [1]], (0, 2))
+        prob = PottsProblem(ComputedParams(; name = :c), [ownership => σ, kind => [1]], (0, 2))
         p = prob.p
         v, repack, _ = SS.canonicalize(SS.Tunable(), p)
         @test v == [1.0, 2.0]
@@ -191,7 +191,7 @@ end
         hand = Potts._with_values(ck, merge(NamedTuple(ck), (λ2 = 7.0,)))
         @test Potts.SciMLBase.remake(prob; p = hand).p.λ2 == 6.0
         @test_throws ArgumentError Potts.SciMLBase.remake(prob; p = [:λ => 3.0, :λ2 => 7.0])
-        p32 = PottsProblem(C9Computed(; name = :c), [ownership => σ, kind => [1]], (0, 2); T = Float32)
+        p32 = PottsProblem(ComputedParams(; name = :c), [ownership => σ, kind => [1]], (0, 2); T = Float32)
         _, repack32, _ = SS.canonicalize(SS.Tunable(), p32.p)
         q1, q2 = repack32([1.0, 3.0]), repack32(Float32[1, 3])
         @test q1 == q2 && typeof(q1) === typeof(q2) === typeof(p32.p) && q1.λ2 === 6.0f0
@@ -206,7 +206,7 @@ end
         end
         @test e isa ArgumentError
         @test SS.replace(SS.Tunable(), pi_, [big"0.1"]).x === 0.1
-        prob3 = PottsProblem(C9Computed3(; name = :c), [ownership => σ, kind => [1]], (0, 2))
+        prob3 = PottsProblem(ComputedParams3(; name = :c), [ownership => σ, kind => [1]], (0, 2))
         @test typeof(prob3.p) !== typeof(p)
         @test SS.canonicalize(SS.Tunable(), prob3.p)[2]([1.0, 3.0]).λ2 == 9.0
         @test SS.canonicalize(SS.Tunable(), p)[2]([1.0, 3.0]).λ2 == 6.0
@@ -219,8 +219,8 @@ end
             err
         end
         @test e isa ArgumentError
-        @test typeof(PottsProblem(C9Computed(; name = :c, T = 2.0), [ownership => σ, kind => [1]], (0, 2)).p) === typeof(p)
-        ps3 = Potts._p(getfield(Potts.ModelingToolkitBase.mtkcompile(C9Computed3(; name = :c)), :sys), :parameters)
+        @test typeof(PottsProblem(ComputedParams(; name = :c, T = 2.0), [ownership => σ, kind => [1]], (0, 2)).p) === typeof(p)
+        ps3 = Potts._p(getfield(Potts.ModelingToolkitBase.mtkcompile(ComputedParams3(; name = :c)), :sys), :parameters)
         e = try
             Potts._register_derivation!(ps3, Float64, p)
         catch err
@@ -232,9 +232,9 @@ end
         @test Potts._canon_default(a13[1][2]) == Potts._canon_default(f13[1][2])
         @test !Potts._same_defaults(a13, f13)
         @test Potts._same_defaults(a13, [(:a, N_(1 // 3))]) && Potts._same_defaults([(:a, N_(0))], [(:a, N_(0.0))])
-        pb = PottsProblem(C9FB(; name = :c), [ownership => σ, kind => [1]], (0, 2))
+        pb = PottsProblem(SameNameB(; name = :c), [ownership => σ, kind => [1]], (0, 2))
         pa = try
-            PottsProblem(C9FA(; name = :c), [ownership => σ, kind => [1]], (0, 2))
+            PottsProblem(SameNameA(; name = :c), [ownership => σ, kind => [1]], (0, 2))
         catch err
             err
         end
@@ -245,7 +245,7 @@ end
         @test refused || distinct
         @test rep(pb) == 9.0
         for (sv, want) in ((2, 6.0), (3, 9.0))
-            ps = PottsProblem(C9Sweep(; name = :sw, s = sv), [ownership => σ, kind => [1]], (0, 2))
+            ps = PottsProblem(ComputedSweep(; name = :sw, s = sv), [ownership => σ, kind => [1]], (0, 2))
             @test SS.canonicalize(SS.Tunable(), ps.p)[2]([1.0, 3.0]).λ2 == want
         end
     end

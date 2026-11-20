@@ -1,4 +1,4 @@
-# Coefficients as runtime parameters (P5 C7b-2): a value change reuses the compiled bodies;
+# Coefficients as runtime parameters: a value change reuses the compiled bodies;
 # tangent solves (P5 §3.4): derivatives of the solution with respect to a coefficient from
 # one primal solve and one tangent solve with homogeneous boundary values, against finite
 # differences, with the negative control that keeps the primal boundary values.
@@ -39,7 +39,7 @@ using .LF_solvers_coefficients: fd
     sv, u = primal_solve(box)
     du = tangent!(sv, u, :shift)
     ref = fd(box, :shift, 1e-5)
-    @test relmax(du, ref) <= 1e-5                       # P5 probe B2: 4e-7
+        @test relmax(du, ref) <= 1.0e-5                       # measured: 4e-7
     # u is linear in the Dirichlet value: the tangent is exact
     dg = tangent!(sv, u, (:dirichlet, 1, 2))
     @test relmax(dg, fd(box, (:dirichlet, 1, 2), 0.1)) <= 1e-8

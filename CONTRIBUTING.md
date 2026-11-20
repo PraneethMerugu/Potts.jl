@@ -33,17 +33,17 @@ See [test/README.md](test/README.md) for per-package environment variables (`POT
 
 ## Fast local loop (`test/dev.jl`)
 
-Start an interactive `Revise` and `ReTestItems` session from the repository root to rerun individual `@testitem`s without restarting Julia:
+Start an interactive `Revise` and `ReTestItems` session from the repository root to rerun individual `@testitem`s without restarting Julia. Test titles are plain descriptions, so select items by words in their titles, by a regex, or by tag:
 
 ```sh
 julia --project=test -i test/dev.jl
 ```
 
 ```julia
-ti("F4-E5")                    # items whose name contains "F4-E5"
-ti(r"^F3-17: a Coarse")        # items whose name matches a regex
+ti("coarse field")             # items whose name contains "coarse field"
+ti(r"^a Coarse\(4\)")          # items whose name matches a regex
 ti(; tags = :fields_coarse)    # items carrying a tag
-ti("F4-E7"; nworkers = 1)      # run in a fresh worker process
+ti("is_kind"; nworkers = 1)    # run in a fresh worker process
 tf("fields_short_tests.jl")    # all items in one file
 ```
 

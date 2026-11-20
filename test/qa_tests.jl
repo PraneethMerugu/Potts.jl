@@ -34,7 +34,7 @@ const _CLOSURE_HEADS = (:->, :function, :do, :generator, :comprehension, :typed_
 
 function _qa_closure_heads(ex)
     ex isa Expr || return 0
-    # the outer `(args...) -> body` is the generated function itself: scan its body (TS1c)
+    # the outer `(args...) -> body` is the generated function itself: scan its body
     body = ex.head === :-> ? ex.args[2] : ex
     n = Ref(0)
     _qa_walk(x -> x isa Expr && x.head in _CLOSURE_HEADS && (n[] += 1), body)
@@ -79,7 +79,7 @@ end
 _qa_warm_allocated(integ) = (step!(integ); @allocated step!(integ))
 
 
-# P6.0k: discrete components' tick phases (kind-gated, fused with couplings, clocked, model
+# Discrete components' tick phases (kind-gated, fused with couplings, clocked, model
 # scope) are type stable, allocation free and, in Float32, free of Float64.
 @potts_model QADiscreteKinds begin
     @kinds medium A B
@@ -165,7 +165,7 @@ function _privileged_hits(file)
 end
 
 
-# P6.0j: ExplicitImports guardrails (CLAUDE.md code rules). Every name Potts uses is
+# ExplicitImports guardrails (CLAUDE.md code rules). Every name Potts uses is
 # imported explicitly and by its owner. The allowlists name each non-public access the
 # package genuinely needs; add to them only by review, with the reason.
 using ExplicitImports: ExplicitImports, check_no_implicit_imports, check_all_explicit_imports_are_public,
@@ -183,24 +183,24 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     # --- Potts -> Base: no public equivalent
     Symbol("@__doc__"),   # attaching docstrings to macro-generated components
     :setindex,            # non-mutating tuple `setindex`
-    Symbol("@nospecializeinfer"),  # the remake hooks inferred once for every model (TS1c)
+    Symbol("@nospecializeinfer"),  # the remake hooks inferred once for every model
     # --- Potts -> Symbolics
     :rename,              # Symbolics.rename: renames a component system (`k.x` is `k₊x`)
-    :VarDomainPairing,    # what `Potts.kind ∈ (1, 2)` builds: a binding of it is refused by name (F4-E16)
+    :VarDomainPairing,    # what `Potts.kind ∈ (1, 2)` builds: a binding of it is refused by name
     # --- PottsDynamicQuantitiesExt -> Potts: the extension is part of Potts and gives
     # Potts's own symbolic operators their unit rules, so it reads Potts internals.
     :at, :at2, :history_lag, :cell_integral, :Δ, :cell_centroid, :copy_displacement,
     :random_uniform, :gather, :population,   # operators whose `get_unit` rules it defines
     :_check_units,        # the unit-check hook `mtkcompile` calls, defined by the extension
     :_describe,           # statement labels for unit error messages
-    :_p,                  # reads a PottsSystem's payload field (W-lite part, C4)
+    :_p,                  # reads a PottsSystem's payload field (its `part`)
     # --- PottsDynamicQuantitiesExt -> MTK
     :get_unit,            # MTK's unit-inference function the extension extends; not public
-    # --- Potts -> MTKBase: discrete components (P6.0k). The clock of a compiled discrete
+    # --- Potts -> MTKBase: discrete components. The clock of a compiled discrete
     # system is only available as this variable metadata; no public accessor exists.
     :VariableTimeDomain,  # metadata key holding a discrete variable's clock
     :IntegerSequence,     # the clock of `ShiftIndex(t, 0)` (one tick per step, no period)
-    # --- Potts -> MTKBase: the W-lite container (C4, v3 §7.1). MTKBase's
+    # --- Potts -> MTKBase: the container around System. MTKBase's
     # `is_parameter(::AbstractSystem, ::ParameterIndex)` answers `is_split` of the container,
     # which has no index cache; the owned method forwards it to the inner System instead.
     :ParameterIndex,
@@ -219,7 +219,7 @@ const POTTS_NONPUBLIC_EXPLICIT = (
 )
 
 
-# P6.0v (D-085): every synchronize and host↔device copy of the step path goes through the
+# D-085: every synchronize and host↔device copy of the step path goes through the
 # counted helpers in `lib/CorePotts/src/transfers.jl`. A raw call anywhere else must be in
 # this allowlist, with the reason it is not in the step path (or not a transfer).
 const RAW_TRANSFER_ALLOW = Dict(
@@ -240,7 +240,7 @@ const RAW_TRANSFER_ALLOW = Dict(
     "lib/CorePotts/src/checkpoint.jl" => 1,  # `reinit!`'s `_copy_state!` (setup; the counters are reset after it)
     "lib/CorePotts/src/fields.jl" => 1,      # `_bind_copy!`: a field phase's kind tables to the backend when it binds, and at a rebind its tables and status word (setup and rebinding, never per MCS)
     # `_device_copy!` on the CPU backend (host arrays); on a device it is a kernel, since
-    # Metal.jl's device→device `copyto!` waits for the GPU twice (P6.0v3, D-101)
+    # Metal.jl's device→device `copyto!` waits for the GPU twice (D-101)
     "lib/CorePotts/src/phases.jl" => 1,
     "src/layouts.jl" => 2,                   # initial layouts on host arrays (setup; Frame masks)
 )
@@ -328,7 +328,7 @@ end
             @test isempty(check_allocs(fn, typeof.((st, p, prop, ctx))))
         end
         # a warm MCS allocates nothing: phases, the lifecycle check and checkerboard colors that
-        # fit one CPU workgroup run as plain loops (`CorePotts._launch`; AUTONOMY §5)
+        # fit one CPU workgroup run as plain loops (`CorePotts._launch`)
         for alg in (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
             wi = init(PottsProblem(sys, op, (0, 100); T, capacity = cap, skw...), alg; save_start = false, save_end = false, save_everystep = false)
             @test minimum(_qa_warm_allocated(wi) for _ in 1:5) == 0
@@ -349,7 +349,7 @@ end
     end
 end
 
-@testitem "QA: generated edge and lifecycle code has no closure heads (TS1c)" setup = [QaSetup] tags = [:potts, :qa] begin
+@testitem "QA: generated edge and lifecycle code has no closure heads" setup = [QaSetup] tags = [:potts, :qa] begin
     @testset "QA: generated edge and lifecycle code has no closure heads ($T)" for T in (Float64, Float32)
         gc = generated_code(QAEdgeModel(; name = :qe); T)
         @test all(ex -> _qa_closure_heads(ex) == 0, _qa_generated_exprs(gc))
@@ -413,6 +413,59 @@ end
     end
 end
 
+@testitem "QA: no development-process IDs in names, titles, comments or messages" setup = [QaSetup] tags = [:potts, :qa] begin
+    @testset "QA: no development-process IDs in names, titles, comments or messages" begin
+        # Positive controls, built by concatenation so that this file does not match itself.
+        for (s, tok) in (
+                ("see " * "P6" * ".0as here", "P6" * ".0as"), ("p6" * "_0as_x.jl", "p6" * "_0as"),
+                ("P60" * "AS_NAMED", "P60" * "AS_"), ("p64" * "r_rate", "p64" * "r_"),
+                ("F4" * "-E15", "F4" * "-E15"), ("F3" * "-21b", "F3" * "-21b"), ("TS" * "1b", "TS" * "1b"),
+                ("review" * " r1", "review" * " r1"), ("r3" * " S1", "r3" * " S1"),
+                ("front " * "end A", "front " * "end A"), ("W-" * "lite", "W-" * "lite"),
+                ("cutover " * "C8", "cutover " * "C8"), ("F3 " * "design §3.4", "F3 " * "design"),
+                ("v3 " * "§7.1", "v3 " * "§"), ("D-" * "F2" * "-1", "D-" * "F2" * "-1"),
+                ("P60" * "ccDevice", "P60" * "ccD"), ("review" * " M2", "review" * " M2"),
+                ("review" * " 4", "review" * " 4"), ("review" * " B1 #1", "review" * " B1"),
+                ("gating (B" * "1)", "(B" * "1)"), ("P3" * "-mg §6", "P3" * "-mg"),
+            )
+            @test qa_phase_tokens(s) == [tok]
+        end
+        # Negative controls: domain names of the same shape.
+        for s in (
+                "before_mcs", "frozen_kinds", "Float64", "RK4", "BDF2", "F1-F4", "V-C12", "O5",
+                "C12(curve, k)", "T1 transition", "## Step 1: the lattice", "paired A/B", "D-" * "157",
+                "50 Eden rounds", "round 1", "review the code", "PRE §III B4", "p53 levels",
+            )
+            @test isempty(qa_phase_tokens(s))
+        end
+        # Plain decision IDs: allowed in code comments only.
+        @test qa_decision_ids("msg = \"see D-" * "123\"") == ["D-" * "123"]
+        @test isempty(qa_decision_ids("x = 1   # D-" * "123"))
+        @test qa_decision_ids("# D-" * "123"; prose = true) == ["D-" * "123"]
+        @test isempty(qa_decision_ids("D-12, D-1234, VD-123"))
+        # Scratch-directory control: a planted ID fails, and an allowlist entry lets it pass.
+        mktempdir() do tmp
+            mkpath(joinpath(tmp, "src"))
+            write(joinpath(tmp, "src", "planted.jl"), "# see " * "P6" * ".0as\nx = 1\n")
+            write(joinpath(tmp, "src", "clean.jl"), "# the copy sweep, D-" * "157\n")
+            @test qa_no_phase_names(tmp) == ["src/planted.jl:1: " * "P6" * ".0as"]
+            mkpath(joinpath(tmp, "docs", "src"))
+            write(joinpath(tmp, "docs", "src", "page.md"), "The sweep (D-" * "157).\n")
+            @test qa_no_phase_names(tmp) == ["docs/src/page.md:1: D-" * "157", "src/planted.jl:1: " * "P6" * ".0as"]
+            rm(joinpath(tmp, "docs"); recursive = true)
+            allow = joinpath(tmp, "allow.txt")
+            write(allow, "src/planted.jl\t" * "P6" * ".0as\ta planted control\n")
+            @test isempty(qa_no_phase_names(tmp; allow = qa_phase_allowlist(allow)))
+            write(allow, "src/planted.jl\t" * "P6" * ".0as\n")
+            @test_throws ArgumentError qa_phase_allowlist(allow)
+        end
+        # The repository: every hit not in test/phase_names_allow.txt.
+        bad = qa_no_phase_names(joinpath(@__DIR__, ".."))
+        isempty(bad) || @error "development-process IDs (rename them, or add an allowlist entry with a reason)" bad
+        @test isempty(bad)
+    end
+end
+
 @testitem "QA: ExplicitImports (Potts)" setup = [QaSetup] tags = [:potts, :qa] begin
     @testset "QA: ExplicitImports (Potts)" begin
         qa_explicit_imports(
@@ -435,7 +488,7 @@ end
             root;
             allowed_bcs_files = [
                 joinpath(root, "src", "macro.jl"),
-                joinpath(root, "test", "fields_couple_b6_tests.jl"),
+                joinpath(root, "test", "fields_couple_checks_tests.jl"),
             ]
         )
         @test Base.get_extension(Potts, :PottsDynamicQuantitiesExt) !== nothing
@@ -445,8 +498,8 @@ end
     end
 end
 
-@testitem "QA: no raw host transfer outside the counted helpers (D-085)" setup = [QaSetup] tags = [:potts, :qa] begin
-    @testset "QA: no raw host transfer outside the counted helpers (D-085)" begin
+@testitem "QA: no raw host transfer outside the counted helpers" setup = [QaSetup] tags = [:potts, :qa] begin
+    @testset "QA: no raw host transfer outside the counted helpers" begin
         root = joinpath(@__DIR__, "..")
         hits = Dict{String, Int}()
         for d in ("lib/CorePotts/src", "src"), f in readdir(joinpath(root, d))
@@ -459,7 +512,7 @@ end
     end
 end
 
-# P6.1a5 (D-138): the Voronoi layer (tessellation, Lloyd, repair) and shape regions are type
+# D-138: the Voronoi layer (tessellation, Lloyd, repair) and shape regions are type
 # stable on square, hexagonal and 3D lattices (host-side, but `graner_glazier_aggregate`
 # runs it at paper size for every replicate).
 @testitem "QA: Voronoi and shape regions are type stable (label)" setup = [QaSetup] tags = [:potts, :qa] begin
@@ -476,7 +529,7 @@ end
     end
 end
 
-# P6.3c (D-141): Eden's growth and the Splits passes are type stable on square, hexagonal and
+# D-141: Eden's growth and the Splits passes are type stable on square, hexagonal and
 # 3D lattices (host-side; the growth loop runs once per round over the frontier).
 @testitem "QA: Eden and Splits are type stable (label)" setup = [QaSetup] tags = [:potts, :qa] begin
     using Potts.Layouts

@@ -1,4 +1,4 @@
-# Whole-cell connectivity (P6.9a) beside the acceptance file
+# Whole-cell connectivity beside the acceptance file
 # lib/PottsModels/test/acceptance/global_connectivity_tests.jl: the build check of every shell-based quantity on a periodic
 # axis of length 1 (the shell wraps onto the target), and `reinit!` clearing the
 # checkerboard's deferred-refusal counter.
@@ -60,8 +60,8 @@ end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "P6.9a: shell-based quantities refuse a periodic axis of length 1" setup = [ConnectivityGlobalSetup] tags = [:potts, :connectivity_global] begin
-    @testset "P6.9a: shell-based quantities refuse a periodic axis of length 1" begin
+@testitem "shell-based quantities refuse a periodic axis of length 1" setup = [ConnectivityGlobalSetup] tags = [:potts, :connectivity_global] begin
+    @testset "shell-based quantities refuse a periodic axis of length 1" begin
         for (i, (name, _)) in enumerate(CG_RULES)
             thin = getfield(@__MODULE__, Symbol("CGShellThin", i))
             err = try
@@ -86,8 +86,8 @@ end
     end
 end
 
-@testitem "P6.9a: reinit! clears the deferred-refusal counter" setup = [ConnectivityGlobalSetup] tags = [:potts, :connectivity_global] begin
-    @testset "P6.9a: reinit! clears the deferred-refusal counter" begin
+@testitem "reinit! clears the deferred-refusal counter" setup = [ConnectivityGlobalSetup] tags = [:potts, :connectivity_global] begin
+    @testset "reinit! clears the deferred-refusal counter" begin
         σ = zeros(Int32, 24, 24)
         σ[5:12, 5:12] .= 1
         σ[14:20, 6:14] .= 2
@@ -113,8 +113,8 @@ end
 # in `site_index_type`, Int64 above 2³¹ − 1 sites. Forced on 24² (`_FORCE_WIDE_SITES`, read
 # when the scratch is built), the exact flood (SequentialCPM) and the windowed search
 # (CheckerboardCPM) must give the Int32 run exactly, refusals included.
-@testitem "P6.9a: the flood stacks at the Int64 site width (D-253)" setup = [ConnectivityGlobalSetup] tags = [:potts, :connectivity_global] begin
-    @testset "P6.9a: the flood stacks at the Int64 site width (D-253)" begin
+@testitem "the flood stacks at the Int64 site width" setup = [ConnectivityGlobalSetup] tags = [:potts, :connectivity_global] begin
+    @testset "the flood stacks at the Int64 site width" begin
         σ = zeros(Int32, 24, 24)
         σ[5:12, 5:12] .= 1
         σ[14:20, 6:14] .= 2

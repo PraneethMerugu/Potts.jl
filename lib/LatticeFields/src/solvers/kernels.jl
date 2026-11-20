@@ -23,14 +23,14 @@ A cell-centered Helmholtz operator in coefficient form, the input of a solver gr
     normal), as `IR.FaceRule`. The ghost rule gives the boundary row the diagonal `w·d` and
     the right-hand side `w·q`, with `d = α/(α/2 + β)` and `q = g/(α/2 + β)` (Dirichlet is
     `(1, 0, g)`: `d = 2`). `α/2 + β = 0` leaves the ghost value undefined and is refused.
-    The sign rule (F3 design §3.4): `d ≥ 0` (α and β of the same sign) enters the operator;
+    The sign rule: `d ≥ 0` (α and β of the same sign) enters the operator;
     a negative `d` would break the M-matrix, so it stays out of the operator and enters the
     right-hand side as `−d·w·x` at the current iterate `x` (a defect correction): each
     `lift!` takes it at the current `x`, and `steady!` iterates lift and solve until the
     full operator's residual is at the tolerance;
     With `robin_full = true` the whole `d` enters the operator, either sign (a steady solve,
     whose operator has no time-step shift to keep dominant: it stays symmetric, and it is
-    positive definite exactly when the steady problem is well posed; F3 batch 4 r3 S1);
+    positive definite exactly when the steady problem is well posed);
   - `name`: the user's field, which every message names (`nothing`: "the solver group");
     `axes`: the axis names for messages (default `"1"`, `"2"`, …);
   - `hex = true`: a hexagonal lattice in axial coordinates (2D), whose sites have six
@@ -204,7 +204,7 @@ end
 Reactions weaker than this, relative to the strongest face (`s / max(face) < FLOOR_SHIFT`),
 put an unanchored group in the Float32 floor regime, where Float32 PCG cannot reach
 ‖r‖∞ ≤ 1e-6‖b‖∞. The floor is invariant under scaling `s` and the faces together. Measured
-(C7b R5, Float32 solver, faces 0.01, 1 and 100, the same results at each scale): per256
+(Float32 solver, faces 0.01, 1 and 100, the same results at each scale): per256
 floors at s/face ≤ 0.05 and converges at ≥ 0.1; Neumann-x/periodic-y (128×96) floors at
 s/face ≤ 0.2 (best 1.0e-6–1.6e-6 at 0.2) and converges at 0.5 (5 iterations); at s/face = 1
 both converge in 4 iterations. Earlier: per256 1e-4 at s = 5.5e-6, pure Neumann 3.4e-5 at s = 0.
@@ -214,7 +214,7 @@ const FLOOR_SHIFT = 0.5
 Is the group in the Float32 floor regime: unanchored, with its weakest reaction relative to
 its strongest face below `FLOOR_SHIFT`? A field-valued shift or face counts as weak (its
 range is not known at build time). `solver_type = :auto` solves such groups in Float64
-(provisional D-C7b).
+(a provisional rule).
 """
 function floor_regime(op::CellOperator{N}) where {N}
     anchored(op) && return false
@@ -232,7 +232,7 @@ function jumpy(op::CellOperator)
 end
 
 """
-The runtime parameter slots of the operator's numeric coefficients (v3 §3.1, P5 C7b-2):
+The runtime parameter slots of the operator's numeric coefficients:
 `(; face, shift, value, dirichlet, robin)` with slot 0 for a coefficient that is a field key
 or absent; a Robin face has three slots `(d⁺, d⁻, q)` (`robin_parts`). Coefficients are
 parameters, not constants: a change of value never recompiles, and the slot order is
@@ -729,7 +729,7 @@ function _resid!(ctx)
 end
 
 """
-PCG kernels (P3-mg §6): K1 (`p ← z + βp` at the stencil points, partial `p·Ap`), K2 (`x ← x
+PCG kernels of the masked multigrid solver: K1 (`p ← z + βp` at the stencil points, partial `p·Ap`), K2 (`x ← x
 
   - αp`into the other buffer, the true residual`r = b − A(x + αp)`from the stencil points, partial ‖r‖∞; N-13 on every iteration) and the setup residual`pcg.true` (`r = b − A x`, partial ‖r‖∞ and ‖b‖∞). Under deflation `z`, `x`and`b` enter minus their means.
 """

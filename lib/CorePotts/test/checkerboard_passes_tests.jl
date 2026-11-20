@@ -1,4 +1,4 @@
-# CheckerboardCPM, the lockless block scheme (P6.0bl, research/checkerboard-kinetics.md): the
+# CheckerboardCPM, the lockless block scheme: the
 # layout, the stays, the copy counts, the serial pass and the lockless trackers. On the CPU the
 # work items run one after another, so ΔH and every tracker are exact there; the device tests
 # (gpu.jl) check the trackers after concurrent runs. The closeness to SequentialCPM is measured
@@ -15,8 +15,8 @@ include("shared/gg_model.jl")
 include("shared/export_all.jl")
 end
 
-@testitem "checkerboard (P6.0bl)" setup = [CP_checkerboard_passes] tags = [:corepotts, :checkerboard_passes] begin
-@testset "checkerboard (P6.0bl)" begin
+@testitem "checkerboard" setup = [CP_checkerboard_passes] tags = [:corepotts, :checkerboard_passes] begin
+    @testset "checkerboard" begin
     lat = Lattice((30, 30))
     σ, kinds = blocks((30, 30), 5)
         tracked = CPMFunction(gg_delta_H; temperature = gg_temperature, track = CorePotts.TrackEnergyChange{Float64}())

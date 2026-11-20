@@ -1,4 +1,4 @@
-# Hexagonal 2D lattices (M2.1b): axial coordinates embedded at (q + r/2, r·√3/2).
+# Hexagonal 2D lattices: axial coordinates embedded at (q + r/2, r·√3/2).
 
 @testsetup module CP_hex
 using Test, CorePotts, StaticArrays, Statistics, Random

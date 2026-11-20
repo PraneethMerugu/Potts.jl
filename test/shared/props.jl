@@ -1,4 +1,4 @@
-# Shared property-test helpers (TS-R2 §2, §3, §4):
+# Shared property-test helpers:
 # - `fp_props`: fingerprint sensitivity, invariance, checkpoint compatibility, and subprocess determinism
 # - `stat_accept` / `required_n`: normal/t/TOST statistical acceptance helpers with stated α and power
 # - `observed_orders` / `observed_order`: empirical convergence-order helpers

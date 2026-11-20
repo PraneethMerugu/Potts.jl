@@ -7,7 +7,7 @@ The computed parameters `computed` (`name => default`, the default an expression
 parameters, or an array with expression entries for a kind table) as one compiled function of
 the base parameters `base` (names, in the order of the values the derivation takes). Chains
 (`k3 = 2k2`, `k2 = 3a`) evaluate in their order; a cycle is an `ArgumentError`. The rules are
-D-117's (`LatticeFields.Problems.Derivation`): the expression is compiled as written
+those of `LatticeFields.Problems.Derivation`: the expression is compiled as written
 (Base and registered functions, `÷` as integer division, a lazy `ifelse`), and a kind-table
 read `value_at(t, k)` or `value_at(t, k, l)` takes kind numbers (medium 0). Potts and `discretize` call
 it; a caller that keeps computed values (Potts' parameter object, `LatticePDE`'s computed slots)

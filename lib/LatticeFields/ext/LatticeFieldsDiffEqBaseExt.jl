@@ -1,4 +1,4 @@
-# The tstops of an owned run for DiffEqBase's accessors (F4-05): DiffEqCallbacks' periodic and
+# The tstops of an owned run for DiffEqBase's accessors: DiffEqCallbacks' periodic and
 # iterative callbacks read them (`get_tstops_max`) to stop scheduling past the time span.
 module LatticeFieldsDiffEqBaseExt
 

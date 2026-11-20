@@ -1,5 +1,5 @@
 # `hamiltonian`, `drives` and the `PottsSweepSpec` payload of a compiled model with
-# `@components` (D-160, P6.0bm review H1): the compiled system reports the energy as written,
+# `@components` (D-160): the compiled system reports the energy as written,
 # not the lowered one (coupled parameters substituted, observed quantities expanded).
 
 @testsetup module SweepSpecSetup
@@ -40,7 +40,7 @@ struct SsOtherKey end
 end
 
 
-# `updates` (D-164, P6.0bp review H1): a contact fold prints as the fold it stands for,
+# `updates` (D-164): a contact fold prints as the fold it stands for,
 # `count_contacts(contact_partner, pred, relation)`, never as its tracker's internal name
 # (`contacts_<relation>_<hash>`), on the plain and the compiled form alike.
 using PottsModels: OpenVTReferenceMonolayer

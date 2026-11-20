@@ -1,20 +1,20 @@
-# F4-E5, F4-E6, F4-E7 (research/field-compiler/f4/F4-ergonomics.md items 4, 5 and 9, user
-# rulings 2026-11-10). Uses the definitions of fields_couple.jl (CpPDE, CpHost, CrHost2, cp_*).
+# Shorter coupled PDESystems. Uses the definitions of couple_testsetup.jl (CpPDE, CpHost,
+# CrHost2, cp_*).
 #
-# E5: a coupled PDESystem may leave out an axis interval; the axis takes the lattice's
-# `[0, dims · spacing]`. A given interval must still match. Oracle: Merks (the B form of
+# A coupled PDESystem may leave out an axis interval; the axis takes the lattice's
+# `[0, dims · spacing]`. A given interval must still match. Oracle: Merks (the PDESystem form of
 # docs/models/src/merks_model.jl, its PDESystem built in a function of the lattice with
 # `lattice_domain`) against the same PDESystem with no domain, bitwise.
-# E7: `Potts.is_kind(model, :A, …)` is `kind == code` (one name) or a membership test (several);
+# `Potts.is_kind(model, :A, …)` is `kind == code` (one name) or a membership test (several);
 # an unknown name is refused. Oracle: bitwise against `Potts.kind == Potts.lookup(model, :A)`
 # and `ismember(Potts.kind, (1, 2))`.
-# E6: the same Merks field from `LatticePDE.pdesystem` (no lists, no domain), bitwise.
-# Negative controls: at the E4 commit with the base system.jl, "gives no interval for `x`" and
-# "`is_kind` not defined" (~/lpwork/f4E/nc-e5e7.log); at 4ca38af7 `Potts.Fields` and
-# `pdesystem` do not exist (~/lpwork/f4E/nc-e4e6.log).
+# The same Merks field from `LatticePDE.pdesystem` (no lists, no domain), bitwise.
+# Negative controls: before this feature, with the base system.jl, "gives no interval for `x`" and
+# "`is_kind` not defined"; at 4ca38af7 `Potts.Fields` and
+# `pdesystem` do not exist.
 
-@testitem "F4-E5: an axis a coupled PDESystem leaves out takes the lattice's interval" setup = [CoupleSetup] tags = [:potts, :fields_short] begin
-    @testset "F4-E5: an axis a coupled PDESystem leaves out takes the lattice's interval" begin
+@testitem "an axis a coupled PDESystem leaves out takes the lattice's interval" setup = [CoupleSetup] tags = [:potts, :fields_short] begin
+    @testset "an axis a coupled PDESystem leaves out takes the lattice's interval" begin
         ref = fs_run(FsMerksLong(; name = :m))
         @test maximum(ref.u[end].site.c) > 0 && ref.u[end].ownership != ref.u[1].ownership
         @test cp_same(fs_run(FsMerksNoDom(; name = :m)), ref)                       # bitwise
@@ -42,8 +42,8 @@
     end
 end
 
-@testitem "F4-E7: Potts.is_kind" setup = [CoupleSetup] tags = [:potts, :fields_short] begin
-    @testset "F4-E7: Potts.is_kind" begin
+@testitem "Potts.is_kind" setup = [CoupleSetup] tags = [:potts, :fields_short] begin
+    @testset "Potts.is_kind" begin
         host = CpHost(; name = :m)
         @test isequal(Potts.is_kind(host, :A), Potts.kind == Potts.lookup(host, :A))
         @test isequal(Potts.is_kind(host, :medium), Potts.kind == 0)
@@ -51,10 +51,10 @@ end
         ml = Potts.couple(host, CpPDE.sys2(); inputs = [CpPDE.endo => Potts.kind == Potts.lookup(host, :A)])
         a, l = cp_run(ma, ExplicitEuler()), cp_run(ml, ExplicitEuler())
         @test cp_same(a, l) && maximum(a.u[end].site.c) > 0.1
-        # in a mixed vector with a numeric binding (the E1 situation): a test, not a constant
+        # in a mixed vector with a numeric binding (the mixed-vector case): a test, not a constant
         vol = Potts.value_at(Potts.B.volume, Potts.B.owner)
         mv = Potts.couple(host, CpPDE.sys(); inputs = [CpPDE.endo => Potts.is_kind(host, :A), CpPDE.vol => vol])
-        @test count(==(1), Potts.field_inputs(PottsProblem(mv, cp_op(), (0, 1)))[:kind]) == 32   # (the kind numbers, F4-B6 review)
+        @test count(==(1), Potts.field_inputs(PottsProblem(mv, cp_op(), (0, 1)))[:kind]) == 32   # (the kind numbers)
         # several kinds: a membership test, bitwise against `ismember`
         h2 = CrHost2(; name = :m)
         op2 = (σ = zeros(Int32, 24, 20); σ[5:8, 5:8] .= 1; σ[14:17, 10:13] .= 2; [ownership => σ, kind => [:A, :B]])

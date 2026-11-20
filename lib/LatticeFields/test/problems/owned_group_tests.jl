@@ -1,4 +1,4 @@
-# The group layer on a builder program (F2-06): `advance!` of a `GroupRuntime` equals the
+# The group layer on a builder program: `advance!` of a `GroupRuntime` equals the
 # integrator's step, `ends_in = :slot1` brings an odd count back to slot 1 with the same
 # values, and the runtime's host parts allocate nothing (AllocCheck, and `@allocated` of a
 # warm `advance!`).

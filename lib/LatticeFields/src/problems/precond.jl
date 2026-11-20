@@ -1,9 +1,8 @@
-# The lattice multigrid as a preconditioner of SciML's linear solves (F4-08; F4 design §3.7,
-# SX-15, Q-A (b)): `LatticeMultigrid()` is a LinearSolve `precs` function. Given the `W = J − M/γ`
+# The lattice multigrid as a preconditioner of SciML's linear solves: `LatticeMultigrid()` is a LinearSolve `precs` function. Given the `W = J − M/γ`
 # of an implicit OrdinaryDiffEq solver (or the operator `A` of a linear system with no time),
-# it binds the owned implicit runtime of the problem (the rows' operators `J̃` of F3-07, with
+# it binds the owned implicit runtime of the problem (the rows' operators `J̃` of the implicit algorithms, with
 # the shift `1/γ`) at the solver's state, and applies one V-cycle per field as `ldiv!`: the
-# block-diagonal preconditioner of the coupled steady solve (F3-12d), on the problem's backend.
+# block-diagonal preconditioner of the coupled steady solve, on the problem's backend.
 
 # (`LatticeMultigrid`, defined with the lattice solvers, is `Solvers.LatticeMultigrid`; this file
 # adds its method for the operators of a problem `discretize` returned.)
@@ -124,7 +123,7 @@ end
 function _mg_bind!(P::MGPreconditioner, u, lp, t, γ)
     ig = P.integ
     _load_state!(ig.store, u)
-    # the inputs given as functions of the time, at the time of the bind (F4-B1), as the right side
+    # the inputs given as functions of the time, at the time of the bind, as the right side
     lp isa LatticeParameters && !isempty(lp.fns) && _mg_inputs!(ig, lp, t)
     k = lp.tick[]
     for rt in ig.runtimes

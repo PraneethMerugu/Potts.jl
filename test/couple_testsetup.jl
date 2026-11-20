@@ -1,4 +1,7 @@
-# The top-level definitions of fields_couple.jl, fields_couple_e.jl, fields_short.jl, fields_couple_e8.jl, fields_couple_e11.jl, fields_couple_w2.jl (converted from the include-into-Main suite, TS1a).
+# Shared definitions of the coupled-PDESystem tests: fields_couple_tests.jl,
+# fields_couple_bindings_tests.jl, fields_short_tests.jl, fields_couple_names_tests.jl,
+# fields_couple_arrays_faces_tests.jl, fields_couple_inputs_tests.jl and
+# fields_discretization_tests.jl.
 
 @testsetup module CoupleSetup
 using Potts, Test
@@ -173,7 +176,7 @@ catch err
     sprint(showerror, err)
 end
 
-module CpRev
+module CpCases
 using Potts: Potts
 using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters
 const Interval = Potts.ModelingToolkitBase.DomainSets.Interval
@@ -315,7 +318,7 @@ fs_op(dims = (40, 30)) = (σ = zeros(Int32, dims...); σ[5:9, 5:9] .= 1; σ[20:2
 
 fs_run(m; op = fs_op(Potts._p(m, :lattice).dims), k = 20) = solve(PottsProblem(m, op, (0, k); seed = 5), SequentialCPM(); saveat = 0:5:k)
 
-# ---- from fields_couple_e8.jl -----------------------------------------------------------------------
+# ---- from fields_couple_names_tests.jl -----------------------------------------------------------------------
 module CeS
 using Potts: Potts
 using Potts.Fields
@@ -380,7 +383,7 @@ end
 CePeriodic(; name = :CePeriodic, kw...) = _CePer12(; with_field = true, name, kw...)
 CePeriodicHost(; name = :CePeriodicHost, kw...) = _CePer12(; with_field = false, name, kw...)
 
-# ---- from fields_couple_e11.jl ----------------------------------------------------------------------
+# ---- from fields_couple_arrays_faces_tests.jl ----------------------------------------------------------------------
 ce_op(dims) = (σ = zeros(Int32, dims...); σ[4:6, 3:5] .= 1; [ownership => σ, kind => [:A]])
 
 function ce_steps(m, op, k; kw...)
@@ -440,9 +443,9 @@ end
 end
 
 CeHostArr(; name = :CeHostArr, kw...) = _CeArrBase(; variant = :host, name, kw...)
-CeFiCompB(; name = :CeFiCompB, kw...) = _CeArrBase(; variant = :fi_comp, name, kw...)
-CeFiDriveB(; name = :CeFiDriveB, kw...) = _CeArrBase(; variant = :fi_drive, name, kw...)
-CeFcCompB(; name = :CeFcCompB, kw...) = _CeArrBase(; variant = :fc_comp, name, kw...)
+ArrayFieldsComponent(; name = :ArrayFieldsComponent, kw...) = _CeArrBase(; variant = :fi_comp, name, kw...)
+ArrayFieldsDrive(; name = :ArrayFieldsDrive, kw...) = _CeArrBase(; variant = :fi_drive, name, kw...)
+ArrayConstraintsComponent(; name = :ArrayConstraintsComponent, kw...) = _CeArrBase(; variant = :fc_comp, name, kw...)
 CeFiScal(; name = :CeFiScal, kw...) = _CeArrBase(; variant = :fi_scal, name, kw...)
 CeFiDriveScal(; name = :CeFiDriveScal, kw...) = _CeArrBase(; variant = :fi_drive_scal, name, kw...)
 CeFcScal(; name = :CeFcScal, kw...) = _CeArrBase(; variant = :fc_scal, name, kw...)
@@ -544,8 +547,8 @@ end
 CeW1(; name = :CeW1, kw...) = _CeWBase(; w = CE_W1, name, kw...)
 CeW2(; name = :CeW2, kw...) = _CeWBase(; w = CE_W2, name, kw...)
 
-# ---- from fields_couple_w2.jl -----------------------------------------------------------------------
-module W2
+# ---- from fields_couple_inputs_tests.jl -----------------------------------------------------------------------
+module Input
 using Potts: Potts
 using Potts.Fields
 @parameters Dc = 0.5 s = 0.4 k = 0.05
@@ -582,16 +585,17 @@ auxnobc() = auxbc([])
     name = :sys)
 end
 
-@potts_model W2Host begin
+@potts_model InputHost begin
     @kinds medium cell other
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells => (volume - 9.0)^2
     @sweep Metropolis(; temperature = 1.0)
 end
 
-w2_op() = (σ = zeros(Int32, 12, 10); σ[4:6, 3:5] .= 1; [ownership => σ, kind => [:cell]])
+input_op() = (σ = zeros(Int32, 12, 10); σ[4:6, 3:5] .= 1; [ownership => σ, kind => [:cell]])
 
-w2_model(fields; kinds = :(@kinds medium cell other)) = :(@potts_model W2M begin
+input_model(fields; kinds = :(@kinds medium cell other)) = :(
+    @potts_model InputM begin
     $kinds
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells => (volume - 9.0)^2
@@ -599,7 +603,7 @@ w2_model(fields; kinds = :(@kinds medium cell other)) = :(@potts_model W2M begin
     @sweep Metropolis(; temperature = 1.0)
 end)
 
-w2_new(ex) = cp_msg(() -> (Core.eval(@__MODULE__, ex); Base.invokelatest(() -> W2M(; name = :m))))
+input_new(ex) = cp_msg(() -> (Core.eval(@__MODULE__, ex); Base.invokelatest(() -> InputM(; name = :m))))
 
 @potts_model _FaceOnly8x6 begin
     @structural_parameters sys_fn = CeFace.nolap
@@ -612,14 +616,14 @@ end
 
 CeFaceB(; name = :CeFaceB, kw...) = _FaceOnly8x6(; sys_fn = CeFace.nolap, name, kw...)
 CeFaceLapB(; name = :CeFaceLapB, kw...) = _FaceOnly8x6(; sys_fn = CeFace.lap, name, kw...)
-W2FaceW(; name = :W2FaceW, kw...) = _FaceOnly8x6(; sys_fn = W2.withbc, name, kw...)
-W2FaceN(; name = :W2FaceN, kw...) = _FaceOnly8x6(; sys_fn = W2.nobc, name, kw...)
-W2AuxBcs(; name = :W2AuxBcs, kw...) = _FaceOnly8x6(; sys_fn = W2.auxbc, name, kw...)
-W2AuxNo(; name = :W2AuxNo, kw...) = _FaceOnly8x6(; sys_fn = W2.auxnobc, name, kw...)
+InputFaceW(; name = :InputFaceW, kw...) = _FaceOnly8x6(; sys_fn = Input.withbc, name, kw...)
+InputFaceN(; name = :InputFaceN, kw...) = _FaceOnly8x6(; sys_fn = Input.nobc, name, kw...)
+InputAuxBcs(; name = :InputAuxBcs, kw...) = _FaceOnly8x6(; sys_fn = Input.auxbc, name, kw...)
+InputAuxNo(; name = :InputAuxNo, kw...) = _FaceOnly8x6(; sys_fn = Input.auxnobc, name, kw...)
 
-w2_face_op() = (σ = zeros(Int32, 8, 6); σ[4:6, 3:5] .= 1; [ownership => σ, kind => [:A]])
-w2_u(m; kw...) = (pr = PottsProblem(m(; name = :m), w2_face_op(), (0, 3); seed = 1, kw...); Array(solve(pr, SequentialCPM()).u[end].site.u))
-w2_hand() = (u = zeros(8, 6); u[1, :] .= 10 * (1 - (1 - 0.1 / 4)^12); u)
+input_face_op() = (σ = zeros(Int32, 8, 6); σ[4:6, 3:5] .= 1; [ownership => σ, kind => [:A]])
+input_u(m; kw...) = (pr = PottsProblem(m(; name = :m), input_face_op(), (0, 3); seed = 1, kw...); Array(solve(pr, SequentialCPM()).u[end].site.u))
+input_hand() = (u = zeros(8, 6); u[1, :] .= 10 * (1 - (1 - 0.1 / 4)^12); u)
 
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end

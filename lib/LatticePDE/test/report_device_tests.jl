@@ -1,8 +1,8 @@
-# F4-13 on a device (LATTICEPDE_GPU = rocm | metal), Float32: `field_report` of an owned
+# The field report on a device (LATTICEPDE_GPU = rocm | metal), Float32: `field_report` of an owned
 # integrator (explicit and Backward Euler), of an owned solution and of an OrdinaryDiffEq solve
 # on device arrays prints the same group policy as the host, with the device's counters, and
 # the run after a report equals the run without one, bit for bit.
-# Negative control at 4d025fa8 (~/lpwork/f4-13b/nc-base-device.log): `field_report` is not defined.
+# Negative control at 4d025fa8: `field_report` is not defined.
 
 @testsetup module LP_report_device
 using Test, LatticePDE
@@ -31,8 +31,8 @@ end
 include("shared/export_all.jl")
 end
 
-@testitem "F4-13: field_report on nameof(typeof(PDEV))" setup = [LP_report_device] tags = [:latticepde, :report_device, :gpu_only] begin
-@testset "F4-13: field_report on $(nameof(typeof(PDEV)))" begin
+@testitem "field_report on nameof(typeof(PDEV))" setup = [LP_report_device] tags = [:latticepde, :report_device, :gpu_only] begin
+    @testset "field_report on $(nameof(typeof(PDEV)))" begin
     @parameters dD = 1e-3 dk = 0.1
     @variables dc(..)
     dce = dc(t, x, y)
@@ -71,7 +71,7 @@ end
     st = solve(mk(32, PDEV), Tsit5())
     rt = sprint(field_report, st)
     @test occursin("SciML solve, Tsit5, retcode Success", rt) && occursin("backend $(nameof(typeof(PDEV)))", rt)
-    # (the device's matrix-free `JacobianOperator`, a SciMLOperators `FunctionOperator`; ruling Q7)
+        # (the device's matrix-free `JacobianOperator`, a SciMLOperators `FunctionOperator`)
     @test occursin("jac update_coefficients!; jac_prototype FunctionOperator; jvp LatticeJVP", rt)
 end
 end

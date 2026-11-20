@@ -346,7 +346,7 @@ it. `deflate` (`:auto`: PCG on a `deflatable` group) solves for the zero-mean pa
 `pcg.x` and carries the constant-mode coefficient `c = mean(b)/s` as a device scalar; the
 solution `pcg.x − mean(pcg.x) + c` is written to `pcg.u` after every solve.
 `deflate = false` is the undeflated reference form. A Float32 solution array limits its own
-true residual (upper bound `eps(Float32)·|c|·‖A‖∞` relative to ‖b‖∞, D-C7b), whatever the
+true residual (upper bound `eps(Float32)·|c|·‖A‖∞` relative to ‖b‖∞), whatever the
 solver precision.
 """
 function FieldSolver(
@@ -364,14 +364,14 @@ function FieldSolver(
         deflate = dfl)
     s = semantic(p)
     # a Float64 solver on a device whose default float is Float32 (an explicit `solver_type`, or
-    # `:auto` in the floor regime, D-C7b): its kernels are registered (D-157 carve-out, R-F3c)
+    # `:auto` in the floor regime): its kernels are registered (D-157 carve-out)
     declared = T === Float64 && Exec.default_float(exec) !== Float64
     # (a solver launch passes the linear site index: a hexagonal lattice's diagonal reads would
     # otherwise select the Cartesian index form)
     o = ishex(op) ? CompileOptions(; T, declared, index = :linear) : CompileOptions(; T, declared)
     declared && foreach(f -> Exec.register_float64!(string(typeof(f)), Exec.FLOAT64_ARRAY), (finish!, bottom!, gershgorin!, ishex(op) ? build_hex! : build_site!))
     bodies = Dict{String, Any}()
-    praw = coef_values(op)                # coefficients are runtime parameters (P5 C7b-2)
+    praw = coef_values(op)                # coefficients are runtime parameters
     for k in s.kernels
         ck = compile_kernel(s, k, o; stages)
         d = derive_function(ck)
@@ -459,7 +459,8 @@ function lowered_type(exec, S, role; op = nothing)
     S in LOWERED_TYPES ||
         bad("number type ", S, " (", role, ") is not lowered for this solver; ",
             "lowered: ", join(LOWERED_TYPES, ", "),
-            S <: AbstractFloat ? "" : " (a Dual or BigFloat implicit solve is planned after the paper, FE-26)")
+        S <: AbstractFloat ? "" : " (a Dual or BigFloat implicit solve is not supported yet)"
+    )
     S === Float32 || supports(exec, S) ||
         bad("number type ", S, " (", role, ") is not supported by this executor ",
             "(supports(exec, ", S, ") is false: the device has no ", S, "); use Float32")
@@ -469,7 +470,7 @@ end
 """
     resolve_solver_T(exec, op, state, solver_type)
 
-The solver's number type (provisional D-C7b): `:auto` is Float64 for a group in the
+The solver's number type (a provisional rule): `:auto` is Float64 for a group in the
 Float32 floor regime (`floor_regime(op)`) when `supports(exec, Float64)` (asked only
 then), else the state type; on a backend without Float64 such a group stays in Float32,
 ends `:floor` and the sentinel names it. A type is checked by `lowered_type`.
@@ -988,7 +989,7 @@ end
 Run plan `sp`; with `host = true` read the `done` flag after every segment and stop when it
 is set (a declared host pass). On a host executor (`host_scalars`) the device mode stops there
 too, after the segments whose slots are the plan's last (`sp.stop`): its scalars are host
-memory, so the read is free (R1 of the F3-06 review: a solve that is done, at its setup or
+memory, so the read is free (a solve that is done, at its setup or
 after an iteration, skips the gated launches that would follow, about 4.9 ms of a
 0-iteration solve at 256² on 8 threads); the result is the same, every later launch being
 gated off, and the solve ends in the plan's last rotation. Returns the number of segments run.
@@ -1297,7 +1298,7 @@ A stopped solve never reports `done`; fixed-cycle solves never stop early.
 end
 const STALL_GAIN = 0.9
 const STALL_CHECKS = 3
-const FLOOR_ULPS = 4          # measured floors: best = 0.11–0.48 ε·scale (D-C7b)
+const FLOOR_ULPS = 4          # measured floors: best = 0.11–0.48 ε·scale
 const GROW_CHECKS = 3
 const GROW_FACTOR = 2
 

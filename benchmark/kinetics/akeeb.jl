@@ -1,5 +1,5 @@
 #     julia --project=lib/PottsModels/test -t 12 benchmark/kinetics/akeeb.jl <runs> <out> [<points> <arms>]   # ROCm for the checkerboard arms
-# Akeeb invasion (P6.0bl): SequentialCPM (CPU) against CheckerboardCPM on the GPU and on the CPU
+# Akeeb invasion: SequentialCPM (CPU) against CheckerboardCPM on the GPU and on the CPU
 # (the host loop: the scheme without concurrency) at three paper points, the page's protocol (500 × 300, 701 MCS, the six
 # invasion metrics of `akeeb_observables`, the authors' "MCS 700"), at the same MCS clock.
 using Potts, PottsModels, AMDGPU, Random, Printf

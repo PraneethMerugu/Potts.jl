@@ -1,8 +1,8 @@
-# Split from silent_tests.jl (Wave T3b); uses LP_silent setup.
+# Split from silent_tests.jl; uses LP_silent setup.
 
-@testitem "an input's names never shadow another name (F1 round 3)" setup = [LP_silent] tags = [:latticepde, :silent] begin
-    @testset "an input's names never shadow another name (F1 round 3)" begin
-        # round 2: silently misrouted (an input named `c` took `ig[:c] = …`, `kp` read the input
+@testitem "an input's names never shadow another name" setup = [LP_silent] tags = [:latticepde, :silent] begin
+    @testset "an input's names never shadow another name" begin
+        # Silently misrouted (an input named `c` took `ig[:c] = …`, `kp` read the input
         # array, the last of two inputs with one name won)
         @variables ka(..)::Int32 [input = true, lattice_input_name = "c"] kb(..)::Int32 [input = true, lattice_input_name = "kp"]
         @variables kb2(..)::Int32 [input = true, lattice_input_name = "kp"]
@@ -22,9 +22,9 @@
     end
 end
 
-@testitem "a table on the ODE path is the table (F1 round 3)" setup = [LP_silent] tags = [:latticepde, :silent] begin
-    @testset "a table on the ODE path is the table (F1 round 3)" begin
-        # round 2 (coupled and standalone routes): the ODE right side bound the table to the state: at u0 it was
+@testitem "a table on the ODE path is the table" setup = [LP_silent] tags = [:latticepde, :silent] begin
+    @testset "a table on the ODE path is the table" begin
+        # Formerly (coupled and standalone routes) the ODE right side bound the table to the state: at u0 it was
         # −1 where −2, and Tsit5 gave c(1) = 0.5000 where exp(−2) = 0.1353
         @parameters Dq[1:2] = [1.0, 2.0]
         sys = ssys([D(ce) ~ -Dq[2] * ce], [c(0, x, y) ~ 1.0], [ce], [Dq])
@@ -33,7 +33,7 @@ end
         o.f(du, o.u0, o.p, 0.0)
         @test all(≈(-2.0), du)
         @test SciMLBase.solve(o, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10).u[end][1] ≈ exp(-2) rtol = 1.0e-6
-        # the owned path (right before too), and a new table through remake (round 2: "`Dq[1:2]`
+        # the owned path (right before too), and a new table through remake ("`Dq[1:2]`
         # is not a parameter of the problem")
         p = sown(sys)
         alg = ExplicitEuler(; substeps = 1)
@@ -45,7 +45,7 @@ end
         @test SciMLBase.solve(remake(o; p = [Dq => [1.0, 5.0]]), Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10).u[end][1] ≈ exp(-5) rtol = 1.0e-6
         ig = init(p, alg; dt = 0.01)
         @test_throws ArgumentError setp(p, Dq)(p, [1.0, 5.0])
-        # an integrator's table is set through `setp` (and `integ.ps`, F2-13)
+        # an integrator's table is set through `setp` (and `integ.ps`)
         setp(ig, Dq)(ig, [1.0, 5.0])
         @test ig.ps[Dq] == [1.0, 5.0]
         # a typo is refused on the ODE path too
@@ -53,14 +53,14 @@ end
     end
 end
 
-@testitem "parameter keys, tables and input lists (F1 round 4)" setup = [LP_silent] tags = [:latticepde, :silent] begin
-    @testset "parameter keys, tables and input lists (F1 round 4)" begin
+@testitem "parameter keys, tables and input lists" setup = [LP_silent] tags = [:latticepde, :silent] begin
+    @testset "parameter keys, tables and input lists" begin
         @parameters Dq[1:2] = [1.0, 2.0] kr = 0.5
         sys = ssys([D(ce) ~ -Dq[2] * ce - kr * ce + ifelse(qe == 1, 1.0, 0.0)], [c(0, x, y) ~ 1.0], [ce, qe], [Dq, kr])
         p = sown(sys; inputs = [qe => 0])
         ix = p.index
-        # an integer key is a slot of the parameter vector; an expression is no index (round 3:
-        # both threw "is not a parameter of the problem", so `remake(p; p = [1 => …])` failed)
+        # an integer key is a slot of the parameter vector; an expression is no index
+        # (both threw "is not a parameter of the problem", so `remake(p; p = [1 => …])` failed)
         @test SymbolicIndexingInterface.parameter_index(ix, 1) == 1
         @test_throws ArgumentError SymbolicIndexingInterface.parameter_index(ix, 9)
         @test SymbolicIndexingInterface.parameter_index(ix, 2ce) === nothing
@@ -91,12 +91,12 @@ end
     end
 end
 
-@testitem "parameter keys, table lists and writes, input sites (F1 round 5)" setup = [LP_silent] tags = [:latticepde, :silent] begin
-    @testset "parameter keys, table lists and writes, input sites (F1 round 5)" begin
+@testitem "parameter keys, table lists and writes, input sites" setup = [LP_silent] tags = [:latticepde, :silent] begin
+    @testset "parameter keys, table lists and writes, input sites" begin
         @parameters Dq[1:2] = [1.0, 2.0] kr = 0.5
         sys = ssys([D(ce) ~ -Dq[2] * ce - kr * ce + ifelse(qe == 1, 1.0, 0.0)], [c(0, x, y) ~ 1.0], [ce, qe], [Dq, kr])
         alg = ExplicitEuler(; substeps = 1)
-        # the ODE path refuses a key that is no parameter's name (round 4: `remake` skipped it
+        # the ODE path refuses a key that is no parameter's name (`remake` skipped it
         # silently, the run kept kr = 0.5; `setp` gave "invalid index: nothing")
         o = discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64); inputs = [qe => 0])
         for pm in ([kr + 1 => 1.0], [kr => 0.1, 2kr => 1.0], Dict(2kr => 1.0))
@@ -119,7 +119,7 @@ end
         # an out-of-range input value is refused
         K = zeros(4, 4); K[3, 2] = 2.5
         @test_throws ArgumentError sown(sys; inputs = [qe => K])
-        # an integrator's table is written (round 4: "`Dq` names nothing of this problem"), and the
+        # an integrator's table is written ("`Dq` names nothing of this problem"), and the
         # step reads it: c(0.1) = 1 − 0.1 (Dq[2] + kr)
         ig.ps[Dq[2]] = 4.0
         @test ig.ps[:Dq] == [1.0, 4.0] && p.tables == ["Dq" => [1.0, 2.0]]
@@ -132,16 +132,16 @@ end
     end
 end
 
-@testitem "table coefficients in the bound; problems built from ours (F1 round 6)" setup = [LP_silent] tags = [:latticepde, :silent] begin
-    @testset "table coefficients in the bound; problems built from ours (F1 round 6)" begin
-        # round 5: the bound could not see `Dn[1] * laplacian(c)`: Dn[1] = −1 ran (discretize, remake and
+@testitem "table coefficients in the bound; problems built from ours" setup = [LP_silent] tags = [:latticepde, :silent] begin
+    @testset "table coefficients in the bound; problems built from ours" begin
+        # The bound could not see `Dn[1] * laplacian(c)`: Dn[1] = −1 ran (discretize, remake and
         # `ig[Dn] = …`), and `ig[Dn] = [1000, 2]` kept 1 substep (unstable, reported Success)
         @parameters Dn[1:2] = [1.0, 2.0] Dm[1:2] = [-1.0, 2.0]
         sys = ssys([D(ce) ~ Dn[1] * laplacian(ce)], [c(0, x, y) ~ 1.0], [ce], [Dn])
         negsys = ssys([D(ce) ~ Dm[1] * laplacian(ce)], [c(0, x, y) ~ 1.0], [ce], [Dm])
         alg = ExplicitEuler(; substeps = 1)
         neg(err) = occursin("is negative at these parameters", err)
-        # ODE: at the first call of the right side (F4-01; base: at `discretize`)
+        # ODE: at the first call of the right side (base: at `discretize`)
         @test_throws ArgumentError solve(discretize(negsys, LatticeDiscretization(Grid((4, 4)); T = Float64)), Tsit5())
         @test_throws ArgumentError solve(sown(negsys), alg; dt = 0.01)                                            # owned: before a step
         p = sown(sys)
@@ -181,12 +181,12 @@ end
     end
 end
 
-@testitem "a table coefficient is bounded at every entry (F1 round 7)" setup = [LP_silent] tags = [:latticepde, :silent] begin
-    @testset "a table coefficient is bounded at every entry (F1 round 7)" begin
-        # round 6: each read took only its smallest and largest entry, which under-bounds a
+@testitem "a table coefficient is bounded at every entry" setup = [LP_silent] tags = [:latticepde, :silent] begin
+    @testset "a table coefficient is bounded at every entry" begin
+        # Each read took only its smallest and largest entry, which under-bounds a
         # coefficient that is not affine in it: each run below was n = 1 and blew up with Success
         # (c(1) = 1.1e7, 1.2e24, 1.1e7); every site is kind 2 (entry 2), dt = 0.025. Index 0
-        # reads 0 (round 8): `1 / value_at(Dv, …)` takes an index declared never 0 (`kb`, bounds (1, 3))
+        # reads 0: `1 / value_at(Dv, …)` takes an index declared never 0 (`kb`, bounds (1, 3))
         @parameters Dq[1:3] = [0.0, 10.0, 20.0] Ds[1:3] = [0.0, π / 2, π] Dv[1:3] = [-1.0, 0.01, 1.0]
         K = fill(Int32(2), 4, 4)
         for (rate, tab, k, q) in (
@@ -200,9 +200,9 @@ end
             @test SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c, end]) < 1.0e-20
         end
         # a zero entry under `1 / value_at(…)` that the inputs reach (a kind 1 at site (3, 2)) is not
-        # finite: refused, naming the entry and saying to fix it (round 7: only "give an explicit
+        # finite: refused, naming the entry and saying to fix it (only "give an explicit
         # count"; F2 record (i): refused with or without a count). The entries the inputs do not
-        # reach are not read (F2 record (h)): with kind 2 everywhere it runs
+        # reach are not read: with kind 2 everywhere it runs
         @parameters Dz[1:3] = [0.0, 0.01, 1.0]
         K1 = copy(K); K1[3, 2] = 1
         sys = ssys([D(ce) ~ -(1 / value_at(Dz, qb)) * ce], [c(0, x, y) ~ 1.0], [ce, qb], [Dz])
@@ -217,18 +217,18 @@ end
     end
 end
 
-@testitem "a table read takes index 0 and clamped indices as the kernel does (F1 round 8)" setup = [LP_silent] tags = [:latticepde, :silent] begin
-    @testset "a table read takes index 0 and clamped indices as the kernel does (F1 round 8)" begin
+@testitem "a table read takes index 0 and clamped indices as the kernel does" setup = [LP_silent] tags = [:latticepde, :silent] begin
+    @testset "a table read takes index 0 and clamped indices as the kernel does" begin
         K5, K0 = fill(Int32(5), 4, 4), fill(Int32(0), 4, 4)
         # one index, tables of different lengths: the kernel clamps the index into each table's
-        # own range, so at k = 5 `Db` reads 100 and `Da` its last entry 0 (round 7: the group took
+        # own range, so at k = 5 `Db` reads 100 and `Da` its last entry 0 (the group took
         # the shortest table's entries: n = 1, Success, max|c(1)| = 1.1e7; f8f98e43: n = 2)
         @parameters Da[1:3] = [0.0, 0.0, 0.0] Db[1:5] = [0.0, 0.0, 0.0, 0.0, 100.0]
         sys = ssys([D(ce) ~ -(value_at(Db, qe) - value_at(Da, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Da, Db])
         sol = solve(sown(sys; inputs = [qe => K5]), ExplicitEuler(); dt = 0.025)
         @test substep_counts(sol)[1] == 2 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c, end]) < 1.0e-20
         # index 0 (an input value 0, or a literal 0) reads 0, so `100 − value_at(T3, k)` is 100 there
-        # (round 7 and f8f98e43: index 0 was not evaluated; n = 1, Success, max|c(1)| = 1.1e7 where
+        # (before the fix, f8f98e43: index 0 was not evaluated; n = 1, Success, max|c(1)| = 1.1e7 where
         # the exact value is exp(−100) = 3.7e-44)
         @parameters T3[1:3] = [100.0, 100.0, 100.0]
         for (rate, ins) in ((-(100 - value_at(T3, qe)) * ce, [ce, qe]), (-(100 - value_at(T3, 0)) * ce, [ce]))
@@ -236,12 +236,12 @@ end
             sol = solve(sown(sys; inputs = length(ins) == 2 ? [qe => K0] : ()), ExplicitEuler(); dt = 0.025)
             @test substep_counts(sol)[1] == 2 && SciMLBase.successful_retcode(sol) && maximum(abs, sol[:c, end]) < 1.0e-20
         end
-        # the CPU `value_at` reads as the kernel does (round 7: `T[Int(k)]`, a BoundsError at 0)
+        # the CPU `value_at` reads as the kernel does (`T[Int(k)]`, a BoundsError at 0)
         @test value_at([1.0, 2.0, 3.0], 0) == 0.0 && value_at([1.0, 2.0, 3.0], 5) == 3.0 && value_at([1.0, 2.0, 3.0], -1) == 1.0
         @test value_at([1.0, 2.0, 3.0], 2) == 2.0                                           # control
         # `1 / value_at(T, k)` with an index that is 0 at a site is not finite there: refused, saying so,
-        # with the route (keep 0 out of the index); a count does not help (F2 record (i): 1fb097f2
-        # ran a count). With no 0 in the map it takes an automatic count (F2 record (h))
+        # with the route (keep 0 out of the index); a count does not help (1fb097f2
+        # ran a count). With no 0 in the map it takes an automatic count
         @parameters Dv8[1:3] = [-1.0, 0.01, 1.0]
         sys = ssys([D(ce) ~ -(1 / value_at(Dv8, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dv8])
         Kz = fill(Int32(2), 4, 4); Kz[3, 2] = 0
@@ -265,13 +265,13 @@ end
         @test_throws ArgumentError solve(sown(sys; inputs = [qe => K015]), ExplicitEuler(); dt = 0.025)
         @test first(substep_counts(solve(sown(sys; inputs = [qe => K015]), ExplicitEuler(; substeps = 2); dt = 0.025))) == 2
         # the interval of the index is over the current values: with 0 everywhere each read takes
-        # one entry, under the cap (F2 record (m))
+        # one entry, under the cap
         @test first(substep_counts(solve(sown(sys; inputs = [qe => K0]), ExplicitEuler(); dt = 0.025))) == ceil(Int, 0.025 * 136 / 1.8)
     end
 end
 
-@testitem "an explicit count is raised by every term with a bound (F1 round 9)" setup = [LP_silent] tags = [:latticepde, :silent] begin
-    @testset "an explicit count is raised by every term with a bound (F1 round 9)" begin
+@testitem "an explicit count is raised by every term with a bound" setup = [LP_silent] tags = [:latticepde, :silent] begin
+    @testset "an explicit count is raised by every term with a bound" begin
         # 1fb097f2: a coefficient with a non-finite value (index 0) or over the cap made the whole
         # bound NaN, and an explicit count stayed as given: each run below ended Success and blew up.
         # Since F2 record (i) a value that is not finite where the inputs reach is refused with or
@@ -279,7 +279,7 @@ end
         K = fill(Int32(2), 4, 4)
         K16 = reshape(Int32.(mod.(0:255, 16)), 16, 16)               # index values 0 … 15
         # P1: `1 / value_at(Dv, k)` at every entry 200 (1fb097f2: n = 2, Success, 1.2e14): raised to 3,
-        # with no warning (no 0 in the map: the bound is finite, F2 record (h))
+        # with no warning (no 0 in the map: the bound is finite)
         @parameters Dv9[1:3] = fill(0.005, 3)
         sys = ssys([D(ce) ~ -(1 / value_at(Dv9, qe)) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Dv9])
         sol = @test_logs solve(sown(sys; inputs = [qe => K]), ExplicitEuler(; substeps = 2); dt = 0.025)
@@ -310,8 +310,8 @@ end
     end
 end
 
-@testitem "warnings once per term and cause; messages name every cause (F2 records (a), (b), (e))" setup = [LP_silent] tags = [:latticepde, :silent] begin
-    @testset "warnings once per term and cause; messages name every cause (F2 records (a), (b), (e))" begin
+@testitem "warnings once per term and cause; messages name every cause" setup = [LP_silent] tags = [:latticepde, :silent] begin
+    @testset "warnings once per term and cause; messages name every cause" begin
         # (a) a sweep over the value of an entry the bound does not cover warned once per value
         # (bda31989: three here, and the set grew with every value). Since F2 record (i) such an
         # entry is refused at each value; a sweep past the cap (the cause left to warn) warns once:
@@ -334,7 +334,7 @@ end
         @test count(l -> l.level == Base.CoreLogging.Warn && occursin("4096", string(l.message)), logs) == 1
         # (b) an unseen term and a coefficient with no finite bound in one rate: both are named
         # (bda31989: only the unseen term `-(c^3)`). A coefficient not finite where the inputs
-        # reach is refused before (F2 record (i)); past the cap is the cause left here
+        # reach is refused before; past the cap is the cause left here
         @parameters Tz2[1:16] = zeros(16)
         sys = ssys([D(ce) ~ -ce^3 - sum(value_at(Tz2, qe + i) for i in 1:4) * ce], [c(0, x, y) ~ 1.0], [ce, qe], [Tz2])
         @test_throws ArgumentError solve(sown(sys; inputs = [qe => reshape(Int32.(0:15), 4, 4)]), ExplicitEuler(); dt = 0.025)

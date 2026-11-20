@@ -1,8 +1,8 @@
-# F2-06: the shared group layer (LatticeFields.Problems, group.jl). An owned problem steps
+# The shared group layer (LatticeFields.Problems, group.jl). An owned problem steps
 # through `GroupRuntime`s (`advance!`, one per field group); `FieldGroups` assigns algorithms
 # to fields; an algorithm declares its buffers (`nbuffers`) and keeps a cache (`alg_cache`)
 # that `reset!` and its return code (`step_retcode!`) reach.
-# F2-07: `lower_group` (the rate form and the group cut), the update pass (`fuse_update`) and
+# `lower_group` (the rate form and the group cut), the update pass (`fuse_update`) and
 # its byte-identity gate, a clip in B, `dt` required, Cartesian indexing on the host.
 
 @testsetup module LP_groups
@@ -23,8 +23,8 @@ include("shared/groups.jl")
 include("shared/export_all.jl")
 end
 
-@testitem "F2-06: B steps through the group layer" setup = [LP_groups] tags = [:latticepde, :groups] begin
-    @testset "F2-06: B steps through the group layer" begin
+@testitem "B steps through the group layer" setup = [LP_groups] tags = [:latticepde, :groups] begin
+    @testset "B steps through the group layer" begin
         p = gown(gsys())
         a4, a3 = ExplicitEuler(; substeps = 4), ExplicitEuler(; substeps = 3)
         ig = init(p, a4; dt = 0.01)
@@ -46,8 +46,8 @@ end
     end
 end
 
-@testitem "F2-06: FieldGroups: two groups in state order, each ending in slot 1" setup = [LP_groups] tags = [:latticepde, :groups] begin
-    @testset "F2-06: FieldGroups: two groups in state order, each ending in slot 1" begin
+@testitem "FieldGroups: two groups in state order, each ending in slot 1" setup = [LP_groups] tags = [:latticepde, :groups] begin
+    @testset "FieldGroups: two groups in state order, each ending in slot 1" begin
         # c does not read o (ga = 0): the c group steps alone; the o group runs after it and reads
         # the new c from its array (base: no groups in B)
         p = remake(gown(gsys()); p = [ga => 0.0])
@@ -83,8 +83,8 @@ end
     end
 end
 
-@testitem "F2-06: an algorithm's buffers, cache, reset! and return code" setup = [LP_groups] tags = [:latticepde, :groups] begin
-    @testset "F2-06: an algorithm's buffers, cache, reset! and return code" begin
+@testitem "an algorithm's buffers, cache, reset! and return code" setup = [LP_groups] tags = [:latticepde, :groups] begin
+    @testset "an algorithm's buffers, cache, reset! and return code" begin
         p = gown(gsys())
         ig = init(p, GStub(0); dt = 0.01)
         @test length(ig.store.flat) == 3                              # nbuffers = 3: a third buffer
@@ -109,8 +109,8 @@ end
     end
 end
 
-@testitem "F2-06: the step-start clamp: a mask that switches on is read by that step's substeps" setup = [LP_groups] tags = [:latticepde, :groups] begin
-    @testset "F2-06: the step-start clamp: a mask that switches on is read by that step's substeps" begin
+@testitem "the step-start clamp: a mask that switches on is read by that step's substeps" setup = [LP_groups] tags = [:latticepde, :groups] begin
+    @testset "the step-start clamp: a mask that switches on is read by that step's substeps" begin
         @variables gw(..) gwk(..)::Int32 [input = true]
         we, wk = gw(t, x, y), gwk(t, x, y)
         sys = PDESystem(
@@ -128,8 +128,8 @@ end
     end
 end
 
-@testitem "F2-06: the warning set stays bounded over 500 remakes" setup = [LP_groups] tags = [:latticepde, :groups] begin
-    @testset "F2-06: the warning set stays bounded over 500 remakes" begin
+@testitem "the warning set stays bounded over 500 remakes" setup = [LP_groups] tags = [:latticepde, :groups] begin
+    @testset "the warning set stays bounded over 500 remakes" begin
         # the coupled rows of c and o are not bounded: an explicit count warns once per (program,
         # term, cause), never once per value (base: 500 keys, about 120 KB, record (a))
         p = gown(gsys())
@@ -144,8 +144,8 @@ end
     end
 end
 
-@testitem "F2-07: the update pass equals the symbolic fusion (byte-identity gate)" setup = [LP_groups] tags = [:latticepde, :groups] begin
-    @testset "F2-07: the update pass equals the symbolic fusion (byte-identity gate)" begin
+@testitem "the update pass equals the symbolic fusion (byte-identity gate)" setup = [LP_groups] tags = [:latticepde, :groups] begin
+    @testset "the update pass equals the symbolic fusion (byte-identity gate)" begin
         @variables gm(..) gd(..)::Bool [input = true] gk(..)::Int32 [input = true]
         gme, gde, gke = gm(t, x, y), gd(t, x, y), gk(t, x, y)
         @parameters gr = -0.5 Dg[1:2] = [0.3, 1.0]
@@ -187,8 +187,8 @@ end
     end
 end
 
-@testitem "F2-07: a clip in B; a second algorithm fuses once, with no LatticePDE call" setup = [LP_groups] tags = [:latticepde, :groups] begin
-    @testset "F2-07: a clip in B; a second algorithm fuses once, with no LatticePDE call" begin
+@testitem "a clip in B; a second algorithm fuses once, with no LatticePDE call" setup = [LP_groups] tags = [:latticepde, :groups] begin
+    @testset "a clip in B; a second algorithm fuses once, with no LatticePDE call" begin
         @variables gq(..)
         gqe = gq(t, x, y)
         n = 8
@@ -221,12 +221,12 @@ end
     end
 end
 
-@testitem "F2-07: dt is required; lower_group cuts a group" setup = [LP_groups] tags = [:latticepde, :groups] begin
-    @testset "F2-07: dt is required; lower_group cuts a group" begin
+@testitem "dt is required; lower_group cuts a group" setup = [LP_groups] tags = [:latticepde, :groups] begin
+    @testset "dt is required; lower_group cuts a group" begin
         p = gown(gsys())
         for f in (() -> init(p, ExplicitEuler()), () -> solve(p), () -> solve(p; saveat = 0.05))
             e = gerr(f)
-            @test occursin("needs `dt`", e) && occursin("saveat", e) && occursin("clock", e)       # F2-08c: the clock exists
+            @test occursin("needs `dt`", e) && occursin("saveat", e) && occursin("clock", e)       # The clock exists
         end
         disc = LatticeDiscretization(Grid((8, 8)); T = Float64)
         whole = LatticePDE.lower_group(gsys(), disc)
@@ -241,8 +241,8 @@ end
     end
 end
 
-@testitem "F3-22 review r1: lower_group's cut keeps the faces of a field an operator reads" setup = [LP_groups] tags = [:latticepde, :groups] begin
-    @testset "F3-22 review r1: lower_group's cut keeps the faces of a field an operator reads" begin
+@testitem "lower_group's cut keeps the faces of a field an operator reads" setup = [LP_groups] tags = [:latticepde, :groups] begin
+    @testset "lower_group's cut keeps the faces of a field an operator reads" begin
         ce, oe = gc(t, x, y), go(t, x, y)
         sys = PDESystem(
             [D(ce) ~ 0.1 * laplacian(ce) + 0.5 * laplacian(oe) - ce, D(oe) ~ 0.2 * laplacian(oe) - oe],
@@ -267,8 +267,8 @@ end
     end
 end
 
-@testitem "F3-02: ParamSlot, TableSpec and InputSpec in the GroupSpec" setup = [LP_groups] tags = [:latticepde, :groups] begin
-    @testset "F3-02: ParamSlot, TableSpec and InputSpec in the GroupSpec" begin
+@testitem "ParamSlot, TableSpec and InputSpec in the GroupSpec" setup = [LP_groups] tags = [:latticepde, :groups] begin
+    @testset "ParamSlot, TableSpec and InputSpec in the GroupSpec" begin
         disc = LatticeDiscretization(Grid((8, 8)); T = Float64)
         whole = LatticePDE.lower_group(gsys(), disc)
         @test string.(whole.params) == ["ga", "gb"] && all(q -> q isa LFP.ParamSlot && q.role === :base, whole.params)
@@ -303,8 +303,8 @@ end
     end
 end
 
-@testitem "F3-02: an aux field read at neighbor sites (closed box: refused with the route)" setup = [LP_groups] tags = [:latticepde, :groups] begin
-    @testset "F3-02: an aux field read at neighbor sites (closed box: refused with the route)" begin
+@testitem "an aux field read at neighbor sites (closed box: refused with the route)" setup = [LP_groups] tags = [:latticepde, :groups] begin
+    @testset "an aux field read at neighbor sites (closed box: refused with the route)" begin
         ce, Ke = gsc(t, x, y), gsK(t, x, y)
         dom = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
         mk(rate, bcs) = PDESystem(
@@ -336,8 +336,8 @@ end
     end
 end
 
-@testitem "F3-02: an aux-carried loop runs (Jacobi in a group, the split across groups)" setup = [LP_groups] tags = [:latticepde, :groups] begin
-    @testset "F3-02: an aux-carried loop runs (Jacobi in a group, the split across groups)" begin
+@testitem "an aux-carried loop runs (Jacobi in a group, the split across groups)" setup = [LP_groups] tags = [:latticepde, :groups] begin
+    @testset "an aux-carried loop runs (Jacobi in a group, the split across groups)" begin
         ae, cl, Kl = gla(t, x, y), glc(t, x, y), glK(t, x, y)
         per = [gla(t, 0, y) ~ gla(t, 1, y), gla(t, x, 0) ~ gla(t, x, 1), glc(t, 0, y) ~ glc(t, 1, y), glc(t, x, 0) ~ glc(t, x, 1)]
         sys = PDESystem(
@@ -366,8 +366,8 @@ end
     end
 end
 
-@testitem "F3-04: B reads the status word (host: after every step)" setup = [LP_groups] tags = [:latticepde, :groups] begin
-    @testset "F3-04: B reads the status word (host: after every step)" begin
+@testitem "B reads the status word (host: after every step)" setup = [LP_groups] tags = [:latticepde, :groups] begin
+    @testset "B reads the status word (host: after every step)" begin
         p = gown(gsys())                                      # 10 windows of 0.01
         ig = init(p, WStub(; code = 2, at = 3); dt = 0.01, saveat = 0.05)
         s = @test_logs (:warn, r"fields `gc`, `go`: the solve failed in window 3 \(t = 0\.02\) \(the linear solve diverged\).*ConvergenceFailure.*substeps = n") solve!(ig)
@@ -391,14 +391,14 @@ end
     end
 end
 
-# F3-04 review r1: M2 `reinit!` starts a clean run (the word, the totals and `rt.status`
+# M2 `reinit!` starts a clean run (the word, the totals and `rt.status`
 # cleared); S5 a write (`reset!`) keeps the failure; S4 a failure saves the state it stopped at;
 # S3 the window's number and start time. The stub fails at its 3rd step only (its own count, not
 # cleared), so the run after `reinit!` succeeds. Base (8f658abd): `reinit!` kept the totals and
 # the failing window (the new run warned nothing and ended `ConvergenceFailure` at its first
 # read); a write set `rt.status = Success`; the saves ended at 0.0.
-@testitem "F3-04: reinit! starts a clean run; a write keeps the failure; the stop is saved" setup = [LP_groups] tags = [:latticepde, :groups] begin
-    @testset "F3-04: reinit! starts a clean run; a write keeps the failure; the stop is saved" begin
+@testitem "reinit! starts a clean run; a write keeps the failure; the stop is saved" setup = [LP_groups] tags = [:latticepde, :groups] begin
+    @testset "reinit! starts a clean run; a write keeps the failure; the stop is saved" begin
         p = gown(gsys())
         ig = init(p, WStub(; code = 2, at = 3); dt = 0.01, saveat = 0.05)
         s = @test_logs (:warn, r"window 3 \(t = 0\.02\)") solve!(ig)
@@ -414,8 +414,8 @@ end
     end
 end
 
-@testitem "F3 r2: init's barriers: one group skips the coupling check; step! and solve! stay inferred" setup = [LP_groups] tags = [:latticepde, :groups] begin
-    @testset "F3 r2: init's barriers: one group skips the coupling check; step! and solve! stay inferred" begin
+@testitem "init's barriers: one group skips the coupling check; step! and solve! stay inferred" setup = [LP_groups] tags = [:latticepde, :groups] begin
+    @testset "init's barriers: one group skips the coupling check; step! and solve! stay inferred" begin
         p = gown(gsys())
         a4 = ExplicitEuler(; substeps = 4)
         # one group returns before any work: `nothing` is no parameter vector, and it is not read
@@ -426,7 +426,7 @@ end
         @test_throws ArgumentError LFP._check_coupling(pl, two, pl.p; dt = 0.01)
         # `init` binds the groups behind a barrier (its return type is not inferred); the
         # integrator it returns steps and runs with inferred types, explicit and implicit (the
-        # solution, SciML's `ODESolution`, is built behind a barrier: F4-04)
+        # solution, SciML's `ODESolution`, is built behind a barrier)
         for alg in (a4, BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 30), linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 64)))
             ig = init(p, alg; dt = 0.01)
             @inferred step!(ig)

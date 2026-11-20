@@ -1,4 +1,4 @@
-# Units (M3.1): dimensional analysis when parameters/variables carry `[unit = …]`
+# Units: dimensional analysis when parameters/variables carry `[unit = …]`
 # (PottsDynamicQuantitiesExt).
 
 @testsetup module UnitsSetup

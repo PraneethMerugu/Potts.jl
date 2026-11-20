@@ -24,7 +24,7 @@ function compiles(f)
     return instances() - c0
 end
 
-# v3 §4.4 asks C2 to confirm this on KA 0.9.43: a static ndrange is part of the kernel type,
+# Checked on KA 0.9.43: a static ndrange is part of the kernel type,
 # so each distinct ndrange is expected to be its own compile; a dynamic one is not.
 const NDRANGE_COMPILES = Dict{Symbol, Vector{Int}}()
 include("shared/export_all.jl")

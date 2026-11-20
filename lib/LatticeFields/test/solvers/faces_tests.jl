@@ -1,4 +1,4 @@
-# F3-05 (F3 design §3.4): the solver group's face conditions and inputs, against hand
+# The solver group's face conditions and inputs, against hand
 # matrices assembled here from the ghost rule (independent of the solver's fields):
 #   - Robin faces `α u + β ∂u/∂n = g` (diagonal `w α/(α/2 + β)`, right side `w g/(α/2 + β)`),
 #     the sign rule (a negative diagonal stays out of the operator, as a defect correction),
@@ -12,8 +12,8 @@
 # a field face with a Dirichlet value is refused ("a face-Dirichlet axis must be
 # non-periodic with a constant face coefficient"); the messages are IRErrors without the
 # field; a Dirichlet value on a size-1 axis enters the diagonal but not the right side
-# (max error 0.71 against the hand matrix below); the mask value field already solved (5e-13:
-# F3-05 adds its test).
+# (max error 0.71 against the hand matrix below); the mask value field already solved (5e-13;
+# tested below).
 
 @testsetup module LF_solvers_faces
 using Test, LatticeFields
@@ -327,10 +327,9 @@ end
 end
 end
 
-# F3-05 review r1 S1, N1: the inner solvers check their keywords when built, naming the keyword
-# and its range, and print by keyword without the module path. Base (9db10886,
-# ~/lpwork/f3b2r1-nc-lf.log: 17 of the
-# testset's checks fail there): `DevicePCG(; maxiters = 0)`, `DevicePCG(; reltol = -1.0)`,
+# The inner solvers check their keywords when built, naming the keyword
+# and its range, and print by keyword without the module path. Before the fix (9db10886;
+# 17 of the testset's checks fail there): `DevicePCG(; maxiters = 0)`, `DevicePCG(; reltol = -1.0)`,
 # `DevicePCG(; reltol = NaN)` and `Multigrid(; cycle = VCycle(0, 2))` construct; VCycle(0, 2) is refused
 # only by `FieldSolver`; `repr(DevicePCG())` is "DevicePCG(Multigrid(LatticeFields.Solvers.V(2,
 # 2), nothing, 1.0e-6, nothing, 1.0e-6), 8, 1.0e-6)".
@@ -373,10 +372,10 @@ end
 end
 end
 
-# F3-06 review nits (batch 2): a cycle prints as the pair `(ν₁, ν₂)`, so the display runs where
+# A cycle prints as the pair `(ν₁, ν₂)`, so the display runs where
 # only `LatticePCG` and `LatticeMultigrid` are bound (`V` is public, not exported); a `V` of non-integers,
 # a `cycle` that is not a cycle, a block solve that is not a `LatticePCG` or a `LatticeMultigrid` and a `Bool` count each get
-# a message naming the keyword and a working value. Base (437a84ef, ~/lpwork/f3b3-nc-nits.log):
+# a message naming the keyword and a working value. Before the fix (437a84ef):
 # `repr` prints `cycle = V(3, 3)` (an `UndefVarError` where `V` is not bound); `V(2.0, 2)` and
 # `Multigrid(; cycle = (2, 2))` are MethodErrors; `precond = :mg` builds; `budget = true` builds.
 @testitem "inner solver keywords: cycles, preconditioners and Bool counts" setup = [LF_solvers_faces] tags = [:latticefields, :solvers] begin

@@ -1,5 +1,5 @@
 #!/bin/bash
-# CI's test suites in parallel on the self-hosted PC (P6.ci; D-157 runner, 16 cores / 32
+# CI's test suites in parallel on the self-hosted PC (D-157 runner, 16 cores / 32
 # threads). Cores 12-15 and their SMT siblings 28-31 stay free for benchmarks. The other
 # twelve physical cores (0-11, siblings 16-27) are split into disjoint pairs, one pair and
 # its two siblings per process, so no process shares a core with another: the in-process

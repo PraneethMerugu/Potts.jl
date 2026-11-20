@@ -121,9 +121,9 @@ end
 
 solver_limiter(c) = (u, i, p, t) -> (u .= max.(u, c); nothing)
 
-p60n_two() = (s = zeros(Int32, 12, 8); s[3:6, 3:6] .= 1; s[7:10, 3:6] .= 2; s)
+two_cells() = (s = zeros(Int32, 12, 8); s[3:6, 3:6] .= 1; s[7:10, 3:6] .= 2; s)
 
-@potts_model _P60nOwn begin
+@potts_model _OwnUnknown begin
     @structural_parameters begin
         by_id = true
     end
@@ -139,10 +139,10 @@ p60n_two() = (s = zeros(Int32, 12, 8); s[3:6, 3:6] .= 1; s[7:10, 3:6] .= 2; s)
     @sweep Metropolis(; temperature = 1.0e-6)
 end
 
-P60nOwnIndex(; name = :P60nOwnIndex, kw...) = _P60nOwn(; by_id = true, name, kw...)
-P60nOwnPlain(; name = :P60nOwnPlain, kw...) = _P60nOwn(; by_id = false, name, kw...)
+OwnUnknownIndex(; name = :OwnUnknownIndex, kw...) = _OwnUnknown(; by_id = true, name, kw...)
+OwnUnknownPlain(; name = :OwnUnknownPlain, kw...) = _OwnUnknown(; by_id = false, name, kw...)
 
-@potts_model P60nGather begin
+@potts_model JacobiGather begin
     @kinds medium A
     @variables y(cell) = 0.0
     @lattice Lattice((12, 8))
@@ -151,7 +151,7 @@ P60nOwnPlain(; name = :P60nOwnPlain, kw...) = _P60nOwn(; by_id = false, name, kw
     @sweep Metropolis(; temperature = 1.0e-6)
 end
 
-@potts_model P60nIndexLocal begin
+@potts_model IndexLocal begin
     @kinds medium A
     @variables begin
         y(cell) = 0.0

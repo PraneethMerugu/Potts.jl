@@ -1,4 +1,4 @@
-# Definitions of exec_tests.jl that other test files use (moved here by TS1b).
+# Definitions of exec_tests.jl that other test files use.
 
 # The Schedule contract (lp/c5 `schedule/contract.jl`): linear `body(s, S, P, G)` guarded by
 # `s <= G.n`, Cartesian `body(x, S, P, G)` guarding each axis, tuple ndranges

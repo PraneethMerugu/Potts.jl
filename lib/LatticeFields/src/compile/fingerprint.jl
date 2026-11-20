@@ -1,4 +1,4 @@
-# Fingerprint (O-2, approved): SHA-1 of the semantic IR after pass 2 plus the storage layout,
+# Fingerprint: SHA-1 of the semantic IR after pass 2 plus the storage layout,
 # truncated to UInt64. Not hashed: the schedule, fusion, index strategy, hoisting, emission
 # and the debug flag. The text names ops and keys, never codes or ids, so adding an op, a
 # kernel class or a solver never changes an existing program's fingerprint and never bumps

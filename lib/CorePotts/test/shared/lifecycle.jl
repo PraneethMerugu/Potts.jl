@@ -1,4 +1,4 @@
-# Definitions of lifecycle_tests.jl that other test files use (moved here by TS1b).
+# Definitions of lifecycle_tests.jl that other test files use.
 frozen_dynamics(st, p, prop, ctx) = false
 lc_state(σ, kinds, lat; capacity = length(kinds), cell = (;)) = with_capacity(
     initial_state(σ, kinds; cell = merge(init_moments(σ, lat, length(kinds)), cell)), capacity)
@@ -13,7 +13,7 @@ end
 
 divide_at(t) = (st, p, ctx, key, mcs, c) -> mcs == t ? EVENT_DIVIDE : EVENT_NONE
 
-# P6.0d (D-081): a frozen mask that derives from the state (as Potts' `[frozen]` kinds) is
+# D-081: a frozen mask that derives from the state (as Potts' `[frozen]` kinds) is
 # recomputed after every MCS with a lifecycle event, by `refresh_frozen!` and by `reinit!`.
 # `FrozenKind(k)`: the standard rule (built on the device), the sites of cells of kind `k`
 # are frozen. `HostFrozen(k)`: the same rule given as a custom `remake_frozen` (the host
@@ -58,7 +58,7 @@ function fk_domain_problem(; T = Float64)
     return PottsProblem(f, st, lat, (0, 8), gg_params(T))
 end
 
-# P6.0v2b (D-128): a custom rule declares the leaves it reads (`frozen_reads`). On the CPU
+# D-128: a custom rule declares the leaves it reads (`frozen_reads`). On the CPU
 # the declared path is the live state (no copy), so only the validation and the masks are
 # exercised here; the byte behaviour is covered on Metal by the acceptance file
 # `frozen_kind_refresh_bytes_tests.jl`. A bad declaration fails at `init`, before any step.

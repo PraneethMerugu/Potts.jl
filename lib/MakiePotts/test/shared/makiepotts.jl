@@ -1,4 +1,4 @@
-# Definitions of makiepotts_tests.jl that other test files use (moved here by TS1b).
+# Definitions of makiepotts_tests.jl that other test files use.
 using Test
 using Aqua
 using CairoMakie
@@ -43,7 +43,7 @@ function render_fixture(; dimensions = 2)
     return (; state, problem)
 end
 
-# P6.0j: ExplicitImports guardrails (CLAUDE.md code rules). Every name MakiePotts uses is
+# ExplicitImports guardrails (the repository code rules). Every name MakiePotts uses is
 # imported explicitly and by its owner. The allowlist names each non-public access the
 # package genuinely needs; add to it only by review, with the reason.
 using ExplicitImports: ExplicitImports, check_no_implicit_imports, check_all_explicit_imports_are_public,

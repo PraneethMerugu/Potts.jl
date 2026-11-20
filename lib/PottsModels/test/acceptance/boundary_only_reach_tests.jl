@@ -246,7 +246,7 @@ function reach_refusal(label; kw...)
     end
 end
 """The spacing of CheckerboardCPM(; parts = 2) on `label`'s problem: the smallest gap
-`(k - 1) · base` between the active sub-regions of two blocks (D-271)."""
+`(k - 1) · base` between the active sub-regions of two blocks."""
 reach_spacing(label; kw...) = (
     l = init(reach_problem(label; kw...), CheckerboardCPM(; parts = 2)).cache.layout;
     (l.k - 1) * minimum(l.base)

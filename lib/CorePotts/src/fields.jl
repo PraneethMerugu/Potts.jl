@@ -1,4 +1,4 @@
-# Continuous fields on the lattice (v3 §7, cutover C8). A field is a site array of floats in
+# Continuous fields on the lattice. A field is a site array of floats in
 # `st.site`; its equations are lowered by the field compiler (LatticePDE → LatticeFields) into
 # a step plan, and `FieldPhase` runs that plan inside the MCS: the CPM keeps reading the field
 # from `st.site` as before. The arrays of the plan (the field and its scratch, the inputs the
@@ -37,12 +37,12 @@ of length zero: each masked site takes its value, every other site keeps its own
 from a checkpoint skips it.
 
 With `aux_only = true` the phase is bound to the group's `aux:` kernels alone (aux fields
-`K ~ rhs`, F3 design §3.12) and takes no substep: one launch evaluates them from the state as
+`K ~ rhs`) and takes no substep: one launch evaluates them from the state as
 it is, which it never writes. Front end A runs one at init for a group with state and aux
-fields (F3 review S1, r2 N1: no update rule, so no `lower` clip, touches the state).
+fields (no update rule, so no `lower` clip, touches the state).
 
-With `start = true` the phase is a group's steady start (`init = :steady` on its algorithm,
-F3-12c): `alg` is the `QuasiSteady` of `LatticeFields.Problems.steady_start`, bound to the same
+With `start = true` the phase is a group's steady start (`init = :steady` on its algorithm):
+`alg` is the `QuasiSteady` of `LatticeFields.Problems.steady_start`, bound to the same
 arrays as the step and run once, at init on a fresh state (after the masked-condition clamp),
 never per MCS and not from a checkpoint.
 """
@@ -101,7 +101,7 @@ end
 
 # The run-context entry of a field phase: the runtime behind an untyped reference, so the
 # context's type (what kernels receive, adapted to `nothing` here) carries none of the
-# host launch state (its Float64 step lengths, D-C8 item 9); `R` recovers the runtime's type
+# host launch state (its Float64 step lengths); `R` recovers the runtime's type
 struct FieldHandle{R}
     ref::Base.RefValue{Any}
 end
@@ -133,7 +133,7 @@ end
 # per MCS)
 _bind_copy!(dst, src) = copyto!(dst, src)
 
-# The value of parameter slot `n` at `p`: the clock's slot (`clock__tick`, F2 design §2.6) is
+# The value of parameter slot `n` at `p`: the clock's slot (`clock__tick`) is
 # not a parameter of the model; its launches write the step index (the MCS number) into it
 const _CLOCK = Symbol(Problems.CLOCK_KEY)
 _param(p, n::Symbol) = n === _CLOCK ? 0.0 : getproperty(p, n)
@@ -185,7 +185,7 @@ The substep count of field phase `ph` at parameters `p`: its `substeps` rule at 
 parameter and table values. The rule throws (an `ArgumentError`) for parameters it refuses
 (negative diffusion, a coupling past the limit, a coefficient with no finite bound), so a
 caller that checks before it changes anything keeps the run atomic. A group with state needs
-at least one substep; a group with no state (aux fields only, F3 design §3.12) takes 0: its
+at least one substep; a group with no state (aux fields only) takes 0: its
 window evaluates them once.
 """
 function field_substeps(ph::FieldPhase, p)
@@ -200,12 +200,12 @@ _stateless(ph::FieldPhase) = ph.aux_only || isempty(ph.group.spec.state)
 # The runtime of a field phase bound to the state's arrays at parameters `p` (`PottsProblem` on
 # the shared group runtime: `ends_in = :slot1`, the field back in its `st.site` array after an
 # odd count), with the step's substep count (also when `ph` is the at-init clamp, which runs
-# one substep of length zero from the same launches: the binding is the step's, D-C8 item 8).
+# one substep of length zero from the same launches: the binding is the step's).
 # `tables` reuses the device tables of an earlier binding when their contents are unchanged.
 function _field_bind(ph::FieldPhase, st, p, backend; tables = nothing, abstol = 1 // 10^6, reltol = 1 // 10^3)
     s = ph.program
     arrs = _arrays(ph.arrays, st)
-    # (a scratch field on its own level: a coarse field's face or masked value, F3-17)
+    # (a scratch field on its own level: a coarse field's face or masked value)
     nf(i) = LatticeFields.IR.nsites(s, s.fields[i].levels[1])
     bufs = [a[1] === nothing ? Any[_scratch(backend, LatticeFields.IR.juliatype(s.fields[i].storage), nf(i))] :
             a[2] === nothing ? Any[vec(a[1])] : Any[vec(a[1]), vec(a[2])] for (i, a) in enumerate(arrs)]
@@ -310,7 +310,7 @@ integrator (`setp`, `integ.ps[x] = v`) and `remake` run it first, so a refused v
 nothing: the parameters, the state and the time stay as they were. On an integrator only the
 phases whose own parameters or tables change are checked.
 """
-function check_field_parameters(@nospecialize(f), @nospecialize(p))     # host, once per change (TS1c)
+function check_field_parameters(@nospecialize(f), @nospecialize(p))     # host, once per change
     for ph in _field_phases(f.phases)
         field_substeps(ph, p)
     end
@@ -395,8 +395,8 @@ end
 
 # The phase runs one window of the fields: pass `part = (r, R)` of the `R` passes of a sub-MCS
 # `repeat(R, …)` (`(1, 1)` for the whole MCS); a map group (`ExplicitMap`) steps in pass 1 only,
-# and so does a group with no state (aux fields only, F3 design §3.12: once per MCS).
-# The clock (F2 design §2.6): the step index is
+# and so does a group with no state (aux fields only: once per MCS).
+# The clock: the step index is
 # the MCS number `mcs` (the same in every pass), and the window starts at the time
 # `t0 = (mcs + (r − 1)/R) · mcs_duration`; substep `j` runs at `t0 + j h`.
 function (ph::FieldPhase{K})(st, p, ctx, key, mcs, backend, part::NTuple{2, Int} = (1, 1)) where {K}
@@ -411,7 +411,7 @@ function (ph::FieldPhase{K})(st, p, ctx, key, mcs, backend, part::NTuple{2, Int}
     n = ph.init ? 1 : rt.n
     # (the at-init clamp runs outside the passes: `part = (1, 1)`, its window starts at `mcs · period`)
     t0 = mcs * ph.period + (part[1] - 1) * ph.dt          # ph.dt = mcs_duration / R
-    # (a run with derivative parts, F3-21b: its shadow runtime too, from the same start)
+    # (a run with derivative parts: its shadow runtime too, from the same start)
     _field_advance!(ctx, ph, st, rt, (t0, mcs), n, ph.init ? 0.0 : rt.dt)
     # (a group with no state: `n = 0`, its kernels once)
     launches = max(n, 1) * length(rt.steps[1].launches)
@@ -423,7 +423,7 @@ function (ph::FieldPhase{K})(st, p, ctx, key, mcs, backend, part::NTuple{2, Int}
 end
 
 # a field phase takes the pass of a sub-MCS `repeat` (`run_phases`); other phases do not.
-# On the host its group's status word is read after its window (F3 design §3.4: a plain read;
+# On the host its group's status word is read after its window (a plain read;
 # nothing for the explicit algorithms, whose caches have no word)
 function run_phase(ph::FieldPhase{K}, st, p, ctx, key, mcs, backend, stats, part) where {K}
     n = ph(st, p, ctx, key, mcs, backend, part)
@@ -435,14 +435,14 @@ end
 """
     FieldStats
 
-The field solvers' counters of a run (`integ.stats.fields`, F3 design §3.3), summed over the
+The field solvers' counters of a run (`integ.stats.fields`), summed over the
 status words of its field groups: `solves`, `budget` (linear budget hits), `floor` (rounding
 floors), `newton_budget` (Newton budget hits), and `code`, the worst code read so far
 (`Success`, `StalledSuccess`, `ConvergenceFailure`, or `Unstable` when a field left the declared
 `bounds` its stability bound used). All zero for the explicit algorithms. On a device, each read
 of `integ.stats` reads the status words first (one synchronization), so the counters include
 every window so far. When a solution is built at the end of a run, it also keeps what the
-field report of the solution reads (batch-end review (e), as LatticePDE's `sol.stats`
+field report of the solution reads (as LatticePDE's `sol.stats`
 does): `counts`, the substep count each field group used last ([`substep_counts`](@ref));
 `implicit`, the resolved implicit facts of each group (`nothing` for an explicit one;
 `Problems.implicit_facts`); and `backend`, the backend's name (`"CPU"`). All empty before.
@@ -463,8 +463,8 @@ _rank(c::SciMLBase.ReturnCode.T) = c == SciMLBase.ReturnCode.Success ? 0 : c == 
 # one group's status word into the run's counters and code (`Problems.check_status!`)
 function _read_status!(stats, rt::Problems.GroupRuntime)
     c = Problems.check_status!(rt, stats.fields)
-    # the fields whose declared bounds the stability bound used, still inside them (batch 5
-    # review M2): `Unstable` past them, with one warning
+    # the fields whose declared bounds the stability bound used, still inside them:
+    # `Unstable` past them, with one warning
     c = Problems.check_declared!(rt)
     _rank(c) > _rank(stats.fields.code) && (stats.fields.code = c)
     return nothing
@@ -504,7 +504,7 @@ which hold on a fresh initial state only.
 derived(t::Tuple) = filter(ph -> !(ph isa FieldPhase && (ph.init || ph.start)), t)
 
 # ---------------------------------------------------------------------------------------
-# Derivative parts of the fields (F3-21b): a shadow tangent store. A problem with a
+# Derivative parts of the fields: a shadow tangent store. A problem with a
 # `ParameterTangent` runs the primal model unchanged (the CPM, its kernels and the primal field
 # runtimes read and write only primal arrays at the primal parameters), and each field phase has
 # a second runtime, bound to a shadow store at the Dual element type: a Dual twin of every array
@@ -513,7 +513,7 @@ derived(t::Tuple) = filter(ph -> !(ph isa FieldPhase && (ph.init || ph.start)), 
 # reads (the CPM inputs, masks, site variables, tables). Before each window the twins take the
 # primal state's values (their derivative parts kept); an explicit group's shadow runtime steps
 # forward mode, then the primal one; an implicit group's primal runtime solves each stage once and
-# F3-21a's tangent step (`TangentCache`, on the primal cache) follows it (`advance_shared!`). The derivative is pathwise at the run's CPM path: σ, the cells
+# the tangent step (`TangentCache`, on the primal cache) follows it (`advance_shared!`). The derivative is pathwise at the run's CPM path: σ, the cells
 # and every CPM value are held fixed, and the fields' response to the parameters is
 # differentiated along it.
 
@@ -561,7 +561,7 @@ Adapt.adapt_structure(to, ::TangentHandle) = nothing
 The shadow tangent store of one trajectory: the Dual parameter object and its version (one more
 per parameter write), the twins (primal array ⇒ Dual twin; `names`: a field's name ⇒ the twin of
 its state array, for the reads), each field phase's shadow runtime by its context key, whether it
-shares its primal runtime's solve (an implicit group, F3-21b r1 S3), the primal runtime's store
+shares its primal runtime's solve (an implicit group), the primal runtime's store
 and cache and the version it was bound at, and the (twin, primal) pairs whose values are set
 before each window.
 """
@@ -808,7 +808,7 @@ function _tangent_reinit!(::Val{true}, ctx, tg)
     return nothing
 end
 
-# A parameter write on a run with derivative parts (F3-21b r1 S1): the Dual parameters follow
+# A parameter write on a run with derivative parts: the Dual parameters follow
 # (`tangent_parameters`: the written values plain, the others keep their derivative parts), and
 # each shadow runtime is bound again at its next window
 tangent_parameters!(integ, p) = _tangent_parameters!(tangent_on(integ.ctx), integ, p)

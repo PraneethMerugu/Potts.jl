@@ -246,7 +246,7 @@ end #hide
 # ### Deviations
 #
 # One row per failed, parked or provisional target and per difference from the paper or
-# the released code (D-154). The columns are our value, the paper's value (with the
+# the released code. The columns are our value, the paper's value (with the
 # released code's where it differs), the suspected cause and the status of the question
 # to the authors: "not an author question", "not asked" (the question is on our open
 # question list, spec 10 §7 and model-specs README §5; Details), "asked on ⟨date⟩" or
@@ -277,19 +277,19 @@ dev_rows = [ #hide
     "| V-A6 phenotype fractions (provisional classifier; **$va6_result**, full sweep) | $va6_ours (N = $(last(split(first(split(va6[1]["ours"], ")")), "N = "))) classified runs) | 22 / 1 / 23 / 54 % (p.13, Fig. 5B) | provisional: the area-equality classifier (`akeeb_phenotype`), identified from the released notebooks as the one behind Fig. 5B and S1 Table; Fig. 5A uses a fingers/singles/clusters rule (spec 10 §5.3.5). The paper does not say. R3's floor of 5 percentage points means the Single-cell row (≈ 1 %) cannot fail: it is a check on the other three | $(aq("q1")) |", #hide
     "| V-A8 (paper) cluster composition (**PARKED**) | V-A8 binds on the released `cluster_data.csv` instead: P1 $(va8[1]["ours"]), P2 $(va8[2]["ours"]) ($(va8[1]["result"]), $(va8[2]["result"]), full run) | mean ≈ 7 cells, 60–70 % leaders, median 4 L / 3 F (p.14–17); the released cluster tables give ≈ 4.6 cells and 55 % leaders | the subset or weighting behind the paper's values is not stated | $(aq("q8")) |", #hide
     "| V-A9 leader speed (**PARKED**) | not run (no measurement to reproduce) | 0.4 px/MCS at λ = 20 (p.6) | no definition, code or data | $(aq("q6")) |", #hide
-    "| Chemotaxis term (D6) | the code: CC3D Merks ΔH = −λ[c(tgt) − c(src)] if the new or old cell is a leader | absolute potential −λ Σ c(x) over leader sites, Eq. (1) | the paper's numbers come from the code (D-050 A3; spec 10 §2.1) | $(aq("q2")) |", #hide
-    "| Leader creation (D1) | the code: new one-site leaders inserted into followers until 25 % of the inventory (`akeeb_state`, S:64–75); planned variant `leaders = :reassign` (D-050 A1) | 25 % of the followers \"reassigned\" (p.5) | the 1559 cells in the authors' files come from the code (spec 10 §4 #23) | not an author question |", #hide
-    "| Missed seeding draws (MD-1) | the authors' count (≈ 382 painted of 390 counted), no ghost cell allocated; variant `akeeb_state(; seeding = :retry)` paints exactly 390 | — (code: a draw on a leader leaves an empty \"ghost\" leader in the inventory, S:68–75) | emulates the released code (D-068; spec 10 §5.3.6) | $(aq("q7")) |", #hide
-    "| Division timer (D3) | the code: clock > 75 + U{0…49}, redrawn every MCS (S:143–146) | one U(25, 125) draw per cycle (p.6) | the paper's numbers come from the code (D-050 A2) | not an author question |", #hide
+    "| Chemotaxis term (D6) | the code: CC3D Merks ΔH = −λ[c(tgt) − c(src)] if the new or old cell is a leader | absolute potential −λ Σ c(x) over leader sites, Eq. (1) | the paper's numbers come from the code (paper-vs-code item A3; spec 10 §2.1) | $(aq("q2")) |", #hide
+    "| Leader creation (D1) | the code: new one-site leaders inserted into followers until 25 % of the inventory (`akeeb_state`, S:64–75); planned variant `leaders = :reassign` (paper-vs-code item A1) | 25 % of the followers \"reassigned\" (p.5) | the 1559 cells in the authors' files come from the code (spec 10 §4 #23) | not an author question |", #hide
+    "| Missed seeding draws (MD-1) | the authors' count (≈ 382 painted of 390 counted), no ghost cell allocated; variant `akeeb_state(; seeding = :retry)` paints exactly 390 | — (code: a draw on a leader leaves an empty \"ghost\" leader in the inventory, S:68–75) | emulates the released code (spec 10 §5.3.6) | $(aq("q7")) |", #hide
+    "| Division timer (D3) | the code: clock > 75 + U{0…49}, redrawn every MCS (S:143–146) | one U(25, 125) draw per cycle (p.6) | the paper's numbers come from the code (paper-vs-code item A2) | not an author question |", #hide
     "| Competent followers (D4) | the code: Bernoulli(PP) per follower (S:131) | a subset of size PP × N_FC (p.6) | the paper's numbers come from the code (spec 10 §2.4) | not an author question |", #hide
     "| Growth (D5) | the code: every follower grows while its target is below 20 (S:113–115) | f_grow only (Table 1) | the paper's numbers come from the code (spec 10 §2.4) | not an author question |", #hide
     "| Connectivity (D7) | a hard constraint, plus no extinction | not mentioned (code: penalty 10⁵ on copies that break the losing cell's 8-ring arc, X:29–31) | e^(−10⁴) at T = 10: the soft penalty is never paid; the plugin also protects one-site cells (spec 10 §7.1 P2) | not an author question |", #hide
     "| Closed bottom edge (D7) | ring positions off the lattice read as nothing | not mentioned (code: CompuCell3D reads ring positions off the lattice as the cell at pixel (0, 0, 0)) | a CompuCell3D source artifact we do not reproduce; suspected small, affects bottom-wall cells only; unmeasured | not an author question |", #hide
-    "| Metrics (D12–D17) | the code (`akeeb_observables`, spec 10 §5.3.3 O1–O8): per-column areas above the lowest main top; no spline; `distance = 10` then merge `> 15`; singles = leaders only; FC-seeded clusters (S:458–671); planned: paper-definition observables (D-050 A4) | invasive area = main-tumor volume; infiltrative = convex hull; spline-smoothed front; fingers ≥ 20 px apart; singles of either kind; leader-only satellites counted | the paper's numbers reproduce only from the code's quantities (spec 10 §7 D12) | $(aq("q5")) |", #hide
+    "| Metrics (D12–D17) | the code (`akeeb_observables`, spec 10 §5.3.3 O1–O8): per-column areas above the lowest main top; no spline; `distance = 10` then merge `> 15`; singles = leaders only; FC-seeded clusters (S:458–671); planned: paper-definition observables (paper-vs-code item A4) | invasive area = main-tumor volume; infiltrative = convex hull; spline-smoothed front; fingers ≥ 20 px apart; singles of either kind; leader-only satellites counted | the paper's numbers reproduce only from the code's quantities (spec 10 §7 D12) | $(aq("q5")) |", #hide
     "| Main-tumor seed row (D19) | the code: x ∈ 1:499, y = 2 (1-based; S:496, x ∈ 0…498) | all cells at y = 1 (p.7) | negligible | not an author question |", #hide
     "| Time (A6) | 701 MCS, read as the authors' 700 | 700 MCS (p.4); code: 701 steps, sweep first (X:15) | settled by the authors' MCS-0 data (spec 10 §5.3.2) | not an author question |", #hide
-    "| μ default (A5) | 24 (`μ` keyword) | λ = 24 for the sample; code 24 (S:25) | none (D-050 A5, D-142) | not an author question |", #hide
-    "| RNG (D11) | `StableRNG` layouts, counter-based Potts streams; seeds listed in the Details (`seed`) | seeds 0–9 (p.6); the code sets no seed | ensemble agreement only (D-029) | not an author question |", #hide
+    "| μ default (A5) | 24 (`μ` keyword) | λ = 24 for the sample; code 24 (S:25) | none (paper-vs-code item A5) | not an author question |", #hide
+    "| RNG (D11) | `StableRNG` layouts, counter-based Potts streams; seeds listed in the Details (`seed`) | seeds 0–9 (p.6); the code sets no seed | ensemble agreement only | not an author question |", #hide
     "| CC3D version (D9) | CC3D 4.6.0 semantics | 4.6.0 (p.3); XML header 4.3.1 (X:1) | which release produced the runs (spec 10 §7) | $(aq("q3")) |", #hide
 ] #hide
 Markdown.parse(join(dev_rows, "\n")) #hide
@@ -307,7 +307,7 @@ Markdown.parse(join(dev_rows, "\n")) #hide
 #     (`POTTS_FULL_REPRODUCTION=true`) runs the spec's ensembles: 10 runs at each of nine
 #     parameter points and 10 at each of the 121 points of the PP = 0.5 slice. The
 #     committed full-run record is `lib/PottsModels/reproductions/data/10/full-2026-10-07/`
-#     (P6.2d, D-146: verdicts, time series, provenance). It holds the page at FULL and a
+#     (verdicts, time series, provenance). It holds the page at FULL and a
 #     separate 13,310-run sweep of the whole (J_LF, λ, PP) grid for V-A6 and the full-sweep
 #     form of V-A7; "The full run" below reads its verdicts from there.
 #
@@ -380,7 +380,7 @@ Markdown.parse(join(dev_rows, "\n")) #hide
 base = PottsProblem(PottsModels.AkeebInvasion(; name = :akeeb), akeeb_state(; seed = 1), (0, 701); capacity = 4000, seed = 1)
 par(name) = getp(base, name)(base)
 J = par(:J)
-Markdown.parse("""
+parameters_md = """
 | Symbol | Value | Units | Meaning | Source | Status |
 |---|---|---|---|---|---|
 | lattice | 500 × 300, x periodic, y closed | sites (1 site ≈ 2.5 µm) | domain | p.4, Table 1; X:14, X:18–19 | stated (y wall: code only) |
@@ -390,14 +390,15 @@ Markdown.parse("""
 | J_LF | $(J[2, 3]) (default); scanned over −5…5 | energy | leader–follower adhesion | p.6, Table 1; S:37 | stated |
 | λ_V | $(par(:λᵥ)) | energy / site² | volume constraint | p.6, Table 1; S:88 | stated |
 | V_T (start) | 10 | sites | target volume | p.6, Table 1; S:87 | stated |
-| λ (`μ`) | $(par(:μ)) (default); scanned over 0, 3, …, 30 | energy / site | leader chemotaxis | p.6, Table 1; S:25, S:38 | stated; default 24 = the reference sample (D-050 A5, D-142) |
+| λ (`μ`) | $(par(:μ)) (default); scanned over 0, 3, …, 30 | energy / site | leader chemotaxis | p.6, Table 1; S:25, S:38 | stated; default 24 = the reference sample (paper-vs-code item A5) |
 | f_grow | 0.015 | sites / MCS | follower target growth while < V_max | Table 1; S:20, S:111–115 | rate stated; cap and "all followers" code only |
 | V_max | $(par(:V_max)) | sites | growth cap and division size | p.6; S:113, S:143 | stated |
 | clock gate | > $(par(:clock_min)) + $(par(:clock_spread)) U, fresh U each MCS | MCS | division timer | S:143–146 (paper: U(25, 125), p.6) | code (D3) |
 | PP | 0.5 (default); scanned over 0…1 | — | P(follower has a clock), per follower | p.6, Table 1; S:131 | stated (paper: a fixed-size subset, D4) |
 | leaders | 25 % of the counted inventory | — | one-site leaders inserted into followers | p.5; S:64–75 | code (D1, MD-1) |
 | duration | 701 sweeps, measured as "MCS 700" | MCS | — | p.4, p.7; X:15 | stated; mapping from the data (spec 10 §5.3.2) |
-""")
+"""
+Markdown.parse(parameters_md)
 
 # **Units and time.** Lengths are lattice sites, areas are px² (the paper's µm² are px² ×
 # 6.25). One MCS is N copy attempts, N the number of sites, as in CompuCell3D (p.4). Each
@@ -438,8 +439,8 @@ count(==(:leader), op_retry[2].second), count(==(:leader), akeeb_state()[2].seco
 # authors' row y = 1 (our y = 2); the invasive and infiltrative areas integrate the
 # per-column tops of the main tumor and of any cell above the main tumor's lowest top;
 # fingers are SciPy 1.7 `find_peaks(prominence = 10, distance = 10, width = 5)` on the
-# main-tumor profile followed by the authors' merge (`PottsModels.Analysis`, D-069,
-# D-073); singles are leaders with no neighbor above the main tumor's lowest cell
+# main-tumor profile followed by the authors' merge (`PottsModels.Analysis`);
+# singles are leaders with no neighbor above the main tumor's lowest cell
 # centroid; detached cells are all cells outside the main tumor above that line; clusters
 # are components outside the main tumor of at least two cells with at least one
 # follower.
@@ -476,9 +477,9 @@ akeeb_observables(sol_one.u[end])
 # | V-A3 fingers, singles, clusters marginals over the PP = 0.5 slice | A slice; p.10–11 | R2, 1210 runs | FULL | READY |
 # | V-A4 invasive and infiltrative marginals | A slice; p.10 | R2 on seven means; [−1, 2] > (> 2) > (≤ −2) strictly; both λ ratios within ±15 % | FULL | READY |
 # | V-A5 cluster incidence 28.3 % (N 1209), 71.5 % at λ ≥ 24 (N 330); 4.85 ± 0.24 when present | A slice; p.10–11 | R3; R2 | FULL | READY |
-# | V-A6 phenotype fractions 22 / 1 / 23 / 54 % | p.13, Fig. 5B; A classified (13,263 runs) | the area-equality classifier `akeeb_phenotype` (provisional, spec 10 §5.3.5) on the full sweep, 13,310 runs; R3 per phenotype | FULL record | READY (P6.2d, D-156; un-parked) |
+# | V-A6 phenotype fractions 22 / 1 / 23 / 54 % | p.13, Fig. 5B; A classified (13,263 runs) | the area-equality classifier `akeeb_phenotype` (provisional, spec 10 §5.3.5) on the full sweep, 13,310 runs; R3 per phenotype | FULL record | READY (un-parked) |
 # | V-A7 PP barely matters: P1, P7, P9 each match their own reference | A; p.10–11 | R1 (P9 adds 6 tests) | FULL | READY |
-# | V-A7 (full sweep) \|r(PP, metric)\| < 0.05 for the six metrics | A; p.10–11 (\|r\| < 0.03) | the full sweep, 13,310 runs | FULL record | READY (P6.2d) |
+# | V-A7 (full sweep) \|r(PP, metric)\| < 0.05 for the six metrics | A; p.10–11 (\|r\| < 0.03) | the full sweep, 13,310 runs | FULL record | READY |
 # | V-A8 cluster composition: P1 mean size 5.79 (SD 3.75, 75 clusters), leader fraction 0.578; P2 5.56 (3.71, 143), 0.517 | C `cluster_data.csv` | R1 with clusters as the units; pooled leader fraction ± 0.10 | FULL | READY |
 # | V-A8 (paper) mean ≈ 7 cells, 60–70 % leaders, median 4 L / 3 F | p.14–17 | — | — | **PARKED** (not reproducible from the release; author question 8) |
 # | V-A9 leader speed 0.4 px/MCS at λ = 20 | p.6 | — | — | **PARKED** (undefined; author question 6) |
@@ -620,7 +621,7 @@ fig
 # Replicate 1 at each of our phenotype points (V-A10, not gating; only P4 is a named paper
 # point, p.11): the
 # multimodal reference P1, bulk P4, single-cell P5 and no invasion P6, every 10 MCS.
-# Leaders red, followers green, medium white, no cell outlines (D-156). Each video
+# Leaders red, followers green, medium white, no cell outlines. Each video
 # re-solves its point's replicate 1 with dense saves; saving does not change a run, which
 # the last line checks against the ensemble where that replicate was run.
 
@@ -668,8 +669,8 @@ fmt(x) = string(round(x; digits = abs(x) >= 100 ? 0 : 2))
 rows = []
 addrow!(target, paper, ours, tol, class, ok) = push!(rows, (; target, paper, ours, tol, class, ok, result = verdict(ok, class)))
 
-## μ default (D-142)
-addrow!("default μ", "24 (S:25; D-050 A5, D-142)", string(par(:μ)), "= 24", "SMOKE+FULL", par(:μ) == 24.0)
+## μ default
+addrow!("default μ", "24 (S:25; paper-vs-code item A5)", string(par(:μ)), "= 24", "SMOKE+FULL", par(:μ) == 24.0)
 
 ## V-A0 and its negative control
 for (j, m) in enumerate(METRICS)
@@ -828,7 +829,7 @@ Markdown.parse(isempty(failing) ? "None in this run." : join(["- $(r.target): ou
 
 # #### The full run (committed record)
 #
-# The verdicts of the full run, read from `data/10/full-2026-10-07/` (D-146). The page at
+# The verdicts of the full run, read from `data/10/full-2026-10-07/`. The page at
 # FULL (`verdicts.tsv`) and the full sweep (`verdicts_sweep.tsv`) were run with the machine,
 # threads and wall time below (`provenance.toml`, `sweep_provenance.toml`):
 
@@ -912,10 +913,10 @@ Markdown.parse("PottsModels $(pkgversion(PottsModels)), commit " *
 #
 # | Date | Change | Reason |
 # |---|---|---|
-# | 2026-10-05 | First version: targets pre-registered from spec 10 §5.3 (reduced run) | ROADMAP P6.2b; D-143 |
-# | 2026-10-07 | Deviations table in the four-column form (ours, paper, suspected cause, author question), with the parked targets as rows; the timing names machine and backend; cells drawn without outlines. No target, tolerance or verdict changed | D-154, D-156; ROADMAP P6.0bd, P6.0bf |
-# | 2026-10-07 | The full-run record (`data/10/full-2026-10-07/`): V-A6 un-parked with the provisional area-equality classifier and V-A7's full-sweep form, both read from the committed sweep; the V-A2 P6 deviation; reported correlations and marginals; links to the full-run videos | ROADMAP P6.2d; D-156 |
-# | 2026-10-08 | Rewritten in the D-185 order: intro, the `@potts_model` code (checked against the shipped `AkeebInvasion`), a minimal run, the results (key figures against the paper and the authors' data from the record `data/10/full-2026-10-07/`, the full-run videos, a verdict summary, the deviations table) and this collapsed Details section with everything else; contact wording removed. No target, tolerance, seed or verdict changed | D-185 |
+# | 2026-10-05 | First version: targets pre-registered from spec 10 §5.3 (reduced run) | pre-registration |
+# | 2026-10-07 | Deviations table in the four-column form (ours, paper, suspected cause, author question), with the parked targets as rows; the timing names machine and backend; cells drawn without outlines. No target, tolerance or verdict changed | deviations as a table per model; the rendering policy |
+# | 2026-10-07 | The full-run record (`data/10/full-2026-10-07/`): V-A6 un-parked with the provisional area-equality classifier and V-A7's full-sweep form, both read from the committed sweep; the V-A2 P6 deviation; reported correlations and marginals; links to the full-run videos | the run and rendering policy |
+# | 2026-10-08 | Rewritten in the order shared by the paper-model pages: intro, the `@potts_model` code (checked against the shipped `AkeebInvasion`), a minimal run, the results (key figures against the paper and the authors' data from the record `data/10/full-2026-10-07/`, the full-run videos, a verdict summary, the deviations table) and this collapsed Details section with everything else; contact wording removed. No target, tolerance, seed or verdict changed | one layout for every paper-model page |
 #
 # ```@raw html
 # </details>

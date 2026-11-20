@@ -1,5 +1,5 @@
-# Solver and `@sweep` validation, D-130 depth bounds, F2-04/F2-05 field solver contracts,
-# and TS-R2 §2.7 `stable_substeps` Fourier oracle.
+# Solver and `@sweep` validation, depth bounds (D-130), field solver contracts, and the
+# `stable_substeps` Fourier oracle.
 
 @testitem "internal slot suffixes are reserved for declared names" setup = [SolversSetup] tags = [:potts, :solvers] begin
     @testset "internal slot suffixes are reserved for declared names" begin
@@ -46,7 +46,7 @@ end
     end
 end
 
-# `mcs_duration` validation beyond the frozen P6.0av acceptance (D-126): the `offset`,
+# `mcs_duration` validation (D-126): the `offset`,
 # `combine` and `mcs_duration` checks also live in the `SweepSpec` constructor, so a hand-built
 # spec passed to `PottsSystem(; sweep)` cannot bypass them, and its errors are those of `@sweep`.
 @testitem "@sweep: mcs_duration validated; a hand-built SweepSpec is checked too" setup = [SolversSetup] tags = [:potts, :solvers] begin
@@ -156,9 +156,9 @@ end
     end
 end
 
-# F2-05: the default field solver (D-F2-R1, amends D-075)
-@testitem "F2-05: a field takes ExplicitEuler() by default" setup = [SolversSetup] tags = [:potts, :solvers] begin
-    @testset "F2-05: a field takes ExplicitEuler() by default" begin
+# The default field solver (amends D-075)
+@testitem "a field takes ExplicitEuler() by default" setup = [SolversSetup] tags = [:potts, :solvers] begin
+    @testset "a field takes ExplicitEuler() by default" begin
         op = [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:A]]
         # builds with the default …
         d = PottsProblem(SolverOneField(; name = :f), op, (0, 2))
@@ -177,8 +177,8 @@ end
     end
 end
 
-@testitem "TS-R2 §2.7: stable_substeps hand table and Fourier amplification/tightness oracle" setup = [SolversSetup] tags = [:potts, :solvers] begin
-    @testset "TS-R2 §2.7: stable_substeps hand table and Fourier amplification/tightness oracle" begin
+@testitem "stable_substeps hand table and Fourier amplification/tightness oracle" setup = [SolversSetup] tags = [:potts, :solvers] begin
+    @testset "stable_substeps hand table and Fourier amplification/tightness oracle" begin
         LP = Potts.LatticePDE
         LFP = Potts.LatticeFields.Problems
         t, Dt = FieldPDE.t, FieldPDE.Dt

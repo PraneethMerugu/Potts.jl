@@ -1,7 +1,7 @@
-# The OpenVT monolayer submission package (spec 15 §4.0.1; P6.15j, D-180, D-204, D-206): the
+# The OpenVT monolayer submission package (spec 15 §4.0.1; D-180, D-204, D-206): the
 # `implementations/Potts.jl/` and `results/Potts.jl/` trees of the consortium layout, built
 # from the committed D-146 records under `reproductions/data/15/` and the bulk directory (the
-# O1 archives and O2 files, too large for git, whose sha256s the P6.15j record pins). No
+# O1 archives and O2 files, too large for git, whose sha256s the O1 re-run record pins). No
 # simulation runs here.
 #
 # Determinism: every file is a function of the records, the bulk files, the sources and the
@@ -24,10 +24,10 @@ const _OPENVT_PKG_BULK_ENV = "OPENVT_PACKAGE_BULK"
 """
     PottsModels.OPENVT_FRAMEWORK_TOKEN
 
-The framework token of the Potts.jl entry in the OpenVT consortium repository (D-215 (9)):
+The framework token of the Potts.jl entry in the OpenVT consortium repository:
 the folder name under `implementations/` and `results/` and the stem of every file name
 that carries one. No spaces (the consortium's `run_metrics.sh` splits on them). The
-checkerboard entry of D-214 will use `"Potts.jl_checkerboard"`.
+separate checkerboard entry uses `"Potts.jl_checkerboard"`.
 """
 const OPENVT_FRAMEWORK_TOKEN = "Potts.jl"
 const _OPENVT_PKG_FW = OPENVT_FRAMEWORK_TOKEN
@@ -36,7 +36,7 @@ const _OPENVT_PKG_FW = OPENVT_FRAMEWORK_TOKEN
     PottsModels.OPENVT_BULK_RELEASE_TAG
 
 The tag of the public Potts.jl release that is to hold the bulk files of the split
-OpenVT package (D-213 (b)); the core README and `EMAIL.md` link each bulk file as
+OpenVT package; the core README and `EMAIL.md` link each bulk file as
 `https://github.com/PraneethMerugu/Potts.jl/releases/download/<tag>/<file>`. Nothing creates
 the release: the maintainer creates it under this tag (or rebuilds with another
 `release_tag`).
@@ -58,9 +58,9 @@ const _OPENVT_PKG_TABLE1 = "$(_OPENVT_PKG_FW)_table1.csv"
 # the bulk side of the split (D-215 (7)): file names in results/<token>/Monolayer/
 _openvt_pkg_isbulk(name) = name in (_OPENVT_PKG_O2_ZIP, _OPENVT_PKG_O1_MANIFEST) || name in (_openvt_pkg_o1_zip(c) for c in keys(_OPENVT_PKG_O1_STEM))
 const _OPENVT_PKG_RELEASES = "https://github.com/PraneethMerugu/Potts.jl/releases/download/"
-# the O5 names of the P6.15g record (`string(γ)`, e.g. 0.0, 0.12, 1.0e-4), β = 0
+# the O5 names of the sweeps record (`string(γ)`, e.g. 0.0, 0.12, 1.0e-4), β = 0
 const _OPENVT_PKG_O5 = r"^Potts\.jl_gamma_(\d+\.\d+(?:e-?\d+)?)_(\d+)MCS\.csv$"
-# the Figure 8 colonies of the P6.15k record (D-211 R2; `openvt_filename(:O5; beta, mcs)`), γ = 0
+# the Figure 8 colonies of the β-colonies record (D-211 R2; `openvt_filename(:O5; beta, mcs)`), γ = 0
 const _OPENVT_PKG_O5_BETA = r"^Potts\.jl_beta_(\d+\.\d+(?:e-?\d+)?)_(\d+)MCS\.csv$"
 # the package name of an O5 colony (D-215 (4)): both parameters, as TST and CC3D name theirs
 _openvt_pkg_o5_name(beta, gamma, mcs) = "$(_OPENVT_PKG_FW)_beta_$(beta)_gamma_$(gamma)_$(mcs)MCS.csv"
@@ -71,7 +71,8 @@ const _OPENVT_PKG_F5_UNIT = "M's axis is consistent with distance in units of R/
 # scripts that need a local clone of the consortium repository stay out of the package
 const _OPENVT_PKG_NEEDS_G = "OPENVT_MONOLAYER_REPO"
 
-# ROADMAP item => what its record carries (P6.15i convention: `provenance.toml`'s `item`)
+# record key => the `item` string its `provenance.toml` carries (the committed records name
+# themselves this way, so these strings are data and stay as written)
 const _OPENVT_PKG_ITEMS = (calib = "P6.15b", f5 = "P6.15e", f3f8 = "P6.15f", f1f4 = "P6.15h", sweeps = "P6.15g",
     o1 = "P6.15j", f8beta = "P6.15k", o1g = "P6.15l")
 const _OPENVT_PKG_FIGURES = (calib = "Figure 2, Table S5", f5 = "Figure 5", f3f8 = "Figures 3 and 9",
@@ -79,7 +80,7 @@ const _OPENVT_PKG_FIGURES = (calib = "Figure 2, Table S5", f5 = "Figure 5", f3f8
     o1 = "O1 per-cell time series (cases a, b, e, f re-run), O2 files",
     f8beta = "Figure 8 (the colonies at the T1 β values, area inhibition)",
     o1g = "O1 and O2 in the consortium scripts' form (column g, descriptive zips, O2 k = 0…99; no re-run)")
-# records a draft build may do without (`allow_pending = true`): the P6.15k β colonies run on
+# records a draft build may do without (`allow_pending = true`): the β colonies run on
 # the PC after the rest is merged; a draft leaves out Figure 8 and its O5 files and says
 # "Figure 8: pending". The default build requires them, so a build for upload is complete.
 const _OPENVT_PKG_LATER = (:f8beta,)
@@ -92,7 +93,7 @@ const _OPENVT_PKG_LATER = (:f8beta,)
                                           release_tag = PottsModels.OPENVT_BULK_RELEASE_TAG)
 
 Build the Potts.jl submission to the OpenVT growing-monolayer benchmark in the consortium
-repository's layout (spec 15 §4.0.1, conforming to the consortium's scripts per D-215). The
+repository's layout (spec 15 §4.0.1, conforming to the consortium's scripts where the manuscript is silent). The
 framework token `<FW>` is `PottsModels.OPENVT_FRAMEWORK_TOKEN`.
 
 With `split = nothing` (the default) it writes `outdir/implementations/<FW>/` (the
@@ -105,7 +106,7 @@ the bulk items: the O1 per-cell time series (`x,y,i,n,g`) as one descriptively n
 case with their manifest, the A3 inhibition shares derived from that manifest, the O2
 Figure 5 zip (k = 0…99), and the O3 and O5 sweep files. It returns `outdir`.
 
-With `split = :email` it writes the same package, split for sending by mail (D-213 (a)–(d)):
+With `split = :email` it writes the same package, split for sending by mail:
 `outdir/core.zip` (every file except the bulk ones, unpacking at the consortium
 repository's root; its results README links each bulk file by name, sha256 and its
 release-download URL under `release_tag`), `outdir/bulk/` (the O1 zips, the O2 zip and the O1
@@ -114,18 +115,19 @@ manifest, byte copies, to be attached to a public release; nothing here creates 
 `(; outdir, core_bytes, bulk_bytes, bulk)` with the size of `core.zip`, the summed size of
 `bulk/` and the bulk file sizes. Any other `split` is an `ArgumentError`.
 
-Everything is read from the committed records under `lib/PottsModels/reproductions/data/15/`
-(D-146), the model defaults and the bulk directory; nothing is simulated. An item's record is
-the newest directory (by name) whose `provenance.toml` names its ROADMAP item. Every record
-(P6.15b, e, f, g, h, j, k and l) is required. `allow_pending = true` (default `false`) allows a
-draft build without the P6.15k record (M's Figure 8 colonies, D-211): Figure 8 and its O5
+Everything is read from the committed records under `lib/PottsModels/reproductions/data/15/`,
+the model defaults and the bulk directory; nothing is simulated. An item's record is
+the newest directory (by name) whose `provenance.toml` `item` matches. Every record
+(calibration, Figure 5, Figures 3 and 9, Figures 1 and 4, sweeps, O1 re-run, β colonies and
+O1 post-processing) is required. `allow_pending = true` (default `false`) allows a
+draft build without the β-colonies record (M's Figure 8 colonies): Figure 8 and its O5
 files are left out and the results README says "Figure 8: pending". Never upload a draft build.
 
 `results/<FW>/figures/` holds byte copies of the records' renders of M's Figures 5
 (`fig5_shared.png`), 7 (`fig7_grid.png`) and 8 (`fig8_grid.png`).
 
-`bulk` is a directory outside git holding the O1 zips and the O2 zip that the P6.15l
-record's `archives.tsv` names (written by its `post_o1.jl`), each with the size and sha256
+`bulk` is a directory outside git holding the O1 zips and the O2 zip that the O1
+post-processing record's `archives.tsv` names (written by its `post_o1.jl`), each with the size and sha256
 pinned there. Nothing else is read from it, and its files are copied byte for byte.
 
 Two calls on the same commit and bulk directory write byte-identical files (zip time stamps
@@ -153,7 +155,9 @@ function openvt_submission_package(outdir::AbstractString; bulk = get(ENV, _OPEN
     recs = _openvt_pkg_records()
     for k in keys(_OPENVT_PKG_ITEMS)
         haskey(recs, k) || (allow_pending && k in _OPENVT_PKG_LATER) ||
-            throw(ArgumentError("openvt_submission_package: no $(_OPENVT_PKG_ITEMS[k]) record in data/15" *
+            throw(
+            ArgumentError(
+                "openvt_submission_package: no record of $(_OPENVT_PKG_FIGURES[k]) in data/15" *
                                 (k in _OPENVT_PKG_LATER ? " (pass allow_pending = true for a draft build without it)" : "")))
     end
     o1 = _openvt_pkg_o1(joinpath(_OPENVT_PKG_DATA, recs[:o1g]), recs[:o1],
@@ -464,20 +468,20 @@ end
 
 _openvt_pkg_sha(path) = bytes2hex(open(sha256, path))
 
-# the P6.15j record's manifests: O1 members by case (in member order), archives, O2 files
-# the case (b) runs of the P6.15e record: k => seed
+# the case (b) runs of the Figure 5 record: k => seed
 function _openvt_pkg_o2_runs(rec)
     _, rows = _openvt_pkg_tsv(joinpath(rec, "runs.tsv"))
     return Dict(parse(Int, r["k"]) => parse(Int, r["seed"]) for r in rows if r["case"] == "b")
 end
 
-# the P6.15l record (the D-215 post-processing of the P6.15j record `raw`): O1 members by case
+# the O1 post-processing record (the D-215 post-processing of the O1 re-run record `raw`): O1 members by case
 # (in member order), the archives (O1 per case and the O2 zip), the O2 files
 function _openvt_pkg_o1(rec, raw, o2runs)
     need(f) = (p = joinpath(rec, f); isfile(p) ? _openvt_pkg_tsv(p)[2] :
-                                     throw(ArgumentError("openvt_submission_package: the P6.15l record has no $f")))
+            throw(ArgumentError("openvt_submission_package: the O1 post-processing record has no $f"))
+    )
     src = get(TOML.parsefile(joinpath(rec, "provenance.toml")), "source", "")
-    src == raw || throw(ArgumentError("openvt_submission_package: the P6.15l record maps $(repr(src)), not the P6.15j record $raw"))
+    src == raw || throw(ArgumentError("openvt_submission_package: the O1 post-processing record maps $(repr(src)), not the O1 re-run record $raw"))
     members = Dict{String, Vector{Any}}()
     for r in need("o1_manifest.tsv")
         e = (; case = r["case"], seed = parse(Int, r["seed"]), mcs = parse(Int, r["mcs"]), file = r["file"],
@@ -497,9 +501,13 @@ function _openvt_pkg_o1(rec, raw, o2runs)
          parse(Int, only(o2zip)["members"]) == length(o2) &&
          [parse(Int, r["k"]) + 1 for r in o2] == sort(collect(keys(o2runs))) &&
          all(r -> r["file"] == "$(_OPENVT_PKG_O2_DIR)/cell_data_no_inhibition_$(r["k"]).csv", o2)
-    ok || throw(ArgumentError("openvt_submission_package: the P6.15l record's manifests are incomplete: archives.tsv " *
+    ok || throw(
+        ArgumentError(
+            "openvt_submission_package: the O1 post-processing record's manifests are incomplete: archives.tsv " *
                               "must list one zip per case of o1_manifest.tsv with its member count and the O2 zip, " *
-                              "and o2_manifest.tsv one file per case (b) run of the P6.15e record (k = run − 1)"))
+                "and o2_manifest.tsv one file per case (b) run of the Figure 5 record (k = run − 1)"
+        )
+    )
     return (; members, archives, o2zip = only(o2zip), o2, o2runs, cases = sort(collect(keys(members))))
 end
 
@@ -515,9 +523,9 @@ function _openvt_pkg_bulk(bulk, o1)
     for r in [o1.archives; o1.o2zip]
         f = r["archive"]
         p = joinpath(dir, f)
-        isfile(p) || throw(ArgumentError("openvt_submission_package: the bulk directory lacks $f (written by the P6.15l record's post_o1.jl)"))
+        isfile(p) || throw(ArgumentError("openvt_submission_package: the bulk directory lacks $f (written by the O1 post-processing record's post_o1.jl)"))
         (string(filesize(p)) == r["bytes"] && _openvt_pkg_sha(p) == r["sha256"]) ||
-            throw(ArgumentError("openvt_submission_package: $f in the bulk directory differs from the P6.15l record's sha256"))
+            throw(ArgumentError("openvt_submission_package: $f in the bulk directory differs from the O1 post-processing record's sha256"))
     end
     return dir
 end
@@ -542,7 +550,7 @@ function _openvt_pkg_bulk_items(dir, o1, bulk, cycle)
     return nothing
 end
 
-# O3 and O5: byte copies of the P6.15g sweeps record's tables and its f7/ snapshots (β = 0)
+# O3 and O5: byte copies of the sweeps record's tables and its f7/ snapshots (β = 0)
 function _openvt_pkg_sweeps(dir, sw)
     mkpath(dir)
     for (f, name) in _OPENVT_PKG_O3
@@ -573,19 +581,20 @@ function _openvt_pkg_table1(path, sw)
 end
 
 # M's Figures 5, 7 and 8 (D-211): byte copies of the records' renders, and the Figure 8
-# colonies (O5) of the P6.15k record
+# colonies (O5) of the β-colonies record
 function _openvt_pkg_figures(res, recs)
     mkpath(joinpath(res, "figures"))
     for (k, f, name) in ((:f5, "fig5_shared.png", "fig5.png"), (:sweeps, "fig7_grid.png", "fig7.png"),
         (:f8beta, "fig8_grid.png", "fig8.png"))
         haskey(recs, k) || continue
         src = joinpath(_OPENVT_PKG_DATA, recs[k], f)
-        isfile(src) || throw(ArgumentError("openvt_submission_package: the $(_OPENVT_PKG_ITEMS[k]) record has no $f"))
+        isfile(src) || throw(ArgumentError("openvt_submission_package: the record of $(_OPENVT_PKG_FIGURES[k]) has no $f"))
         cp(src, joinpath(res, "figures", name))
     end
     if haskey(recs, :f8beta)
         _openvt_pkg_copyall(joinpath(_OPENVT_PKG_DATA, recs[:f8beta], "f8"), joinpath(res, "Monolayer", "final_snapshot_data"),
-            _OPENVT_PKG_O5_BETA, m -> _openvt_pkg_o5_name(m[1], "0.0", m[2])) || throw(ArgumentError("openvt_submission_package: the P6.15k record has no f8/ snapshots"))
+            _OPENVT_PKG_O5_BETA, m -> _openvt_pkg_o5_name(m[1], "0.0", m[2])
+        ) || throw(ArgumentError("openvt_submission_package: the β-colonies record has no f8/ snapshots"))
     end
     return nothing
 end
@@ -826,12 +835,12 @@ function _openvt_pkg_figure_rows(facts)
                              "(areas from the full state); thin black pixel-edge boundaries; white medium",
             "the CompuCell3D, TST and Artistoo close-ups colour cells blue to red by area (coolwarm) with thin boundaries; " *
             "the limits of their colour scales are not stated",
-            "the style follows the other frameworks' panels (D-185); the scale limits are our provisional reading",
+            "the style follows the other frameworks' panels; the scale limits are our provisional reading",
             "not asked; on our open question list as Q10 (the colour variable and its limits) and Q18 (the Potts.jl colour, RGB(8, 29, 88) proposed)"),
         ("F1 window", @sprintf("a %d × %d-site block (about %.0f cell diameters 2R) on the colony rim, %.0f %% tissue, the rim entering at the top edge and leaving at the right edge",
                 w, w, w / (2 * facts.R), 100 * facts.closeup.tissue),
             "45 × 45 mm close-ups; the window size is not stated",
-            "the size is estimated from the TST close-up; the block is moved inward along the 45° ray from the colony centroid to frame the rim as the other panels do (about 65–75 % tissue; D-229)",
+            "the size is estimated from the TST close-up; the block is moved inward along the 45° ray from the colony centroid to frame the rim as the other panels do (about 65–75 % tissue)",
             "not an author question"),
         ("F2 consortium curves", "Potts.jl curves and the spring–dashpot reference only", "panels b, d, e overlay all frameworks",
             "the consortium's curves are compared through frozen spread values, not redrawn", "not an author question"),
@@ -850,7 +859,8 @@ function _openvt_pkg_figure_rows(facts)
     gap = facts.min_gap === nothing ? "" : "; no run came closer than $(facts.min_gap) sites"
     append!(rows, [
         ("F4 drawing", "cell i's outline and the in-panel names left out; counts as numbers",
-            "a black outline of cell i, names, coloured count glyphs", "no outlines (D-156)", "not an author question"),
+                "a black outline of cell i, names, coloured count glyphs", "no outlines", "not an author question",
+            ),
         ("F5 distance bins and origin",
             "M's shared edges $(join(_openvt_pkg_g.(_OPENVT_PKG_F5_EDGES), ", ")) for figures/fig5.png, binned in R (provisional). " *
             "$(_OPENVT_PKG_F5_UNIT). The F5 record's verdict " *
@@ -1011,7 +1021,7 @@ function _openvt_pkg_figures_section(recs)
         haskey(recs, k) || continue
         n = k === :sweeps ? 7 : 8
         p = joinpath(_OPENVT_PKG_DATA, recs[k], "fig$(n)_grid.tsv")
-        isfile(p) || throw(ArgumentError("openvt_submission_package: the $(_OPENVT_PKG_ITEMS[k]) record has no fig$(n)_grid.tsv"))
+        isfile(p) || throw(ArgumentError("openvt_submission_package: the record of $(_OPENVT_PKG_FIGURES[k]) has no fig$(n)_grid.tsv"))
         _, rows = _openvt_pkg_tsv(p)
         for r in rows
             print(io, "| ", fig, " | ", replace(r["multiple"], "x" => "×"), " | ", sym, " = ", r["value"], " | ", r["N"], " | ",
@@ -1028,7 +1038,7 @@ end
 
 _openvt_pkg_sweep_row(recs) =
     _openvt_pkg_row("F6, T1, F7", "run in the record `$(recs[:sweeps])`; its failing rows are listed above",
-        "Figure 6, Table 1, Figure 7", "the protocol and targets were frozen before the run (D-174)",
+    "Figure 6, Table 1, Figure 7", "the protocol and targets were frozen before the run",
         "not an author question")
 
 # the licence line of both READMEs (D-181)
@@ -1107,7 +1117,7 @@ function _openvt_pkg_results_readme(recs, prov, meta, facts, o1)
     # the case (b) seeds of the Figure 5 runs, as `seed = <offset> + k` when they are consecutive
     offs = unique(s - k for (k, s) in o1.o2runs)
     o2seed = length(offs) == 1 ? "seed $(only(offs)) + k" :
-             "seeds $(minimum(values(o1.o2runs)))–$(maximum(values(o1.o2runs))), by run k in the P6.15e `runs.tsv`"
+        "seeds $(minimum(values(o1.o2runs)))–$(maximum(values(o1.o2runs))), by run k in the Figure 5 record's `runs.tsv`"
     print(io, """
     | `Monolayer/<stem>.zip` | O1 per-cell time series, one zip per case: $(o1zips). One file per run and save (MCS 0, every $(_OPENVT_PKG_GRID) MCS and the stop; $(nfiles) files in all), `<stem>/s<seed>/potts_<case>_s<seed>_<MCS:06d>.csv`, one row per live cell. Unzipped in `Monolayer/`, the files land in `Monolayer/<stem>/s<seed>/` | `x`, `y` (R, from the lattice centre), `i` (inhibition code: 0 growing, 1 type 1, 2 type 2, 3 both), `n` (number of neighbour cells), `g` (1 if i = 0, else 0; the column `metrics.cpp` reads) |
     | `Monolayer/$(_OPENVT_PKG_O1_MANIFEST)` | every O1 file: its zip, name, row count, size and sha256 | `archive`, `file`, `rows` (cells), `bytes`, `sha256` |

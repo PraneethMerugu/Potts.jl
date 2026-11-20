@@ -1,11 +1,11 @@
-# Split from coarse_tests.jl (Wave T3b); uses LP_coarse setup.
+# Split from coarse_tests.jl; uses LP_coarse setup.
 
-@testitem "F3-16: F4-15b: a mask blends on the blocks it covers in part" setup = [LP_coarse] tags = [:latticepde, :coarse] begin
+@testitem "a mask blends on the blocks it covers in part" setup = [LP_coarse] tags = [:latticepde, :coarse] begin
     using .LP_coarse: fd
-    @testset "F4-15b: a mask blends on the blocks it covers in part" begin
+    @testset "a mask blends on the blocks it covers in part" begin
         # A mask `masked(q == 0, v)` on Coarse(4): a node is masked where its whole block is kind 0;
         # elsewhere it holds the value of its free part (the children with q ≠ 0), its equation folded
-        # over them. Base 7d101740 (~/lpwork/f4F15b/nc.log): the mask folds by Majority, so a node
+        # over them. Before the fix (7d101740): the mask folds by Majority, so a node
         # with 9 or more medium children is held and its sources are lost, and the others fold over
         # the whole block.
         lvl(n) = Symbolics.wrap(
@@ -72,7 +72,7 @@
                 want = alg isa ExplicitEuler ? want .+ h .* (a .+ b .* want) : (want .+ h .* a) ./ (1 .- h .* b)
             end
             m = nf .> 0
-            @test isapprox(u1[m], want[m]; rtol = 1.0e-12) || (println("F4-15b scalar ", alg, ": ", maximum(abs, u1[m] .- want[m])); false)
+            @test isapprox(u1[m], want[m]; rtol = 1.0e-12) || (println("scalar ", alg, ": ", maximum(abs, u1[m] .- want[m])); false)
         end
         # f = 0 and f = 1: a node no child of which is held folds over the whole block bitwise (the
         # rate equals the unmasked system's), a node all of whose children are held is masked
@@ -87,7 +87,7 @@
         op.f(du1, u0, op.p, 0.0); on.f(du2, u0, on.p, 0.0)
         @test vec(nf .== 16) == (du1 .== du2 .&& vec(nf .== 16)) && any(nf .== 16)
         @test all(du1[vec(0 .< nf .< 16)] .!= du2[vec(0 .< nf .< 16)])
-        # complementary masks on a block covered half by each (F4-15 review should-fix 3): neither
+        # complementary masks on a block covered half by each: neither
         # node is masked; each field holds the value of its own free part (its rate folds over its
         # own free children), so `masked(q == 0, 9)` sees the source and `masked(q != 0, 9)` does not
         Qh = zeros(Int32, CDIMS); Qh[1:4, 1:2] .= 1                      # block (1, 1): 8 of 16 sites kind 1
@@ -122,13 +122,13 @@
 
 end
 
-@testitem "F3-16: F4-15b: the free fold intersects the irregular domain" setup = [LP_coarse] tags = [:latticepde, :coarse] begin
+@testitem "the free fold intersects the irregular domain" setup = [LP_coarse] tags = [:latticepde, :coarse] begin
     using .LP_coarse: fd
-    @testset "F4-15b: the free fold intersects the irregular domain" begin
+    @testset "the free fold intersects the irregular domain" begin
         # (ruling 2026-11-12: the free support is free ∩ in-domain; with no in-domain free child
         # the mean is over the in-domain children; an out-of-domain child never contributes. A
         # non-twin test: a hand value that the pre-fix fold misses, because the twin would
-        # reproduce whatever the fold does. At 721d1efb (~/lpwork/f4F15b/cdom-nc.log) the two
+        # reproduce whatever the fold does. At 721d1efb the two
         # cases read 100.0 and 44.875.)
         qd = first(@variables qd(..)::Int32 [input = true])
         kd = first(@variables kd(..) [input = true, bounds = (0, 100)])
@@ -161,15 +161,15 @@ end
         # (u0 = 0, one explicit window: the state is h times the rate)
         s = solve(p, ExplicitEuler(; substeps = 1); dt = 1.0e-6)
         d = Array(s[cdf(t, x, y), length(s.t)]) ./ 1.0e-6
-        @test isapprox(d[1, 1], 5.0; rtol = 1.0e-14) || (println("F4-15b domain case 1: ", d[1, 1], " (want 5: the in-domain children, not the free out-of-domain ones)"); false)
-        @test isapprox(d[2, 1], 2.0; rtol = 1.0e-14) || (println("F4-15b domain case 2: ", d[2, 1], " (want 2: free ∩ in-domain)"); false)
+        @test isapprox(d[1, 1], 5.0; rtol = 1.0e-14) || (println("domain case 1: ", d[1, 1], " (want 5: the in-domain children, not the free out-of-domain ones)"); false)
+        @test isapprox(d[2, 1], 2.0; rtol = 1.0e-14) || (println("domain case 2: ", d[2, 1], " (want 2: free ∩ in-domain)"); false)
     end
 
 end
 
-@testitem "F3-16: F4-15b review: the support is free ∩ in-domain, not one or the other" setup = [LP_coarse] tags = [:latticepde, :coarse] begin
+@testitem "the support is free ∩ in-domain, not one or the other" setup = [LP_coarse] tags = [:latticepde, :coarse] begin
     using .LP_coarse: fd
-    @testset "F4-15b review: the support is free ∩ in-domain, not one or the other" begin
+    @testset "the support is free ∩ in-domain, not one or the other" begin
         # (review should-fix 1: a block whose free set and in-domain set are both proper subsets,
         # with masked-in, free-in, free-out and masked-out children. The fold reads the free-in
         # children only; the committed hand cases put the free set outside the domain or the
@@ -209,7 +209,7 @@ end
             @test isapprox(d[J...], v; rtol = 1.0e-14) ||
                 (
                 println(
-                    "F4-15b P1 block ", J, ": ", d[J...], " (want ", v, " = free ∩ in-domain; the in-domain mean ",
+                    "masked block ", J, ": ", d[J...], " (want ", v, " = free ∩ in-domain; the in-domain mean ",
                     cinfree(Kd, Qd .== 0, Dd)[J...], ", the free mean ", cfree(Kd, Qd .== 0)[J...],
                     ", the whole mean ", cmean(Kd)[J...], ")"
                 ); false
@@ -227,9 +227,9 @@ end
 
 end
 
-@testitem "F3-16: F4-15b review: the operator coefficient and the jac rows fold over free ∩ in-domain" setup = [LP_coarse] tags = [:latticepde, :coarse] begin
+@testitem "the operator coefficient and the jac rows fold over free ∩ in-domain" setup = [LP_coarse] tags = [:latticepde, :coarse] begin
     using .LP_coarse: fd
-    @testset "F4-15b review: the operator coefficient and the jac rows fold over free ∩ in-domain" begin
+    @testset "the operator coefficient and the jac rows fold over free ∩ in-domain" begin
         # (review should-fix 2: a partial mask, an irregular domain and a spatial operator whose
         # coefficient reads a fine input. The coefficient folds at each face over the block's free
         # in-domain children, and the implicit operator's rows fold as the residual does.)
@@ -288,13 +288,13 @@ end
             @test sc.retcode == SciMLBase.ReturnCode.Success
             a, b = Array(sc[cq(t, x, y), length(sc.t)]), sh[ch(t, x, y), length(sh.t)]
             rt = alg isa ExplicitEuler ? 1.0e-13 : 1.0e-10
-            @test isapprox(a, b; rtol = rt) || (println("F4-15b P2 ", alg, ": max |Δ| ", maximum(abs, a .- b)); false)
+            @test isapprox(a, b; rtol = rt) || (println("P2 ", alg, ": max |Δ| ", maximum(abs, a .- b)); false)
         end
     end
 
 end
 
-@testitem "F3-16: a fine field and a coarse field in one group: prolongation and restriction" setup = [LP_coarse] tags = [:latticepde, :coarse] begin
+@testitem "a fine field and a coarse field in one group: prolongation and restriction" setup = [LP_coarse] tags = [:latticepde, :coarse] begin
     using .LP_coarse: fd
     @testset "a fine field and a coarse field in one group: prolongation and restriction" begin
         # u (fine 8×8) reads c (Coarse(2), 4×4) at the node of its block; c reads u by the block
@@ -347,7 +347,7 @@ end
 
 end
 
-@testitem "F3-16: an irregular domain on a coarse grid: the domain folded by Majority" setup = [LP_coarse] tags = [:latticepde, :coarse] begin
+@testitem "an irregular domain on a coarse grid: the domain folded by Majority" setup = [LP_coarse] tags = [:latticepde, :coarse] begin
     using .LP_coarse: fd
     @testset "an irregular domain on a coarse grid: the domain folded by Majority" begin
         # the fine domain: each 4×4 block in it on 10 of its 16 sites, or out of it on 10 (a strict
@@ -366,7 +366,7 @@ end
         q, g = @variables q(..)::Int32 [input = true] g(..) [input = true]
         cdo = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(first(@variables cdomf(..))), LatticePDE.LatticeLevel, Coarse(4)))
         cdh = first(@variables cdomh(..))
-        # (the twin reads the kind expressions' block means as real inputs, F4-15)
+        # (the twin reads the kind expressions' block means as real inputs)
         function dsys(c; hand = false)
             k2, k1 = hand ? (cf2(t, x, y), cf1(t, x, y)) : (ismember(q(t, x, y), (2,)), q(t, x, y) == 1)
             PDESystem(
@@ -378,7 +378,7 @@ end
         pc = cown(dsys(cdo), CDIMS; domain = cdm, ins = [cdm(t, x, y) => Df, q(t, x, y) => CQ1, g(t, x, y) => CG])
         # (`ckinds` covers no block with kind 3 whole: no node is masked, each folds over its free
         # children; the hand inputs are the in-domain free means, as the fold's support is under
-        # the domain ruling: at 721d1efb (~/lpwork/f4F15b/cdom-nc.log) the three comparisons fail)
+        # the domain ruling: at 721d1efb the three comparisons fail)
         # (the hand inputs are the in-domain free means: the ruling's support is free ∩ in-domain)
         ph = cown(
             dsys(cdh; hand = true), CDIMS .÷ CK; domain = cdm,
@@ -417,7 +417,7 @@ end
 
 end
 
-@testitem "F3-16: refusals name the cause and a route that works" setup = [LP_coarse] tags = [:latticepde, :coarse] begin
+@testitem "refusals name the cause and a route that works" setup = [LP_coarse] tags = [:latticepde, :coarse] begin
     using .LP_coarse: fd
     @testset "refusals name the cause and a route that works" begin
         q = first(@variables q(..)::Int32 [input = true])
@@ -437,7 +437,7 @@ end
         @test solve(mk(cc; n = (20, 16)), ExplicitEuler(); dt = 0.1).retcode == SciMLBase.ReturnCode.Success
         @test solve(mk(cc; n = (16, 1)), ExplicitEuler(); dt = 0.1).retcode == SciMLBase.ReturnCode.Success   # size 1: never coarsened
         # a spatial operator of a coarse field in a fine row: the coarse operator at the node of
-        # the block (F3-22: the direct form is the aux field of the route, which also works)
+        # the block (the direct form is the aux field of the route, which also works)
         u = first(@variables uref(..))
         L = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(first(@variables Lref(..))), LatticePDE.LatticeLevel, Coarse(4)))
         direct = PDESystem(
@@ -452,7 +452,7 @@ end
         @test size(sg[L(t, x, y), 1]) == (4, 4) && size(sg[u(t, x, y), 2]) == (16, 16)
         sdir = solve(cown(direct, (16, 16)), ExplicitEuler(; substeps = 1); dt = 0.01, saveat = [0.01])
         @test sdir[u(t, x, y), 2] == sg[u(t, x, y), 2]
-        # a mask on an aux field: refused (D-F4-15b Limits (4): an aux field follows its
+        # a mask on an aux field: refused (an aux field follows its
         # expression), with the route (mask a rate field)
         am = PDESystem(
             [D(cc(t, x, y)) ~ 0.01 * laplacian(cc(t, x, y)), L(t, x, y) ~ laplacian(cc(t, x, y))],

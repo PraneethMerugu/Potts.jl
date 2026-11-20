@@ -1,9 +1,8 @@
-# F4-E6 (research/field-compiler/f4/F4-ergonomics.md item 5, user ruling 2026-11-10):
 # `LatticePDE.pdesystem(eqs, bcs; name, domain)` works out the independent variables, the
 # dependent variables (in order of first appearance) and the parameters, and returns a plain
 # `PDESystem`. Oracle: the hand-built `PDESystem` (equal lists; the same problem, bitwise
 # runs). Negative control at the base 4ca38af7: `pdesystem` does not exist (an
-# `UndefVarError`, ~/lpwork/f4E/nc-e4e7.log).
+# `UndefVarError`).
 
 @testsetup module LP_pdesystem_ctor
 using Test, LatticePDE
@@ -54,16 +53,16 @@ catch e
     sprint(showerror, e)
 end
 
-# F4-E6 review (wave 2): the inputs come after the fields in name order, not in SymbolicUtils'
+# The inputs come after the fields in name order, not in SymbolicUtils'
 # term order or the order the conditions read them. Negative control at 11523b0b: the input
-# first read in a condition (`psa`) came after `psz` (~/lpwork/f4W2r/nc.log).
+# first read in a condition (`psa`) came after `psz`.
 @variables psz(..)::Bool [input = true] psa(..) [input = true]
 include("shared/export_all.jl")
 end
 
-@testitem "F4-E6: pdesystem works out the lists of the hand-built PDESystem" setup = [LP_pdesystem_ctor] tags = [:latticepde, :pdesystem_ctor] begin
+@testitem "pdesystem works out the lists of the hand-built PDESystem" setup = [LP_pdesystem_ctor] tags = [:latticepde, :pdesystem_ctor] begin
 using .LP_pdesystem_ctor: fd
-@testset "F4-E6: pdesystem works out the lists of the hand-built PDESystem" begin
+    @testset "pdesystem works out the lists of the hand-built PDESystem" begin
     a = LatticePDE.pdesystem(pseq(), psbc(); name = :ps, domain = psdom)
     @test a isa PDESystem && nameof(a) === :ps
     @test isequal(collect(a.ivs), [t, x, y])
@@ -93,9 +92,9 @@ using .LP_pdesystem_ctor: fd
 end
 end
 
-@testitem "F4-E6: pdesystem refusals" setup = [LP_pdesystem_ctor] tags = [:latticepde, :pdesystem_ctor] begin
+@testitem "pdesystem refusals" setup = [LP_pdesystem_ctor] tags = [:latticepde, :pdesystem_ctor] begin
 using .LP_pdesystem_ctor: fd
-@testset "F4-E6: pdesystem refusals" begin
+    @testset "pdesystem refusals" begin
     m = psmsg(() -> LatticePDE.pdesystem([D(psc(t, x, y)) ~ psu(t, x) - psc(t, x, y)]; name = :bad))
     @test occursin("different independent variables", m) || (println(m); false)
     m = psmsg(() -> LatticePDE.pdesystem(Equation[]; name = :bad))
@@ -105,9 +104,9 @@ using .LP_pdesystem_ctor: fd
 end
 end
 
-@testitem "F4-E6 review: pdesystem orders the inputs by name" setup = [LP_pdesystem_ctor] tags = [:latticepde, :pdesystem_ctor] begin
+@testitem "pdesystem orders the inputs by name" setup = [LP_pdesystem_ctor] tags = [:latticepde, :pdesystem_ctor] begin
 using .LP_pdesystem_ctor: fd
-@testset "F4-E6 review: pdesystem orders the inputs by name" begin
+    @testset "pdesystem orders the inputs by name" begin
     dvnames(s) = [string(nameof(operation(unwrap(u)))) for u in s.dvs]
     for rhs in (psz(t, x, y) - psc(t, x, y), psc(t, x, y) * psz(t, x, y), 2.0 * psz(t, x, y) - psc(t, x, y))
         s = LatticePDE.pdesystem([D(psc(t, x, y)) ~ rhs], [psc(t, 0, y) ~ psa(t, 0, y)]; name = :pso)

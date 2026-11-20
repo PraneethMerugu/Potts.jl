@@ -1,4 +1,4 @@
-# The interning builder (hash-consing, R3 §2: no separate canonicalize pass). Every node is
+# The interning builder (hash-consing: no separate canonicalize pass). Every node is
 # interned on (op, type, operands, imm); commutative operands are flattened (ADD, MUL) and
 # sorted by a structural order that never looks at node ids, so equal expressions get equal
 # ids whatever the build order. `finish` renumbers nodes, accesses and constants in a
@@ -192,7 +192,7 @@ function select!(b::KernelBuilder, c, x, y; op = SELECT)
         node!(b, op, t, Int32[c, cast!(b, x, t), cast!(b, y, t)]))
 end
 """
-Lazy conditional (user `ifelse`, D-014): emitted as a branch.
+Lazy conditional (user `ifelse`): emitted as a branch.
 """
 cond!(b::KernelBuilder, c, x, y) = select!(b, c, x, y; op = COND)
 function bittest!(b::KernelBuilder, x::Integer, bit::Integer)

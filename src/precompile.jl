@@ -99,7 +99,7 @@ function _precompile_workload()
         PottsProblem(csys, [CorePotts.ownership => σ, B.kind => [1]], (0, 1); T = S, field_solver = ExplicitEuler())
     end
     # the coupled `@fields` model: init and a first MCS with each owned field algorithm, and
-    # its field report (F4-14)
+    # its field report
     csys2 = mtkcompile(_PrecompileModel(; name = :precompile))
     for fs in (ExplicitEuler(), BackwardEuler())
         prob = PottsProblem(csys2, [CorePotts.ownership => σ, B.kind => [:cell]], (0, 1); field_solver = fs, capacity = 8)
