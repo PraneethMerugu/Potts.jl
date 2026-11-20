@@ -372,7 +372,7 @@ end
 """
 @inline function _resid(i::Int32, active, w, s, sb, si, x, b, dims, per)
     T = eltype(x)
-    # bounds: i ≤ prod(dims), every level array's length; neighbours wrap or are checked
+    # bounds: i ≤ prod(dims), every level array's length; neighbors wrap or are checked
     @inbounds active[i] != 0 || return zero(T), one(T)
     X = _coords(i, dims)
     @inbounds xi = x[i]
@@ -542,7 +542,7 @@ or singular row).
 """
 @inline function _gersh_site(i::Int32, active, w, s, sb, si, dims, per)
     T = eltype(s)
-    # bounds: i ≤ prod(dims), every level array's length; neighbours wrap or are checked
+    # bounds: i ≤ prod(dims), every level array's length; neighbors wrap or are checked
     @inbounds active[i] != 0 || return floatmax(T), zero(T)
     X = _coords(i, dims)
     @inbounds D = s[i] + sb[i] + si[i]

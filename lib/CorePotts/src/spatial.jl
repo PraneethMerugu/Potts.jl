@@ -6,7 +6,7 @@
 @inline function is_boundary_site(σ, ctx, i; relation = ctx.contact)
     lat = ctx.lattice
     x = coordinates(lat, i)
-    # bounds: i ≤ nsites = length(σ); inside neighbours are ≤ nsites as well
+    # bounds: i ≤ nsites = length(σ); inside neighbors are ≤ nsites as well
     a = @inbounds σ[i]
     for k in 1:length(relation)
         inside, y = shift(lat, x, @inbounds relation.offsets[k])

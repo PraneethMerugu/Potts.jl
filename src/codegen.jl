@@ -477,7 +477,7 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
                         ctx.lattice, prop.x, prop.target, $R, kk, $inner
                     )
                     if ins
-                        # bounds: sn is an inside neighbour of the copy's target, ≤ nsites
+                        # bounds: sn is an inside neighbor of the copy's target, ≤ nsites
                         n = @inbounds st.ownership[sn]
                         w = CorePotts.weight($R, kk)
                         k_n = Potts._cellkind(st, n)

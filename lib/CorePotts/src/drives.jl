@@ -67,7 +67,7 @@ family is `−(λ/max)(mean(source, new) − mean(target, old))`.
     total = zero(T)
     n = 0
     zero_seen = false
-    # bounds: site and inside neighbours have linear indices ≤ nsites
+    # bounds: site and inside neighbors have linear indices ≤ nsites
     if @inbounds(σ[site]) == owner
         a = @inbounds x[site]
         total += _fold_term(fold, a)
