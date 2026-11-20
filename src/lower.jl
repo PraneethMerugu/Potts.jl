@@ -247,6 +247,7 @@ end
 function _site_read(i::Entity, j)
     L = get(i.options, :lattice_level, nothing)
     return if L === nothing
+            # bounds: j is a site index ≤ nsites (compile accepts only site-valued indices)
             :(@inbounds st.site.$(i.name)[$j])
         else
             :(@inbounds st.site.$(i.name)[Potts._coarse_site($j, size(st.ownership), $(trailing_zeros(L.k)))])
@@ -290,6 +291,7 @@ function _lower_named(x, i::Entity, env::LowerEnv)
         haskey(env.bind, :__cell) || throw(PottsCompileError("cell variable `$(i.name)` needs a cell: write `$(i.name)[new]` or `$(i.name)[owner[target]]`"))
         return :(Potts._cellval(st.cell.$(i.name), $(env.bind[:__cell])))
     elseif r === :model
+        # bounds: every model column has one entry
         return :(@inbounds st.model.$(i.name)[1])
     elseif r === :edge
         haskey(env.bind, :__edge) || throw(PottsCompileError("edge variable `$(i.name)` is only available in edge terms and link rules"))
@@ -500,8 +502,10 @@ function _is_site_position(x)
 end
 
 """Value of a cell array at `c`, zero for the medium (`c == 0`)."""
+# bounds: c ≠ 0 is a cell id from σ or a copy, ≤ capacity = length(a)
 @inline _cellval(a, c) = c == 0 ? zero(eltype(a)) : @inbounds a[c]
 """Kind of cell `c` (`0` for the medium)."""
+# bounds: c ≠ 0 is a cell id from σ or a copy, ≤ capacity
 @inline _cellkind(st, c) = c == 0 ? Int32(0) : Int32(@inbounds st.cell.kind[c])
 
 # ---------------------------------------------------------------------------------------
@@ -692,6 +696,7 @@ function _ref_default(i::Entity, env)
 end
 
 """Whether slot `r` (a reference) holds an alive cell: `0 < r ≤ capacity` and `volume[r] > 0`."""
+# bounds: 0 < r ≤ length(vol), checked first (the `_deref*` below check it too)
 @inline _alive_slot(vol, r) = (0 < r) & (r <= length(vol)) && @inbounds(vol[r] > 0)
 """Column `a` of referent `r`, or `d` (the medium's value) when `r` is 0 or dead."""
 @inline _deref(a, vol, r, d) = _alive_slot(vol, r) ? @inbounds(a[r]) : d      # r checked by `_alive_slot`
@@ -713,6 +718,7 @@ The alive member of kind `k` of cluster `cl`, or 0. With several, the one with t
     best, bb, dup = Int32(0), typemax(Int32), false
     cl == 0 && return best, dup
     for m in 1:length(cell.kind)          # m ∈ 1:capacity: every column has that length
+        # bounds: m ∈ 1:capacity, the length of every cell column
         if @inbounds(cell.volume[m]) > 0 && @inbounds(cell.cluster[m]) == cl && @inbounds(cell.kind[m]) == k
             dup |= best != 0
             b = Int32(_birth(cell, m))
@@ -792,6 +798,7 @@ function _lower_at(args, env)
     i.role !== :kindtable && length(args) == 2 && _is_ref(args[2]) && return _lower_deref(i, args[2], env)
     idx = map(a -> lower(a, env), args[2:end])
     if i.role === :kindtable
+        # bounds: kinds are in 0:nk - 1; the problem checks nk entries per kind-table axis
         return :(@inbounds p.$(i.name)[$(map(k -> :(Int($k) + 1), idx)...)])
     end
     length(idx) == 1 || throw(PottsCompileError("`$(i.name)` takes one index"))
@@ -870,6 +877,7 @@ function _lower_population(args, env)
     acc, cnt, flag, v = map(p -> Symbol(p, :_, nsym), (:acc, :cnt, :zero, :v))
     bind = copy(env.bind)
     if ni.role === :bound_cell
+        # bounds: the bound cell is a cell id ≤ capacity
         merge!(bind, Dict{Symbol, Any}(:volume => :($T(@inbounds st.cell.volume[$nsym])),
             :surface => :(@inbounds st.cell.surface[$nsym]), :kind => :(Potts._cellkind(st, $nsym)),
             :id => nsym, :generation => :(@inbounds st.cell.generation[$nsym]), :__cell => nsym,
@@ -976,6 +984,7 @@ function _lower_gather(args, env)
         step = quote
             $dup = false
             for $k2 in 1:($k - 1)
+                # bounds: k2 < k ≤ length(offs)
                 $in2, $y2 = CorePotts.shift(ctx.lattice, $x0, @inbounds $offs[$k2])
                 $in2 && ($dup |= let $nsym = CorePotts.linear_index(ctx.lattice, $y2)
                     $condc && ($bodyc == $v)

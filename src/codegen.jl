@@ -69,6 +69,7 @@ _draws(key, mcs, entity) = key === nothing ? () : (:__draw => (key, mcs, entity)
 _cell_entity(c) = :(CorePotts.cell_entity($c, @inbounds st.cell.generation[$c]))
 
 function _cell_env(T, c, relname; kind = :(Potts._cellkind(st, $c)), mcs = nothing, key = nothing, extra = ())
+    # bounds: c is a cell id ≤ capacity (the compiler accepts only cell-valued indices)
     return LowerEnv(T, :cell, Dict{Symbol, Any}(_draws(key, mcs, _cell_entity(c))..., :volume => :($T(@inbounds st.cell.volume[$c])),
         :surface => :(@inbounds st.cell.surface[$c]), :kind => kind, :id => c,
         :generation => :(@inbounds st.cell.generation[$c]), :__cell => c,
@@ -84,6 +85,7 @@ end
 
 # A cluster named by its root `r` (cluster terms): its trackers, the root's kind and variables.
 function _cluster_env(T, r, relname; δ = nothing)
+    # bounds: r is a cluster root, a cell id ≤ capacity
     return LowerEnv(T, :cell, Dict{Symbol, Any}(:cluster_volume => :($T(@inbounds st.cell.cluster_volume[$r])),
         :cluster_surface => :(@inbounds st.cell.cluster_surface[$r]), :kind => :(Potts._cellkind(st, $r)),
         :id => r, :__cell => r, (δ === nothing ? () : (:δcluster_surface => δ,))...), relname)
@@ -92,6 +94,7 @@ end
 function _site_env(T, i, relname; mcs = nothing, key = nothing)
     return LowerEnv(
         T, :site, Dict{Symbol, Any}(
+            # bounds: i is a site index ≤ nsites = length(st.ownership)
             _draws(key, mcs, i)..., :owner => :(@inbounds st.ownership[$i]),
             :kind => :(CorePotts.owner_kind(st, $i)), :__site => i,
             :position => :(Potts._position($T, ctx, $i)), :site => i,
@@ -345,6 +348,7 @@ function _delta_H_expr(c::CompiledPottsSystem, T; drives::Bool = true)
             for kk in 1:length($R)
                 ins, sn = CorePotts.neighbor_index(ctx.lattice, prop.x, prop.target, $R, kk, $inner)
                 if ins
+                        # bounds: sn is an inside neighbour of the copy's target, ≤ nsites
                         n = @inbounds st.ownership[sn]
                     w = CorePotts.weight($R, kk)
                     k_n = Potts._cellkind(st, n)
@@ -552,6 +556,7 @@ function _commit_expr(c::CompiledPottsSystem, T)
             # (`CorePotts.oncopy_cell!`), so concurrent copies to one cell all count
             a, jj, pre = :(st.cell.$(xi.name)), Symbol(:j_, j), Symbol(:pre_, j)
             push!(vals, :($jj = $(lower(idx, env))))
+            # bounds: jj ≠ 0 is a cell of the copy (compile checks the index), ≤ capacity
             push!(vals, :($pre = $jj == 0 ? zero(eltype($a)) : (@inbounds $a[$jj])))
             push!(writes, :(CorePotts.oncopy_cell!($a, $jj, $v, $pre, ctx)))
         else
@@ -605,6 +610,7 @@ function _write(lhs, v, env)
     j = lower(i, env)
     if xi.role === :cell
         a = :(st.cell.$(xi.name))
+        # bounds: j ≠ 0 is a cell of the copy (compile checks the index), ≤ capacity
         return :(($j) != 0 && (@inbounds $a[$j] = convert(eltype($a), $v)))
     elseif xi.role in (:site, :field)
         # a `Coarse(k)` field's node holds a block of sites: one copy cannot set it
@@ -1126,6 +1132,7 @@ end
 """One model phase computing the population folds `slots` (`name => fold`) into `st.model`."""
 function _slots_phase(T, slots, rn)
     env = _model_env(T, rn; key = :key)
+    # bounds: every model column has one entry
     body = [:(@inbounds st.model.$(n)[1] = $T($(lower(x, env)))) for (n, x) in slots]
     return CorePotts.ModelPhase(_rgf(:((st, p, ctx, key, mcs) -> $(Expr(:block, body..., :(return nothing))))))
 end
@@ -1145,6 +1152,7 @@ function _cell_ode_expr(c::CompiledPottsSystem, T, dt, odes, solver; scratch = f
     outs = scratch ? _ode_scratch_name.(names) : names
     body = _ode_steps(solver, T, dt, ys, [lower(_substitute_locals(rate, locals), env) for (_, rate) in odes])
     live = if scratch
+        # bounds: the cell phase runs over c ∈ 1:capacity, every cell column's length
         :(if !(@inbounds st.cell.volume[c] > 0)
                 $([:(@inbounds st.cell.$(outs[i])[c] = st.cell.$(names[i])[c]) for i in eachindex(ys)]...)
                 return nothing
@@ -1169,6 +1177,7 @@ function _model_ode_expr(c::CompiledPottsSystem, T, dt, odes, solver; scratch = 
     outs = scratch ? _ode_scratch_name.(names) : names
     body = _ode_steps(solver, T, dt, ys, [lower(_substitute_locals(rate, locals, :model), env) for (_, rate) in odes])
     return :((st, p, ctx, key, mcs) -> begin
+        # bounds: every model column has one entry
         $([:($(ys[i]) = $T(@inbounds st.model.$(names[i])[1])) for i in eachindex(ys)]...)
         $body
         $([:(@inbounds st.model.$(outs[i])[1] = $(ys[i])) for i in eachindex(ys)]...)
@@ -1640,6 +1649,7 @@ function _site_update_phases(c, T, us, every, rn)
     vals = [:($(Symbol(:v_, j)) = $(_with_ref_term(() -> lower(u.eq.rhs, env), _update_label(u)))) for (j, u) in enumerate(us)]
     writes = [begin
         dst = buffered ? Symbol(n, :__next) : n
+        # bounds: the site phase runs over i ∈ 1:nsites, every site column's length
         :(@inbounds st.site.$dst[i] = $(Symbol(:v_, j)))
     end for (j, n) in enumerate(names)]
     gate = every == 1 ? nothing : :(mcs % $every == 0 || return nothing)
@@ -1678,6 +1688,7 @@ end
 function _model_update_expr(c, T, us, every, rn)
     env = _model_env(T, rn; key = :key)
     vals = [:($(Symbol(:v_, j)) = $(_with_ref_term(() -> lower(u.eq.rhs, env), _update_label(u)))) for (j, u) in enumerate(us)]
+    # bounds: every model column has one entry
     writes = [:(@inbounds st.model.$(info(_unwrap(u.eq.lhs)).name)[1] = $(Symbol(:v_, j))) for (j, u) in enumerate(us)]
     gate = every == 1 ? nothing : :(mcs % $every == 0 || return nothing)
     return :((st, p, ctx, key, mcs) -> $(Expr(:block, gate, vals..., writes..., :(return nothing))))
@@ -1686,6 +1697,7 @@ end
 function _cell_update_expr(c, T, us, every, rn)
     env = _cell_env(T, :c, rn; mcs = :mcs, key = :key)
     vals = [:($(Symbol(:v_, j)) = $(_with_ref_term(() -> lower(u.eq.rhs, env), _update_label(u)))) for (j, u) in enumerate(us)]
+    # bounds: the cell phase runs over c ∈ 1:capacity, every cell column's length
     writes = [:(@inbounds st.cell.$(info(_unwrap(u.eq.lhs)).name)[c] = $(Symbol(:v_, j))) for (j, u) in enumerate(us)]
     gate = every == 1 ? nothing : :(mcs % $every == 0 || return nothing)
     return :((st, p, ctx, key, mcs, c) -> $(Expr(:block, gate,
@@ -1715,6 +1727,7 @@ function _edge_update_expr(c, T, r::Symbol, us, every, rn)
     vals = [:($(Symbol(:v_, j)) = $(_with_ref_term(() -> lower(u.eq.rhs, env), _update_label(u)))) for (j, u) in enumerate(us)]
     writes = [begin
         col = :(st.cell.$(Symbol(:link_, n)))
+        # bounds: ek, kb ≤ maxdegree rows; ea, eb are linked cell ids ≤ capacity
         :(@inbounds ($col[ek, ea] = $(Symbol(:v_, j)); $col[kb, eb] = $(Symbol(:v_, j))))
     end for (j, n) in enumerate(names)]
     gate = every == 1 ? nothing : :(mcs % $every == 0 || return nothing)
@@ -2003,6 +2016,7 @@ function _release(c::CompiledPottsSystem)
     refs = _ref_columns(c)
     isempty(refs) && return nothing
     resets = [quote
+                  # bounds: the release runs over c ∈ 1:capacity (the launch range)
                   r = @inbounds st.cell.$n[c]
                   (r != 0 && !Potts._alive_slot(st.cell.volume, r)) && (@inbounds st.cell.$n[c] = zero(r))
               end for n in refs]
@@ -2045,6 +2059,7 @@ function _division_rules(c::CompiledPottsSystem, ids, T, who, ruled)
             name = info(x).name
             role(x) === :cell || throw(ArgumentError("division rules set cell variables; `$name` is $(role(x))"))
             if r isa Split
+                # bounds: parent and daughter are cell ids ≤ capacity
                 push!(block, :(@inbounds st.cell.$name[parent] /= 2), :(@inbounds st.cell.$name[daughter] = st.cell.$name[parent]))
             elseif _has_draw(r)
                 # a drawing rule is evaluated for each daughter (D-150): the parent's draws are

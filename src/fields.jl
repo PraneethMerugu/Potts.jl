@@ -1256,6 +1256,7 @@ function _field_fill_phase(c::CompiledPottsSystem, T)
     env = _site_env(T, :i, getfield(c, :gather_names); mcs = :mcs, key = :key)
     body = map(filled) do (name, ex, E)
         v = _fill_value(ex, env)
+        # bounds: the site phase runs over i ∈ 1:nsites, every site column's length
         E <: Bool ? :(@inbounds st.site.$name[i] = UInt8($v)) : :(@inbounds st.site.$name[i] = $E($v))
     end
     return CorePotts.SitePhase(_rgf(:((st, p, ctx, key, mcs, i) -> begin
