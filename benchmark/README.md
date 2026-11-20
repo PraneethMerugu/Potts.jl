@@ -11,7 +11,7 @@
   always, plus the named device backend). It exits 1 when a CPU row allocates; a row
   slower than its baseline is only flagged (`--strict` restores the old 5 % CPU rule).
   Whether a change is slower is decided by `ab.jl`.
-- `ab.jl` / `ab_one.jl` — the paired A/B (AUTONOMY §7.4), below.
+- `ab.jl` / `ab_one.jl` — the paired A/B, which decides whether a change is slower, below.
 - `machine.jl` — the machine table (keys of `baseline.toml`, pinning) and the Tuple type
   cache seeding shared by the gate and the A/B.
 - `test/lock_and_gpu_timing.jl` and `test/ab_harness.jl` — tests of the lock, the

@@ -1,5 +1,5 @@
 # Acceptance test for the fair machine lock and for Metal gate and A/B timings to GPU
-# completion (AUTONOMY §7.2 step 2).
+# completion, written before the code it tests.
 #
 #     julia --project=benchmark benchmark/test/lock_and_gpu_timing.jl
 #     tools/exclusive.sh env POTTS_GPU=metal julia --project=benchmark benchmark/test/lock_and_gpu_timing.jl

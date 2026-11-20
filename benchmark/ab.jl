@@ -1,5 +1,6 @@
-# Paired A/B timing of gate cases (AUTONOMY §7.4, D-157). Absolute baselines are
-# informational; a slowdown is decided here, against two same-commit controls.
+# Paired A/B timing of gate cases, run for every change that can affect speed (D-157).
+# Absolute baselines are informational; a slowdown is decided here, against two same-commit
+# controls.
 #
 #     julia benchmark/ab.jl <base> <candidate> <cases> <backend> [rounds] [options]
 #     julia benchmark/ab.jl --inprocess <checkout> <variants.jl> <backend> [rounds] [options]

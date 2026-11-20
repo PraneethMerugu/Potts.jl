@@ -1,5 +1,5 @@
 #!/bin/sh
-# Run a command while holding the machine-wide lock (AUTONOMY §7.4, D-090): GPU suites and
+# Run a command while holding the machine-wide lock (D-090): GPU suites and
 # the performance gate must not overlap each other, or anything else timed, across worktrees.
 #     tools/exclusive.sh env GROUP=GPU POTTS_GPU=metal julia --project=test test/runtests.jl
 #     tools/exclusive.sh julia --project=benchmark benchmark/gate.jl metal
