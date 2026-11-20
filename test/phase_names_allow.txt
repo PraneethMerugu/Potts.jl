@@ -1,3 +1,40 @@
 # Exceptions to the phase-name guard (`qa_no_phase_names`, test/qa_tests.jl): one
 # path<TAB>token<TAB>reason per line. Target: empty. Every entry names a string that committed
 # data or a design document fixes, so it cannot be renamed here.
+benchmark/kinetics/ensemble.jl	P615F_	a name defined by a committed run script under lib/PottsModels/reproductions/data/15/ that this benchmark includes
+benchmark/kinetics/ensemble.jl	P615M_	a name defined by a committed run script under lib/PottsModels/reproductions/data/15/ that this benchmark includes
+benchmark/kinetics/monolayer_cases.jl	P615F_	a name defined by a committed run script under lib/PottsModels/reproductions/data/15/ that this benchmark includes
+benchmark/kinetics/monolayer_cases.jl	P615M_	a name defined by a committed run script under lib/PottsModels/reproductions/data/15/ that this benchmark includes
+benchmark/kinetics/monolayer_cases.jl	p615f_	a name defined by a committed run script under lib/PottsModels/reproductions/data/15/ that this benchmark includes
+benchmark/kinetics/monolayer_cases.jl	p615m_	a name defined by a committed run script under lib/PottsModels/reproductions/data/15/ that this benchmark includes
+lib/PottsModels/src/benchmarks/openvt_package.jl	P6.15b	the `item` value of a committed record's provenance.toml, matched to find the record
+lib/PottsModels/src/benchmarks/openvt_package.jl	P6.15e	the `item` value of a committed record's provenance.toml, matched to find the record
+lib/PottsModels/src/benchmarks/openvt_package.jl	P6.15f	the `item` value of a committed record's provenance.toml, matched to find the record
+lib/PottsModels/src/benchmarks/openvt_package.jl	P6.15g	the `item` value of a committed record's provenance.toml, matched to find the record
+lib/PottsModels/src/benchmarks/openvt_package.jl	P6.15h	the `item` value of a committed record's provenance.toml, matched to find the record
+lib/PottsModels/src/benchmarks/openvt_package.jl	P6.15j	the `item` value of a committed record's provenance.toml, matched to find the record
+lib/PottsModels/src/benchmarks/openvt_package.jl	P6.15k	the `item` value of a committed record's provenance.toml, matched to find the record
+lib/PottsModels/src/benchmarks/openvt_package.jl	P6.15l	the `item` value of a committed record's provenance.toml, matched to find the record
+lib/PottsModels/test/acceptance/transfer_counters_tests.jl	P6.0v1	a row ID that the host-transfer audit document under docs/design/research assigns
+lib/PottsModels/test/acceptance/transfer_counters_tests.jl	P6.0v2	a row ID that the host-transfer audit document under docs/design/research assigns
+lib/PottsModels/test/acceptance/transfer_counters_tests.jl	P6.0v3	a row ID that the host-transfer audit document under docs/design/research assigns
+lib/PottsModels/test/reproductions/01_merks_2008_figures_tests.jl	P6.3f	the `item` value of a committed record's provenance.toml, compared with the record
+lib/PottsModels/test/reproductions/01_merks_page_tests.jl	P6.3f	the `item` value of a committed record's provenance.toml, compared with the record
+lib/PottsModels/test/reproductions/15_openvt_checkerboard_tests.jl	P6.15m	the `item` value of a committed record's provenance.toml, compared with the record
+lib/PottsModels/test/reproductions/15_openvt_manuscript_draft_tests.jl	P6.15k	the `item` value of a committed record's provenance.toml, compared with the record
+lib/PottsModels/test/reproductions/15_openvt_package_delivery_tests.jl	P6.15g	the `item` value of a committed record's provenance.toml, compared with the record
+lib/PottsModels/test/reproductions/15_openvt_package_tests.jl	P6.15b	the `item` value of a committed record's provenance.toml, compared with the record
+lib/PottsModels/test/reproductions/15_openvt_package_tests.jl	P6.15e	the `item` value of a committed record's provenance.toml, compared with the record
+lib/PottsModels/test/reproductions/15_openvt_package_tests.jl	P6.15f	the `item` value of a committed record's provenance.toml, compared with the record
+lib/PottsModels/test/reproductions/15_openvt_package_tests.jl	P6.15g	the `item` value of a committed record's provenance.toml, compared with the record
+lib/PottsModels/test/reproductions/15_openvt_package_tests.jl	P6.15h	the `item` value of a committed record's provenance.toml, compared with the record
+lib/PottsModels/test/reproductions/15_openvt_package_tests.jl	P6.15j	the `item` value of a committed record's provenance.toml, compared with the record
+lib/PottsModels/test/reproductions/15_openvt_package_tests.jl	P6.15k	the `item` value of a committed record's provenance.toml, compared with the record
+lib/PottsModels/test/reproductions/15_openvt_package_tests.jl	P6.15l	the `item` value of a committed record's provenance.toml, compared with the record
+lib/PottsModels/test/reproductions/15_openvt_page_tests.jl	P6.15	the `item` value of a committed record's provenance.toml, compared with the record
+lib/PottsModels/test/reproductions/15_openvt_page_tests.jl	P6.15b	the `item` value of a committed record's provenance.toml, compared with the record
+lib/PottsModels/test/reproductions/15_openvt_page_tests.jl	P6.15e	the `item` value of a committed record's provenance.toml, compared with the record
+lib/PottsModels/test/reproductions/15_openvt_page_tests.jl	P6.15f	the `item` value of a committed record's provenance.toml, compared with the record
+lib/PottsModels/test/reproductions/15_openvt_page_tests.jl	P6.15g	the `item` value of a committed record's provenance.toml, compared with the record
+lib/PottsModels/test/reproductions/15_openvt_page_tests.jl	P6.15h	the `item` value of a committed record's provenance.toml, compared with the record
+lib/PottsModels/test/reproductions/15_openvt_page_tests.jl	P6.15k	the `item` value of a committed record's provenance.toml, compared with the record

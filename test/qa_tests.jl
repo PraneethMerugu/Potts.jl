@@ -449,11 +449,7 @@ end
         # The repository: every hit not in test/phase_names_allow.txt.
         bad = qa_no_phase_names(joinpath(@__DIR__, ".."))
         isempty(bad) || @error "development-process IDs (rename them, or add an allowlist entry with a reason)" bad
-        if isempty(bad)
-            @test isempty(bad)
-        else
-            @test_broken isempty(bad)    # report mode: lists the remaining work
-        end
+        @test isempty(bad)
     end
 end
 
