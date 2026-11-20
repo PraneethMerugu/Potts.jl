@@ -367,7 +367,8 @@ function _csc_add!(M::SparseArrays.SparseMatrixCSC{T}, i::Int, j::Int, v::T) whe
     lo = Int(M.colptr[j])
     hi = Int(M.colptr[j + 1]) - 1
     k = searchsortedfirst(rv, i, lo, hi, Base.Order.Forward)
-    k <= hi && rv[k] == i || error("entry ($i, $j) is not in the sparsity pattern")
+    k <= hi && rv[k] == i ||
+        throw(ArgumentError("the matrix has no entry ($i, $j) in its sparsity pattern"))
     # bounds: the guard above gives lo ≤ k ≤ hi, inside the column's slots of nz
     @inbounds nz[k] += v
     return nothing
