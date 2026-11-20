@@ -69,7 +69,13 @@ const POTTSMODELS_GROUPS_TABLE = _load_pm_groups()
 # A caller that forwards its own command line (for example `julia runtests.jl Core`) can leave this
 # script's path in ARGS; that path is not a group, so it is dropped.
 const POTTSMODELS_SELECTED_GROUPS = let cli = filter(a -> normpath(abspath(a)) != normpath(abspath(@__FILE__)), ARGS)
-    raw = !isempty(cli) ? cli : (!isempty(strip(get(ENV, "GROUP", ""))) ? [strip(ENV["GROUP"])] : ["All"])
+    raw = if !isempty(cli)
+        cli
+    elseif !isempty(strip(get(ENV, "GROUP", "")))
+        [strip(ENV["GROUP"])]
+    else
+        ["All"]
+    end
     _resolve_pm_groups(POTTSMODELS_GROUPS_TABLE, raw)
 end
 

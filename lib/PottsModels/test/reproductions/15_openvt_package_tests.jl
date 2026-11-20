@@ -1351,8 +1351,11 @@ end
             cases = o1_cases(new)
             @test sort([get(r, "case", "") for r in ar]) == sort(vcat(cases, "O2"))
             for r in ar
-                want = r["case"] == "O2" ? (O2_ZIP, length(O2_K)) :
+                want = if r["case"] == "O2"
+                    (O2_ZIP, length(O2_K))
+                else
                     (o1_zip(r["case"]), length(o1_members(new, r["case"])))
+                end
                 @test get(r, "archive", "") == want[1] && parse(Int, r["members"]) == want[2] &&
                     parse(Int, r["bytes"]) > 0 && hex(r["sha256"])
             end

@@ -384,7 +384,13 @@ f64(x) = lowercase(x) == "nan" ? NaN : parse(Float64, x)
 # per-run series of one case from a timeseries table (r or R column)
 function record_series(ts, case; cycle)
     rows = [r for r in ts if r["case"] == case]
-    rc = isempty(rows) ? "r" : (haskey(first(rows), "R") ? "R" : "r")
+    rc = if isempty(rows)
+        "r"
+    elseif haskey(first(rows), "R")
+        "R"
+    else
+        "r"
+    end
     out = Dict{Int, Any}()
     for seed in unique(parse(Int, r["seed"]) for r in rows)
         rr = [r for r in rows if parse(Int, r["seed"]) == seed]

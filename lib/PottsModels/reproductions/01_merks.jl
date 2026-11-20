@@ -376,8 +376,11 @@ function tsv01b(path)
 end
 const DIGI_01B = joinpath(pkgdir(PottsModels), "test", "reproductions", "data", "01b")
 b01_verdicts = RECORD_01B === nothing ? Dict{String, String}[] : tsv01b(joinpath(RECORD_01B, "verdicts.tsv"))
-b01_causes = (RECORD_01B === nothing || !isfile(joinpath(RECORD_01B, "deviations.tsv"))) ? Dict{String, String}[] :
-             tsv01b(joinpath(RECORD_01B, "deviations.tsv"))
+b01_causes = if RECORD_01B === nothing || !isfile(joinpath(RECORD_01B, "deviations.tsv"))
+    Dict{String, String}[]
+else
+    tsv01b(joinpath(RECORD_01B, "deviations.tsv"))
+end
 b01_rows = filter(v -> !startswith(v["check"], "point ") && v["control"] == "false", b01_verdicts)
 b01_ctls = filter(v -> v["control"] == "true", b01_verdicts)
 mdcell(s) = replace(s, "|" => "\\|")
@@ -764,7 +767,13 @@ function anisotropy(σs)
         sxx, syy = mean((I[1] - ma[1])^2 for I in A), mean((I[2] - ma[2])^2 for I in A)
         sxy = mean((I[1] - ma[1]) * (I[2] - ma[2]) for I in A)
         λ = (sxx + syy) / 2 + sqrt(((sxx - syy) / 2)^2 + sxy^2)
-        e = abs(sxy) > 1e-12 ? (λ - syy, sxy) : (sxx >= syy ? (1.0, 0.0) : (0.0, 1.0))
+        e = if abs(sxy) > 1e-12
+            (λ - syy, sxy)
+        elseif sxx >= syy
+            (1.0, 0.0)
+        else
+            (0.0, 1.0)
+        end
         e = e ./ hypot(e...)
         d = mb .- ma
         pa = (d[1] * e[1] + d[2] * e[2])^2
@@ -800,10 +809,13 @@ else
     (; std = [run06(s, [1440]; lattice = (200, 200), n = 100) for s in 90001:90001],
         round = [run06(s, [1440]; lattice = (200, 200), n = 100, p = [:λ_L => 0.0]) for s in 90001:90001], t12 = 1440, t48 = nothing)
 end
-smoke08 = FULL ? nothing :
-          (; ci = [compactness(run08(s, [1000])[1000]) for s in 90011:90011],
-              noci = [compactness(run08(s, [1000]; p = [:χcc => 500.0])[1000]) for s in 90011:90011],
-              eo = [compactness(run08(s, [1000]; mode = :extension_only)[1000]) for s in 90011:90011])
+smoke08 = if FULL
+    nothing
+else
+    (; ci = [compactness(run08(s, [1000])[1000]) for s in 90011:90011],
+        noci = [compactness(run08(s, [1000]; p = [:χcc => 500.0])[1000]) for s in 90011:90011],
+        eo = [compactness(run08(s, [1000]; mode = :extension_only)[1000]) for s in 90011:90011])
+end
 walks = (; el = tmap(s -> walk(s; tend = FULL ? 2000 : 1000), FULL ? (1401:1410) : (90021:90021)),
     ro = tmap(s -> walk(s; p = [:L => 10.0, :λ_L => 50.0], tend = FULL ? 2000 : 1000), FULL ? (1411:1420) : (90021:90022)))
 nothing #hide
@@ -969,7 +981,15 @@ fig
 
 pf(ok) = ok ? "PASS" : "FAIL"
 binding(class) = class == "SMOKE+FULL" || (class == "FULL" && FULL)
-verdict(ok, class) = ok === nothing ? "see the FULL record table" : binding(class) ? pf(ok) : "info"
+function verdict(ok, class)
+    if ok === nothing
+        return "see the FULL record table"
+    elseif binding(class)
+        return pf(ok)
+    else
+        return "info"
+    end
+end
 fmt(x) = string(round(x; digits = 3))
 ms(v) = length(v) > 1 ? "$(fmt(mean(v))) ± $(fmt(std(v))) (n = $(length(v)))" : "$(fmt(mean(v))) (n = 1)"
 rows = []

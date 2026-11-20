@@ -274,10 +274,16 @@ function canon(u)
         k => [Float64.(collect(selectdim(v, ndims(v), c))) for c in order]
             for (k, v) in pairs(u.cell) if !(k in skip) && !startswith(String(k), "link")
     )
-    cl = haskey(u.cell, :cluster) ?
-        [sort([new[m] for m in live if u.cell.cluster[m] == u.cell.cluster[c]]) for c in order] : nothing
-    bonds = haskey(u.cell, :links__bond) ?
-        [sort([new[a] for a in u.cell.links__bond[:, c] if a != 0]) for c in order] : nothing
+    cl = if haskey(u.cell, :cluster)
+        [sort([new[m] for m in live if u.cell.cluster[m] == u.cell.cluster[c]]) for c in order]
+    else
+        nothing
+    end
+    bonds = if haskey(u.cell, :links__bond)
+        [sort([new[a] for a in u.cell.links__bond[:, c] if a != 0]) for c in order]
+    else
+        nothing
+    end
     return (; ownership = σ, cols, cl, bonds)
 end
 function same_canon(a, b)

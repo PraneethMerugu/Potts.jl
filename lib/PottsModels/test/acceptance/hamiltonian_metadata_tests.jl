@@ -160,7 +160,15 @@ end
 # H of the same state from `hamiltonian(sys)` by substitution: term 1 over dark cells, term 2
 # over light cells, term 3 over the bonds (kind/neighbor_kind bound per bond if the term reads them)
 function substituted_H(terms, σ, kinds, v)
-    kindnum(c) = c == 0 ? 0 : (kinds[c] === :dark ? 1 : 2)
+    function kindnum(c)
+        if c == 0
+            return 0
+        elseif kinds[c] === :dark
+            return 1
+        else
+            return 2
+        end
+    end
     H = 0.0
     for (t, k) in ((terms[1], :dark), (terms[2], :light)), c in eachindex(kinds)
         kinds[c] === k || continue

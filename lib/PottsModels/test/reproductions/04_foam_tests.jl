@@ -326,8 +326,11 @@ end
 
 @testitem "04 FULL record: every row from reproductions/data/04/full-*" setup = [FoamSetup] tags = [:pottsmodels, :reproductions] begin
     @testset "04 FULL record: every row from reproductions/data/04/full-*" begin
-        dirs = isdir(DATA) ? filter(d -> startswith(d, "full-") && isdir(joinpath(DATA, d)), readdir(DATA)) :
+        dirs = if isdir(DATA)
+            filter(d -> startswith(d, "full-") && isdir(joinpath(DATA, d)), readdir(DATA))
+        else
             String[]
+        end
         length(dirs) == 1 || @info "04: expected exactly one reproductions/data/04/full-* directory" dirs
         @test length(dirs) == 1
         if length(dirs) == 1
@@ -360,8 +363,11 @@ end
             @test length(sel(R["steady"]; set = "v2")) == 5 && all(r -> length(r["phi_50"]) == TV2 ÷ 50, sel(R["steady"]; set = "v2"))
             V = foam_verdicts(R)
             dev_f = joinpath(D, "deviations.tsv")
-            devs = isfile(dev_f) ? [Dict(zip(split(readline(dev_f), '\t'), split(l, '\t'))) for l in readlines(dev_f)[2:end]] :
+            devs = if isfile(dev_f)
+                [Dict(zip(split(readline(dev_f), '\t'), split(l, '\t'))) for l in readlines(dev_f)[2:end]]
+            else
                 Dict{String, String}[]
+            end
             check(V, devs; broken_ok = true)
             vt = split.(readlines(joinpath(D, "verdicts.tsv"))[2:end], '\t')
             for v in V

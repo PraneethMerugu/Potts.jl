@@ -629,8 +629,11 @@ end
 
 @testitem "15 openvt f3 f8 FULL record: F3 (cases f, b), F8 / V5 (cases a, e) and the controls" setup = [OpenVTF3F8Setup] tags = [:pottsmodels, :reproductions] begin
     @testset "15 openvt f3 f8 FULL record: F3 (cases f, b), F8 / V5 (cases a, e) and the controls" begin
-        dirs = isdir(DATA) ? filter(d -> startswith(d, "f3-f8-") && isdir(joinpath(DATA, d)), readdir(DATA)) :
+        dirs = if isdir(DATA)
+            filter(d -> startswith(d, "f3-f8-") && isdir(joinpath(DATA, d)), readdir(DATA))
+        else
             String[]
+        end
         length(dirs) == 1 || @info "15 openvt f3 f8: no record yet (expected exactly one reproductions/data/15/f3-f8-* directory)" dirs
         @test length(dirs) == 1
         if length(dirs) == 1

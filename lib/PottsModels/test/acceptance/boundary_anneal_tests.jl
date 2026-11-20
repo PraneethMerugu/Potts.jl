@@ -114,7 +114,13 @@ function bond_counts_09(σ, k)
         b = σ[mod1(x + dx, nx), mod1(y + dy, ny)]
         a == b && continue
         a == 0 && ((a, b) = (b, a))
-        key = b == 0 ? (k[a] == 1 ? :dM : :lM) : k[a] == k[b] ? (k[a] == 1 ? :dd : :ll) : :dl
+        key = if b == 0
+            k[a] == 1 ? :dM : :lM
+        elseif k[a] == k[b]
+            k[a] == 1 ? :dd : :ll
+        else
+            :dl
+        end
         n[key] += 1
     end
     return n

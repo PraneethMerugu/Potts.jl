@@ -140,8 +140,13 @@ function define(name::Symbol, ex::Expr)
     end
     return nothing
 end
-model(name::Symbol) = isdefined(@__MODULE__, name) ? getfield(@__MODULE__, name) :
-    error("cell reference helpers fixture $name did not build: $(get(DEFINE_ERRORS, name, "unknown"))")
+function model(name::Symbol)
+    if isdefined(@__MODULE__, name)
+        return getfield(@__MODULE__, name)
+    else
+        error("cell reference helpers fixture $name did not build: $(get(DEFINE_ERRORS, name, "unknown"))")
+    end
+end
 system(name::Symbol; sysname = :m) = Base.invokelatest(model(name); name = sysname)
 vol(u) = Array(u.cell.volume)
 col(u, n) = Array(getfield(u.cell, n))

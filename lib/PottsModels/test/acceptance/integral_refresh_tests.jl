@@ -233,7 +233,15 @@ function refresh_phases(M)
         )
 end
 # a refresh phase, gated or not, and the cell column it writes
-refresh_reduce(x) = x isa CorePotts.CellReduce ? x : x isa Potts._Gated && x.phase isa CorePotts.CellReduce ? x.phase : nothing
+function refresh_reduce(x)
+    if x isa CorePotts.CellReduce
+        return x
+    elseif x isa Potts._Gated && x.phase isa CorePotts.CellReduce
+        return x.phase
+    else
+        return nothing
+    end
+end
 refresh_dst(r) = typeof(r.dst).parameters[2]
 """Names of the integral columns refreshed by the phases `t`, in order (with repeats)."""
 refresh_refreshed(t) = Symbol[refresh_dst(r) for r in map(refresh_reduce, collect(t)) if r !== nothing]
@@ -433,8 +441,11 @@ end
         io, il = init(po, alg), init(pl, alg)
         foreach(_ -> (step!(io); step!(il)), 1:5)
         rs = map(1:15) do r
-            to, tl = isodd(r) ? (refresh_time(io; reps = 3), refresh_time(il; reps = 3)) :
+            to, tl = if isodd(r)
+                (refresh_time(io; reps = 3), refresh_time(il; reps = 3))
+            else
                 reverse((refresh_time(il; reps = 3), refresh_time(io; reps = 3)))
+            end
             to / tl
         end
         ok = minimum(rs) <= 1.5

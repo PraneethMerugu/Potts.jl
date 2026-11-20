@@ -153,20 +153,27 @@ function define(name::Symbol, ex::Expr)
     end
     return nothing
 end
-direction_model(name::Symbol) = isdefined(@__MODULE__, name) ? getfield(@__MODULE__, name) :
-    error("copy direction fixture $name did not build: $(get(DEFINE_ERRORS, name, "unknown"))")
+function direction_model(name::Symbol)
+    if isdefined(@__MODULE__, name)
+        return getfield(@__MODULE__, name)
+    else
+        error("copy direction fixture $name did not build: $(get(DEFINE_ERRORS, name, "unknown"))")
+    end
+end
 # ---------------------------------------------------------------------------------------
 # 1. Probe models for the host oracle.
 function probe_expr(name::Symbol, lattice::Expr, nd::Int)
-    drive = nd == 3 ?
+    drive = if nd == 3
         :(
-            a1 * direction[1] + a2 * direction[2] + a3 * direction[3] + bt * position[target][2] * direction[1] +
-            cs * position[source][1] * direction[2]
-        ) :
+                a1 * direction[1] + a2 * direction[2] + a3 * direction[3] + bt * position[target][2] * direction[1] +
+                cs * position[source][1] * direction[2]
+            )
+    else
         :(
-            a1 * direction[1] + a2 * direction[2] + bt * position[target][2] * direction[1] +
-            cs * position[source][1] * direction[2]
-        )
+                a1 * direction[1] + a2 * direction[2] + bt * position[target][2] * direction[1] +
+                cs * position[source][1] * direction[2]
+            )
+    end
     return :(
         @potts_model $name begin
             @kinds medium A B
@@ -223,8 +230,11 @@ probe_problem(M, dims; seed = 1) =
 # shell of NeighborOrder(4), and far pairs along every axis
 function offsets(nd)
     near = vec([Tuple(o) for o in Iterators.product(ntuple(_ -> -1:1, nd)...) if any(!=(0), Tuple(o))])
-    reach2 = nd == 2 ? [(2, 0), (-2, 0), (0, 2), (0, -2), (2, 1), (-1, 2), (-2, -1), (1, -2)] :
+    reach2 = if nd == 2
+        [(2, 0), (-2, 0), (0, 2), (0, -2), (2, 1), (-1, 2), (-2, -1), (1, -2)]
+    else
         [(2, 0, 0), (0, -2, 0), (0, 0, 2), (2, 1, 0), (0, -1, 2), (-2, 0, -1)]
+    end
     far = [ntuple(j -> j == k ? s : 0, nd) for k in 1:nd for s in (-5, -4, 4, 5)]
     return unique(vcat(near, reach2, far))
 end
@@ -347,8 +357,11 @@ direction_two() = (σ = zeros(Int32, LAT); σ[22:24, 3:7] .= 1; σ[1:2, 3:7] .= 
 direction_one() = (σ = zeros(Int32, LAT); σ[22:24, 7:11] .= 1; σ[1:2, 7:11] .= 1; σ)
 function direction_problem(which::Symbol, σ; T = Float64, p = Pair{Symbol, Float64}[], seed = 11, tspan = (0, 8))
     nc = maximum(σ)
-    op = which === :dir ? [ownership => σ, kind => fill(:A, nc)] :
+    op = if which === :dir
+        [ownership => σ, kind => fill(:A, nc)]
+    else
         [ownership => σ, kind => fill(:A, nc), :px => DIRECTION_PX, :py => DIRECTION_PY]
+    end
     M = which === :dir ? direction_model(:Dir) : DirectionRef
     prob = PottsProblem(M(; name = which), op, tspan; T, seed)
     return isempty(p) ? prob : remake(prob; p)

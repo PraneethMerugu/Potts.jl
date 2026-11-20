@@ -377,8 +377,11 @@ bulkfiles(s) = (d = joinpath(s, "bulk"); isdir(d) ? sort(readdir(d)) : String[])
 url(tag, f) = RELEASE_BASE * "$(tag)/$(f)"
 # the core's README*.md texts
 core_readmes(s) = (
-    z = joinpath(s, "core.zip"); isfile(z) ?
-        [m => String(zip_read(z, m)) for m in zip_names(z) if isreadme(m)] : Pair{String, String}[]
+    z = joinpath(s, "core.zip"); if isfile(z)
+        [m => String(zip_read(z, m)) for m in zip_names(z) if isreadme(m)]
+    else
+        Pair{String, String}[]
+    end
 )
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end

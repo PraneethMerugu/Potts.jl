@@ -94,7 +94,13 @@ function merks_anisotropy(σs)
             syy = mean((I[2] - ma[2])^2 for I in A)
             sxy = mean((I[1] - ma[1]) * (I[2] - ma[2]) for I in A)
             λ = (sxx + syy) / 2 + sqrt(((sxx - syy) / 2)^2 + sxy^2)
-            e = abs(sxy) > 1.0e-12 ? (λ - syy, sxy) : (sxx >= syy ? (1.0, 0.0) : (0.0, 1.0))
+            e = if abs(sxy) > 1.0e-12
+                (λ - syy, sxy)
+            elseif sxx >= syy
+                (1.0, 0.0)
+            else
+                (0.0, 1.0)
+            end
             e = e ./ hypot(e...)
             d = mb .- ma
             pa = (d[1] * e[1] + d[2] * e[2])^2

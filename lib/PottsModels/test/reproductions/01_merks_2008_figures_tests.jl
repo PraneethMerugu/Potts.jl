@@ -712,8 +712,11 @@ end
                         for q in rows if abs(parse(Float64, q["x"]) - t[3]) <= 0.02 + 1.0e-9
                 ]
                 sort!(sds)
-                med = isodd(length(sds)) ? sds[(end + 1) ÷ 2] :
+                med = if isodd(length(sds))
+                    sds[(end + 1) ÷ 2]
+                else
                     (sds[end ÷ 2] + sds[end ÷ 2 + 1]) / 2
+                end
                 @test t[5] ≈ figure_up(max(med, unc)) atol = 1.0e-9
             elseif t[1] == "F12"
                 @test t[5] ≈ figure_up(max(t[3] <= 1500 ? 0.03 : 0.025, unc)) atol = 1.0e-9
@@ -832,9 +835,11 @@ end
 
 @testitem "01b FULL record" setup = [Merks2008FiguresSetup] tags = [:pottsmodels, :reproductions] begin
     @testset "01b FULL record" begin
-        dirs = isdir(DATA) ?
-            filter(d -> startswith(d, "full-01b-") && isdir(joinpath(DATA, d)), readdir(DATA)) :
+        dirs = if isdir(DATA)
+            filter(d -> startswith(d, "full-01b-") && isdir(joinpath(DATA, d)), readdir(DATA))
+        else
             String[]
+        end
         @test length(dirs) == 1
         D = joinpath(DATA, first(dirs))
         for f in ("sweeps.tsv", "series.tsv", "verdicts.tsv", "provenance.toml")

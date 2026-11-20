@@ -98,9 +98,26 @@ const SQ4 = ((1, 0), (-1, 0), (0, 1), (0, -1))
 const SQ8 = Tuple((i, j) for i in -1:1 for j in -1:1 if (i, j) != (0, 0))
 const CU6 = ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1))
 const CU26 = Tuple((i, j, k) for k in -1:1 for j in -1:1 for i in -1:1 if (i, j, k) != (0, 0, 0))
-global_nbrs(geom, adj) = geom === :hex ? HEX : geom === :square ? (adj === :face ? SQ4 : SQ8) :
-    (adj === :face ? CU6 : CU26)
-global_shell(geom) = geom === :hex ? HEX : geom === :square ? SQ8 : CU26
+function global_nbrs(geom, adj)
+    if geom === :hex
+        return HEX
+    elseif geom === :square
+        return adj === :face ? SQ4 : SQ8
+    elseif adj === :face
+        return CU6
+    else
+        return CU26
+    end
+end
+function global_shell(geom)
+    if geom === :hex
+        return HEX
+    elseif geom === :square
+        return SQ8
+    else
+        return CU26
+    end
+end
 adjs(geom) = geom === :hex ? (:face,) : (:face, :full)
 dual(adj) = adj === :face ? :full : :face
 """`y` wrapped on a periodic lattice; `nothing` off a closed one."""

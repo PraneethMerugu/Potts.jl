@@ -110,10 +110,25 @@ using Potts: CorePotts
 const HEX = ((1, 0), (0, 1), (-1, 1), (-1, 0), (0, -1), (1, -1))
 const SQUARE = Tuple((i, j) for j in -1:1 for i in -1:1 if (i, j) != (0, 0))
 const CUBE = Tuple((i, j, k) for k in -1:1 for j in -1:1 for i in -1:1 if (i, j, k) != (0, 0, 0))
-connectivity_shell(geom) = geom === :hex ? HEX : geom === :square ? SQUARE : CUBE
+function connectivity_shell(geom)
+    if geom === :hex
+        return HEX
+    elseif geom === :square
+        return SQUARE
+    else
+        return CUBE
+    end
+end
 isface(geom, o) = geom === :hex || sum(abs, o) == 1
-connectivity_adj(geom, adjacency, a, b) = geom === :hex ? (a .- b) in HEX :
-    adjacency === :face ? sum(abs, a .- b) == 1 : maximum(abs, a .- b) == 1
+function connectivity_adj(geom, adjacency, a, b)
+    if geom === :hex
+        return (a .- b) in HEX
+    elseif adjacency === :face
+        return sum(abs, a .- b) == 1
+    else
+        return maximum(abs, a .- b) == 1
+    end
+end
 """Number of components of `sites` under `adj` that contain a site with `touch(site)`."""
 function ncomp(sites, adj; touch = _ -> true)
     seen = falses(length(sites))
@@ -327,7 +342,13 @@ function configs(geom, periodic, nin, old, new)
         # ≤ 3 or ≥ 23; the rest of the shell alternates between `new` and a third label.
         # Plus a fixed random sample over the labels (2000, or 1500 for the other cases).
         out = Vector{Vector{Int}}()
-        lo, hi, nrand = (old, new) == (1, 0) ? (4, 22, 0) : (old, new) == (1, 3) ? (3, 23, 2000) : (-1, 27, 1500)
+        lo, hi, nrand = if (old, new) == (1, 0)
+            (4, 22, 0)
+        elseif (old, new) == (1, 3)
+            (3, 23, 2000)
+        else
+            (-1, 27, 1500)
+        end
         alt = new == 0 ? first(others) : 0
         for m in 0:(2^26 - 1)
             k = count_ones(m)
@@ -351,7 +372,13 @@ function configs(geom, periodic, nin, old, new)
 end
 """Runs every config of a scene through `models` (prefix => oracle); returns counts."""
 function connectivity_enumerate(geom, periodic, x, prefixes)
-    dims = geom === :cubic ? (5, 5, 5) : geom === :hex ? (9, 8) : (7, 7)
+    dims = if geom === :cubic
+        (5, 5, 5)
+    elseif geom === :hex
+        (9, 8)
+    else
+        (7, 7)
+    end
     per = ntuple(_ -> periodic, length(dims))
     y = Base.setindex(x, x[1] + 2, 1)
     shellsites = connectivity_shellsites(dims, x, geom, per)

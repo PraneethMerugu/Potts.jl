@@ -44,9 +44,13 @@ end
 function _unwrap_track(points, dims, periodic, ::Val{N}) where {N}
     length(dims) == N ||
         throw(ArgumentError("unwrap_track: `dims` has $(length(dims)) entries, the points are $(N)D"))
-    per = periodic isa Bool ? ntuple(_ -> periodic, Val(N)) :
-          (length(periodic) == N ? ntuple(d -> Bool(periodic[d]), Val(N)) :
-           throw(ArgumentError("unwrap_track: `periodic` has $(length(periodic)) entries, the points are $(N)D")))
+    per = if periodic isa Bool
+        ntuple(_ -> periodic, Val(N))
+    elseif length(periodic) == N
+        ntuple(d -> Bool(periodic[d]), Val(N))
+    else
+        throw(ArgumentError("unwrap_track: `periodic` has $(length(periodic)) entries, the points are $(N)D"))
+    end
     L = ntuple(d -> Float64(dims[d]), Val(N))
     all(l -> l > 0, L) || throw(ArgumentError("unwrap_track: the periods must be positive, got $dims"))
     pts = _track_points(points, Val(N), "unwrap_track")

@@ -186,12 +186,18 @@ function draft_tsv(path)
     return head, [Dict(zip(head, String.(split(l, '\t')))) for l in ls[2:end]]
 end
 draft_f(s) = parse(Float64, s)
-draft_dirs(prefix) = isdir(DATA) ? sort(
-        filter(
-            d -> startswith(d, prefix) && isdir(joinpath(DATA, d)),
-            readdir(DATA)
-        )
-    ) : String[]
+function draft_dirs(prefix)
+    if isdir(DATA)
+        return sort(
+                filter(
+                    d -> startswith(d, prefix) && isdir(joinpath(DATA, d)),
+                    readdir(DATA)
+                )
+            )
+    else
+        return String[]
+    end
+end
 function draft_table1()
     _, rows = draft_tsv(joinpath(DATA, SWEEPS, "table1.tsv"))
     return rows

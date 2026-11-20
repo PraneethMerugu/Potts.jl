@@ -88,8 +88,13 @@ function define(name::Symbol, ex::Expr)
     end
     return nothing
 end
-class_model(name::Symbol) = isdefined(@__MODULE__, name) ? getfield(@__MODULE__, name) :
-    error("kind classes fixture $name did not build: $(get(DEFINE_ERRORS, name, "unknown"))")
+function class_model(name::Symbol)
+    if isdefined(@__MODULE__, name)
+        return getfield(@__MODULE__, name)
+    else
+        error("kind classes fixture $name did not build: $(get(DEFINE_ERRORS, name, "unknown"))")
+    end
+end
 """The exception `f()` throws and its message (`nothing, ""` if it throws none); a macro
 expansion error arrives wrapped in a `LoadError` and is unwrapped."""
 function class_error(f)

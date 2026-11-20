@@ -196,8 +196,13 @@ merks2008_denovo(; lattice = (202, 202), n = 360, rounds = 10, region = (3:(latt
         Eden(RandomPoints(n; region, replace = true, seed); rounds, kinds = [:endothelial], seed,
             neighborhood = Moore(1), shortfall = :allow))
 
-_merks_choice(x, allowed, model, key) = x in allowed ? x :
-                                        throw(ArgumentError("$model: `$key` must be one of $(join(repr.(allowed), ", ")), got $(repr(x))"))
+function _merks_choice(x, allowed, model, key)
+    if x in allowed
+        return x
+    else
+        throw(ArgumentError("$model: `$key` must be one of $(join(repr.(allowed), ", ")), got $(repr(x))"))
+    end
+end
 
 """
     Merks2006(; name, lattice = (500, 500), rule = :soft, …)

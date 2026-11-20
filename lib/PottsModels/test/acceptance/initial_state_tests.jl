@@ -231,8 +231,13 @@ const INITIAL_A1 = [
     ("hex, r = 2", (21, 21), (11, 11), 2.0, 4, 13, 19, true),
 ]
 initial_shape(c, r) = length(c) == 2 ? Circle(Point(Float64.(c)...), r) : Sphere(Point(Float64.(c)...), r)
-initial_target(dims, hex) = hex ? Lattice(dims; geometry = Hexagonal(), boundary = Closed()) :
-    Lattice(dims; boundary = Closed())
+function initial_target(dims, hex)
+    if hex
+        return Lattice(dims; geometry = Hexagonal(), boundary = Closed())
+    else
+        return Lattice(dims; boundary = Closed())
+    end
+end
 # ---------------------------------------------------------------------------------------
 # 7. `Group` and `cluster` (brief §4.A5 a–f; 2D 10×10 closed)
 const BODY = () -> Group(

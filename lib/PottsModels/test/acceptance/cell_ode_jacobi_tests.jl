@@ -170,8 +170,15 @@ const DEAD = 4
 # Explicit Euler (h = 1): y ← w − y, z ← w. RK4 (one step): the linear decay toward the held
 # target scales the deviation by R(−λ) = 1 − λ + λ²/2 − λ³/6 + λ⁴/24. Adaptive: the exact
 # solution, deviation × e^(−λ).
-decay(solver, λ) = solver === :ee ? 1 - λ :
-    solver === :rk4 ? 1 - λ + λ^2 / 2 - λ^3 / 6 + λ^4 / 24 : exp(-λ)
+function decay(solver, λ)
+    if solver === :ee
+        return 1 - λ
+    elseif solver === :rk4
+        return 1 - λ + λ^2 / 2 - λ^3 / 6 + λ^4 / 24
+    else
+        return exp(-λ)
+    end
+end
 function mixed_oracle(y0, z0, m; ysolver = :ee, zsolver = :ee)
     ys = [copy(y0)]; zs = [copy(z0)]
     for _ in 1:m

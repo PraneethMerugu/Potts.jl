@@ -149,8 +149,13 @@ function define(name::Symbol, ex::Expr)
     end
     return nothing
 end
-model(name::Symbol) = isdefined(@__MODULE__, name) ? getfield(@__MODULE__, name) :
-    error("cell references fixture $name did not build: $(get(DEFINE_ERRORS, name, "unknown"))")
+function model(name::Symbol)
+    if isdefined(@__MODULE__, name)
+        return getfield(@__MODULE__, name)
+    else
+        error("cell references fixture $name did not build: $(get(DEFINE_ERRORS, name, "unknown"))")
+    end
+end
 system(name::Symbol; sysname = :m) = Base.invokelatest(model(name); name = sysname)
 vol(u) = Array(u.cell.volume)
 col(u, n) = Array(getfield(u.cell, n))
@@ -386,7 +391,13 @@ function reference_credit(u, a, prop)
 end
 function gap(prob, u, prop; credit = :potts)
     a = apply(prob, u, prop)
-    c = credit === :potts ? Potts._killing_credit(prob, u, prop, a) : credit === :oracle ? reference_credit(u, a, prop) : 0.0
+    c = if credit === :potts
+        Potts._killing_credit(prob, u, prop, a)
+    elseif credit === :oracle
+        reference_credit(u, a, prop)
+    else
+        0.0
+    end
     return energy_change(prob, u, prop) - (total_energy(prob, a) - total_energy(prob, u)) - c
 end
 # a reference-reading energy that reads what a copy changes (refused, section D)

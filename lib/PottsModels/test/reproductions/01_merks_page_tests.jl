@@ -474,19 +474,28 @@ const PAGE_H4 = heading_line(r"^# ## 4\.")
 # D-185 layout: the deviations section (a `# ###` subsection of §3, to the next heading) and
 # the Details section (§4, to the end of the page)
 const HDEV = heading_line(r"^# ### .*[Dd]eviations")
-const HDEV_END = HDEV === nothing ? nothing :
+const HDEV_END = if HDEV === nothing
+    nothing
+else
     let k = findfirst(l -> occursin(r"^# ###? ", l), LINES[(HDEV + 1):end])
-        k === nothing ? length(LINES) + 1 : HDEV + k
+                k === nothing ? length(LINES) + 1 : HDEV + k
+        end
 end
 page_lines(a, b) = (a === nothing || b === nothing) ? "" : join(LINES[a:(b - 1)], '\n')
 const DEV = page_lines(HDEV, HDEV_END)
 const DETAILS = page_lines(PAGE_H4, length(LINES) + 1)
 const BEGINS = findall(l -> strip(l) == BEGIN, LINES)
 const ENDS = findall(l -> strip(l) == END, LINES)
-const CHUNK = (length(BEGINS) == 1 && length(ENDS) == 1 && BEGINS[1] < ENDS[1]) ?
-    join(LINES[(BEGINS[1] + 1):(ENDS[1] - 1)], '\n') : ""
-const OUTSIDE = isempty(CHUNK) ? SRC :
+const CHUNK = if length(BEGINS) == 1 && length(ENDS) == 1 && BEGINS[1] < ENDS[1]
+    join(LINES[(BEGINS[1] + 1):(ENDS[1] - 1)], '\n')
+else
+    ""
+end
+const OUTSIDE = if isempty(CHUNK)
+    SRC
+else
     join([LINES[1:(BEGINS[1] - 1)]; LINES[(ENDS[1] + 1):end]], '\n')
+end
 function md_rows(text)
     rows = Vector{Vector{String}}()
     for l in split(text, '\n')

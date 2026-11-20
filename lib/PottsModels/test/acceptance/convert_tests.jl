@@ -161,8 +161,13 @@ function define(name::Symbol, ex::Expr)
     end
     return nothing
 end
-convert_model(name::Symbol) = isdefined(@__MODULE__, name) ? getfield(@__MODULE__, name) :
-    error("convert fixture $name did not build: $(get(DEFINE_ERRORS, name, "unknown"))")
+function convert_model(name::Symbol)
+    if isdefined(@__MODULE__, name)
+        return getfield(@__MODULE__, name)
+    else
+        error("convert fixture $name did not build: $(get(DEFINE_ERRORS, name, "unknown"))")
+    end
+end
 system(name::Symbol; sysname = :m) = Base.invokelatest(convert_model(name); name = sysname)
 # the build error of a source (nothing if it builds), for the error-message tests
 function build_error(ex::Expr; compile = true)

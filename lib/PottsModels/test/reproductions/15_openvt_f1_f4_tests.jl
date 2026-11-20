@@ -208,7 +208,13 @@ function segments(scene)
         (p isa Makie.Lines || p isa Makie.LineSegments) || continue
         pts = [(Float64(q[1]), Float64(q[2])) for q in p[1][]]
         col = p.color[]
-        colour(k) = col isa AbstractVector ? (k <= length(col) ? col[k] : nothing) : col
+        function colour(k)
+            if col isa AbstractVector
+                return k <= length(col) ? col[k] : nothing
+            else
+                return col
+            end
+        end
         if p isa Makie.LineSegments
             for k in 1:2:(length(pts) - 1)
                 push!(segs, (pts[k], pts[k + 1], colour(k)))

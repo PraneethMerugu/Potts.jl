@@ -489,7 +489,11 @@ function openvt_spread_compare(ref::AbstractVector{<:Real}, alt::AbstractVector{
     sd_ref, sd_alt = _spread_sd(ref, mean_ref), _spread_sd(alt, mean_alt)
     diff = mean_alt - mean_ref
     se = sqrt(sd_ref^2 / n_ref + sd_alt^2 / n_alt)
-    zs = se == 0 ? (diff == 0 ? 0.0 : copysign(Inf, diff)) : diff / se
+    zs = if se == 0
+        diff == 0 ? 0.0 : copysign(Inf, diff)
+    else
+        diff / se
+    end
     return (; n_ref, n_alt, mean_ref, mean_alt, sd_ref, sd_alt, diff, se, z = zs, beyond = abs(zs) > z)
 end
 

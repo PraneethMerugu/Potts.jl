@@ -99,7 +99,15 @@ const ALGS = (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal =
 component_shift(real, coupling) = component_model(component_node(; real), :xc, :(@equations $coupling); L = 16)
 """Node values of cells 1–6 at t = 0…4 (as 0/1 integers; anything else is -1), per algorithm."""
 function ticks(m)
-    bit(x) = x == 1 ? 1 : (x == 0 ? 0 : -1)
+    function bit(x)
+        if x == 1
+            return 1
+        elseif x == 0
+            return 0
+        else
+            return -1
+        end
+    end
     prob = PottsProblem(m, COMPONENT_OP, (0, 4))
     return [
         [[bit(getproperty(u.cell, Symbol("xc₊X"))[c]) for c in 1:6] for u in solve(prob, alg; saveat = 0:4).u]

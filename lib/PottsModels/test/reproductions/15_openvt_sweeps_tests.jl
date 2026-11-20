@@ -285,8 +285,11 @@ end
 
 @testitem "15 openvt sweeps FULL record: V1, V2, V2b, V3, V3b, F7 and the controls" setup = [OpenVTSweepsSetup] tags = [:pottsmodels, :reproductions] begin
     @testset "15 openvt sweeps FULL record: V1, V2, V2b, V3, V3b, F7 and the controls" begin
-        dirs = isdir(DATA) ? filter(d -> startswith(d, "sweeps-") && isdir(joinpath(DATA, d)), readdir(DATA)) :
+        dirs = if isdir(DATA)
+            filter(d -> startswith(d, "sweeps-") && isdir(joinpath(DATA, d)), readdir(DATA))
+        else
             String[]
+        end
         length(dirs) == 1 || @info "15 openvt sweeps: no record yet (expected exactly one reproductions/data/15/sweeps-* directory)" dirs
         @test length(dirs) == 1
         if length(dirs) == 1

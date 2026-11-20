@@ -189,8 +189,12 @@ function _openvt_pkg_build(out, recs, o1, bulk)
     mkpath(res)
     rec(k) = joinpath(_OPENVT_PKG_DATA, recs[k])
     prov = Dict(k => TOML.parsefile(joinpath(rec(k), "provenance.toml")) for k in keys(recs))
-    meta = Dict(k => (isfile(joinpath(rec(k), "meta.toml")) ? TOML.parsefile(joinpath(rec(k), "meta.toml")) :
-                      Dict{String, Any}()) for k in keys(recs))
+    function read_meta(k)
+        path = joinpath(rec(k), "meta.toml")
+        isfile(path) || return Dict{String, Any}()
+        return TOML.parsefile(path)
+    end
+    meta = Dict(k => read_meta(k) for k in keys(recs))
     facts = _openvt_pkg_facts(recs, meta)
 
     # implementations/Potts.jl
@@ -477,8 +481,11 @@ end
 # the O1 post-processing record (the D-215 post-processing of the O1 re-run record `raw`): O1 members by case
 # (in member order), the archives (O1 per case and the O2 zip), the O2 files
 function _openvt_pkg_o1(rec, raw, o2runs)
-    need(f) = (p = joinpath(rec, f); isfile(p) ? _openvt_pkg_tsv(p)[2] :
-            throw(ArgumentError("openvt_submission_package: the O1 post-processing record has no $f"))
+    need(f) = (p = joinpath(rec, f); if isfile(p)
+        _openvt_pkg_tsv(p)[2]
+    else
+        throw(ArgumentError("openvt_submission_package: the O1 post-processing record has no $f"))
+    end
     )
     src = get(TOML.parsefile(joinpath(rec, "provenance.toml")), "source", "")
     src == raw || throw(ArgumentError("openvt_submission_package: the O1 post-processing record maps $(repr(src)), not the O1 re-run record $raw"))
@@ -1116,8 +1123,11 @@ function _openvt_pkg_results_readme(recs, prov, meta, facts, o1)
     nfiles = sum(length, values(o1.members))
     # the case (b) seeds of the Figure 5 runs, as `seed = <offset> + k` when they are consecutive
     offs = unique(s - k for (k, s) in o1.o2runs)
-    o2seed = length(offs) == 1 ? "seed $(only(offs)) + k" :
+    o2seed = if length(offs) == 1
+        "seed $(only(offs)) + k"
+    else
         "seeds $(minimum(values(o1.o2runs)))–$(maximum(values(o1.o2runs))), by run k in the Figure 5 record's `runs.tsv`"
+    end
     print(io, """
     | `Monolayer/<stem>.zip` | O1 per-cell time series, one zip per case: $(o1zips). One file per run and save (MCS 0, every $(_OPENVT_PKG_GRID) MCS and the stop; $(nfiles) files in all), `<stem>/s<seed>/potts_<case>_s<seed>_<MCS:06d>.csv`, one row per live cell. Unzipped in `Monolayer/`, the files land in `Monolayer/<stem>/s<seed>/` | `x`, `y` (R, from the lattice centre), `i` (inhibition code: 0 growing, 1 type 1, 2 type 2, 3 both), `n` (number of neighbour cells), `g` (1 if i = 0, else 0; the column `metrics.cpp` reads) |
     | `Monolayer/$(_OPENVT_PKG_O1_MANIFEST)` | every O1 file: its zip, name, row count, size and sha256 | `archive`, `file`, `rows` (cells), `bytes`, `sha256` |

@@ -85,8 +85,11 @@ function update_names(e)
             push!(out, update_name(y))
         elseif UPDATE_SU.iscall(y)
             op = UPDATE_SU.operation(y)
-            op isa UPDATE_SU.BasicSymbolic && UPDATE_SU.issym(op) ? push!(out, update_name(op)) :
+            if op isa UPDATE_SU.BasicSymbolic && UPDATE_SU.issym(op)
+                push!(out, update_name(op))
+            else
                 foreach(walk, UPDATE_SU.arguments(y))
+            end
         end
     )
     walk(e)

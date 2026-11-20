@@ -34,7 +34,21 @@ const TARGETS = [
     (:beta, 1.1), (:beta, 2.0), (:beta, 5.0), (:beta, 10.0), (:beta, 20.0),
     (:gamma, 5.0), (:gamma, 10.0), (:gamma, 20.0),
 ]
-inhibition_n1(sweep, q) = sweep === :beta ? (q == 0 ? 10 : q in V2B ? 5 : 1) : (q == 1 ? 5 : 1)
+function inhibition_n1(sweep, q)
+    if sweep === :beta
+        if q == 0
+            return 10
+        elseif q in V2B
+            return 5
+        else
+            return 1
+        end
+    elseif q == 1
+        return 5
+    else
+        return 1
+    end
+end
 inhibition_seed(sweep, q, k) = (sweep === :beta ? 160_000_000 : 170_000_000) + 100q + k
 params(sweep, q) = sweep === :beta ? (q / 10_000, 0.0) : (0.0, q / 10_000)
 seed_smoke(k) = 95_400 + k
@@ -52,9 +66,13 @@ const V3_MARGIN = 0.05
 const V2B_RATIO = (0.75, 1.25)
 const V3B_BAND = (61.0, 70.0)
 const F7_MIN = 0.9
-inhibition_band(sweep, m) = sweep === :beta ?
-    (V2_SPREAD[m][1] - V2_MARGIN[m], V2_SPREAD[m][2] + V2_MARGIN[m]) :
-    (V3_SPREAD[m][1] - V3_MARGIN, V3_SPREAD[m][2] + V3_MARGIN)
+function inhibition_band(sweep, m)
+    if sweep === :beta
+        return (V2_SPREAD[m][1] - V2_MARGIN[m], V2_SPREAD[m][2] + V2_MARGIN[m])
+    else
+        return (V3_SPREAD[m][1] - V3_MARGIN, V3_SPREAD[m][2] + V3_MARGIN)
+    end
+end
 inhibition_mid(m) = m == 1.1 ? "1.1x" : string(Int(m), "x")
 inhibition_row(sweep, m) = (sweep === :beta ? "V2." : "V3.") * inhibition_mid(m)
 const ROWS = [

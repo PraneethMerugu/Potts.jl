@@ -81,8 +81,13 @@ function define(name::Symbol, ex::Expr)
     end
     return nothing
 end
-ownership_model(name::Symbol) = isdefined(@__MODULE__, name) ? getfield(@__MODULE__, name) :
-    error("convert fixture $name did not build: $(get(DEFINE_ERRORS, name, "unknown"))")
+function ownership_model(name::Symbol)
+    if isdefined(@__MODULE__, name)
+        return getfield(@__MODULE__, name)
+    else
+        error("convert fixture $name did not build: $(get(DEFINE_ERRORS, name, "unknown"))")
+    end
+end
 system(name::Symbol; sysname = :m) = Base.invokelatest(ownership_model(name); name = sysname)
 vol(u) = Array(u.cell.volume)
 col(u, n) = Array(getfield(u.cell, n))
@@ -197,8 +202,19 @@ struct Trigger
     member::Int32   # member 2's event
     lone::Int32     # lone cell 3's event
 end
-(t::Trigger)(st, p, ctx, key, mcs, c) =
-    mcs != 0 ? EVENT_NONE : c == 1 ? t.root : c == 2 ? t.member : c == 3 ? t.lone : EVENT_NONE
+function (t::Trigger)(st, p, ctx, key, mcs, c)
+    if mcs != 0
+        return EVENT_NONE
+    elseif c == 1
+        return t.root
+    elseif c == 2
+        return t.member
+    elseif c == 3
+        return t.lone
+    else
+        return EVENT_NONE
+    end
+end
 struct Kind end
 (::Kind)(st, p, ctx, key, mcs, c) = st.cell.q[c] >= 10 ? Int32(3) : st.cell.kind[c]
 struct Normal end
@@ -236,8 +252,13 @@ function a17_problem(trig; T = Float64, tspan = (0, 1))
     return remake(prob; f = g)
 end
 # the new combinator, or a clean error today
-ownership_transitioning(e) = isdefined(CorePotts, :transitioning) ? CorePotts.transitioning(e) :
-    error("CorePotts.transitioning is not defined")
+function ownership_transitioning(e)
+    if isdefined(CorePotts, :transitioning)
+        return CorePotts.transitioning(e)
+    else
+        error("CorePotts.transitioning is not defined")
+    end
+end
 # (kind, q, tagk) of the alive cells, sorted; cells of the cluster (not the lone cell 3)
 ownership_cells(u; skip = ()) = sort(
     [

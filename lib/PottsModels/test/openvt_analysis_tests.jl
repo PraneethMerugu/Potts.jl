@@ -179,7 +179,13 @@ end
         function cpp_graham(q)
             q = copy(q)
             p0 = q[argmin([(p[2], p[1]) for p in q])]
-            o(a, b, c) = (v = cpp_orient(a, b, c); v < 0 ? -1 : v > 0 ? 1 : 0)
+            o(a, b, c) = (v = cpp_orient(a, b, c); if v < 0
+                -1
+            elseif v > 0
+                1
+            else
+                0
+            end)
             d2(a) = (p0[1] - a[1]) * (p0[1] - a[1]) + (p0[2] - a[2]) * (p0[2] - a[2])
             sort!(q; lt = (a, b) -> (s = o(p0, a, b); s == 0 ? d2(a) < d2(b) : s < 0))
             h = Int[]

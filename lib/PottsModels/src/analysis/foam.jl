@@ -61,13 +61,19 @@ function _unlike_pairs(σ, dims::NTuple{N, Int}, periodic::NTuple{N, Bool}, mask
 end
 _in_mask(::Nothing, x) = true
 _in_mask(mask, x) = @inbounds mask[x]         # mask has the lattice's (= σ's) size
+# coordinate `v` wrapped once onto `1:n`
+function _wrap_once(v, n)
+    v < 1 && return v + n
+    v > n && return v - n
+    return v
+end
 # x + o on the lattice: wraps on periodic axes, `inside = false` off a closed one. The
 # relation rejects offsets that alias under a periodic axis, so |o_d| < dims_d and one wrap
 # suffices.
 @inline function _neighbor(x::NTuple{N, Int}, o::NTuple{N, Int32}, dims, periodic) where {N}
     y = ntuple(d -> x[d] + Int(o[d]), Val(N))
     inside = all(ntuple(d -> periodic[d] || 1 <= y[d] <= dims[d], Val(N)))
-    w = ntuple(d -> y[d] < 1 ? y[d] + dims[d] : (y[d] > dims[d] ? y[d] - dims[d] : y[d]), Val(N))
+    w = ntuple(d -> _wrap_once(y[d], dims[d]), Val(N))
     return inside, w
 end
 

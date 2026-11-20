@@ -286,8 +286,11 @@ end
 function Potts.paint!(op::Potts.LayoutState, l::Clipper, lat)
     id = Potts.new_cell!(op, :c)
     Potts.assign!(op, (1:2, 1:2), id)
-    l.clipped === nothing ? Potts.record!(op; requested = 1, painted = 1) :
+    if l.clipped === nothing
+        Potts.record!(op; requested = 1, painted = 1)
+    else
         Potts.record!(op; requested = 1, painted = 1, clipped = l.clipped)
+    end
     return nothing
 end
 struct Silent <: AbstractLayout end
@@ -347,7 +350,15 @@ end
         @test !haskey(cp["deps"], "GeometryBasics")
         # no PottsModels source names StableRNG(s) (docstrings and comments may)
         names = Set{Symbol}()
-        walk(ex) = ex isa Symbol ? push!(names, ex) : ex isa Expr ? foreach(walk, ex.args) : nothing
+        function walk(ex)
+            if ex isa Symbol
+                return push!(names, ex)
+            elseif ex isa Expr
+                return foreach(walk, ex.args)
+            else
+                return nothing
+            end
+        end
         srcs = String[]
         for (dir, _, fs) in walkdir(joinpath(pkgdir(PottsModels), "src")), f in fs
             endswith(f, ".jl") && push!(srcs, joinpath(dir, f))
@@ -439,9 +450,13 @@ end
         ]
         for (target, region, n, hex) in cases, seed in (1, 2, 99)
             dims, per, _, mask = meta(target)
-            sites = region === nothing ? [x for x in CartesianIndices(dims) if mask === nothing || mask[x]] :
-                region isa Tuple ? [x for x in CartesianIndices(region) if mask === nothing || mask[x]] :
+            sites = if region === nothing
+                [x for x in CartesianIndices(dims) if mask === nothing || mask[x]]
+            elseif region isa Tuple
+                [x for x in CartesianIndices(region) if mask === nothing || mask[x]]
+            else
                 ballsites(Tuple(region.center), region.r, target)
+            end
             pts = Potts.points(RandomPoints(n; region, seed), target)
             @test pts isa Vector{<:Point} && eltype(pts) === Point{length(dims), Float64}
             @test [Tuple(p) for p in pts] == [cart(Tuple(x), hex) for x in voronoi_draws(sites, n, seed)]

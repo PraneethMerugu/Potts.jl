@@ -216,9 +216,14 @@ function edge_guard(margin::Integer; terminate::Bool = false, every::Integer = 1
     every >= 1 || throw(ArgumentError("edge_guard: `every` must be ≥ 1, got $every"))
     g = _EdgeGuard(Int(margin), Ref{Any}(nothing))
     condition(u, t, integ) = t % every == 0 && g(u.ownership)
-    affect!(integ) = terminate ? terminate!(integ, ReturnCode.Failure) :
-                     throw(DomainError(margin, "edge_guard: a cell came within $margin sites of the lattice edge " *
-                                               "at MCS $(integ.t); use a larger lattice"))
+    function affect!(integ)
+        if terminate
+            return terminate!(integ, ReturnCode.Failure)
+        else
+            throw(DomainError(margin, "edge_guard: a cell came within $margin sites of the lattice edge " *
+                "at MCS $(integ.t); use a larger lattice"))
+        end
+    end
     return DiscreteCallback(condition, affect!; save_positions = (false, false))     # one save of the last MCS
 end
 

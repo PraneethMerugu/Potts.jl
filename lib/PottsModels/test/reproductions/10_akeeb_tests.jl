@@ -213,11 +213,14 @@ end
 
 # A lattice from a picture: rows top (y = Y) to bottom (y = 1), σ[x, y].
 akeeb_lattice(rows) = (Y = length(rows); [rows[Y - y + 1][x] for x in eachindex(rows[1]), y in 1:Y])
-const AKEEB_SMOKE = AKEEB_FULL ? nothing :
+const AKEEB_SMOKE = if AKEEB_FULL
+    nothing
+else
     (
-        P1 = akeeb_run(POINTS.P1, akeeb_seed.(1, 1:4)), P7 = akeeb_run(POINTS.P7, akeeb_seed.(7, 1:2)),
-        P8 = akeeb_run(POINTS.P8, akeeb_seed.(8, 1:2)),
-    )
+            P1 = akeeb_run(POINTS.P1, akeeb_seed.(1, 1:4)), P7 = akeeb_run(POINTS.P7, akeeb_seed.(7, 1:2)),
+            P8 = akeeb_run(POINTS.P8, akeeb_seed.(8, 1:2)),
+        )
+end
 # ---------------------------------------------------------------------------------------------
 # FULL-record rows (D-156; recomputed under D-163): V-A6 and the full-sweep
 # form of V-A7 need the 13,310-run sweep, so they bind in the committed record. The test

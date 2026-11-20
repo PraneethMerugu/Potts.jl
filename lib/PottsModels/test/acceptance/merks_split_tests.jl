@@ -369,7 +369,15 @@ end
             field_solver = SOLVER
         )
         u8 = merks_split_first(prob8)
-        kind8(c) = c == 0 ? 0 : c == 1 ? 2 : 1
+        function kind8(c)
+            if c == 0
+                return 0
+            elseif c == 1
+                return 2
+            else
+                return 1
+            end
+        end
         props8 = proposals(prob8, u8, N20)
         @test length(props8) > 300
         H8 = merks_split_energy(Array(u8.ownership), kind8, prob8.p, N20)
@@ -507,7 +515,15 @@ end
             M(; name = :m, lattice = (20, 20)), [merks_split_op(σ0); :T => 200.0; extra...], (0, 5);
             field_solver = SOLVER, seed = 7
         )
-        kd(c) = c == 0 ? 0 : c == 1 ? 2 : 1
+        function kd(c)
+            if c == 0
+                return 0
+            elseif c == 1
+                return 2
+            else
+                return 1
+            end
+        end
         p = prob.p
         sol = solve(prob, SequentialCPM(); saveat = 1)
         frame = σ0 .== 1
@@ -541,7 +557,15 @@ end
         @test prob.p.t_relax == 100
         sol = solve(prob, SequentialCPM(); saveat = 1)
         @test sol.t[101] == 100 && sol.t[102] == 101
-        kd(c) = c == 0 ? 0 : c == 1 ? 2 : 1
+        function kd(c)
+            if c == 0
+                return 0
+            elseif c == 1
+                return 2
+            else
+                return 1
+            end
+        end
         @test all(u -> all(==(0.0), merks_split_c(u)), sol.u[1:101])                          # MCS 0–99: no field
         c100, σ100, c101 = merks_split_c(sol.u[101]), Array(sol.u[101].ownership), merks_split_c(sol.u[102])
         @test maximum(abs, c101 .- merks_split_field(c100, σ100, kd, prob.p)) < 1.0e-12         # MCS 100: the field

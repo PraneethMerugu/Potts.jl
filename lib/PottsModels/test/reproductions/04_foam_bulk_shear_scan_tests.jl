@@ -307,7 +307,13 @@ synth(tf, n1; grid = GRID) = [
 ]
 """t ∝ 1/κ_b through the targets at κ01 (β = 0.01) and κ05 (β = 0.05); others ∝ 1/(κβ)."""
 pow(κ01, κ05; cap = 2^16) = (κ, β, k) -> begin
-    t = β == 0.01 ? 4300κ01 / κ : β == 0.05 ? 420κ05 / κ : 43κ01 / (κ * β)
+    t = if β == 0.01
+        4300κ01 / κ
+    elseif β == 0.05
+        420κ05 / κ
+    else
+        43κ01 / (κ * β)
+    end
     t > cap ? -1 : round(Int, t)
 end
 scan_cons(κc; who = 1:SCAN_N) = (κ, β, k) -> (β >= 1.0e-3 && κ >= κc * (1 - 1.0e-12) && k in who) ? 3.0 : 0.0
@@ -503,10 +509,14 @@ end
     # record: reproductions/data/04/kb-scan-<date>/scan.tsv
     # ---------------------------------------------------------------------------------------------
     @testset "04 κ_b scan record: reproductions/data/04/kb-scan-*" begin
-        dirs = isdir(DATA) ? filter(
-                d -> occursin(r"^kb-scan-\d{4}-\d{2}-\d{2}$", d) &&
-                isfile(joinpath(DATA, d, "scan.tsv")), readdir(DATA)
-            ) : String[]
+        dirs = if isdir(DATA)
+            filter(
+                    d -> occursin(r"^kb-scan-\d{4}-\d{2}-\d{2}$", d) &&
+                    isfile(joinpath(DATA, d, "scan.tsv")), readdir(DATA)
+                )
+        else
+            String[]
+        end
         @test length(dirs) == 1
         D = joinpath(DATA, last(sort(dirs)))
         rows = scan_read(joinpath(D, "scan.tsv"))

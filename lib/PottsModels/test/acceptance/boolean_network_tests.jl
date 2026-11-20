@@ -103,7 +103,15 @@ function problem(grn; tspan = (0, NETWORK_K), T = Float64)
     ]
     return PottsProblem(model(grn), op, tspan; T), rows
 end
-network_bit(x) = x == 1 ? 1 : (x == 0 ? 0 : -1)
+function network_bit(x)
+    if x == 1
+        return 1
+    elseif x == 0
+        return 0
+    else
+        return -1
+    end
+end
 # exact 0/1, anything else is a mismatch
 """The (A, B, C) trajectory of cell `c` in a solution (host arrays, CPU or device)."""
 function network_trajectory(sol, c)

@@ -75,10 +75,15 @@ using Statistics: mean
 # ---------------------------------------------------------------------------------------
 # Independent oracle for the shell values
 const HEX = ((1, 0), (0, 1), (-1, 1), (-1, 0), (0, -1), (1, -1))
-topology_shell(geom::Symbol) =
-    geom === :hex ? collect(HEX) :
-    geom === :square ? [(i, j) for i in -1:1 for j in -1:1 if (i, j) != (0, 0)] :
-    [(i, j, k) for i in -1:1 for j in -1:1 for k in -1:1 if (i, j, k) != (0, 0, 0)]
+function topology_shell(geom::Symbol)
+    if geom === :hex
+        return collect(HEX)
+    elseif geom === :square
+        return [(i, j) for i in -1:1 for j in -1:1 if (i, j) != (0, 0)]
+    else
+        return [(i, j, k) for i in -1:1 for j in -1:1 for k in -1:1 if (i, j, k) != (0, 0, 0)]
+    end
+end
 adjacent(geom, a, b) = geom === :hex ? (a .- b) in HEX : sum(abs, a .- b) == 1
 """Owner of site `x .+ o` (−1 outside a closed lattice)."""
 function topology_owner(σ, x, o; periodic)

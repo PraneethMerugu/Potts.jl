@@ -71,8 +71,13 @@ function define(name::Symbol, ex::Expr)
     end
     return nothing
 end
-model(name::Symbol) = isdefined(@__MODULE__, name) ? getfield(@__MODULE__, name) :
-    error("initial state fixture $name did not build: $(get(DEFINE_ERRORS, name, "unknown"))")
+function model(name::Symbol)
+    if isdefined(@__MODULE__, name)
+        return getfield(@__MODULE__, name)
+    else
+        error("initial state fixture $name did not build: $(get(DEFINE_ERRORS, name, "unknown"))")
+    end
+end
 system(name::Symbol) = Base.invokelatest(model(name); name = :pb)
 const ANY = :(any(kind[n] == substrate for n in VonNeumann(1)(site)))
 # The field `F` of Fixture P as a plain MTK PDESystem on the 6 × 6 × 4 lattice:
@@ -102,8 +107,11 @@ function predicate_src(name; source = ANY, zb = :(Closed()), field = true)
     helper = :(touches_substrate(s) = count(true for n in VonNeumann(1)(s) if kind[n] == substrate) > 0)
     tail = [:(@energy cells(lam) => (volume - 8.0)^2), :(@constraint mobile > 0.5), :(@sweep Metropolis(; temperature = 1.0))]
     stmts = if field
-        fields = source === nothing ? :(@fields pde(; source = false) (:lam => kind == lam)) :
+        fields = if source === nothing
+            :(@fields pde(; source = false) (:lam => kind == lam))
+        else
             :(@fields pde() (:lam => kind == lam, :src => $source))
+        end
         Any[:(@kinds medium substrate[frozen] lam), lat, helper, fields, :(@parameters mobile = 0.0), tail...]
     else
         Any[

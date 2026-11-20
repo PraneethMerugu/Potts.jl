@@ -75,9 +75,17 @@ const SQ8 = Tuple((i, j) for i in -1:1 for j in -1:1 if (i, j) != (0, 0))
 const CU6 = ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1))
 const CU26 = Tuple((i, j, k) for k in -1:1 for j in -1:1 for i in -1:1 if (i, j, k) != (0, 0, 0))
 """Neighbour offsets of `adj` on `geom` (hex has one adjacency)."""
-euler_nbrs(geom, adj) = geom === :hex ? HEX :
-    geom === :square ? (adj === :face ? SQ4 : SQ8) :
-    (adj === :face ? CU6 : CU26)
+function euler_nbrs(geom, adj)
+    if geom === :hex
+        return HEX
+    elseif geom === :square
+        return adj === :face ? SQ4 : SQ8
+    elseif adj === :face
+        return CU6
+    else
+        return CU26
+    end
+end
 dual(adj) = adj === :face ? :full : :face
 euler_adjs(geom) = geom === :hex ? (:face,) : (:face, :full)
 """`X[i]`, wrapped on a periodic lattice; false outside a closed one."""
@@ -148,9 +156,15 @@ function chi_hex(X, periodic)
     return χ
 end
 """Oracle (a): χ of the site set `X` under `adj` on `geom`."""
-chi(X, geom, adj; periodic) =
-    geom === :hex ? chi_hex(X, periodic) :
-    adj === :face ? chi_graph(X, periodic) : chi_closed(X, periodic)
+function chi(X, geom, adj; periodic)
+    if geom === :hex
+        return chi_hex(X, periodic)
+    elseif adj === :face
+        return chi_graph(X, periodic)
+    else
+        return chi_closed(X, periodic)
+    end
+end
 # ---------------------------------------------------------------------------------------
 # Oracle (b): flood fills of the cell and of its complement (dual adjacency)
 """(pieces, pieces touching the array's border) of `M` under the offsets `nbrs` (closed)."""
@@ -247,7 +261,15 @@ euler_has(m, t) = (m & t) == t
 euler_D4(m) = 1 - count_ones(m & FACE4) + count(t -> euler_has(m, t), TRIOS2)
 Dhex(m) = 1 - count_ones(m) + count_ones(m & ((m >> 1) | ((m & 0x01) << 5)))
 euler_D6(m) = 1 - count_ones(m & FACE6) + count(t -> euler_has(m, t), TRIOS3) - count(t -> euler_has(m, t), OCTS)
-euler_shell(geom) = geom === :hex ? HEX : geom === :square ? RING2 : CU26
+function euler_shell(geom)
+    if geom === :hex
+        return HEX
+    elseif geom === :square
+        return RING2
+    else
+        return CU26
+    end
+end
 """Owner of site `y` (−1 outside a closed lattice)."""
 function euler_owner(σ, y, periodic)
     periodic && return Int(σ[map(mod1, y, size(σ))...])
@@ -442,16 +464,23 @@ end
 const DH_DIMS = Dict(:square => (9, 8), :hex => (9, 8), :cubic => (5, 5, 4))
 dh_lattice(geom, periodic) =
 let b = periodic ? :(Periodic()) : :(Closed()), d = DH_DIMS[geom]
-    geom === :hex ? :(Lattice($d; geometry = Hexagonal(), boundary = $b, neighborhood = Hex(1))) :
+    if geom === :hex
+        :(Lattice($d; geometry = Hexagonal(), boundary = $b, neighborhood = Hex(1)))
+    else
         :(Lattice($d; boundary = $b, neighborhood = Moore(1)))
+    end
 end
 for ((geom, periodic), (_, prop, _)) in GEOMS
     hex = geom === :hex
     full = :full                                          # hex: the same as `:face` (Q4)
     lat = dh_lattice(geom, periodic)
-    drive = geom === :square ? :(ν * euler(old; adjacency = :full) + ρ * euler[new]) :
-        geom === :hex ? :(ν * euler(old; adjacency = :full) + ρ * euler(new; adjacency = :face)) :
+    drive = if geom === :square
+        :(ν * euler(old; adjacency = :full) + ρ * euler[new])
+    elseif geom === :hex
+        :(ν * euler(old; adjacency = :full) + ρ * euler(new; adjacency = :face))
+    else
         :(ν * euler(new; adjacency = :face) + ρ * euler(old; adjacency = :full))
+    end
     @eval @potts_model $(euler_name("EulerDH", geom, periodic)) begin
         @kinds medium A B
         @parameters begin

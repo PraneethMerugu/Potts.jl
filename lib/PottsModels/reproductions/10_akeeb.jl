@@ -212,7 +212,15 @@ nothing #hide
 let #hide
     ## the page at FULL, with its parked V-A6 row replaced by the full sweep's V-A6 and V-A7 rows #hide
     rows = [filter(r -> r["target"] != "V-A6 phenotype fractions", rec_page); filter(r -> r["class"] == "FULL", rec_sweep)] #hide
-    fam(t) = t == "default μ" ? "μ default" : startswith(t, "invariants") ? "per-run invariants" : match(r"^(V-[AC]\d+)", t)[1] #hide
+    function fam(t)
+        if t == "default μ"
+            return "μ default"
+        elseif startswith(t, "invariants")
+            return "per-run invariants"
+        else
+            return match(r"^(V-[AC]\d+)", t)[1]
+        end
+    end #hide
     what = Dict("μ default" => "default λ = 24", "V-A0" => "front after one sweep", "V-A1" => "inventory, leaders, divisions", #hide
         "V-A2" => "six metrics at P1–P8", "V-A3" => "fingers, singles, clusters over the PP = 0.5 slice", #hide
         "V-A4" => "invasive and infiltrative over the slice; order; ratios", "V-A5" => "cluster incidence and size", #hide
@@ -651,8 +659,12 @@ end
 
 # #### The PP = 0.5 slice (full build only)
 
-slice_runs = FULL ? [(k = pt, runs = ensemble(pt, [1_000_000 + 100j + i for i in 1:10]; saves = [701]))
-                     for (j, pt) in enumerate(SLICE)] : nothing
+slice_runs = if FULL
+    [(k = pt, runs = ensemble(pt, [1_000_000 + 100j + i for i in 1:10]; saves = [701]))
+        for (j, pt) in enumerate(SLICE)]
+else
+    nothing
+end
 marginal(m, set) = [Float64(getproperty(r.obs[700], m)) for s in slice_runs
                     if set === :all || SETS[set](s.k) for r in s.runs]
 Markdown.parse(FULL ? "121 points × 10 runs at MCS 700 (authors' count)." :
@@ -662,9 +674,17 @@ Markdown.parse(FULL ? "121 points × 10 runs at MCS 700 (authors' count)." :
 
 pf(ok) = ok ? "PASS" : "FAIL"
 binding(class) = class == "SMOKE+FULL" || (class == "FULL" && FULL)
-verdict(ok, class) = ok === nothing ? "pending full run" :
-                     class == "reported" ? "reported" :
-                     binding(class) ? pf(ok) : "info: $(ok ? "in band" : "out of band")"
+function verdict(ok, class)
+    if ok === nothing
+        return "pending full run"
+    elseif class == "reported"
+        return "reported"
+    elseif binding(class)
+        return pf(ok)
+    else
+        return "info: $(ok ? "in band" : "out of band")"
+    end
+end
 fmt(x) = string(round(x; digits = abs(x) >= 100 ? 0 : 2))
 rows = []
 addrow!(target, paper, ours, tol, class, ok) = push!(rows, (; target, paper, ours, tol, class, ok, result = verdict(ok, class)))
@@ -810,8 +830,11 @@ addrow!("V-A8 (paper) cluster sizes", "≈ 7 cells, 60–70 % leaders (p.14–17
 addrow!("V-A9 leader speed", "0.4 px/MCS at λ = 20 (p.6)", "—", "—", "parked", nothing)
 addrow!("V-A10 morphology", "Fig. 4", "videos above", "—", "reported", true)
 
-heading = FULL ? "Validation (full ensembles)" :
-          "**Smoke check (reduced) — not validation.** Only the SMOKE+FULL rows carry a verdict here; the validation result is the pending full run."
+heading = if FULL
+    "Validation (full ensembles)"
+else
+    "**Smoke check (reduced) — not validation.** Only the SMOKE+FULL rows carry a verdict here; the validation result is the pending full run."
+end
 display_result(r) = r.class == "parked" ? "PARKED" : r.result
 Markdown.parse("""
 $heading

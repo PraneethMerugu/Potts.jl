@@ -105,17 +105,23 @@ end
     @testset "09 V-PRE7 SMOKE (64 cells, n = 4)" begin
         σ, k = graner_glazier_state()
         # the page's `annealed`: cells are the labels 1:maximum(σ), so vanished top labels are dropped
-        anneal(σa, run) = maximum(σa) == 0 ? copy(σa) : ownership(
-                solve(
-                    PottsProblem(
-                        GranerGlazier(; name = :sorting_anneal, lattice = size(σa)),
-                        [
-                            ownership => copy(σa), kind => k[1:maximum(σa)], :J => getp(run, :J)(run), :λ => getp(run, :λ)(run),
-                            :V₀ => getp(run, :V₀)(run), :T => 0.0,
-                        ], (0, 32); seed = 1
-                    ), SequentialCPM(); saveat = 32
-                ).u[end]
-            )
+        function anneal(σa, run)
+            if maximum(σa) == 0
+                return copy(σa)
+            else
+                return ownership(
+                        solve(
+                            PottsProblem(
+                                GranerGlazier(; name = :sorting_anneal, lattice = size(σa)),
+                                [
+                                    ownership => copy(σa), kind => k[1:maximum(σa)], :J => getp(run, :J)(run), :λ => getp(run, :λ)(run),
+                                    :V₀ => getp(run, :V₀)(run), :T => 0.0,
+                                ], (0, 32); seed = 1
+                            ), SequentialCPM(); saveat = 32
+                        ).u[end]
+                    )
+            end
+        end
         function hetero(σa)
             dl = total = 0
             nx, ny = size(σa)

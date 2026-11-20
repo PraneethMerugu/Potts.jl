@@ -135,8 +135,11 @@ function bytes_refreshes(sys, alg; backend = CPU(), wide = false, T = Float64)
     nmobile = Int[]
     for i in 1:3
         if i == 2       # a user write to the live state (not an integrator transfer)
-            sys isa Standard ? copyto!(integ.state.cell.kind, Int32[1, 1, 2, ones(Int32, NCELL - 3)...]) :
+            if sys isa Standard
+                copyto!(integ.state.cell.kind, Int32[1, 1, 2, ones(Int32, NCELL - 3)...])
+            else
                 copyto!(integ.state.cell.stiff, bytes_stiff(T, STIFF1))
+            end
         end
         c0 = counts(integ.stats)
         r = refresh_frozen!(integ)

@@ -154,8 +154,11 @@ function build(M)
     code = Pair{String, String}[]
     for k in propertynames(g)
         v = getproperty(g, k)
-        v isa AbstractVector ? append!(code, ("$k[$i]" => str(x) for (i, x) in enumerate(v))) :
+        if v isa AbstractVector
+            append!(code, ("$k[$i]" => str(x) for (i, x) in enumerate(v)))
+        else
             push!(code, String(k) => str(v))
+        end
     end
     prob = hoist_problem(M, 200; n = 2)
     u = prob.u0

@@ -212,7 +212,13 @@ function _Grid(pts::Vector{_Point2})
     return _Grid(xmin, ymin, h, nx, ny)
 end
 
-_cellaxis(v, v0, h, n) = (s = (v - v0) / h; s < 1 ? 1 : s >= n ? n : floor(Int, s) + 1)
+_cellaxis(v, v0, h, n) = (s = (v - v0) / h; if s < 1
+    1
+elseif s >= n
+    n
+else
+    floor(Int, s) + 1
+end)
 _cell(g::_Grid, p::_Point2) = (_cellaxis(p[1], g.x0, g.h, g.nx), _cellaxis(p[2], g.y0, g.h, g.ny))
 _cellid(g::_Grid, i::Int, j::Int) = i + (j - 1) * g.nx
 

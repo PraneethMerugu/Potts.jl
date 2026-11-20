@@ -145,12 +145,16 @@ issep(row) = all(c -> occursin(r"^:?-{3,}:?$", c), row)
 paras(t) = [String(strip(replace(x, r"\s+" => " "))) for q in split(t, r"\n\s*\n") for x in split(q, r"\n(?=\s*(?:[-*]|\d+\.)\s|\s*\|)")]
 # ---- the record ---------------------------------------------------------------------------------
 function checkerboard_page_record()
-    dirs = isdir(DATA) ? sort(
-            filter(
-                d -> occursin(r"^checkerboard-\d{4}-\d{2}-\d{2}$", d) &&
-                isdir(joinpath(DATA, d)), readdir(DATA)
+    dirs = if isdir(DATA)
+        sort(
+                filter(
+                    d -> occursin(r"^checkerboard-\d{4}-\d{2}-\d{2}$", d) &&
+                    isdir(joinpath(DATA, d)), readdir(DATA)
+                )
             )
-        ) : String[]
+    else
+        String[]
+    end
     isempty(dirs) && return nothing
     st(d) = (p = joinpath(DATA, d, "meta.toml"); isfile(p) ? string(get(TOML.parsefile(p), "status", "")) : "")
     finals = filter(d -> st(d) == "final", dirs)
@@ -169,8 +173,13 @@ flagged() = (
     (count(r -> r["beyond"] == "true", rows), length(rows))
 )
 checkerboard_page_devs() = isfile(rec("entry", "deviations.tsv")) ? checkerboard_page_tsv(rec("entry", "deviations.tsv")) : Dict{String, String}[]
-maxcolours() = isfile(rec("ablation.tsv")) ?
-    maximum(parse(Int, r["colours"]) for r in checkerboard_page_tsv(rec("ablation.tsv"))) : nothing
+function maxcolours()
+    if isfile(rec("ablation.tsv"))
+        return maximum(parse(Int, r["colours"]) for r in checkerboard_page_tsv(rec("ablation.tsv")))
+    else
+        return nothing
+    end
+end
 clause(r) = String(strip(first(split(r["suspected_cause"], ':'))))
 function dev_findings(text)
     bad = String[]

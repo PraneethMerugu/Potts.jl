@@ -194,8 +194,13 @@ const CONTROLS = (Plain, ModelPlain, Gather)
 const HILLS = (Hill, ModelHill)
 cellscope(M) = M in (CELL_SHAPES..., Plain, Gather)
 sigma() = (s = zeros(Int32, 12, 8); s[3:6, 3:6] .= 1; s[7:10, 3:6] .= 2; s)
-expansion_op(M) = cellscope(M) ? [ownership => sigma(), kind => [:A, :A], :y => [1.0, 2.0]] :
-    [ownership => sigma(), kind => [:A, :A]]
+function expansion_op(M)
+    if cellscope(M)
+        return [ownership => sigma(), kind => [:A, :A], :y => [1.0, 2.0]]
+    else
+        return [ownership => sigma(), kind => [:A, :A]]
+    end
+end
 problem(M, tspan; T = Float64, kw...) = PottsProblem(M(; name = :x), expansion_op(M), tspan; T, seed = 7, kw...)
 """The ODE unknowns of `u` (cells' `y` then `z`; the model's `g` then `h`), as Float64."""
 function expansion_values(M, u)

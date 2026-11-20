@@ -134,9 +134,23 @@ const RNGS = (:StableRNG, :LehmerRNG, :Xoshiro, :MersenneTwister)
 const ARITH = (:+, :-, :*, :⊻, :xor, :|, :<<, :>>, :>>>, :.+, :.-, :.*, :.⊻)
 const CONV = (:UInt64, :Int, :Int64, :UInt, :UInt32, :Int32, :UInt128, :convert, :(%))
 # the name in `M.:name`; nothing when it is not a Symbol (`M.:($f)` in an `@eval` loop)
-qname(x) = x isa Expr && x.head === :. && length(x.args) == 2 && x.args[2] isa QuoteNode &&
-    x.args[2].value isa Symbol ? x.args[2].value : nothing
-substream_name(f) = f isa Symbol ? f : f isa GlobalRef ? f.name : qname(f)
+function qname(x)
+    if x isa Expr && x.head === :. && length(x.args) == 2 && x.args[2] isa QuoteNode &&
+        x.args[2].value isa Symbol
+        return x.args[2].value
+    else
+        return nothing
+    end
+end
+function substream_name(f)
+    if f isa Symbol
+        return f
+    elseif f isa GlobalRef
+        return f.name
+    else
+        return qname(f)
+    end
+end
 iscall(ex, names) = ex isa Expr && ex.head === :call && substream_name(ex.args[1]) in names
 seedlike(x) = (n = x isa Symbol ? x : qname(x); n isa Symbol && occursin("seed", lowercase(String(n)))) ||
     (iscall(x, CONV) && any(seedlike, x.args[2:end]))

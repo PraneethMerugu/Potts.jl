@@ -489,7 +489,13 @@ function bond_counts(σ, k)
         b = σ[mod1(x + dx, nx), mod1(y + dy, ny)]
         a == b && continue
         a == 0 && ((a, b) = (b, a))
-        key = b == 0 ? (k[a] == 1 ? :dM : :lM) : k[a] == k[b] ? (k[a] == 1 ? :dd : :ll) : :dl
+        key = if b == 0
+            k[a] == 1 ? :dM : :lM
+        elseif k[a] == k[b]
+            k[a] == 1 ? :dd : :ll
+        else
+            :dl
+        end
         n[key] += 1
     end
     return n
@@ -902,7 +908,15 @@ function logfit(y, lo, hi)
 end
 ## first saved time at which curve `a` exceeds curve `b`; `nothing` if never
 crossing(a, b, times = ts) = (j = findfirst(j -> a[j] > b[j], eachindex(times)); j === nothing ? nothing : times[j])
-show_t(t) = t === nothing ? "none by $(last(ts))" : t == first(ts) ? "≤ $t (already at the first save)" : "$t"
+function show_t(t)
+    if t === nothing
+        return "none by $(last(ts))"
+    elseif t == first(ts)
+        return "≤ $t (already at the first save)"
+    else
+        return "$t"
+    end
+end
 
 ## a row: text columns, the class, `ok` at the nominal time (nothing if not run), and
 ## `timed(s)` (nothing if the row has no time)
@@ -1095,8 +1109,11 @@ scales = 2.0 .^ range(-1, 1; length = 41)
 best = argmax(s -> (npass(s), -abs(log(s))), scales)
 at_s(r) = r.timed === nothing ? "—" : pf(r.timed(best))
 
-heading = FULL ? "Validation (n = $n)" :
-          "**Smoke check (reduced, n = $n) — not validation.** Only the SMOKE+FULL rows carry a verdict here; the validation result is the pending full run."
+heading = if FULL
+    "Validation (n = $n)"
+else
+    "**Smoke check (reduced, n = $n) — not validation.** Only the SMOKE+FULL rows carry a verdict here; the validation result is the pending full run."
+end
 Markdown.parse("""
 $heading
 

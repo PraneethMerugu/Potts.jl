@@ -85,7 +85,13 @@ function field_pde(dims, h, reaction)
     Potts.ModelingToolkitBase.@variables c(..) medium(..)::Bool [input = true]
     xs = (x, y, z)[1:length(dims)]
     C, M = c(t, xs...), medium(t, xs...)
-    rate = reaction === :uniform ? Dc * L.laplacian(C) - k * C : reaction === :offcell ? Dc * L.laplacian(C) - k * C * M : Dc * L.laplacian(C)
+    rate = if reaction === :uniform
+        Dc * L.laplacian(C) - k * C
+    elseif reaction === :offcell
+        Dc * L.laplacian(C) - k * C * M
+    else
+        Dc * L.laplacian(C)
+    end
     return Potts.ModelingToolkitBase.PDESystem(
         [Potts.D(C) ~ rate], [c(0, xs...) ~ 0.0],
         L.lattice_domain(t, xs, dims; spacing = h), [t, xs...], reaction === :offcell ? [C, M] : [C], [Dc, k];
@@ -178,7 +184,15 @@ function ftcs(c0, D, k, h, dt, n, T; periodic = true, mask = ones(size(c0)), low
             lap = 0.0
             for d in 1:length(dims)
                 e = CartesianIndex(ntuple(j -> j == d ? 1 : 0, length(dims)))
-                nb(J) = J in CI ? c[J] : periodic ? c[CartesianIndex(mod1.(Tuple(J), dims))] : c[I]
+                function nb(J)
+                    if J in CI
+                        return c[J]
+                    elseif periodic
+                        return c[CartesianIndex(mod1.(Tuple(J), dims))]
+                    else
+                        return c[I]
+                    end
+                end
                 lap += (nb(I + e) - 2c[I] + nb(I - e)) / h^2
             end
             v = c[I] + τ * (D * lap - k * c[I] * mask[I])
