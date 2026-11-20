@@ -1,8 +1,8 @@
-# IR data model (v3 §3). Plain host values; nothing here reaches the device. Every compiler
+# IR data model. Plain host values; nothing here reaches the device. Every compiler
 # pass is written against these types once per spatial dimension `N`.
 
 """
-Element types of IR values. Storage lanes are `F16 F32 F64 U8 I32 U32` (R1 F5); `REAL` is
+Element types of IR values. Storage lanes are `F16 F32 F64 U8 I32 U32`; `REAL` is
 the abstract float compute type that pass 4 resolves to `T`; `BOOL` is a predicate.
 """
 @enum Scalar::UInt8 F16 F32 F64 U8 I32 U32 REAL BOOL
@@ -34,8 +34,8 @@ Boundary policy of an access: `RESOLVE` (pass 2 rewrites out-of-domain reads), `
 @enum Bpolicy::UInt8 RESOLVE INSIDE ZERO CLAMP
 @enum SpaceKind::UInt8 FULL MASKED RESTRICTED
 
-# The op set of v3 §3.4. Printing and fingerprints use the names, never the codes, so adding
-# an op never changes an existing program's text (O-2 additivity).
+# The op set. Printing and fingerprints use the names, never the codes, so adding
+# an op never changes an existing program's text.
 @enum Op::UInt8 CONST PARAM LOAD TABLE COORD INSIDE_OP BITTEST RUNTIME ADD MUL NEG DIV FMA MIN MAX ABS POWI SQRT EXP LOG CALL EQ LT LE AND OR NOT XOR SELECT COND CAST IDX RESTRICT ELEMENT_SUM
 
 # RESTRICT(x; imm = 0 sum | 1 max | 2 plurality) at a coarse site combines `x` over the site's
@@ -98,7 +98,7 @@ struct FieldDecl{N}
     epoch::Epoch
     buffers::Int8                    # 1, or 2 for host ping-pong
     role::Symbol                     # :state | :aux | :input | :output | :scratch
-    fixed::Bool                      # a declared storage (`lattice_storage`, FE-17): the float lane
+    fixed::Bool                      # a declared storage (`lattice_storage`): the float lane
                                      # holds its own type under `lanes = :state` (`lanetype`)
 end
 FieldDecl{N}(key, classes, shape, symmetric, storage, levels, epoch, buffers, role) where {N} =
@@ -215,7 +215,7 @@ end
 args(k::Kernel, n::Node) = view(k.operands, n.args)
 args(k::Kernel, i::Integer) = args(k, k.nodes[i])
 
-# ---- boundary rules (v3 §3.5) ----------------------------------------------------------
+# ---- boundary rules ----------------------------------------------------------
 abstract type AbstractBoundaryRule end
 
 """
@@ -232,9 +232,9 @@ Coef(v::Real) = Coef(Float64(v), Int32(0))
 `α c + β ∂c/∂n = g` on the face (`axis`, `side = ±1`) of a cell-centered field. Dirichlet:
 α = 1, β = 0. No flux: α = 0, β = 1, g = 0. `β` is in lattice units (the front end divides by h).
 `gfield` (0: none) is a field holding the value at each boundary site (a value that reads the
-time, the coordinates or an input, F3-07): then `g` is that field's value times the
+time, the coordinates or an input): then `g` is that field's value times the
 coefficient `g` (a kernel of the program computes the field at the step's time). `afield` and
-`bfield` (0: none) do the same for `α` and `β` (F4-12b): a Robin coefficient that varies by
+`bfield` (0: none) do the same for `α` and `β`: a Robin coefficient that varies by
 site or in time is that field's value at the boundary site times the coefficient.
 """
 struct FaceRule <: AbstractBoundaryRule
@@ -253,7 +253,7 @@ FaceRule(field, axis, side, alpha::Coef, beta::Coef, g::Coef, gfield = 0) =
 
 """
 Does the face rule `r` have a coefficient `α` or `β` that varies by site or in time (a value
-field, F4-12b)?
+field)?
 """
 sitecoefs(r::FaceRule) = r.afield != 0 || r.bfield != 0
 
@@ -293,7 +293,7 @@ end
 """
 Masked node value: stores at masked sites write `value` (identity row). `vfield` (0: none) is
 a field holding the value at each site (a value that reads the time, the coordinates or an
-input, F3-07): the value is then that field's value times the coefficient `value` (the mask's
+input): the value is then that field's value times the coefficient `value` (the mask's
 kernel computes the field with the mask).
 """
 struct NodeValueRule <: AbstractBoundaryRule

@@ -112,7 +112,7 @@ Enqueue a workgroup launch on a KernelAbstractions `backend` (no wait): `ngroups
 """
 function workgroups!(backend, body::F, ngroups, wg, phases, ::Type{T}, ldslen, S, P,
         G) where {F, T}
-    # compile mode (`Exec.compiling`, F3-15): one group with no phase compiles the kernel
+    # compile mode (`Exec.compiling`): one group with no phase compiles the kernel
     c = Exec.compiling()
     _workgroups!(backend, wg)(body, S, P, G, Int32(c ? 0 : phases), T, Val(max(Int(ldslen), 1));
         ndrange = (c ? 1 : ngroups) * wg)

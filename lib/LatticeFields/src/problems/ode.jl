@@ -1,4 +1,4 @@
-# The SciML path (v3 §8): `ODEProblem(ODEFunction(LatticeRHS; sys = LatticeIndex), u0, …)`.
+# The SciML path: `ODEProblem(ODEFunction(LatticeRHS; sys = LatticeIndex), u0, …)`.
 # The right side runs the rate kernels of a program in its ODE form (each rate field `c`
 # stores its rate in a scratch field `∂c`) through Exec. The solver passes a different `u`
 # and `du` at each stage, so the state and rate arrays of every launch are views of `u` and
@@ -50,7 +50,7 @@ struct RHSContext{N, B}
     index::Any                                 # for the parameter checks (names)
     stability::Any                             # … and the front end's `check_parameters`
     binputs::Vector{Pair{String, Any}}         # … with the inputs it reads in an index (host, by site)
-    steady::Vector{String}                     # the steady rows' fields (`0 ~ rhs`, F4-02)
+    steady::Vector{String}                     # the steady rows' fields (`0 ~ rhs`)
     moving::Bool                               # the init kernels read the time or the clock: run at every call
 end
 const MAX_VARIANTS = 8
@@ -58,7 +58,7 @@ const MAX_VARIANTS = 8
 """
     LatticeMetadata
 
-The discretization metadata of a problem `discretize` returns (F4 design §3.2): the owned
+The discretization metadata of a problem `discretize` returns: the owned
 problem built at `discretize` (its group, plans and checks, at the values given there), the
 family (`:ode` or `:map`), and the right side of SciML's solvers, built at its first call
 (`builds` counts the builds: an owned solve builds none). It is the `problem_type` of an
@@ -95,7 +95,7 @@ SciMLBase.wrap_sol(sol, ::LatticeMetadata) = sol
     steady_start!(u, prob, p, t) -> u
 
 The default start of a problem with steady rows `0 ~ rhs` on an OrdinaryDiffEq solver (its
-`DefaultInit`; review R2): the steady fields of `u` are solved at `t` from the other fields of
+`DefaultInit`): the steady fields of `u` are solved at `t` from the other fields of
 `u`, by the owned `QuasiSteady` solve of those rows on the lattice (sparse: the operator of the
 rows, `LatticePCG` to `reltol = 1e-10`), so the solver starts on the algebraic constraint. The
 other fields are kept. `initializealg = BrownFullBasicInit()` or `CheckInit()` given to `solve`
@@ -206,7 +206,7 @@ function _build_rhs(m::LatticeMetadata, u, p, t)
     s = _sem(m)
     rates = m.family == :map ? Dict{String, String}() : Dict{String, String}(k => "∂$k" for k in fp.state)
     N = _ndims(s)
-    # the launches write the step index `p.tick` into the clock's slot (F4-02); the init
+    # the launches write the step index `p.tick` into the clock's slot; the init
     # kernels run at every call when they read the time or the clock (`moving`)
     ctx = RHSContext{N, typeof(fp.backend)}(s, fp.backend, copy(fp.state), rates, copy(fp.initkeys), _rhs_options(fp),
         fp.tables, fp.faces, fp.tspan[1], m.plans, fp.index, fp.stability,
@@ -225,7 +225,7 @@ function _build_rhs(m::LatticeMetadata, u, p, t)
     end
     return _lattice_rhs(ctx, E, nothing)
 end
-# an array on another backend than the problem's is refused, naming both (SX-12)
+# an array on another backend than the problem's is refused, naming both
 function _check_backend(backend, u, what)
     u isa AbstractArray || return nothing
     b = KA.get_backend(u)
@@ -238,7 +238,7 @@ end
 """
     lattice_problem(fp::FieldProblem) -> SciML problem
 
-The SciML problem of the owned problem `fp` (F4 design §3.2): an `ODEProblem` for rates (with
+The SciML problem of the owned problem `fp`: an `ODEProblem` for rates (with
 a `mass_matrix` when it has steady rows), a `DiscreteProblem` for maps, and for a system with no
 time a `LinearProblem` (every row linear: `A` a [`LatticeOperator`](@ref), `b` the constant
 part) or a `NonlinearProblem` of the right side. `p` is a [`LatticeParameters`](@ref), the
@@ -246,12 +246,12 @@ state is on `fp`'s backend and the function a [`LatticeFunction`](@ref) whose me
 `fp`. The built-in callbacks (the clock's step index, [`ClockTick`](@ref); the masks,
 [`MaskSync`](@ref)) are in the problem's keywords, so every OrdinaryDiffEq solve runs them.
 
-The Jacobian keywords (F4-07; F4 design §3.7) set the `ODEFunction`'s (and a nonlinear
+The Jacobian keywords set the `ODEFunction`'s (and a nonlinear
 system's `NonlinearFunction`'s) Jacobian fields:
 
 - `jvp = true` (the default): `jvp` is a [`LatticeJVP`](@ref), one Dual evaluation of the right
   side, which Krylov linear solvers use; on a device it is also the `jac_prototype`, a
-  matrix-free [`JacobianOperator`](@ref) (ruling Q7);
+  matrix-free [`JacobianOperator`](@ref);
 - `sparse = true`: `jac_prototype` is the sparse pattern of [`field_jacobian_sparsity`](@ref) with
   its diagonal, and `colorvec` a distance-2 coloring of it ([`column_colors`](@ref)), so
   OrdinaryDiffEq forms the Jacobian with one colored evaluation per color (host only);
@@ -284,7 +284,7 @@ function lattice_problem(fp::FieldProblem; jac::Bool = false, sparse::Bool = fal
     return SciMLBase.ODEProblem(fun, U, fp.tspan, lp, meta; kw...)
 end
 
-# The mass matrix of the steady rows `0 ~ rhs` (F4-02; F4 design §3.6): `Diagonal(m)` with
+# The mass matrix of the steady rows `0 ~ rhs`: `Diagonal(m)` with
 # `m = 0` on the steady fields' slots (a masked site of one is the row `0 = v - u`, so it
 # stays regular), or `I` when there is none
 function _mass_matrix(fp::FieldProblem, ::Type{E}) where {E}
@@ -324,7 +324,7 @@ _has_masks(fp::FieldProblem) = (s = fp.program;
                                 any(r -> r isa NodeValueRule && any(k -> fieldid(s, k) == r.field, fp.state), s.rules))
 
 # the affect of a built-in callback (the clock, the masks: the ODE path's), marked so that an
-# owned solve, which steps them itself, leaves them out of the problem's callbacks (F4-05)
+# owned solve, which steps them itself, leaves them out of the problem's callbacks
 struct _Builtin{F} <: Function
     f::F
 end
@@ -335,7 +335,7 @@ _builtin(cb) = cb isa Union{SciMLBase.DiscreteCallback, SciMLBase.ContinuousCall
     InputRefresh(masks)
 
 The built-in callback of the inputs given as functions of the time on an OrdinaryDiffEq
-solve (F4-B1; [`LatticeParameters`](@ref) `fns`). The right side evaluates each function at
+solve ([`LatticeParameters`](@ref) `fns`). The right side evaluates each function at
 the time of every call (each stage of a step, the Jacobian-vector product and the
 preconditioner's bind too), so the solver sees the input at its own times. After each
 accepted step this callback writes `f(t)` into `p.inputs` (what `integ.ps[q]` and `sol.ps`
@@ -426,7 +426,7 @@ end
 """
     FnInputCheck
 
-What the right side checks of an input function's result (F4-B1), built once per input and
+What the right side checks of an input function's result, built once per input and
 build: the field, its site count, its storage (float, or the range of its integer type), and
 the input's declared type and bounds. Mutable, so a dynamic call takes it without boxing.
 """
@@ -451,8 +451,7 @@ end
 """
     ClockTick(τ)
 
-The built-in callback of the clock's step index on an OrdinaryDiffEq solve (F4-02; F4 design
-§3.6): at `init` it sets `p.tick` to 0 and adds a `tstop` at every boundary `t₀ + kτ` of the
+The built-in callback of the clock's step index on an OrdinaryDiffEq solve: at `init` it sets `p.tick` to 0 and adds a `tstop` at every boundary `t₀ + kτ` of the
 time span, and at each boundary it sets `p.tick = k`, so the solver lands on every boundary and
 reads `step_index(t)` as the owned steppers do (the right side has one value per period). A
 new step index is a discrete event: every masked site takes its value again (a value that reads
@@ -482,7 +481,7 @@ end
 """
     MaskSync(moving)
 
-The built-in callback of the masks on an OrdinaryDiffEq solve (F4-02; F4 design §3.6). A
+The built-in callback of the masks on an OrdinaryDiffEq solve. A
 masked site's rate is its value's time derivative (`∂v/∂t`, 0 for a value that does not read
 the time), so the solver carries the value at its own order; the callback writes values only
 where the mask *set* changes, which no rate can carry:
@@ -561,7 +560,7 @@ end
     MaskEvent(f)
 
 The built-in callback of one located switch of a moving mask set on an OrdinaryDiffEq solve
-(review F4 b2 #3; [`MaskSync`](@ref)): a continuous callback on `f(p, t)` (a comparison's
+([`MaskSync`](@ref)): a continuous callback on `f(p, t)` (a comparison's
 `lhs - rhs` of the time and the parameters) whose root the solver finds; at the root every
 masked site takes its value, with the masks evaluated just past it (at `nextfloat(t)`: a root
 of `t - t0` is `t0` itself, where `t > t0` is still false).
@@ -684,7 +683,7 @@ function _masked_u0(prob, u0, q)
     return _clamp_masks!(U, m, lp)
 end
 
-# A system with no time (F4-02; F4 design §3.6): every row linear gives a `LinearProblem` of the
+# A system with no time: every row linear gives a `LinearProblem` of the
 # right side's operator, any other a `NonlinearProblem` of the right side at `t₀`
 function _timefree_problem(meta, f, U, lp; jac::Bool = false, sparse::Bool = false, jvp::Bool = true)
     fp = meta.problem
@@ -869,8 +868,8 @@ struct LatticeRHS{L <: Tuple, W, E, X, I}
     synced::Vector{Any}                        # [the `LatticeParameters` whose tables and inputs the store holds]
     stamp::Vector{Int}                         # … at its write count
     tcell::Base.RefValue{Float64}              # the time of a call through a `LatticeFunction` (no boxing)
-    masked::Vector{Tuple{UnitRange{Int}, Any, Coef, Any, Symbol, Any, Any}} # the masked state fields (F4-02, `_masked`)
-    fnspecs::Dict{String, FnInputCheck}           # the checks of the input functions' results (F4-B1), by key
+    masked::Vector{Tuple{UnitRange{Int}, Any, Coef, Any, Symbol, Any, Any}} # the masked state fields (`_masked`)
+    fnspecs::Dict{String, FnInputCheck}           # the checks of the input functions' results, by key
     initbs::Vector{Any}                        # [the init launches bound, the parameter vector they hold]
 end
 _rhs_eltype(du, u, p, t) = promote_dual(promote_dual(promote_type(eltype(u), eltype(du)), eltype(_pvals(p))), typeof(t))
@@ -880,11 +879,11 @@ function (f::LatticeRHS{L, W, E})(du, u, p, t) where {L, W, E}
     degenerate_face(f.faces, pv) == 0 || check_faces(f.faces, pv)
     C = _rhs_eltype(du, u, p, t)
     C === E || return _variant(f, C)(du, u, p, t)
-    # the tables and inputs of `p` (F4-00): uploaded again when `p` or its write count changes
+    # the tables and inputs of `p`: uploaded again when `p` or its write count changes
     _synced(f, p) || _sync!(f, p)
-    # the inputs given as functions of the time, at this call's time (F4-B1)
+    # the inputs given as functions of the time, at this call's time
     _fns_at!(f, p, t)
-    # the computed slots (F2-15): derived again when the values change, and on every call for
+    # the computed slots: derived again when the values change, and on every call for
     # parameters with derivative parts (a reseeded Dual vector keeps its primal values)
     _derives(f) && (_plainp(pv) && _checked(f, pv) || derive!(pv, _ptables(p, f.ctx.tables), f.ctx.index))
     _checked(f, pv) || _check!(f, p)
@@ -894,10 +893,10 @@ function (f::LatticeRHS{L, W, E})(du, u, p, t) where {L, W, E}
     isempty(f.masked) || _masked_rates!(du, u, pv, f.masked)
     return nothing
 end
-# the clock's step index of `p` (F4-02), or nothing (the launch keeps the slot's value)
+# the clock's step index of `p`, or nothing (the launch keeps the slot's value)
 _ptick(p::LatticeParameters) = p.tick[]
 _ptick(p) = nothing
-# The masked sites of the state (F4-02; F4 design §3.6): a site of a rate's field holds its
+# The masked sites of the state: a site of a rate's field holds its
 # value (rate 0), a site of a steady row's field is the row `0 = v - u` (so the mass matrix
 # stays regular there), and a map's next value is the mask value. A value or a mask set that
 # moves in time follows the mask callback ([`MaskSync`](@ref)) at each accepted step.
@@ -905,7 +904,7 @@ function _masked_rates!(du, u, p, masked)
     for (range, m, c, vf, mode, rf, _) in masked
         d = view(du, range)
         if mode === :hold
-            # a value that reads the time moves at its rate `∂v/∂t` (review R1), else it holds
+            # a value that reads the time moves at its rate `∂v/∂t`, else it holds
             rf === nothing ? _clamp_masked!(d, m, zero(eltype(du))) :
             _clamp_masked!(d, m, convert(eltype(du), _coefdual(c, p)), rf)
         else
@@ -1011,7 +1010,7 @@ _same_params(f::LatticeRHS, p::AbstractVector{<:Union{Float32, Float64}}) =
     all(i -> f.lastv[i] == Float64(p[i]), eachindex(f.lastv))
 function _init!(f::LatticeRHS{L, W, E}, p, t = f.ctx.t0, k = nothing) where {L, W, E}
     # the init launches bound once per parameter vector and values (a rerun at the same values,
-    # as an input function's call makes, allocates nothing: F4-B1 review)
+    # as an input function's call makes, allocates nothing)
     b = f.initbs
     if b[1] === nothing || b[2] !== p || !_bound_same(f, p)
         b[1] = BoundStep(f.ctx.backend, f.ctx.program, f.init, f.store, p; c = zero(E))
@@ -1074,7 +1073,7 @@ Serialization.serialize(s::Serialization.AbstractSerializer, f::LatticeRHS) =
 # A call from a task that does not own the build: the build itself once the task claims it
 # (it has no owner, or its owner has ended), else the task's own copy, built once and kept in
 # `copies`, found through a `WeakRef` in its task-local storage keyed by this build's `owner`
-# vector (SX-37): a mutable key, whose identity is its address (the build itself is an
+# vector: a mutable key, whose identity is its address (the build itself is an
 # immutable struct, whose `objectid` hashes its contents and allocates). The build holds the
 # copy; the task holds only the weak reference, so a dropped build frees its copies. The
 # lookup takes no lock and does not allocate; the copy has this build's type, so the call is
@@ -1137,7 +1136,7 @@ end
 # called in turn with its build) the integer arrays are shared and the float inputs copied; with
 # `shared = :inputs` (another task's copy) every input is copied into arrays of its own, so
 # threads that run trajectories with other inputs, or input functions written at each call,
-# never write one array (F4-B1). Init kernels run at the first call (with that call's `p`),
+# never write one array. Init kernels run at the first call (with that call's `p`),
 # or here for the native build (`Pinit`).
 const _PLANS_LOCK = ReentrantLock()
 # the masked state fields of program `s` on store `st` (a `NodeValueRule` on a state field):
@@ -1195,8 +1194,8 @@ function _lattice_rhs(ctx::RHSContext, ::Type{E}, base, Pinit = nothing, inputs 
     dU = similar(U)
     c = zero(E)
     ls = map(Tuple(sp.launches)) do l
-        # a table's id numbers the tables, not the fields: it is never a state slot (F1: a
-        # table whose index equalled a state field's id was bound to the state)
+        # a table's id numbers the tables, not the fields: it is never a state slot (a
+        # table whose index equalled a state field's id was once bound to the state)
         S0 = Tuple(Tuple(role === :table || !haskey(marks, id) ?
                          array(st, id, role, role == :table ? 0 : 1) :
                          role === :next ? StateView(marks[id].range, true) : marks[id]
@@ -1222,7 +1221,7 @@ end
 """
     ODEAux(f, program)
 
-The aux fields of an ODE problem as observed quantities (F3 design §3.12): `a(u, p, t, key)` is
+The aux fields of an ODE problem as observed quantities: `a(u, p, t, key)` is
 aux field `key` at state `u`, parameters `p` and time `t`, `rhs(u, t)`, grid-shaped on the
 problem's backend (a host state, such as an owned solve's save on a device, is copied there
 first). One call of the right side `f` at `(u, p, t)` runs the aux kernels on the
@@ -1235,7 +1234,7 @@ end
 _build_eltype(::LatticeRHS{L, W, E}) where {L, W, E} = E
 function (a::ODEAux)(u, p, t, key)
     # a saved state of an owned solve on a device is a host vector: the aux kernels read it on
-    # the problem's backend (review F4 b2 #4)
+    # the problem's backend
     if a.f isa LatticeFunction
         be = a.f.meta.problem.backend
         typeof(KA.get_backend(u)) == typeof(be) || (u = copyto!(KA.allocate(be, eltype(u), length(u)), u))
@@ -1275,7 +1274,7 @@ function ode_problem(prog::Program, u0, tspan, p; state, rates, init = String[],
         backend = KA.CPU(),
         options::CompileOptions = CompileOptions(), steady::Bool = false)
     faces = face_checks(prog)
-    derive!(p, tables, index)                       # the computed slots (F2-15)
+    derive!(p, tables, index)                       # the computed slots
     check_faces(faces, p)
     check_values(p, index; built = false)
     s = semantic(prog)
@@ -1302,12 +1301,12 @@ function ode_problem(prog::Program, u0, tspan, p; state, rates, init = String[],
     pv = collect(p)
     f = _lattice_rhs(ctx, E, nothing, pv, ins)
     U = copyto!(KA.allocate(backend, E, n), convert(Vector{E}, collect(u0)))
-    # aux fields `K ~ rhs` read as observed quantities (`sol[K]`, `integ[K]`: F3-00 review M1)
+    # aux fields `K ~ rhs` read as observed quantities (`sol[K]`, `integ[K]`)
     index isa LatticeIndex && !isempty(index.aux) && (index.auxeval[] = ODEAux(f, s))
     index isa LatticeIndex && (index.program[] = s)          # (the checks of an input write)
     fun = SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize}(f; sys = index)
     lp = LatticeParameters(pv, tabs, ins)
-    # a system with no time (F3-12b): the steady state of the right side, for SciML's steady
+    # a system with no time: the steady state of the right side, for SciML's steady
     # solvers (`DynamicSS`, a nonlinear solver)
     steady && return SciMLBase.SteadyStateProblem(fun, U, lp)
     return SciMLBase.ODEProblem(fun, U, _tspan(tspan), lp)
@@ -1318,7 +1317,7 @@ end
 # the right side and keeps its `sys`): a parameter map given to `remake` names parameters
 # only. SciMLBase skips a key whose `parameter_index` is `nothing` (SII's answer for an
 # expression such as `2k`), so `remake(o; p = [2k => 1.0])` would run with the old values; it
-# is refused here (F1).
+# is refused here.
 
 # `T` with the type parameter of its field `field` bounded by `S` (a parameter found by name,
 # not by position)
@@ -1348,12 +1347,12 @@ const LatticeNonlinearProblem = typewith(SciMLBase.NonlinearProblem, :f,
 const LatticeSciMLProblem = Union{LatticeODEProblem, LatticeSteadyStateProblem, LatticeNonlinearProblem,
                                   LatticeDiscreteProblem}
 
-# The parameters of a remake of a lattice problem (F4-00): `p` a `LatticeParameters`, a vector
+# The parameters of a remake of a lattice problem: `p` a `LatticeParameters`, a vector
 # of every scalar parameter, or a map whose keys name scalar parameters, whole tables (`Dk =>
 # values`) and inputs (`kind => K`); `inputs` more input pairs. Every key names a parameter (a
-# typo, an expression or a computed parameter is refused, F1), each write is checked (a
+# typo, an expression or a computed parameter is refused), each write is checked (a
 # declared bound, finite table values, one input value per site) and the computed slots
-# follow (F2-15). A plain value is written into the parameter type, a Dual promotes it.
+# follow. A plain value is written into the parameter type, a Dual promotes it.
 # `missing`: the problem's own object.
 function remake_params(prob, p, inputs = ())
     lp = prob.p
@@ -1378,8 +1377,8 @@ function remake_params(prob, p, inputs = ())
         _write_given_input!(q, ix, InputSlot(_input_of(ix, s, q), ix), v, _start_time(prob))
     end
     ix isa LatticeIndex || return q
-    derive!(q.values, q.tables, ix)                    # the computed slots follow (F2-15)
-    check_bounds(q.values, ix)                         # a declared bound, at the write (F2-14)
+    derive!(q.values, q.tables, ix)                    # the computed slots follow
+    check_bounds(q.values, ix)                         # a declared bound, at the write
     return q
 end
 # the input key of `s` among the inputs of `q`, else an error listing them
@@ -1392,7 +1391,7 @@ end
 # the start of a problem's time span (an input function's first value), or nothing (no time)
 _start_time(prob) = hasproperty(prob, :tspan) && prob.tspan isa Tuple ? Float64(prob.tspan[1]) : nothing
 # a given input of a remake: a value (the input is constant from now on), or a function of the
-# time, kept in `q.fns` with its value at `t0` (F4-B1)
+# time, kept in `q.fns` with its value at `t0`
 function _write_given_input!(q::LatticeParameters, ix, slot::InputSlot, v, t0)
     k = slot.key
     filter!(x -> first(x) != k, q.fns)
@@ -1433,7 +1432,7 @@ end
 # `u0` of a remake: a flat state, or `field => values` pairs (a number or one value per site)
 # over the problem's state, on its backend; a Dual value promotes the state
 function remake_u0(prob, u0)
-    # a state on another backend than the problem's is refused, naming both (SX-12)
+    # a state on another backend than the problem's is refused, naming both
     u0 isa AbstractArray && !(u0 isa AbstractArray{<:Pair}) && _check_backend(KA.get_backend(prob.u0), u0, "u0")
     u0 isa Union{AbstractVector{<:Pair}, Tuple, AbstractDict} && !isempty(u0) || return u0
     ix = SII.symbolic_container(prob.f)
@@ -1486,7 +1485,7 @@ end
 # `NonlinearProblem(SteadyStateProblem(prob))`: the residual `f(du, u, p, Inf)` with the
 # Jacobian keywords in residual form. (SciMLBase 3.58's own conversion wraps a `jvp` as
 # `(Jv, u, p)`, dropping the vector, so its `NonlinearFunction` refuses an in-place `jvp` as
-# nonconforming; F4-07 sets one on every problem.)
+# nonconforming; every problem sets one.)
 # Upstream: https://github.com/SciML/SciMLBase.jl/issues/1663; drop this method once a fixed SciMLBase is required.
 function SciMLBase.NonlinearProblem(prob::LatticeSteadyStateProblem)
     f = prob.f
@@ -1554,8 +1553,8 @@ end
 CommonSolve.solve(::SciMLBase.AbstractODEProblem, alg::Union{AbstractFieldAlgorithm, LinearSolver}; kw...) = throw(_ode_refusal(alg))
 CommonSolve.init(::SciMLBase.AbstractODEProblem, alg::Union{AbstractFieldAlgorithm, LinearSolver}; kw...) = throw(_ode_refusal(alg))
 
-# The problems `discretize` returns (F4-01): one problem, many algorithms. A field algorithm
-# (or no algorithm: the default of the group's kind, Q1) steps the owned problem built from the
+# The problems `discretize` returns: one problem, many algorithms. A field algorithm
+# (or no algorithm: the default of the group's kind) steps the owned problem built from the
 # metadata and the problem's state, time span and parameters; any other algorithm is SciML's.
 const LatticeProblem = Union{LatticeODEProblem, LatticeDiscreteProblem}
 function _owned_or_refuse(prob, alg)
@@ -1564,7 +1563,7 @@ function _owned_or_refuse(prob, alg)
 end
 # `save_idxs` of state fields on an OrdinaryDiffEq solve: a field is a grid of indices, which
 # SciML's saved subsystem cannot take, so the fields become their flat indices (and `sol[c]`
-# finds the field in the saves: F4-05)
+# finds the field in the saves)
 function SciMLBase.get_save_idxs_and_saved_subsystem(prob::LatticeProblem, save_idxs)
     idx = _field_save_idxs(prob, save_idxs)
     idx === save_idxs && return invoke(SciMLBase.get_save_idxs_and_saved_subsystem, Tuple{Any, Any}, prob, save_idxs)
@@ -1585,9 +1584,9 @@ function _field_save_idxs(prob, save_idxs)
     any(isfield, save_idxs isa Union{AbstractVector, Tuple} ? save_idxs : (save_idxs,)) || return save_idxs
     return _save_indices(m.problem, save_idxs)
 end
-# (the integrator keeps `prob`: its solution is SciML's, of `prob`, F4-04; the problem's own
+# (the integrator keeps `prob`: its solution is SciML's, of `prob`, the problem's own
 # keywords join the call's as DiffEqBase merges them, its callbacks before the call's, without
-# the built-in ones of the ODE path, which an owned run steps itself: F4-05)
+# the built-in ones of the ODE path, which an owned run steps itself)
 function _owned_init(fp::FieldProblem, alg, prob; callback = nothing, kw...)
     pk = Dict{Symbol, Any}(pairs(prob.kwargs))
     pcb = _user_callbacks(pop!(pk, :callback, nothing))
@@ -1611,7 +1610,7 @@ function _builtin_set(prob)
     return isempty(b) ? nothing : b
 end
 # `remake(prob; callback = cb)`: the built-in callbacks stay, the given ones join them (a
-# replaced keyword would drop the clock and the masks of the ODE path: review F4 b2 #2)
+# replaced keyword would drop the clock and the masks of the ODE path)
 function _remake_kw(prob, kw)
     haskey(kw, :callback) || return kw
     b = _builtin_set(prob)
@@ -1649,7 +1648,7 @@ _check_default_alg() = hasmethod(CommonSolve.solve, Tuple{SciMLBase.AbstractDEPr
     )
 )
 
-# A system with no time (F4-02): its `LinearProblem` or `NonlinearProblem`; a field algorithm
+# A system with no time: its `LinearProblem` or `NonlinearProblem`; a field algorithm
 # (or none: `QuasiSteady()`) solves the owned problem once
 const LatticeLinearProblem = typewith(SciMLBase.LinearProblem, :A, LatticeOperator)
 const LatticeResidualProblem = typewith(SciMLBase.NonlinearProblem, :f,

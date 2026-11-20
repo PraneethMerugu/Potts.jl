@@ -24,7 +24,7 @@ function ProgramBuilder(
 end
 
 """
-Declare a field; returns its provisional id. `fixed = true` (a declared storage, FE-17): the
+Declare a field; returns its provisional id. `fixed = true` (a declared storage): the
 float lane `storage` holds its own type under `lanes = :state` too, where a lane otherwise
 holds the problem's value type ([`lanetype`](@ref LatticeFields.Compile.lanetype)).
 """

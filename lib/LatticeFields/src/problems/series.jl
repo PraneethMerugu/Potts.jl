@@ -1,4 +1,4 @@
-# Solutions of lattice problems (F4-04; F4 design §3.5): an owned solve returns SciML's
+# Solutions of lattice problems: an owned solve returns SciML's
 # `ODESolution` (linear interpolation: `sol(t)`, `Array(sol)`, `sol.ps`, `sol.alg`, `sol.stats`).
 # A field read on any solution of a lattice problem (owned, OrdinaryDiffEq, or a FieldProblem
 # solved directly) follows SciML and `PottsProblem`: `sol[c]` is one grid per save;
@@ -7,7 +7,7 @@
 """
     FieldSeries
 
-A field's values over the saves of a solution, time first (F4-04; MethodOfLines' shape): an
+A field's values over the saves of a solution, time first (MethodOfLines' shape): an
 `AbstractArray` of size `(nt, dims...)` whose entries are read from the saved states when
 indexed, with no copy of the series ([`field_series`](@ref) gives it; `sol[c]` is a vector of
 grids). `s[i, :, :]` (or `sol[c, i]`, `sol[c][i]`) is the grid at save `i`,
@@ -187,11 +187,11 @@ const ImplicitFacts = @NamedTuple{
 """
     LatticeStats
 
-The statistics of an owned solve (`sol.stats`, F4-04): `nf` the windows stepped (shortened ones
+The statistics of an owned solve (`sol.stats`): `nf` the windows stepped (shortened ones
 too), `nsolve` the implicit solves, `counts` the substep count of each field group
 ([`substep_counts`](@ref)), and the solver counters of the groups' status words
 ([`field_stats`](@ref)): `solves`, `budget`, `floor`, `newton_budget`; `syncs` the host copies of a
-device state that callbacks and interpolated saves took (0 with none, F4-05); `implicit` the
+device state that callbacks and interpolated saves took (0 with none); `implicit` the
 resolved implicit facts of each group, `nothing` for an explicit one ([`implicit_facts`](@ref):
 `linsolve`, the multigrid levels, `solver_type`, the Newton count and its rule, the operator's
 exactness), taken when the solution is built.
@@ -247,7 +247,7 @@ _stats(t) = throw(ArgumentError("field_stats: the solution was not computed by a
 substep_counts(s::LatticeSolution) = s.stats isa LatticeStats ? copy(s.stats.counts) :
     throw(ArgumentError("substep_counts: the solution was not computed by a field algorithm (an owned solve)"))
 
-# the solution of an owned solve of the SciML problem `sp` (F4-04): `build_solution` over the
+# the solution of an owned solve of the SciML problem `sp`: `build_solution` over the
 # saves, with linear interpolation (a map's states are constant between steps), and `prob` at
 # the integrator's current parameters, tables and inputs (`sol.ps` reads the values written
 # during the run)
@@ -272,7 +272,7 @@ function _final_problem(integ::FieldIntegrator, sp)
            invoke(SciMLBase.remake, Tuple{T}, sp; p = q, save_idxs = idx)
 end
 
-# Field reads on every solution of a lattice problem (ruling Q18): `sol[c]` of a state or aux
+# Field reads on every solution of a lattice problem: `sol[c]` of a state or aux
 # field is one grid per save (as SciML and `PottsProblem` read a variable); `sol[x]` the
 # coordinates of the site centers; anything else as SciML reads it. (The methods for integer,
 # colon and index-array arguments keep SciML's reads, unambiguously.)
@@ -302,8 +302,7 @@ end
 
 The state at time `t` (linear in time between the saves) and at the point `(x, y…)`, multilinear
 between the site centers (constant past the outermost centers): the value of field `idxs`, or
-with `idxs = nothing` a vector of every state field's value, in state order (F4-04; F4 design
-§3.5, MethodOfLines' spatial interpolation).
+with `idxs = nothing` a vector of every state field's value, in state order (MethodOfLines' spatial interpolation).
 """
 function (sol::LatticeSolution)(t::Real, x::Real, ys::Real...; idxs = nothing)
     ix = _lindex(sol)

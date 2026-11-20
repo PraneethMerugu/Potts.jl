@@ -1,11 +1,11 @@
-# F3-06 (F3 design §1.2 items 4–5, §2.5, §3.4 S15): the warm solve on the CPU.
+# The warm solve on the CPU.
 #   - The host reduction fast path (`Schedule.host_reduce!`: the tree's idle items skipped,
 #     blocks in chunks on threads) equals the emulated workgroups (`host_workgroups!`, the
 #     HostExec of these tests) bitwise on every solver test case, at Float32 and Float64, and
 #     whatever the chunk count.
 #   - Plans are held per kind, budget and rotation: a warm rebuild + lift + solve allocates
 #     0 B, and a sweep over 100 coefficient values keeps `sv.plans` at a constant size.
-# Base (1079c4ff, ~/lpwork/f3b2-06nc-base.log): the warm rebuild + lift + solve allocates
+# Before this test's fix (1079c4ff): the warm rebuild + lift + solve allocates
 # 11–12 KB (disk128 PCG 12,208 B; the plan key alone 3,520 B per lookup); the sweep keeps
 # `sv.plans` at 8–11 (every value write drops all plans); no fast path exists, so the bitwise
 # test passes trivially there. Negative controls on this tree: a tree that skips half of
@@ -62,7 +62,7 @@ end
 using .LF_solvers_warm: fd
 @testset "the host reduction fast path equals the emulated workgroups bitwise" begin
     rng = Xoshiro(21)
-    extra = (                                             # F3-05 operators
+    extra = (                                             # face-condition operators
         "robin" => (CellOperator((40, 24); shift = 0.05, robin = (((0.4, 0.25, 0.3), (0.1, -1.0, 0.4)), (nothing, (1.0, 0.6, 0.2)))),
             ("in.f" => rand(rng, 960),)),
         "fieldface" => (CellOperator((40, 24); shift = 0.02, face = ("in.wx", "in.wy"), mask = "in.mask", value = "in.v",
@@ -128,9 +128,9 @@ using .LF_solvers_warm: fd
 end
 end
 
-# F3-05/06 review r1 S4: the values are not in the plan key, so a coefficient write must drop
+# The values are not in the plan key, so a coefficient write must drop
 # the held plans (`empty!` in `_set_raw!`). After `set_coefficients!`, `steady!` and a tangent
-# equal a solver built fresh at the new values, bitwise. Negative control (~/lpwork/f3b2r1-nc-s4.log):
+# equal a solver built fresh at the new values, bitwise. Negative control:
 # without the `empty!`, the written solver solves with its first values: 30 of the 48 checks fail
 # (`steady!` off by up to 0.14 in 14, both executors; all 16 tangents miss the difference quotient);
 # base 9db10886 passes (no test of it existed).

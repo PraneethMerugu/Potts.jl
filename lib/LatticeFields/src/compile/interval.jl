@@ -1,4 +1,4 @@
-# Interval coefficient evaluator (R3 §3.1, v3 §4.5), emitted as host code: given parameter
+# Interval coefficient evaluator, emitted as host code: given parameter
 # bounds it returns enclosures of chosen nodes with no allocation, which is what stability
 # bounds and stage counts need. A load takes its field's declared state interval; a load with
 # no declared interval is a build error naming the field. Bounds are widened outward by one

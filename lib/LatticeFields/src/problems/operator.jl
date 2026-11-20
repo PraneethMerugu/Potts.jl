@@ -1,4 +1,4 @@
-# The operator of an implicit group (F3 design §3.4): the symmetric Helmholtz part `J̃` of the
+# The operator of an implicit group: the symmetric Helmholtz part `J̃` of the
 # rate Jacobian that a front end extracts from its linearity table, as plain data (no Symbolics:
 # LatticePDE builds it in `lower_group`'s deferred `operator`, for both coupled and standalone routes). The
 # implicit runtime (`implicit.jl`) turns it into one `Solvers.CellOperator` per row.
@@ -28,14 +28,13 @@ Jacobian that the linear solve sees:
   linear rate), else `inexact` lists the terms left in the residual (a defect correction), in
   the user's words;
 - `iterate`: the local Jacobian reads the row's own field (a local nonlinear term `f(c)`,
-  `−∂f/∂c` at the iterate, or a switch): the `jac:` kernel runs at every Newton iteration
-  (F3-09a);
+  `−∂f/∂c` at the iterate, or a switch): the `jac:` kernel runs at every Newton iteration;
 - `switch`: the row has a switch term `a max(c − c_T, 0)` (`LaggedSwitch`): its Jacobian
-  flips with the iterate, and a group with one takes 2 Newton iterations automatically (S1);
-- `adv`: the bound of the row's advection terms (F3-09b): entries whose absolute values sum to
+  flips with the iterate, and a group with one takes 2 Newton iterations automatically;
+- `adv`: the bound of the row's advection terms: entries whose absolute values sum to
   the upwind bound `Σ_a 2 max|u_a| / h_a`, each a `Coef` (a velocity of numbers and
   parameters) or `(; f, text)`, `f` a function of the parameters (a velocity that varies by
-  site, bounded over the box by the interval evaluator, F3-13; NaN when not finite, and the
+  site, bounded over the box by the interval evaluator, NaN when not finite, and the
   term `text` is then one no bound sees);
 - `cross`: the row's cross terms `a · o` (`CrossLinear`): the other field's key, `a` as a
   `Coef` (`NaN` when no number or parameter bounds it), the term's text;
@@ -45,29 +44,29 @@ Jacobian that the linear solve sees:
   M3), each `(bound, text, ratio)`: `bound` a function of the parameters (a
   [`ParamsTables`](@ref), the tables included) giving its Gershgorin bound (a bound that is not
   finite at the parameters makes the term unseen), and `ratio` its face-wise ratio θ to the
-  kept term, `max|m K|` of the term over the smallest `m K` kept (R2-M1; NaN when the kept
+  kept term, `max|m K|` of the term over the smallest `m K` kept (NaN when the kept
   multiplier is not bounded below by a positive value, `nothing` when no interval bounds it):
   with `L_out ≼ θ L_kept` the correction contracts by θ at any step size, so when the row's θ
   sum is at most 1/2 the term counts in the Newton count only, not in the substeps;
 - `facemax`: for a field row with diffusion, a function of the parameters giving the largest
   face coefficient per axis (`Σ max|m| max|K| / h_a²`, NaN when not finite), or `nothing`: it
-  bounds the part of a Robin face with a negative diagonal left out of the operator (R2-S1);
+  bounds the part of a Robin face with a negative diagonal left out of the operator;
 - `jmax`: for a field row with local terms, a function of the parameters giving the largest
-  value of its local Jacobian over the sites (the interval evaluator over the box, F3-13; NaN
+  value of its local Jacobian over the sites (the interval evaluator over the box, NaN
   when not finite), or `nothing`: the growth that count rule 1 keeps out of the shift;
 - `linear`: every term of the row is linear in the group's state (diffusion, linear local,
-  advection, cross-linear terms and sources; F3-12d: a coupled solve's directional difference
+  advection, cross-linear terms and sources: a coupled solve's directional difference
   of the residual is then exact at any step, and one Newton step is the solve);
 - `crossfaces`: the row's cross diffusion terms `D laplacian(o)` with a numeric coefficient, each the
   other field's key and its faces per axis `D/h_a²` as `Coef`s (the coupled steady system's
-  modes, F3-12d);
-- `msign`: the row's diffusion multipliers that read the coordinates (F3-24), each
+  modes);
+- `msign`: the row's diffusion multipliers that read the coordinates, each
   `(f, mtext, text)`: `f` a function of the parameters giving the multiplier's smallest value
   over the site centers (the interval evaluator; NaN when it has none), `mtext` the multiplier
   and `text` the term in the user's words. Where one may be negative the scaled row drops the
   diffusion (anti-diffusion), so the operator is not exact at those parameters: checked at
   bind and at every parameter write;
-- `sitefaces`: the row's Robin faces whose α or β varies by site or in time (F4-12b), each
+- `sitefaces`: the row's Robin faces whose α or β varies by site or in time, each
   `(axis, k, f)` (`k` 1 low, 2 high): `f` a function of the parameters giving the smallest and
   largest ghost diagonal `d = α/(α/2 + β)` over the face's sites at any time (NaN when no
   interval bounds it, or `α/2 + β` may vanish). A negative part stays out of the operator per
@@ -101,7 +100,7 @@ end
 """
     OperatorSpec
 
-The operator of an implicit group (F3 design §3.4): its rows ([`RowOperator`](@ref), in the
+The operator of an implicit group: its rows ([`RowOperator`](@ref), in the
 group's state order) and the operator program `jac` (the `jac:<key>` kernels of the rows whose
 operator varies by site, before the semantic passes; `nothing` when every row is numeric). The
 program's fields are keyed as the group's, so a runtime binds them to its store's arrays by key.
@@ -147,8 +146,8 @@ _advval(c::NamedTuple, p) = Float64(c.f(p))
 
 The largest positive local derivative the operator `op` sees over the rows `keys` at raw
 parameters `p` (`max(J_loc, 0)` of the numeric rows; a row whose local Jacobian varies by site
-takes its interval bound over the sites, `jmax`, F3-13; with none, or one that is not finite, it
-counts 0: its shift is clamped instead, F3 design §3.4 Positivity).
+takes its interval bound over the sites, `jmax`, with none, or one that is not finite, it
+counts 0: its shift is clamped instead).
 """
 function growth(op::OperatorSpec, keys, p)
     g = 0.0
@@ -168,12 +167,11 @@ end
 """
     inexact_bounds(op, keys, cyclic, p) -> (; ρ, κ, θ, unseen)
 
-The bounds of the terms outside the operator `op` of the rows `keys` at raw parameters `p`
-(F3 design §3.4, §3.6): the largest bound `ρ` (`ρ_adv`) of a row's advection terms and the
+The bounds of the terms outside the operator `op` of the rows `keys` at raw parameters `p`: the largest bound `ρ` (`ρ_adv`) of a row's advection terms and the
 diffusion terms out of a scaled row's operator (`bounds`, read with the tables when `p` is a
 [`ParamsTables`](@ref)) whose face-wise ratio sum to the kept term is unknown or above 1/2,
 the largest such ratio sum `θ` of a row where it is at most 1/2 (those terms then contract by
-`θ` at any step size and add nothing to `ρ`, R2-M1), the largest in-group cross
+`θ` at any step size and add nothing to `ρ`), the largest in-group cross
 sum `κ` (`κ_in`) when the rows read one another in a cycle (`cyclic`), and the terms no bound
 sees (`unseen`, in the user's words; an unknown cross coefficient in a cycle counts).
 """

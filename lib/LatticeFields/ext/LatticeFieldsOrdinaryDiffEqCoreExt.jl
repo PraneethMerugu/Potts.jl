@@ -1,8 +1,8 @@
 # `setp` on an OrdinaryDiffEq integrator of a field program's ODE form names a symbol that is
-# no parameter (an expression such as `2k`), as `setp` on the problem does (F1), instead of
+# no parameter (an expression such as `2k`), as `setp` on the problem does, instead of
 # SII's "invalid index: nothing" when the setter runs; a value outside a parameter's declared
-# bounds is refused when the setter runs, before it is written (F2-14). A write of an aux field
-# is refused in the user's words (F3-00).
+# bounds is refused when the setter runs, before it is written. A write of an aux field
+# is refused in the user's words.
 module LatticeFieldsOrdinaryDiffEqCoreExt
 
 using OrdinaryDiffEqCore: OrdinaryDiffEqCore, ODEIntegrator, DefaultInit
@@ -25,7 +25,7 @@ function SII.setp(sys::LatticeODEIntegrator, sym; kw...)
         ix = SII.symbolic_container(integ.f)
         Problems.check_bounds(lp ? p.values : p, ix, kv; tables = lp ? p.tables : Problems.rhs_tables(integ.f))
         s(integ, v)
-        # a write is a discrete event: every masked site takes its value now (F4-02), as a mask
+        # a write is a discrete event: every masked site takes its value now, as a mask
         # value may read the parameter, table or input written (its rate cannot carry the jump)
         lp && Problems.sync_masks!(integ)
         return v
@@ -39,10 +39,10 @@ function SII.setsym(sys::LatticeODEIntegrator, sym)
     return invoke(SII.setsym, Tuple{Any, Any}, sys, sym)
 end
 
-# A problem with steady rows `0 ~ rhs` (a mass matrix, F4-02) starts from a consistent state:
+# A problem with steady rows `0 ~ rhs` (a mass matrix) starts from a consistent state:
 # SciML's default (`CheckInit`) refuses an initial state whose steady rows are not solved, so
 # the default here solves them (`Problems.steady_start!`: the owned QuasiSteady solve of those
-# rows at t0, on the lattice; review R2). `initializealg = BrownFullBasicInit()` or
+# rows at t0, on the lattice). `initializealg = BrownFullBasicInit()` or
 # `CheckInit()` given to `solve` dispatch to their own methods.
 function OrdinaryDiffEqCore._initialize_dae!(integ::ODEIntegrator, prob::Problems.LatticeODEProblem, alg::DefaultInit,
         x::Val{true})

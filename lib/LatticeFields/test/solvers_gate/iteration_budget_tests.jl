@@ -1,19 +1,20 @@
-# PG-4 sweep (opt-in group `solvers_gate`). Per reference case:
+# The solver iteration budget over the reference cases (opt-in group `solvers_gate`). Per
+# reference case:
 #   - Float64, undeflated PCG and stationary V(2,2): equal to the reference counts (D-048);
-#   - PG-4(a), the group's solver under `linsolve = :auto` (PCG, deflated when unanchored), in
+#   - the iteration budget: the group's solver under `linsolve = :auto` (PCG, deflated when unanchored), in
 #     Float64 and Float32: ≤ 8 iterations (9 on the 512² disk at s = 5.5e-6; ≤ 12 on odd
 #     periodic axes, user ruling), `done`. Float32 periodic rows run a Float64 solver
 #     (`solver_type = :auto` on unanchored weak-reaction groups, user ruling);
 #   - with `solver_type = Float32`, Float32 periodic rows at s = 5.5e-6 stop at the Float32 floor
 #     (`:floor`, never `:done`): the best true residual against its measured bound;
-#   - PG-4(d), depth: measured Float32 stationary counts grow ≤ 2 from the 128² to the 512² box.
+#   - depth: measured Float32 stationary counts grow ≤ 2 from the 128² to the 512² box.
 # per300 (odd coarse axes) needs 11 (3D per45: 12, in solvers/deflation.jl).
 
-@testsetup module LF_solvers_gate_pg4
+@testsetup module LF_solvers_gate_iteration_budget
 using Test, LatticeFields
 include("../host_runner.jl")
 include("../solvers_cases.jl")
-const PG4_FLOOR = Dict("per256" => 3e-4, "per300" => 1.5e-3)  # measured best: 1.0e-4, 4.8e-4
+const FLOAT32_FLOOR = Dict("per256" => 3e-4, "per300" => 1.5e-3)  # measured best: 1.0e-4, 4.8e-4
 
 function auto_run(case, T; kw...)
     sv = case_solver(case, T; kw...)
@@ -23,8 +24,8 @@ end
 include("../shared/export_all.jl")
 end
 
-@testitem "PG-4 sweep" setup = [LF_solvers_gate_pg4] tags = [:latticefields, :solvers_gate] begin
-@testset "PG-4 sweep" begin
+@testitem "solver iteration budget sweep" setup = [LF_solvers_gate_iteration_budget] tags = [:latticefields, :solvers_gate] begin
+@testset "solver iteration budget sweep" begin
     mg32 = Dict{String, Int}()
     for ((name, s), ref) in sort(collect(REFERENCE); by = first)
         case = named_case(name, s)
@@ -44,9 +45,9 @@ end
         if startswith(name, "per")
                 _, f32 = auto_run(case, Float32; solver_type = Float32)
             @test f32.status === :floor                # never :done above the tolerance
-            @test f32.best / f32.bnorm <= PG4_FLOOR[name]
+            @test f32.best / f32.bnorm <= FLOAT32_FLOOR[name]
         end
     end
-    @test mg32["box512"] - mg32["box128"] <= 2         # PG-4(d) on measured counts
+    @test mg32["box512"] - mg32["box128"] <= 2         # the depth bound, on measured counts
 end
 end

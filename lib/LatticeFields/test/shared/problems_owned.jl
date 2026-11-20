@@ -1,4 +1,4 @@
-# Definitions of problems/owned_tests.jl that other test files use (moved here by TS1b).
+# Definitions of problems/owned_tests.jl that other test files use.
 using LatticeFields.Problems: FieldProblem, ExplicitEuler, BoundStep, LatticeIndex,
                               FieldSlot,
                               ode_problem, face_checks, check_faces, degenerate_face

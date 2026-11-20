@@ -1,4 +1,4 @@
-# Definitions of problems/x1_exact_tests.jl that other test files use (moved here by TS1b).
+# Definitions of problems/bit_exact_kernels_tests.jl that other test files use.
 using Random: Xoshiro
 using LatticeFields.Compile: loads_first
 

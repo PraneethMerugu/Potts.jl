@@ -2,7 +2,7 @@
     LatticeFields
 
 Fields on lattices: the execution layer, IR, compiler passes and schedule of the field
-compiler (v3 §2–§4). This file holds only `include` lines; each layer is a submodule in its
+compiler. This file holds only `include` lines; each layer is a submodule in its
 own directory.
 
   - [`Exec`](@ref LatticeFields.Exec): the host executor, the generic device wrapper,

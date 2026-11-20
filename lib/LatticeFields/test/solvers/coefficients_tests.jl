@@ -1,4 +1,4 @@
-# Coefficients as runtime parameters (P5 C7b-2): a value change reuses the compiled bodies;
+# Coefficients as runtime parameters: a value change reuses the compiled bodies;
 # tangent solves (P5 §3.4): derivatives of the solution with respect to a coefficient from
 # one primal solve and one tangent solve with homogeneous boundary values, against finite
 # differences, with the negative control that keeps the primal boundary values.

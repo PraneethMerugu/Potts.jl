@@ -1,4 +1,4 @@
-# The x1 bit-exactness experiment (pass 3, P3-gates §1) ported onto generated FV kernels:
+# Bit-exactness of generated FV kernels:
 # K coupled species, `u_k ← u_k + h (a_k Δu_k − b_k u_k + Σ_T p u_i u_j)` on a periodic
 # grid. On identical inputs, outputs are compared as bit patterns (`-0.0 ≠ 0.0`) across
 #   layout       K separate fields  vs  one K-component field (planes);
@@ -8,16 +8,16 @@
 #                the device vs the host executor (problems_device.jl).
 # Negative control: one input element one ulp up changes the output.
 
-@testsetup module LF_problems_x1_exact
+@testsetup module LF_problems_bit_exact
 using Test, LatticeFields
 include("../host_runner.jl")
 include("../fixtures.jl")
-include("../shared/problems_x1_exact.jl")
+include("../shared/problems_bit_exact.jl")
 include("../shared/export_all.jl")
 end
 
-@testitem "x1 port: generated FV kernels are bit-exact (length(dims)D K=K T=T)" setup = [LF_problems_x1_exact] tags = [:latticefields, :problems] begin
-@testset "x1 port: generated FV kernels are bit-exact ($(length(dims))D K=$K T=$T)" for (dims, K, T) in (
+@testitem "generated FV kernels are bit-exact (length(dims)D K=K T=T)" setup = [LF_problems_bit_exact] tags = [:latticefields, :problems] begin
+@testset "generated FV kernels are bit-exact ($(length(dims))D K=$K T=$T)" for (dims, K, T) in (
     ((24, 20), 4, 0), ((24, 20), 4, 3), ((24, 20), 8, 3), ((10, 9, 8), 4, 3), (
     (10, 9, 8), 8, 0))
     X, P = inputs(dims, K), speciesP(K, T)

@@ -1,7 +1,7 @@
 """
     LatticeFields.Schedule
 
-Step order (topological, Jacobi inside cycles), cost-model fusion (v3 §4.3), buffer binding,
+Step order (topological, Jacobi inside cycles), cost-model fusion, buffer binding,
 launch descriptions for Exec and the fusion report.
 """
 module Schedule

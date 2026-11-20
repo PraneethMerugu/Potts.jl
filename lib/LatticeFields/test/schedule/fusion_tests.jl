@@ -1,4 +1,4 @@
-# Fusion decisions against the cost model (v3 §4.3 regime table, P3-gates x2/x3), with the
+# Fusion decisions against the cost model (its regime table, as measured on the field-kernel benchmarks), with the
 # shared-reads rule and a fixed stream cap as negative controls; fusion legality; ordering;
 # fused execution bit-exact with split execution; static ndrange marking.
 
@@ -33,7 +33,7 @@ end
     end
     # 2D 4096², independent fields, K = 8: split
     @test nlaunch(independent((4096, 4096), 8)) == 8
-    # modeled launch-bound smoother time is in the measured range (15.8–18.1 µs, P3-gates §3)
+    # modeled launch-bound smoother time is in the measured range (15.8–18.1 µs)
     tf, ts = all_vs_split(smoother((42, 42, 42), 4))
     @test 12e-6 < tf < 22e-6 && 1.3 < ts / tf < 2.2
 end
@@ -98,8 +98,8 @@ end
 end
 end
 
-@testitem "F3-02: a one-buffer field inside a Jacobi group is read new (its writer first)" setup = [LF_schedule_fusion] tags = [:latticefields, :schedule] begin
-@testset "F3-02: a one-buffer field inside a Jacobi group is read new (its writer first)" begin
+@testitem "a one-buffer field inside a Jacobi group is read new (its writer first)" setup = [LF_schedule_fusion] tags = [:latticefields, :schedule] begin
+@testset "a one-buffer field inside a Jacobi group is read new (its writer first)" begin
     # x, y two-buffer, K one-buffer: `z_K` (K ← x) sorts last by key, but `fy` reads K's new
     # value, so `z_K` runs before it; x and y keep the Jacobi rule (old values)
     function auxloop(off)

@@ -1,4 +1,4 @@
-# Derivative parts through the implicit solve (F3-21a): tangent steps. A state with derivative
+# Derivative parts through the implicit solve: tangent steps. A state with derivative
 # parts (ForwardDiff Duals: Dual parameters, a Dual start) is solved in two parts. The primal
 # solve runs on a primal copy of the store (`pst`, the value type), with the primal parameters,
 # exactly as a primal run (its Newton iterations, solvers, status word and counts). After each
@@ -71,7 +71,7 @@ end
 """
     TangentCache
 
-The cache of an implicit runtime whose state carries derivative parts (F3-21a): the primal
+The cache of an implicit runtime whose state carries derivative parts: the primal
 [`ImplicitCache`](@ref) `pc` on the primal copy `pst` of the store (its parity vector is the
 store's), the pairs of Dual and primal arrays synchronized at each window's start, the tangent
 rows (in `pc`'s solve order), Crank–Nicolson's Dual right-side launches, the derivative part

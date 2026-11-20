@@ -1,4 +1,4 @@
-# F3-20 (F3 design, F3-20): the hexagonal lattice in the solver's operator. Axial coordinates,
+# The hexagonal lattice in the solver's operator. Axial coordinates,
 # six neighbors ±e₁, ±e₂, ±(e₁ − e₂), the face to +e₁ − e₂ the third face direction of
 # `CellOperator(…; hex = true)`. The tests compare a solve with the eliminated system assembled
 # here from the six faces and the ghost rule (masks with a value field, a Robin face, a
@@ -6,7 +6,7 @@
 # grids that coarsen two and three levels (and one with generated levels above the bottom),
 # and check the tangent solve of the diagonal face against a finite difference.
 # Base (ee577f6e): `hex` is an unknown keyword of `CellOperator` (MethodError).
-# Negative controls (mutations of this tree, F3-20 log in HANDOFF §6): the operator without
+# Negative controls (mutations of this tree, run by hand): the operator without
 # the diagonal faces fails the hand system; a coarse build that drops the diagonal fine faces
 # (`RuleWeights(; diagonal = 0)`) fails the cycle-factor bound.
 
@@ -123,9 +123,9 @@ end
 include("../shared/export_all.jl")
 end
 
-@testitem "F3-20: a hex solve equals the hand system of the six faces" setup = [LF_solvers_hex] tags = [:latticefields, :solvers] begin
+@testitem "a hex solve equals the hand system of the six faces" setup = [LF_solvers_hex] tags = [:latticefields, :solvers] begin
 using .LF_solvers_hex: fd
-@testset "F3-20: a hex solve equals the hand system of the six faces" begin
+@testset "a hex solve equals the hand system of the six faces" begin
     # closed box: a Robin face (axis 2 low, d > 0), a Robin face whose diagonal is negative (axis 1
     # low, the defect correction), a Dirichlet face (axis 1 high), no-flux axis 2 high
     op, inp = hex_case((13, 11); robin = (((-0.2, 1.0, 0.5), nothing), ((1.0, 0.5, 0.4), nothing)),
@@ -159,11 +159,11 @@ using .LF_solvers_hex: fd
 end
 end
 
-@testitem "F3-20: multigrid on hex grids: the residual reduction per V-cycle" setup = [LF_solvers_hex] tags = [:latticefields, :solvers] begin
+@testitem "multigrid on hex grids: the residual reduction per V-cycle" setup = [LF_solvers_hex] tags = [:latticefields, :solvers] begin
 using .LF_solvers_hex: fd
-@testset "F3-20: multigrid on hex grids: the residual reduction per V-cycle" begin
+@testset "multigrid on hex grids: the residual reduction per V-cycle" begin
     # 7×6 coarsens two levels, 13×11 and 12×8 three (odd axes: the last coarse cell takes three
-    # children); 160×150 has generated levels above the bottom (lb = 2). Measured (F3-20 log):
+    # children); 160×150 has generated levels above the bottom (lb = 2). Measured:
     # 0.15–0.24 (two levels), 0.19–0.34 (three), 0.37–0.42 at 160×150; the Cartesian grids of
     # the same faces 0.25–0.33 (likely because the hexagonal lattice is not bipartite: with constant
     # faces D⁻¹A ends at 1.5, below
@@ -187,9 +187,9 @@ using .LF_solvers_hex: fd
 end
 end
 
-@testitem "F3-20: the tangent solve of the diagonal face equals a finite difference" setup = [LF_solvers_hex] tags = [:latticefields, :solvers] begin
+@testitem "the tangent solve of the diagonal face equals a finite difference" setup = [LF_solvers_hex] tags = [:latticefields, :solvers] begin
 using .LF_solvers_hex: fd
-@testset "F3-20: the tangent solve of the diagonal face equals a finite difference" begin
+@testset "the tangent solve of the diagonal face equals a finite difference" begin
     op = CellOperator((12, 10); hex = true, face = (1.0, 0.8, 0.6), shift = 0.4,
         robin = ((nothing, nothing), ((1.0, 0.5, 0.7), nothing)), dirichlet = ((nothing, 1.0), (nothing, nothing)))
     f = rand(Xoshiro(5), 120)

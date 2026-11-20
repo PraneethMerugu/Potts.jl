@@ -1,4 +1,4 @@
-# C7b lowering: RESTRICT over children (odd tails, axes of size 1), level +1 reads in the fine
+# Multilevel lowering: RESTRICT over children (odd tails, axes of size 1), level +1 reads in the fine
 # frame, the refusal of a level that coarsens an axis of size 1, block reductions and gates.
 # Oracles are direct loops over the n ÷ 2 convention, independent of the emitter.
 
@@ -48,10 +48,10 @@ end
 end
 end
 
-# F3-16 (`Coarse(k)` fields): an access m > 1 levels away. Base 85794414 (~/lpwork/f3b6-nc-lf.log):
+# `Coarse(k)` fields: an access m > 1 levels away. Before the fix (85794414):
 # `legality` refused every case ("an access shifts more than one level").
-@testitem "F3-16: RESTRICT over m > 1 levels, mixed depths, level +m reads, divisibility" setup = [LF_compile_multilevel] tags = [:latticefields, :compile] begin
-@testset "F3-16: RESTRICT over m > 1 levels, mixed depths, level +m reads, divisibility" begin
+@testitem "RESTRICT over m > 1 levels, mixed depths, level +m reads, divisibility" setup = [LF_compile_multilevel] tags = [:latticefields, :compile] begin
+@testset "RESTRICT over m > 1 levels, mixed depths, level +m reads, divisibility" begin
     for (dims, m) in (((8, 4), 2), ((4, 1, 8), 2), ((16,), 3))
         N = length(dims)
         pb = ProgramBuilder(Grid(dims); levels = m + 1)
@@ -85,7 +85,7 @@ end
     for got in ml_modes(pb, ("e" => Float32[10, 20],))
         @test got == Float32[10, 10, 10, 20, 20, 20, 20, 20]     # blocks of 2..9, clamped to 8
     end
-    # an axis that 2^m does not divide is refused, naming it (the front end refuses first, F3-16)
+    # an axis that 2^m does not divide is refused, naming it (the front end refuses first)
     pb = ProgramBuilder(Grid((6, 8)); levels = 3)
     r = field!(pb, "r"; role = :input)
     v = field!(pb, "v"; role = :output, levels = [2])

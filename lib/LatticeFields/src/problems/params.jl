@@ -6,13 +6,13 @@
 """
     LatticeParameters(values, tables = [], inputs = []; tick = 0, fns = [])
 
-The parameters of a field problem (F4 design §3.3): `values` the scalar parameters in raw
+The parameters of a field problem: `values` the scalar parameters in raw
 order (SciMLStructures' `Tunable` portion; Duals allowed), `tables` the kind tables as
 `key => values` (`Constants`), `inputs` the input arrays as `key => values` (flat host
 values, or `nothing` for an unset input) and `tick` the clock's step index (`Discrete`, with
 the inputs). `stamp` counts the writes of tables and inputs: the right side of an ODE solver
 uploads them again (and runs its masks and checks again) when it changes. `fns` are the
-inputs given as functions of the time (`key => f`, F4-B1): every solver writes `f(t)` into the
+inputs given as functions of the time (`key => f`): every solver writes `f(t)` into the
 input: the owned run at the start and after each window, an OrdinaryDiffEq solver's right
 side at every call ([`InputRefresh`](@ref)).
 

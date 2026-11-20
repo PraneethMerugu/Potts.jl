@@ -1,4 +1,4 @@
-# The interning builder (hash-consing, R3 §2: no separate canonicalize pass). Every node is
+# The interning builder (hash-consing: no separate canonicalize pass). Every node is
 # interned on (op, type, operands, imm); commutative operands are flattened (ADD, MUL) and
 # sorted by a structural order that never looks at node ids, so equal expressions get equal
 # ids whatever the build order. `finish` renumbers nodes, accesses and constants in a

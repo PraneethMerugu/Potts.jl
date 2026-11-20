@@ -1,4 +1,4 @@
-# Semantic passes 0–2 (v3 §4.1). Their output is the semantic normal form: the fingerprint
+# Semantic passes 0–2. Their output is the semantic normal form: the fingerprint
 # source and the input of the schedule. Every pass returns a new verified program.
 
 function zero_offset(a::Access{N}) where {N}
@@ -146,7 +146,7 @@ function _ne0!(b, x)
 end
 
 # a rule's value: its coefficient, times the value field at access `at` when it has one (a
-# face or mask value that reads the time, the coordinates or an input, F3-07)
+# face or mask value that reads the time, the coordinates or an input)
 function _rulevalue!(b, p::Program{N}, c::Coef, vf::Integer, at::Access{N}) where {N}
     vf == 0 && return _coef!(b, c)
     a = Access{N}(Int32(vf), 0, Sel(Int16(1)), at.offset, at.level, all(iszero, at.offset.a) ? INSIDE : CLAMP)
@@ -170,7 +170,7 @@ function _ghost!(b, p::Program, f, axis, side, center, at)
         irerror("field `", p.fields[f].key, "`: face rule on axis ",
             axis, " has α = β = 0")
     g() = _rulevalue!(b, p, r.g, r.gfield, at)
-    site = sitecoefs(r)                                   # (α or β varies by site: Robin, F4-12b)
+    site = sitecoefs(r)                                   # (α or β varies by site: Robin)
     if !site && α.param == 0 && β.param == 0 && β.value == 0   # Dirichlet: ghost = (2/α) g − c
         return arith!(b, ADD, arith!(b, MUL, constant!(b, 2 / α.value), g()),
             arith!(b, NEG, center))

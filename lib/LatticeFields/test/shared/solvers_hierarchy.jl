@@ -1,4 +1,4 @@
-# Definitions of solvers/hierarchy_tests.jl that other test files use (moved here by TS1b).
+# Definitions of solvers/hierarchy_tests.jl that other test files use.
 using LatticeFields.Solvers: depth, RULE_M
 const SV = LatticeFields.Solvers
 

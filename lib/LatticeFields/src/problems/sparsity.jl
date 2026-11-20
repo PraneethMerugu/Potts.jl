@@ -1,10 +1,10 @@
-# The Jacobian of the ODE right side (F4-07; F4 design §3.7, AF-01, SX-13): its sparsity
+# The Jacobian of the ODE right side: its sparsity
 # pattern read off the IR, a distance-2 coloring of its columns, the colored Dual Jacobian
 # (`jac = true`) and the Jacobian-vector product (`jvp`). The pattern comes from the semantic
 # rate program the right side runs: every load's site (offsets, the boundary rules' ghost and
 # clamp reads, coarse levels and restrictions, a hexagonal lattice's axial offsets), folded
 # through the aux fields the program computes from the state. No tracing: the IR knows the
-# stencil (SX-14).
+# stencil.
 
 # a field's rows' state columns in the walk (`SparseMatrixCSC`, column = row), or nothing
 const _Deps = Union{Nothing, SparseArrays.SparseMatrixCSC{Bool, Int}}
@@ -251,7 +251,7 @@ end
     field_jacobian_sparsity(prob) -> SparseMatrixCSC{Bool, Int}
 
 The sparsity pattern of the Jacobian `∂f/∂u` of the right side of `prob` (an `ODEProblem`
-`discretize` returned), read off its IR (F4-07; F4 design §3.7): entry `(i, j)` is stored when
+`discretize` returned), read off its IR: entry `(i, j)` is stored when
 the rate of state entry `i` reads state entry `j` at some value of the state and parameters.
 It holds every load of the rate program at its site (the stencil's offsets; a face's ghost
 value, which reads the site on the face; a periodic wrap; a coarse field's parent and a
@@ -302,8 +302,7 @@ _dense_refusal(s, t) = throw(ArgumentError(string("the rates read a reduction (a
     column_colors(S[, coords]) -> Vector{Int}
 
 A distance-2 coloring of the columns of `S`: two columns that share a row get different
-colors, so one Dual evaluation with one partial per color gives every entry of the Jacobian
-(F4-07). With the lattice coordinates of the columns (`coords`, one column per entry of the
+colors, so one Dual evaluation with one partial per color gives every entry of the Jacobian. With the lattice coordinates of the columns (`coords`, one column per entry of the
 state, `N` rows) a stencil's lattice coloring `(a ⋅ x) mod m` is tried first (5 colors for a
 5-point stencil, 7 for a 3D 7-point one, 9 for a 9-point one, when the box allows it: a
 periodic axis needs `m` to divide its size); otherwise, or when it takes more colors, the greedy
@@ -373,7 +372,7 @@ end
 """
     LatticeJacobian(meta, pattern, colors)
 
-`jac = true` (F4-07): `J(Jm, u, p, t)` writes the Jacobian of the right side into `Jm` (the
+`jac = true`: `J(Jm, u, p, t)` writes the Jacobian of the right side into `Jm` (the
 problem's sparse `jac_prototype`, or a dense matrix), by colored forward-mode Duals of the
 right side: one evaluation per chunk of at most `chunk` colors (12 by default), each partial
 seeded on the columns of one color, and the entries of `pattern` read from them. Needs
@@ -395,7 +394,7 @@ Base.deepcopy_internal(j::LatticeJacobian, ::IdDict) = LatticeJacobian(j.meta, j
 """
     LatticeJVP(meta)
 
-The Jacobian-vector product of the right side (F4-07; F4 design §3.7): `jvp(Jv, v, u, p, t)`
+The Jacobian-vector product of the right side: `jvp(Jv, v, u, p, t)`
 sets `Jv = (∂f/∂u)(u, p, t) v` by one evaluation of the right side on Duals with one partial
 (`u + ε v`), on the problem's backend. Set on every `ODEProblem` `discretize` returns; it
 needs ForwardDiff (its extension, which OrdinaryDiffEq's implicit solvers load).
@@ -425,7 +424,7 @@ lattice_jvp!(Jv, j, v, u, p, t) = throw(ArgumentError("the Jacobian-vector produ
 """
     JacobianOperator(jvp, u, p, t)
 
-The matrix-free Jacobian of a problem on a device (F4 design §3.10, ruling Q7): a
+The matrix-free Jacobian of a problem on a device: a
 `SciMLOperators.FunctionOperator` whose product is [`LatticeJVP`](@ref), the `jac_prototype`
 of an `ODEProblem` on a device, so an implicit OrdinaryDiffEq solver forms `W = J − M/γ` as an
 operator and solves it with a Krylov method (precondition it with `LatticeMultigrid()`).
@@ -437,7 +436,7 @@ end
 
 # the Jacobian keywords of `lattice_problem` (`jac`, `sparse`, `jvp`) as `ODEFunction` keywords:
 # the sparse prototype (the pattern with its diagonal, which `W = J − M/γ` holds) and its
-# coloring on the host; the matrix-free operator on a device (Q7)
+# coloring on the host; the matrix-free operator on a device
 function _jacobian_kw(meta::LatticeMetadata, U, lp; jac::Bool, sparse::Bool, jvp::Bool)
     fp = meta.problem
     host = Exec.ishost(fp.backend)

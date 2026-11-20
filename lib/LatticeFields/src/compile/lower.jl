@@ -71,11 +71,11 @@ function compile_kernel(p::Program{N}, k::Kernel{N}, o::CompileOptions = Compile
         $(Expr(:tuple, vals...))
     end)
     # derived again at each launch: a hoisted value that reads the time, and every kernel that
-    # reads the clock slot (directly, or through a hoisted value: F2 design §2.6, rules 1–2)
+    # reads the clock slot (directly, or through a hoisted value)
     timed = any(d -> _reads(d, :t), derived) ||
             (clock != 0 && (_reads_slot(k, clock) || any(d -> _reads_q(d, clock), derived)))
     h = bytes2hex(sha1(string(body)))
-    # a declared Float64 (FE-17) on a device: the body's signature part into the D-157 registry
+    # a declared Float64 on a device: the body's signature part into the D-157 registry
     o.declared && _touches_float64(p, k, o) && Exec.register_float64!(string(typeof(rgf(body))))
     return CompiledKernel{N}(k.key, body, L.strategy, k.space, L.levels, L.lanes, L.args,
         p.nparams, derived, derive, timed, T, o.I, h, k)

@@ -1,4 +1,4 @@
-# Ordering, fusion and step plans (v3 §4.3).
+# Ordering, fusion and step plans.
 
 """
     step_order(p, ids) -> Vector{Vector{Int}}
@@ -8,7 +8,7 @@ strongly connected components are Jacobi groups (every member reads the old valu
 two-buffer fields). Ties break by kernel key, so the order is canonical.
 
 A one-buffer field (an aux field `K ~ rhs`) has no old value: inside a Jacobi group its
-readers run after its writer (they read the new value, F3-02). The members of a group are
+readers run after its writer (they read the new value). The members of a group are
 ordered by these reads (ties by key); only a cycle of one-buffer reads (fields that define each
 other within one step) is a read cycle, refused.
 """

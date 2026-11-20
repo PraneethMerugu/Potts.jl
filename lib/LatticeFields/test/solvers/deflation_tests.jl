@@ -1,4 +1,4 @@
-# Constant-mode deflation on unanchored groups (provisional D-C7b) and the stop statuses: the
+# Constant-mode deflation on unanchored groups (a provisional rule) and the stop statuses: the
 # mean coefficient, the zero-mean solve, the warm start, s = 0, the Float32 floor and the
 # Float64 solver of unanchored weak-reaction groups (`solver_type`), a slow solve that is not a
 # floor, and
@@ -52,7 +52,7 @@ Solvers.launch!(::MinExec, l::Solvers.Launch) = Solvers.launch!(HostExec(), l)
 
 """
 Periodic 128², log-normal face coefficients (σ = 2), s = 1e-4: a slow, still-converging
-solve (C7b review round 2).
+solve.
 """
 function jumpy_case(σ = 2.0)
     rng, n = MersenneTwister(3), 128
@@ -82,13 +82,13 @@ end
     case = named_case("per256", 5.5e-6)
     sv, ref = case_solver(case, Float64), case_solver(case, Float64; deflate = false)
     k = steady!(sv)
-    @test scalars(sv).done && k <= 12 && scalars(sv).rnorm <= 1e-6 * scalars(sv).bnorm   # D-C7b: PCG <= 12
+    @test scalars(sv).done && k <= 12 && scalars(sv).rnorm <= 1e-6 * scalars(sv).bnorm   # PCG <= 12
     @test scalars(sv).mean ≈ 0.5 / 5.5e-6 rtol = 1e-12 # mean(b)/s
     steady!(ref)
     u, uref = field(sv, "pcg.u"), field(ref, "pcg.x")
     @test maximum(abs, u .- uref) / maximum(abs, uref) < 1e-6
     @test abs(sum(field(sv, "pcg.x"))) / length(u) < 1e-9 * maximum(abs, u)   # zero-mean part
-    # PG-4(a) on odd periodic axes is ≤ 12 (user ruling, D-C7b). per300 (75 → 37): measured
+    # The iteration budget on odd periodic axes is ≤ 12 (user ruling). per300 (75 → 37): measured
     # 11 deflated (12 undeflated); 3D per45 (45 → 22): measured 12.
     sv = case_solver(named_case("per300", 5.5e-6), Float64)
     @test steady!(sv) <= 12 && scalars(sv).done
@@ -302,7 +302,7 @@ end
 
 @testitem "coefficients are validated; set_coefficients! warns once about solver_type" setup = [LF_solvers_deflation] tags = [:latticefields, :solvers] begin
     @testset "coefficients are validated; set_coefficients! warns once about solver_type" begin
-    # refusals in the user's words (F3-05): an ArgumentError naming the field and the axis
+    # refusals in the user's words: an ArgumentError naming the field and the axis
     E(f) = try
         f(); ""
     catch e

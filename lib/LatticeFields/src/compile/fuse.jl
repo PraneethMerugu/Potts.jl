@@ -1,4 +1,4 @@
-# The update pass (F2 design §2.5): a stepper's update fused into a rate program as an IR
+# The update pass: a stepper's update fused into a rate program as an IR
 # pass, so any algorithm lowers in the Symbolics-free layer (`FieldGroup`).
 
 """
@@ -16,7 +16,7 @@ the masks and the rules pass through, renumbered. `rule === nothing` returns `ra
 The result is node for node the program a front end fuses symbolically
 (`symbolic_discretize(…; update = rule)`): the builder interns and orders every node
 structurally, and kernels are renumbered canonically (`finish`), so `fingerprint_text` of the
-two is the same (the F2-07 gate).
+two is the same.
 """
 function fuse_update(p::Program{N}, rule) where {N}
     rule === nothing && return p
@@ -74,7 +74,7 @@ end
 """
     fuse_residual(rate::Program, rule) -> Program
 
-The residual program of an implicit stepper (F3 design §3.2, §3.4): the fields of
+The residual program of an implicit stepper: the fields of
 `fuse_update(rate, …)` in the same order and at the same ids (the state fields with two
 buffers, no scratch `∂c`), so a runtime's store of the stepped program serves it, followed by
 one residual field `res:c` and one history field `c__n` (a one-buffer input: the state at the
@@ -84,7 +84,7 @@ kernel stores `rule(kb, c, r, cn)` into `res:c` (`c` the load of the field, the 
 never written. With an irregular domain a site outside stores 0. The other kernels and the
 rules pass through, renumbered (as `fuse_update`).
 
-`widen16 = true` (the solve's residual, batch 5 review S1): the residual of a field stored in
+`widen16 = true` (the solve's residual): the residual of a field stored in
 Float16 is held in the state's value type (a float lane, not fixed), the type the solver reads,
 so the solve sees no Float16 rounding beyond the state's own.
 """

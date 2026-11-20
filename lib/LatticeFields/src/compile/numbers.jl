@@ -80,7 +80,7 @@ Values that only drive a policy (substep counts, face checks, float → integer 
 
 The derivative parts of number type `T`: 0 for a plain number, `N` for `Dual{tag, V, N}`
 (extension). With [`dvalue`](@ref), [`dpartial`](@ref), [`dsetpartial`](@ref) and
-[`dreplace`](@ref) it is what the implicit solve's tangent steps read and write (F3-21a): one
+[`dreplace`](@ref) it is what the implicit solve's tangent steps read and write: one
 level of derivative parts, each a value of the value type.
 """
 npartials(::Type) = 0
@@ -122,7 +122,7 @@ closed, so lanes are value classes; the state lanes `F32` and `F64` hold the pro
 type `V` (Float32, Float64, BigFloat on the host), and only the explicitly narrow `F16`
 (`lattice_storage`) stays Float16. Float64 IR constants and spacing bound a BigFloat
 reference near 1e-16 relative in geometry. `fixed = true` (a field with a declared storage,
-`lattice_storage`, FE-17): the lane holds its own type under `:state` too.
+`lattice_storage`): the lane holds its own type under `:state` too.
 """
 function lanetype(lane::Scalar, ::Type{V}, lanes::Symbol = :fixed, fixed::Bool = false) where {V}
     lanes == :state && !fixed && lane != F16 && return V

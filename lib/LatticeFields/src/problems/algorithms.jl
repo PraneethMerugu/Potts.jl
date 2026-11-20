@@ -1,4 +1,4 @@
-# The field algorithms (F2 design §2.3, §2.6): `ExplicitEuler`, `ExplicitMap`, the group
+# The field algorithms: `ExplicitEuler`, `ExplicitMap`, the group
 # assignment `FieldGroups`, and the hooks an algorithm defines for the group layer
 # (`group.jl`): its update (`update_key`), its family (`alg_family`), its buffer count
 # (`nbuffers`) and its cache (`alg_cache`, `reset_cache!`, `step_retcode!`).
@@ -59,14 +59,14 @@ struct ExplicitEuler <: AbstractFieldAlgorithm
         )
     end
 end
-# `init`: `nothing` (start from the initial state) or `:steady` (F3-12c)
+# `init`: `nothing` (start from the initial state) or `:steady`
 function _init_keyword(w, init)
     init === nothing || init === :steady || throw(ArgumentError(string(w, ": init = ", repr(init), " is not a start; ",
         "give `init = :steady` (solve the group's steady state before the first window) or leave `init` out (start from ",
         "the initial state)")))
     return init
 end
-# `compute_type` (FE-17, F3 design §3.8): `:auto` (the problem's value type), `Float32` or `Float64`
+# `compute_type`: `:auto` (the problem's value type), `Float32` or `Float64`
 function _compute_keyword(w, c)
     c === :auto || c === Float32 || c === Float64 || throw(
         ArgumentError(
@@ -80,7 +80,7 @@ end
     compute_type(alg, V) -> Type
 
 The value type the kernels of a group stepped by `alg` compute in, for problem value type `V`:
-`V` under `compute_type = :auto`, else `compute_type` (FE-17).
+`V` under `compute_type = :auto`, else `compute_type`.
 """
 compute_type(a, ::Type{V}) where {V} = (
     c = hasfield(typeof(a), :compute_type) ? getfield(a, :compute_type) : :auto;
@@ -108,7 +108,7 @@ _dt_text(kw) = haskey(kw, :dt) ? " (the window `dt` is a keyword of `solve`: `so
 nbuffers(::ExplicitEuler) = 2
 
 """
-The implicit field algorithms (F3 design §3.2): each substep solves the Newton form
+The implicit field algorithms: each substep solves the Newton form
 `(I/(γh) − J̃) δ = G(u_k)` with a linear solver (`linsolve`), `G` the group's rate program as a
 residual and `J̃` the symmetric operator its front end extracts (`OperatorSpec`).
 """
@@ -322,7 +322,7 @@ function _implicit_keywords(w, substeps, nlsolve, lower_bound, linsolve, solver_
                 w,
                 ": `solver_type` takes `:auto` (the state's number type), `Float32` or `Float64`; got ", repr(solver_type),
                 solver_type isa Type && !(solver_type <: AbstractFloat && isbitstype(solver_type)) ? "" :
-                    solver_type isa Type ? " (a BigFloat implicit solve is planned after the paper, FE-26; a Dual state's derivative parts take tangent solves in its value type)" : ""
+                    solver_type isa Type ? " (a BigFloat implicit solve is not supported yet; a Dual state's derivative parts take tangent solves in its value type)" : ""
             )
         )
     )
@@ -535,7 +535,7 @@ ExplicitMap(; compute_type = :auto) = ExplicitMap(compute_type)
 nbuffers(::ExplicitMap) = 2
 
 # The window of a step of `alg` on a problem whose discretization declares the clock of period
-# `clock` (`nothing`: none; F2 design §2.4, §2.6): `dt`, the `solve` keyword, or the clock's
+# `clock` (`nothing`: none): `dt`, the `solve` keyword, or the clock's
 # period when `dt` is left out; without a clock `dt` is required (nothing else sets the window:
 # `saveat` never does). A given `dt` must divide the period to a relative 1e-12: the stepper
 # lands on every clock boundary, so a period holds a whole number of windows (`_per`).
@@ -677,12 +677,12 @@ linear_solver_refusal(what, s, route; implicit = "`BackwardEuler(; linsolve = $(
 """
     FieldGroups(field => alg, …; default = nothing)
 
-An algorithm that steps the fields of a problem in groups (F2 design §2.6): each field takes
+An algorithm that steps the fields of a problem in groups: each field takes
 the algorithm of its pair (a field symbol, or a state key), the others `default`. Fields with
 `isequal` algorithms form one group (the comparison covers the whole value). Groups run in
 state order (the order of their first field), each window `dt` (the `solve` keyword): a group reads
 the fields of the other groups from their arrays, as they are when it runs (coupled `PottsProblem` field phases
-do the same, v3 §6.1), and ends each step in slot 1, so the next group reads the current
+do the same), and ends each step in slot 1, so the next group reads the current
 values.
 
 Groups that read one another in a loop (`c` reads `o` and `o` reads `c`, directly or through

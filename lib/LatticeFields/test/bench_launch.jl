@@ -1,4 +1,4 @@
-# Host cost of Exec launches (PG-0 `launch_dep(args)`, PG-13 host bytes per launch), not a
+# Host cost of Exec launches (`launch_dep(args)`, host bytes per launch), not a
 # test: a dependent chain of 200 launches per form, then host bytes per warm launch.
 #
 #   julia --project=lib/LatticeFields/test lib/LatticeFields/test/bench_launch.jl rocm|metal|cpu

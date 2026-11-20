@@ -67,13 +67,13 @@ end
 end
 end
 
-# F3-14 (FE-17): a declared storage (`fixed`) holds its own type under the state lanes, a
+# A declared storage (`fixed`) holds its own type under the state lanes, a
 # compute type wider than the storage loads and stores through `lanecast` (`S`), and a declared
 # Float64 registers the kernel in Exec's D-157 registry. Base f5641ce1: no `fixed`, no `S`, no
 # registry (every test errors).
-@testitem "F3-14: fixed lanes, a compute type wider than the storage, the Float64 registry" setup = [LF_compile_numbers] tags = [:latticefields, :compile] begin
+@testitem "fixed lanes, a compute type wider than the storage, the Float64 registry" setup = [LF_compile_numbers] tags = [:latticefields, :compile] begin
     using .LF_compile_numbers: value_type
-@testset "F3-14: fixed lanes, a compute type wider than the storage, the Float64 registry" begin
+@testset "fixed lanes, a compute type wider than the storage, the Float64 registry" begin
     @test lanetype(F64, Float32, :state, true) == Float64 && lanetype(F32, Float64, :state, true) == Float32
     @test lanetype(F64, Float32, :state, false) == Float32                         # control: the value class
     E = Dual{Nothing, Float64, 1}

@@ -26,7 +26,7 @@ function Compile.promote_dual(::Type{E}, ::Type{P}) where {E, P <: Dual}
     return promote_type(E, Compile.withvaltype(P, Compile.value_type(E)))
 end
 
-# The Jacobian-vector product of a lattice right side (F4-07): one evaluation on Duals with one
+# The Jacobian-vector product of a lattice right side: one evaluation on Duals with one
 # partial, `u + ε v`, on the problem's backend (the arrays are kept per Dual type)
 function Problems.lattice_jvp!(Jv, j::Problems.LatticeJVP, v, u, p, t)
     D = Dual{typeof(ForwardDiff.Tag(Problems.lattice_jvp!, eltype(u))), eltype(u), 1}
@@ -39,7 +39,7 @@ function Problems.lattice_jvp!(Jv, j::Problems.LatticeJVP, v, u, p, t)
     end
 end
 
-# The colored Dual Jacobian (F4-07): per chunk of `K` colors, one evaluation with partial `q`
+# The colored Dual Jacobian: per chunk of `K` colors, one evaluation with partial `q`
 # seeded on the columns of color `c0 + q`; each stored entry `(i, j)` of the pattern reads row
 # `i`'s partial of `j`'s color (no other column of that color is in row `i`)
 function Problems.colored_jacobian!(J, jac::Problems.LatticeJacobian, u, p, t)
