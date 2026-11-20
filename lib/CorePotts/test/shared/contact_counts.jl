@@ -44,7 +44,7 @@ function cc_problem(; lifecycle = true)
     st = with_capacity(initial_state(σ, kinds; cell), 32)
     cc = ContactCounts((ContactCount(:n_med, Moore(1), CC_MED), ContactCount(:n_two, VonNeumann(1), CC_TWO)))
     f = CPMFunction(gg_delta_H; commit! = cc_commit!, temperature = gg_temperature,
-        lifecycle = lifecycle ? Lifecycle(cc_trigger; kind = cc_kind, normal = random_plane) : nothing)
+        lifecycle = lifecycle ? Lifecycle(cc_trigger; kind = cc_kind, normal = RandomPlane()) : nothing)
     p = merge(gg_params(), (; V0 = 36.0, T = 8.0))
     return PottsProblem(f, st, lat, (0, 30), p; contact = Moore(1), proposal = Moore(1),
         relations = (; vn = VonNeumann(1), contact_counts = cc), seed = 7)

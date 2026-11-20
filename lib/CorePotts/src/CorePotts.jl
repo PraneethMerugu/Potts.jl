@@ -40,7 +40,7 @@ export is_extension, is_retraction, chemotaxis_delta, saturating, saturating_lin
 export is_boundary_site, count_neighbors, CellReduce, ContactGraph, contact_graph,
     contact_neighbors, empty_contacts, ContactPhase, contact_slot, contact_measure
 export Lifecycle, EVENT_NONE, EVENT_DIVIDE, EVENT_DIVIDE_CLUSTER, EVENT_REMOVE, EVENT_TRANSITION, AlongMinorAxis,
-    AlongMajorAxis, RandomPlane, along_minor_axis, along_major_axis, random_plane,
+    AlongMajorAxis, RandomPlane,
     principal_axis, rebuild_trackers!, with_capacity
 export empty_links, linked, link_count, link_slot, add_link!, remove_link!, remove_incident!,
     centroid_distance, centroid_separation, link_delta, HostPhase

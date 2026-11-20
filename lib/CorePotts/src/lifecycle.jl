@@ -92,7 +92,7 @@ hand-written):
   `EVENT_DIVIDE` (the cell divides alone), `EVENT_DIVIDE_CLUSTER` (its compartment cluster
   divides as a unit), `EVENT_REMOVE` or `EVENT_TRANSITION` (priorities are resolved inside).
 - `normal(st, p, ctx, key, mcs, c) -> NTuple{N}` — division plane normal through the
-  centroid (`along_minor_axis`, `along_major_axis`, `random_plane`, or any vector).
+  centroid (`AlongMinorAxis()`, `AlongMajorAxis()`, `RandomPlane()`, or any vector).
 - `kind(st, p, ctx, key, mcs, c) -> Int32` — the destination kind of a transition.
 - `divide!(st, p, ctx, key, mcs, parent, daughter)` — daughter state rule, run after the
   default `Copy` of every non-tracker cell quantity (e.g. halve extensive quantities).
@@ -168,7 +168,7 @@ struct Lifecycle{TR, NO, CN, KI, DV, CD, RB, RU <: Val, BE, RL, OC}
     owner_changed::OC           # the site hook at every site whose owner changes, or `nothing`
 end
 Lifecycle(
-    trigger; normal = along_minor_axis, kind = keep_kind, divide! = no_divide_rule,
+    trigger; normal = AlongMinorAxis(), kind = keep_kind, divide! = no_divide_rule,
     rebuild! = no_rebuild, every::Integer = 1, cluster_normal = normal, cluster_divide! = divide!,
     rules::Bool = false, before = nothing, release = nothing, owner_changed = nothing) =
     Lifecycle(trigger, normal, cluster_normal, kind, divide!, cluster_divide!, rebuild!, Int(every), Val(rules), before,
@@ -224,42 +224,37 @@ no_rebuild(st, p, ctx, backend) = nothing
 const STREAM_DIVISION_PLANE = stream_id("CorePotts.division_plane")
 
 """
+    AlongMinorAxis()
     AlongMinorAxis{T}()
 
-Division plane normal functor in float type `T`. A `Lifecycle` evaluates it in the state's
-float type, whatever `T` it was given. Divides across the cell's long axis (the plane
-contains the minor axis, so the normal is the major principal axis). See [`along_minor_axis`](@ref).
+Division plane normal functor in float type `T` (`Float64` when not given). A `Lifecycle`
+evaluates it in the state's float type, whatever `T` it was given. Divides across the cell's
+long axis (the plane contains the minor axis, so the normal is the major principal axis).
 """
 struct AlongMinorAxis{T} end
+AlongMinorAxis() = AlongMinorAxis{Float64}()
 
 """
+    AlongMajorAxis()
     AlongMajorAxis{T}()
 
-Division plane normal functor in float type `T`. A `Lifecycle` evaluates it in the state's
-float type, whatever `T` it was given. Divides along the cell's long axis (the normal is the
-minor principal axis). See
-[`along_major_axis`](@ref).
+Division plane normal functor in float type `T` (`Float64` when not given). A `Lifecycle`
+evaluates it in the state's float type, whatever `T` it was given. Divides along the cell's
+long axis (the normal is the minor principal axis).
 """
 struct AlongMajorAxis{T} end
+AlongMajorAxis() = AlongMajorAxis{Float64}()
 
 """
+    RandomPlane()
     RandomPlane{T}()
 
-Division plane normal functor in float type `T`. A `Lifecycle` evaluates it in the state's
-float type, whatever `T` it was given. Draws a uniformly random unit normal addressed by
-cell id and generation. See
-[`random_plane`](@ref).
+Division plane normal functor in float type `T` (`Float64` when not given). A `Lifecycle`
+evaluates it in the state's float type, whatever `T` it was given. Draws a uniformly random
+unit normal addressed by cell id and generation.
 """
 struct RandomPlane{T} end
-
-"""The division plane normal `AlongMinorAxis`; a `Lifecycle` evaluates it in the state's float type."""
-const along_minor_axis = AlongMinorAxis{Float64}()
-
-"""The division plane normal `AlongMajorAxis`; a `Lifecycle` evaluates it in the state's float type."""
-const along_major_axis = AlongMajorAxis{Float64}()
-
-"""The division plane normal `RandomPlane`; a `Lifecycle` evaluates it in the state's float type."""
-const random_plane = RandomPlane{Float64}()
+RandomPlane() = RandomPlane{Float64}()
 
 @inline (::AlongMinorAxis{T})(st, p, ctx, key, mcs, c) where {T} =
     principal_axis(T, st.cell, ctx.lattice, c, 1)

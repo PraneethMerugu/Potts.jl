@@ -157,7 +157,7 @@ end
             (st.cell.together[parent] = st.cell.together[daughter] = 1.0; nothing)
         run(tr) = solve(PottsProblem(CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
                 lifecycle = Lifecycle(tr; normal = (st, p, ctx, key, mcs, c) -> (0.0, 1.0), divide! = alone!,
-                    cluster_normal = along_minor_axis, cluster_divide! = together!)), st, lat, (0, 1), gg_params()), alg)
+                    cluster_normal = AlongMinorAxis(), cluster_divide! = together!)), st, lat, (0, 1), gg_params()), alg)
         # root 1 divides its cluster (member 2's own EVENT_DIVIDE yields to it); 3 and 5 alone
         tr(st, p, ctx, key, mcs, c) = mcs != 0 ? EVENT_NONE : c == 1 ? EVENT_DIVIDE_CLUSTER :
                                       c in (2, 3, 5) ? EVENT_DIVIDE : EVENT_NONE

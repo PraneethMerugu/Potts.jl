@@ -36,7 +36,7 @@ function ld_growing_prob()
         gg_delta_H; temperature = gg_temperature,
         lifecycle = Lifecycle(
             (st, p, ctx, key, mcs, c) -> st.cell.volume[c] >= 60 ? EVENT_DIVIDE : EVENT_NONE;
-            normal = random_plane
+            normal = RandomPlane()
         )
     )
     return PottsProblem(fg, stg, lg, (0, 30), merge(gg_params(), (; V0 = 70.0)))

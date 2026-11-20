@@ -43,7 +43,7 @@ end
         e = embed(L, Float64.(Tuple(x) .- centre))
         (e[1] / 6)^2 + (e[2] / 3)^2 <= 1 && (ellipse[x] = 1)
     end
-    u = run_lifecycle(ellipse, [1], L, Lifecycle(divide_at(0); normal = along_minor_axis)).u[end]   # plane across the long x axis
+    u = run_lifecycle(ellipse, [1], L, Lifecycle(divide_at(0); normal = AlongMinorAxis())).u[end]   # plane across the long x axis
         halves = [[embed(L, Float64.(Tuple(x)))[1] for x in CartesianIndices(u.ownership) if u.ownership[x] == c] for c in 1:2]
     onplane = count(x -> ellipse[x] == 1 && abs(embed(L, Float64.(Tuple(x) .- centre))[1]) < 1e-9, CartesianIndices(ellipse))
     @test u.cell.volume[1] - u.cell.volume[2] == onplane               # sites on the plane stay with the parent

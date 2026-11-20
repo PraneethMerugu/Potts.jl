@@ -17,7 +17,7 @@ end
         lat = Lattice((40, 40))
         σ = zeros(Int32, 40, 40); σ[1:20, 1:6] .= 1
         σ = circshift(σ, (-5, -2))                          # straddles both seams
-        for (normal, sizes) in ((along_minor_axis, (10 * 6, 10 * 6)), (along_major_axis, (20 * 3, 20 * 3)))
+        for (normal, sizes) in ((AlongMinorAxis(), (10 * 6, 10 * 6)), (AlongMajorAxis(), (20 * 3, 20 * 3)))
             sol = run_lifecycle(σ, [1], lat, Lifecycle(divide_at(0); normal))
             u = sol.u[end]
             @test sort(u.cell.volume[1:2]) == collect(sizes)
@@ -28,7 +28,7 @@ end
                 @test all(isapprox.(centroid(u.cell, lat, c), μ; atol = 1e-9))
             end
         end
-        sol = run_lifecycle(σ, [1], lat, Lifecycle(divide_at(0); normal = random_plane))
+        sol = run_lifecycle(σ, [1], lat, Lifecycle(divide_at(0); normal = RandomPlane()))
         @test sum(sol.u[end].cell.volume) == 120 && all(>(0), sol.u[end].cell.volume[1:2])
     end
 
