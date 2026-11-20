@@ -16,7 +16,7 @@ struct OrthogonalSlice <: AbstractRenderExtent
     function OrthogonalSlice(axis::Integer, index::Integer)
         1 <= axis <= 3 || throw(ArgumentError("slice axis must be 1, 2, or 3"))
         index > 0 || throw(ArgumentError("slice index must be positive"))
-        new(Int(axis), Int(index))
+        return new(Int(axis), Int(index))
     end
 end
 
@@ -61,7 +61,7 @@ function Base.show(io::IO, key::RenderChannelKey{S, T}) where {S, T}
     else
         "medium"
     end
-    print(io, scope, " channel :", key.name, "::", T)
+    return print(io, scope, " channel :", key.name, "::", T)
 end
 
 """
@@ -76,8 +76,10 @@ struct RenderChannel{K <: RenderChannelKey, V}
     units::Union{Nothing, String}
 end
 
-function RenderChannel(key::RenderChannelKey, values;
-        label::AbstractString = String(key.name), units = nothing)
+function RenderChannel(
+        key::RenderChannelKey, values;
+        label::AbstractString = String(key.name), units = nothing
+    )
     normalized_units = units === nothing ? nothing : String(units)
     return RenderChannel(key, values, String(label), normalized_units)
 end
@@ -94,7 +96,9 @@ struct RenderRequest{E <: AbstractRenderExtent}
     include_cell_metadata::Bool
 end
 
-function RenderRequest(; extent::AbstractRenderExtent = FullDomain(),
-        include_cell_metadata::Bool = true)
+function RenderRequest(;
+        extent::AbstractRenderExtent = FullDomain(),
+        include_cell_metadata::Bool = true
+    )
     return RenderRequest(extent, include_cell_metadata)
 end

@@ -4,7 +4,7 @@ struct InvalidRenderFrameError <: Exception
 end
 
 function Base.showerror(io::IO, error::InvalidRenderFrameError)
-    print(io, "invalid Potts render frame:\n  - ", join(error.messages, "\n  - "))
+    return print(io, "invalid Potts render frame:\n  - ", join(error.messages, "\n  - "))
 end
 
 """Thrown when an encoding's declared requirements are absent from a frame."""
@@ -20,10 +20,12 @@ function Base.showerror(io::IO, error::MissingRenderChannelError)
     if isempty(error.available)
         print(io, "; the frame declares no channels")
     else
-        print(io, "; available channels: ",
-            join(map(item -> sprint(show, item), error.available), ", "))
+        print(
+            io, "; available channels: ",
+            join(map(item -> sprint(show, item), error.available), ", ")
+        )
     end
-    print(io, ". Construct the frame with an explicit RenderChannel value")
+    return print(io, ". Construct the frame with an explicit RenderChannel value")
 end
 
 """Thrown when a Makie recording finishes without producing a nonempty output file."""

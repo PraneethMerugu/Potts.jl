@@ -13,7 +13,7 @@ function reference_frame()
     signals = (0.15, 0.42, 0.76, 0.58, 0.91)
     signal_values = Dict{RenderCellIdentity, Float64}()
     for (index, ((cx, cy), (rx, ry), cell_type, signal)) in
-            enumerate(zip(centers, radii, types, signals))
+        enumerate(zip(centers, radii, types, signals))
         identity = RenderCellIdentity(index, index == 4 ? 2 : 0)
         push!(cells, RenderCellMetadata(identity, cell_type))
         signal_values[identity] = signal
@@ -27,33 +27,49 @@ function reference_frame()
     end
     key = CellChannelKey(:signal, Float64)
     geometry = RenderGeometry(dims; spacing = (0.6, 0.6))
-    frame = PottsRenderFrame(120, owners, cells;
-        channels = (RenderChannel(key, signal_values;
-            label = "Signal", units = "a.u."),),
-        geometry)
+    frame = PottsRenderFrame(
+        120, owners, cells;
+        channels = (
+            RenderChannel(
+                key, signal_values;
+                label = "Signal", units = "a.u."
+            ),
+        ),
+        geometry
+    )
     return frame, key
 end
 
 frame, signal_key = reference_frame()
 figure = Figure(size = (1240, 480), backgroundcolor = :white)
 
-type_axis = Axis(figure[1, 1];
+type_axis = Axis(
+    figure[1, 1];
     title = "Cell type · categorical",
-    xlabel = "x (μm)", ylabel = "y (μm)", aspect = DataAspect())
-type_plot = pottsplot!(type_axis, frame;
+    xlabel = "x (μm)", ylabel = "y (μm)", aspect = DataAspect()
+)
+type_plot = pottsplot!(
+    type_axis, frame;
     boundaries = true, boundary_width = 0.8,
-    obstacle_color = :gray35)
-potts_legend(figure[1, 2], type_plot;
-    title = "Ownership", framevisible = false)
+    obstacle_color = :gray35
+)
+potts_legend(
+    figure[1, 2], type_plot;
+    title = "Ownership", framevisible = false
+)
 
-signal_axis = Axis(figure[1, 3];
+signal_axis = Axis(
+    figure[1, 3];
     title = "Requested cell channel · continuous",
-    xlabel = "x (μm)", ylabel = "y (μm)", aspect = DataAspect())
-signal_plot = pottsplot!(signal_axis, frame;
+    xlabel = "x (μm)", ylabel = "y (μm)", aspect = DataAspect()
+)
+signal_plot = pottsplot!(
+    signal_axis, frame;
     encoding = ChannelEncoding(signal_key),
     colormap = :magma, boundaries = true,
     boundary_color = (:white, 0.75), boundary_width = 0.7,
-    nan_color = :gray92, obstacle_color = :gray25)
+    nan_color = :gray92, obstacle_color = :gray25
+)
 Colorbar(figure[1, 4], signal_plot; label = "Signal (a.u.)")
 
 colsize!(figure.layout, 1, Relative(0.42))

@@ -39,8 +39,10 @@ frame_provenance(frame::ColumnarFrame) = frame.lineage
 
 function columnar_frame(phase::Integer = 0)
     shape = (4, 3)
-    spatial = RenderGeometry(shape;
-        spacing = (0.75, 1.25), origin = (-1.5, 2.0))
+    spatial = RenderGeometry(
+        shape;
+        spacing = (0.75, 1.25), origin = (-1.5, 2.0)
+    )
     first_identity = RenderCellIdentity(11, 4)
     second_identity = RenderCellIdentity(29, 8)
     first_metadata = RenderCellMetadata(first_identity, 2; label = "Alpha")
@@ -69,12 +71,16 @@ function columnar_frame(phase::Integer = 0)
     ]
     stream_records = Dict{Any, Any}(
         SIGNAL_KEY => RenderChannel(
-            SIGNAL_KEY, values; label = "Foreign signal", units = "a.u."),
+            SIGNAL_KEY, values; label = "Foreign signal", units = "a.u."
+        ),
     )
     lineage = RenderProvenance(
-        :downstream_fixture, ColumnarFrame, :host, RenderRequest())
-    return ColumnarFrame(Int(phase), shape, spatial, site_records,
-        identity_records, owner_records, stream_records, lineage)
+        :downstream_fixture, ColumnarFrame, :host, RenderRequest()
+    )
+    return ColumnarFrame(
+        Int(phase), shape, spatial, site_records,
+        identity_records, owner_records, stream_records, lineage
+    )
 end
 
 """Custom continuous encoding supplied by a downstream package."""
@@ -99,8 +105,10 @@ function encode_frame(frame::AbstractPottsRenderFrame, encoding::RootSignalEncod
         lower, upper = extrema(finite)
         lower == upper ? (lower - 0.5, upper + 0.5) : (lower, upper)
     end
-    return EncodedPottsFrame(values, encoding, LegendEntry[],
-        encoding_label(encoding), source.units, limits)
+    return EncodedPottsFrame(
+        values, encoding, LegendEntry[],
+        encoding_label(encoding), source.units, limits
+    )
 end
 
 end

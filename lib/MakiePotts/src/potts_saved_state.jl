@@ -1,9 +1,9 @@
 function _render_cells(state::CorePotts.CPMState)
     kinds, generations, vols = CorePotts.cell_kinds(state), CorePotts.cell_generations(state),
-    CorePotts.volumes(state)
+        CorePotts.volumes(state)
     return [
         RenderCellMetadata(RenderCellIdentity(id, Int(generations[id])), Int(kinds[id]))
-        for id in eachindex(kinds) if vols[id] > 0
+            for id in eachindex(kinds) if vols[id] > 0
     ]
 end
 
@@ -16,9 +16,11 @@ function _render_owners(state::CorePotts.CPMState, cells, frozen)
         if id == 0
             owners[site] = RenderOwner(frozen !== nothing && frozen[site] ? ObstacleSite : MediumSite, 1)
         else
-            id in active || throw(InvalidRenderFrameError(
-                ["finite owner $id has no active metadata"]
-            ))
+            id in active || throw(
+                InvalidRenderFrameError(
+                    ["finite owner $id has no active metadata"]
+                )
+            )
             owners[site] = RenderOwner(CellSite, id)
         end
     end
@@ -38,9 +40,11 @@ end
 function _project_spatial_array(
         ::AbstractArray{T, 2}, ::OrthogonalSlice
     ) where {T}
-    throw(ArgumentError(
-        "OrthogonalSlice is valid only for a three-dimensional source"
-    ))
+    throw(
+        ArgumentError(
+            "OrthogonalSlice is valid only for a three-dimensional source"
+        )
+    )
 end
 
 function _project_extent(
@@ -59,16 +63,16 @@ function _project_extent(
     retained = Tuple(filter(!=(extent.axis), (1, 2, 3)))
     projected_spacing = ntuple(i -> spacing[retained[i]], Val(2))
     return projected, RenderGeometry(
-        size(projected);
-        spacing = projected_spacing,
-        source_axes = retained,
-    )
+            size(projected);
+            spacing = projected_spacing,
+            source_axes = retained,
+        )
 end
 
 function _project_extent(
         owners::AbstractArray{RenderOwner, 2}, spacing, extent::OrthogonalSlice
     )
-    _project_spatial_array(owners, extent)
+    return _project_spatial_array(owners, extent)
 end
 
 function _project_saved_state_channels(
@@ -77,17 +81,23 @@ function _project_saved_state_channels(
         extent::AbstractRenderExtent,
     )
     all(item -> item isa RenderChannel, channels) ||
-        throw(InvalidRenderFrameError(
+        throw(
+        InvalidRenderFrameError(
             ["saved-state channels must be an ordered tuple of RenderChannel values"]
-        ))
+        )
+    )
     return map(channels) do item
         item.key isa RenderChannelKey{SiteChannelScope} || return item
         item.values isa AbstractArray || return item
         size(item.values) == source_size ||
-            throw(InvalidRenderFrameError([
-                "saved-state site-channel size must equal the full saved domain; " *
-                "expected $source_size, got $(size(item.values))",
-            ]))
+            throw(
+            InvalidRenderFrameError(
+                [
+                    "saved-state site-channel size must equal the full saved domain; " *
+                        "expected $source_size, got $(size(item.values))",
+                ]
+            )
+        )
         values = _project_spatial_array(item.values, extent)
         RenderChannel(item.key, values; label = item.label, units = item.units)
     end
@@ -108,14 +118,17 @@ function _build_renderframe(
         _project_extent(owners, spacing, request.extent)
     metadata = request.include_cell_metadata ? cells : RenderCellMetadata[]
     any(owner -> owner.kind === CellSite, projected_owners) &&
-        isempty(metadata) && throw(ArgumentError(
+        isempty(metadata) && throw(
+        ArgumentError(
             "cell metadata cannot be omitted while the requested extent contains cells"
-        ))
+        )
+    )
     provenance = RenderProvenance(
         :saved_state, typeof(state), :host, request
     )
     projected_channels = _project_saved_state_channels(
-        channels, size(owners), request.extent)
+        channels, size(owners), request.extent
+    )
     return PottsRenderFrame(
         Int(mcs),
         projected_owners,
@@ -153,10 +166,12 @@ function renderframe(
         channels::Tuple = (),
     )
     checkbounds(solution.u, index)
-    return renderframe(solution.u[index], request; mcs = solution.t[index], channels,
+    return renderframe(
+        solution.u[index], request; mcs = solution.t[index], channels,
         # the saved state's own obstacles: a frozen mask that follows the state (D-081) differs
         # from the problem's t0 mask once a cell enters or leaves a frozen kind
-        frozen = CorePotts.frozen_sites(solution.prob, solution.u[index]), spacing = solution.prob.spacing)
+        frozen = CorePotts.frozen_sites(solution.prob, solution.u[index]), spacing = solution.prob.spacing
+    )
 end
 
 """Eagerly materialize independent frames from a retained solution."""

@@ -4,8 +4,8 @@ module CITelemetry
 
     function escape_json(value)
         return replace(
-                string(value), '\\' => "\\\\", '"' => "\\\"", '\n' => "\\n", '\r' => "\\r"
-            )
+            string(value), '\\' => "\\\\", '"' => "\\\"", '\n' => "\\n", '\r' => "\\r"
+        )
     end
 
     function emit_record(label, elapsed_seconds, status; kind = "phase", detail = "")
@@ -45,8 +45,8 @@ module CITelemetry
 
     function observe(label, detail)
         return emit_record(
-                label, 0.0, "observed"; kind = "observation", detail
-            )
+            label, 0.0, "observed"; kind = "observation", detail
+        )
     end
 
     function record_duration(action, label; kind = "phase")

@@ -32,7 +32,7 @@ function _resolve_mp_groups(groups_table, raw_groups)
     selected = String[]
     for raw in raw_groups
         g = strip(String(raw))
-        startswith(g, "MakiePotts_") && (g = g[length("MakiePotts_") + 1:end])
+        startswith(g, "MakiePotts_") && (g = g[(length("MakiePotts_") + 1):end])
         g == "MakiePotts" && (g = "All")
         if g == "All"
             for name in sort!(collect(keys(groups_table)))
@@ -64,7 +64,8 @@ else
 end
 const MAKIEPOTTS_SELECTED_GROUPS = _resolve_mp_groups(MAKIEPOTTS_GROUPS_TABLE, MAKIEPOTTS_RAW_GROUPS)
 
-function makiepotts_tests(groups = MAKIEPOTTS_SELECTED_GROUPS;
+function makiepotts_tests(
+        groups = MAKIEPOTTS_SELECTED_GROUPS;
         nworkers = parse(Int, get(ENV, "RETESTITEMS_NWORKERS", "2")),
         qa = get(ENV, "MAKIEPOTTS_QA", "true") == "true"
     )
@@ -77,8 +78,10 @@ function makiepotts_tests(groups = MAKIEPOTTS_SELECTED_GROUPS;
     for g in groups
         append!(gs, Symbol.(get(MAKIEPOTTS_GROUPS_TABLE[g], "tags", [g])))
     end
-    kw = (; nworkers, name, test_end_expr, testitem_timeout = 3600, retries = 0,
-        nworker_threads = string(Threads.nthreads()), logs = :batched)
+    kw = (;
+        nworkers, name, test_end_expr, testitem_timeout = 3600, retries = 0,
+        nworker_threads = string(Threads.nthreads()), logs = :batched,
+    )
     task_local_storage(:SOURCE_PATH, Pkg.Operations.testfile(dirname(Base.active_project()))) do
         if is_all
             if qa

@@ -9,8 +9,10 @@ function benchmark_frame(dims = (512, 512); cell_width = 16)
     cells = RenderCellMetadata[]
     for site in CartesianIndices(owners)
         x, y = Tuple(site)
-        id = UInt32((x - 1) ÷ cell_width +
-                    ((y - 1) ÷ cell_width) * cells_per_row + 1)
+        id = UInt32(
+            (x - 1) ÷ cell_width +
+                ((y - 1) ÷ cell_width) * cells_per_row + 1
+        )
         owners[site] = RenderOwner(CellSite, id)
         if !haskey(identities, id)
             identity = CellIdentity(id, 0)
@@ -25,11 +27,14 @@ frame = benchmark_frame()
 
 suite = BenchmarkGroup()
 suite["encode"]["cell_type"] = @benchmarkable encode_frame(
-    $frame, CellTypeEncoding())
+    $frame, CellTypeEncoding()
+)
 suite["encode"]["identity"] = @benchmarkable encode_frame(
-    $frame, CellIdentityEncoding())
+    $frame, CellIdentityEncoding()
+)
 suite["geometry"]["boundaries"] = @benchmarkable MakiePotts._boundary_segments(
-    $frame)
+    $frame
+)
 suite["conformance"] = @benchmarkable render_frame_conformance($frame)
 
 results = run(suite; verbose = true)

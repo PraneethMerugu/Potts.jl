@@ -26,12 +26,20 @@ function visual_reference_frame()
         owners[x, y] = RenderOwner(ObstacleSite, 2)
     end
     key = CellChannelKey(:reference_signal, Float64)
-    geometry = RenderGeometry(dims;
-        spacing = (0.6, 0.8), origin = (-1.2, 0.5))
-    frame = PottsRenderFrame(80, owners, cells;
-        channels = (RenderChannel(key, values;
-            label = "Signal", units = "a.u."),),
-        geometry)
+    geometry = RenderGeometry(
+        dims;
+        spacing = (0.6, 0.8), origin = (-1.2, 0.5)
+    )
+    frame = PottsRenderFrame(
+        80, owners, cells;
+        channels = (
+            RenderChannel(
+                key, values;
+                label = "Signal", units = "a.u."
+            ),
+        ),
+        geometry
+    )
     return frame, key
 end
 
@@ -43,21 +51,30 @@ function visual_reference_figure()
         fontsize = 14,
     )
 
-    categorical_axis = Axis(figure[1, 1];
+    categorical_axis = Axis(
+        figure[1, 1];
         title = "Cell type",
-        xlabel = "x (μm)", ylabel = "y (μm)", aspect = DataAspect())
-    categorical = pottsplot!(categorical_axis, frame;
+        xlabel = "x (μm)", ylabel = "y (μm)", aspect = DataAspect()
+    )
+    categorical = pottsplot!(
+        categorical_axis, frame;
         boundaries = true,
         boundary_width = 0.8,
         medium_color = :gray18,
-        obstacle_color = :gray48)
-    potts_legend(figure[1, 2], categorical;
-        title = "Ownership", framevisible = false)
+        obstacle_color = :gray48
+    )
+    potts_legend(
+        figure[1, 2], categorical;
+        title = "Ownership", framevisible = false
+    )
 
-    continuous_axis = Axis(figure[1, 3];
+    continuous_axis = Axis(
+        figure[1, 3];
         title = "Cell signal",
-        xlabel = "x (μm)", ylabel = "y (μm)", aspect = DataAspect())
-    continuous = pottsplot!(continuous_axis, frame;
+        xlabel = "x (μm)", ylabel = "y (μm)", aspect = DataAspect()
+    )
+    continuous = pottsplot!(
+        continuous_axis, frame;
         encoding = ChannelEncoding(key),
         colormap = :magma,
         boundaries = true,
@@ -65,7 +82,8 @@ function visual_reference_figure()
         boundary_width = 0.8,
         medium_color = :gray95,
         nan_color = :gray78,
-        obstacle_color = :gray20)
+        obstacle_color = :gray20
+    )
     Colorbar(figure[1, 4], continuous; label = "Signal (a.u.)")
 
     colsize!(figure.layout, 1, Relative(0.39))

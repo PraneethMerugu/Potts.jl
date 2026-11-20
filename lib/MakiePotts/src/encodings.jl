@@ -91,12 +91,16 @@ function encode_frame(frame::AbstractPottsRenderFrame, encoding::CellTypeEncodin
         end
     end
     entries = LegendEntry[LegendEntry(:medium, "Medium", 0)]
-    append!(entries, [
-        LegendEntry(type_id, "Cell type $type_id", UInt64(type_id))
-        for type_id in type_ids
-    ])
-    return EncodedPottsFrame(values, encoding, entries,
-        encoding.label, nothing, nothing)
+    append!(
+        entries, [
+            LegendEntry(type_id, "Cell type $type_id", UInt64(type_id))
+                for type_id in type_ids
+        ]
+    )
+    return EncodedPottsFrame(
+        values, encoding, entries,
+        encoding.label, nothing, nothing
+    )
 end
 
 function encode_frame(frame::AbstractPottsRenderFrame, encoding::CellIdentityEncoding)
@@ -118,14 +122,20 @@ function encode_frame(frame::AbstractPottsRenderFrame, encoding::CellIdentityEnc
         end
     end
     entries = LegendEntry[LegendEntry(:medium, "Medium", 0)]
-    append!(entries, [
-        LegendEntry(identity,
-            "Cell $(identity.id) · generation $(identity.generation)",
-            (UInt64(identity.id) << 32) ⊻ identity.generation)
-        for identity in identities
-    ])
-    return EncodedPottsFrame(values, encoding, entries,
-        encoding.label, nothing, nothing)
+    append!(
+        entries, [
+            LegendEntry(
+                identity,
+                "Cell $(identity.id) · generation $(identity.generation)",
+                (UInt64(identity.id) << 32) ⊻ identity.generation
+            )
+                for identity in identities
+        ]
+    )
+    return EncodedPottsFrame(
+        values, encoding, entries,
+        encoding.label, nothing, nothing
+    )
 end
 
 function _finite_range(values)
@@ -162,8 +172,10 @@ function encode_frame(frame::AbstractPottsRenderFrame, encoding::ChannelEncoding
         end
     end
     label = encoding.label === nothing ? item.label : encoding.label
-    return EncodedPottsFrame(values, encoding, LegendEntry[],
-        label, item.units, _finite_range(values))
+    return EncodedPottsFrame(
+        values, encoding, LegendEntry[],
+        label, item.units, _finite_range(values)
+    )
 end
 
 """Return a copy of the semantic legend entries produced by an encoding."""
@@ -222,8 +234,11 @@ function _categorical_colors(entries::Vector{LegendEntry}, palette, medium_color
     end
     requested = length(entries) - 1
     supplied = Makie.to_colormap(palette)
-    length(supplied) >= requested || throw(ArgumentError(
-        "category palette supplies $(length(supplied)) colors for $requested categories; " *
-        "MakiePotts never cycles palettes silently"))
+    length(supplied) >= requested || throw(
+        ArgumentError(
+            "category palette supplies $(length(supplied)) colors for $requested categories; " *
+                "MakiePotts never cycles palettes silently"
+        )
+    )
     return vcat([Makie.to_color(medium_color)], supplied[1:requested])
 end

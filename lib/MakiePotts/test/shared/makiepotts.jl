@@ -13,12 +13,14 @@ using .CITelemetry: record_duration
 include("../downstream_fixture.jl")
 include("../allocation_fixture.jl")
 
-const MAKIEPOTTS_TEST_FILES = Set((
-    "test_adversarial_tests.jl",
-    "test_allocations_tests.jl",
-    "test_downstream_conformance_tests.jl",
-    "test_saved_state_channels_tests.jl",
-))
+const MAKIEPOTTS_TEST_FILES = Set(
+    (
+        "test_adversarial_tests.jl",
+        "test_allocations_tests.jl",
+        "test_downstream_conformance_tests.jl",
+        "test_saved_state_channels_tests.jl",
+    )
+)
 
 function render_fixture(; dimensions = 2)
     dims = dimensions == 2 ? (5, 4) : (5, 4, 3)
@@ -35,8 +37,10 @@ function render_fixture(; dimensions = 2)
     temperature(st, p, prop, ctx) = p.T
     energy(st, p, prop, ctx) = CorePotts.volume_delta(st.cell.volume, prop, (v, c) -> (v - 4.0)^2)
     f = CorePotts.CPMFunction(energy; temperature)
-    problem = CorePotts.PottsProblem(f, CorePotts.initial_state(labels, kinds), lattice, (0, 0),
-        (; T = 2.0); seed = 1)
+    problem = CorePotts.PottsProblem(
+        f, CorePotts.initial_state(labels, kinds), lattice, (0, 0),
+        (; T = 2.0); seed = 1
+    )
     state = if dimensions == 2
         only(CorePotts.solve(problem, CorePotts.SequentialCPM()).u)
     else

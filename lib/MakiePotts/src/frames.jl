@@ -26,7 +26,7 @@ struct RenderOwner
     function RenderOwner(kind::RenderOwnerKind, id::Integer)
         0 < id <= typemax(UInt32) ||
             throw(ArgumentError("render owner identity must fit UInt32 and be positive"))
-        new(kind, UInt32(id))
+        return new(kind, UInt32(id))
     end
 end
 function Base.:(==)(left::RenderOwner, right::RenderOwner)
@@ -46,7 +46,7 @@ struct RenderCellIdentity
             throw(ArgumentError("cell identity must fit UInt32 and be positive"))
         0 <= generation <= typemax(UInt64) ||
             throw(ArgumentError("cell generation must fit UInt64 and be nonnegative"))
-        new(UInt32(id), UInt64(generation))
+        return new(UInt32(id), UInt64(generation))
     end
 end
 function Base.:(==)(left::RenderCellIdentity, right::RenderCellIdentity)
@@ -62,11 +62,13 @@ struct RenderCellMetadata
     cell_type::UInt32
     label::String
 
-    function RenderCellMetadata(identity::RenderCellIdentity, cell_type::Integer;
-            label::AbstractString = "Cell $(identity.id)")
+    function RenderCellMetadata(
+            identity::RenderCellIdentity, cell_type::Integer;
+            label::AbstractString = "Cell $(identity.id)"
+        )
         0 < cell_type <= typemax(UInt32) ||
             throw(ArgumentError("cell type must fit UInt32 and be positive"))
-        new(identity, UInt32(cell_type), String(label))
+        return new(identity, UInt32(cell_type), String(label))
     end
 end
 function Base.:(==)(left::RenderCellMetadata, right::RenderCellMetadata)
@@ -75,8 +77,10 @@ function Base.:(==)(left::RenderCellMetadata, right::RenderCellMetadata)
         left.label == right.label
 end
 function Base.hash(metadata::RenderCellMetadata, seed::UInt)
-    return hash(metadata.label,
-        hash(metadata.cell_type, hash(metadata.identity, seed)))
+    return hash(
+        metadata.label,
+        hash(metadata.cell_type, hash(metadata.identity, seed))
+    )
 end
 
 """
@@ -89,12 +93,17 @@ struct RenderGeometry{N, T <: AbstractFloat}
     origin::NTuple{N, T}
     source_axes::NTuple{N, Int}
 
-    function RenderGeometry(size::NTuple{N, <:Integer};
+    function RenderGeometry(
+            size::NTuple{N, <:Integer};
             spacing = ntuple(_ -> 1.0, Val(N)),
             origin = ntuple(_ -> 0.0, Val(N)),
-            source_axes = ntuple(identity, Val(N))) where {N}
-        N in (2, 3) || throw(ArgumentError(
-            "render geometry supports two or three dimensions"))
+            source_axes = ntuple(identity, Val(N))
+        ) where {N}
+        N in (2, 3) || throw(
+            ArgumentError(
+                "render geometry supports two or three dimensions"
+            )
+        )
         normalized_size = ntuple(i -> Int(size[i]), Val(N))
         all(>(0), normalized_size) ||
             throw(ArgumentError("render geometry dimensions must be positive"))
@@ -110,7 +119,7 @@ struct RenderGeometry{N, T <: AbstractFloat}
             throw(ArgumentError("source axes must be positive"))
         length(unique(normalized_axes)) == N ||
             throw(ArgumentError("source axes must be unique"))
-        new{N, T}(normalized_size, normalized_spacing, normalized_origin, normalized_axes)
+        return new{N, T}(normalized_size, normalized_spacing, normalized_origin, normalized_axes)
     end
 end
 function Base.:(==)(left::RenderGeometry, right::RenderGeometry)
@@ -120,8 +129,10 @@ function Base.:(==)(left::RenderGeometry, right::RenderGeometry)
         left.source_axes == right.source_axes
 end
 function Base.hash(geometry::RenderGeometry, seed::UInt)
-    return hash(geometry.source_axes,
-        hash(geometry.origin, hash(geometry.spacing, hash(geometry.size, seed))))
+    return hash(
+        geometry.source_axes,
+        hash(geometry.origin, hash(geometry.spacing, hash(geometry.size, seed)))
+    )
 end
 
 """Data-lineage record carried by a complete render frame."""
@@ -132,8 +143,10 @@ struct RenderProvenance{R}
     request::R
 end
 
-function RenderProvenance(source::Symbol, source_type::Type, residency::Symbol,
-        request::RenderRequest)
+function RenderProvenance(
+        source::Symbol, source_type::Type, residency::Symbol,
+        request::RenderRequest
+    )
     return RenderProvenance(source, string(source_type), residency, request)
 end
 
@@ -142,9 +155,11 @@ Canonical, validated render-frame snapshot. Construction defensively copies
 mutable input containers; callers consume it as logically immutable through the
 accessor protocol.
 """
-struct PottsRenderFrame{N, O <: AbstractArray{RenderOwner, N},
-        M <: AbstractVector{RenderCellMetadata}, C <: Tuple, G, P} <:
-        AbstractPottsRenderFrame{N}
+struct PottsRenderFrame{
+        N, O <: AbstractArray{RenderOwner, N},
+        M <: AbstractVector{RenderCellMetadata}, C <: Tuple, G, P,
+    } <:
+    AbstractPottsRenderFrame{N}
     mcs::Int
     owners::O
     cells::M
@@ -202,15 +217,19 @@ function _frame_errors(mcs, owners, cells, channels, geometry)
                 push!(errors, "medium-channel values must be domain-ID-keyed")
             if item.values isa AbstractDict
                 all(key -> key isa Integer && key > 0, keys(item.values)) ||
-                    push!(errors,
-                        "medium-channel keys must be positive integer domain IDs")
+                    push!(
+                    errors,
+                    "medium-channel keys must be positive integer domain IDs"
+                )
             end
         end
         if item.values isa AbstractArray || item.values isa AbstractDict
             expected = _channel_value_type(item.key)
             all(value -> ismissing(value) || value isa expected, values(item.values)) ||
-                push!(errors,
-                    "render channel $(item.key) contains a value outside its declared type")
+                push!(
+                errors,
+                "render channel $(item.key) contains a value outside its declared type"
+            )
         end
     end
     return unique(errors)
@@ -218,11 +237,13 @@ end
 
 _channel_value_type(::RenderChannelKey{S, T}) where {S, T} = T
 
-function PottsRenderFrame(mcs::Integer, owners::AbstractArray{RenderOwner, N},
+function PottsRenderFrame(
+        mcs::Integer, owners::AbstractArray{RenderOwner, N},
         cells::AbstractVector{RenderCellMetadata};
         channels::Tuple = (),
         geometry::RenderGeometry{N} = RenderGeometry(size(owners)),
-        provenance = RenderProvenance(:manual, typeof(owners), :host, RenderRequest())) where {N}
+        provenance = RenderProvenance(:manual, typeof(owners), :host, RenderRequest())
+    ) where {N}
     errors = _frame_errors(Int(mcs), owners, cells, channels, geometry)
     isempty(errors) || throw(InvalidRenderFrameError(errors))
     frozen_owners = copy(owners)
@@ -236,10 +257,13 @@ function PottsRenderFrame(mcs::Integer, owners::AbstractArray{RenderOwner, N},
         RenderChannel(item.key, values; label = item.label, units = item.units)
     end
     lookup = Dict(cell.identity.id => index for (index, cell) in pairs(frozen_cells))
-    return PottsRenderFrame{N, typeof(frozen_owners), typeof(frozen_cells),
-        typeof(frozen_channels), typeof(geometry), typeof(provenance)}(
+    return PottsRenderFrame{
+        N, typeof(frozen_owners), typeof(frozen_cells),
+        typeof(frozen_channels), typeof(geometry), typeof(provenance),
+    }(
         Int(mcs), frozen_owners, frozen_cells, frozen_channels,
-        geometry, provenance, lookup)
+        geometry, provenance, lookup
+    )
 end
 
 """Return the Monte Carlo step represented by a render frame."""
@@ -278,8 +302,11 @@ available_channels(frame::PottsRenderFrame) = map(item -> item.key, frame.channe
 """Return the materialized channel matching `key`, or throw if absent."""
 function frame_channel(frame::PottsRenderFrame, key::RenderChannelKey)
     index = findfirst(item -> item.key == key, frame.channels)
-    index === nothing && throw(MissingRenderChannelError(
-        key, Any[available_channels(frame)...]))
+    index === nothing && throw(
+        MissingRenderChannelError(
+            key, Any[available_channels(frame)...]
+        )
+    )
     return frame.channels[index]
 end
 
@@ -339,8 +366,10 @@ function render_frame_conformance(frame::AbstractPottsRenderFrame{N}) where {N}
                     break
                 end
                 metadata.identity.id == owner.id || begin
-                    push!(issues,
-                        "cell_metadata(frame, owner) must preserve the owner ID")
+                    push!(
+                        issues,
+                        "cell_metadata(frame, owner) must preserve the owner ID"
+                    )
                     break
                 end
                 ok, by_identity = _probe_frame(
@@ -349,8 +378,10 @@ function render_frame_conformance(frame::AbstractPottsRenderFrame{N}) where {N}
                 )
                 ok || break
                 by_identity == metadata || begin
-                    push!(issues,
-                        "cell_metadata call forms must return equal metadata")
+                    push!(
+                        issues,
+                        "cell_metadata call forms must return equal metadata"
+                    )
                     break
                 end
             end

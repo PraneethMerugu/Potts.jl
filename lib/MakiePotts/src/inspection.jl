@@ -10,7 +10,7 @@ function _owner_label(frame, owner::RenderOwner)
     if owner.kind === CellSite
         metadata = cell_metadata(frame, owner)
         return "Cell $(metadata.identity.id)\nGeneration $(metadata.identity.generation)\n" *
-               "Cell type $(metadata.cell_type)"
+            "Cell type $(metadata.cell_type)"
     elseif owner.kind === ObstacleSite
         return "Obstacle medium $(owner.id)"
     else
@@ -21,14 +21,16 @@ end
 """
 Return the semantic DataInspector label for one rendered site.
 """
-function inspection_label(frame::AbstractPottsRenderFrame{2},
-        encoding::AbstractPottsEncoding, index)
+function inspection_label(
+        frame::AbstractPottsRenderFrame{2},
+        encoding::AbstractPottsEncoding, index
+    )
     site = _site_index(frame, index)
     owner = owner_at(frame, site)
     source_axes = frame_geometry(frame).source_axes
     coordinates = Tuple(site)
     base = "Site $(coordinates) · source axes $(source_axes)\n" *
-           _owner_label(frame, owner)
+        _owner_label(frame, owner)
     encoded = encode_frame(frame, encoding)
     if encoding_kind(encoded.encoding) === ContinuousEncoding
         value = encoded.values[site]
