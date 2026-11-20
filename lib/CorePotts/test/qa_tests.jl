@@ -113,8 +113,7 @@ end
 
 @testitem "QA: Aqua (CorePotts)" setup = [CP_qa] tags = [:corepotts, :qa] begin
 @testset "QA: Aqua (CorePotts)" begin
-        # `persistent_tasks = false`: KernelAbstractions/GPU backends register background tasks.
-        qa_aqua(CorePotts; persistent_tasks = false)
+        qa_aqua(CorePotts)
         qa_extension_piracies(CorePotts)                # inside the GPU extensions, when loaded
     end
 end
@@ -154,4 +153,25 @@ end
         end
     end
 end
+end
+
+# JET's error analysis of the whole package: undefined names and fields (D-298)
+@testitem "QA: JET package analysis (CorePotts)" setup = [CP_qa] tags = [:corepotts, :qa] begin
+    @testset "QA: JET package analysis (CorePotts)" begin
+        qa_jet_package(
+            CorePotts;
+            locals = [
+                # assigned when the state has clusters, read only then (or when a cluster root
+                # was found, which needs clusters)
+                r"`(members|cl)` may be undefined \(lifecycle\.jl\)" => "assigned under the condition of its use",
+            ]
+        )
+    end
+end
+
+# the check-bounds lane: an out-of-bounds read under `@inbounds` is caught (D-298)
+@testitem "QA: check-bounds lane control (CorePotts)" setup = [CP_qa] tags = [:corepotts, :qa] begin
+    @testset "QA: check-bounds lane control (CorePotts)" begin
+        qa_check_bounds_control()
+    end
 end

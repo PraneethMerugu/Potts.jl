@@ -11,6 +11,7 @@ using CommonSolve: solve, solve!, init, step!
 using SciMLBase: SciMLBase, reinit!, remake, ReturnCode
 const SS = LatticeFields.Problems.SS
 const SII = LatticeFields.Problems.SII
+include(joinpath(@__DIR__, "..", "..", "..", "..", "test", "shared", "qa_common.jl"))
 include("../shared/export_all.jl")
 end
 
@@ -183,5 +184,21 @@ end
         @test_throws ArgumentError init(prob, alg; dt = 0.05, reltol = 1.0e-3)
         @test_throws ArgumentError init(prob, alg; dt = 0.05, abstol = -1.0)
         @test_throws ArgumentError init(prob, alg; dt = 0.05, abstol = 0.0, reltol = 0.0)
+    end
+end
+
+# SciMLBase's integrator and solution interface on a FieldProblem (the shared check)
+@testitem "FieldProblem: the shared SciMLBase interface check" setup = [LF_problems_sciml] tags = [:latticefields, :problems] begin
+    @testset "FieldProblem: the shared SciMLBase interface check" begin
+        dims = (10, 8)
+        ix = LatticeIndex(; variables = [:u => FieldSlot(1:prod(dims), dims)], parameters = [:D => 1])
+        prob = FieldProblem(
+            euler2(dims; storage = LatticeFields.IR.F64), rand(Xoshiro(17), prod(dims)), (0.0, 0.2), [0.5];
+            state = ["u"], kind = :rate, index = ix
+        )
+        qa_sciml_interface(
+            prob, ExplicitEuler(; substeps = 1); kw = (; dt = 0.05), h = 0.05, stop = 0.15, nwin = 4, tf = 0.2,
+            state_copy = integ -> copy(Array(integ.u)), live_write! = integ -> (integ.u .= 2.0; nothing)
+        )
     end
 end

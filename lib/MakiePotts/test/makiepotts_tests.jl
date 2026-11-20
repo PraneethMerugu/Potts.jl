@@ -264,8 +264,7 @@ end
 
 @testitem "MakiePotts package quality" setup = [MP_makiepotts] tags = [:makiepotts, :qa] begin
 @testset "MakiePotts package quality" begin
-        # `persistent_tasks = false`: Makie/CairoMakie may hold background font/render tasks.
-        qa_aqua(MakiePotts; persistent_tasks = false)
+        qa_aqua(MakiePotts)
         qa_api_docs(MakiePotts; docs_dir = joinpath(@__DIR__, "..", "..", "..", "docs"))
         qa_error_rules(pkgdir(MakiePotts))
 end
@@ -320,4 +319,11 @@ end
         @test read(command, String) == output
     end
 end
+end
+
+# JET's error analysis of the whole package: undefined names and fields (D-298)
+@testitem "QA: JET package analysis (MakiePotts)" setup = [MP_makiepotts] tags = [:makiepotts, :qa] begin
+    @testset "QA: JET package analysis (MakiePotts)" begin
+        qa_jet_package(MakiePotts)
+    end
 end

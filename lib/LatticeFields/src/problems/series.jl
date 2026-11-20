@@ -275,8 +275,12 @@ end
 # Field reads on every solution of a lattice problem: `sol[c]` of a state or aux
 # field is one grid per save (as SciML and `PottsProblem` read a variable); `sol[x]` the
 # coordinates of the site centers; anything else as SciML reads it. (The methods for integer,
-# colon and index-array arguments keep SciML's reads, unambiguously.)
-function Base.getindex(sol::LatticeSolution, sym)
+# colon and index-array arguments keep SciML's reads, unambiguously.) `sym` is restricted to
+# the key types that can name a field (symbolic terms through the SymbolicUtils extension), so
+# the method is not ambiguous with array packages' index types (BlockArrays' `Block`,
+# BandedMatrices' `Band`).
+Base.getindex(sol::LatticeSolution, sym::Union{Symbol, AbstractString, Number}) = _lattice_getindex(sol, sym)
+function _lattice_getindex(sol, sym)
     s = _field_series(sol, sym)
     s === nothing || return _grids(s)
     c = _coordinate(sol, sym)

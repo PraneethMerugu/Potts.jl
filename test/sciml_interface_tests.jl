@@ -12,6 +12,7 @@ using SciMLBase: SciMLBase, ReturnCode, add_tstop!, derivative_discontinuity!, D
     EnsembleSerial
 using DiffEqCallbacks: PresetTimeCallback, PeriodicCallback
 isdefined(@__MODULE__, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
+include(joinpath(@__DIR__, "shared", "qa_common.jl"))
 const LP = Potts.LatticePDE
 const LFP = Potts.LatticeFields.Problems
 
@@ -79,63 +80,20 @@ end
     for c0 in iface_cases()
         c = fix_tspan(c0)
         @testset "$(c.name)" begin
-            prob, alg, kw, h = c.prob, c.alg, c.kw, c.h
-            @test SciMLBase.isinplace(prob) === true
-
-            # step!(integ, h, true) lands on t + h; add_tstop! is landed on
-            integ = init(prob, alg; kw..., save_everystep = false)
-            step!(integ, h, true)
-            @test integ.t ≈ h
-            ts = 2h + (c.name == "PottsProblem" ? 1 : 0.05)
-            add_tstop!(integ, ts)
-            while integ.t < ts - 1.0e-9
-                step!(integ)
-            end
-            @test integ.t ≈ ts
-            @test SciMLBase.check_error(integ) == ReturnCode.Success        # a healthy run in progress
-            @test integ.sol.retcode == ReturnCode.Default
-            @test SciMLBase.has_stats(integ) && integ.stats !== nothing
-
-            # iteration runs one step per window to the end of the time span
-            fresh = init(prob, alg; kw..., save_everystep = false)
-            n = 0
-            for _ in fresh
-                n += 1
-            end
-            @test n == c.nwin && fresh.t ≈ c.tf
-            @test SciMLBase.successful_retcode(fresh.sol)
-
-            # DiffEqCallbacks fire at the listed times
-            hits = Float64[]
-            times = c.name == "PottsProblem" ? [2, 5] : [0.3, 0.75]
-            solve(prob, alg; kw..., save_everystep = false, callback = PresetTimeCallback(times, i -> push!(hits, i.t)))
-            @test hits ≈ times
-            per = Float64[]
-            Δ = c.name == "PottsProblem" ? 2 : 0.3
-            solve(prob, alg; kw..., save_everystep = false, callback = PeriodicCallback(i -> push!(per, i.t), Δ))
-            want = c.name == "PottsProblem" ? [2, 4, 6] : [0.3, 0.6, 0.9]
-            @test per[1:length(want)] ≈ want && all(t -> t <= c.tf + 1.0e-9, per)
-
-            # the default saves every step (SciML); `saveat` and `save_everystep = false` save less
-            sol = solve(prob, alg; kw...)
-            @test length(sol.t) == c.nwin + 1
-            @test length(solve(prob, alg; kw..., save_everystep = false).t) == 2
-            @test sol(sol.t[2]) == sol.u[2]
-
-            # an unknown keyword is refused
-            @test_throws ArgumentError solve(prob, alg; kw..., not_a_keyword = 1)
-
-            # a write into the live state, then `derivative_discontinuity!`, changes the next step
-            a = init(prob, alg; kw..., save_everystep = false)
-            b = init(prob, alg; kw..., save_everystep = false)
-            step!(a); step!(b)
-            live_write!(a)
-            derivative_discontinuity!(a, true)
-            for _ in 1:3
-                step!(a); step!(b)
-            end
-            @test state_copy(a) != state_copy(b)
+            potts = c.name == "PottsProblem"
+            callbacks = (;
+                preset = PresetTimeCallback, periodic = PeriodicCallback,
+                times = potts ? [2, 5] : [0.3, 0.75], period = potts ? 2 : 0.3,
+                want = potts ? [2, 4, 6] : [0.3, 0.6, 0.9],
+            )
+            qa_sciml_interface(
+                c.prob, c.alg; c.kw, c.h, stop = 2c.h + (potts ? 1 : 0.05), c.nwin, c.tf,
+                state_copy, live_write!, callbacks
+            )
         end
+    end
+    @testset "a problem missing an interface method fails the check" begin
+        qa_sciml_interface_control()
     end
 end
 

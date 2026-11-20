@@ -1,0 +1,48 @@
+# CompatHelper: opens one pull request per dependency whose new release falls outside a
+# [compat] bound, for every package and test project of the workspace, against `monorepo`. It
+# only opens pull requests: it never pushes to an existing branch, merges, or tags. It runs on
+# a GitHub-hosted runner, so it does not take the self-hosted CI machine. The schedule fires
+# only once this file is on the default branch (main), and opening pull requests needs the
+# repository setting that allows GitHub Actions to create them. Pull requests opened with the
+# default GITHUB_TOKEN do not start CI; run CI on them by hand (or push to them).
+name: CompatHelper
+
+on:
+  schedule:
+    - cron: '0 5 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: compathelper
+  cancel-in-progress: true
+
+permissions:
+  contents: write        # the pull-request branches
+  pull-requests: write
+
+jobs:
+  compathelper:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.13'
+      - name: Install CompatHelper
+        run: julia --startup-file=no -e 'using Pkg; Pkg.add(name = "CompatHelper", version = "3")'
+      - name: Open compat pull requests
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          julia --startup-file=no -e '
+            using CompatHelper
+            CompatHelper.main(;
+                subdirs = ["", "test",
+                    "lib/CorePotts", "lib/CorePotts/test",
+                    "lib/LatticeFields", "lib/LatticeFields/test",
+                    "lib/LatticePDE", "lib/LatticePDE/test",
+                    "lib/MakiePotts", "lib/MakiePotts/test",
+                    "lib/PottsModels", "lib/PottsModels/test"],
+                bump_version = false,
+                master_branch = "monorepo",
+            )'

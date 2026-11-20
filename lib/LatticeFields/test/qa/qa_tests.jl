@@ -31,6 +31,16 @@ include(joinpath(@__DIR__, "..", "..", "..", "..", "test", "shared", "qa_common.
 include("../shared/export_all.jl")
 end
 
+@testsetup module LF_qa_rhs
+using Test, LatticeFields
+using JET: @test_opt
+include("../host_runner.jl")
+include("../fixtures.jl")
+include("../shared/problems_owned.jl")
+using LatticeFields.Problems: LatticeRHS, ode_problem
+include("../shared/export_all.jl")
+end
+
 @testitem "ExplicitImports" setup = [LF_qa_qa] tags = [:latticefields, :qa] begin
 @testset "ExplicitImports" begin
         qa_explicit_imports(
@@ -64,15 +74,23 @@ end
 
 # Aqua's ambiguity check loads only LatticeFields' own dependencies. A user's session also
 # loads array and polynomial packages whose generic methods (`==` on any AbstractArray) can be
-# ambiguous with LatticeFields' own (f2d9c774 had 8 such, with these three loaded): load them
-# here and require LatticeFields to add none (a guard).
+# ambiguous with LatticeFields' own (f2d9c774 had 8 such, with three of these loaded, and
+# `getindex` on a solution was ambiguous with BlockArrays' and BandedMatrices' index types until
+# D-298): load them here and require LatticeFields to add none (a guard).
 @testitem "no ambiguities with common array packages loaded" setup = [LF_qa_qa] tags = [:latticefields, :qa] begin
-@testset "no ambiguities with common array packages loaded" begin
-    @eval using ArrayLayouts: ArrayLayouts
-    @eval using DynamicPolynomials: DynamicPolynomials
-    @eval using SparseArrays: SparseArrays
-    @test isempty(Test.detect_ambiguities(LatticeFields; recursive = true))
-end
+    @testset "no ambiguities with common array packages loaded" begin
+        @eval using ArrayLayouts: ArrayLayouts
+        @eval using BandedMatrices: BandedMatrices
+        @eval using BlockArrays: BlockArrays
+        @eval using DynamicPolynomials: DynamicPolynomials
+        @eval using SparseArrays: SparseArrays
+        @test isempty(Test.detect_ambiguities(LatticeFields; recursive = true))
+        # control: an array type whose `getindex` takes any key, as the solution's did, is
+        # ambiguous with BlockArrays' `Block` methods
+        scratch = Module(:ScratchIndex)
+        Core.eval(scratch, :(struct V <: AbstractVector{Int} end; Base.size(::V) = (1,); Base.getindex(::V, k) = 1))
+        @test !isempty(Test.detect_ambiguities(scratch))
+    end
 end
 
 @testitem "source rules" setup = [LF_qa_qa] tags = [:latticefields, :qa] begin
@@ -81,4 +99,51 @@ end
         qa_source_rules(root; exclude_files = [@__FILE__])
         qa_error_rules(root; reviewed_invariants = ["src/compile/emit.jl", "src/problems/tangent.jl"])
 end
+end
+
+# JET's error analysis of the whole package: undefined names and fields (D-298)
+@testitem "JET package analysis" setup = [LF_qa_qa] tags = [:latticefields, :qa] begin
+    @testset "JET package analysis" begin
+        qa_jet_package(
+            LatticeFields;
+            broken = [
+                # `_canonical_fields` reads `init` only when the field list has it
+                # (`f === :init && getfield(s, f) …`); JET propagates `:init` into the
+                # algorithms that have no such field
+                r"LatticeGMRES has no field `init`" => "a branch JET cannot rule out",
+                r"LatticePCG has no field `init`" => "a branch JET cannot rule out",
+            ],
+            locals = [
+                # the PCG and tangent kernel builders reassign `kb` (and `b`) after closures
+                # that capture it: boxed captures, each read after its assignment
+                r"`(kb|b)` is not defined \(kernels\.jl\)" => "boxed capture",
+            ]
+        )
+    end
+end
+
+# the right side of the ODE form (`ODEFunction(LatticeRHS)`): its per-call work, the walk over
+# the bound launches, has no runtime dispatch. The call's other branches (upload of new tables
+# and inputs, derived slots, checks, init kernels, masked fields) dispatch at run time by design
+# (function barriers on parameter changes); see D-298.
+@testitem "JET: the ODE right side LatticeRHS" setup = [LF_qa_rhs] tags = [:latticefields, :qa] begin
+    @testset "JET: the ODE right side LatticeRHS" begin
+        dims = (12, 10)
+        u0 = rand(Xoshiro(6), prod(dims))
+        ix = LatticeIndex(; variables = [:u => FieldSlot(1:prod(dims), dims)])
+        ode = ode_problem(
+            euler2(dims; rate = true, storage = F64), u0, (0.0, 1.0), [0.5]; state = ["u"],
+            rates = Dict("u" => "∂u"), index = ix, options = CompileOptions(; T = Float64)
+        )
+        rhs = ode.f.f
+        @test rhs isa LatticeRHS
+        du = similar(ode.u0)
+        rhs(du, ode.u0, ode.p, 0.0)
+        pv, k = LatticeFields.Problems._pvals(ode.p), LatticeFields.Problems._ptick(ode.p)
+        @test_opt target_modules = (LatticeFields,) rhs.walk(rhs.launches, (du, ode.u0, pv, 0.0, k))
+        # the walk is the whole per-call work: it alone gives the right side's rates
+        du2 = zero(du)
+        rhs.walk(rhs.launches, (du2, ode.u0, pv, 0.0, k))
+        @test du2 == du
+    end
 end
