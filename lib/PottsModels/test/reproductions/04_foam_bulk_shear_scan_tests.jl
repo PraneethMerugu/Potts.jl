@@ -208,7 +208,7 @@ function scan_at(grid, med, κ)
     (isfinite(med[j]) && isfinite(med[j + 1])) || return Inf
     return exp(log(med[j]) + (log(κ) - log(grid[j])) * (log(med[j + 1]) - log(med[j])) / (log(grid[j + 1]) - log(grid[j])))
 end
-"""The D-203 decision on a scan table: (kappa_b = Float64 or nothing, path, reason, khat,
+"""The bulk-modulus decision on a scan table: (kappa_b = Float64 or nothing, path, reason, khat,
 med, cons, fit, P). See the header for the rule."""
 function analyse(
         rows; grid = GRID, betas = SCAN_BETAS, seeds = 1:SCAN_N, k_req = SCAN_K,
@@ -525,7 +525,7 @@ end
             @info "04 κ_b control at κ_D190" β m m190
             @test scan_within(m, m190)
         end
-        @info "04 κ_b scan decision (D-203)" A.kappa_b A.path A.reason A.khat A.P
+        @info "04 κ_b scan decision" A.kappa_b A.path A.reason A.khat A.P
         @test A.kappa_b === nothing || GRID[1] <= A.kappa_b <= GRID[end]
         dec = joinpath(D, "decision.toml")
         if isfile(dec)

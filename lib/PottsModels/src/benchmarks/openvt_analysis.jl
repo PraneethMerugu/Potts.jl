@@ -420,7 +420,7 @@ The file name the OpenVT benchmark expects for `format` (spec 15 §3.1):
 - `openvt_filename(:O5; gamma, mcs)`: `"Potts.jl_gamma_<gamma>_<mcs>MCS.csv"`, with `gamma`
   as `string` writes it (the Fig 7 colonies, β = 0);
 - `openvt_filename(:O5; beta, mcs)`: `"Potts.jl_beta_<beta>_<mcs>MCS.csv"`, with `beta` as
-  `string` writes it (the Fig 8 colonies, γ = 0; D-211).
+  `string` writes it (the Fig 8 colonies, γ = 0).
 
 O4 and O6 have no fixed names. Another format or an O3 `parameter` other than `:beta` and
 `:gamma` is an `ArgumentError`, and so is an O5 call with both or neither of `gamma` and
@@ -465,7 +465,7 @@ end
 
 Whether the per-seed values `alt` of one metric (e.g. `CheckerboardCPM` runs) differ from
 the per-seed values `ref` (e.g. the `SequentialCPM` reference runs) beyond the seed spread,
-by the Welch two-sample z of independent runs (spec 15 §1.3, D-214, D-216):
+by the Welch two-sample z of independent runs (spec 15 §1.3):
 
 - `diff = mean(alt) − mean(ref)`, `se = √(sd_ref²/n_ref + sd_alt²/n_alt)` with sample
   standard deviations (`n − 1`), and the statistic `z = diff / se`;

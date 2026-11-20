@@ -227,7 +227,7 @@ end
         @test REC !== nothing
         for k in TIME_KEYS
             ok = haskey(TIME, k)
-            ok || @info "15 openvt checkerboard page: meta.toml [time] of $(REC) lacks $k (the D-224 re-run writes it)"
+            ok || @info "15 openvt checkerboard page: meta.toml [time] of $(REC) lacks $k (the re-run at the production color count writes it)"
             @test ok
         end
         @test get(TIME, "phases_chain", -1) == get(TIME, "phases_monolayer", -2)            # D-224
@@ -290,7 +290,7 @@ end
                 isempty(f) || @info "15 openvt checkerboard page deviations" first(f, 10)
                 @test isempty(f)
                 for re in (
-                        r"thinning"i, r"claim"i, r"D-008", r"D-220", r"not a bug"i, r"ΔH", r"brute[- ]force"i,
+                        r"thinning"i, r"claim"i, r"not a bug"i, r"ΔH", r"brute[- ]force"i,
                         r"\b0 mismatches\b|\bno mismatch"i,
                     )
                     ok = occursin(re, flat)

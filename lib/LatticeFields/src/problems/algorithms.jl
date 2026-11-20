@@ -247,7 +247,7 @@ the operator has the lattice's six faces.
   in, `:auto` (the problem's value type), `Float32` or `Float64`. A wider type than the
   storage (`Float64` on a Float32 problem) loads each field value into it and rounds once at
   each store; on a device with Float64 (ROCm, CUDA) its kernels are registered as declared
-  Float64 (D-157), and a device without Float64 (Metal) refuses it when the group is bound
+  Float64, and a device without Float64 (Metal) refuses it when the group is bound
   (`init`, in both routes; so do `solver_type = Float64` and a field declared
   `lattice_storage = Float64`), naming the field and the routes.
 - `init = :steady`: before the first window (at `init`, and again at `reinit!`), solve the

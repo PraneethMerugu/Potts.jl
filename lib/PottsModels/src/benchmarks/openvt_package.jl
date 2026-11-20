@@ -24,10 +24,10 @@ const _OPENVT_PKG_BULK_ENV = "OPENVT_PACKAGE_BULK"
 """
     PottsModels.OPENVT_FRAMEWORK_TOKEN
 
-The framework token of the Potts.jl entry in the OpenVT consortium repository (D-215 (9)):
+The framework token of the Potts.jl entry in the OpenVT consortium repository:
 the folder name under `implementations/` and `results/` and the stem of every file name
 that carries one. No spaces (the consortium's `run_metrics.sh` splits on them). The
-checkerboard entry of D-214 will use `"Potts.jl_checkerboard"`.
+separate checkerboard entry uses `"Potts.jl_checkerboard"`.
 """
 const OPENVT_FRAMEWORK_TOKEN = "Potts.jl"
 const _OPENVT_PKG_FW = OPENVT_FRAMEWORK_TOKEN
@@ -36,7 +36,7 @@ const _OPENVT_PKG_FW = OPENVT_FRAMEWORK_TOKEN
     PottsModels.OPENVT_BULK_RELEASE_TAG
 
 The tag of the public Potts.jl release that is to hold the bulk files of the split
-OpenVT package (D-213 (b)); the core README and `EMAIL.md` link each bulk file as
+OpenVT package; the core README and `EMAIL.md` link each bulk file as
 `https://github.com/PraneethMerugu/Potts.jl/releases/download/<tag>/<file>`. Nothing creates
 the release: the maintainer creates it under this tag (or rebuilds with another
 `release_tag`).
@@ -93,7 +93,7 @@ const _OPENVT_PKG_LATER = (:f8beta,)
                                           release_tag = PottsModels.OPENVT_BULK_RELEASE_TAG)
 
 Build the Potts.jl submission to the OpenVT growing-monolayer benchmark in the consortium
-repository's layout (spec 15 §4.0.1, conforming to the consortium's scripts per D-215). The
+repository's layout (spec 15 §4.0.1, conforming to the consortium's scripts where the manuscript is silent). The
 framework token `<FW>` is `PottsModels.OPENVT_FRAMEWORK_TOKEN`.
 
 With `split = nothing` (the default) it writes `outdir/implementations/<FW>/` (the
@@ -106,7 +106,7 @@ the bulk items: the O1 per-cell time series (`x,y,i,n,g`) as one descriptively n
 case with their manifest, the A3 inhibition shares derived from that manifest, the O2
 Figure 5 zip (k = 0…99), and the O3 and O5 sweep files. It returns `outdir`.
 
-With `split = :email` it writes the same package, split for sending by mail (D-213 (a)–(d)):
+With `split = :email` it writes the same package, split for sending by mail:
 `outdir/core.zip` (every file except the bulk ones, unpacking at the consortium
 repository's root; its results README links each bulk file by name, sha256 and its
 release-download URL under `release_tag`), `outdir/bulk/` (the O1 zips, the O2 zip and the O1
@@ -115,12 +115,12 @@ manifest, byte copies, to be attached to a public release; nothing here creates 
 `(; outdir, core_bytes, bulk_bytes, bulk)` with the size of `core.zip`, the summed size of
 `bulk/` and the bulk file sizes. Any other `split` is an `ArgumentError`.
 
-Everything is read from the committed records under `lib/PottsModels/reproductions/data/15/`
-(D-146), the model defaults and the bulk directory; nothing is simulated. An item's record is
+Everything is read from the committed records under `lib/PottsModels/reproductions/data/15/`,
+the model defaults and the bulk directory; nothing is simulated. An item's record is
 the newest directory (by name) whose `provenance.toml` `item` matches. Every record
 (calibration, Figure 5, Figures 3 and 9, Figures 1 and 4, sweeps, O1 re-run, β colonies and
 O1 post-processing) is required. `allow_pending = true` (default `false`) allows a
-draft build without the β-colonies record (M's Figure 8 colonies, D-211): Figure 8 and its O5
+draft build without the β-colonies record (M's Figure 8 colonies): Figure 8 and its O5
 files are left out and the results README says "Figure 8: pending". Never upload a draft build.
 
 `results/<FW>/figures/` holds byte copies of the records' renders of M's Figures 5
@@ -835,12 +835,12 @@ function _openvt_pkg_figure_rows(facts)
                              "(areas from the full state); thin black pixel-edge boundaries; white medium",
             "the CompuCell3D, TST and Artistoo close-ups colour cells blue to red by area (coolwarm) with thin boundaries; " *
             "the limits of their colour scales are not stated",
-            "the style follows the other frameworks' panels (D-185); the scale limits are our provisional reading",
+            "the style follows the other frameworks' panels; the scale limits are our provisional reading",
             "not asked; on our open question list as Q10 (the colour variable and its limits) and Q18 (the Potts.jl colour, RGB(8, 29, 88) proposed)"),
         ("F1 window", @sprintf("a %d × %d-site block (about %.0f cell diameters 2R) on the colony rim, %.0f %% tissue, the rim entering at the top edge and leaving at the right edge",
                 w, w, w / (2 * facts.R), 100 * facts.closeup.tissue),
             "45 × 45 mm close-ups; the window size is not stated",
-            "the size is estimated from the TST close-up; the block is moved inward along the 45° ray from the colony centroid to frame the rim as the other panels do (about 65–75 % tissue; D-229)",
+            "the size is estimated from the TST close-up; the block is moved inward along the 45° ray from the colony centroid to frame the rim as the other panels do (about 65–75 % tissue)",
             "not an author question"),
         ("F2 consortium curves", "Potts.jl curves and the spring–dashpot reference only", "panels b, d, e overlay all frameworks",
             "the consortium's curves are compared through frozen spread values, not redrawn", "not an author question"),
@@ -859,7 +859,7 @@ function _openvt_pkg_figure_rows(facts)
     gap = facts.min_gap === nothing ? "" : "; no run came closer than $(facts.min_gap) sites"
     append!(rows, [
         ("F4 drawing", "cell i's outline and the in-panel names left out; counts as numbers",
-            "a black outline of cell i, names, coloured count glyphs", "no outlines (D-156)", "not an author question"),
+            "a black outline of cell i, names, coloured count glyphs", "no outlines", "not an author question"),
         ("F5 distance bins and origin",
             "M's shared edges $(join(_openvt_pkg_g.(_OPENVT_PKG_F5_EDGES), ", ")) for figures/fig5.png, binned in R (provisional). " *
             "$(_OPENVT_PKG_F5_UNIT). The F5 record's verdict " *
@@ -1037,7 +1037,7 @@ end
 
 _openvt_pkg_sweep_row(recs) =
     _openvt_pkg_row("F6, T1, F7", "run in the record `$(recs[:sweeps])`; its failing rows are listed above",
-        "Figure 6, Table 1, Figure 7", "the protocol and targets were frozen before the run (D-174)",
+        "Figure 6, Table 1, Figure 7", "the protocol and targets were frozen before the run",
         "not an author question")
 
 # the licence line of both READMEs (D-181)

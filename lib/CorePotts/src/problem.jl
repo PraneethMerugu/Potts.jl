@@ -479,7 +479,7 @@ _proposal(alg, prob) = something(alg.proposal, prob.proposal)
 The keywords `solve` and `init` of a `PottsProblem` take (SciML's common keywords that have
 a meaning on the MCS clock, and `backend` and `checkpoint`). Any other keyword is an
 `ArgumentError` that lists these: a Monte Carlo sweep has no step size or truncation error,
-so `dt`, `abstol` and `reltol` are among the refused ones (D-287 X3).
+so `dt`, `abstol` and `reltol` are among the refused ones.
 """
 const SOLVE_KEYWORDS = (
     :backend, :saveat, :save_start, :save_end, :save_everystep, :save_idxs, :tstops, :maxiters,
@@ -571,7 +571,7 @@ clock:
 - `verbose = false` silences the warnings of `init` and `solve!`; `progress = true` logs the
   progress (SciML's progress logging).
 - `alias`: accepted; the state is always copied.
-- `dense`: only `false` (no interpolation between MCS, D-287 X4).
+- `dense`: only `false` (no interpolation between MCS).
 - `backend`: the KernelAbstractions backend the run executes on; `checkpoint`: a
   [`PottsCheckpoint`](@ref) to continue.
 
@@ -757,7 +757,7 @@ end
     init(prob::PottsProblem; backend = CPU(), kwargs...)
     solve(prob::PottsProblem; backend = CPU(), kwargs...)
 
-Without an algorithm (D-009): `SequentialCPM()` on the CPU. A device backend has no default,
+Without an algorithm: `SequentialCPM()` on the CPU. A device backend has no default,
 since `SequentialCPM` is CPU-only. Pass `CheckerboardCPM()` there; anything else throws an
 `ArgumentError` that says so.
 """
@@ -766,7 +766,7 @@ function CommonSolve.init(prob::PottsProblem; backend = CPU(), kwargs...)
         ArgumentError(
             "no default algorithm on the $(nameof(typeof(backend))) " *
                 "backend: pass one explicitly, e.g. `solve(prob, CheckerboardCPM(); backend)` " *
-                "(SequentialCPM, the CPU default, runs only on the CPU; D-009)"
+                "(SequentialCPM, the CPU default, runs only on the CPU)"
         )
     )
     return CommonSolve.init(prob, SequentialCPM(); backend, kwargs...)
@@ -1264,7 +1264,7 @@ function _mobility_scratch(backend, prob, ::MaskMobility)
     I = site_index_type(nsites(prob.lattice))
     I === Int64 && !_atomic64(backend) && throw(ArgumentError(
         "this lattice has $(nsites(prob.lattice)) sites and a frozen mask that follows the state: its refresh " *
-        "counts sites in Int64 atomics, which $(nameof(typeof(backend))) does not have (D-253); " *
+        "counts sites in Int64 atomics, which $(nameof(typeof(backend))) does not have; " *
         "run it on the CPU or on ROCm or CUDA"))
     return MobileCounters(KernelAbstractions.zeros(backend, I, 3), zeros(I, 3))
 end
@@ -1275,7 +1275,7 @@ function _check_convert_atomics(backend, u0)
     haskey(u0.model, CONVERT_FLAGS) || return nothing
     (eltype(getfield(u0.model, CONVERT_FLAGS)) === Int64 && !_atomic64(backend)) && throw(ArgumentError(
             "this lattice has $(length(u0.ownership)) sites and an @convert pass: it keeps site indices in Int64 atomics, " *
-        "which $(nameof(typeof(backend))) does not have (D-253); run it on the CPU or on ROCm or CUDA"))
+        "which $(nameof(typeof(backend))) does not have; run it on the CPU or on ROCm or CUDA"))
     return nothing
 end
 
@@ -1493,7 +1493,7 @@ end
 SciMLBase.has_stats(::PottsIntegrator) = true
 SciMLBase.get_du(::PottsIntegrator) = throw(
     ArgumentError(
-        "get_du: a Potts state is a label field and has no derivative (D-287 X5); compare two states instead"
+        "get_du: a Potts state is a label field and has no derivative; compare two states instead"
     )
 )
 
@@ -1512,10 +1512,10 @@ end
 
 Saved states at integer MCS: `t`, `u` (host states), `prob`, `alg`, `retcode`, `stats`.
 `sol[i]` is the `i`-th saved state and `sol(t)` the state saved at MCS `t`; `sol(t; idxs)`
-reads `idxs` there. There is no interpolation between MCS (`dense` is `false`, D-287 X4): a
+reads `idxs` there. There is no interpolation between MCS (`dense` is `false`): a
 time that was not saved, or is not a whole MCS, is an `ArgumentError`. A state is a label
-lattice and cell tables, not one array, so `Array(sol)` and `sol[j, i]` are refused (D-287
-X9); read a quantity by name, `sol[x]` or `sol[x, i]`.
+lattice and cell tables, not one array, so `Array(sol)` and `sol[j, i]` are refused;
+read a quantity by name, `sol[x]` or `sol[x, i]`.
 """
 struct PottsSolution{S, P, A} <: SciMLBase.AbstractTimeseriesSolution{S, 1, Vector{S}}
     u::Vector{S}
@@ -1622,7 +1622,7 @@ function (sol::PottsSolution)(t::Real; idxs = nothing)
     (isinteger(t) && !isempty(sol.t) && first(sol.t) <= t <= last(sol.t)) || throw(
         ArgumentError(
             string(
-                "sol(t): t = ", t, " is not a saved MCS (there is no interpolation between MCS; D-287 X4); saved ",
+                "sol(t): t = ", t, " is not a saved MCS (there is no interpolation between MCS); saved ",
                 length(sol.t) <= 12 ? "times are $(sol.t)" : "MCS run from $(first(sol.t)) to $(last(sol.t))"
             )
         )
@@ -1631,7 +1631,7 @@ function (sol::PottsSolution)(t::Real; idxs = nothing)
     (i <= length(sol.t) && sol.t[i] == t) || throw(
         ArgumentError(
             string(
-                "sol(t): MCS ", Int(t), " was not saved (there is no interpolation between MCS; D-287 X4); save it with ",
+                "sol(t): MCS ", Int(t), " was not saved (there is no interpolation between MCS); save it with ",
                 "`saveat`"
             )
         )
@@ -1642,13 +1642,13 @@ end
 
 Base.Array(::PottsSolution) = throw(
     ArgumentError(
-        "`Array(sol)`: a Potts state is a label lattice and cell tables, not one array (D-287 X9); read a " *
+        "`Array(sol)`: a Potts state is a label lattice and cell tables, not one array; read a " *
             "quantity by name (`sol[x]`) or a saved state's arrays (`sol.u[i].ownership`)"
     )
 )
 Base.getindex(::PottsSolution, j::Int, i::Int) = throw(
     ArgumentError(
-        "sol[j, i]: a Potts state is not one array, so it has no component `j` (D-287 X9); read a quantity " *
+        "sol[j, i]: a Potts state is not one array, so it has no component `j`; read a quantity " *
             "by name, `sol[x, i]`"
     )
 )

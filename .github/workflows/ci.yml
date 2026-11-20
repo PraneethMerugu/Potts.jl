@@ -116,6 +116,6 @@ jobs:
         # status 0), so the pass costs one cheap group. Add groups here as
         # each one is measured clean under the flag; do not add a group that has not been.
         run: $PIN julia --check-bounds=yes --project=lib/LatticeFields/test lib/LatticeFields/test/runtests.jl
-      - name: Keep this Manifest as the dependency lock (D-272)
+      - name: Keep this Manifest as the dependency lock
         # only reached when every step above passed
         run: mkdir -p "$HOME/potts-ci" && cp Manifest.toml "$HOME/potts-ci/Manifest.toml"

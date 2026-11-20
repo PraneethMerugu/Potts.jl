@@ -18,7 +18,7 @@ index written into the slot (`derive(Praw, c, t, k)`). `S`: the value type the s
 hold under `lanes = :state` (`nothing`: `T`); a group's `compute_type` wider than its storage
 compiles in `T` and loads and stores through `lanecast`. `declared`: the group
 declared its Float64 (`compute_type`, `lattice_storage`): a kernel that computes in or touches
-Float64 is registered in Exec's D-157 registry ([`Exec.register_float64!`](@ref)).
+Float64 is registered in Exec's Float64 registry ([`Exec.register_float64!`](@ref)).
 """
 Base.@kwdef struct CompileOptions
     T::Union{Type, Nothing} = nothing

@@ -7,7 +7,7 @@
 The computed parameters of a model or system as one compiled function. `d(vals)` maps the base values `vals` (a tuple in the order of `d.base`: numbers and
 tables) to the computed values (a tuple in the order of `d.computed`: a number, or an array for
 a kind table with expression entries). `LatticePDE.derivation` builds it; a front end calls it
-after every write of base values. Its rules are D-117's: Base and registered functions,
+after every write of base values. Its rules: Base and registered functions,
 integer division, a lazy `ifelse`, and a kind-table read by kind number (the medium is 0), in
 the number type of the values given. An evaluation that fails is an `ArgumentError` that names
 the computed parameter.

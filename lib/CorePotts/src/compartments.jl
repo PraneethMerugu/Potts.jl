@@ -146,7 +146,7 @@ end
 """
 Apply `δ = cluster_surface_change(…)` to `cell.cluster_surface` (atomic). With a weighted
 relation in a float column the adds of two copies into one cluster round in their order, which
-a threaded or device checkerboard phase does not fix (lockless cells, D-271).
+a threaded or device checkerboard phase does not fix (lockless cells).
 """
 @inline function commit_cluster_surface!(cell, prop, δ)
     a, b = cluster_of(cell, prop.old), cluster_of(cell, prop.new)

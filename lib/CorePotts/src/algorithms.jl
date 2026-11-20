@@ -71,7 +71,7 @@ fidelity reference. `acceptance = nothing` uses the
 model's law (`CPMFunction(…; acceptance)`), else `Metropolis()`; `proposal = nothing` uses
 the problem's copy neighborhood (`PottsProblem(…; proposal)`, default `VonNeumann(1)`).
 
-`skip_interior = true` draws only boundary sites (D-177, D-198): mobile sites with a mobile
+`skip_interior = true` draws only boundary sites: mobile sites with a mobile
 proposal neighbor of another owner. Every other pick would propose a copy of its own owner
 (a null move), so the run of such picks between two boundary picks is drawn at once,
 geometric in the boundary fraction. One MCS is still `N` attempts over all mobile sites

@@ -33,8 +33,7 @@ Phase: `st.cell.name[c] = op_{i ∈ c} f(st, p, ctx, key, mcs, i)` over every ce
 (`op ∈ (+, max, min)`). Covers owner sums, means (divide by volume), counts of sites
 satisfying a predicate (return a `Bool`/`Int32`), and structured owner sums.
 
-The result is the same for every order of the sites, so for every thread count and backend
-(D-029):
+The result is the same for every order of the sites, so for every thread count and backend:
 
   - an integer column, and `max`/`min`, use atomics, which are exact;
   - a float sum (Float16, Float32, Float64) is an exact Int64 fixed-point sum with a power-of-two

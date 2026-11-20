@@ -13,7 +13,7 @@ shared:
 CONF
 cat > "$HOME/.config/systemd/user/pueued.service" <<UNIT
 [Unit]
-Description=pueue daemon (Potts PC queue, D-248)
+Description=pueue daemon (Potts PC queue)
 
 [Service]
 ExecStart=$HOME/.local/bin/pueued -v

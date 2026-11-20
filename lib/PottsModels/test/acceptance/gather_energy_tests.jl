@@ -318,7 +318,7 @@ function compile_error(label)
         return e
     end
 end
-"""Is `e` the D-209 refusal of a statement in domain `dom`?"""
+"""Is `e` the refusal of a cell-dependent gather in a statement in domain `dom`?"""
 is_refusal(e, dom) = e isa Potts.PottsCompileError && occursin("$dom", e.msg)
 """ΔH oracle: a Metropolis chain driven by `dH(u, p, prop, ctx)` (default the generated
 `delta_H`), `nsteps` copy attempts (unlike pairs, Moore(1) source) each compared with

@@ -5,7 +5,7 @@
   `julia -t auto --project=benchmark benchmark/graner.jl [seq|cpu|metal] [mcs] [scale]`
 - `benchmarks.jl` — BenchmarkTools `SUITE` (AirspeedVelocity-compatible) of the warm MCS.
 - `lib/PottsModels/data/graner/` — the pre-equilibrated 72² initial condition (64 cells).
-- `gate.jl` — the zero-allocation check of a warm MCS (D-053, D-157), with informational
+- `gate.jl` — the zero-allocation check of a warm MCS, with informational
   timings against this machine's rows of `baseline.toml`:
   `julia --project=benchmark benchmark/gate.jl [rocm|metal] [update] [--strict]` (CPU rows
   always, plus the named device backend). It exits 1 when a CPU row allocates; a row
@@ -14,10 +14,10 @@
 - `ab.jl` / `ab_one.jl` — the paired A/B (AUTONOMY §7.4), below.
 - `machine.jl` — the machine table (keys of `baseline.toml`, pinning) and the Tuple type
   cache seeding shared by the gate and the A/B.
-- `test/lock_and_gpu_timing.jl` (D-090) and `test/ab_harness.jl` — tests of the lock, the
+- `test/lock_and_gpu_timing.jl` and `test/ab_harness.jl` — tests of the lock, the
   gate's timing and the A/B harness.
 
-### Machines and baselines (D-157)
+### Machines and baselines
 
 `baseline.toml` is keyed by machine and backend: `[mac.cpu]`, `[mac.metal]`,
 `[nucbox.cpu]`, `[nucbox.rocm]`, each with a `[<machine>.meta]` table; rows are
@@ -49,7 +49,7 @@ By default it:
   (500 000) after the packages load and before anything is built. Kernel launches look up
   Tuple types, and the table grows fourfold when it fills; a session with the packages
   loaded sits just below a growth (222k–243k entries of 262144 on the NucBox), and a
-  session that happened to create more types times differently (D-145: Metal OpenVT read
+  session that happened to create more types times differently (Metal OpenVT read
   1.07–1.115 unseeded, 0.996 seeded).
 - **runs two same-commit controls**: `<base>-abctl` and `<candidate>-abctl`, detached
   worktrees of the base's and the candidate's commits (created, or checked to be clean
@@ -58,7 +58,7 @@ By default it:
   show how far apart they read here.
 - **interleaves**: every round runs each side once, each in a fresh process, and the
   order rotates, so each side runs first equally often (default 16 rounds on CPU, 8 on
-  ROCm/Metal, for 4 sides). By default (D-291), all sides in a round start concurrently on
+  ROCm/Metal, for 4 sides). By default, all sides in a round start concurrently on
   distinct physical non-benchmark cores (`0-11` on the NucBox), load, seed the type cache,
   build and compile every case (on ROCm, problems are built before `READY`, while AMDGPU
   loading, Tuple cache seeding, and GPU kernel compile stay after `GO` so no sibling holds
@@ -95,7 +95,7 @@ as the statistic (`--stat`) and a 95 % bootstrap interval of the median per-roun
 ROCm: the median over rounds of the per-round ratio, which cancels a slow drift of the
 machine, since the sides of a round run back to back (a drifting ROCm hour read worst
 controls 1.024 on the fastest medians and 1.006 paired). For Metal it is `fastest`: each
-side's fastest run median, i.e. the same GPU power state (D-145).
+side's fastest run median, i.e. the same GPU power state.
 
 The verdict uses the controls as the resolution (coordinator ruling, 2026-10-07). `dev` is
 the largest control deviation |ratio − 1| over every case and both controls (0 without
@@ -107,7 +107,7 @@ apart narrows what passes; it never loosens it.
 | 0 | pass: every candidate/base ≤ margin |
 | 1 | regression: some candidate/base > 1 + `--tolerance` (0.05) |
 | 2 | unreadable: some candidate/base between the margin and 1 + tolerance; re-run, or judge with the controls' range stated |
-| 3 | some timed run was disturbed (listed); takes precedence: time again with the machine idle. Exception (D-252): `a GC ran inside a timed sample of …` on a CPU case is not noise but an allocating step; run `gate.jl` on the side the log names (the `round r <side>:` line, or the case label in an `--inprocess` run), and on the candidate treat it as an allocation regression |
+| 3 | some timed run was disturbed (listed); takes precedence: time again with the machine idle. Exception: `a GC ran inside a timed sample of …` on a CPU case is not noise but an allocating step; run `gate.jl` on the side the log names (the `round r <side>:` line, or the case label in an `--inprocess` run), and on the candidate treat it as an allocation regression |
 | 4 | harness error: bad arguments, a dirty checkout or one that is not a checkout's top level, a candidate that skips a case, a child that crashed |
 
 A control whose interval excludes 1 is flagged on its case (a per-checkout offset, below);
@@ -131,7 +131,7 @@ So two checkouts of one commit differ by up to ~1 % on the CPU and ~2.3 % on ROC
 that the rounds' bootstrap interval does not cover. With tolerance 0.05 the pass margin of
 these runs is therefore 1.0399 (CPU) and 1.0274 (ROCm); every candidate/base read below it.
 
-### Device timings run to GPU completion (D-090)
+### Device timings run to GPU completion
 
 On a device backend `step!` only enqueues kernels. Every device timing (Metal, ROCm) in `gate.jl`
 and `ab_one.jl` is therefore `step!` followed by a wait for the device (`device_sync` in
@@ -152,7 +152,7 @@ far below their GPU cost; the Metal rows of `baseline.toml` were re-measured onc
 CPU rows were left as they were). Metal A/B verdicts from before that date on those models
 say nothing about GPU cost.
 
-### The machine lock (`tools/exclusive.sh`, D-090)
+### The machine lock (`tools/exclusive.sh`)
 
 A FIFO ticket queue in front of the directory lock `/tmp/potts-exclusive.lock`. Each call
 takes a numbered ticket in `/tmp/potts-exclusive.q`; the lowest ticket is next and takes the
@@ -164,7 +164,7 @@ stale (`test/lock_and_gpu_timing.jl` checks this rule). The command's exit statu
 is passed through, and the ticket and lock are removed on exit, HUP, INT, QUIT, PIPE or
 TERM.
 
-The legacy rows below were measured with the since-removed `reference/` pin (D-048).
+The legacy rows below were measured with the since-removed `reference/` pin.
 
 ## 2026-09-29, Apple M1 Pro, Julia 1.12.6, 8 threads (MCS = N attempts)
 

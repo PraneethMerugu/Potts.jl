@@ -50,16 +50,16 @@ include("foam.jl")
     PottsModels.openvt_f4_figure(σ, c) -> Makie.Figure
 
 The lattice panel of the OpenVT monolayer benchmark's Fig 4 (the free-surface fraction
-fᵢ; `G:results/free_surface.tex`, D-175): the 2D ownership array `σ` (`σ[I] > 0` a cell id,
+fᵢ; `G:results/free_surface.tex`): the 2D ownership array `σ` (`σ[I] > 0` a cell id,
 `0` medium) drawn with `pottsplot` (`CellIdentityEncoding`, medium RGB(236,236,236), no
 boundaries), a white site grid, and one short dash for every pair (site of cell `c`, Moore(1)
 neighbor owned by anything else), across the pair's shared edge or corner: magenta
 RGB(231,41,138) for medium partners and amber RGB(255,192,0) for other cells. Cells are
 tinted with the .tex's cell colors when `σ`'s ids are exactly `1:n` with `n ≤ 4`, and with
-the automatic identity palette (D-172) otherwise. A label shows
+the automatic identity palette otherwise. A label shows
 both counts, `fᵢ = m / (m + n)`, the G1 count of [`openvt_snapshot`](@ref
 PottsModels.openvt_snapshot). The .tex's black outline of cell i is left out on purpose: no
-cell outlines are drawn (D-156).
+cell outlines are drawn.
 
 Requires Makie and MakiePotts to be loaded (`using CairoMakie, MakiePotts`).
 """
@@ -69,7 +69,7 @@ function openvt_f4_figure end
     PottsModels.openvt_f1_figure(frame; window = 64, banner = true, areas = nothing) -> Makie.Figure
 
 The Potts.jl panel of the OpenVT monolayer benchmark's Fig 1 ("Overview of participating
-frameworks"; `G:results/introduction.tex`, D-175, D-185). `frame` is a 2D MakiePotts render
+frameworks"; `G:results/introduction.tex`). `frame` is a 2D MakiePotts render
 frame of a colony, e.g. `renderframe(u)` of the first state of case (a) with 10⁴ cells.
 
 The panel is a square axis showing an unchanged `window × window` block of `frame` (same
@@ -79,13 +79,13 @@ the other frameworks' closeups ([`openvt_colony_panel!`](@ref PottsModels.openvt
 with `color = :area`): each cell colored by its area with `coolwarm`, scaled to the min–max
 of the areas of the cells in the panel, a white medium and thin black pixel-edge boundaries
 between unlike ids. The lattice fills the panel edge to edge, with no outer margin, inside a
-thin gray frame like the other frameworks' closeups (D-229). The areas are the cells' site counts in the whole `frame`, so a cell cut
+thin gray frame like the other frameworks' closeups. The areas are the cells' site counts in the whole `frame`, so a cell cut
 by the window keeps its full area; `areas` (cell id => area) supplies them instead, e.g. for a
 block stored without the rest of the lattice. Above the panel, 1/45 of the panel high apart,
 is the 5/45-high banner in the proposed Potts.jl color RGB(8,29,88) with "Potts.jl" in white
 bold; `banner = false` leaves it out and gives the bare panel (the consortium's
 `closeup.png`). The 64-site default, about 8 cell diameters, is an estimate of what the TST
-closeup shows. The submitted panel (D-229) is a block moved inward along the same ray until it
+closeup shows. The submitted panel is a block moved inward along the same ray until it
 is about 70 % tissue; it is passed as `frame` with `window` equal to its size.
 
 Requires Makie and MakiePotts to be loaded (`using CairoMakie, MakiePotts`).
@@ -98,7 +98,7 @@ function openvt_f1_figure end
         state_colors = (growing, inhibited)) -> PottsPlot
 
 Draw a 2D MakiePotts render frame into the Makie axis `ax` in the style of the OpenVT
-consortium's colony figures (D-185; spec 15 §4.0.2): one `pottsplot` on a white medium and
+consortium's colony figures (spec 15 §4.0.2): one `pottsplot` on a white medium and
 thin black boundaries along every pixel edge between unlike ids (cell–cell and
 cell–medium), drawn as one `linesegments` plot with square caps so the outline has no gaps.
 

@@ -274,7 +274,7 @@ function job_problems(R)
         row == "V-C12" && tryparse(Float64, get(r, "displacement_sites", "")) === nothing &&
             push!(probs, "$row seed $seed: displacement_sites")
         row == "V-C12" && tryparse(Float64, get(r, "displacement_sites_0", "")) === nothing &&
-            push!(probs, "$row seed $seed: displacement_sites_0 (vc12_mcs0.tsv, D-200)")
+            push!(probs, "$row seed $seed: displacement_sites_0 (vc12_mcs0.tsv)")
     end
     return probs
 end
@@ -523,7 +523,7 @@ end
 const PROV = isfile(joinpath(REC, "provenance.toml")) ? TOML.parsefile(joinpath(REC, "provenance.toml")) : Dict{String, Any}()
 const PAGE_R0 = page_tsv(joinpath(REC, "replicates.tsv"))
 const VC12 = page_tsv(joinpath(REC, "vc12_mcs0.tsv"))
-"""Problems with `vc12_mcs0.tsv` against the replicate rows (D-200; empty when they match)."""
+"""Problems with `vc12_mcs0.tsv` against the replicate rows (empty when they match)."""
 function vc12_problems(R, V)
     probs = String[]
     jobs = [r for r in R if get(r, "row", "") == "V-C12"]
@@ -847,7 +847,7 @@ end
         @test length(att) == 1
         if length(att) == 1
             t = join(att[1], "|")
-            @test occursin("39 204", t) && occursin("40 000", t) && occursin("2 %", t) && occursin("D-200", t)
+            @test occursin("39 204", t) && occursin("40 000", t) && occursin("2 %", t) && occursin("The paper is the target", t)
         end
         @test !any(r -> occursin(r"pending|at risk"i, join(r, "|")), body)
         for r in body

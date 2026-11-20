@@ -124,7 +124,7 @@ end
 `n` square endothelial cells of `side²` sites (the default 10² is the target area
 `A = 100`) at random, non-overlapping positions (one-site gaps) in a centered `region` (Merks
 et al. 2006: 282 cells over 333 × 333 sites of a 500² lattice): `[ownership => σ, kind => fill(:endothelial, n)]`.
-It is `layout(merks_layout(; lattice, kw...), lattice)` (D-087).
+It is `layout(merks_layout(; lattice, kw...), lattice)`.
 """
 merks_state(; lattice = (500, 500), kw...) = layout(merks_layout(; lattice, kw...), lattice)
 
@@ -204,7 +204,7 @@ _merks_choice(x, allowed, model, key) = x in allowed ? x :
     Merks2006(; name, lattice = (500, 500), rule = :soft, …)
 
 Vasculogenesis by autocrine chemotaxis of elongated cells: Merks, Brodsky, Goligorsky,
-Newman & Glazier, *Dev. Biol.* **289**, 44 (2006) (model-spec 01, Variant E; D-050 M1–M5).
+Newman & Glazier, *Dev. Biol.* **289**, 44 (2006) (model-spec 01, Variant E; paper-vs-code item M1–M5).
 Kinds `medium`, `endothelial` and `border[frozen]`; start it with
 [`merks2006_layout`](@ref).
 
@@ -215,12 +215,12 @@ Kinds `medium`, `endothelial` and `border[frozen]`; start it with
   `−χ (f(c[target]) − f(c[source]))` with `f(c) = c/(1 + s c)`, `χ = χcM` when the target's
   or the source's owner is the medium and `χcc` otherwise; both are 1000 (the paper's γ)
   and `s = 0`.
-- Connectivity (D-050 M3): `rule = :soft` adds `E₀` to every copy that breaks the losing
+- Connectivity (paper-vs-code item M3): `rule = :soft` adds `E₀` to every copy that breaks the losing
   endothelial cell's 8-site ring (TST's `ConnectivityPreservedP`; under Metropolis this is
-  TST's threshold shift, D-140); `rule = :hard` vetoes those copies instead.
+  TST's threshold shift); `rule = :hard` vetoes those copies instead.
 - A frozen border (`Frame(:border)`, one site thick) with `J(c,B) = 100`, `J(M,B) = 0`
-  (D-050 M4).
-- The field (Eq. 6, D-050 M5): `∂c/∂t = D Δc + α[endothelial] − ε c [medium]`, 5-point `laplacian`,
+  (paper-vs-code item M4).
+- The field (Eq. 6, paper-vs-code item M5): `∂c/∂t = D Δc + α[endothelial] − ε c [medium]`, 5-point `laplacian`,
   held at `c = 0` on the border after every substep (the masked condition
   `c ~ masked(frame, 0.0)`), stepped before the sweep of each MCS (`@schedule fields, sweep`).
   The field is a plain MTK `PDESystem`, coupled with `@fields`.
@@ -280,7 +280,7 @@ end
 
 Contact-inhibited chemotaxis in de novo and sprouting blood-vessel growth: Merks, Perryn,
 Shirinifard & Glazier, *PLoS Comput. Biol.* **4**, e1000163 (2008) (model-spec 01,
-Variant CI; D-050 M1, M4–M7). Kinds `medium`, `endothelial` and `border[frozen]`;
+Variant CI; paper-vs-code item M1, M4–M7). Kinds `medium`, `endothelial` and `border[frozen]`;
 start it with [`merks2008_sprout`](@ref) (Figs. 4–11) or [`merks2008_denovo`](@ref)
 (Fig. 2).
 
@@ -290,14 +290,14 @@ start it with [`merks2008_sprout`](@ref) (Figs. 4–11) or [`merks2008_denovo`](
 - Chemotaxis (Eq. 3): `−χ (f(c[target]) − f(c[source]))`, `f(c) = c/(1 + s c)`, with
   `χ = χcM` at cell–medium copies (the target's or the source's owner is the medium) and
   `χcc` at cell–cell copies. `χcc = 0` is contact inhibition; `χcc = χcM` removes it, and
-  any value between is the continuous ratio of Fig. 5 (D-050 M7). `mode =
+  any value between is the continuous ratio of Fig. 5 (paper-vs-code item M7). `mode =
   :extension_only` (Eq. 4) drops the term when the source is the medium (a retraction).
 - A frozen border (`Frame(:border; width = 2)`; the authors' 1-site frame on 200², whose
   20-site stencil reaches one site further) with `J(c,B) = 100`, `J(M,B) = 0`.
 - The field (Eq. 1): `∂c/∂t = D Δc + α[endothelial] − ε c [medium]`, 5-point `laplacian`, `c = 0`
   on the border after every substep, stepped before the sweep of each MCS. As in the
   released code the field is off for the first `t_relax` MCS (MCS 0 to `t_relax − 1`, the
-  files' `relaxation`, D-050 M6), so chemotaxis starts after it.
+  files' `relaxation`, paper-vs-code item M6), so chemotaxis starts after it.
 
 Parameters, in lattice units (Δx = 2 µm, 1 MCS = 30 s): `T = 50`, `λ = 25`, `A = 50`,
 `χcM = 500`, `χcc = 0`, `s = 0`, `Dc = 0.75` (10⁻¹³ m²/s), `α = ε = 0.03` (10⁻³ s⁻¹),

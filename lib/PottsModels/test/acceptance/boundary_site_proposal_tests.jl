@@ -697,7 +697,7 @@ const FULL_L = 400
 const FULL_CELLS = 1000
 const FULL_RUNS = 100
 const FULL_GRID = 0.5:1.0:8.5
-"""FULL: N(t) until the first MCS with ≥ 1000 cells (D-173 protocol; edge guard 5)."""
+"""FULL: N(t) until the first MCS with ≥ 1000 cells (edge guard 5)."""
 function full_run(prob, alg, seed)
     N = Int[]
     rec = DiscreteCallback(

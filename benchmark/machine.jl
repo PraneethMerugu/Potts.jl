@@ -285,7 +285,7 @@ end
 Wait until no CI job runs on this host (`ci`) and, with `gpu`, no other process holds the
 GPU, polling every `poll` s until `deadline` (a `time()` value). Returns `true` when the
 machine is idle, `false` when the deadline passed while it was still busy (the caller then
-times anyway and counts the run as disturbed). D-157: benchmarks on the NucBox run with the
+times anyway and counts the run as disturbed). Benchmarks on the NucBox run with the
 runner idle; a CI job's GPU group made a ROCm Graner–Glazier MCS read 2500 instead of
 47 ns/site (2026-10-07). Off Linux it returns at once.
 """

@@ -14,7 +14,7 @@ machine = "x86_64-linux-gnu"
 model = "AkeebInvasion"
 notes = "Hollow red rings inside the follower slab are real: trapped leaders that grew into a ring around a follower. The local one-arc connectivity rule (CC3D Connectivity) only checks each copy's 8-ring and cannot prevent rings."
 paper = "Akeeb, Marcus & Jiang, PLoS Comput. Biol. (2026), Fig. 4 bottom row, S2 Video (D); authors' Sample/Multimodal_invasion (2, 24, 0.5)"
-parameters = "J = akeeb_contacts(2.0); constructor defaults otherwise, including μ = 24 (D-142)"
+parameters = "J = akeeb_contacts(2.0); constructor defaults otherwise, including μ = 24"
 record_wall_s = 50.8
 recorded_mcs = [0, 701]
 save_every_mcs = 3

@@ -106,7 +106,7 @@ end
                 @test length(hits) == 1
                 k, m = only(hits)
                 @test all(c -> u[c] != U(c, k, m), live)
-                @info "D-237 oracle ($label): $(length(daughters)) daughters, generations $(gen[daughters])"
+                @info "draw-address oracle ($label): $(length(daughters)) daughters, generations $(gen[daughters])"
             finally
                 Potts.CorePotts._FORCE_DEVICE_LIFECYCLE[] = false
             end

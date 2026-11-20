@@ -137,7 +137,7 @@ end
 
 const BUILD_ORDER = [
     ("In flight (offline FULL runs on the PC)", [
-        ("P6.15g", "OpenVT Figure 6, Table 1 and Figure 7: the threshold sweeps (V1–V3b). Estimated about 45 core-hours with `SequentialCPM(; skip_interior = true)` (PC, AMD Ryzen AI Max+ 395, CPU; from the 2.83× case (a) speed-up, D-174)."),
+        ("P6.15g", "OpenVT Figure 6, Table 1 and Figure 7: the threshold sweeps (V1–V3b). Estimated about 45 core-hours with `SequentialCPM(; skip_interior = true)` (PC, AMD Ryzen AI Max+ 395, CPU; from the 2.83× case (a) speed-up)."),
         ("P6.3f", "Merks: the FULL run and the digitised 01b figure targets."),
     ]),
     ("Step 4: foam", [
@@ -186,11 +186,10 @@ function render_status(; published::Bool = false)
 
     !!! note "Policy"
         - **All 12 models.** The paper covers all 12 reference models; there is no reduced
-          fallback set (D-154).
+          fallback set.
         - **Provisional defaults.** No open question to a paper's authors holds a model back.
           The model ships with a labelled provisional default, and every provisional default is
-          a row of the deviations table on that model's page, with its author-question status
-          (D-154, D-155).
+          a row of the deviations table on that model's page, with its author-question status.
         - **Author letters are sent by the PI.** Questions for the authors are collected on our
           open question list. Nothing on these pages is an answer from an author or from the
           OpenVT consortium unless its deviations row says "answered".

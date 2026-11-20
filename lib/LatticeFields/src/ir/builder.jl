@@ -192,7 +192,7 @@ function select!(b::KernelBuilder, c, x, y; op = SELECT)
         node!(b, op, t, Int32[c, cast!(b, x, t), cast!(b, y, t)]))
 end
 """
-Lazy conditional (user `ifelse`, D-014): emitted as a branch.
+Lazy conditional (user `ifelse`): emitted as a branch.
 """
 cond!(b::KernelBuilder, c, x, y) = select!(b, c, x, y; op = COND)
 function bittest!(b::KernelBuilder, x::Integer, bit::Integer)

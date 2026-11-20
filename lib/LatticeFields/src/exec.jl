@@ -58,7 +58,7 @@ supports(backend, ::Type{T}) where {T} =
 Policy: the float type of code emitted for `backend` when the caller names none. `Float64`
 on the host executor, `Float32` on every device: default device code stays `Float32`, so it
 runs unchanged on backends without doubles (Metal) and gives the same results on every
-device (D-157 scans production Float32 paths for doubles). This is not a query of the
+device (the device scan checks production Float32 paths for doubles). This is not a query of the
 hardware; ask [`supports`](@ref) for that.
 """
 default_float(backend) = ishost(backend) ? Float64 : Float32
@@ -66,7 +66,7 @@ default_float(backend) = ishost(backend) ? Float64 : Float32
 """
     register_float64!(parts::String...)
 
-The D-157 carve-out: a kernel whose Float64 its user declared (a
+The carve-out: a kernel whose Float64 its user declared (a
 group's `compute_type` or `solver_type` of Float64, or a field's `lattice_storage = Float64`, on a
 device whose default float is Float32) is registered by the parts of its signature text: a
 kernel signature that holds every part is skipped by the no-`double` scan of the device test

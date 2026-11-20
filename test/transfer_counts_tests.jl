@@ -45,9 +45,9 @@ function tc_divide_problem(; T = Float64, tspan = (0, 4))
 end
 
 
-"""Hand count of the event MCS of the division fixture on a device backend. Since D-089
+"""Hand count of the event MCS of the division fixture on a device backend. Since
 the lifecycle is planned and applied on the device (`run_lifecycle_device!`
-enqueues kernels only): (0, 0, 0). Before it, the D-035 host plan made (2, 18, 1098)."""
+enqueues kernels only): (0, 0, 0). Before it, the host plan made (2, 18, 1098)."""
 tc_division_counts(u0) = (0, 0, 0)
 
 

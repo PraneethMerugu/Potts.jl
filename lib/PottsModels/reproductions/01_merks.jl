@@ -28,7 +28,7 @@
 # lattice sizes and replicate counts, at commit `3f1c441a`, on an AMD Ryzen AI Max+ 395 (CPU
 # backend, 12 threads). The page reads the record and does not rerun it. **All 37
 # pre-registered checks pass.** V-C12, the displacement ratio, is read from MCS 0 as in the
-# paper's figure (D-200), from the record's stored snapshots without new runs.
+# paper's figure, from the record's stored snapshots without new runs.
 
 using Potts, PottsModels
 using Potts.Layouts
@@ -184,7 +184,7 @@ Markdown.parse("Largest difference after one MCS: **$(round(100 * split_rel; dig
 
 # ## 3. Results
 #
-# The committed full-run record (D-146) is read here, not rerun. The chunk below loads its
+# The committed full-run record is read here, not rerun. The chunk below loads its
 # verdicts, the frozen FULL rules applied to its 590 per-replicate rows, the sweep means at
 # both clocks (`points.tsv`) and the diagnosis of each failing check.
 
@@ -271,7 +271,7 @@ let
     end
     errorbars!(ax, 1:4, m(p9), sd(p9); color = ours, whiskerwidth = 6)
     scatter!(ax, 1:4, m(p9); color = ours)
-    ## V-C12, 01b Fig. 6E: mean displacement from MCS 0 to code MCS 19 300 (D-200)
+    ## V-C12, 01b Fig. 6E: mean displacement from MCS 0 to code MCS 19 300
     rep = record_tsv("vc12_mcs0.tsv")
     dmu(ci) = 2 .* [parse(Float64, r["displacement_sites_0"]) for r in rep if r["CI"] == ci]   # 2 µm per site
     ax = Axis(fig[2, 2]; title = "V-C12 · 01b Fig. 6E", ylabel = "displacement from MCS 0 (µm)", xticks = (1:2, ["CI", "no CI"]),
@@ -342,7 +342,7 @@ let n = length(record_verdicts)
                          (v["result"] == "FAIL" ? "**FAIL**" : "PASS") * " |" for v in head], "\n"))
 end
 
-# V-C3 was the at-risk row before the full run (D-153). Its low plateau now passes at
+# V-C3 was the at-risk row before the full run. Its low plateau now passes at
 # 0.377. V-C12 measures each cell's centroid displacement from MCS 0, the start before the
 # 100 relaxation MCS, to code MCS 19 300, as 01b Fig. 6E does: its curves start at 0 and
 # jump within the first hour. That jump is the relaxation. The fragments of the initial
@@ -350,14 +350,14 @@ end
 # both arms. Measured from MCS 0 the jump adds to the inhibited cells' outward sprouting and
 # is largely undone by the uninhibited cluster's contraction. Our first reading started at
 # MCS 100, after the jump, and gave 68.1 against 54.0 µm, a ratio of 1.26 that failed the
-# band [1.5, 2.5]. D-200 moved the frozen definition to the paper's origin; the band is
+# band [1.5, 2.5]. The paper is the target, so the definition moved to its origin; the band is
 # unchanged. The record's snapshots hold MCS 0, 100 and 19 300 only, so the end stays at
-# 19 300, where the paper's axis runs to about 19 800 (D-200). Every check is in the
+# 19 300, where the paper's axis runs to about 19 800. Every check is in the
 # Details.
 #
 # ### 01b figures against the digitized curves
 #
-# D-202 pre-registers 133 points read off 01b Figs. 5, 7–10 and 12, Fig. 13's Σ ΔH, and
+# The pre-registered 01b test reads 133 points read off 01b Figs. 5, 7–10 and 12, Fig. 13's Σ ΔH, and
 # 16 shape rows (the files, reading method and uncertainty are in
 # `test/reproductions/data/01b/`). Each color is one curve. Open markers on a dashed line
 # are the paper's digitized values, with its ± 1 SD where the figure draws one. Filled
@@ -389,7 +389,7 @@ function b01_deviation_row(v)
 end
 b01_deviation_rows = [b01_deviation_row(v) for v in b01_rows if v["result"] == "FAIL"]
 if RECORD_01B === nothing
-    Markdown.parse("**Provisional.** The 01b record (1330 runs, D-202) has not landed yet, so the panels show " *
+    Markdown.parse("**Provisional.** The 01b record (1330 runs) has not landed yet, so the panels show " *
                    "the paper's digitized curves alone and no 01b verdict is claimed.")
 else
     p01b = TOML.parsefile(joinpath(RECORD_01B, "provenance.toml"))
@@ -466,13 +466,13 @@ let
     fig
 end
 
-# Seven inferred set-ups (I1–I7 in D-202) stand in for what 01b does not state; each is a
+# Seven inferred set-ups (I1–I7) stand in for what 01b does not state; each is a
 # provisional row of the deviations table below.
 #
 # ### Deviations
 #
 # The table has one row per failed, parked or provisional target, and one per difference
-# from the papers or the released files (D-154). The full run's failing checks come last,
+# from the papers or the released files. The full run's failing checks come last,
 # with their diagnosis from the record (`deviations.tsv`). The columns are:
 #
 # - our value;
@@ -482,38 +482,38 @@ end
 #   question is on our open question list, model-specs README §5 and the Details below),
 #   "asked on ⟨date⟩" or "answered → ⟨D-entry⟩".
 #
-# Provisional defaults ship labeled (D-155).
+# Provisional defaults ship labeled.
 
 aq(item) = "not asked (on our open question list: README §5, Merks item $item; Details below)"
 deviations_md = """
 | Item | Ours | Paper | Suspected cause | Author question |
 |---|---|---|---|---|
-| 2006 target length L (provisional) | 50 px; variant `Merks2006(; L = 60.0)` | "about 100 µm" = 50 px (01a p.50); 60 px in every 2006-labeled file | the text and the files conflict (D-050 M2) | $(aq(1)) |
-| 2006 connectivity E₀ | E₀ = 5000 drive (≡ TST's threshold shift under Metropolis); variants `E₀ = 2000`, `rule = :hard` | soft, "E0 > 2000" (01a p.49); files: `conn_diss` 5000 (`longcells.par`) or 2000 (`default.par`) | the files disagree (spec D-13; D-050 M3, D-140) | $(aq(1)) |
-| 2006 seeding | 282 squares of 10² (= A), `merks2006_layout` (`Scattered`, D-087); any layout | 282 cells over 333² of 500², shape unstated; files: 100 point seeds × 10 Eden rounds on 200² | unstated in the paper (D-050 M11; spec A-15) | $(aq(1)) |
-| V-E5/V-E6 classification time (provisional) | 48 h (5760 MCS), the last Fig. 4 time | unstated (01a Figs. 6–7) | unstated (D-153 ruling 3; D-155) | not asked (on our open question list: Details below) |
-| 2008 time origin | TST's loop counter, which includes the 100 relaxation MCS; every 2008 value also reported at N + 100 | — (relaxation not mentioned; Dataset S1 `relaxation = 100`) | unstated whether figure times include the relaxation (spec A-19; D-050 M6) | $(aq(2)) |
-| 01b Fig. 2 set-up | the paper's: `merks2008_denovo(; lattice = (502, 502), n = 1000, region = (85:417, 85:417))`; the files' as `merks2008_denovo()` | 1000 cells over 333² in a ~500² lattice; files: 360 seeds × 10 Eden rounds on 200² | the enclosing lattice is printed ambiguously (D-050 M10; spec A-9) | $(aq(5)) |
-| Field scheme | unsplit explicit Euler, 15 substeps, before the sweep | "finite-difference", 15 steps of 2 s; files: FTCS 5-point, split secretion/decay then diffusion, before the sweep | one MCS differs from the split scheme by $(round(100 * split_rel; digits = 2)) % of max c on a developed sprout, within the scheme's own first-order error (D-050 M5) | not an author question |
-| ΔH arithmetic | Float | real; files: integer, each term truncated | performance over exactness (D-050 M9, D-029) | not an author question |
-| χ(c,c) | a real parameter (`χcc`) | a continuous ratio swept (01b Fig. 5); files: boolean, χ(c,c) ∈ {0, χ(c,M)} | the sweep's code is not released (D-050 M7; spec A-20) | $(aq(4)) |
-| Parameter sets | `Merks2006`, `Merks2008`, no shared values; keywords on either | two papers, two sets (spec A-17); files: `longcells.par` (2006-labeled), Dataset S1 (2008) | none (D-050 M1) | not an author question |
-| 2008 seeding | one Eden blob, 50 rounds, 7 divisions → 128 cells (`merks2008_sprout`; variant `divisions = 8`, 256 cells) | "rounded clusters" (01b p.5); the files as ours | none (D-050 M11, D-141) | not an author question |
-| 2008 attempts per MCS | 39 204 = 198², one per mobile site of the framed 202² lattice, as TST (ca.cpp:385) | N = the number of lattice sites (01b p.11), 200² = 40 000 on the 200² lattice of the 01b parameter files (Dataset S1) | we followed TST; our MCS is 2 % shorter than the paper's, a 2 % difference in time scale. The paper is the target: the next full run uses its N through `attempts`, not a re-run for this alone (D-200 item 2) | not an author question |
-| Border | 1-site frame (2006); 2-site frame on 202² (2008) | frozen pixels, J(c,B) = 100; files: a 1-px frame, the 20-site stencil reading the off-lattice ring as border | none: the same contacts and attempts (D-050 M4) | not an author question |
+| 2006 target length L (provisional) | 50 px; variant `Merks2006(; L = 60.0)` | "about 100 µm" = 50 px (01a p.50); 60 px in every 2006-labeled file | the text and the files conflict (paper-vs-code item M2) | $(aq(1)) |
+| 2006 connectivity E₀ | E₀ = 5000 drive (≡ TST's threshold shift under Metropolis); variants `E₀ = 2000`, `rule = :hard` | soft, "E0 > 2000" (01a p.49); files: `conn_diss` 5000 (`longcells.par`) or 2000 (`default.par`) | the files disagree (spec D-13; paper-vs-code item M3) | $(aq(1)) |
+| 2006 seeding | 282 squares of 10² (= A), `merks2006_layout` (`Scattered`); any layout | 282 cells over 333² of 500², shape unstated; files: 100 point seeds × 10 Eden rounds on 200² | unstated in the paper (paper-vs-code item M11; spec A-15) | $(aq(1)) |
+| V-E5/V-E6 classification time (provisional) | 48 h (5760 MCS), the last Fig. 4 time | unstated (01a Figs. 6–7) | unstated | not asked (on our open question list: Details below) |
+| 2008 time origin | TST's loop counter, which includes the 100 relaxation MCS; every 2008 value also reported at N + 100 | — (relaxation not mentioned; Dataset S1 `relaxation = 100`) | unstated whether figure times include the relaxation (spec A-19; paper-vs-code item M6) | $(aq(2)) |
+| 01b Fig. 2 set-up | the paper's: `merks2008_denovo(; lattice = (502, 502), n = 1000, region = (85:417, 85:417))`; the files' as `merks2008_denovo()` | 1000 cells over 333² in a ~500² lattice; files: 360 seeds × 10 Eden rounds on 200² | the enclosing lattice is printed ambiguously (paper-vs-code item M10; spec A-9) | $(aq(5)) |
+| Field scheme | unsplit explicit Euler, 15 substeps, before the sweep | "finite-difference", 15 steps of 2 s; files: FTCS 5-point, split secretion/decay then diffusion, before the sweep | one MCS differs from the split scheme by $(round(100 * split_rel; digits = 2)) % of max c on a developed sprout, within the scheme's own first-order error (paper-vs-code item M5) | not an author question |
+| ΔH arithmetic | Float | real; files: integer, each term truncated | performance over exactness (paper-vs-code item M9) | not an author question |
+| χ(c,c) | a real parameter (`χcc`) | a continuous ratio swept (01b Fig. 5); files: boolean, χ(c,c) ∈ {0, χ(c,M)} | the sweep's code is not released (paper-vs-code item M7; spec A-20) | $(aq(4)) |
+| Parameter sets | `Merks2006`, `Merks2008`, no shared values; keywords on either | two papers, two sets (spec A-17); files: `longcells.par` (2006-labeled), Dataset S1 (2008) | none (paper-vs-code item M1) | not an author question |
+| 2008 seeding | one Eden blob, 50 rounds, 7 divisions → 128 cells (`merks2008_sprout`; variant `divisions = 8`, 256 cells) | "rounded clusters" (01b p.5); the files as ours | none (paper-vs-code item M11) | not an author question |
+| 2008 attempts per MCS | 39 204 = 198², one per mobile site of the framed 202² lattice, as TST (ca.cpp:385) | N = the number of lattice sites (01b p.11), 200² = 40 000 on the 200² lattice of the 01b parameter files (Dataset S1) | we followed TST; our MCS is 2 % shorter than the paper's, a 2 % difference in time scale. The paper is the target: the next full run uses its N through `attempts`, not a re-run for this alone | not an author question |
+| Border | 1-site frame (2006); 2-site frame on 202² (2008) | frozen pixels, J(c,B) = 100; files: a 1-px frame, the 20-site stencil reading the off-lattice ring as border | none: the same contacts and attempts (paper-vs-code item M4) | not an author question |
 | Copy proposal | random source, random target among its neighbors | source among the neighbors of a random target (files the same) | the same ordered-pair law away from the frame (spec D-8) | not an author question |
 | Compactness | TST's `Compactness()`: all cell sites over the hull of their centers | A_cluster / A_hull (01b p.5); the files' function is never called | the analysis scripts are not released (spec D-18, A-14) | $(aq(3)) |
 | PARKED: V-E2–V-E4 (lacunae and branch points; decay vs in vitro) | not run | 01a Fig. 5 | the 01a morphometry pipeline and its pixel scale are not released (spec A-18) | $(aq(3)) |
 | PARKED: V-E7, V-E9 (lacuna size vs cell size; cell speed) | not run | 01a Fig. 8 ("not shown"); ≈ 5 µm/h (01a p.50) | the metric and the measurement interval are not stated | not asked (not yet on our open question list) |
 | PARKED: V-E8 (alternative mechanisms) | not run | 01a Figs. 9–10 | the parameter sets conflict with the files (spec D-14, D-15) | not asked (not yet on our open question list) |
-| PARKED: V-C6, V-C8, V-C10, V-C11 (cord width; C vs D at 1024 cells; C(t) and ΔH on 500²) | not run | 01b p.8, Figs. 10, 12, 13 | cord width undefined; no 1024-cell or Fig. 12 set-up (spec D-2, A-10); Figs. 10, 12 and 13 enter through the 01b digitized targets on inferred set-ups (I1, I2 below; D-202) | $(aq(4)) |
-| 01b I1: Figs. 12–13 start (provisional) | 256 cells, 71 Eden rounds, 8 divisions, on 502² | 256 cells (caption); no file | unstated set-up (D-202 I1; spec D-2) | $(aq(4)) |
-| 01b I2: Fig. 10 1024-cell start (provisional) | 1024 cells, 141 rounds, 10 divisions, on 402² | "400×400-pixel lattices"; no file | unstated set-up (D-202 I2; spec A-10) | $(aq(4)) |
-| 01b I3: replicates in Figs. 7–10 (provisional) | n = 10 per point | not stated (Fig. 5 states 10) | unstated (D-202 I3) | $(aq(4)) |
-| 01b I4: "no contact inhibition" (provisional) | χcc = χcM | the files' `vecadherinknockout` | the text does not define it (D-202 I4) | $(aq(4)) |
-| 01b I5: Fig. 13 H − H₀ (provisional) | Float Σ ΔH of accepted copies, chemotaxis included; sign, order and magnitude within √10 pinned | integer-truncated terms in the files | ΔH arithmetic (D-202 I5; D-050 M9) | $(aq(3)) |
-| 01b I6: time axis (provisional) | includes the 100 relaxation MCS | not stated | as the 2008 time origin row (D-202 I6) | $(aq(2)) |
-| 01b I7: Fig. 10 legend (provisional) | the flatter solid curve read as 1024 cells | the legend and the caption disagree | a figure inconsistency (D-202 I7) | $(aq(4)) |
+| PARKED: V-C6, V-C8, V-C10, V-C11 (cord width; C vs D at 1024 cells; C(t) and ΔH on 500²) | not run | 01b p.8, Figs. 10, 12, 13 | cord width undefined; no 1024-cell or Fig. 12 set-up (spec D-2, A-10); Figs. 10, 12 and 13 enter through the 01b digitized targets on inferred set-ups (I1, I2 below) | $(aq(4)) |
+| 01b I1: Figs. 12–13 start (provisional) | 256 cells, 71 Eden rounds, 8 divisions, on 502² | 256 cells (caption); no file | unstated set-up (inferred set-up I1; spec D-2) | $(aq(4)) |
+| 01b I2: Fig. 10 1024-cell start (provisional) | 1024 cells, 141 rounds, 10 divisions, on 402² | "400×400-pixel lattices"; no file | unstated set-up (inferred set-up I2; spec A-10) | $(aq(4)) |
+| 01b I3: replicates in Figs. 7–10 (provisional) | n = 10 per point | not stated (Fig. 5 states 10) | unstated (inferred set-up I3) | $(aq(4)) |
+| 01b I4: "no contact inhibition" (provisional) | χcc = χcM | the files' `vecadherinknockout` | the text does not define it (inferred set-up I4) | $(aq(4)) |
+| 01b I5: Fig. 13 H − H₀ (provisional) | Float Σ ΔH of accepted copies, chemotaxis included; sign, order and magnitude within √10 pinned | integer-truncated terms in the files | ΔH arithmetic (inferred set-up I5; paper-vs-code item M9) | $(aq(3)) |
+| 01b I6: time axis (provisional) | includes the 100 relaxation MCS | not stated | as the 2008 time origin row (inferred set-up I6) | $(aq(2)) |
+| 01b I7: Fig. 10 legend (provisional) | the flatter solid curve read as 1024 cells | the legend and the caption disagree | a figure inconsistency (inferred set-up I7) | $(aq(4)) |
 $(join([full_deviation_rows; b01_deviation_rows], "\n"))
 """
 Markdown.parse(deviations_md)
@@ -541,8 +541,8 @@ Markdown.parse(deviations_md)
 #   parameter files of 01b Dataset S1.
 #   No code was released with 01a; the TST files headed "Cf. Fig. 4 of Merks et al. 2006"
 #   are 2008-release values, assumed for 2006 (spec 01 §7.8).
-# - Spec: `docs/design/research/model-specs/01_merks.md` (§2, §3, §5, §7, §8); decisions
-#   D-050 M1–M11 (model-specs README §4.1), D-087, D-145, D-153.
+# - Spec: `docs/design/research/model-specs/01_merks.md` (§2, §3, §5, §7, §8); the paper-vs-code
+#   items M1–M11 (model-specs README §4.1).
 # - Reproducibility grade: **A** for 2008 (Dataset S1 and TST fix every parameter of the
 #   Figs. 5–11 runs) and **C** for 2006 (λ, A, λ_L, E₀, the field boundary and scheme are
 #   absent from the paper; the target length conflicts with the files).
@@ -592,12 +592,12 @@ Markdown.parse("""
 | A | $(v6(:A)) | $(v8(:A)) | sites | target area | longcells.par:7 (2006; inferred from 01a Fig. 8); 01b p.11 | 2006: code, assumed |
 | λ_L | $(v6(:λ_L)) | — | energy/site² | length strength | longcells.par:10 | code, assumed |
 | L | $(v6(:L)) | — | sites | target length, "about 100 µm" | 01a p.50 (60 in longcells.par:8: author question) | stated (text) |
-| E₀ | $(v6(:E₀)) | — | energy | connectivity penalty | 01a p.49 "E0 > 2000"; longcells.par:12 | code (5000), D-050 M3 |
+| E₀ | $(v6(:E₀)) | — | energy | connectivity penalty | 01a p.49 "E0 > 2000"; longcells.par:12 | code (5000), paper-vs-code item M3 |
 | χ(c,M), χ(c,c) | $(v6(:χcM)), $(v6(:χcc)) | $(v8(:χcM)), $(v8(:χcc)) | energy/conc. | chemotaxis | 01a Eq. 2 (γ); 01b p.12 | stated |
 | s | $(v6(:s)) | $(v8(:s)) | 1/conc. | saturation | 01b p.12 | stated |
 | D | $(v6(:Dc)) | $(v8(:Dc)) | sites²/MCS | 10⁻¹³ m² s⁻¹ × 30 s / (2 µm)² | 01a p.49; 01b p.3 | derived |
 | α = ε | $(v6(:α)) | $(v8(:α)) | 1/MCS | 1.8·10⁻⁴ s⁻¹ (2006), 10⁻³ s⁻¹ (2008), × 30 s | 01a p.49; 01b p.3 | derived |
-| t_relax | — | $(v8(:t_relax)) | MCS | relaxation without the field | sprout_*.par:40 | code-only (D-050 M6) |
+| t_relax | — | $(v8(:t_relax)) | MCS | relaxation without the field | sprout_*.par:40 | code-only (paper-vs-code item M6) |
 | lattice | 500 × 500, frame 1 | 202 × 202, frame 2 | sites | domain incl. frozen frame | 01a Fig. 4; sprout_*.par:34-35 | stated / code |
 """)
 
@@ -608,18 +608,18 @@ Markdown.parse("""
 # (sizex − 2)(sizey − 2) attempts per MCS (ca.cpp:385) on its 500² and 200² lattices. The
 # 2008 paper sets N, the attempts per MCS, to the number of lattice sites (01b p.11); its
 # parameter files (Dataset S1) use a 200² lattice, so N = 200² = 40 000, 2 % more than ours.
-# The paper is the target, so this is a row of the deviations table (D-200 item 2), and the next
+# The paper is the target, so this is a row of the deviations table, and the next
 # full run uses the paper's N.
 #
-# **Clocks (D-156).** The 2008 runs relax for 100 MCS without the field. Plots of 2008 runs
+# **Clocks.** The 2008 runs relax for 100 MCS without the field. Plots of 2008 runs
 # use the time from the end of relaxation as their primary axis; the code's MCS counter
 # (TST's loop counter) is that time + 100, noted on each axis. The pass/fail rows bind on
-# the code counter, as frozen (D-153; spec 01 §8 A-19), and the full run also reports them
+# the code counter, as frozen (spec 01 §8 A-19), and the full run also reports them
 # at the end-of-relaxation reading.
 #
 # ### Pre-registered targets
 #
-# The targets are spec 01 §5 as audited before the first run (D-153): rows whose observable and set-up
+# The targets are spec 01 §5 as audited before the first run: rows whose observable and set-up
 # are fixed by the paper or the released files are READY; the others are PARKED with the
 # reason. The binding rules are those of the test
 # `lib/PottsModels/test/reproductions/01_merks_tests.jl`. Verdict classes: **SMOKE+FULL** rows
@@ -648,7 +648,7 @@ Markdown.parse("""
 # | V-C9 C vs T, both modes | 01b Fig. 11 | ext-only > 0.85 and ext-retr < 0.5 at T = 50; both < 0.3 at T = 800 | SMOKE+FULL | READY |
 # | V-C10 C(t), 256 cells on 500² | 01b Fig. 12 | — | — | **PARKED** (no Fig. 12 set-up, inferred only: D-2) |
 # | V-C11 cumulative ΔH | 01b Fig. 13 | — | — | **PARKED** (Fig. 12 set-up; bookkeeping D-17) |
-# | V-C12 displacement CI vs no CI over 160 h | 01b Fig. 6E | from MCS 0 to code MCS 19 300 (D-200; was MCS 100): ratio in [1.5, 2.5] | FULL | READY |
+# | V-C12 displacement CI vs no CI over 160 h | 01b Fig. 6E | from MCS 0 to code MCS 19 300 (was MCS 100): ratio in [1.5, 2.5] | FULL | READY |
 #
 # The reduced (SMOKE) forms: V-E1 on the density-matched 200² at 12 h, one seed; V-C2 and
 # V-C9 at 1000 MCS, one seed, with margins of 0.2; V-E10 over 1000 MCS (one elongated,
@@ -830,7 +830,7 @@ full = if FULL
                                       (compactness(r[5000]), compactness(r[5100]))), 1:10)
                for (k, (T, mode)) in enumerate(((50.0, :extension_only), (50.0, :extension_retraction),
                                                  (800.0, :extension_only), (800.0, :extension_retraction))))
-    disp(seed; p) = (r = run08(seed, [0, 19_300]; p); mean(((a, b),) -> hypot((b .- a)...),            # from MCS 0 (D-200)
+    disp(seed; p) = (r = run08(seed, [0, 19_300]; p); mean(((a, b),) -> hypot((b .- a)...),            # from MCS 0
         zip([(mean(I[1] for I in findall(==(c), r[0])), mean(I[2] for I in findall(==(c), r[0]))) for c in 2:129],
             [(mean(I[1] for I in findall(==(c), r[19_300])), mean(I[2] for I in findall(==(c), r[19_300]))) for c in 2:129])))
     vc12 = (; ci = tmap(i -> disp(12_000 + i; p = Pair[]), 1:10), no = tmap(i -> disp(12_100 + i; p = [:χcc => 500.0]), 1:10))
@@ -861,8 +861,8 @@ const MACHINE = "$(strip(Sys.cpu_info()[1].model)) ($(Sys.MACHINE)), CPU backend
 Markdown.parse("One run, $(join(lat06, " × ")), $(Int(last(sol06.t))) MCS ($(Int(last(sol06.t)) ÷ 120) h), " *
                "`SequentialCPM`: **$(round(t06; digits = 1)) s** on $MACHINE (not warmed up: includes compilation).")
 
-# One color per cell (D-172; the frozen frame is a cell too), the matrix white, every 20
-# MCS (10 min); cells are drawn without outlines (D-156):
+# One color per cell (the frozen frame is a cell too), the matrix white, every 20
+# MCS (10 min); cells are drawn without outlines:
 
 record_potts("01_merks_2006.mp4", sol06; framerate = 15, title = "Merks2006, $(lat06[1])²",
     encoding = CellIdentityEncoding(), plot = (; medium_color = :white), figure = (; size = (600, 620)))
@@ -874,7 +874,7 @@ record_potts("01_merks_2006.mp4", sol06; framerate = 15, title = "Merks2006, $(l
 # logarithmic scale (three decades below the run's maximum) and ten green isolines at
 # 5 %, 15 %, …, 95 % of the frame's maximum (01a Fig. 4 caption, p.48). The paper draws the
 # cell outlines on top; we draw the cells as a translucent red fill instead, since cell
-# outlines are never drawn here (D-156). The field is the model's own `c`, read from the
+# outlines are never drawn here. The field is the model's own `c`, read from the
 # saved states.
 
 function record_field(file, sol; title, figsize, every = 1)
@@ -1079,7 +1079,7 @@ Markdown.parse("Commit `$(record_prov["commit"][1:8])`, $(record_prov["cpu"]) ("
                "with no new runs, at commit `$(record_prov["vc12_mcs0"]["commit"][1:8])` (`vc12_mcs0.jl`, `vc12_mcs0.tsv`); " *
                "the amended record's stamp of the test file's sha256 is `$(record_prov["vc12_mcs0"]["frozen_test_sha256"][1:12])…`.")
 
-# The 2008 sweep means at both clocks (`points.tsv`; D-153 M6). The binding reading is the
+# The 2008 sweep means at both clocks (`points.tsv`). The binding reading is the
 # code counter N; the other is N + 100 code MCS, which is N MCS after relaxation:
 
 Markdown.parse("| Row | Point | n | mean C at N code MCS | mean C at N MCS after relaxation (code MCS = N + 100) |\n|---|---|---|---|---|\n" *
@@ -1111,7 +1111,7 @@ Markdown.parse(isempty(failing) ? "None." : join(failing, "\n"))
 
 # ### 01b: every check
 #
-# Every row and negative control of the frozen 01b test (D-202), as the record's
+# Every row and negative control of the frozen 01b test, as the record's
 # `verdicts.tsv` gives them; the frozen record tier recomputes each from `sweeps.tsv` and
 # `series.tsv`. Controls must fail.
 
@@ -1159,13 +1159,13 @@ Markdown.parse("PottsModels $(pkgversion(PottsModels)), commit " *
 #
 # | Date | Change | Reason |
 # |---|---|---|
-# | 2026-10-05 | First version: targets pre-registered from spec 01 §5 (reduced run) | D-153 |
-# | 2026-10-07 | Deviations table in the four-column form (ours, paper, suspected cause, author question), seeded from D-153's review rows, with the parked targets as rows; the "Attempts per MCS" row dropped and the Units paragraph corrected (our attempts per MCS equal TST's); timings name machine and backend; cells drawn without outlines, the field videos with a translucent cell fill. No target, tolerance or verdict changed | D-153, D-154, D-156 |
-# | 2026-10-08 | The full-run record `data/01/full-2026-10-08/` (590 runs, the frozen FULL tier): its verdicts in §5, its failing checks in the deviations table, the sweep means at both clocks; the "at risk" V-C3 row replaced by the record's verdict; one color per cell in the cell videos; two full-run replicates as release videos. No target, tolerance or seed changed | D-146, D-153, D-156, D-172 |
-# | 2026-10-08 | Rewritten in the D-185 order: intro, the `@potts_model` code, a minimal run, the results (key figures against the papers from the record `data/01/full-2026-10-08/`, the full-run videos of `reproductions-2026-10-08-merks`, a verdict summary, the deviations table) and this collapsed Details section with everything else; contact wording removed. No target, tolerance, seed or verdict changed | D-185 |
-# | 2026-10-09 | V-C12 measured from MCS 0, the origin of 01b Fig. 6E, instead of MCS 100. The frozen definition was amended and the band kept. The record's stored snapshots were re-read, with no new runs (`vc12_mcs0.tsv` in `data/01/full-2026-10-08/`). The ratio is 2.017 and passes (it was 1.26 and failed), so 37 of 37 checks pass. The attempts-per-MCS deviation row was added: the paper's 40 000 against our 39 204 | D-200 |
-# | 2026-10-09 | The 01b digitized targets (Figs. 5, 7–10, 12, 13): a §3 section drawing the paper's digitized curves against the record `data/01/full-01b-*` once it lands (provisional until then), the inferred set-ups I1–I7 as provisional deviation rows, and every 01b check in the Details. No 2006/2008 target, tolerance, seed or verdict changed | D-202 |
-# | 2026-10-13 | V-C4's CI target at J(c,c) = 40 is 0.4 (was 0.3) and V-C5's CI target at χ(c,M) = 500 is 0.4 (was 0.35), both ± 0.1. The record's values (0.378 and 0.399) pass as before, re-derived with no new runs. The attempts-per-MCS row now credits N = 200² to the paper's rule (N = the number of lattice sites) on the lattice of its parameter files, not to the paper's text | paper audit: 01b Figs. 7 and 8 at 400 dpi read ≈ 0.40 at both points (digitized 0.401 and 0.396); D-240 |
+# | 2026-10-05 | First version: targets pre-registered from spec 01 §5 (reduced run) | pre-registration |
+# | 2026-10-07 | Deviations table in the four-column form (ours, paper, suspected cause, author question), seeded from the pre-registration review rows, with the parked targets as rows; the "Attempts per MCS" row dropped and the Units paragraph corrected (our attempts per MCS equal TST's); timings name machine and backend; cells drawn without outlines, the field videos with a translucent cell fill. No target, tolerance or verdict changed | the pre-registration review; the rendering policy |
+# | 2026-10-08 | The full-run record `data/01/full-2026-10-08/` (590 runs, the frozen FULL tier): its verdicts in §5, its failing checks in the deviations table, the sweep means at both clocks; the "at risk" V-C3 row replaced by the record's verdict; one color per cell in the cell videos; two full-run replicates as release videos. No target, tolerance or seed changed | full runs are offline and their records committed; one color per cell |
+# | 2026-10-08 | Rewritten in the order shared by the paper-model pages: intro, the `@potts_model` code, a minimal run, the results (key figures against the papers from the record `data/01/full-2026-10-08/`, the full-run videos of `reproductions-2026-10-08-merks`, a verdict summary, the deviations table) and this collapsed Details section with everything else; contact wording removed. No target, tolerance, seed or verdict changed | one layout for every paper-model page |
+# | 2026-10-09 | V-C12 measured from MCS 0, the origin of 01b Fig. 6E, instead of MCS 100. The frozen definition was amended and the band kept. The record's stored snapshots were re-read, with no new runs (`vc12_mcs0.tsv` in `data/01/full-2026-10-08/`). The ratio is 2.017 and passes (it was 1.26 and failed), so 37 of 37 checks pass. The attempts-per-MCS deviation row was added: the paper's 40 000 against our 39 204 | the paper, not the authors' code, is the target |
+# | 2026-10-09 | The 01b digitized targets (Figs. 5, 7–10, 12, 13): a §3 section drawing the paper's digitized curves against the record `data/01/full-01b-*` once it lands (provisional until then), the inferred set-ups I1–I7 as provisional deviation rows, and every 01b check in the Details. No 2006/2008 target, tolerance, seed or verdict changed | the 01b targets, pre-registered |
+# | 2026-10-13 | V-C4's CI target at J(c,c) = 40 is 0.4 (was 0.3) and V-C5's CI target at χ(c,M) = 500 is 0.4 (was 0.35), both ± 0.1. The record's values (0.378 and 0.399) pass as before, re-derived with no new runs. The attempts-per-MCS row now credits N = 200² to the paper's rule (N = the number of lattice sites) on the lattice of its parameter files, not to the paper's text | paper audit: 01b Figs. 7 and 8 at 400 dpi read ≈ 0.40 at both points (digitized 0.401 and 0.396) |
 #
 # ```@raw html
 # </details>
