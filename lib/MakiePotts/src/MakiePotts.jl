@@ -4,10 +4,9 @@ Potts solutions.
 """
 module MakiePotts
 
-import Makie
-import CorePotts
-using CorePotts: isfatal
-import PrecompileTools
+using CorePotts: CorePotts, isfatal
+using Makie: Makie
+using PrecompileTools: PrecompileTools
 
 include("errors.jl")
 include("requests.jl")
