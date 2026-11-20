@@ -146,12 +146,15 @@ function main(args)
             for (name, s) in rows
                 println(
                     io,
-                    "| `$name` | $(s.covered) | $(s.tracked) | $(fmt_pct(s.covered, s.tracked)) | $(s.files_cov)/$(s.files_total) |"
+                    "| `$name` | $(s.covered) | $(s.tracked) " *
+                        "| $(fmt_pct(s.covered, s.tracked)) " *
+                        "| $(s.files_cov)/$(s.files_total) |"
                 )
             end
             println(
                 io,
-                "| **Total** | **$(tot_cov)** | **$(tot_trk)** | **$(fmt_pct(tot_cov, tot_trk))** | **$(tot_fcov)/$(tot_ftot)** |\n"
+                "| **Total** | **$(tot_cov)** | **$(tot_trk)** | " *
+                    "**$(fmt_pct(tot_cov, tot_trk))** | **$(tot_fcov)/$(tot_ftot)** |\n"
             )
             println(
                 io,

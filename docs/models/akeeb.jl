@@ -257,7 +257,10 @@ Markdown.parse(
     """
     | Measure | This run | Authors (10 runs) |
     |:--|--:|--:|
-    """ * join(["| $m | $(fmt(getproperty(obs, m))) | $(reference[m]) |" for m in keys(reference)], "\n")
+    """ * join(
+        ["| $m | $(fmt(getproperty(obs, m))) | $(reference[m]) |" for m in keys(reference)],
+        "\n"
+    )
 )
 
 # One run is not an ensemble: the reproduction of this paper compares ensembles of runs

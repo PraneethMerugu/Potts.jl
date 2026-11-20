@@ -300,14 +300,17 @@ function render_status(; published::Bool = false)
             push!(links, "[model page](@ref $(m["models_page"]))")
         end
         println(
-            io, "| $nn | $(_cell(m["name"])) | $status | $(pf("PASS")) | $(pf("FAIL")) | $(pf("PARKED")) | $(_controls(counts)) | $devs | ",
+            io, "| $nn | $(_cell(m["name"])) | $status | ",
+            "$(pf("PASS")) | $(pf("FAIL")) | $(pf("PARKED")) | ",
+            "$(_controls(counts)) | $devs | ",
             isempty(links) ? "—" : join(links, ", "), " |"
         )
         isempty(recs) && continue
         println(details, "\n### $nn: $(m["name"])\n")
         println(
             details,
-            "| Record | PASS | FAIL | PARKED | Controls as required | Information rows | Machine and backend | Run time | Commit |"
+            "| Record | PASS | FAIL | PARKED | Controls as required | Information rows | ",
+            "Machine and backend | Run time | Commit |"
         )
         println(details, "|:--|--:|--:|--:|--:|--:|:--|:--|:--|")
         for r in recs
@@ -317,7 +320,8 @@ function render_status(; published::Bool = false)
             ctl = _controls(c)
             println(
                 details,
-                "| `data/$(m["data"])/$(r.name)/` | $(c["PASS"]) | $(c["FAIL"]) | $(c["PARKED"])$sup | ",
+                "| `data/$(m["data"])/$(r.name)/` | ",
+                "$(c["PASS"]) | $(c["FAIL"]) | $(c["PARKED"])$sup | ",
                 "$ctl | $(c["info"]) | $(p.machine) | $(p.run) | $(p.commit) |"
             )
         end
