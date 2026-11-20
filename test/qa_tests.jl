@@ -565,3 +565,17 @@ end
         qa_check_bounds_control()
     end
 end
+
+# every external dependency of a workspace test project has a compat bound (D-298)
+@testitem "QA: test projects bound their external dependencies" setup = [QaSetup] tags = [:potts, :qa] begin
+    @testset "QA: test projects bound their external dependencies" begin
+        root = pkgdir(Potts)
+        workspace = Base.parsed_toml(joinpath(root, "Project.toml"))["workspace"]["projects"]
+        own = [Base.parsed_toml(joinpath(root, p, "Project.toml"))["name"] for p in workspace if !endswith(p, "test") && p != "benchmark" && p != "docs"]
+        push!(own, "Potts")
+        for p in filter(endswith("test"), workspace)
+            @test isempty(qa_missing_compat(joinpath(root, p, "Project.toml"); own))
+        end
+        qa_missing_compat_control()
+    end
+end
