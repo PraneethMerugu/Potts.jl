@@ -13,15 +13,17 @@ end
 struct CellTypeEncoding <: AbstractPottsEncoding
     label::String
 end
-CellTypeEncoding(; label::AbstractString = "Cell type") =
-    CellTypeEncoding(String(label))
+function CellTypeEncoding(; label::AbstractString = "Cell type")
+    return CellTypeEncoding(String(label))
+end
 
 """Encode finite cells by generation-aware identity."""
 struct CellIdentityEncoding <: AbstractPottsEncoding
     label::String
 end
-CellIdentityEncoding(; label::AbstractString = "Cell identity") =
-    CellIdentityEncoding(String(label))
+function CellIdentityEncoding(; label::AbstractString = "Cell identity")
+    return CellIdentityEncoding(String(label))
+end
 
 """Encode one requested numeric channel."""
 struct ChannelEncoding{K <: RenderChannelKey} <: AbstractPottsEncoding
@@ -40,8 +42,9 @@ required_channels(::Union{CellTypeEncoding, CellIdentityEncoding}) = ()
 required_channels(encoding::ChannelEncoding) = (encoding.key,)
 """Return the human-readable label of an encoding."""
 encoding_label(encoding::Union{CellTypeEncoding, CellIdentityEncoding}) = encoding.label
-encoding_label(encoding::ChannelEncoding) =
-    encoding.label === nothing ? String(encoding.key.name) : encoding.label
+function encoding_label(encoding::ChannelEncoding)
+    return encoding.label === nothing ? String(encoding.key.name) : encoding.label
+end
 
 """One semantic categorical legend entry independent of any Makie Block."""
 struct LegendEntry
@@ -165,8 +168,9 @@ end
 
 """Return a copy of the semantic legend entries produced by an encoding."""
 legend_entries(encoded::EncodedPottsFrame) = copy(encoded.categories)
-legend_entries(frame::AbstractPottsRenderFrame, encoding::AbstractPottsEncoding) =
-    legend_entries(encode_frame(frame, encoding))
+function legend_entries(frame::AbstractPottsRenderFrame, encoding::AbstractPottsEncoding)
+    return legend_entries(encode_frame(frame, encoding))
+end
 
 function _hsv_rgb(h::Float64, s::Float64 = 0.62, v::Float64 = 0.88)
     sector = 6h

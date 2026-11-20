@@ -173,14 +173,20 @@ function Makie.plot!(plot::PottsPlot)
 end
 
 Makie.plottype(::AbstractPottsRenderFrame{2}) = PottsPlot
-Makie.convert_arguments(::Type{<:PottsPlot},
-    frame::AbstractPottsRenderFrame{2}) = (frame,)
-Makie.used_attributes(::Type{<:PottsPlot},
-    ::AbstractPottsRenderFrame{2}) = ()
+function Makie.convert_arguments(::Type{<:PottsPlot},
+    frame::AbstractPottsRenderFrame{2})
+    return (frame,)
+end
+function Makie.used_attributes(::Type{<:PottsPlot},
+    ::AbstractPottsRenderFrame{2})
+    return ()
+end
 Makie.preferred_axis_type(::Type{<:PottsPlot}) = Makie.Axis
 Makie.preferred_axis_type(::AbstractPottsRenderFrame{2}) = Makie.Axis
-Makie.preferred_axis_attributes(::Type{Makie.Axis},
-    ::Type{<:PottsPlot}) = (aspect = Makie.DataAspect(),)
+function Makie.preferred_axis_attributes(::Type{Makie.Axis},
+    ::Type{<:PottsPlot})
+    return (aspect = Makie.DataAspect(),)
+end
 
 function Makie.data_limits(plot::PottsPlot)
     geometry = frame_geometry(plot.frame[])
@@ -190,8 +196,9 @@ function Makie.data_limits(plot::PottsPlot)
             geometry.size[2] * geometry.spacing[2], 0))
 end
 
-Makie.boundingbox(plot::PottsPlot, ::Symbol = :data) =
-    Makie.apply_transform_and_model(plot, Makie.data_limits(plot))
+function Makie.boundingbox(plot::PottsPlot, ::Symbol = :data)
+    return Makie.apply_transform_and_model(plot, Makie.data_limits(plot))
+end
 
 function Makie.extract_colormap(plot::PottsPlot)
     isempty(plot.plots) && return nothing
@@ -274,10 +281,14 @@ function Makie.plot!(plot::PottsVolume)
 end
 
 Makie.plottype(::AbstractPottsRenderFrame{3}) = PottsVolume
-Makie.convert_arguments(::Type{<:PottsVolume},
-    frame::AbstractPottsRenderFrame{3}) = (frame,)
-Makie.used_attributes(::Type{<:PottsVolume},
-    ::AbstractPottsRenderFrame{3}) = ()
+function Makie.convert_arguments(::Type{<:PottsVolume},
+    frame::AbstractPottsRenderFrame{3})
+    return (frame,)
+end
+function Makie.used_attributes(::Type{<:PottsVolume},
+    ::AbstractPottsRenderFrame{3})
+    return ()
+end
 Makie.preferred_axis_type(::Type{<:PottsVolume}) = Makie.LScene
 Makie.preferred_axis_type(::AbstractPottsRenderFrame{3}) = Makie.LScene
 

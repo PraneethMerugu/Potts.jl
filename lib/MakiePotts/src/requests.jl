@@ -37,17 +37,21 @@ struct RenderChannelKey{S <: AbstractRenderChannelScope, T}
     name::Symbol
 end
 
-RenderChannelKey(::S, name::Symbol, ::Type{T}) where {S <: AbstractRenderChannelScope, T} =
-    RenderChannelKey{S, T}(name)
+function RenderChannelKey(::S, name::Symbol, ::Type{T}) where {S <: AbstractRenderChannelScope, T}
+    return RenderChannelKey{S, T}(name)
+end
 """Construct a site-scoped [`RenderChannelKey`](@ref)."""
-SiteChannelKey(name::Symbol, ::Type{T} = Any) where {T} =
-    RenderChannelKey(SiteChannelScope(), name, T)
+function SiteChannelKey(name::Symbol, ::Type{T} = Any) where {T}
+    return RenderChannelKey(SiteChannelScope(), name, T)
+end
 """Construct a finite-cell-scoped [`RenderChannelKey`](@ref)."""
-CellChannelKey(name::Symbol, ::Type{T} = Any) where {T} =
-    RenderChannelKey(CellChannelScope(), name, T)
+function CellChannelKey(name::Symbol, ::Type{T} = Any) where {T}
+    return RenderChannelKey(CellChannelScope(), name, T)
+end
 """Construct a medium-domain-scoped [`RenderChannelKey`](@ref)."""
-MediumChannelKey(name::Symbol, ::Type{T} = Any) where {T} =
-    RenderChannelKey(MediumChannelScope(), name, T)
+function MediumChannelKey(name::Symbol, ::Type{T} = Any) where {T}
+    return RenderChannelKey(MediumChannelScope(), name, T)
+end
 
 function Base.show(io::IO, key::RenderChannelKey{S, T}) where {S, T}
     scope = if S === SiteChannelScope

@@ -50,8 +50,9 @@ function explore_potts(solution::CorePotts.PottsSolution;
 end
 
 Base.showable(::MIME"text/plain", ::PottsExplorer) = true
-Base.show(io::IO, ::MIME"text/plain", explorer::PottsExplorer) =
-    show(io, MIME"text/plain"(), explorer.figure)
+function Base.show(io::IO, ::MIME"text/plain", explorer::PottsExplorer)
+    return show(io, MIME"text/plain"(), explorer.figure)
+end
 
 Base.isopen(explorer::PottsExplorer) = !explorer.closed[]
 

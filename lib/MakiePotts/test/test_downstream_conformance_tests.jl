@@ -13,8 +13,9 @@ struct ThrowingFrame <: AbstractPottsRenderFrame{2} end
 MakiePotts.frame_mcs(::ThrowingFrame) = 0
 MakiePotts.frame_size(::ThrowingFrame) = (2, 2)
 MakiePotts.frame_geometry(::ThrowingFrame) = RenderGeometry((2, 2))
-MakiePotts.frame_provenance(::ThrowingFrame) =
-    RenderProvenance(:throwing_fixture, ThrowingFrame, :host, RenderRequest())
+function MakiePotts.frame_provenance(::ThrowingFrame)
+    return RenderProvenance(:throwing_fixture, ThrowingFrame, :host, RenderRequest())
+end
 MakiePotts.owner_at(::ThrowingFrame, _) = error("broken owner accessor")
 MakiePotts.available_channels(::ThrowingFrame) = ()
 include("shared/export_all.jl")

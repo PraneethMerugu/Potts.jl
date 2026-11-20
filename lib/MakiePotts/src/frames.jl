@@ -29,10 +29,12 @@ struct RenderOwner
         new(kind, UInt32(id))
     end
 end
-Base.:(==)(left::RenderOwner, right::RenderOwner) =
-    left.kind === right.kind && left.id == right.id
-Base.hash(owner::RenderOwner, seed::UInt) =
-    hash(owner.id, hash(owner.kind, seed))
+function Base.:(==)(left::RenderOwner, right::RenderOwner)
+    return left.kind === right.kind && left.id == right.id
+end
+function Base.hash(owner::RenderOwner, seed::UInt)
+    return hash(owner.id, hash(owner.kind, seed))
+end
 
 """Generation-aware finite-cell identity."""
 struct RenderCellIdentity
@@ -47,10 +49,12 @@ struct RenderCellIdentity
         new(UInt32(id), UInt64(generation))
     end
 end
-Base.:(==)(left::RenderCellIdentity, right::RenderCellIdentity) =
-    left.id == right.id && left.generation == right.generation
-Base.hash(identity::RenderCellIdentity, seed::UInt) =
-    hash(identity.generation, hash(identity.id, seed))
+function Base.:(==)(left::RenderCellIdentity, right::RenderCellIdentity)
+    return left.id == right.id && left.generation == right.generation
+end
+function Base.hash(identity::RenderCellIdentity, seed::UInt)
+    return hash(identity.generation, hash(identity.id, seed))
+end
 
 """Semantic metadata for one live finite cell."""
 struct RenderCellMetadata
@@ -65,13 +69,15 @@ struct RenderCellMetadata
         new(identity, UInt32(cell_type), String(label))
     end
 end
-Base.:(==)(left::RenderCellMetadata, right::RenderCellMetadata) =
-    left.identity == right.identity &&
-    left.cell_type == right.cell_type &&
-    left.label == right.label
-Base.hash(metadata::RenderCellMetadata, seed::UInt) =
-    hash(metadata.label,
+function Base.:(==)(left::RenderCellMetadata, right::RenderCellMetadata)
+    return left.identity == right.identity &&
+        left.cell_type == right.cell_type &&
+        left.label == right.label
+end
+function Base.hash(metadata::RenderCellMetadata, seed::UInt)
+    return hash(metadata.label,
         hash(metadata.cell_type, hash(metadata.identity, seed)))
+end
 
 """
 Physical geometry of a rendered ownership array. Coordinates use cell centers;
@@ -107,14 +113,16 @@ struct RenderGeometry{N, T <: AbstractFloat}
         new{N, T}(normalized_size, normalized_spacing, normalized_origin, normalized_axes)
     end
 end
-Base.:(==)(left::RenderGeometry, right::RenderGeometry) =
-    left.size == right.size &&
-    left.spacing == right.spacing &&
-    left.origin == right.origin &&
-    left.source_axes == right.source_axes
-Base.hash(geometry::RenderGeometry, seed::UInt) =
-    hash(geometry.source_axes,
+function Base.:(==)(left::RenderGeometry, right::RenderGeometry)
+    return left.size == right.size &&
+        left.spacing == right.spacing &&
+        left.origin == right.origin &&
+        left.source_axes == right.source_axes
+end
+function Base.hash(geometry::RenderGeometry, seed::UInt)
+    return hash(geometry.source_axes,
         hash(geometry.origin, hash(geometry.spacing, hash(geometry.size, seed))))
+end
 
 """Data-lineage record carried by a complete render frame."""
 struct RenderProvenance{R}

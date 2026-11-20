@@ -27,10 +27,12 @@ frame_mcs(frame::ColumnarFrame) = frame.stamp
 frame_size(frame::ColumnarFrame) = frame.shape
 frame_geometry(frame::ColumnarFrame) = frame.spatial
 owner_at(frame::ColumnarFrame, site) = frame.site_records[site]
-cell_metadata(frame::ColumnarFrame, identity::RenderCellIdentity) =
-    frame.identity_records[identity]
-cell_metadata(frame::ColumnarFrame, owner::RenderOwner) =
-    frame.owner_records[owner.id]
+function cell_metadata(frame::ColumnarFrame, identity::RenderCellIdentity)
+    return frame.identity_records[identity]
+end
+function cell_metadata(frame::ColumnarFrame, owner::RenderOwner)
+    return frame.owner_records[owner.id]
+end
 available_channels(frame::ColumnarFrame) = Tuple(keys(frame.stream_records))
 frame_channel(frame::ColumnarFrame, key::RenderChannelKey) = frame.stream_records[key]
 frame_provenance(frame::ColumnarFrame) = frame.lineage

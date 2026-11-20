@@ -76,10 +76,12 @@ function _triple(colour)
 end
 
 """Fraction of pairs (i, i + d) in a colour sequence that are confusable, for each d."""
-confusable_fractions(colours) = map(DISTANCES) do d
-    labs = map(_lab, colours)
-    n = length(labs) - d
-    count(i -> _delta_e(labs[i], labs[i + d]) < CONFUSABLE_DE, 1:n) / n
+function confusable_fractions(colours)
+    return map(DISTANCES) do d
+            labs = map(_lab, colours)
+            n = length(labs) - d
+            count(i -> _delta_e(labs[i], labs[i + d]) < CONFUSABLE_DE, 1:n) / n
+        end
 end
 
 hue_bins(colours) = Set(floor(Int, 12 * h) for h in map(_hue, colours) if isfinite(h))
