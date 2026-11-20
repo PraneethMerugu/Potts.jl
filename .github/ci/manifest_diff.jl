@@ -2,8 +2,10 @@
 # D-272): `julia manifest_diff.jl <old> <new>`. Prints nothing when they agree.
 using TOML
 
-versions(path) = Dict(name => get(first(entries), "version", "stdlib")
-                      for (name, entries) in TOML.parsefile(path)["deps"])
+function versions(path)
+    return Dict(name => get(first(entries), "version", "stdlib")
+        for (name, entries) in TOML.parsefile(path)["deps"])
+end
 
 old, new = versions(ARGS[1]), versions(ARGS[2])
 for name in sort!(collect(union(keys(old), keys(new))))
