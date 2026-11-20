@@ -82,10 +82,10 @@ julia --project=test -i test/dev.jl
 ```
 
 ```julia
-ti("F4-E5")                    # items whose name contains "F4-E5"
-ti(r"^F3-17: a Coarse")        # items whose name matches a regex
+ti("coarse field")             # items whose name contains "coarse field"
+ti(r"^a Coarse\(4\)")          # items whose name matches a regex
 ti(; tags = :fields_coarse)    # the items of fields_coarse_tests.jl
-ti("F4-E7"; nworkers = 1)      # in a fresh worker process
+ti("is_kind"; nworkers = 1)    # in a fresh worker process
 tf("fields_short_tests.jl")    # every item of one file
 ```
 

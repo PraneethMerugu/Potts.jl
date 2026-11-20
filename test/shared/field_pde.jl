@@ -1,4 +1,4 @@
-# The names the PDESystems of the Potts test models use (F4-B4t): a test file defines its
+# The names the PDESystems of the Potts test models use: a test file defines its
 # PDESystems in a module of its own, `module XxPDE; using ..FieldPDE; … end`, and couples them
 # into its models with `@fields`. `pdesys(eqs, bcs, dims, dvs, ps)` is MTK's `PDESystem` on the
 # domain of a lattice of `dims` sites (`lattice_domain`, axis `d` spanning `[0, dims[d] ·

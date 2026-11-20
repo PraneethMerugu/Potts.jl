@@ -1,4 +1,4 @@
-# Shared 6-package QA helpers (TS3-1: Potts, CorePotts, LatticeFields, LatticePDE,
+# Shared 6-package QA helpers (Potts, CorePotts, LatticeFields, LatticePDE,
 # MakiePotts, PottsModels). Included by each package's QA test file/setup.
 
 if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)

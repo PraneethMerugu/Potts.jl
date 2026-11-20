@@ -1,10 +1,10 @@
-# F3-17 (F3 design §3.9): `[lattice_level = Coarse(k)]` on a field of `@potts_model`. The
+# `[lattice_level = Coarse(k)]` on a field of `@potts_model`. The
 # field's array is its grid's (one value per node of k×k sites), its equation runs there
 # through the same lowering as standalone fields (`Potts.fields` → `discretize`), and a CPM read of
 # the field at a site reads the node whose block holds the site, so `integral(c) / volume` is
 # the cell's average over its sites. With σ frozen the coupled model equals its PDESystem solved
 # by LatticePDE (`Potts.fields` → `discretize`) bitwise. The fields are coupled with `@fields`
-# (`@fields`; before, written in `@equations`). Base 392dd404 (~/lpwork/f3b6-nc-a.log):
+# (`@fields`; before, written in `@equations`). Before the fix (392dd404):
 # `lattice_level` is not an option of `variable` (every model errors).
 
 @testsetup module FieldsCoarseSetup
@@ -111,7 +111,7 @@ end
 # two frozen cells, A (rows 2:8, columns 2:6; 9 and 12 of 16 sites of blocks (1, 1) and (2, 1),
 # 6 and 8 of (1, 2) and (2, 2): blocks A covers in part, so `kA` folds to 9/16, 12/16, 6/16 and
 # 8/16 there) and B (rows 9:15, columns 6:12; only block (3, 3), sites 9:12 x 9:12, lies wholly in
-# B, so the mask holds there only: D-F4-15b, a node is masked when its whole block is)
+# B, so the mask holds there only: a coarse node is masked when its whole block is)
 function fc_sigma(dims = (16, 12))
     σ = zeros(Int32, dims)
     σ[2:8, 2:6] .= 1
@@ -157,9 +157,9 @@ end
 end
 
 
-# Review r1 M2: a coarse field's source that reads a fine field nonlinearly receives the fine
+# A coarse field's source that reads a fine field nonlinearly receives the fine
 # integral of the source (the mean of the whole subterm, each fine read at its site), in a model as in
-# B. Base cb20be97 (~/lpwork/f3b6r-nc-m2a.log): `f(mean g)`, off by up to 75%.
+# B. Before the fix (cb20be97): `f(mean g)`, off by up to 75%.
 @potts_model FcMass begin
     @kinds medium A[frozen] B[frozen]
     @parameters S[kind] = [1.0, 2.0, 5.0]
@@ -170,13 +170,13 @@ end
 end
 
 
-# F3-22 (F3 design §5 F3-22): a spatial operator across grids in a model. `v` is fine, `c` is coarse:
+# A spatial operator across grids in a model. `v` is fine, `c` is coarse:
 # the coarse row reads the block mean of the fine Laplacian, and the fine row `u` the coarse
 # `laplacian(c)` at its block's node. The direct form is the aux field of the manual route (bitwise),
 # the model equals B (`Potts.fields`) bitwise, the added aux field is the binding's scratch (not in the
-# state), and a ForwardDiff Dual runs through it (F3-21b's shadow store). Base 5316bf1c
-# (~/lpwork/f322/nc-*.log): the direct form is refused ("a spatial operator reads its field on
-# that field's own grid").
+# state), and a ForwardDiff Dual runs through it (the derivative shadow store). Before the fix
+# (5316bf1c) the direct form was refused ("a spatial operator reads its field on that field's
+# own grid").
 using ForwardDiff: ForwardDiff
 
 @potts_model _Fc16x12 begin
@@ -230,8 +230,8 @@ end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "TS1-1: coarse grid and domain coupled models equal LatticePDE owned run" setup = [FieldsCoarseSetup] tags = [:potts, :fields_coarse] begin
-    @testset "TS1-1: coarse grid and domain coupled models equal LatticePDE owned run" begin
+@testitem "coarse grid and domain coupled models equal LatticePDE owned run" setup = [FieldsCoarseSetup] tags = [:potts, :fields_coarse] begin
+    @testset "coarse grid and domain coupled models equal LatticePDE owned run" begin
         # 1. Coarse(4) with BackwardEuler and ExplicitEuler
         k = 4
         for (fs, alg) in ((BackwardEuler(), BackwardEuler()), (ExplicitEuler(), ExplicitEuler()))
@@ -265,8 +265,8 @@ end
     end
 end
 
-@testitem "TS1-1: cross-grid operator coupled models equal LatticePDE owned run" setup = [FieldsCoarseSetup] tags = [:potts, :fields_coarse] begin
-    @testset "TS1-1: cross-grid operator coupled models equal LatticePDE owned run" begin
+@testitem "cross-grid operator coupled models equal LatticePDE owned run" setup = [FieldsCoarseSetup] tags = [:potts, :fields_coarse] begin
+    @testset "cross-grid operator coupled models equal LatticePDE owned run" begin
         # Cross-grid operators (`FcXd`, `FcXr`, `FcCut`, `FcCutBcs`)
         tight = LatticePCG(; reltol = 1.0e-12, maxiters = 64)
         for fs in (ExplicitEuler(; substeps = 40), BackwardEuler(; linsolve = tight), CrankNicolson(; linsolve = tight))
@@ -302,8 +302,8 @@ end
     end
 end
 
-@testitem "F3-17: a site read of a coarse field reads its block's node; integral(c)/volume is the cell average" setup = [FieldsCoarseSetup] tags = [:potts, :fields_coarse] begin
-    @testset "F3-17: a site read of a coarse field reads its block's node; integral(c)/volume is the cell average" begin
+@testitem "a site read of a coarse field reads its block's node; integral(c)/volume is the cell average" setup = [FieldsCoarseSetup] tags = [:potts, :fields_coarse] begin
+    @testset "a site read of a coarse field reads its block's node; integral(c)/volume is the cell average" begin
         a, integ = fc_runA(3)
         σ = fc_sigma()
         # (the default order runs `after_mcs` before `fields`: `avg` reads `c` of the MCS before)
@@ -328,8 +328,8 @@ end
     end
 end
 
-@testitem "F3-17: lattice_level in a model: arrays, refusals and routes" setup = [FieldsCoarseSetup] tags = [:potts, :fields_coarse] begin
-    @testset "F3-17: lattice_level in a model: arrays, refusals and routes" begin
+@testitem "lattice_level in a model: arrays, refusals and routes" setup = [FieldsCoarseSetup] tags = [:potts, :fields_coarse] begin
+    @testset "lattice_level in a model: arrays, refusals and routes" begin
         # the operating point gives a coarse field its grid's array
         a0 = [Float64(i + 10j) for i in 1:4, j in 1:3]
         integ = init(PottsProblem(FcMix(; name = :f), [fc_op(); :c => a0], (0, 1)), SequentialCPM())
@@ -342,8 +342,8 @@ end
             ArgumentError, ["`c` has `lattice_level = Coarse(4)`", "of size (4, 3)"],
             () -> PottsProblem(FcMix(; name = :f), [fc_op(); :c => zeros(16, 12)], (0, 1))
         )
-        # a field of the lattice given a coarsened array is refused as before F3-17 (review r1 M1: cb20be97
-        # built it, and its kernels wrote past the 8×6 array; ~/lpwork/f3b6r-nc-m1.log)
+        # a field of the lattice given a coarsened array is refused (before the fix, cb20be97
+        # built it, and its kernels wrote past the 8×6 array)
         fco_throws(
             ArgumentError, ["site quantity `e` has size (8, 6), lattice (16, 12)"],
             () -> PottsProblem(FcMix(; name = :f), [fc_op(); :e => zeros(8, 6)], (0, 1))
@@ -393,8 +393,8 @@ end
     end
 end
 
-@testitem "review r1 M2: a coarse source of a fine field receives its fine integral (in a model)" setup = [FieldsCoarseSetup] tags = [:potts, :fields_coarse] begin
-    @testset "review r1 M2: a coarse source of a fine field receives its fine integral (in a model)" begin
+@testitem "a coarse source of a fine field receives its fine integral (in a model)" setup = [FieldsCoarseSetup] tags = [:potts, :fields_coarse] begin
+    @testset "a coarse source of a fine field receives its fine integral (in a model)" begin
         integ = init(
             PottsProblem(FcMass(; name = :m), fc_op(), (0, 1); field_solver = ExplicitEuler()), SequentialCPM();
             save_start = false
@@ -413,8 +413,8 @@ end
 end
 
 
-@testitem "F3-22: a Dual runs through a cross-grid term in a model (against central differences)" setup = [FieldsCoarseSetup] tags = [:potts, :fields_coarse] begin
-    @testset "F3-22: a Dual runs through a cross-grid term in a model (against central differences)" begin
+@testitem "a Dual runs through a cross-grid term in a model (against central differences)" setup = [FieldsCoarseSetup] tags = [:potts, :fields_coarse] begin
+    @testset "a Dual runs through a cross-grid term in a model (against central differences)" begin
         tight = LatticePCG(; reltol = 1.0e-11, maxiters = 60)
         W = [0.01 * (i + 2j) for i in 1:16, j in 1:12]
         q(sol) = sum(W .* sol.u[end].site.u)

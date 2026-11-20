@@ -5,7 +5,7 @@ using Potts, PottsModels
 isdefined(@__MODULE__, :SingleDivisionFixture) ||
     include(joinpath(@__DIR__, "..", "..", "lib", "PottsModels", "test", "fixtures.jl"))   # test-only models (D-254)
 
-# The published models come from lib/PottsModels (M3.3 acceptance: parity from its sources).
+# The published models come from lib/PottsModels (their own sources).
 const Sorting = GranerGlazier
 const Merks = MerksVasculogenesis
 const Monolayer = SingleDivisionFixture

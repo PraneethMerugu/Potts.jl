@@ -1,10 +1,10 @@
-@testitem "F3-13 M1: Burgers in a model stays unseen (no frozen-velocity count)" setup = [FieldsSetup, FieldsBoundsRolesSetup] tags = [:potts, :fields] begin
-    @testset "F3-13 M1: Burgers in a model stays unseen (no frozen-velocity count)" begin
+@testitem "Burgers in a model stays unseen (no frozen-velocity count)" setup = [FieldsSetup, FieldsBoundsRolesSetup] tags = [:potts, :fields] begin
+    @testset "Burgers in a model stays unseen (no frozen-velocity count)" begin
         c0 = [0.5 + 0.4 * sin(2π * (i - 0.5) / 32) for i in 1:32, j in 1:32]
         op = [ownership => zeros(Int32, 32, 32), kind => Symbol[], :c => c0]
         e = something(fd_err(() -> PottsProblem(FbBurgers(; name = :b), op, (0, 20); seed = 1, field_solver = ExplicitEuler())), "")
         @test occursin("Advect", e) && occursin("substeps", e)
-        # (review r2 N1) the routes are a count or BackwardEuler; `bounds` cannot help this term
+        # the routes are a count or BackwardEuler; `bounds` cannot help this term
         @test occursin("velocity reads the field it moves", e) && occursin("BackwardEuler", e) && !occursin("`bounds", e)
         # the user's count (h = Δx/8, past the linearized limit Δx/4 at c ≡ 1): bounded, below 1
         pb = @test_logs (:warn, r"Advect") match_mode = :any PottsProblem(
@@ -17,8 +17,8 @@
     end
 end
 
-@testitem "F3-13 M2: declared intervals after the build in a model" setup = [FieldsSetup, FieldsBoundsRolesSetup] tags = [:potts, :fields] begin
-    @testset "F3-13 M2: declared intervals after the build in a model" begin
+@testitem "declared intervals after the build in a model" setup = [FieldsSetup, FieldsBoundsRolesSetup] tags = [:potts, :fields] begin
+    @testset "declared intervals after the build in a model" begin
         RC = Potts.SciMLBase.ReturnCode
         dims = (16, 16)
         e = something(fd_err(() -> PottsProblem(FbDir3(; name = :f), fd_empty(dims), (0, 2))), "")
@@ -40,8 +40,8 @@ end
     end
 end
 
-@testitem "F3-13: the interval bound in a model (declared bounds, aux fields, coordinates, advection)" setup = [FieldsSetup, FieldsBoundsRolesSetup] tags = [:potts, :fields] begin
-    @testset "F3-13: the interval bound in a model (declared bounds, aux fields, coordinates, advection)" begin
+@testitem "the interval bound in a model (declared bounds, aux fields, coordinates, advection)" setup = [FieldsSetup, FieldsBoundsRolesSetup] tags = [:potts, :fields] begin
+    @testset "the interval bound in a model (declared bounds, aux fields, coordinates, advection)" begin
         LP, MTKB = Potts.LatticePDE, Potts.ModelingToolkitBase
         tt, DD = MTKB.t_nounits, MTKB.D_nounits
         dims = (16, 16)
@@ -97,8 +97,8 @@ end
     end
 end
 
-@testitem "F3-14: lattice_storage, compute_type and solver_type in a model (FE-17)" setup = [FieldsSetup, FieldsBoundsRolesSetup] tags = [:potts, :fields] begin
-    @testset "F3-14: lattice_storage, compute_type and solver_type in a model (FE-17)" begin
+@testitem "lattice_storage, compute_type and solver_type in a model" setup = [FieldsSetup, FieldsBoundsRolesSetup] tags = [:potts, :fields] begin
+    @testset "lattice_storage, compute_type and solver_type in a model" begin
         σ = zeros(Int32, 12, 10)
         σ[3:5, 3:5] .= 1
         σ[8:10, 6:8] .= 2
@@ -154,8 +154,8 @@ end
     end
 end
 
-@testitem "batch-end review S4: compute_type = Float64 reaches a Float32 model's field kernels" setup = [FieldsSetup, FieldsBoundsRolesSetup] tags = [:potts, :fields] begin
-    @testset "batch-end review S4: compute_type = Float64 reaches a Float32 model's field kernels" begin
+@testitem "compute_type = Float64 reaches a Float32 model's field kernels" setup = [FieldsSetup, FieldsBoundsRolesSetup] tags = [:potts, :fields] begin
+    @testset "compute_type = Float64 reaches a Float32 model's field kernels" begin
         run1(T, alg) = (
             integ = init(
                 PottsProblem(FwNarrow(; name = :w), fd_empty((12, 10)), (0, 1); T, seed = 3, field_solver = alg),
@@ -170,8 +170,8 @@ end
     end
 end
 
-@testitem "F3-14 S1, S4 in a model: Float16 under the implicit algorithms; Dual parameters in words" setup = [FieldsSetup, FieldsBoundsRolesSetup] tags = [:potts, :fields] begin
-    @testset "F3-14 S1, S4 in a model: Float16 under the implicit algorithms; Dual parameters in words" begin
+@testitem "S4 in a model: Float16 under the implicit algorithms; Dual parameters in words" setup = [FieldsSetup, FieldsBoundsRolesSetup] tags = [:potts, :fields] begin
+    @testset "S4 in a model: Float16 under the implicit algorithms; Dual parameters in words" begin
         dims = (16, 16)
         for fs in (BackwardEuler(), BackwardEuler(; compute_type = Float64), CrankNicolson(), BDF2(), QuasiSteady())
             a = solve(PottsProblem(FbHalf(; name = :h), fd_empty(dims), (0, 10); field_solver = fs, T = Float32), SequentialCPM())
@@ -180,7 +180,7 @@ end
             @test a.retcode == Potts.SciMLBase.ReturnCode.Success && eltype(ca) == Float16
             @test maximum(abs, Float64.(ca) .- cb) <= 4.0e-3 * maximum(abs, cb)
         end
-        # (F3-21b: the Dual runs; its field carries derivative parts, its values are the primal run's)
+        # (the Dual runs; its field carries derivative parts, its values are the primal run's)
         pf = PottsProblem(FbFull(; name = :f), fd_empty(dims), (0, 2))
         d = solve(remake(pf; p = [:k => ForwardDiff.Dual(0.05, 1.0)]), SequentialCPM()).u[end].site.c
         @test ForwardDiff.value.(d) == solve(pf, SequentialCPM()).u[end].site.c && all(<(0), ForwardDiff.partials.(d, 1))

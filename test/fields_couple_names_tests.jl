@@ -1,13 +1,13 @@
-# F4-E8 to F4-E10 (gaps found by the Merks and frozen ports, HANDOFF 2026-11-10 "F4-B4m + F4-B5
-# DONE"). Uses the definitions of fields_couple.jl (cp_run, cp_same, cp_op, cp_build_err, cp_msg).
+# Gaps found when the Merks models and the older tests moved to `@fields`. Uses the
+# definitions of couple_testsetup.jl (cp_run, cp_same, cp_op, cp_build_err, cp_msg).
 #
-# E8: `@fields c, s = pdesys (…)` binds a PDESystem parameter by name for the statements after
+# `@fields c, s = pdesys (…)` binds a PDESystem parameter by name for the statements after
 # the line, as it binds fields. Oracle: a drive that reads the PDESystem's `s`, bitwise against
 # the workaround (a model parameter `s` bound to an input of the PDESystem). Negative control at
-# the E7 commit: "`s` is not a field of the PDESystem" (~/lpwork/f4E/nc-e8e10.log).
+# the commit before this feature: "`s` is not a field of the PDESystem".
 
-@testitem "F4-E8: a later statement reads a @fields PDESystem parameter by name" setup = [CoupleSetup] tags = [:potts, :fields_couple_e8] begin
-    @testset "F4-E8: a later statement reads a @fields PDESystem parameter by name" begin
+@testitem "a later statement reads a @fields PDESystem parameter by name" setup = [CoupleSetup] tags = [:potts, :fields_couple_names] begin
+    @testset "a later statement reads a @fields PDESystem parameter by name" begin
         for fs in (ExplicitEuler(), BackwardEuler())
             n, w = cp_run(CeNamed(; name = :m), fs), cp_run(CeWork(; name = :m), fs)
             @test cp_same(n, w) && maximum(n.u[end].site.c) > 0.1
@@ -31,8 +31,8 @@
     end
 end
 
-@testitem "F4-E9: a Bool input takes a truth-valued expression (any over a relation)" setup = [CoupleSetup] tags = [:potts, :fields_couple_e8] begin
-    @testset "F4-E9: a Bool input takes a truth-valued expression (any over a relation)" begin
+@testitem "a Bool input takes a truth-valued expression (any over a relation)" setup = [CoupleSetup] tags = [:potts, :fields_couple_names] begin
+    @testset "a Bool input takes a truth-valued expression (any over a relation)" begin
         op = cp_op()
         σ = first(op).second
         nb = [any(1 <= i + di <= size(σ, 1) && 1 <= j + dj <= size(σ, 2) && σ[i + di, j + dj] != 0
@@ -67,8 +67,8 @@ end
     end
 end
 
-@testitem "F4-E10: a PDESystem's condition is named in its refusal" setup = [CoupleSetup] tags = [:potts, :fields_couple_e8] begin
-    @testset "F4-E10: a PDESystem's condition is named in its refusal" begin
+@testitem "a PDESystem's condition is named in its refusal" setup = [CoupleSetup] tags = [:potts, :fields_couple_names] begin
+    @testset "a PDESystem's condition is named in its refusal" begin
         op = [ownership => zeros(Int32, 12, 12), kind => Symbol[]]
         for m in (CePeriodic(; name = :m), Potts.couple(CePeriodicHost(; name = :m), CeB.face()))
             e = cp_compile_msg(() -> PottsProblem(m, op, (0, 1)))

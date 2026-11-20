@@ -1,19 +1,19 @@
-# F3-08 (F3 design §3.7): `BackwardEuler` in a model. A field group with
+# `BackwardEuler` in a model. A field group with
 # `field_solver = BackwardEuler()` steps through the same runtime as standalone fields
 # (`Problems.GroupRuntime`, the implicit cache), bound to the state's site arrays: with σ frozen
 # the model equals B (`Potts.fields` → `discretize`) bitwise; a moving σ enters the next window's solve
 # through the CPM's own input array; a parameter write rebinds in place (`reset!`: the hierarchy
-# is rebuilt); a solve that fails ends the run. Base (437a84ef, ~/lpwork/f3b3-nc-a-base.log):
-# `BackwardEuler` is not defined in Potts (every testset errors). Negative control (mutation,
-# ~/lpwork/f3b3-nc-a-reset2.log): `install_launches!` without `reset!` keeps the stale hierarchy
-# and `jac:` arrays after a parameter write, and FiStill's run differs from a fresh problem's
-# (FiMix passes: its mask reads `e`, so it rebuilds every window anyway, f3b3-nc-a-reset.log).
+# is rebuilt); a solve that fails ends the run. Before the fix (437a84ef):
+# `BackwardEuler` is not defined in Potts (every testset errors). Negative control (mutation):
+# `install_launches!` without `reset!` keeps the stale hierarchy and `jac:` arrays after a
+# parameter write, and FiStill's run differs from a fresh problem's (FiMix passes: its mask
+# reads `e`, so it rebuilds every window anyway).
 
-# TS1-1: Parametric coupling table split per solver family for 4-worker concurrency, covering
+# Parametric coupling table split per solver family for 4-worker concurrency, covering
 # BackwardEuler, CrankNicolson, BDF2, QuasiSteady, hexagonal lattices, moving masks, Robin/field
 # faces, and coupled steady rows against LatticePDE's owned run (bitwise, σ frozen).
-@testitem "TS1-1: BackwardEuler coupled models equal LatticePDE owned run" setup = [ImplicitSetup] tags = [:potts, :fields_implicit, :fields_steppers] begin
-    @testset "TS1-1: BackwardEuler coupled models equal LatticePDE owned run" begin
+@testitem "BackwardEuler coupled models equal LatticePDE owned run" setup = [ImplicitSetup] tags = [:potts, :fields_implicit, :fields_steppers] begin
+    @testset "BackwardEuler coupled models equal LatticePDE owned run" begin
         fi_check_table_rows(
             (
             (FiMix, BackwardEuler(), 8, (:c, :e), true, true),
@@ -26,8 +26,8 @@
     end
 end
 
-@testitem "TS1-1: CrankNicolson and BDF2 coupled models equal LatticePDE owned run" setup = [ImplicitSetup] tags = [:potts, :fields_implicit, :fields_steppers] begin
-    @testset "TS1-1: CrankNicolson and BDF2 coupled models equal LatticePDE owned run" begin
+@testitem "CrankNicolson and BDF2 coupled models equal LatticePDE owned run" setup = [ImplicitSetup] tags = [:potts, :fields_implicit, :fields_steppers] begin
+    @testset "CrankNicolson and BDF2 coupled models equal LatticePDE owned run" begin
         fi_check_table_rows(
             (
             (FiStill, CrankNicolson(), 4, (:c,), false, false),
@@ -39,8 +39,8 @@ end
     end
 end
 
-@testitem "TS1-1: QuasiSteady coupled models equal LatticePDE owned run" setup = [ImplicitSetup] tags = [:potts, :fields_implicit, :fields_steppers] begin
-    @testset "TS1-1: QuasiSteady coupled models equal LatticePDE owned run" begin
+@testitem "QuasiSteady coupled models equal LatticePDE owned run" setup = [ImplicitSetup] tags = [:potts, :fields_implicit, :fields_steppers] begin
+    @testset "QuasiSteady coupled models equal LatticePDE owned run" begin
         fi_check_table_rows(
             (
             (FiStill, QuasiSteady(), 4, (:c,), false, true),
@@ -54,8 +54,8 @@ end
     end
 end
 
-@testitem "TS1-1: coupled steady rows and hexagonal models equal LatticePDE owned run" setup = [ImplicitSetup] tags = [:potts, :fields_implicit, :fields_steppers] begin
-    @testset "TS1-1: coupled steady rows and hexagonal models equal LatticePDE owned run" begin
+@testitem "coupled steady rows and hexagonal models equal LatticePDE owned run" setup = [ImplicitSetup] tags = [:potts, :fields_implicit, :fields_steppers] begin
+    @testset "coupled steady rows and hexagonal models equal LatticePDE owned run" begin
         dims = (12, 10)
         # Coupled steady rows (`FcPair`, `FcFeed`)
         ap, ip = fc_runA(FcPair, 3, (:u, :v))
@@ -87,8 +87,8 @@ end
     end
 end
 
-@testitem "F3-08: a moving σ enters the next window's solve through the CPM's array" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
-    @testset "F3-08: a moving σ enters the next window's solve through the CPM's array" begin
+@testitem "a moving σ enters the next window's solve through the CPM's array" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
+    @testset "a moving σ enters the next window's solve through the CPM's array" begin
         dims = (16, 16)
         σ = zeros(Int32, dims...); σ[4:7, 4:7] .= 1; σ[10:13, 9:12] .= 2
         integ = init(PottsProblem(FiMoving(; name = :f), [ownership => σ, kind => [:A, :A]], (0, 20);
@@ -114,8 +114,8 @@ end
     end
 end
 
-@testitem "F3-08: a parameter write rebinds in place; a failure ends the run" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
-    @testset "F3-08: a parameter write rebinds in place; a failure ends the run" begin
+@testitem "a parameter write rebinds in place; a failure ends the run" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
+    @testset "a parameter write rebinds in place; a failure ends the run" begin
         dims = (12, 10)
         prob = PottsProblem(FiMix(; name = :f), fi_op(dims), (0, 6); field_solver = BackwardEuler())
         integ = init(prob, SequentialCPM(); save_start = false)
@@ -149,8 +149,8 @@ end
     end
 end
 
-@testitem "F3-08: a Merks-like model with BackwardEuler runs 20 MCS (CPU)" setup = [ImplicitSetup, PortsSetup] tags = [:potts, :fields_implicit] begin
-    @testset "F3-08: a Merks-like model with BackwardEuler runs 20 MCS (CPU)" begin
+@testitem "a Merks-like model with BackwardEuler runs 20 MCS (CPU)" setup = [ImplicitSetup, PortsSetup] tags = [:potts, :fields_implicit] begin
+    @testset "a Merks-like model with BackwardEuler runs 20 MCS (CPU)" begin
         p = PottsProblem(MERKS, [ownership => merks_state(), kind => [1, 1]], (0, 20); field_solver = BackwardEuler(lower_bound = 0.0))
         s = solve(p, SequentialCPM())
         @test s.retcode == FiRC.Success && all(isfinite, s.u[end].site.c) && minimum(s.u[end].site.c) >= 0
@@ -158,8 +158,8 @@ end
     end
 end
 
-@testitem "F3-08: messages name BackwardEuler as the route, and it works" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
-    @testset "F3-08: messages name BackwardEuler as the route, and it works" begin
+@testitem "messages name BackwardEuler as the route, and it works" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
+    @testset "messages name BackwardEuler as the route, and it works" begin
         op = [ownership => zeros(Int32, 16, 8), kind => Symbol[], :c => zeros(16, 8)]
         mk(; kw...) = PottsProblem(FiPeriodic(; name = :f), op, (0, 1); kw...)
         e(f) = try
@@ -174,8 +174,8 @@ end
     end
 end
 
-@testitem "F3-21a r1 M1 (in a model): a write to a mask's value equals a restart at the write" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
-    @testset "F3-21a r1 M1 (in a model): a write to a mask's value equals a restart at the write" begin
+@testitem "(in a model): a write to a mask's value equals a restart at the write" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
+    @testset "(in a model): a write to a mask's value equals a restart at the write" begin
         # FiMix's mask `c ~ masked(e ≥ 0.5, v)`: base (79af8c69) the implicit update kept the old `v`
         dims = (12, 10)
         integ = init(PottsProblem(FiMix(; name = :f), fi_op(dims), (0, 8); field_solver = BackwardEuler()), SequentialCPM();
@@ -190,8 +190,8 @@ end
     end
 end
 
-@testitem "F3-24 (in a model): a multiplier that reads the coordinates: the hand BE matrix" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
-    @testset "F3-24 (in a model): a multiplier that reads the coordinates: the hand BE matrix" begin
+@testitem "(in a model): a multiplier that reads the coordinates: the hand BE matrix" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
+    @testset "(in a model): a multiplier that reads the coordinates: the hand BE matrix" begin
         # the row `m_i Σ_f K_f (c_n − c_i)` (h = 1, the site (i, j) at (i − ½, j − ½), zero flux at the box);
         # base (7f8001c3): the faces `m_i K_f`, off the BE step
         dims = (12, 10)
@@ -221,8 +221,8 @@ end
     end
 end
 
-@testitem "r1 M1 (in a model): an operator that reads the time is built at each substep's end time" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
-    @testset "r1 M1 (in a model): an operator that reads the time is built at each substep's end time" begin
+@testitem "(in a model): an operator that reads the time is built at each substep's end time" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
+    @testset "(in a model): an operator that reads the time is built at each substep's end time" begin
         # one MCS of length 0.2 in 4 substeps: c = Π_j 1/(1 + h(1 + 20 t_j)) (base: 0.49638, the
         # first substep's operator at every substep)
         s = solve(PottsProblem(FiTimed(; name = :f), [ownership => zeros(Int32, 8, 8), kind => Symbol[]], (0, 1);
@@ -234,8 +234,8 @@ end
     end
 end
 
-@testitem "r1 M2 (in a model): a write that turns a Robin face negative reclassifies the group" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
-    @testset "r1 M2 (in a model): a write that turns a Robin face negative reclassifies the group" begin
+@testitem "(in a model): a write that turns a Robin face negative reclassifies the group" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
+    @testset "(in a model): a write that turns a Robin face negative reclassifies the group" begin
         dims = (12, 10)
         for (b0, b1) in ((-1.0, 1.0), (1.0, -1.0))
             integ = init(PottsProblem(FiRobinW(; name = :f), [fi_op(dims); :rb => b0], (0, 4); field_solver = BackwardEuler()),
@@ -253,8 +253,8 @@ end
 end
 
 
-@testitem "F3-20 r1 M1 (in a model): face conditions on a hexagonal lattice: the hand BE matrix, equal to B bitwise" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
-    @testset "F3-20 r1 M1 (in a model): face conditions on a hexagonal lattice: the hand BE matrix, equal to B bitwise" begin
+@testitem "(in a model): face conditions on a hexagonal lattice: the hand BE matrix, equal to B bitwise" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
+    @testset "(in a model): face conditions on a hexagonal lattice: the hand BE matrix, equal to B bitwise" begin
         # a Dirichlet face (axis 1 low), a Robin face (axis 2 low); a link leaving the box takes its
         # face's ghost (a diagonal link axis 1's when it leaves along axis 1); base: refused at discretize
         dims, k = (12, 10), 1
@@ -294,9 +294,9 @@ end
     end
 end
 
-@testitem "F3-20 r1 M2 (in a model): a three-kind class in a rate (ExplicitEuler)" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
-    @testset "F3-20 r1 M2 (in a model): a three-kind class in a rate (ExplicitEuler)" begin
-        # `ismember(kind, cells3)` is one OR of three kinds; before F3-20 the emitter kept two of them
+@testitem "(in a model): a three-kind class in a rate (ExplicitEuler)" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
+    @testset "(in a model): a three-kind class in a rate (ExplicitEuler)" begin
+        # `ismember(kind, cells3)` is one OR of three kinds; before the fix the emitter kept two of them
         dims = (12, 10)
         σ = zeros(Int32, dims...)
         σ[2:4, 2:4] .= 1; σ[6:8, 2:4] .= 2; σ[2:4, 6:8] .= 3
@@ -305,8 +305,8 @@ end
     end
 end
 
-@testitem "r1 M6 (in a model): a component field equals its scalar spelling" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
-    @testset "r1 M6 (in a model): a component field equals its scalar spelling" begin
+@testitem "(in a model): a component field equals its scalar spelling" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
+    @testset "(in a model): a component field equals its scalar spelling" begin
         dims, k = (12, 10), 3
         function run(M)
             integ = init(PottsProblem(M(; name = :f), fi_op(dims), (0, k); field_solver = BackwardEuler()), SequentialCPM(); save_start = false)
@@ -323,8 +323,8 @@ end
     end
 end
 
-@testitem "F3-21b: BackwardEuler field derivatives and ForwardDiff.gradient against central differences" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
-    @testset "F3-21b: BackwardEuler field derivatives and ForwardDiff.gradient against central differences" begin
+@testitem "BackwardEuler field derivatives and ForwardDiff.gradient against central differences" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
+    @testset "BackwardEuler field derivatives and ForwardDiff.gradient against central differences" begin
         tight = LatticePCG(; reltol = 1.0e-11, maxiters = 60)
         fi_check_dual_fd(BackwardEuler(; linsolve = tight), ((:Dc, 0.2), (:s, 0.5), (:kd, 0.1)))
         # several derivative parts at once (one chunk: one run), the computed `Dh` through `Dc`
@@ -341,8 +341,8 @@ end
     end
 end
 
-@testitem "F3-21b: ExplicitEuler, CrankNicolson, BDF2, QuasiSteady field derivatives against central differences" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
-    @testset "F3-21b: ExplicitEuler, CrankNicolson, BDF2, QuasiSteady field derivatives against central differences" begin
+@testitem "ExplicitEuler, CrankNicolson, BDF2, QuasiSteady field derivatives against central differences" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
+    @testset "ExplicitEuler, CrankNicolson, BDF2, QuasiSteady field derivatives against central differences" begin
         tight = LatticePCG(; reltol = 1.0e-11, maxiters = 60)
         for fs in (ExplicitEuler(), CrankNicolson(; linsolve = tight), BDF2(; linsolve = tight), QuasiSteady(; linsolve = tight))
             fi_check_dual_fd(fs, ((:Dc, 0.2),))
@@ -350,8 +350,8 @@ end
     end
 end
 
-@testitem "F3-21b: multi-group and masked field derivatives against central differences" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
-    @testset "F3-21b: multi-group and masked field derivatives against central differences" begin
+@testitem "multi-group and masked field derivatives against central differences" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
+    @testset "multi-group and masked field derivatives against central differences" begin
         tight = LatticePCG(; reltol = 1.0e-11, maxiters = 60)
         # a group reading another group's field: ∂w/∂ra through `u`'s twin, ∂w/∂rb in `w`'s own group
         two(ps) = solve(PottsProblem(FiDualTwo(; name = :m), [fi_dop(); ps], (0, 12); field_solver = ExplicitEuler(),
@@ -377,8 +377,8 @@ end
     end
 end
 
-@testitem "F3-21b: a Dual run's integrator, remake and refusals" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
-    @testset "F3-21b: a Dual run's integrator, remake and refusals" begin
+@testitem "a Dual run's integrator, remake and refusals" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
+    @testset "a Dual run's integrator, remake and refusals" begin
         # `ForwardDiff.derivative` through `solve` (plain and `Potts.couple`)
         f(k) = fi_dq(fi_drun(ExplicitEuler(), [:kd => k]))
         @test ForwardDiff.derivative(f, 0.1) ≈ (f(0.1 + 1.0e-5) - f(0.1 - 1.0e-5)) / 2.0e-5 rtol = 1.0e-6
@@ -433,13 +433,13 @@ end
     end
 end
 
-# F3-21b r1 S1, N2: the initial fields' derivative parts (a Dual initial value; a default that
+# The initial fields' derivative parts (a Dual initial value; a default that
 # reads a seeded parameter, evaluated in Duals), a mid-run write of a field parameter (the shadow
 # rebound; the written value is plain from then on), and a CPM read beside a seeded parameter.
-# Negative controls (lp-f3t, ~/lpwork/f321b/ncr1-*.log): no initial seeding; defaults not
+# Negative controls (lp-f3t): no initial seeding; defaults not
 # evaluated in Duals; no rebind of the shadow after a write.
-@testitem "F3-21b r1: initial values, parameter writes and CPM reads against central differences" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
-    @testset "F3-21b r1: initial values, parameter writes and CPM reads against central differences" begin
+@testitem "initial values, parameter writes and CPM reads against central differences" setup = [ImplicitSetup] tags = [:potts, :fields_implicit] begin
+    @testset "initial values, parameter writes and CPM reads against central differences" begin
         tight = LatticePCG(; reltol = 1.0e-11, maxiters = 60)
         σ = zeros(Int32, 12, 10); σ[4:6, 3:5] .= 1
         msum(sol) = sum(FI_DW[1:12, 1:10] .* sol.u[end].site.c)
@@ -493,8 +493,8 @@ end
     end
 end
 
-@testitem "F3-21b: field derivative parts on the device agree with the CPU" setup = [ImplicitSetup] tags = [:potts, :fields_implicit, :device] begin
-    @testset "F3-21b: field derivative parts on the device agree with the CPU" begin
+@testitem "field derivative parts on the device agree with the CPU" setup = [ImplicitSetup] tags = [:potts, :fields_implicit, :device] begin
+    @testset "field derivative parts on the device agree with the CPU" begin
         if isdefined(@__MODULE__, :PottsDevices) && PottsDevices.on_device() && PottsDevices.device_name() == "rocm"
             backend = PottsDevices.device_backend()
             σ = zeros(Int32, 12, 10); σ[4:6, 3:5] .= 1

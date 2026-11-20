@@ -1,4 +1,4 @@
-# P6.3b (D-145): `@schedule` beyond the frozen acceptance file: how it composes (`extend`), the
+# D-145: `@schedule` beyond the frozen acceptance file: how it composes (`extend`), the
 # errors of the less common forms, the canonical fingerprint and the phase tuples the compiler
 # builds. The field conditions (previously `@boundary`) are a PDESystem's.
 
@@ -9,7 +9,7 @@ isdefined(@__MODULE__, :PottsDevices) || include(joinpath(@__DIR__, "shared", "d
 using Potts: CorePotts
 
 
-# the fields of the `@schedule` and mask models, coupled with `@fields` (F4-B4t, F4-B6)
+# the fields of the `@schedule` and mask models, coupled with `@fields`
 isdefined(@__MODULE__, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
 
 module BsPDE
@@ -105,7 +105,7 @@ end
 end
 
 
-# Integrals under a non-default order (D-145, review round 1): one rule on the placed order
+# Integrals under a non-default order (D-145): one rule on the placed order
 # refreshes, after each σ-moving entry and each block write, what the later entries read.
 @potts_model BSIntS1 begin                       # components after the sweep, the after block last
     @kinds medium A
@@ -160,8 +160,8 @@ end
 end
 
 
-# `laplacian` is lowered by the field compiler in field equations only (cutover C8); a model body
-# reaches it qualified (the bare name points to `using Potts.Fields`, F4-B6)
+# `laplacian` is lowered by the field compiler in field equations only; a model body
+# reaches it qualified (the bare name points to `using Potts.Fields`)
 @potts_model BSFaceObs begin
     @kinds medium A
     @lattice Lattice((8, 4); boundary = (Closed(), Periodic()))
@@ -291,10 +291,10 @@ end
 
 @testitem "masks and faces that cannot hold" setup = [BoundaryScheduleSetup] tags = [:potts, :boundary_schedule] begin
     @testset "masks and faces that cannot hold" begin
-        # a mask that reads the field it clamps is accepted (F2-11 review (a); before: refused)
+        # a mask that reads the field it clamps is accepted (before: refused)
         @test bs_error(() -> mtkcompile(BSMask(; name = :m, mask_case = :self))) === nothing
-        # a mask that reads a field stepped after its own reads it at the window start (round 2 of
-        # F2 batch 4; before: refused "a field stepped with or after `c`")
+        # a mask that reads a field stepped after its own reads it at the window start (before:
+        # refused "a field stepped with or after `c`")
         @test bs_error(() -> mtkcompile(BSMask(; name = :m, mask_case = :later))) === nothing
         @test bs_error(() -> mtkcompile(BSMask(; name = :m, mask_case = :earlier))) === nothing
     end

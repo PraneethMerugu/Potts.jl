@@ -1,6 +1,6 @@
-# Shared setup for W-lite container, delegation, refusal matrix and composition tests.
+# Shared setup for the system container, delegation, refusal matrix and composition tests.
 
-@testsetup module WliteSetup
+@testsetup module SystemContainerSetup
 using Potts, Test
 using Potts: CorePotts
 isdefined(@__MODULE__, :PottsDevices) || include(joinpath(@__DIR__, "shared", "devices.jl"))
@@ -21,11 +21,11 @@ const WL_SII = Potts.SymbolicIndexingInterface
 
 const WL_SB = Potts.SciMLBase
 
-isdefined(@__MODULE__, :WLiteMatrix) || include(joinpath(@__DIR__, "shared", "wlite_matrix.jl"))
+isdefined(@__MODULE__, :RefusalMatrix) || include(joinpath(@__DIR__, "shared", "refusal_matrix.jl"))
 
 
-# --- the probe's models (wlitedef.jl): composed `decay`, input `volume`, a PDESystem; and an empty one
-module WLiteModels
+# --- the models: composed `decay`, input `volume`, a PDESystem; and an empty one
+module ContainerModels
     using Potts
     using Potts.ModelingToolkitBase: System, PDESystem, @variables, @parameters, compose, complete
     const Interval = Potts.ModelingToolkitBase.DomainSets.Interval
@@ -56,16 +56,16 @@ module WLiteModels
     )
 end
 
-using .WLiteModels: xv, a, excess, volume, decay, inner_all, inner_empty
+using .ContainerModels: xv, a, excess, volume, decay, inner_all, inner_empty
 
 
-const W_all = Potts.wrap_system(:allparts, complete(inner_all), WLiteModels.pde(:allparts), WLiteModels.part())
+const W_all = Potts.wrap_system(:allparts, complete(inner_all), ContainerModels.pde(:allparts), ContainerModels.part())
 
-const W_empty = Potts.wrap_system(:gg, complete(inner_empty), nothing, WLiteModels.part())
+const W_empty = Potts.wrap_system(:gg, complete(inner_empty), nothing, ContainerModels.part())
 
 
 # W and inner agree: the same value, or the same exception type
-function wl_agree(f, W, I)
+function container_agree(f, W, I)
     rw = try
         (:ok, f(W))
     catch e
@@ -110,7 +110,7 @@ const WL_PUBLISHED = (
 
 
 # WL2: compose-then-wrap, `compose` via `get_parent`, nested, S-2 bindings
-module WLiteCompose
+module ContainerCompose
     using Potts
     using Potts.ModelingToolkitBase: System, @variables, @parameters
     const t = Potts.t
@@ -125,7 +125,7 @@ end
 
 # A condition of a coupled PDESystem (prior legacy condition form, then checked bitwise
 # against a `@boundary` site mask): stored, printed and lowered; the masked sites hold 5.0
-module WLitePDE
+module ContainerPDE
     using Potts.Fields
     @parameters Dc = 1.0
     @variables c(..) = 0.0 border(..)::Bool [input = true]
@@ -133,10 +133,10 @@ module WLitePDE
 end
 
 
-# C4 review round 2: the inner-vs-payload check also compares parameters, observed and
+# The inner-vs-payload check also compares parameters, observed and
 # initialization equations and initial conditions; a model built from its payload is marked
 # so the check is an identity test (no second build)
-@potts_model WLiteGuard begin
+@potts_model ContainerGuard begin
     @kinds medium cell
     @parameters T = 1.0 λ = 2.0
     @variables x(model) = 1.0
@@ -147,7 +147,7 @@ end
 
 
 # C9: components rebuilt from `compose`.
-module WLiteC9
+module ComposeSys
     using Potts
     using Potts.ModelingToolkitBase: System, @variables, @parameters
     const t = Potts.t
@@ -161,7 +161,7 @@ module WLiteC9
 end
 
 
-@potts_model WLiteC9Cell begin
+@potts_model ComposeCell begin
     @kinds medium cell
     @variables y(cell) = 1.0
     @equations D(y) ~ -y
@@ -170,8 +170,8 @@ end
 end
 
 
-# C9 review: what a composed component cannot carry is refused by name, never dropped
-module WLiteC9Neg
+# What a composed component cannot carry is refused by name, never dropped
+module ComposeNeg
     using Potts
     using Potts.ModelingToolkitBase: System, @variables, @parameters, @poissonians
     const t = Potts.t
@@ -192,22 +192,22 @@ end
 
 isdefined(@__MODULE__, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
 
-module WlPDE
+module ContainerFieldPDE
     using ..FieldPDE
     @variables c(..)
     diffusion() = (@parameters Dc = 0.1; C = c(t, x, y); pdesys([Dt(C) ~ Dc * laplacian(C)], [c(0, x, y) ~ 0.0], (8, 8), [C], [Dc]))
 end
 
 
-@potts_model WLiteC9Field begin                 # a model with a field (its PDESystem built by mtkcompile)
+@potts_model ComposeField begin                 # a model with a field (its PDESystem built by mtkcompile)
     @kinds medium cell
     @lattice Lattice((8, 8))
-    @fields WlPDE.diffusion()
+    @fields ContainerFieldPDE.diffusion()
     @sweep Metropolis(; temperature = 1.0)
 end
 
 
-@potts_model WLiteC9FoldOther begin             # kinds other than the host's, a population fold
+@potts_model ComposeFoldOther begin             # kinds other than the host's, a population fold
     @kinds medium ka kb
     @variables n(model) = 0.0
     @equations D(n) ~ count(true for c in cells(kb)) - n
@@ -216,7 +216,7 @@ end
 end
 
 
-@potts_model WLiteC9FoldSame begin              # the host's kinds, a population fold
+@potts_model ComposeFoldSame begin              # the host's kinds, a population fold
     @kinds medium cell
     @variables n(model) = 0.0
     @equations D(n) ~ count(true for c in cells(cell)) - n
@@ -225,24 +225,24 @@ end
 end
 
 
-@potts_model WLiteC9PerCellComp begin           # a per-cell `@components` (review B2)
+@potts_model ComposePerCellComp begin           # a per-cell `@components` (review B2)
     @kinds medium cell
-    @components cells(cell) clock = WLiteC9Neg.clock()
+    @components cells(cell) clock = ComposeNeg.clock()
     @lattice Lattice((8, 8))
     @sweep Metropolis(; temperature = 1.0)
 end
 
 
-@potts_model WLiteC9ModelComp begin             # a model `@components` named `decay`
+@potts_model ComposeModelComp begin             # a model `@components` named `decay`
     @kinds medium cell
     @parameters T = 1.0
-    @components model decay = WLiteC9.decay()
+    @components model decay = ComposeSys.decay()
     @lattice Lattice((8, 8))
     @sweep Metropolis(; temperature = T)
 end
 
 
-@potts_model WLiteC9Table begin                 # a kind table (review S3)
+@potts_model ComposeTable begin                 # a kind table
     @kinds medium cell
     @parameters J[kind, kind] = [0 1; 1 0]
     @variables z(model) = 1.0
@@ -252,8 +252,8 @@ end
 end
 
 
-# F4-10: `Potts.component`
-@potts_model WLiteF410 begin
+# `Potts.component`
+@potts_model ComponentOf begin
     @kinds medium cell
     @parameters λ = 2.0
     @variables x(model) = 1.0
@@ -265,13 +265,13 @@ end
 
 
 # Condition stored on part / fields, or none
-@potts_model WLiteBcs begin
+@potts_model ContainerBcs begin
     @structural_parameters with_bcs = true
     @kinds medium cell border
     @parameters T = 1.0
     @lattice Lattice((8, 8))
     if with_bcs
-        @fields WLitePDE.sys() (WLitePDE.border => kind == border)
+        @fields ContainerPDE.sys() (ContainerPDE.border => kind == border)
     end
     @sweep Metropolis(; temperature = T)
 end
@@ -279,14 +279,14 @@ end
 
 # Behavioral negative control for getfield(sys, ...): user declares parameter `part`,
 # variable `inner`, and composes component `fields` on top of a PDESystem.
-@potts_model WLiteShadow begin
+@potts_model ContainerShadow begin
     @kinds medium cell
     @parameters part = 3.0
     @variables inner(model) = 2.0
     @equations D(inner) ~ -part * inner
     @lattice Lattice((8, 8))
     @energy cells => (volume - 9.0)^2
-    @fields WlPDE.diffusion()
+    @fields ContainerFieldPDE.diffusion()
     @sweep Metropolis(; temperature = 1.0)
 end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))

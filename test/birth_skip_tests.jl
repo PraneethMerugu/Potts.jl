@@ -1,4 +1,4 @@
-# P6.5a3: a dividing model that never reads `birth` keeps no cell serials (D-066 item 3), so
+# A dividing model that never reads `birth` keeps no cell serials (D-066 item 3), so
 # neither lifecycle planner runs the serial pass. Decided when the model is compiled
 # (`CompiledPottsSystem.uses_birth`: `birth`, `birth[ref]`, `sibling`, `@convert`); the state
 # then has no `birth` column or `NEXT_BIRTH` counter and the planners take `births = nothing`.
@@ -172,8 +172,8 @@ bs_blob(model; tspan = (0, 30), seed = 1, kw...) = PottsProblem(model, [ownershi
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "P6.5a3: the serial pass is kept exactly when the model reads `birth`" setup = [BirthSkipSetup, ConvertSetup] tags = [:potts, :birth_skip] begin
-    @testset "P6.5a3: the serial pass is kept exactly when the model reads `birth`" begin
+@testitem "the serial pass is kept exactly when the model reads `birth`" setup = [BirthSkipSetup, ConvertSetup] tags = [:potts, :birth_skip] begin
+    @testset "the serial pass is kept exactly when the model reads `birth`" begin
         cases = [
             ("AkeebInvasion", AkeebInvasion(; name = :a, lattice = (24, 30)), true, false),
             ("OpenVTGrowingMonolayer", OpenVTGrowingMonolayer(; name = :o, lattice = (24, 24)), true, false),
@@ -201,13 +201,13 @@ end
             @test haskey(u0.model, CorePotts.NEXT_BIRTH) == keep
         end
         @test !haskey(bs_akeeb().u0.cell, :birth) && !haskey(bs_akeeb().u0.model, CorePotts.NEXT_BIRTH)
-        # a @convert pass keeps them (its `from`/`to` default to `sibling(k)`; frozen P6.5b fixtures)
+        # a @convert pass keeps them (its `from`/`to` default to `sibling(k)`)
         @test getfield(mtkcompile(CVDevice(; name = :cv)), :uses_birth)
     end
 end
 
-@testitem "P6.5a3: a birth-free dividing model's trajectory is unchanged by the skip (CPU)" setup = [BirthSkipSetup] tags = [:potts, :birth_skip] begin
-    @testset "P6.5a3: a birth-free dividing model's trajectory is unchanged by the skip (CPU)" begin
+@testitem "a birth-free dividing model's trajectory is unchanged by the skip (CPU)" setup = [BirthSkipSetup] tags = [:potts, :birth_skip] begin
+    @testset "a birth-free dividing model's trajectory is unchanged by the skip (CPU)" begin
         for (label, mk) in (("Akeeb", bs_akeeb), ("OpenVT growing", bs_openvt), ("members/root", (; kw...) -> bs_blob(BSPlain(; name = :p))))
             prob = mk()
             with = bs_with_serials(prob)
@@ -239,8 +239,8 @@ end
     end
 end
 
-@testitem "P6.5a3: the oracles are not vacuous" setup = [BirthSkipSetup] tags = [:potts, :birth_skip] begin
-    @testset "P6.5a3: the oracles are not vacuous" begin
+@testitem "the oracles are not vacuous" setup = [BirthSkipSetup] tags = [:potts, :birth_skip] begin
+    @testset "the oracles are not vacuous" begin
         prob = bs_akeeb(; tspan = (0, 30))
         a = solve(prob, SequentialCPM(); saveat = 1)
         @test !bs_same(a, solve(remake(prob; seed = 1), SequentialCPM(); saveat = 1))    # another seed differs
@@ -253,8 +253,8 @@ end
     end
 end
 
-@testitem "P6.5a3: a model reading `birth` (sibling) keeps the pass (negative control)" setup = [BirthSkipSetup] tags = [:potts, :birth_skip] begin
-    @testset "P6.5a3: a model reading `birth` (sibling) keeps the pass (negative control)" begin
+@testitem "a model reading `birth` (sibling) keeps the pass (negative control)" setup = [BirthSkipSetup] tags = [:potts, :birth_skip] begin
+    @testset "a model reading `birth` (sibling) keeps the pass (negative control)" begin
         prob = bs_blob(BSSibling(; name = :s))
         @test prob.u0.cell.birth[1:3] == Int32[1, 2, 3] && prob.u0.model[CorePotts.NEXT_BIRTH] == Int32[4]
         for alg in (SequentialCPM(), CheckerboardCPM())
@@ -266,8 +266,8 @@ end
     end
 end
 
-@testitem "P6.5a3: post-run reads of `birth` on a birth-free dividing model are refused" setup = [BirthSkipSetup] tags = [:potts, :birth_skip] begin
-    @testset "P6.5a3: post-run reads of `birth` on a birth-free dividing model are refused" begin
+@testitem "post-run reads of `birth` on a birth-free dividing model are refused" setup = [BirthSkipSetup] tags = [:potts, :birth_skip] begin
+    @testset "post-run reads of `birth` on a birth-free dividing model are refused" begin
         prob = bs_akeeb(; tspan = (0, 3))
         sol = solve(prob, SequentialCPM())
         @test_throws ArgumentError sol[Potts.B.birth]
@@ -298,8 +298,8 @@ end
     end
 end
 
-@testitem "P6.5a3: the skip on the device (PottsDevices; device planner forms)" setup = [BirthSkipSetup] tags = [:potts, :birth_skip, :device] begin
-    @testset "P6.5a3: the skip on the device (PottsDevices; device planner forms)" begin
+@testitem "the skip on the device (PottsDevices; device planner forms)" setup = [BirthSkipSetup] tags = [:potts, :birth_skip, :device] begin
+    @testset "the skip on the device (PottsDevices; device planner forms)" begin
         if isdefined(@__MODULE__, :PottsDevices) && PottsDevices.on_device()
             backend = PottsDevices.device_backend()
             alg = CheckerboardCPM()

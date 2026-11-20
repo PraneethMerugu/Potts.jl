@@ -1,7 +1,7 @@
 # Split from test/symbolic_tests.jl
 
-@testitem "connectivity(rule = ArcOrPair()) keeps TST's zero-arc pass (P6.0m, D-074 scope)" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "connectivity(rule = ArcOrPair()) keeps TST's zero-arc pass (P6.0m, D-074 scope)" begin
+@testitem "connectivity(rule = ArcOrPair()) keeps TST's zero-arc pass" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "connectivity(rule = ArcOrPair()) keeps TST's zero-arc pass" begin
         @potts_model ConnectivityProbe begin
             @structural_parameters local_only = false
             @kinds medium A
@@ -40,12 +40,12 @@
     end
 end
 
-# P6.0m (D-075): `Chemotaxis`'s `when` defaults to `new != 0`; `when = true` is every copy;
+# D-075: `Chemotaxis`'s `when` defaults to `new != 0`; `when = true` is every copy;
 # `kinds` requires `kind[new] ∈ kinds`, so retractions stay 0 with `kinds` given
 
 
-@testitem "Chemotaxis `when` (P6.0m, D-075)" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "Chemotaxis `when` (P6.0m, D-075)" begin
+@testitem "Chemotaxis `when`" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "Chemotaxis `when`" begin
         @potts_model _ChemoWhen begin
             @structural_parameters mode = :every
             @kinds medium A
@@ -131,12 +131,12 @@ end
     end
 end
 
-# P6.0m (D-075 Q8): `a` and `b` are reserved for every declaration, and for a programmatic
+# `a` and `b` are reserved for every declaration, and for a programmatic
 # PottsSystem; the error suggests `a₀`/`b₀`
 
 
-@testitem "`a` and `b` are reserved globally (P6.0m, D-075 Q8)" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "`a` and `b` are reserved globally (P6.0m, D-075 Q8)" begin
+@testitem "`a` and `b` are reserved globally" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "`a` and `b` are reserved globally" begin
         expand(body) = Potts._potts_model(:X, body, @__MODULE__)
         for decl in (
                 :(@kinds medium a), :(@kinds medium A b), :(@observed b ~ volume), :(@relations a = Moore(1)),
@@ -167,7 +167,7 @@ end
 end
 
 
-@testitem "P6.0e contact terms read site values: name" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+@testitem "contact terms read site values: name" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
     SITE_CONTACT_CASES = (
         ("square", () -> SiteContacts(; name = :sq), (24, 24), Moore(1)),
         ("hex", () -> SiteContacts(; name = :hx, geometry = Hexagonal(), near = Hex(1), far = Hex(2)), (24, 24), Hex(1)),
@@ -186,7 +186,7 @@ end
         return Potts._rgf(swap(code))
     end
 
-    @testset "P6.0e contact terms read site values: $name" for (name, mk, dims, rel) in SITE_CONTACT_CASES
+    @testset "contact terms read site values: $name" for (name, mk, dims, rel) in SITE_CONTACT_CASES
         sys = mk()
         prob = site_contact_problem(sys, dims)
         @test site_selfcheck(prob, rel) < 1.0e-9
@@ -201,8 +201,8 @@ end
 end
 
 
-@testitem "P6.0e x′ outside contact terms is rejected" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "P6.0e x′ outside contact terms is rejected" begin
+@testitem "x′ outside contact terms is rejected" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "x′ outside contact terms is rejected" begin
         bad(E) = Potts.PottsSystem(;
             name = :bad, kinds = [:medium, :A], lattice = Potts.lattice_spec((8, 8)),
             variables = [c], energies = [Potts.energy(E)], sweep = Potts.sweep_spec(:metropolis; temperature = 1.0)
@@ -223,8 +223,8 @@ end
 end
 
 
-@testitem "P6.0e contact terms see on-copy writes and clears (D-045)" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "P6.0e contact terms see on-copy writes and clears (D-045)" begin
+@testitem "contact terms see on-copy writes and clears" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "contact terms see on-copy writes and clears" begin
         @potts_model SourceWriteContacts begin
             @kinds medium A
             @variables mark(site) = 0.0
@@ -253,8 +253,8 @@ end
 end
 
 
-@testitem "P6.0e checkerboard equals sequential; Float32 never touches Float64" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "P6.0e checkerboard equals sequential; Float32 never touches Float64" begin
+@testitem "checkerboard equals sequential; Float32 never touches Float64" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "checkerboard equals sequential; Float32 never touches Float64" begin
         prob = site_contact_problem(SiteContacts(; name = :sq), (24, 24); tspan = (0, 60))
         H(alg, seeds) = [total_energy(prob, solve(remake(prob; seed), alg; save_start = false).u[end]) for seed in seeds]
         n_sc = max(12, required_n(sqrt(2) * 150.0, 300.0; alpha = 1.0e-3, power = 0.9))
@@ -275,8 +275,8 @@ end
 end
 
 
-@testitem "P6.0e population folds in contact terms keep their own site" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "P6.0e population folds in contact terms keep their own site" begin
+@testitem "population folds in contact terms keep their own site" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "population folds in contact terms keep their own site" begin
         @potts_model SiteContactsFold begin
             @kinds medium A B
             @variables cue(site) = 0.0
@@ -304,8 +304,8 @@ end
 end
 
 
-@testitem "P6.0e x′ in extensions" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "P6.0e x′ in extensions" begin
+@testitem "x′ in extensions" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "x′ in extensions" begin
         @potts_model SiteContactsExt1 begin
             @extend cue, v = base = SiteContactsBase()
             @energy contacts => 2 * cue * (1 + cue′)^2 + v[2] * v′[1]
@@ -328,8 +328,8 @@ end
 end
 
 
-@testitem "P6.0e two site terms reading an on-copy write" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "P6.0e two site terms reading an on-copy write" begin
+@testitem "two site terms reading an on-copy write" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "two site terms reading an on-copy write" begin
         @potts_model TwoSiteTermsOnCopy begin
             @kinds medium A
             @variables mark(site) = 0.0
@@ -360,8 +360,8 @@ end
 # an extension cannot declare `x′` beside an inherited site variable `x` (nor the reverse)
 
 
-@testitem "P6.0e `x′` stays reserved through @extend" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "P6.0e `x′` stays reserved through @extend" begin
+@testitem "`x′` stays reserved through @extend" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "`x′` stays reserved through @extend" begin
         @potts_model PrimeClashParam begin
             @extend cue, A = b = SiteContactsBase()
             @parameters cue′ = 2.0
@@ -382,8 +382,8 @@ end
 end
 
 
-@testitem "P6.0e2 primes of non-site quantities" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "P6.0e2 primes of non-site quantities" begin
+@testitem "primes of non-site quantities" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "primes of non-site quantities" begin
         @potts_model PrimeBase begin
             @structural_parameters n = 2
             @kinds medium A
@@ -481,7 +481,7 @@ end
 end
 
 # Component bindings (an MTK value given as an expression): an expression of the component's
-# parameters is evaluated at build (F2-14, test/mtk_native.jl); any other binding is rejected by
+# parameters is evaluated at build (test/mtk_native.jl); any other binding is rejected by
 # name only where Potts reads it; a binding of a continuous observed variable (its equation
 # gives its value) stays ignored
 

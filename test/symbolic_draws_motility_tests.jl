@@ -51,8 +51,8 @@
 end
 
 
-@testitem "rand(): cell draws are addressed by id and current generation (D-237)" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "rand(): cell draws are addressed by id and current generation (D-237)" begin
+@testitem "rand(): cell draws are addressed by id and current generation" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "rand(): cell draws are addressed by id and current generation" begin
         @potts_model DaughterDraws begin
             @kinds medium A B
             @parameters T = 1.0
@@ -324,7 +324,7 @@ end
             end, @__MODULE__
         )
         @test_throws ArgumentError Potts._potts_model(
-            :_BadW2, quote
+            :_BadInp, quote
                 @kinds medium A
                 @variables n(model) = 0.0
                 @lattice Lattice((8, 8))
@@ -340,8 +340,8 @@ end
 end
 
 
-@testitem "P6.4a1: copy-scope `mcs` is the number of completed MCS (on-copy readback)" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "P6.4a1: copy-scope `mcs` is the number of completed MCS (on-copy readback)" begin
+@testitem "copy-scope `mcs` is the number of completed MCS (on-copy readback)" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "copy-scope `mcs` is the number of completed MCS (on-copy readback)" begin
         @potts_model CopyClock begin
             @kinds medium A
             @parameters w = 0.0
@@ -387,8 +387,8 @@ end
 end
 
 
-@testitem "P6.4a1: copy-scope `direction` and `position[s][k]` diagnostics" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "P6.4a1: copy-scope `direction` and `position[s][k]` diagnostics" begin
+@testitem "copy-scope `direction` and `position[s][k]` diagnostics" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "copy-scope `direction` and `position[s][k]` diagnostics" begin
         @potts_model DirDiagProbe begin
             @structural_parameters case = :drive_vec use_hex = false
             @kinds medium A

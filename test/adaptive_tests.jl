@@ -1,5 +1,5 @@
-# Adaptive host integration of cell and model ODEs (`PottsProblem(…; ode_solver = Adaptive(alg))`,
-# M4.1; the solver is a problem keyword, D-075).
+# Adaptive host integration of cell and model ODEs (`PottsProblem(…; ode_solver = Adaptive(alg))`;
+# the solver is a problem keyword, D-075).
 
 @testsetup module AdaptiveSetup
 using Potts, Test
@@ -54,7 +54,7 @@ end
 end
 
 
-# Sentinel tests of the read scan (P6.0v2 review): every leaf outside the computed reads is
+# Sentinel tests of the read scan: every leaf outside the computed reads is
 # overwritten with a sentinel (NaN, `true`, and 1 for integers: wrong but in range, so a missed
 # read through an unchecked index fails the test instead of crashing); the outputs must not
 # change. Negative controls poison one leaf the scan does list and expect a change.
@@ -272,7 +272,7 @@ end
     end
 end
 
-# D-092 (P6.0v2): host phases copy only the state leaves their generated code reads
+# D-092: host phases copy only the state leaves their generated code reads
 @testitem "state reads of generated host code" setup = [AdaptiveSetup] tags = [:potts, :adaptive] begin
     @testset "state reads of generated host code" begin
         R = Potts._state_reads

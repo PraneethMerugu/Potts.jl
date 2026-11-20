@@ -153,7 +153,7 @@ _warnings(f) = [r.message for r in Test.collect_test_logs(f; min_level = Base.Co
 
 
 # ---------------------------------------------------------------------------------------------
-# InsertUntil (P6.2a, review §3 R2)
+# InsertUntil (review §3 R2)
 # ---------------------------------------------------------------------------------------------
 
 @potts_model InsertProbe begin
@@ -181,7 +181,7 @@ _kind_sites(op, k) = (σ = _op(op, ownership); ks = _op(op, kind); findall(i -> 
 
 
 # ---------------------------------------------------------------------------------------------
-# Eden, Splits, RandomPoints(replace = true), shortfall (P6.3c, D-141); the frozen acceptance
+# Eden, Splits, RandomPoints(replace = true), shortfall (D-141); the frozen acceptance
 # file holds the hand fixtures, the growth oracle and the spec 01 bands
 # ---------------------------------------------------------------------------------------------
 

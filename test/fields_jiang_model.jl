@@ -1,4 +1,4 @@
-# The Jiang-like model of F3-18 (test/fields_jiang.jl) and its spheroid.
+# The Jiang-like model (fields_jiang_tests.jl) and its spheroid.
 isdefined(@__MODULE__, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
 module JgPDE
 using ..FieldPDE
@@ -6,7 +6,7 @@ using ..FieldPDE
 @variables gf(..) [lattice_level = Coarse(4)] inh(..) [lattice_level = Coarse(4)]
 @variables pq(..)::Bool [input = true] kP(..)::Bool [input = true] kQ(..)::Bool [input = true] kN(..)::Bool [input = true]
 @variables med(..)::Bool [input = true]
-# F4-15b: the majority twin's mask at the coarse level (no fine read: the whole-block fold)
+# The majority twin's mask at the coarse level (no fine read: the whole-block fold)
 @variables medc(..)::Bool [input = true, lattice_level = Coarse(4)]
 # the five fields on a coarse grid (`Coarse(4)`); the kinds are bound inputs: `pq` is
 # `ismember(kind, (P, Q))`, `kP`, `kQ`, `kN` the kinds and `med` the medium

@@ -1,22 +1,21 @@
-# F3-23 (user ruling 2026-10-28; research/field-compiler/f3/F3-23-integer-cell-sums.md): cell
-# sums are exact Int64 fixed-point sums, so a model that reads a cell average runs bitwise the
+# Cell sums are exact Int64 fixed-point sums, so a model that reads a cell average runs bitwise the
 # same at every thread count (D-029). Two models, each run in this process (one thread) and in
 # fresh processes at `-t 4` and `-t 8` (32³ and 200² lattices: above `HOST_GRAIN` sites):
 #
-# - the Jiang-like model of F3-18: the digest of `ocell = integral(o) / volume` after 2 MCS;
+# - the Jiang-like model: the digest of `ocell = integral(o) / volume` after 2 MCS;
 # - a Merks-like model whose energy thresholds a cell average (`cavg > θ` moves the target
 #   volume): the digests of σ and `cavg` after 8 MCS.
 #
 # Each run also takes the host site passes one site per item (`CorePotts._CR_RUN_HOST`), so they
 # are threaded at these sizes. Negative control in the same runs: `CorePotts._FLOAT_ATOMICS`
-# restores the float atomics of the code before F3-23, and the averages then differ between one
+# restores the float atomics of the code before the fixed-point sums, and the averages then differ between one
 # thread and several.
 #
-# Review r1 (M1, M2): the same for the other sums over sites, in Float32 with CheckerboardCPM and
+# The same for the other sums over sites, in Float32 with CheckerboardCPM and
 # the device lifecycle on the CPU (as a device runs it): `surface` over a weighted lattice
 # neighborhood after divisions, `cluster_surface` of weighted compartments that divide, and
-# the compound writes of a `@convert` pass (`cs_r1_digests`). Their negative control is on
-# ROCm (test/gpu.jl), where the float atomics differ run to run; here it only shows that the
+# the compound writes of a `@convert` pass (`cs_site_sum_digests`). Their negative control is on
+# ROCm (gpu_fields_tests.jl), where the float atomics differ run to run; here it only shows that the
 # fixed-point path is the one taken.
 
 @testsetup module CellSumsSetup
@@ -32,12 +31,12 @@ isdefined(@__MODULE__, :JiangLike) || include(joinpath(@__DIR__, "fields_jiang_m
 include(joinpath(@__DIR__, "cell_sums_models.jl"))
 
 
-const CS_R1 = cs_r1_digests()
+const CS_SITE_SUMS = cs_site_sum_digests()
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "F3-23: cell averages are bitwise the same across run lengths (1 thread)" setup = [CellSumsSetup] tags = [:potts, :cell_sums] begin
-    @testset "F3-23: cell averages are bitwise the same across run lengths (1 thread)" begin
+@testitem "cell averages are bitwise the same across run lengths (1 thread)" setup = [CellSumsSetup] tags = [:potts, :cell_sums] begin
+    @testset "cell averages are bitwise the same across run lengths (1 thread)" begin
         @test 32^3 > CorePotts.Exec.HOST_GRAIN && 200^2 > CorePotts.Exec.HOST_GRAIN
         one = cs_digests()
         # the run length changes no bit; negative control (float atomics) differs
@@ -46,10 +45,10 @@ end
     end
 end
 
-@testitem "H5: F3-23 cell averages are bitwise the same at 1 and 4 threads (in-process)" setup = [CellSumsSetup] tags = [:multithreaded] begin
+@testitem "fixed-point cell averages are bitwise the same at 1 and 4 threads (in-process)" setup = [CellSumsSetup] tags = [:multithreaded] begin
     Threads.nthreads() >= 4 ||
         error("This testitem requires at least 4 Julia threads (got $(Threads.nthreads())); run GROUP=Multithreaded with `julia -t 4`")
-    @testset "H5: F3-23 cell averages are bitwise the same at 1 and 4 threads (in-process)" begin
+    @testset "fixed-point cell averages are bitwise the same at 1 and 4 threads (in-process)" begin
         @test 32^3 > CorePotts.Exec.HOST_GRAIN && 200^2 > CorePotts.Exec.HOST_GRAIN
         one_run = cs_digests1(false)
         four_run = cs_digests1(false; run = 1)
@@ -60,10 +59,10 @@ end
     end
 end
 
-@testitem "H5: threaded CheckerboardCPM Repeat invariants, Global veto, and negative control" setup = [CellSumsSetup] tags = [:multithreaded] begin
+@testitem "threaded CheckerboardCPM Repeat invariants, Global veto, and negative control" setup = [CellSumsSetup] tags = [:multithreaded] begin
     Threads.nthreads() >= 4 ||
         error("This testitem requires at least 4 Julia threads (got $(Threads.nthreads())); run GROUP=Multithreaded with `julia -t 4`")
-    @testset "H5: threaded CheckerboardCPM Repeat invariants, Global veto, and negative control" begin
+    @testset "threaded CheckerboardCPM Repeat invariants, Global veto, and negative control" begin
         @test cs_threaded_cb_invariants() == (true, true, true, true, true)
         gv = cs_threaded_cb_global_veto_check(CsThreadedCBGlobalVeto; threads = true)
         @test gv.nonzero_cells && gv.committed > 0
@@ -79,17 +78,17 @@ end
     end
 end
 
-@testitem "F3-23 r1: weighted surfaces, cluster surfaces and @convert writes" setup = [CellSumsSetup] tags = [:potts, :cell_sums] begin
-    @testset "F3-23 r1: weighted surfaces, cluster surfaces and @convert writes" begin
-        r1, (nw, nc) = CS_R1                                                 # (at 4 and 8 threads: above)
+@testitem "weighted surfaces, cluster surfaces and @convert writes" setup = [CellSumsSetup] tags = [:potts, :cell_sums] begin
+    @testset "weighted surfaces, cluster surfaces and @convert writes" begin
+        r1, (nw, nc) = CS_SITE_SUMS                                                 # (at 4 and 8 threads: above)
         @test nw > 100 && nc > 10                                            # both models divide
-        @test first(cs_r1_digests()) == r1
-        # review r2 (S1): the host lifecycle planner adds the same integer units as the device
+        @test first(cs_site_sum_digests()) == r1
+        # The host lifecycle planner adds the same integer units as the device
         # lifecycle, so the CPU's default path gives the same bits (weighted surface after 441
         # divisions, compartments after 34 cluster divisions). Control: with float atomics the
         # host's float recompute and the device lifecycle's float deltas differ.
-        @test first(cs_r1_digests(; host = true)) == r1
-        ch, cd = first(cs_r1_digests(; ctl = true, host = true)), first(cs_r1_digests(; ctl = true))
+        @test first(cs_site_sum_digests(; host = true)) == r1
+        ch, cd = first(cs_site_sum_digests(; ctl = true, host = true)), first(cs_site_sum_digests(; ctl = true))
         @test ch[1] == cd[1] && ch[2] != cd[2] && ch[4] != cd[4]
         # the trackers against a recount from σ, with a tolerance: copies add the float weights and
         # divisions their integer units, so a weighted tracker and a recount differ in the last
@@ -107,7 +106,7 @@ end
         finally
             CorePotts._FORCE_DEVICE_LIFECYCLE[] = f0
         end
-        # review r2 (N4): a state saved before the compound writes' scratch (no `#cv_w*` columns)
+        # a state saved before the compound writes' scratch (no `#cv_w*` columns)
         # runs after `remake`, which adds them; its result equals the fresh problem's
         pv = PottsProblem(CsConv(; name = :v), cs_conv_op(), (0, 30); T = Float32, seed = 7, capacity = 8)
         u0 = pv.u0
@@ -119,7 +118,7 @@ end
         @test haskey(qv.u0.cell, Symbol("#cv_wsum")) && size(qv.u0.cell[Symbol("#cv_wsum")], 1) == 2
         sv = solve(qv, CheckerboardCPM(); save_start = false).u[end]
         @test cs_bits(sv.model.tot) == r1[6]
-        # review r3 (N2): `reinit!` with the cell columns in another order at the same capacity says
+        # `reinit!` with the cell columns in another order at the same capacity says
         # so (it said "cell capacity 8, got 8"); a capacity that differs keeps its words
         integ = init(pv, CheckerboardCPM())
         ks = collect(keys(u0.cell))
@@ -135,7 +134,7 @@ end
         big = PottsProblem(CsConv(; name = :v), cs_conv_op(), (0, 30); T = Float32, seed = 7, capacity = 9).u0
         @test_throws ArgumentError reinit!(integ, big)
         # the float atomics give other sums (the path is taken): surface, cluster surface, tot, V_target
-        ctl = first(cs_r1_digests(; ctl = true))
+        ctl = first(cs_site_sum_digests(; ctl = true))
         @test ctl[2] != r1[2] && ctl[4] != r1[4] && ctl[6] != r1[6] && ctl[7] != r1[7]
     end
 end

@@ -1,7 +1,7 @@
 # Split from test/symbolic_tests.jl
 
-@testitem "replacement is by target; a changed cadence warns (D-045)" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "replacement is by target; a changed cadence warns (D-045)" begin
+@testitem "replacement is by target; a changed cadence warns" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "replacement is by target; a changed cadence warns" begin
         @potts_model CadenceBase begin
             @kinds medium A
             @variables n(model) = 0.0
@@ -23,8 +23,8 @@
 end
 
 
-@testitem "P6.0f per-rule cadence: counts against the oracle (square, hex, 3D; sequential, checkerboard)" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "P6.0f per-rule cadence: counts against the oracle (square, hex, 3D; sequential, checkerboard)" begin
+@testitem "per-rule cadence: counts against the oracle (square, hex, 3D; sequential, checkerboard)" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "per-rule cadence: counts against the oracle (square, hex, 3D; sequential, checkerboard)" begin
         for (label, sys_of, dims, prop) in (
                 ("square", (na, nb) -> RuleCadences(; name = :rc, na, nb), (48, 32), Moore(1)),
                 ("hex", (na, nb) -> RuleCadences(; name = :rc, na, nb, geometry = Hexagonal(), near = Hex(1)), (48, 32), Hex(1)),
@@ -44,8 +44,8 @@ end
 end
 
 
-@testitem "P6.0f per-rule cadence: generated gates" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "P6.0f per-rule cadence: generated gates" begin
+@testitem "per-rule cadence: generated gates" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "per-rule cadence: generated gates" begin
         # Every(1) and a shared cadence generate no modulo gate (zero cost when unused)
         @test !_has_any_modulo_gate(_trigger_ast(RuleCadences(; name = :rc)))
         @test !_has_any_modulo_gate(_trigger_ast(RuleCadences(; name = :rc, na = 3, nb = 3)))
@@ -58,8 +58,8 @@ end
 end
 
 
-@testitem "P6.0f per-rule cadence: API, errors" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "P6.0f per-rule cadence: API, errors" begin
+@testitem "per-rule cadence: API, errors" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "per-rule cadence: API, errors" begin
         @potts_model LinkCadence begin
             @kinds medium A
             @relationship bond(cell, cell) capacity = 1
@@ -102,8 +102,8 @@ end
 end
 
 
-@testitem "P6.0f per-rule cadence: only the firing rule writes the daughters' state" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "P6.0f per-rule cadence: only the firing rule writes the daughters' state" begin
+@testitem "per-rule cadence: only the firing rule writes the daughters' state" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "per-rule cadence: only the firing rule writes the daughters' state" begin
         σ = zeros(Int32, 48, 32); σ[2:13, 2:13] .= 1
         function run(sys, tspan; alg = SequentialCPM())
             u = solve(PottsProblem(sys, [ownership => σ, kind => [:ka]], tspan; capacity = 32), alg).u[end]
@@ -133,8 +133,8 @@ end
 end
 
 
-@testitem "P6.0f per-rule cadence: disjoint rules generate plain events" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "P6.0f per-rule cadence: disjoint rules generate plain events" begin
+@testitem "per-rule cadence: disjoint rules generate plain events" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "per-rule cadence: disjoint rules generate plain events" begin
         sys = RuleCadences(; name = :rc, na = 2, nb = 3)
         t = _trigger_ast(sys)
         @test !_has_ruled_event(t) && !_has_true_and(t)
@@ -149,8 +149,8 @@ end
 end
 
 
-@testitem "P6.0f per-rule cadence: absolute MCS after remake" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "P6.0f per-rule cadence: absolute MCS after remake" begin
+@testitem "per-rule cadence: absolute MCS after remake" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "per-rule cadence: absolute MCS after remake" begin
         σ, kinds = rule_cadence_state((48, 32))
         prob = PottsProblem(RuleCadences(; name = :rc, na = 2, nb = 3), [ownership => σ, kind => kinds], (0, 1); capacity = 128)
         oracle(n, t0, t1) = 2^count(m -> m % n == 0, t0:(t1 - 1))
@@ -161,8 +161,8 @@ end
 end
 
 
-@testitem "P6.0f per-rule cadence: cluster rules" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "P6.0f per-rule cadence: cluster rules" begin
+@testitem "per-rule cadence: cluster rules" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "per-rule cadence: cluster rules" begin
         σ, kinds, groups = compartment_state()
         prob = PottsProblem(ClusterCadences(; name = :cc), [ownership => σ, kind => kinds, cluster => groups], (0, 1); capacity = 128)
         @test prob.f.lifecycle.every == 1 && prob.f.lifecycle.rules === Val(true)
@@ -181,8 +181,8 @@ end
 end
 
 
-@testitem "P6.0f per-rule cadence: extend accumulates division rules and warns on a new cadence" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "P6.0f per-rule cadence: extend accumulates division rules and warns on a new cadence" begin
+@testitem "per-rule cadence: extend accumulates division rules and warns on a new cadence" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "per-rule cadence: extend accumulates division rules and warns on a new cadence" begin
         @potts_model CadenceDivBase begin
             @kinds medium ka kb
             @lattice Lattice((16, 16))
@@ -226,8 +226,8 @@ end
 end
 
 
-@testitem "P6.0f per-rule cadence survives @components" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "P6.0f per-rule cadence survives @components" begin
+@testitem "per-rule cadence survives @components" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "per-rule cadence survives @components" begin
         @potts_model CadenceComponents begin
             @kinds medium A
             @components cells(A) clock = clock
@@ -242,9 +242,9 @@ end
 end
 
 
-@testitem "P6.0v3: a cell update fuses with the lifecycle trigger only when legal" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
-    @testset "P6.0v3: a cell update fuses with the lifecycle trigger only when legal" begin
-        @potts_model P60v3Fuse begin
+@testitem "a cell update fuses with the lifecycle trigger only when legal" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "a cell update fuses with the lifecycle trigger only when legal" begin
+        @potts_model TriggerFuse begin
             @structural_parameters own_only = true
             @kinds medium A
             @variables g(cell) = 0.0
@@ -259,7 +259,7 @@ end
             @sweep Metropolis(; temperature = 1.0)
         end
 
-        @potts_model P60v3FuseNotLast begin
+        @potts_model TriggerFuseNotLast begin
             @kinds medium A
             @parameters k = 0.1
             @variables begin
@@ -292,9 +292,9 @@ end
         σ = zeros(Int32, 24, 24); σ[3:6, 3:6] .= 1; σ[15:18, 15:18] .= 2
         op = [ownership => σ, kind => [:A, :A]]
         cellphases(prob) = count(ph -> ph isa CorePotts.CellPhase, prob.f.phases.after_mcs)
-        own = PottsProblem(P60v3Fuse(; name = :f, own_only = true), op, (0, 8); capacity = 16)
+        own = PottsProblem(TriggerFuse(; name = :f, own_only = true), op, (0, 8); capacity = 16)
         @test own.f.lifecycle.before !== nothing && cellphases(own) == 0
-        for sys in (P60v3Fuse(; name = :f, own_only = false), P60v3FuseNotLast(; name = :f))
+        for sys in (TriggerFuse(; name = :f, own_only = false), TriggerFuseNotLast(; name = :f))
             prob = PottsProblem(sys, op, (0, 8); capacity = 16)
             @test prob.f.lifecycle.before === nothing
             @test cellphases(prob) >= 1

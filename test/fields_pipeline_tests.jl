@@ -6,7 +6,7 @@
 # (the models, `ownership`, `kind`, `fd_source_op`, `PottsDevices` and the Merks models are
 # `FieldsSetup`'s, the converted fields.jl part of the suite)
 
-# ROCm (F2 batch 2): with `POTTS_GPU=rocm`, every case on the device (CheckerboardCPM) against
+# ROCm: with `POTTS_GPU=rocm`, every case on the device (CheckerboardCPM) against
 # the same run on the CPU: σ equal, every site array within a relative 1e-5 (Float32) or 1e-12
 # (Float64) of its largest value
 @testitem "F2 guard (ROCm): the hard set on the device matches the CPU" setup = [FieldsSetup] tags = [:potts, :fields, :device] begin
@@ -54,10 +54,10 @@
     end
 end
 
-# F2-08a: a warm MCS of Merks at 500² (15 substeps, the field read by the CPM) allocates
+# A warm MCS of Merks at 500² (15 substeps, the field read by the CPM) allocates
 # nothing on the CPU (measured inside a function)
-@testitem "F2-08a: the Merks 500² warm MCS allocates nothing (CPU)" setup = [FieldsSetup] tags = [:potts, :fields] begin
-    @testset "F2-08a: the Merks 500² warm MCS allocates nothing (CPU)" begin
+@testitem "the Merks 500² warm MCS allocates nothing (CPU)" setup = [FieldsSetup] tags = [:potts, :fields] begin
+    @testset "the Merks 500² warm MCS allocates nothing (CPU)" begin
         warm(integ) = (step!(integ); step!(integ); @allocated step!(integ))
         σ = zeros(Int32, 500, 500); σ[200:215, 200:215] .= 1; σ[300:312, 280:300] .= 2
         prob = PottsProblem(MerksVasculogenesis(; name = :m, lattice = (500, 500)), [ownership => σ, kind => [:endothelial, :endothelial]],
@@ -68,11 +68,11 @@ end
     end
 end
 
-# F2-08b: Merks2006 has a masked field (its `kind == border` frame): the clamp at the step start
+# Merks2006 has a masked field (its `kind == border` frame): the clamp at the step start
 # runs every MCS, and a warm MCS at 500² still allocates nothing on the CPU (a `foreach` closure
 # over the clamps allocated 176 B per MCS on the coupled model's runtime)
-@testitem "F2-08b: the Merks2006 500² warm MCS (masked, clamped) allocates nothing (CPU)" setup = [FieldsSetup] tags = [:potts, :fields] begin
-    @testset "F2-08b: the Merks2006 500² warm MCS (masked, clamped) allocates nothing (CPU)" begin
+@testitem "the Merks2006 500² warm MCS (masked, clamped) allocates nothing (CPU)" setup = [FieldsSetup] tags = [:potts, :fields] begin
+    @testset "the Merks2006 500² warm MCS (masked, clamped) allocates nothing (CPU)" begin
         warm(integ) = (step!(integ); step!(integ); @allocated step!(integ))
         σ = zeros(Int32, 500, 500); σ[1, :] .= 1; σ[end, :] .= 1; σ[:, 1] .= 1; σ[:, end] .= 1
         σ[200:215, 200:215] .= 2; σ[300:312, 280:300] .= 3
@@ -83,11 +83,11 @@ end
     end
 end
 
-# F2-08c: Merks2008 reads `mcs` (its `mcs ≥ t_relax` gate) through the clock's slot, whose
+# Merks2008 reads `mcs` (its `mcs ≥ t_relax` gate) through the clock's slot, whose
 # launches derive their parameters at each launch with the MCS number: a warm MCS at 500²
 # still allocates nothing on the CPU
-@testitem "F2-08c: the Merks2008 500² warm MCS (mcs read) allocates nothing (CPU)" setup = [FieldsSetup] tags = [:potts, :fields] begin
-    @testset "F2-08c: the Merks2008 500² warm MCS (mcs read) allocates nothing (CPU)" begin
+@testitem "the Merks2008 500² warm MCS (mcs read) allocates nothing (CPU)" setup = [FieldsSetup] tags = [:potts, :fields] begin
+    @testset "the Merks2008 500² warm MCS (mcs read) allocates nothing (CPU)" begin
         warm(integ) = (step!(integ); step!(integ); @allocated step!(integ))
         σ = zeros(Int32, 500, 500); σ[1:2, :] .= 1; σ[(end - 1):end, :] .= 1; σ[:, 1:2] .= 1; σ[:, (end - 1):end] .= 1
         σ[200:215, 200:215] .= 2; σ[300:312, 280:300] .= 3

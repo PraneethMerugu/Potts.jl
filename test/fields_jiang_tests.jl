@@ -1,4 +1,4 @@
-# F3-18 (F3 design §5, v3 §7.3 (b)): a Jiang-like integration test. The structure of Jiang et
+# A Jiang-like integration test. The structure of Jiang et
 # al. 2005 (spec 06 §2.5): five fields on the lattice coarsened by 4 (paper p. 10), O₂ and
 # glucose consumed above their thresholds by the viable cells (the switch `max(u − u_T, 0)`),
 # lactate produced from both consumptions (it reads O₂ and glucose), a growth factor consumed
@@ -6,9 +6,9 @@
 # moving masked Dirichlet: the tumor-medium interface), BackwardEuler, and four field windows
 # per MCS between quarter sweeps (Fig. 3: `repeat(4, sweep(fraction = 1//4), fields)`). The
 # rates are the paper's ratios in lattice units, with O₂'s diffusion scaled so that its shift
-# `h²/(D dt)` on the coarse grid is about 0.022 (v3 §6.3). The cell average of O₂ is read through
+# `h²/(D dt)` on the coarse grid is about 0.022. The cell average of O₂ is read through
 # `integral(o) / volume`. With σ frozen the model equals B (`Potts.fields` → `discretize`) bitwise.
-# Base 392dd404 (~/lpwork/f3b6-nc-a.log): `lattice_level` is not an option of `variable`.
+# Before the fix (392dd404): `lattice_level` is not an option of `variable`.
 
 @testsetup module FieldsJiangSetup
 using Potts, Test
@@ -18,8 +18,8 @@ isdefined(@__MODULE__, :JiangLike) || include(joinpath(@__DIR__, "fields_jiang_m
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "F3-18: a Jiang-like model equals B bitwise (σ frozen, CPU)" setup = [FieldsJiangSetup] tags = [:potts, :fields_jiang] begin
-    @testset "F3-18: a Jiang-like model equals B bitwise (σ frozen, CPU)" begin
+@testitem "a Jiang-like model equals B bitwise (σ frozen, CPU)" setup = [FieldsJiangSetup] tags = [:potts, :fields_jiang] begin
+    @testset "a Jiang-like model equals B bitwise (σ frozen, CPU)" begin
         σ, kinds = jiang_state(JG_DIMS)
         @test Set(kinds) == Set([:N, :Q, :P])
         k = 2
@@ -42,7 +42,7 @@ end
         # the fields are not trivial: O₂ falls from the medium value into the spheroid; lactate is
         # produced; the inhibitor grows in the core
         o = a[end].o
-        @info "F3-18 (CPU, 32³ lattice, 8³ fields): O₂ $(extrema(o)), lactate max $(maximum(a[end].l)), inhibitor max $(maximum(a[end].inh))"
+        @info "(CPU, 32³ lattice, 8³ fields): O₂ $(extrema(o)), lactate max $(maximum(a[end].l)), inhibitor max $(maximum(a[end].inh))"
         @test maximum(o) == 0.08 && minimum(o) < 0.04
         @test maximum(a[end].l) > 0 && maximum(a[end].inh) > 0
         # the cell average of O₂ through the coarse read (`after_mcs` runs after the MCS's field windows)
@@ -53,14 +53,14 @@ end
     end
 end
 
-# F4-15 (user ruling 2026-11-11): the coupled model equals its own PDESystem (`JgPDE.jiang`)
+# The coupled model equals its own PDESystem (`JgPDE.jiang`)
 # solved by LatticePDE with `Potts.field_inputs(integ, pdesys)`. The kind bindings (`pq =>
 # ismember(kind, (P, Q))`, `kQ => kind == Q`, ...) and the PDESystem's Bool inputs fold by one rule
 # on the Coarse(4) grid, the block mean, so the two agree on the spheroid's rim, where blocks are
 # covered in part. This replaces the F2 guard's digests of this model (D-274).
-# Base 5e972579 (~/lpwork/f4F15/nc.log): the bindings are read at the block's owner.
-@testitem "F4-15: the Jiang-like model equals its PDESystem with field_inputs (blocks covered in part)" setup = [FieldsJiangSetup] tags = [:potts, :fields_jiang] begin
-    @testset "F4-15: the Jiang-like model equals its PDESystem with field_inputs (blocks covered in part)" begin
+# Before the fix (5e972579): the bindings are read at the block's owner.
+@testitem "the Jiang-like model equals its PDESystem with field_inputs (blocks covered in part)" setup = [FieldsJiangSetup] tags = [:potts, :fields_jiang] begin
+    @testset "the Jiang-like model equals its PDESystem with field_inputs (blocks covered in part)" begin
         σ, kinds = jiang_state(JG_DIMS)
         names = (:o, :g, :l, :gf, :inh)
         integ = init(PottsProblem(JiangLike(; name = :j), [ownership => σ, kind => kinds], (0, 3);
@@ -75,7 +75,7 @@ end
             inputs = collect(fi), u0 = [n => copy(Array(getproperty(current_state(integ).site, n))) for n in names], tspan = (0.0, 1.0)
         )
         s = Potts.LatticePDE.solve(prob, BackwardEuler(); dt = 0.25)
-        # F4-15 review should-fix 2 and F4-15b: an oracle independent of the lowering. The inhibitor's
+        # An oracle independent of the lowering. The inhibitor's
         # rate at u = 0 is its source 3 (Q + 2N), folded over each block's free children (the
         # mask is the medium), so the free volume times the rate, summed over the nodes, is 3 times
         # the exact count of Q + 2N sites off the medium (every such site: 1593, from σ and the
@@ -93,22 +93,22 @@ end
         for n in names
             got, want = s[n, length(s.t)], Array(getproperty(current_state(integ).site, n))
             @test maximum(abs, got .- want) <= 1e-14 * max(1.0, maximum(abs, want)) ||
-                  (println("F4-15 Jiang $n: ", maximum(abs, got .- want)); false)
+                  (println("Jiang $n: ", maximum(abs, got .- want)); false)
         end
     end
 end
 
-# Review r1 M3: lactate's source reads O₂ and glucose (switches of other rows' fields) and no
+# Lactate's source reads O₂ and glucose (switches of other rows' fields) and no
 # lactate, so it is known when lactate is solved after them: the default BackwardEuler operator
-# is exact, newton = 2 (the switch rows) with no warning, and equals newton = 12 (base cb20be97:
-# the term is unseen, newton = 4 and the warning; ~/lpwork/f3b6r-nc-m3.log)
-@testitem "F3-18: the Jiang-like default BackwardEuler is exact (newton = 2, no warning)" setup = [FieldsJiangSetup] tags = [:potts, :fields_jiang] begin
-    @testset "F3-18: the Jiang-like default BackwardEuler is exact (newton = 2, no warning)" begin
+# is exact, newton = 2 (the switch rows) with no warning, and equals newton = 12 (before the
+# fix, cb20be97: the term is unseen, newton = 4 and the warning)
+@testitem "the Jiang-like default BackwardEuler is exact (newton = 2, no warning)" setup = [FieldsJiangSetup] tags = [:potts, :fields_jiang] begin
+    @testset "the Jiang-like default BackwardEuler is exact (newton = 2, no warning)" begin
         σ, kinds = jiang_state(JG_DIMS)
         @test_logs min_level = Base.CoreLogging.Warn init(PottsProblem(JiangLike(; name = :j), [ownership => σ, kind => kinds], (0, 1);
             field_solver = BackwardEuler()), SequentialCPM(); save_start = false)
-        # F3-22 review r1: lactate reads O₂ and glucose one way (they do not read it back), so the
-        # default ExplicitEuler count is bounded (D-C7a item 2 amended; base 9afaac05: refused with
+        # Lactate reads O₂ and glucose one way (they do not read it back), so the
+        # default ExplicitEuler count is bounded (before 9afaac05: refused with
         # the route `field_solver = BackwardEuler()`, now checked on a loop in audit.jl)
         m = try
             PottsProblem(JiangLike(; name = :j), [ownership => σ, kind => kinds], (0, 1)); ""
@@ -144,7 +144,7 @@ end
         @test Potts.SciMLBase.check_error(a2) == Potts.SciMLBase.ReturnCode.Success   # healthy, in progress
         @test Potts.LatticeFields.Problems.field_stats(a2).newton_budget == 0
         b = run(BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 12), linsolve = tight))
-        # F4-15b (review; user ruling 2026-11-13): the acceptance is
+        # The acceptance is
         # `||δ_k||∞ <= 1e-3 * ||u_k - u^n||∞ + 10 eps(T) ||u_k||∞` (implicit.jl), relative to the step
         # increment; the distance from the two-step iterate to the 12-step reference is the remaining
         # convergence error, not the accepted update. The bound 1e-5 * max(1, |b|) is the user's policy
@@ -157,15 +157,15 @@ end
     end
 end
 
-# F4-15b containment (coordinator ruling 2026-11-12, replacing the withdrawn value-level
-# containment inside the 86 partial blocks). The fold acts on each node's row and on the node
+# Containment (this replaces a withdrawn value-level containment inside the 86 partial
+# blocks). The fold acts on each node's row and on the node
 # values the operator reads, so a fully free node one stencil step from a node the majority rule
 # held must move: its Laplacian reads that neighbour's value (v under the majority rule, the free
 # part w here). The exact closure is the 86 partial blocks plus the free nodes within one in-box
 # stencil step of a majority-held node; nothing in the 35 fully free blocks beyond that closure
 # and nothing in the 391 fully masked blocks may differ.
-@testitem "F4-15b: the fold differs on partial blocks; one step moves the one-hop closure" setup = [FieldsJiangSetup] tags = [:potts, :fields_jiang] begin
-    @testset "F4-15b: the fold differs on partial blocks; one step moves the one-hop closure" begin
+@testitem "the fold differs on partial blocks; one step moves the one-hop closure" setup = [FieldsJiangSetup] tags = [:potts, :fields_jiang] begin
+    @testset "the fold differs on partial blocks; one step moves the one-hop closure" begin
         σ, kinds = jiang_state(JG_DIMS)
         names = (:o, :g, :l, :gf, :inh)
         integ = init(PottsProblem(JiangLike(; name = :j), [ownership => σ, kind => kinds], (0, 3);
@@ -190,7 +190,7 @@ end
         pnew = Potts.LatticePDE.discretize(pde, disc; inputs = collect(fi), u0 = u0, tspan = (0.0, 1e-6))
         # the majority twin: the same model with the mask at the coarse node (no fine read), so every
         # fold is the whole-block mean and a node the majority rule holds (more than half medium) is
-        # held at v. This is the D-F4-15 semantics, built from the same fine inputs.
+        # held at v. These are the majority-rule semantics, built from the same fine inputs.
         medm = [nm[I] > nt ÷ 2 for I in CartesianIndices(nb)]
         pmaj = Potts.LatticePDE.discretize(JgPDE.jiang(JG_DIMS; coarsemask = true), disc;
             inputs = vcat([k2 => v2 for (k2, v2) in collect(fi) if k2 != :med], [:medc => medm]),
@@ -215,6 +215,6 @@ end
         end
         # the enumeration (printed, not re-derived: `closure` is by construction the free nodes with a
         # held neighbour, so an assertion that each has one would be tautological)
-        @info "F4-15b one-step closure" [Tuple(I) for I in findall(closure)]
+        @info "one-step closure" [Tuple(I) for I in findall(closure)]
     end
 end

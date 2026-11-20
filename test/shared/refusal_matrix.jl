@@ -1,10 +1,10 @@
-# The refusal matrix of the W-lite LA container (v3 §7.1, C4 gate): every SciMLBase problem
+# The refusal matrix of the system container: every SciMLBase problem
 # constructor MTKBase extends, plus `JumpProblem`, in 3 plain argument shapes, `{true}` and
 # `{true, FullSpecialize}` (16 × 5 = 80 routes), and 19 MTK paths, on one `PottsSystem`.
 # Each route is REFUSED (an `ArgumentError` naming `PottsProblem`), LOUD (any other exception)
-# or BUILT (returns). Included by test/wlite.jl and by its negative-control subprocess
-# (test/wlite_negctl.jl), which runs it with the refusal methods deleted.
-module WLiteMatrix
+# or BUILT (returns). Included by system_container_tests.jl and by its negative-control subprocess
+# (test/system_refusal_negctl.jl), which runs it with the refusal methods deleted.
+module RefusalMatrix
 
 using Potts
 const MTKB = Potts.ModelingToolkitBase

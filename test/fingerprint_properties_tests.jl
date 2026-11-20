@@ -1,7 +1,7 @@
-# Property-based tests for `prob.f.fingerprint` (TS-R2 §2.1, R2):
-# sensitivity across every semantic input, invariance under cosmetic changes, coverage of
-# published PottsModels and fixtures, and negative controls for P6.0aq, P6.0ar, P6.0p,
-# P6.0c2, and F4-E15.
+# Property-based tests for `prob.f.fingerprint`: sensitivity across every semantic input,
+# invariance under cosmetic changes, coverage of published PottsModels and fixtures, and
+# negative controls for inputs a naive hash would drop (acceptance law, proposal, phase
+# cadence, captured closure state).
 
 @testsetup module FPPropsSetup
 using Potts, PottsModels, Test
@@ -278,8 +278,8 @@ end
     end
 end
 
-@testitem "fingerprint negative controls (P6.0aq, P6.0ar, P6.0p, P6.0c2, F4-E15)" setup = [FPPropsSetup] tags = [:potts, :fingerprint] begin
-    @testset "fingerprint negative controls (P6.0aq, P6.0ar, P6.0p, P6.0c2, F4-E15)" begin
+@testitem "fingerprint negative controls" setup = [FPPropsSetup] tags = [:potts, :fingerprint] begin
+    @testset "fingerprint negative controls" begin
         σ = zeros(Int32, 10, 10); σ[3:5, 3:5] .= 1
         op = [ownership => σ, kind => [:cell]]
 
@@ -310,7 +310,7 @@ end
             end
         end
 
-        # P6.0aq: acceptance law must enter the fingerprint (a naive hash omitting law fails)
+        # Acceptance law must enter the fingerprint (a naive hash omitting law fails)
         sys_m = NCBase(; name = :m, law = :metropolis)
         sys_b = NCBase(; name = :m, law = :barker)
         fp_m = PottsProblem(sys_m, op, (0, 2)).f.fingerprint
@@ -328,7 +328,7 @@ end
         )
         @test naive_no_law(sys_m) == naive_no_law(sys_b)   # negative control: omitting law collides
 
-        # P6.0ar: non-default proposal relation must enter the fingerprint
+        # Non-default proposal relation must enter the fingerprint
         sys_vn = NCBase(; name = :m, proposal_rel = VonNeumann(1))
         sys_mo = NCBase(; name = :m, proposal_rel = Moore(1))
         @test PottsProblem(sys_vn, op, (0, 2)).f.fingerprint !=
@@ -345,11 +345,11 @@ end
         )
         @test naive_no_prop(sys_vn) == naive_no_prop(sys_mo)  # negative control: omitting proposal collides
 
-        # P6.0p: phase cadence (every = 1 vs every = 2) must enter the fingerprint
+        # Phase cadence (every = 1 vs every = 2) must enter the fingerprint
         @test PottsProblem(NCBase(; name = :a, divide_every = 1), op, (0, 2)).f.fingerprint !=
             PottsProblem(NCBase(; name = :b, divide_every = 2), op, (0, 2)).f.fingerprint
 
-        # P6.0c2: closure session token binding (distinct closure values get distinct fingerprints)
+        # Closure session token binding (distinct closure values get distinct fingerprints)
         f1 = x -> x + 1.0
         f2 = x -> x + 2.0
         c1 = Potts._canonical(Adaptive(Potts.RK4(); fn = f1))
@@ -375,7 +375,7 @@ end
         fp_a2 = PottsProblem(NCAdapt(; name = :m), op, (0, 2); ode_solver = Adaptive(Potts.RK4(); fn = b2)).f.fingerprint
         @test fp_a1 != fp_a2
 
-        # F4-E15: anonymous neighborhood weight functions with different bodies produce distinct
+        # Anonymous neighborhood weight functions with different bodies produce distinct
         # fingerprints, and identical bodies produce equal fingerprints
         w1 = o -> 1.0 / sum(abs2, o)
         w1b = o -> 1.0 / sum(abs2, o)

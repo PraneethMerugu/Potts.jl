@@ -37,10 +37,10 @@ end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "TS2-2: PottsProblem SciML interface conformance" setup = [PottsInterfaceSetup] tags = [:potts] begin
+@testitem "PottsProblem SciML interface conformance" setup = [PottsInterfaceSetup] tags = [:potts] begin
     SS = Potts.SciMLStructures
     SII = Potts.SymbolicIndexingInterface
-    @testset "TS2-2: PottsProblem SciML interface conformance" begin
+    @testset "PottsProblem SciML interface conformance" begin
         prob = PottsProblem(ScimlConforming(; name = :sc), sciml_op(), (0, 6); seed = 11)
         for alg in (SequentialCPM(), CheckerboardCPM())
             sol_solve = solve(prob, alg)
@@ -142,8 +142,8 @@ end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "TS2-3: user boundary refusals carry diagnosis and remedy" setup = [BoundaryRefusalSetup] tags = [:potts] begin
-    @testset "TS2-3: user boundary refusals carry diagnosis and remedy" begin
+@testitem "user boundary refusals carry diagnosis and remedy" setup = [BoundaryRefusalSetup] tags = [:potts] begin
+    @testset "user boundary refusals carry diagnosis and remedy" begin
         σ = zeros(Int32, 8, 8); σ[3:4, 3:4] .= 1
         prob = PottsProblem(VecParamModel(; name = :sc), [ownership => σ, kind => [:A]], (0, 2))
         @test_throws ArgumentError remake(prob; bogus_kw = 1)

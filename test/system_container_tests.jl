@@ -1,8 +1,8 @@
-# The W-lite LA container (v3 §7.1, C4): read access, show, property forwarding, SII,
+# The container around MTK's System that a `PottsSystem` is: read access, show, property forwarding, SII,
 # refusal matrix, negative control, 18-method boundary, piracy, and getfield behavioral check.
 
-@testitem "W-lite A: read access" setup = [WliteSetup] tags = [:potts, :wlite] begin
-    @testset "W-lite A: read access" begin
+@testitem "system container: read access" setup = [SystemContainerSetup] tags = [:potts, :system_container] begin
+    @testset "system container: read access" begin
         W, I, R = W_all, Potts.inner(W_all), complete(inner_all)
         @test W isa WL_MTKB.AbstractSystem && iscomplete(I) && iscomplete(W)     # complete, as its inner
         @test isequal(equations(W), equations(I))                                # A1
@@ -18,8 +18,8 @@
     end
 end
 
-@testitem "W-lite B: show" setup = [WliteSetup] tags = [:potts, :wlite] begin
-    @testset "W-lite B: show" begin
+@testitem "system container: show" setup = [SystemContainerSetup] tags = [:potts, :system_container] begin
+    @testset "system container: show" begin
         s = sprint(show, MIME"text/plain"(), W_all)
         @test occursin("PottsSystem allparts", s) && occursin("fields: PDESystem", s) && occursin("decay₊yd", s)   # B1
         @test !occursin("fields:", sprint(show, MIME"text/plain"(), W_empty))
@@ -28,48 +28,48 @@ end
     end
 end
 
-@testitem "W-lite C: sys.x" setup = [WliteSetup] tags = [:potts, :wlite] begin
-    @testset "W-lite C: sys.x" begin
+@testitem "system container: sys.x" setup = [SystemContainerSetup] tags = [:potts, :system_container] begin
+    @testset "system container: sys.x" begin
         W, I = W_all, Potts.inner(W_all)
         @test isequal(W.xv, xv) && isequal(W.a, a)                                       # C1, C2
         @test any(isequal(unwrap(W.decay.yd)), unknowns(W))                              # C3
-        @test wl_agree(s -> getproperty(s, Symbol("decay₊yd")), W, I)                    # C4
+        @test container_agree(s -> getproperty(s, Symbol("decay₊yd")), W, I)                    # C4
         @test any(isequal(unwrap(W.decay.kd)), parameters(W))                            # C5
         @test_throws ArgumentError W.nope                                                # C6
         @test isequal(W.t, Potts.t)                                                      # C7
     end
 end
 
-@testitem "W-lite D: SymbolicIndexingInterface" setup = [WliteSetup] tags = [:potts, :wlite] begin
-    @testset "W-lite D: SymbolicIndexingInterface" begin
+@testitem "system container: SymbolicIndexingInterface" setup = [SystemContainerSetup] tags = [:potts, :system_container] begin
+    @testset "system container: SymbolicIndexingInterface" begin
         W, I = W_all, Potts.inner(W_all)
         uks, pps = unknowns(I), parameters(I)
         prob = WL_MTKB.ODEProblem(mtkcompile(I; inputs = [volume]), [volume => 1.0], (0.0, 1.0))
         @test WL_SII.is_time_dependent(W) === true                                                       # D1
         @test isequal(WL_SII.independent_variable_symbols(W), [unwrap(Potts.t)])                         # D2
-        @test all(u -> wl_agree(s -> WL_SII.is_variable(s, u), W, I), uks) && all(u -> WL_SII.is_variable(W, u), uks)   # D3
-        @test all(u -> wl_agree(s -> WL_SII.variable_index(s, u), W, I), uks)                            # D4
-        @test all(p -> wl_agree(s -> WL_SII.is_parameter(s, p), W, I), pps) && all(p -> WL_SII.is_parameter(W, p), pps) # D5
-        @test all(p -> wl_agree(s -> WL_SII.parameter_index(s, p), W, I), pps)                           # D6
-        @test wl_agree(WL_SII.variable_symbols, W, I)                                                    # D7
-        @test wl_agree(WL_SII.parameter_symbols, W, I)                                                   # D8
-        @test wl_agree(s -> WL_SII.is_observed(s, unwrap(excess)), W, I)                                 # D9
-        @test wl_agree(s -> Dict(WL_SII.default_values(s)), W, I)                                        # D10
-        @test wl_agree(WL_SII.all_variable_symbols, W, I)                                                # D11
+        @test all(u -> container_agree(s -> WL_SII.is_variable(s, u), W, I), uks) && all(u -> WL_SII.is_variable(W, u), uks)   # D3
+        @test all(u -> container_agree(s -> WL_SII.variable_index(s, u), W, I), uks)                            # D4
+        @test all(p -> container_agree(s -> WL_SII.is_parameter(s, p), W, I), pps) && all(p -> WL_SII.is_parameter(W, p), pps) # D5
+        @test all(p -> container_agree(s -> WL_SII.parameter_index(s, p), W, I), pps)                           # D6
+        @test container_agree(WL_SII.variable_symbols, W, I)                                                    # D7
+        @test container_agree(WL_SII.parameter_symbols, W, I)                                                   # D8
+        @test container_agree(s -> WL_SII.is_observed(s, unwrap(excess)), W, I)                                 # D9
+        @test container_agree(s -> Dict(WL_SII.default_values(s)), W, I)                                        # D10
+        @test container_agree(WL_SII.all_variable_symbols, W, I)                                                # D11
         @test WL_SII.is_variable(W, W.decay.yd)                                                          # D12
         @test WL_SII.is_independent_variable(W, Potts.t)                                                 # D13
         @test prob[W.xv] == 2.0 && prob.ps[W.a] == 0.1                                                   # D14
         @test prob[W.decay.yd] == 1.0                                                                    # D15
-        @test wl_agree(s -> WL_SII.getu(s, W.xv)(prob), W, I)                                            # D16
-        @test wl_agree(s -> WL_SII.getp(s, W.a)(prob), W, I)                                             # D17
-        @test all(p -> wl_agree(s -> WL_SII.is_timeseries_parameter(s, p), W, I), pps)                   # D18
-        @test wl_agree(s -> WL_SII.variable_index(s, :xv), W, I)                                         # D19
-        @test wl_agree(s -> WL_SII.parameter_index(s, :a), W, I)                                         # D20
-        @test wl_agree(s -> WL_SII.is_parameter(s, WL_SII.parameter_index(I, a)), W, I)                  # D21
-        @test wl_agree(WL_SII.all_symbols, W, I)                                                         # D22
-        @test all(p -> wl_agree(s -> WL_SII.timeseries_parameter_index(s, p), W, I), pps)                # D23
-        @test wl_agree(s -> WL_SII.getu(s, W.xv + 2 * W.a)(prob), W, I)                                  # D24
-        @test wl_agree(s -> WL_SII.getp(s, 2 * W.a)(prob), W, I)                                         # D25
+        @test container_agree(s -> WL_SII.getu(s, W.xv)(prob), W, I)                                            # D16
+        @test container_agree(s -> WL_SII.getp(s, W.a)(prob), W, I)                                             # D17
+        @test all(p -> container_agree(s -> WL_SII.is_timeseries_parameter(s, p), W, I), pps)                   # D18
+        @test container_agree(s -> WL_SII.variable_index(s, :xv), W, I)                                         # D19
+        @test container_agree(s -> WL_SII.parameter_index(s, :a), W, I)                                         # D20
+        @test container_agree(s -> WL_SII.is_parameter(s, WL_SII.parameter_index(I, a)), W, I)                  # D21
+        @test container_agree(WL_SII.all_symbols, W, I)                                                         # D22
+        @test all(p -> container_agree(s -> WL_SII.timeseries_parameter_index(s, p), W, I), pps)                # D23
+        @test container_agree(s -> WL_SII.getu(s, W.xv + 2 * W.a)(prob), W, I)                                  # D24
+        @test container_agree(s -> WL_SII.getp(s, 2 * W.a)(prob), W, I)                                         # D25
         # a getter built from the model reads through the problem's own index (the inner System
         # is not the compiled one the problem was built from)
         @test WL_SII.getu(W, [W.xv, W.decay.yd])(prob) == WL_SII.getu(prob, [W.xv, W.decay.yd])(prob)  # D26
@@ -79,8 +79,8 @@ end
     end
 end
 
-@testitem "W-lite E: template compile on the inner" setup = [WliteSetup] tags = [:potts, :wlite] begin
-    @testset "W-lite E: template compile on the inner" begin
+@testitem "system container: template compile on the inner" setup = [SystemContainerSetup] tags = [:potts, :system_container] begin
+    @testset "system container: template compile on the inner" begin
         I = Potts.inner(W_all)
         function du_of(sys)
             p = WL_MTKB.ODEProblem(sys, [volume => 1.0], (0.0, 1.0))
@@ -95,10 +95,10 @@ end
     end
 end
 
-@testitem "W-lite F: refusal matrix (probe models)" setup = [WliteSetup] tags = [:potts, :wlite] begin
-    @testset "W-lite F: refusal matrix (probe models)" begin
+@testitem "system container: refusal matrix (probe models)" setup = [SystemContainerSetup] tags = [:potts, :system_container] begin
+    @testset "system container: refusal matrix (probe models)" begin
         for W in (W_all, W_empty)
-            m = WLiteMatrix.matrix(W, decay)
+            m = RefusalMatrix.matrix(W, decay)
             @test length(m) == 99
             @test isempty(filter(p -> occursin("Problem", first(p)) && last(p) === :BUILT, m))          # F1: no problem builds
             @test all(
@@ -108,42 +108,42 @@ end
                 )
             )
             built = WL_BY_DESIGN_RAW[nameof(W)]
-            @test sort(WLiteMatrix.built(m)) == sort(built)                                            # F2
+            @test sort(RefusalMatrix.built(m)) == sort(built)                                            # F2
             @test all(l -> Dict(m)[l] === :LOUD, setdiff(WL_LOUD_REQUIRED, built))                     # F3: no hang, loud
-            @test WLiteMatrix.tally(m) == Dict(:REFUSED => 80, :LOUD => 19 - length(built), :BUILT => length(built))
+            @test RefusalMatrix.tally(m) == Dict(:REFUSED => 80, :LOUD => 19 - length(built), :BUILT => length(built))
             @test_throws Potts.PottsCompileError mtkcompile(W)
         end
     end
 end
 
-@testitem "W-lite F: names, strings and symbols after the system are refused (C4 review S1)" setup = [WliteSetup] tags = [:potts, :wlite] begin
-    @testset "W-lite F: names, strings and symbols after the system are refused (C4 review S1)" begin
+@testitem "system container: names, strings and symbols after the system are refused" setup = [SystemContainerSetup] tags = [:potts, :system_container] begin
+    @testset "system container: names, strings and symbols after the system are refused" begin
         for W in (W_all, W_empty, PottsModels.GranerGlazier(; name = :gg))
-            sh = WLiteMatrix.shapes(W)
+            sh = RefusalMatrix.shapes(W)
             @test length(sh) == 16 * 5 * 3 + 2
             bad = filter(p -> last(p) !== :REFUSED, sh)
-            isempty(bad) || @info "W-lite shapes not refused" bad
+            isempty(bad) || @info "shapes not refused" bad
             @test isempty(bad)
         end
     end
 end
 
-@testitem "W-lite F: refusal matrix on every published model" setup = [WliteSetup] tags = [:potts, :wlite] begin
-    @testset "W-lite F: refusal matrix on every published model" begin
+@testitem "system container: refusal matrix on every published model" setup = [SystemContainerSetup] tags = [:potts, :system_container] begin
+    @testset "system container: refusal matrix on every published model" begin
         for n in WL_PUBLISHED
             W = getfield(PottsModels, n)(; name = :m)
-            m = WLiteMatrix.matrix(W, decay)
-            @test WLiteMatrix.tally(m) == Dict(:REFUSED => 80, :LOUD => 19 - length(WL_BY_DESIGN), :BUILT => length(WL_BY_DESIGN))
-            @test sort(WLiteMatrix.built(m)) == sort(WL_BY_DESIGN)
+            m = RefusalMatrix.matrix(W, decay)
+            @test RefusalMatrix.tally(m) == Dict(:REFUSED => 80, :LOUD => 19 - length(WL_BY_DESIGN), :BUILT => length(WL_BY_DESIGN))
+            @test sort(RefusalMatrix.built(m)) == sort(WL_BY_DESIGN)
             @test mtkcompile(W) isa CompiledPottsSystem
         end
     end
 end
 
-@testitem "W-lite F: negative control (refusal loop deleted)" setup = [WliteSetup] tags = [:potts, :wlite, :subprocess] begin
-    @testset "W-lite F: negative control (refusal loop deleted)" begin
+@testitem "system container: negative control (refusal loop deleted)" setup = [SystemContainerSetup] tags = [:potts, :system_container, :subprocess] begin
+    @testset "system container: negative control (refusal loop deleted)" begin
         out = read(pipeline(addenv(`$(Base.julia_cmd()) --startup-file=no --project=$(Base.active_project()) $(joinpath(@__DIR__,
-        "wlite_negctl.jl"))`, "JULIA_PKG_GC_AUTO" => "false"); stderr = devnull), String)
+        "system_refusal_negctl.jl"))`, "JULIA_PKG_GC_AUTO" => "false"); stderr = devnull), String)
         lines = filter(startswith("NEGCTL "), split(out, '\n'))
         @test length(lines) == length(WL_PUBLISHED)
         expected = sort(
@@ -165,8 +165,8 @@ end
     end
 end
 
-@testitem "W-lite G: the owned methods, piracy" setup = [WliteSetup] tags = [:potts, :wlite] begin
-    @testset "W-lite G: the owned methods, piracy" begin
+@testitem "system container: the owned methods, piracy" setup = [SystemContainerSetup] tags = [:potts, :system_container] begin
+    @testset "system container: the owned methods, piracy" begin
         @test isempty(Aqua.Piracy.hunt(Potts))                                                          # G1
         T = PottsSystem
         owned = Method[]
@@ -224,15 +224,15 @@ end
                 any(==(PottsSystem), Base.unwrap_unionall(m.sig).parameters)
         ]
         @test length(scanned) == 28 && all(m -> m in owned || m.name === :extend, scanned)
-        @test length(WLiteMatrix.refusal_methods()) == 58
+        @test length(RefusalMatrix.refusal_methods()) == 58
         @test isempty(filter(((a, b),) -> a.module === Potts || b.module === Potts, Test.detect_ambiguities(Potts; recursive = true)))
     end
 end
 
-@testitem "W-lite: internal access uses getfield (shadowed inner/part/fields properties)" setup = [WliteSetup] tags = [:potts, :wlite] begin
-    @testset "W-lite: internal access uses getfield (shadowed inner/part/fields properties)" begin
-        base = WLiteShadow(; name = :sh)
-        comp = Potts.component(:fields, WLiteC9.decay(; name = :fields), base)
+@testitem "system container: internal access uses getfield (shadowed inner/part/fields properties)" setup = [SystemContainerSetup] tags = [:potts, :system_container] begin
+    @testset "system container: internal access uses getfield (shadowed inner/part/fields properties)" begin
+        base = ContainerShadow(; name = :sh)
+        comp = Potts.component(:fields, ComposeSys.decay(; name = :fields), base)
         W = compose(base, comp)
         # User properties resolve to the model's quantity / parameter / subsystem, not PottsSystem fields
         @test isequal(unwrap(W.inner), unwrap(base.inner))

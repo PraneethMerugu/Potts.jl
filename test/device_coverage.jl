@@ -8,7 +8,7 @@ using Test
 using CorePotts: CorePotts
 
 # name => why the ROCm GPU group cannot compile it (empty since the claiming checkerboard's
-# bodies went with it, P6.0bl)
+# bodies went with it)
 const ALLOWLIST = Dict{String, String}()
 
 @testset "device IR: every CorePotts kernel and launch body is scanned" begin

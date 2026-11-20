@@ -6,7 +6,7 @@ using Potts: CorePotts
 isdefined(@__MODULE__, :PottsDevices) || include(joinpath(@__DIR__, "shared", "devices.jl"))
 isdefined(@__MODULE__, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
 
-# the field models' PDESystems (F4-B4t): a kind table, a CPM read and a parameter expression
+# the field models' PDESystems: a kind table, a CPM read and a parameter expression
 # that a PDESystem does not hold are bound inputs (`dk => δ[kind]`)
 module AuPDE
     using ..FieldPDE

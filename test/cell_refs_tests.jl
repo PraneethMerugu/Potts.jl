@@ -1,4 +1,4 @@
-# Cell references (R6, P6.5a): regressions found in review of the D-231 implementation. The
+# Cell references (R6): regressions found in review of the D-231 implementation. The
 # specification is the frozen acceptance test lib/PottsModels/test/acceptance/cell_references_tests.jl;
 # these cover forms it does not reach.
 
@@ -254,8 +254,8 @@ end
 
 
 # `ifelse` with a reference in one branch reads as a reference, so its other branch must be a
-# cell index too: a site index (`target`) would be dereferenced as a cell slot (review of
-# P6.5a). Negative control: the same `ifelse` with a cell index (`old`, 0) builds and runs.
+# cell index too: a site index (`target`) would be dereferenced as a cell slot. Negative
+# control: the same `ifelse` with a cell index (`old`, 0) builds and runs.
 @potts_model CRSiteBranch begin
     @kinds medium ka
     @variables partner(cell)::CellRef
@@ -431,8 +431,8 @@ end
     end
 end
 
-@testitem "the D-209 refusal through a reference names the alternatives (E8)" setup = [CellRefsSetup] tags = [:potts, :cell_refs] begin
-    @testset "the D-209 refusal through a reference names the alternatives (E8)" begin
+@testitem "the refusal of an unbound cell read through a reference names the alternatives" setup = [CellRefsSetup] tags = [:potts, :cell_refs] begin
+    @testset "the refusal of an unbound cell read through a reference names the alternatives" begin
         err = try
             PottsProblem(CRBadVolume(; name = :bv), [ownership => CR_σ, :partner => [2, 3, 1]], (0, 1))
             nothing

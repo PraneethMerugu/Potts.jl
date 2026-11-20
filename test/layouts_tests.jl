@@ -1,4 +1,4 @@
-# Layouts (P6.1a): spec-level properties with independent checks (D-048).
+# Layouts: spec-level properties with independent checks (D-048).
 
 
 @testitem "layouts: Tiling" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
@@ -193,7 +193,7 @@ end
         # a lattice domain: cells must lie inside it
         lat = Lattice((10, 10); domain = OnIndices(x -> x[1] <= 5))
         @test _op(layout(Tiling((2, 2); region = (1:5, 1:10), kinds = [:a]), lat), ownership)[6:end, :] == zeros(Int32, 5, 10)
-        @test _op(layout(Frame(:w), lat), ownership) == _frame_oracle(lat.mask, (true, true), 1)   # P6.1a2 (periodic)
+        @test _op(layout(Frame(:w), lat), ownership) == _frame_oracle(lat.mask, (true, true), 1)   # periodic
         # the same domain from a model's @lattice (LatticeSpec path)
         dsys = DomainLayoutProbe(; name = :d)
         @test _op(layout(Tiling((2, 2); region = (1:5, 1:10), kinds = [:cell]), dsys), ownership)[6:end, :] == zeros(Int32, 5, 10)
@@ -204,9 +204,9 @@ end
     end
 end
 
-@testitem "layouts: Frame on a lattice domain (P6.1a2)" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+@testitem "layouts: Frame on a lattice domain" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
     using Potts.Layouts
-    @testset "layouts: Frame on a lattice domain (P6.1a2)" begin
+    @testset "layouts: Frame on a lattice domain" begin
         sys = DiskFrameProbe(; name = :disk)
         mask = Potts.lattice(sys).domain
         for w in (1, 2)
@@ -311,7 +311,7 @@ end
         t = best_under(() -> layout(overlay(Tiling((3, 3); kinds = [:a]), Tiling((1, 1); spacing = 2, region = (2:299, 2:299),
             kinds = [:b])), (300, 300)), 5)
         @test t < 5
-        # P6.1a4: the lattice-sized `visited` array is allocated only for a flood fill. Every
+        # The lattice-sized `visited` array is allocated only for a flood fill. Every
         # cut cell below is a box trimmed by a frame, so the check allocates only per-cell
         # buffers (4096 cells), far below the 80³ Int32 array (2 MB).
         lat = Potts.lattice_spec((80, 80, 80); boundary = Closed())

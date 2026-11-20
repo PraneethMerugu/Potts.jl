@@ -1,4 +1,4 @@
-# The discrete-time component fixtures (P6.0k, D-065 Q9): MTK clocked (`Shift`) systems
+# The discrete-time component fixtures (D-065): MTK clocked (`Shift`) systems
 # lowered into one per-cell tick phase per clock. Both `SymbolicSetup` and `QaSetup` include this
 # file: the QA items build `QADiscreteScratch`/`QADiscreteKinds` out of these systems and out of
 # `DiscreteHybrid`, `discrete_counter_model` and `_discrete_blocks`, and an item's setup cannot
@@ -8,7 +8,7 @@ using Potts.ModelingToolkitBase: ShiftIndex, Clock, System, @parameters, @named
 
 isdefined(@__MODULE__, :_tc) || const _tc = Potts.t      # Potts.t: the model time variable
 
-# Discrete-time components (P6.0k, D-065 Q9): MTK clocked (`Shift`) systems lowered into one
+# Discrete-time components (D-065): MTK clocked (`Shift`) systems lowered into one
 # per-cell tick phase per clock, after the ODEs. Oracles are hand-computed sequences.
 using Potts.ModelingToolkitBase: ShiftIndex, Clock
 
@@ -119,7 +119,7 @@ const _DISCRETE_ALGS = (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; 
 
 
 # Several tick phases (cell and model scope, clocks that coincide) read only pre-tick values:
-# the result does not depend on declaration order (review P6.0k round 1).
+# the result does not depend on declaration order.
 Potts.ModelingToolkitBase.@variables dX(_tc)::Bool = false dM(_tc) = 0.0 dZ(_tc)::Bool = false dY(_tc)::Bool = false
 
 @parameters ds::Bool = false dq = 0.0 dw::Bool = false

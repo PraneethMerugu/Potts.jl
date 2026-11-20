@@ -156,8 +156,8 @@ end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "R4: Symbolics.substitute reference evaluator matches compiled field steps and BCs" setup = [FieldsReferenceSetup] tags = [:potts, :fields] begin
-    @testset "R4: Symbolics.substitute reference evaluator matches compiled field steps and BCs" begin
+@testitem "Symbolics.substitute reference evaluator matches compiled field steps and BCs" setup = [FieldsReferenceSetup] tags = [:potts, :fields] begin
+    @testset "Symbolics.substitute reference evaluator matches compiled field steps and BCs" begin
         Symbolics.@variables C_sym lap_sym D_sym k_sym
         rhs_pde = D_sym * lap_sym - k_sym * C_sym
 
@@ -212,8 +212,8 @@ end
     end
 end
 
-@testitem "R4: Symbolics.substitute reference evaluator verifies coupled cell-field feedback" setup = [FieldsReferenceSetup] tags = [:potts, :fields] begin
-    @testset "R4: Symbolics.substitute reference evaluator verifies coupled cell-field feedback" begin
+@testitem "Symbolics.substitute reference evaluator verifies coupled cell-field feedback" setup = [FieldsReferenceSetup] tags = [:potts, :fields] begin
+    @testset "Symbolics.substitute reference evaluator verifies coupled cell-field feedback" begin
         Symbolics.@variables C_sym lap_sym D_sym alpha_sym k_sym mem_sym
         rhs_coupled = D_sym * lap_sym - k_sym * C_sym + alpha_sym * mem_sym
 

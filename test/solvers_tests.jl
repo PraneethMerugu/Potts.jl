@@ -1,5 +1,5 @@
-# Core solver placement beyond frozen P6.0c: Jacobi across groups, scratch layouts, solver keys,
-# P6.0n cross-cell reads, and D-208 copy-step reach. Setup lives in `solvers_testsetup.jl`.
+# Core solver placement: Jacobi across groups, scratch layouts, solver keys, cross-cell reads,
+# and copy-step reach (D-208). Setup lives in `solvers_testsetup.jl`.
 
 @testitem "solver groups are Jacobi, independent of equation order" setup = [SolversSetup] tags = [:potts, :solvers] begin
     @testset "solver groups are Jacobi, independent of equation order" begin
@@ -87,7 +87,7 @@ end
         @test solve(keyed, SequentialCPM()).u[end].site.c == solve(plain, SequentialCPM()).u[end].site.c
         two = PottsProblem(fs, op, (0, 3); field_solver = ExplicitEuler(substeps = 2))
         @test two.f.fingerprint != plain.f.fingerprint                                           # negative control
-        # with `solvers` covering every field, `field_solver` takes its default (D-F2-R1)
+        # with `solvers` covering every field, `field_solver` takes its default
         @test PottsProblem(fs, op, (0, 2); solvers = [:c => ExplicitEuler()]).f.fingerprint ==
               PottsProblem(fs, op, (0, 2); field_solver = ExplicitEuler(), solvers = [:c => ExplicitEuler()]).f.fingerprint
         # components: the system (all its integrated unknowns), `comp.x`, or `Symbol("comp₊x")`
@@ -140,44 +140,44 @@ end
     end
 end
 
-@testitem "P6.0n: y[id] is the own unknown, a gather over other cells is Jacobi" setup = [SolversSetup] tags = [:potts, :solvers] begin
-    @testset "P6.0n: y[id] is the own unknown, a gather over other cells is Jacobi" begin
-        op(y) = [ownership => p60n_two(), kind => [:A, :A], :y => y]
+@testitem "y[id] is the own unknown, a gather over other cells is Jacobi" setup = [SolversSetup] tags = [:potts, :solvers] begin
+    @testset "y[id] is the own unknown, a gather over other cells is Jacobi" begin
+        op(y) = [ownership => two_cells(), kind => [:A, :A], :y => y]
         rk4 = 1 - 1 + 1 / 2 - 1 / 6 + 1 / 24                     # one RK4 step of y' = −y, h = 1
         for alg in (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
-            own = PottsProblem(P60nOwnIndex(; name = :o), op([1.0, 2.0]), (0, 2); ode_solver = Potts.RK4())
-            plain = PottsProblem(P60nOwnPlain(; name = :o), op([1.0, 2.0]), (0, 2); ode_solver = Potts.RK4())
+            own = PottsProblem(OwnUnknownIndex(; name = :o), op([1.0, 2.0]), (0, 2); ode_solver = Potts.RK4())
+            plain = PottsProblem(OwnUnknownPlain(; name = :o), op([1.0, 2.0]), (0, 2); ode_solver = Potts.RK4())
             @test !haskey(own.u0.cell, :y__ode)                   # an own read needs no scratch
             u = solve(own, alg).u[end].cell.y
             @test u == solve(plain, alg).u[end].cell.y
             # held at its start-of-step value, `y[id]` would give y + h·(−y) = 0 every step
             @test u ≈ [1.0, 2.0] .* rk4^2 && all(>(0), u)
-            g = PottsProblem(P60nGather(; name = :g), op([1.0, 2.0]), (0, 3))
+            g = PottsProblem(JacobiGather(; name = :g), op([1.0, 2.0]), (0, 3))
             @test haskey(g.u0.cell, :y__ode)
             traj = [Vector(x.cell.y) for x in solve(g, alg; saveat = 0:3).u]
             @test traj == [[1.0, 2.0], [2.0, 1.0], [1.0, 2.0], [2.0, 1.0]]    # Jacobi: swaps
         end
         # the detector: a hoisted fold or reads of non-ODE cell variables need no scratch
         @test !Potts._ode_reads_other_cells(mtkcompile(SolverPairYS(; name = :p)))
-        @test Potts._ode_reads_other_cells(mtkcompile(P60nGather(; name = :g)))
-        @test !Potts._ode_reads_other_cells(mtkcompile(P60nOwnIndex(; name = :o)))
+        @test Potts._ode_reads_other_cells(mtkcompile(JacobiGather(; name = :g)))
+        @test !Potts._ode_reads_other_cells(mtkcompile(OwnUnknownIndex(; name = :o)))
     end
 end
 
-@testitem "P6.0n: an index follows the stepped local" setup = [SolversSetup] tags = [:potts, :solvers] begin
-    @testset "P6.0n: an index follows the stepped local" begin
-        op = [ownership => p60n_two(), kind => [:A, :A], :y => [0.4, 0.4], :w => [2.0, 1.0]]
-        prob = PottsProblem(P60nIndexLocal(; name = :d), op, (0, 1); ode_solver = ExplicitEuler(substeps = 4))
+@testitem "an index follows the stepped local" setup = [SolversSetup] tags = [:potts, :solvers] begin
+    @testset "an index follows the stepped local" begin
+        op = [ownership => two_cells(), kind => [:A, :A], :y => [0.4, 0.4], :w => [2.0, 1.0]]
+        prob = PottsProblem(IndexLocal(; name = :d), op, (0, 1); ode_solver = ExplicitEuler(substeps = 4))
         @test !haskey(prob.u0.cell, :y__ode)
-        @test !Potts._ode_reads_other_cells(mtkcompile(P60nIndexLocal(; name = :d)))
+        @test !Potts._ode_reads_other_cells(mtkcompile(IndexLocal(; name = :d)))
         for alg in (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
             @test solve(prob, alg).u[end].cell.y ≈ [2.15, 1.65]
         end
     end
 end
 
-@testitem "D-208: copy-step relations follow the functions, not only the model" setup = [SolversSetup] tags = [:potts, :solvers] begin
-    @testset "D-208: copy-step relations follow the functions, not only the model" begin
+@testitem "copy-step relations follow the functions, not only the model" setup = [SolversSetup] tags = [:potts, :solvers] begin
+    @testset "copy-step relations follow the functions, not only the model" begin
         σ = zeros(Int32, 12, 12)
         σ[2:4, 2:4] .= 1
         σ[6:8, 2:4] .= 2

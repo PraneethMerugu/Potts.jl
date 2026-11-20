@@ -1,4 +1,4 @@
-# F4-13 (F4 design §3.9, AF-09), the Potts side: `field_report` of a `PottsProblem`, a
+# The Potts side of `field_report`: the report of a `PottsProblem`, a
 # `PottsIntegrator` and a `PottsSolution` prints each field group of the model as LatticeFields
 # prints the groups of a LatticePDE problem (`Problems.group_report`, one function re-exported by
 # Potts): the algorithm, the window (the MCS), the substep count and its cause, the bound, the
@@ -7,7 +7,7 @@
 # integrator) prints the same group lines. The report reads what the objects hold: a warm
 # `step!` still allocates nothing after it.
 # Negative control: at 5100e988 `field_report` is not defined in Potts (this file fails at its
-# first testset, ~/lpwork/f4F13/nc-base.log).
+# first testset).
 
 @testsetup module FieldsReportSetup
 using Potts, Test
@@ -72,8 +72,8 @@ include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
    # (a function barrier)
-@testitem "F4-13: field_report of a Merks-like model at Do = 50 shows the 223 substeps and their cause" setup = [FieldsReportSetup] tags = [:potts, :fields_report] begin
-    @testset "F4-13: field_report of a Merks-like model at Do = 50 shows the 223 substeps and their cause" begin
+@testitem "field_report of a Merks-like model at Do = 50 shows the 223 substeps and their cause" setup = [FieldsReportSetup] tags = [:potts, :fields_report] begin
+    @testset "field_report of a Merks-like model at Do = 50 shows the 223 substeps and their cause" begin
         @test isdefined(Potts, :field_report) && Base.isexported(Potts, :field_report)
         @test Potts.field_report === Potts.LatticePDE.field_report === Potts.LatticeFields.Problems.field_report
         m = FrMerks(; name = :m)
@@ -84,8 +84,8 @@ end
         @test fr_line(rep, "window") == "  window     dt = 1.0, 223 substeps (h = 0.0044843)"
         # ρ = 8 Do + ec (the decay in the medium) = 400.05
         @test fr_line(rep, "substeps") == "  substeps   the bound, ⌈dt ρ / 1.8⌉ = ⌈1.0 × 400.05 / 1.8⌉ = 223 [bound]"
-        # batch-end review S5, S1: ρ split into the parts of its row; past 20 substeps of the bound,
-        # the implicit count as a route (base ab34e226, ~/lpwork/f4BE/nc.log: `ρ = 400.05` alone, no route)
+        # ρ split into the parts of its row; past 20 substeps of the bound,
+        # the implicit count as a route (before the fix, ab34e226: `ρ = 400.05` alone, no route)
         @test fr_line(rep, "bound") == "  bound      ρ = 400.05 (row c: diffusion 400.0, reaction 0.05)"
         @test fr_line(rep, "route") == "  route      BackwardEuler() steps this group in 1 substep"
         @test fr_line(rep, "numbers") == "  numbers    state Float64, compute Float64"
@@ -115,7 +115,7 @@ end
         @test startswith(rs, "Field report: PottsSolution, 1 field group, SequentialCPM, retcode Success")
         @test fr_line(rs, "saves") == "  saves      5 over (0, 4), 4 MCS"                 # every MCS (SciML)
         @test fr_line(rs, "substeps") == fr_line(rep, "substeps")
-        # batch-end review (e): the solution keeps the counts its run used and the backend
+        # The solution keeps the counts its run used and the backend
         @test fr_line(rs, "counters") == "  counters   substep counts c 223; code Success"
         @test fr_line(rs, "backend") == "  backend    CPU"
         # a user minimum above the bound sets the count: no route
@@ -124,9 +124,9 @@ end
     end
 end
 
-@testitem "batch-end review (e): a PottsSolution's report matches its integrator's (counts, implicit facts)" setup = [FieldsReportSetup] tags = [:potts, :fields_report] begin
-    @testset "batch-end review (e): a PottsSolution's report matches its integrator's (counts, implicit facts)" begin
-        # base ab34e226 (~/lpwork/f4BE/nc.log): the solution prints the policy as given (`newton
+@testitem "a PottsSolution's report matches its integrator's (counts, implicit facts)" setup = [FieldsReportSetup] tags = [:potts, :fields_report] begin
+    @testset "a PottsSolution's report matches its integrator's (counts, implicit facts)" begin
+        # Before the fix (ab34e226): the solution prints the policy as given (`newton
         # automatic (set when the group is bound)`, no substep counts) and no backend
         m = FrMerks(; name = :m)
         for fs in (ExplicitEuler(), BackwardEuler(; linsolve = LatticeMultigrid()))
@@ -176,8 +176,8 @@ end
     end
 end
 
-@testitem "F4-13: a coupled model and its bare PDESystem print the same group lines" setup = [FieldsReportSetup] tags = [:potts, :fields_report] begin
-    @testset "F4-13: a coupled model and its bare PDESystem print the same group lines" begin
+@testitem "a coupled model and its bare PDESystem print the same group lines" setup = [FieldsReportSetup] tags = [:potts, :fields_report] begin
+    @testset "a coupled model and its bare PDESystem print the same group lines" begin
         LP = Potts.LatticePDE
         cases = (
             (FrMerks(; name = :m), ExplicitEuler(), ExplicitEuler(), 1),
@@ -212,8 +212,8 @@ end
     end
 end
 
-@testitem "F4-13: a report adds nothing to a run (a warm step! allocates 0 B after it)" setup = [FieldsReportSetup] tags = [:potts, :fields_report] begin
-    @testset "F4-13: a report adds nothing to a run (a warm step! allocates 0 B after it)" begin
+@testitem "a report adds nothing to a run (a warm step! allocates 0 B after it)" setup = [FieldsReportSetup] tags = [:potts, :fields_report] begin
+    @testset "a report adds nothing to a run (a warm step! allocates 0 B after it)" begin
         m = FrMerks(; name = :m)
         for fs in (ExplicitEuler(), BackwardEuler(; linsolve = LatticeMultigrid()))
             integ = init(PottsProblem(m, fr_op(), (0, 20); seed = 3, field_solver = fs), SequentialCPM(); save_everystep = false)

@@ -31,7 +31,7 @@
             v = solve(p, CheckerboardCPM(; proposal = Moore(1)); backend).u[end]
             @test v.cell.volume == [count(==(c), v.ownership) for c in eachindex(v.cell.volume)]
         end
-        # F3-08: Merks with `BackwardEuler` on the device (the implicit runtime's launches, the
+        # Merks with `BackwardEuler` on the device (the implicit runtime's launches, the
         # status word read at the saves), 20 MCS
         sb = solve(PottsProblem(MERKS, [ownership => merks_state(), kind => [1, 1]], (0, 20); T = Float32,
                 field_solver = BackwardEuler(lower_bound = 0.0)
@@ -39,14 +39,14 @@
         )
         cb = Array(sb.u[end].site.c)
         @test sb.retcode == Potts.SciMLBase.ReturnCode.Success && all(isfinite, cb) && minimum(cb) >= 0 && maximum(cb) > 0
-        # F3-10, F3-11: Crank–Nicolson and BDF2 (their right-side and history launches), 20 MCS
+        # Crank–Nicolson and BDF2 (their right-side and history launches), 20 MCS
         for fs in (CrankNicolson(lower_bound = 0.0), BDF2(lower_bound = 0.0))
             sx = solve(PottsProblem(MERKS, [ownership => merks_state(), kind => [1, 1]], (0, 20); T = Float32,
                 field_solver = fs), CheckerboardCPM(; proposal = Moore(1)); backend)
             cx = Array(sx.u[end].site.c)
             @test sx.retcode == Potts.SciMLBase.ReturnCode.Success && all(isfinite, cx) && minimum(cx) >= 0 && maximum(cx) > 0
         end
-        # F3-12a: QuasiSteady (the steady stage, its status checks), 20 MCS; no clip: the steady
+        # QuasiSteady (the steady stage, its status checks), 20 MCS; no clip: the steady
         # solve's nonnegativity holds to the solver's tolerance. V₀ = 9.0 is the port's value
         # (test/ports/models.jl:40): the model's V₀ = 100.0 puts the two cells' target volume at the
         # 144-site box's whole medium, which empties `ecm`, removes the `-δc * C * ecm` decay and
@@ -104,7 +104,7 @@
         ul = solve(PottsProblem(Lags(; name = :l), [ownership => σl, kind => [1]], (0, 7); T = Float32),
             CheckerboardCPM(); backend).u[end]
         @test Array(ul.model.lag3) == Float32[4] && all(==(-1), Array(ul.site.wlag))
-        # integral(x): exact per-cell reductions on the device (Int64 fixed point, F3-23)
+        # integral(x): exact per-cell reductions on the device (Int64 fixed point)
         σi = zeros(Int32, 20, 20); σi[3:6, 3:6] .= 1; σi[12:15, 12:15] .= 2
         wi = [Float32(i + j) / 40 for i in 1:20, j in 1:20]
         ui = solve(PottsProblem(Integrals(; name = :i), [ownership => σi, kind => [1, 1], :w => wi], (0, 5); T = Float32),
@@ -112,9 +112,9 @@
         σh = Array(ui.ownership)
         @test Array(ui.cell.mass) ≈ [sum(wi[σh .== k]) for k in 1:2]
         # integral(x) with site-independent folds: computed once into model slots on the device
-        σf, wf = p60ai_init((16, 16))
+        σf, wf = hoisted_init((16, 16))
         wf = Float32.(wf)
-        solf = solve(PottsProblem(P60aiRefresh(; name = :x), [ownership => σf, kind => [:A, :A], :w => wf], (0, 3);
+        solf = solve(PottsProblem(HoistedRefresh(; name = :x), [ownership => σf, kind => [:A, :A], :w => wf], (0, 3);
                 T = Float32, seed = 5), CheckerboardCPM(); backend)
         uf = solf.u[end]
         σh, Vf = Array(uf.ownership), Array(uf.cell.volume)
@@ -125,7 +125,7 @@
         mvf = sum(Vf[Vf .> 0]) / count(>(0), Vf)
         # the observed-only integral has no column (D-120): computed from the saved state, its
         # hoisted fold included
-        xo = last(Potts._integrals(getfield(mtkcompile(P60aiRefresh(; name = :x)), :sys); observed = true))
+        xo = last(Potts._integrals(getfield(mtkcompile(HoistedRefresh(; name = :x)), :sys); observed = true))
         @test !hasproperty(uf.cell, Potts._integral_name(xo))
         @test Array(solf[:o][end]) ≈ perf(i -> wf[i] * mvf)                               # at the MCS boundary
         # model-scope ODEs and a model component (single-item kernel)
@@ -235,8 +235,8 @@ end
     end
 end
 
-@testitem "P6.0e contact terms reading site values on the device (Float32)" setup = [GpuSetup, SymbolicSetup] tags = [:potts, :gpu, :device] begin
-    @testset "P6.0e contact terms reading site values on the device (Float32)" begin
+@testitem "contact terms reading site values on the device (Float32)" setup = [GpuSetup, SymbolicSetup] tags = [:potts, :gpu, :device] begin
+    @testset "contact terms reading site values on the device (Float32)" begin
         backend = PottsDevices.device_backend()
         sys = SiteContacts(; name = :sq)
         p64 = site_contact_problem(sys, (24, 24); tspan = (0, 60))
@@ -249,7 +249,7 @@ end
         ys = [total_energy(p64, solve(remake(p32; seed), CheckerboardCPM(); backend, save_start = false).u[end]) for seed in 101:(100 + n_sc)]
         margin = 0.1 * abs(mean(xs))
         res = stat_accept(xs, ys; margin, alpha = 1.0e-3)
-        @info "P6.0e site-value contacts H, CPU vs device" cpu = mean(xs) device = mean(ys) z = res.statistic pvalue = res.pvalue
+        @info "site-value contacts H, CPU vs device" cpu = mean(xs) device = mean(ys) z = res.statistic pvalue = res.pvalue
         @test res.pass
         @test !stat_accept(xs, ys .+ 0.25 * abs(mean(xs)); margin, alpha = 1.0e-3).pass
         # an on-copy write read by the contact term, on the device
@@ -262,8 +262,8 @@ end
     end
 end
 
-@testitem "P6.0f per-rule cadence on the device (Float32)" setup = [GpuSetup, SymbolicSetup] tags = [:potts, :gpu, :device] begin
-    @testset "P6.0f per-rule cadence on the device (Float32)" begin
+@testitem "per-rule cadence on the device (Float32)" setup = [GpuSetup, SymbolicSetup] tags = [:potts, :gpu, :device] begin
+    @testset "per-rule cadence on the device (Float32)" begin
         backend = PottsDevices.device_backend()
         σ, kinds = rule_cadence_state((48, 32))
         for (na, nb) in ((2, 3), (2, 4), (3, 3))
@@ -275,8 +275,8 @@ end
     end
 end
 
-@testitem "P6.0f rule-carrying events on the device (Float32)" setup = [GpuSetup, SymbolicSetup] tags = [:potts, :gpu, :device] begin
-    @testset "P6.0f rule-carrying events on the device (Float32)" begin
+@testitem "rule-carrying events on the device (Float32)" setup = [GpuSetup, SymbolicSetup] tags = [:potts, :gpu, :device] begin
+    @testset "rule-carrying events on the device (Float32)" begin
         backend = PottsDevices.device_backend()
         σ = zeros(Int32, 48, 32); σ[2:13, 2:13] .= 1
         function run(sys, tspan)
@@ -302,8 +302,8 @@ end
     end
 end
 
-@testitem "P6.0k discrete components on the device (Float32)" setup = [GpuSetup, SymbolicSetup] tags = [:potts, :gpu, :device] begin
-    @testset "P6.0k discrete components on the device (Float32)" begin
+@testitem "discrete components on the device (Float32)" setup = [GpuSetup, SymbolicSetup] tags = [:potts, :gpu, :device] begin
+    @testset "discrete components on the device (Float32)" begin
         backend = PottsDevices.device_backend()
         σ = _discrete_blocks(2)
         prob = PottsProblem(DiscreteHybrid(; name = :h), [ownership => σ, kind => [1, 1], Symbol("tg₊dA") => [false, true]], (0, 8);
@@ -322,8 +322,8 @@ end
     end
 end
 
-@testitem "P6.0k scratch-published ticks on the device (Float32)" setup = [GpuSetup, SymbolicSetup] tags = [:potts, :gpu, :device] begin
-    @testset "P6.0k scratch-published ticks on the device (Float32)" begin
+@testitem "scratch-published ticks on the device (Float32)" setup = [GpuSetup, SymbolicSetup] tags = [:potts, :gpu, :device] begin
+    @testset "scratch-published ticks on the device (Float32)" begin
         # several tick phases (cell and model scope, two clocks): scratch slots published on the device
         @potts_model GPUDiscreteScratch begin
             @kinds medium A
@@ -350,8 +350,8 @@ end
     end
 end
 
-@testitem "P6.0k Jacobi across cells on the device (shift register, Float32)" setup = [GpuSetup, SymbolicSetup] tags = [:potts, :gpu, :device] begin
-    @testset "P6.0k Jacobi across cells on the device (shift register, Float32)" begin
+@testitem "Jacobi across cells on the device (shift register, Float32)" setup = [GpuSetup, SymbolicSetup] tags = [:potts, :gpu, :device] begin
+    @testset "Jacobi across cells on the device (shift register, Float32)" begin
         prob = PottsProblem(DiscreteShiftRegister(; name = :s), [ownership => _discrete_blocks(6, 16), kind => fill(1, 6)], (0, 4);
             T = Float32)
         sol = solve(prob, CheckerboardCPM(; proposal = Moore(1)); backend = PottsDevices.device_backend(), saveat = 0:4)
@@ -363,7 +363,7 @@ end
     end
 end
 
-# P6.0c: several ODE solver groups step through scratch `x__ode` on the device (fixed-step
+# Several ODE solver groups step through scratch `x__ode` on the device (fixed-step
 # kernels) and through the host (adaptive), then publish: the CPU result in Float32.
 @testitem "solver groups on the device (Jacobi scratch)" setup = [GpuSetup, SolversSetup] tags = [:potts, :gpu, :device] begin
     @testset "solver groups on the device (Jacobi scratch)" begin
@@ -388,20 +388,20 @@ end
     end
 end
 
-@testitem "P6.0d frozen-kind transitions on the device (Float32, device-built mask)" setup = [GpuSetup] tags = [:potts, :gpu, :device] begin
-    # P6.0d: the frozen acceptance scenario on the device (Float32, CheckerboardCPM). The `[frozen]`
+@testitem "frozen-kind transitions on the device (Float32, device-built mask)" setup = [GpuSetup] tags = [:potts, :gpu, :device] begin
+    # The frozen acceptance scenario on the device (Float32, CheckerboardCPM). The `[frozen]`
     # kinds are the standard rule, so the mask is rebuilt on the device after the transition.
-    module P60dOnDevice
+    module FrozenKindMaskOnDevice
     include(joinpath(@__DIR__, "shared", "pottsmodels_test_file.jl"))
     PottsModelsTestFile.run_file(@__MODULE__, joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "frozen_kind_mask_tests.jl"))
     end
-    @testset "P6.0d frozen-kind transitions on the device (Float32, device-built mask)" begin
-        M = P60dOnDevice.FrozenKindMaskSetup
+    @testset "frozen-kind transitions on the device (Float32, device-built mask)" begin
+        M = FrozenKindMaskOnDevice.FrozenKindMaskSetup
         backend = PottsDevices.device_backend()
         σ = zeros(Int32, 30, 30); σ[5:10, 5:10] .= 1; σ[18:23, 18:23] .= 2
         function device_problem(moves...)
             prob = PottsProblem(
-                M.Kinds(; name = :p60d), [ownership => σ, kind => [:cell, :wall]], (0, M.FROZEN_T1);
+                M.Kinds(; name = :frozen), [ownership => σ, kind => [:cell, :wall]], (0, M.FROZEN_T1);
                 seed = 1, T = Float32)
             f = prob.f
             sw = M.Switch(moves)

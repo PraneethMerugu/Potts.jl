@@ -1,5 +1,5 @@
-@testitem "F2-10: operators and aux fields equal LatticePDE's own run, bitwise" setup = [FieldsSetup, FieldsOpBcsSetup] tags = [:potts, :fields] begin
-    @testset "F2-10: operators and aux fields equal LatticePDE's own run, bitwise" begin
+@testitem "operators and aux fields equal LatticePDE's own run, bitwise" setup = [FieldsSetup, FieldsOpBcsSetup] tags = [:potts, :fields] begin
+    @testset "operators and aux fields equal LatticePDE's own run, bitwise" begin
         LP, MTKB = Potts.LatticePDE, Potts.ModelingToolkitBase
         tt, DD = MTKB.t_nounits, MTKB.D_nounits
         dims, k, n = (8, 6), 3, 4
@@ -41,8 +41,8 @@
     end
 end
 
-@testitem "F2-10 review: map under repeat, constant velocity, global coordinates, z in 2D" setup = [FieldsSetup, FieldsOpBcsSetup] tags = [:potts, :fields] begin
-    @testset "F2-10 review: map under repeat, constant velocity, global coordinates, z in 2D" begin
+@testitem "map under repeat, constant velocity, global coordinates, z in 2D" setup = [FieldsSetup, FieldsOpBcsSetup] tags = [:potts, :fields] begin
+    @testset "map under repeat, constant velocity, global coordinates, z in 2D" begin
         # M1: one map per MCS under `repeat(4, fields)` (base, before the fix: 1.875, 1.9921875, …:
         # one map per pass)
         integ = init(PottsProblem(FpMapRepeat(; name = :f), fd_empty((6, 4)), (0, 3)), SequentialCPM())
@@ -86,7 +86,7 @@ end
                 end
             end
         )
-        # R1 (batch 4 round 2): a helper argument `x` binds `x` in the helper only, so the binding's
+        # A helper argument `x` binds `x` in the helper only, so the binding's
         # `x` (the coordinate) still warns (base: the helper silenced the warning for the body)
         @test_logs (:warn, r"`x` in the model body is the lattice coordinate") match_mode = :any Core.eval(
             m, quote
@@ -125,8 +125,8 @@ end
     end
 end
 
-@testitem "F2-10: maps, one kind per model, coordinates" setup = [FieldsSetup, FieldsOpBcsSetup] tags = [:potts, :fields] begin
-    @testset "F2-10: maps, one kind per model, coordinates" begin
+@testitem "maps, one kind per model, coordinates" setup = [FieldsSetup, FieldsOpBcsSetup] tags = [:potts, :fields] begin
+    @testset "maps, one kind per model, coordinates" begin
         LP = Potts.LatticePDE
         # a map steps once per MCS (`ExplicitMap()` by default): m₁ = x, m₂ = 0.5 m₁ + x, …
         integ = init(PottsProblem(FpMap(; name = :f), fd_empty((6, 4)), (0, 3)), SequentialCPM())
@@ -159,8 +159,8 @@ end
     end
 end
 
-@testitem "F3-00: aux fields with states start at rhs (in a model)" setup = [FieldsSetup, FieldsOpBcsSetup] tags = [:potts, :fields] begin
-    @testset "F3-00: aux fields with states start at rhs (in a model)" begin
+@testitem "aux fields with states start at rhs (in a model)" setup = [FieldsSetup, FieldsOpBcsSetup] tags = [:potts, :fields] begin
+    @testset "aux fields with states start at rhs (in a model)" begin
         σ0 = zeros(Int32, 8, 8)
         σ0[3:5, 3:5] .= 1
         c0 = [0.1 * i + 0.01 * j for i in 1:8, j in 1:8]
@@ -189,8 +189,8 @@ end
     end
 end
 
-@testitem "F3-00: aux-only fields in a model" setup = [FieldsSetup, FieldsOpBcsSetup] tags = [:potts, :fields] begin
-    @testset "F3-00: aux-only fields in a model" begin
+@testitem "aux-only fields in a model" setup = [FieldsSetup, FieldsOpBcsSetup] tags = [:potts, :fields] begin
+    @testset "aux-only fields in a model" begin
         st(integ) = CorePotts.current_state(integ)
         σ0 = zeros(Int32, 12, 8)
         σ0[3:6, 3:6] .= 1
@@ -246,8 +246,8 @@ end
     end
 end
 
-@testitem "F3-01: one substep policy, one warning set" setup = [FieldsSetup, FieldsOpBcsSetup] tags = [:potts, :fields] begin
-    @testset "F3-01: one substep policy, one warning set" begin
+@testitem "one substep policy, one warning set" setup = [FieldsSetup, FieldsOpBcsSetup] tags = [:potts, :fields] begin
+    @testset "one substep policy, one warning set" begin
         LP, LFP, MTKB = Potts.LatticePDE, Potts.LatticeFields.Problems, Potts.ModelingToolkitBase
         warns(logs) = count(l -> l.level == Base.CoreLogging.Warn && occursin("does not cover", string(l.message)), logs)
         # the policy warns once per key and process: forget the keys warned so far (by an earlier
@@ -284,14 +284,14 @@ end
         end
         @test warns(logs) == 1 && occursin("ExplicitEuler(substeps = 4): 4 substeps", string(logs[end].message))
         @test length(LFP._SEEN_WARNED) == n0 + 2
-        # review r1 S2: the automatic count's refusal of the unseen term comes at `remake`, as before
-        # F3-01 (743ab0a0); at 8f658abd `remake` returned and `init` refused (u1_a §4)
+        # The automatic count's refusal of the unseen term comes at `remake`, as at 743ab0a0;
+        # at 8f658abd `remake` returned and `init` refused
         @test_throws ArgumentError remake(probs[1]; field_solver = ExplicitEuler())
     end
 end
 
-@testitem "F3-02: an aux-carried loop runs in a model (Jacobi in a group, the split across groups)" setup = [FieldsSetup, FieldsOpBcsSetup] tags = [:potts, :fields] begin
-    @testset "F3-02: an aux-carried loop runs in a model (Jacobi in a group, the split across groups)" begin
+@testitem "an aux-carried loop runs in a model (Jacobi in a group, the split across groups)" setup = [FieldsSetup, FieldsOpBcsSetup] tags = [:potts, :fields] begin
+    @testset "an aux-carried loop runs in a model (Jacobi in a group, the split across groups)" begin
         σ = zeros(Int32, 6, 4)
         σ[2:3, 2:3] .= 1
         op = [ownership => σ, kind => [:A]]

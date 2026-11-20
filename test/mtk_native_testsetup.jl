@@ -84,7 +84,7 @@ end
 end
 
 
-# the field rates (F4-B4t): the kind set is the binding of the input `e`
+# the field rates: the kind set is the binding of the input `e`
 isdefined(@__MODULE__, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
 
 module MnPDE
@@ -126,7 +126,7 @@ using SciMLStructures: SciMLStructures as SS
 using ForwardDiff: ForwardDiff
 
 
-@potts_model C9Computed begin
+@potts_model ComputedParams begin
     @kinds medium cell
     @parameters begin
         T = 1.0
@@ -139,7 +139,7 @@ using ForwardDiff: ForwardDiff
 end
 
 
-@potts_model C9Computed3 begin
+@potts_model ComputedParams3 begin
     @kinds medium cell
     @parameters begin
         T = 1.0
@@ -152,36 +152,36 @@ end
 end
 
 
-module C9ModA
+module FnModA
     using Potts.Symbolics: Symbolics, @register_symbolic
     f(x) = 2x
     @register_symbolic f(x)
 end
 
-module C9ModB
+module FnModB
     using Potts.Symbolics: Symbolics, @register_symbolic
     f(x) = 3x
     @register_symbolic f(x)
 end
 
-@potts_model C9FA begin
+@potts_model SameNameA begin
     @kinds medium cell
     @parameters begin
         T = 1.0
         λ = 2.0
-        λ2 = C9ModA.f(λ)
+        λ2 = FnModA.f(λ)
     end
     @energy cells => λ2 * (volume - 9.0)^2
     @lattice Lattice((12, 12))
     @sweep Metropolis(; temperature = T)
 end
 
-@potts_model C9FB begin
+@potts_model SameNameB begin
     @kinds medium cell
     @parameters begin
         T = 1.0
         λ = 2.0
-        λ2 = C9ModB.f(λ)
+        λ2 = FnModB.f(λ)
     end
     @energy cells => λ2 * (volume - 9.0)^2
     @lattice Lattice((12, 12))
@@ -189,7 +189,7 @@ end
 end
 
 
-@potts_model C9Sweep begin
+@potts_model ComputedSweep begin
     @structural_parameters begin
         s = 2
     end
@@ -207,7 +207,7 @@ include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
 
-@testsetup module F2MetadataSetup
+@testsetup module MetadataSetup
 using Potts, Test, PottsModels
 using Potts: CorePotts
 isdefined(@__MODULE__, :PottsDevices) || include(joinpath(@__DIR__, "shared", "devices.jl"))
@@ -216,7 +216,7 @@ using Potts.ModelingToolkitBase: ModelingToolkitBase as MTKB
 using Potts.SymbolicIndexingInterface: getp, setp
 
 
-@potts_model F2Meta begin
+@potts_model WithMeta begin
     @kinds medium cell
     @parameters begin
         T = 1.0, [tunable = false]
@@ -229,7 +229,7 @@ using Potts.SymbolicIndexingInterface: getp, setp
 end
 
 
-@potts_model F2NoMeta begin
+@potts_model NoMeta begin
     @kinds medium cell
     @parameters begin
         T = 1.0
@@ -242,7 +242,7 @@ end
 end
 
 
-@potts_model F2BoundChain begin
+@potts_model BoundChain begin
     @kinds medium cell
     @parameters begin
         α = 0.3
@@ -257,7 +257,7 @@ end
 
 const _MN_DEFAULT_COMP = MTKB.System(Potts.Equation[], Potts.t; name = :comp)
 
-@potts_model F2CompRoute begin
+@potts_model CompRoute begin
     @structural_parameters comp_sys = _MN_DEFAULT_COMP
     @kinds medium A
     @components cells(A) comp = comp_sys
@@ -284,7 +284,7 @@ end
 
 function compmodel(sys)
     σ = zeros(Int32, 10, 10); σ[3:5, 3:5] .= 1
-    return PottsProblem(F2CompRoute(; name = :cr, comp_sys = sys), [ownership => σ, kind => [:A]], (0, 2))
+    return PottsProblem(CompRoute(; name = :cr, comp_sys = sys), [ownership => σ, kind => [:A]], (0, 2))
 end
 
 emsg(f, E::Type{<:Exception} = ArgumentError) = try
