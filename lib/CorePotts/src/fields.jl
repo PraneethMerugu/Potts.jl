@@ -525,7 +525,7 @@ ForwardDiff Duals in the entries that carry them (the seeded parameters and the 
 that read them), `seeds` the front end's record of the Dual values given (`name => value`), and
 `u0` the derivative parts of the initial fields (`name => Dual array or Dual number`: a Dual
 initial value, or a default that reads a seeded parameter). The CPM reads the primal object
-(`prob.p`); the field groups step the derivative parts along the CPM path ([`tangent_run`](@ref)).
+(`prob.p`); the field groups step the derivative parts along the CPM path (`tangent_run`).
 """
 struct ParameterTangent{P}
     p::P

@@ -212,7 +212,11 @@ function lower(x, env::LowerEnv)
     if op === (^) && SymbolicUtils.isconst(_unwrap(args[2]))
         e = SymbolicUtils.unwrap_const(_unwrap(args[2]))
         if e isa Integer || (e isa Real && isinteger(e))
-            return Expr(:call, :^, lower(args[1], env), Int(e))   # literal_pow, no float exponent
+            # products (`LatticeFields.Compile.powi`), not `^`: Base's `Float32 ^ Int` and ROCm's
+            # `pow` compute in Float64; a negative power of an integer is in the model's float type
+            x = lower(args[1], env)
+            e < 0 && (x = :(Potts._tofloat($(env.T), $x)))
+            return :(Potts.LatticeFields.Compile.powi($x, $(Int(e))))
         end
     end
     # float-valued functions compute in the model's scalar type (no Float64 from Int args)
@@ -446,6 +450,7 @@ end
 implicit solver's Jacobian, already-typed floats) unchanged."""
 @inline _tofloat(::Type{T}, x::Integer) where {T} = T(x)
 @inline _tofloat(::Type{T}, x) where {T} = x
+
 
 """
 Cartesian position of site `i`: the embedded lattice coordinates times the lattice

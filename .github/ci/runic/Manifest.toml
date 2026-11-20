@@ -1,6 +1,6 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.13.3"
+julia_version = "1.13.4"
 manifest_format = "2.1"
 project_hash = "22246c3c7a589e093912232fb3a5c8f0bb2b0d75"
 
@@ -29,10 +29,10 @@ version = "1.11.0"
 
 [[deps.Runic]]
 deps = ["JuliaSyntax", "Preferences"]
-git-tree-sha1 = "4bb4f4bbff3fe1c1f9b55ed2c1d08082a63a2d6b"
+git-tree-sha1 = "ad86c622acd496229942d82dafae66ba39281310"
 registries = "General"
 uuid = "62bfec6d-59d7-401d-8490-b29ee721c001"
-version = "1.10.0"
+version = "1.13.0"
 
 [[deps.TOML]]
 deps = ["Dates"]

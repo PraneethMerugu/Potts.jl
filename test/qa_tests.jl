@@ -184,9 +184,6 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     Symbol("@__doc__"),   # attaching docstrings to macro-generated components
     :setindex,            # non-mutating tuple `setindex`
     Symbol("@nospecializeinfer"),  # the remake hooks inferred once for every model (TS1c)
-    # --- Potts -> SymbolicUtils: the type of a symbolic function `c(t, x, y)` (field
-    # variables of the field compiler's PDESystem, D-C8); no public constructor takes it
-    :FnType,
     # --- Potts -> Symbolics
     :rename,              # Symbolics.rename: renames a component system (`k.x` is `k₊x`)
     :VarDomainPairing,    # what `Potts.kind ∈ (1, 2)` builds: a binding of it is refused by name (F4-E16)
@@ -207,13 +204,6 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     # `is_parameter(::AbstractSystem, ::ParameterIndex)` answers `is_split` of the container,
     # which has no index cache; the owned method forwards it to the inner System instead.
     :ParameterIndex,
-    # --- Potts -> SciMLStructures (C9): the interface `PottsParameters` implements; the
-    # package declares its API public only in a comment (no `public` statement)
-    :isscimlstructure, :ismutablescimlstructure, :hasportion, :canonicalize, :replace,
-    :Tunable, :Constants, :AbstractPortion,
-    # --- Potts -> MTKBase (C9): a system's own poissonians and noise equations; MTKBase has no
-    # public (or recursive) accessor for either, and Potts refuses them rather than drop them
-    :get_poissonians, :get_noise_eqs,
     # --- Potts -> MTKBase: `description(sys)` is MTK's documented accessor of a system's
     # description (`@description`); MTKBase does not declare it public. Potts forwards it.
     :description,

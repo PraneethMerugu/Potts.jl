@@ -20,7 +20,8 @@ function _powi_node!(b, k::Kernel, i, a, ctx)
     return node!(b, MUL, n.type, fill(x, n.imm))
 end
 """
-`x^n` for 2 ≤ n ≤ 4 becomes a product chain (`x^4 = (x·x)·(x·x)`, shared by interning).
+`x^n` for 2 ≤ n ≤ 4 becomes a product chain (`x^4 = (x·x)·(x·x)`, shared by interning); other
+exponents, and all of them in the debug mode, emit `powi`.
 """
 expand_powi(p::Program, k::Kernel) = rebuild(_powi_node!, k, buildkeys(p))
 
