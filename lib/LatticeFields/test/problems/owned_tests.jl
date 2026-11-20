@@ -145,3 +145,15 @@ end
     @test cv([true, false, 1, 0, 1, 0, 1, 0, 1]; bool = true) == ""
 end
 end
+
+# The report's route line for an explicit group past 20 substeps: when the implicit count
+# cannot be computed (the implicit rules throw), the report leaves the line out instead of
+# failing. Before the fix (D-298) the fallback itself threw an `UndefVarError` (`isfatal` was
+# not imported). The group here is no group at all, so the rules throw a `MethodError`.
+@testitem "the report leaves the route line out when the implicit count fails" setup = [LF_problems_owned] tags = [:latticefields, :problems] begin
+    @testset "the report leaves the route line out when the implicit count fails" begin
+        io = IOBuffer()
+        @test LatticeFields.Problems._route_line(io, nothing, ExplicitEuler(), 0.1, nothing, ["u"], 25) === nothing
+        @test isempty(take!(io))
+    end
+end
