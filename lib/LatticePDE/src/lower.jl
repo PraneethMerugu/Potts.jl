@@ -125,8 +125,8 @@ function _num(e::Env, ids)
     t = any(i -> isfloat(_type(e, i)), ids) ? REAL : nothing
     return [_type(e, i) == BOOL ? cast!(e.kb, i, t === nothing ? I32 : t) : i for i in ids]
 end
+# build time: arith! is varargs, so the node ids are splatted into it
 _op(e::Env, op, ids...) = arith!(e.kb, op, _num(e, collect(Int32, ids))...)
-_op(e::Env, op, ids::AbstractVector) = arith!(e.kb, op, _num(e, collect(Int32, ids))...)
 _real(e::Env, i) = cast!(e.kb, _num(e, [i])[1], REAL)
 function _bool(e::Env, i)
     return if _type(e, i) == BOOL
@@ -299,7 +299,7 @@ function _fold_product(u, e::Env)
     else
         append!(ids, Int32[lower(y, e) for y in F])
     end
-    return _op(e, MUL, ids)
+    return _op(e, MUL, ids...)
 end
 """
     _cond(u, env; fold = :majority) -> node id
@@ -657,7 +657,7 @@ function _advect(e::Env{N}, uvel, c) where {N}
         end
         _op(e, MUL, constant!(e.kb, 1 / e.h[d]), _op(e, ADD, fl...))
     end
-    return _op(e, ADD, divs)
+    return _op(e, ADD, divs...)
 end
 
 """
@@ -804,14 +804,14 @@ function lower(x, e::Env{N}) where {N}
         ]
     )
     ids = Int32[lower(y, e) for y in a]
-    f === (+) && return _op(e, ADD, ids)
-    f === (*) && return _op(e, MUL, ids)
+    f === (+) && return _op(e, ADD, ids...)
+    f === (*) && return _op(e, MUL, ids...)
     if f === (-)
         length(ids) == 1 && return arith!(e.kb, NEG, _num(e, ids)...)
         return _op(e, ADD, ids[1], arith!(e.kb, NEG, _num(e, ids[2:2])...))
     end
     f === (/) && return arith!(e.kb, DIV, _real(e, ids[1]), _real(e, ids[2]))
-    (f === min || f === max) && return _op(e, f === min ? MIN : MAX, ids)
+    (f === min || f === max) && return _op(e, f === min ? MIN : MAX, ids...)
     if f === (^)
         p = unwrap_const(unwrap(a[2]))
         p isa Real && isinteger(p) &&
