@@ -38,7 +38,7 @@ soft constraint, e.g. the `E₀` connectivity threshold of Merks et al.:
 (without the acceptance law's offset), into `sol.stats.accepted_energy_change`. When the drives are
 copy differences of a state function ``G``, that sum is ``Φ(\text{end}) − Φ(\text{start})``
 with ``Φ = H + G``, a check of a run's bookkeeping. The identity holds with no lifecycle
-events or killing copies (a killing copy also pays its cell's empty-state energy, D-083).
+events or killing copies (a killing copy also pays its cell's empty-state energy).
 Without `track` nothing is accumulated and the run costs nothing extra.
 `remake(prob; track)` switches it on a problem built from a model; a hand-written
 problem passes a new `f` (`CPMFunction(…; track)`).

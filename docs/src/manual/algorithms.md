@@ -62,7 +62,7 @@ warns once; such a lattice runs as fast or faster on the CPU.
 
 With the default of about 64 phases per MCS (8 parts per axis in 2D, 4 in 3D), the
 kinetics match `SequentialCPM`'s within the statistical resolution of these checks (the
-P6.0bl study, `docs/design/research/checkerboard-kinetics.md`): foam coarsening and cell
+kinetics study, `docs/design/research/checkerboard-kinetics.md`): foam coarsening and cell
 sorting on the CPU, the OpenVT chain relaxation time, the OpenVT monolayer cases (b) and
 (f), Akeeb invasion at three parameter points, a 3D RPE sheet, and the persistence of an
 Act cell. One deviation remains: an Act cell moves up to 6 % faster when its activity is
@@ -115,8 +115,8 @@ The sequence of non-null attempts has the same law as `SequentialCPM`'s, but it 
 from a different random stream: `SequentialCPM()` spends one draw on each null pick, and
 `skip_interior = true` does not make those draws. With the same `seed`, the two settings give
 different trajectories with the same statistics. Each setting is still deterministic on
-its own: the same problem, seed and algorithm give the same run (D-158). Continuing from a
-checkpoint is equal in law to an uninterrupted run, not bitwise identical (D-177).
+its own: the same problem, seed and algorithm give the same run. Continuing from a
+checkpoint is equal in law to an uninterrupted run, not bitwise identical.
 
 ### When to use it
 
@@ -125,7 +125,7 @@ interior: a colony growing from one cell, such as the OpenVT monolayer, a few ce
 migrating on a large lattice, or a dilute aggregate. The fewer boundary sites, the larger
 the speed-up. A reproduction defined on `SequentialCPM()` can switch to it without
 changing its targets, since the two are equal in law; the OpenVT threshold sweeps and the
-foam reproduction run this way (D-174, D-190).
+foam reproduction run this way.
 
 ### Limits
 
@@ -134,13 +134,13 @@ foam reproduction run this way (D-174, D-190).
 - **One O(N) pass per MCS.** At the start of each MCS the state and the frozen mask are
   compared with a shadow copy, to catch writes made outside the sweep. On a nearly empty
   lattice this pass is a visible part of the cost: about 0.25 ms per MCS on 1400² (Mac, Apple
-  Silicon, CPU; measured in the P6.4b1 review).
+  Silicon, CPU; measured when the option was added).
 - **Not a change to `CheckerboardCPM`.** `CheckerboardCPM` makes many attempts at once,
   which is a different dynamics, close to `SequentialCPM`'s (see
   [Kinetics](@ref manual-algorithms-checkerboard-time)). `skip_interior = true` is
   equivalent to `SequentialCPM()` by construction. `CheckerboardCPM` has no such option:
   an attempt at an interior site already ends after two reads there.
-- **General proposal laws** with a Hastings correction are later work (ROADMAP P6.4b).
+- **General proposal laws** with a Hastings correction are not supported yet.
 
 ### Example
 
@@ -172,8 +172,8 @@ bnd = solve(prob, SequentialCPM(; skip_interior = true); save_everystep = false)
 
 ### Measured evidence
 
-The acceptance test is `lib/PottsModels/test/acceptance/boundary_site_proposal_tests.jl`
-(D-177). It passes at both tiers (SMOKE: 102 checks, 2 skipped by tier; FULL on the PC:
+The acceptance test is `lib/PottsModels/test/acceptance/boundary_site_proposal_tests.jl`.
+It passes at both tiers (SMOKE: 102 checks, 2 skipped by tier; FULL on the PC:
 106 checks, every ``|z| \le 2.4``). Each check is held to a false-failure probability of
 at most 10⁻³ and has a negative control.
 
@@ -192,7 +192,7 @@ at most 10⁻³ and has a negative control.
 - **`SequentialCPM()` unchanged.** Two bitwise records of `SequentialCPM()` runs still match,
   and its performance A/B passes (worst candidate/base 1.010 against a margin of 1.032).
 
-Speed-ups over `SequentialCPM()` (D-177):
+Speed-ups over `SequentialCPM()`:
 
 | Case | Speed-up | Machine and backend |
 |---|---|---|

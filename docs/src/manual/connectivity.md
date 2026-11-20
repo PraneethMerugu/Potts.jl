@@ -85,7 +85,7 @@ connected through this copy". `c` is `old`, or `new` under `Simple()` and `Globa
 (`shell(target)`, `shell(source)`) and takes no options: `shell(old)` and
 `shell(target; include_self = true)` are `ArgumentError`s.
 
-**Shadowing (D-195).** These names came after published models used some of them as
+**Shadowing.** These names came after published models used some of them as
 structural parameters (`WortelAct(; connected)`). A structural parameter may take the name
 `connected`, `shell`, `pieces`, `distinct`, `Local`, `ArcOrPair` or `Simple`; inside its own
 model it then shadows the helper, and that model cannot call the helper. For example, with
