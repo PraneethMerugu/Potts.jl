@@ -71,7 +71,7 @@ _identity(::typeof(min), T) = typemax(T)
 @inline function _cell_reduce_body!(i, f, op, dst, st, p, ctx, key, mcs)
     # bounds: launched over i ∈ 1:nsites = length(st.ownership)
     c = @inbounds st.ownership[i]
-    if c != 0
+    return if c != 0
         v = convert(eltype(dst), f(st, p, ctx, key, mcs, i))
         _atomic!(op, dst, c, v)
     end
@@ -152,9 +152,14 @@ reductions.
 """
 function reduce_scratch(ncell::Integer)
     return (;
-        cell = NamedTuple{(_CR_ACC, _CR_LO, _CR_HI, _CR_EXP, _CR_FLAG)}((zeros(Int64, ncell), zeros(UInt32, ncell),
-            zeros(Int32, ncell), zeros(Int32, ncell), zeros(Int32, ncell))),
-        model = NamedTuple{(REDUCE_STATUS,)}((zeros(UInt32, 1),)))
+        cell = NamedTuple{(_CR_ACC, _CR_LO, _CR_HI, _CR_EXP, _CR_FLAG)}(
+            (
+                zeros(Int64, ncell), zeros(UInt32, ncell),
+                zeros(Int32, ncell), zeros(Int32, ncell), zeros(Int32, ncell),
+            )
+        ),
+        model = NamedTuple{(REDUCE_STATUS,)}((zeros(UInt32, 1),)),
+    )
 end
 
 # Without 64-bit atomics (`_atomic64`, Metal) the sum takes the paired 32-bit form;
@@ -167,16 +172,21 @@ const _FLOAT_ATOMICS = Ref(false)
 
 _has_reduce_scratch(st) = haskey(st.cell, _CR_ACC) && haskey(st.model, REDUCE_STATUS)
 @inline function _cr(st)
-    return (; acc = getfield(st.cell, _CR_ACC), lo = getfield(st.cell, _CR_LO), hi = getfield(st.cell, _CR_HI),
-        exp = getfield(st.cell, _CR_EXP), flag = getfield(st.cell, _CR_FLAG), status = getfield(st.model, REDUCE_STATUS))
+    return (;
+        acc = getfield(st.cell, _CR_ACC), lo = getfield(st.cell, _CR_LO), hi = getfield(st.cell, _CR_HI),
+        exp = getfield(st.cell, _CR_EXP), flag = getfield(st.cell, _CR_FLAG), status = getfield(st.model, REDUCE_STATUS),
+    )
 end
 
 # ⌈log₂ N⌉ for N lattice sites (every cell has at most N); refused above 2^61 sites, where
 # the Int64 sum could no longer hold N terms below 2^(62 − L)
 function _reduce_bits(n::Integer)
-    n <= 2^61 || throw(ArgumentError(
-        "a float cell sum (`integral`, `CellReduce`) over $n lattice sites cannot be held exactly in Int64 " *
-        "fixed point (at most 2^61 sites); use a smaller lattice"))
+    n <= 2^61 || throw(
+        ArgumentError(
+            "a float cell sum (`integral`, `CellReduce`) over $n lattice sites cannot be held exactly in Int64 " *
+                "fixed point (at most 2^61 sites); use a smaller lattice"
+        )
+    )
     return n <= 1 ? 0 : 64 - leading_zeros(n - 1)
 end
 
@@ -318,13 +328,20 @@ end
     return nothing
 end
 
-function _cell_reduce!(::typeof(+), f::F, dst::AbstractArray{T}, ::Type{D}, st, p, ctx, key, mcs,
-        backend) where {F, T <: Union{Float16, Float32, Float64}, D}
+function _cell_reduce!(
+        ::typeof(+), f::F, dst::AbstractArray{T}, ::Type{D}, st, p, ctx, key, mcs,
+        backend
+    ) where {F, T <: Union{Float16, Float32, Float64}, D}
     _FLOAT_ATOMICS[] && return _cell_reduce_atomic!(+, f, dst, st, p, ctx, key, mcs, backend)
-    _has_reduce_scratch(st) || throw(ArgumentError(string(
-        "the cell sum into the ", T, " column `", _part_name(D), "` (`CellReduce`) needs the reduction scratch in the ",
-        "state: merge `sc = CorePotts.reduce_scratch(ncell)` into it (`initial_state(σ, kinds; cell = (; …, sc.cell...), ",
-        "model = sc.model)`)")))
+    _has_reduce_scratch(st) || throw(
+        ArgumentError(
+            string(
+                "the cell sum into the ", T, " column `", _part_name(D), "` (`CellReduce`) needs the reduction scratch in the ",
+                "state: merge `sc = CorePotts.reduce_scratch(ncell)` into it (`initial_state(σ, kinds; cell = (; …, sc.cell...), ",
+                "model = sc.model)`)"
+            )
+        )
+    )
     sc = _cr(st)
     n = length(st.ownership)
     L = _reduce_bits(n)
@@ -344,12 +361,19 @@ function _cell_reduce!(::typeof(+), f::F, dst::AbstractArray{T}, ::Type{D}, st, 
 end
 
 # any other number type (BigFloat, Dual, Rational): summed in site order on the host
-function _cell_reduce!(::typeof(+), f::F, dst::AbstractArray{T}, ::Type{D}, st, p, ctx, key, mcs,
-        backend) where {F, T, D}
-    Exec.ishost(backend) || throw(ArgumentError(string(
-        "run on the CPU: the cell sum into the ", T, " column `", _part_name(D), "` (`CellReduce`) runs on the host ",
-        "only, because a device has no atomics for ", T,
-        (T <: AbstractFloat ? "; or use a Float32 or Float64 column" : ""))))
+function _cell_reduce!(
+        ::typeof(+), f::F, dst::AbstractArray{T}, ::Type{D}, st, p, ctx, key, mcs,
+        backend
+    ) where {F, T, D}
+    Exec.ishost(backend) || throw(
+        ArgumentError(
+            string(
+                "run on the CPU: the cell sum into the ", T, " column `", _part_name(D), "` (`CellReduce`) runs on the host ",
+                "only, because a device has no atomics for ", T,
+                (T <: AbstractFloat ? "; or use a Float32 or Float64 column" : "")
+            )
+        )
+    )
     fill!(dst, zero(T))
     σ = st.ownership
     for i in eachindex(σ)
@@ -433,8 +457,10 @@ function _check_reduce_status!(stats, st, t, backend)
     else
         "rescale the summed expression (this device has no Float64)"
     end
-    @warn string("the cell sum `", name, "` (`integral`, `CellReduce`) exceeded floatmax(", T, ") = ", floatmax(T),
-        " by MCS ", t, " and is stored as ±Inf; ", route)
+    @warn string(
+        "the cell sum `", name, "` (`integral`, `CellReduce`) exceeded floatmax(", T, ") = ", floatmax(T),
+        " by MCS ", t, " and is stored as ±Inf; ", route
+    )
     fill!(w, zero(eltype(w)))
     return nothing
 end
@@ -520,10 +546,12 @@ then depends on the order). The `#ct_` columns are the scratch of a weighted rel
 exact sums (integer weight units).
 """
 function empty_contacts(maxdeg::Integer, ncell::Integer; T::Type = Float32)
-    return (; contact_nbr = zeros(Int32, maxdeg, ncell), contact_measure = zeros(T, maxdeg, ncell),
+    return (;
+        contact_nbr = zeros(Int32, maxdeg, ncell), contact_measure = zeros(T, maxdeg, ncell),
         contact_medium = zeros(T, ncell), contact_overflow = zeros(Int32, ncell),
         _CT_ACC => zeros(Int64, maxdeg + 1, ncell), _CT_LO => zeros(UInt32, maxdeg + 1, ncell),
-        _CT_HI => zeros(Int32, maxdeg + 1, ncell))
+        _CT_HI => zeros(Int32, maxdeg + 1, ncell),
+    )
 end
 const _CT_ACC = Symbol("#ct_acc")         # row maxdeg + 1: the medium
 const _CT_LO = Symbol("#ct_lo")
@@ -544,7 +572,7 @@ ContactPhase(relation::Symbol = :contact) = ContactPhase{relation}()
 @inline function _contact_body!(i, nbr, measure, medium, overflow, σ, lat, r, u, sc)
     # bounds: i ≤ nsites = length(σ); a ≤ capacity, the columns of nbr and measure
     a = @inbounds σ[i]
-    if a != 0
+    return if a != 0
         x = coordinates(lat, i)
         maxdeg = size(nbr, 1)
         for k in 1:length(r)
@@ -606,13 +634,20 @@ function (ph::ContactPhase{R})(st, p, ctx, key, mcs, backend) where {R}
     rel = getfield(ctx, R)
     n = length(st.ownership)
     u = _units_for(eltype(c.contact_measure), rel, n, backend)
-    u === nothing || haskey(c, _CT_ACC) || throw(ArgumentError(string(
-        "the contact table (`ContactPhase`) over the weighted relation `", R, "` needs the `#ct_` scratch columns ",
-        "of `empty_contacts`: build the table with `empty_contacts(maxdeg, ncell; T)` and merge all of its columns")))
+    u === nothing || haskey(c, _CT_ACC) || throw(
+        ArgumentError(
+            string(
+                "the contact table (`ContactPhase`) over the weighted relation `", R, "` needs the `#ct_` scratch columns ",
+                "of `empty_contacts`: build the table with `empty_contacts(maxdeg, ncell; T)` and merge all of its columns"
+            )
+        )
+    )
     sc = u === nothing ? nothing : (; acc = getfield(c, _CT_ACC), lo = getfield(c, _CT_LO), hi = getfield(c, _CT_HI))
     _device_fill!(backend, c.contact_nbr, 0); _device_fill!(backend, c.contact_measure, 0)
     _device_fill!(backend, c.contact_medium, 0); _device_fill!(backend, c.contact_overflow, 0)
-    Exec.launch!(backend, _contact_body!, n, (c.contact_nbr, c.contact_measure, c.contact_medium,
+    Exec.launch!(
+        backend, _contact_body!, n, (
+            c.contact_nbr, c.contact_measure, c.contact_medium,
             c.contact_overflow, st.ownership, ctx.lattice, rel, u, sc,
         )
     )

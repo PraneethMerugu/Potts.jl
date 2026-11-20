@@ -51,14 +51,15 @@ function PottsProblem(
         relations = (;), spacing = nothing, frozen = nothing, seed = 0, replica = 0, repeat = 0, tangent = nothing, kwargs...
     )
     return _problem(
-            f, u0, lattice, tspan, p, contact, proposal, relations, spacing, frozen, seed, replica, repeat, tangent,
-            NamedTuple(kwargs)
-        )
+        f, u0, lattice, tspan, p, contact, proposal, relations, spacing, frozen, seed, replica, repeat, tangent,
+        NamedTuple(kwargs)
+    )
 end
 
 # The checks and the resolved relations of a new problem, compiled once for every model:
 # nothing here is specialized on the model's types (the problem type itself is built at the end)
-Base.@nospecializeinfer function _problem(@nospecialize(f::CPMFunction), @nospecialize(u0::CPMState),
+Base.@nospecializeinfer function _problem(
+        @nospecialize(f::CPMFunction), @nospecialize(u0::CPMState),
         @nospecialize(lattice::Lattice), @nospecialize(tspan), @nospecialize(p), @nospecialize(contact),
         @nospecialize(proposal), @nospecialize(relations), @nospecialize(spacing), @nospecialize(frozen), seed, replica,
         repeat, @nospecialize(tangent), @nospecialize(kwargs::NamedTuple)
@@ -80,10 +81,13 @@ Base.@nospecializeinfer function _problem(@nospecialize(f::CPMFunction), @nospec
     if kinds !== nothing                            # the standard rule decides the mask
         rule = _standard_frozen(kinds, u0)
         dom(m) = lattice.mask === nothing ? m : m .| .!lattice.mask
-        frozen === nothing || dom(frozen) == dom(rule) || throw(ArgumentError(
-            "a model with frozen kinds $kinds derives its frozen mask from the state; a " *
-            "`frozen` mask that differs from it cannot be combined with them (give the " *
-            "obstacle sites to a cell of a frozen kind instead)"))
+        frozen === nothing || dom(frozen) == dom(rule) || throw(
+            ArgumentError(
+                "a model with frozen kinds $kinds derives its frozen mask from the state; a " *
+                    "`frozen` mask that differs from it cannot be combined with them (give the " *
+                    "obstacle sites to a cell of a frozen kind instead)"
+            )
+        )
         frozen = rule
     end
     if lattice.mask !== nothing                     # outside the domain: medium, never mobile
@@ -190,7 +194,7 @@ function _check_frozen_hooks(@nospecialize(sys))         # (host, once per `init
     # a `frozen_varies` defined outside CorePotts (even `false`, also on a supertype) is a choice (D-133)
     which(frozen_varies, Tuple{typeof(sys)}).module === CorePotts || return nothing
     @warn "`remake_frozen` is overridden for $(typeof(sys)) but `frozen_varies(sys)` is false: the " *
-          "frozen mask stays static during a run. Define `CorePotts.frozen_varies(::$(typeof(sys))) = true`." maxlog = 1
+        "frozen mask stays static during a run. Define `CorePotts.frozen_varies(::$(typeof(sys))) = true`." maxlog = 1
     return nothing
 end
 
@@ -199,7 +203,8 @@ end
 function _frozen_reads(@nospecialize(sys), @nospecialize(st))
     reads = frozen_reads(sys)
     reads === nothing && return nothing
-    (reads isa Tuple && all(n -> n isa Symbol, reads)) || throw(ArgumentError(
+    (reads isa Tuple && all(n -> n isa Symbol, reads)) || throw(
+        ArgumentError(
             "`frozen_reads` must be `nothing` or a tuple of Symbols (`:ownership` or cell column names); got $(repr(reads))"
         )
     )
@@ -207,10 +212,15 @@ function _frozen_reads(@nospecialize(sys), @nospecialize(st))
         n === :ownership || haskey(st.cell, n) || throw(
             ArgumentError(
                 "`frozen_reads` declares `$n`, which is neither `:ownership` nor a cell column of the state " *
-            "(cell columns: $(join(keys(st.cell), ", ")))"))
+                    "(cell columns: $(join(keys(st.cell), ", ")))"
+            )
+        )
     end
-    allunique(reads) || throw(ArgumentError(
-        "`frozen_reads` declares `$(reads[findfirst(n -> count(==(n), reads) > 1, reads)])` more than once; got $(repr(reads))"))
+    allunique(reads) || throw(
+        ArgumentError(
+            "`frozen_reads` declares `$(reads[findfirst(n -> count(==(n), reads) > 1, reads)])` more than once; got $(repr(reads))"
+        )
+    )
     return reads
 end
 _custom_frozen(@nospecialize(sys)) = frozen_varies(sys) && frozen_kinds(sys) === nothing
@@ -229,8 +239,12 @@ and `prob.u0` re-laid out for it if its state layout depends on them (values kep
 everything else is kept. Here: every such keyword is an `ArgumentError`.
 """
 function remake_function(sys, prob; kwargs...)
-    throw(ArgumentError("remake: unknown keyword$(length(kwargs) == 1 ? "" : "s") " *
-                        "$(join(("`$k`" for k in keys(kwargs)), ", "))"))
+    throw(
+        ArgumentError(
+            "remake: unknown keyword$(length(kwargs) == 1 ? "" : "s") " *
+                "$(join(("`$k`" for k in keys(kwargs)), ", "))"
+        )
+    )
 end
 
 """
@@ -457,10 +471,13 @@ _sum_or_nothing(::Nothing, ::Nothing) = nothing
 # Ensemble statistics: totals over trajectories.
 function Base.merge(a::PottsStats, b::PottsStats)
     l = LifecycleStats(; (f => getfield(a.lifecycle, f) + getfield(b.lifecycle, f) for f in fieldnames(LifecycleStats))...)
-    fs = FieldStats(; solves = a.fields.solves + b.fields.solves, budget = a.fields.budget + b.fields.budget,
+    fs = FieldStats(;
+        solves = a.fields.solves + b.fields.solves, budget = a.fields.budget + b.fields.budget,
         floor = a.fields.floor + b.fields.floor, newton_budget = a.fields.newton_budget + b.fields.newton_budget,
-        code = _rank(b.fields.code) > _rank(a.fields.code) ? b.fields.code : a.fields.code)
-    return PottsStats(; mcs = a.mcs + b.mcs, attempts = a.attempts + b.attempts,
+        code = _rank(b.fields.code) > _rank(a.fields.code) ? b.fields.code : a.fields.code
+    )
+    return PottsStats(;
+        mcs = a.mcs + b.mcs, attempts = a.attempts + b.attempts,
         accepted = (a.accepted < 0 || b.accepted < 0) ? -1 : a.accepted + b.accepted,
         committed = (a.committed < 0 || b.committed < 0) ? -1 : a.committed + b.committed,
         launches = a.launches + b.launches, refreshes = a.refreshes + b.refreshes,
@@ -468,12 +485,15 @@ function Base.merge(a::PottsStats, b::PottsStats)
         transfer_bytes = a.transfer_bytes + b.transfer_bytes, lifecycle = l, fields = fs,
         ode_code = b.ode_code != SciMLBase.ReturnCode.Default ? b.ode_code : a.ode_code,
         accepted_energy_change = _sum_or_nothing(a.accepted_energy_change, b.accepted_energy_change),
-        connectivity_deferred = _sum_or_nothing(a.connectivity_deferred, b.connectivity_deferred))
+        connectivity_deferred = _sum_or_nothing(a.connectivity_deferred, b.connectivity_deferred)
+    )
 end
 
 function _to_backend(backend, x)
-    return Adapt.adapt(KernelAbstractions.allocate(backend, Int32, 0) |>
-        typeof |> _array_adaptor, x)
+    return Adapt.adapt(
+        KernelAbstractions.allocate(backend, Int32, 0) |>
+            typeof |> _array_adaptor, x
+    )
 end
 _array_adaptor(::Type{<:Array}) = Array
 _array_adaptor(A::Type) = Base.typename(A).wrapper
@@ -650,8 +670,10 @@ function _init_run(prob, alg, backend, checkpoint, callback, o)
         (checkpoint.stats.accepted_energy_change === nothing) == (prob.f.track === nothing) || throw(
             ArgumentError(
                 "checkpoint was taken with tracking $(checkpoint.stats.accepted_energy_change === nothing ? "off" : "on") " *
-            "but the problem has tracking $(prob.f.track === nothing ? "off" : "on"); continue it in a problem " *
-            "with the same `track`"))
+                    "but the problem has tracking $(prob.f.track === nothing ? "off" : "on"); continue it in a problem " *
+                    "with the same `track`"
+            )
+        )
         # a restored state is no fresh one: its at-init phases skip the field clamps (D-145)
         integ = _init(prob, alg, false, backend, _options(prob, o), callback)
         _restore_stats!(_stats(integ), checkpoint.stats)
@@ -744,8 +766,8 @@ end
 _select(u, ::Nothing) = u
 function _select(u, l::SavedLeaves)
     return CPMState(
-            l.ownership ? u.ownership : nothing, _pick(u.cell, l.cell), _pick(u.site, l.site), _pick(u.model, l.model), (;)
-        )
+        l.ownership ? u.ownership : nothing, _pick(u.cell, l.cell), _pick(u.site, l.site), _pick(u.model, l.model), (;)
+    )
 end
 _pick(nt::NamedTuple, names::Vector{Symbol}) = NamedTuple{Tuple(names)}(map(n -> getfield(nt, n), Tuple(names)))
 
@@ -753,9 +775,9 @@ _pick(nt::NamedTuple, names::Vector{Symbol}) = NamedTuple{Tuple(names)}(map(n ->
 # MCS: a hint, once per session
 @noinline function _hint_device_saves()
     return @info string(
-            "this device run saves every MCS (`save_everystep` defaults to `isempty(saveat)`, as in SciML), ",
-            "a host copy of the state each time; pass `saveat` or `save_everystep = false` to save less"
-        ) maxlog = 1
+        "this device run saves every MCS (`save_everystep` defaults to `isempty(saveat)`, as in SciML), ",
+        "a host copy of the state each time; pass `saveat` or `save_everystep = false` to save less"
+    ) maxlog = 1
 end
 function _warn_large_saves(prob, saveat, save_start, save_end, everystep, leaves)
     t0, t1 = prob.tspan
@@ -805,14 +827,16 @@ _parameter_tuple(p) = applicable(NamedTuple, p) ? NamedTuple(p) : (;)
 function _float64_problem(prob::PottsProblem)
     u = prob.u0
     return _holds_float64(u.cell) || _holds_float64(u.site) || _holds_float64(u.model) ||
-           _holds_float64(_parameter_tuple(prob.p))
+        _holds_float64(_parameter_tuple(prob.p))
 end
 function _device_float_notice(prob::PottsProblem, backend)
     (Exec.ishost(backend) || !_float64_problem(prob)) && return false
-    @warn string("this problem was built in Float64 and runs on the ", nameof(typeof(backend)),
+    @warn string(
+        "this problem was built in Float64 and runs on the ", nameof(typeof(backend)),
         " backend: Float64 device code is several times slower than Float32 on most GPUs. Give the ",
         "backend to the problem as well (`PottsProblem(sys, op, tspan; backend)` builds in the ",
-        "backend's float type, Float32 on a device). The run itself is unchanged; this notice shows once") maxlog = 1
+        "backend's float type, Float32 on a device). The run itself is unchanged; this notice shows once"
+    ) maxlog = 1
     return true
 end
 
@@ -830,8 +854,10 @@ Base.@nospecializeinfer function _init(
     lat = prob.lattice
     _device_float_notice(prob, backend)
     _check_convert_atomics(backend, prob.u0)
-    ctx = (; lattice = _to_backend(backend, lat), proposal = relation(_proposal(alg, prob), lat), contact = prob.contact,
-        mobility = _backend_mobility(backend, mobility(prob.frozen, lat)), prob.relations...)
+    ctx = (;
+        lattice = _to_backend(backend, lat), proposal = relation(_proposal(alg, prob), lat), contact = prob.contact,
+        mobility = _backend_mobility(backend, mobility(prob.frozen, lat)), prob.relations...,
+    )
     prob.spacing === nothing || (ctx = merge(ctx, (; spacing = prob.spacing)))
     # whole-cell connectivity: the flood scratch and the evaluation mode; nothing otherwise
     ctx = merge(ctx, connectivity_ctx(backend, prob.f, lat, alg isa CheckerboardCPM ? GlobalBoard() : GlobalExact()))
@@ -847,7 +873,8 @@ Base.@nospecializeinfer function _init(
     # a problem with derivative parts: the shadow tangent store of the field phases
     ctx = with_tangent(ctx, prob.tangent, prob.f.phases, state, p, backend, fresh)
     cache = alg isa CheckerboardCPM ?
-            CheckerboardCache(backend, lat, prob.f, relation(_proposal(alg, prob), lat); alg.region, alg.parts, alg.switches,
+        CheckerboardCache(
+            backend, lat, prob.f, relation(_proposal(alg, prob), lat); alg.region, alg.parts, alg.switches,
             alg.threads, alg.inline_max_blocks, min_read = _copy_step_reach(prob, ctx), cell = state.cell
         ) :
         _skips_interior(alg) ? BoundaryCache(state.ownership, ctx.mobility, ctx.lattice, ctx.proposal) : nothing
@@ -856,7 +883,8 @@ Base.@nospecializeinfer function _init(
     fused_limits = _fused_lifecycle_limits(alg)
     lcache = prob.f.lifecycle === nothing ? nothing :
         LifecycleCache(backend, ndims(lat), ncells(prob.u0), state, _device_planned(backend, alg, prob.f); fused_limits)
-    integ = PottsIntegrator(prob, alg, _device_law(_law(alg, prob.f), backend), state, cache, lcache, prob.f, device_functions(prob.f), p, ctx, backend, key,
+    integ = PottsIntegrator(
+        prob, alg, _device_law(_law(alg, prob.f), backend), state, cache, lcache, prob.f, device_functions(prob.f), p, ctx, backend, key,
         prob.tspan[1], prob.tspan[2], opts, Int[], Any[], SciMLBase.ReturnCode.Default, _initial_stats(prob.f),
         _callbacks(callback), prob.frozen === nothing ? nsites(lat) : count(!, prob.frozen),
         _mobility_scratch(backend, prob, ctx.mobility), 0, false
@@ -867,7 +895,8 @@ Base.@nospecializeinfer function _init(
     _each(e -> precompile(_run_entry!, (typeof(integ), typeof(e))), prob.f.phases.mcs)
     _stats(integ).launches += run_phases(
         fresh ? prob.f.phases.at_init : derived(prob.f.phases.at_init), integ.state, integ.p, integ.ctx,
-        integ.key, integ.t, integ.backend, _stats(integ))
+        integ.key, integ.t, integ.backend, _stats(integ)
+    )
     _start_failed!(integ)
     _each(cb -> cb.initialize(cb, integ.state, integ.t, integ), integ.callbacks)
     opts.save_start && _save!(integ)
@@ -958,9 +987,12 @@ function _preflight(prob::PottsProblem, alg::AbstractCPMAlgorithm, ctx)
         throw(ArgumentError("the surface relation must not include the origin: pass a neighbor relation without offset zero (such as `VonNeumann(1)` or `Moore(1)`)"))
     # the pair-energy deltas assume unordered bonds: every offset needs its negation
     for name in (:contact, :surface)
-        haskey(ctx, name) && !is_symmetric(getfield(ctx, name)) && throw(ArgumentError(
-            "the $name relation is not symmetric (each offset needs its negation with the same " *
-            "weight); an asymmetric relation gives a ΔH that is not an energy difference"))
+        haskey(ctx, name) && !is_symmetric(getfield(ctx, name)) && throw(
+            ArgumentError(
+                "the $name relation is not symmetric (each offset needs its negation with the same " *
+                    "weight); an asymmetric relation gives a ΔH that is not an energy difference"
+            )
+        )
     end
     _check_connectivity(prob, alg, ctx)
     return nothing
@@ -1030,8 +1062,14 @@ function _parameter_route(integ::PottsIntegrator, sym, write::Bool)
     SII.is_parameter(integ, sym) || return nothing
     t = sym isa Symbol ? repr(sym) : string(sym)
     route = write ? "write `integ.ps[$t] = v`" : "read `integ.ps[$t]`"
-    throw(ArgumentError(string("`", lstrip(t, ':'), "` is a parameter: ", route,
-        " (SciML's convention: an integrator indexes states, `integ.ps` its parameters)")))
+    throw(
+        ArgumentError(
+            string(
+                "`", lstrip(t, ':'), "` is a parameter: ", route,
+                " (SciML's convention: an integrator indexes states, `integ.ps` its parameters)"
+            )
+        )
+    )
 end
 function Base.getindex(integ::PottsIntegrator, sym)
     _parameter_route(integ, sym, false)
@@ -1083,7 +1121,8 @@ function _check_status!(integ::PottsIntegrator)
 end
 
 # A nonzero status word fails the run, with a warning naming each reason (once per run)
-const _STATUS_REASONS = (STATUS_NONFINITE => "an energy change was not finite (NaN or Inf)",
+const _STATUS_REASONS = (
+    STATUS_NONFINITE => "an energy change was not finite (NaN or Inf)",
     STATUS_DRAW_EXHAUSTED => "a bounded randn(μ, σ; lower_bound) draw exhausted its $MAX_DRAW_ATTEMPTS attempts",
     STATUS_DRAW_NEGATIVE_SD => "a bounded randn(μ, σ; lower_bound) draw was given σ < 0",
 )
@@ -1160,11 +1199,15 @@ _run_mcs!(integ, t::Tuple) = (Base.afoldl((_, e) -> (_run_entry!(integ, e); noth
 
 function _sequential_sweep!(integ::PottsIntegrator, ctx, part::NTuple{2, Int})
     if _skips_interior(integ.alg)
-        acc, status, tracked = boundary_site_mcs!(integ.state, integ.kf, integ.p, ctx,
-            integ.law, integ.key, integ.t, integ.cache, integ.f.track)
+        acc, status, tracked = boundary_site_mcs!(
+            integ.state, integ.kf, integ.p, ctx,
+            integ.law, integ.key, integ.t, integ.cache, integ.f.track
+        )
     else
-        acc, status, tracked = sequential_mcs!(integ.state, integ.kf, integ.p, ctx,
-            integ.law, integ.key, integ.t, integ.f.track, part)
+        acc, status, tracked = sequential_mcs!(
+            integ.state, integ.kf, integ.p, ctx,
+            integ.law, integ.key, integ.t, integ.f.track, part
+        )
     end
     _stats(integ).accepted = max(_stats(integ).accepted, 0) + acc
     tracked === nothing || (_stats(integ).accepted_energy_change += tracked)
@@ -1176,7 +1219,8 @@ end
 function _run_entry!(integ::PottsIntegrator, phases::Tuple, part::NTuple{2, Int} = (1, 1))
     _stats(integ).launches += run_phases(
         phases, integ.state, integ.p, integ.ctx,
-        integ.key, integ.t, integ.backend, _stats(integ), part)
+        integ.key, integ.t, integ.backend, _stats(integ), part
+    )
     return nothing
 end
 # `part = (j, n)`: pass `j` of the `n` passes of a `Repeat` (the whole MCS is `(1, 1)`)
@@ -1193,8 +1237,10 @@ function _run_entry!(integ::PottsIntegrator, ::SweepPhase, part::NTuple{2, Int} 
             _sequential_sweep!(integ, ctx, part)
         end
     else
-        _stats(integ).launches += checkerboard_mcs!(integ.state, integ.cache, integ.kf,
-            integ.p, ctx, integ.law, integ.key, integ.t, part)
+        _stats(integ).launches += checkerboard_mcs!(
+            integ.state, integ.cache, integ.kf,
+            integ.p, ctx, integ.law, integ.key, integ.t, part
+        )
     end
     return nothing
 end
@@ -1210,14 +1256,20 @@ end
 function _check_repeat(phases::Phases, alg, cache)
     for r in phases.mcs
         (r isa Repeat && r.n > 1 && any(x -> x isa SweepPhase, r.entries)) || continue
-        _skips_interior(alg) && throw(ArgumentError(
-            "the MCS order repeats a 1/$(r.n) sweep, which `SequentialCPM(; skip_interior = true)` cannot split " *
-            "(its attempts are geometric skips); use `SequentialCPM()` or `CheckerboardCPM()`"))
+        _skips_interior(alg) && throw(
+            ArgumentError(
+                "the MCS order repeats a 1/$(r.n) sweep, which `SequentialCPM(; skip_interior = true)` cannot split " *
+                    "(its attempts are geometric skips); use `SequentialCPM()` or `CheckerboardCPM()`"
+            )
+        )
         if cache isa CheckerboardCache
             C = length(cache.order)
-            C % r.n == 0 || throw(ArgumentError(
-                "the MCS order repeats a 1/$(r.n) sweep; `CheckerboardCPM` splits an MCS into its $C phases, " *
-                "so the count must divide $C"))
+            C % r.n == 0 || throw(
+                ArgumentError(
+                    "the MCS order repeats a 1/$(r.n) sweep; `CheckerboardCPM` splits an MCS into its $C phases, " *
+                        "so the count must divide $C"
+                )
+            )
         end
     end
     return nothing
@@ -1240,8 +1292,10 @@ end
 # The host lifecycle path (CPU; host hooks on a device): events are known on the host, and
 # the frozen mask follows them at once (D-081; quiet MCS pay nothing)
 function _step_lifecycle!(integ, ::Nothing, before::Bool = true)
-    launches, events = run_lifecycle!(integ.f.lifecycle, integ.lcache, integ.state, integ.p, integ.ctx,
-        integ.key, integ.t, integ.backend, _stats(integ), before)
+    launches, events = run_lifecycle!(
+        integ.f.lifecycle, integ.lcache, integ.state, integ.p, integ.ctx,
+        integ.key, integ.t, integ.backend, _stats(integ), before
+    )
     _stats(integ).launches += launches
     events && _refresh_frozen!(integ)
     return nothing
@@ -1252,8 +1306,10 @@ function _step_lifecycle!(integ, D::DeviceLifecycle)
     D.form[] == _FORM_HOST && return _step_lifecycle!(integ, nothing)
     sc = integ.mscratch
     refresh = sc === nothing ? nothing : (; integ.ctx.mobility.frozen, kinds = frozen_kinds(integ.f.sys))
-    n = run_lifecycle_device!(integ.f.lifecycle, integ.lcache, integ.state, integ.p, integ.ctx, integ.key, integ.t,
-        integ.backend, refresh)
+    n = run_lifecycle_device!(
+        integ.f.lifecycle, integ.lcache, integ.state, integ.p, integ.ctx, integ.key, integ.t,
+        integ.backend, refresh
+    )
     if n < 0                    # handover: the host planner takes this MCS and every later one
         D.before_ran[] && _drop_device_counts!(integ, D)
         _stats(integ).launches += D.enqueued[]        # the failed form's kernels that ran
@@ -1291,10 +1347,13 @@ _mobility_scratch(backend, prob, ::AllMobile) = nothing
 function _mobility_scratch(backend, prob, ::MaskMobility)
     (frozen_varies(prob.f.sys) && frozen_kinds(prob.f.sys) !== nothing) || return nothing
     I = site_index_type(nsites(prob.lattice))
-    I <: Int64 && !_atomic64(backend) && throw(ArgumentError(
-        "this lattice has $(nsites(prob.lattice)) sites and a frozen mask that follows the state: its refresh " *
+    I <: Int64 && !_atomic64(backend) && throw(
+        ArgumentError(
+            "this lattice has $(nsites(prob.lattice)) sites and a frozen mask that follows the state: its refresh " *
                 "counts sites in Int64 atomics, which $(nameof(typeof(backend))) does not have; " *
-        "run it on the CPU or on ROCm or CUDA"))
+                "run it on the CPU or on ROCm or CUDA"
+        )
+    )
     return MobileCounters(KernelAbstractions.zeros(backend, I, 3), zeros(I, 3))
 end
 
@@ -1302,7 +1361,8 @@ end
 # atomics (`convert_scratch`, D-253), which a backend without them cannot compile: refused
 function _check_convert_atomics(backend, u0)
     haskey(u0.model, CONVERT_FLAGS) || return nothing
-    (eltype(getfield(u0.model, CONVERT_FLAGS)) <: Int64 && !_atomic64(backend)) && throw(ArgumentError(
+    (eltype(getfield(u0.model, CONVERT_FLAGS)) <: Int64 && !_atomic64(backend)) && throw(
+        ArgumentError(
             "this lattice has $(length(u0.ownership)) sites and an @convert pass: it keeps site indices in Int64 atomics, " *
                 "which $(nameof(typeof(backend))) does not have; run it on the CPU or on ROCm or CUDA"
         )
@@ -1315,7 +1375,8 @@ end
 function _initial_stats(f)
     return PottsStats(;
         accepted_energy_change = f.track === nothing ? nothing : 0.0,
-        connectivity_deferred = (f.connectivity === nothing || !f.connectivity.uses_global) ? nothing : 0)
+        connectivity_deferred = (f.connectivity === nothing || !f.connectivity.uses_global) ? nothing : 0
+    )
 end
 
 # Whole-cell connectivity on a device: a device lifecycle does not maintain the
@@ -1324,9 +1385,12 @@ function _check_connectivity(prob, alg, ctx)
     h = prob.f.connectivity
     h === nothing && return nothing
     _ondevice(ctx.flood.mark) || return nothing
-    h.after_slots > 0 && prob.f.lifecycle !== nothing && throw(ArgumentError(
-        "cell-scope `pieces`/`largest_piece` with a lifecycle run on the host only (CPU backend): the device " *
-        "lifecycle does not rebuild them"))
+    h.after_slots > 0 && prob.f.lifecycle !== nothing && throw(
+        ArgumentError(
+            "cell-scope `pieces`/`largest_piece` with a lifecycle run on the host only (CPU backend): the device " *
+                "lifecycle does not rebuild them"
+        )
+    )
     return nothing
 end
 
@@ -1533,10 +1597,10 @@ end
 SciMLBase.has_stats(::PottsIntegrator) = true
 function SciMLBase.get_du(::PottsIntegrator)
     throw(
-            ArgumentError(
-                "get_du: a Potts state is a label field and has no derivative; compare two states instead"
-            )
+        ArgumentError(
+            "get_du: a Potts state is a label field and has no derivative; compare two states instead"
         )
+    )
 end
 
 # SciML's contract: `Success` while the run is healthy, else the code that ended it
@@ -1599,9 +1663,11 @@ Base.lastindex(sol::PottsSolution) = lastindex(sol.u)
 
 function Base.show(io::IO, ::MIME"text/plain", sol::PottsSolution)
     n = length(sol.t)
-    println(io, "PottsSolution: retcode ", sol.retcode, ", ", n, " saved state", n == 1 ? "" : "s",
-        ", ", sol.stats.mcs, " MCS")
-    print(io, "t: ", n <= 12 ? sol.t : "[$(join(sol.t[1:5], ", ")), …, $(join(sol.t[(end - 4):end], ", "))]")
+    println(
+        io, "PottsSolution: retcode ", sol.retcode, ", ", n, " saved state", n == 1 ? "" : "s",
+        ", ", sol.stats.mcs, " MCS"
+    )
+    return print(io, "t: ", n <= 12 ? sol.t : "[$(join(sol.t[1:5], ", ")), …, $(join(sol.t[(end - 4):end], ", "))]")
 end
 function Base.show(io::IO, sol::PottsSolution)
     return print(io, "PottsSolution(", sol.retcode, ", ", length(sol.t), " states)")
@@ -1694,19 +1760,19 @@ end
 
 function Base.Array(::PottsSolution)
     throw(
-            ArgumentError(
-                "`Array(sol)`: a Potts state is a label lattice and cell tables, not one array; read a " *
-                    "quantity by name (`sol[x]`) or a saved state's arrays (`sol.u[i].ownership`)"
-            )
+        ArgumentError(
+            "`Array(sol)`: a Potts state is a label lattice and cell tables, not one array; read a " *
+                "quantity by name (`sol[x]`) or a saved state's arrays (`sol.u[i].ownership`)"
         )
+    )
 end
 function Base.getindex(::PottsSolution, j::Int, i::Int)
     throw(
-            ArgumentError(
-                "sol[j, i]: a Potts state is not one array, so it has no component `j`; read a quantity " *
-                    "by name, `sol[x, i]`"
-            )
+        ArgumentError(
+            "sol[j, i]: a Potts state is not one array, so it has no component `j`; read a quantity " *
+                "by name, `sol[x, i]`"
         )
+    )
 end
 
 function _restore_stats!(dst::PottsStats, src::PottsStats)
@@ -1743,8 +1809,10 @@ A SciML ensemble of Potts runs. Trajectory `i` solves `remake(prob′; replica =
 where `prob′ = prob_func(prob, ctx)` (default: `prob`), so trajectories are independent and
 reproducible: trajectory `i` equals `solve(remake(prob; replica = prob.replica + i), alg)`.
 """
-function SciMLBase.EnsembleProblem(prob::PottsProblem; prob_func = SciMLBase.DEFAULT_PROB_FUNC,
-        safetycopy = false, kwargs...)
+function SciMLBase.EnsembleProblem(
+        prob::PottsProblem; prob_func = SciMLBase.DEFAULT_PROB_FUNC,
+        safetycopy = false, kwargs...
+    )
     pf = _ReplicaProbFunc(prob_func)
     return invoke(SciMLBase.EnsembleProblem, Tuple{Any}, prob; prob_func = pf, safetycopy, kwargs...)
 end
@@ -1769,12 +1837,14 @@ end
 # itself got a `seed` or an `rng`, else trajectory `i` keeps replica `i` of the problem's seed.
 function SciMLBase.__solve(
         prob::SciMLBase.AbstractEnsembleProblem, alg::AbstractCPMAlgorithm,
-        ensemble::SciMLBase.BasicEnsembleAlgorithm; kwargs...)
+        ensemble::SciMLBase.BasicEnsembleAlgorithm; kwargs...
+    )
     seeded = haskey(kwargs, :seed) || haskey(kwargs, :rng)
     function generic()
-        return invoke(SciMLBase.__solve, Tuple{SciMLBase.AbstractEnsembleProblem, Any, SciMLBase.BasicEnsembleAlgorithm},
-                prob, alg, ensemble; kwargs..., _rng_seeds = seeded
-            )
+        return invoke(
+            SciMLBase.__solve, Tuple{SciMLBase.AbstractEnsembleProblem, Any, SciMLBase.BasicEnsembleAlgorithm},
+            prob, alg, ensemble; kwargs..., _rng_seeds = seeded
+        )
     end
     ensemble isa EnsembleSerial && return generic()
     return @with IN_THREADED_ENSEMBLE => true generic()
@@ -1899,8 +1969,10 @@ function (s::ParameterSetter)(valp, vals)
     s.run_hook && SymbolicIndexingInterface.finalize_parameters_hook!(valp, s.original)
     return nothing
 end
-function SymbolicIndexingInterface.setp(sys::Union{PottsIntegrator, PottsProblem, CPMFunction}, ps::Union{Tuple, AbstractVector};
-    run_hook = true)
+function SymbolicIndexingInterface.setp(
+        sys::Union{PottsIntegrator, PottsProblem, CPMFunction}, ps::Union{Tuple, AbstractVector};
+        run_hook = true
+    )
     return parameter_setter(sys, ps, run_hook)
 end
 function SymbolicIndexingInterface.setp(sys::Union{PottsIntegrator, PottsProblem, CPMFunction}, p; run_hook = true)
@@ -1935,8 +2007,12 @@ end
 function _check_settable(sys, x)
     SymbolicIndexingInterface.is_parameter(sys, x) && return nothing
     SymbolicIndexingInterface.is_variable(sys, x) &&
-        throw(ArgumentError("setp: `$x` is a state variable, not a parameter; set states with " *
-                            "`setu`, or parameters and states together with `setsym`"))
+        throw(
+        ArgumentError(
+            "setp: `$x` is a state variable, not a parameter; set states with " *
+                "`setu`, or parameters and states together with `setsym`"
+        )
+    )
     throw(_unknown_name(sys, x, "setp"))
 end
 
@@ -2001,7 +2077,7 @@ function symbol_setter(sys, syms)
     pk, sk = Int[], Int[]
     for (k, x) in enumerate(syms)
         if SymbolicIndexingInterface.symbolic_type(x) isa SymbolicIndexingInterface.NotSymbolic ||
-           SymbolicIndexingInterface.is_variable(sys, x)
+                SymbolicIndexingInterface.is_variable(sys, x)
             push!(sk, k)                                  # a state (or a raw state index)
         elseif SymbolicIndexingInterface.is_parameter(sys, x)
             push!(pk, k)
@@ -2101,15 +2177,21 @@ set_parameter(p::NamedTuple, v, i::ParameterField) = set_parameter(p, v, i.name)
 # `SII.remake_buffer(prob, prob.p, keys, vals)` (and `setp_oop`, which calls it on the root
 # container) on a problem without a model: a new NamedTuple of the same type with those fields
 # set (the original untouched)
-function SymbolicIndexingInterface.remake_buffer(sys::Union{PottsIntegrator, PottsProblem, CPMFunction, ParameterFields},
-        p::NamedTuple, idxs, vals)
+function SymbolicIndexingInterface.remake_buffer(
+        sys::Union{PottsIntegrator, PottsProblem, CPMFunction, ParameterFields},
+        p::NamedTuple, idxs, vals
+    )
     length(idxs) == length(vals) ||
         throw(DimensionMismatch("remake_buffer: $(length(idxs)) keys, $(length(vals)) values"))
     for (i, v) in zip(idxs, vals)
         name = _index_name(i)
         (name isa Symbol && haskey(p, name)) ||
-            throw(ArgumentError("remake_buffer: `$name` is not a field of the parameter object " *
-                                "($(join(keys(p), ", ")))"))
+            throw(
+            ArgumentError(
+                "remake_buffer: `$name` is not a field of the parameter object " *
+                    "($(join(keys(p), ", ")))"
+            )
+        )
         p = set_parameter(p, v, name)
     end
     return p
@@ -2201,8 +2283,10 @@ function Problems.field_report(io::IO, prob::PottsProblem)
     println(io, "Field report: PottsProblem, ", _report_groups(phases), " (the policy at the problem's parameters; nothing bound)")
     isempty(phases) || _report_line(io, "backend", "set at `init` (`init(prob, alg; backend)`; the CPU by default)")
     for (i, ph) in enumerate(phases)
-        Problems.group_report(io, ph.group, ph.alg, _policy_params(ph, prob.p); title = _report_title(i, phases), ph.dt,
-            E = ph.T, t0 = prob.tspan[1] * ph.period)
+        Problems.group_report(
+            io, ph.group, ph.alg, _policy_params(ph, prob.p); title = _report_title(i, phases), ph.dt,
+            E = ph.T, t0 = prob.tspan[1] * ph.period
+        )
     end
     _report_coupling(io, phases, prob.p)
     return nothing
@@ -2232,8 +2316,10 @@ end
 function Problems.field_report(io::IO, sol::PottsSolution)
     prob = sol.prob
     phases = _field_phases(prob.f.phases)
-    println(io, "Field report: PottsSolution, ", _report_groups(phases), ", ", nameof(typeof(sol.alg)), ", retcode ", sol.retcode,
-        " (the policy at the problem's parameters)")
+    println(
+        io, "Field report: PottsSolution, ", _report_groups(phases), ", ", nameof(typeof(sol.alg)), ", retcode ", sol.retcode,
+        " (the policy at the problem's parameters)"
+    )
     _report_line(io, "saves", string(length(sol.t), " over ", prob.tspan, ", ", sol.stats.mcs, " MCS"))
     # the counts the groups used and their implicit facts, kept at the end of the run (a
     # solution built before they were kept: the policy's and as given)
@@ -2242,9 +2328,11 @@ function Problems.field_report(io::IO, sol::PottsSolution)
     isempty(phases) || isempty(f.backend) || _report_line(io, "backend", f.backend)
     _report_counters(io, phases, kept ? f.counts : nothing, f)
     for (i, ph) in enumerate(phases)
-        Problems.group_report(io, ph.group, ph.alg, _policy_params(ph, prob.p); title = _report_title(i, phases), ph.dt,
+        Problems.group_report(
+            io, ph.group, ph.alg, _policy_params(ph, prob.p); title = _report_title(i, phases), ph.dt,
             E = ph.T, t0 = prob.tspan[1] * ph.period, n = kept ? f.counts[i] : nothing,
-            facts = kept && length(f.implicit) == length(phases) ? f.implicit[i] : nothing)
+            facts = kept && length(f.implicit) == length(phases) ? f.implicit[i] : nothing
+        )
     end
     _report_coupling(io, phases, prob.p)
     return nothing
@@ -2291,7 +2379,9 @@ function _report_coupling(io, phases, p)
         isempty(wp) ? append!(wp, v) : (wp .= ifelse.(isnan.(wp), v, wp))
         w isa Problems.ParamsTables && append!(tabs, (t for t in w.tables if !any(u -> u[1] == t[1], tabs)))
     end
-    Problems.coupling_report(io, c.stability, c.groups, [ph.alg for ph in phases], Problems.with_tables(wp, tabs),
-        first(phases).dt)
+    Problems.coupling_report(
+        io, c.stability, c.groups, [ph.alg for ph in phases], Problems.with_tables(wp, tabs),
+        first(phases).dt
+    )
     return nothing
 end

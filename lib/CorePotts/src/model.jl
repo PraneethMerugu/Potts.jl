@@ -45,8 +45,10 @@ Build a host `CPMState`: `σ` labels sites with ids `1:length(kinds)` (`0` = med
 has the lattice's size, except one named in `shapes`, which has that size (a field on a
 coarse grid).
 """
-function initial_state(σ::AbstractArray{<:Integer}, kinds::AbstractVector{<:Integer};
-        cell = (;), site = (;), model = (;), history = (;), shapes = (;))
+function initial_state(
+        σ::AbstractArray{<:Integer}, kinds::AbstractVector{<:Integer};
+        cell = (;), site = (;), model = (;), history = (;), shapes = (;)
+    )
     n = length(kinds)
     volume = zeros(Int32, n)
     for s in σ
@@ -163,12 +165,16 @@ struct CPMFunction{DH, CM, CN, TT, BI, PH, LC, AC, SYS, TK, CO}
     connectivity::CO
 end
 
-function CPMFunction(delta_H; commit! = commit_volume!, constraint = always,
+function CPMFunction(
+        delta_H; commit! = commit_volume!, constraint = always,
         temperature, bias = no_bias, phases = NO_PHASES,
         lifecycle = nothing, acceptance = nothing, footprint = Footprint(), fingerprint = 0,
-        sys = nothing, track = nothing, connectivity = nothing)
-    return CPMFunction(delta_H, commit!, constraint, temperature, bias, phases,
-        lifecycle, acceptance, footprint, UInt64(fingerprint), sys, track, connectivity)
+        sys = nothing, track = nothing, connectivity = nothing
+    )
+    return CPMFunction(
+        delta_H, commit!, constraint, temperature, bias, phases,
+        lifecycle, acceptance, footprint, UInt64(fingerprint), sys, track, connectivity
+    )
 end
 
 """
@@ -193,9 +199,12 @@ track (`CorePotts.track_eltype(::MyTrack) = Float64`; `Float32` on Metal).
 """
 track_eltype(::TrackEnergyChange{T}) where {T} = T
 function track_eltype(track)
-    throw(ArgumentError(
-        "CheckerboardCPM needs the scalar type of the custom track $(typeof(track)): define " *
-        "`CorePotts.track_eltype(::$(typeof(track))) = Float64` (Float32 on a device)"))
+    throw(
+        ArgumentError(
+            "CheckerboardCPM needs the scalar type of the custom track $(typeof(track)): define " *
+                "`CorePotts.track_eltype(::$(typeof(track))) = Float64` (Float32 on a device)"
+        )
+    )
 end
 
 """
@@ -218,8 +227,10 @@ end
 # `SequentialCPM` takes it as an argument, so untracked kernels see exactly these fields
 # (`post` and `defer` are `nothing`, zero-size, without whole-cell connectivity).
 function device_functions(f::CPMFunction)
-    return DeviceFunctions(f.delta_H, f.commit!, f.constraint, f.temperature, f.bias,
-        _hook(f.connectivity, :post), _hook(f.connectivity, :defer))
+    return DeviceFunctions(
+        f.delta_H, f.commit!, f.constraint, f.temperature, f.bias,
+        _hook(f.connectivity, :post), _hook(f.connectivity, :defer)
+    )
 end
 _hook(::Nothing, name) = nothing
 _hook(h, name) = getfield(h, name)
@@ -284,8 +295,10 @@ Change of `Σ_{unordered pairs} w·J(owner, neighbor_owner)` over a (possibly we
 `prop` is accepted. `J(a, b)` takes cell ids (`0` = medium) and is only evaluated for
 `a ≠ b`.
 """
-@inline function contact_delta(σ, ctx, prop::Proposal{N}, J::F;
-        relation = ctx.contact) where {N, F}
+@inline function contact_delta(
+        σ, ctx, prop::Proposal{N}, J::F;
+        relation = ctx.contact
+    ) where {N, F}
     a, b = prop.old, prop.new
     dH = zero(typeof(J(a, b)))
     for k in 1:length(relation)
@@ -307,8 +320,10 @@ Change of the old and new cells' surfaces (weighted count of bonds to other owne
 `relation`) when `prop` is accepted, accumulated in `T` (pass the tracker's element type;
 Float32 weights convert exactly). Only these two cells' surfaces change.
 """
-@inline function surface_change(σ, ctx, prop::Proposal{N}; relation = ctx.surface,
-        T::Type = typeof(weight(relation, 1))) where {N}
+@inline function surface_change(
+        σ, ctx, prop::Proposal{N}; relation = ctx.surface,
+        T::Type = typeof(weight(relation, 1))
+    ) where {N}
     a, b = prop.old, prop.new
     δa = zero(T)
     δb = δa

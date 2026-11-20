@@ -17,8 +17,10 @@ const PHILOX_W1 = 0xBB67AE85
     return (p >> 32) % UInt32, p % UInt32
 end
 
-@inline function philox4x32(c0::UInt32, c1::UInt32, c2::UInt32, c3::UInt32,
-        k0::UInt32, k1::UInt32)
+@inline function philox4x32(
+        c0::UInt32, c1::UInt32, c2::UInt32, c3::UInt32,
+        k0::UInt32, k1::UInt32
+    )
     for _ in 1:10
         hi0, lo0 = _mulhilo(PHILOX_M0, c0)
         hi1, lo1 = _mulhilo(PHILOX_M1, c2)
@@ -44,8 +46,10 @@ const _KEY_TAG = (0x43505331, 0x6b657931)   # "CPS1", "key1"
 
 function RNGKey(seed::Integer, replica::Integer = 0, repeat::Integer = 0)
     s = UInt64(seed)
-    r0, r1, _, _ = philox4x32(s % UInt32, (s >> 32) % UInt32, UInt32(replica),
-        UInt32(repeat), _KEY_TAG...)
+    r0, r1, _, _ = philox4x32(
+        s % UInt32, (s >> 32) % UInt32, UInt32(replica),
+        UInt32(repeat), _KEY_TAG...
+    )
     return RNGKey(r0, r1)
 end
 
@@ -69,8 +73,10 @@ const STREAM_SEQUENTIAL_TARGET = stream_id("CorePotts.sequential_target")
 const STREAM_COLOR_ORDER = stream_id("CorePotts.color_order")
 const STREAM_BLOCK = stream_id("CorePotts.block")                  # block scheme: direction, acceptance, site
 const STREAM_BOUNDARY_SITE = stream_id("CorePotts.boundary_site")  # skip, target, direction, acceptance
-const RESERVED_STREAMS = (STREAM_PROPOSAL, STREAM_SEQUENTIAL_TARGET, STREAM_COLOR_ORDER, STREAM_BLOCK,
-    STREAM_BOUNDARY_SITE)
+const RESERVED_STREAMS = (
+    STREAM_PROPOSAL, STREAM_SEQUENTIAL_TARGET, STREAM_COLOR_ORDER, STREAM_BLOCK,
+    STREAM_BOUNDARY_SITE,
+)
 
 """
     draw(key, mcs, entity, stream, local = 0) -> NTuple{4, UInt32}
@@ -82,8 +88,10 @@ Four independent 32-bit words for one address. `entity` is a site index or a cel
 key as `k0 ⊻ hi * W1` (a bijection of `hi`; `hi = 0` leaves the key as it is). An entity below
 2³² therefore draws exactly as before, and no two entities below 2⁶⁴ share a stream.
 """
-@inline function draw(key::RNGKey, mcs::Integer, entity::Integer, stream::UInt32,
-        local_index::Integer = 0)
+@inline function draw(
+        key::RNGKey, mcs::Integer, entity::Integer, stream::UInt32,
+        local_index::Integer = 0
+    )
     # wrapping conversions: in range by construction, and no exception branch in kernels (X1)
     e = entity % UInt64
     hi = (e >> 32) % UInt32

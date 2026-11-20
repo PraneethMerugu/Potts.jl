@@ -28,10 +28,17 @@ struct ContactCount{P <: Part, R}
     mask::UInt64
 end
 function ContactCount(column::Symbol, relation, mask::Integer; kinds::Integer = 64)
-    kinds <= 64 || throw(ArgumentError("ContactCount `$column`: a kind mask holds at most 64 kinds (medium " *
-                                       "included), the model has $kinds"))
-    (mask >= 0 && (kinds == 64 || mask >> kinds == 0)) || throw(ArgumentError(
-        "ContactCount `$column`: mask $(repr(mask)) names kinds beyond the model's $kinds"))
+    kinds <= 64 || throw(
+        ArgumentError(
+            "ContactCount `$column`: a kind mask holds at most 64 kinds (medium " *
+                "included), the model has $kinds"
+        )
+    )
+    (mask >= 0 && (kinds == 64 || mask >> kinds == 0)) || throw(
+        ArgumentError(
+            "ContactCount `$column`: mask $(repr(mask)) names kinds beyond the model's $kinds"
+        )
+    )
     return ContactCount(Part((:cell, column)), relation, UInt64(mask))
 end
 

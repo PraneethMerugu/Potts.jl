@@ -55,8 +55,10 @@ public transitioning
         !(_base_event(e) == EVENT_DIVIDE || _base_event(e) == EVENT_DIVIDE_CLUSTER)
 end
 function _bad_transition_error(n)
-    return ArgumentError("lifecycle: $n trigger value(s) with `transitioning(event)` on an event " *
-        "other than EVENT_DIVIDE or EVENT_DIVIDE_CLUSTER")
+    return ArgumentError(
+        "lifecycle: $n trigger value(s) with `transitioning(event)` on an event " *
+            "other than EVENT_DIVIDE or EVENT_DIVIDE_CLUSTER"
+    )
 end
 
 # the event without its transition bit, and whether the cell transitions
@@ -174,11 +176,14 @@ struct Lifecycle{TR, NO, CN, KI, DV, CD, RB, RU <: Val, BE, RL, OC}
     owner_changed::OC           # the site hook at every site whose owner changes, or `nothing`
 end
 function Lifecycle(
-    trigger; normal = AlongMinorAxis(), kind = keep_kind, divide! = no_divide_rule,
-    rebuild! = no_rebuild, every::Integer = 1, cluster_normal = normal, cluster_divide! = divide!,
-    rules::Bool = false, before = nothing, release = nothing, owner_changed = nothing)
-    return Lifecycle(trigger, normal, cluster_normal, kind, divide!, cluster_divide!, rebuild!, Int(every), Val(rules), before,
-        release, owner_changed)
+        trigger; normal = AlongMinorAxis(), kind = keep_kind, divide! = no_divide_rule,
+        rebuild! = no_rebuild, every::Integer = 1, cluster_normal = normal, cluster_divide! = divide!,
+        rules::Bool = false, before = nothing, release = nothing, owner_changed = nothing
+    )
+    return Lifecycle(
+        trigger, normal, cluster_normal, kind, divide!, cluster_divide!, rebuild!, Int(every), Val(rules), before,
+        release, owner_changed
+    )
 end
 
 # the ownership hook at site `i` (`Lifecycle.owner_changed`)
@@ -347,11 +352,11 @@ end
         e = trigger(st, p, ctx, key, mcs, c % Int32) % Int32
     end
     @inbounds events[c] = e
-    e != EVENT_NONE && @inbounds Atomix.@atomic count[slot] += Int32(1)     # slot ∈ (1, 2) = axes(count)
+    return e != EVENT_NONE && @inbounds Atomix.@atomic count[slot] += Int32(1)     # slot ∈ (1, 2) = axes(count)
 end
 
 @inline function _normal_body!(c, normals, events, daughter, normal, st, p, ctx, key, mcs, ruled)
-    if _base_event(_event(ruled, @inbounds(events[c]))) == EVENT_DIVIDE && @inbounds(daughter[c]) > 0    # cell divisions only
+    return if _base_event(_event(ruled, @inbounds(events[c]))) == EVENT_DIVIDE && @inbounds(daughter[c]) > 0    # cell divisions only
         n = normal(st, p, ctx, key, mcs, Int32(c))
         for d in 1:length(n)
             @inbounds normals[d, c] = n[d]
@@ -361,7 +366,7 @@ end
 
 @inline function _partition_body!(i, σ, daughter, normals, bias, removed, cell, lat, hook::H, st) where {H}
     c = @inbounds σ[i]
-    if c > 0
+    return if c > 0
         if @inbounds(removed[c])
             @inbounds σ[i] = Int32(0)
             _owner_changed!(hook, st, i)
@@ -399,7 +404,7 @@ end
         @inbounds st.cell.kind[c] = k
         divides && (@inbounds st.cell.kind[d] = k)
     end
-    if divides
+    return if divides
         if b == EVENT_DIVIDE
             _divide_rule!(ruled, divide!, st, p, ctx, key, mcs, Int32(c), d, raw)
         else
@@ -427,7 +432,8 @@ end
 
 function LifecycleCache(backend, N::Int, capacity::Int, st = nothing, device::Bool = false; fused_limits = (;))
     T = Exec.default_float(backend)
-    return LifecycleCache(KernelAbstractions.zeros(backend, Int32, capacity),
+    return LifecycleCache(
+        KernelAbstractions.zeros(backend, Int32, capacity),
         KernelAbstractions.zeros(backend, Int32, 2), zeros(Int32, 1), Ref(0),
         KernelAbstractions.zeros(backend, Int32, capacity),
         KernelAbstractions.zeros(backend, Bool, capacity),
@@ -462,8 +468,10 @@ count (counted on a device). Quiet MCS return after the trigger kernel.
 `pstats` is the integrator's `PottsStats` (lifecycle counts, host transfers). `before = false`:
 `lc.before` has already run this MCS (a device form that failed after launching it).
 """
-function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, mcs, backend, pstats,
-        before::Bool = true)
+function run_lifecycle!(
+        lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, mcs, backend, pstats,
+        before::Bool = true
+    )
     nb = before ? _run_before(lc.before, st, p, ctx, key, mcs, backend) : 0
     mcs % lc.every == 0 || return nb, false
     stats = pstats.lifecycle
@@ -578,7 +586,9 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
     Exec.launch!(
         backend, _partition_body!, n, (
             st.ownership, cache.daughter, cache.normals, cache.bias, cache.removed,
-        st.cell, ctx.lattice, lc.owner_changed, st))
+            st.cell, ctx.lattice, lc.owner_changed, st,
+        )
+    )
     launches += 1
 
     # daughters: copy every non-tracker cell quantity from the parent, same kind, new generation
@@ -587,8 +597,10 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
         ds = daughter[parents]
         # `map` over (name, array) unrolls statically: no runtime dispatch per quantity
         map(keys(st.cell), values(st.cell)) do name, a
-            (name in (:volume, :surface, :anchor, :m1, :m2, :generation, :birth) || _is_link_data(name) ||
-             _is_scratch_column(name)) ||
+            (
+                name in (:volume, :surface, :anchor, :m1, :m2, :generation, :birth) || _is_link_data(name) ||
+                    _is_scratch_column(name)
+            ) ||
                 _copy_columns!(pstats, a, ds, parents)          # daughters start unlinked
             nothing
         end
@@ -611,8 +623,12 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
     end
     any(_is_adjacency, keys(st.cell)) && (any(removed) || !isempty(parents)) &&
         _lifecycle_links!(pstats, st, findall(removed), daughter[parents])
-    Exec.launch!(backend, _cell_rule_body!, cap, (cache.events, cache.daughter, lc.kind, lc.divide!,
-        lc.cluster_divide!, st, p, ctx, key, mcs, lc.rules))
+    Exec.launch!(
+        backend, _cell_rule_body!, cap, (
+            cache.events, cache.daughter, lc.kind, lc.divide!,
+            lc.cluster_divide!, st, p, ctx, key, mcs, lc.rules,
+        )
+    )
     launches += 1
 
     _has_clusters(st) && _fix_clusters!(pstats, st)
@@ -738,7 +754,8 @@ function with_capacity(st::CPMState, capacity::Integer)
     grow(a::AbstractVector) = (b = similar(a, capacity); fill!(b, zero(eltype(a))); b[1:n] .= a; b)
     function grow(a::AbstractArray)
         b = similar(a, (size(a)[1:(end - 1)]..., capacity)); fill!(b, zero(eltype(a)))
-        b[ntuple(_ -> Colon(), ndims(a) - 1)..., 1:n] .= a; b
+        b[ntuple(_ -> Colon(), ndims(a) - 1)..., 1:n] .= a
+        return b
     end
     cell = map(grow, st.cell)
     cell.kind[(n + 1):end] .= Int32(1)

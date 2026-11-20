@@ -7,11 +7,11 @@ using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordin
 include("shared/gg_model.jl")
 include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "props.jl"))
 
-    invdist(o) = 1 / sqrt(sum(abs2, o))
+invdist(o) = 1 / sqrt(sum(abs2, o))
 
-    σ0, kinds0 = blocks((36, 36), 5)
-    lat = Lattice((36, 36))
-    prob = PottsProblem(GG, initial_state(σ0, kinds0), lat, (0, 20), gg_params(); seed = 7)
+σ0, kinds0 = blocks((36, 36), 5)
+lat = Lattice((36, 36))
+prob = PottsProblem(GG, initial_state(σ0, kinds0), lat, (0, 20), gg_params(); seed = 7)
 include("shared/export_all.jl")
 end
 
@@ -53,7 +53,7 @@ end
         k = RNGKey(3)
         s = UInt32(1)
         @test draw(k, 1, 2, s) == draw(k, 1, 2, s) != draw(k, 1, 3, s)
-        @test draw(k, 1, 2, s) != draw(k, 1, 2, s + 0x1) != draw(k, 1, 2, s, 1)
+        @test draw(k, 1, 2, s) != draw(k, 1, 2, s + 0x01) != draw(k, 1, 2, s, 1)
         xs = [uniform(Float64, draw(k, 0, i, UInt32(7))[1]) for i in 1:100_000]
         @test length(xs) >= required_n(1 / sqrt(12), 0.005; alpha = 1.0e-3, power = 0.9)
         @test stat_accept(xs; mu0 = 0.5, margin = 0.005, alpha = 1.0e-3).pass
@@ -65,72 +65,82 @@ end
 
 @testitem "rng: Philox4x32-10 KAT and address keying" setup = [CP_corepotts] tags = [:corepotts, :core] begin
     @testset "rng: Philox4x32-10 KAT and address keying" begin
-    # Official Random123 (Salmon et al. 2011) Philox4x32-10 known-answer vectors
-    kat_vectors = (
-        ((0x00000000, 0x00000000, 0x00000000, 0x00000000), (0x00000000, 0x00000000),
-         (0x6627e8d5, 0xe169c58d, 0xbc57ac4c, 0x9b00dbd8)),
-        ((0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff), (0xffffffff, 0xffffffff),
-         (0x408f276d, 0x41c83b0e, 0xa20bc7c6, 0x6d5451fd)),
-        ((0x243f6a88, 0x85a308d3, 0x13198a2e, 0x03707344), (0xa4093822, 0x299f31d0),
-         (0xd16cfe09, 0x94fdcceb, 0x5001e420, 0x24126ea1)),
-    )
-    for (ctr, key, expected) in kat_vectors
-        @test CorePotts.philox4x32(ctr..., key...) == expected
-    end
+        # Official Random123 (Salmon et al. 2011) Philox4x32-10 known-answer vectors
+        kat_vectors = (
+            (
+                (0x00000000, 0x00000000, 0x00000000, 0x00000000), (0x00000000, 0x00000000),
+                (0x6627e8d5, 0xe169c58d, 0xbc57ac4c, 0x9b00dbd8),
+            ),
+            (
+                (0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff), (0xffffffff, 0xffffffff),
+                (0x408f276d, 0x41c83b0e, 0xa20bc7c6, 0x6d5451fd),
+            ),
+            (
+                (0x243f6a88, 0x85a308d3, 0x13198a2e, 0x03707344), (0xa4093822, 0x299f31d0),
+                (0xd16cfe09, 0x94fdcceb, 0x5001e420, 0x24126ea1),
+            ),
+        )
+        for (ctr, key, expected) in kat_vectors
+            @test CorePotts.philox4x32(ctr..., key...) == expected
+        end
 
-    # Independent re-implementation of Philox4x32-10, RNGKey, stream_id, and draw address keying
-    function ref_philox4x32(c0::UInt32, c1::UInt32, c2::UInt32, c3::UInt32, k0::UInt32, k1::UInt32)
-        M0 = UInt64(0xD2511F53); M1 = UInt64(0xCD9E8D57)
-        W0 = UInt32(0x9E3779B9); W1 = UInt32(0xBB67AE85)
-        for _ in 1:10
-            p0 = M0 * UInt64(c0)
-            p1 = M1 * UInt64(c2)
-            hi0 = UInt32(p0 >> 32); lo0 = UInt32(p0 & 0xffffffff)
-            hi1 = UInt32(p1 >> 32); lo1 = UInt32(p1 & 0xffffffff)
-            c0, c1, c2, c3 = xor(hi1, c1, k0), lo1, xor(hi0, c3, k1), lo0
-            k0 = (k0 + W0) % UInt32
-            k1 = (k1 + W1) % UInt32
+        # Independent re-implementation of Philox4x32-10, RNGKey, stream_id, and draw address keying
+        function ref_philox4x32(c0::UInt32, c1::UInt32, c2::UInt32, c3::UInt32, k0::UInt32, k1::UInt32)
+            M0 = UInt64(0xD2511F53); M1 = UInt64(0xCD9E8D57)
+            W0 = UInt32(0x9E3779B9); W1 = UInt32(0xBB67AE85)
+            for _ in 1:10
+                p0 = M0 * UInt64(c0)
+                p1 = M1 * UInt64(c2)
+                hi0 = UInt32(p0 >> 32); lo0 = UInt32(p0 & 0xffffffff)
+                hi1 = UInt32(p1 >> 32); lo1 = UInt32(p1 & 0xffffffff)
+                c0, c1, c2, c3 = xor(hi1, c1, k0), lo1, xor(hi0, c3, k1), lo0
+                k0 = (k0 + W0) % UInt32
+                k1 = (k1 + W1) % UInt32
+            end
+            return (c0, c1, c2, c3)
         end
-        return (c0, c1, c2, c3)
-    end
-    function ref_key(seed::Integer, replica::Integer = 0, repeat::Integer = 0)
-        s = UInt64(seed)
-        r0, r1, _, _ = ref_philox4x32(UInt32(s & 0xffffffff), UInt32(s >> 32),
-            UInt32(replica), UInt32(repeat), 0x43505331, 0x6b657931)
-        return (r0, r1)
-    end
-    function ref_draw(k0::UInt32, k1::UInt32, mcs::Integer, entity::Integer, stream::UInt32, local_idx::Integer = 0)
-        e = UInt64(entity)
-        hi = UInt32(e >> 32)
-        lo = UInt32(e & 0xffffffff)
-        eff_k0 = hi == 0 ? k0 : xor(k0, (hi * UInt32(0xBB67AE85)) % UInt32)
-        return ref_philox4x32(UInt32(mcs & 0xffffffff), lo, stream, UInt32(local_idx & 0xffffffff), eff_k0, k1)
-    end
-    function ref_fnv1a(s::AbstractString)
-        h = UInt32(0x811c9dc5)
-        for b in codeunits(s)
-            h = (xor(h, UInt32(b)) * UInt32(0x01000193)) % UInt32
+        function ref_key(seed::Integer, replica::Integer = 0, repeat::Integer = 0)
+            s = UInt64(seed)
+            r0, r1, _, _ = ref_philox4x32(
+                UInt32(s & 0xffffffff), UInt32(s >> 32),
+                UInt32(replica), UInt32(repeat), 0x43505331, 0x6b657931
+            )
+            return (r0, r1)
         end
-        return h
-    end
+        function ref_draw(k0::UInt32, k1::UInt32, mcs::Integer, entity::Integer, stream::UInt32, local_idx::Integer = 0)
+            e = UInt64(entity)
+            hi = UInt32(e >> 32)
+            lo = UInt32(e & 0xffffffff)
+            eff_k0 = hi == 0 ? k0 : xor(k0, (hi * UInt32(0xBB67AE85)) % UInt32)
+            return ref_philox4x32(UInt32(mcs & 0xffffffff), lo, stream, UInt32(local_idx & 0xffffffff), eff_k0, k1)
+        end
+        function ref_fnv1a(s::AbstractString)
+            h = UInt32(0x811c9dc5)
+            for b in codeunits(s)
+                h = (xor(h, UInt32(b)) * UInt32(0x01000193)) % UInt32
+            end
+            return h
+        end
 
-    for (ctr, key, expected) in kat_vectors
-        @test ref_philox4x32(ctr..., key...) == expected
-    end
-    for name in ("CorePotts.proposal", "CorePotts.sequential_target", "CorePotts.color_order",
-                 "CorePotts.block", "CorePotts.boundary_site", "custom.stream")
-        @test stream_id(name) == ref_fnv1a(name)
-    end
-    for seed in (0, 1, 7, 0x0123456789abcdef), replica in (0, 3), rep in (0, 5)
-        rk = RNGKey(seed, replica, rep)
-        ek = ref_key(seed, replica, rep)
-        @test (rk.k0, rk.k1) == ek
-        for mcs in (0, 1, 42), ent in (UInt64(0), UInt64(17), UInt64(1) << 32, (UInt64(9) << 32) | 0xdeadbeef),
-            st in (CorePotts.STREAM_PROPOSAL, CorePotts.STREAM_BLOCK), loc in (0, 1, 13)
-            @test draw(rk, mcs, ent, st, loc) == ref_draw(ek..., mcs, ent, st, loc)
+        for (ctr, key, expected) in kat_vectors
+            @test ref_philox4x32(ctr..., key...) == expected
+        end
+        for name in (
+                "CorePotts.proposal", "CorePotts.sequential_target", "CorePotts.color_order",
+                "CorePotts.block", "CorePotts.boundary_site", "custom.stream",
+            )
+            @test stream_id(name) == ref_fnv1a(name)
+        end
+        for seed in (0, 1, 7, 0x0123456789abcdef), replica in (0, 3), rep in (0, 5)
+            rk = RNGKey(seed, replica, rep)
+            ek = ref_key(seed, replica, rep)
+            @test (rk.k0, rk.k1) == ek
+            for mcs in (0, 1, 42), ent in (UInt64(0), UInt64(17), UInt64(1) << 32, (UInt64(9) << 32) | 0xdeadbeef),
+                    st in (CorePotts.STREAM_PROPOSAL, CorePotts.STREAM_BLOCK), loc in (0, 1, 13)
+                @test draw(rk, mcs, ent, st, loc) == ref_draw(ek..., mcs, ent, st, loc)
+            end
         end
     end
-end
 end
 
 @testitem "rng: 64-bit entities do not wrap" setup = [CP_corepotts] tags = [:corepotts, :core] begin
@@ -228,7 +238,7 @@ end
         # the hook reaches the caller's choice of regime, which is the sweep context's type:
         # marked contexts take two words, others one, and each method is its map
         @test CorePotts._pick_regime(CorePotts._with_two_word_pick((; mcs = 0))) === CorePotts.TwoWordPick() &&
-              CorePotts._pick_regime((; mcs = 0)) === nothing
+            CorePotts._pick_regime((; mcs = 0)) === nothing
         # review (MEDIUM): the key is not an identifier, so a relation named `pick` neither
         # selects a regime nor is shadowed by one; it ran before D-247 and still runs
         @test CorePotts._pick_regime((; mcs = 0, pick = 1)) === nothing
@@ -248,7 +258,8 @@ end
             # `mcs` is the sweep's own context field (D-188), so a relation may not take it
             @test_throws ArgumentError PottsProblem(
                 f, initial_state(σ, kinds), lat, (0, 3),
-                gg_params(); relations = (; mcs = Moore(1)))
+                gg_params(); relations = (; mcs = Moore(1))
+            )
         end
         for (hi, lo, n) in ((0xffffffff, 0xffffffff, 10^9), (0x89abcdef, 0x01234567, 2^24 + 3), (0x00000001, 0x80000000, 7))
             @test CorePotts.site_pick(nothing, hi, lo, n) == CorePotts.bounded(hi, n)
@@ -305,9 +316,11 @@ end
     @testset "block layout keeps concurrent sub-regions apart" begin
         # in every phase, sites of two blocks' active sub-regions are farther apart than the
         # footprint the layout was built for, (k - 1)·b (periodic minimum image)
-        for (dims, bnd, b, k) in (((12, 12), Periodic(), 1, 4), ((13, 11), Periodic(), 1, 3),
+        for (dims, bnd, b, k) in (
+                ((12, 12), Periodic(), 1, 4), ((13, 11), Periodic(), 1, 3),
                 ((13, 7), Periodic(), 2, 2), ((10, 9), Closed(), 1, 3), ((7, 5, 6), Periodic(), 1, 2),
-                ((40, 17), Periodic(), 1, 8), ((31, 29), Periodic(), 2, 3))
+                ((40, 17), Periodic(), 1, 8), ((31, 29), Periodic(), 2, 3),
+            )
             lat = Lattice(dims; boundary = bnd)
             l = CorePotts.BlockLayout(dims, b, k)
             N = length(dims)
@@ -315,10 +328,12 @@ end
                 regs = [CorePotts.block_region(l, blk, ph) for blk in 1:CorePotts.nblocks(l)]
                 sites = [[lo .+ Tuple(c) for c in CartesianIndices(side)] for (lo, side) in regs]
                 for i in eachindex(sites), j in (i + 1):length(sites), x in sites[i], y in sites[j]
-                    dist = maximum(ntuple(N) do d
-                        δ = abs(x[d] - y[d])
-                        lat.periodic[d] ? min(δ, dims[d] - δ) : δ
-                    end)
+                    dist = maximum(
+                        ntuple(N) do d
+                            δ = abs(x[d] - y[d])
+                            lat.periodic[d] ? min(δ, dims[d] - δ) : δ
+                        end
+                    )
                     @test dist > (k - 1) * b
                 end
             end
@@ -329,13 +344,16 @@ end
 @testitem "ΔH equals brute-force energy difference (N-D, spec)" setup = [CP_corepotts] tags = [:corepotts, :core] begin
     @testset "ΔH equals brute-force energy difference ($N-D, $spec)" for (N, dims, spec) in (
             (2, (24, 24), Moore(1)), (2, (24, 21), NeighborOrder(3)),
-            (3, (12, 12, 12), Moore(1)), (3, (10, 10, 10), NeighborOrder(2)))
+            (3, (12, 12, 12), Moore(1)), (3, (10, 10, 10), NeighborOrder(2)),
+        )
         σ, kinds = blocks(dims, 3)
         lat = Lattice(dims)
         st = initial_state(σ, kinds)
         p = merge(gg_params(), (; V0 = 20.0))
-        ctx = (; lattice = lat, proposal = relation(VonNeumann(1), lat),
-            contact = relation(spec, lat))
+        ctx = (;
+            lattice = lat, proposal = relation(VonNeumann(1), lat),
+            contact = relation(spec, lat),
+        )
         checked = 0
         for t in 1:nsites(lat), dir in 1:length(ctx.proposal)
             x = coordinates(lat, t)
@@ -349,7 +367,7 @@ end
             after_state = deepcopy(st)
             after_state.ownership[t] = b
             CorePotts.commit_volume!(after_state, p, prop, ctx)
-            @test dH ≈ total_H(after_state, lat, ctx.contact, p) - before atol = 1e-9
+            @test dH ≈ total_H(after_state, lat, ctx.contact, p) - before atol = 1.0e-9
             checked += 1
             checked >= 300 && break
         end
@@ -359,17 +377,21 @@ end
 
 @testitem "ΔH with surface, weighted contact (length(dims)-D, cspec, sspec)" setup = [CP_corepotts] tags = [:corepotts, :core] begin
     @testset "ΔH with surface, weighted contact ($(length(dims))-D, $cspec, $sspec)" for (
-            dims, cspec, sspec) in (
+            dims, cspec, sspec,
+        ) in (
             ((20, 20), Moore(1), VonNeumann(1)),
             ((20, 18), Weighted(NeighborOrder(2), invdist), Moore(1)),
             ((10, 10, 10), Weighted(Moore(1), invdist), Weighted(NeighborOrder(2), invdist)),
-            ((12, 12, 11), VonNeumann(1), Moore(1)))
+            ((12, 12, 11), VonNeumann(1), Moore(1)),
+        )
         σ, kinds = blocks(dims, 3)
         lat = Lattice(dims; boundary = length(dims) == 2 ? Periodic() : (Periodic(), Closed(), Periodic()))
         st = surface_state(σ, kinds, lat, sspec)
         p = gs_params()
-        ctx = (; lattice = lat, proposal = relation(VonNeumann(1), lat),
-            contact = relation(cspec, lat), surface = relation(sspec, lat))
+        ctx = (;
+            lattice = lat, proposal = relation(VonNeumann(1), lat),
+            contact = relation(cspec, lat), surface = relation(sspec, lat),
+        )
         @test st.cell.surface ≈ brute_surface(st.ownership, lat, ctx.surface, length(kinds))
         st32 = surface_state(σ, kinds, lat, sspec; T = Float32)
         checked = 0
@@ -383,9 +405,9 @@ end
             after = deepcopy(st)
             after.ownership[t] = prop.new
             gs_commit!(after, p, prop, ctx)          # after the write, as the algorithms do
-            @test dH ≈ total_H_surface(after, lat, ctx, p) - before atol = 1e-6
+            @test dH ≈ total_H_surface(after, lat, ctx, p) - before atol = 1.0e-6
             @test after.cell.surface ≈ brute_surface(after.ownership, lat, ctx.surface, length(kinds))
-            @test gs_delta_H(st32, p, prop, ctx) ≈ dH rtol = 1e-5 atol = 1e-2   # Float32 tracker
+            @test gs_delta_H(st32, p, prop, ctx) ≈ dH rtol = 1.0e-5 atol = 1.0e-2   # Float32 tracker
             checked += 1
             checked >= 150 && break
         end
@@ -395,19 +417,24 @@ end
 
 @testitem "surface trackers survive a run (nameof(typeof(alg)))" setup = [CP_corepotts] tags = [:corepotts, :core] begin
     @testset "surface trackers survive a run ($(nameof(typeof(alg))))" for alg in (
-            SequentialCPM(), CheckerboardCPM())
+            SequentialCPM(), CheckerboardCPM(),
+        )
         σ, kinds = blocks((30, 30), 5)
         lat = Lattice((30, 30))
         sspec = Weighted(Moore(1), invdist)
-        sprob = PottsProblem(GS, surface_state(σ, kinds, lat, sspec), lat, (0, 30), gs_params();
-            relations = (; surface = sspec))
+        sprob = PottsProblem(
+            GS, surface_state(σ, kinds, lat, sspec), lat, (0, 30), gs_params();
+            relations = (; surface = sspec)
+        )
         sol = solve(sprob, alg)
         @test sol.retcode == ReturnCode.Success
         u = sol.u[end]
         @test u.ownership != σ
         @test u.cell.surface ≈ brute_surface(u.ownership, lat, relation(sspec, lat), length(kinds)) rtol = 1.0e-12
-        bad = PottsProblem(GS, sprob.u0, lat, (0, 1), gs_params();
-            relations = (; surface = Moore(1; include_self = true)))
+        bad = PottsProblem(
+            GS, sprob.u0, lat, (0, 1), gs_params();
+            relations = (; surface = Moore(1; include_self = true))
+        )
         @test_throws ArgumentError init(bad, alg)
     end
 end
@@ -488,8 +515,10 @@ end
             σr[(6i + 1):(6i + 6), (6j + 1):(6j + 6)] .= 6i + j + 1
         end
         kr = Int32[isodd(i + (i ÷ 6)) ? 1 : 2 for i in 1:36]
-        sprob = PottsProblem(GG, initial_state(σr, kr), lat, (0, 60),
-            merge(gg_params(), (; V0 = 36.0)))
+        sprob = PottsProblem(
+            GG, initial_state(σr, kr), lat, (0, 60),
+            merge(gg_params(), (; V0 = 36.0))
+        )
         h0 = hetero(initial_state(σr, kr))
         hs = [hetero(solve(remake(sprob; seed), SequentialCPM()).u[end]) for seed in 1:4]
         hc = [hetero(solve(remake(sprob; seed), CheckerboardCPM()).u[end]) for seed in 1:4]

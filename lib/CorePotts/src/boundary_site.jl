@@ -37,8 +37,10 @@ function BoundaryCache(σ, mob, lat::Lattice{N}, proposal::Relation{N, K}) where
     m = length(σ)
     rev = map(o -> map(-, o), proposal.offsets)
     I = site_index_type(m)
-    B = BoundaryCache{N, K, _shadow_type(mob), I}(zeros(I, m), zeros(I, m), zeros(Int32, m),
-        zeros(Int32, m), _shadow_mask(mob, m), rev, 0, -1, -1, 0.0)
+    B = BoundaryCache{N, K, _shadow_type(mob), I}(
+        zeros(I, m), zeros(I, m), zeros(Int32, m),
+        zeros(Int32, m), _shadow_mask(mob, m), rev, 0, -1, -1, 0.0
+    )
     _rebuild_boundary!(B, σ, mob, lat, proposal.offsets)
     return B
 end
@@ -185,16 +187,21 @@ up to date with its state. For tests; `integ.alg` must be
 """
 function _boundary_sites(integ)
     B = integ.cache
-    B isa BoundaryCache || throw(ArgumentError(
-        "_boundary_sites: the integrator runs $(integ.alg), not SequentialCPM(; skip_interior = true)"))
+    B isa BoundaryCache || throw(
+        ArgumentError(
+            "_boundary_sites: the integrator runs $(integ.alg), not SequentialCPM(; skip_interior = true)"
+        )
+    )
     _sync_boundary!(B, integ.state.ownership, integ.ctx.mobility, integ.ctx.lattice, integ.ctx.proposal.offsets)
     return view(B.list, 1:B.n)
 end
 
 # Returns `(accepted, status, tracked)`, as `sequential_mcs!`. RNG: draw `j` of the MCS (the
 # j-th boundary pick) gives the skip, the site in B, the direction and the acceptance.
-function boundary_site_mcs!(st, f::F, p, ctx, law::L, key::RNGKey, mcs::Integer, B::BoundaryCache,
-        track::TK = nothing) where {F, L, TK}
+function boundary_site_mcs!(
+        st, f::F, p, ctx, law::L, key::RNGKey, mcs::Integer, B::BoundaryCache,
+        track::TK = nothing
+    ) where {F, L, TK}
     σ = st.ownership
     lat = ctx.lattice
     mob = ctx.mobility

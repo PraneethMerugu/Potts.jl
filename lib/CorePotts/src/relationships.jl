@@ -329,7 +329,9 @@ function _check_declared(names, st)
         n === :ownership || haskey(st.cell, n) || throw(
             ArgumentError(
                 "HostPhase declares `$n`, which is neither `:ownership` nor a cell column of the state " *
-            "(cell columns: $(join(keys(st.cell), ", ")))"))
+                    "(cell columns: $(join(keys(st.cell), ", ")))"
+            )
+        )
     end
     return nothing
 end

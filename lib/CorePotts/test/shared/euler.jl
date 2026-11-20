@@ -47,10 +47,14 @@ function eu_problem()
     σ[2:8, 2:8] .= 1; σ[4:6, 4:6] .= 0; σ[12:17, 3:9] .= 2; σ[5:9, 12:17] .= 3; σ[24, 12:16] .= 4; σ[1:3, 12:16] .= 4
     cell = (; init_moments(σ, lat, 4)..., euler = recompute_euler(σ, lat, Val(:face), 4), euler_full = recompute_euler(σ, lat, Val(:full), 4))
     st = with_capacity(initial_state(σ, Int32[1, 2, 1, 2]; cell), 32)
-    f = CPMFunction(gg_delta_H; commit! = eu_commit!, temperature = gg_temperature,
-        lifecycle = Lifecycle(eu_trigger; normal = RandomPlane()))
-    return PottsProblem(f, st, lat, (0, 16), merge(gg_params(), (; V0 = 30.0, T = 8.0)); contact = Moore(1),
-        proposal = Moore(1), seed = 3)
+    f = CPMFunction(
+        gg_delta_H; commit! = eu_commit!, temperature = gg_temperature,
+        lifecycle = Lifecycle(eu_trigger; normal = RandomPlane())
+    )
+    return PottsProblem(
+        f, st, lat, (0, 16), merge(gg_params(), (; V0 = 30.0, T = 8.0)); contact = Moore(1),
+        proposal = Moore(1), seed = 3
+    )
 end
 function eu_bad(cell, σ, lat)
     n = length(cell.kind)

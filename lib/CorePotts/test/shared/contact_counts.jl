@@ -45,16 +45,24 @@ function cc_problem(; lifecycle = true)
         σ[xs, ys] .= c
     end
     kinds = Int32[1, 2, 1, 2, 1]
-    cell = merge(init_moments(σ, lat, 5),
-        (; n_med = recompute_contact_count(σ, kinds, lat, Moore(1), CC_MED, 5),
-            n_two = recompute_contact_count(σ, kinds, lat, VonNeumann(1), CC_TWO, 5)))
+    cell = merge(
+        init_moments(σ, lat, 5),
+        (;
+            n_med = recompute_contact_count(σ, kinds, lat, Moore(1), CC_MED, 5),
+            n_two = recompute_contact_count(σ, kinds, lat, VonNeumann(1), CC_TWO, 5),
+        )
+    )
     st = with_capacity(initial_state(σ, kinds; cell), 32)
     cc = ContactCounts((ContactCount(:n_med, Moore(1), CC_MED), ContactCount(:n_two, VonNeumann(1), CC_TWO)))
-    f = CPMFunction(gg_delta_H; commit! = cc_commit!, temperature = gg_temperature,
-        lifecycle = lifecycle ? Lifecycle(cc_trigger; kind = cc_kind, normal = RandomPlane()) : nothing)
+    f = CPMFunction(
+        gg_delta_H; commit! = cc_commit!, temperature = gg_temperature,
+        lifecycle = lifecycle ? Lifecycle(cc_trigger; kind = cc_kind, normal = RandomPlane()) : nothing
+    )
     p = merge(gg_params(), (; V0 = 36.0, T = 8.0))
-    return PottsProblem(f, st, lat, (0, 30), p; contact = Moore(1), proposal = Moore(1),
-        relations = (; vn = VonNeumann(1), contact_counts = cc), seed = 7)
+    return PottsProblem(
+        f, st, lat, (0, 30), p; contact = Moore(1), proposal = Moore(1),
+        relations = (; vn = VonNeumann(1), contact_counts = cc), seed = 7
+    )
 end
 
 function cc_bad(sol, lat)

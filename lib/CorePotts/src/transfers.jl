@@ -207,5 +207,6 @@ function host_leaves(stats, st::CPMState; ownership::Bool = false, cell = (), si
     end
     return CPMState(
         ownership ? adapt_host(stats, st.ownership) : st.ownership, part(st.cell, cell), part(st.site, site),
-        part(st.model, model), part(st.history, history))
+        part(st.model, model), part(st.history, history)
+    )
 end

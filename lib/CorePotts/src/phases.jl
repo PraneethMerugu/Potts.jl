@@ -141,9 +141,12 @@ function (ph::HistoryPush)(st, p, ctx, key, mcs, backend)
     ring = ph.ring(st)
     s = ph.src(st)
     # host-side shape check: the kernel indexes the ring by the source's length
-    size(ring)[1:(end - 1)] == size(s) || throw(DimensionMismatch(
-        "history ring $(size(ring)) does not match its source $(size(s)) plus a depth axis " *
-        "(grow rings with the state, e.g. `with_capacity`)"))
+    size(ring)[1:(end - 1)] == size(s) || throw(
+        DimensionMismatch(
+            "history ring $(size(ring)) does not match its source $(size(s)) plus a depth axis " *
+                "(grow rings with the state, e.g. `with_capacity`)"
+        )
+    )
     depth = size(ring, ndims(ring))
     n = length(s)
     Exec.launch!(backend, _history_body!, n, (ring, s, mod1(mcs + 1, depth), n))
@@ -189,8 +192,11 @@ struct Repeat{E}
     entries::E
     function Repeat(n::Integer, entries::Tuple)
         n >= 1 || throw(ArgumentError("Repeat: the count must be ≥ 1; got $n"))
-        all(x -> x isa Union{Tuple, SweepPhase}, entries) || throw(ArgumentError(
-            "Repeat: the entries are tuples of phases and at most one SweepPhase() (no lifecycle, no nested Repeat)"))
+        all(x -> x isa Union{Tuple, SweepPhase}, entries) || throw(
+            ArgumentError(
+                "Repeat: the entries are tuples of phases and at most one SweepPhase() (no lifecycle, no nested Repeat)"
+            )
+        )
         count(x -> x isa SweepPhase, entries) <= 1 || throw(ArgumentError("Repeat: at most one SweepPhase()"))
         return new{typeof(entries)}(Int(n), entries)
     end
@@ -250,12 +256,19 @@ function _check_order(mcs)
     nsweep == 1 || throw(ArgumentError("Phases: the MCS order `mcs` must list SweepPhase() exactly once"))
     count(x -> x isa LifecyclePhase, mcs) == 1 ||
         throw(ArgumentError("Phases: the MCS order `mcs` must list LifecyclePhase() exactly once"))
-    all(x -> x isa Union{Tuple, SweepPhase, LifecyclePhase, Repeat}, mcs) || throw(ArgumentError(
-        "Phases: each entry of the MCS order `mcs` is a tuple of phases, SweepPhase(), LifecyclePhase() or a Repeat"))
+    all(x -> x isa Union{Tuple, SweepPhase, LifecyclePhase, Repeat}, mcs) || throw(
+        ArgumentError(
+            "Phases: each entry of the MCS order `mcs` is a tuple of phases, SweepPhase(), LifecyclePhase() or a Repeat"
+        )
+    )
     # `_run_mcs!` folds the order with `Base.afoldl`, which unrolls (one call specialized per
     # entry) only up to 31 entries
-    length(mcs) <= 31 || throw(ArgumentError("Phases: the MCS order `mcs` has $(length(mcs)) entries; " *
-                                             "at most 31 (group consecutive phases into one tuple)"))
+    length(mcs) <= 31 || throw(
+        ArgumentError(
+            "Phases: the MCS order `mcs` has $(length(mcs)) entries; " *
+                "at most 31 (group consecutive phases into one tuple)"
+        )
+    )
     return nothing
 end
 const NO_PHASES = Phases((), (), (), ())

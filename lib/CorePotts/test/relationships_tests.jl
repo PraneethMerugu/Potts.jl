@@ -341,5 +341,5 @@ end
             @test daughter !== nothing && link_count(L, daughter) == 0
             @test link_count(L, 2) > 0 && link_count(L, 3) > 0
         end
-end
+    end
 end

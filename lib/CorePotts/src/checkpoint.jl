@@ -44,11 +44,14 @@ function checkpoint(integ::PottsIntegrator)
     prob.tangent === nothing || throw(
         ArgumentError(
             "a run with derivative parts (Dual parameters) has no " *
-        "checkpoint: its derivative parts are not part of the state; run it from the start, or checkpoint the primal run " *
-        "(`remake` with plain values)"))
+                "checkpoint: its derivative parts are not part of the state; run it from the start, or checkpoint the primal run " *
+                "(`remake` with plain values)"
+        )
+    )
     # `current_state` is the host read point that makes `stats` exact (D-089): it runs
     # before the statistics are copied
-    return PottsCheckpoint(current_state(integ), integ.t, prob.seed, prob.replica,
+    return PottsCheckpoint(
+        current_state(integ), integ.t, prob.seed, prob.replica,
         prob.repeat, adapt_host(_stats(integ), integ.p), prob.f.fingerprint, deepcopy(_stats(integ))
     )
 end
@@ -65,8 +68,12 @@ function load_checkpoint(path::AbstractString)
             Serialization.deserialize(io)
         catch e
             isfatal(e) && rethrow()
-            throw(ArgumentError("$path is not a checkpoint of format $CHECKPOINT_FORMAT: a checkpoint written before " *
-                "the field-compiler cutover (format 1) or by other package versions cannot be read ($(sprint(showerror, e)))"))
+            throw(
+                ArgumentError(
+                    "$path is not a checkpoint of format $CHECKPOINT_FORMAT: a checkpoint written before " *
+                        "the field-compiler cutover (format 1) or by other package versions cannot be read ($(sprint(showerror, e)))"
+                )
+            )
         end
     end
     ck isa PottsCheckpoint || throw(ArgumentError("$path holds a $(typeof(ck)), not a checkpoint of format $CHECKPOINT_FORMAT"))
@@ -74,15 +81,23 @@ function load_checkpoint(path::AbstractString)
 end
 
 function _from_checkpoint(prob::PottsProblem, ck::PottsCheckpoint)
-    ck.format == CHECKPOINT_FORMAT || throw(ArgumentError(
-        "checkpoint format $(ck.format) is not this version's format $CHECKPOINT_FORMAT: a checkpoint written " *
-        "before the field-compiler cutover cannot be continued; finish that run on the version that wrote it"))
-    ck.fingerprint == prob.f.fingerprint || throw(ArgumentError(
-        "checkpoint fingerprint $(ck.fingerprint) does not match the model's $(prob.f.fingerprint)"))
+    ck.format == CHECKPOINT_FORMAT || throw(
+        ArgumentError(
+            "checkpoint format $(ck.format) is not this version's format $CHECKPOINT_FORMAT: a checkpoint written " *
+                "before the field-compiler cutover cannot be continued; finish that run on the version that wrote it"
+        )
+    )
+    ck.fingerprint == prob.f.fingerprint || throw(
+        ArgumentError(
+            "checkpoint fingerprint $(ck.fingerprint) does not match the model's $(prob.f.fingerprint)"
+        )
+    )
     prob.tspan[1] <= ck.t <= prob.tspan[2] ||
         throw(ArgumentError("checkpoint MCS $(ck.t) is outside tspan $(prob.tspan)"))
-    return remake(prob; u0 = ck.state, tspan = (ck.t, prob.tspan[2]), seed = ck.seed,
-        replica = ck.replica, repeat = ck.repeat)
+    return remake(
+        prob; u0 = ck.state, tspan = (ck.t, prob.tspan[2]), seed = ck.seed,
+        replica = ck.replica, repeat = ck.repeat
+    )
 end
 
 _copy_state!(dst::AbstractArray, src) = copyto!(dst, src)
@@ -118,9 +133,12 @@ function SciMLBase.reinit!(
     fresh = u0 === integ.prob.u0                    # (the problem's own state: its derivative parts)
     # symbolic maps; a state is laid out for the model's functions (e.g. Potts' ODE scratch)
     u0 = remake_state(integ.f.sys, integ.prob, u0)
-    _same_shape(integ.state, u0) || throw(ArgumentError(
-        "reinit!: the new state's arrays differ in shape from the integrator's ($(_shape_difference(integ.state, u0))); " *
-        "use `remake` and `init`"))
+    _same_shape(integ.state, u0) || throw(
+        ArgumentError(
+            "reinit!: the new state's arrays differ in shape from the integrator's ($(_shape_difference(integ.state, u0))); " *
+                "use `remake` and `init`"
+        )
+    )
     _fold_lifecycle!(integ; report = false)     # device lifecycle counts of the old run: dropped
     _copy_state!(integ.state, u0)
     refresh_frozen!(integ)          # the frozen mask of the new state (static masks: nothing to do)
@@ -138,7 +156,8 @@ function SciMLBase.reinit!(
     tangent_reinit!(integ.ctx, fresh ? integ.prob.tangent : nothing)   # (and the derivative parts)
     _stats(integ).launches += run_phases(
         integ.f.phases.at_init, integ.state, integ.p, integ.ctx,
-        integ.key, integ.t, integ.backend, _stats(integ))
+        integ.key, integ.t, integ.backend, _stats(integ)
+    )
     _start_failed!(integ)
     reinit_callbacks && _each(cb -> cb.initialize(cb, integ.state, integ.t, integ), integ.callbacks)
     integ.opts.save_start && (isempty(integ.saved_t) || last(integ.saved_t) != integ.t) && _save!(integ)

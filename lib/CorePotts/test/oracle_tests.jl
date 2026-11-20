@@ -27,43 +27,44 @@ end
 
 @testitem "exact transition oracle: Closed 3x2 (Sequential, skip_interior, Checkerboard)" setup = [CP_oracle] tags = [:corepotts, :oracle] begin
     @testset "exact transition oracle: Closed 3x2" begin
-    # the checkerboard's layout here: one block of one-site sub-regions, 64 phases per MCS
+        # the checkerboard's layout here: one block of one-site sub-regions, 64 phases per MCS
         l = init(ORA_CLOSED_PROB, CheckerboardCPM()).cache.layout
-    @test CorePotts.nblocks(l) == 1 && CorePotts.boxsize(l) == 1 && l.k^2 == 64
+        @test CorePotts.nblocks(l) == 1 && CorePotts.boxsize(l) == 1 && l.k^2 == 64
 
-    for (label, alg, step) in (
-            ("SequentialCPM", SequentialCPM(), Oracle.sequential_mcs),
-            ("SequentialCPM(skip_interior)", SequentialCPM(; skip_interior = true), Oracle.sequential_mcs),
-            ("CheckerboardCPM", CheckerboardCPM(), (m, d) -> Oracle.block_mcs(m, d, 64)))
+        for (label, alg, step) in (
+                ("SequentialCPM", SequentialCPM(), Oracle.sequential_mcs),
+                ("SequentialCPM(skip_interior)", SequentialCPM(; skip_interior = true), Oracle.sequential_mcs),
+                ("CheckerboardCPM", CheckerboardCPM(), (m, d) -> Oracle.block_mcs(m, d, 64)),
+            )
             ex = Oracle.exact(ORA_CLOSED_TINY, ORA_CLOSED_SIGMA0, 2, step)
-        @test sum(values(ex)) ≈ 1
-        counts = Dict{Vector{Int8}, Int}()
+            @test sum(values(ex)) ≈ 1
+            counts = Dict{Vector{Int8}, Int}()
             for seed in 1:ORA_R
                 σ = vec(Int8.(solve(remake(ORA_CLOSED_PROB; seed), alg; save_start = false).u[end].ownership))
-            counts[σ] = get(counts, σ, 0) + 1
-        end
+                counts[σ] = get(counts, σ, 0) + 1
+            end
             d, noise = Oracle.tv(ex, counts, ORA_R)
             z = Oracle.chi2_z(ex, counts, ORA_R)
-        @info "oracle" label states = length(ex) tv = d expected_tv = noise z
-        @test z < 4.5                   # a correct sampler fails this about once in 3·10⁵ runs
-        @test d < 2noise
-    end
+            @info "oracle" label states = length(ex) tv = d expected_tv = noise z
+            @test z < 4.5                   # a correct sampler fails this about once in 3·10⁵ runs
+            @test d < 2noise
+        end
     end
 end
 
 @testitem "exact transition oracle: Closed 3x2 mutant T=5 rejected" setup = [CP_oracle] tags = [:corepotts, :oracle] begin
     @testset "exact transition oracle: Closed 3x2 mutant T=5" begin
-    # power: the test rejects a mutant (T = 4 → 5) at this sample size
+        # power: the test rejects a mutant (T = 4 → 5) at this sample size
         ex = Oracle.exact(ORA_CLOSED_TINY, ORA_CLOSED_SIGMA0, 2, (m, d) -> Oracle.block_mcs(m, d, 64))
         mutant = remake(ORA_CLOSED_PROB; p = merge(ORA_P, (; T = 5.0)))
-    counts = Dict{Vector{Int8}, Int}()
+        counts = Dict{Vector{Int8}, Int}()
         for seed in 1:ORA_R
             σ = vec(Int8.(solve(remake(mutant; seed), CheckerboardCPM()).u[end].ownership))
-        counts[σ] = get(counts, σ, 0) + 1
-    end
+            counts[σ] = get(counts, σ, 0) + 1
+        end
         z = Oracle.chi2_z(ex, counts, ORA_R)
-    @info "oracle mutant (T = 5 against exact T = 4)" z
-    @test z > 4.5
+        @info "oracle mutant (T = 5 against exact T = 4)" z
+        @test z > 4.5
     end
 end
 
@@ -181,23 +182,25 @@ end
         for seed in 1:ORA_R
             σ = vec(Int8.(solve(remake(dir_mut; seed), SequentialCPM(); save_start = false).u[end].ownership))
             cnt_dir_m[σ] = get(cnt_dir_m, σ, 0) + 1
-    end
+        end
         @test Oracle.chi2_z(ex_dir, cnt_dir_m, ORA_R) > 4.5
-end
+    end
 end
 
 @testitem "the checkerboard spacing covers an undeclared read radius" setup = [CP_oracle] tags = [:corepotts, :oracle] begin
-@testset "the checkerboard spacing covers an undeclared read radius" begin
-    lat = Lattice((20, 20))
-    σ, k = blocks((20, 20), 3)
-    wide = PottsProblem(GG, initial_state(σ, k), lat, (0, 1), gg_params();
-        contact = NeighborOrder(3))
-    integ = init(wide, CheckerboardCPM())
-    l = integ.cache.layout
-    r, w = CorePotts.reach(wide.f.footprint, integ.ctx.proposal)
-    @test (l.k - 1) * minimum(l.base) >= CorePotts.radius(integ.ctx.contact) + w   # widened, not refused
-    @test init(wide, SequentialCPM()) isa PottsIntegrator
-    ok = CPMFunction(gg_delta_H; temperature = gg_temperature, footprint = Footprint(read = 2))
-    @test solve(remake(wide; f = ok), CheckerboardCPM()).retcode == ReturnCode.Success
-end
+    @testset "the checkerboard spacing covers an undeclared read radius" begin
+        lat = Lattice((20, 20))
+        σ, k = blocks((20, 20), 3)
+        wide = PottsProblem(
+            GG, initial_state(σ, k), lat, (0, 1), gg_params();
+            contact = NeighborOrder(3)
+        )
+        integ = init(wide, CheckerboardCPM())
+        l = integ.cache.layout
+        r, w = CorePotts.reach(wide.f.footprint, integ.ctx.proposal)
+        @test (l.k - 1) * minimum(l.base) >= CorePotts.radius(integ.ctx.contact) + w   # widened, not refused
+        @test init(wide, SequentialCPM()) isa PottsIntegrator
+        ok = CPMFunction(gg_delta_H; temperature = gg_temperature, footprint = Footprint(read = 2))
+        @test solve(remake(wide; f = ok), CheckerboardCPM()).retcode == ReturnCode.Success
+    end
 end

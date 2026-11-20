@@ -47,28 +47,28 @@ end
 
 @testitem "device lifecycle planner: attachment, deferred stats folding, and determinism" setup = [CP_lifecycle_device] tags = [:corepotts, :lifecycle_device] begin
     @testset "device lifecycle planner: attachment, deferred stats folding, and determinism" begin
-    CorePotts._FORCE_DEVICE_LIFECYCLE[] = true
-    try
-        # the planner is really the device one (negative control: off by default)
+        CorePotts._FORCE_DEVICE_LIFECYCLE[] = true
+        try
+            # the planner is really the device one (negative control: off by default)
             prob = ld_base_prob().prob
             integ = init(prob, CheckerboardCPM(); save_start = false, save_end = false, save_everystep = false)
-        @test integ.lcache.device isa CorePotts.DeviceLifecycle
-        @test integ.lcache.device.fused! !== nothing                 # small: one fused launch
-        CorePotts._FORCE_DEVICE_LIFECYCLE[] = false
-        @test init(prob, CheckerboardCPM()).lcache.device === nothing
-        CorePotts._FORCE_DEVICE_LIFECYCLE[] = true
-        # statistics live on the device and are folded at a host read point
-        step!(integ); step!(integ)                             # MCS 1: the division
-        @test count(>(0), Array(integ.state.cell.volume)) == 2  # applied at once …
-        @test integ.stats.lifecycle.divisions == 0             # … counted at the next read
+            @test integ.lcache.device isa CorePotts.DeviceLifecycle
+            @test integ.lcache.device.fused! !== nothing                 # small: one fused launch
+            CorePotts._FORCE_DEVICE_LIFECYCLE[] = false
+            @test init(prob, CheckerboardCPM()).lcache.device === nothing
+            CorePotts._FORCE_DEVICE_LIFECYCLE[] = true
+            # statistics live on the device and are folded at a host read point
+            step!(integ); step!(integ)                             # MCS 1: the division
+            @test count(>(0), Array(integ.state.cell.volume)) == 2  # applied at once …
+            @test integ.stats.lifecycle.divisions == 0             # … counted at the next read
             u = current_state(integ)
-        @test integ.stats.lifecycle.divisions == 1 && count(>(0), u.cell.volume) == 2
+            @test integ.stats.lifecycle.divisions == 1 && count(>(0), u.cell.volume) == 2
             current_state(integ)                                                # folding twice adds nothing
-        @test integ.stats.lifecycle.divisions == 1
-        # deterministic: two runs of a growing population agree exactly (random planes)
+            @test integ.stats.lifecycle.divisions == 1
+            # deterministic: two runs of a growing population agree exactly (random planes)
             pg = ld_growing_prob()
-        g, h = (solve(pg, CheckerboardCPM(); saveat = 5) for _ in 1:2)
-        @test g.stats.lifecycle.divisions == h.stats.lifecycle.divisions >= 2
+            g, h = (solve(pg, CheckerboardCPM(); saveat = 5) for _ in 1:2)
+            @test g.stats.lifecycle.divisions == h.stats.lifecycle.divisions >= 2
             @test all(i -> g.u[i].ownership == h.u[i].ownership && g.u[i].cell == h.u[i].cell, eachindex(g.u))
         finally
             CorePotts._FORCE_DEVICE_LIFECYCLE[] = false
@@ -238,9 +238,9 @@ end
         lim = CorePotts._SCRATCH_LIMIT[]
         CorePotts._FORCE_DEVICE_LIFECYCLE[] = true
         try
-        # A daughter rule that links mother and daughter: the newborn's links are cleaned
-        # (and its columns copied) for every cell before any rule runs, so the rule's link
-        # survives exactly as on the host planner (a race before: the link was dropped)
+            # A daughter rule that links mother and daughter: the newborn's links are cleaned
+            # (and its columns copied) for every cell before any rule runs, so the rule's link
+            # survives exactly as on the host planner (a race before: the link was dropped)
             @testset "a divide! rule's links ($form)" for (form, sites) in (("fused", fuse), ("staged", 0))
                 alg = CheckerboardCPM(; fused_lifecycle_max_sites = sites)
                 link_md!(st, p, ctx, key, mcs, parent, daughter) = (add_link!(st.cell, parent, daughter); nothing)
@@ -259,11 +259,11 @@ end
                 @test linked(host.u[end].cell, 1, 2) && linked(host.u[end].cell, 2, 1)
                 @test dev.u[end].cell.links == host.u[end].cell.links
                 @test dev.u[end].ownership == host.u[end].ownership
-        end
+            end
 
-        # A cell too large for the Int32 moment scratch (here: a lowered bound) does not
-        # divide: the division is deferred and counted, the state stays exact, the host warns
-        # once per report, later reads and `reinit!` do not throw (the count is not sticky)
+            # A cell too large for the Int32 moment scratch (here: a lowered bound) does not
+            # divide: the division is deferred and counted, the state stays exact, the host warns
+            # once per report, later reads and `reinit!` do not throw (the count is not sticky)
             @testset "moment-scratch bound ($form)" for (form, sites) in (("fused", fuse), ("staged", 0))
                 alg = CheckerboardCPM(; fused_lifecycle_max_sites = sites)
                 # cell 1 (8 × 6 sites: m2 about its anchor 264 in x, 152 in y) alone; cluster
@@ -308,7 +308,7 @@ end
                 @test integ.stats.lifecycle.divisions == 3 && integ.stats.lifecycle.deferred == 0
                 @test u.cell.volume == Int32[count(==(c), u.ownership) for c in 1:8]
                 @test same_moments(u, latS, 8, CheckerboardCPM())
-        end
+            end
         finally
             CorePotts._SCRATCH_LIMIT[] = lim
             CorePotts._FORCE_DEVICE_LIFECYCLE[] = false
@@ -330,13 +330,13 @@ end
         restart!(st, p, ctx, key, mcs, parent, daughter) = (st.cell.g[parent] = 0.0; st.cell.g[daughter] = 0.0; nothing)
         function make(fused, every)
             return PottsProblem(
-                    CPMFunction(
-                        gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
-                        phases = Phases(after_mcs = fused ? () : (CellPhase(tick!),)),
-                        lifecycle = Lifecycle(ripe; divide! = restart!, every, before = fused ? tick! : nothing)
-                    ),
-                    stb, latb, (0, 9), gg_params()
-                )
+                CPMFunction(
+                    gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
+                    phases = Phases(after_mcs = fused ? () : (CellPhase(tick!),)),
+                    lifecycle = Lifecycle(ripe; divide! = restart!, every, before = fused ? tick! : nothing)
+                ),
+                stb, latb, (0, 9), gg_params()
+            )
         end
         fuse = CheckerboardCPM().fused_lifecycle_max_sites
         try
@@ -362,10 +362,10 @@ end
                 @test all(i -> sol.u[i].ownership == ref.u[i].ownership && sol.u[i].cell == ref.u[i].cell, eachindex(ref.u))
                 # one launch fewer per checked MCS where the device lifecycle runs it
                 fault == 0 && @test sol.stats.launches == ref.stats.launches - (device ? cld(9, every) : 0)
-        end
+            end
         finally
             CorePotts._LAUNCH_FAULT[] = 0
-        CorePotts._FORCE_DEVICE_LIFECYCLE[] = false
+            CorePotts._FORCE_DEVICE_LIFECYCLE[] = false
+        end
     end
-end
 end

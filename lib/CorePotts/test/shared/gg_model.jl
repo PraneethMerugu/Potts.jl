@@ -15,8 +15,10 @@ end
 gg_temperature(st, p, prop, ctx) = p.T
 const GG = CPMFunction(gg_delta_H; temperature = gg_temperature)
 function gg_params(T = Float64)
-    return (; J = SMatrix{3, 3, T}(0, 16, 16, 16, 2, 11, 16, 11, 14),
-        λ = T(1), V0 = T(40), T = T(10))
+    return (;
+        J = SMatrix{3, 3, T}(0, 16, 16, 16, 2, 11, 16, 11, 14),
+        λ = T(1), V0 = T(40), T = T(10),
+    )
 end
 
 """Blocky initial condition with cells of `side` sites per axis and alternating kinds."""
@@ -58,13 +60,15 @@ function gs_delta_H(st, p, prop, ctx)
     E(v, c) = p.λ * (v - p.V0)^2
     S(s, c) = p.λs * (s - p.S0)^2
     return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
-           surface_delta(st.cell.surface, prop,
+        surface_delta(
+        st.cell.surface, prop,
         surface_change(st.ownership, ctx, prop; T = eltype(st.cell.surface)), S
     )
 end
 function gs_commit!(st, p, prop, ctx)
     commit_volume!(st, p, prop, ctx)
-    commit_surface!(st.cell.surface, prop,
+    return commit_surface!(
+        st.cell.surface, prop,
         surface_change(st.ownership, ctx, prop; T = eltype(st.cell.surface))
     )
 end
@@ -98,6 +102,8 @@ function total_H_surface(st, lat, ctx, p)
     return H + sum(p.λ * (v - p.V0)^2 for v in vol) + sum(p.λs * (s - p.S0)^2 for s in S)
 end
 function surface_state(σ, kinds, lat, r; T = Float64)
-    return initial_state(σ, kinds;
-        cell = (; surface = recompute_surface(σ, lat, relation(r, lat), length(kinds); T)))
+    return initial_state(
+        σ, kinds;
+        cell = (; surface = recompute_surface(σ, lat, relation(r, lat), length(kinds); T))
+    )
 end

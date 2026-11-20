@@ -23,8 +23,10 @@ member whose `kind` is in `prefer` (the kinds that name clusters, e.g. the cytop
 else the lowest member. Roots are stable: they change only when the root dies, and then
 to the lowest live member of the same kind if there is one.
 """
-function init_clusters(σ, cluster::AbstractVector, lat::Lattice; relation = nothing,
-        T::Type = Float64, kind = nothing, prefer = ())
+function init_clusters(
+        σ, cluster::AbstractVector, lat::Lattice; relation = nothing,
+        T::Type = Float64, kind = nothing, prefer = ()
+    )
     cl = Int32.(cluster)
     _normalize_clusters!(cl, _live(σ, length(cl)); kind, prefer, keep = false)
     out = (; cluster = cl, cluster_volume = recompute_cluster_volume(σ, cl))
@@ -124,8 +126,10 @@ end
 Change of the surfaces of the clusters of `old` and `new` (zero if they are the same
 cluster): `surface_change` with owners replaced by their clusters.
 """
-@inline function cluster_surface_change(σ, cell, ctx, prop::Proposal{N}; relation = ctx.surface,
-        T::Type = typeof(weight(relation, 1))) where {N}
+@inline function cluster_surface_change(
+        σ, cell, ctx, prop::Proposal{N}; relation = ctx.surface,
+        T::Type = typeof(weight(relation, 1))
+    ) where {N}
     a, b = cluster_of(cell, prop.old), cluster_of(cell, prop.new)
     δa = zero(T)
     δb = δa
@@ -192,7 +196,9 @@ function _rebuild_cluster_trackers!(stats, st, σ, ctx)
         counted_copy!(
             stats, st.cell.cluster_surface, _recompute_surface(
                 T, σK, ctx.lattice, ctx.surface, length(cl),
-            _units_for(T, ctx.surface, length(σ), CPU())))
+                _units_for(T, ctx.surface, length(σ), CPU())
+            )
+        )
     end
     return nothing
 end
@@ -210,7 +216,9 @@ function _cluster_planes!(stats, normals, bias, lc, st, p, ctx, key, mcs, roots,
     cap = length(cl)
     σK = map(s -> s == 0 ? Int32(0) : cl[s], σ)
     mK = init_moments(σK, lat, cap)
-    cellK = merge(mK, (; volume = recompute_cluster_volume(σ, cl),
+    cellK = merge(
+        mK, (;
+            volume = recompute_cluster_volume(σ, cl),
             generation = to_host(stats, st.cell.generation), kind = to_host(stats, st.cell.kind), cluster = cl,
         )
     )

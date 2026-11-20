@@ -66,9 +66,11 @@ struct FieldPhase{K, G, AL, A, F, PR, SP}
     options::Any                         # the compile options of the plans (host)
     T::Type                              # the value type of the plans
 end
-function FieldPhase{K}(group, alg, arrays::Tuple; tables = Pair{Int, Symbol}[], params = Symbol[], substeps,
+function FieldPhase{K}(
+        group, alg, arrays::Tuple; tables = Pair{Int, Symbol}[], params = Symbol[], substeps,
         dt::Real, period::Real = dt, options, T::Type, init::Bool = false, aux_only::Bool = false,
-        start::Bool = false, rule_tables = Pair{String, Symbol}[]) where {K}
+        start::Bool = false, rule_tables = Pair{String, Symbol}[]
+    ) where {K}
     program = Problems.group_program(group, alg)
     # the plans of value type `T`, made once per group (shared by every trajectory; the host
     # backend only decides the Float64 check here, which `options` already holds)
@@ -79,15 +81,18 @@ function FieldPhase{K}(group, alg, arrays::Tuple; tables = Pair{Int, Symbol}[], 
     end
     return FieldPhase{K, typeof(group), typeof(alg), typeof(arrays), typeof(substeps), typeof(program), typeof(step)}(
         group, alg, program, masks, step, arrays, tables, params, substeps, Float64(dt), Float64(period), init, aux_only,
-        start, collect(Pair{String, Symbol}, rule_tables), options, T)
+        start, collect(Pair{String, Symbol}, rule_tables), options, T
+    )
 end
 # the ids of a program's `aux:` kernels (an `aux_only` phase binds them alone)
 _aux_ids(prog) = [i for (i, k) in enumerate(prog.kernels) if startswith(k.key, "aux:")]
 _aux_ids(ph::FieldPhase) = _aux_ids(ph.program)
 """The masked-condition clamp of field phase `ph` (its at-init form)."""
 function field_clamp(ph::FieldPhase{K}) where {K}
-    return FieldPhase{K}(ph.group, ph.alg, ph.arrays; ph.tables, ph.params, ph.substeps, ph.dt, ph.period, ph.options, ph.T,
-        init = true, ph.aux_only, ph.rule_tables)
+    return FieldPhase{K}(
+        ph.group, ph.alg, ph.arrays; ph.tables, ph.params, ph.substeps, ph.dt, ph.period, ph.options, ph.T,
+        init = true, ph.aux_only, ph.rule_tables
+    )
 end
 
 """
@@ -150,8 +155,10 @@ _param(p, n::Symbol) = n === _CLOCK ? 0.0 : getproperty(p, n)
 # the parameter values and table contents a binding depends on (copies: a table written in
 # place is a change)
 function _bound_values(ph::FieldPhase, p)
-    return (Any[_param(p, n) for n in ph.params],
-        Any[copy(vec(collect(getproperty(p, name)))) for name in _table_names(ph)])
+    return (
+        Any[_param(p, n) for n in ph.params],
+        Any[copy(vec(collect(getproperty(p, name)))) for name in _table_names(ph)],
+    )
 end
 # the tables a phase depends on: its program's, then those only its substep rule reads
 _table_names(ph::FieldPhase) = Iterators.flatten((last.(ph.tables), last.(ph.rule_tables)))
@@ -184,7 +191,8 @@ table coefficient), and the tables only its substep rule reads.
 function table_values(ph::FieldPhase, p)
     return Pair{String, Vector{Float64}}[
         [ph.program.tables[i].key => Float64.(vec(collect(getproperty(p, name)))) for (i, name) in ph.tables];
-        [k => Float64.(vec(collect(getproperty(p, name)))) for (k, name) in ph.rule_tables]]
+        [k => Float64.(vec(collect(getproperty(p, name)))) for (k, name) in ph.rule_tables]
+    ]
 end
 """The raw parameter values of the field phase's slots at `p`."""
 praw(ph::FieldPhase, p) = Tuple(_param(p, n) for n in ph.params)
@@ -232,8 +240,14 @@ function _field_bind(ph::FieldPhase, st, p, backend; tables = nothing, abstol = 
     bufs = [buffers(i, a) for (i, a) in enumerate(arrs)]
     # every bound array holds its field's sites (the kernels index it unchecked)
     for (i, b) in enumerate(bufs), x in b
-        length(x) == nf(i) || throw(ArgumentError(string("field array `", s.fields[i].key, "` has ", length(x),
-            " values; its grid has ", nf(i), " sites")))
+        length(x) == nf(i) || throw(
+            ArgumentError(
+                string(
+                    "field array `", s.fields[i].key, "` has ", length(x),
+                    " values; its grid has ", nf(i), " sites"
+                )
+            )
+        )
     end
     if tables === nothing
         tables = Any[nothing for _ in s.tables]
@@ -484,8 +498,10 @@ Base.@kwdef mutable struct FieldStats
     backend::String = ""
 end
 function Base.show(io::IO, s::FieldStats)
-    return print(io, "FieldStats(solves = ", s.solves, ", budget = ", s.budget, ", floor = ",
-        s.floor, ", newton_budget = ", s.newton_budget, ", code = ", s.code, ")")
+    return print(
+        io, "FieldStats(solves = ", s.solves, ", budget = ", s.budget, ", floor = ",
+        s.floor, ", newton_budget = ", s.newton_budget, ", code = ", s.code, ")"
+    )
 end
 function _rank(c::SciMLBase.ReturnCode.T)
     if c == SciMLBase.ReturnCode.Success
@@ -660,10 +676,16 @@ end
 _dualtype(v) = v isa AbstractArray ? eltype(v) : typeof(v)
 function _tangent_eltype(tg::ParameterTangent, T)
     Es = unique(Any[LatticeFields.Compile.withvaltype(_dualtype(v), T) for (_, v) in Iterators.flatten((tg.seeds, tg.u0))])
-    length(Es) == 1 || throw(ArgumentError(string("the values with derivative parts hold ", length(Es),
-        " different Dual types (", join((LatticeFields.Compile.npartials(E) for E in Es), ", "), " derivative parts, or ",
-        "different tags); give every seed of one run the same Dual type (one `ForwardDiff.derivative`, `gradient` ",
-        "or `jacobian` call)")))
+    length(Es) == 1 || throw(
+        ArgumentError(
+            string(
+                "the values with derivative parts hold ", length(Es),
+                " different Dual types (", join((LatticeFields.Compile.npartials(E) for E in Es), ", "), " derivative parts, or ",
+                "different tags); give every seed of one run the same Dual type (one `ForwardDiff.derivative`, `gradient` ",
+                "or `jacobian` call)"
+            )
+        )
+    )
     return only(Es)
 end
 
@@ -701,16 +723,20 @@ function tangent_run(phases::Phases, st, p, tg::ParameterTangent, backend, ctx, 
             x === nothing || (written[x] = nothing)
         end
     end
-    run = TangentRun(tg.p, 0, E, IdDict{Any, Any}(), written, Dict{Symbol, Any}(), Dict{Symbol, Any}(), Dict{Symbol, Bool}(),
-        Dict{Symbol, Tuple{Any, Any, Int}}(), Dict{Symbol, Vector{Tuple{Any, Any}}}(), backend)
+    run = TangentRun(
+        tg.p, 0, E, IdDict{Any, Any}(), written, Dict{Symbol, Any}(), Dict{Symbol, Any}(), Dict{Symbol, Bool}(),
+        Dict{Symbol, Tuple{Any, Any, Int}}(), Dict{Symbol, Vector{Tuple{Any, Any}}}(), backend
+    )
     any_seeded = false
     for ph in phs
         _shadow!(run, ph, st, _runtime(getfield(ctx, _ctxkey(ph))))
-        any_seeded |= any(x -> LatticeFields.Compile.npartials(typeof(x)) > 0 && !iszero(x - LatticeFields.Compile.primal(x)),
+        any_seeded |= any(
+            x -> LatticeFields.Compile.npartials(typeof(x)) > 0 && !iszero(x - LatticeFields.Compile.primal(x)),
             praw(ph, tg.p)
         )
     end
-    any_seeded || !isempty(tg.u0) || isempty(phs) || @warn string("no field group reads a parameter with derivative parts, ",
+    any_seeded || !isempty(tg.u0) || isempty(phs) || @warn string(
+        "no field group reads a parameter with derivative parts, ",
         "so every derivative of the fields is zero: the CPM and the ODEs read the primal values, and the derivative holds ",
         "the CPM path fixed"
     ) maxlog = 1
@@ -728,8 +754,12 @@ function _shadow!(run::TangentRun, ph::FieldPhase{K}, st, prt) where {K}
     s = ph.program
     arrs = _arrays(ph.arrays, st)
     function twin(x)
-        return get!(() -> fill!(KernelAbstractions.allocate(backend, LatticeFields.Compile.withvaltype(E, eltype(x)), size(x)),
-            zero(LatticeFields.Compile.withvaltype(E, eltype(x)))), run.twins, x)
+        return get!(
+            () -> fill!(
+                KernelAbstractions.allocate(backend, LatticeFields.Compile.withvaltype(E, eltype(x)), size(x)),
+                zero(LatticeFields.Compile.withvaltype(E, eltype(x)))
+            ), run.twins, x
+        )
     end
     nf(i) = LatticeFields.IR.nsites(s, s.fields[i].levels[1])
     bufs = map(enumerate(arrs)) do (i, a)
@@ -738,8 +768,10 @@ function _shadow!(run::TangentRun, ph::FieldPhase{K}, st, prt) where {K}
             S <: AbstractFloat && return Any[_scratch(backend, LatticeFields.Compile.withvaltype(E, S), nf(i))]
             return Any[_scratch(backend, S, nf(i))]
         end
-        return Any[x isa AbstractArray && eltype(x) <: AbstractFloat && haskey(run.written, x) ? vec(twin(x)) : vec(x)
-                   for x in a if x !== nothing]
+        return Any[
+            x isa AbstractArray && eltype(x) <: AbstractFloat && haskey(run.written, x) ? vec(twin(x)) : vec(x)
+                for x in a if x !== nothing
+        ]
     end
     # the values of every twin the phase binds (its own fields, and another group's it reads)
     # from the primal state; a state field's twin is also read back by its name
@@ -758,7 +790,8 @@ function _shadow!(run::TangentRun, ph::FieldPhase{K}, st, prt) where {K}
         ends_in = :slot1, backend, options = ph.options, V = ph.T, host = nothing,
         kernels = ph.aux_only ? (Int[], _aux_ids(ph)) : nothing,
         tols...,
-        (shared ? (; shared = (prt.cache, prt.store)) : (;))...)
+        (shared ? (; shared = (prt.cache, prt.store)) : (;))...
+    )
     trt.totals.where = prt.totals.where
     Exec.ishost(backend) || Problems.compile!(backend, trt)
     run.rts[K], run.syncs[K], run.shared[K] = trt, sync, shared
@@ -801,8 +834,12 @@ function _set_parts!(stats, run::TangentRun, tw, v, name)
     w = v isa AbstractArray ? v : fill(v, size(tw))
     if LatticeFields.Compile.npartials(eltype(w)) > 0
         LatticeFields.Compile.npartials(eltype(w)) == LatticeFields.Compile.npartials(E) ||
-            throw(ArgumentError("`$name` holds $(LatticeFields.Compile.npartials(E)) derivative parts in this run; the " *
-                                "written values hold $(LatticeFields.Compile.npartials(eltype(w)))"))
+            throw(
+            ArgumentError(
+                "`$name` holds $(LatticeFields.Compile.npartials(E)) derivative parts in this run; the " *
+                    "written values hold $(LatticeFields.Compile.npartials(eltype(w)))"
+            )
+        )
         size(w) == size(tw) || throw(DimensionMismatch("`$name` has size $(size(tw)); got $(size(w))"))
         src = similar(tw, E, size(tw))
         counted_copy!(stats, src, E[convert(E, x) for x in w])
@@ -826,8 +863,12 @@ end
 function _seed_initial!(stats, run::TangentRun, tg::ParameterTangent)
     for (name, v) in tg.u0
         tw = get(run.names, name, nothing)
-        tw === nothing && throw(ArgumentError("the initial value of `$name` holds derivative parts, and `$name` is not " *
-                                              "a field a field group steps"))
+        tw === nothing && throw(
+            ArgumentError(
+                "the initial value of `$name` holds derivative parts, and `$name` is not " *
+                    "a field a field group steps"
+            )
+        )
         _set_parts!(stats, run, tw, v, name)
     end
     return nothing

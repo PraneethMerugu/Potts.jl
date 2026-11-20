@@ -112,12 +112,12 @@ end
         dist(u) = (centroid_distance(Float64, u.cell, latR, 1, 2), centroid_distance(Float64, u.cell, latR, 2, 3))
         function runs(k, dev, seeds)
             return map(seeds) do seed
-                    integ = init(prob(f, k, seed), CheckerboardCPM(); save_start = false, (dev ? (; backend) : (;))...)
-                    dev && @test integ.state.ownership isa PottsDevices.device_arraytype() && integ.state.cell.links__bond isa PottsDevices.device_arraytype()
-                    sol = solve!(integ)
-                    @test sol.retcode == ReturnCode.Success
-                    sol.u[end]
-                end
+                integ = init(prob(f, k, seed), CheckerboardCPM(); save_start = false, (dev ? (; backend) : (;))...)
+                dev && @test integ.state.ownership isa PottsDevices.device_arraytype() && integ.state.cell.links__bond isa PottsDevices.device_arraytype()
+                sol = solve!(integ)
+                @test sol.retcode == ReturnCode.Success
+                sol.u[end]
+            end
         end
         us = runs(2, true, 1:4)
         for u in us
@@ -182,10 +182,10 @@ end
         function wide(f)
             CorePotts._FORCE_WIDE_SITES[] = true
             return try
-                    f()
-                finally
-                    CorePotts._FORCE_WIDE_SITES[] = false
-                end
+                f()
+            finally
+                CorePotts._FORCE_WIDE_SITES[] = false
+            end
         end
         fk32 = fk_problem(rm2; T = Float32)
         if CorePotts._atomic64(backend)

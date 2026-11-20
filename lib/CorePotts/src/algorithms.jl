@@ -218,7 +218,8 @@ CheckerboardCPM(acceptance::A, proposal::R, args...) where {A, R} = Checkerboard
 # printed as the keyword call that rebuilds it; keywords at their defaults are left out
 function Base.show(io::IO, a::CheckerboardCPM)
     kw = String[]
-    for (k, d) in ((:acceptance, nothing), (:proposal, nothing), (:region, nothing), (:parts, nothing),
+    for (k, d) in (
+            (:acceptance, nothing), (:proposal, nothing), (:region, nothing), (:parts, nothing),
             (:switches, 1), (:threads, :auto), (:inline_max_blocks, _INLINE_MAX_BLOCKS),
             (:fused_lifecycle_max_sites, _FUSED_LIFECYCLE_MAX_SITES), (:fused_lifecycle_max_cells, _FUSED_LIFECYCLE_MAX_CELLS),
         )

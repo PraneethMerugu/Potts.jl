@@ -40,7 +40,7 @@ function _resolve_corepotts_groups(groups_table, raw_groups)
     selected = String[]
     for raw in raw_groups
         g = strip(String(raw))
-        startswith(g, "CorePotts_") && (g = g[length("CorePotts_") + 1:end])
+        startswith(g, "CorePotts_") && (g = g[(length("CorePotts_") + 1):end])
         g == "CorePotts" && (g = "All")
         if g == "All"
             for name in sort!(collect(keys(groups_table)))
@@ -83,27 +83,39 @@ const COREPOTTS_DEVICES = joinpath(@__DIR__, "..", "..", "..", "test", "shared",
 isdefined(@__MODULE__, :PottsDevices) || !isfile(COREPOTTS_DEVICES) || include(COREPOTTS_DEVICES)
 const COREPOTTS_ON_DEVICE = isdefined(@__MODULE__, :PottsDevices) && PottsDevices.on_device()
 
-function corepotts_tests(groups = COREPOTTS_SELECTED_GROUPS;
-        nworkers = parse(Int, get(ENV, "RETESTITEMS_NWORKERS", "3")))
+function corepotts_tests(
+        groups = COREPOTTS_SELECTED_GROUPS;
+        nworkers = parse(Int, get(ENV, "RETESTITEMS_NWORKERS", "3"))
+    )
     qa = get(ENV, "COREPOTTS_QA", "true") == "true"
     name = (n = get(ENV, "COREPOTTS_TEST_NAME", ""); isempty(n) ? nothing : Regex(n))
     want = Symbol.(filter(!isempty, split(get(ENV, "COREPOTTS_TEST_TAGS", ""), ',')))
     endfile = get(ENV, "POTTS_TEST_END_EXPR_FILE", "")
     test_end_expr = isempty(endfile) ? Expr(:block) : Meta.parse("begin\n" * read(endfile, String) * "\nend")
 
-    group_specs = [(Symbol.(get(COREPOTTS_GROUPS_TABLE[g], "tags", String[])),
-                    Symbol.(get(COREPOTTS_GROUPS_TABLE[g], "exclude_tags", String[])))
-                   for g in groups]
+    group_specs = [
+        (
+            Symbol.(get(COREPOTTS_GROUPS_TABLE[g], "tags", String[])),
+            Symbol.(get(COREPOTTS_GROUPS_TABLE[g], "exclude_tags", String[])),
+        )
+            for g in groups
+    ]
     in_group(ti) = any(((tgs, ex),) -> (isempty(tgs) || any(in(ti.tags), tgs)) && !any(in(ti.tags), ex), group_specs)
     picked(ti) = in_group(ti) && (isempty(want) || any(in(ti.tags), want)) && (qa || !(:qa in ti.tags) || "qa" in groups)
-    kw = (; name, test_end_expr, testitem_timeout = 3600, retries = 0, nworker_threads = string(Threads.nthreads()),
-        logs = :batched)
+    kw = (;
+        name, test_end_expr, testitem_timeout = 3600, retries = 0, nworker_threads = string(Threads.nthreads()),
+        logs = :batched,
+    )
     phases = if COREPOTTS_ON_DEVICE || "gpu" in groups
-        [(ti -> (isempty(want) || any(in(ti.tags), want)) && :device in ti.tags && !(:device_scan in ti.tags), 0),
-            (ti -> (isempty(want) || any(in(ti.tags), want)) && :device_scan in ti.tags, 0)]
+        [
+            (ti -> (isempty(want) || any(in(ti.tags), want)) && :device in ti.tags && !(:device_scan in ti.tags), 0),
+            (ti -> (isempty(want) || any(in(ti.tags), want)) && :device_scan in ti.tags, 0),
+        ]
     else
-        [(ti -> picked(ti) && !(:gpu_only in ti.tags) && !(:timing in ti.tags), nworkers),
-            (ti -> picked(ti) && !(:gpu_only in ti.tags) && :timing in ti.tags, min(nworkers, 1))]
+        [
+            (ti -> picked(ti) && !(:gpu_only in ti.tags) && !(:timing in ti.tags), nworkers),
+            (ti -> picked(ti) && !(:gpu_only in ti.tags) && :timing in ti.tags, min(nworkers, 1)),
+        ]
     end
     failed = Any[]
     for (f, nw) in phases

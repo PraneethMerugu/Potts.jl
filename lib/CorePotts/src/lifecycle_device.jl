@@ -63,7 +63,7 @@ const _ACC_DEFERRED = 4
 const _ACC_EMPTY = 5
 const _ACC_NOCLUSTER = 6            # EVENT_DIVIDE_CLUSTER without cluster state (an error)
 const _ACC_LARGE = 7                # divisions deferred: the cell is too large for the Int32
-                                    # moment scratch (`_scratch_ok`; also counted as deferred)
+# moment scratch (`_scratch_ok`; also counted as deferred)
 const _ACC_BADTRANS = 8             # `transitioning` on an event other than a division (an error)
 const _NACC = 8
 
@@ -72,18 +72,22 @@ const _NACC = 8
 const _SCRATCH_LIMIT = Ref{Int64}(typemax(Int32))
 
 # Cell columns that the lifecycle maintains itself (never copied from parent to daughter)
-const _LIFECYCLE_OWNED = (:volume, :surface, :anchor, :m1, :m2, :generation, :birth, :cluster,
-    :cluster_volume, :cluster_surface, :euler, :euler_full, :pieces, :largest_piece, :pieces_full, :largest_piece_full)
+const _LIFECYCLE_OWNED = (
+    :volume, :surface, :anchor, :m1, :m2, :generation, :birth, :cluster,
+    :cluster_volume, :cluster_surface, :euler, :euler_full, :pieces, :largest_piece, :pieces_full, :largest_piece_full,
+)
 
 """Device scratch of the lifecycle (sized by capacity) and the host buffers of its fold."""
 function _device_scratch(backend, N::Int, cap::Int, nsite::Int)
     z(T, dims...) = KernelAbstractions.zeros(backend, T, dims...)
-    return (; flag = z(Int32, 2), held = z(Int32, cap), newborn = z(Int32, cap), req = z(Int32, cap),
+    return (;
+        flag = z(Int32, 2), held = z(Int32, cap), newborn = z(Int32, cap), req = z(Int32, cap),
         nmem = z(Int32, cap), nlive = z(Int32, cap), coff = z(Int32, cap), freelist = z(Int32, cap),
         dvol = z(Int32, cap), dm1 = z(Int32, N, cap), dm2 = z(Int32, npairs(N), cap),
         rootA = z(Int32, cap), rootB = z(Int32, cap), okc = z(Bool, cap), acc = z(Int32, _NACC),
         mcnt = z(_atomic64(backend) ? site_index_type(nsite) : Int32, 3), mask = z(Int64, 3), taken = z(Int32, 1),
-        wacc = z(Int64, cap), wlo = z(UInt32, cap), whi = z(Int32, cap), limit = _SCRATCH_LIMIT[])
+        wacc = z(Int64, cap), wlo = z(UInt32, cap), whi = z(Int32, cap), limit = _SCRATCH_LIMIT[],
+    )
 end
 
 """Host side of the device lifecycle: the round counter, the kernel objects and the fold
@@ -123,7 +127,8 @@ function DeviceLifecycle(
     return DeviceLifecycle(
         _device_scratch(backend, N, cap, length(st.ownership)), cols, links, _plan_kernel!(backend, PLAN_WG), fused,
         Ref(fused === nothing ? _FORM_STAGED : _FORM_FUSED), Ref(false), Ref(false), Ref(0), Ref(0),
-        zeros(Int32, _NACC), zeros(Int32, _NACC), zeros(Int64, 3), zeros(Int64, 3))
+        zeros(Int32, _NACC), zeros(Int32, _NACC), zeros(Int64, 3), zeros(Int64, 3)
+    )
 end
 
 # ---------------------------------------------------------------------------------------
@@ -137,8 +142,10 @@ end
     c <= ncells(st) && f(st, p, ctx, key, mcs, c % Int32)
     return nothing
 end
-@inline function _dtrigger_body!(c, events, dv, par, round, before::B, trigger::F, st, p, ctx, key, mcs,
-        ::Val{CL}) where {B, F, CL}
+@inline function _dtrigger_body!(
+        c, events, dv, par, round, before::B, trigger::F, st, p, ctx, key, mcs,
+        ::Val{CL}
+    ) where {B, F, CL}
     _before!(before, c, st, p, ctx, key, mcs)
     e = EVENT_NONE
     if @inbounds(st.cell.volume[c]) > 0
@@ -229,7 +236,7 @@ end
         r = @inbounds st.cell.cluster[c]
         Atomix.@atomic dv.nlive[r] += Int32(1)
         if _base_event(_event(ruled, @inbounds events[r])) == EVENT_DIVIDE_CLUSTER &&
-           _event(ruled, @inbounds events[c]) != EVENT_REMOVE
+                _event(ruled, @inbounds events[c]) != EVENT_REMOVE
             Atomix.@atomic dv.nmem[r] += Int32(1)
         end
     end
@@ -351,8 +358,10 @@ end
 # G: daughters and planes. A cell dividing alone takes its slot and its normal; the item of
 # a dividing cluster's root assigns its members' daughters in slot order and evaluates the
 # cluster plane on the cluster's moments
-@inline function _plan_g!(t, cnt, tot, events, daughter, normals, bias, dv, par, normal::NF, cnormal::CF,
-        ruled, st, p, ctx, key, mcs, ::Val{CL}, births) where {NF, CF, CL}
+@inline function _plan_g!(
+        t, cnt, tot, events, daughter, normals, bias, dv, par, normal::NF, cnormal::CF,
+        ruled, st, p, ctx, key, mcs, ::Val{CL}, births
+    ) where {NF, CF, CL}
     _on(dv, par) || return nothing
     lo, hi = _chunk(t, length(events))
     rk = @inbounds(tot[2]) + @inbounds(cnt[t, 3])
@@ -419,8 +428,10 @@ end
 # bounds: a.v is one cell's column (anchor, m1 or m2); d runs over that column's rows
 @inline Base.getindex(a::_OneColumn, d, c) = @inbounds a.v[d]
 
-@inline function _plan_cluster!(r, events, daughter, normals, bias, dv, cnormal::CF, ruled, st, p, ctx, key,
-        mcs, births) where {CF}
+@inline function _plan_cluster!(
+        r, events, daughter, normals, bias, dv, cnormal::CF, ruled, st, p, ctx, key,
+        mcs, births
+    ) where {CF}
     cell = st.cell
     lat = ctx.lattice
     N = ndims(lat)
@@ -511,8 +522,10 @@ end
 # each stage, not around the kernel: `@synchronize` stays at the top level, where every
 # work item reaches it. (KA's CPU backend splits the kernel at each `@synchronize` and needs
 # `@index` as its own statement in each part.)
-@kernel function _plan_kernel!(live, events, daughter, removed, normals, bias, dv, par, round, normal, cnormal,
-        ruled, st, p, ctx, key, mcs, clusters, surf, births)
+@kernel function _plan_kernel!(
+        live, events, daughter, removed, normals, bias, dv, par, round, normal, cnormal,
+        ruled, st, p, ctx, key, mcs, clusters, surf, births
+    )
     cnt = @localmem Int32 (PLAN_WG, 3)
     tot = @localmem Int32 (3,)
     ta = @index(Local, Linear)
@@ -547,8 +560,10 @@ end
     @synchronize
     tg = @index(Local, Linear)
     if live
-        _plan_g!(tg, cnt, tot, events, daughter, normals, bias, dv, par, normal, cnormal, ruled, st, p, ctx, key, mcs,
-            clusters, births)
+        _plan_g!(
+            tg, cnt, tot, events, daughter, normals, bias, dv, par, normal, cnormal, ruled, st, p, ctx, key, mcs,
+            clusters, births
+        )
     end
     @synchronize
     th = @index(Local, Linear)
@@ -641,8 +656,10 @@ end
     return nothing
 end
 
-@inline function _dcopies_body!(c, dv, par, events, daughter, removed, cols, links, st, ruled,
-        ::Val{CL}, release::RL, births::BT) where {CL, RL, BT}
+@inline function _dcopies_body!(
+        c, dv, par, events, daughter, removed, cols, links, st, ruled,
+        ::Val{CL}, release::RL, births::BT
+    ) where {CL, RL, BT}
     _on(dv, par) || return nothing
     # the serial counter passes the entries the planner took (the first stage writing state)
     c == 1 && _advance_births!(births, dv)
@@ -670,8 +687,10 @@ end
     return nothing
 end
 
-@inline function _drules_body!(c, dv, par, events, daughter, kindf::KF, divide!::DF, cluster_divide!::CF, st, p,
-        ctx, key, mcs, ruled) where {KF, DF, CF}
+@inline function _drules_body!(
+        c, dv, par, events, daughter, kindf::KF, divide!::DF, cluster_divide!::CF, st, p,
+        ctx, key, mcs, ruled
+    ) where {KF, DF, CF}
     _on(dv, par) || return nothing
     _cell_rule_body!(c, events, daughter, kindf, divide!, cluster_divide!, st, p, ctx, key, mcs, ruled)
     return nothing
@@ -895,19 +914,23 @@ function run_lifecycle_device!(lc::Lifecycle, cache, st, p, ctx, key, mcs, backe
     round = Int32(r % typemax(Int32))
     T = eltype(cache.normals)
     buf = (; cache.events, cache.daughter, cache.removed, cache.normals, cache.bias)
-    fns = (; lc.before, lc.trigger, normal = _plane(lc.normal, T), cnormal = _plane(lc.cluster_normal, T), lc.kind, lc.divide!,
-        lc.cluster_divide!, lc.release, lc.owner_changed)
+    fns = (;
+        lc.before, lc.trigger, normal = _plane(lc.normal, T), cnormal = _plane(lc.cluster_normal, T), lc.kind, lc.divide!,
+        lc.cluster_divide!, lc.release, lc.owner_changed,
+    )
     surface = haskey(st.cell, :surface) && haskey(ctx, :surface)
     csurface = _has_clusters(st) && haskey(st.cell, :cluster_surface) && haskey(ctx, :surface)
     nsite = length(st.ownership)
-    opt = (; surf = surface ? st.cell.surface : nothing,
+    opt = (;
+        surf = surface ? st.cell.surface : nothing,
         cvol = _has_clusters(st) && haskey(st.cell, :cluster_volume) ? st.cell.cluster_volume : nothing,
         csurf = csurface ? st.cell.cluster_surface : nothing,
         rel = haskey(ctx, :surface) ? ctx.surface : nothing, refresh,
         su = surface ? _units_for(eltype(st.cell.surface), ctx.surface, nsite, backend) : nothing,
         cu = csurface ? _units_for(eltype(st.cell.cluster_surface), ctx.surface, nsite, backend) : nothing,
         cc = _contact_counts(ctx), ccols = _count_columns(st, _contact_counts(ctx)), eul = _euler_columns(st.cell),
-        births = _births(st))
+        births = _births(st),
+    )
     CL = Val(_has_clusters(st))
     if D.form[] == _FORM_FUSED
         D.proven[] && return _run_fused!(D, buf, fns, opt, par, round, lc.rules, CL, st, p, ctx, key, mcs)
@@ -964,7 +987,7 @@ function _form_failed!(D, e)
     isfatal(e) && throw(e)
     next = D.form[] == _FORM_FUSED ? "one kernel per stage" : "the host planner"
     @warn "device lifecycle: the $(D.form[] == _FORM_FUSED ? "fused" : "staged") form cannot launch " *
-          "($(sprint(showerror, e))); using $next"
+        "($(sprint(showerror, e))); using $next"
     D.form[] += 1
     D.proven[] = false
     return -1
@@ -1034,9 +1057,11 @@ struct _StagedFailedMidway <: Exception
     cause::Any
 end
 function Base.showerror(io::IO, e::_StagedFailedMidway)
-    return print(io, "device lifecycle: the staged form failed after $(e.enqueued) of its kernels were enqueued, ",
+    return print(
+        io, "device lifecycle: the staged form failed after $(e.enqueued) of its kernels were enqueued, ",
         "the partition (which writes σ) among them; the state is no longer consistent and cannot be ",
-        "handed to the host planner. Cause: ", sprint(showerror, e.cause))
+        "handed to the host planner. Cause: ", sprint(showerror, e.cause)
+    )
 end
 
 _enqueues(mode) = true
@@ -1049,18 +1074,33 @@ function _run_staged!(D, buf, fns, opt, par, round, ruled, CL, st, p, ctx, key, 
     n = length(st.ownership)
     lat = ctx.lattice
     surf, cvol, csurf, refresh = opt.surf, opt.cvol, opt.csurf, opt.refresh
-    _stage!(mode, _dtrigger_body!, backend, cap,
-        (buf.events, dv, par, round, fns.before, fns.trigger, st, p, ctx, key, mcs, CL))
+    _stage!(
+        mode, _dtrigger_body!, backend, cap,
+        (buf.events, dv, par, round, fns.before, fns.trigger, st, p, ctx, key, mcs, CL)
+    )
     _enqueues(mode) && (D.before_ran[] = true)
-    _stage_plan!(mode, D, backend, (buf.events, buf.daughter, buf.removed, buf.normals, buf.bias, dv, par, round,
-        fns.normal, fns.cnormal, ruled, st, p, ctx, key, mcs, CL, surf, opt.births))
-    _stage!(mode, _dpartition_body!, backend, n,
+    _stage_plan!(
+        mode, D, backend, (
+            buf.events, buf.daughter, buf.removed, buf.normals, buf.bias, dv, par, round,
+            fns.normal, fns.cnormal, ruled, st, p, ctx, key, mcs, CL, surf, opt.births,
+        )
+    )
+    _stage!(
+        mode, _dpartition_body!, backend, n,
         (dv, par, st.ownership, buf.daughter, buf.normals, buf.bias, buf.removed, st.cell, lat, fns.owner_changed, st)
     )
-    _stage!(mode, _dcopies_body!, backend, cap, (dv, par, buf.events, buf.daughter, buf.removed, D.cols, D.links, st,
-        ruled, CL, fns.release, opt.births))
-    _stage!(mode, _drules_body!, backend, cap, (dv, par, buf.events, buf.daughter, fns.kind, fns.divide!,
-        fns.cluster_divide!, st, p, ctx, key, mcs, ruled))
+    _stage!(
+        mode, _dcopies_body!, backend, cap, (
+            dv, par, buf.events, buf.daughter, buf.removed, D.cols, D.links, st,
+            ruled, CL, fns.release, opt.births,
+        )
+    )
+    _stage!(
+        mode, _drules_body!, backend, cap, (
+            dv, par, buf.events, buf.daughter, fns.kind, fns.divide!,
+            fns.cluster_divide!, st, p, ctx, key, mcs, ruled,
+        )
+    )
     launches = 5
     if surf !== nothing
         _stage!(mode, _dsurface_body!, backend, n, (dv, par, st.ownership, surf, ctx.surface, lat, opt.su))
@@ -1076,8 +1116,12 @@ function _run_staged!(D, buf, fns, opt, par, round, ruled, CL, st, p, ctx, key, 
         _stage!(mode, _deuler_body!, backend, _euler_anchors(lat), (dv, par, st.ownership, opt.eul, lat))
         launches += 2
     end
-    _stage!(mode, _dfinalize_body!, backend, cap, (dv, par, buf.daughter, buf.removed, st.cell, surf, lat,
-        surf === nothing ? nothing : opt.su))
+    _stage!(
+        mode, _dfinalize_body!, backend, cap, (
+            dv, par, buf.daughter, buf.removed, st.cell, surf, lat,
+            surf === nothing ? nothing : opt.su,
+        )
+    )
     launches += 1
     if _has_clusters(st)
         _stage!(mode, _dcluster_mark_body!, backend, cap, (dv, par, st.cell))
@@ -1137,8 +1181,10 @@ end
     cnt = @localmem Int32 (PLAN_WG, 3)
     tot = @localmem Int32 (3,)
     t0 = @index(Local, Linear)
-    _each!(_dtrigger_body!, t0, length(buf.events),
-        (buf.events, dv, par, round, fns.before, fns.trigger, st, p, ctx, key, mcs, clusters))
+    _each!(
+        _dtrigger_body!, t0, length(buf.events),
+        (buf.events, dv, par, round, fns.before, fns.trigger, st, p, ctx, key, mcs, clusters)
+    )
     @synchronize
     ta = @index(Local, Linear)
     _plan_a!(ta, cnt, buf.events, buf.daughter, buf.removed, buf.bias, dv, par, round, ruled, st, clusters)
@@ -1159,8 +1205,10 @@ end
     _plan_f!(tf, cnt, tot, dv, par)
     @synchronize
     tg = @index(Local, Linear)
-    _plan_g!(tg, cnt, tot, buf.events, buf.daughter, buf.normals, buf.bias, dv, par, fns.normal, fns.cnormal, ruled,
-        st, p, ctx, key, mcs, clusters, opt.births)
+    _plan_g!(
+        tg, cnt, tot, buf.events, buf.daughter, buf.normals, buf.bias, dv, par, fns.normal, fns.cnormal, ruled,
+        st, p, ctx, key, mcs, clusters, opt.births
+    )
     @synchronize
     th = @index(Local, Linear)
     _plan_h!(th, buf.events, buf.daughter, dv, par, ruled, opt.surf)
@@ -1172,12 +1220,20 @@ end
     )
     @synchronize
     tq = @index(Local, Linear)
-    _each_on!(_dcopies_body!, tq, length(buf.events), (dv, par, buf.events, buf.daughter, buf.removed, cols, links,
-        st, ruled, clusters, fns.release, opt.births))
+    _each_on!(
+        _dcopies_body!, tq, length(buf.events), (
+            dv, par, buf.events, buf.daughter, buf.removed, cols, links,
+            st, ruled, clusters, fns.release, opt.births,
+        )
+    )
     @synchronize
     tu = @index(Local, Linear)
-    _each_on!(_drules_body!, tu, length(buf.events), (dv, par, buf.events, buf.daughter, fns.kind, fns.divide!,
-        fns.cluster_divide!, st, p, ctx, key, mcs, ruled))
+    _each_on!(
+        _drules_body!, tu, length(buf.events), (
+            dv, par, buf.events, buf.daughter, fns.kind, fns.divide!,
+            fns.cluster_divide!, st, p, ctx, key, mcs, ruled,
+        )
+    )
     @synchronize
     ts = @index(Local, Linear)
     _each_if!(_dsurface_body!, ts, length(st.ownership), opt.surf, (dv, par, st.ownership, opt.surf, opt.rel, ctx.lattice, opt.su))
@@ -1185,8 +1241,10 @@ end
     _each_if!(_deuler_zero_body!, ts, length(buf.events), opt.eul, (dv, par, opt.eul))
     @synchronize
     tz = @index(Local, Linear)
-    _each_on!(_dfinalize_body!, tz, length(buf.events),
-        (dv, par, buf.daughter, buf.removed, st.cell, opt.surf, ctx.lattice, opt.surf === nothing ? nothing : opt.su))
+    _each_on!(
+        _dfinalize_body!, tz, length(buf.events),
+        (dv, par, buf.daughter, buf.removed, st.cell, opt.surf, ctx.lattice, opt.surf === nothing ? nothing : opt.su)
+    )
     _each_if!(_dcount_body!, tz, length(st.ownership), opt.cc, (dv, par, st.ownership, st.cell.kind, opt.cc, opt.ccols, ctx.lattice))
     _each_if!(_deuler_body!, tz, _euler_anchors(ctx.lattice), opt.eul, (dv, par, st.ownership, opt.eul, ctx.lattice))
     @synchronize
@@ -1248,7 +1306,7 @@ function _fold_lifecycle!(integ; report::Bool = true)
     large = δ(_ACC_LARGE)              # of which for the moment scratch (warned below)
     deferred > large && s.deferred == 0 && report &&
         @warn "lifecycle: all $(length(lc.events)) cell slots are in use; " *
-              "divisions are deferred until slots free up. Pass a larger `capacity`."
+        "divisions are deferred until slots free up. Pass a larger `capacity`."
     s.divisions += δ(_ACC_DIVISIONS)
     s.removals += δ(_ACC_REMOVALS)
     s.transitions += δ(_ACC_TRANSITIONS)
@@ -1269,8 +1327,8 @@ function _fold_lifecycle!(integ; report::Bool = true)
     end
     report || return nothing
     large > 0 && @warn "lifecycle: $large division(s) deferred: the dividing cell's second moments exceed the " *
-                       "device planner's Int32 scratch (a cell far larger than any in use); such a cell divides " *
-                       "only on the CPU"
+        "device planner's Int32 scratch (a cell far larger than any in use); such a cell divides " *
+        "only on the CPU"
     nocluster > 0 && throw(ArgumentError("lifecycle: EVENT_DIVIDE_CLUSTER needs cluster state (`init_clusters`)"))
     badtrans > 0 && throw(_bad_transition_error(badtrans))
     return nothing

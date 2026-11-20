@@ -61,45 +61,51 @@ end
 
 @testitem "device (PottsDevices.device_name()): surface, moments, and statistical parity" setup = [CP_gpu] tags = [:corepotts, :gpu, :device, :gpu_only] begin
     @testset "device ($(PottsDevices.device_name())): surface, moments, and statistical parity" begin
-    backend = PottsDevices.device_backend()
-    σ, kinds = blocks((64, 64), 6)
-    σ = circshift(σ, (3, 3))
-    lat = Lattice((64, 64))
-    sspec = Weighted(Moore(1), o -> 1 / sqrt(sum(abs2, o)))
-    cell = merge(init_moments(σ, lat, length(kinds)),
-        (; surface = recompute_surface(σ, lat, relation(sspec, lat), length(kinds); T = Float32)))
-    function commit!(st, p, prop, ctx)
-        commit_volume!(st, p, prop, ctx)
-        commit_surface!(st.cell.surface, prop, surface_change(st.ownership, ctx, prop; T = Float32))
-        return commit_moments!(st.cell, ctx, prop)
-    end
-    function delta_H(st, p, prop, ctx)
-        J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
-        E(v, c) = p.λ * (v - p.V0)^2
-        S(s, c) = p.λs * (s - p.S0)^2
+        backend = PottsDevices.device_backend()
+        σ, kinds = blocks((64, 64), 6)
+        σ = circshift(σ, (3, 3))
+        lat = Lattice((64, 64))
+        sspec = Weighted(Moore(1), o -> 1 / sqrt(sum(abs2, o)))
+        cell = merge(
+            init_moments(σ, lat, length(kinds)),
+            (; surface = recompute_surface(σ, lat, relation(sspec, lat), length(kinds); T = Float32))
+        )
+        function commit!(st, p, prop, ctx)
+            commit_volume!(st, p, prop, ctx)
+            commit_surface!(st.cell.surface, prop, surface_change(st.ownership, ctx, prop; T = Float32))
+            return commit_moments!(st.cell, ctx, prop)
+        end
+        function delta_H(st, p, prop, ctx)
+            J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
+            E(v, c) = p.λ * (v - p.V0)^2
+            S(s, c) = p.λs * (s - p.S0)^2
             return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
                 surface_delta(st.cell.surface, prop, surface_change(st.ownership, ctx, prop; T = Float32), S)
-    end
-    f = CPMFunction(delta_H; commit!, temperature = gg_temperature)
-    p = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 36.0f0, T = 10.0f0,
-        λs = 0.2f0, S0 = 22.0f0)
-    prob = PottsProblem(f, initial_state(σ, kinds; cell), lat, (0, 50), p;
-        relations = (; surface = sspec))
-    sol = solve(prob, CheckerboardCPM(); backend)
-    @test sol.retcode == ReturnCode.Success
-    u = sol.u[end]
+        end
+        f = CPMFunction(delta_H; commit!, temperature = gg_temperature)
+        p = (;
+            J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 36.0f0, T = 10.0f0,
+            λs = 0.2f0, S0 = 22.0f0,
+        )
+        prob = PottsProblem(
+            f, initial_state(σ, kinds; cell), lat, (0, 50), p;
+            relations = (; surface = sspec)
+        )
+        sol = solve(prob, CheckerboardCPM(); backend)
+        @test sol.retcode == ReturnCode.Success
+        u = sol.u[end]
         @test u.ownership != σ
         @test u.cell.volume == [count(==(c), u.ownership) for c in eachindex(kinds)]
         @test u.cell.surface ≈ recompute_surface(u.ownership, lat, relation(sspec, lat), length(kinds); T = Float64) rtol = 1.0e-4
         ref = init_moments(u.ownership, lat, length(kinds))
-    for c in eachindex(kinds)
-        @test all(isapprox.(centroid(u.cell, lat, c), centroid(merge(ref, (; volume = u.cell.volume)), lat, c); atol = 1e-9))
-    end
+        for c in eachindex(kinds)
+            @test all(isapprox.(centroid(u.cell, lat, c), centroid(merge(ref, (; volume = u.cell.volume)), lat, c); atol = 1.0e-9))
+        end
 
-    # statistical parity of an observable, CPU vs device checkerboard
-    function energy_proxy(u)          # mean |volume − V0|, a fast-relaxing observable
-        sum(abs.(u.cell.volume .- 36)) / length(u.cell.volume)
-    end
+        # statistical parity of an observable, CPU vs device checkerboard
+        function energy_proxy(u)          # mean |volume − V0|, a fast-relaxing observable
+            sum(abs.(u.cell.volume .- 36)) / length(u.cell.volume)
+        end
         n_ep = max(24, required_n(sqrt(2) * 0.4, 0.6; alpha = 1.0e-3, power = 0.9))
         xs = [energy_proxy(solve(remake(prob; seed), CheckerboardCPM(); save_start = false).u[end]) for seed in 1:n_ep]
         ys = [energy_proxy(solve(remake(prob; seed), CheckerboardCPM(); backend, save_start = false).u[end]) for seed in 101:(100 + n_ep)]
@@ -520,7 +526,6 @@ end
         @test counts() .- before == (0, 1, 16)
         CorePotts.to_host(nothing, d)                                       # nothing counts into `nothing`
         @test counts() .- before == (0, 1, 16)
-end
+    end
 
 end
-

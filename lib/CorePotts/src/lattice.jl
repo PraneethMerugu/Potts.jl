@@ -39,8 +39,10 @@ end
 Lattice{N}(dims, periodic) where {N} = Lattice{N, Nothing, Square}(dims, periodic, nothing, Square())
 Lattice{N, M}(dims, periodic, mask) where {N, M} = Lattice{N, M, Square}(dims, periodic, mask, Square())
 
-function Lattice(dims::NTuple{N, Integer}; boundary = Periodic(), domain = nothing,
-        geometry::AbstractGeometry = Square()) where {N}
+function Lattice(
+        dims::NTuple{N, Integer}; boundary = Periodic(), domain = nothing,
+        geometry::AbstractGeometry = Square()
+    ) where {N}
     geometry isa Hexagonal && N != 2 && throw(ArgumentError("hexagonal lattices are 2D, got $(N)D dims $dims; pass a 2-tuple for dims or use `Square()`"))
     b = boundary isa AbstractBoundary ? ntuple(_ -> boundary, N) : Tuple(boundary)
     length(b) == N || throw(ArgumentError("need $N boundaries, got $(length(b))"))
@@ -344,7 +346,7 @@ _candidates(spec::EuclideanBall, N, ::Hexagonal) = [o for o in _box(2, ceil(Int,
 function _candidates(spec::NeighborOrder, N, ::Hexagonal)
     box = _box(2, 2spec.k)
     shells = sort!(unique(round(_hexsq(o); digits = 9) for o in box if _hexsq(o) > 0))
-    cutoff = shells[spec.k] + 1e-9
+    cutoff = shells[spec.k] + 1.0e-9
     return [o for o in box if _hexsq(o) <= cutoff]
 end
 _ordersq(::Square, o) = _sq(o)
@@ -477,8 +479,11 @@ function _set_mobility!(stats, m::MaskMobility, frozen::AbstractArray{Bool})
     return nothing
 end
 function _set_mobility!(stats, m, frozen)
-    throw(ArgumentError(
-        "the frozen mask changed from $(frozen === nothing ? "a mask to none" : "none to a mask"); use `remake` and `init`"))
+    throw(
+        ArgumentError(
+            "the frozen mask changed from $(frozen === nothing ? "a mask to none" : "none to a mask"); use `remake` and `init`"
+        )
+    )
 end
 
 # The standard rule, one work item per site: a site is frozen when it lies outside the

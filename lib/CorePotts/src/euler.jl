@@ -24,13 +24,17 @@ const _EULER_TRIOS2 = (UInt32(0b10000011), UInt32(0b00001110), UInt32(0b00111000
 _euler_bit3(o) = UInt32(1) << (findfirst(==(o), _CUBIC_SHELL) - 1)
 const _EULER_FACE6 = reduce(|, _euler_bit3(o) for o in _CUBIC_SHELL if count(!=(0), o) == 1)
 # an edge-diagonal neighbour with its two face neighbours: x and the trio make one 2×2 square
-const _EULER_TRIOS3 = Tuple(_euler_bit3(o) | _euler_bit3(ntuple(k -> k == a ? o[a] : 0, 3)) |
-                            _euler_bit3(ntuple(k -> k == b ? o[b] : 0, 3))
-                            for o in _CUBIC_SHELL if count(!=(0), o) == 2
-                            for (a, b) in ((findfirst(!=(0), o), findlast(!=(0), o)),))
+const _EULER_TRIOS3 = Tuple(
+    _euler_bit3(o) | _euler_bit3(ntuple(k -> k == a ? o[a] : 0, 3)) |
+        _euler_bit3(ntuple(k -> k == b ? o[b] : 0, 3))
+        for o in _CUBIC_SHELL if count(!=(0), o) == 2
+        for (a, b) in ((findfirst(!=(0), o), findlast(!=(0), o)),)
+)
 # the 7 shell voxels of one 2×2×2 cube containing x
-const _EULER_OCTANTS = Tuple(reduce(|, _euler_bit3(o) for o in _CUBIC_SHELL if all(k -> o[k] == 0 || o[k] == s[k], 1:3))
-                             for s in Iterators.product((-1, 1), (-1, 1), (-1, 1)))
+const _EULER_OCTANTS = Tuple(
+    reduce(|, _euler_bit3(o) for o in _CUBIC_SHELL if all(k -> o[k] == 0 || o[k] == s[k], 1:3))
+        for s in Iterators.product((-1, 1), (-1, 1), (-1, 1))
+)
 const _EULER_ALL26 = UInt32(0x03ffffff)
 
 @inline _popcount32(m::UInt32) = count_ones(m) % Int32
@@ -214,8 +218,10 @@ end
 # the Euler columns present in a cell state: `(face, full)`, each a column or `nothing`;
 # `nothing` when there is none (no code runs)
 @inline function _euler_columns(cell)
-    return _euler_columns(haskey(cell, :euler) ? cell.euler : nothing,
-        haskey(cell, :euler_full) ? cell.euler_full : nothing)
+    return _euler_columns(
+        haskey(cell, :euler) ? cell.euler : nothing,
+        haskey(cell, :euler_full) ? cell.euler_full : nothing
+    )
 end
 @inline _euler_columns(::Nothing, ::Nothing) = nothing
 @inline _euler_columns(a, b) = (a, b)

@@ -35,4 +35,5 @@ function cs_old_max!(a, c, v)
         a[c] === old && (a[c] = v; break)
         old = a[c]
     end
+    return
 end

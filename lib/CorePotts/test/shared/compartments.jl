@@ -21,7 +21,7 @@ function compartment_model(; λc = 1.0, Vc = 64.0, λs = 0.0, Sc = 32.0, Jint = 
         EC(v, k) = p.λc * (v - p.Vc)^2
         ES(s, k) = p.λs * (s - p.Sc)^2
         return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
-               cluster_volume_delta(st.cell, prop, EC) +
+            cluster_volume_delta(st.cell, prop, EC) +
             cluster_surface_delta(st.cell, prop, cluster_surface_change(st.ownership, st.cell, ctx, prop), ES)
     end
     function commit!(st, p, prop, ctx)
@@ -32,8 +32,10 @@ function compartment_model(; λc = 1.0, Vc = 64.0, λs = 0.0, Sc = 32.0, Jint = 
         haskey(st.cell, :m1) && commit_moments!(st.cell, ctx, prop)
         return nothing
     end
-    p = (; J = SMatrix{3, 3}(0.0, 16, 30, 16, 14, 30, 30, 30, 14), Jint, λ = 1.0,
-        V0 = (48.0, 16.0), λc, Vc, λs, Sc, T = 10.0)
+    p = (;
+        J = SMatrix{3, 3}(0.0, 16, 30, 16, 14, 30, 30, 30, 14), Jint, λ = 1.0,
+        V0 = (48.0, 16.0), λc, Vc, λs, Sc, T = 10.0,
+    )
     alive(st, p, prop, ctx) = forbid_extinction(st.cell.volume, prop)
     f = CPMFunction(dH; commit!, temperature = gg_temperature, constraint = alive)
     return f, p
@@ -49,7 +51,7 @@ function same_moments(u, lat::Lattice{N}, cap, alg) where {N}
     ref = merge(m, (; volume = Int32[count(==(c), u.ownership) for c in 1:cap]))
     return all(1:cap) do c
         ref.volume[c] == 0 && return u.cell.volume[c] == 0
-        all(isapprox.(centroid(u.cell, lat, c), centroid(ref, lat, c); atol = 1e-9)) &&
-            all(isapprox.(CorePotts.covariance(Float64, u.cell, c, Val(N)), CorePotts.covariance(Float64, ref, c, Val(N)); atol = 1e-9))
+        all(isapprox.(centroid(u.cell, lat, c), centroid(ref, lat, c); atol = 1.0e-9)) &&
+            all(isapprox.(CorePotts.covariance(Float64, u.cell, c, Val(N)), CorePotts.covariance(Float64, ref, c, Val(N)); atol = 1.0e-9))
     end
 end

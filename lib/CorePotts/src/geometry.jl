@@ -85,7 +85,7 @@ end
         for e in d:N
             p = _pair(N, d, e)
             @inbounds cell.m2[p, c] += -shift[d] * cell.m1[e, c] - shift[e] * cell.m1[d, c] +
-                                      V * shift[d] * shift[e]
+                V * shift[d] * shift[e]
         end
     end
     for d in 1:N
@@ -185,8 +185,10 @@ centroid(cell, l::Lattice, c) = centroid(Float64, cell, l, c)
 Centroid displacement of cell `c` if site `x` is added (`s = +1`) or removed (`s = -1`):
 `δcentroid` for drives.
 """
-@inline function centroid_shift(::Type{T}, cell, l::Lattice{N}, c, x::NTuple{N, Int},
-        s::Int) where {T, N}
+@inline function centroid_shift(
+        ::Type{T}, cell, l::Lattice{N}, c, x::NTuple{N, Int},
+        s::Int
+    ) where {T, N}
     # bounds: c is a cell id ≤ capacity; k ≤ N rows (and pairs) of the moments
     V = Int(@inbounds cell.volume[c])
     V + s <= 0 && return ntuple(_ -> zero(T), Val(N))
@@ -232,7 +234,7 @@ end
     p = sqrt(p2 / 6)
     B = ((a - q) / p, b / p, c / p, (d - q) / p, e / p, (f - q) / p)
     detB = B[1] * (B[4] * B[6] - B[5]^2) - B[2] * (B[2] * B[6] - B[5] * B[3]) +
-           B[3] * (B[2] * B[5] - B[4] * B[3])
+        B[3] * (B[2] * B[5] - B[4] * B[3])
     φ = acos(clamp(detB / 2, -one(T), one(T))) / 3
     λ1 = q + 2p * cos(φ)
     λ3 = q + 2p * cos(φ + 2T(π) / 3)
@@ -262,15 +264,19 @@ CompuCell3D shape descriptors of cell `c` from the covariance eigenvalues `λ₁
     λ2 = max(λ2, zero(T))
     major, minor = 4sqrt(λ1), 4sqrt(λ2)
     orientation = atan(2C[2], C[1] - C[3]) / 2
-    return (; major_length = major, minor_length = minor, elongation = major / minor,
-        eccentricity = λ1 > 0 ? sqrt(1 - λ2 / λ1) : zero(T), orientation)
+    return (;
+        major_length = major, minor_length = minor, elongation = major / minor,
+        eccentricity = λ1 > 0 ? sqrt(1 - λ2 / λ1) : zero(T), orientation,
+    )
 end
 @inline function cell_shape(::Type{T}, cell, l::Lattice{3}, c) where {T}
     λ = map(v -> max(v, zero(T)), principal_moments(covariance(T, cell, c, Val(3))))
     semiaxes = map(v -> sqrt(5v), λ)
     major, minor = 2semiaxes[1], 2semiaxes[3]
-    return (; major_length = major, minor_length = minor, semiaxes,
-        elongation = major / minor, eccentricity = λ[1] > 0 ? sqrt(1 - λ[3] / λ[1]) : zero(T))
+    return (;
+        major_length = major, minor_length = minor, semiaxes,
+        elongation = major / minor, eccentricity = λ[1] > 0 ? sqrt(1 - λ[3] / λ[1]) : zero(T),
+    )
 end
 cell_shape(cell, l::Lattice, c) = cell_shape(Float64, cell, l, c)
 
@@ -300,8 +306,10 @@ end
 [`major_length`](@ref) of cell `c` if site `x` is added (`s = +1`) or removed (`s = -1`),
 from the moment sums without committing: the ΔH of a length constraint.
 """
-@inline function major_length_after(::Type{T}, cell, l::Lattice{N}, c, x::NTuple{N, Int},
-        s::Int) where {T, N}
+@inline function major_length_after(
+        ::Type{T}, cell, l::Lattice{N}, c, x::NTuple{N, Int},
+        s::Int
+    ) where {T, N}
     # bounds: c is a cell id ≤ capacity; the moment rows as in centroid_shift
     V = Int(@inbounds cell.volume[c]) + s
     V > 0 || return zero(T)
@@ -313,4 +321,3 @@ from the moment sums without committing: the ΔH of a length constraint.
     end
     return _major_length(l, C)
 end
-

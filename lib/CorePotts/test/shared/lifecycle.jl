@@ -2,12 +2,15 @@
 frozen_dynamics(st, p, prop, ctx) = false
 function lc_state(σ, kinds, lat; capacity = length(kinds), cell = (;))
     return with_capacity(
-        initial_state(σ, kinds; cell = merge(init_moments(σ, lat, length(kinds)), cell)), capacity)
+        initial_state(σ, kinds; cell = merge(init_moments(σ, lat, length(kinds)), cell)), capacity
+    )
 end
 
-function run_lifecycle(σ, kinds, lat, lifecycle; capacity = length(kinds) + 4, tspan = (0, 1),
+function run_lifecycle(
+        σ, kinds, lat, lifecycle; capacity = length(kinds) + 4, tspan = (0, 1),
         cell = (;), constraint = frozen_dynamics, p = gg_params(), alg = SequentialCPM(),
-        phases = Phases(), backend = CPU())
+        phases = Phases(), backend = CPU()
+    )
     st = lc_state(σ, kinds, lat; capacity, cell)
     f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint, lifecycle, phases)
     return solve(PottsProblem(f, st, lat, tspan, p), alg; backend)
@@ -34,8 +37,10 @@ CorePotts.remake_frozen(s::HostFrozen, prob, u) = fk_mask(u, s.k)
 CorePotts.remake_frozen(::OnlyRemake, prob, u) = fk_mask(u, 2)
 
 # 30×30 periodic, cell 1 (kind 1) and cell 2 (kind 2), both 6×6 and growing toward V0 = 40
-function fk_problem(trigger = nothing; kind = nothing, sys = FrozenKind(2), T = Float64,
-        tspan = (0, 30), seed = 1)
+function fk_problem(
+        trigger = nothing; kind = nothing, sys = FrozenKind(2), T = Float64,
+        tspan = (0, 30), seed = 1
+    )
     lat = Lattice((30, 30))
     σ = zeros(Int32, 30, 30); σ[5:10, 5:10] .= 1; σ[18:23, 18:23] .= 2
     st = lc_state(σ, Int32[1, 2], lat)
@@ -57,8 +62,10 @@ function fk_domain_problem(; T = Float64)
     lat = Lattice((30, 30); boundary = Closed(), domain = x -> (x[1] - 15.5)^2 + (x[2] - 15.5)^2 <= 13^2)
     σ = zeros(Int32, 30, 30); σ[10:19, 12:19] .= 1
     st = lc_state(σ, Int32[1], lat; capacity = 3)
-    lc = Lifecycle((st, p, ctx, key, mcs, c) -> mcs == 2 && c == 1 ? EVENT_DIVIDE : EVENT_NONE;
-        normal = AlongMinorAxis{T}())
+    lc = Lifecycle(
+        (st, p, ctx, key, mcs, c) -> mcs == 2 && c == 1 ? EVENT_DIVIDE : EVENT_NONE;
+        normal = AlongMinorAxis{T}()
+    )
     f = CPMFunction(gg_delta_H; temperature = gg_temperature, lifecycle = lc)
     return PottsProblem(f, st, lat, (0, 8), gg_params(T))
 end

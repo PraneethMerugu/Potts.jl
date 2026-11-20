@@ -85,9 +85,9 @@ end
         is_cb_union(T) = T !== Union{} && T <: DiscreteCallback && !isconcretetype(T)
         function cb_unions(f, types)
             return count(
-                    is_cb_union ∘ CorePotts.Core.Compiler.widenconst,
-                    only(code_typed(f, types; optimize = true)).first.ssavaluetypes
-                )
+                is_cb_union ∘ CorePotts.Core.Compiler.widenconst,
+                only(code_typed(f, types; optimize = true)).first.ssavaluetypes
+            )
         end
         @testset "$(nameof(typeof(alg)))" for alg in (CheckerboardCPM(; proposal = Moore(1)), SequentialCPM(; proposal = Moore(1)))
             calls = Tuple{Symbol, Int}[]
@@ -123,8 +123,8 @@ end
         # negative control: a plain `for` loop over the same tuple does carry the Union
         function loop(cbs)
             for cb in cbs
-                    cb.condition(nothing, 0, nothing)
-                end
+                cb.condition(nothing, 0, nothing)
+            end
             return nothing
         end
         m = DiscreteCallback((u, t, i) -> t == 1, i -> nothing; save_positions = (false, false))

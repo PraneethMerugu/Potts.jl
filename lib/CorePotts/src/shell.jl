@@ -28,8 +28,10 @@ _bits(offs, pred) = foldl((m, j) -> pred(offs[j]) ? m | (UInt32(1) << (j - 1)) :
 
 # cubic masks over `_CUBE_SHELL`: the face neighbours of x, the near set of `Simple()` (the
 # 18-neighbourhood), every position. The 2D shells are rings (`_RING_BIT2`, below).
-const _CUBE_TABLES = (; xface = _bits(_CUBE_SHELL, o -> sum(abs, o) == 1), near = _bits(_CUBE_SHELL, o -> sum(abs, o) <= 2),
-    all = _bits(_CUBE_SHELL, _ -> true))
+const _CUBE_TABLES = (;
+    xface = _bits(_CUBE_SHELL, o -> sum(abs, o) == 1), near = _bits(_CUBE_SHELL, o -> sum(abs, o) <= 2),
+    all = _bits(_CUBE_SHELL, _ -> true),
+)
 
 @inline _shell_tables(::Lattice{2}) = nothing
 @inline _shell_tables(::Lattice{3}) = _CUBE_TABLES
@@ -82,10 +84,13 @@ host when a problem is built (and by [`recompute_euler`](@ref)).
 """
 function check_shell_lattice(lat::Lattice{N}, quantity::AbstractString) where {N}
     for d in 1:N
-        lat.periodic[d] && lat.dims[d] == 1 && throw(ArgumentError(
-            "`$quantity` reads the target's neighbor shell, which needs every periodic axis to have " *
-            "length ≥ 2: axis $d is periodic with length 1, so the shell wraps onto the target itself; " *
-            "use a $(N - 1)D lattice, or make axis $d Closed (or longer)"))
+        lat.periodic[d] && lat.dims[d] == 1 && throw(
+            ArgumentError(
+                "`$quantity` reads the target's neighbor shell, which needs every periodic axis to have " *
+                    "length ≥ 2: axis $d is periodic with length 1, so the shell wraps onto the target itself; " *
+                    "use a $(N - 1)D lattice, or make axis $d Closed (or longer)"
+            )
+        )
     end
     return nothing
 end

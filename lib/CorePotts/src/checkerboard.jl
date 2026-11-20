@@ -128,8 +128,10 @@ end
 
 # One attempt. `SERIAL = false` in a phase (copies that need the floods are listed); `true` in
 # the serial pass and on the CPU (the floods run, a veto decides at once).
-@inline function block_attempt!(blk, st, f, p, ctx, law, key, mcs, lo, side, lid, tk, cnt, status, sl,
-        ::Val{SERIAL}) where {SERIAL}
+@inline function block_attempt!(
+        blk, st, f, p, ctx, law, key, mcs, lo, side, lid, tk, cnt, status, sl,
+        ::Val{SERIAL}
+    ) where {SERIAL}
     lat = ctx.lattice
     rd, ra, rs, _ = draw(key, mcs, blk, STREAM_BLOCK, lid)
     x = block_site(lo, side, rs)
@@ -336,7 +338,8 @@ the density that matched `SequentialCPM` kinetics in 2D and 3D.
 """
 default_parts(N::Int) = max(2, round(Int, 64^(1 / N)))
 
-function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, proposal; region = nothing, parts = nothing,
+function CheckerboardCache(
+        backend, lat::Lattice{N}, f::CPMFunction, proposal; region = nothing, parts = nothing,
         switches = 1, threads = :auto, inline_max_blocks = _INLINE_MAX_BLOCKS, min_read = 0, cell
     ) where {N}
     r, w = reach(f.footprint, proposal)
@@ -345,32 +348,42 @@ function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, proposal; r
     k = parts === nothing ? default_parts(N) : parts
     k >= 2 || throw(ArgumentError("CheckerboardCPM(; parts = $k): use at least 2"))
     b = region === nothing ? cld(need, k - 1) : region
-    b >= 1 && (k - 1) * b >= need || throw(ArgumentError(
-        "CheckerboardCPM(; region = $b, parts = $k): the model's copy footprint needs (parts - 1) × region ≥ $need"))
+    b >= 1 && (k - 1) * b >= need || throw(
+        ArgumentError(
+            "CheckerboardCPM(; region = $b, parts = $k): the model's copy footprint needs (parts - 1) × region ≥ $need"
+        )
+    )
     layout = BlockLayout(lat.dims, b, k)
     nbox = boxsize(layout)
     switches >= 1 || throw(ArgumentError("CheckerboardCPM(; switches = $switches): use at least 1"))
     threads in (:auto, true, false) || throw(ArgumentError("CheckerboardCPM(; threads = $(repr(threads))): use :auto, true or false"))
     inline_max_blocks >= 0 || throw(ArgumentError("CheckerboardCPM(; inline_max_blocks = $inline_max_blocks): use at least 0"))
     P = k^N * switches
-    (nbox < 2^16 && P < 2^16) || throw(ArgumentError(
-        "CheckerboardCPM(; region = $b, parts = $k, switches = $switches): at most 2^16 - 1 sites per sub-region and phases per MCS"))
+    (nbox < 2^16 && P < 2^16) || throw(
+        ArgumentError(
+            "CheckerboardCPM(; region = $b, parts = $k, switches = $switches): at most 2^16 - 1 sites per sub-region and phases per MCS"
+        )
+    )
     z(T, n) = KernelAbstractions.zeros(backend, T, n)
     tk = f.track === nothing ? nothing : (; f.track, acc = z(track_eltype(f.track), nsites(lat)))
     cnt = z(Int32, nblocks(layout))
     sl = if f.connectivity === nothing
         nothing
     else
-        (; blk = z(Int32, nblocks(layout) * cld(nbox, switches)), lid = z(UInt32, nblocks(layout) * cld(nbox, switches)),
-            count = z(UInt32, 1), deferred = z(UInt32, 1), exact = f.connectivity.exact_veto)
+        (;
+            blk = z(Int32, nblocks(layout) * cld(nbox, switches)), lid = z(UInt32, nblocks(layout) * cld(nbox, switches)),
+            count = z(UInt32, 1), deferred = z(UInt32, 1), exact = f.connectivity.exact_veto,
+        )
     end
     n = nblocks(layout)
     backend isa KernelAbstractions.CPU || n >= DEVICE_MIN_BLOCKS ||
         @warn "CheckerboardCPM on a device: $n work items per phase (blocks $(layout.nblocks)) leave the GPU mostly idle; a lattice this small runs as fast or faster on the CPU" maxlog = 1
     claims = _claim_columns(backend, cell)
-    c = CheckerboardCache(layout, switches, zeros(Int, P), z(UInt32, 1), tk, cnt, sl, need, claims, block_kernel!(backend),
+    c = CheckerboardCache(
+        layout, switches, zeros(Int, P), z(UInt32, 1), tk, cnt, sl, need, claims, block_kernel!(backend),
         serial_kernel!(backend), recenter_kernel!(backend), _block_groupsize(backend, layout.nblocks), _block_inline(backend, n, threads, inline_max_blocks),
-        backend isa KernelAbstractions.CPU)
+        backend isa KernelAbstractions.CPU
+    )
     # fifteen positional fields are easy to permute (two defects of that shape on this branch): read
     # back the ones a swap would corrupt, once per `init`
     @assert c.layout === layout && c.switches == switches && c.reach == need && c.serial === sl &&
@@ -388,8 +401,10 @@ _serial_pass(sl, f) = has_defer(f) || (has_post(f) && sl.exact)
 
 # `part = (j, n)`: pass `j` of `n` of a sub-MCS `Repeat`, the phases `(j-1)·P÷n+1 : j·P÷n` of the
 # MCS's `P` (the whole MCS is `(1, 1)`); each pass ends with the moments re-centered
-function checkerboard_mcs!(st, cache::CheckerboardCache{N}, f::F, p, ctx, law::L, key::RNGKey,
-        mcs::Integer, part::NTuple{2, Int} = (1, 1)) where {N, F, L}
+function checkerboard_mcs!(
+        st, cache::CheckerboardCache{N}, f::F, p, ctx, law::L, key::RNGKey,
+        mcs::Integer, part::NTuple{2, Int} = (1, 1)
+    ) where {N, F, L}
     order = cache.order
     for q in eachindex(order)
         r, _, _, _ = draw(key, mcs, q, STREAM_COLOR_ORDER, 2)
@@ -408,19 +423,25 @@ function checkerboard_mcs!(st, cache::CheckerboardCache{N}, f::F, p, ctx, law::L
             # one work item after another, so each decision sees what the item before it left: exact
             # (the ΔH sum reconciles with the trajectory) and independent of the thread count
             for I in CartesianIndices(l.nblocks)
-                block_stay!(Tuple(I) .- 1, st, f, p, ctx, law, key, mcs, l, off, s, q, cache.track, cache.cnt, cache.status,
-                    sl, Val(true))
+                block_stay!(
+                    Tuple(I) .- 1, st, f, p, ctx, law, key, mcs, l, off, s, q, cache.track, cache.cnt, cache.status,
+                    sl, Val(true)
+                )
             end
             continue
         end
-        cache.kernel(st, f, p, ctx, law, key, mcs, l, off, s, q, cache.track, cache.cnt, cache.status, sl;
-            ndrange = l.nblocks, workgroupsize = cache.groupsize)
+        cache.kernel(
+            st, f, p, ctx, law, key, mcs, l, off, s, q, cache.track, cache.cnt, cache.status, sl;
+            ndrange = l.nblocks, workgroupsize = cache.groupsize
+        )
         serial || continue
         if cache.host
             serial_pass!(st, f, p, ctx, law, key, mcs, l, off, cache.track, cache.cnt, cache.status, sl)
         else
-            cache.serial!(st, f, p, ctx, law, key, mcs, l, off, cache.track, cache.cnt, cache.status, sl; ndrange = 1,
-                workgroupsize = 1)
+            cache.serial!(
+                st, f, p, ctx, law, key, mcs, l, off, cache.track, cache.cnt, cache.status, sl; ndrange = 1,
+                workgroupsize = 1
+            )
             launches += 1
         end
     end

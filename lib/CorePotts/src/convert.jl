@@ -94,14 +94,18 @@ function convert_scratch(dims, ncell::Integer, N::Integer; writes::Integer = 0)
     cell = Pair{Symbol, Any}[
         _CV_FROM => z(Int32, ncell), _CV_TO => z(Int32, ncell), _CV_SRC => z(Int32, ncell),
         _CV_N => z(Int32, ncell), _CV_FIRST => fill(typemax(I), ncell), _CV_NEW => z(Int32, ncell), _CV_HELD => z(
-            Int32, ncell),
+            Int32, ncell
+        ),
         _CV_DVOL => z(Int32, ncell), _CV_DM1 => z(Int32, N, ncell), _CV_DM2 => z(Int32, npairs(N), ncell),
         _CV_OKC => z(Bool, ncell), _CV_ROOTA => big(ncell), _CV_ROOTB => big(ncell),
         _CV_WACC => z(Int64, ncell), _CV_WLO => z(UInt32, ncell), _CV_WHI => z(Int32, ncell),
         _CV_WEXP => z(Int32, writes, ncell), _CV_WFLAG => z(Int32, writes, ncell), _CV_WSUM => z(Int64, writes, ncell),
-        _CV_WSLO => z(UInt32, writes, ncell), _CV_WSHI => z(Int32, writes, ncell)]
-    return (; cell, site = Pair{Symbol, Any}[_CV_SITE => z(Int32, dims...)],
-        model = Pair{Symbol, Any}[CONVERT_FLAGS => z(I, 4)])
+        _CV_WSLO => z(UInt32, writes, ncell), _CV_WSHI => z(Int32, writes, ncell),
+    ]
+    return (;
+        cell, site = Pair{Symbol, Any}[_CV_SITE => z(Int32, dims...)],
+        model = Pair{Symbol, Any}[CONVERT_FLAGS => z(I, 4)],
+    )
 end
 
 """
@@ -156,17 +160,22 @@ struct ConvertPass{EN, DE, IN, TR, WR, OC, RL, LK <: Tuple, WC <: Tuple}
     limit::Int64
     wcols::WC
 end
-function ConvertPass(entity, decide; init!, transfer! = nothing, writes! = nothing,
+function ConvertPass(
+        entity, decide; init!, transfer! = nothing, writes! = nothing,
         owner_changed = nothing, release = nothing,
-        fresh::Integer = 0, links::Tuple = (), limit::Integer = _SCRATCH_LIMIT[], wcols::Tuple = ())
-    ConvertPass(entity, decide, init!, transfer!, writes!,
-        owner_changed, release, Int32(fresh), map(n -> Part((:cell, n)), links), Int64(limit), map(Part, wcols))
+        fresh::Integer = 0, links::Tuple = (), limit::Integer = _SCRATCH_LIMIT[], wcols::Tuple = ()
+    )
+    return ConvertPass(
+        entity, decide, init!, transfer!, writes!,
+        owner_changed, release, Int32(fresh), map(n -> Part((:cell, n)), links), Int64(limit), map(Part, wcols)
+    )
 end
 
 # the pass scratch of a state (`convert_scratch`)
 @inline function _cv(st)
     c = st.cell
-    return (; from = getfield(c, _CV_FROM), to = getfield(c, _CV_TO),
+    return (;
+        from = getfield(c, _CV_FROM), to = getfield(c, _CV_TO),
         src = getfield(c, _CV_SRC), n = getfield(c, _CV_N),
         first = getfield(c, _CV_FIRST), new = getfield(c, _CV_NEW), held = getfield(c, _CV_HELD),
         dvol = getfield(c, _CV_DVOL), dm1 = getfield(c, _CV_DM1), dm2 = getfield(c, _CV_DM2),
@@ -174,7 +183,8 @@ end
         wacc = getfield(c, _CV_WACC), wlo = getfield(c, _CV_WLO), whi = getfield(c, _CV_WHI),
         wexp = getfield(c, _CV_WEXP), wflag = getfield(c, _CV_WFLAG), wsum = getfield(c, _CV_WSUM),
         wslo = getfield(c, _CV_WSLO), wshi = getfield(c, _CV_WSHI),
-        site = getfield(st.site, _CV_SITE), flag = getfield(st.model, CONVERT_FLAGS))
+        site = getfield(st.site, _CV_SITE), flag = getfield(st.model, CONVERT_FLAGS),
+    )
 end
 
 # ---------------------------------------------------------------------------------------
@@ -203,7 +213,8 @@ end
 end
 
 @inline function _surface_delta!(
-    ::Nothing, rel, lat, σ, i, x, old, new, after::A, sc, u) where {A}
+        ::Nothing, rel, lat, σ, i, x, old, new, after::A, sc, u
+    ) where {A}
     return nothing
 end
 @inline function _surface_delta!(surf, rel, lat, σ, i, x, old, new, after::A, sc, u) where {A}
@@ -236,7 +247,8 @@ units of a weighted float surface (`_units_for`, added in `sc.wacc` and folded i
 `_ownership_finalize!`), or `nothing` (atomic adds of the weights).
 """
 @inline function _ownership_delta!(
-        cell, sc, surf, rel, lat, σ, i, old, new, after::A, u) where {A}
+        cell, sc, surf, rel, lat, σ, i, old, new, after::A, u
+    ) where {A}
     x = coordinates(lat, i)
     old > 0 && _moment_delta!(sc, cell, lat, x, old, Int32(-1))
     new > 0 && _moment_delta!(sc, cell, lat, x, new, Int32(1))
@@ -299,7 +311,8 @@ end
 end
 
 @inline function _cv_entity_body!(
-        c, entity::E, st, p, ctx, key, mcs, sc, limit, ::Val{CL}) where {E, CL}
+        c, entity::E, st, p, ctx, key, mcs, sc, limit, ::Val{CL}
+    ) where {E, CL}
     vol = st.cell.volume
     # bounds: c ≤ capacity; cluster ids and from/to are cell ids, also ≤ capacity
     @inbounds(vol[c]) > 0 || return nothing
@@ -362,8 +375,10 @@ end
 end
 
 # one item: the reference reset, then the slots, lowest first, in entity (slot) order
-@inline function _cv_allocate_body!(_, ph::P, st, p, ctx, key, mcs, sc, links::LI,
-        surf, births, ::Val{CL}) where {P, LI, CL}
+@inline function _cv_allocate_body!(
+        _, ph::P, st, p, ctx, key, mcs, sc, links::LI,
+        surf, births, ::Val{CL}
+    ) where {P, LI, CL}
     # bounds: the flag entry exists; r, cursor ≤ cap = length(cell.kind) (loop guards)
     @inbounds(sc.flag[_FLAG_ALLOCATE]) == 0 && return nothing
     cell = st.cell
@@ -373,7 +388,7 @@ end
     for r in 1:cap
         (@inbounds(sc.n[r]) > 0 && @inbounds(sc.to[r]) == 0) || continue
         while cursor <= cap &&
-              (@inbounds(cell.volume[cursor]) > 0 || @inbounds(sc.held[cursor]) != 0)
+                (@inbounds(cell.volume[cursor]) > 0 || @inbounds(sc.held[cursor]) != 0)
             cursor += 1
         end
         if cursor > cap                      # no free slot: the entity converts nothing this pass
@@ -383,8 +398,10 @@ end
         end
         d = cursor % Int32
         cursor += 1
-        _fresh_slot!(cell, d, ph.fresh, r, @inbounds(sc.from[r]),
-            links, surf, births, ctx.lattice, Val(CL))
+        _fresh_slot!(
+            cell, d, ph.fresh, r, @inbounds(sc.from[r]),
+            links, surf, births, ctx.lattice, Val(CL)
+        )
         ph.init!(st, p, ctx, key, mcs, d, ph.fresh)
         @inbounds sc.to[r] = d
         @inbounds sc.new[r] = Int32(1)
@@ -403,7 +420,8 @@ end
 # generation, the next serial, the cluster of entity `r`, no links (its partners drop it), no
 # surface; anchored at its source `f`'s anchor (its first sites are `f`'s, D-066 X2)
 @inline function _fresh_slot!(
-        cell, d, k, r, f, links::LI, surf, births, lat, ::Val{CL}) where {LI, CL}
+        cell, d, k, r, f, links::LI, surf, births, lat, ::Val{CL}
+    ) where {LI, CL}
     N = ndims(lat)
     # bounds: d, r, f ≤ capacity; births.next has one entry; q ≤ N rows of anchor
     @inbounds cell.kind[d] = k
@@ -574,9 +592,14 @@ function _cv_writes!(ph::ConvertPass, st, p, ctx, key, mcs, sc, backend)
     n = length(st.ownership)
     cap = length(st.cell.kind)
     if !all(d -> _wfloat(eltype(d)) || eltype(d) <: Integer, dsts)
-        Exec.ishost(backend) || throw(ArgumentError(string(
-            "run on the CPU: the `@convert` compound writes into ", join(unique(string.(eltype.(dsts))), ", "),
-            " columns add in site order on the host, and a device has no atomics for these number types")))
+        Exec.ishost(backend) || throw(
+            ArgumentError(
+                string(
+                    "run on the CPU: the `@convert` compound writes into ", join(unique(string.(eltype.(dsts))), ", "),
+                    " columns add in site order on the host, and a device has no atomics for these number types"
+                )
+            )
+        )
         for i in 1:n
             _cv_writes_body!(i, ph.writes!, st, p, ctx, key, mcs, sc, _WriteSeq())
         end
@@ -587,9 +610,14 @@ function _cv_writes!(ph::ConvertPass, st, p, ctx, key, mcs, sc, backend)
         return 1
     end
     J = length(dsts)
-    size(sc.wexp, 1) >= J || throw(ArgumentError(string(
-        "the `@convert` pass has ", J, " compound writes and the state's write scratch holds ", size(sc.wexp, 1),
-        ": build the scratch with `convert_scratch(dims, ncell, N; writes = ", J, ")`")))
+    size(sc.wexp, 1) >= J || throw(
+        ArgumentError(
+            string(
+                "the `@convert` pass has ", J, " compound writes and the state's write scratch holds ", size(sc.wexp, 1),
+                ": build the scratch with `convert_scratch(dims, ncell, N; writes = ", J, ")`"
+            )
+        )
+    )
     L = _reduce_bits(n)
     paired = Val(_paired(backend))
     Exec.launch!(backend, _cv_wzero_body!, cap, (sc,))
@@ -667,8 +695,11 @@ function (ph::ConvertPass)(st, p, ctx, key, mcs, backend)
     su = surf === nothing ? nothing : _units_for(eltype(surf), rel, n, backend)
     links = map(L -> L(st), ph.links)
     if ph.fresh > 0
-        Exec.launch!(backend, _cv_allocate_body!, 1, (
-            ph, st, p, ctx, key, mcs, sc, links, surf, _births(st), CL))
+        Exec.launch!(
+            backend, _cv_allocate_body!, 1, (
+                ph, st, p, ctx, key, mcs, sc, links, surf, _births(st), CL,
+            )
+        )
         launches += 1
     end
     if ph.transfer! !== nothing
@@ -714,7 +745,8 @@ function (ph::ConvertPass)(st, p, ctx, key, mcs, backend)
         end
         if csurf !== nothing
             cu = _units_for(eltype(csurf), ctx.surface, n, backend)
-            Exec.launch!(backend, _dcluster_surface_body!, n, (
+            Exec.launch!(
+                backend, _dcluster_surface_body!, n, (
                     dv, par, st.ownership, st.cell, csurf, ctx.surface, lat, cu,
                 )
             )

@@ -61,8 +61,10 @@ name, medium sites are written too.
 """
 write_piff(path::AbstractString, labels, kinds; kw...) = open(io -> write_piff(io, labels, kinds; kw...), path, "w")
 
-function write_piff(io::IO, labels::AbstractArray{<:Integer, N}, kinds; medium = nothing,
-        ids = 1:length(kinds)) where {N}
+function write_piff(
+        io::IO, labels::AbstractArray{<:Integer, N}, kinds; medium = nothing,
+        ids = 1:length(kinds)
+    ) where {N}
     N in (2, 3) || throw(ArgumentError("PIFF describes 2D or 3D lattices, got a $(N)D labels array; pass a 2D or 3D array"))
     dims = size(labels)
     for rest in CartesianIndices(dims[2:end])
