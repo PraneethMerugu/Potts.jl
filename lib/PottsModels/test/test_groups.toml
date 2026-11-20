@@ -1,10 +1,12 @@
 # Declarative test groups for PottsModels.
-# Julia reads `in_all` and `group`; `num_threads = 4` documents the CI shard thread count
-# while preserving POTTSMODELS_SHARD compatibility.
+# runtests.jl reads `in_all`, `group` and the file selection: `dirs` (every file under these
+# directories), `files` (these files), `exclude_files`; a group that names neither `dirs` nor
+# `files` takes every file. `num_threads = 4` documents the CI shard thread count.
 
 [core]
 group = "core"
 in_all = true
+exclude_files = ["qa_tests.jl"]
 versions = ["1.12", "1.13"]
 os = ["self-hosted"]
 runner = ["self-hosted", "Linux", "X64"]
@@ -14,6 +16,7 @@ timeout = 180
 [qa]
 group = "qa"
 in_all = true
+files = ["qa_tests.jl"]
 versions = ["1.12", "1.13"]
 os = ["self-hosted"]
 runner = ["self-hosted", "Linux", "X64"]
@@ -23,6 +26,7 @@ timeout = 30
 [acceptance]
 group = "acceptance"
 in_all = false
+dirs = ["acceptance"]
 versions = ["1.12", "1.13"]
 os = ["self-hosted"]
 runner = ["self-hosted", "Linux", "X64"]
@@ -32,6 +36,7 @@ timeout = 180
 [reproductions]
 group = "reproductions"
 in_all = false
+dirs = ["reproductions"]
 versions = ["1.12", "1.13"]
 os = ["self-hosted"]
 runner = ["self-hosted", "Linux", "X64"]
@@ -41,6 +46,7 @@ timeout = 180
 [guardrails]
 group = "guardrails"
 in_all = false
+files = ["guardrails_tests.jl"]
 versions = ["1.12", "1.13"]
 os = ["self-hosted"]
 runner = ["self-hosted", "Linux", "X64"]
@@ -50,6 +56,7 @@ timeout = 30
 [gpu]
 group = "gpu"
 in_all = false
+dirs = ["acceptance"]
 versions = ["1.12", "1.13"]
 os = ["self-hosted"]
 runner = ["self-hosted", "Linux", "X64", "rocm"]
