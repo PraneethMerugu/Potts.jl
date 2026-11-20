@@ -746,7 +746,7 @@ function _openvt_pkg_impl_readme(recs, prov, scripts, facts)
     sha256s the post-processing record pins. It writes byte-identical trees on every call at
     the same commit. Its `split` option writes the same files as a core zip of at most 20 MB,
     a flat directory of the large files and a plain-text cover note (see its docstring).
-    The acceptance test `lib/PottsModels/test/reproductions/15_openvt_package_tests.jl` checks every
+    The acceptance test `lib/PottsModels/test/reproductions/15_openvt_package.jl` checks every
     file against the records.
 
     ## Citation
