@@ -1,4 +1,4 @@
-# `convert_tests.jl`, part 2 of 2:
+# Site conversion, part 2 of 2:
 # the shared ownership-delta routine, its priority, the ownership hooks and A-17.
 # Part 1, `convert_tests.jl`, pins `@convert` itself (its header states the
 # `@convert` API used below).

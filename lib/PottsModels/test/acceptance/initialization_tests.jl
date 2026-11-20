@@ -1,5 +1,5 @@
-# `initialization_tests.jl` (ROADMAP Phase 6, step 0; D-159, D-165; research/mtk-native-plan.md §4 route A1,
-# §5, §6): initialization equations that touch one cell (or the model) go through
+# Sources: D-159, D-165; research/mtk-native-plan.md §4 route A1, §5, §6.
+# initialization equations that touch one cell (or the model) go through
 # ModelingToolkit's initialization engine. Potts builds one MTK `System` per scope (cell,
 # model) carrying that scope's `@initialization_equations` as MTK `initialization_eqs` (the
 # per-cell template, as `ode_mtkcompile_tests.jl`'s ODE template), builds MTK's `InitializationProblem` from it
@@ -8,7 +8,6 @@
 # model are ModelingToolkit systems" true for entity-local initialization. Cross-entity and
 # lattice initialization (reads of other cells, gathers, folds, site and field variables)
 # stay Potts' (R17, later work); until then they are refused.
-# Decision: D-1xx (`initialization_tests.jl`; the coordinator numbers it).
 #
 # What is new for users:
 #  - a `@potts_model` section `@initialization_equations` (MTK's `initialization_eqs`):

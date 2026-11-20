@@ -22,7 +22,7 @@
 #   MCS, the same `stats.attempts` (N per MCS) and a `stats.accepted` that counts its
 #   committed copies (the law of that count equals SequentialCPM's).
 #
-# What is pinned (one testset group per item of the `boundary_site_proposal_tests.jl` dispatch).
+# What is pinned (one testset group per item).
 #  1. API. `BoundarySiteCPM(; acceptance = nothing, proposal = nothing)` is a
 #     `CorePotts.AbstractCPMAlgorithm`, exported by CorePotts and Potts, with SequentialCPM's two
 #     keywords and defaults (`nothing` = the model's law / the problem's proposal);
@@ -1035,7 +1035,7 @@ end
                 end
                 return out
             end
-            seq = runs(SequentialCPM(), k -> 15_000 + k)                 # `15_openvt_f5_tests.jl`/f case (b) seeds
+            seq = runs(SequentialCPM(), k -> 15_000 + k)                 # the F5 record's case (b) seeds
             bs = runs(boundary_site_bs(), k -> 177_000 + k)
             @test all(r -> r.retcode === :Terminated && r.N[end] >= FULL_CELLS, seq)
             @test all(r -> r.retcode === :Terminated && r.N[end] >= FULL_CELLS, bs)

@@ -1,12 +1,11 @@
-# `update_rules_tests.jl` (ROADMAP Phase 6, step 0; D-159 as amended by D-162; research/mtk-native-plan.md
-# §5, §6): a model's update rules as an MTK-inspectable object. A public
+# Sources: D-159 as amended by D-162; research/mtk-native-plan.md §5, §6.
+# a model's update rules as an MTK-inspectable object. A public
 # `Potts.updates(sys)` lists every `@before_mcs`, `@after_mcs` and `@on_copy` statement as
 # written: its phase, its scope (the declared scope of the variable it writes), its cadence
 # `Every(n)` and its `Equation` in ModelingToolkit's `Pre` form. This is the D-162 sentence
 # "a model's update rules are Symbolics equations in ModelingToolkit's `Pre` form that MTK's
 # generic tools can inspect". Events as MTK `SymbolicDiscreteCallback`s are later work, not
 # this item's (D-162 ruling 2): MTK's `discrete_events`/`continuous_events` stay empty.
-# Decision: D-1xx (`update_rules_tests.jl`; the coordinator numbers it).
 #
 # The contract pinned here (public API only; the element type, storage and caching are the
 # implementer's):

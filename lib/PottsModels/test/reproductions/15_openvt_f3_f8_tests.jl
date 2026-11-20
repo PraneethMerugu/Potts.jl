@@ -5,7 +5,7 @@
 # §4.1 V5 (docs/design/research/model-specs/15_openvt_monolayer.md v3.1). Spec 15 has no
 # V-target for F3: the F3 rows below are the test author's, against the only Table S1 CPM
 # data in G, TST's `TST_No_CI_{deterministic,stochastic}.zip` (spec §4.4). Every band, grid,
-# seed, lattice and run count is the test author's (`15_openvt_f3_f8_tests.jl`; see the D-entry).
+# seed, lattice and run count is the test author's (see the D-entry).
 #
 # Reference numbers from G (54f375f, read only, never in git) are recorded below as constants.
 # They were computed with this file's rules (`g_tst`, `g_legacy`) on the PC

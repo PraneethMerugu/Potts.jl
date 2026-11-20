@@ -3,7 +3,7 @@
 # D-080 (`integral(Pre(x))` outside update blocks), D-110 (hoisted fold slots), D-120
 # (integrals refresh only for their readers; `_integrals_folds` gather order).
 #
-# The gap (from the `integral_refresh_tests.jl` review; observed on e4b6ab51). `_check_geometry` rejects
+# The gap (observed on e4b6ab51). `_check_geometry` rejects
 # `integral` only in energies; `_integrals_folds` (src/lower.jl) gathers integrals from
 # updates, equations, division conditions and rules, link rules, the temperature, discrete
 # ticks and `@observed`, never from `sys.drives` or `sys.constraints`, so an integral there

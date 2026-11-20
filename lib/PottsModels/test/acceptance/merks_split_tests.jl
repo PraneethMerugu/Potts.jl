@@ -1,4 +1,4 @@
-# `merks_split_tests.jl`: Merks split into `Merks2006` and `Merks2008`
+# Merks split into `Merks2006` and `Merks2008`
 # per D-050 M1–M11 (model-spec 01, README §4.1), the `merks_state` port onto `Scattered`
 # (D-087), the 2008 20-neighbour contacts and copies with a 2-thick frame, and the
 # D-141 follow-up: a `Splits` cell repaired into one piece by a later layer is not warned

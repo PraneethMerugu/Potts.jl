@@ -1,7 +1,7 @@
 # a σ-dependent gather in a cell or edge energy is refused
 # at `mtkcompile`. Decision: D-209 (follows D-150, D-041).
 #
-# The defect (diagnosed from the `boundary_only_reach_tests.jl` side finding, D-208). A gather in a `cells(…)` or
+# The defect (D-208). A gather in a `cells(…)` or
 # `edges(…)` energy whose body reads something a copy changes is in `total_energy` but not
 # in the generated ΔH: `_cell_delta` substitutes only the cell's own volume, surface, … and
 # the gather cancels; edge terms are checked only by `_check_static`. Metropolis then samples

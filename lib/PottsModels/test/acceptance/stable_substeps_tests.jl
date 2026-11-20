@@ -161,7 +161,7 @@ const substep_DS = (0.05, 0.125, 0.25, 0.3, 0.5, 0.75, 1.0, 1.7, 2.5)
 # (dims, h, dt, D, k, kcase): today's count is unstable at each; `kcase`: the margin alone
 # (n = ceil(dt D Σ4/h² / 1.8), ignoring k) is unstable too, so (K) is what makes it pass
 const DECAY_CASES = [
-    ((8, 8), 1.0, 1.0, 0.5, 0.2, false),     # the ROADMAP case: today n = 2, ρ = 2.1
+    ((8, 8), 1.0, 1.0, 0.5, 0.2, false),     # the planned case: today n = 2, ρ = 2.1
     ((8, 8), 1.0, 1.0, 0.45, 1.0, true),                             # today n = 2, ρ = 2.3; margin-only n = 2, ρ = 2.3
     ((16,), 1.0, 1.0, 0.5, 0.2, false),                              # today n = 1, ρ = 2.2
     ((6, 6, 6), 1.0, 1.0, 0.25, 1.2, true),                          # today n = 2, ρ = 2.1; margin-only n = 2, ρ = 2.1

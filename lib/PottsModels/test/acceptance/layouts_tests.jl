@@ -1,7 +1,7 @@
 # layout values composed by
 # `overlay` and turned into an SII operating point by `layout`.
 #
-# Surface fixed by the coordinator:
+# The surface:
 #   Tiling(size; spacing = 0, region = <whole lattice>, kinds)   boxes of `size`, `spacing`
 #       medium sites apart, filling `region` (a tuple of ranges) in column-major order;
 #       `kinds` is cycled over the cells in placement order

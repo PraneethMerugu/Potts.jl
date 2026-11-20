@@ -794,7 +794,7 @@ end
         # no penalty in @drive: the error names @constraint
         e = connectivity_try(:ErrNoPenalty, :(@drive connectivity(A)))
         @test e isa ArgumentError && occursin("@constraint", msg(e))
-        # Global() builds since `global_connectivity_tests.jl` (amended), in the helper and in connected
+        # Global() builds since global connectivity (amended), in the helper and in connected
         @test connectivity_try(:ErrGlobal, :(@constraint connectivity(A; rule = Global()))) === nothing
         @test connectivity_try(:ErrGlobalC, :(@constraint connected(old; rule = Global()) | (old == 0))) === nothing
         # an unknown rule symbol (unchanged)

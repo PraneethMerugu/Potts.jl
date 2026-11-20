@@ -6,7 +6,7 @@
 # changes a cell's kind leaves the mask as it was: a cell that becomes frozen keeps moving,
 # and a frozen cell that becomes a free kind stays pinned.
 #
-# Semantics pinned here (ROADMAP: "a kind that becomes frozen after a transition stops
+# Semantics pinned here (scope: "a kind that becomes frozen after a transition stops
 # moving; the negative control moves"):
 #  1. A cell whose kind changes INTO a frozen kind at the lifecycle of MCS S never changes
 #     a site from the state saved at t = S + 1 on (the first state with the new kind; the

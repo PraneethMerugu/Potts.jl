@@ -4,7 +4,7 @@
 # every reference value, tolerance, point, seed and run length below is copied from there.
 # The tutorial page `lib/PottsModels/reproductions/10_akeeb.jl` carries the same table.
 #
-# Surface fixed by the coordinator (implemented in `10_akeeb_tests.jl`):
+# The surface:
 #
 #   AkeebInvasion(; name, …) has the default μ = 24 (D-050 A5, confirmed by D-142).
 #
@@ -55,7 +55,7 @@
 # | V-A3 | fingers / singles / clusters marginals over the PP = 0.5 slice | R2 | — | 1210 runs |
 # | V-A4 | invasive / infiltrative marginals; order; ratios 4.25 and 8.56 | R2; strict; ±15 % | — | 1210 runs |
 # | V-A5 | cluster incidence 28.3 % (N 1209), 71.5 % at λ ≥ 24 (N 330); 4.85 ± 0.24 when present | R3; R2 | — | 1210 runs |
-# | V-A6 | phenotype fractions 22 / 1 / 23 / 54 % (A classified: 2950 / 143 / 2989 / 7181 of 13,263) | R3 per phenotype; READY (D-163), classifier `akeeb_phenotype` provisional (author question 1) | — | FULL record: recomputed from the committed 13,310-run sweep (`10_akeeb_tests.jl`) |
+# | V-A6 | phenotype fractions 22 / 1 / 23 / 54 % (A classified: 2950 / 143 / 2989 / 7181 of 13,263) | R3 per phenotype; READY (D-163), classifier `akeeb_phenotype` provisional (author question 1) | — | FULL record: recomputed from the committed 13,310-run sweep |
 # | V-A7 | P1, P7, P9 each match their own reference | R1 (P9 adds 6) | — | n = 10 |
 # | V-A8 | cluster composition, pooled (C): P1 mean size 5.79 (SD 3.75, 75), leader fraction 0.578; P2 5.56 (3.71, 143), 0.517 | R1 with clusters as units; ±0.10 | — | P1, P2 n = 10 |
 # | V-A8 paper | "mean ≈ 7 cells, 60–70 % leaders, median 4 L / 3 F" | PARKED (not reproducible from the release) | — | — |
@@ -219,7 +219,7 @@ const AKEEB_SMOKE = AKEEB_FULL ? nothing :
         P8 = akeeb_run(POINTS.P8, akeeb_seed.(8, 1:2)),
     )
 # ---------------------------------------------------------------------------------------------
-# FULL-record rows (D-156; recomputed under `10_akeeb_tests.jl`, D-163): V-A6 and the full-sweep
+# FULL-record rows (D-156; recomputed under D-163): V-A6 and the full-sweep
 # form of V-A7 need the 13,310-run sweep, so they bind in the committed record. The test
 # recomputes both verdicts from the committed per-run `sweep.tsv` (spec 10 §5.3.3 R3; |r| <
 # 0.05) and checks that `verdicts_sweep.tsv` reports the same values and verdicts, so a
@@ -306,7 +306,7 @@ const COLS_C = [
 ]
 akeeb_at(rows, k, j) = [v[j] for (kk, v) in rows if kk == k]
 # `x` matches the printed reference `ref` to one unit of its last printed digit (0 to 3
-# decimals, read off the value). One unit, not half, since `10_akeeb_tests.jl` was written; the P9 slip it
+# decimals, read off the value). One unit, not half, since D-152; the slip it
 # absorbed (2889 printed for 2888.46) is corrected under D-152
 akeeb_printed(x, ref) = (
     d = findfirst(d -> round(ref; digits = d) == ref, 0:3) - 1;

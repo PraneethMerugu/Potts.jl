@@ -6,7 +6,7 @@
 # R1  M's Fig 7 is now a grid "Tissue Snapshots with Surface Inhibition": one row per
 #     framework, columns 1.1×, 2×, 5×, 10×, 20× (the T1 multiples), one 10⁴-cell colony per
 #     cell at that multiple's T1 γ, empty where T1 is "—". Our row is a RENDER of the sweeps
-#     record (`data/15/sweeps-2026-10-08/`, `15_openvt_sweeps_tests.jl`): its O5 files `f7/` at the T1 γ values of
+#     record (`data/15/sweeps-2026-10-08/`): its O5 files `f7/` at the T1 γ values of
 #     its `table1.tsv` (5×, 10×, 20×: γ = 0.1625, 0.5375, 0.7625, replicate 1); 1.1× and 2× are
 #     empty (T1 "—"). New files in that record (the run files stay byte for byte):
 #       plot_f7_grid.jl   the render script
@@ -37,7 +37,7 @@
 #     Record files:
 #       run_f8beta.jl     the runner: evaluates this file's top-level `DRAFT*`/`draft*`
 #                         definitions (as run_sweeps.jl does for its test) and runs `draft_job`
-#       provenance.toml   item "`15_openvt_manuscript_draft_tests.jl`", commit (40 hex), dirty_tracked = false, runner (in
+#       provenance.toml   item (the record's item ID, checked below), commit (40 hex), dirty_tracked = false, runner (in
 #                         this directory), test (this file) and test_sha256, decisions ∋ "D-211",
 #                         cpu, threads, julia, started/finished, wall_s; no key "work" (D-195)
 #       meta.toml         replay = true, cap_mcs, cells = 10000, lattice = 1400, algorithm

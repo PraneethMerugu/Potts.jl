@@ -1,4 +1,4 @@
-# `voronoi_shapes_tests.jl` (ROADMAP Phase 6, step 1; research/initial-state-review.md §2 S2, §3 Q1/Q3/Q5;
+# Sources: research/initial-state-review.md §2 S2, §3 Q1/Q3/Q5;
 # D-056, D-057, D-063, D-091, D-093, D-094): `VoronoiBall` becomes the core layer `Voronoi`
 # over the first initial-state vocabulary (`Sphere`/`Circle`/`HyperSphere`, `Point`,
 # `RandomPoints`, `Center()`), shape layers clip to the domain and report `clipped`, and

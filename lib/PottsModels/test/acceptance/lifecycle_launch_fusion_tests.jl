@@ -1,4 +1,4 @@
-# follow-ups of `launch_fusion_tests.jl`'s launch fusion (D-101 review
+# follow-ups of the launch fusion (D-101
 # notes). X4 (typed literals in generated code) is not covered here: it changes every
 # fingerprint and is batched with another fingerprint change.
 #
@@ -56,8 +56,7 @@
 # the device planner's 72 (seed 1; fused and unfused twin alike, σ and every column still
 # equal): the planner kernel has already added this MCS's divisions to the device
 # accumulators when the host planner takes the MCS and counts them again. The Metal
-# testset runs where Metal is loaded with POTTS_GPU=metal (wiring into `test/gpu.jl` is
-# the coordinator's).
+# testset runs where Metal is loaded with POTTS_GPU=metal (`test/gpu_acceptance_tests.jl`).
 
 @testsetup module LifecycleLaunchFusionSetup
 include(joinpath(@__DIR__, "..", "shared", "common.jl"))

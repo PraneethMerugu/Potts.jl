@@ -28,7 +28,7 @@
 #     4-byte scalar read-backs (a status word or a live-cell count) that an implementation
 #     may need; capacities are chosen so that every column is ≥ 64 B, i.e. the slack is
 #     smaller than any column, so no extra column fits in it. A device implementation
-#     (0 B) satisfies every bound ("or run on the device", ROADMAP).
+#     (0 B) satisfies every bound ("or run on the device").
 #  4. Negative controls: each phase actually ran on Metal (ODE values follow their
 #     analytic solutions; HostPhase effects are present; the extra `z1` rule ran), and its
 #     results equal the CPU / current-path results up to Float32 tolerance.
@@ -36,7 +36,7 @@
 # solutions and are identical between the pair members; a HostPhase with declared
 # reads/writes has exactly the effect of the same body without declarations.
 #
-# HostPhase API (proposed surface; ruling for the coordinator). `HostPhase` today declares
+# HostPhase API (proposed surface; needs a ruling). `HostPhase` today declares
 # nothing (it gets `f!` and `every`), so it cannot know its columns. This file uses
 #     HostPhase(f!; every = 1, reads = nothing, writes = nothing)
 # `reads` / `writes`: tuples of Symbols naming the state leaves the body touches: `:ownership` (the

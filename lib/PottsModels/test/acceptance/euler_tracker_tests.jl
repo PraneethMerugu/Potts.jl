@@ -40,7 +40,7 @@
 #     difference of the energy computed from oracle χ, for every copy of random states;
 #     `total_energy` equals the brute-force energy; `commit!` leaves the columns equal to
 #     the oracle. Float64 and Float32.
-#  6. Hex `:full` (D-192 Q4 as amended by the coordinator, consistent with the `connectivity_vocabulary_tests.jl`
+#  6. Hex `:full` (D-192 Q4 as amended, consistent with the `connectivity_vocabulary_tests.jl`
 #     test): hex has a single, self-dual adjacency, so `adjacency = :full` on a hexagonal
 #     lattice is ACCEPTED and means `:face`. It builds in an energy, a drive and `@observed`,
 #     and its values (observables, energies, drives) equal the `:face` ones. Whether it has

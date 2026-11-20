@@ -1,5 +1,5 @@
 # edge-scope MCS updates through
-# `mtkcompile`. Decision: D-1xx (`edge_after_mcs_tests.jl`; the coordinator numbers it).
+# `mtkcompile`.
 #
 # The defect, measured on 405915dc: `@before_mcs`/`@after_mcs` statements that write an edge
 # variable (`rest(edge)`, `rest(bond)`) are accepted by `@potts_model` and listed by

@@ -1,8 +1,8 @@
-# `akeeb_inventory_tests.jl` (ROADMAP Phase 6, step 2; spec 10 V-A1(a); D-068, D-073, D-075): `akeeb_state` is
+# Spec 10 V-A1(a); D-068, D-073, D-075. `akeeb_state` is
 # built on `InsertUntil` (`misses = :count`, `fraction = 1//4`), draws only from StableRNG,
 # and exposes the counted leader inventory.
 #
-# Surface fixed by the coordinator:
+# The surface:
 #
 #   akeeb_layout(; lattice = (500, 300), seed = 0x5cd2609, slab = 21, seeding = :authors)
 #       -> AbstractLayout                                  (PottsModels, public or exported)
@@ -50,7 +50,7 @@ function tally(l, lat)
     return op, [(; r.painted, r.misses, r.counted) for r in report if r.type === :InsertUntil]
 end
 # Independent oracle for the follower slab: today's hand loop (ids x-fastest, row by row),
-# written through the public layout extension API `Potts.paint!` (`layout_protocol_tests.jl` protocol).
+# written through the public layout extension API `Potts.paint!` (the layout protocol).
 struct Slab <: Potts.AbstractLayout
     X::Int
     slab::Int

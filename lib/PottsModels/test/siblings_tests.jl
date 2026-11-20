@@ -406,7 +406,7 @@ const SIBLINGS = Dict(
         end
     ),
 )
-# `eden_splits_tests.jl` (D-141) primitives outside their first model (Merks 2008's TST seeding on a closed
+# The Eden and splits (D-141) primitives outside their first model (Merks 2008's TST seeding on a closed
 # square lattice): Eden seeding with replacement (`shortfall = :allow`, its code consumer)
 # and host-side Splits on the periodic hexagonal sorting sibling, growing under its own
 # Hex(2) neighbourhood and wrapping through its edges.
@@ -418,7 +418,7 @@ function Potts.paint!(op::Potts.LayoutState, l::SibSites, lat)
     foreach(x -> Potts.assign!(op, x, id), l.sites)
     return nothing
 end
-# `connectivity_vocabulary_tests.jl` primitives outside their first model (Merks, Akeeb, WortelAct use `connectivity`):
+# The connectivity vocabulary primitives outside their first model (Merks, Akeeb, WortelAct use `connectivity`):
 # the simple-point rule on a hexagonal lattice with the shell folds `pieces` and `distinct`
 # in a drive, and `connected` composed with a death clause on a cubic 3D lattice
 @potts_model HexSimpleCell begin
@@ -494,7 +494,7 @@ end
 end
 
 @testitem "InsertUntil and Analysis on the hexagonal sorting sibling" setup = [SiblingsSetup] tags = [:pottsmodels, :core] begin
-    # `akeeb_analysis_tests.jl` primitives outside their first model (Akeeb's seeding and code metrics): seed light
+    # The Akeeb analysis primitives outside their first model (Akeeb's seeding and code metrics): seed light
     # cells into a dark tiling on the hexagonal sorting sibling with `InsertUntil`, run it, and
     # read the result with the analysis functions on the hex lattice.
     @testset "InsertUntil and Analysis on the hexagonal sorting sibling" begin
@@ -525,7 +525,7 @@ end
 end
 
 @testitem "boundary_lengths and anneal on the hexagonal sorting sibling" setup = [SiblingsSetup] tags = [:pottsmodels, :core] begin
-    # `boundary_anneal_tests.jl` (D-139) outside its first model (Graner–Glazier's sorting analysis): the boundary
+    # The boundary anneal (D-139) outside its first model (Graner–Glazier's sorting analysis): the boundary
     # split by kind pair and the annealed copy on the hexagonal sorting sibling (Hex(2) contacts,
     # a volume term besides the contacts).
     @testset "boundary_lengths and anneal on the hexagonal sorting sibling" begin
@@ -556,7 +556,7 @@ end
 end
 
 @testitem "Voronoi and RandomPoints on the periodic hexagonal sorting sibling" setup = [SiblingsSetup] tags = [:pottsmodels, :core] begin
-    # `voronoi_shapes_tests.jl` primitives outside their first model (the Graner–Glazier aggregate on a closed square
+    # The Voronoi and shape primitives outside their first model (the Graner–Glazier aggregate on a closed square
     # lattice): a centroidal `Voronoi` of `RandomPoints` filling the periodic hexagonal sorting
     # sibling, wrapping through its edges, with kinds cycled; it runs and its cells start compact.
     @testset "Voronoi and RandomPoints on the periodic hexagonal sorting sibling" begin

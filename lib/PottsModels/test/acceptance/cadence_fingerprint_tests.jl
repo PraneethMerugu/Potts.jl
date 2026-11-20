@@ -1,7 +1,7 @@
 # the D-016 fingerprint includes the tick cadence.
 # Decision: D-118 (amends D-016).
 #
-# The defect (found by the `component_rejections_tests.jl` test author, D-084 "Observation"). The fingerprint is a hash
+# The defect (D-084 "Observation"). The fingerprint is a hash
 # of the generated expressions plus the lattice, spacing, neighbourhood, `T` and the solver
 # spec (`_problem_function`, src/problem.jl). A cadence that lives outside the generated code
 # is not in it, so two problems that run on different schedules fingerprint alike and a
@@ -30,7 +30,7 @@
 #     rule-cadence fixtures really fire on different schedules.
 #  2. Two problems that differ only in a discrete component's clock period or phase (cell
 #     scope and model scope; the `boolean_network_tests.jl` three-node network with Clock(2.0) vs ShiftIndex(t, 0)
-#     as in the ROADMAP row), or in `mcs_duration` where that changes the resolved cadence,
+#     as planned), or in `mcs_duration` where that changes the resolved cadence,
 #     have different fingerprints. How the cadence enters the hash (resolved every/offset of
 #     each gated phase, or the clock spec) is left to the implementer; equal fingerprints for
 #     equal resolved cadences (e.g. Clock(1.0) vs ShiftIndex(t, 0)) are NOT required.

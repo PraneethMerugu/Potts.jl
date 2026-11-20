@@ -7,7 +7,7 @@
 #
 # The record (D-146) is `lib/PottsModels/reproductions/data/01/full-2026-10-08/`:
 #
-# (a) Provenance. `provenance.toml` has item "`01_merks_page_tests.jl`"; a 40-hex `commit` that is an ancestor
+# (a) Provenance. `provenance.toml` has the record's item ID; a 40-hex `commit` that is an ancestor
 #     of HEAD (checked when git is available and the clone is not shallow); `dirty = false`;
 #     `hostname`, `cpu`, `julia`, an integer `threads`, `jobs = 590`,
 #     and a `runner` inside the record directory that exists. Files: only .tsv, .toml, .md,
@@ -34,7 +34,7 @@
 #     N + 100 MCS (D-153 M6, reported), within 5e-5 of the recomputed means.
 # (e) Videos (D-146, D-156, D-161, D-172). `videos.toml` lists ≥ 1 `[[video]]` with `file`
 #     (`01_merks_full-2026-10-08_*cells*.mp4`), `tag` (a new dated pre-release
-#     `reproductions-2026-10-DD…`, DD ≥ 08, which the coordinator creates and uploads to),
+#     `reproductions-2026-10-DD…`, DD ≥ 08, which is created and uploaded at release),
 #     `job` (a key of `replicates.tsv`), `encoding = "CellIdentityEncoding"`,
 #     `boundaries = false`, a 64-hex `sha256`, `bytes` ≤ 50 MB and
 #     `final_state_matches_record = true`. The page links each as
@@ -49,7 +49,7 @@
 # `# ##`/`# ###` heading; "the Details section" from `# ## 4.` to the end.
 #
 # (f) FULL record chunk. Exactly one code chunk delimited by the lines
-#     `## FULL record (`01_merks_page_tests.jl`): begin` and `## FULL record (`01_merks_page_tests.jl`): end`, before the
+#     `BEGIN` and `END` (below), before the
 #     deviations section. It names
 #     the record directory and runs no simulation (no `solve(`, `PottsProblem`, `run06`,
 #     `run08`, `walk(`). Evaluated alone in a fresh module (with PottsModels, TOML, Markdown

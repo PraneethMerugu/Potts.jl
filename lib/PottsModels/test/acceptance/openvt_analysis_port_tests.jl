@@ -26,7 +26,7 @@
 #           successor of the LAST convex-hull vertex (concaveman.h `last->next()`), so points
 #           carved into the closing edge come first.
 #       Empty input: ArgumentError. No `fma`, `muladd`, `@fastmath`, `@simd` in the kernels
-#       (spec D11; ROADMAP Accept).
+#       (spec D11; acceptance).
 #
 #   PottsModels.openvt_metrics(path::AbstractString) / openvt_metrics(x, y, g)
 #       → (; N::Int, r, A, C, w, g, C_rel, w_rel), Float64 except N. `metrics.cpp` §3.2:

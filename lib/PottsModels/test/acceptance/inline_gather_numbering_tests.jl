@@ -1,7 +1,7 @@
 # inline gathers outside the copy step are numbered.
 # Decision: D-132 (amends D-107, after D-124).
 #
-# The defect (`relation_fingerprint_tests.jl` review). The compiler names each inline gather relation `gather1`,
+# The defect. The compiler names each inline gather relation `gather1`,
 # `gather2`, … (D-107) by scanning `all_exprs` (`src/compile.jl`), the expressions of the copy
 # step and of the MCS-boundary updates, ODEs, fields, ticks and the temperature. Six places
 # that also lower inline gathers are not in that scan, so their spec has no name and the
@@ -34,7 +34,7 @@
 # gathers of the generated code). Models whose gathers were all already scanned keep their
 # fingerprints, as do named relations at the new sites and every published model.
 #
-# Amended under D-209 (`gather_energy_tests.jl`). The cell and edge energy fixtures originally folded
+# Amended under D-209. The cell and edge energy fixtures originally folded
 # `count(owner[n] == who for n in R(site))`, a σ-dependent gather that D-209 refuses at
 # `mtkcompile` (its ΔH was wrong). They now fold `count(q[n] == who for n in R(site))`, with
 # `q` the initial owner map set from the operating point (a static site value; every
@@ -86,7 +86,7 @@ const LAYOUTS = Dict(
 gather_g(r, who = :id; site = 40) = :(count(owner[n] == $who for n in $r($site)))
 gather_pair(r; site = 40) = :($(gather_g(r, :a; site)) + $(gather_g(r, :b; site)))
 # the same folds over the static site value `q` (the initial owner map, from the operating
-# point): the energy form allowed under D-209 (`gather_energy_tests.jl`); every energy fixture uses it
+# point): the energy form allowed under D-209; every energy fixture uses it
 gather_s(r, who = :id; site = 40) = :(count(q[n] == $who for n in $r($site)))
 spair(r; site = 40) = :($(gather_s(r, :a; site)) + $(gather_s(r, :b; site)))
 const STATIC = :(@constraint source < 0)

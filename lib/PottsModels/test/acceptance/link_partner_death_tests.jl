@@ -3,7 +3,7 @@
 #
 # The defect. When a linked cell loses its last site through copies, its centroid is 0/0
 # (`m1 / volume` with volume 0). `link_delta` is then NaN for every copy of the surviving
-# partner and `total_energy` is NaN. Links were dropped only on `EVENT_REMOVE`. (ROADMAP
+# partner and `total_energy` is NaN. Links were dropped only on `EVENT_REMOVE`. (The plan
 # describes a silent freeze; on the tree this was written against, the first non-finite ΔH
 # sets STATUS_NONFINITE, so the survivor stops moving because the run ends with retcode
 # `Failure` within an MCS of the death. Both are covered: the run must reach its end and
@@ -12,7 +12,7 @@
 # D-066 prescribes BOTH halves (quoted):
 #   X3: "Dropped at the next boundary; dead partner skipped meanwhile".
 #   Item 5: "**Links:** `link_delta` and `total_energy` skip a partner with `volume == 0`.
-#   This reuses `centroid`'s load and fixes the NaN freeze (`link_partner_death_tests.jl`)."
+#   This reuses `centroid`'s load and fixes the NaN freeze."
 #   Item 5, boundaries: "Dead cells' links are dropped [...] (c) at the start of each
 #   `@link`/`@unlink` host phase, before links are created, so a stale degree or `linked`
 #   never blocks creation. A relationship with none of these never creates links; the skip

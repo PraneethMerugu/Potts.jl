@@ -5,7 +5,7 @@
 # pass band below is copied from there. The seeds, the SMOKE bands and the run lengths are
 # the test author's (D-148). Gap G10 (spec §6).
 #
-# Surface fixed by the test author (implemented in `15_openvt_calibration_tests.jl`; open questions in D-148):
+# The surface (open questions in D-148):
 #
 #   PottsModels.Analysis.centroids(σ; periodic = (false, …)) -> Vector{NTuple{N, Float64}}
 #     (general; the existing method gains the keyword). On an axis d with periodic[d], each

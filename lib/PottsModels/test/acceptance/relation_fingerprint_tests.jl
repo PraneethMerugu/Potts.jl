@@ -1,7 +1,7 @@
 # named and inline gather relations are in the
 # fingerprint. Decision: D-124 (amends D-016, after D-122).
 #
-# The defect (`neighborhood_fingerprint_tests.jl` test author, D-122 "Follow-up"). A named relation (`@relations far =
+# The defect (D-122 "Follow-up"). A named relation (`@relations far =
 # EuclideanBall(2.0)`, read by `contacts(far)` or a fold `for n in far(site)`) and an inline gather
 # relation (`for n in Moore(1)(42)`) reach the generated code only as a field of the run
 # context (`ctx.far`, `ctx.gather1`: the compiler numbers inline gathers `gather1`, `gather2`,
@@ -15,7 +15,7 @@
 # and `Weighted(Moore(1), 2)` vs `3` all fingerprint alike pairwise, so a checkpoint loads
 # across them although the energy or the dynamics differ.
 #
-# Amended under D-209 (`gather_energy_tests.jl`). The cell-energy fixtures ("… energy …") originally folded
+# Amended under D-209. The cell-energy fixtures ("… energy …") originally folded
 # `count(owner[n] == id for n in R(40))`, a σ-dependent gather that D-209 refuses at
 # `mtkcompile` (its ΔH was wrong). They now fold the same count over a static site value,
 # `0.1 * volume * count(q[n] == id for n in R(40))`, with `q` the initial owner map set from
@@ -71,7 +71,7 @@ const LATTICES = Dict(
 # corner of cell 1 on the 12×12 lattices; 74 = (2, 2, 2), a corner of cell 1 on the cube
 relation_count(r, who = :id; site = 40) = :(count(owner[n] == $who for n in $r($site)))
 # the same fold over the static site value `q` (the initial owner map, set from the operating
-# point): the energy form allowed under D-209 (`gather_energy_tests.jl`), read by the generated ΔH through `volume`
+# point): the energy form allowed under D-209, read by the generated ΔH through `volume`
 static(r, who = :id; site = 40) = :(count(q[n] == $who for n in $r($site)))
 # copy drive reading relations `rs` at the source and `rt` at the target
 relation_drive(rs, rt) = :(@drive copy => 0.1 * (count(owner[n] == 1 for n in $rs(source)) - count(owner[n] == 1 for n in $rt(target))))

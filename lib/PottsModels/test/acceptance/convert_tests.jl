@@ -1,10 +1,10 @@
-# `convert_tests.jl`, part 1 of 2:
+# Site conversion, part 1 of 2:
 # `@convert`, site conversion as a per-MCS kernel pass.
 # Part 2, `ownership_delta_tests.jl`, holds the shared ownership-delta routine (priority), the
 # ownership hooks (`clear_on_ownership_change`, no `@on_copy`) and A-17.
 #
-# Decisions: D-233 (the maintainer's and spec owner's scope for `convert_tests.jl`, relayed by the
-# coordinator 2026-10-13: independent per-site conversion with p evaluated at the START of
+# Decisions: D-233 (the maintainer's and spec owner's scope for `@convert`,
+# 2026-10-13: independent per-site conversion with p evaluated at the START of
 # the pass, counter-addressed draws, generated kernels, no host round trip per MCS; it
 # supersedes api-synthesis §2.9's `order = Shuffled()` and per-candidate re-evaluation),
 # D-075 (`@convert` block form, `Fresh`, `created`, named `@schedule` phase; D-035 as
@@ -13,7 +13,7 @@
 # planner, lowest-first allocation), D-231 (`cell_references_tests.jl` references), D-209, D-048 (oracles and
 # negative controls), D-016 (fingerprint).
 #
-# ROADMAP: "R8: the shared ownership-delta routine (priority remove > convert > transition >
+# Scope: "R8: the shared ownership-delta routine (priority remove > convert > transition >
 # divide > create); `@convert` (block form with `Fresh`, `created`, `budget`, each one a
 # named `@schedule` phase costed per D-035 as amended by D-075); ownership hooks apply
 # `clear_on_ownership_change`, and `@on_copy` never fires from the lifecycle (D-075 clarify).
@@ -60,7 +60,7 @@
 #      referent is 0 (absent or dead) the pass allocates a new member of kind `k` for the
 #      entity, ONLY IF at least one of its candidates converts (D-066 X2: born on its first
 #      site; no conversion, no cell, no serial). One cell per entity per pass: every
-#      conversion of that pass goes to it. (The coordinator's contract (b): "allocation for
+#      conversion of that pass goes to it. (The contract (b): "allocation for
 #      clusters that have conversions but no target member"; the E3 block names no `Fresh`.)
 # B. Semantics of one pass (D-233). For each entity:
 #    - `p` is evaluated ONCE PER CANDIDATE ON THE START-OF-PASS STATE: every cell quantity
@@ -116,7 +116,7 @@
 #    that allocates. Zero cost when off: a quiet pass allocates nothing on the CPU (0 bytes
 #    per warm `step!`).
 # F. Not pinned here: `budget` (see the report: per-entity budgets need an order among
-#    independent candidates, which D-233 removed; the coordinator rules on it), `gate`,
+#    independent candidates, which D-233 removed; it needs a ruling), `gate`,
 #    `when`, `order`, `Every(n)` on `@convert`, `cells(…)` domains with allocation, `to = 0`
 #    (conversion to medium), `Fresh(k)` without a reference, a pass whose `from` dies.
 # G. Kind-conditional, expression-valued cell-variable defaults (ergonomics review E1; NOT

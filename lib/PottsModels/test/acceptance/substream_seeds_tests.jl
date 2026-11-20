@@ -1,7 +1,7 @@
 # sub-stream seeds come from
 # one stable mixer, not from `seed + k`.
 #
-# Surface fixed by the coordinator:
+# The surface:
 #
 #   Potts._substream_seed(seed::Integer, stream::Union{Symbol, AbstractString}) -> UInt64
 #       (internal; not exported, not `public`)

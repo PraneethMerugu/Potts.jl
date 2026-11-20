@@ -1,4 +1,4 @@
-# `initial_state_tests.jl`, part B of 3: a
+# Initial state, part B of 3: a
 # PDE source on a site predicate (R5).
 # Part A, `initial_state_tests.jl`: the initial-state vocabulary. Part C,
 # `mean_squared_displacement_tests.jl`: MSD and the modified Fürth fits.
@@ -10,7 +10,6 @@
 # transfer counters), D-016 (fingerprints), D-048 (oracles and negative controls), D-242
 # (no A/B unless field codegen changes).
 #
-# ROADMAP (`initial_state_tests.jl` row): "R5 predicate-sourced PDE".
 #
 # =========================================================================================
 # THE CONTRACT THESE TESTS PIN (brief §3.B; no new API, no new DSL name or keyword)

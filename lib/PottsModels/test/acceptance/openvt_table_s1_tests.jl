@@ -66,7 +66,7 @@
 #     x, y = (centroid − center) / R in R units (centroid = mean site index, closed
 #     lattice); r = √(A_star/π) / R; f = medium pairs / unlike pairs over Moore(1)
 #     computed from σ (exact at the saved state); a = volume / A_star; R = √(A₀/π).
-#     Written with `openvt_analysis_port_tests.jl`'s `write_openvt(path, :O2, snapshot)` (feat/p6-15d surface).
+#     Written with `openvt_analysis_port_tests.jl`'s `write_openvt(path, :O2, snapshot)`.
 #   stop_at_cells(n) -> DiscreteCallback   (PottsModels, G7/G11) terminate! at the end of
 #     the first MCS whose live-cell count (volume > 0, after the lifecycle) is ≥ n;
 #     retcode Terminated. Used at n = 1000 (F3/F5) and 10⁴ (M's termination, C15).

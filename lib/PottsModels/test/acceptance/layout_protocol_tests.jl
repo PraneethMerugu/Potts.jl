@@ -2,7 +2,7 @@
 # the layout protocol `paint!(op::LayoutState, l, lat)`, the layout report, `Tiling(partial)`
 # and `splits`.
 #
-# Surface fixed by the coordinator (Potts, src/layouts.jl, unless noted):
+# The surface (Potts, src/layouts.jl, unless noted):
 #
 #   Potts.paint!(op::Potts.LayoutState, l, lat)                          (public, the one method)
 #       The extension method of every layer. `op` is opaque: a layer reads and writes it only

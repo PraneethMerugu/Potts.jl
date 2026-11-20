@@ -5,7 +5,7 @@
 # a ΔH that leaves o's edges in place: `centroid_shift` returns 0 for a cell going to
 # volume 0, so `link_delta` evaluates o's edges at o's pre-copy centroid, while
 # `total_energy` drops them (both ends must be alive, D-079). The killing copy's ΔH
-# therefore differs from H(after) − H(before) by exactly the edge credit (`link_partner_death_tests.jl` reviewer
+# therefore differs from H(after) − H(before) by exactly the edge credit (a
 # probe: 4.56, 146.55). And `total_energy` sums cell and cluster terms over every slot, so
 # a dead cell still contributes E(empty state).
 #
@@ -13,12 +13,12 @@
 #   "`total_energy` sums: cell terms over alive cells; cluster terms over roots `r`
 #   (`cluster[r] == r`) of clusters with at least one alive member [...]; edge terms over
 #   links whose two ends are both alive. A dead cell contributes nothing."
-# ROADMAP `killing_copy_energy_tests.jl`: "the killing copy's ΔH credits the dead cell's edge energy", and
+# The scope: "the killing copy's ΔH credits the dead cell's edge energy", and
 #   "Accept: for every copy, including a killing copy, ΔH equals the H difference on a
 #   linked model."
 #
 # Semantics pinned here. For a copy whose old owner `o` it kills (credits per D-066 item 4,
-# with the edge credit folded into ΔH by `killing_copy_energy_tests.jl`):
+# with the edge credit folded into ΔH):
 #
 #     ΔH(copy) == H(after) − H(before) + E_cell(o, empty state)
 #                 [+ E_cluster(cluster[o], empty state), if that cluster has no alive member]

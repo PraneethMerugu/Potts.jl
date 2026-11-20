@@ -1,7 +1,7 @@
 # the acceptance law's parameters are in the fingerprint.
 # Decision: D-121 (amends D-016, after D-118).
 #
-# The defect (`cadence_fingerprint_tests.jl` review, D-118 "Review and merge"). The fingerprint hashes the generated
+# The defect (D-118 "Review and merge"). The fingerprint hashes the generated
 # code, the lattice, spacing, neighbourhood, `T`, the canonical solver spec and (D-118) the
 # non-default cadences and `mcs_duration` (`_problem_function`, src/problem.jl). The sweep's
 # acceptance law is solver data outside the generated code: `_acceptance(sys.sweep, T)`
@@ -31,7 +31,7 @@
 #     algorithm is NOT in the fingerprint; a SequentialCPM checkpoint loads into a
 #     CheckerboardCPM `init` (pinned below as a control; passes on the base). The
 #     algorithm-level `acceptance` override is a run choice too and is not pinned either way.
-#   OUT OF SCOPE (reported to the coordinator, not checked here): the `@relations proposal`
+#   OUT OF SCOPE (reported, not checked here): the `@relations proposal`
 #   and `@relations contact` neighbourhoods are not fingerprinted either (Moore(1) vs the
 #   default fingerprint alike on 432a0a74); WortelAct, OpenVT and Merks set
 #   `proposal = Moore(1)`, so hashing a non-default proposal would move their pins, which
@@ -49,7 +49,7 @@
 #     through save_checkpoint/load_checkpoint); a fresh build with the same law and offset
 #     loads it (control: the error is the fingerprint, not tspan or the state).
 #  4. Only non-default values are hashed: the default law (Metropolis, offset 0) keeps its
-#     fingerprint: the fixture's value on 432a0a74 and every PottsModels system (the `cadence_fingerprint_tests.jl`
+#     fingerprint: the fixture's value on 432a0a74 and every PottsModels system (the D-118
 #     pins, recorded on 4e81e1eb; all use `Metropolis` with offset 0) are unchanged.
 
 @testsetup module AcceptanceLawFingerprintSetup

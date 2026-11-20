@@ -3,7 +3,7 @@
 # spec 15 §4.0.1 case (b), §3.1 O2 and §3.4, and the pre-registered target is §4.1 V4
 # (docs/design/research/model-specs/15_openvt_monolayer.md v3.1); every reference value
 # below is copied from there. The pass margins, the peak rule, the seeds, the lattice, the
-# control's γ and the SMOKE bands are the test author's (`15_openvt_f5_tests.jl`; see the D-entry).
+# control's γ and the SMOKE bands are the test author's (see the D-entry).
 #
 # V4 as spec 15 §4.1 states it. Pooled over 100 runs (TST_5T, Morpheus_5T; G zips):
 #   "≈ 89% of cells at f = 0; nonzero f peaked at 0.25–0.35 with no cell above f = 0.56;
@@ -33,7 +33,7 @@
 # f == 0 are removed from bin 0 (a cell with u ≥ 100 unlike pairs can have 0 < f < 0.01, so
 # bin 0 also holds nonzero f: 26 cells of 10⁵ in the FULL record).
 #
-# Amendment (`15_openvt_f5_tests.jl`, before merge): the first version dropped all of bin 0 for V4.2 and
+# Amendment (before merge): the first version dropped all of bin 0 for V4.2 and
 # asserted that bin 0 held exactly the f == 0 cells; the FULL record falsified that premise
 # (bin 0: 88 829 cells, f == 0: 88 803). The rule now drops exactly the f == 0 cells and the
 # premise assertion is replaced by hf[1] ≥ n_f0. No band, seed, run or target changed; every

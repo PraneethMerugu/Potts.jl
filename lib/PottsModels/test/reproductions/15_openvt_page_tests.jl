@@ -9,9 +9,9 @@
 # D-168, D-172–D-175, D-185). Amended under D-185 for the page layout only: the order of
 # (b), where the deviations and videos sit ((d), (e)), the pending wording and the F1 colour
 # row; no verdict rule, band or record-value check changed.
-# Amended under D-211 (`15_openvt_manuscript_draft_tests.jl`; the 9 Oct 2026 draft is M) for the figure numbering and the
-# record artefacts only: M's metrics figure is now Figure 9 (the `15_openvt_f3_f8_tests.jl` record's `fig8.png`,
-# record names unchanged), M's new Figure 8 is the β colony grid (`15_openvt_manuscript_draft_tests.jl` record, pending
+# Amended under D-211 (the 9 Oct 2026 draft is M) for the figure numbering and the
+# record artefacts only: M's metrics figure is now Figure 9 (the F3/F8 record's `fig8.png`,
+# record names unchanged), M's new Figure 8 is the β colony grid (the Fig 8 β record, pending
 # until its PC run lands), Figure 7 shows the grid render `fig7_grid.png` and Figure 5 the
 # shared-bin render `fig5_shared.png`. The R1–R4 content checks are in `15_openvt_manuscript_draft_tests.jl`.
 #
@@ -34,8 +34,8 @@
 #     heading of the same or a higher level.
 # (c) Each item is either RENDERED from a merged record or PENDING:
 #     - an item's records are the directories of `reproductions/data/15/` whose
-#       `provenance.toml` has its ROADMAP item: F1, F4 `15_openvt_f1_f4_tests.jl`; F2, S5 `15_openvt_calibration_tests.jl`; F3, F9 `15_openvt_f3_f8_tests.jl`;
-#       F5 `15_openvt_f5_tests.jl`; F6, T1, F7 `15_openvt_sweeps_tests.jl`; F8 `15_openvt_manuscript_draft_tests.jl`. Table S1 is the parameter table and has no
+#       `provenance.toml` has the item ID given for it in `ITEMS` below: F1, F4 the F1/F4 record; F2, S5 the calibration
+#       record; F3, F9 the F3/F8 record; F5 the F5 record; F6, T1, F7 the sweeps record; F8 the Fig 8 β record. Table S1 is the parameter table and has no
 #       record;
 #     - RENDERED: the section names a record directory, the first 8 characters of its
 #       commit, and its machine (the cpu up to " w/", or the hostname; case-insensitive),
@@ -45,8 +45,8 @@
 #       or .tsv of the
 #       record). It does not say "pending". The record figures follow M's layout (their
 #       READMEs and reproduction tests check it), so naming the file checks the layout;
-#     - PENDING is allowed only for the `15_openvt_sweeps_tests.jl` items while no `15_openvt_sweeps_tests.jl` record is merged
-#       (D-174), and for F8 while no `15_openvt_manuscript_draft_tests.jl` record is merged (D-211). The section then says
+#     - PENDING is allowed only for the sweeps items while no sweeps record is merged
+#       (D-174), and for F8 while no Fig 8 β record is merged (D-211). The section then says
 #       "pending: FULL run <state> (D-174)" (or "(D-211)"; <state> e.g. "parked" or "in
 #       progress") and shows no image. When the record lands, the same items must be
 #       RENDERED, with no edit to this file.
@@ -116,7 +116,7 @@ const TITLE = "OpenVT monolayer benchmark"
 const PENDING = r"pending: FULL run [a-z ]+ \(D-(174|211)\)"
 const MODEL_SRC = joinpath(ROOT, "lib", "PottsModels", "src", "openvt_reference.jl")
 const RELEASES = "https://github.com/PraneethMerugu/Potts.jl/releases/download/"
-# (label kind, label, ROADMAP item or nothing, fixed artefact or nothing), in M's order
+# (label kind, label, record item ID or nothing, fixed artefact or nothing), in M's order
 const ITEMS = [
     ("F1", :figure, "1", "P6.15h", "fig1.png"),
     ("F2", :figure, "2", "P6.15b", "fig2_bde.png"),

@@ -36,7 +36,7 @@
 # 4. `Global(; window = nothing)` is a reserved DSL name (a placeholder until global connectivity): it
 #    constructs (`window` is `nothing` or a positive integer, else `ArgumentError`). A
 #    model that uses `!connected(old; rule = Global())` was an `ArgumentError` until global connectivity;
-#    amended for `global_connectivity_tests.jl`: it now builds and runs on every algorithm.
+#    amended for global connectivity: it now builds and runs on every algorithm.
 #    (Amended under D-189 ruling 6: `components(old; scope = Global()) > 1` is gone, with
 #    no alias; its meaning, "old is in more than one piece", is now `!connected(old; rule = …)`.)
 #    Control: the same model with `local_components` builds.
@@ -585,7 +585,7 @@ end
                     end
                 end
             )
-            # amended for `global_connectivity_tests.jl`: `Global()` is now a rule value and builds and runs (it was an
+            # amended for global connectivity: `Global()` is now a rule value and builds and runs (it was an
             # ArgumentError placeholder until global connectivity)
             @test e === nothing
         end

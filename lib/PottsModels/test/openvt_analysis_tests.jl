@@ -1,4 +1,4 @@
-# OpenVT monolayer analysis (`openvt_analysis_port_tests.jl`, D-149): behaviour outside the acceptance file
+# OpenVT monolayer analysis (D-149): behaviour outside the acceptance file
 # `acceptance/openvt_analysis_port_tests.jl`. The spatial grids of `concave_hull` are checked
 # against a brute-force concaveman that scans every point and edge with the same kernels.
 
@@ -61,7 +61,7 @@ function ovt_brute_hull(points; concavity = 2.0)
 end
 # ── D13: the candidate search does not prune ───────────────────────────────────────────────
 
-# A 37-point jittered lattice (`openvt_analysis_port_tests.jl` review, minimised from a fuzz failure). At concavity
+# A 37-point jittered lattice (minimised from a fuzz failure). At concavity
 # 1.5, metrics.cpp's concaveman (R-tree, node size 32) returns 30 vertices: its box distance
 # over-estimates next to the near-vertical edges and the search never reaches point 23
 # (≈ (5, 1)). The same C++ with box pruning disabled returns the 31 vertices below, as here.
@@ -92,7 +92,7 @@ const OVT_LATTICE37_HULL = [
     29, 30, 24, 23, 13, 9, 4, 1, 2, 6, 7, 3, 8, 14, 15, 16, 17, 18, 19, 20, 12, 22,
     21, 28, 36, 35, 34, 33, 32, 31, 37,
 ]
-# `PottsModels.openvt_frame` (`15_openvt_f3_f8_tests.jl`, D-173): the O1 rows.
+# `PottsModels.openvt_frame` (D-173): the O1 rows.
 # `reproductions/15_openvt_f3_f8_tests.jl` checks a hand-built fixture; here random tilings with
 # ids touching the lattice edges, dead and absent ids, against a brute-force neighbour scan
 function ovt_frame_oracle(σ, c)

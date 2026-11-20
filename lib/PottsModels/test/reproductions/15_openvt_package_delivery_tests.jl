@@ -12,10 +12,10 @@
 # framework token); spec 15 §7 at da81b245 (Q15, Q23, Q24 and Q26 open, so rows may keep
 # naming them; Q25 resolved; Q19, Q20 and Q21 CLOSED, not asked, under D-213: "Potts follows
 # M; this framework's departure is recorded, not queried"); D-180/D-204/D-206 (the package and its bulk
-# directory); D-211/D-212 (Figs 5, 7, 8; Q26); D-214 (a second entry later, `15_openvt_checkerboard_tests.jl`).
+# directory); D-211/D-212 (Figs 5, 7, 8; Q26); D-214 (a second entry later, the checkerboard).
 #
 # The framework token <FW> is DELIVERY_FW ("Potts.jl"; D-215 (9): a parameter without spaces,
-# "Potts.jl_checkerboard" for `15_openvt_checkerboard_tests.jl`). Nothing below spells it except through DELIVERY_FW. The
+# "Potts.jl_checkerboard" for the checkerboard entry). Nothing below spells it except through DELIVERY_FW. The
 # repository name in URLs, PraneethMerugu/Potts.jl, is the repository, not the token.
 #
 # ---------------------------------------------------------------------------------------------

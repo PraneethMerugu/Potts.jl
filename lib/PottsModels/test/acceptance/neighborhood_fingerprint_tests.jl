@@ -1,7 +1,7 @@
 # the proposal and contact neighbourhoods are in the
 # fingerprint. Decision: D-122 (amends D-016, after D-118 and D-121).
 #
-# The defect (`acceptance_law_fingerprint_tests.jl` test author, D-121 "Follow-up"). The fingerprint hashes the generated
+# The defect (D-121 "Follow-up"). The fingerprint hashes the generated
 # code, the lattice (its `neighborhood = …` by content), spacing, `T`, the canonical solver
 # spec, the non-default cadences (D-118) and the non-default acceptance law (D-121)
 # (`_problem_function`, src/problem.jl). `@relations proposal = …` and `@relations contact =
@@ -33,7 +33,7 @@
 # hexagonal lattice) fingerprints like omission; weights hash by value, so two textually
 # equal weight closures (two anonymous functions) fingerprint alike.
 #
-# OUT OF SCOPE (reported to the coordinator, not checked here): named relations (`@relations
+# OUT OF SCOPE (reported, not checked here): named relations (`@relations
 # far = EuclideanBall(2.0)` used by `contacts(far)` or a fold `for n in far(site)`) and inline gather
 # relations (`for n in Moore(1)(42)` vs `Moore(2)(42)`) reach the run as `ctx` data too and
 # collide the same way on f137f929; they have no default, so hashing them moves the pins of
@@ -224,7 +224,7 @@ neighborhood_openvt() = PottsProblem(
     openvt_monolayer_state(; lattice = (24, 24)), (0, 10); capacity = 64
 )
 # default neighbourhoods: unchanged. The fixture values were recorded on f137f929 ("sq" is
-# also the D-121 fixture's pin); the PottsModels systems are the `cadence_fingerprint_tests.jl` pins (4e81e1eb).
+# also the D-121 fixture's pin); the PottsModels systems are the D-118 pins (4e81e1eb).
 unchanged() = (
     "sq" => () -> problem("sq"),
     "sq proposal=VonNeumann(1)" => () -> problem("sq proposal=VonNeumann(1)"),

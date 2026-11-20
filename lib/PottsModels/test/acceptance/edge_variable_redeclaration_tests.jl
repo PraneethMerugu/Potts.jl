@@ -1,4 +1,4 @@
-# `relationships_tests.jl` review follow-ups on edge variables.
+# follow-ups on edge variables (relationships, D-058).
 # Decision: D-127 (amends D-058).
 #
 # The defects, measured on 18861b25:

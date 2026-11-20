@@ -151,7 +151,7 @@ end
         σ = zeros(Int32, 12, 12); σ[3:9, 6] .= 1; σ[6, 5] = 2; σ[6, 7] = 3
         @test !model_allows(ArcPeriodic, σ, ARC_X, SRC)
 
-        # zero arcs (the cell's last site) still pass: TST lets a cell vanish (`connectivity_and_reserved_names_tests.jl` scope).
+        # zero arcs (the cell's last site) still pass: TST lets a cell vanish (the connectivity rule allows it).
         σ = zeros(Int32, 12, 12); σ[6, 6] = 1; σ[6, 5] = 2
         @test model_allows(ArcPeriodic, σ, ARC_X, SRC)
     end

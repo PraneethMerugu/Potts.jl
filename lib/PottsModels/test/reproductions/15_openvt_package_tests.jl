@@ -5,7 +5,7 @@
 # D-204 amendment (the package completed): every item the first version listed as optional or
 # "Pending" is now REQUIRED: O1 (per-cell time series of cases a, b, e, f, re-run from the
 # recorded seeds), O2 (case b), A3 (inhibition shares over time, from O1), O3 and O5 (the
-# `15_openvt_sweeps_tests.jl` sweeps record is merged), the MIT line (D-181), and a deterministic build outside
+# sweeps record is merged), the MIT line (D-181), and a deterministic build outside
 # git. The O1 files and the O2 files are too large for git (D-168, D-204): they live in a BULK
 # directory outside git, `ENV["OPENVT_PACKAGE_BULK"]`, and git pins their MANIFEST (names, row
 # counts, byte counts, inhibition-code counts, sha256), never their bytes. See "BULK inputs",
@@ -44,15 +44,15 @@
 #   (disagreement 3).
 # - lengths in R and time stamps in MCS with 5T = 775 MCS (TST README, Morpheus README): agree.
 #
-# D-211 amendment (`15_openvt_manuscript_draft_tests.jl`; the 9 Oct 2026 draft is M): M's Figures 5, 7 and 8 become REQUIRED
+# D-211 amendment (the 9 Oct 2026 draft is M): M's Figures 5, 7 and 8 become REQUIRED
 # package figures, byte copies of their records' renders, with M's new Fig 8 colonies as O5:
-#   figures/fig5.png   the `15_openvt_f5_tests.jl` record's fig5_shared.png (Fig 5 row on M's shared distance
+#   figures/fig5.png   the F5 record's fig5_shared.png (Fig 5 row on M's shared distance
 #                      bins 0, 18.6, 37.2, 55.8, 74.4, 93; R4)
-#   figures/fig7.png   the `15_openvt_sweeps_tests.jl` record's fig7_grid.png (Fig 7 colony grid, γ; R1)
-#   figures/fig8.png   the `15_openvt_manuscript_draft_tests.jl` record's fig8_grid.png (new Fig 8 colony grid, β; R2)
+#   figures/fig7.png   the sweeps record's fig7_grid.png (Fig 7 colony grid, γ; R1)
+#   figures/fig8.png   the Fig 8 β record's fig8_grid.png (new Fig 8 colony grid, β; R2)
 #   Monolayer/final_snapshot_data/Potts.jl_beta_<β>_<MCS>MCS.csv
-#                      O5 of the five Fig 8 colonies, byte copies of the `15_openvt_manuscript_draft_tests.jl` record's f8/
-# The `15_openvt_manuscript_draft_tests.jl` record (`data/15/f8beta-*`, item "`15_openvt_manuscript_draft_tests.jl`") joins the records: its runner goes to
+#                      O5 of the five Fig 8 colonies, byte copies of the Fig 8 β record's f8/
+# The Fig 8 β record (`data/15/f8beta-*`, item `ITEMS[:f8beta]`) joins the records: its runner goes to
 # scripts/, its provenance to provenance/. The results README gets a level-2 "Figures"
 # section naming the three figures, M's colours (yellow, teal, red) and the shared bin edges,
 # and, in a caption or a table, each drawn colony's C/C_circle from its record's
@@ -63,7 +63,7 @@
 # ("formerly", "2 Oct"), and some line labels Figure 9 with the metrics (O6) files.
 # Specifications of the renders: `15_openvt_manuscript_draft_tests.jl`.
 #
-# D-215 amendment (`15_openvt_package_delivery_tests.jl`; the conformance audit against G's own scripts, which hard-code
+# D-215 amendment (the conformance audit against G's own scripts, which hard-code
 # what the manuscript leaves open). It SUPERSEDES the names and columns given further down
 # wherever they differ; the checks below are the D-215 ones. <FW> is the framework token
 # PACKAGE_FW ("Potts.jl"; D-215 (9): a parameter without spaces, "Potts.jl_checkerboard" later).
@@ -74,7 +74,7 @@
 #      k = 0…99 (the Fig 5 notebook's range(0,100)); member k is the F5 run k + 1 (seed
 #      15000 + k + 1), bytes unchanged. No loose O2 files.
 #   4. O5: Monolayer/final_snapshot_data/<FW>_beta_<β>_gamma_<γ>_<MCS>MCS.csv, one per colony
-#      of the sweeps f7/ (β = 0) and `15_openvt_manuscript_draft_tests.jl` f8/ (γ = 0) records, byte copies; β, γ and MCS
+#      of the sweeps f7/ (β = 0) and Fig 8 β f8/ (γ = 0) records, byte copies; β, γ and MCS
 #      equal the record names' as parsed numbers.
 #   5. O1 archives: Monolayer/<stem>.zip with stem (b) <FW>_No_CI_stochastic, (f)
 #      <FW>_No_CI_deterministic, (e) <FW>_beta0.8_gamma0.0 and, chosen here in e's style,
@@ -82,16 +82,16 @@
 #      <stem>/s<seed>/potts_<case>_s<seed>_<MCS:06d>.csv (the seed in the folder and the name).
 #   6. Table 1: Monolayer/<FW>_table1.csv, header starting parameter,multiple,threshold, one
 #      row per row of the sweeps record's table1.tsv in its order ("—": NaN or empty).
-#   The post-processing is no re-run: a new git-pinned record (provenance.toml item "`15_openvt_package_delivery_tests.jl`",
-#   `source` = the `15_openvt_package_tests.jl` record's directory name, its runner in the directory) holds
-#   o1_manifest.tsv, archives.tsv and o2_manifest.tsv (the `15_openvt_package_tests.jl` headers) for the renamed
-#   files: same case, seed, MCS, rows and codes as `15_openvt_package_tests.jl`, bytes + 2 per line for the g
-#   column, new sha256; O2 rows k = 0…99 with `15_openvt_package_tests.jl` row k + 1's bytes and sha256;
+#   The post-processing is no re-run: a new git-pinned record (provenance.toml item `ITEMS[:o1g]`,
+#   `source` = the O1 re-run record's directory name, its runner in the directory) holds
+#   o1_manifest.tsv, archives.tsv and o2_manifest.tsv (the O1 re-run record's headers) for the renamed
+#   files: same case, seed, MCS, rows and codes as the O1 re-run record, bytes + 2 per line for the g
+#   column, new sha256; O2 rows k = 0…99 with the O1 re-run record's row k + 1's bytes and sha256;
 #   archives.tsv one row per O1 case plus a row with case "O2" for the O2 zip. The bulk
 #   directory then holds the new archives under these names (the old ones may stay; they are
 #   not read): <bulk>/<stem>.zip per case and <bulk>/<FW>_5T_MonolayerGrowth_1000_Data.zip,
-#   copied into the package byte for byte. The `15_openvt_package_tests.jl` record is still checked as before (11);
-#   the package's archives, O1 manifest CSV and O2 against the `15_openvt_package_delivery_tests.jl` record (11b, 12).
+#   copied into the package byte for byte. The O1 re-run record is still checked as before (11);
+#   the package's archives, O1 manifest CSV and O2 against the post-processing record (11b, 12).
 #   The e-mail split and the README/EMAIL notes (D-215 (7), (8)) are in 15_openvt_package_delivery_tests.jl.
 #
 # ---------------------------------------------------------------------------------------------
@@ -113,9 +113,8 @@
 # generator (which ignores it).
 #
 # Records are found the way the page test (`15_openvt_page_tests.jl`) finds them: the directories of `data/15/`
-# whose `provenance.toml` names the ROADMAP item: `15_openvt_calibration_tests.jl` calibration (F2, S5), `15_openvt_f5_tests.jl` F5,
-# `15_openvt_f3_f8_tests.jl` F3/F8, `15_openvt_f1_f4_tests.jl` F1/F4, `15_openvt_sweeps_tests.jl` the sweeps (F6, T1, F7; merged, D-174/D-178), and
-# (D-204) `15_openvt_package_tests.jl` the O1 re-run record. The newest directory (by name) wins when an item has
+# whose `provenance.toml` names the record's item ID (`ITEMS` below): the calibration (F2, S5), F5,
+# F3/F8, F1/F4, the sweeps (F6, T1, F7; merged, D-174/D-178), and (D-204) the O1 re-run record. The newest directory (by name) wins when an item has
 # several.
 #
 # ---------------------------------------------------------------------------------------------
@@ -136,7 +135,7 @@
 #   README.md            units, seeds, a Deviations table (D-154), the readings C1–C17, the
 #                        closeup's colours (D-185: area on coolwarm, provisional scale limits),
 #                        a "Pending" section (see below)
-#   closeup.png          byte-identical to the `15_openvt_f1_f4_tests.jl` record's fig1_panel.png, the bare Potts.jl
+#   closeup.png          byte-identical to the F1/F4 record's fig1_panel.png, the bare Potts.jl
 #                        panel without the banner, which the .tex adds (G:results/<FW>/closeup.png)
 #   provenance/<record>.toml
 #                        each record's provenance.toml, with the key `hostname` removed
@@ -183,9 +182,9 @@
 #      per O1 save in MCS order; t = MCS/775; f_k = (count of cells with i = k)/(cells), the
 #      counts and cells of that save's O1 file (= the manifest's i0…i3 and rows).
 # O3   Monolayer/Potts.jl_time_to_10k_vs_beta.csv, …_vs_gamma.csv        beta|gamma,Time to 10k
-#      (MCS),Time to 10k (5T)   (F6, T1; byte copies of the `15_openvt_sweeps_tests.jl` record's files)
+#      (MCS),Time to 10k (5T)   (F6, T1; byte copies of the sweeps record's files)
 # O5   Monolayer/final_snapshot_data/Potts.jl_gamma_<γ>_<MCS>MCS.csv    x_pos,y_pos,radius_i,
-#      inhibited   (F7; byte copies of the `15_openvt_sweeps_tests.jl` record's f7/ files, at least 5)
+#      inhibited   (F7; byte copies of the sweeps record's f7/ files, at least 5)
 # The results README may keep a "Pending" section for other things, but it names none of the
 # items above (their stems are in REQUIRED) and none of the first version's required ones.
 # Both READMEs carry the MIT line (D-181): one line with "MIT", "licence"/"license" and
@@ -204,10 +203,10 @@
 # ~50 MB; O2 ~8 MB. About 320 MB zipped in all: D-204's ask-before-upload threshold applies.
 #
 # ---------------------------------------------------------------------------------------------
-# The O1 re-run record (git; D-146 form; provenance.toml `item = "`15_openvt_package_tests.jl`"`)
+# The O1 re-run record (git; D-146 form; provenance.toml `item = ITEMS[:o1]`)
 # ---------------------------------------------------------------------------------------------
 # data/15/<name>/ (e.g. o1-2026-10-10/), small files only, no verdicts.tsv or deviations.tsv:
-#   provenance.toml   item "`15_openvt_package_tests.jl`", runner (in this directory), commit, threads, wall times,
+#   provenance.toml   item `ITEMS[:o1]`, runner (in this directory), commit, threads, wall times,
 #                     manifest_sha256 (as the other records; the package drops hostname/work)
 #   runs.tsv          case k seed mcs N saves: one row per re-run; for a, b, e, f equal to the
 #                     F3/F8 record's runs.tsv on these columns (D-204: the record reproduced)
@@ -264,7 +263,7 @@
 #   plane). Last cell starts with "not an author question", "not asked" or "resolved"; a row
 #   naming Q# says "our open question list".
 # - Units and seeds: the results README names "775", "156" (T(λ = 2) in MCS), R as the cell
-#   radius, CD = 10 px, and every case's seed range from the `15_openvt_f3_f8_tests.jl` meta.toml.
+#   radius, CD = 10 px, and every case's seed range from the F3/F8 record's meta.toml.
 # - Nothing private, nothing implying contact (all text files): the page test's list, plus
 #   the user name (except inside "PraneethMerugu/Potts.jl", the public repository), host names,
 #   absolute paths, the PC's address and "PI".
@@ -277,7 +276,7 @@ const DATA = joinpath(ROOT, "lib", "PottsModels", "reproductions", "data", "15")
 const SRC = joinpath(ROOT, "lib", "PottsModels", "src")
 const SPEC = joinpath(ROOT, "docs", "design", "research", "model-specs", "15_openvt_monolayer.md")
 # D-215 (9): the framework token is a parameter (no spaces): "Potts.jl" for the sequential
-# entry; "Potts.jl_checkerboard" later (`15_openvt_checkerboard_tests.jl`). Paths and file stems use it, never a literal.
+# entry; "Potts.jl_checkerboard" later (the checkerboard entry). Paths and file stems use it, never a literal.
 const PACKAGE_FW = "Potts.jl"
 const IMPL = joinpath("implementations", PACKAGE_FW)
 const RES = joinpath("results", PACKAGE_FW)
@@ -288,7 +287,7 @@ const CYCLE = 775
 const GRID = 39
 # D-173 save cadence
 const PACKAGE_CASES = ["a", "b", "e", "f"]
-# spec §4.0.1 cases run by `15_openvt_f3_f8_tests.jl` (control is ours)
+# spec §4.0.1 cases of the F3/F8 record (control is ours)
 const LAMBDAS = [1, 2, 3, 5]
 # Table S5
 const ITEMS = Dict(
@@ -299,7 +298,7 @@ const ITEMS = Dict(
 const BULK_ENV = "OPENVT_PACKAGE_BULK"
 const BULK = get(ENV, BULK_ENV, "")
 const O1_CASES = ["a", "b", "e", "f"]
-# re-run from the `15_openvt_f3_f8_tests.jl` seeds (D-204 a)
+# re-run from the F3/F8 record's seeds (D-204 a)
 const A3_CASES = ["a", "e"]
 # spec §4.0 A3; c and d too where O1 has them
 const SWEEP_CASE = Dict("c" => "beta", "d" => "gamma")
@@ -322,8 +321,8 @@ o1_case(zipname) = (
 )
 const O1_MEMBER = r"^([^/]+)/s(\d+)/potts_([a-z]+)_s(\d+)_(\d{6})\.csv$"
 # stem, seed, case, seed, MCS
-# the `15_openvt_package_tests.jl` re-run record keeps its own (historical) names: the D-215 post-processing
-# record (item `15_openvt_package_delivery_tests.jl`) maps them to the names above
+# the O1 re-run record keeps its own (historical) names: the D-215 post-processing
+# record (item `ITEMS[:o1g]`) maps them to the names above
 o1_zip_raw(case) = "Potts.jl_centroids_$(case).zip"
 const O1_MEMBER_RAW = r"^centroids/([a-z]+)/potts_([a-z]+)_s(\d+)_(\d{6})\.csv$"
 const O2_DIR_RAW = "Potts.jl_5T_MonolayerGrowth_1000_Data"
@@ -375,7 +374,7 @@ const REQUIRED = [
     (:O5, "final_snapshot_data", package_re(raw"^Monolayer/final_snapshot_data/{FW}_beta_([0-9.eE+-]+)_gamma_([0-9.eE+-]+)_(\d+)MCS\.csv$")),
     # D-215 (6): Table 1
     (:T1, "table1", package_re(raw"^Monolayer/{FW}_table1\.csv$")),
-    # D-211 (`15_openvt_manuscript_draft_tests.jl`): M's Figures 5, 7 and 8
+    # D-211: M's Figures 5, 7 and 8
     (:Fig5, "figures/fig5.png", r"^figures/fig5\.png$"),
     (:Fig7, "figures/fig7.png", r"^figures/fig7\.png$"),
     (:Fig8, "figures/fig8.png", r"^figures/fig8\.png$"),
@@ -414,7 +413,7 @@ package_f(s) = parse(Float64, strip(s))
 package_eq(a, b; rtol = 1.0e-12, atol = 1.0e-12) = (isnan(a) && isnan(b)) || (a == b) ||
     (isfinite(a) && isfinite(b) && abs(a - b) <= atol + rtol * max(abs(a), abs(b)))
 col(head, name) = findfirst(==(name), head)
-# records by ROADMAP item (`15_openvt_page_tests.jl` convention)
+# records by item ID (as `15_openvt_page_tests.jl` finds them)
 function package_records()
     recs = Dict{Symbol, String}()
     isdir(DATA) || return recs
@@ -665,7 +664,7 @@ function package_present(rels, key)
     re = only(x[3] for x in REQUIRED if x[1] == key)
     return filter(f -> occursin(re, f), rels)
 end
-# ---- D-211 (`15_openvt_manuscript_draft_tests.jl`): M's Figures 5, 7 and 8 and the Fig 8 colonies -------------------------------
+# ---- D-211: M's Figures 5, 7 and 8 and the Fig 8 colonies -------------------------------
 # figure labels a line names, "Figure 3/9" and "Figures 3 and 9" included
 function fig_labels(l)
     out = String[]
@@ -939,7 +938,7 @@ end
         end
 
         ts = package_timeseries()
-        rec = o1g_rec()                    # D-215: the post-processed manifests (item `15_openvt_package_delivery_tests.jl`)
+        rec = o1g_rec()                    # D-215: the post-processed manifests (item `ITEMS[:o1g]`)
         man = isempty(rec) ? Dict{Tuple{String, Int}, Vector{Any}}() : package_o1_manifest(rec)
         o1cases = o1_cases(man)
         # O1: one archive per case of the O1 record, by its D-215 name (bytes and members: 11b, 12)
@@ -1011,7 +1010,7 @@ end
         end
 
         # O3: header, ≥ 5 rows, 5T = MCS / 775 (or both non-finite for capped runs); byte copies of
-        # the `15_openvt_sweeps_tests.jl` record's tables
+        # the sweeps record's tables
         sw = haskey(RECS, :sweeps) ? package_rec(:sweeps) : ""
         for (key, par) in ((:O3b, "beta"), (:O3g, "gamma"))
             files = package_present(rels, key)
@@ -1028,7 +1027,7 @@ end
             end
         end
         # O5 (D-215 (4)): <FW>_beta_<β>_gamma_<γ>_<MCS>MCS.csv, one per colony of the sweeps
-        # record's f7/ (β = 0) and the `15_openvt_manuscript_draft_tests.jl` record's f8/ (γ = 0), numbers equal to the record
+        # record's f7/ (β = 0) and the Fig 8 β record's f8/ (γ = 0), numbers equal to the record
         # names' (as parsed), bytes equal to the record files; header, inhibited ∈ {0, 1}
         o5 = package_present(rels, :O5)
         src = o5_sources()
@@ -1306,7 +1305,7 @@ end
             end
             prov = package_has(rec, "provenance.toml") ? TOML.parsefile(joinpath(rec, "provenance.toml")) : Dict{String, Any}()
             @test get(prov, "item", "") == "P6.15l"
-            @test get(prov, "source", "") == basename(raw)                  # the `15_openvt_package_tests.jl` record it maps
+            @test get(prov, "source", "") == basename(raw)                  # the O1 re-run record it maps
             @test occursin(r"^[0-9a-f]{40}$", get(prov, "commit", ""))
             @test package_has(rec, basename(get(prov, "runner", "-")))
             @test !haskey(prov, "work")
@@ -1314,8 +1313,8 @@ end
             for (f, h) in (("o1_manifest.tsv", H_O1M), ("archives.tsv", H_ARCH), ("o2_manifest.tsv", H_O2M))
                 @test first(tsv_or_empty(joinpath(rec, f))) == h
             end
-            # O1: one row per `15_openvt_package_tests.jl` row, same case, seed, MCS, rows and codes; the file renamed to
-            # <stem>/s<seed>/<`15_openvt_package_tests.jl` base name>; bytes + 2 per line (",g" on the header and every
+            # O1: one row per O1 re-run record row, same case, seed, MCS, rows and codes; the file renamed to
+            # <stem>/s<seed>/<the O1 re-run record's base name>; bytes + 2 per line (",g" on the header and every
             # row); its own sha256; rows sorted by file
             old, new = package_o1_manifest(raw), package_o1_manifest(rec)
             @test Set(keys(old)) == Set(keys(new))
@@ -1336,7 +1335,7 @@ end
             _, rawm = tsv_or_empty(joinpath(rec, "o1_manifest.tsv"))
             files = [r["file"] for r in rawm if haskey(r, "file")]
             @test files == sort(files) && allunique(files)
-            # O2: k = 0…99, the `15_openvt_package_tests.jl` row k + 1's bytes (unchanged content), renamed
+            # O2: k = 0…99, the O1 re-run record's row k + 1's bytes (unchanged content), renamed
             _, o2a = tsv_or_empty(joinpath(raw, "o2_manifest.tsv"))
             _, o2b = tsv_or_empty(joinpath(rec, "o2_manifest.tsv"))
             byk = Dict(parse(Int, r["k"]) => r for r in o2a if haskey(r, "k"))
@@ -1494,7 +1493,7 @@ end
             src = haskey(RECS, rk) ? joinpath(package_rec(rk), f) : ""
             @test isfile(src) && length(files) == 1 && read(res(only(files))) == read(src)
         end
-        # the Fig 8 colonies: O5 at γ = 0 and β > 0, byte copies of the `15_openvt_manuscript_draft_tests.jl` record's f8/ (five;
+        # the Fig 8 colonies: O5 at γ = 0 and β > 0, byte copies of the Fig 8 β record's f8/ (five;
         # names per D-215 (4), checked in (7))
         f8src = Dict(k => v for (k, v) in o5_sources() if k[2] == 0.0 && k[1] > 0)
         o5b = [f for f in package_present(rels, :O5) if (k = o5_key(f); k !== nothing && haskey(f8src, k))]

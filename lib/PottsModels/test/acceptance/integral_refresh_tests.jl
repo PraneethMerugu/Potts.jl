@@ -3,7 +3,7 @@
 # integrals), `integral_pre_tests.jl` (`integral(Pre(w))` slots), D-110 (`integral_fold_hoist_tests.jl`: hoisted fold slots before
 # the refreshes), D-016/D-118 (fingerprint).
 #
-# The waste (found in the `integral_pre_tests.jl` review; measured on 432a0a74). `_phases_parts` in
+# The waste (measured on 432a0a74). `_phases_parts` in
 # src/codegen.jl refreshes, once any integral is read after the sweep, EVERY integral not
 # dirtied by the after block at the start of the after block: also those read only by the
 # before block or the temperature (fresh from the previous `end_mcs`, read before this

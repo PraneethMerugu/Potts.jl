@@ -5,7 +5,7 @@
 # F4 (the catch in `_compile_discrete` relabelling internal Potts errors) is not observable
 # without internals in this environment (MTKBase only: the catch wraps MTKBase's own
 # `mtkcompile`); it is left to other tests. Byte-identical code and fingerprints of the
-# published models, and build time / first MCS, are the coordinator's merge check (base and
+# published models, and build time / first MCS, are a merge check (base and
 # merged tree side by side); here only same-session fingerprint equalities are asserted.
 
 @testsetup module ComponentRejectionsSetup

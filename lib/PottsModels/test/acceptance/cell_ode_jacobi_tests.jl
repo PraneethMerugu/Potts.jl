@@ -1,5 +1,5 @@
 # cell ODEs that read another cell's ODE state are Jacobi
-# across cells (D-038, D-077 scratch rule, D-078; `boolean_network_tests.jl` review N3).
+# across cells (D-038, D-077 scratch rule, D-078).
 #
 # Semantics pinned here:
 #  1. Every cell's ODE rate reads every other cell's ODE state as it was at the start of the

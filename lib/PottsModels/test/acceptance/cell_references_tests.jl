@@ -5,7 +5,7 @@
 # D-209 (an energy may not read what a copy changes beyond ΔH), D-048 (oracles, negative
 # controls).
 #
-# ROADMAP: "R6: cell references (`sibling`, `members`, `root`, `partner`, `x[ref]`);
+# Scope: "R6: cell references (`sibling`, `members`, `root`, `partner`, `x[ref]`);
 # liveness per D-066 (alive ⇔ volume > 0; `birth` serial; `CellRef` references cleared at
 # allocation boundaries; exact self-check credits); claim widening, with checkerboard
 # validated statistically against sequential (D-065 Q7)."

@@ -1,7 +1,7 @@
 # a paper-size Graner–Glazier initial state (PRE 47, 2128:
 # one aggregate of about 1000 cells).
 #
-# Surface fixed by the coordinator:
+# The surface:
 #   graner_glazier_aggregate(n = 1000; seed = 1) -> (σ, kinds)
 #   one round aggregate of `n` cells of about the model's V₀ = 40 sites, randomly mixed dark (1)
 #   and light (2) in equal numbers (±1), surrounded by medium on a square lattice sized to fit;

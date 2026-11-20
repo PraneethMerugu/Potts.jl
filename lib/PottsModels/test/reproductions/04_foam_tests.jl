@@ -9,11 +9,11 @@
 # (deviations table), D-158 (pins), D-048 (oracles, negative controls).
 #
 # ── APIs this file names that do not exist on the base commit (d7fc5793) ──────────────────
-# - `foam_analysis_tests.jl` (feat/p6-4b2, test acceptance/foam_analysis_tests.jl), in
+# - The foam analysis (test acceptance/foam_analysis_tests.jl), in
 #   PottsModels.Analysis: stored_energy, side_counts, contact_changes, t1_events,
 #   central_moment, topology_moments, power_spectrum, spectral_exponent, mean_t1,
 #   yield_strain (and the existing cell_graph). Used exactly as that file pins them.
-# - `copy_direction_tests.jl` (feat/p6-4a1, test acceptance/copy_direction_tests.jl): the copy-scope
+# - The copy direction (test acceptance/copy_direction_tests.jl): the copy-scope
 #   `direction[1]` (x_target − x_source, minimum image on the periodic x axis),
 #   `position[target][2]` and `mcs` in a drive.
 #
@@ -169,7 +169,7 @@
 # BoundarySiteCPM at T → 0⁺ ≈ 1.4 ms/MCS without shear; ≈ 3.8 ms/MCS with the per-MCS
 # neighbour diff under boundary shear (reference shear model, stub analysis functions);
 # a reduced end-to-end FULL (stubs) averaged ≈ 4.2 ms/MCS. Foams ≈ 2 s (ordered), ≈ 4 s
-# (disordered). Not measured: the PC, and the real `copy_direction_tests.jl`/`foam_analysis_tests.jl` code (spec §8 guessed
+# (disordered). Not measured: the PC, and the real copy-direction and foam-analysis code (spec §8 guessed
 # 5 ms/MCS, ≈ 10 min per 10⁵ MCS). Paper MCS per block (× τ ≈ 3.3 for ours): κ stage
 # 33 × 5 × 4e4 = 6.6e6; V5 scan 4 × 24 × 5 × 4e4 = 1.9e7; V3/V4/V6 50 × 4e4 = 2e6; V2/V9
 # 1e5; spectral set 75 × 2^17 = 9.8e6; V14 100 × 2^15 = 3.3e6; V16 25 × 1e4 = 2.5e5.

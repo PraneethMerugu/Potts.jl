@@ -1,12 +1,11 @@
-# `hamiltonian_metadata_tests.jl` (ROADMAP Phase 6, step 0; D-159; research/mtk-native-plan.md §3.1, §4 route A4+,
-# §5, §6): the sweep's definition as an MTK-visible object. A public `Potts.hamiltonian(sys)`
+# Sources: D-159; research/mtk-native-plan.md §3.1, §4 route A4+, §5, §6.
+# the sweep's definition as an MTK-visible object. A public `Potts.hamiltonian(sys)`
 # gives the model's Hamiltonian as Symbolics expressions, and a typed metadata payload
 # `Potts.PottsSweepSpec`, read through MTK's own `getmetadata`/`hasmetadata`, tells generic
 # code that a system has a lattice sweep and what that sweep is (the Hamiltonian, drives,
 # constraints, temperature and proposal neighbourhood). This is the plan §5 sentence "an
 # `AbstractSystem` whose ... Hamiltonian [is a Symbolics expression] that ModelingToolkit's
 # generic tools can inspect". It is a description only: MTK never executes the sweep.
-# Decision: D-1xx (`hamiltonian_metadata_tests.jl`; the coordinator numbers it).
 #
 # The contract pinned here (public API only; storage, caching, the domain objects' types
 # and the payload's constructor are the implementer's):

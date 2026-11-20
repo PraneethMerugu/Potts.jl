@@ -1,4 +1,4 @@
-# parameter-setter loose ends (`computed_parameters_tests.jl` review).
+# parameter-setter loose ends (after the computed parameters).
 # the read-only computed-parameter rule (user OK 2026-10-20): a list naming
 # a computed parameter (β) is refused whole; lists of base parameters are one change.
 #

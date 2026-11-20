@@ -1,4 +1,4 @@
-# `initial_state_tests.jl`, part C of 3: the
+# Initial state, part C of 3: the
 # mean squared displacement and the modified Fürth fits (R16) in `PottsModels.Analysis`.
 # Part A, `initial_state_tests.jl`: the initial-state vocabulary. Part B,
 # `predicate_source_tests.jl`: the predicate-sourced PDE source.
@@ -8,7 +8,6 @@
 # (fits and MSD live in `PottsModels.Analysis`), D-200 / paper over code (the default fit is
 # the paper's procedure), D-048 (oracles and negative controls).
 #
-# ROADMAP (`initial_state_tests.jl` row): "R16 MSD / Fürth fits".
 #
 # =========================================================================================
 # THE PUBLIC API THESE TESTS EXPECT (brief §3.C; exported from `PottsModels.Analysis`)

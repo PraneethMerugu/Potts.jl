@@ -2,7 +2,7 @@
 # Graner–Glazier sorting analysis (spec 09 §9.0, PRE §II D1), as model-agnostic public
 # functions of Potts, documented on a manual page and used by the 09 tutorial.
 #
-# Surface fixed by the coordinator (D-139):
+# The surface (D-139):
 #
 #   Potts.boundary_lengths(prob, u = prob.u0; relation = nothing)
 #           -> AbstractDict{Tuple{Symbol, Symbol}, <:Real}                  (public in Potts)

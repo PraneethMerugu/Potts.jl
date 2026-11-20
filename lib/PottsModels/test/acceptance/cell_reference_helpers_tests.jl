@@ -1,8 +1,8 @@
 # E2 named pairs and the
 # E7 geometry helpers `centroid(c, k)`, `minimum_image`, `separation` and
-# `integral(x; over = cluster)` (D-243 amendment; the ROADMAP's `cluster_integral`).
-# Decisions and sources: D-231 "Scope" (`centroid(c, k)`, `separation`, `minimum_image` go
-# to `cell_reference_helpers_tests.jl` with their own tests), D-075 / api-synthesis §2.6–2.7 and §6.4 (the reference
+# `integral(x; over = cluster)` (D-243 amendment; planned as `cluster_integral`).
+# Decisions and sources: D-231 "Scope" (`centroid(c, k)`, `separation`, `minimum_image` get
+# their own tests, here), D-075 / api-synthesis §2.6–2.7 and §6.4 (the reference
 # vocabulary and the geometry helpers), D-066 item 5 (a dead referent reads as the medium),
 # D-032 / D-075 (`centroid` has no ΔH, so it is not read in energies until R7), D-188 (axes
 # are literal lattice axes), D-048 (hand oracles, independent oracles, negative controls),
@@ -10,9 +10,8 @@
 # (Π_CN−N, 14b Eq 10: r_CN − r_N = V_C (r_C − r_N) / (V_C + V_N), xy-projected; the
 # lamellipodium–nucleus distance, 14a Fig 12; 14c's base statistics over a cluster).
 #
-# ROADMAP: "`cell_reference_helpers_tests.jl` (D-231 follow-ups; alongside `initial_state_tests.jl`; E7 before the initial-state rulings) E2 named pairs; E6
-# docs for cell references; E7 helpers `centroid(c, k)`, `minimum_image`,
-# `cluster_integral` (api-synthesis §6.4), with their own tests."
+# Scope (D-231 follow-ups): E2 named pairs; E6 docs for cell references; E7 helpers
+# `centroid(c, k)`, `minimum_image`, `cluster_integral` (api-synthesis §6.4), with their own tests.
 #
 # =========================================================================================
 # THE PUBLIC API THESE TESTS EXPECT (names, signatures, semantics)

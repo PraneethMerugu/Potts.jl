@@ -1,4 +1,4 @@
-# `eden_splits_tests.jl` (ROADMAP Phase 6, step 3; research/initial-state-review.md §2 (§5.8a TST seeding),
+# Sources: research/initial-state-review.md §2 (§5.8a TST seeding),
 # §4; initial-state-vocabulary.md §5.4–§5.6; model-specs/01_merks.md §7.6; D-057, D-063,
 # D-091, D-093, D-138): the TST seeding vocabulary. `Eden` (seed-and-grow), a host-routine
 # `Splits` (not the lifecycle division routine), `RandomPoints(replace = true)`, and

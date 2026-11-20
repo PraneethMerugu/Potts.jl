@@ -2,11 +2,11 @@
 # on Metal (D-119).
 #
 # History: a fold whose body reads `time` cannot be hoisted to a model slot (`time` is not
-# in the model environment), so the ODE kernel computes it per cell. Found by the `cell_ode_jacobi_tests.jl` test
-# author (D-086): that kernel did not compile for Metal (`InvalidIRError`,
-# `jl_new_opaque_closure_jlcall`), so `Fold` was left out of `cell_ode_jacobi_tests.jl`'s Metal testset. A
+# in the model environment), so the ODE kernel computes it per cell. Found while testing the cell ODE
+# Jacobi path (D-086): that kernel did not compile for Metal (`InvalidIRError`,
+# `jl_new_opaque_closure_jlcall`), so `Fold` was left out of that Metal testset (`cell_ode_jacobi_tests.jl`). A
 # fold that reads `mcs` is hoisted and ran on Metal. Reproduced on monorepo 4e81e1eb (after
-# `gather_ode_allocations_tests.jl`/`ode_expansion_tests.jl`, D-103/D-104/D-107, removed the per-cell `rhs` closure): the `cell_ode_jacobi_tests.jl` fold
+# D-103/D-104/D-107 removed the per-cell `rhs` closure): the `cell_ode_jacobi_tests.jl` fold
 # fixture already runs on Metal and equals the CPU Float32 run (y = [1, 2, 4] → [6, 5, 3] →
 # [8, 9, 11] → [20, 19, 17] → [36, 37, 39] on both). This file is the regression guard.
 #

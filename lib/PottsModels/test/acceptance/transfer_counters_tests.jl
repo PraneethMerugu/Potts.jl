@@ -1,6 +1,6 @@
 # GPU host-transfer audit and instrumentation.
-# This file accepts `transfer_counters_tests.jl` itself (the counters, the current baseline and
-# the audit document), not `device_lifecycle_tests.jl`–v3: their zero-transfer targets are checked with them.
+# This file checks the counters, the current baseline and the audit document; the zero-transfer
+# targets of the later device work are checked with that work (`device_lifecycle_tests.jl`).
 #
 # The counters. Every device→host and host→device copy and every device synchronize that
 # the integrator makes (`init`, `step!`, saves, the lifecycle, phases, generated code) goes
@@ -15,10 +15,10 @@
 # stays 0 (a host `deepcopy` snapshot is not a transfer). The counters are `Int`, start at 0,
 # add under `merge` (ensemble totals) like the other fields of `PottsStats`.
 #
-# Expected counts on Metal. (a) and (b) are exact and are also the long-term targets of
-# v3 ((a) held at the first version: 1554d56, plus `frozen_kind_mask_tests.jl`, whose `refresh_frozen!`
+# Expected counts on Metal. (a) and (b) are exact and are also the long-term targets
+# ((a) held at the first version: 1554d56, plus the frozen-kind mask, whose `refresh_frozen!`
 # returns before synchronizing when nothing is frozen, as in every fixture here; (b) was
-# amended by `device_lifecycle_tests.jl` under D-089):
+# amended under D-089):
 #  (a) A quiet MCS of a gate model without a lifecycle (Graner–Glazier, Wortel Act, Merks
 #      with the explicit field solver): 0 syncs, 0 transfers. `CheckerboardCPM` reads its
 #      status back only at a save; the field step copies device to device.
@@ -26,16 +26,16 @@
 #      Akeeb, the division fixture after MCS 0): 0 syncs, 0 transfers, 0 bytes (D-089: the
 #      lifecycle is planned on the device, with no trigger read-back; D-035's 1 sync,
 #      1 transfer, 4 bytes event-count readback is withdrawn on GPU backends).
-# (c) and (d) are invariants that survive `device_lifecycle_tests.jl`/v2 (their exact current-path counts are an
-# ordinary regression test that those rows update):
+# (c) and (d) are invariants that survive the device lifecycle work (their exact current-path counts are an
+# ordinary regression test that it updates):
 #  (c) The division fixture (every cell divides at MCS 0) divides both cells at MCS 0, read
 #      at a `checkpoint` (a host read point: under D-089 `stats.lifecycle` is exact only at
 #      saves, the end of `solve!`, `checkpoint` and `current_state(integ)`, and the event MCS has no
-#      host traffic bound here; amended by `device_lifecycle_tests.jl`).
+#      host traffic bound here; amended under D-089).
 #  (d) An MCS running a `HostPhase` (host code over host copies) transfers: transfers ≥ 1.
 #  Counters never decrease from one MCS to the next; a save (`current_state(integ)`) is counted (lower
 #  bounds: it synchronizes and copies σ and every cell column down).
-# The audit document has a section per known starting point of the ROADMAP row.
+# The audit document has a section per known starting point of the transfer work.
 #
 # Today this fails with `FieldError: type PottsStats has no field transfers` (and `syncs`,
 # `transfer_bytes`).

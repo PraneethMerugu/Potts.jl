@@ -842,7 +842,7 @@ function sides_oracle(σ, n)
     return length.(S)
 end
 # ---------------------------------------------------------------------------------------------
-# SMOKE: the no-shear rows at full size (binding once `foam_analysis_tests.jl` lands)
+# SMOKE: the no-shear rows at full size (binding once the foam analysis lands)
 # ---------------------------------------------------------------------------------------------
 const FOAM_SMOKE = Dict{Symbol, Any}()
 # the two ordered smoke foams, built once per process: the ordered-foam item checks them, and

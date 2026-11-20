@@ -10,7 +10,7 @@
 #     Three gather shapes over a site neighbourhood (the DSL has no cell-neighbour gather;
 #     `neighbors(c)` is a roadmap idea, not vocabulary):
 #       - `XVol`: a sum of a non-ODE cell variable over `owner[n]` of a literal site's Moore
-#         neighbourhood (the ROADMAP's example);
+#         neighbourhood (the planned example);
 #       - `XCross`: a conditioned maximum of the cell's own ODE unknown over the other cells
 #         around a site (the cross-cell, Jacobi-scratch path of `cell_ode_jacobi_tests.jl`, D-078);
 #       - `XRing`: a `count` over a named relation (`@relations ring = VonNeumann(1)`)

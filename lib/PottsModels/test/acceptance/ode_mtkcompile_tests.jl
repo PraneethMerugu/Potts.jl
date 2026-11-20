@@ -1,5 +1,5 @@
-# `ode_mtkcompile_tests.jl` (ROADMAP Phase 6, step 0; D-159, D-162; research/mtk-native-plan.md §4 route A2,
-# §5, §6): a model's own cell- and model-scope ODEs go through ModelingToolkit's
+# Sources: D-159, D-162; research/mtk-native-plan.md §4 route A2, §5, §6.
+# a model's own cell- and model-scope ODEs go through ModelingToolkit's
 # `mtkcompile` before Potts lowers them. Potts builds one MTK `System` per scope from the
 # `@equations` of that scope (the per-cell template: one cell's equations, compiled once,
 # advanced for every cell by Potts' batched kernel as before), lets MTK's structural
@@ -7,7 +7,6 @@
 # equations. This makes plan §5's sentence true for ODEs: "The continuous ... parts of a
 # model are ModelingToolkit systems compiled by `mtkcompile`". Fields (lattice PDEs) are not
 # in this item; they stay Potts' `FieldStep`.
-# Decision: D-1xx (`ode_mtkcompile_tests.jl`; the coordinator numbers it).
 #
 # What is new for users: `@equations` accepts explicit algebraic equations `y ~ expr` for a
 # declared cell or model variable `y`. MTK eliminates `y` as an observed variable; it is no

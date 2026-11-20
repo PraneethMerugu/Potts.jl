@@ -1,7 +1,7 @@
 # the `InsertUntil` layout and the
 # code-definition analysis primitives behind Akeeb's metrics (spec 10 §5.3.3 O1–O8).
 #
-# Surface fixed by the coordinator:
+# The surface:
 #
 #   InsertUntil(kind; into, fraction = nothing, number = nothing, seed, region = nothing (the whole lattice),
 #               misses = :retry)                                          (Potts, src/layouts.jl)

@@ -1,6 +1,6 @@
-# `launch_fusion_tests.jl`: launch fusion, Metal codegen fixes and
+# Launch fusion, Metal codegen fixes and
 # no hidden GPU waits. Decisions: D-085 (counters), D-089/D-096 (device lifecycle), D-090
-# (Metal timings), D-092 (`column_copies_tests.jl`; its review filed the double sync of item 4), D-098 (Merks'
+# (Metal timings), D-092 (column copies; the double sync of item 4), D-098 (Merks'
 # 15 field substeps). Audit: `docs/design/research/gpu-host-transfer-audit.md` §2.1, §6 T3,
 # §8 (F1–F6, §8.2, §8.3, §8.4), §9–§11.
 #
@@ -9,7 +9,7 @@
 #      way and at the same sizes: Graner–Glazier 72, Wortel Act 100, Merks 100 with 15
 #      field substeps, OpenVT monolayer 100, Akeeb 99×60) makes 0 syncs, 0 transfers, 0 B
 #      AND 0 GPU waits. GPU waits are the calls of Metal.jl's `wait_cmdbuf!`, counted with
-#      the test-only wrapper of `test/transfer_counts.jl` (Metal.jl 1.10.0 bodies; the
+#      the test-only wrapper of `test/transfer_counts_tests.jl` (Metal.jl 1.10.0 bodies; the
 #      back-pressure of `wait_oldest_cleanup!`, the host running ahead of a busy GPU, is not
 #      a wait). Controls: the window is quiet (checkpoints around it show no lifecycle
 #      event) and the wrapper counts the waits of the checkpoint after the window.
@@ -35,7 +35,7 @@
 #        Akeeb 99×60        64 + one launch for the `V_target`/`clock` `CellPhase` and the
 #                           lifecycle (F1) + 1 re-centering. Floor = bound = 66.
 #      The floors keep the launch counter honest: every phase still needs its kernel.
-#  (4) `column_copies_tests.jl` review: an MCS with two consecutive adaptive-ODE host phases (a cell and a
+#  (4) An MCS with two consecutive adaptive-ODE host phases (a cell and a
 #      model ODE, both `Adaptive`) makes exactly one counted sync (today two; the second
 #      waits on an idle queue). Controls: a single adaptive phase makes one sync (the
 #      counter is live), and both ODEs follow their analytic solutions.
@@ -238,7 +238,7 @@ kernel_types(integ) = (typeof(integ.p), typeof(integ.state), typeof(integ.ctx), 
     a[i] = Float32(Float64(a[i]) * 1.000000001)
 end
 # ---------------------------------------------------------------------------------------
-# GPU-wait instrumentation, as in `test/transfer_counts.jl` and `device_lifecycle_tests.jl`:
+# GPU-wait instrumentation, as in `test/transfer_counts_tests.jl` and `device_lifecycle_tests.jl`:
 # `Metal.wait_cmdbuf!` gains a counter; the queue-depth back-pressure of
 # `wait_oldest_cleanup!` is excluded. The bodies copy Metal.jl 1.10.0's, hence the version
 # pin. Each file instruments at its own top level just before its testsets, so whichever is

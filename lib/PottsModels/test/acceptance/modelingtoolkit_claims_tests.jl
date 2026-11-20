@@ -1,10 +1,9 @@
-# `modelingtoolkit_claims_tests.jl` (ROADMAP Phase 6, step 0; D-159, D-160, D-162, D-164, D-165, D-170;
-# research/mtk-native-plan.md §5, §6, §9): every ModelingToolkit claim the paper and the
+# Sources: D-159, D-160, D-162, D-164, D-165, D-170; research/mtk-native-plan.md §5, §6, §9.
+# every ModelingToolkit claim the paper and the
 # docs make, each checked against the code, and the wording itself checked against the docs.
 # The point is that the claim can never drift from the code: if a sentence below stops being
 # true, this file fails; if the docs (or an in-repo paper source) say more than is true, or
 # stop saying what is approved, this file fails.
-# Decision: D-1xx (`modelingtoolkit_claims_tests.jl`; the coordinator numbers it).
 #
 # The claims and their checks (public API only; one testset per claim):
 #  C1. "Potts.jl is built on ModelingToolkit. Every Potts model is a ModelingToolkit
@@ -68,9 +67,9 @@
 #      (from D-159, D-162 and plan §5) and none matches the true sentences the docs use; each
 #      approved pattern matches its decision's sentence and not a weakened one.
 #
-# On 07757b51 (`hamiltonian_metadata_tests.jl`, bn, bo, bp merged; Mac): 821 pass and 8 fail of 829. Every C, N and
+# On 07757b51 (the Hamiltonian metadata, initialization and update-rule work merged; Mac): 821 pass and 8 fail of 829. Every C, N and
 # forbidden-wording check passes; the 8 failures are the W approved sentences, which no docs
-# page carries yet (there is no "Relation to ModelingToolkit" page: plan §6 `modelingtoolkit_claims_tests.jl`), and
+# page carries yet (there is no "Relation to ModelingToolkit" page: plan §6), and
 # writing it is the implementer's work. A stub page with the eight sentences passes 829/829;
 # adding "the fields are compiled by MTK" to it fails exactly that pattern. No check here may
 # be weakened to make the code pass (D-156).

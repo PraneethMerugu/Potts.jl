@@ -1,4 +1,4 @@
-# PottsModels.Analysis (`akeeb_analysis_tests.jl`, D-069): brute-force oracles for every definition, the tie
+# PottsModels.Analysis (D-069): brute-force oracles for every definition, the tie
 # order of the NumPy argsort port, and negative controls. The acceptance file
 # `acceptance/akeeb_analysis_tests.jl` holds the hand-derived SciPy cases.
 
@@ -138,7 +138,7 @@ end
         # An organ pipe [1:89; 89:-1:1] exhausts the introsort depth budget (2⌊log₂ 178⌋ = 14)
         # and reaches the heapsort fallback. Each value occurs twice (at k and 179 − k); below
         # are the values whose right copy comes first, cross-checked against an independent
-        # literal transcription of NumPy 1.21 `aquicksort_double` (`akeeb_analysis_tests.jl` dispatch). A stable
+        # literal transcription of NumPy 1.21 `aquicksort_double` (D-069). A stable
         # sort would put every left copy first.
         v = Float64.([1:89; 89:-1:1])
         t = AN._np_argsort(v)

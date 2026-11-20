@@ -23,7 +23,7 @@
 #     `field_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0)` it builds and runs, and in a
 #     configuration where they bind (c(0) = −0.05), `lower_bound = 0.0` keeps the field ≥ 0 while
 #     `ExplicitEuler()` does not. Bitwise equality with the pre-change (`@sweep`-placed)
-#     result is checked by the coordinator at merge, not checked here (digests would pin
+#     result is checked at merge, not checked here (digests would pin
 #     floating-point operand order, which shifts with unrelated codegen edits; D-070). The
 #     pre-change Merks fingerprint (recorded on 1092ada, Julia 1.12.6) no longer matches
 #     (D-075: checkpoints from before the change fail by design).

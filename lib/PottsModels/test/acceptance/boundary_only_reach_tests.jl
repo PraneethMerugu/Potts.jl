@@ -1,5 +1,5 @@
 # CheckerboardCPM's preflight counts only the relations
-# the copy step reads. Follow-up of `inline_gather_numbering_tests.jl` (D-132); deferred by D-134.
+# the copy step reads. Follows D-132; deferred by D-134.
 #
 # Amended under D-271. The lockless CheckerboardCPM no longer refuses a copy-step read beyond
 # the declared footprint: it widens its spacing instead. Sections 2 and 3 now check that it
@@ -30,7 +30,7 @@
 #    in the copy step but the compiler declares Footprint(read = 1); the preflight refuses.
 #    This must stay refused (named and inline), alone or next to a boundary read of R.
 #
-# Amended under D-209 (`gather_energy_tests.jl`). The edge fixtures originally folded `owner[n] == a`/`b`, a
+# Amended under D-209. The edge fixtures originally folded `owner[n] == a`/`b`, a
 # σ-dependent gather in an edge energy, which D-209 refuses at `mtkcompile` (its ΔH was
 # wrong), so they could no longer reach the preflight. A copy-step read beyond the declared
 # footprint remains possible with a valid form: a static gather in an edge energy that ΔH
@@ -43,7 +43,7 @@
 # Footprint(read = 1): the preflight must still refuse it, with the same message. The
 # initial edge energy is 0.1 · 8 · 3 = 2.4 (was 0.8). (Such a read is in fact safe under the
 # checkerboard, since nothing a copy writes is read; refusing it stays the conservative rule
-# of this file, not a correctness requirement. A finer rule is not part of `boundary_only_reach_tests.jl`.) Every
+# of this file, not a correctness requirement. A finer rule is out of scope.) Every
 # other fixture, value and digest is unchanged.
 #
 # Rule pinned here: the preflight reach is the largest radius of the contact relation and of

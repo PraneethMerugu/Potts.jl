@@ -1,4 +1,4 @@
-# `boundary_schedule_tests.jl` (ROADMAP Phase 6, step 3; api-synthesis §2.11, §2.12, §6.1 (D-035 row), §6.4; R5):
+# Sources: api-synthesis §2.11, §2.12, §6.1 (D-035 row), §6.4; R5.
 # `@boundary` per face and per site mask (a masked clamp applied after EVERY explicit field
 # substep), field phase placement and an explicit phase order. The phase order IS `@schedule`,
 # with the `step!` restructuring of api-synthesis §2.12 (the sweep and the lifecycle become
@@ -110,7 +110,7 @@
 #     with one host pass (an `Adaptive` cell ODE) makes the same per-MCS syncs/transfers/bytes
 #     under every schedule, exactly one sync per MCS (one round trip per firing).
 #
-# Not here (the coordinator checks at merge): the CPU gate is unchanged and the Metal A/B is
+# Not here (checked at merge): the CPU gate is unchanged and the Metal A/B is
 # ≤ 1.01 on the five gate models (their host phases are `nothing`).
 #
 # Today this fails with `UndefVarError: @boundary not defined` / `UndefVarError: @schedule

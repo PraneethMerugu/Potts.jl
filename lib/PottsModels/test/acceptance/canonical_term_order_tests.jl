@@ -26,7 +26,7 @@
 #     columns) follows the term order, and `_commutative_order!` does not normalise names, so
 #     fingerprints are NOT fully canonical today for models with several hoisted folds;
 #   - item 2: `CanonicalSum16`'s code changes between rounds (3 of 18 fail; two operands of a sum
-#     swap, as in the `ode_expansion_tests.jl` review's `14tt + y_1` → `y_1 + 14tt`); its states are equal;
+#     swap, as in `14tt + y_1` → `y_1 + 14tt`); its states are equal;
 #   - item 3 (two fresh Potts builds, different module ids and `hash(population)`): 48 of 96
 #     report entries differ: the code of 20 of 24 fixture × solver × T cases (all four
 #     fixtures) and 28 of 48 final states (by a few ulp); no fingerprint differs between them;
@@ -46,7 +46,7 @@
 #     fresh first depot in which it recompiles Potts (`Base.compilecache`), so the two load
 #     Potts builds with different module ids (checked, as is that `hash(population)`
 #     differs). Both report the generated code, fingerprint and final states of every
-#     fixture × solver × T × algorithm; they must be identical. Run by the coordinator with
+#     fixture × solver × T × algorithm; they must be identical. Run at merge with
 #       POTTS_CROSSBUILD=1 julia --project=lib/PottsModels/test -e 'using Test, Potts, PottsModels;
 #           include("lib/PottsModels/test/acceptance/canonical_term_order_tests.jl")'
 #     from the repository root (the worker processes take about 3.5 minutes, the whole file

@@ -4,8 +4,8 @@
 # T1 γ values.
 # Protocol: spec 15 §4.0.1 cases (a), (c) and (d), §3.5 and §4.3. Targets: §4.1 V1, V2, V2b, V3
 # and V3b (docs/design/research/model-specs/15_openvt_monolayer.md v3.3, which carries the
-# `15_openvt_sweeps_tests.jl` V-target audit). Every grid, seed, lattice, run count, rule and negative control below
-# is the test author's (`15_openvt_sweeps_tests.jl`; see the D-entry).
+# sweeps V-target audit). Every grid, seed, lattice, run count, rule and negative control below
+# is the test author's (see the D-entry).
 #
 # Reference numbers from G (54f375f, read only, never in git) are recorded below as constants.
 # They were computed with this file's rules (`mrule`, `g_reference`) on the PC
@@ -125,8 +125,7 @@
 #   `deviations.tsv` (D-154) and is then `@test_broken`. The controls must fail. Until the
 #   record exists this testset fails on its first check.
 # - FULL (POTTS_FULL_REPRODUCTION=true or REPRO=full, offline on the PC; D-146, D-157):
-#   reruns the protocol and requires every row and every control. Its cost (G9 profile,
-#   `15_openvt_sweeps_tests.jl`): at most 160 runs and about 11 M MCS·runs, ≈ 125 core-hours on one uncontended
+#   reruns the protocol and requires every row and every control. Its cost (G9 profile): at most 160 runs and about 11 M MCS·runs, ≈ 125 core-hours on one uncontended
 #   PC thread; the jobs of a stage run in parallel with `:greedy` scheduling (D-173).
 #
 # Record schema (tab-separated, one header line):

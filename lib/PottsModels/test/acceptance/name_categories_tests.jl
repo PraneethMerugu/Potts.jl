@@ -165,7 +165,7 @@ end
 
         @testset "through @extend: base category vs extension category" begin
             ext(stmts, words...) = rejection(() -> category_model(stmts), words...)
-            # the `api_defects_tests.jl` review repro: base parameter, extension cell variable
+            # the API-defects repro: base parameter, extension cell variable
             @test ext(
                 quote
                     @extend CategoryBase(); @variables gain(cell) = 5.0

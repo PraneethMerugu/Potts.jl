@@ -1,4 +1,4 @@
-# `initial_state_tests.jl`, part A of 3: the
+# Initial state, part A of 3: the
 # initial-state vocabulary (R2). `Interior`, `Fill`, `Objects`, `Group`, `set_column!`, and
 # `layout` emitting `cluster` and per-cell columns.
 # Part B, `predicate_source_tests.jl`: the predicate-sourced PDE source (R5). Part C,
@@ -12,7 +12,7 @@
 # classes are not layer kinds), D-233 (E1: kind-conditional expression defaults, already
 # merged), D-048 (oracles and negative controls).
 #
-# ROADMAP (`initial_state_tests.jl` row): "R2 `Plane`, `Spheres`; … Initial-state vocabulary … `Fill`,
+# Scope: "R2 `Plane`, `Spheres`; … Initial-state vocabulary … `Fill`,
 # `Objects(Sphere…)` and `Group` (with `set_column!`) in place of `Plane`/`Spheres`; amends
 # D-075 §3.3, user-approved 2026-10-01 (D-087); the docs show `Plane`/`Spheres` recipes."
 #
