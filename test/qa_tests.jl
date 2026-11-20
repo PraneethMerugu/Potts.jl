@@ -558,3 +558,10 @@ end
         qa_jet_control()
     end
 end
+
+# the check-bounds lane: an out-of-bounds read under `@inbounds` is caught (D-298)
+@testitem "QA: check-bounds lane control" setup = [QaSetup] tags = [:potts, :qa] begin
+    @testset "QA: check-bounds lane control" begin
+        qa_check_bounds_control()
+    end
+end

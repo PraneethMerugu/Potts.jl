@@ -194,6 +194,25 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
         return nothing
     end
 
+    # `@inbounds` hides an out-of-bounds read unless Julia runs with `--check-bounds=yes`
+    _qa_read_past_end(v::Vector{Int}) = @inbounds v[length(v) + 1]
+
+    """
+        qa_check_bounds_control()
+
+    The negative control of the check-bounds lanes. Under `--check-bounds=yes`, a read one past
+    the end of a vector inside `@inbounds` throws a `BoundsError`. With the environment variable
+    `POTTS_CHECK_BOUNDS_LANE=true` (set by the CI lanes), the flag itself must be on, so a lane
+    that lost it fails. Without the flag the read is not made (it is undefined behavior).
+    """
+    function qa_check_bounds_control()
+        Test = Base.require(_QA_TEST)
+        on = Base.JLOptions().check_bounds == 1
+        get(ENV, "POTTS_CHECK_BOUNDS_LANE", "false") == "true" && Test.@test on
+        on && Test.@test_throws BoundsError _qa_read_past_end([1, 2, 3])
+        return on
+    end
+
     """
         qa_explicit_imports(mod; nonpublic_explicit = (), nonpublic_qualified = (),
                             skip_owners = false)

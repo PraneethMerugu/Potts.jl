@@ -162,3 +162,10 @@ end
         qa_jet_package(CorePotts)
     end
 end
+
+# the check-bounds lane: an out-of-bounds read under `@inbounds` is caught (D-298)
+@testitem "QA: check-bounds lane control (CorePotts)" setup = [CP_qa] tags = [:corepotts, :qa] begin
+    @testset "QA: check-bounds lane control (CorePotts)" begin
+        qa_check_bounds_control()
+    end
+end
