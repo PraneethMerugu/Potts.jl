@@ -50,7 +50,7 @@ only when a choice depends on the hardware (a Float64 solver group, an explicit 
 problem); the type device code gets by default is [`default_float`](@ref).
 """
 function supports(backend, ::Type{T}) where {T}
-    return ishost(backend) || T === Float32 || (T === Float64 && KernelAbstractions.supports_float64(backend))
+    return ishost(backend) || T <: Float32 || (T <: Float64 && KernelAbstractions.supports_float64(backend))
 end
 
 """

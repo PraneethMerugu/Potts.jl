@@ -61,7 +61,7 @@
 """
     supports(exec, ::Type{S})
 
-Can executor `exec` run number type `S` on its device? Default: `S === Float32` only; an
+Can executor `exec` run number type `S` on its device? Default: `S <: Float32` only; an
 executor adds methods for the types it supports (contract item 6).
 """
-supports(exec, ::Type{S}) where {S} = S === Float32
+supports(exec, ::Type{S}) where {S} = S <: Float32

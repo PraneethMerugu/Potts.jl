@@ -57,8 +57,8 @@ function _generic_bodies()
         _be_status_body!, _bdf2_q_body!)
 end
 function _register_float64_store!(backend, bufs)
-    (Exec.ishost(backend) || Exec.default_float(backend) === Float64) && return nothing
-    any(b -> any(a -> eltype(a) <: AbstractFloat && value_type(eltype(a)) === Float64, b), bufs) || return nothing
+    (Exec.ishost(backend) || Exec.default_float(backend) <: Float64) && return nothing
+    any(b -> any(a -> eltype(a) <: AbstractFloat && value_type(eltype(a)) <: Float64, b), bufs) || return nothing
     # keyed on a Float64 device array in the signature: an instance of these
     # bodies over Float32 arrays that reaches a Float64 scalar is still flagged
     foreach(f -> Exec.register_float64!(string(typeof(f)), Exec.FLOAT64_ARRAY), _generic_bodies())

@@ -559,9 +559,9 @@ bind_cache(alg, g, st, p; kw...) = alg_cache(alg, g, st)
 # storage)
 function _implicit_eltype(u, key, alg, V)
     T = eltype(u)
-    T === Float16 && V in (Float32, Float64) && return V
+    T <: Float16 && V in (Float32, Float64) && return V
     T in (Float32, Float64) && return T
-    T === Float16 && throw(ArgumentError(string(_algname(alg), ": the field `", key, "` holds Float16 and the problem's ",
+    T <: Float16 && throw(ArgumentError(string(_algname(alg), ": the field `", key, "` holds Float16 and the problem's ",
         "value type is Float16; an implicit solve runs in Float32 or Float64: give the problem T = Float32 and the ",
         "field `lattice_storage = Float16` (it is then solved in Float32, each update rounded to Float16), or step it ",
         "with `ExplicitEuler`")))
@@ -745,7 +745,7 @@ function _alias_store(st::FieldStore, s::Program, prog::Program; own = Dict{Stri
         elseif startswith(f.key, "res:")
             u = st.bufs[fieldid(s, f.key[5:end])][1]
             # (a widened residual of a Float16 field, `fuse_residual(…; widen16)`: the value type)
-            E = eltype(u) === Float16 && f.storage != F16 && V !== nothing ? V : eltype(u)
+            E = eltype(u) <: Float16 && f.storage != F16 && V !== nothing ? V : eltype(u)
             bufs[i] = Any[_zeros(st.backend, E, length(u))]
         else
             throw(ArgumentError("the implicit program's field `$(f.key)` has no array in the group's store"))
@@ -803,7 +803,7 @@ function bind_cache(
     if jp !== nothing
         for f in jp.fields
             startswith(f.key, "jac:") || continue
-            own[f.key] = Any[_zeros(st.backend, juliatype(f.storage) === UInt8 ? UInt8 : _eltype(f.storage, withvaltype(eltype(st.bufs[fieldid(s, keys[1])][1]), V), f.fixed), nsites(jp, f.levels[1]))]
+            own[f.key] = Any[_zeros(st.backend, juliatype(f.storage) <: UInt8 ? UInt8 : _eltype(f.storage, withvaltype(eltype(st.bufs[fieldid(s, keys[1])][1]), V), f.fixed), nsites(jp, f.levels[1]))]
         end
         jst = _alias_store(st, s, jp; own, byid = false)
         jids = collect(eachindex(jp.kernels))
@@ -1427,7 +1427,7 @@ function _newton_check!(r::ImplicitRow, backend, word, dst, un, x, it, last, win
         Exec.launch!(backend, _be_norms_body!, nb, (r.part, dst, un, x, r.smask, r.v, nothing, nothing, r.mask, n, gate))
     end
     # (a field stored in Float16: its rounding at each update is part of the floor)
-    fl = eltype(dst) === Float16 ? T(10 * eps(T) + 2 * eps(Float16)) : T(10 * eps(T))
+    fl = eltype(dst) <: Float16 ? T(10 * eps(T) + 2 * eps(Float16)) : T(10 * eps(T))
     Exec.launch!(
         backend, _be_newton_body!, 1, (
             word, r.part, Int32(nb), r.hist, Int32(it), last, T(NEWTON_EPS),

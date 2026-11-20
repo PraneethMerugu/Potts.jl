@@ -379,7 +379,7 @@ function FieldSolver(
     s = semantic(p)
     # a Float64 solver on a device whose default float is Float32 (an explicit `solver_type`, or
     # `:auto` in the floor regime): its kernels are registered (D-157 carve-out)
-    declared = T === Float64 && Exec.default_float(exec) !== Float64
+    declared = T <: Float64 && !(Exec.default_float(exec) <: Float64)
     # (a solver launch passes the linear site index: a hexagonal lattice's diagonal reads would
     # otherwise select the Cartesian index form)
     o = ishex(op) ? CompileOptions(; T, declared, index = :linear) : CompileOptions(; T, declared)
@@ -483,7 +483,7 @@ function lowered_type(exec, S, role; op = nothing)
             "lowered: ", join(LOWERED_TYPES, ", "),
         S <: AbstractFloat ? "" : " (a Dual or BigFloat implicit solve is not supported yet)"
     )
-    S === Float32 || supports(exec, S) ||
+    S <: Float32 || supports(exec, S) ||
         bad("number type ", S, " (", role, ") is not supported by this executor ",
             "(supports(exec, ", S, ") is false: the device has no ", S, "); use Float32")
     return S
@@ -499,7 +499,7 @@ ends `:floor` and the sentinel names it. A type is checked by `lowered_type`.
 """
 function resolve_solver_T(exec, op::CellOperator, state::Type, solver_type)
     solver_type === :auto || return lowered_type(exec, solver_type, "solver_type"; op)
-    state === Float32 && floor_regime(op) && supports(exec, Float64) && return Float64
+    state <: Float32 && floor_regime(op) && supports(exec, Float64) && return Float64
     return state
 end
 

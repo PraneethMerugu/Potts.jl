@@ -147,17 +147,17 @@ end
 # plans on the host for every backend, such as `PottsProblem`, sets `o.declared` itself)
 function _options(o::CompileOptions, ::Type{V}, backend; clock::Int = o.clock, C::Type = V, s = nothing) where {V}
     f64 = s !== nothing && any(f -> f.fixed && f.storage == F64, s.fields)
-    wide = C === Float64 || f64
+    wide = C <: Float64 || f64
     ok = _float64_ok(C, backend) || (f64 && Exec.supports(backend, Float64))
     return CompileOptions(; T = C, I = o.I, float64_ok = o.float64_ok && ok, debug = o.debug,
         index = o.index, lanes = :state, clock, S = C === V ? nothing : V,
-        declared = o.declared || (wide && Exec.default_float(backend) !== Float64 && !(V === Float64 && C === Float64 && !f64)))
+        declared = o.declared || (wide && !(Exec.default_float(backend) <: Float64) && !(V <: Float64 && C <: Float64 && !f64)))
 end
 
 # Float64 in device code: allowed on the host, and for a Float64 problem on hardware that has
 # it (`Exec.supports`); a Float32 problem on a device keeps the D-157 double scan
 function _float64_ok(::Type{V}, backend) where {V}
-    return Exec.default_float(backend) === Float64 || (V === Float64 && Exec.supports(backend, Float64))
+    return Exec.default_float(backend) <: Float64 || (V <: Float64 && Exec.supports(backend, Float64))
 end
 
 # the init and step plans of value type `V` (planned and emitted once per family; the ODE

@@ -401,7 +401,7 @@ function _bind_coupled(
     )
     K = mapreduce(r -> eltype(r.resarr), promote_type, rows)
     for r in rows
-        eltype(r.bufs[1]) === Float16 && throw(ArgumentError(string(_algname(alg), ": the fields ", join(("`$k`" for k in keys), ", "),
+        eltype(r.bufs[1]) <: Float16 && throw(ArgumentError(string(_algname(alg), ": the fields ", join(("`$k`" for k in keys), ", "),
             " are solved together (their rows read one another), and the field `", r.key, "` is stored in Float16, whose ",
             "rounding is too coarse for the coupled solve's difference of the residual; give it `lattice_storage = Float32`")))
     end
@@ -532,7 +532,7 @@ function (cr::CoupledRow)(o::_CsOp{:update})
     if auto
         T = eltype(r.part)
         Exec.launch!(backend, _be_norms_body!, nb, (r.part, dst, r.bufs[par], δ, nothing, nothing, nothing, nothing, r.mask, n, gate))
-        fl = eltype(dst) === Float16 ? T(10 * eps(T) + 2 * eps(Float16)) : T(10 * eps(T))
+        fl = eltype(dst) <: Float16 ? T(10 * eps(T) + 2 * eps(Float16)) : T(10 * eps(T))
         Exec.launch!(
             backend, _be_newton_body!, 1, (
                 word, r.part, Int32(nb), r.hist, Int32(it), hits, T(NEWTON_EPS), fl, window,

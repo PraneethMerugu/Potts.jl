@@ -1027,7 +1027,7 @@ function check_backend_float64(prog, alg, backend, V::Type; fields = String[])
     fs = join(("`$k`" for k in fields), ", ")
     head = string("field", length(fields) == 1 ? " " : "s ", fs, ": ")
     tail = " needs Float64 on the device, and this backend has no Float64 (`supports_float64` is false: Metal)"
-    compute_type(alg, V) === Float64 && value_type(V) !== Float64 && throw(
+    compute_type(alg, V) <: Float64 && !(value_type(V) <: Float64) && throw(
         ArgumentError(
             string(
                 head, _algtext(alg),
