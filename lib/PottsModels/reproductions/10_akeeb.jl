@@ -513,32 +513,20 @@ J = par(:J)
 parameters_md = """
 | Symbol | Value | Units | Meaning | Source | Status |
 |---|---|---|---|---|---|
-| lattice | 500 × 300, x periodic, y closed | sites (1 site ≈ 2.5 µm) | domain | p.4, \
-Table 1; X:14, X:18–19 | stated (y wall: code only) |
+| lattice | 500 × 300, x periodic, y closed | sites (1 site ≈ 2.5 µm) | domain | p.4, Table 1; X:14, X:18–19 | stated (y wall: code only) |
 | T | $(par(:T)) | energy | temperature | Table 1; X:16 | stated |
-| `J_ML`, `J_MF` | $(J[1, 2]), $(J[1, 3]) | energy | medium–leader, medium–follower | \
-Table 1; X:53, X:56 | stated |
-| `J_LL`, `J_FF` | $(J[2, 2]), $(J[3, 3]) | energy | leader–leader, follower–follower | \
-Table 1; X:57, X:55 | stated |
-| J_LF | $(J[2, 3]) (default); scanned over −5…5 | energy | leader–follower adhesion | \
-p.6, Table 1; S:37 | stated |
+| `J_ML`, `J_MF` | $(J[1, 2]), $(J[1, 3]) | energy | medium–leader, medium–follower | Table 1; X:53, X:56 | stated |
+| `J_LL`, `J_FF` | $(J[2, 2]), $(J[3, 3]) | energy | leader–leader, follower–follower | Table 1; X:57, X:55 | stated |
+| J_LF | $(J[2, 3]) (default); scanned over −5…5 | energy | leader–follower adhesion | p.6, Table 1; S:37 | stated |
 | λ_V | $(par(:λᵥ)) | energy / site² | volume constraint | p.6, Table 1; S:88 | stated |
 | V_T (start) | 10 | sites | target volume | p.6, Table 1; S:87 | stated |
-| λ (`μ`) | $(par(:μ)) (default); scanned over 0, 3, …, 30 | energy / site | leader \
-chemotaxis | p.6, Table 1; S:25, S:38 | stated; default 24 = the reference sample \
-(paper-vs-code item A5) |
-| f_grow | 0.015 | sites / MCS | follower target growth while < V_max | Table 1; S:20, \
-S:111–115 | rate stated; cap and "all followers" code only |
-| V_max | $(par(:V_max)) | sites | growth cap and division size | p.6; S:113, S:143 | \
-stated |
-| clock gate | > $(par(:clock_min)) + $(par(:clock_spread)) U, fresh U each MCS | MCS | \
-division timer | S:143–146 (paper: U(25, 125), p.6) | code (D3) |
-| PP | 0.5 (default); scanned over 0…1 | — | P(follower has a clock), per follower | p.6, \
-Table 1; S:131 | stated (paper: a fixed-size subset, D4) |
-| leaders | 25 % of the counted inventory | — | one-site leaders inserted into followers \
-| p.5; S:64–75 | code (D1, MD-1) |
-| duration | 701 sweeps, measured as "MCS 700" | MCS | — | p.4, p.7; X:15 | stated; \
-mapping from the data (spec 10 §5.3.2) |
+| λ (`μ`) | $(par(:μ)) (default); scanned over 0, 3, …, 30 | energy / site | leader chemotaxis | p.6, Table 1; S:25, S:38 | stated; default 24 = the reference sample (paper-vs-code item A5) |
+| f_grow | 0.015 | sites / MCS | follower target growth while < V_max | Table 1; S:20, S:111–115 | rate stated; cap and "all followers" code only |
+| V_max | $(par(:V_max)) | sites | growth cap and division size | p.6; S:113, S:143 | stated |
+| clock gate | > $(par(:clock_min)) + $(par(:clock_spread)) U, fresh U each MCS | MCS | division timer | S:143–146 (paper: U(25, 125), p.6) | code (D3) |
+| PP | 0.5 (default); scanned over 0…1 | — | P(follower has a clock), per follower | p.6, Table 1; S:131 | stated (paper: a fixed-size subset, D4) |
+| leaders | 25 % of the counted inventory | — | one-site leaders inserted into followers | p.5; S:64–75 | code (D1, MD-1) |
+| duration | 701 sweeps, measured as "MCS 700" | MCS | — | p.4, p.7; X:15 | stated; mapping from the data (spec 10 §5.3.2) |
 """
 Markdown.parse(parameters_md)
 

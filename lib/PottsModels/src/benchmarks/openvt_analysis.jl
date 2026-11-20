@@ -309,19 +309,14 @@ Write `data` as the OpenVT benchmark file `format` (spec 15 §3.1) to `dest`, a 
 |:--|:--|:--|
 | `:O1` | `(; x, y, i, n)`: centroid, inhibition code in `0:3`, neighbor count | `x,y,i,n` |
 | `:O2` | `(; x, y, r, f, a)` | `x,y,r,f,a` |
-| `:O3` | `(; beta, mcs)` or `(; gamma, mcs)`; `mcs = NaN` for a run that never reached \
-10⁴ cells | `beta,Time to 10k (MCS),Time to 10k (5T)`; the 5T column is `mcs/775` |
-| `:O4` | `(; t, widths)`, `widths[k, rep]` in cell diameters | \
-`Normalized time (T),Tissue width rep1 (CD),…,Mean Tissue width (CD),STD Tissue width (CD)`;
+| `:O3` | `(; beta, mcs)` or `(; gamma, mcs)`; `mcs = NaN` for a run that never reached 10⁴ cells | `beta,Time to 10k (MCS),Time to 10k (5T)`; the 5T column is `mcs/775` |
+| `:O4` | `(; t, widths)`, `widths[k, rep]` in cell diameters | `Normalized time (T),Tissue width rep1 (CD),…,Mean Tissue width (CD),STD Tissue width (CD)`;
 the mean and the population SD (divisor = replicates) of each row,
         from sequential sums |
-| `:O5` | `(; x_pos, y_pos, radius_i, inhibited)`, `inhibited` 0 or 1 | \
-`x_pos,y_pos,radius_i,inhibited` |
-| `:O6` | `(; t, metrics)`, `metrics[k]` from [`openvt_metrics`](@ref) | \
-`t,N,r,A,C,w,g,C_rel,w_rel`; a row is `t` as `run_metrics.sh` prints it (`%.15g`), `,`,
+| `:O5` | `(; x_pos, y_pos, radius_i, inhibited)`, `inhibited` 0 or 1 | `x_pos,y_pos,radius_i,inhibited` |
+| `:O6` | `(; t, metrics)`, `metrics[k]` from [`openvt_metrics`](@ref) | `t,N,r,A,C,w,g,C_rel,w_rel`; a row is `t` as `run_metrics.sh` prints it (`%.15g`), `,`,
         and [`openvt_metrics_line`](@ref) |
-| `:O6_neighbors` | `(; n, p)` from [`openvt_neighbor_histogram`](@ref) | `n,p`; `p` as \
-`metrics.cpp` prints it |
+| `:O6_neighbors` | `(; n, p)` from [`openvt_neighbor_histogram`](@ref) | `n,p`; `p` as `metrics.cpp` prints it |
 
 The O4 mean and SD are summed left to right; NumPy sums pairwise, so with 8 or more
 replicates they can differ from `numpy.mean`/`numpy.std` in the last bit. The O6 values have

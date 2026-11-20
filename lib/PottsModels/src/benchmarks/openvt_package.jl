@@ -879,13 +879,10 @@ function _openvt_pkg_impl_readme(recs, prov, scripts, facts)
 
     | Path | What it is |
     |---|---|
-    | `src/openvt_reference.jl` | `OpenVTReferenceMonolayer`, the monolayer model (Table \
-        S1), and `openvt_reference_state`, the one-cell disc start |
-    | `src/openvt_chain.jl` | `OpenVTChain`, the 1D chain model of the mechanical \
-        calibration (Figure 2, Table S5), with `openvt_chain` and `openvt_release` |
+    | `src/openvt_reference.jl` | `OpenVTReferenceMonolayer`, the monolayer model (Table S1), and `openvt_reference_state`, the one-cell disc start |
+    | `src/openvt_chain.jl` | `OpenVTChain`, the 1D chain model of the mechanical calibration (Figure 2, Table S5), with `openvt_chain` and `openvt_release` |
     | `parameters.csv` | every parameter and Potts.jl setting used, with units |
-    | `scripts/<record>/` | the runner, plotting and video scripts of each run record, \
-        unchanged |
+    | `scripts/<record>/` | the runner, plotting and video scripts of each run record, unchanged |
 
     Both model files are copies of `lib/PottsModels/src/` in the Potts.jl repository, where
     they are part of the `PottsModels` package (`using PottsModels`).
@@ -1614,31 +1611,14 @@ function _openvt_pkg_results_readme(recs, prov, meta, facts, o1)
 
         | Path | Content | Columns (units) |
         |---|---|---|
-        | `closeup.png` | Figure 1 panel without its banner: case ($(cl.case)), \
-        run $(cl.run) (seed $(cl.seed)) at the stop (MCS $(cl.mcs), N = $(cl.N)), \
-        the $(w) × $(w)-site block on the colony rim, moved inward along the 45° \
-        ray from the colony centroid to $(round(Int, 100 * cl.tissue)) % \
-        tissue ($(cl.cells) cells, $(cl.medium) medium sites) | PNG |
-        | `Relaxation/11cells/width.csv` | 11-cell chain width, λ = 2, mean and SD over \
-        the runs | `Normalized time (T),Mean Tissue width (CD),STD Tissue width (CD)` |
-        | `Relaxation/11+10cells/width.csv`, `inner_width.csv` | 11+10-cell chain: total \
-        and inner (11-cell) width, λ = 2, T(2) with no refit | as above \
-        (`Mean inner width (CD)`, `STD inner width (CD)`) |
-        | `Relaxation/lambda_scan/11cells_lambda<λ>_width.csv` | 11-cell chain width for \
-        λ = $(join(_OPENVT_PKG_LAMBDAS, ", ")) (Table S5's runs) | as above |
-        | `Relaxation/table_S5.csv` | Table S5: T(λ) (first crossing of 90 % of the \
-        plateau by the mean width) and the MSE against the spring–dashpot reference \
-        on t ≥ 0 | `lambda` (1), `T (MCS)`, `MSE` (CD²) |
-        | `Monolayer/metrics/<case>/measurements_s<seed>.csv` | Figure 9 (metrics): per \
-        run and save (every $(_OPENVT_PKG_GRID) MCS and at the stop): cell count and the \
-        `metrics.cpp` values of the concave-hull boundary | `MCS`, `t` (cycles), `N` \
-        (cells), `R` (R, mean radius), `A` (R², area), `C` (R, perimeter), `w` (R, radius \
-        spread), `g` (fraction of growing cells) |
-        | `Monolayer/metrics/measurements_<case>_mean.csv` | the arithmetic mean over the \
-        case's runs (schema "Data Collection") at the saves every run reached; NaN \
-        values skipped | as above, plus `runs` (count) |
-        | `Monolayer/metrics/neighbors_<case>.csv` | final neighbour-number histogram \
-        pooled over the case's runs | `n` (neighbours), `p` (% of cells) |
+        | `closeup.png` | Figure 1 panel without its banner: case ($(cl.case)), run $(cl.run) (seed $(cl.seed)) at the stop (MCS $(cl.mcs), N = $(cl.N)), the $(w) × $(w)-site block on the colony rim, moved inward along the 45° ray from the colony centroid to $(round(Int, 100 * cl.tissue)) % tissue ($(cl.cells) cells, $(cl.medium) medium sites) | PNG |
+        | `Relaxation/11cells/width.csv` | 11-cell chain width, λ = 2, mean and SD over the runs | `Normalized time (T),Mean Tissue width (CD),STD Tissue width (CD)` |
+        | `Relaxation/11+10cells/width.csv`, `inner_width.csv` | 11+10-cell chain: total and inner (11-cell) width, λ = 2, T(2) with no refit | as above (`Mean inner width (CD)`, `STD inner width (CD)`) |
+        | `Relaxation/lambda_scan/11cells_lambda<λ>_width.csv` | 11-cell chain width for λ = $(join(_OPENVT_PKG_LAMBDAS, ", ")) (Table S5's runs) | as above |
+        | `Relaxation/table_S5.csv` | Table S5: T(λ) (first crossing of 90 % of the plateau by the mean width) and the MSE against the spring–dashpot reference on t ≥ 0 | `lambda` (1), `T (MCS)`, `MSE` (CD²) |
+        | `Monolayer/metrics/<case>/measurements_s<seed>.csv` | Figure 9 (metrics): per run and save (every $(_OPENVT_PKG_GRID) MCS and at the stop): cell count and the `metrics.cpp` values of the concave-hull boundary | `MCS`, `t` (cycles), `N` (cells), `R` (R, mean radius), `A` (R², area), `C` (R, perimeter), `w` (R, radius spread), `g` (fraction of growing cells) |
+        | `Monolayer/metrics/measurements_<case>_mean.csv` | the arithmetic mean over the case's runs (schema "Data Collection") at the saves every run reached; NaN values skipped | as above, plus `runs` (count) |
+        | `Monolayer/metrics/neighbors_<case>.csv` | final neighbour-number histogram pooled over the case's runs | `n` (neighbours), `p` (% of cells) |
         """
     )
     o1cases = join(("($c)" for c in o1.cases), ", ")
@@ -1661,50 +1641,23 @@ function _openvt_pkg_results_readme(recs, prov, meta, facts, o1)
     end
     print(
         io, """
-        | `Monolayer/<stem>.zip` | O1 per-cell time series, one zip per case: $(o1zips). \
-        One file per run and save (MCS 0, every $(_OPENVT_PKG_GRID) MCS and the stop; \
-        $(nfiles) files in all), `<stem>/s<seed>/potts_<case>_s<seed>_<MCS:06d>.csv`, one \
-        row per live cell. Unzipped in `Monolayer/`, the files land in \
-        `Monolayer/<stem>/s<seed>/` | `x`, `y` (R, from the lattice centre), `i` \
-        (inhibition code: 0 growing, 1 type 1, 2 type 2, 3 both), `n` (number of neighbour \
-        cells), `g` (1 if i = 0, else 0; the column `metrics.cpp` reads) |
-        | `Monolayer/$(_OPENVT_PKG_O1_MANIFEST)` | every O1 file: its zip, name, row \
-        count, size and sha256 | `archive`, `file`, `rows` (cells), `bytes`, `sha256` |
-        | `Monolayer/metrics/<case>/inhibition_s<seed>.csv` | A3 for cases $(a3cases): the \
-        share of each inhibition code among the cells of every O1 save of the run | `MCS`, \
-        `t` (cycles), `f0`, `f1`, `f2`, `f3` (fractions of cells with i = 0, 1, 2, 3) |
-        | `Monolayer/$(_OPENVT_PKG_O2_ZIP)` | Figure 5 snapshots at 1000 cells, case (b): \
-        `$(_OPENVT_PKG_O2_DIR)/cell_data_no_inhibition_<k>.csv`, k = \
-        0…$(length(o1.o2) - 1), file k from run k + 1 ($(o2seed)) | `x`, `y` (R, from the \
-        lattice centre), `r` (R), `f` (fraction), `a` (A/A*) |
-        | `Monolayer/$(_OPENVT_PKG_FW)_time_to_10k_vs_{beta,gamma}.csv` | Figure 6 / Table \
-        1: time to 10⁴ cells per run (NaN for capped runs) | `beta` or `gamma` (1), `Time \
-        to 10k (MCS)`, `Time to 10k (5T)` (cycles) |
-        | `Monolayer/$(_OPENVT_PKG_TABLE1)` | Table 1: our β and γ thresholds per multiple \
-        of the uninhibited time, with the TST and Artistoo values and the spread and band \
-        of our pre-registered check (NaN: no threshold) | `parameter`, `multiple` (1), \
-        `threshold` (1), `tau_cycles` (cycles), `interpolated` (1), `TST`, `Artistoo`, \
-        `spread_lo`, `spread_hi`, `band_lo`, `band_hi` |
-        | \
-        `Monolayer/final_snapshot_data/$(_OPENVT_PKG_FW)_beta_0.0_gamma_<γ>_<MCS>MCS.csv` \
-        | Figure 7 final snapshots (β = 0, as in M's Figure 7) | `x_pos`, `y_pos` (R, \
-        from the lattice centre), `radius_i` (R), `inhibited` (0/1) |
+        | `Monolayer/<stem>.zip` | O1 per-cell time series, one zip per case: $(o1zips). One file per run and save (MCS 0, every $(_OPENVT_PKG_GRID) MCS and the stop; $(nfiles) files in all), `<stem>/s<seed>/potts_<case>_s<seed>_<MCS:06d>.csv`, one row per live cell. Unzipped in `Monolayer/`, the files land in `Monolayer/<stem>/s<seed>/` | `x`, `y` (R, from the lattice centre), `i` (inhibition code: 0 growing, 1 type 1, 2 type 2, 3 both), `n` (number of neighbour cells), `g` (1 if i = 0, else 0; the column `metrics.cpp` reads) |
+        | `Monolayer/$(_OPENVT_PKG_O1_MANIFEST)` | every O1 file: its zip, name, row count, size and sha256 | `archive`, `file`, `rows` (cells), `bytes`, `sha256` |
+        | `Monolayer/metrics/<case>/inhibition_s<seed>.csv` | A3 for cases $(a3cases): the share of each inhibition code among the cells of every O1 save of the run | `MCS`, `t` (cycles), `f0`, `f1`, `f2`, `f3` (fractions of cells with i = 0, 1, 2, 3) |
+        | `Monolayer/$(_OPENVT_PKG_O2_ZIP)` | Figure 5 snapshots at 1000 cells, case (b): `$(_OPENVT_PKG_O2_DIR)/cell_data_no_inhibition_<k>.csv`, k = 0…$(length(o1.o2) - 1), file k from run k + 1 ($(o2seed)) | `x`, `y` (R, from the lattice centre), `r` (R), `f` (fraction), `a` (A/A*) |
+        | `Monolayer/$(_OPENVT_PKG_FW)_time_to_10k_vs_{beta,gamma}.csv` | Figure 6 / Table 1: time to 10⁴ cells per run (NaN for capped runs) | `beta` or `gamma` (1), `Time to 10k (MCS)`, `Time to 10k (5T)` (cycles) |
+        | `Monolayer/$(_OPENVT_PKG_TABLE1)` | Table 1: our β and γ thresholds per multiple of the uninhibited time, with the TST and Artistoo values and the spread and band of our pre-registered check (NaN: no threshold) | `parameter`, `multiple` (1), `threshold` (1), `tau_cycles` (cycles), `interpolated` (1), `TST`, `Artistoo`, `spread_lo`, `spread_hi`, `band_lo`, `band_hi` |
+        | `Monolayer/final_snapshot_data/$(_OPENVT_PKG_FW)_beta_0.0_gamma_<γ>_<MCS>MCS.csv` | Figure 7 final snapshots (β = 0, as in M's Figure 7) | `x_pos`, `y_pos` (R, from the lattice centre), `radius_i` (R), `inhibited` (0/1) |
         """
     )
     haskey(recs, :f8beta) && print(
         io, """
-        | \
-        `Monolayer/final_snapshot_data/$(_OPENVT_PKG_FW)_beta_<β>_gamma_0.0_<MCS>MCS.csv` \
-        | Figure 8 final snapshots at the T1 β values (γ = 0); `inhibited` is area \
-        inhibition (a < β) | as above |
+        | `Monolayer/final_snapshot_data/$(_OPENVT_PKG_FW)_beta_<β>_gamma_0.0_<MCS>MCS.csv` | Figure 8 final snapshots at the T1 β values (γ = 0); `inhibited` is area inhibition (a < β) | as above |
         """
     )
     print(
         io, """
-        | `figures/fig5.png`, \
-        `figures/fig7.png`$(haskey(recs, :f8beta) ? ", `figures/fig8.png`" : "") | \
-        M's Figures 5, 7$(haskey(recs, :f8beta) ? " and 8 (β)" : ""): our rows, \
-        see Figures below | PNG |
+        | `figures/fig5.png`, `figures/fig7.png`$(haskey(recs, :f8beta) ? ", `figures/fig8.png`" : "") | M's Figures 5, 7$(haskey(recs, :f8beta) ? " and 8 (β)" : ""): our rows, see Figures below | PNG |
 
         The O1 files of cases $(o1cases) come from a re-run of the Figure 3/9 runs from \
         their

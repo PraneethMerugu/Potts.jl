@@ -237,82 +237,14 @@ r3(x) = round(x; digits = 3)
 deviations_md = """
 | Item | Ours | Paper | Suspected cause | Author question |
 |---|---|---|---|---|
-| V-PRE5 one dark cluster @ 10⁴ (**FAIL**; target: ensemble-mean largest share ≥ 0.90; \
-open deviation "late-stage coarsening") | largest dark-cluster \
-share $(round(mean(rec_10k); digits = 3)) \
-± $(round(std(rec_10k) / sqrt(length(rec_10k)); digits = 3)) (SE, n \
-= $(length(rec_10k)), second full run); $(rec_share[1]) ± $(rec_share[2]) \
-(SE) pooled over $rec_k runs (late-coarsening pass); heterotypic at \
-10⁴ $(rec_fdl[1]) ± $(rec_fdl[2]), minimum $(rec_fdl[3]), ≤ 0.050 \
-in $(rec_fdl[4]) of $rec_k | one dark cluster from ≈ 5000 \
-(PRE Fig. 12(g), p.2140, one run); heterotypic 0.050 \
-(PRE), 0.040 (PRL) at 10⁴ | stochastic late \
-coalescence; paper n = 1; light:dark share \
-unstated. Late sorting in the CPM is \
-diffusion and coalescence of rounded clusters (Durand 2021, PLoS Comput Biol), so the \
-last merges are slow and stochastic: $(rec_22[1]) of $(rec_22[2]) replicates (the \
-second full run and the late-coarsening diagnostic) reach a single-cluster share \
-≥ 0.90 at 10⁴, while the paper shows one run. Temperature and lattice effects \
-act at early times only (Holm et al. 1991, Phys Rev A), and the late rate \
-depends on the type ratio (Franke 2022), which the paper does not \
-state. Temperature is a sensitivity, not an identified cause (T ≥ \
-14 merges every run by 2×10⁴ but leaves heterotypic at 10⁴ \
-unchanged; the paper states T = 10). Excluded: the \
-periodic image, the start relaxation, the reading \
-time, the type fraction, the cell-size \
-difference, the aggregate size and the seed \
-set (spec §9.5) | $AQ |
-| V-PRE7 T = 80 disintegration (**FAIL**; target: more than half the cells gone by 500) | \
-$(r3(v7_g80)) of the cells gone at 500 and $(r3(vm(vgone, 80.0, 10_000))) at 10⁴, all of \
-them light ($vpre7_n replicates); heterotypic $(r3(vm(dl_of, 80.0, 100))) at 100. The \
-other three V-PRE7 rows pass. At T = 40 our heterotypic fraction matches the paper's \
-plateau ($(r3(v7_f40[1])) at 10³, $(r3(v7_f40[2])) at 2×10³), but our light monolayer is \
-late (dark–medium $(r3(v7_dM40_50)) at 50, first below 0.003 at $v7_mono40) | all cells \
-disappear and heterotypic → 0 by ≈ 100 (PRE Fig. 15, p.2144); at T = 40 the monolayer \
-forms by ≈ 50 and heterotypic reads ≈ 0.145 at 10³ and ≈ 0.16 at 2×10³, where the curve \
-ends | our cells disappear too slowly. The contact temperature scale matches at T = 2 and \
-T = 10 (T = 2 reads $(r3(vm(dl_of, 2.0, 3200))) at 3200 against ≈ 0.3; T = 10 matches \
-V-PRE1 to 10³; T = 15–20 sit in the late-coarsening gap above), so this is not a uniform \
-factor on T. In one exploratory replicate with λ halved at T = 80 (n = 1, start 3001 / \
-seed 13001; review probe, `data/09/vpre7-2026-10-07/review_probe/`, not a verdict), the \
-light-cell loss and the timing of heterotypic → 0 come closer to Fig. 15, but dark cells \
-still survive (309 of 500 at 500). The pattern is consistent with an unstated convention \
-for the area term at a copy or for a cell's last site. The T = 120–240 runs of the record \
-(`diagnostic_timeseries.tsv`) are kept as data. The same deviation is expected to affect \
-V-PRE8 (λ = 0.1: all cells lost by ≈ 800), which is not yet on this page | not asked \
-(proposed for our open question list; Open questions under Details) |
-| V-PRE6, V-PRE16 ⟨n⟩ part, V-PRE17 (**PARKED**) | not run | bulk ⟨n⟩ and μ₂ against T \
-(PRE Table II); the generator's ⟨n⟩ plateau (PRE Figs. 4–5); bulk ⟨n⟩ after 2 \
-annealing MCS (PRE Fig. 2) | the rule that makes two cells neighbors when \
-counting n (Tables I–III) is not stated (spec §8.4, §9.1) | $AQ |
-| V-PRE8–V-PRE12, V-PRE14, V-PRE15 (pre-registered, not yet on this page) | not run | λ \
-scan (Fig. 16, Table III), checkerboard start (Figs. 7–8), T dependence (Fig. 9, \
-Table I), slow engulfment (Figs. 18–19), J_lM = 30 (Figs. 20–21), dispersal (Fig. \
-25), J_ld scan (Figs. 26–27) | not built on this page yet; the targets are in \
-the pre-registered table under Details | not an author question |
-| Time unit | 1 MCS = N attempts; paper t = our $(PAPER_MCS)t | 1 MCS = 16N attempts (PRL \
-p.2014) | a convention only (INTERNALS F8). Both samplers pick target sites uniformly \
-over the whole lattice, so verdicts are read at the paper's nominal times (spec \
-§8.5) | not an author question |
-| Aggregate size | $(n_state) cells on $(dims_state) (`graner_glazier_state`) in the \
-reduced build; $(FULL ? "this run uses" : "the full run uses") \
-`graner_glazier_aggregate(1000)`, one per replicate | ≈ 1000 cells (PRE p.2129) | \
-cost of the docs build. With the small aggregate, boundary fractions scale \
-with perimeter/area and sorting levels off long before 10⁴ paper MCS; the \
-full run tests this deviation | not an author question |
-| Log-law window | also reported over 4–512 (an extra row, not a replacement) | 5–4000 \
-paper MCS (spec §9.1 V-PRE1) | the window of `test/papers_tests.jl`, which ends \
-before our small aggregate levels off | not an author question |
-| Boundary conditions and lattice size | periodic, \
-$(join(size(σ0), " × "))$(FULL ? ", medium margin $MARGIN sites" : ""); variant: the \
-`lattice` keyword | unstated | unstated in the papers. The aggregate stays clear of its \
-image: no replicate has a save without an all-medium row and column (isolation guard, \
-under Details), and the same starts embedded in a $(dims_pad) lattice give the same bond \
-counts to 10³ (variant run under Details). The first full run used a margin of 10, chosen \
-by a check that ran only to 10³ (spec §9.1 ruling 3); over 2×10⁴ paper MCS the aggregates \
-drift and deform by ≈ 30 sites, and some touched their image after ≈ 3000 paper MCS, which \
-removed light–medium boundary and failed V-PRE3 (b) (spec §9.4). The margin is now \
-$MARGIN, which dispersal runs need anyway (spec §8.6 D2, §9.1 V-PRE14/15) | $AQ |
+| V-PRE5 one dark cluster @ 10⁴ (**FAIL**; target: ensemble-mean largest share ≥ 0.90; open deviation "late-stage coarsening") | largest dark-cluster share $(round(mean(rec_10k); digits = 3)) ± $(round(std(rec_10k) / sqrt(length(rec_10k)); digits = 3)) (SE, n = $(length(rec_10k)), second full run); $(rec_share[1]) ± $(rec_share[2]) (SE) pooled over $rec_k runs (late-coarsening pass); heterotypic at 10⁴ $(rec_fdl[1]) ± $(rec_fdl[2]), minimum $(rec_fdl[3]), ≤ 0.050 in $(rec_fdl[4]) of $rec_k | one dark cluster from ≈ 5000 (PRE Fig. 12(g), p.2140, one run); heterotypic 0.050 (PRE), 0.040 (PRL) at 10⁴ | stochastic late coalescence; paper n = 1; light:dark share unstated. Late sorting in the CPM is diffusion and coalescence of rounded clusters (Durand 2021, PLoS Comput Biol), so the last merges are slow and stochastic: $(rec_22[1]) of $(rec_22[2]) replicates (the second full run and the late-coarsening diagnostic) reach a single-cluster share ≥ 0.90 at 10⁴, while the paper shows one run. Temperature and lattice effects act at early times only (Holm et al. 1991, Phys Rev A), and the late rate depends on the type ratio (Franke 2022), which the paper does not state. Temperature is a sensitivity, not an identified cause (T ≥ 14 merges every run by 2×10⁴ but leaves heterotypic at 10⁴ unchanged; the paper states T = 10). Excluded: the periodic image, the start relaxation, the reading time, the type fraction, the cell-size difference, the aggregate size and the seed set (spec §9.5) | $AQ |
+| V-PRE7 T = 80 disintegration (**FAIL**; target: more than half the cells gone by 500) | $(r3(v7_g80)) of the cells gone at 500 and $(r3(vm(vgone, 80.0, 10_000))) at 10⁴, all of them light ($vpre7_n replicates); heterotypic $(r3(vm(dl_of, 80.0, 100))) at 100. The other three V-PRE7 rows pass. At T = 40 our heterotypic fraction matches the paper's plateau ($(r3(v7_f40[1])) at 10³, $(r3(v7_f40[2])) at 2×10³), but our light monolayer is late (dark–medium $(r3(v7_dM40_50)) at 50, first below 0.003 at $v7_mono40) | all cells disappear and heterotypic → 0 by ≈ 100 (PRE Fig. 15, p.2144); at T = 40 the monolayer forms by ≈ 50 and heterotypic reads ≈ 0.145 at 10³ and ≈ 0.16 at 2×10³, where the curve ends | our cells disappear too slowly. The contact temperature scale matches at T = 2 and T = 10 (T = 2 reads $(r3(vm(dl_of, 2.0, 3200))) at 3200 against ≈ 0.3; T = 10 matches V-PRE1 to 10³; T = 15–20 sit in the late-coarsening gap above), so this is not a uniform factor on T. In one exploratory replicate with λ halved at T = 80 (n = 1, start 3001 / seed 13001; review probe, `data/09/vpre7-2026-10-07/review_probe/`, not a verdict), the light-cell loss and the timing of heterotypic → 0 come closer to Fig. 15, but dark cells still survive (309 of 500 at 500). The pattern is consistent with an unstated convention for the area term at a copy or for a cell's last site. The T = 120–240 runs of the record (`diagnostic_timeseries.tsv`) are kept as data. The same deviation is expected to affect V-PRE8 (λ = 0.1: all cells lost by ≈ 800), which is not yet on this page | not asked (proposed for our open question list; Open questions under Details) |
+| V-PRE6, V-PRE16 ⟨n⟩ part, V-PRE17 (**PARKED**) | not run | bulk ⟨n⟩ and μ₂ against T (PRE Table II); the generator's ⟨n⟩ plateau (PRE Figs. 4–5); bulk ⟨n⟩ after 2 annealing MCS (PRE Fig. 2) | the rule that makes two cells neighbors when counting n (Tables I–III) is not stated (spec §8.4, §9.1) | $AQ |
+| V-PRE8–V-PRE12, V-PRE14, V-PRE15 (pre-registered, not yet on this page) | not run | λ scan (Fig. 16, Table III), checkerboard start (Figs. 7–8), T dependence (Fig. 9, Table I), slow engulfment (Figs. 18–19), J_lM = 30 (Figs. 20–21), dispersal (Fig. 25), J_ld scan (Figs. 26–27) | not built on this page yet; the targets are in the pre-registered table under Details | not an author question |
+| Time unit | 1 MCS = N attempts; paper t = our $(PAPER_MCS)t | 1 MCS = 16N attempts (PRL p.2014) | a convention only (INTERNALS F8). Both samplers pick target sites uniformly over the whole lattice, so verdicts are read at the paper's nominal times (spec §8.5) | not an author question |
+| Aggregate size | $(n_state) cells on $(dims_state) (`graner_glazier_state`) in the reduced build; $(FULL ? "this run uses" : "the full run uses") `graner_glazier_aggregate(1000)`, one per replicate | ≈ 1000 cells (PRE p.2129) | cost of the docs build. With the small aggregate, boundary fractions scale with perimeter/area and sorting levels off long before 10⁴ paper MCS; the full run tests this deviation | not an author question |
+| Log-law window | also reported over 4–512 (an extra row, not a replacement) | 5–4000 paper MCS (spec §9.1 V-PRE1) | the window of `test/papers_tests.jl`, which ends before our small aggregate levels off | not an author question |
+| Boundary conditions and lattice size | periodic, $(join(size(σ0), " × "))$(FULL ? ", medium margin $MARGIN sites" : ""); variant: the `lattice` keyword | unstated | unstated in the papers. The aggregate stays clear of its image: no replicate has a save without an all-medium row and column (isolation guard, under Details), and the same starts embedded in a $(dims_pad) lattice give the same bond counts to 10³ (variant run under Details). The first full run used a margin of 10, chosen by a check that ran only to 10³ (spec §9.1 ruling 3); over 2×10⁴ paper MCS the aggregates drift and deform by ≈ 30 sites, and some touched their image after ≈ 3000 paper MCS, which removed light–medium boundary and failed V-PRE3 (b) (spec §9.4). The margin is now $MARGIN, which dispersal runs need anyway (spec §8.6 D2, §9.1 V-PRE14/15) | $AQ |
 | Type fraction | $(
     if FULL
         "equal numbers, randomly placed (`graner_glazier_aggregate`, one draw per " *
@@ -337,30 +269,12 @@ start(s) built on this page), against $(round(sd_relaxed; digits = 1)) for the \
 Potts-relaxed `graner_glazier_state`. Heterotypic fractions from a Voronoi and from a \
 relaxed start agree at 1, 10 and 100 paper MCS, and so does the V-PRE4 boundary drop (spec \
 §9.1 V-PRE4) | not an author question |
-| T = 0 annealing | on a copy, $(2PAPER_MCS) of our MCS, the run's J | 2 paper MCS on a \
-copy: "We anneal the displayed data only" (PRE p.2134) | none: matches the paper \
-(spec §8.4 A-GG4, resolved) | not an author question |
-| Target area per kind | one `V₀` | one value except the cavity run (PRE Fig. 28) | \
-per-kind targets not expressible yet (spec §8.6 D14) | not an author question |
-| Boundary length | mismatched bonds on the 8-neighbor lattice, medium included, each bond \
-once | the same, counting unstated (PRE p.2133); total ≈ 66 850 in PRE Fig. 13(a) | a \
-measurement convention only; it cancels in fractions and in the V-PRE4 ratio D (spec §8.6 \
-D8). The paper's total reads as Moore bonds counted twice, on boundaries about 10 % \
-smoother after its T = 0 anneal: our total at t = 1 is $(round(Int, rec_N1)) (FULL \
-record), so counted twice ≈ $(round(Int, 2rec_N1 / 1000))k against the paper's 66.85k \
-($(round(66_850 / 2rec_N1; digits = 2))×) | $AQ |
-| Two published runs (paper-internal) | the sorting targets use the envelope of both \
-runs, widened by 0.03 (spec §9.1) | PRL Fig. 2 and PRE Fig. 13 use the same \
-parameters but differ: dark–dark at 10 MCS, dd crossing time, light–medium \
-plateau (spec §9.2) | a single paper curve ± 0.05 would fail a model that \
-reproduces the other run (spec §8.5 "Supersession") | $AQ |
-| Monolayer time (paper-internal) | read as the two runs; the target is dark–medium < \
-0.003 by 10³ (V-PRE3 (a)), which both runs meet | light monolayer "after 300 MCS" \
-(PRL p.2015) against "After 600 MCS" (PRE p.2140) | the two published runs differ \
-(spec §8.4, §9.1 V-PRE3 (a)) | $AQ |
-| Annealing temperature in PRE Fig. 23 (paper-internal) | T = 0 for the partial-sorting \
-copy too | caption: "two MCS of T = 10 annealing"; the protocol is T = 0 (PRE p.2134) \
-| read as a typo (spec §8.2; §9.1 V-PRE13) | not an author question |
+| T = 0 annealing | on a copy, $(2PAPER_MCS) of our MCS, the run's J | 2 paper MCS on a copy: "We anneal the displayed data only" (PRE p.2134) | none: matches the paper (spec §8.4 A-GG4, resolved) | not an author question |
+| Target area per kind | one `V₀` | one value except the cavity run (PRE Fig. 28) | per-kind targets not expressible yet (spec §8.6 D14) | not an author question |
+| Boundary length | mismatched bonds on the 8-neighbor lattice, medium included, each bond once | the same, counting unstated (PRE p.2133); total ≈ 66 850 in PRE Fig. 13(a) | a measurement convention only; it cancels in fractions and in the V-PRE4 ratio D (spec §8.6 D8). The paper's total reads as Moore bonds counted twice, on boundaries about 10 % smoother after its T = 0 anneal: our total at t = 1 is $(round(Int, rec_N1)) (FULL record), so counted twice ≈ $(round(Int, 2rec_N1 / 1000))k against the paper's 66.85k ($(round(66_850 / 2rec_N1; digits = 2))×) | $AQ |
+| Two published runs (paper-internal) | the sorting targets use the envelope of both runs, widened by 0.03 (spec §9.1) | PRL Fig. 2 and PRE Fig. 13 use the same parameters but differ: dark–dark at 10 MCS, dd crossing time, light–medium plateau (spec §9.2) | a single paper curve ± 0.05 would fail a model that reproduces the other run (spec §8.5 "Supersession") | $AQ |
+| Monolayer time (paper-internal) | read as the two runs; the target is dark–medium < 0.003 by 10³ (V-PRE3 (a)), which both runs meet | light monolayer "after 300 MCS" (PRL p.2015) against "After 600 MCS" (PRE p.2140) | the two published runs differ (spec §8.4, §9.1 V-PRE3 (a)) | $AQ |
+| Annealing temperature in PRE Fig. 23 (paper-internal) | T = 0 for the partial-sorting copy too | caption: "two MCS of T = 10 annealing"; the protocol is T = 0 (PRE p.2134) | read as a typo (spec §8.2; §9.1 V-PRE13) | not an author question |
 """
 nothing #hide
 
@@ -649,14 +563,10 @@ Markdown.parse(
     | J(l,l) | $(J[3, 3]) | energy | light–light contact | PRL p.2015 | stated |
     | J(d,M) = J(l,M) | $(J[1, 2]) | energy | cell–medium contact | PRL p.2015 | stated |
     | λ | $(par(:λ)) | energy / site² | area-constraint strength | PRL p.2014 | stated |
-    | A(d) = A(l) | $(par(:V₀)) | sites | target area | PRL p.2015; PRE p.2130, p.2151 | \
-    stated (PRE) |
+    | A(d) = A(l) | $(par(:V₀)) | sites | target area | PRL p.2015; PRE p.2130, p.2151 | stated (PRE) |
     | T | $(par(:T)) | energy (k = 1) | temperature | PRL p.2014 | stated |
-    | lattice | $(join(size(σ0), " × ")), periodic | sites | domain | — | our choice \
-    (unstated) |
-    | cells | $ncells ($ndark dark, $nlight light) | — | initial aggregate \
-    | $(FULL ? "`graner_glazier_aggregate`; PRE p.2129 ≈ 1000" : "PRE §II D3 recipe") \
-    | derived |
+    | lattice | $(join(size(σ0), " × ")), periodic | sites | domain | — | our choice (unstated) |
+    | cells | $ncells ($ndark dark, $nlight light) | — | initial aggregate | $(FULL ? "`graner_glazier_aggregate`; PRE p.2129 ≈ 1000" : "PRE §II D3 recipe") | derived |
     """
 )
 
@@ -1144,8 +1054,7 @@ Markdown.parse(
     """
     Bond counts (mean ± SD, n = $n each), $(join(size(σ0), " × ")) against $dims_pad:
 
-    | paper MCS | bonds | $(join(size(σ0), " × ")) | $dims_pad | difference | q SE (q \
-    = $(fmt(q_pad))) | within |
+    | paper MCS | bonds | $(join(size(σ0), " × ")) | $dims_pad | difference | q SE (q = $(fmt(q_pad))) | within |
     |---|---|---|---|---|---|---|
     """ * join(pad_rows, "\n") * """
 
@@ -1643,8 +1552,7 @@ Markdown.parse(
     """
     $heading
 
-    | Target | Paper | Ours (mean ± SD, n = $n) | Tolerance | Class | Result (nominal \
-    time) | at s = $(fmt(best)) (informational) |
+    | Target | Paper | Ours (mean ± SD, n = $n) | Tolerance | Class | Result (nominal time) | at s = $(fmt(best)) (informational) |
     |---|---|---|---|---|---|---|
     """ * join(
         ["| $(r.target) | $(r.paper) | $(r.ours) | $(r.tol) | $(r.class) | $(r.result) | $(at_s(r)) |" for r in targets],
