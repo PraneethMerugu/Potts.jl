@@ -745,39 +745,40 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
     const _QA_TESTMOD = Base.require(_QA_TEST)
 
     # A test set that keeps its results to itself: the controls run a guard on a planted
-    # defect inside one and require it to fail, without failing the enclosing test set.
-    mutable struct _QACapture <: _QA_TESTMOD.AbstractTestSet
+    # defect inside one and require it to fail, without failing the enclosing test set. Test
+    # sets nested in it take its type and report to it; the outermost reports to no one.
+    struct _QACapture <: _QA_TESTMOD.AbstractTestSet
         description::String
         results::Vector{Any}
-        top::Bool
     end
-    _QACapture(description; kw...) = _QACapture(string(description), Any[], false)
+    _QACapture(description; kw...) = _QACapture(string(description), Any[])
     _QA_TESTMOD.record(ts::_QACapture, r) = (push!(ts.results, r); r)
     function _QA_TESTMOD.finish(ts::_QACapture)
-        ts.top || _QA_TESTMOD.record(_QA_TESTMOD.get_testset(), ts)
+        parent = _QA_TESTMOD.get_testset()
+        parent isa _QACapture && _QA_TESTMOD.record(parent, ts)
         return ts
     end
     _qa_flatten(r) = r isa _QACapture ? reduce(vcat, map(_qa_flatten, r.results); init = Any[]) : Any[r]
 
-    """
-        qa_failures(f) -> Vector
+    # (defined through `Core.eval`: `@testset` is expanded once Test is loaded)
+    Core.eval(
+        @__MODULE__, quote
+            """
+                qa_failures(f) -> Vector
 
-    Run `f()` (a guard) in a test set of its own and return its failed and errored results
-    (`Test.Fail`, `Test.Error`), including an exception `f` throws outside a test. The
-    enclosing test set does not see them: a negative control requires them to be non-empty.
-    """
-    function qa_failures(f)
-        T = _QA_TESTMOD
-        ts = _QACapture("negative control", Any[], true)
-        Base.ScopedValues.with(T.CURRENT_TESTSET => ts, T.TESTSET_DEPTH => T.get_testset_depth() + 1) do
-            try
-                f()
-            catch err
-                push!(ts.results, T.Error(:nontest_error, :(), err, Base.current_exceptions(), LineNumberNode(0)))
+            Run `f()` (a guard) in a test set of its own and return its failed and errored
+            results (`Test.Fail`, `Test.Error`), including an exception `f` throws outside a
+            test. The enclosing test set does not see them: a negative control requires them to
+            be non-empty.
+            """
+            function qa_failures(f)
+                ts = _QA_TESTMOD.@testset _QACapture "negative control" begin
+                    f()
+                end
+                return filter(r -> r isa Union{_QA_TESTMOD.Fail, _QA_TESTMOD.Error}, _qa_flatten(ts))
             end
         end
-        return filter(r -> r isa Union{T.Fail, T.Error}, _qa_flatten(ts))
-    end
+    )
 
     # ModelingToolkit's public system interface, walked on one system. The calls are
     # ModelingToolkitBase's public `AbstractSystem` interface (version 1.77):
