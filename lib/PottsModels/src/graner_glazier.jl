@@ -18,7 +18,7 @@ Differences from the paper (Glazier & Graner, Phys. Rev. E 47, 2128, 1993):
 - a periodic lattice (the paper does not say): fine for sorting, not for runs where cells
   detach and would wrap around;
 - the model does not anneal. The paper measures on a copy annealed for 2 paper MCS at T = 0
-  (32 of ours); `test/papers.jl` does the same;
+  (32 of ours); `test/papers_tests.jl` does the same;
 - one `V₀` for both kinds: the cavity run (per-kind targets, non-neighbor copies) is not
   expressible yet.
 """

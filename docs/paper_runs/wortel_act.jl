@@ -4,7 +4,7 @@
 # Niculescu et al. (PLoS Comput. Biol. 11, e1004280), single-cell runs (Figs. 2-4): one cell
 # (A = 500, λ_A = 50, P = 340, λ_P = 2) on a wrapped 200×200 lattice, no chemotaxis, runs of
 # 30 000 MCS. The `WortelAct` defaults are the amoeboid set (λ_act = 200, max_act = 20, T = 20).
-# The cell starts as a 23×23 square (area 529) at the center, as in `test/papers.jl`.
+# The cell starts as a 23×23 square (area 529) at the center, as in `test/papers_tests.jl`.
 #
 #     julia --project=docs docs/paper_runs/wortel_act.jl
 include(joinpath(@__DIR__, "common.jl"))

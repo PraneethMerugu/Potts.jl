@@ -1,6 +1,6 @@
 # The model built in docs/models/merks.jl. The page shows its fragments (the lines after
 # each `#> name` marker, up to the next marker or `#<`) and then runs the whole file;
-# lib/PottsModels/test/tutorial_models.jl checks that it compiles to the same problem as
+# lib/PottsModels/test/tutorial_models_tests.jl checks that it compiles to the same problem as
 # `PottsModels.MerksVasculogenesis`.
 using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters
 using Potts.LatticePDE: laplacian, lattice_domain

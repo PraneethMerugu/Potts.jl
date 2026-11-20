@@ -1,6 +1,6 @@
 # The model built in docs/models/wortel_act.jl. The page shows its fragments (the lines after
 # each `#> name` marker, up to the next marker or `#<`) and then runs the whole file;
-# lib/PottsModels/test/tutorial_models.jl checks that it compiles to the same problem as
+# lib/PottsModels/test/tutorial_models_tests.jl checks that it compiles to the same problem as
 # `PottsModels.WortelAct`.
 @potts_model ActMigration begin
     #> lattice

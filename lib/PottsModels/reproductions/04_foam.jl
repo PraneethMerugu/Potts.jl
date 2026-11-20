@@ -288,7 +288,7 @@ end #hide
 
 # ### Verdicts at a glance
 #
-# The rows are pre-registered in the test (`test/reproductions/04_foam.jl`, D-190),
+# The rows are pre-registered in the test (`test/reproductions/04_foam_tests.jl`, D-190),
 # with the paper's acceptance bands, and judged on the full run: 10 ordered foams, 30
 # disordered ones and every shear row on 5 replicates. The test recomputes every
 # value below from the committed record.
@@ -375,7 +375,7 @@ Markdown.parse(join([ #hide
 #   5819–5832 (1999), doi:[10.1103/PhysRevE.59.5819](https://doi.org/10.1103/PhysRevE.59.5819);
 #   the arXiv version cond-mat/9902111 has the same text without the figures.
 # - Spec: `docs/design/research/model-specs/04_foam.md` (§2 mechanics, §5 targets, §7
-#   ambiguities, §8 build plan). Frozen test: `lib/PottsModels/test/reproductions/04_foam.jl`
+#   ambiguities, §8 build plan). Test: `lib/PottsModels/test/reproductions/04_foam_tests.jl`
 #   (D-190), which fixes every row, band, seed and run length below.
 #
 # ### Protocol

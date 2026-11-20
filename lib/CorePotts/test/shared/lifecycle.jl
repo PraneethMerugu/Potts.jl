@@ -61,7 +61,7 @@ end
 # P6.0v2b (D-128): a custom rule declares the leaves it reads (`frozen_reads`). On the CPU
 # the declared path is the live state (no copy), so only the validation and the masks are
 # exercised here; the byte behaviour is covered on Metal by the acceptance file
-# `p6_0v2b_frozen_refresh_bytes.jl`. A bad declaration fails at `init`, before any step.
+# `frozen_kind_refresh_bytes_tests.jl`. A bad declaration fails at `init`, before any step.
 struct DeclaredFrozen
     k::Int32
     reads::Any

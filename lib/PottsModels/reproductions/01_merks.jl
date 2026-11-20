@@ -621,7 +621,7 @@ Markdown.parse("""
 # The targets are spec 01 §5 as audited for P6.3d (D-153): rows whose observable and set-up
 # are fixed by the paper or the released files are READY; the others are PARKED with the
 # reason. The binding rules are those of the test
-# `lib/PottsModels/test/reproductions/01_merks.jl`. Verdict classes: **SMOKE+FULL** rows
+# `lib/PottsModels/test/reproductions/01_merks_tests.jl`. Verdict classes: **SMOKE+FULL** rows
 # bind in both builds (at the reduced size in this build); **FULL** rows bind only in the
 # full run.
 #
