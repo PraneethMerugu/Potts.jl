@@ -659,4 +659,45 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
         return bad
     end
 
+    """
+        qa_missing_compat(project_file; own) -> Vector{String}
+
+    The external dependencies of the project at `project_file` that have no `[compat]`
+    entry, sorted. External means neither a standard library nor a package named in `own`
+    (the workspace's own packages). A test project's dependencies are bounded like a
+    package's, so a breaking upstream release fails resolution instead of the tests.
+    """
+    function qa_missing_compat(project_file::AbstractString; own)
+        toml = Base.parsed_toml(project_file)
+        compat = get(toml, "compat", Dict{String, Any}())
+        std = readdir(Sys.STDLIB)
+        return sort!([n for n in keys(get(toml, "deps", Dict{String, Any}())) if !(n in std) && !(n in own) && !haskey(compat, n)])
+    end
+
+    """
+        qa_missing_compat_control()
+
+    The negative control for [`qa_missing_compat`](@ref): a scratch project with a bounded
+    dependency, an unbounded one and a standard library must report the unbounded one only.
+    """
+    function qa_missing_compat_control()
+        Test = Base.require(_QA_TEST)
+        mktempdir() do dir
+            file = joinpath(dir, "Project.toml")
+            write(
+                file, """
+                [deps]
+                Bounded = "5a4b3c2d-1e0f-4a9b-8c7d-6e5f4a3b2c1d"
+                Unbounded = "0f1e2d3c-4b5a-4968-8776-a5b4c3d2e1f0"
+                Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+                [compat]
+                Bounded = "1"
+                """
+            )
+            Test.@test qa_missing_compat(file; own = ()) == ["Unbounded"]
+        end
+        return nothing
+    end
+
 end
