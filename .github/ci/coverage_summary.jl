@@ -113,12 +113,29 @@ function main(args)
     tot_ftot = sum(r -> r[2].files_total, rows)
 
     println("Code coverage summary (non-gating, CPU fast/compile suites):")
-    println(@sprintf("  %-15s %9s %9s %8s  %s", "Package", "Covered", "Tracked", "Pct", "Files (.cov/.jl)"))
+    println(
+        @sprintf(
+            "  %-15s %9s %9s %8s  %s", "Package", "Covered", "Tracked", "Pct",
+            "Files (.cov/.jl)"
+        )
+    )
     for (name, s) in rows
-        println(@sprintf("  %-15s %9d %9d %8s  %d/%d", name, s.covered, s.tracked, fmt_pct(s.covered, s.tracked), s.files_cov, s.files_total))
+        println(
+            @sprintf(
+                "  %-15s %9d %9d %8s  %d/%d",
+                name, s.covered, s.tracked, fmt_pct(s.covered, s.tracked), s.files_cov,
+                s.files_total
+            )
+        )
     end
-    println(@sprintf("  %-15s %9d %9d %8s  %d/%d", "Total", tot_cov, tot_trk, fmt_pct(tot_cov, tot_trk), tot_fcov, tot_ftot))
-    println("  Note: PottsModels and GPU are excluded from --code-coverage (PottsModels takes over 9000 s under coverage).")
+    println(
+        @sprintf(
+            "  %-15s %9d %9d %8s  %d/%d",
+            "Total", tot_cov, tot_trk, fmt_pct(tot_cov, tot_trk), tot_fcov, tot_ftot
+        )
+    )
+    println("  Note: PottsModels and GPU are excluded from --code-coverage (PottsModels \
+        takes over 9000 s under coverage).")
 
     summary_path = get(ENV, "GITHUB_STEP_SUMMARY", "")
     if !isempty(summary_path)
@@ -127,10 +144,20 @@ function main(args)
             println(io, "| Package | Covered | Tracked | Coverage | Files (`.cov`/`.jl`) |")
             println(io, "| --- | ---: | ---: | ---: | ---: |")
             for (name, s) in rows
-                println(io, "| `$name` | $(s.covered) | $(s.tracked) | $(fmt_pct(s.covered, s.tracked)) | $(s.files_cov)/$(s.files_total) |")
+                println(
+                    io,
+                    "| `$name` | $(s.covered) | $(s.tracked) | $(fmt_pct(s.covered, s.tracked)) | $(s.files_cov)/$(s.files_total) |"
+                )
             end
-            println(io, "| **Total** | **$(tot_cov)** | **$(tot_trk)** | **$(fmt_pct(tot_cov, tot_trk))** | **$(tot_fcov)/$(tot_ftot)** |\n")
-            println(io, "> `PottsModels` and `GPU` are excluded from `--code-coverage` (`PottsModels` exceeds 9000 s under coverage).")
+            println(
+                io,
+                "| **Total** | **$(tot_cov)** | **$(tot_trk)** | **$(fmt_pct(tot_cov, tot_trk))** | **$(tot_fcov)/$(tot_ftot)** |\n"
+            )
+            println(
+                io,
+                "> `PottsModels` and `GPU` are excluded from `--code-coverage` \
+                    (`PottsModels` exceeds 9000 s under coverage)."
+            )
         end
     end
 
