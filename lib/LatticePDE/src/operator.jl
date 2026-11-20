@@ -467,7 +467,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
                 iterate = true
                 switch |= class == :LaggedSwitch
             elseif class === :Other && !_reads(term, (_ref(c),)) && !isempty(auxof(term)) &&
-                   (rd = unique(vcat([auxrd[j] for j in auxof(term)]..., Any[o for o in staterefs if _reads(term, (o,))]));
+                   (rd = unique(vcat(reduce(vcat, [auxrd[j] for j in auxof(term)]; init = Any[]), Any[o for o in staterefs if _reads(term, (o,))]));
                     !any(o -> isequal(o, _ref(c)), rd))
                 # a term of aux fields: a cross term of the states they read, none when they read
                 # no state (a source). Exact in solve order, like any cross term; a cycle leaves it unseen

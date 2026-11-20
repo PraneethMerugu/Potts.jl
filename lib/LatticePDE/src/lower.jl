@@ -97,6 +97,7 @@ function _num(e::Env, ids)
     return [_type(e, i) == BOOL ? cast!(e.kb, i, t === nothing ? I32 : t) : i for i in ids]
 end
 _op(e::Env, op, ids...) = arith!(e.kb, op, _num(e, collect(Int32, ids))...)
+_op(e::Env, op, ids::AbstractVector) = arith!(e.kb, op, _num(e, collect(Int32, ids))...)
 _real(e::Env, i) = cast!(e.kb, _num(e, [i])[1], REAL)
 _bool(e::Env, i) = _type(e, i) == BOOL ? i : node!(e.kb, NOT, BOOL, Int32[_cmp(e, EQ, i, constant!(e.kb, 0, I32))])
 _cmp(e::Env, op, a, b) = compare!(e.kb, op, _num(e, [a, b])...)
@@ -235,7 +236,7 @@ function _fold_product(u, e::Env)
     else
         append!(ids, Int32[lower(y, e) for y in F])
     end
-    return _op(e, MUL, ids...)
+    return _op(e, MUL, ids)
 end
 """
     _cond(u, env; fold = :majority) -> node id
@@ -467,7 +468,7 @@ function _advect(e::Env{N}, uvel, c) where {N}
         end
         _op(e, MUL, constant!(e.kb, 1 / e.h[d]), _op(e, ADD, fl...))
     end
-    return _op(e, ADD, divs...)
+    return _op(e, ADD, divs)
 end
 
 """
@@ -579,14 +580,14 @@ function lower(x, e::Env{N}) where {N}
     f === (!) && return node!(e.kb, NOT, BOOL, Int32[_bool(e, lower(a[1], e))])
     (f === (&) || f === (|)) && return node!(e.kb, f === (&) ? AND : OR, BOOL, Int32[_bool(e, lower(y, e)) for y in a])
     ids = Int32[lower(y, e) for y in a]
-    f === (+) && return _op(e, ADD, ids...)
-    f === (*) && return _op(e, MUL, ids...)
+    f === (+) && return _op(e, ADD, ids)
+    f === (*) && return _op(e, MUL, ids)
     if f === (-)
         length(ids) == 1 && return arith!(e.kb, NEG, _num(e, ids)...)
         return _op(e, ADD, ids[1], arith!(e.kb, NEG, _num(e, ids[2:2])...))
     end
     f === (/) && return arith!(e.kb, DIV, _real(e, ids[1]), _real(e, ids[2]))
-    (f === min || f === max) && return _op(e, f === min ? MIN : MAX, ids...)
+    (f === min || f === max) && return _op(e, f === min ? MIN : MAX, ids)
     if f === (^)
         p = unwrap_const(unwrap(a[2]))
         p isa Real && isinteger(p) && return node!(e.kb, POWI, _type(e, _num(e, ids[1:1])[1]), _num(e, ids[1:1]), Int(p))

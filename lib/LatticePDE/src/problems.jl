@@ -230,7 +230,7 @@ _tabread(v, i::Integer) = i == 0 ? 0.0 : Float64(v[clamp(i, 1, length(v))])
 _val(f::_IvCoef, args) = (q = f.iv(args); (Float64(q[1]), Float64(q[2])))
 _isfin(v) = all(isfinite, v)
 _push_val!(out, v::Real) = push!(out, v)
-_push_val!(out, v::Tuple) = push!(out, v...)
+_push_val!(out, v::Tuple) = append!(out, v)
 function _val(f, args)
     try
         return Float64(f(args...))
