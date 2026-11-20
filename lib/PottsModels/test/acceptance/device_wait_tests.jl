@@ -8,14 +8,15 @@
 # under the machine lock; Float32 checkerboard gate cases):
 #  - `step!` itself waits nowhere: 0 syncs and 0 transfers per MCS (200 MCS, no save) on
 #    Graner–Glazier 72², the OpenVT monolayer 100², Merks 100² and the OpenVT reference
-#    100². The wait cost is all at host read points: saves, `current_state(integ)`, checkpoints.
-#  - A read point right after `step!` (`current_state(integ)`, i.e. `current_state`; also what a
-#    callback or a hand-written integrator loop reads), 600 reads per process, two
+#    100². The wait cost is all at host read points: saves, `current_state(integ)`,
+#    checkpoints.
+#  - A read point right after `step!` (`current_state(integ)`, i.e. `current_state`; also
+#    what a callback or a hand-written integrator loop reads), 600 reads per process, two
 #    processes per mode. "default" is the library today: `sync!` is
-#    `KernelAbstractions.synchronize`, i.e. AMDGPU's default `synchronize` (256 spins,
-#    then a HIP host callback through Julia's event loop), and every device→host
-#    `copyto!` waits the same way inside AMDGPU. "spin" is a `hipStreamQuery` spin in
-#    `sync!` with the copies enqueued `async = true` and waited on by the same spin:
+#    `KernelAbstractions.synchronize`, i.e. AMDGPU's default `synchronize` (256 spins, then
+#    a HIP host callback through Julia's event loop), and every device→host `copyto!` waits
+#    the same way inside AMDGPU. "spin" is a `hipStreamQuery` spin in `sync!` with the
+#    copies enqueued `async = true` and waited on by the same spin:
 #        model (MCS GPU µs)        default: median / reads > 1 ms     spin: median / > 1 ms
 #        OpenVT monolayer (77)     12.9 ms / 600 of 600               0.12 ms / 1–2 of 600
 #        OpenVT reference (113)    12.9 ms / 462–466 of 600           0.19 ms / 1 of 600
@@ -60,29 +61,30 @@
 #  (R) Results unchanged (D-158), on the CPU for Graner–Glazier: a
 #      run that saves after every MCS (a wait and device→host copies every MCS), a run
 #      that saves every 4 MCS and a run stepped with no wait until the end are bitwise
-#      equal in every leaf at every shared time, and each saved state equals `current_state(integ)` of
-#      an independent run stepped to the same MCS. A stale read (a copy not waited for) or
-#      a wait that changed work would show up here. A wait cannot change the trajectory, so
-#      equality with the pre-change code follows: the trajectory is the kernels', and they
-#      are not touched by this item. On the device backend, every gate case
-#      (`benchmark/gate.jl`, Float32 checkerboard; D-271, not reproducible there): the save
-#      times asked for, the state moves, and every saved state and the unsaved end state are
-#      consistent in themselves (tracked volumes equal the site counts of σ).
+#      equal in every leaf at every shared time, and each saved state equals
+#      `current_state(integ)` of an independent run stepped to the same MCS. A stale read (a
+#      copy not waited for) or a wait that changed work would show up here. A wait cannot
+#      change the trajectory, so equality with the pre-change code follows: the trajectory
+#      is the kernels', and they are not touched by this item. On the device backend, every
+#      gate case (`benchmark/gate.jl`, Float32 checkerboard; D-271, not reproducible there):
+#      the save times asked for, the state moves, and every saved state and the unsaved end
+#      state are consistent in themselves (tracked volumes equal the site counts of σ).
 #  (A) Allocations: a warm `_device_wait` allocates 0 bytes on the CPU and on ROCm, idle and
 #      with work in flight; on Metal it allocates no more than `KernelAbstractions.
 #      synchronize` (Metal.jl's own wait allocates ~240 B); `_spin_until` with `done`
 #      already true allocates 0. (A warm `step!` stays allocation-free on the CPU: gate.jl.)
 #  (P) Performance (ROCm only; skipped cleanly elsewhere): on the OpenVT monolayer, Merks
-#      and OpenVT reference cases, of 300 reads `current_state(integ)` right after a `step!`, at most
-#      6 (2 %) take over 1 ms; and of 300 `step!`s that each save, at most 6 take over
-#      3 ms (a guard: this path is fast today). Up to 3 samples are taken and the best
-#      counts (D-271, 2026-11-06): the slow path fails every sample, a burst of load does not. Today 12–100 % of the reads on the two
-#      lifecycle models take over 1 ms (table above); Merks is a control that passes today.
-#      The ROCm paired A/B (`benchmark/ab.jl <base> <cand> all cpu,rocm`, D-171) is the
-#      merge gate for "no regression" and must exit 0. Its timed expression is `step!`
-#      plus the harness's own spin, and `step!` has no library wait, so the expected A/B
-#      ratio is 1.00 within the controls; the speed-up is in runs that save: measured
-#      whole solves with `saveat` every 10 MCS are reported with the implementation.
+#      and OpenVT reference cases, of 300 reads `current_state(integ)` right after a
+#      `step!`, at most 6 (2 %) take over 1 ms; and of 300 `step!`s that each save, at most
+#      6 take over 3 ms (a guard: this path is fast today). Up to 3 samples are taken and
+#      the best counts (D-271, 2026-11-06): the slow path fails every sample, a burst of
+#      load does not. Today 12–100 % of the reads on the two lifecycle models take over 1 ms
+#      (table above); Merks is a control that passes today. The ROCm paired A/B
+#      (`benchmark/ab.jl <base> <cand> all cpu,rocm`, D-171) is the merge gate for "no
+#      regression" and must exit 0. Its timed expression is `step!` plus the harness's own
+#      spin, and `step!` has no library wait, so the expected A/B ratio is 1.00 within the
+#      controls; the speed-up is in runs that save: measured whole solves with `saveat`
+#      every 10 MCS are reported with the implementation.
 #
 # Where this file lives. Under `lib/PottsModels/test/acceptance/` (not `benchmark/test/`):
 # it pins library behaviour (a CorePotts helper, the results of the published models, the
@@ -134,11 +136,18 @@ function cases(T, tspan)
     gg = graner_glazier_state()
     return [
         "graner_glazier_72" =>
-            () -> PottsProblem(GranerGlazier(; name = :gg), [ownership => gg[1], kind => gg[2]], tspan; T),
+            () -> PottsProblem(
+            GranerGlazier(; name = :gg), [
+                ownership => gg[1], kind => gg[2],
+            ], tspan; T
+        ),
         "wortel_act_100" =>
             () -> (
             σ = zeros(Int32, 100, 100); σ[40:62, 40:62] .= 1;
-            PottsProblem(WortelAct(; name = :w, lattice = (100, 100)), [ownership => σ, kind => [:cell]], tspan; T)
+            PottsProblem(
+                WortelAct(; name = :w, lattice = (100, 100)),
+                [ownership => σ, kind => [:cell]], tspan; T
+            )
         ),
         "merks_100" =>
             () -> PottsProblem(
@@ -165,7 +174,8 @@ function cases(T, tspan)
             );
             PottsProblem(
                 OpenVTReferenceMonolayer(; name = :r, lattice = (100, 100)),
-                [ownership => σ, kind => fill(:cell, 36), :σ_X => 0.0], tspan; T, capacity = 128
+                [ownership => σ, kind => fill(:cell, 36), :σ_X => 0.0], tspan; T,
+                capacity = 128
             )
         ),
         "merks2006_100" =>
@@ -187,11 +197,15 @@ const WAIT_N = 12
 function results_unchanged(prob, alg, backend)
     kw = backend === nothing ? (;) : (; backend)
     prob = remake(prob; tspan = (0, WAIT_N))
-    every = solve(prob, alg; saveat = 1:WAIT_N, save_start = false, save_end = false, kw...)  # a wait every MCS
-    fourth = solve(prob, alg; saveat = 4:4:WAIT_N, save_start = false, save_end = false, kw...)
+    # a wait every MCS
+    every = solve(prob, alg; saveat = 1:WAIT_N, save_start = false, save_end = false, kw...)
+    fourth = solve(
+        prob, alg; saveat = 4:4:WAIT_N, save_start = false, save_end = false, kw...
+    )
     integ = init(prob, alg; save_start = false, save_end = false, kw...)
     for _ in 1:WAIT_N
-        step!(integ)                                                         # no wait at all
+        # no wait at all
+        step!(integ)
     end
     uend = current_state(integ)
     ok = Bool[]
@@ -210,10 +224,11 @@ function results_unchanged(prob, alg, backend)
     end
     return ok
 end
-# (R) on the device (D-271): the lockless checkerboard is not reproducible there (user ruling
-# 2026-11-04), so runs cannot be compared bitwise. A stale or torn read still shows: every
-# saved state, and the state stepped with no wait, must be consistent in itself (each cell's
-# tracked volume equals its site count in σ), at the save times asked for, and the state moves.
+# (R) on the device (D-271): the lockless checkerboard is not reproducible there (user
+# ruling 2026-11-04), so runs cannot be compared bitwise. A stale or torn read still shows:
+# every saved state, and the state stepped with no wait, must be consistent in itself (each
+# cell's tracked volume equals its site count in σ), at the save times asked for, and the
+# state moves.
 function consistent(u)
     σ = Array(u.ownership)
     v = Array(u.cell.volume)
@@ -221,8 +236,12 @@ function consistent(u)
 end
 function saves_consistent(prob, alg, backend)
     prob = remake(prob; tspan = (0, WAIT_N))
-    every = solve(prob, alg; saveat = 1:WAIT_N, save_start = false, save_end = false, backend)
-    fourth = solve(prob, alg; saveat = 4:4:WAIT_N, save_start = false, save_end = false, backend)
+    every = solve(
+        prob, alg; saveat = 1:WAIT_N, save_start = false, save_end = false, backend
+    )
+    fourth = solve(
+        prob, alg; saveat = 4:4:WAIT_N, save_start = false, save_end = false, backend
+    )
     integ = init(prob, alg; save_start = false, save_end = false, backend)
     for _ in 1:WAIT_N
         step!(integ)
@@ -251,11 +270,13 @@ if DEVICE == "rocm"
             return nothing
         end
         hostcall_holder() =
-            WAIT_AMDGPU.Device.HostCallHolder(Float32, Tuple{Float32}; continuous = true) do x
+            WAIT_AMDGPU.Device.HostCallHolder(Float32, Tuple{Float32}; continuous = true) \
+        do x
                 x + 1.0f0
             end
         launch_hostcalls(b, hc, n) =
-            (WAIT_AMDGPU.@roc groupsize = 1 gridsize = 1 hostcall_kernel(b, hc, Int32(n)); nothing)
+            (WAIT_AMDGPU.@roc groupsize = 1 gridsize = 1 hostcall_kernel(b, hc, \
+        Int32(n)); nothing)
         """
     )
 end
@@ -266,12 +287,15 @@ allocs_spin() = @allocated CorePotts._spin_until(TRUE, 1.0)
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "device wait: the library's device wait" setup = [DeviceWaitSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "device wait: the library's device wait" setup = [DeviceWaitSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "device wait: the library's device wait" begin
         @testset "(W) the helper exists, is internal, and waits on the CPU" begin
             @test isdefined(CorePotts, :_device_wait)
             @test isdefined(CorePotts, :_spin_until)
-            @test !Base.ispublic(CorePotts, :_device_wait) && !Base.ispublic(CorePotts, :_spin_until)
+            @test !Base.ispublic(CorePotts, :_device_wait) &&
+                !Base.ispublic(CorePotts, :_spin_until)
             @test CorePotts._device_wait(WAIT_KA.CPU()) === nothing
             @test CorePotts._device_wait(WAIT_KA.CPU(); timeout = 5.0) === nothing
             @test CorePotts._spin_until(() -> true, 1.0) === nothing
@@ -286,7 +310,8 @@ end
             # a task that needs several turns: the spin must yield repeatedly
             n = Threads.Atomic{Int}(0)
             t2 = @async for _ in 1:5
-                Threads.atomic_add!(n, 1); yield()
+                Threads.atomic_add!(n, 1)
+                yield()
             end
             CorePotts._spin_until(() -> n[] >= 5, 30.0)
             @test n[] == 5
@@ -320,7 +345,8 @@ end
 
         @testset "(A) allocations (CPU)" begin
             b = WAIT_KA.CPU()
-            allocs_wait(b); allocs_spin()
+            allocs_wait(b)
+            allocs_spin()
             @test allocs_wait(b) == 0
             @test allocs_spin() == 0
         end
@@ -351,7 +377,9 @@ end
 
             @testset "(A) allocations on the device ($DEVICE)" begin
                 a = WAIT_KA.zeros(backend, Float32, 1 << 20)
-                a .+= 1.0f0; allocs_wait(backend); allocs_ka(backend)
+                a .+= 1.0f0
+                allocs_wait(backend)
+                allocs_ka(backend)
                 idle = allocs_wait(backend)
                 a .+= 1.0f0
                 busy = allocs_wait(backend)
@@ -377,21 +405,30 @@ end
             if DEVICE == "rocm"
                 @testset "(P) read points do not take the slow wait path (ROCm)" begin
                     mk = Dict(cases(Float32, (0, 10^6)))
-                    for name in ("openvt_monolayer_100", "merks_100", "openvt_reference_100")
+                    for name in (
+                            "openvt_monolayer_100", "merks_100",
+                            "openvt_reference_100",
+                        )
                         prob = mk[name]()
-                        # up to 3 samples of 300; the best one counts. The slow path is systematic
-                        # (12-100 % of reads, in every sample), while a busy machine preempts the
-                        # spinning thread in bursts (CI shares its CPUs: 14-20 slow reads, the
-                        # Merks control too, 2026-11-06; D-271)
+                        # up to 3 samples of 300; the best one counts. The slow path is
+                        # systematic (12-100 % of reads, in every sample), while a busy
+                        # machine preempts the spinning thread in bursts (CI shares its
+                        # CPUs: 14-20 slow reads, the Merks control too, 2026-11-06; D-271)
                         function sample()
-                            integ = init(prob, CheckerboardCPM(); backend, save_start = false, save_end = false)
+                            integ = init(
+                                prob, CheckerboardCPM(); backend,
+                                save_start = false, save_end = false
+                            )
                             for _ in 1:5
-                                step!(integ); current_state(integ)
+                                step!(integ)
+                                current_state(integ)
                             end
                             reads = Float64[]
                             for _ in 1:300
                                 step!(integ)
-                                t = time_ns(); current_state(integ); push!(reads, (time_ns() - t) / 1.0e9)
+                                t = time_ns()
+                                current_state(integ)
+                                push!(reads, (time_ns() - t) / 1.0e9)
                             end
                             saving = init(
                                 remake(prob; tspan = (0, 400)), CheckerboardCPM(); backend,
@@ -402,15 +439,21 @@ end
                             end
                             steps = Float64[]
                             for _ in 1:300
-                                t = time_ns(); step!(saving); push!(steps, (time_ns() - t) / 1.0e9)
+                                t = time_ns()
+                                step!(saving)
+                                push!(steps, (time_ns() - t) / 1.0e9)
                             end
                             return (;
-                                reads = count(>(1.0e-3), reads), steps = count(>(3.0e-3), steps),
+                                reads = count(>(1.0e-3), reads),
+                                steps = count(>(3.0e-3), steps),
                                 median_read_us = 1.0e6 * sort(reads)[150],
                             )
                         end
                         samples = [sample()]
-                        while length(samples) < 3 && (minimum(x -> x.reads, samples) > 6 || minimum(x -> x.steps, samples) > 6)
+                        while length(samples) < 3 && (
+                                minimum(x -> x.reads, samples) > 6 ||
+                                    minimum(x -> x.steps, samples) > 6
+                            )
                             push!(samples, sample())
                         end
                         slow_reads = minimum(x -> x.reads, samples)
@@ -434,7 +477,8 @@ end
                     @test time() - t0 < 60.0
                     @test Array(b) == Float32.(2:17)
                     # negative control (one thread: the service task runs only when this one
-                    # yields): a spin that never yields cannot finish the kernel; the helper then does
+                    # yields): a spin that never yields cannot finish the kernel; the helper
+                    # then does
                     if Threads.maxthreadid() == 1
                         fill!(b, 0.0f0)
                         CorePotts._device_wait(backend)
@@ -460,7 +504,8 @@ end
                 end
 
             else
-                @test_skip "ROCm (POTTS_GPU=rocm): hostcalls (H) and the read-point timing (P)"
+                @test_skip "ROCm (POTTS_GPU=rocm): hostcalls (H) and the read-point \
+                    timing (P)"
             end
         else
             @test_skip "device (POTTS_GPU=metal|rocm)"

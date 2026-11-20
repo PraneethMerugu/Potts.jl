@@ -5,8 +5,8 @@ The Act model of actin-driven cell migration (Niculescu, Textor & de Boer, PLoS 
 Biol. 11, e1004280, 2015; Wortel et al., Biophys. J. 120, 2609, 2021), with the semantics of
 their reference code Artistoo:
 
-- **Activity.** Every site a cell gains becomes fully active (`max_act`); a site taken by the
-  medium is inactive; activity decays by one per MCS.
+- **Activity.** Every site a cell gains becomes fully active (`max_act`); a site taken by
+  the medium is inactive; activity decays by one per MCS.
 - **Act term.** Every copy gains `−(λ_act/max_act)(GM(source) − GM(target))`, where `GM(s)`
   is the plain geometric mean of the activity over `s` and its Moore neighbors owned like
   `s` (zero if any is inactive, and zero for the medium). Retracting active sites is
@@ -44,7 +44,10 @@ The defaults are the amoeboid cell of Niculescu et al. (Methods; Fig. 6) on a 20
         cells(cell) => λ * (volume - V₀)^2 + λₛ * (surface - S₀)^2
         contacts => J[kind, neighbor_kind]
     end
-    act_mean(s) = geomean(act[n] for n in Moore(1; include_self = true)(s) if owner[n] == owner[s])
+    act_mean(s) = geomean(
+        act[n]
+            for n in Moore(1; include_self = true)(s) if owner[n] == owner[s]
+    )
     @drive copy => -(λ_act / max_act) * (act_mean(source) - act_mean(target))
     @on_copy act[target] ~ ifelse(new != 0, max_act, 0.0)
     @after_mcs act ~ max(Pre(act) - 1, 0)

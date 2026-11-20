@@ -1,10 +1,11 @@
 using Potts, PottsModels, Test
 using Statistics: mean, std
-const FULLREPRO = get(ENV, "POTTS_FULL_REPRODUCTION", "false") == "true" || get(ENV, "REPRO", "") == "full"
+const FULLREPRO = get(ENV, "POTTS_FULL_REPRODUCTION", "false") == "true" ||
+    get(ENV, "REPRO", "") == "full"
 const RSOLVER = ExplicitEuler(substeps = 15)
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Observables
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 const MERKS_R8 = [(a, b) for a in -1:1 for b in -1:1 if (a, b) != (0, 0)]
 const MERKS_R4 = [(1, 0), (-1, 0), (0, 1), (0, -1)]
 merks_cross(o, a, b) = (a[1] - o[1]) * (b[2] - o[2]) - (a[2] - o[2]) * (b[1] - o[1])
@@ -23,10 +24,17 @@ function hull_area(pts)
     end
     h = [chain(P)[1:(end - 1)]; chain(reverse(P))[1:(end - 1)]]
     length(h) < 3 && return 0.0
-    return abs(sum(k -> h[k][1] * h[mod1(k + 1, end)][2] - h[mod1(k + 1, end)][1] * h[k][2], eachindex(h))) / 2
+    return abs(
+        sum(
+            k -> h[k][1] * h[mod1(k + 1, end)][2] -
+                h[mod1(k + 1, end)][1] * h[k][2], eachindex(h)
+        )
+    ) / 2
 end
 """O1: TST compactness (σ: 0 medium, 1 frame, ≥ 2 endothelial)."""
-merks_compactness(σ) = (pts = [(I[1], I[2]) for I in findall(>=(2), σ)]; length(pts) / hull_area(pts))
+function merks_compactness(σ)
+    (pts = [(I[1], I[2]) for I in findall(>=(2), σ)]; length(pts) / hull_area(pts))
+end
 function components(mask, offs)
     X, Y = size(mask)
     lab = zeros(Int, X, Y)
@@ -76,12 +84,19 @@ function centroids(σ)
     for I in CartesianIndices(σ)
         c = σ[I]
         c >= 2 || continue
-        sx[c] += I[1]; sy[c] += I[2]; m[c] += 1
+        sx[c] += I[1]
+        sy[c] += I[2]
+        m[c] += 1
     end
     return [(sx[c] / m[c], sy[c] / m[c]) for c in 2:n]
 end
 """O5, in sites (× 2 µm)."""
-merks_displacement(σ0, σ1) = mean(((a, b),) -> hypot(b[1] - a[1], b[2] - a[2]), zip(centroids(σ0), centroids(σ1)))
+function merks_displacement(σ0, σ1)
+    return mean(
+        ((a, b),) -> hypot(b[1] - a[1], b[2] - a[2]),
+        zip(centroids(σ0), centroids(σ1))
+    )
+end
 """O6 over a vector of σ's saved at equal intervals: (Σ par², Σ perp²)."""
 function merks_anisotropy(σs)
     par = perp = 0.0
@@ -112,22 +127,32 @@ function merks_anisotropy(σs)
     end
     return par, perp
 end
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Runs
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 """One 2006 run: final σ's at the save times (MCS)."""
 function run06(seed, saves; lattice = (500, 500), n = 282, p = Pair[])
     op = layout(merks2006_layout(; lattice, n, seed), lattice)
-    prob = PottsProblem(Merks2006(; name = :m6, lattice), [op; p...], (0, maximum(saves)); field_solver = RSOLVER, seed)
+    prob = PottsProblem(
+        Merks2006(; name = :m6, lattice), [op; p...],
+        (0, maximum(saves)); field_solver = RSOLVER, seed
+    )
     sol = solve(prob, SequentialCPM(); saveat = saves)
     return Dict(Int(t) => Array(u.ownership) for (t, u) in zip(sol.t, sol.u))
 end
 """One 2008 sprout run (or the paper de novo start): σ's at the save times (MCS)."""
 function run08(seed, saves; p = Pair[], mode = :extension_retraction, denovo = false)
     lattice = denovo ? (502, 502) : (202, 202)
-    l = denovo ? merks2008_denovo(; lattice, n = 1000, region = (85:417, 85:417), seed) : merks2008_sprout(; seed)
+    l = if denovo
+        merks2008_denovo(; lattice, n = 1000, region = (85:417, 85:417), seed)
+    else
+        merks2008_sprout(; seed)
+    end
     op = layout(l, lattice)
-    prob = PottsProblem(Merks2008(; name = :m8, lattice, mode), [op; p...], (0, maximum(saves)); field_solver = RSOLVER, seed)
+    prob = PottsProblem(
+        Merks2008(; name = :m8, lattice, mode), [op; p...],
+        (0, maximum(saves)); field_solver = RSOLVER, seed
+    )
     sol = solve(prob, SequentialCPM(); saveat = saves)
     return Dict(Int(t) => Array(u.ownership) for (t, u) in zip(sol.t, sol.u))
 end
@@ -136,14 +161,18 @@ function merks_walk(seed; p = Pair[], tend = 2000)
     G = (160, 160)
     op = layout(merks2006_layout(; lattice = G, region = (120, 120), n = 9, seed), G)
     prob = PottsProblem(
-        Merks2006(; name = :m6, lattice = G), [op; :χcM => 0.0; :χcc => 0.0; p...], (0, tend);
+        Merks2006(; name = :m6, lattice = G), [op; :χcM => 0.0; :χcc => 0.0; p...], (
+            0, tend,
+        );
         field_solver = RSOLVER, seed
     )
-    sol = solve(prob, SequentialCPM(); saveat = 200:10:tend)          # the first 200 MCS relax the squares
+    # the first 200 MCS relax the squares
+    sol = solve(prob, SequentialCPM(); saveat = 200:10:tend)
     par, perp = merks_anisotropy([Array(u.ownership) for u in sol.u])
     return par / perp
 end
-# a crossing of y(x) through `level` by linear interpolation, the first one (nothing if none)
+# a crossing of y(x) through `level` by linear interpolation, the first one (nothing if
+# none)
 function crossing(xs, ys, level)
     for k in 1:(length(xs) - 1)
         a, b = ys[k] - level, ys[k + 1] - level
@@ -152,9 +181,9 @@ function crossing(xs, ys, level)
     end
     return nothing
 end
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # FULL (offline; POTTS_FULL_REPRODUCTION=true)
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 function tmap(f, xs)
     out = Vector{Any}(undef, length(xs))
     Threads.@threads(

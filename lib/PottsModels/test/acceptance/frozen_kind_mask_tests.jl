@@ -53,7 +53,8 @@ const FROZEN_T1 = 60
         cells => λ * (volume - V₀)^2
         contacts => J[kind, neighbor_kind]
     end
-    @divide cells(cell) when = volume >= 10000    # never fires: a lifecycle needs the moments
+    # never fires: a lifecycle needs the moments
+    @divide cells(cell) when = volume >= 10000
     @sweep Metropolis(; temperature = T)
 end
 # kind indices (medium = 0): checked against the operating point below
@@ -74,7 +75,11 @@ struct Trigger{S}
     sw::S
 end
 function (t::Trigger)(st, p, ctx, key, mcs, c)
-    return mcs == FROZEN_S && dest(t.sw, st.cell.kind[c]) != st.cell.kind[c] ? EVENT_TRANSITION : EVENT_NONE
+    return if mcs == FROZEN_S && dest(t.sw, st.cell.kind[c]) != st.cell.kind[c]
+        EVENT_TRANSITION
+    else
+        EVENT_NONE
+    end
 end
 struct Kind{S}
     sw::S
@@ -85,7 +90,10 @@ function problem(moves::Pair{Int32, Int32}...; seed = 1)
     σ = zeros(Int32, 30, 30)
     σ[5:10, 5:10] .= 1
     σ[18:23, 18:23] .= 2
-    prob = PottsProblem(Kinds(; name = :frozen_kind), [ownership => σ, kind => [:cell, :wall]], (0, FROZEN_T1); seed)
+    prob = PottsProblem(
+        Kinds(; name = :frozen_kind),
+        [ownership => σ, kind => [:cell, :wall]], (0, FROZEN_T1); seed
+    )
     f = prob.f
     sw = Switch(moves)
     lc = Lifecycle(Trigger(sw); kind = Kind(sw))
@@ -104,19 +112,30 @@ const AFTER = (FROZEN_S + 3):(FROZEN_T1 + 1)
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "frozen kind mask: a cell that becomes frozen stops moving, a frozen cell that is released moves" setup = [FrozenKindMaskSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "frozen kind mask: a cell that becomes frozen stops moving, a frozen cell that \
+    is released moves" setup = [FrozenKindMaskSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
     # u at t = S + 2 … T1: sweeps S + 1 … T1 − 1 (39 steps)
-    @testset "frozen kind mask: a cell that becomes frozen stops moving, a frozen cell that is released moves ($(nameof(typeof(alg))))" for alg in
-        (SequentialCPM(), CheckerboardCPM())
-        # cell 1: cell → wall (frozen); cell 2: wall → cell (released), in the same lifecycle pass
+    @testset "frozen kind mask: a cell that becomes frozen stops moving, a frozen cell \
+        that is released moves ($(nameof(typeof(alg))))" for alg in (
+            SequentialCPM(),
+            CheckerboardCPM(),
+        )
+        # cell 1: cell → wall (frozen); cell 2: wall → cell (released), in the same
+        # lifecycle pass
         prob = problem(CELL => WALL, WALL => CELL)
         @test Array(prob.u0.cell.kind)[1:2] == [CELL, WALL]          # fixture: kind indices
         sol = solve(prob, alg; saveat = 1)
         @test Symbol(sol.retcode) === :Success
         @test sol.t == 0:FROZEN_T1
         # the transition happened at the lifecycle of MCS S, and only there
-        @test all(i -> Array(sol.u[i].cell.kind)[1:2] == [CELL, WALL], 1:(FROZEN_S + 1))   # t = 0 … S
-        @test all(i -> Array(sol.u[i].cell.kind)[1:2] == [WALL, CELL], (FROZEN_S + 2):(FROZEN_T1 + 1))
+        # t = 0 … S
+        @test all(i -> Array(sol.u[i].cell.kind)[1:2] == [CELL, WALL], 1:(FROZEN_S + 1))
+        @test all(
+            i -> Array(sol.u[i].cell.kind)[1:2] == [WALL, CELL],
+            (FROZEN_S + 2):(FROZEN_T1 + 1)
+        )
         @test sol.stats.lifecycle.transitions == 2
         @test all(u -> Array(u.cell.volume)[1] > 0 && Array(u.cell.volume)[2] > 0, sol.u)
 
@@ -126,26 +145,39 @@ end
 
         # 1. frozen after the transition: cell 1's sites never change from t = S + 1 on
         frozen_at = sites(sol.u[FROZEN_S + 2], 1)
-        @test all(i -> sites(sol.u[i], 1) == frozen_at, AFTER)        # DEFECT CHECK (currently moves)
-        @test moved(sol, 1, AFTER) == 0                               # DEFECT CHECK (currently ≈ every MCS)
+        # DEFECT CHECK (currently moves)
+        @test all(i -> sites(sol.u[i], 1) == frozen_at, AFTER)
+        # DEFECT CHECK (currently ≈ every MCS)
+        @test moved(sol, 1, AFTER) == 0
         @test Array(sol.u[end].cell.volume)[1] == count(frozen_at)
         # 2. released: cell 2 moves after the transition
-        @test moved(sol, 2, AFTER) >= length(AFTER) ÷ 2          # DEFECT CHECK (currently 0)
+        # DEFECT CHECK (currently 0)
+        @test moved(sol, 2, AFTER) >= length(AFTER) ÷ 2
         @test sites(sol.u[end], 2) != sites(sol.u[FROZEN_S + 2], 2)
     end
 end
 
-@testitem "frozen kind mask: the same transition into a free kind keeps moving (negative control)" setup = [FrozenKindMaskSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "frozen kind mask: the same transition into a free kind keeps moving (negative control $(nameof(typeof(alg))))" for alg in
-        (SequentialCPM(), CheckerboardCPM())
+@testitem "frozen kind mask: the same transition into a free kind keeps moving (negative \
+    control)" setup = [FrozenKindMaskSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "frozen kind mask: the same transition into a free kind keeps moving \
+        (negative control $(nameof(typeof(alg))))" for alg in (
+            SequentialCPM(),
+            CheckerboardCPM(),
+        )
         # cell 1: cell → other (not frozen); cell 2 stays wall
         prob = problem(CELL => OTHER)
         sol = solve(prob, alg; saveat = 1)
         @test Symbol(sol.retcode) === :Success
-        @test all(i -> Array(sol.u[i].cell.kind)[1:2] == [OTHER, WALL], (FROZEN_S + 2):(FROZEN_T1 + 1))
+        @test all(
+            i -> Array(sol.u[i].cell.kind)[1:2] == [OTHER, WALL],
+            (FROZEN_S + 2):(FROZEN_T1 + 1)
+        )
         @test sol.stats.lifecycle.transitions == 1
         @test moved(sol, 1, BEFORE) >= length(BEFORE) ÷ 2
         @test moved(sol, 1, AFTER) >= length(AFTER) ÷ 2          # the control moves
-        @test moved(sol, 2, 2:(FROZEN_T1 + 1)) == 0                          # an untouched wall never moves
+        # an untouched wall never moves
+        @test moved(sol, 2, 2:(FROZEN_T1 + 1)) == 0
     end
 end

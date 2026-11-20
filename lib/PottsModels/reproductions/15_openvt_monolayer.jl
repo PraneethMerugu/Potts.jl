@@ -5,8 +5,9 @@
 # optional contact inhibition of growth. The consortium's manuscript defines the model, the
 # protocols, the analysis and the figures that every framework contributes to: OpenVT
 # consortium, *Reference Model for the Simulation of a Growing Tissue Monolayer with Contact
-# Inhibition*, in preparation (called **M** below; the 9 Oct 2026 draft). PottsModels ships the model as
-# `OpenVTReferenceMonolayer`, and this page is Potts.jl's contribution to M's lineup.
+# Inhibition*, in preparation (called **M** below; the 9 Oct 2026 draft). PottsModels ships
+# the model as `OpenVTReferenceMonolayer`, and this page is Potts.jl's contribution to M's
+# lineup.
 #
 # The page shows, in order:
 #
@@ -40,7 +41,10 @@ const DATA15 = joinpath(pkgdir(PottsModels), "reproductions", "data", "15")
 ## a committed record: check the commit quoted in the text against its provenance
 function record(dir; commit)
     prov = TOML.parsefile(joinpath(DATA15, dir, "provenance.toml"))
-    @assert startswith(prov["commit"], commit) "$dir: provenance commit is $(prov["commit"])"
+    @assert startswith(
+        prov["commit"],
+        commit
+    ) "$dir: provenance commit is $(prov["commit"])"
     @assert prov["dirty_tracked"] === false
     return prov
 end
@@ -59,7 +63,10 @@ end
 function tsv(dir, file)
     lines = filter(!isempty, readlines(joinpath(DATA15, dir, file)))
     head = split(lines[1], '\t')
-    return [Dict(String(h) => String(v) for (h, v) in zip(head, split(l, '\t'))) for l in lines[2:end]]
+    return [
+        Dict(String(h) => String(v) for (h, v) in zip(head, split(l, '\t')))
+            for l in lines[2:end]
+    ]
 end
 
 ## a verdict table as Markdown (vertical bars inside cells are shown as ∣, underscores
@@ -105,7 +112,8 @@ nothing #hide
 #         γ = 0.0
 #         J[kind, kind] = [0.0 10.0; 10.0 20.0]
 #     end
-#     @variables begin                   # per cell: reference area, division factor, free surface
+#     # per cell: reference area, division factor, free surface
+#     @variables begin
 #         A_star(cell) = A₀
 #         X(cell) = 0.0
 #         f(cell) = 1.0
@@ -118,12 +126,16 @@ nothing #hide
 #     end
 #     # the first cell draws its X before its first division check
 #     @before_mcs X ~ ifelse(Pre(X) > 0, Pre(X), randn(μ_X, σ_X; lower_bound = 0.0))
-#     @after_mcs begin                   # f, then growth unless inhibited (type 1 and type 2)
+#     # f, then growth unless inhibited (type 1 and type 2)
+#     @after_mcs begin
 #         f ~ ifelse(
 #             count(true for _ in contacts) > 0,
-#             count(neighbor_kind == medium for _ in contacts) / count(true for _ in contacts), 1.0
+#             count(neighbor_kind == medium for _ in contacts) /
+#                 count(true for _ in contacts),
+#             1.0
 #         )
-#         A_star ~ ifelse((volume / Pre(A_star) >= β) && (f >= γ), Pre(A_star) + α, Pre(A_star))
+#         A_star ~
+#             ifelse((volume / Pre(A_star) >= β) && (f >= γ), Pre(A_star) + α, Pre(A_star))
 #     end
 #     # division on the actual area; each daughter draws its own X
 #     @divide cells(cell) when = volume >= X * A₀, along = RandomPlane(), A_star => Split(),
@@ -143,8 +155,14 @@ nothing #hide
 # 5 sites of the edge:
 
 @named ref = OpenVTReferenceMonolayer(; lattice = (120, 120))
-prob = PottsProblem(ref, openvt_reference_state(; lattice = (120, 120)), (0, 3 * 775); seed = 1, capacity = 256)
-guards = CallbackSet(PottsModels.edge_guard(5; terminate = true), PottsModels.stop_at_cells(64))
+prob = PottsProblem(
+    ref, openvt_reference_state(; lattice = (120, 120)), (0, 3 * 775);
+    seed = 1, capacity = 256
+)
+guards = CallbackSet(
+    PottsModels.edge_guard(5; terminate = true),
+    PottsModels.stop_at_cells(64)
+)
 sol = solve(prob, SequentialCPM(); saveat = 0:15:(3 * 775), callback = guards)
 (retcode = sol.retcode, mcs = sol.t[end], cells = count(>(0), sol.u[end].cell.volume))
 
@@ -152,7 +170,10 @@ sol = solve(prob, SequentialCPM(); saveat = 0:15:(3 * 775), callback = guards)
 # free-surface fraction f and the area fraction a):
 
 fig = Figure(; size = (380, 380))
-ax = Axis(fig[1, 1]; aspect = DataAspect(), title = "OpenVTReferenceMonolayer, MCS $(sol.t[end])")
+ax = Axis(
+    fig[1, 1]; aspect = DataAspect(),
+    title = "OpenVTReferenceMonolayer, MCS $(sol.t[end])"
+)
 hidedecorations!(ax)
 pottsplot!(ax, renderframe(sol); encoding = CellIdentityEncoding(), medium_color = :white)
 limits!(ax, 40, 80, 40, 80)
@@ -179,22 +200,29 @@ o2 = PottsModels.openvt_snapshot(sol.u[end])
 # Apple M1 Pro, 4 threads, 14 s; figure `fig2_bde.png`.
 
 record("calibration-2026-10-05"; commit = "30c39601") #hide
-record_figure("calibration-2026-10-05", "fig2_bde.png"; alt = "Figure 2 b, d, e: chain relaxation") #hide
+record_figure( #hide
+    "calibration-2026-10-05", "fig2_bde.png"; #hide
+    alt = "Figure 2 b, d, e: chain relaxation" #hide
+) #hide
 
 # **Potts.jl (checkerboard).** The same 11-cell chain at λ = 2 under `CheckerboardCPM`, on
 # the 150 × 7 chain with the monolayer's 64 phases per MCS, relaxes at the sequential speed:
-# T(λ = 2) = 158 MCS against 158 on the same chain (see Potts.jl (checkerboard) below). Left:
-# in its own T, on the reference; right: both in MCS. Figure `fig2.png` of
+# T(λ = 2) = 158 MCS against 158 on the same chain (see Potts.jl (checkerboard) below).
+# Left: in its own T, on the reference; right: both in MCS. Figure `fig2.png` of
 # `data/15/checkerboard-2026-11-05/` (`plot_fig2.jl`):
 
-record_figure("checkerboard-2026-11-05", "fig2.png"; alt = "Figure 2 b: chain relaxation at lambda = 2, Potts.jl (checkerboard)") #hide
+record_figure( #hide
+    "checkerboard-2026-11-05", "fig2.png"; #hide
+    alt = "Figure 2 b: chain relaxation at lambda = 2, Potts.jl (checkerboard)" #hide
+) #hide
 
 #-
 
 let rows = filter(r -> r["result"] in ("PASS", "FAIL"), cal)
     Markdown.parse(
-        "**PASS: $(count(r -> r["result"] == "PASS", rows)) of $(length(rows)) calibration rows** " *
-            "(V6–V8). T = 156 MCS at λ = 2 against Table S5's 155, so one cycle is 5T = 775 MCS."
+        "**PASS: $(count(r -> r["result"] == "PASS", rows)) of $(length(rows)) " *
+            "calibration rows** (V6–V8). T = 156 MCS at λ = 2 against Table S5's 155, so \
+                one cycle is 5T = 775 MCS."
     )
 end
 
@@ -202,27 +230,34 @@ end
 #
 # M's Figure 5 pools 100 stochastic runs of case (b) at 10³ cells: histograms and
 # cumulative counts of the free-surface fraction f and of a = A/A\*, stacked by distance
-# from the initial cell. Rows: the consortium's TST runs (M's data), Potts.jl case (b) (seeds
-# 15001–15100) and the γ = 10⁻⁴ negative control (seeds 15501–15520). The verdict rules
-# were also run on the consortium's TST and Morpheus data, and both pass all seven rows.
-# Record `data/15/f5-2026-10-07/`, commit `3af81ae8`,
-# AMD Ryzen AI Max+ 395 PC, 12 threads, 120 runs in 468 s.
+# from the initial cell. Rows: the consortium's TST runs (M's data), Potts.jl case (b)
+# (seeds 15001–15100) and the γ = 10⁻⁴ negative control (seeds 15501–15520). The verdict
+# rules were also run on the consortium's TST and Morpheus data, and both pass all seven
+# rows. Record `data/15/f5-2026-10-07/`, commit `3af81ae8`, AMD Ryzen AI Max+ 395 PC, 12
+# threads, 120 runs in 468 s.
 #
 # M now draws every row on one set of distance bins, edges 0, 18.6, 37.2, 55.8, 74.4 and
-# 93 ("radii"). Our case (b) row on those edges, `fig5_shared.png` (`plot_f5_shared.jl`, from
-# the 100 per-cell files; the counts are in `hist_shared.tsv`), binned in R from the lattice center. M's axis is consistent with distance in units of R/2
-# (fitted 1.84–2.23 units per R across all nine consortium rows); the unit and origin are Q15
-# on our open question list. Our row stays in R and is provisional.
-# Our colonies reach up to 43 R, so the outer two bins are empty:
+# 93 ("radii"). Our case (b) row on those edges, `fig5_shared.png` (`plot_f5_shared.jl`,
+# from the 100 per-cell files; the counts are in `hist_shared.tsv`), binned in R from the
+# lattice center. M's axis is consistent with distance in units of R/2 (fitted 1.84–2.23
+# units per R across all nine consortium rows); the unit and origin are Q15 on our open
+# question list. Our row stays in R and is provisional. Our colonies reach up to 43 R, so
+# the outer two bins are empty:
 
 record("f5-2026-10-07"; commit = "3af81ae8") #hide
-record_figure("f5-2026-10-07", "fig5_shared.png"; alt = "Figure 5: f and a distributions of case (b) on the shared distance bins") #hide
+record_figure( #hide
+    "f5-2026-10-07", "fig5_shared.png"; #hide
+    alt = "Figure 5: f and a distributions of case (b) on the shared distance bins" #hide
+) #hide
 
 # The verdict figure `fig5.png` keeps each row on its own 5 equal bins, with the
 # consortium's TST row and the control (re-binning moves cells between distance bins only,
 # so no verdict changes):
 
-record_figure("f5-2026-10-07", "fig5.png"; alt = "Figure 5: f and a distributions, TST, Potts.jl and the control") #hide
+record_figure( #hide
+    "f5-2026-10-07", "fig5.png"; #hide
+    alt = "Figure 5: f and a distributions, TST, Potts.jl and the control" #hide
+) #hide
 
 # The bulk agrees (f = 0 share 0.888, a peak 0.865, mean a 0.849, mean f 0.039); the rim
 # does not: **V4.2, V4.3 and V4.5 fail** (see Deviations). The control fails as required.
@@ -246,11 +281,17 @@ record_figure("f5-2026-10-07", "fig5.png"; alt = "Figure 5: f and a distribution
 # equals case (a) run 1 of the Figure 3/9 record.
 
 record("f1-f4-2026-10-08"; commit = "c6ca4bc4") #hide
-record_figure("f1-f4-2026-10-08", "fig1.png"; alt = "Potts.jl panel of Figure 1", width = 360) #hide
+record_figure( #hide
+    "f1-f4-2026-10-08", "fig1.png"; alt = "Potts.jl panel of Figure 1", #hide
+    width = 360 #hide
+) #hide
 
 # The whole colony at the same state, the panel's block shaded (`fig1_colony.png`):
 
-record_figure("f1-f4-2026-10-08", "fig1_colony.png"; alt = "the 10^4-cell colony of case (a), run 1", width = 600) #hide
+record_figure( #hide
+    "f1-f4-2026-10-08", "fig1_colony.png"; #hide
+    alt = "the 10^4-cell colony of case (a), run 1", width = 600 #hide
+) #hide
 
 # ### Figures 3 and 9: growth over time
 #
@@ -265,23 +306,36 @@ record_figure("f1-f4-2026-10-08", "fig1_colony.png"; alt = "the 10^4-cell colony
 # figure was Figure 8 in the 2 Oct draft; the record keeps its names).
 
 prov_f3f8 = record("f3-f8-2026-10-08"; commit = "a64ae188") #hide
-record_figure("f3-f8-2026-10-08", "fig3.png"; alt = "Figure 3: N, r and A against time, TST and Potts.jl") #hide
+record_figure( #hide
+    "f3-f8-2026-10-08", "fig3.png"; #hide
+    alt = "Figure 3: N, r and A against time, TST and Potts.jl" #hide
+) #hide
 
 # Potts.jl (checkerboard), cases (f) and (b) in its own 775-MCS cycles, with the sequential
 # case (f) run 1 in gray (`fig3.png` of the checkerboard record, `plot_fig3.jl`):
 
-record_figure("checkerboard-2026-11-05", "fig3.png"; alt = "Figure 3: N, r and A against time, Potts.jl (checkerboard)") #hide
+record_figure( #hide
+    "checkerboard-2026-11-05", "fig3.png"; #hide
+    alt = "Figure 3: N, r and A against time, Potts.jl (checkerboard)" #hide
+) #hide
 
 #-
 
-record_figure("f3-f8-2026-10-08", "fig8.png"; alt = "Figure 9: seven panels for cases (a) and (e)") #hide
+record_figure( #hide
+    "f3-f8-2026-10-08", "fig8.png"; #hide
+    alt = "Figure 9: seven panels for cases (a) and (e)" #hide
+) #hide
 
-# Potts.jl (checkerboard), case (a) in its own 775-MCS cycles, with the sequential case (a) in gray;
-# panel (g) shows each run's share of six-neighbor cells and sd of n at the stop, as the
-# record keeps the O1 summaries rather than the histogram (`fig9.png` of the checkerboard
-# record, `plot_fig9.jl`):
+# Potts.jl (checkerboard), case (a) in its own 775-MCS cycles, with the sequential case (a)
+# in gray; panel (g) shows each run's share of six-neighbor cells and sd of n at the stop,
+# as the record keeps the O1 summaries rather than the histogram (`fig9.png` of the
+# checkerboard record, `plot_fig9.jl`):
 
-record_figure("checkerboard-2026-11-05", "fig9.png"; alt = "Figure 9 panels for case (a), Potts.jl (checkerboard) and the sequential runs") #hide
+record_figure( #hide
+    "checkerboard-2026-11-05", "fig9.png"; #hide
+    alt = "Figure 9 panels for case (a), Potts.jl (checkerboard) and the " * #hide
+        "sequential runs" #hide
+) #hide
 
 # Every pre-registered row passes and every negative control fails. Case (f) reproduces
 # TST's synchronous doublings and reaches 10³ cells at 9.97 cycles against 10.01; its area
@@ -292,23 +346,31 @@ record_figure("checkerboard-2026-11-05", "fig9.png"; alt = "Figure 9 panels for 
 #
 # Figure 6 plots the mean time to 10⁴ cells against β (γ = 0, case (c)) and against γ
 # (β = 0, case (d)), with dashed lines at 1.1, 2, 5, 10 and 20 times M's uninhibited time of
-# 13.57 cycles. Table 1 lists the threshold at which each multiple is reached; Figure 7 shows
-# the colony at 10⁴ cells at each multiple's γ threshold. Rings: the Potts.jl thresholds;
-# diamonds and crosses: TST's and Artistoo's Table 1 values. Record
-# `data/15/sweeps-2026-10-08/`, commit `41fb2ba6`, AMD Ryzen AI Max+ 395 PC,
-# 12 threads, 160 runs (6 capped at 20×) in 68.7 core-hours, with
-# `SequentialCPM(; skip_interior = true)` (equal in law to `SequentialCPM()`);
-# figures `fig6.png` and `fig7_grid.png`, thresholds `table1.tsv`.
+# 13.57 cycles. Table 1 lists the threshold at which each multiple is reached; Figure 7
+# shows the colony at 10⁴ cells at each multiple's γ threshold. Rings: the Potts.jl
+# thresholds; diamonds and crosses: TST's and Artistoo's Table 1 values. Record
+# `data/15/sweeps-2026-10-08/`, commit `41fb2ba6`, AMD Ryzen AI Max+ 395 PC, 12 threads, 160
+# runs (6 capped at 20×) in 68.7 core-hours, with `SequentialCPM(; skip_interior = true)`
+# (equal in law to `SequentialCPM()`); figures `fig6.png` and `fig7_grid.png`, thresholds
+# `table1.tsv`.
 
 sweeps = tsv("sweeps-2026-10-08", "verdicts.tsv") #hide
 record("sweeps-2026-10-08"; commit = "41fb2ba6") #hide
-record_figure("sweeps-2026-10-08", "fig6.png"; alt = "Figure 6: time to 10^4 cells against beta and gamma") #hide
+record_figure( #hide
+    "sweeps-2026-10-08", "fig6.png"; #hide
+    alt = "Figure 6: time to 10^4 cells against beta and gamma" #hide
+) #hide
 
 #-
 
 let t1 = tsv("sweeps-2026-10-08", "table1.tsv")
     function v(p, m)
-        r = filter(r -> startswith(r["target"], (p == "beta" ? "V2." : "V3.") * replace(m, ".0" => "") * "x"), sweeps)
+        r = filter(
+            r -> startswith(
+                r["target"],
+                (p == "beta" ? "V2." : "V3.") * replace(m, ".0" => "") * "x"
+            ), sweeps
+        )
         return isempty(r) ? "—" : only(r)["result"]
     end
     val(s) = isempty(s) ? "—" : s
@@ -317,7 +379,8 @@ let t1 = tsv("sweeps-2026-10-08", "table1.tsv")
         p = r["parameter"] == "beta" ? "β" : "γ"
         verdict = v(r["parameter"], r["multiple"])
         out *= "| $p | $(replace(r["multiple"], r"\.0$" => ""))× ($(r["tau_cycles"])) | $(val(r["threshold"])) | $(val(r["TST"])) | " *
-            "$(val(r["Artistoo"])) | $(val(r["band"])) | $(verdict == "FAIL" ? "**FAIL**" : verdict) |\n"
+            "$(val(r["Artistoo"])) | $(val(r["band"])) \
+                | $(verdict == "FAIL" ? "**FAIL**" : verdict) |\n"
     end
     Markdown.parse(out)
 end
@@ -326,21 +389,25 @@ end
 # adjacent grid points (ascending) whose mean times enclose the multiple, is narrowed by
 # bisection, and the threshold is whichever of its two ends (6 runs each) has the mean time
 # nearer the multiple. It is not the nearest of all sampled points: at β 1.1× this gives
-# 0.625 where the globally nearest sample is 0.65 (no verdict changes). Against our own uninhibited
-# time (14.945 cycles) the same rule gives β = 0.80, 0.95, 0.99, 1.01 and 1.02 and
-# γ = 0.20, 0.60 and 0.75 (information only, in `table1.tsv`). The γ rows at 1.1× and 2× are
-# "—", as for every lattice framework: the time jumps from 14.9 to 58.8 cycles between
+# 0.625 where the globally nearest sample is 0.65 (no verdict changes). Against our own
+# uninhibited time (14.945 cycles) the same rule gives β = 0.80, 0.95, 0.99, 1.01 and 1.02
+# and γ = 0.20, 0.60 and 0.75 (information only, in `table1.tsv`). The γ rows at 1.1× and 2×
+# are "—", as for every lattice framework: the time jumps from 14.9 to 58.8 cycles between
 # γ = 0 and γ = 10⁻⁴.
 
 # **Figure 7** is M's grid "Tissue Snapshots with Surface Inhibition": one colony at 10⁴
 # cells per Table 1 multiple, at that multiple's γ threshold (β = 0). Our row,
 # `fig7_grid.png` (`plot_f7_grid.jl`, a render of the record's O5 files, replicate 1): 1.1×
-# and 2× are empty, as for every lattice framework (our T1 is "—" there); 5×, 10× and 20× are
-# γ = 0.1625, 0.5375 and 0.7625. Cells are yellow (no inhibition) or teal (surface-inhibited),
-# and the black line is the tissue outline: the concave hull of the cell centroids as the
-# consortium's `metrics.cpp` draws it (concaveman, concavity 1.5).
+# and 2× are empty, as for every lattice framework (our T1 is "—" there); 5×, 10× and 20×
+# are γ = 0.1625, 0.5375 and 0.7625. Cells are yellow (no inhibition) or teal
+# (surface-inhibited), and the black line is the tissue outline: the concave hull of the
+# cell centroids as the consortium's `metrics.cpp` draws it (concaveman, concavity 1.5).
 
-record_figure("sweeps-2026-10-08", "fig7_grid.png"; alt = "Figure 7: 10^4-cell colonies at the gamma thresholds, yellow and teal, with the concave hull") #hide
+record_figure( #hide
+    "sweeps-2026-10-08", "fig7_grid.png"; #hide
+    alt = "Figure 7: 10^4-cell colonies at the gamma thresholds, yellow and teal, " * #hide
+        "with the concave hull" #hide
+) #hide
 
 # C/C_circle of each colony (the outline's perimeter over that of a circle of its area,
 # `metrics.cpp`'s first roughness): **1.38** at 5×, **1.91** at 10× and **2.22** at 20×
@@ -354,7 +421,10 @@ record_figure("sweeps-2026-10-08", "fig7_grid.png"; alt = "Figure 7: 10^4-cell c
 # The same final states (with γ = 0 and 10⁻⁴) as lattice stills, colored by state
 # (`fig7_cells.png`):
 
-record_figure("sweeps-2026-10-08", "fig7_cells.png"; alt = "the five sweep colonies as lattice stills, colored by state") #hide
+record_figure( #hide
+    "sweeps-2026-10-08", "fig7_cells.png"; #hide
+    alt = "the five sweep colonies as lattice stills, colored by state" #hide
+) #hide
 
 # **15 of 18 pre-registered rows pass; V1, V2.1.1x and V3b fail** (see Deviations), and all
 # three negative controls fail, as required. Nothing was tuned: no band, rule, seed or
@@ -370,22 +440,27 @@ record_figure("sweeps-2026-10-08", "fig7_cells.png"; alt = "the five sweep colon
 #   whole γ curve lies 4–11 % below TST's samples, yet every γ threshold passes.
 #
 # The leading candidate for all three is the division rule: Potts.jl, like M, divides on
-# the actual area, TST on the target area (C13). It is unverified, and for V3b it is a weaker fit: we are slower than TST at γ = 0 but faster
-# when only the rim grows, which a plain rate offset cannot cause.
+# the actual area, TST on the target area (C13). It is unverified, and for V3b it is a
+# weaker fit: we are slower than TST at γ = 0 but faster when only the rim grows, which a
+# plain rate offset cannot cause.
 #
 # ### Figure 8: colonies at the β thresholds (area inhibition)
 #
 # M's new Figure 8, "Tissue Snapshots with Area Inhibition", is the same grid for β (γ = 0):
 # one colony at 10⁴ cells at each of our Table 1 β values, 0.625, 0.9375, 0.9875, 1.007 and
-# 1.0212, cells yellow (no inhibition) or red (area-inhibited, a < β), with the black concave
-# hull of `metrics.cpp` (concavity 1.5). The sweeps record did not keep these colonies, so
-# each is replayed from its seed: replicate 1 of that T1 point, which stopped at the same MCS
-# with the same cell count as its sweeps row. Record `data/15/f8beta-2026-10-09/`,
-# commit `97c326bf`, AMD Ryzen AI Max+ 395 PC, 5 threads, 5 runs in 24 min; figure
-# `fig8_grid.png` (`plot_f8_grid.jl`).
+# 1.0212, cells yellow (no inhibition) or red (area-inhibited, a < β), with the black
+# concave hull of `metrics.cpp` (concavity 1.5). The sweeps record did not keep these
+# colonies, so each is replayed from its seed: replicate 1 of that T1 point, which stopped
+# at the same MCS with the same cell count as its sweeps row. Record
+# `data/15/f8beta-2026-10-09/`, commit `97c326bf`, AMD Ryzen AI Max+ 395 PC, 5 threads, 5
+# runs in 24 min; figure `fig8_grid.png` (`plot_f8_grid.jl`).
 
 record("f8beta-2026-10-09"; commit = "97c326bf") #hide
-record_figure("f8beta-2026-10-09", "fig8_grid.png"; alt = "Figure 8: 10^4-cell colonies at the beta thresholds, yellow and red, with the concave hull") #hide
+record_figure( #hide
+    "f8beta-2026-10-09", "fig8_grid.png"; #hide
+    alt = "Figure 8: 10^4-cell colonies at the beta thresholds, yellow and red, " * #hide
+        "with the concave hull" #hide
+) #hide
 
 # C/C_circle of each colony (`fig8_grid.tsv`): **1.12** at 1.1×, **1.16** at 2×, **1.18** at
 # 5×, **1.24** at 10× and **1.25** at 20×. The inhibited share rises from 50 % at β = 0.625
@@ -396,7 +471,8 @@ record_figure("f8beta-2026-10-09", "fig8_grid.png"; alt = "Figure 8: 10^4-cell c
 # ### The full-run videos
 #
 # Run 1 of each case, one frame every 39 MCS to the stop, one color per cell, no outlines
-# (release `reproductions-2026-10-08-openvt-f3f8` and `reproductions-2026-10-07-openvt-f5-cells-v2`).
+# (release `reproductions-2026-10-08-openvt-f3f8` and
+# `reproductions-2026-10-07-openvt-f5-cells-v2`).
 #
 # ```@raw html
 # <figure><video src="https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-08-openvt-f3f8/15_openvt_f3f8_a_run1_seed15701_cells.mp4" controls loop muted playsinline width="420"></video>
@@ -416,16 +492,28 @@ let
     function pre(rows)
         return filter(
             r -> r["result"] in ("PASS", "FAIL") && get(r, "case", "") != "control" &&
-                !occursin("must FAIL", get(r, "band", "")) && !occursin("(all rows)", r["target"]), rows
+                !occursin("must FAIL", get(r, "band", "")) && !occursin("(all \
+                    rows)", r["target"]), rows
         )
     end
     tally(rows) = (p = count(r -> r["result"] == "PASS", rows); "$p of $(length(rows))")
-    fails(rows) = (f = [String(first(split(r["target"]))) for r in rows if r["result"] == "FAIL"]; isempty(f) ? "—" : "**" * join(f, ", ") * "**")
+    function fails(rows)
+        f = [String(first(split(r["target"]))) for r in rows if r["result"] == "FAIL"]
+        return isempty(f) ? "—" : "**" * join(f, ", ") * "**"
+    end
     calr = filter(r -> r["result"] in ("PASS", "FAIL"), cal)
     f3 = pre(filter(r -> startswith(r["target"], "F3") && r["case"] in ("f", "b"), f3f8))
-    f8 = pre(filter(r -> (startswith(r["target"], "V5.") || startswith(r["target"], "F8.")) && r["case"] in ("a", "e"), f3f8))
+    f8 = pre(
+        filter(
+            r -> (startswith(r["target"], "V5.") || startswith(r["target"], "F8.")) &&
+                r["case"] in ("a", "e"), f3f8
+        )
+    )
     v4 = pre(filter(r -> startswith(r["target"], "V4.") && r["case"] == "b", f5))
-    ctl = filter(r -> r["case"] == "control" || occursin("must FAIL", get(r, "band", "")), f3f8)
+    ctl = filter(
+        r -> r["case"] == "control" || occursin("must FAIL", get(r, "band", "")),
+        f3f8
+    )
     sw = pre(sweeps)
     swc = filter(r -> occursin("must FAIL", r["band"]), sweeps)
     Markdown.parse(
@@ -433,10 +521,13 @@ let
         | Item | Pre-registered rows passing | Failing | Negative controls |
         |---|---|---|---|
         | Figure 2, Table S5 (calibration) | $(tally(calr)) | $(fails(calr)) | — |
-        | Figure 3 (cases f, b) | $(tally(f3)) | $(fails(f3)) | $(count(r -> r["result"] == "FAIL", ctl)) of $(length(ctl)) fail, as required |
-        | Figure 5 (case b) | $(tally(v4)) | $(fails(v4)) | the γ = 10⁻⁴ control fails V4.4 and V4.6, as required |
+        | Figure 3 (cases f, b) | $(tally(f3)) | $(fails(f3)) | \
+        $(count(r -> r["result"] == "FAIL", ctl)) of $(length(ctl)) fail, as required |
+        | Figure 5 (case b) | $(tally(v4)) | $(fails(v4)) | the γ = 10⁻⁴ control fails \
+        V4.4 and V4.6, as required |
         | Figure 9 (cases a, e) | $(tally(f8)) | $(fails(f8)) | — |
-        | Figures 6, 7 and Table 1 (sweeps, with V1) | $(tally(sw)) | $(fails(sw)) | $(count(r -> r["result"] == "FAIL", swc)) of $(length(swc)) fail, as required |
+        | Figures 6, 7 and Table 1 (sweeps, with V1) | $(tally(sw)) | $(fails(sw)) | \
+        $(count(r -> r["result"] == "FAIL", swc)) of $(length(swc)) fail, as required |
         """
     )
 end
@@ -447,9 +538,9 @@ end
 # the suspected cause and the status of the question to the authors: "not asked" (the
 # question is on our open question list, spec 15 §7) or "not an author question". Where
 # another framework's code departs from M, M is the reference and the departure is recorded,
-# not queried: "not asked (maintainer ruling: M over TST)" or "not asked (M over the framework's code)". No band
-# was relaxed. The readings of M and every figure choice are in the differences table in
-# the Details.
+# not queried: "not asked (maintainer ruling: M over TST)" or "not asked (M over the
+# framework's code)". No band was relaxed. The readings of M and every figure choice are in
+# the differences table in the Details.
 #
 # | Item | Ours | Manuscript (M) | Suspected cause | Author question |
 # |---|---|---|---|---|
@@ -464,9 +555,9 @@ end
 #
 # **Reading the division rows.** Where we differ from TST, the manuscript is the reference
 # (M over code). Our model follows M: a cell divides when its actual area reaches X·A\*(0),
-# both daughters take half the mother's A\*, each redraws X, and every parameter is Table S1's.
-# M is followed (actual area); the released TST model divides on target area (the released
-# TST OpenVT model, sbr-shakibi/Tissue-Simulation-Toolkit@7ae1636,
+# both daughters take half the mother's A\*, each redraws X, and every parameter is Table
+# S1's. M is followed (actual area); the released TST model divides on target area (the
+# released TST OpenVT model, sbr-shakibi/Tissue-Simulation-Toolkit@7ae1636,
 # src/models/openvt-monolayer-type1-tst.cpp:169). The maintainer's ruling is that M holds
 # over TST's code, so this departure is recorded, not queried.
 #
@@ -477,26 +568,26 @@ end
 # cell–medium adhesion or a stiffer area term than Table S1, which flattens rims, so our
 # Table S1 rim values (V4.2, V4.3) may be the faithful ones.
 #
-# The released TST stops at 1000 cells (`max_cell_count = 1000`), so which build produced its
-# curves beyond 10³ cells is not known. Under the same ruling (M over TST's code) this is
-# recorded, not queried.
+# The released TST stops at 1000 cells (`max_cell_count = 1000`), so which build produced
+# its curves beyond 10³ cells is not known. Under the same ruling (M over TST's code) this
+# is recorded, not queried.
 #
 # ### Potts.jl (checkerboard)
 #
 # A characterization of the algorithm, not part of the OpenVT consortium submission:
 # the same model, Table S1 parameters and cases (a), (b) and (f), solved with
 # `CheckerboardCPM(; proposal = Moore(1))` on a GPU (ROCm) on its own seeds, and compared
-# metric by metric with the sequential runs above. Record `data/15/checkerboard-2026-11-05/`,
-# commit `e1c963d3`, AMD Ryzen AI Max+ 395 PC and its GPU; its figures
-# follow the sequential Figures 2, 3 and 9 above.
+# metric by metric with the sequential runs above. Record
+# `data/15/checkerboard-2026-11-05/`, commit `e1c963d3`, AMD Ryzen AI Max+ 395 PC and its
+# GPU; its figures follow the sequential Figures 2, 3 and 9 above.
 #
 # **The algorithm.** `CheckerboardCPM` is the lockless block checkerboard (after Sultan et
 # al., arXiv 2312.09317). The lattice is cut into blocks of 8 × 8 one-site
 # sub-regions. A phase activates the same sub-region in every block, with one work item per
 # block. Each MCS draws 64 phases at random. An accepted copy commits at once, and per-cell
-# totals change by atomic adds. Nothing is claimed and no copy is dropped. Device runs depend
-# on the timing of the work items, so they are not reproducible from the seed. The record
-# counts the committed copies of each GPU run from its own `stats.committed`.
+# totals change by atomic adds. Nothing is claimed and no copy is dropped. Device runs
+# depend on the timing of the work items, so they are not reproducible from the seed. The
+# record counts the committed copies of each GPU run from its own `stats.committed`.
 #
 # **Time scale.** M measures time in each framework's own mechanical T and sets the growth
 # rate per T (C1, C16), so these runs calibrate their own T first. The calibration
@@ -521,7 +612,10 @@ end
 
 record("checkerboard-2026-11-05"; commit = "e1c963d3") #hide
 include(joinpath(DATA15, "checkerboard-2026-11-05", "page_quotes.jl")) #hide
-cb_check("checkerboard-2026-11-05", joinpath(pkgdir(PottsModels), "reproductions", "15_openvt_monolayer.jl")) #hide
+cb_check( #hide
+    "checkerboard-2026-11-05", #hide
+    joinpath(pkgdir(PottsModels), "reproductions", "15_openvt_monolayer.jl") #hide
+) #hide
 nothing #hide
 
 # ## 4. Details
@@ -655,19 +749,24 @@ verdict_table(
 #
 # M's Figure 4 defines f on a lattice: cell i's medium pairs (magenta) over all its unlike
 # pairs (magenta and amber). Our panel draws M's 7 × 7 configuration: cell i has 13 medium
-# and 25 cell pairs on Moore(1), so fᵢ = 13/(13 + 25) = 0.342. The marks are decoded from the
-# rendered figure and checked against a brute-force count and against the f the model
+# and 25 cell pairs on Moore(1), so fᵢ = 13/(13 + 25) = 0.342. The marks are decoded from
+# the rendered figure and checked against a brute-force count and against the f the model
 # computes during a run (`openvt_snapshot`), for all four cells. Record
-# `data/15/f1-f4-2026-10-08/`, commit `c6ca4bc4`; figure `fig4.png`,
-# rendered by `plot_f4.jl` on a Mac (the record's runner ran on the
-# AMD Ryzen AI Max+ 395 PC).
+# `data/15/f1-f4-2026-10-08/`, commit `c6ca4bc4`; figure `fig4.png`, rendered by
+# `plot_f4.jl` on a Mac (the record's runner ran on the AMD Ryzen AI Max+ 395 PC).
 
-record_figure("f1-f4-2026-10-08", "fig4.png"; alt = "Figure 4: free-surface pairs of cell i", width = 420) #hide
+record_figure( #hide
+    "f1-f4-2026-10-08", "fig4.png"; #hide
+    alt = "Figure 4: free-surface pairs of cell i", width = 420 #hide
+) #hide
 
 # The same construction for each of the four cells (f = 13/38, 5/13, 0/14 and 2/13),
 # `fig4_cells.png`:
 
-record_figure("f1-f4-2026-10-08", "fig4_cells.png"; alt = "free-surface pairs of all four cells") #hide
+record_figure( #hide
+    "f1-f4-2026-10-08", "fig4_cells.png"; #hide
+    alt = "free-surface pairs of all four cells" #hide
+) #hide
 
 # ### Table S1: CPM parameters
 #
@@ -689,16 +788,16 @@ record_figure("f1-f4-2026-10-08", "fig4_cells.png"; alt = "free-surface pairs of
 # Settings that Table S1 leaves to each framework, with ours: the contact and copy
 # neighborhood (Moore(1), eight neighbors, for both), the update scheme
 # (`SequentialCPM`: one copy attempt per lattice site per MCS, random order), the lattice
-# (closed, 400², 1400² or 1800², with a 5-site edge guard) and the save cadence (every 39 MCS
-# and at the stop). The calibration uses its own chain set-up (λ = 1, 2, 3, 5; 5-site-high
-# periodic strip).
+# (closed, 400², 1400² or 1800², with a 5-site edge guard) and the save cadence (every 39
+# MCS and at the stop). The calibration uses its own chain set-up (λ = 1, 2, 3, 5;
+# 5-site-high periodic strip).
 #
 # ### Table S5: mechanical time scale T against λ
 #
-# Per λ, the relaxation time T of the 11-cell chain in MCS and the mean squared error between
-# the mean relaxation curve and the spring–dashpot reference. Our column is computed from the
-# Figure 2 record (`data/15/calibration-2026-10-05/`, commit `30c39601`, Apple M1 Pro), read
-# from its `verdicts.tsv`; the per-run crossing times are in `crossings.tsv`.
+# Per λ, the relaxation time T of the 11-cell chain in MCS and the mean squared error
+# between the mean relaxation curve and the spring–dashpot reference. Our column is computed
+# from the Figure 2 record (`data/15/calibration-2026-10-05/`, commit `30c39601`, Apple M1
+# Pro), read from its `verdicts.tsv`; the per-run crossing times are in `crossings.tsv`.
 # Potts.jl (checkerboard) has its own λ = 2 row on the P1b chain: T = 158 MCS
 # (`checkerboard-2026-11-05`, `calibration.tsv`, 100 runs; see its section above).
 
@@ -706,7 +805,12 @@ num(s) = match(r"[0-9]+(\.[0-9]+)?(e-?[0-9]+)?", last(split(s, ":"))).match
 s5 = "| λ | T, Table S5 (MCS) | T, Potts.jl (MCS) | MSE, Table S5 | MSE, Potts.jl |\n|---|---|---|---|---|\n"
 for λ in (1, 2, 3, 5)
     t = only(filter(r -> startswith(r["target"], "V6 T(λ = $λ)"), cal))
-    m = only(filter(r -> startswith(r["target"], "V7 MSE") && occursin("(λ = $λ)", r["target"]), cal))
+    m = only(
+        filter(
+            r -> startswith(r["target"], "V7 MSE") && occursin("(λ = $λ)", r["target"]),
+            cal
+        )
+    )
     global s5 *= "| $λ | $(num(t["paper"])) | $(num(t["ours"])) | $(num(m["paper"])) | $(num(m["ours"])) |\n"
 end
 Markdown.parse(s5)

@@ -9,8 +9,8 @@
 #   rule applies to its entries: `J[kind, kind] = [0 Jx Jx; Jx 2 Jx-5; Jx Jx-5 14]` builds
 #   with the values of `Jx`, and follows `Jx` under a constructor keyword, `remake` and
 #   `integ.ps[:Jx] = v`. The need is recorded in the model sketches
-#   (docs/design/research/model-specs/sketches/10_akeeb_invasion.md, friction 4: "Kind tables
-#   cannot contain parameters"; scanning `J_LF` needs a host-built matrix today).
+#   (docs/design/research/model-specs/sketches/10_akeeb_invasion.md, friction 4: "Kind
+#   tables cannot contain parameters"; scanning `J_LF` needs a host-built matrix today).
 #   Today (2f54c1e9) `PottsProblem` raises
 #       MethodError: no method matching Float64(::Symbolics.Num)
 #   from `_param_value` (src/problem.jl:326), because `_resolve_defaults!` substitutes only
@@ -21,8 +21,9 @@
 #   (e.g. `volume`, an `@observed` name, …)". Every other reader takes names as Symbols
 #   (docs/src/manual/indexing.md: `sol[:x]`, `getu(sol, :x)`, `getp(prob, :λ)`), so
 #   `observe(sol, :name)` must equal `observe(sol, x)` for the quantity `x` that
-#   `Potts.lookup(sys, :name)` returns (an `@observed` name, a declared variable, a built-in,
-#   a parameter), and likewise `observe(prob, :name)`. Today `observe(sol, :nA)` raises
+#   `Potts.lookup(sys, :name)` returns (an `@observed` name, a declared variable, a
+#   built-in, a parameter), and likewise `observe(prob, :name)`. Today `observe(sol, :nA)`
+#   raises
 #       ErrorException: cannot lower constant nA
 #   (the Symbol is lowered as a literal). An unknown name must give an `ArgumentError` that
 #   names it, not a lowering error or a MethodError (today: "cannot lower constant nosuch").
@@ -93,12 +94,13 @@ api_J(x) = [0 x x; x 2 x - 5; x x - 5 14]
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "api defects: small API defects" setup = [APIDefectsSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "api defects: small API defects" setup = [APIDefectsSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "api defects: small API defects" begin
-
         @testset "api defects defect 1: a kind table computed from parameters" begin
-            # (amended under the read-only computed-parameter rule, user OK 2026-10-22: the explicit-table case uses
-            # the constructor keyword)
+            # (amended under the read-only computed-parameter rule, user OK 2026-10-22: the
+            # explicit-table case uses the constructor keyword)
             prob = PottsProblem(Table(; name = :kt), blocks(), (0, 5); seed = 3)
             J = getp(prob, :J)(prob)
             V = getp(prob, :V₀)(prob)
@@ -122,17 +124,20 @@ end
             @test getp(p2, :Jx)(p2) == 30.0
             @test total_energy(p2) == 737.0
             @test typeof(p2.p) === typeof(prob.p)                       # nothing recompiles
-            # a fixed table is declared with a number (the read-only computed-parameter rule: the computed J is read-only, so a write
-            # of it is refused, naming its input Jx)
+            # a fixed table is declared with a number (the read-only computed-parameter
+            # rule: the computed J is read-only, so a write of it is refused, naming its
+            # input Jx)
             M = [0 5 5; 5 1 3; 5 3 1]
             p3 = PottsProblem(Table(; name = :kt, J = M), blocks(), (0, 5); seed = 3)
             @test getp(p3, :J)(p3) == M
             e3 = try
-                remake(prob; p = [:J => M]); nothing
+                remake(prob; p = [:J => M])
+                nothing
             catch err
                 err
             end
-            @test e3 isa ArgumentError && occursin("`J` is computed from `Jx`", sprint(showerror, e3))
+            @test e3 isa ArgumentError &&
+                occursin("`J` is computed from `Jx`", sprint(showerror, e3))
 
             # a constructor keyword gives a new default; the table follows it
             p4 = PottsProblem(Table(; name = :kt, Jx = 20.0), blocks(), (0, 5); seed = 3)
@@ -147,8 +152,8 @@ end
             @test integ.ps[:J] == api_J(40.0)
             @test typeof(integ.p) === typeof(prob.p)
 
-            # negative control: a table from parameters that is not symmetric for its values gives
-            # the contact-table error, not a MethodError
+            # negative control: a table from parameters that is not symmetric for its values
+            # gives the contact-table error, not a MethodError
             err = try
                 PottsProblem(Asym(; name = :asym), blocks(), (0, 5))
                 nothing
@@ -162,11 +167,12 @@ end
             @test getp(ok, :J)(ok) == [0 16 16; 16 2 11; 16 11 14]
         end
 
-        # ---------------------------------------------------------------------------------------
-        # Defect 2 fixture: two 3×3 cells of kind A (x = 3:5 and 7:9, y = 3:5 and 7:9) on a 12×12
-        # lattice, saved at every MCS 0:4. `age` counts MCS (`@after_mcs age += 1`), so at saved time
-        # t each cell's age is t; `nA` counts live A cells (2 throughout: no lifecycle, and a 9-site
-        # volume target at strength 1 keeps both cells alive at T = 10).
+        # ----------------------------------------------------------------------------------
+        # Defect 2 fixture: two 3×3 cells of kind A (x = 3:5 and 7:9, y = 3:5 and 7:9) on a
+        # 12×12 lattice, saved at every MCS 0:4. `age` counts MCS (`@after_mcs age += 1`),
+        # so at saved time t each cell's age is t; `nA` counts live A cells (2 throughout:
+        # no lifecycle, and a 9-site volume target at strength 1 keeps both cells alive at T
+        # = 10).
 
         @potts_model Obs begin
             @kinds medium A
@@ -181,7 +187,9 @@ end
 
         @testset "api defects defect 2: observe by Symbol" begin
             sys = Obs(; name = :ob)
-            σ = zeros(Int32, 12, 12); σ[3:5, 3:5] .= 1; σ[7:9, 7:9] .= 2
+            σ = zeros(Int32, 12, 12)
+            σ[3:5, 3:5] .= 1
+            σ[7:9, 7:9] .= 2
             prob = PottsProblem(sys, [ownership => σ, kind => [:A, :A]], (0, 4); seed = 1)
             sol = solve(prob, SequentialCPM(); saveat = 1)
             @test sol.t == 0:4
@@ -214,6 +222,5 @@ end
                 @test err isa ArgumentError && occursin("nosuch", sprint(showerror, err))
             end
         end
-
     end
 end

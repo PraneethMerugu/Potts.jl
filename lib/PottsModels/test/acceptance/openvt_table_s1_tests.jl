@@ -4,7 +4,8 @@
 # kept unchanged as a documented variant (`OpenVTGrowingMonolayer`, kept bit for bit
 # below). Decision: D-150.
 #
-# ── Surface fixed here ─────────────────────────────────────────────────────────────────────
+# ── Surface fixed here
+# ─────────────────────────────────────────────────────────────────────
 #
 # G1 (Potts DSL, general; not model-named): a CELL-SCOPE CONTACT FOLD.
 #   In cell scope (`@before_mcs`/`@after_mcs` cell updates, division `when`, cell
@@ -13,16 +14,17 @@
 #   axes, dropped across a closed edge), owner(s′) ≠ owner(s), for which `pred` holds.
 #   R is the contact relation (the lattice neighbourhood unless declared otherwise);
 #   `contacts(rel)` folds over a relation declared in `@relations`. `pred` may read the
-#   partner's `neighbor_kind` (`neighbor_kind == medium`, `neighbor_kind == B`; `medium` is the kind of owner 0)
-#   and constants; `true` counts every unlike pair, so `count(true for _ in contacts)` ==
-#   `surface` when the surface relation is the contact relation (cross-checked below).
-#   The value is EXACT after every accepted copy and every lifecycle event (it is read
-#   fresh at `@before_mcs`, i.e. after the previous MCS's lifecycle, and at `@after_mcs`,
-#   after the sweep), and it is maintained INCREMENTALLY: a model reading it pays per
-#   accepted copy, not per site per MCS (cost backstop below: ≤ 1.5× the same model reading
-#   the existing `surface` tracker; a whole-lattice recomputation, the only form today,
-#   measures ≈ 2.7×). M's free-surface fraction (Fig 4, spec §2.4, TST "method 3") is
-#   f = count(neighbor_kind == medium for _ in contacts) / count(true for _ in contacts) on Moore(1).
+#   partner's `neighbor_kind` (`neighbor_kind == medium`, `neighbor_kind == B`; `medium` is
+#   the kind of owner 0) and constants; `true` counts every unlike pair, so `count(true for
+#   _ in contacts)` == `surface` when the surface relation is the contact relation
+#   (cross-checked below). The value is EXACT after every accepted copy and every lifecycle
+#   event (it is read fresh at `@before_mcs`, i.e. after the previous MCS's lifecycle, and
+#   at `@after_mcs`, after the sweep), and it is maintained INCREMENTALLY: a model reading
+#   it pays per accepted copy, not per site per MCS (cost backstop below: ≤ 1.5× the same
+#   model reading the existing `surface` tracker; a whole-lattice recomputation, the only
+#   form today, measures ≈ 2.7×). M's free-surface fraction (Fig 4, spec §2.4, TST "method
+#   3") is f = count(neighbor_kind == medium for _ in contacts) / count(true for _ in
+#   contacts) on Moore(1).
 #
 # G2 (Potts DSL, general):
 #   `randn()`: a standard normal draw with `rand()`'s contract (vocabulary.jl:299): its
@@ -57,11 +59,14 @@
 #       a fresh X ~ N(μ_X, σ_X) redrawn while ≤ 0 (C3), at birth. The first cell's X is
 #       drawn the same way (from the run's seed) before the first division check.
 #       σ_X = 0 is the deterministic mode X ≡ μ_X = 2 (case (f)).
-#   openvt_reference_state(; lattice = (1400, 1400), area0 = 50) -> [ownership => σ, kind => [:cell]]
+#   openvt_reference_state(; lattice = (1400, 1400), area0 = 50) -> [ownership => σ, kind =>
+#       [:cell]]
 #     (exported; G5) one disc: the sites whose centres lie within R = √(A₀/π) of the
 #     lattice centre point ((size .+ 1) ./ 2, the layouts' `Center()`), id 1 — Morpheus'
-#     `Sphere radius="R"` at the centre. 52 sites on even lattices, 45 on odd ones (A₀ = 50).
-#   openvt_snapshot(u; area0 = 50.0, center = (size(u.ownership) .+ 1) ./ 2) -> (; x, y, r, f, a)
+#     `Sphere radius="R"` at the centre. 52 sites on even lattices, 45 on odd ones (A₀ =
+#     50).
+#   openvt_snapshot(u; area0 = 50.0, center = (size(u.ownership) .+ 1) ./ 2) -> (; x, y, r,
+#       f, a)
 #     (PottsModels; G11's O2 row data, spec §3.1) live cells (volume > 0) in id order;
 #     x, y = (centroid − center) / R in R units (centroid = mean site index, closed
 #     lattice); r = √(A_star/π) / R; f = medium pairs / unlike pairs over Moore(1)
@@ -73,8 +78,8 @@
 #   PottsModels.Analysis.near_edge(σ, margin)::Bool   (G6, general) true iff some site
 #     with σ ≠ 0 has an index i_d ≤ margin or i_d ≥ size(σ, d) − margin + 1 on some axis d.
 #   edge_guard(margin; terminate = false) -> DiscreteCallback   (PottsModels, G6) checked
-#     after every MCS; when `near_edge(σ, margin)`: throws a `DomainError` (default), or with
-#     `terminate = true` calls terminate!(integ, ReturnCode.Failure).
+#     after every MCS; when `near_edge(σ, margin)`: throws a `DomainError` (default), or
+#     with `terminate = true` calls terminate!(integ, ReturnCode.Failure).
 #
 # ── Oracles and controls (D-048) ──────────────────────────────────────────────────────────
 #   - F4: M's Fig 4 lattice panel (G:results/free_surface.tex:48-110, transcribed below as a
@@ -85,8 +90,8 @@
 #     `surface` as a second oracle. Controls: the before-values disagree with the same
 #     MCS's σ (the timing is real), consecutive states differ (a stale count would fail).
 #   - G2: moments and tails against N(0, 1) at 4 SE; parent/daughter independence; equality
-#     across SequentialCPM and CheckerboardCPM (stream keyed by cell and MCS; `rand()` is the
-#     positive control, it does this today); a constant rule still copies.
+#     across SequentialCPM and CheckerboardCPM (stream keyed by cell and MCS; `rand()` is
+#     the positive control, it does this today); a constant rule still copies.
 #   - Model: Table S1 values; the growth law against σ after every MCS on an inhibited
 #     colony (both inhibitions exercised, and the alternative a = A/A₀ shown to differ);
 #     C9 at exact equality (β = 1 and γ = 1 grow; nextfloat does not); the division law
@@ -95,12 +100,14 @@
 #   - Deterministic mode: X ≡ 2 and synchronous doublings (N = 1, 2, 4, 8 in windows at
 #     t ≈ 1, 2, 3 cycles); control: the stochastic mode fails the same windows.
 #     Windows from a stub of this model on today's primitives, 16/16 deterministic seeds
-#     inside (first division 698–755, second 1457–1521, third 2193–2294 MCS), 0/16 stochastic.
+#     inside (first division 698–755, second 1457–1521, third 2193–2294 MCS), 0/16
+#     stochastic.
 #   - The 2024 set: fingerprint and 60-MCS trajectory digests of `OpenVTGrowingMonolayer`
 #     recorded at 30c39601 (1 and 4 threads alike).
-#   - G6/G11: hand-built σ for `near_edge`; a run that reaches the edge (guard fires; without
-#     the guard it runs on); tilings of 999/1000 and 9999/10⁴ cells; the first crossing in a
-#     growing run against an unstopped run of the same seed; O2 rows against brute force.
+#   - G6/G11: hand-built σ for `near_edge`; a run that reaches the edge (guard fires;
+#     without the guard it runs on); tilings of 999/1000 and 9999/10⁴ cells; the first
+#     crossing in a growing run against an unstopped run of the same seed; O2 rows against
+#     brute force.
 #
 # Seeds are the test author's: 151_001… (G1), 152_001… (G2 fixture), 153_001… (model runs),
 # 15_001… (doubling windows, as measured), 1:200 (initial X).
@@ -121,11 +128,11 @@ const MONOLAYER_R = sqrt(50 / π)
 # 1 R in px (spec §2.3), A₀ = 50
 const MOORE = [(dx, dy) for dx in -1:1 for dy in -1:1 if (dx, dy) != (0, 0)]
 const MONOLAYER_VN = [(1, 0), (-1, 0), (0, 1), (0, -1)]
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Models defined with syntax that does not exist yet are defined inside `try`, so that a
 # failure is recorded per testset (the right reason: the DSL lacks the fold or `randn()`)
 # and the rest of the file still runs.
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 const DEFINED = Dict{Symbol, Any}()
 function define(name::Symbol, ex::Expr)
     try
@@ -158,7 +165,10 @@ define(
                 ma(cell) = -1.0
                 ua(cell) = -1.0
             end
-            @lattice Lattice((36, 30); boundary = (Periodic(), Closed()), neighborhood = Moore(1))
+            @lattice Lattice(
+                (36, 30); boundary = (Periodic(), Closed()),
+                neighborhood = Moore(1)
+            )
             @relations begin
                 proposal = Moore(1)
                 vn = VonNeumann(1)
@@ -207,7 +217,13 @@ define(
 )
 # G1 cost: the same model reading the fold (CostFold) or the existing `surface` (CostSurf)
 for (name, rhs) in (
-        (:CostFold, :(count(neighbor_kind == medium for _ in contacts) / count(true for _ in contacts))),
+        (
+            :CostFold,
+            :(
+                count(neighbor_kind == medium for _ in contacts) /
+                    count(true for _ in contacts)
+            ),
+        ),
         (:CostSurf, :(surface / (surface + 1.0))),
     )
     define(
@@ -265,7 +281,8 @@ define(
                 z ~ randn()
                 w ~ rand()
             end
-            @divide cells(A) when = mcs == 0, along = RandomPlane(), d => randn(), h => rand(), e => 7.0, tag => Split()
+            @divide cells(A) when = mcs == 0, along = RandomPlane(),
+                d => randn(), h => rand(), e => 7.0, tag => Split()
             @sweep Metropolis(; temperature = T)
         end
     )
@@ -279,13 +296,19 @@ define(
     @energy cells(cell) => 1.0 * (volume - 16)^2
     @sweep Metropolis(; temperature = T)
 end
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Helpers (test-internal)
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 """Brute-force contact pairs per cell id 1:maximum(σ): unlike pairs, medium pairs and pairs
-whose partner cell has kind index `toward` (kindof[id]), over `offs`, wrapping on periodic axes."""
-function monolayer_contacts(σ, offs; periodic = (false, false), kindof = nothing, toward = 0, n = maximum(σ; init = 0))
-    unlike = zeros(Int, n); med = zeros(Int, n); tow = zeros(Int, n)
+whose partner cell has kind index `toward` (kindof[id]), over `offs`, wrapping on periodic
+axes."""
+function monolayer_contacts(
+        σ, offs; periodic = (false, false), kindof = nothing,
+        toward = 0, n = maximum(σ; init = 0)
+    )
+    unlike = zeros(Int, n)
+    med = zeros(Int, n)
+    tow = zeros(Int, n)
     L = size(σ)
     for I in CartesianIndices(σ)
         c = σ[I]
@@ -316,16 +339,30 @@ function fnv(bytes)
     end
     return h
 end
-digest(u) = fnv(vcat(reinterpret(UInt8, vec(Array(u.ownership))), reinterpret(UInt8, Array(u.cell.V_target))))
+function digest(u)
+    return fnv(
+        vcat(
+            reinterpret(UInt8, vec(Array(u.ownership))),
+            reinterpret(UInt8, Array(u.cell.V_target))
+        )
+    )
+end
 par(prob, x) = getp(prob, x)(prob)
-# The F4 lattice: σ[x + 1, y + 1] is the tikz pixel (x, y); cell i = 1, i−1 = 2, i+1 = 3, i+2 = 4
+# The F4 lattice: σ[x + 1, y + 1] is the tikz pixel (x, y); cell i = 1, i−1 = 2, i+1 = 3,
+# i+2 = 4
 function fig4()
     σ = zeros(Int32, 7, 7)
     cells = (
-        [(3, 1), (2, 2), (3, 2), (4, 2), (2, 3), (3, 3), (4, 3), (5, 3), (2, 4), (3, 4), (4, 4), (3, 5)],   # i (ca)
-        [(0, 0), (1, 0), (2, 0), (3, 0), (0, 1), (1, 1), (2, 1)],                                           # i−1 (cb)
-        [(4, 0), (5, 0), (6, 0), (4, 1), (5, 1), (6, 1), (5, 2), (6, 2), (6, 3)],                           # i+1 (cc)
-        [(4, 6), (5, 6), (6, 6), (4, 5), (5, 5), (6, 5), (5, 4), (6, 4)],                                   # i+2 (cd)
+        [
+            (3, 1), (2, 2), (3, 2), (4, 2), (2, 3), (3, 3),
+            (4, 3), (5, 3), (2, 4), (3, 4), (4, 4), (3, 5),
+        ],   # i (ca)
+        # i−1 (cb)
+        [(0, 0), (1, 0), (2, 0), (3, 0), (0, 1), (1, 1), (2, 1)],
+        # i+1 (cc)
+        [(4, 0), (5, 0), (6, 0), (4, 1), (5, 1), (6, 1), (5, 2), (6, 2), (6, 3)],
+        # i+2 (cd)
+        [(4, 6), (5, 6), (6, 6), (4, 5), (5, 5), (6, 5), (5, 4), (6, 4)],
     )
     for (c, px) in enumerate(cells), (x, y) in px
         σ[x + 1, y + 1] = c
@@ -337,10 +374,17 @@ const MONOLAYER_L = (60, 60)
 const SYS = Ref{Any}(nothing)
 function monolayer_sys()
     SYS[] === nothing && isdefined(PottsModels, :OpenVTReferenceMonolayer) &&
-        (SYS[] = PottsModels.OpenVTReferenceMonolayer(; name = :monolayer_m, lattice = MONOLAYER_L))
+        (
+        SYS[] = PottsModels.OpenVTReferenceMonolayer(;
+            name = :monolayer_m,
+            lattice = MONOLAYER_L
+        )
+    )
     return SYS[]
 end
-function monolayer_prob(; tspan = (0, 300), seed = 153_001, p = Pair{Symbol, Any}[], op = nothing, kw...)
+function monolayer_prob(;
+        tspan = (0, 300), seed = 153_001, p = Pair{Symbol, Any}[], op = nothing, kw...
+    )
     sys = monolayer_sys()
     sys === nothing && error("OpenVTReferenceMonolayer is not defined")
     st = op === nothing ? PottsModels.openvt_reference_state(; lattice = MONOLAYER_L) : op
@@ -354,12 +398,16 @@ function monolayer_quiet(us, i)
     return all(c -> b.cell.A_star[c] >= a.cell.A_star[c], monolayer_live(b))
 end
 """The division of MCS k (host states `us`, save i) as (parent, daughter), or `nothing`
-unless exactly one happened: parent = live before with A_star decreased, daughter = new id."""
+unless exactly one happened: parent = live before with A_star decreased, daughter = new
+id."""
 function monolayer_division(us, i)
     a, b = us[i - 1], us[i]
     la, lb = monolayer_live(a), monolayer_live(b)
     born = setdiff(lb, la)
-    parents = [c for c in intersect(la, lb) if b.cell.A_star[c] < a.cell.A_star[c] - 1.0e-12]
+    parents = [
+        c
+            for c in intersect(la, lb) if b.cell.A_star[c] < a.cell.A_star[c] - 1.0e-12
+    ]
     (length(born) == 1 && length(parents) == 1) || return nothing
     return (only(parents), only(born))
 end
@@ -367,7 +415,10 @@ const FOLD_SEEDS = (151_001, 151_002)
 const FOLD_MCS = 150
 function fold_state()
     σ = zeros(Int32, 36, 30)
-    blocks = ((vcat(35:36, 1:2), 1:5), (8:11, 1:5), (12:15, 1:5), (20:23, 10:14), (24:27, 10:14), (5:8, 25:29))
+    blocks = (
+        (vcat(35:36, 1:2), 1:5), (8:11, 1:5), (12:15, 1:5),
+        (20:23, 10:14), (24:27, 10:14), (5:8, 25:29),
+    )
     for (c, (xs, ys)) in enumerate(blocks)
         σ[xs, ys] .= c
     end
@@ -376,7 +427,8 @@ end
 """Check every saved MCS of a Fold run against the brute-force oracle; returns counters."""
 function check_fold(sol)
     out = Dict(
-        k => 0 for k in (
+        k => 0
+            for k in (
                 :before_bad, :before_n, :after_bad, :after_n, :divisions, :ab, :vn_differs,
                 :stale_differs, :timing_differs,
             )
@@ -387,13 +439,16 @@ function check_fold(sol)
         σp, σc = prev.ownership, cur.ownership
         kp = prev.cell.kind
         n = length(prev.cell.volume)
-        bp = monolayer_contacts(σp, MOORE; periodic = (true, false), kindof = kp, toward = 2, n)
+        bp = monolayer_contacts(
+            σp, MOORE; periodic = (true, false), kindof = kp, toward = 2, n
+        )
         vp = monolayer_contacts(σp, MONOLAYER_VN; periodic = (true, false), n)
         bc = monolayer_contacts(σc, MOORE; periodic = (true, false), n)
         both = intersect(monolayer_live(prev), monolayer_live(cur))
         for c in both
             out[:before_n] += 1
-            ok = cur.cell.mb[c] == bp.med[c] && cur.cell.ub[c] == bp.unlike[c] && cur.cell.bb[c] == bp.tow[c] &&
+            ok = cur.cell.mb[c] == bp.med[c] && cur.cell.ub[c] == bp.unlike[c] &&
+                cur.cell.bb[c] == bp.tow[c] &&
                 cur.cell.vb[c] == vp.med[c] && cur.cell.sb[c] == bp.unlike[c]
             out[:before_bad] += !ok
             out[:ab] += bp.tow[c] > 0
@@ -405,7 +460,10 @@ function check_fold(sol)
         if !divided
             for c in monolayer_live(cur)
                 out[:after_n] += 1
-                out[:after_bad] += !(cur.cell.ma[c] == bc.med[c] && cur.cell.ua[c] == bc.unlike[c])
+                out[:after_bad] += !(
+                    cur.cell.ma[c] == bc.med[c] &&
+                        cur.cell.ua[c] == bc.unlike[c]
+                )
             end
         end
         out[:stale_differs] += bp.med != bc.med[1:length(bp.med)]
@@ -422,9 +480,9 @@ function monolayer_time(integ; n = 10, reps = 3)
         (time_ns() - t) / n / 1.0e9
     end
 end
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # G2: randn() and per-daughter draws
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 const DRAW_SEEDS = (152_001, 152_002)
 function draws_state()
     σ = zeros(Int32, 80, 80)
@@ -442,9 +500,9 @@ function monolayer_windows(N)
     return all(N[m + 1] == 1 for m in 0:650) && all(N[m + 1] == 2 for m in 800:1400) &&
         all(N[m + 1] == 4 for m in 1600:2100) && N[2401] == 8
 end
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # G11: stop at N cells, and the O2 snapshot
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 """The first `n` 4 × 4 tiles (column-major) of the 100 × 100 tiling of 400 × 400."""
 function monolayer_tiles(n)
     σ = zeros(Int32, 400, 400)
@@ -459,11 +517,15 @@ end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "openvt table s1 G1 F4: the fold equals M's Fig 4 lattice count (f_i = 13/38)" setup = [OpenVTTableS1Setup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "openvt table s1 G1 F4: the fold equals M's Fig 4 lattice count (f_i = \
+    13/38)" setup = [OpenVTTableS1Setup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # G1: the contact fold
-    # ---------------------------------------------------------------------------------------------
-    @testset "openvt table s1 G1 F4: the fold equals M's Fig 4 lattice count (f_i = 13/38)" begin
+    # --------------------------------------------------------------------------------------
+    @testset "openvt table s1 G1 F4: the fold equals M's Fig 4 lattice count (f_i = \
+        13/38)" begin
         σ = fig4()
         @test [count(==(c), σ) for c in 0:4] == [13, 12, 7, 9, 8]
         # the oracle on the picture: magenta (medium) and orange (cell) dashes of cell i
@@ -472,7 +534,10 @@ end
         @test bf.med[1] == 13 && bf.unlike[1] - bf.med[1] == 25          # the drawn counts
         @test monolayer_ok(:Fig4)
         if monolayer_ok(:Fig4)
-            prob = PottsProblem(Fig4(; name = :monolayer_f4), [ownership => σ, kind => fill(:cell, 4)], (0, 1); seed = 1)
+            prob = PottsProblem(
+                Fig4(; name = :monolayer_f4),
+                [ownership => σ, kind => fill(:cell, 4)], (0, 1); seed = 1
+            )
             u = solve(prob, SequentialCPM(; proposal = Moore(1)); saveat = 1).u[end]
             @test u.cell.m[1:4] == [13, 5, 0, 2]
             @test u.cell.u[1:4] == [38, 13, 14, 13]
@@ -484,8 +549,12 @@ end
     end
 end
 
-@testitem "openvt table s1 G1: the contact fold is exact after every MCS (random runs, both algorithms)" setup = [OpenVTTableS1Setup] tags = [:pottsmodels, :acceptance] begin
-    @testset "openvt table s1 G1: the contact fold is exact after every MCS (random runs, both algorithms)" begin
+@testitem "openvt table s1 G1: the contact fold is exact after every MCS (random runs, \
+    both algorithms)" setup = [OpenVTTableS1Setup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "openvt table s1 G1: the contact fold is exact after every MCS (random runs, \
+        both algorithms)" begin
         @test monolayer_ok(:Fold)
         if monolayer_ok(:Fold)
             prob = PottsProblem(
@@ -496,21 +565,30 @@ end
                 sol = solve(remake(prob; seed), alg; saveat = 1)
                 @test Symbol(sol.retcode) === :Success
                 r = check_fold(sol)
-                @test r[:before_bad] == 0                 # fresh after the lifecycle: equals σ of the previous MCS
-                @test r[:after_bad] == 0                  # fresh after the sweep (division-free MCS)
+                # fresh after the lifecycle: equals σ of the previous MCS
+                @test r[:before_bad] == 0
+                # fresh after the sweep (division-free MCS)
+                @test r[:after_bad] == 0
                 # non-vacuous
                 @test r[:before_n] >= 6 * FOLD_MCS && r[:after_n] >= 4 * FOLD_MCS
-                @test r[:divisions] >= 3                  # lifecycle events happened and were followed
-                @test r[:ab] > 0 && r[:vn_differs] > 0    # A–B contacts present; VonNeumann ≠ Moore
+                # lifecycle events happened and were followed
+                @test r[:divisions] >= 3
+                # A–B contacts present; VonNeumann ≠ Moore
+                @test r[:ab] > 0 && r[:vn_differs] > 0
                 @test r[:stale_differs] >= FOLD_MCS ÷ 2   # a count one MCS stale would fail
-                @test r[:timing_differs] > 0              # before-values are not the after-sweep state
+                # before-values are not the after-sweep state
+                @test r[:timing_differs] > 0
             end
         end
     end
 end
 
-@testitem "openvt table s1 G1: the fold is incremental (cost ≤ 1.5× the `surface` tracker)" setup = [OpenVTTableS1Setup] tags = [:pottsmodels, :acceptance] begin
-    @testset "openvt table s1 G1: the fold is incremental (cost ≤ 1.5× the `surface` tracker)" begin
+@testitem "openvt table s1 G1: the fold is incremental (cost ≤ 1.5× the `surface` \
+    tracker)" setup = [OpenVTTableS1Setup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "openvt table s1 G1: the fold is incremental (cost ≤ 1.5× the `surface` \
+        tracker)" begin
         @test monolayer_ok(:CostFold) && monolayer_ok(:CostSurf)
         if monolayer_ok(:CostFold) && monolayer_ok(:CostSurf)
             σ = zeros(Int32, 200, 200)
@@ -521,24 +599,42 @@ end
             end
             op = [ownership => σ, kind => fill(:cell, k)]
             for alg in ALGS
-                a = init(PottsProblem(CostFold(; name = :monolayer_cf), op, (0, 10^6)), alg; save_start = false, save_end = false)
-                b = init(PottsProblem(CostSurf(; name = :monolayer_cs), op, (0, 10^6)), alg; save_start = false, save_end = false)
+                a = init(
+                    PottsProblem(CostFold(; name = :monolayer_cf), op, (0, 10^6)),
+                    alg; save_start = false, save_end = false
+                )
+                b = init(
+                    PottsProblem(CostSurf(; name = :monolayer_cs), op, (0, 10^6)),
+                    alg; save_start = false, save_end = false
+                )
                 foreach(_ -> (step!(a); step!(b)), 1:5)
                 # the fold model computes the true fraction (control: not a constant)
                 fs = Array(a.u.cell.f)[1:k]
-                @test minimum(fs) == 0 && any(x -> 0 < x < 1, fs)       # interior cells 0, rim cells in between
+                # interior cells 0, rim cells in between
+                @test minimum(fs) == 0 && any(x -> 0 < x < 1, fs)
                 rs = map(1:10) do r
-                    ta, tb = isodd(r) ? (monolayer_time(a), monolayer_time(b)) : reverse((monolayer_time(b), monolayer_time(a)))
+                    ta, tb = if isodd(r)
+                        (monolayer_time(a), monolayer_time(b))
+                    else
+                        reverse((monolayer_time(b), monolayer_time(a)))
+                    end
                     ta / tb
                 end
-                @info "openvt table s1 G1 cost ($(nameof(typeof(alg)))): fold / surface per MCS, min $(round(minimum(rs); digits = 3)), median $(round(sort(rs)[5]; digits = 3))"
-                @test minimum(rs) <= 1.5          # a whole-lattice recomputation measures ≈ 2.7×
+                @info "openvt table s1 G1 cost ($(nameof(typeof(alg)))): fold / surface \
+                    per MCS, min $(round(minimum(rs); digits = 3)), \
+                        median $(round(sort(rs)[5]; digits = 3))"
+                # a whole-lattice recomputation measures ≈ 2.7×
+                @test minimum(rs) <= 1.5
             end
         end
     end
 end
 
-@testitem "openvt table s1 G2: randn and per-daughter draws in division rules" setup = [OpenVTTableS1Setup] tags = [:pottsmodels, :acceptance] begin
+@testitem "openvt table s1 G2: randn and per-daughter draws in division rules" setup = [
+    OpenVTTableS1Setup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "openvt table s1 G2: randn() and per-daughter draws in division rules" begin
         @test monolayer_ok(:Draws)
         if monolayer_ok(:Draws)
@@ -551,25 +647,30 @@ end
                     for alg in ALGS, s in DRAW_SEEDS
             )
             sol = sols[(:SequentialCPM, first(DRAW_SEEDS))]
-            u1 = sol.u[2]                                     # after MCS 0: every cell divided once
+            # after MCS 0: every cell divided once
+            u1 = sol.u[2]
             live = monolayer_live(u1)
             @test length(live) == 800
             # pairs by the split tag: parent and daughter both carry c
             tags = Array(u1.cell.tag)
             pairs_ = [findall(==(Float64(c)), tags[1:length(tags)]) for c in 1:400]
             @test all(p -> length(p) == 2, pairs_)
-            dp = [u1.cell.d[p[1]] for p in pairs_]; dd = [u1.cell.d[p[2]] for p in pairs_]
-            hp = [u1.cell.h[p[1]] for p in pairs_]; hd = [u1.cell.h[p[2]] for p in pairs_]
+            dp = [u1.cell.d[p[1]] for p in pairs_]
+            dd = [u1.cell.d[p[2]] for p in pairs_]
+            hp = [u1.cell.h[p[1]] for p in pairs_]
+            hd = [u1.cell.h[p[2]] for p in pairs_]
             # each daughter draws: the two values differ, independently
             @test all(dp .!= dd) && all(hp .!= hd)
             @test abs(cor(dp, dd)) <= 0.2 && abs(cor(hp, hd)) <= 0.2       # 4/√400
             ds = vcat(dp, dd)
             @test abs(mean(ds)) <= 4 / sqrt(800) && abs(var(ds) - 1) <= 4 * sqrt(2 / 800)
-            @test all(x -> 0 < x < 1, vcat(hp, hd)) && abs(mean(vcat(hp, hd)) - 0.5) <= 4 * sqrt(1 / 12 / 800)
+            @test all(x -> 0 < x < 1, vcat(hp, hd)) &&
+                abs(mean(vcat(hp, hd)) - 0.5) <= 4 * sqrt(1 / 12 / 800)
             # a rule without a draw still copies (control)
             @test all(==(7.0), u1.cell.e[live])
             # randn() per MCS and per cell: N(0, 1)
-            Z = reduce(vcat, [Array(u.cell.z)[monolayer_live(u)] for u in sol.u[3:end]])      # MCS 1..5, 800 cells
+            # MCS 1..5, 800 cells
+            Z = reduce(vcat, [Array(u.cell.z)[monolayer_live(u)] for u in sol.u[3:end]])
             W = reduce(vcat, [Array(u.cell.w)[monolayer_live(u)] for u in sol.u[3:end]])
             n = length(Z)
             @test n == 4000
@@ -577,36 +678,56 @@ end
             @test abs(var(Z) - 1) <= 4 * sqrt(2 / n)
             @test abs(mean(abs.(Z) .> 1.959964) - 0.05) <= 4 * sqrt(0.05 * 0.95 / n)
             @test abs(mean(Z .> 0) - 0.5) <= 4 * sqrt(0.25 / n)
-            @test abs(cor(Z, W)) <= 4 / sqrt(n)                              # distinct streams
+            # distinct streams
+            @test abs(cor(Z, W)) <= 4 / sqrt(n)
             # fresh per MCS: lag-1 correlation of each cell's draws
             z2 = [Array(sol.u[i].cell.z)[1:800] for i in 3:7]
-            lag = reduce(vcat, [z2[i] for i in 1:4]); lead = reduce(vcat, [z2[i] for i in 2:5])
+            lag = reduce(vcat, [z2[i] for i in 1:4])
+            lead = reduce(vcat, [z2[i] for i in 2:5])
             @test abs(cor(lag, lead)) <= 4 / sqrt(3200)
             @test length(unique(Z)) == n
             # stable stream: keyed by (seed, MCS, cell), so equal on both algorithms
             for s in DRAW_SEEDS
                 a, b = sols[(:SequentialCPM, s)], sols[(:CheckerboardCPM, s)]
-                @test all(i -> Array(a.u[i].cell.w)[1:800] == Array(b.u[i].cell.w)[1:800], 3:7)   # rand(): positive control (today)
-                @test all(i -> Array(a.u[i].cell.z)[1:800] == Array(b.u[i].cell.z)[1:800], 3:7)
+                # rand(): positive control (today)
+                @test all(
+                    i -> Array(a.u[i].cell.w)[1:800] == Array(b.u[i].cell.w)[1:800],
+                    3:7
+                )
+                @test all(
+                    i -> Array(a.u[i].cell.z)[1:800] == Array(b.u[i].cell.z)[1:800],
+                    3:7
+                )
                 @test Array(a.u[2].cell.d)[1:800] == Array(b.u[2].cell.d)[1:800]
-                @test Array(a.u[2].ownership) != Array(b.u[2].ownership)                     # control: the sweeps differ
+                # control: the sweeps differ
+                @test Array(a.u[2].ownership) != Array(b.u[2].ownership)
             end
             # reproducible under the seed; another seed draws otherwise
             again = solve(prob, first(ALGS); saveat = 1)
-            @test all(i -> Array(again.u[i].cell.z) == Array(sol.u[i].cell.z) && Array(again.u[i].cell.d) == Array(sol.u[i].cell.d), 1:7)
+            @test all(
+                i -> Array(again.u[i].cell.z) == Array(sol.u[i].cell.z) &&
+                    Array(again.u[i].cell.d) == Array(sol.u[i].cell.d),
+                1:7
+            )
             other = sols[(:SequentialCPM, last(DRAW_SEEDS))]
             @test Array(other.u[3].cell.z)[1:800] != Array(sol.u[3].cell.z)[1:800]
         end
     end
 end
 
-@testitem "openvt table s1 model: OpenVTReferenceMonolayer has Table S1's parameters (M p.11, §2.1)" setup = [OpenVTTableS1Setup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "openvt table s1 model: OpenVTReferenceMonolayer has Table S1's parameters (M \
+    p.11, §2.1)" setup = [OpenVTTableS1Setup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # The Table S1 model
-    # ---------------------------------------------------------------------------------------------
-    @testset "openvt table s1 model: OpenVTReferenceMonolayer has Table S1's parameters (M p.11, §2.1)" begin
-        @test isdefined(PottsModels, :OpenVTReferenceMonolayer) && :OpenVTReferenceMonolayer in names(PottsModels)
-        @test isdefined(PottsModels, :openvt_reference_state) && :openvt_reference_state in names(PottsModels)
+    # --------------------------------------------------------------------------------------
+    @testset "openvt table s1 model: OpenVTReferenceMonolayer has Table S1's parameters \
+        (M p.11, §2.1)" begin
+        @test isdefined(PottsModels, :OpenVTReferenceMonolayer) &&
+            :OpenVTReferenceMonolayer in names(PottsModels)
+        @test isdefined(PottsModels, :openvt_reference_state) &&
+            :openvt_reference_state in names(PottsModels)
         if monolayer_sys() !== nothing
             sys = PottsModels.OpenVTReferenceMonolayer(; name = :default)
             lat = Potts.lattice(sys)
@@ -614,65 +735,112 @@ end
             @test !Potts.isperiodic(lat, 1) && !Potts.isperiodic(lat, 2)
             prob = monolayer_prob(; tspan = (0, 1))
             @test (par(prob, :A₀), par(prob, :λ), par(prob, :T)) == (50.0, 2.0, 20.0)
-            @test par(prob, :α) == 50 / 775 && abs(par(prob, :α) - 6.452e-2) < 5.0e-6   # Table S1, C16
-            @test isapprox(par(prob, :A₀) / par(prob, :α), 775; rtol = 1.0e-12)           # 5T = 775 MCS (C1)
+            # Table S1, C16
+            @test par(prob, :α) == 50 / 775 && abs(par(prob, :α) - 6.452e-2) < 5.0e-6
+            # 5T = 775 MCS (C1)
+            @test isapprox(par(prob, :A₀) / par(prob, :α), 775; rtol = 1.0e-12)
             @test (par(prob, :μ_X), par(prob, :σ_X)) == (2.0, 0.4)
-            @test par(prob, :μ_X) * par(prob, :A₀) == 100.0                              # μ_Amax
+            # μ_Amax
+            @test par(prob, :μ_X) * par(prob, :A₀) == 100.0
             @test (par(prob, :β), par(prob, :γ)) == (0.0, 0.0)
-            @test par(prob, :J) == [0.0 10.0; 10.0 20.0]                                       # J_cm = 10, J_cc = 20
-            @test prob.u0.cell.A_star[1] == 50.0                                                     # A*(0)
+            # J_cm = 10, J_cc = 20
+            @test par(prob, :J) == [0.0 10.0; 10.0 20.0]
+            # A*(0)
+            @test prob.u0.cell.A_star[1] == 50.0
             @test prob.f.lifecycle !== nothing
         end
     end
 end
 
-@testitem "openvt table s1 G5: the disc start" setup = [OpenVTTableS1Setup] tags = [:pottsmodels, :acceptance] begin
+@testitem "openvt table s1 G5: the disc start" setup = [OpenVTTableS1Setup] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "openvt table s1 G5: the disc start" begin
         @test isdefined(PottsModels, :openvt_reference_state)
         if isdefined(PottsModels, :openvt_reference_state)
-            for (L, n) in (((100, 100), 52), ((101, 101), 45), ((1400, 1400), 52), ((60, 60), 52))
+            for (L, n) in (
+                    ((100, 100), 52), ((101, 101), 45), ((1400, 1400), 52), (
+                        (60, 60), 52,
+                    ),
+                )
                 st = PottsModels.openvt_reference_state(; lattice = L)
                 σ = state_σ(st)
                 @test size(σ) == L && state_kinds(st) == [:cell]
                 c = (L .+ 1) ./ 2
-                disc = [I for I in CartesianIndices(σ) if hypot(I[1] - c[1], I[2] - c[2]) <= MONOLAYER_R]
+                disc = [
+                    I
+                        for I in CartesianIndices(σ)
+                        if hypot(I[1] - c[1], I[2] - c[2]) <= MONOLAYER_R
+                ]
                 @test count(==(1), σ) == n == length(disc)
                 @test all(I -> σ[I] == 1, disc) && count(!=(0), σ) == n && maximum(σ) == 1
                 idx = findall(==(1), σ)
-                @test (mean(i[1] for i in idx), mean(i[2] for i in idx)) == c                      # centred
+                # centred
+                @test (mean(i[1] for i in idx), mean(i[2] for i in idx)) == c
             end
             @test state_σ(PottsModels.openvt_reference_state()) ==
                 state_σ(PottsModels.openvt_reference_state(; lattice = (1400, 1400)))
             # the radius follows A₀
-            σ = state_σ(PottsModels.openvt_reference_state(; lattice = (100, 100), area0 = 100))
-            @test count(==(1), σ) == count(I -> hypot(I[1] - 50.5, I[2] - 50.5) <= sqrt(100 / π), CartesianIndices(σ))
+            σ = state_σ(
+                PottsModels.openvt_reference_state(; lattice = (100, 100), area0 = 100)
+            )
+            @test count(==(1), σ) ==
+                count(
+                I -> hypot(I[1] - 50.5, I[2] - 50.5) <= sqrt(100 / π),
+                CartesianIndices(σ)
+            )
             @test abs(count(==(1), σ) - 100) <= 10
             # negative control: the 2024 state is a 5 × 5 square, not a disc
-            @test count(!=(0), first(openvt_monolayer_state(; lattice = (100, 100))).second) == 25
+            @test count(
+                !=(0),
+                first(openvt_monolayer_state(; lattice = (100, 100))).second
+            ) ==
+                25
         end
     end
 end
 
-@testitem "openvt table s1 model: runs on both algorithms; f is G1's; uninhibited growth by α" setup = [OpenVTTableS1Setup] tags = [:pottsmodels, :acceptance] begin
-    @testset "openvt table s1 model: runs on both algorithms; f is G1's; uninhibited growth by α" begin
+@testitem "openvt table s1 model: runs on both algorithms; f is G1's; uninhibited growth \
+    by α" setup = [OpenVTTableS1Setup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "openvt table s1 model: runs on both algorithms; f is G1's; uninhibited \
+        growth by α" begin
         @test monolayer_sys() !== nothing
         if monolayer_sys() !== nothing
             for alg in ALGS, seed in (153_001, 153_002)
-                sol = solve(monolayer_prob(; tspan = (0, 400), seed, p = [:α => 0.5]), alg; saveat = 1)
+                sol = solve(
+                    monolayer_prob(; tspan = (0, 400), seed, p = [:α => 0.5]), alg;
+                    saveat = 1
+                )
                 @test Symbol(sol.retcode) === :Success
                 α = 0.5
-                bad_f = 0; bad_g = 0; quiet = 0; divs = 0; badX = 0; bad_v = 0
+                bad_f = 0
+                bad_g = 0
+                quiet = 0
+                divs = 0
+                badX = 0
+                bad_v = 0
                 us = hosts(sol)
                 for i in 2:length(us)
                     u = us[i]
                     live = monolayer_live(u)
-                    bad_v += u.cell.volume[live] != [count(==(c), u.ownership) for c in live]
+                    bad_v += u.cell.volume[live] !=
+                        [count(==(c), u.ownership) for c in live]
                     badX += count(c -> !(u.cell.X[c] > 0), live)
                     if monolayer_quiet(us, i)
                         quiet += 1
-                        bf = monolayer_contacts(u.ownership, MOORE; n = length(u.cell.volume))
+                        bf = monolayer_contacts(
+                            u.ownership, MOORE;
+                            n = length(u.cell.volume)
+                        )
                         bad_f += count(c -> u.cell.f[c] != bf.med[c] / bf.unlike[c], live)
-                        bad_g += count(c -> abs(u.cell.A_star[c] - us[i - 1].cell.A_star[c] - α) > 1.0e-9, live)
+                        bad_g += count(
+                            c -> abs(
+                                u.cell.A_star[c] -
+                                    us[i - 1].cell.A_star[c] - α
+                            ) > 1.0e-9, live
+                        )
                     else
                         divs += 1
                     end
@@ -686,11 +854,16 @@ end
     end
 end
 
-@testitem "openvt table s1 model: the growth law with β and γ (after every MCS of an inhibited colony)" setup = [OpenVTTableS1Setup] tags = [:pottsmodels, :acceptance] begin
-    @testset "openvt table s1 model: the growth law with β and γ (after every MCS of an inhibited colony)" begin
+@testitem "openvt table s1 model: the growth law with β and γ (after every MCS of an \
+    inhibited colony)" setup = [OpenVTTableS1Setup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "openvt table s1 model: the growth law with β and γ (after every MCS of an \
+        inhibited colony)" begin
         @test monolayer_sys() !== nothing
         if monolayer_sys() !== nothing
-            # a 5 × 5 block of 7 × 7 cells (interior cells have f = 0); X ≡ 2 and slow growth: no division
+            # a 5 × 5 block of 7 × 7 cells (interior cells have f = 0); X ≡ 2 and slow
+            # growth: no division
             σ = zeros(Int32, MONOLAYER_L)
             k = 0
             for a in 0:4, b in 0:4
@@ -701,12 +874,21 @@ end
             op = [ownership => σ, kind => fill(:cell, k)]
             n_grow = n_β = n_γ = n_both = n_alt = bad = lost = 0
             for alg in ALGS, seed in (153_011, 153_012)
-                sol = solve(monolayer_prob(; tspan = (0, 250), seed, op, p = [:β => β, :γ => γ, :σ_X => 0.0]), alg; saveat = 1)
+                sol = solve(
+                    monolayer_prob(;
+                        tspan = (0, 250), seed, op, p = [
+                            :β => β, :γ => γ, :σ_X => 0.0,
+                        ]
+                    ),
+                    alg;
+                    saveat = 1
+                )
                 @test Symbol(sol.retcode) === :Success
                 us = hosts(sol)
                 for i in 2:length(us)
                     prev, u = us[i - 1], us[i]
-                    lost += monolayer_live(u) != 1:k                                 # no division, no loss
+                    # no division, no loss
+                    lost += monolayer_live(u) != 1:k
                     bf = monolayer_contacts(u.ownership, MOORE; n = length(u.cell.volume))
                     for c in 1:k
                         A0, A1, v = prev.cell.A_star[c], u.cell.A_star[c], u.cell.volume[c]
@@ -719,7 +901,8 @@ end
                         n_β += !okβ && okγ
                         n_γ += okβ && !okγ
                         n_both += !okβ && !okγ
-                        n_alt += (v / A0 >= β) != (v / 50 >= β)                  # CC3D's a = A/A₀ differs
+                        # CC3D's a = A/A₀ differs
+                        n_alt += (v / A0 >= β) != (v / 50 >= β)
                     end
                 end
             end
@@ -730,18 +913,33 @@ end
     end
 end
 
-@testitem "openvt table s1 model: C9 at equality (≥ grows, nextfloat does not)" setup = [OpenVTTableS1Setup] tags = [:pottsmodels, :acceptance] begin
+@testitem "openvt table s1 model: C9 at equality (≥ grows, nextfloat does not)" setup = [
+    OpenVTTableS1Setup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "openvt table s1 model: C9 at equality (≥ grows, nextfloat does not)" begin
         @test monolayer_sys() !== nothing
         if monolayer_sys() !== nothing
             st = PottsModels.openvt_reference_state(; lattice = MONOLAYER_L)
             σ0 = state_σ(st)
-            v = count(==(1), σ0)                      # 52: frozen in place by λ = 1e6 at T = 1e-3
-            for (β, γ, grows) in ((1.0, 0.0, true), (nextfloat(1.0), 0.0, false), (0.0, 1.0, true), (0.0, nextfloat(1.0), false))
-                p = [:λ => 1.0e6, :T => 1.0e-3, :A₀ => Float64(v), :β => β, :γ => γ, :σ_X => 0.0]
-                sol = solve(monolayer_prob(; tspan = (0, 1), op = [st; :A_star => [Float64(v)]], p), first(ALGS); saveat = 1)
+            # 52: frozen in place by λ = 1e6 at T = 1e-3
+            v = count(==(1), σ0)
+            for (β, γ, grows) in (
+                    (1.0, 0.0, true), (nextfloat(1.0), 0.0, false),
+                    (0.0, 1.0, true), (0.0, nextfloat(1.0), false),
+                )
+                p = [
+                    :λ => 1.0e6, :T => 1.0e-3, :A₀ => Float64(v),
+                    :β => β, :γ => γ, :σ_X => 0.0,
+                ]
+                sol = solve(
+                    monolayer_prob(; tspan = (0, 1), op = [st; :A_star => [Float64(v)]], p),
+                    first(ALGS); saveat = 1
+                )
                 u = sol.u[end]
-                @test Array(u.ownership) == σ0                                   # a = 1 and f = 1 exactly
+                # a = 1 and f = 1 exactly
+                @test Array(u.ownership) == σ0
                 @test u.cell.f[1] == 1.0
                 @test u.cell.A_star[1] == (grows ? v + 50 / 775 : Float64(v))
             end
@@ -749,14 +947,22 @@ end
     end
 end
 
-@testitem "openvt table s1 model: division at X·A₀, Split, both daughters redraw X (M §2.1, C13, C14)" setup = [OpenVTTableS1Setup] tags = [:pottsmodels, :acceptance] begin
-    @testset "openvt table s1 model: division at X·A₀, Split, both daughters redraw X (M §2.1, C13, C14)" begin
+@testitem "openvt table s1 model: division at X·A₀, Split, both daughters redraw X (M \
+    §2.1, C13, C14)" setup = [OpenVTTableS1Setup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "openvt table s1 model: division at X·A₀, Split, both daughters redraw X (M \
+        §2.1, C13, C14)" begin
         @test monolayer_sys() !== nothing
         if monolayer_sys() !== nothing
-            births = Float64[]; pairsX = Tuple{Float64, Float64}[]
+            births = Float64[]
+            pairsX = Tuple{Float64, Float64}[]
             bad_thresh = bad_split = bad_redraw = n_single = n_div = 0
             for seed in 153_021:153_024
-                sol = solve(monolayer_prob(; tspan = (0, 300), seed, p = [:α => 1.0]), first(ALGS); saveat = 1)
+                sol = solve(
+                    monolayer_prob(; tspan = (0, 300), seed, p = [:α => 1.0]),
+                    first(ALGS); saveat = 1
+                )
                 us = hosts(sol)
                 for i in 2:length(us)
                     prev, u = us[i - 1], us[i]
@@ -764,20 +970,33 @@ end
                     ev = monolayer_division(us, i)
                     born = setdiff(monolayer_live(u), monolayer_live(prev))
                     n_div += length(born)
-                    # no surviving non-dividing cell is at or above its threshold (checked after the sweep)
-                    parents = [c for c in intersect(monolayer_live(prev), monolayer_live(u)) if u.cell.A_star[c] < prev.cell.A_star[c] - 1.0e-12]
+                    # no surviving non-dividing cell is at or above its threshold (checked
+                    # after the sweep)
+                    parents = [
+                        c
+                            for c in intersect(monolayer_live(prev), monolayer_live(u))
+                            if u.cell.A_star[c] < prev.cell.A_star[c] - 1.0e-12
+                    ]
                     for c in setdiff(monolayer_live(u), born, parents)
                         bad_thresh += !(u.cell.volume[c] < u.cell.X[c] * A₀)
                     end
                     ev === nothing && continue
                     p, d = ev
                     n_single += 1
-                    bad_thresh += !(u.cell.volume[p] + u.cell.volume[d] >= prev.cell.X[p] * A₀)
-                    bad_split += !(
-                        u.cell.A_star[p] == u.cell.A_star[d] &&
-                            abs(u.cell.A_star[p] + u.cell.A_star[d] - (prev.cell.A_star[p] + 1.0)) <= 1.0e-9
+                    bad_thresh += !(
+                        u.cell.volume[p] + u.cell.volume[d] >=
+                            prev.cell.X[p] * A₀
                     )
-                    bad_redraw += !(u.cell.X[p] != prev.cell.X[p] && u.cell.X[d] != u.cell.X[p])
+                    bad_split += !(
+                        u.cell.A_star[p] == u.cell.A_star[d] && abs(
+                            u.cell.A_star[p] + u.cell.A_star[d] -
+                                (prev.cell.A_star[p] + 1.0)
+                        ) <= 1.0e-9
+                    )
+                    bad_redraw += !(
+                        u.cell.X[p] != prev.cell.X[p] &&
+                            u.cell.X[d] != u.cell.X[p]
+                    )
                     append!(births, (u.cell.X[p], u.cell.X[d]))
                     push!(pairsX, (u.cell.X[p], u.cell.X[d]))
                 end
@@ -795,16 +1014,23 @@ end
     end
 end
 
-@testitem "openvt table s1 model: X is redrawn while ≤ 0 (C3), at birth" setup = [OpenVTTableS1Setup] tags = [:pottsmodels, :acceptance] begin
+@testitem "openvt table s1 model: X is redrawn while ≤ 0 (C3), at birth" setup = [
+    OpenVTTableS1Setup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "openvt table s1 model: X is redrawn while ≤ 0 (C3), at birth" begin
         @test monolayer_sys() !== nothing
         if monolayer_sys() !== nothing
-            # σ_X = 1.25: P(X ≤ 0) = Φ(−1.6) ≈ 5.5 % per raw draw, so an untruncated draw shows up
-            # (≥ 100 draws: missed with P < 0.4 %)
+            # σ_X = 1.25: P(X ≤ 0) = Φ(−1.6) ≈ 5.5 % per raw draw, so an untruncated draw
+            # shows up (≥ 100 draws: missed with P < 0.4 %)
             draws = Float64[]
             nonpos = 0
             for seed in 153_031:153_034
-                sol = solve(monolayer_prob(; tspan = (0, 300), seed, p = [:α => 1.0, :σ_X => 1.25]), first(ALGS); saveat = 1)
+                sol = solve(
+                    monolayer_prob(; tspan = (0, 300), seed, p = [:α => 1.0, :σ_X => 1.25]),
+                    first(ALGS); saveat = 1
+                )
                 @test Symbol(sol.retcode) === :Success
                 for i in 2:length(sol.u)
                     u = sol.u[i]
@@ -823,8 +1049,12 @@ end
     end
 end
 
-@testitem "openvt table s1 model: the first cell's X (drawn per seed, keyed like every draw)" setup = [OpenVTTableS1Setup] tags = [:pottsmodels, :acceptance] begin
-    @testset "openvt table s1 model: the first cell's X (drawn per seed, keyed like every draw)" begin
+@testitem "openvt table s1 model: the first cell's X (drawn per seed, keyed like every \
+    draw)" setup = [OpenVTTableS1Setup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "openvt table s1 model: the first cell's X (drawn per seed, keyed like every \
+        draw)" begin
         @test monolayer_sys() !== nothing
         if monolayer_sys() !== nothing
             prob = monolayer_prob(; tspan = (0, 1))
@@ -836,28 +1066,38 @@ end
             n = length(X1)
             @test n >= 190                                 # X·A₀ ≤ 52 has P ≈ 0.8 %
             @test all(>(0), X1) && length(unique(X1)) == n
-            @test abs(mean(X1) - 2) <= 4 * 0.4 / sqrt(n) && abs(std(X1) - 0.4) <= 4 * 0.4 / sqrt(2n)
-            # reproducible, and the same on both algorithms (the sweep does not touch the stream)
+            @test abs(mean(X1) - 2) <= 4 * 0.4 / sqrt(n) &&
+                abs(std(X1) - 0.4) <= 4 * 0.4 / sqrt(2n)
+            # reproducible, and the same on both algorithms (the sweep does not touch the
+            # stream)
             for seed in 1:10
                 a = solve(remake(prob; seed), ALGS[1]; saveat = 1).u[end]
                 b = solve(remake(prob; seed), ALGS[2]; saveat = 1).u[end]
                 c = solve(remake(prob; seed), ALGS[1]; saveat = 1).u[end]
                 @test a.cell.X[1] == c.cell.X[1] && Array(a.ownership) == Array(c.ownership)
-                monolayer_live(a) == monolayer_live(b) == [1] && @test a.cell.X[1] == b.cell.X[1]
+                monolayer_live(a) == monolayer_live(b) == [1] &&
+                    @test a.cell.X[1] == b.cell.X[1]
             end
         end
     end
 end
 
-@testitem "openvt table s1 G2: deterministic mode X ≡ 2 gives synchronous doublings (case (f))" setup = [OpenVTTableS1Setup] tags = [:pottsmodels, :acceptance] begin
-    @testset "openvt table s1 G2: deterministic mode X ≡ 2 gives synchronous doublings (case (f))" begin
+@testitem "openvt table s1 G2: deterministic mode X ≡ 2 gives synchronous doublings (case \
+    (f))" setup = [OpenVTTableS1Setup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "openvt table s1 G2: deterministic mode X ≡ 2 gives synchronous doublings \
+        (case (f))" begin
         @test monolayer_sys() !== nothing
         if monolayer_sys() !== nothing
             prob = monolayer_prob(; tspan = (0, 2400), p = [:σ_X => 0.0])
             for seed in DET_SEEDS
                 sol = solve(remake(prob; seed), first(ALGS); saveat = 1)
                 N = [length(monolayer_live(u)) for u in sol.u]
-                @test all(u -> all(c -> u.cell.X[c] == 2.0, monolayer_live(u)), sol.u[2:end])
+                @test all(
+                    u -> all(c -> u.cell.X[c] == 2.0, monolayer_live(u)),
+                    sol.u[2:end]
+                )
                 @test monolayer_windows(N)
                 # the steps fall near t = 1, 2, 3 cycles (775 MCS each)
                 steps = [k - 1 for k in 2:length(N) if N[k] != N[k - 1]]
@@ -867,8 +1107,11 @@ end
             hits = count(
                 seed -> monolayer_windows(
                     [
-                        length(monolayer_live(u)) for u in
-                            solve(remake(prob; seed, p = [:σ_X => 0.4]), first(ALGS); saveat = 1).u
+                        length(monolayer_live(u))
+                            for u in solve(
+                                remake(prob; seed, p = [:σ_X => 0.4]),
+                                first(ALGS); saveat = 1
+                            ).u
                     ]
                 ),
                 STO_SEEDS
@@ -878,25 +1121,38 @@ end
     end
 end
 
-@testitem "openvt table s1: OpenVTGrowingMonolayer carries the 2024 Artistoo parameters" setup = [OpenVTTableS1Setup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "openvt table s1: OpenVTGrowingMonolayer carries the 2024 Artistoo \
+    parameters" setup = [OpenVTTableS1Setup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # The 2024 set is kept, bit for bit
-    # ---------------------------------------------------------------------------------------------
-    @testset "openvt table s1: OpenVTGrowingMonolayer carries the 2024 Artistoo parameters" begin
+    # --------------------------------------------------------------------------------------
+    @testset "openvt table s1: OpenVTGrowingMonolayer carries the 2024 Artistoo \
+        parameters" begin
         p = PottsProblem(
-            OpenVTGrowingMonolayer(; name = :o, lattice = (40, 40), τ = 10.0), openvt_monolayer_state(; lattice = (40, 40)),
+            OpenVTGrowingMonolayer(; name = :o, lattice = (40, 40), τ = 10.0),
+            openvt_monolayer_state(;
+                lattice = (40, 40)
+            ),
             (0, 60); capacity = 256, seed = 3
         )
-        @test (par(p, :A₀), par(p, :λ), par(p, :τ), par(p, :J)) == (25.0, 20.0, 10.0, [0.0 20.0; 20.0 20.0])
+        @test (par(p, :A₀), par(p, :λ), par(p, :τ), par(p, :J)) ==
+            (25.0, 20.0, 10.0, [0.0 20.0; 20.0 20.0])
     end
 end
 
-@testitem "openvt table s1 G6: near_edge and edge_guard" setup = [OpenVTTableS1Setup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "openvt table s1 G6: near_edge and edge_guard" setup = [
+    OpenVTTableS1Setup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # G6: the domain guard
-    # ---------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     @testset "openvt table s1 G6: near_edge and edge_guard" begin
-        @test isdefined(PottsModels.Analysis, :near_edge) && isdefined(PottsModels, :edge_guard)
+        @test isdefined(PottsModels.Analysis, :near_edge) &&
+            isdefined(PottsModels, :edge_guard)
         if isdefined(PottsModels.Analysis, :near_edge)
             ne = PottsModels.Analysis.near_edge
             one_at(i, j) = (σ = zeros(Int32, 20, 16); σ[i, j] = 7; σ)
@@ -912,35 +1168,56 @@ end
             # a fast colony on 60 × 60 reaches the 12-site margin within 400 MCS
             prob = monolayer_prob(; tspan = (0, 400), seed = 153_041, p = [:α => 2.0])
             free = solve(prob, first(ALGS); saveat = 1)
-            @test Symbol(free.retcode) === :Success                         # control: no guard, it runs on
+            # control: no guard, it runs on
+            @test Symbol(free.retcode) === :Success
             hit = findfirst(u -> ne(Array(u.ownership), 12), free.u)
             @test hit !== nothing && hit > 2
-            @test_throws DomainError solve(prob, first(ALGS); callback = PottsModels.edge_guard(12))
-            sol = solve(prob, first(ALGS); saveat = 1, callback = PottsModels.edge_guard(12; terminate = true))
+            @test_throws DomainError solve(
+                prob, first(ALGS);
+                callback = PottsModels.edge_guard(12)
+            )
+            sol = solve(
+                prob, first(ALGS); saveat = 1,
+                callback = PottsModels.edge_guard(12; terminate = true)
+            )
             @test sol.retcode == ReturnCode.Failure
-            @test sol.t[end] == free.t[hit] && Array(sol.u[end].ownership) == Array(free.u[hit].ownership)
+            @test sol.t[end] == free.t[hit] &&
+                Array(sol.u[end].ownership) == Array(free.u[hit].ownership)
             @test !ne(Array(sol.u[end - 1].ownership), 12)
             # control: a margin the run never reaches
-            quiet = solve(remake(prob; tspan = (0, 100)), first(ALGS); callback = PottsModels.edge_guard(3))
+            quiet = solve(
+                remake(prob; tspan = (0, 100)), first(ALGS);
+                callback = PottsModels.edge_guard(3)
+            )
             @test Symbol(quiet.retcode) === :Success
         end
     end
 end
 
-@testitem "openvt table s1 G11: stop_at_cells at 1000 and 10⁴ cells, and at the first crossing" setup = [OpenVTTableS1Setup] tags = [:pottsmodels, :acceptance] begin
-    @testset "openvt table s1 G11: stop_at_cells at 1000 and 10⁴ cells, and at the first crossing" begin
+@testitem "openvt table s1 G11: stop_at_cells at 1000 and 10⁴ cells, and at the first \
+    crossing" setup = [OpenVTTableS1Setup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "openvt table s1 G11: stop_at_cells at 1000 and 10⁴ cells, and at the first \
+        crossing" begin
         @test isdefined(PottsModels, :stop_at_cells)
         if isdefined(PottsModels, :stop_at_cells)
             for n in (1000, 10_000)
                 cb = PottsModels.stop_at_cells(n)
                 @test cb isa DiscreteCallback
                 at = solve(
-                    PottsProblem(Tiles(; name = :monolayer_t), monolayer_tiles(n), (0, 3); capacity = 10_100),
+                    PottsProblem(
+                        Tiles(; name = :monolayer_t), monolayer_tiles(n), (0, 3);
+                        capacity = 10_100
+                    ),
                     first(ALGS); callback = cb
                 )
                 @test at.retcode == ReturnCode.Terminated && at.t[end] == 1
                 below = solve(
-                    PottsProblem(Tiles(; name = :monolayer_t), monolayer_tiles(n - 1), (0, 3); capacity = 10_100),
+                    PottsProblem(
+                        Tiles(; name = :monolayer_t),
+                        monolayer_tiles(n - 1), (0, 3); capacity = 10_100
+                    ),
                     first(ALGS); callback = cb
                 )
                 @test Symbol(below.retcode) === :Success && below.t[end] == 3     # control
@@ -951,16 +1228,24 @@ end
                 N = [length(monolayer_live(u)) for u in ref.u]
                 first8 = findfirst(>=(8), N)
                 @test first8 !== nothing && N[first8 - 1] < 8
-                sol = solve(prob, first(ALGS); saveat = 1, callback = PottsModels.stop_at_cells(8))
+                sol = solve(
+                    prob, first(ALGS); saveat = 1,
+                    callback = PottsModels.stop_at_cells(8)
+                )
                 @test sol.retcode == ReturnCode.Terminated
-                @test sol.t[end] == ref.t[first8] && Array(sol.u[end].ownership) == Array(ref.u[first8].ownership)
+                @test sol.t[end] == ref.t[first8] &&
+                    Array(sol.u[end].ownership) == Array(ref.u[first8].ownership)
             end
         end
     end
 end
 
-@testitem "openvt table s1 G11: the O2 snapshot (x, y, r, f, a in R; r = √(A*/π)/R)" setup = [OpenVTTableS1Setup] tags = [:pottsmodels, :acceptance] begin
-    @testset "openvt table s1 G11: the O2 snapshot (x, y, r, f, a in R; r = √(A*/π)/R)" begin
+@testitem "openvt table s1 G11: the O2 snapshot (x, y, r, f, a in R; r = √(A*/π)/R)" setup =
+    [OpenVTTableS1Setup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "openvt table s1 G11: the O2 snapshot (x, y, r, f, a in R; r = \
+        √(A*/π)/R)" begin
         @test isdefined(PottsModels, :openvt_snapshot)
         if isdefined(PottsModels, :openvt_snapshot) && monolayer_sys() !== nothing
             snap = PottsModels.openvt_snapshot
@@ -968,9 +1253,13 @@ end
             u0 = monolayer_prob(; tspan = (0, 1)).u0
             s0 = snap(u0)
             @test keys(s0) == (:x, :y, :r, :f, :a)
-            @test s0.x == [0.0] && s0.y == [0.0] && abs(s0.r[1] - 1) <= 1.0e-12 && s0.f == [1.0] && s0.a == [52 / 50]
+            @test s0.x == [0.0] && s0.y == [0.0] && abs(s0.r[1] - 1) <= 1.0e-12 &&
+                s0.f == [1.0] && s0.a == [52 / 50]
             # a grown colony against brute force
-            sol = solve(monolayer_prob(; tspan = (0, 300), seed = 153_061, p = [:α => 1.0]), first(ALGS))
+            sol = solve(
+                monolayer_prob(; tspan = (0, 300), seed = 153_061, p = [:α => 1.0]),
+                first(ALGS)
+            )
             u = sol.u[end]
             s = snap(u)
             live = monolayer_live(u)
@@ -981,10 +1270,23 @@ end
             @test length(live) >= 8 && length(s.x) == length(live)
             @test maximum(abs.(s.x .- (cx .- 30.5) ./ MONOLAYER_R)) <= 1.0e-12
             @test maximum(abs.(s.y .- (cy .- 30.5) ./ MONOLAYER_R)) <= 1.0e-12
-            @test maximum(abs.(s.r .- sqrt.(Array(u.cell.A_star)[live] ./ π) ./ MONOLAYER_R)) <= 1.0e-12
+            @test maximum(
+                abs.(
+                    s.r .-
+                        sqrt.(Array(u.cell.A_star)[live] ./ π) ./ MONOLAYER_R
+                )
+            ) <=
+                1.0e-12
             @test s.f == [bf.med[c] / bf.unlike[c] for c in live]
-            @test maximum(abs.(s.a .- Array(u.cell.volume)[live] ./ Array(u.cell.A_star)[live])) <= 1.0e-12
-            @test any(<(1.0), s.f)                                           # non-vacuous: contacts between cells
+            @test maximum(
+                abs.(
+                    s.a .-
+                        Array(u.cell.volume)[live] ./ Array(u.cell.A_star)[live]
+                )
+            ) <=
+                1.0e-12
+            # non-vacuous: contacts between cells
+            @test any(<(1.0), s.f)
             # the centre and A₀ keywords
             s2 = snap(u; area0 = 100.0, center = (1.0, 1.0))
             @test maximum(abs.(s2.x .- (cx .- 1) ./ sqrt(100 / π))) <= 1.0e-12
@@ -999,11 +1301,15 @@ end
     end
 end
 
-@testitem "openvt table s1 device: G1 exact, per-daughter draws, the model's f (CheckerboardCPM, Float32)" setup = [OpenVTTableS1Setup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "openvt table s1 device: G1 exact, per-daughter draws, the model's f \
+    (CheckerboardCPM, Float32)" setup = [OpenVTTableS1Setup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # Metal
-    # ---------------------------------------------------------------------------------------------
-    @testset "openvt table s1 device: G1 exact, per-daughter draws, the model's f (CheckerboardCPM, Float32)" begin
+    # --------------------------------------------------------------------------------------
+    @testset "openvt table s1 device: G1 exact, per-daughter draws, the model's f \
+        (CheckerboardCPM, Float32)" begin
         if ON_DEVICE
             backend = PottsDevices.device_backend()
             if monolayer_ok(:Fold)
@@ -1022,7 +1328,8 @@ end
                     seed = first(DRAW_SEEDS), T = Float32
                 )
                 u1 = solve(prob, CheckerboardCPM(); backend, saveat = 1).u[2]
-                tags = Array(u1.cell.tag); d = Array(u1.cell.d)
+                tags = Array(u1.cell.tag)
+                d = Array(u1.cell.d)
                 prs = [findall(==(Float32(c)), tags) for c in 1:400]
                 @test all(p -> length(p) == 2 && d[p[1]] != d[p[2]], prs)
                 @test abs(mean(d[1:800])) <= 4 / sqrt(800)
@@ -1031,10 +1338,15 @@ end
             end
             if monolayer_sys() !== nothing
                 sol = solve(
-                    monolayer_prob(; tspan = (0, 300), seed = 153_071, p = [:α => 1.0], T = Float32), CheckerboardCPM();
+                    monolayer_prob(;
+                        tspan = (0, 300), seed = 153_071, p = [:α => 1.0],
+                        T = Float32
+                    ), CheckerboardCPM();
                     backend, saveat = 1
                 )
-                bad = 0; quiet = 0; badX = 0
+                bad = 0
+                quiet = 0
+                badX = 0
                 us = hosts(sol)
                 for i in 2:length(us)
                     u = us[i]
@@ -1042,7 +1354,10 @@ end
                     monolayer_quiet(us, i) || continue
                     quiet += 1
                     bf = monolayer_contacts(u.ownership, MOORE; n = length(u.cell.volume))
-                    bad += count(c -> abs(u.cell.f[c] - bf.med[c] / bf.unlike[c]) > eps(Float32), monolayer_live(u))
+                    bad += count(
+                        c -> abs(u.cell.f[c] - bf.med[c] / bf.unlike[c]) > eps(Float32),
+                        monolayer_live(u)
+                    )
                 end
                 @test bad == 0 && badX == 0 && quiet >= 200
             else

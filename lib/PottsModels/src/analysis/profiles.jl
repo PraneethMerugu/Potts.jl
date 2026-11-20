@@ -3,8 +3,8 @@
 """
     column_tops([pred,] σ::AbstractMatrix) -> Vector{Int}
 
-For each column `x` (σ's first index), the largest `y` (second index) whose site belongs to a
-cell `c` (not the medium) with `pred(c)`; 0 if there is none. `pred` defaults to every
+For each column `x` (σ's first index), the largest `y` (second index) whose site belongs to
+a cell `c` (not the medium) with `pred(c)`; 0 if there is none. `pred` defaults to every
 cell; pass, for example, `in(S)` for a set of cells `S`.
 """
 column_tops(σ::AbstractMatrix) = column_tops(Returns(true), σ)
@@ -32,7 +32,8 @@ right; NumPy sums pairwise, so for non-integer data the two can differ in the la
 function trapezoid_integral(x, y)
     x, y = collect(x), collect(y)
     length(x) == length(y) ||
-        throw(ArgumentError("trapezoid_integral: x and y have different lengths ($(length(x)) and $(length(y)))"))
+        throw(ArgumentError("trapezoid_integral: x and y have different lengths \
+            ($(length(x)) and $(length(y)))"))
     s = 0.0
     for i in 1:(length(x) - 1)
         s += (x[i + 1] - x[i]) * (y[i + 1] + y[i]) / 2

@@ -15,7 +15,10 @@ using MakiePotts: MakiePotts
 # - a family module may not be bound to another name (`import Potts as P`,
 #   `using Potts: CorePotts as C`, `const P = Potts`): an alias would hide later accesses.
 # Not handled: reflection (`getproperty(Potts, :x)`, `getfield`, `@eval`).
-const POTTS_FAMILY = Dict(:Potts => Potts, :CorePotts => Potts.CorePotts, :PottsModels => PottsModels)
+const POTTS_FAMILY = Dict(
+    :Potts => Potts, :CorePotts => Potts.CorePotts, :PottsModels =>
+        PottsModels
+)
 _isfamily(v) = v isa Module && get(POTTS_FAMILY, nameof(v), nothing) === v
 function nonpublic_accesses(ex, bad = String[])
     ex isa Expr || return bad
@@ -41,7 +44,8 @@ function nonpublic_accesses(ex, bad = String[])
             for it in ex.args
                 path = it.head === :as ? it.args[1].args : it.args
                 v = _resolve_path(path, bad)
-                it.head === :as && _isfamily(v) && push!(bad, "alias $(it.args[2]) = $(join(path, '.'))")
+                it.head === :as && _isfamily(v) &&
+                    push!(bad, "alias $(it.args[2]) = $(join(path, '.'))")
             end
         end
         return bad
@@ -57,7 +61,8 @@ end
 # of a chain (`Potts.CorePotts`) is pushed to `bad`.
 function _family_module(p, bad)
     p isa Symbol && return get(POTTS_FAMILY, p, nothing)
-    p isa Expr && p.head === :. && length(p.args) == 2 && p.args[2] isa QuoteNode || return nothing
+    p isa Expr && p.head === :. && length(p.args) == 2 && p.args[2] isa QuoteNode ||
+        return nothing
     m = _family_module(p.args[1], bad)
     m === nothing && return nothing
     x = p.args[2].value
@@ -105,13 +110,17 @@ end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "PottsModels uses only public names" setup = [GuardrailsSetup] tags = [:pottsmodels, :guardrails] begin
+@testitem "PottsModels uses only public names" setup = [GuardrailsSetup] tags = [
+    :pottsmodels, :guardrails,
+] begin
     @testset "PottsModels uses only public names" begin
         @test check_no_implicit_imports(PottsModels) === nothing
-        # FFTW documents but does not export `r2r` and its kinds; `rfft` is ambiguous once FFTA
-        # (a KernelDensity dependency) is loaded (`Analysis.power_spectrum`)
-        @test check_all_explicit_imports_are_public(PottsModels; ignore = (:R2HC, :r2r)) === nothing
-        # no exception: `akeeb_state` draws its clocks through the public `Potts.layer_rng` (D-138)
+        # FFTW documents but does not export `r2r` and its kinds; `rfft` is ambiguous once
+        # FFTA (a KernelDensity dependency) is loaded (`Analysis.power_spectrum`)
+        @test check_all_explicit_imports_are_public(PottsModels; ignore = (:R2HC, :r2r)) ===
+            nothing
+        # no exception: `akeeb_state` draws its clocks through the public `Potts.layer_rng`
+        # (D-138)
         @test check_all_qualified_accesses_are_public(PottsModels) === nothing
         @test check_all_qualified_accesses_via_owners(PottsModels) === nothing
         @test check_no_stale_explicit_imports(PottsModels) === nothing
@@ -119,7 +128,9 @@ end
     end
 end
 
-@testitem "PottsModels docs and extensions" setup = [GuardrailsSetup] tags = [:pottsmodels, :guardrails] begin
+@testitem "PottsModels docs and extensions" setup = [GuardrailsSetup] tags = [
+    :pottsmodels, :guardrails,
+] begin
     @testset "PottsModels docs and extensions" begin
         @test isempty(Docs.undocumented_names(PottsModels; private = false))
         @test isempty(Docs.undocumented_names(PottsModels.Analysis; private = false))
@@ -130,7 +141,9 @@ end
     end
 end
 
-@testitem "reproduction scripts use only public names" setup = [GuardrailsSetup] tags = [:pottsmodels, :guardrails] begin
+@testitem "reproduction scripts use only public names" setup = [GuardrailsSetup] tags = [
+    :pottsmodels, :guardrails,
+] begin
     @testset "reproduction scripts use only public names" begin
         dir = joinpath(@__DIR__, "..", "reproductions")
         scripts = sort(filter(endswith(".jl"), readdir(dir)))
@@ -140,61 +153,92 @@ end
         end
         # negative controls: each form is caught, and public names pass
         @test nonpublic_accesses("Potts.lattice_spec((4, 4))") == ["Potts.lattice_spec"]
-        @test nonpublic_accesses("f(x) = CorePotts.linear_index(l, x) + CorePotts._embed(g, x)") == ["CorePotts._embed"]
+        @test nonpublic_accesses(
+            "f(x) = CorePotts.linear_index(l, x) + CorePotts._embed(g, x)"
+        ) ==
+            ["CorePotts._embed"]
         @test nonpublic_accesses("Potts.CorePotts.shift(l, x, o)") == ["Potts.CorePotts"]
-        @test nonpublic_accesses("Potts.CorePotts._embed(g, x)") == ["Potts.CorePotts", "CorePotts._embed"]
-        @test nonpublic_accesses("using Potts: layout, lattice_spec") == ["Potts.lattice_spec (imported)"]
-        @test nonpublic_accesses("import Potts: lattice_spec as ls") == ["Potts.lattice_spec (imported)"]
+        @test nonpublic_accesses("Potts.CorePotts._embed(g, x)") ==
+            ["Potts.CorePotts", "CorePotts._embed"]
+        @test nonpublic_accesses("using Potts: layout, lattice_spec") ==
+            ["Potts.lattice_spec (imported)"]
+        @test nonpublic_accesses("import Potts: lattice_spec as ls") ==
+            ["Potts.lattice_spec (imported)"]
         @test nonpublic_accesses("using Potts.CorePotts: shift") == ["Potts.CorePotts"]
-        @test nonpublic_accesses("using CorePotts: shift, _embed") == ["CorePotts._embed (imported)"]
+        @test nonpublic_accesses("using CorePotts: shift, _embed") ==
+            ["CorePotts._embed (imported)"]
         @test nonpublic_accesses("import Potts.lattice_spec") == ["Potts.lattice_spec"]
         @test nonpublic_accesses("using Potts, Potts.CorePotts") == ["Potts.CorePotts"]
         @test nonpublic_accesses("import Potts as P") == ["alias P = Potts"]
         @test nonpublic_accesses("import CorePotts as C") == ["alias C = CorePotts"]
-        @test nonpublic_accesses("import Potts.CorePotts as C") == ["Potts.CorePotts", "alias C = Potts.CorePotts"]
-        @test nonpublic_accesses("using Potts: CorePotts as C") == ["Potts.CorePotts (imported)", "alias C = CorePotts"]
-        @test nonpublic_accesses("using PottsModels: PottsModels as PM") == ["alias PM = PottsModels"]
+        @test nonpublic_accesses("import Potts.CorePotts as C") ==
+            ["Potts.CorePotts", "alias C = Potts.CorePotts"]
+        @test nonpublic_accesses("using Potts: CorePotts as C") ==
+            ["Potts.CorePotts (imported)", "alias C = CorePotts"]
+        @test nonpublic_accesses("using PottsModels: PottsModels as PM") ==
+            ["alias PM = PottsModels"]
         @test nonpublic_accesses("const P = Potts") == ["alias P = Potts"]
         @test nonpublic_accesses("const CP = CorePotts") == ["alias CP = CorePotts"]
         @test nonpublic_accesses("PM = PottsModels") == ["alias PM = PottsModels"]
         @test isempty(
             nonpublic_accesses(
                 """
-                using Potts, PottsModels; using Potts: layout, paint!; import CorePotts.shift
-                Potts.paint!(op, l, lat); Potts.new_cell!(op, k); CorePotts.shift(l, x, o); Makie.wong_colors()
+                using Potts, PottsModels; using Potts: layout, paint!; import \
+                CorePotts.shift
+                Potts.paint!(op, l, lat); Potts.new_cell!(op, k); CorePotts.shift(l, x, \
+                o); Makie.wong_colors()
                 const alg = SequentialCPM(); f(x) = Potts.layout(x)"""
             )
         )
     end
 end
 
-@testitem "every model builds from `using Potts` and `using Potts.Layouts` alone" setup = [GuardrailsSetup] tags = [:pottsmodels, :guardrails] begin
+@testitem "every model builds from `using Potts` and `using Potts.Layouts` alone" setup = [
+    GuardrailsSetup,
+] tags = [
+    :pottsmodels, :guardrails,
+] begin
     @testset "every model builds from `using Potts` and `using Potts.Layouts` alone" begin
         src = joinpath(@__DIR__, "..", "src")
-        for f in sort(filter(f -> f != "PottsModels.jl" && endswith(f, ".jl"), readdir(src)))
+        for f in sort(
+                filter(f -> f != "PottsModels.jl" && endswith(f, ".jl"), readdir(src))
+            )
             m = Module(Symbol(:Sandbox_, splitext(f)[1]))
-            Core.eval(m, :(using Potts; using Potts.Layouts; using DelimitedFiles: readdlm; using Random: MersenneTwister))
+            Core.eval(
+                m,
+                :(
+                    using Potts;
+                    using Potts.Layouts;
+                    using DelimitedFiles: readdlm;
+                    using Random: MersenneTwister
+                )
+            )
             Base.include(m, joinpath(src, f))
             ctors = filter(
-                n -> isdefined(m, n) && isuppercase(first(string(n))) && getfield(m, n) isa Function,
+                n -> isdefined(m, n) && isuppercase(first(string(n))) &&
+                    getfield(m, n) isa Function,
                 names(m; all = true)
             )
             @test !isempty(ctors)
             for c in ctors
-                @test mtkcompile(getfield(m, c)(; name = :probe)) isa Potts.CompiledPottsSystem
+                @test mtkcompile(getfield(m, c)(; name = :probe)) isa
+                    Potts.CompiledPottsSystem
             end
         end
     end
 end
 
-@testitem "DSL vocabulary is documented" setup = [GuardrailsSetup] tags = [:pottsmodels, :guardrails] begin
+@testitem "DSL vocabulary is documented" setup = [GuardrailsSetup] tags = [
+    :pottsmodels, :guardrails,
+] begin
     @testset "DSL vocabulary is documented" begin
         corpus = dsl_docs_corpus()
         @test isempty(filter(n -> !dsl_documented(corpus, n), collect(keys(Potts.DSL))))
-        # controls: each branch alone passes, and a name the docs never mention fails; Base's
-        # docstring of `rand` does not count for Potts's `rand`
+        # controls: each branch alone passes, and a name the docs never mention fails;
+        # Base's docstring of `rand` does not count for Potts's `rand`
         @test dsl_documented("", :transfer) && dsl_documented("`zz(`", :zz)
         @test !dsl_documented(corpus, :no_such_dsl_name) && !dsl_documented("", :rand)
-        @test_throws ArgumentError Potts.DSL.connectivity(1; rule = :unknown)       # Symbol options are checked
+        # Symbol options are checked
+        @test_throws ArgumentError Potts.DSL.connectivity(1; rule = :unknown)
     end
 end

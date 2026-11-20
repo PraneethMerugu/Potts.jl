@@ -19,8 +19,9 @@ profiles after a simulation, never inside a Monte Carlo step.
   [`topology_moments`](@ref), T1 detection with [`contact_changes`](@ref) and
   [`t1_events`](@ref), spectra with [`power_spectrum`](@ref) (Eq. 9) and
   [`spectral_exponent`](@ref), [`mean_t1`](@ref) (N̄) and [`yield_strain`](@ref).
-- Motility (reproduction 14): [`unwrap_track`](@ref), [`mean_squared_displacement`](@ref), the modified Fürth
-  model [`furth_mean_squared_displacement`](@ref), its fits [`furth_fit`](@ref) and [`natural_units`](@ref).
+- Motility (reproduction 14): [`unwrap_track`](@ref), [`mean_squared_displacement`](@ref),
+  the modified Fürth model [`furth_mean_squared_displacement`](@ref), its fits
+  [`furth_fit`](@ref) and [`natural_units`](@ref).
 
 Indices are 1-based throughout; cell ids are the values of σ (0 is the medium).
 """
@@ -28,14 +29,19 @@ module Analysis
 
 using FFTW: R2HC, r2r
 using LinearAlgebra: qr
-using Potts: Closed, Lattice, NeighborOrder, Periodic, VonNeumann, contact_graph, contact_neighbors, relation
+using Potts: Closed, Lattice, NeighborOrder, Periodic, VonNeumann, contact_graph,
+    contact_neighbors, relation
 
-export find_peaks, peak_prominences, peak_widths, merge_peaks, column_tops, trapezoid_integral, cell_graph, reachable,
-    components, centroids, chain_centroids, chain_width, crossing_time, relaxation_mse, near_edge
+export find_peaks, peak_prominences, peak_widths, merge_peaks, column_tops,
+    trapezoid_integral, cell_graph, reachable,
+    components, centroids, chain_centroids, chain_width, crossing_time, relaxation_mse,
+    near_edge
 export concave_hull
-export stored_energy, side_counts, contact_changes, t1_events, topology_distribution, central_moment,
+export stored_energy, side_counts, contact_changes, t1_events, topology_distribution,
+    central_moment,
     topology_moments, power_spectrum, spectral_exponent, mean_t1, yield_strain
-export unwrap_track, mean_squared_displacement, furth_mean_squared_displacement, furth_fit, natural_units
+export unwrap_track, mean_squared_displacement, furth_mean_squared_displacement, furth_fit,
+    natural_units
 
 include("peaks.jl")
 include("profiles.jl")

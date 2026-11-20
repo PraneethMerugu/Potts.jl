@@ -11,17 +11,26 @@
 #   leader_front   max y over leader sites
 #   leader_mean_y  mean y over leader sites
 #   components     connected components of non-medium sites (von Neumann, x periodic)
-function akeeb_metrics(σ::AbstractMatrix{<:Integer}, isleader::AbstractVector{Bool}, n0::Integer)
+function akeeb_metrics(
+        σ::AbstractMatrix{<:Integer}, isleader::AbstractVector{Bool},
+        n0::Integer
+    )
     X, Y = size(σ)
     leader(c) = c <= length(isleader) && isleader[c]
     live = Set{Int}()
-    outer = 0; lfront = 0; lsum = 0; ln = 0
+    outer = 0
+    lfront = 0
+    lsum = 0
+    ln = 0
     for y in 1:Y, x in 1:X
-        c = Int(σ[x, y]); c == 0 && continue
+        c = Int(σ[x, y])
+        c == 0 && continue
         push!(live, c)
         outer = max(outer, y)
         if leader(c)
-            lfront = max(lfront, y); lsum += y; ln += 1
+            lfront = max(lfront, y)
+            lsum += y
+            ln += 1
         end
     end
     seen = falses(X, Y)
@@ -34,7 +43,11 @@ function akeeb_metrics(σ::AbstractMatrix{<:Integer}, isleader::AbstractVector{B
         push!(stack, (x, y))
         while !isempty(stack)
             (i, j) = pop!(stack)
-            for (ii, jj) in ((mod1(i + 1, X), j), (mod1(i - 1, X), j), (i, j + 1), (i, j - 1))
+            for (ii, jj) in (
+                    (mod1(i + 1, X), j), (mod1(i - 1, X), j), (i, j + 1), (
+                        i, j - 1,
+                    ),
+                )
                 1 <= jj <= Y || continue
                 (σ[ii, jj] == 0 || seen[ii, jj]) && continue
                 seen[ii, jj] = true
@@ -54,18 +67,23 @@ end
 #   singles   cells touching no other cell
 #   detached  cells not connected to the row y = 1
 function core_singles(σ::AbstractMatrix{<:Integer})
-    X, Y = size(σ); adj = Dict{Int, Set{Int}}()
+    X, Y = size(σ)
+    adj = Dict{Int, Set{Int}}()
     for y in 1:Y, x in 1:X
-        c = Int(σ[x, y]); c == 0 && continue
+        c = Int(σ[x, y])
+        c == 0 && continue
         get!(adj, c, Set{Int}())
         for (ii, jj) in ((mod1(x + 1, X), y), (x, y + 1))
             jj <= Y || continue
-            d = Int(σ[ii, jj]); (d == 0 || d == c) && continue
-            push!(adj[c], d); push!(get!(adj, d, Set{Int}()), c)
+            d = Int(σ[ii, jj])
+            (d == 0 || d == c) && continue
+            push!(adj[c], d)
+            push!(get!(adj, d, Set{Int}()), c)
         end
     end
     base = Set(Int(σ[x, 1]) for x in 1:X if σ[x, 1] != 0)
-    reach = copy(base); st = collect(base)
+    reach = copy(base)
+    st = collect(base)
     while !isempty(st)
         c = pop!(st)
         for d in adj[c]
@@ -73,5 +91,8 @@ function core_singles(σ::AbstractMatrix{<:Integer})
         end
     end
     core = maximum((y for y in 1:Y, x in 1:X if Int(σ[x, y]) in reach); init = 0)
-    return (core = core, singles = count(c -> isempty(adj[c]), keys(adj)), detached = length(adj) - length(reach))
+    return (
+        core = core, singles = count(c -> isempty(adj[c]), keys(adj)),
+        detached = length(adj) - length(reach),
+    )
 end

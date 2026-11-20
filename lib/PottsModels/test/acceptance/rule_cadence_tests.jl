@@ -34,38 +34,65 @@ end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "rule cadence: two division rules at different cadences" setup = [RuleCadenceSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "rule cadence: two division rules at different cadences" setup = [
+    RuleCadenceSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "rule cadence: two division rules at different cadences" begin
         σ, kinds = two_cadences_state()
-        prob = PottsProblem(TwoCadences(; name = :two), [ownership => σ, kind => kinds], (0, 6))
+        prob = PottsProblem(
+            TwoCadences(; name = :two), [ownership => σ, kind => kinds], (
+                0, 6,
+            )
+        )
         @test selfcheck(remake(prob; tspan = (0, 1))) < 1.0e-9
-        # MCS are numbered from 0 and a rule with Every(n) fires when mcs % n == 0 (as updates do):
-        # ka divides at MCS 0, 2, 4 and kb at MCS 0, 3; tspan (0, n) runs MCS 0 … n − 1
-        expected = Dict(1 => (2, 2), 2 => (2, 2), 3 => (4, 2), 4 => (4, 4), 5 => (8, 4), 6 => (8, 4))
-        for alg in (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
+        # MCS are numbered from 0 and a rule with Every(n) fires when mcs % n == 0 (as
+        # updates do): ka divides at MCS 0, 2, 4 and kb at MCS 0, 3; tspan (0, n) runs MCS 0
+        # … n − 1
+        expected = Dict(
+            1 => (2, 2), 2 => (2, 2), 3 => (4, 2), 4 => (4, 4), 5 => (8, 4), 6 => (8, 4)
+        )
+        for alg in (
+                SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(;
+                    proposal = Moore(1)
+                ),
+            )
             for n in 1:6
-                @test kind_counts(solve(remake(prob; tspan = (0, n)), alg).u[end]) == expected[n]
+                @test kind_counts(solve(remake(prob; tspan = (0, n)), alg).u[end]) ==
+                    expected[n]
             end
         end
     end
 end
 
-@testitem "rule cadence: Every(n) on a rule needs n ≥ 1; Every(1) is the default cadence" setup = [RuleCadenceSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "rule cadence: Every(n) on a rule needs n ≥ 1; Every(1) is the default cadence" begin
+@testitem "rule cadence: Every(n) on a rule needs n ≥ 1; Every(1) is the default \
+    cadence" setup = [RuleCadenceSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "rule cadence: Every(n) on a rule needs n ≥ 1; Every(1) is the default \
+        cadence" begin
         @test_throws ArgumentError Potts.Every(0)
         σ, kinds = two_cadences_state()
         one = Potts.divide(Potts.cells(1), Potts.Every(1); when = Potts.B.volume >= 4)
         dflt = Potts.divide(Potts.cells(1); when = Potts.B.volume >= 4)
         function sys(r)
             return Potts.PottsSystem(;
-                name = :x, kinds = [:medium, :ka, :kb], lattice = Potts.lattice_spec((60, 40)),
+                name = :x, kinds = [:medium, :ka, :kb], lattice = Potts.lattice_spec(
+                    (
+                        60, 40,
+                    )
+                ),
                 sweep = Potts.sweep_spec(:metropolis; temperature = 10.0), divisions = [r]
             )
         end
         function count1(r)
             return kind_counts(
                 solve(
-                    PottsProblem(mtkcompile(sys(r)), [ownership => σ, kind => kinds], (0, 2)),
+                    PottsProblem(
+                        mtkcompile(sys(r)), [ownership => σ, kind => kinds],
+                        (0, 2)
+                    ),
                     SequentialCPM()
                 ).u[end]
             )

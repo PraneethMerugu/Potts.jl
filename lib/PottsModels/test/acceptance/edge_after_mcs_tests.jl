@@ -13,7 +13,8 @@
 # gives an edge (the `edges(rel) => …` term and `@unlink` condition environment):
 #  C. `mtkcompile` accepts it, and `Potts.updates(csys)` on the
 #     compiled form equals the authored listing (phase, scope `:edge`, cadence and the
-#     `isequal` equation; the `update_rules_tests.jl` F check extended to the compiled form).
+#     `isequal` equation; the `update_rules_tests.jl` F check extended to the compiled
+#     form).
 #  B. Behaviour, on a frozen configuration (every copy costs ≥ ~990 at T = 1, so σ and the
 #     centroids never change; checked) with links (1,2) at d = 8 and (2,3) at d = 10 and
 #     (1,3) unlinked:
@@ -29,8 +30,9 @@
 #       - no link is created or removed, and empty link slots keep their 0 payload;
 #       - SequentialCPM and CheckerboardCPM agree; Float32 at rtol 1e-5.
 #  R. An edge update reads only its own relationship's edge variables (as `_check_edge_vars`
-#     already requires of edge terms and link rules): writing `rest(bond)` from `len(tether)`
-#     is a `PottsCompileError` at `mtkcompile` naming `len` and `tether`, not a KeyError.
+#     already requires of edge terms and link rules): writing `rest(bond)` from
+#     `len(tether)` is a `PottsCompileError` at `mtkcompile` naming `len` and `tether`, not
+#     a KeyError.
 #  D. On the device (POTTS_GPU = metal | rocm; Float32, CheckerboardCPM): the same payloads
 #     as the CPU at rtol 1e-5.
 #
@@ -158,14 +160,29 @@ end
 # d12 = 8, d23 = 10; links (1,2) and (2,3); (1,3) unlinked
 function state()
     σ = zeros(Int32, 30, 12)
-    σ[3:6, 5:8] .= 1; σ[11:14, 5:8] .= 2; σ[21:24, 5:8] .= 3
+    σ[3:6, 5:8] .= 1
+    σ[11:14, 5:8] .= 2
+    σ[21:24, 5:8] .= 3
     return σ
 end
-edge_update_op() = Any[ownership => state(), kind => [:blob, :blob, :blob], :bond => [(1, 2), (2, 3)]]
-problem(M; T = Float64, nmcs = 6) = PottsProblem(M(; name = :m), edge_update_op(), (0, nmcs); T)
+function edge_update_op()
+    return Any[
+        ownership => state(), kind => [:blob, :blob, :blob], :bond => [
+            (1, 2), (2, 3),
+        ],
+    ]
+end
+function problem(M; T = Float64, nmcs = 6)
+    return PottsProblem(
+        M(; name = :m), edge_update_op(), (
+            0, nmcs,
+        ); T
+    )
+end
 const EDGE_UPDATE_D = Dict((1, 2) => 8.0, (2, 3) => 10.0)
 edge_update_rest(d, t) = d + (12.0 - d) * 0.75^t
-# payload `x` of the `bond` link between `a` and `b`, read at `a`'s end (`nothing`: unlinked)
+# payload `x` of the `bond` link between `a` and `b`, read at `a`'s end (`nothing`:
+# unlinked)
 function payload(cell, x, a, b)
     k = CorePotts.link_slot(CorePotts.link_store(cell, :bond), a, b)
     return k == 0 ? nothing : Float64(Array(getproperty(cell, Symbol(:link_, x)))[k, a])
@@ -183,13 +200,18 @@ const ON_DEVICE = PottsDevices.on_device()
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "edge after mcs C: mtkcompile of an edge-scope update; updates(csys) as authored" setup = [EdgeAfterMCSSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "edge after mcs C: mtkcompile of an edge-scope update; updates(csys) as \
+    authored" setup = [EdgeAfterMCSSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # C. mtkcompile accepts edge updates; `updates` on the compiled form
-    @testset "edge after mcs C: mtkcompile of an edge-scope update; updates(csys) as authored" begin
+    @testset "edge after mcs C: mtkcompile of an edge-scope update; updates(csys) as \
+        authored" begin
         sys = Edge(; name = :pe)
         U = Potts.updates(sys)
-        @test length(U) == 1 && only(U).scope === :edge                    # as `update_rules_tests.jl` (control)
+        # as `update_rules_tests.jl` (control)
+        @test length(U) == 1 && only(U).scope === :edge
         cs = mtkcompile(sys)
         @test cs isa Potts.CompiledPottsSystem
         @test same(Potts.updates(cs), U)
@@ -205,19 +227,26 @@ end
         ]
         @test same(Potts.updates(mtkcompile(r)), Ur)
         # the compiled system still has no MTK events (D-162)
-        @test isempty(EDGE_UPDATE_M.discrete_events(Potts.inner(getfield(mtkcompile(sys), :sys))))
+        @test isempty(
+            EDGE_UPDATE_M.discrete_events(Potts.inner(getfield(mtkcompile(sys), :sys)))
+        )
     end
 end
 
-@testitem "edge after mcs B: edge updates run once per link per MCS" setup = [EdgeAfterMCSSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "edge after mcs B: edge updates run once per link per MCS" setup = [
+    EdgeAfterMCSSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # B. Behaviour: once per link, each link's distance, both ends equal
     @testset "edge after mcs B: edge updates run once per link per MCS" begin
         prob = problem(Relax)
         @testset "$(nameof(typeof(alg)))" for alg in (SequentialCPM(), CheckerboardCPM())
             sol = solve(prob, alg; saveat = 1)
             @test Symbol(sol.retcode) === :Success && sol.t == 0:6
-            @test all(u -> u.ownership == state(), sol.u)                           # frozen: distances fixed
+            # frozen: distances fixed
+            @test all(u -> u.ownership == state(), sol.u)
             for (i, t) in enumerate(sol.t), ((a, b), d) in EDGE_UPDATE_D
                 c = sol.u[i].cell
                 @test payload(c, :rest, a, b) ≈ edge_update_rest(d, t) rtol = 1.0e-12
@@ -226,12 +255,16 @@ end
             c = sol.u[end].cell
             # not applied twice per link (once per stored end), and applied at all
             for ((a, b), d) in EDGE_UPDATE_D
-                @test !isapprox(payload(c, :rest, a, b), d + (12.0 - d) * 0.75^12; rtol = 1.0e-6)
+                @test !isapprox(
+                    payload(c, :rest, a, b), d + (12.0 - d) * 0.75^12;
+                    rtol = 1.0e-6
+                )
                 @test !isapprox(payload(c, :rest, a, b), 12.0; rtol = 1.0e-6)
             end
             # @before_mcs Every(3): before MCS 0 and 3, seen at t = 1 and 4
             ages = [payload(u.cell, :age, 1, 2) for u in sol.u]
-            @test [sol.t[i + 1] for i in 1:(length(ages) - 1) if ages[i + 1] != ages[i]] == [1, 4]
+            @test [sol.t[i + 1] for i in 1:(length(ages) - 1) if ages[i + 1] != ages[i]] ==
+                [1, 4]
             @test ages[end] == 2.0 && payload(c, :age, 3, 2) == 2.0
             # the cell update in the same block
             @test c.g == fill(6.0, 3)
@@ -243,23 +276,33 @@ end
         # Float32 runs the same updates
         s32 = solve(problem(Relax; T = Float32), SequentialCPM())
         for ((a, b), d) in EDGE_UPDATE_D
-            @test payload(s32.u[end].cell, :rest, a, b) ≈ edge_update_rest(d, 6) rtol = 1.0e-5
+            @test payload(s32.u[end].cell, :rest, a, b) ≈
+                edge_update_rest(d, 6) rtol = 1.0e-5
         end
     end
 end
 
-@testitem "edge after mcs R: an edge update reading another relationship's edge variable" setup = [EdgeAfterMCSSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "edge after mcs R: an edge update reading another relationship's edge \
+    variable" setup = [EdgeAfterMCSSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # R. An edge update reads only its own relationship's edge variables
-    @testset "edge after mcs R: an edge update reading another relationship's edge variable" begin
+    @testset "edge after mcs R: an edge update reading another relationship's edge \
+        variable" begin
         sys = Cross(; name = :px)
-        @test only(Potts.updates(sys)).scope === :edge                       # listed (control)
+        # listed (control)
+        @test only(Potts.updates(sys)).scope === :edge
         @test clear(() -> mtkcompile(sys), "len", "tether")
     end
 end
 
-@testitem "edge after mcs D: edge updates on the device (Float32) equal the CPU run" setup = [EdgeAfterMCSSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "edge after mcs D: edge updates on the device (Float32) equal the CPU run" begin
+@testitem "edge after mcs D: edge updates on the device (Float32) equal the CPU run" setup =
+    [EdgeAfterMCSSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "edge after mcs D: edge updates on the device (Float32) equal the CPU \
+        run" begin
         if ON_DEVICE
             backend = PottsDevices.device_backend()
             alg = CheckerboardCPM()
@@ -268,20 +311,27 @@ end
             gpu = solve(prob, alg; backend, saveat = 0:6)
             @test Symbol(gpu.retcode) === :Success
             for i in eachindex(cpu.u), ((a, b), d) in EDGE_UPDATE_D
-                @test payload(gpu.u[i].cell, :rest, a, b) ≈ payload(cpu.u[i].cell, :rest, a, b) rtol = 1.0e-5
-                @test payload(gpu.u[i].cell, :age, a, b) == payload(cpu.u[i].cell, :age, a, b)
+                @test payload(gpu.u[i].cell, :rest, a, b) ≈
+                    payload(cpu.u[i].cell, :rest, a, b) rtol = 1.0e-5
+                @test payload(gpu.u[i].cell, :age, a, b) ==
+                    payload(cpu.u[i].cell, :age, a, b)
             end
-            @test payload(gpu.u[end].cell, :rest, 2, 3) ≈ edge_update_rest(10.0, 6) rtol = 1.0e-5
+            @test payload(gpu.u[end].cell, :rest, 2, 3) ≈
+                edge_update_rest(10.0, 6) rtol = 1.0e-5
         else
             @test_skip "device (POTTS_GPU=metal|rocm)"
         end
     end
 end
 
-@testitem "edge after mcs N: without edge updates the payloads stay; the configuration is frozen" setup = [EdgeAfterMCSSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "edge after mcs N: without edge updates the payloads stay; the configuration is \
+    frozen" setup = [EdgeAfterMCSSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # N. Negative controls (pass before this item)
-    @testset "edge after mcs N: without edge updates the payloads stay; the configuration is frozen" begin
+    @testset "edge after mcs N: without edge updates the payloads stay; the configuration \
+        is frozen" begin
         prob = problem(Still)
         @test [row(u) for u in Potts.updates(mtkcompile(Still(; name = :ps)))] ==
             [(:after_mcs, :cell, Potts.Every(1))]
@@ -292,13 +342,15 @@ end
             for (a, b) in keys(EDGE_UPDATE_D)
                 @test payload(c, :rest, a, b) == 12.0 && payload(c, :rest, b, a) == 12.0
                 @test payload(c, :age, a, b) == 0.0
-                @test CorePotts.centroid_distance(Float64, c, prob.lattice, a, b) == EDGE_UPDATE_D[(a, b)]
+                @test CorePotts.centroid_distance(Float64, c, prob.lattice, a, b) ==
+                    EDGE_UPDATE_D[(a, b)]
             end
             @test payload(c, :rest, 1, 3) === nothing
             @test edge_update_links(c) == edge_update_links(prob.u0.cell)
             @test c.g == fill(6.0, 3)
         end
         # the oracle separates once-per-link from twice and from never
-        @test !isapprox(edge_update_rest(8.0, 6), 8.0 + 4.0 * 0.75^12; rtol = 1.0e-6) && edge_update_rest(8.0, 0) == 12.0
+        @test !isapprox(edge_update_rest(8.0, 6), 8.0 + 4.0 * 0.75^12; rtol = 1.0e-6) &&
+            edge_update_rest(8.0, 0) == 12.0
     end
 end

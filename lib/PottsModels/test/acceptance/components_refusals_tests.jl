@@ -6,17 +6,19 @@
 #     `mtkcompile`, like the F7 fields (D-084): today they are accepted and ignored.
 #  2. A component binding of parameters builds (FE-18): `y(t) = 2k` and
 #     `initial_conditions = [y => 2k]` give the initial value 2k, `k2 = 2k` is the computed
-#     (read-only) parameter `comp7₊k2`, a discrete `s2 = !s` the computed `net7₊s2`. A binding
-#     that reads an unknown (`y(t) = 2z`, a discrete `X(t) = !Y`) is rejected, naming the
-#     component: `component \`comp7\` (the F7 form) or the location `@components cells comp7`
-#     (the form discrete ticks already carry). Before FE-18 every one of these was rejected.
-#  3. An `x′` `UndefVarError` raised inside a hand-written (non-`@potts_model`) `@extend` base
-#     propagates unchanged; the extension does not relabel it with its own (or another
+#     (read-only) parameter `comp7₊k2`, a discrete `s2 = !s` the computed `net7₊s2`. A
+#     binding that reads an unknown (`y(t) = 2z`, a discrete `X(t) = !Y`) is rejected,
+#     naming the component: `component \`comp7\` (the F7 form) or the location `@components
+#     cells comp7` (the form discrete ticks already carry). Before FE-18 every one of these
+#     was rejected.
+#  3. An `x′` `UndefVarError` raised inside a hand-written (non-`@potts_model`) `@extend`
+#     base propagates unchanged; the extension does not relabel it with its own (or another
 #     base's) description of `x` (D-088 residual). Today it becomes "`x′`: primes exist only
 #     for site/field variables … `x` is a cell variable" from the outer model.
 #  4. `init` does not warn about `frozen_varies` when the system defines `frozen_varies`
 #     itself (outside CorePotts), even as `false` (a deliberately static mask); the warning
-#     still fires for a custom `remake_frozen` with CorePotts' default `frozen_varies` (D-081).
+#     still fires for a custom `remake_frozen` with CorePotts' default `frozen_varies`
+#     (D-081).
 #  5. The temperature's `integral(Pre(x))` error carries its location "in @sweep" (D-080).
 #
 # Errors may surface while a macro expands (a `LoadError`), at `mtkcompile`, at
@@ -36,7 +38,8 @@ const REFUSAL_OP = [ownership => ONE, kind => [:A]]
 function refusal_model(sys, comp::Symbol, stmts...; scope = :(cells(A)))
     SYSTEM[] = sys
     decl = Expr(
-        :macrocall, Symbol("@components"), LineNumberNode(@__LINE__, Symbol(@__FILE__)), scope,
+        :macrocall, Symbol("@components"), LineNumberNode(@__LINE__, Symbol(@__FILE__)),
+        scope,
         :($comp = SYSTEM[])
     )
     ex = quote
@@ -59,8 +62,10 @@ function rejection(f, words...)
         f()
     catch e
         e isa LoadError && (e = e.error)
-        e isa Union{ArgumentError, Potts.PottsCompileError} || return "not an ArgumentError: $(typeof(e)): $(first(sprint(showerror, e), 300))"
-        isempty(words) || occursin(first(words), sprint(showerror, e)) || return "message does not match $(first(words))"
+        e isa Union{ArgumentError, Potts.PottsCompileError} ||
+            return "not an ArgumentError: $(typeof(e)): $(first(sprint(showerror, e), 300))"
+        isempty(words) || occursin(first(words), sprint(showerror, e)) ||
+            return "message does not match $(first(words))"
         return :ok
     end
     return "accepted silently"
@@ -71,8 +76,13 @@ function refusal_builds(m, op = REFUSAL_OP)
     prob = PottsProblem(m, op, (0, 1))
     return Symbol(solve(prob, SequentialCPM(; proposal = Moore(1))).retcode) === :Success
 end
-"""Build, make the problem and run one MCS: the stage where a binding is rejected is free."""
-full(m) = (mtkcompile(m); solve(PottsProblem(m, REFUSAL_OP, (0, 1)), SequentialCPM(; proposal = Moore(1))))
+"""
+Build, make the problem and run one MCS: the stage where a binding is rejected is free.
+"""
+function full(m)
+    mtkcompile(m)
+    return solve(PottsProblem(m, REFUSAL_OP, (0, 1)), SequentialCPM(; proposal = Moore(1)))
+end
 refusal_fingerprint(m, op = REFUSAL_OP) = PottsProblem(m, op, (0, 1)).f.fingerprint
 """A message names component `c`: the F7 form `component \`c\``, or the location
 `@components cells c` / `@components model c` (as discrete ticks carry today)."""
@@ -84,7 +94,10 @@ function refusal_continuous(feature = (y, z, k) -> (;))
     t = Potts.t
     @variables y(t) = 1.0 z(t) = 0.0
     @parameters k = 0.3
-    return System([Potts.D(y) ~ -k * y, Potts.D(z) ~ -z], t; name = :comp7, feature(y, z, k)...)
+    return System(
+        [Potts.D(y) ~ -k * y, Potts.D(z) ~ -z], t; name = :comp7,
+        feature(y, z, k)...
+    )
 end
 """The discrete component `net7`: a counter `C(k) ~ C(k-1) + 1`, plus `feature(C)`."""
 function refusal_discrete(feature = C -> (;))
@@ -139,7 +152,8 @@ end
     @extend second = HandBad()
 end
 # controls
-@potts_model OuterMacroBase begin              # a `@potts_model` base translates with its own description
+# a `@potts_model` base translates with its own description
+@potts_model OuterMacroBase begin
     @extend base = BadInner()
     @parameters qq = 2.0
 end
@@ -148,7 +162,8 @@ end
     @variables g(cell) = 2.0
     @energy cells => 0.1 * g′ * volume
 end
-@potts_model OuterInherited begin              # `qq′` of `qq` bound from a hand-written base
+# `qq′` of `qq` bound from a hand-written base
+@potts_model OuterInherited begin
     @extend qq = base = HandOK()
     @energy cells => 0.1 * qq′ * volume
 end
@@ -156,14 +171,18 @@ end
     @extend qq = base = HandOK()
     @energy cells => 0.1 * qq * volume
 end
-"""`:ok` if `f()` throws the `UndefVarError` of `var` (possibly in a `LoadError`); otherwise what happened."""
+"""
+`:ok` if `f()` throws the `UndefVarError` of `var` (possibly in a `LoadError`); otherwise
+what happened.
+"""
 function refusal_undef(f, var::Symbol)
     try
         f()
     catch e
         e isa LoadError && (e = e.error)
         e isa UndefVarError && e.var === var && return :ok
-        return "not the UndefVarError of $var: $(typeof(e)): $(first(sprint(showerror, e), 400))"
+        return "not the UndefVarError \
+            of $var: $(typeof(e)): $(first(sprint(showerror, e), 400))"
     end
     return "accepted silently"
 end
@@ -189,7 +208,11 @@ CorePotts.remake_frozen(::Forgot, prob, u) = prob.frozen
 function core_problem(sys)
     lat = CorePotts.Lattice((10, 10))
     st = CorePotts.initial_state(ONE, Int32[1])
-    f = CorePotts.CPMFunction((st, p, prop, ctx) -> 0.0; temperature = (st, p, prop, ctx) -> 1.0, sys)
+    f = CorePotts.CPMFunction(
+        (st, p, prop, ctx) -> 0.0; temperature = (
+            st, p, prop, ctx
+        ) -> 1.0, sys
+    )
     fz = falses(10, 10)
     fz[1, :] .= true
     return CorePotts.PottsProblem(f, st, lat, (0, 2), (;); frozen = fz)
@@ -215,19 +238,36 @@ const INTEGRAL_PRE = "`integral(Pre(x))` is only available in update blocks"
 # Unchanged pins: the fixtures this item touches build the same code
 function pinned()
     return (
-        "continuous component" => () -> refusal_fingerprint(refusal_model(refusal_continuous(), :comp7)),
-        "continuous component (model)" => () -> refusal_fingerprint(refusal_model(refusal_continuous(), :comp7; scope = :model)),
-        "discrete component" => () -> refusal_fingerprint(refusal_model(refusal_discrete(), :net7)),
-        "nested component" => () -> refusal_fingerprint(refusal_model(refusal_nested(), :comp7)),
-        "guesses" => () -> refusal_fingerprint(refusal_model(refusal_continuous((y, z, k) -> (; guesses = [z => 0.0])), :comp7)),
-        "extension of a hand-written base" => () -> refusal_fingerprint(OuterOK(; name = :o)),
-        "temperature integral(w)" => () -> refusal_fingerprint(refusal_temperature(:(1.0 + 0.01 * integral(w)))),
+        "continuous component" =>
+            () -> refusal_fingerprint(refusal_model(refusal_continuous(), :comp7)),
+        "continuous component (model)" =>
+            () -> refusal_fingerprint(
+            refusal_model(refusal_continuous(), :comp7; scope = :model)
+        ),
+        "discrete component" =>
+            () -> refusal_fingerprint(refusal_model(refusal_discrete(), :net7)),
+        "nested component" =>
+            () -> refusal_fingerprint(refusal_model(refusal_nested(), :comp7)),
+        "guesses" =>
+            () -> refusal_fingerprint(
+            refusal_model(
+                refusal_continuous((y, z, k) -> (; guesses = [z => 0.0])), :comp7
+            )
+        ),
+        "extension of a hand-written base" =>
+            () -> refusal_fingerprint(OuterOK(; name = :o)),
+        "temperature integral(w)" =>
+            () -> refusal_fingerprint(refusal_temperature(:(1.0 + 0.01 * integral(w)))),
     )
 end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "components refusals 1: MTK tstops and assertions are rejected by name" setup = [ComponentsRefusalsSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "components refusals 1: MTK tstops and assertions are rejected by name" setup = [
+    ComponentsRefusalsSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "components refusals 1: MTK tstops and assertions are rejected by name" begin
         # positive controls: the same components without the feature build and run
         @test refusal_builds(refusal_model(refusal_continuous(), :comp7))
@@ -235,38 +275,95 @@ end
         @test refusal_builds(refusal_model(refusal_discrete(), :net7))
         @test refusal_builds(refusal_model(refusal_nested(), :comp7))
         # empty tstops/assertions are no feature: accepted
-        @test refusal_builds(refusal_model(refusal_continuous((y, z, k) -> (; tstops = Float64[])), :comp7))
+        @test refusal_builds(
+            refusal_model(
+                refusal_continuous(
+                    (y, z, k) -> (;
+                        tstops = Float64[],
+                    )
+                ), :comp7
+            )
+        )
         # `guesses` stay ignored (D-084)
-        @test refusal_builds(refusal_model(refusal_continuous((y, z, k) -> (; guesses = [z => 0.0])), :comp7))
+        @test refusal_builds(
+            refusal_model(
+                refusal_continuous(
+                    (y, z, k) -> (;
+                        guesses = [z => 0.0],
+                    )
+                ), :comp7
+            )
+        )
         # an F7 field is still rejected (unchanged)
         @test rejection(
-            () -> mtkcompile(refusal_model(refusal_continuous((y, z, k) -> (; continuous_events = [[y ~ 0.5] => [y ~ 1.0]])), :comp7)),
+            () -> mtkcompile(
+                refusal_model(
+                    refusal_continuous(
+                        (y, z, k) -> (;
+                            continuous_events = [[y ~ 0.5] => [y ~ 1.0]],
+                        )
+                    ),
+                    :comp7
+                )
+            ),
             refusal_names("comp7"), "continuous_events"
         ) === :ok
 
         function rejected(sys, comp, word; scope = :(cells(A)))
-            return rejection(() -> mtkcompile(refusal_model(sys, comp; scope)), refusal_names(String(comp)), word)
+            return rejection(
+                () -> mtkcompile(refusal_model(sys, comp; scope)),
+                refusal_names(String(comp)), word
+            )
         end
         # tstops: today accepted, and the run never stops at t = 0.5
-        @test rejected(refusal_continuous((y, z, k) -> (; tstops = [0.5])), :comp7, "tstops") === :ok
-        @test rejected(refusal_continuous((y, z, k) -> (; tstops = [0.5])), :comp7, "tstops"; scope = :model) === :ok
+        @test rejected(
+            refusal_continuous((y, z, k) -> (; tstops = [0.5])), :comp7,
+            "tstops"
+        ) ===
+            :ok
+        @test rejected(
+            refusal_continuous((y, z, k) -> (; tstops = [0.5])),
+            :comp7, "tstops"; scope = :model
+        ) === :ok
         @test rejected(refusal_discrete(C -> (; tstops = [0.5])), :net7, "tstops") === :ok
         @test rejected(refusal_nested(y -> (; tstops = [0.5])), :comp7, "tstops") === :ok
         # assertions: today accepted, and never checked
-        @test rejected(refusal_continuous((y, z, k) -> (; assertions = Dict(y > -1.0 => "y negative"))), :comp7, "assertions") === :ok
         @test rejected(
-            refusal_continuous((y, z, k) -> (; assertions = Dict(y > -1.0 => "y negative"))), :comp7, "assertions";
+            refusal_continuous(
+                (y, z, k) -> (;
+                    assertions = Dict(y > -1.0 => "y negative"),
+                )
+            ),
+            :comp7,
+            "assertions"
+        ) === :ok
+        @test rejected(
+            refusal_continuous(
+                (y, z, k) -> (;
+                    assertions = Dict(y > -1.0 => "y negative"),
+                )
+            ), :comp7, "assertions";
             scope = :model
         ) === :ok
-        @test rejected(refusal_discrete(C -> (; assertions = Dict(C >= 0 => "C negative"))), :net7, "assertions") === :ok
-        @test rejected(refusal_nested(y -> (; assertions = Dict(y > -1.0 => "y negative"))), :comp7, "assertions") === :ok
+        @test rejected(
+            refusal_discrete(C -> (; assertions = Dict(C >= 0 => "C negative"))),
+            :net7, "assertions"
+        ) === :ok
+        @test rejected(
+            refusal_nested(y -> (; assertions = Dict(y > -1.0 => "y negative"))),
+            :comp7, "assertions"
+        ) === :ok
     end
 end
 
-@testitem "components refusals 2: bindings of parameters build; bindings of unknowns are rejected, naming the component" setup = [ComponentsRefusalsSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "components refusals 2: bindings of parameters build; bindings of unknowns are \
+    rejected, naming the component" setup = [ComponentsRefusalsSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 2. Binding rejections name the component
-    @testset "components refusals 2: bindings of parameters build; bindings of unknowns are rejected, naming the component ($scope)" for scope in (:(cells(A)), :model)
+    @testset "components refusals 2: bindings of parameters build; bindings of unknowns \
+        are rejected, naming the component ($scope)" for scope in (:(cells(A)), :model)
         t = Potts.t
         D = Potts.D
         function rejected(sys, comp, words...)
@@ -276,7 +373,11 @@ end
             )
         end
         builds(sys, comp) = refusal_builds(refusal_model(sys, comp; scope))
-        problem(sys, comp) = (m = refusal_model(sys, comp; scope); mtkcompile(m); PottsProblem(m, REFUSAL_OP, (0, 1)))
+        function problem(sys, comp)
+            m = refusal_model(sys, comp; scope)
+            mtkcompile(m)
+            return PottsProblem(m, REFUSAL_OP, (0, 1))
+        end
         first_value(prob, name) = first(vcat(Potts.observe(prob, name)))
         # positive controls: plain values, and plain values given as MTK initial conditions
         let
@@ -284,10 +385,18 @@ end
             @variables y(t) = 1.0 z(t) = 0.0
             @test builds(System([D(y) ~ -k * y, D(z) ~ -z], t; name = :comp7), :comp7)
             @variables y(t)
-            @test builds(System([D(y) ~ -k * y, D(z) ~ -z], t; name = :comp7, initial_conditions = [y => 2.0]), :comp7)
+            @test builds(
+                System(
+                    [D(y) ~ -k * y, D(z) ~ -z], t; name = :comp7, initial_conditions = [
+                        y =>
+                            2.0,
+                    ]
+                ),
+                :comp7
+            )
         end
-        # a variable's value bound to a parameter: its initial value 2k = 0.6 (FE-18; before:
-        # rejected, "… `comp7₊y` has no initial value")
+        # a variable's value bound to a parameter: its initial value 2k = 0.6 (FE-18;
+        # before: rejected, "… `comp7₊y` has no initial value")
         let
             @parameters k = 0.3
             @variables y(t) = 2k z(t) = 0.0
@@ -299,12 +408,17 @@ end
         let
             @parameters k = 0.3
             @variables y(t) z(t) = 0.0
-            sys = System([D(y) ~ -k * y, D(z) ~ -z], t; name = :comp7, initial_conditions = [y => 2k])
+            sys = System(
+                [D(y) ~ -k * y, D(z) ~ -z], t; name = :comp7, initial_conditions = [
+                    y =>
+                        2k,
+                ]
+            )
             @test builds(sys, :comp7)
             @test first_value(problem(sys, :comp7), :comp7₊y) ≈ 0.6
         end
-        # a parameter bound to another: the computed, read-only `comp7₊k2 = 0.6` (before: "unknown
-        # symbol `k2` in …")
+        # a parameter bound to another: the computed, read-only `comp7₊k2 = 0.6` (before:
+        # "unknown symbol `k2` in …")
         let
             @parameters k = 0.3
             @parameters k2 = 2k
@@ -320,16 +434,23 @@ end
             @parameters k = 0.3
             @variables z(t) = 0.5
             @variables y(t) = 2z
-            @test rejected(System([D(y) ~ -k * y, D(z) ~ -z], t; name = :comp7), :comp7, r"\by\b") === :ok
+            @test rejected(
+                System([D(y) ~ -k * y, D(z) ~ -z], t; name = :comp7), :comp7,
+                r"\by\b"
+            ) ===
+                :ok
         end
         # discrete: a node bound to another node (today: "… `net7₊X` has no initial value")
         let kk = ShiftIndex(t, 0)
             @variables Y(t)::Bool = false
             @variables X(t)::Bool = !Y
-            @test rejected(System([X(kk) ~ !X(kk - 1), Y(kk) ~ X(kk - 1)], t; name = :net7), :net7, r"\bX\b") === :ok
+            @test rejected(
+                System([X(kk) ~ !X(kk - 1), Y(kk) ~ X(kk - 1)], t; name = :net7),
+                :net7, r"\bX\b"
+            ) === :ok
         end
-        # discrete: a parameter bound to another: the computed `net7₊s2 = !s = true` (before:
-        # rejected, named by its tick location)
+        # discrete: a parameter bound to another: the computed `net7₊s2 = !s = true`
+        # (before: rejected, named by its tick location)
         let kk = ShiftIndex(t, 0)
             @parameters s::Bool = false
             @parameters s2::Bool = !s
@@ -342,37 +463,56 @@ end
     end
 end
 
-@testitem "components refusals 2: a Potts parameter without a value is not blamed on a component" setup = [ComponentsRefusalsSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "components refusals 2: a Potts parameter without a value is not blamed on a component" begin
+@testitem "components refusals 2: a Potts parameter without a value is not blamed on a \
+    component" setup = [ComponentsRefusalsSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "components refusals 2: a Potts parameter without a value is not blamed on a \
+        component" begin
         # negative control: the model's own parameter, next to a valid component
-        m = refusal_model(refusal_continuous(), :comp7, :(@parameters q), :(@energy cells => q * volume))
+        m = refusal_model(
+            refusal_continuous(), :comp7, :(@parameters q), :(
+                @energy cells =>
+                    q * volume
+            )
+        )
         @test rejection(() -> full(m), "`q`", "no default") === :ok
         @test rejection(() -> full(m), r"^(?!.*component)"s) === :ok
     end
 end
 
-@testitem "components refusals 3: an `x′` error inside a hand-written @extend base is not relabelled" setup = [ComponentsRefusalsSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "components refusals 3: an `x′` error inside a hand-written @extend base is not relabelled" begin
+@testitem "components refusals 3: an `x′` error inside a hand-written @extend base is not \
+    relabelled" setup = [ComponentsRefusalsSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "components refusals 3: an `x′` error inside a hand-written @extend base is \
+        not relabelled" begin
         qq′ = Symbol("qq′")
-        # targets: the base's own error, whatever the outer model or an earlier base calls `qq`
+        # targets: the base's own error, whatever the outer model or an earlier base calls
+        # `qq`
         @test refusal_undef(() -> OuterCell(; name = :o), qq′) === :ok
         @test refusal_undef(() -> OuterParam(; name = :o), qq′) === :ok
         @test refusal_undef(() -> OuterTwo(; name = :o), qq′) === :ok
         # control: with nothing named `qq` outside the base it is already unchanged
         @test refusal_undef(() -> OuterNone(; name = :o), qq′) === :ok
         @test refusal_undef(() -> HandBad(), qq′) === :ok
-        # controls: a `@potts_model` base's own description (a cell variable, not the outer parameter)
+        # controls: a `@potts_model` base's own description (a cell variable, not the outer
+        # parameter)
         @test rejection(
-            () -> OuterMacroBase(; name = :o), "`qq′`", "primes exist only for site/field variables",
+            () -> OuterMacroBase(; name = :o), "`qq′`",
+            "primes exist only for site/field variables",
             "`qq` is a cell variable"
         ) === :ok
-        # controls: the extension's own primes are still translated, after a hand-written base
+        # controls: the extension's own primes are still translated, after a hand-written
+        # base
         @test rejection(
-            () -> OuterOwnPrime(; name = :o), "`g′`", "primes exist only for site/field variables",
+            () -> OuterOwnPrime(; name = :o), "`g′`",
+            "primes exist only for site/field variables",
             "`g` is a cell variable"
         ) === :ok
         @test rejection(
-            () -> OuterInherited(; name = :o), "`qq′`", "primes exist only for site/field variables",
+            () -> OuterInherited(; name = :o), "`qq′`",
+            "primes exist only for site/field variables",
             "`qq` is a cell variable"
         ) === :ok
         # control: a valid extension of a hand-written base builds and runs
@@ -380,8 +520,12 @@ end
     end
 end
 
-@testitem "components refusals 4: frozen_varies defined outside CorePotts silences init's warning" setup = [ComponentsRefusalsSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "components refusals 4: frozen_varies defined outside CorePotts silences init's warning" begin
+@testitem "components refusals 4: frozen_varies defined outside CorePotts silences init's \
+    warning" setup = [ComponentsRefusalsSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "components refusals 4: frozen_varies defined outside CorePotts silences \
+        init's warning" begin
         alg = CorePotts.SequentialCPM()
         W = Base.CoreLogging.Warn
         function warn_logs(f)
@@ -389,8 +533,9 @@ end
             val = Base.CoreLogging.with_logger(f, logger)
             return val, logger.logs
         end
-        # targets: a deliberately static mask (order-independent: check specifically for frozen_varies
-        # in an isolated TestLogger so unrelated once-per-session warnings cannot cause order dependence)
+        # targets: a deliberately static mask (order-independent: check specifically for
+        # frozen_varies in an isolated TestLogger so unrelated once-per-session warnings
+        # cannot cause order dependence)
         for sys in (Static(), StaticMember())
             integ, logs = warn_logs(() -> CorePotts.init(core_problem(sys), alg))
             @test integ isa CorePotts.PottsIntegrator
@@ -404,8 +549,13 @@ end
         # controls: the warning still fires for CorePotts' default `frozen_varies`
         integ_f, logs_f = warn_logs(() -> CorePotts.init(core_problem(Forgot()), alg))
         @test integ_f isa CorePotts.PottsIntegrator
-        @test any(r -> r.level == W && occursin("frozen_varies", string(r.message)) && occursin("Forgot", string(r.message)), logs_f)
-        # controls: no frozen_varies warning for `frozen_varies = true`, no system, or a Potts model (frozen_kinds)
+        @test any(
+            r -> r.level == W && occursin("frozen_varies", string(r.message)) &&
+                occursin("Forgot", string(r.message)),
+            logs_f
+        )
+        # controls: no frozen_varies warning for `frozen_varies = true`, no system, or a
+        # Potts model (frozen_kinds)
         for prob in (
                 core_problem(Varies()), core_problem(nothing),
                 PottsProblem(OuterOK(; name = :o), REFUSAL_OP, (0, 1)),
@@ -417,12 +567,18 @@ end
     end
 end
 
-@testitem "components refusals 5: the temperature's integral(Pre) error is located in @sweep" setup = [ComponentsRefusalsSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "components refusals 5: the temperature's integral(Pre) error is located in @sweep" begin
+@testitem "components refusals 5: the temperature's integral(Pre) error is located in \
+    @sweep" setup = [ComponentsRefusalsSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "components refusals 5: the temperature's integral(Pre) error is located in \
+        @sweep" begin
         # targets
         for law in (:Metropolis, :Barker)
             @test rejection(
-                () -> mtkcompile(refusal_temperature(:(1.0 + 0.01 * integral(Pre(w))); law)),
+                () -> mtkcompile(
+                    refusal_temperature(:(1.0 + 0.01 * integral(Pre(w))); law)
+                ),
                 INTEGRAL_PRE, "in @sweep"
             ) === :ok
         end
@@ -442,11 +598,19 @@ end
             end
             Eqn(; name = :eq)
         end
-        @test rejection(() -> mtkcompile(Base.invokelatest(eval, eqn)), INTEGRAL_PRE, "in @equations") === :ok
+        @test rejection(
+            () -> mtkcompile(Base.invokelatest(eval, eqn)), INTEGRAL_PRE,
+            "in @equations"
+        ) ===
+            :ok
     end
 end
 
-@testitem "components refusals: a guess does not move the fingerprint" setup = [ComponentsRefusalsSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "components refusals: a guess does not move the fingerprint" setup = [
+    ComponentsRefusalsSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "components refusals: a guess does not move the fingerprint" begin
         fps = Dict(name => fp() for (name, fp) in pinned())
         @test fps["guesses"] == fps["continuous component"]

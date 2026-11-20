@@ -1,6 +1,7 @@
 # OpenVT monolayer analysis (D-149): behaviour outside the acceptance file
-# `acceptance/openvt_analysis_port_tests.jl`. The spatial grids of `concave_hull` are checked
-# against a brute-force concaveman that scans every point and edge with the same kernels.
+# `acceptance/openvt_analysis_port_tests.jl`. The spatial grids of `concave_hull` are
+# checked against a brute-force concaveman that scans every point and edge with the same
+# kernels.
 
 @testsetup module OpenVTAnalysisSetup
 include(joinpath(@__DIR__, "shared", "common.jl"))
@@ -21,7 +22,10 @@ function ovt_brute_hull(points; concavity = 2.0)
         for e in eachindex(P)
             nxt[e] == 0 && continue
             p, q = P[e], P[nxt[e]]
-            (min(p[1], q[1]) > xh || max(p[1], q[1]) < xl || min(p[2], q[2]) > yh || max(p[2], q[2]) < yl) && continue
+            (
+                min(p[1], q[1]) > xh || max(p[1], q[1]) < xl || min(p[2], q[2]) > yh ||
+                    max(p[2], q[2]) < yl
+            ) && continue
             OVT_AN._intersects(p, q, a, b) && return false
         end
         return true
@@ -33,10 +37,16 @@ function ovt_brute_hull(points; concavity = 2.0)
         k += 1
         a, b, c, d = P[prv[e]], P[e], P[nxt[e]], P[nxt[nxt[e]]]
         maxsq = OVT_AN._sqdist(b, c) / (concavity * concavity)
-        cands = sort!([(OVT_AN._sqsegdist(pts[i], b, c), i) for i in eachindex(pts) if alive[i]])
+        cands = sort!(
+            [
+                (OVT_AN._sqsegdist(pts[i], b, c), i)
+                    for i in eachindex(pts) if alive[i]
+            ]
+        )
         filter!(t -> !(t[1] > maxsq), cands)
         i = findfirst(
-            t -> t[1] < OVT_AN._sqsegdist(pts[t[2]], a, b) && t[1] < OVT_AN._sqsegdist(pts[t[2]], c, d) &&
+            t -> t[1] < OVT_AN._sqsegdist(pts[t[2]], a, b) &&
+                t[1] < OVT_AN._sqsegdist(pts[t[2]], c, d) &&
                 clear(b, pts[t[2]]) && clear(c, pts[t[2]]), cands
         )
         i === nothing && continue
@@ -59,7 +69,8 @@ function ovt_brute_hull(points; concavity = 2.0)
     end
     return out
 end
-# ── D13: the candidate search does not prune ───────────────────────────────────────────────
+# ── D13: the candidate search does not prune
+# ───────────────────────────────────────────────
 
 # A 37-point jittered lattice (minimised from a fuzz failure). At concavity
 # 1.5, metrics.cpp's concaveman (R-tree, node size 32) returns 30 vertices: its box distance
@@ -93,8 +104,9 @@ const OVT_LATTICE37_HULL = [
     21, 28, 36, 35, 34, 33, 32, 31, 37,
 ]
 # `PottsModels.openvt_frame` (D-173): the O1 rows.
-# `reproductions/15_openvt_f3_f8_tests.jl` checks a hand-built fixture; here random tilings with
-# ids touching the lattice edges, dead and absent ids, against a brute-force neighbour scan
+# `reproductions/15_openvt_f3_f8_tests.jl` checks a hand-built fixture; here random tilings
+# with ids touching the lattice edges, dead and absent ids, against a brute-force neighbour
+# scan
 function ovt_frame_oracle(σ, c)
     s = Set{Int}()
     for I in CartesianIndices(σ)
@@ -109,28 +121,47 @@ end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "OpenVT analysis: concave_hull's grids find what a full scan finds" setup = [OpenVTAnalysisSetup] tags = [:pottsmodels, :core] begin
+@testitem "OpenVT analysis: concave_hull's grids find what a full scan finds" setup = [
+    OpenVTAnalysisSetup,
+] tags = [
+    :pottsmodels, :core,
+] begin
     @testset "OpenVT analysis: concave_hull's grids find what a full scan finds" begin
         rng = MersenneTwister(15)
         clouds = Vector{NTuple{2, Float64}}[]
         for n in (6, 40, 300)
-            push!(clouds, [(50rand(rng), 20rand(rng)) for _ in 1:n])                                  # uniform, flat box
-            push!(clouds, [(θ = 2π * rand(rng); r = 9sqrt(rand(rng)) * (1 + 0.4sin(5θ)); (r * cos(θ), r * sin(θ))) for _ in 1:n])  # ragged
-            push!(clouds, [(1.0e6 + rand(rng), -3.0 + 1.0e-3 * rand(rng)) for _ in 1:n])              # offset, thin
+            # uniform, flat box
+            push!(clouds, [(50rand(rng), 20rand(rng)) for _ in 1:n])
+            push!(
+                clouds,
+                [
+                    (
+                        θ = 2π * rand(rng); r = 9sqrt(rand(rng)) * (1 + 0.4sin(5θ));
+                        (r * cos(θ), r * sin(θ))
+                    ) for _ in 1:n
+                ]
+            )  # ragged
+            # offset, thin
+            push!(clouds, [(1.0e6 + rand(rng), -3.0 + 1.0e-3 * rand(rng)) for _ in 1:n])
         end
         for pts in clouds, concavity in (1.0, 1.5, 3.0)
             @test OVT_AN.concave_hull(pts; concavity) == ovt_brute_hull(pts; concavity)
         end
-        # the boundary is a subset of the input, holds the convex hull and has no repeated vertex
+        # the boundary is a subset of the input, holds the convex hull and has no repeated
+        # vertex
         pts = clouds[5]
         h = OVT_AN.concave_hull(pts; concavity = 1.5)
-        @test issubset(h, pts) && allunique(h) && issubset(OVT_AN.concave_hull(pts; concavity = Inf), h)
+        @test issubset(h, pts) && allunique(h) &&
+            issubset(OVT_AN.concave_hull(pts; concavity = Inf), h)
         # negative control: a smaller concavity carves more
-        @test length(OVT_AN.concave_hull(pts; concavity = 1.0)) > length(OVT_AN.concave_hull(pts; concavity = 3.0))
+        @test length(OVT_AN.concave_hull(pts; concavity = 1.0)) >
+            length(OVT_AN.concave_hull(pts; concavity = 3.0))
     end
 end
 
-@testitem "OpenVT analysis: invalid input" setup = [OpenVTAnalysisSetup] tags = [:pottsmodels, :core] begin
+@testitem "OpenVT analysis: invalid input" setup = [OpenVTAnalysisSetup] tags = [
+    :pottsmodels, :core,
+] begin
     @testset "OpenVT analysis: invalid input" begin
         @test_throws ArgumentError openvt_metrics(Float64[], Float64[], Int[])
         @test_throws DimensionMismatch openvt_metrics([1.0, 2.0], [1.0], [1])
@@ -141,41 +172,68 @@ end
             write(path, "x,y,g,n\n1,2,zz,3\n")
             @test_throws ArgumentError openvt_metrics(path)
         end
-        @test_throws ArgumentError OVT_AN.concave_hull([(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]; concavity = 0)
-        @test_throws ArgumentError OVT_AN.concave_hull([(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]; length_threshold = -1)
+        @test_throws ArgumentError OVT_AN.concave_hull(
+            [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)];
+            concavity = 0
+        )
+        @test_throws ArgumentError OVT_AN.concave_hull(
+            [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]; length_threshold = -1
+        )
         @test_throws ArgumentError OVT_AN.concave_hull([(0.0, 0.0), (NaN, 0.0)])
         @test_throws ArgumentError openvt_inhibition_fractions(Int[])
         @test_throws ArgumentError openvt_neighbor_histogram([2, -1])
         @test_throws ArgumentError openvt_filename(:O4)
-        @test_throws ArgumentError write_openvt(IOBuffer(), :O5, (x_pos = [1.0], y_pos = [1.0], radius_i = [1.0], inhibited = [2]))
+        @test_throws ArgumentError write_openvt(
+            IOBuffer(), :O5,
+            (x_pos = [1.0], y_pos = [1.0], radius_i = [1.0], inhibited = [2])
+        )
         # a failed write leaves no file behind
         mktempdir() do dir
             path = joinpath(dir, "o1.csv")
-            @test_throws ArgumentError write_openvt(path, :O1, (x = [1.0], y = [1.0], i = [7], n = [1]))
+            @test_throws ArgumentError write_openvt(
+                path, :O1, (
+                    x = [1.0], y = [1.0], i = [7], n = [1],
+                )
+            )
             @test !isfile(path)
         end
     end
 end
 
-@testitem "OpenVT analysis: points collinear with p₀ give one strictly convex hull (D12)" setup = [OpenVTAnalysisSetup] tags = [:pottsmodels, :core] begin
-    # ── D12: the Graham order is a strict weak ordering ────────────────────────────────────────
-    @testset "OpenVT analysis: points collinear with p₀ give one strictly convex hull (D12)" begin
+@testitem "OpenVT analysis: points collinear with p₀ give one strictly convex hull \
+    (D12)" setup = [OpenVTAnalysisSetup] tags = [
+    :pottsmodels, :core,
+] begin
+    # ── D12: the Graham order is a strict weak ordering
+    # ────────────────────────────────────────
+    @testset "OpenVT analysis: points collinear with p₀ give one strictly convex hull \
+        (D12)" begin
         # seven points on one ray from p₀, exactly collinear in Float64 (the steps are exact
         # multiples of 2⁻¹⁰ on top of a full-precision start), plus two corners
         X, Y = 1234.567890123, 987.654321987
         ray = [(X + k * (3 / 1024), Y + k * (5 / 1024)) for k in 0:6]
         P = [ray; (X + 0.0625, Y); (X + 0.0625, Y + 0.0390625)]
-        @test all(OVT_AN._orientation_exact(ray[1], ray[i], ray[j]) == 0 for i in 2:7, j in 2:7)
+        @test all(
+            OVT_AN._orientation_exact(ray[1], ray[i], ray[j]) == 0
+                for i in 2:7, j in 2:7
+        )
         # metrics.cpp's orientation on this ray is rounding noise, and not antisymmetric
-        cpp_orient(a, b, c) = a[1] * (b[2] - c[2]) + b[1] * (c[2] - a[2]) + c[1] * (a[2] - b[2])
-        @test any(cpp_orient(ray[1], ray[i], ray[j]) != -cpp_orient(ray[1], ray[j], ray[i]) for i in 2:7, j in 2:7)
-        # p₀, the far end of the ray, the two corners: strictly convex, whatever the input order
+        function cpp_orient(a, b, c)
+            return a[1] * (b[2] - c[2]) + b[1] * (c[2] - a[2]) +
+                c[1] * (a[2] - b[2])
+        end
+        @test any(
+            cpp_orient(ray[1], ray[i], ray[j]) != -cpp_orient(ray[1], ray[j], ray[i])
+                for i in 2:7, j in 2:7
+        )
+        # p₀, the far end of the ray, the two corners: strictly convex, whatever the input
+        # order
         want = [ray[1], ray[7], P[9], P[8]]
         for perm in (1:9, 9:-1:1, [6, 7, 8, 3, 9, 1, 4, 2, 5], [2, 4, 6, 8, 1, 3, 5, 7, 9])
             @test OVT_AN.concave_hull(P[perm]; concavity = Inf) == want
         end
-        # negative control: metrics.cpp's comparator and scan, with Julia's stable sort, keep an
-        # interior ray point on the "convex" hull for the third order above
+        # negative control: metrics.cpp's comparator and scan, with Julia's stable sort,
+        # keep an interior ray point on the "convex" hull for the third order above
         function cpp_graham(q)
             q = copy(q)
             p0 = q[argmin([(p[2], p[1]) for p in q])]
@@ -201,15 +259,24 @@ end
             return length(h)
         end
         @test cpp_graham(P[[6, 7, 8, 3, 9, 1, 4, 2, 5]]) == 5
-        # integer rays from p₀ (exact arithmetic either way): nearer points on a hull ray dropped
-        sq = [(0.0, 0.0), (0.0, 1.0), (0.0, 2.0), (0.0, 3.0), (1.0, 0.0), (2.0, 0.0), (3.0, 0.0), (3.0, 3.0), (1.0, 1.0), (2.0, 2.0)]
+        # integer rays from p₀ (exact arithmetic either way): nearer points on a hull ray
+        # dropped
+        sq = [
+            (0.0, 0.0), (0.0, 1.0), (0.0, 2.0), (0.0, 3.0), (1.0, 0.0),
+            (2.0, 0.0), (3.0, 0.0), (3.0, 3.0), (1.0, 1.0), (2.0, 2.0),
+        ]
         for q in (sq, reverse(sq))
-            @test OVT_AN.concave_hull(q; concavity = Inf) == [(0.0, 0.0), (0.0, 3.0), (3.0, 3.0), (3.0, 0.0)]
+            @test OVT_AN.concave_hull(q; concavity = Inf) ==
+                [(0.0, 0.0), (0.0, 3.0), (3.0, 3.0), (3.0, 0.0)]
         end
     end
 end
 
-@testitem "OpenVT analysis: no pruning error next to near-parallel edges (D13)" setup = [OpenVTAnalysisSetup] tags = [:pottsmodels, :core] begin
+@testitem "OpenVT analysis: no pruning error next to near-parallel edges (D13)" setup = [
+    OpenVTAnalysisSetup,
+] tags = [
+    :pottsmodels, :core,
+] begin
     @testset "OpenVT analysis: no pruning error next to near-parallel edges (D13)" begin
         h = OVT_AN.concave_hull(OVT_LATTICE37; concavity = 1.5)
         @test h == OVT_LATTICE37[OVT_LATTICE37_HULL]
@@ -219,24 +286,35 @@ end
     end
 end
 
-@testitem "OpenVT analysis: Artistoo frame 1656 (D12; OPENVT_MONOLAYER_REPO)" setup = [OpenVTAnalysisSetup] tags = [:pottsmodels, :core] begin
-    # ── D12 on a consortium frame (gated: OPENVT_MONOLAYER_REPO, never copied into git) ─────────
+@testitem "OpenVT analysis: Artistoo frame 1656 (D12; OPENVT_MONOLAYER_REPO)" setup = [
+    OpenVTAnalysisSetup,
+] tags = [
+    :pottsmodels, :core,
+] begin
+    # ── D12 on a consortium frame (gated: OPENVT_MONOLAYER_REPO, never copied into git)
+    # ─────────
     @testset "OpenVT analysis: Artistoo frame 1656 (D12; OPENVT_MONOLAYER_REPO)" begin
         repo = get(ENV, "OPENVT_MONOLAYER_REPO", "")
-        zipf = joinpath(repo, "results", "Artistoo", "Monolayer", "Type 1", "Centroid_data.zip")
+        zipf = joinpath(
+            repo, "results", "Artistoo", "Monolayer", "Type 1", "Centroid_data.zip"
+        )
         if isempty(repo)
-            @test_skip "OPENVT_MONOLAYER_REPO not set"   # D-204, D-206: the consortium data is external to git
+            # D-204, D-206: the consortium data is external to git
+            @test_skip "OPENVT_MONOLAYER_REPO not set"
         else
-            @test isfile(zipf) && Sys.which("unzip") !== nothing      # a set repo must hold the data
+            # a set repo must hold the data
+            @test isfile(zipf) && Sys.which("unzip") !== nothing
             mktempdir() do tmp
-                run(`unzip -q -j $zipf Centroid_data/centroids_neighbors_mcs_1656.csv -d $tmp`)
+                run(`unzip -q -j $zipf Centroid_data/centroids_neighbors_mcs_1656.csv -d \
+                    $tmp`)
                 path = joinpath(tmp, "centroids_neighbors_mcs_1656.csv")
                 lines = filter(!isempty, readlines(path))
                 names = split(lines[1], ',')
                 # Artistoo's header is cell_id,x,y,active,neighbors: g is `active`
                 ix, iy, ia = (findlast(==(c), names) for c in ("x", "y", "active"))
                 rows = [split(l, ',') for l in lines[2:end]]
-                x, y = [parse(Float64, r[ix]) for r in rows], [parse(Float64, r[iy]) for r in rows]
+                x, y = [parse(Float64, r[ix]) for r in rows],
+                    [parse(Float64, r[iy]) for r in rows]
                 g = [parse(Int, r[ia]) for r in rows]
                 pts = collect(zip(x, y))
                 # metrics.cpp (libc++) gives a 74-vertex convex hull; a stable sort with its
@@ -244,13 +322,16 @@ end
                 @test length(OVT_AN.concave_hull(pts; concavity = Inf)) == 74
                 m = openvt_metrics(x, y, g)
                 @test m.w_rel ≈ 0.0155 atol = 1.0e-4
-                @test openvt_metrics_line(m) == "10002,261.993,215834,1798.96,4.06557,0.203659,1.09234,0.0155179\n"
+                @test openvt_metrics_line(m) ==
+                    "10002,261.993,215834,1798.96,4.06557,0.203659,1.09234,0.0155179\n"
             end
         end
     end
 end
 
-@testitem "OpenVT analysis: reader edge cases" setup = [OpenVTAnalysisSetup] tags = [:pottsmodels, :core] begin
+@testitem "OpenVT analysis: reader edge cases" setup = [OpenVTAnalysisSetup] tags = [
+    :pottsmodels, :core,
+] begin
     @testset "OpenVT analysis: reader edge cases" begin
         mktempdir() do dir
             path = joinpath(dir, "f.csv")
@@ -258,21 +339,31 @@ end
             @test_throws ArgumentError openvt_metrics(path)
             # CRLF line ends and stod-prefix fields
             write(path, "x,y,g,n\r\n0,0,1,3\r\n1,0,0x,5\r\n1,1abc,1.0,5\r\n0,1,1,6\r\n")
-            @test openvt_metrics_line(openvt_metrics(path)) == "4,0.707107,1,4,0,0.75,1.12838,0\n"
+            @test openvt_metrics_line(openvt_metrics(path)) ==
+                "4,0.707107,1,4,0,0.75,1.12838,0\n"
         end
-        @test_throws ArgumentError openvt_metrics([0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [1, 0.5, 1])
+        @test_throws ArgumentError openvt_metrics(
+            [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [
+                1, 0.5, 1,
+            ]
+        )
         @test_throws ArgumentError openvt_neighbor_histogram(Int[])
     end
 end
 
-@testitem "OpenVT analysis: openvt_frame against a brute-force neighbour count" setup = [OpenVTAnalysisSetup] tags = [:pottsmodels, :core] begin
+@testitem "OpenVT analysis: openvt_frame against a brute-force neighbour count" setup = [
+    OpenVTAnalysisSetup,
+] tags = [
+    :pottsmodels, :core,
+] begin
     @testset "OpenVT analysis: openvt_frame against a brute-force neighbour count" begin
         rng = MersenneTwister(173)
         for trial in 1:20
             nx, ny = rand(rng, 3:25), rand(rng, 3:25)
             ncell = rand(rng, 1:30)
             σ = Int32[rand(rng) < 0.3 ? 0 : rand(rng, 1:ncell) for _ in 1:nx, _ in 1:ny]
-            vol = Float64[count(==(c), σ) for c in 1:(ncell + 2)]          # two trailing dead ids
+            # two trailing dead ids
+            vol = Float64[count(==(c), σ) for c in 1:(ncell + 2)]
             A = 1.0 .+ 10 .* rand(rng, ncell + 2)
             u = (; ownership = σ, cell = (; volume = vol, A_star = A))
             β, γ = rand(rng), rand(rng)
@@ -281,13 +372,21 @@ end
             live = findall(>(0), vol)
             @test fr.x == o.x && fr.y == o.y
             @test fr.n == [ovt_frame_oracle(σ, c) for c in live]
-            @test fr.i == [openvt_inhibition_code(o.a[j], o.f[j]; beta = β, gamma = γ) for j in eachindex(live)]
+            @test fr.i == [
+                openvt_inhibition_code(o.a[j], o.f[j]; beta = β, gamma = γ)
+                    for j in eachindex(live)
+            ]
         end
-        # a 2 × 2 block of four cells: every cell touches the other three (two by faces, one by a corner)
+        # a 2 × 2 block of four cells: every cell touches the other three (two by faces, one
+        # by a corner)
         u = (; ownership = Int32[1 2; 3 4], cell = (; volume = ones(4), A_star = ones(4)))
         @test PottsModels.openvt_frame(u; beta = 0, gamma = 0).n == [3, 3, 3, 3]
         # A₀ and center pass through to the snapshot
-        @test PottsModels.openvt_frame(u; beta = 0, gamma = 0, area0 = π, center = (0, 0)).x == [1.0, 1.0, 2.0, 2.0]
-        @test_throws ArgumentError PottsModels.openvt_frame((; ownership = zeros(Int32, 2, 2, 2), cell = u.cell); beta = 0, gamma = 0)
+        @test PottsModels.openvt_frame(
+            u; beta = 0, gamma = 0, area0 = π, center = (0, 0)
+        ).x == [1.0, 1.0, 2.0, 2.0]
+        @test_throws ArgumentError PottsModels.openvt_frame(
+            (; ownership = zeros(Int32, 2, 2, 2), cell = u.cell); beta = 0, gamma = 0
+        )
     end
 end

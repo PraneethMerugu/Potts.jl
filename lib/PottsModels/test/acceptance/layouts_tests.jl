@@ -10,7 +10,8 @@
 #       ArgumentError when they cannot be placed
 #   Frame(kind; width = 1)   one cell of `kind` owning every site within `width` of the edge
 #   overlay(layers...)   later layers overwrite earlier ones; ids follow layer order
-#   layout(l, dims) -> [ownership => σ, kind => kinds]   (an operating point for PottsProblem)
+#   layout(l, dims) -> [ownership => σ, kind => kinds]   (an operating point for
+#                                                        PottsProblem)
 
 @testsetup module LayoutsSetup
 include(joinpath(@__DIR__, "..", "shared", "common.jl"))
@@ -34,18 +35,22 @@ end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "layouts: Tiling and Frame, overlaid" setup = [LayoutsSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "layouts: Tiling and Frame, overlaid" setup = [LayoutsSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "layouts: Tiling and Frame, overlaid" begin
         tiles = Tiling((5, 5); spacing = 1, region = (3:28, 3:28), kinds = [:dark, :light])
         op = layout(overlay(Frame(:wall), tiles), (30, 30))
         σ, kinds = opget(op, ownership), opget(op, kind)
         @test size(σ) == (30, 30)
-        @test length(kinds) == 17 && kinds[1] == :wall                  # the frame is layer 1
+        # the frame is layer 1
+        @test length(kinds) == 17 && kinds[1] == :wall
         border = [i in (1, 30) || j in (1, 30) for i in 1:30, j in 1:30]
         @test all(σ[border] .== 1) && count(==(1), σ) == 116
         for c in 2:17
             idx = findall(==(c), σ)
-            @test length(idx) == 25                                     # untouched 5×5 boxes
+            # untouched 5×5 boxes
+            @test length(idx) == 25
             @test all(i -> 3 <= i[1] <= 28 && 3 <= i[2] <= 28, idx)
             @test maximum(i[1] for i in idx) - minimum(i[1] for i in idx) == 4
         end
@@ -57,28 +62,44 @@ end
     end
 end
 
-@testitem "layouts: Scattered" setup = [LayoutsSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "layouts: Scattered" setup = [LayoutsSetup] tags = [
+    :pottsmodels,
+    :acceptance,
+] begin
     @testset "layouts: Scattered" begin
         sc(seed) = layout(Scattered(10, (4, 4); kinds = [:dark], seed), (40, 40))
         σ = opget(sc(1), ownership)
         @test maximum(σ) == 10 && all(c -> count(==(c), σ) == 16, 1:10)
         @test opget(sc(1), kind) == fill(:dark, 10)
-        apart = true                                     # gap = 1: no two cells touch (Moore)
+        # gap = 1: no two cells touch (Moore)
+        apart = true
         for i in CartesianIndices(σ), d in CartesianIndices((-1:1, -1:1))
             j = i + d
             checkbounds(Bool, σ, j) || continue
             σ[i] != 0 && σ[j] != 0 && σ[i] != σ[j] && (apart = false)
         end
         @test apart
-        @test opget(sc(1), ownership) == σ                              # deterministic in seed
+        # deterministic in seed
+        @test opget(sc(1), ownership) == σ
         @test opget(sc(2), ownership) != σ
-        @test_throws ArgumentError layout(Scattered(200, (4, 4); kinds = [:dark], seed = 1), (40, 40))
+        @test_throws ArgumentError layout(
+            Scattered(200, (4, 4); kinds = [:dark], seed = 1), (
+                40, 40,
+            )
+        )
     end
 end
 
-@testitem "layouts: layouts in 3D" setup = [LayoutsSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "layouts: layouts in 3D" setup = [LayoutsSetup] tags = [
+    :pottsmodels,
+    :acceptance,
+] begin
     @testset "layouts: layouts in 3D" begin
-        op = layout(Tiling((3, 3, 3); spacing = 1, region = (2:13, 2:13, 2:13), kinds = [:dark]), (14, 14, 14))
+        op = layout(
+            Tiling((3, 3, 3); spacing = 1, region = (2:13, 2:13, 2:13), kinds = [:dark]), (
+                14, 14, 14,
+            )
+        )
         σ = opget(op, ownership)
         @test size(σ) == (14, 14, 14) && maximum(σ) == 27
         @test all(c -> count(==(c), σ) == 27, 1:27)

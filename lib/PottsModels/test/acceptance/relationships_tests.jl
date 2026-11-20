@@ -39,14 +39,19 @@ function two_springs_problem(tspan = (0, 1000))
         TwoSprings(; name = :two), [
             ownership => σ, kind => [:blob, :blob, :blob],
             :bond => [(1, 2)], :tether => [(2, 3)],
-        ], (tspan[1], tspan[2])
+        ],
+        (tspan[1], tspan[2])
     )
 end
 dist(prob, u, a, b) = CorePotts.centroid_distance(Float64, u.cell, prob.lattice, a, b)
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "relationships: two relationships, each with its own store and law" setup = [RelationshipsSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "relationships: two relationships, each with its own store and law" setup = [
+    RelationshipsSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "relationships: two relationships, each with its own store and law" begin
         prob = two_springs_problem()
         @test selfcheck(prob) < 1.0e-9
@@ -55,14 +60,19 @@ end
                 u = solve(remake(prob; seed), alg).u[end]
                 (dist(prob, u, 1, 2), dist(prob, u, 2, 3))
             end
-            @test abs(mean(first.(d)) - 12.0) < 2.5          # bond relaxes to its own rest length
-            @test abs(mean(last.(d)) - 18.0) < 2.5           # tether to its own (a shared store
-            # or law would pull both to one length)
+            # bond relaxes to its own rest length
+            @test abs(mean(first.(d)) - 12.0) < 2.5
+            # tether to its own (a shared store or law would pull both to one length)
+            @test abs(mean(last.(d)) - 18.0) < 2.5
         end
     end
 end
 
-@testitem "relationships: relationship names are checked" setup = [RelationshipsSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "relationships: relationship names are checked" setup = [
+    RelationshipsSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "relationships: relationship names are checked" begin
         @test_throws ArgumentError @macroexpand @potts_model DuplicateRelationship begin
             @kinds medium blob

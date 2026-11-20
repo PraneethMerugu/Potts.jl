@@ -7,8 +7,8 @@
 # bitwise; same-seed determinism is free), D-171 (`gate.jl` checks warm allocations, the
 # A/B decides speed), D-157 (POTTS_GPU device selection).
 #
-# Names and forms pinned (the DSL surface; a new DSL name must be documented, and the reviewer
-# checks the diff of `Potts.DSL`).
+# Names and forms pinned (the DSL surface; a new DSL name must be documented, and the
+# reviewer checks the diff of `Potts.DSL`).
 # - `direction[k]`, k = 1..N: component k of x_target − x_source, a scalar of the model's
 #   type `T`. Why this form: it mirrors `position[k]`, the one vector builtin of the DSL,
 #   which is already indexed by axis with `[k]` and is in the same Cartesian units. A tuple
@@ -29,16 +29,16 @@
 # - Copy scope: drives (`@drive copy => …`) and constraints (`@constraint …`) read it; both
 #   are pinned. (On-copy updates and a copy-scope temperature share the copy scope's
 #   environment and are expected to follow; they are not pinned here.) It is not an
-#   `@energy` name: an energy is a state function and x_i − x_j is a property of the copy, so
-#   the shear term is a drive, and ΔH (`prob.f.delta_H`, the Metropolis argument) includes
-#   it. `energy_change` (ΔH without drives) does not.
+#   `@energy` name: an energy is a state function and x_i − x_j is a property of the copy,
+#   so the shear term is a drive, and ΔH (`prob.f.delta_H`, the Metropolis argument)
+#   includes it. `energy_change` (ΔH without drives) does not.
 # - Also in the copy scope, both today rejected in a drive ("`mcs` is not available in a
 #   drive", "`position` is not available in a drive"; spec 04 §8 assumed both were there):
 #   `mcs`, the number of completed MCS, i.e. n − 1 during the n-th MCS (as in `@before_mcs`
-#   and the ODEs, `time_fold_metal_tests.jl`); and `position[target][k]`, `position[source][k]`, the site's
-#   `position` component k. The copy scope indexes every site quantity explicitly
-#   (`kind[target]`, `c[source]`), so `position[s]` is the site's vector and `[k]` its
-#   component; the site-scope `position[k]` is unchanged. `time` is not
+#   and the ODEs, `time_fold_metal_tests.jl`); and `position[target][k]`,
+#   `position[source][k]`, the site's `position` component k. The copy scope indexes every
+#   site quantity explicitly (`kind[target]`, `c[source]`), so `position[s]` is the site's
+#   vector and `[k]` its component; the site-scope `position[k]` is unchanged. `time` is not
 #   needed by the foam (t is in MCS) and is left to later work.
 #
 # The foam form that must be writable (spec 04 Eq. 7 with G(t) = sin(ωt), y from the
@@ -64,9 +64,9 @@
 #     hexagonal lattice is not pinned.
 #  2. The kernel path, bitwise. A model with the shear drive written with `direction`,
 #     `position` and `mcs` (`Dir`) and a reference that writes the same numbers with
-#     features that exist today (`DirectionRef`: site variables px, py holding the coordinates,
-#     the minimum image by `ifelse` with the period L, and a model variable G set from `mcs`
-#     in `@before_mcs`) give bitwise the same trajectory (σ at every MCS and
+#     features that exist today (`DirectionRef`: site variables px, py holding the
+#     coordinates, the minimum image by `ifelse` with the period L, and a model variable G
+#     set from `mcs` in `@before_mcs`) give bitwise the same trajectory (σ at every MCS and
 #     `stats.accepted`) from the same seed. 24×16, periodic x, closed y, one cell across the
 #     x seam. Algorithms: SequentialCPM with Moore(1), VonNeumann(1) and NeighborOrder(4)
 #     proposals, CheckerboardCPM(Moore(1)), BoundarySiteCPM(Moore(1)). Drives: (a) γ0·G·(y −
@@ -102,10 +102,11 @@
 #  4. Performance. Zero warm allocations (the gate's rule: the minimum over five warm
 #     `step!`s after two, `benchmark/gate.jl`) for `Dir` with the sin drive under the
 #     four algorithms of item 2 and for the 3D probe under SequentialCPM(Moore(1)).
-#     Models that do not read `direction` are unchanged (D-158); the transition oracles are in
-#     `lib/CorePotts/test/oracle.jl` and `test/oracle.jl`, and the gate rows elsewhere. `DirectionRef`, a model with a copy-scope drive and constraint that do
-#     not read `direction` (the code path this item touches), runs the same trajectory as its
-#     twin that does (testset 3). Speed is the D-171 A/B, outside this file.
+#     Models that do not read `direction` are unchanged (D-158); the transition oracles are
+#     in `lib/CorePotts/test/oracle.jl` and `test/oracle.jl`, and the gate rows elsewhere.
+#     `DirectionRef`, a model with a copy-scope drive and constraint that do not read
+#     `direction` (the code path this item touches), runs the same trajectory as its twin
+#     that does (testset 3). Speed is the D-171 A/B, outside this file.
 #  5. `Metropolis(tie)` is deferred (not needed for the foam). Spec 04 A-6 recommends the
 #     T → 0⁺ limit: ties (ΔH′ = 0) accepted with P = 1, uphill moves rejected. Today's
 #     `Metropolis` at T = ε > 0 does exactly that for ties (`x ≤ 0` accepts) and accepts
@@ -118,16 +119,16 @@
 #     pinned (it passes today): `CorePotts.accept` at ε = 1e-6 accepts ties for every
 #     uniform draw and rejects ΔH = 1e-3 for every draw, in Float64 and Float32.
 #
-# Tiers and cost (Apple M-series, one thread): always on, about 1 min with a stub, mostly the
-# compilation of the eight models; item 3 is ~1 s of sampling per arm. No FULL tier.
+# Tiers and cost (Apple M-series, one thread): always on, about 1 min with a stub, mostly
+# the compilation of the eight models; item 3 is ~1 s of sampling per arm. No FULL tier.
 #
 # Today (base commit d7fc5793) this file fails because `direction` is not defined
 # (`UndefVarError: direction not defined` when any model that names it is constructed: 40
-# errors, in every testset of items 1–4 that uses `direction`); with `direction` alone added,
-# `mcs` and `position` would still be rejected in a drive. The reference halves pass: the
-# hand oracle's own checks, the controls of item 2, the reference arms of item 3, the
-# record of item 4 and item 5. Checked before commit against a stub (the probes and
-# `Dir` rewritten with today's site-variable workaround): every testset passes.
+# errors, in every testset of items 1–4 that uses `direction`); with `direction` alone
+# added, `mcs` and `position` would still be rejected in a drive. The reference halves pass:
+# the hand oracle's own checks, the controls of item 2, the reference arms of item 3, the
+# record of item 4 and item 5. Checked before commit against a stub (the probes and `Dir`
+# rewritten with today's site-variable workaround): every testset passes.
 
 @testsetup module CopyDirectionSetup
 include(joinpath(@__DIR__, "..", "shared", "common.jl"))
@@ -157,7 +158,8 @@ function direction_model(name::Symbol)
     if isdefined(@__MODULE__, name)
         return getfield(@__MODULE__, name)
     else
-        error("copy direction fixture $name did not build: $(get(DEFINE_ERRORS, name, "unknown"))")
+        error("copy direction fixture $name did not \
+            build: $(get(DEFINE_ERRORS, name, "unknown"))")
     end
 end
 # ---------------------------------------------------------------------------------------
@@ -165,12 +167,14 @@ end
 function probe_expr(name::Symbol, lattice::Expr, nd::Int)
     drive = if nd == 3
         :(
-            a1 * direction[1] + a2 * direction[2] + a3 * direction[3] + bt * position[target][2] * direction[1] +
+            a1 * direction[1] + a2 * direction[2] + a3 * direction[3] +
+                bt * position[target][2] * direction[1] +
                 cs * position[source][1] * direction[2]
         )
     else
         :(
-            a1 * direction[1] + a2 * direction[2] + bt * position[target][2] * direction[1] +
+            a1 * direction[1] + a2 * direction[2] +
+                bt * position[target][2] * direction[1] +
                 cs * position[source][1] * direction[2]
         )
     end
@@ -196,14 +200,29 @@ function probe_expr(name::Symbol, lattice::Expr, nd::Int)
 end
 # (name, lattice expression, dims, periodic axes, spacing)
 const GEOMS = [
-    (:ProbePC, :(Lattice((7, 6); boundary = (Periodic(), Closed()))), (7, 6), (true, false), (1.0, 1.0)),
-    (:ProbePP, :(Lattice((7, 6); boundary = (Periodic(), Periodic()))), (7, 6), (true, true), (1.0, 1.0)),
     (
-        :ProbeSP, :(Lattice((7, 6); boundary = (Closed(), Periodic()), spacing = (0.5, 2.0))), (7, 6), (false, true),
+        :ProbePC, :(Lattice((7, 6); boundary = (Periodic(), Closed()))),
+        (7, 6), (true, false), (1.0, 1.0),
+    ),
+    (
+        :ProbePP, :(Lattice((7, 6); boundary = (Periodic(), Periodic()))),
+        (7, 6), (true, true), (1.0, 1.0),
+    ),
+    (
+        :ProbeSP, :(
+            Lattice(
+                (7, 6); boundary = (Closed(), Periodic()), spacing = (
+                    0.5, 2.0,
+                )
+            )
+        ),
+        (7, 6), (false, true),
         (0.5, 2.0),
     ),
     (
-        :Probe3D, :(Lattice((5, 6, 5); boundary = (Periodic(), Closed(), Periodic()))), (5, 6, 5),
+        :Probe3D, :(Lattice((5, 6, 5); boundary = (Periodic(), Closed(), Periodic()))), (
+            5, 6, 5,
+        ),
         (true, false, true), (1.0, 1.0, 1.0),
     ),
 ]
@@ -225,12 +244,21 @@ function direction_labels(dims, seed)
     end
 end
 function probe_problem(M, dims; seed = 1)
-    return PottsProblem(M(; name = :probe), [ownership => direction_labels(dims, 640 + seed), kind => [:A, :B]], (0, 1))
+    return PottsProblem(
+        M(; name = :probe),
+        [ownership => direction_labels(dims, 640 + seed), kind => [:A, :B]], (0, 1)
+    )
 end
 # the offsets tried from every target: Moore(1) (which contains VonNeumann(1)), the reach-2
 # shell of NeighborOrder(4), and far pairs along every axis
 function offsets(nd)
-    near = vec([Tuple(o) for o in Iterators.product(ntuple(_ -> -1:1, nd)...) if any(!=(0), Tuple(o))])
+    near = vec(
+        [
+            Tuple(o)
+                for o in Iterators.product(ntuple(_ -> -1:1, nd)...)
+                if any(!=(0), Tuple(o))
+        ]
+    )
     reach2 = if nd == 2
         [(2, 0), (-2, 0), (0, 2), (0, -2), (2, 1), (-1, 2), (-2, -1), (1, -2)]
     else
@@ -258,10 +286,13 @@ function direction_shift(x, o, dims, periodic)
     return y
 end
 # the drive part of ΔH (ΔH − ΔE) of one scripted copy, through the host hook
-direction_drive(prob, u, prop) = prob.f.delta_H(u, prob.p, prop, Potts._host_ctx(prob)) - energy_change(prob, u, prop)
+function direction_drive(prob, u, prop)
+    return prob.f.delta_H(u, prob.p, prop, Potts._host_ctx(prob)) -
+        energy_change(prob, u, prop)
+end
 """
-Every unlike scripted copy on the probe problem, as (target coords, source coords, wrapped?):
-`wrapped` when the source was reached across a periodic seam.
+Every unlike scripted copy on the probe problem, as (target coords, source coords,
+wrapped?): `wrapped` when the source was reached across a periodic seam.
 """
 function direction_pairs(prob, dims, periodic)
     σ = prob.u0.ownership
@@ -278,7 +309,10 @@ end
 function direction_prop(prob, xt, xs; dir = 1)
     lat = prob.lattice
     σ = prob.u0.ownership
-    return CorePotts.Proposal(CorePotts.linear_index(lat, xt), CorePotts.linear_index(lat, xs), xt, dir, σ[xt...], σ[xs...])
+    return CorePotts.Proposal(
+        CorePotts.linear_index(lat, xt),
+        CorePotts.linear_index(lat, xs), xt, dir, σ[xt...], σ[xs...]
+    )
 end
 # ---------------------------------------------------------------------------------------
 # 2. The kernel path: the shear drive written with `direction`, `position` and `mcs`, and a
@@ -303,7 +337,9 @@ define(
                 cells => (volume - 25.0)^2
                 contacts => 4.0 * (kind != neighbor_kind)
             end
-            @drive copy => γ0 * ifelse(mode > 0.5, sin(ω * mcs), ifelse(mcs < K, 1.0, -0.5)) * (position[target][2] - y0) *
+            @drive copy =>
+                γ0 * ifelse(mode > 0.5, sin(ω * mcs), ifelse(mcs < K, 1.0, -0.5)) *
+                (position[target][2] - y0) *
                 direction[1] + η * direction[2] + u * direction[1]
             @constraint direction[1]^2 + direction[2]^2 <= R2
             @sweep Metropolis(; temperature = 3.0)
@@ -334,30 +370,51 @@ define(
         contacts => 4.0 * (kind != neighbor_kind)
     end
     @before_mcs G ~ ifelse(mode > 0.5, sin(ω * mcs), ifelse(mcs < K, 1.0, -0.5))
-    @drive copy => γ0 * G * (py[target] - y0) *
+    @drive copy =>
+        γ0 * G * (py[target] - y0) *
         ifelse(
         px[target] - px[source] > L / 2, px[target] - px[source] - L,
-        ifelse(px[target] - px[source] < -L / 2, px[target] - px[source] + L, px[target] - px[source])
+        ifelse(
+            px[target] - px[source] < -L / 2, px[target] - px[source] + L, px[target] -
+                px[source]
+        )
     ) +
         η * (py[target] - py[source]) +
         u * ifelse(
         px[target] - px[source] > L / 2, px[target] - px[source] - L,
-        ifelse(px[target] - px[source] < -L / 2, px[target] - px[source] + L, px[target] - px[source])
+        ifelse(
+            px[target] - px[source] < -L / 2, px[target] - px[source] + L, px[target] -
+                px[source]
+        )
     )
     @constraint ifelse(
         px[target] - px[source] > L / 2, px[target] - px[source] - L,
-        ifelse(px[target] - px[source] < -L / 2, px[target] - px[source] + L, px[target] - px[source])
+        ifelse(
+            px[target] - px[source] < -L / 2, px[target] - px[source] + L, px[target] -
+                px[source]
+        )
     )^2 +
         (py[target] - py[source])^2 <= R2
     @sweep Metropolis(; temperature = 3.0)
 end
 const DIRECTION_PX = [Float64(x) for x in 1:24, y in 1:16]
 const DIRECTION_PY = [Float64(y) for x in 1:24, y in 1:16]
-"""Two 5×5 cells: one across the x seam (x 22:24 ∪ 1:2) in the lower half, one in the upper."""
-direction_two() = (σ = zeros(Int32, LAT); σ[22:24, 3:7] .= 1; σ[1:2, 3:7] .= 1; σ[10:14, 10:14] .= 2; σ)
+"""
+Two 5×5 cells: one across the x seam (x 22:24 ∪ 1:2) in the lower half, one in the upper.
+"""
+function direction_two()
+    σ = zeros(Int32, LAT)
+    σ[22:24, 3:7] .= 1
+    σ[1:2, 3:7] .= 1
+    σ[10:14, 10:14] .= 2
+    return σ
+end
 """One 5×5 cell across the x seam at mid-height."""
 direction_one() = (σ = zeros(Int32, LAT); σ[22:24, 7:11] .= 1; σ[1:2, 7:11] .= 1; σ)
-function direction_problem(which::Symbol, σ; T = Float64, p = Pair{Symbol, Float64}[], seed = 11, tspan = (0, 8))
+function direction_problem(
+        which::Symbol, σ; T = Float64,
+        p = Pair{Symbol, Float64}[], seed = 11, tspan = (0, 8)
+    )
     nc = maximum(σ)
     op = if which === :dir
         [ownership => σ, kind => fill(:A, nc)]
@@ -378,7 +435,10 @@ const ALGS = [
     ("SequentialCPM(VonNeumann(1))", SequentialCPM(; proposal = VonNeumann(1))),
     ("SequentialCPM(NeighborOrder(4))", SequentialCPM(; proposal = NeighborOrder(4))),
     ("CheckerboardCPM(Moore(1))", CheckerboardCPM(; proposal = Moore(1))),
-    ("BoundarySiteCPM(Moore(1))", SequentialCPM(; skip_interior = true, proposal = Moore(1))),
+    (
+        "BoundarySiteCPM(Moore(1))",
+        SequentialCPM(; skip_interior = true, proposal = Moore(1)),
+    ),
 ]
 const DRIVES = [
     ("(a) reversal at mcs = K", Pair{Symbol, Float64}[]),
@@ -396,7 +456,10 @@ function direction_cx(σ)
 end
 """Net x drift of the cell over M MCS: the sum of minimum-image centroid increments."""
 function direction_drift(prob, M)
-    integ = init(prob, SequentialCPM(; proposal = Moore(1)); save_start = false, save_end = false, save_everystep = false)
+    integ = init(
+        prob, SequentialCPM(; proposal = Moore(1));
+        save_start = false, save_end = false, save_everystep = false
+    )
     c = direction_cx(current_state(integ).ownership)
     D = 0.0
     for _ in 1:M
@@ -408,7 +471,11 @@ function direction_drift(prob, M)
     return D
 end
 function drifts(which, u, seeds)
-    base = direction_problem(which, direction_one(); p = [:γ0 => 0.0, :u => u], tspan = (0, DIRECTION_M))
+    base = direction_problem(
+        which, direction_one(); p = [:γ0 => 0.0, :u => u], tspan = (
+            0, DIRECTION_M,
+        )
+    )
     return [direction_drift(remake(base; seed = s), DIRECTION_M) for s in seeds]
 end
 direction_z(D) = mean(D) / (std(D) / sqrt(length(D)))
@@ -429,7 +496,11 @@ end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "copy direction: the hand oracle (no production code)" setup = [CopyDirectionSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "copy direction: the hand oracle (no production code)" setup = [
+    CopyDirectionSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "copy direction: the hand oracle (no production code)" begin
         # the oracle's minimum image and the near offsets: −o on every axis
         for (dims, periodic) in (((7, 6), (true, false)), ((5, 6, 5), (true, false, true)))
@@ -438,18 +509,30 @@ end
                 xt = Tuple(I)
                 xs = direction_shift(xt, o, dims, periodic)
                 xs === nothing && continue
-                @test shear_direction(xt, xs, dims, periodic, map(_ -> 1.0, dims)) == map(x -> -Float64(x), o)
+                @test shear_direction(xt, xs, dims, periodic, map(_ -> 1.0, dims)) ==
+                    map(x -> -Float64(x), o)
             end
         end
-        @test direction_mi(-6, 7) == 1 && direction_mi(5, 7) == -2 && direction_mi(4, 6) == -2 && direction_mi(-3, 7) == -3
-        @test shear_direction((1, 1), (6, 1), (7, 6), (true, false), (1.0, 1.0)) == (2.0, 0.0)     # across the seam
-        @test shear_direction((1, 1), (1, 6), (7, 6), (true, false), (1.0, 1.0)) == (0.0, -5.0)    # closed: plain
-        @test shear_direction((1, 1), (1, 4), (7, 6), (true, true), (1.0, 1.0)) === nothing        # the tie
+        @test direction_mi(-6, 7) == 1 && direction_mi(5, 7) == -2 &&
+            direction_mi(4, 6) == -2 && direction_mi(-3, 7) == -3
+        @test shear_direction((1, 1), (6, 1), (7, 6), (true, false), (1.0, 1.0)) ==
+            (2.0, 0.0)     # across the seam
+        @test shear_direction((1, 1), (1, 6), (7, 6), (true, false), (1.0, 1.0)) ==
+            (0.0, -5.0)    # closed: plain
+        # the tie
+        @test shear_direction((1, 1), (1, 4), (7, 6), (true, true), (1.0, 1.0)) === nothing
     end
 end
 
-@testitem "copy direction: exact direction on the host hook" setup = [CopyDirectionSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "copy direction: exact direction on the host hook ($name)" for (name, _, dims, periodic, spacing) in GEOMS
+@testitem "copy direction: exact direction on the host hook" setup = [
+    CopyDirectionSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "copy direction: exact direction on the host hook ($name)" for (
+            name, _, dims,
+            periodic, spacing,
+        ) in GEOMS
         M = direction_model(name)
         nd = length(dims)
         coefs = nd == 3 ? (:a1, :a2, :a3, :bt, :cs) : (:a1, :a2, :bt, :cs)
@@ -485,8 +568,12 @@ end
     end
 end
 
-@testitem "copy direction: hexagonal (either an ArgumentError naming `direction`, or the embedded offset)" setup = [CopyDirectionSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "copy direction: hexagonal (either an ArgumentError naming `direction`, or the embedded offset)" begin
+@testitem "copy direction: hexagonal (either an ArgumentError naming `direction`, or the \
+    embedded offset)" setup = [CopyDirectionSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "copy direction: hexagonal (either an ArgumentError naming `direction`, or \
+        the embedded offset)" begin
         if haskey(DEFINE_ERRORS, :ProbeHex) && DEFINE_ERRORS[:ProbeHex] isa ArgumentError
             @test occursin("direction", sprint(showerror, DEFINE_ERRORS[:ProbeHex]))
         else
@@ -500,15 +587,30 @@ end
                 @test occursin("direction", sprint(showerror, built))
             else
                 base = built
-                probs = Dict(k => remake(base; p = [k => 1.0]) for k in (:a1, :a2, :bt, :cs))
+                probs = Dict(
+                    k => remake(base; p = [k => 1.0])
+                        for k in (:a1, :a2, :bt, :cs)
+                )
                 emb(v) = (v[1] + v[2] / 2, v[2] * sqrt(3) / 2)
                 worst = 0.0
                 n = 0
                 for (xt, xs, _) in direction_pairs(base, (7, 6), (false, false))
                     d = emb(map(-, xt, xs))
-                    want = Dict(:a1 => d[1], :a2 => d[2], :bt => emb(xt)[2] * d[1], :cs => emb(xs)[1] * d[2])
+                    want = Dict(
+                        :a1 => d[1], :a2 => d[2], :bt => emb(xt)[2] * d[1], :cs =>
+                            emb(xs)[1] * d[2]
+                    )
                     for k in (:a1, :a2, :bt, :cs)
-                        worst = max(worst, abs(direction_drive(probs[k], base.u0, direction_prop(base, xt, xs)) - want[k]))
+                        worst = max(
+                            worst,
+                            abs(
+                                direction_drive(
+                                    probs[k], base.u0,
+                                    direction_prop(base, xt, xs)
+                                ) -
+                                    want[k]
+                            )
+                        )
                     end
                     n += 1
                 end
@@ -519,19 +621,26 @@ end
     end
 end
 
-@testitem "copy direction: the reference's controls discriminate (no `direction`)" setup = [CopyDirectionSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "copy direction: the reference's controls discriminate (no `direction`)" setup = [
+    CopyDirectionSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "copy direction: the reference's controls discriminate (no `direction`)" begin
         alg = SequentialCPM(; proposal = Moore(1))
         ref = traj(direction_problem(:ref, direction_two()), alg)
-        @test ref == traj(direction_problem(:ref, direction_two()), alg)                       # determinism
+        # determinism
+        @test ref == traj(direction_problem(:ref, direction_two()), alg)
         for (label, p) in (
                 ("no minimum image", [:L => 1.0e6]), ("opposite sign", [:γ0 => -1.0]),
-                ("reversal one MCS later", [:K => 4.0]), ("diagonals forbidden", [:R2 => 1.5]),
+                ("reversal one MCS later", [:K => 4.0]),
+                ("diagonals forbidden", [:R2 => 1.5]),
             )
             alt = traj(direction_problem(:ref, direction_two(); p), alg)
             @test alt[1] != ref[1]
         end
-        # the foam form and drive (c) move cells (the comparisons below are not of fixed states)
+        # the foam form and drive (c) move cells (the comparisons below are not of fixed
+        # states)
         for (_, p) in DRIVES
             tr = traj(direction_problem(:ref, direction_two(); p), alg)
             @test tr[2] > 10 && tr[1][end] != tr[1][1]
@@ -539,25 +648,47 @@ end
     end
 end
 
-@testitem "copy direction: kernel path equals the reference, bitwise (;)" setup = [CopyDirectionSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "copy direction: kernel path equals the reference, bitwise ($alabel; $dlabel)" for (alabel, alg) in ALGS,
+@testitem "copy direction: kernel path equals the reference, bitwise (;)" setup = [
+    CopyDirectionSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "copy direction: kernel path equals the reference, bitwise \
+        ($alabel; $dlabel)" for (alabel, alg) in ALGS,
             (dlabel, p) in DRIVES
 
-        @test traj(direction_problem(:dir, direction_two(); p), alg) == traj(direction_problem(:ref, direction_two(); p), alg)
+        @test traj(direction_problem(:dir, direction_two(); p), alg) ==
+            traj(direction_problem(:ref, direction_two(); p), alg)
     end
 end
 
-@testitem "copy direction: kernel path equals the reference, bitwise (Float32)" setup = [CopyDirectionSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "copy direction: kernel path equals the reference, bitwise (Float32 $dlabel)" for (dlabel, p) in DRIVES
-        for alg in (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
+@testitem "copy direction: kernel path equals the reference, bitwise (Float32)" setup = [
+    CopyDirectionSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "copy direction: kernel path equals the reference, bitwise \
+        (Float32 $dlabel)" for (dlabel, p) in DRIVES
+        for alg in (
+                SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(;
+                    proposal = Moore(1)
+                ),
+            )
             @test traj(direction_problem(:dir, direction_two(); T = Float32, p), alg) ==
                 traj(direction_problem(:ref, direction_two(); T = Float32, p), alg)
         end
     end
 end
 
-@testitem "copy direction: on the device (Float32, CheckerboardCPM)" setup = [CopyDirectionSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "copy direction: on the device (Float32, CheckerboardCPM) $dlabel" for (dlabel, p) in DRIVES
+@testitem "copy direction: on the device (Float32, CheckerboardCPM)" setup = [
+    CopyDirectionSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "copy direction: on the device (Float32, CheckerboardCPM) $dlabel" for (
+            dlabel,
+            p,
+        ) in DRIVES
         if ON_DEVICE
             backend = PottsDevices.device_backend()
             alg = CheckerboardCPM(; proposal = Moore(1))
@@ -571,67 +702,113 @@ end
     end
 end
 
-@testitem "copy direction: drift statistics, reference arms (no `direction`)" setup = [CopyDirectionSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "copy direction: drift statistics, reference arms (no `direction`)" setup = [
+    CopyDirectionSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "copy direction: drift statistics, reference arms (no `direction`)" begin
         ref1 = drifts(:ref, 1.0, 1001:1400)
         ref1b = drifts(:ref, 1.0, 2001:2400)
         refh = drifts(:ref, 0.5, 1001:1400)
-        @info "copy direction reference drift" u1 = (mean(ref1), std(ref1), direction_z(ref1)) u½ = (mean(refh), direction_z(refh))
+        @info "copy direction reference drift" u1 = (
+            mean(ref1), std(ref1),
+            direction_z(ref1),
+        ) u½ = (
+            mean(refh), direction_z(refh),
+        )
         @test direction_z(ref1) < -DIRECTION_Z1 && -2.0 <= mean(ref1) <= -0.5
-        @test abs(direction_welch(ref1, ref1b)) <= DIRECTION_Z2              # the two-sample test's null
-        @test abs(direction_welch(ref1, refh)) > DIRECTION_Z2                # and its power at u = ½
+        # the two-sample test's null
+        @test abs(direction_welch(ref1, ref1b)) <= DIRECTION_Z2
+        # and its power at u = ½
+        @test abs(direction_welch(ref1, refh)) > DIRECTION_Z2
     end
 end
 
-@testitem "copy direction: drift statistics (`direction`)" setup = [CopyDirectionSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "copy direction: drift statistics (`direction`)" setup = [
+    CopyDirectionSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "copy direction: drift statistics (`direction`)" begin
         pos = drifts(:dir, 1.0, 1:DIRECTION_R)
         neg = drifts(:dir, -1.0, 1:DIRECTION_R)
         nul = drifts(:dir, 0.0, 1:DIRECTION_R)
         ref1 = drifts(:ref, 1.0, 1001:1400)
         refh = drifts(:ref, 0.5, 1001:1400)
-        @info "copy direction drift" u1 = (mean(pos), direction_z(pos)) u_minus1 = (mean(neg), direction_z(neg)) u0 = (mean(nul), direction_z(nul)) welch =
-            direction_welch(pos, ref1)
+        @info "copy direction drift" u1 = (mean(pos), direction_z(pos)) u_minus1 = (
+            mean(neg), direction_z(neg),
+        ) u0 = (mean(nul), direction_z(nul)) welch = direction_welch(pos, ref1)
         @test direction_z(pos) < -DIRECTION_Z1                               # (a) sign
-        @test direction_z(neg) > DIRECTION_Z1                                # (a) the opposite sign
+        # (a) the opposite sign
+        @test direction_z(neg) > DIRECTION_Z1
         @test -2.0 <= mean(pos) <= -0.5                              # (b) rough magnitude
         @test 0.5 <= mean(neg) <= 2.0
         @test abs(direction_z(nul)) <= DIRECTION_Z2                          # (c) null
-        @test abs(direction_welch(pos, ref1)) <= DIRECTION_Z2                # (d) the reference's law
+        # (d) the reference's law
+        @test abs(direction_welch(pos, ref1)) <= DIRECTION_Z2
         @test abs(direction_welch(pos, refh)) > DIRECTION_Z2                 # (d) control
     end
 end
 
-@testitem "copy direction: zero warm allocations" setup = [CopyDirectionSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "copy direction: zero warm allocations" setup = [CopyDirectionSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "copy direction: zero warm allocations ($alabel)" for (alabel, alg) in ALGS
-        prob = direction_problem(:dir, direction_two(); p = [:mode => 1.0], tspan = (0, 100))
+        prob = direction_problem(
+            :dir, direction_two(); p = [:mode => 1.0], tspan = (
+                0, 100,
+            )
+        )
         @test warm_alloc(prob, alg) == 0
-        @test warm_alloc(direction_problem(:ref, direction_two(); p = [:mode => 1.0], tspan = (0, 100)), alg) == 0   # control
+        @test warm_alloc(
+            direction_problem(
+                :ref, direction_two(); p = [:mode => 1.0], tspan = (
+                    0, 100,
+                )
+            ), alg
+        ) == 0   # control
     end
 end
 
-@testitem "copy direction: zero warm allocations (3D probe)" setup = [CopyDirectionSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "copy direction: zero warm allocations (3D probe)" setup = [
+    CopyDirectionSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "copy direction: zero warm allocations (3D probe)" begin
         base = probe_problem(direction_model(:Probe3D), (5, 6, 5))
-        prob = remake(base; p = [:a1 => 1.0, :a3 => -0.5, :bt => 0.25, :cs => 0.125], tspan = (0, 100))
+        prob = remake(
+            base; p = [:a1 => 1.0, :a3 => -0.5, :bt => 0.25, :cs => 0.125], tspan = (
+                0, 100,
+            )
+        )
         @test warm_alloc(prob, SequentialCPM(; proposal = Moore(1))) == 0
     end
 end
 
-@testitem "copy direction: T = ε is the T → 0⁺ limit (Metropolis(tie) deferred)" setup = [CopyDirectionSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "copy direction: T = ε is the T → 0⁺ limit (Metropolis(tie) deferred)" setup = [
+    CopyDirectionSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 5. The premise of deferring `Metropolis(tie)`: T = ε gives the T → 0⁺ limit.
     @testset "copy direction: T = ε is the T → 0⁺ limit (Metropolis(tie) deferred)" begin
         law = CorePotts.Metropolis()
         for T in (Float64, Float32)
             ε = T(1.0e-6)
             draws = T[0, 1.0e-7, 0.25, 0.5, 0.75, prevfloat(one(T))]
-            @test all(r -> CorePotts.accept(law, zero(T), ε, r), draws)            # ties: P = 1
-            @test all(r -> CorePotts.accept(law, T(-1.0e-3), ε, r), draws)         # downhill
-            @test !any(r -> CorePotts.accept(law, T(1.0e-3), ε, r), draws[2:end])  # uphill: P = 0
+            # ties: P = 1
+            @test all(r -> CorePotts.accept(law, zero(T), ε, r), draws)
+            # downhill
+            @test all(r -> CorePotts.accept(law, T(-1.0e-3), ε, r), draws)
+            # uphill: P = 0
+            @test !any(r -> CorePotts.accept(law, T(1.0e-3), ε, r), draws[2:end])
             @test !any(r -> CorePotts.accept(law, T(1), ε, r), draws)
             # control: T = 0 keeps the ½ tie rule, which is why the foam uses ε
-            @test CorePotts.accept(law, zero(T), zero(T), T(0.25)) && !CorePotts.accept(law, zero(T), zero(T), T(0.75))
+            @test CorePotts.accept(law, zero(T), zero(T), T(0.25)) &&
+                !CorePotts.accept(law, zero(T), zero(T), T(0.75))
         end
     end
 end

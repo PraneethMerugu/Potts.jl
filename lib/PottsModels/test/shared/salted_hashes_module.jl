@@ -7,7 +7,8 @@ const POTTS_OPS = (Potts.population, Potts.gather, Potts.value_at)
 const BASE_OPS = (sin, cos, exp)
 for f in (POTTS_OPS..., BASE_OPS...)
     @eval function Base.hash(g::typeof($f), h::UInt)
-        (SALT[] == 0 || !any(x -> x === g, SALTED[])) && return invoke(hash, Tuple{Function, UInt}, g, h)
+        (SALT[] == 0 || !any(x -> x === g, SALTED[])) &&
+            return invoke(hash, Tuple{Function, UInt}, g, h)
         return hash(SALT[], hash(:canonical_salt, h))
     end
 end

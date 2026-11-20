@@ -4,43 +4,46 @@
 #
 # Today (e006198b):
 #   1. `setp(integ, [:λ, :w])` (a parameter and a state) builds SII's generic setter, which
-#      then throws a `MethodError` (`set_parameter(::PottsParameters, ::Float64, ::Nothing)`)
-#      when applied, after it has set `λ`.
+#      then throws a `MethodError` (`set_parameter(::PottsParameters, ::Float64,
+#      ::Nothing)`) when applied, after it has set `λ`.
 #   2. `SII.setsym(integ, [:β, :α])` is applied one name at a time: β = 5 is set, then the
 #      change of α re-derives β (= 2α = 10), so the result depends on the order; D-112
 #      makes a list one change.
 #   3. `SII.remake_buffer(prob, prob.p, [:λ], [3.0])` overflows the stack: SII's untyped
 #      fallback calls its deprecated `Dict` method, which calls the fallback again.
 #   4. `setp`/`getp`/`integ.ps[x]` on a hand-written CorePotts problem (`CPMFunction`
-#      without a model, `f.sys === nothing`) throw `MethodError: symbolic_container(::Nothing)`,
-#      although CorePotts' own `set_parameter(p::NamedTuple, v, i::Symbol)` (and
-#      `SII.set_parameter!(integ, v, :T)`) already set a NamedTuple parameter object by name.
+#      without a model, `f.sys === nothing`) throw `MethodError:
+#      symbolic_container(::Nothing)`, although CorePotts' own `set_parameter(p::NamedTuple,
+#      v, i::Symbol)` (and `SII.set_parameter!(integ, v, :T)`) already set a NamedTuple
+#      parameter object by name.
 #
 # Rule (D-116).
 #   * `setp(x, list)` (x an integrator, problem, function or model description) whose list
 #     names a state (as well as parameters) is an `ArgumentError` when the setter is built,
 #     pointing to `setu` / `setsym`; nothing is set.
-#   * `SII.setsym(integ, list)`: the parameters of the list are set as one change (the read-only computed-parameter rule:
-#     then every computed parameter is derived again; a list naming one is refused whole),
-#     the same as `setp(integ, those parameters)`; its states are set as by `setu`. A list of
-#     states only works as today; a list of parameters only ≡ `setp`; a mixed list sets the
-#     states and the parameters, the parameters as one change. A single name is unchanged.
-#     A name that is neither is an `ArgumentError` when the setter is built. A rejected
-#     parameter value leaves the parameters unchanged (all-or-nothing, as `setp`).
+#   * `SII.setsym(integ, list)`: the parameters of the list are set as one change (the
+#     read-only computed-parameter rule: then every computed parameter is derived again; a
+#     list naming one is refused whole), the same as `setp(integ, those parameters)`; its
+#     states are set as by `setu`. A list of states only works as today; a list of
+#     parameters only ≡ `setp`; a mixed list sets the states and the parameters, the
+#     parameters as one change. A single name is unchanged. A name that is neither is an
+#     `ArgumentError` when the setter is built. A rejected parameter value leaves the
+#     parameters unchanged (all-or-nothing, as `setp`).
 #   * `SII.remake_buffer(prob, prob.p, keys, vals)` on a model's problem returns a new
 #     parameter object equal to `remake(prob; p = Dict(keys .=> vals)).p` (one change, the
 #     problem's scalar type, the same type); keys may be names or symbolic parameters; the
 #     original is untouched; an unknown key is an `ArgumentError`.
-#   * A hand-written CorePotts problem whose parameter object is a NamedTuple: its fields are
-#     its parameters by name. `getp`, `setp` (one name or a list), `integ.ps[x]` work on an
-#     integrator (values converted to the field's type, so the object's type never
+#   * A hand-written CorePotts problem whose parameter object is a NamedTuple: its fields
+#     are its parameters by name. `getp`, `setp` (one name or a list), `integ.ps[x]` work on
+#     an integrator (values converted to the field's type, so the object's type never
 #     changes), `getp` works on the problem, `setp` applied to the problem is the usual
 #     "problem parameters are immutable" `ArgumentError`; a name that is not a field is an
 #     `ArgumentError` when the setter is built. A parameter object that is not a NamedTuple
 #     has no names: `setp`/`getp` by name are an `ArgumentError` (never a `MethodError`).
 #
-# Values by hand (fixture of `computed_parameters_tests.jl`/`remake_namedtuple_tests.jl` plus a cell variable w, default 0): two 3×3 cells
-# P (x = 3:5) and Q (x = 6:8) on a 12×12 lattice, von Neumann contacts:
+# Values by hand (fixture of `computed_parameters_tests.jl`/`remake_namedtuple_tests.jl`
+# plus a cell variable w, default 0): two 3×3 cells P (x = 3:5) and Q (x = 6:8) on a 12×12
+# lattice, von Neumann contacts:
 #   contacts = 9 J[M,P] + 9 J[M,Q] + 3 J[P,Q] = 21 Jx − 15 = 321 at Jx = 16;
 #   cells = λ ((9 − V₀[P] + w)² + (9 − V₀[Q] + w)²), V₀ = [0, γ, β], α = 4 → β = 8 → γ = 9.
 #   Defaults: 321 + 1 = 322. λ = 3: 324. α = 5 (β = 10, γ = 11): 321 + 4 + 1 = 326.
@@ -111,7 +114,8 @@ function setter_remake_buffer(sys, buf, ks, vs)
     m3 = which(S.remake_buffer, Tuple{typeof(sys), typeof(buf), typeof(d)})
     if m4.module === S && m4.sig == Tuple{typeof(S.remake_buffer), Any, Any, Any, Any} &&
             m3.module === S
-        return StackOverflowError()          # not called: would recurse (SII fallback ↔ Dict)
+        # not called: would recurse (SII fallback ↔ Dict)
+        return StackOverflowError()
     end
     try
         return S.remake_buffer(sys, buf, ks, vs)
@@ -129,7 +133,11 @@ const HWT = CorePotts.CPMFunction(hwt_dH; temperature = hwt_T)
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "parameter setters: parameter-setter loose ends" setup = [ParameterSettersSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "parameter setters: parameter-setter loose ends" setup = [
+    ParameterSettersSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "parameter setters: parameter-setter loose ends" begin
         sys = Chain(; name = :chain)
         op = [ownership => sigma(), kind => [:P, :Q]]
@@ -143,8 +151,9 @@ end
             @test total_energy(prob) == 322.0
             i = fresh()
             @test setter_w(i) == [0.0, 0.0]
-            # setp with a list naming the computed β is refused whole (the read-only computed-parameter rule); a list of base
-            # parameters is one change, then β, γ, V₀ follow α
+            # setp with a list naming the computed β is refused whole (the read-only
+            # computed-parameter rule); a list of base parameters is one change, then β, γ,
+            # V₀ follow α
             @test setter_error(() -> setp(i, [:β, :α])(i, [5.0, 5.0])) isa ArgumentError
             @test ivals(i).α == 4.0
             setp(i, [:λ, :α])(i, [2.0, 5.0])
@@ -189,7 +198,8 @@ end
             i = fresh()
             SII.setsym(i, [Potts.lookup(sys, :λ), Potts.lookup(sys, :α)])(i, [2.0, 5.0])
             @test (i.ps[:α], i.ps[:β], i.ps[:γ]) == (5.0, 10.0, 11.0)
-            # a list naming a computed parameter (β, the table J) is refused whole, when built
+            # a list naming a computed parameter (β, the table J) is refused whole, when
+            # built
             for names in ([:β, :α], [:α, :β], [:J, :Jx, :λ], [:β, :α, :w])
                 i = fresh()
                 @test setter_error(() -> SII.setsym(i, names)) isa ArgumentError
@@ -224,10 +234,12 @@ end
             SII.setsym(i, [:λ, :α])(i, [2.0, 5.0])
             step!(i)
             @test i.t == 1 && (i.ps[:β], i.ps[:γ]) == (10.0, 11.0)
-            # negative controls: an unknown name; a rejected value leaves the parameters as they were
+            # negative controls: an unknown name; a rejected value leaves the parameters as
+            # they were
             @test setter_error(() -> SII.setsym(fresh(), [:λ, :zz])) isa ArgumentError
             i = fresh()
-            e = setter_error(() -> SII.setsym(i, [:α, :Jx])(i, [5.0, [1.0, 2.0]]))   # Jx is a number
+            # Jx is a number
+            e = setter_error(() -> SII.setsym(i, [:α, :Jx])(i, [5.0, [1.0, 2.0]]))
             @test e isa ArgumentError
             @test (i.ps[:α], i.ps[:β], i.ps[:J]) == (4.0, 8.0, setter_Jf(16.0))
         end
@@ -259,12 +271,14 @@ end
                 @test (pvals(q).β, pvals(q).γ) == (10.0, 11.0)
                 @test total_energy(q) == 331.0
             end
-            # keys naming the computed β: refused whole (the read-only computed-parameter rule)
+            # keys naming the computed β: refused whole (the read-only computed-parameter
+            # rule)
             @test setter_remake_buffer(prob, prob.p, [:β, :α], [5.0, 5.0]) isa ArgumentError
             # values take the problem's scalar type; symbolic keys
             r = setter_remake_buffer(prob, prob.p, [:λ], [3])
             @test !(r isa Exception) && typeof(r) === typeof(prob.p)
-            r isa Exception || @test getp(remake(prob; p = r), :λ)(remake(prob; p = r)) === 3.0
+            r isa Exception ||
+                @test getp(remake(prob; p = r), :λ)(remake(prob; p = r)) === 3.0
             r = setter_remake_buffer(prob, prob.p, [Potts.lookup(sys, :λ)], [3.0])
             @test !(r isa Exception) && r == remake(prob; p = Dict(:λ => 3.0)).p
             # the original is untouched
@@ -272,11 +286,13 @@ end
             @test total_energy(prob) == 322.0
             # negative controls: an unknown key; a variable is not a parameter
             @test setter_remake_buffer(prob, prob.p, [:zz], [1.0]) isa ArgumentError
-            @test setter_remake_buffer(prob, prob.p, [:λ, :zz], [2.0, 1.0]) isa ArgumentError
+            @test setter_remake_buffer(prob, prob.p, [:λ, :zz], [2.0, 1.0]) isa
+                ArgumentError
             @test setter_remake_buffer(prob, prob.p, [:w], [1.0]) isa ArgumentError
         end
 
-        @testset "hand-written CorePotts problems: a NamedTuple's fields are its parameters" begin
+        @testset "hand-written CorePotts problems: a NamedTuple's fields are its \
+            parameters" begin
             σ = sigma()
             hp = CorePotts.PottsProblem(
                 SETTER_HW, CorePotts.initial_state(σ, Int32[1, 2]),
@@ -308,14 +324,17 @@ end
             @test e === nothing && i.p === (h = 2.0, T = 10.0)
             e = setter_error(() -> i.ps[:T])
             @test e === nothing && i.ps[:T] === 10.0
-            # the run uses the new value: ΔH = h, accepted with probability min(1, exp(−h/T))
+            # the run uses the new value: ΔH = h, accepted with probability min(1,
+            # exp(−h/T))
             i = init(remake(hp; p = (h = 1.0e9, T = 1.0)), SequentialCPM())
             step!(i)
-            @test i.stats.accepted == 0                                 # control: nothing accepted
+            # control: nothing accepted
+            @test i.stats.accepted == 0
             e = setter_error(() -> setp(i, :h)(i, -1.0))
             @test e === nothing
             e === nothing && (step!(i); @test i.stats.accepted > 0)
-            # setp applied to the problem writes the problem's parameters (SciML), not another's
+            # setp applied to the problem writes the problem's parameters (SciML), not
+            # another's
             hq = remake(hp)
             e = setter_error(() -> setp(hq, :T)(hq, 5.0))
             @test e === nothing && hq.p === (h = 0.0, T = 5.0)

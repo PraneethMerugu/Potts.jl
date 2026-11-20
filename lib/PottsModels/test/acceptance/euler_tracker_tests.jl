@@ -40,13 +40,13 @@
 #     difference of the energy computed from oracle χ, for every copy of random states;
 #     `total_energy` equals the brute-force energy; `commit!` leaves the columns equal to
 #     the oracle. Float64 and Float32.
-#  6. Hex `:full` (D-192 Q4 as amended, consistent with the `connectivity_vocabulary_tests.jl`
-#     test): hex has a single, self-dual adjacency, so `adjacency = :full` on a hexagonal
-#     lattice is ACCEPTED and means `:face`. It builds in an energy, a drive and `@observed`,
-#     and its values (observables, energies, drives) equal the `:face` ones. Whether it has
-#     a column of its own is not pinned. Build errors: an unknown adjacency is an
-#     `ArgumentError` listing `:face` and `:full`; a bare `euler` in a drive is an
-#     `ArgumentError`.
+#  6. Hex `:full` (D-192 Q4 as amended, consistent with the
+#     `connectivity_vocabulary_tests.jl` test): hex has a single, self-dual adjacency, so
+#     `adjacency = :full` on a hexagonal lattice is ACCEPTED and means `:face`. It builds in
+#     an energy, a drive and `@observed`, and its values (observables, energies, drives)
+#     equal the `:face` ones. Whether it has a column of its own is not pinned. Build
+#     errors: an unknown adjacency is an `ArgumentError` listing `:face` and `:full`; a bare
+#     `euler` in a drive is an `ArgumentError`.
 #  7. Negative controls (they test the test): a test-side incremental tracker built from the
 #     note's closed forms passes the same oracle harness on every geometry, and each mutant
 #     is caught: a wrong sign (gaining side; and the 3D duality sign), the wrong adjacency
@@ -73,7 +73,10 @@ const HEX = ((1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1))
 const SQ4 = ((1, 0), (-1, 0), (0, 1), (0, -1))
 const SQ8 = Tuple((i, j) for i in -1:1 for j in -1:1 if (i, j) != (0, 0))
 const CU6 = ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1))
-const CU26 = Tuple((i, j, k) for k in -1:1 for j in -1:1 for i in -1:1 if (i, j, k) != (0, 0, 0))
+const CU26 = Tuple(
+    (i, j, k) for k in -1:1 for j in -1:1
+        for i in -1:1 if (i, j, k) != (0, 0, 0)
+)
 """Neighbour offsets of `adj` on `geom` (hex has one adjacency)."""
 function euler_nbrs(geom, adj)
     if geom === :hex
@@ -99,7 +102,9 @@ function euler_get(X, i, periodic)
 end
 # ---------------------------------------------------------------------------------------
 # Oracle (a): the complex recount (exact on tori; every periodic axis ≥ 3 here)
-"""Graph complex: sites − adjacent pairs + full 2-cells (− full 3-cells), square/cubic `:face`."""
+"""
+Graph complex: sites − adjacent pairs + full 2-cells (− full 3-cells), square/cubic `:face`.
+"""
 function chi_graph(X, periodic)
     g(i) = euler_get(X, i, periodic)
     d = ndims(X)
@@ -112,7 +117,20 @@ function chi_graph(X, periodic)
             χ -= g(i) & g(i .+ e)
         end
         for a in 1:d, b in (a + 1):d                          # full 2×2 squares
-            sq = all(g(i .+ ntuple(k -> k == a ? u : k == b ? v : 0, d)) for u in 0:1, v in 0:1)
+            sq = all(
+                g(
+                    i .+ ntuple(
+                        k -> if k == a
+                            u
+                        elseif k == b
+                            v
+                        else
+                            0
+                        end, d
+                    )
+                )
+                    for u in 0:1, v in 0:1
+            )
             χ += sq
         end
         if d == 3                                             # full 2×2×2 cubes
@@ -214,7 +232,10 @@ function euler_flood(X, geom, adj)
     bounded = nc - touching                               # holes (2D) or cavities (3D)
     return geom === :cubic ? (b0, bounded) : b0 - bounded
 end
-"""The oracle value of cell `c` and whether (b) agreed with (a) (`nothing`: (b) not applicable)."""
+"""
+The oracle value of cell `c` and whether (b) agreed with (a) (`nothing`: (b) not
+applicable).
+"""
 function euler_oracle(σ, c, geom, adj; periodic)
     X = σ .== c
     χ = chi(X, geom, adj; periodic)
@@ -245,11 +266,14 @@ end
 const RING2 = ((-1, -1), (-1, 0), (-1, 1), (0, 1), (1, 1), (1, 0), (1, -1), (0, -1))
 # bit k-1
 const FACE4 = UInt32(0b10101010)
-const TRIOS2 = (UInt32(0b10000011), UInt32(0b00001110), UInt32(0b00111000), UInt32(0b11100000))
+const TRIOS2 = (
+    UInt32(0b10000011), UInt32(0b00001110), UInt32(0b00111000), UInt32(0b11100000),
+)
 bit3(o) = UInt32(1) << (findfirst(==(o), CU26) - 1)
 const FACE6 = reduce(|, bit3(o) for o in CU6)
 const TRIOS3 = [
-    bit3(o) | bit3(ntuple(k -> k == a ? o[a] : 0, 3)) | bit3(ntuple(k -> k == b ? o[b] : 0, 3))
+    bit3(o) | bit3(ntuple(k -> k == a ? o[a] : 0, 3)) |
+        bit3(ntuple(k -> k == b ? o[b] : 0, 3))
         for o in CU26 if count(!=(0), o) == 2
         for (a, b) in ((findfirst(!=(0), o), findlast(!=(0), o)),)
 ]
@@ -260,7 +284,10 @@ const OCTS = [
 euler_has(m, t) = (m & t) == t
 euler_D4(m) = 1 - count_ones(m & FACE4) + count(t -> euler_has(m, t), TRIOS2)
 Dhex(m) = 1 - count_ones(m) + count_ones(m & ((m >> 1) | ((m & 0x01) << 5)))
-euler_D6(m) = 1 - count_ones(m & FACE6) + count(t -> euler_has(m, t), TRIOS3) - count(t -> euler_has(m, t), OCTS)
+function euler_D6(m)
+    return 1 - count_ones(m & FACE6) + count(t -> euler_has(m, t), TRIOS3) -
+        count(t -> euler_has(m, t), OCTS)
+end
 function euler_shell(geom)
     if geom === :hex
         return HEX
@@ -314,7 +341,9 @@ function replay(σ0, n, copies, geom, adj; periodic, mutant = :none)
     end
     return bad
 end
-"""A deterministic random state of labels 0:n (medium about 1/(n+1)), every label present."""
+"""
+A deterministic random state of labels 0:n (medium about 1/(n+1)), every label present.
+"""
 function random_σ(dims, n, seed)
     st = UInt64(seed) * 0x9E3779B97F4A7C15 + 1
     σ = zeros(Int32, dims)
@@ -351,15 +380,58 @@ end
 # ---------------------------------------------------------------------------------------
 # Models
 const GEOMS = [
-    (:square, false) => (:(Lattice((12, 12); boundary = Closed(), neighborhood = Moore(1))), :(Moore(1)), (12, 12)),
-    (:square, true) => (:(Lattice((12, 12); boundary = Periodic(), neighborhood = Moore(1))), :(Moore(1)), (12, 12)),
-    (:hex, false) => (:(Lattice((10, 10); geometry = Hexagonal(), boundary = Closed(), neighborhood = Hex(1))), :(Hex(2)), (10, 10)),
-    (:hex, true) => (:(Lattice((10, 10); geometry = Hexagonal(), boundary = Periodic(), neighborhood = Hex(1))), :(Hex(2)), (10, 10)),
-    (:cubic, false) => (:(Lattice((6, 6, 6); boundary = Closed(), neighborhood = Moore(1))), :(Moore(1)), (6, 6, 6)),
-    (:cubic, true) => (:(Lattice((6, 6, 6); boundary = Periodic(), neighborhood = Moore(1))), :(Moore(1)), (6, 6, 6)),
+    (:square, false) =>
+        (
+        :(Lattice((12, 12); boundary = Closed(), neighborhood = Moore(1))),
+        :(Moore(1)), (12, 12),
+    ),
+    (:square, true) =>
+        (
+        :(Lattice((12, 12); boundary = Periodic(), neighborhood = Moore(1))),
+        :(Moore(1)), (12, 12),
+    ),
+    (:hex, false) => (
+        :(
+            Lattice(
+                (10, 10); geometry = Hexagonal(), boundary = Closed(),
+                neighborhood = Hex(1)
+            )
+        ),
+        :(Hex(2)),
+        (10, 10),
+    ),
+    (:hex, true) => (
+        :(
+            Lattice(
+                (10, 10); geometry = Hexagonal(), boundary = Periodic(),
+                neighborhood = Hex(1)
+            )
+        ),
+        :(Hex(2)),
+        (10, 10),
+    ),
+    (:cubic, false) =>
+        (
+        :(Lattice((6, 6, 6); boundary = Closed(), neighborhood = Moore(1))),
+        :(Moore(1)), (6, 6, 6),
+    ),
+    (:cubic, true) =>
+        (
+        :(Lattice((6, 6, 6); boundary = Periodic(), neighborhood = Moore(1))),
+        :(Moore(1)), (6, 6, 6),
+    ),
 ]
-euler_name(prefix, geom, periodic) = Symbol(prefix, uppercasefirst(string(geom)), periodic ? "Periodic" : "Closed")
-euler_model(prefix, geom, periodic) = getfield(@__MODULE__, euler_name(prefix, geom, periodic))
+function euler_name(prefix, geom, periodic)
+    return Symbol(
+        prefix, uppercasefirst(string(geom)), periodic ? "Periodic" : "Closed"
+    )
+end
+function euler_model(prefix, geom, periodic)
+    return getfield(
+        @__MODULE__,
+        euler_name(prefix, geom, periodic)
+    )
+end
 const EULER_V0 = Dict(:square => 20, :hex => 14, :cubic => 30)
 for ((geom, periodic), (lat, prop, _)) in GEOMS
     V0 = EULER_V0[geom]
@@ -406,25 +478,37 @@ for ((geom, periodic), (lat, prop, _)) in GEOMS
         @sweep Metropolis(; temperature = 6.0)
     end
 end
-"""Four compact cells (kinds A, B, A, B) on `dims`: 2D squares of side L/2 − 1 (12: 25 sites,
-10: 16), 3D cubes of side 3 (27 sites)."""
+"""Four compact cells (kinds A, B, A, B) on `dims`: 2D squares of side L/2 − 1 (12: 25
+sites, 10: 16), 3D cubes of side 3 (27 sites)."""
 function blocks(dims)
     σ = zeros(Int32, dims)
     if length(dims) == 2
         h = dims[1] ÷ 2
         lo, hi = 1:(h - 1), (h + 1):(2h - 1)
-        σ[lo, lo] .= 1; σ[hi, lo] .= 2; σ[lo, hi] .= 3; σ[hi, hi] .= 4
+        σ[lo, lo] .= 1
+        σ[hi, lo] .= 2
+        σ[lo, hi] .= 3
+        σ[hi, hi] .= 4
     else
-        σ[1:3, 1:3, 1:3] .= 1; σ[4:6, 1:3, 1:3] .= 2; σ[1:3, 4:6, 4:6] .= 3; σ[4:6, 4:6, 1:3] .= 4
+        σ[1:3, 1:3, 1:3] .= 1
+        σ[4:6, 1:3, 1:3] .= 2
+        σ[1:3, 4:6, 4:6] .= 3
+        σ[4:6, 4:6, 1:3] .= 4
     end
     return σ
 end
 const KINDS = [:A, :B, :A, :B]
 function euler_problem(M, σ; tspan = (0, 20), kw...)
-    return PottsProblem(M(; name = :euler), [ownership => σ, kind => KINDS[1:maximum(σ)]], tspan; seed = 3, kw...)
+    return PottsProblem(
+        M(; name = :euler), [ownership => σ, kind => KINDS[1:maximum(σ)]],
+        tspan; seed = 3, kw...
+    )
 end
 euler_col(u, adj) = Array(adj === :face ? u.cell.euler : u.cell.euler_full)
-"""Tracked vs oracle (a) for every cell and adjacency; returns (mismatches, checks, values seen)."""
+"""
+Tracked vs oracle (a) for every cell and adjacency; returns (mismatches, checks, values
+seen).
+"""
 function compare(u, geom, adjs; periodic)
     σ = Array(u.ownership)
     # every cell up to the last live one (dead cells read 0; unused capacity is not read)
@@ -442,7 +526,10 @@ function compare(u, geom, adjs; periodic)
 end
 # ---------------------------------------------------------------------------------------
 # Section 4: exactness after random copy sequences of real integrators
-const ALGS = [("SequentialCPM", SequentialCPM()), ("CheckerboardCPM", CheckerboardCPM()), ("BoundarySiteCPM", SequentialCPM(; skip_interior = true))]
+const ALGS = [
+    ("SequentialCPM", SequentialCPM()), ("CheckerboardCPM", CheckerboardCPM()),
+    ("BoundarySiteCPM", SequentialCPM(; skip_interior = true)),
+]
 for (geom, periodic) in ((:square, true), (:cubic, false))
     lat, prop, _ = Dict(GEOMS)[(geom, periodic)]
     @eval @potts_model $(euler_name("Divide", geom, periodic)) begin
@@ -454,7 +541,10 @@ for (geom, periodic) in ((:square, true), (:cubic, false))
             χ4(cell) ~ euler
             χ8(cell) ~ euler(; adjacency = :full)
         end
-        @divide cells(A) when = volume >= 22, along = $(geom === :cubic ? (1.0, 0.0, 0.0) : (1.0, 0.0))
+        @divide cells(A) when = volume >= 22, along = $(
+            geom === :cubic ? (1.0, 0.0, 0.0) :
+                (1.0, 0.0)
+        )
         @sweep Metropolis(; temperature = 6.0)
     end
 end
@@ -515,8 +605,11 @@ end
 function euler_energy(σ, geom; periodic)
     E = 0.0
     for (c, k) in enumerate((:A, :B, :A))
-        E += k === :A ? 3.0 * (1 - euler_oracle(σ, c, geom, :face; periodic)[1])^2 :
+        E += if k === :A
+            3.0 * (1 - euler_oracle(σ, c, geom, :face; periodic)[1])^2
+        else
             0.5 * euler_oracle(σ, c, geom, geom === :hex ? :face : :full; periodic)[1]
+        end
     end
     return E
 end
@@ -527,7 +620,10 @@ function euler_prop(lat, x, y, σ)
     )
 end
 # every geometry and boundary in Float64; the closed ones also in Float32
-const DH_ROWS = [[(g, p, Float64) for ((g, p), _) in GEOMS]; [(g, false, Float32) for g in (:square, :hex, :cubic)]]
+const DH_ROWS = [
+    [(g, p, Float64) for ((g, p), _) in GEOMS];
+    [(g, false, Float32) for g in (:square, :hex, :cubic)]
+]
 # ---------------------------------------------------------------------------------------
 # Section 6: build errors
 """The exception of building `@potts_model` `ex` into a problem (`nothing` if it builds)."""
@@ -579,17 +675,27 @@ const ON_DEVICE = PottsDevices.on_device()
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "euler tracker: the oracle (reference shapes, (a) = (b))" setup = [EulerTrackerSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "euler tracker: the oracle (reference shapes, (a) = (b))" setup = [
+    EulerTrackerSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # Section 3: the oracle itself (passes on the base)
     @testset "euler tracker: the oracle (reference shapes, (a) = (b))" begin
         sq(dims) = zeros(Int32, dims)
         # square 2D, closed 12×12
         σ = sq((12, 12))
         σ[2:4, 2:4] .= 1                                        # disc
-        σ[6:10, 2:6] .= 2; σ[7:9, 3:5] .= 0                     # annulus (width 1)
-        σ[2, 9] = 3; σ[4, 9] = 3; σ[3, 8] = 3; σ[3, 10] = 3     # diamond round an empty centre
-        σ[10:11, 9:11] .= 4; σ[12, 9] = 4; σ[12, 11] = 4        # pocket open to the closed wall
+        σ[6:10, 2:6] .= 2
+        σ[7:9, 3:5] .= 0                     # annulus (width 1)
+        σ[2, 9] = 3
+        σ[4, 9] = 3
+        σ[3, 8] = 3
+        σ[3, 10] = 3     # diamond round an empty centre
+        σ[10:11, 9:11] .= 4
+        σ[12, 9] = 4
+        σ[12, 11] = 4        # pocket open to the closed wall
         want = Dict(:face => [1, 0, 4, 1], :full => [1, 0, 0, 1])
         for adj in (:face, :full)
             vals, bad, flooded = oracle_all(σ, 4, :square, adj; periodic = false)
@@ -597,40 +703,52 @@ end
             @test bad == 0 && flooded == 4
         end
         # periodic: a band round the torus reads 0 (D-192 Q2); a disc 1; the whole torus 0
-        σ = sq((12, 12)); σ[3:4, :] .= 1; σ[7:9, 5:7] .= 2
+        σ = sq((12, 12))
+        σ[3:4, :] .= 1
+        σ[7:9, 5:7] .= 2
         for adj in (:face, :full)
             @test oracle_all(σ, 2, :square, adj; periodic = true)[1] == [0, 1]
-            @test euler_oracle(σ, 1, :square, adj; periodic = true)[2] === nothing   # wraps: (b) n/a
+            # wraps: (b) n/a
+            @test euler_oracle(σ, 1, :square, adj; periodic = true)[2] === nothing
             @test chi(trues(6, 6), :square, adj; periodic = true) == 0
         end
         # hex: a 7-site hexagon 1, the 6-ring round an empty centre 0
-        σ = sq((10, 10)); σ[3, 3] = 1; foreach(o -> σ[(3, 3) .+ o...] = 1, HEX)
+        σ = sq((10, 10))
+        σ[3, 3] = 1
+        foreach(o -> σ[(3, 3) .+ o...] = 1, HEX)
         foreach(o -> σ[(7, 6) .+ o...] = 2, HEX)
         for periodic in (false, true)
             vals, bad, flooded = oracle_all(σ, 2, :hex, :face; periodic)
             @test vals == [1, 0] && bad == 0 && flooded == 2
         end
-        # cubic 3D, closed 7×7×7: a solid ring 0, a hollow cube 2, two edge-diagonal voxels 2 / 1
+        # cubic 3D, closed 7×7×7: a solid ring 0, a hollow cube 2, two edge-diagonal voxels
+        # 2 / 1
         σ = sq((7, 7, 7))
-        σ[1:3, 1:3, 1] .= 1; σ[2, 2, 1] = 0
-        σ[4:6, 4:6, 4:6] .= 2; σ[5, 5, 5] = 0
-        σ[1, 6, 6] = 3; σ[2, 7, 6] = 3
+        σ[1:3, 1:3, 1] .= 1
+        σ[2, 2, 1] = 0
+        σ[4:6, 4:6, 4:6] .= 2
+        σ[5, 5, 5] = 0
+        σ[1, 6, 6] = 3
+        σ[2, 7, 6] = 3
         for (adj, w) in ((:face, [0, 2, 2]), (:full, [0, 2, 1]))
             vals, bad, flooded = oracle_all(σ, 3, :cubic, adj; periodic = false)
             @test vals == w && bad == 0 && flooded == 3
         end
         # a rod through a periodic axis: 0 (one tunnel)
-        σ = sq((6, 6, 6)); σ[2, 2, :] .= 1
+        σ = sq((6, 6, 6))
+        σ[2, 2, :] .= 1
         @test chi(σ .== 1, :cubic, :face; periodic = true) == 0
         @test chi(σ .== 1, :cubic, :full; periodic = true) == 0
         # (a) = (b) on random states, every geometry and boundary
-        for (geom, dims) in ((:square, (9, 8)), (:hex, (9, 8)), (:cubic, (5, 5, 4))), periodic in (false, true),
+        for (geom, dims) in ((:square, (9, 8)), (:hex, (9, 8)), (:cubic, (5, 5, 4))),
+                periodic in (false, true),
                 adj in euler_adjs(geom)
             nbad = nflood = 0
             for seed in 1:6
                 σ = random_σ(dims, 3, seed)
                 _, bad, flooded = oracle_all(σ, 3, geom, adj; periodic)
-                nbad += bad; nflood += flooded
+                nbad += bad
+                nflood += flooded
             end
             @test nbad == 0
             periodic || @test nflood == 18
@@ -638,11 +756,21 @@ end
     end
 end
 
-@testitem "euler tracker: negative controls (test-side tracker and mutants)" setup = [EulerTrackerSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "euler tracker: negative controls (test-side tracker and mutants)" setup = [
+    EulerTrackerSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # Section 7a: negative controls on the harness (pass on the base)
     @testset "euler tracker: negative controls (test-side tracker and mutants)" begin
-        for (geom, dims, len) in ((:square, (8, 7), 300), (:hex, (8, 7), 300), (:cubic, (5, 4, 4), 120)), periodic in (false, true)
+        for (geom, dims, len) in (
+                    (:square, (8, 7), 300), (:hex, (8, 7), 300), (
+                        :cubic, (5, 4, 4), 120,
+                    ),
+                ),
+                periodic in (false, true)
+
             σ0 = random_σ(dims, 3, 11)
             copies = euler_copies(σ0, geom, len, 5; periodic)
             for adj in euler_adjs(geom)
@@ -652,89 +780,150 @@ end
                 @test replay(σ0, 3, copies, geom, adj; periodic, mutant = :skip_losing) > 0
                 @test replay(σ0, 3, copies, geom, adj; periodic, mutant = :gain_sign) > 0
                 # the wrong adjacency (the `:face` update for `:full`) is caught
-                adj === :full && @test replay(σ0, 3, copies, geom, adj; periodic, mutant = :wrong_adjacency) > 0
+                adj === :full && @test replay(
+                    σ0, 3, copies, geom, adj; periodic, mutant = :wrong_adjacency
+                ) > 0
                 # the 3D duality sign (D₂₆ = +D₆(~m)) is caught
                 (geom === :cubic && adj === :full) &&
-                    @test replay(σ0, 3, copies, geom, adj; periodic, mutant = :duality_sign) > 0
+                    @test replay(
+                    σ0, 3, copies, geom, adj; periodic, mutant = :duality_sign
+                ) > 0
             end
         end
     end
 end
 
-@testitem "euler tracker: columns, observables and the initial rebuild" setup = [EulerTrackerSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "euler tracker: columns, observables and the initial rebuild" setup = [
+    EulerTrackerSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # Section 1: surface and state columns
-    @testset "euler tracker: columns, observables and the initial rebuild ($geom, $(periodic ? "Periodic" : "Closed"))" for ((geom, periodic), (_, _, dims)) in GEOMS
+    @testset "euler tracker: columns, observables and the initial rebuild \
+        ($geom, $(periodic ? "Periodic" : "Closed"))" for (
+            (
+                geom, periodic,
+            ), (_, _, dims),
+        ) in GEOMS
+
         adjs = euler_adjs(geom)
         σ = random_σ(dims, 4, 21)                             # fragmented, holed cells
         for prefix in ("Track", "Obs")
             prob = euler_problem(euler_model(prefix, geom, periodic), σ)
             u = prob.u0
             @test haskey(u.cell, :euler) && eltype(u.cell.euler) == Int32
-            geom === :hex || @test haskey(u.cell, :euler_full) && eltype(u.cell.euler_full) == Int32
+            geom === :hex ||
+                @test haskey(u.cell, :euler_full) && eltype(u.cell.euler_full) == Int32
             bad, checks, seen = compare(u, geom, adjs; periodic)
             @test bad == 0 && checks == 4 * length(adjs)
             @test getu(prob, :χ4)(prob) == u.cell.euler
             # hex: `:full` reads the `:face` value (Q4)
-            @test getu(prob, :χ8)(prob) == (geom === :hex ? u.cell.euler : u.cell.euler_full)
+            @test getu(prob, :χ8)(prob) ==
+                (geom === :hex ? u.cell.euler : u.cell.euler_full)
         end
     end
 end
 
-@testitem "euler tracker: reference shapes through the compiled model" setup = [EulerTrackerSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "euler tracker: reference shapes through the compiled model" setup = [
+    EulerTrackerSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "euler tracker: reference shapes through the compiled model" begin
         # square closed: disc 1/1, annulus 0/0, diamond 4/0, pocket at the wall 1/1
         σ = zeros(Int32, 12, 12)
         σ[2:4, 2:4] .= 1
-        σ[6:10, 2:6] .= 2; σ[7:9, 3:5] .= 0
-        σ[2, 9] = 3; σ[4, 9] = 3; σ[3, 8] = 3; σ[3, 10] = 3
-        σ[10:11, 9:11] .= 4; σ[12, 9] = 4; σ[12, 11] = 4
+        σ[6:10, 2:6] .= 2
+        σ[7:9, 3:5] .= 0
+        σ[2, 9] = 3
+        σ[4, 9] = 3
+        σ[3, 8] = 3
+        σ[3, 10] = 3
+        σ[10:11, 9:11] .= 4
+        σ[12, 9] = 4
+        σ[12, 11] = 4
         u = euler_problem(TrackSquareClosed, σ).u0
         @test u.cell.euler == [1, 0, 4, 1]
         @test u.cell.euler_full == [1, 0, 0, 1]
-        @test u.cell.euler != u.cell.euler_full                  # the adjacencies differ (control)
+        # the adjacencies differ (control)
+        @test u.cell.euler != u.cell.euler_full
         # square periodic: a band round the torus reads 0 (D-192 Q2), a disc 1
-        σ = zeros(Int32, 12, 12); σ[3:4, :] .= 1; σ[7:9, 5:7] .= 2
+        σ = zeros(Int32, 12, 12)
+        σ[3:4, :] .= 1
+        σ[7:9, 5:7] .= 2
         u = euler_problem(TrackSquarePeriodic, σ).u0
         @test u.cell.euler == [0, 1] && u.cell.euler_full == [0, 1]
         # hex: a 7-site hexagon 1, a 6-ring 0
-        σ = zeros(Int32, 10, 10); σ[3, 3] = 1; foreach(o -> σ[(3, 3) .+ o...] = 1, HEX)
+        σ = zeros(Int32, 10, 10)
+        σ[3, 3] = 1
+        foreach(o -> σ[(3, 3) .+ o...] = 1, HEX)
         foreach(o -> σ[(7, 6) .+ o...] = 2, HEX)
         for M in (TrackHexClosed, TrackHexPeriodic)
             prob = euler_problem(M, σ)
             @test prob.u0.cell.euler == [1, 0]
-            @test getu(prob, :χ8)(prob) == [1, 0]                # hex `:full` == `:face` (Q4)
+            # hex `:full` == `:face` (Q4)
+            @test getu(prob, :χ8)(prob) == [1, 0]
         end
         # cubic closed: a solid ring 0/0, a hollow cube 2/2, two edge-diagonal voxels 2/1
         σ = zeros(Int32, 6, 6, 6)
-        σ[1:3, 1:3, 1] .= 1; σ[2, 2, 1] = 0
-        σ[4:6, 4:6, 4:6] .= 2; σ[5, 5, 5] = 0
-        σ[1, 5, 5] = 3; σ[2, 6, 5] = 3
+        σ[1:3, 1:3, 1] .= 1
+        σ[2, 2, 1] = 0
+        σ[4:6, 4:6, 4:6] .= 2
+        σ[5, 5, 5] = 0
+        σ[1, 5, 5] = 3
+        σ[2, 6, 5] = 3
         u = euler_problem(TrackCubicClosed, σ).u0
         @test u.cell.euler == [0, 2, 2] && u.cell.euler_full == [0, 2, 1]
         # cubic periodic: a rod through a periodic axis 0/0
-        σ = zeros(Int32, 6, 6, 6); σ[2, 2, :] .= 1; σ[4:5, 4:5, 2:3] .= 2
+        σ = zeros(Int32, 6, 6, 6)
+        σ[2, 2, :] .= 1
+        σ[4:5, 4:5, 2:3] .= 2
         u = euler_problem(TrackCubicPeriodic, σ).u0
         @test u.cell.euler == [0, 1] && u.cell.euler_full == [0, 1]
     end
 end
 
-@testitem "euler tracker: tracked χ = oracle after every MCS" setup = [EulerTrackerSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "euler tracker: tracked χ = oracle after every MCS ($geom, $(periodic ? "Periodic" : "Closed"))" for ((geom, periodic), (_, _, dims)) in GEOMS
+@testitem "euler tracker: tracked χ = oracle after every MCS" setup = [
+    EulerTrackerSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "euler tracker: tracked χ = oracle after every MCS \
+        ($geom, $(periodic ? "Periodic" : "Closed"))" for (
+            (
+                geom, periodic,
+            ), (_, _, dims),
+        ) in GEOMS
+
         adjs = euler_adjs(geom)
         for (label, alg) in ALGS, prefix in ("Track", "Obs")
             prefix == "Obs" && label != "SequentialCPM" && continue
-            prob = euler_problem(euler_model(prefix, geom, periodic), blocks(dims); tspan = (0, 15))
-            integ = init(prob, alg; save_start = false, save_end = false, save_everystep = false)
+            prob = euler_problem(
+                euler_model(prefix, geom, periodic), blocks(dims); tspan = (
+                    0, 15,
+                )
+            )
+            integ = init(
+                prob, alg; save_start = false, save_end = false, save_everystep = false
+            )
             bad = checks = 0
             seen = Set{Int}()
             obs_ok = true
             for _ in 1:15
                 step!(integ)
                 b, k, s = compare(integ.state, geom, adjs; periodic)
-                bad += b; checks += k; union!(seen, s)
+                bad += b
+                checks += k
+                union!(seen, s)
                 obs_ok &= integ[:χ4] == integ.state.cell.euler
-                obs_ok &= integ[:χ8] == (geom === :hex ? integ.state.cell.euler : integ.state.cell.euler_full)
+                obs_ok &= integ[:χ8] == (
+                    if geom === :hex
+                        integ.state.cell.euler
+                    else
+                        integ.state.cell.euler_full
+                    end
+                )
             end
             @test bad == 0
             @test checks >= 15 * 2 * length(adjs)
@@ -745,13 +934,20 @@ end
     end
 end
 
-@testitem "euler tracker: tracked χ = oracle across divisions (the lifecycle rebuild)" setup = [EulerTrackerSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "euler tracker: tracked χ = oracle across divisions (the lifecycle rebuild)" begin
+@testitem "euler tracker: tracked χ = oracle across divisions (the lifecycle \
+    rebuild)" setup = [EulerTrackerSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "euler tracker: tracked χ = oracle across divisions (the lifecycle \
+        rebuild)" begin
         for (geom, periodic) in ((:square, true), (:cubic, false))
             _, _, dims = Dict(GEOMS)[(geom, periodic)]
             M = euler_model("Divide", geom, periodic)
             prob = euler_problem(M, blocks(dims); tspan = (0, 12), capacity = 64)
-            integ = init(prob, SequentialCPM(); save_start = false, save_end = false, save_everystep = false)
+            integ = init(
+                prob, SequentialCPM(); save_start = false,
+                save_end = false, save_everystep = false
+            )
             bad = 0
             for _ in 1:12
                 step!(integ)
@@ -763,8 +959,11 @@ end
     end
 end
 
-@testitem "euler tracker: ΔH = brute-force difference" setup = [EulerTrackerSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "euler tracker: ΔH = brute-force difference ($geom, $(periodic ? "Periodic" : "Closed"), $T)" for (geom, periodic, T) in DH_ROWS
+@testitem "euler tracker: ΔH = brute-force difference" setup = [EulerTrackerSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "euler tracker: ΔH = brute-force difference \
+        ($geom, $(periodic ? "Periodic" : "Closed"), $T)" for (geom, periodic, T) in DH_ROWS
         M = euler_model("EulerDH", geom, periodic)
         dims = DH_DIMS[geom]
         shell = euler_shell(geom)
@@ -772,17 +971,25 @@ end
         commit_bad = 0
         for seed in 1:2
             σ = random_σ(dims, 3, 30 + seed)
-            prob = PottsProblem(M(; name = :dh), [ownership => σ, kind => [:A, :B, :A]], (0, 1); T)
+            prob = PottsProblem(
+                M(; name = :dh), [ownership => σ, kind => [:A, :B, :A]], (
+                    0, 1,
+                ); T
+            )
             u = prob.u0
             ctx = Potts._host_ctx(prob)
             tol = T === Float64 ? 0.0 : 1.0e-3
-            @test isapprox(total_energy(prob, u), euler_energy(σ, geom; periodic); atol = tol)
+            @test isapprox(
+                total_energy(prob, u), euler_energy(σ, geom; periodic);
+                atol = tol
+            )
             E0 = euler_energy(σ, geom; periodic)
             k = 0
             for I in CartesianIndices(σ), o in shell
                 x = Tuple(I)
                 k += 1
-                k % 3 == 0 || continue                               # every third pair (light)
+                # every third pair (light)
+                k % 3 == 0 || continue
                 y = x .+ o
                 if periodic
                     y = map(mod1, y, size(σ))
@@ -791,13 +998,16 @@ end
                 end
                 old, new = Int(σ[x...]), Int(σ[y...])
                 old == new && continue
-                old != 0 && count(==(old), σ) == 1 && continue        # no killing copies (D-083)
+                # no killing copies (D-083)
+                old != 0 && count(==(old), σ) == 1 && continue
                 prop = euler_prop(prob.lattice, x, y, σ)
-                σ1 = copy(σ); σ1[x...] = new
+                σ1 = copy(σ)
+                σ1[x...] = new
                 dE = euler_energy(σ1, geom; periodic) - E0
                 drive = sum(
                     w * (c == 0 ? 0 : euler_oracle(σ, c, geom, adj; periodic)[1])
-                        for (adj, side, w) in drive_terms(geom) for c in (side === :old ? old : new)
+                        for (adj, side, w) in drive_terms(geom)
+                        for c in (side === :old ? old : new)
                 )
                 ΔE = energy_change(prob, u, prop)
                 ΔH = prob.f.delta_H(u, prob.p, prop, ctx)
@@ -806,104 +1016,166 @@ end
                 nE += isapprox(ΔE, dE; atol = tol)
                 nD += isapprox(ΔH - ΔE, drive; atol = tol)
                 # commit! moves both columns to the oracle values of the new state
-                a = deepcopy(u); a.ownership[x...] = new
+                a = deepcopy(u)
+                a.ownership[x...] = new
                 prob.f.commit!(a, prob.p, prop, ctx)
                 for adj in euler_adjs(geom)
-                    commit_bad += euler_col(a, adj) != oracle_all(σ1, 3, geom, adj; periodic)[1]
+                    commit_bad += euler_col(a, adj) !=
+                        oracle_all(σ1, 3, geom, adj; periodic)[1]
                 end
             end
         end
         @test ntot >= 40
-        @test nnz >= ntot ÷ 4                                        # the energy moves (non-vacuous)
+        # the energy moves (non-vacuous)
+        @test nnz >= ntot ÷ 4
         @test nE == ntot
         @test nD == ntot
         @test commit_bad == 0
     end
 end
 
-@testitem "euler tracker: build errors" setup = [EulerTrackerSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "euler tracker: build errors" setup = [EulerTrackerSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "euler tracker: build errors" begin
         hexlat = :(Lattice((10, 10); geometry = Hexagonal(), neighborhood = Hex(1)))
         sqlat = :(Lattice((10, 10)))
-        σ = zeros(Int32, 10, 10); σ[3:5, 3:5] .= 1
+        σ = zeros(Int32, 10, 10)
+        σ[3:5, 3:5] .= 1
         msg(e) = sprint(showerror, e)
-        # `:face` (explicit or default) and `:full` (Q4 amended: the same as `:face`) build on
-        # hex, in an energy, a drive and `@observed`; `:full` builds on square
+        # `:face` (explicit or default) and `:full` (Q4 amended: the same as `:face`) build
+        # on hex, in an energy, a drive and `@observed`; `:full` builds on square
         for line in (
                 :(@energy cells => euler(; adjacency = :face)), :(@energy cells => euler),
-                :(@drive copy => euler(old; adjacency = :face)), :(@observed q(cell) ~ euler),
+                :(@drive copy => euler(old; adjacency = :face)),
+                :(@observed q(cell) ~ euler),
                 :(@energy cells => euler(; adjacency = :full)),
                 :(@drive copy => euler(old; adjacency = :full)),
                 :(@observed q(cell) ~ euler(; adjacency = :full))
             )
             @test euler_build(build_case(hexlat, line), σ) === nothing
         end
-        @test euler_build(build_case(sqlat, :(@energy cells => euler(; adjacency = :full))), σ) === nothing
+        @test euler_build(
+            build_case(
+                sqlat, :(
+                    @energy cells =>
+                        euler(; adjacency = :full)
+                )
+            ), σ
+        ) === nothing
         # an unknown adjacency lists the two valid ones
         for lat in (sqlat, hexlat)
-            e = euler_build(build_case(lat, :(@energy cells => euler(; adjacency = :diag))), σ)
+            e = euler_build(
+                build_case(lat, :(@energy cells => euler(; adjacency = :diag))),
+                σ
+            )
             @test e isa ArgumentError
         end
-        # controls on the harness (the base): a surface energy builds; a bare `volume` in a drive
-        # is an ArgumentError
+        # controls on the harness (the base): a surface energy builds; a bare `volume` in a
+        # drive is an ArgumentError
         @test euler_build(build_case(sqlat, :(@energy cells => surface)), σ) === nothing
-        @test euler_build(build_case(sqlat, :(@drive copy => volume)), σ) isa Potts.PottsCompileError
+        @test euler_build(build_case(sqlat, :(@drive copy => volume)), σ) isa
+            Potts.PottsCompileError
         # a bare `euler` in a drive is a PottsCompileError (index it, as `volume`)
         e = euler_build(build_case(sqlat, :(@drive copy => euler)), σ)
         @test e isa Potts.PottsCompileError && occursin("euler", msg(e))
     end
 end
 
-@testitem "euler tracker: a model that never names euler costs nothing" setup = [EulerTrackerSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "euler tracker: a model that never names euler costs nothing" setup = [
+    EulerTrackerSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "euler tracker: a model that never names euler costs nothing" begin
         for ((geom, periodic), (_, _, dims)) in GEOMS
             M = euler_model("Plain", geom, periodic)
             prob = euler_problem(M, blocks(dims))
             @test !any(k -> occursin("euler", string(k)), keys(prob.u0.cell))
             g = generated_code(M(; name = :euler))
-            @test !any(mentions_euler, (g.delta_H, g.commit!, g.constraint, g.total_energy, g.delta_E))
+            @test !any(
+                mentions_euler, (
+                    g.delta_H, g.commit!, g.constraint, g.total_energy, g.delta_E,
+                )
+            )
             @test !any(mentions_euler, g.phases)
         end
         # the published models carry no euler column
         σ, kinds = graner_glazier_state()
-        prob = PottsProblem(GranerGlazier(; name = :gg), [ownership => σ, kind => kinds], (0, 1))
+        prob = PottsProblem(
+            GranerGlazier(; name = :gg), [ownership => σ, kind => kinds], (
+                0, 1,
+            )
+        )
         @test !any(k -> occursin("euler", string(k)), keys(prob.u0.cell))
     end
 end
 
-@testitem "euler tracker: a model that reads euler differs in fingerprint (control)" setup = [EulerTrackerSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "euler tracker: a model that reads euler differs in fingerprint (control)" begin
+@testitem "euler tracker: a model that reads euler differs in fingerprint (control)" setup =
+    [EulerTrackerSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "euler tracker: a model that reads euler differs in fingerprint \
+        (control)" begin
         for ((geom, periodic), (_, _, dims)) in GEOMS
-            a = euler_problem(euler_model("Plain", geom, periodic), blocks(dims)).f.fingerprint
-            b = euler_problem(euler_model("Track", geom, periodic), blocks(dims)).f.fingerprint
+            a = euler_problem(
+                euler_model("Plain", geom, periodic),
+                blocks(dims)
+            ).f.fingerprint
+            b = euler_problem(
+                euler_model("Track", geom, periodic),
+                blocks(dims)
+            ).f.fingerprint
             @test a != b
         end
     end
 end
 
-@testitem "euler tracker: zero warm allocations" setup = [EulerTrackerSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "euler tracker: zero warm allocations ($geom, $(periodic ? "Periodic" : "Closed"))" for ((geom, periodic), (_, _, dims)) in GEOMS
+@testitem "euler tracker: zero warm allocations" setup = [EulerTrackerSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "euler tracker: zero warm allocations \
+        ($geom, $(periodic ? "Periodic" : "Closed"))" for (
+            (
+                geom, periodic,
+            ), (_, _, dims),
+        ) in GEOMS
+
         plain = euler_problem(euler_model("Plain", geom, periodic), blocks(dims))
         for (label, alg) in ALGS
             @test all(==(0), warm_allocs(plain, alg))           # control (the base)
         end
         for (label, alg) in ALGS
-            @test all(==(0), warm_allocs(euler_problem(euler_model("Track", geom, periodic), blocks(dims)), alg))
+            @test all(
+                ==(0),
+                warm_allocs(
+                    euler_problem(euler_model("Track", geom, periodic), blocks(dims)), alg
+                )
+            )
             # energy and drive reads, both adjacencies
             dh = PottsProblem(
                 euler_model("EulerDH", geom, periodic)(; name = :dh),
-                [ownership => random_σ(DH_DIMS[geom], 3, 31), kind => [:A, :B, :A]], (0, 10)
+                [ownership => random_σ(DH_DIMS[geom], 3, 31), kind => [:A, :B, :A]], (
+                    0, 10,
+                )
             )
             @test all(==(0), warm_allocs(dh, alg))
         end
     end
 end
 
-@testitem "euler tracker: Float32 on the CPU (Int32 columns, exact)" setup = [EulerTrackerSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "euler tracker: Float32 on the CPU (Int32 columns, exact)" setup = [
+    EulerTrackerSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "euler tracker: Float32 on the CPU (Int32 columns, exact)" begin
         for (geom, periodic) in ((:square, true), (:cubic, false))
             _, _, dims = Dict(GEOMS)[(geom, periodic)]
-            prob = euler_problem(euler_model("Track", geom, periodic), blocks(dims); T = Float32)
+            prob = euler_problem(
+                euler_model("Track", geom, periodic), blocks(dims);
+                T = Float32
+            )
             sol = solve(prob, CheckerboardCPM())
             u = sol.u[end]
             @test eltype(u.cell.euler) == Int32 && eltype(u.cell.euler_full) == Int32
@@ -912,20 +1184,30 @@ end
     end
 end
 
-@testitem "euler tracker: euler on the device (CheckerboardCPM, Float32)" setup = [EulerTrackerSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "euler tracker: euler on the device (CheckerboardCPM, Float32)" setup = [
+    EulerTrackerSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "euler tracker: euler on the device (CheckerboardCPM, Float32)" begin
         if ON_DEVICE
             backend = PottsDevices.device_backend()
             for (geom, periodic) in ((:square, true), (:hex, false), (:cubic, false))
                 _, _, dims = Dict(GEOMS)[(geom, periodic)]
-                prob = euler_problem(euler_model("Track", geom, periodic), blocks(dims); T = Float32)
+                prob = euler_problem(
+                    euler_model("Track", geom, periodic), blocks(dims);
+                    T = Float32
+                )
                 sol = solve(prob, CheckerboardCPM(); backend)
                 u = sol.u[end]
                 @test eltype(u.cell.euler) == Int32
                 @test compare(u, geom, euler_adjs(geom); periodic)[1] == 0
             end
             # across divisions: the device rebuild
-            prob = euler_problem(DivideSquarePeriodic, blocks((12, 12)); tspan = (0, 12), capacity = 64, T = Float32)
+            prob = euler_problem(
+                DivideSquarePeriodic, blocks((12, 12));
+                tspan = (0, 12), capacity = 64, T = Float32
+            )
             sol = solve(prob, CheckerboardCPM(); backend)
             @test sol.stats.lifecycle.divisions > 0
             @test compare(sol.u[end], :square, (:face, :full); periodic = true)[1] == 0

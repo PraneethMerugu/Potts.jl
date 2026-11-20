@@ -1,6 +1,6 @@
 # Test-only models (D-254): not published, so not in PottsModels. A test setup that needs
-# them includes this file (`include(joinpath(@__DIR__, "fixtures.jl"))`, or `"..", "fixtures.jl"`
-# from a subdirectory), and its items use them by their bare names.
+# them includes this file (`include(joinpath(@__DIR__, "fixtures.jl"))`, or `"..",
+# "fixtures.jl"` from a subdirectory), and its items use them by their bare names.
 using Potts
 
 """
@@ -28,6 +28,7 @@ once, at MCS 0, when their area has reached the target, splitting a cell mass va
         cells(epithelial) => λ * (volume - V₀)^2
         contacts => J[kind, neighbor_kind]
     end
-    @divide cells(epithelial) when = (mcs == 0) && (volume >= V₀), along = (1.0, 0.0), mass => Split()
+    @divide cells(epithelial) when = (mcs == 0) && (volume >= V₀), along = (1.0, 0.0),
+        mass => Split()
     @sweep Metropolis(; temperature = T)
 end

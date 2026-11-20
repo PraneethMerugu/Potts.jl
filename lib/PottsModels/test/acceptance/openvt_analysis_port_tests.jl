@@ -1,14 +1,16 @@
-# `openvt_analysis_port_tests.jl` (spec research/model-specs/15_openvt_monolayer.md §3, §4.0 A3,
-# §6 G8; D-147, D-146, D-048): the OpenVT monolayer analysis port. A concaveman port, a
-# byte-faithful port of the consortium's `metrics.cpp`, the M Category 3 inhibition fractions
-# (A3) and the O1–O6 writers. Decision: D-149.
+# `openvt_analysis_port_tests.jl` (spec research/model-specs/15_openvt_monolayer.md §3, §4.0
+# A3, §6 G8; D-147, D-146, D-048): the OpenVT monolayer analysis port. A concaveman port, a
+# byte-faithful port of the consortium's `metrics.cpp`, the M Category 3 inhibition
+# fractions (A3) and the O1–O6 writers. Decision: D-149.
 #
-# ── Surface fixed here (names are qualified in this file, so export is the implementer's call)
+# ── Surface fixed here (names are qualified in this file, so export is the implementer's
+# call)
 #
 #   PottsModels.Analysis.concave_hull(points; concavity = 2.0, length_threshold = 0.0)
-#       General primitive. `points`: a vector of 2-tuples of reals (converted to Float64; the
-#       input is not mutated). Returns `Vector{NTuple{2,Float64}}`: the closed boundary,
-#       without repeating the first vertex, exactly as `metrics.cpp` builds it (§3.2 step 3):
+#       General primitive. `points`: a vector of 2-tuples of reals (converted to Float64;
+#       the input is not mutated). Returns `Vector{NTuple{2,Float64}}`: the closed boundary,
+#       without repeating the first vertex, exactly as `metrics.cpp` builds it (§3.2 step
+#       3):
 #         - convex hull by Graham scan, collinear points excluded (metrics.cpp:33-63): pivot
 #           p0 = the point with the least (y, x); the others sorted by orientation about p0
 #           (clockwise first, ties by squared distance); a two-vertex hull of equal points
@@ -19,12 +21,12 @@
 #           |bc|² ≥ length_threshold², the interior candidates are taken in increasing
 #           squared segment distance d (only d ≤ |bc|²/concavity²); the first with
 #           d < sqSegDist(p, a, b) and d < sqSegDist(p, c, d′) whose edges b–p, c–p cross no
-#           current edge (concaveman.h `intersects`, bounding-box prefilter) is inserted when
-#           min(|pb|², |pc|²) ≤ |bc|²/concavity²; an inserted point and its duplicates leave
-#           the candidate set;
+#           current edge (concaveman.h `intersects`, bounding-box prefilter) is inserted
+#           when min(|pb|², |pc|²) ≤ |bc|²/concavity²; an inserted point and its duplicates
+#           leave the candidate set;
 #         - vertex order: clockwise from p0 in Graham order, the output starting at the
-#           successor of the LAST convex-hull vertex (concaveman.h `last->next()`), so points
-#           carved into the closing edge come first.
+#           successor of the LAST convex-hull vertex (concaveman.h `last->next()`), so
+#           points carved into the closing edge come first.
 #       Empty input: ArgumentError. No `fma`, `muladd`, `@fastmath`, `@simd` in the kernels
 #       (spec D11; acceptance).
 #
@@ -32,12 +34,12 @@
 #       → (; N::Int, r, A, C, w, g, C_rel, w_rel), Float64 except N. `metrics.cpp` §3.2:
 #       the header is split on ',' and `"`/`'` stripped; columns x, y, g, n located by name
 #       (last match; extra columns ignored; empty lines skipped). For Potts' own O1 files a
-#       missing `g` is derived from an `i` column, g = (i == 0) (spec C8). Missing x or y, or
-#       neither g nor i: ArgumentError. A data row with too few fields: ArgumentError.
-#       Boundary = concave_hull(points; concavity = 1.5). B > 2: c = vertex mean, r = mean |v−c|,
-#       A = |shoelace|/2, C = closed perimeter, w = √(Σ(|v−c| − r)²/(B − 1)); else NaN.
-#       g = Σg/N, C_rel = C/(2√(πA)), w_rel = w/r. Sums in metrics.cpp's order (r, A, C in
-#       one loop over (i, j) = (B, 1), (1, 2), …; w in a second loop), Float64 throughout
+#       missing `g` is derived from an `i` column, g = (i == 0) (spec C8). Missing x or y,
+#       or neither g nor i: ArgumentError. A data row with too few fields: ArgumentError.
+#       Boundary = concave_hull(points; concavity = 1.5). B > 2: c = vertex mean, r = mean
+#       |v−c|, A = |shoelace|/2, C = closed perimeter, w = √(Σ(|v−c| − r)²/(B − 1)); else
+#       NaN. g = Σg/N, C_rel = C/(2√(πA)), w_rel = w/r. Sums in metrics.cpp's order (r, A, C
+#       in one loop over (i, j) = (B, 1), (1, 2), …; w in a second loop), Float64 throughout
 #       (the arm64 reference has long double == double).
 #   PottsModels.openvt_metrics_line(m)::String
 #       exactly metrics.cpp's stdout: `N,r,A,C,w,g,C_rel,w_rel\n`, each value as C++
@@ -58,7 +60,8 @@
 #       plain integers. `read_openvt(write_openvt(…))` returns the input (isequal).
 #         :O1  (; x, y, i, n)                 header `x,y,i,n`; i ∈ 0:3, else ArgumentError
 #         :O2  (; x, y, r, f, a)              header `x,y,r,f,a`
-#         :O3  (; beta | gamma, mcs)          header `beta,Time to 10k (MCS),Time to 10k (5T)`
+#         :O3  (; beta | gamma, mcs)          header
+#                                             `beta,Time to 10k (MCS),Time to 10k (5T)`
 #                                             (resp. gamma); 5T column = mcs/775; unreached
 #                                             runs are mcs = NaN → `nan,nan`
 #         :O4  (; t, widths)                  widths[k, rep] in CD; header
@@ -89,8 +92,8 @@
 #   - The headline (gated on ENV["OPENVT_MONOLAYER_REPO"], the consortium repo G at 54f375f;
 #     never copied into git): the 25 Morpheus parameter-plane centroid files
 #     (`results/Morpheus/Monolayer/Parameter_Plane_Centroid_Data/Parameter_Plane_Morpheus_Centroids.zip`,
-#     unzipped to a temp dir with the `unzip` tool) give the committed `metrics.csv` byte for
-#     byte: header `file,N,r,A,C,w,g`, then `<file>,` and the first six fields of the
+#     unzipped to a temp dir with the `unzip` tool) give the committed `metrics.csv` byte
+#     for byte: header `file,N,r,A,C,w,g`, then `<file>,` and the first six fields of the
 #     metrics line, files in byte order (the committed file was made by the older 6-field
 #     binary, run_metrics.sh in that directory). The two trailing fields (C_rel, w_rel) are
 #     checked against TAIL, recorded from the reference build.
@@ -109,24 +112,28 @@
 # ── Reference build (2026-10-05, this Mac, arm64; scratch only)
 #
 #   G=$OPENVT_MONOLAYER_REPO/results/postprocessing
-#   c++ -std=c++17 -O2 -ffp-contract=off -I$G -o metrics_off $G/metrics.cpp       # Apple clang 17.0.0
-#   g++-15 -std=c++17 -O2 -ffp-contract=off -I$G -o metrics_gcc_off $G/metrics.cpp  # GCC 15.2.0
-#   c++ -std=c++17 -O2 -I$G -o metrics_on $G/metrics.cpp                           # default contraction
+#   # Apple clang 17.0.0
+#   c++ -std=c++17 -O2 -ffp-contract=off -I$G -o metrics_off $G/metrics.cpp
+#   # GCC 15.2.0
+#   g++-15 -std=c++17 -O2 -ffp-contract=off -I$G -o metrics_gcc_off $G/metrics.cpp
+#   # default contraction
+#   c++ -std=c++17 -O2 -I$G -o metrics_on $G/metrics.cpp
 #   cd <unzipped centroids>; { echo "file,N,r,A,C,w,g"; for f in *.csv; do echo -n "$f,";
-#     ./metrics_off $f | cut -d, -f1-6; done; } | cmp - <dir>/metrics.csv          # identical
+#     ./metrics_off $f | cut -d, -f1-6; done; } | cmp - <dir>/metrics.csv  # identical
 #   metrics_on differs from the committed file on all 25 rows. A brute-force Julia port
 #   (scratch, no R-tree) reproduced all 25 rows, all 8 fields, byte for byte in ≈ 7 s.
-#   Before it was committed, this whole file ran green against that scratch port (184 passes with
-#   the repo set; 128 + 1 broken without), and the port's `muladd` variant failed the FMA
-#   guard (a test is run against a stand-in of the code it tests before it is committed; the
-#   port itself is not committed).
+#   Before it was committed, this whole file ran green against that scratch port (184 passes
+#   with the repo set; 128 + 1 broken without), and the port's `muladd` variant failed the
+#   FMA guard (a test is run against a stand-in of the code it tests before it is committed;
+#   the port itself is not committed).
 
 @testsetup module OpenVTAnalysisPortSetup
 include(joinpath(@__DIR__, "..", "shared", "common.jl"))
 using Test
 const Models = PottsModels
 const HULL_AN = PottsModels.Analysis
-# ── helpers ────────────────────────────────────────────────────────────────────────────────
+# ── helpers
+# ────────────────────────────────────────────────────────────────────────────────
 hull_csv(dir, name, text) = (path = joinpath(dir, name); write(path, text); path)
 # an integer-only LCG cloud: a hexagonal lattice (spacing 1, rows √3/2 ≈ 0.8660254 apart)
 # inside a disc of radius ρ, each coordinate jittered by an integer in ±jit (units of 1e-7)
@@ -136,7 +143,7 @@ function cloud(seed::Integer, ρ::Integer, jit::Integer)
     draw(m) = (s = s * 0x5851f42d4c957f2d + 0x14057b7ef767814f; Int((s >> 33) % UInt64(m)))
     dec(v) = string(div(v, 10^7), ".", lpad(rem(v, 10^7), 7, '0'))
     rows = String["x,y,g,n"]
-    for j in -ρ:ρ, i in (-ρ - 1):(ρ + 1)
+    for j in (-ρ):ρ, i in (-ρ - 1):(ρ + 1)
         xi = i * 10^7 + (isodd(j) ? 5 * 10^6 : 0)
         yi = j * 8660254
         xi^2 + yi^2 <= (ρ * 10^7)^2 || continue
@@ -154,10 +161,12 @@ function xyg(path)
     names = [replace(s, '"' => "", '\'' => "") for s in split(lines[1], ',')]
     ix, iy, ig = (findlast(==(c), names) for c in ("x", "y", "g"))
     rows = [split(l, ',') for l in lines[2:end]]
-    return [parse(Float64, r[ix]) for r in rows], [parse(Float64, r[iy]) for r in rows], [parse(Int, r[ig]) for r in rows]
+    return [parse(Float64, r[ix]) for r in rows], [parse(Float64, r[iy]) for r in rows],
+        [parse(Int, r[ig]) for r in rows]
 end
 hull(pts; kw...) = HULL_AN.concave_hull(NTuple{2, Float64}[Float64.(p) for p in pts]; kw...)
-# ── FMA guard ───────────────────────────────────────────────────────────────────────────────
+# ── FMA guard
+# ───────────────────────────────────────────────────────────────────────────────
 
 # (seed, ρ, jit) => (the -ffp-contract=off line, the default-contraction clang line,
 #                    a scratch Julia port with `muladd` in orient/orient2d/sqDist/sqSegDist)
@@ -178,7 +187,8 @@ const CLOUDS = [
         "355,8.5659,285.366,103.202,2.39258,0.253521,1.72338,0.279315\n",
     ),
 ]
-# ── headline: the committed parameter-plane metrics.csv, byte for byte ──────────────────────
+# ── headline: the committed parameter-plane metrics.csv, byte for byte
+# ──────────────────────
 const TAIL = Dict(   # C_rel,w_rel from the -ffp-contract=off reference build
     "Centroids_Morpheus_beta0.0_gamma0.0_replicate4458.csv" => "1.18433,0.0112518",
     "Centroids_Morpheus_beta0.0_gamma0.3_replicate4422.csv" => "1.38554,0.0486836",
@@ -204,9 +214,10 @@ const TAIL = Dict(   # C_rel,w_rel from the -ffp-contract=off reference build
     "Centroids_Morpheus_beta1.0_gamma0.3_replicate4426.csv" => "1.28956,0.0565742",
     "Centroids_Morpheus_beta1.0_gamma0.45_replicate4448.csv" => "1.59477,0.103692",
     "Centroids_Morpheus_beta1.0_gamma0.4_replicate4431.csv" => "1.56256,0.104281",
-    "Centroids_Morpheus_beta1.0_gamma0.5_replicate4481.csv" => "2.07075,0.290948",
+    "Centroids_Morpheus_beta1.0_gamma0.5_replicate4481.csv" => "2.07075,0.290948"
 )
-# ── O1–O6 writers ───────────────────────────────────────────────────────────────────────────
+# ── O1–O6 writers
+# ───────────────────────────────────────────────────────────────────────────
 function hull_text(fmt, data)
     io = IOBuffer()
     Models.write_openvt(io, fmt, data)
@@ -216,68 +227,91 @@ hull_fields(text) = [split(l, ',') for l in split(chomp(text), '\n')]
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "openvt analysis port: concave_hull on hand-built point sets" setup = [OpenVTAnalysisPortSetup] tags = [:pottsmodels, :acceptance] begin
-    # ── concave hull: hand-built point sets ───────────────────────────────────────────────────
+@testitem "openvt analysis port: concave_hull on hand-built point sets" setup = [
+    OpenVTAnalysisPortSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # ── concave hull: hand-built point sets
+    # ───────────────────────────────────────────────────
     @testset "openvt analysis port: concave_hull on hand-built point sets" begin
         sq = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
-        # Graham: p0 = (0,0); clockwise (decreasing angle) order (0,1), (1,1), (1,0); every point
-        # is on the hull, so concaveman returns it unchanged
+        # Graham: p0 = (0,0); clockwise (decreasing angle) order (0,1), (1,1), (1,0); every
+        # point is on the hull, so concaveman returns it unchanged
         @test hull(sq; concavity = 1.5) == [(0.0, 0.0), (0.0, 1.0), (1.0, 1.0), (1.0, 0.0)]
-        @test hull(reverse(sq); concavity = 1.5) == [(0.0, 0.0), (0.0, 1.0), (1.0, 1.0), (1.0, 0.0)]
-        @test HULL_AN.concave_hull(sq) == [(0.0, 0.0), (0.0, 1.0), (1.0, 1.0), (1.0, 0.0)]   # default concavity
-        @test HULL_AN.concave_hull([(0, 0), (1, 0), (1, 1), (0, 1)]) == [(0.0, 0.0), (0.0, 1.0), (1.0, 1.0), (1.0, 0.0)]  # Int input
+        @test hull(reverse(sq); concavity = 1.5) ==
+            [(0.0, 0.0), (0.0, 1.0), (1.0, 1.0), (1.0, 0.0)]
+        # default concavity
+        @test HULL_AN.concave_hull(sq) == [(0.0, 0.0), (0.0, 1.0), (1.0, 1.0), (1.0, 0.0)]
+        @test HULL_AN.concave_hull([(0, 0), (1, 0), (1, 1), (0, 1)]) ==
+            [(0.0, 0.0), (0.0, 1.0), (1.0, 1.0), (1.0, 0.0)]  # Int input
         @test eltype(HULL_AN.concave_hull(sq)) == NTuple{2, Float64}
-        # square + centre: the centre is d = 0.25 from every edge (≤ 1/2.25) but exactly as close
-        # to the adjacent edges, and `d < d0` is strict → never inserted
-        @test hull([sq; (0.5, 0.5)]; concavity = 1.5) == [(0.0, 0.0), (0.0, 1.0), (1.0, 1.0), (1.0, 0.0)]
+        # square + centre: the centre is d = 0.25 from every edge (≤ 1/2.25) but exactly as
+        # close to the adjacent edges, and `d < d0` is strict → never inserted
+        @test hull([sq; (0.5, 0.5)]; concavity = 1.5) ==
+            [(0.0, 0.0), (0.0, 1.0), (1.0, 1.0), (1.0, 0.0)]
         # the input is not mutated (metrics.cpp sorts its own vector in place)
         pts = [(0.5, 0.5), (1.0, 1.0), (0.0, 0.0), (1.0, 0.0), (0.0, 1.0)]
         keep = copy(pts)
         HULL_AN.concave_hull(pts; concavity = 1.5)
         @test pts == keep
 
-        # L of six points; convex hull (0,0),(0,2),(1,2),(2,1),(2,0); (1,1) lies d = 0.5 from the
-        # edge (1,2)–(2,1) (|bc|² = 2), 1 from both adjacent edges, and 1 from both endpoints.
-        # Inserted iff min endpoint distance 1 ≤ 2/concavity²: concavity 1 yes; 1.5 (0.889) and
-        # 2 (0.5) no. Earlier edges reject it: edge (0,0)–(0,2) has d = 1 = d0 (strict <).
+        # L of six points; convex hull (0,0),(0,2),(1,2),(2,1),(2,0); (1,1) lies d = 0.5
+        # from the edge (1,2)–(2,1) (|bc|² = 2), 1 from both adjacent edges, and 1 from both
+        # endpoints. Inserted iff min endpoint distance 1 ≤ 2/concavity²: concavity 1 yes;
+        # 1.5 (0.889) and 2 (0.5) no. Earlier edges reject it: edge (0,0)–(0,2) has d = 1 =
+        # d0 (strict <).
         L6 = [(0.0, 0.0), (2.0, 0.0), (2.0, 1.0), (1.0, 1.0), (1.0, 2.0), (0.0, 2.0)]
         convexL = [(0.0, 0.0), (0.0, 2.0), (1.0, 2.0), (2.0, 1.0), (2.0, 0.0)]
         @test hull(L6; concavity = 1.5) == convexL
         @test hull(L6; concavity = 2.0) == convexL
-        @test hull(L6; concavity = 1.0) == [(0.0, 0.0), (0.0, 2.0), (1.0, 2.0), (1.0, 1.0), (2.0, 1.0), (2.0, 0.0)]
+        @test hull(L6; concavity = 1.0) ==
+            [(0.0, 0.0), (0.0, 2.0), (1.0, 2.0), (1.0, 1.0), (2.0, 1.0), (2.0, 0.0)]
         # length_threshold: an edge shorter than it is never drilled (|bc|² = 2 < 1.5²)
         @test hull(L6; concavity = 1.0, length_threshold = 1.5) == convexL
 
         # notch: (2, 3.2) is d = 0.64 below the top edge (|bc|² = 16, limit 16/2.25 = 7.11),
         # 4 from both side edges, min endpoint distance 4 + 0.64 = 4.64 ≤ 7.11 → inserted
         # between (0,4) and (4,4)
-        @test hull([(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0), (2.0, 3.2)]; concavity = 1.5) ==
+        @test hull(
+            [(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0), (2.0, 3.2)];
+            concavity = 1.5
+        ) ==
             [(0.0, 0.0), (0.0, 4.0), (2.0, 3.2), (4.0, 4.0), (4.0, 0.0)]
         # with a huge concavity nothing is carved: the convex hull
-        @test hull([(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0), (2.0, 3.2)]; concavity = 1.0e300) ==
+        @test hull(
+            [(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0), (2.0, 3.2)];
+            concavity = 1.0e300
+        ) ==
             [(0.0, 0.0), (0.0, 4.0), (4.0, 4.0), (4.0, 0.0)]
 
-        # big L: the 18 lattice points {0:5}×{0:1} ∪ {0:1}×{2:4}. Convex hull (0,0),(0,4),(1,4),
-        # (5,1),(5,0); every lattice point on a hull edge is carved in (d = 0); the notch edge
-        # (1,4)–(5,1) takes (4,1) (d = 0.36 on 3x + 4y = 19), then (3,1), (2,1), (1,2), (1,3);
-        # (1,1) is the only interior point: d = 0.5 from (1,2)–(2,1) but both endpoints are 1
-        # away (> 2/2.25). The output starts after the last hull vertex (5,0), so the points
-        # carved into the closing edge (5,0)→(0,0) come first.
+        # big L: the 18 lattice points {0:5}×{0:1} ∪ {0:1}×{2:4}. Convex hull
+        # (0,0),(0,4),(1,4), (5,1),(5,0); every lattice point on a hull edge is carved in (d
+        # = 0); the notch edge (1,4)–(5,1) takes (4,1) (d = 0.36 on 3x + 4y = 19), then
+        # (3,1), (2,1), (1,2), (1,3); (1,1) is the only interior point: d = 0.5 from
+        # (1,2)–(2,1) but both endpoints are 1 away (> 2/2.25). The output starts after the
+        # last hull vertex (5,0), so the points carved into the closing edge (5,0)→(0,0)
+        # come first.
         Lbig = [(Float64(i), Float64(j)) for i in 0:5 for j in 0:1]
         append!(Lbig, [(Float64(i), Float64(j)) for i in 0:1 for j in 2:4])
         @test hull(Lbig; concavity = 1.5) ==
             [
-            (4.0, 0.0), (3.0, 0.0), (2.0, 0.0), (1.0, 0.0), (0.0, 0.0), (0.0, 1.0), (0.0, 2.0), (0.0, 3.0),
-            (0.0, 4.0), (1.0, 4.0), (1.0, 3.0), (1.0, 2.0), (2.0, 1.0), (3.0, 1.0), (4.0, 1.0), (5.0, 1.0), (5.0, 0.0),
+            (4.0, 0.0), (3.0, 0.0), (2.0, 0.0), (1.0, 0.0),
+            (0.0, 0.0), (0.0, 1.0), (0.0, 2.0), (0.0, 3.0),
+            (0.0, 4.0), (1.0, 4.0), (1.0, 3.0), (1.0, 2.0), (2.0, 1.0),
+            (3.0, 1.0), (4.0, 1.0), (5.0, 1.0), (5.0, 0.0),
         ]
 
-        # collinear: Graham keeps the two ends; the inner points are 0 from the edge but also
-        # 0 from the adjacent (reverse) edge → rejected (strict <)
-        @test hull([(0.0, 0.0), (1.0, 0.0), (2.0, 0.0), (3.0, 0.0)]; concavity = 1.5) == [(0.0, 0.0), (3.0, 0.0)]
-        @test hull([(2.0, 0.0), (0.0, 0.0), (3.0, 0.0), (1.0, 0.0)]; concavity = 1.5) == [(0.0, 0.0), (3.0, 0.0)]
-        # duplicates: a duplicated hull vertex appears once (its copy leaves the candidate set
-        # with it)
-        @test hull([sq; (1.0, 1.0)]; concavity = 1.5) == [(0.0, 0.0), (0.0, 1.0), (1.0, 1.0), (1.0, 0.0)]
+        # collinear: Graham keeps the two ends; the inner points are 0 from the edge but
+        # also 0 from the adjacent (reverse) edge → rejected (strict <)
+        @test hull([(0.0, 0.0), (1.0, 0.0), (2.0, 0.0), (3.0, 0.0)]; concavity = 1.5) ==
+            [(0.0, 0.0), (3.0, 0.0)]
+        @test hull([(2.0, 0.0), (0.0, 0.0), (3.0, 0.0), (1.0, 0.0)]; concavity = 1.5) ==
+            [(0.0, 0.0), (3.0, 0.0)]
+        # duplicates: a duplicated hull vertex appears once (its copy leaves the candidate
+        # set with it)
+        @test hull([sq; (1.0, 1.0)]; concavity = 1.5) ==
+            [(0.0, 0.0), (0.0, 1.0), (1.0, 1.0), (1.0, 0.0)]
         @test hull([(2.0, 3.0), (2.0, 3.0), (2.0, 3.0)]; concavity = 1.5) == [(2.0, 3.0)]
         @test hull([(3.0, 4.0), (3.0, 4.0)]; concavity = 1.5) == [(3.0, 4.0)]
         # a single point; two points (pivot = least y first)
@@ -287,11 +321,17 @@ end
     end
 end
 
-@testitem "openvt analysis port: openvt_metrics on hand-built files" setup = [OpenVTAnalysisPortSetup] tags = [:pottsmodels, :acceptance] begin
-    # ── metrics.cpp port: hand-built centroid files ───────────────────────────────────────────
+@testitem "openvt analysis port: openvt_metrics on hand-built files" setup = [
+    OpenVTAnalysisPortSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # ── metrics.cpp port: hand-built centroid files
+    # ───────────────────────────────────────────
     @testset "openvt analysis port: openvt_metrics on hand-built files" begin
         mktempdir() do dir
-            # notch, with quoted names, an extra column, odd column order and a trailing blank line
+            # notch, with quoted names, an extra column, odd column order and a trailing
+            # blank line
             notch = hull_csv(
                 dir, "notch.csv", """
                 "cell.id",'n',"y",extra,"x","g"
@@ -306,8 +346,8 @@ end
             m = Models.openvt_metrics(notch)
             @test keys(m) == (:N, :r, :A, :C, :w, :g, :C_rel, :w_rel)
             @test m.N === 5
-            # boundary (0,0),(0,4),(2,3.2),(4,4),(4,0): area 16 − ½·4·0.8, perimeter 12 + 2√4.64,
-            # centre (2, 2.24)
+            # boundary (0,0),(0,4),(2,3.2),(4,4),(4,0): area 16 − ½·4·0.8, perimeter 12 +
+            # 2√4.64, centre (2, 2.24)
             v = [(0.0, 0.0), (0.0, 4.0), (2.0, 3.2), (4.0, 4.0), (4.0, 0.0)]
             d = [hypot(p[1] - 2.0, p[2] - 2.24) for p in v]
             r = sum(d) / 5
@@ -318,10 +358,14 @@ end
             @test m.g == 0.6
             @test m.C_rel ≈ m.C / (2sqrt(pi * m.A)) rtol = 1.0e-15
             @test m.w_rel ≈ m.w / m.r rtol = 1.0e-15
-            @test Models.openvt_metrics_line(m) == "5,2.45883,14.4,16.3081,0.854822,0.6,1.21232,0.347655\n"
+            @test Models.openvt_metrics_line(m) ==
+                "5,2.45883,14.4,16.3081,0.854822,0.6,1.21232,0.347655\n"
 
             # square + centre: B = 4, r = √½, A = 1, C = 4, w = 0, C_rel = 2/√π
-            sqc = hull_csv(dir, "sq.csv", "x,y,g,n\n0,0,1,3\n1,0,0,5\n1,1,1,5\n0,1,1,6\n0.5,0.5,0,0\n")
+            sqc = hull_csv(
+                dir, "sq.csv",
+                "x,y,g,n\n0,0,1,3\n1,0,0,5\n1,1,1,5\n0,1,1,6\n0.5,0.5,0,0\n"
+            )
             m = Models.openvt_metrics(sqc)
             @test m.N == 5 && m.A == 1 && m.C == 4 && m.w == 0 && m.w_rel == 0 && m.g == 0.6
             @test m.r ≈ sqrt(0.5) rtol = 1.0e-15
@@ -335,38 +379,74 @@ end
             @test m.r ≈ r rtol = 1.0e-14
             @test m.A == 0.5
             @test m.C ≈ 2 + sqrt(2) rtol = 1.0e-15
-            @test m.w ≈ sqrt(((sqrt(2) / 3 - r)^2 + 2 * (sqrt(5) / 3 - r)^2) / 2) rtol = 1.0e-12
+            @test m.w ≈
+                sqrt(((sqrt(2) / 3 - r)^2 + 2 * (sqrt(5) / 3 - r)^2) / 2) rtol = 1.0e-12
             @test m.g ≈ 2 / 3 rtol = 1.0e-15
-            @test Models.openvt_metrics_line(m) == "3,0.654039,0.5,3.41421,0.158166,0.666667,1.36207,0.24183\n"
+            @test Models.openvt_metrics_line(m) ==
+                "3,0.654039,0.5,3.41421,0.158166,0.666667,1.36207,0.24183\n"
 
-            # B ≤ 2: r, A, C, w and the ratios are NaN (the measurement files' leading `nan`s)
+            # B ≤ 2: r, A, C, w and the ratios are NaN (the measurement files' leading
+            # `nan`s)
             m_one = Models.openvt_metrics(hull_csv(dir, "one.csv", "x,y,g,n\n5,7,1,0\n"))
-            @test m_one.N == 1 && m_one.g == 1 && all(isnan, (m_one.r, m_one.A, m_one.C, m_one.w, m_one.C_rel, m_one.w_rel))
+            @test m_one.N == 1 && m_one.g == 1 &&
+                all(isnan, (m_one.r, m_one.A, m_one.C, m_one.w, m_one.C_rel, m_one.w_rel))
             @test Models.openvt_metrics_line(m_one) == "1,nan,nan,nan,nan,1,nan,nan\n"
-            m_col = Models.openvt_metrics(hull_csv(dir, "col.csv", "x,y,g,n\n0,0,1,1\n1,0,0,2\n2,0,0,2\n3,0,1,1\n"))
+            m_col = Models.openvt_metrics(
+                hull_csv(
+                    dir, "col.csv", "x,y,g,n\n0,0,1,1\n1,0,0,2\n2,0,0,2\n3,0,1,1\n"
+                )
+            )
             @test Models.openvt_metrics_line(m_col) == "4,nan,nan,nan,nan,0.5,nan,nan\n"
-            m_two = Models.openvt_metrics(hull_csv(dir, "two.csv", "x,y,g,n\n3,4,0,1\n0,0,0,1\n"))
+            m_two = Models.openvt_metrics(
+                hull_csv(dir, "two.csv", "x,y,g,n\n3,4,0,1\n0,0,0,1\n")
+            )
             @test Models.openvt_metrics_line(m_two) == "2,nan,nan,nan,nan,0,nan,nan\n"
 
             # the vector method agrees with the file method
-            @test Models.openvt_metrics([0.0, 0.0, 2.0, 4.0, 4.0], [0.0, 4.0, 3.2, 4.0, 0.0], [1, 0, 1, 1, 0]) ==
+            @test Models.openvt_metrics(
+                [0.0, 0.0, 2.0, 4.0, 4.0], [0.0, 4.0, 3.2, 4.0, 0.0], [1, 0, 1, 1, 0]
+            ) ==
                 Models.openvt_metrics(notch)
 
             # C8: an O1 file (i, no g) gives g = (i == 0); same boundary as the notch
             o1 = joinpath(dir, "o1.csv")
-            Models.write_openvt(o1, :O1, (x = [0.0, 0.0, 2.0, 4.0, 4.0], y = [0.0, 4.0, 3.2, 4.0, 0.0], i = [0, 1, 0, 0, 3], n = [2, 3, 3, 4, 2]))
-            @test Models.openvt_metrics_line(Models.openvt_metrics(o1)) == "5,2.45883,14.4,16.3081,0.854822,0.6,1.21232,0.347655\n"
+            Models.write_openvt(
+                o1,
+                :O1,
+                (
+                    x = [0.0, 0.0, 2.0, 4.0, 4.0], y = [0.0, 4.0, 3.2, 4.0, 0.0],
+                    i = [0, 1, 0, 0, 3], n = [2, 3, 3, 4, 2],
+                )
+            )
+            @test Models.openvt_metrics_line(Models.openvt_metrics(o1)) ==
+                "5,2.45883,14.4,16.3081,0.854822,0.6,1.21232,0.347655\n"
 
             # metrics.cpp's fatal errors
-            @test_throws ArgumentError Models.openvt_metrics(hull_csv(dir, "nox.csv", "\"cell.center.x\",y,g,n\n1,2,1,3\n"))
-            @test_throws ArgumentError Models.openvt_metrics(hull_csv(dir, "noy.csv", "x,g,n\n1,1,3\n"))
-            @test_throws ArgumentError Models.openvt_metrics(hull_csv(dir, "nog.csv", "x,y,n\n1,2,3\n"))
-            @test_throws ArgumentError Models.openvt_metrics(hull_csv(dir, "short.csv", "x,y,g,n\n1,2,1,3\n4,5\n"))
+            @test_throws ArgumentError Models.openvt_metrics(
+                hull_csv(
+                    dir, "nox.csv", "\"cell.center.x\",y,g,n\n1,2,1,3\n"
+                )
+            )
+            @test_throws ArgumentError Models.openvt_metrics(
+                hull_csv(dir, "noy.csv", "x,g,n\n1,1,3\n")
+            )
+            @test_throws ArgumentError Models.openvt_metrics(
+                hull_csv(dir, "nog.csv", "x,y,n\n1,2,3\n")
+            )
+            @test_throws ArgumentError Models.openvt_metrics(
+                hull_csv(
+                    dir, "short.csv", "x,y,g,n\n1,2,1,3\n4,5\n"
+                )
+            )
         end
     end
 end
 
-@testitem "openvt analysis port: neighbour histogram (metrics.cpp n,p)" setup = [OpenVTAnalysisPortSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "openvt analysis port: neighbour histogram (metrics.cpp n,p)" setup = [
+    OpenVTAnalysisPortSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "openvt analysis port: neighbour histogram (metrics.cpp n,p)" begin
         h = Models.openvt_neighbor_histogram([3, 5, 5, 6, 0])
         @test h.n == 0:6 && h.p == [20.0, 0.0, 0.0, 20.0, 0.0, 40.0, 20.0]
@@ -376,13 +456,23 @@ end
         Models.write_openvt(io, :O6_neighbors, h)
         @test String(take!(io)) == "n,p\n0,0\n1,66.6667\n2,33.3333\n"
         io = IOBuffer()
-        Models.write_openvt(io, :O6_neighbors, Models.openvt_neighbor_histogram([3, 5, 5, 6, 0]))
+        Models.write_openvt(
+            io, :O6_neighbors, Models.openvt_neighbor_histogram(
+                [
+                    3, 5, 5, 6, 0,
+                ]
+            )
+        )
         @test String(take!(io)) == "n,p\n0,20\n1,0\n2,0\n3,20\n4,0\n5,40\n6,20\n"
     end
 end
 
-@testitem "openvt analysis port: geometry kernels avoid fused multiply-adds (spec D11)" setup = [OpenVTAnalysisPortSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "openvt analysis port: geometry kernels avoid fused multiply-adds (spec D11)" begin
+@testitem "openvt analysis port: geometry kernels avoid fused multiply-adds (spec \
+    D11)" setup = [OpenVTAnalysisPortSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "openvt analysis port: geometry kernels avoid fused multiply-adds (spec \
+        D11)" begin
         mktempdir() do dir
             for ((seed, ρ, jit), (off, on, jlfma)) in CLOUDS
                 path = hull_csv(dir, "cloud_$seed.csv", cloud(seed, ρ, jit))
@@ -392,7 +482,8 @@ end
                 @test off != on && off != jlfma && line != jlfma
             end
         end
-        # source scan: the files that define the port contain no fused/reassociating arithmetic
+        # source scan: the files that define the port contain no fused/reassociating
+        # arithmetic
         files = Set{String}()
         adir = normpath(joinpath(@__DIR__, "..", "..", "src", "analysis"))
         for f in readdir(adir; join = true)
@@ -417,15 +508,22 @@ end
     end
 end
 
-@testitem "openvt analysis port: consortium parameter-plane metrics.csv, byte for byte (OPENVT_MONOLAYER_REPO)" setup = [OpenVTAnalysisPortSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "openvt analysis port: consortium parameter-plane metrics.csv, byte for byte (OPENVT_MONOLAYER_REPO)" begin
+@testitem "openvt analysis port: consortium parameter-plane metrics.csv, byte for byte \
+    (OPENVT_MONOLAYER_REPO)" setup = [OpenVTAnalysisPortSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "openvt analysis port: consortium parameter-plane metrics.csv, byte for byte \
+        (OPENVT_MONOLAYER_REPO)" begin
         repo = get(ENV, "OPENVT_MONOLAYER_REPO", "")
-        dir = joinpath(repo, "results", "Morpheus", "Monolayer", "Parameter_Plane_Centroid_Data")
+        dir = joinpath(
+            repo, "results", "Morpheus", "Monolayer", "Parameter_Plane_Centroid_Data"
+        )
         zipf = joinpath(dir, "Parameter_Plane_Morpheus_Centroids.zip")
         if isempty(repo)
             @test_skip "OPENVT_MONOLAYER_REPO not set"
         else
-            @test isfile(zipf) && Sys.which("unzip") !== nothing      # a set repo must hold the data
+            # a set repo must hold the data
+            @test isfile(zipf) && Sys.which("unzip") !== nothing
             committed = read(joinpath(dir, "metrics.csv"), String)
             mktempdir() do tmp
                 run(`unzip -q $zipf -d $tmp`)
@@ -435,7 +533,9 @@ end
                 print(io, "file,N,r,A,C,w,g\n")
                 rows = Dict{String, String}()
                 for f in files
-                    line = Models.openvt_metrics_line(Models.openvt_metrics(joinpath(tmp, f)))
+                    line = Models.openvt_metrics_line(
+                        Models.openvt_metrics(joinpath(tmp, f))
+                    )
                     fields = split(chomp(line), ',')
                     @test endswith(line, "\n") && length(fields) == 8
                     @test join(fields[7:8], ",") == TAIL[f]
@@ -445,9 +545,16 @@ end
                 ours = String(take!(io))
                 @test ours == committed
                 if ours != committed   # per-row diagnostics
-                    want = Dict(split(l, ',')[1] => l for l in split(chomp(committed), '\n')[2:end])
+                    want = Dict(
+                        split(l, ',')[1] => l
+                            for l in split(chomp(committed), '\n')[2:end]
+                    )
                     for f in files
-                        rows[f] == get(want, f, "") || @info "openvt analysis port metrics.csv row differs" f ours = rows[f] committed = get(want, f, "")
+                        rows[f] == get(want, f, "") ||
+                            @info "openvt analysis port metrics.csv row \
+                                differs" f ours = rows[f] committed = get(
+                            want, f, ""
+                        )
                     end
                 end
 
@@ -462,32 +569,49 @@ end
                 m1 = Models.openvt_metrics(x, y, g)
                 @test m1.N == m0.N && m1.g == m0.g
                 @test m1.r != m0.r && m1.A != m0.A && m1.C != m0.C
-                @test string(f, ",", join(split(chomp(Models.openvt_metrics_line(m1)), ',')[1:6], ",")) != rows[f]
+                @test string(
+                    f, ",",
+                    join(split(chomp(Models.openvt_metrics_line(m1)), ',')[1:6], ",")
+                ) !=
+                    rows[f]
             end
         end
     end
 end
 
-@testitem "openvt analysis port: A3 inhibition codes and fractions" setup = [OpenVTAnalysisPortSetup] tags = [:pottsmodels, :acceptance] begin
-    # ── A3: inhibition codes and fractions (M p.2–3, spec C9) ───────────────────────────────────
+@testitem "openvt analysis port: A3 inhibition codes and fractions" setup = [
+    OpenVTAnalysisPortSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # ── A3: inhibition codes and fractions (M p.2–3, spec C9)
+    # ───────────────────────────────────
     @testset "openvt analysis port: A3 inhibition codes and fractions" begin
         code = Models.openvt_inhibition_code
-        @test code(0.9, 0.2; beta = 0.9, gamma = 0.2) == 0      # a = β and f = γ grow (≥, spec C9)
+        # a = β and f = γ grow (≥, spec C9)
+        @test code(0.9, 0.2; beta = 0.9, gamma = 0.2) == 0
         @test code(0.89, 0.5; beta = 0.9, gamma = 0.2) == 1     # type 1 only
         @test code(1.0, 0.19; beta = 0.9, gamma = 0.2) == 2     # type 2 only
         @test code(0.5, 0.0; beta = 0.9, gamma = 0.2) == 3      # both
-        @test code(prevfloat(0.9), 0.2; beta = 0.9, gamma = 0.2) == 1   # one ulp below β inhibits
+        # one ulp below β inhibits
+        @test code(prevfloat(0.9), 0.2; beta = 0.9, gamma = 0.2) == 1
         @test code(0.9, prevfloat(0.2); beta = 0.9, gamma = 0.2) == 2
         # β = γ = 0 (case a): nothing is ever inhibited, even a = f = 0
-        @test all(code(a, f; beta = 0.0, gamma = 0.0) == 0 for a in (0.0, 0.3, 1.2), f in (0.0, 0.4, 1.0))
-        # negative control on C9: the schema's strict `>` would make a = β inhibited; M's ≥ does not
-        @test code(0.8, 1.0; beta = 0.8, gamma = 0.0) == 0 && code(0.8 - 1.0e-12, 1.0; beta = 0.8, gamma = 0.0) == 1
+        @test all(
+            code(a, f; beta = 0.0, gamma = 0.0) == 0
+                for a in (0.0, 0.3, 1.2), f in (0.0, 0.4, 1.0)
+        )
+        # negative control on C9: the schema's strict `>` would make a = β inhibited; M's ≥
+        # does not
+        @test code(0.8, 1.0; beta = 0.8, gamma = 0.0) == 0 &&
+            code(0.8 - 1.0e-12, 1.0; beta = 0.8, gamma = 0.0) == 1
 
         fr = Models.openvt_inhibition_fractions([0, 0, 1, 2, 3, 3, 3, 0])
         @test keys(fr) == (:uninhibited, :type1, :type2, :both)
         @test fr == (uninhibited = 3 / 8, type1 = 1 / 8, type2 = 1 / 8, both = 3 / 8)
         @test sum(values(fr)) == 1
-        @test Models.openvt_inhibition_fractions(fill(2, 5)) == (uninhibited = 0.0, type1 = 0.0, type2 = 1.0, both = 0.0)
+        @test Models.openvt_inhibition_fractions(fill(2, 5)) ==
+            (uninhibited = 0.0, type1 = 0.0, type2 = 1.0, both = 0.0)
         @test_throws ArgumentError Models.openvt_inhibition_fractions([0, 4])
         @test_throws ArgumentError Models.openvt_inhibition_fractions([-1, 0])
         # codes → fractions from per-cell (a, f), one save of an O1 series
@@ -495,32 +619,54 @@ end
         f = [0.0, 0.3, 0.5, 0.0, 0.25, 0.1]
         i = [code(a[k], f[k]; beta = 0.9, gamma = 0.25) for k in eachindex(a)]
         @test i == [2, 0, 1, 3, 0, 3]
-        @test Models.openvt_inhibition_fractions(i) == (uninhibited = 2 / 6, type1 = 1 / 6, type2 = 1 / 6, both = 2 / 6)
+        @test Models.openvt_inhibition_fractions(i) ==
+            (uninhibited = 2 / 6, type1 = 1 / 6, type2 = 1 / 6, both = 2 / 6)
     end
 end
 
-@testitem "openvt analysis port: O1–O6 writers" setup = [OpenVTAnalysisPortSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "openvt analysis port: O1–O6 writers" setup = [OpenVTAnalysisPortSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "openvt analysis port: O1–O6 writers" begin
         mktempdir() do dir
-            rt(fmt, data) = (path = joinpath(dir, "rt_$fmt.csv"); Models.write_openvt(path, fmt, data); Models.read_openvt(path, fmt))
+            function rt(fmt, data)
+                path = joinpath(dir, "rt_$fmt.csv")
+                Models.write_openvt(path, fmt, data)
+                return Models.read_openvt(path, fmt)
+            end
 
             # O1: x,y,i,n
-            o1 = (x = [0.1, -2.5, 1 / 3, 1.0e-5], y = [3.0, 0.2, -7.25, 2 / 7], i = [0, 1, 2, 3], n = [6, 0, 5, 12])
+            o1 = (
+                x = [0.1, -2.5, 1 / 3, 1.0e-5], y = [3.0, 0.2, -7.25, 2 / 7],
+                i = [0, 1, 2, 3], n = [6, 0, 5, 12],
+            )
             t = hull_text(:O1, o1)
             @test startswith(t, "x,y,i,n\n") && endswith(t, "\n") && !occursin("\r", t)
             rows = hull_fields(t)[2:end]
             @test length(rows) == 4 && all(length(r) == 4 for r in rows)
-            @test [r[3] for r in rows] == ["0", "1", "2", "3"] && [r[4] for r in rows] == ["6", "0", "5", "12"]
-            @test [parse(Float64, r[1]) for r in rows] == o1.x && [parse(Float64, r[2]) for r in rows] == o1.y
+            @test [r[3] for r in rows] == ["0", "1", "2", "3"] &&
+                [r[4] for r in rows] == ["6", "0", "5", "12"]
+            @test [parse(Float64, r[1]) for r in rows] == o1.x &&
+                [parse(Float64, r[2]) for r in rows] == o1.y
             @test isequal(rt(:O1, o1), o1)
-            @test_throws ArgumentError hull_text(:O1, (x = [1.0], y = [1.0], i = [4], n = [1]))
+            @test_throws ArgumentError hull_text(
+                :O1, (
+                    x = [1.0], y = [1.0], i = [4], n = [1],
+                )
+            )
             @test_throws ArgumentError hull_text(:O1, (x = [1.0], y = [1.0], i = [0]))
-            @test_throws Union{ArgumentError, DimensionMismatch} hull_text(:O1, (x = [1.0, 2.0], y = [1.0], i = [0], n = [1]))
+            @test_throws Union{ArgumentError, DimensionMismatch} hull_text(
+                :O1, (x = [1.0, 2.0], y = [1.0], i = [0], n = [1])
+            )
 
             # O2: x,y,r,f,a
-            o2 = (x = [1.5, -0.25], y = [0.0, 9.875], r = [1.0, 0.9128709291752769], f = [0.0, 0.3125], a = [0.85, 1.1])
+            o2 = (
+                x = [1.5, -0.25], y = [0.0, 9.875], r = [1.0, 0.9128709291752769],
+                f = [0.0, 0.3125], a = [0.85, 1.1],
+            )
             t = hull_text(:O2, o2)
-            @test startswith(t, "x,y,r,f,a\n") && length(hull_fields(t)) == 3 && all(length(r) == 5 for r in hull_fields(t))
+            @test startswith(t, "x,y,r,f,a\n") && length(hull_fields(t)) == 3 &&
+                all(length(r) == 5 for r in hull_fields(t))
             @test isequal(rt(:O2, o2), o2)
 
             # O3: time to 10⁴ cells; 5T = MCS/775; unreached → nan,nan
@@ -530,11 +676,13 @@ end
             @test rows[1] == ["beta", "Time to 10k (MCS)", "Time to 10k (5T)"]
             @test rows[2][2:3] == ["nan", "nan"]
             @test rows[3][2] == "11424" && rows[4][2] == "213288"
-            @test parse(Float64, rows[3][3]) == 11424 / 775 && parse(Float64, rows[4][3]) == 213288 / 775
+            @test parse(Float64, rows[3][3]) == 11424 / 775 &&
+                parse(Float64, rows[4][3]) == 213288 / 775
             @test [parse(Float64, r[1]) for r in rows[2:end]] == o3.beta
             @test isequal(rt(:O3, o3), o3)
             o3g = (gamma = [0.0195, 0.5], mcs = [856.0, 1.0e5])
-            @test hull_fields(hull_text(:O3, o3g))[1] == ["gamma", "Time to 10k (MCS)", "Time to 10k (5T)"]
+            @test hull_fields(hull_text(:O3, o3g))[1] ==
+                ["gamma", "Time to 10k (MCS)", "Time to 10k (5T)"]
             @test isequal(rt(:O3, o3g), o3g)
             @test_throws ArgumentError hull_text(:O3, (delta = [0.1], mcs = [1.0]))
 
@@ -546,13 +694,18 @@ end
                 "Tissue width rep3 (CD)", "Mean Tissue width (CD)", "STD Tissue width (CD)",
             ]
             @test length(rows) == 4 && all(length(r) == 6 for r in rows)
-            @test [parse(Float64, r[5]) for r in rows[2:end]] ≈ [5.5, 7.0, 9.0] rtol = 1.0e-15
-            @test [parse(Float64, r[6]) for r in rows[2:end]] ≈ [sqrt(1 / 6), 0.0, sqrt(1 / 24)] rtol = 1.0e-14 atol = 1.0e-15
+            @test [parse(Float64, r[5]) for r in rows[2:end]] ≈
+                [5.5, 7.0, 9.0] rtol = 1.0e-15
+            @test [parse(Float64, r[6]) for r in rows[2:end]] ≈
+                [sqrt(1 / 6), 0.0, sqrt(1 / 24)] rtol = 1.0e-14 atol = 1.0e-15
             @test parse(Float64, rows[3][6]) == 0
             @test isequal(rt(:O4, o4), o4)
 
             # O5: final snapshots
-            o5 = (x_pos = [197.233, -3.5], y_pos = [187.925, 0.0], radius_i = [1.01602, 1.19135], inhibited = [1, 0])
+            o5 = (
+                x_pos = [197.233, -3.5], y_pos = [187.925, 0.0],
+                radius_i = [1.01602, 1.19135], inhibited = [1, 0],
+            )
             t = hull_text(:O5, o5)
             @test startswith(t, "x_pos,y_pos,radius_i,inhibited\n")
             @test [r[4] for r in hull_fields(t)[2:end]] == ["1", "0"]
@@ -562,10 +715,15 @@ end
             ms = [
                 Models.openvt_metrics([5.0], [7.0], [1]),
                 Models.openvt_metrics([0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [1, 0, 1]),
-                Models.openvt_metrics([0.0, 1.0, 1.0, 0.0, 0.5], [0.0, 0.0, 1.0, 1.0, 0.5], [1, 0, 1, 1, 0]),
+                Models.openvt_metrics(
+                    [0.0, 1.0, 1.0, 0.0, 0.5], [0.0, 0.0, 1.0, 1.0, 0.5], [
+                        1, 0, 1, 1, 0,
+                    ]
+                ),
             ]
             o6 = (t = [0.0, 5 / 97, 1.0], metrics = ms)
-            @test hull_text(:O6, o6) == "t,N,r,A,C,w,g,C_rel,w_rel\n" *
+            @test hull_text(:O6, o6) ==
+                "t,N,r,A,C,w,g,C_rel,w_rel\n" *
                 "0,1,nan,nan,nan,nan,1,nan,nan\n" *
                 "0.0515463917525773,3,0.654039,0.5,3.41421,0.158166,0.666667,1.36207,0.24183\n" *
                 "1,5,0.707107,1,4,0,0.6,1.12838,0\n"
@@ -577,18 +735,31 @@ end
             @test back.r[2:3] ≈ [ms[2].r, ms[3].r] rtol = 1.0e-5
             @test back.g ≈ [1, 2 / 3, 0.6] rtol = 1.0e-5
             nb = Models.openvt_neighbor_histogram([1, 1, 2])
-            @test isequal(rt(:O6_neighbors, nb), (n = [0, 1, 2], p = [0.0, 66.6667, 33.3333]))
+            @test isequal(
+                rt(:O6_neighbors, nb), (
+                    n = [0, 1, 2], p = [0.0, 66.6667, 33.3333],
+                )
+            )
 
             @test_throws ArgumentError hull_text(:O7, o1)
         end
 
         # file names (spec §3.1)
-        @test Models.openvt_filename(:O1; case = "a", seed = 3, mcs = 780) == "potts_a_s3_000780.csv"
-        @test Models.openvt_filename(:O1; case = :b, seed = 12, mcs = 10517) == "potts_b_s12_010517.csv"
-        @test Models.openvt_filename(:O2; k = 7) == joinpath("Potts.jl_5T_MonolayerGrowth_1000_Data", "cell_data_no_inhibition_7.csv")
-        @test Models.openvt_filename(:O3; parameter = :beta) == "Potts.jl_time_to_10k_vs_beta.csv"
-        @test Models.openvt_filename(:O3; parameter = :gamma) == "Potts.jl_time_to_10k_vs_gamma.csv"
-        @test Models.openvt_filename(:O5; gamma = 0.12, mcs = 52965) == "Potts.jl_gamma_0.12_52965MCS.csv"
+        @test Models.openvt_filename(:O1; case = "a", seed = 3, mcs = 780) ==
+            "potts_a_s3_000780.csv"
+        @test Models.openvt_filename(:O1; case = :b, seed = 12, mcs = 10517) ==
+            "potts_b_s12_010517.csv"
+        @test Models.openvt_filename(:O2; k = 7) ==
+            joinpath(
+            "Potts.jl_5T_MonolayerGrowth_1000_Data",
+            "cell_data_no_inhibition_7.csv"
+        )
+        @test Models.openvt_filename(:O3; parameter = :beta) ==
+            "Potts.jl_time_to_10k_vs_beta.csv"
+        @test Models.openvt_filename(:O3; parameter = :gamma) ==
+            "Potts.jl_time_to_10k_vs_gamma.csv"
+        @test Models.openvt_filename(:O5; gamma = 0.12, mcs = 52965) ==
+            "Potts.jl_gamma_0.12_52965MCS.csv"
         @test_throws ArgumentError Models.openvt_filename(:O3; parameter = :delta)
     end
 end

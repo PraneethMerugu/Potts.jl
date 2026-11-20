@@ -25,7 +25,8 @@ chain_centroids(σ)                 # [30.0, 35.0]: cell 2 sits past the seam
 function chain_centroids(σ::AbstractArray{<:Integer})
     L = size(σ, 1)
     x = [c[1] for c in centroids(σ; periodic = true)]
-    any(isnan, x) && throw(ArgumentError("chain_centroids: id $(findfirst(isnan, x)) owns no site"))
+    any(isnan, x) &&
+        throw(ArgumentError("chain_centroids: id $(findfirst(isnan, x)) owns no site"))
     n = length(x)
     n <= 1 && return x
     p = sortperm(x)
@@ -50,9 +51,13 @@ The extent of a chain of cells along axis 1, `(max − min)` of
 [`chain_centroids`](@ref)`(σ)[cells]`, in units of `CD` lattice sites (a cell diameter).
 `cells` picks a sub-chain, for example the inner cells of a longer chain.
 """
-function chain_width(σ::AbstractArray{<:Integer}, cells = 1:Int(maximum(σ; init = 0)); CD = 10)
+function chain_width(
+        σ::AbstractArray{<:Integer}, cells = 1:Int(maximum(σ; init = 0));
+        CD = 10
+    )
     xs = chain_centroids(σ)[cells]
-    isempty(xs) && throw(ArgumentError("chain_width: no cells (σ owns no site, or `cells` is empty)"))
+    isempty(xs) &&
+        throw(ArgumentError("chain_width: no cells (σ owns no site, or `cells` is empty)"))
     return (maximum(xs) - minimum(xs)) / CD
 end
 
@@ -64,7 +69,8 @@ Later dips below `level` do not matter.
 """
 function crossing_time(t, w, level = 9.0)
     length(t) == length(w) ||
-        throw(ArgumentError("crossing_time: t and w have different lengths ($(length(t)) and $(length(w)))"))
+        throw(ArgumentError("crossing_time: t and w have different lengths ($(length(t)) \
+            and $(length(w)))"))
     i = findfirst(>=(level), w)
     return i === nothing ? nothing : t[firstindex(t) + (i - firstindex(w))]
 end
@@ -81,7 +87,8 @@ function relaxation_mse(t, w, T, ref_t, ref_w)
     s = collect(t) ./ T
     w = collect(w)
     length(s) == length(w) ||
-        throw(ArgumentError("relaxation_mse: t and w have different lengths ($(length(s)) and $(length(w)))"))
+        throw(ArgumentError("relaxation_mse: t and w have different lengths ($(length(s)) \
+            and $(length(w)))"))
     length(ref_t) == length(ref_w) ||
         throw(ArgumentError("relaxation_mse: ref_t and ref_w have different lengths"))
     isempty(s) && throw(ArgumentError("relaxation_mse: t is empty"))
@@ -89,9 +96,14 @@ function relaxation_mse(t, w, T, ref_t, ref_w)
     acc = 0.0
     for (r, v) in zip(ref_t, ref_w)
         s[1] <= r <= s[end] ||
-            throw(ArgumentError("relaxation_mse: reference time $r lies outside the run, [$(s[1]), $(s[end])] T"))
+            throw(ArgumentError("relaxation_mse: reference time $r lies outside the run, \
+                [$(s[1]), $(s[end])] T"))
         j = searchsortedlast(s, r)
-        ŵ = j == length(s) ? float(w[j]) : w[j] + (w[j + 1] - w[j]) * (r - s[j]) / (s[j + 1] - s[j])
+        ŵ = if j == length(s)
+            float(w[j])
+        else
+            w[j] + (w[j + 1] - w[j]) * (r - s[j]) / (s[j + 1] - s[j])
+        end
         acc += (ŵ - v)^2
     end
     return acc / length(ref_t)

@@ -10,10 +10,10 @@
 #
 #   RandomPoints(n; region = <whole lattice>, replace = false, seed)          (amends D-138)
 #       `replace = true`: with the region's in-domain sites in column-major order s₁…sₘ and
-#       `rng = Potts.layer_rng(seed)`, point k is s_{rand(rng, 1:m)}, k = 1…n, one draw each,
-#       no redraw: duplicates are allowed and `n > m` is allowed. `n > 0` with `m = 0` is an
-#       `ArgumentError` (nothing to draw from); `n = 0` gives no points. `replace = false` is
-#       D-138's rule unchanged (so the two agree up to the first repeated site).
+#       `rng = Potts.layer_rng(seed)`, point k is s_{rand(rng, 1:m)}, k = 1…n, one draw
+#       each, no redraw: duplicates are allowed and `n > m` is allowed. `n > 0` with `m = 0`
+#       is an `ArgumentError` (nothing to draw from); `n = 0` gives no points. `replace =
+#       false` is D-138's rule unchanged (so the two agree up to the first repeated site).
 #       `remake(p; replace = …)` works.
 #
 #   Eden(points; rounds, region = <whole lattice>, kinds, seed, neighborhood = nothing,
@@ -29,27 +29,27 @@
 #       cell, or on a site an earlier point of this layer took: coinciding seeds merge).
 #       `kinds` is cycled over the cells created, in creation order; ids in creation order.
 #       Growth. `rounds` synchronous rounds. Let G be the cells this layer created and
-#       `offs = CorePotts.relation(nbh, core_lattice).offsets` (canonical order), where `nbh`
-#       is `neighborhood`, or the lattice's neighbourhood when `nothing` (Moore(1) for a dims
-#       tuple). In each round, every site x of `region` ∩ domain, in column-major order, that
-#       is medium at the start of the round and has at least one neighbour (`CorePotts.shift`
-#       through every offset) owned by a cell of G at the start of the round draws
-#       `j = rand(rng, 1:length(offs))` with `rng = Potts.layer_rng(seed, :eden)` (one rng for
-#       the whole layer, drawn across rounds); if `shift(x, offs[j])` is inside and owned by a
-#       cell of G at the start of the round, x joins that cell at the end of the round. Sites
-#       with no such neighbour draw nothing. (The law is TST's: every medium site draws one of
-#       the 8 neighbours uniformly and copies it only if it is a growing cell; sites with no
-#       growing neighbour can never change, so skipping their draws changes the stream only.)
-#       Eden only fills: it never paints a site an earlier layer owns, nor outside `region`
-#       or the domain. There is no `into` keyword (the review's "defer"; TST grows into
-#       medium only; Voronoi is the same, D-138).
+#       `offs = CorePotts.relation(nbh, core_lattice).offsets` (canonical order), where
+#       `nbh` is `neighborhood`, or the lattice's neighbourhood when `nothing` (Moore(1) for
+#       a dims tuple). In each round, every site x of `region` ∩ domain, in column-major
+#       order, that is medium at the start of the round and has at least one neighbour
+#       (`CorePotts.shift` through every offset) owned by a cell of G at the start of the
+#       round draws `j = rand(rng, 1:length(offs))` with `rng = Potts.layer_rng(seed,
+#       :eden)` (one rng for the whole layer, drawn across rounds); if `shift(x, offs[j])`
+#       is inside and owned by a cell of G at the start of the round, x joins that cell at
+#       the end of the round. Sites with no such neighbour draw nothing. (The law is TST's:
+#       every medium site draws one of the 8 neighbours uniformly and copies it only if it
+#       is a growing cell; sites with no growing neighbour can never change, so skipping
+#       their draws changes the stream only.) Eden only fills: it never paints a site an
+#       earlier layer owns, nor outside `region` or the domain. There is no `into` keyword
+#       (the review's "defer"; TST grows into medium only; Voronoi is the same, D-138).
 #       Report row: type `:Eden`, `requested` = number of points, `painted` = cells created
 #       (points placed), `misses` = requested − painted, `counted` = painted, `clipped` =
-#       D-138's region rule (0 for the whole lattice), `dropped`/`splits` as for every layer.
-#       `ArgumentError`: rounds < 0, empty `kinds`, a seed outside 0:typemax(UInt64), a bad
-#       `shortfall` or `splits`, a `neighborhood` that is not a `CorePotts.AbstractRelationSpec`, an
-#       empty point list, a point or shape of another dimension (at layout).
-#       `remake(e; rounds = …)` works.
+#       D-138's region rule (0 for the whole lattice), `dropped`/`splits` as for every
+#       layer. `ArgumentError`: rounds < 0, empty `kinds`, a seed outside 0:typemax(UInt64),
+#       a bad `shortfall` or `splits`, a `neighborhood` that is not a
+#       `CorePotts.AbstractRelationSpec`, an empty point list, a point or shape of another
+#       dimension (at layout). `remake(e; rounds = …)` works.
 #
 #   Splits(layer, k; shortfall = :error, splits = :warn)                       (exported)
 #       TST `DivideCells` (ca.cpp:901-1002) as a host routine wrapping one layer; it shares
@@ -58,28 +58,26 @@
 #       report row (a delegating layer, D-091), then makes k passes. Pass j visits the
 #       cells created inside this row (by `layer` or by earlier passes) in id order as they
 #       stand at the start of the pass; each cell with ≥ 2 sites is cut in two and its
-#       daughter is allocated (`new_cell!`, kind = the mother's) right after the cut, so pass
-#       j's daughters follow in the order of their mothers. Cells of earlier layers are
-#       never touched.
-#       The cut: site coordinates are Cartesian (`embed`) and, along periodic axes, the
-#       image nearest the cell's first site in column-major order (displacement in
+#       daughter is allocated (`new_cell!`, kind = the mother's) right after the cut, so
+#       pass j's daughters follow in the order of their mothers. Cells of earlier layers are
+#       never touched. The cut: site coordinates are Cartesian (`embed`) and, along periodic
+#       axes, the image nearest the cell's first site in column-major order (displacement in
 #       [-n/2, n/2): ties to the lower image). c = centroid; C = Σ (p − c)(p − c)ᵀ; v = the
-#       unit eigenvector of C's largest eigenvalue (in 2D CorePotts' AlongMinorAxis rule:
-#       v ∝ (λ − C₂₂, C₁₂) unless |C₁₂| ≤ eps·(|C₁₁| + |C₂₂|), then e₁ if C₁₁ ≥ C₂₂ else e₂;
+#       unit eigenvector of C's largest eigenvalue (in 2D CorePotts' AlongMinorAxis rule: v
+#       ∝ (λ − C₂₂, C₁₂) unless |C₁₂| ≤ eps·(|C₁₁| + |C₂₂|), then e₁ if C₁₁ ≥ C₂₂ else e₂;
 #       in general, when the largest eigenvalue is repeated, the first standard axis with a
 #       nonzero projection on its eigenspace, projected), with its sign fixed so that its
 #       first component of magnitude > 1e-9 is positive. A site p goes to the daughter iff
 #       (p − c)·v > 0; sites on the plane stay with the mother (TST: `j > aa2 + bb2·i`).
 #       One-piece check: at the end of its paint, every piece of this row that is not
-#       connected under the lattice neighbourhood is counted in the row's `splits` and, under
-#       `splits = :warn`, gets a `@warn` (containing "Splits"); `:allow` silences the warning,
-#       not the count. (The overlay check of D-057/D-091 is unchanged: a cell is "cut" only by
-#       a later layer.)
-#       Report row: type `:Splits`, `requested` = m·2ᵏ (m = cells of `layer` that own a site
-#       after it painted), `painted` = cells of this row owning a site after the passes,
-#       `misses` = requested − painted, `counted` = painted, `clipped` = the inner layer's.
-#       `ArgumentError`: k outside 0:30, bad `shortfall` or `splits`. `remake(s; k = …)`
-#       works.
+#       connected under the lattice neighbourhood is counted in the row's `splits` and,
+#       under `splits = :warn`, gets a `@warn` (containing "Splits"); `:allow` silences the
+#       warning, not the count. (The overlay check of D-057/D-091 is unchanged: a cell is
+#       "cut" only by a later layer.) Report row: type `:Splits`, `requested` = m·2ᵏ (m =
+#       cells of `layer` that own a site after it painted), `painted` = cells of this row
+#       owning a site after the passes, `misses` = requested − painted, `counted` = painted,
+#       `clipped` = the inner layer's. `ArgumentError`: k outside 0:30, bad `shortfall` or
+#       `splits`. `remake(s; k = …)` works.
 #
 #   shortfall = :error | :warn | :allow  (Eden and Splits only, in this item)
 #       When `painted < requested` at the end of the layer's own paint: `:error` throws an
@@ -91,21 +89,22 @@
 #
 #   No DSL name or keyword is added: layouts are problem data (D-057).
 #
-# Expected values. Every hand fixture is derived in the comments next to it. Where the result
-# depends on the draws, the independent oracle below replays the D-141 rule on its own lattice
-# arithmetic (only `Potts.layer_rng` and `CorePotts.relation` are shared; both are fixed by
-# D-138 and the CorePotts suite). The 01 §7.6 bands come from the spec's independent Python
-# re-implementation of TST (de novo ≈ 355 cells of ≈ 47 px, ≈ 17 000 px; sprout blob ≈ 1 850–
-# 2 300 px → 128 cells of ≈ 15–18 px); the test author's stub measured, seeds 1:8, de novo
-# 357–360 cells, mean 47.6 px; sprout blobs 1 816–2 439 (mean 2 166), 128 cells each.
+# Expected values. Every hand fixture is derived in the comments next to it. Where the
+# result depends on the draws, the independent oracle below replays the D-141 rule on its
+# own lattice arithmetic (only `Potts.layer_rng` and `CorePotts.relation` are shared; both
+# are fixed by D-138 and the CorePotts suite). The 01 §7.6 bands come from the spec's
+# independent Python re-implementation of TST (de novo ≈ 355 cells of ≈ 47 px, ≈ 17 000 px;
+# sprout blob ≈ 1 850– 2 300 px → 128 cells of ≈ 15–18 px); the test author's stub measured,
+# seeds 1:8, de novo 357–360 cells, mean 47.6 px; sprout blobs 1 816–2 439 (mean 2 166), 128
+# cells each.
 
 @testsetup module EdenSplitsSetup
 include(joinpath(@__DIR__, "..", "shared", "common.jl"))
 using Potts: CorePotts
 using StableRNGs: StableRNG
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Helpers (independent of the code under test)
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 eden_σ(op) = op[1].second
 eden_kinds(op) = op[2].second
 eden_sites(σ, c) = Set(Tuple.(findall(==(c), σ)))
@@ -119,7 +118,11 @@ struct Sites <: Potts.AbstractLayout
     cells::Vector{Vector{Tuple{Vararg{Int}}}}
     kinds::Vector{Any}
 end
-Sites(cells, kinds = fill(:c, length(cells))) = Sites([Tuple{Vararg{Int}}[Tuple(x) for x in c] for c in cells], Any[kinds...])
+function Sites(cells, kinds = fill(:c, length(cells)))
+    return Sites(
+        [Tuple{Vararg{Int}}[Tuple(x) for x in c] for c in cells], Any[kinds...]
+    )
+end
 function Potts.paint!(op::Potts.LayoutState, l::Sites, lat)
     for (k, c) in enumerate(l.cells)
         id = Potts.new_cell!(op, l.kinds[k])
@@ -140,16 +143,22 @@ function eden_nb(x, o, dims, per)
     return all(d -> 1 <= y[d] <= dims[d], 1:N) ? y : nothing
 end
 # RandomPoints(replace = true) oracle: `sites` in column-major order.
-eden_rp(sites, n, seed) = (rng = StableRNG(UInt64(seed)); [sites[rand(rng, 1:length(sites))] for _ in 1:n])
+function eden_rp(sites, n, seed)
+    rng = StableRNG(UInt64(seed))
+    return [sites[rand(rng, 1:length(sites))] for _ in 1:n]
+end
 # replace = false (D-138): redraw while taken.
 function rp_distinct(sites, n, seed)
-    rng = StableRNG(UInt64(seed)); taken = Set{Int}(); out = eltype(sites)[]
+    rng = StableRNG(UInt64(seed))
+    taken = Set{Int}()
+    out = eltype(sites)[]
     for _ in 1:n
         i = rand(rng, 1:length(sites))
         while i in taken
             i = rand(rng, 1:length(sites))
         end
-        push!(taken, i); push!(out, sites[i])
+        push!(taken, i)
+        push!(out, sites[i])
     end
     return out
 end
@@ -157,7 +166,10 @@ end
 # array); seeds: site tuples or `nothing` (point outside the lattice), in point order.
 # `deterministic = true` is the negative-control variant: a site joins its first growing
 # neighbour every round (a different growth law).
-function eden_growth(σ0, allowed, seeds, rounds, seed, kinds, offs, per; deterministic = false, stream = :eden)
+function eden_growth(
+        σ0, allowed, seeds, rounds, seed, kinds, offs,
+        per; deterministic = false, stream = :eden
+    )
     dims = size(σ0)
     σ = Int.(σ0)
     base = maximum(σ; init = 0)
@@ -192,7 +204,8 @@ end
 function eden_split(σ, c, offs, per)
     idx = Tuple.(findall(==(c), σ))
     isempty(idx) && return 0
-    seen = Set([idx[1]]); st = [idx[1]]
+    seen = Set([idx[1]])
+    st = [idx[1]]
     while !isempty(st)
         q = pop!(st)
         for o in offs
@@ -206,12 +219,16 @@ box(r...) = vec([Tuple(x) for x in CartesianIndices(r)])
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "eden splits surface" setup = [EdenSplitsSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "eden splits surface" setup = [EdenSplitsSetup] tags = [
+    :pottsmodels,
+    :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # Surface
-    # ---------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     @testset "eden splits surface" begin
-        @test Base.isexported(Potts.Layouts, :Eden) && Base.isexported(Potts.Layouts, :Splits)
+        @test Base.isexported(Potts.Layouts, :Eden) &&
+            Base.isexported(Potts.Layouts, :Splits)
         @test Potts.Eden <: Potts.AbstractLayout && Potts.Splits <: Potts.AbstractLayout
         # a host layer, not the lifecycle routine: CorePotts has no such names
         @test !isdefined(CorePotts, :Eden) && !isdefined(CorePotts, :Splits)
@@ -223,10 +240,12 @@ end
     end
 end
 
-@testitem "RandomPoints(replace = true): draw rule" setup = [EdenSplitsSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "RandomPoints(replace = true): draw rule" setup = [EdenSplitsSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # RandomPoints(replace = true)
-    # ---------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     @testset "RandomPoints(replace = true): draw rule" begin
         # (target, region (or nothing), in-domain region sites column-major, n)
         dom = Lattice((6, 6); boundary = Closed(), domain = x -> x[1] <= x[2])
@@ -234,111 +253,260 @@ end
             ((6, 5), nothing, box(1:6, 1:5), 20),                     # n = 20 < m = 30
             ((7, 7), (2:4, 3:5), box(2:4, 3:5), 12),                  # n = 12 > m = 9
             ((4, 4, 4), (1:2, 1:2, 1:2), box(1:2, 1:2, 1:2), 10),     # 3D, n > m = 8
-            (dom, nothing, [x for x in box(1:6, 1:6) if x[1] <= x[2]], 25),   # domain: m = 21
+            # domain: m = 21
+            (dom, nothing, [x for x in box(1:6, 1:6) if x[1] <= x[2]], 25),
             (Lattice((5, 4)), nothing, box(1:5, 1:4), 30),            # periodic, n > m = 20
         ]
         for (target, region, sites, n) in cases, seed in (1, 2, 3, 0x0123456789abcdef)
-            p = region === nothing ? RandomPoints(n; replace = true, seed) : RandomPoints(n; region, replace = true, seed)
+            p = if region === nothing
+                RandomPoints(n; replace = true, seed)
+            else
+                RandomPoints(n; region, replace = true, seed)
+            end
             got = Potts.points(p, target)
             @test length(got) == n
             want = eden_rp(sites, n, seed)
             @test got == [Point{length(x), Float64}(Float64.(x)) for x in want]
-            @test Potts.points(p, target) == got                          # deterministic in the seed
+            # deterministic in the seed
+            @test Potts.points(p, target) == got
         end
         # pigeonhole: 12 points on 9 sites must repeat (hand: 12 > 9)
-        pts = Potts.points(RandomPoints(12; region = (2:4, 3:5), replace = true, seed = 5), (7, 7))
+        pts = Potts.points(
+            RandomPoints(12; region = (2:4, 3:5), replace = true, seed = 5), (
+                7, 7,
+            )
+        )
         @test length(unique(pts)) <= 9 && length(pts) == 12
         @test all(p -> 2 <= p[1] <= 4 && 3 <= p[2] <= 5, pts)
         # replace = false still refuses n > m (D-138) and stays distinct
-        @test_throws ArgumentError Potts.points(RandomPoints(12; region = (2:4, 3:5), seed = 5), (7, 7))
-        @test allunique(Potts.points(RandomPoints(9; region = (2:4, 3:5), seed = 5), (7, 7)))
-        # the two rules share one stream: they agree up to (excluding) the first repeated draw
+        @test_throws ArgumentError Potts.points(
+            RandomPoints(12; region = (2:4, 3:5), seed = 5), (
+                7, 7,
+            )
+        )
+        @test allunique(
+            Potts.points(
+                RandomPoints(9; region = (2:4, 3:5), seed = 5), (
+                    7, 7,
+                )
+            )
+        )
+        # the two rules share one stream: they agree up to (excluding) the first repeated
+        # draw
         for seed in 1:20
             sites = box(1:5, 1:5)
             with = eden_rp(sites, 10, seed)
             k = findfirst(i -> with[i] in with[1:(i - 1)], 2:10)
             k === nothing && continue
-            a = Potts.points(RandomPoints(10; region = (1:5, 1:5), replace = true, seed), (5, 5))
+            a = Potts.points(
+                RandomPoints(10; region = (1:5, 1:5), replace = true, seed), (
+                    5, 5,
+                )
+            )
             b = Potts.points(RandomPoints(10; region = (1:5, 1:5), seed), (5, 5))
             @test a[1:k] == b[1:k]                    # k = (first repeat index) − 1
-            @test a != b                               # negative control: the redraw rule differs
-            @test b == [Point{2, Float64}(Float64.(x)) for x in rp_distinct(sites, 10, seed)]
+            # negative control: the redraw rule differs
+            @test a != b
+            @test b ==
+                [Point{2, Float64}(Float64.(x)) for x in rp_distinct(sites, 10, seed)]
         end
-        # a shape region wrapping through a periodic edge (D-138): Circle(Point(1, 1), 1) on a
-        # periodic 9 × 9 holds (1,1) (2,1) (9,1) (1,2) (1,9); column-major: (1,1) (2,1) (9,1) (1,2) (1,9)
-        pp = Potts.points(RandomPoints(30; region = Circle(Point(1.0, 1.0), 1.0), replace = true, seed = 4), Lattice((9, 9)))
+        # a shape region wrapping through a periodic edge (D-138): Circle(Point(1, 1), 1) on
+        # a periodic 9 × 9 holds (1,1) (2,1) (9,1) (1,2) (1,9); column-major: (1,1) (2,1)
+        # (9,1) (1,2) (1,9)
+        pp = Potts.points(
+            RandomPoints(
+                30; region = Circle(Point(1.0, 1.0), 1.0), replace = true,
+                seed = 4
+            ),
+            Lattice((9, 9))
+        )
         want = eden_rp([(1, 1), (2, 1), (9, 1), (1, 2), (1, 9)], 30, 4)
         @test pp == [Point{2, Float64}(Float64.(x)) for x in want]
         # hex: draws are index sites, returned Cartesian (q + r/2, r√3/2)
         hx = Lattice((5, 4); geometry = Hexagonal(), boundary = Closed())
         hp = Potts.points(RandomPoints(15; replace = true, seed = 9), hx)
         want = eden_rp(box(1:5, 1:4), 15, 9)
-        @test all(i -> isapprox(collect(hp[i]), [want[i][1] + want[i][2] / 2, want[i][2] * sqrt(3) / 2]; atol = 1.0e-12), 1:15)
+        @test all(
+            i -> isapprox(
+                collect(hp[i]), [want[i][1] + want[i][2] / 2, want[i][2] * sqrt(3) / 2];
+                atol = 1.0e-12
+            ),
+            1:15
+        )
         # edge cases
         @test isempty(Potts.points(RandomPoints(0; replace = true, seed = 1), (3, 3)))
         nodom = Lattice((6, 6); boundary = Closed(), domain = x -> x[1] <= 3)
-        @test_throws ArgumentError Potts.points(RandomPoints(2; region = (5:6, 1:6), replace = true, seed = 1), nodom)
-        @test isempty(Potts.points(RandomPoints(0; region = (5:6, 1:6), replace = true, seed = 1), nodom))
+        @test_throws ArgumentError Potts.points(
+            RandomPoints(2; region = (5:6, 1:6), replace = true, seed = 1), nodom
+        )
+        @test isempty(
+            Potts.points(
+                RandomPoints(0; region = (5:6, 1:6), replace = true, seed = 1),
+                nodom
+            )
+        )
         @test_throws ArgumentError RandomPoints(-1; replace = true, seed = 1)
         @test_throws ArgumentError RandomPoints(2; replace = true, seed = -1)
     end
 end
 
-@testitem "RandomPoints(replace = true): remake" setup = [EdenSplitsSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "RandomPoints(replace = true): remake" setup = [EdenSplitsSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "RandomPoints(replace = true): remake" begin
         p = RandomPoints(12; region = (2:4, 3:5), seed = 5)
         q = remake(p; replace = true)
-        @test Potts.points(q, (7, 7)) == Potts.points(RandomPoints(12; region = (2:4, 3:5), replace = true, seed = 5), (7, 7))
-        @test Potts.points(remake(q; seed = 6), (7, 7)) == Potts.points(RandomPoints(12; region = (2:4, 3:5), replace = true, seed = 6), (7, 7))
-        @test Potts.points(remake(remake(q; replace = false); n = 9), (7, 7)) == Potts.points(RandomPoints(9; region = (2:4, 3:5), seed = 5), (7, 7))
+        @test Potts.points(q, (7, 7)) ==
+            Potts.points(
+            RandomPoints(12; region = (2:4, 3:5), replace = true, seed = 5), (
+                7, 7,
+            )
+        )
+        @test Potts.points(remake(q; seed = 6), (7, 7)) ==
+            Potts.points(
+            RandomPoints(12; region = (2:4, 3:5), replace = true, seed = 6), (
+                7, 7,
+            )
+        )
+        @test Potts.points(remake(remake(q; replace = false); n = 9), (7, 7)) ==
+            Potts.points(RandomPoints(9; region = (2:4, 3:5), seed = 5), (7, 7))
         @test_throws ArgumentError remake(q; n = -1)
         @test_throws ArgumentError remake(q; seed = -1)
     end
 end
 
-@testitem "Eden: seeding (rounds = 0)" setup = [EdenSplitsSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "Eden: seeding (rounds = 0)" setup = [EdenSplitsSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # Eden: hand fixtures
-    # ---------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     @testset "Eden: seeding (rounds = 0)" begin
         # two points → two one-site cells, kinds cycled over the cells created
-        op, rep = layout(Eden([Point(2.0, 3.0), Point(5.0, 5.0)]; rounds = 0, kinds = [:a, :b], seed = 1), (6, 6); report = true)
+        op, rep = layout(
+            Eden(
+                [Point(2.0, 3.0), Point(5.0, 5.0)]; rounds = 0, kinds = [:a, :b],
+                seed = 1
+            ),
+            (6, 6);
+            report = true
+        )
         σ = eden_σ(op)
         @test σ[2, 3] == 1 && σ[5, 5] == 2 && count(!=(0), σ) == 2
         @test eden_kinds(op) == [:a, :b]
         r = only(rep)
-        @test (r.type, r.requested, r.painted, r.dropped, r.misses, r.counted, r.clipped, r.splits) == (:Eden, 2, 2, 0, 0, 2, 0, 0)
-        # rounding half up: Center() on 6×6 is (3.5, 3.5) → (4, 4); on 5×5 (3, 3); on 200² (101, 101)
-        @test findall(!=(0), eden_σ(layout(Eden(Center(); rounds = 0, kinds = [:a], seed = 1), (6, 6)))) == [CartesianIndex(4, 4)]
-        @test findall(!=(0), eden_σ(layout(Eden(Center(); rounds = 0, kinds = [:a], seed = 1), (5, 5)))) == [CartesianIndex(3, 3)]
-        @test findall(!=(0), eden_σ(layout(Eden(Center(); rounds = 0, kinds = [:a], seed = 1), (200, 200)))) == [CartesianIndex(101, 101)]
-        @test findall(!=(0), eden_σ(layout(Eden(Point(2.5, 2.49); rounds = 0, kinds = [:a], seed = 1), (6, 6)))) == [CartesianIndex(3, 2)]
+        @test (
+            r.type, r.requested, r.painted, r.dropped,
+            r.misses, r.counted, r.clipped, r.splits,
+        ) == (:Eden, 2, 2, 0, 0, 2, 0, 0)
+        # rounding half up: Center() on 6×6 is (3.5, 3.5) → (4, 4); on 5×5 (3, 3); on 200²
+        # (101, 101)
+        @test findall(
+            !=(0), eden_σ(
+                layout(
+                    Eden(Center(); rounds = 0, kinds = [:a], seed = 1), (
+                        6, 6,
+                    )
+                )
+            )
+        ) == [CartesianIndex(4, 4)]
+        @test findall(
+            !=(0), eden_σ(
+                layout(
+                    Eden(Center(); rounds = 0, kinds = [:a], seed = 1), (
+                        5, 5,
+                    )
+                )
+            )
+        ) == [CartesianIndex(3, 3)]
+        @test findall(
+            !=(0), eden_σ(
+                layout(
+                    Eden(Center(); rounds = 0, kinds = [:a], seed = 1), (
+                        200, 200,
+                    )
+                )
+            )
+        ) == [CartesianIndex(101, 101)]
+        @test findall(
+            !=(0),
+            eden_σ(
+                layout(
+                    Eden(Point(2.5, 2.49); rounds = 0, kinds = [:a], seed = 1), (
+                        6, 6,
+                    )
+                )
+            )
+        ) == [CartesianIndex(3, 2)]
         # 3D and hex: index (2, 3, 1) and hex index (3, 2) = Cartesian (3 + 1, √3)
-        @test findall(!=(0), eden_σ(layout(Eden([Point(2.0, 3.0, 1.0)]; rounds = 0, kinds = [:a], seed = 1), (4, 4, 4)))) == [CartesianIndex(2, 3, 1)]
+        @test findall(
+            !=(0),
+            eden_σ(
+                layout(
+                    Eden([Point(2.0, 3.0, 1.0)]; rounds = 0, kinds = [:a], seed = 1), (
+                        4, 4, 4,
+                    )
+                )
+            )
+        ) == [CartesianIndex(2, 3, 1)]
         hx = Lattice((6, 6); geometry = Hexagonal(), boundary = Closed())
-        @test findall(!=(0), eden_σ(layout(Eden([Point(4.0, sqrt(3))]; rounds = 0, kinds = [:a], seed = 1), hx))) == [CartesianIndex(3, 2)]
+        @test findall(
+            !=(0),
+            eden_σ(
+                layout(
+                    Eden([Point(4.0, sqrt(3))]; rounds = 0, kinds = [:a], seed = 1),
+                    hx
+                )
+            )
+        ) ==
+            [CartesianIndex(3, 2)]
         # a point off a closed lattice is not placed; on a periodic axis it wraps: x = 0 → 6
-        op, rep = layout(Eden([Point(0.0, 3.0), Point(2.0, 2.0)]; rounds = 0, kinds = [:a], seed = 1, shortfall = :allow), (6, 6); report = true)
-        @test findall(!=(0), eden_σ(op)) == [CartesianIndex(2, 2)] && (rep[1].requested, rep[1].painted, rep[1].misses) == (2, 1, 1)
-        op = layout(Eden([Point(0.0, 3.0), Point(2.0, 2.0)]; rounds = 0, kinds = [:a], seed = 1), Lattice((6, 6)))
+        op, rep = layout(
+            Eden(
+                [Point(0.0, 3.0), Point(2.0, 2.0)]; rounds = 0,
+                kinds = [:a], seed = 1, shortfall = :allow
+            ),
+            (6, 6);
+            report = true
+        )
+        @test findall(!=(0), eden_σ(op)) == [CartesianIndex(2, 2)] &&
+            (rep[1].requested, rep[1].painted, rep[1].misses) == (2, 1, 1)
+        op = layout(
+            Eden([Point(0.0, 3.0), Point(2.0, 2.0)]; rounds = 0, kinds = [:a], seed = 1),
+            Lattice((6, 6))
+        )
         @test eden_σ(op)[6, 3] == 1 && eden_σ(op)[2, 2] == 2
-        # coinciding points merge: the first creates the cell; kinds cycle over cells, not points
+        # coinciding points merge: the first creates the cell; kinds cycle over cells, not
+        # points
         pts = [Point(2.0, 2.0), Point(2.0, 2.0), Point(4.0, 4.0)]
-        op, rep = layout(Eden(pts; rounds = 0, kinds = [:a, :b], seed = 1, shortfall = :allow), (6, 6); report = true)
+        op, rep = layout(
+            Eden(pts; rounds = 0, kinds = [:a, :b], seed = 1, shortfall = :allow),
+            (6, 6); report = true
+        )
         @test eden_σ(op)[2, 2] == 1 && eden_σ(op)[4, 4] == 2 && eden_kinds(op) == [:a, :b]
-        @test (rep[1].requested, rep[1].painted, rep[1].misses, rep[1].counted) == (3, 2, 1, 2)
+        @test (rep[1].requested, rep[1].painted, rep[1].misses, rep[1].counted) ==
+            (3, 2, 1, 2)
     end
 end
 
-@testitem "Eden: one growth draw (hole and strip fixtures)" setup = [EdenSplitsSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "Eden: one growth draw (hole and strip fixtures)" setup = [
+    EdenSplitsSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "Eden: one growth draw (hole and strip fixtures)" begin
-        @test eden_offs(Moore(1), CorePotts.Lattice((5, 5))) == collect(MOORE2)   # the oracle's order
-        # Hole: closed 3×3, the 8 ring sites are seeds (ids in this order); the centre is the only
-        # frontier site and every neighbour grows, so round 1 paints it with the cell at
-        # (2, 2) + offs[j], j the layer's first draw. 9 sites, 8 cells.
+        # the oracle's order
+        @test eden_offs(Moore(1), CorePotts.Lattice((5, 5))) == collect(MOORE2)
+        # Hole: closed 3×3, the 8 ring sites are seeds (ids in this order); the centre is
+        # the only frontier site and every neighbour grows, so round 1 paints it with the
+        # cell at (2, 2) + offs[j], j the layer's first draw. 9 sites, 8 cells.
         ring = [(1, 1), (2, 1), (3, 1), (1, 2), (3, 2), (1, 3), (2, 3), (3, 3)]
         for seed in 1:6
-            op = layout(Eden([Point(Float64.(x)) for x in ring]; rounds = 1, kinds = [:a], seed), (3, 3))
+            op = layout(
+                Eden([Point(Float64.(x)) for x in ring]; rounds = 1, kinds = [:a], seed), (
+                    3, 3,
+                )
+            )
             σ = eden_σ(op)
             j = rand(Potts.layer_rng(seed, :eden), 1:8)
             y = (2 + MOORE2[j][1], 2 + MOORE2[j][2])
@@ -346,103 +514,226 @@ end
             @test σ[2, 2] == findfirst(==(y), ring)
             @test [σ[x...] for x in ring] == 1:8
         end
-        # Strip: closed 60×1, one seed at (1, 1). Every round the only frontier site is the one
-        # right of the blob; its single in-lattice growing neighbour is offset (-1, 0) = offs[1],
-        # so it is painted iff that round's draw is 1. After R rounds the blob is 1 + #{draws == 1}.
+        # Strip: closed 60×1, one seed at (1, 1). Every round the only frontier site is the
+        # one right of the blob; its single in-lattice growing neighbour is offset (-1, 0) =
+        # offs[1], so it is painted iff that round's draw is 1. After R rounds the blob is 1
+        # + #{draws == 1}.
         for seed in 1:6, R in (1, 40)
             rng = Potts.layer_rng(seed, :eden)
             want = 1 + count(==(1), [rand(rng, 1:8) for _ in 1:R])
-            σ = eden_σ(layout(Eden(Point(1.0, 1.0); rounds = R, kinds = [:a], seed), (60, 1)))
-            @test count(==(1), σ) == want && all(==(1), σ[1:want, 1]) && all(==(0), σ[(want + 1):end, 1])
+            σ = eden_σ(
+                layout(
+                    Eden(Point(1.0, 1.0); rounds = R, kinds = [:a], seed), (
+                        60, 1,
+                    )
+                )
+            )
+            @test count(==(1), σ) == want && all(==(1), σ[1:want, 1]) &&
+                all(==(0), σ[(want + 1):end, 1])
         end
         # negative control: a deterministic Eden would fill 41 sites in 40 rounds
-        @test count(==(1), eden_σ(layout(Eden(Point(1.0, 1.0); rounds = 40, kinds = [:a], seed = 1), (60, 1)))) < 20
-        # Periodic strip (8, 1), x periodic, y closed: seed (1, 1). Frontier in column-major order:
-        # (2, 1) [growing neighbour at (-1, 0) = offs[1]] then (8, 1) [at (+1, 0) through the wrap
+        @test count(
+            ==(1),
+            eden_σ(
+                layout(
+                    Eden(Point(1.0, 1.0); rounds = 40, kinds = [:a], seed = 1), (
+                        60, 1,
+                    )
+                )
+            )
+        ) < 20
+        # Periodic strip (8, 1), x periodic, y closed: seed (1, 1). Frontier in column-major
+        # order: (2, 1) [growing neighbour at (-1, 0) = offs[1]] then (8, 1) [at (+1, 0)
+        # through the wrap
         # = offs[4]]; one draw each.
         per = Lattice((8, 1); boundary = (Periodic(), Closed()))
         for seed in 1:12
             rng = Potts.layer_rng(seed, :eden)
             j1, j2 = rand(rng, 1:8), rand(rng, 1:8)
             σ = eden_σ(layout(Eden(Point(1.0, 1.0); rounds = 1, kinds = [:a], seed), per))
-            @test σ[2, 1] == (j1 == 1 ? 1 : 0) && σ[8, 1] == (j2 == 4 ? 1 : 0) && all(==(0), σ[3:7, 1])
+            @test σ[2, 1] == (j1 == 1 ? 1 : 0) && σ[8, 1] == (j2 == 4 ? 1 : 0) &&
+                all(==(0), σ[3:7, 1])
         end
         # closed control: (8, 1) is never a frontier site in round 1
-        @test all(s -> eden_σ(layout(Eden(Point(1.0, 1.0); rounds = 1, kinds = [:a], seed = s), (8, 1)))[8, 1] == 0, 1:12)
-        # the stream is layer_rng(seed, :eden): at least one hole seed differs under layer_rng(seed)
+        @test all(
+            s -> eden_σ(
+                layout(
+                    Eden(Point(1.0, 1.0); rounds = 1, kinds = [:a], seed = s), (
+                        8, 1,
+                    )
+                )
+            )[8, 1] == 0,
+            1:12
+        )
+        # the stream is layer_rng(seed, :eden): at least one hole seed differs under
+        # layer_rng(seed)
         @test any(1:6) do seed
             j = rand(Potts.layer_rng(seed), 1:8)
-            σ = eden_σ(layout(Eden([Point(Float64.(x)) for x in ring]; rounds = 1, kinds = [:a], seed), (3, 3)))
+            σ = eden_σ(
+                layout(
+                    Eden(
+                        [Point(Float64.(x)) for x in ring]; rounds = 1, kinds = [:a],
+                        seed
+                    ), (
+                        3, 3,
+                    )
+                )
+            )
             σ[2, 2] != findfirst(==((2 + MOORE2[j][1], 2 + MOORE2[j][2])), ring)
         end
     end
 end
 
-@testitem "Eden: fills medium only; region, domain and clipping" setup = [EdenSplitsSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "Eden: fills medium only; region, domain and clipping" setup = [
+    EdenSplitsSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "Eden: fills medium only; region, domain and clipping" begin
-        # a seed on an earlier cell is not placed; the tile is never painted over in 20 rounds
+        # a seed on an earlier cell is not placed; the tile is never painted over in 20
+        # rounds
         function l(sf)
             return overlay(
                 Tiling((2, 2); region = (3:4, 3:4), kinds = [:x]),
-                Eden([Point(3.0, 3.0), Point(1.0, 1.0)]; rounds = 20, kinds = [:e], seed = 1, shortfall = sf)
+                Eden(
+                    [Point(3.0, 3.0), Point(1.0, 1.0)]; rounds = 20,
+                    kinds = [:e], seed = 1, shortfall = sf
+                )
             )
         end
         op, rep = layout(l(:allow), (6, 6); report = true)
         σ = eden_σ(op)
         @test all(==(1), σ[3:4, 3:4]) && count(==(1), σ) == 4 && σ[1, 1] == 2
-        @test (rep[2].type, rep[2].requested, rep[2].painted, rep[2].misses) == (:Eden, 2, 1, 1)
+        @test (rep[2].type, rep[2].requested, rep[2].painted, rep[2].misses) ==
+            (:Eden, 2, 1, 1)
         @test rep[1].splits == 0 && rep[2].splits == 0
         @test_throws ArgumentError layout(l(:error), (6, 6))
         # with a Frame first (TST's border): the frame is never grown into
-        op = layout(overlay(Frame(:border; width = 1), Eden(Center(); rounds = 30, kinds = [:e], seed = 2)), (12, 12))
+        op = layout(
+            overlay(
+                Frame(:border; width = 1),
+                Eden(Center(); rounds = 30, kinds = [:e], seed = 2)
+            ),
+            (12, 12)
+        )
         σ = eden_σ(op)
-        @test all(==(1), σ[1, :]) && all(==(1), σ[end, :]) && all(==(1), σ[:, 1]) && all(==(1), σ[:, end])
+        @test all(==(1), σ[1, :]) && all(==(1), σ[end, :]) && all(==(1), σ[:, 1]) &&
+            all(==(1), σ[:, end])
         @test eden_kinds(op) == [:border, :e]
         # region box: growth stays inside 3:6 × 3:6
-        σ = eden_σ(layout(Eden(Center(); region = (3:6, 3:6), rounds = 30, kinds = [:a], seed = 3), (10, 10)))
-        @test all(x -> 3 <= x[1] <= 6 && 3 <= x[2] <= 6, findall(!=(0), σ)) && count(!=(0), σ) >= 1
+        σ = eden_σ(
+            layout(
+                Eden(
+                    Center(); region = (3:6, 3:6), rounds = 30, kinds = [:a], seed = 3
+                ), (
+                    10, 10,
+                )
+            )
+        )
+        @test all(x -> 3 <= x[1] <= 6 && 3 <= x[2] <= 6, findall(!=(0), σ)) &&
+            count(!=(0), σ) >= 1
         # a seed outside the region is not placed
-        op, rep = layout(Eden([Point(1.0, 1.0)]; region = (3:6, 3:6), rounds = 3, kinds = [:a], seed = 1, shortfall = :allow), (10, 10); report = true)
+        op, rep = layout(
+            Eden(
+                [Point(1.0, 1.0)]; region = (3:6, 3:6), rounds = 3,
+                kinds = [:a], seed = 1, shortfall = :allow
+            ),
+            (10, 10);
+            report = true
+        )
         @test all(==(0), eden_σ(op)) && (rep[1].requested, rep[1].painted) == (1, 0)
-        # shape region clipped by the closed corner: Circle(Point(1, 1), 2) holds the 13 integer
-        # points with dx² + dy² ≤ 4; the in-lattice ones have dx, dy ≥ 0: (0,0) (1,0) (2,0) (0,1)
-        # (0,2) (1,1) = 6, so clipped = 7 and growth stays on those 6 sites
+        # shape region clipped by the closed corner: Circle(Point(1, 1), 2) holds the 13
+        # integer points with dx² + dy² ≤ 4; the in-lattice ones have dx, dy ≥ 0: (0,0)
+        # (1,0) (2,0) (0,1) (0,2) (1,1) = 6, so clipped = 7 and growth stays on those 6
+        # sites
         disc = Circle(Point(1.0, 1.0), 2.0)
-        op, rep = layout(Eden(Point(1.0, 1.0); region = disc, rounds = 25, kinds = [:a], seed = 4), (10, 10); report = true)
+        op, rep = layout(
+            Eden(Point(1.0, 1.0); region = disc, rounds = 25, kinds = [:a], seed = 4),
+            (10, 10); report = true
+        )
         @test rep[1].clipped == 7
-        @test issubset(Set(Tuple.(findall(!=(0), eden_σ(op)))), Set([(1, 1), (2, 1), (3, 1), (1, 2), (1, 3), (2, 2)]))
-        # domain: x + y ≤ 7 on a closed 6×6; the box 3:6 × 3:6 (16 sites) keeps (3,3) (3,4) (4,3):
-        # clipped = 13 and growth stays on those 3 sites
+        @test issubset(
+            Set(Tuple.(findall(!=(0), eden_σ(op)))),
+            Set([(1, 1), (2, 1), (3, 1), (1, 2), (1, 3), (2, 2)])
+        )
+        # domain: x + y ≤ 7 on a closed 6×6; the box 3:6 × 3:6 (16 sites) keeps (3,3) (3,4)
+        # (4,3): clipped = 13 and growth stays on those 3 sites
         dom = Lattice((6, 6); boundary = Closed(), domain = x -> x[1] + x[2] <= 7)
-        op, rep = layout(Eden(Point(3.0, 3.0); region = (3:6, 3:6), rounds = 25, kinds = [:a], seed = 5), dom; report = true)
+        op, rep = layout(
+            Eden(Point(3.0, 3.0); region = (3:6, 3:6), rounds = 25, kinds = [:a], seed = 5),
+            dom; report = true
+        )
         @test rep[1].clipped == 13
-        @test issubset(Set(Tuple.(findall(!=(0), eden_σ(op)))), Set([(3, 3), (3, 4), (4, 3)]))
+        @test issubset(
+            Set(Tuple.(findall(!=(0), eden_σ(op)))), Set(
+                [
+                    (3, 3), (3, 4), (4, 3),
+                ]
+            )
+        )
         # whole lattice: clipped 0, even with a domain
-        @test only(last(layout(Eden(Point(2.0, 2.0); rounds = 2, kinds = [:a], seed = 1), dom; report = true))).clipped == 0
+        @test only(
+            last(
+                layout(
+                    Eden(Point(2.0, 2.0); rounds = 2, kinds = [:a], seed = 1),
+                    dom; report = true
+                )
+            )
+        ).clipped == 0
         # a later layer over an Eden cell: dropped, not a shortfall
         op, rep = layout(
             overlay(
-                Eden([Point(2.0, 2.0), Point(5.0, 5.0)]; rounds = 0, kinds = [:a], seed = 1),
+                Eden(
+                    [Point(2.0, 2.0), Point(5.0, 5.0)]; rounds = 0, kinds = [:a],
+                    seed = 1
+                ),
                 Tiling((1, 1); region = (2:2, 2:2), kinds = [:t])
             ), (6, 6); report = true
         )
-        @test (rep[1].requested, rep[1].painted, rep[1].dropped) == (2, 2, 1) && eden_kinds(op) == [:a, :t]
+        @test (rep[1].requested, rep[1].painted, rep[1].dropped) == (2, 2, 1) &&
+            eden_kinds(op) == [:a, :t]
     end
 end
 
 @testitem "Eden: oracle" setup = [EdenSplitsSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     # Eden: the oracle on square / hex / 3D, periodic / closed / domain
-    # ---------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     @testset "Eden: oracle ($name)" for (name, target, dims, per, spec, layer_spec) in [
             ("square closed, Moore", (30, 30), (30, 30), (false, false), Moore(1), nothing),
-            ("square periodic, Moore", Lattice((20, 20)), (20, 20), (true, true), Moore(1), nothing),
-            ("square closed, VonNeumann keyword", (20, 20), (20, 20), (false, false), VonNeumann(1), VonNeumann(1)),
-            ("hex closed", Lattice((20, 20); geometry = Hexagonal(), boundary = Closed()), (20, 20), (false, false), Moore(1), nothing),
-            ("hex periodic", Lattice((20, 20); geometry = Hexagonal()), (20, 20), (true, true), Moore(1), nothing),
+            (
+                "square periodic, Moore", Lattice((20, 20)),
+                (20, 20), (true, true), Moore(1), nothing,
+            ),
+            (
+                "square closed, VonNeumann keyword", (20, 20), (20, 20),
+                (false, false), VonNeumann(1), VonNeumann(1),
+            ),
+            (
+                "hex closed",
+                Lattice((20, 20); geometry = Hexagonal(), boundary = Closed()),
+                (20, 20), (false, false), Moore(1), nothing,
+            ),
+            (
+                "hex periodic", Lattice((20, 20); geometry = Hexagonal()),
+                (20, 20), (true, true), Moore(1), nothing,
+            ),
             ("3D closed", (8, 8, 8), (8, 8, 8), (false, false, false), Moore(1), nothing),
-            ("3D periodic", Lattice((8, 8, 8)), (8, 8, 8), (true, true, true), Moore(1), nothing),
-            ("square domain", Lattice((20, 20); boundary = Closed(), domain = x -> (x[1] - 10)^2 + (x[2] - 10)^2 <= 64), (20, 20), (false, false), Moore(1), nothing),
+            (
+                "3D periodic", Lattice((8, 8, 8)), (8, 8, 8),
+                (true, true, true), Moore(1), nothing,
+            ),
+            (
+                "square domain",
+                Lattice(
+                    (20, 20); boundary = Closed(), domain = x -> (x[1] - 10)^2 +
+                        (x[2] - 10)^2 <= 64
+                ),
+                (20, 20),
+                (false, false),
+                Moore(1),
+                nothing,
+            ),
         ]
         N = length(dims)
         clat = target isa Tuple ? CorePotts.Lattice(target; boundary = Closed()) : target
@@ -453,48 +744,74 @@ end
             p = RandomPoints(n; replace = true, seed = 10 + seed)
             seeds = eden_rp(region, n, 10 + seed)
             kw = layer_spec === nothing ? (;) : (; neighborhood = layer_spec)
-            op, rep = layout(Eden(p; rounds, kinds = [:a, :b, :c], seed, shortfall = :allow, kw...), target; report = true)
-            want, wk = eden_growth(zeros(Int, dims), mask, seeds, rounds, seed, [:a, :b, :c], offs, per)
+            op, rep = layout(
+                Eden(p; rounds, kinds = [:a, :b, :c], seed, shortfall = :allow, kw...),
+                target; report = true
+            )
+            want, wk = eden_growth(
+                zeros(Int, dims), mask, seeds, rounds, seed, [:a, :b, :c], offs, per
+            )
             @test eden_σ(op) == want
             @test eden_kinds(op) == wk
             r = only(rep)
-            @test (r.requested, r.painted, r.misses, r.counted) == (n, length(unique(seeds)), n - length(unique(seeds)), length(unique(seeds)))
-            # every cell is one piece under the growth neighbourhood (sites join a neighbour)
+            @test (r.requested, r.painted, r.misses, r.counted) == (
+                n, length(unique(seeds)), n - length(unique(seeds)), length(unique(seeds)),
+            )
+            # every cell is one piece under the growth neighbourhood (sites join a
+            # neighbour)
             @test all(c -> eden_split(want, c, offs, per) == 0, 1:maximum(want))
             # negative control: the deterministic growth law gives another σ
-            rounds >= 4 && @test eden_σ(op) != first(eden_growth(zeros(Int, dims), mask, seeds, rounds, seed, [:a, :b, :c], offs, per; deterministic = true))
+            rounds >= 4 && @test eden_σ(op) !=
+                first(
+                eden_growth(
+                    zeros(Int, dims), mask, seeds, rounds, seed,
+                    [:a, :b, :c], offs, per; deterministic = true
+                )
+            )
         end
         # with an earlier layer (a frame on closed axes, or a block on periodic ones)
-        first_layer = all(per) ? Tiling(ntuple(_ -> 2, N); region = ntuple(_ -> 1:2, N), kinds = [:t]) : Frame(:f; width = 1)
+        first_layer = if all(per)
+            Tiling(ntuple(_ -> 2, N); region = ntuple(_ -> 1:2, N), kinds = [:t])
+        else
+            Frame(:f; width = 1)
+        end
         op0 = layout(first_layer, target)
         σ0 = Int.(eden_σ(op0))
         seeds = eden_rp(region, 5, 77)
         op = layout(
             overlay(
                 first_layer, Eden(
-                    RandomPoints(5; replace = true, seed = 77); rounds = 5, kinds = [:e], seed = 8, shortfall = :allow,
+                    RandomPoints(5; replace = true, seed = 77); rounds = 5, kinds = [:e],
+                    seed = 8, shortfall = :allow,
                     (layer_spec === nothing ? (;) : (; neighborhood = layer_spec))...
                 )
             ), target
         )
         want, _ = eden_growth(σ0, mask, seeds, 5, 8, [:e], offs, per)
         @test eden_σ(op) == want
-        @test all(i -> σ0[i] == 0 || eden_σ(op)[i] == σ0[i], eachindex(σ0))      # earlier cells untouched
+        # earlier cells untouched
+        @test all(i -> σ0[i] == 0 || eden_σ(op)[i] == σ0[i], eachindex(σ0))
     end
 end
 
-@testitem "Eden: invariants and determinism" setup = [EdenSplitsSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "Eden: invariants and determinism" setup = [EdenSplitsSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "Eden: invariants and determinism" begin
         pts = RandomPoints(8; region = (10:30, 10:30), replace = true, seed = 3)
         e(R; seed = 1) = Eden(pts; rounds = R, kinds = [:a], seed, shortfall = :allow)
         σ6 = eden_σ(layout(e(6), (40, 40)))
         σ9 = eden_σ(layout(e(9), (40, 40)))
-        # same seed: the first 6 rounds are the same draws, so every site painted at 6 keeps its owner
+        # same seed: the first 6 rounds are the same draws, so every site painted at 6 keeps
+        # its owner
         @test all(i -> σ6[i] == 0 || σ9[i] == σ6[i], eachindex(σ6))
         @test count(!=(0), σ9) > count(!=(0), σ6)
-        @test eden_σ(layout(e(6), (40, 40))) == σ6                                 # deterministic
-        @test eden_σ(layout(e(6; seed = 2), (40, 40))) != σ6                       # the seed matters
-        # Moore growth moves one Chebyshev step per round: each cell stays within 6 of its seed
+        # deterministic
+        @test eden_σ(layout(e(6), (40, 40))) == σ6
+        # the seed matters
+        @test eden_σ(layout(e(6; seed = 2), (40, 40))) != σ6
+        # Moore growth moves one Chebyshev step per round: each cell stays within 6 of its
+        # seed
         seeds = unique(eden_rp(box(10:30, 10:30), 8, 3))
         for (c, s) in enumerate(seeds)
             @test all(x -> maximum(abs.(Tuple(x) .- s)) <= 6, findall(==(c), σ6))
@@ -502,63 +819,103 @@ end
         @test count(!=(0), σ6) <= length(seeds) * 13^2
         # remake
         @test eden_σ(layout(remake(e(6); rounds = 9), (40, 40))) == σ9
-        @test eden_σ(layout(remake(e(6); seed = 2), (40, 40))) == eden_σ(layout(e(6; seed = 2), (40, 40)))
+        @test eden_σ(layout(remake(e(6); seed = 2), (40, 40))) ==
+            eden_σ(layout(e(6; seed = 2), (40, 40)))
         @test_throws ArgumentError remake(e(6); rounds = -1)
     end
 end
 
-@testitem "Eden: argument errors" setup = [EdenSplitsSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "Eden: argument errors" setup = [EdenSplitsSetup] tags = [
+    :pottsmodels,
+    :acceptance,
+] begin
     @testset "Eden: argument errors" begin
         @test_throws ArgumentError Eden(Center(); rounds = -1, kinds = [:a], seed = 1)
         @test_throws ArgumentError Eden(Center(); rounds = 1, kinds = Symbol[], seed = 1)
         @test_throws ArgumentError Eden(Center(); rounds = 1, kinds = [:a], seed = -1)
-        @test_throws ArgumentError Eden(Center(); rounds = 1, kinds = [:a], seed = 1, shortfall = :sometimes)
-        @test_throws ArgumentError Eden(Center(); rounds = 1, kinds = [:a], seed = 1, splits = :never)
-        @test_throws ArgumentError Eden(Center(); rounds = 1, kinds = [:a], seed = 1, neighborhood = "moore")
-        @test_throws ArgumentError Eden(Point{2, Float64}[]; rounds = 1, kinds = [:a], seed = 1)
-        @test_throws ArgumentError layout(Eden(Point(1.0, 1.0, 1.0); rounds = 1, kinds = [:a], seed = 1), (5, 5))
-        @test_throws ArgumentError layout(Eden(Center(); region = Sphere(Point(2.0, 2.0, 2.0), 1.0), rounds = 1, kinds = [:a], seed = 1), (5, 5))
+        @test_throws ArgumentError Eden(
+            Center(); rounds = 1, kinds = [:a], seed = 1, shortfall = :sometimes
+        )
+        @test_throws ArgumentError Eden(
+            Center(); rounds = 1, kinds = [:a], seed = 1, splits = :never
+        )
+        @test_throws ArgumentError Eden(
+            Center(); rounds = 1, kinds = [:a], seed = 1, neighborhood = "moore"
+        )
+        @test_throws ArgumentError Eden(
+            Point{2, Float64}[]; rounds = 1, kinds = [:a],
+            seed = 1
+        )
+        @test_throws ArgumentError layout(
+            Eden(Point(1.0, 1.0, 1.0); rounds = 1, kinds = [:a], seed = 1), (5, 5)
+        )
+        @test_throws ArgumentError layout(
+            Eden(
+                Center(); region = Sphere(Point(2.0, 2.0, 2.0), 1.0),
+                rounds = 1, kinds = [:a], seed = 1
+            ),
+            (5, 5)
+        )
     end
 end
 
-@testitem "shortfall::error,:warn,:allow" setup = [EdenSplitsSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "shortfall::error,:warn,:allow" setup = [EdenSplitsSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # shortfall and its first :allow consumer
-    # ---------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     @testset "shortfall::error,:warn,:allow" begin
-        # 10 points with replacement on the 9 sites of 1:3 × 1:3: at least one merge (pigeonhole)
+        # 10 points with replacement on the 9 sites of 1:3 × 1:3: at least one merge
+        # (pigeonhole)
         p = RandomPoints(10; region = (1:3, 1:3), replace = true, seed = 2)
         made = length(unique(eden_rp(box(1:3, 1:3), 10, 2)))
         @test made <= 9
         e(sf) = Eden(p; rounds = 2, kinds = [:a], seed = 1, shortfall = sf)
         err = try
-            layout(e(:error), (6, 6)); nothing
+            layout(e(:error), (6, 6))
+            nothing
         catch x
             x
         end
         @test err isa ArgumentError
         msg = sprint(showerror, err)
         @test occursin("shortfall", msg)
-        @test_throws ArgumentError layout(Eden(p; rounds = 2, kinds = [:a], seed = 1), (6, 6))   # the default is :error
+        @test_throws ArgumentError layout(
+            Eden(p; rounds = 2, kinds = [:a], seed = 1), (
+                6, 6,
+            )
+        )   # the default is :error
         a, ra = quiet(() -> layout(e(:allow), (6, 6); report = true))
         w, rw = @test_logs (:warn, r"shortfall") layout(e(:warn), (6, 6); report = true)
         @test same(a, w) && ra == rw
         @test (ra[1].requested, ra[1].painted, ra[1].misses) == (10, made, 10 - made)
         @test maximum(eden_σ(a)) == made
         # no shortfall, no message, in every mode
-        q = RandomPoints(3; region = (1:3, 1:3), seed = 2)                         # distinct
+        # distinct
+        q = RandomPoints(3; region = (1:3, 1:3), seed = 2)
         for sf in (:error, :warn, :allow)
-            quiet(() -> layout(Eden(q; rounds = 2, kinds = [:a], seed = 1, shortfall = sf), (6, 6)))
+            quiet(
+                () -> layout(
+                    Eden(q; rounds = 2, kinds = [:a], seed = 1, shortfall = sf), (
+                        6, 6,
+                    )
+                )
+            )
         end
         @test remake(e(:error); shortfall = :allow) isa Potts.AbstractLayout
         @test same(layout(remake(e(:error); shortfall = :allow), (6, 6)), a)
     end
 end
 
-@testitem "01b de novo (01 §7.6): the:allow consumer, and the GrowInCells law" setup = [EdenSplitsSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "01b de novo (01 §7.6): the:allow consumer, and the GrowInCells law" setup = [
+    EdenSplitsSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "01b de novo (01 §7.6): the:allow consumer, and the GrowInCells law" begin
-        # TST denovo_*.par: 200², a one-site border, 360 seeds with replacement over the 198²
-        # interior, 10 synchronous Eden rounds, no division.
+        # TST denovo_*.par: 200², a one-site border, 360 seeds with replacement over the
+        # 198² interior, 10 synchronous Eden rounds, no division.
         function denovo(s; sf = :allow)
             return overlay(
                 Frame(:border; width = 1),
@@ -568,7 +925,8 @@ end
                 )
             )
         end
-        # seed 1 draws a coinciding pair (the oracle's count): the default refuses, :allow paints
+        # seed 1 draws a coinciding pair (the oracle's count): the default refuses, :allow
+        # paints
         @test length(unique(eden_rp(box(2:199, 2:199), 360, 1))) < 360
         @test_throws ArgumentError layout(denovo(1; sf = :error), (200, 200))
         means = Float64[]
@@ -584,55 +942,80 @@ end
             @test all(==(1), σ[1, :]) && all(==(1), σ[:, 200])     # the border is untouched
         end
         @test 45.5 <= sum(means) / 8 <= 49.5                 # spec: ≈ 47–48 px per cell
-        # TST sprout: one seed at the centre (101, 101), 50 rounds → one blob of ≈ 1 850–2 300 px,
-        # then 7 divisions → 128 cells of ≈ 15–18 px.
+        # TST sprout: one seed at the centre (101, 101), 50 rounds → one blob of ≈ 1 850–2
+        # 300 px, then 7 divisions → 128 cells of ≈ 15–18 px.
         blob(s) = Eden(Center(); rounds = 50, kinds = [:endothelial], seed = s)
         sizes = Int[]
         for s in 1:8
             σ = eden_σ(layout(overlay(Frame(:border; width = 1), blob(s)), (200, 200)))
             push!(sizes, count(==(2), σ))
             @test σ[101, 101] == 2 && 1_500 <= sizes[end] <= 2_800
-            op, rep = layout(overlay(Frame(:border; width = 1), Splits(blob(s), 7; splits = :allow)), (200, 200); report = true)
+            op, rep = layout(
+                overlay(Frame(:border; width = 1), Splits(blob(s), 7; splits = :allow)),
+                (200, 200); report = true
+            )
             σs = eden_σ(op)
-            @test maximum(σs) == 129 && count(>(1), σs) == sizes[end]            # sites conserved
-            @test (rep[2].type, rep[2].requested, rep[2].painted, rep[2].misses) == (:Splits, 128, 128, 0)
+            # sites conserved
+            @test maximum(σs) == 129 && count(>(1), σs) == sizes[end]
+            @test (rep[2].type, rep[2].requested, rep[2].painted, rep[2].misses) ==
+                (:Splits, 128, 128, 0)
             @test 11 <= sizes[end] / 128 <= 22
         end
         @test 1_900 <= sum(sizes) / 8 <= 2_400
-        # negative control: a deterministic Eden fills the Chebyshev ball, 101² = 10 201 sites
-        # (rows 51:151 lie inside the 2:199 interior), far outside the band
+        # negative control: a deterministic Eden fills the Chebyshev ball, 101² = 10 201
+        # sites (rows 51:151 lie inside the 2:199 interior), far outside the band
         σ0 = Int.(eden_σ(layout(Frame(:border; width = 1), (200, 200))))
         allowed = σ0 .== 0
-        det, _ = eden_growth(σ0, allowed, [(101, 101)], 50, 1, [:e], collect(MOORE2), (false, false); deterministic = true)
+        det, _ = eden_growth(
+            σ0, allowed, [(101, 101)], 50, 1, [:e],
+            collect(MOORE2), (false, false); deterministic = true
+        )
         @test count(==(2), det) == 101^2
     end
 end
 
-@testitem "Splits: the cut (square)" setup = [EdenSplitsSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "Splits: the cut (square)" setup = [EdenSplitsSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # Splits: hand fixtures
-    # ---------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     @testset "Splits: the cut (square)" begin
         # 4 × 2 box x ∈ 3:6, y ∈ 4:5: C = diag(10, 2), long axis e₁, centroid x = 4.5 → the
         # daughter (id 2) is x ∈ 5:6, the mother keeps x ∈ 3:4
         t = Tiling((4, 2); region = (3:6, 4:5), kinds = [:a])
         op, rep = layout(Splits(t, 1), (8, 8); report = true)
         σ = eden_σ(op)
-        @test eden_sites(σ, 1) == Set(box(3:4, 4:5)) && eden_sites(σ, 2) == Set(box(5:6, 4:5))
+        @test eden_sites(σ, 1) == Set(box(3:4, 4:5)) &&
+            eden_sites(σ, 2) == Set(box(5:6, 4:5))
         @test eden_kinds(op) == [:a, :a]
         r = only(rep)
-        @test (r.type, r.requested, r.painted, r.dropped, r.misses, r.counted, r.clipped, r.splits) == (:Splits, 2, 2, 0, 0, 2, 0, 0)
-        # k = 2: each 2 × 2 half is isotropic (C = diag(1, 1), the e₁ tie rule): cell 1 keeps
-        # x = 3 and its daughter (id 3) takes x = 4; cell 2 keeps x = 5, daughter 4 takes x = 6
+        @test (
+            r.type, r.requested, r.painted, r.dropped,
+            r.misses, r.counted, r.clipped, r.splits,
+        ) == (:Splits, 2, 2, 0, 0, 2, 0, 0)
+        # k = 2: each 2 × 2 half is isotropic (C = diag(1, 1), the e₁ tie rule): cell 1
+        # keeps x = 3 and its daughter (id 3) takes x = 4; cell 2 keeps x = 5, daughter 4
+        # takes x = 6
         σ = eden_σ(layout(Splits(t, 2), (8, 8)))
         @test [eden_sites(σ, c) for c in 1:4] == [Set(box(x:x, 4:5)) for x in (3, 5, 4, 6)]
-        # negative control: cutting along the long axis instead would give the rows y = 4 / y = 5
+        # negative control: cutting along the long axis instead would give the rows y = 4 /
+        # y = 5
         @test eden_sites(eden_σ(layout(Splits(t, 1), (8, 8))), 1) != Set(box(3:6, 4:4))
-        # 3 × 5 box x ∈ 1:3, y ∈ 1:5: C = diag(10, 30), centroid (2, 3); the row y = 3 lies on the
-        # plane and stays with the mother: mother 9 sites (y ≤ 3), daughter 6 (y ∈ 4:5)
-        σ = eden_σ(layout(Splits(Tiling((3, 5); region = (1:3, 1:5), kinds = [:a]), 1), (6, 7)))
-        @test eden_sites(σ, 1) == Set(box(1:3, 1:3)) && eden_sites(σ, 2) == Set(box(1:3, 4:5))
-        # diagonal (1,1)…(4,4): C = [5 5; 5 5], v = (1, 1)/√2, centroid (2.5, 2.5) → daughter (3,3) (4,4)
+        # 3 × 5 box x ∈ 1:3, y ∈ 1:5: C = diag(10, 30), centroid (2, 3); the row y = 3 lies
+        # on the plane and stays with the mother: mother 9 sites (y ≤ 3), daughter 6 (y ∈
+        # 4:5)
+        σ = eden_σ(
+            layout(
+                Splits(Tiling((3, 5); region = (1:3, 1:5), kinds = [:a]), 1), (
+                    6, 7,
+                )
+            )
+        )
+        @test eden_sites(σ, 1) == Set(box(1:3, 1:3)) &&
+            eden_sites(σ, 2) == Set(box(1:3, 4:5))
+        # diagonal (1,1)…(4,4): C = [5 5; 5 5], v = (1, 1)/√2, centroid (2.5, 2.5) →
+        # daughter (3,3) (4,4)
         σ = eden_σ(layout(Splits(Sites([[(1, 1), (2, 2), (3, 3), (4, 4)]]), 1), (5, 5)))
         @test eden_sites(σ, 2) == Set([(3, 3), (4, 4)])
         # anti-diagonal: v ∝ (1, −1) with a positive first component → daughter (3,2) (4,1)
@@ -641,63 +1024,99 @@ end
     end
 end
 
-@testitem "Splits: hex, 3D, periodic" setup = [EdenSplitsSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "Splits: hex, 3D, periodic" setup = [EdenSplitsSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "Splits: hex, 3D, periodic" begin
-        # Hex rhombus q ∈ 2:4, r ∈ 2:3 (6 sites). In Cartesian coordinates (q + r/2, r√3/2) the
-        # covariance is tilted (per site: var x = var q + var r/4 = 2/3 + 1/16, var y = 3/16,
-        # cov = √3/16 > 0), so v ≈ (0.982, 0.189); the centroid is (4.25, 2.5·√3/2). Projections:
-        # (2,2) −1.31, (3,2) −0.33, (4,2) +0.65, (2,3) −0.65, (3,3) +0.33, (4,3) +1.31 →
-        # daughter {(4,2), (3,3), (4,3)}. Index-space covariance (diag(2/3, 1/4)) would give the
-        # daughter {(4,2), (4,3)} (negative control).
+        # Hex rhombus q ∈ 2:4, r ∈ 2:3 (6 sites). In Cartesian coordinates (q + r/2, r√3/2)
+        # the covariance is tilted (per site: var x = var q + var r/4 = 2/3 + 1/16, var y =
+        # 3/16, cov = √3/16 > 0), so v ≈ (0.982, 0.189); the centroid is (4.25, 2.5·√3/2).
+        # Projections: (2,2) −1.31, (3,2) −0.33, (4,2) +0.65, (2,3) −0.65, (3,3) +0.33,
+        # (4,3) +1.31 → daughter {(4,2), (3,3), (4,3)}. Index-space covariance (diag(2/3,
+        # 1/4)) would give the daughter {(4,2), (4,3)} (negative control).
         hx = Lattice((6, 6); geometry = Hexagonal(), boundary = Closed())
         σ = eden_σ(layout(Splits(Sites([box(2:4, 2:3)]), 1), hx))
         @test eden_sites(σ, 2) == Set([(4, 2), (3, 3), (4, 3)])
         @test eden_sites(σ, 1) == Set([(2, 2), (3, 2), (2, 3)])
         @test eden_sites(σ, 2) != Set([(4, 2), (4, 3)])
         # 3D 2 × 2 × 4: C = diag(2, 2, 20), centroid z = 2.5 → daughter z ∈ 3:4
-        σ = eden_σ(layout(Splits(Tiling((2, 2, 4); region = (1:2, 1:2, 1:4), kinds = [:a]), 1), (3, 3, 5)))
-        @test eden_sites(σ, 2) == Set(box(1:2, 1:2, 3:4)) && eden_sites(σ, 1) == Set(box(1:2, 1:2, 1:2))
+        σ = eden_σ(
+            layout(
+                Splits(Tiling((2, 2, 4); region = (1:2, 1:2, 1:4), kinds = [:a]), 1), (
+                    3, 3, 5,
+                )
+            )
+        )
+        @test eden_sites(σ, 2) == Set(box(1:2, 1:2, 3:4)) &&
+            eden_sites(σ, 1) == Set(box(1:2, 1:2, 1:2))
         # 3D 3 × 2 × 2: long axis x, centroid x = 2 (on the plane: mother) → daughter x = 3
-        σ = eden_σ(layout(Splits(Tiling((3, 2, 2); region = (1:3, 1:2, 1:2), kinds = [:a]), 1), (4, 3, 3)))
+        σ = eden_σ(
+            layout(
+                Splits(Tiling((3, 2, 2); region = (1:3, 1:2, 1:2), kinds = [:a]), 1), (
+                    4, 3, 3,
+                )
+            )
+        )
         @test eden_sites(σ, 2) == Set(box(3:3, 1:2, 1:2))
         # 3D isotropic 2 × 2 × 2 (the tie rule: e₁) → daughter x = 2
-        σ = eden_σ(layout(Splits(Tiling((2, 2, 2); region = (1:2, 1:2, 1:2), kinds = [:a]), 1), (3, 3, 3)))
+        σ = eden_σ(
+            layout(
+                Splits(Tiling((2, 2, 2); region = (1:2, 1:2, 1:2), kinds = [:a]), 1), (
+                    3, 3, 3,
+                )
+            )
+        )
         @test eden_sites(σ, 2) == Set(box(2:2, 1:2, 1:2))
-        # Periodic 10 × 10: a cell on x ∈ {9, 10, 1, 2}, y ∈ 4:5 across the edge. First site in
-        # column-major order is (1, 4); nearest images x = 9 → −1, 10 → 0: unwrapped −1, 0, 1, 2,
-        # centroid 0.5 → daughter x ∈ {1, 2}, mother x ∈ {9, 10}
+        # Periodic 10 × 10: a cell on x ∈ {9, 10, 1, 2}, y ∈ 4:5 across the edge. First site
+        # in column-major order is (1, 4); nearest images x = 9 → −1, 10 → 0: unwrapped −1,
+        # 0, 1, 2, centroid 0.5 → daughter x ∈ {1, 2}, mother x ∈ {9, 10}
         cell = [(x, y) for y in 4:5 for x in (1, 2, 9, 10)]
         σ = eden_σ(layout(Splits(Sites([cell]), 1), Lattice((10, 10))))
         @test eden_sites(σ, 2) == Set([(x, y) for y in 4:5 for x in (1, 2)])
-        # closed control: the same sites unwrapped as 1, 2, 9, 10 (centroid 5.5) → daughter {9, 10}
+        # closed control: the same sites unwrapped as 1, 2, 9, 10 (centroid 5.5) → daughter
+        # {9, 10}
         σ = eden_σ(layout(Splits(Sites([cell]), 1), (10, 10)))
         @test eden_sites(σ, 2) == Set([(x, y) for y in 4:5 for x in (9, 10)])
     end
 end
 
-@testitem "Splits: ids, kinds, conservation, earlier layers" setup = [EdenSplitsSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "Splits: ids, kinds, conservation, earlier layers" setup = [
+    EdenSplitsSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "Splits: ids, kinds, conservation, earlier layers" begin
-        # two cells of kinds :a and :b, k = 1 → ids 1 (a), 2 (b), 3 (a, daughter of 1), 4 (b)
+        # two cells of kinds :a and :b, k = 1 → ids 1 (a), 2 (b), 3 (a, daughter of 1), 4
+        # (b)
         two = Sites([box(1:4, 1:2), box(1:2, 5:8)], [:a, :b])
         op = layout(Splits(two, 1), (8, 8))
         σ = eden_σ(op)
         @test eden_kinds(op) == [:a, :b, :a, :b]
-        @test eden_sites(σ, 3) == Set(box(3:4, 1:2)) && eden_sites(σ, 4) == Set(box(1:2, 7:8))
+        @test eden_sites(σ, 3) == Set(box(3:4, 1:2)) &&
+            eden_sites(σ, 4) == Set(box(1:2, 7:8))
         # k = 2: pass 2 visits 1, 2, 3, 4 → daughters 5, 6, 7, 8 of the same kinds
         op = layout(Splits(two, 2), (8, 8))
         @test eden_kinds(op) == [:a, :b, :a, :b, :a, :b, :a, :b]
         σ = eden_σ(op)
-        # cell 1 (x 1:2, y 1:2) → mother x = 1, daughter 5 x = 2; cell 2 (x 1:2, y 5:6) → 6 is x = 2
-        @test eden_sites(σ, 5) == Set(box(2:2, 1:2)) && eden_sites(σ, 6) == Set(box(2:2, 5:6))
-        # conservation: Eden blobs split 3 times keep their sites, each piece inside its blob
-        inner = Eden(RandomPoints(4; region = (5:35, 5:35), seed = 9); rounds = 8, kinds = [:p, :q], seed = 3)
+        # cell 1 (x 1:2, y 1:2) → mother x = 1, daughter 5 x = 2; cell 2 (x 1:2, y 5:6) → 6
+        # is x = 2
+        @test eden_sites(σ, 5) == Set(box(2:2, 1:2)) &&
+            eden_sites(σ, 6) == Set(box(2:2, 5:6))
+        # conservation: Eden blobs split 3 times keep their sites, each piece inside its
+        # blob
+        inner = Eden(
+            RandomPoints(4; region = (5:35, 5:35), seed = 9); rounds = 8, kinds = [
+                :p, :q,
+            ], seed = 3
+        )
         σin = eden_σ(layout(inner, (40, 40)))
         op, rep = layout(Splits(inner, 3; splits = :allow), (40, 40); report = true)
         σs = eden_σ(op)
         @test (σs .!= 0) == (σin .!= 0)
         @test all(c -> length(unique(σin[σs .== c])) == 1, 1:maximum(σs))
         @test maximum(σs) == 32 && (rep[1].requested, rep[1].painted) == (32, 32)
-        @test eden_kinds(op) == [k for _ in 1:16 for k in (:p, :q)]     # each daughter takes its mother's kind
+        # each daughter takes its mother's kind
+        @test eden_kinds(op) == [k for _ in 1:16 for k in (:p, :q)]
         # k = 0 is the inner layer
         op0, rep0 = layout(Splits(inner, 0), (40, 40); report = true)
         @test eden_σ(op0) == σin && (rep0[1].requested, rep0[1].painted) == (4, 4)
@@ -710,39 +1129,64 @@ end
         )
         σ = eden_σ(op)
         @test eden_sites(σ, 1) == Set(box(1:4, 1:2)) && eden_kinds(op) == [:t, :s, :s]
-        @test [(r.type, r.requested, r.painted) for r in rep] == [(:Tiling, 1, 1), (:Splits, 2, 2)]
+        @test [(r.type, r.requested, r.painted) for r in rep] ==
+            [(:Tiling, 1, 1), (:Splits, 2, 2)]
         # clipped is the inner layer's: the corner disc of the Eden fixture (7)
         disc = Circle(Point(1.0, 1.0), 2.0)
-        _, rep = layout(Splits(Eden(Point(1.0, 1.0); region = disc, rounds = 25, kinds = [:a], seed = 4), 0), (10, 10); report = true)
+        _, rep = layout(
+            Splits(
+                Eden(
+                    Point(1.0, 1.0); region = disc, rounds = 25, kinds = [:a], seed = 4
+                ), 0
+            ),
+            (10, 10);
+            report = true
+        )
         @test rep[1].clipped == 7
     end
 end
 
-@testitem "Splits: one-piece check" setup = [EdenSplitsSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "Splits: one-piece check" setup = [EdenSplitsSetup] tags = [
+    :pottsmodels,
+    :acceptance,
+] begin
     @testset "Splits: one-piece check" begin
         # U open upwards: columns x = 1 and x = 3 at y ∈ 1:6, joined by (2, 1) (13 sites).
-        # Σ(x − 2)² = 12, Σ(y − 43/13)² ≈ 40.8, covariance 0 → long axis e₂, centroid y ≈ 3.31 →
-        # daughter = y ∈ 4:6 in both columns: two pieces two columns apart, not connected under
-        # Moore(1). The mother {(1,1:3), (2,1), (3,1:3)} is one piece.
+        # Σ(x − 2)² = 12, Σ(y − 43/13)² ≈ 40.8, covariance 0 → long axis e₂, centroid y ≈
+        # 3.31 → daughter = y ∈ 4:6 in both columns: two pieces two columns apart, not
+        # connected under Moore(1). The mother {(1,1:3), (2,1), (3,1:3)} is one piece.
         U = Sites([vcat([(1, y) for y in 1:6], [(3, y) for y in 1:6], [(2, 1)])])
         op, rep = @test_logs (:warn, r"Splits") layout(Splits(U, 1), (5, 8); report = true)
-        @test eden_sites(eden_σ(op), 2) == Set(vcat([(1, y) for y in 4:6], [(3, y) for y in 4:6]))
+        @test eden_sites(eden_σ(op), 2) ==
+            Set(vcat([(1, y) for y in 4:6], [(3, y) for y in 4:6]))
         @test rep[1].splits == 1
-        op2, rep2 = quiet(() -> layout(Splits(U, 1; splits = :allow), (5, 8); report = true))
+        op2, rep2 = quiet(
+            () -> layout(Splits(U, 1; splits = :allow), (5, 8); report = true)
+        )
         @test same(op2, op) && rep2[1].splits == 1
-        # negative control: a convex cell splits into one-piece halves, no warning, splits = 0
-        _, rep3 = quiet(() -> layout(Splits(Tiling((4, 2); region = (3:6, 4:5), kinds = [:a]), 2), (8, 8); report = true))
+        # negative control: a convex cell splits into one-piece halves, no warning, splits =
+        # 0
+        _, rep3 = quiet(
+            () -> layout(
+                Splits(Tiling((4, 2); region = (3:6, 4:5), kinds = [:a]), 2),
+                (8, 8); report = true
+            )
+        )
         @test rep3[1].splits == 0
     end
 end
 
-@testitem "Splits: shortfall and argument errors" setup = [EdenSplitsSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "Splits: shortfall and argument errors" setup = [EdenSplitsSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "Splits: shortfall and argument errors" begin
-        # a one-site cell cannot be cut: requested 2·2 = 4, painted 3 (cell 2 → (5,5) and (6,5))
+        # a one-site cell cannot be cut: requested 2·2 = 4, painted 3 (cell 2 → (5,5) and
+        # (6,5))
         l(sf) = Splits(Sites([[(2, 2)], [(5, 5), (6, 5)]]), 1; shortfall = sf)
         @test_throws ArgumentError layout(l(:error), (8, 8))
         err = try
-            layout(l(:error), (8, 8)); nothing
+            layout(l(:error), (8, 8))
+            nothing
         catch x
             x
         end
@@ -752,9 +1196,15 @@ end
         @test (rep[1].requested, rep[1].painted, rep[1].misses) == (4, 3, 1)
         σ = eden_σ(op)
         @test σ[2, 2] == 1 && σ[5, 5] == 2 && σ[6, 5] == 3
-        @test same(first(@test_logs (:warn, r"shortfall") layout(l(:warn), (8, 8); report = true)), op)
+        @test same(
+            first(@test_logs (:warn, r"shortfall") layout(l(:warn), (8, 8); report = true)),
+            op
+        )
         # k = 2: nothing left to cut (three one-site cells): requested 8, painted 3
-        _, rep = layout(Splits(Sites([[(2, 2)], [(5, 5), (6, 5)]]), 2; shortfall = :allow), (8, 8); report = true)
+        _, rep = layout(
+            Splits(Sites([[(2, 2)], [(5, 5), (6, 5)]]), 2; shortfall = :allow),
+            (8, 8); report = true
+        )
         @test (rep[1].requested, rep[1].painted) == (8, 3)
         # arguments
         t = Tiling((4, 2); region = (3:6, 4:5), kinds = [:a])
@@ -762,7 +1212,13 @@ end
         @test_throws ArgumentError Splits(t, 31)
         @test_throws ArgumentError Splits(t, 1; shortfall = :maybe)
         @test_throws ArgumentError Splits(t, 1; splits = :never)
-        @test same(layout(remake(Splits(t, 1); k = 2), (8, 8)), layout(Splits(t, 2), (8, 8)))
+        @test same(
+            layout(remake(Splits(t, 1); k = 2), (8, 8)), layout(
+                Splits(t, 2), (
+                    8, 8,
+                )
+            )
+        )
         @test_throws ArgumentError remake(Splits(t, 1); k = -1)
     end
 end

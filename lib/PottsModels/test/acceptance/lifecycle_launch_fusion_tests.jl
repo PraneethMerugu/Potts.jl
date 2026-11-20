@@ -24,18 +24,19 @@
 #      host planner rerunning `before` would do) differs from the fused + fault run, so the
 #      comparison detects a double application.
 #      CPU: the device planner forced on the CPU backend (`_FORCE_DEVICE_LIFECYCLE`, as the
-#      CorePotts tests do), `CheckerboardCPM(; fused_lifecycle_max_sites = 0)` so the staged form is the one that runs.
-#      Metal (POTTS_GPU=metal with Metal loaded, Float32): the same comparisons.
+#      CorePotts tests do), `CheckerboardCPM(; fused_lifecycle_max_sites = 0)` so the staged
+#      form is the one that runs. Metal (POTTS_GPU=metal with Metal loaded, Float32): the
+#      same comparisons.
 #  (b) `generated_code(sys)` shows the lifecycle as Potts builds it. Contract: the result
 #      has a field `lifecycle`, `nothing` for a model without divisions, else a NamedTuple
 #      with at least `trigger` (the trigger's expression) and `before` (the expression of
-#      the fused cell update, or `nothing`). When the problem fuses (`prob.f.lifecycle.before
-#      !== nothing`), `lifecycle.before` is the update and the update is NOT among
-#      `phases`; when fusion is not legal (the trigger reads another cell's value of the
-#      written column; the update is not the last after-MCS phase), `lifecycle.before ===
-#      nothing` and the update stays in `phases`. `generated_code` and `PottsProblem` agree
-#      for both scalar types. Fingerprints are unchanged (recorded on 457104d8): showing the
-#      code differently must not change the code.
+#      the fused cell update, or `nothing`). When the problem fuses
+#      (`prob.f.lifecycle.before !== nothing`), `lifecycle.before` is the update and the
+#      update is NOT among `phases`; when fusion is not legal (the trigger reads another
+#      cell's value of the written column; the update is not the last after-MCS phase),
+#      `lifecycle.before === nothing` and the update stays in `phases`. `generated_code` and
+#      `PottsProblem` agree for both scalar types. Fingerprints are unchanged (recorded on
+#      457104d8): showing the code differently must not change the code.
 #
 # Test-only hook the implementer adds (not public, not exported), next to `_LAUNCH_FAULT`
 # in `lib/CorePotts/src/lifecycle_device.jl`:
@@ -86,7 +87,8 @@ end
         contacts => 4.0
     end
     @after_mcs g ~ g + 1.0
-    @divide cells(A) Every(2) when = g >= 4.0 && volume >= 20, along = RandomPlane(), g => 0.0
+    @divide cells(A) Every(2) when = g >= 4.0 && volume >= 20, along = RandomPlane(),
+        g => 0.0
     @sweep Metropolis(; temperature = 8.0)
 end
 # (b) fusion not legal: the trigger reads another cell's `g`
@@ -133,33 +135,45 @@ end
 # The unfused twin (D-101's construction): `before = nothing`, the update as the last
 # after-MCS `CellPhase`; `extra` appends more after-MCS phases (the negative control)
 function unfuse(prob; extra = ())
-    f = prob.f; lc = f.lifecycle
+    f = prob.f
+    lc = f.lifecycle
     @assert lc.before !== nothing
     lc0 = CorePotts.Lifecycle(
         lc.trigger, lc.normal, lc.cluster_normal, lc.kind, lc.divide!, lc.cluster_divide!,
         lc.rebuild!, lc.every, lc.rules, nothing, nothing, nothing
     )
     ph = f.phases
-    ph0 = CorePotts.Phases(ph.before_mcs, (ph.after_mcs..., CorePotts.CellPhase(lc.before), extra...), ph.end_mcs, ph.at_init)
+    ph0 = CorePotts.Phases(
+        ph.before_mcs, (ph.after_mcs..., CorePotts.CellPhase(lc.before), extra...),
+        ph.end_mcs, ph.at_init
+    )
     f0 = CorePotts.CPMFunction(
         f.delta_H, f.commit!, f.constraint, f.temperature, f.bias, ph0, lc0,
         f.acceptance, f.footprint, f.fingerprint, f.sys, f.track, f.connectivity
     )
     return CorePotts.PottsProblem(
-        f0, prob.u0, prob.lattice, prob.contact, prob.proposal, prob.relations, prob.spacing,
-        prob.frozen, prob.tspan, prob.p, prob.seed, prob.replica, prob.repeat, prob.tangent, prob.kwargs
+        f0, prob.u0, prob.lattice, prob.contact, prob.proposal, prob.relations,
+        prob.spacing,
+        prob.frozen, prob.tspan, prob.p, prob.seed, prob.replica,
+        prob.repeat, prob.tangent, prob.kwargs
     )
 end
 const TRACKERS = (:anchor, :m1, :m2)
 function same(a, b)
-    return length(a.u) == length(b.u) &&
-        all(i -> a.u[i].ownership == b.u[i].ownership && a.u[i].cell == b.u[i].cell && a.u[i].model == b.u[i].model, eachindex(a.u))
+    return length(a.u) == length(b.u) && all(
+        i -> a.u[i].ownership == b.u[i].ownership && a.u[i].cell == b.u[i].cell &&
+            a.u[i].model == b.u[i].model,
+        eachindex(a.u)
+    )
 end
 function same_but_trackers(a, b)
     return length(a.u) == length(b.u) && all(eachindex(a.u)) do i
         x, y = a.u[i], b.u[i]
         x.ownership == y.ownership && x.model == y.model && keys(x.cell) == keys(y.cell) &&
-            all(k -> k in TRACKERS || getfield(x.cell, k) == getfield(y.cell, k), keys(x.cell))
+            all(
+            k -> k in TRACKERS || getfield(x.cell, k) == getfield(y.cell, k),
+            keys(x.cell)
+        )
     end
 end
 # trackers of every save equal a recount from σ (centroid and covariance of each live cell)
@@ -170,10 +184,16 @@ function trackers_exact(sol, lat::CorePotts.Lattice{N}) where {N}
         ref = merge(m, (; volume = Int32[count(==(c), u.ownership) for c in 1:cap]))
         u.cell.volume == ref.volume && all(1:cap) do c
             ref.volume[c] == 0 && return true
-            all(isapprox.(CorePotts.centroid(u.cell, lat, c), CorePotts.centroid(ref, lat, c); atol = 1.0e-9)) &&
-                all(
+            all(
                 isapprox.(
-                    CorePotts.covariance(Float64, u.cell, c, Val(N)), CorePotts.covariance(Float64, ref, c, Val(N));
+                    CorePotts.centroid(u.cell, lat, c),
+                    CorePotts.centroid(ref, lat, c); atol = 1.0e-9
+                )
+            ) && all(
+                isapprox.(
+                    CorePotts.covariance(Float64, u.cell, c, Val(N)), CorePotts.covariance(
+                        Float64, ref, c, Val(N)
+                    );
                     atol = 1.0e-9
                 )
             )
@@ -202,7 +222,10 @@ function lifecycle_run(prob, k; backend = nothing, device_on_cpu = backend === n
     HOOK && (CorePotts._STAGED_FAULT_AFTER[] = k)
     try
         kw = backend === nothing ? (;) : (; backend)
-        integ = init(prob, CheckerboardCPM(; fused_lifecycle_max_sites = 0); saveat = 1, kw...)
+        integ = init(
+            prob, CheckerboardCPM(; fused_lifecycle_max_sites = 0); saveat = 1,
+            kw...
+        )
         D = integ.lcache.device
         @assert D isa CorePotts.DeviceLifecycle && D.fused! === nothing
         handover = -1
@@ -219,15 +242,20 @@ function lifecycle_run(prob, k; backend = nothing, device_on_cpu = backend === n
 end
 function cases(T)
     [
-        "counter" => PottsProblem(Counter(; name = :c), counter_state(), (0, 40); T, capacity = 64),
-        "counter Every(2)" => PottsProblem(Counter2(; name = :c), counter_state(), (1, 41); T, capacity = 64),
+        "counter" =>
+            PottsProblem(Counter(; name = :c), counter_state(), (0, 40); T, capacity = 64),
+        "counter Every(2)" =>
+            PottsProblem(Counter2(; name = :c), counter_state(), (1, 41); T, capacity = 64),
         "OpenVT monolayer" => PottsProblem(
             OpenVTGrowingMonolayer(; name = :o, lattice = (60, 60), τ = 10.0),
             openvt_monolayer_state(; lattice = (60, 60)), (0, 60); T, capacity = 256
         ),
         "Akeeb" => PottsProblem(
             AkeebInvasion(; name = :a, lattice = (60, 40)),
-            [akeeb_state(; lattice = (60, 40)); :clock_min => 3.0; :clock_spread => 5.0; :V_max => 9.0], (0, 60);
+            [
+                akeeb_state(; lattice = (60, 40)); :clock_min => 3.0; :clock_spread => 5.0;
+                :V_max => 9.0
+            ], (0, 60);
             T, capacity = 1500
         ),
     ]
@@ -235,12 +263,16 @@ end
 function check_handover(name, prob, k; backend = nothing)
     @test prob.f.lifecycle.before !== nothing                     # the problem is fused
     q = unfuse(prob)
-    fa, form, at = @test_logs (:warn, r"cannot launch") match_mode = :any lifecycle_run(prob, k; backend)
+    fa, form, at = @test_logs (
+        :warn,
+        r"cannot launch",
+    ) match_mode = :any lifecycle_run(prob, k; backend)
     @test form == CorePotts._FORM_HOST && at >= 0                  # the handover happened
     ua, uform, uat = lifecycle_run(q, k; backend)
     @test uform == CorePotts._FORM_HOST && uat == at
     un, nform, _ = lifecycle_run(q, 0; backend)
-    @test nform != CorePotts._FORM_HOST                            # the device planner throughout
+    # the device planner throughout
+    @test nform != CorePotts._FORM_HOST
     # a device checkerboard is not reproducible (D-271): its runs are compared only through
     # the recount below; the CPU runs (phases inline) carry the run-to-run comparisons
     if backend === nothing
@@ -248,7 +280,8 @@ function check_handover(name, prob, k; backend = nothing)
         @test same(fa, ua)
         # against the device planner: bitwise except the trackers' representation …
         @test same_but_trackers(fa, un)
-        @test fa.stats.lifecycle.divisions == un.stats.lifecycle.divisions == ua.stats.lifecycle.divisions
+        @test fa.stats.lifecycle.divisions == un.stats.lifecycle.divisions ==
+            ua.stats.lifecycle.divisions
     end
     # … whose values equal a recount from σ
     @test trackers_exact(fa, prob.lattice) && trackers_exact(un, prob.lattice) &&
@@ -263,27 +296,46 @@ end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "lifecycle launch fusion: lifecycle follow-ups" setup = [LifecycleLaunchFusionSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "lifecycle launch fusion: lifecycle follow-ups" setup = [
+    LifecycleLaunchFusionSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "lifecycle launch fusion: lifecycle follow-ups" begin
-        @testset "(a) staged form fails after the fused `before` ran (CPU, forced device planner)" begin
-            @test HOOK                       # CorePotts._STAGED_FAULT_AFTER (test-only hook)
+        @testset "(a) staged form fails after the fused `before` ran (CPU, forced device \
+            planner)" begin
+            # CorePotts._STAGED_FAULT_AFTER (test-only hook)
+            @test HOOK
             if HOOK
                 for (name, prob) in cases(Float64), k in (1, 2), seed in (1, 2)
                     @testset "$name, fault after kernel $k, seed $seed" begin
                         check_handover(name, remake(prob; seed), k)
                     end
                 end
-                # negative control: applying the update twice at the handover MCS (what a host
-                # planner that reruns `before` does) is detected by the comparison
+                # negative control: applying the update twice at the handover MCS (what a
+                # host planner that reruns `before` does) is detected by the comparison
                 prob = remake(last(cases(Float64)[1]); seed = 1)
                 fa, at = lifecycle_run(prob, 1)[[1, 3]]
                 up = prob.f.lifecycle.before
-                twice(st, p, ctx, key, mcs, c) = (mcs == at && up(st, p, ctx, key, mcs, c); nothing)
-                dbl = lifecycle_run(unfuse(prob; extra = (CorePotts.CellPhase(twice),)), 0)[1]
+                function twice(st, p, ctx, key, mcs, c)
+                    mcs == at && up(st, p, ctx, key, mcs, c)
+                    return nothing
+                end
+                dbl = lifecycle_run(
+                    unfuse(prob; extra = (CorePotts.CellPhase(twice),)),
+                    0
+                )[1]
                 @test !same_but_trackers(fa, dbl)
-                # control of the control: the wrapper is inert at an MCS the run never reaches
-                never(st, p, ctx, key, mcs, c) = (mcs == -7 && up(st, p, ctx, key, mcs, c); nothing)
-                inert = lifecycle_run(unfuse(prob; extra = (CorePotts.CellPhase(never),)), 0)[1]
+                # control of the control: the wrapper is inert at an MCS the run never
+                # reaches
+                function never(st, p, ctx, key, mcs, c)
+                    mcs == -7 && up(st, p, ctx, key, mcs, c)
+                    return nothing
+                end
+                inert = lifecycle_run(
+                    unfuse(prob; extra = (CorePotts.CellPhase(never),)),
+                    0
+                )[1]
                 @test same_but_trackers(fa, inert)
             end
         end
@@ -303,14 +355,21 @@ end
         end
 
         @testset "(b) generated_code shows the fused lifecycle" begin
-            σ = zeros(Int32, 24, 24); σ[3:6, 3:6] .= 1; σ[15:18, 15:18] .= 2
+            σ = zeros(Int32, 24, 24)
+            σ[3:6, 3:6] .= 1
+            σ[15:18, 15:18] .= 2
             op = [ownership => σ, kind => [:A, :A]]
             fused_model(name) = Counter(; name)
             writes_g(ex) = ex !== nothing && occursin("st.cell.g[c] =", string(ex))
-            is_trigger(ex) = ex !== nothing && occursin("EVENT_DIVIDE", string(ex)) && occursin("EVENT_NONE", string(ex))
+            function is_trigger(ex)
+                return ex !== nothing && occursin("EVENT_DIVIDE", string(ex)) &&
+                    occursin("EVENT_NONE", string(ex))
+            end
             for T in (Float64, Float32)
                 # fused: the update is the lifecycle's `before`, not an after-MCS phase
-                prob = PottsProblem(fused_model(:f), counter_state(), (0, 4); T, capacity = 16)
+                prob = PottsProblem(
+                    fused_model(:f), counter_state(), (0, 4); T, capacity = 16
+                )
                 @test prob.f.lifecycle.before !== nothing
                 gc = generated_code(fused_model(:f); T)
                 @test hasproperty(gc, :lifecycle)
@@ -338,11 +397,20 @@ end
             end
             # a published model: OpenVT's `V_target` update is fused
             sys = OpenVTGrowingMonolayer(; name = :o, lattice = (24, 24))
-            prob = PottsProblem(sys, openvt_monolayer_state(; lattice = (24, 24)), (0, 2); capacity = 64)
+            prob = PottsProblem(
+                sys, openvt_monolayer_state(; lattice = (24, 24)), (0, 2);
+                capacity = 64
+            )
             @test prob.f.lifecycle.before !== nothing
             gc = generated_code(sys)
             writes_vt(ex) = ex !== nothing && occursin("st.cell.V_target[c] =", string(ex))
-            @test any(writes_vt, Any[gc.phases...; hasproperty(gc, :lifecycle) ? [gc.lifecycle.before] : []])  # control
+            @test any(
+                writes_vt, Any[
+                    gc.phases...;
+                    hasproperty(gc, :lifecycle) ? [gc.lifecycle.before] :
+                        []
+                ]
+            )  # control
             @test !any(writes_vt, gc.phases)
             @test hasproperty(gc, :lifecycle) && writes_vt(gc.lifecycle.before)
         end

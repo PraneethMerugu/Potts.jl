@@ -10,11 +10,11 @@
 # host code), so it declares it:
 #     CorePotts.frozen_reads(sys)   # default `nothing`
 # A tuple of Symbols naming the state leaves `remake_frozen(sys, prob, u)` reads at a
-# refresh: `:ownership` (the labels) or a cell column name, as `HostPhase(...; reads)` (D-092).
-# `nothing` (the default) keeps today's behaviour: the whole state is copied to the host
-# at every custom-rule refresh. With a declaration, what the rule sees in undeclared leaves
-# is unspecified. A name that is neither `:ownership` nor a cell column of the state is an
-# `ArgumentError` by the first refresh (at `init` or at `refresh_frozen!`), on every
+# refresh: `:ownership` (the labels) or a cell column name, as `HostPhase(...; reads)`
+# (D-092). `nothing` (the default) keeps today's behaviour: the whole state is copied to the
+# host at every custom-rule refresh. With a declaration, what the rule sees in undeclared
+# leaves is unspecified. A name that is neither `:ownership` nor a cell column of the state
+# is an `ArgumentError` by the first refresh (at `init` or at `refresh_frozen!`), on every
 # backend, so a typo never reads a stale or device leaf silently. Public, not exported,
 # beside `frozen_varies`/`frozen_kinds`. The standard rule (`frozen_kinds`) ignores it.
 #
@@ -112,12 +112,24 @@ function problem(sys; wide = false, T = Float64)
     model = (;)
     site = (;)
     if wide
-        cell = merge(cell, (; z1 = fill(T(2), n), z2 = fill(Int32(7), n), z3 = ones(T, 3, n)))
+        cell = merge(
+            cell, (;
+                z1 = fill(T(2), n), z2 = fill(Int32(7), n), z3 = ones(T, 3, n),
+            )
+        )
         model = (; q = T[5])
         site = (; h = fill(T(0.5), DIMS))
     end
     u0 = CorePotts.initial_state(σ, kinds; cell, model, site)
-    dH(st, p, prop, ctx) = CorePotts.volume_delta(st.cell.volume, prop, (v, c) -> p.λ * (v - p.V0)^2)
+    function dH(st, p, prop, ctx)
+        return CorePotts.volume_delta(
+            st.cell.volume, prop, (v, c) -> p.λ *
+                (
+                v -
+                    p.V0
+            )^2
+        )
+    end
     f = CorePotts.CPMFunction(dH; temperature = (st, p, prop, ctx) -> p.T, sys)
     p = (; λ = T(100), V0 = T(16), T = T(0))
     lat = CorePotts.Lattice(DIMS; boundary = CorePotts.Closed())
@@ -150,26 +162,40 @@ function bytes_refreshes(sys, alg; backend = CPU(), wide = false, T = Float64)
     end
     return (; deltas, masks, nmobile, integ, prob)
 end
-bytes_bound(prob) = sizeof(prob.u0.ownership) + sizeof(prob.u0.cell.stiff) + prod(DIMS) + SLACK
+function bytes_bound(prob)
+    return sizeof(prob.u0.ownership) + sizeof(prob.u0.cell.stiff) + prod(DIMS) +
+        SLACK
+end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "frozen kind refresh bytes: fixtures differ only by quantities the rule does not read" setup = [FrozenKindRefreshBytesSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
-    @testset "frozen kind refresh bytes: fixtures differ only by quantities the rule does not read" begin
+@testitem "frozen kind refresh bytes: fixtures differ only by quantities the rule does \
+    not read" setup = [FrozenKindRefreshBytesSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
+    @testset "frozen kind refresh bytes: fixtures differ only by quantities the rule does \
+        not read" begin
         a, b = problem(Declared()), problem(Declared(); wide = true)
-        @test issubset(keys(a.u0.cell), keys(b.u0.cell)) && length(keys(b.u0.cell)) == length(keys(a.u0.cell)) + 3
+        @test issubset(keys(a.u0.cell), keys(b.u0.cell)) &&
+            length(keys(b.u0.cell)) == length(keys(a.u0.cell)) + 3
         @test haskey(b.u0.model, :q) && haskey(b.u0.site, :h) && !haskey(a.u0.site, :h)
-        @test all(c -> sizeof(getfield(b.u0.cell, c)) >= 8 * SLACK, keys(b.u0.cell))   # slack < any column
+        # slack < any column
+        @test all(c -> sizeof(getfield(b.u0.cell, c)) >= 8 * SLACK, keys(b.u0.cell))
         @test a.u0.ownership == b.u0.ownership && a.u0.cell.stiff == b.u0.cell.stiff
         @test a.frozen == b.frozen == expected(STIFF0)
         @test count(a.frozen) == 16
         @test problem(Standard()).frozen == expected(STIFF0)
-        @test bytes_bound(a) == 1024 + 256 + 256 + 16                         # σ, stiff, mask up, slack
+        # σ, stiff, mask up, slack
+        @test bytes_bound(a) == 1024 + 256 + 256 + 16
     end
 end
 
-@testitem "frozen kind refresh bytes: the `frozen_reads` hook" setup = [FrozenKindRefreshBytesSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "frozen kind refresh bytes: the `frozen_reads` hook" setup = [
+    FrozenKindRefreshBytesSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "frozen kind refresh bytes: the `frozen_reads` hook" begin
         @test HOOK
         if HOOK
@@ -187,8 +213,12 @@ end
     end
 end
 
-@testitem "frozen kind refresh bytes: custom-rule masks on the CPU (today's snapshot path, hand-checked)" setup = [FrozenKindRefreshBytesSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "frozen kind refresh bytes: custom-rule masks on the CPU (today's snapshot path, hand-checked)" begin
+@testitem "frozen kind refresh bytes: custom-rule masks on the CPU (today's snapshot \
+    path, hand-checked)" setup = [FrozenKindRefreshBytesSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "frozen kind refresh bytes: custom-rule masks on the CPU (today's snapshot \
+        path, hand-checked)" begin
         m0, m1 = expected(STIFF0), expected(STIFF1)
         @test count(m0) == 16 && count(m1) == 32
         N = prod(DIMS)
@@ -199,8 +229,10 @@ end
                 @test r.masks == [m0, m1, m1]
                 @test r.nmobile == [N - 16, N - 32, N - 32]
                 @test r.masks[end] == frozen_sites(r.prob, r.integ.state)
-                @test all(==((0, 0, 0)), r.deltas)                              # nothing counted on the CPU
-                @test r.integ.state.ownership == r.prob.u0.ownership                            # σ fixed (T = 0)
+                # nothing counted on the CPU
+                @test all(==((0, 0, 0)), r.deltas)
+                # σ fixed (T = 0)
+                @test r.integ.state.ownership == r.prob.u0.ownership
                 @test r.integ.stats.refreshes == 3
             end
             std = bytes_refreshes(Standard(), alg; wide)
@@ -218,8 +250,12 @@ end
     end
 end
 
-@testitem "frozen kind refresh bytes: custom-rule refresh copies only the declared leaves on the device" setup = [FrozenKindRefreshBytesSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "frozen kind refresh bytes: custom-rule refresh copies only the declared leaves on the device" begin
+@testitem "frozen kind refresh bytes: custom-rule refresh copies only the declared leaves \
+    on the device" setup = [FrozenKindRefreshBytesSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "frozen kind refresh bytes: custom-rule refresh copies only the declared \
+        leaves on the device" begin
         if ON_DEVICE
             backend = PottsDevices.device_backend()
             alg = CheckerboardCPM()
@@ -229,20 +265,25 @@ end
             nar = bytes_refreshes(Declared(), alg; backend, T)
             wid = bytes_refreshes(Declared(), alg; backend, T, wide = true)
             bound = bytes_bound(nar.prob)
-            @info "frozen kind refresh bytes declared refresh (syncs, transfers, bytes)" narrow = nar.deltas wide = wid.deltas bound
+            @info "frozen kind refresh bytes declared refresh (syncs, transfers, \
+                bytes)" narrow = nar.deltas wide = wid.deltas bound
             @test all(==(first(nar.deltas)), nar.deltas)                        # steady
-            @test wid.deltas == nar.deltas                                      # unused quantities: not moved
+            # unused quantities: not moved
+            @test wid.deltas == nar.deltas
             @test all(d -> d[3] <= bound, nar.deltas)
             for r in (nar, wid)
-                @test r.masks == [m0, m1, m1]                                   # the rule ran on the new stiff
+                # the rule ran on the new stiff
+                @test r.masks == [m0, m1, m1]
                 @test r.nmobile == [N - 16, N - 32, N - 32]
                 @test r.integ.stats.refreshes == 3
                 @test Array(r.integ.state.ownership) == r.prob.u0.ownership
             end
-            # negative control: the undeclared fallback (whole state) sees the unused quantities
+            # negative control: the undeclared fallback (whole state) sees the unused
+            # quantities
             fn = bytes_refreshes(Undeclared(), alg; backend, T)
             fw = bytes_refreshes(Undeclared(), alg; backend, T, wide = true)
-            @info "frozen kind refresh bytes fallback refresh (syncs, transfers, bytes)" narrow = fn.deltas wide = fw.deltas
+            @info "frozen kind refresh bytes fallback refresh (syncs, transfers, \
+                bytes)" narrow = fn.deltas wide = fw.deltas
             @test all(i -> fw.deltas[i][3] > fn.deltas[i][3], 1:3)
             @test fn.masks == fw.masks == nar.masks
             @test fn.nmobile == nar.nmobile
@@ -260,17 +301,23 @@ end
     end
 end
 
-@testitem "frozen kind refresh bytes: standard-rule refresh on the device (twin-invariant)" setup = [FrozenKindRefreshBytesSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "frozen kind refresh bytes: standard-rule refresh on the device (twin-invariant)" begin
+@testitem "frozen kind refresh bytes: standard-rule refresh on the device \
+    (twin-invariant)" setup = [FrozenKindRefreshBytesSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "frozen kind refresh bytes: standard-rule refresh on the device \
+        (twin-invariant)" begin
         if ON_DEVICE
             backend = PottsDevices.device_backend()
             alg = CheckerboardCPM()
             nar = bytes_refreshes(Standard(), alg; backend, T = Float32)
             wid = bytes_refreshes(Standard(), alg; backend, T = Float32, wide = true)
-            @info "frozen kind refresh bytes standard refresh (syncs, transfers, bytes)" narrow = nar.deltas wide = wid.deltas
+            @info "frozen kind refresh bytes standard refresh (syncs, transfers, \
+                bytes)" narrow = nar.deltas wide = wid.deltas
             @test all(==(first(nar.deltas)), nar.deltas)
             @test wid.deltas == nar.deltas
-            @test all(d -> d[3] <= SLACK, nar.deltas)                    # the counts only (12 B)
+            # the counts only (12 B)
+            @test all(d -> d[3] <= SLACK, nar.deltas)
             @test nar.masks == wid.masks == [expected((2,)), expected((3,)), expected((3,))]
         else
             @test_skip "device (POTTS_GPU=metal|rocm)"

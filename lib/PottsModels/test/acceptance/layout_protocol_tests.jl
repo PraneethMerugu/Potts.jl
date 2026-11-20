@@ -1,22 +1,23 @@
 #
-# the layout protocol `paint!(op::LayoutState, l, lat)`, the layout report, `Tiling(partial)`
-# and `splits`.
+# the layout protocol `paint!(op::LayoutState, l, lat)`, the layout report,
+# `Tiling(partial)` and `splits`.
 #
 # The surface (Potts, src/layouts.jl, unless noted):
 #
-#   Potts.paint!(op::Potts.LayoutState, l, lat)                          (public, the one method)
-#       The extension method of every layer. `op` is opaque: a layer reads and writes it only
-#       through the accessors below, and reads the lattice only through the lattice queries
-#       (no `LatticeSpec` field). `Tiling`, `Scattered`, `Frame`, `InsertUntil`, `overlay` and
-#       PottsModels' `VoronoiBall` are rewritten on it. The return value is ignored.
-#       `paint!(σ, kinds, l, lat)` is removed with no alias (D-028): no 4-argument `paint!`
-#       method is left in Potts or PottsModels.
+#   Potts.paint!(op::Potts.LayoutState, l, lat)                     (public, the one method)
+#       The extension method of every layer. `op` is opaque: a layer reads and writes it
+#       only through the accessors below, and reads the lattice only through the lattice
+#       queries (no `LatticeSpec` field). `Tiling`, `Scattered`, `Frame`, `InsertUntil`,
+#       `overlay` and PottsModels' `VoronoiBall` are rewritten on it. The return value is
+#       ignored. `paint!(σ, kinds, l, lat)` is removed with no alias (D-028): no 4-argument
+#       `paint!` method is left in Potts or PottsModels.
 #   State accessors (public):
-#       new_cell!(op, kind) -> id      allocates the next id, `ncells(op) + 1`; ids are those
-#                                      of the paint so far (compaction happens after the paint)
-#       assign!(op, x, id) -> Int      paints site `x` (a tuple of integers) or the box `x` (a
-#                                      tuple of unit ranges) with cell `id`; returns the number of
-#                                      sites written
+#       new_cell!(op, kind) -> id      allocates the next id, `ncells(op) + 1`; ids are
+#                                      those of the paint so far (compaction happens after
+#                                      the paint)
+#       assign!(op, x, id) -> Int      paints site `x` (a tuple of integers) or the box `x`
+#                                      (a tuple of unit ranges) with cell `id`; returns the
+#                                      number of sites written
 #       owner(op, x) -> Integer        the current owner of site `x` (0 = medium)
 #       kindof(op, id)                 the kind given to `new_cell!`
 #       ncells(op) -> Int              ids allocated so far
@@ -25,9 +26,9 @@
 #
 #   layout(l, x; report = false)
 #       `report = true` returns `(point, report)`, `point == layout(l, x)` (the same SII
-#       operating point `[ownership => σ, kind => kinds]`). `report` is a vector of rows, one
-#       per LEAF layer in paint order (an `overlay` contributes its flattened leaves). Every
-#       row has the properties
+#       operating point `[ownership => σ, kind => kinds]`). `report` is a vector of rows,
+#       one per LEAF layer in paint order (an `overlay` contributes its flattened leaves).
+#       Every row has the properties
 #         type       nameof the leaf layer's type, a Symbol (`:Tiling`, `:InsertUntil`, …)
 #         requested  Tiling: boxes placed; Scattered: n; Frame: 1; InsertUntil with
 #                    `number = n`: n; a custom layer: what it passed to `record!`
@@ -35,19 +36,20 @@
 #         dropped    of those, the cells left with no site after the whole layout
 #         misses     InsertUntil: missed draws (both modes); a custom layer: its `record!`
 #                    value (default 0); other layers 0
-#         counted    InsertUntil: what its stop rule counted (painted, + misses under :count);
-#                    Tiling, Scattered, Frame: painted
+#         counted    InsertUntil: what its stop rule counted (painted, + misses under
+#                    :count); Tiling, Scattered, Frame: painted
 #         splits     cells cut ONLY by this layer (a cut = this layer took at least one of
-#                    the cell's sites) whose remaining sites are disconnected after the whole
-#                    layout, counted whatever the layer's `splits` setting
+#                    the cell's sites) whose remaining sites are disconnected after the
+#                    whole layout, counted whatever the layer's `splits` setting
 #       Rows may carry more properties (`layer`, `clipped`, …). `layout_tally` is removed
 #       with no alias (D-028).
 #
-#   Tiling(size; spacing = 0, region = <whole lattice>, kinds, partial = :skip, splits = :warn)
-#       `partial = :skip` (default) places whole boxes only, as today. `partial = :clip` also
-#       starts boxes up to the end of the region and keeps the part of each box inside
-#       region ∩ lattice (a region may then reach beyond the lattice). Any other value throws
-#       an ArgumentError.
+#   Tiling(size; spacing = 0, region = <whole lattice>, kinds, partial = :skip, splits =
+#       :warn)
+#       `partial = :skip` (default) places whole boxes only, as today. `partial = :clip`
+#       also starts boxes up to the end of the region and keeps the part of each box inside
+#       region ∩ lattice (a region may then reach beyond the lattice). Any other value
+#       throws an ArgumentError.
 #   splits = :warn | :allow on Tiling, Scattered, Frame and InsertUntil (default :warn; any
 #       other value throws an ArgumentError). `layout` warns (a message matching
 #       r"split cell") once per cell that later layers cut into disconnected pieces, unless
@@ -56,7 +58,8 @@
 #       constructor with the layer's own keywords overridden by `kw`, so it validates.
 #
 #   PottsModels: akeeb_layout(; lattice, seed, slab, seeding) is
-#       overlay(Tiling((3, 3); region = (1:X, 1:3cld(slab, 3)), kinds = [:follower], partial = :clip),
+#       overlay(Tiling((3, 3); region = (1:X, 1:3cld(slab, 3)), kinds = [:follower], partial
+#       = :clip),
 #               InsertUntil(:leader; into = [:follower], fraction = 1 // 4, seed, misses,
 #                           region = (2:X, 2:(slab - 1)), splits = :allow))
 #       (`_AkeebSlab` is deleted), and `akeeb_state` paints it with no logger of its own
@@ -64,10 +67,10 @@
 #
 # Expected values. The Akeeb digests below were computed on the tree before this item
 # (ec544d8) with `layout_tally(akeeb_layout(; lattice, seed, seeding), lattice)` and
-# `akeeb_state`, by /tmp/protocol/digests_today.jl: SHA-256 of σ's little-endian Int32 bytes,
-# the follower count (kinds are `nf` followers then `painted` leaders) and the tally. Every
-# other expected value is derived by hand in the comments; the one draw-dependent count (the
-# report fixture's misses) is also recomputed from the documented draw rule.
+# `akeeb_state`, by /tmp/protocol/digests_today.jl: SHA-256 of σ's little-endian Int32
+# bytes, the follower count (kinds are `nf` followers then `painted` leaders) and the tally.
+# Every other expected value is derived by hand in the comments; the one draw-dependent
+# count (the report fixture's misses) is also recomputed from the documented draw rule.
 
 @testsetup module LayoutProtocolSetup
 include(joinpath(@__DIR__, "..", "shared", "common.jl"))
@@ -87,7 +90,10 @@ function protocol_logs(f)
 end
 function quietly(f)                 # f(), with its log records captured, not printed
     v = nothing
-    Base.CoreLogging.with_logger(() -> (v = f()), Test.TestLogger(min_level = Base.CoreLogging.Debug))
+    Base.CoreLogging.with_logger(
+        () -> (v = f()),
+        Test.TestLogger(min_level = Base.CoreLogging.Debug)
+    )
     return v
 end
 function splitwarns(f)
@@ -96,9 +102,9 @@ function splitwarns(f)
         protocol_logs(f)
     )
 end
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Custom layers, written against the new protocol only
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 const SEEN = Any[]
 # One cell on a column (column 1 on a periodic x axis, else column 2) over every in-domain
 # site not owned by a cell of kind `avoid`, then one 2 × 2 box cell in the upper corner.
@@ -158,7 +164,8 @@ function lat_field_reads(T)
     resolve(x) = x isa Core.SSAValue ? resolve(ci.code[x.id]) : x
     rhs(st) = st isa Expr && st.head === :(=) ? st.args[2] : st
     alias = Set{Int}([lat])
-    for _ in 1:length(ci.code), st in ci.code                 # plain aliases `L = lat`, to a fixpoint
+    # plain aliases `L = lat`, to a fixpoint
+    for _ in 1:length(ci.code), st in ci.code
         st isa Expr && st.head === :(=) && st.args[1] isa Core.SlotNumber || continue
         v = resolve(st.args[2])
         v isa Core.SlotNumber && v.id in alias && push!(alias, st.args[1].id)
@@ -174,9 +181,9 @@ function lat_field_reads(T)
     end
     return reads
 end
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Akeeb: the published slab, its inventory, and the public-layer expression
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 
 # (lattice, seeding, seed, followers, (painted, misses, counted))
 const AKEEB = [
@@ -200,22 +207,35 @@ const AKEEB = [
 # The published slab written with public layers only.
 function protocol_akeeb(X, slab, seed, misses; splits = :allow)
     return overlay(
-        Tiling((3, 3); region = (1:X, 1:(3 * cld(slab, 3))), kinds = [:follower], partial = :clip),
-        InsertUntil(:leader; into = [:follower], fraction = 1 // 4, seed, misses, region = (2:X, 2:(slab - 1)), splits)
+        Tiling(
+            (3, 3); region = (1:X, 1:(3 * cld(slab, 3))), kinds = [:follower],
+            partial = :clip
+        ),
+        InsertUntil(
+            :leader; into = [:follower], fraction = 1 // 4,
+            seed, misses, region = (2:X, 2:(slab - 1)), splits
+        )
     )
 end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "layout protocol: Akeeb σ, kinds and inventory agree with the public-layer expression" setup = [LayoutProtocolSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "layout protocol: Akeeb σ, kinds and inventory agree with the public-layer expression" begin
+@testitem "layout protocol: Akeeb σ, kinds and inventory agree with the public-layer \
+    expression" setup = [LayoutProtocolSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "layout protocol: Akeeb σ, kinds and inventory agree with the public-layer \
+        expression" begin
         @test !isdefined(PottsModels, :_AkeebSlab)
         for (lat, seeding, seed, nf, tally) in AKEEB
             misses = seeding === :authors ? :count : :retry
             np = tally[1]
             expected_kinds = [fill(:follower, nf); fill(:leader, np)]
             # akeeb_layout through the report
-            op, rep = layout(PottsModels.akeeb_layout(; lattice = lat, seed, seeding), lat; report = true)
+            op, rep = layout(
+                PottsModels.akeeb_layout(; lattice = lat, seed, seeding), lat;
+                report = true
+            )
             σ = protocol_σ(op)
             @test σ isa Matrix{Int32} && size(σ) == lat
             @test protocol_kinds(op) == expected_kinds
@@ -234,32 +254,80 @@ end
         # x is periodic in the model: painting on the system gives the closed-lattice cells
         sys = AkeebInvasion(; name = :protocol, lattice = (99, 60))
         for seeding in (:authors, :retry)
-            closed = protocol_σ(layout(PottsModels.akeeb_layout(; lattice = (99, 60), seed = 1, seeding), (99, 60)))
-            @test protocol_σ(layout(PottsModels.akeeb_layout(; lattice = (99, 60), seed = 1, seeding), sys)) == closed
+            closed = protocol_σ(
+                layout(
+                    PottsModels.akeeb_layout(; lattice = (99, 60), seed = 1, seeding),
+                    (99, 60)
+                )
+            )
+            @test protocol_σ(
+                layout(
+                    PottsModels.akeeb_layout(; lattice = (99, 60), seed = 1, seeding),
+                    sys
+                )
+            ) ==
+                closed
         end
         # negative control: the comparison sees a single changed site
-        a = copy(protocol_σ(layout(PottsModels.akeeb_layout(; lattice = (99, 60), seed = 1), (99, 60))))
-        b = copy(a); b[50, 40] = 1
+        a = copy(
+            protocol_σ(
+                layout(
+                    PottsModels.akeeb_layout(; lattice = (99, 60), seed = 1), (
+                        99, 60,
+                    )
+                )
+            )
+        )
+        b = copy(a)
+        b[50, 40] = 1
         @test a != b
     end
 end
 
-@testitem "layout protocol: akeeb_state logs nothing; a layer's own warning surfaces" setup = [LayoutProtocolSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "layout protocol: akeeb_state logs nothing; a layer's own warning \
+    surfaces" setup = [LayoutProtocolSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # Logging
-    # ---------------------------------------------------------------------------------------------
-    @testset "layout protocol: akeeb_state logs nothing; a layer's own warning surfaces" begin
+    # --------------------------------------------------------------------------------------
+    @testset "layout protocol: akeeb_state logs nothing; a layer's own warning \
+        surfaces" begin
         # seed 1 at 500 × 300: the leaders cut follower 713 into pieces (the control below)
         @test isempty(protocol_logs(() -> akeeb_state(; seed = 1)))
         @test isempty(protocol_logs(() -> akeeb_state()))
-        @test isempty(protocol_logs(() -> akeeb_state(; lattice = (99, 60), seed = 3, seeding = :retry)))
-        @test isempty(protocol_logs(() -> layout(PottsModels.akeeb_layout(; seed = 1), (500, 300))))
+        @test isempty(
+            protocol_logs(
+                () -> akeeb_state(; lattice = (99, 60), seed = 3, seeding = :retry)
+            )
+        )
+        @test isempty(
+            protocol_logs(
+                () -> layout(
+                    PottsModels.akeeb_layout(; seed = 1), (
+                        500, 300,
+                    )
+                )
+            )
+        )
         # control: the same layers with `splits = :warn` on the leaders do warn
-        @test splitwarns(() -> layout(protocol_akeeb(500, 21, 1, :count; splits = :warn), (500, 300))) >= 1
-        # an unrelated warning raised inside a layer is not swallowed, with or without the Akeeb layers
-        logs = protocol_logs(() -> layout(overlay(PottsModels.akeeb_layout(; seed = 1), Loud((250, 200))), (500, 300)))
+        @test splitwarns(
+            () -> layout(
+                protocol_akeeb(
+                    500, 21, 1, :count; splits = :warn
+                ), (500, 300)
+            )
+        ) >= 1
+        # an unrelated warning raised inside a layer is not swallowed, with or without the
+        # Akeeb layers
+        logs = protocol_logs(
+            () -> layout(
+                overlay(PottsModels.akeeb_layout(; seed = 1), Loud((250, 200))), (500, 300)
+            )
+        )
         @test length(logs) == 1
-        @test only(logs).level == Base.CoreLogging.Warn && occursin("Protocol loud layer at (250, 200)", string(only(logs).message))
+        @test only(logs).level == Base.CoreLogging.Warn &&
+            occursin("Protocol loud layer at (250, 200)", string(only(logs).message))
         @test_logs (:warn, r"Protocol loud layer") layout(Loud((2, 2)), (4, 4))
         # akeeb_state installs no logger of its own (D-082's NullLogger is gone)
         src = Meta.parseall(read(joinpath(pkgdir(PottsModels), "src", "akeeb.jl"), String))
@@ -272,29 +340,39 @@ end
         @test body !== nothing
         syms = Symbol[]
         walk(ex -> ex isa Symbol && push!(syms, ex), body)
-        @test :akeeb_layout in syms                                      # control: the walk sees the body
+        # control: the walk sees the body
+        @test :akeeb_layout in syms
         @test !(:NullLogger in syms) && !(:with_logger in syms)
     end
 end
 
-@testitem "layout protocol: a custom layer on paint!(op::LayoutState, l, lat)" setup = [LayoutProtocolSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "layout protocol: a custom layer on paint!(op::LayoutState, l, lat)" setup = [
+    LayoutProtocolSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # The protocol: a custom layer through the public accessors
-    # ---------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     @testset "layout protocol: a custom layer on paint!(op::LayoutState, l, lat)" begin
-        for n in (:LayoutState, :paint!, :new_cell!, :assign!, :owner, :kindof, :ncells, :record!, :isperiodic, :indomain)
+        for n in (
+                :LayoutState, :paint!, :new_cell!, :assign!, :owner,
+                :kindof, :ncells, :record!, :isperiodic, :indomain,
+            )
             @test isdefined(Potts, n) && Base.ispublic(Potts, n)
         end
-        @test !Base.ispublic(Potts, :_warn_split)                        # control: internals are not
+        # control: internals are not
+        @test !Base.ispublic(Potts, :_warn_split)
         # No LatticeSpec field in the custom layers; the checker sees field reads (controls)
         @test isempty(lat_field_reads(Probe))
         @test isempty(lat_field_reads(Loud))
         @test length(lat_field_reads(Peek)) == 1
         @test length(lat_field_reads(PeekAlias)) == 1
 
-        # Closed 6 × 6: nine 2 × 2 tiles (ids x-fastest, kinds keep, a, keep, …), then the probe.
-        # Column 2 is owned by tiles 1 (keep), 4 (a), 7 (keep): the stripe (cell 10) takes
-        # (2, 3) and (2, 4) from tile 4, which keeps (1, 3:4). The box (cell 11) covers tile 9
+        # Closed 6 × 6: nine 2 × 2 tiles (ids x-fastest, kinds keep, a, keep, …), then the
+        # probe. Column 2 is owned by tiles 1 (keep), 4 (a), 7 (keep): the stripe (cell 10)
+        # takes (2, 3) and (2, 4) from tile 4, which keeps (1, 3:4). The box (cell 11)
+        # covers tile 9
         # = (5:6, 5:6), which is dropped: ids 10, 11 become 9, 10.
         base = Tiling((2, 2); kinds = [:keep, :a])
         function expected(stripe_x, keep_x)
@@ -320,7 +398,10 @@ end
             @test protocol_kinds(op) == kinds10
             @test length(rep) == 2 && [r.type for r in rep] == [:Tiling, :Probe]
             @test protocol_row(rep[1]) == (9, 9, 1, 0, 9, 0)
-            @test (rep[2].requested, rep[2].painted, rep[2].dropped, rep[2].misses, rep[2].splits) == (2, 2, 0, 0, 0)
+            @test (
+                rep[2].requested, rep[2].painted,
+                rep[2].dropped, rep[2].misses, rep[2].splits,
+            ) == (2, 2, 0, 0, 0)
         end
         # A domain: (2, 3) is outside, so the stripe skips it and paints 5 sites.
         mask = trues(6, 6)
@@ -335,19 +416,25 @@ end
     end
 end
 
-@testitem "layout protocol: layout(l, x; report = true), one row per leaf layer" setup = [LayoutProtocolSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "layout protocol: layout(l, x; report = true), one row per leaf layer" setup = [
+    LayoutProtocolSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # The report
-    # ---------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     @testset "layout protocol: layout(l, x; report = true), one row per leaf layer" begin
         # Closed 8 × 4, rows y 1:3 painted, y = 4 medium.
-        #   L1 Tiling 3 × 3 clipped over (1:8, 1:3): c1 = x 1:3, c2 = x 4:6, c3 = x 7:8 (clipped)
-        #   L2 Tiling 2 × 3 over (7:8, 1:3), kind b: covers c3, which is dropped (cut, not split)
-        #   L3 Tiling 1 × 3 over (5:5, 1:3), kind x: cuts c2 into x = 4 and x = 6 (a split, one
+        #   L1 Tiling 3 × 3 clipped over (1:8, 1:3): c1 = x 1:3, c2 = x 4:6, c3 = x 7:8
+        #   (clipped) L2 Tiling 2 × 3 over (7:8, 1:3), kind b: covers c3, which is dropped
+        #   (cut, not split) L3 Tiling 1 × 3 over (5:5, 1:3), kind x: cuts c2 into x = 4 and
+        #   x = 6 (a split, one
         #      warning: L3 is the only layer that cut c2)
-        #   L4 InsertUntil(:y; into = [:a], number = 1, misses = :count) over (2:2, 3:4): draw 1
-        #      is (2, 3) (c1, a hit), draw 2 is (2, 4) (medium, a miss). It stops after the first
-        #      hit; c1 keeps 8 connected sites. counted = 1 + misses.
+        #   L4 InsertUntil(:y; into = [:a], number = 1, misses = :count) over (2:2, 3:4):
+        #   draw 1
+        #      is (2, 3) (c1, a hit), draw 2 is (2, 4) (medium, a miss). It stops after the
+        #      first hit; c1 keeps 8 connected sites. counted = 1 + misses.
         # Final ids: c1 = 1, c2 = 2, b = 3, x = 4, y = 5.
         S = 8
         function l(s3)
@@ -355,16 +442,21 @@ end
                 Tiling((3, 3); region = (1:8, 1:3), kinds = [:a], partial = :clip),
                 Tiling((2, 3); region = (7:8, 1:3), kinds = [:b]),
                 Tiling((1, 3); region = (5:5, 1:3), kinds = [:x], splits = s3),
-                InsertUntil(:y; into = [:a], number = 1, seed = S, misses = :count, region = (2:2, 3:4))
+                InsertUntil(
+                    :y; into = [:a], number = 1, seed = S,
+                    misses = :count, region = (2:2, 3:4)
+                )
             )
         end
-        # the misses from the documented draw rule: StableRNG(seed), rand(rng, 1:length(sites))
+        # the misses from the documented draw rule: StableRNG(seed), rand(rng,
+        # 1:length(sites))
         rng = StableRNG(S)
         m = 0
         while rand(rng, 1:2) == 2
             m += 1
         end
-        @test m == 2                                                     # recorded at ec544d8
+        # recorded at ec544d8
+        @test m == 2
         op, rep = quietly(() -> layout(l(:warn), (8, 4); report = true))
         σ = Int32[
             1 1 1 2 4 2 3 3
@@ -381,7 +473,8 @@ end
             (1, 1, 0, 0, 1, 1),
             (1, 1, 0, m, 1 + m, 0),
         ]
-        @test protocol_σ(quietly(() -> layout(l(:warn), (8, 4)))) == σ   # the same point without the report
+        # the same point without the report
+        @test protocol_σ(quietly(() -> layout(l(:warn), (8, 4)))) == σ
         @test protocol_σ(quietly(() -> layout(l(:warn), (8, 4); report = false))) == σ
         # the split is reported whatever the setting; only the warning depends on it
         @test splitwarns(() -> layout(l(:warn), (8, 4))) == 1
@@ -398,36 +491,87 @@ end
             )
         ) == 3
         # Scattered requests n and paints n
-        @test protocol_row.(rows(Scattered(3, (2, 2); kinds = [:a], seed = 1), (20, 20))) == [(3, 3, 0, 0, 3, 0)]
+        @test protocol_row.(rows(Scattered(3, (2, 2); kinds = [:a], seed = 1), (20, 20))) ==
+            [(3, 3, 0, 0, 3, 0)]
         # InsertUntil under :retry: painted = counted = number, misses as drawn
         tiles = Tiling((2, 2); spacing = 1, kinds = [:a, :b])
-        r = rows(overlay(tiles, InsertUntil(:x; into = [:a], number = 10, seed = 3)), (21, 21))
-        @test protocol_row(r[1]) == (49, 49, 0, 0, 49, 0) && protocol_row(r[2]) == (10, 10, 0, 55, 10, 0)
+        r = rows(
+            overlay(tiles, InsertUntil(:x; into = [:a], number = 10, seed = 3)), (
+                21, 21,
+            )
+        )
+        @test protocol_row(r[1]) == (49, 49, 0, 0, 49, 0) &&
+            protocol_row(r[2]) == (10, 10, 0, 55, 10, 0)
     end
 end
 
-@testitem "layout protocol: Tiling(partial =:skip |:clip)" setup = [LayoutProtocolSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "layout protocol: Tiling(partial =:skip |:clip)" setup = [
+    LayoutProtocolSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # Tiling(partial)
-    # ---------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     @testset "layout protocol: Tiling(partial =:skip |:clip)" begin
         row(op) = vec(protocol_σ(op)[:, 1])
-        # 7 wide, boxes of 3: :clip keeps the 1-wide box 7:7, :skip (default) leaves column 7 empty
-        clip = layout(Tiling((3, 3); region = (1:7, 1:3), kinds = [:a], partial = :clip), (7, 3))
-        @test protocol_σ(clip) == repeat(Int32[1, 1, 1, 2, 2, 2, 3], 1, 3) && protocol_kinds(clip) == [:a, :a, :a]
-        skip = layout(Tiling((3, 3); region = (1:7, 1:3), kinds = [:a], partial = :skip), (7, 3))
-        @test protocol_σ(skip) == repeat(Int32[1, 1, 1, 2, 2, 2, 0], 1, 3) && protocol_kinds(skip) == [:a, :a]
-        @test protocol_σ(layout(Tiling((3, 3); region = (1:7, 1:3), kinds = [:a]), (7, 3))) == protocol_σ(skip)
-        @test protocol_row.(rows(Tiling((3, 3); region = (1:7, 1:3), kinds = [:a], partial = :clip), (7, 3))) ==
+        # 7 wide, boxes of 3: :clip keeps the 1-wide box 7:7, :skip (default) leaves column
+        # 7 empty
+        clip = layout(
+            Tiling((3, 3); region = (1:7, 1:3), kinds = [:a], partial = :clip), (
+                7, 3,
+            )
+        )
+        @test protocol_σ(clip) == repeat(Int32[1, 1, 1, 2, 2, 2, 3], 1, 3) &&
+            protocol_kinds(clip) == [:a, :a, :a]
+        skip = layout(
+            Tiling((3, 3); region = (1:7, 1:3), kinds = [:a], partial = :skip), (
+                7, 3,
+            )
+        )
+        @test protocol_σ(skip) == repeat(Int32[1, 1, 1, 2, 2, 2, 0], 1, 3) &&
+            protocol_kinds(skip) == [:a, :a]
+        @test protocol_σ(
+            layout(
+                Tiling((3, 3); region = (1:7, 1:3), kinds = [:a]), (
+                    7, 3,
+                )
+            )
+        ) == protocol_σ(skip)
+        @test protocol_row.(
+            rows(
+                Tiling((3, 3); region = (1:7, 1:3), kinds = [:a], partial = :clip), (
+                    7, 3,
+                )
+            )
+        ) ==
             [(3, 3, 0, 0, 3, 0)]
-        # clipped at the region, not only at the lattice (the CompuCell3D difference): region 2:6
-        @test row(layout(Tiling((3, 3); region = (2:6, 1:3), kinds = [:a], partial = :clip), (7, 3))) ==
+        # clipped at the region, not only at the lattice (the CompuCell3D difference):
+        # region 2:6
+        @test row(
+            layout(
+                Tiling((3, 3); region = (2:6, 1:3), kinds = [:a], partial = :clip), (
+                    7, 3,
+                )
+            )
+        ) ==
             Int32[0, 1, 1, 1, 2, 2, 0]
-        @test row(layout(Tiling((3, 3); region = (2:6, 1:3), kinds = [:a]), (7, 3))) == Int32[0, 1, 1, 1, 0, 0, 0]
+        @test row(layout(Tiling((3, 3); region = (2:6, 1:3), kinds = [:a]), (7, 3))) ==
+            Int32[0, 1, 1, 1, 0, 0, 0]
         # region ∩ lattice: a region reaching past the lattice is clipped at the lattice …
-        @test protocol_σ(layout(Tiling((3, 3); region = (1:9, 1:3), kinds = [:a], partial = :clip), (7, 3))) == protocol_σ(clip)
+        @test protocol_σ(
+            layout(
+                Tiling((3, 3); region = (1:9, 1:3), kinds = [:a], partial = :clip), (
+                    7, 3,
+                )
+            )
+        ) == protocol_σ(clip)
         # … and still throws under :skip (D-057)
-        @test_throws ArgumentError layout(Tiling((3, 3); region = (1:9, 1:3), kinds = [:a]), (7, 3))
+        @test_throws ArgumentError layout(
+            Tiling((3, 3); region = (1:9, 1:3), kinds = [:a]), (
+                7, 3,
+            )
+        )
         # 2D with spacing 1 on 6 × 4: starts x ∈ {1, 4}, y ∈ {1, 4}; the top row of boxes is
         # clipped to y = 4; ids x-fastest, kinds cycled a, b
         σ = Int32[
@@ -436,31 +580,47 @@ end
             0 0 0 0 0 0
             3 3 0 4 4 0
         ]'
-        op = layout(Tiling((2, 2); spacing = 1, region = (1:6, 1:4), kinds = [:a, :b], partial = :clip), (6, 4))
+        op = layout(
+            Tiling(
+                (2, 2); spacing = 1, region = (1:6, 1:4), kinds = [:a, :b], partial = :clip
+            ), (
+                6, 4,
+            )
+        )
         @test protocol_σ(op) == σ && protocol_kinds(op) == [:a, :b, :a, :b]
-        op = layout(Tiling((2, 2); spacing = 1, region = (1:6, 1:4), kinds = [:a, :b]), (6, 4))
+        op = layout(
+            Tiling((2, 2); spacing = 1, region = (1:6, 1:4), kinds = [:a, :b]), (
+                6, 4,
+            )
+        )
         σ[:, 4] .= 0
         @test protocol_σ(op) == σ && protocol_kinds(op) == [:a, :b]
         @test_throws ArgumentError Tiling((3, 3); kinds = [:a], partial = :bogus)
     end
 end
 
-@testitem "layout protocol: splits =:warn |:allow, exempt only if every cutter allows" setup = [LayoutProtocolSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "layout protocol: splits =:warn |:allow, exempt only if every cutter \
+    allows" setup = [LayoutProtocolSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # splits
-    # ---------------------------------------------------------------------------------------------
-    @testset "layout protocol: splits =:warn |:allow, exempt only if every cutter allows" begin
-        # Closed 5 × 3 with a bar cell on (1:5, 2). `mid` takes (3, 2) and splits the bar into
-        # (1:2, 2) and (4:5, 2); `tip` takes (5, 2) and leaves it connected.
+    # --------------------------------------------------------------------------------------
+    @testset "layout protocol: splits =:warn |:allow, exempt only if every cutter \
+        allows" begin
+        # Closed 5 × 3 with a bar cell on (1:5, 2). `mid` takes (3, 2) and splits the bar
+        # into (1:2, 2) and (4:5, 2); `tip` takes (5, 2) and leaves it connected.
         lat = (5, 3)
         bar = Tiling((5, 1); region = (1:5, 2:2), kinds = [:a])
         mid(s) = Tiling((1, 1); region = (3:3, 2:2), kinds = [:m], splits = s)
         tip(s) = Tiling((1, 1); region = (5:5, 2:2), kinds = [:e], splits = s)
         w(ls...) = splitwarns(() -> layout(overlay(bar, ls...), lat))
-        @test w(Tiling((1, 1); region = (3:3, 2:2), kinds = [:m])) == 1             # default :warn
+        # default :warn
+        @test w(Tiling((1, 1); region = (3:3, 2:2), kinds = [:m])) == 1
         @test w(mid(:warn)) == 1
         @test w(mid(:allow)) == 0
-        @test w(tip(:warn)) == 0                                                     # cut, not split
+        # cut, not split
+        @test w(tip(:warn)) == 0
         @test w(mid(:allow), tip(:allow)) == 0
         @test w(mid(:allow), tip(:warn)) == 1      # a :warn layer also cut the split cell
         @test w(tip(:warn), mid(:allow)) == 1      # in either order
@@ -474,32 +634,47 @@ end
         @test w2(m1(:warn), t3(:allow)) == 1
         # every shipped layer takes the keyword and validates it
         @test Tiling((1, 1); kinds = [:a], splits = :allow) isa AbstractLayout
-        @test Scattered(1, (1, 1); kinds = [:a], seed = 1, splits = :allow) isa AbstractLayout
+        @test Scattered(1, (1, 1); kinds = [:a], seed = 1, splits = :allow) isa
+            AbstractLayout
         @test Frame(:w; splits = :allow) isa AbstractLayout
-        @test InsertUntil(:x; into = [:a], number = 1, seed = 1, splits = :allow) isa AbstractLayout
+        @test InsertUntil(:x; into = [:a], number = 1, seed = 1, splits = :allow) isa
+            AbstractLayout
         @test_throws ArgumentError Tiling((1, 1); kinds = [:a], splits = :maybe)
-        @test_throws ArgumentError Scattered(1, (1, 1); kinds = [:a], seed = 1, splits = :maybe)
+        @test_throws ArgumentError Scattered(
+            1, (1, 1); kinds = [:a], seed = 1, splits = :maybe
+        )
         @test_throws ArgumentError Frame(:w; splits = :maybe)
-        @test_throws ArgumentError InsertUntil(:x; into = [:a], number = 1, seed = 1, splits = :maybe)
+        @test_throws ArgumentError InsertUntil(
+            :x; into = [:a], number = 1, seed = 1, splits = :maybe
+        )
         # InsertUntil(splits = :allow): an inserted site that splits a 3 × 1 host is silent
         host = Tiling((3, 1); region = (1:3, 2:2), kinds = [:h])
-        ins(s) = InsertUntil(:x; into = [:h], number = 1, seed = 1, region = (2:2, 2:2), splits = s)
+        function ins(s)
+            return InsertUntil(
+                :x; into = [:h], number = 1, seed = 1, region = (2:2, 2:2), splits = s
+            )
+        end
         @test splitwarns(() -> layout(overlay(host, ins(:warn)), (3, 3))) == 1
         @test splitwarns(() -> layout(overlay(host, ins(:allow)), (3, 3))) == 0
     end
 end
 
-@testitem "layout protocol: remake(::AbstractLayout; kw...) re-runs the keyword constructor" setup = [LayoutProtocolSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "layout protocol: remake(::AbstractLayout; kw...) re-runs the keyword \
+    constructor" setup = [LayoutProtocolSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # remake
-    # ---------------------------------------------------------------------------------------------
-    @testset "layout protocol: remake(::AbstractLayout; kw...) re-runs the keyword constructor" begin
+    # --------------------------------------------------------------------------------------
+    @testset "layout protocol: remake(::AbstractLayout; kw...) re-runs the keyword \
+        constructor" begin
         s1 = Scattered(4, (2, 2); kinds = [:a], seed = 1)
         s2 = remake(s1; seed = 2)
         @test s2 isa Scattered
         σ(l) = protocol_σ(layout(l, (20, 20)))
         @test σ(s2) == σ(Scattered(4, (2, 2); kinds = [:a], seed = 2))
-        @test σ(s2) != σ(s1)                                             # control: the seed matters
+        # control: the seed matters
+        @test σ(s2) != σ(s1)
         @test σ(remake(s1)) == σ(s1)
         @test_throws ArgumentError remake(s1; seed = -1)
         @test_throws ArgumentError remake(s1; gap = -1)
@@ -509,16 +684,28 @@ end
         # (painted 2, misses 16, counted 18); under :retry (10, 55, 10) (both at ec544d8).
         tiles = Tiling((2, 2); spacing = 1, kinds = [:a, :b])
         iu = InsertUntil(:x; into = [:a], number = 10, seed = 3, misses = :count)
-        tally(l) = (r = protocol_ins(rows(overlay(tiles, l), (21, 21))); (r.painted, r.misses, r.counted))
+        function tally(l)
+            r = protocol_ins(rows(overlay(tiles, l), (21, 21)))
+            return (r.painted, r.misses, r.counted)
+        end
         @test tally(iu) == (2, 16, 18)
         iu2 = remake(iu; misses = :retry)
         @test iu2 isa InsertUntil
-        @test tally(iu2) == (10, 55, 10) == tally(InsertUntil(:x; into = [:a], number = 10, seed = 3, misses = :retry))
+        @test tally(iu2) == (10, 55, 10) ==
+            tally(InsertUntil(:x; into = [:a], number = 10, seed = 3, misses = :retry))
         @test protocol_σ(layout(overlay(tiles, iu2), (21, 21))) ==
-            protocol_σ(layout(overlay(tiles, InsertUntil(:x; into = [:a], number = 10, seed = 3)), (21, 21)))
-        @test tally(remake(iu2; misses = :count)) == tally(iu)                    # round trip
+            protocol_σ(
+            layout(
+                overlay(tiles, InsertUntil(:x; into = [:a], number = 10, seed = 3)), (
+                    21, 21,
+                )
+            )
+        )
+        # round trip
+        @test tally(remake(iu2; misses = :count)) == tally(iu)
         @test_throws ArgumentError remake(iu; misses = :ghost)
-        @test_throws ArgumentError remake(iu; fraction = 1 // 4)                  # two stop rules
+        # two stop rules
+        @test_throws ArgumentError remake(iu; fraction = 1 // 4)
         @test_throws ArgumentError remake(iu; seed = -1)
 
         t = Tiling((3, 3); region = (1:7, 1:3), kinds = [:a])
@@ -529,25 +716,56 @@ end
     end
 end
 
-@testitem "layout protocol: paint!(σ, kinds, …) and layout_tally are gone" setup = [LayoutProtocolSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "layout protocol: paint!(σ, kinds, …) and layout_tally are gone" setup = [
+    LayoutProtocolSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # Removals (D-028: no alias)
-    # ---------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     @testset "layout protocol: paint!(σ, kinds, …) and layout_tally are gone" begin
-        @test !(isdefined(Potts, :layout_tally) && (Base.ispublic(Potts, :layout_tally) || Base.isexported(Potts, :layout_tally)))
-        @test !(isdefined(PottsModels, :layout_tally) && Base.ispublic(PottsModels, :layout_tally))
+        @test !(
+            isdefined(Potts, :layout_tally) && (
+                Base.ispublic(Potts, :layout_tally) ||
+                    Base.isexported(Potts, :layout_tally)
+            )
+        )
+        @test !(
+            isdefined(PottsModels, :layout_tally) &&
+                Base.ispublic(PottsModels, :layout_tally)
+        )
         @test Base.ispublic(Potts, :paint!)
         ms = [m for m in methods(Potts.paint!) if m.module in (Potts, PottsModels)]
-        @test length(ms) >= 6               # Tiling, Scattered, Frame, InsertUntil, overlay, Voronoi (VoronoiBall's successor, D-138)
-        @test all(m -> m.nargs == 4, ms)    # #self#, op, l, lat: no paint!(σ, kinds, l, lat)
-        for T in (Tiling, Scattered, Frame, InsertUntil, typeof(overlay(Frame(:w), Frame(:v))), Potts.Voronoi)
+        # Tiling, Scattered, Frame, InsertUntil, overlay, Voronoi (VoronoiBall's successor,
+        # D-138)
+        @test length(ms) >= 6
+        # #self#, op, l, lat: no paint!(σ, kinds, l, lat)
+        @test all(m -> m.nargs == 4, ms)
+        for T in (
+                Tiling, Scattered, Frame, InsertUntil,
+                typeof(overlay(Frame(:w), Frame(:v))), Potts.Voronoi,
+            )
             @test isempty(methods(Potts.paint!, (AbstractArray, Any, T, Any)))
-            @test any(m -> m.nargs == 4, methods(Potts.paint!, (Potts.LayoutState, T, Potts.LatticeSpec)))
+            @test any(
+                m -> m.nargs == 4, methods(
+                    Potts.paint!, (
+                        Potts.LayoutState, T, Potts.LatticeSpec,
+                    )
+                )
+            )
         end
-        # VoronoiBall's successor paints (on the new protocol; D-138: `VoronoiBall(n; radius, kinds, seed)`
-        # is `Voronoi(RandomPoints(n; region = ball, seed); region = ball, lloyd = 30, kinds)`)
+        # VoronoiBall's successor paints (on the new protocol; D-138: `VoronoiBall(n;
+        # radius, kinds, seed)` is `Voronoi(RandomPoints(n; region = ball, seed); region =
+        # ball, lloyd = 30, kinds)`)
         ball = Circle(Point(12.5, 12.5), 8.0)
-        op = layout(Potts.Voronoi(Potts.RandomPoints(4; region = ball, seed = 1); region = ball, lloyd = 30, kinds = Int32[1, 2]), (24, 24))
+        op = layout(
+            Potts.Voronoi(
+                Potts.RandomPoints(4; region = ball, seed = 1);
+                region = ball, lloyd = 30, kinds = Int32[1, 2]
+            ),
+            (24, 24)
+        )
         @test sort(unique(protocol_σ(op))) == 0:4 && length(protocol_kinds(op)) == 4
     end
 end

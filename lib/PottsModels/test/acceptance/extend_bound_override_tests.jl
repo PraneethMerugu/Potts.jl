@@ -24,8 +24,8 @@
 #     declarations (a model has one value per name, D-113);
 #   * `@extend Base()` without binding behaves the same (control; it works today).
 #
-# Energies are checked by hand. Fixture: on a 12×12 lattice with von Neumann contacts, cell 1
-# (kind A) at x = 3:5, y = 3:5 (volume 9) and cell 2 (kind B) at x = 6:8, y = 3:6 (volume
+# Energies are checked by hand. Fixture: on a 12×12 lattice with von Neumann contacts, cell
+# 1 (kind A) at x = 3:5, y = 3:5 (volume 9) and cell 2 (kind B) at x = 6:8, y = 3:6 (volume
 # 12). They share 3 contact pairs (x = 5|6, y = 3:5); cell 1 has 12 − 3 = 9 pairs with the
 # medium, cell 2 has 14 − 3 = 11 (pairs counted once, docs/src/manual/energy.md). The base:
 #   E = λ ((9 − V₀)² + (12 − V₀)²) + 9 J[M,A] + 11 J[M,B] + 3 J[A,B] + x (9 + 12)
@@ -141,7 +141,14 @@ override_problem(m) = PottsProblem(m, override_op(), (0, 2); seed = 7)
 """The total energy of model `m` on the fixture, or the error message."""
 override_energy(m) = override_try(() -> total_energy(override_problem(m)))
 """The value of parameter `k` in `m`'s problem (plain numbers or a matrix), or the error."""
-override_value(m, k) = override_try(() -> (v = getp(override_problem(m), k)(override_problem(m)); v isa Number ? v : Matrix(v)))
+function override_value(m, k)
+    return override_try(
+        () -> (
+            v = getp(override_problem(m), k)(override_problem(m));
+            v isa Number ? v : Matrix(v)
+        )
+    )
+end
 """The declared default of quantity `k` in `m` as plain numbers, or the error (a symbolic
 default does not convert)."""
 function override_default(m, k)
@@ -161,9 +168,13 @@ const OVERRIDE_M = [0 1 1; 1 0 2; 1 2 0]
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "extend bound override: an @extend-bound name redeclared keeps its own default" setup = [ExtendBoundOverrideSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "extend bound override: an @extend-bound name redeclared keeps its own \
+    default" setup = [ExtendBoundOverrideSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
     # contacts 9 + 11 + 6 = 26
-    @testset "extend bound override: an @extend-bound name redeclared keeps its own default" begin
+    @testset "extend bound override: an @extend-bound name redeclared keeps its own \
+        default" begin
         @testset "negative controls: the base and a binding without redeclaration" begin
             b = OverrideBase(; name = :b)
             @test override_default(b, :λ) == 1.0
@@ -215,7 +226,8 @@ end
             w = build(PartialKw)
             @test override_default(w, :V₀) == 8.0 && override_default(w, :λ) == 3.0
             @test override_value(w, :V₀) == 8.0
-            @test override_energy(w) == 113.5                         # 3 (1 + 16) + 52 + 10.5
+            # 3 (1 + 16) + 52 + 10.5
+            @test override_energy(w) == 113.5
         end
 
         @testset "a bound variable redeclared" begin
@@ -228,7 +240,8 @@ end
             @test override_default(b, :x) == 2.0 && override_default(b, :λ) == 3.0
             @test override_energy(b) == 121.0                         # 27 + 52 + 42
             k = build(Both; λ = 5.0)
-            @test override_default(k, :x) == 2.0 && override_energy(k) == 139.0   # 45 + 52 + 42
+            # 45 + 52 + 42
+            @test override_default(k, :x) == 2.0 && override_energy(k) == 139.0
         end
 
         @testset "a bound kind table redeclared" begin
@@ -250,7 +263,8 @@ end
             @test override_energy(m) == 89.5                          # 71.5 + 9·2
             m = build(MuBaseKw)
             @test override_value(m, :λ) == 1.5 && override_value(m, :μ) == 3.0
-            @test override_energy(m) == 103.0                         # 13.5 + 52 + 10.5 + 27
+            # 13.5 + 52 + 10.5 + 27
+            @test override_energy(m) == 103.0
             # redeclared: the extension's λ, before or after μ
             for F in (MuRedecl, MuAfter)
                 m = build(F)
@@ -264,7 +278,8 @@ end
                 @test override_energy(k) == 197.5                     # 45 + 52 + 10.5 + 90
                 # and μ still follows λ after the build (D-112)
                 q = override_try(() -> remake(override_problem(m); p = [:λ => 2.0]))
-                @test override_try(() -> (getp(q, :μ)(q), total_energy(q))) == (4.0, 116.5)   # 18 + 52 + 10.5 + 36
+                # 18 + 52 + 10.5 + 36
+                @test override_try(() -> (getp(q, :μ)(q), total_energy(q))) == (4.0, 116.5)
             end
         end
     end

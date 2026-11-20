@@ -85,7 +85,8 @@ relaxation's t = 0; the first relaxing MCS is `at + 1`. Pass it as
 `solve(prob, alg; callback = openvt_release(100))`.
 """
 function openvt_release(at::Integer = 100)
-    # a parameter write: the state is unchanged, so no save of its own (`saveat` saves MCS `at`)
+    # a parameter write: the state is unchanged, so no save of its own (`saveat` saves MCS
+    # `at`)
     return DiscreteCallback(
         (u, t, integ) -> t == at, integ -> (integ.ps[:A_c] = integ.ps[:A]; nothing);
         save_positions = (false, false)
@@ -101,16 +102,19 @@ with (`relaxation_exact.m` of the benchmark): `n` beads at `x_i(0) = i/2` (in CD
 
     ẋ_i = rate · [(x_{i+1} − x_i − 1) − (x_i − x_{i−1} − 1)],
 
-with both ends free (or `x_0` held fixed with `pinned = true`). Returns `x_{n−1}(t) − x_0(t)`
-in CD, with `t` in units of the benchmark's T. The default `rate` is k/η solved from
-w(1) = 9 for 11 beads, so `spring_dashpot_width(1.0) ≈ 9`; the width starts at `(n − 1)/2`
-and approaches `n − 1` from below.
+with both ends free (or `x_0` held fixed with `pinned = true`). Returns
+`x_{n−1}(t) − x_0(t)` in CD, with `t` in units of the benchmark's T. The default `rate` is
+k/η solved from w(1) = 9 for 11 beads, so `spring_dashpot_width(1.0) ≈ 9`; the width starts
+at `(n − 1)/2` and approaches `n − 1` from below.
 
 The solution is the exact eigenmode expansion of the chain: the free chain's Laplacian has
 the modes `cos((i + ½) kπ/n)` with rates `2 − 2cos(kπ/n)`, and the chain pinned at `x_0`
 has `sin(i θ_k)`, `θ_k = (2k − 1)π/(2n − 1)`, with rates `2 − 2cos θ_k`.
 """
-function spring_dashpot_width(t::Real; n::Integer = 11, rate::Real = 18.2816647214633, pinned::Bool = false)
+function spring_dashpot_width(
+        t::Real; n::Integer = 11, rate::Real = 18.2816647214633,
+        pinned::Bool = false
+    )
     n >= 2 || throw(ArgumentError("spring_dashpot_width: n must be at least 2, got $n"))
     u0(i) = -i / 2                                  # displacement from the rest position i
     du = 0.0                                        # u_{n−1}(t) − u_0(t)

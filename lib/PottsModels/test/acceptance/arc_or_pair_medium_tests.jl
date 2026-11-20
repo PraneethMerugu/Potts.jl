@@ -15,9 +15,10 @@
 #   (-1,-1) (0,-1) (1,-1) (1,0) (1,1) (0,1) (-1,1) (-1,0)
 # Every fixture below lists the eight ring owners in this order, by hand.
 #
-# The predicate is read the way the other acceptance files read it (`connectivity_and_reserved_names_tests.jl`):
-# the compiled constraint `prob.f.constraint` of a `@potts_model` built through the public
-# `connectivity(...; rule = ArcOrPair())`, and of the published `WortelAct(connected = true)`.
+# The predicate is read the way the other acceptance files read it
+# (`connectivity_and_reserved_names_tests.jl`): the compiled constraint `prob.f.constraint`
+# of a `@potts_model` built through the public `connectivity(...; rule = ArcOrPair())`, and
+# of the published `WortelAct(connected = true)`.
 
 @testsetup module ArcOrPairMediumSetup
 include(joinpath(@__DIR__, "..", "shared", "common.jl"))
@@ -26,7 +27,8 @@ function allows(prob, σ, x, y)
     return prob.f.constraint(
         prob.u0, prob.p,
         CorePotts.Proposal(
-            CorePotts.linear_index(prob.lattice, x), CorePotts.linear_index(prob.lattice, y),
+            CorePotts.linear_index(prob.lattice, x),
+            CorePotts.linear_index(prob.lattice, y),
             x, 1, σ[x...], σ[y...]
         ), Potts._host_ctx(prob)
     )
@@ -46,7 +48,13 @@ end
     @constraint connectivity(A; rule = ArcOrPair())
     @sweep Metropolis(; temperature = 1.0)
 end
-arc_prob(M, σ) = PottsProblem(M(; name = :aa), [ownership => σ, kind => fill(:A, maximum(σ))], (0, 1))
+function arc_prob(M, σ)
+    return PottsProblem(
+        M(; name = :aa), [
+            ownership => σ, kind => fill(:A, maximum(σ)),
+        ], (0, 1)
+    )
+end
 model_allows(M, σ, x, y) = allows(arc_prob(M, σ), σ, x, y)
 """Number of 8-connected pieces of cell `c` in `σ` (non-periodic; fixtures stay off the
 wrap). Used to show that an accepted copy really splits the cell."""
@@ -56,13 +64,15 @@ function arc_pieces(σ, c)
     for I in CartesianIndices(σ)
         (σ[I] == c && !seen[I]) || continue
         n += 1
-        stack = [I]; seen[I] = true
+        stack = [I]
+        seen[I] = true
         while !isempty(stack)
             J = pop!(stack)
             for d in CartesianIndices((-1:1, -1:1))
                 K = J + d
                 (checkbounds(Bool, σ, K) && σ[K] == c && !seen[K]) || continue
-                seen[K] = true; push!(stack, K)
+                seen[K] = true
+                push!(stack, K)
             end
         end
     end
@@ -74,8 +84,8 @@ const ARC_X = (6, 6)
 const SRC = (6, 5)
 # ---------------------------------------------------------------------------------------
 # A single cell in medium: ring_cells ≤ 1, so the pair clause never fires and the rule is
-# the plain one-arc rule, before and after the fix. Every retraction (medium source) of every
-# site of the cell is checked against an arc count computed here, independently.
+# the plain one-arc rule, before and after the fix. Every retraction (medium source) of
+# every site of the cell is checked against an arc count computed here, independently.
 """Arcs of `c` on the Moore ring of `x` (out-of-domain on a closed lattice is not `c`)."""
 function arcs(σ, x, c; periodic)
     ring = ((-1, -1), (0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0))
@@ -95,17 +105,22 @@ end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "arc or pair medium: cell–cell–medium junction is not the pair exemption" setup = [ArcOrPairMediumSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "arc or pair medium: cell–cell–medium junction is not the pair exemption" setup =
+    [ArcOrPairMediumSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
     # the source left of the target: (0, -1) on the ring
 
-    # ---------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     @testset "arc or pair medium: cell–cell–medium junction is not the pair exemption" begin
         # σ: bar of 1 at (3:9, 6); cell 2 at (6, 5); everything else medium.
         # Ring of (6,6): (5,5)=0 (6,5)=2 (7,5)=0 (7,6)=1 (7,7)=0 (6,7)=0 (5,7)=0 (5,6)=1
         #   ring_arcs = 2 (1 at positions 4 and 8, separated), ring_cells = 2 (1, 2),
         #   ring_medium = 5.  Current rule: 2 ≤ 1 false, ring_cells == 2 true → ACCEPT.
         #   Fixed rule: ring_medium = 5 ≠ 0 → REFUSE.
-        σ = zeros(Int32, 12, 12); σ[3:9, 6] .= 1; σ[6, 5] = 2
+        σ = zeros(Int32, 12, 12)
+        σ[3:9, 6] .= 1
+        σ[6, 5] = 2
         @test arc_pieces(σ, 1) == 1
         @test arc_pieces(after(σ, ARC_X, SRC), 1) == 2      # the copy splits cell 1
         @test !model_allows(ArcPeriodic, σ, ARC_X, SRC)
@@ -114,11 +129,13 @@ end
         # one medium site is enough. σ: everything cell 2 except the bar, and (5,7) medium.
         # Ring: (5,5)=2 (6,5)=2 (7,5)=2 (7,6)=1 (7,7)=2 (6,7)=2 (5,7)=0 (5,6)=1
         #   arcs 2, cells 2, medium 1 → current ACCEPT, fixed REFUSE.
-        σ1 = fill(Int32(2), 12, 12); σ1[3:9, 6] .= 1; σ1[5, 7] = 0
+        σ1 = fill(Int32(2), 12, 12)
+        σ1[3:9, 6] .= 1
+        σ1[5, 7] = 0
         @test !model_allows(ArcPeriodic, σ1, ARC_X, SRC)
 
-        # the published model that motivated the item: WortelAct(connected = true), same junction
-        # (kind `cell`; its constraint is `connectivity(cell; rule = ArcOrPair())`)
+        # the published model that motivated the item: WortelAct(connected = true), same
+        # junction (kind `cell`; its constraint is `connectivity(cell; rule = ArcOrPair())`)
         wprob = PottsProblem(
             WortelAct(; name = :w, lattice = (12, 12), connected = true),
             [ownership => σ, kind => [:cell, :cell]], (0, 1)
@@ -127,13 +144,18 @@ end
     end
 end
 
-@testitem "arc or pair medium: controls the fix must keep" setup = [ArcOrPairMediumSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "arc or pair medium: controls the fix must keep" setup = [
+    ArcOrPairMediumSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "arc or pair medium: controls the fix must keep" begin
         # pure two-cell ring, no medium. σ: cell 2 everywhere except the bar.
         # Ring: (5,5)=2 (6,5)=2 (7,5)=2 (7,6)=1 (7,7)=2 (6,7)=2 (5,7)=2 (5,6)=1
-        #   arcs 2, cells 2, medium 0 → ACCEPT under both rules (TST exempts it although the bar
-        #   is split; the rule is local).
-        σ = fill(Int32(2), 12, 12); σ[3:9, 6] .= 1
+        #   arcs 2, cells 2, medium 0 → ACCEPT under both rules (TST exempts it although the
+        #   bar is split; the rule is local).
+        σ = fill(Int32(2), 12, 12)
+        σ[3:9, 6] .= 1
         @test model_allows(ArcPeriodic, σ, ARC_X, SRC)
         wprob = PottsProblem(
             WortelAct(; name = :w, lattice = (12, 12), connected = true),
@@ -142,57 +164,91 @@ end
         @test allows(wprob, σ, ARC_X, SRC)
 
         # medium on the ring but one arc: an ordinary junction copy stays accepted.
-        # σ: cell 1 block (3:6, 3:6), cell 2 block (7:9, 3:6), medium elsewhere. Target (6,6),
-        # source (7,6). Ring of (6,6): (5,5)=1 (6,5)=1 (7,5)=2 (7,6)=2 (7,7)=0 (6,7)=0 (5,7)=0
+        # σ: cell 1 block (3:6, 3:6), cell 2 block (7:9, 3:6), medium elsewhere. Target
+        # (6,6), source (7,6). Ring of (6,6): (5,5)=1 (6,5)=1 (7,5)=2 (7,6)=2 (7,7)=0
+        # (6,7)=0 (5,7)=0
         #   (5,6)=1 → the 1s at positions 1, 2, 8 are one cyclic arc → arcs 1 → ACCEPT.
-        σ = zeros(Int32, 12, 12); σ[3:6, 3:6] .= 1; σ[7:9, 3:6] .= 2
+        σ = zeros(Int32, 12, 12)
+        σ[3:6, 3:6] .= 1
+        σ[7:9, 3:6] .= 2
         @test model_allows(ArcPeriodic, σ, (6, 6), (7, 6))
 
         # three cells on the ring with medium: refused under both rules (arcs 2, cells 3).
         # σ: bar of 1, cell 2 at (6,5), cell 3 at (6,7). Ring: 0 2 0 1 0 3 0 1.
-        σ = zeros(Int32, 12, 12); σ[3:9, 6] .= 1; σ[6, 5] = 2; σ[6, 7] = 3
+        σ = zeros(Int32, 12, 12)
+        σ[3:9, 6] .= 1
+        σ[6, 5] = 2
+        σ[6, 7] = 3
         @test !model_allows(ArcPeriodic, σ, ARC_X, SRC)
 
-        # zero arcs (the cell's last site) still pass: TST lets a cell vanish (the connectivity rule allows it).
-        σ = zeros(Int32, 12, 12); σ[6, 6] = 1; σ[6, 5] = 2
+        # zero arcs (the cell's last site) still pass: TST lets a cell vanish (the
+        # connectivity rule allows it).
+        σ = zeros(Int32, 12, 12)
+        σ[6, 6] = 1
+        σ[6, 5] = 2
         @test model_allows(ArcPeriodic, σ, ARC_X, SRC)
     end
 end
 
-@testitem "arc or pair medium: out-of-domain sites on a Closed edge are not medium" setup = [ArcOrPairMediumSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "arc or pair medium: out-of-domain sites on a Closed edge are not medium" setup =
+    [ArcOrPairMediumSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "arc or pair medium: out-of-domain sites on a Closed edge are not medium" begin
-        # σ (Closed 12×12): cell 1 along the top edge row 1, cols 3:9; cell 2 below it, rows 2:4,
-        # cols 3:9; medium elsewhere. Target (1,6), source (2,6).
-        # Ring of (1,6): (0,5)=OUT (1,5)=1 (2,5)=2 (2,6)=2 (2,7)=2 (1,7)=1 (0,7)=OUT (0,6)=OUT
+        # σ (Closed 12×12): cell 1 along the top edge row 1, cols 3:9; cell 2 below it, rows
+        # 2:4, cols 3:9; medium elsewhere. Target (1,6), source (2,6). Ring of (1,6):
+        # (0,5)=OUT (1,5)=1 (2,5)=2 (2,6)=2 (2,7)=2 (1,7)=1 (0,7)=OUT (0,6)=OUT
         #   arcs 2 (1 at positions 2 and 6), medium 0 (the three OUT sites are not medium).
         #   Amended under D-189 ruling 5: inside `ArcOrPair()` the Closed frame counts
-        #   as a cell, as TST's σ = −1 frame does, so cells 3 (1, 2, frame) → the pair clause
-        #   fails → REFUSE. (Before that ruling the frame was nothing: cells 2 → ACCEPT.)
-        σ = zeros(Int32, 12, 12); σ[1, 3:9] .= 1; σ[2:4, 3:9] .= 2
+        #   as a cell, as TST's σ = −1 frame does, so cells 3 (1, 2, frame) → the pair
+        #   clause fails → REFUSE. (Before that ruling the frame was nothing: cells 2 →
+        #   ACCEPT.)
+        σ = zeros(Int32, 12, 12)
+        σ[1, 3:9] .= 1
+        σ[2:4, 3:9] .= 2
         @test !model_allows(ArcClosed, σ, (1, 6), (2, 6))
 
         # the same edge junction with one real medium site, (2,7) = 0:
-        # Ring: OUT 1 2 2 0 1 OUT OUT → arcs 2, cells 2, medium 1 → current ACCEPT, fixed REFUSE.
-        σm = copy(σ); σm[2, 7] = 0
+        # Ring: OUT 1 2 2 0 1 OUT OUT → arcs 2, cells 2, medium 1 → current ACCEPT, fixed
+        # REFUSE.
+        σm = copy(σ)
+        σm[2, 7] = 0
         @test !model_allows(ArcClosed, σm, (1, 6), (2, 6))
 
-        # the same σ on a Periodic lattice: row 0 wraps to row 12, whose cols 5:7 are medium.
+        # the same σ on a Periodic lattice: row 0 wraps to row 12, whose cols 5:7 are
+        # medium.
         # Ring: (12,5)=0 1 2 2 2 1 (12,7)=0 (12,6)=0 → arcs 2, cells 2, medium 3
-        #   → current ACCEPT, fixed REFUSE (wrapped sites are ordinary sites, not out of domain).
+        #   → current ACCEPT, fixed REFUSE (wrapped sites are ordinary sites, not out of
+        #   domain).
         @test !model_allows(ArcPeriodic, σ, (1, 6), (2, 6))
     end
 end
 
-@testitem "arc or pair medium: single cell in medium is the one-arc rule" setup = [ArcOrPairMediumSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "arc or pair medium: single cell in medium is the one-arc rule ($(periodic ? "Periodic" : "Closed"))" for periodic in (true, false)
+@testitem "arc or pair medium: single cell in medium is the one-arc rule" setup = [
+    ArcOrPairMediumSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "arc or pair medium: single cell in medium is the one-arc rule \
+        ($(periodic ? "Periodic" : "Closed"))" for periodic in (true, false)
         M = periodic ? ArcPeriodic : ArcClosed
         shapes = Matrix{Int32}[]
-        # a U (bridges and a cavity), touching the top edge (row 1) and the left edge (col 1)
-        s = zeros(Int32, 12, 12); s[1:6, 1] .= 1; s[6, 1:5] .= 1; s[1:6, 5] .= 1; s[3, 2:3] .= 1
+        # a U (bridges and a cavity), touching the top edge (row 1) and the left edge (col
+        # 1)
+        s = zeros(Int32, 12, 12)
+        s[1:6, 1] .= 1
+        s[6, 1:5] .= 1
+        s[1:6, 5] .= 1
+        s[3, 2:3] .= 1
         push!(shapes, s)
         # an annulus with a diagonal tail (corner contacts) in the interior
-        s = zeros(Int32, 12, 12); s[4:8, 4:8] .= 1; s[5:7, 5:7] .= 0; s[6, 6] = 1
-        s[9, 9] = 1; s[10, 10] = 1; s[10, 11] = 1
+        s = zeros(Int32, 12, 12)
+        s[4:8, 4:8] .= 1
+        s[5:7, 5:7] .= 0
+        s[6, 6] = 1
+        s[9, 9] = 1
+        s[10, 10] = 1
+        s[10, 11] = 1
         push!(shapes, s)
         for σ in shapes
             prob = arc_prob(M, σ)
@@ -201,7 +257,11 @@ end
             for I in CartesianIndices(σ)
                 σ[I] == 1 || continue
                 x = Tuple(I)
-                for (di, dj) in ((-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (-1, 1), (1, -1), (1, 1))
+                for (di, dj) in (
+                        (-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (-1, 1), (
+                            1, -1,
+                        ), (1, 1),
+                    )
                     y = (x[1] + di, x[2] + dj)
                     if periodic
                         y = (mod1(y[1], 12), mod1(y[2], 12))
@@ -211,7 +271,9 @@ end
                     σ[y...] == 0 || continue
                     want = arcs(σ, x, 1; periodic) <= 1
                     got = allows(prob, σ, x, y)
-                    n += 1; accepted += want; refused += !want
+                    n += 1
+                    accepted += want
+                    refused += !want
                     agree += got == want
                 end
             end

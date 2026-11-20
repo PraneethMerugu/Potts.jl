@@ -11,31 +11,33 @@
 # κ = 2.497 (the D-190 FULL record's calibration.tsv, 2.4967980904210996) for Eq. 6
 # unchanged, and gives the bulk Eq. 7 term its own scale:
 #     γ(y, t) = −κ_b·β_paper·(y − (L_y + 1)/2)·G(t),   G = 1 (steady),
-# i.e. the model parameter `β` of `ReferenceShearedFoam` is κ_b·β_paper. Nothing else changes:
-# lattice 256², (Periodic(), Closed()), NeighborOrder(4) contacts and proposals, J = 3,
-# Γ = 1, T = 1e-6, `BoundarySiteCPM()` (DV1), T1s counted with `t1_events(...; unit = :t1)`
-# on the VonNeumann(1) `cell_graph` of consecutive MCS.
+# i.e. the model parameter `β` of `ReferenceShearedFoam` is κ_b·β_paper. Nothing else
+# changes: lattice 256², (Periodic(), Closed()), NeighborOrder(4) contacts and proposals, J
+# = 3, Γ = 1, T = 1e-6, `BoundarySiteCPM()` (DV1), T1s counted with `t1_events(...; unit =
+# :t1)` on the VonNeumann(1) `cell_graph` of consecutive MCS.
 #
 # Does the code expose κ_b separately? At the MODEL level, yes in effect: in
-# `ReferenceShearedFoam` (04_foam_tests.jl) the Eq. 6 term reads only `γ0` and the Eq. 7 term only `β`,
-# both free parameters in model units, so the two scales are already independent and the scan
-# needs no new model parameter. The coupling is in the HARNESS: D-190's `foam_bulk(st, βp, κ,
-# …)` takes one κ, and the FULL runner and `foam_full` pass the boundary κ (`κ.kappa`) to it,
-# and the record tier asserts `beta_model ≈ κ·beta`. If this scan returns a κ_b, the updated
-# 04 test needs a pre-registered constant (say `KAPPA_B`, a D-entry value) passed as the
-# κ argument of every `foam_bulk` call, a `beta_model ≈ κ_b·beta` record check, and κ_b in
-# calibration.tsv. This file implements none of that (D-203: the test is updated only after
-# a D-entry).
+# `ReferenceShearedFoam` (04_foam_tests.jl) the Eq. 6 term reads only `γ0` and the Eq. 7
+# term only `β`, both free parameters in model units, so the two scales are already
+# independent and the scan needs no new model parameter. The coupling is in the HARNESS:
+# D-190's `foam_bulk(st, βp, κ, …)` takes one κ, and the FULL runner and `foam_full` pass
+# the boundary κ (`κ.kappa`) to it, and the record tier asserts `beta_model ≈ κ·beta`. If
+# this scan returns a κ_b, the updated 04 test needs a pre-registered constant (say
+# `KAPPA_B`, a D-entry value) passed as the κ argument of every `foam_bulk` call, a
+# `beta_model ≈ κ_b·beta` record check, and κ_b in calibration.tsv. This file implements
+# none of that (D-203: the test is updated only after a D-entry).
 #
-# ── The scan (pre-registered; set "kb", seed block 13) ──────────────────────────────────────
-# Foams: ordered foams k = 1..5 exactly as D-190 (`make_foam(:ordered, k)`, prep seeds
+# ── The scan (pre-registered; set "kb", seed block 13)
+# ────────────────────────────────────── Foams: ordered foams k = 1..5 exactly as D-190
+# (`make_foam(:ordered, k)`, prep seeds
 #   `prep_seed(:ordered, k, try)`: the same foams as the D-190 FULL record). τ = 1/ū
 #   over foams 1..5 (`foam_ubar`, the D-190 A-5 τ, as `foam_tau`). Runs use foams k = 1..3.
 # Seeds: n = 3 replicates; run seed `run_seed(13, j, k)` with j the β index (1..5) and k
 #   the foam. The seed does not depend on κ_b: common random numbers across the κ_b grid, so
-#   the t_first(κ_b) curve of a replicate is paired along the grid. Block 13 is unused by D-190.
-# β (paper units): {1e-4, 1e-3, 5e-3, 0.01, 0.05} (D-203 (a); Fig. 9's set). Model β = κ_b·β.
-# κ_b grid: κ_b = κ_D190 · 2^(i/2), i = −8..14: 23 values, 0.156 … 319.6, step √2.
+#   the t_first(κ_b) curve of a replicate is paired along the grid. Block 13 is unused by
+#   D-190.
+# β (paper units): {1e-4, 1e-3, 5e-3, 0.01, 0.05} (D-203 (a); Fig. 9's set). Model β =
+# κ_b·β. κ_b grid: κ_b = κ_D190 · 2^(i/2), i = −8..14: 23 values, 0.156 … 319.6, step √2.
 #   Anchored on the boundary κ so that i = 0 is the D-190 bulk setting (a harness control
 #   against the D-190 record, below). Bounds, from the D-190 FULL record (ordered foams,
 #   bulk.tsv set "spec", the only information used):
@@ -57,19 +59,22 @@
 #   Fig. 11(a)'s ordered ε_y (1.13, 1.10, 1.11, 0.80, 0.43 at β = 0.001 … 0.05) and c =
 #   0.0205–0.0258: β = 0.001 → 43 800–55 100 (cap 2^16 covers it by ≥ 19 %); β = 0.005 →
 #   8 500–10 700 and β = 0.01 → 4 300 (2^14 = 3.8 × 4 300, far beyond the +25 % edge 5 375).
-#   β = 1e-4 would need ≈ 4.4–5.5 × 10⁵ on the ordered plateau: no affordable cap reaches it,
-#   so its rows are info only (it gets the 2^16 cap).
-# Early stop (exact): the run stops at the first check (every w = round(Int, 100τ) of our MCS,
-#   and at the cap) where `yield_strain` on the prefix finds index i with i ≤ m − w + 1. Then
-#   every candidate before i has its full window inside the prefix and failed, and i's window
-#   is complete, so the full-cap result is i: t_first is identical to a run to the cap
-#   (oracle below). Recorded: our MCS run (`mcs_run`) and T1s up to the stop (`t1_total`).
+#   β = 1e-4 would need ≈ 4.4–5.5 × 10⁵ on the ordered plateau: no affordable cap reaches
+#   it, so its rows are info only (it gets the 2^16 cap).
+# Early stop (exact): the run stops at the first check (every w = round(Int, 100τ) of our
+# MCS,
+#   and at the cap) where `yield_strain` on the prefix finds index i with i ≤ m − w + 1.
+#   Then every candidate before i has its full window inside the prefix and failed, and i's
+#   window is complete, so the full-cap result is i: t_first is identical to a run to the
+#   cap (oracle below). Recorded: our MCS run (`mcs_run`) and T1s up to the stop
+#   (`t1_total`).
 # Jobs: 23 κ_b × 5 β × 3 replicates = 345, plus the 5 foams.
 #
-# ── Fit target (D-203 (b)) ──────────────────────────────────────────────────────────────────
-# Spec 04 §3.2 ("Yield-strain calibration, ordered bulk shear", from 04b Figs. 4(b), 5(b),
-# 11(a)): β = 0.01 → first T1 ≈ 4300 MCS; β = 0.05 → first T1 ≈ 420 MCS; ε_y ≈ c·β·t with
-# c ≈ 0.020–0.026. The paper itself gives no tolerance (04b p.5826 only reads Figs. 4(b) and
+# ── Fit target (D-203 (b))
+# ────────────────────────────────────────────────────────────────── Spec 04 §3.2
+# ("Yield-strain calibration, ordered bulk shear", from 04b Figs. 4(b), 5(b), 11(a)): β =
+# 0.01 → first T1 ≈ 4300 MCS; β = 0.05 → first T1 ≈ 420 MCS; ε_y ≈ c·β·t with c ≈
+# 0.020–0.026. The paper itself gives no tolerance (04b p.5826 only reads Figs. 4(b) and
 # 5(b), and p.5827 says "the yield strain remains almost the same", which Fig. 11(a)
 # contradicts: spec A-17 (i)). The ±25 % band is spec §3.2's own wording: "The ≈ 25%
 # mismatch between the two estimates marks the limits of this calibration" (the two c
@@ -78,13 +83,14 @@
 #   yield within the cap) and t_first clamped to ≥ 1 for the logarithms. A grid value meets
 #   the fit iff |med_β/target_β − 1| ≤ 0.25 for BOTH β = 0.01 (4300) and β = 0.05 (420).
 #
-# ── Consistency check (D-203 (c)) ───────────────────────────────────────────────────────────
-# "T1s occur at β ≤ 0.001, so Fig. 9's N̄ > 0." N̄ > 0 ⇔ t1_total > 0 (N̄ is t1_total over
-# positive factors). Pre-registered: at β = 1e-3, t1_total > 0 within the cap in at least
-# k = 2 of the n = 3 replicates. β = 1e-3 is the largest β ≤ 0.001 and the one where the
-# paper's ORDERED foam yields (Fig. 11(a): ε_y = 1.13 at 0.001, the plateau); Fig. 9's own
-# foams are disordered, and on the ordered plateau β = 1e-4 cannot yield within any
-# affordable cap, so β = 1e-4 is recorded (info) and does not gate.
+# ── Consistency check (D-203 (c))
+# ─────────────────────────────────────────────────────────── "T1s occur at β ≤ 0.001, so
+# Fig. 9's N̄ > 0." N̄ > 0 ⇔ t1_total > 0 (N̄ is t1_total over positive factors).
+# Pre-registered: at β = 1e-3, t1_total > 0 within the cap in at least k = 2 of the n = 3
+# replicates. β = 1e-3 is the largest β ≤ 0.001 and the one where the paper's ORDERED foam
+# yields (Fig. 11(a): ε_y = 1.13 at 0.001, the plateau); Fig. 9's own foams are disordered,
+# and on the ordered plateau β = 1e-4 cannot yield within any affordable cap, so β = 1e-4 is
+# recorded (info) and does not gate.
 #
 # ── Decision rule (D-203 (d); `analyse` / `decide`, pure, tested below) ────────
 # Input: the scan table; it must be exactly the pre-registered grid × β × replicates (else
@@ -104,23 +110,27 @@
 #    `nothing`, :consistency). Then return κ̂ (an off-grid value: the D-entry, updated test
 #    and the 200 bulk jobs re-run validate it, D-203 (d)).
 # A returned κ_b → the spec owner, then a D-entry, amendment, re-run (D-203). `nothing` →
-# stop: the Eq. 2 form is in question, the record stays provisional, F1 hard gate (Dr Jiang).
+# stop: the Eq. 2 form is in question, the record stays provisional, F1 hard gate (Dr
+# Jiang).
 #
-# ── Harness control against the D-190 record (record tier) ─────────────────────────────────
-# At i = 0 (κ_b = κ_D190) the scan repeats D-190's ordered bulk runs at β = 0.01 and 0.05
-# (other seeds, same foams 1..3, same model β). D-190 record medians (ordered, set "spec",
-# 5 replicates): 455 and 40 paper MCS. The scan's medians there must lie within ±25 % of them.
+# ── Harness control against the D-190 record (record tier)
+# ───────────────────────────────── At i = 0 (κ_b = κ_D190) the scan repeats D-190's ordered
+# bulk runs at β = 0.01 and 0.05 (other seeds, same foams 1..3, same model β). D-190 record
+# medians (ordered, set "spec", 5 replicates): 455 and 40 paper MCS. The scan's medians
+# there must lie within ±25 % of them.
 #
-# ── Cost (estimate) ─────────────────────────────────────────────────────────────────────────
-# Per (κ_b, replicate), worst case (every run to its cap): 2 × 65 536 + 3 × 16 384 = 180 224
-# paper MCS = 6.2 × 10⁵ of our MCS at τ = 3.447. × 69 = 4.3 × 10⁷ our MCS. The D-190 FULL ran
-# ≈ 1.35 × 10⁸ our MCS in 9.7 h on 24 PC threads ≈ 6.2 ms per MCS per thread (with heavier
-# per-window analysis than here): worst case ≈ 74 thread-h ≈ 3.1 h on 24 threads. With the
-# D-190 pinning pattern (model β ≲ 0.0125–0.025 never yields) about 2/3 of that runs to the
-# cap: expected ≈ 2 h on 24 threads. The longest job is ≈ 2.3 × 10⁵ our MCS (≈ 25 min).
-# Mac: SMOKE only (≈ 10 s of runs plus compilation).
+# ── Cost (estimate)
+# ───────────────────────────────────────────────────────────────────────── Per (κ_b,
+# replicate), worst case (every run to its cap): 2 × 65 536 + 3 × 16 384 = 180 224 paper MCS
+# = 6.2 × 10⁵ of our MCS at τ = 3.447. × 69 = 4.3 × 10⁷ our MCS. The D-190 FULL ran ≈ 1.35 ×
+# 10⁸ our MCS in 9.7 h on 24 PC threads ≈ 6.2 ms per MCS per thread (with heavier per-window
+# analysis than here): worst case ≈ 74 thread-h ≈ 3.1 h on 24 threads. With the D-190
+# pinning pattern (model β ≲ 0.0125–0.025 never yields) about 2/3 of that runs to the cap:
+# expected ≈ 2 h on 24 threads. The longest job is ≈ 2.3 × 10⁵ our MCS (≈ 25 min). Mac:
+# SMOKE only (≈ 10 s of runs plus compilation).
 #
-# ── Tiers ───────────────────────────────────────────────────────────────────────────────────
+# ── Tiers
+# ───────────────────────────────────────────────────────────────────────────────────
 # always: the decision rule on synthetic tables (with negative controls), the early-stop
 #   oracle, the grid and cap bounds.
 # SMOKE (default, as D-190): foam 1, κ_b = κ_D190, β = 0.05, cap 300 paper MCS
@@ -128,10 +138,11 @@
 # SCAN (BULK_SHEAR_SCAN=true; offline on the PC, D-157): runs the 345 jobs; with
 #   OUT=<dir> writes scan.tsv, provenance.toml and decision.toml there. Copy to
 #   lib/PottsModels/reproductions/data/04/kb-scan-<date>/.
-# record (always): reads the one reproductions/data/04/kb-scan-*/scan.tsv, checks completeness,
-#   τ and the harness control, recomputes the decision (and compares it with decision.toml when
-#   present) and reports it. The decision
-#   itself (a κ_b or `nothing`) is an outcome, not a pass/fail.
+# record (always): reads the one reproductions/data/04/kb-scan-*/scan.tsv, checks
+# completeness,
+#   τ and the harness control, recomputes the decision (and compares it with decision.toml
+#   when present) and reports it. The decision itself (a κ_b or `nothing`) is an outcome,
+#   not a pass/fail.
 #
 # scan.tsv schema (one header line, tab-separated): kappa_b, beta, beta_model, k, seed, tau,
 # cap (paper MCS), mcs_run (our MCS), t_first (paper MCS, −1 none), t1_total.
@@ -142,9 +153,9 @@ using Dates
 using Statistics: mean, median
 # the foam reproduction's model, foams, τ and run helpers (D-190)
 include(joinpath(@__DIR__, "..", "shared", "foam.jl"))
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Constants (pre-registered)
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 const BULK_SHEAR_SCAN = get(ENV, "BULK_SHEAR_SCAN", "false") == "true"
 const OUT = get(ENV, "OUT", "")
 const BOUNDARY_KAPPA = 2.4967980904210996
@@ -169,13 +180,15 @@ const RECORDED_MEDIANS = (0.01 => 455.0, 0.05 => 40.0)
 # D-190 record, ordered "spec" medians
 const SMOKE_CAP, SMOKE_CAP0 = 300, 100
 const COLS = [
-    "kappa_b" => Float64, "beta" => Float64, "beta_model" => Float64, "k" => Int, "seed" => Int,
-    "tau" => Float64, "cap" => Int, "mcs_run" => Int, "t_first" => Int, "t1_total" => Float64,
+    "kappa_b" => Float64, "beta" => Float64, "beta_model" => Float64, "k" => Int, "seed" =>
+        Int,
+    "tau" => Float64, "cap" => Int, "mcs_run" => Int, "t_first" => Int, "t1_total" =>
+        Float64,
 ]
 scan_seed(j, k) = run_seed(SCAN_BLOCK, j, k)
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Decision rule (pure)
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 """t_first as a number for medians and logs: −1 (no yield within the cap) → Inf; ≥ 1."""
 tval(t) = t < 0 ? Inf : max(Float64(t), 1.0)
 """Within the ±tol band of the target (Inf never is)."""
@@ -190,26 +203,42 @@ function cube(rows; grid = GRID, betas = SCAN_BETAS, seeds = 1:SCAN_N)
         j = findfirst(b -> isapprox(b, Float64(r["beta"]); rtol = 1.0e-9), betas)
         k = findfirst(==(Int(r["k"])), seeds)
         (i === nothing || j === nothing || k === nothing) &&
-            throw(ArgumentError("bulk_shear_scan: row off the design (κ_b = $(r["kappa_b"]), β = $(r["beta"]), k = $(r["k"]))"))
-        isnan(t[i, j, k]) || throw(ArgumentError("bulk_shear_scan: duplicate row (κ_b = $(grid[i]), β = $(betas[j]), k = $(r["k"]))"))
+            throw(ArgumentError("bulk_shear_scan: row off the design (κ_b \
+                = $(r["kappa_b"]), β = $(r["beta"]), k = $(r["k"]))"))
+        isnan(t[i, j, k]) ||
+            throw(ArgumentError("bulk_shear_scan: duplicate row (κ_b = $(grid[i]), β \
+                = $(betas[j]), k = $(r["k"]))"))
         t[i, j, k] = tval(r["t_first"])
         n1[i, j, k] = Float64(r["t1_total"])
     end
-    any(isnan, t) && throw(ArgumentError("bulk_shear_scan: incomplete table ($(count(isnan, t)) of $(length(t)) rows missing)"))
+    any(isnan, t) &&
+        throw(ArgumentError("bulk_shear_scan: incomplete table ($(count(isnan, t)) \
+            of $(length(t)) rows missing)"))
     return t, n1
 end
 """κ where the log–log line through (κ1, m1), (κ2, m2) reaches m (m1 ≥ m > m2, finite)."""
-scan_interp(κ1, m1, κ2, m2, m) = exp(log(κ1) + (log(m) - log(m1)) * (log(κ2) - log(κ1)) / (log(m2) - log(m1)))
+function scan_interp(κ1, m1, κ2, m2, m)
+    return exp(
+        log(κ1) +
+            (log(m) - log(m1)) * (log(κ2) - log(κ1)) /
+            (log(m2) - log(m1))
+    )
+end
 """med at κ by log–log interpolation along the grid; Inf if a bracket end is Inf."""
 function scan_at(grid, med, κ)
     j = findlast(g -> g <= κ * (1 + 1.0e-12), grid)
-    (j === nothing || (j == length(grid) && !isapprox(grid[j], κ; rtol = 1.0e-12))) && return Inf
+    (j === nothing || (j == length(grid) && !isapprox(grid[j], κ; rtol = 1.0e-12))) &&
+        return Inf
     isapprox(grid[j], κ; rtol = 1.0e-12) && return med[j]
     (isfinite(med[j]) && isfinite(med[j + 1])) || return Inf
-    return exp(log(med[j]) + (log(κ) - log(grid[j])) * (log(med[j + 1]) - log(med[j])) / (log(grid[j + 1]) - log(grid[j])))
+    return exp(
+        log(med[j]) +
+            (log(κ) - log(grid[j])) * (log(med[j + 1]) - log(med[j])) /
+            (log(grid[j + 1]) - log(grid[j]))
+    )
 end
-"""The bulk-modulus decision on a scan table: (kappa_b = Float64 or nothing, path, reason, khat,
-med, cons, fit, P). See the header for the rule."""
+"""The bulk-modulus decision on a scan table: (kappa_b = Float64 or nothing, path, reason,
+khat, med, cons, fit, P). See the header for the rule."""
 function analyse(
         rows; grid = GRID, betas = SCAN_BETAS, seeds = 1:SCAN_N, k_req = SCAN_K,
         targets = TARGETS, tol = TOL, cons_beta = CONS_BETA
@@ -226,7 +255,8 @@ function analyse(
     khat = Float64[]
     for (β, tg) in targets
         m = med[:, jb(β)]
-        any(i -> m[i] < tg && m[i + 1] >= tg, 1:(ng - 1)) && return out(nothing, :interp, :non_monotone, khat)
+        any(i -> m[i] < tg && m[i + 1] >= tg, 1:(ng - 1)) &&
+            return out(nothing, :interp, :non_monotone, khat)
         d = findfirst(i -> m[i] >= tg && m[i + 1] < tg, 1:(ng - 1))
         d === nothing && return out(nothing, :interp, :not_bracketed, khat)
         isfinite(m[d]) || return out(nothing, :interp, :pinning_cliff, khat)
@@ -235,14 +265,15 @@ function analyse(
     κ̂ = exp(mean(log, khat))
     all(scan_within(scan_at(grid, med[:, jb(β)], κ̂), tg; tol) for (β, tg) in targets) ||
         return out(nothing, :interp, :off_target, khat)
-    cons[findlast(g -> g <= κ̂ * (1 + 1.0e-12), grid)] || return out(nothing, :interp, :consistency, khat)
+    cons[findlast(g -> g <= κ̂ * (1 + 1.0e-12), grid)] ||
+        return out(nothing, :interp, :consistency, khat)
     return out(κ̂, :interp, :ok, khat)
 end
 """The chosen κ_b, or `nothing` (stop: the F1 gate)."""
 decide(rows; kw...) = analyse(rows; kw...).kappa_b
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Early stop (pure) and the run
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 """After m of our MCS (N = the per-MCS T1 series so far): (done, tf). done once the
 prefix's yield index i has a complete window (i ≤ m − w + 1), or at the cap (final);
 tf = i/τ (paper MCS), or nothing."""
@@ -277,7 +308,10 @@ function scan_run(st, βm, cap, seed, τ)
         g = g2
         (m % w == 0 || m == T) || continue
         d = settled(view(N, 1:m), τ, w; final = m == T)
-        d.done && return (t_first = d.tf === nothing ? -1 : round(Int, d.tf), mcs_run = m, t1_total = sum(view(N, 1:m)))
+        d.done && return (
+            t_first = d.tf === nothing ? -1 : round(Int, d.tf),
+            mcs_run = m, t1_total = sum(view(N, 1:m)),
+        )
     end
 end
 function scan_write(dir, rows)
@@ -293,11 +327,16 @@ function scan_read(file)
     ls = readlines(file)
     h = split(ls[1], '\t')
     h == first.(COLS) || throw(ArgumentError("bulk_shear_scan: scan.tsv header $(h)"))
-    return [Dict{String, Any}(c => parse(T, v) for ((c, T), v) in zip(COLS, split(l, '\t'))) for l in ls[2:end] if !isempty(l)]
+    return [
+        Dict{String, Any}(
+            c => parse(T, v)
+                for ((c, T), v) in zip(COLS, split(l, '\t'))
+        ) for l in ls[2:end] if !isempty(l)
+    ]
 end
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # always: the rule on synthetic tables, the early-stop oracle, the design
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 """A synthetic complete table: t(κ, β, k) and n1(κ, β, k)."""
 function synth(tf, n1; grid = GRID)
     return [
@@ -320,22 +359,34 @@ function pow(κ01, κ05; cap = 2^16)
         t > cap ? -1 : round(Int, t)
     end
 end
-scan_cons(κc; who = 1:SCAN_N) = (κ, β, k) -> (β >= 1.0e-3 && κ >= κc * (1 - 1.0e-12) && k in who) ? 3.0 : 0.0
-# ---------------------------------------------------------------------------------------------
+function scan_cons(κc; who = 1:SCAN_N)
+    return (κ, β, k) -> if β >= 1.0e-3 && κ >= κc * (1 - 1.0e-12) &&
+            k in who
+        3.0
+    else
+        0.0
+    end
+end
+# ------------------------------------------------------------------------------------------
 # SCAN (PC, BULK_SHEAR_SCAN=true)
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 function bulk_shear_scan_table()
     foam_template(false, FOAM_L)
     foam_template(true, FOAM_L)
     foams = tmap(k -> make_foam(:ordered, k), 1:TAU_FOAMS)
     τ = 1 / mean(row["ubar"] for (_, row) in foams)
-    jobs = [(κ, j, β, k) for κ in GRID for (j, β) in enumerate(SCAN_BETAS) for k in 1:SCAN_N]
+    jobs = [
+        (κ, j, β, k) for κ in GRID for (j, β) in enumerate(SCAN_BETAS)
+            for k in 1:SCAN_N
+    ]
     sort!(jobs; by = ((κ, j, β, k),) -> -CAP[β])                 # long caps first
     rows = tmap(jobs) do (κ, j, β, k)
         r = scan_run(foams[k][1], κ * β, CAP[β], scan_seed(j, k), τ)
         Dict{String, Any}(
-            "kappa_b" => κ, "beta" => β, "beta_model" => κ * β, "k" => k, "seed" => scan_seed(j, k),
-            "tau" => τ, "cap" => CAP[β], "mcs_run" => r.mcs_run, "t_first" => r.t_first, "t1_total" => r.t1_total
+            "kappa_b" => κ, "beta" => β, "beta_model" => κ * β, "k" => k, "seed" =>
+                scan_seed(j, k),
+            "tau" => τ, "cap" => CAP[β], "mcs_run" => r.mcs_run,
+            "t_first" => r.t_first, "t1_total" => r.t1_total
         )
     end
     sort!(rows; by = r -> (r["kappa_b"], r["beta"], r["k"]))
@@ -344,36 +395,53 @@ end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "04 κ_b scan: the design" setup = [FoamBulkShearScanSetup] tags = [:pottsmodels, :reproductions] begin
+@testitem "04 κ_b scan: the design" setup = [FoamBulkShearScanSetup] tags = [
+    :pottsmodels, :reproductions,
+] begin
     @testset "04 κ_b scan: the design" begin
         @test length(GRID) == 23 && GRID[9] == BOUNDARY_KAPPA && issorted(GRID)
         @test all(r -> r ≈ √2, GRID[2:end] ./ GRID[1:(end - 1)])
         @test GRID[1] * 0.05 < 0.0125 && GRID[end] * 1.0e-4 > 0.025      # bracket (header)
-        @test √2 < (1 + TOL) / (1 - TOL)                               # step narrower than the window
-        @test CAP[1.0e-3] >= 1.13 / (0.0205 * 1.0e-3) && CAP[0.01] >= 1.25 * 4300 && CAP[5.0e-3] >= 1.1 / (0.0205 * 5.0e-3)
+        # step narrower than the window
+        @test √2 < (1 + TOL) / (1 - TOL)
+        @test CAP[1.0e-3] >= 1.13 / (0.0205 * 1.0e-3) && CAP[0.01] >= 1.25 * 4300 &&
+            CAP[5.0e-3] >= 1.1 / (0.0205 * 5.0e-3)
         @test sort(collect(keys(CAP))) == SCAN_BETAS && SCAN_K <= SCAN_N
         seeds = [scan_seed(j, k) for j in eachindex(SCAN_BETAS) for k in 1:SCAN_N]
-        @test allunique(seeds) && !any(s -> s in seeds, [run_seed(b, i, k) for b in 1:12 for i in 0:200 for k in 1:10])
+        @test allunique(seeds) && !any(
+            s -> s in seeds, [
+                run_seed(b, i, k) for b in 1:12 for i in 0:200
+                    for k in 1:10
+            ]
+        )
     end
 end
 
-@testitem "04 κ_b scan: decision rule on synthetic tables" setup = [FoamBulkShearScanSetup] tags = [:pottsmodels, :reproductions] begin
+@testitem "04 κ_b scan: decision rule on synthetic tables" setup = [
+    FoamBulkShearScanSetup,
+] tags = [
+    :pottsmodels, :reproductions,
+] begin
     @testset "04 κ_b scan: decision rule on synthetic tables" begin
         g = GRID
-        @test scan_within(5375, 4300) && !scan_within(5376, 4300) && scan_within(3225, 4300) && !scan_within(3224, 4300)
+        @test scan_within(5375, 4300) && !scan_within(5376, 4300) &&
+            scan_within(3225, 4300) && !scan_within(3224, 4300)
         @test !scan_within(Inf, 4300) && tval(-1) == Inf && tval(0) == 1.0
-        # (1) both targets met at one grid value; consistency from below it → that grid value
+        # (1) both targets met at one grid value; consistency from below it → that grid
+        #     value
         A = analyse(synth(pow(g[12], g[12]), scan_cons(g[10])))
         @test A.kappa_b == g[12] && A.path === :grid && A.P == [12]
         # (2) off-grid optimum (two grid values pass) → interpolation, recovers κ*
         κs = sqrt(g[12] * g[13])
         A = analyse(synth(pow(κs, κs), scan_cons(g[10])))
-        @test length(A.P) == 2 && A.path === :interp && A.reason === :ok && isapprox(A.kappa_b, κs; rtol = 1.0e-3)
+        @test length(A.P) == 2 && A.path === :interp && A.reason === :ok &&
+            isapprox(A.kappa_b, κs; rtol = 1.0e-3)
         # (3) robust to one replicate never yielding; to row order
         t1 = pow(g[12], g[12])
         rows = synth((κ, β, k) -> k == 3 ? -1 : t1(κ, β, k), scan_cons(g[10]))
         @test decide(rows) == g[12]
-        @test decide(reverse(rows)) == g[12] && decide(rows[sortperm([hash(r["kappa_b"] * r["k"]) for r in rows])]) == g[12]
+        @test decide(reverse(rows)) == g[12] &&
+            decide(rows[sortperm([hash(r["kappa_b"] * r["k"]) for r in rows])]) == g[12]
         # negative controls → nothing
         # (N1) the two targets want κ_b a factor 4 apart (the expected F1 shape)
         A = analyse(synth(pow(g[12], g[8]), scan_cons(g[1])))
@@ -388,31 +456,53 @@ end
         A = analyse(synth((κ, β, k) -> κ * β >= 0.02 ? 100 : -1, scan_cons(g[1])))
         @test A.kappa_b === nothing && A.reason === :pinning_cliff
         # (N5) not bracketed: the optimum lies above, or below, the grid
-        @test analyse(synth(pow(1000.0, 1000.0; cap = 10^9), scan_cons(g[1]))).reason === :not_bracketed
+        @test analyse(synth(pow(1000.0, 1000.0; cap = 10^9), scan_cons(g[1]))).reason ===
+            :not_bracketed
         @test analyse(synth(pow(0.01, 0.01), scan_cons(g[1]))).reason === :not_bracketed
-        # (N6) non-monotone in κ_b (an upward crossing) → nothing on the interpolation path; the
-        # grid path is checked first, so one passing grid value still decides
+        # (N6) non-monotone in κ_b (an upward crossing) → nothing on the interpolation path;
+        # the grid path is checked first, so one passing grid value still decides
         ts = pow(κs, κs)
         A = analyse(synth((κ, β, k) -> κ ≈ g[16] ? 10^5 : ts(κ, β, k), scan_cons(g[10])))
         @test A.kappa_b === nothing && A.reason === :non_monotone && A.path === :interp
-        @test decide(synth((κ, β, k) -> κ ≈ g[16] ? 10^5 : t1(κ, β, k), scan_cons(g[10]))) == g[12]
+        @test decide(
+            synth((κ, β, k) -> κ ≈ g[16] ? 10^5 : t1(κ, β, k), scan_cons(g[10]))
+        ) ==
+            g[12]
         # (N7) no table is not a result: missing, duplicated or off-design rows throw
         rows = synth(t1, scan_cons(g[10]))
         @test_throws ArgumentError decide(rows[2:end])
         @test_throws ArgumentError decide([rows; rows[1:1]])
-        @test_throws ArgumentError decide([rows[2:end]; Dict{String, Any}(rows[1]..., "kappa_b" => 2.5)])
-        @test_throws ArgumentError decide([rows[2:end]; Dict{String, Any}(rows[1]..., "beta" => 0.02)])
+        @test_throws ArgumentError decide(
+            [
+                rows[2:end];
+                Dict{String, Any}(rows[1]..., "kappa_b" => 2.5)
+            ]
+        )
+        @test_throws ArgumentError decide(
+            [
+                rows[2:end];
+                Dict{String, Any}(rows[1]..., "beta" => 0.02)
+            ]
+        )
         # interpolation and lookup oracles
         @test scan_interp(1.0, 100.0, 4.0, 25.0, 50.0) ≈ 2.0
-        @test scan_at([1.0, 4.0], [100.0, 25.0], 2.0) ≈ 50.0 && scan_at([1.0, 4.0], [Inf, 25.0], 2.0) == Inf
+        @test scan_at([1.0, 4.0], [100.0, 25.0], 2.0) ≈ 50.0 &&
+            scan_at([1.0, 4.0], [Inf, 25.0], 2.0) == Inf
     end
 end
 
-@testitem "04 κ_b scan: early stop equals the full-cap yield_strain" setup = [FoamBulkShearScanSetup] tags = [:pottsmodels, :reproductions] begin
+@testitem "04 κ_b scan: early stop equals the full-cap yield_strain" setup = [
+    FoamBulkShearScanSetup,
+] tags = [
+    :pottsmodels, :reproductions,
+] begin
     @testset "04 κ_b scan: early stop equals the full-cap yield_strain" begin
         τ, w = 3.447, round(Int, 100 * 3.447)
         function full(N)
-            r = FOAM_AN.yield_strain(collect(1:length(N)) ./ τ, N; threshold = 1, window = w)
+            r = FOAM_AN.yield_strain(
+                collect(1:length(N)) ./ τ, N; threshold = 1,
+                window = w
+            )
             return r === nothing ? -1 : round(Int, r)
         end
         early(N) = (o = online(N, τ, w); o.tf === nothing ? -1 : round(Int, o.tf))
@@ -420,28 +510,37 @@ end
             T = 2000 + 37s
             N = zeros(T)
             for _ in 1:(s % 7)
-                N[mod1(7919s * (length(N) ÷ 3 + 1) + 13 * count(>(0), N), T)] = 0.5         # isolated half-T1s
+                # isolated half-T1s
+                N[mod1(7919s * (length(N) ÷ 3 + 1) + 13 * count(>(0), N), T)] = 0.5
             end
             s % 3 == 0 && (N[mod1(104729s, T)] = 1.0)
-            s % 5 == 0 && (N[T - 3] = 0.5; N[T] = 0.5)                                    # a yield in the truncated tail
+            # a yield in the truncated tail
+            s % 5 == 0 && (N[T - 3] = 0.5; N[T] = 0.5)
             @test early(N) == full(N)
         end
         N = zeros(3000)
         N[500] = 0.5
-        N[500 + w - 1] = 0.5                                     # completes exactly at the window's end
+        # completes exactly at the window's end
+        N[500 + w - 1] = 0.5
         @test early(N) == full(N) == round(Int, 500 / τ)
         o = online(N, τ, w)
-        @test o.m < 3000 && o.m >= 500 + w - 1                   # stopped early, after the window closed
-        N[100] = 0.5                                             # an earlier lone half-T1 does not yield
+        # stopped early, after the window closed
+        @test o.m < 3000 && o.m >= 500 + w - 1
+        # an earlier lone half-T1 does not yield
+        N[100] = 0.5
         @test early(N) == full(N) == round(Int, 500 / τ)
         @test early(zeros(1000)) == -1 && online(zeros(1000), τ, w).m == 1000
     end
 end
 
-@testitem "04 κ_b scan SMOKE: one κ_b, one β, short cap" setup = [FoamBulkShearScanSetup] tags = [:pottsmodels, :reproductions] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "04 κ_b scan SMOKE: one κ_b, one β, short cap" setup = [
+    FoamBulkShearScanSetup,
+] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    # --------------------------------------------------------------------------------------
     # SMOKE: the harness on one κ_b, one β, a short cap (as D-190)
-    # ---------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     if !BULK_SHEAR_SCAN
         @testset "04 κ_b scan SMOKE: one κ_b, one β, short cap" begin
             foam_template(false, FOAM_L)
@@ -459,8 +558,10 @@ end
             # the scan.tsv round trip
             rows = [
                 Dict{String, Any}(
-                    "kappa_b" => BOUNDARY_KAPPA, "beta" => β, "beta_model" => BOUNDARY_KAPPA * β,
-                    "k" => 1, "seed" => scan_seed(5, 1), "tau" => τ, "cap" => c, "mcs_run" => x.mcs_run,
+                    "kappa_b" => BOUNDARY_KAPPA, "beta" => β, "beta_model" =>
+                        BOUNDARY_KAPPA * β,
+                    "k" => 1, "seed" => scan_seed(5, 1), "tau" => τ,
+                    "cap" => c, "mcs_run" => x.mcs_run,
                     "t_first" => x.t_first, "t1_total" => x.t1_total
                 ) for (β, c, x) in ((0.05, SMOKE_CAP, r), (0.0, SMOKE_CAP0, r0))
             ]
@@ -472,7 +573,10 @@ end
     end
 end
 
-@testitem "04 κ_b SCAN" setup = [FoamBulkShearScanSetup] tags = [:pottsmodels, :reproductions] begin
+@testitem "04 κ_b SCAN" setup = [FoamBulkShearScanSetup] tags = [
+    :pottsmodels,
+    :reproductions,
+] begin
     if BULK_SHEAR_SCAN
         @testset "04 κ_b SCAN" begin
             t0 = time()
@@ -493,14 +597,34 @@ end
                     true
                 end
                 open(joinpath(OUT, "provenance.toml"), "w") do io
-                    println(io, "decision = \"D-203\"\nfrozen_test = \"lib/PottsModels/test/reproductions/04_foam_bulk_shear_scan_tests.jl\"")
-                    println(io, "commit = \"$commit\"\ndirty = $dirty\njulia = \"$(VERSION)\"\nthreads = $(Threads.nthreads())")
-                    println(io, "machine = \"$(gethostname()); $(Sys.cpu_info()[1].model)\"\nwall_s = $(time() - t0)")
-                    println(io, "tau = $τ\nfoam_seeds = $(repr([r["seed"] for (_, r) in foams]))\nfinished = \"$(now())\"")
+                    println(
+                        io,
+                        "decision = \"D-203\"\nfrozen_test = \
+                            \"lib/PottsModels/test/reproductions/\
+                            04_foam_bulk_shear_scan_tests.jl\""
+                    )
+                    println(
+                        io,
+                        "commit = \"$commit\"\ndirty = $dirty\njulia = \
+                            \"$(VERSION)\"\nthreads = $(Threads.nthreads())"
+                    )
+                    println(
+                        io,
+                        "machine = \"$(gethostname()); \
+                            $(Sys.cpu_info()[1].model)\"\nwall_s = $(time() - t0)"
+                    )
+                    println(
+                        io,
+                        "tau = $τ\nfoam_seeds \
+                            = $(repr([r["seed"] for (_, r) in foams]))\nfinished = \
+                                \"$(now())\""
+                    )
                 end
                 open(joinpath(OUT, "decision.toml"), "w") do io
-                    println(io, "kappa_b = $(A.kappa_b === nothing ? "\"nothing\"" : A.kappa_b)")
-                    println(io, "path = \"$(A.path)\"\nreason = \"$(A.reason)\"\nkhat = $(repr(A.khat))")
+                    println(io, "kappa_b \
+                        = $(A.kappa_b === nothing ? "\"nothing\"" : A.kappa_b)")
+                    println(io, "path = \"$(A.path)\"\nreason = \"$(A.reason)\"\nkhat \
+                        = $(repr(A.khat))")
                 end
                 @info "04 κ_b scan written" OUT wall = time() - t0
             end
@@ -508,10 +632,14 @@ end
     end
 end
 
-@testitem "04 κ_b scan record: reproductions/data/04/kb-scan-*" setup = [FoamBulkShearScanSetup] tags = [:pottsmodels, :reproductions] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "04 κ_b scan record: reproductions/data/04/kb-scan-*" setup = [
+    FoamBulkShearScanSetup,
+] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    # --------------------------------------------------------------------------------------
     # record: reproductions/data/04/kb-scan-<date>/scan.tsv
-    # ---------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     @testset "04 κ_b scan record: reproductions/data/04/kb-scan-*" begin
         dirs = if isdir(DATA)
             filter(
@@ -525,12 +653,22 @@ end
         D = joinpath(DATA, last(sort(dirs)))
         rows = scan_read(joinpath(D, "scan.tsv"))
         @test length(rows) == length(GRID) * length(SCAN_BETAS) * SCAN_N
-        @test all(r -> r["seed"] == scan_seed(findfirst(≈(r["beta"]), SCAN_BETAS), r["k"]), rows)
-        @test all(r -> r["cap"] == CAP[SCAN_BETAS[findfirst(≈(r["beta"]), SCAN_BETAS)]], rows)
+        @test all(
+            r -> r["seed"] == scan_seed(findfirst(≈(r["beta"]), SCAN_BETAS), r["k"]),
+            rows
+        )
+        @test all(
+            r -> r["cap"] == CAP[SCAN_BETAS[findfirst(≈(r["beta"]), SCAN_BETAS)]],
+            rows
+        )
         @test all(r -> r["beta_model"] ≈ r["kappa_b"] * r["beta"], rows)
         τ = rows[1]["tau"]
         @test all(r -> r["tau"] == τ, rows) && 2.5 < τ < 4.5
-        @test all(r -> r["t_first"] == -1 ? r["mcs_run"] == ours(r["cap"], τ) : r["mcs_run"] <= ours(r["cap"], τ), rows)
+        @test all(
+            r -> r["t_first"] == -1 ? r["mcs_run"] == ours(r["cap"], τ) :
+                r["mcs_run"] <= ours(r["cap"], τ),
+            rows
+        )
         @test all(r -> r["t_first"] == -1 || r["t1_total"] > 0, rows)
         # harness control: at κ_b = κ_D190 the D-190 record's ordered medians are reproduced
         A = analyse(rows)
@@ -543,8 +681,12 @@ end
         @test A.kappa_b === nothing || GRID[1] <= A.kappa_b <= GRID[end]
         dec = joinpath(D, "decision.toml")
         if isfile(dec)
-            d = Dict(split(l, " = "; limit = 2) for l in readlines(dec) if occursin(" = ", l))
-            @test d["kappa_b"] == (A.kappa_b === nothing ? "\"nothing\"" : string(A.kappa_b))
+            d = Dict(
+                split(l, " = "; limit = 2)
+                    for l in readlines(dec) if occursin(" = ", l)
+            )
+            @test d["kappa_b"] ==
+                (A.kappa_b === nothing ? "\"nothing\"" : string(A.kappa_b))
             @test d["reason"] == "\"$(A.reason)\""
         end
     end

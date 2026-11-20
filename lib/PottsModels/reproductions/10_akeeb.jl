@@ -57,7 +57,8 @@ nothing #hide
         V_max = 20.0                              # growth cap and division size
         clock_min = 75.0                          # division gate: clock > 75 + 50 U
         clock_spread = 50.0
-        J[kind, kind] = [0.0 2.0 10.0; 2.0 16.0 2.0; 10.0 2.0 5.0]   # J_LF = 2; scan with akeeb_contacts
+        # J_LF = 2; scan with akeeb_contacts
+        J[kind, kind] = [0.0 2.0 10.0; 2.0 16.0 2.0; 10.0 2.0 5.0]
     end
     @variables begin
         V_target(cell) = 10.0
@@ -73,7 +74,11 @@ nothing #hide
         contacts => J[kind, neighbor_kind]
     end
     ## CompuCell3D's chemotaxis: any copy that a leader gains or loses climbs the cue
-    @drive copy => ifelse((kind[new] == leader) || (kind[old] == leader), -μ * (cue[target] - cue[source]), 0.0)
+    @drive copy =>
+        ifelse(
+        (kind[new] == leader) || (kind[old] == leader),
+        -μ * (cue[target] - cue[source]), 0.0
+    )
     @constraint connectivity(leader, follower)   # cells stay in one piece
     @constraint no_extinction
     @after_mcs begin
@@ -81,7 +86,8 @@ nothing #hide
         clock ~ ifelse(Pre(clock) >= 0, Pre(clock) + 1, Pre(clock))
     end
     ## a fresh uniform draw every MCS, as in the authors' code
-    @divide cells(follower) when = (clock >= 0) && (volume > V_max) && (clock > clock_min + clock_spread * rand()),
+    @divide cells(follower) when = (clock >= 0) && (volume > V_max) &&
+        (clock > clock_min + clock_spread * rand()),
         along = RandomPlane(), V_target => Split(), clock => 0.0
     @sweep Metropolis(; temperature = T)
 end
@@ -89,16 +95,26 @@ end
 # This listing is the shipped constructor. Both compile to the same code and give the same
 # run, cell for cell:
 
-let small = akeeb_state(; lattice = (99, 60)), alg = SequentialCPM(; proposal = VonNeumann(1))
-    run(M) = solve(PottsProblem(M(; name = :akeeb, lattice = (99, 60)), small, (0, 701); capacity = 1000, seed = 7), alg; save_everystep = false)
+let small = akeeb_state(; lattice = (99, 60)), alg = SequentialCPM(;
+        proposal = VonNeumann(1)
+    )
+    function run(M)
+        return solve(
+            PottsProblem(
+                M(; name = :akeeb, lattice = (99, 60)), small, (0, 701);
+                capacity = 1000, seed = 7
+            ), alg; save_everystep = false
+        )
+    end
     a, b = run(AkeebInvasion), run(PottsModels.AkeebInvasion)
-    ownership(a.u[end]) == ownership(b.u[end]) && a.stats.lifecycle.divisions == b.stats.lifecycle.divisions > 0
+    ownership(a.u[end]) == ownership(b.u[end]) && a.stats.lifecycle.divisions ==
+        b.stats.lifecycle.divisions > 0
 end
 
 # ## 2. A minimal run
 #
-# The authors' reference sample (adhesion 2, chemotaxis 24, PP = 0.5) from the published start:
-# a 500 × 21 slab of 3 × 3 followers with one-site leaders inserted until they are a
+# The authors' reference sample (adhesion 2, chemotaxis 24, PP = 0.5) from the published
+# start: a 500 × 21 slab of 3 × 3 followers with one-site leaders inserted until they are a
 # quarter of all cells. The authors' "MCS 700" is our state after 701 MCS (§4).
 # `akeeb_observables` measures a state as the authors' analysis code does.
 
@@ -117,8 +133,14 @@ akeeb_observables(sol.u[end])
 # runs per point at MCS 700) and dataset B (an independent sweep with snapshots every 100
 # MCS). Ours are the committed full run, 10 runs per point.
 
-rec_dir = joinpath(pkgdir(PottsModels), "reproductions", "data", "10", "full-2026-10-07") #hide
-rec_rows(file) = (l = split.(readlines(joinpath(rec_dir, file)), '\t'); [Dict(zip(l[1], r)) for r in l[2:end]]) #hide
+rec_dir = joinpath( #hide
+    pkgdir(PottsModels), "reproductions", "data", "10", #hide
+    "full-2026-10-07" #hide
+) #hide
+rec_rows(file) = ( #hide
+    l = split.(readlines(joinpath(rec_dir, file)), '\t'); #hide
+    [Dict(zip(l[1], r)) for r in l[2:end]] #hide
+) #hide
 rec_page, rec_sweep = rec_rows("verdicts.tsv"), rec_rows("verdicts_sweep.tsv") #hide
 rec(rows, target) = only(r for r in rows if r["target"] == target) #hide
 rec_runs = rec_rows("sweep.tsv") #hide
@@ -126,7 +148,13 @@ rec_ts = rec_rows("timeseries.tsv") #hide
 pm(s) = Tuple(parse.(Float64, match(r"^(-?[0-9.]+) ± ([0-9.]+)", s).captures)) #hide
 const MET = (:invasive, :infiltrative, :singles, :fingers, :detached, :clusters) #hide
 const PNAMES = ["P$k" for k in 1:9] #hide
-ts_vals(point, t, m) = [parse(Float64, r[string(m)]) for r in rec_ts if r["point"] == point && r["paper_mcs"] == string(t)] #hide
+ts_vals( #hide
+    point, t, #hide
+    m #hide
+) = [ #hide
+    parse(Float64, r[string(m)]) #hide
+        for r in rec_ts if r["point"] == point && r["paper_mcs"] == string(t) #hide
+] #hide
 ref_row(point, m) = rec(rec_page, (point == "P9" ? "V-A7" : "V-A2") * " $point $m") #hide
 nothing #hide
 
@@ -138,21 +166,31 @@ nothing #hide
 
 let f = Figure(size = (900, 520)) #hide
     for (j, m) in enumerate(MET) #hide
-        ax = Axis(f[(j - 1) ÷ 3 + 1, (j - 1) % 3 + 1]; title = string(m), xticks = (1:9, PNAMES)) #hide
+        ax = Axis( #hide
+            f[(j - 1) ÷ 3 + 1, (j - 1) % 3 + 1]; title = string(m), #hide
+            xticks = (1:9, PNAMES) #hide
+        ) #hide
         A = [pm(ref_row(p, m)["paper"]) for p in PNAMES] #hide
         O = [ts_vals(p, 700, m) for p in PNAMES] #hide
         bad = [ref_row(p, m)["result"] == "FAIL" for p in PNAMES] #hide
         errorbars!(ax, (1:9) .- 0.15, first.(A), last.(A); color = :gray55) #hide
         scatter!(ax, (1:9) .- 0.15, first.(A); color = :gray55, marker = :diamond) #hide
-        errorbars!(ax, (1:9) .+ 0.15, mean.(O), std.(O); color = ifelse.(bad, :red3, :dodgerblue4)) #hide
-        scatter!(ax, (1:9) .+ 0.15, mean.(O); color = ifelse.(bad, :red3, :dodgerblue4)) #hide
+        errorbars!( #hide
+            ax, (1:9) .+ 0.15, mean.(O), std.(O); #hide
+            color = ifelse.(bad, :red3, :dodgerblue4) #hide
+        ) #hide
+        scatter!( #hide
+            ax, (1:9) .+ 0.15, mean.(O); #hide
+            color = ifelse.(bad, :red3, :dodgerblue4) #hide
+        ) #hide
     end #hide
-    Legend(
-        f[3, 1:3], [
-            MarkerElement(; marker = :diamond, color = :gray55), MarkerElement(; marker = :circle, color = :dodgerblue4), #hide
-            MarkerElement(; marker = :circle, color = :red3),
+    Legend( #hide
+        f[3, 1:3], [ #hide
+            MarkerElement(; marker = :diamond, color = :gray55), #hide
+            MarkerElement(; marker = :circle, color = :dodgerblue4), #hide
+            MarkerElement(; marker = :circle, color = :red3), #hide
         ], ["authors (A, n = 10)", "ours (n = 10)", "ours, fails R1"]; #hide
-        orientation = :horizontal, framevisible = false
+        orientation = :horizontal, framevisible = false #hide
     ) #hide
     f #hide
 end #hide
@@ -162,10 +200,14 @@ end #hide
 
 let f = Figure(size = (900, 520)) #hide
     for (j, m) in enumerate(MET) #hide
-        ax = Axis(f[(j - 1) ÷ 3 + 1, (j - 1) % 3 + 1]; title = string(m), xlabel = "MCS (authors' count)") #hide
-        ref = [
-            pm(rec(rec_page, "V-A0 $m @ 0")["paper"]); [pm(rec(rec_page, "V-A11 $m @ $t")["paper"]) for t in (100, 300, 500)]; #hide
-            [pm(ref_row("P1", m)["paper"])]
+        ax = Axis( #hide
+            f[(j - 1) ÷ 3 + 1, (j - 1) % 3 + 1]; title = string(m), #hide
+            xlabel = "MCS (authors' count)" #hide
+        ) #hide
+        ref = [ #hide
+            pm(rec(rec_page, "V-A0 $m @ 0")["paper"]); #hide
+            [pm(rec(rec_page, "V-A11 $m @ $t")["paper"]) for t in (100, 300, 500)]; #hide
+            [pm(ref_row("P1", m)["paper"])] #hide
         ] #hide
         ts = [0, 100, 300, 500, 700] #hide
         O = [ts_vals("P1", t, m) for t in ts] #hide
@@ -174,9 +216,14 @@ let f = Figure(size = (900, 520)) #hide
         errorbars!(ax, ts .+ 8.0, mean.(O), std.(O); color = :dodgerblue4) #hide
         scatter!(ax, ts .+ 8.0, mean.(O); color = :dodgerblue4) #hide
     end #hide
-    Legend(
-        f[3, 1:3], [MarkerElement(; marker = :diamond, color = :gray55), MarkerElement(; marker = :circle, color = :dodgerblue4)], #hide
-        ["authors (B; A at 700)", "ours (n = 10)"]; orientation = :horizontal, framevisible = false
+    Legend( #hide
+        f[3, 1:3], #hide
+        [ #hide
+            MarkerElement(; marker = :diamond, color = :gray55), #hide
+            MarkerElement(; marker = :circle, color = :dodgerblue4), #hide
+        ], #hide
+        ["authors (B; A at 700)", "ours (n = 10)"]; orientation = :horizontal, #hide
+        framevisible = false #hide
     ) #hide
     f #hide
 end #hide
@@ -187,7 +234,10 @@ end #hide
 # phenotype at each (J_LF, λ) of the PP = 0.5 plane, authors and ours. The figure is
 # committed with the record (`analyse.jl`).
 
-cp(joinpath(rec_dir, "10_akeeb_phenotypes.png"), "10_akeeb_phenotypes.png"; force = true) #hide
+cp( #hide
+    joinpath(rec_dir, "10_akeeb_phenotypes.png"), "10_akeeb_phenotypes.png"; #hide
+    force = true #hide
+) #hide
 nothing #hide
 
 # ```@raw html
@@ -196,9 +246,9 @@ nothing #hide
 #
 # ### The full-run videos
 #
-# Replicate 1 at each of our phenotype points (P4 is the paper's named bulk point, p.11; P1 is
-# the authors' sample run; P5 and P6 are our on-grid choices), 500 × 300, 701 MCS, every 10
-# MCS. Leaders are red and followers green, colored by type on a white matrix, without
+# Replicate 1 at each of our phenotype points (P4 is the paper's named bulk point, p.11; P1
+# is the authors' sample run; P5 and P6 are our on-grid choices), 500 × 300, 701 MCS, every
+# 10 MCS. Leaders are red and followers green, colored by type on a white matrix, without
 # cell outlines. P6 is the failing point.
 #
 # ```@raw html
@@ -218,25 +268,35 @@ nothing #hide
 # ### Verdicts at a glance
 
 let #hide
-    ## the page at FULL, with its parked V-A6 row replaced by the full sweep's V-A6 and V-A7 rows #hide
-    rows = [filter(r -> r["target"] != "V-A6 phenotype fractions", rec_page); filter(r -> r["class"] == "FULL", rec_sweep)] #hide
-    function fam(t)
-        if t == "default μ"
-            return "μ default"
-        elseif startswith(t, "invariants")
-            return "per-run invariants"
-        else
-            return match(r"^(V-[AC]\d+)", t)[1]
-        end
+    ## the page at FULL, with its parked V-A6 row replaced by the full sweep's V-A6 #hide
+    ## and V-A7 rows #hide
+    rows = [ #hide
+        filter(r -> r["target"] != "V-A6 phenotype fractions", rec_page); #hide
+        filter(r -> r["class"] == "FULL", rec_sweep) #hide
+    ] #hide
+    function fam(t) #hide
+        if t == "default μ" #hide
+            return "μ default" #hide
+        elseif startswith(t, "invariants") #hide
+            return "per-run invariants" #hide
+        else #hide
+            return match(r"^(V-[AC]\d+)", t)[1] #hide
+        end #hide
     end #hide
-    what = Dict(
-        "μ default" => "default λ = 24", "V-A0" => "front after one sweep", "V-A1" => "inventory, leaders, divisions", #hide
-        "V-A2" => "six metrics at P1–P8", "V-A3" => "fingers, singles, clusters over the PP = 0.5 slice", #hide
-        "V-A4" => "invasive and infiltrative over the slice; order; ratios", "V-A5" => "cluster incidence and size", #hide
-        "V-A6" => "phenotype fractions, full sweep", "V-A7" => "PP barely matters (P9; full-sweep r)", #hide
-        "V-A8" => "cluster composition", "V-A9" => "leader speed", "V-A10" => "morphology (videos)", #hide
-        "V-A11" => "time course at P1", "V-C1" => "PP = 0 control", "V-C2" => "λ = 0 control", #hide
-        "per-run invariants" => "infiltrative ≥ invasive, detached ≥ singles"
+    what = Dict( #hide
+        "μ default" => "default λ = 24", "V-A0" => "front after one sweep", #hide
+        "V-A1" => "inventory, leaders, divisions", #hide
+        "V-A2" => "six metrics at P1–P8", #hide
+        "V-A3" => "fingers, singles, clusters over the PP = 0.5 slice", #hide
+        "V-A4" => "invasive and infiltrative over the slice; order; ratios", #hide
+        "V-A5" => "cluster incidence and size", #hide
+        "V-A6" => "phenotype fractions, full sweep", #hide
+        "V-A7" => "PP barely matters (P9; full-sweep r)", #hide
+        "V-A8" => "cluster composition", "V-A9" => "leader speed", #hide
+        "V-A10" => "morphology (videos)", #hide
+        "V-A11" => "time course at P1", "V-C1" => "PP = 0 control", #hide
+        "V-C2" => "λ = 0 control", #hide
+        "per-run invariants" => "infiltrative ≥ invasive, detached ≥ singles" #hide
     ) #hide
     order = unique(fam(r["target"]) for r in rows) #hide
     cnt(k) = count(r -> r["result"] == k, rows) #hide
@@ -249,29 +309,41 @@ let #hide
         elseif np == length(rs) #hide
             "all PASS" #hide
         else #hide
-            join(["$(count(r -> r["result"] == k, rs)) $k" for k in unique(r["result"] for r in rs)], ", ") #hide
+            join( #hide
+                [ #hide
+                    "$(count(r -> r["result"] == k, rs)) $k" #hide
+                        for k in unique(r["result"] for r in rs) #hide
+                ], #hide
+                ", " #hide
+            ) #hide
         end #hide
         return "| $f | $(get(what, f, "")) | $(length(rs)) | $res |" #hide
     end #hide
-    head = [
-        rec(rec_page, "V-A2 P6 invasive"), rec(rec_page, "V-A2 P6 infiltrative"), rec(rec_page, "V-A2 P1 invasive"), #hide
-        rec(rec_page, "V-A1 (c) divisions by MCS 700"), rec(rec_page, "V-A4 order of invasive area"), #hide
-        rec(rec_page, "V-A5 cluster incidence, all"), rec(rec_sweep, "V-A6 Multimodal fraction"), #hide
-        rec(rec_sweep, "V-A7 r(PP, invasive), full sweep"), rec(rec_page, "V-C2 λ = 0: no cluster"),
+    head = [ #hide
+        rec(rec_page, "V-A2 P6 invasive"), rec(rec_page, "V-A2 P6 infiltrative"), #hide
+        rec(rec_page, "V-A2 P1 invasive"), #hide
+        rec(rec_page, "V-A1 (c) divisions by MCS 700"), #hide
+        rec(rec_page, "V-A4 order of invasive area"), #hide
+        rec(rec_page, "V-A5 cluster incidence, all"), #hide
+        rec(rec_sweep, "V-A6 Multimodal fraction"), #hide
+        rec(rec_sweep, "V-A7 r(PP, invasive), full sweep"), #hide
+        rec(rec_page, "V-C2 λ = 0: no cluster"), #hide
     ] #hide
     cell(x) = replace(x, "|" => "\\|") #hide
-    Markdown.parse(
-        "**$(cnt("PASS")) PASS, $(cnt("FAIL")) FAIL, $(cnt("PARKED")) PARKED, $(cnt("reported")) reported.** " * #hide
-            "The two FAIL rows are one deviation: at P6 no cell detaches, so invasive and infiltrative area are " * #hide
-            "the same quantity.\n\n" * #hide
-            "| Target | Checks | Rows | Result |\n|---|---|---|---|\n" * join(summ.(order), "\n") * "\n\n" * #hide
+    Markdown.parse( #hide
+        "**$(cnt("PASS")) PASS, $(cnt("FAIL")) FAIL, $(cnt("PARKED")) " * #hide
+            "PARKED, $(cnt("reported")) reported.** The two FAIL rows are one " * #hide
+            "deviation: at P6 no cell detaches, so invasive and infiltrative area " * #hide
+            "are the same quantity.\n\n| Target | Checks | Rows | Result |\n|---|---|---|---|\n" * #hide
+            join(summ.(order), "\n") * "\n\n" * #hide
             "Headline rows:\n\n| Target | Authors / paper | Ours | Tolerance | Result |\n|---|---|---|---|---|\n" * #hide
-            join(
-            [
+            join( #hide
+            [ #hide
                 "| $(cell(r["target"])) | $(cell(r["paper"])) | $(cell(r["ours"])) | $(cell(r["tolerance"])) | " * #hide
-                    (r["result"] == "FAIL" ? "**FAIL**" : r["result"]) * " |" for r in head
-            ], "\n"
-        )
+                    (r["result"] == "FAIL" ? "**FAIL**" : r["result"]) * " |" #hide
+                    for r in head #hide
+            ], "\n" #hide
+        ) #hide
     ) #hide
 end #hide
 
@@ -288,22 +360,41 @@ end #hide
 # XML (spec 10 §1).
 
 aq(q) = "not asked (on our open question list: spec 10 §7 $q; README §5)" #hide
-rec_p6 = [parse(Float64, r["invasive"]) for r in rec_runs if r["J_LF"] == "-2.0" && r["lambda"] == "6.0"] #hide
-rec_p6s = [parse(Float64, r["invasive"]) for r in rec_runs if r["J_LF"] == "-2.0" && r["lambda"] == "6.0" && r["PP"] == "0.5"] #hide
+rec_p6 = [ #hide
+    parse(Float64, r["invasive"]) #hide
+        for r in rec_runs if r["J_LF"] == "-2.0" && r["lambda"] == "6.0" #hide
+] #hide
+rec_p6s = [ #hide
+    parse(Float64, r["invasive"]) #hide
+        for r in rec_runs #hide
+        if r["J_LF"] == "-2.0" && r["lambda"] == "6.0" && r["PP"] == "0.5" #hide
+] #hide
 rfmt(x) = string(round(Int, x)) #hide
-## pass rule R1 of the protocol (spec 10 §5.3.3), defined here because the deviations table uses it #hide
-r1(μA, sA, nA, μB, sB, nB, f) = abs(μB - μA) <= max(3 * sqrt(sA^2 / nA + sB^2 / nB), 0.1 * abs(μA), f) #hide
+## pass rule R1 of the protocol (spec 10 §5.3.3), defined here because the deviations #hide
+## table uses it #hide
+r1(μA, sA, nA, μB, sB, nB, f) = abs(μB - μA) <= #hide
+    max(3 * sqrt(sA^2 / nA + sB^2 / nB), 0.1 * abs(μA), f) #hide
 tol1(μA, sA, nA, sB, nB, f) = max(3 * sqrt(sA^2 / nA + sB^2 / nB), 0.1 * abs(μA), f) #hide
-## dataset A at (J_LF, λ) = (−2, 6) pooled over its 11 PP levels (`Data/invasion_metrics.csv`; #hide
-## PP does not matter, V-A7): invasive mean, SD, n #hide
+## dataset A at (J_LF, λ) = (−2, 6) pooled over its 11 PP levels #hide
+## (`Data/invasion_metrics.csv`; PP does not matter, V-A7): invasive mean, SD, n #hide
 const A_P6_POOLED = (2381, 383, 110) #hide
-va6 = [rec(rec_sweep, "V-A6 $p fraction") for p in ("No invasion", "Single-cell", "Bulk", "Multimodal")] #hide
+va6 = [ #hide
+    rec(rec_sweep, "V-A6 $p fraction") #hide
+        for p in ("No invasion", "Single-cell", "Bulk", "Multimodal") #hide
+] #hide
 va6_ours = join([first(split(r["ours"], " %")) for r in va6], " / ") * " %" #hide
 va6_result = all(r -> r["result"] == "PASS", va6) ? "PASS" : "FAIL" #hide
-va8 = [rec(rec_page, "V-A8 $p mean cluster size; leader fraction") for p in ("P1", "P2")] #hide
+va8 = [ #hide
+    rec(rec_page, "V-A8 $p mean cluster size; leader fraction") #hide
+        for p in ("P1", "P2") #hide
+] #hide
 p6 = rec(rec_page, "V-A2 P6 invasive") #hide
 p6A = parse.(Float64, match(r"^([0-9.]+) ± ([0-9.]+)", p6["paper"]).captures)        # A at P6, n = 10 #hide
-p6s_band = r1(p6A..., 10, mean(rec_p6s), std(rec_p6s), length(rec_p6s), 0.0) ? "in band (R1)" : "out of band (R1)" #hide
+p6s_band = #hide
+    r1( #hide
+        p6A..., 10, mean(rec_p6s), std(rec_p6s), length(rec_p6s), #hide
+        0.0 #hide
+    ) ? "in band (R1)" : "out of band (R1)" #hide
 dev_rows = [ #hide
     "| Item | Ours | Paper | Suspected cause | Author question |", #hide
     "|---|---|---|---|---|", #hide
@@ -337,21 +428,21 @@ Markdown.parse(join(dev_rows, "\n")) #hide
 # !!! warning "Reduced run"
 #     The docs build runs a reduced ensemble (`POTTS_FULL_REPRODUCTION` unset): 4 runs at
 #     the reference point and 2 at each control point. Only the rows of class SMOKE+FULL
-#     carry a verdict there; the tables below are a smoke check, not validation. The full run
-#     (`POTTS_FULL_REPRODUCTION=true`) runs the spec's ensembles: 10 runs at each of nine
-#     parameter points and 10 at each of the 121 points of the PP = 0.5 slice. The
+#     carry a verdict there; the tables below are a smoke check, not validation. The full
+#     run (`POTTS_FULL_REPRODUCTION=true`) runs the spec's ensembles: 10 runs at each of
+#     nine parameter points and 10 at each of the 121 points of the PP = 0.5 slice. The
 #     committed full-run record is `lib/PottsModels/reproductions/data/10/full-2026-10-07/`
-#     (verdicts, time series, provenance). It holds the page at FULL and a
-#     separate 13,310-run sweep of the whole (J_LF, λ, PP) grid for V-A6 and the full-sweep
-#     form of V-A7; "The full run" below reads its verdicts from there.
+#     (verdicts, time series, provenance). It holds the page at FULL and a separate
+#     13,310-run sweep of the whole (J_LF, λ, PP) grid for V-A6 and the full-sweep form of
+#     V-A7; "The full run" below reads its verdicts from there.
 #
 # ### Paper and sources
 #
 # - S. Akeeb, A.I. Marcus, Y. Jiang, "Clusters, fingers, and singles: A mechanical
 #   landscape of tumor invasion", *PLoS Comput. Biol.* **22**(9), e1014747 (2026).
 #   doi:[10.1371/journal.pcbi.1014747](https://doi.org/10.1371/journal.pcbi.1014747).
-#   Read in the version of record (24 pp.). Erratum status: none known; not checked against the journal's
-#   correction notices.
+#   Read in the version of record (24 pp.). Erratum status: none known; not checked against
+#   the journal's correction notices.
 # - Released code and data: `https://github.com/Jiang-Lab/Leader_Follower_Invasion_Model`
 #   at commit `0b9673faa736b2ee54bb200142546ade9e841093` (21 Nov 2025). The model
 #   is `Implementation/Main_Simulation_Scan/cclc_math_path/Simulation/` (`CCIecm.xml`,
@@ -383,8 +474,10 @@ Markdown.parse(join(dev_rows, "\n")) #hide
 # Eq. (1), p.4:
 #
 # ```math
-# H = \sum_{\langle i,j\rangle} J(\tau(\sigma_i), \tau(\sigma_j))\,(1 - \delta_{\sigma_i\sigma_j})
-#   + \sum_\sigma \lambda_V (V_\sigma - V_{T,\sigma})^2 - \sum_x \lambda\, c(x)\,\delta_{\sigma(x),\mathrm{LC}}
+# H = \sum_{\langle i,j\rangle} J(\tau(\sigma_i), \tau(\sigma_j))
+#   \,(1 - \delta_{\sigma_i\sigma_j})
+#   + \sum_\sigma \lambda_V (V_\sigma - V_{T,\sigma})^2
+#   - \sum_x \lambda\, c(x)\,\delta_{\sigma(x),\mathrm{LC}}
 # ```
 #
 # The released code implements the third term as CompuCell3D's default (Merks)
@@ -411,26 +504,41 @@ Markdown.parse(join(dev_rows, "\n")) #hide
 # The published constructor carries the defaults; the scan parameters J_LF, λ and PP are
 # set per run:
 
-base = PottsProblem(PottsModels.AkeebInvasion(; name = :akeeb), akeeb_state(; seed = 1), (0, 701); capacity = 4000, seed = 1)
+base = PottsProblem(
+    PottsModels.AkeebInvasion(; name = :akeeb), akeeb_state(; seed = 1),
+    (0, 701); capacity = 4000, seed = 1
+)
 par(name) = getp(base, name)(base)
 J = par(:J)
 parameters_md = """
 | Symbol | Value | Units | Meaning | Source | Status |
 |---|---|---|---|---|---|
-| lattice | 500 × 300, x periodic, y closed | sites (1 site ≈ 2.5 µm) | domain | p.4, Table 1; X:14, X:18–19 | stated (y wall: code only) |
+| lattice | 500 × 300, x periodic, y closed | sites (1 site ≈ 2.5 µm) | domain | p.4, \
+Table 1; X:14, X:18–19 | stated (y wall: code only) |
 | T | $(par(:T)) | energy | temperature | Table 1; X:16 | stated |
-| `J_ML`, `J_MF` | $(J[1, 2]), $(J[1, 3]) | energy | medium–leader, medium–follower | Table 1; X:53, X:56 | stated |
-| `J_LL`, `J_FF` | $(J[2, 2]), $(J[3, 3]) | energy | leader–leader, follower–follower | Table 1; X:57, X:55 | stated |
-| J_LF | $(J[2, 3]) (default); scanned over −5…5 | energy | leader–follower adhesion | p.6, Table 1; S:37 | stated |
+| `J_ML`, `J_MF` | $(J[1, 2]), $(J[1, 3]) | energy | medium–leader, medium–follower | \
+Table 1; X:53, X:56 | stated |
+| `J_LL`, `J_FF` | $(J[2, 2]), $(J[3, 3]) | energy | leader–leader, follower–follower | \
+Table 1; X:57, X:55 | stated |
+| J_LF | $(J[2, 3]) (default); scanned over −5…5 | energy | leader–follower adhesion | \
+p.6, Table 1; S:37 | stated |
 | λ_V | $(par(:λᵥ)) | energy / site² | volume constraint | p.6, Table 1; S:88 | stated |
 | V_T (start) | 10 | sites | target volume | p.6, Table 1; S:87 | stated |
-| λ (`μ`) | $(par(:μ)) (default); scanned over 0, 3, …, 30 | energy / site | leader chemotaxis | p.6, Table 1; S:25, S:38 | stated; default 24 = the reference sample (paper-vs-code item A5) |
-| f_grow | 0.015 | sites / MCS | follower target growth while < V_max | Table 1; S:20, S:111–115 | rate stated; cap and "all followers" code only |
-| V_max | $(par(:V_max)) | sites | growth cap and division size | p.6; S:113, S:143 | stated |
-| clock gate | > $(par(:clock_min)) + $(par(:clock_spread)) U, fresh U each MCS | MCS | division timer | S:143–146 (paper: U(25, 125), p.6) | code (D3) |
-| PP | 0.5 (default); scanned over 0…1 | — | P(follower has a clock), per follower | p.6, Table 1; S:131 | stated (paper: a fixed-size subset, D4) |
-| leaders | 25 % of the counted inventory | — | one-site leaders inserted into followers | p.5; S:64–75 | code (D1, MD-1) |
-| duration | 701 sweeps, measured as "MCS 700" | MCS | — | p.4, p.7; X:15 | stated; mapping from the data (spec 10 §5.3.2) |
+| λ (`μ`) | $(par(:μ)) (default); scanned over 0, 3, …, 30 | energy / site | leader \
+chemotaxis | p.6, Table 1; S:25, S:38 | stated; default 24 = the reference sample \
+(paper-vs-code item A5) |
+| f_grow | 0.015 | sites / MCS | follower target growth while < V_max | Table 1; S:20, \
+S:111–115 | rate stated; cap and "all followers" code only |
+| V_max | $(par(:V_max)) | sites | growth cap and division size | p.6; S:113, S:143 | \
+stated |
+| clock gate | > $(par(:clock_min)) + $(par(:clock_spread)) U, fresh U each MCS | MCS | \
+division timer | S:143–146 (paper: U(25, 125), p.6) | code (D3) |
+| PP | 0.5 (default); scanned over 0…1 | — | P(follower has a clock), per follower | p.6, \
+Table 1; S:131 | stated (paper: a fixed-size subset, D4) |
+| leaders | 25 % of the counted inventory | — | one-site leaders inserted into followers \
+| p.5; S:64–75 | code (D1, MD-1) |
+| duration | 701 sweeps, measured as "MCS 700" | MCS | — | p.4, p.7; X:15 | stated; \
+mapping from the data (spec 10 §5.3.2) |
 """
 Markdown.parse(parameters_md)
 
@@ -456,17 +564,20 @@ function run_prob(point, seed; tmax = 701)
         p = [:μ => point[2], :J => akeeb_contacts(point[1])], seed, tspan = (0, tmax)
     )
 end
-solve(run_prob((2.0, 24.0, 0.5), 1; tmax = 2), alg; save_everystep = false)                  # warm-up (compilation)
+# warm-up (compilation)
+solve(run_prob((2.0, 24.0, 0.5), 1; tmax = 2), alg; save_everystep = false)
 t_one = @elapsed sol_one = solve(run_prob((2.0, 24.0, 0.5), 1), alg; save_everystep = false)
-const MACHINE = "$(strip(Sys.cpu_info()[1].model)) ($(Sys.MACHINE)), CPU backend, one thread"
+const MACHINE =
+    "$(strip(Sys.cpu_info()[1].model)) ($(Sys.MACHINE)), CPU backend, one thread"
 Markdown.parse(
     "One run, 500 × 300, 701 MCS, `SequentialCPM`: " *
-        "**$(round(t_one; digits = 1)) s** on $MACHINE ($(sol_one.stats.lifecycle.divisions) divisions)."
+        "**$(round(t_one; digits = 1)) s** on $MACHINE \
+            ($(sol_one.stats.lifecycle.divisions) divisions)."
 )
 
 # The scan is ordinary parameter `remake`: a contact table and a chemotaxis strength per
-# point. The bulk point P4 (−2, 15, 0.5), named in the paper (p.11), and the variant seeding that
-# paints the full 390 leaders:
+# point. The bulk point P4 (−2, 15, 0.5), named in the paper (p.11), and the variant seeding
+# that paints the full 390 leaders:
 
 prob_bulk = remake(base; p = [:J => akeeb_contacts(-2.0), :μ => 15.0])
 op_retry = akeeb_state(; seeding = :retry)
@@ -532,27 +643,46 @@ akeeb_observables(sol_one.u[end])
 # The points (spec 10 §5.3.4), with their role in the authors' data:
 
 const POINTS = (
-    P1 = (2.0, 24.0, 0.5), P2 = (2.0, 30.0, 0.5), P3 = (5.0, 30.0, 0.5), P4 = (-2.0, 15.0, 0.5),
-    P5 = (5.0, 3.0, 0.5), P6 = (-2.0, 6.0, 0.5), P7 = (2.0, 24.0, 0.0), P8 = (2.0, 0.0, 0.5), P9 = (2.0, 24.0, 1.0),
+    P1 = (2.0, 24.0, 0.5), P2 = (2.0, 30.0, 0.5), P3 = (5.0, 30.0, 0.5),
+    P4 = (-2.0, 15.0, 0.5),
+    P5 = (5.0, 3.0, 0.5), P6 = (-2.0, 6.0, 0.5), P7 = (2.0, 24.0, 0.0),
+    P8 = (2.0, 0.0, 0.5), P9 = (2.0, 24.0, 1.0),
 )
 const ROLE = (
     P1 = "multimodal; the reference sample", P2 = "multimodal (p.11 representative)",
-    P3 = "weak adhesion, high λ", P4 = "bulk (p.11 representative)", P5 = "single-cell (best on-grid point)",
+    P3 = "weak adhesion, high λ", P4 = "bulk (p.11 representative)",
+    P5 = "single-cell (best on-grid point)",
     P6 = "no invasion", P7 = "V-C1 (PP = 0)", P8 = "V-C2 (λ = 0)", P9 = "V-A7 (PP = 1)",
 )
 const METRICS = (:invasive, :infiltrative, :singles, :fingers, :detached, :clusters)
-const FLOOR = (; invasive = 0.0, infiltrative = 0.0, singles = 1.0, fingers = 1.0, detached = 1.0, clusters = 1.0)
-## dataset A at MCS 700, mean and SD per metric (spec 10 §5.3.4; "= invasive" copies invasive)
+const FLOOR = (;
+    invasive = 0.0, infiltrative = 0.0, singles = 1.0, fingers = 1.0,
+    detached = 1.0, clusters = 1.0,
+)
+## dataset A at MCS 700, mean and SD per metric (spec 10 §5.3.4; "= invasive" copies
+## invasive)
 const REF_A = (
-    P1 = ((15734, 1362), (44029, 1669), (204.5, 9.3), (12.0, 1.2), (239.4, 11.1), (5.5, 2.3)),
-    P2 = ((12903, 1185), (50860, 1827), (246.8, 9.8), (10.4, 1.3), (312.2, 14.1), (11.2, 2.7)),
+    P1 = (
+        (15734, 1362), (44029, 1669), (204.5, 9.3), (12.0, 1.2), (239.4, 11.1),
+        (5.5, 2.3),
+    ),
+    P2 = (
+        (12903, 1185), (50860, 1827), (246.8, 9.8), (10.4, 1.3), (312.2, 14.1),
+        (11.2, 2.7),
+    ),
     P3 = ((4771, 935), (54495, 981), (290.3, 6.7), (4.5, 1.1), (320.5, 12.2), (1.4, 1.1)),
     P4 = ((4897, 826), (4897, 826), (0, 0), (4.2, 1.5), (0, 0), (0, 0)),
     P5 = ((2707, 282), (2950, 289), (6.7, 2.4), (0.7, 0.8), (6.7, 2.4), (0, 0)),
     P6 = ((2155, 261), (2155, 261), (0, 0), (0.1, 0.3), (0, 0), (0, 0)),
-    P7 = ((15319, 1873), (46006, 1286), (204.3, 7.9), (11.1, 1.4), (249.9, 16.1), (7.0, 2.1)),
+    P7 = (
+        (15319, 1873), (46006, 1286), (204.3, 7.9), (11.1, 1.4), (249.9, 16.1),
+        (7.0, 2.1),
+    ),
     P8 = ((1963, 300), (1963, 300), (0, 0), (0, 0), (0, 0), (0, 0)),
-    P9 = ((16493, 2294), (42656, 2889), (201.8, 6.4), (11.7, 1.9), (228.4, 12.5), (4.5, 1.8)),
+    P9 = (
+        (16493, 2294), (42656, 2889), (201.8, 6.4), (11.7, 1.9), (228.4, 12.5),
+        (4.5, 1.8),
+    ),
 )
 const N_A = 10
 ## dataset B at P1 (spec 10 §5.3.4 time course), n = 10
@@ -560,7 +690,10 @@ const REF_B = Dict(
     0 => ((499.4, 5.3), (499.4, 5.3), (0, 0), (0, 0), (0, 0), (0, 0)),
     100 => ((3666, 515), (3765, 499), (3.2, 1.5), (3.8, 1.1), (3.2, 1.5), (0, 0)),
     300 => ((9261, 1576), (12657, 1708), (57.7, 4.5), (9.3, 1.6), (58.8, 5.3), (0.1, 0.3)),
-    500 => ((15108, 933), (28345, 1187), (139.2, 7.1), (10.8, 1.3), (148.1, 6.3), (1.4, 0.5))
+    500 => (
+        (15108, 933), (28345, 1187), (139.2, 7.1), (10.8, 1.3), (148.1, 6.3),
+        (1.4, 0.5),
+    )
 )
 const N_B = 10
 const DIVISIONS, DIVISIONS_TOL = 578, 55                     # V-A1 (c)
@@ -569,16 +702,20 @@ const SETS = (
     λ_high = k -> k[2] >= 20, λ_low = k -> k[2] < 10, λ_24 = k -> k[2] >= 24,
 )
 const SET_TEXT = (
-    J_mid = "J_LF ∈ [−1, 2]", J_strong = "J_LF ≤ −2", J_weak = "J_LF > 2", λ_high = "λ ≥ 20",
+    J_mid = "J_LF ∈ [−1, 2]", J_strong = "J_LF ≤ −2", J_weak = "J_LF > 2",
+    λ_high = "λ ≥ 20",
     λ_low = "λ < 10", λ_24 = "λ ≥ 24", all = "all",
 )
 ## V-A3 / V-A4: (metric, set, mean, SE) over the PP = 0.5 slice of A (spec 10 §5.2)
 const REF_SLICE = [
-    (:fingers, :J_mid, 7.2, 0.24), (:fingers, :λ_high, 9.78, 0.15), (:fingers, :J_strong, 3.99, 0.22),
+    (:fingers, :J_mid, 7.2, 0.24), (:fingers, :λ_high, 9.78, 0.15),
+    (:fingers, :J_strong, 3.99, 0.22),
     (:fingers, :J_weak, 6.08, 0.2),
-    (:singles, :J_weak, 175.94, 6.6), (:singles, :J_strong, 1.46, 0.22), (:singles, :J_mid, 52.94, 3.37),
+    (:singles, :J_weak, 175.94, 6.6), (:singles, :J_strong, 1.46, 0.22),
+    (:singles, :J_mid, 52.94, 3.37),
     (:clusters, :J_mid, 1.63, 0.15), (:clusters, :J_weak, 1.77, 0.16),
-    (:invasive, :J_strong, 5381, 206), (:invasive, :J_mid, 10301, 335), (:invasive, :J_weak, 6658, 192),
+    (:invasive, :J_strong, 5381, 206), (:invasive, :J_mid, 10301, 335),
+    (:invasive, :J_weak, 6658, 192),
     (:invasive, :λ_high, 12173, 275), (:invasive, :λ_low, 2866, 53),
     (:infiltrative, :λ_high, 30351, 860), (:infiltrative, :λ_low, 3545, 133),
 ]
@@ -618,7 +755,10 @@ Markdown.parse(
 seed_of(k, i) = 10_000k + i
 const SAVES = [1, 101, 301, 501, 701]
 r2(μA, seA, μB, seB, f) = abs(μB - μA) <= max(3 * sqrt(seA^2 + seB^2), 0.1 * abs(μA), f)
-r3(pA, NA, pB, NB) = abs(pB - pA) <= max(3 * sqrt(pA * (1 - pA) / NA + pB * (1 - pB) / NB), 0.05)
+function r3(pA, NA, pB, NB)
+    return abs(pB - pA) <=
+        max(3 * sqrt(pA * (1 - pA) / NA + pB * (1 - pB) / NB), 0.05)
+end
 sd(v) = length(v) > 1 ? std(v) : 0.0
 
 ## one record per run: observables at each save, keyed by the authors' MCS, and the
@@ -626,7 +766,8 @@ sd(v) = length(v) > 1 ? std(v) : 0.0
 function ensemble(point, seeds; tmax = 701, saves = SAVES)
     prob_func(q, ctx) = run_prob(point, seeds[ctx.sim_id]; tmax)
     ens = solve(
-        EnsembleProblem(base; prob_func), alg, EnsembleThreads(); trajectories = length(seeds),
+        EnsembleProblem(base; prob_func), alg, EnsembleThreads();
+        trajectories = length(seeds),
         saveat = saves
     )
     return map(enumerate(ens.u)) do (i, sol)
@@ -639,18 +780,31 @@ function ensemble(point, seeds; tmax = 701, saves = SAVES)
             c > 0 && (alive1[c] = true)
         end
         (;
-            obs = Dict(Int(t) - 1 => akeeb_observables(sol.u[findfirst(==(t), sol.t)]) for t in saves),
-            divisions = sol.stats.lifecycle.divisions, live0 = length(unique(filter(>(0), vec(u0.ownership)))),
+            obs = Dict(
+                Int(t) - 1 => akeeb_observables(sol.u[findfirst(==(t), sol.t)])
+                    for t in saves
+            ),
+            divisions = sol.stats.lifecycle.divisions,
+            live0 = length(unique(filter(>(0), vec(u0.ownership)))),
             live1 = count(alive1), ncells0 = length(kinds0), painted = length(L),
             leaders_kept = all(c -> u0.cell.kind[c] == lc && alive1[c], L) &&
-                count(c -> alive1[c] && u1.cell.kind[c] == lc, eachindex(alive1)) == length(L),
+                count(c -> alive1[c] && u1.cell.kind[c] == lc, eachindex(alive1)) ==
+                length(L),
             final = i == 1 ? ownership(u1) : nothing,
         )        # replicate 1, for the video check
     end
 end
 values_at(runs, t, m) = [Float64(getproperty(r.obs[t], m)) for r in runs]
 
-n_point = (name) -> FULL ? 10 : (name === :P1 ? 4 : name in (:P7, :P8) ? 2 : 0)
+n_point = (name) -> if FULL
+    10
+elseif name === :P1
+    4
+elseif name in (:P7, :P8)
+    2
+else
+    0
+end
 runs = Dict(
     name => ensemble(POINTS[name], seed_of.(k, 1:n_point(name)))
         for (k, name) in enumerate(keys(POINTS)) if n_point(name) > 0
@@ -658,8 +812,12 @@ runs = Dict(
 runs_va0 = ensemble(POINTS.P1, 100_000 .+ (1:10); tmax = 1, saves = [1])
 Markdown.parse(
     "Runs at each point ($(Threads.nthreads()) thread(s)): " *
-        join(["$name $(length(runs[name]))" for name in keys(POINTS) if haskey(runs, name)], ", ") *
-        "; V-A0: $(length(runs_va0)) one-MCS runs." * (FULL ? " The PP = 0.5 slice: 121 × 10 runs (below)." : "")
+        join(
+        ["$name $(length(runs[name]))" for name in keys(POINTS) if haskey(runs, name)],
+        ", "
+    ) *
+        "; V-A0: $(length(runs_va0)) one-MCS runs." *
+        (FULL ? " The PP = 0.5 slice: 121 × 10 runs (below)." : "")
 )
 
 # Side by side with the authors' time course at P1 (dataset B, mean ± SD, n = 10; MCS 700
@@ -667,10 +825,16 @@ Markdown.parse(
 
 fig = Figure(size = (900, 520))
 for (j, m) in enumerate(METRICS)
-    ax = Axis(fig[(j - 1) ÷ 3 + 1, (j - 1) % 3 + 1]; title = string(m), xlabel = "MCS (authors' count)")
+    ax = Axis(
+        fig[(j - 1) ÷ 3 + 1, (j - 1) % 3 + 1]; title = string(m),
+        xlabel = "MCS (authors' count)"
+    )
     tB = [0, 100, 300, 500]
     μB, sB = [REF_B[t][j][1] for t in tB], [REF_B[t][j][2] for t in tB]
-    errorbars!(ax, [tB; 700] .- 8, [μB; REF_A.P1[j][1]], [sB; REF_A.P1[j][2]]; color = :gray)
+    errorbars!(
+        ax, [tB; 700] .- 8, [μB; REF_A.P1[j][1]], [sB; REF_A.P1[j][2]];
+        color = :gray
+    )
     scatter!(ax, [tB; 700] .- 8, [μB; REF_A.P1[j][1]]; color = :gray, marker = :diamond)
     ts = [0, 100, 300, 500, 700]
     v = [values_at(runs[:P1], t, m) for t in ts]
@@ -678,8 +842,13 @@ for (j, m) in enumerate(METRICS)
     scatter!(ax, ts .+ 8, mean.(v); color = :red3)
 end
 Legend(
-    fig[3, 1:3], [MarkerElement(; marker = :diamond, color = :gray), MarkerElement(; marker = :circle, color = :red3)],
-    ["authors (B; A at 700)", "ours, n = $(length(runs[:P1]))"]; orientation = :horizontal, framevisible = false
+    fig[3, 1:3],
+    [
+        MarkerElement(; marker = :diamond, color = :gray),
+        MarkerElement(; marker = :circle, color = :red3),
+    ],
+    ["authors (B; A at 700)", "ours, n = $(length(runs[:P1]))"]; orientation = :horizontal,
+    framevisible = false
 )
 fig
 
@@ -704,7 +873,8 @@ for name in (:P1, :P4, :P5, :P6)
     push!(videos, file)
 end
 # This build's videos are below. The full run's are release assets (the same seeds and
-# rendering): [P1](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-07-akeeb/10_akeeb_full-2026-10-07_P1_replicate1.mp4),
+# rendering):
+# [P1](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-07-akeeb/10_akeeb_full-2026-10-07_P1_replicate1.mp4),
 # [P4](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-07-akeeb/10_akeeb_full-2026-10-07_P4_replicate1.mp4),
 # [P5](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-07-akeeb/10_akeeb_full-2026-10-07_P5_replicate1.mp4),
 # [P6](https://github.com/PraneethMerugu/Potts.jl/releases/download/reproductions-2026-10-07-akeeb/10_akeeb_full-2026-10-07_P6_replicate1.mp4).
@@ -733,8 +903,12 @@ function marginal(m, set)
     ]
 end
 Markdown.parse(
-    FULL ? "121 points × 10 runs at MCS 700 (authors' count)." :
-        "Not run in the reduced build: the V-A3, V-A4 and V-A5 rows below are pending the full run."
+    if FULL
+        "121 points × 10 runs at MCS 700 (authors' count)."
+    else
+        "Not run in the reduced build: the V-A3, V-A4 and V-A5 rows below are pending the \
+            full run."
+    end
 )
 
 # #### Pass/fail table
@@ -754,16 +928,25 @@ function verdict(ok, class)
 end
 fmt(x) = string(round(x; digits = abs(x) >= 100 ? 0 : 2))
 rows = []
-addrow!(target, paper, ours, tol, class, ok) = push!(rows, (; target, paper, ours, tol, class, ok, result = verdict(ok, class)))
+function addrow!(target, paper, ours, tol, class, ok)
+    return push!(
+        rows,
+        (; target, paper, ours, tol, class, ok, result = verdict(ok, class))
+    )
+end
 
 ## μ default
-addrow!("default μ", "24 (S:25; paper-vs-code item A5)", string(par(:μ)), "= 24", "SMOKE+FULL", par(:μ) == 24.0)
+addrow!(
+    "default μ", "24 (S:25; paper-vs-code item A5)", string(par(:μ)), "= 24",
+    "SMOKE+FULL", par(:μ) == 24.0
+)
 
 ## V-A0 and its negative control
 for (j, m) in enumerate(METRICS)
     v, (μA, sA) = values_at(runs_va0, 0, m), REF_B[0][j]
     addrow!(
-        "V-A0 $m @ 0", "$μA ± $sA (B)", "$(fmt(mean(v))) ± $(fmt(sd(v))) (n = $(length(v)))",
+        "V-A0 $m @ 0", "$μA ± $sA (B)",
+        "$(fmt(mean(v))) ± $(fmt(sd(v))) (n = $(length(v)))",
         "± $(fmt(tol1(μA, sA, N_B, sd(v), length(v), FLOOR[m])))", "SMOKE+FULL",
         r1(μA, sA, N_B, mean(v), sd(v), length(v), FLOOR[m])
     )
@@ -771,11 +954,15 @@ end
 before = [akeeb_observables(run_prob(POINTS.P1, s).u0).invasive for s in 100_000 .+ (1:10)]
 addrow!(
     "V-A0 control: invasive before any sweep", "fails R1 (spec 10 §5.2)", fmt(mean(before)),
-    "must fail", "SMOKE+FULL", !r1(499.4, 5.3, N_B, mean(before), sd(before), length(before), 0.0)
+    "must fail", "SMOKE+FULL",
+    !r1(499.4, 5.3, N_B, mean(before), sd(before), length(before), 0.0)
 )
 
 ## V-A1 (a): the layouts of the P1 runs
-layouts = [layout(akeeb_layout(; seed = seed_of(1, i)), (500, 300); report = true) for i in 1:length(runs[:P1])]
+layouts = [
+    layout(akeeb_layout(; seed = seed_of(1, i)), (500, 300); report = true)
+        for i in 1:length(runs[:P1])
+]
 inv_ok = all(layouts) do (point, report)
     t = only(r for r in report if r.type === :InsertUntil)
     kinds = point[2].second
@@ -785,17 +972,24 @@ end
 inventory = [only(r for r in rep if r.type === :InsertUntil) for (_, rep) in layouts]
 addrow!(
     "V-A1 (a) followers; leader inventory", "1169; 390 (sample)",
-    "1169; counted $(join(unique(getproperty.(inventory, :counted)), "/")), painted $(fmt(mean(getproperty.(inventory, :painted))))",
+    "1169; counted $(join(unique(getproperty.(inventory, :counted)), "/")), \
+        painted $(fmt(mean(getproperty.(inventory, :painted))))",
     "exact", "SMOKE+FULL", inv_ok
 )
 ## V-A1 (b), (c)
 addrow!(
-    "V-A1 (b) leaders never divide, never lost", "S:124–163", all(r -> r.leaders_kept, runs[:P1]) ? "all runs" : "violated",
-    "exact", "SMOKE+FULL", all(r -> r.leaders_kept && r.live0 == r.ncells0 && r.live1 - r.live0 == r.divisions, runs[:P1])
+    "V-A1 (b) leaders never divide, never lost", "S:124–163",
+    all(r -> r.leaders_kept, runs[:P1]) ? "all runs" : "violated",
+    "exact", "SMOKE+FULL",
+    all(
+        r -> r.leaders_kept && r.live0 == r.ncells0 && r.live1 - r.live0 == r.divisions,
+        runs[:P1]
+    )
 )
 divs = [r.divisions for r in runs[:P1]]
 addrow!(
-    "V-A1 (c) divisions by MCS 700", "578 (one sample run)", "$(fmt(mean(divs))) ± $(fmt(sd(divs))) (n = $(length(divs)))",
+    "V-A1 (c) divisions by MCS 700", "578 (one sample run)",
+    "$(fmt(mean(divs))) ± $(fmt(sd(divs))) (n = $(length(divs)))",
     "± $DIVISIONS_TOL", "SMOKE+FULL", abs(mean(divs) - DIVISIONS) <= DIVISIONS_TOL
 )
 
@@ -809,8 +1003,10 @@ for name in keys(POINTS), (j, m) in enumerate(METRICS)
     end
     v = values_at(runs[name], 700, m)
     addrow!(
-        "$row $name $m", "$μA ± $sA (A)", "$(fmt(mean(v))) ± $(fmt(sd(v))) (n = $(length(v)))",
-        "± $(fmt(tol1(μA, sA, N_A, sd(v), length(v), FLOOR[m])))", "FULL", r1(μA, sA, N_A, mean(v), sd(v), length(v), FLOOR[m])
+        "$row $name $m", "$μA ± $sA (A)",
+        "$(fmt(mean(v))) ± $(fmt(sd(v))) (n = $(length(v)))",
+        "± $(fmt(tol1(μA, sA, N_A, sd(v), length(v), FLOOR[m])))", "FULL",
+        r1(μA, sA, N_A, mean(v), sd(v), length(v), FLOOR[m])
     )
 end
 
@@ -819,7 +1015,8 @@ for t in (100, 300, 500), (j, m) in enumerate(METRICS)
     v, (μA, sA) = values_at(runs[:P1], t, m), REF_B[t][j]
     addrow!(
         "V-A11 $m @ $t", "$μA ± $sA (B)", "$(fmt(mean(v))) ± $(fmt(sd(v)))",
-        "± $(fmt(tol1(μA, sA, N_B, sd(v), length(v), FLOOR[m])))", "FULL", r1(μA, sA, N_B, mean(v), sd(v), length(v), FLOOR[m])
+        "± $(fmt(tol1(μA, sA, N_B, sd(v), length(v), FLOOR[m])))", "FULL",
+        r1(μA, sA, N_B, mean(v), sd(v), length(v), FLOOR[m])
     )
 end
 
@@ -828,19 +1025,29 @@ for name in (:P1, :P2)
     μA, sA, nA, fA = REF_C[name]
     if !haskey(runs, name)
         addrow!(
-            "V-A8 $name mean cluster size; leader fraction", "$μA (SD $sA, $nA clusters); $fA (C)", "not run",
+            "V-A8 $name mean cluster size; leader fraction",
+            "$μA (SD $sA, $nA clusters); $fA (C)", "not run",
             "R1; ± 0.10", "FULL", nothing
         )
         continue
     end
     os = [r.obs[700] for r in runs[name]]
-    sizes = Float64[l + f for o in os for (l, f) in zip(o.cluster_leaders, o.cluster_followers)]
+    sizes = Float64[
+        l + f for o in os
+            for (l, f) in zip(o.cluster_leaders, o.cluster_followers)
+    ]
     frac = sum(o -> sum(o.cluster_leaders), os) / max(1, sum(sizes))
-    ok = length(sizes) >= 2 && r1(μA, sA, nA, mean(sizes), std(sizes), length(sizes), 0.0) && abs(frac - fA) <= 0.1
+    ok = length(sizes) >= 2 &&
+        r1(μA, sA, nA, mean(sizes), std(sizes), length(sizes), 0.0) && abs(frac - fA) <= 0.1
     addrow!(
-        "V-A8 $name mean cluster size; leader fraction", "$μA (SD $sA, $nA clusters); $fA (C)",
-        length(sizes) >= 2 ? "$(fmt(mean(sizes))) (SD $(fmt(std(sizes))), $(length(sizes)) clusters); $(fmt(frac))" :
-            "$(length(sizes)) clusters", "R1 (clusters as units); ± 0.10", "FULL", length(sizes) >= 2 ? ok : false
+        "V-A8 $name mean cluster size; leader fraction",
+        "$μA (SD $sA, $nA clusters); $fA (C)",
+        if length(sizes) >= 2
+            "$(fmt(mean(sizes))) (SD $(fmt(std(sizes))), $(length(sizes)) \
+                clusters); $(fmt(frac))"
+        else
+            "$(length(sizes)) clusters"
+        end, "R1 (clusters as units); ± 0.10", "FULL", length(sizes) >= 2 ? ok : false
     )
 end
 
@@ -848,12 +1055,16 @@ end
 for (m, set, μA, seA) in REF_SLICE
     tag = m in (:invasive, :infiltrative) ? "V-A4" : "V-A3"
     if !FULL
-        addrow!("$tag $m, $(SET_TEXT[set])", "$μA ± $seA (A, SE)", "not run", "R2", "FULL", nothing)
+        addrow!(
+            "$tag $m, $(SET_TEXT[set])", "$μA ± $seA (A, SE)", "not run", "R2", "FULL",
+            nothing
+        )
         continue
     end
     v = marginal(m, set)
     addrow!(
-        "$tag $m, $(SET_TEXT[set])", "$μA ± $seA (A, SE)", "$(fmt(mean(v))) ± $(fmt(std(v) / sqrt(length(v)))) (N = $(length(v)))",
+        "$tag $m, $(SET_TEXT[set])", "$μA ± $seA (A, SE)",
+        "$(fmt(mean(v))) ± $(fmt(std(v) / sqrt(length(v)))) (N = $(length(v)))",
         "R2", "FULL", r2(μA, seA, mean(v), std(v) / sqrt(length(v)), FLOOR[m])
     )
 end
@@ -861,29 +1072,45 @@ if FULL
     inv_mean(set) = mean(marginal(:invasive, set))
     addrow!(
         "V-A4 order of invasive area", "[−1, 2] > (> 2) > (≤ −2)",
-        "$(fmt(inv_mean(:J_mid))) > $(fmt(inv_mean(:J_weak))) > $(fmt(inv_mean(:J_strong)))", "strict", "FULL",
+        "$(fmt(inv_mean(:J_mid))) > $(fmt(inv_mean(:J_weak))) \
+            > $(fmt(inv_mean(:J_strong)))", "strict", "FULL",
         inv_mean(:J_mid) > inv_mean(:J_weak) > inv_mean(:J_strong)
     )
     for m in (:invasive, :infiltrative)
         ρ = mean(marginal(m, :λ_high)) / mean(marginal(m, :λ_low))
-        addrow!("V-A4 $m ratio λ ≥ 20 / λ < 10", string(RATIO[m]), fmt(ρ), "± 15 %", "FULL", abs(ρ / RATIO[m] - 1) <= 0.15)
+        addrow!(
+            "V-A4 $m ratio λ ≥ 20 / λ < 10", string(RATIO[m]), fmt(ρ), "± 15 %", "FULL",
+            abs(ρ / RATIO[m] - 1) <= 0.15
+        )
     end
     for (set, pA, NA) in INCIDENCE
         v = marginal(:clusters, set)
         p = count(>=(1), v) / length(v)
         addrow!(
-            "V-A5 cluster incidence, $(SET_TEXT[set])", "$pA (N = $NA)", "$(fmt(p)) (N = $(length(v)))", "R3", "FULL",
+            "V-A5 cluster incidence, $(SET_TEXT[set])", "$pA (N = $NA)",
+            "$(fmt(p)) (N = $(length(v)))", "R3", "FULL",
             r3(pA, NA, p, length(v))
         )
     end
     present = filter(>=(1), marginal(:clusters, :λ_24))
     addrow!(
-        "V-A5 clusters when present, λ ≥ 24", "4.85 ± 0.24 (SE)", "$(fmt(mean(present))) ± $(fmt(std(present) / sqrt(length(present))))",
-        "R2", "FULL", r2(CLUSTERS_WHEN_PRESENT..., mean(present), std(present) / sqrt(length(present)), 1.0)
+        "V-A5 clusters when present, λ ≥ 24", "4.85 ± 0.24 (SE)",
+        "$(fmt(mean(present))) ± $(fmt(std(present) / sqrt(length(present))))",
+        "R2", "FULL",
+        r2(
+            CLUSTERS_WHEN_PRESENT..., mean(present),
+            std(present) / sqrt(length(present)), 1.0
+        )
     )
 else
-    addrow!("V-A4 order and ratios", "[−1, 2] > (> 2) > (≤ −2); 4.25, 8.56", "not run", "strict; ± 15 %", "FULL", nothing)
-    addrow!("V-A5 incidence and size when present", "28.3 %, 71.5 %; 4.85 ± 0.24", "not run", "R3; R2", "FULL", nothing)
+    addrow!(
+        "V-A4 order and ratios", "[−1, 2] > (> 2) > (≤ −2); 4.25, 8.56", "not run",
+        "strict; ± 15 %", "FULL", nothing
+    )
+    addrow!(
+        "V-A5 incidence and size when present", "28.3 %, 71.5 %; 4.85 ± 0.24",
+        "not run", "R3; R2", "FULL", nothing
+    )
 end
 
 ## V-C1 and V-C2, with their controls
@@ -892,14 +1119,19 @@ addrow!(
     "divisions $(join(unique(r.divisions for r in runs[:P7]), "/"))", "exact", "SMOKE+FULL",
     all(r -> r.divisions == 0 && r.live1 == r.live0, runs[:P7])
 )
-addrow!("V-C1 control: P1 runs divide", "—", "min $(minimum(divs))", "> 0 in every run", "SMOKE+FULL", all(>(0), divs))
+addrow!(
+    "V-C1 control: P1 runs divide", "—", "min $(minimum(divs))", "> 0 in every run",
+    "SMOKE+FULL", all(>(0), divs)
+)
 cl8 = values_at(runs[:P8], 700, :clusters)
 addrow!(
-    "V-C2 λ = 0: no cluster", "0 in all 1209 λ = 0 runs (A)", "max $(fmt(maximum(cl8)))", "0 in every run", "SMOKE+FULL",
+    "V-C2 λ = 0: no cluster", "0 in all 1209 λ = 0 runs (A)", "max $(fmt(maximum(cl8)))",
+    "0 in every run", "SMOKE+FULL",
     all(iszero, cl8)
 )
 addrow!(
-    "V-C2 control: P1 runs form clusters", "—", "max $(fmt(maximum(values_at(runs[:P1], 700, :clusters))))", "> 0 in some run",
+    "V-C2 control: P1 runs form clusters", "—",
+    "max $(fmt(maximum(values_at(runs[:P1], 700, :clusters))))", "> 0 in some run",
     "SMOKE+FULL", any(>(0), values_at(runs[:P1], 700, :clusters))
 )
 for m in (:singles, :fingers, :detached)
@@ -908,16 +1140,21 @@ for m in (:singles, :fingers, :detached)
 end
 inv8 = values_at(runs[:P8], 700, :invasive)
 addrow!(
-    "V-C2 control: P8 invasive against P1's reference", "15734 ± 1362 (A, P1)", fmt(mean(inv8)), "must fail R1", "SMOKE+FULL",
+    "V-C2 control: P8 invasive against P1's reference", "15734 ± 1362 (A, P1)",
+    fmt(mean(inv8)), "must fail R1", "SMOKE+FULL",
     !r1(REF_A.P1[1]..., N_A, mean(inv8), sd(inv8), length(inv8), 0.0)
 )
 
 ## per-run invariants
 allruns = [runs_va0; reduce(vcat, collect(values(runs)))]
 FULL && append!(allruns, reduce(vcat, [s.runs for s in slice_runs]))
-inv_all = all(r -> all(o -> o.infiltrative >= o.invasive && o.detached >= o.singles, values(r.obs)), allruns)
+inv_all = all(
+    r -> all(o -> o.infiltrative >= o.invasive && o.detached >= o.singles, values(r.obs)),
+    allruns
+)
 addrow!(
-    "invariants: infiltrative ≥ invasive, detached ≥ singles", "every run of A, B, C", "$(length(allruns)) runs, every save",
+    "invariants: infiltrative ≥ invasive, detached ≥ singles", "every run of A, B, C",
+    "$(length(allruns)) runs, every save",
     "exact", "SMOKE+FULL", inv_all
 )
 
@@ -925,22 +1162,28 @@ addrow!(
 ## V-A6 and the full-sweep V-A7: read from the committed full sweep (they need all 13,310
 ## runs, which no docs build makes); class "FULL record"
 for r in rec_sweep
-    (startswith(r["target"], "V-A6") || startswith(r["target"], "V-A7")) && r["class"] == "FULL" || continue
+    (startswith(r["target"], "V-A6") || startswith(r["target"], "V-A7")) && r["class"] ==
+        "FULL" || continue
     push!(
         rows, (;
-            target = r["target"], paper = r["paper"], ours = r["ours"], tol = r["tolerance"], class = "FULL record",
+            target = r["target"], paper = r["paper"], ours = r["ours"],
+            tol = r["tolerance"], class = "FULL record",
             ok = r["result"] == "PASS", result = r["result"],
         )
     )
 end
-addrow!("V-A8 (paper) cluster sizes", "≈ 7 cells, 60–70 % leaders (p.14–17)", "—", "—", "parked", nothing)
+addrow!(
+    "V-A8 (paper) cluster sizes", "≈ 7 cells, 60–70 % leaders (p.14–17)", "—", "—",
+    "parked", nothing
+)
 addrow!("V-A9 leader speed", "0.4 px/MCS at λ = 20 (p.6)", "—", "—", "parked", nothing)
 addrow!("V-A10 morphology", "Fig. 4", "videos above", "—", "reported", true)
 
 heading = if FULL
     "Validation (full ensembles)"
 else
-    "**Smoke check (reduced) — not validation.** Only the SMOKE+FULL rows carry a verdict here; the validation result is the pending full run."
+    "**Smoke check (reduced) — not validation.** Only the SMOKE+FULL rows carry a verdict \
+        here; the validation result is the pending full run."
 end
 display_result(r) = r.class == "parked" ? "PARKED" : r.result
 Markdown.parse(
@@ -957,7 +1200,13 @@ Markdown.parse(
 # or fall out of band:
 
 failing = filter(r -> r.ok === false, rows)
-Markdown.parse(isempty(failing) ? "None in this run." : join(["- $(r.target): ours $(r.ours), tolerance $(r.tol)." for r in failing], "\n"))
+Markdown.parse(
+    if isempty(failing)
+        "None in this run."
+    else
+        join(["- $(r.target): ours $(r.ours), tolerance $(r.tol)." for r in failing], "\n")
+    end
+)
 
 # #### The full run (committed record)
 #
@@ -975,11 +1224,29 @@ function prov(file)
     )
 end
 pp, ps = prov("provenance.toml"), prov("sweep_provenance.toml")
-tally = Dict(k => count(r -> r["result"] == k, rec_page) for k in unique(r["result"] for r in rec_page))
+tally = Dict(
+    k => count(r -> r["result"] == k, rec_page)
+        for k in unique(r["result"] for r in rec_page)
+)
+failing_rows = join(
+    [
+        "$(r["target"]) ($(r["ours"]) against $(r["paper"]))"
+            for r in rec_page if r["result"] == "FAIL"
+    ],
+    "; "
+)
 Markdown.parse(
     """
-    - **Page at FULL:** commit `$(pp["commit"][1:8])`, $(pp["cpu"]) ($(pp["machine"])), CPU backend, $(pp["threads"]) threads, $(pp["wall_s"]) s wall time. Verdicts (tally of the page as run, before V-A6 was un-parked): $(join(["$(tally[k]) $k" for k in sort(collect(keys(tally)))], ", ")). Failing: $(join(["$(r["target"]) ($(r["ours"]) against $(r["paper"]))" for r in rec_page if r["result"] == "FAIL"], "; ")) (one deviation; the deviations table).
-    - **Full sweep:** commit `$(ps["commit"][1:8])`, $(ps["cpu"]) ($(ps["machine"])), CPU backend, $(ps["threads"]) threads, $(ps["points"]) points × $(ps["replicates"]) runs; $(ps["wall_s_last_session"]) s wall time for the last session (PP = 0.2–1.0; PP = 0.0 and 0.1 were written by an earlier session, see the record's README).
+    - **Page at FULL:** commit `$(pp["commit"][1:8])`, $(pp["cpu"]) ($(pp["machine"])), \
+    CPU backend, $(pp["threads"]) threads, $(pp["wall_s"]) s wall time. Verdicts \
+    (tally of the page as run, before V-A6 was \
+    un-parked): $(join(["$(tally[k]) $k" for k in sort(collect(keys(tally)))], ", ")). \
+    Failing: $failing_rows (one deviation; the deviations table).
+    - **Full sweep:** commit `$(ps["commit"][1:8])`, $(ps["cpu"]) ($(ps["machine"])), CPU \
+    backend, $(ps["threads"]) threads, $(ps["points"]) points × $(ps["replicates"]) \
+    runs; $(ps["wall_s_last_session"]) s wall time for the last session (PP = \
+    0.2–1.0; PP = 0.0 and 0.1 were written by an earlier session, see the \
+    record's README).
     """
 )
 
@@ -989,13 +1256,23 @@ Markdown.parse(
 # Single-cell comparison (≈ 1 %) unable to fail; the other three carry the verdict.
 
 let names = ["none", "single", "bulk", "multimodal"],
-        A = [parse(Float64, match(r"A ([0-9.]+) %", r["paper"])[1]) for r in va6]    # A's fractions, read from verdicts_sweep.tsv
+        # A's fractions, read from verdicts_sweep.tsv
+        A = [parse(Float64, match(r"A ([0-9.]+) %", r["paper"])[1]) for r in va6]
     ph = [r["phenotype"] for r in rec_runs if r["phenotype"] != "unclassified"]
     ours = [100 * count(==(n), ph) / length(ph) for n in names]
     f = Figure(size = (520, 340))
-    ax = Axis(f[1, 1]; ylabel = "% of classified runs", xticks = (1:4, ["No invasion", "Single-cell", "Bulk", "Multimodal"]))
-    barplot!(ax, (1:4) .- 0.2, A; width = 0.38, color = :gray60, label = "authors (A, Fig. 5B)")
-    barplot!(ax, (1:4) .+ 0.2, ours; width = 0.38, color = :red3, label = "ours (full sweep)")
+    ax = Axis(
+        f[1, 1]; ylabel = "% of classified runs",
+        xticks = (1:4, ["No invasion", "Single-cell", "Bulk", "Multimodal"])
+    )
+    barplot!(
+        ax, (1:4) .- 0.2, A; width = 0.38, color = :gray60,
+        label = "authors (A, Fig. 5B)"
+    )
+    barplot!(
+        ax, (1:4) .+ 0.2, ours; width = 0.38, color = :red3,
+        label = "ours (full sweep)"
+    )
     axislegend(ax; position = :lt, framevisible = false)
     f
 end

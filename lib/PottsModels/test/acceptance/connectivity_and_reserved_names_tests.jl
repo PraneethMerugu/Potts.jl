@@ -4,15 +4,17 @@
 #
 # Semantics pinned here:
 #  1. `Chemotaxis(c; strength, when)`: an explicit `when` that admits a retraction (the
-#     medium gains, `new == 0`) gives that copy the drive `-strength * (c[target] - c[source])`.
-#     The default (`kinds = ()`, `when = true`) keeps the documented rule "acts when the
-#     gaining cell is a cell": a retraction gets 0, an extension gets the drive.
-#  2. `connectivity(k)` (rule `Local()`): a copy that takes a site from a constrained cell is
-#     accepted iff the cell's sites around the target form EXACTLY one piece (D-074). Zero
-#     pieces (the cell's last site; an isolated fragment site) is rejected, like two pieces
-#     (a bridge). Square (Moore ring, face-connected pieces) and hexagonal (6-ring arcs).
-#  3. `a` and `b` (the edge endpoints) are reserved: a parameter or variable named `a` or `b`
-#     is an ArgumentError when the model is built (expansion, construction or mtkcompile).
+#     medium gains, `new == 0`) gives that copy the drive `-strength * (c[target] -
+#     c[source])`. The default (`kinds = ()`, `when = true`) keeps the documented rule "acts
+#     when the gaining cell is a cell": a retraction gets 0, an extension gets the drive.
+#  2. `connectivity(k)` (rule `Local()`): a copy that takes a site from a constrained cell
+#     is accepted iff the cell's sites around the target form EXACTLY one piece (D-074).
+#     Zero pieces (the cell's last site; an isolated fragment site) is rejected, like two
+#     pieces (a bridge). Square (Moore ring, face-connected pieces) and hexagonal (6-ring
+#     arcs).
+#  3. `a` and `b` (the edge endpoints) are reserved: a parameter or variable named `a` or
+#     `b` is an ArgumentError when the model is built (expansion, construction or
+#     mtkcompile).
 #  4. `integral(x)` read in an update block that also writes `x` bare folds the NEW values
 #     (D-042: a bare name in the block is its new value; a fold inside an update runs before
 #     the update that reads it). Saved `s = integral(w)` equals the true sum at every save.
@@ -88,14 +90,22 @@ function reserved_pieces(σ, x, cell, hex::Bool)
     offs = hex ? HEX : MOORE
     n1, n2 = size(σ)
     mine = [
-        o for o in offs if 1 <= x[1] + o[1] <= n1 && 1 <= x[2] + o[2] <= n2 &&
+        o
+            for o in offs
+            if 1 <= x[1] + o[1] <= n1 && 1 <= x[2] + o[2] <= n2 &&
             σ[x[1] + o[1], x[2] + o[2]] == cell
     ]
-    adjacent(p, q) = (d = (p[1] - q[1], p[2] - q[2]); hex ? d in HEX : abs(d[1]) + abs(d[2]) == 1)
-    seen = falses(length(mine)); pieces = 0
+    function adjacent(p, q)
+        d = (p[1] - q[1], p[2] - q[2])
+        return hex ? d in HEX : abs(d[1]) + abs(d[2]) == 1
+    end
+    seen = falses(length(mine))
+    pieces = 0
     for s in eachindex(mine)
         seen[s] && continue
-        pieces += 1; seen[s] = true; todo = [s]
+        pieces += 1
+        seen[s] = true
+        todo = [s]
         while !isempty(todo)
             v = pop!(todo)
             for w in eachindex(mine)
@@ -120,11 +130,20 @@ function reserved_local(σ, x, old, new, hex)
     inside(y) = 1 <= y[1] <= n1 && 1 <= y[2] <= n2
     all(y -> inside(y) && σ[y...] == old, ring) && return false          # full ring
     reserved_pieces(σ, x, old, hex) == 1 || return false
-    return any(o -> (hex || abs(o[1]) + abs(o[2]) == 1) && inside(x .+ o) && σ[(x .+ o)...] == new, offs)
+    return any(
+        o -> (hex || abs(o[1]) + abs(o[2]) == 1) && inside(x .+ o) &&
+            σ[(x .+ o)...] == new, offs
+    )
 end
 # ---------------------------------------------------------------------------------------
 # 3. `a` and `b` are reserved (the edge endpoints)
-reserved_build(name, body) = mtkcompile(Base.invokelatest(eval(Potts._potts_model(name, body, @__MODULE__)); name = :m))
+function reserved_build(name, body)
+    return mtkcompile(
+        Base.invokelatest(
+            eval(Potts._potts_model(name, body, @__MODULE__)); name = :m
+        )
+    )
+end
 # ---------------------------------------------------------------------------------------
 # 4. integral(x) of a site variable written in the same @after_mcs
 @potts_model IntSameBlock begin
@@ -157,10 +176,15 @@ end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "connectivity and reserved names: Chemotaxis drives retractions admitted by `when`" setup = [ConnectivityAndReservedNamesSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "connectivity and reserved names: Chemotaxis drives retractions admitted by `when`" begin
+@testitem "connectivity and reserved names: Chemotaxis drives retractions admitted by \
+    `when`" setup = [ConnectivityAndReservedNamesSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "connectivity and reserved names: Chemotaxis drives retractions admitted by \
+        `when`" begin
         # c[i, j] = i. Cell 1 (kind A) owns rows 4:7, columns 4:7.
-        σ = zeros(Int32, 12, 12); σ[4:7, 4:7] .= 1
+        σ = zeros(Int32, 12, 12)
+        σ[4:7, 4:7] .= 1
         cf = [Float64(i) for i in 1:12, j in 1:12]
         op = [ownership => σ, kind => [:A], :c => cf]
         either = PottsProblem(ChemoEither(; name = :ce), op, (0, 1))
@@ -176,64 +200,92 @@ end
         @test (grow.old, grow.new) == (0, 1)
         expected_retract = -1.0 * (cf[7, 5] - cf[8, 5])
         @test expected_retract == 1.0
-        # negative control: the defect (gate forced to `new != 0`) gives 0 here, so the check
-        # below distinguishes it
+        # negative control: the defect (gate forced to `new != 0`) gives 0 here, so the
+        # check below distinguishes it
         buggy_retract = retract.new != 0 ? expected_retract : 0.0
         @test buggy_retract != expected_retract
 
-        @test reserved_drive(either, retract) ≈ 1.0            # DEFECT CHECK (currently 0.0)
+        # DEFECT CHECK (currently 0.0)
+        @test reserved_drive(either, retract) ≈ 1.0
         @test reserved_drive(either, grow) ≈ -1.0            # extension control
-        # default `when`: acts when the gaining cell is a cell (docstring), so only extensions
+        # default `when`: acts when the gaining cell is a cell (docstring), so only
+        # extensions
         @test reserved_drive(default, retract) == 0.0
         @test reserved_drive(default, grow) ≈ -1.0
     end
 end
 
-@testitem "connectivity and reserved names: connectivity(k) rejects zero components" setup = [ConnectivityAndReservedNamesSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "connectivity and reserved names: connectivity(k) rejects zero components ($label)" for (label, geo, nb, hex) in
-        (
+@testitem "connectivity and reserved names: connectivity(k) rejects zero components" setup =
+    [ConnectivityAndReservedNamesSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "connectivity and reserved names: connectivity(k) rejects zero components \
+        ($label)" for (label, geo, nb, hex) in (
             ("square", CorePotts.Square(), Moore(1), false),
             ("hex", Hexagonal(), Hex(1), true),
         )
-        build(σ) = PottsProblem(ConnOne(; name = :c1, geometry = geo, near = nb), [ownership => σ, kind => [:A]], (0, 1))
-        # (a) the cell's last site: σ[6,6] alone; medium at (7,6) copies into it. The ring of
-        #     (6,6) holds no site of cell 1 → 0 pieces → rejected.
-        σ = zeros(Int32, 12, 12); σ[6, 6] = 1
-        prob = build(σ); prop = reserved_prop(prob.lattice, σ, (6, 6), (7, 6))
+        function build(σ)
+            return PottsProblem(
+                ConnOne(; name = :c1, geometry = geo, near = nb),
+                [ownership => σ, kind => [:A]], (0, 1)
+            )
+        end
+        # (a) the cell's last site: σ[6,6] alone; medium at (7,6) copies into it. The ring
+        #     of (6,6) holds no site of cell 1 → 0 pieces → rejected.
+        σ = zeros(Int32, 12, 12)
+        σ[6, 6] = 1
+        prob = build(σ)
+        prop = reserved_prop(prob.lattice, σ, (6, 6), (7, 6))
         @test reserved_pieces(σ, (6, 6), 1, hex) == 0
         @test !rule(σ, (6, 6), 1, hex) && buggy(σ, (6, 6), 1, hex)   # negative control
         @test !allows(prob, prob.u0, prop)          # DEFECT CHECK (currently allowed)
-        # (b) an isolated fragment site: block rows/cols 3:6 plus σ[10,10]; medium at (11,10)
-        #     copies into (10,10). Its ring (square and hex) touches no other site of cell 1.
-        σ = zeros(Int32, 12, 12); σ[3:6, 3:6] .= 1; σ[10, 10] = 1
-        prob = build(σ); prop = reserved_prop(prob.lattice, σ, (10, 10), (11, 10))
+        # (b) an isolated fragment site: block rows/cols 3:6 plus σ[10,10]; medium at
+        #     (11,10) copies into (10,10). Its ring (square and hex) touches no other site
+        #     of cell 1.
+        σ = zeros(Int32, 12, 12)
+        σ[3:6, 3:6] .= 1
+        σ[10, 10] = 1
+        prob = build(σ)
+        prop = reserved_prop(prob.lattice, σ, (10, 10), (11, 10))
         @test reserved_pieces(σ, (10, 10), 1, hex) == 0
         @test !allows(prob, prob.u0, prop)          # DEFECT CHECK (currently allowed)
         # (c) a bridge: the line σ[3:9, 6]; medium at (6,7) copies into (6,6). Cell-1 ring
-        #     sites: (5,6), (7,6) — offsets (∓1, 0), not adjacent on either lattice → 2 pieces.
-        σ = zeros(Int32, 12, 12); σ[3:9, 6] .= 1
-        prob = build(σ); prop = reserved_prop(prob.lattice, σ, (6, 6), (6, 7))
+        #     sites: (5,6), (7,6) — offsets (∓1, 0), not adjacent on either lattice → 2
+        #     pieces.
+        σ = zeros(Int32, 12, 12)
+        σ[3:9, 6] .= 1
+        prob = build(σ)
+        prop = reserved_prop(prob.lattice, σ, (6, 6), (6, 7))
         @test reserved_pieces(σ, (6, 6), 1, hex) == 2
         @test !allows(prob, prob.u0, prop)          # still rejected
         # (d) an ordinary boundary copy: block 3:6 × 3:6; medium at (7,4) copies into (6,4).
-        #     Square ring: (5,3),(5,4),(5,5),(6,3),(6,5) — face-connected via (5,3)-(6,3) and
-        #     (5,5)-(6,5) → 1 piece. Hex ring (offsets): (0,1)→(6,5), (-1,1)→(5,5), (-1,0)→(5,4),
-        #     (0,-1)→(6,3) are cell 1, (1,0)→(7,4) and (1,-1)→(7,3) are medium → one arc.
-        σ = zeros(Int32, 12, 12); σ[3:6, 3:6] .= 1
-        prob = build(σ); prop = reserved_prop(prob.lattice, σ, (6, 4), (7, 4))
+        #     Square ring: (5,3),(5,4),(5,5),(6,3),(6,5) — face-connected via (5,3)-(6,3)
+        #     and (5,5)-(6,5) → 1 piece. Hex ring (offsets): (0,1)→(6,5), (-1,1)→(5,5),
+        #     (-1,0)→(5,4), (0,-1)→(6,3) are cell 1, (1,0)→(7,4) and (1,-1)→(7,3) are medium
+        #     → one arc.
+        σ = zeros(Int32, 12, 12)
+        σ[3:6, 3:6] .= 1
+        prob = build(σ)
+        prop = reserved_prop(prob.lattice, σ, (6, 4), (7, 4))
         @test reserved_pieces(σ, (6, 4), 1, hex) == 1
         @test allows(prob, prob.u0, prop)           # still accepted
-        # (e) oracle emulation over every proposal of a scattered state: the constraint equals
-        #     the exactly-one rule with `Local()`'s gain test and full-ring refusal (amended
-        #     under D-189 rulings 3 and 10: on the square lattice diagonal Moore sources now meet
-        #     the gain test); the sample contains copies where the defect differs.
+        # (e) oracle emulation over every proposal of a scattered state: the constraint
+        #     equals the exactly-one rule with `Local()`'s gain test and full-ring refusal
+        #     (amended under D-189 rulings 3 and 10: on the square lattice diagonal Moore
+        #     sources now meet the gain test); the sample contains copies where the defect
+        #     differs.
         σ = zeros(Int32, 12, 12)
         for i in 1:12, j in 1:12
             σ[i, j] = Int32(mod(i * 7 + j * 13 + i * j, 5) < 2 ? 1 + mod(i + j, 3) : 0)
         end
-        prob = PottsProblem(ConnOne(; name = :c1, geometry = geo, near = nb), [ownership => σ, kind => [:A, :A, :A]], (0, 1))
+        prob = PottsProblem(
+            ConnOne(; name = :c1, geometry = geo, near = nb),
+            [ownership => σ, kind => [:A, :A, :A]], (0, 1)
+        )
         offs = hex ? HEX : MOORE
-        got = Bool[]; want = Bool[]; differs = 0
+        got = Bool[]
+        want = Bool[]
+        differs = 0
         for i in 2:11, j in 2:11, o in offs
             y = (i + o[1], j + o[2])
             σ[i, j] == σ[y...] && continue
@@ -241,34 +293,55 @@ end
             push!(want, reserved_local(σ, (i, j), σ[i, j], σ[y...], hex))
             differs += rule(σ, (i, j), σ[i, j], hex) != buggy(σ, (i, j), σ[i, j], hex)
         end
-        @test differs > 0                                 # negative control: the sample can tell
+        # negative control: the sample can tell
+        @test differs > 0
         @test length(want) > 100
-        @test got == want                                 # DEFECT CHECK (differs on 0-piece copies)
+        # DEFECT CHECK (differs on 0-piece copies)
+        @test got == want
     end
 end
 
-@testitem "connectivity and reserved names: a connectivity-constrained single-site cell never disappears" setup = [ConnectivityAndReservedNamesSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "connectivity and reserved names: a connectivity-constrained single-site cell never disappears ($label, $(nameof(typeof(alg))))" for
-        (label, geo, nb) in (("square", CorePotts.Square(), Moore(1)), ("hex", Hexagonal(), Hex(1))),
+@testitem "connectivity and reserved names: a connectivity-constrained single-site cell \
+    never disappears" setup = [ConnectivityAndReservedNamesSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "connectivity and reserved names: a connectivity-constrained single-site \
+        cell never disappears ($label, $(nameof(typeof(alg))))" for (label, geo, nb) in (
+                (
+                    "square", CorePotts.Square(), Moore(1),
+                ), ("hex", Hexagonal(), Hex(1)),
+            ),
             alg in (SequentialCPM(; proposal = nb), CheckerboardCPM(; proposal = nb))
-        # One site of kind A in medium; E = (volume - 1)^2 at T = 20. The last-site copy costs
-        # (0-1)^2 - (1-1)^2 = +1, accepted with probability e^(-1/20) ≈ 0.95 unless constrained.
-        # Under D-074 the last-site copy has 0 pieces and is rejected, so volume ≥ 1 at every
-        # save for every seed (a hard guarantee, not a statistical one).
-        σ = zeros(Int32, 12, 12); σ[6, 6] = 1
+        # One site of kind A in medium; E = (volume - 1)^2 at T = 20. The last-site copy
+        # costs (0-1)^2 - (1-1)^2 = +1, accepted with probability e^(-1/20) ≈ 0.95 unless
+        # constrained. Under D-074 the last-site copy has 0 pieces and is rejected, so
+        # volume ≥ 1 at every save for every seed (a hard guarantee, not a statistical one).
+        σ = zeros(Int32, 12, 12)
+        σ[6, 6] = 1
         op = [ownership => σ, kind => [:A]]
         held = PottsProblem(ConnOne(; name = :c1, geometry = geo, near = nb), op, (0, 20))
         free = PottsProblem(ConnFree(; name = :c0, geometry = geo, near = nb), op, (0, 20))
-        lowest(prob, seed) = minimum(u -> Array(u.cell.volume)[1], solve(remake(prob; seed), alg).u)
-        # negative control: without the constraint the cell dies in every seed (measured: by MCS 1)
+        function lowest(prob, seed)
+            return minimum(
+                u -> Array(u.cell.volume)[1],
+                solve(remake(prob; seed), alg).u
+            )
+        end
+        # negative control: without the constraint the cell dies in every seed (measured: by
+        # MCS 1)
         @test all(seed -> lowest(free, seed) == 0, 1:8)
         @test all(seed -> lowest(held, seed) >= 1, 1:8)   # DEFECT CHECK (currently dies)
     end
 end
 
-@testitem "connectivity and reserved names: parameters and variables named `a` or `b` are rejected" setup = [ConnectivityAndReservedNamesSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "connectivity and reserved names: parameters and variables named `a` or `b` are rejected" begin
-        # the reviewer's case: a parameter `b` used in an edge term, where `b` is the endpoint
+@testitem "connectivity and reserved names: parameters and variables named `a` or `b` are \
+    rejected" setup = [ConnectivityAndReservedNamesSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "connectivity and reserved names: parameters and variables named `a` or `b` \
+        are rejected" begin
+        # the reviewer's case: a parameter `b` used in an edge term, where `b` is the
+        # endpoint
         function edge_body(bname)
             return quote
                 @kinds medium A
@@ -297,8 +370,10 @@ end
         end
         # controls: the same bodies with other names build (the error below is the name)
         @test reserved_build(:EdgeOK, edge_body(:bb)) isa Potts.CompiledPottsSystem
-        @test reserved_build(:DeclOK, decl_body(:(@parameters a2 = 3.0))) isa Potts.CompiledPottsSystem
-        @test reserved_build(:DeclOK2, decl_body(:(@variables b2(cell) = 0.0))) isa Potts.CompiledPottsSystem
+        @test reserved_build(:DeclOK, decl_body(:(@parameters a2 = 3.0))) isa
+            Potts.CompiledPottsSystem
+        @test reserved_build(:DeclOK2, decl_body(:(@variables b2(cell) = 0.0))) isa
+            Potts.CompiledPottsSystem
         # DEFECT CHECKS (currently accepted); the message names the offending declaration
         @test_throws ArgumentError reserved_build(:EdgeB, edge_body(:b))
         @test_throws ArgumentError reserved_build(:EdgeB2, edge_body(:b))
@@ -312,22 +387,41 @@ end
     end
 end
 
-@testitem "connectivity and reserved names: integral(x) folds x's new value in the block that writes it" setup = [ConnectivityAndReservedNamesSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "connectivity and reserved names: integral(x) folds x's new value in the block that writes it ($(nameof(typeof(alg))))" for
-        alg in (SequentialCPM(), CheckerboardCPM())
-        # Cell 1 = 4×4 block (16 sites). E = (volume - 16)^2 at T = 0: every copy changes the
-        # volume by ±1, ΔH = +1 > 0, rejected, so the cell keeps its 16 sites. w = k at every
-        # site after MCS k. At save k: true sum over the cell = 16k → s = 0, 16, 32, 48.
-        # The defect (integral refreshed before the block) gives 16(k-1): 0, 0, 16, 32.
-        σ = zeros(Int32, 12, 12); σ[4:7, 4:7] .= 1
+@testitem "connectivity and reserved names: integral(x) folds x's new value in the block \
+    that writes it" setup = [ConnectivityAndReservedNamesSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "connectivity and reserved names: integral(x) folds x's new value in the \
+        block that writes it ($(nameof(typeof(alg))))" for alg in (
+            SequentialCPM(),
+            CheckerboardCPM(),
+        )
+        # Cell 1 = 4×4 block (16 sites). E = (volume - 16)^2 at T = 0: every copy changes
+        # the volume by ±1, ΔH = +1 > 0, rejected, so the cell keeps its 16 sites. w = k at
+        # every site after MCS k. At save k: true sum over the cell = 16k → s = 0, 16, 32,
+        # 48. The defect (integral refreshed before the block) gives 16(k-1): 0, 0, 16, 32.
+        σ = zeros(Int32, 12, 12)
+        σ[4:7, 4:7] .= 1
         truth = [16.0 * k for k in 0:3]
         stale = [16.0 * max(k - 1, 0) for k in 0:3]
-        @test truth != stale                              # negative control: the check can tell
-        for (M, which) in ((IntSplitBlocks, "split (control)"), (IntSameBlock, "same block"))
-            sol = solve(PottsProblem(M(; name = :i), [ownership => σ, kind => [:A]], (0, 3)), alg; saveat = 0:3)
+        # negative control: the check can tell
+        @test truth != stale
+        for (M, which) in (
+                (IntSplitBlocks, "split (control)"), (
+                    IntSameBlock, "same block",
+                ),
+            )
+            sol = solve(
+                PottsProblem(
+                    M(; name = :i), [ownership => σ, kind => [:A]], (
+                        0, 3,
+                    )
+                ), alg; saveat = 0:3
+            )
             @test [Array(u.cell.volume)[1] for u in sol.u] == fill(16, 4)
             @test [sum(Array(u.site.w)[Array(u.ownership) .== 1]) for u in sol.u] == truth
-            @test [Array(u.cell.s)[1] for u in sol.u] == truth   # DEFECT CHECK for "same block"
+            # DEFECT CHECK for "same block"
+            @test [Array(u.cell.s)[1] for u in sol.u] == truth
         end
     end
 end

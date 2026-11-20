@@ -13,10 +13,10 @@
 The stored energy φ of Eq. (8) (04b p.5823; spec 04 §2.8),
 φ ≡ Σ_{i,j} θ (1 − δ_{σ_i, σ_j}): `θ` times the number of unordered neighbor pairs
 `{i, j}` under `neighborhood` with `σ_i ≠ σ_j`, each pair counted once (reading (a):
-only φ/φ(0) is plotted, so the factor 2 of the ordered sum cancels). The default shell is the
-paper's fourth-nearest neighborhood (04b p.5822; spec §8). Pairs wrap on `Periodic()` axes;
-a pair that leaves a `Closed()` axis, or the lattice domain, does not exist. Every owner
-counts, the medium (0) included. The neighborhood must be symmetric (each offset's
+only φ/φ(0) is plotted, so the factor 2 of the ordered sum cancels). The default shell is
+the paper's fourth-nearest neighborhood (04b p.5822; spec §8). Pairs wrap on `Periodic()`
+axes; a pair that leaves a `Closed()` axis, or the lattice domain, does not exist. Every
+owner counts, the medium (0) included. The neighborhood must be symmetric (each offset's
 negation also in it); weights of a `Weighted` relation are ignored.
 
 One pass over the sites with half the offsets, no allocation beyond the relation.
@@ -25,7 +25,9 @@ function stored_energy(
         σ::AbstractArray{<:Integer, N}, lat::Lattice{N}; neighborhood = NeighborOrder(4),
         θ::Real = 1
     ) where {N}
-    size(σ) == lat.dims || throw(ArgumentError("stored_energy: σ has size $(size(σ)), the lattice $(lat.dims)"))
+    size(σ) == lat.dims ||
+        throw(ArgumentError("stored_energy: σ has size $(size(σ)), the \
+            lattice $(lat.dims)"))
     half = _half_offsets(relation(neighborhood, lat).offsets)
     return θ * _unlike_pairs(σ, lat.dims, lat.periodic, lat.mask, half)
 end
@@ -35,7 +37,8 @@ end
 function _half_offsets(offs::Tuple)
     for o in offs
         all(iszero, o) || map(-, o) in offs ||
-            throw(ArgumentError("stored_energy: the neighborhood is not symmetric (offset $o without $(map(-, o)))"))
+            throw(ArgumentError("stored_energy: the neighborhood is not symmetric \
+                (offset $o without $(map(-, o)))"))
     end
     return [o for o in offs if _positive(o)]
 end
@@ -46,9 +49,12 @@ function _positive(o)
     return false
 end
 
-function _unlike_pairs(σ, dims::NTuple{N, Int}, periodic::NTuple{N, Bool}, mask, half) where {N}
+function _unlike_pairs(
+        σ, dims::NTuple{N, Int}, periodic::NTuple{N, Bool}, mask, half
+    ) where {N}
     n = 0
-    @inbounds for x in CartesianIndices(σ)     # x and y = x + o (wrapped) are checked to be in `σ`
+    # x and y = x + o (wrapped) are checked to be in `σ`
+    @inbounds for x in CartesianIndices(σ)
         a = σ[x]
         _in_mask(mask, x) || continue
         for o in half
@@ -149,14 +155,18 @@ function central_moment(x::AbstractVector{<:Real}, m::Integer = 2)
 end
 
 """
-    topology_moments(σ, lattice::Lattice; neighborhood = VonNeumann(1)) -> (; mean_n, mu2_n, mean_a, mu2_a)
+    topology_moments(σ, lattice::Lattice; neighborhood = VonNeumann(1)) -> (; mean_n, mu2_n,
+        mean_a, mu2_a)
 
 ⟨n⟩, μ2(n), ⟨a⟩ and μ2(a) (04b p.5823; spec 04 §2.8, [`central_moment`](@ref)) over the
 bubbles of `σ`: the ids in `1:maximum(σ)` that own at least one site (an id with no site is
 not a bubble). `n` is from [`side_counts`](@ref) with `neighborhood`, `a` is the bubble's
 site count (areas stay in sites; any rescaling of μ2(a) is a calibration).
 """
-function topology_moments(σ::AbstractArray{<:Integer}, lat::Lattice; neighborhood = VonNeumann(1))
+function topology_moments(
+        σ::AbstractArray{<:Integer}, lat::Lattice;
+        neighborhood = VonNeumann(1)
+    )
     n = side_counts(σ, lat; neighborhood)
     area = zeros(Int, length(n))
     for s in σ
@@ -167,7 +177,8 @@ function topology_moments(σ::AbstractArray{<:Integer}, lat::Lattice; neighborho
     nl = n[live]
     al = area[live]
     return (
-        mean_n = sum(nl) / length(nl), mu2_n = central_moment(nl), mean_a = sum(al) / length(al),
+        mean_n = sum(nl) / length(nl), mu2_n = central_moment(nl), mean_a = sum(al) /
+            length(al),
         mu2_a = central_moment(al),
     )
 end
@@ -207,7 +218,8 @@ counting unit `unit` (A-15). With `L` and `G` the numbers of lost and gained con
 [`contact_changes`](@ref):
 
   - `:t1`: `(L + G) / 2`. One full T1 (one pair parts, another meets) is 1; half of a T1
-    seen through a transient four-fold vertex is 1/2 (the half-integers of the Fig. 5 inset).
+    seen through a transient four-fold vertex is 1/2 (the half-integers of the Fig. 5
+    inset).
   - `:pairs`: `L + G`. One T1 is 2 (the even-valued bars of Figs. 4(b) and 5(b)).
   - `:bubbles`: the number of bubbles whose neighbor list changed. One T1 is 4.
 
@@ -217,7 +229,8 @@ so a call costs one pass over both lists.
 """
 function t1_events(prev::AbstractVector, next::AbstractVector; unit::Symbol = :t1)
     unit in (:t1, :pairs, :bubbles) ||
-        throw(ArgumentError("t1_events: unit must be :t1, :pairs or :bubbles, got $(repr(unit))"))
+        throw(ArgumentError("t1_events: unit must be :t1, :pairs or :bubbles, \
+            got $(repr(unit))"))
     unit === :bubbles && return Float64(_changed_bubbles(prev, next))
     changes = 0
     for a in 1:max(length(prev), length(next))
@@ -301,7 +314,8 @@ function power_spectrum(x::AbstractVector{<:Real}; dt::Real = 1)
     L >= 2 || throw(ArgumentError("power_spectrum: need at least 2 samples, got $L"))
     dt > 0 || throw(ArgumentError("power_spectrum: dt must be positive, got $dt"))
     # halfcomplex: X[k + 1] and X[L − k + 1] are the real and imaginary parts of
-    # Σ_t x_t e^{−2πi k t / L}; the imaginary part of k = L/2 (L even) is zero and not stored
+    # Σ_t x_t e^{−2πi k t / L}; the imaginary part of k = L/2 (L even) is zero and not
+    # stored
     X = r2r(Float64.(x), R2HC)
     K = L ÷ 2
     S = [(X[k + 1]^2 + (2k < L ? X[L - k + 1]^2 : 0.0)) / L for k in 1:K]
@@ -319,7 +333,8 @@ frequency (no slope to fit), is an `ArgumentError`.
 """
 function spectral_exponent(f::AbstractVector{<:Real}, S::AbstractVector{<:Real}, range)
     length(f) == length(S) ||
-        throw(DimensionMismatch("spectral_exponent: f and S have lengths $(length(f)) and $(length(S))"))
+        throw(DimensionMismatch("spectral_exponent: f and S have lengths $(length(f)) \
+            and $(length(S))"))
     lo, hi = range[1], range[2]
     n = 0
     su = sv = 0.0
@@ -332,9 +347,11 @@ function spectral_exponent(f::AbstractVector{<:Real}, S::AbstractVector{<:Real},
         sv += log10(Sk)
     end
     n >= 2 ||
-        throw(ArgumentError("spectral_exponent: $n bin(s) with $lo ≤ f ≤ $hi and S > 0, need at least 2"))
+        throw(ArgumentError("spectral_exponent: $n bin(s) with $lo ≤ f ≤ $hi and S > 0, \
+            need at least 2"))
     fmin < fmax ||
-        throw(ArgumentError("spectral_exponent: the $n bins with $lo ≤ f ≤ $hi and S > 0 all have f = $fmin"))
+        throw(ArgumentError("spectral_exponent: the $n bins with $lo ≤ f ≤ $hi and S > 0 \
+            all have f = $fmin"))
     ū, v̄ = su / n, sv / n
     suv = suu = 0.0
     for (fk, Sk) in zip(f, S)
@@ -378,9 +395,12 @@ function yield_strain(
         window::Integer = 1
     )
     length(strain) == length(N) ||
-        throw(DimensionMismatch("yield_strain: strain and N have lengths $(length(strain)) and $(length(N))"))
-    threshold > 0 || throw(ArgumentError("yield_strain: threshold must be positive, got $threshold"))
-    window >= 1 || throw(ArgumentError("yield_strain: window must be at least 1, got $window"))
+        throw(DimensionMismatch("yield_strain: strain and N have \
+            lengths $(length(strain)) and $(length(N))"))
+    threshold > 0 ||
+        throw(ArgumentError("yield_strain: threshold must be positive, got $threshold"))
+    window >= 1 ||
+        throw(ArgumentError("yield_strain: window must be at least 1, got $window"))
     n = length(N)
     for (k, i) in enumerate(eachindex(N))
         N[i] > 0 || continue

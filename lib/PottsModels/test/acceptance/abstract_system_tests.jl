@@ -2,30 +2,32 @@
 # Decision: D-137 (implements D-075 §0.1); rewritten for the container
 # of D-256; amended under D-260).
 #
-# A `PottsSystem` is an MTK `AbstractSystem` that wraps a complete, flattened ModelingToolkitBase
-# `System` (`Potts.inner(sys)`), a field `PDESystem` or `nothing` (`Potts.fields(sys)`) and the
-# Potts payload. MTK's accessors, the metadata and `sys.x` are the inner System's; a model is
-# complete (`complete` returns it); MTK's `extend` merges two Potts models, MTK's `compose`
-# adds components and `rename` renames; `toggle_namespacing` is refused.
+# A `PottsSystem` is an MTK `AbstractSystem` that wraps a complete, flattened
+# ModelingToolkitBase `System` (`Potts.inner(sys)`), a field `PDESystem` or `nothing`
+# (`Potts.fields(sys)`) and the Potts payload. MTK's accessors, the metadata and `sys.x` are
+# the inner System's; a model is complete (`complete` returns it); MTK's `extend` merges two
+# Potts models, MTK's `compose` adds components and `rename` renames; `toggle_namespacing`
+# is refused.
 #
 # The contract checked here:
 #  S. Subtype and fields. `PottsSystem <: AbstractSystem`; its fields are exactly `name`,
 #     `inner`, `fields`, `part`; the inner System is complete and flat and carries the model
-#     name. The keyword constructor takes `checks` (default true): `checks = false` skips the
-#     construction checks (a reserved kind name `a` is accepted), `checks = true` runs them;
-#     both rebuild a model with the same fingerprint, and so does `Potts.wrap_system`. MTK's
-#     `T(fields...; checks)` rebuild renames the model (MTK's `@set sys.name`).
+#     name. The keyword constructor takes `checks` (default true): `checks = false` skips
+#     the construction checks (a reserved kind name `a` is accepted), `checks = true` runs
+#     them; both rebuild a model with the same fingerprint, and so does `Potts.wrap_system`.
+#     MTK's `T(fields...; checks)` rebuild renames the model (MTK's `@set sys.name`).
 #  A. Accessors (ModelingToolkitBase's generic functions), checked against Potts' own lists:
 #     `equations` (the `@equations` as written, plus each component's equations flattened,
-#     `dc₊y`), `unknowns` (`Potts.declared_variables(sys)` in declaration order, plus each component's
-#     unknowns, a discrete component's nodes among them; never the lattice ownership, kinds or
-#     built-in cell properties; the compiled model's PottsSystem lists the same names once),
-#     `parameters` (`Potts.declared_parameters(sys)`, plus each component's), `observed` (one
-#     `name ~ expr` per `@observed` quantity; `observe(prob, lhs) == observe(prob, rhs)`),
-#     `nameof`. The sweep payload is the inner System's metadata; MTK's metadata functions on
-#     the container read and set it. The `PottsSystem` docstring names the accessors and `Potts.inner`.
-#  N. `sys.x` is MTK's `getproperty` on the complete inner System: the declared symbol itself
-#     for parameters, variables of each scope, `@observed` names and names merged by
+#     `dc₊y`), `unknowns` (`Potts.declared_variables(sys)` in declaration order, plus each
+#     component's unknowns, a discrete component's nodes among them; never the lattice
+#     ownership, kinds or built-in cell properties; the compiled model's PottsSystem lists
+#     the same names once), `parameters` (`Potts.declared_parameters(sys)`, plus each
+#     component's), `observed` (one `name ~ expr` per `@observed` quantity; `observe(prob,
+#     lhs) == observe(prob, rhs)`), `nameof`. The sweep payload is the inner System's
+#     metadata; MTK's metadata functions on the container read and set it. The `PottsSystem`
+#     docstring names the accessors and `Potts.inner`.
+#  N. `sys.x` is MTK's `getproperty` on the complete inner System: the declared symbol
+#     itself for parameters, variables of each scope, `@observed` names and names merged by
 #     `@extend` (one and two levels); `sys.dc.y` is the flattened component quantity `dc₊y`;
 #     an undeclared name is an `ArgumentError`. MTK's namespaced view
 #     (`toggle_namespacing(Potts.inner(sys), true).λ`, `pr₊λ`) and the plain symbol both key
@@ -35,11 +37,12 @@
 #     not throw); MTK's `complete` returns the model, `toggle_namespacing` is an
 #     `ArgumentError`, and `iscomplete(sys)` is true, as for the inner System.
 #     `Potts.lattice(sys)` (public, not exported; D-137 rule 6) returns the lattice.
-#  E. MTK's `compose` adds an MTK System to a PottsSystem; a Potts model with CPM statements as
-#     a component, or a PottsSystem inside a plain System, is an `ArgumentError` (no recursion,
-#     no build); `ODEProblem`/`JumpProblem` (plain and `{iip}`) on a PottsSystem or a compiled
-#     one are `ArgumentError`s naming `PottsProblem`; MTK's `extend` between a PottsSystem and a
-#     plain `System` is an `ArgumentError` naming `extend` and `@components` either way (D-039).
+#  E. MTK's `compose` adds an MTK System to a PottsSystem; a Potts model with CPM statements
+#     as a component, or a PottsSystem inside a plain System, is an `ArgumentError` (no
+#     recursion, no build); `ODEProblem`/`JumpProblem` (plain and `{iip}`) on a PottsSystem
+#     or a compiled one are `ArgumentError`s naming `PottsProblem`; MTK's `extend` between a
+#     PottsSystem and a plain `System` is an `ArgumentError` naming `extend` and
+#     `@components` either way (D-039).
 #  Q. Aqua ambiguities and piracy on Potts are clean.
 #  G. A source scan: no property read `<x>sys.<field>`, `base.<field>`, `$bname.<field>`
 #     (and per file `b.`, `m.`, `s.`, see RECEIVERS) of a PottsSystem or PottsPart field
@@ -61,7 +64,9 @@ named(xs, n) = only(filter(x -> Potts.info(x).name === n, collect(xs)))
 # ---------------------------------------------------------------------------------------
 # Fixtures
 system_two(dims, a, b) = (s = zeros(Int32, dims); s[a...] .= 1; s[b...] .= 2; s)
-const OP12 = [ownership => system_two((12, 12), (2:4, 2:4), (7:9, 7:9)), kind => [:host, :host]]
+const OP12 = [
+    ownership => system_two((12, 12), (2:4, 2:4), (7:9, 7:9)), kind => [:host, :host],
+]
 # cell and model variables, a kind table, an ODE, an after-MCS update and an observed sum
 @potts_model Cell begin
     @kinds medium host
@@ -129,7 +134,10 @@ function network()
     SYSTEM_M.@variables A(t)::Bool = false B(t)::Bool = false C(t)::Bool = false
     SYSTEM_M.@parameters wnt::Bool = false
     return SYSTEM_M.System(
-        [A(k) ~ wnt | (B(k - 1) & !C(k - 1)), B(k) ~ A(k - 1), C(k) ~ !(A(k - 1) | B(k - 1))], t;
+        [
+            A(k) ~ wnt | (B(k - 1) & !C(k - 1)), B(k) ~ A(k - 1), C(k) ~
+                !(A(k - 1) | B(k - 1)),
+        ], t;
         name = :grn
     )
 end
@@ -172,7 +180,9 @@ end
     @parameters χ = 0.25
     @energy cells(host) => χ * surface
 end
-const OP_SPRING = [ownership => system_two((30, 20), (3:5, 3:5), (12:14, 3:5)), kind => [:host, :host]]
+const OP_SPRING = [
+    ownership => system_two((30, 20), (3:5, 3:5), (12:14, 3:5)), kind => [:host, :host],
+]
 # a field with a drive, a frozen kind, per-kind temperature; the field `c` is a plain MTK
 # PDESystem whose input `dark` (0/1) is bound at `@fields`
 function field_pde()
@@ -182,7 +192,8 @@ function field_pde()
     C = c(t, x, y)
     return Potts.ModelingToolkitBase.PDESystem(
         [Potts.D(C) ~ 0.1 * L.laplacian(C) + 0.02 * dark(t, x, y) - 0.01 * C],
-        [c(0, x, y) ~ 0.0], L.lattice_domain(t, (x, y), (16, 16)), [t, x, y], [C, dark(t, x, y)], Any[]; name = :system_field
+        [c(0, x, y) ~ 0.0], L.lattice_domain(t, (x, y), (16, 16)), [t, x, y],
+        [C, dark(t, x, y)], Any[]; name = :system_field
     )
 end
 @potts_model Field begin
@@ -202,7 +213,8 @@ end
     @sweep Metropolis(; temperature = Tk[kind], combine = min)
 end
 const OP_FIELD = [
-    ownership => (s = zeros(Int32, 16, 16); s[:, 1] .= 1; s[4:6, 4:6] .= 2; s[10:12, 10:12] .= 3; s),
+    ownership =>
+        (s = zeros(Int32, 16, 16); s[:, 1] .= 1; s[4:6, 4:6] .= 2; s[10:12, 10:12] .= 3; s),
     kind => [:wall, :dark, :light],
 ]
 const EULER = (; field_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0))
@@ -232,7 +244,9 @@ const EULER = (; field_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0))
     @observed big ~ volume > 9
     @sweep Metropolis(; temperature = T)
 end
-const OP_LIFE = [ownership => system_two((24, 24), (3:6, 3:6), (12:15, 12:15)), kind => [:A, :B]]
+const OP_LIFE = [
+    ownership => system_two((24, 24), (3:6, 3:6), (12:15, 12:15)), kind => [:A, :B],
+]
 # two cell ODEs under RK4 (the fingerprint_compare tool's pair)
 @potts_model SystemPair begin
     @kinds medium host
@@ -252,33 +266,55 @@ end
 # (label, system builder, operating point, problem keywords, generated_code keywords)
 const SYSTEM_GG = graner_glazier_state()
 const CASES = [
-    ("GranerGlazier", () -> GranerGlazier(; name = :gg), [ownership => SYSTEM_GG[1], kind => SYSTEM_GG[2]], (;)),
     (
-        "WortelAct", () -> WortelAct(; name = :act, lattice = (8, 8)),
-        [ownership => system_two((8, 8), (2:3, 2:3), (6:7, 6:7)), kind => [:cell, :cell]], (;),
+        "GranerGlazier", () -> GranerGlazier(; name = :gg),
+        [ownership => SYSTEM_GG[1], kind => SYSTEM_GG[2]], (;),
     ),
     (
-        "WortelAct connected", () -> WortelAct(; name = :act, lattice = (8, 8), connected = true),
-        [ownership => system_two((8, 8), (2:3, 2:3), (6:7, 6:7)), kind => [:cell, :cell]], (;),
+        "WortelAct", () -> WortelAct(; name = :act, lattice = (8, 8)),
+        [ownership => system_two((8, 8), (2:3, 2:3), (6:7, 6:7)), kind => [:cell, :cell]],
+        (;),
+    ),
+    (
+        "WortelAct connected",
+        () -> WortelAct(; name = :act, lattice = (8, 8), connected = true),
+        [ownership => system_two((8, 8), (2:3, 2:3), (6:7, 6:7)), kind => [:cell, :cell]],
+        (;),
     ),
     (
         "MerksVasculogenesis", () -> MerksVasculogenesis(; name = :merks, lattice = (8, 8)),
-        [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]], EULER,
+        [
+            ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind =>
+                [:endothelial],
+        ], EULER,
     ),
     (
-        "MerksVasculogenesis contact-inhibited", () -> MerksVasculogenesis(; name = :merks, lattice = (8, 8), contact_inhibited = true),
-        [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]], EULER,
+        "MerksVasculogenesis contact-inhibited", () -> MerksVasculogenesis(;
+            name = :merks, lattice = (8, 8), contact_inhibited = true
+        ),
+        [
+            ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind =>
+                [:endothelial],
+        ], EULER,
     ),
     (
         "SingleDivisionFixture", () -> SingleDivisionFixture(; name = :fixture),
-        [ownership => (s = zeros(Int32, 12, 8); s[5:8, 4:5] .= 1; s), kind => [:epithelial]], (;),
+        [
+            ownership => (s = zeros(Int32, 12, 8); s[5:8, 4:5] .= 1; s), kind =>
+                [:epithelial],
+        ], (;),
     ),
     (
-        "OpenVTGrowingMonolayer", () -> OpenVTGrowingMonolayer(; name = :openvt, lattice = (24, 24)),
+        "OpenVTGrowingMonolayer", () -> OpenVTGrowingMonolayer(;
+            name = :openvt, lattice = (
+                24, 24,
+            )
+        ),
         openvt_monolayer_state(; lattice = (24, 24)), (; capacity = 64),
     ),
     (
-        "AkeebInvasion", () -> AkeebInvasion(; name = :akeeb, lattice = (60, 40)), akeeb_state(; lattice = (60, 40)),
+        "AkeebInvasion", () -> AkeebInvasion(; name = :akeeb, lattice = (60, 40)),
+        akeeb_state(; lattice = (60, 40)),
         (; capacity = 256),
     ),
     ("fixture cell", () -> Cell(; name = :pr), OP12, (;)),
@@ -289,7 +325,10 @@ const CASES = [
     ("fixture spring @extend²", () -> SpringExt2(; name = :ext2), OP_SPRING, (;)),
     ("fixture field", () -> Field(; name = :fld), OP_FIELD, EULER),
     ("fixture lifecycle", () -> Life(; name = :life), OP_LIFE, (;)),
-    ("fixture ODE pair RK4", () -> SystemPair(; name = :pair), OP12, (; ode_solver = Potts.RK4())),
+    (
+        "fixture ODE pair RK4", () -> SystemPair(; name = :pair),
+        OP12, (; ode_solver = Potts.RK4()),
+    ),
 ]
 problem(sys, op, kw; T = Float64) = PottsProblem(sys, op, (0, 1); T, kw...)
 system_fp(sys, op, kw; T = Float64) = problem(sys, op, kw; T).f.fingerprint
@@ -301,17 +340,26 @@ function clear(f, words...)
     catch e
         e
     end
-    err isa ArgumentError || (@info "abstract system: expected an ArgumentError, got $(err === nothing ? "no error" : typeof(err))"; return false)
+    err isa ArgumentError || (
+        @info "abstract system: expected an ArgumentError, \
+            got $(err === nothing ? "no error" : typeof(err))";
+        return false
+    )
     return true
 end
 # `compose(a, b)` gives a clear error. Called only when the method it reaches is not MTK's
 # varargs `compose(syss...)`: on a type without its own method that one recurses without end
 # (`compose(x, [y])` → `compose(x, [[y]])` → …), as on 33f681df.
 function compose_clear(a, b)
-    args = b isa AbstractArray ? Tuple{typeof(a), typeof(b)} : Tuple{typeof(a), Vector{typeof(b)}}
+    args = if b isa AbstractArray
+        Tuple{typeof(a), typeof(b)}
+    else
+        Tuple{typeof(a), Vector{typeof(b)}}
+    end
     m = which(SYSTEM_M.compose, args)
     if m.isva
-        @info "abstract system: compose$(args) reaches MTK's varargs compose (unbounded recursion); not called"
+        @info "abstract system: compose$(args) reaches MTK's varargs compose (unbounded \
+            recursion); not called"
         return false
     end
     return clear(() -> SYSTEM_M.compose(a, b), "compose", "@components")
@@ -321,10 +369,14 @@ struct OtherKey end
 # ---------------------------------------------------------------------------------------
 # G. No PottsSystem field read by property in src/ or ext/
 const FIELDS = (
-    "name", "inner", "part", "kinds", "frozen_kinds", "kind_classes", "lattice", "parameters", "variables",
-    "relations", "energies", "drives", "constraints", "updates", "equations", "divisions", "relationships",
-    "link_rules", "observed", "components", "discrete", "sweep", "structural", "sources", "eqs", "unknowns",
-    "ps", "systems", "metadata", "namespacing", "complete", "iv", "var_to_name", "description", "bcs", "bindings",
+    "name", "inner", "part", "kinds", "frozen_kinds",
+    "kind_classes", "lattice", "parameters", "variables",
+    "relations", "energies", "drives", "constraints", "updates",
+    "equations", "divisions", "relationships",
+    "link_rules", "observed", "components", "discrete", "sweep",
+    "structural", "sources", "eqs", "unknowns",
+    "ps", "systems", "metadata", "namespacing", "complete",
+    "iv", "var_to_name", "description", "bcs", "bindings",
 )
 # short receivers that hold a PottsSystem on 33f681df, per file (a base in the code
 # `@potts_model` generates, the rebuilt model in `_bind_components`, …)
@@ -339,7 +391,8 @@ function property_reads()
         endswith(f, ".jl") || continue
         extra = join(("\\b" * r for r in get(RECEIVERS, "$dir/$f", String[])), "|")
         rx = Regex(
-            "(\\b[A-Za-z_]*sys|\\bbase|\\\$bname" * (isempty(extra) ? "" : "|" * extra) * ")\\.(" *
+            "(\\b[A-Za-z_]*sys|\\bbase|\\\$bname" * (isempty(extra) ? "" : "|" * extra) *
+                ")\\.(" *
                 join(FIELDS, "|") * ")\\b"
         )
         indoc = false
@@ -361,23 +414,33 @@ end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "abstract system S: PottsSystem <: AbstractSystem wraps a complete inner System" setup = [AbstractSystemSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "abstract system S: PottsSystem <: AbstractSystem wraps a complete inner \
+    System" setup = [AbstractSystemSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # S. Subtype, the four fields, the constructors
-    @testset "abstract system S: PottsSystem <: AbstractSystem wraps a complete inner System" begin
+    @testset "abstract system S: PottsSystem <: AbstractSystem wraps a complete inner \
+        System" begin
         @test PottsSystem <: SYSTEM_M.AbstractSystem
         @test GranerGlazier(; name = :gg) isa SYSTEM_M.AbstractSystem
         @test fieldnames(PottsSystem) == (:name, :inner, :fields, :part)
         sys = Cell(; name = :pr)
         inner = Potts.inner(sys)
-        @test inner isa SYSTEM_M.System && SYSTEM_M.iscomplete(inner) && isempty(SYSTEM_M.get_systems(inner))
+        @test inner isa SYSTEM_M.System && SYSTEM_M.iscomplete(inner) &&
+            isempty(SYSTEM_M.get_systems(inner))
         @test nameof(inner) === :pr && Potts.fields(sys) === nothing
-        # the keyword constructor, with and without the construction checks (a reserved kind `a`)
+        # the keyword constructor, with and without the construction checks (a reserved kind
+        # `a`)
         part = getfield(sys, :part)
         kw = (f => getfield(part, f) for f in fieldnames(Potts.PottsPart))
         s2 = PottsSystem(; name = :pr, kw...)
-        @test s2 isa PottsSystem && nameof(s2) === :pr && system_fp(s2, OP12, (;)) == system_fp(sys, OP12, (;))
-        bad = (; (f => getfield(part, f) for f in fieldnames(Potts.PottsPart))..., kinds = [:medium, :a])
+        @test s2 isa PottsSystem && nameof(s2) === :pr &&
+            system_fp(s2, OP12, (;)) == system_fp(sys, OP12, (;))
+        bad = (;
+            (f => getfield(part, f) for f in fieldnames(Potts.PottsPart))...,
+            kinds = [:medium, :a],
+        )
         @test PottsSystem(; name = :pr, bad..., checks = false) isa PottsSystem
         @test_throws ArgumentError PottsSystem(; name = :pr, bad..., checks = true)
         @test_throws ArgumentError PottsSystem(; name = :pr, bad...)
@@ -385,19 +448,25 @@ end
         w = Potts.wrap_system(:pr, inner, nothing, part)
         @test system_fp(w, OP12, (;)) == system_fp(sys, OP12, (;))
         @test_throws ArgumentError Potts.wrap_system(:other, inner, nothing, part)
-        # MTK rebuilds a system as `T(fields...; checks)` (`@set sys.name = …`): the same model,
-        # renamed when the name differs
+        # MTK rebuilds a system as `T(fields...; checks)` (`@set sys.name = …`): the same
+        # model, renamed when the name differs
         fs = [getfield(sys, f) for f in fieldnames(PottsSystem)]
-        @test system_fp(PottsSystem(fs...; checks = false), OP12, (;)) == system_fp(sys, OP12, (;))
+        @test system_fp(PottsSystem(fs...; checks = false), OP12, (;)) ==
+            system_fp(sys, OP12, (;))
         @test nameof(PottsSystem(:other, fs[2:end]...; checks = false)) === :other
     end
 end
 
-@testitem "abstract system A: equations, unknowns, parameters, observed" setup = [AbstractSystemSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "abstract system A: equations, unknowns, parameters, observed" setup = [
+    AbstractSystemSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # A. Accessors: MTK's, answered by the inner System
     @testset "abstract system A: equations, unknowns, parameters, observed" begin
-        E, U, P, O = SYSTEM_M.equations, SYSTEM_M.unknowns, SYSTEM_M.parameters, SYSTEM_M.observed
+        E, U, P, O = SYSTEM_M.equations, SYSTEM_M.unknowns, SYSTEM_M.parameters,
+            SYSTEM_M.observed
         # a model without ODEs, components or observed quantities
         gg = GranerGlazier(; name = :gg)
         @test E(gg) isa AbstractVector{SYSTEM_M.Equation} && isempty(E(gg))
@@ -413,23 +482,36 @@ end
         @test Set(system_names(P(sys))) == Set([:λ, :T, :J]) && length(P(sys)) == 3
         @test all(isequal.(P(sys), Potts.declared_parameters(sys)))
         obs = O(sys)
-        @test obs isa AbstractVector{SYSTEM_M.Equation} && length(obs) == 1 && system_name(only(obs).lhs) === :total
+        @test obs isa AbstractVector{SYSTEM_M.Equation} && length(obs) == 1 &&
+            system_name(only(obs).lhs) === :total
         prob = problem(sys, OP12, (;))
-        @test observe(prob, only(obs).lhs) == observe(prob, only(obs).rhs) == 3.0       # x = 1.5 on two cells
-        # site and edge variables are unknowns too; the lattice, built-ins and fields are not (a
-        # field and its equation are in the model's PDESystem, `Potts.fields`)
+        # x = 1.5 on two cells
+        @test observe(prob, only(obs).lhs) == observe(prob, only(obs).rhs) == 3.0
+        # site and edge variables are unknowns too; the lattice, built-ins and fields are
+        # not (a field and its equation are in the model's PDESystem, `Potts.fields`)
         @test Set(system_names(U(Life(; name = :life)))) == Set([:m, :q, :act, :total])
         @test isempty(U(Field(; name = :fld))) && isempty(E(Field(; name = :fld)))
         @test length(SYSTEM_M.equations(Potts.fields(Field(; name = :fld)))) == 1
         @test system_names(U(Spring(; name = :sp))) == [:rest]
         @test Set(system_names(U(SpringExt2(; name = :ext2)))) == Set([:rest, :len])
         @test Set(system_names(P(SpringExt2(; name = :ext2)))) == Set([:T, :k, :χ])
-        @test !any(n -> n in (:volume, :surface, :kind, :ownership), system_names(U(Life(; name = :life))))
+        @test !any(
+            n -> n in (:volume, :surface, :kind, :ownership), system_names(
+                U(
+                    Life(;
+                        name = :life
+                    )
+                )
+            )
+        )
         @test [system_name(eq.lhs) for eq in O(Life(; name = :life))] == [:big]
     end
 end
 
-@testitem "abstract system A: accessors include components namespaced, never twice" setup = [AbstractSystemSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "abstract system A: accessors include components namespaced, never twice" setup =
+    [AbstractSystemSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "abstract system A: accessors include components namespaced, never twice" begin
         E, U, P = SYSTEM_M.equations, SYSTEM_M.unknowns, SYSTEM_M.parameters
         sys = Comp(; name = :pr)
@@ -440,8 +522,10 @@ end
         @test count(eq -> occursin("clk₊m", string(eq.lhs)), E(sys)) == 1
         # the compiled model's PottsSystem has the components bound: the same names, once
         cs = getfield(mtkcompile(sys), :sys)
-        @test Set(system_names(U(cs))) == Set(system_names(U(sys))) && length(U(cs)) == length(U(sys))
-        @test Set(system_names(U(cs))) == Set(Potts.info(v).name for v in Potts.declared_variables(cs))
+        @test Set(system_names(U(cs))) == Set(system_names(U(sys))) &&
+            length(U(cs)) == length(U(sys))
+        @test Set(system_names(U(cs))) ==
+            Set(Potts.info(v).name for v in Potts.declared_variables(cs))
         # a discrete component's nodes and parameter
         net = Net(; name = :net)
         @test issubset([:input, :grn₊A, :grn₊B, :grn₊C], system_names(U(net)))
@@ -450,51 +534,72 @@ end
         # fields are in `Potts.fields`)
         for (label, build, _, _) in CASES[1:8]
             m = build()
-            @test Set(system_names(U(m))) == Set(Potts.info(v).name for v in Potts.declared_variables(m) if Potts.info(v).role !== :field)
-            @test Set(system_names(P(m))) == Set(Potts.info(v).name for v in Potts.declared_parameters(m))
+            @test Set(system_names(U(m))) == Set(
+                Potts.info(v).name
+                    for v in Potts.declared_variables(m) if Potts.info(v).role !== :field
+            )
+            @test Set(system_names(P(m))) ==
+                Set(Potts.info(v).name for v in Potts.declared_parameters(m))
         end
     end
 end
 
-@testitem "abstract system A: nameof; the metadata is the inner System's" setup = [AbstractSystemSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "abstract system A: nameof; the metadata is the inner System's" setup = [
+    AbstractSystemSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "abstract system A: nameof; the metadata is the inner System's" begin
         sys = Cell(; name = :pr)
         @test nameof(sys) === :pr
-        @test SYSTEM_M.getmetadata(Potts.inner(sys), Potts.PottsSweepSpec, nothing) isa Potts.PottsSweepSpec
+        @test SYSTEM_M.getmetadata(Potts.inner(sys), Potts.PottsSweepSpec, nothing) isa
+            Potts.PottsSweepSpec
         @test SYSTEM_M.getmetadata(Potts.inner(sys), Key, :none) === :none
         # MTK's metadata functions on the container read and set the inner System's
         @test SYSTEM_M.getmetadata(sys, Key, :none) === :none
-        @test SYSTEM_M.getmetadata(sys, Potts.PottsSweepSpec, nothing) isa Potts.PottsSweepSpec
+        @test SYSTEM_M.getmetadata(sys, Potts.PottsSweepSpec, nothing) isa
+            Potts.PottsSweepSpec
         @test SYSTEM_M.getmetadata(SYSTEM_M.setmetadata(sys, Key, 42), Key, :none) == 42
         # documented
         doc = string(Base.Docs.doc(PottsSystem))
-        for w in ("equations", "unknowns", "parameters", "observed", "nameof", "Potts.inner")
+        for w in (
+                "equations", "unknowns", "parameters", "observed", "nameof",
+                "Potts.inner",
+            )
             @test occursin(w, doc)
         end
     end
 end
 
-@testitem "abstract system N: sys.x is the declared symbol" setup = [AbstractSystemSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "abstract system N: sys.x is the declared symbol" setup = [
+    AbstractSystemSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # N. `sys.x`: MTK's getproperty on the complete inner System
     @testset "abstract system N: sys.x is the declared symbol" begin
         sys = Cell(; name = :pr)
         for n in (:λ, :J, :x, :g, :total)
             @test system_name(getproperty(sys, n)) === n
         end
-        @test isequal(sys.λ, named(Potts.declared_parameters(sys), :λ)) && isequal(sys.x, named(Potts.declared_variables(sys), :x))
+        @test isequal(sys.λ, named(Potts.declared_parameters(sys), :λ)) &&
+            isequal(sys.x, named(Potts.declared_variables(sys), :x))
         @test system_name(GranerGlazier(; name = :gg).V₀) === :V₀
         @test system_name(Life(; name = :life).act) === :act
         @test system_name(Field(; name = :fld).c) === :c
         @test system_name(Spring(; name = :sp).rest) === :rest
         # names merged by @extend, one and two levels
         ext = SpringExt(; name = :ext)
-        @test system_name(ext.k) === :k && system_name(ext.rest) === :rest && system_name(ext.len) === :len
+        @test system_name(ext.k) === :k && system_name(ext.rest) === :rest &&
+            system_name(ext.len) === :len
         ext2 = SpringExt2(; name = :ext2)
-        @test system_name(ext2.k) === :k && system_name(ext2.len) === :len && system_name(ext2.χ) === :χ
+        @test system_name(ext2.k) === :k && system_name(ext2.len) === :len &&
+            system_name(ext2.χ) === :χ
         # component members, through the component: the flattened quantity
         comp = Comp(; name = :pr)
-        @test system_name(comp.dc.y) === :dc₊y && system_name(comp.dc.k) === :dc₊k && system_name(comp.clk.m) === :clk₊m
+        @test system_name(comp.dc.y) === :dc₊y && system_name(comp.dc.k) === :dc₊k &&
+            system_name(comp.clk.m) === :clk₊m
         @test any(isequal(Potts.Symbolics.unwrap(comp.dc.y)), SYSTEM_M.unknowns(comp))
         # an undeclared name
         @test_throws ArgumentError sys.nosuch
@@ -509,10 +614,15 @@ end
     end
 end
 
-@testitem "abstract system C: extend and show; MTK's complete and toggle_namespacing on a PottsSystem" setup = [AbstractSystemSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
-    # C. extend, show, lattice; MTK's complete returns the model, toggle_namespacing is refused
-    @testset "abstract system C: extend and show; MTK's complete and toggle_namespacing on a PottsSystem" begin
+@testitem "abstract system C: extend and show; MTK's complete and toggle_namespacing on a \
+    PottsSystem" setup = [AbstractSystemSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
+    # C. extend, show, lattice; MTK's complete returns the model, toggle_namespacing is
+    #    refused
+    @testset "abstract system C: extend and show; MTK's complete and toggle_namespacing \
+        on a PottsSystem" begin
         sys = Cell(; name = :pr)
         @test parentmodule(which(show, Tuple{IO, MIME"text/plain", PottsSystem})) === Potts
         # extend between Potts systems: a PottsSystem with the union of the declarations
@@ -520,8 +630,8 @@ end
         @test ext isa PottsSystem && nameof(ext) === :extra
         @test Set(system_names(SYSTEM_M.parameters(ext))) == Set([:λ, :T, :J, :μ])
         @test system_fp(ext, OP12, (;)) != system_fp(sys, OP12, (;))
-        # MTK's `complete` returns the model, which is complete as its inner System is; MTK's
-        # `extend` is the merge above; `toggle_namespacing` is refused
+        # MTK's `complete` returns the model, which is complete as its inner System is;
+        # MTK's `extend` is the merge above; `toggle_namespacing` is refused
         @test SYSTEM_M.complete(sys) === sys
         @test SYSTEM_M.extend === extend
         @test_throws ArgumentError SYSTEM_M.toggle_namespacing(sys, false)
@@ -532,11 +642,21 @@ end
         @test occursin("kinds: medium, host", txt) && occursin("inner: System pr", txt)
         two = sprint(show, sys)
         @test occursin("pr", two) && length(two) < 10_000
-        @test startswith(sprint(show, MIME"text/plain"(), GranerGlazier(; name = :gg); context = :limit => true), "PottsSystem gg")
+        @test startswith(
+            sprint(
+                show, MIME"text/plain"(), GranerGlazier(; name = :gg); context = :limit =>
+                    true
+            ),
+            "PottsSystem gg"
+        )
     end
 end
 
-@testitem "abstract system C: Potts.lattice, the public lattice accessor" setup = [AbstractSystemSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "abstract system C: Potts.lattice, the public lattice accessor" setup = [
+    AbstractSystemSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "abstract system C: Potts.lattice, the public lattice accessor" begin
         @test Base.ispublic(Potts, :lattice) && !Base.isexported(Potts, :lattice)
         for (label, build, _, _) in CASES[[1, 4, 9, 12]]
@@ -544,25 +664,32 @@ end
             @test Potts.lattice(s) === getfield(getfield(s, :part), :lattice)
         end
         @test Potts.lattice(GranerGlazier(; name = :gg)).dims == (72, 72)
-        @test Potts.lattice(MerksVasculogenesis(; name = :m, lattice = (8, 8))).dims == (8, 8)
+        @test Potts.lattice(MerksVasculogenesis(; name = :m, lattice = (8, 8))).dims ==
+            (8, 8)
     end
 end
 
-@testitem "abstract system E: compose, ODEProblem, JumpProblem, extend with a System" setup = [AbstractSystemSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "abstract system E: compose, ODEProblem, JumpProblem, extend with a \
+    System" setup = [AbstractSystemSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # E. Loud paths and refusals
-    @testset "abstract system E: compose, ODEProblem, JumpProblem, extend with a System" begin
+    @testset "abstract system E: compose, ODEProblem, JumpProblem, extend with a \
+        System" begin
         sys = Cell(; name = :pr)
         other = Extra(; name = :extra)
         mtk = system_decay()
-        # MTK's compose adds an MTK System to a PottsSystem; a Potts model with CPM statements as a
-        # component, or a PottsSystem inside a plain System, is refused (never recurses, never builds)
+        # MTK's compose adds an MTK System to a PottsSystem; a Potts model with CPM
+        # statements as a component, or a PottsSystem inside a plain System, is refused
+        # (never recurses, never builds)
         @test SYSTEM_M.compose(sys, [mtk]) isa PottsSystem
         for f in (
                 () -> SYSTEM_M.compose(sys, [other]), () -> SYSTEM_M.compose(sys, other),
                 () -> SYSTEM_M.compose(mtk, [sys]), () -> SYSTEM_M.compose(mtk, sys),
             )
-            @test_throws ArgumentError f()                  # a StackOverflowError (recursion) fails this
+            # a StackOverflowError (recursion) fails this
+            @test_throws ArgumentError f()
         end
         for s in (sys, mtkcompile(sys))
             @test clear(() -> SYSTEM_M.ODEProblem(s, [], (0.0, 1.0)), "PottsProblem")
@@ -571,7 +698,10 @@ end
         end
         # the curly forms too (SciMLBase's `{iip}` constructors accept any `f`)
         @test clear(() -> SYSTEM_M.ODEProblem{true}(sys, [], (0.0, 1.0)), "PottsProblem")
-        @test clear(() -> Potts.SciMLBase.NonlinearProblem{true}(sys, [], (0.0, 1.0)), "PottsProblem")
+        @test clear(
+            () -> Potts.SciMLBase.NonlinearProblem{true}(sys, [], (0.0, 1.0)),
+            "PottsProblem"
+        )
         @test clear(() -> SYSTEM_M.extend(sys, mtk), "extend", "@components")
         @test clear(() -> SYSTEM_M.extend(mtk, sys), "extend", "@components")
         # controls: MTK's own extend and compose still work on plain Systems
@@ -580,8 +710,12 @@ end
     end
 end
 
-@testitem "abstract system Q: Aqua ambiguities and piracy (Potts)" setup = [AbstractSystemSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "abstract system Q: Aqua ambiguities and piracy (Potts)" setup = [
+    AbstractSystemSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # Q. Aqua on Potts
     @testset "abstract system Q: Aqua ambiguities and piracy (Potts)" begin
         Aqua.test_ambiguities(Potts)
@@ -589,10 +723,16 @@ end
     end
 end
 
-@testitem "abstract system G: internal reads use getfield or an accessor" setup = [AbstractSystemSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "abstract system G: internal reads use getfield or an accessor" setup = [
+    AbstractSystemSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "abstract system G: internal reads use getfield or an accessor" begin
         hits = property_reads()
-        isempty(hits) || @info "abstract system: $(length(hits)) property reads of PottsSystem fields, e.g. $(first(hits, 5))"
+        isempty(hits) ||
+            @info "abstract system: $(length(hits)) property reads of PottsSystem fields, \
+                e.g. $(first(hits, 5))"
         @test isempty(hits)
     end
 end

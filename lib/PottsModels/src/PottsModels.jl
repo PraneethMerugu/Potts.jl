@@ -8,12 +8,15 @@ keywords override structural parameters and parameter defaults, and `@extend` bu
 """
 module PottsModels
 
-using Potts: Potts, @potts_model, Closed, DiscreteCallback, Lattice, Metropolis, Moore, NeighborOrder, Periodic,
+using Potts: Potts, @potts_model, Closed, DiscreteCallback, Lattice, Metropolis, Moore,
+    NeighborOrder, Periodic,
     RandomPlane, VonNeumann, kind, major_length, ownership, terminate!
-using Potts.Layouts: Center, Circle, Eden, Frame, InsertUntil, Point, RandomPoints, Scattered, Splits, Tiling, Voronoi,
+using Potts.Layouts: Center, Circle, Eden, Frame, InsertUntil, Point, RandomPoints,
+    Scattered, Splits, Tiling, Voronoi,
     layout, overlay
 # for the compile workload (end of this file)
-using Potts: CheckerboardCPM, ExplicitEuler, PottsProblem, SequentialCPM, init, mtkcompile, step!
+using Potts: CheckerboardCPM, ExplicitEuler, PottsProblem, SequentialCPM, init, mtkcompile,
+    step!
 using DelimitedFiles: readdlm
 using Printf: @sprintf
 using PrecompileTools: PrecompileTools
@@ -22,15 +25,19 @@ using SHA: sha256
 using TOML: TOML
 
 export GranerGlazier, WortelAct, MerksVasculogenesis, OpenVTGrowingMonolayer,
-    AkeebInvasion, OpenVTChain, OpenVTReferenceMonolayer, Merks2006, Merks2008, ShearedFoam
-export graner_glazier_state, graner_glazier_aggregate, akeeb_state, akeeb_layout, akeeb_contacts, akeeb_observables,
-    akeeb_phenotype, openvt_monolayer_state, merks_state, openvt_reference_state, merks_layout, merks2006_layout,
+    AkeebInvasion, OpenVTChain, OpenVTReferenceMonolayer, Merks2006, Merks2008,
+    ShearedFoam
+export graner_glazier_state, graner_glazier_aggregate, akeeb_state, akeeb_layout,
+    akeeb_contacts, akeeb_observables,
+    akeeb_phenotype, openvt_monolayer_state, merks_state, openvt_reference_state,
+    merks_layout, merks2006_layout,
     merks2008_sprout, merks2008_denovo, sheared_foam_state
 export openvt_chain, openvt_release, spring_dashpot_width
 
 include("analysis/Analysis.jl")
 public Analysis
-export openvt_metrics, openvt_metrics_line, openvt_neighbor_histogram, openvt_inhibition_code,
+export openvt_metrics, openvt_metrics_line, openvt_neighbor_histogram,
+    openvt_inhibition_code,
     openvt_inhibition_fractions, write_openvt, read_openvt, openvt_filename
 
 include("graner_glazier.jl")
@@ -52,21 +59,21 @@ include("foam.jl")
 The lattice panel of the OpenVT monolayer benchmark's Fig 4 (the free-surface fraction
 fᵢ; `G:results/free_surface.tex`): the 2D ownership array `σ` (`σ[I] > 0` a cell id,
 `0` medium) drawn with `pottsplot` (`CellIdentityEncoding`, medium RGB(236,236,236), no
-boundaries), a white site grid, and one short dash for every pair (site of cell `c`, Moore(1)
-neighbor owned by anything else), across the pair's shared edge or corner: magenta
+boundaries), a white site grid, and one short dash for every pair (site of cell `c`,
+Moore(1) neighbor owned by anything else), across the pair's shared edge or corner: magenta
 RGB(231,41,138) for medium partners and amber RGB(255,192,0) for other cells. Cells are
 tinted with the .tex's cell colors when `σ`'s ids are exactly `1:n` with `n ≤ 4`, and with
-the automatic identity palette otherwise. A label shows
-both counts, `fᵢ = m / (m + n)`, the G1 count of [`openvt_snapshot`](@ref
-PottsModels.openvt_snapshot). The .tex's black outline of cell i is left out on purpose: no
-cell outlines are drawn.
+the automatic identity palette otherwise. A label shows both counts, `fᵢ = m / (m + n)`, the
+G1 count of [`openvt_snapshot`](@ref PottsModels.openvt_snapshot). The .tex's black outline
+of cell i is left out on purpose: no cell outlines are drawn.
 
 Requires Makie and MakiePotts to be loaded (`using CairoMakie, MakiePotts`).
 """
 function openvt_f4_figure end
 
 """
-    PottsModels.openvt_f1_figure(frame; window = 64, banner = true, areas = nothing) -> Makie.Figure
+    PottsModels.openvt_f1_figure(frame; window = 64, banner = true,
+        areas = nothing) -> Makie.Figure
 
 The Potts.jl panel of the OpenVT monolayer benchmark's Fig 1 ("Overview of participating
 frameworks"; `G:results/introduction.tex`). `frame` is a 2D MakiePotts render
@@ -75,18 +82,19 @@ frame of a colony, e.g. `renderframe(u)` of the first state of case (a) with 10�
 The panel is a square axis showing an unchanged `window × window` block of `frame` (same
 owners, same cell identities and generations), centered on the colony rim along the 45°
 diagonal from the colony centroid (colony lower left, medium upper right), in the style of
-the other frameworks' closeups ([`openvt_colony_panel!`](@ref PottsModels.openvt_colony_panel!)
-with `color = :area`): each cell colored by its area with `coolwarm`, scaled to the min–max
-of the areas of the cells in the panel, a white medium and thin black pixel-edge boundaries
-between unlike ids. The lattice fills the panel edge to edge, with no outer margin, inside a
-thin gray frame like the other frameworks' closeups. The areas are the cells' site counts in the whole `frame`, so a cell cut
-by the window keeps its full area; `areas` (cell id => area) supplies them instead, e.g. for a
-block stored without the rest of the lattice. Above the panel, 1/45 of the panel high apart,
-is the 5/45-high banner in the proposed Potts.jl color RGB(8,29,88) with "Potts.jl" in white
-bold; `banner = false` leaves it out and gives the bare panel (the consortium's
-`closeup.png`). The 64-site default, about 8 cell diameters, is an estimate of what the TST
-closeup shows. The submitted panel is a block moved inward along the same ray until it
-is about 70 % tissue; it is passed as `frame` with `window` equal to its size.
+the other frameworks' closeups
+([`openvt_colony_panel!`](@ref PottsModels.openvt_colony_panel!) with `color = :area`): each
+cell colored by its area with `coolwarm`, scaled to the min–max of the areas of the cells in
+the panel, a white medium and thin black pixel-edge boundaries between unlike ids. The
+lattice fills the panel edge to edge, with no outer margin, inside a thin gray frame like
+the other frameworks' closeups. The areas are the cells' site counts in the whole `frame`,
+so a cell cut by the window keeps its full area; `areas` (cell id => area) supplies them
+instead, e.g. for a block stored without the rest of the lattice. Above the panel, 1/45 of
+the panel high apart, is the 5/45-high banner in the proposed Potts.jl color RGB(8,29,88)
+with "Potts.jl" in white bold; `banner = false` leaves it out and gives the bare panel (the
+consortium's `closeup.png`). The 64-site default, about 8 cell diameters, is an estimate of
+what the TST closeup shows. The submitted panel is a block moved inward along the same ray
+until it is about 70 % tissue; it is passed as `frame` with `window` equal to its size.
 
 Requires Makie and MakiePotts to be loaded (`using CairoMakie, MakiePotts`).
 """
@@ -120,29 +128,36 @@ include("benchmarks/openvt_package.jl")
 public openvt_submission_package, openvt_spread_compare, openvt_spread_table
 
 # Precompile the models (D-047; in this file because the guardrails build every other src
-# file from `using Potts` alone): every constructor and its `mtkcompile`, and for the published
-# models the first `PottsProblem` and sequential MCS in their usual configuration (Akeeb also
-# in Float32, sequential and checkerboard), so a session's first construction, problem and
-# MCS reuse cached code. The generated code does not depend on the lattice size and RGF ids
-# are content hashes, so the small lattices here compile the same functions as any other.
-# Developers switch it off with the PrecompileTools preference `precompile_workload = false`.
+# file from `using Potts` alone): every constructor and its `mtkcompile`, and for the
+# published models the first `PottsProblem` and sequential MCS in their usual configuration
+# (Akeeb also in Float32, sequential and checkerboard), so a session's first construction,
+# problem and MCS reuse cached code. The generated code does not depend on the lattice size
+# and RGF ids are content hashes, so the small lattices here compile the same functions as
+# any other. Developers switch it off with the PrecompileTools preference
+# `precompile_workload = false`.
 function _first_mcs(c, op, alg = SequentialCPM(); kw...)
     prob = PottsProblem(c, op, (0, 10); kw...)
     step!(init(prob, alg; save_start = false, save_everystep = false))
     return nothing
 end
 
-# The workload: also run by the AMDGPU extension (PottsModelsAMDGPUExt), since loading AMDGPU
-# invalidates much of this cache (PG-11)
+# The workload: also run by the AMDGPU extension (PottsModelsAMDGPUExt), since loading
+# AMDGPU invalidates much of this cache (PG-11)
 function _precompile_workload()
     σ = zeros(Int32, 24, 24)
     σ[8:14, 8:14] .= 1
     gg = graner_glazier_state()
     _first_mcs(mtkcompile(GranerGlazier(; name = :gg)), [ownership => gg[1], kind => gg[2]])
-    _first_mcs(mtkcompile(WortelAct(; name = :w, lattice = (24, 24))), [ownership => σ, kind => [:cell]])
+    _first_mcs(
+        mtkcompile(WortelAct(; name = :w, lattice = (24, 24))), [
+            ownership => σ, kind => [:cell],
+        ]
+    )
     _first_mcs(
         mtkcompile(MerksVasculogenesis(; name = :m, lattice = (24, 24))),
-        merks_state(; lattice = (24, 24), n = 2, side = 5); field_solver = ExplicitEuler(substeps = 15, lower_bound = 0.0)
+        merks_state(; lattice = (24, 24), n = 2, side = 5); field_solver = ExplicitEuler(
+            substeps = 15, lower_bound = 0.0
+        )
     )
     # Float32 under CheckerboardCPM: the configuration of a device run (PG-11)
     _first_mcs(
@@ -152,11 +167,13 @@ function _precompile_workload()
     )
     _first_mcs(
         mtkcompile(Merks2006(; name = :m6, lattice = (24, 24))),
-        layout(merks2006_layout(; lattice = (24, 24), n = 2, side = 5), (24, 24)); field_solver = ExplicitEuler(substeps = 15)
+        layout(merks2006_layout(; lattice = (24, 24), n = 2, side = 5), (24, 24));
+        field_solver = ExplicitEuler(substeps = 15)
     )
     _first_mcs(
         mtkcompile(Merks2008(; name = :m8, lattice = (24, 24))),
-        layout(merks2008_denovo(; lattice = (24, 24), n = 4, rounds = 2), (24, 24)); field_solver = ExplicitEuler(substeps = 15)
+        layout(merks2008_denovo(; lattice = (24, 24), n = 4, rounds = 2), (24, 24));
+        field_solver = ExplicitEuler(substeps = 15)
     )
     _first_mcs(
         mtkcompile(OpenVTGrowingMonolayer(; name = :o, lattice = (24, 24))),
@@ -169,7 +186,10 @@ function _precompile_workload()
     )
     _first_mcs(
         mtkcompile(ShearedFoam(; name = :f, lattice = (32, 32))),
-        [sheared_foam_state(; lattice = (32, 32)); :ytop => 32.0; :ymid => 16.5], SequentialCPM(; skip_interior = true)
+        [sheared_foam_state(; lattice = (32, 32)); :ytop => 32.0; :ymid => 16.5],
+        SequentialCPM(;
+            skip_interior = true
+        )
     )
     a = mtkcompile(AkeebInvasion(; name = :a, lattice = (24, 30)))
     op = akeeb_state(; lattice = (24, 30))

@@ -1,6 +1,6 @@
 # what an
-# `@components` MTK System carries but Potts cannot honour is rejected by name, and `Pre` of a
-# discrete node reads like the node inside a tick.
+# `@components` MTK System carries but Potts cannot honour is rejected by name, and `Pre` of
+# a discrete node reads like the node inside a tick.
 #
 # F4 (the catch in `_compile_discrete` relabelling internal Potts errors) is not observable
 # without internals in this environment (MTKBase only: the catch wraps MTKBase's own
@@ -38,8 +38,11 @@ function rejection(f, words...)
     try
         f()
     catch e
-        e isa Union{ArgumentError, Potts.PottsCompileError} || return "not an ArgumentError or PottsCompileError: $(typeof(e)): $(first(sprint(showerror, e), 300))"
-        isempty(words) || occursin(first(words), sprint(showerror, e)) || return "message does not name $(first(words))"
+        e isa Union{ArgumentError, Potts.PottsCompileError} ||
+            return "not an ArgumentError or \
+                PottsCompileError: $(typeof(e)): $(first(sprint(showerror, e), 300))"
+        isempty(words) || occursin(first(words), sprint(showerror, e)) ||
+            return "message does not name $(first(words))"
         return :ok
     end
     return "accepted silently"
@@ -60,9 +63,14 @@ function component_continuous(feature = (y, z, k) -> (;))
     t = Potts.t
     @variables y(t) = 1.0 z(t) = 0.0
     @parameters k = 0.3
-    return System([Potts.D(y) ~ -k * y, Potts.D(z) ~ -z], t; name = :comp7, feature(y, z, k)...)
+    return System(
+        [Potts.D(y) ~ -k * y, Potts.D(z) ~ -z], t; name = :comp7,
+        feature(y, z, k)...
+    )
 end
-"""The discrete component `net7` (a toggle and its lag), plus the keywords `feature(X, Y)`."""
+"""
+The discrete component `net7` (a toggle and its lag), plus the keywords `feature(X, Y)`.
+"""
 function component_discrete(feature = (X, Y) -> (;))
     t = Potts.t
     k = ShiftIndex(t, 0)
@@ -72,11 +80,18 @@ end
 # ---------------------------------------------------------------------------------------
 # F1: `Pre` of a discrete node, read inside a tick. Ticks are Jacobi (D-077): a coupling
 # evaluated in a tick reads every node's pre-tick value, so there `Pre(x)` is `x`, and
-# `Pre(x)[j]`, `Pre(x[j])` are `x[j]`. Fixture: the shift register of the Potts suite (a node
-# copies its left neighbour's node each tick), as a Bool and as a Real node.
+# `Pre(x)[j]`, `Pre(x[j])` are `x[j]`. Fixture: the shift register of the Potts suite (a
+# node copies its left neighbour's node each tick), as a Bool and as a Real node.
 function blocks(n, L)
     σ = zeros(Int32, L, L)
-    for (c, (i, j)) in enumerate(Iterators.take(((i, j) for i in 1:4:(L - 3), j in 1:4:(L - 3)), n))
+    for (c, (i, j)) in enumerate(
+            Iterators.take(
+                (
+                    (i, j)
+                        for i in 1:4:(L - 3), j in 1:4:(L - 3)
+                ), n
+            )
+        )
         σ[(i + 1):(i + 3), (j + 1):(j + 3)] .= c
     end
     return σ
@@ -96,8 +111,15 @@ function component_node(; real = false)
 end
 const COMPONENT_OP = [ownership => blocks(6, 16), kind => fill(1, 6)]
 const ALGS = (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
-component_shift(real, coupling) = component_model(component_node(; real), :xc, :(@equations $coupling); L = 16)
-"""Node values of cells 1–6 at t = 0…4 (as 0/1 integers; anything else is -1), per algorithm."""
+function component_shift(real, coupling)
+    return component_model(
+        component_node(; real), :xc,
+        :(@equations $coupling); L = 16
+    )
+end
+"""
+Node values of cells 1–6 at t = 0…4 (as 0/1 integers; anything else is -1), per algorithm.
+"""
 function ticks(m)
     function bit(x)
         if x == 1
@@ -110,58 +132,104 @@ function ticks(m)
     end
     prob = PottsProblem(m, COMPONENT_OP, (0, 4))
     return [
-        [[bit(getproperty(u.cell, Symbol("xc₊X"))[c]) for c in 1:6] for u in solve(prob, alg; saveat = 0:4).u]
+        [
+            [bit(getproperty(u.cell, Symbol("xc₊X"))[c]) for c in 1:6]
+                for u in solve(prob, alg; saveat = 0:4).u
+        ]
             for alg in ALGS
     ]
 end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "component rejections F7: ignored component features are rejected by name" setup = [ComponentRejectionsSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "component rejections F7: ignored component features are rejected by name" begin
+@testitem "component rejections F7: ignored component features are rejected by name" setup =
+    [ComponentRejectionsSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "component rejections F7: ignored component features are rejected by \
+        name" begin
         Pre = MTKB.Pre
         # positive controls: the same components without the feature build and run
         @test component_builds(component_model(component_continuous(), :comp7))
         @test component_builds(component_model(component_discrete(), :net7))
-        # `guesses` are ignored, as documented (MTK initialisation is not run): accepted, same code
+        # `guesses` are ignored, as documented (MTK initialisation is not run): accepted,
+        # same code
         guessed = component_continuous((y, z, k) -> (; guesses = [z => 0.0]))
         @test component_builds(component_model(guessed, :comp7))
         op = [ownership => ONE, kind => [:A]]
-        @test component_fingerprint(component_model(guessed, :comp7), op) == component_fingerprint(component_model(component_continuous(), :comp7), op)
+        @test component_fingerprint(component_model(guessed, :comp7), op) ==
+            component_fingerprint(component_model(component_continuous(), :comp7), op)
 
-        rejected(sys, comp, word) = rejection(() -> mtkcompile(component_model(sys, comp)), String(comp), word)
+        function rejected(sys, comp, word)
+            return rejection(
+                () -> mtkcompile(component_model(sys, comp)),
+                String(comp), word
+            )
+        end
 
-        # initialization_eqs (the r8 reproducer: today `z ~ 5y` is dropped and comp7₊z starts at 0)
+        # initialization_eqs (the r8 reproducer: today `z ~ 5y` is dropped and comp7₊z
+        # starts at 0)
         @test rejected(
-            component_continuous((y, z, k) -> (; initialization_eqs = [z ~ 5y], guesses = [z => 0.0])),
+            component_continuous(
+                (y, z, k) -> (;
+                    initialization_eqs = [z ~ 5y], guesses = [z => 0.0],
+                )
+            ),
             :comp7, r"initiali[sz]ation_eq"
         ) === :ok
-        @test rejected(component_discrete((X, Y) -> (; initialization_eqs = [Y ~ !X])), :net7, r"initiali[sz]ation_eq") === :ok
+        @test rejected(
+            component_discrete((X, Y) -> (; initialization_eqs = [Y ~ !X])),
+            :net7, r"initiali[sz]ation_eq"
+        ) === :ok
         # discrete_events
         @test rejected(
-            component_continuous((y, z, k) -> (; discrete_events = [[1.0] => [y ~ Pre(y) + 10.0]])),
+            component_continuous(
+                (y, z, k) -> (;
+                    discrete_events = [[1.0] => [y ~ Pre(y) + 10.0]],
+                )
+            ),
             :comp7, "discrete_events"
         ) === :ok
-        @test rejected(component_discrete((X, Y) -> (; discrete_events = [[1.0] => [X ~ !Pre(X)]])), :net7, "discrete_events") === :ok
+        @test rejected(
+            component_discrete((X, Y) -> (; discrete_events = [[1.0] => [X ~ !Pre(X)]])),
+            :net7, "discrete_events"
+        ) === :ok
         # continuous_events
         @test rejected(
-            component_continuous((y, z, k) -> (; continuous_events = [[y ~ 0.5] => [y ~ 1.0]])),
+            component_continuous(
+                (y, z, k) -> (;
+                    continuous_events = [[y ~ 0.5] => [y ~ 1.0]],
+                )
+            ),
             :comp7, "continuous_events"
         ) === :ok
         # jumps
         @test rejected(
-            component_continuous((y, z, k) -> (; jumps = [MTKB.ConstantRateJump(k * y, [y ~ Pre(y) + 1.0])])),
+            component_continuous(
+                (y, z, k) -> (;
+                    jumps = [MTKB.ConstantRateJump(k * y, [y ~ Pre(y) + 1.0])],
+                )
+            ),
             :comp7, r"jump"
         ) === :ok
     end
 end
 
-@testitem "component rejections F7: bindings that touch a coupled parameter are rejected by name" setup = [ComponentRejectionsSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "component rejections F7: bindings that touch a coupled parameter are rejected by name" begin
+@testitem "component rejections F7: bindings that touch a coupled parameter are rejected \
+    by name" setup = [ComponentRejectionsSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "component rejections F7: bindings that touch a coupled parameter are \
+        rejected by name" begin
         t = Potts.t
         D = Potts.D
         couple = :(@equations comp7.k ~ volume / 90)
-        rejected(sys) = rejection(() -> mtkcompile(component_model(sys, :comp7, couple)), "comp7", r"bind")
+        function rejected(sys)
+            return rejection(
+                () -> mtkcompile(component_model(sys, :comp7, couple)),
+                "comp7", r"bind"
+            )
+        end
         builds(sys) = component_builds(component_model(sys, :comp7, couple))
         # positive control: the component with `k` coupled and no binding builds
         @test builds(component_continuous())
@@ -180,25 +248,34 @@ end
             @parameters k = 0.3
             @parameters k2 = 2k
             @variables y(t) = 1.0 z(t) = 0.0
-            @test rejected(System([D(y) ~ -k2 * y, D(z) ~ -k * z], t; name = :comp7)) === :ok
-            @test builds(System([D(y) ~ -2k * y, D(z) ~ -k * z], t; name = :comp7))   # control: inline
+            @test rejected(System([D(y) ~ -k2 * y, D(z) ~ -k * z], t; name = :comp7)) ===
+                :ok
+            # control: inline
+            @test builds(System([D(y) ~ -2k * y, D(z) ~ -k * z], t; name = :comp7))
         end
         # the coupled parameter is itself bound
         let
             @parameters k0 = 0.1
             @parameters k = 2k0
             @variables y(t) = 1.0 z(t) = 0.0
-            @test rejected(System([D(y) ~ -k * y, D(z) ~ -k0 * z], t; name = :comp7)) === :ok
+            @test rejected(System([D(y) ~ -k * y, D(z) ~ -k0 * z], t; name = :comp7)) ===
+                :ok
             @parameters k = 0.3                             # control: unbound
             @test builds(System([D(y) ~ -k * y, D(z) ~ -k0 * z], t; name = :comp7))
         end
     end
 end
 
-@testitem "component rejections F1: Pre of a discrete node inside a tick is the node" setup = [ComponentRejectionsSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "component rejections F1: Pre of a discrete node inside a tick is the node" begin
-        shift = [[Int(c <= m) for c in 1:6] for m in 0:4]          # cell c is on after c ticks
-        toggle = [fill(isodd(m) ? 1 : 0, 6) for m in 0:4]          # every cell flips each tick
+@testitem "component rejections F1: Pre of a discrete node inside a tick is the \
+    node" setup = [ComponentRejectionsSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "component rejections F1: Pre of a discrete node inside a tick is the \
+        node" begin
+        # cell c is on after c ticks
+        shift = [[Int(c <= m) for c in 1:6] for m in 0:4]
+        # every cell flips each tick
+        toggle = [fill(isodd(m) ? 1 : 0, 6) for m in 0:4]
         @test shift != toggle
         for real in (false, true)
             # the plain reads (controls): pass on the current code
@@ -209,9 +286,13 @@ end
             plain_self = :($par ~ $(flip(:(xc.X))))
             @test all(==(shift), ticks(component_shift(real, plain_shift)))
             @test all(==(toggle), ticks(component_shift(real, plain_self)))
-            fp_shift = component_fingerprint(component_shift(real, plain_shift), COMPONENT_OP)
+            fp_shift = component_fingerprint(
+                component_shift(real, plain_shift),
+                COMPONENT_OP
+            )
             fp_self = component_fingerprint(component_shift(real, plain_self), COMPONENT_OP)
-            @test fp_shift != fp_self                                # the fingerprint separates them
+            # the fingerprint separates them
+            @test fp_shift != fp_self
             # `Pre` forms: the same trajectories and the same code as the plain reads
             for (coupling, want, fp) in (
                     (:($par ~ $(left(:(Pre(xc.X)[max(id - 1, 1)])))), shift, fp_shift),

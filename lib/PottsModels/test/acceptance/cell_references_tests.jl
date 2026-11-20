@@ -1,9 +1,9 @@
 # R6 cell
 # references and liveness per D-066.
 # Decisions: D-066 (liveness, `birth`, references, boundaries, self-check credits), D-065 Q7
-# (sequential is the reference; the checkerboard is validated statistically), D-036 (clusters), D-075 / api-synthesis §2.6–2.7 (the reference vocabulary),
-# D-209 (an energy may not read what a copy changes beyond ΔH), D-048 (oracles, negative
-# controls).
+# (sequential is the reference; the checkerboard is validated statistically), D-036
+# (clusters), D-075 / api-synthesis §2.6–2.7 (the reference vocabulary), D-209 (an energy
+# may not read what a copy changes beyond ΔH), D-048 (oracles, negative controls).
 #
 # Scope: "R6: cell references (`sibling`, `members`, `root`, `partner`, `x[ref]`);
 # liveness per D-066 (alive ⇔ volume > 0; `birth` serial; `CellRef` references cleared at
@@ -18,18 +18,19 @@
 #    variable holding a reference to another cell (D-066 item 5: "cell variables of a
 #    declared reference type (e.g. `partner::CellRef`)"). `partner` is not a built-in: it is
 #    the user's name, as `prev`/`next` in the myxobacteria sketch.
-#    - `CellRef` is bound inside model bodies (a new `Potts.DSL` name; the implementer documents
-#      it for guardrails_tests.jl's DSL docs check).
+#    - `CellRef` is bound inside model bodies (a new `Potts.DSL` name; the implementer
+#      documents it for guardrails_tests.jl's DSL docs check).
 #    - Default 0 (no reference, the medium). The operating point sets it by slot:
 #      `:partner => [2, 3, 1, 3, 0, 6]`. A cell may reference itself.
-#    - Stored as the integer column `u.cell.partner` (`eltype <: Integer`), one entry per slot.
+#    - Stored as the integer column `u.cell.partner` (`eltype <: Integer`), one entry per
+#      slot.
 #    - Daughters copy reference variables like every other cell variable (D-066 item 5).
 #    - An update may write one: `@after_mcs nuc ~ sibling(nucleus)`.
 #    - A reference compares with `==` against `id`, another reference or 0.
 # B. Reference sources (api-synthesis §2.7; cell scope = updates, rules, `@observed`):
 #    - `sibling(k)`: the alive member of kind `k` of the current cell's cluster (the cell
-#      itself when it is of kind `k`), or 0 when the cluster has none. `sibling(c, k)` is the
-#      same for cell `c` (inside population folds such as `for c in cells(cytoplasm)`).
+#      itself when it is of kind `k`), or 0 when the cluster has none. `sibling(c, k)` is
+#      the same for cell `c` (inside population folds such as `for c in cells(cytoplasm)`).
 #    - `root(cluster)`: the cluster's root (`cluster[c]`, D-036) as a reference; a lone cell
 #      is its own root. A copy-killed root (still naming its cluster, D-066 item 4) reads as
 #      a dead referent.
@@ -38,14 +39,14 @@
 #      (`m` below): `sum(volume[m] for m in members(cluster))`,
 #      `count(true for m in members(cluster, nucleus))`.
 #    - Not pinned here: `sibling`/`members`/`root` inside `@energy`/`@drive` (no consumer
-#      needs them in the sweep: Fortuna reads them at boundaries only, 14 sketch §4 item 11);
-#      `sibling(k)` when a cluster has several alive members of kind `k`; the value of a raw
-#      reference to a dead cell (only its dereference is pinned).
+#      needs them in the sweep: Fortuna reads them at boundaries only, 14 sketch §4 item
+#      11); `sibling(k)` when a cluster has several alive members of kind `k`; the value of
+#      a raw reference to a dead cell (only its dereference is pinned).
 # C. Dereferencing, `x[ref]`: `q[ref]` (a cell variable), `kind[ref]`, `volume[ref]`,
 #    `birth[ref]`, `alive(ref)`, and chains (`partner[partner[old]]`). A DEAD referent
 #    (volume 0), and ref 0, read as the medium: kind 0, volume 0, `birth` 0, `alive` false,
-#    and every cell variable at its declared DEFAULT (here `q(cell) = 5.0`, so the default is
-#    distinguishable from 0) (D-066 item 5). In copy scope (`@drive`, `@constraint`)
+#    and every cell variable at its declared DEFAULT (here `q(cell) = 5.0`, so the default
+#    is distinguishable from 0) (D-066 item 5). In copy scope (`@drive`, `@constraint`)
 #    `volume[partner[old]]` reads the referent's current volume.
 # D. Energies (cell terms). A cell term may read through a reference only what no copy
 #    changes: cell variables no `@on_copy` writes, `kind`, `birth`, `alive(ref)`, e.g.
@@ -64,29 +65,34 @@
 #    referents, dead referents read as the medium. The self-check is exact:
 #
 #        energy_change(prob, u, prop) ==
-#            total_energy(prob, a) − total_energy(prob, u) + Potts._killing_credit(prob, u, prop, a)
+#            total_energy(prob, a) − total_energy(prob, u) + Potts._killing_credit(prob, u,
+#                prop, a)
 #
 #    for EVERY copy (|gap| < 1e-9), where `a` is the state after the copy and the credit is
-#      E_cell(o, empty state)                      (as today, `killing_copy_energy_tests.jl` / D-083)
+#      E_cell(o, empty state)                      (as today, `killing_copy_energy_tests.jl`
+#                                                  / D-083)
 #      + Σ_{c alive in a, c ≠ o} [ E_c(c's values in a; referents read in u) − E_c(a) ].
 #    For a copy that kills nobody the second sum is 0. The credit is checked against an
 #    independent oracle (the test's own E_c), and `total_energy` against the same oracle.
 # F. Liveness and `birth` (D-066 items 1, 3).
 #    - `alive(ref)` ≡ `volume[ref] > 0` (a read-only built-in).
-#    - `birth`: a read-only cell-scope built-in, a monotone serial never reused. Initial cells
-#      get 1:n. Each division daughter in a NEW slot gets the next serial (`next_birth`, a
-#      counter stored in the state and checkpointed, not max+1); the parent keeps its slot and
-#      its `birth`. `birth` is not copied to daughters. With slot reuse (lowest-first, D-066
-#      item 3) a daughter in a dead cell's slot gets a new serial, never the dead cell's nor
-#      its slot number. In a model with a lifecycle the serial is the column
-#      `u.cell.birth::Vector{Int32}`; in a model without births `birth ≡ slot` (D-066 item 3).
-#      `observe(prob, :bth, u)` with `@observed bth(cell) ~ birth` reads it per slot.
-#    - Not pinned here (D-066 item 3's output mapping): SII `id`, `cluster` as `birth[root]`,
-#      plots, `write_piff(…; ids = birth)`, `with_capacity`; a daughter that receives no site.
+#    - `birth`: a read-only cell-scope built-in, a monotone serial never reused. Initial
+#      cells get 1:n. Each division daughter in a NEW slot gets the next serial
+#      (`next_birth`, a counter stored in the state and checkpointed, not max+1); the parent
+#      keeps its slot and its `birth`. `birth` is not copied to daughters. With slot reuse
+#      (lowest-first, D-066 item 3) a daughter in a dead cell's slot gets a new serial,
+#      never the dead cell's nor its slot number. In a model with a lifecycle the serial is
+#      the column `u.cell.birth::Vector{Int32}`; in a model without births `birth ≡ slot`
+#      (D-066 item 3). `observe(prob, :bth, u)` with `@observed bth(cell) ~ birth` reads it
+#      per slot.
+#    - Not pinned here (D-066 item 3's output mapping): SII `id`, `cluster` as
+#      `birth[root]`, plots, `write_piff(…; ids = birth)`, `with_capacity`; a daughter that
+#      receives no site.
 # G. Boundaries (D-066 item 5 (a)). In the lifecycle plan of an event MCS, BEFORE any id is
 #    allocated, every reference to a dead cell is reset to 0, so a reference never aliases
 #    the new cell that reuses the slot (and a daughter copies the reset value). On quiet MCS
-#    the stored value is not pinned, only its dereference (C). (b), R8's routine, is `convert_tests.jl`.
+#    the stored value is not pinned, only its dereference (C). (b), R8's routine, is
+#    `convert_tests.jl`.
 # H. Checkerboard (D-065 Q7). CheckerboardCPM is validated STATISTICALLY against
 #    SequentialCPM, with the pre-registered protocol of section 6. The lockless checkerboard
 #    claims nothing (D-271), so the claim-set tests of section 5 and the negative control
@@ -98,7 +104,8 @@
 # Fixture ReferencePair: two cells of kind `cell` (V₀ = 30, λ = 1, J_cell,medium = 6,
 # J_cell,cell = 2) on a closed 16×31 lattice, separated by a frozen wall column (column 16),
 # so they never touch; `partner = [2, 1, 0]`. A drive couples their volumes:
-#     κ(1 − 2(V_old − V_partner[old])) [old a cell] + κ(1 + 2(V_new − V_partner[new])) [new a cell]
+#     κ(1 − 2(V_old − V_partner[old])) [old a cell] + κ(1 + 2(V_new − V_partner[new])) [new
+#     a cell]
 # which is the exact ΔU of U = κ(V₁ − V₂)² for copies that change one of the two cells, so
 # SequentialCPM samples exp(−(H + U)/T). κ = 6, T = 24. A checkerboard copy of cell 1 whose
 # drive reads V₂ while a copy of cell 2 commits in the same colour sees a stale V₂; the
@@ -108,8 +115,9 @@
 #  - Replicates: seeds 1:32 for every arm. Arms: SequentialCPM (reference), CheckerboardCPM
 #    (candidate), and SequentialCPM with seeds 33:64 (the test's null).
 #  - Test: Welch t = (x̄ − ȳ)/√(s²ₓ/32 + s²ᵧ/32), critical value 3.89 (two-sided α = 1e-4
-#    under the normal reference, as `boundary_site_proposal_tests.jl` FULL; the t reference at the Welch df ≈ 60 puts
-#    1e-4 at ≈ 4.1, so 3.89 is slightly stricter for the agreement test). Agreement:
+#    under the normal reference, as `boundary_site_proposal_tests.jl` FULL; the t reference
+#    at the Welch df ≈ 60 puts 1e-4 at ≈ 4.1, so 3.89 is slightly stricter for the agreement
+#    test). Agreement:
 #    |t(candidate, reference)| ≤ 3.89. Null: |t(seq 33:64, seq 1:32)| ≤ 3.89.
 #  - Calibration on the base commit, with a stub in which the partner was `3 − id` and the
 #    widening was installed by hand as `reads = (partner[old], partner[new])` (the D-058
@@ -128,16 +136,18 @@
 #
 # Sections: 1 references and dereferencing (cluster fixture); 2 updates writing and reading
 # references; 3 energies: H, ΔH and the exact self-check credits; 4 liveness, `birth`,
-# boundaries (lifecycle fixture, checkpoint); 5 a two-hop chain under both algorithms; 6 the statistical validation;
-# 7 device. Fixtures that use the new syntax are defined through `define`, so a build
-# failure today fails the testsets that use them instead of aborting the file.
+# boundaries (lifecycle fixture, checkpoint); 5 a two-hop chain under both algorithms; 6 the
+# statistical validation; 7 device. Fixtures that use the new syntax are defined through
+# `define`, so a build failure today fails the testsets that use them instead of aborting
+# the file.
 
 @testsetup module CellReferencesSetup
 include(joinpath(@__DIR__, "..", "shared", "common.jl"))
 using Test, Potts, PottsModels
 using Potts: CorePotts
 using Statistics: mean, var
-const REFERENCE_FULL = get(ENV, "POTTS_FULL_REPRODUCTION", "false") == "true" || get(ENV, "REPRO", "") == "full"
+const REFERENCE_FULL = get(ENV, "POTTS_FULL_REPRODUCTION", "false") == "true" ||
+    get(ENV, "REPRO", "") == "full"
 # ---------------------------------------------------------------------------------------
 # 0. Helpers
 const DEFINE_ERRORS = Dict{Symbol, Any}()
@@ -153,7 +163,8 @@ function model(name::Symbol)
     if isdefined(@__MODULE__, name)
         return getfield(@__MODULE__, name)
     else
-        error("cell references fixture $name did not build: $(get(DEFINE_ERRORS, name, "unknown"))")
+        error("cell references fixture $name did not \
+            build: $(get(DEFINE_ERRORS, name, "unknown"))")
     end
 end
 system(name::Symbol; sysname = :m) = Base.invokelatest(model(name); name = sysname)
@@ -188,7 +199,12 @@ function apply(prob, u, prop)
     return a
 end
 reference_kills(u, prop) = prop.old != 0 && vol(u)[prop.old] == 1
-reference_prop(prob, u, old, new) = first(filter(p -> p.old == old && p.new == new, reference_props(prob, u)))
+function reference_prop(
+        prob, u, old,
+        new
+    )
+    return first(filter(p -> p.old == old && p.new == new, reference_props(prob, u)))
+end
 welch(x, y) = (mean(x) - mean(y)) / sqrt(var(x) / length(x) + var(y) / length(y))
 # ---------------------------------------------------------------------------------------
 # Fixtures
@@ -216,7 +232,9 @@ define(
             end
             @after_mcs begin
                 nuc ~ sibling(nucleus)
-                w ~ q[sibling(nucleus)] + volume[sibling(lamellipodium)] + count(true for m in members(cluster))
+                w ~
+                    q[sibling(nucleus)] + volume[sibling(lamellipodium)] +
+                    count(true for m in members(cluster))
             end
             @observed begin
                 sn(cell) ~ q[sibling(nucleus)]
@@ -252,25 +270,37 @@ function cluster_problem(; tspan = (0, 3), seed = 1)
     return PottsProblem(
         sys, [
             ownership => σ,
-            kind => [:cytoplasm, :nucleus, :lamellipodium, :cytoplasm, :nucleus, :cytoplasm],
+            kind =>
+                [:cytoplasm, :nucleus, :lamellipodium, :cytoplasm, :nucleus, :cytoplasm],
             cluster => [1, 1, 1, 4, 4, 6], :q => CL_Q,
-        ], tspan; seed, capacity = 8
+        ],
+        tspan;
+        seed,
+        capacity = 8
     )
 end
 # independent oracles on a state (alive = volume > 0; kinds 1 cyto, 2 nucleus, 3 lamel)
 const CL_DEFAULT_Q = 5.0
 function reference_sibling(u, c, k)
-    v = vol(u); kd = col(u, :kind); cl = col(u, :cluster)
+    v = vol(u)
+    kd = col(u, :kind)
+    cl = col(u, :cluster)
     ms = [m for m in eachindex(v) if v[m] > 0 && cl[m] == cl[c] && kd[m] == k]
     @assert length(ms) <= 1
     return isempty(ms) ? 0 : ms[1]
 end
-reference_members(u, c) = (v = vol(u); cl = col(u, :cluster); [m for m in eachindex(v) if v[m] > 0 && cl[m] == cl[c]])
+function reference_members(u, c)
+    v = vol(u)
+    cl = col(u, :cluster)
+    return [m for m in eachindex(v) if v[m] > 0 && cl[m] == cl[c]]
+end
 qat(u, r) = (r > 0 && vol(u)[r] > 0) ? col(u, :q)[r] : CL_DEFAULT_Q
 volat(u, r) = r > 0 ? vol(u)[r] : 0
 kindat(u, r) = (r > 0 && vol(u)[r] > 0) ? Int(col(u, :kind)[r]) : 0
 function cluster_oracle(u, c)
-    v = vol(u); cl = col(u, :cluster); kd = col(u, :kind)
+    v = vol(u)
+    cl = col(u, :cluster)
+    kd = col(u, :kind)
     sn = qat(u, reference_sibling(u, c, 2))
     sl = volat(u, reference_sibling(u, c, 3))
     al = reference_sibling(u, c, 3) > 0 ? 1.0 : 0.0
@@ -284,7 +314,8 @@ function cluster_oracle(u, c)
     return (; sn, sl, al, isself, rk, rq, mv, mn)
 end
 function cluster_tot(u)
-    v = vol(u); kd = col(u, :kind)
+    v = vol(u)
+    kd = col(u, :kind)
     cyto = [c for c in eachindex(v) if v[c] > 0 && kd[c] == 1]
     return (
         sum(volat(u, reference_sibling(u, c, 2)) for c in cyto),
@@ -293,7 +324,9 @@ function cluster_tot(u)
 end
 # F2. Energy fixture (sections 3, 5). Kinds: medium 0, cell 1, other 2. Every cell term
 # reads its partner's static values; `q` defaults to 5.0.
-const REFERENCE_E = (λ = 1.0, V₀ = 6.0, ν = 0.7, μ = [0.0 0.0 0.0; 0.3 0.5 0.7; 0.2 0.4 0.9], qdef = 5.0)
+const REFERENCE_E = (
+    λ = 1.0, V₀ = 6.0, ν = 0.7, μ = [0.0 0.0 0.0; 0.3 0.5 0.7; 0.2 0.4 0.9], qdef = 5.0,
+)
 define(
     :Energy, quote
         @potts_model Energy begin
@@ -312,7 +345,8 @@ define(
             end
             @lattice Lattice((20, 20); boundary = Closed(), neighborhood = Moore(1))
             @energy begin
-                cells => λ * (volume - V₀ - q[partner])^2 + μ[kind, kind[partner]] * volume +
+                cells =>
+                    λ * (volume - V₀ - q[partner])^2 + μ[kind, kind[partner]] * volume +
                     ifelse(alive(partner), ν, 0.0) * volume
                 contacts => J[kind, neighbor_kind]
             end
@@ -349,12 +383,15 @@ function energy_sigma()
     σ[9:10, 14:15] .= 6
     return σ
 end
-function energy_problem(; tspan = (0, 4), seed = 1, partner = E_PARTNER, q = E_Q, T = Float64)
+function energy_problem(;
+        tspan = (0, 4), seed = 1, partner = E_PARTNER, q = E_Q, T = Float64
+    )
     return PottsProblem(
         system(:Energy; sysname = :en), [
             ownership => energy_sigma(), kind => E_KINDS,
             :partner => partner, :q => q,
-        ], tspan; seed, T, capacity = 8
+        ],
+        tspan; seed, T, capacity = 8
     )
 end
 # (alive cells relabelled 1:n, kinds kept: the contact energy depends only on site kinds)
@@ -374,20 +411,31 @@ end
 # E_c with c's own volume `vc`, its referent read in state `r` (alive ⇔ volume > 0)
 function reference_Ec(u, c, vc, r)
     E = REFERENCE_E
-    kd = col(u, :kind); q = col(u, :q); pr = Int(col(u, :partner)[c])
+    kd = col(u, :kind)
+    q = col(u, :q)
+    pr = Int(col(u, :partner)[c])
     live = pr > 0 && vol(r)[pr] > 0
     kr = live ? Int(col(r, :kind)[pr]) : 0
     qr = live ? col(r, :q)[pr] : E.qdef
-    return E.λ * (vc - E.V₀ - qr)^2 + E.μ[Int(kd[c]) + 1, kr + 1] * vc + (live ? E.ν : 0.0) * vc
+    return E.λ * (vc - E.V₀ - qr)^2 + E.μ[Int(kd[c]) + 1, kr + 1] * vc +
+        (live ? E.ν : 0.0) * vc
 end
-cell_energy(u) = sum(reference_Ec(u, c, vol(u)[c], u) for c in 1:6 if vol(u)[c] > 0; init = 0.0)
+function cell_energy(u)
+    return sum(
+        reference_Ec(u, c, vol(u)[c], u) for c in 1:6 if vol(u)[c] > 0;
+        init = 0.0
+    )
+end
 # the credit of section E: ΔH (referents read in u) − (H(a) − H(u))
 function reference_credit(u, a, prop)
     o, n = Int(prop.old), Int(prop.new)
     va, vu = vol(a), vol(u)
     local_after = sum((reference_Ec(u, c, va[c], u) for c in (o, n) if c != 0); init = 0.0)
     after = sum((reference_Ec(a, c, va[c], a) for c in 1:6 if va[c] > 0); init = 0.0)
-    others = sum((reference_Ec(u, c, vu[c], u) for c in 1:6 if vu[c] > 0 && !(c in (o, n))); init = 0.0)
+    others = sum(
+        (reference_Ec(u, c, vu[c], u) for c in 1:6 if vu[c] > 0 && !(c in (o, n)));
+        init = 0.0
+    )
     return local_after - after + others
 end
 function gap(prob, u, prop; credit = :potts)
@@ -399,7 +447,8 @@ function gap(prob, u, prop; credit = :potts)
     else
         0.0
     end
-    return energy_change(prob, u, prop) - (total_energy(prob, a) - total_energy(prob, u)) - c
+    return energy_change(prob, u, prop) - (total_energy(prob, a) - total_energy(prob, u)) -
+        c
 end
 # a reference-reading energy that reads what a copy changes (refused, section D)
 const BAD = quote
@@ -443,7 +492,8 @@ define(
                 cells(doomed) => λd * volume^2
                 contacts => J[kind, neighbor_kind]
             end
-            @divide cells(blob) when = mcs == 20, along = (1.0, 0.0), tq => q[partner] + 1.0
+            @divide cells(blob) when = mcs == 20, along = (1.0, 0.0),
+                tq => q[partner] + 1.0
             @observed begin
                 bth(cell) ~ birth
                 pbth(cell) ~ birth[partner]
@@ -465,7 +515,11 @@ function life_problem(; tspan = (0, 30), seed = 1, T = Float64)
         sys, [
             ownership => σ, kind => [:blob, :blob, :doomed], :partner => [2, 3, 1],
             :q => [1.0, 2.0, 3.0], :tag => [10.0, 20.0, 30.0],
-        ], tspan; seed, T, capacity = 8
+        ],
+        tspan;
+        seed,
+        T,
+        capacity = 8
     )
 end
 # the save index (into sol.u) of the division event: the first state with 4 alive cells
@@ -474,29 +528,38 @@ event(sol) = findfirst(u -> count(>(0), vol(u)) == 4, sol.u)
 function post_event_checks(prob, u)
     v = vol(u)
     @test count(>(0), v) == 4
-    @test all(>(0), v[1:4])                                       # parents 1, 2; daughters 3 (reused), 4
-    @test v[3] > 0                                                # fixture: the doomed cell's slot is reused
+    # parents 1, 2; daughters 3 (reused), 4
+    @test all(>(0), v[1:4])
+    # fixture: the doomed cell's slot is reused
+    @test v[3] > 0
     tag = col(u, :tag)
     d1 = findfirst(c -> c in (3, 4) && tag[c] == 10.0, 1:4)        # daughter of blob 1
     d2 = findfirst(c -> c in (3, 4) && tag[c] == 20.0, 1:4)        # daughter of blob 2
     @test d1 !== nothing && d2 !== nothing
     (d1 === nothing || d2 === nothing) && return nothing
     bth = observe(prob, :bth, u)
-    @test bth[1] == 1 && bth[2] == 2                             # parents keep their serials
-    @test Set(bth[[3, 4]]) == Set([4, 5])                        # new serials, never 3 (the dead cell's, and slot 3's)
+    # parents keep their serials
+    @test bth[1] == 1 && bth[2] == 2
+    # new serials, never 3 (the dead cell's, and slot 3's)
+    @test Set(bth[[3, 4]]) == Set([4, 5])
     @test eltype(u.cell.birth) == Int32
     pr = col(u, :partner)
     @test eltype(pr) <: Integer
-    @test pr[2] == 0                                             # reset at the event, before slot 3 was reallocated
-    @test pr[d2] == 0                                            # the daughter copied the reset reference
-    @test pr[1] == 2 && pr[d1] == 2                              # a live reference survives and is copied
+    # reset at the event, before slot 3 was reallocated
+    @test pr[2] == 0
+    # the daughter copied the reset reference
+    @test pr[d2] == 0
+    # a live reference survives and is copied
+    @test pr[1] == 2 && pr[d1] == 2
     @test observe(prob, :pa, u)[2] == 0.0
     @test observe(prob, :pbth, u)[2] == 0
     @test observe(prob, :pbth, u)[1] == 2
     @test observe(prob, :pq, u)[d1] == 2.0
     tq = col(u, :tq)
-    @test tq[d1] == 3.0                                          # rule read q[partner] = q[2] = 2
-    @test tq[d2] == 6.0                                          # rule read a dead/cleared referent: default 5
+    # rule read q[partner] = q[2] = 2
+    @test tq[d1] == 3.0
+    # rule read a dead/cleared referent: default 5
+    @test tq[d2] == 6.0
     return (; d1, d2)
 end
 # F4. Claim-widening fixture (sections 5, 6): see the protocol above.
@@ -519,8 +582,15 @@ define(
                 cells(cell) => λ * (volume - V₀)^2
                 contacts => J[kind, neighbor_kind]
             end
-            @drive copy => ifelse(kind[old] == cell, κ * (1 - 2 * (volume[old] - volume[partner[old]])), 0.0) +
-                ifelse(kind[new] == cell, κ * (1 + 2 * (volume[new] - volume[partner[new]])), 0.0)
+            @drive copy =>
+                ifelse(
+                kind[old] == cell, κ *
+                    (1 - 2 * (volume[old] - volume[partner[old]])), 0.0
+            ) +
+                ifelse(
+                kind[new] == cell, κ *
+                    (1 + 2 * (volume[new] - volume[partner[new]])), 0.0
+            )
             @sweep Metropolis(; temperature = T)
         end
     end
@@ -536,9 +606,17 @@ function pair_problem(; seed = 1, tspan = (0, 400), T = Float64)
         seed, T
     )
 end
-reference_stat(sol, burn) = mean(u -> Float64(vol(u)[1] - vol(u)[2])^2, sol.u[(burn + 1):end])
+function reference_stat(sol, burn)
+    return mean(
+        u -> Float64(vol(u)[1] - vol(u)[2])^2,
+        sol.u[(burn + 1):end]
+    )
+end
 function sample(alg, seeds; tspan = (0, 400), burn = 50, kw...)
-    return [reference_stat(solve(pair_problem(; seed, tspan, kw...), alg; saveat = 1), burn) for seed in seeds]
+    return [
+        reference_stat(solve(pair_problem(; seed, tspan, kw...), alg; saveat = 1), burn)
+            for seed in seeds
+    ]
 end
 # F5. A two-hop chain in a drive (section 5).
 define(
@@ -556,7 +634,8 @@ define(
             end
             @lattice Lattice((20, 20); boundary = Closed(), neighborhood = Moore(1))
             @energy cells => λ * (volume - V₀)^2
-            @drive copy => κ * (volume[partner[partner[old]]] + volume[partner[partner[new]]])
+            @drive copy =>
+                κ * (volume[partner[partner[old]]] + volume[partner[partner[new]]])
             @sweep Metropolis(; temperature = T)
         end
     end
@@ -571,61 +650,89 @@ function hop_problem()
         system(:Hop; sysname = :hop), [
             ownership => σ, kind => fill(:cell, 4),
             :partner => [2, 3, 4, 1],
-        ], (0, 3); seed = 1
+        ],
+        (0, 3); seed = 1
     )
 end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "cell references: the fixtures build" setup = [CellReferencesSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
-    # 1. References and dereferencing: sibling, members, root, x[ref], alive (cluster fixture)
+@testitem "cell references: the fixtures build" setup = [CellReferencesSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
+    # 1. References and dereferencing: sibling, members, root, x[ref], alive (cluster
+    #    fixture)
     @testset "cell references: the fixtures build" begin
         for name in (:Clusters, :Energy, :BadEnergy, :Life, :ReferencePair, :Hop)
-            @test isdefined(@__MODULE__, name)                       # DEFECT CHECK: `CellRef`, `sibling`, … unknown today
+            # DEFECT CHECK: `CellRef`, `sibling`, … unknown today
+            @test isdefined(@__MODULE__, name)
         end
     end
 end
 
-@testitem "cell references: sibling, members, root and x[ref] read the cluster (hand values)" setup = [CellReferencesSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "cell references: sibling, members, root and x[ref] read the cluster (hand values)" begin
+@testitem "cell references: sibling, members, root and x[ref] read the cluster (hand \
+    values)" setup = [CellReferencesSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "cell references: sibling, members, root and x[ref] read the cluster (hand \
+        values)" begin
         prob = cluster_problem()
         u = prob.u0
         @test vol(u)[1:6] == [32, 4, 1, 1, 4, 16]
         @test col(u, :cluster)[1:6] == [1, 1, 1, 4, 4, 6]
         # hand values (kinds: cytoplasm 1, nucleus 2, lamellipodium 3; q default 5.0)
-        @test observe(prob, :sn, u)[1:6] == [2.0, 2.0, 2.0, 6.0, 6.0, 5.0]       # q[sibling(nucleus)]
-        @test observe(prob, :sl, u)[1:6] == [1, 1, 1, 0, 0, 0]                    # volume[sibling(lamellipodium)]
-        @test observe(prob, :al, u)[1:6] == [1.0, 1.0, 1.0, 0.0, 0.0, 0.0]        # alive(sibling(lamellipodium))
-        @test observe(prob, :isself, u)[1:6] == [1.0, 0.0, 0.0, 1.0, 0.0, 1.0]    # sibling(cytoplasm) == id
-        @test observe(prob, :rk, u)[1:6] == [1, 1, 1, 1, 1, 1]                    # kind[root(cluster)]
-        @test observe(prob, :rq, u)[1:6] == [1.0, 1.0, 1.0, 4.0, 4.0, 7.0]        # q[root(cluster)]
-        @test observe(prob, :mv, u)[1:6] == [37, 37, 37, 5, 5, 16]                # Σ volume over members(cluster)
-        @test observe(prob, :mn, u)[1:6] == [1, 1, 1, 1, 1, 0]                    # count over members(cluster, nucleus)
-        @test observe(prob, :tot, u) == 8                                         # Σ volume[sibling(c, nucleus)], cytoplasms
-        @test observe(prob, :tot2, u) == 3.0 + 5.0 + 5.0                          # Σ q[sibling(c, lamellipodium)]
+        # q[sibling(nucleus)]
+        @test observe(prob, :sn, u)[1:6] == [2.0, 2.0, 2.0, 6.0, 6.0, 5.0]
+        # volume[sibling(lamellipodium)]
+        @test observe(prob, :sl, u)[1:6] == [1, 1, 1, 0, 0, 0]
+        # alive(sibling(lamellipodium))
+        @test observe(prob, :al, u)[1:6] == [1.0, 1.0, 1.0, 0.0, 0.0, 0.0]
+        # sibling(cytoplasm) == id
+        @test observe(prob, :isself, u)[1:6] == [1.0, 0.0, 0.0, 1.0, 0.0, 1.0]
+        # kind[root(cluster)]
+        @test observe(prob, :rk, u)[1:6] == [1, 1, 1, 1, 1, 1]
+        # q[root(cluster)]
+        @test observe(prob, :rq, u)[1:6] == [1.0, 1.0, 1.0, 4.0, 4.0, 7.0]
+        # Σ volume over members(cluster)
+        @test observe(prob, :mv, u)[1:6] == [37, 37, 37, 5, 5, 16]
+        # count over members(cluster, nucleus)
+        @test observe(prob, :mn, u)[1:6] == [1, 1, 1, 1, 1, 0]
+        # Σ volume[sibling(c, nucleus)], cytoplasms
+        @test observe(prob, :tot, u) == 8
+        # Σ q[sibling(c, lamellipodium)]
+        @test observe(prob, :tot2, u) == 3.0 + 5.0 + 5.0
     end
 end
 
-@testitem "cell references: dead referents read as the medium (sibling, root, members)" setup = [CellReferencesSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "cell references: dead referents read as the medium (sibling, root, members)" begin
+@testitem "cell references: dead referents read as the medium (sibling, root, \
+    members)" setup = [CellReferencesSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "cell references: dead referents read as the medium (sibling, root, \
+        members)" begin
         prob = cluster_problem()
         u = prob.u0
         # kill the lamellipodium 3 (medium takes its only site) and, separately, the root 4
         a3 = apply(prob, u, reference_prop(prob, u, 3, 0))
         a4 = apply(prob, u, reference_prop(prob, u, 4, 0))
         @test vol(a3)[3] == 0 && vol(a4)[4] == 0
-        @test col(a4, :cluster)[5] == 4                         # the dead root still names its cluster
+        # the dead root still names its cluster
+        @test col(a4, :cluster)[5] == 4
         # hand values after the deaths
         @test observe(prob, :sl, a3)[1:2] == [0, 0]
         @test observe(prob, :al, a3)[1:2] == [0.0, 0.0]
         @test observe(prob, :mv, a3)[1:2] == [36, 36]
-        @test observe(prob, :tot2, a3) == 15.0                       # every cytoplasm now reads the default q
-        @test observe(prob, :rk, a4)[5] == 0                         # kind of a dead root: medium
+        # every cytoplasm now reads the default q
+        @test observe(prob, :tot2, a3) == 15.0
+        # kind of a dead root: medium
+        @test observe(prob, :rk, a4)[5] == 0
         @test observe(prob, :rq, a4)[5] == 5.0                       # its q: the default
-        @test observe(prob, :sn, a4)[5] == 6.0                       # sibling(nucleus) of the nucleus is itself
+        # sibling(nucleus) of the nucleus is itself
+        @test observe(prob, :sn, a4)[5] == 6.0
         @test observe(prob, :mv, a4)[5] == 4 && observe(prob, :mn, a4)[5] == 1
-        @test observe(prob, :tot, a4) == 4                           # cytoplasm 4 is dead: only cluster A counts
+        # cytoplasm 4 is dead: only cluster A counts
+        @test observe(prob, :tot, a4) == 4
         # every observable against the independent oracle, on all three states
         for s in (u, a3, a4)
             v = vol(s)
@@ -646,29 +753,41 @@ end
     end
 end
 
-@testitem "cell references: updates write a reference and read through references" setup = [CellReferencesSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "cell references: updates write a reference and read through references" setup = [
+    CellReferencesSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 2. Updates write and read references
-    @testset "cell references: updates write a reference and read through references ($(nameof(typeof(alg))))" for alg in
-        (SequentialCPM(), CheckerboardCPM())
+    @testset "cell references: updates write a reference and read through references \
+        ($(nameof(typeof(alg))))" for alg in (SequentialCPM(), CheckerboardCPM())
         prob = cluster_problem(; tspan = (0, 3))
         sol = solve(prob, alg; saveat = 1)
         @test Symbol(sol.retcode) === :Success
         @test eltype(col(sol.u[end], :nuc)) <: Integer
         n = 0
-        for u in sol.u[2:end]                                        # after each MCS's updates
-            v = vol(u); nuc = col(u, :nuc); w = col(u, :w)
+        # after each MCS's updates
+        for u in sol.u[2:end]
+            v = vol(u)
+            nuc = col(u, :nuc)
+            w = col(u, :w)
             nq = observe(prob, :nq, u)
             for c in 1:6
                 v[c] > 0 || continue
                 s = reference_sibling(u, c, 2)
-                @test nuc[c] == s                                    # nuc ~ sibling(nucleus)
-                @test w[c] ≈ qat(u, s) + volat(u, reference_sibling(u, c, 3)) + length(reference_members(u, c)) atol = 1.0e-12
-                @test nq[c] == qat(u, s)                        # q[nuc]: a written reference read back
+                # nuc ~ sibling(nucleus)
+                @test nuc[c] == s
+                @test w[c] ≈
+                    qat(u, s) + volat(u, reference_sibling(u, c, 3)) +
+                    length(reference_members(u, c)) atol = 1.0e-12
+                # q[nuc]: a written reference read back
+                @test nq[c] == qat(u, s)
                 n += 1
             end
         end
-        @test n >= 12                                                # ≥ 4 alive cells in each of the 3 states
+        # ≥ 4 alive cells in each of the 3 states
+        @test n >= 12
         # the written reference is a slot, not a copy of the value: cluster A's cells name 2
         u = sol.u[end]
         vol(u)[2] > 0 && @test col(u, :nuc)[1] == 2
@@ -676,8 +795,12 @@ end
     end
 end
 
-@testitem "cell references: H dereferences in its own state (independent oracle)" setup = [CellReferencesSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "cell references: H dereferences in its own state (independent oracle)" setup = [
+    CellReferencesSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 3. Energies: H, ΔH and the exact self-check credits
     @testset "cell references: H dereferences in its own state (independent oracle)" begin
         prob = energy_problem()
@@ -688,7 +811,8 @@ end
         # kill cell 3 (by the medium): its readers 2 and 4 now read the medium
         a = apply(prob, u, reference_prop(prob, u, 3, 0))
         @test vol(a)[3] == 0
-        @test total_energy(prob, a) ≈ cell_energy(a) + contact_energy(a) atol = 1.0e-9   # DEFECT CHECK
+        # DEFECT CHECK
+        @test total_energy(prob, a) ≈ cell_energy(a) + contact_energy(a) atol = 1.0e-9
         # a dead referent reads exactly as ref 0 …
         a0 = deepcopy(a)
         a0.cell.partner[2] = 0
@@ -705,34 +829,45 @@ end
     end
 end
 
-@testitem "cell references: ΔH equals the H difference plus the credits, for every copy" setup = [CellReferencesSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "cell references: ΔH equals the H difference plus the credits, for every copy" begin
+@testitem "cell references: ΔH equals the H difference plus the credits, for every \
+    copy" setup = [CellReferencesSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "cell references: ΔH equals the H difference plus the credits, for every \
+        copy" begin
         prob = energy_problem()
         u = prob.u0
         props = reference_props(prob, u)
         kills = filter(p -> reference_kills(u, p), props)
-        # fixture: cell 3 is killed by the medium (third-party readers 2 and 4), by 1 (a gainer
-        # that does not read it) and by 2 (a gainer that reads it)
-        @test any(p -> p.new == 0, kills) && any(p -> p.new == 1, kills) && any(p -> p.new == 2, kills)
+        # fixture: cell 3 is killed by the medium (third-party readers 2 and 4), by 1 (a
+        # gainer that does not read it) and by 2 (a gainer that reads it)
+        @test any(p -> p.new == 0, kills) && any(p -> p.new == 1, kills) &&
+            any(p -> p.new == 2, kills)
         @test length(props) > 150
         worst_potts = worst_oracle = 0.0
         for p in props
             g1 = gap(prob, u, p; credit = :potts)
             g2 = gap(prob, u, p; credit = :oracle)
-            worst_potts = max(worst_potts, abs(g1)); worst_oracle = max(worst_oracle, abs(g2))
-            reference_kills(u, p) && (@test abs(g1) < 1.0e-9; @test abs(g2) < 1.0e-9)       # DEFECT CHECK
+            worst_potts = max(worst_potts, abs(g1))
+            worst_oracle = max(worst_oracle, abs(g2))
+            # DEFECT CHECK
+            reference_kills(u, p) && (@test abs(g1) < 1.0e-9; @test abs(g2) < 1.0e-9)
         end
-        @test worst_potts < 1.0e-9                                     # the suite's self-check helper is exact
-        @test worst_oracle < 1.0e-9                                    # and the credit is the oracle's
+        # the suite's self-check helper is exact
+        @test worst_potts < 1.0e-9
+        # and the credit is the oracle's
+        @test worst_oracle < 1.0e-9
         # the killing credits are not zero: the readers' terms really change (sensitivity)
         for p in kills
             a = apply(prob, u, p)
             cr = reference_credit(u, a, p)
-            @test abs(cr - reference_Ec(u, 3, 0, u)) > 1.0                # beyond E_cell(3, empty state)
-            @test Potts._killing_credit(prob, u, p, a) ≈ cr atol = 1.0e-9         # DEFECT CHECK
+            # beyond E_cell(3, empty state)
+            @test abs(cr - reference_Ec(u, 3, 0, u)) > 1.0
+            # DEFECT CHECK
+            @test Potts._killing_credit(prob, u, p, a) ≈ cr atol = 1.0e-9
         end
-        # ΔH reads the referent in the pre-copy state: the gainer 2 that kills its referent 3
-        # pays its own term with 3 still alive (independent oracle of the local ΔH)
+        # ΔH reads the referent in the pre-copy state: the gainer 2 that kills its referent
+        # 3 pays its own term with 3 still alive (independent oracle of the local ΔH)
         p = first(filter(p -> p.new == 2, kills))
         a = apply(prob, u, p)
         local2 = reference_Ec(u, 2, vol(a)[2], u) - reference_Ec(u, 2, vol(u)[2], u)
@@ -742,15 +877,22 @@ end
         # negative controls: without the reader credit the check fails by more than 1
         pm = first(filter(p -> p.new == 0, kills))
         am = apply(prob, u, pm)
-        plain = energy_change(prob, u, pm) - (total_energy(prob, am) - total_energy(prob, u))
-        vac = REFERENCE_E.λ * (0 - REFERENCE_E.V₀ - E_Q[1])^2           # E_cell(3, empty), partner 1 alive: μ[cell, cell]·0 + 0
-        @test abs(plain - vac) > 1.0                                 # the cell credit alone is not enough
+        plain = energy_change(prob, u, pm) -
+            (total_energy(prob, am) - total_energy(prob, u))
+        # E_cell(3, empty), partner 1 alive: μ[cell, cell]·0 + 0
+        vac = REFERENCE_E.λ * (0 - REFERENCE_E.V₀ - E_Q[1])^2
+        # the cell credit alone is not enough
+        @test abs(plain - vac) > 1.0
     end
 end
 
-@testitem "cell references: the self-check stays exact along runs" setup = [CellReferencesSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "cell references: the self-check stays exact along runs ($(nameof(typeof(alg))))" for alg in
-        (SequentialCPM(), CheckerboardCPM())
+@testitem "cell references: the self-check stays exact along runs" setup = [
+    CellReferencesSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "cell references: the self-check stays exact along runs \
+        ($(nameof(typeof(alg))))" for alg in (SequentialCPM(), CheckerboardCPM())
         prob = energy_problem(; tspan = (0, 4))
         sol = solve(prob, alg; saveat = 1)
         @test Symbol(sol.retcode) === :Success
@@ -762,23 +904,37 @@ end
         end
         @test n > 500
         @test worst < 1.0e-9
-        @test all(u -> isapprox(total_energy(prob, u), cell_energy(u) + contact_energy(u); atol = 1.0e-8), sol.u)
+        @test all(
+            u -> isapprox(
+                total_energy(prob, u), cell_energy(u) + contact_energy(u);
+                atol = 1.0e-8
+            ),
+            sol.u
+        )
     end
 end
 
-@testitem "cell references: an energy may not read what a copy changes through a reference" setup = [CellReferencesSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "cell references: an energy may not read what a copy changes through a reference" begin
+@testitem "cell references: an energy may not read what a copy changes through a \
+    reference" setup = [CellReferencesSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "cell references: an energy may not read what a copy changes through a \
+        reference" begin
         @test_throws Potts.PottsCompileError mtkcompile(system(:BadEnergy))
         # the static reads of the energy fixture compile (control)
         @test mtkcompile(system(:Energy)) isa CompiledPottsSystem
     end
 end
 
-@testitem "cell references: birth serials, dead referents and the boundary reset" setup = [CellReferencesSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "cell references: birth serials, dead referents and the boundary reset" setup = [
+    CellReferencesSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 4. Liveness, `birth` and the allocation boundary (lifecycle fixture)
-    @testset "cell references: birth serials, dead referents and the boundary reset ($(nameof(typeof(alg))))" for alg in
-        (SequentialCPM(), CheckerboardCPM())
+    @testset "cell references: birth serials, dead referents and the boundary reset \
+        ($(nameof(typeof(alg))))" for alg in (SequentialCPM(), CheckerboardCPM())
         prob = life_problem()
         u0 = prob.u0
         @test observe(prob, :bth, u0)[1:3] == [1, 2, 3]
@@ -792,26 +948,33 @@ end
         e = event(sol)
         @test i !== nothing && e !== nothing
         if i !== nothing && e !== nothing
-            @test i < e - 2                                          # fixture: the doomed cell dies well before the event
-            @test 20 <= sol.t[e] <= 21                               # the event is the mcs == 20 division
-            # between the death and the event: cell 2's referent is dead and reads as the medium
+            # fixture: the doomed cell dies well before the event
+            @test i < e - 2
+            # the event is the mcs == 20 division
+            @test 20 <= sol.t[e] <= 21
+            # between the death and the event: cell 2's referent is dead and reads as the
+            # medium
             for u in sol.u[i:(e - 1)]
                 @test observe(prob, :pa, u)[2] == 0.0
                 @test observe(prob, :pk, u)[2] == 0
-                @test observe(prob, :pq, u)[2] == 5.0                # the default, not q[3] = 3.0
+                # the default, not q[3] = 3.0
+                @test observe(prob, :pq, u)[2] == 5.0
                 @test observe(prob, :pbth, u)[2] == 0
-                @test observe(prob, :pa, u)[1] == 1.0                # (1's referent, 2, is alive)
+                # (1's referent, 2, is alive)
+                @test observe(prob, :pa, u)[1] == 1.0
                 @test observe(prob, :bth, u)[1:2] == [1, 2]
             end
             # after the event
             for u in sol.u[e:end]
                 post_event_checks(prob, u)
             end
-            # negative control: a stale reference (never reset) would alias the daughter in slot 3
+            # negative control: a stale reference (never reset) would alias the daughter in
+            # slot 3
             u = sol.u[end]
             stale = deepcopy(u)
             stale.cell.partner[2] = 3
-            @test observe(prob, :pa, stale)[2] == 1.0                # alive: the checks above would fail
+            # alive: the checks above would fail
+            @test observe(prob, :pa, stale)[2] == 1.0
             @test observe(prob, :pbth, stale)[2] in (4, 5)
             # and `birth ≡ slot` would give the reused slot's number 3
             @test 3 ∉ observe(prob, :bth, u)[1:4]
@@ -819,7 +982,11 @@ end
     end
 end
 
-@testitem "cell references: next_birth survives a checkpoint" setup = [CellReferencesSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "cell references: next_birth survives a checkpoint" setup = [
+    CellReferencesSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "cell references: next_birth survives a checkpoint" begin
         prob = life_problem()
         alg = SequentialCPM()
@@ -829,7 +996,8 @@ end
             step!(integ)
         end
         ck = checkpoint(integ)
-        @test vol(ck.state)[3] == 0                             # fixture: the max-birth cell (3) died before
+        # fixture: the max-birth cell (3) died before
+        @test vol(ck.state)[3] == 0
         path = joinpath(mktempdir(), "cell_refs.jls")
         save_checkpoint(path, ck)
         rest = solve!(init(prob, alg; checkpoint = load_checkpoint(path)))
@@ -837,17 +1005,23 @@ end
         @test Array(u.ownership) == Array(full.u[end].ownership)
         @test observe(prob, :bth, u) == observe(prob, :bth, full.u[end])
         @test col(u, :partner) == col(full.u[end], :partner)
-        post_event_checks(prob, u)                              # serials 4, 5: not max(alive) + 1 = 3
+        # serials 4, 5: not max(alive) + 1 = 3
+        post_event_checks(prob, u)
     end
 end
 
-@testitem "cell references: birth ≡ slot without a lifecycle; alive ⇔ volume > 0" setup = [CellReferencesSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "cell references: birth ≡ slot without a lifecycle; alive ⇔ volume > 0" setup = [
+    CellReferencesSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "cell references: birth ≡ slot without a lifecycle; alive ⇔ volume > 0" begin
         cl = cluster_problem()
         @test observe(cl, :bth, cl.u0)[1:6] == 1:6
         prob = energy_problem()
         u = prob.u0
-        @test observe(prob, :partner, u)[1:6] == E_PARTNER        # the reference column, read by name
+        # the reference column, read by name
+        @test observe(prob, :partner, u)[1:6] == E_PARTNER
         @test eltype(col(u, :partner)) <: Integer
         a = apply(prob, u, reference_prop(prob, u, 3, 0))
         for s in (u, a)
@@ -856,36 +1030,57 @@ end
             want = [Float64(pr[c] > 0 && v[pr[c]] > 0) for c in 1:6]
             @test observe(prob, :pal, s)[1:6] == want
         end
-        @test observe(prob, :pal, u)[[2, 4]] == [1.0, 1.0] && observe(prob, :pal, a)[[2, 4]] == [0.0, 0.0]
+        @test observe(prob, :pal, u)[[2, 4]] == [1.0, 1.0] &&
+            observe(prob, :pal, a)[[2, 4]] == [0.0, 0.0]
         @test observe(prob, :pal, u)[5] == 0.0                       # ref 0 is not alive
     end
 end
 
-@testitem "cell references: a reference chain runs under both algorithms" setup = [CellReferencesSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
-    # 5. A two-hop reference chain under both algorithms (the claim-set tests are removed, D-271)
+@testitem "cell references: a reference chain runs under both algorithms" setup = [
+    CellReferencesSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
+    # 5. A two-hop reference chain under both algorithms (the claim-set tests are removed,
+    #    D-271)
     @testset "cell references: a reference chain runs under both algorithms" begin
         ph = hop_problem()
-        @test all(alg -> Symbol(solve(ph, alg).retcode) === :Success, (SequentialCPM(), CheckerboardCPM()))
+        @test all(
+            alg -> Symbol(solve(ph, alg).retcode) === :Success, (
+                SequentialCPM(), CheckerboardCPM(),
+            )
+        )
     end
 end
 
-@testitem "cell references: the checkerboard agrees with the sequential reference (light tier)" setup = [CellReferencesSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
-    # 6. CheckerboardCPM against SequentialCPM, statistically (D-065 Q7; protocol in the header)
-    @testset "cell references: the checkerboard agrees with the sequential reference (light tier)" begin
+@testitem "cell references: the checkerboard agrees with the sequential reference (light \
+    tier)" setup = [CellReferencesSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
+    # 6. CheckerboardCPM against SequentialCPM, statistically (D-065 Q7; protocol in the
+    #    header)
+    @testset "cell references: the checkerboard agrees with the sequential reference \
+        (light tier)" begin
         seq = sample(SequentialCPM(), 1:32)
         cb = sample(CheckerboardCPM(), 1:32)
         null = sample(SequentialCPM(), 33:64)
         t_cb, t_null = welch(cb, seq), welch(null, seq)
-        @info "cell references checkerboard vs sequential" mean_seq = mean(seq) mean_cb = mean(cb) t_cb t_null
+        @info "cell references checkerboard vs sequential" mean_seq = mean(
+            seq
+        ) mean_cb = mean(cb) t_cb t_null
         @test abs(t_null) <= 3.89                                    # the test's null holds
         @test abs(t_cb) <= 3.89                                      # agreement
     end
 end
 
-@testitem "cell references: the checkerboard agrees with the sequential reference (FULL tier)" setup = [CellReferencesSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "cell references: the checkerboard agrees with the sequential reference (FULL tier)" begin
+@testitem "cell references: the checkerboard agrees with the sequential reference (FULL \
+    tier)" setup = [CellReferencesSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "cell references: the checkerboard agrees with the sequential reference \
+        (FULL tier)" begin
         if REFERENCE_FULL
             kw = (; tspan = (0, 1000), burn = 100)
             seq = sample(SequentialCPM(), 1001:1200; kw...)
@@ -897,24 +1092,37 @@ end
             end
             lo, hi = ci(cb)
             @info "cell references FULL checkerboard vs sequential" ci_cb = (lo, hi)
-            @test -0.06 <= lo && hi <= 0.06                          # equivalence within ±6 %
+            # equivalence within ±6 %
+            @test -0.06 <= lo && hi <= 0.06
         else
             @test_skip "FULL tier: set POTTS_FULL_REPRODUCTION=true (offline, on the PC)"
         end
     end
 end
 
-@testitem "cell references: references on the device" setup = [CellReferencesSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "cell references: references on the device" setup = [CellReferencesSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 7. Device
     @testset "cell references: references on the device" begin
         if PottsDevices.on_device()
             backend = PottsDevices.device_backend()
             alg = CheckerboardCPM(; proposal = Moore(1))
-            # the statistical validation: device checkerboard (Float32) against the CPU reference
+            # the statistical validation: device checkerboard (Float32) against the CPU
+            # reference
             seq = sample(SequentialCPM(), 1:32)
-            dev = [reference_stat(solve(pair_problem(; seed, T = Float32), alg; backend, saveat = 1), 50) for seed in 1:32]
-            @info "cell references device checkerboard vs CPU sequential" mean_seq = mean(seq) mean_dev = mean(dev) t = welch(dev, seq)
+            dev = [
+                reference_stat(
+                    solve(pair_problem(; seed, T = Float32), alg; backend, saveat = 1), 50
+                )
+                    for seed in 1:32
+            ]
+            @info "cell references device checkerboard vs CPU sequential" mean_seq = mean(
+                seq
+            ) mean_dev = mean(dev) t = welch(
+                dev, seq
+            )
             @test abs(welch(dev, seq)) <= 3.89
             # births and the boundary reset in a device lifecycle
             prob = life_problem(; T = Float32)

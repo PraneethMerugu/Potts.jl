@@ -31,8 +31,8 @@
 #   `offset = 0` reproduces today's Barker bit for bit.
 #
 # Oracles. The trajectories are compared, bit for bit, with runs under test-defined
-# acceptance laws (`BarkerRef`), subtypes of `CorePotts.AbstractAcceptanceLaw` implementing the
-# formula above (and, with δ = 0, today's Barker formula verbatim), passed through the
+# acceptance laws (`BarkerRef`), subtypes of `CorePotts.AbstractAcceptanceLaw` implementing
+# the formula above (and, with δ = 0, today's Barker formula verbatim), passed through the
 # algorithm's `acceptance` keyword. They are independent of `CorePotts.Barker`, so a law
 # that ignores δ, or applies it with the wrong sign, fails the comparison.
 #
@@ -49,9 +49,9 @@
 @testsetup module BarkerOffsetSetup
 include(joinpath(@__DIR__, "..", "shared", "common.jl"))
 using Potts: CorePotts
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Reference acceptance law (independent of CorePotts.Barker)
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 struct BarkerRef{F} <: CorePotts.AbstractAcceptanceLaw
     offset::F
 end
@@ -67,9 +67,9 @@ struct Legacy <: CorePotts.AbstractAcceptanceLaw end
     return u < inv(one(T) + exp(dH / temperature))
 end
 barker_p(dH, T, δ) = inv(one(dH) + exp((dH - δ) / T))
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Fixture: a small two-kind sorting model under Barker, one model per sweep form
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 const BARKER_T = 4.0
 for (name, sweep) in (
         (:None, :(Barker(; temperature = 4.0))),
@@ -96,11 +96,17 @@ function problem(model; seed = 7, tspan = (0, 20))
         σ[(3 + 5i):(6 + 5i), (3 + 5j):(6 + 5j)] .= id
     end
     kinds = [isodd(k) ? :dark : :light for k in 1:id]
-    return PottsProblem(model(; name = :barker), [ownership => σ, kind => kinds], tspan; seed)
+    return PottsProblem(
+        model(; name = :barker), [ownership => σ, kind => kinds], tspan;
+        seed
+    )
 end
 function barker_run(prob, alg)
     sol = solve(prob, alg; saveat = 1)
-    return (; σs = [copy(u.ownership) for u in sol.u], accepted = sol.stats.accepted, attempts = sol.stats.attempts)
+    return (;
+        σs = [copy(u.ownership) for u in sol.u],
+        accepted = sol.stats.accepted, attempts = sol.stats.attempts,
+    )
 end
 same(a, b) = a.σs == b.σs && a.accepted == b.accepted && a.attempts == b.attempts
 # Activity: sites changed between consecutive saved states (CheckerboardCPM does not count
@@ -113,10 +119,14 @@ const ALGS = (
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "barker offset: CorePotts.Barker carries an offset" setup = [BarkerOffsetSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "barker offset: CorePotts.Barker carries an offset" setup = [
+    BarkerOffsetSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 1. CorePotts level
-    # ---------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     @testset "barker offset: CorePotts.Barker carries an offset" begin
         @test CorePotts.Barker().offset == 0
         @test CorePotts.Barker(; offset = 1.5).offset == 1.5
@@ -134,8 +144,14 @@ end
             @test !CorePotts.accept(law, dH, T, p)
             # Float32 path (Metal-sized scalars)
             p32 = barker_p(Float32(dH), Float32(T), Float32(δ))
-            @test CorePotts.accept(CorePotts.Barker(; offset = Float32(δ)), Float32(dH), Float32(T), prevfloat(p32))
-            @test !CorePotts.accept(CorePotts.Barker(; offset = Float32(δ)), Float32(dH), Float32(T), p32)
+            @test CorePotts.accept(
+                CorePotts.Barker(; offset = Float32(δ)),
+                Float32(dH), Float32(T), prevfloat(p32)
+            )
+            @test !CorePotts.accept(
+                CorePotts.Barker(; offset = Float32(δ)), Float32(dH),
+                Float32(T), p32
+            )
         end
         # the shift is ΔH − offset: a tie at ΔH == offset is accepted with probability ½
         @test CorePotts.accept(CorePotts.Barker(; offset = 2.0), 2.0, 1.0, prevfloat(0.5))
@@ -155,11 +171,16 @@ end
                 @test !CorePotts.accept(CorePotts.Barker(; offset = δ), dH, T, 0.0)
             end
             for (dH, δ) in ((1.0, 1.0), (-2.5, -2.5), (0.0, 0.0))      # x == 0: u < ½
-                @test CorePotts.accept(CorePotts.Barker(; offset = δ), dH, T, prevfloat(0.5))
+                @test CorePotts.accept(
+                    CorePotts.Barker(; offset = δ), dH, T,
+                    prevfloat(0.5)
+                )
                 @test !CorePotts.accept(CorePotts.Barker(; offset = δ), dH, T, 0.5)
             end
             # and coincides with Metropolis(offset) there, for every u
-            for (dH, δ) in ((0.5, 1.0), (0.0, -1.0), (1.0, 1.0)), u in (0.0, prevfloat(0.5), 0.5, 0.9)
+            for (dH, δ) in ((0.5, 1.0), (0.0, -1.0), (1.0, 1.0)),
+                    u in (0.0, prevfloat(0.5), 0.5, 0.9)
+
                 @test CorePotts.accept(CorePotts.Barker(; offset = δ), dH, T, u) ==
                     CorePotts.accept(CorePotts.Metropolis(; offset = δ), dH, T, u)
             end
@@ -167,10 +188,14 @@ end
     end
 end
 
-@testitem "barker offset: @sweep Barker(; offset) reaches the acceptance law" setup = [BarkerOffsetSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "barker offset: @sweep Barker(; offset) reaches the acceptance law" setup = [
+    BarkerOffsetSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 2. `@sweep Barker(; offset = δ)` is carried into the run
-    # ---------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     @testset "barker offset: @sweep Barker(; offset) reaches the acceptance law" begin
         for (model, δ) in ((Plus, 3.0), (Minus, -2.5))
             prob = problem(model)
@@ -183,8 +208,12 @@ end
     end
 end
 
-@testitem "barker offset: @sweep Barker(; offset) runs under 1/(1 + e^{(ΔH − δ)/T})" setup = [BarkerOffsetSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "barker offset: @sweep Barker(; offset) runs under 1/(1 + e^{(ΔH − δ)/T}) ($name)" for (name, mk) in ALGS
+@testitem "barker offset: @sweep Barker(; offset) runs under 1/(1 + e^{(ΔH − δ)/T})" setup =
+    [BarkerOffsetSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "barker offset: @sweep Barker(; offset) runs under 1/(1 + e^{(ΔH − δ)/T}) \
+        ($name)" for (name, mk) in ALGS
         base = barker_run(problem(None), mk(nothing))
         for (model, δ) in ((Plus, 3.0), (Minus, -2.5))
             prob = problem(model)
@@ -198,11 +227,17 @@ end
     end
 end
 
-@testitem "barker offset (; acceptance = Barker(; offset)) carries the offset" setup = [BarkerOffsetSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "barker offset (; acceptance = Barker(; offset)) carries the offset" setup = [
+    BarkerOffsetSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 3. The algorithm keyword carries it too
-    # ---------------------------------------------------------------------------------------------
-    @testset "barker offset $name(; acceptance = Barker(; offset)) carries the offset" for (name, mk) in ALGS
+    # --------------------------------------------------------------------------------------
+    @testset "barker offset $name(; acceptance = Barker(; offset)) carries the offset" for (
+            name, mk,
+        ) in ALGS
         prob = problem(None)
         base = barker_run(prob, mk(nothing))
         for δ in (3.0, -2.5)
@@ -220,17 +255,27 @@ end
     end
 end
 
-@testitem "barker offset: offset = 0 reproduces today's Barker" setup = [BarkerOffsetSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "barker offset: offset = 0 reproduces today's Barker" setup = [
+    BarkerOffsetSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 4. offset = 0 is today's Barker, bit for bit
-    # ---------------------------------------------------------------------------------------------
-    @testset "barker offset: offset = 0 reproduces today's Barker ($name)" for (name, mk) in ALGS
+    # --------------------------------------------------------------------------------------
+    @testset "barker offset: offset = 0 reproduces today's Barker ($name)" for (
+            name,
+            mk,
+        ) in ALGS
         prob = problem(None)
         legacy = barker_run(prob, mk(Legacy()))
-        @test same(barker_run(prob, mk(nothing)), legacy)                         # no offset given
-        @test same(barker_run(problem(Zero), mk(nothing)), legacy)     # `offset = 0` in @sweep
+        # no offset given
+        @test same(barker_run(prob, mk(nothing)), legacy)
+        # `offset = 0` in @sweep
+        @test same(barker_run(problem(Zero), mk(nothing)), legacy)
         @test same(barker_run(prob, mk(CorePotts.Barker())), legacy)
-        @test same(barker_run(prob, mk(BarkerRef(0.0))), legacy)                   # oracle self-check
+        # oracle self-check
+        @test same(barker_run(prob, mk(BarkerRef(0.0))), legacy)
         # negative control: the legacy oracle is sensitive to the law
         @test !same(barker_run(prob, mk(BarkerRef(3.0))), legacy)
     end

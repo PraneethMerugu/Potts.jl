@@ -14,8 +14,8 @@
 #                     region = (2:X, 2:(slab - 1)))
 #     (the draw ranges of the authors' CCIecmSteppables.py S:70–71; the seed is passed
 #     through unchanged). The counted inventory (spec 10 V-A1(a)) is that layer's tally,
-#     read with the public layout report (`layout_protocol_tests.jl`; `tally` below keeps its
-#     InsertUntil rows as `(; painted, misses, counted)`):
+#     read with the public layout report (`layout_protocol_tests.jl`; `tally` below keeps
+#     its InsertUntil rows as `(; painted, misses, counted)`):
 #         only(last(tally(akeeb_layout(; lattice, seed, slab, seeding), lattice)))
 #     `painted` = leaders created, `misses` = missed draws (the authors' empty "ghost"
 #     leaders under :authors, D-068), `counted` = the CC3D inventory (390 at 500 × 300,
@@ -25,12 +25,13 @@
 #       -> [ownership => σ, kind => kinds, :clock => …, :rate => …, :cue => …]
 #     Keys and order unchanged (papers_tests.jl reads `o[2].second`). `σ` and `kinds`
 #     are exactly `layout(akeeb_layout(; lattice, seed, slab, seeding), lattice)`.
-#     Clocks are drawn from `StableRNG(Potts._substream_seed(seed, :clock))` (`substream_seeds_tests.jl`, D-093), one cell at a time in id order: a leader
-#     draws nothing (clock −1); a follower draws u = rand(rng), and its clock is −1 if
-#     u > pp, else Float64(rand(rng, 0:74)). This is today's recipe with MersenneTwister
-#     replaced by StableRNG (D-075: StableRNG only), so the state is the same on every
-#     Julia version. `akeeb_state` logs no warning: several leaders inside one follower can
-#     cut it, which `overlay` warns about, but that is the published slab, not a user error.
+#     Clocks are drawn from `StableRNG(Potts._substream_seed(seed, :clock))`
+#     (`substream_seeds_tests.jl`, D-093), one cell at a time in id order: a leader draws
+#     nothing (clock −1); a follower draws u = rand(rng), and its clock is −1 if u > pp,
+#     else Float64(rand(rng, 0:74)). This is today's recipe with MersenneTwister replaced by
+#     StableRNG (D-075: StableRNG only), so the state is the same on every Julia version.
+#     `akeeb_state` logs no warning: several leaders inside one follower can cut it, which
+#     `overlay` warns about, but that is the published slab, not a user error.
 #
 # Expected values are structural (the CC3D quota 4n ≥ 1169 + n gives n = 390 at
 # 500 × 300; 4n ≥ 231 + n gives 77 at 99 × 60). No value depends on a particular draw
@@ -47,7 +48,8 @@ quiet(f) = Base.CoreLogging.with_logger(f, Base.CoreLogging.NullLogger())
 # The InsertUntil rows of the layout report as (; painted, misses, counted), in paint order.
 function tally(l, lat)
     op, report = layout(l, lat; report = true)
-    return op, [(; r.painted, r.misses, r.counted) for r in report if r.type === :InsertUntil]
+    return op,
+        [(; r.painted, r.misses, r.counted) for r in report if r.type === :InsertUntil]
 end
 # Independent oracle for the follower slab: today's hand loop (ids x-fastest, row by row),
 # written through the public layout extension API `Potts.paint!` (the layout protocol).
@@ -67,12 +69,21 @@ end
 function oracle(X, slab, seed, misses)
     return overlay(
         Slab(X, slab),
-        InsertUntil(:leader; into = [:follower], fraction = 1 // 4, seed, misses, region = (2:X, 2:(slab - 1)))
+        InsertUntil(
+            :leader; into = [:follower], fraction = 1 // 4,
+            seed, misses, region = (2:X, 2:(slab - 1))
+        )
     )
 end
 # The clock recipe on the `:clock` sub-stream (D-093) over the kinds as returned (id order).
-function inventory_clocks(kinds, pp, seed; rng = StableRNG(Potts._substream_seed(seed, :clock)))
-    return [k === :leader || rand(rng) > pp ? -1.0 : Float64(rand(rng, 0:74)) for k in kinds]
+function inventory_clocks(
+        kinds, pp, seed;
+        rng = StableRNG(Potts._substream_seed(seed, :clock))
+    )
+    return [
+        k === :leader || rand(rng) > pp ? -1.0 : Float64(rand(rng, 0:74))
+            for k in kinds
+    ]
 end
 # Equal partitions up to relabelling the followers, and identical leader ids and sites.
 function same_cells(σa, ka, σo, ko)
@@ -80,59 +91,95 @@ function same_cells(σa, ka, σo, ko)
     count(==(:follower), ka) == nf || return false
     sort(ka) == sort(ko) || return false
     (σa .> nf) == (σo .> nf) || return false                     # leader sites
-    σa[σa .> nf] == σo[σo .> nf] || return false                 # leader ids, in paint order
+    # leader ids, in paint order
+    σa[σa .> nf] == σo[σo .> nf] || return false
     (σa .== 0) == (σo .== 0) || return false
     pairs = Set(zip(σa[0 .< σa .<= nf], σo[0 .< σo .<= nf]))     # follower id bijection
-    return length(pairs) == nf && length(Set(first.(pairs))) == nf && length(Set(last.(pairs))) == nf
+    return length(pairs) == nf && length(Set(first.(pairs))) == nf &&
+        length(Set(last.(pairs))) == nf
 end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "akeeb inventory: akeeb_layout is public and akeeb_state keeps its shape" setup = [AkeebInventorySetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "akeeb inventory: akeeb_layout is public and akeeb_state keeps its shape" setup =
+    [AkeebInventorySetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "akeeb inventory: akeeb_layout is public and akeeb_state keeps its shape" begin
-        @test isdefined(PottsModels, :akeeb_layout) && Base.ispublic(PottsModels, :akeeb_layout)
-        @test PottsModels.akeeb_layout(; lattice = (99, 60), seed = 1) isa Potts.AbstractLayout
+        @test isdefined(PottsModels, :akeeb_layout) &&
+            Base.ispublic(PottsModels, :akeeb_layout)
+        @test PottsModels.akeeb_layout(; lattice = (99, 60), seed = 1) isa
+            Potts.AbstractLayout
         o = akeeb_state(; lattice = (99, 60), seed = 1)
-        @test length(o) == 5 && isequal(first(o[1]), ownership) && isequal(first(o[2]), kind)
+        @test length(o) == 5 && isequal(first(o[1]), ownership) &&
+            isequal(first(o[2]), kind)
         @test [first(p) for p in o[3:5]] == [:clock, :rate, :cue]
         @test o[1].second isa Matrix{Int32} && o[2].second isa Vector{Symbol}
-        @test o[3].second isa Vector{Float64} && o[4].second isa Vector{Float64} && o[5].second isa Matrix{Float64}
+        @test o[3].second isa Vector{Float64} && o[4].second isa Vector{Float64} &&
+            o[5].second isa Matrix{Float64}
         doc = string(@doc akeeb_state)
         @test occursin("StableRNG", doc) && !occursin("MersenneTwister", doc)
         @test_throws ArgumentError akeeb_state(; seeding = :other)
         @test_throws ArgumentError PottsModels.akeeb_layout(; seeding = :other)
-        @test_throws ArgumentError akeeb_state(; lattice = (30, 21))          # no row above the slab
+        # no row above the slab
+        @test_throws ArgumentError akeeb_state(; lattice = (30, 21))
     end
 end
 
-@testitem "akeeb inventory: akeeb_state is InsertUntil(fraction = 1//4, misses =:count) on the slab" setup = [AkeebInventorySetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "akeeb inventory: akeeb_state is InsertUntil(fraction = 1//4, misses =:count) on the slab" begin
-        # lattices: the published one, the tests' 99 × 60, and slabs that are and are not whole tiles
+@testitem "akeeb inventory: akeeb_state is InsertUntil(fraction = 1//4, misses =:count) \
+    on the slab" setup = [AkeebInventorySetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "akeeb inventory: akeeb_state is InsertUntil(fraction = 1//4, misses \
+        =:count) on the slab" begin
+        # lattices: the published one, the tests' 99 × 60, and slabs that are and are not
+        # whole tiles
         cases = [
-            ((500, 300), 21, 0x05cd2609), ((500, 300), 21, 7), ((99, 60), 21, 3), ((60, 40), 15, 11),
+            ((500, 300), 21, 0x05cd2609), ((500, 300), 21, 7), ((99, 60), 21, 3), (
+                (60, 40), 15, 11,
+            ),
             ((61, 40), 13, 5),
         ]
-        for (lat, slab, seed) in cases, (seeding, misses) in ((:authors, :count), (:retry, :retry))
+        for (lat, slab, seed) in cases,
+                (seeding, misses) in ((:authors, :count), (:retry, :retry))
+
             o = quiet(() -> akeeb_state(; lattice = lat, slab, seed, seeding))
             σ, ks = inventory_get(o, ownership), inventory_get(o, kind)
             ref, tref = quiet(() -> tally(oracle(lat[1], slab, seed, misses), lat))
             @test same_cells(σ, ks, inventory_get(ref, ownership), inventory_get(ref, kind))
-            # the counted inventory through the public API: one InsertUntil layer, the same tally
-            op, t = quiet(() -> tally(PottsModels.akeeb_layout(; lattice = lat, slab, seed, seeding), lat))
+            # the counted inventory through the public API: one InsertUntil layer, the same
+            # tally
+            op, t = quiet(
+                () -> tally(
+                    PottsModels.akeeb_layout(; lattice = lat, slab, seed, seeding),
+                    lat
+                )
+            )
             @test t == tref && length(t) == 1
-            @test inventory_get(op, ownership) == σ && inventory_get(op, kind) == ks       # akeeb_state paints it
+            # akeeb_state paints it
+            @test inventory_get(op, ownership) == σ && inventory_get(op, kind) == ks
             @test count(==(:leader), ks) == only(t).painted
         end
     end
 end
 
-@testitem "akeeb inventory: V-A1(a) counted inventory at 500 × 300" setup = [AkeebInventorySetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "akeeb inventory: V-A1(a) counted inventory at 500 × 300" setup = [
+    AkeebInventorySetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "akeeb inventory: V-A1(a) counted inventory at 500 × 300" begin
         lat, nf = (500, 300), 1169                          # 166·7 + 7 followers
         for seed in (0x05cd2609, 1)
             o = quiet(() -> akeeb_state(; lattice = lat, seed))
             σ, ks = inventory_get(o, ownership), inventory_get(o, kind)
-            t = only(last(quiet(() -> tally(PottsModels.akeeb_layout(; lattice = lat, seed), lat))))
+            t = only(
+                last(
+                    quiet(
+                        () -> tally(PottsModels.akeeb_layout(; lattice = lat, seed), lat)
+                    )
+                )
+            )
             np = count(==(:leader), ks)
             # followers: all 1169, none erased, ids first
             @test count(==(:follower), ks) == nf && ks[1:nf] == fill(:follower, nf)
@@ -140,20 +187,34 @@ end
             # inventory: every draw counts; ghosts are never cells (D-066 X2)
             @test t.painted == np && length(ks) == nf + np
             @test t.counted == t.painted + t.misses
-            # leader fraction: the inventory meets the quarter, overshooting only by trailing misses
+            # leader fraction: the inventory meets the quarter, overshooting only by
+            # trailing misses
             @test 4 * t.counted >= nf + t.counted && 390 <= t.counted <= 390 + t.misses
-            # the authors' empty leaders exist, so the painted fraction stays below a quarter
+            # the authors' empty leaders exist, so the painted fraction stays below a
+            # quarter
             @test t.misses > 0 && 4 * np < nf + np
             # one-site leaders, ids in paint order, on follower pixels of the draw region
             slab = inventory_get(layout(Slab(500, 21), lat), ownership)
             @test sort(σ[σ .> nf]) == (nf + 1):(nf + np)
             sites = findall(σ .> nf)
             @test all(i -> 2 <= i[1] <= 500 && 2 <= i[2] <= 20 && slab[i] > 0, sites)
-            # D-068: a ghost changes nothing but the count. Under :retry the same stream paints the
-            # full quota, and the :authors leaders are exactly its first `np` leaders
+            # D-068: a ghost changes nothing but the count. Under :retry the same stream
+            # paints the full quota, and the :authors leaders are exactly its first `np`
+            # leaders
             or = quiet(() -> akeeb_state(; lattice = lat, seed, seeding = :retry))
             σr, kr = inventory_get(or, ownership), inventory_get(or, kind)
-            tr = only(last(quiet(() -> tally(PottsModels.akeeb_layout(; lattice = lat, seed, seeding = :retry), lat))))
+            tr = only(
+                last(
+                    quiet(
+                        () -> tally(
+                            PottsModels.akeeb_layout(;
+                                lattice = lat, seed,
+                                seeding = :retry
+                            ), lat
+                        )
+                    )
+                )
+            )
             @test count(==(:leader), kr) == 390 == tr.painted == tr.counted
             @test σr[sites] == σ[sites] && tr.misses >= t.misses
             @test count(>(nf), σr) == 390 && all(i -> σr[i] <= nf + np, sites)
@@ -161,9 +222,16 @@ end
     end
 end
 
-@testitem "akeeb inventory: StableRNG only, reproducible" setup = [AkeebInventorySetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "akeeb inventory: StableRNG only, reproducible" setup = [
+    AkeebInventorySetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "akeeb inventory: StableRNG only, reproducible" begin
-        for (lat, seed, pp) in (((500, 300), 0x05cd2609, 0.5), ((99, 60), 2, 0.5), ((99, 60), 4, 0.9), ((99, 60), 4, 0.0))
+        for (lat, seed, pp) in (
+                ((500, 300), 0x05cd2609, 0.5), ((99, 60), 2, 0.5),
+                ((99, 60), 4, 0.9), ((99, 60), 4, 0.0),
+            )
             a = quiet(() -> akeeb_state(; lattice = lat, seed, pp))
             b = quiet(() -> akeeb_state(; lattice = lat, seed, pp))
             @test all(i -> isequal(a[i], b[i]), 1:5)
@@ -171,19 +239,26 @@ end
             clocks = inventory_get(a, :clock)
             # the clock stream is the `:clock` sub-stream (D-093) in id order
             @test clocks == inventory_clocks(ks, pp, seed)
-            # negative control: the oracle depends on the stream (another StableRNG seed differs)
-            pp > 0 && @test inventory_clocks(ks, pp, seed) != inventory_clocks(ks, pp, seed; rng = StableRNG(seed + 2))
+            # negative control: the oracle depends on the stream (another StableRNG seed
+            # differs)
+            pp > 0 && @test inventory_clocks(ks, pp, seed) !=
+                inventory_clocks(ks, pp, seed; rng = StableRNG(seed + 2))
             @test inventory_get(a, :rate) == [k === :leader ? 0.0 : 0.015 for k in ks]
-            @test inventory_get(a, :cue) == [Float64(y - 1) for x in 1:lat[1], y in 1:lat[2]]
+            @test inventory_get(a, :cue) ==
+                [Float64(y - 1) for x in 1:lat[1], y in 1:lat[2]]
             pp == 0 && @test all(==(-1.0), clocks)
         end
         # distinct seeds give distinct slabs
-        σs = [inventory_get(akeeb_state(; lattice = (99, 60), seed), ownership) for seed in 1:4]
+        σs = [
+            inventory_get(akeeb_state(; lattice = (99, 60), seed), ownership)
+                for seed in 1:4
+        ]
         @test length(unique(σs)) == 4
-        # akeeb_state is quiet at the published size. At seed 1 the leaders cut a follower in
-        # two (a bare `overlay` of the oracle slab and the leader layer warns there)
+        # akeeb_state is quiet at the published size. At seed 1 the leaders cut a follower
+        # in two (a bare `overlay` of the oracle slab and the leader layer warns there)
         @test_logs min_level = Base.CoreLogging.Warn akeeb_state()
         @test_logs min_level = Base.CoreLogging.Warn akeeb_state(; seed = 1)
-        @test_logs (:warn, r"split cell") layout(oracle(500, 21, 1, :count), (500, 300))  # not vacuous
+        # not vacuous
+        @test_logs (:warn, r"split cell") layout(oracle(500, 21, 1, :count), (500, 300))
     end
 end

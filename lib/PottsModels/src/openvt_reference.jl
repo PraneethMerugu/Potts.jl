@@ -1,21 +1,22 @@
 """
     OpenVTReferenceMonolayer(; name, lattice = (1400, 1400), …)
 
-The OpenVT growing monolayer with contact inhibition as the benchmark manuscript specifies it
-(Table S1 and §2.1; spec `15_openvt_monolayer.md` §2). One disc-shaped cell grows into a
+The OpenVT growing monolayer with contact inhibition as the benchmark manuscript specifies
+it (Table S1 and §2.1; spec `15_openvt_monolayer.md` §2). One disc-shaped cell grows into a
 colony on a closed lattice, large enough that the colony stays away from the edge (guard it
 with [`edge_guard`](@ref PottsModels.edge_guard)):
 
-- area constraint `λ (volume − A_star)²`, adhesion `J[kind, neighbor_kind]` on `Moore(1)` with
-  `J_cm = 10`, `J_cc = 20` (no net adhesion), Metropolis at `T`;
+- area constraint `λ (volume − A_star)²`, adhesion `J[kind, neighbor_kind]` on `Moore(1)`
+  with `J_cm = 10`, `J_cc = 20` (no net adhesion), Metropolis at `T`;
 - growth once per MCS after the sweep: `A_star += α` iff `volume / A_star ≥ β` (type 1)
   and `f ≥ γ` (type 2), where `f` is the free-surface fraction, the cell's medium contact
   pairs over its unlike contact pairs on `Moore(1)` (M's Fig 4, TST's "method 3"), read
-  with the contact fold `count(neighbor_kind == medium for _ in contacts) / count(true for _ in contacts)`;
+  with the contact fold
+  `count(neighbor_kind == medium for _ in contacts) / count(true for _ in contacts)`;
 - division at `volume ≥ X · A₀` along a random plane. Both daughters take half the
   mother's `A_star` and draw their own `X ~ N(μ_X, σ_X)`, redrawn while `X ≤ 0`
-  (`randn(μ_X, σ_X; lower_bound = 0)`); the first cell draws its `X` the same way before the first
-  division check. `σ_X = 0` is the deterministic mode `X ≡ μ_X`.
+  (`randn(μ_X, σ_X; lower_bound = 0)`); the first cell draws its `X` the same way before the
+  first division check. `σ_X = 0` is the deterministic mode `X ≡ μ_X`.
 
 Parameters (Table S1): `A₀ = 50` (A\\*(0), px), `λ = 2`, `T = 20`, `α = 50/775` px/MCS (a
 cycle of `5T = A₀/α = 775` MCS), `μ_X = 2`, `σ_X = 0.4`, `β = γ = 0` (uninhibited) and
@@ -57,9 +58,12 @@ the variant [`OpenVTGrowingMonolayer`](@ref).
     @after_mcs begin
         f ~ ifelse(
             count(true for _ in contacts) > 0,
-            count(neighbor_kind == medium for _ in contacts) / count(true for _ in contacts), 1.0
+            count(neighbor_kind == medium for _ in contacts) /
+                count(true for _ in contacts),
+            1.0
         )
-        A_star ~ ifelse((volume / Pre(A_star) >= β) && (f >= γ), Pre(A_star) + α, Pre(A_star))
+        A_star ~
+            ifelse((volume / Pre(A_star) >= β) && (f >= γ), Pre(A_star) + α, Pre(A_star))
     end
     @divide cells(cell) when = volume >= X * A₀, along = RandomPlane(), A_star => Split(),
         X => randn(μ_X, σ_X; lower_bound = 0.0)
@@ -70,9 +74,9 @@ end
     openvt_reference_state(; lattice = (1400, 1400), area0 = 50)
 
 One disc-shaped cell at the lattice center: the sites whose centers lie within
-`R = √(area0/π)` of the center point `(size .+ 1) ./ 2` (Morpheus' `Sphere radius = R`), id 1,
-as `[ownership => σ, kind => [:cell]]` (`area0` is the model's A₀). For `area0 = 50` that is 52 sites on an even lattice
-and 45 on an odd one.
+`R = √(area0/π)` of the center point `(size .+ 1) ./ 2` (Morpheus' `Sphere radius = R`), id
+1, as `[ownership => σ, kind => [:cell]]` (`area0` is the model's A₀). For `area0 = 50` that
+is 52 sites on an even lattice and 45 on an odd one.
 """
 function openvt_reference_state(; lattice = (1400, 1400), area0 = 50)
     σ = zeros(Int32, lattice)
@@ -85,10 +89,12 @@ function openvt_reference_state(; lattice = (1400, 1400), area0 = 50)
 end
 
 """
-    openvt_snapshot(u; area0 = 50.0, center = (size(u.ownership) .+ 1) ./ 2) -> (; x, y, r, f, a)
+    openvt_snapshot(u; area0 = 50.0, center = (size(u.ownership) .+ 1) ./ 2) -> (; x, y, r,
+        f, a)
 
 The O2 rows of a saved state `u` of [`OpenVTReferenceMonolayer`](@ref) (spec §3.1): one per
-live cell (volume > 0), in id order, lengths in units of `R = √(area0/π)` (`area0` is the model's A₀):
+live cell (volume > 0), in id order, lengths in units of `R = √(area0/π)` (`area0` is the
+model's A₀):
 
 - `x`, `y`: the centroid (mean site index; the lattice is closed) minus `center`, over `R`;
 - `r = √(A_star/π) / R`, the radius of the cell's reference area;
@@ -97,11 +103,15 @@ live cell (volume > 0), in id order, lengths in units of `R = √(area0/π)` (`a
 """
 function openvt_snapshot(u; area0 = 50.0, center = (size(u.ownership) .+ 1) ./ 2)
     σ = Array(u.ownership)
-    ndims(σ) == 2 || throw(ArgumentError("openvt_snapshot: a 2D state is required, got $(ndims(σ))D"))
+    ndims(σ) == 2 ||
+        throw(ArgumentError("openvt_snapshot: a 2D state is required, got $(ndims(σ))D"))
     volume = Array(u.cell.volume)
     A = Array(u.cell.A_star)
     n = length(volume)
-    sx = zeros(n); sy = zeros(n); med = zeros(Int, n); unlike = zeros(Int, n)
+    sx = zeros(n)
+    sy = zeros(n)
+    med = zeros(Int, n)
+    unlike = zeros(Int, n)
     nx, ny = size(σ)
     for j in 1:ny, i in 1:nx
         c = σ[i, j]
@@ -128,7 +138,8 @@ function openvt_snapshot(u; area0 = 50.0, center = (size(u.ownership) .+ 1) ./ 2
 end
 
 """
-    openvt_frame(u; beta, gamma, area0 = 50.0, center = (size(u.ownership) .+ 1) ./ 2) -> (; x, y, i, n)
+    openvt_frame(u; beta, gamma, area0 = 50.0,
+        center = (size(u.ownership) .+ 1) ./ 2) -> (; x, y, i, n)
 
 The O1 rows of a saved state `u` of [`OpenVTReferenceMonolayer`](@ref) (spec §3.1, M's
 DATA COLLECTION time series): one per live cell (volume > 0), in id order, ready for
@@ -137,12 +148,12 @@ DATA COLLECTION time series): one per live cell (volume > 0), in id order, ready
 - `x`, `y`: the centroid in units of `R = √(area0/π)` from `center`, exactly as
   [`openvt_snapshot`](@ref PottsModels.openvt_snapshot) gives them;
 - `i`: the inhibition code [`openvt_inhibition_code`](@ref) of the snapshot's `a` and `f` at
-  the thresholds `beta` (the model's β; type 1, area) and `gamma` (γ; type 2, free surface): 0 growing, 1, 2 or 3.
-  The code is computed on the saved state, after that MCS's growth increment: `a` is
-  `volume / A_star` with the grown `A_star`, while the model decided growth on the
-  pre-growth `volume / Pre(A_star)`. The two differ only for a cell whose target area is
-  within one increment `α` (50/775 px by default) of the β threshold, so the effect is
-  negligible;
+  the thresholds `beta` (the model's β; type 1, area) and `gamma` (γ; type 2, free surface):
+  0 growing, 1, 2 or 3. The code is computed on the saved state, after that MCS's growth
+  increment: `a` is `volume / A_star` with the grown `A_star`, while the model decided
+  growth on the pre-growth `volume / Pre(A_star)`. The two differ only for a cell whose
+  target area is within one increment `α` (50/775 px by default) of the β threshold, so the
+  effect is negligible;
 - `n`: the number of distinct other cells (medium and the cell itself excluded) among the
   `Moore(1)` neighbors of the cell's sites (spec §2.4), on the closed lattice (no wrap).
 
@@ -150,7 +161,9 @@ Like `openvt_snapshot`, it takes any `u` with `u.ownership` (2D), `u.cell.volume
 `u.cell.A_star`, on the host or a device. `σ` and the volumes are copied to the host twice,
 once by the snapshot and once for the neighbor count.
 """
-function openvt_frame(u; beta::Real, gamma::Real, area0 = 50.0, center = (size(u.ownership) .+ 1) ./ 2)
+function openvt_frame(
+        u; beta::Real, gamma::Real, area0 = 50.0, center = (size(u.ownership) .+ 1) ./ 2
+    )
     o = openvt_snapshot(u; area0, center)
     σ = Array(u.ownership)
     live = findall(>(0), Array(u.cell.volume))
@@ -161,8 +174,8 @@ end
 
 # the number of distinct other nonzero ids Moore(1)-adjacent to each id 1:ncell of σ (closed
 # lattice). Adjacency is symmetric, so the four forward offsets visit every unlike adjacent
-# pair once per direction; each pair is stored once (packed lo << 32 | hi), deduplicated, and
-# counted at both ends.
+# pair once per direction; each pair is stored once (packed lo << 32 | hi), deduplicated,
+# and counted at both ends.
 function _moore_degrees(σ::AbstractMatrix{<:Integer}, ncell::Integer)
     nx, ny = size(σ)
     pairs = UInt64[]
@@ -192,22 +205,23 @@ end
 """
     stop_at_cells(n; every = 1) -> DiscreteCallback
 
-Terminate a run (`ReturnCode.Terminated`) at the end of the first checked MCS whose number of
-live cells (volume > 0, after the lifecycle) is at least `n`; the state of that MCS is the
-last one saved. Checked every `every` MCS: on a device each check is one host read (a count
-over the cell volumes), a declared host pass.
+Terminate a run (`ReturnCode.Terminated`) at the end of the first checked MCS whose number
+of live cells (volume > 0, after the lifecycle) is at least `n`; the state of that MCS is
+the last one saved. Checked every `every` MCS: on a device each check is one host read (a
+count over the cell volumes), a declared host pass.
 """
 function stop_at_cells(n::Integer; every::Integer = 1)
     every >= 1 || throw(ArgumentError("stop_at_cells: `every` must be ≥ 1, got $every"))
     condition(u, t, integ) = t % every == 0 && count(>(0), u.cell.volume) >= n
-    return DiscreteCallback(condition, terminate!; save_positions = (false, false))   # one save of the last MCS
+    # one save of the last MCS
+    return DiscreteCallback(condition, terminate!; save_positions = (false, false))
 end
 
 """
     edge_guard(margin; terminate = false, every = 1) -> DiscreteCallback
 
-Guard a run on a finite lattice that stands for an unbounded domain: after every checked MCS,
-if a cell comes within `margin` sites of the lattice edge
+Guard a run on a finite lattice that stands for an unbounded domain: after every checked
+MCS, if a cell comes within `margin` sites of the lattice edge
 ([`Analysis.near_edge`](@ref PottsModels.Analysis.near_edge)), throw a `DomainError` (the
 default) or, with `terminate = true`, stop the run with `ReturnCode.Failure` (the state of
 that MCS is the last one saved). Checked every `every` MCS: on a device each check is one
@@ -223,13 +237,14 @@ function edge_guard(margin::Integer; terminate::Bool = false, every::Integer = 1
         else
             throw(
                 DomainError(
-                    margin, "edge_guard: a cell came within $margin sites of the lattice edge " *
-                        "at MCS $(integ.t); use a larger lattice"
+                    margin, "edge_guard: a cell came within $margin sites of the lattice " *
+                        "edge at MCS $(integ.t); use a larger lattice"
                 )
             )
         end
     end
-    return DiscreteCallback(condition, affect!; save_positions = (false, false))     # one save of the last MCS
+    # one save of the last MCS
+    return DiscreteCallback(condition, affect!; save_positions = (false, false))
 end
 
 # `near_edge` as one masked reduction: the frame of `margin` sites, built once per array
@@ -237,7 +252,8 @@ end
 # allocates nothing but the reduction's result)
 struct _EdgeGuard
     margin::Int
-    frame::Ref{Any}          # (array type, size, frame mask) once built; read only on the host
+    # (array type, size, frame mask) once built; read only on the host
+    frame::Ref{Any}
 end
 function (g::_EdgeGuard)(σ::AbstractArray)
     σ isa Array && return Analysis.near_edge(σ, g.margin)
@@ -245,7 +261,10 @@ function (g::_EdgeGuard)(σ::AbstractArray)
     if !(c isa Tuple && c[1] === typeof(σ) && c[2] == size(σ))
         host = falses(size(σ))
         for I in CartesianIndices(host)
-            host[I] = any(d -> I[d] <= g.margin || I[d] >= size(σ, d) - g.margin + 1, 1:ndims(σ))
+            host[I] = any(
+                d -> I[d] <= g.margin || I[d] >= size(σ, d) - g.margin + 1,
+                1:ndims(σ)
+            )
         end
         m = similar(σ, Bool)
         copyto!(m, Array(host))

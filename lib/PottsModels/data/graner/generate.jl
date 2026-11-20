@@ -53,7 +53,8 @@ function boundary(σ)
     n = m = 0
     X, Y = size(σ)
     for y in 1:Y, x in 1:X, (dx, dy) in ((1, 0), (0, 1), (1, 1), (1, -1))
-        a = σ[x, y]; b = σ[mod1(x + dx, X), mod1(y + dy, Y)]
+        a = σ[x, y]
+        b = σ[mod1(x + dx, X), mod1(y + dy, Y)]
         a == b && continue
         n += 1
         (a == 0 || b == 0) && (m += 1)
@@ -61,13 +62,16 @@ function boundary(σ)
     return n, m / n
 end
 
-# a copy of `σ` annealed 10 paper MCS at T = 0 with the relaxation energies (PRE Fig. 5 caption)
+# a copy of `σ` annealed 10 paper MCS at T = 0 with the relaxation energies (PRE Fig. 5
+# caption)
 function annealed(σ, n)
     q = PottsProblem(
         GranerGlazier(; name = :anneal), [
             ownership => copy(σ), kind => fill(:light, n),
             :J => [0 8 8; 8 2 2; 8 2 2], :T => 0.0, :λ => 1.0, :V₀ => 40.0,
-        ], (0, 160); seed = SEED + 2
+        ],
+        (0, 160);
+        seed = SEED + 2
     )
     return solve(q, SequentialCPM(); saveat = 160).u[end].ownership
 end
@@ -83,7 +87,9 @@ function generate(outdir)
         GranerGlazier(; name = :relax), [
             ownership => σ0, kind => fill(:light, n),
             :J => [0 8 8; 8 2 2; 8 2 2], :T => 5.0, :λ => 1.0, :V₀ => 40.0,
-        ], (0, 6400); seed = SEED
+        ],
+        (0, 6400);
+        seed = SEED
     )
     sol = solve(relax, SequentialCPM(); saveat = 0:100:6400)
     σ = sol.u[end].ownership
@@ -95,8 +101,10 @@ function generate(outdir)
     late = [boundary(annealed(u.ownership, n)) for u in sol.u[(end - 16):end]]
     drift_total, drift_medium = drift_of(first.(late)), drift_of(last.(late))
     @info "equilibrated (annealed copies, last 100 paper MCS)" drift_total drift_medium
-    drift_total <= 0.02 || error("not equilibrated: total boundary drifts by $drift_total of its mean")
-    drift_medium <= 0.02 || error("not equilibrated: medium fraction drifts by $drift_medium of its mean")
+    drift_total <= 0.02 ||
+        error("not equilibrated: total boundary drifts by $drift_total of its mean")
+    drift_medium <= 0.02 ||
+        error("not equilibrated: medium fraction drifts by $drift_medium of its mean")
     @info "relaxed" cells = n boundary_start = boundary(σ0) boundary_end = boundary(σ)
     trng = MersenneTwister(SEED + 1)
     kinds = [rand(trng, Bool) ? 1 : 2 for _ in 1:n]

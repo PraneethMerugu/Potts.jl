@@ -5,9 +5,9 @@ Cell sorting by differential adhesion (Graner & Glazier, Phys. Rev. Lett. 69, 20
 two cell kinds with an area constraint and kind-dependent contact energies on a periodic
 lattice with Moore contacts and proposals. The defaults are the papers' (PRL p. 2015; PRE
 p. 2139): `J_dd = 2`,
-`J_dl = 11`, `J_ll = 14`, `J_cM = 16`, `λ = 1`, `V₀ = 40`, `T = 10`. They satisfy its sorting
-hierarchy `J_dd < (J_dd + J_ll)/2 < J_dl < J_ll < J_M` (PRL Eq. 3), and light cells engulf
-the dark ones.
+`J_dl = 11`, `J_ll = 14`, `J_cM = 16`, `λ = 1`, `V₀ = 40`, `T = 10`. They satisfy its
+sorting hierarchy `J_dd < (J_dd + J_ll)/2 < J_dl < J_ll < J_M` (PRL Eq. 3), and light cells
+engulf the dark ones.
 
 Differences from the paper (Glazier & Graner, Phys. Rev. E 47, 2128, 1993):
 - one MCS here is `N` copy attempts, the paper's is `16N`, so paper time `t` is ours `16t`;
@@ -85,10 +85,10 @@ edge and wraps across it (`n = 200`: after about 23 000 MCS for one run seed), a
 aggregate is rebuilt on the larger lattice, not embedded: a different `margin` can move a
 few boundary sites between cells (32 sites for `n = 1000`, `seed = 9`, margin 60 against
 10), so compare margins statistically, not site by site. Built with the
-[`Voronoi`](@ref) layout over a disk of area `40n` (`n` generators drawn by `RandomPoints` in
-the disk, 30 Lloyd steps: a centroidal Voronoi tessellation, every cell one piece),
-with the kinds cycled over the random generators, so dark and light are mixed at random in
-equal numbers (±1). Deterministic in `seed`.
+[`Voronoi`](@ref) layout over a disk of area `40n` (`n` generators drawn by `RandomPoints`
+in the disk, 30 Lloyd steps: a centroidal Voronoi tessellation, every cell one piece), with
+the kinds cycled over the random generators, so dark and light are mixed at random in equal
+numbers (±1). Deterministic in `seed`.
 
 The paper relaxes its aggregate as one cell type for 400 paper MCS before assigning types
 (§II D3); no Potts relaxation is run here. The cell areas are more spread than after that
@@ -97,12 +97,23 @@ The sorting time course does not see the difference: the heterotypic boundary fr
 this start and from a relaxed one agree within 0.005 at 1, 10 and 100 paper MCS (6
 seeds). The area term evens the cells out within the first MCS.
 """
-function graner_glazier_aggregate(n::Integer = 1000; seed::Integer = 1, margin::Integer = 60)
-    margin >= 0 || throw(ArgumentError("graner_glazier_aggregate: margin must be non-negative, got $margin"))
+function graner_glazier_aggregate(
+        n::Integer = 1000; seed::Integer = 1,
+        margin::Integer = 60
+    )
+    margin >= 0 ||
+        throw(ArgumentError("graner_glazier_aggregate: margin must be non-negative, \
+            got $margin"))
     radius = sqrt(40n / π)
     L = 2ceil(Int, radius) + 1 + 2margin
     c = (L + 1) / 2                                          # the lattice centre
     ball = Circle(Point(c, c), radius)
-    op = layout(Voronoi(RandomPoints(n; region = ball, seed); region = ball, lloyd = 30, kinds = Int32[1, 2]), (L, L))
+    op = layout(
+        Voronoi(
+            RandomPoints(n; region = ball, seed); region = ball, lloyd = 30,
+            kinds = Int32[1, 2]
+        ),
+        (L, L)
+    )
     return op[1].second, op[2].second
 end

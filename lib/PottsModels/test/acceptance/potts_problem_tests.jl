@@ -22,7 +22,9 @@ end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "potts problem: PottsProblem" setup = [PottsProblemSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "potts problem: PottsProblem" setup = [PottsProblemSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "potts problem: PottsProblem" begin
         @test isdefined(CorePotts, :PottsProblem)
         @test !isdefined(CorePotts, :CPMProblem)
@@ -31,8 +33,13 @@ end
         @test CorePotts.PottsProblem <: problem_SciMLBase.AbstractSciMLProblem
         @test !(CorePotts.PottsProblem <: problem_SciMLBase.AbstractDEProblem)
 
-        σ = zeros(Int32, 12, 12); σ[4:6, 4:6] .= 1
-        prob = PottsProblem(Model(; name = :m), [CorePotts.ownership => σ, kind => [:A]], (0, 5))
+        σ = zeros(Int32, 12, 12)
+        σ[4:6, 4:6] .= 1
+        prob = PottsProblem(
+            Model(; name = :m), [CorePotts.ownership => σ, kind => [:A]], (
+                0, 5,
+            )
+        )
         @test prob isa CorePotts.PottsProblem
         for alg in (SequentialCPM(), CheckerboardCPM())
             @test problem_SciMLBase.isdiscrete(alg)

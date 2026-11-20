@@ -1,6 +1,6 @@
 # Peak finding: a port of SciPy 1.7.x `scipy.signal.find_peaks`, `peak_prominences` and
-# `peak_widths` (scipy/signal/_peak_finding.py, scipy/signal/_peak_finding_utils.pyx), and of
-# the NumPy 1.21 `argsort` they rely on (numpy/core/src/npysort/quicksort.c.src
+# `peak_widths` (scipy/signal/_peak_finding.py, scipy/signal/_peak_finding_utils.pyx), and
+# of the NumPy 1.21 `argsort` they rely on (numpy/core/src/npysort/quicksort.c.src
 # `aquicksort_<type>`, heapsort.c.src `aheapsort_<type>`), per D-069. Read from the sources
 # as text; indices are shifted to 1-based, and interpolated positions are computed on the
 # 0-based offsets first, so every floating-point value matches SciPy's before the shift, for
@@ -49,7 +49,8 @@
 
 # SciPy converts every signal to a contiguous float64 array (`_arg_x_as_expected`).
 function _signal(x)
-    x isa AbstractVector || throw(ArgumentError("expected a 1-D signal, got a $(typeof(x))"))
+    x isa AbstractVector ||
+        throw(ArgumentError("expected a 1-D signal, got a $(typeof(x))"))
     return convert(Vector{Float64}, collect(x))
 end
 
@@ -82,7 +83,7 @@ function _local_maxima(x::Vector{Float64})
     return mids
 end
 
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # NumPy 1.21 `np.argsort(v)` for float64 (default kind "quicksort"): introsort with
 # median-of-3 partitioning, insertion sort for partitions of ≤ 16 elements and a heapsort
 # fallback once the depth budget 2⌊log₂ n⌋ is spent. It is NOT stable: `find_peaks`'s tie
@@ -103,7 +104,8 @@ function _swap!(t, i, j)
     return nothing
 end
 
-# `aheapsort_<type>` on t[off : off + n − 1]; `a[i]` is t[off + i − 1] (NumPy's `tosort - 1`).
+# `aheapsort_<type>` on t[off : off + n − 1]; `a[i]` is t[off + i − 1] (NumPy's `tosort -
+# 1`).
 function _np_aheapsort!(t, v, off, n)
     a = off - 1
     l = n >> 1
@@ -268,7 +270,8 @@ function _widths(x::Vector{Float64}, peaks, rel_height, prom, lbase, rbase)
     zero_width = false
     for (k, peak) in enumerate(peaks)
         lb, rb = lbase[k], rbase[k]
-        (1 <= lb <= peak <= rb <= length(x)) || throw(ArgumentError("prominence data is invalid for peak $peak"))
+        (1 <= lb <= peak <= rb <= length(x)) ||
+            throw(ArgumentError("prominence data is invalid for peak $peak"))
         height = x[peak] - prom[k] * rel_height
         i = peak
         while lb < i && height < x[i]
@@ -292,7 +295,8 @@ function _widths(x::Vector{Float64}, peaks, rel_height, prom, lbase, rbase)
 end
 
 """
-    find_peaks(x; distance = nothing, prominence = nothing, width = nothing, rel_height = 0.5)
+    find_peaks(x; distance = nothing, prominence = nothing, width = nothing,
+        rel_height = 0.5)
         -> Vector{Int}
 
 Peaks of the signal `x`, as SciPy 1.7's `scipy.signal.find_peaks` finds them, with 1-based
@@ -310,8 +314,11 @@ indices.
 The filters run in that order, each on the survivors of the previous one. SciPy's `height`,
 `threshold`, `plateau_size` and `wlen` options are not ported (`wlen` is always `None`).
 """
-function find_peaks(x; distance = nothing, prominence = nothing, width = nothing, rel_height = 0.5)
-    distance !== nothing && distance < 1 && throw(ArgumentError("`distance` must be greater or equal to 1"))
+function find_peaks(
+        x; distance = nothing, prominence = nothing, width = nothing, rel_height = 0.5
+    )
+    distance !== nothing && distance < 1 &&
+        throw(ArgumentError("`distance` must be greater or equal to 1"))
     xs = _signal(x)
     peaks = _local_maxima(xs)
     if distance !== nothing
