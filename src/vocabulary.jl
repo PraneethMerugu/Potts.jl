@@ -1021,8 +1021,8 @@ end
 cells(kinds::_KindArg...) = CellDomain(_flat_kinds(kinds))
 clusters(kinds::_KindArg...) = ClusterDomain(_flat_kinds(kinds))
 (d::ContactDomain)(relation::Symbol) = ContactDomain(relation)
-const contacts = ContactDomain(:contact)
-const sites = SiteDomain()
+const CONTACTS = ContactDomain(:contact)
+const SITES = SiteDomain()
 """The copy-attempt domain of `@drive copy => expr`."""
 const COPY = CopyDomain()
 
@@ -1254,7 +1254,7 @@ The target's neighbor shell as a relation for `pieces`, `distinct` and the other
 not part of it.
 """
 struct ShellRelation end
-const shell = ShellRelation()
+const SHELL = ShellRelation()
 function (s::ShellRelation)(anchor; kws...)
     isempty(kws) || throw(
         ArgumentError(
@@ -1298,7 +1298,7 @@ The cell built-in: the number of connected components of the cell's sites under
 struct _Pieces end
 Base.nameof(::_Pieces) = :pieces
 Base.show(io::IO, ::_Pieces) = print(io, "pieces")
-const pieces = _Pieces()
+const PIECES = _Pieces()
 function (f::_Pieces)(c, a::Around; adjacency = :face)
     a.relation isa ShellRelation || _not_shell()
     _shell_anchor(a.anchor)
@@ -1336,11 +1336,11 @@ The number of distinct values of `body` over the in-domain sites of relation `R`
 struct _Distinct end
 Base.nameof(::_Distinct) = :distinct
 Base.show(io::IO, ::_Distinct) = print(io, "distinct")
-const distinct = _Distinct()
+const DISTINCT = _Distinct()
 (::_Distinct)(itr) = length(unique(itr))
 
 """`no_extinction`: forbid copies that remove a cell's last site."""
-const no_extinction = Constraint(:no_extinction, Int[], nothing)
+const NO_EXTINCTION = Constraint(:no_extinction, Int[], nothing)
 
 energy(p::Pair) = EnergyTerm(_domain(p.first), p.second)
 # bare `cells`/`clusters` mean every kind
@@ -1724,7 +1724,7 @@ Volume(kinds::_KindArg...; target, strength = 1) = cells(kinds...) => strength *
 """`Surface(kinds...; target, strength)` ≡ `cells(kinds...) => strength * (surface - target)^2`."""
 Surface(kinds::_KindArg...; target, strength = 1) = cells(kinds...) => strength * (B.surface - target)^2
 """`Adhesion(J)` ≡ `contacts => J[kind, neighbor_kind]` for a kind table `J`."""
-Adhesion(J) = contacts => _index(J, B.kind, B.neighbor_kind)
+Adhesion(J) = CONTACTS => _index(J, B.kind, B.neighbor_kind)
 """
     Chemotaxis(c; strength, response = identity, kinds = (), when = new != 0)
 
@@ -2139,8 +2139,9 @@ end
 
 """Names bound inside `@potts_model` bodies (the modeling vocabulary, not exported)."""
 const DSL = (;
-    cells, clusters, contacts, sites, edges, new_contact, connectivity, no_extinction, Global, Local, ArcOrPair,
-    Simple, connected, shell, pieces, distinct,
+    cells, clusters, contacts = CONTACTS, sites = SITES, edges, new_contact, connectivity,
+    no_extinction = NO_EXTINCTION, Global, Local, ArcOrPair, Simple, connected, shell = SHELL,
+    pieces = PIECES, distinct = DISTINCT,
     Volume, Surface, Adhesion, Chemotaxis, saturating, saturating_linear,
     principal_axis = _principal_axis, major_axis = _major_axis, minor_axis = _minor_axis,
     RandomPlane = _random_plane, Split, ExplicitEuler, RK4, Adaptive, Every, rand = _rand, randn = _randn, count = _Count(),

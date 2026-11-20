@@ -208,8 +208,8 @@ end
             variables = [c], energies = [Potts.energy(E)], sweep = Potts.sweep_spec(:metropolis; temperature = 1.0)
         )
         c = Potts.variable(only(Potts.Symbolics.@variables c(Potts.t)), :site)
-        @test_throws Potts.PottsCompileError mtkcompile(bad(Potts.sites => Potts._primed(c)))
-        @test mtkcompile(bad(Potts.contacts => c * Potts._primed(c))) isa Potts.CompiledPottsSystem
+        @test_throws Potts.PottsCompileError mtkcompile(bad(Potts.SITES => Potts._primed(c)))
+        @test mtkcompile(bad(Potts.CONTACTS => c * Potts._primed(c))) isa Potts.CompiledPottsSystem
         @test_throws ArgumentError Potts._primed(Potts.variable(only(Potts.Symbolics.@variables m(Potts.t)), :cell))
         @test_throws ArgumentError Potts._potts_model(
             :X,
@@ -350,7 +350,7 @@ end
         @test_throws Potts.PottsCompileError mtkcompile(
             Potts.PottsSystem(;
                 name = :bad,
-                kinds = [:medium, :A], lattice = Potts.lattice_spec((8, 8)), energies = [Potts.energy(Potts.contacts => Potts.B.target)],
+                kinds = [:medium, :A], lattice = Potts.lattice_spec((8, 8)), energies = [Potts.energy(Potts.CONTACTS => Potts.B.target)],
                 sweep = Potts.sweep_spec(:metropolis; temperature = 1.0)
             )
         )

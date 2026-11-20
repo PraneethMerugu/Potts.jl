@@ -443,14 +443,14 @@ end
         @test_throws Potts.PottsCompileError mtkcompile(
             Potts.PottsSystem(;
                 name = :bad, kinds = [:medium, :A],
-                lattice = Potts.lattice_spec((8, 8)), energies = [Potts.energy(Potts.contacts => Potts._index(Potts.B.volume, Potts.B.owner))],
+                lattice = Potts.lattice_spec((8, 8)), energies = [Potts.energy(Potts.CONTACTS => Potts._index(Potts.B.volume, Potts.B.owner))],
                 sweep = Potts.sweep_spec(:metropolis; temperature = 1.0)
             )
         )
         @test_throws Potts.PottsCompileError mtkcompile(
             Potts.PottsSystem(;
                 name = :bad, kinds = [:medium, :A],
-                lattice = Potts.lattice_spec((8, 8)), energies = [Potts.energy(Potts.sites => 0.1 * Potts._index(Potts.B.volume, Potts.B.owner))],
+                lattice = Potts.lattice_spec((8, 8)), energies = [Potts.energy(Potts.SITES => 0.1 * Potts._index(Potts.B.volume, Potts.B.owner))],
                 sweep = Potts.sweep_spec(:metropolis; temperature = 1.0)
             )
         )

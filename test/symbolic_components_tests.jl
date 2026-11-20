@@ -128,7 +128,7 @@ end
         ck = checkpoint(integ)
         @test solve!(init(p2, SequentialCPM(); checkpoint = ck)).u[end].ownership == solve(p1, SequentialCPM()).u[end].ownership
         # site populations stay inside the domain
-        @test observe(p1, Potts._fold_iter(count, s -> true, Potts.sites, nothing)) == count(Potts.lattice(DiskSorting(; name = :d)).domain)
+        @test observe(p1, Potts._fold_iter(count, s -> true, Potts.SITES, nothing)) == count(Potts.lattice(DiskSorting(; name = :d)).domain)
     end
 end
 

@@ -13,7 +13,8 @@ module Potts
 using ADTypes: AutoFiniteDiff
 using ConstructionBase: ConstructionBase
 using CorePotts
-using CorePotts: CorePotts, Footprint, Lattice, embed, PottsProblem, Periodic, Closed, Moore, init, solve, step!, saturating, saturating_linear
+using CorePotts: CorePotts, Footprint, Lattice, embed, PottsProblem, Periodic, Closed, Moore, init, solve, step!, saturating, saturating_linear,
+    ownership
 # the compile workload's `@potts_model` body names these (precompile.jl)
 using CorePotts: Metropolis, RandomPlane
 using JumpProcesses: JumpProcesses
@@ -24,7 +25,8 @@ using LatticeFields.Problems: ExplicitEuler, ExplicitMap, LatticeNewton, Backwar
 using LatticeFields.Solvers: LatticePCG, LatticeGMRES, LatticeMultigrid, LatticeBlockSolve, VCycle
 using LatticePDE: LatticePDE, laplacian, value_at, ismember, Coarse
 using LinearAlgebra: Symmetric, eigen, svdvals
-using ModelingToolkitBase: ModelingToolkitBase, Differential, Equation, Pre, @named, mtkcompile, complete, compose, extend
+using ModelingToolkitBase: ModelingToolkitBase, Differential, Equation, Pre, @named, mtkcompile, complete, compose, extend,
+    t_nounits as t
 using PrecompileTools: PrecompileTools
 using RuntimeGeneratedFunctions: RuntimeGeneratedFunctions
 using SciMLBase: SciMLBase
@@ -42,7 +44,6 @@ using GeometryBasics: HyperSphere, Point
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
-const t = ModelingToolkitBase.t_nounits
 const D = ModelingToolkitBase.D_nounits
 
 for name in names(CorePotts)

@@ -1,9 +1,6 @@
 # `PottsProblem(sys, op, tspan)`: operating point + compiled model → `CorePotts.PottsProblem`
 # with generated functions (the analogue of MTK's `ODEProblem(sys, op, tspan)`).
 
-# `ownership => labels` in an operating point uses CorePotts' `ownership` accessor as the key.
-const ownership = CorePotts.ownership
-
 """
     PottsModelInfo
 
