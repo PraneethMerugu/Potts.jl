@@ -338,7 +338,7 @@ struct _RunPhase{S, P, C, K, M, B, T}
     stats::T
     part::NTuple{2, Int}
 end
-@inline function (f::_RunPhase)(ph)
+function (f::_RunPhase)(ph)
     return run_phase(
         ph, f.st, f.p, f.ctx, f.key, f.mcs, f.backend, f.stats, f.part
     )
