@@ -74,8 +74,13 @@ function _mg_bind_for!(engines, lck, m::LatticeMetadata, W, p, inner)
     γ = _mg_gamma(W)
     fp = m.problem
     u, q, t = p isa Tuple && length(p) == 4 ? (p[2], p[3], p[4]) : (nothing, p, fp.tspan[1])
-    lp = q isa LatticeParameters ? q : m.problem.p isa LatticeParameters ? m.problem.p :
-         LatticeParameters(copy(fp.p), fp.tables, fp.inputs; fns = fp.inputfns)
+    lp = if q isa LatticeParameters
+        q
+    elseif m.problem.p isa LatticeParameters
+        m.problem.p
+    else
+        LatticeParameters(copy(fp.p), fp.tables, fp.inputs; fns = fp.inputfns)
+    end
     P = lock(lck) do
         key = (objectid(m), current_task())
         e = get(engines, key, nothing)
@@ -103,7 +108,13 @@ function _mg_engine(m::LatticeMetadata, lp::LatticeParameters, inner)
     h = 1.0
     be = BackwardEuler(; substeps = 1, nlsolve = LatticeNewton(; max_iter = 1), linsolve = inner)
     qs = QuasiSteady(; nlsolve = LatticeNewton(; max_iter = 1), linsolve = inner)
-    alg = fp.group.spec.timefree ? qs : isempty(st) ? be : FieldGroups((k => qs for k in st)...; default = be)
+    alg = if fp.group.spec.timefree
+        qs
+    elseif isempty(st)
+        be
+    else
+        FieldGroups((k => qs for k in st)...; default = be)
+    end
     integ = CommonSolve.init(g, alg; dt = h, save_start = false, save_end = false)
     s = fp.program
     slots = state_layout(s, Int[fieldid(s, k) for k in fp.state])
@@ -194,7 +205,13 @@ function _mg_local_body!(i, y, off, r, sh, mask, dom, s)
     @inbounds begin
         K = eltype(y)
         d = K(_at(sh, i))
-        y[off + i] = _cs_fixed(mask, dom, i) ? -s * r[off + i] : (d > 0 ? -r[off + i] / d : -r[off + i])
+        y[off + i] = if _cs_fixed(mask, dom, i)
+            -s * r[off + i]
+        elseif d > 0
+            -r[off + i] / d
+        else
+            -r[off + i]
+        end
     end
     return nothing
 end

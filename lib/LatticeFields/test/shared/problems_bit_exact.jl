@@ -79,8 +79,11 @@ function run_species(s, sp, X, P, layout)
         copyto!(current(st, s, "u"), reduce(vcat, X))
     end
     run_step!(s, sp, st, P)
-    out = layout == :sep ? [copy(current(st, s, "u$k")) for k in 1:K] :
+    out = if layout == :sep
+        [copy(current(st, s, "u$k")) for k in 1:K]
+    else
         collect(Iterators.partition(copy(current(st, s, "u")), length(X[1])))
+    end
     return reduce(vcat, map(o -> reinterpret(UInt32, collect(o)), out))
 end
 

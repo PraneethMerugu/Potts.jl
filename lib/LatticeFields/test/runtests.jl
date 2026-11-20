@@ -61,8 +61,13 @@ function _resolve_lf_groups(groups_table, raw_groups)
 end
 
 const LATTICEFIELDS_GROUPS_TABLE = _load_lf_groups()
-const LATTICEFIELDS_RAW_GROUPS = !isempty(ARGS) ? ARGS :
-    (!isempty(strip(get(ENV, "GROUP", ""))) ? [strip(ENV["GROUP"])] : ["All"])
+const LATTICEFIELDS_RAW_GROUPS = if !isempty(ARGS)
+    ARGS
+elseif !isempty(strip(get(ENV, "GROUP", "")))
+    [strip(ENV["GROUP"])]
+else
+    ["All"]
+end
 const LATTICEFIELDS_SELECTED_GROUPS = _resolve_lf_groups(LATTICEFIELDS_GROUPS_TABLE, LATTICEFIELDS_RAW_GROUPS)
 
 if "gpu" in LATTICEFIELDS_SELECTED_GROUPS &&

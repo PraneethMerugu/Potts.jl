@@ -12,11 +12,24 @@ function iv_mul(a::Iv, b::Iv)
     return _out(minimum(p), maximum(p))
 end
 iv_neg(a::Iv) = (-a[2], -a[1])
-iv_div(a::Iv, b::Iv) = b[1] <= 0 <= b[2] ? (-Inf, Inf) :
-                       iv_mul(a, _out(1 / b[2], 1 / b[1]))
+function iv_div(a::Iv, b::Iv)
+    if b[1] <= 0 <= b[2]
+        return (-Inf, Inf)
+    else
+        return iv_mul(a, _out(1 / b[2], 1 / b[1]))
+    end
+end
 iv_min(a::Iv, b::Iv) = (min(a[1], b[1]), min(a[2], b[2]))
 iv_max(a::Iv, b::Iv) = (max(a[1], b[1]), max(a[2], b[2]))
-iv_abs(a::Iv) = a[1] >= 0 ? a : a[2] <= 0 ? iv_neg(a) : (0.0, max(-a[1], a[2]))
+function iv_abs(a::Iv)
+    if a[1] >= 0
+        return a
+    elseif a[2] <= 0
+        return iv_neg(a)
+    else
+        return (0.0, max(-a[1], a[2]))
+    end
+end
 function iv_powi(a::Iv, n::Int)
     n == 0 && return (1.0, 1.0)
     n < 0 && return iv_div((1.0, 1.0), iv_powi(a, -n))
@@ -37,8 +50,13 @@ function _ivexpr(k::Kernel, i, p::Program, bounds, a)
     op == CONST && return (k.consts[n.imm], k.consts[n.imm])
     op == PARAM && return :((Plo[$(Int(n.imm))], Phi[$(Int(n.imm))]))
     if op in (LOAD, TABLE, RUNTIME)
-        key = op == LOAD ? p.fields[k.accesses[n.imm].field].key :
-              op == TABLE ? p.tables[n.imm].key : "runtime#$(n.imm)"
+        key = if op == LOAD
+            p.fields[k.accesses[n.imm].field].key
+        elseif op == TABLE
+            p.tables[n.imm].key
+        else
+            "runtime#$(n.imm)"
+        end
         haskey(bounds, key) ||
             irerror("interval evaluator: `", key, "` has no declared interval",
                 " (kernel `", k.key, "`, node v", i, ")")

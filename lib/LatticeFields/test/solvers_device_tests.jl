@@ -107,8 +107,11 @@ using .LF_solvers_device: instances
             S, G = devconvert(l.S), devconvert(l.G)
             f64_type(Tuple{typeof(S), typeof(l.P), typeof(G)}) &&
                 push!(bad, "args " * l.key)
-            args = l.wg == 0 ? (typeof(_index(1, l.G)),) :
-                   (Int32, Int32, Int32, typeof(devconvert(l.lds)))
+            args = if l.wg == 0
+                (typeof(_index(1, l.G)),)
+            else
+                (Int32, Int32, Int32, typeof(devconvert(l.lds)))
+            end
             append!(bad, f64_sites(Tuple{typeof(l.body), args..., typeof(S), typeof(l.P),
                 typeof(G)}))
         end

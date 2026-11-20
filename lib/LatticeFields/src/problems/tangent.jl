@@ -38,7 +38,13 @@ function _tupdate_body!(i, dst, x, smask, v, res, s, mask, mval, mvf, lo, j)
         elseif lo !== nothing && dvalue(d) <= lo
             q = zero(dvalue(d))
         else
-            δ = res !== nothing ? res[i] / _at(s, i) : (v !== nothing && smask[i] != 0) ? v[i] : x[i]
+            δ = if res !== nothing
+                res[i] / _at(s, i)
+            elseif v !== nothing && smask[i] != 0
+                v[i]
+            else
+                x[i]
+            end
             q = dpartial(d, j) + δ
         end
         dst[i] = dsetpartial(d, j, q)
@@ -110,7 +116,13 @@ function _tcur(prog::Program, s::Program, swaps, all_state, stcur, par)
     cur = ones(Int, length(prog.fields))
     for (i, f) in enumerate(prog.fields)
         if i <= length(s.fields)
-            cur[i] = i in swaps ? 3 - par : (all_state ? par : stcur[i])
+            cur[i] = if i in swaps
+                3 - par
+            elseif all_state
+                par
+            else
+                stcur[i]
+            end
         elseif endswith(f.key, "__n")
             cur[i] = par
         end
@@ -122,7 +134,13 @@ function _tqcur(prog::Program, s::Program, swaps, all_state, stcur, par)
     cur = ones(Int, length(prog.fields))
     for (i, f) in enumerate(prog.fields)
         if i <= length(s.fields)
-            cur[i] = i in swaps ? par : (all_state ? par : stcur[i])
+            cur[i] = if i in swaps
+                par
+            elseif all_state
+                par
+            else
+                stcur[i]
+            end
         elseif endswith(f.key, "__n")
             cur[i] = par
         end
@@ -285,8 +303,11 @@ function _tset_q!(c::TangentCache, rt::GroupRuntime, bdf::Bool)
     par = _parity(rt)
     for r in c.rows
         un = r.bufs[par]
-        bdf ? Exec.launch!(c.backend, _bdf2_q_body!, length(r.q), (r.q, un, r.prev)) :
-              Exec.launch!(c.backend, _copy_body!, length(r.q), (r.q, un))
+        if bdf
+            Exec.launch!(c.backend, _bdf2_q_body!, length(r.q), (r.q, un, r.prev))
+        else
+            Exec.launch!(c.backend, _copy_body!, length(r.q), (r.q, un))
+        end
     end
     return nothing
 end

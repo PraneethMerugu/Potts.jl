@@ -170,7 +170,9 @@ function _prestrict!(w::_Walk{N}, i) where {N}
         nj.op in (LOAD, IR.INSIDE_OP) && (depth = max(depth, -Int(k.accesses[nj.imm].level)))
     end
     L = Int(k.space.level)
-    ranges = ntuple(d -> leveldims(s, L - depth)[d] == 1 ? (0:0) : depth == 1 ? (0:2) : (0:((1 << depth) - 1)), N)
+    dims = leveldims(s, L - depth)
+    span = depth == 1 ? (0:2) : (0:((1 << depth) - 1))
+    ranges = ntuple(d -> dims[d] == 1 ? (0:0) : span, N)
     saved = w.stamp
     for o in Iterators.product(ranges...)
         # the third child exists only at the last site of an odd axis

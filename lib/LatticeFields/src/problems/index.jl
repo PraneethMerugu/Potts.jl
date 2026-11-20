@@ -99,7 +99,13 @@ function LatticeIndex(; key::F = identity, variables = Pair[], parameters = Pair
         o = get(ins, kk, nothing)
         o === nothing || o == k || throw(ArgumentError(string("two input fields have the name `", s, "`: `",
             o, "` and `", k, "`; give each input its own name (`lattice_input_name`)")))
-        what = haskey(vars, kk) ? "a field" : haskey(params, kk) ? "a parameter" : nothing
+        what = if haskey(vars, kk)
+            "a field"
+        elseif haskey(params, kk)
+            "a parameter"
+        else
+            nothing
+        end
         what === nothing || throw(ArgumentError(string("the input field `", k, "` has the name `", s,
             "` (its `lattice_input_name`), which is also ", what, " of the problem; give the input another name")))
         ins[kk] = String(k)
@@ -198,8 +204,13 @@ SII.is_parameter(ix::LatticeIndex, sym) = (_scalar(sym) && haskey(ix.params, ix.
 SII.is_observed(ix::LatticeIndex, sym) = _scalar(sym) && (haskey(ix.observed, ix.key(sym)) || _ode_aux(ix, sym) !== nothing)
 # an aux field on the ODE path: observed, `rhs(u(t), t)` from the solver's state
 _ode_aux(ix::LatticeIndex, sym) = ix.auxeval[] === nothing ? nothing : aux_key(ix, sym)
-SII.parameter_observed(ix::LatticeIndex, sym) = _scalar(sym) ? _on_values(get(ix.observed, ix.key(sym), nothing)) :
-                                               _observed_list(ix, sym)
+function SII.parameter_observed(ix::LatticeIndex, sym)
+    if _scalar(sym)
+        return _on_values(get(ix.observed, ix.key(sym), nothing))
+    else
+        return _observed_list(ix, sym)
+    end
+end
 # an observed parameter reads the scalar values (`LatticeParameters` or a raw vector)
 _on_values(f) = f === nothing ? nothing : (p, t) -> f(_pvals(p), t)
 function SII.observed(ix::LatticeIndex, sym)
@@ -278,8 +289,13 @@ end
 The entry of the table that `sym` names: `i` for `Dk[i]`, 0 for the whole table `Dk`; `nothing`
 if `sym` names no table. (`table_key` gives the table.)
 """
-table_entry(ix::LatticeIndex, sym) = (sym isa Tuple || sym isa Integer) ? nothing :
-                                     (t = get(ix.tables, ix.key(sym), nothing); t === nothing ? nothing : last(t))
+function table_entry(ix::LatticeIndex, sym)
+    if sym isa Tuple || sym isa Integer
+        return nothing
+    else
+        return (t = get(ix.tables, ix.key(sym), nothing); t === nothing ? nothing : last(t))
+    end
+end
 SII.parameter_symbols(ix::LatticeIndex) = ix.paramsyms
 function SII.is_independent_variable(ix::LatticeIndex, sym)
     any(v -> isequal(ix.key(v), ix.key(sym)),

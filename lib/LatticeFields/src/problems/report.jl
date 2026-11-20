@@ -118,7 +118,13 @@ function _implicit_cause(spec::GroupSpec, alg::AbstractImplicitFieldAlgorithm, d
         return (; n, cause = :bound, text = string(r.n2 >= r.n1 ? "the convergence rule" : "the growth rule", " (", rules,
             "), above ", least))
     end
-    cause = alg.substeps === nothing ? :least : max(r.n1, r.n2) == r.m ? :both : :user
+    cause = if alg.substeps === nothing
+        :least
+    elseif max(r.n1, r.n2) == r.m
+        :both
+    else
+        :user
+    end
     return (; n, cause, text = string(cause == :both ? "both " : "", least, cause == :both ? " and a rule" : "", " (", rules, ")"))
 end
 
@@ -210,8 +216,16 @@ end
 function _newton_text(alg, f)
     f.given && return string(f.newton, ": given (`nlsolve = ", repr(alg.nlsolve), "`)")
     w = string(f.newton, ", automatic: ")
-    f.coupled && return string(w, "the coupled solve's operator is the whole Jacobian (",
-        f.linear ? "linear: one solve" : alg isa QuasiSteady ? "nonlinear steady: $QS_NEWTON checked" : "nonlinear", ")")
+    if f.coupled
+        kind = if f.linear
+            "linear: one solve"
+        elseif alg isa QuasiSteady
+            "nonlinear steady: $QS_NEWTON checked"
+        else
+            "nonlinear"
+        end
+        return string(w, "the coupled solve's operator is the whole Jacobian (", kind, ")")
+    end
     unseen = isempty(f.unseen) ? "" : string(": ", join(_termtext.(f.unseen), ", "))
     if alg isa QuasiSteady
         f.exact && return string(w, f.switch || f.iterate ? "nonlinear or switched rows ($QS_NEWTON checked)" : "the operator is exact")
@@ -231,33 +245,50 @@ function _operator_text(f)
     terms = String[_termtext(t) for t in f.terms]
     f.cyclic && push!(terms, "the cycle among the group's fields")
     f.exact0 && push!(terms, "a Robin face or a diffusion multiplier whose sign is negative at these parameters")
-    ρ = f.seen ? string("ρ_in = ", _rtext(f.ρin)) :
+    ρ = if f.seen
+        string("ρ_in = ", _rtext(f.ρin))
+    else
         string("ρ_in unknown (no bound sees ", isempty(f.unseen) ? "a term out of the operator" : join(_termtext.(f.unseen), ", "), ")")
+    end
     return string("J̃ inexact: ", isempty(terms) ? "terms out of the operator" : join(terms, ", "), "; ", ρ,
         ", corrected by the Newton iterations")
 end
 function _fact_lines(io, alg, f)
     auto = alg.linsolve === :auto ? " (`linsolve = :auto`)" : ""
-    inner = f.coupled ? string(
-            "coupled solve ", repr(f.krylov), isempty(f.linsolve) ? "" :
-            string(", each field preconditioned by ", join(repr.(f.linsolve), ", "))
-        ) :
-        isempty(f.linsolve) ? "none: every row is local (solved site by site)" : join(repr.(f.linsolve), ", ")
+    inner = if f.coupled
+        precs = isempty(f.linsolve) ? "" : string(", each field preconditioned by ", join(repr.(f.linsolve), ", "))
+        string("coupled solve ", repr(f.krylov), precs)
+    elseif isempty(f.linsolve)
+        "none: every row is local (solved site by site)"
+    else
+        join(repr.(f.linsolve), ", ")
+    end
     _line(io, "linsolve", string(inner, auto, isempty(f.levels) ? "" : string(", multigrid levels ", join(f.levels, ", "))))
     _line(io, "newton", _newton_text(alg, f))
     _line(io, "operator", _operator_text(f))
     return nothing
 end
-_solvertext(alg, f) = f === nothing || isempty(f.solver_type) ? string("solver ", canonical(alg.solver_type), " (set when bound)") :
-    string("solver ", join(f.solver_type, ", "), alg.solver_type === :auto ? " (`solver_type = :auto`)" : "")
+function _solvertext(alg, f)
+    if f === nothing || isempty(f.solver_type)
+        return string("solver ", canonical(alg.solver_type), " (set when bound)")
+    else
+        return string("solver ", join(f.solver_type, ", "), alg.solver_type === :auto ? " (`solver_type = :auto`)" : "")
+    end
+end
 # … and an implicit group with no bound runtime (`field_report(prob, alg)`): as given
 function _given_lines(io, spec::GroupSpec, g::FieldGroup, alg::AbstractImplicitFieldAlgorithm, keys)
     op = _operator(spec, alg)
     coupled = coupled_solve(alg, op, group_program(g, alg), keys)
     rows = [r for r in op.rows if r.key in keys]
-    inner = coupled ? string("coupled solve ", repr(_krylov(alg.linsolve))) :
-            all(r -> r.local_only, rows) ? "none: every row is local (solved site by site)" :
-        alg.linsolve === :auto ? string(repr(Solvers.LatticePCG()), " (`linsolve = :auto`)") : repr(alg.linsolve)
+    inner = if coupled
+        string("coupled solve ", repr(_krylov(alg.linsolve)))
+    elseif all(r -> r.local_only, rows)
+        "none: every row is local (solved site by site)"
+    elseif alg.linsolve === :auto
+        string(repr(Solvers.LatticePCG()), " (`linsolve = :auto`)")
+    else
+        repr(alg.linsolve)
+    end
     _line(io, "linsolve", inner)
     _line(io, "newton", alg.nlsolve === nothing ? "automatic (set when the group is bound)" : string(alg.nlsolve.max_iter, ": given (`nlsolve = ", repr(alg.nlsolve), "`)"))
     return nothing
@@ -300,8 +331,15 @@ function group_report(io::IO, rt::GroupRuntime, pp; title = "group", dt::Real = 
     return nothing
 end
 
-_state_type(rt::GroupRuntime) = rt.c !== nothing ? typeof(rt.c) :
-                               isempty(rt.keys) ? Float64 : eltype(rt.store.bufs[fieldid(rt.program, rt.keys[1])][1])
+function _state_type(rt::GroupRuntime)
+    if rt.c !== nothing
+        return typeof(rt.c)
+    elseif isempty(rt.keys)
+        return Float64
+    else
+        return eltype(rt.store.bufs[fieldid(rt.program, rt.keys[1])][1])
+    end
+end
 # the policy lines of a group (bound or not): the header, window, count and cause, bound,
 # numbers. `n` the count the run used (`nothing`: the policy's); `t0` the start of the first
 # window, over which a bound that reads the time is counted (`current`: the bound's own window,
@@ -313,9 +351,16 @@ function _policy_lines(io, title, spec, alg, dt::Float64, n, pp, fields, stabili
     _at_window(stability, current ? nothing : t0, dt) do
         c = substep_cause(spec, alg, dt, pp; fields, stability)
         n = something(n, c.n)
-        win = timed ? (w = bound_window(stability); w === nothing ? "" :
-                                                    string("; the bound reads the time: each window is recounted, this count is ",
-                current ? "the current" : "the first", " window's, [", _rtext(w[1]), ", ", _rtext(w[2]), "]")) : ""
+        win = if timed
+            (w = bound_window(stability); if w === nothing
+                ""
+            else
+                string("; the bound reads the time: each window is recounted, this count is ",
+                    current ? "the current" : "the first", " window's, [", _rtext(w[1]), ", ", _rtext(w[2]), "]")
+            end)
+        else
+            ""
+        end
         if c.cause in (:map, :steady, :aux)
             _line(io, "window", string("dt = ", _rtext(dt), ", ", c.text))
         elseif c.cause == :refused
@@ -327,8 +372,13 @@ function _policy_lines(io, title, spec, alg, dt::Float64, n, pp, fields, stabili
             nw = timed && !current ? c.n : n
             _line(io, "window", string("dt = ", _rtext(dt), ", ", _plural(nw, "substep"), nw > 0 ? string(" (h = ", _rtext(dt / nw), ")") : "",
                 win))
-            pre = c.n == n ? "" : current ? string("now ", n, "; the policy at these parameters gives ", c.n, ": ") :
-                                  string("the run's last window took ", n, "; ", c.n, " by ")
+            pre = if c.n == n
+                ""
+            elseif current
+                string("now ", n, "; the policy at these parameters gives ", c.n, ": ")
+            else
+                string("the run's last window took ", n, "; ", c.n, " by ")
+            end
             _line(io, "substeps", string(pre, c.text, " [", c.cause, "]"))
             c.cause in (:bound, :both) && _route_line(io, spec, alg, dt, pp, fields, n)
         end
@@ -392,13 +442,20 @@ function _coupling_lines(io, stability, keys::Vector{Vector{String}}, algs, pp, 
     end
     steady = [a isa QuasiSteady for a in algs]
     within = lagged_coupling(stability, keys, pp; within = loops)
-    sr = any(g -> !isempty(loops[g]) && any(h -> steady[h], loops[g]), eachindex(keys)) ?
-         steady_loop_rates(stability, keys, pp, steady, loops) : nothing
+    sr = if any(g -> !isempty(loops[g]) && any(h -> steady[h], loops[g]), eachindex(keys))
+        steady_loop_rates(stability, keys, pp, steady, loops)
+    else
+        nothing
+    end
     println(io, "coupling:")
     for g in eachindex(keys)
         isempty(loops[g]) && continue
         qs = any(h -> steady[h], loops[g])
-        q = qs ? (sr === nothing ? nothing : sr[g]) : within[g]
+        q = if qs
+            sr === nothing ? nothing : sr[g]
+        else
+            within[g]
+        end
         if q === nothing
             println(io, "  group ", g, ": loop ", loops[g], " with a QuasiSteady group: the rule has no bound for its gain")
         elseif steady[g]
@@ -409,8 +466,15 @@ function _coupling_lines(io, stability, keys::Vector{Vector{String}}, algs, pp, 
             # only; the words of the coupling rule's warning)
             ul = !qs && any(h -> within[h].unseen, loops[g]) ? unseen_loop(stability, pp, keys, within, loops[g]) : nothing
             unseen = ul !== nothing && ul.kind !== :none
+            side = if !isfinite(κ)
+                ""
+            elseif κ <= 1 + _COUPLING_RTOL
+                " (≤ 1)"
+            else
+                " (> 1)"
+            end
             println(io, "  group ", g, ": loop ", loops[g], ", κ = dt · rate = ", _rtext(dt), " × ", _rtext(q.rate), " = ",
-                _rtext(κ), isfinite(κ) ? (κ <= 1 + _COUPLING_RTOL ? " (≤ 1)" : " (> 1)") : "",
+                _rtext(κ), side,
                 q.row === nothing || q.row == "" ? "" : string("; worst row ", q.row, " reads ", q.other, " through ", q.text),
                 unseen ? string("; ", cover_text(ul.terms)) : "")
         end
@@ -489,8 +553,10 @@ function field_report(io::IO, prob::SciMLBase.AbstractSciMLProblem, alg::Abstrac
     println(io, "Field report: problem under ", _headtext(alg), " (the policy at the problem's parameters; nothing bound)")
     _problem_lines(io, fp)
     for (a, _) in _groups(fp, alg)
-        alg_family(a) == fp.kind || throw(ArgumentError(string("field_report: a ", fp.kind == :map ?
-            "map program is stepped by ExplicitMap()" : "rate program is stepped by a rate algorithm", "; got ", _algtext(a))))
+        if alg_family(a) != fp.kind
+            route = fp.kind == :map ? "map program is stepped by ExplicitMap()" : "rate program is stepped by a rate algorithm"
+            throw(ArgumentError(string("field_report: a ", route, "; got ", _algtext(a))))
+        end
     end
     _groups_lines(io, fp, alg, nothing; dt)
     return nothing
@@ -504,15 +570,23 @@ function _function_lines(io, prob, m::LatticeMetadata)
     jac, jp, cv, jvp, mm = prop(f, :jac), prop(f, :jac_prototype), prop(f, :colorvec), prop(f, :jvp), prop(f, :mass_matrix)
     # (a function by its name: an operator prototype sets `jac` to its `update_coefficients!`)
     tname(x) = x isa Function && !(x isa Union{LatticeJVP, LatticeJacobian}) ? string(nameof(x)) : string(nameof(typeof(x)))
-    mmt = mm === nothing || mm === LinearAlgebra.I ? "I" :
-          mm isa LinearAlgebra.Diagonal ? string("Diagonal (", count(iszero, Array(mm.diag)), " steady slots)") : tname(mm)
+    mmt = if mm === nothing || mm === LinearAlgebra.I
+        "I"
+    elseif mm isa LinearAlgebra.Diagonal
+        string("Diagonal (", count(iszero, Array(mm.diag)), " steady slots)")
+    else
+        tname(mm)
+    end
     _line(io, "function", _clauses(string("right side built ", _plural(m.builds[], "time")),
         jac === nothing ? "" : string("jac ", tname(jac)),
         jp === nothing ? "" : string("jac_prototype ", tname(jp), cv === nothing ? "" : string(" (", maximum(cv; init = 0), " colors)")),
         jvp === nothing ? "" : string("jvp ", tname(jvp)), string("mass matrix ", mmt)))
     # (the family's built-ins: a problem with no time has none)
-    names = m.problem.group.spec.timefree || m.family == :map ? String[] :
-            [string(nameof(typeof(c))) for c in _builtin_specs(m.problem)]
+    names = if m.problem.group.spec.timefree || m.family == :map
+        String[]
+    else
+        [string(nameof(typeof(c))) for c in _builtin_specs(m.problem)]
+    end
     isempty(names) || _line(io, "callbacks", string("built-in: ", _keystext(names)))
     return nothing
 end
@@ -608,6 +682,11 @@ function field_report(io::IO, sol::FieldSolution)
     _system_bound(io, fp)
     return nothing
 end
+# group `i`'s substep count in a report: `nothing` before a run, 0 for a group without one
+function _group_count(counts, i)
+    counts === nothing && return nothing
+    return i <= length(counts) ? counts[i] : 0
+end
 # the groups of a solution or of a problem under an algorithm: the policy at its parameters
 # (a bound that reads the time over the first window), the counts its run used (`counts`, or
 # `nothing`: the policy's) and the facts resolved at its bind (`facts`, or `nothing`: as given)
@@ -623,7 +702,7 @@ function _groups_lines(io, fp::FieldProblem, alg, counts; facts = nothing, dt = 
         f = facts === nothing || i > length(facts) ? nothing : facts[i]
         group_report(
             io, fp.group, a, pp; title = string("group ", i, " of ", length(groups)), dt = w,
-            n = counts === nothing ? nothing : i <= length(counts) ? counts[i] : 0, facts = f, fields = ks, stability = stab, E,
+            n = _group_count(counts, i), facts = f, fields = ks, stability = stab, E,
             t0 = fp.tspan[1])
     end
     fp.kind == :map || _coupling_lines(io, fp.stability, [collect(String, ks) for (_, ks) in groups], [a for (a, _) in groups], pp,

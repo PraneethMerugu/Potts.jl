@@ -28,8 +28,11 @@ end
     # finish: the same expression built in two orders gives identical kernels
     function build_once(order)
         q = ProgramBuilder(Grid((4, 4)); periodic = (true, true), nparams = 2)
-        fs = order ? (field!(q, "u"), field!(q, "v")) :
-             reverse((field!(q, "v"), field!(q, "u")))
+        fs = if order
+            (field!(q, "u"), field!(q, "v"))
+        else
+            reverse((field!(q, "v"), field!(q, "u")))
+        end
         k = kernel(q)
         terms = [load(k, fs[1]; offset = o) * param(k, 1) for o in OFFS2]
         order || reverse!(terms)

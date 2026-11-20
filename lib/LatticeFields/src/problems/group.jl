@@ -545,11 +545,13 @@ one group; declared intervals for the state fields the terms read, `c.fields`). 
 both routes (an `AbstractPolicyTexts` may define its own).
 """
 function coupling_unseen_text(::AbstractPolicyTexts, c)
-    head = c.kind === :conservative ?
-           string("a term the bound cannot see (", join(c.terms, ", "), ") counts as reading every group, so ", _fieldlist(c.lf),
-               " are checked as a loop; κ = dt · rate = ", _num(c.κ), " covers only the seen terms") :
-           string("the groups of ", _fieldlist(c.lf), " read one another in a loop through terms the stability bound cannot see: ",
-               "κ = dt · rate = ", _num(c.κ), "; ", cover_text(c.terms))
+    head = if c.kind === :conservative
+        string("a term the bound cannot see (", join(c.terms, ", "), ") counts as reading every group, so ", _fieldlist(c.lf),
+            " are checked as a loop; κ = dt · rate = ", _num(c.κ), " covers only the seen terms")
+    else
+        string("the groups of ", _fieldlist(c.lf), " read one another in a loop through terms the stability bound cannot see: ",
+            "κ = dt · rate = ", _num(c.κ), "; ", cover_text(c.terms))
+    end
     return string(head, ", so the lag between the groups (each reads the others' fields held over each window dt = ", _num(c.dt),
         ") is not checked, and a large dt can make the run inaccurate without making it unstable. Step ", _fieldlist(c.lf),
         " in one group, or declare intervals (`bounds = (lo, hi)`) for ",
@@ -583,8 +585,11 @@ end
 (k::_OnceKey)(why) = string(k.key, "#", why)
 function (s::GroupSubsteps)(pp; span = nothing)
     key = _OnceKey(s.key)
-    n = s.alg isa ExplicitEuler ? substeps(s.spec, s.alg, s.dt, pp; key, texts = s.texts, span) :
+    n = if s.alg isa ExplicitEuler
+        substeps(s.spec, s.alg, s.dt, pp; key, texts = s.texts, span)
+    else
         substeps(s.spec, s.alg, s.dt, pp; key, texts = s.texts)
+    end
     c = s.coupling
     c === nothing || check_coupling(c.stability, c.groups, c.explicit, c.whole(pp), s.dt; check = (c.index,),
         key, texts = s.texts, steady = c.steady, rows0 = hasproperty(c, :rows0) ? c.rows0 : String[])
@@ -595,12 +600,12 @@ end
 _fieldlist(ks) = join(("`$k`" for k in ks), ", ")
 _num(x) = round(x; sigdigits = 6)                  # a value in a message (`dt = 0.003334`)
 function unbounded_text(t::ProblemTexts, c)
-    why = unbounded_reason(c.stability, c.pp)
-    return string("no automatic substeps: no stability bound for these parameters (",
-        why === nothing ? string("a rate term the bound cannot see, such as advection, a nonlinear rate, ",
+    why = something(unbounded_reason(c.stability, c.pp),
+        string("a rate term the bound cannot see, such as advection, a nonlinear rate, ",
             "or a coefficient with more than 6 kind sets and ",
             "comparisons; a parameter without a value; or coupled rows that ",
-            "are not diagonally dominant, whose spectrum may be complex") : why,
+            "are not diagonally dominant, whose spectrum may be complex"))
+    return string("no automatic substeps: no stability bound for these parameters (", why,
         "). Give an explicit count: ", t.route, " (a minimum; the bound over ",
         "the terms it sees can raise it)")
 end
@@ -611,16 +616,23 @@ uncovered_text(::ProblemTexts, c) = string("ExplicitEuler(substeps = ", c.least,
 # at an entry), with its own words
 function refuse_parameters(::ProblemTexts, c)
     check_parameters(c.stability, c.pp)
-    throw(ArgumentError(string("the stability bound of ", _fieldlist(c.fields), " refuses these parameters: ",
-        isempty(c.r.negative) ? "a coefficient is not finite where the inputs reach" :
-        string("the diffusion coefficient of ", _fieldlist(c.r.negative), " is negative"))))
+    why = if isempty(c.r.negative)
+        "a coefficient is not finite where the inputs reach"
+    else
+        string("the diffusion coefficient of ", _fieldlist(c.r.negative), " is negative")
+    end
+    throw(ArgumentError(string("the stability bound of ", _fieldlist(c.fields), " refuses these parameters: ", why)))
 end
-coupling_unknown_text(t::ProblemTexts, c; refuse::Bool) = refuse ?
-    string("FieldGroups: the problem's stability bound does not see the terms that couple its groups (each group ",
-        "reads the fields of the others from their arrays, held over the window); step the fields in one group, ",
-        "or give every group an explicit count (`", t.route, "`)") :
-    string("FieldGroups: the stability bound does not see the coupling between the groups ",
-        join((_fieldlist(k) for k in c.keys), " and "), ": the counts are the user's")
+function coupling_unknown_text(t::ProblemTexts, c; refuse::Bool)
+    if refuse
+        return string("FieldGroups: the problem's stability bound does not see the terms that couple its groups (each group ",
+            "reads the fields of the others from their arrays, held over the window); step the fields in one group, ",
+            "or give every group an explicit count (`", t.route, "`)")
+    else
+        return string("FieldGroups: the stability bound does not see the coupling between the groups ",
+            join((_fieldlist(k) for k in c.keys), " and "), ": the counts are the user's")
+    end
+end
 function coupling_unbounded_text(t::ProblemTexts, c; refuse::Bool)
     ks, q, lf = c.keys[c.g], c.q, c.lf
     refuse && return string("FieldGroups: the group of ", _fieldlist(ks),
@@ -657,10 +669,14 @@ end
 # steady groups that read one another take one `QuasiSteady` (one group: solved together)
 function steady_loop_text(t::ProblemTexts, c)
     w = c.why[1]
-    one = w === :steady_only ? string("Give ", _fieldlist(c.qs), " one `QuasiSteady` (the same keywords: one group, whose ",
-                                      "steady rows are solved together), or step ") :
-          w === :steady ? string("Give ", _fieldlist(c.qs), " one `QuasiSteady` (one group, solved together), or step ") :
-          "Step "
+    one = if w === :steady_only
+        string("Give ", _fieldlist(c.qs), " one `QuasiSteady` (the same keywords: one group, whose ",
+            "steady rows are solved together), or step ")
+    elseif w === :steady
+        string("Give ", _fieldlist(c.qs), " one `QuasiSteady` (one group, solved together), or step ")
+    else
+        "Step "
+    end
     return string("FieldGroups: the QuasiSteady group", length(c.qs) == 1 ? " of " : "s of ", _fieldlist(c.qs),
         length(c.qs) == 1 ? " is" : " are", " in a loop of groups that read one another (", _fieldlist(c.lf), "): a steady field answers its inputs at ",
         "once, with the gain of its steady solve, so the lag of one window between the groups can grow without bound, ",
@@ -679,8 +695,12 @@ end
 # the gain of a loop with a QuasiSteady group in words: the worst term and the gain it reads through
 function steady_gain_words(c)
     x = c.x
-    via = isempty(x.qs) ? "" : string(" (`", x.qs, "` answers at once with a gain up to ", _num(x.gain),
-        ", from its smallest decay and its faces, times ", _num(x.kout), ", the sum of its reads of the loop)")
+    via = if isempty(x.qs)
+        ""
+    else
+        string(" (`", x.qs, "` answers at once with a gain up to ", _num(x.gain),
+            ", from its smallest decay and its faces, times ", _num(x.kout), ", the sum of its reads of the loop)")
+    end
     return string("the terms in the rate of `", x.row, "` that read other groups of the loop (the largest: the ",
         "coefficient `", x.text, "` of `", x.other, "`", via, ") give κ = dt · Σ k_in · gain · k_out = ",
         round(c.κ; sigdigits = 4), " > 1")
@@ -703,20 +723,27 @@ function loop_text(t::ProblemTexts, c)
     unseen = [k for h in c.loops[c.g] if c.parts[h].unseen for k in c.keys[h]]
     # route 1: the loop's fields in one group; an automatic count needs dominant rows
     ρ = Float64(restrict_bound(c.stability, lf)(pp))
-    one = isfinite(ρ) && ρ >= 0 ? string("Step ", _fieldlist(lf), " in one group (one algorithm; its count can be automatic)") :
-          string("Step ", _fieldlist(lf), " in one group with an explicit count (`", t.route, "`: ",
-                 "their rows are not diagonally dominant, so no automatic count bounds them)")
+    one = if isfinite(ρ) && ρ >= 0
+        string("Step ", _fieldlist(lf), " in one group (one algorithm; its count can be automatic)")
+    else
+        string("Step ", _fieldlist(lf), " in one group with an explicit count (`", t.route, "`: ",
+            "their rows are not diagonally dominant, so no automatic count bounds them)")
+    end
     # route 2: a dt that divides the time span (`init` refuses any other)
     span = c.span
     lim = floor(1 / q.rate; sigdigits = 4)
     n = max(1, ceil(Int, span * q.rate * (1 - _COUPLING_RTOL)))
+    note = if isempty(unseen)
+        ""
+    else
+        string(" (the terms of ", _fieldlist(unseen), " that the bound cannot see and that read ",
+            "another field count as reading every other group)")
+    end
     return string("FieldGroups: the groups of ", _fieldlist(lf), " read one another in a loop, each from the ",
         "others' arrays, held over each window dt = ", _num(dt),
         ": the terms in the rate of `", q.row, "` that read other groups of the loop (the largest: the coefficient `", q.text,
         "` of `", q.other, "`) give dt · Σ max|coefficient| = ", round(κ; sigdigits = 4), " > 1, and the loop can then ",
-        "grow without bound at any substep count",
-        isempty(unseen) ? "" : string(" (the terms of ", _fieldlist(unseen), " that the bound cannot see and that read ",
-                                      "another field count as reading every other group)"),
+        "grow without bound at any substep count", note,
         ". ", one, ", or use a smaller dt that divides the time span ", _num(span), ": dt ≤ ", lim,
         ", such as dt = ", _num(span), "/", n)
 end
@@ -833,8 +860,10 @@ end
 # a steady solve has no substeps: its routes are the budgets, a fixed value or decay, or a
 # transient solver
 function status_route(::QuasiSteady, which::Symbol, cause::Integer = 0; coupled::Bool = false)
-    which === :budget && return coupled ? "a larger linear budget (`linsolve = LatticeGMRES(; maxiters = n)`)" :
-        "a larger linear budget (`linsolve = LatticePCG(; maxiters = n)`)"
+    if which === :budget
+        solver = coupled ? "LatticeGMRES" : "LatticePCG"
+        return "a larger linear budget (`linsolve = $solver(; maxiters = n)`)"
+    end
     which === :newton_budget && return "more Newton iterations (a larger `nlsolve = LatticeNewton(; max_iter = k)`)"
     cause & 0xc0 != 0 && return string("step the fields with `BackwardEuler` (a transient solve needs no unique steady ",
         "state), or give the coupled solve a larger budget (`linsolve = LatticeGMRES(; maxiters = n)`)"
@@ -1089,11 +1118,13 @@ end
     # an implicit group goes on: the interval sets only its Newton count, which the Newton check verifies
     if rt.alg isa AbstractImplicitFieldAlgorithm && isfinite(v)
         below = v < x.lo
-        route = below && !(rt.alg isa QuasiSteady) ?
+        route = if below && !(rt.alg isa QuasiSteady)
             string(
-                "Give `lower_bound = ", x.lo, "` to the algorithm (it clips each substep at ", x.lo, ": ",
-            _algname(rt.alg), " does not keep the values inside the bounds by itself), or widen `bounds`") :
-                "Widen `bounds` in the field's declaration to the range the field takes"
+                    "Give `lower_bound = ", x.lo, "` to the algorithm (it clips each substep at ", x.lo, ": ",
+                _algname(rt.alg), " does not keep the values inside the bounds by itself), or widen `bounds`")
+        else
+            "Widen `bounds` in the field's declaration to the range the field takes"
+        end
         Exec.VERBOSE[] && @warn string(
             head, route, ". The interval sets only the implicit solve's counts, and the solve checks its own ",
             "steps (the Newton check when it iterates, the shift clamp when it takes one step; both warn), so the run goes on")
@@ -1307,8 +1338,13 @@ function _check_status!(w, rt::GroupRuntime, acc)
     # a clamped shift with one Newton step and no check: the step is not the Backward Euler step,
     # and nothing else tells
     !tot.clamped && h[STATUS_CAUSE] & 0x8 != 0 && newton_count(rt.cache) == 1 && _clamp_warn(rt, h)
-    code = h[STATUS_CODE] == 0 ? SciMLBase.ReturnCode.Success :
-           h[STATUS_CODE] == 1 ? SciMLBase.ReturnCode.StalledSuccess : SciMLBase.ReturnCode.ConvergenceFailure
+    code = if h[STATUS_CODE] == 0
+        SciMLBase.ReturnCode.Success
+    elseif h[STATUS_CODE] == 1
+        SciMLBase.ReturnCode.StalledSuccess
+    else
+        SciMLBase.ReturnCode.ConvergenceFailure
+    end
     if (!tot.warned && (tot.budget > 0 || tot.newton_budget > 0)) ||
        (code == SciMLBase.ReturnCode.ConvergenceFailure && tot.window == 0)
         _status_warn(rt, h[STATUS_WINDOW], h[STATUS_CAUSE], code)
@@ -1339,7 +1375,15 @@ end
     return nothing
 end
 # the method's step in messages ("Backward Euler", "Crank–Nicolson"; another by its name)
-_stepname(a) = a isa BackwardEuler ? "Backward Euler" : a isa CrankNicolson ? "Crank–Nicolson" : string(nameof(typeof(a)))
+function _stepname(a)
+    if a isa BackwardEuler
+        return "Backward Euler"
+    elseif a isa CrankNicolson
+        return "Crank–Nicolson"
+    else
+        return string(nameof(typeof(a)))
+    end
+end
 # the warnings of a read (cold: once per runtime and run); a function barrier, compiled once
 # for every runtime type
 @noinline function _status_warn(@nospecialize(rt), window, cause, code)
@@ -1348,13 +1392,16 @@ _stepname(a) = a isa BackwardEuler ? "Backward Euler" : a isa CrankNicolson ? "C
     s = length(rt.keys) == 1 ? "" : "s"
     if code != SciMLBase.ReturnCode.ConvergenceFailure && !tot.warned && (tot.budget > 0 || tot.newton_budget > 0)
         tot.warned = true
-        what = tot.budget > 0 ? ("the linear solve reached its budget $(tot.budget) time$(tot.budget == 1 ? "" : "s")",
-                                 status_route(rt.alg, :budget; coupled = coupled_solve(rt.cache))) :
+        what = if tot.budget > 0
+            ("the linear solve reached its budget $(tot.budget) time$(tot.budget == 1 ? "" : "s")",
+                status_route(rt.alg, :budget; coupled = coupled_solve(rt.cache)))
+        else
             (
                 string(
                     "the Newton iteration", (k = newton_count(rt.cache)) === nothing ? "" : " (`max_iter = $k`)",
                     " reached its budget $(tot.newton_budget) time$(tot.newton_budget == 1 ? "" : "s")"),
                 status_route(rt.alg, :newton_budget))
+        end
         Exec.VERBOSE[] && @warn "field$s $fs: $(what[1]) so far (the result is accepted, `ReturnCode.Success`, and counted in `stats`); " *
               "$(what[2]) removes this warning"
     end
@@ -1388,7 +1435,15 @@ function window_text(rt::GroupRuntime, w::Integer)
 end
 
 # the worse of two codes: a failure over `StalledSuccess` over `Success`
-_rank(c::SciMLBase.ReturnCode.T) = c == SciMLBase.ReturnCode.Success ? 0 : c == SciMLBase.ReturnCode.StalledSuccess ? 1 : 2
+function _rank(c::SciMLBase.ReturnCode.T)
+    if c == SciMLBase.ReturnCode.Success
+        return 0
+    elseif c == SciMLBase.ReturnCode.StalledSuccess
+        return 1
+    else
+        return 2
+    end
+end
 _worse(a::SciMLBase.ReturnCode.T, b::SciMLBase.ReturnCode.T) = _rank(b) > _rank(a) ? b : a
 
 # the substeps of a window: the explicit step launches, one per substep (a group with no state:
@@ -1605,8 +1660,11 @@ function compile!(backend, rt::GroupRuntime)
     for (bufs, _, m, c, vf) in rt.stepclamps
         u = bufs[1]
         v = convert(eltype(u), c.param == 0 ? c.value : c.value * rt.p[c.param])
-        push!(jobs, vf === nothing ? () -> Exec.compile!(backend, _clamp_body!, (u, m, v, length(m))) :
-                    () -> Exec.compile!(backend, _clamp_field_body!, (u, m, v, vf, length(m))))
+        if vf === nothing
+            push!(jobs, () -> Exec.compile!(backend, _clamp_body!, (u, m, v, length(m))))
+        else
+            push!(jobs, () -> Exec.compile!(backend, _clamp_field_body!, (u, m, v, vf, length(m))))
+        end
     end
     for (d, s) in rt.copies
         push!(jobs, () -> Exec.compile!(backend, _copy_body!, (d, s)))

@@ -1,6 +1,13 @@
 # The update pass: a stepper's update fused into a rate program as an IR
 # pass, so any algorithm lowers in the Symbolics-free layer (`FieldGroup`).
 
+# a field declaration with two time slots (a stepped field)
+function _two_slot(f::FieldDecl{N}) where {N}
+    return FieldDecl{N}(
+        f.key, f.classes, f.shape, f.symmetric, f.storage, f.levels, f.epoch, Int8(2), f.role, f.fixed
+    )
+end
+
 """
     fuse_update(rate::Program, rule) -> Program
 
@@ -36,10 +43,16 @@ function fuse_update(p::Program{N}, rule) where {N}
     newid = zeros(Int32, length(p.fields))
     newid[keep] .= Int32.(1:length(keep))
     stepped = Set(values(step))
-    fm(i) = i == 0 ? Int32(0) : haskey(step, Int32(i)) ? newid[step[Int32(i)]] : newid[i]
-    fields = [i in stepped ? FieldDecl{N}(f.key, f.classes, f.shape, f.symmetric, f.storage, f.levels, f.epoch,
-                                             Int8(2), f.role, f.fixed) : f
-              for (i, f) in enumerate(p.fields) if i in keep]
+    function fm(i)
+        if i == 0
+            return Int32(0)
+        elseif haskey(step, Int32(i))
+            return newid[step[Int32(i)]]
+        else
+            return newid[i]
+        end
+    end
+    fields = [i in stepped ? _two_slot(f) : f for (i, f) in enumerate(p.fields) if i in keep]
     bk = ([f.key for f in fields], [f.storage for f in fields], [t.key for t in p.tables])
     dom = p.hierarchy[1].grid.domain != 0
     kernels = map(p.kernels) do k
@@ -105,9 +118,7 @@ function fuse_residual(p::Program{N}, rule; widen16::Bool = false) where {N}
     newid = zeros(Int32, length(p.fields))
     newid[keep] .= Int32.(1:length(keep))
     stepped = Set(values(step))
-    fields = [i in stepped ? FieldDecl{N}(f.key, f.classes, f.shape, f.symmetric, f.storage, f.levels, f.epoch,
-                                             Int8(2), f.role, f.fixed) : f
-              for (i, f) in enumerate(p.fields) if i in keep]
+    fields = [i in stepped ? _two_slot(f) : f for (i, f) in enumerate(p.fields) if i in keep]
     nk = length(fields)
     # the residual and history fields, appended: `res:c` at `nk + j`, `c__n` at `nk + n + j`
     res = Dict{String, Int32}()
@@ -124,7 +135,15 @@ function fuse_residual(p::Program{N}, rule; widen16::Bool = false) where {N}
         push!(fields, FieldDecl{N}(c * "__n", f.classes, f.shape, f.symmetric, f.storage, f.levels, f.epoch, Int8(1), :input, f.fixed))
         hist[c] = Int32(nk + length(order) + j)
     end
-    fm(i) = i == 0 ? Int32(0) : haskey(step, Int32(i)) ? res[keys[step[Int32(i)]]] : newid[i]
+    function fm(i)
+        if i == 0
+            return Int32(0)
+        elseif haskey(step, Int32(i))
+            return res[keys[step[Int32(i)]]]
+        else
+            return newid[i]
+        end
+    end
     bk = ([f.key for f in fields], [f.storage for f in fields], [t.key for t in p.tables])
     dom = p.hierarchy[1].grid.domain != 0
     kernels = map(p.kernels) do k

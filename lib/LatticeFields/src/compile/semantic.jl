@@ -77,7 +77,15 @@ end
 # ---- pass 1: fold constants and zeros (Float64, through the interning builder) ------------
 _isconst(b, i) = b.nodes[i].op == CONST
 _cval(b, i) = b.consts[b.nodes[i].imm]
-_typed(t::Scalar, v) = t == BOOL ? v != 0 : isinteger_lane(t) ? Int64(v) : v
+function _typed(t::Scalar, v)
+    if t == BOOL
+        return v != 0
+    elseif isinteger_lane(t)
+        return Int64(v)
+    else
+        return v
+    end
+end
 const _FOLD = Dict{Op, Function}(
     ADD => +, MUL => *, NEG => -, DIV => /, MIN => min, MAX => max,
     ABS => abs, SQRT => sqrt, EXP => exp, LOG => log, EQ => ==, LT => <, LE => <=,
@@ -131,8 +139,11 @@ end
 
 # ---- pass 2: semantic boundary resolution --------------------------------------------------
 function _coef!(b, c::Coef)
-    c.param == 0 ? constant!(b, c.value) :
-    node!(b, MUL, REAL, Int32[constant!(b, c.value), param!(b, c.param)])
+    if c.param == 0
+        constant!(b, c.value)
+    else
+        node!(b, MUL, REAL, Int32[constant!(b, c.value), param!(b, c.param)])
+    end
 end
 function _with(a::Access{N}, off, policy) where {N}
     Access{N}(a.field, a.class, a.comp, Sel(off), a.level, policy)
@@ -220,8 +231,13 @@ function _resolve_load!(b::KernelBuilder{N}, p::Program{N}, a::Access{N}) where 
     all(iszero, off) && return v
     center = _loadacc!(b, p, _with(a, ntuple(_ -> Int16(0), N), INSIDE))
     for r in p.rules
-        m = r isa ImmersedRule && r.field == a.field ? r.mask :
-            r isa DomainEdgeRule && r.field == a.field ? (r.mask == 0 ? p.hierarchy[1].grid.domain : r.mask) : 0
+        m = if r isa ImmersedRule && r.field == a.field
+            r.mask
+        elseif r isa DomainEdgeRule && r.field == a.field
+            r.mask == 0 ? p.hierarchy[1].grid.domain : r.mask
+        else
+            0
+        end
         m == 0 && continue
         r isa ImmersedRule && r.kind != :zero_flux &&
             irerror("immersed rule kind `", r.kind,

@@ -128,8 +128,17 @@ function _input_ok(p::Program, key::AbstractString, v, bool::Bool, bounds::Tuple
     return _values_ok(v, isfloat(st), _int_range(st), bool, bounds)
 end
 # the values of an integer storage type, as Float64 (a type-stable `typemin`/`typemax`)
-_int_range(st) = st == U8 ? (0.0, 255.0) : st == I32 ? (Float64(typemin(Int32)), Float64(typemax(Int32))) :
-                 st == U32 ? (0.0, Float64(typemax(UInt32))) : (-Inf, Inf)
+function _int_range(st)
+    if st == U8
+        return (0.0, 255.0)
+    elseif st == I32
+        return (Float64(typemin(Int32)), Float64(typemax(Int32)))
+    elseif st == U32
+        return (0.0, Float64(typemax(UInt32)))
+    else
+        return (-Inf, Inf)
+    end
+end
 _values_ok(v::Number, fl, r, bool, bounds) = _value_ok(v, fl, r, bool, bounds)
 function _values_ok(v::AbstractArray, fl, r, bool, bounds)
     # (a device array is checked on a host copy: no scalar indexing)
@@ -154,7 +163,11 @@ end
 # input function closes over) has no input store to go to in this version
 _plain(x) = x isa Union{AbstractFloat, Integer, Rational}
 function _check_plain(v, name)
-    x = v isa AbstractArray ? (isempty(v) ? 0.0 : first(v isa Union{Array, AbstractRange} ? v : Array(v))) : v
+    x = if v isa AbstractArray
+        isempty(v) ? 0.0 : first(v isa Union{Array, AbstractRange} ? v : Array(v))
+    else
+        v
+    end
     v isa Union{Number, AbstractArray} && !_plain(x) && throw(ArgumentError(string("input `", name, "`: the function ",
         "returned values of type ", typeof(x), "; an input holds plain numbers (no derivative parts): to differentiate ",
         "through a time-dependent input, write it in the equations with a parameter (`a * sin(ω * t)`) and ",
@@ -175,11 +188,15 @@ function _not_input(s, ks)
     isempty(comps) || throw(ArgumentError(string("`", name, "` is an array input: give each component, ",
         "`inputs = [", join(("$(_route(x)) => values" for x in comps), ", "), "]` (or the components of the array ",
         "variable)")))
-    throw(ArgumentError(string("`", name, "` is not an input field of the problem",
-        isempty(ks) ? " (it has none)" : " (its inputs: " * join(("`$x`" for x in ks), ", ") * ")",
-        _cpm_word(string(s)) || _cpm_word(name) ? string("; `", name, "` is a name `Potts.fields(model)` gives a CPM ",
+    known = isempty(ks) ? " (it has none)" : " (its inputs: " * join(("`$x`" for x in ks), ", ") * ")"
+    cpm = if _cpm_word(string(s)) || _cpm_word(name)
+        string("; `", name, "` is a name `Potts.fields(model)` gives a CPM ",
             "input, and a coupled PDESystem's inputs are its own: `Potts.field_inputs(integ, pdesys)` gives the values of ",
-            "exactly the inputs of `pdesys`") : "")))
+            "exactly the inputs of `pdesys`")
+    else
+        ""
+    end
+    throw(ArgumentError(string("`", name, "` is not an input field of the problem", known, cpm)))
 end
 # a name a Potts model's `Potts.fields` gives a CPM input: a CPM word, or a
 # CPM read as the model writes it (`volume[owner]`)
@@ -204,8 +221,8 @@ function _check_integer(p::Program, key::AbstractString, name, v; bool::Bool = f
     bad = findfirst(!ok, v isa Number ? (v,) : v)
     bad === nothing && return nothing
     dims = _input_dims(p, f)
-    throw(ArgumentError(string("input `", name, "` holds ", bool ? "a Bool mask (true/false or 0/1)" :
-        "integer values (a kind map: $T)", "; got ", (v isa Number ? v : v[bad]),
+    holds = bool ? "a Bool mask (true/false or 0/1)" : "integer values (a kind map: $T)"
+    throw(ArgumentError(string("input `", name, "` holds ", holds, "; got ", (v isa Number ? v : v[bad]),
         (v isa Number ? "" : " at site $(Tuple(CartesianIndices(dims)[bad]))"))))
 end
 
@@ -287,9 +304,14 @@ or inputs, else `p`. The hooks read the tables in Float64 on their primal values
 for the parameters: a BigFloat table is rounded and a Dual table drops its derivative parts
 here only; the problem keeps the values as given).
 """
-with_tables(p, tables; inputs = ()) = isempty(tables) && isempty(inputs) ? p :
-                                      ParamsTables(p, Pair{String, Vector{Float64}}[k => _primal64(v) for (k, v) in tables],
-                                          Pair{String, Any}[inputs...])
+function with_tables(p, tables; inputs = ())
+    if isempty(tables) && isempty(inputs)
+        return p
+    else
+        return ParamsTables(p, Pair{String, Vector{Float64}}[k => _primal64(v) for (k, v) in tables],
+            Pair{String, Any}[inputs...])
+    end
+end
 _primal64(v::Vector{Float64}) = v
 _primal64(v) = Float64[Float64(primal(x)) for x in v]
 
@@ -423,10 +445,14 @@ function check_values(p, index; built::Bool = true)
     for i in eachindex(p)
         isnan(primal(p[i])) || continue
         name = index isa LatticeIndex ? parameter_name(index, i) : "#$i"
+        route = if built
+            string(" or set it with `remake(prob; p = [", name, " => v])`, or on an integrator ",
+                "`setp(integ, ", name, ")(integ, v)`")
+        else
+            string(" or a value in the system's `initial_conditions` (`", name, " => v`)")
+        end
         throw(ArgumentError(string("parameter `", name, "` has no value (it is NaN): give it a default ",
-            "(`@parameters ", name, " = v`)", built ? string(" or set it with `remake(prob; p = [", name, " => v])`, or on an integrator ",
-                                                     "`setp(integ, ", name, ")(integ, v)`") :
-                                              string(" or a value in the system's `initial_conditions` (`", name, " => v`)"))))
+            "(`@parameters ", name, " = v`)", route)))
     end
     return nothing
 end

@@ -140,7 +140,13 @@ function _cs_plocal_body!(i, z, off, v, s, mask, dom)
     @inbounds begin
         K = eltype(z)
         d = K(_at(s, i))
-        z[off + i] = _cs_fixed(mask, dom, i) ? zero(K) : (d > 0 ? v[off + i] / d : v[off + i])
+        z[off + i] = if _cs_fixed(mask, dom, i)
+            zero(K)
+        elseif d > 0
+            v[off + i] / d
+        else
+            v[off + i]
+        end
     end
     return nothing
 end
@@ -153,7 +159,11 @@ function _cs_rhs_body!(i, f, v, res, j, m, smask, rmask, dom, ih, ih2)
             f[i] = zero(eltype(f))
             own = !(m[i] > 0) && !(rmask !== nothing && rmask[i] != 0) && !(dom !== nothing && dom[i] == 0)
             d = max(ih - _jat(j, i, ih), ih2)
-            v[i] = own ? (d > 0 ? g / d : g) : zero(eltype(v))
+            v[i] = if own
+                d > 0 ? g / d : g
+            else
+                zero(eltype(v))
+            end
         else
             f[i] = g / m[i]
             v[i] = zero(eltype(v))
@@ -175,7 +185,11 @@ function _cs_status_body!(i, w, scal, window, steady, gate)
         if d == 5
             fail = UInt32(128)
         elseif d == 3
-            fail = isfinite(rn) ? (steady ? UInt32(1 | 64) : UInt32(1)) : UInt32(4)
+            fail = if isfinite(rn)
+                steady ? UInt32(1 | 64) : UInt32(1)
+            else
+                UInt32(4)
+            end
         elseif d == 0
             w[STATUS_BUDGET] += UInt32(1)
             steady && !(rn <= scal[_GM_BNORM] / 2) && (fail = UInt32(64))
@@ -574,7 +588,17 @@ function _coupled_iteration!(cs::CoupledKrylov, c, a)
         re = isempty(rn) ? zero(K) : K(@inbounds rn[end])
         # (1 converged; 5 a breakdown: the operator is singular on the Krylov space; 3 diverged:
         # a residual that is not finite, or an early stop; 0 a budget hit)
-        hs[_GM_DONE] = st.solved ? one(K) : !isfinite(re) ? K(3) : st.inconsistent ? K(5) : st.niter < cs.budget ? K(3) : zero(K)
+        hs[_GM_DONE] = if st.solved
+            one(K)
+        elseif !isfinite(re)
+            K(3)
+        elseif st.inconsistent
+            K(5)
+        elseif st.niter < cs.budget
+            K(3)
+        else
+            zero(K)
+        end
         hs[_GM_ITER] = K(st.niter)
         hs[_GM_RNORM] = re
         hs[_GM_BNORM] = r1
@@ -620,7 +644,13 @@ function coupled_modes(s::Program{N}, op::OperatorSpec, keys, p) where {N}
     # first solve decides (its refusal is tested on a periodic hexagonal pair)
     _ishex(s) && return nothing
     # the face conditions per axis and side, the same for every row (as the 1D ghost rule's factor)
-    ghost(id, a, k) = (f = _face_kind(s, id, a, k, p); f[1] === :none ? 0.0 : f[1] === :dirichlet ? 2.0 : f[2] / (f[2] / 2 + f[3]))
+    ghost(id, a, k) = (f = _face_kind(s, id, a, k, p); if f[1] === :none
+        0.0
+    elseif f[1] === :dirichlet
+        2.0
+    else
+        f[2] / (f[2] / 2 + f[3])
+    end)
     for a in 1:N, k in 1:2
         s.periodic[a] && continue
         g0 = ghost(ids[1], a, k)
@@ -677,8 +707,11 @@ end
 # (`how`: where the eigenvalue comes from)
 function _growth_refusal(keys, λ, scale, how)
     fs = join(("`$k`" for k in keys), ", ")
-    ev = imag(λ) == 0 ? string(round(real(λ); sigdigits = 3)) :
-         string(round(real(λ); sigdigits = 3), (imag(λ) < 0 ? " − " : " + "), round(abs(imag(λ)); sigdigits = 3), "i")
+    ev = if imag(λ) == 0
+        string(round(real(λ); sigdigits = 3))
+    else
+        string(round(real(λ); sigdigits = 3), (imag(λ) < 0 ? " − " : " + "), round(abs(imag(λ)); sigdigits = 3), "i")
+    end
     sgn = real(λ) > scale ? "positive" : "zero"
     return ArgumentError(string("QuasiSteady: the fields ", fs, " read one another, and their coupled steady system has a ",
         real(λ) > scale ? "growing" : "neutral", " mode: an eigenvalue of its Jacobian with ", sgn, " real part (", ev, how,

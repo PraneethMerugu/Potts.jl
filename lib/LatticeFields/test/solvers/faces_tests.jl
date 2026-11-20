@@ -317,8 +317,15 @@ end
     for (α, β, g) in ((0.4, 0.25, 0.3), (0.1, -1.0, 0.4))      # positive part; negative part (defect)
         sv, u = prim(α, β, g)
         for (which, h) in ((:alpha, 1e-6), (:beta, 1e-6), (:g, 1e-3))
-            pert(δ) = which === :alpha ? prim(α + δ, β, g)[2] : which === :beta ? prim(α, β + δ, g)[2] :
-                      prim(α, β, g + δ)[2]
+            function pert(δ)
+                if which === :alpha
+                    return prim(α + δ, β, g)[2]
+                elseif which === :beta
+                    return prim(α, β + δ, g)[2]
+                else
+                    return prim(α, β, g + δ)[2]
+                end
+            end
             ref = (pert(h) .- pert(-h)) ./ 2h
             @test relerr(tangent!(sv, u, (:robin, 1, 1, which)), ref) <= 1e-5
         end

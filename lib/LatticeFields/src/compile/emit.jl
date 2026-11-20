@@ -36,7 +36,15 @@ _lane_holds(f, o::CompileOptions) = lanetype(f.storage, something(o.S, o.T), o.l
 debug_options() = CompileOptions(; T = Float64, I = Int, debug = true)
 
 # ---- pass 4: types ------------------------------------------------------------------------
-jtype(t::Scalar, T::Type) = t == REAL ? T : t == BOOL ? Bool : juliatype(t)
+function jtype(t::Scalar, T::Type)
+    if t == REAL
+        return T
+    elseif t == BOOL
+        return Bool
+    else
+        return juliatype(t)
+    end
+end
 
 """
 Pass 4: a Float64 compute value type (`Float64`, a Dual over Float64, or anything wider) or
@@ -129,7 +137,13 @@ _loads(k::Kernel) = ((n, k.accesses[n.imm]) for n in k.nodes if n.op == LOAD)
 
 function lower_index(p::Program{N}, k::Kernel{N}, o::CompileOptions) where {N}
     box = any(a -> count(!iszero, a.offset.a) >= 2, k.accesses) && isempty(k.reductions)
-    strategy = o.debug ? :linear : o.index == :auto ? (box ? :cartesian : :linear) : o.index
+    strategy = if o.debug
+        :linear
+    elseif o.index == :auto
+        box ? :cartesian : :linear
+    else
+        o.index
+    end
     levels = Int8[k.space.level]
     foreach(a -> push!(levels, k.space.level + a.level), k.accesses)
     lanes, as = kernel_args(p, k)
@@ -169,8 +183,11 @@ divisible by `2^m`, `legality`) reads the child `2^m (x − 1) + 1 + o` plus its
 An axis of size 1 is never coarsened (identity).
 """
 function _fine(c::Ctx, a::Access, d)
-    o = a.offset.cond == 0 ? _I(c, a.offset.a[d]) :
+    o = if a.offset.cond == 0
+        _I(c, a.offset.a[d])
+    else
         :(ifelse($(vname(c, a.offset.cond)), $(_I(c, a.offset.b[d])), $(_I(c, a.offset.a[d]))))
+    end
     x = Symbol(:x, d)
     a.level >= 0 && return :($x + $o), c.k.space.level
     lev = c.k.space.level + a.level
@@ -189,8 +206,14 @@ end
 Largest |offset| of an access along axis `d` (both `Sel` arms), with the child offset.
 """
 function _maxoff(c::Ctx, a::Access, d)
-    max(abs(Int(a.offset.a[d])), abs(Int(a.offset.b[d]))) +
-    (a.level == -1 ? 2 : a.level < 0 ? 2^(-Int(a.level)) - 1 : 0)
+    halo = if a.level == -1
+        2
+    elseif a.level < 0
+        2^(-Int(a.level)) - 1
+    else
+        0
+    end
+    return max(abs(Int(a.offset.a[d])), abs(Int(a.offset.b[d]))) + halo
 end
 
 """
@@ -208,16 +231,22 @@ function _target(c::Ctx{N}, a::Access{N}; bounded::Bool = true) where {N}
         n = _dim(c, fl, d)
         shifted = a.offset.cond != 0 || a.offset.a[d] != 0 || a.level < 0
         if shifted && a.policy != INSIDE && c.p.periodic[d]
-            y = c.o.debug || _maxoff(c, a, d) >= leveldims(c.p, fl)[d] ? :(mod1($y, $n)) :
+            y = if c.o.debug || _maxoff(c, a, d) >= leveldims(c.p, fl)[d]
+                :(mod1($y, $n))
+            else
                 :((y = $y; ifelse(y < $(_I(c, 1)), y + $n, ifelse(y > $n, y - $n, y))))
+            end
         elseif bounded && shifted && a.policy in (CLAMP, ZERO)
             y = c.o.debug ? :(clamp($y, 1, $n)) : :(min(max($y, $(_I(c, 1))), $n))
         end
         if bounded && a.level > 0 && leveldims(c.p, fl)[d] != 1
             nc = _dim(c, lev, d)
             m = Int(a.level)
-            y = c.o.debug ? :(min(fld($y - 1, $(2^m)) + 1, $nc)) :
+            y = if c.o.debug
+                :(min(fld($y - 1, $(2^m)) + 1, $nc))
+            else
                 :(min((($y - $(_I(c, 1))) >> $m) + $(_I(c, 1)), $nc))
+            end
         end
         push!(ys, y)
     end
@@ -230,8 +259,11 @@ range: offsets are wrapped (periodic), clamped (CLAMP, ZERO) or proven inside (I
 offset 0 after pass 2), which is the bounds argument for the `@inbounds` emitted with it.
 """
 function linear_index(c::Ctx{N}, a::Access{N}) where {N}
-    comp = a.comp.cond == 0 ? _I(c, a.comp.a) :
-           :(ifelse($(vname(c, a.comp.cond)), $(_I(c, a.comp.b)), $(_I(c, a.comp.a))))
+    comp = if a.comp.cond == 0
+        _I(c, a.comp.a)
+    else
+        :(ifelse($(vname(c, a.comp.cond)), $(_I(c, a.comp.b)), $(_I(c, a.comp.a))))
+    end
     own = zero_offset(a) && !c.o.debug
     ys, lev = _target(c, a)
     ns = [_dim(c, lev, d) for d in 1:N]
@@ -364,7 +396,9 @@ function _restrict(c::Ctx{N}, i) where {N}
         nj = c.k.nodes[j]
         nj.op in (LOAD, INSIDE_OP) && (depth = max(depth, -Int(c.k.accesses[nj.imm].level)))
     end
-    ranges = ntuple(d -> leveldims(c.p, lev - depth)[d] == 1 ? (0:0) : depth == 1 ? (0:2) : (0:(2^depth - 1)), N)
+    dims = leveldims(c.p, lev - depth)
+    span = depth == 1 ? (0:2) : (0:(2^depth - 1))
+    ranges = ntuple(d -> dims[d] == 1 ? (0:0) : span, N)
     T = jtype(n.type, c.o.T)
     acc = nothing
     vals, oks = Any[], Any[]                     # (plurality: each child's value and whether it exists)
@@ -374,10 +408,14 @@ function _restrict(c::Ctx{N}, i) where {N}
         _emit!(blk, cc, root, Set{Int32}())
         term = Expr(:block, blk..., vname(cc, root))
         tails = depth == 1 ? [d for d in 1:N if o[d] == 2] : Int[]
-        pred = isempty(tails) ? true : foldl((x, y) -> :($x & $y),
-            [:(($(Symbol(:x, d)) == $(_dim(c, lev, d))) &
-               ($(_dim(c, lev - 1, d)) > $(_I(c, 2)) * $(_dim(c, lev, d))))
-             for d in tails])
+        pred = if isempty(tails)
+            true
+        else
+            foldl((x, y) -> :($x & $y),
+                [:(($(Symbol(:x, d)) == $(_dim(c, lev, d))) &
+                   ($(_dim(c, lev - 1, d)) > $(_I(c, 2)) * $(_dim(c, lev, d))))
+                 for d in tails])
+        end
         if n.imm == 2
             push!(vals, term)
             push!(oks, pred)
@@ -390,7 +428,13 @@ function _restrict(c::Ctx{N}, i) where {N}
                 $(zero(T))
             end)
         end
-        acc = acc === nothing ? term : n.imm == 0 ? :($acc + $term) : :(max($acc, $term))
+        acc = if acc === nothing
+            term
+        elseif n.imm == 0
+            :($acc + $term)
+        else
+            :(max($acc, $term))
+        end
     end
     n.imm == 2 && return :(plurality(($(vals...),), ($(oks...),)))
     return acc
@@ -443,9 +487,8 @@ function passthrough(c::Ctx)
         f.buffers == 2 || continue
         idx = c.index(c, s.access)
         src = _ref(c, c.names[(s.access.field, :cur)], idx)
-        push!(out,
-            c.o.debug ? :($(c.names[(s.access.field, :next)])[$idx] = $src) :
-            :(@inbounds $(c.names[(s.access.field, :next)])[$idx] = $src))
+        dst = c.names[(s.access.field, :next)]
+        push!(out, c.o.debug ? :($dst[$idx] = $src) : :(@inbounds $dst[$idx] = $src))
     end
     return out
 end
@@ -584,8 +627,11 @@ function _blocks(c::Ctx{N}, head, gate, pre, body) where {N}
         rv, off = Symbol(:rv, q), I(256 * (q - 1))
         push!(rvs, :($rv = $(r.op == :sum ? zero(T) : T(-Inf))))
         push!(put, :(@inbounds lds[item + $off] = $rv))            # t ≤ 256, q ≤ R: in 256R
-        comb = r.op == :sum ? :(lds[item + $off] + lds[item + rstride + $off]) :
-               :(max(lds[item + $off], lds[item + rstride + $off]))
+        comb = if r.op == :sum
+            :(lds[item + $off] + lds[item + rstride + $off])
+        else
+            :(max(lds[item + $off], lds[item + rstride + $off]))
+        end
         push!(tree, :(@inbounds lds[item + $off] = $comb))         # t + rstride ≤ 256
         A = c.names[(r.target, :table)]
         push!(fin,

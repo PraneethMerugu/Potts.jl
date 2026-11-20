@@ -156,8 +156,11 @@ function (s::FieldSolution)(t::Real; idxs = nothing)
     ts[1] - tol <= t <= ts[end] + tol || throw(ArgumentError(string("sol(t): t = ", t, " is outside the saves [",
         ts[1], ", ", ts[end], "]")))
     k = clamp(searchsortedlast(ts, t + tol), 1, length(ts))
-    u = abs(ts[k] - t) <= tol || k == length(ts) || s.prob.kind == :map ? s.u[k] :
+    u = if abs(ts[k] - t) <= tol || k == length(ts) || s.prob.kind == :map
+        s.u[k]
+    else
         s.u[k] .+ ((t - ts[k]) / (ts[k + 1] - ts[k])) .* (s.u[k + 1] .- s.u[k])
+    end
     idxs === nothing && return u
     ix = s.prob.index
     slot = ix isa LatticeIndex ? get(ix.vars, ix.key(idxs), nothing) : nothing
@@ -244,8 +247,13 @@ const LatticeSolution = typewith(SciMLBase.ODESolution, :prob, LatticeProblem)
 field_stats(s::LatticeSolution) = _stats(s.stats)
 _stats(t::LatticeStats) = (; solves = t.solves, budget = t.budget, floor = t.floor, newton_budget = t.newton_budget)
 _stats(t) = throw(ArgumentError("field_stats: the solution was not computed by a field algorithm (an owned solve)"))
-substep_counts(s::LatticeSolution) = s.stats isa LatticeStats ? copy(s.stats.counts) :
-    throw(ArgumentError("substep_counts: the solution was not computed by a field algorithm (an owned solve)"))
+function substep_counts(s::LatticeSolution)
+    if s.stats isa LatticeStats
+        return copy(s.stats.counts)
+    else
+        throw(ArgumentError("substep_counts: the solution was not computed by a field algorithm (an owned solve)"))
+    end
+end
 
 # the solution of an owned solve of the SciML problem `sp`: `build_solution` over the
 # saves, with linear interpolation (a map's states are constant between steps), and `prob` at
@@ -254,8 +262,11 @@ substep_counts(s::LatticeSolution) = s.stats isa LatticeStats ? copy(s.stats.cou
 function _ode_solution(integ::FieldIntegrator, sp)
     q = _final_problem(integ, sp)
     ts, us = integ.ts, integ.us
-    interp = sp isa SciMLBase.DiscreteProblem ? SciMLBase.ConstantInterpolation(ts, us) :
-             SciMLBase.LinearInterpolation(ts, us)
+    interp = if sp isa SciMLBase.DiscreteProblem
+        SciMLBase.ConstantInterpolation(ts, us)
+    else
+        SciMLBase.LinearInterpolation(ts, us)
+    end
     return SciMLBase.build_solution(q, integ.alg, ts, us; interp, dense = integ.dense, retcode = integ.retcode,
         stats = LatticeStats(integ))
 end
@@ -268,8 +279,11 @@ function _final_problem(integ::FieldIntegrator, sp)
     T = sp isa SciMLBase.DiscreteProblem ? SciMLBase.DiscreteProblem : SciMLBase.ODEProblem
     idx = getfield(integ, :saveidxs)
     # (`save_idxs`: the saves hold those indices; the time-first reads find the fields in them)
-    return idx === nothing ? invoke(SciMLBase.remake, Tuple{T}, sp; p = q) :
-           invoke(SciMLBase.remake, Tuple{T}, sp; p = q, save_idxs = idx)
+    if idx === nothing
+        return invoke(SciMLBase.remake, Tuple{T}, sp; p = q)
+    else
+        return invoke(SciMLBase.remake, Tuple{T}, sp; p = q, save_idxs = idx)
+    end
 end
 
 # Field reads on every solution of a lattice problem: `sol[c]` of a state or aux

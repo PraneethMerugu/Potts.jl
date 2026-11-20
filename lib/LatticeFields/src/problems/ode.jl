@@ -172,7 +172,15 @@ end
 
 The metadata of a problem `discretize` returned (in any family), else `nothing`.
 """
-lattice_metadata(prob) = prob isa SciMLBase.LinearProblem ? _lmeta(prob.A) : hasproperty(prob, :f) ? _lmeta(prob.f) : nothing
+function lattice_metadata(prob)
+    if prob isa SciMLBase.LinearProblem
+        return _lmeta(prob.A)
+    elseif hasproperty(prob, :f)
+        return _lmeta(prob.f)
+    else
+        return nothing
+    end
+end
 _lmeta(f::LatticeFunction) = f.meta
 _lmeta(f::SciMLBase.AbstractSciMLFunction) = _lmeta(f.f)
 _lmeta(f) = nothing
@@ -279,8 +287,11 @@ function lattice_problem(fp::FieldProblem; jac::Bool = false, sparse::Bool = fal
     end
     M = _mass_matrix(fp, E)
     jkw = _jacobian_kw(meta, U, lp; jac, sparse, jvp)
-    fun = M === LinearAlgebra.I ? SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize}(f; sys = ix, jkw...) :
-          SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize}(f; sys = ix, mass_matrix = M, jkw...)
+    fun = if M === LinearAlgebra.I
+        SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize}(f; sys = ix, jkw...)
+    else
+        SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize}(f; sys = ix, mass_matrix = M, jkw...)
+    end
     return SciMLBase.ODEProblem(fun, U, fp.tspan, lp, meta; kw...)
 end
 
@@ -415,8 +426,15 @@ function _refresh_input!(integ, p::LatticeParameters, k::String, f::F) where {F}
     x = last(p.inputs[j])
     if x isa Vector && (v isa Number || length(v) == length(x))
         # (the host types of an input, written without a dynamic call that would box a number)
-        x isa Vector{Float64} ? _write_host!(x, v) : x isa Vector{Int32} ? _write_host!(x, v) :
-        x isa Vector{UInt8} ? _write_host!(x, v) : _write_host!(x, v)
+        if x isa Vector{Float64}
+            _write_host!(x, v)
+        elseif x isa Vector{Int32}
+            _write_host!(x, v)
+        elseif x isa Vector{UInt8}
+            _write_host!(x, v)
+        else
+            _write_host!(x, v)
+        end
     else
         p.inputs[j] = k => _host_input(prog, k, v, input_name(index, k), index)
     end
@@ -905,12 +923,18 @@ function _masked_rates!(du, u, p, masked)
         d = view(du, range)
         if mode === :hold
             # a value that reads the time moves at its rate `∂v/∂t`, else it holds
-            rf === nothing ? _clamp_masked!(d, m, zero(eltype(du))) :
-            _clamp_masked!(d, m, convert(eltype(du), _coefdual(c, p)), rf)
+            if rf === nothing
+                _clamp_masked!(d, m, zero(eltype(du)))
+            else
+                _clamp_masked!(d, m, convert(eltype(du), _coefdual(c, p)), rf)
+            end
         else
             v = convert(eltype(du), _coefdual(c, p))
-            mode === :next ? (vf === nothing ? _clamp_masked!(d, m, v) : _clamp_masked!(d, m, v, vf)) :
-            _mask_residual!(d, view(u, range), m, v, vf)
+            if mode === :next
+                vf === nothing ? _clamp_masked!(d, m, v) : _clamp_masked!(d, m, v, vf)
+            else
+                _mask_residual!(d, view(u, range), m, v, vf)
+            end
         end
     end
     return nothing
@@ -982,11 +1006,20 @@ function _eval_input!(g::G, cell::Base.RefValue{Float64}, a, s::FnInputCheck) wh
 end
 @noinline function _input_fn_error(v, s::FnInputCheck, t)
     _check_plain(v, s.name)
-    held = s.bool ? "a Bool mask (true/false or 0/1)" : s.fl ? "values in its declared bounds $(s.bounds)" :
-           "integer values in its type's range and its declared bounds $(s.bounds)"
-    what = v isa AbstractArray && length(v) != s.n ? string("an array of ", length(v), " values; the field has ", s.n) :
-           v isa Union{Number, AbstractArray} ? string("a value outside what it holds (", held, ")") :
-           string("a ", typeof(v))
+    held = if s.bool
+        "a Bool mask (true/false or 0/1)"
+    elseif s.fl
+        "values in its declared bounds $(s.bounds)"
+    else
+        "integer values in its type's range and its declared bounds $(s.bounds)"
+    end
+    what = if v isa AbstractArray && length(v) != s.n
+        string("an array of ", length(v), " values; the field has ", s.n)
+    elseif v isa Union{Number, AbstractArray}
+        string("a value outside what it holds (", held, ")")
+    else
+        string("a ", typeof(v))
+    end
     throw(ArgumentError(string("input `", s.name, "`: its function returned ", what, " at t = ", t,
         "; it returns an array with one value per site or a number")))
 end
@@ -1057,9 +1090,21 @@ end
 # and its own lock. Serializing writes the same: a build with no owner (a running task does
 # not serialize), which the task that first calls the deserialized function claims.
 _unowned(f::LatticeRHS, val) = typeof(f)(map(fieldnames(typeof(f))) do k
-    k === :owner ? Any[nothing] : k === :copies ? Dict{Task, Any}() : k === :lock ? ReentrantLock() :
-    k === :synced ? Any[getfield(f, :synced)[1] === nothing ? nothing : :given] : k === :tcell ? Ref(0.0) : k === :masked ? val(getfield(f, :masked)) :
-    val(getfield(f, k))
+    if k === :owner
+        Any[nothing]
+    elseif k === :copies
+        Dict{Task, Any}()
+    elseif k === :lock
+        ReentrantLock()
+    elseif k === :synced
+        Any[getfield(f, :synced)[1] === nothing ? nothing : :given]
+    elseif k === :tcell
+        Ref(0.0)
+    elseif k === :masked
+        val(getfield(f, :masked))
+    else
+        val(getfield(f, k))
+    end
 end...)
 function Base.deepcopy_internal(f::LatticeRHS, d::IdDict)
     haskey(d, f) && return d[f]
@@ -1148,7 +1193,13 @@ function _masked(s::Program, st::FieldStore, slots, ctx)
     out = Tuple{UnitRange{Int}, Any, Coef, Any, Symbol, Any, Any}[]
     for r in s.rules
         r isa NodeValueRule && isassigned(slots, r.field) && !isempty(slots[r.field]) || continue
-        mode = isempty(ctx.rates) ? :next : s.fields[r.field].key in ctx.steady ? :steady : :hold
+        mode = if isempty(ctx.rates)
+            :next
+        elseif s.fields[r.field].key in ctx.steady
+            :steady
+        else
+            :hold
+        end
         vf = r.vfield == 0 ? nothing : array(st, r.vfield, :cur)
         rk = r.vfield == 0 ? "" : replace(s.fields[r.vfield].key, r"^maskvalue:" => "maskrate:")
         ri = rk == "" ? nothing : findfirst(fd -> fd.key == rk, s.fields)
@@ -1196,10 +1247,7 @@ function _lattice_rhs(ctx::RHSContext, ::Type{E}, base, Pinit = nothing, inputs 
     ls = map(Tuple(sp.launches)) do l
         # a table's id numbers the tables, not the fields: it is never a state slot (a
         # table whose index equalled a state field's id was once bound to the state)
-        S0 = Tuple(Tuple(role === :table || !haskey(marks, id) ?
-                         array(st, id, role, role == :table ? 0 : 1) :
-                         role === :next ? StateView(marks[id].range, true) : marks[id]
-                   for (id, role) in lane) for lane in l.bind)
+        S0 = Tuple(Tuple(_rhs_binding(st, marks, id, role) for (id, role) in lane) for lane in l.bind)
         S = map(lane -> map(a -> _resolve(a, U, dU), lane), S0)
         np = s.nparams
         P = launch_parameters(l.kernel, ntuple(_ -> zero(E), np), c)
@@ -1405,14 +1453,44 @@ function _write_given_input!(q::LatticeParameters, ix, slot::InputSlot, v, t0)
     push!(q.fns, k => v)
     return q
 end
+# the element type of a parameter table after the values `p` (pairs) are written into it
+function _table_eltype(ix, p, T)
+    for x in p
+        if SII.parameter_index(ix, first(x)) isa TableSlot && last(x) isa Union{AbstractArray, Tuple}
+            T = promote_type(T, _tabelt(collect(last(x))))
+        end
+    end
+    return T
+end
+# the element type of a state after the `field => values` pairs `u0` are written into it
+function _pairs_eltype(u0, T)
+    for x in u0
+        if last(x) isa Real
+            T = promote_dual(T, typeof(last(x)))
+        elseif last(x) isa AbstractArray
+            T = promote_dual(T, eltype(last(x)))
+        end
+    end
+    return T
+end
+# the array a right-side launch binds for `(id, role)`: a table or a field outside the state
+# is its own array; a state field is its view of the state vector (`:next`, the derivative)
+function _rhs_binding(st, marks, id, role)
+    if role === :table || !haskey(marks, id)
+        return array(st, id, role, role == :table ? 0 : 1)
+    elseif role === :next
+        return StateView(marks[id].range, true)
+    else
+        return marks[id]
+    end
+end
 function _params_from_map(lp::LatticeParameters, ix, p, t0 = nothing)
     ix isa LatticeIndex && check_parameter_keys(ix, (first(x) for x in p))
     T = foldl((T, x) -> last(x) isa Real ? promote_dual(T, typeof(last(x))) : T, p; init = eltype(lp.values))
     q = with_values(lp, Vector{T}(lp.values))
     # a whole table of a wider type (BigFloat values for Float64 defaults) widens the tables
     TT0 = _tabeltype(lp.tables)
-    TT = foldl((S, x) -> SII.parameter_index(ix, first(x)) isa TableSlot && last(x) isa Union{AbstractArray, Tuple} ?
-                         promote_type(S, _tabelt(collect(last(x)))) : S, p; init = TT0)
+    TT = _table_eltype(ix, p, TT0)
     TT === TT0 || (q = LatticeParameters(q.values, Pair{String, Vector{TT}}[k => Vector{TT}(v) for (k, v) in q.tables],
         q.inputs; tick = q.tick[], fns = q.fns))
     for (k, v) in p
@@ -1437,8 +1515,7 @@ function remake_u0(prob, u0)
     u0 isa Union{AbstractVector{<:Pair}, Tuple, AbstractDict} && !isempty(u0) || return u0
     ix = SII.symbolic_container(prob.f)
     all(x -> x isa Pair, u0) || throw(ArgumentError("`u0` is a flat vector of the state or `field => values` pairs"))
-    E = foldl((T, x) -> last(x) isa Real ? promote_dual(T, typeof(last(x))) :
-                        last(x) isa AbstractArray ? promote_dual(T, eltype(last(x))) : T, u0; init = eltype(prob.u0))
+    E = _pairs_eltype(u0, eltype(prob.u0))
     out = Vector{E}(Array(prob.u0))
     for (k, v) in u0
         slot = ix isa LatticeIndex ? _slot(ix, k) : nothing
@@ -1544,8 +1621,11 @@ end
 # A field solver or a linear solver given to an `ODEProblem` that `discretize` did not build
 # (its right side has no group to step): the route to an OrdinaryDiffEq solver
 function _ode_refusal(alg)
-    name = alg isa LinearSolver ? string("`", repr(alg), "` is a linear solver, the `linsolve` of an implicit field solver") :
-           string("`", _algtext(alg), "` is a field solver: it steps the problem of a discretized system")
+    name = if alg isa LinearSolver
+        string("`", repr(alg), "` is a linear solver, the `linsolve` of an implicit field solver")
+    else
+        string("`", _algtext(alg), "` is a field solver: it steps the problem of a discretized system")
+    end
     return ArgumentError(string("`solve`/`init` of an `ODEProblem`: ", name, ". This `ODEProblem` was not built by ",
         "`LatticePDE.discretize` (it has no field groups to step): give it an OrdinaryDiffEq solver (`ImplicitEuler()` ",
         "is Backward Euler), or solve the problem `discretize` returns"))
@@ -1590,7 +1670,13 @@ end
 function _owned_init(fp::FieldProblem, alg, prob; callback = nothing, kw...)
     pk = Dict{Symbol, Any}(pairs(prob.kwargs))
     pcb = _user_callbacks(pop!(pk, :callback, nothing))
-    cb = pcb === nothing ? callback : callback === nothing ? pcb : SciMLBase.CallbackSet(pcb, callback)
+    cb = if pcb === nothing
+        callback
+    elseif callback === nothing
+        pcb
+    else
+        SciMLBase.CallbackSet(pcb, callback)
+    end
     return CommonSolve.init(fp, alg; pk..., kw..., callback = cb, _sciml = prob)
 end
 function _user_callbacks(cb)
@@ -1668,7 +1754,11 @@ function SciMLBase.remake(prob::LatticeLinearProblem; p = missing, u0 = missing,
     m = lattice_metadata(prob)
     fp = m.problem
     lp = q === missing ? prob.p : q
-    U = u0 === missing ? (prob.u0 === nothing ? fp.u0 : prob.u0) : remake_u0(prob, u0)
+    U = if u0 === missing
+        prob.u0 === nothing ? fp.u0 : prob.u0
+    else
+        remake_u0(prob, u0)
+    end
     g = _field_problem(fp.program, fp.state, U isa Vector ? copy(U) : Array(U), fp.tspan, collect(lp.values), lp.tables,
         lp.inputs, fp.backend, fp.index, fp.faces, fp.stability, fp.kind, fp.initkeys, fp.options, fp.group)
     return lattice_problem(g)

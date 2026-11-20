@@ -199,8 +199,15 @@ function resolve_inner(op::CellOperator, inner)
     inner isa LatticeMultigrid || _refuse(
         op, "`linsolve` takes `:auto`, a `LatticePCG(…)` or a `LatticeMultigrid(…)`; got ",
         repr(inner))
-    b = inner.cycles !== nothing ? inner.cycles :
-        inner.maxiters !== nothing ? inner.maxiters : jumpy(op) ? 12 : 8
+    b = if inner.cycles !== nothing
+        inner.cycles
+    elseif inner.maxiters !== nothing
+        inner.maxiters
+    elseif jumpy(op)
+        12
+    else
+        8
+    end
     r = something(inner.reltol, 1.0e-6)
     w = something(inner.warn_tol, inner.cycles === nothing ? r : 1.0e-3)
     return LatticeMultigrid(inner.cycle, inner.cycles, r, b, w)
@@ -387,7 +394,15 @@ function FieldSolver(
     end
     _bind_inputs!(bufs, exec, op, s, inputs)
     nb = reduction_blocks(nsites(s, 0))
-    tlen(k) = k == "solve.scal" ? SCALARS : k == "solve.gb" ? 2 : nb
+    function tlen(k)
+        if k == "solve.scal"
+            return SCALARS
+        elseif k == "solve.gb"
+            return 2
+        else
+            return nb
+        end
+    end
     tables = Dict{Int32, Any}(Int32(i) => alloc(exec, T, tlen(t.key))
     for (i, t) in enumerate(s.tables))
     sv = FieldSolver{N, typeof(exec)}(
@@ -505,9 +520,15 @@ The solution field, an array of the state type: `pcg.u` under deflation, `out.u`
 solver type differs from the state type, else `pcg.x` under PCG or the finest level's `x`.
 """
 function solution_key(sv::FieldSolver)
-    sv.deflate ? "pcg.u" :
-    sv.T != sv.state ? "out.u" :
-        sv.alg isa FusedPCG ? "pcg.x" : lkey(0, "x")
+    if sv.deflate
+        "pcg.u"
+    elseif sv.T != sv.state
+        "out.u"
+    elseif sv.alg isa FusedPCG
+        "pcg.x"
+    else
+        lkey(0, "x")
+    end
 end
 """
 The working field a solve starts from (`steady!` zeroes it).
@@ -526,14 +547,29 @@ number type (`solver_type = :auto`) stays as resolved at build.
 """
 function set_coefficients!(sv::FieldSolver, op::CellOperator)
     o = sv.op
-    diff = op.dims != o.dims ? "the lattice size" : op.periodic != o.periodic ? "the periodic axes" :
-           ishex(op) != ishex(o) ? "the lattice geometry (hexagonal or not)" :
-           op.mask != o.mask ? "the mask" : op.name != o.name ? "the field name" :
-           op.robin_full != o.robin_full ? "where a Robin face's negative part goes (`robin_full`)" :
-           coef_slots(op) != coef_slots(o) ? "which coefficients are numbers, fields or absent" :
-           !all(map((x, y) -> x isa Real || x == y, faces(op), faces(o))) ? "a face coefficient field" :
-           !(op.shift isa Real || op.shift == o.shift) ? "the shift field" :
-           !(op.value isa Real || op.value == o.value) ? "the mask value field" : nothing
+    diff = if op.dims != o.dims
+        "the lattice size"
+    elseif op.periodic != o.periodic
+        "the periodic axes"
+    elseif ishex(op) != ishex(o)
+        "the lattice geometry (hexagonal or not)"
+    elseif op.mask != o.mask
+        "the mask"
+    elseif op.name != o.name
+        "the field name"
+    elseif op.robin_full != o.robin_full
+        "where a Robin face's negative part goes (`robin_full`)"
+    elseif coef_slots(op) != coef_slots(o)
+        "which coefficients are numbers, fields or absent"
+    elseif !all(map((x, y) -> x isa Real || x == y, faces(op), faces(o)))
+        "a face coefficient field"
+    elseif !(op.shift isa Real || op.shift == o.shift)
+        "the shift field"
+    elseif !(op.value isa Real || op.value == o.value)
+        "the mask value field"
+    else
+        nothing
+    end
     diff === nothing || _refuse(o, "set_coefficients! takes new values for the same structure; ",
         diff, " differs: build a new FieldSolver for the new structure")
     check_coefficients(op)
@@ -643,8 +679,13 @@ function _direction(op::CellOperator, coef)
     a, k, which = j
     α, β, g = op.robin[a][k]
     den = α / 2 + β
-    dd, dq = which === :alpha ? (β / den^2, -g / (2den^2)) :
-             which === :beta ? (-α / den^2, -g / den^2) : (0.0, 1 / den)
+    dd, dq = if which === :alpha
+        (β / den^2, -g / (2den^2))
+    elseif which === :beta
+        (-α / den^2, -g / den^2)
+    else
+        (0.0, 1 / den)
+    end
     s = cs.robin[a][k]
     v[op.robin_full || α / den >= 0 ? s[1] : s[2]] = dd     # d's sign picks its part (one-sided at d = 0)
     v[s[3]] = dq
@@ -708,8 +749,13 @@ deflation, else `solve.out` when the solver type differs from the state type.
 function _epilogue!(pl::PlanBuilder)
     sv = pl.sv
     ep = Any[]
-    key = sv.deflate && sv.alg isa FusedPCG ? "pcg.out" :
-          sv.T != sv.state ? "solve.out" : nothing
+    key = if sv.deflate && sv.alg isa FusedPCG
+        "pcg.out"
+    elseif sv.T != sv.state
+        "solve.out"
+    else
+        nothing
+    end
     if key !== nothing
         gen!(pl, key)
         push!(ep, pop!(pl.segments[end]))
@@ -771,8 +817,11 @@ function fin!(pl::PlanBuilder, op)
     budget = pl.budget                    # the plan's budget, not the algorithm's
     r0 = alg isa LatticeMultigrid ? something(alg.reltol, 1.0e-6) : alg.reltol
     w0 = alg isa LatticeMultigrid ? something(alg.warn_tol, alg.cycles === nothing ? r0 : 1.0e-3) : alg.reltol
-    rtol, warn = alg isa FusedPCG ? (alg.reltol, alg.reltol) :
+    rtol, warn = if alg isa FusedPCG
+        (alg.reltol, alg.reltol)
+    else
         (alg.cycles === nothing ? r0 : 0.0, w0)
+    end
     tk = ("solve.scal", "solve.pr", "solve.pb", "solve.pd",
         sv.deflate ? "solve.ps" : "solve.pd", sv.deflate ? "solve.pq" : "solve.pd",
         "solve.px")
@@ -798,15 +847,25 @@ The partials a finishing op combines: up to `NCOMBO` `(table, sum?)` pairs, the 
 index into `(scal, pr, pb, pd, ps, pq, px)` (0: unused). `px` is the rounding scale.
 """
 function _combos(op, deflate)
-    c = op == FIN_MEAN ? ((5, true), (6, true)) :
-        op == SETUP ? ((2, false), (3, false), (7, false)) :
-        op == NORM ? ((2, false), (7, false)) :
-        op == FIN_RZ ? (deflate ? ((4, true), (5, true), (6, true)) : ((4, true),)) :
-        op == FIN_ALPHA ? ((4, true),) :
-        op == FIN_IT ?
-        (deflate ? ((2, false), (7, false), (4, true), (5, true), (6, true)) :
-         ((2, false), (7, false), (4, true))) :
+    c = if op == FIN_MEAN
+        ((5, true), (6, true))
+    elseif op == SETUP
+        ((2, false), (3, false), (7, false))
+    elseif op == NORM
+        ((2, false), (7, false))
+    elseif op == FIN_RZ
+        deflate ? ((4, true), (5, true), (6, true)) : ((4, true),)
+    elseif op == FIN_ALPHA
+        ((4, true),)
+    elseif op == FIN_IT
+        if deflate
+            ((2, false), (7, false), (4, true), (5, true), (6, true))
+        else
+            ((2, false), (7, false), (4, true))
+        end
+    else
         ()
+    end
     red = ntuple(q -> q <= length(c) ? Int32(c[q][1]) : Int32(0), NCOMBO)
     sum = ntuple(q -> q <= length(c) ? c[q][2] : true, NCOMBO)
     return red, sum
@@ -892,8 +951,12 @@ function rebuild_plan(sv::FieldSolver)
             dimsc = Int32.(Tuple(ctx.dims[l + 1])), n0 = Int32.(sv.op.dims),
             level = Int32(l), per = sv.op.periodic, majority = r.majority)
         # (a hexagonal lattice's build behind a barrier: a Cartesian solver never compiles it)
-        push!(pl.segments[end], hex ? Base.inferencebarrier(_hex_build)(sv.T, r, nsites(sv.prog, l), S, G) :
-                                Launch(build_site!, nsites(sv.prog, l), S, map(sv.T, (r.inside, r.plane, r.inherited, r.box)), G, "build"))
+        build = if hex
+            Base.inferencebarrier(_hex_build)(sv.T, r, nsites(sv.prog, l), S, G)
+        else
+            Launch(build_site!, nsites(sv.prog, l), S, map(sv.T, (r.inside, r.plane, r.inherited, r.box)), G, "build")
+        end
+        push!(pl.segments[end], build)
     end
     C = ctx.lv[ctx.L + 1]                 # the coarsest Gershgorin interval for the bottom
     S = (_levelarrays(pl, C)..., sv.tables[tid(sv, "solve.gb")])
@@ -1101,13 +1164,21 @@ budgeted solve ended above its tolerance; returns whether it fired.
 function sentinel(sv::FieldSolver)
     s = scalars(sv)
     s.warn || return false
-    hint = sv.alg isa LatticeMultigrid ? " Stationary multigrid: use LatticePCG (linsolve = :auto)." :
-           s.status === :floor && sv.T == Float32 && floor_regime(sv.op) ?
-           " Float32 floor of an unanchored group at weak reaction: solve in Float64 " *
-        "(solver_type; a backend with Float64)." :
-           ""
-    what = s.status === :floor ? "stagnated (floor)" :
-           s.status === :diverged ? "diverged" : "ended"
+    hint = if sv.alg isa LatticeMultigrid
+        " Stationary multigrid: use LatticePCG (linsolve = :auto)."
+    elseif s.status === :floor && sv.T == Float32 && floor_regime(sv.op)
+        " Float32 floor of an unanchored group at weak reaction: solve in Float64 " *
+            "(solver_type; a backend with Float64)."
+    else
+        ""
+    end
+    what = if s.status === :floor
+        "stagnated (floor)"
+    elseif s.status === :diverged
+        "diverged"
+    else
+        "ended"
+    end
     Exec.VERBOSE[] && @warn string(
         _who(sv.op), ": the field solve ", what, " at ‖r‖∞ = ", s.rnorm,
         " > tolerance after ", s.iter, " iterations.", hint)
@@ -1290,9 +1361,15 @@ A stopped solve never reports `done`; fixed-cycle solves never stop early.
         atfloor = (scal[STALL] >= T(STALL_CHECKS)) &
                   (scal[BEST] <= T(FLOOR_ULPS) * eps(T) * sc)
         diverged = (scal[GROW] >= T(GROW_CHECKS)) & (rn > T(GROW_FACTOR) * scal[BEST])
-        scal[DONE] = rn <= scal[TOL] ? one(T) :
-                     G.stall & atfloor ? T(2) :
-                     G.stall & G.diverge & diverged ? T(3) : zero(T)
+        scal[DONE] = if rn <= scal[TOL]
+            one(T)
+        elseif G.stall & atfloor
+            T(2)
+        elseif G.stall & G.diverge & diverged
+            T(3)
+        else
+            zero(T)
+        end
     end
     return nothing
 end

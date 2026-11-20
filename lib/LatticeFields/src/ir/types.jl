@@ -14,7 +14,17 @@ isunsigned_lane(t::Scalar) = t in (U8, U32)
 """
 Storage size in bytes of one element of lane `t`.
 """
-lanebytes(t::Scalar) = t == U8 ? 1 : t == F16 ? 2 : t == F64 ? 8 : 4
+function lanebytes(t::Scalar)
+    if t == U8
+        return 1
+    elseif t == F16
+        return 2
+    elseif t == F64
+        return 8
+    else
+        return 4
+    end
+end
 """
 Host Julia type of an integer or storage lane.
 """

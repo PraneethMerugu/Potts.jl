@@ -45,7 +45,13 @@ function hex_system(op::CellOperator{2}, inp)
         A[q, q] += get(op.shift, i)
         c = Tuple(CartesianIndices(d)[i])
         for o in HEX6
-            dd = o in ((1, 0), (-1, 0)) ? 1 : o in ((0, 1), (0, -1)) ? 2 : 3
+            dd = if o in ((1, 0), (-1, 0))
+                1
+            elseif o in ((0, 1), (0, -1))
+                2
+            else
+                3
+            end
             pos = o in ((1, 0), (0, 1), (1, -1))
             v = c .+ o
             out = ntuple(a -> !(1 <= v[a] <= d[a]) && !per[a], 2)

@@ -38,8 +38,11 @@ function oracle_launch!(p, l::LaunchSpec, st, Praw, rt)
     S, P, G = launch_arrays(st, l), launch_parameters(ck, Praw), launch_geometry(p, ck, rt)
     body = Compile.body_function(ck)
     padded = map((n, w) -> cld(n, w) * w, l.ndrange, l.workgroup)
-    ck.strategy == :cartesian ? oracle_cartesian!(body, padded, S, P, G) :
-    oracle_loop!(body, G.n, S, P, G)
+    if ck.strategy == :cartesian
+        oracle_cartesian!(body, padded, S, P, G)
+    else
+        oracle_loop!(body, G.n, S, P, G)
+    end
     return nothing
 end
 
@@ -58,8 +61,13 @@ function HostStore(p::IR.Program; init = (key, A) -> nothing)
     return st
 end
 function _rt2(rt)
-    length(rt) == 2 ? Float64.(Tuple(rt)) :
-    length(rt) == 1 ? (Float64(rt[1]), 0.0) : (0.0, 0.0)
+    if length(rt) == 2
+        Float64.(Tuple(rt))
+    elseif length(rt) == 1
+        (Float64(rt[1]), 0.0)
+    else
+        (0.0, 0.0)
+    end
 end
 function _snapshot(st)
     FieldStore(st.backend, Vector{Any}[Any[copy(a) for a in b] for b in st.bufs], copy(st.cur), copy(st.tables))

@@ -54,8 +54,11 @@ function BoundStep(backend, p::Program, sp::StepPlan, st::FieldStore, Praw; cur 
             cc = c === nothing ? zero(ck.T) : zero(withvaltype(typeof(c), value_type(ck.T)))
                    S = launch_arrays(st, l, cur)
                    f = fuse === nothing ? nothing : fuse(l, cur)
-            b = f === nothing ? bind_program(backend, p, l, S, launch_parameters(ck, P0, cc), (0, 0)) :
+            b = if f === nothing
+                bind_program(backend, p, l, S, launch_parameters(ck, P0, cc), (0, 0))
+            else
                 bind_program(backend, p, l, (S..., f[1]), launch_parameters(ck, P0, cc), (0, 0); wrap = f[2])
+            end
                    ck.timed ? TimedDerived(b, derive_function(ck), P0, cc) : Timed(b)
                end
     for l in sp.launches)

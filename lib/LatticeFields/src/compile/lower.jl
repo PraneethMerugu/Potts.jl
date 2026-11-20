@@ -62,8 +62,11 @@ function compile_kernel(p::Program{N}, k::Kernel{N}, o::CompileOptions = Compile
     # the clock's step index `k` (an integer, exact in Float64 up to 2^53) into its slot of the
     # raw parameters, before anything is derived from them; `k = nothing` keeps the slot
     clock = 0 < o.clock <= p.nparams ? o.clock : 0
-    tick = clock == 0 ? nothing :
-           :(P = k === nothing ? P : $(Expr(:tuple, [i == clock ? :(oftype(P[$i], k)) : :(P[$i]) for i in 1:(p.nparams)]...)))
+    tick = if clock == 0
+        nothing
+    else
+        :(P = k === nothing ? P : $(Expr(:tuple, [i == clock ? :(oftype(P[$i], k)) : :(P[$i]) for i in 1:(p.nparams)]...)))
+    end
     derive = :((P, c, t, k) -> begin
         $tick
         Q = map(_wide, P)

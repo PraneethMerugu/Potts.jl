@@ -116,9 +116,11 @@ function SII.set_parameter!(p::LatticeParameters, v, s::TableSlot)
     j = _tabpos(p, s.key)
     vals = last(p.tables[j])
     if s.entry == 0
-        v isa Union{AbstractArray, Tuple} && length(v) == length(vals) || throw(ArgumentError(string("the table `", s.key,
-            "` has ", length(vals), " entries; give ", length(vals), " values (got ", v isa Union{AbstractArray, Tuple} ?
-                                                                                     length(v) : repr(v), ")")))
+        if !(v isa Union{AbstractArray, Tuple} && length(v) == length(vals))
+            got = v isa Union{AbstractArray, Tuple} ? length(v) : repr(v)
+            throw(ArgumentError(string("the table `", s.key, "` has ", length(vals), " entries; give ", length(vals),
+                " values (got ", got, ")")))
+        end
         all(x -> x isa Real && isfinite(x), v) || throw(ArgumentError("the table `$(s.key)` must hold finite values (got $v)"))
         vals .= vec(collect(v))
     else
@@ -132,8 +134,12 @@ function SII.set_parameter!(p::LatticeParameters, v, s::InputSlot)
     any(x -> first(x) == s.key, p.fns) && _fn_write_error(input_name(s.index, s.key))
     j = _inpos(p, s.key)
     prog = s.index.program[]
-    w = prog isa Program ? _input_value(prog, s.key, v, input_name(s.index, s.key); bool = is_bool_input(s.index, s.key),
-                                bounds = input_bounds(s.index, s.key)) : v
+    w = if prog isa Program
+        _input_value(prog, s.key, v, input_name(s.index, s.key); bool = is_bool_input(s.index, s.key),
+            bounds = input_bounds(s.index, s.key))
+    else
+        v
+    end
     p.inputs[j] = s.key => w
     p.stamp[] += 1
     return v

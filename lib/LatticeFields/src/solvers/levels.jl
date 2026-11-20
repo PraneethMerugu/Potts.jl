@@ -9,10 +9,35 @@
 # argument for each `@inbounds`.
 
 # (`prod`/`sum` widen Int32 to Int; these folds keep the index type.)
-@inline _stride(dims::NTuple{N, Int32}, a) where {N} = foldl(*, ntuple(
-    d -> d < a ?
-         dims[d] :
-         one(Int32), N))
+@inline _stride(dims::NTuple{N, Int32}, a) where {N} = foldl(*, ntuple(d -> d < a ? dims[d] : one(Int32), N))
+# the coarse step of a face along axis `a`: none on an axis of one coarse site, else ±1 where
+# the face offset `o` leaves the fine block `lo:hi` of coarse site `c`
+@inline function _coarse_step(dimsc, o, c, lo, hi, a)
+    if dimsc[a] == one(Int32)
+        return zero(Int32)
+    elseif o[a] == 1 && c[a] == hi[a]
+        return one(Int32)
+    elseif o[a] == -1 && c[a] == lo[a]
+        return -one(Int32)
+    else
+        return zero(Int32)
+    end
+end
+# the part of a hexagonal face's widths `f1`, `f2` that direction `e` takes (both on the diagonal)
+@inline function _hex_part(e, f1, f2)
+    if e == 3
+        return f1 + f2
+    elseif e == 1
+        return f1
+    else
+        return f2
+    end
+end
+# the coarse coordinate of fine coordinate `X` on axis `e` (an axis of one site keeps it)
+@inline function _parent_coord(X, dl, dp, e)
+    dl[e] == one(Int32) && return X[e]
+    return min((X[e] - one(Int32)) >> 1 + one(Int32), dp[e])
+end
 @inline function _coords(i::Int32, dims::NTuple{N, Int32}) where {N}
     t = i - one(Int32)
     return ntuple(d -> rem(div(t, _stride(dims, d)), dims[d]) + one(Int32), N)
@@ -26,7 +51,13 @@ Neighbor of `x` along axis `a` by `σ = ±1`: `(x′, exists)`; periodic axes wr
 @inline function _nb(x::NTuple{N, Int32}, a, σ, dims, per) where {N}
     v0 = x[a] + Int32(σ)
     ok = one(Int32) <= v0 <= dims[a]
-    v = ok ? v0 : per[a] ? (v0 < one(Int32) ? dims[a] : one(Int32)) : x[a]
+    v = if ok
+        v0
+    elseif per[a]
+        v0 < one(Int32) ? dims[a] : one(Int32)
+    else
+        x[a]
+    end
     return ntuple(d -> d == a ? v : x[d], N), ok | per[a]
 end
 """
@@ -36,7 +67,13 @@ Neighbor of `x` by the offset `o` (each entry −1, 0 or 1): `(x′, exists)`; p
     y = ntuple(N) do d
         v0 = x[d] + Int32(o[d])
         ok = one(Int32) <= v0 <= dims[d]
-        ok ? v0 : per[d] ? (v0 < one(Int32) ? dims[d] : one(Int32)) : x[d]
+        if ok
+            v0
+        elseif per[d]
+            v0 < one(Int32) ? dims[d] : one(Int32)
+        else
+            x[d]
+        end
     end
     return y, all(ntuple(d -> (one(Int32) <= x[d] + Int32(o[d]) <= dims[d]) | per[d], N))
 end
@@ -53,11 +90,17 @@ end
 Physical width (in finest cells) of cell `i` of a level with `n` cells, `ℓ` coarsenings
 below a finest axis of `n0` cells: 2^ℓ, the last cell takes the rest.
 """
-@inline _width(i::Int32, n::Int32, n0::Int32, ℓ::Int32) = n0 == one(Int32) ? one(Int32) :
-                                                          i < n ? (one(Int32) << ℓ) :
-                                                          n0 -
-                                                          (n - one(Int32)) *
-                                                          (one(Int32) << ℓ)
+@inline function _width(i::Int32, n::Int32, n0::Int32, ℓ::Int32)
+    if n0 == one(Int32)
+        return one(Int32)
+    elseif i < n
+        return one(Int32) << ℓ
+    else
+        return n0 -
+            (n - one(Int32)) *
+            (one(Int32) << ℓ)
+    end
+end
 
 """
 Rule-M weights of the hierarchy build: `inside` for a mask face inside a coarse
@@ -227,14 +270,18 @@ function build_hex!(j, S::Tuple{F, C}, P, G) where {F, C}
             @inbounds w = σ > 0 ? wf[d][i] : wf[d][jn]
             @inbounds y = af[jn] != 0
             # the coarse step Δ of the face (an axis of one coarse site: no step)
-            Δ = ntuple(a -> dimsc[a] == one(Int32) ? zero(Int32) :
-                            o[a] == 1 && c[a] == hi[a] ? one(Int32) :
-                            o[a] == -1 && c[a] == lo[a] ? -one(Int32) : zero(Int32), 2)
+            Δ = ntuple(a -> _coarse_step(dimsc, o, c, lo, hi, a), 2)
             if Δ == (zero(Int32), zero(Int32))           # inside J: once per face
                 σ > 0 && active != y && (si += T(P[1]) * w)
                 continue
             end
-            e = Δ[2] == zero(Int32) ? 1 : Δ[1] == zero(Int32) ? 2 : 3
+            e = if Δ[2] == zero(Int32)
+                1
+            elseif Δ[1] == zero(Int32)
+                2
+            else
+                3
+            end
             if Δ == E[e]                                 # J → J + E: the coarse face of J
                 d == 3 && (w *= T(P[5]))
                 x2 = active & y
@@ -246,7 +293,7 @@ function build_hex!(j, S::Tuple{F, C}, P, G) where {F, C}
                     Xn = _nbo(X, E[e], dimsc, per)[1]
                     f1 = _hexfac(T, 1, c, cn, X, Xn, dimsf, dimsc, n0, ℓ)
                     f2 = _hexfac(T, 2, c, cn, X, Xn, dimsf, dimsc, n0, ℓ)
-                    gf = _tset(gf, gf[e] + (e == 3 ? f1 + f2 : e == 1 ? f1 : f2), e)
+                    gf = _tset(gf, gf[e] + _hex_part(e, f1, f2), e)
                 end
             elseif activeJ && actm[e] && active && !y    # J − E → J: a mask face on its plane
                 si += T(P[2]) * w
@@ -398,10 +445,7 @@ function bottom!(ph, g, t, lds, S, P, G)
         @inbounds xc, dp = xs[l + 1], dims[l + 1]                  # KP has l < K
         for i in t:W:n
             X = _coords(i, dl)
-            Pc = ntuple(
-                e -> dl[e] == one(Int32) ? X[e] :
-                     min((X[e] - one(Int32)) >> 1 + one(Int32), dp[e]),
-                length(X))
+            Pc = ntuple(e -> _parent_coord(X, dl, dp, e), length(X))
             @inbounds active[i] != 0 && (x[i] += xc[_lin(Pc, dp)])   # i ≤ n
         end
         return nothing

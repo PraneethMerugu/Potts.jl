@@ -33,8 +33,11 @@ function step_order(p::Program, ids::Vector{Int})
         push!(stack, v)
         push!(onstack, v)
         for u in succ[v]
-            haskey(index, u) ? (u in onstack && (low[v] = min(low[v], index[u]))) :
-            (strong(u); low[v] = min(low[v], low[u]))
+            if haskey(index, u)
+                u in onstack && (low[v] = min(low[v], index[u]))
+            else
+                (strong(u); low[v] = min(low[v], low[u]))
+            end
         end
         low[v] == index[v] || return
         c = Int[]
@@ -148,10 +151,13 @@ function merge_kernels(p::Program{N}, ids::Vector{Int}, scc; forward::Bool = tru
             n = k.nodes[j]
             a = n.op == LOAD ? k.accesses[n.imm] : nothing
             src = a === nothing ? nothing : get(out, (a.field, a.comp.a), nothing)
-            new[j] = forward && src !== nothing && (scc[src[2]] != scc[i] || p.fields[a.field].buffers == 1) && zero_offset(a) &&
-                     a.comp.cond == 0 ? _rounded!(b, p, a.field, src[1]) :
-                     copy_node!(
-                b, k, j, Int32[new[x] for x in args(k, n)], (new, identity, identity))
+            new[j] = if forward && src !== nothing && (scc[src[2]] != scc[i] || p.fields[a.field].buffers == 1) && zero_offset(a) &&
+                a.comp.cond == 0
+                _rounded!(b, p, a.field, src[1])
+            else
+                copy_node!(
+                    b, k, j, Int32[new[x] for x in args(k, n)], (new, identity, identity))
+            end
         end
         for s in k.stores
             push!(b.stores, Store{N}(s.access, new[s.value], s.law))
@@ -195,8 +201,17 @@ Workgroups of a reducing kernel over `n` sites: one per 256-site block.
 """
 reduction_blocks(n::Integer) = cld(Int(n), 256)
 function workgroup(N, strategy)
-    return strategy == :cartesian ? (N == 3 ? (64, 2, 2) : N == 2 ? (64, 4) : (256,)) :
-           (256,)
+    if strategy == :cartesian
+        if N == 3
+            return (64, 2, 2)
+        elseif N == 2
+            return (64, 4)
+        else
+            return (256,)
+        end
+    else
+        return (256,)
+    end
 end
 
 """
@@ -250,10 +265,9 @@ function plan(p::Program{N}, ids::Vector{Int} = collect(eachindex(p.kernels));
         k = merge(p, g, scc)
         legality(with_kernels(p, [k]))
         ck = compile_kernel(p, k, options; stages)
-        bind = [[(id,
-                     role == :cur && haskey(written, id) &&
-                     all(i -> scc[i] != written[id], g) ?
-                     :next : role) for (id, role) in lane] for lane in ck.args]
+        # a field another component of the group writes is read from its next slot
+        rebind(id, role) = role == :cur && haskey(written, id) && all(i -> scc[i] != written[id], g) ? :next : role
+        bind = [[(id, rebind(id, role)) for (id, role) in lane] for lane in ck.args]
         push!(launches,
             LaunchSpec{N}(ck, [p.kernels[i].key for i in g], bind,
                 workgroup(N, ck.strategy), _ndrange(p, k, ck.strategy), true))
@@ -278,10 +292,12 @@ function fusion_report(io::IO, sp::StepPlan)
     for d in sp.decisions
         println(io, d.merged ? "fuse  " : "split ",
             join(d.group, "+"), " | ", d.candidate, "  ",
-            d.reason, d.reason == :cost ?
-                      string(" fused=", round(d.t_fused * 1e6; digits = 2),
-                "µs split=", round(d.t_split * 1e6; digits = 2), "µs") :
-                      string(": ", d.detail))
+            d.reason, _decision_detail(d))
     end
     return nothing
+end
+# the detail of a fusion decision: the modeled times of a cost decision, else its text
+function _decision_detail(d)
+    d.reason == :cost || return string(": ", d.detail)
+    return string(" fused=", round(d.t_fused * 1e6; digits = 2), "µs split=", round(d.t_split * 1e6; digits = 2), "µs")
 end

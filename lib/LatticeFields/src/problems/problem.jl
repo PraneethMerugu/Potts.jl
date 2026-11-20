@@ -247,8 +247,11 @@ function SciMLBase.remake(prob::FieldProblem; u0 = prob.u0, tspan = prob.tspan, 
     # new initial values as at the build
     check_declared(prob.stability, with_tables(map(primal, pv), tables))
     u0 === prob.u0 || check_declared_state(prob, u0, eachindex(u0), "starts at")
-    ins = isempty(inputs) ? prob.inputs :
+    ins = if isempty(inputs)
+        prob.inputs
+    else
         resolve_inputs(prob.program, prob.index, inputs, prob.inputs; t0 = tspan[1])
+    end
     fns = isempty(inputs) ? prob.inputfns : input_functions(prob.program, prob.index, inputs, prob.inputfns)
     return _field_problem(prob.program, prob.state, collect(u0), tspan, pv, tables,
         ins, prob.backend, prob.index, prob.faces, prob.stability, prob.kind, prob.initkeys,
@@ -338,8 +341,13 @@ _parameter_vector(prob::FieldProblem, p) = _pairs_vector(prob, p)
 # the parameter type after pairs `p`: the problem's, promoted only by a Dual value (a plain
 # value is written into the problem's type: plain parameters never promote, P5); from the
 # pair type when its value type is concrete, else from the values
-_pairtype(::Type{E}, ::Type{Pair{K, V}}, p) where {E, K, V} =
-    isconcretetype(V) ? (V <: Real ? promote_dual(E, V) : E) : _pairtype(E, Any, p)
+function _pairtype(::Type{E}, ::Type{Pair{K, V}}, p) where {E, K, V}
+    if isconcretetype(V)
+        return V <: Real ? promote_dual(E, V) : E
+    else
+        return _pairtype(E, Any, p)
+    end
+end
 _pairtype(::Type{E}, _, p) where {E} = foldl((T, x) -> last(x) isa Real ? promote_dual(T, typeof(last(x))) : T, p; init = E)
 function _pairs_vector(prob::FieldProblem, p)
     pv = Vector{_pairtype(eltype(prob.p), eltype(typeof(p)), p)}(prob.p)
@@ -405,8 +413,13 @@ function _aux_read(prog::Program, flat, k)
 end
 Base.length(s::FieldSolution) = length(s.t)
 # (`sol[c, end]`: the last save)
-Base.lastindex(s::FieldSolution, d::Integer) = d == 2 ? length(s.t) :
-    throw(ArgumentError("a FieldSolution is indexed `sol[c, i]` by a symbol and a save"))
+function Base.lastindex(s::FieldSolution, d::Integer)
+    if d == 2
+        return length(s.t)
+    else
+        throw(ArgumentError("a FieldSolution is indexed `sol[c, i]` by a symbol and a save"))
+    end
+end
 
 """
     FieldIntegrator
@@ -521,8 +534,11 @@ end
 function _bound_inputs(i::FieldIntegrator; set = nothing)
     ks = bound_inputs(i.prob.stability)
     prog = i.prob.program
-    return Pair{String, Any}[k => _site_shaped(prog, k, set !== nothing && first(set) == k ? last(set) :
-                                                         Array(array(i.store, fieldid(prog, k), :cur))) for k in ks]
+    function value(k)
+        set !== nothing && first(set) == k && return last(set)
+        return Array(array(i.store, fieldid(prog, k), :cur))
+    end
+    return Pair{String, Any}[k => _site_shaped(prog, k, value(k)) for k in ks]
 end
 # the warning's once-key: the program (its printed text, hashed) and the value-free reason
 _warn_key(prob::FieldProblem, why) = string(hash(sprint(print_program, prob.program)); base = 16) * "|" * string(why)
@@ -565,10 +581,13 @@ end
 function _count_route(alg, clock, dt, span, what)
     alg isa ExplicitMap && return string("; give ", what, " a whole number of map steps")
     d = clock === nothing ? nothing : _divider(span, clock)
-    give = d === nothing ? string(what, " a multiple of ", dt) :
+    give = if d === nothing
+        string(what, " a multiple of ", dt)
+    else
         string(
             what, " a multiple of ", dt, ", or `solve(prob, alg; dt = ", d, ")` (it divides both ", what,
                   " and the clock's period ", clock, ")")
+    end
     return string("; give ", give)
 end
 
@@ -594,11 +613,16 @@ end
 The algorithm of a steady row `0 ~ rhs` that no pair names, beside `alg` (both front
 ends): `QuasiSteady`, with its `linsolve` and `solver_type` when it has them.
 """
-steady_alg(a) = a isa QuasiSteady ? a :
-    QuasiSteady(;
-        linsolve = a isa AbstractImplicitFieldAlgorithm ? a.linsolve : :auto,
-        solver_type = a isa AbstractImplicitFieldAlgorithm ? a.solver_type : :auto, init = starts_steady(a) ? :steady : nothing
-    )
+function steady_alg(a)
+    if a isa QuasiSteady
+        return a
+    else
+        return QuasiSteady(;
+                linsolve = a isa AbstractImplicitFieldAlgorithm ? a.linsolve : :auto,
+                solver_type = a isa AbstractImplicitFieldAlgorithm ? a.solver_type : :auto, init = starts_steady(a) ? :steady : nothing
+            )
+    end
+end
 """
     starts_steady(alg) -> Bool
 
@@ -643,7 +667,13 @@ function _groups(prob::FieldProblem, g::FieldGroups)
     # a steady field with no pair takes `QuasiSteady` beside the default
     sa = g.default === nothing ? QuasiSteady() : steady_alg(g.default)
     for k in prob.state
-        a = haskey(assigned, k) ? assigned[k] : k in st ? sa : g.default
+        a = if haskey(assigned, k)
+            assigned[k]
+        elseif k in st
+            sa
+        else
+            g.default
+        end
         a === nothing && throw(ArgumentError(string("FieldGroups: the field `", k, "` has no algorithm; ",
             "pair it with one (`", k, " => alg`) or give `default`")))
         j = findfirst(x -> isequal(x[1], a), out)
@@ -705,7 +735,13 @@ function _save_times(t0::T, tf::T, dt::T, save_start::Bool, save_end::Bool, sat:
 end
 # the save times of the save keywords `o` over `t0..tf`
 function _save_list(prob::FieldProblem, o, t0::T, tf::T, dt::T, a1, clock) where {T}
-    sat = !o.save_on ? T[] : o.saveat isa Real ? _saveat_grid(t0, tf, T(o.saveat)) : T[s for s in o.saveat]
+    sat = if !o.save_on
+        T[]
+    elseif o.saveat isa Real
+        _saveat_grid(t0, tf, T(o.saveat))
+    else
+        T[s for s in o.saveat]
+    end
     prob.kind == :map && !isempty(sat) && Base.inferencebarrier(_map_saveat)(sat, t0, dt, a1, clock)
     return _save_times(t0, tf, dt, o.save_start, o.save_end, sat)
 end
@@ -777,12 +813,14 @@ function _init(
         abstol === nothing || push!(bad, :abstol)
         reltol === nothing || push!(bad, :reltol)
         has_implicit = any(g -> g[1] isa AbstractImplicitFieldAlgorithm, groups)
-        why = has_implicit ?
-            "automatic `nlsolve = nothing` uses its fixed 1e-3 ∞-norm test and ignores `abstol`/`reltol`; pass `nlsolve = LatticeNewton()` to use them" :
+        why = if has_implicit
+            "automatic `nlsolve = nothing` uses its fixed 1e-3 ∞-norm test and ignores `abstol`/`reltol`; pass `nlsolve = LatticeNewton()` to use them"
+        else
             string(
-                "not one of a field algorithm's (it steps fixed windows of `dt`): `saveat`, `save_start`, `save_end`, ",
-                "`save_everystep`, `save_on`, `save_idxs`, `callback`, `tstops`, `maxiters`, `verbose`, `alias`, `dense`, `dt`"
-            )
+                    "not one of a field algorithm's (it steps fixed windows of `dt`): `saveat`, `save_start`, `save_end`, ",
+                    "`save_everystep`, `save_on`, `save_idxs`, `callback`, `tstops`, `maxiters`, `verbose`, `alias`, `dense`, `dt`"
+                )
+        end
         throw(
             ArgumentError(
                 string(
@@ -795,11 +833,14 @@ function _init(
     end
     atol, rtol = resolve_tols(abstol, reltol)
     for (a, _) in groups
-        alg_family(a) == prob.kind || throw(ArgumentError(string(
-            "a ", prob.kind == :map ? "map program is stepped by ExplicitMap()" :
-                        "rate program is stepped by `solve(prob, ExplicitEuler(); dt)`",
-            "; got ",
-            _algtext(a))))
+        if alg_family(a) != prob.kind
+            route = if prob.kind == :map
+                "map program is stepped by ExplicitMap()"
+            else
+                "rate program is stepped by `solve(prob, ExplicitEuler(); dt)`"
+            end
+            throw(ArgumentError(string("a ", route, "; got ", _algtext(a))))
+        end
         _window(a, dt, _clock(prob))
     end
     check_faces(prob.faces, prob.p)
@@ -832,12 +873,12 @@ function _init(
     _load_state!(st, prob.u0)
     # each group's count from the bound of its own rows (`restrict_bound`; one group: the
     # problem's bound)
-    ms = [
-        length(groups) == 1 ? substeps(prob, a; dt = w) :
-          substeps(prob, a, prob.p; tables = prob.tables, inputs = _bound_inputs(prob),
-                stability = restrict_bound(prob.stability, ks), fields = ks, dt = w
-            ) for (a, ks) in groups
-    ]
+    function group_count(a, ks)
+        length(groups) == 1 && return substeps(prob, a; dt = w)
+        return substeps(prob, a, prob.p; tables = prob.tables, inputs = _bound_inputs(prob),
+            stability = restrict_bound(prob.stability, ks), fields = ks, dt = w)
+    end
+    ms = [group_count(a, ks) for (a, ks) in groups]
     _check_coupling(prob, groups, prob.p; dt)
     run_step!(prob.backend, prob.program, prob.init, st, prob.p; rt = (t0, dt, 0), c = zero(E))
     pgood = copy(prob.p)
@@ -903,7 +944,15 @@ function _save_indices(prob::FieldProblem, idxs)
     return out
 end
 # the type of `integ.u`: the store's flat buffer (a `MixedState` for a mixed store)
-_utype(st::FieldStore, ::Type{E}) where {E} = mixed_state(st) ? MixedState : isempty(st.flat) ? Vector{E} : typeof(st.flat[1])
+function _utype(st::FieldStore, ::Type{E}) where {E}
+    if mixed_state(st)
+        return MixedState
+    elseif isempty(st.flat)
+        return Vector{E}
+    else
+        return typeof(st.flat[1])
+    end
+end
 
 # The steady starts (`init = :steady` on a group's algorithm): before the first window
 # each such group's steady state `0 = r(u)` is solved once by `QuasiSteady` (`steady_start`),
@@ -1004,8 +1053,11 @@ function _aux_values(integ::FieldIntegrator)
 end
 
 function _parity(integ::FieldIntegrator)
-    isempty(integ.prob.step.swaps) ? 1 :
-    integ.store.cur[integ.prob.step.swaps[1]]
+    if isempty(integ.prob.step.swaps)
+        1
+    else
+        integ.store.cur[integ.prob.step.swaps[1]]
+    end
 end
 _time(integ::FieldIntegrator) = getfield(integ, :tnow)
 # The clock's step index of the current window: the clock boundaries reached since the start
@@ -1060,8 +1112,11 @@ function _step!(integ::FieldIntegrator)
     # (a continuous callback): one host copy
     (getfield(integ, :cprev) !== nothing || _save_inside(integ.save, integ.nsave, target, tol)) &&
         Base.inferencebarrier(_keep_prev!)(integ)
-    code = full ? _advance_all(integ.runtimes, (t, _tick(integ))) :
-           Base.inferencebarrier(_advance_short)(integ.runtimes, (t, _tick(integ)), target - t, dt)::SciMLBase.ReturnCode.T
+    code = if full
+        _advance_all(integ.runtimes, (t, _tick(integ)))
+    else
+        Base.inferencebarrier(_advance_short)(integ.runtimes, (t, _tick(integ)), target - t, dt)::SciMLBase.ReturnCode.T
+    end
     integ.iter = _window_done!(integ.tstops, target, dt, integ.t0, integ.iter, tol)
     integ.tnow = target
     integ.windows += 1
@@ -1253,8 +1308,11 @@ function _reinit!(
         throw(ArgumentError("u0 has $(length(u0)) values; the state has $(length(integ.prob.u0))"))
     u0 === integ.prob.u0 || check_declared_state(integ.prob, u0, eachindex(u0), "starts at")
     t0 <= tf || throw(ArgumentError(string("reinit!: t0 = ", t0, " is after tf = ", tf)))
-    saveopts = saveat === nothing ? getfield(integ, :saveopts) :
+    saveopts = if saveat === nothing
+        getfield(integ, :saveopts)
+    else
         merge(getfield(integ, :saveopts), (; saveat = saveat isa Real ? typeof(t0)(saveat) : typeof(t0)[s for s in saveat]))
+    end
     _respan!(integ, t0, tf, saveopts)               # (the save times of `init` again, or `saveat`)
     st = integ.store
     foreach(f -> st.cur[f] = 1, integ.prob.step.swaps)
@@ -1302,9 +1360,15 @@ end
 
 # the saved state's element type: the state's storage (a mixed store: their promotion, so no
 # field loses precision in a save)
-_ueltype(st::FieldStore, ::Type{E}) where {E} =
-    mixed_state(st) ? mapreduce(i -> eltype(st.bufs[i][1]), promote_type, _state_ids(st)) :
-    isempty(st.flat) ? E : eltype(st.flat[1])
+function _ueltype(st::FieldStore, ::Type{E}) where {E}
+    if mixed_state(st)
+        return mapreduce(i -> eltype(st.bufs[i][1]), promote_type, _state_ids(st))
+    elseif isempty(st.flat)
+        return E
+    else
+        return eltype(st.flat[1])
+    end
+end
 # (a `Vector` of the saved element type, inferred: a save of it dispatches statically, so a
 # first save compiles `_save!` once, not again at run time; first-init compile, design §6)
 function _current(integ::FieldIntegrator)
@@ -1527,8 +1591,7 @@ function _integ_getindex(i::FieldIntegrator, sym)
         _eval_aux!(i)
         f = i.prob.program.fields[fieldid(i.prob.program, ka)]
         a = copy(array(i.store, fieldid(i.prob.program, ka), :cur))
-        return reshape(a, ncomp(f) == 1 ? leveldims(i.prob.program, f.levels[1]) :
-                          (leveldims(i.prob.program, f.levels[1])..., ncomp(f)))
+        return reshape(a, _field_shape(i.prob.program, f))
     end
     k = i.prob.index isa LatticeIndex ? input_key(i.prob.index, sym) : nothing
     k === nothing && (_check_symbol(i, sym); return SII.getsym(i, sym)(i))
@@ -1536,8 +1599,12 @@ function _integ_getindex(i::FieldIntegrator, sym)
     a = copy(array(i.store, fieldid(i.prob.program, k), :cur))
     # a Bool-declared input (stored as 0/1 bytes) reads back as Bool, on the problem's device
     is_bool_input(i.prob.index, k) && (a = map(!iszero, a))
-    return reshape(a, ncomp(f) == 1 ? leveldims(i.prob.program, f.levels[1]) :
-                      (leveldims(i.prob.program, f.levels[1])..., ncomp(f)))
+    return reshape(a, _field_shape(i.prob.program, f))
+end
+# the array shape of field `f`: its level's dimensions, and a last axis for its components
+function _field_shape(s::Program, f)
+    d = leveldims(s, f.levels[1])
+    return ncomp(f) == 1 ? d : (d..., ncomp(f))
 end
 
 # the values of the table (or the entry of one) that `sym` names, else `nothing`; a list of
@@ -1552,8 +1619,13 @@ function _read_table(x::Union{FieldProblem, FieldIntegrator, FieldSolution}, sym
     e = table_entry(ix, sym)
     return e == 0 ? copy(vals) : vals[e]
 end
-_has_table(ix, sym) = sym isa Union{AbstractVector, Tuple} && table_key(ix, sym) === nothing ?
-                      any(s -> _has_table(ix, s), sym) : table_key(ix, sym) !== nothing
+function _has_table(ix, sym)
+    if sym isa Union{AbstractVector, Tuple} && table_key(ix, sym) === nothing
+        return any(s -> _has_table(ix, s), sym)
+    else
+        return table_key(ix, sym) !== nothing
+    end
+end
 # `getp` of a table reads it from the problem (a table is not in the parameter vector); a list
 # with a table in it reads each entry with its own `getp`
 # the clock's slot is the stepper's, not a parameter
@@ -1662,7 +1734,13 @@ at" for `remake(; u0)` and `reinit!`, "is written" for a state write).
 function check_declared_state(prob::FieldProblem, vals, idx, what::AbstractString)
     decl = declared_intervals(prob.stability)
     (isempty(decl) || !(prob.index isa LatticeIndex)) && return nothing
-    is = idx isa Integer ? (idx,) : idx isa Colon ? eachindex(prob.u0) : idx
+    is = if idx isa Integer
+        (idx,)
+    elseif idx isa Colon
+        eachindex(prob.u0)
+    else
+        idx
+    end
     vals isa AbstractArray && !(vals isa Array) && (vals = Array(vals))      # (a device array: one copy, cold)
     for (k, (lo, hi)) in decl
         slot = get(prob.index.vars, prob.index.key(Symbol(k)), nothing)
@@ -1944,9 +2022,17 @@ function _write_table!(i::FieldIntegrator, v, sym)
     n = length(vals)
     num(x) = x isa Real && !(x isa Bool)
     if e == 0
-        v isa Union{AbstractArray, Tuple} && length(v) == n && all(num, v) || throw(ArgumentError(string(
-            "the table `", t, "` has ", n, " entries; give a vector of ", n, " numbers (got ",
-            v isa Union{AbstractArray, Tuple} ? (length(v) == n ? "a non-number" : "$(length(v))") : repr(v), ")")))
+        if !(v isa Union{AbstractArray, Tuple} && length(v) == n && all(num, v))
+            got = if !(v isa Union{AbstractArray, Tuple})
+                repr(v)
+            elseif length(v) == n
+                "a non-number"
+            else
+                "$(length(v))"
+            end
+            throw(ArgumentError(string(
+                "the table `", t, "` has ", n, " entries; give a vector of ", n, " numbers (got ", got, ")")))
+        end
         vals .= [_table_value(eltype(vals), t, x) for x in v]
     else
         num(v) || throw(ArgumentError("`$(_symtext(sym))` is entry $e of the table `$t`: give one number (got $(repr(v)))"))
@@ -2010,11 +2096,10 @@ function _counts(i::FieldIntegrator, p; tables, inputs)
     return _counts_all(i, p; tables, inputs)
 end
 function _counts_all(i::FieldIntegrator, p; tables, inputs)
-    ms = map(
-        rt -> rt.all_state ? substeps(i.prob, rt.alg, p; tables, inputs, dt = _iwindow(i)) :
-            substeps(i.prob, rt.alg, p; tables, inputs, stability = rt.stability, fields = rt.keys, dt = _iwindow(i)),
-        i.runtimes
-    )
+    ms = map(i.runtimes) do rt
+        rt.all_state && return substeps(i.prob, rt.alg, p; tables, inputs, dt = _iwindow(i))
+        return substeps(i.prob, rt.alg, p; tables, inputs, stability = rt.stability, fields = rt.keys, dt = _iwindow(i))
+    end
     _check_coupling(i.prob, [(rt.alg, rt.keys) for rt in i.runtimes], p; tables, inputs, dt = i.dt)
     return ms
 end

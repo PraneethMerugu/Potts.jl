@@ -35,10 +35,10 @@ The storage layout and lattice: what a checkpoint's meaning depends on besides t
 """
 function print_layout(io::IO, p::Program{N}) where {N}
     g = p.hierarchy[1].grid
+    domain = g.domain == 0 ? "box" : p.masks[g.domain].key
     println(io, "lattice N=", N, " dims=", Int.(g.dims),
         " geometry=", _lc(g.geometry), " periodic=",
-        p.periodic, " spacing=", p.spacing, " domain=", g.domain == 0 ? "box" :
-                                                        p.masks[g.domain].key,
+        p.periodic, " spacing=", p.spacing, " domain=", domain,
         " params=", p.nparams)
     for l in p.hierarchy
         println(

@@ -22,7 +22,13 @@ end
 Children of coarse index `X` on an axis of `nf` fine sites (n ÷ 2 convention, oracle).
 """
 function kids(X, nf)
-    nf == 1 ? (X:X) : (X == nf ÷ 2 && isodd(nf) ? ((2X - 1):(2X + 1)) : ((2X - 1):(2X)))
+    if nf == 1
+        X:X
+    elseif X == nf ÷ 2 && isodd(nf)
+        (2X - 1):(2X + 1)
+    else
+        (2X - 1):(2X)
+    end
 end
 
 function restrict_case(dims; op = :sum, lane = F32)

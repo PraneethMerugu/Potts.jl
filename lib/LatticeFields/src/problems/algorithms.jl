@@ -86,21 +86,31 @@ compute_type(a, ::Type{V}) where {V} = (
     c = hasfield(typeof(a), :compute_type) ? getfield(a, :compute_type) : :auto;
                                          c === :auto ? V : c)
 function ExplicitEuler(; substeps = nothing, lower_bound = nothing, init = nothing, compute_type = :auto, kw...)
-    isempty(kw) || throw(ArgumentError(string("ExplicitEuler: ",
-                haskey(kw, :linsolve) ? string(
-                        "`linsolve = ", repr(kw[:linsolve]), "`: `linsolve` is a keyword of the implicit field ",
-                                   "solvers (the linear solver of each implicit step), and `ExplicitEuler` solves no ",
-                        "linear system; give it to an implicit field solver, `BackwardEuler(; linsolve = ",
-                        repr(kw[:linsolve]), ")`, or leave `linsolve` out"
-                    ) :
-                    string(
-                        "no keyword ", join(("`$k`" for k in keys(kw)), ", "), "; its keywords are `substeps`, `lower_bound`, `init` ",
-                        "and `compute_type`", _dt_text(kw)
-                    )
-            )
-        )
-    )
+    isempty(kw) || throw(ArgumentError(string("ExplicitEuler: ", _explicit_euler_keywords(kw))))
     return ExplicitEuler(substeps, lower_bound, init, compute_type)
+end
+# the refusal of keywords `ExplicitEuler` does not take
+function _explicit_euler_keywords(kw)
+    if haskey(kw, :linsolve)
+        return string(
+            "`linsolve = ", repr(kw[:linsolve]), "`: `linsolve` is a keyword of the implicit field ",
+            "solvers (the linear solver of each implicit step), and `ExplicitEuler` solves no ",
+            "linear system; give it to an implicit field solver, `BackwardEuler(; linsolve = ",
+            repr(kw[:linsolve]), ")`, or leave `linsolve` out"
+        )
+    else
+        return string(
+            "no keyword ", join(("`$k`" for k in keys(kw)), ", "), "; its keywords are `substeps`, `lower_bound`, `init` ",
+            "and `compute_type`", _dt_text(kw)
+        )
+    end
+end
+# the note after a refused `solver_type`: why a non-bits float type is refused
+function _solver_type_note(solver_type)
+    solver_type isa Type || return ""
+    solver_type <: AbstractFloat && isbitstype(solver_type) && return ""
+    return " (a BigFloat implicit solve is not supported yet; a Dual state's derivative parts take " *
+        "tangent solves in its value type)"
 end
 # the route of a `dt` given to a field algorithm: the window is a keyword of `solve`
 _dt_text(kw) = haskey(kw, :dt) ? " (the window `dt` is a keyword of `solve`: `solve(prob, alg; dt)`)" : ""
@@ -321,8 +331,7 @@ function _implicit_keywords(w, substeps, nlsolve, lower_bound, linsolve, solver_
             string(
                 w,
                 ": `solver_type` takes `:auto` (the state's number type), `Float32` or `Float64`; got ", repr(solver_type),
-                solver_type isa Type && !(solver_type <: AbstractFloat && isbitstype(solver_type)) ? "" :
-                    solver_type isa Type ? " (a BigFloat implicit solve is not supported yet; a Dual state's derivative parts take tangent solves in its value type)" : ""
+                _solver_type_note(solver_type)
             )
         )
     )

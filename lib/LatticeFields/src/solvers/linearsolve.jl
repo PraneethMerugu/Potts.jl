@@ -144,7 +144,13 @@ function _bound_mul_body!(i, S, P, G)
                 xj = (mask !== nothing && mask[j] != 0) ? zero(T) : T(x[j])
                 acc += w3i * (x0 - xj)
             else
-                dg = !in1 ? (G.dir[1][2] ? T(2) : G.rob[1][2]) : (G.dir[2][1] ? T(2) : G.rob[2][1])
+                dg = if !in1
+                    G.dir[1][2] ? T(2) : G.rob[1][2]
+                elseif G.dir[2][1]
+                    T(2)
+                else
+                    G.rob[2][1]
+                end
                 acc += dg * w3i * x0
             end
             in1 = G.per[1] || c1 > 1
@@ -155,7 +161,13 @@ function _bound_mul_body!(i, S, P, G)
                 xj = (mask !== nothing && mask[j] != 0) ? zero(T) : T(x[j])
                 acc += wj * (x0 - xj)
             else
-                dg = !in1 ? (G.dir[1][1] ? T(2) : G.rob[1][1]) : (G.dir[2][2] ? T(2) : G.rob[2][2])
+                dg = if !in1
+                    G.dir[1][1] ? T(2) : G.rob[1][1]
+                elseif G.dir[2][2]
+                    T(2)
+                else
+                    G.rob[2][2]
+                end
                 acc += dg * w3i * x0
             end
         end
@@ -263,7 +275,13 @@ function _visit_bound_entries(emit!, A::BoundOperator{ET, N}, ::Type{T}) where {
                 diag += w3i
                 emit!(idx, j, (mask !== nothing && mask[j] != 0) ? zero(T) : -w3i)
             else
-                dg = !in1 ? (dir[1][2] ? T(2) : rob[1][2]) : (dir[2][1] ? T(2) : rob[2][1])
+                dg = if !in1
+                    dir[1][2] ? T(2) : rob[1][2]
+                elseif dir[2][1]
+                    T(2)
+                else
+                    rob[2][1]
+                end
                 diag += dg * w3i
             end
             in1 = per[1] || c1 > 1
@@ -274,7 +292,13 @@ function _visit_bound_entries(emit!, A::BoundOperator{ET, N}, ::Type{T}) where {
                 diag += wj
                 emit!(idx, j, (mask !== nothing && mask[j] != 0) ? zero(T) : -wj)
             else
-                dg = !in1 ? (dir[1][1] ? T(2) : rob[1][1]) : (dir[2][2] ? T(2) : rob[2][2])
+                dg = if !in1
+                    dir[1][1] ? T(2) : rob[1][1]
+                elseif dir[2][2]
+                    T(2)
+                else
+                    rob[2][2]
+                end
                 diag += dg * w3i
             end
         end
@@ -525,8 +549,13 @@ end
 LatticeBlockSolve(linsolve) = LatticeBlockSolve(linsolve, Dict{Any, Any}(), ReentrantLock())
 LatticeBlockSolve() = LatticeBlockSolve(LatticePCG(; maxiters = 2))
 Base.:(==)(a::LatticeBlockSolve, b::LatticeBlockSolve) = a.linsolve == b.linsolve
-Base.show(io::IO, b::LatticeBlockSolve) = b == LatticeBlockSolve() ? print(io, "LatticeBlockSolve()") :
-    print(io, "LatticeBlockSolve(", b.linsolve, ")")
+function Base.show(io::IO, b::LatticeBlockSolve)
+    if b == LatticeBlockSolve()
+        return print(io, "LatticeBlockSolve()")
+    else
+        return print(io, "LatticeBlockSolve(", b.linsolve, ")")
+    end
+end
 Base.:(==)(a::LatticePCG, b::LatticePCG) = a.precs == b.precs && a.maxiters == b.maxiters && a.reltol == b.reltol
 Base.hash(a::LatticeBlockSolve, h::UInt) = hash(a.linsolve, hash(:LatticeBlockSolve, h))
 Base.hash(a::LatticePCG, h::UInt) = hash((a.precs, a.maxiters, a.reltol), hash(:LatticePCG, h))
@@ -691,7 +720,11 @@ function bound_field_cache(exec, op::CellOperator, linsolve; T = Float32, solver
                 "`$(nameof(typeof(alg)))` only supports `Float64` sparse matrices; leave `solver_type` out (`:auto`) or pass `solver_type = Float64`"
             )
         )
-        S = solver_type === :auto ? (_needs_float64_csc(alg) ? Float64 : eltype(b)) : solver_type
+        S = if solver_type === :auto
+            _needs_float64_csc(alg) ? Float64 : eltype(b)
+        else
+            solver_type
+        end
         Aop = BoundOperator(exec, op, S, solver_type, ins)
         M = sparse_operator(Aop)
         b_buf = eltype(b) === S ? b : copyto!(Vector{S}(undef, length(b)), b)
@@ -766,8 +799,11 @@ function LinearSolve.init_cacheval(
         assumptions::LinearSolve.OperatorAssumptions
     )
     default_m = jumpy(A.op) ? 12 : 8
-    m = alg.cycles !== nothing ? _check_fused_cap(alg.cycles) :
+    m = if alg.cycles !== nothing
+        _check_fused_cap(alg.cycles)
+    else
         _fused_budget(alg.maxiters, maxiters, length(b), default_m)
+    end
     r = something(alg.reltol, Float64(reltol))
     w = something(alg.warn_tol, alg.cycles === nothing ? r : 1.0e-3)
     mg = LatticeMultigrid(alg.cycle, alg.cycles, r, m, w, alg.engines, alg.lock)
@@ -834,8 +870,11 @@ end
 function _budget!(sv::FieldSolver, alg::LatticeMultigrid, cache)
     a = sv.alg::LatticeMultigrid
     default_m = jumpy(sv.op) ? 12 : 8
-    m = alg.cycles !== nothing ? _check_fused_cap(alg.cycles) :
+    m = if alg.cycles !== nothing
+        _check_fused_cap(alg.cycles)
+    else
         _fused_budget(alg.maxiters, cache.maxiters, length(cache.b), default_m)
+    end
     r = something(alg.reltol, Float64(cache.reltol))
     w = something(alg.warn_tol, alg.cycles === nothing ? r : 1.0e-3)
     if (a.cycles === nothing && (r != a.reltol || w != a.warn_tol)) ||
@@ -869,8 +908,13 @@ function _retcode_scal(exec, scal, fixed::Bool)
     host_scalars(exec, scal) || return SciMLBase.ReturnCode.Default, 0
     code = _scal_int(scal, DONE)
     iters = _scal_int(scal, ITER)
-    rc = code == 1 || (code == 0 && fixed) ? SciMLBase.ReturnCode.Success :
-        code == 0 ? SciMLBase.ReturnCode.MaxIters : SciMLBase.ReturnCode.ConvergenceFailure
+    rc = if code == 1 || (code == 0 && fixed)
+        SciMLBase.ReturnCode.Success
+    elseif code == 0
+        SciMLBase.ReturnCode.MaxIters
+    else
+        SciMLBase.ReturnCode.ConvergenceFailure
+    end
     return rc, iters
 end
 _scal_int(scal::Array, i) = @inbounds Int(scal[i])       # (i ≤ SCALARS = length(scal))
@@ -930,8 +974,13 @@ function _solve!(cache, alg::LatticePCG, ::Nothing)
     copyto!(cache.u, x)
     # (not converged: `MaxIters` at the iteration limit, else `ConvergenceFailure`, as LinearSolve's
     # Krylov methods report it)
-    retcode = stats.solved ? SciMLBase.ReturnCode.Success :
-        stats.niter >= itmax ? SciMLBase.ReturnCode.MaxIters : SciMLBase.ReturnCode.ConvergenceFailure
+    retcode = if stats.solved
+        SciMLBase.ReturnCode.Success
+    elseif stats.niter >= itmax
+        SciMLBase.ReturnCode.MaxIters
+    else
+        SciMLBase.ReturnCode.ConvergenceFailure
+    end
     return SciMLBase.build_linear_solution(alg, cache.u, nothing, cache; retcode, iters = stats.niter, stats)
 end
 
@@ -955,8 +1004,13 @@ _krylov_precond(P) = P isa Union{LinearAlgebra.UniformScaling, SciMLOperators.Id
 function SciMLBase.solve!(cache::LinearSolve.LinearCache, alg::LatticeGMRES; kwargs...)
     budget = _gmres!(cache, alg; owned_atol = false)
     st = cache.cacheval.stats
-    retcode = st.solved ? SciMLBase.ReturnCode.Success :
-        st.niter >= budget ? SciMLBase.ReturnCode.MaxIters : SciMLBase.ReturnCode.ConvergenceFailure
+    retcode = if st.solved
+        SciMLBase.ReturnCode.Success
+    elseif st.niter >= budget
+        SciMLBase.ReturnCode.MaxIters
+    else
+        SciMLBase.ReturnCode.ConvergenceFailure
+    end
     return SciMLBase.build_linear_solution(alg, cache.u, nothing, cache; retcode, iters = st.niter)
 end
 function _gmres!(cache, alg::LatticeGMRES; owned_atol::Bool = false)

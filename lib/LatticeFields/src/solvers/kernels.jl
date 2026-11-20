@@ -70,13 +70,14 @@ function CellOperator(dims::NTuple{N, Integer}; periodic = ntuple(_ -> false, N)
     hex && !(N == 2 && all(>=(2), dims)) && throw(ArgumentError(string(who,
         ": a hexagonal lattice is 2D with at least two sites per axis; got the dims ", Tuple(dims))))
     face === nothing && (face = ntuple(_ -> 1.0, hex ? 3 : N))
-    length(face) == (hex ? 3 : N) || throw(ArgumentError(string(who, ": `face` has one coefficient per ",
-        hex ? "face direction of a hexagonal lattice (+e₁, +e₂, +e₁ − e₂): 3" : string("axis: ", N), "; got ", length(face))))
+    if length(face) != (hex ? 3 : N)
+        per = hex ? "face direction of a hexagonal lattice (+e₁, +e₂, +e₁ − e₂): 3" : string("axis: ", N)
+        throw(ArgumentError(string(who, ": `face` has one coefficient per ", per, "; got ", length(face))))
+    end
     function rob(r)
         r === nothing && return nothing
-        length(r) == 3 || throw(ArgumentError(string(name === nothing ? "the solver group" :
-                                                     string("field `", name, "`"),
-            ": a Robin face is `(α, β, g)` or `nothing`; got ", repr(r))))
+        whose = name === nothing ? "the solver group" : string("field `", name, "`")
+        length(r) == 3 || throw(ArgumentError(string(whose, ": a Robin face is `(α, β, g)` or `nothing`; got ", repr(r))))
         return map(Float64, Tuple(r))
     end
     fs = map(num, Tuple(face))
@@ -104,8 +105,13 @@ The face directions of a lattice with `N` axes as offsets: the unit vectors, and
 the diagonal `e₁ − e₂` third.
 """
 face_dirs(N, hex::Bool) = hex ? ((1, 0), (0, 1), (1, -1)) : ntuple(a -> _unit(N, a, 1), N)
-_facename(op::CellOperator, a) = a <= length(op.dims) ? string("axis `", op.axes[a], "`") :
-                                 string("the diagonal `", op.axes[1], " − ", op.axes[2], "`")
+function _facename(op::CellOperator, a)
+    if a <= length(op.dims)
+        return string("axis `", op.axes[a], "`")
+    else
+        return string("the diagonal `", op.axes[1], " − ", op.axes[2], "`")
+    end
+end
 
 """
 The subject of a solver message: the user's field, or "the solver group" without a name.
@@ -332,8 +338,11 @@ function _apply(kb::KernelBuilder{N}, F::LevelFields{N}, per, dims, xget; lev = 
 
         dims[a] == 1 && continue
         o = _unit(N, a, σ)
-        w = σ > 0 ? L(F.w[a]) :
+        w = if σ > 0
+            L(F.w[a])
+        else
             L(F.w[a]; o, pol = per[a] ? IR.CLAMP : IR.ZERO)
+        end
         xj = _real(L(F.active; o, pol = IR.CLAMP)) * xget(o)
         D, Ax = D + w, Ax + w * (x0 - xj)
     end
@@ -361,8 +370,11 @@ function _roundscale(kb::KernelBuilder{N}, F::LevelFields{N}, per, dims, b, aget
 
         dims[a] == 1 && continue
         o = _unit(N, a, σ)
-        w = σ > 0 ? L(F.w[a]) :
+        w = if σ > 0
+            L(F.w[a])
+        else
             L(F.w[a]; o, pol = per[a] ? IR.CLAMP : IR.ZERO)
+        end
         sc = sc + w * (x0 + _real(L(F.active; o, pol = IR.CLAMP)) * abs(aget(o)))
     end
     if length(F.w) > N && all(>(1), dims)          # hexagonal: the faces to ±(e₁ − e₂)
@@ -408,12 +420,14 @@ function solver_program(op::CellOperator{N}, pcg::Bool; lane = F32, state = lane
         value = op.value isa String ? input(op.value) : Int32(0),
         shift = op.shift isa String ? input(op.shift) : Int32(0),
         face = map(f -> f isa String ? input(f) : Int32(0), faces(op)))
-    pf = pcg ?
-         (; x = field!(pb, "pcg.x"; buffers = 2, storage = lane),
-        b = field!(pb, "pcg.b"; role = :aux, storage = lane),
-        p = field!(pb, "pcg.p"; buffers = 2, storage = lane),
-        u = deflate ? field!(pb, "pcg.u"; storage = state) : Int32(0)) :
-         nothing
+    pf = if pcg
+        (; x = field!(pb, "pcg.x"; buffers = 2, storage = lane),
+            b = field!(pb, "pcg.b"; role = :aux, storage = lane),
+            p = field!(pb, "pcg.p"; buffers = 2, storage = lane),
+            u = deflate ? field!(pb, "pcg.u"; storage = state) : Int32(0))
+    else
+        nothing
+    end
     rb = has_robin(op) ? field!(pb, "robin.b"; role = :aux, storage = lane) : Int32(0)
     tab(k) = table!(pb, k; storage = lane, oob = :none)
     tb = (; scal = tab("solve.scal"), pr = tab("solve.pr"), pb = tab("solve.pb"),
@@ -458,7 +472,13 @@ function _face_in(kb::KernelBuilder{N}, ctx, a; o = ntuple(_ -> 0, N)) where {N}
     f = faces(ctx.op)[a]
     f isa Real && return param(kb, ctx.cs.face[a])
     per = a <= N ? ctx.op.periodic[a] : all(ctx.op.periodic)
-    pol = all(iszero, o) ? IR.RESOLVE : per ? IR.CLAMP : IR.ZERO
+    pol = if all(iszero, o)
+        IR.RESOLVE
+    elseif per
+        IR.CLAMP
+    else
+        IR.ZERO
+    end
     return load(kb, ctx.inp.face[a]; offset = o, policy = pol)
 end
 
@@ -488,8 +508,11 @@ function _fill!(ctx)
     op, F, pb = ctx.op, ctx.lv[1], ctx.pb
     N = length(op.dims)
     kb = kernel(pb)
-    active = ctx.inp.mask == 0 ? constant(kb, 1.0) :
-          select(eq(load(kb, ctx.inp.mask), 0), 1.0, 0.0)
+    active = if ctx.inp.mask == 0
+        constant(kb, 1.0)
+    else
+        select(eq(load(kb, ctx.inp.mask), 0), 1.0, 0.0)
+    end
     store(kb, F.active, cast(active, U8))
     sbox = constant(kb, 0.0)
     for a in 1:N
@@ -497,9 +520,13 @@ function _fill!(ctx)
         op.periodic[a] || (w = select(_inside(kb, ctx.inp.f, _unit(N, a, 1)), w, 0.0))
         store(kb, F.w[a], w)
         for (k, σ) in enumerate((-1, 1))
-            diag = op.dirichlet[a][k] !== nothing ? 2 * _face_in(kb, ctx, a) :
-                   op.robin[a][k] !== nothing ?
-                   param(kb, ctx.cs.robin[a][k][1]) * _face_in(kb, ctx, a) : nothing
+            diag = if op.dirichlet[a][k] !== nothing
+                2 * _face_in(kb, ctx, a)
+            elseif op.robin[a][k] !== nothing
+                param(kb, ctx.cs.robin[a][k][1]) * _face_in(kb, ctx, a)
+            else
+                nothing
+            end
             diag === nothing && continue                 # the ghost rule's diagonal (d⁺ w)
             sbox = sbox + select(_inside(kb, ctx.inp.f, _unit(N, a, σ)), 0.0, diag)
         end
@@ -509,8 +536,16 @@ function _fill!(ctx)
         all(op.periodic) || (w = select(_inside(kb, ctx.inp.f, (1, -1)), w, 0.0))
         store(kb, F.w[3], w)
         for σ in (1, -1)
-            g = _hexghost(kb, ctx, σ, (a, k, w) -> op.dirichlet[a][k] !== nothing ? 2 * w :
-                                              op.robin[a][k] !== nothing ? param(kb, ctx.cs.robin[a][k][1]) * w : nothing)
+            function ghost_diag(a, k, w)
+                if op.dirichlet[a][k] !== nothing
+                    return 2 * w
+                elseif op.robin[a][k] !== nothing
+                    return param(kb, ctx.cs.robin[a][k][1]) * w
+                else
+                    return nothing
+                end
+            end
+            g = _hexghost(kb, ctx, σ, ghost_diag)
             g === nothing || (sbox = sbox + g)
         end
     end
@@ -561,8 +596,16 @@ function _lift!(ctx)
                 v = _num(kb, op.value, ctx.inp.value, ctx.cs.value; offset = o, policy = IR.CLAMP)
                 b = b + select(hit, w * v, 0.0)
             end
-            g = _hexghost(kb, ctx, σ, (a, k, w) -> op.dirichlet[a][k] !== nothing ? 2 * w * param(kb, ctx.cs.dirichlet[a][k]) :
-                                              op.robin[a][k] !== nothing ? w * param(kb, ctx.cs.robin[a][k][3]) : nothing)
+            function ghost_rhs(a, k, w)
+                if op.dirichlet[a][k] !== nothing
+                    return 2 * w * param(kb, ctx.cs.dirichlet[a][k])
+                elseif op.robin[a][k] !== nothing
+                    return w * param(kb, ctx.cs.robin[a][k][3])
+                else
+                    return nothing
+                end
+            end
+            g = _hexghost(kb, ctx, σ, ghost_rhs)
             g === nothing || (b = b + g)
         end
     end
@@ -601,8 +644,7 @@ function _robin!(ctx)
     end
     if ishex(op)                                         # the diagonal faces that leave the box
         for σ in (1, -1)
-            g = _hexghost(kb, ctx, σ, (a, k, w) -> op.robin[a][k] === nothing ? nothing :
-                                              param(kb, ctx.cs.robin[a][k][2]) * w * x)
+            g = _hexghost(kb, ctx, σ, (a, k, w) -> op.robin[a][k] === nothing ? nothing : param(kb, ctx.cs.robin[a][k][2]) * w * x)
             g === nothing || (b = b - g)
         end
     end

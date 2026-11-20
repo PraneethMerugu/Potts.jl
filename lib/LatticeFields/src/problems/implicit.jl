@@ -149,8 +149,15 @@ function _be_norms_body!(b, part, dst, un, x, smask, v, res, s, mask, n, gate)
         dm, im, um = zero(T), zero(T), zero(T)
         for i in ((b - 1) * NB + 1):min(b * NB, n)
             (mask !== nothing && mask[i] != 0) && continue
-            δ = gated ? zero(T) :
-                res !== nothing ? res[i] / _at(s, i) : (v !== nothing && smask[i] != 0) ? v[i] : x[i]
+            δ = if gated
+                zero(T)
+            elseif res !== nothing
+                res[i] / _at(s, i)
+            elseif v !== nothing && smask[i] != 0
+                v[i]
+            else
+                x[i]
+            end
             dm = _nanmax(dm, abs(T(δ)))
             im = _nanmax(im, abs(T(dst[i] - un[i])))
             um = _nanmax(um, abs(T(dst[i])))
@@ -169,7 +176,13 @@ function _be_newton_body!(i, w, part, nb, hist, it, last, epsn, fl, window, stea
             un = _nanmax(un, part[3b])
         end
         d1, d2 = it == 1 ? (zero(T), zero(T)) : (hist[2], hist[1])      # ‖δ_{k−1}‖, ‖δ_{k−2}‖
-        fail = !isfinite(dk) ? UInt32(4) : (checkdiv && it >= 3 && dk > 2d1 && d1 > 2d2) ? UInt32(2) : UInt32(0)
+        fail = if !isfinite(dk)
+            UInt32(4)
+        elseif checkdiv && it >= 3 && dk > 2d1 && d1 > 2d2
+            UInt32(2)
+        else
+            UInt32(0)
+        end
         # (a steady solve has no increment over a step: the field-relative form)
         conv = steady ? dk <= (epsn + fl) * un : dk <= epsn * inc + fl * un
         it == 1 && (hist[3] = dk)
@@ -207,7 +220,13 @@ function _be_kappa_norms_body!(b, part, cnt, off, dst, un, x, smask, v, res, s, 
             ((mask !== nothing && mask[i] != 0) || (dom !== nothing && dom[i] == 0)) && continue
             c += UInt32(1)
             if !gated
-                dv = T(res !== nothing ? res[i] / _at(s, i) : (v !== nothing && smask[i] != 0) ? v[i] : x[i])
+                dv = if res !== nothing
+                    T(res[i] / _at(s, i))
+                elseif v !== nothing && smask[i] != 0
+                    T(v[i])
+                else
+                    T(x[i])
+                end
                 u0 = abs(T(un[i]))
                 # exact pre-update iterate u_k = dst − δ apart from rounding and any final-iteration lower_bound clip
                 uk = abs(T(dst[i]) - dv)
@@ -332,9 +351,15 @@ _at(::Nothing, i) = false
 function _be_update_body!(i, dst, src, x, smask, v, res, s, mask, mval, mvf, lower, clip, gate)
     @inbounds begin
         gated = gate !== nothing && gate[1] != 0
-        δ = gated ? zero(eltype(dst)) :
-            res !== nothing ? res[i] / _at(s, i) :
-            (v !== nothing && smask[i] != 0) ? v[i] : x[i]
+        δ = if gated
+            zero(eltype(dst))
+        elseif res !== nothing
+            res[i] / _at(s, i)
+        elseif v !== nothing && smask[i] != 0
+            v[i]
+        else
+            x[i]
+        end
         u = src[i] + δ
         if mask !== nothing && mask[i] != 0
             u = mvf === nothing ? mval : mval * mvf[i]
@@ -360,7 +385,13 @@ function _be_shift_body!(i, s, j, d, m, smask, rmask, dom, ih, ih2, w, window)
             w[STATUS_CLAMP] == 0 && (w[STATUS_CLAMP] = UInt32(window))
         end
         base = max(s0, ih2)
-        scaled = m === nothing ? base : (m[i] > 0 ? base / m[i] : ih)
+        scaled = if m === nothing
+            base
+        elseif m[i] > 0
+            base / m[i]
+        else
+            ih
+        end
         s[i] = d === nothing ? scaled : scaled + d[i]
         if smask !== nothing
             off = (rmask !== nothing && rmask[i] != 0) || (dom !== nothing && dom[i] == 0) || (m !== nothing && !(m[i] > 0))
@@ -551,6 +582,19 @@ function _face_kind(s::Program, id, a, k, p)
     β == 0 && return (:dirichlet, α, 0.0)
     return (:robin, α, β)
 end
+# the Dirichlet faces of axis `a` (0.0 at each, `nothing` elsewhere; none on a periodic axis)
+function _dirichlet_faces(s::Program, id, a, p)
+    s.periodic[a] && return (nothing, nothing)
+    return ntuple(k -> _face_kind(s, id, a, k, p)[1] === :dirichlet ? 0.0 : nothing, 2)
+end
+# the Robin faces of axis `a` (`(α, β, 0.0)` at each, `nothing` elsewhere; none on a periodic axis)
+function _robin_faces(s::Program, id, a, p)
+    s.periodic[a] && return (nothing, nothing)
+    return ntuple(2) do k
+        f = _face_kind(s, id, a, k, p)
+        return f[1] === :robin ? (f[2], f[3], 0.0) : nothing
+    end
+end
 
 # the numeric operator of a row at parameters `p` and step `h`: faces, shift, face conditions
 # (homogeneous: δ has zero boundary data), the row's mask with value 0 (its update writes the
@@ -569,10 +613,8 @@ function _numeric_operator(s::Program{N}, r::RowOperator, id, p, h, γ, mask::Bo
     if coupled && isinf(γ * h) && !(s0 > 0)
         shift = abs(s0) + sum((abs(_coefsum(Coef[c], p)) for (_, c, _) in r.cross if !isnan(c.value)); init = 0.0)
     end
-    dir = ntuple(a -> s.periodic[a] ? (nothing, nothing) :
-                      ntuple(k -> _face_kind(s, id, a, k, p)[1] === :dirichlet ? 0.0 : nothing, 2), N)
-    rob = ntuple(a -> s.periodic[a] ? (nothing, nothing) :
-                      ntuple(k -> (f = _face_kind(s, id, a, k, p); f[1] === :robin ? (f[2], f[3], 0.0) : nothing), 2), N)
+    dir = ntuple(a -> _dirichlet_faces(s, id, a, p), N)
+    rob = ntuple(a -> _robin_faces(s, id, a, p), N)
     # a steady solve (γh = ∞) takes a Robin face's negative part into its operator too: with no
     # time-step shift to keep dominant, it stays symmetric and exact
     op = Solvers.CellOperator(dims; periodic = s.periodic, face, shift, mask = mask ? "mask" : nothing, value = 0.0,
@@ -616,9 +658,12 @@ function _robin_bounds(s::Program{N}, op::OperatorSpec, keys, p) where {N}
                 if r.field
                     r.facemax !== nothing && fm === nothing && (fm = r.facemax(p))
                     w = fm === nothing ? NaN : Float64(fm[a])
-                    isfinite(w * dm) ? (m = max(m, w * abs(dm))) :
-                    push!(texts, string("the Robin face of `", r.key, "` on axis ", a, " (", k == 1 ? "low" : "high",
-                        " side), whose diagonal ", isnan(dm) ? "may be negative at some site" : "is negative", " at these parameters,"))
+                    if isfinite(w * dm)
+                        m = max(m, w * abs(dm))
+                    else
+                        push!(texts, string("the Robin face of `", r.key, "` on axis ", a, " (", k == 1 ? "low" : "high",
+                            " side), whose diagonal ", isnan(dm) ? "may be negative at some site" : "is negative", " at these parameters,"))
+                    end
                 else
                     m = max(m, abs(_coefsum(r.faces[a], p)) * abs(dm))
                 end
@@ -761,8 +806,17 @@ function bind_cache(
         jplan = _implicit_plan(g, jp, :jac, jids, V, backend, options; C = compute_type(alg, V))
         # per slot parity and Newton iteration (first: the iterate is the substep's start, slot
         # `par`; later: the other slot), as the residual's
-        jcur(par, first) = [(k = findfirst(x -> x.key == f.key, s.fields)) === nothing ? 1 :
-                            k in swaps ? (first ? par : 3 - par) : st.cur[k] for f in jp.fields]
+        function jslot(f, par, first)
+            k = findfirst(x -> x.key == f.key, s.fields)
+            if k === nothing
+                return 1
+            elseif k in swaps
+                return first ? par : 3 - par
+            else
+                return st.cur[k]
+            end
+        end
+        jcur(par, first) = [jslot(f, par, first) for f in jp.fields]
         jcurs = (jcur(1, true), jcur(2, true), jcur(1, false), jcur(2, false))
         mkjac = q -> ntuple(i -> BoundStep(backend, jp, jplan, jst, q; cur = jcurs[i], c), 4)
         jac = mkjac(p)
@@ -790,7 +844,13 @@ function bind_cache(
         cur = ones(Int, length(prog.fields))
         for (i, f) in enumerate(prog.fields)
             if i <= length(s.fields)
-                cur[i] = i in swaps ? (first && !(i in before) ? par : 3 - par) : (all_state ? par : st.cur[i])
+                cur[i] = if i in swaps
+                    first && !(i in before) ? par : 3 - par
+                elseif all_state
+                    par
+                else
+                    st.cur[i]
+                end
             elseif endswith(f.key, "__n")
                 cur[i] = par
             end
@@ -923,14 +983,23 @@ function bind_cache(
     iterate = any(r -> r.op.iterate, rows)
     smin = _steady_shift(op, keys, p)
     # (behind a barrier: a group that is not coupled compiles none of it)
-    cs = coupled ? Base.inferencebarrier(_bind_coupled)(
-            rows, _krylov(alg.linsolve), st, s, rs, rst, sps, rcurss, swaps, keys,
-            g.spec.init, backend, p, c, op, alg, auto_newton
-        ) : nothing
-    newton = auto_newton ? (
-            coupled ? _coupled_newton(alg, cs.linear, switch) :
+    cs = if coupled
+        Base.inferencebarrier(_bind_coupled)(
+                rows, _krylov(alg.linsolve), st, s, rs, rst, sps, rcurss, swaps, keys,
+                g.spec.init, backend, p, c, op, alg, auto_newton
+            )
+    else
+        nothing
+    end
+    newton = if auto_newton
+        if coupled
+            _coupled_newton(alg, cs.linear, switch)
+        else
             _auto_newton(alg, exact, switch, iterate, seen, ρin, h, b.θ, smin)
-        ) : alg.nlsolve.max_iter::Int
+        end
+    else
+        alg.nlsolve.max_iter::Int
+    end
     check = !auto_newton || newton > 1
     if !coupled && !auto_newton
         if length(rows) == 1
@@ -1027,7 +1096,13 @@ _auto_newton(alg::AbstractImplicitFieldAlgorithm, exact, switch, iterate, seen, 
 function _auto_newton(::QuasiSteady, exact, switch, iterate, seen, ρin, h, θ, smin)
     exact && return switch || iterate ? QS_NEWTON : 1
     seen || return QS_NEWTON_CAP
-    ρ = ρin == 0 ? θ : smin > 0 ? ρin / smin + θ : Inf
+    ρ = if ρin == 0
+        θ
+    elseif smin > 0
+        ρin / smin + θ
+    else
+        Inf
+    end
     ρ < 1 || return QS_NEWTON_CAP
     return clamp(ceil(Int, log(NEWTON_EPS) / log(ρ)) + 1, QS_NEWTON, QS_NEWTON_CAP)
 end
@@ -1051,7 +1126,13 @@ function _newton_count(exact::Bool, switch::Bool, seen::Bool, ρin::Float64, γ:
     seen || return 4
     ρc = γ * h * ρin + θ
     cap = θ > 0 ? NEWTON_CAP_THETA : NEWTON_CAP
-    k = ρc <= 0 ? 2 : ρc >= 1 ? cap : clamp(ceil(Int, log(NEWTON_EPS) / log(ρc)) + (θ > 0), 2, cap)
+    k = if ρc <= 0
+        2
+    elseif ρc >= 1
+        cap
+    else
+        clamp(ceil(Int, log(NEWTON_EPS) / log(ρc)) + (θ > 0), 2, cap)
+    end
     return switch ? max(k, 2) : k
 end
 # once per group and term: a term no bound sees is corrected by Newton iterations,
@@ -1150,8 +1231,11 @@ function _count_set!(c::ImplicitCache, rt::GroupRuntime)
 end
 function _set_newton!(c::ImplicitCache, alg)
     c.auto || return nothing
-    c.newton = c.cs !== nothing ? _coupled_newton(alg, c.cs.linear, c.switch) :
-               _auto_newton(alg, c.exact, c.switch, c.iterate, c.seen, c.ρin, c.h, c.θ, c.smin)
+    c.newton = if c.cs !== nothing
+        _coupled_newton(alg, c.cs.linear, c.switch)
+    else
+        _auto_newton(alg, c.exact, c.switch, c.iterate, c.seen, c.ρin, c.h, c.θ, c.smin)
+    end
     c.check = c.newton > 1
     c.flip = _flips(alg, c.exact, c.switch)
     return nothing
@@ -1255,8 +1339,11 @@ function (r::ImplicitRow)(a)
             )
         )
         if check
-            auto ? _newton_check!(r, backend, word, dst, r.bufs[par], nothing, it, hits, window, isinf(h), checkdiv, failbudget, gate) :
+            if auto
+                _newton_check!(r, backend, word, dst, r.bufs[par], nothing, it, hits, window, isinf(h), checkdiv, failbudget, gate)
+            else
                 _kappa_row_norms!(r, backend, dst, r.bufs[par], nothing, gpart, gcnt, gate, abstol, reltol)
+            end
         end
         return nothing
     end
@@ -1267,8 +1354,11 @@ function (r::ImplicitRow)(a)
         )
     )
     if check
-        auto ? _newton_check!(r, backend, word, dst, r.bufs[par], x, it, hits, window, isinf(h), checkdiv, failbudget, gate) :
+        if auto
+            _newton_check!(r, backend, word, dst, r.bufs[par], x, it, hits, window, isinf(h), checkdiv, failbudget, gate)
+        else
             _kappa_row_norms!(r, backend, dst, r.bufs[par], x, gpart, gcnt, gate, abstol, reltol)
+        end
     end
     return nothing
 end
@@ -1398,8 +1488,11 @@ struct _SetQ{B}
 end
 function (r::ImplicitRow)(a::_SetQ)
     un = r.bufs[a.par]
-    a.bdf ? Exec.launch!(a.backend, _bdf2_q_body!, length(r.q), (r.q, un, r.prev)) :
-            Exec.launch!(a.backend, _copy_body!, length(r.q), (r.q, un))
+    if a.bdf
+        Exec.launch!(a.backend, _bdf2_q_body!, length(r.q), (r.q, un, r.prev))
+    else
+        Exec.launch!(a.backend, _copy_body!, length(r.q), (r.q, un))
+    end
     return nothing
 end
 # BDF2: `uⁿ` (slot `par`, the stage's start) into each row's `uⁿ⁻¹` for the next substep (its
@@ -1526,15 +1619,23 @@ end
 function _rebind_cache(c::ImplicitCache, rt::GroupRuntime, p)
     res, jac, qres, pres = c.rebind(p)
     hγ = c.γ * c.h
-    ops = Any[r.numeric === nothing ? nothing :
-              first(_numeric_operator(rt.program, r.op, fieldid(rt.program, r.key), p, hγ, 1.0, r.mask !== nothing;
-                  coupled = c.cs !== nothing))
-              for r in c.rows]
-    shifts = Any[r.solver === nothing && r.s isa Number ? oftype(r.s, max(1 / hγ - _coefsum(r.op.jloc, p), 1 / (2hγ))) :
-                 nothing for r in c.rows]
+    ops = Any[_row_numeric_operator(rt, r, p, hγ, c.cs !== nothing) for r in c.rows]
+    shifts = Any[_row_shift(r, p, hγ) for r in c.rows]
     # a row's mask value (`c ~ masked(pred, v)`, `v` may read a parameter): a write changes it
     mvals = Any[_row_mval(rt.program, r, p) for r in c.rows]
     return (res, jac, ops, shifts, p, qres, pres, mvals)
+end
+# a row's numeric operator after a parameter write, or `nothing` for a row without one
+function _row_numeric_operator(rt::GroupRuntime, r, p, hγ, coupled::Bool)
+    r.numeric === nothing && return nothing
+    return first(
+        _numeric_operator(rt.program, r.op, fieldid(rt.program, r.key), p, hγ, 1.0, r.mask !== nothing; coupled)
+    )
+end
+# a row's time-step shift after a parameter write (rows with their own solver have none)
+function _row_shift(r, p, hγ)
+    r.solver === nothing && r.s isa Number || return nothing
+    return oftype(r.s, max(1 / hγ - _coefsum(r.op.jloc, p), 1 / (2hγ)))
 end
 function _row_mval(s::Program, r::ImplicitRow, p)
     nv = findfirst(x -> x isa NodeValueRule && x.field == fieldid(s, r.key), s.rules)
@@ -1729,7 +1830,13 @@ function _steady_indefinite(s::Program{N}, r::RowOperator, id, shift, p) where {
         d = fill(2w, n)
         for (k, i) in ((1, 1), (2, n))
             f = kinds[a][k]
-            d[i] += f[1] === :dirichlet ? w : f[1] === :robin ? w * (f[2] / (f[2] / 2 + f[3])) - w : -w
+            d[i] += if f[1] === :dirichlet
+                w
+            elseif f[1] === :robin
+                w * (f[2] / (f[2] / 2 + f[3])) - w
+            else
+                -w
+            end
         end
         λ += _tridiag_min(d, w)
     end
@@ -1754,13 +1861,26 @@ function _hex_steady_min(r::RowOperator, kinds, dims, per, shift, p)
     w = Float64(_coefsum(r.faces[1], p))
     n1, n2 = dims
     n = n1 * n2
-    ghost(f) = f[1] === :dirichlet ? 2.0 : f[1] === :robin ? f[2] / (f[2] / 2 + f[3]) : 0.0
+    function ghost(f)
+        if f[1] === :dirichlet
+            return 2.0
+        elseif f[1] === :robin
+            return f[2] / (f[2] / 2 + f[3])
+        else
+            return 0.0
+        end
+    end
     dg = fill(Float64(shift), n)                   # the diagonal: shift, faces, ghosts
     for j in 1:n2, i in 1:n1, (di, dj) in _HEXLINKS
         in1 = per[1] || 1 <= i + di <= n1
         in2 = per[2] || 1 <= j + dj <= n2
-        dg[i + (j - 1) * n1] += in1 && in2 ? w :
-            w * (in1 ? ghost(kinds[2][dj < 0 ? 1 : 2]) : ghost(kinds[1][di < 0 ? 1 : 2]))
+        dg[i + (j - 1) * n1] += if in1 && in2
+            w
+        elseif in1
+            w * ghost(kinds[2][dj < 0 ? 1 : 2])
+        else
+            w * ghost(kinds[1][di < 0 ? 1 : 2])
+        end
     end
     v = [sin(1.3q) + 0.5cos(0.7q) for q in 1:n]    # (a fixed start: no RNG state)
     v ./= LinearAlgebra.norm(v)

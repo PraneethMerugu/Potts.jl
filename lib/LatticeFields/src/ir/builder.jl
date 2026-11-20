@@ -41,7 +41,15 @@ end
 nodeargs(b::KernelBuilder, i) = view(b.operands, b.nodes[i].args)
 
 # ---- structural order (never uses node ids, so it is build-order independent) ----------
-_cmp(a, b) = isless(a, b) ? -1 : isless(b, a) ? 1 : 0
+function _cmp(a, b)
+    if isless(a, b)
+        return -1
+    elseif isless(b, a)
+        return 1
+    else
+        return 0
+    end
+end
 function _accesscmp(b::KernelBuilder, x::Access, y::Access)
     c = _cmp(b.fieldkeys[x.field], b.fieldkeys[y.field])
     c == 0 || return c
@@ -258,7 +266,14 @@ ties).
 function restrict(x::Ex; op::Symbol = :sum)
     op in (:sum, :max, :plurality) || irerror("RESTRICT: op `$op` is not :sum, :max or :plurality")
     t = x.b.nodes[x.id].type
-    return Ex(x.b, node!(x.b, RESTRICT, t, Int32[x.id], op == :sum ? 0 : op == :max ? 1 : 2))
+    code = if op == :sum
+        0
+    elseif op == :max
+        1
+    else
+        2
+    end
+    return Ex(x.b, node!(x.b, RESTRICT, t, Int32[x.id], code))
 end
 """
 Reduce `x` over the kernel's sites into the partials table `target` (`op ∈ (:sum, :max)`).
