@@ -1,4 +1,4 @@
-# Solver placement (D-075, P6.0c): how each field and ODE is integrated is fixed when the
+# Solver placement (D-075): how each field and ODE is integrated is fixed when the
 # problem is built, from the `PottsProblem` keywords `field_solver`, `ode_solver` and
 # `solvers`, and compiled into the phase code at the one codegen point (`_phases`). The model
 # carries no solver; the algorithms carry none either (D-046). A different scheme is a
@@ -28,7 +28,7 @@ end
 
 _solver_name(x) = info(x).name
 
-# The field solvers (one place, cutover C8): a field takes a LatticeFields field algorithm as
+# The field solvers (one place): a field takes a LatticeFields field algorithm as
 # its `field_solver` or `solvers` entry, lowered by the field compiler (`_field_groups`); a new
 # `AbstractFieldAlgorithm` (the implicit steppers) joins with no edit here. A rate field takes a rate
 # algorithm (`ExplicitEuler`), a map field (`Shift(t, 1)(m) ~ rhs`) `ExplicitMap()`; each refuses
@@ -36,8 +36,8 @@ _solver_name(x) = info(x).name
 _is_field_solver(s) = s isa AbstractFieldAlgorithm
 _field_solver_names() = "`ExplicitEuler(…)`, `BackwardEuler(…)`, `CrankNicolson(…)`, `BDF2(…)`, `QuasiSteady(…)`, or `ExplicitMap()` for a map"
 # A field solver as given: the window of a `PottsProblem` is the MCS (`mcs_duration`); a rate
-# field refuses `ExplicitMap` (F2-04), a map field (`map = true`) a
-# rate algorithm (F2-10)
+# field refuses `ExplicitMap`, a map field (`map = true`) a
+# rate algorithm
 function _check_field_solver(s, what; map::Bool = false)
     map && !(s isa ExplicitMap) && !(s isa LatticeFields.Problems.FieldGroups) && throw(ArgumentError(string(
         what, ": `", nameof(typeof(s)), "(…)` steps rates `D(c) ~ rhs`; a map field ",
@@ -53,7 +53,7 @@ function _check_field_solver(s, what; map::Bool = false)
     return s
 end
 # an ODE's explicit Euler steps over the MCS window too; `init = :steady` is a field group's
-# steady start (F3-12c): an ODE starts from its initial values
+# steady start: an ODE starts from its initial values
 function _check_ode_init(s, what)
     s isa ExplicitEuler && s.init !== nothing && throw(ArgumentError(string(
         "$what: `ExplicitEuler(; init = ", repr(s.init), ")`: `init = :steady` starts a field group at its steady state; ",
@@ -66,7 +66,7 @@ end
 
 Resolve the solver keywords against compiled model `c`:
 - `field_solver` (default `ExplicitEuler()`, the automatic substep count; D-075 as amended
-  by D-F2-R1) integrates every field that `solvers` does not name, and is an error when the
+  for fields) integrates every field that `solvers` does not name, and is an error when the
   model has no field. A default resolves, groups and fingerprints alike with the same
   solver given explicitly;
 - `ode_solver` (default `ExplicitEuler()`, one step per MCS) integrates every cell
@@ -86,9 +86,9 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
     disc = _discretization(c, discretization, T)
     disc === nothing || return _resolve_discretized(c, disc, field_solver, ode_solver, solvers)
     fields = [_solver_name(x) for (x, _) in getfield(c, :fields)]
-    # the map fields (`Shift(t, 1)(m) ~ rhs`; a model has rates or maps, F2-10)
+    # the map fields (`Shift(t, 1)(m) ~ rhs`; a model has rates or maps)
     maps = Set{Symbol}(info(x).name for (x, _, op) in _field_equations(sys) if op isa ModelingToolkitBase.Shift)
-    # the steady fields (`0 ~ rhs`, F3-12b): `QuasiSteady` only, by default too
+    # the steady fields (`0 ~ rhs`): `QuasiSteady` only, by default too
     steady = Set{Symbol}(info(x).name for (x, _, op) in _field_equations(sys) if op === :steady)
     QS = LatticeFields.Problems.QuasiSteady
     function steady_only(n, s, where)
@@ -101,7 +101,7 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
     fgpairs, fsolver = Pair{Any, Any}[], field_solver
     if isempty(fields)
         # a model whose only fields are aux fields (`K ~ rhs`) evaluates them once per MCS, with
-        # no solver (F3 design §3.12)
+        # no solver
         aux = _field_aux(sys)
         field_solver === nothing || throw(ArgumentError(isempty(aux) ?
             "`field_solver`: model `$(nameof(sys))` has no field to integrate; remove the keyword" :
@@ -109,9 +109,9 @@ function _resolve_solvers(c::CompiledPottsSystem; field_solver = nothing, ode_so
             "$(join(("`$(info(x).name) ~ …`" for (x, _) in aux), ", ")) $(length(aux) == 1 ? "is an aux field" : "are aux fields"), " *
             "evaluated once per MCS with no solver; remove the keyword"))
     else
-        # the default (D-F2-R1): explicit Euler with the automatic substep count; for maps
+        # the default: explicit Euler with the automatic substep count; for maps
         # `ExplicitMap()`, one application per MCS
-        # `FieldGroups(c => alg, …; default)` (F3-03): its pairs as `solvers` entries of fields,
+        # `FieldGroups(c => alg, …; default)`: its pairs as `solvers` entries of fields,
         # its `default` the field solver of the others, so it resolves (and fingerprints) as the
         # `solvers` spelling
         if field_solver isa LatticeFields.Problems.FieldGroups

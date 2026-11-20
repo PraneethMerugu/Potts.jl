@@ -29,14 +29,14 @@ struct CompiledPottsSystem <: ModelingToolkitBase.AbstractSystem
     cell_odes::Vector{Tuple{Any, Any}}                # (cell variable, rate)
     model_odes::Vector{Tuple{Any, Any}}               # (model variable, rate)
     divisions::Vector{DivideRule}
-    relationships::Vector{RelationshipSpec}           # in declaration order (P6.0b)
+    relationships::Vector{RelationshipSpec}           # in declaration order
     edge_terms::Vector{Tuple{Symbol, Any}}            # (relationship, E(a, b, distance, its edge vars))
     edge_vars::Dict{Symbol, Vector{Any}}              # relationship → its edge variables
     link_rules::Vector{LinkRule}
     uses_surface::Bool
     uses_clusters::Bool                               # `st.cell.cluster` and `cluster_volume`
     uses_cluster_surface::Bool
-    uses_euler::Bool                                  # `euler` (face adjacency), P6.3j
+    uses_euler::Bool                                  # `euler` (face adjacency)
     uses_euler_full::Bool                             # `euler(; adjacency = :full)` (not on hex)
     euler_full_column::Symbol                         # the column it reads: `:euler` on hex (D-192 Q4)
     cluster_division::Bool
@@ -52,7 +52,7 @@ struct CompiledPottsSystem <: ModelingToolkitBase.AbstractSystem
     update_pops::Vector{Pair{Symbol, Any}}            # model slots of folds hoisted from updates and integrals
     energy_snapshots::Vector{Pair{Symbol, Any}}       # model slots of folds in energies (D-041)
     cell_ode_pops::Vector{Pair{Symbol, Any}}          # model slots of folds in cell ODEs
-    discrete::Vector{DiscreteBlock}                   # discrete components' ticks (P6.0k), folds hoisted
+    discrete::Vector{DiscreteBlock}                   # discrete components' ticks, folds hoisted
     discrete_pops::Vector{Pair{Symbol, Any}}          # model slots of folds in cell-scope ticks
     contact_trackers::Vector{Tuple{Symbol, Symbol, UInt64}}   # contact folds (name, relation, kind mask), D-150
     # the system as authored, before `_bind_components` lowers its components (`sys` is the
@@ -65,12 +65,12 @@ struct CompiledPottsSystem <: ModelingToolkitBase.AbstractSystem
     # the cell and model `@initialization_equations` (`initialization_system`, initialization.jl),
     # by scope; run when a problem is built, never read by codegen
     initialization::Dict{Symbol, Any}
-    # cell-scope `pieces`/`largest_piece` (P6.9a): the face and full trackers read; on a
+    # cell-scope `pieces`/`largest_piece`: the face and full trackers read; on a
     # hexagonal lattice `:full` reads the `:face` columns (one adjacency, D-193)
     uses_pieces::Bool
     uses_pieces_full::Bool
     pieces_hex::Bool
-    # cell serials (P6.5a3, D-066 item 3): whether the model reads `birth`, directly
+    # cell serials (D-066 item 3): whether the model reads `birth`, directly
     # (`birth`, `birth[ref]`) or through `sibling` (its lowest-birth rule, E5) or a `@convert`
     # pass (whose `from`/`to` default to `sibling(k)`). A dividing model that reads none of
     # them carries no `birth` column, so neither planner runs the serial pass (`_tracks_births`)
@@ -142,7 +142,7 @@ const _CELL_ENERGY_BUILTINS = (
     :volume, :surface, :kind, :id, :generation, :cluster, :major_length, :euler, :euler_full,
     :pieces, :pieces_full, :largest_piece, :largest_piece_full, :birth,
 )
-# the cell-scope pieces trackers (P6.9a): the face pair, the full pair
+# the cell-scope pieces trackers: the face pair, the full pair
 const _PIECES_NAMES = (:pieces, :largest_piece, :pieces_full, :largest_piece_full)
 # cell updates, division rules (cluster trackers change with copies of other members, so
 # they are readable here but not in cell energies)
@@ -150,7 +150,7 @@ const _CELL_BUILTINS = (_CELL_ENERGY_BUILTINS..., :mcs, :cluster_volume, :cluste
 const _CLUSTER_BUILTINS = (:cluster_volume, :cluster_surface, :kind, :id)
 const _CONTACT_BUILTINS = (:kind, :neighbor_kind, :owner, :neighbor_owner, :weight, :neighbor_site)   # `neighbor_site`: from `x′`
 const _SITE_BUILTINS = (:owner, :kind, :position, :site, :mcs)
-# `direction`, `position[s][k]` and `mcs` (P6.4a1, D-188): the copy's source→target offset,
+# `direction`, `position[s][k]` and `mcs` (D-188): the copy's source→target offset,
 # a site's position, and the number of completed MCS
 const _PROPOSAL_BUILTINS = (
     :source, :target, :old, :new, :local_components, :ring_arcs, :ring_cells, :ring_medium,
@@ -226,7 +226,7 @@ function _check_names(x, allowed, what; between_copies::Bool = false)
     return nothing
 end
 
-# Relationships (P6.0b): names are unique; each edge variable belongs to one relationship,
+# Relationships: names are unique; each edge variable belongs to one relationship,
 # named by its scope (`rest(bond)`) or, with a single relationship, `rest(edge)`.
 function _relationships(sys::PottsSystem)
     rels = _p(sys, :relationships)
@@ -474,14 +474,14 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
 
     # differential equations: fields (lattice PDEs) and per-cell ODEs
     fields = Tuple{Any, Any}[]
-    field_aux = Tuple{Any, Any}[]                  # aux fields `K ~ rhs` (not stepped; F2-10)
+    field_aux = Tuple{Any, Any}[]                  # aux fields `K ~ rhs` (not stepped)
     cell_odes = Tuple{Any, Any}[]
     model_odes = Tuple{Any, Any}[]
     derivatives = Dict{Symbol, Any}()
     for eq in _p(sys, :equations)
         _located(sys, eq) do
             lhs = _unwrap(eq.lhs)
-            # a map `Shift(t, 1)(m) ~ rhs` or an aux `K ~ rhs` of a field (F2 design §2.11)
+            # a map `Shift(t, 1)(m) ~ rhs` or an aux `K ~ rhs` of a field
             fl = _field_lhs(eq, sys)
             if fl !== nothing && fl[2] !== :rate
                 x, kind = fl
@@ -517,7 +517,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
             )
             derivatives[i.name] = eq
             if i.role === :field || i.role === :site
-                # `time` reads the field's own time `t` (the window's start plus `j h` per substep, F2-08c)
+                # `time` reads the field's own time `t` (the window's start plus `j h` per substep)
                 _check_names(eq.rhs, (_SITE_BUILTINS..., :time), "a field equation"; between_copies = true)
                 push!(fields, (x, eq.rhs))
             elseif i.role === :cell
@@ -546,7 +546,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
             end
         end
     end
-    # each rule divides by its own domain (P6.0a); a kind is divided by one domain only
+    # each rule divides by its own domain; a kind is divided by one domain only
     cluster_division = any(d -> d.domain isa ClusterDomain, _p(sys, :divisions))
     domain_kinds(D) = unique(
         Iterators.flatten(
@@ -571,7 +571,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
         end
     end
 
-    # discrete components (P6.0k): a tick reads the pre-tick state, between copies
+    # discrete components: a tick reads the pre-tick state, between copies
     for b in _p(sys, :discrete)
         _located(sys, b) do
             for x in b.next
@@ -662,13 +662,13 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
     if hex && uses_euler_full
         uses_euler, uses_euler_full = true, false
     end
-    # cell-scope pieces (P6.9a): one tracker pair per adjacency read; hex has one adjacency
+    # cell-scope pieces: one tracker pair per adjacency read; hex has one adjacency
     uses_pieces = any(x -> _uses_builtin(x, :pieces) || _uses_builtin(x, :largest_piece), scanned)
     uses_pieces_full = any(x -> _uses_builtin(x, :pieces_full) || _uses_builtin(x, :largest_piece_full), scanned)
     if hex && uses_pieces_full
         uses_pieces, uses_pieces_full = true, false
     end
-    # cell serials (P6.5a3): read by `birth`, `sibling` (lowest birth) and every `@convert`
+    # cell serials: read by `birth`, `sibling` (lowest birth) and every `@convert`
     # pass; the algebraic and initialization equations, the authored energies and drives
     # and the division planes are scanned too (lowered elsewhere, so a reader there keeps
     # the serials)
@@ -789,7 +789,7 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
     # the lowered model's inner System is rebuilt from its lowered payload, so MTK's accessors
     # on `Potts.inner(csys)` list what the lowering kept (an eliminated algebraic variable is observed)
     fsys = something(fieldsys, getfield(sys, :fields), Some(nothing))
-    # the PDESystem's digest is recorded in the payload, so the compiled `sys` composes again (C9)
+    # the PDESystem's digest is recorded in the payload, so the compiled `sys` composes again
     fsys === nothing || (sys = _replace(sys; metadata = Base.ImmutableDict(_p(sys, :metadata), _FieldsFrom => _pde_digest(fsys))))
     sys = _wrap_payload(nameof(sys), fsys, getfield(sys, :part))
     return CompiledPottsSystem(
@@ -956,12 +956,12 @@ _proposal_spec(sys::PottsSystem) = get(_p(sys, :relations), :proposal, CorePotts
 # LatticePDE's `lower_group` (in Float64) so that a term the field compiler cannot lower is an
 # error here, with the CPM inputs dry-lowered in site scope. Returns the PDESystem and the
 # cache of lowered groups (`CompiledPottsSystem.field_specs`) holding the group of all fields,
-# which a `PottsProblem` with one group in Float64 reuses (F2 design §2.5); `nothing` and an
+# which a `PottsProblem` with one group in Float64 reuses; `nothing` and an
 # empty cache for a model without fields.
 function _check_fields(sys::PottsSystem, rn)
     specs = Dict{Any, Any}()
     eqs = _field_equations(sys)
-    # a condition sets a stepped field (never dropped; F2 design §2.12)
+    # a condition sets a stepped field (never dropped)
     isempty(eqs) && !isempty(_p(sys, :bcs)) && _located(sys, _BcsLine(first(_p(sys, :bcs)))) do
         throw(
             PottsCompileError(
@@ -975,12 +975,12 @@ function _check_fields(sys::PottsSystem, rn)
         )
     end
     # a model whose only fields are aux fields `K ~ rhs` has one group with no state, which
-    # evaluates them once per MCS (F3 design §3.12)
+    # evaluates them once per MCS
     isempty(eqs) && isempty(_field_aux(sys)) && return nothing, specs
     known = _located(() -> _field_inputs(sys, Float64), sys, _field_equation_of(sys, nothing))
     names = Symbol[info(x).name for (x, _) in eqs]
     # (the stability bound is built at the first problem: `mtkcompile` only checks the lowering)
-    # a refusal of the lowering names the equation it was lowering (LatticePDE's note; review r1 N2)
+    # a refusal of the lowering names the equation it was lowering (LatticePDE's note)
     delete!(task_local_storage(), :lattice_equation)
     g = try
         _lower_field_group(sys, names, Float64; known, bound = false)
@@ -999,8 +999,8 @@ function _check_fields(sys::PottsSystem, rn)
 end
 
 # the equation of the field with key `k` (`"c"`, `"u[1]"`); with no key or no such field, the
-# one field equation, else the fields' PDESystem as a whole (`_FieldSystemLine`; batch-end review
-# (d): not the model's first equation, which may be a cell ODE)
+# one field equation, else the fields' PDESystem as a whole (`_FieldSystemLine`;
+# not the model's first equation, which may be a cell ODE)
 function _field_equation_of(sys::PottsSystem, k)
     eqs = [eq for eq in _p(sys, :equations) if (f = _field_lhs(eq, sys); f !== nothing && f[1] !== nothing)]
     if k !== nothing
@@ -1333,7 +1333,7 @@ function _cell_delta(E, dv::Int; after = Dict{Any, Any}())
         _unwrap(B.cluster_volume) => B.cluster_volume + dv,
         _unwrap(B.cluster_surface) => B.cluster_surface + DCSURFACE, _unwrap(B.major_length) => DMAJOR,
         _unwrap(B.euler) => B.euler + DEULER, _unwrap(B.euler_full) => B.euler_full + DEULER_FULL,
-        # not deltas: the exact after-values of the copy (P6.9a)
+        # not deltas: the exact after-values of the copy
         _unwrap(B.pieces) => DPIECES, _unwrap(B.largest_piece) => DLARGEST,
         _unwrap(B.pieces_full) => DPIECES_FULL, _unwrap(B.largest_piece_full) => DLARGEST_FULL, after...
     )
@@ -1411,8 +1411,8 @@ function _field_eq_text(eq::Equation, sys::PottsSystem)
     return replace(s, r"([\w₊]+)\(t\)" => m -> (n = chop(m; tail = 3); n in names ? string(n, at) : m))
 end
 
-# a condition as a located statement (review R4 of F2 batch 4: the error named the first
-# `@equations` line); a condition a PDESystem brought is named with it (F4-E10)
+# a condition as a located statement (an error used to name the first `@equations` line); a
+# condition a PDESystem brought is named with it
 struct _BcsLine
     eq::Any
 end
@@ -1423,7 +1423,7 @@ _describe_text(b::_BcsLine, kinds = nothing) =
 
 # descriptions are built only when reporting (printing symbolic expressions is slow); a
 # built-in shows as written (`volume`, not the input `volume(t)`), and an operator of the field
-# compiler as the model writes it (`laplacian(c)`, `Advect(Upwind1())`, `[ux, 0.0]`; review R3)
+# compiler as the model writes it (`laplacian(c)`, `Advect(Upwind1())`, `[ux, 0.0]`)
 _describe(x, kinds...) = _nopkg(_builtin_text(_describe_text(x, kinds...)))
 _describe_text(e::EnergyTerm, kinds = nothing) = "@energy $(_domain_string(e.domain, kinds)) => $(e.expr)"
 _describe_text(d::Drive) = "@drive copy => $(d.expr)"
@@ -1433,7 +1433,7 @@ _describe_text(eq::Equation, kinds = nothing) = (
     i = info(eq.lhs);
     i !== nothing && i.role === :observed ? "@observed $(eq.lhs) ~ $(eq.rhs)" : "@equations " * _eq_text(eq, kinds)
 )
-# an equation as written (review r1 N2): a condition inside arithmetic keeps its parentheses
+# an equation as written: a condition inside arithmetic keeps its parentheses
 # (Symbolics prints `(kind == 1) - c` as `kind == 1 - c`), and a kind compared by number is named
 function _eq_text(eq::Equation, kinds)
     s = string(_paren_conditions(eq.lhs), " ~ ", _paren_conditions(eq.rhs))
@@ -1559,7 +1559,7 @@ function _dry_lower(sys::PottsSystem, rn, fields, cell_odes)
         foreach(i -> _located(() -> foreach(y -> _check_geometry(y, N; hex), vcat(x(i))), sys, i), items)
     end
     # the conditions of the coupled PDESystems: a masked condition's predicate and value, a face's
-    # value, are lowered in site scope at the field step (F4-E13)
+    # value, are lowered in site scope at the field step
     for b in _p(sys, :bcs)
         _located(() -> _check_geometry(b.rhs, N; hex), sys, _BcsLine(b))
     end
@@ -1619,7 +1619,7 @@ function _check_copy_integral(x, what; when = "every copy attempt")
 end
 
 # the sides of the conditions of the coupled PDESystems: a masked condition's predicate and
-# value or a face's value read CPM quantities at the field step (F4-E13)
+# value or a face's value read CPM quantities at the field step
 _bcs_exprs(sys::PottsSystem) = Any[x for b in _p(sys, :bcs) for x in (b.lhs, b.rhs)]
 
 _is_hex(sys) = core_lattice(_p(sys, :lattice)).geometry isa CorePotts.Hexagonal

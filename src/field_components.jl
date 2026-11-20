@@ -1,4 +1,4 @@
-# A plain `PDESystem` as fields of a model (F4-11, FE-15b). `Potts.component(name, pdesys,
+# A plain `PDESystem` as fields of a model. `Potts.component(name, pdesys,
 # model)` carries it, and `compose` moves it into the model's payload: each dependent
 # variable becomes a field variable, each parameter a model parameter, each equation a field
 # equation and each condition a condition of the payload (`bcs`). The fields then compile,
@@ -88,9 +88,9 @@ function _pde_content(sys, f::ModelingToolkitBase.PDESystem, prefix, what::Abstr
             "its independent variable $k; the time is the first independent variable: give `[$(v), " *
             join((string(w) for w in ivs if !isequal(w, v)), ", ") * "]`")))
     end
-    # the spatial domain is the lattice's in the model's length unit (ruling Q8): axis `d` spans
+    # the spatial domain is the lattice's in the model's length unit: axis `d` spans
     # `[0, dims[d] · spacing[d]]`, which is also the domain `Potts.fields` gives. An axis the
-    # PDESystem gives no interval for takes the lattice's (F4-E5); a given one must match it.
+    # PDESystem gives no interval for takes the lattice's; a given one must match it.
     dom = ModelingToolkitBase.get_domain(f)
     for e in dom
         v = _unwrap(e.variables)
@@ -239,7 +239,7 @@ function _pde_content(sys, f::ModelingToolkitBase.PDESystem, prefix, what::Abstr
         v = haskey(ic, u) ? ic[u] : haskey(ic, op) ? ic[op] : haskey(start, op) ? start[op] :
             M.hasdefault(u) ? M.getdefault(u) : nothing
         if SymbolicUtils.symtype(u) <: AbstractArray
-            # an array field `u(..)[1:n]` (F4-E11): its components `u_1, …, u_n`, as `@variables
+            # an array field `u(..)[1:n]`: its components `u_1, …, u_n`, as `@variables
             # u(field)[1:n]` declares them; `u[i]` reads component `i`
             _pde_components!(variables, fmap, u, op, v, m, fresh, what, pname)
             continue
@@ -273,7 +273,7 @@ function _pde_content(sys, f::ModelingToolkitBase.PDESystem, prefix, what::Abstr
     return (; variables, parameters = Any[Symbolics.wrap(pmap[u]) for u in raw], equations, bcs, inputs = filled)
 end
 
-# The components of the array field `u` (operation `op`) of a PDESystem as model fields (F4-E11):
+# The components of the array field `u` (operation `op`) of a PDESystem as model fields:
 # `vector_variable(name, 1:n, :field)`, the components `name_i` that `@variables name(field)[1:n]`
 # declares, with the field's default (one value for every component, or one per component)
 function _pde_components!(variables, fmap, u, op, v, m, fresh, what, pname)
@@ -330,7 +330,7 @@ function _input_bindings(sys, f, inputs, what, pname)
         b isa Pair || throw(ArgumentError("$what: the inputs are pairs `input => expression`; got `$b`"))
         key, ex = b
         if key isa _NamedKey
-            # `@fields … (cell => …)`: the name of an input first, then the local value (F4-E2)
+            # `@fields … (cell => …)`: the name of an input first, then the local value
             k = _binding_target(key.name, ops)
             k === nothing && (key = _key_value(key); k = _binding_target(key, ops))
         else
@@ -346,7 +346,7 @@ function _input_bindings(sys, f, inputs, what, pname)
             " but not an input; declare it `[input = true]` to bind it to a CPM expression")))
         haskey(out, op) && throw(ArgumentError("$what: the input `$(_input_key(u, op))` is bound twice"))
         # a constant term is its value: in a vector that also holds a symbolic binding, Julia
-        # promotes `false` to `Num(false)` (F4-E1), which must meet the same check as `false`
+        # promotes `false` to `Num(false)`, which must meet the same check as `false`
         e = _unwrap_number(ex)
         # `Potts.kind == :A` is Julia's `==` of a symbol and a Symbol: the constant `false`, built
         # before any symbolic term exists, so the kind name cannot be recovered here
@@ -403,7 +403,7 @@ function _declared_input(key, ivs)
     end
     return u isa SymbolicUtils.BasicSymbolic && ModelingToolkitBase.isinput(u)
 end
-# whether a binding is a truth value (F4-E9): of type `Bool`, a comparison, `ismember`, `!`,
+# whether a binding is a truth value: of type `Bool`, a comparison, `ismember`, `!`,
 # `&`, `|` or `xor` of truth values, an `ifelse` of two, or an `any`/`all` fold over a relation or
 # a population (`any(kind[n] == k for n in R(site))`, whose symbolic type is not `Bool`)
 const _TRUTH_OPS = (==, !=, <, <=, >, >=, isequal)
@@ -467,7 +467,7 @@ _example_kind(sys) = (ks = _p(sys, :kinds); length(ks) >= 2 ? ks[2] : isempty(ks
 
 # a bare-symbol key of an `@fields` binding (`cell => kind == cell`): its name, matched against
 # the inputs of the PDESystem first, and its value in the constructor (a closure), read only when
-# no input has that name (F4-E2: so a kind `cell` does not shadow the input `cell`)
+# no input has that name (so a kind `cell` does not shadow the input `cell`)
 struct _NamedKey{F}
     name::Symbol
     value::F
@@ -523,7 +523,7 @@ function _pde_term(x, m)
         "parameters or independent variables", m.noparams ? "; list it in the 6th argument of `PDESystem` (its " *
         "parameters, empty here), or build the system with `pdesystem`, which lists them" : "")))
     f, a = operation(u), arguments(u)
-    # `u[i]` of an array field (F4-E11): component `i`, at its site or a face
+    # `u[i]` of an array field: component `i`, at its site or a face
     if f === getindex && length(a) == 2 && iscall(_unwrap(a[1])) && (g = operation(_unwrap(a[1])); haskey(m.fmap, g)) &&
        m.fmap[g] isa AbstractVector
         i = _unwrap_number(a[2])
@@ -531,7 +531,7 @@ function _pde_term(x, m)
             "is read by its number, 1 to ", length(m.fmap[g]))))
         return _pde_read(_unwrap(a[1]), m.fmap[g][i], m)
     end
-    # an array literal (`Advect(…)([ux, 0.0], c)`, F4-E12): its shape stays, its elements map
+    # an array literal (`Advect(…)([ux, 0.0], c)`): its shape stays, its elements map
     if f === SymbolicUtils.array_literal
         return reshape(Base.vect((Symbolics.wrap(_pde_term(y, m)) for y in a[2:end])...), _unwrap_number(a[1]))
     end
@@ -595,7 +595,7 @@ end
 # expression, element type, PDESystem name)`, by the names their PDESystems give them
 struct _FieldInputs end
 
-# `@fields [names =] pdesys (bindings…)` in `@potts_model` (F4-B2): the content of the PDESystem
+# `@fields [names =] pdesys (bindings…)` in `@potts_model`: the content of the PDESystem
 # `f` as fields of the model being built, from what it declares before the `@fields` line (its
 # lattice, or that of its first `@extend` base)
 function _fields_content(name::Symbol, lattice, kinds, bases, params, vars, f, inputs, values)
@@ -631,24 +631,24 @@ function _check_fields_names(params, vars, brought::Dict{Symbol, String})
     return nothing
 end
 # the field or parameter named `n` of the content `c` of the PDESystem `f` (`@fields c, Dc = f`;
-# F4-E8: a parameter too, so a later statement reads it by name)
+# A parameter too, so a later statement reads it by name)
 function _fields_name(c, n::Symbol, f)
     for x in Iterators.flatten((c.variables, c.parameters))
         info(x).name === n && return x
     end
-    comps = [x for x in c.variables if get(info(x).options, :vector, nothing) === n]      # an array field (F4-E11)
+    comps = [x for x in c.variables if get(info(x).options, :vector, nothing) === n]      # an array field
     isempty(comps) || return QuantityVector(n, Num[Symbolics.wrap(x) for x in comps])
     throw(ArgumentError(string("@fields ", n, " = ", nameof(f), ": `", n, "` is not a field of the PDESystem `", nameof(f),
         "`; its fields are ", join(("`$(info(x).name)`" for x in c.variables), ", "), isempty(c.parameters) ? "" :
         string(", and its parameters (a name may be one too) ", join(("`$(info(x).name)`" for x in c.parameters), ", ")))))
 end
 # the build record of a model with the inputs of its `@fields` PDESystems (`Potts.field_inputs`),
-# the PDESystem each of its conditions came from (F4-E10) and the fields they brought
+# the PDESystem each of its conditions came from and the fields they brought
 _with_field_inputs(md, ins, origins = (), coupled = ()) =
     _with_coupled(_with_bcs_origins(isempty(ins) ? md : Base.ImmutableDict(md, _FieldInputs => collect(Tuple{Symbol, Any, Type, Symbol}, ins)),
             origins), coupled)
 
-# payload metadata key (F4-B6): the names of the fields that coupled PDESystems brought (`@fields`,
+# payload metadata key: the names of the fields that coupled PDESystems brought (`@fields`,
 # `Potts.couple`, `compose`, `Potts.wrap_system`). Their equations are the model's field equations;
 # any other equation of a field is refused (`_check_field_lines`). An extension keeps its bases'
 # entries (`_merged_metadata`).
@@ -666,7 +666,7 @@ function _field_line_names(eq)
     return Symbol[info(x).name for x in _steady_reads(eq).all]
 end
 _field_names_text(ns) = join(("`$n`" for n in ns), ", ")
-# An `@equations` line that writes a field (F4-B6): a model's fields are coupled PDESystems
+# An `@equations` line that writes a field: a model's fields are coupled PDESystems
 # (`text`: the line as written in the model body, when the macro has it)
 _no_field_line(x::AbstractVector, text = nothing) = (foreach(e -> _no_field_line(e, text), x); x)
 _no_field_line(x, text = nothing) = x
@@ -679,7 +679,7 @@ function _no_field_line(eq::Equation, text = nothing)
         " = pdesys (input => expression)`")))
 end
 # The equations of the payload `part` (`PottsSystem(; equations)`) that write a field no coupled
-# PDESystem brought (F4-B6): refused, with the route `Potts.couple`
+# PDESystem brought: refused, with the route `Potts.couple`
 function _check_field_lines(part::PottsPart)
     coupled = nothing
     for eq in part.equations
@@ -694,9 +694,9 @@ function _check_field_lines(part::PottsPart)
     return part
 end
 
-# payload metadata key (F4-E10): `condition => PDESystem name` for the conditions and the field
+# payload metadata key: `condition => PDESystem name` for the conditions and the field
 # equations a PDESystem brought (`@fields`, `Potts.couple`), so a refusal of one names the
-# PDESystem (the equations since the batch-end review (d)). An
+# PDESystem. An
 # extension keeps its bases' entries (`_merged_metadata` keeps every entry; this reads them all).
 struct _BcsOrigins end
 _with_bcs_origins(md, origins) = isempty(origins) ? md : Base.ImmutableDict(md, _BcsOrigins => collect(Pair{Any, Symbol}, origins))

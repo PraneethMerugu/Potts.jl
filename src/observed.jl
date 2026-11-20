@@ -52,15 +52,15 @@ function _observed_scope(x)
     return scope
 end
 
-# A dividing model that reads no `birth` keeps no serials (P6.5a3): a query that reads them
+# A dividing model that reads no `birth` keeps no serials: a query that reads them
 # afterwards (`sol[birth]`, `sibling`'s lowest-birth rule) is refused, not answered with slots
 function _check_untracked_birth(c::CompiledPottsSystem, e)
     (_numbers_cells(c) && !getfield(c, :uses_birth)) || return nothing
     (_uses_builtin(e, :birth) || _has_op(e, cluster_sibling)) || return nothing
     throw(
         ArgumentError(
-            "model `$(nameof(c))` never reads `birth`, so the birth column was not kept " *
-                "(P6.5a3, D-245): `$e` cannot be evaluated after the run; declare " *
+            "model `$(nameof(c))` never reads `birth`, so the birth column was not kept" *
+                ": `$e` cannot be evaluated after the run; declare " *
                 "`@observed bth(cell) ~ birth` in the model to record it"
         )
     )
@@ -85,7 +85,7 @@ end
 
 # Observed values per cell or per site: the generated function of one element, mapped here. A
 # comprehension inside the generated body would be an opaque closure, which a downstream
-# package cannot precompile (TS1c).
+# package cannot precompile.
 struct _CellValues{T, F}
     f::F
 end
@@ -131,7 +131,7 @@ columns of integrals read only by `@observed` (not stored) are created in `T`.""
 # (observed-only integrals have no cell column, D-120)
 function _fresh_integrals(::Type{T}, u, p, ctx, t, phases, names) where {T}
     fresh(n) = hasproperty(u.cell, n) ? zero(getfield(u.cell, n)) : fill!(similar(u.cell.kind, T), zero(T))
-    # the cell sums' scratch (F3-23) is made fresh, so the saved state's own is left unchanged
+    # the cell sums' scratch is made fresh, so the saved state's own is left unchanged
     sc = CorePotts.reduce_scratch(length(u.cell.kind))
     cell = merge(u.cell, NamedTuple(n => fresh(n) for n in names), sc.cell)
     # the integrals' hoisted folds write their model slots: copies, so `u` is left unchanged
@@ -148,7 +148,7 @@ end
 
 _potts_quantity(x) = (u = _unwrap(x); u isa SymbolicUtils.BasicSymbolic)
 
-# a base parameter (a computed one is not a parameter for SII: it is observed, D-F2-1)
+# a base parameter (a computed one is not a parameter for SII: it is observed)
 function _param_info(sys::PottsModelInfo, x)
     x = _localize(getfield(sys.csys, :sys), x; strict = true)       # another model's `other₊λ` is an error (D-137)
     ps = _p(getfield(sys.csys, :sys), :parameters)
@@ -161,7 +161,7 @@ function _param_info(sys::PottsModelInfo, x)
     i !== nothing && i.role in (:param, :kindtable) || return nothing
     return _computed_entity(ps, i.name) === nothing ? i.name : nothing
 end
-# the computed parameter `x` names (D-F2-1), or `nothing`
+# the computed parameter `x` names, or `nothing`
 function _computed_info(sys::PottsModelInfo, x)
     x isa Union{AbstractArray, Tuple} && return nothing
     x = _localize(getfield(sys.csys, :sys), x; strict = true)
@@ -221,7 +221,7 @@ SII.variable_symbols(sys::PottsModelInfo) = filter(_state_var, _p(getfield(sys.c
 SII.all_variable_symbols(sys::PottsModelInfo) = [SII.variable_symbols(sys); [o.lhs for o in _p(getfield(sys.csys, :sys), :observed)]]
 SII.is_parameter(sys::PottsModelInfo, x) = _param_info(sys, x) !== nothing
 function SII.parameter_index(sys::PottsModelInfo, x)
-    # a computed parameter is read-only (D-F2-1): its index (asked by `setp`, `integ.ps[x] = v`,
+    # a computed parameter is read-only: its index (asked by `setp`, `integ.ps[x] = v`,
     # `remake`) is an error naming its inputs
     ci = _computed_info(sys, x)
     ci === nothing || throw(ArgumentError(_computed_message(_p(getfield(sys.csys, :sys), :parameters), ci)))

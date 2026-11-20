@@ -1,4 +1,4 @@
-# The sweep's definition as an MTK-visible object (D-160, P6.0bm): `hamiltonian(sys)`,
+# The sweep's definition as an MTK-visible object (D-160): `hamiltonian(sys)`,
 # `drives(sys)` and the `PottsSweepSpec` metadata payload, read with MTK's own
 # `getmetadata`/`hasmetadata`; and the update rules as written, `updates(sys)` (D-164).
 # Descriptions only: they are derived from the system on every read, so they always

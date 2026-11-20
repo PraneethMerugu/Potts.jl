@@ -190,7 +190,7 @@ function CorePotts.PottsProblem(
     )
     track = _track(track)
     opd = _operating_point(sys, op)
-    seeds, u0seeds = _split_tangents!(sys, opd)     # Dual values: their primal values in `opd` (F3-21b)
+    seeds, u0seeds = _split_tangents!(sys, opd)     # Dual values: their primal values in `opd`
     values = _parameter_values(c, opd)
     p = PottsParameters(
         NamedTuple(
@@ -233,7 +233,7 @@ function CorePotts.PottsProblem(
 end
 
 # ---------------------------------------------------------------------------------------
-# Parameters with derivative parts (F3-21b). A ForwardDiff `Dual` given for a parameter (in the
+# Parameters with derivative parts. A ForwardDiff `Dual` given for a parameter (in the
 # operating point or `remake(prob; p = …)`) runs: the problem's parameter object holds its primal
 # value (the CPM, the ODEs and every kernel read it: the run is the primal run, bit for bit), and
 # `prob.tangent` holds the parameter object with the Duals (the computed parameters that read a
@@ -273,7 +273,7 @@ function _refuse_dual_value(name, role, v)
         ArgumentError(
             string(
                 what, " ", _valtext(w), ": derivatives run through scalar parameters and the ",
-                "initial values of fields (F3-21b); not through ", role === :kindtable ? "kind tables (a later feature)" :
+                "initial values of fields; not through ", role === :kindtable ? "kind tables (not supported yet)" :
                     "the initial values of cell, model or site variables (the CPM's state, held fixed)",
                 ". Take finite differences, or give the derivative's direction a scalar parameter"
             )
@@ -294,7 +294,7 @@ function _tangent(c::CompiledPottsSystem, T, p::PottsParameters, seeds, opd = no
             string(
                 isempty(seeds) ? "the initial value of `" : "parameter `", first_seed.first,
                 "` holds ", _valtext(first(_dualvals(first_seed.second))), "; model `", nameof(c), "` has no fields, and derivative ",
-                "parts run through the fields only (F3-21b): the CPM and the ODEs take plain numbers. Take finite differences of the run"
+                "parts run through the fields only: the CPM and the ODEs take plain numbers. Take finite differences of the run"
             )
         )
     )
@@ -357,7 +357,7 @@ function _dual_object(c::CompiledPottsSystem, T, p::PottsParameters, vals::Dict{
     return _with_values(p, NamedTuple(k => vals[k] for k in keys(NamedTuple(p))))
 end
 
-# a write on a run with derivative parts (F3-21b r1 S1): the base entries the write left unchanged
+# a write on a run with derivative parts: the base entries the write left unchanged
 # keep their derivative parts, the written ones are plain, the computed ones are derived again
 function CorePotts.tangent_parameters(info::PottsModelInfo, dp::PottsParameters, p::PottsParameters)
     ps = _p(getfield(info.csys, :sys), :parameters)
@@ -382,7 +382,7 @@ function _check_tangent_reads(c::CompiledPottsSystem, T, dual::Set{Symbol})
                 string(
                     "the field equations read `", _input_word(name, ex), "`, which the CPM computes ",
                     "each MCS from `", first(r), "`, a parameter with derivative parts; the CPM computes in primal values, so ",
-                    "that derivative would be lost (F3-21b): write `", first(r), "` outside the CPM read in the field equation ",
+                    "that derivative would be lost: write `", first(r), "` outside the CPM read in the field equation ",
                     "(an `ifelse` of CPM reads is filled whole: move the parameter out of its branches), or take finite differences"
                 )
             )
@@ -578,7 +578,7 @@ _fingerprint_seed(sys::PottsSystem, T) = string(
 )
 # The neighbourhood by content. A neighbourhood that holds a compiler-generated name (an
 # anonymous weight, `Weighted(Moore(1), o -> 1 / norm(o))`) printed as `var"#24#25"`, a number
-# that depends on what was defined before it in the session (F4-E15), so it is written by its
+# that depends on what was defined before it in the session, so it is written by its
 # offsets and weights on the lattice instead. Every other neighbourhood keeps its printed form,
 # and so its fingerprint.
 function _canonical_neighborhood(sys::PottsSystem)
@@ -800,7 +800,7 @@ _opkey(k) = (u = _unwrap(k); u)
 
 # The parameter values of a problem being built (raw, before the conversion to the scalar type):
 # a base parameter's operating-point value or default, and every computed parameter derived from
-# them (D-F2-1; F2 design §2.7). An operating-point entry for a computed parameter is a write,
+# them. An operating-point entry for a computed parameter is a write,
 # refused naming its inputs; an operating-point value written as an expression of parameters is
 # evaluated once (D-117).
 function _parameter_values(c::CompiledPottsSystem, opd)
@@ -851,7 +851,7 @@ end
 # the parameters of `p` as a `Dict` (variable → value), for evaluating defaults of state
 _parameter_dict(c::CompiledPottsSystem, p) = Dict{Any, Any}(_unwrap(x) => getproperty(p, info(x).name) for x in _p(getfield(c, :sys), :parameters))
 
-# The computed parameters (D-F2-1, F2 design §2.7): read-only and derived from the base
+# The computed parameters: read-only and derived from the base
 # parameters through one compiled derivation (`LatticePDE.derivation`, D-117's rules), built
 # once per model's parameter list. Its structural checks name the parameter: a default that
 # reads a variable or built-in, or draws `rand()`.
@@ -910,7 +910,7 @@ function _derive(ps, T, p::PottsParameters)
         )
     )
 end
-# the refusal of a write of computed parameter `i` (D-F2-1): its expression, its base inputs
+# the refusal of a write of computed parameter `i`: its expression, its base inputs
 # (through chains) and the routes
 function _computed_message(ps, i::Entity)
     byvar = Dict{Any, Entity}(_unwrap(x) => info(x) for x in ps)
@@ -927,7 +927,7 @@ function _computed_message(ps, i::Entity)
     end
     sort!(base; by = string)
     ins = join(("`$b`" for b in base), ", ")
-    # a component's binding (`k2 = 2k` in `comp`): the number goes into the component (review M1)
+    # a component's binding (`k2 = 2k` in `comp`): the number goes into the component
     o = get(i.options, :origin, nothing)
     route = o === nothing ? string("(the model constructor's keyword `", i.name, " = v` does)") :
         string("in the component: give `", o[2], "` a number in `", o[1], "`'s parameters, in place of its binding")
@@ -949,7 +949,7 @@ function _computed_entity(ps, x)
 end
 
 # `()` or `(names, fp)` for a parameter object's type (`PottsParameters{NT, D}`): the computed
-# parameters (D-F2-1) and a fingerprint of their `(name, default)` pairs (C9). Only computed
+# parameters and a fingerprint of their `(name, default)` pairs. Only computed
 # parameters are fingerprinted: a constructor keyword that overrides another default (a sweep
 # `Model(; T = t)`) keeps one type, so nothing recompiles.
 _computed_params(ps) = [x for x in ps if _is_symbolic(info(x).default)]
@@ -963,7 +963,7 @@ end
 _const_value(d) = (u = _unwrap(d); u isa SymbolicUtils.BasicSymbolic && SymbolicUtils.isconst(u) ? SymbolicUtils.unwrap_const(u) : u)
 function _computed_tag(ps)
     cs = _computed_params(ps)
-    # MTK metadata (F2-14): `tunable = false` names and declared bounds, in the type only when present
+    # MTK metadata: `tunable = false` names and declared bounds, in the type only when present
     nt = Tuple(info(x).name for x in ps if get(info(x).options, :tunable, true) === false)
     bs = Tuple((info(x).name, info(x).options.bounds...) for x in ps if haskey(info(x).options, :bounds))
     tag = isempty(cs) ? ((), UInt64(0)) :
@@ -982,7 +982,7 @@ _same_default(a, b::AbstractArray) = false
 _same_default(a, b) = isequal(_const_value(a), _const_value(b))
 _same_defaults(a, b) = length(a) == length(b) && all(x[1] === y[1] && _same_default(x[2], y[2]) for (x, y) in zip(a, b))
 
-# register the derivation of `p`'s computed parameters (D-F2-1) for `SciMLStructures.replace`:
+# register the derivation of `p`'s computed parameters for `SciMLStructures.replace`:
 # one per exact type; a second model with the same type but other computed defaults (a
 # fingerprint collision) is an error, never a silent replacement
 function _register_derivation!(ps, T, p::PottsParameters)
@@ -1145,7 +1145,7 @@ catch e
                 "parameter `$(i.name)` = $(_valtext(v)) does not convert to the problem's scalar type $T: " *
                 "a parameter object holds plain numbers (no Duals). A Dual goes to the problem: " *
                 "`PottsProblem(sys, op, tspan)` or `remake(prob; p = [k => Dual])`, whose fields then carry derivative " *
-                "parts along the run's CPM path (F3-21b); an integrator write takes a plain number. A parameter the " *
+                "parts along the run's CPM path; an integrator write takes a plain number. A parameter the " *
                 "CPM reads has a derivative that is zero almost everywhere (the acceptance of a copy is piecewise " *
                 "constant in it), so it belongs to likelihood-free inference"
             )
@@ -1153,7 +1153,7 @@ catch e
 end
 
 # a value in a message: a ForwardDiff Dual by its value and value type, not its type (whose tag
-# can embed the whole problem's type: several KB; batch 5 review S4)
+# can embed the whole problem's type: several KB)
 function _valtext(v)
     T = typeof(v)
     V = LatticeFields.Compile.value_type(T)
@@ -1183,7 +1183,7 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
     end
     lat = core_lattice(_p(sys, :lattice))
     site = Pair{Symbol, Any}[]
-    shapes = Pair{Symbol, Any}[]          # the site arrays on a coarse grid (F3-17): their shapes
+    shapes = Pair{Symbol, Any}[]          # the site arrays on a coarse grid: their shapes
     cell = Pair{Symbol, Any}[]
     model = Pair{Symbol, Any}[]
     for x in _p(sys, :variables)
@@ -1195,7 +1195,7 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
         if i.role === :site || i.role === :field
             S = get(i.options, :lattice_storage, T)                  # a field's own storage (Float16)
             _check_field_bounds(i, v)
-            # (a `Coarse(k)` field's array is its grid's, F3-17)
+            # (a `Coarse(k)` field's array is its grid's)
             sd = _site_dims(i, _p(sys, :lattice).dims)
             v isa AbstractArray && sd != _p(sys, :lattice).dims && size(v) != sd &&
                 throw(
@@ -1240,10 +1240,10 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
     if getfield(c, :uses_surface)
         push!(cell, :surface => CorePotts.recompute_surface(σ, lat, CorePotts.relation(getfield(c, :relations)[:surface], lat), ncell; T))
     end
-    # Euler characteristics (P6.3j, D-192): Int32 columns, one per adjacency the model reads
+    # Euler characteristics (D-192): Int32 columns, one per adjacency the model reads
     getfield(c, :uses_euler) && push!(cell, :euler => CorePotts.recompute_euler(σ, lat, Val(:face), ncell))
     getfield(c, :uses_euler_full) && push!(cell, :euler_full => CorePotts.recompute_euler(σ, lat, Val(:full), ncell))
-    # cell-scope pieces (P6.9a): Int32 columns, a (pieces, largest piece) pair per adjacency read
+    # cell-scope pieces: Int32 columns, a (pieces, largest piece) pair per adjacency read
     for (full, P, L) in ((false, :pieces, :largest_piece), (true, :pieces_full, :largest_piece_full))
         (full ? getfield(c, :uses_pieces_full) : getfield(c, :uses_pieces)) || continue
         pc, lc = CorePotts.recompute_pieces(σ, lat, Val(full), ncell)
@@ -1268,7 +1268,7 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
     elseif haskey(opd, ckey)
         throw(ArgumentError("`cluster` in the operating point, but the model uses no compartments"))
     end
-    for r in getfield(c, :relationships)                       # one link store per relationship (P6.0b)
+    for r in getfield(c, :relationships)                       # one link store per relationship
         vars = getfield(c, :edge_vars)[r.name]
         links = CorePotts.empty_links(r.capacity, ncell, r.name; (info(x).name => T for x in vars)...)
         store = (; links = links[CorePotts.adjacency_name(r.name)], Base.tail(links)...)
@@ -1290,7 +1290,7 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
         dst = scope === :site ? site : scope === :cell ? cell : model
         push!(dst, Symbol(n, :__pre) => copy(last(dst[findfirst(q -> q.first === n, dst)])))
     end
-    # scratch slots of discrete components ticking in several phases (P6.0k)
+    # scratch slots of discrete components ticking in several phases
     if _tick_scratch(c)
         for b in getfield(c, :discrete), x in b.slots
             dst = b.scope === :cell ? cell : model
@@ -1303,7 +1303,7 @@ function _initial_state(c::CompiledPottsSystem, opd, T, capacity, pvals = Dict{A
     end
     # cell serials (R6, D-066 item 3): a model that divides numbers its cells 1, 2, … and
     # its daughters from the counter on; without divisions a cell's serial is its slot. A
-    # dividing model that never reads `birth` has no column, so no serial pass (P6.5a3)
+    # dividing model that never reads `birth` has no column, so no serial pass
     if _tracks_births(c)
         push!(cell, :birth => Int32.(1:ncell))
         push!(model, CorePotts.NEXT_BIRTH => Int32[ncell + 1])
@@ -1326,7 +1326,7 @@ end
 
 # Cell serials and spare slots: a model that divides or allocates by `@convert`
 _numbers_cells(c::CompiledPottsSystem) = !isempty(getfield(c, :divisions)) || !isempty(_p(getfield(c, :sys), :converts))
-# Cell serials kept (P6.5a3): a model that allocates cells and reads `birth` (`uses_birth`:
+# Cell serials kept: a model that allocates cells and reads `birth` (`uses_birth`:
 # `birth`, `sibling`, `@convert`). Decided when the model is compiled; the state's `birth`
 # column and `NEXT_BIRTH` counter carry it to both lifecycle planners (`births = nothing`
 # without them, the serial pass skipped).
@@ -1343,7 +1343,7 @@ _substitute_kind(v, k) = Symbolics.substitute(v, Dict(_unwrap(B.kind) => k))
 # The scratch of `@convert` passes (`CorePotts.convert_scratch`), made where the state lives;
 # a model without `@convert`, or a state that has all of it, is returned as is. A state saved
 # by an earlier version (with the pass flags but without the compound writes' sum columns, or
-# with fewer rows than the model's writes) gets the missing cell columns (F3-23 r2): they are
+# with fewer rows than the model's writes) gets the missing cell columns: they are
 # scratch, zero between passes, so nothing of the run is lost; the flags' counts are kept.
 function _convert_layout(st::CorePotts.CPMState, c::CompiledPottsSystem)
     isempty(_p(getfield(c, :sys), :converts)) && return st
@@ -1368,7 +1368,7 @@ function _convert_layout(st::CorePotts.CPMState, c::CompiledPottsSystem)
     )
 end
 
-# The scratch of the cell sums of stored integrals (`CorePotts.reduce_scratch`, F3-23: exact
+# The scratch of the cell sums of stored integrals (`CorePotts.reduce_scratch`: exact
 # Int64 fixed-point sums), made where the state lives; a state that has it, or a model without
 # a stored integral, is returned as is
 function _reduce_layout(st::CorePotts.CPMState, c::CompiledPottsSystem)
@@ -1382,7 +1382,7 @@ function _reduce_layout(st::CorePotts.CPMState, c::CompiledPottsSystem)
 end
 
 # A `CellRef` column (R6): Int32 cell ids, 0 (none) or a labelled cell
-# A field's initial values against its declared `bounds = (lo, hi)` (F3-13): the stability bound
+# A field's initial values against its declared `bounds = (lo, hi)`: the stability bound
 # takes that interval for the coefficients that read the field, so a field that starts outside
 # it is refused, naming the first site
 function _check_field_bounds(i, v)
@@ -1470,7 +1470,7 @@ function _kind_index(sys::PottsSystem, k::Symbol)
     return j - 1
 end
 
-# with the flood scratch of a model with whole-cell connectivity (P6.9a), exact (`GlobalExact`)
+# with the flood scratch of a model with whole-cell connectivity, exact (`GlobalExact`)
 _host_ctx(prob) = (;
     lattice = prob.lattice, contact = prob.contact, prob.relations...,
     (prob.spacing === nothing ? (;) : (; spacing = prob.spacing))...,
@@ -1515,7 +1515,7 @@ end
 # its type and nothing recompiles.
 const _SymbolicMap = Union{AbstractVector{<:Pair}, AbstractDict}
 
-# (a Dual value: its primal value here, the Dual in the problem's tangent: `remake_tangent`, F3-21b)
+# (a Dual value: its primal value here, the Dual in the problem's tangent: `remake_tangent`)
 CorePotts.remake_parameters(@nospecialize(info::PottsModelInfo), @nospecialize(prob), p::_SymbolicMap) =
     _set_parameter_map(
     info, prob.p, Pair{Any, Any}[
@@ -1527,7 +1527,7 @@ CorePotts.remake_parameters(@nospecialize(info::PottsModelInfo), @nospecialize(p
 )
 
 # parameter object `old` with the parameter map `p` applied as one change, then every computed
-# parameter derived again (D-F2-1)
+# parameter derived again
 Base.@nospecializeinfer function _set_parameter_map(@nospecialize(info::PottsModelInfo), @nospecialize(old::PottsParameters), p)
     p = _expand_vectors(getfield(info.csys, :sys), Pair{Any, Any}[_localize(getfield(info.csys, :sys), k; strict = true) => v for (k, v) in p])
     names = Dict{Any, Entity}()
@@ -1541,7 +1541,7 @@ Base.@nospecializeinfer function _set_parameter_map(@nospecialize(info::PottsMod
         key = k isa Symbol ? k : _unwrap(k)
         haskey(names, key) || throw(ArgumentError("`$k` is not a parameter of $(nameof(info.csys))"))
         i = names[key]
-        # a computed parameter is read-only (D-F2-1): the whole change is refused, nothing is set
+        # a computed parameter is read-only: the whole change is refused, nothing is set
         _is_symbolic(i.default) && throw(ArgumentError(_computed_message(_p(getfield(info.csys, :sys), :parameters), i)))
         new[i.name] = _param_value(info.T, v, i)
     end
@@ -1567,7 +1567,7 @@ CorePotts.remake_parameters(@nospecialize(info::PottsModelInfo), @nospecialize(p
     CorePotts.remake_parameters(info, prob, _field_pairs(p))
 
 # a whole parameter object gives its base values, and the computed parameters are derived again
-# from them (D-F2-1 amends D-115: a checkpoint's object restores bitwise, as the derivation is
+# from them (this amends D-115: a checkpoint's object restores bitwise, as the derivation is
 # deterministic; a hand-edited object gets consistent computed values, never a silent mix); the
 # kind tables are checked either way. One of this problem's type is used as is; one of another
 # type must have the same names and sets every base value, converted to the problem's scalar type
@@ -1611,7 +1611,7 @@ end
 _field_pairs(nt::NamedTuple) = Pair{Symbol, Any}[k => v for (k, v) in pairs(nt)]
 _is_pairs(p) = (p isa AbstractVector || p isa Tuple) && all(x -> x isa Pair, p)
 
-# Derive every computed parameter again from the base values (D-F2-1), and check the tables.
+# Derive every computed parameter again from the base values, and check the tables.
 Base.@nospecializeinfer function _finish_parameters(@nospecialize(mi::PottsModelInfo), @nospecialize(old), @nospecialize(out), _)
     c = mi.csys
     out = _derive(_p(getfield(c, :sys), :parameters), mi.T, out)
@@ -1694,7 +1694,7 @@ function _report_converts(info::PottsModelInfo, integ)
     return nothing
 end
 
-# A given state has this model's serial layout (D-066 item 3, P6.5a3): the `birth` column and
+# A given state has this model's serial layout (D-066 item 3): the `birth` column and
 # the `NEXT_BIRTH` counter exactly when the model reads `birth`. Any other layout is a state of
 # another model, an `ArgumentError`.
 function _check_births(st::CorePotts.CPMState, c::CompiledPottsSystem)
@@ -1739,7 +1739,7 @@ function CorePotts.remake_state(info::PottsModelInfo, prob, u0::_SymbolicMap, kw
     any(x -> _has_dual(last(x)), u0) && throw(
         ArgumentError(
             "`remake(prob; u0 = …)` takes plain values: give initial " *
-                "values with derivative parts to the problem (`PottsProblem(sys, op, tspan)`, F3-21b)"
+                "values with derivative parts to the problem (`PottsProblem(sys, op, tspan)`)"
         )
     )
     opd = _operating_point(getfield(info.csys, :sys), u0)

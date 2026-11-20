@@ -1,4 +1,4 @@
-# Sub-stream seeds (ROADMAP P6.0w, D-093). StableRNG streams at seeds `s` and `s + 1` are
+# Sub-stream seeds (D-093). StableRNG streams at seeds `s` and `s + 1` are
 # draw-wise shifted copies of each other (D-082), so a seed derived from another seed must
 # go through a mixer, never `seed + k`. The mixer is pinned so that a sub-stream is the same
 # on every Julia version (D-075).

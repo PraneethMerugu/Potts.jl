@@ -82,13 +82,13 @@ const DCSURFACE = _tag(_sym(:δcluster_surface), Entity(:delta, :cluster_surface
 const DMAJOR = _tag(_sym(:δmajor_length), Entity(:delta, :major_length, nothing, (;)))
 const DEULER = _tag(_sym(:δeuler), Entity(:delta, :euler, nothing, (;)))
 const DEULER_FULL = _tag(_sym(:δeuler_full), Entity(:delta, :euler_full, nothing, (;)))
-# not deltas: a cell's pieces and largest piece after the copy (P6.9a)
+# not deltas: a cell's pieces and largest piece after the copy
 const DPIECES = _tag(_sym(:δpieces), Entity(:delta, :pieces, nothing, (;)))
 const DLARGEST = _tag(_sym(:δlargest_piece), Entity(:delta, :largest_piece, nothing, (;)))
 const DPIECES_FULL = _tag(_sym(:δpieces_full), Entity(:delta, :pieces_full, nothing, (;)))
 const DLARGEST_FULL = _tag(_sym(:δlargest_piece_full), Entity(:delta, :largest_piece_full, nothing, (;)))
 
-# `euler(; adjacency)` and `euler(c; adjacency)` (P6.3j, D-192): `@potts_model` rewrites a
+# `euler(; adjacency)` and `euler(c; adjacency)` (D-192): `@potts_model` rewrites a
 # call of `euler` to this. Each adjacency is its own built-in (one tracker column each);
 # `:face` is the bare `euler`. On a hexagonal lattice the two are the same (D-192 Q4).
 const _EULER_ADJACENCIES = (:face, :full)
@@ -108,7 +108,7 @@ _euler(args...; kwargs...) = throw(
     )
 )
 
-# Cell-scope `pieces` and `largest_piece` (P6.9a, D-189 ruling 9): the number of connected
+# Cell-scope `pieces` and `largest_piece` (D-189 ruling 9): the number of connected
 # components of a cell's sites and the site count of the largest, under `:face` (the bare
 # names) or `:full` adjacency, exact trackers like `euler`. `pieces(c, shell(target))` stays
 # the shell fold (`_Pieces`); `@potts_model` rewrites a bare `pieces` to `_bare_pieces(pieces)`
@@ -135,7 +135,7 @@ _largest_piece(args...; kwargs...) = throw(
 
 """
 `parameter(name, default; unit, tunable, bounds, description)`: a scalar model parameter, with
-MTK's metadata (F2-14, FE-18): `unit` (`VariableUnit`), `tunable = false` (out of
+MTK's metadata: `unit` (`VariableUnit`), `tunable = false` (out of
 `SciMLStructures.Tunable`, into `Constants`), `bounds = (lo, hi)` (checked at build and at every
 write) and `description` (shown with the model). The metadata is MTK's own, so
 `ModelingToolkitBase.istunable`, `getbounds` and `getdescription` read it.
@@ -149,7 +149,7 @@ parameter(name::Symbol, default; unit = nothing, tunable = true, bounds = nothin
         )
     ), unit, bounds, description
 )
-# a component's bound parameter keeps where it was bound, `(component, name)`, for its messages (F2-15)
+# a component's bound parameter keeps where it was bound, `(component, name)`, for its messages
 _origin(opts, ::Nothing) = opts
 _origin(opts, o) = (; opts..., origin = o)
 # (`tunable = false` through MTK's own declaration: its metadata key is not public)
@@ -161,8 +161,8 @@ _tunable(name, t) = t isa Bool ? t : throw(ArgumentError("parameter `$name`: `tu
 
 _with_unit(x, ::Nothing) = x
 _with_unit(x, u) = Symbolics.wrap(SymbolicUtils.setmetadata(Symbolics.unwrap(x), ModelingToolkitBase.VariableUnit, u))
-# MTK's metadata on a parameter's symbol (only what is given: a parameter without metadata is
-# the symbol it was before F2-14)
+# MTK's metadata on a parameter's symbol (only what is given: a parameter without metadata keeps
+# its plain symbol)
 function _with_meta(x, unit, bounds, description)
     x = _with_unit(x, unit)
     u = Symbolics.unwrap(x)
@@ -189,7 +189,7 @@ function _meta_options(name, tunable, bounds, description)
     return (; opts..., bounds = (Float64(bounds[1]), Float64(bounds[2])))
 end
 # a value of parameter `i` outside its declared bounds (every entry of a kind table); `ps`, the
-# model's parameters, lets a computed parameter name the inputs to change (review S4 of batch 5)
+# model's parameters, lets a computed parameter name the inputs to change
 function _check_bounds(i::Entity, v, ps = nothing)
     b = get(i.options, :bounds, nothing)
     b === nothing && return v
@@ -210,7 +210,7 @@ _bnum(x) = isinteger(x) && isfinite(x) ? string(Int(x)) : string(x)
 `kind_parameter(name, values)`: a parameter indexed by kind (medium included), the array
 parameter `name[1:n]` or `name[1:n, 1:m]` of `values`' shape. It is read through LatticePDE's
 `value_at` (`J[kind, neighbor_kind]` in a model), never MTK's `getindex`, which a compiled template
-cannot take with an input index (S-4).
+cannot take with an input index.
 """
 function kind_parameter(name::Symbol, values; unit = nothing, tunable = true, bounds = nothing, description = nothing)
     (values isa AbstractArray && ndims(values) in (1, 2)) ||
@@ -308,7 +308,7 @@ outside `SCOPES` names a relationship: `rest(bond)` is an edge variable of `@rel
 bond` (option `relationship = :bond`; `mtkcompile` checks the name). `rest(edge)` belongs
 to the model's only relationship.
 
-A field takes `[lattice_level = Coarse(k)]` (F3-17; LatticePDE's [`Coarse`](@ref)): it lives on
+A field takes `[lattice_level = Coarse(k)]` (LatticePDE's [`Coarse`](@ref)): it lives on
 the lattice coarsened by `k` per axis, its array has one value per node (a block of `k` sites
 per axis), and its equation runs there. Its fine reads (`kind`, other site reads) are folded
 over each block. A CPM read of the field at a site reads the node whose block holds the site,
@@ -371,7 +371,7 @@ function variable(x, scope::Symbol; default = _NO_VALUE, unit = nothing, guess =
         )
         k === :clear_on_ownership_change && v === true && !(scope in (:site, :field)) &&
             throw(ArgumentError("variable `$name`: `clear_on_ownership_change` applies to site variables"))
-        # `[lattice_storage = Float16 | Float32 | Float64]` (P5 role model, FE-17): a field's own
+        # `[lattice_storage = Float16 | Float32 | Float64]` (P5 role model): a field's own
         # storage type, narrower or wider than the state type `T` (its kernels compute in the
         # group's `compute_type`, and each store rounds once to the storage)
         k === :lattice_storage && !(scope === :field && v in (Float16, Float32, Float64)) &&
@@ -382,7 +382,7 @@ function variable(x, scope::Symbol; default = _NO_VALUE, unit = nothing, guess =
                     (v isa Type ? string(v) : repr(v)) * (scope === :field ? ")" : " on a variable that is not a field)")
             )
         )
-        # `[bounds = (lo, hi)]` on a field (F3-13, FE-18 metadata): the interval its values stay
+        # `[bounds = (lo, hi)]` on a field (field metadata): the interval its values stay
         # in, which the stability bound takes for a coefficient that reads the field
         if k === :bounds
             scope === :field || throw(
@@ -399,7 +399,7 @@ function variable(x, scope::Symbol; default = _NO_VALUE, unit = nothing, guess =
                 )
             )
         end
-        # `[lattice_level = Coarse(k)]` on a field (F3-17): the grid coarsened by `k` per axis
+        # `[lattice_level = Coarse(k)]` on a field: the grid coarsened by `k` per axis
         # (LatticePDE's metadata); its CPM reads read the node whose block holds the site
         if k === :lattice_level
             scope === :field || throw(
@@ -674,7 +674,7 @@ _integral(x; over = nothing) = over === nothing ? cell_integral(x isa Num ? x : 
 # `integral(x; over = cluster)` (E7, D-243): the site expression `x` summed over the sites of
 # every alive member of the cell's cluster. The integrand is in site scope: a bare `volume`
 # (and a bare cell variable) is the value of the site's owner, the member the site belongs to
-# (spec-owner ruling R1), so `integral(volume; over = cluster)` is Σ_members V_m².
+# so `integral(volume; over = cluster)` is Σ_members V_m².
 function _integral_over(x, over)
     u = _unwrap(over)
     (u isa SymbolicUtils.BasicSymbolic && isequal(u, _unwrap(B.cluster))) || throw(
@@ -752,7 +752,7 @@ _rand() = random_uniform(Num(_next_number!()))
 # Helpers the macro rewrites user syntax into
 
 """`x[i...]` inside a model: indexing of symbolic quantities, `getindex` otherwise."""
-# a Bool quantity (a node of a discrete component) read at a cell stays a Bool (P6.0k)
+# a Bool quantity (a node of a discrete component) read at a cell stays a Bool
 _index(x::Num, i) = (_no_class_index(i); SymbolicUtils.symtype(Symbolics.unwrap(x)) === Bool ? _nonzero(value_at(x, i)) : value_at(x, i))
 _index(x::QuantityVector, i::Num) = Num[value_at(c, i) for c in x.components]   # the vector at a cell/site
 _index(x::QuantityVector, i::Integer) = x.components[i]
@@ -1034,7 +1034,7 @@ struct Drive
     expr::Any
 end
 # ---------------------------------------------------------------------------------------
-# Connectivity (P6.3g, D-189): rule values, `connected`, the `connectivity` helper, and the
+# Connectivity (D-189): rule values, `connected`, the `connectivity` helper, and the
 # shell folds `shell`, `pieces`, `distinct`. The rules read the target's neighbour SHELL (8
 # sites on a square lattice, 6 on a hexagonal one, 26 in 3D; `CorePotts.shell_offsets`),
 # whatever the model's neighbourhood. See the "Connectivity" manual page.
@@ -1289,7 +1289,7 @@ sites are joined when they are face neighbors (`:face`) or any neighbors (`:full
 `pieces(old, shell(target))` is the old `ring_arcs`/`local_components` for a cell. Only
 `shell` is a relation for `pieces` (no custom shells in v1).
 
-The cell built-in (P6.9a): the number of connected components of the cell's sites under
+The cell built-in: the number of connected components of the cell's sites under
 `adjacency` (0 for a dead cell), an exact tracker. In cell energies (`@energy cells(k) => α *
 (pieces > 1)`) the copy sees its exact after-value; in a drive or constraint `pieces[old]`,
 `pieces(new; adjacency)` read the value before the copy (the medium reads 0). See also
@@ -1304,7 +1304,7 @@ function (f::_Pieces)(c, a::Around; adjacency = :face)
     _shell_anchor(a.anchor)
     return _gather(f, n -> n, a, n -> _index(B.owner, n) == c; adjacency)
 end
-# the cell-scope built-in (P6.9a): `pieces(; adjacency)`, `pieces(c; adjacency)`, `pieces[c]`
+# the cell-scope built-in: `pieces(; adjacency)`, `pieces(c; adjacency)`, `pieces[c]`
 (::_Pieces)(; adjacency = :face) = _pieces_builtin(:pieces, adjacency)
 (::_Pieces)(c; adjacency = :face) = _index(_pieces_builtin(:pieces, adjacency), c)
 _index(::_Pieces, i) = _index(B.pieces, i)
@@ -1920,7 +1920,7 @@ function _schedule_names(listed)
 end
 
 # ---------------------------------------------------------------------------------------
-# Cell references (R6; D-066 item 5, D-075 / api-synthesis §2.6–2.7, D-231)
+# Cell references (D-066, D-075, D-231)
 
 """
     CellRef
@@ -2065,7 +2065,7 @@ allocates a cell of kind `k` on the entity's first conversion when it has none.
 In the writes, `created` is true for the conversion that allocated `to` and false otherwise.
 
 A compound write (`x[to] += e`, `m += e`) adds `e` once per converted site. The adds of one
-pass are an exact fixed-point sum per target (F3-23), so the result is the same for every
+pass are an exact fixed-point sum per target, so the result is the same for every
 thread count and on every backend. Every `e` reads the state from before the writes: an `e`
 may not read a variable the pass writes (refused at build). The writes are evaluated twice
 (an exponent pass and a sum pass); `rand()` is a counter draw, the same in both.
@@ -2177,7 +2177,7 @@ PottsParameters(
 ) =
     PottsParameters{typeof(values), tag}(values)
 _computed(::PottsParameters{NT, D}) where {NT, D} = D === () ? () : D[1]
-# the MTK metadata in the type (F2-14), only when a parameter has some: the names declared
+# the MTK metadata in the type, only when a parameter has some: the names declared
 # `tunable = false`, and `(name, lo, hi)` of each declared `bounds`
 _nontunable(::PottsParameters{NT, D}) where {NT, D} = length(D) == 3 ? D[3][1] : ()
 _declared_bounds(::PottsParameters{NT, D}) where {NT, D} = length(D) == 3 ? D[3][2] : ()
@@ -2193,14 +2193,14 @@ Base.isequal(a::PottsParameters, b::PottsParameters) = isequal(NamedTuple(a), Na
 Base.hash(p::PottsParameters, h::UInt) = hash(NamedTuple(p), hash(:PottsParameters, h))
 Base.show(io::IO, p::PottsParameters) = print(io, "PottsParameters", NamedTuple(p))
 
-# SciMLStructures (cutover C9, P5 C7a-11): `Tunable` is the floating-point scalar parameters in
+# SciMLStructures (P5 C7a-11): `Tunable` is the floating-point scalar parameters in
 # declaration order; `Constants` the kind tables (each flattened, column-major) and any integer or
 # Bool scalars; computed parameters (D-112) are in neither, and `replace` re-derives the ones that
 # read a replaced value. `PottsParameters` is immutable: `replace` returns a new object of the
 # same type. Values convert to each entry's own type and are never promoted: a Dual is an
 # `ArgumentError` (the object holds plain numbers in the problem's scalar type), and so is a value
 # an integer entry cannot hold exactly; a wider float (a BigFloat into a Float64 entry) rounds to
-# the entry's type. `remake(prob; p = obj)` takes the object as given (D-115, D-C9 item 7).
+# the entry's type. `remake(prob; p = obj)` takes the object as given (D-115).
 SciMLStructures.isscimlstructure(::PottsParameters) = true
 SciMLStructures.ismutablescimlstructure(::PottsParameters) = false
 SciMLStructures.hasportion(::SciMLStructures.Tunable, ::PottsParameters) = true
@@ -2271,7 +2271,7 @@ function SciMLStructures.replace(
     it = collect(Any, v)
     vals = map(k -> k in ks ? _rebuild(nt[k], k, it) : nt[k], keys(nt))
     q = _with_values(p, NamedTuple{keys(nt)}(Tuple(vals)))
-    for (k, lo, hi) in _declared_bounds(p)            # a declared bound holds here too (F2-14)
+    for (k, lo, hi) in _declared_bounds(p)            # a declared bound holds here too
         k in ks && _check_bounds(Entity(:param, k, nothing, (; bounds = (lo, hi))), NamedTuple(q)[k])
     end
     isempty(_computed(p)) && return q
