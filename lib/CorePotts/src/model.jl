@@ -57,8 +57,8 @@ function initial_state(σ::AbstractArray{<:Integer}, kinds::AbstractVector{<:Int
     for (name, a) in pairs(site)
         want = haskey(shapes, name) ? Tuple(shapes[name]) : size(σ)
         size(a) == want && continue
-        throw(ArgumentError(want == size(σ) ? "site quantity `$name` has size $(size(a)), lattice $(size(σ))" :
-                            "site quantity `$name` has size $(size(a)), its grid $want (lattice $(size(σ)))"))
+        grid = want == size(σ) ? "lattice $(size(σ))" : "its grid $want (lattice $(size(σ)))"
+        throw(ArgumentError("site quantity `$name` has size $(size(a)), $grid"))
     end
     for (name, a) in pairs(cell)
         size(a, ndims(a)) == n ||

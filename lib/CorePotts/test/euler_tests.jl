@@ -25,11 +25,20 @@ end
         hex = geom === :hex
         N = geom === :cubic ? 3 : 2
         lat = hex ? Lattice((5, 5); boundary = Closed(), geometry = Hexagonal()) : Lattice(ntuple(_ -> 5, N); boundary = Closed())
-        shell = hex ? CorePotts._HEX_RING : N == 2 ? CorePotts._EULER_RING2 : CorePotts._CUBIC_SHELL
+        shell = if hex
+            CorePotts._HEX_RING
+        elseif N == 2
+            CorePotts._EULER_RING2
+        else
+            CorePotts._CUBIC_SHELL
+        end
         K = length(shell)
         x = ntuple(_ -> 3, N)
-        masks = K <= 8 ? (0:((1 << K) - 1)) :
-                [UInt32((0x9E3779B97F4A7C15 * k) >> 38) for k in 1:800]      # 26-bit, deterministic
+        masks = if K <= 8
+            0:((1 << K) - 1)
+        else
+            [UInt32((0x9E3779B97F4A7C15 * k) >> 38) for k in 1:800]
+        end      # 26-bit, deterministic
         bad_brute = bad_rec = 0
         for m in masks
             σ = zeros(Int32, lat.dims)

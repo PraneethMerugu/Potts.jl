@@ -470,7 +470,13 @@ Compound write `j` of a `@convert` pass, `dst[idx] += w` (`ConvertPass`); `idx` 
     v = _cr_work(eltype(dst))(convert(eltype(dst), w))
     r = _wrow(m.sc, j, idx)                                # j ≤ rows, idx ≤ capacity: in bounds
     if !isfinite(v)
-        bit = isnan(v) ? Int32(1) : v > 0 ? Int32(2) : Int32(4)
+        bit = if isnan(v)
+            Int32(1)
+        elseif v > 0
+            Int32(2)
+        else
+            Int32(4)
+        end
         Atomix.@atomic m.sc.wflag[r] |= bit
     elseif !iszero(v)
         b = _cr_biased(v)
@@ -513,8 +519,14 @@ end
     fl = @inbounds sc.wflag[r]
     b = @inbounds sc.wexp[r]
     if fl != 0
-        @inbounds dst[c] += (fl & Int32(1) != 0 || fl & Int32(6) == Int32(6)) ? T(NaN) :
-                            fl & Int32(2) != 0 ? T(Inf) : T(-Inf)
+        v = if fl & Int32(1) != 0 || fl & Int32(6) == Int32(6)
+            T(NaN)
+        elseif fl & Int32(2) != 0
+            T(Inf)
+        else
+            T(-Inf)
+        end
+        @inbounds dst[c] += v
     elseif b != 0
         W = _cr_work(T)
         @inbounds dst[c] += T(ldexp(W(_cr_acc(_wsc_sum(sc), r, paired)), -_cr_shift(W, b, L)))
@@ -650,8 +662,11 @@ function (ph::ConvertPass)(st, p, ctx, key, mcs, backend)
     end
     if _has_clusters(st)
         cvol = haskey(st.cell, :cluster_volume) ? st.cell.cluster_volume : nothing
-        csurf = haskey(st.cell, :cluster_surface) && haskey(ctx, :surface) ?
-                st.cell.cluster_surface : nothing
+        csurf = if haskey(st.cell, :cluster_surface) && haskey(ctx, :surface)
+            st.cell.cluster_surface
+        else
+            nothing
+        end
         Exec.launch!(backend, _dcluster_mark_body!, cap, (dv, par, st.cell))
         Exec.launch!(backend, _dcluster_root_body!, cap, (dv, par, st.cell, cvol, csurf))
         launches += 2

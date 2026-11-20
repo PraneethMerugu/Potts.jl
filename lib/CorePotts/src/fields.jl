@@ -71,9 +71,11 @@ function FieldPhase{K}(group, alg, arrays::Tuple; tables = Pair{Int, Symbol}[], 
     program = Problems.group_program(group, alg)
     # the plans of value type `T`, made once per group (shared by every trajectory; the host
     # backend only decides the Float64 check here, which `options` already holds)
-    masks, step = aux_only ?
-        Problems.group_plans(group, alg, T, KernelAbstractions.CPU(), options; kernels = (Int[], _aux_ids(program))) :
+    masks, step = if aux_only
+        Problems.group_plans(group, alg, T, KernelAbstractions.CPU(), options; kernels = (Int[], _aux_ids(program)))
+    else
         Problems.group_plans(group, alg, T, KernelAbstractions.CPU(), options)
+    end
     return FieldPhase{K, typeof(group), typeof(alg), typeof(arrays), typeof(substeps), typeof(program), typeof(step)}(
         group, alg, program, masks, step, arrays, tables, params, substeps, Float64(dt), Float64(period), init, aux_only,
         start, collect(Pair{String, Symbol}, rule_tables), options, T)
@@ -207,8 +209,16 @@ function _field_bind(ph::FieldPhase, st, p, backend; tables = nothing, abstol = 
     arrs = _arrays(ph.arrays, st)
     # (a scratch field on its own level: a coarse field's face or masked value)
     nf(i) = LatticeFields.IR.nsites(s, s.fields[i].levels[1])
-    bufs = [a[1] === nothing ? Any[_scratch(backend, LatticeFields.IR.juliatype(s.fields[i].storage), nf(i))] :
-            a[2] === nothing ? Any[vec(a[1])] : Any[vec(a[1]), vec(a[2])] for (i, a) in enumerate(arrs)]
+    function buffers(i, a)
+        if a[1] === nothing
+            return Any[_scratch(backend, LatticeFields.IR.juliatype(s.fields[i].storage), nf(i))]
+        elseif a[2] === nothing
+            return Any[vec(a[1])]
+        else
+            return Any[vec(a[1]), vec(a[2])]
+        end
+    end
+    bufs = [buffers(i, a) for (i, a) in enumerate(arrs)]
     # every bound array holds its field's sites (the kernels index it unchecked)
     for (i, b) in enumerate(bufs), x in b
         length(x) == nf(i) || throw(ArgumentError(string("field array `", s.fields[i].key, "` has ", length(x),
@@ -262,8 +272,11 @@ function (m::_MCSWindow)(w::Integer, t1::Real)
     n = round(Int, t1 / m.period) + cld(w, m.per)
     r = mod1(w, m.per)
     t = round((n - 1) * m.period + (r - 1) * m.period / m.per; sigdigits = 6)
-    return m.per == 1 ? string("the field step of MCS ", n, " (t = ", t, ")") :
-           string("the field step of MCS ", n, " (pass ", r, " of ", m.per, ", t = ", t, ")")
+    if m.per == 1
+        return string("the field step of MCS ", n, " (t = ", t, ")")
+    else
+        return string("the field step of MCS ", n, " (pass ", r, " of ", m.per, ", t = ", t, ")")
+    end
 end
 
 """The merged [`phase_context`](@ref) of every phase of `phases` (each once)."""
@@ -459,7 +472,15 @@ Base.@kwdef mutable struct FieldStats
 end
 Base.show(io::IO, s::FieldStats) = print(io, "FieldStats(solves = ", s.solves, ", budget = ", s.budget, ", floor = ",
     s.floor, ", newton_budget = ", s.newton_budget, ", code = ", s.code, ")")
-_rank(c::SciMLBase.ReturnCode.T) = c == SciMLBase.ReturnCode.Success ? 0 : c == SciMLBase.ReturnCode.StalledSuccess ? 1 : 2
+function _rank(c::SciMLBase.ReturnCode.T)
+    if c == SciMLBase.ReturnCode.Success
+        return 0
+    elseif c == SciMLBase.ReturnCode.StalledSuccess
+        return 1
+    else
+        return 2
+    end
+end
 # one group's status word into the run's counters and code (`Problems.check_status!`)
 function _read_status!(stats, rt::Problems.GroupRuntime)
     c = Problems.check_status!(rt, stats.fields)
@@ -694,8 +715,8 @@ function _shadow!(run::TangentRun, ph::FieldPhase{K}, st, prt) where {K}
     bufs = map(enumerate(arrs)) do (i, a)
         if a[1] === nothing                 # a face or masked value: Dual scratch for a float
             S = LatticeFields.IR.juliatype(s.fields[i].storage)
-            return Any[S <: AbstractFloat ? _scratch(backend, LatticeFields.Compile.withvaltype(E, S), nf(i)) :
-                       _scratch(backend, S, nf(i))]
+            S <: AbstractFloat && return Any[_scratch(backend, LatticeFields.Compile.withvaltype(E, S), nf(i))]
+            return Any[_scratch(backend, S, nf(i))]
         end
         return Any[x isa AbstractArray && eltype(x) <: AbstractFloat && haskey(run.written, x) ? vec(twin(x)) : vec(x)
                    for x in a if x !== nothing]

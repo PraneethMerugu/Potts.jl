@@ -112,10 +112,20 @@ end
     end
 
     # a `Global` veto: the gaining side local, the losing side searched in a window of 2 or exactly
-        post_w(st, p, prop, ctx, stage) = CorePotts.global_gains(st.ownership, ctx, prop, Val(false)) ?
-            CorePotts.global_keeps(st.ownership, ctx, prop, Val(false), Val(2), Val(25), stage) : Int32(2)
-        post_x(st, p, prop, ctx, stage) = CorePotts.global_gains(st.ownership, ctx, prop, Val(false)) ?
-            CorePotts.global_keeps(st.ownership, ctx, prop, Val(false), Val(nothing), Val(0), stage) : Int32(2)
+        function post_w(st, p, prop, ctx, stage)
+            if CorePotts.global_gains(st.ownership, ctx, prop, Val(false))
+                return CorePotts.global_keeps(st.ownership, ctx, prop, Val(false), Val(2), Val(25), stage)
+            else
+                return Int32(2)
+            end
+        end
+        function post_x(st, p, prop, ctx, stage)
+            if CorePotts.global_gains(st.ownership, ctx, prop, Val(false))
+                return CorePotts.global_keeps(st.ownership, ctx, prop, Val(false), Val(nothing), Val(0), stage)
+            else
+                return Int32(2)
+            end
+        end
     vetoes = (("window 2", CorePotts.ConnectivityHooks(; post = post_w, uses_global = true, window = 2)),
         ("exact", CorePotts.ConnectivityHooks(; post = post_x, uses_global = true, exact_veto = true)))
 

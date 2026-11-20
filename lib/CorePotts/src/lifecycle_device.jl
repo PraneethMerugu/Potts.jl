@@ -327,8 +327,13 @@ end
 end
 @inline _advance_births!(::Nothing, dv) = nothing
 @inline _advance_births!(b, dv) = (@inbounds b.next[1] += dv.taken[1]; nothing)   # both have one entry
-_births(st) = haskey(st.cell, :birth) && haskey(st.model, NEXT_BIRTH) ?
-              (; col = st.cell.birth, next = getfield(st.model, NEXT_BIRTH)) : nothing
+function _births(st)
+    if haskey(st.cell, :birth) && haskey(st.model, NEXT_BIRTH)
+        return (; col = st.cell.birth, next = getfield(st.model, NEXT_BIRTH))
+    else
+        return nothing
+    end
+end
 
 # G: daughters and planes. A cell dividing alone takes its slot and its normal; the item of
 # a dividing cluster's root assigns its members' daughters in slot order and evaluates the
@@ -619,9 +624,13 @@ end
         @inbounds st.cell.generation[d] += one(eltype(st.cell.generation))
         if CL
             k = @inbounds st.cell.cluster[c]
-            @inbounds st.cell.cluster[d] = _divides_with_cluster(_event(ruled, @inbounds events[c])) ?
-                                           daughter[k] :              # the root's daughter names the new cluster
-                                           dv.nlive[k] == 1 ? d : k   # a lone cell's daughter is lone
+            @inbounds st.cell.cluster[d] = if _divides_with_cluster(_event(ruled, @inbounds events[c]))
+                daughter[k]               # the root's daughter names the new cluster
+            elseif dv.nlive[k] == 1
+                d                         # a lone cell's daughter is lone
+            else
+                k
+            end
         end
     end
     map(L -> _clean_links!(L, c, removed, dv.newborn), links)
@@ -849,15 +858,15 @@ function run_lifecycle_device!(lc::Lifecycle, cache, st, p, ctx, key, mcs, backe
     buf = (; cache.events, cache.daughter, cache.removed, cache.normals, cache.bias)
     fns = (; lc.before, lc.trigger, normal = _plane(lc.normal, T), cnormal = _plane(lc.cluster_normal, T), lc.kind, lc.divide!,
         lc.cluster_divide!, lc.release, lc.owner_changed)
-    opt = (; surf = haskey(st.cell, :surface) && haskey(ctx, :surface) ? st.cell.surface : nothing,
+    surface = haskey(st.cell, :surface) && haskey(ctx, :surface)
+    csurface = _has_clusters(st) && haskey(st.cell, :cluster_surface) && haskey(ctx, :surface)
+    nsite = length(st.ownership)
+    opt = (; surf = surface ? st.cell.surface : nothing,
         cvol = _has_clusters(st) && haskey(st.cell, :cluster_volume) ? st.cell.cluster_volume : nothing,
-        csurf = _has_clusters(st) && haskey(st.cell, :cluster_surface) && haskey(ctx, :surface) ?
-                st.cell.cluster_surface : nothing,
+        csurf = csurface ? st.cell.cluster_surface : nothing,
         rel = haskey(ctx, :surface) ? ctx.surface : nothing, refresh,
-        su = haskey(st.cell, :surface) && haskey(ctx, :surface) ?
-            _units_for(eltype(st.cell.surface), ctx.surface, length(st.ownership), backend) : nothing,
-        cu = _has_clusters(st) && haskey(st.cell, :cluster_surface) && haskey(ctx, :surface) ?
-            _units_for(eltype(st.cell.cluster_surface), ctx.surface, length(st.ownership), backend) : nothing,
+        su = surface ? _units_for(eltype(st.cell.surface), ctx.surface, nsite, backend) : nothing,
+        cu = csurface ? _units_for(eltype(st.cell.cluster_surface), ctx.surface, nsite, backend) : nothing,
         cc = _contact_counts(ctx), ccols = _count_columns(st, _contact_counts(ctx)), eul = _euler_columns(st.cell),
         births = _births(st))
     CL = Val(_has_clusters(st))

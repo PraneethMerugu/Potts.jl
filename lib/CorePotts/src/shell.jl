@@ -281,8 +281,13 @@ end
     return _simple(X, Bg, full, r, t)
 end
 @inline _simple(X, Bg, full, ::Val{:ring6}, t) = _runs6(X) == 1 && _runs6(Bg) == 1
-@inline _simple(X, Bg, full, ::Val{:ring8}, t) = full ? (_runs8(_fill8(X)) == 1 && _runs8_touching(Bg) == 1) :
-                                                 (_runs8_touching(X) == 1 && _runs8(_fill8(Bg)) == 1)
+@inline function _simple(X, Bg, full, ::Val{:ring8}, t)
+    if full
+        return _runs8(_fill8(X)) == 1 && _runs8_touching(Bg) == 1
+    else
+        return _runs8_touching(X) == 1 && _runs8(_fill8(Bg)) == 1
+    end
+end
 @inline function _simple(X, Bg, full, ::Val{:box}, t)
     if full
         return _components27(X, true) == 1 && _components27(Bg & t.near, false, t.xface) == 1

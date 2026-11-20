@@ -349,9 +349,12 @@ function CheckerboardCache(backend, lat::Lattice{N}, f::CPMFunction, proposal; r
     z(T, n) = KernelAbstractions.zeros(backend, T, n)
     tk = f.track === nothing ? nothing : (; f.track, acc = z(track_eltype(f.track), nsites(lat)))
     cnt = z(Int32, nblocks(layout))
-    sl = f.connectivity === nothing ? nothing :
-         (; blk = z(Int32, nblocks(layout) * cld(nbox, switches)), lid = z(UInt32, nblocks(layout) * cld(nbox, switches)),
-        count = z(UInt32, 1), deferred = z(UInt32, 1), exact = f.connectivity.exact_veto)
+    sl = if f.connectivity === nothing
+        nothing
+    else
+        (; blk = z(Int32, nblocks(layout) * cld(nbox, switches)), lid = z(UInt32, nblocks(layout) * cld(nbox, switches)),
+            count = z(UInt32, 1), deferred = z(UInt32, 1), exact = f.connectivity.exact_veto)
+    end
     n = nblocks(layout)
     backend isa KernelAbstractions.CPU || n >= DEVICE_MIN_BLOCKS ||
         @warn "CheckerboardCPM on a device: $n work items per phase (blocks $(layout.nblocks)) leave the GPU mostly idle; a lattice this small runs as fast or faster on the CPU" maxlog = 1

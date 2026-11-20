@@ -219,7 +219,13 @@ end
         c == 0 && continue
         w = _cr_value(f, eltype(dst), st, p, ctx, key, mcs, i)
         if !isfinite(w)
-            bit = isnan(w) ? Int32(1) : w > 0 ? Int32(2) : Int32(4)
+            bit = if isnan(w)
+                Int32(1)
+            elseif w > 0
+                Int32(2)
+            else
+                Int32(4)
+            end
             Atomix.@atomic sc.flag[c] |= bit                                  # (rare: no local form)
         elseif !iszero(w)
             b = max(b, _cr_biased(w))
@@ -275,7 +281,13 @@ end
     fl = @inbounds sc.flag[c]
     b = @inbounds sc.exp[c]
     v = if fl != 0
-        (fl & Int32(1) != 0 || fl & Int32(6) == Int32(6)) ? T(NaN) : fl & Int32(2) != 0 ? T(Inf) : T(-Inf)
+        if fl & Int32(1) != 0 || fl & Int32(6) == Int32(6)
+            T(NaN)
+        elseif fl & Int32(2) != 0
+            T(Inf)
+        else
+            T(-Inf)
+        end
     elseif b == 0
         zero(T)
     else
@@ -396,9 +408,13 @@ function _check_reduce_status!(stats, st, t, backend)
     j = Int(s >> 8)
     names = keys(st.cell)
     name, T = 1 <= j <= length(names) ? (names[j], eltype(getfield(st.cell, names[j]))) : (Symbol("?"), Float32)
-    route = T === Float64 ? "rescale the summed expression" :
-            _atomic64(backend) ? "build the problem in Float64 (`PottsProblem(…; T = Float64)`) or rescale the summed expression" :
-            "rescale the summed expression (this device has no Float64)"
+    route = if T === Float64
+        "rescale the summed expression"
+    elseif _atomic64(backend)
+        "build the problem in Float64 (`PottsProblem(…; T = Float64)`) or rescale the summed expression"
+    else
+        "rescale the summed expression (this device has no Float64)"
+    end
     @warn string("the cell sum `", name, "` (`integral`, `CellReduce`) exceeded floatmax(", T, ") = ", floatmax(T),
         " by MCS ", t, " and is stored as ±Inf; ", route)
     fill!(w, zero(eltype(w)))

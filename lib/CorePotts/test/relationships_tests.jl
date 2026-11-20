@@ -157,8 +157,15 @@ end
                 a < b && add_link!(cell, a, b; age = Int32(mcs))
             end
         end
-        remove_first(st, p, ctx, key, mcs, c) = mcs == 1 && c == 1 ? EVENT_REMOVE :
-            mcs == 1 && c == 2 ? EVENT_DIVIDE : EVENT_NONE
+        function remove_first(st, p, ctx, key, mcs, c)
+            if mcs == 1 && c == 1
+                return EVENT_REMOVE
+            elseif mcs == 1 && c == 2
+                return EVENT_DIVIDE
+            else
+                return EVENT_NONE
+            end
+        end
         st = with_capacity(
             initial_state(
                 σ, kinds;
@@ -305,8 +312,15 @@ end
                 add_link!(CorePotts.link_store(cell, :tether), a, b)
             end
         end
-        remove_first(st, p, ctx, key, mcs, c) = mcs == 1 && c == 1 ? EVENT_REMOVE :
-            mcs == 1 && c == 2 ? EVENT_DIVIDE : EVENT_NONE
+        function remove_first(st, p, ctx, key, mcs, c)
+            if mcs == 1 && c == 1
+                return EVENT_REMOVE
+            elseif mcs == 1 && c == 2
+                return EVENT_DIVIDE
+            else
+                return EVENT_NONE
+            end
+        end
         st = with_capacity(
             initial_state(
                 σ, kinds;

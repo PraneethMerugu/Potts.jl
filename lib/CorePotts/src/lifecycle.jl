@@ -288,8 +288,13 @@ function principal_axis end
     C = embed_covariance(l, covariance(T, cell, c, Val(2)))     # Cartesian axes
     λ = principal_moments(C)[k]
     a, b, d = C
-    v = abs(b) > eps(T) * (abs(a) + abs(d)) ? (λ - d, b) :
-        (a >= d) == (k == 1) ? (one(T), zero(T)) : (zero(T), one(T))
+    v = if abs(b) > eps(T) * (abs(a) + abs(d))
+        (λ - d, b)
+    elseif (a >= d) == (k == 1)
+        (one(T), zero(T))
+    else
+        (zero(T), one(T))
+    end
     n = sqrt(v[1]^2 + v[2]^2)
     return (v[1] / n, v[2] / n)
 end
@@ -306,7 +311,15 @@ end
         n > nb && (best = v; nb = n)
     end
     o, z = one(T), zero(T)
-    nb < eps(T)^2 && return k == 1 ? (o, z, z) : k == 2 ? (z, o, z) : (z, z, o)
+    if nb < eps(T)^2
+        if k == 1
+            return (o, z, z)
+        elseif k == 2
+            return (z, o, z)
+        else
+            return (z, z, o)
+        end
+    end
     s = sqrt(nb)
     return (best[1] / s, best[2] / s, best[3] / s)
 end
@@ -490,8 +503,11 @@ function run_lifecycle!(lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, m
             if nextfree + length(ms) - 1 <= length(free)
                 for m in ms
                     # a member that transitions transitions first (A-17)
-                    events[m] = events[m] == EVENT_TRANSITION || tb[m] ? _EVENT_DIVIDE_CLUSTER_TRANSITION :
-                                EVENT_DIVIDE_CLUSTER
+                    events[m] = if events[m] == EVENT_TRANSITION || tb[m]
+                        _EVENT_DIVIDE_CLUSTER_TRANSITION
+                    else
+                        EVENT_DIVIDE_CLUSTER
+                    end
                     tb[m] = false
                     rule === nothing || (rule[m] = rule[c])      # members follow the root's rule
                     daughter[m] = free[nextfree]

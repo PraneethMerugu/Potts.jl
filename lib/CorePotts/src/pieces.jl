@@ -39,10 +39,20 @@ The adjacency offsets of a cell's sites: face (`Val(false)`) or full (`Val(true)
 # the shell positions adjacent to x under the adjacency, in shell (`shell_offsets`) order
 const _SQUARE_XFACE = _bits(_SQUARE_SHELL, o -> sum(abs, o) == 1)
 @inline _touch_bits(::Lattice{2, M, Hexagonal}, ::Val{F}) where {M, F} = _RING_ALL6
-@inline _touch_bits(::Lattice{2, M, Square}, ::Val{F}) where {M, F} = F ? _RING_ALL8 :
-                                                                      _SQUARE_XFACE
-@inline _touch_bits(::Lattice{3}, ::Val{F}) where {F} = F ? _CUBE_TABLES.all :
-                                                        _CUBE_TABLES.xface
+@inline function _touch_bits(::Lattice{2, M, Square}, ::Val{F}) where {M, F}
+    if F
+        return _RING_ALL8
+    else
+        return _SQUARE_XFACE
+    end
+end
+@inline function _touch_bits(::Lattice{3}, ::Val{F}) where {F}
+    if F
+        return _CUBE_TABLES.all
+    else
+        return _CUBE_TABLES.xface
+    end
+end
 
 # the shell pieces of the mask `m` (shell order) that meet its touches `touch`, with the
 # shell kernels: runs of the ring in 2D, dilation in the 3×3×3 box in 3D
@@ -355,9 +365,14 @@ test only (1: undecided); `GlobalSearch()` decides, exactly under `ctx.global_mo
     stage isa GlobalLocal && return GLOBAL_WINDOW
     return _keeps_search(ctx.global_mode, σ, ctx, prop, touch, adj, w, cap)
 end
-@inline _keeps_search(::GlobalExact, σ, ctx, prop, touch, adj, w, cap) = _keeps_exact(
-    σ, ctx.lattice, ctx.flood, prop.x, prop.target, prop.old, touch, adj) ? GLOBAL_PASS :
-                                                                         GLOBAL_REFUSED
+@inline function _keeps_search(::GlobalExact, σ, ctx, prop, touch, adj, w, cap)
+    if _keeps_exact(
+        σ, ctx.lattice, ctx.flood, prop.x, prop.target, prop.old, touch, adj)
+        return GLOBAL_PASS
+    else
+        return GLOBAL_REFUSED
+    end
+end
 @inline _keeps_search(
     ::GlobalBoard, σ, ctx, prop, touch, adj, ::Val{nothing}, cap) = _keeps_search(
     GlobalExact(), σ, ctx, prop, touch, adj, Val(nothing), cap)

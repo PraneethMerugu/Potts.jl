@@ -447,6 +447,12 @@ struct MobileCounters{D, I}
     host::Vector{I}             # I: `site_index_type` of the lattice (D-253)
 end
 
+# a total that is `nothing` when either part is not counted
+_sum_or_nothing(a, b) = a + b
+_sum_or_nothing(::Nothing, b) = nothing
+_sum_or_nothing(a, ::Nothing) = nothing
+_sum_or_nothing(::Nothing, ::Nothing) = nothing
+
 # Ensemble statistics: totals over trajectories.
 function Base.merge(a::PottsStats, b::PottsStats)
     l = LifecycleStats(; (f => getfield(a.lifecycle, f) + getfield(b.lifecycle, f) for f in fieldnames(LifecycleStats))...)
@@ -460,9 +466,8 @@ function Base.merge(a::PottsStats, b::PottsStats)
         syncs = a.syncs + b.syncs, transfers = a.transfers + b.transfers,
         transfer_bytes = a.transfer_bytes + b.transfer_bytes, lifecycle = l, fields = fs,
         ode_code = b.ode_code != SciMLBase.ReturnCode.Default ? b.ode_code : a.ode_code,
-        accepted_energy_change = (a.accepted_energy_change === nothing || b.accepted_energy_change === nothing) ? nothing : a.accepted_energy_change + b.accepted_energy_change,
-        connectivity_deferred = (a.connectivity_deferred === nothing || b.connectivity_deferred === nothing) ? nothing :
-                                a.connectivity_deferred + b.connectivity_deferred)
+        accepted_energy_change = _sum_or_nothing(a.accepted_energy_change, b.accepted_energy_change),
+        connectivity_deferred = _sum_or_nothing(a.connectivity_deferred, b.connectivity_deferred))
 end
 
 _to_backend(backend, x) = Adapt.adapt(KernelAbstractions.allocate(backend, Int32, 0) |>
@@ -700,7 +705,13 @@ function _saved_leaves(prob, idxs)
         if i === :ownership
             ownership = true
         else
-            push!(i.scope === :cell ? cell : i.scope === :site ? site : model, i.name)
+            if i.scope === :cell
+                push!(cell, i.name)
+            elseif i.scope === :site
+                push!(site, i.name)
+            else
+                push!(model, i.name)
+            end
         end
     end
     return SavedLeaves(ownership, unique!(cell), unique!(site), unique!(model))
@@ -1005,8 +1016,9 @@ function _parameter_route(integ::PottsIntegrator, sym, write::Bool)
     write && (m = _readonly(integ, sym); m === nothing || throw(ArgumentError(m)))
     SII.is_parameter(integ, sym) || return nothing
     t = sym isa Symbol ? repr(sym) : string(sym)
-    throw(ArgumentError(string("`", lstrip(t, ':'), "` is a parameter: ", write ? "write `integ.ps[$t] = v`" :
-        "read `integ.ps[$t]`", " (SciML's convention: an integrator indexes states, `integ.ps` its parameters)")))
+    route = write ? "write `integ.ps[$t] = v`" : "read `integ.ps[$t]`"
+    throw(ArgumentError(string("`", lstrip(t, ':'), "` is a parameter: ", route,
+        " (SciML's convention: an integrator indexes states, `integ.ps` its parameters)")))
 end
 function Base.getindex(integ::PottsIntegrator, sym)
     _parameter_route(integ, sym, false)
@@ -1161,8 +1173,11 @@ function _run_entry!(integ::PottsIntegrator, ::SweepPhase, part::NTuple{2, Int} 
     if integ.alg isa SequentialCPM
         # the site-pick regime is fixed per sweep in the context's type (D-247): two static
         # calls, so the one-word sweep compiles exactly as before
-        _two_word_pick(integ.nmobile) ? _sequential_sweep!(integ, _with_two_word_pick(ctx), part) :
-        _sequential_sweep!(integ, ctx, part)
+        if _two_word_pick(integ.nmobile)
+            _sequential_sweep!(integ, _with_two_word_pick(ctx), part)
+        else
+            _sequential_sweep!(integ, ctx, part)
+        end
     else
         _stats(integ).launches += checkerboard_mcs!(integ.state, integ.cache, integ.kf,
             integ.p, ctx, integ.law, integ.key, integ.t, part)
@@ -1372,9 +1387,13 @@ end
 function _refresh_frozen!(integ, m::MaskMobility, ::Nothing)
     reads = _frozen_reads(integ.f.sys, integ.state)
     sync!(_stats(integ), integ.backend)
-    u = integ.backend isa CPU ? integ.state :
-        reads === nothing ? snapshot(_stats(integ), integ.backend, integ.state) :
+    u = if integ.backend isa CPU
+        integ.state
+    elseif reads === nothing
+        snapshot(_stats(integ), integ.backend, integ.state)
+    else
         host_leaves(_stats(integ), integ.state; ownership = :ownership in reads, cell = filter(n -> n !== :ownership, reads))
+    end
     fz = frozen_sites(integ.prob, u)
     _set_mobility!(_stats(integ), m, fz)
     integ.nmobile = count(!, fz)
@@ -1424,8 +1443,11 @@ function _finish!(integ::PottsIntegrator)
     report_run(integ.f.sys, integ)
     if integ.retcode == SciMLBase.ReturnCode.Default
         # a rounding floor of a field solve is kept as the final code (the run went on)
-        integ.retcode = _stats(integ).fields.code == SciMLBase.ReturnCode.StalledSuccess ? SciMLBase.ReturnCode.StalledSuccess :
-                        SciMLBase.ReturnCode.Success
+        integ.retcode = if _stats(integ).fields.code == SciMLBase.ReturnCode.StalledSuccess
+            SciMLBase.ReturnCode.StalledSuccess
+        else
+            SciMLBase.ReturnCode.Success
+        end
     end
     integ.opts.save_end && (isempty(integ.saved_t) || last(integ.saved_t) != integ.t) &&
         _save!(integ)
@@ -1567,7 +1589,13 @@ Base.show(io::IO, sol::PottsSolution) =
 
 # a lattice in a few words: `24×20 periodic lattice`, `16×16 closed hexagonal lattice`
 function _lattice_words(l::Lattice)
-    b = all(l.periodic) ? " periodic" : any(l.periodic) ? " partly periodic" : " closed"
+    b = if all(l.periodic)
+        " periodic"
+    elseif any(l.periodic)
+        " partly periodic"
+    else
+        " closed"
+    end
     g = l.geometry isa Square ? "" : string(" ", lowercase(string(nameof(typeof(l.geometry)))))
     return string(join(l.dims, "×"), b, g, " lattice")
 end
@@ -1999,12 +2027,17 @@ SymbolicIndexingInterface.symbolic_container(integ::PottsIntegrator) = _paramete
 SymbolicIndexingInterface.symbolic_container(prob::PottsProblem) = _parameter_container(prob.f.sys, prob)
 
 _has_field(s::ParameterFields, x) = s.p isa NamedTuple && x isa Symbol && haskey(s.p, x)
-_names_hint(s::ParameterFields) =
-    s.p isa NamedTuple ? "; the parameters of a problem without a model are the fields of its NamedTuple " *
-                         "parameter object: $(join(keys(s.p), ", "))" :
-    s.p === nothing ? "; a function without a model has no parameter names (use its problem or integrator)" :
-    "; a problem without a model has parameter names only if its parameter object is a NamedTuple " *
-    "(this one is a $(nameof(typeof(s.p))))"
+function _names_hint(s::ParameterFields)
+    if s.p isa NamedTuple
+        return "; the parameters of a problem without a model are the fields of its NamedTuple " *
+            "parameter object: $(join(keys(s.p), ", "))"
+    elseif s.p === nothing
+        return "; a function without a model has no parameter names (use its problem or integrator)"
+    else
+        return "; a problem without a model has parameter names only if its parameter object is a NamedTuple " *
+            "(this one is a $(nameof(typeof(s.p))))"
+    end
+end
 function _check_parameter_name(s::ParameterFields, x)
     SymbolicIndexingInterface.symbolic_type(x) isa SymbolicIndexingInterface.NotSymbolic && return nothing
     _has_field(s, x) || throw(ArgumentError("`$x` is not a parameter" * _names_hint(s)))

@@ -36,8 +36,17 @@
         σm = copy(σd); σm[3:8, 30:37] .= 3
         cm = merge(init_moments(σm, latd, 3), init_clusters(σm, [1, 1, 3], latd), (; tag = zeros(Float32, 3)))
         stm = with_capacity(initial_state(σm, Int32[1, 2, 2]; cell = cm), 8)
-        trm(st, p, ctx, key, mcs, c) = mcs != 0 ? EVENT_NONE : c == 1 ? EVENT_DIVIDE_CLUSTER :
-            c in (2, 3) ? EVENT_DIVIDE : EVENT_NONE
+        function trm(st, p, ctx, key, mcs, c)
+            if mcs != 0
+                return EVENT_NONE
+            elseif c == 1
+                return EVENT_DIVIDE_CLUSTER
+            elseif c in (2, 3)
+                return EVENT_DIVIDE
+            else
+                return EVENT_NONE
+            end
+        end
         alone!(st, p, ctx, key, mcs, parent, daughter) = (st.cell.tag[parent] = st.cell.tag[daughter] = 1.0f0; nothing)
         together!(st, p, ctx, key, mcs, parent, daughter) = (st.cell.tag[parent] = st.cell.tag[daughter] = 2.0f0; nothing)
         fm = CPMFunction(
@@ -394,10 +403,20 @@ end
         ref = merge(init_moments(u.ownership, lat, n), (; volume = u.cell.volume))
         @test all(c -> all(isapprox.(centroid(u.cell, lat, c), centroid(ref, lat, c); atol = 1.0e-6)), 1:n)
         # a `Global` veto: exact (the serial pass) and in a window of 2 (searched in the phase)
-        post_w(st, p, prop, ctx, stage) = CorePotts.global_gains(st.ownership, ctx, prop, Val(false)) ?
-            CorePotts.global_keeps(st.ownership, ctx, prop, Val(false), Val(2), Val(25), stage) : Int32(2)
-        post_x(st, p, prop, ctx, stage) = CorePotts.global_gains(st.ownership, ctx, prop, Val(false)) ?
-            CorePotts.global_keeps(st.ownership, ctx, prop, Val(false), Val(nothing), Val(0), stage) : Int32(2)
+        function post_w(st, p, prop, ctx, stage)
+            if CorePotts.global_gains(st.ownership, ctx, prop, Val(false))
+                return CorePotts.global_keeps(st.ownership, ctx, prop, Val(false), Val(2), Val(25), stage)
+            else
+                return Int32(2)
+            end
+        end
+        function post_x(st, p, prop, ctx, stage)
+            if CorePotts.global_gains(st.ownership, ctx, prop, Val(false))
+                return CorePotts.global_keeps(st.ownership, ctx, prop, Val(false), Val(nothing), Val(0), stage)
+            else
+                return Int32(2)
+            end
+        end
         pieces0 = first(CorePotts.recompute_pieces(σ, lat, Val(false), n))
         for hooks in (
                 CorePotts.ConnectivityHooks(; post = post_x, uses_global = true, exact_veto = true),

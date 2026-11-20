@@ -65,7 +65,13 @@ end
 
 const COREPOTTS_GROUPS_TABLE = _load_corepotts_groups()
 const COREPOTTS_SELECTED_GROUPS = let cli = filter(a -> normpath(abspath(a)) != normpath(abspath(@__FILE__)), ARGS)
-    raw = !isempty(cli) ? cli : (!isempty(strip(get(ENV, "GROUP", ""))) ? [strip(ENV["GROUP"])] : ["All"])
+    raw = if !isempty(cli)
+        cli
+    elseif !isempty(strip(get(ENV, "GROUP", "")))
+        [strip(ENV["GROUP"])]
+    else
+        ["All"]
+    end
     _resolve_corepotts_groups(COREPOTTS_GROUPS_TABLE, raw)
 end
 
@@ -92,11 +98,13 @@ function corepotts_tests(groups = COREPOTTS_SELECTED_GROUPS;
     picked(ti) = in_group(ti) && (isempty(want) || any(in(ti.tags), want)) && (qa || !(:qa in ti.tags) || "qa" in groups)
     kw = (; name, test_end_expr, testitem_timeout = 3600, retries = 0, nworker_threads = string(Threads.nthreads()),
         logs = :batched)
-    phases = (COREPOTTS_ON_DEVICE || "gpu" in groups) ?
+    phases = if COREPOTTS_ON_DEVICE || "gpu" in groups
         [(ti -> (isempty(want) || any(in(ti.tags), want)) && :device in ti.tags && !(:device_scan in ti.tags), 0),
-         (ti -> (isempty(want) || any(in(ti.tags), want)) && :device_scan in ti.tags, 0)] :
+            (ti -> (isempty(want) || any(in(ti.tags), want)) && :device_scan in ti.tags, 0)]
+    else
         [(ti -> picked(ti) && !(:gpu_only in ti.tags) && !(:timing in ti.tags), nworkers),
-         (ti -> picked(ti) && !(:gpu_only in ti.tags) && :timing in ti.tags, min(nworkers, 1))]
+            (ti -> picked(ti) && !(:gpu_only in ti.tags) && :timing in ti.tags, min(nworkers, 1))]
+    end
     failed = Any[]
     for (f, nw) in phases
         try

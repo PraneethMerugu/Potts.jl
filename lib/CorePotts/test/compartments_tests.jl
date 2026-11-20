@@ -159,8 +159,17 @@ end
                 lifecycle = Lifecycle(tr; normal = (st, p, ctx, key, mcs, c) -> (0.0, 1.0), divide! = alone!,
                     cluster_normal = AlongMinorAxis(), cluster_divide! = together!)), st, lat, (0, 1), gg_params()), alg)
         # root 1 divides its cluster (member 2's own EVENT_DIVIDE yields to it); 3 and 5 alone
-        tr(st, p, ctx, key, mcs, c) = mcs != 0 ? EVENT_NONE : c == 1 ? EVENT_DIVIDE_CLUSTER :
-                                      c in (2, 3, 5) ? EVENT_DIVIDE : EVENT_NONE
+        function tr(st, p, ctx, key, mcs, c)
+            if mcs != 0
+                return EVENT_NONE
+            elseif c == 1
+                return EVENT_DIVIDE_CLUSTER
+            elseif c in (2, 3, 5)
+                return EVENT_DIVIDE
+            else
+                return EVENT_NONE
+            end
+        end
         sol = run(tr)
         u = sol.u[end]
         @test sol.stats.lifecycle.divisions == 4
@@ -181,8 +190,19 @@ end
 
         # negative controls: a non-root's EVENT_DIVIDE_CLUSTER (5) is ignored; without its
         # root's cluster event, member 2 divides alone and its daughter stays in cluster 1
-        tr2(st, p, ctx, key, mcs, c) = mcs != 0 ? EVENT_NONE : c == 2 ? EVENT_DIVIDE :
-                                       c == 4 ? EVENT_NONE : c == 5 ? EVENT_DIVIDE_CLUSTER : EVENT_NONE
+        function tr2(st, p, ctx, key, mcs, c)
+            if mcs != 0
+                return EVENT_NONE
+            elseif c == 2
+                return EVENT_DIVIDE
+            elseif c == 4
+                return EVENT_NONE
+            elseif c == 5
+                return EVENT_DIVIDE_CLUSTER
+            else
+                return EVENT_NONE
+            end
+        end
         sol2 = run(tr2)
         u2 = sol2.u[end]
         @test sol2.stats.lifecycle.divisions == 1
@@ -199,7 +219,15 @@ end
         σ = zeros(Int32, 40, 40)
         σ[11:30, 11:24] .= 1; σ[13:18, 15:20] .= 2; σ[23:28, 15:20] .= 3
         σ[33:38, 30:37] .= 4
-        tr(st, p, ctx, key, mcs, c) = mcs != 0 ? EVENT_NONE : c == 1 ? EVENT_DIVIDE_CLUSTER : EVENT_DIVIDE
+        function tr(st, p, ctx, key, mcs, c)
+            if mcs != 0
+                return EVENT_NONE
+            elseif c == 1
+                return EVENT_DIVIDE_CLUSTER
+            else
+                return EVENT_DIVIDE
+            end
+        end
         run(capacity) = begin
             cell = merge(init_moments(σ, lat, 4), init_clusters(σ, Int32[1, 1, 1, 4], lat))
             st = with_capacity(initial_state(σ, Int32[1, 2, 2, 1]; cell), capacity)

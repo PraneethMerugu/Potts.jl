@@ -191,7 +191,17 @@ end
     σ = zeros(Int32, 40, 40); σ[11:30, 15:22] .= 1; σ[18:23, 17:20] .= 2
     cell = merge(init_moments(σ, lat, 2), init_clusters(σ, Int32[1, 1], lat))
     st = with_capacity(initial_state(σ, Int32[1, 2]; cell), 6)
-    tr(st, p, ctx, key, mcs, c) = mcs != 0 ? EVENT_NONE : c == 1 ? EVENT_DIVIDE_CLUSTER : c == 2 ? EVENT_TRANSITION : EVENT_NONE
+    function tr(st, p, ctx, key, mcs, c)
+        if mcs != 0
+            return EVENT_NONE
+        elseif c == 1
+            return EVENT_DIVIDE_CLUSTER
+        elseif c == 2
+            return EVENT_TRANSITION
+        else
+            return EVENT_NONE
+        end
+    end
     frozen(st, p, prop, ctx) = false
     f = CPMFunction(gg_delta_H; temperature = gg_temperature, constraint = frozen,
         lifecycle = Lifecycle(tr; kind = (st, p, ctx, key, mcs, c) -> Int32(1)))

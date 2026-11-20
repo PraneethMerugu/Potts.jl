@@ -124,9 +124,13 @@ end
 # `commit_moments!` from a copy function: on the lockless checkerboard (`ctx.lockless`) the sums
 # move by atomic adds and the anchors re-center once per MCS (`recenter_kernel!`), since a
 # re-centering rewrites a cell's sums and another copy of the cell may be in flight
-@inline commit_moments!(cell, ctx::NamedTuple, prop::Proposal) = _lockless(ctx) ?
-                                                                 _commit_moments_atomic!(cell, ctx.lattice, prop) :
-                                                                 commit_moments!(cell, ctx.lattice, prop)
+@inline function commit_moments!(cell, ctx::NamedTuple, prop::Proposal)
+    if _lockless(ctx)
+        return _commit_moments_atomic!(cell, ctx.lattice, prop)
+    else
+        return commit_moments!(cell, ctx.lattice, prop)
+    end
+end
 
 @inline function _commit_moments_atomic!(cell, l::Lattice{N}, prop::Proposal{N}) where {N}
     if prop.old != 0

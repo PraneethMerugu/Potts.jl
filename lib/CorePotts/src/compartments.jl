@@ -47,7 +47,13 @@ function _normalize_clusters!(cl, live; kind = nothing, prefer = (), keep = true
         r = if keep && k in ms
             k
         else
-            want = !keep ? prefer : (kind !== nothing && 1 <= k <= length(cl)) ? (kind[k],) : ()
+            want = if !keep
+                prefer
+            elseif kind !== nothing && 1 <= k <= length(cl)
+                (kind[k],)
+            else
+                ()
+            end
             i = kind === nothing ? nothing : findfirst(m -> kind[m] in want, ms)
             i === nothing ? minimum(ms) : ms[i]
         end

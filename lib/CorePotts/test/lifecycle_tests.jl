@@ -57,8 +57,15 @@ end
         lat = Lattice((30, 30))
         σ = zeros(Int32, 30, 30); σ[3:8, 3:8] .= 1; σ[15:24, 15:20] .= 2
         # remove cell 1 at MCS 0, divide cell 2 at MCS 1 → daughter reuses id 1, generation 2
-        ev(st, p, ctx, key, mcs, c) = (mcs == 0 && c == 1) ? EVENT_REMOVE :
-                                      (mcs == 1 && c == 2) ? EVENT_DIVIDE : EVENT_NONE
+        function ev(st, p, ctx, key, mcs, c)
+            if mcs == 0 && c == 1
+                return EVENT_REMOVE
+            elseif mcs == 1 && c == 2
+                return EVENT_DIVIDE
+            else
+                return EVENT_NONE
+            end
+        end
         halve!(st, p, ctx, key, mcs, parent, daughter) =
             (st.cell.target[parent] /= 2; st.cell.target[daughter] = st.cell.target[parent]; nothing)
         sol = run_lifecycle(σ, [1, 2], lat, Lifecycle(ev; divide! = halve!); capacity = 2,
@@ -115,10 +122,21 @@ end
     σ[20:35, 15:22] .= 3; σ[25:30, 17:20] .= 4
     cell = merge(init_moments(σ, lat, 4), init_clusters(σ, Int32[1, 2, 3, 3], lat))
     st = with_capacity(initial_state(σ, Int32[1, 1, 1, 1]; cell = merge(cell, (; x = zeros(4)))), 10)
-    tr(st, p, ctx, key, mcs, c) = mcs != 0 ? EVENT_NONE : c == 1 ? CorePotts.ruled_event(EVENT_DIVIDE, 2) :
-                                  c == 2 ? CorePotts.ruled_event(EVENT_DIVIDE, 1) :
-                                  c == 3 ? CorePotts.ruled_event(EVENT_DIVIDE_CLUSTER, 5) :
-                                  c == 4 ? CorePotts.ruled_event(EVENT_DIVIDE, 7) : EVENT_NONE     # ignored: its cluster divides
+    function tr(st, p, ctx, key, mcs, c)
+        if mcs != 0
+            return EVENT_NONE
+        elseif c == 1
+            return CorePotts.ruled_event(EVENT_DIVIDE, 2)
+        elseif c == 2
+            return CorePotts.ruled_event(EVENT_DIVIDE, 1)
+        elseif c == 3
+            return CorePotts.ruled_event(EVENT_DIVIDE_CLUSTER, 5)
+        elseif c == 4
+            return CorePotts.ruled_event(EVENT_DIVIDE, 7)
+        else
+            return EVENT_NONE
+        end
+    end     # ignored: its cluster divides
     seen = Dict{Int32, Int32}()
     rule!(st, p, ctx, key, mcs, parent, daughter, rule) = (seen[parent] = rule; st.cell.x[daughter] = rule; nothing)
     frozen(st, p, prop, ctx) = false

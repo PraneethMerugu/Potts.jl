@@ -26,8 +26,15 @@ function cc_commit!(st, p, prop, ctx)
     return nothing
 end
 # divisions of large cells every other MCS, and cell 1 changes kind at MCS 4
-cc_trigger(st, p, ctx, key, mcs, c) = mcs == 4 && c == 1 ? EVENT_TRANSITION :
-                                      (iseven(mcs) && st.cell.volume[c] >= 28) ? EVENT_DIVIDE : EVENT_NONE
+function cc_trigger(st, p, ctx, key, mcs, c)
+    if mcs == 4 && c == 1
+        return EVENT_TRANSITION
+    elseif iseven(mcs) && st.cell.volume[c] >= 28
+        return EVENT_DIVIDE
+    else
+        return EVENT_NONE
+    end
+end
 cc_kind(st, p, ctx, key, mcs, c) = Int32(3 - st.cell.kind[c])
 
 function cc_problem(; lifecycle = true)

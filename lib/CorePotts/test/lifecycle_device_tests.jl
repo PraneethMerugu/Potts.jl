@@ -270,8 +270,17 @@ end
                 # {2, 3} with root 2 (a small and a large member) as a unit
                 σs = zeros(Int32, 30, 30); σs[3:10, 3:8] .= 1
                 σs[15:16, 15:16] .= 2; σs[20:27, 15:20] .= 3
-                trs(st, p, ctx, key, mcs, c) = mcs != 1 ? EVENT_NONE : c == 1 ? EVENT_DIVIDE :
-                    c == 2 ? EVENT_DIVIDE_CLUSTER : EVENT_NONE
+                function trs(st, p, ctx, key, mcs, c)
+                    if mcs != 1
+                        return EVENT_NONE
+                    elseif c == 1
+                        return EVENT_DIVIDE
+                    elseif c == 2
+                        return EVENT_DIVIDE_CLUSTER
+                    else
+                        return EVENT_NONE
+                    end
+                end
                 latS = Lattice((30, 30))
                 cells = merge(init_moments(σs, latS, 3), init_clusters(σs, Int32[1, 2, 2], latS))
                 sts = with_capacity(initial_state(σs, Int32[1, 1, 1]; cell = cells), 8)
@@ -341,8 +350,11 @@ end
                 ref = solve(make(false, every), alg; saveat = 1)
                 CorePotts._FORCE_DEVICE_LIFECYCLE[] = device
                 CorePotts._LAUNCH_FAULT[] = fault
-                sol = fault == 0 ? solve(make(true, every), alg; saveat = 1) :
+                sol = if fault == 0
+                    solve(make(true, every), alg; saveat = 1)
+                else
                     @test_logs (:warn, r"cannot launch") solve(make(true, every), alg; saveat = 1)
+                end
                 CorePotts._LAUNCH_FAULT[] = 0
                 @test sol.stats.lifecycle.divisions == ref.stats.lifecycle.divisions >= 3
                 @test all(i -> sol.u[i].ownership == ref.u[i].ownership && sol.u[i].cell == ref.u[i].cell, eachindex(ref.u))

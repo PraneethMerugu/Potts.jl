@@ -37,8 +37,11 @@ function fk_problem(trigger = nothing; kind = nothing, sys = FrozenKind(2), T = 
     lat = Lattice((30, 30))
     σ = zeros(Int32, 30, 30); σ[5:10, 5:10] .= 1; σ[18:23, 18:23] .= 2
     st = lc_state(σ, Int32[1, 2], lat)
-    lc = trigger === nothing ? nothing :
-         Lifecycle(trigger; normal = AlongMinorAxis{T}(), (kind === nothing ? (;) : (; kind))...)
+    lc = if trigger === nothing
+        nothing
+    else
+        Lifecycle(trigger; normal = AlongMinorAxis{T}(), (kind === nothing ? (;) : (; kind))...)
+    end
     f = CPMFunction(gg_delta_H; temperature = gg_temperature, lifecycle = lc, sys)
     return PottsProblem(f, st, lat, tspan, gg_params(T); seed, frozen = fk_mask(st, 2))
 end

@@ -305,8 +305,11 @@ function run_phase(ph::HostPhase{F}, st, p, ctx, key, mcs, backend, stats) where
         end
     else
         foreach(ph.writes) do name
-            name === :ownership ? _write_back!(stats, st.ownership, host.ownership) :
-            _write_back!(stats, getfield(st.cell, name), getfield(host.cell, name))
+            if name === :ownership
+                _write_back!(stats, st.ownership, host.ownership)
+            else
+                _write_back!(stats, getfield(st.cell, name), getfield(host.cell, name))
+            end
         end
     end
     return 0
