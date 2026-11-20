@@ -5,8 +5,6 @@
 # names are bound in the current mode and to what code; everything else follows the role
 # recorded in each symbol's metadata.
 
-using SymbolicUtils: iscall, operation, arguments, issym
-
 const CP = CorePotts
 
 const _FLOAT_OPS = (sqrt, cbrt, exp, exp2, exp10, expm1, log, log2, log10, log1p, sin, cos, tan,

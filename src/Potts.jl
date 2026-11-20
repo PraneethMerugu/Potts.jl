@@ -34,7 +34,7 @@ using SciMLStructures: SciMLStructures
 using SimpleNonlinearSolve: SimpleNonlinearSolve, SimpleNewtonRaphson
 using StableRNGs: StableRNG
 using StaticArrays: StaticArrays, SMatrix, SVector
-using SymbolicUtils: SymbolicUtils
+using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, issym
 using Symbolics: Symbolics, Num
 using SymbolicIndexingInterface: SymbolicIndexingInterface
 # Last, on purpose (D-138): GeometryBasics' `OffsetInteger` `convert` methods invalidate the
