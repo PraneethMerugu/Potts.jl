@@ -795,16 +795,24 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
     const _QA_LINE_EXCLUDE = (
         "lib/PottsModels/reproductions/data/", "docs/design/", "docs/references/",
     )
-    # Long lines that cannot be wrapped, by kind: a URL, a Markdown table row, raw HTML or a
-    # Markdown heading in a Literate comment, and a regex or raw string literal (these take
-    # no `\` line continuation).
+    # Long lines that cannot be wrapped, by kind: a Markdown table row in a comment or
+    # docstring (the line starts with `|`), and a URL, raw HTML or a Markdown heading in a
+    # comment. Code that builds a table row is not exempt: its string splits with `*`.
     const _QA_LINE_KINDS = (
-        r"https?://",
-        r"^\s*(?:#\s*)?\"?\|.*\||\\n\|.*\||\"\s*\|.*\|",
+        r"^\s*(?:#\s*)?\|(?!\|)",
+        r"^\s*#.*https?://",
         r"^\s*#\s*</?[a-zA-Z]",
         r"^\s*#\s+#{1,6} ",
-        r"\b(?:r|raw)\"",
     )
+    # A URL, regex or raw string literal takes no `\` line continuation: a code line is
+    # exempt when such a literal is what makes it long, that is, the rest of the line fits
+    # in half the limit.
+    const _QA_LINE_LITERAL = r"https?://\S+|\b(?:r|raw)\"(?:[^\"\\]|\\.)*\""
+    function _qa_line_exempt(ln, limit)
+        any(r -> occursin(r, ln), _QA_LINE_KINDS) && return true
+        occursin(_QA_LINE_LITERAL, ln) || return false
+        return textwidth(replace(ln, _QA_LINE_LITERAL => "")) <= limit ÷ 2
+    end
 
     """
         qa_line_allowlist(path) -> Vector{Tuple{String, String}}
@@ -835,10 +843,11 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
     file when git or the repository is absent) that are wider than `limit` columns
     (`textwidth`), as `"file:line: width"`. Skipped: `docs/design/`, `docs/references/` and
     the committed records under `lib/PottsModels/reproductions/data/`. Exempt: a line that
-    cannot be wrapped (a URL, a Markdown table row, raw HTML or a heading in a Literate
-    comment, a regex or raw string literal, a line inside a raw triple-quoted string) and a
-    line that an `allow` entry matches. Each entry that matches no long line is returned
-    too, as `"allowlist: file: text"`. Empty when clean.
+    cannot be wrapped (a Markdown table row in a comment or docstring; a URL, raw HTML or a
+    heading in a comment; a line made long by a URL, regex or raw string literal; a line
+    inside a raw triple-quoted string) and a line that an `allow` entry matches. Each entry
+    that matches no long line is returned too, as `"allowlist: file: text"`. Empty when
+    clean.
     """
     function qa_long_lines(
             root::AbstractString; limit::Integer = _QA_LINE_LIMIT,
@@ -860,7 +869,7 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
                     inraw = true
                 end
                 (textwidth(ln) <= limit || wasraw) && continue
-                any(r -> occursin(r, ln), _QA_LINE_KINDS) && continue
+                _qa_line_exempt(ln, limit) && continue
                 k = findfirst(((q, t),) -> q == p && (t == "*" || occursin(t, ln)), allow)
                 if k === nothing
                     push!(bad, "$p:$i: $(textwidth(ln))")

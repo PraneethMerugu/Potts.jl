@@ -697,6 +697,22 @@ end
             )
             mkpath(joinpath(tmp, "docs", "design"))
             write(joinpath(tmp, "docs", "design", "notes.jl"), long * "\n")
+            # by kind: a table row in a comment and a line made long by its regex pass;
+            # code that builds a table row and long code holding a short regex fail
+            cells = repeat("| \$a ", 30) * "|"
+            build = "push!(rows, \"" * cells * "\")"
+            regex = "m = match(r\"" * repeat("[0-9]", 30) * "\", s)"
+            code = long * " + f(r\"a\")"
+            write(
+                joinpath(tmp, "src", "kinds.jl"),
+                join(["# " * cells, build, regex, code], "\n") * "\n"
+            )
+            @test qa_long_lines(tmp) == [
+                "src/kinds.jl:2: $(textwidth(build))",
+                "src/kinds.jl:4: $(textwidth(code))",
+                "src/planted.jl:2: $(textwidth(long))",
+            ]
+            rm(joinpath(tmp, "src", "kinds.jl"))
             @test qa_long_lines(tmp) == ["src/planted.jl:2: $(textwidth(long))"]
             @test isempty(qa_long_lines(tmp; limit = textwidth(long)))
             allow = joinpath(tmp, "allow.txt")
