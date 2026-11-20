@@ -40,8 +40,10 @@ determines (`steady_rows`), and the spec's `steady` lists those fields: their gr
 take `QuasiSteady` only. `steady` names more such fields (a front end that writes its steady
 rows as rates itself). A system with no time is a steady system (`spec.timefree`).
 """
-function lower_group(sys::PDESystem, disc::LatticeDiscretization; fields = nothing, values::Bool = true, bound::Bool = true,
-    filled = (), steady = String[])
+function lower_group(
+        sys::PDESystem, disc::LatticeDiscretization; fields = nothing, values::Bool = true, bound::Bool = true,
+        filled = (), steady = String[]
+    )
     return _lower_group(sys, disc; fields, values, bound, filled, steady).spec
 end
 
@@ -57,8 +59,12 @@ struct DeferredBound
     sys::Any
 end
 function (::DeferredBound)(p)
-    throw(ArgumentError("the group's stability bound is not built yet (`lower_group(…; bound = false)`); " *
-        "build it with `LatticePDE.resolve_bound(spec)`"))
+    throw(
+        ArgumentError(
+            "the group's stability bound is not built yet (`lower_group(…; bound = false)`); " *
+                "build it with `LatticePDE.resolve_bound(spec)`"
+        )
+    )
 end
 
 """
@@ -71,16 +77,20 @@ function resolve_bound(spec::Problems.GroupSpec)
     d = spec.stability
     d isa DeferredBound || return spec
     stab = stability_bound(d.cf, d.sys)
-    return Problems.GroupSpec(spec.rate; spec.state, spec.external, spec.params, spec.tables, spec.inputs, spec.init,
+    return Problems.GroupSpec(
+        spec.rate; spec.state, spec.external, spec.params, spec.tables, spec.inputs, spec.init,
         spec.kind, spec.clock, stability = stab, route = spec.texts.route, terms = copy(stab.terms), spec.linearity,
-        spec.operator, spec.steady, spec.timefree)
+        spec.operator, spec.steady, spec.timefree
+    )
 end
 
 # `values = false`: the front end binds the parameter and table values itself (Potts: its
 # parameter object, with its own computed parameters), so the system's computed defaults are
 # not read (`_fold_computed`) and its tables not checked (`_check_tables`)
-function _lower_group(sys::PDESystem, disc::LatticeDiscretization; fields = nothing, values::Bool = true, bound::Bool = true,
-        filled = (), steady = String[], timefree::Bool = false)
+function _lower_group(
+        sys::PDESystem, disc::LatticeDiscretization; fields = nothing, values::Bool = true, bound::Bool = true,
+        filled = (), steady = String[], timefree::Bool = false
+    )
     _check_parts(sys)
     sys, rows, tf = steady_form(sys, length(disc.grid.dims))
     steady, timefree = unique!(String[collect(String, steady); rows]), timefree || tf
@@ -103,13 +113,15 @@ function _lower_group(sys::PDESystem, disc::LatticeDiscretization; fields = noth
     else
         DeferredBound(cf, sys)
     end
-    spec = Problems.GroupSpec(s; state = _states(s), external, kind = hasmap ? :map : :rate, clock = disc.clock,
+    spec = Problems.GroupSpec(
+        s; state = _states(s), external, kind = hasmap ? :map : :rate, clock = disc.clock,
         init = [k.key for k in s.kernels if any(q -> startswith(k.key, q), ("mask:", "domain:"))], stability = stab,
         params = _param_slots(cf, defaults, values), tables = _table_specs(cf, values),
         inputs = _input_specs(cf, sys, s, filled),
         terms = stab isa StabilityBound ? copy(stab.terms) : String[], linearity = cf.linearity,
         operator = hasmap ? nothing : DeferredOperator(cf, sys, disc),
-        steady = String[k for k in _states(s) if k in steady], timefree)
+        steady = String[k for k in _states(s) if k in steady], timefree
+    )
     return (; spec, cf, sys, derived, computed, defaults)
 end
 
@@ -144,7 +156,8 @@ function _group_cut(sys::PDESystem, fields)
     ic2 = Dict(k => v for (k, v) in ics if !any(o -> isequal(o, _opof(k)), cut))
     out = PDESystem(
         eqs, filter(bcmine, get_bcs(sys)), get_domain(sys), get_ivs(sys), dvs, _params(sys);
-        name = nameof(sys), initial_conditions = ic2)
+        name = nameof(sys), initial_conditions = ic2
+    )
     return out, external
 end
 
@@ -196,8 +209,12 @@ function _input_specs(cf::CompiledField, sys::PDESystem, s, filled)
             n = get_lattice_input_name(v)
             n === nothing || (name = i == 0 ? n : "$n[$i]")
         end
-        push!(out, Problems.InputSpec(f.key; name, eltype = E, bounds = b, default = get(defaults, f.key, nothing),
-            filled = f.key in fills))
+        push!(
+            out, Problems.InputSpec(
+                f.key; name, eltype = E, bounds = b, default = get(defaults, f.key, nothing),
+                filled = f.key in fills
+            )
+        )
     end
     return out
 end

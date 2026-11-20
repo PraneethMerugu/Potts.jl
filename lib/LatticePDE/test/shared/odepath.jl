@@ -17,9 +17,10 @@ odisc(; kw...) = LatticeDiscretization(Grid((8, 8)); T = Float64, kw...)
 function omsys()
     return PDESystem(
         [D(ode_c) ~ oD * laplacian(ode_c) - ode_c], [oc(0, x, y) ~ x, ode_c ~ masked(ode_k == 1, 2.0)], odom(0.2),
-        [t, x, y], [ode_c, ode_k], [oD]; name = :om)
+        [t, x, y], [ode_c, ode_k], [oD]; name = :om
+    )
 end
-const OTOL = (; abstol = 1e-11, reltol = 1e-11)
+const OTOL = (; abstol = 1.0e-11, reltol = 1.0e-11)
 
 # Negative controls at 0a182a0e, in each testset.
 @parameters qD = 0.5
@@ -30,8 +31,10 @@ function qsys(val)
     return PDESystem(
         [D(qce) ~ qD * laplacian(qce)], [
             qc(0, x, y) ~ 1.0, Differential(x)(qc(t, 1, y)) ~ 0.0,
-            Differential(y)(qc(t, x, 0)) ~ 0.0, Differential(y)(qc(t, x, 1)) ~ 0.0, qce ~ masked(qke == 1, val)],
-        [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [qce, qke], [qD]; name = :q)
+            Differential(y)(qc(t, x, 0)) ~ 0.0, Differential(y)(qc(t, x, 1)) ~ 0.0, qce ~ masked(qke == 1, val),
+        ],
+        [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [qce, qke], [qD]; name = :q
+    )
 end
 
 # Re-review (2026-11-06): a discrete event (a new step index, a write of a parameter or an input
@@ -45,11 +48,12 @@ const RRM = vec(RRK .== 1)
 function rrsys(val)
     return PDESystem(
         [D(rrce) ~ 0.2 * laplacian(rrce) - 0.5 * rrce], [rrc(0, x, y) ~ x, rrce ~ masked(rrke == 1, val)],
-        odom(1.0), [t, x, y], [rrce, rrke, rrqe], [rra]; name = :rr)
+        odom(1.0), [t, x, y], [rrce, rrke, rrqe], [rra]; name = :rr
+    )
 end
 # the masked values after a write `k => v` on a Tsit5 integrator at t = 0.5, at t = 1
 function rrwrite(val, k, v)
-    i = init(discretize(rrsys(val), odisc(); inputs = [rrke => RRK, rrqe => zeros(8, 8)]), Tsit5(); abstol = 1e-9, reltol = 1e-9)
+    i = init(discretize(rrsys(val), odisc(); inputs = [rrke => RRK, rrqe => zeros(8, 8)]), Tsit5(); abstol = 1.0e-9, reltol = 1.0e-9)
     SciMLBase.step!(i, 0.5, true)
     i.ps[k] = v
     SciMLBase.step!(i, 0.5, true)

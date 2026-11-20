@@ -29,8 +29,12 @@ function derivation(base::AbstractVector, computed::AbstractVector)
     order, done = Symbol[], Set{Symbol}()
     while length(order) < length(names)
         k = findfirst(n -> !(n in done) && issubset(deps[n], done), names)
-        k === nothing && throw(ArgumentError("the computed parameters " *
-            join(("`$n = $(defs[n])`" for n in names if !(n in done)), ", ") * " read one another in a cycle"))
+        k === nothing && throw(
+            ArgumentError(
+                "the computed parameters " *
+                    join(("`$n = $(defs[n])`" for n in names if !(n in done)), ", ") * " read one another in a cycle"
+            )
+        )
         push!(order, names[k])
         push!(done, names[k])
     end
@@ -39,12 +43,16 @@ function derivation(base::AbstractVector, computed::AbstractVector)
     for n in order
         e = defs[n]
         ex = e isa AbstractArray ? _array_expr(n, e) : _derive_expr(n, e)
-        push!(body, :($n = try
-            $ex
-        catch $er
+        push!(
+            body, :(
+                $n = try
+                    $ex
+                catch $er
                     $(isfatal)($er) && rethrow()
-            $(Problems.derive_fail)($(QuoteNode(n)), $(as_written(_deftext(e))), $er)
-        end))
+                    $(Problems.derive_fail)($(QuoteNode(n)), $(as_written(_deftext(e))), $er)
+                end
+            )
+        )
     end
     fn = Expr(:->, vs, Expr(:block, body..., Expr(:tuple, names...)))
     return Problems.Derivation(Problems.rgf(fn), Symbol[Symbol(b) for b in base], names)

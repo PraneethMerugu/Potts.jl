@@ -12,10 +12,10 @@ function sown(sys; n = 4, inputs = (), kw...)
 end
 function emsg(f)
     return try
-            f(); ""
-        catch e
-            sprint(showerror, e)
-        end
+        f(); ""
+    catch e
+        sprint(showerror, e)
+    end
 end
 
 @variables mm(..) dm(..)::Bool [input = true] kq(..)::Int32 [input = true] Lc(..)
@@ -48,4 +48,4 @@ checker(n, a, b) = [Int32(isodd(i + j) ? a : b) for i in 1:n, j in 1:n]
 sok(sol) = SciMLBase.successful_retcode(sol) && all(isfinite, sol[:c, end])
 # a run that grew without bound: not finite, or a million times its start (the owned path's
 # `Unstable` fires on Inf/NaN only: a run at dt ρ / n = 2.1 reaches 2e130 and reports Success)
-sgrew(sol) = (u = sol[:c, end]; !all(isfinite, u) || maximum(abs, u) > 1e6 * maximum(abs, sol[:c, 1]))
+sgrew(sol) = (u = sol[:c, end]; !all(isfinite, u) || maximum(abs, u) > 1.0e6 * maximum(abs, sol[:c, 1]))

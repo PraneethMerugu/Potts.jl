@@ -57,7 +57,7 @@ function timeit(f; steps = 20, reps = 5)
         devsync()
         best = min(best, (time_ns() - t0) / steps)
     end
-    return best * 1e-9
+    return best * 1.0e-9
 end
 
 # ---- reference kernels -------------------------------------------------------------------
@@ -87,21 +87,25 @@ end
     x, y, z = i0 + 1i32, j0 + 1i32, k0 + 1i32
     pl = nx * ny
     @inbounds c = u[i]
-    @inbounds out[i] = c + k * (u[ifelse(x == 1i32, i + nx - 1i32, i - 1i32)] + u[ifelse(x == nx, i - nx + 1i32, i + 1i32)] +
-                        u[ifelse(y == 1i32, i + nx * (ny - 1i32), i - nx)] + u[ifelse(y == ny, i - nx * (ny - 1i32), i + nx)] +
-                        u[ifelse(z == 1i32, i + pl * (nz - 1i32), i - pl)] + u[ifelse(z == nz, i - pl * (nz - 1i32), i + pl)] - 6c)
+    @inbounds out[i] = c + k * (
+        u[ifelse(x == 1i32, i + nx - 1i32, i - 1i32)] + u[ifelse(x == nx, i - nx + 1i32, i + 1i32)] +
+            u[ifelse(y == 1i32, i + nx * (ny - 1i32), i - nx)] + u[ifelse(y == ny, i - nx * (ny - 1i32), i + nx)] +
+            u[ifelse(z == 1i32, i + pl * (nz - 1i32), i - pl)] + u[ifelse(z == nz, i - pl * (nz - 1i32), i + pl)] - 6c
+    )
 end
 const i32 = Int32(1)
 
 function copy_gbs(n)
     a, b = dev(rand(Float32, n)), dev(zeros(Float32, n))
     t = timeit(() -> copy_k!(DEV, 256)(b, a; ndrange = n))
-    return 8n / t / 1e9
+    return 8n / t / 1.0e9
 end
 
 # ---- generated programs ------------------------------------------------------------------
-const OFF = Dict(2 => ((1, 0), (-1, 0), (0, 1), (0, -1)),
-    3 => ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)))
+const OFF = Dict(
+    2 => ((1, 0), (-1, 0), (0, 1), (0, -1)),
+    3 => ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1))
+)
 
 """K coupled species (Δ, decay, T random bilinear terms)."""
 function species(dims::NTuple{N}, K, T; kernels = :one, seed = 1, shift = 0.0) where {N}
@@ -147,7 +151,7 @@ function bound(p, K; fuse = true)
     return (() -> bs((0.0f0, 0.1f0))), sp
 end
 
-row(tag, t, bytes, ref) = @printf("%-52s %10.2f µs %7.1f GB/s  %s\n", tag, t * 1e6, bytes / t / 1e9, ref)
+row(tag, t, bytes, ref) = @printf("%-52s %10.2f µs %7.1f GB/s  %s\n", tag, t * 1.0e6, bytes / t / 1.0e9, ref)
 
 # ---- bandwidth ---------------------------------------------------------------------------
 function bandwidth_gate()
@@ -162,11 +166,13 @@ function bandwidth_gate()
             timeit(() -> hand3_k!(DEV, 256)(o, u, 0.01f0, Int32.(dims)...; ndrange = n))
         end
         cg = copy_gbs(n)
-        gg, gh = bytes / tg / 1e9, bytes / th / 1e9
+        gg, gh = bytes / tg / 1.0e9, bytes / th / 1.0e9
         @printf(
             "bandwidth %dD %s: generated %.1f GB/s, hand %.1f GB/s, copy %.1f GB/s; generated/hand = %.3f (gate ≥ 0.90), generated/copy = %.3f (floor %s)\n",
-            N, join(dims, "×"), gg, gh, cg, gg / gh, gg / cg, N == 2 ? "0.75" : "0.70")
+            N, join(dims, "×"), gg, gh, cg, gg / gh, gg / cg, N == 2 ? "0.75" : "0.70"
+        )
     end
+    return
 end
 
 # ---- fusion ------------------------------------------------------------------------------
@@ -178,7 +184,8 @@ function fusion_gate()
     a, b = timeit(tf), timeit(ts)
     return @printf(
         "fusion two species %s: fused %d launch(es) %.1f µs, separate %d launches %.1f µs; separate/fused = %.3f (gate ≥ 1.4)\n",
-        join(dims, "×"), length(spf.launches), a * 1e6, length(sps.launches), b * 1e6, b / a)
+        join(dims, "×"), length(spf.launches), a * 1.0e6, length(sps.launches), b * 1.0e6, b / a
+    )
 end
 
 # ---- species -----------------------------------------------------------------------------
@@ -187,16 +194,20 @@ function fbody(D, K, T; seed = 1)
     rng = Xoshiro(seed)
     st = Any[]
     if D == 2
-        push!(st, :((j0, i0) = divrem(i - 1, nx)), :(x = i0 + 1), :(y = j0 + 1),
+        push!(
+            st, :((j0, i0) = divrem(i - 1, nx)), :(x = i0 + 1), :(y = j0 + 1),
             :(n1 = ifelse(x == 1, i + nx - 1, i - 1)), :(n2 = ifelse(x == nx, i - nx + 1, i + 1)),
-            :(n3 = ifelse(y == 1, i + nx * (ny - 1), i - nx)), :(n4 = ifelse(y == ny, i - nx * (ny - 1), i + nx)))
+            :(n3 = ifelse(y == 1, i + nx * (ny - 1), i - nx)), :(n4 = ifelse(y == ny, i - nx * (ny - 1), i + nx))
+        )
         nn = 4
     else
-        push!(st, :((r0, i0) = divrem(i - 1, nx)), :((k0, j0) = divrem(r0, ny)),
+        push!(
+            st, :((r0, i0) = divrem(i - 1, nx)), :((k0, j0) = divrem(r0, ny)),
             :(x = i0 + 1), :(y = j0 + 1), :(z = k0 + 1), :(pl = nx * ny),
             :(n1 = ifelse(x == 1, i + nx - 1, i - 1)), :(n2 = ifelse(x == nx, i - nx + 1, i + 1)),
             :(n3 = ifelse(y == 1, i + nx * (ny - 1), i - nx)), :(n4 = ifelse(y == ny, i - nx * (ny - 1), i + nx)),
-            :(n5 = ifelse(z == 1, i + pl * (nz - 1), i - pl)), :(n6 = ifelse(z == nz, i - pl * (nz - 1), i + pl)))
+            :(n5 = ifelse(z == 1, i + pl * (nz - 1), i - pl)), :(n6 = ifelse(z == nz, i - pl * (nz - 1), i + pl))
+        )
         nn = 6
     end
     cs = [Symbol(:c, k) for k in 1:K]
@@ -211,12 +222,14 @@ function fbody(D, K, T; seed = 1)
         end
         push!(st, :(OUT[$k][i] = $(cs[k]) + h * ($rate)))
     end
-    ex = :((i, OUT, IN, p, h, nx, ny, nz, N) -> begin
-        @inbounds begin
-            $(st...)
+    ex = :(
+        (i, OUT, IN, p, h, nx, ny, nz, N) -> begin
+            @inbounds begin
+                $(st...)
+            end
+            nothing
         end
-        nothing
-    end)
+    )
     return RuntimeGeneratedFunctions.drop_expr(@RuntimeGeneratedFunction(ex)), pk
 end
 
@@ -232,7 +245,8 @@ function species_gate()
         tr = timeit(() -> Exec.launch!(DEV, f, n, (OUT, IN, p, 0.1f0, d3..., n)))
         @printf(
             "species %dD %s K=%d (%d streams): generated %.1f µs, generator %.1f µs; generated/generator = %.3f (gate ≥ 0.95)\n",
-            D, join(dims, "×"), K, 2K, tg * 1e6, tr * 1e6, tr / tg)
+            D, join(dims, "×"), K, 2K, tg * 1.0e6, tr * 1.0e6, tr / tg
+        )
     end
     for m in (SMOKE ? (16, 32) : (42, 128, 256))
         dims = (m, m, m)
@@ -243,8 +257,10 @@ function species_gate()
         measured = a < b ? "fused" : "split"
         @printf(
             "species choice %d³ K=4: planner %s (%d launches); measured fused %.1f µs, split %.1f µs → %s; %s\n",
-            m, planner, length(spf.launches), a * 1e6, b * 1e6, measured, planner == measured ? "MATCH" : "MISMATCH")
+            m, planner, length(spf.launches), a * 1.0e6, b * 1.0e6, measured, planner == measured ? "MATCH" : "MISMATCH"
+        )
     end
+    return
 end
 
 # ---- compile -----------------------------------------------------------------------------
@@ -264,20 +280,23 @@ function compile_gate()
     @printf(
         "compile (same arity): first body %.2f s (gate ≤ 1.8), further mean %.3f s, median %.3f s over %d (gate ≤ 0.4): %s\n",
         same[1], sum(further) / length(further), further[cld(length(further), 2)], length(further),
-        join(map(t -> @sprintf("%.3f", t), same), " "))
+        join(map(t -> @sprintf("%.3f", t), same), " ")
+    )
     # a new arity (K = 1, 3, 4, 5: new argument types) also specializes the host-side launch
     # and wrapper code; reported apart, not a compile row
     arity = [compile_one(K, 0.7) for K in (1, 3, 4, 5)]
     @printf(
         "compile info, new arity per body (K = 1, 3, 4, 5): mean %.3f s: %s\n",
-        sum(arity) / length(arity), join(map(t -> @sprintf("%.3f", t), arity), " "))
+        sum(arity) / length(arity), join(map(t -> @sprintf("%.3f", t), arity), " ")
+    )
     # a parameter change does not recompile: remake + init + steps add no kernel instance
-    @parameters t x y Dc = 1e-3 k = 0.1
+    @parameters t x y Dc = 1.0e-3 k = 0.1
     @variables c(..)
     rd = PDESystem(
         Differential(t)(c(t, x, y)) ~ Dc * laplacian(c(t, x, y)) - k * c(t, x, y),
         [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1.0, c(t, x, 0) ~ c(t, x, 1)],
-        [t ∈ Interval(0, 1), x ∈ Interval(0, 1), y ∈ Interval(0, 1)], [t, x, y], [c(t, x, y)], [Dc, k]; name = :rd)
+        [t ∈ Interval(0, 1), x ∈ Interval(0, 1), y ∈ Interval(0, 1)], [t, x, y], [c(t, x, y)], [Dc, k]; name = :rd
+    )
     prob = discretize(rd, LatticeDiscretization(Grid((64, 64)); T = Float32, backend = DEV))
     solve(prob, ExplicitEuler(); dt = 0.1f0)   # the bound is known (Dc, k)
     devsync()
@@ -289,25 +308,28 @@ end
 
 # ---- build -------------------------------------------------------------------------------
 function build_gate()
-    @parameters t x y Dc = 1e-3 k = 0.1
+    @parameters t x y Dc = 1.0e-3 k = 0.1
     @variables c(..)
     rd = PDESystem(
         Differential(t)(c(t, x, y)) ~ Dc * laplacian(c(t, x, y)) - k * c(t, x, y),
         [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1.0, Differential(x)(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)],
-        [t ∈ Interval(0, 10), x ∈ Interval(0, 1), y ∈ Interval(0, 1)], [t, x, y], [c(t, x, y)], [Dc, k]; name = :rd)
+        [t ∈ Interval(0, 10), x ∈ Interval(0, 1), y ∈ Interval(0, 1)], [t, x, y], [c(t, x, y)], [Dc, k]; name = :rd
+    )
     # the build: lowering, semantic passes, plan, binding and compile (site counts are runtime
     # values, so none of it should scale with the grid); the state (allocation, initial
     # values, upload) is O(sites) by nature and reported apart
     stores = Dict{Int, Any}()
     function build(n)
-        cf = symbolic_discretize(rd, LatticeDiscretization(Grid((n, n)); T = Float32);
-            update = LatticePDE.euler_update)
+        cf = symbolic_discretize(
+            rd, LatticeDiscretization(Grid((n, n)); T = Float32);
+            update = LatticePDE.euler_update
+        )
         s = semantic(cf.program)
         sp = plan(s; options = opts())
         st = get!(() -> Problems.FieldStore(DEV, s; flat = ["c"]), stores, n)   # arrays: allocated once
         bs = Problems.BoundStep(DEV, s, sp, st, cf.defaults)
         Problems.compile!(DEV, bs)
-        devsync()
+        return devsync()
     end
     function state(n)
         prob = discretize(rd, LatticeDiscretization(Grid((n, n)); T = Float32, backend = DEV))
@@ -320,7 +342,8 @@ function build_gate()
     s64, sbig = (minimum(@elapsed(state(n)) for _ in 1:3) for n in (64, big))
     @printf(
         "build (lower, passes, plan, bind, compile; arrays preallocated): 64² %.4f s, %d² %.4f s; ratio %.2f (gate < 1.5)\n",
-        t64, big, tbig, tbig / t64)
+        t64, big, tbig, tbig / t64
+    )
     return @printf("build info: discretize + init incl. the state (O(sites)): 64² %.4f s, %d² %.4f s\n", s64, big, sbig)
 end
 

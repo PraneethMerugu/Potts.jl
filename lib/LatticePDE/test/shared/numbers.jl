@@ -9,9 +9,10 @@ function nsys(; T = 0.1)
     return psys(
         [D(ce) ~ Dn * laplacian(ce) - kn * ce],
         [c(0, x, y) ~ 0.0, c(t, 0, y) ~ gn, Differential(x)(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)],
-        [Dn, kn, gn]; T)
+        [Dn, kn, gn]; T
+    )
 end
-fd(f, x; h = 1e-6) = (f(x + h) - f(x - h)) / (2h)
+fd(f, x; h = 1.0e-6) = (f(x + h) - f(x - h)) / (2h)
 pidx(prob, s) = LatticePDE.Problems.SII.parameter_index(prob, s)
 withp(p, i, v) = (q = collect(promote_type(eltype(p), typeof(v)), p); q[i] = v; q)
 
@@ -35,9 +36,9 @@ const TTIGHT = LatticePCG(; reltol = 1.0e-13, maxiters = 200)
 function tad(prob, alg, s; dt, out = sol -> sol.u[end])
     i = pidx(prob, s)
     J(v) = sum(out(solve(remake(prob; p = withp(prob.p, i, v)), alg; dt)))
-    return ForwardDiff.derivative(J, prob.p[i]), fd(J, prob.p[i]; h = 1e-5)
+    return ForwardDiff.derivative(J, prob.p[i]), fd(J, prob.p[i]; h = 1.0e-5)
 end
-tok(ad, f) = isapprox(ad, f; rtol = 1e-7) && ad != 0
+tok(ad, f) = isapprox(ad, f; rtol = 1.0e-7) && ad != 0
 
 # A group that declares Float64 on a backend without it (Metal) is
 # refused at the bind in words; a stub backend whose `supports_float64` is false stands in.

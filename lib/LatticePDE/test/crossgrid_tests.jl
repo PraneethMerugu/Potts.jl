@@ -10,8 +10,8 @@
 @testsetup module LP_crossgrid
 using Test, LatticePDE
 using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
-                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
-                           t_nounits as t, D_nounits as D
+    System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+    t_nounits as t, D_nounits as D
 using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
 using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
 using DomainSets: Interval
@@ -55,8 +55,8 @@ end
                 @test size(a) == (row === xu ? (16, 16) : (4, 4))
                 # the other row of the system (its own operator is on its own grid)
                 @test sd[xe(row === xu ? xcc : xv), 2] == sr[xe(row === xu ? xcc : xv), 2]
+            end
         end
-    end
     end
 
 end
@@ -81,12 +81,12 @@ end
         function flux(I, J)
             s = 0.0
             for j in 1:4, i in 1:4
-                    a, b = 4 * (I - 1) + i, 4 * (J - 1) + j
-                    i == 1 && a > 1 && (s += (v0[a - 1, b] - v0[a, b]) / h^2)
-                    i == 4 && a < 16 && (s += (v0[a + 1, b] - v0[a, b]) / h^2)
-                    j == 1 && b > 1 && (s += (v0[a, b - 1] - v0[a, b]) / h^2)
-                    j == 4 && b < 16 && (s += (v0[a, b + 1] - v0[a, b]) / h^2)
-                end
+                a, b = 4 * (I - 1) + i, 4 * (J - 1) + j
+                i == 1 && a > 1 && (s += (v0[a - 1, b] - v0[a, b]) / h^2)
+                i == 4 && a < 16 && (s += (v0[a + 1, b] - v0[a, b]) / h^2)
+                j == 1 && b > 1 && (s += (v0[a, b - 1] - v0[a, b]) / h^2)
+                j == 4 && b < 16 && (s += (v0[a, b + 1] - v0[a, b]) / h^2)
+            end
             return s
         end
         @test [flux(I, J) for I in 1:4, J in 1:4] ≈ 16 .* reshape(XR * vec(L), 4, 4) rtol = 1.0e-10
@@ -137,7 +137,7 @@ end
         for (pr, row) in ((p.cf, xu), (p.fc, xcc))
             sa, sb = solve(hx(pr.dir), halg; dt = 0.0005, saveat = [0.002]), solve(hx(pr.route), halg; dt = 0.0005, saveat = [0.002])
             @test sa[xe(row), 2] == sb[xe(row), 2] && maximum(abs, sa[xe(row), 2]) > 0
-    end
+        end
     end
 
 end
@@ -236,10 +236,10 @@ end
         )
         function err(nw)
             s = solve(
-                    xown(sys, (16, 16)),
-                    BackwardEuler(; substeps = 1, nlsolve = LatticeNewton(; κ = 1.0e-4, max_iter = nw), linsolve = tight);
-                    dt, saveat = [dt],
-                )
+                xown(sys, (16, 16)),
+                BackwardEuler(; substeps = 1, nlsolve = LatticeNewton(; κ = 1.0e-4, max_iter = nw), linsolve = tight);
+                dt, saveat = [dt],
+            )
             return maximum(abs, [vec(s[xe(xcc), 2]); vec(s[xe(xu), 2])] .- ref)
         end
         Test.@test_logs (:warn, r"`0\.1laplacian\(xuu\)` \(in the rate of `xcc`\) is not in the implicit operator") match_mode = :any min_level = Base.CoreLogging.Warn begin
@@ -373,7 +373,7 @@ end
                 v0 = prob.p[i]
                 h = 1.0e-6
                 @test ForwardDiff.derivative(J, v0) ≈ (J(v0 + h) - J(v0 - h)) / 2h rtol = 1.0e-7
+            end
         end
     end
-end
 end

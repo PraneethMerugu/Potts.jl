@@ -254,11 +254,11 @@ end
         cut = LatticePDE.lower_group(sys, disc; fields = [ce]).rate
         function rules(p, k)
             return sort!(
-                    [
-                        (r.axis, r.side, r.alpha, r.beta, r.g) for r in p.rules if r isa GFaceRule &&
-                            p.fields[r.field].key == k
-                    ]; by = r -> (r[1], r[2])
-                )
+                [
+                    (r.axis, r.side, r.alpha, r.beta, r.g) for r in p.rules if r isa GFaceRule &&
+                        p.fields[r.field].key == k
+                ]; by = r -> (r[1], r[2])
+            )
         end
         @test length(rules(cut, "go")) == 4 && rules(cut, "go") == rules(whole, "go")
         @test any(r -> r[1] == 1 && r[2] == -1 && r[5].value == 2.0, rules(cut, "go"))    # the Dirichlet face came along
@@ -311,9 +311,9 @@ end
         dom = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
         function mk(rate, bcs)
             return PDESystem(
-                    [D(ce) ~ rate, Ke ~ 0.5 * ce], [gsc(0, x, y) ~ x * y, bcs...], dom, [t, x, y], [ce, Ke],
-                    Num[]; name = :gs
-                )
+                [D(ce) ~ rate, Ke ~ 0.5 * ce], [gsc(0, x, y) ~ x * y, bcs...], dom, [t, x, y], [ce, Ke],
+                Num[]; name = :gs
+            )
         end
         nf = [
             Differential(x)(gsc(t, 0, y)) ~ 0.0, Differential(x)(gsc(t, 1, y)) ~ 0.0,

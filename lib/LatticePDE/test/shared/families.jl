@@ -13,15 +13,20 @@ fam_dom = [t ∈ Interval(0.0, 0.2), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.
 fam_faces = [fu(t, 0, y) ~ 1.0, fu(t, x, 0) ~ fu(t, x, 1)]
 fam_rate = PDESystem(
     [D(fam_u) ~ fDc * laplacian(fam_u) - fk * fam_u + x * y], [fu(0, x, y) ~ x; fam_faces], fam_dom, [t, x, y],
-    [fam_u], [fDc, fk]; name = :famr)
+    [fam_u], [fDc, fk]; name = :famr
+)
 fam_steady = PDESystem(
     [D(fam_u) ~ fDc * laplacian(fam_u) - fk * fam_u + fam_v, 0 ~ 0.1 * laplacian(fam_v) - fam_v + fam_u],
-    [fu(0, x, y) ~ x; fam_faces; fv(t, x, 0) ~ fv(t, x, 1)], fam_dom, [t, x, y], [fam_u, fam_v], [fDc, fk]; name = :fams)
+    [fu(0, x, y) ~ x; fam_faces; fv(t, x, 0) ~ fv(t, x, 1)], fam_dom, [t, x, y], [fam_u, fam_v], [fDc, fk]; name = :fams
+)
 fam_chain = PDESystem(
     [D(fam_u) ~ fDc * laplacian(fam_u) - fk * fam_u, D(fam_v) ~ 0.5 * laplacian(fam_v) - fam_v + fam_u],
-    [fu(0, x, y) ~ x; fv(0, x, y) ~ y; fam_faces; fv(t, x, 0) ~ fv(t, x, 1)], fam_dom, [t, x, y], [fam_u, fam_v], [fDc, fk]; name = :famc)
-fam_map = PDESystem([Shift(t, 1)(fam_N) ~ (fN(t, x + fdx, y) + fN(t, x - fdx, y)) / 2], [fN(0, x, y) ~ x],
-    [t ∈ Interval(0.0, 3.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [fam_N], [fdx]; name = :famm)
+    [fu(0, x, y) ~ x; fv(0, x, y) ~ y; fam_faces; fv(t, x, 0) ~ fv(t, x, 1)], fam_dom, [t, x, y], [fam_u, fam_v], [fDc, fk]; name = :famc
+)
+fam_map = PDESystem(
+    [Shift(t, 1)(fam_N) ~ (fN(t, x + fdx, y) + fN(t, x - fdx, y)) / 2], [fN(0, x, y) ~ x],
+    [t ∈ Interval(0.0, 3.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [fam_N], [fdx]; name = :famm
+)
 const FAM_INNER = LatticePCG(; reltol = 1.0e-12, maxiters = 64)
 # (name, system, algorithm, the keywords of `solve`: the window `dt`)
 const FAM_CASES = [
@@ -41,10 +46,10 @@ const FAM_CASES = [
 fam_disc() = LatticeDiscretization(Grid((8, 8)); T = Float64)
 function fmsg(f)
     return try
-            f(); ""
-        catch e
-            sprint(showerror, e)
-        end
+        f(); ""
+    catch e
+        sprint(showerror, e)
+    end
 end
 
 # a backend that is not the problem's: an array type whose backend is a stand-in GPU

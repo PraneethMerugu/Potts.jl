@@ -68,8 +68,10 @@ function _pins(eq, args, ivs, ends)
         elseif v == hi
             push!(pins, (i, 1))
         else
-            _bcerr(eq, "`$(ivs[i]) = $v` is not on a face of $lo .. $hi: the low face is `$(ivs[i]) = $lo` and the high face is " *
-                "`$(ivs[i]) = $hi` (the domain's extent)")
+            _bcerr(
+                eq, "`$(ivs[i]) = $v` is not on a face of $lo .. $hi: the low face is `$(ivs[i]) = $lo` and the high face is " *
+                    "`$(ivs[i]) = $hi` (the domain's extent)"
+            )
         end
     end
     return pins
@@ -106,8 +108,10 @@ function parse_bcs(bcs, fields, ivs, ends)
             coef, core = 1, tm
             if iscall(tm) && operation(tm) === (*)
                 fac = arguments(tm)
-                k = findfirst(f -> _fieldread(f, fields) !== nothing ||
-                                       (iscall(f) && operation(f) isa Differential), fac)
+                k = findfirst(
+                    f -> _fieldread(f, fields) !== nothing ||
+                        (iscall(f) && operation(f) isa Differential), fac
+                )
                 k === nothing && _bcerr(eq, "the term `$tm` reads no field")
                 core, coef = fac[k], prod(fac[setdiff(eachindex(fac), k)])
             end
@@ -186,8 +190,10 @@ function _bc_value(eq, v, op = nothing, fields = Dict{Any, Bool}())
             "a derivative of another state field in a condition's value is not lowered in this version: write " *
                 "the condition with that field's value, or with a value of the time, the coordinates and parameters"
         end
-        _bcerr(eq, "its value holds `$d`, a derivative of a field; a condition's value may differentiate " *
-                   "expressions of the time, the coordinates and parameters only ($route)")
+        _bcerr(
+            eq, "its value holds `$d`, a derivative of a field; a condition's value may differentiate " *
+                "expressions of the time, the coordinates and parameters only ($route)"
+        )
     end
     return w
 end
@@ -213,8 +219,10 @@ function robin_slots(sys::PDESystem)
     end
     function simple(c)
         return _cval(c) !== nothing || unwrap(c) in params ||
-            (iscall(unwrap(c)) && operation(unwrap(c)) === (*) && count(y -> unwrap(y) in params, arguments(unwrap(c))) == 1 &&
-             all(y -> unwrap(y) in params || _cval(y) !== nothing, arguments(unwrap(c))))
+            (
+            iscall(unwrap(c)) && operation(unwrap(c)) === (*) && count(y -> unwrap(y) in params, arguments(unwrap(c))) == 1 &&
+                all(y -> unwrap(y) in params || _cval(y) !== nothing, arguments(unwrap(c)))
+        )
     end
     onlyparams(c) = (vs = Symbolics.get_variables(unwrap(c)); !isempty(vs) && all(v -> v in params, vs))
     extra, ic = Any[], Dict{Any, Any}(_ics(sys))
@@ -225,8 +233,12 @@ function robin_slots(sys::PDESystem)
         other, cores, coefs = Any[], Any[], Any[]
         for tm in terms
             fac = iscall(tm) && operation(tm) === (*) ? arguments(tm) : Any[tm]
-            k = findfirst(f -> _fieldread(f, fields) !== nothing || (iscall(unwrap(f)) && operation(unwrap(f)) isa Differential &&
-                                                                     _fieldread(arguments(unwrap(f))[1], fields) !== nothing), fac)
+            k = findfirst(
+                f -> _fieldread(f, fields) !== nothing || (
+                    iscall(unwrap(f)) && operation(unwrap(f)) isa Differential &&
+                        _fieldread(arguments(unwrap(f))[1], fields) !== nothing
+                ), fac
+            )
             k === nothing && (push!(other, tm); continue)
             core = unwrap(fac[k])
             c = prod(Symbolics.wrap.(fac[setdiff(eachindex(fac), k)]); init = Symbolics.wrap(1))
@@ -259,10 +271,11 @@ function robin_slots(sys::PDESystem)
         end
         changed || return eq
         return sum(Symbolics.wrap, other; init = Symbolics.wrap(0)) +
-               sum(Symbolics.wrap(c) * Symbolics.wrap(core) for (core, c) in zip(cores, coefs)) ~ eq.rhs
+            sum(Symbolics.wrap(c) * Symbolics.wrap(core) for (core, c) in zip(cores, coefs)) ~ eq.rhs
     end
     isempty(extra) && return sys
     return PDESystem(
         get_eqs(sys), bcs, get_domain(sys), get_ivs(sys), get_dvs(sys), Any[ps; extra]; name = nameof(sys),
-        initial_conditions = ic)
+        initial_conditions = ic
+    )
 end

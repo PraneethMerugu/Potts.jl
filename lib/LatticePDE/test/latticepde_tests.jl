@@ -3,8 +3,8 @@
 @testsetup module LP_latticepde
 using Test, LatticePDE
 using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
-                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
-                           t_nounits as t, D_nounits as D
+    System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+    t_nounits as t, D_nounits as D
 using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
 using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
 using DomainSets: Interval
@@ -119,7 +119,8 @@ end
         cases = [
             (D(q) ~ -q + value_at(Jk, kc), [kc], [kc => 2], 19.0, Jk),
             (D(q) ~ -q + value_at(J2, kc, kcp), [kc, kcp], [kc => 2, kcp => 3], 7.0, J2),
-            (D(q) ~ -q + 5 * ismember(kc, (2, 3)), [kc], [kc => 3], 4.0, nothing)]
+            (D(q) ~ -q + 5 * ismember(kc, (2, 3)), [kc], [kc => 3], 4.0, nothing),
+        ]
         for (eq, ins, iv, expect, table) in cases
             sys = System([eq], t; name = :cell)
             table === nothing || @test any(p -> isequal(p, unwrap(table)), parameters(sys))   # discovered
@@ -146,7 +147,8 @@ end
         @test_throws ["Differentiation with array expressions"] Symbolics.expand_derivatives(Dx(value_at(J, ke, ke)))
         for term in (
                 laplacian(ce), DivKGrad(:harmonic)(Ke, ce), Advect(Upwind1())(ve[1], ce), value_at(ce, ke),
-            ismember(ke, (2, 3)), masked(ke == 3, ce))
+                ismember(ke, (2, 3)), masked(ke == 3, ce),
+            )
             err = try
                 Symbolics.expand_derivatives(Dx(term))
             catch e
@@ -180,20 +182,29 @@ end
         @test get_lattice_storage(ue) === :dense
         @test get_lattice_level(ue) == 2
         @test get_lattice_input_name(kde) == "kind" && MTKB.isinput(kde)
-        @test all(f -> f(we) === nothing, (get_lattice_placement, get_lattice_storage, get_lattice_level,
+        @test all(
+            f -> f(we) === nothing, (
+                get_lattice_placement, get_lattice_storage, get_lattice_level,
                 get_lattice_input_name,
             )
         )
         # the keys read back from the stored dependent variables
         pd = PDESystem(
             [D(ue) ~ laplacian(ue) + kde, D(we) ~ laplacian(we)], Equation[], dom, [t, x, y], [ue, we, kde], Num[];
-            name = :meta)
+            name = :meta
+        )
         @test get_lattice_placement(pd.dvs[1]) === :node && get_lattice_input_name(pd.dvs[3]) == "kind"
         @test get_lattice_placement(pd.dvs[2]) === nothing
         # and survive an offset read and a substitution
         @test get_lattice_input_name(kd(t, x + dx, y)) == "kind"
-        @test get_lattice_spacing(only(filter(v -> isequal(v, unwrap(dx)),
-            collect(vars(substitute(ue + dx * h, Dict(h => 2.0))))))) == 1
+        @test get_lattice_spacing(
+            only(
+                filter(
+                    v -> isequal(v, unwrap(dx)),
+                    collect(vars(substitute(ue + dx * h, Dict(h => 2.0))))
+                )
+            )
+        ) == 1
     end
 end
 

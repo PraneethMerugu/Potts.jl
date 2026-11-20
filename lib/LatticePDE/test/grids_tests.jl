@@ -10,8 +10,8 @@
 @testsetup module LP_grids
 using Test, LatticePDE
 using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
-                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
-                           t_nounits as t, D_nounits as D
+    System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+    t_nounits as t, D_nounits as D
 using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
 using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
 using DomainSets: Interval
@@ -25,46 +25,46 @@ end
 
 @testitem "sol[c] is one grid per save on the owned, Tsit5 and FieldProblem paths" setup = [LP_grids] tags = [:latticepde, :grids] begin
     @testset "sol[c] is one grid per save on the owned, Tsit5 and FieldProblem paths" begin
-    p = discretize(qsys(), LatticeDiscretization(Grid((6, 4)); T = Float64))
+        p = discretize(qsys(), LatticeDiscretization(Grid((6, 4)); T = Float64))
         so = solve(p, ExplicitEuler(); dt = 0.01, saveat = 0.1)
-    st = solve(p, Tsit5(); saveat = 0.1, abstol = 1e-10, reltol = 1e-10)
+        st = solve(p, Tsit5(); saveat = 0.1, abstol = 1.0e-10, reltol = 1.0e-10)
         sf = solve(LFP.field_problem(p), ExplicitEuler(); dt = 0.01, saveat = 0.1)
         @test sf isa SciMLBase.ODESolution && so isa SciMLBase.ODESolution
-    for s in (so, st, sf)
-        v = s[qce]
-        last = reshape(s.u[end], 6, 4)
-        @test v isa AbstractVector && length(v) == length(s.t) == 4
-        @test v[end] == last && v[2] == reshape(s.u[2], 6, 4)
+        for s in (so, st, sf)
+            v = s[qce]
+            last = reshape(s.u[end], 6, 4)
+            @test v isa AbstractVector && length(v) == length(s.t) == 4
+            @test v[end] == last && v[2] == reshape(s.u[2], 6, 4)
             @test maximum(s[qce][end]) == maximum(last)          # a grid, not a number
-        @test s[qce, 2] == v[2] && s[qce, length(s.t)] == last
-        @test s(0.1; idxs = qce) ≈ v[2] && s(0.15; idxs = qce) ≈ (v[2] .+ v[3]) ./ 2
-        f = field_series(s, qce)
-        @test f isa LFP.FieldSeries && size(f) == (4, 6, 4) && f[end, :, :] == last && f[2, 3, 2] == v[2][3, 2]
-        @test s[:qc] == v && s[qc] == v                        # the name and the bare callable
+            @test s[qce, 2] == v[2] && s[qce, length(s.t)] == last
+            @test s(0.1; idxs = qce) ≈ v[2] && s(0.15; idxs = qce) ≈ (v[2] .+ v[3]) ./ 2
+            f = field_series(s, qce)
+            @test f isa LFP.FieldSeries && size(f) == (4, 6, 4) && f[end, :, :] == last && f[2, 3, 2] == v[2][3, 2]
+            @test s[:qc] == v && s[qc] == v                        # the name and the bare callable
+        end
+        # the owned and the FieldProblem solutions are the same run
+        @test so[qce] == sf[qce] && so.t == sf.t
+        @test maximum(abs, so[qce][end] .- st[qce][end]) < 0.01   # (EE against Tsit5)
     end
-    # the owned and the FieldProblem solutions are the same run
-    @test so[qce] == sf[qce] && so.t == sf.t
-    @test maximum(abs, so[qce][end] .- st[qce][end]) < 0.01   # (EE against Tsit5)
-end
 end
 
 @testitem "save_idxs on owned and Tsit5 solves" setup = [LP_grids] tags = [:latticepde, :grids] begin
     @testset "save_idxs on owned and Tsit5 solves" begin
-    p = discretize(qsys(), LatticeDiscretization(Grid((6, 4)); T = Float64))
-    function msg(f)
-        return try
+        p = discretize(qsys(), LatticeDiscretization(Grid((6, 4)); T = Float64))
+        function msg(f)
+            return try
                 f(); ""
             catch e
                 sprint(showerror, e)
             end
-    end
-    # a field saved whole: its grids, on both paths
+        end
+        # a field saved whole: its grids, on both paths
         for alg in (ExplicitEuler(), Tsit5())
             s = solve(p, alg; dt = 0.01, saveat = 0.1, save_idxs = qce)
-        @test length(s.u[1]) == 24 && size(s[qce][end]) == (6, 4) && s[qce][end] == reshape(s.u[end], 6, 4)
-    end
-    # part of a field: the read names `save_idxs` and the routes
+            @test length(s.u[1]) == 24 && size(s[qce][end]) == (6, 4) && s[qce][end] == reshape(s.u[end], 6, 4)
+        end
+        # part of a field: the read names `save_idxs` and the routes
         s = solve(p, ExplicitEuler(); dt = 0.01, saveat = 0.1, save_idxs = [2, 3])
         @test length(s.u[1]) == 2 && occursin("save_idxs", msg(() -> s[qce]))
-end
+    end
 end

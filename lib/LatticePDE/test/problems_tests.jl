@@ -81,10 +81,10 @@ end
         # conservation: periodic and no-flux faces keep Σ c to roundoff; a Dirichlet face does not
         function cons(bcs)
             s = solve(
-                    owned(psys([D(ce) ~ laplacian(ce)], [c(0, x, y) ~ x + y^2; bcs], Num[]; T = 0.05), 8, 6),
-                    ExplicitEuler()
-                    ; dt = 1.0e-3
-                )
+                owned(psys([D(ce) ~ laplacian(ce)], [c(0, x, y) ~ x + y^2; bcs], Num[]; T = 0.05), 8, 6),
+                ExplicitEuler()
+                ; dt = 1.0e-3
+            )
             return (sum(s[:c, 1]), sum(s[:c, end]))
         end
         m0, m1 = cons([c(t, x, 0) ~ c(t, x, 1), Differential(x)(c(t, 0, y)) ~ 0.0, Differential(x)(c(t, 1, y)) ~ 0.0])
@@ -508,10 +508,10 @@ end
         withp(p, i, v) = (q = collect(promote_type(eltype(p), typeof(v)), p); q[i] = v; q)
         function emsg(f)
             return try
-                    f(); ""
-                catch e
-                    sprint(showerror, e)
-                end
+                f(); ""
+            catch e
+                sprint(showerror, e)
+            end
         end
         @parameters kd = 1.0 Dd = 0.1
         @parameters Td[1:2] = [0.5, 1.0]
@@ -577,10 +577,10 @@ end
     @testset "aux fields in B (aux-only systems, sol[K], integ[K])" begin
         function emsg(f)
             return try
-                    f(); ""
-                catch e
-                    sprint(showerror, e)
-                end
+                f(); ""
+            catch e
+                sprint(showerror, e)
+            end
         end
         @parameters Kb = 2.0 Da = 0.1 ka = 1.0
         xc = ((1:4) .- 0.5) ./ 4

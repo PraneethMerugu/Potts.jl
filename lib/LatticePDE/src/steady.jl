@@ -88,11 +88,15 @@ function steady_rows(sys::PDESystem)
         unread = if isempty(left)
             " (every field has an equation)"
         else
-            string(" of the fields with no equation (",
-                join(("`$(_slotkey(f))`" for f in left), ", "), ")")
+            string(
+                " of the fields with no equation (",
+                join(("`$(_slotkey(f))`" for f in left), ", "), ")"
+            )
         end
-        _dverr(string("equation `", eq, "`: a steady equation `0 ~ rhs` is solved for a field that it reads and that ",
-            "has no other equation, and it reads none", unread,
+        _dverr(
+            string(
+                "equation `", eq, "`: a steady equation `0 ~ rhs` is solved for a field that it reads and that ",
+                "has no other equation, and it reads none", unread,
                 "; write the field's operator into the row (`0 ~ D * laplacian(c) - k * c + s` for `c`)"
             )
         )
@@ -125,7 +129,8 @@ function steady_rows(sys::PDESystem)
     end
     out = PDESystem(
         eqs, bcs, get_domain(sys), get_ivs(sys), get_dvs(sys), _params(sys); name = nameof(sys),
-        initial_conditions = ic)
+        initial_conditions = ic
+    )
     return out, steady
 end
 
@@ -177,7 +182,8 @@ function steady_sign(rhs, c)
         f, a = operation(u), arguments(u)
         if (f === laplacian && isequal(unwrap(a[1]), c)) || (
                 f isa Differential && iscall(unwrap(a[1])) &&
-                                                     operation(unwrap(a[1])) isa Differential && isequal(unwrap(arguments(unwrap(a[1]))[1]), c))
+                    operation(unwrap(a[1])) isa Differential && isequal(unwrap(arguments(unwrap(a[1]))[1]), c)
+            )
             ops[u] = z
             return nothing
         elseif (f isa DivKGrad) && isequal(unwrap(a[end]), c)
@@ -196,12 +202,12 @@ function steady_sign(rhs, c)
     # fall back to the conservative steady sign rather than failing analysis.
     function at(vz, vc)
         return try
-                e = substitute(substitute(rhs, ops; fold = Val(false)), Dict{Any, Any}(c => vc, z => vz); fold = Val(false))
-                num(substitute(e, Dict{Any, Any}(v => 1.0 for v in Symbolics.get_variables(e)); fold = Val(true)))
-            catch e
-                isfatal(e) && rethrow()
-                nothing
-            end
+            e = substitute(substitute(rhs, ops; fold = Val(false)), Dict{Any, Any}(c => vc, z => vz); fold = Val(false))
+            num(substitute(e, Dict{Any, Any}(v => 1.0 for v in Symbolics.get_variables(e)); fold = Val(true)))
+        catch e
+            isfatal(e) && rethrow()
+            nothing
+        end
     end
     hasop = any(v -> !(v isa Number), values(ops))            # (an operator on `c`: `z` or `z K`)
     if hasop
@@ -239,7 +245,8 @@ function _timed(sys::PDESystem)
     tt = _STEADY_T
     any(v -> isequal(unwrap(v), tt), get_ivs(sys)) && _dverr(
         "the system's variables $(Tuple(get_ivs(sys))) have no time but use " *
-        "`$tt` as an axis; name the axes otherwise (a time-free system gains the time `$tt`)")
+            "`$tt` as an axis; name the axes otherwise (a time-free system gains the time `$tt`)"
+    )
     ops = Any[_opof(v) for v in get_dvs(sys)]
     rule = Dict{Any, Any}()
     ders = Any[]

@@ -28,14 +28,14 @@ function steps!(R, dt, n; P = R.P)
 end
 function throws_with(f, s)
     return try
-            f()
-            false
-        catch e
-            e isa ArgumentError && occursin(s, sprint(showerror, e))
-        end
+        f()
+        false
+    catch e
+        e isa ArgumentError && occursin(s, sprint(showerror, e))
+    end
 end
 
-@parameters x y z Dc = 1e-3 k = 0.1 h0 = 2.0 g0 = 0.5 K0 = 2.0 cT = 0.1 dx [lattice_spacing = 1] dy [lattice_spacing = 2]
+@parameters x y z Dc = 1.0e-3 k = 0.1 h0 = 2.0 g0 = 0.5 K0 = 2.0 cT = 0.1 dx [lattice_spacing = 1] dy [lattice_spacing = 2]
 @parameters Dk[1:3] = [1.0, 2.0, 3.0]
 @variables c(..) o(..) K(..) N(..) kindₛ(..)::Int32 [input = true] vel(..)[1:2] [input = true] u(..)[1:2]
 Dx, Dy = Differential(x), Differential(y)

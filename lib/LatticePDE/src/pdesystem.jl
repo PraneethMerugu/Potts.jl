@@ -52,7 +52,7 @@ function pdesystem(eqs, bcs = Equation[]; name, domain = Any[], kwargs...)
                 msg === nothing || throw(ArgumentError("pdesystem: " * msg))
             end
         end
-        if iscall(u)
+        return if iscall(u)
             op = operation(u)
             if op isa SymbolicUtils.BasicSymbolic          # `c(t, x, y)`, `c(0, x, y)`
                 push!(terms, u)
@@ -78,14 +78,24 @@ function pdesystem(eqs, bcs = Equation[]; name, domain = Any[], kwargs...)
     # the independent variables: the arguments of the dependent variables of the equations
     isvar(a) = (w = unwrap(a); w isa SymbolicUtils.BasicSymbolic && !SymbolicUtils.isconst(w) && !iscall(w))
     k = findfirst(u -> all(isvar, arguments(u)), terms[1:neq])
-    k === nothing && throw(ArgumentError("pdesystem: the equations read no dependent variable at its independent " *
-                                         "variables (`c(t, x, y)`)"))
+    k === nothing && throw(
+        ArgumentError(
+            "pdesystem: the equations read no dependent variable at its independent " *
+                "variables (`c(t, x, y)`)"
+        )
+    )
     ivs = Any[arguments(terms[k])...]
     for u in terms[1:neq]
         all(isvar, arguments(u)) || continue
         length(arguments(u)) == length(ivs) && all(i -> isequal(arguments(u)[i], ivs[i]), eachindex(ivs)) ||
-            throw(ArgumentError(string("pdesystem: `", u, "` and `", terms[k], "` have different independent variables; ",
-                "give every dependent variable the same ones, or use `PDESystem` with the lists")))
+            throw(
+            ArgumentError(
+                string(
+                    "pdesystem: `", u, "` and `", terms[k], "` have different independent variables; ",
+                    "give every dependent variable the same ones, or use `PDESystem` with the lists"
+                )
+            )
+        )
     end
     dvs, ops = Any[], Any[]
     for u in terms
@@ -101,8 +111,10 @@ function pdesystem(eqs, bcs = Equation[]; name, domain = Any[], kwargs...)
     isfield(u) = any(w -> isequal(operation(w), operation(u)), terms[1:nlhs])
     dvs = Any[filter(isfield, dvs); sort!(filter(!isfield, dvs); by = u -> string(nameof(operation(u))))]
     ps = Any[v for v in leaves if !seen(v, ivs)]
-    return PDESystem(collect(eqs), collect(bcs), domain, Symbolics.wrap.(ivs), Symbolics.wrap.(dvs),
-                     isempty(ps) ? Num[] : Symbolics.wrap.(ps); name, kwargs...)
+    return PDESystem(
+        collect(eqs), collect(bcs), domain, Symbolics.wrap.(ivs), Symbolics.wrap.(dvs),
+        isempty(ps) ? Num[] : Symbolics.wrap.(ps); name, kwargs...
+    )
 end
 
 """

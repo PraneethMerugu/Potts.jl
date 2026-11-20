@@ -18,17 +18,19 @@ const CTIGHT = LatticeGMRES(; reltol = 1.0e-12, maxiters = 200)
 const cae, cbe, cqe, cze = ca(t, x, y), cb(t, x, y), cq(t, x, y), cz(t, x, y)
 function cmsg(f)
     return try
-            f(); ""
-        catch err
-            err isa ArgumentError ? err.msg : sprint(showerror, err)
-        end
+        f(); ""
+    catch err
+        err isa ArgumentError ? err.msg : sprint(showerror, err)
+    end
 end
 # the loop `q1` (a steady field and a rate field that feed each other, with sources, so the
 # steady state is not 0): `lhs` is `D`
 # (rate rows, which QuasiSteady solves as steady rows) or `0 ~` rows
 function q1(δ, k; steady = false)
-    return PDESystem(steady ?
+    return PDESystem(
+        steady ?
             [0 ~ 0.1 * laplacian(cae) - δ * cae + k * cbe + x, 0 ~ 0.1 * laplacian(cbe) - cbe - k * cae + y] :
             [D(cae) ~ 0.1 * laplacian(cae) - δ * cae + k * cbe + x, D(cbe) ~ 0.1 * laplacian(cbe) - cbe - k * cae + y],
-        [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 1.0], bdom(0.2), [t, x, y], [cae, cbe], Any[]; name = :q1)
+        [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 1.0], bdom(0.2), [t, x, y], [cae, cbe], Any[]; name = :q1
+    )
 end

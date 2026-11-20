@@ -16,7 +16,7 @@ mf_rate(tt) = hand_rate(; K = (x, y) -> 0.1, f = (xx, yy) -> mf_src(xx, yy, tt),
 # the errors and orders of `alg` at each window `dt` against the semi-discrete solution (the `:ode` path, Tsit5
 # at 1e-12), `m²` sites
 function mf_orders(alg, dts; m = 32)
-    ref = solve(mf_problem((m, m)), Tsit5(); reltol = 1e-12, abstol = 1e-12).u[end]
+    ref = solve(mf_problem((m, m)), Tsit5(); reltol = 1.0e-12, abstol = 1.0e-12).u[end]
     pm = mf_problem((m, m))
     es = [maximum(abs, vec(blast(solve(pm, alg; dt))) .- ref) for dt in dts]
     return es, log2.(es[1:(end - 1)] ./ es[2:end])
@@ -36,7 +36,8 @@ end
 function step1d(n, h; k = 10)
     s = PDESystem(
         [D(b1(t, x)) ~ laplacian(b1(t, x))], [b1(0, x) ~ ifelse(x < 0.5, 1.0, 0.0)],
-        [t ∈ Interval(0.0, k * h), x ∈ Interval(0.0, 1.0)], [t, x], [b1(t, x)], Any[]; name = :s1)
+        [t ∈ Interval(0.0, k * h), x ∈ Interval(0.0, 1.0)], [t, x], [b1(t, x)], Any[]; name = :s1
+    )
     return discretize(s, LatticeDiscretization(Grid((n,)); T = Float64))
 end
 tv1(u) = sum(abs, diff(vec(u)))
@@ -45,8 +46,9 @@ function robin_sys(v)
     @parameters crb = v
     return PDESystem(
             [D(bce) ~ 0.3 * laplacian(bce) - 2 * bce + 1],
-        [bc(0, x, y) ~ x * y, 1.5 * bc(t, 1, y) - crb * Differential(x)(bc(t, 1, y)) ~ 0.2], bdom(1.0), [t, x, y], [bce],
-        [crb]; name = :crob), crb
+            [bc(0, x, y) ~ x * y, 1.5 * bc(t, 1, y) - crb * Differential(x)(bc(t, 1, y)) ~ 0.2], bdom(1.0), [t, x, y], [bce],
+            [crb]; name = :crob
+        ), crb
 end
 # `p`'s state after each of `k` windows of `alg`
 function windows(p, alg, k; dt)

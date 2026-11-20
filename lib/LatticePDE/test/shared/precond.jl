@@ -11,7 +11,8 @@ qdom(T) = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0,
 function qsys(T; f = 0.0)
     return PDESystem(
         [D(qc(t, x, y)) ~ qD * laplacian(qc(t, x, y)) - qk * qc(t, x, y) + f],
-        [qc(0, x, y) ~ sin(π * x) * cos(π * y), qc(t, 0, y) ~ 1.0], qdom(T), [t, x, y], [qc(t, x, y)], [qD, qk]; name = :qs)
+        [qc(0, x, y) ~ sin(π * x) * cos(π * y), qc(t, 0, y) ~ 1.0], qdom(T), [t, x, y], [qc(t, x, y)], [qD, qk]; name = :qs
+    )
 end
 qdisc(n; kw...) = LatticeDiscretization(Grid((n, n)); T = Float64, kw...)
 const QTIGHT = LatticePCG(; reltol = 1.0e-13, maxiters = 400)
@@ -20,6 +21,6 @@ const QTIGHT = LatticePCG(; reltol = 1.0e-13, maxiters = 400)
 function qfbdf(prob; precs = nothing, gmres_restart = 200)
     j = prob.f.jvp
     c0 = j.calls[]
-    s = solve(prob, FBDF(; linsolve = KrylovJL_GMRES(; precs, gmres_restart)); abstol = 1e-6, reltol = 1e-6)
+    s = solve(prob, FBDF(; linsolve = KrylovJL_GMRES(; precs, gmres_restart)); abstol = 1.0e-6, reltol = 1.0e-6)
     return s, (j.calls[] - c0) / max(s.stats.nsolve, 1)
 end

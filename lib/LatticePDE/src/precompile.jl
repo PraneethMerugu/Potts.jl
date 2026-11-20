@@ -20,7 +20,9 @@ function _precompile_workload()
         (D(ce) ~ Dc * laplacian(ce) - k * ce + x, [c(0, x, y) ~ x * y, c(t, 0, y) ~ 1.0]),
         (
             D(ce) ~ Dc * laplacian(ce) - k * ce,
-            [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1.0, Differential(x)(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)]))
+            [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1.0, Differential(x)(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)],
+        ),
+    )
     for (eq, bc) in forms, T in (Float64, Float32)
         sys = PDESystem([eq], bc, dom, [t, x, y], [ce], [Dc, k]; name = :precompile)
         prob = discretize(sys, LatticeDiscretization(Grid((8, 8)); T))

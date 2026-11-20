@@ -39,18 +39,26 @@ end
 function _diffusion_parts(term, xs)
     reps, parts = Dict{Any, Any}(), Any[]
     function walk(y)
-        return iscall(y) && (f = operation(y);
+        return iscall(y) && (
+            f = operation(y);
             if f === laplacian
                 (reps[y] = 1; push!(parts, (1, :all, :harmonic)))
             elseif f isa DivKGrad
                 (reps[y] = 1; push!(parts, (arguments(y)[1], :all, f.mean)))
             elseif f isa Differential
-                (r = _raw_flux(y); reps[y] = 1;
-                    push!(parts, (r === nothing || r[1] === nothing ? 1 : r[1],
-                        findfirst(v -> isequal(v, unwrap(f.x)), xs), :harmonic)))
+                (
+                    r = _raw_flux(y); reps[y] = 1;
+                    push!(
+                        parts, (
+                            r === nothing || r[1] === nothing ? 1 : r[1],
+                            findfirst(v -> isequal(v, unwrap(f.x)), xs), :harmonic,
+                        )
+                    )
+                )
             else
                 foreach(walk, arguments(y))
-            end)
+            end
+        )
     end
     walk(unwrap(term))
     length(parts) == 1 || return nothing
@@ -150,7 +158,9 @@ function _operator_of(u, o)
     return iscall(u) && (
         (
             f = operation(u); (f === laplacian || f isa DivKGrad || f isa Advect || f isa Differential) &&
-                                        _reads(u, (o,))) || any(a -> _operator_of(unwrap(a), o), arguments(u)))
+                _reads(u, (o,))
+        ) || any(a -> _operator_of(unwrap(a), o), arguments(u))
+    )
 end
 # a cross term `a · o` (`CrossLinear`, `o` another field) as (the field's key, `a` as a `Coef`
 # or `Coef(NaN)` when it is not a number or a number times a parameter, its text)
@@ -377,14 +387,20 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
         a = findfirst(isequal(v), xs)
         v => (Float64(leftendpoint(get_domain(sys)[kk].domain)) + s.spacing[a] / 2, Float64(rightendpoint(get_domain(sys)[kk].domain)) - s.spacing[a] / 2)
     end
-    pp0 = Problems.ParamsTables(collect(Any, cf.defaults),
-        Pair{String, Vector{Float64}}[first(q) => Float64.(collect(last(q))) for q in cf.tables])
+    pp0 = Problems.ParamsTables(
+        collect(Any, cf.defaults),
+        Pair{String, Vector{Float64}}[first(q) => Float64.(collect(last(q))) for q in cf.tables]
+    )
     staterefs = unique([_ref(v) for v in values(dvs)])     # the group's own states (no aux field, no input)
-    allops = Any[unique([_ref(v) for v in values(dvs)]);
+    allops = Any[
+        unique([_ref(v) for v in values(dvs)]);
         unique(
             [
                 _opof(v) for v in unwrap.(get_dvs(sys)) if !haskey(cf.keys, _opof(v)) ||
-                                                               !any(k -> k in states, cf.keys[_opof(v)])])]
+                    !any(k -> k in states, cf.keys[_opof(v)])
+            ]
+        )
+    ]
     # the group's states each aux field reads, through the aux fields it reads in turn (a term
     # that reads an aux field is a cross term of those states, or a source when it reads none:
     # `0.5 L` with `L ~ laplacian(c)`, the residual kernel of a row evaluates the aux kernels it
@@ -453,29 +469,35 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
                 push!(cross, cb)
                 cfc = _cross_faces(term, cb[1], xs, params, bysite, hk, N; hex)
                 cfc === nothing || push!(crossfaces, (cb[1], cfc))
-            elseif class == :Advection && (ab = something(_advection_bound(term, params, hk),
-                                                          _advection_ibound(k, term, params, tabset, box, hk), Some(nothing))) !== nothing
+            elseif class == :Advection && (
+                    ab = something(
+                        _advection_bound(term, params, hk),
+                        _advection_ibound(k, term, params, tabset, box, hk), Some(nothing)
+                    )
+                ) !== nothing
                 # out of the operator (a defect correction) with a bound: the count rule 2 (a
                 # velocity that varies by site, bounded over the box)
                 push!(inexact, _optext(k, term))
                 append!(adv, ab)
             elseif class in (:LaggedSwitch, :Other) && _local_term(term, c, inputops, ivs, others) &&
-                   (dj = _local_derivative(term, c)) !== nothing
+                    (dj = _local_derivative(term, c)) !== nothing
                 # a local nonlinear term `f(c)` or a switch: `∂f/∂c` at the iterate,
                 # exact as a Newton step; the `jac:` kernel runs at every Newton iteration
                 push!(jterms, dj)
                 iterate = true
                 switch |= class == :LaggedSwitch
             elseif class === :Other && !_reads(term, (_ref(c),)) && !isempty(auxof(term)) &&
-                   (rd = unique(vcat(reduce(vcat, [auxrd[j] for j in auxof(term)]; init = Any[]), Any[o for o in staterefs if _reads(term, (o,))]));
-                    !any(o -> isequal(o, _ref(c)), rd))
+                    (
+                    rd = unique(vcat(reduce(vcat, [auxrd[j] for j in auxof(term)]; init = Any[]), Any[o for o in staterefs if _reads(term, (o,))]));
+                    !any(o -> isequal(o, _ref(c)), rd)
+                )
                 # a term of aux fields: a cross term of the states they read, none when they read
                 # no state (a source). Exact in solve order, like any cross term; a cycle leaves it unseen
                 for o in rd
                     push!(cross, (first(_cross_bound(k, term, (o,), cf, params, bysite)), Coef(NaN), _optext(k, term)))
                 end
             elseif class in (:LaggedSwitch, :Other) && !_reads(term, (_ref(c),)) &&
-                   (rd = [o for o in others if _reads(term, (o,))]; !isempty(rd) && all(o -> any(r -> isequal(r, o), staterefs), rd))
+                    (rd = [o for o in others if _reads(term, (o,))]; !isempty(rd) && all(o -> any(r -> isequal(r, o), staterefs), rd))
                 # a term of other rows' fields only, whatever its form:
                 # a source when the row is solved after them (exact in an acyclic group); one
                 # cross entry per field it reads, with no coefficient (a cycle leaves it unseen)
@@ -565,11 +587,21 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
         end
         # the faces whose α or β varies by site or in time: the ghost diagonal over the face's
         # sites at any time
-        sitefaces = Tuple{Int, Int, Any}[(a, side < 0 ? 1 : 2, _site_diag(cf, k, a, side, params, tabset,
-                                              Any[cbox; (ivs[1], (t0, Inf), "")]))
-                                         for (kk, a, side) in sort!(collect(Base.keys(cf.sitecoefs))) if kk == k]
-        push!(rows, Problems.RowOperator(k, faces, jloc, field, scaled, domain, local_only, isempty(inexact), inexact,
-            iterate, switch, adv, cross, unseen, bounds, facemax, jmax, linear, crossfaces, msign, sitefaces))
+        sitefaces = Tuple{Int, Int, Any}[
+            (
+                a, side < 0 ? 1 : 2, _site_diag(
+                    cf, k, a, side, params, tabset,
+                    Any[cbox; (ivs[1], (t0, Inf), "")]
+                ),
+            )
+                for (kk, a, side) in sort!(collect(Base.keys(cf.sitecoefs))) if kk == k
+        ]
+        push!(
+            rows, Problems.RowOperator(
+                k, faces, jloc, field, scaled, domain, local_only, isempty(inexact), inexact,
+                iterate, switch, adv, cross, unseen, bounds, facemax, jmax, linear, crossfaces, msign, sitefaces
+            )
+        )
     end
     jac = isempty(plans) ? nothing : _jac_program(cf, sys, disc, plans, params, xs)
     return Problems.OperatorSpec{N}(rows, jac)
@@ -592,8 +624,12 @@ function _jac_program(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDiscret
         push!(pb.fields, f)
     end
     append!(pb.tables, s.tables)
-    append!(pb.masks, [MaskDecl(m.key, fieldid_in(pb, s.fields[m.field].key), m.epoch) for m in s.masks
-                       if !startswith(s.fields[m.field].key, "∂")])
+    append!(
+        pb.masks, [
+            MaskDecl(m.key, fieldid_in(pb, s.fields[m.field].key), m.epoch) for m in s.masks
+                if !startswith(s.fields[m.field].key, "∂")
+        ]
+    )
     # the lowering's environment over these fields
     fids = Dict{Any, Tuple{Vector{Int32}, Scalar}}()
     for (op, ks) in cf.keys
@@ -608,8 +644,10 @@ function _jac_program(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDiscret
         i = findfirst(t -> t.key == string(u), pb.tables)
         i === nothing || (tables[u] = (Int32(i), pb.tables[i].storage))
     end
-    spacing = Dict{Any, Int}(p => get_lattice_spacing(p) for p in keys(params) if !(SymbolicUtils.symtype(p) <: AbstractArray) &&
-                                                                    get_lattice_spacing(p) !== nothing)
+    spacing = Dict{Any, Int}(
+        p => get_lattice_spacing(p) for p in keys(params) if !(SymbolicUtils.symtype(p) <: AbstractArray) &&
+            get_lattice_spacing(p) !== nothing
+    )
     ends = map(xs) do v
         kk = findfirst(d -> isequal(unwrap(d.variables), v), get_domain(sys))
         Float64(leftendpoint(get_domain(sys)[kk].domain))
@@ -626,7 +664,8 @@ function _jac_program(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDiscret
     function env(kb, L, k)
         return Env(
             kb, fids, params, tables, spacing, unwrap(get_ivs(sys)[1]), xs, lo, level_spacing(h, fdims, L), false,
-            ntuple(_ -> 0, N), RESOLVE, nothing, false, domat(L), Int32[], L, flev, fdims, 0, get(cf.free, k, nothing), cf.domfree)
+            ntuple(_ -> 0, N), RESOLVE, nothing, false, domat(L), Int32[], L, flev, fdims, 0, get(cf.free, k, nothing), cf.domfree
+        )
     end
     for (k, pl) in sort!(collect(plans); by = first)
         id = fieldid_in(pb, k)
@@ -648,8 +687,14 @@ function _jac_program(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDiscret
         zero_ = constant!(kb, 0.0)
         indom(o) = dlid == 0 ? nothing : _indomain(kb, dlid, N, o)
         function inside(o)
-            return node!(kb, INSIDE_OP, BOOL, Int32[], access!(kb, Access{N}(id, Int8(0), Sel(Int16(1)),
-                Sel(NTuple{N, Int16}(o)), Int8(0), INSIDE)))
+            return node!(
+                kb, INSIDE_OP, BOOL, Int32[], access!(
+                    kb, Access{N}(
+                        id, Int8(0), Sel(Int16(1)),
+                        Sel(NTuple{N, Int16}(o)), Int8(0), INSIDE
+                    )
+                )
+            )
         end
         if !pl.local_only && hex
             # a hexagonal lattice: the three faces `m · 2/(3h²)` (`laplacian` alone lowers there, `K = 1`),
@@ -714,8 +759,10 @@ function _jac_program(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDiscret
                         face = if q.mean === :arithmetic
                             _op(e, MUL, constant!(kb, 0.5), sum_)
                         else
-                            select!(kb, _cmp(e, EQ, sum_, constant!(kb, 0.0)), constant!(kb, 0.0),
-                                _op(e, DIV, _op(e, MUL, constant!(kb, 2.0), Kc, Kn), sum_))
+                            select!(
+                                kb, _cmp(e, EQ, sum_, constant!(kb, 0.0)), constant!(kb, 0.0),
+                                _op(e, DIV, _op(e, MUL, constant!(kb, 2.0), Kc, Kn), sum_)
+                            )
                         end
                         return _op(e, MUL, constant!(kb, 1 / e.h[a]^2), mult, face)
                     end

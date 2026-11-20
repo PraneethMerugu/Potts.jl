@@ -88,8 +88,10 @@ function _raw_flux(u)
     d.order == 2 && return (nothing, a)
     d.order == 1 || return nothing
     fs = iscall(a) && operation(a) === (*) ? arguments(a) : [a]
-    k = findfirst(f -> iscall(f) && operation(f) isa Differential && operation(f).order == 1 &&
-                           isequal(operation(f).x, d.x), fs)
+    k = findfirst(
+        f -> iscall(f) && operation(f) isa Differential && operation(f).order == 1 &&
+            isequal(operation(f).x, d.x), fs
+    )
     k === nothing && return nothing
     K = length(fs) == 1 ? 1 : prod(fs[setdiff(eachindex(fs), k)])
     return (K, only(arguments(fs[k])))

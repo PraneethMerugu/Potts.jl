@@ -17,8 +17,8 @@ function fjac(po, u)
     J = zeros(m, m)
     for j in 1:m
         v = copy(u)
-        v[j] += 1e-7
-        J[:, j] = (f(v) .- f0) ./ 1e-7
+        v[j] += 1.0e-7
+        J[:, j] = (f(v) .- f0) ./ 1.0e-7
     end
     return J
 end

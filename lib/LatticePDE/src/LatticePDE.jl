@@ -22,12 +22,12 @@ module LatticePDE
 
 using DomainSets: Interval, leftendpoint, rightendpoint
 using LatticeFields.IR: F16, Grid, Program, ProgramBuilder, Coef, FaceRule, NodeValueRule, MaskDecl,
-                        Access, Sel, Scalar, Bpolicy, Ex, field!, rule!, kernel, add!, program,
-                        node!, constant!, param!, runtime!, coord!, table!, call!, cast!, arith!,
-                        compare!, select!, cond!, load!, access!, store!, isfloat, CALLS,
-                        F32, F64, I32, U8, U32, REAL, BOOL, RESOLVE, CLAMP, INSIDE, ZERO, PERSIGMA,
-                        ADD, MUL, NEG, DIV, MIN, MAX, ABS, SQRT, EXP, LOG, POWI, EQ, LT, LE,
-                        NOT, AND, OR, INSIDE_OP, HEX, DomainEdgeRule, Level, STATIC, RESTRICT, Space, FULL
+    Access, Sel, Scalar, Bpolicy, Ex, field!, rule!, kernel, add!, program,
+    node!, constant!, param!, runtime!, coord!, table!, call!, cast!, arith!,
+    compare!, select!, cond!, load!, access!, store!, isfloat, CALLS,
+    F32, F64, I32, U8, U32, REAL, BOOL, RESOLVE, CLAMP, INSIDE, ZERO, PERSIGMA,
+    ADD, MUL, NEG, DIV, MIN, MAX, ABS, SQRT, EXP, LOG, POWI, EQ, LT, LE,
+    NOT, AND, OR, INSIDE_OP, HEX, DomainEdgeRule, Level, STATIC, RESTRICT, Space, FULL
 using CommonSolve: solve, init, step!, solve!
 using KernelAbstractions: KernelAbstractions
 using LatticeFields: Exec, Problems, isfatal
@@ -37,14 +37,14 @@ using LatticeFields.IR: fieldid, RESOLVE, degenerate, leveldims, sitecoefs
 using LatticeFields.Problems: FieldProblem, FieldSlot, LatticeIndex,
     ExplicitEuler, ExplicitMap, LatticeNewton, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, RT_DT,
     substep_counts, steady_fields, field_series, field_jacobian_sparsity,
-                              field_report
+    field_report
 using ModelingToolkitBase: ModelingToolkitBase, PDESystem, Pre, ShiftIndex, Shift, Hold, Sample, get_bcs, get_domain, get_dvs,
     get_eqs, get_initial_conditions, get_ivs, get_ps, get_systems
 using PrecompileTools: @setup_workload, @compile_workload
 using SciMLBase: AbstractDiscretization, NullParameters, remake
 using SymbolicIndexingInterface: getp, getu, setp, parameter_index
 using Symbolics: Symbolics, Differential, Equation, Num, VarDomainPairing, @register_symbolic,
-                 unwrap, substitute
+    unwrap, substitute
 using SymbolicUtils: SymbolicUtils, arguments, iscall, operation, unwrap_const
 using SymbolicUtils.Code: toexpr
 using TermInterface: TermInterface
@@ -59,9 +59,9 @@ export get_lattice_placement, get_lattice_storage, get_lattice_level, get_lattic
     get_lattice_input_name
 export vocabulary_issues, check_vocabulary
 export LatticeDiscretization, FiniteVolume, CompiledField, discretize, symbolic_discretize,
-       parse_bcs, linearity, Grid, HEX, Interval, lattice_domain
+    parse_bcs, linearity, Grid, HEX, Interval, lattice_domain
 export ExplicitEuler, ExplicitMap, LatticeNewton, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, solve, init, step!, solve!, stability_bound,
-       substep_counts, steady_fields, field_series, field_report
+    substep_counts, steady_fields, field_series, field_report
 export LatticePCG, LatticeGMRES, LatticeMultigrid   # the linear solvers (LinearSolve algorithms; `linsolve = …`); `VCycle` is public
 export LatticeBlockSolve                          # coupled block preconditioner (LinearSolve `precs` function)
 export field_jacobian_sparsity              # the Jacobian's pattern
@@ -100,8 +100,12 @@ arguments; the face mean is an option of the operator, kept through `substitute`
 struct DivKGrad
     mean::Symbol
     function DivKGrad(mean::Symbol)
-        mean in FACE_MEANS || throw(ArgumentError("DivKGrad: the face mean must be one of " *
-                                                  "$(join(repr.(FACE_MEANS), ", ")); got $(repr(mean))"))
+        mean in FACE_MEANS || throw(
+            ArgumentError(
+                "DivKGrad: the face mean must be one of " *
+                    "$(join(repr.(FACE_MEANS), ", ")); got $(repr(mean))"
+            )
+        )
         return new(mean)
     end
 end
@@ -198,12 +202,12 @@ symbolic `Bool` term; arrays are written per component, `u[i] ~ masked(pred, v)`
 """
 function masked(p, v)
     throw(
-            ArgumentError(
-                "`masked(pred, v)` is a symbolic boundary-condition marker; its predicate must be a " *
-                    "symbolic Bool term such as `kindₛ == 3` or `ismember(kindₛ, (2, 3))`. A kind set " *
-                    "written with `∈` (`kindₛ ∈ (2, 3)`, `kindₛ ∈ Set(…)`) is not a term: use `ismember`."
-            )
+        ArgumentError(
+            "`masked(pred, v)` is a symbolic boundary-condition marker; its predicate must be a " *
+                "symbolic Bool term such as `kindₛ == 3` or `ismember(kindₛ, (2, 3))`. A kind set " *
+                "written with `∈` (`kindₛ ∈ (2, 3)`, `kindₛ ∈ Set(…)`) is not a term: use `ismember`."
         )
+    )
 end
 @register_symbolic masked(p::Bool, v::Real)
 
@@ -230,8 +234,12 @@ sol = solve(prob, ExplicitEuler(); dt = 0.25)       # 4 windows per step index
 ```
 """
 function step_index(t::Real)
-    throw(ArgumentError("`step_index(t)` is the step index of a discretization's clock: it has a " *
-        "value only in an equation discretized with `LatticeDiscretization(…; clock = τ)`"))
+    throw(
+        ArgumentError(
+            "`step_index(t)` is the step index of a discretization's clock: it has a " *
+                "value only in an equation discretized with `LatticeDiscretization(…; clock = τ)`"
+        )
+    )
 end
 @register_symbolic step_index(t::Real)
 
@@ -240,9 +248,13 @@ end
 # that reaches one of them is an error, not the unevaluated `D(op(…))` Symbolics returns by
 # default. (`expand_derivatives` asks only for arguments whose own derivative is nonzero.)
 function _no_derivative(op)
-    throw(ArgumentError("LatticePDE operators are opaque to symbolic differentiation; " *
-        "`$op` has no derivative rule (differentiate the field before applying " *
-        "the operator, or keep the derivative outside it)"))
+    throw(
+        ArgumentError(
+            "LatticePDE operators are opaque to symbolic differentiation; " *
+                "`$op` has no derivative rule (differentiate the field before applying " *
+                "the operator, or keep the derivative outside it)"
+        )
+    )
 end
 Symbolics.@register_derivative laplacian(x) I _no_derivative(laplacian)
 Symbolics.@register_derivative (op::DivKGrad)(K, c) I _no_derivative(op)
@@ -316,8 +328,14 @@ when most of its block is (the Majority fold), and its edge is the coarse field'
 struct Coarse
     k::Int
     function Coarse(k::Integer)
-        (k >= 1 && ispow2(k)) || throw(ArgumentError(string("Coarse(", k, "): the factor is a power of two (1, 2, 4, 8, …), ",
-            "the number of lattice sites per axis in each node of the coarse grid")))
+        (k >= 1 && ispow2(k)) || throw(
+            ArgumentError(
+                string(
+                    "Coarse(", k, "): the factor is a power of two (1, 2, 4, 8, …), ",
+                    "the number of lattice sites per axis in each node of the coarse grid"
+                )
+            )
+        )
         return new(Int(k))
     end
 end
@@ -413,8 +431,12 @@ when there are none.
 """
 function check_vocabulary(args...)
     issues = vocabulary_issues(args...)
-    isempty(issues) || throw(ArgumentError("LatticePDE refuses $(length(issues)) term" *
-                                           "$(length(issues) == 1 ? "" : "s"):\n  - " * join(issues, "\n  - ")))
+    isempty(issues) || throw(
+        ArgumentError(
+            "LatticePDE refuses $(length(issues)) term" *
+                "$(length(issues) == 1 ? "" : "s"):\n  - " * join(issues, "\n  - ")
+        )
+    )
     return nothing
 end
 
@@ -432,11 +454,15 @@ function _scan_side!(issues, where, x)
     x isa AbstractArray && (foreach(y -> _scan_side!(issues, where, y), x); return issues)
     v = unwrap_const(Symbolics.unwrap(x))
     if v isa VarDomainPairing
-        push!(issues, "$where: `$(v.variables) ∈ $(v.domain)` is a domain pairing (an interval), " *
-                      "not a kind set; $ISMEMBER_HINT")
+        push!(
+            issues, "$where: `$(v.variables) ∈ $(v.domain)` is a domain pairing (an interval), " *
+                "not a kind set; $ISMEMBER_HINT"
+        )
     elseif v isa Bool
-        push!(issues, "$where: the side is the literal `$v`; `kindₛ ∈ Set(…)` evaluates before a term " *
-                      "exists; $ISMEMBER_HINT")
+        push!(
+            issues, "$where: the side is the literal `$v`; `kindₛ ∈ Set(…)` evaluates before a term " *
+                "exists; $ISMEMBER_HINT"
+        )
     elseif v isa AbstractArray
         foreach(y -> _scan_side!(issues, where, y), v)
     else
@@ -452,16 +478,22 @@ function _scan_term!(issues, where, u)
     if f === in
         push!(issues, "$where: `$u` is an `in` term, not a kind set; $ISMEMBER_HINT")
     elseif f isa Pre
-        push!(issues, "$where: `$u` uses `Pre`, the callback previous value, which has no meaning " *
-                      "in a field system; $SHIFT_HINT")
+        push!(
+            issues, "$where: `$u` uses `Pre`, the callback previous value, which has no meaning " *
+                "in a field system; $SHIFT_HINT"
+        )
     end
     if _isvocabulary(f) && any(a -> unwrap_const(a) isa Bool, args)
-        push!(issues, "$where: `$u` has a literal `Bool` argument; `kindₛ ∈ Set(…)` evaluates before a " *
-                      "term exists; $ISMEMBER_HINT")
+        push!(
+            issues, "$where: `$u` has a literal `Bool` argument; `kindₛ ∈ Set(…)` evaluates before a " *
+                "term exists; $ISMEMBER_HINT"
+        )
     end
     if any(a -> unwrap_const(a) isa ShiftIndex, args)
-        push!(issues, "$where: `$u` has a `ShiftIndex` argument (the `c(k + 1)` notation does not " *
-                      "apply to space-time variables); $SHIFT_HINT")
+        push!(
+            issues, "$where: `$u` has a `ShiftIndex` argument (the `c(k + 1)` notation does not " *
+                "apply to space-time variables); $SHIFT_HINT"
+        )
     end
     foreach(a -> _scan_term!(issues, where, a), args)
     return issues

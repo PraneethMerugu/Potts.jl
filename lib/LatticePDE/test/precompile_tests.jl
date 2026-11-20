@@ -5,8 +5,8 @@
 @testsetup module LP_precompile
 using Test, LatticePDE
 using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
-                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
-                           t_nounits as t, D_nounits as D
+    System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+    t_nounits as t, D_nounits as D
 using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
 using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
 using DomainSets: Interval
@@ -19,6 +19,6 @@ end
 
 @testitem "the precompile workload runs" setup = [LP_precompile] tags = [:latticepde, :precompile] begin
     @testset "the precompile workload runs" begin
-    @test (@test_logs min_level = Base.CoreLogging.Warn LatticePDE._precompile_workload()) === nothing
-end
+        @test (@test_logs min_level = Base.CoreLogging.Warn LatticePDE._precompile_workload()) === nothing
+    end
 end

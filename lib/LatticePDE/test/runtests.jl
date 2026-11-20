@@ -38,7 +38,7 @@ function _resolve_lp_groups(groups_table, raw_groups)
     selected = String[]
     for raw in raw_groups
         g = strip(String(raw))
-        startswith(g, "LatticePDE_") && (g = g[length("LatticePDE_") + 1:end])
+        startswith(g, "LatticePDE_") && (g = g[(length("LatticePDE_") + 1):end])
         g == "LatticePDE" && (g = "All")
         if g == "All"
             for name in sort!(collect(keys(groups_table)))
@@ -82,32 +82,44 @@ end
 
 const LATTICEPDE_DEVICE = !isempty(get(ENV, "LATTICEPDE_GPU", ""))
 
-function latticepde_tests(groups = LATTICEPDE_SELECTED_GROUPS;
-        nworkers = parse(Int, get(ENV, "RETESTITEMS_NWORKERS", LATTICEPDE_DEVICE ? "0" : "3")))
+function latticepde_tests(
+        groups = LATTICEPDE_SELECTED_GROUPS;
+        nworkers = parse(Int, get(ENV, "RETESTITEMS_NWORKERS", LATTICEPDE_DEVICE ? "0" : "3"))
+    )
     qa = get(ENV, "LATTICEPDE_QA", "true") == "true"
     name = (n = get(ENV, "LATTICEPDE_TEST_NAME", ""); isempty(n) ? nothing : Regex(n))
     want = Symbol.(filter(!isempty, split(get(ENV, "LATTICEPDE_TEST_TAGS", ""), ',')))
     endfile = get(ENV, "POTTS_TEST_END_EXPR_FILE", "")
     test_end_expr = isempty(endfile) ? Expr(:block) : Meta.parse("begin\n" * read(endfile, String) * "\nend")
     allow_gpu = "gpu" in groups || (LATTICEPDE_DEVICE && any(g -> g == "All" || g == "LatticePDE", LATTICEPDE_RAW_GROUPS))
-    group_specs = [(Symbol.(get(LATTICEPDE_GROUPS_TABLE[g], "tags", String[])),
-                    Symbol.(get(LATTICEPDE_GROUPS_TABLE[g], "exclude_tags", String[])))
-                   for g in groups]
+    group_specs = [
+        (
+            Symbol.(get(LATTICEPDE_GROUPS_TABLE[g], "tags", String[])),
+            Symbol.(get(LATTICEPDE_GROUPS_TABLE[g], "exclude_tags", String[])),
+        )
+            for g in groups
+    ]
     function in_group(ti)
-        return any(((tgs, ex),) -> begin
+        return any(
+            ((tgs, ex),) -> begin
                 effective_ex = allow_gpu ? filter(!=(:gpu_only), ex) : ex
                 (isempty(tgs) || any(in(ti.tags), tgs)) && !any(in(ti.tags), effective_ex)
-            end, group_specs)
+            end, group_specs
+        )
     end
     function picked(ti)
         return in_group(ti) && (isempty(want) || any(in(ti.tags), want)) &&
             (allow_gpu || !(:gpu_only in ti.tags)) && (qa || !(:qa in ti.tags) || "qa" in groups)
     end
-    kw = (; name, test_end_expr, testitem_timeout = 3600, retries = 0, nworker_threads = string(Threads.nthreads()),
-        logs = :batched)
+    kw = (;
+        name, test_end_expr, testitem_timeout = 3600, retries = 0, nworker_threads = string(Threads.nthreads()),
+        logs = :batched,
+    )
     failed = Any[]
-    for (f, nw) in ((ti -> picked(ti) && !(:timing in ti.tags), nworkers),
-                    (ti -> picked(ti) && :timing in ti.tags, min(nworkers, 1)))
+    for (f, nw) in (
+            (ti -> picked(ti) && !(:timing in ti.tags), nworkers),
+            (ti -> picked(ti) && :timing in ti.tags, min(nworkers, 1)),
+        )
         try
             task_local_storage(:SOURCE_PATH, Pkg.Operations.testfile(dirname(Base.active_project()))) do
                 runtests(f, LATTICEPDE_TESTDIR; nworkers = nw, kw...)

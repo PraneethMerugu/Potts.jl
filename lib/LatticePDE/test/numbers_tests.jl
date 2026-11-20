@@ -81,11 +81,11 @@ end
             function Jd(v)
                 pv = withp(ode.p.values, i, v)
                 return sum(
-                        solve(
-                            remake(ode; p = pv, u0 = eltype(pv).(ode.u0)), Tsit5(); abstol = 1.0e-12,
-                            reltol = 1.0e-12
-                        ).u[end]
-                    )
+                    solve(
+                        remake(ode; p = pv, u0 = eltype(pv).(ode.u0)), Tsit5(); abstol = 1.0e-12,
+                        reltol = 1.0e-12
+                    ).u[end]
+                )
             end
             v0 = ode.p.values[i]
             d = ForwardDiff.derivative(Jd, v0)
@@ -450,11 +450,11 @@ end
         function mk(v, T)
             f = v === she ? sh : s64
             return discretize(
-                    PDESystem(
-                        [D(v) ~ 0.0625 * laplacian(v) - 0.5 * v], [f(0, x, y) ~ x * y + 0.5],
-                        sdom, [t, x, y], [v], Any[]; name = :s
-                    ), LatticeDiscretization(Grid((16, 16)); T)
-                )
+                PDESystem(
+                    [D(v) ~ 0.0625 * laplacian(v) - 0.5 * v], [f(0, x, y) ~ x * y + 0.5],
+                    sdom, [t, x, y], [v], Any[]; name = :s
+                ), LatticeDiscretization(Grid((16, 16)); T)
+            )
         end
         ref = solve(mk(s64e, Float64), BackwardEuler(); dt = 0.1).u[end]
         for T in (Float32, Float64), alg in (
@@ -576,11 +576,11 @@ end
         sdom = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
         function mk(f, T)
             return discretize(
-                    PDESystem(
-                        [D(f(t, x, y)) ~ 0.02 * DivKGrad(:harmonic)(1 + x, f(t, x, y)) - f(t, x, y) + 0.5 * y],
-                        [f(0, x, y) ~ x * y + 0.5], sdom, [t, x, y], [f(t, x, y)], Any[]; name = :s
-                    ), LatticeDiscretization(Grid((8, 8)); T)
-                )
+                PDESystem(
+                    [D(f(t, x, y)) ~ 0.02 * DivKGrad(:harmonic)(1 + x, f(t, x, y)) - f(t, x, y) + 0.5 * y],
+                    [f(0, x, y) ~ x * y + 0.5], sdom, [t, x, y], [f(t, x, y)], Any[]; name = :s
+                ), LatticeDiscretization(Grid((8, 8)); T)
+            )
         end
         for (f, S, T, tol) in ((sfr32, Float32, Float64, 1.0e-5), (sfr16, Float16, Float32, 4.0e-3), (sfr64, Float64, Float32, 1.0e-5))
             for alg in (BackwardEuler(), CrankNicolson(), BDF2(), QuasiSteady())
@@ -602,10 +602,10 @@ end
         ndom = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
         function emsg(f)
             return try
-                    f(); ""
-                catch err
-                    sprint(showerror, err)
-                end
+                f(); ""
+            catch err
+                sprint(showerror, err)
+            end
         end
         pw = discretize(
             PDESystem([D(nwe) ~ laplacian(nwe)], [nw(0, x, y) ~ x], ndom, [t, x, y], [nwe], Any[]; name = :n),

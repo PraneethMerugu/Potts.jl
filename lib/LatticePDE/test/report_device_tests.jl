@@ -7,8 +7,8 @@
 @testsetup module LP_report_device
 using Test, LatticePDE
 using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
-                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
-                           t_nounits as t, D_nounits as D
+    System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
+    t_nounits as t, D_nounits as D
 using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
 using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
 using DomainSets: Interval
@@ -33,47 +33,54 @@ end
 
 @testitem "field_report on nameof(typeof(PDEV))" setup = [LP_report_device] tags = [:latticepde, :report_device, :gpu_only] begin
     @testset "field_report on $(nameof(typeof(PDEV)))" begin
-    @parameters dD = 1e-3 dk = 0.1
-    @variables dc(..)
-    dce = dc(t, x, y)
+        @parameters dD = 1.0e-3 dk = 0.1
+        @variables dc(..)
+        dce = dc(t, x, y)
         sys = PDESystem(
             D(dce) ~ dD * laplacian(dce) - dk * dce,
-        [dc(0, x, y) ~ 0.0, dc(t, 0, y) ~ 1.0, Differential(x)(dc(t, 1, y)) ~ 0.0, dc(t, x, 0) ~ dc(t, x, 1)],
-        [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [dce], [dD, dk]; name = :d)
-    mk(n, be) = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float32, backend = be))
-    function body(r)
-        return join(filter(l -> !(startswith(l, "  problem") || startswith(l, "  launches") || startswith(l, "  fusion") ||
-            startswith(l, "           ")), split(r, '\n')), '\n')
-    end
-    # the §7.4 count at 512² (12 substeps of the bound) on the device
-    pd = mk(512, PDEV)
-        ig = init(pd, ExplicitEuler(); dt = 0.01)
-    r = sprint(field_report, ig)
-    @test occursin("backend $(nameof(typeof(PDEV)))", r) && occursin("12 substeps", r) && occursin("/ 1.8⌉ = 12 [bound]", r)
-    @test occursin("state Float32, compute Float32", r)
-        for alg in (ExplicitEuler(), BackwardEuler())
-        pd, ph = mk(32, PDEV), mk(32, KernelAbstractions.CPU())
-            a, b, h = init(pd, alg; dt = 0.01), init(pd, alg; dt = 0.01), init(ph, alg; dt = 0.01)
-        step!(a)
-        step!(b)
-        step!(h)
-        rd, rh = sprint(field_report, a), sprint(field_report, h)
-        # the same group policy as the host (the device and host plans' launches may differ)
-        @test body(rd) == body(rh) || (println(rd, "\n----\n", rh); false)
-        step!(a)
-        step!(b)
-        @test Array(a.u) == Array(b.u)                  # the report changed nothing in the run
-        if alg isa BackwardEuler
-                @test occursin("LatticePCG() (`linsolve = :auto`), multigrid levels", rd) && occursin("1 window; 1 solve; status Success", rd)
+            [dc(0, x, y) ~ 0.0, dc(t, 0, y) ~ 1.0, Differential(x)(dc(t, 1, y)) ~ 0.0, dc(t, x, 0) ~ dc(t, x, 1)],
+            [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [dce], [dD, dk]; name = :d
+        )
+        mk(n, be) = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float32, backend = be))
+        function body(r)
+            return join(
+                filter(
+                    l -> !(
+                        startswith(l, "  problem") || startswith(l, "  launches") || startswith(l, "  fusion") ||
+                            startswith(l, "           ")
+                    ), split(r, '\n')
+                ), '\n'
+            )
         end
-    end
+        # the §7.4 count at 512² (12 substeps of the bound) on the device
+        pd = mk(512, PDEV)
+        ig = init(pd, ExplicitEuler(); dt = 0.01)
+        r = sprint(field_report, ig)
+        @test occursin("backend $(nameof(typeof(PDEV)))", r) && occursin("12 substeps", r) && occursin("/ 1.8⌉ = 12 [bound]", r)
+        @test occursin("state Float32, compute Float32", r)
+        for alg in (ExplicitEuler(), BackwardEuler())
+            pd, ph = mk(32, PDEV), mk(32, KernelAbstractions.CPU())
+            a, b, h = init(pd, alg; dt = 0.01), init(pd, alg; dt = 0.01), init(ph, alg; dt = 0.01)
+            step!(a)
+            step!(b)
+            step!(h)
+            rd, rh = sprint(field_report, a), sprint(field_report, h)
+            # the same group policy as the host (the device and host plans' launches may differ)
+            @test body(rd) == body(rh) || (println(rd, "\n----\n", rh); false)
+            step!(a)
+            step!(b)
+            @test Array(a.u) == Array(b.u)                  # the report changed nothing in the run
+            if alg isa BackwardEuler
+                @test occursin("LatticePCG() (`linsolve = :auto`), multigrid levels", rd) && occursin("1 window; 1 solve; status Success", rd)
+            end
+        end
         s = solve(mk(32, PDEV), BackwardEuler(); dt = 0.01)
-    rs = sprint(field_report, s)
+        rs = sprint(field_report, s)
         @test occursin("owned solve, BackwardEuler(), retcode Success", rs) && occursin("substep counts dc 1; 10 solves", rs)
-    st = solve(mk(32, PDEV), Tsit5())
-    rt = sprint(field_report, st)
-    @test occursin("SciML solve, Tsit5, retcode Success", rt) && occursin("backend $(nameof(typeof(PDEV)))", rt)
+        st = solve(mk(32, PDEV), Tsit5())
+        rt = sprint(field_report, st)
+        @test occursin("SciML solve, Tsit5, retcode Success", rt) && occursin("backend $(nameof(typeof(PDEV)))", rt)
         # (the device's matrix-free `JacobianOperator`, a SciMLOperators `FunctionOperator`)
-    @test occursin("jac update_coefficients!; jac_prototype FunctionOperator; jvp LatticeJVP", rt)
-end
+        @test occursin("jac update_coefficients!; jac_prototype FunctionOperator; jvp LatticeJVP", rt)
+    end
 end
