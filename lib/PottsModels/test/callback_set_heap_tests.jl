@@ -1,4 +1,4 @@
-# `15_openvt_checkerboard_tests.jl` m3 regression: a CallbackSet of two differently typed DiscreteCallbacks (a recorder
+# A regression found by the checkerboard runner: a CallbackSet of two differently typed DiscreteCallbacks (a recorder
 # and `openvt_release`) with `saveat` on the host CheckerboardCPM path corrupted the GC heap
 # (segfault or "GC error (probable corruption)" in a later `_save!`; CorePotts looped `for cb
 # in integ.callbacks` over the heterogeneous tuple). Run alone on Julia 1.12.6 (macOS arm64),

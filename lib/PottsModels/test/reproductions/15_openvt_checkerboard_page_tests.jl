@@ -1,10 +1,8 @@
-# `15_openvt_checkerboard_tests.jl` m4, re-scoped (D-225; replaces the D-222 test `15_openvt_entries.jl`): the
-# CheckerboardCPM characterisation on page 15.  once committed by the
-# coordinator; the test author writes no implementation.
+# The CheckerboardCPM characterisation on page 15 (D-225; replaces the D-222 test `15_openvt_entries.jl`).
 #
 # Maintainer (D-225): "ok we can leave checkerboard out of the submission, but keep it in the
 # docs". So:
-#   - the OpenVT submission stays sequential-only, exactly as `15_openvt_package_delivery_tests.jl` merged it: no `entries`
+#   - the OpenVT submission stays sequential-only, exactly as D-215 left it: no `entries`
 #     keyword, no OPENVT_ENTRIES / OPENVT_CHECKERBOARD_TOKEN, no checkerboard folder, bulk
 #     file, EMAIL.md text or O1 replay; Q27 is withdrawn (never raised);
 #   - page 15 keeps a "Potts.jl (checkerboard)" section and its figure slots, as a
@@ -16,7 +14,7 @@
 # D-224 (T_cb calibrated on the P1b chain at the production colour count, 4 = 4), D-225.
 #
 # Every number is READ from the latest final checkerboard record (as
-# `15_openvt_checkerboard_tests.jl` picks it: the latest `data/15/checkerboard-<date>/` with meta
+# the checkerboard test picks it (`15_openvt_checkerboard_tests.jl`): the latest `data/15/checkerboard-<date>/` with meta
 # status "final", else the latest), never hard-coded: the record is being regenerated under
 # D-224, so T_cb, the cycle and the counts change.
 #
@@ -85,8 +83,8 @@
 #      `split = :email` build carry no trace of the checkerboard: no path and no text member
 #      (README, CSV, TOML, EMAIL.md, scripts) that contains "checkerboard" (any case) or
 #      "CheckerboardCPM"; the trees are exactly implementations/Potts.jl and results/Potts.jl
-#      (and core.zip, bulk/, EMAIL.md). Byte equality with the `15_openvt_package_delivery_tests.jl` build is the
-#      `15_openvt_package_tests.jl` / `15_openvt_package_delivery_tests.jl`'s job; this pins that adding the page
+#      (and core.zip, bulk/, EMAIL.md). Byte equality with the D-215 build is checked by
+#      `15_openvt_package_tests.jl` and `15_openvt_package_delivery_tests.jl`; this pins that adding the page
 #      section, the renders and the plot scripts changes nothing the package reads.
 
 @testsetup module OpenVTCheckerboardPageSetup
@@ -223,13 +221,13 @@ end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "15 openvt checkerboard m4 (R) the record provides the page's numbers" setup = [OpenVTCheckerboardPageSetup] tags = [:pottsmodels, :reproductions] begin
+@testitem "15 openvt checkerboard page (R) the record provides the page's numbers" setup = [OpenVTCheckerboardPageSetup] tags = [:pottsmodels, :reproductions] begin
     # =============================================================================================
-    @testset "15 openvt checkerboard m4 (R) the record provides the page's numbers" begin
+    @testset "15 openvt checkerboard page (R) the record provides the page's numbers" begin
         @test REC !== nothing
         for k in TIME_KEYS
             ok = haskey(TIME, k)
-            ok || @info "15 openvt checkerboard m4: meta.toml [time] of $(REC) lacks $k (the D-224 re-run writes it)"
+            ok || @info "15 openvt checkerboard page: meta.toml [time] of $(REC) lacks $k (the D-224 re-run writes it)"
             @test ok
         end
         @test get(TIME, "phases_chain", -1) == get(TIME, "phases_monolayer", -2)            # D-224
@@ -243,8 +241,8 @@ end
     end
 end
 
-@testitem "15 openvt checkerboard m4 (P1–P5) page 15: the Potts.jl (checkerboard) section" setup = [OpenVTCheckerboardPageSetup] tags = [:pottsmodels, :reproductions] begin
-    @testset "15 openvt checkerboard m4 (P1–P5) page 15: the Potts.jl (checkerboard) section" begin
+@testitem "15 openvt checkerboard page (P1–P5) page 15: the Potts.jl (checkerboard) section" setup = [OpenVTCheckerboardPageSetup] tags = [:pottsmodels, :reproductions] begin
+    @testset "15 openvt checkerboard page (P1–P5) page 15: the Potts.jl (checkerboard) section" begin
         @test !isempty(SRC) && REC !== nothing
         kdev = head(h -> h[2] == 3 && occursin(r"^Deviations"i, h[3]))
         kdet = head(h -> h[2] == 2 && occursin(r"^(\d+\.\s*)?Details"i, h[3]))
@@ -265,7 +263,7 @@ end
             @test any(p -> occursin(r"\bnot\b[^.]{0,60}\bsubmission"i, p), paras(prose))
             @test occursin(r"characteri[sz]ation"i, flat)
             bad = [re.pattern for re in NOT_SUBMISSION if occursin(re, sec)]
-            isempty(bad) || @info "15 openvt checkerboard m4 page: submission wording in the checkerboard section" bad
+            isempty(bad) || @info "15 openvt checkerboard page: submission wording in the checkerboard section" bad
             @test isempty(bad)
             # (P3) the time scale and the colour counts, from the record
             t = TIME
@@ -275,7 +273,7 @@ end
                         string(t["alpha_text"]), checkerboard_page_2dp(t["z"]), checkerboard_page_2dp(t["z_p1b"]),
                     )
                     ok = occursin(s, flat)
-                    ok || @info "15 openvt checkerboard m4 page: the checkerboard section lacks" s
+                    ok || @info "15 openvt checkerboard page: the checkerboard section lacks" s
                     @test ok
                 end
                 cc, cm = t["phases_chain"], t["phases_monolayer"]
@@ -289,14 +287,14 @@ end
             @test nt > 0 && occursin("$nf of $nt", flat)
             if nf > 0                                    # (P4, P5) only with flagged rows (D-271)
                 f = dev_findings(sec)
-                isempty(f) || @info "15 openvt checkerboard m4 page deviations" first(f, 10)
+                isempty(f) || @info "15 openvt checkerboard page deviations" first(f, 10)
                 @test isempty(f)
                 for re in (
                         r"thinning"i, r"claim"i, r"D-008", r"D-220", r"not a bug"i, r"ΔH", r"brute[- ]force"i,
                         r"\b0 mismatches\b|\bno mismatch"i,
                     )
                     ok = occursin(re, flat)
-                    ok || @info "15 openvt checkerboard m4 page: the cause text lacks" re
+                    ok || @info "15 openvt checkerboard page: the cause text lacks" re
                     @test ok
                 end
                 mc = maxcolours()
@@ -308,8 +306,8 @@ end
     end
 end
 
-@testitem "15 openvt checkerboard m4 (P6–P9) page 15: figure slots, Table S5, renders, wording" setup = [OpenVTCheckerboardPageSetup] tags = [:pottsmodels, :reproductions] begin
-    @testset "15 openvt checkerboard m4 (P6–P9) page 15: figure slots, Table S5, renders, wording" begin
+@testitem "15 openvt checkerboard page (P6–P9) page 15: figure slots, Table S5, renders, wording" setup = [OpenVTCheckerboardPageSetup] tags = [:pottsmodels, :reproductions] begin
+    @testset "15 openvt checkerboard page (P6–P9) page 15: figure slots, Table S5, renders, wording" begin
         @test REC !== nothing
         k2 = head(h -> h[2] == 3 && occursin(r"^Figure 2\b", h[3]))
         k39 = head(h -> h[2] == 3 && occursin(r"Figures 3 and 9", h[3]))
@@ -344,7 +342,7 @@ end
             for f in RENDERS
                 p = rec(f)
                 ok = isfile(p) && filesize(p) <= 10 * 2^20 && read(p, 8) == UInt8[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
-                ok || @info "15 openvt checkerboard m4: the render $f is missing from $(REC) (or not a PNG)"
+                ok || @info "15 openvt checkerboard page: the render $f is missing from $(REC) (or not a PNG)"
                 @test ok
                 @test any(s -> occursin(f, read(rec(s), String)), scripts)
             end
@@ -352,27 +350,27 @@ end
         # (P9)
         @test !occursin(r"\bQ2[78]\b", SRC)
         bad = [re.pattern for re in FORBIDDEN if occursin(re, replace(SRC, "PraneethMerugu/Potts.jl" => ""))]
-        isempty(bad) || @info "15 openvt checkerboard m4 page: forbidden text" bad
+        isempty(bad) || @info "15 openvt checkerboard page: forbidden text" bad
         @test isempty(bad)
     end
 end
 
-@testitem "15 openvt checkerboard m4 (S1) the submission API is unchanged" setup = [OpenVTCheckerboardPageSetup] tags = [:pottsmodels, :reproductions] begin
-    @testset "15 openvt checkerboard m4 (S1) the submission API is unchanged" begin
+@testitem "15 openvt checkerboard page (S1) the submission API is unchanged" setup = [OpenVTCheckerboardPageSetup] tags = [:pottsmodels, :reproductions] begin
+    @testset "15 openvt checkerboard page (S1) the submission API is unchanged" begin
         @test !isdefined(PottsModels, :OPENVT_CHECKERBOARD_TOKEN)
         @test !isdefined(PottsModels, :OPENVT_ENTRIES)
         @test !hasmethod(PottsModels.openvt_submission_package, Tuple{String}, (:entries,))
     end
 end
 
-@testitem "15 openvt checkerboard m4 (S2) the package carries no checkerboard (bulk tier)" setup = [OpenVTCheckerboardPageSetup] tags = [:pottsmodels, :reproductions] begin
+@testitem "15 openvt checkerboard page (S2) the package carries no checkerboard (bulk tier)" setup = [OpenVTCheckerboardPageSetup] tags = [:pottsmodels, :reproductions] begin
     if isempty(BULK) || !isdir(BULK)
-        @testset "15 openvt checkerboard m4 (S2) the package carries no checkerboard (bulk tier)" begin
-            @info "15 openvt checkerboard m4: $(BULK_ENV) not set; the package check is skipped"
-            @test_skip "15 openvt checkerboard m4 (S2) needs $(BULK_ENV)"
+        @testset "15 openvt checkerboard page (S2) the package carries no checkerboard (bulk tier)" begin
+            @info "15 openvt checkerboard page: $(BULK_ENV) not set; the package check is skipped"
+            @test_skip "15 openvt checkerboard page (S2) needs $(BULK_ENV)"
         end
     else
-        @testset "15 openvt checkerboard m4 (S2) the package carries no checkerboard" begin
+        @testset "15 openvt checkerboard page (S2) the package carries no checkerboard" begin
             out = mktempdir()
             U, S = joinpath(out, "u"), joinpath(out, "s")
             trace(s) = occursin(r"checkerboard"i, s) || occursin("CheckerboardCPM", s)
@@ -398,7 +396,7 @@ end
                     any(e -> endswith(m, e), textext) && trace(String(read(`unzip -p $(joinpath(S, "core.zip")) $m`))) &&
                         push!(bad, "core.zip:$m (text)")
                 end
-                isempty(bad) || @info "15 openvt checkerboard m4: checkerboard traces in the submission" first(bad, 10)
+                isempty(bad) || @info "15 openvt checkerboard page: checkerboard traces in the submission" first(bad, 10)
                 @test isempty(bad)
             finally
                 rm(out; recursive = true, force = true)

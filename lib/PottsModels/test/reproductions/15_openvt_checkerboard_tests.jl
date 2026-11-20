@@ -1,4 +1,4 @@
-# `15_openvt_checkerboard_tests.jl` m1: characterisation of the OpenVT entry
+# Characterisation of the OpenVT entry
 # "Potts.jl (checkerboard)", `CheckerboardCPM` on the PC's GPU (ROCm), against the CPU
 # `SequentialCPM` reference (the "Potts.jl" entry).
 # Spec 15 §1.3 (the entry, its expected-difference classes and its own time scale), §3.1 O1,
@@ -51,7 +51,7 @@
 # rule decides the time scale (item 5).
 #
 # ---------------------------------------------------------------------------------------------
-# Per-seed metrics (test author; the F3/F8 rules of `15_openvt_f3_f8_tests.jl`, per run)
+# Per-seed metrics (the F3/F8 rules of `15_openvt_f3_f8_tests.jl`, per run)
 # ---------------------------------------------------------------------------------------------
 # A run's series: saves (t = MCS / cycle, N, r, A, C, w, g), cut at the first save with
 # N ≥ cells (1000 for b, f; 10⁴ for a). Metric ids (no spaces; τ printed with one decimal).
@@ -59,7 +59,7 @@
 # read at a time is interpolated linearly in t between the two saves around that time (the
 # value at a save when it falls on one; the last save's value past the last save). A
 # last-save-before rule reads each arm up to one save interval stale, a bias that differs
-# between grids (the `15_openvt_checkerboard_tests.jl` review, exp3: a 39-MCS phase alone gave |z| up to 14.9 on case
+# between grids (a review experiment: a 39-MCS phase alone gave |z| up to 14.9 on case
 # (f)'s r@ and A@).
 #   L@τ      log₂ N at τ, interpolated, τ ∈ 0.5:1:8.5                     (F3.1)
 #   r@τ, A@τ r and A at τ, interpolated, τ ∈ 4.5:1:8.5                     (F3.3, F3.4)
@@ -77,20 +77,20 @@
 #   O1.n_mean, O1.n_sd, O1.n6, O1.i0   of the run's last O1 frame (the stop save; D-215
 #            columns x,y,i,n,g): mean and sample sd of n, share of cells with n == 6, share
 #            with i == 0. Not recomputable from git (O1 files are bulk); checked for range.
-# The sequential reference values are the `15_openvt_f3_f8_tests.jl` record's runs of the case (all its seeds,
+# The sequential reference values are the F3/F8 record's runs of the case (all its seeds,
 # cycle 775); this file recomputes them from that record's timeseries.tsv. `lost` is not in
-# the `15_openvt_f3_f8_tests.jl` or O1 records (neither has division counts), so the checkerboard record carries
+# the F3/F8 or O1 records (neither has division counts), so the checkerboard record carries
 # a CPU replay of the sequential seeds (`reference_runs.tsv`): same seeds, protocol and
-# algorithm, whose stop MCS and N must equal the `15_openvt_f3_f8_tests.jl` record's (the replay is the run, as
+# algorithm, whose stop MCS and N must equal the F3/F8 record's (the replay is the run, as
 # the O1 record's was; D-029 same seed, same backend). The checkerboard values use the
 # record's own cycle (item 5).
 #
 # ---------------------------------------------------------------------------------------------
-# The record (D-146 form; written by the m2/m3 runner on the PC's GPU)
+# The record (D-146 form; written by the checkerboard runner on the PC's GPU)
 # ---------------------------------------------------------------------------------------------
 # reproductions/data/15/checkerboard-<YYYY-MM-DD>/ (the latest final one is checked, else the
 # latest; files .tsv/.toml/.md/.jl/.png/.svg only, none over 10 MB, as the page test's (g)):
-#   provenance.toml  item = "`15_openvt_checkerboard_tests.jl`"; commit (40 hex), dirty_tracked = false, julia, machine,
+#   provenance.toml  item = the record's item ID (checked below); commit (40 hex), dirty_tracked = false, julia, machine,
 #                    cpu, threads, started, finished, wall_s; runner = the repository path of a
 #                    runner inside this record directory (it exists), runner_sha256 = its
 #                    sha256; test, test_sha256, manifest_sha256 (64 hex each); and
@@ -110,9 +110,9 @@
 #                    live == N (live cells at the stop), divisions = divisions by the stop;
 #                    planner = "device" for every run
 #   reference_runs.tsv  case k seed mcs N divisions live: the CPU SequentialCPM replay of every
-#                    `15_openvt_f3_f8_tests.jl` seed of cases a, b, f; mcs and N equal the `15_openvt_f3_f8_tests.jl` runs.tsv
+#                    the F3/F8 record's seed of cases a, b, f; mcs and N equal the F3/F8 record's runs.tsv
 #   timeseries.tsv   case seed mcs N r|R A C w g: every save of every checkerboard run (the
-#                    length column may be headed `r` as in `15_openvt_f3_f8_tests.jl` or `R` as D-215 item 2)
+#                    length column may be headed `r` as in the F3/F8 record or `R` as D-215 item 2)
 #   metrics.tsv      algorithm case seed metric value: algorithm ∈ {sequential, checkerboard};
 #                    every metric id above for every seed of both algorithms
 #   comparison.tsv   case metric n_ref n_alt mean_ref mean_alt sd_ref sd_alt diff se z beyond:
@@ -122,7 +122,7 @@
 #                    number), 100 runs at λ = 2; compared with the λ = 2 rows of the sequential
 #                    calibration record SEQ_CAL's crossings.tsv
 #   entry/deviations.tsv   the checkerboard entry's deviations, header
-#                    target case ours paper suspected_cause author_question (the `15_openvt_f3_f8_tests.jl`
+#                    target case ours paper suspected_cause author_question (as in the F3/F8 record
 #                    record's columns); target's first token is the metric id; `ours` holds the
 #                    checkerboard mean, `paper` the sequential reference mean (first decimal
 #                    numbers); suspected_cause's leading clause (before the first ':') is one
@@ -132,7 +132,7 @@
 #                    the words "under investigation" appear nowhere in a cause.
 # The deviations table sits in `entry/` and the comparison is not called verdicts.tsv: the
 # page and package tests sweep data/15/*/{deviations,verdicts}.tsv into the
-# sequential entry's tables, and this entry's rows do not belong there (m4 decides).
+# sequential entry's tables, and this entry's rows do not belong there (the page test decides).
 #
 # ---------------------------------------------------------------------------------------------
 # API required of the implementer (PottsModels; `public`, not exported, as openvt_snapshot)
@@ -173,18 +173,18 @@ const FOLDER = "Potts.jl_checkerboard"
 const DATA = joinpath(pkgdir(PottsModels), "reproductions", "data", "15")
 const PREFIX = "checkerboard-"
 const SEQ_REF = "f3-f8-2026-10-08"
-# the sequential reference record (`15_openvt_f3_f8_tests.jl`)
+# the sequential reference record (the F3/F8 record)
 const SEQ_CAL = "calibration-2026-10-05"
 # the sequential chain calibration (`15_openvt_calibration_tests.jl`)
 const CYCLE_SEQ = 775
 const T_SEQ = 156
-# sequential T(λ = 2), `15_openvt_calibration_tests.jl` record
+# sequential T(λ = 2), the calibration record
 const CHECKERBOARD_TN = 0.5:1.0:8.5
 const CHECKERBOARD_TR = 4.5:1.0:8.5
 const KSYNC = 0:3
 const REQUIRED = ["a", "b", "f"]
 # the cases compared, exactly
-# case protocols (`15_openvt_f3_f8_tests.jl`, spec 15 §4.0.1); the sequential seeds are the `15_openvt_f3_f8_tests.jl` record's
+# case protocols (`15_openvt_f3_f8_tests.jl`, spec 15 §4.0.1); the sequential seeds are the F3/F8 record's
 const CASES = Dict(
     "f" => (; beta = 0.0, gamma = 0.0, sigma_X = 0.0, L = 400, cells = 1000, runs = 100, seed = k -> 15_200 + k),
     "b" => (; beta = 0.0, gamma = 0.0, sigma_X = 0.4, L = 400, cells = 1000, runs = 100, seed = k -> 15_000 + k),
@@ -296,7 +296,7 @@ function seed_metrics(s, cells)
     end
     return m
 end
-# an ideal deterministic run (as `15_openvt_f3_f8_tests.jl`'s): N = 2^⌊rate (t − lag)⌋ saved every 39 MCS
+# an ideal deterministic run (as in `15_openvt_f3_f8_tests.jl`): N = 2^⌊rate (t − lag)⌋ saved every 39 MCS
 function ideal(; lag = 0.02, rate = 1.0, cells = 1000, cycle = CYCLE_SEQ, every = 39)
     mcs = Int[]; N = Int[]
     m = 0
@@ -599,7 +599,7 @@ end
         end
         # not swept into the sequential entry's tables (page and package tests)
         @test !isfile(joinpath(D, "deviations.tsv")) && !isfile(joinpath(D, "verdicts.tsv"))
-        # small statistics only (the page test's (g) rules, which m4 will apply)
+        # small statistics only (the page test's (g) rules, which the page test applies)
         for (root, _, fs) in walkdir(D), f in fs
             p = joinpath(root, f)
             ok = any(e -> endswith(lowercase(f), e), EXT) && filesize(p) <= 10 * 2^20
@@ -701,7 +701,7 @@ end
                 @test mm[1] == 0 && mm[end] == parse(Int, r["mcs"]) && s.N[end] == parse(Int, r["N"])
                 @test all(diff(mm[1:(end - 1)]) .== every) && all(diff(mm) .> 0)
             end
-            # the sequential replay is the `15_openvt_f3_f8_tests.jl` record's runs (stop MCS and N), with counts
+            # the sequential replay is the F3/F8 record's runs (stop MCS and N), with counts
             seqseeds = [P.seed(k) for k in 1:P.runs]
             @test sort([parse(Int, r["seed"]) for r in ref_runs if r["case"] == c]) == seqseeds
             rp = [r for r in replay if r["case"] == c]
@@ -712,7 +712,7 @@ end
                     parse(Int, r["divisions"]) + 1 >= parse(Int, r["live"]), rp
             )
             # per-seed metrics: both algorithms, every metric, every seed; the F3–F8 ones
-            # recomputed (checkerboard from this record, sequential from the `15_openvt_f3_f8_tests.jl` record),
+            # recomputed (checkerboard from this record, sequential from the F3/F8 record),
             # `lost` from the run tables
             refser = record_series(ref_ts, c; cycle = CYCLE_SEQ)
             for (alg, sers, seeds, lost) in (
