@@ -281,11 +281,13 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
             end
         end
         # disturbances with injected CPU load and topology
-        dist(load; reasons = () -> String[]) = BenchMachine.disturbances(
-            12, 12:15;
-            busy = cpus -> Dict(k => get(load, k, 0.0) for k in cpus), siblings = sibs,
-            linux = true, reasons
-        )
+        function dist(load; reasons = () -> String[])
+            return BenchMachine.disturbances(
+                    12, 12:15;
+                    busy = cpus -> Dict(k => get(load, k, 0.0) for k in cpus), siblings = sibs,
+                    linux = true, reasons
+                )
+        end
         @test dist(Dict()) == String[]
         @test dist(Dict(28 => 0.1)) == ["SMT sibling cpu28 10% busy"]
         @test dist(Dict(28 => 0.03)) == String[]                     # below 5 %: idle enough
@@ -301,10 +303,12 @@ setf(sd, n, fs...) = write(joinpath(sd, n * ".txt"), join(fs, " "))
 
     @testset "Tuple type cache seeding is equal whatever the session made before" begin
         mj = joinpath(REPO, "benchmark", "machine.jl")
-        mk(
-            pre,
-            body
-        ) = "include($(repr(mj))); for i in 1:$pre; Core.apply_type(Tuple, Val{i}, Val{:other}); end; $body"
+        function mk(
+                pre,
+                body
+            )
+            return "include($(repr(mj))); for i in 1:$pre; Core.apply_type(Tuple, Val{i}, Val{:other}); end; $body"
+        end
         probe(pre) = split(readchomp(`$(jl()) -e $(mk(pre, "s = BenchMachine.seed_type_cache!(); println(s.entries, \" \", s.capacity)"))`))
         a, b = probe(0), probe(25_000)                       # the second session made 25k more types
         @test parse(Int, a[2]) == parse(Int, b[2])           # same table size

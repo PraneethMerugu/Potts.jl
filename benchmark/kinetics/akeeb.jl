@@ -12,8 +12,11 @@ const METRICS = (:invasive, :infiltrative, :singles, :fingers, :detached, :clust
 const ARMS = [("seq", SequentialCPM(; proposal = VonNeumann(1)), false),
     ("cb", CheckerboardCPM(; proposal = VonNeumann(1)), true),
     ("cb_cpu", CheckerboardCPM(; proposal = VonNeumann(1)), false)]
-problem(pt, seed) = (p = POINTS[pt]; PottsProblem(AkeebInvasion(; name = :akeeb, J = akeeb_contacts(p[1]), μ = p[2]),
-    akeeb_state(; pp = p[3], seed = 0x5cd2609 + seed), (0, 701); capacity = 4000, seed))
+function problem(pt, seed)
+    p = POINTS[pt]
+    return PottsProblem(AkeebInvasion(; name = :akeeb, J = akeeb_contacts(p[1]), μ = p[2]),
+        akeeb_state(; pp = p[3], seed = 0x5cd2609 + seed), (0, 701); capacity = 4000, seed)
+end
 function run_one(pt, alg, gpu, seed)
     sol = if gpu
         solve(problem(pt, seed), alg; backend = ROCBackend(), save_start = false, save_everystep = false)

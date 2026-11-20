@@ -9,11 +9,13 @@ const REPO = dirname(dirname(@__DIR__))
 const ASSETS = joinpath(REPO, "docs", "src", "assets", "paper_runs")
 mkpath(ASSETS)
 
-git_commit() = try
-    strip(read(`git -C $REPO rev-parse --short HEAD`, String)) *
-    (isempty(strip(read(`git -C $REPO status --porcelain -- lib src`, String))) ? "" : "-dirty")
-catch
-    "unknown"
+function git_commit()
+    return try
+            strip(read(`git -C $REPO rev-parse --short HEAD`, String)) *
+            (isempty(strip(read(`git -C $REPO status --porcelain -- lib src`, String))) ? "" : "-dirty")
+        catch
+            "unknown"
+        end
 end
 
 """
@@ -120,18 +122,20 @@ function reencode(mp4)
 end
 
 """The provenance entries every sidecar carries: machine, backend, times, commit, Julia."""
-run_info(name; wall, rec, mp4) = Dict{String, Any}(
-    "backend" => "CPU",
-    "cpu" => strip(Sys.cpu_info()[1].model),
-    "machine" => Sys.MACHINE,
-    "threads" => Threads.nthreads(),
-    "solve_wall_s" => round(wall; digits = 1),
-    "record_wall_s" => round(rec; digits = 1),
-    "video_mb" => round(filesize(mp4) / 2^20; digits = 2),
-    "git_commit" => git_commit(),
-    "julia" => string(VERSION),
-    "date" => string(now()),
-    "script" => "docs/paper_runs/$name.jl")
+function run_info(name; wall, rec, mp4)
+    return Dict{String, Any}(
+        "backend" => "CPU",
+        "cpu" => strip(Sys.cpu_info()[1].model),
+        "machine" => Sys.MACHINE,
+        "threads" => Threads.nthreads(),
+        "solve_wall_s" => round(wall; digits = 1),
+        "record_wall_s" => round(rec; digits = 1),
+        "video_mb" => round(filesize(mp4) / 2^20; digits = 2),
+        "git_commit" => git_commit(),
+        "julia" => string(VERSION),
+        "date" => string(now()),
+        "script" => "docs/paper_runs/$name.jl")
+end
 
 """Write the sidecar `docs/src/assets/paper_runs/<name>.toml`."""
 function write_sidecar(name, info)
@@ -143,5 +147,7 @@ function write_sidecar(name, info)
 end
 
 """The caption's provenance clause: machine, backend, threads and commit of this render."""
-rendered_on() = "Rendered on $(strip(Sys.cpu_info()[1].model)), CPU backend, " *
-                "$(Threads.nthreads() == 1 ? "one thread" : "$(Threads.nthreads()) threads"), commit $(git_commit())."
+function rendered_on()
+    return "Rendered on $(strip(Sys.cpu_info()[1].model)), CPU backend, " *
+        "$(Threads.nthreads() == 1 ? "one thread" : "$(Threads.nthreads()) threads"), commit $(git_commit())."
+end

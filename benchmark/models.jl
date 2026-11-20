@@ -11,8 +11,10 @@ graner_temperature(st, p, prop, ctx) = p.T
 const GRANER = CPMFunction(graner_delta_H; temperature = graner_temperature)
 
 """Graner–Glazier (PRL 69, 2013) parameters: kinds 1 = dark, 2 = light."""
-graner_params(T = Float64) = (; J = SMatrix{3, 3, T}(0, 16, 16, 16, 2, 11, 16, 11, 14),
-    λ = T(1), V0 = T(40), T = T(10))
+function graner_params(T = Float64)
+    return (; J = SMatrix{3, 3, T}(0, 16, 16, 16, 2, 11, 16, 11, 14),
+        λ = T(1), V0 = T(40), T = T(10))
+end
 
 """The pre-equilibrated 72² SCDPotts baseline (64 cells), tiled `scale × scale` times."""
 function graner_state(scale = 1)

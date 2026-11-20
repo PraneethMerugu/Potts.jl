@@ -71,12 +71,14 @@ function sandbox()
     return (; root, lockroot, excl = joinpath(root, "tools", "exclusive.sh"))
 end
 
-stamp_sh(log, tag, what) =
-    "perl -MTime::HiRes=time -e 'printf qq(%s %s %.6f\\n), \$ARGV[0], \$ARGV[1], time' $tag $what >> $log"
+function stamp_sh(log, tag, what)
+    return "perl -MTime::HiRes=time -e 'printf qq(%s %s %.6f\\n), \$ARGV[0], \$ARGV[1], time' $tag $what >> $log"
+end
 
 """`exclusive.sh` running a shell holder that stamps start/end around `sleep d`."""
-holder(sb, log, tag, d) =
-    Cmd([sb.excl, "sh", "-c", "$(stamp_sh(log, tag, "start")); sleep $d; $(stamp_sh(log, tag, "end"))"])
+function holder(sb, log, tag, d)
+    return Cmd([sb.excl, "sh", "-c", "$(stamp_sh(log, tag, "start")); sleep $d; $(stamp_sh(log, tag, "end"))"])
+end
 
 spawn(cmd; out = devnull) = run(pipeline(cmd; stdout = out, stderr = out); wait = false)
 
@@ -228,20 +230,25 @@ end
 # otherwise). A timing that synchronizes an explicit backend must include the spin. A CPU
 # row (no backend) must not include it.
 const SPIN_NS = Ref(0)
-KernelAbstractions.synchronize(::KernelAbstractions.CPU) =
-    (t = time_ns(); while time_ns() - t < SPIN_NS[] end; nothing)
+function KernelAbstractions.synchronize(::KernelAbstractions.CPU)
+    t = time_ns()
+    while time_ns() - t < SPIN_NS[] end
+    return nothing
+end
 
 const SPIN = 2_000_000                       # 2 ms; a warm CPU MCS of GG 72² is ~0.15 ms
 
 """Every function defined in `files`: name => bodies (short and long form)."""
 function defs(files)
     d = Dict{Symbol, Vector{Any}}()
-    walk(ex) = ex isa Expr && begin
-        if ex.head in (:function, :(=)) && ex.args[1] isa Expr && ex.args[1].head == :call
-            f = ex.args[1].args[1]
-            f isa Symbol && push!(get!(d, f, Any[]), ex.args[2])
-        end
-        foreach(walk, ex.args)
+    function walk(ex)
+        return ex isa Expr && begin
+                if ex.head in (:function, :(=)) && ex.args[1] isa Expr && ex.args[1].head == :call
+                    f = ex.args[1].args[1]
+                    f isa Symbol && push!(get!(d, f, Any[]), ex.args[2])
+                end
+                foreach(walk, ex.args)
+            end
     end
     for f in files
         walk(Meta.parseall(read(f, String)))
@@ -391,17 +398,22 @@ end
                 be = Metal.MetalBackend()
                 gg32 = Dict(GateUnderTest.cases(Float32))["graner_glazier_72"]
                 prob = gg32()
-                fresh() = (
-                    i = GateUnderTest.init(prob, alg; backend = be, save_start = false, save_end = false, save_everystep = false);
-                    GateUnderTest.step!(i); GateUnderTest.step!(i); KernelAbstractions.synchronize(be); i
-                )
+                function fresh()
+                    i = GateUnderTest.init(prob, alg; backend = be, save_start = false, save_end = false, save_everystep = false)
+                    GateUnderTest.step!(i)
+                    GateUnderTest.step!(i)
+                    KernelAbstractions.synchronize(be)
+                    return i
+                end
                 fresh()
-                ref() = run(
-                    @benchmarkable(
-                        (GateUnderTest.step!(i); KernelAbstractions.synchronize($be)),
-                        setup = (i = $fresh()), evals = 1, samples = 40, seconds = 20
-                    )
-                )
+                function ref()
+                    return run(
+                            @benchmarkable(
+                                (GateUnderTest.step!(i); KernelAbstractions.synchronize($be)),
+                                setup = (i = $fresh()), evals = 1, samples = 40, seconds = 20
+                            )
+                        )
+                end
                 # interleaved, so both sides see the same GPU power states; min vs min
                 r1 = ref(); g1 = first(GateUnderTest.measure(gg32, alg; backend = be))
                 r2 = ref(); g2 = first(GateUnderTest.measure(gg32, alg; backend = be))

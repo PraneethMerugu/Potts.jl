@@ -15,8 +15,11 @@ function cubes(L, a)
     end
     return σ, Int32[isodd(i) ? 1 : 2 for i in 1:c]
 end
-problem3(L) = (s = cubes(L, 5); PottsProblem(GRANER, initial_state(s...), Lattice((L, L, L)), (0, NMCS),
-    merge(graner_params(), (; V0 = 64.0)); contact = Moore(1), seed = 5))
+function problem3(L)
+    s = cubes(L, 5)
+    return PottsProblem(GRANER, initial_state(s...), Lattice((L, L, L)), (0, NMCS),
+        merge(graner_params(), (; V0 = 64.0)); contact = Moore(1), seed = 5)
+end
 
 function rate(prob, alg)
     integ = init(prob, alg; save_start = false, save_end = false, save_everystep = false)

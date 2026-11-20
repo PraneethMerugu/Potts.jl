@@ -11,8 +11,10 @@ using AMDGPU, KernelAbstractions, Printf
 end
 const backend = ROCBackend()
 const kern = touch!(backend)
-seqof(a, n, m) = for k in 1:n
-    kern(a, k; ndrange = m)
+function seqof(a, n, m)
+    return for k in 1:n
+            kern(a, k; ndrange = m)
+        end
 end
 function direct(a, n, m)
     seqof(a, n, m); AMDGPU.synchronize()
@@ -43,8 +45,10 @@ end
 function rawlaunch(a, n, m)
     g = 256; b = cld(m, g)
     k = @roc launch = false rtouch!(a, 1)
-    run() = for j in 1:n
-        k(a, j; groupsize = g, gridsize = b)
+    function run()
+        return for j in 1:n
+                k(a, j; groupsize = g, gridsize = b)
+            end
     end
     run(); AMDGPU.synchronize()
     t = @elapsed (for _ in 1:20; run(); end; AMDGPU.synchronize())
