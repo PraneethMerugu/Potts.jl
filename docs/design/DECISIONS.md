@@ -5655,3 +5655,26 @@ Each guard is a test with a negative control, a planted defect it must fail on; 
 - **Macro round trip.** Seven models that together use each `@potts_model` section are rebuilt from their payload by `PottsSystem(; name, <payload fields>...)` and must give the same fingerprint and the same state at every save. Controls: a dropped payload field and another seed. It does not show that each section can be written by hand with public constructors (a follow-up), and the `@description` and `@metadata` system metadata is not in the payload. 35 s.
 - **CorePotts workload.** A hand-written two-cell `CPMFunction`, 2 MCS with `SequentialCPM`. A user's first hand-written run in a fresh process: 4.1 s before, 0.36 s after; `using CorePotts` 0.98 s before, 1.00 s after.
 - **Coordinates in site updates.** `@after_mcs h ~ x` is refused today with a `PottsCompileError` that names `x`; the test is a `@test_broken` against the site-center oracle. The lowering is not in this change.
+
+## D-299 Style: Runic on every file, 92 columns, runtime closures and `@inbounds` (2026-11-20; ruling R2 of D-287)
+
+The last batch of the conformance series. One commit per package per change, so review and an A/B can bisect.
+
+- **Fixed per R2.** Runic formatting of every Julia file with a full-repository check, the 92-column limit, and closures on runtime paths.
+- **Kept as project style per R2, not touched.** Single-underscore private names, multi-letter type parameters, and closures on the compiler side (build time, lowering, `Expr` building).
+- **Source edits that change no behavior.**
+  - Lowercase constants: the model-vocabulary constants of Potts are uppercase, and its aliases are imports; CorePotts division-plane normals are constructors; PottsModels imports `t_nounits as t`.
+  - Chained and multi-line ternaries become `if`/`elseif`, a helper or dispatch (about 620 by the scripts and about 130 by hand, and about 190 more where wrapping to 92 columns split a ternary).
+  - Short-form definitions over several lines become long form (about 1150, and about 245 more from wrapping).
+  - `===` on types becomes `<:` where a subtype test is meant (46 sites); `===` stays where identity is meant (about 23 sites).
+  - Imports move to the module headers; no file mixes `import` and `using` blocks; included files import nothing.
+  - Splats of runtime collections become plain calls or loops; splats inside `Expr` building stay.
+- **Hot-path edits** (the A/B judges these).
+  - Closures created per call on runtime paths: CorePotts, 9 sites become functors; LatticeFields, 6 per-step closures become loops and 1 becomes a functor.
+  - `@inbounds`: every kept use has an adjacent comment that states why the index is in bounds (about 694 kept); 6 uses outside hot code are dropped. Where such a comment had come between a docstring and its definition, it now sits above the docstring.
+  - A/B result: (to be filled in).
+- **Format check.** All Julia files are formatted with Runic. The CI job keeps its name, "Runic formatting check (changed .jl files)", but now checks every tracked `.jl` file except `lib/PottsModels/reproductions/data/` and `docs/references/` with `Runic --check --diff`; the full clone it needed for the changed-lines diff (`fetch-depth: 0`) is gone. String literal contents were compared before and after formatting and are unchanged.
+- **Line length.** Code and docstrings are at most 92 columns. Long lines are wrapped by hand or by script, with checks that the parsed code is unchanged (strings keep their value through `*` chains and `\` line continuations; docstring paragraphs are reflowed) and that the Literate `#hide` markers still cover each hidden line. Over-long lines fell from about 28,500 to 541.
+  - **Check.** `qa_long_lines(root; limit = 92, allow)` and `qa_line_allowlist(path)` in `test/shared/qa_common.jl`, run once in the Potts QA item "lines fit in 92 columns". It reads the tracked `.jl` files, skips `docs/design/`, `docs/references/` and `lib/PottsModels/reproductions/data/`, and measures with `textwidth`. Control: a scratch directory where a planted long line fails, a long URL line and a long line under `docs/design/` pass, an allowlist entry lets the planted line pass, and an entry that matches no long line is reported.
+  - **Exempt by kind** (525 lines): a line with a URL (26), a Markdown table row (362), raw HTML (31) or a Markdown heading (4) in a Literate comment, a line with a regex or raw string literal (49), and a line inside a raw triple-quoted string (53). These take no line break without changing what they show or match.
+  - **Allowlist** (`test/line_length_allow.txt`, `path<TAB>text<TAB>reason`, 16 entries): the recorded timing table in `benchmark/latency.jl`, two aligned worked tables in PottsModels acceptance tests, a repository path in a code span, and one CSV row of expected test output.
