@@ -18,7 +18,7 @@ _rgb(r, g, b) = Makie.RGBf(r / 255, g / 255, b / 255)
 const MEDIUM_PAIR = _rgb(231, 41, 138)       # free_surface.tex `m`
 const CELL_PAIR = _rgb(255, 192, 0)          # free_surface.tex `c`
 const MEDIUM_F4 = _rgb(236, 236, 236)        # free_surface.tex `ma!10`
-const POTTS_COLOUR = _rgb(8, 29, 88)         # spec §4.0.2, Q18 proposal
+const POTTS_COLOUR = _rgb(8, 29, 88)         # spec §4.0.2, our proposed color
 # growing and inhibited cells in M's Fig 7 (the TST row, G:results/TST/TST_10k_snapshots.pdf,
 # ColorBrewer RdYlBu): blue for growing cells, orange for (type 2) inhibited ones; spec §4.0.2 F7
 const GROWING = _rgb(44, 123, 182)

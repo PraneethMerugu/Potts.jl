@@ -280,7 +280,7 @@ end
 
 Contact-inhibited chemotaxis in de novo and sprouting blood-vessel growth: Merks, Perryn,
 Shirinifard & Glazier, *PLoS Comput. Biol.* **4**, e1000163 (2008) (model-spec 01,
-Variant CI; D-050 M1, M4–M7, P6.3e). Kinds `medium`, `endothelial` and `border[frozen]`;
+Variant CI; D-050 M1, M4–M7). Kinds `medium`, `endothelial` and `border[frozen]`;
 start it with [`merks2008_sprout`](@ref) (Figs. 4–11) or [`merks2008_denovo`](@ref)
 (Fig. 2).
 
@@ -293,7 +293,7 @@ start it with [`merks2008_sprout`](@ref) (Figs. 4–11) or [`merks2008_denovo`](
   any value between is the continuous ratio of Fig. 5 (D-050 M7). `mode =
   :extension_only` (Eq. 4) drops the term when the source is the medium (a retraction).
 - A frozen border (`Frame(:border; width = 2)`; the authors' 1-site frame on 200², whose
-  20-site stencil reaches one site further, P6.3e) with `J(c,B) = 100`, `J(M,B) = 0`.
+  20-site stencil reaches one site further) with `J(c,B) = 100`, `J(M,B) = 0`.
 - The field (Eq. 1): `∂c/∂t = D Δc + α[endothelial] − ε c [medium]`, 5-point `laplacian`, `c = 0`
   on the border after every substep, stepped before the sweep of each MCS. As in the
   released code the field is off for the first `t_relax` MCS (MCS 0 to `t_relax − 1`, the

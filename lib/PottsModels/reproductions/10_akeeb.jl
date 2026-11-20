@@ -307,7 +307,7 @@ Markdown.parse(join(dev_rows, "\n")) #hide
 #     (`POTTS_FULL_REPRODUCTION=true`) runs the spec's ensembles: 10 runs at each of nine
 #     parameter points and 10 at each of the 121 points of the PP = 0.5 slice. The
 #     committed full-run record is `lib/PottsModels/reproductions/data/10/full-2026-10-07/`
-#     (P6.2d, D-146: verdicts, time series, provenance). It holds the page at FULL and a
+#     (D-146: verdicts, time series, provenance). It holds the page at FULL and a
 #     separate 13,310-run sweep of the whole (J_LF, λ, PP) grid for V-A6 and the full-sweep
 #     form of V-A7; "The full run" below reads its verdicts from there.
 #
@@ -476,9 +476,9 @@ akeeb_observables(sol_one.u[end])
 # | V-A3 fingers, singles, clusters marginals over the PP = 0.5 slice | A slice; p.10–11 | R2, 1210 runs | FULL | READY |
 # | V-A4 invasive and infiltrative marginals | A slice; p.10 | R2 on seven means; [−1, 2] > (> 2) > (≤ −2) strictly; both λ ratios within ±15 % | FULL | READY |
 # | V-A5 cluster incidence 28.3 % (N 1209), 71.5 % at λ ≥ 24 (N 330); 4.85 ± 0.24 when present | A slice; p.10–11 | R3; R2 | FULL | READY |
-# | V-A6 phenotype fractions 22 / 1 / 23 / 54 % | p.13, Fig. 5B; A classified (13,263 runs) | the area-equality classifier `akeeb_phenotype` (provisional, spec 10 §5.3.5) on the full sweep, 13,310 runs; R3 per phenotype | FULL record | READY (P6.2d, D-156; un-parked) |
+# | V-A6 phenotype fractions 22 / 1 / 23 / 54 % | p.13, Fig. 5B; A classified (13,263 runs) | the area-equality classifier `akeeb_phenotype` (provisional, spec 10 §5.3.5) on the full sweep, 13,310 runs; R3 per phenotype | FULL record | READY (D-156; un-parked) |
 # | V-A7 PP barely matters: P1, P7, P9 each match their own reference | A; p.10–11 | R1 (P9 adds 6 tests) | FULL | READY |
-# | V-A7 (full sweep) \|r(PP, metric)\| < 0.05 for the six metrics | A; p.10–11 (\|r\| < 0.03) | the full sweep, 13,310 runs | FULL record | READY (P6.2d) |
+# | V-A7 (full sweep) \|r(PP, metric)\| < 0.05 for the six metrics | A; p.10–11 (\|r\| < 0.03) | the full sweep, 13,310 runs | FULL record | READY |
 # | V-A8 cluster composition: P1 mean size 5.79 (SD 3.75, 75 clusters), leader fraction 0.578; P2 5.56 (3.71, 143), 0.517 | C `cluster_data.csv` | R1 with clusters as the units; pooled leader fraction ± 0.10 | FULL | READY |
 # | V-A8 (paper) mean ≈ 7 cells, 60–70 % leaders, median 4 L / 3 F | p.14–17 | — | — | **PARKED** (not reproducible from the release; author question 8) |
 # | V-A9 leader speed 0.4 px/MCS at λ = 20 | p.6 | — | — | **PARKED** (undefined; author question 6) |
@@ -912,9 +912,9 @@ Markdown.parse("PottsModels $(pkgversion(PottsModels)), commit " *
 #
 # | Date | Change | Reason |
 # |---|---|---|
-# | 2026-10-05 | First version: targets pre-registered from spec 10 §5.3 (reduced run) | ROADMAP P6.2b; D-143 |
-# | 2026-10-07 | Deviations table in the four-column form (ours, paper, suspected cause, author question), with the parked targets as rows; the timing names machine and backend; cells drawn without outlines. No target, tolerance or verdict changed | D-154, D-156; ROADMAP P6.0bd, P6.0bf |
-# | 2026-10-07 | The full-run record (`data/10/full-2026-10-07/`): V-A6 un-parked with the provisional area-equality classifier and V-A7's full-sweep form, both read from the committed sweep; the V-A2 P6 deviation; reported correlations and marginals; links to the full-run videos | ROADMAP P6.2d; D-156 |
+# | 2026-10-05 | First version: targets pre-registered from spec 10 §5.3 (reduced run) | D-143 |
+# | 2026-10-07 | Deviations table in the four-column form (ours, paper, suspected cause, author question), with the parked targets as rows; the timing names machine and backend; cells drawn without outlines. No target, tolerance or verdict changed | D-154, D-156 |
+# | 2026-10-07 | The full-run record (`data/10/full-2026-10-07/`): V-A6 un-parked with the provisional area-equality classifier and V-A7's full-sweep form, both read from the committed sweep; the V-A2 P6 deviation; reported correlations and marginals; links to the full-run videos | D-156 |
 # | 2026-10-08 | Rewritten in the D-185 order: intro, the `@potts_model` code (checked against the shipped `AkeebInvasion`), a minimal run, the results (key figures against the paper and the authors' data from the record `data/10/full-2026-10-07/`, the full-run videos, a verdict summary, the deviations table) and this collapsed Details section with everything else; contact wording removed. No target, tolerance, seed or verdict changed | D-185 |
 #
 # ```@raw html

@@ -172,7 +172,7 @@ o2 = PottsModels.openvt_snapshot(sol.u[end])
 # t = 0 towards 10 cell diameters (CD); the time T at which the mean crosses 90 % of the
 # relaxation is the framework's time unit (panel b, Table S5). Panels d and e test the
 # calibrated T, without refitting, on a 21-cell chain. Dashed: the spring–dashpot
-# reference. Record `data/15/calibration-2026-10-05/` (ROADMAP P6.15b), commit `30c39601`,
+# reference. Record `data/15/calibration-2026-10-05/`, commit `30c39601`,
 # Apple M1 Pro, 4 threads, 14 s; figure `fig2_bde.png`.
 
 record("calibration-2026-10-05"; commit = "30c39601") #hide
@@ -200,7 +200,7 @@ end
 # from the initial cell. Rows: the consortium's TST runs (M's data), Potts.jl case (b) (seeds
 # 15001–15100) and the γ = 10⁻⁴ negative control (seeds 15501–15520). The verdict rules
 # were also run on the consortium's TST and Morpheus data, and both pass all seven rows.
-# Record `data/15/f5-2026-10-07/` (ROADMAP P6.15e), commit `3af81ae8`,
+# Record `data/15/f5-2026-10-07/`, commit `3af81ae8`,
 # AMD Ryzen AI Max+ 395 PC, 12 threads, 120 runs in 468 s.
 #
 # M now draws every row on one set of distance bins, edges 0, 18.6, 37.2, 55.8, 74.4 and
@@ -235,7 +235,7 @@ record_figure("f5-2026-10-07", "fig5.png"; alt = "Figure 5: f and a distribution
 # edge and leaves at the right edge as in the other frameworks' panels (D-229; the first,
 # rim-centered block was 56 % tissue). The banner color RGB(8, 29, 88) is our proposal for
 # Potts.jl. Record
-# `data/15/f1-f4-2026-10-08/` (ROADMAP P6.15h), commit `c6ca4bc4`, AMD Ryzen AI Max+ 395
+# `data/15/f1-f4-2026-10-08/`, commit `c6ca4bc4`, AMD Ryzen AI Max+ 395
 # PC, one thread; figure `fig1.png`, drawn by `plot_f1.jl` from
 # `window.tsv` and `window_cells.tsv` (written by `run_f1_reframe.jl`). The rerun's stop
 # equals case (a) run 1 of the Figure 3/9 record.
@@ -255,7 +255,7 @@ record_figure("f1-f4-2026-10-08", "fig1_colony.png"; alt = "the 10^4-cell colony
 # (uninhibited) and (e) (β = 0.8), 10 runs each to 10⁴ cells, with the bulk and
 # boundary-limited growth laws and the CompuCell3D and Morpheus curves of M's draft
 # (earlier β = 0.8 runs in their own cycle lengths, footnoted). Record
-# `data/15/f3-f8-2026-10-08/` (ROADMAP P6.15f), commit `a64ae188`, AMD Ryzen AI Max+ 395 PC,
+# `data/15/f3-f8-2026-10-08/`, commit `a64ae188`, AMD Ryzen AI Max+ 395 PC,
 # 12 threads, 240 runs in 9.2 core-hours; figures `fig3.png` and `fig8.png` (M's metrics
 # figure was Figure 8 in the 2 Oct draft; the record keeps its names).
 
@@ -290,7 +290,7 @@ record_figure("checkerboard-2026-11-05", "fig9.png"; alt = "Figure 9 panels for 
 # 13.57 cycles. Table 1 lists the threshold at which each multiple is reached; Figure 7 shows
 # the colony at 10⁴ cells at each multiple's γ threshold. Rings: the Potts.jl thresholds;
 # diamonds and crosses: TST's and Artistoo's Table 1 values. Record
-# `data/15/sweeps-2026-10-08/` (ROADMAP P6.15g), commit `41fb2ba6`, AMD Ryzen AI Max+ 395 PC,
+# `data/15/sweeps-2026-10-08/`, commit `41fb2ba6`, AMD Ryzen AI Max+ 395 PC,
 # 12 threads, 160 runs (6 capped at 20×) in 68.7 core-hours, with
 # `SequentialCPM(; skip_interior = true)` (equal in law to `SequentialCPM()`, D-177, D-198);
 # figures `fig6.png` and `fig7_grid.png`, thresholds `table1.tsv`.
@@ -373,8 +373,8 @@ record_figure("sweeps-2026-10-08", "fig7_cells.png"; alt = "the five sweep colon
 # 1.0212, cells yellow (no inhibition) or red (area-inhibited, a < β), with the black concave
 # hull of `metrics.cpp` (concavity 1.5). The sweeps record did not keep these colonies, so
 # each is replayed from its seed: replicate 1 of that T1 point, which stopped at the same MCS
-# with the same cell count as its sweeps row. Record `data/15/f8beta-2026-10-09/` (ROADMAP
-# P6.15k), commit `97c326bf`, AMD Ryzen AI Max+ 395 PC, 5 threads, 5 runs in 24 min; figure
+# with the same cell count as its sweeps row. Record `data/15/f8beta-2026-10-09/`,
+# commit `97c326bf`, AMD Ryzen AI Max+ 395 PC, 5 threads, 5 runs in 24 min; figure
 # `fig8_grid.png` (`plot_f8_grid.jl`).
 
 record("f8beta-2026-10-09"; commit = "97c326bf") #hide
@@ -473,8 +473,8 @@ end
 # A characterization of the algorithm, not part of the OpenVT consortium submission (D-225):
 # the same model, Table S1 parameters and cases (a), (b) and (f), solved with
 # `CheckerboardCPM(; proposal = Moore(1))` on a GPU (ROCm) on its own seeds, and compared
-# metric by metric with the sequential runs above. Record `data/15/checkerboard-2026-11-05/`
-# (ROADMAP P6.15m), commit `e1c963d3`, AMD Ryzen AI Max+ 395 PC and its GPU; its figures
+# metric by metric with the sequential runs above. Record `data/15/checkerboard-2026-11-05/`,
+# commit `e1c963d3`, AMD Ryzen AI Max+ 395 PC and its GPU; its figures
 # follow the sequential Figures 2, 3 and 9 above.
 #
 # **The algorithm.** `CheckerboardCPM` is the lockless block checkerboard (after Sultan et
@@ -631,7 +631,7 @@ verdict_table(filter(r -> r["case"] in ("b", "control") && startswith(r["target"
 # and 25 cell pairs on Moore(1), so fᵢ = 13/(13 + 25) = 0.342. The marks are decoded from the
 # rendered figure and checked against a brute-force count and against the f the model
 # computes during a run (`openvt_snapshot`), for all four cells. Record
-# `data/15/f1-f4-2026-10-08/` (ROADMAP P6.15h), commit `c6ca4bc4`; figure `fig4.png`,
+# `data/15/f1-f4-2026-10-08/`, commit `c6ca4bc4`; figure `fig4.png`,
 # rendered by `plot_f4.jl` on a Mac (the record's runner ran on the
 # AMD Ryzen AI Max+ 395 PC).
 
@@ -765,15 +765,15 @@ Markdown.parse("PottsModels $(pkgversion(PottsModels)); records at commits `30c3
 
 # | Date | Change | Reason |
 # |---|---|---|
-# | 2026-10-08 | First version: Figures 1–5 and 8 and Tables S1 and S5 from the committed records; Figure 6, Table 1 and Figure 7 shown as parked; the differences table with C1–C17, the three V4 failures and the V1 slow growth | ROADMAP P6.15i; D-178 |
+# | 2026-10-08 | First version: Figures 1–5 and 8 and Tables S1 and S5 from the committed records; Figure 6, Table 1 and Figure 7 shown as parked; the differences table with C1–C17, the three V4 failures and the V1 slow growth | D-178 |
 # | 2026-10-08 | Rewritten in the D-185 order: intro, the `@potts_model` code, a minimal run, the results (calibration, Figure 5, the Figure 1 panel, Figures 3 and 8, the sweeps in one line, the videos, a verdict summary and the four-column deviations table) and this collapsed Details section with everything else. The Figure 1 panel restyled as the other frameworks' close-ups: cells colored by area (coolwarm, the panel's own min–max, provisional) with thin black boundaries. No target, band, seed or verdict changed | D-185 |
-# | 2026-10-08 | Figures 6 and 7 and Table 1 rendered from the sweeps record: 15 of 18 rows pass; V1, V2.1.1x and V3b are deviation rows. Nothing was tuned | ROADMAP P6.15g; D-174 |
+# | 2026-10-08 | Figures 6 and 7 and Table 1 rendered from the sweeps record: 15 of 18 rows pass; V1, V2.1.1x and V3b are deviation rows. Nothing was tuned | D-174 |
 # | 2026-10-09 | Deviation rows V1, V3b and V4.2/V4.3/V4.5 name TST's departure from M (division on target area, the released TST OpenVT model, sbr-shakibi/Tissue-Simulation-Toolkit@7ae1636, src/models/openvt-monolayer-type1-tst.cpp:169); a note on the other frameworks' departures from Table S1. No target, tolerance or verdict changed | D-154 |
-# | 2026-10-09 | The 9 Oct 2026 draft is M: the metrics figure is now Figure 9 (the record keeps `fig8.png`); Figure 7 in M's grid form with the concave hull and C/C_circle in the caption (`fig7_grid.png`); Figure 5 on M's shared distance-bin edges (`fig5_shared.png`, binned in R; the unit comparison provisional); M's new Figure 8 (β colonies) added as pending. Renders only; no run, target or verdict changed | ROADMAP P6.15k; D-211, D-212 |
-# | 2026-10-09 | M's new Figure 8 (β colonies) rendered from the P6.15k record: five replays of the sweeps record's replicate 1 at our T1 β values, each equal to its sweeps row; C/C_circle in the caption. No target or verdict changed | ROADMAP P6.15k; D-211, D-212 |
-# | 2026-10-10 | The division rule stated as a ruling: M is followed (actual area); the released TST model divides on target area, recorded and not queried. The rows that cited the closed questions on the division trigger, the TST build, the TST and Morpheus departures and σ_X (V1, V2.1.1x, V3b, V4.2, V4.3, V4.5, F3.4, C13, C17) now say "not asked (maintainer ruling: M over TST)" or "not asked (M over the framework's code)". Figure 5: M's axis is consistent with distance in units of R/2 (fitted 1.84–2.23 units per R across all nine consortium rows), Q15 on our open question list; our row stays in R and provisional. No target, tolerance or verdict changed | ROADMAP P6.15l; D-213, D-215, D-217 |
-# | 2026-10-10 | The Potts.jl (checkerboard) section: a characterization of `CheckerboardCPM` against the sequential runs (its own T on the P1b chain at the monolayer's 4 colors, the comparison, the claim-thinning cause and the ΔH brute-force check), not part of the consortium submission; its Figure 2, 3 and 9 renders after the sequential ones. Every number is checked against the record when the page is built | ROADMAP P6.15m; D-220, D-221, D-224, D-225, D-226 |
-# | 2026-11-05 | The Potts.jl (checkerboard) section regenerated for the lockless block `CheckerboardCPM` (record `checkerboard-2026-11-05`): T(λ = 2) = 158 MCS, the sequential cycle of 775 MCS, 0 of 102 metrics beyond the spread, so no deviations table. The colors, claims, thinning cause, ablation and ΔH check of the 2026-10-10 record no longer apply and are removed. The Figure 2, 3 and 9 renders come from the new record | ROADMAP P6.0bl, P6.15m; D-271 |
+# | 2026-10-09 | The 9 Oct 2026 draft is M: the metrics figure is now Figure 9 (the record keeps `fig8.png`); Figure 7 in M's grid form with the concave hull and C/C_circle in the caption (`fig7_grid.png`); Figure 5 on M's shared distance-bin edges (`fig5_shared.png`, binned in R; the unit comparison provisional); M's new Figure 8 (β colonies) added as pending. Renders only; no run, target or verdict changed | D-211, D-212 |
+# | 2026-10-09 | M's new Figure 8 (β colonies) rendered from the β-colonies record (`data/15/f8beta-2026-10-09/`): five replays of the sweeps record's replicate 1 at our T1 β values, each equal to its sweeps row; C/C_circle in the caption. No target or verdict changed | D-211, D-212 |
+# | 2026-10-10 | The division rule stated as a ruling: M is followed (actual area); the released TST model divides on target area, recorded and not queried. The rows that cited the closed questions on the division trigger, the TST build, the TST and Morpheus departures and σ_X (V1, V2.1.1x, V3b, V4.2, V4.3, V4.5, F3.4, C13, C17) now say "not asked (maintainer ruling: M over TST)" or "not asked (M over the framework's code)". Figure 5: M's axis is consistent with distance in units of R/2 (fitted 1.84–2.23 units per R across all nine consortium rows), Q15 on our open question list; our row stays in R and provisional. No target, tolerance or verdict changed | D-213, D-215, D-217 |
+# | 2026-10-10 | The Potts.jl (checkerboard) section: a characterization of `CheckerboardCPM` against the sequential runs (its own T on the P1b chain at the monolayer's 4 colors, the comparison, the claim-thinning cause and the ΔH brute-force check), not part of the consortium submission; its Figure 2, 3 and 9 renders after the sequential ones. Every number is checked against the record when the page is built | D-220, D-221, D-224, D-225, D-226 |
+# | 2026-11-05 | The Potts.jl (checkerboard) section regenerated for the lockless block `CheckerboardCPM` (record `checkerboard-2026-11-05`): T(λ = 2) = 158 MCS, the sequential cycle of 775 MCS, 0 of 102 metrics beyond the spread, so no deviations table. The colors, claims, thinning cause, ablation and ΔH check of the 2026-10-10 record no longer apply and are removed. The Figure 2, 3 and 9 renders come from the new record | D-271 |
 #
 # ```@raw html
 # </details>

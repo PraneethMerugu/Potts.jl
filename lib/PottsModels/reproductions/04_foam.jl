@@ -475,8 +475,8 @@ Markdown.parse("PottsModels $(pkgversion(PottsModels)), Julia $(VERSION), on $(s
 
 # | Date | Change | Reason |
 # |---|---|---|
-# | 2026-10-08 | First version, provisional: the model, the ordered and disordered foams, smoke-scale verdicts, a short bulk shear, videos, the deviations table and the full-run command | P6.4r; D-186, D-190 |
-# | 2026-10-09 | The full-run record replaces the smoke-scale verdicts: verdict table, deviations from the record, the pinning finding (under review); the videos stay | P6.4r; D-154, D-190 |
+# | 2026-10-08 | First version, provisional: the model, the ordered and disordered foams, smoke-scale verdicts, a short bulk shear, videos, the deviations table and the full-run command | D-186, D-190 |
+# | 2026-10-09 | The full-run record replaces the smoke-scale verdicts: verdict table, deviations from the record, the pinning finding (under review); the videos stay | D-154, D-190 |
 #
 # ```@raw html
 # </details>

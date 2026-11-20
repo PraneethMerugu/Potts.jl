@@ -188,7 +188,7 @@ Markdown.parse("Largest difference after one MCS: **$(round(100 * split_rel; dig
 # verdicts, the frozen FULL rules applied to its 590 per-replicate rows, the sweep means at
 # both clocks (`points.tsv`) and the diagnosis of each failing check.
 
-## FULL record (P6.3f): begin
+## FULL record: begin
 const RECORD = joinpath(pkgdir(PottsModels), "reproductions", "data", "01", "full-2026-10-08")
 function record_tsv(file)
     lines = filter(!isempty, readlines(joinpath(RECORD, file)))
@@ -209,7 +209,7 @@ function deviation_row(v)
     return "| $(v["row"]) $(v["check"]) (FAIL; full run) | $(v["ours"]) | $(v["paper"]) | $cause | $status |"
 end
 full_deviation_rows = [deviation_row(v) for v in record_verdicts if v["result"] == "FAIL"]
-## FULL record (P6.3f): end
+## FULL record: end
 nothing #hide
 
 # ### Key figures against the papers
@@ -499,8 +499,8 @@ Markdown.parse("""
 | χ(c,c) | a real parameter (`χcc`) | a continuous ratio swept (01b Fig. 5); files: boolean, χ(c,c) ∈ {0, χ(c,M)} | the sweep's code is not released (D-050 M7; spec A-20) | $(aq(4)) |
 | Parameter sets | `Merks2006`, `Merks2008`, no shared values; keywords on either | two papers, two sets (spec A-17); files: `longcells.par` (2006-labeled), Dataset S1 (2008) | none (D-050 M1) | not an author question |
 | 2008 seeding | one Eden blob, 50 rounds, 7 divisions → 128 cells (`merks2008_sprout`; variant `divisions = 8`, 256 cells) | "rounded clusters" (01b p.5); the files as ours | none (D-050 M11, D-141) | not an author question |
-| 2008 attempts per MCS | 39 204 = 198², one per mobile site of the framed 202² lattice, as TST (ca.cpp:385) | N = the number of lattice sites (01b p.11), 200² = 40 000 on the 200² lattice of the 01b parameter files (Dataset S1) | we followed TST; our MCS is 2 % shorter than the paper's, a 2 % difference in time scale. The paper is the target: the next full run uses its N through `attempts` (ROADMAP P6.E2), not a re-run for this alone (D-200 item 2) | not an author question |
-| Border | 1-site frame (2006); 2-site frame on 202² (2008) | frozen pixels, J(c,B) = 100; files: a 1-px frame, the 20-site stencil reading the off-lattice ring as border | none: the same contacts and attempts (D-050 M4; P6.3e) | not an author question |
+| 2008 attempts per MCS | 39 204 = 198², one per mobile site of the framed 202² lattice, as TST (ca.cpp:385) | N = the number of lattice sites (01b p.11), 200² = 40 000 on the 200² lattice of the 01b parameter files (Dataset S1) | we followed TST; our MCS is 2 % shorter than the paper's, a 2 % difference in time scale. The paper is the target: the next full run uses its N through `attempts`, not a re-run for this alone (D-200 item 2) | not an author question |
+| Border | 1-site frame (2006); 2-site frame on 202² (2008) | frozen pixels, J(c,B) = 100; files: a 1-px frame, the 20-site stencil reading the off-lattice ring as border | none: the same contacts and attempts (D-050 M4) | not an author question |
 | Copy proposal | random source, random target among its neighbors | source among the neighbors of a random target (files the same) | the same ordered-pair law away from the frame (spec D-8) | not an author question |
 | Compactness | TST's `Compactness()`: all cell sites over the hull of their centers | A_cluster / A_hull (01b p.5); the files' function is never called | the analysis scripts are not released (spec D-18, A-14) | $(aq(3)) |
 | PARKED: V-E2–V-E4 (lacunae and branch points; decay vs in vitro) | not run | 01a Fig. 5 | the 01a morphometry pipeline and its pixel scale are not released (spec A-18) | $(aq(3)) |
@@ -618,7 +618,7 @@ Markdown.parse("""
 #
 # ### Pre-registered targets
 #
-# The targets are spec 01 §5 as audited for P6.3d (D-153): rows whose observable and set-up
+# The targets are spec 01 §5 as audited before the first run (D-153): rows whose observable and set-up
 # are fixed by the paper or the released files are READY; the others are PARKED with the
 # reason. The binding rules are those of the test
 # `lib/PottsModels/test/reproductions/01_merks_tests.jl`. Verdict classes: **SMOKE+FULL** rows
@@ -1158,9 +1158,9 @@ Markdown.parse("PottsModels $(pkgversion(PottsModels)), commit " *
 #
 # | Date | Change | Reason |
 # |---|---|---|
-# | 2026-10-05 | First version: targets pre-registered from spec 01 §5 (reduced run) | ROADMAP P6.3d; D-153 |
-# | 2026-10-07 | Deviations table in the four-column form (ours, paper, suspected cause, author question), seeded from D-153's review rows, with the parked targets as rows; the "Attempts per MCS" row dropped and the Units paragraph corrected (our attempts per MCS equal TST's); timings name machine and backend; cells drawn without outlines, the field videos with a translucent cell fill. No target, tolerance or verdict changed | D-153, D-154, D-156; ROADMAP P6.3f |
-# | 2026-10-08 | The full-run record `data/01/full-2026-10-08/` (590 runs, the frozen FULL tier): its verdicts in §5, its failing checks in the deviations table, the sweep means at both clocks; the "at risk" V-C3 row replaced by the record's verdict; one color per cell in the cell videos; two full-run replicates as release videos. No target, tolerance or seed changed | D-146, D-153, D-156, D-172; ROADMAP P6.3f |
+# | 2026-10-05 | First version: targets pre-registered from spec 01 §5 (reduced run) | D-153 |
+# | 2026-10-07 | Deviations table in the four-column form (ours, paper, suspected cause, author question), seeded from D-153's review rows, with the parked targets as rows; the "Attempts per MCS" row dropped and the Units paragraph corrected (our attempts per MCS equal TST's); timings name machine and backend; cells drawn without outlines, the field videos with a translucent cell fill. No target, tolerance or verdict changed | D-153, D-154, D-156 |
+# | 2026-10-08 | The full-run record `data/01/full-2026-10-08/` (590 runs, the frozen FULL tier): its verdicts in §5, its failing checks in the deviations table, the sweep means at both clocks; the "at risk" V-C3 row replaced by the record's verdict; one color per cell in the cell videos; two full-run replicates as release videos. No target, tolerance or seed changed | D-146, D-153, D-156, D-172 |
 # | 2026-10-08 | Rewritten in the D-185 order: intro, the `@potts_model` code, a minimal run, the results (key figures against the papers from the record `data/01/full-2026-10-08/`, the full-run videos of `reproductions-2026-10-08-merks`, a verdict summary, the deviations table) and this collapsed Details section with everything else; contact wording removed. No target, tolerance, seed or verdict changed | D-185 |
 # | 2026-10-09 | V-C12 measured from MCS 0, the origin of 01b Fig. 6E, instead of MCS 100. The frozen definition was amended and the band kept. The record's stored snapshots were re-read, with no new runs (`vc12_mcs0.tsv` in `data/01/full-2026-10-08/`). The ratio is 2.017 and passes (it was 1.26 and failed), so 37 of 37 checks pass. The attempts-per-MCS deviation row was added: the paper's 40 000 against our 39 204 | D-200 |
 # | 2026-10-09 | The 01b digitized targets (Figs. 5, 7–10, 12, 13): a §3 section drawing the paper's digitized curves against the record `data/01/full-01b-*` once it lands (provisional until then), the inferred set-ups I1–I7 as provisional deviation rows, and every 01b check in the Details. No 2006/2008 target, tolerance, seed or verdict changed | D-202 |

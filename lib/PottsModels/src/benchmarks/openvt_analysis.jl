@@ -445,7 +445,7 @@ function openvt_filename(format::Symbol; kw...)
 end
 
 # ---------------------------------------------------------------------------------------------
-# Algorithm-against-algorithm comparison of per-seed values (P6.15m, D-214, D-216)
+# Algorithm-against-algorithm comparison of per-seed values (D-214, D-216)
 # ---------------------------------------------------------------------------------------------
 
 # sample mean and sd (n − 1) of finite values; a constant sample has its value as mean and sd exactly 0
@@ -472,7 +472,7 @@ by the Welch two-sample z of independent runs (spec 15 §1.3, D-214, D-216):
 - `se == 0` gives `z = 0` when `diff == 0` and `±Inf` (the sign of `diff`) otherwise;
 - `beyond = |z| > z`, where the keyword `z` is the critical value. The default 4.42 is
   Φ⁻¹(1 − 5·10⁻⁶): a family false-alarm budget of 10⁻³ split over at most 100 two-sided
-  checks, the convention of P6.4b1's ensemble check of `BoundarySiteCPM`.
+  checks, the convention of the ensemble check of `BoundarySiteCPM` against the sequential sampler.
 
 Returns `(; n_ref, n_alt, mean_ref, mean_alt, sd_ref, sd_alt, diff, se, z, beyond)`: the
 counts are `Int`, `beyond` a `Bool`, the rest `Float64`. `ref` and `alt` are vectors of
