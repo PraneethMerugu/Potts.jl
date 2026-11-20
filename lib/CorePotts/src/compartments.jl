@@ -5,8 +5,8 @@
 # surface are trackers indexed by cluster id; `EVENT_DIVIDE_CLUSTER` divides a
 # cluster as a unit.
 
-"""Cluster of cell `c` (`0` for the medium)."""
 # bounds: c is a cell id from σ or a copy proposal, ≤ capacity
+"""Cluster of cell `c` (`0` for the medium)."""
 @inline cluster_of(cell, c) = c == 0 ? Int32(0) : @inbounds cell.cluster[c]
 
 """`true` if `a` and `b` are cells of the same cluster (use for internal contact energies)."""

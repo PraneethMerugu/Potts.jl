@@ -60,8 +60,8 @@ radius(c::ContactCounts) = maximum(x -> radius(x.relation), c.counts; init = 0)
 
 """Whether partner kind `k` (0 = medium) is in the kind set `mask`, as 0 or 1."""
 @inline _kind_bit(mask::UInt64, k) = Int32(ifelse(UInt32(k) < UInt32(64), (mask >> (UInt32(k) & 0x3f)) & UInt64(1), UInt64(0)))   # kind ≥ 64: never
-"""Kind of owner `q` (0 for the medium)."""
 # bounds: q is an owner from σ, so q ≤ capacity = length(kind)
+"""Kind of owner `q` (0 for the medium)."""
 @inline _owner_kind(kind, q) = q == 0 ? Int32(0) : Int32(@inbounds kind[q])
 
 """

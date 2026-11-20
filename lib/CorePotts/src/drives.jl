@@ -79,8 +79,8 @@ family is `−(λ/max)(mean(source, new) − mean(target, old))`.
     return _fold_end(fold, total, n, zero_seen)
 end
 
-"""Extinction policy `ForbidExtinction`: veto a copy that would remove a cell's last site."""
 # bounds: prop.old is a cell id ≤ capacity = length(volume)
+"""Extinction policy `ForbidExtinction`: veto a copy that would remove a cell's last site."""
 @inline forbid_extinction(volume, prop) = prop.old == 0 || @inbounds(volume[prop.old]) > 1
 
 # ---------------------------------------------------------------------------------------

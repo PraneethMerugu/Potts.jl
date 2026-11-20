@@ -62,12 +62,12 @@ Return `true` if cells `a` and `b` are nonzero and linked in link store `cell`.
 """
 @inline linked(cell, a, b) = a != 0 && b != 0 && link_slot(cell, a, b) != 0
 
+# bounds: k ≤ maxdegree(cell), the rows of links; a ≤ capacity
 """
     link_count(cell, a) -> Int
 
 Number of active links incident on cell `a` in link store `cell`.
 """
-# bounds: k ≤ maxdegree(cell), the rows of links; a ≤ capacity
 @inline link_count(cell, a) = count(k -> @inbounds(cell.links[k, a]) != 0, 1:maxdegree(cell))
 
 _payload_names(cell) = Tuple(k for k in keys(cell) if startswith(String(k), "link_"))

@@ -5,8 +5,8 @@
 # CPM fills, the masks) are site arrays of the state; the bound launches of one trajectory live
 # in its run context (`ctx`), built when an integrator is created (`phase_context`).
 
-"""Kind of the cell owning site `i` (`0` for the medium)."""
 # bounds: i ≤ nsites; the owner c is a cell id ≤ capacity
+"""Kind of the cell owning site `i` (`0` for the medium)."""
 @inline owner_kind(st, i) = (c = @inbounds st.ownership[i]; c == 0 ? Int32(0) : @inbounds st.cell.kind[c])
 
 """

@@ -307,6 +307,6 @@ run_phase(ph::P, st, p, ctx, key, mcs, backend, stats) where {P} = ph(st, p, ctx
 # with the pass `part = (j, n)` of a sub-MCS `Repeat` (only a field phase reads it, fields.jl)
 run_phase(ph::P, st, p, ctx, key, mcs, backend, stats, part) where {P} = run_phase(ph, st, p, ctx, key, mcs, backend, stats)
 
-"""Accepted-copy affect: reset `array[target]` to `value` when ownership changes."""
 # bounds: prop.target is a site index ≤ nsites = length(array)
+"""Accepted-copy affect: reset `array[target]` to `value` when ownership changes."""
 @inline clear_on_copy!(array, prop, value) = (@inbounds array[prop.target] = value; nothing)

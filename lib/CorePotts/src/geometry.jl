@@ -162,8 +162,8 @@ end
 # ---------------------------------------------------------------------------------------
 # Queries (host or device). `T` is the float type of the result.
 
-"""Centroid of cell `c` in lattice coordinates, wrapped into `[1, n + 1)` on periodic axes."""
 # bounds: c is a cell id ≤ capacity (callers pass ids from σ or a proposal)
+"""Centroid of cell `c` in lattice coordinates, wrapped into `[1, n + 1)` on periodic axes."""
 @inline centroid(::Type{T}, cell, l::Lattice, c) where {T} = _centroid(T, cell, l, c, @inbounds cell.volume[c])
 # … from an already-loaded volume `V` (one load for a caller that also tests `V`, e.g.
 # `link_delta`'s dead-partner skip: no second, possibly racing, read of the volume)
