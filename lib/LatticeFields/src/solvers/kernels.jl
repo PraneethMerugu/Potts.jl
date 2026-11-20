@@ -60,15 +60,23 @@ struct CellOperator{N}
     robin_full::Bool
     diag::Union{Nothing, Float64, String}  # hex: the face to +e₁ − e₂ (`nothing`: Cartesian)
 end
-function CellOperator(dims::NTuple{N, Integer}; periodic = ntuple(_ -> false, N),
+function CellOperator(
+        dims::NTuple{N, Integer}; periodic = ntuple(_ -> false, N),
         face = nothing, shift = 0.0, mask = nothing, value = 0.0,
         dirichlet = ntuple(_ -> (nothing, nothing), N),
         robin = ntuple(_ -> (nothing, nothing), N), name = nothing,
-        axes = ntuple(a -> string(a), N), robin_full::Bool = false, hex::Bool = false) where {N}
+        axes = ntuple(a -> string(a), N), robin_full::Bool = false, hex::Bool = false
+    ) where {N}
     num(x) = x isa Real ? Float64(x) : String(x)
     who = name === nothing ? "the solver group" : string("field `", name, "`")
-    hex && !(N == 2 && all(>=(2), dims)) && throw(ArgumentError(string(who,
-        ": a hexagonal lattice is 2D with at least two sites per axis; got the dims ", Tuple(dims))))
+    hex && !(N == 2 && all(>=(2), dims)) && throw(
+        ArgumentError(
+            string(
+                who,
+                ": a hexagonal lattice is 2D with at least two sites per axis; got the dims ", Tuple(dims)
+            )
+        )
+    )
     face === nothing && (face = ntuple(_ -> 1.0, hex ? 3 : N))
     if length(face) != (hex ? 3 : N)
         per = hex ? "face direction of a hexagonal lattice (+e₁, +e₂, +e₁ − e₂): 3" : string("axis: ", N)
@@ -81,12 +89,14 @@ function CellOperator(dims::NTuple{N, Integer}; periodic = ntuple(_ -> false, N)
         return map(Float64, Tuple(r))
     end
     fs = map(num, Tuple(face))
-    op = CellOperator{N}(Int.(dims), Tuple(periodic), ntuple(a -> fs[a], N), num(shift),
+    op = CellOperator{N}(
+        Int.(dims), Tuple(periodic), ntuple(a -> fs[a], N), num(shift),
         mask === nothing ? nothing : String(mask), num(value),
         map(d -> map(g -> g === nothing ? nothing : Float64(g), Tuple(d)), Tuple(dirichlet)),
         map(d -> map(rob, Tuple(d)), Tuple(robin)),
         name === nothing ? nothing : string(name), map(string, Tuple(axes)), robin_full,
-        hex ? fs[3] : nothing)
+        hex ? fs[3] : nothing
+    )
     check_coefficients(op)
     return op
 end
@@ -141,7 +151,7 @@ positive? An unanchored group has the near-null constant mode (eigenvalue `s`), 
 deflates (`unanchored`).
 """
 function anchored(op::CellOperator)
-    op.mask !== nothing || any(d -> any(!isnothing, d), op.dirichlet) ||
+    return op.mask !== nothing || any(d -> any(!isnothing, d), op.dirichlet) ||
         any(d -> any(r -> r !== nothing && robin_parts(r...)[1] > 0, d), op.robin)
 end
 """
@@ -172,36 +182,48 @@ function check_coefficients(op::CellOperator{N}) where {N}
     s = op.shift
     fin(s) || _refuse(op, "the shift (the reaction coefficient `s` of `A u = s u + Σ w (u − u_nb)`) must be finite; got ", s)
     s isa Real && !(s >= 0) &&
-        _refuse(op, "the shift (the reaction coefficient `s` of `A u = s u + Σ w (u − u_nb)`) must be ≥ 0; got ", s,
-            ". A negative shift (growth) makes the operator indefinite, which PCG and multigrid cannot solve: ",
-            "step the field with an explicit method (`ExplicitEuler`)")
+        _refuse(
+        op, "the shift (the reaction coefficient `s` of `A u = s u + Σ w (u − u_nb)`) must be ≥ 0; got ", s,
+        ". A negative shift (growth) makes the operator indefinite, which PCG and multigrid cannot solve: ",
+        "step the field with an explicit method (`ExplicitEuler`)"
+    )
     for (a, f) in enumerate(faces(op))
         fin(f) || _refuse(op, "the face coefficient of ", _facename(op, a), " must be finite; got ", f)
         f isa Real && !(f > 0) &&
-            _refuse(op, "the face coefficient of ", _facename(op, a), " must be > 0; got ", f,
-                ". A face ≤ 0 is anti-diffusion, which the solve cannot converge on: give a positive ",
-                "diffusion coefficient (cut the lattice with a mask instead)")
+            _refuse(
+            op, "the face coefficient of ", _facename(op, a), " must be > 0; got ", f,
+            ". A face ≤ 0 is anti-diffusion, which the solve cannot converge on: give a positive ",
+            "diffusion coefficient (cut the lattice with a mask instead)"
+        )
     end
     fin(op.value) || _refuse(op, "the mask value must be finite; got ", op.value)
     for a in 1:N, k in 1:2
         g, r = op.dirichlet[a][k], op.robin[a][k]
         (g !== nothing || r !== nothing) && op.periodic[a] &&
-            _refuse(op, "axis `", op.axes[a], "` is periodic: it has no ", _side(k),
-                " face for a ", g !== nothing ? "Dirichlet value" : "Robin condition",
-                "; drop the face condition or make the axis non-periodic")
+            _refuse(
+            op, "axis `", op.axes[a], "` is periodic: it has no ", _side(k),
+            " face for a ", g !== nothing ? "Dirichlet value" : "Robin condition",
+            "; drop the face condition or make the axis non-periodic"
+        )
         g !== nothing && r !== nothing &&
             _refuse(op, _face_words(op, a, k), " has both a Dirichlet value and a Robin condition; give one")
         g === nothing || isfinite(g) ||
             _refuse(op, "the Dirichlet value on ", _face_words(op, a, k), " must be finite; got ", g)
         r === nothing && continue
         α, β, gr = r
-        all(isfinite, r) || _refuse(op, "the Robin condition `α u + β ∂u/∂n = g` on ",
-            _face_words(op, a, k), " must have finite α, β and g; got (", α, ", ", β, ", ", gr, ")")
-        α == 0 && β == 0 && _refuse(op, "the Robin condition on ", _face_words(op, a, k),
-            " has α = β = 0, which is no condition: give α (a fixed value) or β (a flux)")
-        degenerate(α, β) && _refuse(op, "the Robin condition `α u + β ∂u/∂n = g` on ",
+        all(isfinite, r) || _refuse(
+            op, "the Robin condition `α u + β ∂u/∂n = g` on ",
+            _face_words(op, a, k), " must have finite α, β and g; got (", α, ", ", β, ", ", gr, ")"
+        )
+        α == 0 && β == 0 && _refuse(
+            op, "the Robin condition on ", _face_words(op, a, k),
+            " has α = β = 0, which is no condition: give α (a fixed value) or β (a flux)"
+        )
+        degenerate(α, β) && _refuse(
+            op, "the Robin condition `α u + β ∂u/∂n = g` on ",
             _face_words(op, a, k), " has α/2 + β = 0 (α = ", α, ", β = ", β,
-            " per lattice spacing: 2β + αh = 0), which leaves the ghost value undefined: change α or β")
+            " per lattice spacing: 2β + αh = 0), which leaves the ghost value undefined: change α or β"
+        )
     end
     return nothing
 end
@@ -232,7 +254,7 @@ end
 Does the group have a mask, a Dirichlet or Robin face or a non-constant face coefficient (§5.6)?
 """
 function jumpy(op::CellOperator)
-    op.mask !== nothing ||
+    return op.mask !== nothing ||
         any(d -> any(!isnothing, d), op.dirichlet) || has_robin(op) ||
         any(f -> f isa String, faces(op))
 end
@@ -251,8 +273,12 @@ function coef_slots(op::CellOperator{N}) where {N}
     face = ntuple(a -> next(fs[a]), length(fs))
     shift, value = next(op.shift), next(op.value)
     dirichlet = ntuple(a -> map(next, op.dirichlet[a]), N)
-    robin = ntuple(a -> map(r -> r === nothing ? (0, 0, 0) : (next(0.0), next(0.0), next(0.0)),
-            op.robin[a]), N)
+    robin = ntuple(
+        a -> map(
+            r -> r === nothing ? (0, 0, 0) : (next(0.0), next(0.0), next(0.0)),
+            op.robin[a]
+        ), N
+    )
     return (; face, shift, value, dirichlet, robin, n = n[])
 end
 """
@@ -292,8 +318,14 @@ axis of size 1); the bottom starts at the first level with at most `LDS_SITES` s
 depth(op::CellOperator) = depth(op.dims; op)
 function depth(dims::NTuple{N, Int}; op = nothing) where {N}
     big = [d for d in dims if d > 1]
-    isempty(big) && throw(ArgumentError(string(op === nothing ? "the solver group" : _who(op),
-        ": the lattice ", dims, " has one site: a multigrid solve needs an axis with more than one site")))
+    isempty(big) && throw(
+        ArgumentError(
+            string(
+                op === nothing ? "the solver group" : _who(op),
+                ": the lattice ", dims, " has one site: a multigrid solve needs an axis with more than one site"
+            )
+        )
+    )
     L = floor(Int, log2(minimum(big)))           # ≥ 1: every axis in `big` has ≥ 2 sites
     lb = something(findfirst(l -> prod(leveldims(Level(Grid(dims), l))) <= LDS_SITES, 1:L), L)
     return L, lb
@@ -319,7 +351,8 @@ _and(x::Ex, y::Ex) = Ex(x.b, node!(x.b, AND, BOOL, Int32[x.id, y.id]))
 _not(x::Ex) = Ex(x.b, node!(x.b, NOT, BOOL, Int32[x.id]))
 function _inside(kb::KernelBuilder{N}, f, off) where {N}
     a = Access{N}(
-        Int32(f), Int8(0), Sel(Int16(1)), Sel(NTuple{N, Int16}(off)), Int8(0), INSIDE)
+        Int32(f), Int8(0), Sel(Int16(1)), Sel(NTuple{N, Int16}(off)), Int8(0), INSIDE
+    )
     return Ex(kb, node!(kb, INSIDE_OP, BOOL, Int32[], access!(kb, a)))
 end
 _scal(kb, t, i) = table(kb, t, F32, constant(kb, i, I32))
@@ -330,8 +363,10 @@ _scal(kb, t, i) = table(kb, t, F32, constant(kb, i, I32))
 """
 function _apply(kb::KernelBuilder{N}, F::LevelFields{N}, per, dims, xget; lev = 0) where {N}
     function L(f; o = ntuple(_ -> 0, N), pol = IR.RESOLVE)
-        return load(kb, f; offset = o, level = lev,
-            policy = all(iszero, o) ? IR.RESOLVE : pol)
+        return load(
+            kb, f; offset = o, level = lev,
+            policy = all(iszero, o) ? IR.RESOLVE : pol
+        )
     end
     c = L(F.s) + L(F.sbox) + L(F.sint)
     x0 = xget(ntuple(_ -> 0, N))
@@ -365,8 +400,10 @@ The rounding scale of the residual `b − A x` at the kernel's site: `|b| + (|A|
 """
 function _roundscale(kb::KernelBuilder{N}, F::LevelFields{N}, per, dims, b, aget) where {N}
     function L(f; o = ntuple(_ -> 0, N), pol = IR.RESOLVE)
-        return load(kb, f; offset = o,
-            policy = all(iszero, o) ? IR.RESOLVE : pol)
+        return load(
+            kb, f; offset = o,
+            policy = all(iszero, o) ? IR.RESOLVE : pol
+        )
     end
     x0 = abs(aget(ntuple(_ -> 0, N)))
     sc = abs(b) + (L(F.s) + L(F.sbox) + L(F.sint)) * x0
@@ -397,49 +434,64 @@ constant-mode deflation (needs `pcg` and `deflatable(op)`). `lane` is the solver
 type, `state` that of the caller-facing arrays (inputs and solution): when they differ
 and there is no deflated `pcg.u`, the solution is copied into `out.u` (kernel `solve.out`).
 """
-function solver_program(op::CellOperator{N}, pcg::Bool; lane = F32, state = lane,
-        deflate::Bool = false) where {N}
+function solver_program(
+        op::CellOperator{N}, pcg::Bool; lane = F32, state = lane,
+        deflate::Bool = false
+    ) where {N}
     deflate && !(pcg && deflatable(op)) &&
         _refuse(
         op, "`deflate = true` needs `LatticePCG` on a group with no mask, no Dirichlet or ",
-            "Robin face and a constant shift (the constant mode is then an eigenvector); this group ",
+        "Robin face and a constant shift (the constant mode is then an eigenvector); this group ",
         pcg ? "is anchored or has a field-valued shift" : "uses stationary `LatticeMultigrid`",
-            ": use `deflate = :auto`")
+        ": use `deflate = :auto`"
+    )
     L, lb = depth(op)
     cs = coef_slots(op)
-    pb = ProgramBuilder(Grid(op.dims); periodic = op.periodic, levels = L + 1,
-        nparams = cs.n)
+    pb = ProgramBuilder(
+        Grid(op.dims); periodic = op.periodic, levels = L + 1,
+        nparams = cs.n
+    )
     nf = length(faces(op))
     lv = map(0:L) do l
         f(name; kw...) = field!(pb, lkey(l, name); levels = [l], storage = lane, kw...)
-        LevelFields{N, nf}(f("active"; storage = U8, role = :aux),
+        LevelFields{N, nf}(
+            f("active"; storage = U8, role = :aux),
             ntuple(a -> f("w$a"; role = :aux), nf), f("s"; role = :aux),
             f("sbox"; role = :aux), f("sint"; role = :aux),
             f("x"; buffers = l < lb ? 2 : 1), f("b"; role = :aux), f("d"; role = :scratch),
-            l >= lb ? f("r"; role = :scratch) : Int32(0))
+            l >= lb ? f("r"; role = :scratch) : Int32(0)
+        )
     end
     input(k; kw...) = field!(pb, k; role = :input, storage = state, kw...)
-    inp = (; f = input("in.f"),
+    inp = (;
+        f = input("in.f"),
         mask = op.mask === nothing ? Int32(0) : input(op.mask; storage = U8),
         value = op.value isa String ? input(op.value) : Int32(0),
         shift = op.shift isa String ? input(op.shift) : Int32(0),
-        face = map(f -> f isa String ? input(f) : Int32(0), faces(op)))
+        face = map(f -> f isa String ? input(f) : Int32(0), faces(op)),
+    )
     pf = if pcg
-        (; x = field!(pb, "pcg.x"; buffers = 2, storage = lane),
+        (;
+            x = field!(pb, "pcg.x"; buffers = 2, storage = lane),
             b = field!(pb, "pcg.b"; role = :aux, storage = lane),
             p = field!(pb, "pcg.p"; buffers = 2, storage = lane),
-            u = deflate ? field!(pb, "pcg.u"; storage = state) : Int32(0))
+            u = deflate ? field!(pb, "pcg.u"; storage = state) : Int32(0),
+        )
     else
         nothing
     end
     rb = has_robin(op) ? field!(pb, "robin.b"; role = :aux, storage = lane) : Int32(0)
     tab(k) = table!(pb, k; storage = lane, oob = :none)
-    tb = (; scal = tab("solve.scal"), pr = tab("solve.pr"), pb = tab("solve.pb"),
+    tb = (;
+        scal = tab("solve.scal"), pr = tab("solve.pr"), pb = tab("solve.pb"),
         pd = tab("solve.pd"), px = tab("solve.px"), gb = tab("solve.gb"),
         ps = deflate ? tab("solve.ps") : Int32(0),
-        pq = deflate ? tab("solve.pq") : Int32(0))
-    ctx = (; pb, op, cs, lv, inp, pf, tb, rb, L, lb, lane, deflate,
-        dims = [Int.(leveldims(Level(Grid(op.dims), l))) for l in 0:L])
+        pq = deflate ? tab("solve.pq") : Int32(0),
+    )
+    ctx = (;
+        pb, op, cs, lv, inp, pf, tb, rb, L, lb, lane, deflate,
+        dims = [Int.(leveldims(Level(Grid(op.dims), l))) for l in 0:L],
+    )
     _fill!(ctx)
     _lift!(ctx)
     rb == 0 || _robin!(ctx)
@@ -462,9 +514,12 @@ function solver_program(op::CellOperator{N}, pcg::Bool; lane = F32, state = lane
     end
     p = check_no_time(program(pb))         # renumbers ids by key: remap the handles
     fm(i) = i == 0 ? Int32(0) : fieldid(p, pb.fields[i].key)
-    lvm = [LevelFields{N, nf}(
-               fm(F.active), map(fm, F.w), fm(F.s), fm(F.sbox), fm(F.sint), fm(F.x),
-               fm(F.b), fm(F.d), fm(F.r)) for F in lv]
+    lvm = [
+        LevelFields{N, nf}(
+            fm(F.active), map(fm, F.w), fm(F.s), fm(F.sbox), fm(F.sint), fm(F.x),
+            fm(F.b), fm(F.d), fm(F.r)
+        ) for F in lv
+    ]
     return p, (; L, lb, dims = ctx.dims, lv = lvm)
 end
 
@@ -556,7 +611,7 @@ function _fill!(ctx)
     store(kb, F.s, _num(kb, op.shift, ctx.inp.shift, ctx.cs.shift))
     store(kb, F.sbox, sbox)
     store(kb, F.sint, 0.0)
-    add!(pb, kb, "fill")
+    return add!(pb, kb, "fill")
 end
 
 """
@@ -572,30 +627,51 @@ function _lift!(ctx)
         o = _unit(N, a, σ)
         if ctx.inp.mask != 0 && op.dims[a] > 1
             w = σ > 0 ? _face_in(kb, ctx, a) : _face_in(kb, ctx, a; o)
-            hit = Ex(kb,
+            hit = Ex(
+                kb,
                 compare!(
-                    kb, IR.EQ, load(kb, ctx.inp.mask; offset = o,
-                        policy = IR.CLAMP).id,
-                    constant!(kb, 0.0, U8)))
+                    kb, IR.EQ, load(
+                        kb, ctx.inp.mask; offset = o,
+                        policy = IR.CLAMP
+                    ).id,
+                    constant!(kb, 0.0, U8)
+                )
+            )
             hit = _not(hit)
             op.periodic[a] || (hit = _and(hit, _inside(kb, ctx.inp.f, o)))
-            v = _num(kb, op.value, ctx.inp.value, ctx.cs.value; offset = o,
-                policy = IR.CLAMP)
+            v = _num(
+                kb, op.value, ctx.inp.value, ctx.cs.value; offset = o,
+                policy = IR.CLAMP
+            )
             b = b + select(hit, w * v, 0.0)
         end
         g = op.dirichlet[a][k]
-        g === nothing || (b = b + select(_inside(kb, ctx.inp.f, o), 0.0,
-            2 * _face_in(kb, ctx, a) * param(kb, ctx.cs.dirichlet[a][k])))
-        op.robin[a][k] === nothing || (b = b + select(_inside(kb, ctx.inp.f, o), 0.0,
-            _face_in(kb, ctx, a) * param(kb, ctx.cs.robin[a][k][3])))
+        g === nothing || (
+            b = b + select(
+                _inside(kb, ctx.inp.f, o), 0.0,
+                2 * _face_in(kb, ctx, a) * param(kb, ctx.cs.dirichlet[a][k])
+            )
+        )
+        op.robin[a][k] === nothing || (
+            b = b + select(
+                _inside(kb, ctx.inp.f, o), 0.0,
+                _face_in(kb, ctx, a) * param(kb, ctx.cs.robin[a][k][3])
+            )
+        )
     end
     if ishex(op)                                         # the diagonal faces to ±(e₁ − e₂)
         for σ in (1, -1)
             o = (σ, -σ)
             if ctx.inp.mask != 0
                 w = σ > 0 ? _face_in(kb, ctx, 3) : _face_in(kb, ctx, 3; o)
-                hit = _not(Ex(kb, compare!(kb, IR.EQ, load(kb, ctx.inp.mask; offset = o, policy = IR.CLAMP).id,
-                    constant!(kb, 0.0, U8))))
+                hit = _not(
+                    Ex(
+                        kb, compare!(
+                            kb, IR.EQ, load(kb, ctx.inp.mask; offset = o, policy = IR.CLAMP).id,
+                            constant!(kb, 0.0, U8)
+                        )
+                    )
+                )
                 all(op.periodic) || (hit = _and(hit, _inside(kb, ctx.inp.f, o)))
                 v = _num(kb, op.value, ctx.inp.value, ctx.cs.value; offset = o, policy = IR.CLAMP)
                 b = b + select(hit, w * v, 0.0)
@@ -615,7 +691,7 @@ function _lift!(ctx)
     end
     mk = ctx.inp.mask == 0 ? b : select(eq(load(kb, ctx.inp.mask), 0), b, 0.0)
     store(kb, ctx.rb == 0 ? _rhs(ctx) : ctx.rb, mk)
-    add!(pb, kb, "lift")
+    return add!(pb, kb, "lift")
 end
 
 """
@@ -643,8 +719,10 @@ function _robin!(ctx)
 
         op.robin[a][k] === nothing && continue
         dneg = param(kb, ctx.cs.robin[a][k][2])
-        b = b - select(_inside(kb, ctx.inp.f, _unit(N, a, σ)), 0.0,
-            dneg * _face_in(kb, ctx, a) * x)
+        b = b - select(
+            _inside(kb, ctx.inp.f, _unit(N, a, σ)), 0.0,
+            dneg * _face_in(kb, ctx, a) * x
+        )
     end
     if ishex(op)                                         # the diagonal faces that leave the box
         for σ in (1, -1)
@@ -654,7 +732,7 @@ function _robin!(ctx)
     end
     mk = ctx.inp.mask == 0 ? b : select(eq(load(kb, ctx.inp.mask), 0), b, 0.0)
     store(kb, _rhs(ctx), mk)
-    add!(pb, kb, "robin.b")
+    return add!(pb, kb, "robin.b")
 end
 
 """
@@ -700,7 +778,7 @@ function _step!(ctx, l; zero_ = false, rz = false)
     store(kb, F.x, _sel(kb, F, xn))
     store(kb, F.d, _sel(kb, F, dn))
     rz && _rz!(kb, ctx, b, _sel(kb, F, xn))
-    add!(pb, kb, string(zero_ ? "zstep" : "step", rz ? ".rz" : "", ".", lkey(l, "")))
+    return add!(pb, kb, string(zero_ ? "zstep" : "step", rz ? ".rz" : "", ".", lkey(l, "")))
 end
 
 """
@@ -728,9 +806,9 @@ function _prolong!(ctx, l; rz = false)
     function xget(o)
         z = all(iszero, o)
         pol = z ? IR.RESOLVE : IR.CLAMP
-        load(kb, F.x; offset = o, policy = pol) +
-        _real(load(kb, F.active; offset = o, policy = pol)) *
-        load(kb, C.x; offset = o, level = 1, policy = z ? IR.RESOLVE : IR.CLAMP)
+        return load(kb, F.x; offset = o, policy = pol) +
+            _real(load(kb, F.active; offset = o, policy = pol)) *
+            load(kb, C.x; offset = o, level = 1, policy = z ? IR.RESOLVE : IR.CLAMP)
     end
     b = load(kb, F.b)
     Ax, D = _apply(kb, F, ctx.op.periodic, ctx.dims[l + 1], xget)
@@ -739,7 +817,7 @@ function _prolong!(ctx, l; rz = false)
     store(kb, F.x, _sel(kb, F, xn))
     store(kb, F.d, _sel(kb, F, dn))
     rz && _rz!(kb, ctx, b, _sel(kb, F, xn))
-    add!(pb, kb, string("prolong", rz ? ".rz" : "", ".", lkey(l, "")))
+    return add!(pb, kb, string("prolong", rz ? ".rz" : "", ".", lkey(l, "")))
 end
 
 """
@@ -749,12 +827,14 @@ function _restrict!(ctx, l)
     F, C, pb, N = ctx.lv[l], ctx.lv[l + 1], ctx.pb, length(ctx.op.dims)
     kb = kernel(pb, Space{N}(; level = l))
     gate!(kb, _notdone(kb, ctx.tb))
-    xget = o -> load(kb, F.x; offset = o, level = -1,
-        policy = all(iszero, o) ? IR.RESOLVE : IR.CLAMP)
+    xget = o -> load(
+        kb, F.x; offset = o, level = -1,
+        policy = all(iszero, o) ? IR.RESOLVE : IR.CLAMP
+    )
     Ax, _ = _apply(kb, F, ctx.op.periodic, ctx.dims[l], xget; lev = -1)
     r = _real(load(kb, F.active; level = -1)) * (load(kb, F.b; level = -1) - Ax)
     store(kb, C.b, restrict(r))
-    add!(pb, kb, string("restrict.", lkey(l, "")))
+    return add!(pb, kb, string("restrict.", lkey(l, "")))
 end
 
 """
@@ -771,7 +851,7 @@ function _resid!(ctx)
     reduce!(kb, :max, abs(_sel(kb, F, b)), ctx.tb.pb)
     sc = _roundscale(kb, F, ctx.op.periodic, ctx.dims[1], b, xget)
     reduce!(kb, :max, _sel(kb, F, sc), ctx.tb.px)
-    add!(pb, kb, "resid")
+    return add!(pb, kb, "resid")
 end
 
 """
@@ -826,7 +906,7 @@ function _pcg!(ctx)
     add!(pb, kb, "pcg.center")
     kb = kernel(pb)                       # the solution: zero-mean part plus c (ungated)
     store(kb, pf.u, load(kb, pf.x) - _scal(kb, tb.scal, XMEAN) + _scal(kb, tb.scal, MEAN))
-    add!(pb, kb, "pcg.out")
+    return add!(pb, kb, "pcg.out")
 end
 
 """
@@ -841,8 +921,10 @@ function _tangent!(ctx)
     x, bt = ctx.pf === nothing ? (F.x, F.b) : (ctx.pf.x, ctx.pf.b)
     for (key, diff) in (("tangent.r0", false), ("tangent.dr", true))
         kb = kernel(pb)
-        xget = o -> load(kb, x; offset = o,
-            policy = all(iszero, o) ? IR.RESOLVE : IR.CLAMP)
+        xget = o -> load(
+            kb, x; offset = o,
+            policy = all(iszero, o) ? IR.RESOLVE : IR.CLAMP
+        )
         Ax, _ = _apply(kb, F, ctx.op.periodic, ctx.dims[1], xget)
         r = _sel(kb, F, load(kb, bt) - Ax)
         store(kb, F.d, diff ? r - load(kb, F.d) : r)

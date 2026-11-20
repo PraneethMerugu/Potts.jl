@@ -278,9 +278,11 @@ the launch is Cartesian: `body(x, args...)` for `x` over the ndrange (padded up 
 multiple of the workgroup per axis on a device; the body guards every axis), a plain
 column-major loop over `CartesianIndices(ndrange)` on the host.
 """
-function Launch(backend, body::B, args::A, ndrange::NTuple{N, Integer};
+function Launch(
+        backend, body::B, args::A, ndrange::NTuple{N, Integer};
         workgroupsize::Union{Integer, NTuple{N, Integer}} = N == 1 ? 256 : (64, ntuple(_ -> 1, N - 1)...),
-        static::Bool, cartesian::Bool = N > 1) where {B, A <: Tuple, N}
+        static::Bool, cartesian::Bool = N > 1
+    ) where {B, A <: Tuple, N}
     cartesian || return Launch(backend, body, args, only(ndrange); workgroupsize = only(workgroupsize), static)
     all(>=(0), ndrange) || throw(ArgumentError("Launch: ndrange $ndrange has a negative axis"))
     nd = map(Int, ndrange)
@@ -432,10 +434,12 @@ function walker(n::Integer)
     return lock(_WALKERS_LOCK) do
         get!(_WALKERS, Int(n)) do
             calls = [:(getfield(t, $i)()) for i in 1:n]
-            ex = :(function (t)
-                $(calls...)
-                return nothing
-            end)
+            ex = :(
+                function (t)
+                    $(calls...)
+                    return nothing
+                end
+            )
             RuntimeGeneratedFunctions.drop_expr(@RuntimeGeneratedFunction(ex))
         end
     end

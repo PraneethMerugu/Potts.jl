@@ -44,11 +44,15 @@ end
 # the default here solves them (`Problems.steady_start!`: the owned QuasiSteady solve of those
 # rows at t0, on the lattice). `initializealg = BrownFullBasicInit()` or
 # `CheckInit()` given to `solve` dispatch to their own methods.
-function OrdinaryDiffEqCore._initialize_dae!(integ::ODEIntegrator, prob::Problems.LatticeODEProblem, alg::DefaultInit,
-        x::Val{true})
+function OrdinaryDiffEqCore._initialize_dae!(
+        integ::ODEIntegrator, prob::Problems.LatticeODEProblem, alg::DefaultInit,
+        x::Val{true}
+    )
     generic = Tuple{ODEIntegrator, SciMLBase.ODEProblem, DefaultInit, Val{true}}
-    (SciMLBase.has_initializeprob(prob.f) || prob.f.mass_matrix isa UniformScaling ||
-     Problems.lattice_metadata(prob) === nothing) &&
+    (
+        SciMLBase.has_initializeprob(prob.f) || prob.f.mass_matrix isa UniformScaling ||
+            Problems.lattice_metadata(prob) === nothing
+    ) &&
         return invoke(OrdinaryDiffEqCore._initialize_dae!, generic, integ, prob, alg, x)
     Problems.steady_start!(integ.u, prob, integ.p, integ.t)
     return nothing

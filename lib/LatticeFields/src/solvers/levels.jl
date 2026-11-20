@@ -44,8 +44,9 @@ end
 end
 @inline function _lin(x::NTuple{N, Int32}, dims::NTuple{N, Int32}) where {N}
     return one(Int32) +
-                                                                          foldl(
-        +, ntuple(d -> (x[d] - one(Int32)) * _stride(dims, d), N))
+        foldl(
+        +, ntuple(d -> (x[d] - one(Int32)) * _stride(dims, d), N)
+    )
 end
 """
 Neighbor of `x` along axis `a` by `σ = ±1`: `(x′, exists)`; periodic axes wrap.
@@ -185,8 +186,10 @@ function build_site!(j, S::Tuple{F, C}, P, G) where {F, C}
                 cn, _ = _nb(c, a, 1, dimsf, per)
                 i = _lin(c, dimsf)
                 @inbounds w, x, y = wf[a][i], af[i] != 0, af[_lin(cn, dimsf)] != 0
-                f = T(_width(c[a], dimsf[a], n0[a], ℓ - one(Int32)) +
-                      _width(cn[a], dimsf[a], n0[a], ℓ - one(Int32))) / fd
+                f = T(
+                    _width(c[a], dimsf[a], n0[a], ℓ - one(Int32)) +
+                        _width(cn[a], dimsf[a], n0[a], ℓ - one(Int32))
+                ) / fd
                 cf, dcf = (x & y) ? w : zero(T), (x != y) ? w : zero(T)
                 if activeJ & actn
                     acc += f * cf
@@ -235,8 +238,8 @@ weight of the diagonal fine faces in the coarse faces (1; 0 drops them, the nega
 # the factor of a fine face `c → cn` along axis `a` in the coarse face `X → Xn`: fine over
 # coarse center distance, from the physical widths (`build_site!`)
 @inline function _hexfac(::Type{T}, a, c, cn, X, Xn, dimsf, dimsc, n0, ℓ) where {T}
-    T(_width(c[a], dimsf[a], n0[a], ℓ - one(Int32)) + _width(cn[a], dimsf[a], n0[a], ℓ - one(Int32))) /
-    T(_width(X[a], dimsc[a], n0[a], ℓ) + _width(Xn[a], dimsc[a], n0[a], ℓ))
+    return T(_width(c[a], dimsf[a], n0[a], ℓ - one(Int32)) + _width(cn[a], dimsf[a], n0[a], ℓ - one(Int32))) /
+        T(_width(X[a], dimsc[a], n0[a], ℓ) + _width(Xn[a], dimsc[a], n0[a], ℓ))
 end
 function build_hex!(j, S::Tuple{F, C}, P, G) where {F, C}
     (af, wf, sf, bf, if_), (ac, wc, sc, bc, ic) = S
@@ -388,7 +391,7 @@ Phases of the bottom over `K` levels: per level above the coarsest Chebyshev(ν�
 Chebyshev (`1 + 2(degree − 1)`); per level prolongation and Chebyshev(ν₂) (`1 + 2ν₂`).
 """
 function bottom_phases(K, nu1, nu2, degree)
-    (K - 1) * (2nu1 + 1) + 2degree - 1 + (K - 1) * (2nu2 + 1)
+    return (K - 1) * (2nu1 + 1) + 2degree - 1 + (K - 1) * (2nu2 + 1)
 end
 
 """
@@ -431,8 +434,10 @@ function bottom!(ph, g, t, lds, S, P, G)
     acts, ws, ss, sbs, sis, xs, bs, rs, ds, scal, gb = S
     T = eltype(xs[1])
     @inbounds scal[1] != zero(T) && return nothing                 # DONE is scal[1]
-    kind, l, k, coarse = _phase(Int32(ph), Int32(length(G.dims)), Int32(G.nu1),
-        Int32(G.nu2), Int32(G.degree))
+    kind, l, k, coarse = _phase(
+        Int32(ph), Int32(length(G.dims)), Int32(G.nu1),
+        Int32(G.nu2), Int32(G.degree)
+    )
     dims, per, W = G.dims, G.per, Int32(G.wg)
     @inbounds lo, hi = coarse ? (gb[1], gb[2]) : (T(0.5), T(2))   # gb has 2 entries
     c1, c2 = _coarse_coefs(k, lo, hi)
@@ -482,8 +487,11 @@ Coarse site `J`: `bc[J] = Σ` of the fine residual over its children.
 @inline function _restrict_site!(bc, rf, J, dimsf, dimsc)
     X = _coords(J, dimsc)
     acc = zero(eltype(bc))
-    for ci in CartesianIndices(ntuple(
-        e -> range(_kids(X[e], dimsf[e], dimsc[e])...), length(X)))
+    for ci in CartesianIndices(
+            ntuple(
+                e -> range(_kids(X[e], dimsf[e], dimsc[e])...), length(X)
+            )
+        )
         @inbounds acc += rf[_lin(Int32.(Tuple(ci)), dimsf)]        # children of J are in rf
     end
     @inbounds bc[J] = acc                                           # J ≤ length(bc)

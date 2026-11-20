@@ -80,8 +80,8 @@ function naive3!(out, u, P)
     for l in 1:nz, j in 1:ny, i in 1:nx
         c = Float64(u[i, j, l])
         nb = u[mod1(i + 1, nx), j, l] + u[mod1(i - 1, nx), j, l] +
-             (j < ny ? u[i, j + 1, l] : c) + (j > 1 ? u[i, j - 1, l] : c) +
-             (l < nz ? u[i, j, l + 1] : 2P[5] - c) + (l > 1 ? u[i, j, l - 1] : 2P[4] - c)
+            (j < ny ? u[i, j + 1, l] : c) + (j > 1 ? u[i, j - 1, l] : c) +
+            (l < nz ? u[i, j, l + 1] : 2P[5] - c) + (l > 1 ? u[i, j, l - 1] : 2P[4] - c)
         out[i, j, l] = c + k * (nb - 6c)
     end
     return out

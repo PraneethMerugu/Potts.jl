@@ -36,8 +36,10 @@ const RT_DT = 2
 The geometry of compiled kernel `ck` of program `p`, with `rt = (t, dt)` in `R` (the
 kernel's value type; a Dual time gives a Dual `R` on the ODE path).
 """
-function launch_geometry(p::Program{N}, ck::CompiledKernel{N}, rt::NTuple{2, Real};
-        R::Type = ck.T) where {N}
+function launch_geometry(
+        p::Program{N}, ck::CompiledKernel{N}, rt::NTuple{2, Real};
+        R::Type = ck.T
+    ) where {N}
     dims = Tuple(map(Int32, leveldims(p, lv)) for lv in ck.levels)
     n = ck.I(nsites(p, ck.space.level))
     return Geom{N, length(dims), 2, ck.I, R}(n, dims, (lanecast(R, rt[1]), lanecast(R, rt[2])))
@@ -63,16 +65,21 @@ bodies. `n` is `G.n`.
 """
 function bind_program(
         backend, p::Program{N}, spec::LaunchSpec{N}, S::Tuple, P::Tuple, rt;
-        R::Type = spec.kernel.T, wrap::W = identity) where {N, W}
+        R::Type = spec.kernel.T, wrap::W = identity
+    ) where {N, W}
     ck = spec.kernel
     G = launch_geometry(p, ck, rt; R)
     body = wrap(body_function(ck))          # `wrap`: a body around the kernel's (a fused clamp, group.jl)
     if ck.strategy == :cartesian
-        return Exec.Launch(backend, body, (S, P, G), spec.ndrange; cartesian = true,
-            workgroupsize = spec.workgroup, static = spec.static)
+        return Exec.Launch(
+            backend, body, (S, P, G), spec.ndrange; cartesian = true,
+            workgroupsize = spec.workgroup, static = spec.static
+        )
     end
-    return Exec.Launch(backend, body, (S, P, G), Int(G.n);
-        workgroupsize = only(spec.workgroup), static = spec.static)
+    return Exec.Launch(
+        backend, body, (S, P, G), Int(G.n);
+        workgroupsize = only(spec.workgroup), static = spec.static
+    )
 end
 
 """
@@ -111,10 +118,14 @@ function each(n::Integer)
     return lock(_EACH_LOCK) do
         get!(_EACH, Int(n)) do
             calls = [:(getfield(t, $i)(a)) for i in 1:n]
-            rgf(:(function (t, a)
-                $(calls...)
-                return nothing
-            end))
+            rgf(
+                :(
+                    function (t, a)
+                        $(calls...)
+                        return nothing
+                    end
+                )
+            )
         end
     end
 end

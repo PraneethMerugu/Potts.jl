@@ -91,7 +91,7 @@ _apply_callbacks!(integ::FieldIntegrator) = _apply_cbs!(integ, integ.cbs)
 function _apply_cbs!(integ::FieldIntegrator, cs::SciMLBase.CallbackSet)
     u = _cb_u(integ)
     if !isempty(cs.continuous_callbacks) && _continuous!(integ, cs.continuous_callbacks, u) &&
-       !isempty(cs.discrete_callbacks)
+            !isempty(cs.discrete_callbacks)
         _discrete!(integ, _cb_u(integ), cs.discrete_callbacks)   # (an event moved the state)
     else
         _discrete!(integ, u, cs.discrete_callbacks)

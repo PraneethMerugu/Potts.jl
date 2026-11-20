@@ -26,8 +26,10 @@ The host form: workgroups in order, phases in order, items in order (`reverse = 
 the items of each phase backwards: a body that is free of intra-phase races gives the
 same bits either way). `lds` is a host array of at least the launch's `ldslen` elements.
 """
-function host_workgroups!(body::F, ngroups, wg, phases, lds, S, P, G;
-        reverse::Bool = false) where {F}
+function host_workgroups!(
+        body::F, ngroups, wg, phases, lds, S, P, G;
+        reverse::Bool = false
+    ) where {F}
     for g in Int32(1):Int32(ngroups), ph in Int32(1):Int32(phases)
 
         if reverse
@@ -94,7 +96,8 @@ end
 
 # The device wrapper: one workgroup per `g`, `@synchronize` after every phase.
 @kernel unsafe_indices = true function _workgroups!(
-        body, S, P, G, phases, ::Type{T}, ::Val{M}) where {T, M}
+        body, S, P, G, phases, ::Type{T}, ::Val{M}
+    ) where {T, M}
     g = @index(Group, Linear)
     t = @index(Local, Linear)
     lds = @localmem T (M,)
@@ -110,11 +113,15 @@ end
 Enqueue a workgroup launch on a KernelAbstractions `backend` (no wait): `ngroups` groups of
 `wg` items, `ldslen` elements of `T` of workgroup memory.
 """
-function workgroups!(backend, body::F, ngroups, wg, phases, ::Type{T}, ldslen, S, P,
-        G) where {F, T}
+function workgroups!(
+        backend, body::F, ngroups, wg, phases, ::Type{T}, ldslen, S, P,
+        G
+    ) where {F, T}
     # compile mode (`Exec.compiling`): one group with no phase compiles the kernel
     c = Exec.compiling()
-    _workgroups!(backend, wg)(body, S, P, G, Int32(c ? 0 : phases), T, Val(max(Int(ldslen), 1));
-        ndrange = (c ? 1 : ngroups) * wg)
+    _workgroups!(backend, wg)(
+        body, S, P, G, Int32(c ? 0 : phases), T, Val(max(Int(ldslen), 1));
+        ndrange = (c ? 1 : ngroups) * wg
+    )
     return nothing
 end

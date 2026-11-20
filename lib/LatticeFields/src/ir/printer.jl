@@ -8,26 +8,34 @@ _fmt(c::Coef) = c.param == 0 ? _fmt(c.value) : string(_fmt(c.value), "*p", c.par
 _off(t::Tuple) = string("(", join((v > 0 ? "+$v" : "$v" for v in t), ","), ")")
 
 function print_rule(io::IO, p::Program, r::FaceRule)
-    print(io, "rule face ", p.fields[r.field].key, " axis=",
+    print(
+        io, "rule face ", p.fields[r.field].key, " axis=",
         r.axis, " side=", r.side > 0 ? "+" : "-",
-        " alpha=", _fmt(r.alpha), " beta=", _fmt(r.beta), " g=", _fmt(r.g))
+        " alpha=", _fmt(r.alpha), " beta=", _fmt(r.beta), " g=", _fmt(r.g)
+    )
     r.gfield == 0 || print(io, " gfield=", p.fields[r.gfield].key)      # (printed only when set)
     r.afield == 0 || print(io, " afield=", p.fields[r.afield].key)
-    r.bfield == 0 || print(io, " bfield=", p.fields[r.bfield].key)
+    return r.bfield == 0 || print(io, " bfield=", p.fields[r.bfield].key)
 end
 function print_rule(io::IO, p::Program, r::DomainEdgeRule)
-    print(io, "rule domain_edge ",
-        p.fields[r.field].key, " kind=", r.kind)
-    r.mask == 0 || print(io, " mask=", p.masks[r.mask].key)              # (printed only when set)
+    print(
+        io, "rule domain_edge ",
+        p.fields[r.field].key, " kind=", r.kind
+    )
+    return r.mask == 0 || print(io, " mask=", p.masks[r.mask].key)              # (printed only when set)
 end
 function print_rule(io::IO, p::Program, r::ImmersedRule)
-    print(io, "rule immersed ", p.fields[r.field].key,
-        " mask=", p.masks[r.mask].key, " kind=", r.kind)
+    return print(
+        io, "rule immersed ", p.fields[r.field].key,
+        " mask=", p.masks[r.mask].key, " kind=", r.kind
+    )
 end
 function print_rule(io::IO, p::Program, r::NodeValueRule)
-    print(io, "rule node_value ", p.fields[r.field].key,
-        " mask=", p.masks[r.mask].key, " value=", _fmt(r.value), " face=", r.face)
-    r.vfield == 0 || print(io, " vfield=", p.fields[r.vfield].key)      # (printed only when set)
+    print(
+        io, "rule node_value ", p.fields[r.field].key,
+        " mask=", p.masks[r.mask].key, " value=", _fmt(r.value), " face=", r.face
+    )
+    return r.vfield == 0 || print(io, " vfield=", p.fields[r.vfield].key)      # (printed only when set)
 end
 
 """
@@ -36,31 +44,39 @@ The storage layout and lattice: what a checkpoint's meaning depends on besides t
 function print_layout(io::IO, p::Program{N}) where {N}
     g = p.hierarchy[1].grid
     domain = g.domain == 0 ? "box" : p.masks[g.domain].key
-    println(io, "lattice N=", N, " dims=", Int.(g.dims),
+    println(
+        io, "lattice N=", N, " dims=", Int.(g.dims),
         " geometry=", _lc(g.geometry), " periodic=",
         p.periodic, " spacing=", p.spacing, " domain=", domain,
-        " params=", p.nparams)
+        " params=", p.nparams
+    )
     for l in p.hierarchy
         println(
-            io, "level shift=", l.shift, " widths=", l.widths === nothing ? "-" : l.widths)
+            io, "level shift=", l.shift, " widths=", l.widths === nothing ? "-" : l.widths
+        )
     end
     for f in p.fields
-        println(io, "field ", f.key, " lane=", f.storage,
+        println(
+            io, "field ", f.key, " lane=", f.storage,
             " shape=[", join(f.shape, ","), "]", " symmetric=",
             f.symmetric, " buffers=", f.buffers, " role=", f.role, " epoch=", _lc(f.epoch),
             " classes=", [Int.(c.half) for c in f.classes], " levels=[", join(f.levels, ","), "]",
-            f.fixed ? " fixed" : "")
+            f.fixed ? " fixed" : ""
+        )
     end
     for t in p.tables
         println(io, "table ", t.key, " lane=", t.storage, " oob=", t.oob)
     end
     for m in p.masks
         println(
-            io, "mask ", m.key, " field=", p.fields[m.field].key, " epoch=", _lc(m.epoch))
+            io, "mask ", m.key, " field=", p.fields[m.field].key, " epoch=", _lc(m.epoch)
+        )
     end
     for g in p.flags
-        println(io, "flag ", g.key, " field=", p.fields[g.field].key, " bits=",
-            join(("$b:" * p.masks[s].key for (b, s) in g.bits), ","))
+        println(
+            io, "flag ", g.key, " field=", p.fields[g.field].key, " bits=",
+            join(("$b:" * p.masks[s].key for (b, s) in g.bits), ",")
+        )
     end
     return nothing
 end
@@ -70,7 +86,7 @@ function _access(io::IO, p::Program, a::Access)
     a.comp.cond != 0 && print(io, "|", a.comp.b, "?v", a.comp.cond)
     print(io, "] @", _off(a.offset.a))
     a.offset.cond != 0 && print(io, "|", _off(a.offset.b), "?v", a.offset.cond)
-    print(io, " L", a.level, " c", a.class, " ", _lc(a.policy))
+    return print(io, " L", a.level, " c", a.class, " ", _lc(a.policy))
 end
 
 function print_kernel(io::IO, p::Program, k::Kernel)

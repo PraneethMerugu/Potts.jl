@@ -38,7 +38,7 @@ function _resolve_lf_groups(groups_table, raw_groups)
     selected = String[]
     for raw in raw_groups
         g = strip(String(raw))
-        startswith(g, "LatticeFields_") && (g = g[length("LatticeFields_") + 1:end])
+        startswith(g, "LatticeFields_") && (g = g[(length("LatticeFields_") + 1):end])
         g == "LatticeFields" && (g = "All")
         if g == "All"
             for name in sort!(collect(keys(groups_table)))
@@ -71,8 +71,8 @@ end
 const LATTICEFIELDS_SELECTED_GROUPS = _resolve_lf_groups(LATTICEFIELDS_GROUPS_TABLE, LATTICEFIELDS_RAW_GROUPS)
 
 if "gpu" in LATTICEFIELDS_SELECTED_GROUPS &&
-   isempty(strip(get(ENV, "LATTICEFIELDS_GPU", ""))) &&
-   isempty(strip(get(ENV, "POTTS_GPU", "")))
+        isempty(strip(get(ENV, "LATTICEFIELDS_GPU", ""))) &&
+        isempty(strip(get(ENV, "POTTS_GPU", "")))
     ENV["LATTICEFIELDS_GPU"] = Sys.isapple() ? "metal" : "rocm"
 end
 
@@ -80,8 +80,10 @@ const gpu = lowercase(strip(get(ENV, "LATTICEFIELDS_GPU", get(ENV, "POTTS_GPU", 
 gpu in ("", "metal", "rocm") ||
     error("LATTICEFIELDS_GPU must be \"\", \"metal\" or \"rocm\"; got \"$gpu\"")
 
-function latticefields_tests(groups = LATTICEFIELDS_SELECTED_GROUPS;
-        nworkers = parse(Int, get(ENV, "RETESTITEMS_NWORKERS", isempty(gpu) ? "3" : "0")))
+function latticefields_tests(
+        groups = LATTICEFIELDS_SELECTED_GROUPS;
+        nworkers = parse(Int, get(ENV, "RETESTITEMS_NWORKERS", isempty(gpu) ? "3" : "0"))
+    )
     resolved = _resolve_lf_groups(LATTICEFIELDS_GROUPS_TABLE, groups)
     qa = get(ENV, "LATTICEFIELDS_QA", "true") == "true"
     explicit_qa = any(g -> g == "qa" || g == "LatticeFields_qa", groups)
@@ -94,11 +96,15 @@ function latticefields_tests(groups = LATTICEFIELDS_SELECTED_GROUPS;
     endfile = get(ENV, "POTTS_TEST_END_EXPR_FILE", "")
     test_end_expr = isempty(endfile) ? Expr(:block) : Meta.parse("begin\n" * read(endfile, String) * "\nend")
     picked(ti) = any(in(ti.tags), gs) && (!isempty(gpu) || !(:gpu_only in ti.tags))
-    kw = (; name, test_end_expr, testitem_timeout = 3600, retries = 0, nworker_threads = string(Threads.nthreads()),
-        logs = :batched)
+    kw = (;
+        name, test_end_expr, testitem_timeout = 3600, retries = 0, nworker_threads = string(Threads.nthreads()),
+        logs = :batched,
+    )
     failed = Any[]
-    for (f, nw) in ((ti -> picked(ti) && !(:timing in ti.tags), nworkers),
-                    (ti -> picked(ti) && :timing in ti.tags, min(nworkers, 1)))
+    for (f, nw) in (
+            (ti -> picked(ti) && !(:timing in ti.tags), nworkers),
+            (ti -> picked(ti) && :timing in ti.tags, min(nworkers, 1)),
+        )
         try
             task_local_storage(:SOURCE_PATH, Pkg.Operations.testfile(dirname(Base.active_project()))) do
                 runtests(f, LATTICEFIELDS_TESTDIR; nworkers = nw, kw...)

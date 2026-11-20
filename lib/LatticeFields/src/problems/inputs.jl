@@ -14,17 +14,31 @@ end
 
 # a value given for input `key`: an array with one entry per site (and component), or a number
 # for every site; returned as a flat host vector (`Bool` arrays are kept as given)
-function _input_value(p::Program, key::AbstractString, v, name = key; bool::Bool = false,
-        bounds::Tuple{Float64, Float64} = (-Inf, Inf))
+function _input_value(
+        p::Program, key::AbstractString, v, name = key; bool::Bool = false,
+        bounds::Tuple{Float64, Float64} = (-Inf, Inf)
+    )
     n = _input_length(p, key)
     v isa Number && (_check_integer(p, key, name, v; bool, bounds); return fill(v, n))
-    is_input_function(v) && throw(ArgumentError(string("input `", name, "`: a function of the time is given where ",
-        "the problem is built, `discretize(sys, disc; inputs = [", name, " => t -> values])` or `remake(prob; inputs = …)`; ",
-        "a write on an integrator takes an array with one value per site (", n, ") or a number")))
-    v isa AbstractArray || throw(ArgumentError(
-        "input `$name`: give an array with one value per site ($n) or a number; got a $(typeof(v))"))
-    length(v) == n || throw(ArgumentError(
-        "input `$name`: the array has $(length(v)) values; the field has $n (one per site$(n == nsites(p, 0) ? "" : " and component"))"))
+    is_input_function(v) && throw(
+        ArgumentError(
+            string(
+                "input `", name, "`: a function of the time is given where ",
+                "the problem is built, `discretize(sys, disc; inputs = [", name, " => t -> values])` or `remake(prob; inputs = …)`; ",
+                "a write on an integrator takes an array with one value per site (", n, ") or a number"
+            )
+        )
+    )
+    v isa AbstractArray || throw(
+        ArgumentError(
+            "input `$name`: give an array with one value per site ($n) or a number; got a $(typeof(v))"
+        )
+    )
+    length(v) == n || throw(
+        ArgumentError(
+            "input `$name`: the array has $(length(v)) values; the field has $n (one per site$(n == nsites(p, 0) ? "" : " and component"))"
+        )
+    )
     w = vec(collect(v))                       # on the host (a device array is copied here)
     _check_integer(p, key, name, w; bool, bounds)
     return w
@@ -47,8 +61,14 @@ function resolve_inputs(p::Program, index, given, base = nothing; t0 = nothing)
         k = _given_input_key(p, index, s, ks)
         name = input_name(index, k)
         if is_input_function(v)
-            t0 === nothing && throw(ArgumentError(string("input `", name, "`: this problem takes input values, ",
-                "not a function of the time; give an array with one value per site or a number")))
+            t0 === nothing && throw(
+                ArgumentError(
+                    string(
+                        "input `", name, "`: this problem takes input values, ",
+                        "not a function of the time; give an array with one value per site or a number"
+                    )
+                )
+            )
             vals[k] = _host_input(p, k, _call_input(v, t0, name), name, index)
         else
             vals[k] = _input_value(p, k, v, name; bool = is_bool_input(index, k), bounds = input_bounds(index, k))
@@ -94,9 +114,15 @@ end
 
 # the value of input function `f` at time `t`, refused in the user's words when `f` takes no time
 function _call_input(f::F, t, name) where {F}
-    applicable(f, t) || throw(ArgumentError(string("input `", name, "`: a value that is not an array or a number is ",
-        "a function of the time, called as `f(t)`; the given `", typeof(f), "` takes no time argument. Give ",
-        "`", name, " => t -> values`")))
+    applicable(f, t) || throw(
+        ArgumentError(
+            string(
+                "input `", name, "`: a value that is not an array or a number is ",
+                "a function of the time, called as `f(t)`; the given `", typeof(f), "` takes no time argument. Give ",
+                "`", name, " => t -> values`"
+            )
+        )
+    )
     return f(t)
 end
 # the host values of an input function's result: a vector of the input's host type (Float64 for
@@ -117,8 +143,10 @@ function check_input_result(p::Program, key::AbstractString, v, index)
     if !ok || !_input_ok(p, key, v, is_bool_input(index, key), input_bounds(index, key))
         _check_plain(v, input_name(index, key))
         # the error in the user's words (`_input_value` throws it)
-        _input_value(p, key, v, input_name(index, key); bool = is_bool_input(index, key),
-            bounds = input_bounds(index, key))
+        _input_value(
+            p, key, v, input_name(index, key); bool = is_bool_input(index, key),
+            bounds = input_bounds(index, key)
+        )
         throw(ArgumentError(string("input `", input_name(index, key), "`: the function returned a ", typeof(v))))
     end
     return nothing
@@ -156,9 +184,15 @@ function _value_ok(x, fl::Bool, r::Tuple{Float64, Float64}, bool::Bool, bounds::
 end
 # a write of an input that a function of the time gives (the function would take it over)
 @noinline function _fn_write_error(name)
-    throw(ArgumentError(string("input `", name, "` is given as a function of the time, ",
-        "which sets it at every window or call; give it a constant with `remake(prob; inputs = [", _route(name),
-        " => K])` (or another function the same way)")))
+    throw(
+        ArgumentError(
+            string(
+                "input `", name, "` is given as a function of the time, ",
+                "which sets it at every window or call; give it a constant with `remake(prob; inputs = [", _route(name),
+                " => K])` (or another function the same way)"
+            )
+        )
+    )
 end
 
 # an input's values are plain numbers: a value with derivative parts (a ForwardDiff Dual that an
@@ -170,10 +204,16 @@ function _check_plain(v, name)
     else
         v
     end
-    v isa Union{Number, AbstractArray} && !_plain(x) && throw(ArgumentError(string("input `", name, "`: the function ",
-        "returned values of type ", typeof(x), "; an input holds plain numbers (no derivative parts): to differentiate ",
-        "through a time-dependent input, write it in the equations with a parameter (`a * sin(ω * t)`) and ",
-        "differentiate with respect to that parameter")))
+    v isa Union{Number, AbstractArray} && !_plain(x) && throw(
+        ArgumentError(
+            string(
+                "input `", name, "`: the function ",
+                "returned values of type ", typeof(x), "; an input holds plain numbers (no derivative parts): to differentiate ",
+                "through a time-dependent input, write it in the equations with a parameter (`a * sin(ω * t)`) and ",
+                "differentiate with respect to that parameter"
+            )
+        )
+    )
     return nothing
 end
 
@@ -187,14 +227,22 @@ function _not_input(s, ks)
     m = match(r"^\(?([^\s(⋆\[]+)", string(s))
     name = m === nothing ? string(s) : m.captures[1]
     comps = [x for x in ks if startswith(x, name * "[")]
-    isempty(comps) || throw(ArgumentError(string("`", name, "` is an array input: give each component, ",
-        "`inputs = [", join(("$(_route(x)) => values" for x in comps), ", "), "]` (or the components of the array ",
-        "variable)")))
+    isempty(comps) || throw(
+        ArgumentError(
+            string(
+                "`", name, "` is an array input: give each component, ",
+                "`inputs = [", join(("$(_route(x)) => values" for x in comps), ", "), "]` (or the components of the array ",
+                "variable)"
+            )
+        )
+    )
     known = isempty(ks) ? " (it has none)" : " (its inputs: " * join(("`$x`" for x in ks), ", ") * ")"
     cpm = if _cpm_word(string(s)) || _cpm_word(name)
-        string("; `", name, "` is a name `Potts.fields(model)` gives a CPM ",
+        string(
+            "; `", name, "` is a name `Potts.fields(model)` gives a CPM ",
             "input, and a coupled PDESystem's inputs are its own: `Potts.field_inputs(integ, pdesys)` gives the values of ",
-            "exactly the inputs of `pdesys`")
+            "exactly the inputs of `pdesys`"
+        )
     else
         ""
     end
@@ -209,16 +257,24 @@ end
 
 # an integer input (a kind map, a mask) takes integer values in its type's range, a Bool input
 # (`bool`: declared `::Bool`) only Bool or 0/1; a bad value is named with its site
-function _check_integer(p::Program, key::AbstractString, name, v; bool::Bool = false,
-        bounds::Tuple{Float64, Float64} = (-Inf, Inf))
+function _check_integer(
+        p::Program, key::AbstractString, name, v; bool::Bool = false,
+        bounds::Tuple{Float64, Float64} = (-Inf, Inf)
+    )
     f = p.fields[fieldid(p, key)]
     # the declared bounds (`bounds = (lo, hi)` metadata): the stability bound relies on them
     lo, hi = bounds
     out = (lo == -Inf && hi == Inf) ? nothing : findfirst(x -> !(lo <= x <= hi), v isa Number ? (v,) : v)
-    out === nothing || throw(ArgumentError(string("input `", name, "` is declared with bounds (", _bnum(lo), ", ",
-        _bnum(hi), "); got ", (v isa Number ? v : v[out]),
-        (v isa Number ? "" : " at site $(Tuple(CartesianIndices(_input_dims(p, f))[out]))"),
-        "; give values inside the bounds (or declare the bounds the values need)")))
+    out === nothing || throw(
+        ArgumentError(
+            string(
+                "input `", name, "` is declared with bounds (", _bnum(lo), ", ",
+                _bnum(hi), "); got ", (v isa Number ? v : v[out]),
+                (v isa Number ? "" : " at site $(Tuple(CartesianIndices(_input_dims(p, f))[out]))"),
+                "; give values inside the bounds (or declare the bounds the values need)"
+            )
+        )
+    )
     isfloat(f.storage) && return nothing
     T = juliatype(f.storage)
     ok(x) = x isa Bool || (bool ? (x == 0 || x == 1) : isinteger(x) && typemin(T) <= x <= typemax(T))
@@ -226,8 +282,14 @@ function _check_integer(p::Program, key::AbstractString, name, v; bool::Bool = f
     bad === nothing && return nothing
     dims = _input_dims(p, f)
     holds = bool ? "a Bool mask (true/false or 0/1)" : "integer values (a kind map: $T)"
-    throw(ArgumentError(string("input `", name, "` holds ", holds, "; got ", (v isa Number ? v : v[bad]),
-        (v isa Number ? "" : " at site $(Tuple(CartesianIndices(dims)[bad]))"))))
+    throw(
+        ArgumentError(
+            string(
+                "input `", name, "` holds ", holds, "; got ", (v isa Number ? v : v[bad]),
+                (v isa Number ? "" : " at site $(Tuple(CartesianIndices(dims)[bad]))")
+            )
+        )
+    )
 end
 
 # the spelling of input `name` in a route that runs: `:kind`, or `"vel[1]"` for a name that
@@ -256,12 +318,18 @@ is_bool_input(_, ::AbstractString) = false
 # built (an ODE problem, whose inputs are fixed when it is built); `index` gives the names
 function check_inputs_set(inputs; built::Bool = true, index = nothing)
     unset = [input_name(index, k) for (k, v) in inputs if v === nothing]
-    isempty(unset) || throw(ArgumentError(string("the input field",
-        length(unset) == 1 ? " " : "s ", join(("`$k`" for k in unset), ", "), length(unset) == 1 ? " has" : " have",
-        " no value (an unset input is not read as zero): give ", length(unset) == 1 ? "it" : "them",
-        " with `inputs = [", join((_route(u) * " => values" for u in unset), ", "), "]` where the problem is built",
-        built ? ", or `remake(prob; inputs = …)`" : "", "; a variable with a default ",
-        "(`dom(..)::Bool = true [input = true]`) needs none")))
+    isempty(unset) || throw(
+        ArgumentError(
+            string(
+                "the input field",
+                length(unset) == 1 ? " " : "s ", join(("`$k`" for k in unset), ", "), length(unset) == 1 ? " has" : " have",
+                " no value (an unset input is not read as zero): give ", length(unset) == 1 ? "it" : "them",
+                " with `inputs = [", join((_route(u) * " => values" for u in unset), ", "), "]` where the problem is built",
+                built ? ", or `remake(prob; inputs = …)`" : "", "; a variable with a default ",
+                "(`dom(..)::Bool = true [input = true]`) needs none"
+            )
+        )
+    )
     return nothing
 end
 
@@ -312,8 +380,10 @@ function with_tables(p, tables; inputs = ())
     if isempty(tables) && isempty(inputs)
         return p
     else
-        return ParamsTables(p, Pair{String, Vector{Float64}}[k => _primal64(v) for (k, v) in tables],
-            Pair{String, Any}[inputs...])
+        return ParamsTables(
+            p, Pair{String, Vector{Float64}}[k => _primal64(v) for (k, v) in tables],
+            Pair{String, Any}[inputs...]
+        )
     end
 end
 _primal64(v::Vector{Float64}) = v
@@ -384,8 +454,10 @@ see (`"key: term"`). A bound may add `worst`, the row that gives the bound and i
 none (LatticePDE's `StabilityBound` reports them).
 """
 function bound_report(stability, p)
-    return (; negative = String[], coupled = String[], nonfinite = Tuple{String, String, Any}[],
-        terms = String[])
+    return (;
+        negative = String[], coupled = String[], nonfinite = Tuple{String, String, Any}[],
+        terms = String[],
+    )
 end
 
 """
@@ -422,8 +494,10 @@ function check_bounds(p, index)
     return nothing
 end
 function _bounds_message(index, i, v, lo, hi)
-    head = string("parameter `", parameter_name(index, i), "` = ", v, " is outside its declared bounds (", _bnum(lo), ", ",
-        _bnum(hi), ")")
+    head = string(
+        "parameter `", parameter_name(index, i), "` = ", v, " is outside its declared bounds (", _bnum(lo), ", ",
+        _bnum(hi), ")"
+    )
     # a computed parameter: the inputs to change
     k = computed_slot(index, i)
     why = k === nothing ? nothing : get(index.derived, index.key(k), nothing)
@@ -452,13 +526,21 @@ function check_values(p, index; built::Bool = true)
         isnan(primal(p[i])) || continue
         name = index isa LatticeIndex ? parameter_name(index, i) : "#$i"
         route = if built
-            string(" or set it with `remake(prob; p = [", name, " => v])`, or on an integrator ",
-                "`setp(integ, ", name, ")(integ, v)`")
+            string(
+                " or set it with `remake(prob; p = [", name, " => v])`, or on an integrator ",
+                "`setp(integ, ", name, ")(integ, v)`"
+            )
         else
             string(" or a value in the system's `initial_conditions` (`", name, " => v`)")
         end
-        throw(ArgumentError(string("parameter `", name, "` has no value (it is NaN): give it a default ",
-            "(`@parameters ", name, " = v`)", route)))
+        throw(
+            ArgumentError(
+                string(
+                    "parameter `", name, "` has no value (it is NaN): give it a default ",
+                    "(`@parameters ", name, " = v`)", route
+                )
+            )
+        )
     end
     return nothing
 end

@@ -51,10 +51,12 @@ end
 # GPUArrays' fill, registered for the D-157 scan once a store on a device whose default float
 # is Float32 holds Float64 (a declared `lattice_storage`, or a declared T = Float64: R-F3c)
 function _generic_bodies()
-    return (_copy_body!, _clamp_body!, _clamp_field_body!, _zero_body!, _clip_body!, _be_norms_body!,
+    return (
+        _copy_body!, _clamp_body!, _clamp_field_body!, _zero_body!, _clip_body!, _be_norms_body!,
         _be_newton_body!, _be_kappa_norms_body!, _be_kappa_newton_body!, _reset_hist_body!,
         _be_gate_iter_body!, _be_gate_body!, _be_update_body!, _be_shift_body!, _be_rhs_body!,
-        _be_status_body!, _bdf2_q_body!)
+        _be_status_body!, _bdf2_q_body!,
+    )
 end
 function _register_float64_store!(backend, bufs)
     (Exec.ishost(backend) || Exec.default_float(backend) <: Float64) && return nothing
@@ -77,8 +79,10 @@ function FieldStore(backend, p::Program; flat = String[], E = nothing, nbuf = no
         packed = all(f -> _eltype(f.storage, E, f.fixed) === _eltype(fs[1].storage, E, fs[1].fixed), fs)
         if packed
             n = maximum(last, slots[ids])
-            flatbufs = Any[_zeros(backend, _eltype(fs[1].storage, E, fs[1].fixed), n)
-                           for _ in 1:(nbuf === nothing ? fs[1].buffers : max(fs[1].buffers, nbuf))]
+            flatbufs = Any[
+                _zeros(backend, _eltype(fs[1].storage, E, fs[1].fixed), n)
+                    for _ in 1:(nbuf === nothing ? fs[1].buffers : max(fs[1].buffers, nbuf))
+            ]
         end
     end
     bufs = map(enumerate(p.fields)) do (i, f)
@@ -93,8 +97,10 @@ function FieldStore(backend, p::Program; flat = String[], E = nothing, nbuf = no
 end
 function FieldStore(backend, bufs, cur, tables)
     _register_float64_store!(backend, bufs)
-    FieldStore(backend, bufs, cur, tables, Any[],
-        fill(1:0, length(bufs)))
+    return FieldStore(
+        backend, bufs, cur, tables, Any[],
+        fill(1:0, length(bufs))
+    )
 end
 
 """
@@ -227,7 +233,11 @@ The array tuple of a launch (contract item 2) with the current slots `cur` (a ve
 field id).
 """
 function launch_arrays(st::FieldStore, spec::LaunchSpec, cur = st.cur)
-    return Tuple(Tuple(array(st, id, role, role == :table ? 0 : cur[id])
-                 for (id, role) in lane)
-    for lane in spec.bind)
+    return Tuple(
+        Tuple(
+            array(st, id, role, role == :table ? 0 : cur[id])
+                for (id, role) in lane
+        )
+            for lane in spec.bind
+    )
 end

@@ -62,8 +62,10 @@ _line(io, label, text) = println(io, "  ", rpad(label, 11), text)
 _headtext(a) = _algtext(a)
 _headtext(m::ExplicitMap) = canonical(m)
 function _headtext(g::FieldGroups)
-    return string("FieldGroups(", join((string(_symtext(k), " => ", _headtext(a)) for (k, a) in g.pairs), ", "),
-        g.default === nothing ? "" : string("; default = ", _headtext(g.default)), ")")
+    return string(
+        "FieldGroups(", join((string(_symtext(k), " => ", _headtext(a)) for (k, a) in g.pairs), ", "),
+        g.default === nothing ? "" : string("; default = ", _headtext(g.default)), ")"
+    )
 end
 # the clauses of a line that hold something (`"name: a, b"`), joined by `; `
 _clauses(ps...) = join((p for p in ps if !isempty(p)), "; ")
@@ -98,11 +100,19 @@ function _explicit_cause(spec::GroupSpec, alg::ExplicitEuler, dt::Float64, pp, s
     if !(isfinite(ρ) && ρ >= 0)
         if m === nothing
             why = unbounded_reason(stability, pp)
-            return (; n = 0, cause = :refused, text = string("`init` refuses this group: the bound is not finite",
-                why === nothing ? "" : string(" (", _termtext(why), ")"), "; give a count, `", spec.texts.route, "`"))
+            return (;
+                n = 0, cause = :refused, text = string(
+                    "`init` refuses this group: the bound is not finite",
+                    why === nothing ? "" : string(" (", _termtext(why), ")"), "; give a count, `", spec.texts.route, "`"
+                ),
+            )
         end
-        return (; n = m, cause = :user, text = string("the user minimum `substeps = ", m,
-            "` (the bound over the terms it sees is not finite)"))
+        return (;
+            n = m, cause = :user, text = string(
+                "the user minimum `substeps = ", m,
+                "` (the bound over the terms it sees is not finite)"
+            ),
+        )
     end
     b = _bound_count(dt, ρ)
     bt = string("⌈dt ρ / 1.8⌉ = ⌈", _rtext(dt), " × ", _rtext(ρ), " / 1.8⌉ = ", b)
@@ -118,8 +128,12 @@ function _implicit_cause(spec::GroupSpec, alg::AbstractImplicitFieldAlgorithm, d
     rules = string("the growth rule ⌈2γ dt g⌉ = ", r.n1, ", the convergence rule ⌈2γ dt ρ_in / (1 − θ)⌉ = ", r.n2)
     least = alg.substeps === nothing ? string("the least count ", r.m) : string("the user minimum `substeps = ", r.m, "`")
     if max(r.n1, r.n2) > r.m
-        return (; n, cause = :bound, text = string(r.n2 >= r.n1 ? "the convergence rule" : "the growth rule", " (", rules,
-            "), above ", least))
+        return (;
+            n, cause = :bound, text = string(
+                r.n2 >= r.n1 ? "the convergence rule" : "the growth rule", " (", rules,
+                "), above ", least
+            ),
+        )
     end
     cause = if alg.substeps === nothing
         :least
@@ -155,10 +169,14 @@ function _bound_line(io, stability, pp)
     key = unbounded_key(stability, pp)
     extra = key === nothing ? String[] : [p for p in split(key, "; ") if !startswith(p, "unseen: ")]
     decl, used = declared_intervals(stability), used_intervals(stability)
-    _line(io, "bound", _clauses(head, _clause("unseen", _termtext.(r.terms)), _clause("negative diffusion", r.negative),
-        _clause("coupled rows not dominant", r.coupled), _clause("no finite bound", nf),
-        _clause("declared", [string(k, " ∈ ", iv, k in used ? " (used)" : "") for (k, iv) in decl]),
-        isempty(extra) ? "" : string("warning key \"", join(extra, "; "), "\"")))
+    _line(
+        io, "bound", _clauses(
+            head, _clause("unseen", _termtext.(r.terms)), _clause("negative diffusion", r.negative),
+            _clause("coupled rows not dominant", r.coupled), _clause("no finite bound", nf),
+            _clause("declared", [string(k, " ∈ ", iv, k in used ? " (used)" : "") for (k, iv) in decl]),
+            isempty(extra) ? "" : string("warning key \"", join(extra, "; "), "\"")
+        )
+    )
     return nothing
 end
 
@@ -186,8 +204,12 @@ end
 function _partstext(r)
     w = hasproperty(r, :worst) ? r.worst : nothing
     w === nothing && return ""
-    ps = [string(n, " ", _rtext(v)) for (n, v) in (("diffusion", w.diffusion), ("advection", w.advection),
-        ("reaction", w.reaction), ("cross terms", w.cross)) if v != 0]
+    ps = [
+        string(n, " ", _rtext(v)) for (n, v) in (
+                ("diffusion", w.diffusion), ("advection", w.advection),
+                ("reaction", w.reaction), ("cross terms", w.cross),
+            ) if v != 0
+    ]
     return isempty(ps) ? "" : string(" (row ", w.key, ": ", join(ps, ", "), ")")
 end
 
@@ -213,8 +235,10 @@ function _implicit_facts(alg, c, keys)
         (
             collect(String, keys), algs, c.cs === nothing ? nothing : _krylov(alg.linsolve),
             unique([length(s.prog.hierarchy) for s in sv]), unique(Type[s.T for s in sv]), c.newton, !c.auto,
-        c.cs !== nothing, c.cs !== nothing && c.cs.linear, c.exact, c.exact0, c.switch, c.iterate, c.seen, c.cyclic, c.h,
-        c.ρin, c.θ, c.smin, unique([t for r in rows for t in r.inexact]), unique([t for r in rows for t in r.unseen])))
+            c.cs !== nothing, c.cs !== nothing && c.cs.linear, c.exact, c.exact0, c.switch, c.iterate, c.seen, c.cyclic, c.h,
+            c.ρin, c.θ, c.smin, unique([t for r in rows for t in r.inexact]), unique([t for r in rows for t in r.unseen]),
+        )
+    )
 end
 function _newton_text(alg, f)
     f.given && return string(f.newton, ": given (`nlsolve = ", repr(alg.nlsolve), "`)")
@@ -233,14 +257,18 @@ function _newton_text(alg, f)
     if alg isa QuasiSteady
         f.exact && return string(w, f.switch || f.iterate ? "nonlinear or switched rows ($QS_NEWTON checked)" : "the operator is exact")
         f.seen || return string(w, "ρ_in unknown (no bound sees a term out of the operator", unseen, "): the cap $QS_NEWTON_CAP")
-        return string(w, "the contraction ρ_in / s_min + θ of the terms out of the operator, ρ_in = ", _rtext(f.ρin),
-            ", s_min = ", _rtext(f.smin), ", θ = ", _rtext(f.θ))
+        return string(
+            w, "the contraction ρ_in / s_min + θ of the terms out of the operator, ρ_in = ", _rtext(f.ρin),
+            ", s_min = ", _rtext(f.smin), ", θ = ", _rtext(f.θ)
+        )
     end
     f.exact && return string(w, f.switch ? "the operator is exact, and a switch takes a flip pass" : "the operator is exact")
     f.seen || return string(w, "ρ_in unknown (no bound sees a term out of the operator", unseen, ")")
     ρc = _gamma_count(alg) * f.h * f.ρin + f.θ
-    return string(w, "the contraction γ h ρ_in + θ = ", _rtext(ρc), " of the terms out of the operator (ρ_in = ", _rtext(f.ρin),
-        ", h = ", _rtext(f.h), f.θ > 0 ? string(", θ = ", _rtext(f.θ)) : "", ")")
+    return string(
+        w, "the contraction γ h ρ_in + θ = ", _rtext(ρc), " of the terms out of the operator (ρ_in = ", _rtext(f.ρin),
+        ", h = ", _rtext(f.h), f.θ > 0 ? string(", θ = ", _rtext(f.θ)) : "", ")"
+    )
 end
 function _operator_text(f)
     f.coupled && return "J̃ the whole Jacobian (coupled solve: exact)"
@@ -253,8 +281,10 @@ function _operator_text(f)
     else
         string("ρ_in unknown (no bound sees ", isempty(f.unseen) ? "a term out of the operator" : join(_termtext.(f.unseen), ", "), ")")
     end
-    return string("J̃ inexact: ", isempty(terms) ? "terms out of the operator" : join(terms, ", "), "; ", ρ,
-        ", corrected by the Newton iterations")
+    return string(
+        "J̃ inexact: ", isempty(terms) ? "terms out of the operator" : join(terms, ", "), "; ", ρ,
+        ", corrected by the Newton iterations"
+    )
 end
 function _fact_lines(io, alg, f)
     auto = alg.linsolve === :auto ? " (`linsolve = :auto`)" : ""
@@ -310,9 +340,11 @@ function _fusion_lines(io, sp)
 end
 
 function _runtext(t::StatusTotals, status)
-    return _clauses(_plural(t.windows, "window"), t.solves > 0 ? _plural(t.solves, "solve") : "",
+    return _clauses(
+        _plural(t.windows, "window"), t.solves > 0 ? _plural(t.solves, "solve") : "",
         t.budget > 0 ? string(t.budget, " linear budget hits") : "", t.floor > 0 ? string(t.floor, " floors") : "",
-        t.newton_budget > 0 ? string(t.newton_budget, " Newton budget hits") : "", string("status ", status))
+        t.newton_budget > 0 ? string(t.newton_budget, " Newton budget hits") : "", string("status ", status)
+    )
 end
 
 """
@@ -325,8 +357,10 @@ implicit facts, its run counters and its fusion decisions. `E` is the state's el
 (by default the runtime's compute zero's type, else its first field's buffer's). Each front
 end calls it per group.
 """
-function group_report(io::IO, rt::GroupRuntime, pp; title = "group", dt::Real = rt.dt, spec::GroupSpec,
-        stability = rt.stability, E::Type = _state_type(rt))
+function group_report(
+        io::IO, rt::GroupRuntime, pp; title = "group", dt::Real = rt.dt, spec::GroupSpec,
+        stability = rt.stability, E::Type = _state_type(rt)
+    )
     alg = rt.alg
     f = alg isa AbstractImplicitFieldAlgorithm ? _implicit_facts(alg, rt.cache, rt.keys) : nothing
     _policy_lines(io, title, spec, alg, Float64(dt), rt.n, pp, rt.keys, stability, E, f; current = true)
@@ -349,20 +383,26 @@ end
 # numbers. `n` the count the run used (`nothing`: the policy's); `t0` the start of the first
 # window, over which a bound that reads the time is counted (`current`: the bound's own window,
 # a bound runtime's current one)
-function _policy_lines(io, title, spec, alg, dt::Float64, n, pp, fields, stability, ::Type{E}, f = nothing; t0 = nothing,
-        current::Bool = false) where {E}
+function _policy_lines(
+        io, title, spec, alg, dt::Float64, n, pp, fields, stability, ::Type{E}, f = nothing; t0 = nothing,
+        current::Bool = false
+    ) where {E}
     println(io, title, ": ", _keystext(fields), " (", _headtext(alg), ")")
     timed = !(alg isa ExplicitMap) && reads_time(stability)
     _at_window(stability, current ? nothing : t0, dt) do
         c = substep_cause(spec, alg, dt, pp; fields, stability)
         n = something(n, c.n)
         win = if timed
-            (w = bound_window(stability); if w === nothing
-                ""
-            else
-                string("; the bound reads the time: each window is recounted, this count is ",
-                    current ? "the current" : "the first", " window's, [", _rtext(w[1]), ", ", _rtext(w[2]), "]")
-            end)
+            (
+                w = bound_window(stability); if w === nothing
+                    ""
+                else
+                    string(
+                        "; the bound reads the time: each window is recounted, this count is ",
+                        current ? "the current" : "the first", " window's, [", _rtext(w[1]), ", ", _rtext(w[2]), "]"
+                    )
+                end
+            )
         else
             ""
         end
@@ -375,8 +415,12 @@ function _policy_lines(io, title, spec, alg, dt::Float64, n, pp, fields, stabili
             # (a bound that reads the time, not a runtime: the window line gives the first window's
             # count, which its text names; the substeps line gives the run's last)
             nw = timed && !current ? c.n : n
-            _line(io, "window", string("dt = ", _rtext(dt), ", ", _plural(nw, "substep"), nw > 0 ? string(" (h = ", _rtext(dt / nw), ")") : "",
-                win))
+            _line(
+                io, "window", string(
+                    "dt = ", _rtext(dt), ", ", _plural(nw, "substep"), nw > 0 ? string(" (h = ", _rtext(dt / nw), ")") : "",
+                    win
+                )
+            )
             pre = if c.n == n
                 ""
             elseif current
@@ -391,7 +435,10 @@ function _policy_lines(io, title, spec, alg, dt::Float64, n, pp, fields, stabili
         return nothing
     end
     V = value_type(E)
-    _line(io, "numbers", _clauses(string("state ", _typetext(E), ", compute ", compute_type(alg, V),
+    _line(
+        io, "numbers", _clauses(
+            string(
+                "state ", _typetext(E), ", compute ", compute_type(alg, V),
                 hasproperty(alg, :compute_type) && alg.compute_type !== :auto ? " (`compute_type`)" : "",
                 alg isa AbstractImplicitFieldAlgorithm ? string(", ", _solvertext(alg, f)) : ""
             )
@@ -413,8 +460,10 @@ policy's). For an implicit algorithm, the facts resolved when the group was boun
 an [`ImplicitFacts`](@ref)), or else `linsolve` and the Newton count as given. `fields` are the
 group's state keys and `E` the state's element type. Each front end calls it per group.
 """
-function group_report(io::IO, g::FieldGroup, alg, pp; title = "group", dt::Real, n = nothing, facts = nothing,
-        fields = g.spec.state, stability = g.spec.stability, E::Type = Float64, t0 = nothing)
+function group_report(
+        io::IO, g::FieldGroup, alg, pp; title = "group", dt::Real, n = nothing, facts = nothing,
+        fields = g.spec.state, stability = g.spec.stability, E::Type = Float64, t0 = nothing
+    )
     _policy_lines(io, title, g.spec, alg, Float64(dt), n, pp, fields, stability, E, facts; t0)
     if facts !== nothing
         _fact_lines(io, alg, facts)                 # (resolved when the run's group was bound)
@@ -479,10 +528,12 @@ function _coupling_lines(io, stability, keys::Vector{Vector{String}}, algs, pp, 
             else
                 " (> 1)"
             end
-            println(io, "  group ", g, ": loop ", loops[g], ", κ = dt · rate = ", _rtext(dt), " × ", _rtext(q.rate), " = ",
+            println(
+                io, "  group ", g, ": loop ", loops[g], ", κ = dt · rate = ", _rtext(dt), " × ", _rtext(q.rate), " = ",
                 _rtext(κ), side,
                 q.row === nothing || q.row == "" ? "" : string("; worst row ", q.row, " reads ", q.other, " through ", q.text),
-                unseen ? string("; ", cover_text(ul.terms)) : "")
+                unseen ? string("; ", cover_text(ul.terms)) : ""
+            )
         end
     end
     return nothing
@@ -494,16 +545,26 @@ function _problem_lines(io, fp::FieldProblem)
     E = eltype(fp)
     dims(lv) = join(Int.(leveldims(s, lv)), "×")
     own = [string(k, " ", dims(s.fields[fieldid(s, k)].levels[1]), " (coarse)") for k in fp.state if s.fields[fieldid(s, k)].levels[1] != 0]
-    println(io, "  problem    ", _clauses(string(fp.kind == :map ? "maps" : "rates", ", ", _plural(length(fp.state), "state field"),
-            " (", _keystext(fp.state), ")"), string("grid ", dims(0), _ishex(s) ? " (hexagonal)" : ""), _clause("own grids", own),
-        string("backend ", _backendtext(fp.backend))))
+    println(
+        io, "  problem    ", _clauses(
+            string(
+                fp.kind == :map ? "maps" : "rates", ", ", _plural(length(fp.state), "state field"),
+                " (", _keystext(fp.state), ")"
+            ), string("grid ", dims(0), _ishex(s) ? " (hexagonal)" : ""), _clause("own grids", own),
+            string("backend ", _backendtext(fp.backend))
+        )
+    )
     store = unique([npartials(E) > 0 ? E : juliatype(s.fields[fieldid(s, k)].storage) for k in fp.state])
     st = store == [E] ? "" : string(", storage ", join(store, ", "))
-    println(io, "  types      state ", _typetext(E), npartials(E) > 0 ? string(" (", E, ")") : "", ", parameters ",
-        isempty(fp.p) ? "none" : eltype(fp.p), st)
-    rows = _clauses(_clause("steady (0 ~ rhs)", fp.group.spec.steady), _has_masks(fp) ? "masked" : "",
+    println(
+        io, "  types      state ", _typetext(E), npartials(E) > 0 ? string(" (", E, ")") : "", ", parameters ",
+        isempty(fp.p) ? "none" : eltype(fp.p), st
+    )
+    rows = _clauses(
+        _clause("steady (0 ~ rhs)", fp.group.spec.steady), _has_masks(fp) ? "masked" : "",
         fp.group.spec.clock === nothing ? "" : string("clock ", _rtext(fp.group.spec.clock)), _clause("aux", _aux_keys(s)),
-        _clause("inputs", [k for (k, _) in fp.inputs]))
+        _clause("inputs", [k for (k, _) in fp.inputs])
+    )
     isempty(rows) || _line(io, "rows", rows)
     return nothing
 end
@@ -583,10 +644,14 @@ function _function_lines(io, prob, m::LatticeMetadata)
     else
         tname(mm)
     end
-    _line(io, "function", _clauses(string("right side built ", _plural(m.builds[], "time")),
-        jac === nothing ? "" : string("jac ", tname(jac)),
-        jp === nothing ? "" : string("jac_prototype ", tname(jp), cv === nothing ? "" : string(" (", maximum(cv; init = 0), " colors)")),
-        jvp === nothing ? "" : string("jvp ", tname(jvp)), string("mass matrix ", mmt)))
+    _line(
+        io, "function", _clauses(
+            string("right side built ", _plural(m.builds[], "time")),
+            jac === nothing ? "" : string("jac ", tname(jac)),
+            jp === nothing ? "" : string("jac_prototype ", tname(jp), cv === nothing ? "" : string(" (", maximum(cv; init = 0), " colors)")),
+            jvp === nothing ? "" : string("jvp ", tname(jvp)), string("mass matrix ", mmt)
+        )
+    )
     # (the family's built-ins: a problem with no time has none)
     names = if m.problem.group.spec.timefree || m.family == :map
         String[]
@@ -601,25 +666,36 @@ end
 _raw_params(integ::FieldIntegrator) = with_tables(map(primal, integ.pgood), integ.tables; inputs = _bound_inputs(integ))
 _namedcounts(keys, counts) = join((string(_keystext(k), " ", n) for (k, n) in zip(keys, counts)), ", ")
 function _countertext(f)
-    return _clauses(f.solves > 0 ? _plural(f.solves, "solve") : "", f.budget > 0 ? string(f.budget, " linear budget hits") : "",
-        f.floor > 0 ? string(f.floor, " floors") : "", f.newton_budget > 0 ? string(f.newton_budget, " Newton budget hits") : "")
+    return _clauses(
+        f.solves > 0 ? _plural(f.solves, "solve") : "", f.budget > 0 ? string(f.budget, " linear budget hits") : "",
+        f.floor > 0 ? string(f.floor, " floors") : "", f.newton_budget > 0 ? string(f.newton_budget, " Newton budget hits") : ""
+    )
 end
 function field_report(io::IO, integ::FieldIntegrator)
     prob = integ.prob
     f = field_stats(integ)                          # (a device reads the status words first)
     rts = integ.runtimes
     println(io, "Field report: owned integrator, ", _headtext(integ.alg))
-    _line(io, "time", string("t = ", _rtext(_time(integ)), " of ", prob.tspan, ", ", _plural(integ.windows, "window"), " of dt = ",
-        _rtext(integ.dt), ", retcode ", integ.retcode))
-    _line(io, "counters", _clauses(string("substep counts ", _namedcounts([rt.keys for rt in rts], substep_counts(integ))),
-        _countertext(f), integ.syncs > 0 ? string(integ.syncs, " host syncs") : ""))
+    _line(
+        io, "time", string(
+            "t = ", _rtext(_time(integ)), " of ", prob.tspan, ", ", _plural(integ.windows, "window"), " of dt = ",
+            _rtext(integ.dt), ", retcode ", integ.retcode
+        )
+    )
+    _line(
+        io, "counters", _clauses(
+            string("substep counts ", _namedcounts([rt.keys for rt in rts], substep_counts(integ))),
+            _countertext(f), integ.syncs > 0 ? string(integ.syncs, " host syncs") : ""
+        )
+    )
     _problem_lines(io, prob)
     pp = _raw_params(integ)
     one = length(rts) == 1
     for (i, rt) in enumerate(rts)
         group_report(
             io, rt, pp; title = string("group ", i, " of ", length(rts)), dt = _iwindow(integ),
-            spec = prob.group.spec, stability = one ? prob.stability : rt.stability)
+            spec = prob.group.spec, stability = one ? prob.stability : rt.stability
+        )
     end
     for rt in integ.starts
         group_report(io, rt, pp; title = "steady start", dt = rt.dt, spec = prob.group.spec)
@@ -657,8 +733,12 @@ function _stats_lines(io, st, prob)
     fs = fieldnames(typeof(st))
     _line(io, "stats", join((string(k, " ", getfield(st, k)) for k in fs if !iszero(getfield(st, k))), ", "))
     if :naccept in fs && getfield(st, :naccept) > 0 && hasproperty(prob, :tspan)
-        _line(io, "steps", string(getfield(st, :naccept), " accepted", :nreject in fs ? string(", ", getfield(st, :nreject), " rejected") : "",
-            "; mean dt ", _rtext((prob.tspan[2] - prob.tspan[1]) / getfield(st, :naccept))))
+        _line(
+            io, "steps", string(
+                getfield(st, :naccept), " accepted", :nreject in fs ? string(", ", getfield(st, :nreject), " rejected") : "",
+                "; mean dt ", _rtext((prob.tspan[2] - prob.tspan[1]) / getfield(st, :naccept))
+            )
+        )
     end
     return nothing
 end
@@ -673,10 +753,18 @@ function _owned_solution(io, sol, m::LatticeMetadata)
     st = sol.stats::LatticeStats
     fp = field_problem(sol.prob)
     println(io, "Field report: owned solve, ", _headtext(sol.alg), ", retcode ", sol.retcode)
-    _line(io, "saves", _clauses(string(length(sol.t), " over ", fp.tspan), _plural(st.nf, "window"),
-        st.syncs > 0 ? string(st.syncs, " host syncs") : ""))
-    _line(io, "counters", _clauses(string("substep counts ", _namedcounts([ks for (_, ks) in _groups(fp, sol.alg)], st.counts)),
-        _countertext(st)))
+    _line(
+        io, "saves", _clauses(
+            string(length(sol.t), " over ", fp.tspan), _plural(st.nf, "window"),
+            st.syncs > 0 ? string(st.syncs, " host syncs") : ""
+        )
+    )
+    _line(
+        io, "counters", _clauses(
+            string("substep counts ", _namedcounts([ks for (_, ks) in _groups(fp, sol.alg)], st.counts)),
+            _countertext(st)
+        )
+    )
     _problem_lines(io, fp)
     _groups_lines(io, fp, sol.alg, st.counts; facts = st.implicit, dt = st.dt)
     return nothing
@@ -711,9 +799,11 @@ function _groups_lines(io, fp::FieldProblem, alg, counts; facts = nothing, dt = 
         group_report(
             io, fp.group, a, pp; title = string("group ", i, " of ", length(groups)), dt = w,
             n = _group_count(counts, i), facts = f, fields = ks, stability = stab, E,
-            t0 = fp.tspan[1])
+            t0 = fp.tspan[1]
+        )
     end
-    fp.kind == :map || _coupling_lines(io, fp.stability, [collect(String, ks) for (_, ks) in groups], [a for (a, _) in groups], pp,
+    fp.kind == :map || _coupling_lines(
+        io, fp.stability, [collect(String, ks) for (_, ks) in groups], [a for (a, _) in groups], pp,
         _window(first(groups[1]), dt, clock)
     )
     return nothing

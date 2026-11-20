@@ -27,7 +27,8 @@ function host_plan(n)
     b = zeros(Float32, 64)
     ls = ntuple(
         k -> isodd(k) ? Exec.Launch(KA.CPU(), AddK{k}(), (a,), 64; static = true) :
-             Exec.Launch(KA.CPU(), scale!, (b, Float32(k)), 64; static = true),
-        n)
+            Exec.Launch(KA.CPU(), scale!, (b, Float32(k)), 64; static = true),
+        n
+    )
     return ls, a, b
 end

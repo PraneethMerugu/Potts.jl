@@ -124,7 +124,7 @@ function _pload!(w::_Walk, a)
     D = w.deps[a.field]
     D === nothing && return nothing
     for off in (a.offset.cond == 0 ? (a.offset.a,) : (a.offset.a, a.offset.b)),
-        comp in (a.comp.cond == 0 ? (a.comp.a,) : (a.comp.a, a.comp.b))
+            comp in (a.comp.cond == 0 ? (a.comp.a,) : (a.comp.a, a.comp.b))
         row = _prow(w, a, off, comp)
         row == 0 || _paddcols!(w, D, row)
     end
@@ -176,8 +176,10 @@ function _prestrict!(w::_Walk{N}, i) where {N}
     saved = w.stamp
     for o in Iterators.product(ranges...)
         # the third child exists only at the last site of an odd axis
-        depth == 1 && any(d -> o[d] == 2 && !(w.x[d] == leveldims(s, L)[d] && leveldims(s, L - 1)[d] > 2 * leveldims(s, L)[d]),
-            1:N) && continue
+        depth == 1 && any(
+            d -> o[d] == 2 && !(w.x[d] == leveldims(s, L)[d] && leveldims(s, L - 1)[d] > 2 * leveldims(s, L)[d]),
+            1:N
+        ) && continue
         w.counter += 1
         w.stamp = w.counter
         w.child, w.depth = o, depth
@@ -210,8 +212,10 @@ function _pkernel!(deps, tdeps, s::Program{N}, k, n) where {N}
     sites, dims = _psites(s, k)
     nk = prod(dims)
     lin = LinearIndices(dims)
-    w = _Walk{N}(s, k, deps, tdeps, zeros(Int, length(k.nodes)), 0, 0, zeros(Int, n), 0, Int[], ntuple(_ -> 1, N),
-        ntuple(_ -> 0, N), 0)
+    w = _Walk{N}(
+        s, k, deps, tdeps, zeros(Int, length(k.nodes)), 0, 0, zeros(Int, n), 0, Int[], ntuple(_ -> 1, N),
+        ntuple(_ -> 0, N), 0
+    )
     walk!(v, x) = (w.counter += 1; w.stamp = w.counter; w.mstamp += 1; empty!(w.buf); w.x = Tuple(x); _pwalk!(w, v); w.buf)
     out = Dict{Int32, Tuple{Vector{Int}, Vector{Int}, BitVector}}()      # field => (columns, rows, rows written)
     for st in k.stores
@@ -296,10 +300,16 @@ function _sparsity(m::LatticeMetadata)
 end
 # a rate that reads a reduction of the state: every row is dense
 function _dense_refusal(s, t)
-    throw(ArgumentError(string("the rates read a reduction (a sum over the lattice) of the state, table `",
-        s.tables[t].key, "`: every rate then depends on every site, so the Jacobian is dense and `sparse = true` and ",
-        "`jac = true` are refused; the Jacobian-vector product (`jvp = true`, the default) with a Krylov linear solver ",
-        "(`linsolve = KrylovJL_GMRES()`) is the route")))
+    throw(
+        ArgumentError(
+            string(
+                "the rates read a reduction (a sum over the lattice) of the state, table `",
+                s.tables[t].key, "`: every rate then depends on every site, so the Jacobian is dense and `sparse = true` and ",
+                "`jac = true` are refused; the Jacobian-vector product (`jvp = true`, the default) with a Krylov linear solver ",
+                "(`linsolve = KrylovJL_GMRES()`) is the route"
+            )
+        )
+    )
 end
 
 """
@@ -435,8 +445,10 @@ of an `ODEProblem` on a device, so an implicit OrdinaryDiffEq solver forms `W = 
 operator and solves it with a Krylov method (precondition it with `LatticeMultigrid()`).
 """
 function JacobianOperator(jvp::LatticeJVP, u, p, t)
-    return SciMLOperators.FunctionOperator(jvp, u, u; u, p, t, isinplace = true, outofplace = false,
-        T = eltype(u), isconstant = false, islinear = true)
+    return SciMLOperators.FunctionOperator(
+        jvp, u, u; u, p, t, isinplace = true, outofplace = false,
+        T = eltype(u), isconstant = false, islinear = true
+    )
 end
 
 # the Jacobian keywords of `lattice_problem` (`jac`, `sparse`, `jvp`) as `ODEFunction` keywords:
@@ -446,9 +458,12 @@ function _jacobian_kw(meta::LatticeMetadata, U, lp; jac::Bool, sparse::Bool, jvp
     fp = meta.problem
     host = Exec.ishost(fp.backend)
     if !host && (sparse || jac)
-        throw(ArgumentError(string("`", sparse ? "sparse" : "jac", " = true` builds a sparse matrix on the host; the ",
-            "problem's backend is ", nameof(typeof(fp.backend)), ", and no KernelAbstractions sparse matrix exists ",
-            "(a hardware limit): on a device the Jacobian is the matrix-free product (`jvp = true`, the default), ",
+        throw(
+            ArgumentError(
+                string(
+                    "`", sparse ? "sparse" : "jac", " = true` builds a sparse matrix on the host; the ",
+                    "problem's backend is ", nameof(typeof(fp.backend)), ", and no KernelAbstractions sparse matrix exists ",
+                    "(a hardware limit): on a device the Jacobian is the matrix-free product (`jvp = true`, the default), ",
                     "the problem's `jac_prototype`, for a Krylov linear solver with `precs = LatticeMultigrid()`"
                 )
             )

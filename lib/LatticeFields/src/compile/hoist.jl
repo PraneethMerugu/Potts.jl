@@ -6,7 +6,8 @@
 # holds the runtime slot of absolute time (P5 §3.3); the step `dt` stays a runtime value. The debug emission mode skips this pass.
 
 const _NOT_HOSTABLE = (
-    LOAD, INSIDE_OP, COORD, RUNTIME, TABLE, BITTEST, IDX, RESTRICT, ELEMENT_SUM)
+    LOAD, INSIDE_OP, COORD, RUNTIME, TABLE, BITTEST, IDX, RESTRICT, ELEMENT_SUM,
+)
 # `G.rt[1]` is the time `t` (contract item 4); the other runtime slots stay on the device
 const TIME_SLOT = 1
 _istime(n::Node) = n.op == RUNTIME && n.imm == TIME_SLOT
@@ -15,8 +16,10 @@ function _powi_node!(b, k::Kernel, i, a, ctx)
     n = k.nodes[i]
     (n.op == POWI && 2 <= n.imm <= 4) || return copy_node!(b, k, i, a, ctx)
     x = a[1]
-    n.imm == 4 && (x2 = node!(b, MUL, n.type, Int32[x, x]);
-        return node!(b, MUL, n.type, Int32[x2, x2]))
+    n.imm == 4 && (
+        x2 = node!(b, MUL, n.type, Int32[x, x]);
+        return node!(b, MUL, n.type, Int32[x2, x2])
+    )
     return node!(b, MUL, n.type, fill(x, n.imm))
 end
 """
@@ -31,7 +34,7 @@ function _hostflags(k::Kernel)
     for (i, n) in enumerate(k.nodes)
         as = args(k, n)
         host[i] = (_istime(n) || !(n.op in _NOT_HOSTABLE)) && n.type == REAL &&
-                  all(a -> host[a], as)
+            all(a -> host[a], as)
         hasp[i] = n.op == PARAM || _istime(n) || any(a -> hasp[a], as)
     end
     return host, hasp
@@ -79,10 +82,12 @@ function hoist_params(p::Program, k::Kernel)
     end
     foreach(s -> used_by_device[s.value] = true, k.stores)
     foreach(a -> a.offset.cond != 0 && (used_by_device[a.offset.cond] = true), k.accesses)
-    hoisted = [i
-               for i in eachindex(k.nodes)
-               if host[i] && hasp[i] && used_by_device[i] &&
-                      !(k.nodes[i].op in (PARAM, CONST))]     # a bare `t` is hoisted too
+    hoisted = [
+        i
+            for i in eachindex(k.nodes)
+            if host[i] && hasp[i] && used_by_device[i] &&
+            !(k.nodes[i].op in (PARAM, CONST))
+    ]     # a bare `t` is hoisted too
     derived = Any[hostexpr(k, i) for i in hoisted]
     slot = Dict(i => p.nparams + j for (j, i) in enumerate(hoisted))
     k2 = rebuild(k, buildkeys(p)) do b, k, i, a, ctx

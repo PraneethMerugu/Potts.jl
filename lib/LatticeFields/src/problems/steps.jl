@@ -44,24 +44,28 @@ struct BoundStep{L <: Tuple, W}
     launches::L
     walk::W
 end
-function BoundStep(backend, p::Program, sp::StepPlan, st::FieldStore, Praw; cur = st.cur,
-        c = nothing, fuse = nothing)
+function BoundStep(
+        backend, p::Program, sp::StepPlan, st::FieldStore, Praw; cur = st.cur,
+        c = nothing, fuse = nothing
+    )
     P0 = Tuple(Praw)
-    ls = Tuple(begin
-                   ck = l.kernel
+    ls = Tuple(
+        begin
+            ck = l.kernel
             # the parameters in the kernel's compute type (its `compute_type`), wrapped
-                   # like `c` (a Dual of it under Dual parameters)
+            # like `c` (a Dual of it under Dual parameters)
             cc = c === nothing ? zero(ck.T) : zero(withvaltype(typeof(c), value_type(ck.T)))
-                   S = launch_arrays(st, l, cur)
-                   f = fuse === nothing ? nothing : fuse(l, cur)
+            S = launch_arrays(st, l, cur)
+            f = fuse === nothing ? nothing : fuse(l, cur)
             b = if f === nothing
                 bind_program(backend, p, l, S, launch_parameters(ck, P0, cc), (0, 0))
             else
                 bind_program(backend, p, l, (S..., f[1]), launch_parameters(ck, P0, cc), (0, 0); wrap = f[2])
             end
-                   ck.timed ? TimedDerived(b, derive_function(ck), P0, cc) : Timed(b)
-               end
-    for l in sp.launches)
+            ck.timed ? TimedDerived(b, derive_function(ck), P0, cc) : Timed(b)
+        end
+            for l in sp.launches
+    )
     return BoundStep(ls, each(length(ls)))
 end
 (bs::BoundStep)(rt) = bs.walk(bs.launches, rt)
@@ -72,7 +76,7 @@ end
 Compile every launch of `bs` before the first enqueue (host tasks, `Exec.compile_all!`).
 """
 function compile!(backend, bs::BoundStep)
-    Exec.compile_all!(backend, [x.launch for x in bs.launches])
+    return Exec.compile_all!(backend, [x.launch for x in bs.launches])
 end
 
 """
@@ -93,8 +97,10 @@ end
 Bind, run and swap one step (cold: binds on every call; tests and one-off steps). The
 warm path prebuilds [`BoundStep`](@ref)s.
 """
-function run_step!(backend, p::Program, sp::StepPlan, st::FieldStore, Praw; rt = (0, 0),
-        c = nothing)
+function run_step!(
+        backend, p::Program, sp::StepPlan, st::FieldStore, Praw; rt = (0, 0),
+        c = nothing
+    )
     bs = BoundStep(backend, p, sp, st, Praw; c)
     bs(map(Float64, rt))
     return swap!(st, sp)

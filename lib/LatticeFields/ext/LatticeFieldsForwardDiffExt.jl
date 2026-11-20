@@ -6,8 +6,10 @@ using LatticeFields: Compile, Problems
 using SparseArrays: SparseMatrixCSC, nonzeros, nzrange, rowvals
 
 @inline function Compile.lanecast(::Type{T}, d::Dual{G, V, N}) where {T <: AbstractFloat, G, V, N}
-    return Dual{G}(Compile.lanecast(T, value(d)),
-        Partials(map(x -> Compile.lanecast(T, x), partials(d).values)))
+    return Dual{G}(
+        Compile.lanecast(T, value(d)),
+        Partials(map(x -> Compile.lanecast(T, x), partials(d).values))
+    )
 end
 Compile.value_type(::Type{<:Dual{G, V}}) where {G, V} = Compile.value_type(V)
 @inline Compile.primal(d::Dual) = Compile.primal(value(d))

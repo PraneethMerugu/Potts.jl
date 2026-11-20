@@ -416,9 +416,15 @@ function _bind_coupled(
     )
     K = mapreduce(r -> eltype(r.resarr), promote_type, rows)
     for r in rows
-        eltype(r.bufs[1]) <: Float16 && throw(ArgumentError(string(_algname(alg), ": the fields ", join(("`$k`" for k in keys), ", "),
-            " are solved together (their rows read one another), and the field `", r.key, "` is stored in Float16, whose ",
-            "rounding is too coarse for the coupled solve's difference of the residual; give it `lattice_storage = Float32`")))
+        eltype(r.bufs[1]) <: Float16 && throw(
+            ArgumentError(
+                string(
+                    _algname(alg), ": the fields ", join(("`$k`" for k in keys), ", "),
+                    " are solved together (their rows read one another), and the field `", r.key, "` is stored in Float16, whose ",
+                    "rounding is too coarse for the coupled solve's difference of the residual; give it `lattice_storage = Float32`"
+                )
+            )
+        )
     end
     # the perturbed store: the residual store's arrays, with the group's fields on the perturbed
     # states, the residuals on their own arrays and the aux fields the rows write on copies (the
@@ -670,17 +676,17 @@ function coupled_modes(s::Program{N}, op::OperatorSpec, keys, p) where {N}
     function ghost(id, a, k)
         f = _face_kind(s, id, a, k, p)
         return if f[1] === :none
-                0.0
-            elseif f[1] === :dirichlet
-                2.0
-            else
-                f[2] / (f[2] / 2 + f[3])
-            end
+            0.0
+        elseif f[1] === :dirichlet
+            2.0
+        else
+            f[2] / (f[2] / 2 + f[3])
+        end
     end
     for a in 1:N, k in 1:2
         s.periodic[a] && continue
         g0 = ghost(ids[1], a, k)
-        all(i -> isapprox(ghost(i, a, k), g0; rtol = 1e-12, atol = 1e-14), ids) || return nothing
+        all(i -> isapprox(ghost(i, a, k), g0; rtol = 1.0e-12, atol = 1.0e-14), ids) || return nothing
     end
     idx = Dict(r.key => i for (i, r) in enumerate(rows))
     J0 = zeros(R, R)
@@ -739,17 +745,21 @@ function _growth_refusal(keys, λ, scale, how)
         string(round(real(λ); sigdigits = 3), (imag(λ) < 0 ? " − " : " + "), round(abs(imag(λ)); sigdigits = 3), "i")
     end
     sgn = real(λ) > scale ? "positive" : "zero"
-    return ArgumentError(string("QuasiSteady: the fields ", fs, " read one another, and their coupled steady system has a ",
-        real(λ) > scale ? "growing" : "neutral", " mode: an eigenvalue of its Jacobian with ", sgn, " real part (", ev, how,
-        "), so its steady state is ", real(λ) > scale ? "unstable" : "not unique", " and no steady solve applies; step the ",
-        "fields with `BackwardEuler` (a steady row `0 ~ rhs` written as the rate `D(c) ~ rhs`: a steady row takes only ",
-        "`QuasiSteady`), or change the couplings or decays so that every mode decays"))
+    return ArgumentError(
+        string(
+            "QuasiSteady: the fields ", fs, " read one another, and their coupled steady system has a ",
+            real(λ) > scale ? "growing" : "neutral", " mode: an eigenvalue of its Jacobian with ", sgn, " real part (", ev, how,
+            "), so its steady state is ", real(λ) > scale ? "unstable" : "not unique", " and no steady solve applies; step the ",
+            "fields with `BackwardEuler` (a steady row `0 ~ rhs` written as the rate `D(c) ~ rhs`: a steady row takes only ",
+            "`QuasiSteady`), or change the couplings or decays so that every mode decays"
+        )
+    )
 end
 function _coupled_refusal(s::Program, op::OperatorSpec, keys, p)
     m = coupled_modes(s, op, keys, p)
     m === nothing && return nothing
     λ, mode = m
-    scale = 1e-10 * max(1.0, maximum(r -> abs(_coefsum(r.jloc, p)), (r for r in op.rows if r.key in keys)))
+    scale = 1.0e-10 * max(1.0, maximum(r -> abs(_coefsum(r.jloc, p)), (r for r in op.rows if r.key in keys)))
     real(λ) < -scale && return nothing
     throw(_growth_refusal(keys, λ, scale, all(==(1), mode) ? ", in the slowest spatial mode" : ""))
 end
@@ -818,13 +828,13 @@ function coupled_growth(cs::CoupledKrylov, σ::Real, t; m = 12, par = 1)
         hn = sqrt(Float64(_cs_dot(w, w)))
         H[j + 1, j] = hn
         k = j
-        (isfinite(hn) && hn > 1e-10) || break
+        (isfinite(hn) && hn > 1.0e-10) || break
         _cs_div!(w, K(hn))
     end
     μs = LinearAlgebra.eigvals(H[1:k, 1:k])
     all(isfinite, μs) || return nothing
     μ = μs[argmax(abs.(μs))]
-    abs(μ) > 1 + 1e-6 || return nothing
+    abs(μ) > 1 + 1.0e-6 || return nothing
     return complex(σ * (μ - 1) / (μ + 1))
 end
 _cs_div!(x::CoupledVector, s) = Krylov.kdivcopy!(length(x), x, x, s)

@@ -17,9 +17,15 @@
 function _tangent_eltype(E, key, alg)
     V = value_type(E)
     (npartials(V) == 0 && V in (Float32, Float64) && dvalue(zero(E)) isa V) && return V
-    throw(ArgumentError(string(_algname(alg), ": the field `", key, "` holds ", _typetext(E), "; the implicit solve ",
-        "takes derivative parts of Float32 or Float64 values, one level of them (no nested Duals: take one derivative ",
-        "through the solve at a time, or step the field with `ExplicitEuler`)")))
+    throw(
+        ArgumentError(
+            string(
+                _algname(alg), ": the field `", key, "` holds ", _typetext(E), "; the implicit solve ",
+                "takes derivative parts of Float32 or Float64 values, one level of them (no nested Duals: take one derivative ",
+                "through the solve at a time, or step the field with `ExplicitEuler`)"
+            )
+        )
+    )
 end
 
 _tv_body!(i, dst, src) = (@inbounds dst[i] = dvalue(src[i]); nothing)                   # i ≤ length(dst)
@@ -196,8 +202,10 @@ function _bind_tangent(
     C = compute_type(alg, V)
     curs = (_tcur(rs, s, swaps, all_state, st.cur, 1), _tcur(rs, s, swaps, all_state, st.cur, 2))
     order = [r.key for r in pc.rows]
-    sps = [_implicit_plan(g, rs, (:residual, residual_key(alg), k), _row_kernels(rs, k, g.spec.init), V, backend, options; C)
-           for k in order]
+    sps = [
+        _implicit_plan(g, rs, (:residual, residual_key(alg), k), _row_kernels(rs, k, g.spec.init), V, backend, options; C)
+            for k in order
+    ]
     mkres = q -> [ntuple(i -> BoundStep(backend, rs, sps[ri], rst, q; cur = curs[i], c), 2) for ri in eachindex(order)]
     lo = alg.lower_bound === nothing ? nothing : value_type(E)(alg.lower_bound)
     function mkrows(q, res)
@@ -210,8 +218,12 @@ function _bind_tangent(
             mask = nv === nothing ? nothing : array(st, s.masks[s.rules[nv].mask].field, :cur)
             mval = nv === nothing ? zero(T) : convert(T, _coefdual(s.rules[nv].value, q))
             mvf = nv === nothing || s.rules[nv].vfield == 0 ? nothing : array(st, s.rules[nv].vfield, :cur)
-            push!(rows, TangentRow(res[ri], (u[1], u[2]), rst.bufs[fieldid(rs, "res:" * key)][1], mask, mval, mvf, lo,
-                get(qs, key, nothing), alg isa BDF2 ? _zeros(st.backend, T, length(u[1])) : nothing))
+            push!(
+                rows, TangentRow(
+                    res[ri], (u[1], u[2]), rst.bufs[fieldid(rs, "res:" * key)][1], mask, mval, mvf, lo,
+                    get(qs, key, nothing), alg isa BDF2 ? _zeros(st.backend, T, length(u[1])) : nothing
+                )
+            )
         end
         return Tuple(rows)
     end
@@ -244,12 +256,14 @@ end
 function _warn_tangent_newton(pc::ImplicitCache, alg)
     (pc.cs === nothing && !pc.check && (pc.iterate || pc.switch || !pc.exact)) || return nothing
     _warn_once(string("implicit-tangent-newton#", join(pc.keys, ","))) || return nothing
-    @warn string(_algname(alg), ": field", length(pc.keys) == 1 ? " " : "s ", join(("`$k`" for k in pc.keys), ", "),
+    @warn string(
+        _algname(alg), ": field", length(pc.keys) == 1 ? " " : "s ", join(("`$k`" for k in pc.keys), ", "),
         ": the derivative parts are those of each stage's solution (the stage's equation solved), and the run takes ",
         pc.newton, " Newton iteration", pc.newton == 1 ? "" : "s", " per stage with no convergence check, which do",
         pc.newton == 1 ? "es" : "", " not solve a local nonlinear term or a switch exactly, so the derivatives differ from ",
         "those of the run by the derivative of that defect; give `nlsolve = LatticeNewton(; max_iter = k)` (k ≥ 2: the run then iterates until the ",
-        "correction meets the tolerance) for derivatives of the run")
+        "correction meets the tolerance) for derivatives of the run"
+    )
     return nothing
 end
 
@@ -356,12 +370,20 @@ function _trow!(pr::ImplicitRow, tr::TangentRow, c::TangentCache, par, t1, hγ, 
     for j in 1:(c.np)
         Exec.launch!(backend, _tpart_body!, n, (pr.resarr, tr.resarr, j))
         if pr.solver === nothing && pr.lin === nothing
-            Exec.launch!(backend, _tupdate_body!, n, (dst, nothing, nothing, nothing, pr.resarr, pr.s, tr.mask, tr.mval,
-                tr.mvf, tr.lo, j))
+            Exec.launch!(
+                backend, _tupdate_body!, n, (
+                    dst, nothing, nothing, nothing, pr.resarr, pr.s, tr.mask, tr.mval,
+                    tr.mvf, tr.lo, j,
+                )
+            )
         else
             x = _row_correction!(pr, backend, 1.0, hγ)
-            Exec.launch!(backend, _tupdate_body!, n, (dst, x, pr.smask, pr.v, nothing, nothing, tr.mask, tr.mval, tr.mvf,
-                tr.lo, j))
+            Exec.launch!(
+                backend, _tupdate_body!, n, (
+                    dst, x, pr.smask, pr.v, nothing, nothing, tr.mask, tr.mval, tr.mvf,
+                    tr.lo, j,
+                )
+            )
         end
     end
     return nothing
@@ -398,8 +420,12 @@ function _tcoupled!(c::TangentCache, cs::CoupledKrylov, par, t1, hγ, k)
             for (cr, tr) in zip(cs.rows, c.rows)
                 dst = tr.bufs[3 - par]
                 δ = view(ws.x.a, (cr.voff + 1):(cr.voff + cr.n))
-                Exec.launch!(backend, _tupdate_body!, cr.n, (dst, δ, nothing, nothing, nothing, nothing, tr.mask, tr.mval,
-                    tr.mvf, tr.lo, j))
+                Exec.launch!(
+                    backend, _tupdate_body!, cr.n, (
+                        dst, δ, nothing, nothing, nothing, nothing, tr.mask, tr.mval,
+                        tr.mvf, tr.lo, j,
+                    )
+                )
             end
         end
     end

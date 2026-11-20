@@ -7,15 +7,18 @@
 """
 Measured η tables as `(streams, η)` points (fused, DRAM; measured on the field-kernel benchmarks).
 """
-const ETA_GENERATOR = Dict(2 => [(2, 0.99), (8, 0.91), (16, 0.85), (32, 0.80), (64, 0.64)],
-    3 => [(2, 0.97), (4, 0.87), (8, 0.87), (16, 0.84)])   # monotone envelope (8: 0.92 measured)
+const ETA_GENERATOR = Dict(
+    2 => [(2, 0.99), (8, 0.91), (16, 0.85), (32, 0.8), (64, 0.64)],
+    3 => [(2, 0.97), (4, 0.87), (8, 0.87), (16, 0.84)]
+)   # monotone envelope (8: 0.92 measured)
 const ETA_REALISTIC = Dict(
-    2 => [(6, 0.95), (11, 0.94), (16, 0.92), (21, 0.91), (26, 0.90)],
-    3 => [(6, 0.94), (11, 0.91), (16, 0.87), (21, 0.83), (26, 0.78)])
+    2 => [(6, 0.95), (11, 0.94), (16, 0.92), (21, 0.91), (26, 0.9)],
+    3 => [(6, 0.94), (11, 0.91), (16, 0.87), (21, 0.83), (26, 0.78)]
+)
 
 Base.@kwdef struct CostModel
-    bw_dram::Float64 = 235e9          # 232–237 GB/s
-    bw_cache::Float64 = 674e9         # cache-resident ceiling 617–731 GB/s
+    bw_dram::Float64 = 235.0e9          # 232–237 GB/s
+    bw_cache::Float64 = 674.0e9         # cache-resident ceiling 617–731 GB/s
     cache_ws::Float64 = 32 * 2.0^20   # cache-resident up to 32 MiB
     dram_ws::Float64 = 64 * 2.0^20    # DRAM from 64 MiB
     eta_lo_ws::Float64 = 256 * 2.0^20 # η = 1 below (fused wins at 128³; calibration)
@@ -86,8 +89,10 @@ function eta(m::CostModel, N, streams, rf, ws)
     return 1 - w * (1 - _interp(tab, streams))
 end
 function bandwidth(m::CostModel, ws)
-    exp(log(m.bw_cache) +
-        _logfrac(ws, m.cache_ws, m.dram_ws) * log(m.bw_dram / m.bw_cache))
+    return exp(
+        log(m.bw_cache) +
+            _logfrac(ws, m.cache_ws, m.dram_ws) * log(m.bw_dram / m.bw_cache)
+    )
 end
 
 """
@@ -108,10 +113,14 @@ function traffic(p::Program{N}, k::Kernel{N}) where {N}
     function add!(f, comp, rel, rw)
         (f, comp, Int8(k.space.level + rel), rw) in arr && return
         push!(arr, (f, comp, Int8(k.space.level + rel), rw))
-        bytes[] += n * lanebytes(p.fields[f].storage) * 2.0^(-N * rel)
+        return bytes[] += n * lanebytes(p.fields[f].storage) * 2.0^(-N * rel)
     end
-    foreach(a -> add!(a.field, a.comp.a, a.level, :r), (k.accesses[x.imm]
-    for x in k.nodes if x.op == LOAD))
+    foreach(
+        a -> add!(a.field, a.comp.a, a.level, :r), (
+            k.accesses[x.imm]
+                for x in k.nodes if x.op == LOAD
+        )
+    )
     k.space.kind == MASKED && add!(p.masks[k.space.mask].field, Int16(1), 0, :r)
     for s in k.stores
         f = p.fields[s.access.field]
@@ -128,7 +137,7 @@ function traffic(p::Program{N}, k::Kernel{N}) where {N}
     end
     nr, nw = count(x -> x[4] != :w, arr), count(x -> x[4] != :r, arr)
     flops = n *
-            count(x -> !(x.op in (LOAD, CONST, PARAM, COORD, RUNTIME, INSIDE_OP)), k.nodes)
+        count(x -> !(x.op in (LOAD, CONST, PARAM, COORD, RUNTIME, INSIDE_OP)), k.nodes)
     return Traffic(arr, bytes[], nr, nw, flops)
 end
 

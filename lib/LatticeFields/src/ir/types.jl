@@ -56,7 +56,8 @@ opname(op::Op) = op == INSIDE_OP ? "inside" : lowercase(string(op))
 const COMMUTATIVE = (ADD, MUL, MIN, MAX, EQ, AND, OR, XOR)
 const CALLS = (
     :sin, :cos, :tan, :tanh, :sinh, :cosh, :cbrt, :exp2, :log2, :log10, :expm1, :log1p,
-    :atan, :floor, :ceil, :round)
+    :atan, :floor, :ceil, :round,
+)
 
 """
     Grid(dims; geometry = CUBIC, domain = 0)
@@ -70,8 +71,9 @@ struct Grid{N}
     domain::Int32                    # mask id of the irregular domain, 0 for the full box
 end
 function Grid(dims::NTuple{N, Integer}; geometry = CUBIC, domain = 0) where {N}
-    Grid{N}(
-        Int32.(dims), geometry, Int32(domain))
+    return Grid{N}(
+        Int32.(dims), geometry, Int32(domain)
+    )
 end
 
 """
@@ -109,7 +111,7 @@ struct FieldDecl{N}
     buffers::Int8                    # 1, or 2 for host ping-pong
     role::Symbol                     # :state | :aux | :input | :output | :scratch
     fixed::Bool                      # a declared storage (`lattice_storage`): the float lane
-                                     # holds its own type under `lanes = :state` (`lanetype`)
+    # holds its own type under `lanes = :state` (`lanetype`)
 end
 function FieldDecl{N}(key, classes, shape, symmetric, storage, levels, epoch, buffers, role) where {N}
     return FieldDecl{N}(key, classes, shape, symmetric, storage, levels, epoch, buffers, role, false)
@@ -177,10 +179,13 @@ struct Space{N}
     mask::Int32                      # MASKED: mask id
     inset::NTuple{N, NTuple{2, Int16}} # RESTRICTED: (low, high) sites skipped per axis
 end
-function Space{N}(kind = FULL; level = 0, class = 0, mask = 0,
-        inset = ntuple(_ -> (Int16(0), Int16(0)), N)) where {N}
-    Space{N}(
-        kind, Int8(level), Int8(class), Int32(mask), inset)
+function Space{N}(
+        kind = FULL; level = 0, class = 0, mask = 0,
+        inset = ntuple(_ -> (Int16(0), Int16(0)), N)
+    ) where {N}
+    return Space{N}(
+        kind, Int8(level), Int8(class), Int32(mask), inset
+    )
 end
 
 """
@@ -270,7 +275,7 @@ field)?
 sitecoefs(r::FaceRule) = r.afield != 0 || r.bfield != 0
 
 """Relative tolerance of the degenerate-face test: `|α/2 + β| ≤ tol (|α|/2 + |β|)`."""
-const FACE_RTOL = 1e-6
+const FACE_RTOL = 1.0e-6
 
 """
     degenerate(α, β) -> Bool

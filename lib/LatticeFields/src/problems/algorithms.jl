@@ -41,8 +41,11 @@ struct ExplicitEuler <: AbstractFieldAlgorithm
     init::Union{Nothing, Symbol}
     compute_type::Any
     function ExplicitEuler(substeps, lower_bound, init = nothing, compute_type = :auto)
-        substeps isa Integer && substeps == 0 && throw(ArgumentError(
-            "ExplicitEuler: `substeps = 0` is not a count; leave `substeps` out for the automatic count"))
+        substeps isa Integer && substeps == 0 && throw(
+            ArgumentError(
+                "ExplicitEuler: `substeps = 0` is not a count; leave `substeps` out for the automatic count"
+            )
+        )
         substeps === nothing || (substeps isa Integer && !(substeps isa Bool) && substeps >= 1) ||
             throw(ArgumentError("ExplicitEuler: substeps = $(repr(substeps)) must be an integer ≥ 1 (or left out: automatic)"))
         lower_bound === nothing || lower_bound isa Real && isfinite(lower_bound) ||
@@ -61,9 +64,15 @@ struct ExplicitEuler <: AbstractFieldAlgorithm
 end
 # `init`: `nothing` (start from the initial state) or `:steady`
 function _init_keyword(w, init)
-    init === nothing || init === :steady || throw(ArgumentError(string(w, ": init = ", repr(init), " is not a start; ",
-        "give `init = :steady` (solve the group's steady state before the first window) or leave `init` out (start from ",
-        "the initial state)")))
+    init === nothing || init === :steady || throw(
+        ArgumentError(
+            string(
+                w, ": init = ", repr(init), " is not a start; ",
+                "give `init = :steady` (solve the group's steady state before the first window) or leave `init` out (start from ",
+                "the initial state)"
+            )
+        )
+    )
     return init
 end
 # `compute_type`: `:auto` (the problem's value type), `Float32` or `Float64`
@@ -72,8 +81,11 @@ function _compute_keyword(w, c)
         ArgumentError(
             string(
                 w, ": `compute_type` takes `:auto` (the ",
-        "problem's value type), `Float32` or `Float64` (the number type the group's kernels compute in; its fields keep ",
-        "their storage, converted at each load and store); got ", repr(c))))
+                "problem's value type), `Float32` or `Float64` (the number type the group's kernels compute in; its fields keep ",
+                "their storage, converted at each load and store); got ", repr(c)
+            )
+        )
+    )
     return c
 end
 """
@@ -283,16 +295,19 @@ struct BackwardEuler <: AbstractImplicitFieldAlgorithm
     compute_type::Any
     function BackwardEuler(substeps, nlsolve, lower_bound, linsolve, solver_type, init = nothing, compute_type = :auto)
         return new(
-                _implicit_keywords("BackwardEuler", substeps, nlsolve, lower_bound, linsolve, solver_type)..., _init_keyword("BackwardEuler", init),
-                _compute_keyword("BackwardEuler", compute_type)
-            )
+            _implicit_keywords("BackwardEuler", substeps, nlsolve, lower_bound, linsolve, solver_type)..., _init_keyword("BackwardEuler", init),
+            _compute_keyword("BackwardEuler", compute_type)
+        )
     end
 end
 # The keywords of a time-stepping implicit algorithm, each checked (an `ArgumentError` naming
 # the keyword) and converted (`w` names the algorithm in the messages)
 function _implicit_keywords(w, substeps, nlsolve, lower_bound, linsolve, solver_type)
-    substeps isa Integer && !(substeps isa Bool) && substeps == 0 && throw(ArgumentError(
-        "$w: `substeps = 0` is not a count; leave `substeps` out for the automatic count"))
+    substeps isa Integer && !(substeps isa Bool) && substeps == 0 && throw(
+        ArgumentError(
+            "$w: `substeps = 0` is not a count; leave `substeps` out for the automatic count"
+        )
+    )
     substeps === nothing || (substeps isa Integer && !(substeps isa Bool) && substeps >= 1) ||
         throw(ArgumentError("$w: substeps = $(repr(substeps)) must be an integer ≥ 1 (or left out: automatic)"))
     nlsolve === nothing || nlsolve isa LatticeNewton ||
@@ -317,7 +332,7 @@ function _implicit_keywords(w, substeps, nlsolve, lower_bound, linsolve, solver_
         ArgumentError(
             string(
                 w, ": `linsolve = ", repr(linsolve),
-        "` is the solver of a coupled steady group (`QuasiSteady`, whose fields read one another); a time stepper ",
+                "` is the solver of a coupled steady group (`QuasiSteady`, whose fields read one another); a time stepper ",
                 "solves each field with `LatticePCG(…)` (the default) or `LatticeMultigrid(…)`: leave `linsolve` out, or give ",
                 "`linsolve = LatticePCG(; maxiters = n)`"
             )
@@ -345,7 +360,9 @@ function _implicit_keywords(w, substeps, nlsolve, lower_bound, linsolve, solver_
     )
 end
 function _implicit_kwerror(w, kw)
-    return ArgumentError(string(w, ": no keyword ", join(("`$k`" for k in keys(kw)), ", "),
+    return ArgumentError(
+        string(
+            w, ": no keyword ", join(("`$k`" for k in keys(kw)), ", "),
             "; its keywords are `substeps`, `nlsolve`, `lower_bound`, `linsolve`, `solver_type`, `init` and `compute_type`",
             _dt_text(kw)
         )
@@ -392,9 +409,9 @@ struct CrankNicolson <: AbstractImplicitFieldAlgorithm
     compute_type::Any
     function CrankNicolson(substeps, nlsolve, lower_bound, linsolve, solver_type, init = nothing, compute_type = :auto)
         return new(
-                _implicit_keywords("CrankNicolson", substeps, nlsolve, lower_bound, linsolve, solver_type)..., _init_keyword("CrankNicolson", init),
-                _compute_keyword("CrankNicolson", compute_type)
-            )
+            _implicit_keywords("CrankNicolson", substeps, nlsolve, lower_bound, linsolve, solver_type)..., _init_keyword("CrankNicolson", init),
+            _compute_keyword("CrankNicolson", compute_type)
+        )
     end
 end
 function CrankNicolson(;
@@ -436,9 +453,9 @@ struct BDF2 <: AbstractImplicitFieldAlgorithm
     compute_type::Any
     function BDF2(substeps, nlsolve, lower_bound, linsolve, solver_type, init = nothing, compute_type = :auto)
         return new(
-                _implicit_keywords("BDF2", substeps, nlsolve, lower_bound, linsolve, solver_type)..., _init_keyword("BDF2", init),
-                _compute_keyword("BDF2", compute_type)
-            )
+            _implicit_keywords("BDF2", substeps, nlsolve, lower_bound, linsolve, solver_type)..., _init_keyword("BDF2", init),
+            _compute_keyword("BDF2", compute_type)
+        )
     end
 end
 function BDF2(;
@@ -516,7 +533,10 @@ struct QuasiSteady <: AbstractImplicitFieldAlgorithm
     end
 end
 function QuasiSteady(; nlsolve = nothing, linsolve = :auto, solver_type = :auto, init = nothing, compute_type = :auto, kw...)
-    haskey(kw, :substeps) && throw(ArgumentError(string("QuasiSteady: no keyword `substeps`: a steady field is solved ",
+    haskey(kw, :substeps) && throw(
+        ArgumentError(
+            string(
+                "QuasiSteady: no keyword `substeps`: a steady field is solved ",
                 "once per window; give `nlsolve = LatticeNewton(; max_iter = k)` for more Newton iterations per window"
             )
         )
@@ -525,9 +545,15 @@ function QuasiSteady(; nlsolve = nothing, linsolve = :auto, solver_type = :auto,
         ArgumentError(
             string(
                 "QuasiSteady: no keyword `lower_bound`: a steady solve has no substep to ",
-        "clip (a steady state below a bound means the equation allows it; `BackwardEuler` keeps nonnegative data ",
-        "nonnegative)")))
-    isempty(kw) || throw(ArgumentError(string("QuasiSteady: no keyword ", join(("`$k`" for k in keys(kw)), ", "),
+                "clip (a steady state below a bound means the equation allows it; `BackwardEuler` keeps nonnegative data ",
+                "nonnegative)"
+            )
+        )
+    )
+    isempty(kw) || throw(
+        ArgumentError(
+            string(
+                "QuasiSteady: no keyword ", join(("`$k`" for k in keys(kw)), ", "),
                 "; its keywords are `nlsolve`, `linsolve`, `solver_type`, `init` and `compute_type`", _dt_text(kw)
             )
         )
@@ -558,10 +584,15 @@ function _window(alg::AbstractFieldAlgorithm, dt, clock)
     dt === nothing || (dt isa Real && !(dt isa Bool) && isfinite(dt) && dt > 0) ||
         throw(ArgumentError(string("`solve`/`init`: dt = ", repr(dt), " must be finite and > 0")))
     if dt === nothing
-        clock === nothing && throw(ArgumentError(string(
-            "`", nameof(typeof(alg)), "` on a `FieldProblem` needs `dt` (the window) when the discretization declares no ",
+        clock === nothing && throw(
+            ArgumentError(
+                string(
+                    "`", nameof(typeof(alg)), "` on a `FieldProblem` needs `dt` (the window) when the discretization declares no ",
                     "`clock`: nothing else sets the window, and `saveat` never does; give `solve(prob, alg; dt)` or ",
-            "`LatticeDiscretization(…; clock = τ)`")))
+                    "`LatticeDiscretization(…; clock = τ)`"
+                )
+            )
+        )
         return float(clock)
     end
     clock === nothing || _per(dt, clock)
@@ -577,9 +608,14 @@ function _window(::ExplicitMap, dt, clock)
             )
         )
     )
-    clock === nothing || (clock >= 1 && abs(round(clock) - clock) <= 1e-12 * clock) || throw(ArgumentError(string(
-        "the clock's period ", clock, " is not a whole number of map steps (a map steps one unit of time, and ",
-        "`step_index(t)` counts whole periods): give `clock = n` with an integer n ≥ 1, or no clock")))
+    clock === nothing || (clock >= 1 && abs(round(clock) - clock) <= 1.0e-12 * clock) || throw(
+        ArgumentError(
+            string(
+                "the clock's period ", clock, " is not a whole number of map steps (a map steps one unit of time, and ",
+                "`step_index(t)` counts whole periods): give `clock = n` with an integer n ≥ 1, or no clock"
+            )
+        )
+    )
     return 1.0
 end
 # the number of windows `dt` in one period of the clock
@@ -688,7 +724,9 @@ function linear_solver_refusal(what, s, route; implicit = "`BackwardEuler(; lins
         string(
             what,
             ": `", repr(s), "` is a linear solver: it is the `linsolve` of an implicit field solver, not a field solver; give it to ",
-        "one, ", implicit, ", or step the field with an explicit field algorithm: give ", route))
+            "one, ", implicit, ", or step the field with an explicit field algorithm: give ", route
+        )
+    )
 end
 
 """
@@ -772,14 +810,16 @@ resolves it per field, such as `PottsProblem`, prints the per-field map instead)
 """
 function canonical(s::ExplicitEuler)
     return string(
-            "ExplicitEuler(substeps=", repr(s.substeps), ",lower_bound=", repr(s.lower_bound),
-            s.init === nothing ? "" : string(",init=", repr(s.init)), s.compute_type === :auto ? "" : string(",compute_type=", s.compute_type), ")"
-        )
+        "ExplicitEuler(substeps=", repr(s.substeps), ",lower_bound=", repr(s.lower_bound),
+        s.init === nothing ? "" : string(",init=", repr(s.init)), s.compute_type === :auto ? "" : string(",compute_type=", s.compute_type), ")"
+    )
 end
 canonical(m::ExplicitMap) = m.compute_type === :auto ? "ExplicitMap()" : string("ExplicitMap(compute_type=", m.compute_type, ")")
 function canonical(g::FieldGroups)
-    return string("FieldGroups(", join((string(k, "=", canonical(a)) for (k, a) in g.pairs), ","),
-        ";default=", g.default === nothing ? "nothing" : canonical(g.default), ")")
+    return string(
+        "FieldGroups(", join((string(k, "=", canonical(a)) for (k, a) in g.pairs), ","),
+        ";default=", g.default === nothing ? "nothing" : canonical(g.default), ")"
+    )
 end
 canonical(a::AbstractFieldAlgorithm) = _canonical_fields(a)
 canonical(s::Union{Solvers.LatticePCG, Solvers.LatticeGMRES}) = _canonical_fields(Solvers.owned(s))
@@ -843,12 +883,15 @@ function _canonical_value(x, depth::Int)
     )
 end
 function _canonical_fields(s)
-    return string(nameof(typeof(s)), "(",
-            join((string(f, "=", canonical(getfield(s, f))) for f in sort!(collect(fieldnames(typeof(s))))
-                        if !(f === :init && getfield(s, f) === nothing) && !(f === :compute_type && getfield(s, f) === :auto)
-                ), ","
-            ), ")"
-        )
+    return string(
+        nameof(typeof(s)), "(",
+        join(
+            (
+                string(f, "=", canonical(getfield(s, f))) for f in sort!(collect(fieldnames(typeof(s))))
+                    if !(f === :init && getfield(s, f) === nothing) && !(f === :compute_type && getfield(s, f) === :auto)
+            ), ","
+        ), ")"
+    )
 end
 
 # an algorithm in messages, in its keyword form (`ExplicitEuler(; substeps = 2)`)

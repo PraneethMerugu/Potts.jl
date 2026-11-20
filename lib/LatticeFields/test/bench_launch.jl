@@ -52,7 +52,7 @@ function chain(f)
     f(); devsync(); f(); devsync()
     b = @allocated f()
     devsync()
-    return best / 1e3, b
+    return best / 1.0e3, b
 end
 
 for (lbl, n) in (("1 site", 1), ("42³", 42^3))
@@ -62,8 +62,10 @@ for (lbl, n) in (("1 site", 1), ("42³", 42^3))
         body = SumK{K}()
         ls = Exec.Launch(DEV, body, (S, P), n; static = true)
         ld = Exec.Launch(DEV, body, (S, P), n; static = false)
-        for (form, f) in (("Launch static ndrange", ls), ("Launch dynamic ndrange", ld),
-                ("Exec.launch! (CorePotts)", () -> Exec.launch!(DEV, body, n, (S, P))))
+        for (form, f) in (
+                ("Launch static ndrange", ls), ("Launch dynamic ndrange", ld),
+                ("Exec.launch! (CorePotts)", () -> Exec.launch!(DEV, body, n, (S, P))),
+            )
             us, b = chain(f)
             @printf("LAUNCH %-8s %2d arrays  %-26s dep %7.2f µs  host %6d B\n", lbl, K + 1, form, us, b)
         end

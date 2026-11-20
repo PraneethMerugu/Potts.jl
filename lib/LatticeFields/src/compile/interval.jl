@@ -39,7 +39,7 @@ end
 iv_mono(f::F, a::Iv) where {F} = _out(f(a[1]), f(a[2]))
 iv_sqrt(a::Iv) = iv_mono(sqrt, (max(a[1], 0.0), max(a[2], 0.0)))
 function iv_log(a::Iv)
-    a[1] <= 0 ? (-Inf, a[2] <= 0 ? -Inf : nextfloat(log(a[2]))) : iv_mono(log, a)
+    return a[1] <= 0 ? (-Inf, a[2] <= 0 ? -Inf : nextfloat(log(a[2]))) : iv_mono(log, a)
 end
 iv_hull(a::Iv, b::Iv) = (min(a[1], b[1]), max(a[2], b[2]))
 const _MONO_CALLS = (:tanh, :sinh, :cbrt, :exp2, :expm1, :atan, :floor, :ceil, :round)
@@ -58,8 +58,10 @@ function _ivexpr(k::Kernel, i, p::Program, bounds, a)
             "runtime#$(n.imm)"
         end
         haskey(bounds, key) ||
-            irerror("interval evaluator: `", key, "` has no declared interval",
-                " (kernel `", k.key, "`, node v", i, ")")
+            irerror(
+            "interval evaluator: `", key, "` has no declared interval",
+            " (kernel `", k.key, "`, node v", i, ")"
+        )
         return Float64.(bounds[key])
     end
     op == COORD && return (1.0, Float64(maximum(leveldims(p, k.space.level))))
@@ -83,8 +85,10 @@ function _ivexpr(k::Kernel, i, p::Program, bounds, a)
         f in (:sin, :cos) && return (-1.0, 1.0)
         f in _MONO_CALLS && return :(iv_mono($f, $(a[1])))
     end
-    irerror("interval evaluator: op `", opname(op),
-        "` has no interval rule (kernel `", k.key, "`)")
+    irerror(
+        "interval evaluator: op `", opname(op),
+        "` has no interval rule (kernel `", k.key, "`)"
+    )
 end
 
 """
@@ -107,5 +111,5 @@ function interval_expr(p::Program, k::Kernel, nodes; bounds = Dict{String, Iv}()
     return Expr(:->, Expr(:tuple, :Plo, :Phi), Expr(:block, body..., ret))
 end
 function interval_function(p::Program, k::Kernel, nodes; kw...)
-    rgf(interval_expr(p, k, nodes; kw...))
+    return rgf(interval_expr(p, k, nodes; kw...))
 end

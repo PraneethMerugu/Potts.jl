@@ -672,9 +672,9 @@ end
 # … and back: the public algorithm of a field solver's resolved one (the owned budgets unset)
 function public_form(a::FusedPCG)
     return LatticePCG(
-            LatticeMultigrid(; cycle = (a.precond.cycle.nu1, a.precond.cycle.nu2)),
-            a.maxiters == 8 ? nothing : a.maxiters, a.reltol == 1.0e-6 ? nothing : a.reltol
-        )
+        LatticeMultigrid(; cycle = (a.precond.cycle.nu1, a.precond.cycle.nu2)),
+        a.maxiters == 8 ? nothing : a.maxiters, a.reltol == 1.0e-6 ? nothing : a.reltol
+    )
 end
 function public_form(a::LatticeMultigrid)
     r = a.reltol == 1.0e-6 ? nothing : a.reltol
@@ -708,12 +708,12 @@ cache is not fresh.
 # SuiteSparse / BLAS sparse factorizations in LinearSolve 5.18 require Float64/ComplexF64 CSC matrices.
 function _needs_float64_csc(alg)
     return alg isa Union{
-            LinearSolve.KLUFactorization,
-            LinearSolve.UMFPACKFactorization,
-            LinearSolve.LUFactorization,
-            LinearSolve.CHOLMODFactorization,
-            LinearSolve.QRFactorization,
-        }
+        LinearSolve.KLUFactorization,
+        LinearSolve.UMFPACKFactorization,
+        LinearSolve.LUFactorization,
+        LinearSolve.CHOLMODFactorization,
+        LinearSolve.QRFactorization,
+    }
 end
 
 function bound_field_cache(exec, op::CellOperator, linsolve; T = Float32, solver_type = :auto, inputs = ())
@@ -835,13 +835,13 @@ function LinearSolve.init_cacheval(
         assumptions::LinearSolve.OperatorAssumptions
     )
     throw(
-            ArgumentError(
-                string(
-                    "`LatticeMultigrid` solves a lattice field's operator (a `BoundOperator`); got a ", nameof(typeof(A)),
-                    ": use `LatticePCG()`, `LatticeGMRES()`, or a Krylov method with `precs = LatticeMultigrid()`"
-                )
+        ArgumentError(
+            string(
+                "`LatticeMultigrid` solves a lattice field's operator (a `BoundOperator`); got a ", nameof(typeof(A)),
+                ": use `LatticePCG()`, `LatticeGMRES()`, or a Krylov method with `precs = LatticeMultigrid()`"
             )
         )
+    )
 end
 
 SciMLBase.solve!(cache::LinearSolve.LinearCache, alg::LatticePCG; kwargs...) = _solve!(cache, alg, cache.cacheval)

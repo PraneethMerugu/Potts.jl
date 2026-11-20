@@ -88,11 +88,11 @@ end
 relerr(a, b) = maximum(abs, a .- b) / maximum(abs, b)
 function msg(f)
     return try
-            f(); ""
-        catch e
-            e isa ArgumentError || rethrow()
-            sprint(showerror, e)
-        end
+        f(); ""
+    catch e
+        e isa ArgumentError || rethrow()
+        sprint(showerror, e)
+    end
 end
 
 const NM = (; name = "c", axes = ("x", "y"))
@@ -100,240 +100,276 @@ include("../shared/export_all.jl")
 end
 
 @testitem "Robin faces against the ghost-rule hand matrix (16²)" setup = [LF_solvers_faces] tags = [:latticefields, :solvers] begin
-@testset "Robin faces against the ghost-rule hand matrix (16²)" begin
-    rng = Xoshiro(5)
-    f = rand(rng, 256)
-    # α, β of the same sign: the diagonal enters the operator (d = 0.4/0.45, 2/2, 1/(0.25 + 0.6))
-    rob = (((0.4, 0.25, 0.3), (2.0, 1.0, -0.1)), ((1.0, 0.6, 0.2), nothing))
-    op = CellOperator((16, 16); shift = 0.05, robin = rob, NM...)
-    @test !Solvers.has_defect(op) && Solvers.anchored(op) && !Solvers.deflatable(op)
+    @testset "Robin faces against the ghost-rule hand matrix (16²)" begin
+        rng = Xoshiro(5)
+        f = rand(rng, 256)
+        # α, β of the same sign: the diagonal enters the operator (d = 0.4/0.45, 2/2, 1/(0.25 + 0.6))
+        rob = (((0.4, 0.25, 0.3), (2.0, 1.0, -0.1)), ((1.0, 0.6, 0.2), nothing))
+        op = CellOperator((16, 16); shift = 0.05, robin = rob, NM...)
+        @test !Solvers.has_defect(op) && Solvers.anchored(op) && !Solvers.deflatable(op)
         for linsolve in (LatticePCG(; maxiters = 64, reltol = 1.0e-12), LatticeMultigrid(; maxiters = 64, reltol = 1.0e-12))
             e, _ = solve_vs_hand(op, Dict("in.f" => f); linsolve)
-        @test e <= 1e-10
-    end
-    # a pure flux face (α = 0): no diagonal, the flux g/β on the right side
-    op = CellOperator((16, 16); shift = 0.3, robin = (((0.0, 1.0, 0.5), nothing), (nothing, nothing)), NM...)
-    @test robin_parts(0.0, 1.0, 0.5) == (0.0, 0.0, 0.5)
-    @test solve_vs_hand(op, Dict("in.f" => f))[1] <= 1e-10
-    # Dirichlet is the Robin face (1, 0, g): the same operator and the same solution
-    opd = CellOperator((16, 16); shift = 0.05, dirichlet = ((0.2, nothing), (nothing, nothing)))
-    opr = CellOperator((16, 16); shift = 0.05, robin = (((1.0, 0.0, 0.2), nothing), (nothing, nothing)))
+            @test e <= 1.0e-10
+        end
+        # a pure flux face (α = 0): no diagonal, the flux g/β on the right side
+        op = CellOperator((16, 16); shift = 0.3, robin = (((0.0, 1.0, 0.5), nothing), (nothing, nothing)), NM...)
+        @test robin_parts(0.0, 1.0, 0.5) == (0.0, 0.0, 0.5)
+        @test solve_vs_hand(op, Dict("in.f" => f))[1] <= 1.0e-10
+        # Dirichlet is the Robin face (1, 0, g): the same operator and the same solution
+        opd = CellOperator((16, 16); shift = 0.05, dirichlet = ((0.2, nothing), (nothing, nothing)))
+        opr = CellOperator((16, 16); shift = 0.05, robin = (((1.0, 0.0, 0.2), nothing), (nothing, nothing)))
         sd, sr = (FieldSolver(HostExec(), o; T = Float64, linsolve = LatticePCG(; maxiters = 64, reltol = 1.0e-12)) for o in (opd, opr))
-    for s in (sd, sr)
-        copyto!(field(s, "in.f"), f)
-        steady!(s)
+        for s in (sd, sr)
+            copyto!(field(s, "in.f"), f)
+            steady!(s)
+        end
+        @test relerr(solver_solution(sr), solver_solution(sd)) <= 1.0e-12
     end
-    @test relerr(solver_solution(sr), solver_solution(sd)) <= 1e-12
-end
 end
 
 @testitem "the sign rule: a negative Robin diagonal is a defect correction" setup = [LF_solvers_faces] tags = [:latticefields, :solvers] begin
-@testset "the sign rule: a negative Robin diagonal is a defect correction" begin
-    rng = Xoshiro(6)
-    f = rand(rng, 256)
-    # α = 0.1, β = −1 (opposite signs, |β| > α/2): d = 0.1/(−0.95) < 0
-    rob = (((0.1, -1.0, 0.4), nothing), (nothing, nothing))
-    op = CellOperator((16, 16); shift = 0.1, dirichlet = ((nothing, 1.0), (nothing, nothing)), robin = rob, NM...)
-    dp, dn, q = robin_parts(0.1, -1.0, 0.4)
-    @test dp == 0 && dn ≈ 0.1 / -0.95 && q ≈ 0.4 / -0.95
-    @test Solvers.has_defect(op)
-    e, sv = solve_vs_hand(op, Dict("in.f" => f))
-    @test e <= 1e-8                                       # the full operator's solution
-    # the operator itself holds only d⁺ = 0: one plain solve (no defect pass) is not the solution
+    @testset "the sign rule: a negative Robin diagonal is a defect correction" begin
+        rng = Xoshiro(6)
+        f = rand(rng, 256)
+        # α = 0.1, β = −1 (opposite signs, |β| > α/2): d = 0.1/(−0.95) < 0
+        rob = (((0.1, -1.0, 0.4), nothing), (nothing, nothing))
+        op = CellOperator((16, 16); shift = 0.1, dirichlet = ((nothing, 1.0), (nothing, nothing)), robin = rob, NM...)
+        dp, dn, q = robin_parts(0.1, -1.0, 0.4)
+        @test dp == 0 && dn ≈ 0.1 / -0.95 && q ≈ 0.4 / -0.95
+        @test Solvers.has_defect(op)
+        e, sv = solve_vs_hand(op, Dict("in.f" => f))
+        @test e <= 1.0e-8                                       # the full operator's solution
+        # the operator itself holds only d⁺ = 0: one plain solve (no defect pass) is not the solution
         s1 = FieldSolver(HostExec(), op; T = Float64, linsolve = LatticePCG(; maxiters = 64, reltol = 1.0e-12))
-    copyto!(field(s1, "in.f"), f)
-    rebuild!(s1)
-    lift!(s1)
-    solve!(s1; host = true)
-    A, b, cells = hand_system(op, Dict("in.f" => f))
-    @test relerr(solver_solution(s1)[cells], A \ b) > 1e-3
-    # following lift! + solve! by hand is the same defect correction (device mode)
-    for _ in 1:40
+        copyto!(field(s1, "in.f"), f)
+        rebuild!(s1)
         lift!(s1)
-        solve!(s1)
+        solve!(s1; host = true)
+        A, b, cells = hand_system(op, Dict("in.f" => f))
+        @test relerr(solver_solution(s1)[cells], A \ b) > 1.0e-3
+        # following lift! + solve! by hand is the same defect correction (device mode)
+        for _ in 1:40
+            lift!(s1)
+            solve!(s1)
+        end
+        @test relerr(solver_solution(s1)[cells], A \ b) <= 1.0e-8
     end
-    @test relerr(solver_solution(s1)[cells], A \ b) <= 1e-8
-end
 end
 
 @testitem "a degenerate Robin face is refused naming the face, at build and at every write" setup = [LF_solvers_faces] tags = [:latticefields, :solvers] begin
-@testset "a degenerate Robin face is refused naming the face, at build and at every write" begin
-    deg = (((1.0, -0.5, 0.0), nothing), (nothing, nothing))           # α/2 + β = 0
-    e = msg(() -> CellOperator((16, 16); robin = deg, NM...))
-    @test occursin("field `c`: the Robin condition `α u + β ∂u/∂n = g` on the low face of axis `x` has α/2 + β = 0", e)
-    @test occursin("leaves the ghost value undefined: change α or β", e)
-    op = CellOperator((16, 16); shift = 0.1, robin = (((1.0, 0.5, 0.0), nothing), (nothing, nothing)), NM...)
-    sv = FieldSolver(HostExec(), op; T = Float64)
-    bad = CellOperator{2}(op.dims, op.periodic, op.face, op.shift, op.mask, op.value, op.dirichlet,
-        deg, op.name, op.axes, op.robin_full, op.diag)   # bypasses the constructor
-    @test occursin("has α/2 + β = 0", msg(() -> set_coefficients!(sv, bad)))
-    @test occursin("has α = β = 0, which is no condition",
-        msg(() -> CellOperator((16, 16); robin = (((0.0, 0.0, 1.0), nothing), (nothing, nothing)), NM...)))
-    @test occursin("must have finite α, β and g",
-        msg(() -> CellOperator((16, 16); robin = (((1.0, NaN, 1.0), nothing), (nothing, nothing)), NM...)))
-    @test occursin("axis `y` is periodic: it has no high face for a Robin condition",
-        msg(() -> CellOperator((16, 16); periodic = (false, true), robin = ((nothing, nothing), (nothing, (1.0, 1.0, 0.0))), NM...)))
-    @test occursin("the high face of axis `x` has both a Dirichlet value and a Robin condition",
-        msg(() -> CellOperator((16, 16); dirichlet = ((nothing, 1.0), (nothing, nothing)),
-            robin = ((nothing, (1.0, 1.0, 0.0)), (nothing, nothing)), NM...)))
-end
+    @testset "a degenerate Robin face is refused naming the face, at build and at every write" begin
+        deg = (((1.0, -0.5, 0.0), nothing), (nothing, nothing))           # α/2 + β = 0
+        e = msg(() -> CellOperator((16, 16); robin = deg, NM...))
+        @test occursin("field `c`: the Robin condition `α u + β ∂u/∂n = g` on the low face of axis `x` has α/2 + β = 0", e)
+        @test occursin("leaves the ghost value undefined: change α or β", e)
+        op = CellOperator((16, 16); shift = 0.1, robin = (((1.0, 0.5, 0.0), nothing), (nothing, nothing)), NM...)
+        sv = FieldSolver(HostExec(), op; T = Float64)
+        bad = CellOperator{2}(
+            op.dims, op.periodic, op.face, op.shift, op.mask, op.value, op.dirichlet,
+            deg, op.name, op.axes, op.robin_full, op.diag
+        )   # bypasses the constructor
+        @test occursin("has α/2 + β = 0", msg(() -> set_coefficients!(sv, bad)))
+        @test occursin(
+            "has α = β = 0, which is no condition",
+            msg(() -> CellOperator((16, 16); robin = (((0.0, 0.0, 1.0), nothing), (nothing, nothing)), NM...))
+        )
+        @test occursin(
+            "must have finite α, β and g",
+            msg(() -> CellOperator((16, 16); robin = (((1.0, NaN, 1.0), nothing), (nothing, nothing)), NM...))
+        )
+        @test occursin(
+            "axis `y` is periodic: it has no high face for a Robin condition",
+            msg(() -> CellOperator((16, 16); periodic = (false, true), robin = ((nothing, nothing), (nothing, (1.0, 1.0, 0.0))), NM...))
+        )
+        @test occursin(
+            "the high face of axis `x` has both a Dirichlet value and a Robin condition",
+            msg(
+                () -> CellOperator(
+                    (16, 16); dirichlet = ((nothing, 1.0), (nothing, nothing)),
+                    robin = ((nothing, (1.0, 1.0, 0.0)), (nothing, nothing)), NM...
+                )
+            )
+        )
+    end
 end
 
 @testitem "field face coefficients with face-Dirichlet and Robin faces (LF62)" setup = [LF_solvers_faces] tags = [:latticefields, :solvers] begin
-@testset "field face coefficients with face-Dirichlet and Robin faces (LF62)" begin
-    rng = Xoshiro(7)
-    inp = Dict("in.f" => rand(rng, 256), "in.wx" => 0.5 .+ rand(rng, 256), "in.wy" => 0.5 .+ rand(rng, 256))
-    op = CellOperator((16, 16); shift = 0.02, face = ("in.wx", "in.wy"),
-        dirichlet = ((0.2, 1.0), (nothing, nothing)), robin = ((nothing, nothing), ((1.0, 0.5, 0.3), nothing)), NM...)
+    @testset "field face coefficients with face-Dirichlet and Robin faces (LF62)" begin
+        rng = Xoshiro(7)
+        inp = Dict("in.f" => rand(rng, 256), "in.wx" => 0.5 .+ rand(rng, 256), "in.wy" => 0.5 .+ rand(rng, 256))
+        op = CellOperator(
+            (16, 16); shift = 0.02, face = ("in.wx", "in.wy"),
+            dirichlet = ((0.2, 1.0), (nothing, nothing)), robin = ((nothing, nothing), ((1.0, 0.5, 0.3), nothing)), NM...
+        )
         for T in (Float64,), linsolve in (LatticePCG(; maxiters = 64, reltol = 1.0e-12), LatticeMultigrid(; maxiters = 64, reltol = 1.0e-12))
             @test solve_vs_hand(op, inp; linsolve, T)[1] <= 1.0e-10
+        end
+        # a field shift and a mask on top
+        inp["in.s"] = 0.01 .+ 0.1rand(rng, 256)
+        inp["in.mask"] = UInt8.(rand(rng, 256) .< 0.15)
+        op = CellOperator(
+            (16, 16); shift = "in.s", face = ("in.wx", "in.wy"), mask = "in.mask", value = 0.7,
+            dirichlet = ((0.2, 1.0), (nothing, nothing)), NM...
+        )
+        @test solve_vs_hand(op, inp)[1] <= 1.0e-10
+        # a Dirichlet value on a size-1 axis enters the diagonal and the right side (base: diagonal only)
+        op = CellOperator((16, 1); shift = 0.05, dirichlet = ((0.0, 1.0), (0.5, 0.5)))
+        @test solve_vs_hand(op, Dict("in.f" => rand(rng, 16)))[1] <= 1.0e-10
     end
-    # a field shift and a mask on top
-    inp["in.s"] = 0.01 .+ 0.1rand(rng, 256)
-    inp["in.mask"] = UInt8.(rand(rng, 256) .< 0.15)
-    op = CellOperator((16, 16); shift = "in.s", face = ("in.wx", "in.wy"), mask = "in.mask", value = 0.7,
-        dirichlet = ((0.2, 1.0), (nothing, nothing)), NM...)
-    @test solve_vs_hand(op, inp)[1] <= 1e-10
-    # a Dirichlet value on a size-1 axis enters the diagonal and the right side (base: diagonal only)
-    op = CellOperator((16, 1); shift = 0.05, dirichlet = ((0.0, 1.0), (0.5, 0.5)))
-    @test solve_vs_hand(op, Dict("in.f" => rand(rng, 16)))[1] <= 1e-10
-end
 end
 
 @testitem "the mask value as an input field" setup = [LF_solvers_faces] tags = [:latticefields, :solvers] begin
-@testset "the mask value as an input field" begin
-    rng = Xoshiro(8)
-    for dims in ((16, 16), (8, 8, 8))
-        n = prod(dims)
-        inp = Dict("in.f" => 0.1rand(rng, n), "in.mask" => UInt8.(rand(rng, n) .< 0.2), "in.v" => rand(rng, n))
-        op = CellOperator(dims; shift = 0.05, mask = "in.mask", value = "in.v")
-        e, sv = solve_vs_hand(op, inp)
-        @test e <= 1e-10
-        # control: one value for every masked site is another solution
-        inp1 = filter(p -> p.first != "in.v", inp)
-        e1, _ = solve_vs_hand(CellOperator(dims; shift = 0.05, mask = "in.mask", value = 0.5), inp1)
-        @test e1 <= 1e-10
-        A1, b1, cells = hand_system(CellOperator(dims; shift = 0.05, mask = "in.mask", value = 0.5), inp1)
-        @test relerr(solver_solution(sv)[cells], A1 \ b1) > 1e-2
+    @testset "the mask value as an input field" begin
+        rng = Xoshiro(8)
+        for dims in ((16, 16), (8, 8, 8))
+            n = prod(dims)
+            inp = Dict("in.f" => 0.1rand(rng, n), "in.mask" => UInt8.(rand(rng, n) .< 0.2), "in.v" => rand(rng, n))
+            op = CellOperator(dims; shift = 0.05, mask = "in.mask", value = "in.v")
+            e, sv = solve_vs_hand(op, inp)
+            @test e <= 1.0e-10
+            # control: one value for every masked site is another solution
+            inp1 = filter(p -> p.first != "in.v", inp)
+            e1, _ = solve_vs_hand(CellOperator(dims; shift = 0.05, mask = "in.mask", value = 0.5), inp1)
+            @test e1 <= 1.0e-10
+            A1, b1, cells = hand_system(CellOperator(dims; shift = 0.05, mask = "in.mask", value = 0.5), inp1)
+            @test relerr(solver_solution(sv)[cells], A1 \ b1) > 1.0e-2
+        end
     end
-end
 end
 
 @testitem "inputs bind the caller's arrays (aliased, no copy)" setup = [LF_solvers_faces] tags = [:latticefields, :solvers] begin
-@testset "inputs bind the caller's arrays (aliased, no copy)" begin
-    rng = Xoshiro(9)
-    n = 256
-    f, m, v = rand(rng, n), UInt8.(rand(rng, n) .< 0.2), rand(rng, n)
-    op = CellOperator((16, 16); shift = 0.05, mask = "in.mask", value = "in.v", NM...)
+    @testset "inputs bind the caller's arrays (aliased, no copy)" begin
+        rng = Xoshiro(9)
+        n = 256
+        f, m, v = rand(rng, n), UInt8.(rand(rng, n) .< 0.2), rand(rng, n)
+        op = CellOperator((16, 16); shift = 0.05, mask = "in.mask", value = "in.v", NM...)
         linsolve = LatticePCG(; maxiters = 64, reltol = 1.0e-12)
         sv = FieldSolver(HostExec(), op; T = Float64, linsolve, inputs = ("in.f" => f, "in.mask" => m, "in.v" => v))
-    @test field(sv, "in.f") === f && field(sv, "in.mask") === m && field(sv, "in.v") === v
-    steady!(sv)
-    @test solve_vs_hand(op, Dict("in.f" => f, "in.mask" => m, "in.v" => v))[1] <= 1e-10
-    # writing the caller's arrays changes the next solve
-    f .*= 2
-    v .= 1 .- v
-    m .= UInt8.(rand(rng, n) .< 0.3)
-    steady!(sv)
-    A, b, cells = hand_system(op, Dict("in.f" => f, "in.mask" => m, "in.v" => v))
-    @test relerr(solver_solution(sv)[cells], A \ b) <= 1e-10
-    # an array of the lattice's shape: its memory is read (a write into it reaches the solve)
-    F = reshape(copy(f), 16, 16)
+        @test field(sv, "in.f") === f && field(sv, "in.mask") === m && field(sv, "in.v") === v
+        steady!(sv)
+        @test solve_vs_hand(op, Dict("in.f" => f, "in.mask" => m, "in.v" => v))[1] <= 1.0e-10
+        # writing the caller's arrays changes the next solve
+        f .*= 2
+        v .= 1 .- v
+        m .= UInt8.(rand(rng, n) .< 0.3)
+        steady!(sv)
+        A, b, cells = hand_system(op, Dict("in.f" => f, "in.mask" => m, "in.v" => v))
+        @test relerr(solver_solution(sv)[cells], A \ b) <= 1.0e-10
+        # an array of the lattice's shape: its memory is read (a write into it reaches the solve)
+        F = reshape(copy(f), 16, 16)
         s2 = FieldSolver(HostExec(), CellOperator((16, 16); shift = 0.05); T = Float64, linsolve, inputs = Dict("in.f" => F))
-    steady!(s2)
-    F .*= 3
-    steady!(s2)
-    A, b, cells = hand_system(CellOperator((16, 16); shift = 0.05), Dict("in.f" => vec(F)))
-    @test relerr(solver_solution(s2)[cells], A \ b) <= 1e-10
-    # refusals in the user's words
-    @test occursin("field `c`: `inputs`: `in.g` is not an input of this solver; its inputs are `in.f`, `in.mask`, `in.v`",
-        msg(() -> FieldSolver(HostExec(), op; T = Float64, inputs = ["in.g" => f])))
-    @test occursin("`inputs`: `in.f` holds Float32 values; this solver's state type is `Float64` (`T = Float64`): pass an array of Float64, or build the solver with `T = Float32`",
-        msg(() -> FieldSolver(HostExec(), op; T = Float64, inputs = ["in.f" => Float32.(f)])))
-    @test occursin("`inputs`: `in.mask` holds Float64 values; this solver's mask is `UInt8`",
-        msg(() -> FieldSolver(HostExec(), op; T = Float64, inputs = ("in.mask" => f,))))
-    # a vector of pairs converts its arrays to one element type: the message says so
-    @test occursin("pass the pairs as a tuple or a `Dict`",
-        msg(() -> FieldSolver(HostExec(), op; T = Float64, inputs = ["in.f" => f, "in.mask" => m])))
-    @test occursin("field `c`: `in.g` is not a field of this solver; its inputs are `in.f`, `in.mask`, `in.v`",
-        msg(() -> field(sv, "in.g")))
-    @test occursin("this solver needs one value per site: a vector of 256 or an array of size (16, 16)",
-        msg(() -> FieldSolver(HostExec(), op; T = Float64, inputs = ["in.f" => rand(10)])))
-    # following the routes works
-    @test FieldSolver(HostExec(), op; T = Float32, inputs = ["in.f" => Float32.(f)]) isa FieldSolver
-end
+        steady!(s2)
+        F .*= 3
+        steady!(s2)
+        A, b, cells = hand_system(CellOperator((16, 16); shift = 0.05), Dict("in.f" => vec(F)))
+        @test relerr(solver_solution(s2)[cells], A \ b) <= 1.0e-10
+        # refusals in the user's words
+        @test occursin(
+            "field `c`: `inputs`: `in.g` is not an input of this solver; its inputs are `in.f`, `in.mask`, `in.v`",
+            msg(() -> FieldSolver(HostExec(), op; T = Float64, inputs = ["in.g" => f]))
+        )
+        @test occursin(
+            "`inputs`: `in.f` holds Float32 values; this solver's state type is `Float64` (`T = Float64`): pass an array of Float64, or build the solver with `T = Float32`",
+            msg(() -> FieldSolver(HostExec(), op; T = Float64, inputs = ["in.f" => Float32.(f)]))
+        )
+        @test occursin(
+            "`inputs`: `in.mask` holds Float64 values; this solver's mask is `UInt8`",
+            msg(() -> FieldSolver(HostExec(), op; T = Float64, inputs = ("in.mask" => f,)))
+        )
+        # a vector of pairs converts its arrays to one element type: the message says so
+        @test occursin(
+            "pass the pairs as a tuple or a `Dict`",
+            msg(() -> FieldSolver(HostExec(), op; T = Float64, inputs = ["in.f" => f, "in.mask" => m]))
+        )
+        @test occursin(
+            "field `c`: `in.g` is not a field of this solver; its inputs are `in.f`, `in.mask`, `in.v`",
+            msg(() -> field(sv, "in.g"))
+        )
+        @test occursin(
+            "this solver needs one value per site: a vector of 256 or an array of size (16, 16)",
+            msg(() -> FieldSolver(HostExec(), op; T = Float64, inputs = ["in.f" => rand(10)]))
+        )
+        # following the routes works
+        @test FieldSolver(HostExec(), op; T = Float32, inputs = ["in.f" => Float32.(f)]) isa FieldSolver
+    end
 end
 
 @testitem "solver messages name the user's field" setup = [LF_solvers_faces] tags = [:latticefields, :solvers] begin
-@testset "solver messages name the user's field" begin
-    op = CellOperator((16, 16); shift = 0.1, mask = "in.mask", NM...)
-    for (e, want) in (
+    @testset "solver messages name the user's field" begin
+        op = CellOperator((16, 16); shift = 0.1, mask = "in.mask", NM...)
+        for (e, want) in (
                 (
                     msg(() -> FieldSolver(HostExec(), op; linsolve = LatticePCG(; precs = LatticeMultigrid(; cycle = VCycle(2, 1))))),
                     "`LatticePCG` needs a symmetric preconditioner cycle `(ν, ν)`; got `(2, 1)`: use `LatticePCG(; precs = LatticeMultigrid(; cycle = (2, 2)))`",
                 ),
                 (
                     msg(() -> FieldSolver(HostExec(), op; linsolve = LatticePCG(; precs = LatticeMultigrid(; cycles = 2)))),
-            "applies one preconditioner cycle per iteration"),
+                    "applies one preconditioner cycle per iteration",
+                ),
                 (msg(() -> FieldSolver(HostExec(), op; linsolve = :pcg)), "`linsolve` takes `:auto`, a `LatticePCG(…)` or a `LatticeMultigrid(…)`; got :pcg"),
                 (msg(() -> FieldSolver(HostExec(), op; deflate = true)), "`deflate = true` needs `LatticePCG` on a group with no mask"),
                 (msg(() -> FieldSolver(HostExec(), op; solver_type = BigFloat)), "BigFloat (solver_type) is not lowered"),
                 (msg(() -> FieldSolver(HostExec(false), op; solver_type = Float64)), "Float64 (solver_type) is not supported"),
-        (msg(() -> FieldSolver(HostExec(), CellOperator((1, 1); NM...))), "the lattice (1, 1) has one site"),
-        (msg(() -> set_coefficients!(FieldSolver(HostExec(), op), CellOperator((16, 16); shift = 0.1, NM...))),
-            "set_coefficients! takes new values for the same structure; the mask differs"),
-        (msg(() -> tangent!(FieldSolver(HostExec(), op), zeros(256), :mass)), "tangent!: unknown coefficient :mass"),
-        (msg(() -> tangent!(FieldSolver(HostExec(), op), zeros(256), (:robin, 1, 1, :g))), "tangent!: the low face of axis `x` has no Robin condition"))
-        @test (startswith(e, "ArgumentError: field `c`: ") && occursin(want, e)) || (println("MSG: ", e); false)
-        @test !occursin("in.mask", e)                    # the role, not the key
-    end
-    # the routes the messages give work when followed
+                (msg(() -> FieldSolver(HostExec(), CellOperator((1, 1); NM...))), "the lattice (1, 1) has one site"),
+                (
+                    msg(() -> set_coefficients!(FieldSolver(HostExec(), op), CellOperator((16, 16); shift = 0.1, NM...))),
+                    "set_coefficients! takes new values for the same structure; the mask differs",
+                ),
+                (msg(() -> tangent!(FieldSolver(HostExec(), op), zeros(256), :mass)), "tangent!: unknown coefficient :mass"),
+                (msg(() -> tangent!(FieldSolver(HostExec(), op), zeros(256), (:robin, 1, 1, :g))), "tangent!: the low face of axis `x` has no Robin condition"),
+            )
+            @test (startswith(e, "ArgumentError: field `c`: ") && occursin(want, e)) || (println("MSG: ", e); false)
+            @test !occursin("in.mask", e)                    # the role, not the key
+        end
+        # the routes the messages give work when followed
         for kw in (
                 (; linsolve = LatticePCG(; precs = LatticeMultigrid(; cycle = VCycle(2, 2)))), (; linsolve = LatticeMultigrid(; cycle = VCycle(2, 1))),
                 (; linsolve = LatticeMultigrid(; cycles = 2)), (; deflate = :auto), (; solver_type = Float32),
             )
-        @test FieldSolver(HostExec(false), op; kw...) isa FieldSolver
-    end
-    # the sentinel names the field
+            @test FieldSolver(HostExec(false), op; kw...) isa FieldSolver
+        end
+        # the sentinel names the field
         sv = FieldSolver(HostExec(), CellOperator((64, 64); shift = 1.0e-3, mask = "in.mask", value = 1.0, NM...); T = Float32, linsolve = LatticeMultigrid(; maxiters = 1))
-    copyto!(field(sv, "in.mask"), UInt8.((1:4096) .% 7 .== 0))
-    rebuild!(sv)
-    lift!(sv)
-    solve!(sv)
-    @test (@test_logs (:warn, r"^field `c`: the field solve ended") sentinel(sv))
-end
+        copyto!(field(sv, "in.mask"), UInt8.((1:4096) .% 7 .== 0))
+        rebuild!(sv)
+        lift!(sv)
+        solve!(sv)
+        @test (@test_logs (:warn, r"^field `c`: the field solve ended") sentinel(sv))
+    end
 end
 
 @testitem "tangents of Robin coefficients match finite differences" setup = [LF_solvers_faces] tags = [:latticefields, :solvers] begin
-@testset "tangents of Robin coefficients match finite differences" begin
-    rng = Xoshiro(10)
-    f = rand(rng, 256)
-    function prim(α, β, g; s = 0.1)
-        op = CellOperator((16, 16); shift = s, dirichlet = ((nothing, 1.0), (nothing, nothing)),
-            robin = (((α, β, g), nothing), (nothing, nothing)), NM...)
+    @testset "tangents of Robin coefficients match finite differences" begin
+        rng = Xoshiro(10)
+        f = rand(rng, 256)
+        function prim(α, β, g; s = 0.1)
+            op = CellOperator(
+                (16, 16); shift = s, dirichlet = ((nothing, 1.0), (nothing, nothing)),
+                robin = (((α, β, g), nothing), (nothing, nothing)), NM...
+            )
             sv = FieldSolver(HostExec(), op; T = Float64, linsolve = LatticePCG(; maxiters = 64, reltol = 1.0e-13))
-        copyto!(field(sv, "in.f"), f)
-        steady!(sv)
-        return sv, solver_solution(sv)
-    end
-    for (α, β, g) in ((0.4, 0.25, 0.3), (0.1, -1.0, 0.4))      # positive part; negative part (defect)
-        sv, u = prim(α, β, g)
-        for (which, h) in ((:alpha, 1e-6), (:beta, 1e-6), (:g, 1e-3))
-            function pert(δ)
-                if which === :alpha
-                    return prim(α + δ, β, g)[2]
-                elseif which === :beta
-                    return prim(α, β + δ, g)[2]
-                else
-                    return prim(α, β, g + δ)[2]
-                end
-            end
-            ref = (pert(h) .- pert(-h)) ./ 2h
-            @test relerr(tangent!(sv, u, (:robin, 1, 1, which)), ref) <= 1e-5
+            copyto!(field(sv, "in.f"), f)
+            steady!(sv)
+            return sv, solver_solution(sv)
         end
-        @test solver_solution(sv) ≈ u                   # restored (a warm re-solve continues from u)
+        for (α, β, g) in ((0.4, 0.25, 0.3), (0.1, -1.0, 0.4))      # positive part; negative part (defect)
+            sv, u = prim(α, β, g)
+            for (which, h) in ((:alpha, 1.0e-6), (:beta, 1.0e-6), (:g, 1.0e-3))
+                function pert(δ)
+                    if which === :alpha
+                        return prim(α + δ, β, g)[2]
+                    elseif which === :beta
+                        return prim(α, β + δ, g)[2]
+                    else
+                        return prim(α, β, g + δ)[2]
+                    end
+                end
+                ref = (pert(h) .- pert(-h)) ./ 2h
+                @test relerr(tangent!(sv, u, (:robin, 1, 1, which)), ref) <= 1.0e-5
+            end
+            @test solver_solution(sv) ≈ u                   # restored (a warm re-solve continues from u)
+        end
     end
-end
 end
 
 # The inner solvers check their keywords when built, naming the keyword
@@ -343,15 +379,15 @@ end
 # only by `FieldSolver`; `repr(DevicePCG())` is "DevicePCG(Multigrid(LatticeFields.Solvers.V(2,
 # 2), nothing, 1.0e-6, nothing, 1.0e-6), 8, 1.0e-6)".
 @testitem "the inner solvers check their keywords when built" setup = [LF_solvers_faces] tags = [:latticefields, :solvers] begin
-@testset "the inner solvers check their keywords when built" begin
-    function e(f)
-        return try
+    @testset "the inner solvers check their keywords when built" begin
+        function e(f)
+            return try
                 f(); ""
             catch err
                 err isa ArgumentError ? err.msg : sprint(showerror, err)
             end
-    end
-    for (f, want) in (
+        end
+        for (f, want) in (
                 (() -> LatticePCG(; maxiters = 0), "`LatticePCG(; maxiters = 0)`: `maxiters` is the most CG iterations per solve, an integer ≥ 1"),
                 (() -> LatticePCG(; maxiters = 2.5), "`LatticePCG(; maxiters = 2.5)`: `maxiters`"),
                 (() -> LatticePCG(; reltol = -1.0), "`LatticePCG(; reltol = -1.0)`: `reltol` is the relative residual a solve stops at, finite and > 0"),
@@ -366,21 +402,21 @@ end
                 (() -> LatticeMultigrid(; reltol = NaN), "`LatticeMultigrid(; reltol = NaN)`: `reltol`"),
                 (() -> LatticeMultigrid(; warn_tol = 0.0), "`LatticeMultigrid(; warn_tol = 0.0)`: `warn_tol`"),
             )
-        m = e(f)
-        @test startswith(m, want) || (println("MSG: ", m); false)
-    end
-    # the valid values the messages name build
+            m = e(f)
+            @test startswith(m, want) || (println("MSG: ", m); false)
+        end
+        # the valid values the messages name build
         @test LatticePCG(; maxiters = 1, reltol = 1.0e-12).maxiters == 1 && LatticeMultigrid(; cycle = VCycle(1, 1), cycles = 1, maxiters = 1).cycles == 1
-    # the display round-trips
+        # the display round-trips
         for s in (
                 LatticePCG(), LatticeMultigrid(), VCycle(2, 3), LatticePCG(; precs = LatticeMultigrid(; cycle = VCycle(3, 3)), maxiters = 12),
                 LatticeMultigrid(; cycles = 3, reltol = 1.0e-8), LatticeMultigrid(; warn_tol = 0.5),
             )
-        @test eval(Meta.parse(repr(s))) == s
-    end
-    # a default stays out of the display: an argument printed with no call is the empty call
+            @test eval(Meta.parse(repr(s))) == s
+        end
+        # a default stays out of the display: an argument printed with no call is the empty call
         @test !occursin("maxiters", repr(LatticePCG())) && !occursin("cycles", repr(LatticeMultigrid()))
-end
+    end
 end
 
 # A cycle prints as the pair `(ν₁, ν₂)`, so the display runs where
@@ -390,20 +426,20 @@ end
 # `repr` prints `cycle = V(3, 3)` (an `UndefVarError` where `V` is not bound); `V(2.0, 2)` and
 # `Multigrid(; cycle = (2, 2))` are MethodErrors; `precond = :mg` builds; `budget = true` builds.
 @testitem "inner solver keywords: cycles, preconditioners and Bool counts" setup = [LF_solvers_faces] tags = [:latticefields, :solvers] begin
-@testset "inner solver keywords: cycles, preconditioners and Bool counts" begin
-    function e(f)
-        return try
+    @testset "inner solver keywords: cycles, preconditioners and Bool counts" begin
+        function e(f)
+            return try
                 f(); ""
             catch err
                 err isa ArgumentError ? err.msg : sprint(showerror, err)
             end
-    end
-    m = Module()
+        end
+        m = Module()
         Core.eval(m, :(using LatticeFields.Solvers: LatticePCG, LatticeMultigrid))    # no `VCycle` in scope
         s = LatticePCG(; precs = LatticeMultigrid(; cycle = VCycle(3, 3)), maxiters = 12)
-    @test Core.eval(m, Meta.parse(repr(s))) == s
+        @test Core.eval(m, Meta.parse(repr(s))) == s
         @test LatticeMultigrid(; cycle = (3, 1)) == LatticeMultigrid(; cycle = VCycle(3, 1))
-    for (f, want) in (
+        for (f, want) in (
                 (() -> VCycle(2.0, 2), "`VCycle(2.0, 2)`: a V-cycle's smoothing steps ν₁, ν₂ (pre and post) are integers ≥ 1; for example `VCycle(2, 2)`"),
                 (() -> VCycle(true, 2), "`VCycle(true, 2)`: a V-cycle (the `cycle` of a `LatticeMultigrid`) needs ν₁, ν₂ ≥ 1"),
                 (() -> LatticeMultigrid(; cycle = :w), "`LatticeMultigrid(; cycle = :w)`: `cycle` is the V-cycle's smoothing steps, `(ν₁, ν₂)` or `VCycle(ν₁, ν₂)`"),
@@ -413,9 +449,9 @@ end
                 (() -> LatticeMultigrid(; cycles = true), "`LatticeMultigrid(; cycles = true)`: `cycles`"),
                 (() -> LatticeMultigrid(; maxiters = false), "`LatticeMultigrid(; maxiters = false)`: `maxiters`"),
             )
-        @test startswith(e(f), want) || (println("MSG: ", e(f)); false)
-    end
-    # the values the messages name build
+            @test startswith(e(f), want) || (println("MSG: ", e(f)); false)
+        end
+        # the values the messages name build
         @test LatticePCG(; precs = LatticeMultigrid(; cycle = (3, 3))).precs.cycle == VCycle(3, 3)
-end
+    end
 end

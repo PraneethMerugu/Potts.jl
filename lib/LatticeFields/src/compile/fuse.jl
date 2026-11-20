@@ -126,8 +126,12 @@ function fuse_residual(p::Program{N}, rule; widen16::Bool = false) where {N}
     for (j, c) in enumerate(order)
         f = p.fields[findfirst(==(c), keys)]
         wide = widen16 && f.storage == F16
-        push!(fields, FieldDecl{N}("res:" * c, f.classes, f.shape, f.symmetric, wide ? F32 : f.storage, f.levels, f.epoch,
-            Int8(1), :scratch, wide ? false : f.fixed))
+        push!(
+            fields, FieldDecl{N}(
+                "res:" * c, f.classes, f.shape, f.symmetric, wide ? F32 : f.storage, f.levels, f.epoch,
+                Int8(1), :scratch, wide ? false : f.fixed
+            )
+        )
         res[c] = Int32(nk + j)
     end
     for (j, c) in enumerate(order)

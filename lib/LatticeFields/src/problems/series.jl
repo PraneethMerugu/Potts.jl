@@ -74,15 +74,27 @@ function field_series(sol, sym)
     s = _field_series(sol, sym)
     s === nothing || return s
     ix = _lindex(sol)
-    ix isa LatticeIndex && throw(ArgumentError(string("field_series: `", _symtext(sym), "` is not a field of the ",
-        "solution's problem; its fields: ", join(("`$(_symtext(v))`" for v in ix.varsyms), ", "))))
+    ix isa LatticeIndex && throw(
+        ArgumentError(
+            string(
+                "field_series: `", _symtext(sym), "` is not a field of the ",
+                "solution's problem; its fields: ", join(("`$(_symtext(v))`" for v in ix.varsyms), ", ")
+            )
+        )
+    )
     # another solution (Potts per-MCS states): the grid of each save through SII's getter
     g = SII.getsym(sol, sym)
     nt = length(sol.t)
     nt == 0 && throw(ArgumentError("field_series: the solution has no saves"))
     v = g(sol, 1)
-    v isa AbstractArray || throw(ArgumentError(string("field_series: `", _symtext(sym), "` is not a field (it reads ",
-        "a ", typeof(v), " per save)")))
+    v isa AbstractArray || throw(
+        ArgumentError(
+            string(
+                "field_series: `", _symtext(sym), "` is not a field (it reads ",
+                "a ", typeof(v), " per save)"
+            )
+        )
+    )
     return FieldSeries{eltype(v)}((nt, size(v)...), _GetterSlice(g, sol))
 end
 struct _GetterSlice{G, S}
@@ -116,10 +128,16 @@ function _field_series(sol, sym)
         smap = ss isa SciMLBase.SavedSubsystem && ss.state_map isa AbstractDict ? ss.state_map : nothing
         if idx isa AbstractVector{<:Integer} || smap !== nothing   # (the saves hold `save_idxs` only)
             pos = idx isa AbstractVector{<:Integer} ? indexin(r, idx) : [get(smap, j, nothing) for j in r]
-            any(isnothing, pos) && throw(ArgumentError(string("`", _symtext(sym), "` is not saved whole: the ",
-                "solution saved `save_idxs` (", count(!isnothing, pos), " of the field's ", length(r), " sites). ",
-                "Save the field with `save_idxs = ", _symtext(sym), "` (or its flat indices), or read the saved ",
-                "entries as `sol.u[i]`")))
+            any(isnothing, pos) && throw(
+                ArgumentError(
+                    string(
+                        "`", _symtext(sym), "` is not saved whole: the ",
+                        "solution saved `save_idxs` (", count(!isnothing, pos), " of the field's ", length(r), " sites). ",
+                        "Save the field with `save_idxs = ", _symtext(sym), "` (or its flat indices), or read the saved ",
+                        "entries as `sol.u[i]`"
+                    )
+                )
+            )
             r = Int.(pos)
             r == first(r):last(r) && (r = first(r):last(r))
         elseif nt > 0 && length(sol.u[1]) < last(r)
@@ -154,9 +172,15 @@ end
 function (s::FieldSolution)(t::Real; idxs = nothing)
     ts = s.t
     isempty(ts) && throw(ArgumentError("the solution has no saves"))
-    tol = 1e-9 * max(abs(ts[end] - ts[1]), 1.0)
-    ts[1] - tol <= t <= ts[end] + tol || throw(ArgumentError(string("sol(t): t = ", t, " is outside the saves [",
-        ts[1], ", ", ts[end], "]")))
+    tol = 1.0e-9 * max(abs(ts[end] - ts[1]), 1.0)
+    ts[1] - tol <= t <= ts[end] + tol || throw(
+        ArgumentError(
+            string(
+                "sol(t): t = ", t, " is outside the saves [",
+                ts[1], ", ", ts[end], "]"
+            )
+        )
+    )
     k = clamp(searchsortedlast(ts, t + tol), 1, length(ts))
     u = if abs(ts[k] - t) <= tol || k == length(ts) || s.prob.kind == :map
         s.u[k]
@@ -166,8 +190,14 @@ function (s::FieldSolution)(t::Real; idxs = nothing)
     idxs === nothing && return u
     ix = s.prob.index
     slot = ix isa LatticeIndex ? get(ix.vars, ix.key(idxs), nothing) : nothing
-    slot isa FieldSlot || throw(ArgumentError(string("sol(t; idxs): `", _symtext(idxs), "` is not a state field ",
-        "of the problem")))
+    slot isa FieldSlot || throw(
+        ArgumentError(
+            string(
+                "sol(t; idxs): `", _symtext(idxs), "` is not a state field ",
+                "of the problem"
+            )
+        )
+    )
     return reshape(u[slot.range], slot.dims)
 end
 
@@ -186,9 +216,10 @@ bound sees.
 """
 const ImplicitFacts = @NamedTuple{
     keys::Vector{String}, linsolve::Vector{Any}, krylov::Any, levels::Vector{Int}, solver_type::Vector{Type},
-                                  newton::Int, given::Bool, coupled::Bool, linear::Bool, exact::Bool, exact0::Bool, switch::Bool,
-                                  iterate::Bool, seen::Bool, cyclic::Bool, h::Float64, ρin::Float64, θ::Float64, smin::Float64,
-                                  terms::Vector{String}, unseen::Vector{String}}
+    newton::Int, given::Bool, coupled::Bool, linear::Bool, exact::Bool, exact0::Bool, switch::Bool,
+    iterate::Bool, seen::Bool, cyclic::Bool, h::Float64, ρin::Float64, θ::Float64, smin::Float64,
+    terms::Vector{String}, unseen::Vector{String},
+}
 """
     LatticeStats
 
@@ -215,16 +246,19 @@ struct LatticeStats
 end
 function LatticeStats(integ::FieldIntegrator)
     f = field_stats(integ)
-    return LatticeStats(integ.windows, f.solves, substep_counts(integ), f.solves, f.budget, f.floor, f.newton_budget,
+    return LatticeStats(
+        integ.windows, f.solves, substep_counts(integ), f.solves, f.budget, f.floor, f.newton_budget,
         integ.syncs, Union{Nothing, ImplicitFacts}[implicit_facts(rt) for rt in integ.runtimes], _iwindow(integ)
     )
 end
 function Base.show(io::IO, s::LatticeStats)
     ni = count(!isnothing, s.implicit)
-    print(io, "LatticeStats(", s.nf, " windows, ", s.nsolve, " implicit solves, substep counts ", s.counts,
+    return print(
+        io, "LatticeStats(", s.nf, " windows, ", s.nsolve, " implicit solves, substep counts ", s.counts,
         s.budget > 0 ? string(", ", s.budget, " linear budget hits") : "", s.floor > 0 ? string(", ", s.floor, " floors") : "",
         s.newton_budget > 0 ? string(", ", s.newton_budget, " Newton budget hits") : "", s.syncs > 0 ? string(", ", s.syncs, " host syncs") : "",
-        ni > 0 ? string(", implicit facts of ", ni, " of ", length(s.implicit), " groups") : "", ")")
+        ni > 0 ? string(", implicit facts of ", ni, " of ", length(s.implicit), " groups") : "", ")"
+    )
 end
 """
     LatticeSolution
@@ -269,15 +303,19 @@ function _ode_solution(integ::FieldIntegrator, sp)
     else
         SciMLBase.LinearInterpolation(ts, us)
     end
-    return SciMLBase.build_solution(q, integ.alg, ts, us; interp, dense = integ.dense, retcode = integ.retcode,
-        stats = LatticeStats(integ))
+    return SciMLBase.build_solution(
+        q, integ.alg, ts, us; interp, dense = integ.dense, retcode = integ.retcode,
+        stats = LatticeStats(integ)
+    )
 end
 function _final_problem(integ::FieldIntegrator, sp)
     lp = sp.p
     lp isa LatticeParameters || return sp
     ins = Pair{String, Any}[k => (v === nothing ? v : _read_input(integ, k)) for (k, v) in lp.inputs]
-    q = LatticeParameters(copy(integ.p), eltype(integ.tables)[k => copy(v) for (k, v) in integ.tables], ins;
-        tick = _tick(integ), fns = lp.fns)
+    q = LatticeParameters(
+        copy(integ.p), eltype(integ.tables)[k => copy(v) for (k, v) in integ.tables], ins;
+        tick = _tick(integ), fns = lp.fns
+    )
     T = sp isa SciMLBase.DiscreteProblem ? SciMLBase.DiscreteProblem : SciMLBase.ODEProblem
     idx = getfield(integ, :saveidxs)
     # (`save_idxs`: the saves hold those indices; the time-first reads find the fields in them)
@@ -331,8 +369,14 @@ function (sol::LatticeSolution)(t::Real, x::Real, ys::Real...; idxs = nothing)
     u = sol(t)
     pt = (x, ys...)
     cs = [c for c in ix.coordsyms]
-    length(cs) == length(pt) || throw(ArgumentError(string("sol(t, x…): the lattice has ", length(cs),
-        " coordinates; got ", length(pt))))
+    length(cs) == length(pt) || throw(
+        ArgumentError(
+            string(
+                "sol(t, x…): the lattice has ", length(cs),
+                " coordinates; got ", length(pt)
+            )
+        )
+    )
     ranges = Tuple(ix.coords[ix.key(c)] for c in cs)
     at(v) = (slot = ix.vars[ix.key(v)]; _multilinear(reshape(view(u, slot.range), slot.dims), ranges, pt))
     idxs === nothing && return [at(v) for v in ix.varsyms]
@@ -358,9 +402,10 @@ function _multilinear(g, ranges, pt)
 end
 # (an ensemble's statistics: the sums; the counts of the first)
 function Base.merge(a::LatticeStats, b::LatticeStats)
-    return LatticeStats(a.nf + b.nf, a.nsolve + b.nsolve, a.counts, a.solves + b.solves,
-            a.budget + b.budget, a.floor + b.floor, a.newton_budget + b.newton_budget, a.syncs + b.syncs, a.implicit, a.dt
-        )
+    return LatticeStats(
+        a.nf + b.nf, a.nsolve + b.nsolve, a.counts, a.solves + b.solves,
+        a.budget + b.budget, a.floor + b.floor, a.newton_budget + b.newton_budget, a.syncs + b.syncs, a.implicit, a.dt
+    )
 end
 Base.:(==)(a::LatticeStats, b::LatticeStats) = all(f -> getfield(a, f) == getfield(b, f), fieldnames(LatticeStats))
 Base.isequal(a::LatticeStats, b::LatticeStats) = all(f -> isequal(getfield(a, f), getfield(b, f)), fieldnames(LatticeStats))

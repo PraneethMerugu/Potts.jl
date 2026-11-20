@@ -53,12 +53,16 @@ a Float64 lane is a build error naming the fields when the backend has no Float6
 function check_types(p::Program, k::Kernel, o::CompileOptions)
     o.float64_ok && return nothing
     V = value_type(something(o.T, Float32))
-    V <: Union{Float16, Float32} || irerror("kernel `", k.key, "` (fields ",
+    V <: Union{Float16, Float32} || irerror(
+        "kernel `", k.key, "` (fields ",
         join(unique(p.fields[s.access.field].key for s in k.stores), ", "), "): compute value type ",
-        V, " (from ", o.T, ") on a backend without Float64")
+        V, " (from ", o.T, ") on a backend without Float64"
+    )
     for a in k.accesses
-        p.fields[a.field].storage == F64 && irerror("field `", p.fields[a.field].key,
-            "` has lane F64, which this backend does not support")
+        p.fields[a.field].storage == F64 && irerror(
+            "field `", p.fields[a.field].key,
+            "` has lane F64, which this backend does not support"
+        )
     end
     return nothing
 end
@@ -130,8 +134,10 @@ function kernel_args(p::Program, k::Kernel)
     end
     lanes = sort!(unique!([x[1] for x in s]))
     return lanes,
-    [[(x[3], x[4]) for x in sort!([x for x in s if x[1] == l]; by = x -> (x[2], x[4]))]
-     for l in lanes]
+        [
+            [(x[3], x[4]) for x in sort!([x for x in s if x[1] == l]; by = x -> (x[2], x[4]))]
+            for l in lanes
+        ]
 end
 _loads(k::Kernel) = ((n, k.accesses[n.imm]) for n in k.nodes if n.op == LOAD)
 
@@ -166,7 +172,7 @@ struct Ctx{N, X}
     depth::Int
 end
 function Ctx(p::Program{N}, k, o, L, names, index) where {N}
-    Ctx(p, k, o, L, names, index, :v, ntuple(_ -> 0, N), 0)
+    return Ctx(p, k, o, L, names, index, :v, ntuple(_ -> 0, N), 0)
 end
 vname(c::Ctx, i) = Symbol(c.prefix, i)
 
@@ -322,9 +328,13 @@ function _nodeexpr(c::Ctx, i)
         f = c.p.fields[acc.field]
         x = _ref(c, c.names[(acc.field, :cur)], c.index(c, acc))
         isfloat(f.storage) && _lane_holds(f, c.o) != T && (x = :(lanecast($T, $x)))
-        acc.policy == ZERO && (x = :(let y = $x
-            ifelse($(_inside(c, acc)), y, zero(y))
-        end))
+        acc.policy == ZERO && (
+            x = :(
+                let y = $x
+                    ifelse($(_inside(c, acc)), y, zero(y))
+                end
+            )
+        )
         return x
     elseif n.op == INSIDE_OP
         return _inside(c, k.accesses[n.imm])
@@ -366,11 +376,15 @@ function _emit!(out, c::Ctx, i, done::Set{Int32})
             push!(blk, vname(c, j))
             Expr(:block, blk...)
         end
-        push!(out, :($v = if $(vname(c, cnd))
-            $(arms[1])
-        else
-            $(arms[2])
-        end))
+        push!(
+            out, :(
+                $v = if $(vname(c, cnd))
+                    $(arms[1])
+                else
+                    $(arms[2])
+                end
+            )
+        )
     else
         push!(out, :($v = $(_nodeexpr(c, i))))
     end
@@ -412,10 +426,16 @@ function _restrict(c::Ctx{N}, i) where {N}
         pred = if isempty(tails)
             true
         else
-            foldl((x, y) -> :($x & $y),
-                [:(($(Symbol(:x, d)) == $(_dim(c, lev, d))) &
-                   ($(_dim(c, lev - 1, d)) > $(_I(c, 2)) * $(_dim(c, lev, d))))
-                 for d in tails])
+            foldl(
+                (x, y) -> :($x & $y),
+                [
+                    :(
+                        ($(Symbol(:x, d)) == $(_dim(c, lev, d))) &
+                            ($(_dim(c, lev - 1, d)) > $(_I(c, 2)) * $(_dim(c, lev, d)))
+                    )
+                        for d in tails
+                ]
+            )
         end
         if n.imm == 2
             push!(vals, term)
@@ -423,11 +443,13 @@ function _restrict(c::Ctx{N}, i) where {N}
             continue
         end
         if !isempty(tails)
-            term = :(if $pred
-                $term
-            else
-                $(zero(T))
-            end)
+            term = :(
+                if $pred
+                    $term
+                else
+                    $(zero(T))
+                end
+            )
         end
         acc = if acc === nothing
             term
@@ -441,10 +463,14 @@ function _restrict(c::Ctx{N}, i) where {N}
     return acc
 end
 function deps_k(k::Kernel, i)
-    (n = k.nodes[i]; a = collect(Int32, args(k, n));
-        n.op in (LOAD, INSIDE_OP) && (acc = k.accesses[n.imm];
+    (
+        n = k.nodes[i]; a = collect(Int32, args(k, n));
+        n.op in (LOAD, INSIDE_OP) && (
+            acc = k.accesses[n.imm];
             acc.comp.cond != 0 && push!(a, acc.comp.cond);
-            acc.offset.cond != 0 && push!(a, acc.offset.cond)); a)
+            acc.offset.cond != 0 && push!(a, acc.offset.cond)
+        ); a
+    )
 end
 
 """
@@ -473,9 +499,11 @@ Loads of single-buffer fields this kernel also writes; emitted before any store
 """
 function loads_first(c::Ctx)
     w = Set(s.access.field for s in c.k.stores if c.p.fields[s.access.field].buffers == 1)
-    return Int32[i
-                 for (i, n) in enumerate(c.k.nodes)
-                 if n.op == LOAD && c.k.accesses[n.imm].field in w]
+    return Int32[
+        i
+            for (i, n) in enumerate(c.k.nodes)
+            if n.op == LOAD && c.k.accesses[n.imm].field in w
+    ]
 end
 
 """
@@ -503,11 +531,15 @@ function _coords(c::Ctx{N}) where {N}
         for d in (N - 1):-1:1
             lin = :($(Symbol(:x, d)) - $(_I(c, 1)) + $(ns[d]) * ($lin))
         end
-        return Any[[:($(Symbol(:x, d)) = x[$d] % $(c.o.I)) for d in 1:N]...;
-                   :(s = $lin + $(_I(c, 1)))]
+        return Any[
+            [:($(Symbol(:x, d)) = x[$d] % $(c.o.I)) for d in 1:N]...;
+            :(s = $lin + $(_I(c, 1)))
+        ]
     end
-    c.o.debug && return Any[:(ci = CartesianIndices(($([:(Int($n)) for n in ns]...),))[s]);
-               [:($(Symbol(:x, d)) = ci[$d]) for d in 1:N]...]
+    c.o.debug && return Any[
+        :(ci = CartesianIndices(($([:(Int($n)) for n in ns]...),))[s]);
+        [:($(Symbol(:x, d)) = ci[$d]) for d in 1:N]...
+    ]
     out = Any[:(t = s - $(_I(c, 1)))]
     for d in 1:N
         push!(out, d < N ? :((t, r) = divrem(t, $(ns[d]))) : :(r = t))
@@ -520,9 +552,13 @@ function _guard(c::Ctx{N}) where {N}
     sp = c.k.space
     sp.kind == MASKED &&
         return :($(_ref(c, c.names[(c.p.masks[sp.mask].field, :cur)], :s)) != 0)
-    ts = [:(($(Symbol(:x, d)) > $(_I(c, sp.inset[d][1]))) &
-            ($(Symbol(:x, d)) <= $(_dim(c, sp.level, d)) - $(_I(c, sp.inset[d][2]))))
-          for d in 1:N]
+    ts = [
+        :(
+            ($(Symbol(:x, d)) > $(_I(c, sp.inset[d][1]))) &
+                ($(Symbol(:x, d)) <= $(_dim(c, sp.level, d)) - $(_I(c, sp.inset[d][2])))
+        )
+            for d in 1:N
+    ]
     return foldl((x, y) -> :($x & $y), ts)
 end
 
@@ -575,19 +611,25 @@ function emit(p::Program{N}, k::Kernel{N}, o::CompileOptions; stages = LOWERING)
         push!(body, :($(Symbol(:rv, q)) = $(vname(c, r.value))))
     end
     needx = c.L.strategy == :cartesian || o.debug || k.space.kind == RESTRICTED ||
-            any(n -> n.op in (COORD, INSIDE_OP), k.nodes) ||
-            any(a -> !zero_offset(a), k.accesses)
+        any(n -> n.op in (COORD, INSIDE_OP), k.nodes) ||
+        any(a -> !zero_offset(a), k.accesses)
     pre = needx ? _coords(c) : Any[]
     conds = Any[]
     k.space.kind != FULL && push!(conds, _guard(c))
     k.gate != 0 && pushfirst!(conds, vname(c, k.gate))
     if !isempty(conds)
-        body = Any[Expr(:if, foldl((x, y) -> :($x & $y), conds), Expr(:block, body...),
-            Expr(:block, stages.passthrough(c)...))]
+        body = Any[
+            Expr(
+                :if, foldl((x, y) -> :($x & $y), conds), Expr(:block, body...),
+                Expr(:block, stages.passthrough(c)...)
+            ),
+        ]
     end
     if L.strategy == :cartesian
-        inb = foldl((x, y) -> :($x & $y),
-            [:($(Symbol(:x, d)) <= $(_dim(c, k.space.level, d))) for d in 1:N])
+        inb = foldl(
+            (x, y) -> :($x & $y),
+            [:($(Symbol(:x, d)) <= $(_dim(c, k.space.level, d))) for d in 1:N]
+        )
         body = Any[Expr(:if, inb, Expr(:block, body...))]
     end
     if !isempty(k.reductions)
@@ -596,8 +638,11 @@ function emit(p::Program{N}, k::Kernel{N}, o::CompileOptions; stages = LOWERING)
         sig = L.strategy == :cartesian ? (:x, :S, :P, :G) : (:s, :S, :P, :G)
         # Exec passes the site as `Int` (`@index` and the host loop); the body computes in `I`
         L.strategy == :cartesian || pushfirst!(head, :(s = s % $(o.I)))
-        ex = Expr(:->, Expr(:tuple, sig...), Expr(
-            :block, head..., gate..., pre..., body..., :(return nothing)))
+        ex = Expr(
+            :->, Expr(:tuple, sig...), Expr(
+                :block, head..., gate..., pre..., body..., :(return nothing)
+            )
+        )
     end
     return _strip!(ex), L
 end
@@ -637,8 +682,10 @@ function _blocks(c::Ctx{N}, head, gate, pre, body) where {N}
         end
         push!(tree, :(@inbounds lds[item + $off] = $comb))         # t + rstride ≤ 256
         A = c.names[(r.target, :table)]
-        push!(fin,
-            :(@inbounds $A[clamp(blk, one(blk), length($A) % typeof(blk))] = lds[1 + $off]))
+        push!(
+            fin,
+            :(@inbounds $A[clamp(blk, one(blk), length($A) % typeof(blk))] = lds[1 + $off])
+        )
     end
     R > 0 || throw(AssertionError("_blocks called without reductions (internal error: please report it)"))
     site = Any[pre..., body...]
@@ -661,6 +708,8 @@ function _blocks(c::Ctx{N}, head, gate, pre, body) where {N}
             end
         end
     end
-    return Expr(:->, :(ph, g, it, lds, S, P, G),
-        Expr(:block, head..., gate..., :(nsite = $nsite), ex.args..., :(return nothing)))
+    return Expr(
+        :->, :(ph, g, it, lds, S, P, G),
+        Expr(:block, head..., gate..., :(nsite = $nsite), ex.args..., :(return nothing))
+    )
 end

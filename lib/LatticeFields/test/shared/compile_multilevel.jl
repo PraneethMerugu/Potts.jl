@@ -3,14 +3,14 @@ using LatticeFields.IR: reduce!, gate!, table!, table, constant, CLAMP, I32
 
 function ml_msg(f)
     return try
-            f()
-            ""
-        catch e
-            sprint(showerror, e)
-        end
+        f()
+        ""
+    catch e
+        sprint(showerror, e)
+    end
 end
 function ml_modes(pb, inputs; out = "v")
-    map((CompileOptions(), CompileOptions(; index = :linear), debug_options())) do o
+    return map((CompileOptions(), CompileOptions(; index = :linear), debug_options())) do o
         s, sp = build(pb; options = o)
         st = HostStore(s)
         foreach(((k, v),) -> copyto!(current(st, s, k), v), inputs)
@@ -23,7 +23,7 @@ end
 Children of coarse index `X` on an axis of `nf` fine sites (n ÷ 2 convention, oracle).
 """
 function kids(X, nf)
-    if nf == 1
+    return if nf == 1
         X:X
     elseif X == nf ÷ 2 && isodd(nf)
         (2X - 1):(2X + 1)

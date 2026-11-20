@@ -33,8 +33,10 @@ function _verify_node(p::Program, k::Kernel, i::Int, n::Node)
         end
         f = p.fields[a.field]
         n.op == LOAD && n.type != loadtype(f.storage) &&
-            irerror(where_(), ": type ", n.type,
-                " for a load of lane ", f.storage)
+            irerror(
+            where_(), ": type ", n.type,
+            " for a load of lane ", f.storage
+        )
         1 <= a.comp.a <= ncomp(f) && 1 <= a.comp.b <= ncomp(f) ||
             irerror(where_(), ": component out of range for `", f.key, "`")
     elseif n.op == PARAM
@@ -76,13 +78,16 @@ function verify(p::Program)
             ok = isfloat(f.storage) ? t == REAL : t == f.storage
             ok || irerror(
                 "kernel `", k.key, "`: store of a ", t, " value into lane ", f.storage,
-                " of `", f.key, "` (add an explicit cast)")
+                " of `", f.key, "` (add an explicit cast)"
+            )
         end
         for r in k.reductions
             0 < r.value <= length(k.nodes) && k.nodes[r.value].type == REAL &&
-            1 <= r.target <= length(p.tables) ||
-                irerror("kernel `", k.key, "`: bad reduction (value v", r.value,
-                    ", target #", r.target, ")")
+                1 <= r.target <= length(p.tables) ||
+                irerror(
+                "kernel `", k.key, "`: bad reduction (value v", r.value,
+                ", target #", r.target, ")"
+            )
         end
         k.gate == 0 || 0 < k.gate <= length(k.nodes) && k.nodes[k.gate].type == BOOL ||
             irerror("kernel `", k.key, "`: the gate v", k.gate, " is not a Bool node")

@@ -62,9 +62,13 @@ The semantic residual program of group `g` for implicit algorithm `alg` (`fuse_r
 its rate program, once per residual key; thread-safe).
 """
 function residual_program(g::FieldGroup, alg::AbstractImplicitFieldAlgorithm)
-    return lock(() -> get!(() -> semantic(fuse_residual(g.spec.rate, residual_rule(alg); widen16 = true)), g.programs,
-        (:residual, residual_key(alg))),
-        _PLANS_LOCK)
+    return lock(
+        () -> get!(
+            () -> semantic(fuse_residual(g.spec.rate, residual_rule(alg); widen16 = true)), g.programs,
+            (:residual, residual_key(alg))
+        ),
+        _PLANS_LOCK
+    )
 end
 # … of Crank–Nicolson's right side (`QRule`)
 function _q_program(g::FieldGroup)
@@ -76,13 +80,17 @@ function _jac_program(g::FieldGroup, op::OperatorSpec)
     return lock(() -> get!(() -> semantic(op.jac), g.programs, :jac), _PLANS_LOCK)
 end
 # a plan of the kernels `ids` of program `s` (cached in the group's plans by `tag`)
-function _implicit_plan(g::FieldGroup, s::Program, tag, ids::Vector{Int}, ::Type{V}, backend, o::CompileOptions;
-        C::Type = V) where {V}
+function _implicit_plan(
+        g::FieldGroup, s::Program, tag, ids::Vector{Int}, ::Type{V}, backend, o::CompileOptions;
+        C::Type = V
+    ) where {V}
     return lock(_PLANS_LOCK) do
-        first(get!(g.plans, (tag, V, C, Int[], ids)) do
-            p = plan(s, ids; options = _options(o, V, backend; clock = clock_slot(g.spec), C, s))
-            (p, p)
-        end)
+        first(
+            get!(g.plans, (tag, V, C, Int[], ids)) do
+                p = plan(s, ids; options = _options(o, V, backend; clock = clock_slot(g.spec), C, s))
+                (p, p)
+            end
+        )
     end
 end
 
@@ -141,7 +149,7 @@ end
 # (`c.gate`, setting `δ := 0` and skipping solves). Under automatic mode, a 1-step group runs
 # unchecked; under `LatticeNewton`, `max_iter = 1` runs the check.
 const NB = 256
-const NEWTON_EPS = 1e-3
+const NEWTON_EPS = 1.0e-3
 const STATUS_CONVERGED = 8
 const STATUS_CLAMP = 9                  # the first window whose shift was clamped (0: none)
 # the larger of two norms; a NaN stays
@@ -504,7 +512,7 @@ mutable struct ImplicitCache{RS, WK, JL, W, BK, QL, GT, CS, KT, AT, RT, GP, GC, 
     iterate::Bool                       # a row's operator reads its iterate: rebuilt every Newton iteration
     check::Bool                         # the Newton check runs (more than one iteration)
     flip::Bool                          # the automatic count of an exact switch group: its second
-                                        #   iteration is a flip pass, not a convergence test (no budget hit)
+    #   iteration is a flip pass, not a convergence test (no budget hit)
     auto::Bool                          # `nlsolve === nothing`: automatic count and criterion
     check_div::Bool                     # abort on Newton divergence growth (`LatticeNewton(; check_div)`)
     fail_budget::Bool                   # end run with `ConvergenceFailure` on Newton budget hit (`LatticeNewton`)
@@ -516,7 +524,7 @@ mutable struct ImplicitCache{RS, WK, JL, W, BK, QL, GT, CS, KT, AT, RT, GP, GC, 
     ρin::Float64                        # … their bound `ρ_adv + κ_in + ρ_rob` at the bound parameters
     θ::Float64                          # … the face-wise ratio of the diffusion left out of a scaled row
     smin::Float64                       # the smallest shift the operator keeps with no time-step term (the
-                                        #   decay; NaN when a row varies by site): QuasiSteady's count
+    #   decay; NaN when a row varies by site): QuasiSteady's count
     keys::Vector{String}
     cyclic::Bool
     rebuilds::Int                       # hierarchy rebuilds so far (a test reads it)
@@ -562,13 +570,25 @@ function _implicit_eltype(u, key, alg, V)
     T = eltype(u)
     T <: Float16 && V in (Float32, Float64) && return V
     T in (Float32, Float64) && return T
-    T <: Float16 && throw(ArgumentError(string(_algname(alg), ": the field `", key, "` holds Float16 and the problem's ",
-        "value type is Float16; an implicit solve runs in Float32 or Float64: give the problem T = Float32 and the ",
-        "field `lattice_storage = Float16` (it is then solved in Float32, each update rounded to Float16), or step it ",
-        "with `ExplicitEuler`")))
-    throw(ArgumentError(string(_algname(alg), ": the field `", key, "` holds ", _typetext(T), "; an implicit solve runs in ",
+    T <: Float16 && throw(
+        ArgumentError(
+            string(
+                _algname(alg), ": the field `", key, "` holds Float16 and the problem's ",
+                "value type is Float16; an implicit solve runs in Float32 or Float64: give the problem T = Float32 and the ",
+                "field `lattice_storage = Float16` (it is then solved in Float32, each update rounded to Float16), or step it ",
+                "with `ExplicitEuler`"
+            )
+        )
+    )
+    throw(
+        ArgumentError(
+            string(
+                _algname(alg), ": the field `", key, "` holds ", _typetext(T), "; an implicit solve runs in ",
                 "Float32 or Float64 (BigFloat through the implicit solve is not supported yet). ",
-        "Give the field `lattice_storage = Float32` or Float64, or step it with `ExplicitEuler`")))
+                "Give the field `lattice_storage = Float32` or Float64, or step it with `ExplicitEuler`"
+            )
+        )
+    )
 end
 # a number type in messages: a ForwardDiff Dual by its value type, not its full tag
 _typetext(T::Type) = (T <: Real && T !== value_type(T)) ? string("ForwardDiff Duals of ", value_type(T)) : string(T)
@@ -622,16 +642,22 @@ function _numeric_operator(s::Program{N}, r::RowOperator, id, p, h, γ, mask::Bo
     rob = ntuple(a -> _robin_faces(s, id, a, p), N)
     # a steady solve (γh = ∞) takes a Robin face's negative part into its operator too: with no
     # time-step shift to keep dominant, it stays symmetric and exact
-    op = Solvers.CellOperator(dims; periodic = s.periodic, face, shift, mask = mask ? "mask" : nothing, value = 0.0,
-        dirichlet = dir, robin = rob, name = r.key, robin_full = isinf(γ * h), hex = _ishex(s))
+    op = Solvers.CellOperator(
+        dims; periodic = s.periodic, face, shift, mask = mask ? "mask" : nothing, value = 0.0,
+        dirichlet = dir, robin = rob, name = r.key, robin_full = isinf(γ * h), hex = _ishex(s)
+    )
     return op, shift > s0
 end
 # the parameters the bounds of `inexact_bounds` and `_robin_bounds` read: with the store's
 # tables when a row has a bound that may read them (`bounds`, `facemax`), else `p` itself (no copy)
 function _bound_params(st::FieldStore, s::Program, op::OperatorSpec, keys, p)
     isempty(s.tables) && return p
-    any(r -> r.key in keys && (!isempty(r.bounds) || r.facemax !== nothing || r.jmax !== nothing ||
-                               any(c -> !(c isa Coef), r.adv)), op.rows) || return p
+    any(
+        r -> r.key in keys && (
+            !isempty(r.bounds) || r.facemax !== nothing || r.jmax !== nothing ||
+                any(c -> !(c isa Coef), r.adv)
+        ), op.rows
+    ) || return p
     return ParamsTables(p, Pair{String, Vector{Float64}}[s.tables[j].key => _primal64(Array(st.tables[j])) for j in eachindex(s.tables)])
 end
 # the rows whose Robin faces' negative part stays out of the operator: every row of a time
@@ -666,8 +692,12 @@ function _robin_bounds(s::Program{N}, op::OperatorSpec, keys, p) where {N}
                     if isfinite(w * dm)
                         m = max(m, w * abs(dm))
                     else
-                        push!(texts, string("the Robin face of `", r.key, "` on axis ", a, " (", k == 1 ? "low" : "high",
-                            " side), whose diagonal ", isnan(dm) ? "may be negative at some site" : "is negative", " at these parameters,"))
+                        push!(
+                            texts, string(
+                                "the Robin face of `", r.key, "` on axis ", a, " (", k == 1 ? "low" : "high",
+                                " side), whose diagonal ", isnan(dm) ? "may be negative at some site" : "is negative", " at these parameters,"
+                            )
+                        )
                     end
                 else
                     m = max(m, abs(_coefsum(r.faces[a], p)) * abs(dm))
@@ -752,8 +782,10 @@ function _alias_store(st::FieldStore, s::Program, prog::Program; own = Dict{Stri
             throw(ArgumentError("the implicit program's field `$(f.key)` has no array in the group's store"))
         end
     end
-    tables = Any[(j = findfirst(x -> x.key == t.key, s.tables); j === nothing ? _zeros(st.backend, Float64, 1) : st.tables[j])
-                 for t in prog.tables]
+    tables = Any[
+        (j = findfirst(x -> x.key == t.key, s.tables); j === nothing ? _zeros(st.backend, Float64, 1) : st.tables[j])
+            for t in prog.tables
+    ]
     return FieldStore(st.backend, bufs, ones(Int, length(bufs)), tables)
 end
 
@@ -766,8 +798,10 @@ function _row_kernels(rs::Program, key, init)
     for (i, k) in enumerate(rs.kernels)
         k.key in init && continue
         w = writes(k)
-        k.key == "rate:" * key || (!any(f -> f in st || startswith(rs.fields[f].key, "res:"), w) &&
-                                   !startswith(k.key, "rate:")) || continue
+        k.key == "rate:" * key || (
+            !any(f -> f in st || startswith(rs.fields[f].key, "res:"), w) &&
+                !startswith(k.key, "rate:")
+        ) || continue
         push!(out, i)
     end
     return out
@@ -896,7 +930,8 @@ function bind_cache(
         if r.local_only
             sv, numeric = nothing, nothing
             sh = r.field ? _zeros(st.backend, T, nsite) : T(max(1 / hγ - _coefsum(r.jloc, p), 1 / (2hγ)))
-            row = ImplicitRow(key, res, (u[1], u[2]), resarr, nothing, (u[1], u[1]), Int32(0), typeof(u[1])[], nothing,
+            row = ImplicitRow(
+                key, res, (u[1], u[2]), resarr, nothing, (u[1], u[1]), Int32(0), typeof(u[1])[], nothing,
                 nothing, nothing, sh, mask, mval, mvf, lo, nothing, jarr("j"), nothing, nothing, nothing, r.field && r.domain ? jarr("dom") : nothing,
                 r, nothing, part, cnt, row_off, hist, q, prev, nothing, nothing
             )
@@ -921,8 +956,10 @@ function bind_cache(
             f = r.scaled ? _zeros(st.backend, T, nsite) : nothing
             jj, mm, dd, dm = jarr("j"), r.scaled ? jarr("m") : nothing, jarr("d"), r.domain ? jarr("dom") : nothing
             nf = _ishex(s) ? 3 : N                   # (a hexagonal lattice: three face directions)
-            cop = Solvers.CellOperator(dims; periodic = s.periodic, face = ntuple(a -> "w$a", nf), shift = "s",
-                mask = usemask ? "mask" : nothing, value = r.scaled ? "v" : 0.0, name = key, hex = _ishex(s))
+            cop = Solvers.CellOperator(
+                dims; periodic = s.periodic, face = ntuple(a -> "w$a", nf), shift = "s",
+                mask = usemask ? "mask" : nothing, value = r.scaled ? "v" : 0.0, name = key, hex = _ishex(s)
+            )
             ins = Any["in.f" => (r.scaled ? f : resarr), "s" => sh]
             for a in 1:nf
                 push!(ins, "w$a" => jarr("w$a"))
@@ -990,9 +1027,9 @@ function bind_cache(
     # (behind a barrier: a group that is not coupled compiles none of it)
     cs = if coupled
         Base.inferencebarrier(_bind_coupled)(
-                rows, _krylov(alg.linsolve), st, s, rs, rst, sps, rcurss, swaps, keys,
-                g.spec.init, backend, p, c, op, alg, auto_newton
-            )
+            rows, _krylov(alg.linsolve), st, s, rs, rst, sps, rcurss, swaps, keys,
+            g.spec.init, backend, p, c, op, alg, auto_newton
+        )
     else
         nothing
     end
@@ -1032,7 +1069,8 @@ function bind_cache(
     # residuals are zeroed, their solves are skipped/done at setup, and the update adds 0 (including
     # Robin-defect rows and generic-path rows), so the field is the host's early-stop form.
     gate = !Exec.ishost(backend) && (newton > 1 || check) ? _zeros(st.backend, UInt32, 1) : nothing
-    cache = ImplicitCache(rt, each(length(rt)), jac, newton, h, γ, true, true, jumps, moving, timed, word, op, exact0, exact,
+    cache = ImplicitCache(
+        rt, each(length(rt)), jac, newton, h, γ, true, true, jumps, moving, timed, word, op, exact0, exact,
         iterate, check, _flips(alg, exact, switch), auto_newton, check_div, fail_budget, κ, abstol, reltol, switch, seen, ρin, b.θ, smin, keys,
         cyclic, 0, rebind, backend, qres, gate, cs, gpart, gcnt, ghist, gnbt
     )
@@ -1163,12 +1201,14 @@ function _warn_antidiffusion(keys, texts, alg)
     fs = join(("`$k`" for k in keys), ", ")
     for (text, mtext, v) in texts
         _warn_once(string("implicit-antidiffusion#", join(keys, ","), "#", text, "#", v)) || continue
-        @warn string(_algname(alg), ": field", length(keys) == 1 ? " " : "s ", fs, ": in ", text, " the multiplier ",
+        @warn string(
+            _algname(alg), ": field", length(keys) == 1 ? " " : "s ", fs, ": in ", text, " the multiplier ",
             mtext, " of the diffusion is negative at some site centers (", isnan(v) ? "no bound sees its sign" :
-            string("down to ", round(v; sigdigits = 3)), "): a negative diffusion is anti-diffusion, an ill-posed ",
+                string("down to ", round(v; sigdigits = 3)), "): a negative diffusion is anti-diffusion, an ill-posed ",
             "problem, and the implicit operator leaves it out there, so Newton iterations correct it (a budget hit is ",
             "warned, a divergence ends the run with `ReturnCode.ConvergenceFailure`); keep the multiplier ≥ 0 at every ",
-            "site, or step an intentionally signed coefficient with `ExplicitEuler`, with care")
+            "site, or step an intentionally signed coefficient with `ExplicitEuler`, with care"
+        )
     end
     return nothing
 end
@@ -1176,7 +1216,8 @@ function _warn_unseen(keys, unseen, alg)
     fs = join(("`$k`" for k in keys), ", ")
     for u in unique(unseen)
         _warn_once(string("implicit-unseen#", join(keys, ","), "#", u)) || continue
-        @warn string(_algname(alg), ": field", length(keys) == 1 ? " " : "s ", fs, ": ", u, " is not in the implicit ",
+        @warn string(
+            _algname(alg), ": field", length(keys) == 1 ? " " : "s ", fs, ": ", u, " is not in the implicit ",
             "operator and no bound sees it, so it is corrected by Newton iterations (`",
             alg isa QuasiSteady ? QS_NEWTON_CAP : 4, "`), checked on the device at every ",
             alg isa QuasiSteady ? "window" : "substep", ": a budget hit is counted and warned with its route, a divergence ends the run with ",
@@ -1298,8 +1339,12 @@ end
 function _rebuild_row!(r::ImplicitRow, backend, h, γ, word, window)
     if r.s isa AbstractArray
         T = eltype(r.s)
-        Exec.launch!(backend, _be_shift_body!, length(r.s), (r.s, r.j, r.d, r.m, r.smask, r.rmask, r.dom,
-            T(1 / (γ * h)), T(1 / (2γ * h)), word, window))
+        Exec.launch!(
+            backend, _be_shift_body!, length(r.s), (
+                r.s, r.j, r.d, r.m, r.smask, r.rmask, r.dom,
+                T(1 / (γ * h)), T(1 / (2γ * h)), word, window,
+            )
+        )
     end
     if r.solver !== nothing
         Solvers.rebuild!(r.solver)
@@ -1343,7 +1388,9 @@ function (r::ImplicitRow)(a)
     src = first ? r.bufs[par] : dst
     n = length(dst)
     if r.solver === nothing && r.lin === nothing
-        Exec.launch!(backend, _be_update_body!, n, (dst, src, nothing, nothing, nothing, r.resarr, r.s, r.mask, r.mval,
+        Exec.launch!(
+            backend, _be_update_body!, n, (
+                dst, src, nothing, nothing, nothing, r.resarr, r.s, r.mask, r.mval,
                 r.mvf, r.lo, last, gate,
             )
         )
@@ -1358,7 +1405,9 @@ function (r::ImplicitRow)(a)
     end
     x = _row_correction!(r, backend, γ, h; word, window, gate)
     r.scal === nothing || Exec.launch!(backend, _be_status_body!, 1, (word, r.scal, Int32(window), isinf(h), gate))
-    Exec.launch!(backend, _be_update_body!, n, (dst, src, x, r.smask, r.v, nothing, nothing, r.mask, r.mval, r.mvf,
+    Exec.launch!(
+        backend, _be_update_body!, n, (
+            dst, src, x, r.smask, r.v, nothing, nothing, r.mask, r.mval, r.mvf,
             r.lo, last, gate,
         )
     )
@@ -1378,8 +1427,12 @@ function _row_correction!(r::ImplicitRow, backend, γ, h; word = nothing, window
     sv = r.solver
     if r.f !== nothing
         T = eltype(r.f)
-        Exec.launch!(backend, _be_rhs_body!, length(r.f), (r.f, r.v, r.resarr, r.j, r.m, r.smask, r.rmask, r.dom, T(1 / (γ * h)),
-            T(1 / (2γ * h))))
+        Exec.launch!(
+            backend, _be_rhs_body!, length(r.f), (
+                r.f, r.v, r.resarr, r.j, r.m, r.smask, r.rmask, r.dom, T(1 / (γ * h)),
+                T(1 / (2γ * h)),
+            )
+        )
     end
     if sv === nothing
         rhs = r.f !== nothing ? r.f : r.resarr
@@ -1538,7 +1591,9 @@ function _stage_iterations!(c::ImplicitCache, rt::GroupRuntime, t1::Float64, γ:
         # (the automatic count's flip pass of a switch counts no budget hit, M7)
         c.gate === nothing ||
             Exec.launch!(c.backend, _be_gate_iter_body!, 1, (c.word, c.gate, UInt32(length(c.rows)), it == 1))
-        _iterate!(c.cs, c, (par, it == 1, t1, hγ, k, it == c.newton, w, c.backend, 1.0, c.word, it, c.check,
+        _iterate!(
+            c.cs, c, (
+                par, it == 1, t1, hγ, k, it == c.newton, w, c.backend, 1.0, c.word, it, c.check,
                 it == c.newton && !c.flip, c.gate, c.check_div, c.fail_budget, c.auto, c.κ, c.abstol, c.reltol, c.gpart, c.gcnt,
             )
         )
@@ -1618,9 +1673,13 @@ end
 # rows' coefficients set (`set_coefficients!`, no recompile); the hierarchy rebuilds at the
 # next window. In two parts as `rebind_launches`/`install_launches!`: the first may throw.
 function rebind_launches(rt::GroupRuntime{<:FieldStore, <:AbstractImplicitFieldAlgorithm}, p)
-    steps = (_bind_steps(rt.backend, rt.program, rt.step, rt.store, p, rt.swaps, rt.all_state, rt.c),
-        _bind_masks(rt.backend, rt.program, rt.init, rt.store, p, rt.swaps, rt.all_state, rt.c,
-            Set(fieldid(rt.program, k) for k in rt.keys)))
+    steps = (
+        _bind_steps(rt.backend, rt.program, rt.step, rt.store, p, rt.swaps, rt.all_state, rt.c),
+        _bind_masks(
+            rt.backend, rt.program, rt.init, rt.store, p, rt.swaps, rt.all_state, rt.c,
+            Set(fieldid(rt.program, k) for k in rt.keys)
+        ),
+    )
     c = rt.cache
     c isa ImplicitCache || return (steps[1], steps[2], Base.inferencebarrier(_tangent_rebind)(c, rt, p))
     return (steps[1], steps[2], _rebind_cache(c, rt, p))
@@ -1756,21 +1815,28 @@ end
 function _raise_text(op::OperatorSpec, keys, alg, n, rule, cycle, robin)
     fs = join(("`$k`" for k in keys), ", ")
     sh = alg isa CrankNicolson ? "2/h" : "1/h"
-    head = string(_algname(alg), "(substeps = ", alg.substeps, "): field", length(keys) == 1 ? " " : "s ", fs,
-        length(keys) == 1 ? " takes " : " take ", n, " substeps, more than the ", alg.substeps, " requested: ")
-    rule == 1 && return string(head, "a local growth `∂f/∂c` that the operator sees needs `", sh, "` at least twice it, so the shift `",
-        sh, " − ∂f/∂c` keeps the step stable; fewer substeps are not stable")
+    head = string(
+        _algname(alg), "(substeps = ", alg.substeps, "): field", length(keys) == 1 ? " " : "s ", fs,
+        length(keys) == 1 ? " takes " : " take ", n, " substeps, more than the ", alg.substeps, " requested: "
+    )
+    rule == 1 && return string(
+        head, "a local growth `∂f/∂c` that the operator sees needs `", sh, "` at least twice it, so the shift `",
+        sh, " − ∂f/∂c` keeps the step stable; fewer substeps are not stable"
+    )
     terms = unique([t for r in op.rows if r.key in keys for t in r.inexact])
     cycle && push!(terms, "the cycle among the group's fields")
     robin && push!(terms, "the negative part of a Robin face")
-    return string(head, "the terms out of the implicit operator (", join(terms, ", "), ") are corrected by Newton ",
+    return string(
+        head, "the terms out of the implicit operator (", join(terms, ", "), ") are corrected by Newton ",
         "iterations, which converge only when the substep keeps their contraction at most 1/2; fewer substeps would ",
-        "not converge")
+        "not converge"
+    )
 end
 substeps(g::FieldGroup, alg::AbstractImplicitFieldAlgorithm, dt::Real, pp; kw...) = substeps(g.spec, alg, dt, pp; kw...)
 # QuasiSteady: one solve per window (no count), after the parameter refusals and the steady
 # refusals, at build and at every parameter write
-function substeps(spec::GroupSpec, alg::QuasiSteady, dt::Real, pp; fields = spec.state, stability = spec.stability,
+function substeps(
+        spec::GroupSpec, alg::QuasiSteady, dt::Real, pp; fields = spec.state, stability = spec.stability,
         key = identity, texts::AbstractPolicyTexts = ProblemTexts(spec.texts.route)
     )
     isempty(fields) && return 0
@@ -1802,18 +1868,30 @@ function _steady_refusals(spec::GroupSpec, op::OperatorSpec, keys, p)
         r.key in keys || continue
         r.field && continue
         g = _coefsum(r.jloc, p)
-        g > 0 && throw(ArgumentError(string("QuasiSteady: field `", r.key, "`: its local derivative `∂f/∂c` = ", g,
-            " is positive (a growth the operator sees): a growing field's steady state is unstable or not unique, and ",
-            "its steady solve is indefinite; step the field with `BackwardEuler`")))
+        g > 0 && throw(
+            ArgumentError(
+                string(
+                    "QuasiSteady: field `", r.key, "`: its local derivative `∂f/∂c` = ", g,
+                    " is positive (a growth the operator sees): a growing field's steady state is unstable or not unique, and ",
+                    "its steady solve is indefinite; step the field with `BackwardEuler`"
+                )
+            )
+        )
         id = fieldid(s, r.key)
         _steady_indefinite(s, r, id, -g, p)
         (g < 0 || r.iterate || r.switch || !isempty(r.cross)) && continue
         any(x -> x isa NodeValueRule && x.field == id, s.rules) && continue
         any(a -> !s.periodic[a] && any(k -> _face_kind(s, id, a, k, p)[1] !== :none, 1:2), eachindex(s.periodic)) && continue
-        throw(ArgumentError(string("QuasiSteady: field `", r.key, "` has no unique steady state: it has no decay (a ",
-            "local term `−k c` with k > 0) and no fixed value (a Dirichlet or Robin face, a mask), so `0 = rhs` has no ",
-            "solution or many (a constant added to one is another); add a decay or a fixed value, or step it with ",
-            "`BackwardEuler`")))
+        throw(
+            ArgumentError(
+                string(
+                    "QuasiSteady: field `", r.key, "` has no unique steady state: it has no decay (a ",
+                    "local term `−k c` with k > 0) and no fixed value (a Dirichlet or Robin face, a mask), so `0 = rhs` has no ",
+                    "solution or many (a constant added to one is another); add a decay or a fixed value, or step it with ",
+                    "`BackwardEuler`"
+                )
+            )
+        )
     end
     return nothing
 end
@@ -1852,11 +1930,17 @@ function _steady_indefinite(s::Program{N}, r::RowOperator, id, shift, p) where {
     return _steady_refuse(r, λ, scale)
 end
 function _steady_refuse(r::RowOperator, λ, scale)
-    λ > 1e-10 * scale && return nothing
-    throw(ArgumentError(string("QuasiSteady: field `", r.key, "`: its steady operator is indefinite (smallest ",
-        "eigenvalue ", round(λ; sigdigits = 3), "): a Robin face `α c + β ∂c/∂n = g` with α and β of opposite signs ",
-        "feeds the field more than its diffusion and decay remove, so the steady state is unstable or not unique; ",
-        "step the field with `BackwardEuler`, or give the face a smaller |β| (or a larger decay)")))
+    λ > 1.0e-10 * scale && return nothing
+    throw(
+        ArgumentError(
+            string(
+                "QuasiSteady: field `", r.key, "`: its steady operator is indefinite (smallest ",
+                "eigenvalue ", round(λ; sigdigits = 3), "): a Robin face `α c + β ∂c/∂n = g` with α and β of opposite signs ",
+                "feeds the field more than its diffusion and decay remove, so the steady state is unstable or not unique; ",
+                "step the field with `BackwardEuler`, or give the face a smaller |β| (or a larger decay)"
+            )
+        )
+    )
 end
 # The smallest eigenvalue of a numeric hexagonal row's steady operator: `s u + Σ_links
 # w (u − u_n)`, a link that leaves the box taking its face's ghost diagonal `w d` (axis 1's face for a
@@ -1907,7 +1991,7 @@ function _hex_steady_min(r::RowOperator, kinds, dims, per, shift, p)
             E = LinearAlgebra.eigen(LinearAlgebra.SymTridiagonal(α, β), 1:1)
             θ, ρ = E.values[1], b * abs(E.vectors[end, 1])
             λ = θ < 0 ? θ : θ - ρ
-            (θ < 0 || ρ <= 1e-2 * θ || b == 0 || k == n) && break
+            (θ < 0 || ρ <= 1.0e-2 * θ || b == 0 || k == n) && break
         end
         push!(β, b)
         vp, v = v, y ./ b
@@ -1915,7 +1999,7 @@ function _hex_steady_min(r::RowOperator, kinds, dims, per, shift, p)
     return λ, abs(shift) + 12abs(w)
 end
 const _HEXLINKS = ((1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1))
-function _hex_apply!(y, x, dg, w, n1, n2, per::NTuple{2,Bool})
+function _hex_apply!(y, x, dg, w, n1, n2, per::NTuple{2, Bool})
     # bounds: i ≤ n1, j ≤ n2, so q ≤ n1·n2 = length(x) = length(y) = length(dg)
     @inbounds for j in 1:n2, i in 1:n1
         q = i + (j - 1) * n1
@@ -1943,14 +2027,14 @@ function _tridiag_min(d::Vector{Float64}, w::Float64)
         q = d[1] - x
         c = Int(q < 0)
         for i in 2:n
-                q = d[i] - x - w^2 / (q == 0 ? eps() : q); c += q < 0
-            end
+            q = d[i] - x - w^2 / (q == 0 ? eps() : q); c += q < 0
+        end
         return c
     end
     for _ in 1:200
         m = (lo + hi) / 2
         below(m) >= 1 ? (hi = m) : (lo = m)
-        hi - lo <= 1e-14 * max(1.0, abs(hi)) && break
+        hi - lo <= 1.0e-14 * max(1.0, abs(hi)) && break
     end
     return (lo + hi) / 2
 end

@@ -9,24 +9,24 @@ coefficient evaluator.
 module Compile
 
 using RuntimeGeneratedFunctions: RuntimeGeneratedFunctions, RuntimeGeneratedFunction,
-                                 drop_expr
+    drop_expr
 using SHA: sha1
 using ..Exec: Exec
 using ..IR: IR, Access, BOOL, CALL, CAST, CLAMP, COND, CONST, COORD, Coef, DIV,
-            DomainEdgeRule,
-            ELEMENT_SUM, EQ, EXP, F16, F32, F64, FMA, FULL, FaceRule, IDX, INSIDE, INSIDE_OP,
-            ImmersedRule, Kernel, sitecoefs,
-            KernelBuilder, LE, LOAD, LOG, LT, MASKED, MAX, MIN, MUL, NEG, NOT, Node,
-            NodeValueRule, OR, Op,
-            PARAM, POWI, Program, REAL, RESOLVE, RESTRICT, RESTRICTED, RUNTIME, SELECT,
-            SQRT, Scalar, Sel,
-            Space, Store, TABLE, XOR, ZERO, ABS, ADD, AND, BITTEST, access!, arith!, args,
-            buildkeys,
-            compare!, constant!, copy_node!, irerror, isfloat, isinteger_lane, juliatype,
-            leveldims, coarsenable,
-            loadtype, ncomp, nsites, node!, nodeargs, opname, param!, print_program,
-            rebuild,
-            remap_access,
+    DomainEdgeRule,
+    ELEMENT_SUM, EQ, EXP, F16, F32, F64, FMA, FULL, FaceRule, IDX, INSIDE, INSIDE_OP,
+    ImmersedRule, Kernel, sitecoefs,
+    KernelBuilder, LE, LOAD, LOG, LT, MASKED, MAX, MIN, MUL, NEG, NOT, Node,
+    NodeValueRule, OR, Op,
+    PARAM, POWI, Program, REAL, RESOLVE, RESTRICT, RESTRICTED, RUNTIME, SELECT,
+    SQRT, Scalar, Sel,
+    Space, Store, TABLE, XOR, ZERO, ABS, ADD, AND, BITTEST, access!, arith!, args,
+    buildkeys,
+    compare!, constant!, copy_node!, irerror, isfloat, isinteger_lane, juliatype,
+    leveldims, coarsenable,
+    loadtype, ncomp, nsites, node!, nodeargs, opname, param!, print_program,
+    rebuild,
+    remap_access,
     select!, verify, with_kernels, AbstractBoundaryRule, Ex, FieldDecl, FlagDecl, MaskDecl, _rulemap, cast!, load!
 
 RuntimeGeneratedFunctions.init(@__MODULE__)

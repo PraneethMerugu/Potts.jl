@@ -74,11 +74,13 @@ struct LatticeIndex{F}
     maskevents::Vector{Any}                     # the masks' switch functions `(p, t) -> lhs - rhs` (an ODE path's events)
     maskunlocated::Bool                         # a mask predicate reads the time in a switch with no event
 end
-function LatticeIndex(; key::F = identity, variables = Pair[], parameters = Pair[],
+function LatticeIndex(;
+        key::F = identity, variables = Pair[], parameters = Pair[],
         independent_variables = Any[], defaults = Dict{Any, Any}(), inputs = Pair[],
         inputnames = Pair[], boolinputs = String[], inputbounds = Pair[], derived = Pair[], observed = Pair[],
         tables = Pair[], parambounds = Pair[], derive = nothing, aux = Pair[], coordinates = Pair[],
-        maskevents = Any[], maskunlocated::Bool = false) where {F}
+        maskevents = Any[], maskunlocated::Bool = false
+    ) where {F}
     syms(x) = x isa Union{Tuple, AbstractVector} ? x : (x,)
     vars, varsyms = Dict{Any, FieldSlot}(), Any[]
     for (ss, slot) in variables
@@ -97,8 +99,14 @@ function LatticeIndex(; key::F = identity, variables = Pair[], parameters = Pair
     for (ss, k) in inputs, s in syms(ss)
         kk = key(s)
         o = get(ins, kk, nothing)
-        o === nothing || o == k || throw(ArgumentError(string("two input fields have the name `", s, "`: `",
-            o, "` and `", k, "`; give each input its own name (`lattice_input_name`)")))
+        o === nothing || o == k || throw(
+            ArgumentError(
+                string(
+                    "two input fields have the name `", s, "`: `",
+                    o, "` and `", k, "`; give each input its own name (`lattice_input_name`)"
+                )
+            )
+        )
         what = if haskey(vars, kk)
             "a field"
         elseif haskey(params, kk)
@@ -106,8 +114,14 @@ function LatticeIndex(; key::F = identity, variables = Pair[], parameters = Pair
         else
             nothing
         end
-        what === nothing || throw(ArgumentError(string("the input field `", k, "` has the name `", s,
-            "` (its `lattice_input_name`), which is also ", what, " of the problem; give the input another name")))
+        what === nothing || throw(
+            ArgumentError(
+                string(
+                    "the input field `", k, "` has the name `", s,
+                    "` (its `lattice_input_name`), which is also ", what, " of the problem; give the input another name"
+                )
+            )
+        )
         ins[kk] = String(k)
     end
     der = Dict{Any, String}()
@@ -119,15 +133,19 @@ function LatticeIndex(; key::F = identity, variables = Pair[], parameters = Pair
         g = f isa Expr ? rgf(f) : f
         foreach(s -> obs[key(s)] = g, syms(ss))
     end
-    return LatticeIndex(key, vars, varsyms, params, paramsyms,
+    return LatticeIndex(
+        key, vars, varsyms, params, paramsyms,
         Any[independent_variables...], Dict{Any, Any}(defaults), ins,
         names, Set{String}(String.(boolinputs)),
-        Dict{String, Tuple{Float64, Float64}}(String(k) => Float64.((b[1], b[2])) for (k, b) in inputbounds), der, obs, Dict{Any, Tuple{String, Int}}(key(s) => (k isa Tuple ? (String(k[1]), Int(k[2])) : (String(k), 0))
-                                                       for (ss, k) in tables for s in syms(ss)),
+        Dict{String, Tuple{Float64, Float64}}(String(k) => Float64.((b[1], b[2])) for (k, b) in inputbounds), der, obs, Dict{Any, Tuple{String, Int}}(
+            key(s) => (k isa Tuple ? (String(k[1]), Int(k[2])) : (String(k), 0))
+                for (ss, k) in tables for s in syms(ss)
+        ),
         Dict{Int, Tuple{Float64, Float64}}(Int(i) => Float64.((b[1], b[2])) for (i, b) in parambounds), derive,
         Dict{Any, String}(key(s) => String(k) for (ss, k) in aux for s in syms(ss)), Any[first(syms(ss)) for (ss, _) in aux],
         Ref{Any}(nothing), Ref{Any}(nothing), Dict{Any, Any}(key(s) => r for (ss, r) in coordinates for s in syms(ss)),
-        Any[first(syms(ss)) for (ss, _) in coordinates], Any[f isa Expr ? rgf(f) : f for f in maskevents], maskunlocated)
+        Any[first(syms(ss)) for (ss, _) in coordinates], Any[f isa Expr ? rgf(f) : f for f in maskevents], maskunlocated
+    )
 end
 
 # `ix.K` for a name that is not a field of the index: its canonical symbol, as an MTK system
@@ -241,8 +259,14 @@ function SII.parameter_index(ix::LatticeIndex, sym)
     sym isa Bool && throw(ArgumentError("`$sym` is not a parameter: give a parameter's name or its index (an integer)"))
     if sym isa Integer                              # a slot of the parameter vector
         n = maximum(values(ix.params); init = 0)
-        1 <= sym <= n || throw(ArgumentError(string("parameter index ", sym, " is out of range: the problem has ", n,
-            n == 1 ? " parameter" : " parameters")))
+        1 <= sym <= n || throw(
+            ArgumentError(
+                string(
+                    "parameter index ", sym, " is out of range: the problem has ", n,
+                    n == 1 ? " parameter" : " parameters"
+                )
+            )
+        )
         return Int(sym)
     end
     k = ix.key(sym)
@@ -258,8 +282,14 @@ function SII.parameter_index(ix::LatticeIndex, sym)
     (haskey(ix.vars, k) || SII.is_independent_variable(ix, sym)) && return nothing
     # an expression (`2c`) is not an index (SII's contract: `nothing`); a name is
     sym isa Union{Symbol, AbstractString} || SII.hasname(sym) || return nothing
-    throw(ArgumentError(string("`", sym, "` is not a parameter of the problem (its parameters: ",
-        join(("`$q`" for q in ix.paramsyms), ", "), ")")))
+    throw(
+        ArgumentError(
+            string(
+                "`", sym, "` is not a parameter of the problem (its parameters: ",
+                join(("`$q`" for q in ix.paramsyms), ", "), ")"
+            )
+        )
+    )
 end
 # every key of a parameter map names a parameter: `parameter_index` throws for a table, a
 # computed parameter or an unknown name, and gives `nothing` for what is no parameter (a field,
@@ -269,8 +299,14 @@ function check_parameter_keys(ix::LatticeIndex, keys)
         SII.parameter_index(ix, k) === nothing || continue
         kk = k isa Tuple ? nothing : ix.key(k)
         named = kk !== nothing && (haskey(ix.vars, kk) || haskey(ix.inputs, kk) || SII.is_independent_variable(ix, k))
-        throw(ArgumentError(string("`", k, "` is not a parameter of the problem (its parameters: ",
-            join(("`$q`" for q in ix.paramsyms), ", "), ")", named ? "" : "; a key names a parameter, not an expression")))
+        throw(
+            ArgumentError(
+                string(
+                    "`", k, "` is not a parameter of the problem (its parameters: ",
+                    join(("`$q`" for q in ix.paramsyms), ", "), ")", named ? "" : "; a key names a parameter, not an expression"
+                )
+            )
+        )
     end
     return nothing
 end
@@ -300,8 +336,10 @@ function table_entry(ix::LatticeIndex, sym)
 end
 SII.parameter_symbols(ix::LatticeIndex) = ix.paramsyms
 function SII.is_independent_variable(ix::LatticeIndex, sym)
-    any(v -> isequal(ix.key(v), ix.key(sym)),
-        ix.ivs)
+    return any(
+        v -> isequal(ix.key(v), ix.key(sym)),
+        ix.ivs
+    )
 end
 SII.independent_variable_symbols(ix::LatticeIndex) = ix.ivs
 SII.is_time_dependent(::LatticeIndex) = true

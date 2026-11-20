@@ -120,8 +120,14 @@ group whose front end extracts none (`spec.operator === nothing`: a map group) i
 `ArgumentError`.
 """
 function operator_spec(spec::GroupSpec)
-    spec.operator === nothing && throw(ArgumentError(string("the fields ", join(("`$k`" for k in spec.state), ", "),
-        " have no implicit operator (a map `Shift(t, 1)(m) ~ rhs` is stepped by `ExplicitMap()`)")))
+    spec.operator === nothing && throw(
+        ArgumentError(
+            string(
+                "the fields ", join(("`$k`" for k in spec.state), ", "),
+                " have no implicit operator (a map `Shift(t, 1)(m) ~ rhs` is stepped by `ExplicitMap()`)"
+            )
+        )
+    )
     return build_operator(spec.operator, spec)
 end
 operator_spec(o::OperatorSpec) = o

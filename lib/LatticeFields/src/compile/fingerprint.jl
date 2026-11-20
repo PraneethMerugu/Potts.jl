@@ -12,7 +12,8 @@ The fingerprint source text: format version, compute type `T`, then the semantic
 function fingerprint_text(p::Program; T::Type = Float32, passes = SEMANTIC_PASSES)
     s = semantic(p; passes)
     return string(
-        "LatticeFields IR format ", IR_FORMAT, "\nT=", T, "\n", sprint(print_program, s))
+        "LatticeFields IR format ", IR_FORMAT, "\nT=", T, "\n", sprint(print_program, s)
+    )
 end
 
 """

@@ -18,15 +18,15 @@ preconditioner), `VCycle`, `LatticeBlockSolve`, and `BoundOperator`, a field's o
 module Solvers
 
 using ..IR: IR, AND, Access, BOOL, Ex, F32, F64, Grid, I32, INSIDE, INSIDE_OP, degenerate,
-            KernelBuilder,
-            Level, NOT, Program, ProgramBuilder, REAL, RUNTIME, Sel, Space, U8, access!,
-            add!, cast,
-            compare!, constant, constant!, eq, field!, fieldid, gate!, irerror, juliatype,
-            kernel, leveldims, load, ncomp, node!, nsites, param, program, reduce!,
-            restrict,
-            runtime, select, store, table, table!
+    KernelBuilder,
+    Level, NOT, Program, ProgramBuilder, REAL, RUNTIME, Sel, Space, U8, access!,
+    add!, cast,
+    compare!, constant, constant!, eq, field!, fieldid, gate!, irerror, juliatype,
+    kernel, leveldims, load, ncomp, node!, nsites, param, program, reduce!,
+    restrict,
+    runtime, select, store, table, table!
 using ..Compile: LOWERING, TIME_SLOT, CompileOptions, body_function, compile_kernel,
-                 derive_function, semantic
+    derive_function, semantic
 using ..Schedule: Schedule, REDUCE_PHASES, WG, reduce_lds, reduction_blocks, supports
 using ..Exec: Exec
 using KernelAbstractions: KernelAbstractions as KA
@@ -40,8 +40,8 @@ using SciMLOperators: SciMLOperators
 
 public CellOperator, FieldSolver, LatticePCG, LatticeGMRES, LatticeMultigrid, LatticeBlockSolve, BoundOperator,
     VCycle, RuleWeights, robin_parts, rebuild!,
-       lift!, solve!, steady!, tangent!, set_coefficients!, field, solution_key, solver_solution,
-       scalars, iterations, sentinel
+    lift!, solve!, steady!, tangent!, set_coefficients!, field, solution_key, solver_solution,
+    scalars, iterations, sentinel
 
 include("levels.jl")
 include("kernels.jl")

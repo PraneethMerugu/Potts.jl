@@ -2,7 +2,7 @@
 # source and the input of the schedule. Every pass returns a new verified program.
 
 function zero_offset(a::Access{N}) where {N}
-    a.offset.cond == 0 && all(iszero, a.offset.a) && a.level == 0
+    return a.offset.cond == 0 && all(iszero, a.offset.a) && a.level == 0
 end
 writes(k::Kernel) = unique!([s.access.field for s in k.stores])
 reads(k::Kernel) = unique!([a.field for a in k.accesses])
@@ -18,8 +18,10 @@ function legality(p::Program{N}) where {N}
         for s in k.stores
             f = p.fields[s.access.field]
             (s.access.field, s.access.comp.a) in seen &&
-                irerror("kernel `", k.key, "`: `", f.key, "[",
-                    s.access.comp.a, "]` is written twice")
+                irerror(
+                "kernel `", k.key, "`: `", f.key, "[",
+                s.access.comp.a, "]` is written twice"
+            )
             push!(seen, (s.access.field, s.access.comp.a))
             f.role == :input &&
                 irerror("kernel `", k.key, "`: stores to input field `", f.key, "`")
@@ -30,22 +32,30 @@ function legality(p::Program{N}) where {N}
         for a in k.accesses
             f = p.fields[a.field]
             a.field in w && f.buffers == 1 && !zero_offset(a) &&
-                irerror("kernel `", k.key,
-                    "`: single-buffer field `", f.key, "` is written and read at offset ",
-                    a.offset.a, " (declare buffers = 2)")
+                irerror(
+                "kernel `", k.key,
+                "`: single-buffer field `", f.key, "` is written and read at offset ",
+                a.offset.a, " (declare buffers = 2)"
+            )
             k.space.level + a.level in f.levels ||
-                irerror("kernel `", k.key, "`: access to `",
-                    f.key, "` at level ", k.space.level + a.level,
-                    ", which the field does not have")
+                irerror(
+                "kernel `", k.key, "`: access to `",
+                f.key, "` at level ", k.space.level + a.level,
+                ", which the field does not have"
+            )
         end
         for s in k.stores
             f = p.fields[s.access.field]
-            k.space.level in f.levels || irerror("kernel `", k.key, "`: store to `", f.key,
-                "` at level ", k.space.level, ", which the field does not have")
+            k.space.level in f.levels || irerror(
+                "kernel `", k.key, "`: store to `", f.key,
+                "` at level ", k.space.level, ", which the field does not have"
+            )
             f.buffers == 2 && ncomp(f) > 1 &&
                 count(t -> t.access.field == s.access.field, k.stores) != ncomp(f) &&
-                irerror("kernel `", k.key, "`: two-buffer field `", f.key,
-                    "` must be written in all its components")
+                irerror(
+                "kernel `", k.key, "`: two-buffer field `", f.key,
+                "` must be written in all its components"
+            )
         end
         k.space.kind == MASKED && !(1 <= k.space.mask <= length(p.masks)) &&
             irerror("kernel `", k.key, "`: masked space without a mask")
@@ -59,18 +69,24 @@ function legality(p::Program{N}) where {N}
             lo = min(k.space.level, k.space.level + a.level)
             for (d, n) in enumerate(leveldims(p, lo))
                 n == 1 || n % (1 << m) == 0 ||
-                    irerror("kernel `", k.key, "`: an access to `", p.fields[a.field].key, "` shifts ", m,
-                        " levels across axis ", d, " of size ", n, ", which 2^", m, " does not divide")
+                    irerror(
+                    "kernel `", k.key, "`: an access to `", p.fields[a.field].key, "` shifts ", m,
+                    " levels across axis ", d, " of size ", n, ", which 2^", m, " does not divide"
+                )
             end
         end
     end
     for l in p.hierarchy
-        coarsenable(l) || irerror("level ", l.shift, " coarsens an axis of size 1 (dims ",
-            Int.(l.grid.dims), "): an axis of size 1 is never coarsened")
+        coarsenable(l) || irerror(
+            "level ", l.shift, " coarsens an axis of size 1 (dims ",
+            Int.(l.grid.dims), "): an axis of size 1 is never coarsened"
+        )
     end
     any(l -> l.widths !== nothing, p.hierarchy) &&
-        irerror("explicit level widths are not ",
-            "supported: coarse levels follow the n ÷ 2 convention (last aggregate width 3)")
+        irerror(
+        "explicit level widths are not ",
+        "supported: coarse levels follow the n ÷ 2 convention (last aggregate width 3)"
+    )
     return p
 end
 
@@ -89,7 +105,8 @@ end
 const _FOLD = Dict{Op, Function}(
     ADD => +, MUL => *, NEG => -, DIV => /, MIN => min, MAX => max,
     ABS => abs, SQRT => sqrt, EXP => exp, LOG => log, EQ => ==, LT => <, LE => <=,
-    AND => &, OR => |, XOR => xor, NOT => !)
+    AND => &, OR => |, XOR => xor, NOT => !
+)
 
 function _fold_node!(b::KernelBuilder, k::Kernel, i, a, ctx)
     n = k.nodes[i]
@@ -110,8 +127,10 @@ function _fold_node!(b::KernelBuilder, k::Kernel, i, a, ctx)
         m = b.nodes[a[1]]
         m.op == NEG && return nodeargs(b, a[1])[1]
         if m.op == MUL && any(x -> _isconst(b, x), nodeargs(b, a[1]))
-            xs = [_isconst(b, x) ? constant!(b, -_cval(b, x), t) : x
-                  for x in nodeargs(b, a[1])]
+            xs = [
+                _isconst(b, x) ? constant!(b, -_cval(b, x), t) : x
+                    for x in nodeargs(b, a[1])
+            ]
             return node!(b, MUL, t, xs)
         end
     elseif op == DIV
@@ -134,26 +153,26 @@ end
 Pass 1: fold constant subtrees in Float64 and remove zeros and identities.
 """
 function fold(p::Program)
-    with_kernels(p, [rebuild(_fold_node!, k, buildkeys(p)) for k in p.kernels])
+    return with_kernels(p, [rebuild(_fold_node!, k, buildkeys(p)) for k in p.kernels])
 end
 
 # ---- pass 2: semantic boundary resolution --------------------------------------------------
 function _coef!(b, c::Coef)
-    if c.param == 0
+    return if c.param == 0
         constant!(b, c.value)
     else
         node!(b, MUL, REAL, Int32[constant!(b, c.value), param!(b, c.param)])
     end
 end
 function _with(a::Access{N}, off, policy) where {N}
-    Access{N}(a.field, a.class, a.comp, Sel(off), a.level, policy)
+    return Access{N}(a.field, a.class, a.comp, Sel(off), a.level, policy)
 end
 function _loadacc!(b, p, a)
-    node!(b, LOAD, loadtype(p.fields[a.field].storage), Int32[], access!(b, a))
+    return node!(b, LOAD, loadtype(p.fields[a.field].storage), Int32[], access!(b, a))
 end
 _inside!(b, a) = node!(b, INSIDE_OP, BOOL, Int32[], access!(b, a))
 function _ne0!(b, x)
-    node!(b, NOT, BOOL, Int32[compare!(b, EQ, x, constant!(b, 0.0, b.nodes[x].type))])
+    return node!(b, NOT, BOOL, Int32[compare!(b, EQ, x, constant!(b, 0.0, b.nodes[x].type))])
 end
 
 # a rule's value: its coefficient, times the value field at access `at` when it has one (a
@@ -173,29 +192,39 @@ the access of the boundary site (where a value field is read).
 function _ghost!(b, p::Program, f, axis, side, center, at)
     k = findfirst(r -> r isa FaceRule && r.field == f && r.axis == axis && r.side == side, p.rules)
     k === nothing &&
-        irerror("field `", p.fields[f].key, "` has no boundary rule on axis ", axis,
-            " side ", side > 0 ? "+" : "-", " and the axis is not periodic")
+        irerror(
+        "field `", p.fields[f].key, "` has no boundary rule on axis ", axis,
+        " side ", side > 0 ? "+" : "-", " and the axis is not periodic"
+    )
     r = p.rules[k]::FaceRule
     α, β = r.alpha, r.beta
     α.value == 0 && β.value == 0 &&
-        irerror("field `", p.fields[f].key, "`: face rule on axis ",
-            axis, " has α = β = 0")
+        irerror(
+        "field `", p.fields[f].key, "`: face rule on axis ",
+        axis, " has α = β = 0"
+    )
     g() = _rulevalue!(b, p, r.g, r.gfield, at)
     site = sitecoefs(r)                                   # (α or β varies by site: Robin)
     if !site && α.param == 0 && β.param == 0 && β.value == 0   # Dirichlet: ghost = (2/α) g − c
-        return arith!(b, ADD, arith!(b, MUL, constant!(b, 2 / α.value), g()),
-            arith!(b, NEG, center))
+        return arith!(
+            b, ADD, arith!(b, MUL, constant!(b, 2 / α.value), g()),
+            arith!(b, NEG, center)
+        )
     elseif !site && α.param == 0 && α.value == 0          # flux: ghost = c + g/β
         r.gfield == 0 && r.g.param == 0 && r.g.value == 0 && return center
         return arith!(b, ADD, center, arith!(b, DIV, g(), _coef!(b, β)))
     end                                                   # Robin: (g − (α/2 − β) c)/(α/2 + β)
     av, bv = _rulevalue!(b, p, α, r.afield, at), _rulevalue!(b, p, β, r.bfield, at)
     h = arith!(b, MUL, constant!(b, 0.5), av)
-    num = arith!(b,
+    num = arith!(
+        b,
         ADD,
         g(),
-        arith!(b, NEG,
-            arith!(b, MUL, arith!(b, ADD, h, arith!(b, NEG, bv)), center)))
+        arith!(
+            b, NEG,
+            arith!(b, MUL, arith!(b, ADD, h, arith!(b, NEG, bv)), center)
+        )
+    )
     return arith!(b, DIV, num, arith!(b, ADD, h, bv))
 end
 
@@ -210,8 +239,10 @@ function _resolve!(b, p::Program{N}, a::Access{N}, axes) where {N}
         return _loadacc!(b, p, _with(a, off, all(iszero, off) ? INSIDE : CLAMP))
     end
     d = axes[1]
-    abs(off[d]) == 1 || irerror("field `", p.fields[a.field].key, "`: offset ", off,
-        " crosses a non-periodic face by more than one layer")
+    abs(off[d]) == 1 || irerror(
+        "field `", p.fields[a.field].key, "`: offset ", off,
+        " crosses a non-periodic face by more than one layer"
+    )
     inner = _resolve!(b, p, a, axes[2:end])
     c0 = ntuple(e -> e == d ? Int16(0) : off[e], N)
     center = _resolve!(b, p, _with(a, c0, a.policy), axes[2:end])
@@ -225,8 +256,10 @@ function _resolve_load!(b::KernelBuilder{N}, p::Program{N}, a::Access{N}) where 
     off = a.offset.a
     axes = [d for d in 1:N if off[d] != 0 && !p.periodic[d]]
     !isempty(axes) && a.level != 0 &&
-        irerror("field `", p.fields[a.field].key,
-            "`: a level-shifted access at a non-periodic offset needs policy CLAMP or ZERO")
+        irerror(
+        "field `", p.fields[a.field].key,
+        "`: a level-shifted access at a non-periodic offset needs policy CLAMP or ZERO"
+    )
     v = _resolve!(b, p, a, axes)
     all(iszero, off) && return v
     center = _loadacc!(b, p, _with(a, ntuple(_ -> Int16(0), N), INSIDE))
@@ -240,10 +273,14 @@ function _resolve_load!(b::KernelBuilder{N}, p::Program{N}, a::Access{N}) where 
         end
         m == 0 && continue
         r isa ImmersedRule && r.kind != :zero_flux &&
-            irerror("immersed rule kind `", r.kind,
-                "` is not lowered yet (only :zero_flux)")
-        ma = Access{N}(p.masks[m].field, 0, Sel(Int16(1)), Sel(off),
-            0, CLAMP)
+            irerror(
+            "immersed rule kind `", r.kind,
+            "` is not lowered yet (only :zero_flux)"
+        )
+        ma = Access{N}(
+            p.masks[m].field, 0, Sel(Int16(1)), Sel(off),
+            0, CLAMP
+        )
         hit = _ne0!(b, _loadacc!(b, p, ma))
         if r isa DomainEdgeRule
             # across the domain edge, from either side: a neighbor outside, or a site outside
@@ -274,18 +311,22 @@ Store-side rules: `NodeValueRule` makes masked sites store the rule's value (ide
 function _node_values(p::Program{N}, k::Kernel{N}) where {N}
     rs = [r for r in p.rules if r isa NodeValueRule && r.field in writes(k)]
     isempty(rs) && return k
-    return rebuild(copy_node!,
+    return rebuild(
+        copy_node!,
         k,
         buildkeys(p);
         storefn = function (b, s, v)
             for r in rs
                 r.field == s.access.field || continue
-                ma = Access{N}(p.masks[r.mask].field, 0, Sel(Int16(1)),
-                    Sel(ntuple(_ -> Int16(0), N)), 0, INSIDE)
+                ma = Access{N}(
+                    p.masks[r.mask].field, 0, Sel(Int16(1)),
+                    Sel(ntuple(_ -> Int16(0), N)), 0, INSIDE
+                )
                 v = select!(b, _ne0!(b, _loadacc!(b, p, ma)), _rulevalue!(b, p, r.value, r.vfield, ma), v)
             end
             return v
-        end)
+        end
+    )
 end
 
 """

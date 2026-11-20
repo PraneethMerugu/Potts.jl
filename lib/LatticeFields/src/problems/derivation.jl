@@ -28,8 +28,14 @@ in order): `t[ks .+ 1...]`. `name` is the computed parameter that reads it, for 
 """
 function derive_at(name, t, ks...)
     t isa AbstractArray && ndims(t) == length(ks) ||
-        throw(ArgumentError(string("it reads a kind table with ", length(ks), length(ks) == 1 ? " kind" : " kinds",
-            "; the table takes ", t isa AbstractArray ? ndims(t) : 0)))
+        throw(
+        ArgumentError(
+            string(
+                "it reads a kind table with ", length(ks), length(ks) == 1 ? " kind" : " kinds",
+                "; the table takes ", t isa AbstractArray ? ndims(t) : 0
+            )
+        )
+    )
     for k in ks
         k isa Real && isinteger(k) || throw(ArgumentError("it reads a kind table at `$k`, not a kind number"))
     end
@@ -41,8 +47,14 @@ end
 
 # an evaluation of computed parameter `name` (its default written `text`) that failed
 function derive_fail(name, text, e)
-    throw(ArgumentError(string("parameter `", name, "` = `", text,
-        "` fails on the parameter values: ", e isa ArgumentError ? e.msg : sprint(showerror, e))))
+    throw(
+        ArgumentError(
+            string(
+                "parameter `", name, "` = `", text,
+                "` fails on the parameter values: ", e isa ArgumentError ? e.msg : sprint(showerror, e)
+            )
+        )
+    )
 end
 
 # the computed slots of a problem's parameter vector `p`, from its base slots and tables (B:

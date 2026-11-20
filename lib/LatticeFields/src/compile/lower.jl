@@ -33,14 +33,18 @@ end
 """
 The lowering stages; tests replace one to inject a fault.
 """
-const LOWERING = (; powi = expand_powi, hoist = hoist_params, index = lower_index,
-    target = linear_index, order = loads_first, passthrough = passthrough)
+const LOWERING = (;
+    powi = expand_powi, hoist = hoist_params, index = lower_index,
+    target = linear_index, order = loads_first, passthrough = passthrough,
+)
 
 """
 Lower semantic kernel `k` of program `p` (passes 3–6).
 """
-function compile_kernel(p::Program{N}, k::Kernel{N}, o::CompileOptions = CompileOptions();
-        stages = LOWERING) where {N}
+function compile_kernel(
+        p::Program{N}, k::Kernel{N}, o::CompileOptions = CompileOptions();
+        stages = LOWERING
+    ) where {N}
     o.T === nothing && (o = CompileOptions(Float32, o.I, o.float64_ok, o.debug, o.index, o.lanes, o.clock, o.S, o.declared))
     check_types(p, k, o)
     !isempty(k.reductions) && o.index == :cartesian &&
@@ -57,8 +61,10 @@ function compile_kernel(p::Program{N}, k::Kernel{N}, o::CompileOptions = Compile
     verify(with_kernels(p, [k]))
     body, L = emit(p, k, o; stages)
     T = o.T
-    vals = Any[[:(lanecast(typeof(c), P[$i])) for i in 1:(p.nparams)];
-               [:(lanecast(typeof(c), $d)) for d in derived]]
+    vals = Any[
+        [:(lanecast(typeof(c), P[$i])) for i in 1:(p.nparams)];
+        [:(lanecast(typeof(c), $d)) for d in derived]
+    ]
     # the clock's step index `k` (an integer, exact in Float64 up to 2^53) into its slot of the
     # raw parameters, before anything is derived from them; `k = nothing` keeps the slot
     clock = 0 < o.clock <= p.nparams ? o.clock : 0
@@ -67,21 +73,25 @@ function compile_kernel(p::Program{N}, k::Kernel{N}, o::CompileOptions = Compile
     else
         :(P = k === nothing ? P : $(Expr(:tuple, [i == clock ? :(oftype(P[$i], k)) : :(P[$i]) for i in 1:(p.nparams)]...)))
     end
-    derive = :((P, c, t, k) -> begin
-        $tick
-        Q = map(_wide, P)
-        t = _wide(t)
-        $(Expr(:tuple, vals...))
-    end)
+    derive = :(
+        (P, c, t, k) -> begin
+            $tick
+            Q = map(_wide, P)
+            t = _wide(t)
+            $(Expr(:tuple, vals...))
+        end
+    )
     # derived again at each launch: a hoisted value that reads the time, and every kernel that
     # reads the clock slot (directly, or through a hoisted value)
     timed = any(d -> _reads(d, :t), derived) ||
-            (clock != 0 && (_reads_slot(k, clock) || any(d -> _reads_q(d, clock), derived)))
+        (clock != 0 && (_reads_slot(k, clock) || any(d -> _reads_q(d, clock), derived)))
     h = bytes2hex(sha1(string(body)))
     # a declared Float64 on a device: the body's signature part into the D-157 registry
     o.declared && _touches_float64(p, k, o) && Exec.register_float64!(string(typeof(rgf(body))))
-    return CompiledKernel{N}(k.key, body, L.strategy, k.space, L.levels, L.lanes, L.args,
-        p.nparams, derived, derive, timed, T, o.I, h, k)
+    return CompiledKernel{N}(
+        k.key, body, L.strategy, k.space, L.levels, L.lanes, L.args,
+        p.nparams, derived, derive, timed, T, o.I, h, k
+    )
 end
 
 # whether kernel `k` computes in Float64 or loads or stores a lane that holds Float64

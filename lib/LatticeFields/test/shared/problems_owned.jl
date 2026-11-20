@@ -1,7 +1,7 @@
 # Definitions of problems/owned_tests.jl that other test files use.
 using LatticeFields.Problems: FieldProblem, ExplicitEuler, BoundStep, LatticeIndex,
-                              FieldSlot,
-                              ode_problem, face_checks, check_faces, degenerate_face
+    FieldSlot,
+    ode_problem, face_checks, check_faces, degenerate_face
 using LatticeFields.IR: runtime
 using CommonSolve: solve, init, step!
 using SciMLBase: SciMLBase
