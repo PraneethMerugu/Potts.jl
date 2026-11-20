@@ -329,7 +329,7 @@ end
         catch e
             e isa E ? sprint(showerror, e) : "wrong exception $(typeof(e)), expected $E"
         end
-        m = ComponentOf(; name = :m)
+        m = DecayWithEnergy(; name = :m)
         @test !isempty(Potts.hamiltonian(m))
         comp = Potts.component(:decay, ComposeSys.decay(), m)
         @test isempty(Potts.hamiltonian(comp)) && Potts.lattice(comp) == Potts.lattice(m)

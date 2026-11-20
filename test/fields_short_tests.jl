@@ -2,7 +2,7 @@
 # CrHost2, cp_*).
 #
 # A coupled PDESystem may leave out an axis interval; the axis takes the lattice's
-# `[0, dims · spacing]`. A given interval must still match. Oracle: Merks (the B form of
+# `[0, dims · spacing]`. A given interval must still match. Oracle: Merks (the PDESystem form of
 # docs/models/src/merks_model.jl, its PDESystem built in a function of the lattice with
 # `lattice_domain`) against the same PDESystem with no domain, bitwise.
 # `Potts.is_kind(model, :A, …)` is `kind == code` (one name) or a membership test (several);

@@ -324,7 +324,7 @@ end
             end, @__MODULE__
         )
         @test_throws ArgumentError Potts._potts_model(
-            :_BadInp, quote
+            :_BadInput, quote
                 @kinds medium A
                 @variables n(model) = 0.0
                 @lattice Lattice((8, 8))

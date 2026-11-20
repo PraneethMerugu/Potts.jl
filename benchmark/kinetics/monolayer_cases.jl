@@ -4,23 +4,25 @@
 # rules of the OpenVT spread comparison (per-seed metrics, crit(ν),
 # PottsModels.openvt_spread_table). The `P615*`/`p615*` names come from the committed run
 # scripts of lib/PottsModels/reproductions/data/15, which this script includes.
+# <cases>: default "b,f". <out>: the output directory, default `monolayer_cases` under the
+# current directory.
 include(joinpath(ARGS[1], "lib/PottsModels/reproductions/data/15/checkerboard-2026-10-10/run_checkerboard.jl"))
 using Printf
 # ARGS[5]: block,switches,parts (default: the CheckerboardCPM defaults)
-const MC_SR = split(get(ARGS, 5, ""), ',', keepempty = false)
-const MC_ALG = isempty(MC_SR) ? CheckerboardCPM(; proposal = Moore(1)) :
+const MONOLAYER_SETTINGS = split(get(ARGS, 5, ""), ',', keepempty = false)
+const MONOLAYER_ALG = isempty(MONOLAYER_SETTINGS) ? CheckerboardCPM(; proposal = Moore(1)) :
     CheckerboardCPM(;
-        proposal = Moore(1), region = parse(Int, MC_SR[1]), switches = parse(Int, MC_SR[2]),
-        parts = parse(Int, MC_SR[3])
+        proposal = Moore(1), region = parse(Int, MONOLAYER_SETTINGS[1]),
+        switches = parse(Int, MONOLAYER_SETTINGS[2]), parts = parse(Int, MONOLAYER_SETTINGS[3])
     )
-const MC_OUT = expanduser(get(ARGS, 4, "monolayer_cases"))
-const MC_CASES = Tuple(Symbol.(split(get(ARGS, 3, "b,f"), ',')))
-const MC_RUNS = parse(Int, ARGS[2])
-mkpath(MC_OUT)
+const MONOLAYER_OUT = abspath(expanduser(get(ARGS, 4, "monolayer_cases")))
+const MONOLAYER_CASES = Tuple(Symbol.(split(get(ARGS, 3, "b,f"), ',')))
+const MONOLAYER_RUNS = parse(Int, ARGS[2])
+mkpath(MONOLAYER_OUT)
 cycle = P615M_CYCLE_SEQ
 α = A0 / cycle
-mc_seed(c, k) = 217_000_000 + 1000 * findfirst(==(c), MC_CASES) + k
-function mc_run(prob, seed, c; backend = cb_backend())
+monolayer_seed(c, k) = 217_000_000 + 1000 * findfirst(==(c), MONOLAYER_CASES) + k
+function monolayer_run(prob, seed, c; backend = cb_backend())
     rec = NamedTuple[]
     record(integ) = push!(rec, p615f_row(current_state(integ), integ.t; c.beta, c.gamma))
     cbr = Potts.DiscreteCallback(
@@ -29,7 +31,7 @@ function mc_run(prob, seed, c; backend = cb_backend())
     )
     pr = remake(prob; seed, p = [:β => c.beta, :γ => c.gamma, :σ_X => c.sigma_X, :α => α])
     integ = init(
-        pr, MC_ALG; backend, save_start = false, save_everystep = false,
+        pr, MONOLAYER_ALG; backend, save_start = false, save_everystep = false,
         callback = Potts.CorePotts.CallbackSet(
             cbr, PottsModels.stop_at_cells(c.cells),
             PottsModels.edge_guard(P615F_GUARD; terminate = true)
@@ -45,16 +47,16 @@ function mc_run(prob, seed, c; backend = cb_backend())
         live = count(>(0), Array(u.cell.volume)), o1, committed = sol.stats.committed,
     )
 end
-tsf, o1f, rf = joinpath(MC_OUT, "timeseries.tsv"), joinpath(MC_OUT, "o1.tsv"), joinpath(MC_OUT, "runs.tsv")
+tsf, o1f, rf = joinpath(MONOLAYER_OUT, "timeseries.tsv"), joinpath(MONOLAYER_OUT, "o1.tsv"), joinpath(MONOLAYER_OUT, "runs.tsv")
 open(io -> println(io, join(TS_HEADER, '\t')), tsf, "w")
 open(io -> println(io, join(O1_HEADER, '\t')), o1f, "w")
 open(io -> println(io, join(("case", "k", "seed", "retcode", "mcs", "divisions", "live", "wall_s", "committed"), '\t')), rf, "w")
-@info "monolayer cases" cycle α alg = MC_ALG
-mc_run(cb_problem(400), 1, merge(P615F_CASES.b, (; cells = 2)))           # compile
-for c in MC_CASES, k in 1:MC_RUNS
+@info "monolayer cases" cycle α alg = MONOLAYER_ALG
+monolayer_run(cb_problem(400), 1, merge(P615F_CASES.b, (; cells = 2)))           # compile
+for c in MONOLAYER_CASES, k in 1:MONOLAYER_RUNS
     cc = P615F_CASES[c]
-    sd = mc_seed(c, k)
-    wall = @elapsed r = mc_run(cb_problem(cc.L), sd, cc)
+    sd = monolayer_seed(c, k)
+    wall = @elapsed r = monolayer_run(cb_problem(cc.L), sd, cc)
     open(tsf, "a") do io
         for x in r.rec
             println(io, join((c, sd, x.mcs, x.N, cb_f64(x.r), cb_f64(x.A), cb_f64(x.C), cb_f64(x.w), cb_f64(x.g)), '\t'))
@@ -82,7 +84,7 @@ o1v = Dict((r["case"], parse(Int, r["seed"])) => r for r in p615m_tsv(o1f))
 o1seq = ref_o1()
 lostof(rows) = Dict(parse(Int, r["seed"]) => parse(Int, r["divisions"]) + 1 - parse(Int, r["live"]) for r in rows)
 nflag, nrow = 0, 0
-for c in string.(MC_CASES)
+for c in string.(MONOLAYER_CASES)
     P = P615M_CASES[c]
     M = Dict{String, Any}()
     for (alg, sers, lost, o1) in (
@@ -103,7 +105,7 @@ for c in string.(MC_CASES)
         Dict(k => p615m_vals(M["sequential"][k]) for k in P615M_ALL),
         Dict(k => p615m_vals(M["variant"][k]) for k in P615M_ALL); z = zc
     )
-    open(joinpath(MC_OUT, "comparison_$c.tsv"), "w") do io
+    open(joinpath(MONOLAYER_OUT, "comparison_$c.tsv"), "w") do io
         println(io, join(("metric", "mean_ref", "mean_alt", "ratio", "z", "beyond"), '\t'))
         for t in tab
             println(io, join((t.metric, cb_f64(t.mean_ref), cb_f64(t.mean_alt), cb_f64(t.mean_alt / t.mean_ref), cb_f64(t.z), t.beyond), '\t'))

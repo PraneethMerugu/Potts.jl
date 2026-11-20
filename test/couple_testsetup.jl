@@ -1,4 +1,7 @@
-# The top-level definitions of couple_testsetup.jl, fields_couple_bindings_tests.jl, fields_short.jl, fields_couple_names_tests.jl, fields_couple_arrays_faces_tests.jl, fields_couple_inputs_tests.jl (converted from the include-into-Main suite).
+# Shared definitions of the coupled-PDESystem tests: fields_couple_tests.jl,
+# fields_couple_bindings_tests.jl, fields_short_tests.jl, fields_couple_names_tests.jl,
+# fields_couple_arrays_faces_tests.jl, fields_couple_inputs_tests.jl and
+# fields_discretization_tests.jl.
 
 @testsetup module CoupleSetup
 using Potts, Test
@@ -440,9 +443,9 @@ end
 end
 
 CeHostArr(; name = :CeHostArr, kw...) = _CeArrBase(; variant = :host, name, kw...)
-CeFiCompB(; name = :CeFiCompB, kw...) = _CeArrBase(; variant = :fi_comp, name, kw...)
-CeFiDriveB(; name = :CeFiDriveB, kw...) = _CeArrBase(; variant = :fi_drive, name, kw...)
-CeFcCompB(; name = :CeFcCompB, kw...) = _CeArrBase(; variant = :fc_comp, name, kw...)
+ArrayFieldsComponent(; name = :ArrayFieldsComponent, kw...) = _CeArrBase(; variant = :fi_comp, name, kw...)
+ArrayFieldsDrive(; name = :ArrayFieldsDrive, kw...) = _CeArrBase(; variant = :fi_drive, name, kw...)
+ArrayConstraintsComponent(; name = :ArrayConstraintsComponent, kw...) = _CeArrBase(; variant = :fc_comp, name, kw...)
 CeFiScal(; name = :CeFiScal, kw...) = _CeArrBase(; variant = :fi_scal, name, kw...)
 CeFiDriveScal(; name = :CeFiDriveScal, kw...) = _CeArrBase(; variant = :fi_drive_scal, name, kw...)
 CeFcScal(; name = :CeFcScal, kw...) = _CeArrBase(; variant = :fc_scal, name, kw...)
@@ -545,7 +548,7 @@ CeW1(; name = :CeW1, kw...) = _CeWBase(; w = CE_W1, name, kw...)
 CeW2(; name = :CeW2, kw...) = _CeWBase(; w = CE_W2, name, kw...)
 
 # ---- from fields_couple_inputs_tests.jl -----------------------------------------------------------------------
-module Inp
+module Input
 using Potts: Potts
 using Potts.Fields
 @parameters Dc = 0.5 s = 0.4 k = 0.05
@@ -582,17 +585,17 @@ auxnobc() = auxbc([])
     name = :sys)
 end
 
-@potts_model InpHost begin
+@potts_model InputHost begin
     @kinds medium cell other
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells => (volume - 9.0)^2
     @sweep Metropolis(; temperature = 1.0)
 end
 
-inp_op() = (σ = zeros(Int32, 12, 10); σ[4:6, 3:5] .= 1; [ownership => σ, kind => [:cell]])
+input_op() = (σ = zeros(Int32, 12, 10); σ[4:6, 3:5] .= 1; [ownership => σ, kind => [:cell]])
 
-inp_model(fields; kinds = :(@kinds medium cell other)) = :(
-    @potts_model InpM begin
+input_model(fields; kinds = :(@kinds medium cell other)) = :(
+    @potts_model InputM begin
     $kinds
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells => (volume - 9.0)^2
@@ -600,7 +603,7 @@ inp_model(fields; kinds = :(@kinds medium cell other)) = :(
     @sweep Metropolis(; temperature = 1.0)
 end)
 
-inp_new(ex) = cp_msg(() -> (Core.eval(@__MODULE__, ex); Base.invokelatest(() -> InpM(; name = :m))))
+input_new(ex) = cp_msg(() -> (Core.eval(@__MODULE__, ex); Base.invokelatest(() -> InputM(; name = :m))))
 
 @potts_model _FaceOnly8x6 begin
     @structural_parameters sys_fn = CeFace.nolap
@@ -613,14 +616,14 @@ end
 
 CeFaceB(; name = :CeFaceB, kw...) = _FaceOnly8x6(; sys_fn = CeFace.nolap, name, kw...)
 CeFaceLapB(; name = :CeFaceLapB, kw...) = _FaceOnly8x6(; sys_fn = CeFace.lap, name, kw...)
-InpFaceW(; name = :InpFaceW, kw...) = _FaceOnly8x6(; sys_fn = Inp.withbc, name, kw...)
-InpFaceN(; name = :InpFaceN, kw...) = _FaceOnly8x6(; sys_fn = Inp.nobc, name, kw...)
-InpAuxBcs(; name = :InpAuxBcs, kw...) = _FaceOnly8x6(; sys_fn = Inp.auxbc, name, kw...)
-InpAuxNo(; name = :InpAuxNo, kw...) = _FaceOnly8x6(; sys_fn = Inp.auxnobc, name, kw...)
+InputFaceW(; name = :InputFaceW, kw...) = _FaceOnly8x6(; sys_fn = Input.withbc, name, kw...)
+InputFaceN(; name = :InputFaceN, kw...) = _FaceOnly8x6(; sys_fn = Input.nobc, name, kw...)
+InputAuxBcs(; name = :InputAuxBcs, kw...) = _FaceOnly8x6(; sys_fn = Input.auxbc, name, kw...)
+InputAuxNo(; name = :InputAuxNo, kw...) = _FaceOnly8x6(; sys_fn = Input.auxnobc, name, kw...)
 
-inp_face_op() = (σ = zeros(Int32, 8, 6); σ[4:6, 3:5] .= 1; [ownership => σ, kind => [:A]])
-inp_u(m; kw...) = (pr = PottsProblem(m(; name = :m), inp_face_op(), (0, 3); seed = 1, kw...); Array(solve(pr, SequentialCPM()).u[end].site.u))
-inp_hand() = (u = zeros(8, 6); u[1, :] .= 10 * (1 - (1 - 0.1 / 4)^12); u)
+input_face_op() = (σ = zeros(Int32, 8, 6); σ[4:6, 3:5] .= 1; [ownership => σ, kind => [:A]])
+input_u(m; kw...) = (pr = PottsProblem(m(; name = :m), input_face_op(), (0, 3); seed = 1, kw...); Array(solve(pr, SequentialCPM()).u[end].site.u))
+input_hand() = (u = zeros(8, 6); u[1, :] .= 10 * (1 - (1 - 0.1 / 4)^12); u)
 
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end

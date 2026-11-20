@@ -152,13 +152,13 @@ end
 end
 
 
-module FnModA
+module DoubleFunction
     using Potts.Symbolics: Symbolics, @register_symbolic
     f(x) = 2x
     @register_symbolic f(x)
 end
 
-module FnModB
+module TripleFunction
     using Potts.Symbolics: Symbolics, @register_symbolic
     f(x) = 3x
     @register_symbolic f(x)
@@ -169,7 +169,7 @@ end
     @parameters begin
         T = 1.0
         λ = 2.0
-        λ2 = FnModA.f(λ)
+        λ2 = DoubleFunction.f(λ)
     end
     @energy cells => λ2 * (volume - 9.0)^2
     @lattice Lattice((12, 12))
@@ -181,7 +181,7 @@ end
     @parameters begin
         T = 1.0
         λ = 2.0
-        λ2 = FnModB.f(λ)
+        λ2 = TripleFunction.f(λ)
     end
     @energy cells => λ2 * (volume - 9.0)^2
     @lattice Lattice((12, 12))
@@ -257,7 +257,7 @@ end
 
 const _MN_DEFAULT_COMP = MTKB.System(Potts.Equation[], Potts.t; name = :comp)
 
-@potts_model CompRoute begin
+@potts_model ComponentRoute begin
     @structural_parameters comp_sys = _MN_DEFAULT_COMP
     @kinds medium A
     @components cells(A) comp = comp_sys
@@ -284,7 +284,7 @@ end
 
 function compmodel(sys)
     σ = zeros(Int32, 10, 10); σ[3:5, 3:5] .= 1
-    return PottsProblem(CompRoute(; name = :cr, comp_sys = sys), [ownership => σ, kind => [:A]], (0, 2))
+    return PottsProblem(ComponentRoute(; name = :cr, comp_sys = sys), [ownership => σ, kind => [:A]], (0, 2))
 end
 
 emsg(f, E::Type{<:Exception} = ArgumentError) = try

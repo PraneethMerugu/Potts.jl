@@ -9,15 +9,15 @@
     @testset "array fields of a PDESystem are the components u_1, …, u_n" begin
         op = ce_op((12, 10))
         for fs in (BackwardEuler(), CrankNicolson())
-            a, b = ce_steps(CeFiCompB(; name = :f), op, 3; field_solver = fs), ce_steps(CeFiScal(; name = :f), op, 3; field_solver = fs)
+            a, b = ce_steps(ArrayFieldsComponent(; name = :f), op, 3; field_solver = fs), ce_steps(CeFiScal(; name = :f), op, 3; field_solver = fs)
             @test filter(n -> !endswith(string(n), "__next"), first.(a[end])) == [:u_1, :u_2] && ce_values(a) == ce_values(b)   # bitwise, by component
         end
-        a, b = ce_steps(CeFcCompB(; name = :f), op, 3), ce_steps(CeFcScal(; name = :f), op, 3)
+        a, b = ce_steps(ArrayConstraintsComponent(; name = :f), op, 3), ce_steps(CeFcScal(; name = :f), op, 3)
         @test ce_values(a) == ce_values(b) && maximum(abs, last(a[end][1])) > 0.01
         # `Potts.couple` too, and `@fields u = …` bound the vector of the components
         m = Potts.couple(CeHostArr(; name = :h), CeArr.fi())
-        @test ce_steps(m, op, 3; field_solver = BackwardEuler()) == ce_steps(CeFiCompB(; name = :f), op, 3; field_solver = BackwardEuler())
-        d = ce_steps(CeFiDriveB(; name = :f), op, 3; field_solver = BackwardEuler(), seed = 3)
+        @test ce_steps(m, op, 3; field_solver = BackwardEuler()) == ce_steps(ArrayFieldsComponent(; name = :f), op, 3; field_solver = BackwardEuler())
+        d = ce_steps(ArrayFieldsDrive(; name = :f), op, 3; field_solver = BackwardEuler(), seed = 3)
         @test ce_values(d) == ce_values(ce_steps(CeFiDriveScal(; name = :f), op, 3; field_solver = BackwardEuler(), seed = 3))
         # only vectors: a matrix of fields is refused by its shape
         e = cp_msg(() -> Potts.couple(CeHostArr(; name = :h), CeArr.mat()))

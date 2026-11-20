@@ -253,7 +253,7 @@ end
 
 
 # `Potts.component`
-@potts_model ComponentOf begin
+@potts_model DecayWithEnergy begin
     @kinds medium cell
     @parameters λ = 2.0
     @variables x(model) = 1.0
