@@ -39,7 +39,7 @@ using .LF_solvers_coefficients: fd
     sv, u = primal_solve(box)
     du = tangent!(sv, u, :shift)
     ref = fd(box, :shift, 1e-5)
-    @test relmax(du, ref) <= 1e-5                       # measured: 4e-7
+        @test relmax(du, ref) <= 1.0e-5                       # measured: 4e-7
     # u is linear in the Dirichlet value: the tangent is exact
     dg = tangent!(sv, u, (:dirichlet, 1, 2))
     @test relmax(dg, fd(box, (:dirichlet, 1, 2), 0.1)) <= 1e-8

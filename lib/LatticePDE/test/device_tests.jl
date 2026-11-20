@@ -644,7 +644,7 @@ using .LP_device: fd, kron
         sh = solve(mk(KernelAbstractions.CPU()), ExplicitEuler(); dt = 0.01f0, saveat = 0.1)
     @test sd.t == sh.t && all(i -> isapprox(Array(sd[ce, i]), sh[ce, i]; rtol = 1.0f-5), eachindex(sd.t))
     @test maximum(sh[ce, length(sh.t)]) > 0.05
-    # a function that returns a device array (the checks read a host copy)
+        # a function that returns a device array (the checks read a host copy)
     QD(s) = copyto!(KernelAbstractions.allocate(PDEV, Float64, 8, 8), Q(s))
     pg = discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float32, backend = PDEV); inputs = [dqe => QD])
         sg = solve(pg, ExplicitEuler(); dt = 0.01f0, saveat = 0.1)

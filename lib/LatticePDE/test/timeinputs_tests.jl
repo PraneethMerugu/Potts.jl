@@ -152,17 +152,17 @@ end
     @test occursin("takes no time argument", msg(() -> discretize(tisrc(), tidisc(); inputs = [tiqe => () -> 1.0])))
     @test occursin("has 4 values", msg(() -> discretize(tisrc(), tidisc(); inputs = [tiqe => s -> zeros(2, 2)])))
         @test occursin("has 4 values", msg(() -> solve(discretize(tisrc(), tidisc(); inputs = [tiqe => s -> s < 0.1 ? zeros(8, 8) : zeros(2, 2)]), alg; dt = 0.01)))
-    # a write of an input a function gives is refused on both paths, naming `remake`
+        # a write of an input a function gives is refused on both paths, naming `remake`
         for ig in (init(fp, alg; dt = 0.01), init(fp, Tsit5()))
         step!(ig)
         @test occursin("remake(prob; inputs = [:tiq => K])", msg(() -> (ig.ps[tiqe] = fill(7.0, TI_N, TI_N))))
     end
-    # a new time span re-evaluates the input at its start
+        # a new time span re-evaluates the input at its start
     @test remake(fp; tspan = (0.3, 0.5)).ps[tiqe] == tiQ(0.3)
-    # values with derivative parts are refused in words
+        # values with derivative parts are refused in words
     @test occursin("plain numbers", msg(() -> discretize(tisrc(), tidisc();
         inputs = [tiqe => s -> fill(ForwardDiff.Dual(s, 1.0), TI_N, TI_N)])))
-    # an out-of-type result on the ODE path is named as such
+        # an out-of-type result on the ODE path is named as such
     ip = discretize(tiint(), tidisc(); inputs = [tike => s -> fill(s < 0.1 ? Int64(1) : Int64(2)^40, TI_N, TI_N)])
     @test occursin("integer values in its type's range", msg(() -> solve(ip, Tsit5())))
     # the warm step of constant inputs allocates nothing; with a function, only what it returns

@@ -380,7 +380,7 @@ Markdown.parse(join(dev_rows, "\n")) #hide
 base = PottsProblem(PottsModels.AkeebInvasion(; name = :akeeb), akeeb_state(; seed = 1), (0, 701); capacity = 4000, seed = 1)
 par(name) = getp(base, name)(base)
 J = par(:J)
-Markdown.parse("""
+parameters_md = """
 | Symbol | Value | Units | Meaning | Source | Status |
 |---|---|---|---|---|---|
 | lattice | 500 × 300, x periodic, y closed | sites (1 site ≈ 2.5 µm) | domain | p.4, Table 1; X:14, X:18–19 | stated (y wall: code only) |
@@ -397,7 +397,8 @@ Markdown.parse("""
 | PP | 0.5 (default); scanned over 0…1 | — | P(follower has a clock), per follower | p.6, Table 1; S:131 | stated (paper: a fixed-size subset, D4) |
 | leaders | 25 % of the counted inventory | — | one-site leaders inserted into followers | p.5; S:64–75 | code (D1, MD-1) |
 | duration | 701 sweeps, measured as "MCS 700" | MCS | — | p.4, p.7; X:15 | stated; mapping from the data (spec 10 §5.3.2) |
-""")
+"""
+Markdown.parse(parameters_md)
 
 # **Units and time.** Lengths are lattice sites, areas are px² (the paper's µm² are px² ×
 # 6.25). One MCS is N copy attempts, N the number of sites, as in CompuCell3D (p.4). Each

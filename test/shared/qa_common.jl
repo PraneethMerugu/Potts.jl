@@ -294,23 +294,21 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
         return (; bad_errors, bad_catches, bad_invariant_forms, bad_stale, found_invariants)
     end
 
-    """
-        qa_error_rules(pkg_root; reviewed_invariants = String[], allowed_bcs_files = String[])
-
-    Verify that `src/` and `ext/` in `pkg_root` contain:
-    - no `error(...)`, `Base.error(...)`, or `ErrorException(...)` calls,
-    - no bare `catch` clauses (`try ... catch; ... end` without an exception binding),
-    - internal `"please report"` invariants thrown exclusively via `AssertionError` and matching
-      `reviewed_invariants`,
-    and run negative controls proving every guard flags synthetic violations.
-    """
+    # qa_error_rules(pkg_root; reviewed_invariants = String[], allowed_bcs_files = String[])
+    #
+    # Verify that `src/` and `ext/` in `pkg_root` contain:
+    # - no `error(...)`, `Base.error(...)`, or `ErrorException(...)` calls,
+    # - no bare `catch` clauses (`try ... catch; ... end` without an exception binding),
+    # - internal `"please report"` invariants thrown exclusively via `AssertionError` and
+    #   matching `reviewed_invariants`,
+    # that `src/`, `ext/`, and `test/` contain no stale front-end wording (a front end named by a
+    # letter, "both front ends", "@bcs" outside the explicit legacy-section refusal), and run
+    # negative controls proving every guard flags synthetic violations.
     function qa_error_rules(
             pkg_root::AbstractString;
             reviewed_invariants::AbstractVector{<:AbstractString} = String[],
             allowed_bcs_files::AbstractVector{<:AbstractString} = String[]
         )
-        # also: `src/`, `ext/` and `test/` hold no stale front-end wording (a front end named by
-        # a letter, "both front ends", "@bcs" outside the explicit legacy-section refusal)
         Test = Base.require(Base.PkgId(Base.UUID("8dfed614-e22c-5e08-85e1-65c5234f0b40"), "Test"))
         (; bad_errors, bad_catches, bad_invariant_forms, bad_stale, found_invariants) =
             _qa_collect_tree(pkg_root, allowed_bcs_files)

@@ -233,7 +233,7 @@ end
     q = qs(lp)
     @test lp.ps[ls] == 3.0 && maximum(abs, lp.A * q .- lp.b) < 1e-10        # A and b follow the writes
     @test maximum(abs, q .- qs(remake(discretize(sl, odisc()); p = [ls => 3.0, la => 5.0]))) < 1e-12
-    # (0a182a0e: GMRES was off by 1.1 after a parameter write)
+        # (0a182a0e: GMRES was off by 1.1 after a parameter write)
     r = solve(lp, LinearSolve.KrylovJL_GMRES(); abstol = 1e-13, reltol = 1e-13)
         @test maximum(abs, r.u .- q) < 1.0e-9 || (println("GMRES error: ", maximum(abs, r.u .- q)); false)
     # a factorization names its routes (0a182a0e: "no method matching copy(::LatticeOperator)");

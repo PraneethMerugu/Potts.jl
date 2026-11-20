@@ -389,7 +389,8 @@ function b01_deviation_row(v)
 end
 b01_deviation_rows = [b01_deviation_row(v) for v in b01_rows if v["result"] == "FAIL"]
 if RECORD_01B === nothing
-    Markdown.parse("**Provisional.** The 01b record (1330 runs) has not landed yet, so the panels show " *
+    Markdown.parse(
+        "**Provisional.** The 01b record (1330 runs) has not landed yet, so the panels show " *
                    "the paper's digitized curves alone and no 01b verdict is claimed.")
 else
     p01b = TOML.parsefile(joinpath(RECORD_01B, "provenance.toml"))
@@ -583,7 +584,7 @@ p08 = PottsProblem(Merks2008(; name = :m8, lattice = (20, 20)), frame_op((20, 20
 v6(n) = getp(p06, n)(p06)
 v8(n) = getp(p08, n)(p08)
 J6, J8 = v6(:J), v8(:J)
-Markdown.parse("""
+parameters_md = """
 | Symbol | 2006 | 2008 | Units | Meaning | Source | Status |
 |---|---|---|---|---|---|---|
 | J(c,c), J(c,M), J(c,B), J(M,B) | $(J6[2, 2]), $(J6[1, 2]), $(J6[2, 3]), $(J6[1, 3]) | $(J8[2, 2]), $(J8[1, 2]), $(J8[2, 3]), $(J8[1, 3]) | energy | adhesion | 01a p.48; 01b p.11; J(M,B) ca.cpp:236-238 | stated; J(M,B) code-only |
@@ -599,7 +600,8 @@ Markdown.parse("""
 | α = ε | $(v6(:α)) | $(v8(:α)) | 1/MCS | 1.8·10⁻⁴ s⁻¹ (2006), 10⁻³ s⁻¹ (2008), × 30 s | 01a p.49; 01b p.3 | derived |
 | t_relax | — | $(v8(:t_relax)) | MCS | relaxation without the field | sprout_*.par:40 | code-only (paper-vs-code item M6) |
 | lattice | 500 × 500, frame 1 | 202 × 202, frame 2 | sites | domain incl. frozen frame | 01a Fig. 4; sprout_*.par:34-35 | stated / code |
-""")
+"""
+Markdown.parse(parameters_md)
 
 # **Units.** One site is 2 µm × 2 µm; one MCS is 30 s (01a p.50; 01b p.11), the 15 field
 # substeps of 2 s. One of our MCS is one copy attempt per mobile site, the frozen frame
@@ -830,7 +832,9 @@ full = if FULL
                                       (compactness(r[5000]), compactness(r[5100]))), 1:10)
                for (k, (T, mode)) in enumerate(((50.0, :extension_only), (50.0, :extension_retraction),
                                                  (800.0, :extension_only), (800.0, :extension_retraction))))
-    disp(seed; p) = (r = run08(seed, [0, 19_300]; p); mean(((a, b),) -> hypot((b .- a)...),            # from MCS 0
+    disp(seed; p) = (
+        r = run08(seed, [0, 19_300]; p); mean(
+            ((a, b),) -> hypot((b .- a)...),            # from MCS 0
         zip([(mean(I[1] for I in findall(==(c), r[0])), mean(I[2] for I in findall(==(c), r[0]))) for c in 2:129],
             [(mean(I[1] for I in findall(==(c), r[19_300])), mean(I[2] for I in findall(==(c), r[19_300]))) for c in 2:129])))
     vc12 = (; ci = tmap(i -> disp(12_000 + i; p = Pair[]), 1:10), no = tmap(i -> disp(12_100 + i; p = [:χcc => 500.0]), 1:10))

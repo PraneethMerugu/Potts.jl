@@ -859,7 +859,8 @@ function _openvt_pkg_figure_rows(facts)
     gap = facts.min_gap === nothing ? "" : "; no run came closer than $(facts.min_gap) sites"
     append!(rows, [
         ("F4 drawing", "cell i's outline and the in-panel names left out; counts as numbers",
-            "a black outline of cell i, names, coloured count glyphs", "no outlines", "not an author question"),
+                "a black outline of cell i, names, coloured count glyphs", "no outlines", "not an author question",
+            ),
         ("F5 distance bins and origin",
             "M's shared edges $(join(_openvt_pkg_g.(_OPENVT_PKG_F5_EDGES), ", ")) for figures/fig5.png, binned in R (provisional). " *
             "$(_OPENVT_PKG_F5_UNIT). The F5 record's verdict " *
@@ -1037,7 +1038,7 @@ end
 
 _openvt_pkg_sweep_row(recs) =
     _openvt_pkg_row("F6, T1, F7", "run in the record `$(recs[:sweeps])`; its failing rows are listed above",
-        "Figure 6, Table 1, Figure 7", "the protocol and targets were frozen before the run",
+    "Figure 6, Table 1, Figure 7", "the protocol and targets were frozen before the run",
         "not an author question")
 
 # the licence line of both READMEs (D-181)

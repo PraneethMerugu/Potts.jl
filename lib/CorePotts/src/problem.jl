@@ -1264,7 +1264,7 @@ function _mobility_scratch(backend, prob, ::MaskMobility)
     I = site_index_type(nsites(prob.lattice))
     I === Int64 && !_atomic64(backend) && throw(ArgumentError(
         "this lattice has $(nsites(prob.lattice)) sites and a frozen mask that follows the state: its refresh " *
-        "counts sites in Int64 atomics, which $(nameof(typeof(backend))) does not have; " *
+                "counts sites in Int64 atomics, which $(nameof(typeof(backend))) does not have; " *
         "run it on the CPU or on ROCm or CUDA"))
     return MobileCounters(KernelAbstractions.zeros(backend, I, 3), zeros(I, 3))
 end
@@ -1275,7 +1275,9 @@ function _check_convert_atomics(backend, u0)
     haskey(u0.model, CONVERT_FLAGS) || return nothing
     (eltype(getfield(u0.model, CONVERT_FLAGS)) === Int64 && !_atomic64(backend)) && throw(ArgumentError(
             "this lattice has $(length(u0.ownership)) sites and an @convert pass: it keeps site indices in Int64 atomics, " *
-        "which $(nameof(typeof(backend))) does not have; run it on the CPU or on ROCm or CUDA"))
+                "which $(nameof(typeof(backend))) does not have; run it on the CPU or on ROCm or CUDA"
+        )
+    )
     return nothing
 end
 
