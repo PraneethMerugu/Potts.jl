@@ -40,14 +40,16 @@ using LatticeFields.Problems: FieldProblem, FieldSlot, LatticeIndex,
                               field_report
 using ModelingToolkitBase: ModelingToolkitBase, PDESystem, Pre, ShiftIndex, Shift, Hold, Sample, get_bcs, get_domain, get_dvs,
     get_eqs, get_initial_conditions, get_ivs, get_ps, get_systems
+using PrecompileTools: @setup_workload, @compile_workload
 using SciMLBase: AbstractDiscretization, NullParameters, remake
 using SymbolicIndexingInterface: getp, getu, setp, parameter_index
-import SciMLBase: discretize, symbolic_discretize
 using Symbolics: Symbolics, Differential, Equation, Num, VarDomainPairing, @register_symbolic,
                  unwrap, substitute
 using SymbolicUtils: SymbolicUtils, arguments, iscall, operation, unwrap_const
 using SymbolicUtils.Code: toexpr
 using TermInterface: TermInterface
+
+import SciMLBase: discretize, symbolic_discretize
 
 public Δ, pdesystem, pdesystem_refusal, is_crossgrid_key, operand_reads, LatticeCutField, euler_update, bound_parts, StabilityBound, lower_group, DeferredBound, DeferredOperator, OPERATOR_BUILDS, resolve_bound, lowers_call, check_one_kind, velocity_terms, as_written,
     derivation, VCycle, steady_rows, steady_form, steady_choice, steady_sign

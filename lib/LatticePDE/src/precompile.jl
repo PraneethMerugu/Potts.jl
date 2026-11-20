@@ -8,7 +8,6 @@
 # expression, so a user problem whose kernels match one of these (the same terms and faces)
 # also reuses the compiled kernels. (A user turns the workload off with PrecompileTools'
 # preference `precompile_workload = false`.) The tests call it too.
-using PrecompileTools: @setup_workload, @compile_workload
 
 function _precompile_workload()
     t, D = ModelingToolkitBase.t_nounits, ModelingToolkitBase.D_nounits
