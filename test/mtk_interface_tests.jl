@@ -5,7 +5,7 @@
 using Test, Potts, PottsModels
 using Potts.ModelingToolkitBase: ModelingToolkitBase, System, @variables, @parameters
 using Potts.SymbolicIndexingInterface: SymbolicIndexingInterface as SII
-include(joinpath(@__DIR__, "shared", "mtk_interface.jl"))
+include(joinpath(@__DIR__, "shared", "qa_common.jl"))
 
 const M = ModelingToolkitBase
 
@@ -75,6 +75,9 @@ end
     @testset "Potts model with fields" begin
         merks(; name) = MerksVasculogenesis(; name, lattice = (8, 8))
         qa_mtk_system_interface(merks(; name = :merks); rebuild = merks, component = clock_system())
+    end
+    @testset "a system type missing an accessor fails the walk" begin
+        qa_mtk_system_interface_control()
     end
 end
 

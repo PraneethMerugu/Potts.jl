@@ -23,6 +23,7 @@ include("shared/odepath.jl")
 include("shared/precond.jl")
 include("shared/groups_coupling.jl")
 include("shared/implicit.jl")
+include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "qa_common.jl"))
 include("shared/export_all.jl")
 end
 
@@ -107,5 +108,27 @@ end
             @test_throws ArgumentError remake(fp; p = [:nonexistent_param => 1.0])
             @test_throws ArgumentError remake(ode; p = [:nonexistent_param => 1.0])
         end
+    end
+end
+
+# SciMLBase's integrator and solution interface on a discretized PDESystem solved by a field
+# algorithm (the shared check), with DiffEqCallbacks' timed callbacks
+@testitem "discretized ODEProblem: the shared SciMLBase interface check" setup = [LP_sciml_conformance] tags = [:latticepde, :sciml] begin
+    using DiffEqCallbacks: PresetTimeCallback, PeriodicCallback
+    @testset "discretized ODEProblem: the shared SciMLBase interface check" begin
+        @parameters iD = 0.05 ik = 1.0
+        @variables ic(..)
+        ice = ic(t, x, y)
+        sys = PDESystem(
+            [D(ice) ~ iD * laplacian(ice) - ik * ice], [ic(0, x, y) ~ 1.0 + x * y],
+            [t ∈ Interval(0.0, 0.4), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)],
+            [t, x, y], [ice], [iD, ik]; name = :sciml_shared
+        )
+        ode = discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float64))
+        callbacks = (; preset = PresetTimeCallback, periodic = PeriodicCallback, times = [0.1, 0.3], period = 0.1, want = [0.1, 0.2, 0.3])
+        qa_sciml_interface(
+            ode, ExplicitEuler(); kw = (; dt = 0.1), h = 0.1, stop = 0.25, nwin = 4, tf = 0.4,
+            state_copy = integ -> copy(Array(integ.u)), live_write! = integ -> (integ.u .= 2.0; nothing), callbacks
+        )
     end
 end

@@ -23,6 +23,7 @@ struct AtMCS{K} end                     # a condition type per MCS: distinct cal
 # D-009: without an algorithm, SequentialCPM() on the CPU; a device backend has no
 # default and says to pass CheckerboardCPM
 struct TestDevice <: CorePotts.KernelAbstractions.Backend end
+include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "qa_common.jl"))
 include("shared/export_all.jl")
 end
 
@@ -361,5 +362,18 @@ end
         step!(integ)
         @test integ.retcode == ReturnCode.Unstable && SciMLBase.check_error(integ) == ReturnCode.Unstable
         @test_throws ArgumentError step!(integ)                                    # a finished run
+    end
+end
+
+# SciMLBase's integrator and solution interface on a hand-written model (the shared check)
+@testitem "SciMLBase interface on a hand-written CPM problem" setup = [CP_sciml] tags = [:corepotts, :sciml] begin
+    @testset "SciMLBase interface on a hand-written CPM problem" begin
+        σ, kinds = blocks((40, 40), 5)
+        prob = PottsProblem(GG, initial_state(σ, kinds), Lattice((40, 40)), (0, 10), gg_params(); seed = 3)
+        qa_sciml_interface(
+            prob, SequentialCPM(; proposal = Moore(1)); h = 3, stop = 7, nwin = 10, tf = 10,
+            state_copy = integ -> copy(current_state(integ).ownership),
+            live_write! = integ -> (integ.u.cell.kind[1] = integ.u.cell.kind[2]; nothing)
+        )
     end
 end
