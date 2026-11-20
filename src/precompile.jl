@@ -84,7 +84,7 @@ function _precompile_workload()
         lattice = lattice_spec((16, 16); neighborhood = Moore(1)), parameters = Any[λ, V₀, T, J],
         variables = Any[mark],
         energies = [energy(cells(1) => λ * (volume - V₀)^2 + λ * (surface - V₀)^2),
-            energy(contacts => _index(J, kind, neighbor_kind)),
+            energy(CONTACTS => _index(J, kind, neighbor_kind)),
         ],
         drives = [drive(COPY => ifelse(_index(kind, new) == 1, -λ * (_index(mark, target) - _index(mark, source)), 0.0))],
         constraints = [connectivity(1)],
