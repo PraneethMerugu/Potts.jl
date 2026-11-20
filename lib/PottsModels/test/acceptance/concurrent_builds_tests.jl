@@ -237,10 +237,10 @@ function signature(label, sys)
 end
 function concurrent_build(label)
     return try
-            CASES[label][1]()
-        catch e
-            e
-        end
+        CASES[label][1]()
+    catch e
+        e
+    end
 end
 const SERIAL = Dict(l => signature(l, concurrent_build(l)) for l in keys(CASES))
 """Compare the systems `built` (label => system) with the serial builds; return the failures."""

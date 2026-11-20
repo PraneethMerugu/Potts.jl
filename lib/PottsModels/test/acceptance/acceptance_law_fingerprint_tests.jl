@@ -147,29 +147,29 @@ function two_wortel()
 end
 function unchanged()
     return (
-            "fixture Metropolis()" => () -> problem("Metropolis()"),
-            "fixture Metropolis(offset = 0)" => () -> problem("Metropolis(offset = 0)"),
-            "GranerGlazier" => () -> (s = graner_glazier_state(); PottsProblem(GranerGlazier(; name = :gg), [ownership => s[1], kind => s[2]], (0, 10))),
-            "WortelAct" => () -> PottsProblem(WortelAct(; name = :act, lattice = (8, 8)), two_wortel(), (0, 10)),
-            "WortelAct connected" => () -> PottsProblem(WortelAct(; name = :act, lattice = (8, 8), connected = true), two_wortel(), (0, 10)),
-            "MerksVasculogenesis" => () -> PottsProblem(
-                MerksVasculogenesis(; name = :merks, lattice = (8, 8)),
-                [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]], (0, 10);
-                field_solver = Potts.ExplicitEuler(substeps = 2, lower_bound = 0.0)
-            ),
-            "SingleDivisionFixture" => () -> PottsProblem(
-                SingleDivisionFixture(; name = :fixture),
-                [ownership => (s = zeros(Int32, 12, 8); s[5:8, 4:5] .= 1; s), kind => [:epithelial]], (0, 10)
-            ),
-            "OpenVTGrowingMonolayer" => () -> PottsProblem(
-                OpenVTGrowingMonolayer(; name = :openvt, lattice = (24, 24)),
-                openvt_monolayer_state(; lattice = (24, 24)), (0, 10); capacity = 64
-            ),
-            "AkeebInvasion" => () -> PottsProblem(
-                AkeebInvasion(; name = :akeeb, lattice = (60, 40)), akeeb_state(; lattice = (60, 40)), (0, 10);
-                capacity = 256
-            ),
-        )
+        "fixture Metropolis()" => () -> problem("Metropolis()"),
+        "fixture Metropolis(offset = 0)" => () -> problem("Metropolis(offset = 0)"),
+        "GranerGlazier" => () -> (s = graner_glazier_state(); PottsProblem(GranerGlazier(; name = :gg), [ownership => s[1], kind => s[2]], (0, 10))),
+        "WortelAct" => () -> PottsProblem(WortelAct(; name = :act, lattice = (8, 8)), two_wortel(), (0, 10)),
+        "WortelAct connected" => () -> PottsProblem(WortelAct(; name = :act, lattice = (8, 8), connected = true), two_wortel(), (0, 10)),
+        "MerksVasculogenesis" => () -> PottsProblem(
+            MerksVasculogenesis(; name = :merks, lattice = (8, 8)),
+            [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]], (0, 10);
+            field_solver = Potts.ExplicitEuler(substeps = 2, lower_bound = 0.0)
+        ),
+        "SingleDivisionFixture" => () -> PottsProblem(
+            SingleDivisionFixture(; name = :fixture),
+            [ownership => (s = zeros(Int32, 12, 8); s[5:8, 4:5] .= 1; s), kind => [:epithelial]], (0, 10)
+        ),
+        "OpenVTGrowingMonolayer" => () -> PottsProblem(
+            OpenVTGrowingMonolayer(; name = :openvt, lattice = (24, 24)),
+            openvt_monolayer_state(; lattice = (24, 24)), (0, 10); capacity = 64
+        ),
+        "AkeebInvasion" => () -> PottsProblem(
+            AkeebInvasion(; name = :akeeb, lattice = (60, 40)), akeeb_state(; lattice = (60, 40)), (0, 10);
+            capacity = 256
+        ),
+    )
 end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end

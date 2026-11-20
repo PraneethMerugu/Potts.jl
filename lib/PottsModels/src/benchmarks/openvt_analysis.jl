@@ -314,8 +314,10 @@ function write_openvt(io::IO, format::Symbol, data::NamedTuple)
         ndims(W) == 2 && size(W, 1) == length(data.t) ||
             throw(DimensionMismatch("write_openvt: O4 widths must be a length(t) × replicates matrix"))
         R = size(W, 2)
-        print(io, "Normalized time (T),", join(("Tissue width rep$k (CD)" for k in 1:R), ','),
-            R > 0 ? "," : "", "Mean Tissue width (CD),STD Tissue width (CD)\n")
+        print(
+            io, "Normalized time (T),", join(("Tissue width rep$k (CD)" for k in 1:R), ','),
+            R > 0 ? "," : "", "Mean Tissue width (CD),STD Tissue width (CD)\n"
+        )
         for (k, row) in enumerate(eachrow(W))
             s = 0.0
             for v in row
@@ -508,8 +510,12 @@ key set (else `ArgumentError`). One row per metric, sorted by metric id, each
 """
 function openvt_spread_table(ref::AbstractDict{String, <:AbstractVector}, alt::AbstractDict{String, <:AbstractVector}; z::Real = 4.42)
     Set(keys(ref)) == Set(keys(alt)) ||
-        throw(ArgumentError("openvt_spread_table: `ref` and `alt` have different metrics: " *
-                            "only in ref $(sort!(collect(setdiff(keys(ref), keys(alt))))), " *
-                            "only in alt $(sort!(collect(setdiff(keys(alt), keys(ref)))))"))
+        throw(
+        ArgumentError(
+            "openvt_spread_table: `ref` and `alt` have different metrics: " *
+                "only in ref $(sort!(collect(setdiff(keys(ref), keys(alt))))), " *
+                "only in alt $(sort!(collect(setdiff(keys(alt), keys(ref)))))"
+        )
+    )
     return [merge((; metric), openvt_spread_compare(ref[metric], alt[metric]; z)) for metric in sort!(collect(keys(ref)))]
 end

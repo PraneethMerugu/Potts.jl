@@ -213,9 +213,9 @@ function ttail(c, ν; n = 20_000)
     function simpson(f)
         h = 1 / n
         return h / 3 * (
-                f(0.0) + f(1.0) + 4sum(f((2i - 1) * h) for i in 1:(n ÷ 2)) +
-                    2sum(f(2i * h) for i in 1:(n ÷ 2 - 1))
-            )
+            f(0.0) + f(1.0) + 4sum(f((2i - 1) * h) for i in 1:(n ÷ 2)) +
+                2sum(f(2i * h) for i in 1:(n ÷ 2 - 1))
+        )
     end
     tail(c) = simpson(u -> u == 0 ? 0.0 : g(c / u) * c / u^2)
     return tail(c) / (simpson(t -> g(t)) + tail(1.0))
@@ -488,9 +488,9 @@ end
         ]
         function row(case, id, ours, paper, cause; q = "not asked")
             return Dict(
-                    "target" => "$id beyond seed spread", "case" => case, "ours" => ours, "paper" => paper,
-                    "suspected_cause" => cause, "author_question" => q
-                )
+                "target" => "$id beyond seed spread", "case" => case, "ours" => ours, "paper" => paper,
+                "suspected_cause" => cause, "author_question" => q
+            )
         end
         good = [
             row("b", "t_stop", "10.81 cycles (100 seeds, sd 0.31)", "10.36 cycles (sd 0.29)", "update order: …"),
@@ -584,9 +584,9 @@ end
         function regrid(s, every, phase)
             m = round.(Int, s.t .* 775)
             keep = [
-                    i for i in eachindex(m) if i == 1 || i == length(m) ||
-                        (m[i] - phase) % every == 0
-                ]
+                i for i in eachindex(m) if i == 1 || i == length(m) ||
+                    (m[i] - phase) % every == 0
+            ]
             return map(v -> v[keep], s)
         end
         fine = [ideal(; lag = 0.02 + 0.3rand(rng), every = 13) for _ in 1:40]

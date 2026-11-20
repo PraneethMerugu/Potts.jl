@@ -151,11 +151,11 @@ predicate_run(args...; alg = SequentialCPM(), kw...) = predicate_fields(solve(pr
 # (`ExplicitEuler()`), at parameters `p` (the field-compiler switch: LatticePDE's stability bound)
 function live_n(; p = ())
     return CorePotts._runtime(
-            getfield(
-                init(problem(; p, solver = ExplicitEuler()), SequentialCPM()).ctx,
-                :__fields1
-            )
-        ).n
+        getfield(
+            init(problem(; p, solver = ExplicitEuler()), SequentialCPM()).ctx,
+            :__fields1
+        )
+    ).n
 end
 # The source sites of a σ: `lam` sites with a VonNeumann(1) neighbour in the substrate,
 # x, y periodic, z closed unless `zper` (independent of the code under test)

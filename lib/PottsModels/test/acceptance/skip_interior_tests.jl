@@ -108,9 +108,9 @@ end
 end
 function brick(L, b)
     return Int32[
-            (r = (y - 1) ÷ b; r * (L[1] ÷ b) + mod(x - 1 - (isodd(r) ? b ÷ 2 : 0), L[1]) ÷ b + 1)
-                for x in 1:L[1], y in 1:L[2]
-        ]
+        (r = (y - 1) ÷ b; r * (L[1] ÷ b) + mod(x - 1 - (isodd(r) ? b ÷ 2 : 0), L[1]) ÷ b + 1)
+            for x in 1:L[1], y in 1:L[2]
+    ]
 end
 function interior_foam(; tspan = (0, 30), T = 3.0, seed)
     σ = brick((64, 64), 16)
@@ -145,11 +145,11 @@ end
 # the 15 configuration: OpenVT reference model with divisions (σ_X = 0: the first by ~800 MCS)
 function openvt(; tspan = (0, 1000), seed)
     return remake(
-            PottsProblem(
-                OpenVTReferenceMonolayer(; name = :ovt, lattice = (60, 60)),
-                openvt_reference_state(; lattice = (60, 60)), tspan; capacity = 64, seed
-            ); p = [:σ_X => 0.0]
-        )
+        PottsProblem(
+            OpenVTReferenceMonolayer(; name = :ovt, lattice = (60, 60)),
+            openvt_reference_state(; lattice = (60, 60)), tspan; capacity = 64, seed
+        ); p = [:σ_X => 0.0]
+    )
 end
 # The cases: (label, problem, keywords of the algorithm). Short runs (< 1 s each, warm).
 const CASES = [

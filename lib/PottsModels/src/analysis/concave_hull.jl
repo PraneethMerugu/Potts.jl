@@ -219,12 +219,12 @@ end
 function _cellaxis(v, v0, h, n)
     s = (v - v0) / h
     return if s < 1
-            1
-        elseif s >= n
-            n
-        else
-            floor(Int, s) + 1
-        end
+        1
+    elseif s >= n
+        n
+    else
+        floor(Int, s) + 1
+    end
 end
 _cell(g::_Grid, p::_Point2) = (_cellaxis(p[1], g.x0, g.h, g.nx), _cellaxis(p[2], g.y0, g.h, g.ny))
 _cellid(g::_Grid, i::Int, j::Int) = i + (j - 1) * g.nx
@@ -277,8 +277,10 @@ function _Concaveman(pts::Vector{_Point2})
         cellpts[cursor[k]] = i
         cursor[k] += 1
     end
-    return _Concaveman(pts, fill(true, length(pts)), grid, cellstart, cellpts,
-        _Point2[], Int[], Int[], [NTuple{2, Int}[] for _ in 1:ncell], Int[], Int[], 0)
+    return _Concaveman(
+        pts, fill(true, length(pts)), grid, cellstart, cellpts,
+        _Point2[], Int[], Int[], [NTuple{2, Int}[] for _ in 1:ncell], Int[], Int[], 0
+    )
 end
 
 # C++ `tree.erase(p)`: the point and every duplicate of it leave the candidates
@@ -383,7 +385,7 @@ function _concaveman(pts::Vector{_Point2}, hull::Vector{Int}, concavity::Float64
         for (dist, n) in _candidates!(cands, cm, b, c, maxsqlen)
             p = pts[n]
             if dist < _sqsegdist(p, a, b) && dist < _sqsegdist(p, c, d) &&
-               _no_intersections(cm, b, p) && _no_intersections(cm, c, p)
+                    _no_intersections(cm, b, p) && _no_intersections(cm, c, p)
                 found = n
                 break
             end

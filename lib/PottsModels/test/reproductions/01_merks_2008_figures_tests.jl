@@ -296,11 +296,11 @@ function hull_area(pts)
     length(P) < 3 && return 0.0
     function chain(Q)
         return foldl(Q; init = eltype(Q)[]) do h, q
-                while length(h) >= 2 && figure_cross(h[end - 1], h[end], q) <= 0
-                    pop!(h)
-                end
-                push!(h, q)
+            while length(h) >= 2 && figure_cross(h[end - 1], h[end], q) <= 0
+                pop!(h)
             end
+            push!(h, q)
+        end
     end
     h = [chain(P)[1:(end - 1)]; chain(reverse(P))[1:(end - 1)]]
     length(h) < 3 && return 0.0
@@ -448,10 +448,10 @@ function figure_verdicts(msweep, mseries)
     }[]
     function add!(row, check, ours, rule, ok; control = false)
         return push!(
-                V, (;
-                    row, check, ours, rule, ok, control,
-                )
+            V, (;
+                row, check, ours, rule, ok, control,
             )
+        )
     end
     S(fig, curve, x) = msweep[(fig, curve, Float64(x))]
     C12(arm, t) = mseries[(arm, Int(t))].C
@@ -557,9 +557,9 @@ function figure_verdicts(msweep, mseries)
     # negative controls (each must fail)
     function ctl!(row, r)
         return add!(
-                row, "points outside band", "$(r.nout)/$(r.n)",
-                "≤ $(allowed(r.n)) (must fail)", r.ok; control = true
-            )
+            row, "points outside band", "$(r.nout)/$(r.n)",
+            "≤ $(allowed(r.n)) (must fail)", r.ok; control = true
+        )
     end
     sh = [t for t in f5 if t[3] <= 0.85 + 1.0e-9 && isinteger(round(t[3] / 0.05; digits = 6))]       # r = 0.05:0.05:0.85
     ctl!(

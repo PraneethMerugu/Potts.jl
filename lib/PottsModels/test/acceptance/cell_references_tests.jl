@@ -351,11 +351,11 @@ function energy_sigma()
 end
 function energy_problem(; tspan = (0, 4), seed = 1, partner = E_PARTNER, q = E_Q, T = Float64)
     return PottsProblem(
-            system(:Energy; sysname = :en), [
-                ownership => energy_sigma(), kind => E_KINDS,
-                :partner => partner, :q => q,
-            ], tspan; seed, T, capacity = 8
-        )
+        system(:Energy; sysname = :en), [
+            ownership => energy_sigma(), kind => E_KINDS,
+            :partner => partner, :q => q,
+        ], tspan; seed, T, capacity = 8
+    )
 end
 # (alive cells relabelled 1:n, kinds kept: the contact energy depends only on site kinds)
 function contact_energy(u)

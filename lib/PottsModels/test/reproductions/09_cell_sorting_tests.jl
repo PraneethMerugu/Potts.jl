@@ -112,16 +112,16 @@ end
                 return copy(σa)
             else
                 return ownership(
-                        solve(
-                            PottsProblem(
-                                GranerGlazier(; name = :sorting_anneal, lattice = size(σa)),
-                                [
-                                    ownership => copy(σa), kind => k[1:maximum(σa)], :J => getp(run, :J)(run), :λ => getp(run, :λ)(run),
-                                    :V₀ => getp(run, :V₀)(run), :T => 0.0,
-                                ], (0, 32); seed = 1
-                            ), SequentialCPM(); saveat = 32
-                        ).u[end]
-                    )
+                    solve(
+                        PottsProblem(
+                            GranerGlazier(; name = :sorting_anneal, lattice = size(σa)),
+                            [
+                                ownership => copy(σa), kind => k[1:maximum(σa)], :J => getp(run, :J)(run), :λ => getp(run, :λ)(run),
+                                :V₀ => getp(run, :V₀)(run), :T => 0.0,
+                            ], (0, 32); seed = 1
+                        ), SequentialCPM(); saveat = 32
+                    ).u[end]
+                )
             end
         end
         function hetero(σa)

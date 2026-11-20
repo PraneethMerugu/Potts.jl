@@ -117,9 +117,9 @@ end
 pre_cell(sol, n) = [Array(getproperty(u.cell, n))[1] for u in sol.u]
 function pre_solve(M, alg, σ, K; kw...)
     return solve(
-            PottsProblem(M(; name = :m), [ownership => σ, kind => [:A]], (0, K); kw...), alg;
-            saveat = 0:K
-        )
+        PottsProblem(M(; name = :m), [ownership => σ, kind => [:A]], (0, K); kw...), alg;
+        saveat = 0:K
+    )
 end
 # ---------------------------------------------------------------------------------------
 # Moving cell (T = 4): the sweep changes the cell's sites, so the integral must fold the

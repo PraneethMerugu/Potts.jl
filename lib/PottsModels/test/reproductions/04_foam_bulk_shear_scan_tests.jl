@@ -301,24 +301,24 @@ end
 """A synthetic complete table: t(κ, β, k) and n1(κ, β, k)."""
 function synth(tf, n1; grid = GRID)
     return [
-            Dict{String, Any}(
-                "kappa_b" => κ, "beta" => β, "k" => k, "t_first" => tf(κ, β, k),
-                "t1_total" => n1(κ, β, k)
-            ) for κ in grid for β in SCAN_BETAS for k in 1:SCAN_N
-        ]
+        Dict{String, Any}(
+            "kappa_b" => κ, "beta" => β, "k" => k, "t_first" => tf(κ, β, k),
+            "t1_total" => n1(κ, β, k)
+        ) for κ in grid for β in SCAN_BETAS for k in 1:SCAN_N
+    ]
 end
 """t ∝ 1/κ_b through the targets at κ01 (β = 0.01) and κ05 (β = 0.05); others ∝ 1/(κβ)."""
 function pow(κ01, κ05; cap = 2^16)
     return (κ, β, k) -> begin
-            t = if β == 0.01
-                4300κ01 / κ
-            elseif β == 0.05
-                420κ05 / κ
-            else
-                43κ01 / (κ * β)
-            end
-            t > cap ? -1 : round(Int, t)
+        t = if β == 0.01
+            4300κ01 / κ
+        elseif β == 0.05
+            420κ05 / κ
+        else
+            43κ01 / (κ * β)
         end
+        t > cap ? -1 : round(Int, t)
+    end
 end
 scan_cons(κc; who = 1:SCAN_N) = (κ, β, k) -> (β >= 1.0e-3 && κ >= κc * (1 - 1.0e-12) && k in who) ? 3.0 : 0.0
 # ---------------------------------------------------------------------------------------------
@@ -515,9 +515,9 @@ end
     @testset "04 κ_b scan record: reproductions/data/04/kb-scan-*" begin
         dirs = if isdir(DATA)
             filter(
-                    d -> occursin(r"^kb-scan-\d{4}-\d{2}-\d{2}$", d) &&
+                d -> occursin(r"^kb-scan-\d{4}-\d{2}-\d{2}$", d) &&
                     isfile(joinpath(DATA, d, "scan.tsv")), readdir(DATA)
-                )
+            )
         else
             String[]
         end

@@ -230,17 +230,17 @@ const PAIRS_BODY = quote
 end
 function pairs_expr(name::Symbol, Jline::Expr, μline::Expr)
     return :(
-            @potts_model $name begin
-                @kinds medium substrate cytoplasm nucleus
-                @parameters begin
-                    Jcn = 7.0
-                    T = 4.0
-                    $Jline
-                    $μline
-                end
-                $(PAIRS_BODY.args...)
+        @potts_model $name begin
+            @kinds medium substrate cytoplasm nucleus
+            @parameters begin
+                Jcn = 7.0
+                T = 4.0
+                $Jline
+                $μline
             end
-        )
+            $(PAIRS_BODY.args...)
+        end
+    )
 end
 const J_PAIRS = :(
     J[kind, kind] = Pairs(
@@ -474,25 +474,25 @@ end
 # F5. Refusal templates (section 8): one model per refused form, on F2's lattice.
 function bad_expr(name::Symbol; energy = :((volume - 9.0)^2), update = :(w ~ 0.0))
     return :(
-            @potts_model $name begin
-                @kinds medium cytoplasm nucleus
-                @parameters begin
-                    ax = 1.0
-                end
-                @variables begin
-                    dd(cell) = 0.0
-                    w(cell) = 0.0
-                    F(site) = 0.0
-                end
-                @lattice Lattice((20, 12); boundary = (Periodic(), Closed()), neighborhood = Moore(1))
-                @energy begin
-                    cells => $energy
-                    contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 0.5, 1.0)
-                end
-                @after_mcs $update
-                @sweep Metropolis(; temperature = 1.0)
+        @potts_model $name begin
+            @kinds medium cytoplasm nucleus
+            @parameters begin
+                ax = 1.0
             end
-        )
+            @variables begin
+                dd(cell) = 0.0
+                w(cell) = 0.0
+                F(site) = 0.0
+            end
+            @lattice Lattice((20, 12); boundary = (Periodic(), Closed()), neighborhood = Moore(1))
+            @energy begin
+                cells => $energy
+                contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 0.5, 1.0)
+            end
+            @after_mcs $update
+            @sweep Metropolis(; temperature = 1.0)
+        end
+    )
 end
 function bad_op(sys)
     σ = zeros(Int32, 20, 12)
@@ -535,11 +535,11 @@ end
         # (the constructor runs the model body, where the new names are resolved)
         function builds(name)
             return try
-                    system(name)
-                    true
-                catch
-                    false
-                end
+                system(name)
+                true
+            catch
+                false
+            end
         end
         for name in (:HelperPairs, :Refs, :Wrap, :HelperHex)
             @test builds(name)                                       # DEFECT CHECK: `Pairs`, `minimum_image`, … unknown today

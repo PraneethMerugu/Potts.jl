@@ -262,11 +262,11 @@ end
 # (kind, q, tagk) of the alive cells, sorted; cells of the cluster (not the lone cell 3)
 function ownership_cells(u; skip = ())
     return sort(
-            [
-                (Int(col(u, :kind)[c]), col(u, :q)[c], col(u, :tagk)[c])
-                    for c in alive(u) if !(c in skip)
-            ]
-        )
+        [
+            (Int(col(u, :kind)[c]), col(u, :q)[c], col(u, :tagk)[c])
+                for c in alive(u) if !(c in skip)
+        ]
+    )
 end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
@@ -434,11 +434,11 @@ end
             # same hook results, up to a relabelling of the slots the CPU uses (as `device_lifecycle_tests.jl`)
             function sig(u)
                 return sort(
-                        [
-                            (Int(col(u, :kind)[c]), sort(findall(==(c), vec(Array(u.ownership)))), Float64(col(u, :V_target)[c]))
-                                for c in alive(u)
-                        ]
-                    )
+                    [
+                        (Int(col(u, :kind)[c]), sort(findall(==(c), vec(Array(u.ownership)))), Float64(col(u, :V_target)[c]))
+                            for c in alive(u)
+                    ]
+                )
             end
             for name in (:Own, :OwnLate)
                 cpu = solve(own_problem(name; T = Float32), SequentialCPM()).u[end]

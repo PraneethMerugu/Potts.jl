@@ -198,11 +198,11 @@ function merks_split_field(c0, σ, kindof, p; n = 15, clamp = true, stencil = :f
     wts = stencil === :five ? ones(4) : [abs(a) + abs(b) == 1 ? 0.5 : 0.25 for (a, b) in MERKS_SPLIT_N8]
     function lap(c, x, y)
         return sum(
-                k -> wts[k] * (
-                    (1 <= x + offs[k][1] <= X && 1 <= y + offs[k][2] <= Y) ?
-                        c[x + offs[k][1], y + offs[k][2]] - c[x, y] : 0.0
-                ), eachindex(offs)
-            )
+            k -> wts[k] * (
+                (1 <= x + offs[k][1] <= X && 1 <= y + offs[k][2] <= Y) ?
+                    c[x + offs[k][1], y + offs[k][2]] - c[x, y] : 0.0
+            ), eachindex(offs)
+        )
     end
     for _ in 1:n
         c = [c[x, y] + h * (p.Dc * lap(c, x, y) + p.α * isEC[x, y] - p.ε * c[x, y] * isM[x, y]) for x in 1:X, y in 1:Y]

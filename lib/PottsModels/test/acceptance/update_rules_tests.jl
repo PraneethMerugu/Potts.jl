@@ -82,15 +82,15 @@ function update_names(e)
         y = UPDATE_S.unwrap(y)
         y isa UPDATE_SU.BasicSymbolic || return
         return if UPDATE_SU.issym(y)
-                push!(out, update_name(y))
-            elseif UPDATE_SU.iscall(y)
-                op = UPDATE_SU.operation(y)
-                if op isa UPDATE_SU.BasicSymbolic && UPDATE_SU.issym(op)
-                    push!(out, update_name(op))
-                else
-                    foreach(walk, UPDATE_SU.arguments(y))
-                end
+            push!(out, update_name(y))
+        elseif UPDATE_SU.iscall(y)
+            op = UPDATE_SU.operation(y)
+            if op isa UPDATE_SU.BasicSymbolic && UPDATE_SU.issym(op)
+                push!(out, update_name(op))
+            else
+                foreach(walk, UPDATE_SU.arguments(y))
             end
+        end
     end
     walk(e)
     return out
@@ -116,10 +116,10 @@ function update_eval(e, vals::AbstractDict{Symbol})
         y = UPDATE_S.unwrap(y)
         y isa UPDATE_SU.BasicSymbolic || return
         return if isPre(y)
-                pre[y] = vals[Symbol(:Pre_, only(update_names(UPDATE_SU.arguments(y)[1])))]
-            elseif UPDATE_SU.iscall(y)
-                foreach(walk, UPDATE_SU.arguments(y))
-            end
+            pre[y] = vals[Symbol(:Pre_, only(update_names(UPDATE_SU.arguments(y)[1])))]
+        elseif UPDATE_SU.iscall(y)
+            foreach(walk, UPDATE_SU.arguments(y))
+        end
     end
     walk(x)
     isempty(pre) || (x = UPDATE_S.unwrap(UPDATE_S.substitute(x, pre)))
@@ -136,12 +136,12 @@ function same(a, b)
 end
 function clear(f, words...)
     return try
-            f()
-            false
-        catch err
-            err isa Union{ArgumentError, Potts.PottsCompileError} &&
-                (isempty(words) || occursin(first(words), sprint(showerror, err)))
-        end
+        f()
+        false
+    catch err
+        err isa Union{ArgumentError, Potts.PottsCompileError} &&
+            (isempty(words) || occursin(first(words), sprint(showerror, err)))
+    end
 end
 # ---------------------------------------------------------------------------------------
 # Fixtures

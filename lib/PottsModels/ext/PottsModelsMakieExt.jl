@@ -79,14 +79,18 @@ function PottsModels.openvt_f4_figure(σ::AbstractMatrix{<:Integer}, c::Integer)
     m, n = length(medium), length(cell)
 
     fig = Makie.Figure(; size = (420, 470), backgroundcolor = :white)
-    ax = Makie.Axis(fig[1, 1]; title = "Lattice models", aspect = Makie.DataAspect(), titlefont = :bold,
-        titlesize = 18, spinewidth = 1.5)
+    ax = Makie.Axis(
+        fig[1, 1]; title = "Lattice models", aspect = Makie.DataAspect(), titlefont = :bold,
+        titlesize = 18, spinewidth = 1.5
+    )
     Makie.hidedecorations!(ax)
     # the .tex's palette for its four cells; otherwise pottsplot's own (`Makie.automatic` is not
     # public, so the keyword is left out rather than passed as `automatic`)
     palette = ids == 1:length(ids) && length(ids) <= length(TEX_CELLS) ? (; category_palette = TEX_CELLS[1:length(ids)]) : (;)
-    pottsplot!(ax, frame; encoding = CellIdentityEncoding(), medium_color = MEDIUM_F4, palette...,
-        boundaries = false)
+    pottsplot!(
+        ax, frame; encoding = CellIdentityEncoding(), medium_color = MEDIUM_F4, palette...,
+        boundaries = false
+    )
     # the .tex's white site grid: full-length lattice lines only (no partial cell boundaries)
     grid = Makie.Point2f[]
     for k in 0:g.size[1]
@@ -147,8 +151,10 @@ function _with_channel(frame, name, values::AbstractDict)
         vals[c.identity] = Float64(values[id])
     end
     key = CellChannelKey(name, Float64)
-    return PottsRenderFrame(frame_mcs(frame), owners, cells; geometry = frame_geometry(frame),
-        channels = (RenderChannel(key, vals; label = string(name)),)), key, vals
+    return PottsRenderFrame(
+            frame_mcs(frame), owners, cells; geometry = frame_geometry(frame),
+            channels = (RenderChannel(key, vals; label = string(name)),)
+        ), key, vals
 end
 
 # every cell's site count in a frame (its area when the frame is the whole lattice)
@@ -161,8 +167,10 @@ function _site_counts(frame)
     return n
 end
 
-function PottsModels.openvt_colony_panel!(ax, frame; color::Symbol = :area, areas = nothing, inhibited = nothing,
-        colorrange = nothing, linewidth::Real = OUTLINE_WIDTH, state_colors = (GROWING, INHIBITED))
+function PottsModels.openvt_colony_panel!(
+        ax, frame; color::Symbol = :area, areas = nothing, inhibited = nothing,
+        colorrange = nothing, linewidth::Real = OUTLINE_WIDTH, state_colors = (GROWING, INHIBITED)
+    )
     length(frame_size(frame)) == 2 || throw(ArgumentError("openvt_colony_panel!: a 2D frame is required"))
     if color === :area
         a = areas === nothing ? _site_counts(frame) : areas
@@ -172,14 +180,18 @@ function PottsModels.openvt_colony_panel!(ax, frame; color::Symbol = :area, area
             lo, hi = extrema(values(vals))
             colorrange = lo == hi ? (lo - 0.5, hi + 0.5) : (lo, hi)
         end
-        pp = pottsplot!(ax, fr; encoding = ChannelEncoding(key; label = "cell area"), colormap = :coolwarm,
-            colorrange, medium_color = :white, boundaries = false)
+        pp = pottsplot!(
+            ax, fr; encoding = ChannelEncoding(key; label = "cell area"), colormap = :coolwarm,
+            colorrange, medium_color = :white, boundaries = false
+        )
     elseif color === :state
         inhibited === nothing && throw(ArgumentError("openvt_colony_panel!: color = :state needs `inhibited`"))
         fr, key, _ = _with_channel(frame, :inhibited, Dict(id => (v == true || v == 1) ? 1.0 : 0.0 for (id, v) in inhibited))
-        pp = pottsplot!(ax, fr; encoding = ChannelEncoding(key; label = "inhibited"),
+        pp = pottsplot!(
+            ax, fr; encoding = ChannelEncoding(key; label = "inhibited"),
             colormap = Makie.cgrad([Makie.to_color(state_colors[1]), Makie.to_color(state_colors[2])], 2; categorical = true), colorrange = (0.0, 1.0),
-            medium_color = :white, boundaries = false)
+            medium_color = :white, boundaries = false
+        )
     else
         throw(ArgumentError("openvt_colony_panel!: color is :area or :state, got :$color"))
     end
@@ -223,8 +235,10 @@ function _crop(frame, off, window)
     owners = [owner_at(frame, I) for I in sites]
     ids = sort!(unique!([o.id for o in owners if o.kind === CellSite]))
     cells = RenderCellMetadata[cell_metadata(frame, RenderOwner(CellSite, id)) for id in ids]
-    geometry = RenderGeometry((window, window); spacing = g.spacing, origin = g.origin .+ off .* g.spacing,
-        source_axes = g.source_axes)
+    geometry = RenderGeometry(
+        (window, window); spacing = g.spacing, origin = g.origin .+ off .* g.spacing,
+        source_axes = g.source_axes
+    )
     return PottsRenderFrame(frame_mcs(frame), owners, cells; geometry)
 end
 
@@ -244,8 +258,10 @@ function PottsModels.openvt_f1_figure(frame; window::Integer = 64, banner::Bool 
     fig = Makie.Figure(; size = (P + 2pad, height), figure_padding = pad, backgroundcolor = :white)
     if banner
         Makie.Box(fig[1, 1]; width = P, height = P * 5 / 45, color = POTTS_COLOUR, strokevisible = false)
-        Makie.Label(fig[1, 1], "Potts.jl"; color = :white, font = :bold, fontsize = 30, tellwidth = false,
-            tellheight = false)
+        Makie.Label(
+            fig[1, 1], "Potts.jl"; color = :white, font = :bold, fontsize = 30, tellwidth = false,
+            tellheight = false
+        )
     end
     ax = Makie.Axis(fig[banner ? 2 : 1, 1]; width = P, height = P, backgroundcolor = :white)
     Makie.hidedecorations!(ax)

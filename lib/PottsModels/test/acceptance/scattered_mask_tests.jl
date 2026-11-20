@@ -146,11 +146,11 @@ axis is `gap` clear. The predicate below is that rule, written out.
 """
 function apart(a, b, size, dims, per, gap)
     return any(
-            ntuple(
-                d -> per[d] ? (δ = mod(b[d] - a[d], dims[d]); δ - size[d] >= gap && dims[d] - δ - size[d] >= gap) :
-                    (abs(a[d] - b[d]) >= size[d] + gap), length(dims)
-            )
+        ntuple(
+            d -> per[d] ? (δ = mod(b[d] - a[d], dims[d]); δ - size[d] >= gap && dims[d] - δ - size[d] >= gap) :
+                (abs(a[d] - b[d]) >= size[d] + gap), length(dims)
         )
+    )
 end
 """Mark the sites of `blocked` (region indices) that are within `gap` of the box at `o`,
 wrapping a periodic axis and dropping a closed one's sites outside the lattice."""
@@ -205,12 +205,12 @@ end
 kinds_of(placed, kinds) = [kinds[mod1(k, length(kinds))] for k in eachindex(placed)]
 function scattered_error(l, x)
     return try
-            layout(l, x)
-            "no error"
-        catch e
-            e isa ArgumentError || rethrow()
-            sprint(showerror, e)
-        end
+        layout(l, x)
+        "no error"
+    catch e
+        e isa ArgumentError || rethrow()
+        sprint(showerror, e)
+    end
 end
 # The best (minimum) of up to `runs` timed calls of `f`, a `GC.gc()` before each; stops at
 # the first run for which `done(best)` holds. Returns `(best seconds, value of the last call)`.

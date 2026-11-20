@@ -176,9 +176,9 @@ function akeeb_run(point, seeds; tmax = 701, saves = SAVES)
     function prob_func(q, ctx)
         s = seeds[ctx.sim_id]
         return remake(
-                q; u0 = akeeb_state(; pp, seed = s), p = [:μ => μ, :J => akeeb_contacts(jlf)], seed = s,
-                tspan = (0, tmax)
-            )
+            q; u0 = akeeb_state(; pp, seed = s), p = [:μ => μ, :J => akeeb_contacts(jlf)], seed = s,
+            tspan = (0, tmax)
+        )
     end
     ens = solve(
         EnsembleProblem(BASE; prob_func), ALG, EnsembleThreads();
@@ -217,9 +217,9 @@ const AKEEB_SMOKE = if AKEEB_FULL
     nothing
 else
     (
-            P1 = akeeb_run(POINTS.P1, akeeb_seed.(1, 1:4)), P7 = akeeb_run(POINTS.P7, akeeb_seed.(7, 1:2)),
-            P8 = akeeb_run(POINTS.P8, akeeb_seed.(8, 1:2)),
-        )
+        P1 = akeeb_run(POINTS.P1, akeeb_seed.(1, 1:4)), P7 = akeeb_run(POINTS.P7, akeeb_seed.(7, 1:2)),
+        P8 = akeeb_run(POINTS.P8, akeeb_seed.(8, 1:2)),
+    )
 end
 # ---------------------------------------------------------------------------------------------
 # FULL-record rows (D-156; recomputed under D-163): V-A6 and the full-sweep
@@ -556,9 +556,9 @@ end
         ]
         function marginal(m, set)
             return [
-                    Float64(getproperty(r.obs[700], m)) for s in SLICE_RUNS
-                        if set === :all || SLICE_SETS[set](s.k) for r in s.runs
-                ]
+                Float64(getproperty(r.obs[700], m)) for s in SLICE_RUNS
+                    if set === :all || SLICE_SETS[set](s.k) for r in s.runs
+            ]
         end
 
         @testset "10 akeeb FULL: V-A3 / V-A4 slice marginals (R2)" begin
@@ -663,9 +663,9 @@ end
             B(t) = akeeb_csv(joinpath(DATA, "Invasion_Metrics_By_MCS", "invasion_metrics_$(t)_mcs.csv"), COLS_B)
             function C(t)
                 return akeeb_csv(
-                        joinpath(DATA, "NEW", "Invasion_Metrics_By_MCS", "invasion_metrics_at_$(t)_mcs.csv"),
-                        COLS_C
-                    )
+                    joinpath(DATA, "NEW", "Invasion_Metrics_By_MCS", "invasion_metrics_at_$(t)_mcs.csv"),
+                    COLS_C
+                )
             end
             @test length(A) == 13_305
             # the recorded constants are dataset A / B as printed in the spec (rounded)

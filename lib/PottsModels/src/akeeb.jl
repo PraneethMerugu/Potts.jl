@@ -117,7 +117,7 @@ t = only(r for r in report if r.type === :InsertUntil)
 t.painted, t.misses, t.counted     # leaders created, missed draws, the CC3D inventory
 ```
 """
-function akeeb_layout(; lattice = (500, 300), seed = 0x5cd2609, slab = 21, seeding::Symbol = :authors)
+function akeeb_layout(; lattice = (500, 300), seed = 0x05cd2609, slab = 21, seeding::Symbol = :authors)
     seeding in (:authors, :retry) ||
         throw(ArgumentError("akeeb_layout: seeding must be :authors or :retry, got :$seeding"))
     length(lattice) == 2 || throw(ArgumentError("akeeb_layout: the lattice must be 2D, got $lattice"))
@@ -125,9 +125,13 @@ function akeeb_layout(; lattice = (500, 300), seed = 0x5cd2609, slab = 21, seedi
     top = 3 * cld(slab, 3)                                   # the last tile row ends here
     Y > top || throw(ArgumentError("akeeb_layout: lattice height $Y must exceed the slab ($top rows)"))
     misses = seeding === :authors ? :count : :retry
-    return overlay(Tiling((3, 3); region = (1:X, 1:top), kinds = [:follower], partial = :clip),
-        InsertUntil(:leader; into = [:follower], fraction = 1 // 4, seed, misses, region = (2:X, 2:(slab - 1)),
-            splits = :allow))
+    return overlay(
+        Tiling((3, 3); region = (1:X, 1:top), kinds = [:follower], partial = :clip),
+        InsertUntil(
+            :leader; into = [:follower], fraction = 1 // 4, seed, misses, region = (2:X, 2:(slab - 1)),
+            splits = :allow
+        )
+    )
 end
 
 """
@@ -151,8 +155,10 @@ which is `StableRNG(Potts._substream_seed(seed, :clock))` (a mixed sub-stream, s
 consecutive seeds are uncorrelated), one cell at a time in id order (a leader draws
 nothing).
 """
-function akeeb_state(; lattice = (500, 300), pp = 0.5, seed = 0x5cd2609, slab = 21,
-        seeding::Symbol = :authors)
+function akeeb_state(;
+        lattice = (500, 300), pp = 0.5, seed = 0x05cd2609, slab = 21,
+        seeding::Symbol = :authors
+    )
     X, Y = lattice
     top = 3 * cld(slab, 3)                                   # the last tile row ends here
     Y > top || throw(ArgumentError("akeeb_state: lattice height $Y must exceed the slab ($top rows)"))
@@ -248,8 +254,10 @@ function akeeb_observables(σ::AbstractMatrix{<:Integer}, kinds::AbstractVector{
     invasive = A.trapezoid_integral(kept, main .- base)                             # O4
     infiltrative = A.trapezoid_integral(kept, top_out[kept] .- base)
     fingers = length(A.merge_peaks(A.find_peaks(main; prominence = 10, distance = 10, width = 5), 15))  # O5
-    return (; invasive, infiltrative, singles, fingers, detached, clusters = length(counted),
-        cluster_leaders = [count(leader, k) for k in counted], cluster_followers = [count(!leader, k) for k in counted])
+    return (;
+        invasive, infiltrative, singles, fingers, detached, clusters = length(counted),
+        cluster_leaders = [count(leader, k) for k in counted], cluster_followers = [count(!leader, k) for k in counted],
+    )
 end
 
 function akeeb_observables(u)

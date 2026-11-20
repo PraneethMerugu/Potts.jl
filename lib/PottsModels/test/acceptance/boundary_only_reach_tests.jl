@@ -98,9 +98,9 @@ const BOND = :(@relationship bond(cell, cell) capacity = 1)
 reach_divwhen(r) = [STATIC, :(@divide cells(A) when = (y == 0.0) & (mcs * $(reach_g(r)) >= 12), y => mcs + 1.0)]
 function reach_divrule(r)
     return [
-            STATIC,
-            :(@divide cells(A) when = (y == 0.0) & (id == 1) & (mcs == 2), y => 1.0 + $(reach_g(r, 2; site = 29)))
-        ]
+        STATIC,
+        :(@divide cells(A) when = (y == 0.0) & (id == 1) & (mcs == 2), y => 1.0 + $(reach_g(r, 2; site = 29)))
+    ]
 end
 reach_link(r) = [BOND, STATIC, :(@link bond when = new_contact(a, b) && (mcs * $(pair(r)) >= 24))]
 reach_unlink(r) = [BOND, STATIC, :(@unlink bond when = mcs * $(pair(r)) >= 24)]
@@ -221,9 +221,9 @@ function sigma(lk::Symbol)
 end
 function reach_op(lk; links = false, q = false)
     return Any[
-            ownership => sigma(lk), kind => [:A, :A], (links ? [:bond => [(1, 2)]] : [])...,
-            (q ? [:q => Float64.(sigma(lk))] : [])...,
-        ]
+        ownership => sigma(lk), kind => [:A, :A], (links ? [:bond => [(1, 2)]] : [])...,
+        (q ? [:q => Float64.(sigma(lk))] : [])...,
+    ]
 end
 """Does fixture `label` declare the static site value `q` (the edge-energy fixtures of `gather_energy_tests.jl`)?"""
 has_q(label) = startswith(label, "edge") || startswith(label, "mixed")
@@ -232,11 +232,11 @@ not this item's defect). `solve` and `init` do not mutate a problem."""
 const PROBLEMS = Dict{Any, Any}()
 function reach_problem(label; tspan = (0, 16), seed = 1, links = false)
     return get!(PROBLEMS, (label, tspan, seed, links)) do
-            PottsProblem(
-                Base.invokelatest(MODELS[label]; name = :g), reach_op(LAYOUT_OF[label]; links, q = has_q(label)), tspan;
-                seed, capacity = 16
-            )
-        end
+        PottsProblem(
+            Base.invokelatest(MODELS[label]; name = :g), reach_op(LAYOUT_OF[label]; links, q = has_q(label)), tspan;
+            seed, capacity = 16
+        )
+    end
 end
 reach_solve(label; alg, kw...) = solve(reach_problem(label; kw...), alg; saveat = 1)
 # every MCS

@@ -56,8 +56,16 @@ function graner_glazier_state(scale::Integer = 1)
     σ1 = Int32.(readdlm(joinpath(dir, "pre_equilibrated_ownership.tsv"), '\t', Int))
     k1 = Int32.(vec(readdlm(joinpath(dir, "cell_kinds.tsv"), '\t', Int)))
     nc = length(k1)
-    σ = reduce(vcat, [reduce(hcat, [map(s -> s == 0 ? Int32(0) : s + Int32(nc * (i * scale + j)), σ1)
-        for j in 0:(scale - 1)]) for i in 0:(scale - 1)])
+    σ = reduce(
+        vcat, [
+            reduce(
+                hcat, [
+                    map(s -> s == 0 ? Int32(0) : s + Int32(nc * (i * scale + j)), σ1)
+                        for j in 0:(scale - 1)
+                ]
+            ) for i in 0:(scale - 1)
+        ]
+    )
     return σ, repeat(k1, scale^2)
 end
 

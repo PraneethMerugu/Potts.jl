@@ -42,9 +42,9 @@ anneal_lattice(rows) = (Y = length(rows); Int32[rows[Y - y + 1][x] for x in each
 # All six keys of a three-kind model, with the expected values (medium, A, B).
 function expect(; MA = 0, MB = 0, AA = 0, AB = 0, BB = 0)
     return Dict(
-            (:medium, :medium) => 0, (:medium, :A) => MA,
-            (:medium, :B) => MB, (:A, :A) => AA, (:A, :B) => AB, (:B, :B) => BB
-        )
+        (:medium, :medium) => 0, (:medium, :A) => MA,
+        (:medium, :B) => MB, (:A, :A) => AA, (:A, :B) => AB, (:B, :B) => BB
+    )
 end
 # The contact energies of every fixture model: one power of 1000 per kind pair, so the
 # energy spells out each count (all below 1000) in its own three decimal digits.
@@ -91,9 +91,9 @@ for (i, (key, lat)) in enumerate(sort!(collect(LATTICES); by = first))
 end
 function anneal_prob(key, σ, kinds)
     return PottsProblem(
-            MODELS[key](; name = Symbol(:anneal_, key)),
-            [ownership => σ, kind => kinds], (0, 1)
-        )
+        MODELS[key](; name = Symbol(:anneal_, key)),
+        [ownership => σ, kind => kinds], (0, 1)
+    )
 end
 # F1, square 4×3, closed, Moore(1). Cells 1, 2 are A, cell 3 is B:
 #   y=3:  0 0 3 3
@@ -141,9 +141,9 @@ function annealed_09(σ, k, run; seed = 1)
 end
 function as09(L)
     return Dict(
-            :dd => L[(:dark, :dark)], :ll => L[(:light, :light)], :dl => L[(:dark, :light)],
-            :dM => L[(:medium, :dark)], :lM => L[(:medium, :light)]
-        )
+        :dd => L[(:dark, :dark)], :ll => L[(:light, :light)], :dl => L[(:dark, :light)],
+        :dM => L[(:medium, :dark)], :lM => L[(:medium, :light)]
+    )
 end
 hetero(n) = n[:dl] / sum(values(n))
 anneal_mean(x) = sum(x) / length(x)
@@ -185,9 +185,9 @@ const FILLED = Int32[x <= 4 ? 1 : 2 for x in 1:8, y in 1:8]
 end
 function hole_gg()
     return PottsProblem(
-            GranerGlazier(; name = :anneal_hole, lattice = (8, 8)),
-            [ownership => copy(HOLE), kind => [1, 2], :V₀ => 32.0], (0, 32); seed = 3
-        )
+        GranerGlazier(; name = :anneal_hole, lattice = (8, 8)),
+        [ownership => copy(HOLE), kind => [1, 2], :V₀ => 32.0], (0, 32); seed = 3
+    )
 end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end

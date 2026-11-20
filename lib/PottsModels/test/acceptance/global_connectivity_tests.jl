@@ -449,9 +449,9 @@ end
 """Sources of the enumeration: the shell and distance 2 along each axis (detached gains)."""
 function sources(geom)
     return (
-            global_shell(geom)...,
-            (ntuple(k -> k == a ? s : 0, geom === :cubic ? 3 : 2) for a in 1:(geom === :cubic ? 3 : 2) for s in (-2, 2))...,
-        )
+        global_shell(geom)...,
+        (ntuple(k -> k == a ? s : 0, geom === :cubic ? 3 : 2) for a in 1:(geom === :cubic ? 3 : 2) for s in (-2, 2))...,
+    )
 end
 # the models' lattices (GEOMS): the enumerations run on the same dims
 const ENUM_DIMS = Dict(:square => (10, 10), :hex => (10, 10), :cubic => (6, 6, 6))
@@ -603,14 +603,14 @@ const BUILD_N = Ref(0)
 function case(line)
     name = Symbol(:Build, BUILD_N[] += 1)
     return :(
-            @potts_model $name begin
-                @kinds medium A
-                @lattice Lattice((10, 10))
-                @energy cells => (volume - 9)^2
-                $line
-                @sweep Metropolis(; temperature = 1.0)
-            end
-        )
+        @potts_model $name begin
+            @kinds medium A
+            @lattice Lattice((10, 10))
+            @energy cells => (volume - 9)^2
+            $line
+            @sweep Metropolis(; temperature = 1.0)
+        end
+    )
 end
 # ---------------------------------------------------------------------------------------
 # Section 8: zero warm allocations; the AllocCheck proof

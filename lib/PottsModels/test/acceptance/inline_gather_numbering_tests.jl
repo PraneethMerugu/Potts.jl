@@ -93,15 +93,15 @@ const STATIC = :(@constraint source < 0)
 const BOND = :(@relationship bond(cell, cell) capacity = 1)
 function gather_divwhen(r; site = 40)
     return [
-            STATIC,
-            :(@divide cells(A) when = (y == 0.0) & (mcs * $(gather_g(r; site)) >= 12), y => mcs + 1.0)
-        ]
+        STATIC,
+        :(@divide cells(A) when = (y == 0.0) & (mcs * $(gather_g(r; site)) >= 12), y => mcs + 1.0)
+    ]
 end
 function gather_divrule(r)
     return [
-            STATIC,
-            :(@divide cells(A) when = (y == 0.0) & (id == 1) & (mcs == 2), y => 1.0 + $(gather_g(r, 2; site = 29)))
-        ]
+        STATIC,
+        :(@divide cells(A) when = (y == 0.0) & (id == 1) & (mcs == 2), y => 1.0 + $(gather_g(r, 2; site = 29)))
+    ]
 end
 gather_link(r; site = 40) = [BOND, STATIC, :(@link bond when = new_contact(a, b) && (mcs * $(gather_pair(r; site)) >= 24))]
 gather_unlink(r) = [BOND, STATIC, :(@unlink bond when = mcs * $(gather_pair(r)) >= 24)]
@@ -111,9 +111,9 @@ gather_obs(r) = [:(@observed o(cell) ~ $(gather_g(r)))]
 dyn_div(r) = [:(@divide cells(A) when = (y == 0.0) & ($(gather_g(r)) >= 3), y => mcs + 1.0 + $(gather_g(r, 2; site = 29)))]
 function dyn_link(r)
     return [
-            BOND, :(@link bond when = new_contact(a, b) && ($(gather_pair(r)) >= 5)),
-            :(@unlink bond when = $(gather_pair(r)) <= 3), :(@energy edges(bond) => 2.0 * $(spair(r)))
-        ]
+        BOND, :(@link bond when = new_contact(a, b) && ($(gather_pair(r)) >= 5)),
+        :(@unlink bond when = $(gather_pair(r)) <= 3), :(@energy edges(bond) => 2.0 * $(spair(r)))
+    ]
 end
 # label => (layout, @relations body or nothing, statements after the volume energy)
 const FIXTURES = [
@@ -222,16 +222,16 @@ function sigma(lk::Symbol)
 end
 function gather_op(lk; links = false)
     return Any[
-            ownership => sigma(lk), kind => [:A, :A], :q => Float64.(sigma(lk)),   # q: `gather_energy_tests.jl`
-            (links ? [:bond => [(1, 2)]] : [])...,
-        ]
+        ownership => sigma(lk), kind => [:A, :A], :q => Float64.(sigma(lk)),   # q: `gather_energy_tests.jl`
+        (links ? [:bond => [(1, 2)]] : [])...,
+    ]
 end
 """The problem of fixture `label` (a build error propagates: it is the defect)."""
 function gather_problem(label; T = Float64, tspan = (0, 16), seed = 1, links = false)
     return PottsProblem(
-            Base.invokelatest(MODELS[label]; name = :g), gather_op(LAYOUT_OF[label]; links), tspan;
-            T, seed, capacity = 16
-        )
+        Base.invokelatest(MODELS[label]; name = :g), gather_op(LAYOUT_OF[label]; links), tspan;
+        T, seed, capacity = 16
+    )
 end
 gather_solve(label; alg = SequentialCPM(), kw...) = solve(gather_problem(label; kw...), alg; saveat = 1)
 # every MCS

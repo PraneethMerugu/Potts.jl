@@ -58,17 +58,17 @@ end
         dflt = Potts.divide(Potts.cells(1); when = Potts.B.volume >= 4)
         function sys(r)
             return Potts.PottsSystem(;
-                    name = :x, kinds = [:medium, :ka, :kb], lattice = Potts.lattice_spec((60, 40)),
-                    sweep = Potts.sweep_spec(:metropolis; temperature = 10.0), divisions = [r]
-                )
+                name = :x, kinds = [:medium, :ka, :kb], lattice = Potts.lattice_spec((60, 40)),
+                sweep = Potts.sweep_spec(:metropolis; temperature = 10.0), divisions = [r]
+            )
         end
         function count1(r)
             return kind_counts(
-                    solve(
-                        PottsProblem(mtkcompile(sys(r)), [ownership => σ, kind => kinds], (0, 2)),
-                        SequentialCPM()
-                    ).u[end]
-                )
+                solve(
+                    PottsProblem(mtkcompile(sys(r)), [ownership => σ, kind => kinds], (0, 2)),
+                    SequentialCPM()
+                ).u[end]
+            )
         end
         @test count1(one) == count1(dflt) == (4, 1)
     end

@@ -15,11 +15,11 @@ function hull_area(pts)
     length(P) < 3 && return 0.0
     function chain(Q)
         return foldl(Q; init = eltype(Q)[]) do h, q
-                while length(h) >= 2 && merks_cross(h[end - 1], h[end], q) <= 0
-                    pop!(h)
-                end
-                push!(h, q)
+            while length(h) >= 2 && merks_cross(h[end - 1], h[end], q) <= 0
+                pop!(h)
             end
+            push!(h, q)
+        end
     end
     h = [chain(P)[1:(end - 1)]; chain(reverse(P))[1:(end - 1)]]
     length(h) < 3 && return 0.0
@@ -158,9 +158,9 @@ end
 function tmap(f, xs)
     out = Vector{Any}(undef, length(xs))
     Threads.@threads(
-            for i in eachindex(xs)
-                out[i] = f(xs[i])
-            end
-        )
+        for i in eachindex(xs)
+            out[i] = f(xs[i])
+        end
+    )
     return out
 end

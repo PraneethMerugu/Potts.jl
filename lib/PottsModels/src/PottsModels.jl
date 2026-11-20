@@ -140,25 +140,37 @@ function _precompile_workload()
     gg = graner_glazier_state()
     _first_mcs(mtkcompile(GranerGlazier(; name = :gg)), [ownership => gg[1], kind => gg[2]])
     _first_mcs(mtkcompile(WortelAct(; name = :w, lattice = (24, 24))), [ownership => σ, kind => [:cell]])
-    _first_mcs(mtkcompile(MerksVasculogenesis(; name = :m, lattice = (24, 24))),
+    _first_mcs(
+        mtkcompile(MerksVasculogenesis(; name = :m, lattice = (24, 24))),
         merks_state(; lattice = (24, 24), n = 2, side = 5); field_solver = ExplicitEuler(substeps = 15, lower_bound = 0.0)
     )
     # Float32 under CheckerboardCPM: the configuration of a device run (PG-11)
-    _first_mcs(mtkcompile(MerksVasculogenesis(; name = :m, lattice = (24, 24))),
+    _first_mcs(
+        mtkcompile(MerksVasculogenesis(; name = :m, lattice = (24, 24))),
         merks_state(; lattice = (24, 24), n = 2, side = 5), CheckerboardCPM(); T = Float32,
         field_solver = ExplicitEuler(substeps = 15, lower_bound = 0.0)
     )
-    _first_mcs(mtkcompile(Merks2006(; name = :m6, lattice = (24, 24))),
-        layout(merks2006_layout(; lattice = (24, 24), n = 2, side = 5), (24, 24)); field_solver = ExplicitEuler(substeps = 15))
-    _first_mcs(mtkcompile(Merks2008(; name = :m8, lattice = (24, 24))),
-        layout(merks2008_denovo(; lattice = (24, 24), n = 4, rounds = 2), (24, 24)); field_solver = ExplicitEuler(substeps = 15))
-    _first_mcs(mtkcompile(OpenVTGrowingMonolayer(; name = :o, lattice = (24, 24))),
-        openvt_monolayer_state(; lattice = (24, 24)); capacity = 64)
+    _first_mcs(
+        mtkcompile(Merks2006(; name = :m6, lattice = (24, 24))),
+        layout(merks2006_layout(; lattice = (24, 24), n = 2, side = 5), (24, 24)); field_solver = ExplicitEuler(substeps = 15)
+    )
+    _first_mcs(
+        mtkcompile(Merks2008(; name = :m8, lattice = (24, 24))),
+        layout(merks2008_denovo(; lattice = (24, 24), n = 4, rounds = 2), (24, 24)); field_solver = ExplicitEuler(substeps = 15)
+    )
+    _first_mcs(
+        mtkcompile(OpenVTGrowingMonolayer(; name = :o, lattice = (24, 24))),
+        openvt_monolayer_state(; lattice = (24, 24)); capacity = 64
+    )
     _first_mcs(mtkcompile(OpenVTChain(; name = :c)), openvt_chain(11))
-    _first_mcs(mtkcompile(OpenVTReferenceMonolayer(; name = :r, lattice = (24, 24))),
-        openvt_reference_state(; lattice = (24, 24)); capacity = 64)
-    _first_mcs(mtkcompile(ShearedFoam(; name = :f, lattice = (32, 32))),
-        [sheared_foam_state(; lattice = (32, 32)); :ytop => 32.0; :ymid => 16.5], SequentialCPM(; skip_interior = true))
+    _first_mcs(
+        mtkcompile(OpenVTReferenceMonolayer(; name = :r, lattice = (24, 24))),
+        openvt_reference_state(; lattice = (24, 24)); capacity = 64
+    )
+    _first_mcs(
+        mtkcompile(ShearedFoam(; name = :f, lattice = (32, 32))),
+        [sheared_foam_state(; lattice = (32, 32)); :ytop => 32.0; :ymid => 16.5], SequentialCPM(; skip_interior = true)
+    )
     a = mtkcompile(AkeebInvasion(; name = :a, lattice = (24, 30)))
     op = akeeb_state(; lattice = (24, 30))
     _first_mcs(a, op; capacity = 1000)

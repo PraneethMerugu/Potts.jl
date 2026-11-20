@@ -253,11 +253,11 @@ end
 # deterministic.
 function moved()
     return (
-            "WortelAct" => () -> wortel(),
-            "WortelAct connected" => () -> wortel(; connected = true),
-            "CanonicalAt RK4" => () -> relation_ah(Potts.RK4()),
-            "CanonicalAt ExplicitEuler" => () -> relation_ah(Potts.ExplicitEuler()),
-        )
+        "WortelAct" => () -> wortel(),
+        "WortelAct connected" => () -> wortel(; connected = true),
+        "CanonicalAt RK4" => () -> relation_ah(Potts.RK4()),
+        "CanonicalAt ExplicitEuler" => () -> relation_ah(Potts.ExplicitEuler()),
+    )
 end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end

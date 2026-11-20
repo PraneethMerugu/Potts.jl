@@ -380,10 +380,10 @@ url(tag, f) = RELEASE_BASE * "$(tag)/$(f)"
 function core_readmes(s)
     z = joinpath(s, "core.zip")
     return if isfile(z)
-            [m => String(zip_read(z, m)) for m in zip_names(z) if isreadme(m)]
-        else
-            Pair{String, String}[]
-        end
+        [m => String(zip_read(z, m)) for m in zip_names(z) if isreadme(m)]
+    else
+        Pair{String, String}[]
+    end
 end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end

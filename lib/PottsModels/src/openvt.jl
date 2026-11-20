@@ -51,4 +51,3 @@ function openvt_monolayer_state(; lattice = (400, 400), area0 = 25)
     σ[lo[1]:(lo[1] + s - 1), lo[2]:(lo[2] + s - 1)] .= 1
     return [ownership => σ, kind => [:cell]]
 end
-

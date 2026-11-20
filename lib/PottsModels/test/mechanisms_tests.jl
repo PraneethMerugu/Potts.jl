@@ -74,10 +74,10 @@ function cc3d_local(σ, x, a, n, periodic)
 end
 function ring_rule(σ, x, a, periodic)
     return arcs(σ, x, a, periodic) <= 1 ||
-            (
-            length(unique(filter(>(0), collect(ring_owners(σ, x, periodic))))) == 2 &&
-                !any(==(0), ring_owners(σ, x, periodic))
-        )
+        (
+        length(unique(filter(>(0), collect(ring_owners(σ, x, periodic))))) == 2 &&
+            !any(==(0), ring_owners(σ, x, periodic))
+    )
 end
 blockstate(dims, blocks...) = (s = zeros(Int32, dims); foreach(((k, b),) -> s[b...] .= k, enumerate(blocks)); s)
 # The paper-size aggregate (`graner_glazier_aggregate_tests.jl`) and its layout, a `Voronoi` tessellation of a ball (the
@@ -179,12 +179,12 @@ function hull_area(pts)
     P = sort(unique(pts))
     function half(Q)
         return foldl(
-                (h, q) -> (
-                    while length(h) >= 2 && _cross(h[end - 1], h[end], q) <= 0
-                        pop!(h)
-                    end; push!(h, q)
-                ), Q; init = eltype(Q)[]
-            )
+            (h, q) -> (
+                while length(h) >= 2 && _cross(h[end - 1], h[end], q) <= 0
+                    pop!(h)
+                end; push!(h, q)
+            ), Q; init = eltype(Q)[]
+        )
     end
     h = [half(P)[1:(end - 1)]; half(reverse(P))[1:(end - 1)]]
     return abs(sum(k -> h[k][1] * h[mod1(k + 1, end)][2] - h[mod1(k + 1, end)][1] * h[k][2], eachindex(h))) / 2
@@ -213,15 +213,15 @@ end
         h0 = hetero(σ)
         function sorted(J)
             return [
-                    hetero(
-                        solve(
-                            PottsProblem(
-                                GranerGlazier(; name = :gg), [ownership => σ, kind => k, :J => J],
-                                (0, 300); seed
-                            ), SequentialCPM(; proposal = Moore(1))
-                        ).u[end].ownership
-                    ) for seed in 1:3
-                ]
+                hetero(
+                    solve(
+                        PottsProblem(
+                            GranerGlazier(; name = :gg), [ownership => σ, kind => k, :J => J],
+                            (0, 300); seed
+                        ), SequentialCPM(; proposal = Moore(1))
+                    ).u[end].ownership
+                ) for seed in 1:3
+            ]
         end
         # differential adhesion sorts; equal adhesion does not; reversed adhesion mixes
         @test all(<(h0 - 0.1), sorted([0 16 16; 16 2 11; 16 11 14]))
@@ -325,17 +325,17 @@ end
         h0 = hetero(σ)
         function run(J)
             return [
-                    hetero(
-                        Array(
-                            solve(
-                                PottsProblem(
-                                    GranerGlazier(; name = :gg, lattice = size(σ)),
-                                    [ownership => σ, kind => k, :J => J], (0, 300); seed
-                                ), SequentialCPM(; proposal = Moore(1))
-                            ).u[end].ownership
-                        )
-                    ) for seed in 1:2
-                ]
+                hetero(
+                    Array(
+                        solve(
+                            PottsProblem(
+                                GranerGlazier(; name = :gg, lattice = size(σ)),
+                                [ownership => σ, kind => k, :J => J], (0, 300); seed
+                            ), SequentialCPM(; proposal = Moore(1))
+                        ).u[end].ownership
+                    )
+                ) for seed in 1:2
+            ]
         end
         @test all(<(h0 - 0.1), run([0 16 16; 16 2 11; 16 11 14]))
         @test all(h -> abs(h - h0) < 0.05, run([0 16 16; 16 11 11; 16 11 11]))
@@ -425,20 +425,20 @@ end
         cue = [0.05 * x for x in 1:G, y in 1:G]
         function drift(χ)
             return map(1:8) do seed
-                    s = blockstate((G, G), (18:23, 18:23))
-                    u = solve(
-                        PottsProblem(
-                            MerksVasculogenesis(; name = :m, lattice = (G, G)),
-                            [
-                                ownership => s, kind => [:endothelial], :c => copy(cue), :Dc => 0.0, :δc => 0.0, :σc => 0.0,
-                                :χ => χ, :V₀ => 36.0, :λ => 1.0, :λ_L => 0.0, :T => 6.0, :J => zeros(2, 2),
-                            ], (0, 200); seed,
-                            field_solver = MERKS_SOLVER
-                        ),
-                        SequentialCPM()
-                    ).u[end]
-                    mean(i[1] for i in findall(==(1), u.ownership)) - 20.5
-                end
+                s = blockstate((G, G), (18:23, 18:23))
+                u = solve(
+                    PottsProblem(
+                        MerksVasculogenesis(; name = :m, lattice = (G, G)),
+                        [
+                            ownership => s, kind => [:endothelial], :c => copy(cue), :Dc => 0.0, :δc => 0.0, :σc => 0.0,
+                            :χ => χ, :V₀ => 36.0, :λ => 1.0, :λ_L => 0.0, :T => 6.0, :J => zeros(2, 2),
+                        ], (0, 200); seed,
+                        field_solver = MERKS_SOLVER
+                    ),
+                    SequentialCPM()
+                ).u[end]
+                mean(i[1] for i in findall(==(1), u.ownership)) - 20.5
+            end
         end
         @test mean(drift(100.0)) > 10
         @test abs(mean(drift(0.0))) < 4
@@ -573,12 +573,12 @@ end
         σ0 = blockstate((12, 8), (5:8, 4:5))                          # area 8, centroid x = 6.5
         function run(V₀)
             return solve(
-                    PottsProblem(
-                        SingleDivisionFixture(; name = :o),
-                        [ownership => σ0, kind => [:epithelial], :λ => 1.0e6, :V₀ => V₀], (0, 1); capacity = 4
-                    ),
-                    SequentialCPM(; proposal = Moore(1))
-                ).u[end]
+                PottsProblem(
+                    SingleDivisionFixture(; name = :o),
+                    [ownership => σ0, kind => [:epithelial], :λ => 1.0e6, :V₀ => V₀], (0, 1); capacity = 4
+                ),
+                SequentialCPM(; proposal = Moore(1))
+            ).u[end]
         end
         u = run(8.0)
         d = only(filter(c -> c != 1 && u.cell.volume[c] > 0, eachindex(u.cell.volume)))

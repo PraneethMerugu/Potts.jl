@@ -159,14 +159,14 @@ g_exact(t) = exp(-COLUMN_K * t)
 const NCELL = 32
 function copy_x_to_y!(cell, st, p, ctx, mcs)
     for c in eachindex(cell.y)
-            cell.y[c] += cell.x[c]
-        end
+        cell.y[c] += cell.x[c]
+    end
     return nothing
 end
 function copy_sigma_to_y!(cell, st, p, ctx, mcs)
     for c in 1:2
-            cell.y[c] = count(==(Int32(c)), st.ownership)
-        end
+        cell.y[c] = count(==(Int32(c)), st.ownership)
+    end
     return nothing
 end
 function hostphase(body; bad = false)

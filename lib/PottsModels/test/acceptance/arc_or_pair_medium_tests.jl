@@ -24,12 +24,12 @@ include(joinpath(@__DIR__, "..", "shared", "common.jl"))
 using Potts: CorePotts
 function allows(prob, σ, x, y)
     return prob.f.constraint(
-            prob.u0, prob.p,
-            CorePotts.Proposal(
-                CorePotts.linear_index(prob.lattice, x), CorePotts.linear_index(prob.lattice, y),
-                x, 1, σ[x...], σ[y...]
-            ), Potts._host_ctx(prob)
-        )
+        prob.u0, prob.p,
+        CorePotts.Proposal(
+            CorePotts.linear_index(prob.lattice, x), CorePotts.linear_index(prob.lattice, y),
+            x, 1, σ[x...], σ[y...]
+        ), Potts._host_ctx(prob)
+    )
 end
 # target x takes source y's owner
 @potts_model ArcPeriodic begin

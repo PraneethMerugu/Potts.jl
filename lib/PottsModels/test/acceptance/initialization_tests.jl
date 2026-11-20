@@ -95,14 +95,14 @@ initialization_init(c, scope) = Potts.initialization_system(c, scope)
 unwrap_load_error(err) = err isa LoadError ? unwrap_load_error(err.error) : err
 function clear(E::Type{<:Exception}, f, word = nothing)
     return try
-            f()
-            false
-        catch err
-            e = unwrap_load_error(err)
-            ok = e isa E && (word === nothing || occursin(word, sprint(showerror, e)))
-            ok || @info "expected $E$(word === nothing ? "" : " naming $word")" exception = e
-            ok
-        end
+        f()
+        false
+    catch err
+        e = unwrap_load_error(err)
+        ok = e isa E && (word === nothing || occursin(word, sprint(showerror, e)))
+        ok || @info "expected $E$(word === nothing ? "" : " naming $word")" exception = e
+        ok
+    end
 end
 clear(f, word = nothing) = clear(ArgumentError, f, word)
 # Fixtures are defined by evaluating their `@potts_model` here and capturing any error, so

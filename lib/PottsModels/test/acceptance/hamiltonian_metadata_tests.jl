@@ -210,11 +210,11 @@ const MODELS = [
 ]
 function clear(f, words...)
     return try
-            f()
-            false
-        catch err
-            err isa ArgumentError && (isempty(words) || occursin(first(words), sprint(showerror, err)))
-        end
+        f()
+        false
+    catch err
+        err isa ArgumentError && (isempty(words) || occursin(first(words), sprint(showerror, err)))
+    end
 end
 # ---------------------------------------------------------------------------------------
 # M. The typed metadata payload

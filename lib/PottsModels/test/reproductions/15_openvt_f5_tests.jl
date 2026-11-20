@@ -129,10 +129,10 @@ end
 # Pooled summary of a set of cells: everything V4 reads
 function runs_summary(f, a)
     return (;
-            n = length(f), n_f0 = count(==(0), f), sum_f = sum(f; init = 0.0),
-            sum_a = sum(a; init = 0.0), f_max = maximum(f), a_min = minimum(a), a_max = maximum(a),
-            hf = runs_hist(f), ha = runs_hist(a),
-        )
+        n = length(f), n_f0 = count(==(0), f), sum_f = sum(f; init = 0.0),
+        sum_a = sum(a; init = 0.0), f_max = maximum(f), a_min = minimum(a), a_max = maximum(a),
+        hf = runs_hist(f), ha = runs_hist(a),
+    )
 end
 function runs_merge(ss)
     return (;

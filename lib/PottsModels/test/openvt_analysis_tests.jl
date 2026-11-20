@@ -182,12 +182,12 @@ end
             function o(a, b, c)
                 v = cpp_orient(a, b, c)
                 return if v < 0
-                        -1
-                    elseif v > 0
-                        1
-                    else
-                        0
-                    end
+                    -1
+                elseif v > 0
+                    1
+                else
+                    0
+                end
             end
             d2(a) = (p0[1] - a[1]) * (p0[1] - a[1]) + (p0[2] - a[2]) * (p0[2] - a[2])
             sort!(q; lt = (a, b) -> (s = o(p0, a, b); s == 0 ? d2(a) < d2(b) : s < 0))

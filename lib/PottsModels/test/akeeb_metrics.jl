@@ -42,8 +42,10 @@ function akeeb_metrics(σ::AbstractMatrix{<:Integer}, isleader::AbstractVector{B
             end
         end
     end
-    return (divisions = length(live) - n0, outer_front = outer, leader_front = lfront,
-        leader_mean_y = ln == 0 ? 0.0 : lsum / ln, components = comps)
+    return (
+        divisions = length(live) - n0, outer_front = outer, leader_front = lfront,
+        leader_mean_y = ln == 0 ? 0.0 : lsum / ln, components = comps,
+    )
 end
 
 # `core_singles(σ)`: the invasion's architecture (Akeeb, Marcus & Jiang 2026), with cells

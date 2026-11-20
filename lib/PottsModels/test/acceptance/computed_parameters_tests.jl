@@ -60,15 +60,15 @@ const COMPUTED_M = [0 5 5; 5 1 3; 5 3 1]
 # the values a test reads, as a NamedTuple of plain arrays/numbers
 function vals(q)
     return (
-            α = getp(q, :α)(q), β = getp(q, :β)(q), γ = getp(q, :γ)(q), λ = getp(q, :λ)(q),
-            Jx = getp(q, :Jx)(q), J = Matrix(getp(q, :J)(q)), V₀ = Vector(getp(q, :V₀)(q)),
-        )
+        α = getp(q, :α)(q), β = getp(q, :β)(q), γ = getp(q, :γ)(q), λ = getp(q, :λ)(q),
+        Jx = getp(q, :Jx)(q), J = Matrix(getp(q, :J)(q)), V₀ = Vector(getp(q, :V₀)(q)),
+    )
 end
 function ivals(i)
     return (
-            α = i.ps[:α], β = i.ps[:β], γ = i.ps[:γ], λ = i.ps[:λ], Jx = i.ps[:Jx],
-            J = Matrix(i.ps[:J]), V₀ = Vector(i.ps[:V₀]),
-        )
+        α = i.ps[:α], β = i.ps[:β], γ = i.ps[:γ], λ = i.ps[:λ], Jx = i.ps[:Jx],
+        J = Matrix(i.ps[:J]), V₀ = Vector(i.ps[:V₀]),
+    )
 end
 function computed_error(f)
     try

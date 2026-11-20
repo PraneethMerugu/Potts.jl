@@ -157,10 +157,10 @@ function same(a, b)
 end
 function same_but_trackers(a, b)
     return length(a.u) == length(b.u) && all(eachindex(a.u)) do i
-            x, y = a.u[i], b.u[i]
-            x.ownership == y.ownership && x.model == y.model && keys(x.cell) == keys(y.cell) &&
-                all(k -> k in TRACKERS || getfield(x.cell, k) == getfield(y.cell, k), keys(x.cell))
-        end
+        x, y = a.u[i], b.u[i]
+        x.ownership == y.ownership && x.model == y.model && keys(x.cell) == keys(y.cell) &&
+            all(k -> k in TRACKERS || getfield(x.cell, k) == getfield(y.cell, k), keys(x.cell))
+    end
 end
 # trackers of every save equal a recount from σ (centroid and covariance of each live cell)
 function trackers_exact(sol, lat::CorePotts.Lattice{N}) where {N}
@@ -185,9 +185,9 @@ end
 # holds for one run alone, so it also checks the device runs, which are not reproducible
 function births(sol)
     return sum(2:length(sol.u); init = 0) do i
-            a, b = sol.u[i - 1].cell.volume, sol.u[i].cell.volume
-            count(c -> a[c] == 0 && b[c] > 0, eachindex(b))
-        end
+        a, b = sol.u[i - 1].cell.volume, sol.u[i].cell.volume
+        count(c -> a[c] == 0 && b[c] > 0, eachindex(b))
+    end
 end
 # (no case removes cells, so no slot is reused; a daughter left empty is not seen)
 function divisions_seen(sol)

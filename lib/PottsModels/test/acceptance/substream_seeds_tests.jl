@@ -80,8 +80,8 @@ end
 function fnv(name)
     h = 0x811c9dc5
     for b in codeunits(String(name))
-            h = (h ⊻ b) * 0x01000193
-        end
+        h = (h ⊻ b) * 0x01000193
+    end
     return h
 end
 ref(seed, stream) = substream_splitmix64(substream_splitmix64(UInt64(seed)) ⊻ UInt64(fnv(stream)))
@@ -138,7 +138,7 @@ const CONV = (:UInt64, :Int, :Int64, :UInt, :UInt32, :Int32, :UInt128, :convert,
 # the name in `M.:name`; nothing when it is not a Symbol (`M.:($f)` in an `@eval` loop)
 function qname(x)
     if x isa Expr && x.head === :. && length(x.args) == 2 && x.args[2] isa QuoteNode &&
-        x.args[2].value isa Symbol
+            x.args[2].value isa Symbol
         return x.args[2].value
     else
         return nothing

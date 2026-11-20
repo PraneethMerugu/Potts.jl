@@ -383,9 +383,9 @@ end
         # a seed on an earlier cell is not placed; the tile is never painted over in 20 rounds
         function l(sf)
             return overlay(
-                    Tiling((2, 2); region = (3:4, 3:4), kinds = [:x]),
-                    Eden([Point(3.0, 3.0), Point(1.0, 1.0)]; rounds = 20, kinds = [:e], seed = 1, shortfall = sf)
-                )
+                Tiling((2, 2); region = (3:4, 3:4), kinds = [:x]),
+                Eden([Point(3.0, 3.0), Point(1.0, 1.0)]; rounds = 20, kinds = [:e], seed = 1, shortfall = sf)
+            )
         end
         op, rep = layout(l(:allow), (6, 6); report = true)
         σ = eden_σ(op)
@@ -561,12 +561,12 @@ end
         # interior, 10 synchronous Eden rounds, no division.
         function denovo(s; sf = :allow)
             return overlay(
-                    Frame(:border; width = 1),
-                    Eden(
-                        RandomPoints(360; region = (2:199, 2:199), replace = true, seed = s);
-                        rounds = 10, kinds = [:endothelial], seed = 100 + s, shortfall = sf
-                    )
+                Frame(:border; width = 1),
+                Eden(
+                    RandomPoints(360; region = (2:199, 2:199), replace = true, seed = s);
+                    rounds = 10, kinds = [:endothelial], seed = 100 + s, shortfall = sf
                 )
+            )
         end
         # seed 1 draws a coinciding pair (the oracle's count): the default refuses, :allow paints
         @test length(unique(eden_rp(box(2:199, 2:199), 360, 1))) < 360

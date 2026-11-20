@@ -17,11 +17,11 @@ end
         J0 = [0 16 16; 16 2 11; 16 11 14]
         function sim(pars, nmcs; seed = 1, kw...)
             return solve(
-                    PottsProblem(
-                        GranerGlazier(; name = :gg), [ownership => σ0, kind => k, pars...],
-                        (0, nmcs); seed
-                    ), SequentialCPM(; proposal = Moore(1)); kw...
-                )
+                PottsProblem(
+                    GranerGlazier(; name = :gg), [ownership => σ0, kind => k, pars...],
+                    (0, nmcs); seed
+                ), SequentialCPM(; proposal = Moore(1)); kw...
+            )
         end
         # boundary classes over periodic Moore bonds, each pair once
         function bonds(σ)
@@ -47,11 +47,11 @@ end
         # PRE §II D2; D-059), the simulation itself untouched (p.2134)
         function anneal(σ, pars = []; seed = 1)
             return solve(
-                    PottsProblem(
-                        GranerGlazier(; name = :gg),
-                        [ownership => copy(σ), kind => k, pars..., :T => 0.0], (0, 32); seed
-                    ), SequentialCPM(); saveat = 32
-                ).u[end].ownership
+                PottsProblem(
+                    GranerGlazier(; name = :gg),
+                    [ownership => copy(σ), kind => k, pars..., :T => 0.0], (0, 32); seed
+                ), SequentialCPM(); saveat = 32
+            ).u[end].ownership
         end
         medium_fraction(σ, key, pars = []) = (n = bonds(anneal(σ, pars)); n[key] / sum(values(n)))
         hetero(σ, pars = []) = (n = bonds(anneal(σ, pars)); n[:dl] / sum(values(n)))

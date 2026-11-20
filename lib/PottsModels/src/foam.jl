@@ -59,9 +59,11 @@ Differences from the paper:
     end
     # γ > 0 biases copies towards −x: the top row moves +x and the bottom −x (Figs. 2, 4, 5)
     @drive copy => ifelse(periodic > 0.5, sin(ω * mcs), 1.0) *
-                   ifelse(bulk > 0.5, -β * (position[target][2] - ymid),
-        γ0 * (ifelse(position[target][2] < 1.5, 1.0, 0.0) - ifelse(position[target][2] > ytop - 0.5, 1.0, 0.0))) *
-                   direction[1]
+        ifelse(
+        bulk > 0.5, -β * (position[target][2] - ymid),
+        γ0 * (ifelse(position[target][2] < 1.5, 1.0, 0.0) - ifelse(position[target][2] > ytop - 0.5, 1.0, 0.0))
+    ) *
+        direction[1]
     @sweep Metropolis(; temperature = T)
 end
 
@@ -77,8 +79,10 @@ Brick row `r = 0, 1, …` covers `y = side·r + 1 … side·(r + 1)`; odd rows a
 """
 function sheared_foam_state(; lattice = (256, 256), side::Integer = 16)
     L = Tuple(lattice)
-    σ = Int32[(r = (y - 1) ÷ side; r * (L[1] ÷ side) + mod(x - 1 - (isodd(r) ? side ÷ 2 : 0), L[1]) ÷ side + 1)
-              for x in 1:L[1], y in 1:L[2]]
+    σ = Int32[
+        (r = (y - 1) ÷ side; r * (L[1] ÷ side) + mod(x - 1 - (isodd(r) ? side ÷ 2 : 0), L[1]) ÷ side + 1)
+            for x in 1:L[1], y in 1:L[2]
+    ]
     n = Int(maximum(σ))
     return [ownership => σ, kind => fill(:bubble, n), :A => fill(Float64(side)^2, n)]
 end

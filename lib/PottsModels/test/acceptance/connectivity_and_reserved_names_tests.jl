@@ -28,9 +28,9 @@ end
 allows(prob, u, prop) = prob.f.constraint(u, prob.p, prop, Potts._host_ctx(prob))
 function reserved_prop(lat, σ, x, y)
     return CorePotts.Proposal(
-            CorePotts.linear_index(lat, x), CorePotts.linear_index(lat, y),
-            x, 1, σ[x...], σ[y...]
-        )
+        CorePotts.linear_index(lat, x), CorePotts.linear_index(lat, y),
+        x, 1, σ[x...], σ[y...]
+    )
 end
 # target x takes source y's owner
 
@@ -271,29 +271,29 @@ end
         # the reviewer's case: a parameter `b` used in an edge term, where `b` is the endpoint
         function edge_body(bname)
             return quote
-                    @kinds medium A
-                    @parameters begin
-                        $bname = 5.0
-                        k = 1.0
-                    end
-                    @variables rest(edge) = 3.0
-                    @relationship bond(cell, cell) capacity = 1
-                    @lattice Lattice((20, 20))
-                    @energy begin
-                        cells => (volume - 16)^2
-                        edges(bond) => k * (distance - rest)^2 + $bname
-                    end
-                    @sweep Metropolis(; temperature = 1.0)
+                @kinds medium A
+                @parameters begin
+                    $bname = 5.0
+                    k = 1.0
                 end
+                @variables rest(edge) = 3.0
+                @relationship bond(cell, cell) capacity = 1
+                @lattice Lattice((20, 20))
+                @energy begin
+                    cells => (volume - 16)^2
+                    edges(bond) => k * (distance - rest)^2 + $bname
+                end
+                @sweep Metropolis(; temperature = 1.0)
+            end
         end
         function decl_body(decl)
             return quote
-                    @kinds medium A
-                    $decl
-                    @lattice Lattice((12, 12))
-                    @energy cells => (volume - 16)^2
-                    @sweep Metropolis(; temperature = 1.0)
-                end
+                @kinds medium A
+                $decl
+                @lattice Lattice((12, 12))
+                @energy cells => (volume - 16)^2
+                @sweep Metropolis(; temperature = 1.0)
+            end
         end
         # controls: the same bodies with other names build (the error below is the name)
         @test reserved_build(:EdgeOK, edge_body(:bb)) isa Potts.CompiledPottsSystem

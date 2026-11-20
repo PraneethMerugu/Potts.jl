@@ -126,8 +126,12 @@ const PROBS = Dict{Tuple{Int, Int}, Any}()
 foam_lat(L) = Lattice(L; boundary = (Periodic(), Closed()))
 function foam_problem(σ, A, tend; seed, p...)
     L = size(σ)
-    base = get!(() -> PottsProblem(ShearedFoam(; name = :foam, lattice = L), sheared_foam_state(; lattice = L), (0, 1);
-            seed = 1), PROBS, L)
+    base = get!(
+        () -> PottsProblem(
+            ShearedFoam(; name = :foam, lattice = L), sheared_foam_state(; lattice = L), (0, 1);
+            seed = 1
+        ), PROBS, L
+    )
     pp = Pair{Symbol, Float64}[:ytop => L[2], :ymid => (L[2] + 1) / 2, (k => Float64(v) for (k, v) in p)...]
     return remake(base; u0 = [ownership => σ, kind => fill(:bubble, length(A)), :A => A], p = pp, tspan = (0, tend), seed)
 end
@@ -187,7 +191,7 @@ function sheared(f, βm, tend, seed; γ0 = 0.0)
         g2 = cell_graph(σ, fl)
         push!(t1, t1_events(g[], g2; unit = :t1))
         g[] = g2
-        m % 10 == 0 && push!(φ, stored_energy(σ, fl) / φ0)
+        return m % 10 == 0 && push!(φ, stored_energy(σ, fl) / φ0)
     end
     t = @elapsed F = frames!(integ, tend, 30; each)
     return (; frames = F, φ, t1, wall = t, σ = Array(current_state(integ).ownership))
@@ -302,16 +306,22 @@ function short(v) #hide
     w = replace(v, r"-?\d+\.\d+(e-?\d+)?" => m -> string(round(parse(Float64, m); sigdigits = 3))) #hide
     return length(w) > 90 ? "per-run values (in the record's verdicts table)" : cellesc(w) #hide
 end #hide
-Markdown.parse(join([ #hide
-    "**Full run: $(npass(rows)) of $(length(rows)) rows pass, $(npass(ctrl)) of $(length(ctrl)) negative controls pass, " * #hide
-    "$(count(r -> r["result"] == "FAIL", V)) rows fail.** Calibrations: κ = $(fmt(κ; d = 2)) (model γ per paper γ), " * #hide
-    "τ = $(fmt(τ_rec; d = 2)) of our MCS per paper MCS.", #hide
-    "", #hide
-    "| Row | Ours | Band | Result |", #hide
-    "|---|---|---|---|", #hide
-    ("| $(r["id"]) | $(short(r["value"])) | $(cellesc(r["band"])) | " * #hide
-     (r["result"] == "FAIL" ? "**FAIL**" : "PASS") * " |" for r in [rows; ctrl])..., #hide
-], "\n")) #hide
+Markdown.parse(
+    join(
+        [ #hide
+            "**Full run: $(npass(rows)) of $(length(rows)) rows pass, $(npass(ctrl)) of $(length(ctrl)) negative controls pass, " * #hide
+                "$(count(r -> r["result"] == "FAIL", V)) rows fail.** Calibrations: κ = $(fmt(κ; d = 2)) (model γ per paper γ), " * #hide
+                "τ = $(fmt(τ_rec; d = 2)) of our MCS per paper MCS.", #hide
+            "", #hide
+            "| Row | Ours | Band | Result |", #hide
+            "|---|---|---|---|", #hide
+            (
+                "| $(r["id"]) | $(short(r["value"])) | $(cellesc(r["band"])) | " * #hide
+                    (r["result"] == "FAIL" ? "**FAIL**" : "PASS") * " |" for r in [rows; ctrl]
+            )..., #hide
+        ], "\n"
+    )
+) #hide
 
 # ### Deviations
 #
@@ -330,19 +340,25 @@ Markdown.parse(join([ #hide
     nbd / s #hide
 end #hide
 NA(a) = "not asked (on our open question list: spec 04 §7 $a)" #hide
-Markdown.parse(join([ #hide
-    "| Item | Ours | Paper | Suspected cause | Author question |", #hide
-    "|---|---|---|---|---|", #hide
-    ("| $(r["id"]): $(cellesc(r["target"])) (**FAIL**) | $(cellesc(r["ours"])) | $(cellesc(r["paper"])) | $(cellesc(r["suspected_cause"])) | $(cellesc(r["author_question"])) |" #hide
-     for r in rec_rows(isfile(joinpath(rec_dir, "deviations_amended.tsv")) ? "deviations_amended.tsv" : "deviations.tsv"))..., #hide
+Markdown.parse(
+    join(
+        [ #hide
+            "| Item | Ours | Paper | Suspected cause | Author question |", #hide
+            "|---|---|---|---|---|", #hide
+            (
+                "| $(r["id"]): $(cellesc(r["target"])) (**FAIL**) | $(cellesc(r["ours"])) | $(cellesc(r["paper"])) | $(cellesc(r["suspected_cause"])) | $(cellesc(r["author_question"])) |" #hide
+                    for r in rec_rows(isfile(joinpath(rec_dir, "deviations_amended.tsv")) ? "deviations_amended.tsv" : "deviations.tsv")
+            )..., #hide
             "| DV1 proposal law and time scale τ | a uniform neighbor among the 20, at wall sites (`SequentialCPM(; skip_interior = true)`); like neighbors are null draws, so a wall site is updated less often per MCS than in the paper. One paper MCS is τ = 1/ū of our MCS, ū the mean unlike share of the wall sites' 20 neighbors: τ = $(fmt(τ_brick; d = 2)) on the brick wall; the full run measured τ = $(fmt(τ_rec; d = 2)) on its 5 relaxed ordered foams, and every shear time is in paper MCS | a wall site picked at random, a copy only to an unlike neighbor, every pick counted as a trial (p.5822) | the paper's unlike-neighbor proposal (`UnlikeNeighbor`) is not in the engine yet. τ corrects the mean rate, not the per-site spread | $(NA("A-4, A-5")) |", #hide
-    "| DV2 T = 0 | T = 10⁻⁶ (the T → 0⁺ limit: ties accepted, uphill rejected) | T = 0 in Eq. 3, the ΔH = 0 case typeset ambiguously | Eq. 3 (A-6) | $(NA("A-6")) |", #hide
-    "| DV3 shear form and scale κ | the bias γ(y, t)·(x_target − x_source) per copy, minimum image in x; model γ = κ × paper γ, κ calibrated so that the first T1 per cycle at J = 3 falls at the paper's γ0/J ≈ 1.9 (two-stage, pre-registered) | Eq. 2 written with an absolute x_i and a free index j | a literal reading makes the bias grow with x and breaks Fig. 3(c)'s lines through the origin (A-1) | $(NA("A-1")) |", #hide
-    "| DV4 lattice of the low-μ2(a) foams | d095 and d107 on 320² (400 bricks) | 377 and 380 bubbles (Fig. 9) | 256² holds only 256 bricks of 16² (A-14) | $(NA("A-14")) |", #hide
+            "| DV2 T = 0 | T = 10⁻⁶ (the T → 0⁺ limit: ties accepted, uphill rejected) | T = 0 in Eq. 3, the ΔH = 0 case typeset ambiguously | Eq. 3 (A-6) | $(NA("A-6")) |", #hide
+            "| DV3 shear form and scale κ | the bias γ(y, t)·(x_target − x_source) per copy, minimum image in x; model γ = κ × paper γ, κ calibrated so that the first T1 per cycle at J = 3 falls at the paper's γ0/J ≈ 1.9 (two-stage, pre-registered) | Eq. 2 written with an absolute x_i and a free index j | a literal reading makes the bias grow with x and breaks Fig. 3(c)'s lines through the origin (A-1) | $(NA("A-1")) |", #hide
+            "| DV4 lattice of the low-μ2(a) foams | d095 and d107 on 320² (400 bricks) | 377 and 380 bubbles (Fig. 9) | 256² holds only 256 bricks of 16² (A-14) | $(NA("A-14")) |", #hide
             "| DV5 unstated values | steady boundary γ0 = 7 (Figs. 2, 6), β = 0.01 for Fig. 11(b), run lengths 2¹⁵ (N̄) and 10⁴ (μ2(n) rise); anneal 10 MCS at T = 3, relax 1000 MCS, coarsen at Γ = 0, T = 3 to the μ2(n) target | not stated | pre-registered choices | $(NA("A-8, A-12")) |", #hide
-    "| Wall type (A-2) | closed y edges without wall cells; a wall is not a side: μ2(n) = 7/16 = 0.4375 on the brick wall | 0.437 (Fig. 11(c)); the wall type is not stated | the reading that matches the paper's baseline (0.109 if the wall counted as a side, 0 with periodic y) | $(NA("A-2")) |", #hide
-    "| T1 counting unit (A-15) | one T1 = 1 (`t1_events(…; unit = :t1)`); only ratios are targets | even-valued T1 bars (Figs. 4(b), 5(b)) | the paper seems to count each T1 twice | $(NA("A-15")) |", #hide
-], "\n")) #hide
+            "| Wall type (A-2) | closed y edges without wall cells; a wall is not a side: μ2(n) = 7/16 = 0.4375 on the brick wall | 0.437 (Fig. 11(c)); the wall type is not stated | the reading that matches the paper's baseline (0.109 if the wall counted as a side, 0 with periodic y) | $(NA("A-2")) |", #hide
+            "| T1 counting unit (A-15) | one T1 = 1 (`t1_events(…; unit = :t1)`); only ratios are targets | even-valued T1 bars (Figs. 4(b), 5(b)) | the paper seems to count each T1 twice | $(NA("A-15")) |", #hide
+        ], "\n"
+    )
+) #hide
 
 # ### Pinning at low shear rate (under review)
 #
@@ -457,24 +473,27 @@ Markdown.parse(join([ #hide
 #
 # ### Provenance of the full run
 
-Markdown.parse("Record `$(only(rec_dirs))`, written by the test's FULL tier at commit " * #hide
-               "$(first(rec_prov["commit"], 8)) (clean tree), Julia $(rec_prov["julia"]), $(rec_prov["threads"]) threads " * #hide
-               "on an AMD Ryzen AI Max+ 395 CPU; wall time $(round(rec_prov["wall_s_this_launch"] / 3600; digits = 1)) h " * #hide
-               "($(rec_prov["started"][1:16]) to $(rec_prov["finished"][1:16])). Jobs: " * #hide
-               join(["$(v) $(k)" for (k, v) in sort(collect(rec_prov["jobs"]))], ", ") * ". " * #hide
+Markdown.parse(
+    "Record `$(only(rec_dirs))`, written by the test's FULL tier at commit " * #hide
+        "$(first(rec_prov["commit"], 8)) (clean tree), Julia $(rec_prov["julia"]), $(rec_prov["threads"]) threads " * #hide
+        "on an AMD Ryzen AI Max+ 395 CPU; wall time $(round(rec_prov["wall_s_this_launch"] / 3600; digits = 1)) h " * #hide
+        "($(rec_prov["started"][1:16]) to $(rec_prov["finished"][1:16])). Jobs: " * #hide
+        join(["$(v) $(k)" for (k, v) in sort(collect(rec_prov["jobs"]))], ", ") * ". " * #hide
         "The run used `BoundarySiteCPM()`, now `SequentialCPM(; skip_interior = true)` (same semantics)."
 ) #hide
 
 # ### Provenance of the page's own runs (videos)
 
-Markdown.parse("PottsModels $(pkgversion(PottsModels)), Julia $(VERSION), on $(strip(Sys.cpu_info()[1].model)) " *
-               "($(Sys.MACHINE)), CPU, one thread. Two ordered foams in $(round(t_ord; digits = 1)) s; " *
-               "bulk shear $(round(1e3 * sh_ord.wall / SHEAR_MCS; digits = 2)) ms per MCS with the per-MCS " *
-               "T1 detection (256², `SequentialCPM(; skip_interior = true)`). Seeds: the foams use the test's smoke seeds " *
-               "(ordered 9 400 001–2; the d081 foam's ordered start, coarsening and relaxation 9 400 010, " *
-               "its first try). The ordered bulk shear uses 9 400 021, the frozen shear check's seed, " *
-               "here for 3000 MCS instead of its 500, and 9 400 023–24 the disordered bulk and the " *
-               "boundary run; the test does not check these.")
+Markdown.parse(
+    "PottsModels $(pkgversion(PottsModels)), Julia $(VERSION), on $(strip(Sys.cpu_info()[1].model)) " *
+        "($(Sys.MACHINE)), CPU, one thread. Two ordered foams in $(round(t_ord; digits = 1)) s; " *
+        "bulk shear $(round(1.0e3 * sh_ord.wall / SHEAR_MCS; digits = 2)) ms per MCS with the per-MCS " *
+        "T1 detection (256², `SequentialCPM(; skip_interior = true)`). Seeds: the foams use the test's smoke seeds " *
+        "(ordered 9 400 001–2; the d081 foam's ordered start, coarsening and relaxation 9 400 010, " *
+        "its first try). The ordered bulk shear uses 9 400 021, the frozen shear check's seed, " *
+        "here for 3000 MCS instead of its 500, and 9 400 023–24 the disordered bulk and the " *
+        "boundary run; the test does not check these."
+)
 
 # | Date | Change | Reason |
 # |---|---|---|

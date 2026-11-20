@@ -465,12 +465,12 @@ end
 const DH_DIMS = Dict(:square => (9, 8), :hex => (9, 8), :cubic => (5, 5, 4))
 function dh_lattice(geom, periodic)
     return let b = periodic ? :(Periodic()) : :(Closed()), d = DH_DIMS[geom]
-            if geom === :hex
-                :(Lattice($d; geometry = Hexagonal(), boundary = $b, neighborhood = Hex(1)))
-            else
-                :(Lattice($d; boundary = $b, neighborhood = Moore(1)))
-            end
+        if geom === :hex
+            :(Lattice($d; geometry = Hexagonal(), boundary = $b, neighborhood = Hex(1)))
+        else
+            :(Lattice($d; boundary = $b, neighborhood = Moore(1)))
         end
+    end
 end
 for ((geom, periodic), (_, prop, _)) in GEOMS
     hex = geom === :hex
@@ -522,9 +522,9 @@ function euler_energy(σ, geom; periodic)
 end
 function euler_prop(lat, x, y, σ)
     return CorePotts.Proposal(
-            CorePotts.linear_index(lat, x), CorePotts.linear_index(lat, y),
-            x, 1, σ[x...], σ[y...]
-        )
+        CorePotts.linear_index(lat, x), CorePotts.linear_index(lat, y),
+        x, 1, σ[x...], σ[y...]
+    )
 end
 # every geometry and boundary in Float64; the closed ones also in Float32
 const DH_ROWS = [[(g, p, Float64) for ((g, p), _) in GEOMS]; [(g, false, Float32) for g in (:square, :hex, :cubic)]]

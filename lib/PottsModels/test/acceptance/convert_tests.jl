@@ -327,9 +327,9 @@ const KIND0 = [:cytoplasm, :nucleus, :cytoplasm, :lamellipodium, :cytoplasm]
 const VT0 = [40.0, 4.0, 10.0, 2.0, 16.0]
 function convert_op(; replaced = false)
     return [
-            ownership => sigma(), kind => KIND0, cluster => [1, 1, 3, 3, 5],
-            :sub => convert_sub(; replaced), :V_target => VT0,
-        ]
+        ownership => sigma(), kind => KIND0, cluster => [1, 1, 3, 3, 5],
+        :sub => convert_sub(; replaced), :V_target => VT0,
+    ]
 end
 function problem(name::Symbol = :Convert; seed = 1, tspan = (0, 3), T = Float64, replaced = false, kw...)
     prob = PottsProblem(system(name; sysname = :cv), convert_op(; replaced), tspan; seed, T, capacity = 8)

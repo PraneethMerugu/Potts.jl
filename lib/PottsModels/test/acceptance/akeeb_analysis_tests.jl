@@ -474,9 +474,9 @@ end
         )
         function seeding(seed, m)
             return overlay(
-                    slab,
-                    InsertUntil(:leader; into = [:follower], fraction = 1 // 4, seed, misses = m, region = (2:500, 2:20))
-                )
+                slab,
+                InsertUntil(:leader; into = [:follower], fraction = 1 // 4, seed, misses = m, region = (2:500, 2:20))
+            )
         end
         @test length(invasion_get(layout(slab, (500, 40)), kind)) == 1169
         # Several leaders in one follower can cut it in pieces, and `overlay` warns: silenced.

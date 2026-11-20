@@ -141,9 +141,9 @@ closed_tol(r) = d2 -> sqrt(d2) <= r * (1 + 1.0e-12)
 # the hexagonal squared distance between site-centred points is a² + ab + b² (exact)
 function hex_count(r2; strict)
     return count(
-            ((a, b),) -> (q = a^2 + a * b + b^2; strict ? q < r2 : q <= r2),
-            Iterators.product(-10:10, -10:10)
-        )
+        ((a, b),) -> (q = a^2 + a * b + b^2; strict ? q < r2 : q <= r2),
+        Iterators.product(-10:10, -10:10)
+    )
 end
 const ROW_KEYS = (:layer, :type, :requested, :painted, :dropped, :misses, :counted, :clipped, :splits)
 # A custom layer (D-091 protocol) that paints one site per entry of `labels` along row
@@ -212,11 +212,11 @@ end
 # the error message of `f()` ("" if it does not throw an ArgumentError)
 function initial_msg(f)
     return try
-            f()
-            ""
-        catch e
-            e isa ArgumentError ? e.msg : ""
-        end
+        f()
+        ""
+    catch e
+        e isa ArgumentError ? e.msg : ""
+    end
 end
 # ---------------------------------------------------------------------------------------
 # 2. Strict vs closed membership: the brief's A1 table (centre on a site, lattice large

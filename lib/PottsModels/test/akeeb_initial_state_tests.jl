@@ -32,9 +32,9 @@ end
             cue = [Float64(y - 1) for x in 1:12, y in 1:8]
             function op(kinds)
                 return [
-                        ownership => σ, kind => kinds, :clock => fill(-1.0, 5),
-                        :rate => [k === :leader ? 0.0 : 0.015 for k in kinds], :cue => cue,
-                    ]
+                    ownership => σ, kind => kinds, :clock => fill(-1.0, 5),
+                    :rate => [k === :leader ? 0.0 : 0.015 for k in kinds], :cue => cue,
+                ]
             end
             sys = AkeebInvasion(; name = :akeeb_u0, lattice = (12, 8))
             good = [:follower, :leader, :follower, :follower, :leader]

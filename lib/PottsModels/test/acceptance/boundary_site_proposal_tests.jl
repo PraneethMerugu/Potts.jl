@@ -537,9 +537,9 @@ function openvt100_problem()
 end
 function openvt_problem(L; tspan = (0, 10^6), seed = 1, capacity = 64)
     return PottsProblem(
-            OpenVTReferenceMonolayer(; name = Symbol(:ovt, L), lattice = (L, L)),
-            openvt_reference_state(; lattice = (L, L)), tspan; capacity, seed
-        )
+        OpenVTReferenceMonolayer(; name = Symbol(:ovt, L), lattice = (L, L)),
+        openvt_reference_state(; lattice = (L, L)), tspan; capacity, seed
+    )
 end
 sha(σ) = bytes2hex(sha256(reinterpret(UInt8, vec(Array{Int32}(σ)))))
 function warm_allocs(integ)          # a function barrier, as in benchmark/gate.jl

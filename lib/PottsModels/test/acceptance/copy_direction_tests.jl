@@ -165,14 +165,14 @@ end
 function probe_expr(name::Symbol, lattice::Expr, nd::Int)
     drive = if nd == 3
         :(
-                a1 * direction[1] + a2 * direction[2] + a3 * direction[3] + bt * position[target][2] * direction[1] +
+            a1 * direction[1] + a2 * direction[2] + a3 * direction[3] + bt * position[target][2] * direction[1] +
                 cs * position[source][1] * direction[2]
-            )
+        )
     else
         :(
-                a1 * direction[1] + a2 * direction[2] + bt * position[target][2] * direction[1] +
+            a1 * direction[1] + a2 * direction[2] + bt * position[target][2] * direction[1] +
                 cs * position[source][1] * direction[2]
-            )
+        )
     end
     return :(
         @potts_model $name begin

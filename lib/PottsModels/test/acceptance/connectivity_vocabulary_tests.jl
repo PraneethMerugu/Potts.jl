@@ -472,18 +472,18 @@ function connectivity_topology(X, objadj)
         seen = falses(size(M))
         n = 0
         for I in CartesianIndices(M)
-                (M[I] && !seen[I]) || continue
-                n += 1; seen[I] = true; st = [I]
-                while !isempty(st)
-                    J = pop!(st)
-                    for d in CartesianIndices((-1:1, -1:1))
-                        (d == CartesianIndex(0, 0) || (!eight && sum(abs, Tuple(d)) != 1)) && continue
-                        K = J + d
-                        (checkbounds(Bool, M, K) && M[K] && !seen[K]) || continue
-                        seen[K] = true; push!(st, K)
-                    end
+            (M[I] && !seen[I]) || continue
+            n += 1; seen[I] = true; st = [I]
+            while !isempty(st)
+                J = pop!(st)
+                for d in CartesianIndices((-1:1, -1:1))
+                    (d == CartesianIndex(0, 0) || (!eight && sum(abs, Tuple(d)) != 1)) && continue
+                    K = J + d
+                    (checkbounds(Bool, M, K) && M[K] && !seen[K]) || continue
+                    seen[K] = true; push!(st, K)
                 end
             end
+        end
         return n
     end
     return (comps(P, objadj === :full), comps(.!P, objadj !== :full))
@@ -603,8 +603,8 @@ function connectivity_tissue()
     σ = zeros(Int32, 24, 24)
     k = 0
     for i in 0:3, j in 0:3
-            k += 1; σ[(6i + 1):(6i + 6), (6j + 1):(6j + 6)] .= k
-        end
+        k += 1; σ[(6i + 1):(6i + 6), (6j + 1):(6j + 6)] .= k
+    end
     return σ
 end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
@@ -940,14 +940,14 @@ end
         σ0 = zeros(Int32, 24, 24); σ0[9:16, 9:16] .= 1
         function runs(M)
             return [
-                    solve(
-                        remake(
-                            PottsProblem(M(; name = :h), [ownership => σ0, kind => [:A]], (0, 100); seed),
-                            p = [:T => 6.0, :V => 64.0, :J => [0.0 -1.0; -1.0 4.0]]
-                        ),
-                        SequentialCPM(; proposal = prop); saveat = 10:10:100
-                    ) for seed in 1:3
-                ]
+                solve(
+                    remake(
+                        PottsProblem(M(; name = :h), [ownership => σ0, kind => [:A]], (0, 100); seed),
+                        p = [:T => 6.0, :V => 64.0, :J => [0.0 -1.0; -1.0 4.0]]
+                    ),
+                    SequentialCPM(; proposal = prop); saveat = 10:10:100
+                ) for seed in 1:3
+            ]
         end
         holes_local = sum(count(u -> holes(u.ownership, 1) > 0, sol.u) for sol in runs(NcLocal))
         @test holes_local >= 10            # control: Local() lets holes form (measured 30 and 29 of 30)

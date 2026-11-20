@@ -88,13 +88,13 @@ byname(xs, n) = only(x for x in xs if claims_name(x) === n)
 claims_symbolic(e) = CLAIMS_S.unwrap(e) isa Potts.SymbolicUtils.BasicSymbolic
 function clear(f, words...)
     return try
-            f()
-            false
-        catch err
-            ok = err isa ArgumentError && (isempty(words) || occursin(first(words), sprint(showerror, err)))
-            ok || @info "expected an ArgumentError" exception = err
-            ok
-        end
+        f()
+        false
+    catch err
+        ok = err isa ArgumentError && (isempty(words) || occursin(first(words), sprint(showerror, err)))
+        ok || @info "expected an ArgumentError" exception = err
+        ok
+    end
 end
 # ---------------------------------------------------------------------------------------
 # Fixtures
@@ -166,9 +166,9 @@ const Claimsσ = (s = zeros(Int32, 12, 8); s[3:6, 3:6] .= 1; s[7:10, 3:5] .= 2; 
 const CLAIMS_N = 5
 function claims_prob()
     return PottsProblem(
-            All(; name = :all), [ownership => Claimsσ, kind => [:A, :A]], (0, CLAIMS_N);
-            seed = 3, field_solver = ExplicitEuler(substeps = 2)
-        )
+        All(; name = :all), [ownership => Claimsσ, kind => [:A, :A]], (0, CLAIMS_N);
+        seed = 3, field_solver = ExplicitEuler(substeps = 2)
+    )
 end
 # every published model (construction only)
 const MODELS = [
@@ -440,10 +440,10 @@ end
             found = Ref(false)
             function walk(e)
                 Potts.SymbolicUtils.iscall(e) &&
-                        (
-                        Potts.SymbolicUtils.operation(e) isa CLAIMS_M.Pre && (found[] = true);
-                        foreach(walk, Potts.SymbolicUtils.arguments(e))
-                    )
+                    (
+                    Potts.SymbolicUtils.operation(e) isa CLAIMS_M.Pre && (found[] = true);
+                    foreach(walk, Potts.SymbolicUtils.arguments(e))
+                )
                 return nothing
             end
             walk(r)

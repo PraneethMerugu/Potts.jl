@@ -286,15 +286,15 @@ end
             for k in (1.0, 0.25)
                 function go(labels)
                     return jacobi_traj(
-                            solve(
-                                remake(
-                                    problem(
-                                        JacobiPair(; name = :pair), 2, (0, jacobi_M); labels,
-                                        vals = (:y => [1.0, 2.0],)
-                                    ); p = [:k => k]
-                                ), alg; saveat = 0:jacobi_M
-                            ), :y
-                        )
+                        solve(
+                            remake(
+                                problem(
+                                    JacobiPair(; name = :pair), 2, (0, jacobi_M); labels,
+                                    vals = (:y => [1.0, 2.0],)
+                                ); p = [:k => k]
+                            ), alg; saveat = 0:jacobi_M
+                        ), :y
+                    )
                 end
                 a, b = go([1, 2]), go([2, 1])
                 @test all(t -> b[t][[2, 1]] ≈ a[t], eachindex(a))
@@ -303,11 +303,11 @@ end
             y0 = [1.0, 2.0, 4.0]
             function run3(labels)
                 return jacobi_traj(
-                        solve(
-                            problem(Fold(; name = :fold), 3, (0, jacobi_M); labels, vals = (:y => y0,)),
-                            alg; saveat = 0:jacobi_M
-                        ), :y
-                    )
+                    solve(
+                        problem(Fold(; name = :fold), 3, (0, jacobi_M); labels, vals = (:y => y0,)),
+                        alg; saveat = 0:jacobi_M
+                    ), :y
+                )
             end
             a = run3([1, 2, 3])
             for labels in ([3, 2, 1], [2, 3, 1], [3, 1, 2])
@@ -317,11 +317,11 @@ end
             # the mixed model, labels swapped, with an adaptive group
             function runm(labels)
                 sol = solve(
-                        problem(
-                            JacobiMixed(; name = :mixed), 2, (0, 3); labels,
-                            vals = (:y => [1.0, 2.0], :z => [4.0, 8.0]), solvers = [:z => rodas()]
-                        ), alg; saveat = 0:3
-                    )
+                    problem(
+                        JacobiMixed(; name = :mixed), 2, (0, 3); labels,
+                        vals = (:y => [1.0, 2.0], :z => [4.0, 8.0]), solvers = [:z => rodas()]
+                    ), alg; saveat = 0:3
+                )
                 return (jacobi_traj(sol, :y), jacobi_traj(sol, :z))
             end
             (ya, za), (yb, zb) = runm([1, 2]), runm([2, 1])

@@ -21,8 +21,10 @@ negation also in it); weights of a `Weighted` relation are ignored.
 
 One pass over the sites with half the offsets, no allocation beyond the relation.
 """
-function stored_energy(σ::AbstractArray{<:Integer, N}, lat::Lattice{N}; neighborhood = NeighborOrder(4),
-        θ::Real = 1) where {N}
+function stored_energy(
+        σ::AbstractArray{<:Integer, N}, lat::Lattice{N}; neighborhood = NeighborOrder(4),
+        θ::Real = 1
+    ) where {N}
     size(σ) == lat.dims || throw(ArgumentError("stored_energy: σ has size $(size(σ)), the lattice $(lat.dims)"))
     half = _half_offsets(relation(neighborhood, lat).offsets)
     return θ * _unlike_pairs(σ, lat.dims, lat.periodic, lat.mask, half)
@@ -97,7 +99,7 @@ inflates n (spec §2.8, topology audit 2026-10-01). Contacts wrap on `Periodic()
     [`topology_moments`](@ref) does this itself.
 """
 function side_counts(σ::AbstractArray, lat::Lattice; neighborhood = VonNeumann(1))
-    length.(cell_graph(σ, lat; neighborhood))
+    return length.(cell_graph(σ, lat; neighborhood))
 end
 
 """
@@ -164,8 +166,10 @@ function topology_moments(σ::AbstractArray{<:Integer}, lat::Lattice; neighborho
     isempty(live) && throw(ArgumentError("topology_moments: σ has no bubbles"))
     nl = n[live]
     al = area[live]
-    return (mean_n = sum(nl) / length(nl), mu2_n = central_moment(nl), mean_a = sum(al) / length(al),
-        mu2_a = central_moment(al))
+    return (
+        mean_n = sum(nl) / length(nl), mu2_n = central_moment(nl), mean_a = sum(al) / length(al),
+        mu2_a = central_moment(al),
+    )
 end
 
 # ---------------------------------------------------------------------------------------
@@ -369,8 +373,10 @@ is the T1 series sampled at `strain`; converting the boundary displacement to st
 spec §3.2's calibration ε ≈ c·β·t) is the caller's. Different lengths are a
 `DimensionMismatch`; `threshold ≤ 0` or `window < 1` is an `ArgumentError`.
 """
-function yield_strain(strain::AbstractVector{<:Real}, N::AbstractVector{<:Real}; threshold::Real = 1,
-        window::Integer = 1)
+function yield_strain(
+        strain::AbstractVector{<:Real}, N::AbstractVector{<:Real}; threshold::Real = 1,
+        window::Integer = 1
+    )
     length(strain) == length(N) ||
         throw(DimensionMismatch("yield_strain: strain and N have lengths $(length(strain)) and $(length(N))"))
     threshold > 0 || throw(ArgumentError("yield_strain: threshold must be positive, got $threshold"))

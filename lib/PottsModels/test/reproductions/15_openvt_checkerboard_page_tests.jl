@@ -147,11 +147,11 @@ paras(t) = [String(strip(replace(x, r"\s+" => " "))) for q in split(t, r"\n\s*\n
 function checkerboard_page_record()
     dirs = if isdir(DATA)
         sort(
-                filter(
-                    d -> occursin(r"^checkerboard-\d{4}-\d{2}-\d{2}$", d) &&
+            filter(
+                d -> occursin(r"^checkerboard-\d{4}-\d{2}-\d{2}$", d) &&
                     isdir(joinpath(DATA, d)), readdir(DATA)
-                )
             )
+        )
     else
         String[]
     end

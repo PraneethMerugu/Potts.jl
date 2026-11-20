@@ -80,13 +80,13 @@ end
 """A one-model build (no `@extend`): `stmts` plus a lattice, energy and sweep."""
 function single(stmts::Expr)
     return category_model(
-            quote
-                $(stmts.args...)
-                @lattice Lattice((12, 12))
-                @energy cells => (volume - 9.0)^2
-                @sweep Metropolis(; temperature = 10.0)
-            end
-        )
+        quote
+            $(stmts.args...)
+            @lattice Lattice((12, 12))
+            @energy cells => (volume - 9.0)^2
+            @sweep Metropolis(; temperature = 10.0)
+        end
+    )
 end
 const ONE = (s = zeros(Int32, 12, 12); s[3:5, 3:5] .= 1; s)
 """Positive control: compiles, builds a problem and runs one MCS."""

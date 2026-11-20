@@ -447,9 +447,9 @@ const FIXTURES = (
 const OPENVT_SEEDS = 1:24
 function openvt(seed; T = Float32)
     return PottsProblem(
-            OpenVTGrowingMonolayer(; name = :o, lattice = (40, 40), τ = 8.0),
-            openvt_monolayer_state(; lattice = (40, 40)), (0, 70); T, capacity = 256, seed
-        )
+        OpenVTGrowingMonolayer(; name = :o, lattice = (40, 40), τ = 8.0),
+        openvt_monolayer_state(; lattice = (40, 40)), (0, 70); T, capacity = 256, seed
+    )
 end
 function openvt_invariants(sol)
     ok = true

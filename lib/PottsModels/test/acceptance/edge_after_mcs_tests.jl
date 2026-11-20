@@ -62,11 +62,11 @@ end
 lhsname(u) = SII.getname(EDGE_UPDATE_S.unwrap(u.eq.lhs))
 function clear(f, words...)
     return try
-            f()
-            false
-        catch err
-            err isa Potts.PottsCompileError
-        end
+        f()
+        false
+    catch err
+        err isa Potts.PottsCompileError
+    end
 end
 # ---------------------------------------------------------------------------------------
 # Fixtures

@@ -109,11 +109,11 @@ end
 """Evaluate a model definition and construct it (`M(; name = :m)`), returning the error."""
 function build_error(ex::Expr, M::Symbol)
     return class_error(
-            () -> (
-                Core.eval(@__MODULE__, ex);
-                Base.invokelatest(() -> getfield(@__MODULE__, M)(; name = :m))
-            )
+        () -> (
+            Core.eval(@__MODULE__, ex);
+            Base.invokelatest(() -> getfield(@__MODULE__, M)(; name = :m))
         )
+    )
 end
 """Every leaf of a saved state, as host arrays."""
 function leaves(u)
@@ -131,15 +131,15 @@ class_same(a, b) = length(a.u) == length(b.u) && all(leaves(x) == leaves(y) for 
 function class_code(sys; kw...)
     g = generated_code(sys; kw...)
     return string(
-            Base.remove_linenums!(
-                deepcopy(
-                    Any[
-                        g.delta_H, g.commit!,
-                        g.constraint, g.temperature, g.total_energy, g.delta_E, g.phases, g.lifecycle,
-                    ]
-                )
+        Base.remove_linenums!(
+            deepcopy(
+                Any[
+                    g.delta_H, g.commit!,
+                    g.constraint, g.temperature, g.total_energy, g.delta_E, g.phases, g.lifecycle,
+                ]
             )
         )
+    )
 end
 """ΔH (no drives) against H(after) − H(before) on copies of saved states (the suite's selfcheck)."""
 function class_selfcheck(prob; n = 200)
@@ -444,12 +444,12 @@ end
 """Per site, the Moore neighbours (periodic) owned by an ECM cell."""
 function class_near(σ, kd)
     return [
-            count(
-                ((dx, dy),) -> (dx, dy) != (0, 0) &&
-                    (c = σ[wrap(x + dx, y + dy, size(σ))...]; c != 0 && isecm(kd[c])), Iterators.product(-1:1, -1:1)
-            )
-                for x in 1:size(σ, 1), y in 1:size(σ, 2)
-        ]
+        count(
+            ((dx, dy),) -> (dx, dy) != (0, 0) &&
+                (c = σ[wrap(x + dx, y + dy, size(σ))...]; c != 0 && isecm(kd[c])), Iterators.product(-1:1, -1:1)
+        )
+            for x in 1:size(σ, 1), y in 1:size(σ, 2)
+    ]
 end
 ecmask(σ, kd) = [c != 0 && isec(kd[c]) for c in σ]
 # connectivity bridge state: 1 fluid; 2 matrix = two 3×3 blocks joined at (7, 15);
@@ -550,9 +550,9 @@ function cluster_state()
 end
 function cluster_problem(M; T = Float64)
     return PottsProblem(
-            M(; name = :cl),
-            [ownership => cluster_state(), kind => [:fluid, :tip, :stalk, :stalk, :tip], cluster => [1, 2, 2, 4, 4]], (0, 6); T, seed = 5
-        )
+        M(; name = :cl),
+        [ownership => cluster_state(), kind => [:fluid, :tip, :stalk, :stalk, :tip], cluster => [1, 2, 2, 4, 4]], (0, 6); T, seed = 5
+    )
 end
 """H of the cluster model: contact pairs (Moore, periodic) + Σ over endothelial-rooted clusters."""
 cluster_contacts(σ, kd, cl) = cluster_energy(σ, kd, cl; clusters = false)
@@ -658,15 +658,15 @@ function ext_state()
 end
 function ext_problem(M; T = Float64)
     return PottsProblem(
-            M(; name = :ext),
-            [ownership => ext_state(), kind => [:fluid, :tip, :stalk, :tip], :V => [x / 20 for x in 1:20, y in 1:16]], (0, 6); T, seed = 11
-        )
+        M(; name = :ext),
+        [ownership => ext_state(), kind => [:fluid, :tip, :stalk, :tip], :V => [x / 20 for x in 1:20, y in 1:16]], (0, 6); T, seed = 11
+    )
 end
 function ext2_problem(M; T = Float64)
     return PottsProblem(
-            M(; name = :ext2),
-            [ownership => ext_state(), kind => [:fluid, :tip, :prolif, :stalk]], (0, 6); T, seed = 13
-        )
+        M(; name = :ext2),
+        [ownership => ext_state(), kind => [:fluid, :tip, :prolif, :stalk]], (0, 6); T, seed = 13
+    )
 end
 # ---------------------------------------------------------------------------------------
 # Tests

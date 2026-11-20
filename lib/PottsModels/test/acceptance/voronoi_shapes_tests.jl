@@ -96,9 +96,9 @@ voronoi_indomain(mask, x) = all(d -> 1 <= x[d], eachindex(x)) && (mask === nothi
 # the images of index point x along periodic axes (k ∈ -1:1 suffices for the small shapes here)
 function images(x, dims, per)
     return [
-            ntuple(d -> x[d] + k[d] * dims[d], length(dims))
-                for k in Iterators.product(ntuple(d -> per[d] ? (-1:1) : (0:0), length(dims))...)
-        ]
+        ntuple(d -> x[d] + k[d] * dims[d], length(dims))
+            for k in Iterators.product(ntuple(d -> per[d] ? (-1:1) : (0:0), length(dims))...)
+    ]
 end
 # closed ball membership in Cartesian coordinates, any periodic image
 inball(x, c, r, dims, per, hex) = any(y -> sqrt(sum(abs2, cart(y, hex) .- c)) <= r, images(x, dims, per))

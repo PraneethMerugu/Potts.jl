@@ -55,7 +55,8 @@ the variant [`OpenVTGrowingMonolayer`](@ref).
     end
     @before_mcs X ~ ifelse(Pre(X) > 0, Pre(X), randn(μ_X, σ_X; lower_bound = 0.0))
     @after_mcs begin
-        f ~ ifelse(count(true for _ in contacts) > 0,
+        f ~ ifelse(
+            count(true for _ in contacts) > 0,
             count(neighbor_kind == medium for _ in contacts) / count(true for _ in contacts), 1.0
         )
         A_star ~ ifelse((volume / Pre(A_star) >= β) && (f >= γ), Pre(A_star) + α, Pre(A_star))
@@ -220,8 +221,12 @@ function edge_guard(margin::Integer; terminate::Bool = false, every::Integer = 1
         if terminate
             return terminate!(integ, ReturnCode.Failure)
         else
-            throw(DomainError(margin, "edge_guard: a cell came within $margin sites of the lattice edge " *
-                "at MCS $(integ.t); use a larger lattice"))
+            throw(
+                DomainError(
+                    margin, "edge_guard: a cell came within $margin sites of the lattice edge " *
+                        "at MCS $(integ.t); use a larger lattice"
+                )
+            )
         end
     end
     return DiscreteCallback(condition, affect!; save_positions = (false, false))     # one save of the last MCS

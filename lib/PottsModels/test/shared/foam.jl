@@ -116,9 +116,9 @@ const ALG = SequentialCPM(; skip_interior = true)
 const TEMPLATES = Dict{Tuple{Bool, Tuple{Int, Int}}, Any}()
 function brick(L)
     return Int32[
-            (r = (y - 1) ÷ BRICK; r * (L[1] ÷ BRICK) + mod(x - 1 - (isodd(r) ? BRICK ÷ 2 : 0), L[1]) ÷ BRICK + 1)
-                for x in 1:L[1], y in 1:L[2]
-        ]
+        (r = (y - 1) ÷ BRICK; r * (L[1] ÷ BRICK) + mod(x - 1 - (isodd(r) ? BRICK ÷ 2 : 0), L[1]) ÷ BRICK + 1)
+            for x in 1:L[1], y in 1:L[2]
+    ]
 end
 foam_lat(L) = Lattice(L; boundary = (Periodic(), Closed()))
 """The template problem of (shear?, L); built once, outside any threaded loop."""
@@ -336,8 +336,8 @@ function ranks(x)
     p = sortperm(x)
     r = similar(x, Float64)
     for (j, i) in enumerate(p)
-            r[i] = j
-        end
+        r[i] = j
+    end
     return [mean(r[findall(==(x[i]), x)]) for i in eachindex(x)]
 end
 function spearman(x, y)
@@ -777,9 +777,9 @@ function foam_verdicts(R)
     # V14
     function nbar(foam, β)
         return mean(
-                FOAM_AN.mean_t1([r["t1_total"]], r["nbub"], β * r["mcs"])
-                    for r in sel(R["bulk"]; set = "v14", foam, beta = β)
-            )
+            FOAM_AN.mean_t1([r["t1_total"]], r["nbub"], β * r["mcs"])
+                for r in sel(R["bulk"]; set = "v14", foam, beta = β)
+        )
     end
     N14 = Dict((f, β) => nbar(f, β) for f in ("d165", "d172", "d107", "d095") for β in BETAS14)
     r1 = [N14[(f, 1.0e-4)] / N14[(f, 1.0e-3)] for f in ("d165", "d172", "d107", "d095")]
@@ -811,9 +811,9 @@ function foam_verdicts(R)
     # V16
     function rise(set, foam, β)
         return map(sel(R["bulk"]; set, foam, beta = β)) do r
-                ws = filter(w -> 2000 <= 100w["w"] <= 10_000, sel(R["windows"]; set, foam, beta = β, k = r["k"]))
-                mean(w["mu2n"] for w in ws) - r["mu2n0"]
-            end
+            ws = filter(w -> 2000 <= 100w["w"] <= 10_000, sel(R["windows"]; set, foam, beta = β, k = r["k"]))
+            mean(w["mu2n"] for w in ws) - r["mu2n0"]
+        end
     end
     v16 = Dict(f => rise("v16", f, 0.01) for f in ("d081", "d165", "d172", "d202"))
     add!("V16", :row, v16, "rise ≥ 0.1 in ≥ 4/5, each foam", all(x -> count(>=(0.1), x) >= 4, values(v16)))
@@ -859,9 +859,9 @@ const FOAM_SMOKE = Dict{Symbol, Any}()
 # the shear item starts from the first
 function smoke_ordered_foams()
     return get!(FOAM_SMOKE, :ordered) do
-            foam_template(false, FOAM_L)
-            [make_foam(:ordered, k; seedf = _ -> smoke_seed(k)) for k in 1:2]
-        end
+        foam_template(false, FOAM_L)
+        [make_foam(:ordered, k; seedf = _ -> smoke_seed(k)) for k in 1:2]
+    end
 end
 # ---------------------------------------------------------------------------------------------
 # SMOKE: shear (κ-free checks)
@@ -943,8 +943,8 @@ function foam_full()
     end
     function tag!(d; kw...)
         for (k, v) in kw
-                d[string(k)] = v
-            end
+            d[string(k)] = v
+        end
         return d
     end
     # foams, then τ (A-5)

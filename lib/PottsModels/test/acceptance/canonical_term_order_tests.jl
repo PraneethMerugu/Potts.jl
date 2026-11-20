@@ -274,13 +274,13 @@ end
         Potts.Symbolics.@variables a b
         function sx()
             return string.(
-                    Potts.SymbolicUtils.arguments(
-                        Potts.Symbolics.unwrap(
-                            Potts.population(a, b, true) + Potts.gather(a, b, a, b) +
-                                Potts.value_at(a, b) + Potts.population(b, a, true) + sin(a)
-                        )
+                Potts.SymbolicUtils.arguments(
+                    Potts.Symbolics.unwrap(
+                        Potts.population(a, b, true) + Potts.gather(a, b, a, b) +
+                            Potts.value_at(a, b) + Potts.population(b, a, true) + sin(a)
                     )
                 )
+            )
         end
         sx0 = sx()
         orders = [canonical_salted(sx, POTTS_OPS, s) for s in SALTS]

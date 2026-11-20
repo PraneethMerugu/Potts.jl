@@ -182,9 +182,9 @@ pair_oracle(T, nmcs) = T.(isodd(nmcs) ? reverse(collect(FUSION_Y0)) : collect(FU
 # Merks at a small size with the paper's 15 substeps (or `substeps`), a fixed seed.
 function merks_problem(; T = Float64, substeps = 15, seed = 7, nmcs = 6)
     return PottsProblem(
-            MerksVasculogenesis(; name = :m, lattice = (32, 32)), merks_state(; lattice = (32, 32), n = 6, side = 7),
-            (0, nmcs); T, seed, field_solver = ExplicitEuler(; substeps, lower_bound = 0.0)
-        )
+        MerksVasculogenesis(; name = :m, lattice = (32, 32)), merks_state(; lattice = (32, 32), n = 6, side = 7),
+        (0, nmcs); T, seed, field_solver = ExplicitEuler(; substeps, lower_bound = 0.0)
+    )
 end
 # Two adaptive-ODE phases in one MCS: a cell ODE and a model ODE, both `Adaptive`
 # (y(t) = exp(−k t), g(t) = exp(−k t)). The control model has the cell ODE only.

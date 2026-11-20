@@ -3,37 +3,43 @@
 # kind tests: `cell` (an endothelial site), `ecm` (a medium site) and `frame` (a border site).
 # The parameters keep the names and defaults of the models.
 module MerksField
-using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters, t_nounits as t
+    using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters, t_nounits as t
     using Potts.LatticePDE: laplacian, masked, step_index, lattice_domain
-const Dt = Differential(t)
-@parameters x y
-@variables c(..) cell(..)::Bool [input = true] ecm(..)::Bool [input = true] frame(..)::Bool [input = true]
-const C = c(t, x, y)
+    const Dt = Differential(t)
+    @parameters x y
+    @variables c(..) cell(..)::Bool [input = true] ecm(..)::Bool [input = true] frame(..)::Bool [input = true]
+    const C = c(t, x, y)
 
-# `∂c/∂t = D Δc + α δ_cell − ε c (1 − δ_cell)` (2006 Eq. 6) with zero flux at the lattice faces
-function vasculogenesis(lattice)
-    @parameters Dc = 0.75 σc = 5.4e-3 δc = 5.4e-3
+    # `∂c/∂t = D Δc + α δ_cell − ε c (1 − δ_cell)` (2006 Eq. 6) with zero flux at the lattice faces
+    function vasculogenesis(lattice)
+        @parameters Dc = 0.75 σc = 5.4e-3 δc = 5.4e-3
         eq = Dt(C) ~ Dc * laplacian(C) + σc * cell(t, x, y) - δc * C * ecm(t, x, y)
-    return PDESystem([eq], [c(0, x, y) ~ 0.0], lattice_domain(t, (x, y), lattice), [t, x, y],
-        [C, cell(t, x, y), ecm(t, x, y)], [Dc, σc, δc]; name = :merks_field)
-end
+        return PDESystem(
+            [eq], [c(0, x, y) ~ 0.0], lattice_domain(t, (x, y), lattice), [t, x, y],
+            [C, cell(t, x, y), ecm(t, x, y)], [Dc, σc, δc]; name = :merks_field
+        )
+    end
 
-# the same equation, held at `c = 0` on the border sites after every substep
-function merks2006(lattice)
-    @parameters Dc = 0.75 α = 5.4e-3 ε = 5.4e-3
+    # the same equation, held at `c = 0` on the border sites after every substep
+    function merks2006(lattice)
+        @parameters Dc = 0.75 α = 5.4e-3 ε = 5.4e-3
         eq = Dt(C) ~ Dc * laplacian(C) + α * cell(t, x, y) - ε * C * ecm(t, x, y)
-    return PDESystem([eq], [c(0, x, y) ~ 0.0, C ~ masked(frame(t, x, y), 0.0)], lattice_domain(t, (x, y), lattice),
-        [t, x, y], [C, cell(t, x, y), ecm(t, x, y), frame(t, x, y)], [Dc, α, ε]; name = :merks_field)
-end
+        return PDESystem(
+            [eq], [c(0, x, y) ~ 0.0, C ~ masked(frame(t, x, y), 0.0)], lattice_domain(t, (x, y), lattice),
+            [t, x, y], [C, cell(t, x, y), ecm(t, x, y), frame(t, x, y)], [Dc, α, ε]; name = :merks_field
+        )
+    end
 
-# 2008 Eq. 1: as `merks2006`, but off for the first `t_relax` MCS (`step_index(t)` is the MCS)
-function merks2008(lattice)
-    @parameters Dc = 0.75 α = 0.03 ε = 0.03 t_relax = 100.0
+    # 2008 Eq. 1: as `merks2006`, but off for the first `t_relax` MCS (`step_index(t)` is the MCS)
+    function merks2008(lattice)
+        @parameters Dc = 0.75 α = 0.03 ε = 0.03 t_relax = 100.0
         rate = Dc * laplacian(C) + α * cell(t, x, y) - ε * C * ecm(t, x, y)
-    eq = Dt(C) ~ ifelse(step_index(t) >= t_relax, rate, 0.0)
-    return PDESystem([eq], [c(0, x, y) ~ 0.0, C ~ masked(frame(t, x, y), 0.0)], lattice_domain(t, (x, y), lattice),
-        [t, x, y], [C, cell(t, x, y), ecm(t, x, y), frame(t, x, y)], [Dc, α, ε, t_relax]; name = :merks_field)
-end
+        eq = Dt(C) ~ ifelse(step_index(t) >= t_relax, rate, 0.0)
+        return PDESystem(
+            [eq], [c(0, x, y) ~ 0.0, C ~ masked(frame(t, x, y), 0.0)], lattice_domain(t, (x, y), lattice),
+            [t, x, y], [C, cell(t, x, y), ecm(t, x, y), frame(t, x, y)], [Dc, α, ε, t_relax]; name = :merks_field
+        )
+    end
 end
 
 """
@@ -136,8 +142,10 @@ site apart, at uniformly random corners in a centered `region` (`off + 2 : off +
 axis, `off = (lattice − region) ÷ 2`), drawn from a `StableRNG(seed)`:
 `Scattered(n, (side, side); region, kinds = [:endothelial], seed, gap = 1)`.
 """
-function merks_layout(; lattice = (500, 500), region = lattice == (500, 500) ? (333, 333) : lattice,
-        n = 282, side = 10, seed = 1)
+function merks_layout(;
+        lattice = (500, 500), region = lattice == (500, 500) ? (333, 333) : lattice,
+        n = 282, side = 10, seed = 1
+    )
     off = (lattice .- region) .÷ 2
     reg = ntuple(d -> (off[d] + 2):(off[d] + region[d] - 1), 2)
     return Scattered(n, (side, side); region = reg, kinds = [:endothelial], seed, gap = 1)
@@ -169,8 +177,10 @@ overlay(Frame(:border; width = 2),
 A few of the 128 cells are cut into pieces, as in the authors' code, so `splits = :allow`.
 """
 function merks2008_sprout(; rounds = 50, divisions = 7, seed = 1)
-    return overlay(Frame(:border; width = 2),
-        Splits(Eden(Center(); rounds, kinds = [:endothelial], seed, neighborhood = Moore(1)), divisions; splits = :allow))
+    return overlay(
+        Frame(:border; width = 2),
+        Splits(Eden(Center(); rounds, kinds = [:endothelial], seed, neighborhood = Moore(1)), divisions; splits = :allow)
+    )
 end
 
 """
@@ -191,11 +201,17 @@ The default is the released files' (`denovo_*.par`: 360 seeds on the 198² inter
 about 355 cells of 47 sites). 01b Fig. 2's geometry is
 `merks2008_denovo(; lattice = (502, 502), n = 1000, region = (85:417, 85:417))`.
 """
-function merks2008_denovo(; lattice = (202, 202), n = 360, rounds = 10, region = (3:(lattice[1] - 2), 3:(lattice[2] - 2)),
-    seed = 1)
-    return overlay(Frame(:border; width = 2),
-        Eden(RandomPoints(n; region, replace = true, seed); rounds, kinds = [:endothelial], seed,
-            neighborhood = Moore(1), shortfall = :allow))
+function merks2008_denovo(;
+        lattice = (202, 202), n = 360, rounds = 10, region = (3:(lattice[1] - 2), 3:(lattice[2] - 2)),
+        seed = 1
+    )
+    return overlay(
+        Frame(:border; width = 2),
+        Eden(
+            RandomPoints(n; region, replace = true, seed); rounds, kinds = [:endothelial], seed,
+            neighborhood = Moore(1), shortfall = :allow
+        )
+    )
 end
 
 function _merks_choice(x, allowed, model, key)
@@ -262,8 +278,10 @@ prob = PottsProblem(Merks2006(; name = :m), layout(merks2006_layout(), (500, 500
         s = 0.0
     end
     @lattice Lattice(lattice; boundary = Closed(), neighborhood = Moore(1))
-    @fields c = MerksField.merks2006(lattice) (MerksField.cell => kind == endothelial, MerksField.ecm => kind == medium,
-        MerksField.frame => kind == border)
+    @fields c = MerksField.merks2006(lattice) (
+        MerksField.cell => kind == endothelial, MerksField.ecm => kind == medium,
+        MerksField.frame => kind == border,
+    )
     @parameters J[kind, kind] = [0.0 20.0 0.0; 20.0 40.0 100.0; 0.0 100.0 0.0]
     @relations proposal = Moore(1)
     @energy begin
@@ -271,7 +289,7 @@ prob = PottsProblem(Merks2006(; name = :m), layout(merks2006_layout(), (500, 500
         contacts => J[kind, neighbor_kind]
     end
     @drive copy => -ifelse((old == 0) | (new == 0), χcM, χcc) *
-                   (c[target] / (1 + s * c[target]) - c[source] / (1 + s * c[source]))
+        (c[target] / (1 + s * c[target]) - c[source] / (1 + s * c[source]))
     if _merks_choice(rule, (:soft, :hard), "Merks2006", :rule) === :soft
         @drive connectivity(endothelial; rule = ArcOrPair(), penalty = E₀)
     else
@@ -331,8 +349,10 @@ prob = PottsProblem(Merks2008(; name = :m), layout(merks2008_sprout(), (202, 202
         s = 0.0
     end
     @lattice Lattice(lattice; boundary = Closed(), neighborhood = NeighborOrder(4))
-    @fields c = MerksField.merks2008(lattice) (MerksField.cell => kind == endothelial, MerksField.ecm => kind == medium,
-        MerksField.frame => kind == border)
+    @fields c = MerksField.merks2008(lattice) (
+        MerksField.cell => kind == endothelial, MerksField.ecm => kind == medium,
+        MerksField.frame => kind == border,
+    )
     @parameters J[kind, kind] = [0.0 20.0 0.0; 20.0 40.0 100.0; 0.0 100.0 0.0]
     @relations proposal = NeighborOrder(4)
     @energy begin
@@ -341,10 +361,12 @@ prob = PottsProblem(Merks2008(; name = :m), layout(merks2008_sprout(), (202, 202
     end
     if _merks_choice(mode, (:extension_retraction, :extension_only), "Merks2008", :mode) === :extension_retraction
         @drive copy => -ifelse((old == 0) | (new == 0), χcM, χcc) *
-                       (c[target] / (1 + s * c[target]) - c[source] / (1 + s * c[source]))
+            (c[target] / (1 + s * c[target]) - c[source] / (1 + s * c[source]))
     else
-        @drive copy => ifelse(new == 0, 0.0,
-            -ifelse(old == 0, χcM, χcc) * (c[target] / (1 + s * c[target]) - c[source] / (1 + s * c[source])))
+        @drive copy => ifelse(
+            new == 0, 0.0,
+            -ifelse(old == 0, χcM, χcc) * (c[target] / (1 + s * c[target]) - c[source] / (1 + s * c[source]))
+        )
     end
     @schedule fields, sweep
     @sweep Metropolis(; temperature = T)

@@ -66,9 +66,9 @@ function Potts.paint!(op::Potts.LayoutState, l::Slab, lat)
 end
 function oracle(X, slab, seed, misses)
     return overlay(
-            Slab(X, slab),
-            InsertUntil(:leader; into = [:follower], fraction = 1 // 4, seed, misses, region = (2:X, 2:(slab - 1)))
-        )
+        Slab(X, slab),
+        InsertUntil(:leader; into = [:follower], fraction = 1 // 4, seed, misses, region = (2:X, 2:(slab - 1)))
+    )
 end
 # The clock recipe on the `:clock` sub-stream (D-093) over the kinds as returned (id order).
 function inventory_clocks(kinds, pp, seed; rng = StableRNG(Potts._substream_seed(seed, :clock)))

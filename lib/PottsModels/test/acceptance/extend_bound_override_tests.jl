@@ -146,11 +146,11 @@ override_value(m, k) = override_try(() -> (v = getp(override_problem(m), k)(over
 default does not convert)."""
 function override_default(m, k)
     return override_try(
-            () -> (
-                d = Potts.info(Potts.lookup(m, k)).default;
-                d isa AbstractArray ? Matrix{Float64}(d) : Float64(d)
-            )
+        () -> (
+            d = Potts.info(Potts.lookup(m, k)).default;
+            d isa AbstractArray ? Matrix{Float64}(d) : Float64(d)
         )
+    )
 end
 override_count(m, k) = count(p -> Potts.info(p).name === k, Potts.declared_parameters(m))
 build(F; kws...) = override_try(() -> F(; name = :ext, kws...))

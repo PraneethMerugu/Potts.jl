@@ -68,8 +68,12 @@ nothing #hide
 
 σ_demo, k_demo = graner_glazier_state()
 function run_of(model)
-    return ownership(solve(PottsProblem(model, [ownership => σ_demo, kind => k_demo], (0, 160); seed = 1),
-        SequentialCPM(); saveat = 160).u[end])
+    return ownership(
+        solve(
+            PottsProblem(model, [ownership => σ_demo, kind => k_demo], (0, 160); seed = 1),
+            SequentialCPM(); saveat = 160
+        ).u[end]
+    )
 end
 run_of(CellSorting(; name = :cs)) == run_of(GranerGlazier(; name = :gg_shipped))
 
@@ -80,8 +84,10 @@ run_of(CellSorting(; name = :cs)) == run_of(GranerGlazier(; name = :gg_shipped))
 # so this runs to 200 paper MCS. Cells are colored by kind and the medium is dark gray.
 
 u0_demo = [ownership => σ_demo, kind => k_demo]
-demo = solve(PottsProblem(GranerGlazier(; name = :demo), u0_demo, (0, 16 * 200); seed = 1),
-    SequentialCPM(; proposal = Moore(1)); saveat = 16 .* [0, 10, 200])
+demo = solve(
+    PottsProblem(GranerGlazier(; name = :demo), u0_demo, (0, 16 * 200); seed = 1),
+    SequentialCPM(; proposal = Moore(1)); saveat = 16 .* [0, 10, 200]
+)
 fig_demo = Figure(size = (720, 260))
 for (j, t) in enumerate((0, 10, 200))
     ax_j = Axis(fig_demo[1, j]; title = "$t paper MCS", aspect = DataAspect())
@@ -106,7 +112,7 @@ n = FULL ? 10 : 4                       # replicates (spec §9.0: 4 smoke, 10 fu
 σ_state, k_state = graner_glazier_state()
 n_state, dims_state = length(k_state), join(size(σ_state), " × ")
 const MARGIN = 60                       # medium margin of the full-run aggregates (spec §9.4: 10 let
-                                        # aggregates touch their periodic image after ≈ 3000 paper MCS)
+# aggregates touch their periodic image after ≈ 3000 paper MCS)
 starts = [FULL ? graner_glazier_aggregate(1000; seed = i, margin = MARGIN) : (σ_state, k_state) for i in 1:n]
 σ0, k0 = starts[1]
 gg = GranerGlazier(; name = :gg, lattice = size(σ0))
@@ -147,19 +153,25 @@ nothing #hide
 
 rec_dir = joinpath(pkgdir(PottsModels), "reproductions", "data", "09")
 rec_rows(file) = (l = split.(readlines(file), '\t'); [Dict(zip(l[1], r)) for r in l[2:end]])
-rec_10k = [parse(Float64, r["largest_dark_cluster"])
-           for r in rec_rows(joinpath(rec_dir, "full-2026-10-05", "clusters.tsv")) if r["paper_mcs"] == "10000"]
+rec_10k = [
+    parse(Float64, r["largest_dark_cluster"])
+        for r in rec_rows(joinpath(rec_dir, "full-2026-10-05", "clusters.tsv")) if r["paper_mcs"] == "10000"
+]
 rec_pooled = last(split(read(joinpath(rec_dir, "p6-1g-2026-10-06", "pooled.txt"), String), "## pooled"))
 rec_share = match(r"largest@10⁴: mean ([0-9.]+) ± ([0-9.]+)", rec_pooled)
 rec_fdl = match(r"F_dl@10⁴: mean ([0-9.]+) ± ([0-9.]+); min ([0-9.]+); ≤ 0.050: (\d+)", rec_pooled)
 rec_k = match(r"pooled: k = (\d+)", read(joinpath(rec_dir, "p6-1g-2026-10-06", "pooled.txt"), String))[1]
 ## the 22 earlier replicates (the second full run and the late-coarsening diagnostic) with a largest dark-cluster share
 ## ≥ 0.90 at 10⁴; for these saves "by 10⁴" and "at 10⁴" coincide (late-coarsening record)
-rec_22 = match(r"## earlier 22[^\n]*\n(?:[^\n]*\n)*?single by 10⁴: (\d+)/(\d+)",
-               read(joinpath(rec_dir, "p6-1g-2026-10-06", "pooled.txt"), String))
+rec_22 = match(
+    r"## earlier 22[^\n]*\n(?:[^\n]*\n)*?single by 10⁴: (\d+)/(\d+)",
+    read(joinpath(rec_dir, "p6-1g-2026-10-06", "pooled.txt"), String)
+)
 ## total boundary length at paper t = 1 in the FULL record (Moore bonds, each once), for V-PRE4
-rec_N1 = mean(parse(Float64, r["mismatched_bonds"])
-              for r in rec_rows(joinpath(rec_dir, "full-2026-10-05", "timeseries.tsv")) if r["paper_mcs"] == "1")
+rec_N1 = mean(
+    parse(Float64, r["mismatched_bonds"])
+        for r in rec_rows(joinpath(rec_dir, "full-2026-10-05", "timeseries.tsv")) if r["paper_mcs"] == "1"
+)
 const AQ = "not asked (on our open question list: README §5, Glazier item 5; Open questions under Details)"
 ## the V-PRE7 full-size record (Details, "Temperature regimes")
 vpre7_dir = joinpath(rec_dir, "vpre7-2026-10-07")
@@ -215,10 +227,14 @@ nothing #hide
 
 paper_t = [1, 10, 100, 1000, 10_000]
 ## PRE Fig. 13(c) and PRL Fig. 2(a), 400-dpi reads (spec §8.5 V-PRE1); NaN: off-scale (> 0.5)
-paper_pre = Dict(:dl => [0.43, 0.36, 0.245, 0.136, 0.05], :dd => [0.28, 0.30, 0.39, 0.44, 0.485],
-    :ll => [0.23, 0.255, 0.31, 0.36, 0.40])
-paper_prl = Dict(:dl => [0.40, 0.333, 0.206, 0.122, 0.04], :dd => [0.33, 0.375, 0.416, 0.489, NaN],
-    :ll => [0.22, 0.238, 0.289, 0.328, 0.362])
+paper_pre = Dict(
+    :dl => [0.43, 0.36, 0.245, 0.136, 0.05], :dd => [0.28, 0.3, 0.39, 0.44, 0.485],
+    :ll => [0.23, 0.255, 0.31, 0.36, 0.4]
+)
+paper_prl = Dict(
+    :dl => [0.4, 0.333, 0.206, 0.122, 0.04], :dd => [0.33, 0.375, 0.416, 0.489, NaN],
+    :ll => [0.22, 0.238, 0.289, 0.328, 0.362]
+)
 const READ_ERR = 0.005             # 400-dpi read-off (spec §9.0)
 const ENVELOPE_MARGIN = 0.03       # spec §9.1 V-PRE1
 const DD_OFFSCALE_HI = 0.55        # spec §9.1: dd at 10⁴ widened to 0.55, the PRL value being off-scale
@@ -237,26 +253,34 @@ rec_t = sort(unique(parse.(Int, getindex.(rec_series, "paper_mcs"))))
 rec_at(key, t) = [parse(Float64, r["F_" * string(key)]) for r in rec_series if r["paper_mcs"] == string(t)]
 rec_n = length(rec_at(:dl, 1))
 fig_record = Figure(size = (820, 440))
-ax_rec = Axis(fig_record[1, 1]; xscale = log10, xlabel = "time (paper MCS)", ylabel = "fraction of boundary",
-    title = "1000 cells, n = $rec_n (full-size record)")
+ax_rec = Axis(
+    fig_record[1, 1]; xscale = log10, xlabel = "time (paper MCS)", ylabel = "fraction of boundary",
+    title = "1000 cells, n = $rec_n (full-size record)"
+)
 for (c, key) in zip(1:5, (:dl, :dd, :ll, :dM, :lM))
     μ, sd = [mean(rec_at(key, t)) for t in rec_t], [std(rec_at(key, t)) for t in rec_t]
     band!(ax_rec, rec_t, μ .- sd, μ .+ sd; color = (colors[c], 0.25))
     lines!(ax_rec, rec_t, μ; color = colors[c])
     haskey(paper_pre, key) || continue
     js = 2:length(paper_t)
-    rangebars!(ax_rec, paper_t[js] .* 1.08, first.(envelope.(key, js)), last.(envelope.(key, js));
-        color = (:gray, 0.6), whiskerwidth = 6)
+    rangebars!(
+        ax_rec, paper_t[js] .* 1.08, first.(envelope.(key, js)), last.(envelope.(key, js));
+        color = (:gray, 0.6), whiskerwidth = 6
+    )
     for (vals, marker) in ((paper_pre[key], :diamond), (paper_prl[key], :utriangle))
         ok = .!isnan.(vals)
         errorbars!(ax_rec, paper_t[ok], vals[ok], fill(READ_ERR, count(ok)); color = colors[c])
         scatter!(ax_rec, paper_t[ok], vals[ok]; color = colors[c], marker)
     end
 end
-Legend(fig_record[1, 2],
-    [[LineElement(; color = colors[c]) for c in 1:5]; MarkerElement(; marker = :diamond, color = :black);
-     MarkerElement(; marker = :utriangle, color = :black); LineElement(; color = :gray)],
-    [collect("ours, " .* names5); "PRE Fig. 13(c)"; "PRL Fig. 2(a)"; "V-PRE1 pass band"]; framevisible = false)
+Legend(
+    fig_record[1, 2],
+    [
+        [LineElement(; color = colors[c]) for c in 1:5]; MarkerElement(; marker = :diamond, color = :black);
+        MarkerElement(; marker = :utriangle, color = :black); LineElement(; color = :gray)
+    ],
+    [collect("ours, " .* names5); "PRE Fig. 13(c)"; "PRL Fig. 2(a)"; "V-PRE1 pass band"]; framevisible = false
+)
 
 fig7 = Figure(size = (900, 400))
 ax7 = Axis(fig7[1, 1]; xscale = log10, xlabel = "time (paper MCS)", ylabel = "heterotypic fraction")
@@ -270,33 +294,51 @@ for (c, T) in enumerate(vpre7_T)
 end
 rangebars!(ax7, [1000, 2000], [0.12, 0.12], [0.18, 0.18]; color = :black, whiskerwidth = 6)
 scatter!(ax7, [3000, 10_000, 1000, 2000], [0.3, 0.05, 0.145, 0.16]; color = :black, marker = :diamond)
-text!(ax7, [3000, 10_000, 2000], [0.3, 0.05, 0.16]; text = ["T = 2", "T = 10, 20", "T = 40"],
-    align = (:right, :bottom), offset = (-6, 4), fontsize = 11)
+text!(
+    ax7, [3000, 10_000, 2000], [0.3, 0.05, 0.16]; text = ["T = 2", "T = 10, 20", "T = 40"],
+    align = (:right, :bottom), offset = (-6, 4), fontsize = 11
+)
 scatter!(ax7g, [500], [0.5]; color = :black, marker = :xcross, markersize = 12)
 axislegend(ax7; position = :lb, framevisible = false, nbanks = 2)
 
 ## the verdicts of the full-size records, as written by the runs
 pipe(s) = replace(s, r"(?<!\\)\|" => "\\|", r"(?<!\\)_" => "\\_")   # escape table pipes and underscores
-rec_verdicts = [[(; target = r["target"], paper = r["paper"], ours = r["ours"], tol = r["tolerance"],
-                     class = r["class"], result = r["result"]) for r in rec_rows(joinpath(full_dir, "verdicts.tsv"))];
-                [(; target = "V-PRE7 " * r["criterion"], paper = "PRE Fig. 15", ours = r["ours"], tol = r["rule"],
-                     class = "FULL (record)", result = r["result"]) for r in rec_rows(joinpath(vpre7_dir, "verdicts.tsv"))]]
+rec_verdicts = [
+    [
+        (;
+            target = r["target"], paper = r["paper"], ours = r["ours"], tol = r["tolerance"],
+            class = r["class"], result = r["result"],
+        ) for r in rec_rows(joinpath(full_dir, "verdicts.tsv"))
+    ];
+    [
+        (;
+            target = "V-PRE7 " * r["criterion"], paper = "PRE Fig. 15", ours = r["ours"], tol = r["rule"],
+            class = "FULL (record)", result = r["result"],
+        ) for r in rec_rows(joinpath(vpre7_dir, "verdicts.tsv"))
+    ]
+]
 rec_bind = filter(r -> r.result in ("PASS", "FAIL"), rec_verdicts)
 rec_fail = filter(r -> r.result == "FAIL", rec_bind)
-headline = ("V-PRE1 heterotypic @ 10000", "V-PRE1 log law, 5–4000", "V-PRE2 dark–dark crosses heterotypic",
+headline = (
+    "V-PRE1 heterotypic @ 10000", "V-PRE1 log law, 5–4000", "V-PRE2 dark–dark crosses heterotypic",
     "V-PRE2 light–light crosses heterotypic, after dark–dark", "V-PRE3 (a) dark–medium < 0.003",
     "V-PRE3 (c) plateau level, size-free R", "V-PRE4 total length drop D",
     "V-PRE13 (a) partial sorting: dark–medium @ 10³", "V-GG6 light cells smaller than dark @ 10³",
-    "NC1 symmetric contacts @ 10³", "V-PRE7 order at 10³")
+    "NC1 symmetric contacts @ 10³", "V-PRE7 order at 10³",
+)
 summary_md = """
-**$(count(r -> r.result == "PASS", rec_bind)) of $(length(rec_bind)) binding rows pass; $(length(rec_fail)) fail:**
-$(join([r.target for r in rec_fail], "; ")). $(length(rec_verdicts) - length(rec_bind)) more rows are reported
-without a verdict. Headline rows and every failure (all rows are under Details):
+    **$(count(r -> r.result == "PASS", rec_bind)) of $(length(rec_bind)) binding rows pass; $(length(rec_fail)) fail:**
+    $(join([r.target for r in rec_fail], "; ")). $(length(rec_verdicts) - length(rec_bind)) more rows are reported
+    without a verdict. Headline rows and every failure (all rows are under Details):
 
-| Target | Paper | Ours (full-size record) | Rule | Result |
-|---|---|---|---|---|
-""" * join(["| $(r.target) | $(pipe(r.paper)) | $(pipe(r.ours)) | $(pipe(r.tol)) | **$(r.result)** |"
-            for r in rec_verdicts if r.target in headline || r.result == "FAIL"], "\n")
+    | Target | Paper | Ours (full-size record) | Rule | Result |
+    |---|---|---|---|---|
+    """ * join(
+    [
+        "| $(r.target) | $(pipe(r.paper)) | $(pipe(r.ours)) | $(pipe(r.tol)) | **$(r.result)** |"
+            for r in rec_verdicts if r.target in headline || r.result == "FAIL"
+    ], "\n"
+)
 nothing #hide
 
 # ```@raw html
@@ -418,19 +460,21 @@ Markdown.parse(deviations_md) #hide
 # `graner_glazier_aggregate(1000; seed = i, margin = MARGIN)`, so the kind assignments are independent (spec
 # §9.0). The fixture code is under Results.
 
-Markdown.parse("""
-| Symbol | Value | Units | Meaning | Source | Status |
-|---|---|---|---|---|---|
-| J(d,d) | $(J[2, 2]) | energy | dark–dark contact | PRL p.2015 | stated |
-| J(d,l) | $(J[2, 3]) | energy | dark–light contact | PRL p.2015 | stated |
-| J(l,l) | $(J[3, 3]) | energy | light–light contact | PRL p.2015 | stated |
-| J(d,M) = J(l,M) | $(J[1, 2]) | energy | cell–medium contact | PRL p.2015 | stated |
-| λ | $(par(:λ)) | energy / site² | area-constraint strength | PRL p.2014 | stated |
-| A(d) = A(l) | $(par(:V₀)) | sites | target area | PRL p.2015; PRE p.2130, p.2151 | stated (PRE) |
-| T | $(par(:T)) | energy (k = 1) | temperature | PRL p.2014 | stated |
-| lattice | $(join(size(σ0), " × ")), periodic | sites | domain | — | our choice (unstated) |
-| cells | $ncells ($ndark dark, $nlight light) | — | initial aggregate | $(FULL ? "`graner_glazier_aggregate`; PRE p.2129 ≈ 1000" : "PRE §II D3 recipe") | derived |
-""")
+Markdown.parse(
+    """
+    | Symbol | Value | Units | Meaning | Source | Status |
+    |---|---|---|---|---|---|
+    | J(d,d) | $(J[2, 2]) | energy | dark–dark contact | PRL p.2015 | stated |
+    | J(d,l) | $(J[2, 3]) | energy | dark–light contact | PRL p.2015 | stated |
+    | J(l,l) | $(J[3, 3]) | energy | light–light contact | PRL p.2015 | stated |
+    | J(d,M) = J(l,M) | $(J[1, 2]) | energy | cell–medium contact | PRL p.2015 | stated |
+    | λ | $(par(:λ)) | energy / site² | area-constraint strength | PRL p.2014 | stated |
+    | A(d) = A(l) | $(par(:V₀)) | sites | target area | PRL p.2015; PRE p.2130, p.2151 | stated (PRE) |
+    | T | $(par(:T)) | energy (k = 1) | temperature | PRL p.2014 | stated |
+    | lattice | $(join(size(σ0), " × ")), periodic | sites | domain | — | our choice (unstated) |
+    | cells | $ncells ($ndark dark, $nlight light) | — | initial aggregate | $(FULL ? "`graner_glazier_aggregate`; PRE p.2129 ≈ 1000" : "PRE §II D3 recipe") | derived |
+    """
+)
 
 # **Units.** Lengths are lattice sites. One of our MCS is N copy attempts, N the number
 # of lattice sites (medium included). The paper's MCS is 16N attempts (PRL p.2014), so
@@ -447,10 +491,14 @@ const MACHINE = "$(strip(Sys.cpu_info()[1].model)) ($(Sys.MACHINE)), CPU backend
 prob = remake(prob0; tspan = (0, PAPER_MCS * 1000))
 solve(remake(prob; tspan = (0, PAPER_MCS)), alg; save_everystep = false)            # warm-up (compilation)
 t_one = @elapsed solve(prob, alg; save_everystep = false)
-Markdown.parse("One replicate ($ncells cells), 10³ paper MCS, compiled: " *
-               "**$(round(t_one; digits = 1)) s** on $MACHINE." *
-               (FULL ? "" : " In the reduced build this is the $ncells-cell aggregate, so this is not the " *
-                            "paper-size cost; the full build times the 1000-cell aggregate."))
+Markdown.parse(
+    "One replicate ($ncells cells), 10³ paper MCS, compiled: " *
+        "**$(round(t_one; digits = 1)) s** on $MACHINE." *
+        (
+        FULL ? "" : " In the reduced build this is the $ncells-cell aggregate, so this is not the " *
+            "paper-size cost; the full build times the 1000-cell aggregate."
+    )
+)
 
 # The paper-size cost. The reduced build times about 10 paper MCS of
 # `graner_glazier_aggregate(1000)`; the full build reads it off the run above.
@@ -458,14 +506,18 @@ Markdown.parse("One replicate ($ncells cells), 10³ paper MCS, compiled: " *
 t_per_mcs = if FULL
     t_one / 1000
 else
-    prob_big = PottsProblem(GranerGlazier(; name = :gg1000, lattice = size(big_start[1])),
-        [ownership => big_start[1], kind => big_start[2]], (0, PAPER_MCS); seed = 1)
+    prob_big = PottsProblem(
+        GranerGlazier(; name = :gg1000, lattice = size(big_start[1])),
+        [ownership => big_start[1], kind => big_start[2]], (0, PAPER_MCS); seed = 1
+    )
     solve(prob_big, alg; save_everystep = false)                                     # warm-up (compilation)
     (@elapsed solve(remake(prob_big; tspan = (0, 10PAPER_MCS)), alg; save_everystep = false)) / 10
 end
-Markdown.parse("Paper size ($(length(big_start[2])) cells on $(join(size(big_start[1]), " × "))): " *
-               "**$(round(t_per_mcs; digits = 3)) s per paper MCS**, so one full-run replicate " *
-               "($T_FULL paper MCS) takes about $(round(t_per_mcs * T_FULL / 3600; digits = 1)) h; measured on $MACHINE.")
+Markdown.parse(
+    "Paper size ($(length(big_start[2])) cells on $(join(size(big_start[1]), " × "))): " *
+        "**$(round(t_per_mcs; digits = 3)) s per paper MCS**, so one full-run replicate " *
+        "($T_FULL paper MCS) takes about $(round(t_per_mcs * T_FULL / 3600; digits = 1)) h; measured on $MACHINE."
+)
 
 # A variant is ordinary model code, here a parameter `remake`. The partial-sorting regime
 # of PRE §III E swaps J(d,l) and J(l,l) and lowers T:
@@ -509,9 +561,13 @@ end
 function annealed(σ, k, run; seed = 1)
     top = maximum(σ)
     top == 0 && return copy(σ)
-    q = PottsProblem(GranerGlazier(; name = :anneal, lattice = size(σ)),
-        [ownership => copy(σ), kind => k[1:top], :J => getp(run, :J)(run), :λ => getp(run, :λ)(run),
-            :V₀ => getp(run, :V₀)(run), :T => 0.0], (0, 2PAPER_MCS); seed)
+    q = PottsProblem(
+        GranerGlazier(; name = :anneal, lattice = size(σ)),
+        [
+            ownership => copy(σ), kind => k[1:top], :J => getp(run, :J)(run), :λ => getp(run, :λ)(run),
+            :V₀ => getp(run, :V₀)(run), :T => 0.0,
+        ], (0, 2PAPER_MCS); seed
+    )
     return ownership(solve(q, SequentialCPM(); saveat = 2PAPER_MCS).u[end])
 end
 
@@ -605,28 +661,34 @@ nothing #hide
 page = joinpath(pkgdir(PottsModels), "reproductions", "09_cell_sorting.jl")
 function git(args...)
     return try
-            readchomp(Cmd(`git $args`; dir = dirname(page)))
-        catch
-            ""
-        end
+        readchomp(Cmd(`git $args`; dir = dirname(page)))
+    catch
+        ""
+    end
 end
 page_commit = git("log", "-1", "--format=%h %cs", "--", basename(page))
 page_dirty = !isempty(git("status", "--porcelain", "--", basename(page)))
-Markdown.parse("This table was last changed in commit " *
-               (isempty(page_commit) ? "(git unavailable)" : "`$page_commit`") *
-               (page_dirty ? ", with uncommitted edits in this build" : "") * ".")
+Markdown.parse(
+    "This table was last changed in commit " *
+        (isempty(page_commit) ? "(git unavailable)" : "`$page_commit`") *
+        (page_dirty ? ", with uncommitted edits in this build" : "") * "."
+)
 
 # #### Ensemble
 
 ## replicate i starts from `starts[i]` (fixture code under Results); the reduced run's starts are all the same state
 kinds_of(i) = starts[i][2]
 from_start(q, ctx) = FULL ? remake(q; u0 = [ownership => starts[ctx.sim_id][1], kind => starts[ctx.sim_id][2]]) : q
-ts = [1, 2, 3, 4, 5, 6, 8, 10, 13, 16, 20, 25, 32, 40, 50, 64, 80, 100, 128, 160, 200, 256, 320,
-    400, 500, 640, 800, 1000, 1280, 1600, 2000]
+ts = [
+    1, 2, 3, 4, 5, 6, 8, 10, 13, 16, 20, 25, 32, 40, 50, 64, 80, 100, 128, 160, 200, 256, 320,
+    400, 500, 640, 800, 1000, 1280, 1600, 2000,
+]
 FULL && append!(ts, [2560, 3200, 4000, 5000, 6400, 8000, 10_000, 12_800, 16_000, T_FULL])
-ens = solve(EnsembleProblem(remake(prob; tspan = (0, PAPER_MCS * last(ts))); prob_func = from_start), alg,
+ens = solve(
+    EnsembleProblem(remake(prob; tspan = (0, PAPER_MCS * last(ts))); prob_func = from_start), alg,
     EnsembleThreads();
-    trajectories = n, saveat = PAPER_MCS .* ts)
+    trajectories = n, saveat = PAPER_MCS .* ts
+)
 state_at(sol, t) = ownership(sol.u[findfirst(==(PAPER_MCS * t), sol.t)])
 keys5 = (:dl, :dd, :ll, :dM, :lM)
 Cb = Dict(key => zeros(n, length(ts)) for key in keys5)      # bond counts on the annealed copy
@@ -653,15 +715,21 @@ m(key) = vec(mean(F[key]; dims = 1))
 s(key) = vec(std(F[key]; dims = 1))
 fmt(x) = string(round(x; digits = 3))
 shown = filter(t -> t in (1, 10, 100, 1000, 2000, 4000, 10_000, T_FULL), ts)
-Markdown.parse("""
-n = $n replicates (`seed = $SEED`, replicas 1:$n), `SequentialCPM(; proposal = Moore(1))`, CPU,
-$(Threads.nthreads()) thread(s). Fractions of all mismatched bonds, mean ± SD (selected
-times; the plot shows all $(length(ts))):
+Markdown.parse(
+    """
+    n = $n replicates (`seed = $SEED`, replicas 1:$n), `SequentialCPM(; proposal = Moore(1))`, CPU,
+    $(Threads.nthreads()) thread(s). Fractions of all mismatched bonds, mean ± SD (selected
+    times; the plot shows all $(length(ts))):
 
-| paper MCS | heterotypic | dark–dark | light–light | dark–medium | light–medium |
-|---|---|---|---|---|---|
-""" * join(["| $t | " * join(["$(fmt(m(key)[j])) ± $(fmt(s(key)[j]))" for key in keys5], " | ") * " |"
-            for (j, t) in enumerate(ts) if t in shown], "\n"))
+    | paper MCS | heterotypic | dark–dark | light–light | dark–medium | light–medium |
+    |---|---|---|---|---|---|
+    """ * join(
+        [
+            "| $t | " * join(["$(fmt(m(key)[j])) ± $(fmt(s(key)[j]))" for key in keys5], " | ") * " |"
+                for (j, t) in enumerate(ts) if t in shown
+        ], "\n"
+    )
+)
 
 # Side by side with the two published runs: PRE Fig. 13(c) (diamonds) and PRL Fig. 2(a)
 # (triangles), read from 400-dpi renders (spec §8.5 V-PRE1, §9.0: ±0.005, drawn as bars).
@@ -677,18 +745,24 @@ for (c, key) in zip(1:5, keys5)
     lines!(ax, ts, m(key); color = colors[c])
     haskey(paper_pre, key) || continue
     js = 2:length(paper_t)
-    rangebars!(ax, paper_t[js] .* 1.08, first.(envelope.(key, js)), last.(envelope.(key, js));
-        color = (:gray, 0.6), whiskerwidth = 6)
+    rangebars!(
+        ax, paper_t[js] .* 1.08, first.(envelope.(key, js)), last.(envelope.(key, js));
+        color = (:gray, 0.6), whiskerwidth = 6
+    )
     for (vals, marker) in ((paper_pre[key], :diamond), (paper_prl[key], :utriangle))
         ok = .!isnan.(vals)
         errorbars!(ax, paper_t[ok], vals[ok], fill(READ_ERR, count(ok)); color = colors[c])
         scatter!(ax, paper_t[ok], vals[ok]; color = colors[c], marker)
     end
 end
-Legend(fig[1, 2],
-    [[LineElement(; color = colors[c]) for c in 1:5]; MarkerElement(; marker = :diamond, color = :black);
-     MarkerElement(; marker = :utriangle, color = :black); LineElement(; color = :gray)],
-    [collect("ours, " .* names5); "PRE Fig. 13(c)"; "PRL Fig. 2(a)"; "V-PRE1 pass band"]; framevisible = false)
+Legend(
+    fig[1, 2],
+    [
+        [LineElement(; color = colors[c]) for c in 1:5]; MarkerElement(; marker = :diamond, color = :black);
+        MarkerElement(; marker = :utriangle, color = :black); LineElement(; color = :gray)
+    ],
+    [collect("ours, " .* names5); "PRE Fig. 13(c)"; "PRL Fig. 2(a)"; "V-PRE1 pass band"]; framevisible = false
+)
 fig
 
 # Replicate 1 as a video (dark kind blue, light kind green, medium black; frames
@@ -702,8 +776,10 @@ video_t = unique(round.(Int, PAPER_MCS .* exp10.(range(0, log10(last(ts)); lengt
 q1 = remake(prob; tspan = (0, PAPER_MCS * last(ts)), replica = prob.replica + 1)
 FULL && (q1 = remake(q1; u0 = [ownership => starts[1][1], kind => starts[1][2]]))
 video = solve(q1, alg; saveat = video_t)
-record_potts("09_cell_sorting_replicate1.mp4", video; framerate = 12, title = "",
-    figure = (; size = (420, 420)))
+record_potts(
+    "09_cell_sorting_replicate1.mp4", video; framerate = 12, title = "",
+    figure = (; size = (420, 420))
+)
 @assert ownership(video.u[end]) == state_at(sol1, last(ts))
 # ```@raw html
 # <video src="../09_cell_sorting_replicate1.mp4" controls autoplay loop muted playsinline width="420"></video>
@@ -724,27 +800,37 @@ ts_ctrl = filter(<=(t_end), ts)
 t_partial = [10, 100, t_end]
 last_states(ens) = [ownership(sol.u[end]) for sol in ens.u]
 sorted_states = [state_at(sol, t_end) for sol in ens.u]
-ens_partial = solve(EnsembleProblem(prob_partial; prob_func = from_start), alg, EnsembleThreads(); trajectories = n,
-    saveat = PAPER_MCS .* t_partial)
+ens_partial = solve(
+    EnsembleProblem(prob_partial; prob_func = from_start), alg, EnsembleThreads(); trajectories = n,
+    saveat = PAPER_MCS .* t_partial
+)
 partial_states = last_states(ens_partial)
 prob_sym = remake(prob; p = [:J => [0 16 16; 16 11 11; 16 11 11]])
-ens_sym = solve(EnsembleProblem(prob_sym; prob_func = from_start), alg, EnsembleThreads(); trajectories = n,
-    saveat = PAPER_MCS .* ts_ctrl)
+ens_sym = solve(
+    EnsembleProblem(prob_sym; prob_func = from_start), alg, EnsembleThreads(); trajectories = n,
+    saveat = PAPER_MCS .* ts_ctrl
+)
 sym_states = last_states(ens_sym)
 function regime(states, run)
-    return (count(i -> engulfed(states[i], kinds_of(i), run), eachindex(states)),
+    return (
+        count(i -> engulfed(states[i], kinds_of(i), run), eachindex(states)),
         mean(i -> fractions(states[i], kinds_of(i), run)[:dM], eachindex(states)),
-        mean(i -> fractions(states[i], kinds_of(i), run)[:dl], eachindex(states)))
+        mean(i -> fractions(states[i], kinds_of(i), run)[:dl], eachindex(states)),
+    )
 end
-rows = [("sorting (PRL defaults)", "engulfment", regime(sorted_states, prob)),
+rows = [
+    ("sorting (PRL defaults)", "engulfment", regime(sorted_states, prob)),
     ("partial sorting (PRE §III E)", "no monolayer", regime(partial_states, prob_partial)),
-    ("symmetric contacts (NC1)", "no sorting", regime(sym_states, prob_sym))]
-Markdown.parse("""
-At $t_end paper MCS, n = $n each:
+    ("symmetric contacts (NC1)", "no sorting", regime(sym_states, prob_sym)),
+]
+Markdown.parse(
+    """
+    At $t_end paper MCS, n = $n each:
 
-| Run | Paper outcome | engulfed (of $n) | dark–medium | heterotypic |
-|---|---|---|---|---|
-""" * join(["| $r | $o | $(e) | $(fmt(dm)) | $(fmt(h)) |" for (r, o, (e, dm, h)) in rows], "\n"))
+    | Run | Paper outcome | engulfed (of $n) | dark–medium | heterotypic |
+    |---|---|---|---|---|
+    """ * join(["| $r | $o | $(e) | $(fmt(dm)) | $(fmt(h)) |" for (r, o, (e, dm, h)) in rows], "\n")
+)
 
 # #### Variant run: periodic boundaries
 #
@@ -783,13 +869,19 @@ end
 
 t_pad = [10, 100, t_end]
 σp = padded(σ0)
-prob_pad = PottsProblem(GranerGlazier(; name = :gg_padded, lattice = size(σp)),
-    [ownership => σp, kind => k0], (0, PAPER_MCS * t_end); seed = SEED)
+prob_pad = PottsProblem(
+    GranerGlazier(; name = :gg_padded, lattice = size(σp)),
+    [ownership => σp, kind => k0], (0, PAPER_MCS * t_end); seed = SEED
+)
 pad_start(q, ctx) = FULL ? remake(q; u0 = [ownership => padded(starts[ctx.sim_id][1]), kind => starts[ctx.sim_id][2]]) : q
-ens_pad = solve(EnsembleProblem(prob_pad; prob_func = pad_start), alg, EnsembleThreads(); trajectories = n,
-    saveat = PAPER_MCS .* t_pad)
-pad_counts = [bond_counts(annealed(state_at(sol, t), kinds_of(i), prob_pad), kinds_of(i))
-              for (i, sol) in enumerate(ens_pad.u), t in t_pad]
+ens_pad = solve(
+    EnsembleProblem(prob_pad; prob_func = pad_start), alg, EnsembleThreads(); trajectories = n,
+    saveat = PAPER_MCS .* t_pad
+)
+pad_counts = [
+    bond_counts(annealed(state_at(sol, t), kinds_of(i), prob_pad), kinds_of(i))
+        for (i, sol) in enumerate(ens_pad.u), t in t_pad
+]
 pad_rows = String[]
 pad_oks = Bool[]
 n_cmp = length(t_pad) * 3
@@ -800,19 +892,23 @@ for (j, t) in enumerate(t_pad), key in (:dl, :dM, :total)
     Δ, se = mean(wide) - mean(base), sqrt(var(base) / n + var(wide) / n)
     ok = abs(Δ) <= q_pad * se
     push!(pad_oks, ok)
-    push!(pad_rows, "| $t | $key | $(fmt(mean(base))) ± $(fmt(std(base))) | $(fmt(mean(wide))) ± $(fmt(std(wide))) | " *
-                    "$(fmt(Δ)) | $(fmt(q_pad * se)) | $(ok ? "yes" : "no") |")
+    push!(
+        pad_rows, "| $t | $key | $(fmt(mean(base))) ± $(fmt(std(base))) | $(fmt(mean(wide))) ± $(fmt(std(wide))) | " *
+            "$(fmt(Δ)) | $(fmt(q_pad * se)) | $(ok ? "yes" : "no") |"
+    )
 end
-Markdown.parse("""
-Bond counts (mean ± SD, n = $n each), $(join(size(σ0), " × ")) against $dims_pad:
+Markdown.parse(
+    """
+    Bond counts (mean ± SD, n = $n each), $(join(size(σ0), " × ")) against $dims_pad:
 
-| paper MCS | bonds | $(join(size(σ0), " × ")) | $dims_pad | difference | q SE (q = $(fmt(q_pad))) | within |
-|---|---|---|---|---|---|---|
-""" * join(pad_rows, "\n") * """
+    | paper MCS | bonds | $(join(size(σ0), " × ")) | $dims_pad | difference | q SE (q = $(fmt(q_pad))) | within |
+    |---|---|---|---|---|---|---|
+    """ * join(pad_rows, "\n") * """
 
 
-Periodic boundaries harmless for sorting at this size (class FULL): **$(result(all(pad_oks), "FULL"))**.
-""")
+        Periodic boundaries harmless for sorting at this size (class FULL): **$(result(all(pad_oks), "FULL"))**.
+        """
+)
 
 # #### Temperature regimes (V-PRE7, PRE Fig. 15)
 #
@@ -834,19 +930,25 @@ Periodic boundaries harmless for sorting at this size (class FULL): **$(result(a
 # build's save grid and is measured as on this page. "Gone" means volume 0 on the raw state.
 # A save with no mismatched bond left counts as heterotypic 0.
 
-Markdown.parse("""
-Record: $vpre7_n replicates per T, $(length(vpre7_T)) temperatures, commit `$(first(vpre7_meta["commit"], 8))`,
-$(vpre7_meta["machine"]["cpu"]), CPU backend, one thread per replicate. Heterotypic fraction (mean ± SE) and the
-share of cells gone (mean):
+Markdown.parse(
+    """
+    Record: $vpre7_n replicates per T, $(length(vpre7_T)) temperatures, commit `$(first(vpre7_meta["commit"], 8))`,
+    $(vpre7_meta["machine"]["cpu"]), CPU backend, one thread per replicate. Heterotypic fraction (mean ± SE) and the
+    share of cells gone (mean):
 
-| T | heterotypic @ 100 | @ 10³ | @ 2000 | @ 10⁴ | cells gone @ 500 | @ 10⁴ |
-|---|---|---|---|---|---|---|
-""" * join(["| $(Int(T)) | " * join(["$(fmt(vm(dl_of, T, t))) ± $(fmt(vse(dl_of, T, t)))" for t in (100, 1000, 2000, 10_000)], " | ") *
-            " | $(fmt(vm(vgone, T, 500))) | $(fmt(vm(vgone, T, 10_000))) |" for T in vpre7_T], "\n") * """
+    | T | heterotypic @ 100 | @ 10³ | @ 2000 | @ 10⁴ | cells gone @ 500 | @ 10⁴ |
+    |---|---|---|---|---|---|---|
+    """ * join(
+        [
+            "| $(Int(T)) | " * join(["$(fmt(vm(dl_of, T, t))) ± $(fmt(vse(dl_of, T, t)))" for t in (100, 1000, 2000, 10_000)], " | ") *
+                " | $(fmt(vm(vgone, T, 500))) | $(fmt(vm(vgone, T, 10_000))) |" for T in vpre7_T
+        ], "\n"
+    ) * """
 
 
-The isolation guard (pass/fail table) $(v7_guard ? "held at every save of every run" : "failed in at least one run; see `timeseries.tsv`").
-""")
+        The isolation guard (pass/fail table) $(v7_guard ? "held at every save of every run" : "failed in at least one run; see `timeseries.tsv`").
+        """
+)
 
 # The figure of these temperature regimes is under Results.
 
@@ -870,16 +972,26 @@ if !FULL
         q = remake(prob; p = [:T => T], tspan = (0, PAPER_MCS * t_stop))
         tq = filter(<=(t_stop), smoke7_t)
         e = solve(EnsembleProblem(q), alg, EnsembleThreads(); trajectories = n, saveat = PAPER_MCS .* tq)
-        Dict(t => (mean(fractions(state_at(sol, t), k0, q)[:dl] for sol in e.u),
-                mean(count(==(0), cell_areas(state_at(sol, t), k0)) / ncells for sol in e.u)) for t in tq)
+        Dict(
+            t => (
+                mean(fractions(state_at(sol, t), k0, q)[:dl] for sol in e.u),
+                mean(count(==(0), cell_areas(state_at(sol, t), k0)) / ncells for sol in e.u),
+            ) for t in tq
+        )
     end
-    Markdown.parse("""
-    Smoke scan ($ncells cells, n = $n; information only):
+    Markdown.parse(
+        """
+        Smoke scan ($ncells cells, n = $n; information only):
 
-    | T | heterotypic @ 100 | @ 10³ | @ 2000 | cells gone @ 500 |
-    |---|---|---|---|---|
-    """ * join(["| $(Int(T)) | $(fmt(s[100][1])) | $(fmt(s[1000][1])) | $(haskey(s, 2000) ? fmt(s[2000][1]) : "—") | $(fmt(s[500][2])) |"
-                for (T, s) in zip(smoke7_T, smoke7)], "\n"))
+        | T | heterotypic @ 100 | @ 10³ | @ 2000 | cells gone @ 500 |
+        |---|---|---|---|---|
+        """ * join(
+            [
+                "| $(Int(T)) | $(fmt(s[100][1])) | $(fmt(s[1000][1])) | $(haskey(s, 2000) ? fmt(s[2000][1]) : "—") | $(fmt(s[500][2])) |"
+                    for (T, s) in zip(smoke7_T, smoke7)
+            ], "\n"
+        )
+    )
 else
     Markdown.parse("The full build reads V-PRE7 from the committed record only.")
 end
@@ -930,17 +1042,23 @@ end
 ## `timed(s)` (nothing if the row has no time)
 targets = []
 function addrow!(target, paper, ours, tol, class, ok; timed = nothing, info = (;))
-    return push!(targets, (; target, paper, ours, tol, class, ok, timed, info,
-        result = ok === nothing ? "pending full run" : result(ok, class)))
+    return push!(
+        targets, (;
+            target, paper, ours, tol, class, ok, timed, info,
+            result = ok === nothing ? "pending full run" : result(ok, class),
+        )
+    )
 end
 
 ## isolation guard (spec §9.0, §9.4): a validity condition of the run, not a paper target; when it
 ## fails, every row read after the first touching save is void, whatever its own result
 first_touch = [(j = findfirst(!, clear[i, :]); j === nothing ? nothing : ts[j]) for i in 1:n]
-addrow!("Isolation guard: no aggregate touches its periodic image", "— (run validity, spec §9.0)",
+addrow!(
+    "Isolation guard: no aggregate touches its periodic image", "— (run validity, spec §9.0)",
     all(clear) ? "clear at every save, all $n replicates" :
-    "touching: " * join(["replicate $i from $(first_touch[i])" for i in 1:n if first_touch[i] !== nothing], ", "),
-    "an all-medium row and column at every save", "FULL", all(clear))
+        "touching: " * join(["replicate $i from $(first_touch[i])" for i in 1:n if first_touch[i] !== nothing], ", "),
+    "an all-medium row and column at every save", "FULL", all(clear)
+)
 
 ## V-PRE1: two-run envelope ± 0.03 at 10, 100, 10³, 10⁴
 for (key, name) in ((:dl, "heterotypic"), (:dd, "dark–dark"), (:ll, "light–light")), j in 2:length(paper_t)
@@ -953,56 +1071,78 @@ for (key, name) in ((:dl, "heterotypic"), (:dd, "dark–dark"), (:ll, "light–l
         continue
     end
     ok(s) = (x = at(key, s * t); x !== nothing && lo <= x <= hi)
-    addrow!("V-PRE1 $name @ $t", paper, "$(fmt(at(key, t))) ± $(fmt(s(key)[findfirst(==(t), ts)]))",
-        tol, "FULL", ok(1); timed = ok, info = (; key, t, lo, hi))
+    addrow!(
+        "V-PRE1 $name @ $t", paper, "$(fmt(at(key, t))) ± $(fmt(s(key)[findfirst(==(t), ts)]))",
+        tol, "FULL", ok(1); timed = ok, info = (; key, t, lo, hi)
+    )
 end
 r2, slope, t_hi = logfit(m(:dl), 5, 4000)
-addrow!("V-PRE1 log law, 5–4000", "linear in log₁₀ t; slope ≈ −0.11 (PRE), ≈ −0.105 (PRL) per decade (spec §9.1)",
+addrow!(
+    "V-PRE1 log law, 5–4000", "linear in log₁₀ t; slope ≈ −0.11 (PRE), ≈ −0.105 (PRL) per decade (spec §9.1)",
     "R² = $(fmt(r2)), slope $(fmt(slope))" * (t_hi < 4000 ? " (run ends at $t_hi)" : ""),
-    "R² > 0.95, slope in [−0.15, −0.07]", "FULL", r2 > 0.95 && -0.15 <= slope <= -0.07)
+    "R² > 0.95, slope in [−0.15, −0.07]", "FULL", r2 > 0.95 && -0.15 <= slope <= -0.07
+)
 r2b, slopeb, _ = logfit(m(:dl), 4, 512)
-addrow!("extra (not in spec): log law, 4–512", "`test/papers.jl` window",
-    "R² = $(fmt(r2b)), slope $(fmt(slopeb))", "R² > 0.95, slope < 0", "extra", r2b > 0.95 && slopeb < 0)
+addrow!(
+    "extra (not in spec): log law, 4–512", "`test/papers.jl` window",
+    "R² = $(fmt(r2b)), slope $(fmt(slopeb))", "R² > 0.95, slope < 0", "extra", r2b > 0.95 && slopeb < 0
+)
 
 ## V-PRE2: crossing windows; paper crossings from spec §8.5 V-PRE2 (PRE Fig. 13(c), PRL Fig. 2(a))
 paper_cross = (pre = (dd = 18, ll = 49), prl = (dd = 5, ll = 38))
 c_dd, c_ll = crossing(m(:dd), m(:dl)), crossing(m(:ll), m(:dl))
 homo_all = all(m(:dd) .+ m(:ll) .> m(:dl))
-addrow!("V-PRE2 summed homotypic > heterotypic at every save",
+addrow!(
+    "V-PRE2 summed homotypic > heterotypic at every save",
     "already at t = 1 in both paper runs, so a sanity row that cannot discriminate (spec §9.1)",
-    homo_all ? "at every save" : "not at every save", "every save", "FULL", homo_all)
+    homo_all ? "at every save" : "not at every save", "every save", "FULL", homo_all
+)
 ok_dd(s) = c_dd !== nothing && 2.5s <= c_dd <= 40s
-addrow!("V-PRE2 dark–dark crosses heterotypic", "≈ $(paper_cross.pre.dd) (PRE), ≈ $(paper_cross.prl.dd) (PRL)",
-    show_t(c_dd), "[2.5, 40]", "FULL", ok_dd(1); timed = ok_dd)
+addrow!(
+    "V-PRE2 dark–dark crosses heterotypic", "≈ $(paper_cross.pre.dd) (PRE), ≈ $(paper_cross.prl.dd) (PRL)",
+    show_t(c_dd), "[2.5, 40]", "FULL", ok_dd(1); timed = ok_dd
+)
 gap = c_dd === nothing || c_ll === nothing ? "" : "; ll/dd crossing ratio $(fmt(c_ll / c_dd))"
 ok_ll(s) = c_ll !== nothing && c_dd !== nothing && 19s <= c_ll <= 100s && c_dd < c_ll
-addrow!("V-PRE2 light–light crosses heterotypic, after dark–dark",
+addrow!(
+    "V-PRE2 light–light crosses heterotypic, after dark–dark",
     "≈ $(paper_cross.pre.ll) (PRE), ≈ $(paper_cross.prl.ll) (PRL)", show_t(c_ll) * gap,
-    "[19, 100]; dd first", "FULL", ok_ll(1); timed = ok_ll)
+    "[19, 100]; dd first", "FULL", ok_ll(1); timed = ok_ll
+)
 ## NC1 clause of V-PRE2: the control's fractions at every save up to 10³
-Fsym = Dict(key => [begin
-                        b = bond_counts(annealed(state_at(sol, t), kinds_of(i), prob_sym), kinds_of(i))
-                        b[key] / sum(values(b))
-                    end for (i, sol) in enumerate(ens_sym.u), t in ts_ctrl] for key in (:dl, :dd, :ll))
+Fsym = Dict(
+    key => [
+        begin
+            b = bond_counts(annealed(state_at(sol, t), kinds_of(i), prob_sym), kinds_of(i))
+            b[key] / sum(values(b))
+        end for (i, sol) in enumerate(ens_sym.u), t in ts_ctrl
+    ] for key in (:dl, :dd, :ll)
+)
 msym(key) = vec(mean(Fsym[key]; dims = 1))
 c_sym = (crossing(msym(:dd), msym(:dl), ts_ctrl), crossing(msym(:ll), msym(:dl), ts_ctrl))
-addrow!("V-PRE2 NC1: no crossing by 10³", "— (control)",
+addrow!(
+    "V-PRE2 NC1: no crossing by 10³", "— (control)",
     "dd: $(something(c_sym[1], "none")), ll: $(something(c_sym[2], "none"))", "no dd or ll crossing",
-    "FULL", all(isnothing, c_sym))
+    "FULL", all(isnothing, c_sym)
+)
 
 ## V-PRE3
 c_dM = (j = findfirst(<(0.003), m(:dM)); j === nothing ? nothing : ts[j])
 ok_dM(s) = c_dM !== nothing && c_dM <= 1000s
-addrow!("V-PRE3 (a) dark–medium < 0.003", "0.0026 at 200 (PRE); 0 by 300 (PRL)", show_t(c_dM), "by 10³",
-    "FULL", ok_dM(1); timed = ok_dM)
+addrow!(
+    "V-PRE3 (a) dark–medium < 0.003", "0.0026 at 200 (PRE); 0 by 300 (PRL)", show_t(c_dM), "by 10³",
+    "FULL", ok_dM(1); timed = ok_dM
+)
 ## size-free form (ruling of 2026-09-30, spec §9.1), reported only: it did not reach its
 ## calibration bar (20 seeds by the 500 save), so it binds neither build
 paper_rel = 0.0026 / 0.0268                           # PRE Fig. 13(b) at 200 and at 1, 400 dpi (spec §8.5)
 rel_dM = m(:dM) ./ m(:dM)[1]
 c_rel = (j = findfirst(<(0.1), rel_dM); j === nothing ? nothing : ts[j])
 ok_rel(s) = c_rel !== nothing && c_rel <= 1000s
-addrow!("V-PRE3 (a) size-free: dark–medium below 0.1 × its t = 1 value", "$(fmt(paper_rel)) at 200 (PRE Fig. 13(b))",
-    show_t(c_rel), "by 10³", "reported", ok_rel(1); timed = ok_rel)
+addrow!(
+    "V-PRE3 (a) size-free: dark–medium below 0.1 × its t = 1 value", "$(fmt(paper_rel)) at 200 (PRE Fig. 13(b))",
+    show_t(c_rel), "by 10³", "reported", ok_rel(1); timed = ok_rel
+)
 sym_dM = mean(i -> fractions(sym_states[i], kinds_of(i), prob_sym)[:dM], 1:n)
 addrow!("V-PRE3 (a) NC1: dark–medium @ 10³", "— (control)", fmt(sym_dM), "≥ 0.01", "SMOKE+FULL", sym_dM >= 0.01)
 ## plateau: first save after which light–medium stays within 5% of its last value, and the
@@ -1014,90 +1154,126 @@ t_plat = ts[j_plat]
 _, lM_slope, _ = logfit(m(:lM), last(ts) / 10, last(ts))
 flat = abs(lM_slope) <= 0.05lM_end
 ok_plat(s) = t_plat <= 1000s && flat
-addrow!("V-PRE3 (b) light–medium plateau reached", "from ≈ 200 (PRE), ≈ 300 (PRL)",
+addrow!(
+    "V-PRE3 (b) light–medium plateau reached", "from ≈ 200 (PRE), ≈ 300 (PRL)",
     "$t_plat (within 5% of the value at $(last(ts))); last-decade slope $(fmt(lM_slope)) per decade",
     "before 10³; last-decade slope within ± 5% of the last value ($(fmt(0.05lM_end))) per decade",
-    "FULL", ok_plat(1); timed = ok_plat)
+    "FULL", ok_plat(1); timed = ok_plat
+)
 ## plateau level: size-free ratio R, and the raw value
 lM_1000 = at(:lM, 1000)
 ratio, paper_ratio = lM_1000 / medium(1), 0.0628 / PAPER_MEDIUM
-addrow!("V-PRE3 (c) plateau level, size-free R", "0.0628 / $(round(PAPER_MEDIUM; digits = 4)) = $(fmt(paper_ratio)) (PRE Fig. 13(b)); ≈ 0.99 (PRL)",
-    "R = $(fmt(lM_1000)) / $(fmt(medium(1))) = $(fmt(ratio))", "[0.85, 1.10]", "FULL", 0.85 <= ratio <= 1.10)
-addrow!("V-PRE3 (d) plateau level, raw @ 10³", "0.0628 (PRE), 0.057 (PRL)", fmt(lM_1000), "[0.050, 0.075]",
-    "FULL", 0.050 <= lM_1000 <= 0.075)
+addrow!(
+    "V-PRE3 (c) plateau level, size-free R", "0.0628 / $(round(PAPER_MEDIUM; digits = 4)) = $(fmt(paper_ratio)) (PRE Fig. 13(b)); ≈ 0.99 (PRL)",
+    "R = $(fmt(lM_1000)) / $(fmt(medium(1))) = $(fmt(ratio))", "[0.85, 1.10]", "FULL", 0.85 <= ratio <= 1.1
+)
+addrow!(
+    "V-PRE3 (d) plateau level, raw @ 10³", "0.0628 (PRE), 0.057 (PRL)", fmt(lM_1000), "[0.050, 0.075]",
+    "FULL", 0.05 <= lM_1000 <= 0.075
+)
 
 ## V-PRE4: relative drop of the total length, and flatness after 10³
 j100 = findall(t -> 100 <= t <= 1000, ts)
 Dmm = [(Nmm[i, 1] - mean(Nmm[i, j100])) / Nmm[i, 1] for i in 1:n]
 paper_D = (66_850 - 65_900) / 66_850                  # PRE Fig. 13(a) (spec §9.1 V-PRE4)
-addrow!("V-PRE4 total length drop D", "$(fmt(paper_D)) (PRE Fig. 13(a))", "$(fmt(mean(Dmm))) ± $(fmt(std(Dmm)))",
-    "[0.005, 0.03]", "FULL", 0.005 <= mean(Dmm) <= 0.03)
+addrow!(
+    "V-PRE4 total length drop D", "$(fmt(paper_D)) (PRE Fig. 13(a))", "$(fmt(mean(Dmm))) ± $(fmt(std(Dmm)))",
+    "[0.005, 0.03]", "FULL", 0.005 <= mean(Dmm) <= 0.03
+)
 _, N_slope, N_hi = logfit(vec(mean(Nmm; dims = 1)), 1000, 10_000)
 N_1000 = mean(Nmm[:, findfirst(==(1000), ts)])
-addrow!("V-PRE4 total length flat over [10³, 10⁴]", "flat after ≈ 20–100 (PRE Fig. 13(a))",
+addrow!(
+    "V-PRE4 total length flat over [10³, 10⁴]", "flat after ≈ 20–100 (PRE Fig. 13(a))",
     "log-slope $(fmt(N_slope)) bonds per decade" * (N_hi < 10_000 ? " (run ends at $N_hi)" : ""),
-    "≤ 0.005 N_mm(10³) = $(fmt(0.005N_1000)) per decade", "FULL", abs(N_slope) <= 0.005N_1000)
+    "≤ 0.005 N_mm(10³) = $(fmt(0.005N_1000)) per decade", "FULL", abs(N_slope) <= 0.005N_1000
+)
 
 ## V-PRE5: dark clusters on the annealed copy
 mc = vec(mean(ncluster; dims = 1))
-addrow!("V-PRE5 dark-cluster count non-increasing", "clusters merge (PRE Fig. 12)",
+addrow!(
+    "V-PRE5 dark-cluster count non-increasing", "clusters merge (PRE Fig. 12)",
     join(["$(fmt(v)) @ $t" for (t, v) in zip(cluster_t, mc)], ", "), "non-increasing over 10, 100, 10³, 10⁴",
-    "FULL", issorted(mc; rev = true))
+    "FULL", issorted(mc; rev = true)
+)
 if 10_000 in cluster_t
     big_share, dM_end = mean(largest[:, end]), at(:dM, 10_000)
-    addrow!("V-PRE5 one dark cluster @ 10⁴", "a single dark cluster at 13 500 (PRE Fig. 12(h))",
+    addrow!(
+        "V-PRE5 one dark cluster @ 10⁴", "a single dark cluster at 13 500 (PRE Fig. 12(h))",
         "largest $(fmt(big_share)); dark–medium $(fmt(dM_end))", "largest ≥ 0.90; dark–medium < 0.001", "FULL",
-        big_share >= 0.90 && dM_end < 0.001)
+        big_share >= 0.9 && dM_end < 0.001
+    )
 else
-    addrow!("V-PRE5 one dark cluster @ 10⁴", "a single dark cluster at 13 500 (PRE Fig. 12(h))",
+    addrow!(
+        "V-PRE5 one dark cluster @ 10⁴", "a single dark cluster at 13 500 (PRE Fig. 12(h))",
         "not run (largest $(fmt(mean(largest[:, end]))) @ $(last(cluster_t)))", "largest ≥ 0.90; dark–medium < 0.001",
-        "FULL", nothing)
+        "FULL", nothing
+    )
 end
 
 ## V-PRE7: temperature regimes, read from the committed full-size record (Details, "Temperature
 ## regimes"), so these rows carry their verdict in both builds
 v7class = "FULL (record)"
 function addrecord!(target, paper, ours, tol, ok)
-    return push!(targets, (; target, paper, ours, tol, class = v7class, ok,
-        timed = nothing, info = (;), result = pf(ok)))
+    return push!(
+        targets, (;
+            target, paper, ours, tol, class = v7class, ok,
+            timed = nothing, info = (;), result = pf(ok),
+        )
+    )
 end
-addrecord!("V-PRE7 T = 0 freezes", "T = 0 freezes, no sorting (PRE Fig. 15, p.2144)",
-    "\\|F_dl(2000) − F_dl(100)\\| = $(fmt(v7_d0))", "< 0.02", v7_d0 < 0.02)
-addrecord!("V-PRE7 order at 10³", "slower sorting at lower T: T = 2 ≈ 0.3 at 3×10³; T = 5 slower than T = 10 (PRE Fig. 15(a))",
+addrecord!(
+    "V-PRE7 T = 0 freezes", "T = 0 freezes, no sorting (PRE Fig. 15, p.2144)",
+    "\\|F_dl(2000) − F_dl(100)\\| = $(fmt(v7_d0))", "< 0.02", v7_d0 < 0.02
+)
+addrecord!(
+    "V-PRE7 order at 10³", "slower sorting at lower T: T = 2 ≈ 0.3 at 3×10³; T = 5 slower than T = 10 (PRE Fig. 15(a))",
     "T = 2: $(fmt(v7_o[1])), T = 5: $(fmt(v7_o[2])), T = 10: $(fmt(v7_o[3]))", "F_dl(T=2) > F_dl(T=5) > F_dl(T=10)",
-    v7_o[1] > v7_o[2] > v7_o[3])
-addrecord!("V-PRE7 T = 40 plateau", "heterotypic ≈ 0.145 at 10³ and ≈ 0.16 at 2×10³, where the curve ends; ≈ 0.05 above T = 10 at 2×10³ (PRE Fig. 15(a), p.2144)",
+    v7_o[1] > v7_o[2] > v7_o[3]
+)
+addrecord!(
+    "V-PRE7 T = 40 plateau", "heterotypic ≈ 0.145 at 10³ and ≈ 0.16 at 2×10³, where the curve ends; ≈ 0.05 above T = 10 at 2×10³ (PRE Fig. 15(a), p.2144)",
     "$(fmt(v7_f40[1])) at 10³, $(fmt(v7_f40[2])) at 2×10³; $(fmt(v7_gap)) above T = 10 at 2×10³; " *
-    "monolayer late (dark–medium < 0.003 first at $v7_mono40); see Deviations",
+        "monolayer late (dark–medium < 0.003 first at $v7_mono40); see Deviations",
     "in [0.12, 0.18] at 10³ and 2×10³; ≥ 0.01 above T = 10 at 2×10³",
-    all(f -> 0.12 <= f <= 0.18, v7_f40) && v7_gap >= 0.01)
-addrecord!("V-PRE7 T = 80 disintegration", "all cells disappear; heterotypic → 0 by ≈ 100 (PRE Fig. 15, p.2144)",
-    "share of cells gone at 500: $(fmt(v7_g80))", "> 0.5", v7_g80 > 0.5)
+    all(f -> 0.12 <= f <= 0.18, v7_f40) && v7_gap >= 0.01
+)
+addrecord!(
+    "V-PRE7 T = 80 disintegration", "all cells disappear; heterotypic → 0 by ≈ 100 (PRE Fig. 15, p.2144)",
+    "share of cells gone at 500: $(fmt(v7_g80))", "> 0.5", v7_g80 > 0.5
+)
 
 ## V-PRE13: partial sorting
 part = [fractions(state_at(sol, t), kinds_of(i), prob_partial) for (i, sol) in enumerate(ens_partial.u), t in t_partial]
 mpart(key, j) = mean(part[i, j][key] for i in 1:n)
-addrow!("V-PRE13 (a) partial sorting: dark–medium @ 10³", "0.019 (PRE Fig. 23(b), dark–medium bullets; replotted in Fig. 24(b))", fmt(mpart(:dM, 3)), "> 0.01",
-    "SMOKE+FULL", mpart(:dM, 3) > 0.01)
+addrow!(
+    "V-PRE13 (a) partial sorting: dark–medium @ 10³", "0.019 (PRE Fig. 23(b), dark–medium bullets; replotted in Fig. 24(b))", fmt(mpart(:dM, 3)), "> 0.01",
+    "SMOKE+FULL", mpart(:dM, 3) > 0.01
+)
 for (j, (t, v)) in enumerate(zip(t_partial, (0.325, 0.245, 0.17)))   # PRE Fig. 23(a), 300 dpi (spec §9.1)
-    addrow!("V-PRE13 (b) partial sorting: heterotypic @ $t", "≈ $v (PRE Fig. 23(a))", fmt(mpart(:dl, j)),
-        "± 0.05", "FULL", abs(mpart(:dl, j) - v) <= 0.05)
+    addrow!(
+        "V-PRE13 (b) partial sorting: heterotypic @ $t", "≈ $v (PRE Fig. 23(a))", fmt(mpart(:dl, j)),
+        "± 0.05", "FULL", abs(mpart(:dl, j) - v) <= 0.05
+    )
 end
 
 ## V-GG6: light cells smaller than dark, raw state at 10³, with the NC1 control
 function Δarea(states)
-    return [begin
-                a, k = cell_areas(σ, kinds_of(i)), kinds_of(i)
-                mean(a[c] for c in eachindex(k) if k[c] == 2 && a[c] > 0) -
+    return [
+        begin
+            a, k = cell_areas(σ, kinds_of(i)), kinds_of(i)
+            mean(a[c] for c in eachindex(k) if k[c] == 2 && a[c] > 0) -
                 mean(a[c] for c in eachindex(k) if k[c] == 1 && a[c] > 0)
-            end for (i, σ) in enumerate(states)]
+        end for (i, σ) in enumerate(states)
+    ]
 end
 Δa, Δa_sym = Δarea(sorted_states), Δarea(sym_states)
 se_Δa = std(Δa) / sqrt(n)
-addrow!("V-GG6 light cells smaller than dark @ 10³", "\"slightly smaller\" (PRL p.2014)",
+addrow!(
+    "V-GG6 light cells smaller than dark @ 10³", "\"slightly smaller\" (PRL p.2014)",
     "Δa = $(fmt(mean(Δa))) ± $(fmt(se_Δa)) (SE); NC1 $(fmt(mean(Δa_sym)))",
     "Δa < 0, \\|Δa\\| > 2 SE; \\|NC1\\| < ½ \\|Δa\\|", "SMOKE+FULL",
-    mean(Δa) < 0 && abs(mean(Δa)) > 2se_Δa && abs(mean(Δa_sym)) < abs(mean(Δa)) / 2)
+    mean(Δa) < 0 && abs(mean(Δa)) > 2se_Δa && abs(mean(Δa_sym)) < abs(mean(Δa)) / 2
+)
 
 ## NC1: symmetric contacts do not sort
 ## the heterotypic clause is size-free: the heterotypic share of cell–cell bonds only, which
@@ -1106,12 +1282,16 @@ sym_f = [fractions(sym_states[i], kinds_of(i), prob_sym) for i in 1:n]
 sym_share = mean(f[:dl] / (1 - f[:dM] - f[:lM]) for f in sym_f)
 sym_dl = mean(f[:dl] for f in sym_f)
 sym_eng = count(i -> engulfed(sym_states[i], kinds_of(i), prob_sym), 1:n)
-addrow!("NC1 symmetric contacts @ 10³", "— (control; random mixing gives a cell–cell heterotypic share ≈ ½, spec §9.1)",
+addrow!(
+    "NC1 symmetric contacts @ 10³", "— (control; random mixing gives a cell–cell heterotypic share ≈ ½, spec §9.1)",
     "cell–cell heterotypic share $(fmt(sym_share)); dark–medium $(fmt(sym_dM)); engulfed $sym_eng of $n",
     "share ≥ 0.40; dark–medium ≥ 0.01; 0 engulfed", "SMOKE+FULL",
-    sym_share >= 0.40 && sym_dM >= 0.01 && sym_eng == 0)
-addrow!("NC1 raw heterotypic @ 10³ (the old clause)", "— (assumed the paper-size medium share)", fmt(sym_dl), "≥ 0.35",
-    "reported", sym_dl >= 0.35)
+    sym_share >= 0.4 && sym_dM >= 0.01 && sym_eng == 0
+)
+addrow!(
+    "NC1 raw heterotypic @ 10³ (the old clause)", "— (assumed the paper-size medium share)", fmt(sym_dl), "≥ 0.35",
+    "reported", sym_dl >= 0.35
+)
 
 ## informational: one global time scale for all timed rows
 timed_rows = filter(r -> r.timed !== nothing, targets)
@@ -1125,19 +1305,23 @@ heading = if FULL
 else
     "**Smoke check (reduced, n = $n) — not validation.** Only the SMOKE+FULL rows carry a verdict here; the validation result is the pending full run."
 end
-Markdown.parse("""
-$heading
+Markdown.parse(
+    """
+    $heading
 
-| Target | Paper | Ours (mean ± SD, n = $n) | Tolerance | Class | Result (nominal time) | at s = $(fmt(best)) (informational) |
-|---|---|---|---|---|---|---|
-""" * join(["| $(r.target) | $(r.paper) | $(r.ours) | $(r.tol) | $(r.class) | $(r.result) | $(at_s(r)) |" for r in targets],
-               "\n") * """
+    | Target | Paper | Ours (mean ± SD, n = $n) | Tolerance | Class | Result (nominal time) | at s = $(fmt(best)) (informational) |
+    |---|---|---|---|---|---|---|
+    """ * join(
+        ["| $(r.target) | $(r.paper) | $(r.ours) | $(r.tol) | $(r.class) | $(r.result) | $(at_s(r)) |" for r in targets],
+        "\n"
+    ) * """
 
 
-Informational only, not a tolerance (spec §8.5). The single time scale
-s = $(fmt(best)) ∈ [½, 2], applied to all $(length(timed_rows)) timed rows at once, makes
-$(npass(best)) of them pass; $(npass(1.0)) pass at s = 1.
-""")
+        Informational only, not a tolerance (spec §8.5). The single time scale
+        s = $(fmt(best)) ∈ [½, 2], applied to all $(length(timed_rows)) timed rows at once, makes
+        $(npass(best)) of them pass; $(npass(1.0)) pass at s = 1.
+        """
+)
 
 # V-PRE4 depends on the start: an unrelaxed Voronoi start may shed more boundary in its
 # first MCS than the paper's relaxed one did (spec §9.1 V-PRE4 note). The full build
@@ -1149,16 +1333,20 @@ if FULL
     relax_ids = 1:min(3, n)
     D_relaxed = map(relax_ids) do i
         σi, ki = starts[i]
-        relax = remake(prob; u0 = [ownership => σi, kind => fill(2, length(ki))], tspan = (0, 400PAPER_MCS),
-            p = [:J => [0 8 8; 8 2 2; 8 2 2], :T => 5.0])
+        relax = remake(
+            prob; u0 = [ownership => σi, kind => fill(2, length(ki))], tspan = (0, 400PAPER_MCS),
+            p = [:J => [0 8 8; 8 2 2; 8 2 2], :T => 5.0]
+        )
         σr = ownership(solve(relax, alg; saveat = 400PAPER_MCS).u[end])
         run = remake(prob; u0 = [ownership => σr, kind => ki], tspan = (0, PAPER_MCS * 1000))
         sol = solve(run, alg; saveat = PAPER_MCS .* ts[1:findfirst(==(1000), ts)])
         N = [sum(values(bond_counts(annealed(state_at(sol, t), ki, prob), ki))) for t in ts if t <= 1000]
         (N[1] - mean(N[j100])) / N[1]
     end
-    Markdown.parse("V-PRE4 start check, replicates $(relax_ids): D = $(fmt(mean(Dmm[relax_ids]))) from the Voronoi " *
-                   "starts against $(fmt(mean(D_relaxed))) from their relaxed copies.")
+    Markdown.parse(
+        "V-PRE4 start check, replicates $(relax_ids): D = $(fmt(mean(Dmm[relax_ids]))) from the Voronoi " *
+            "starts against $(fmt(mean(D_relaxed))) from their relaxed copies."
+    )
 else
     Markdown.parse(
         "The start check runs in the full build; the reduced build's start is already relaxed. " *
@@ -1186,36 +1374,51 @@ diag_lines = String[] #hide
 for r in failing #hide
     if haskey(r.info, :key) #hide
         x = corrected(r) #hide
-        push!(diag_lines, "$(r.target): rescaled from our medium share ($(fmt(medium(r.info.t)))) to the " * #hide
-            "paper's ($(fmt(PAPER_MEDIUM))), $(fmt(at(r.info.key, r.info.t))) becomes $(fmt(x)) against " * #hide
-            "the band [$(fmt(r.info.lo)), $(fmt(r.info.hi))], $(in_band(r, x) ? "which is inside it: consistent with the larger medium share of our small aggregate" : #hide
-                                  "which is still outside it")." #hide
+        push!(
+            diag_lines, "$(r.target): rescaled from our medium share ($(fmt(medium(r.info.t)))) to the " * #hide
+                "paper's ($(fmt(PAPER_MEDIUM))), $(fmt(at(r.info.key, r.info.t))) becomes $(fmt(x)) against " * #hide
+                "the band [$(fmt(r.info.lo)), $(fmt(r.info.hi))], $(
+                in_band(r, x) ? "which is inside it: consistent with the larger medium share of our small aggregate" : #hide
+                    "which is still outside it"
+            )." #hide
         ) #hide
     end #hide
 end #hide
 any(r -> haskey(r.info, :key), failing) && #hide
-    push!(diag_lines, "Caveat: the paper's medium share ($(fmt(PAPER_MEDIUM))) is its t = 1 value (0.0268 dark + 0.0367 light, " * #hide
+    push!(
+    diag_lines, "Caveat: the paper's medium share ($(fmt(PAPER_MEDIUM))) is its t = 1 value (0.0268 dark + 0.0367 light, " * #hide
         "PRE Fig. 13(b)); the paper's medium share stays at 0.063–0.064 at every time shown (t = 1…1000), so one " * #hide
-        "value serves all times. Read-off uncertainty ≈ ±0.001 per medium fraction (spec §9.0).") #hide
+        "value serves all times. Read-off uncertainty ≈ ±0.001 per medium fraction (spec §9.0)."
+) #hide
 if any(r -> startswith(r.target, "V-PRE1 light–light"), failing) #hide
-    push!(diag_lines, "Light–light: at 10³, $(round(Int, 100mean(i -> light_on_surface(sorted_states[i], kinds_of(i)), eachindex(sorted_states))))% " * #hide
-        "of light cells touch the medium. In a $ncells-cell aggregate nearly every light cell sits in the " * #hide
-        "outer monolayer, so light–light bonds are scarce. The medium-share rescaling leaves " * #hide
-        "$(count(r -> startswith(r.target, "V-PRE1 light–light") && haskey(r.info, :key) && #hide
-                      !in_band(r, corrected(r)), failing)) of the out-of-band light–light rows outside their band; " * #hide
-        "a larger aggregate is needed to test them.") #hide
+    push!(
+        diag_lines, "Light–light: at 10³, $(round(Int, 100mean(i -> light_on_surface(sorted_states[i], kinds_of(i)), eachindex(sorted_states))))% " * #hide
+            "of light cells touch the medium. In a $ncells-cell aggregate nearly every light cell sits in the " * #hide
+            "outer monolayer, so light–light bonds are scarce. The medium-share rescaling leaves " * #hide
+            "$(
+            count(
+                r -> startswith(r.target, "V-PRE1 light–light") && haskey(r.info, :key) && #hide
+                    !in_band(r, corrected(r)), failing
+            )
+        ) of the out-of-band light–light rows outside their band; " * #hide
+            "a larger aggregate is needed to test them."
+    ) #hide
 end #hide
 any(r -> startswith(r.target, "V-PRE2 light–light"), failing) && gap != "" && #hide
-    push!(diag_lines, "Crossings: shape, not only timing. Our dark–dark and light–light crossings are " * #hide
+    push!(
+    diag_lines, "Crossings: shape, not only timing. Our dark–dark and light–light crossings are " * #hide
         "$(fmt(c_ll / c_dd))× apart in time; the paper's are ≈ $(fmt(paper_cross.pre.ll / paper_cross.pre.dd))× (PRE) " * #hide
-        "and ≈ $(fmt(paper_cross.prl.ll / paper_cross.prl.dd))× (PRL) apart.") #hide
+        "and ≈ $(fmt(paper_cross.prl.ll / paper_cross.prl.dd))× (PRL) apart."
+) #hide
 any(r -> startswith(r.target, "V-PRE1 log law"), failing) && #hide
     push!(diag_lines, "Log law: the 5–4000 fit spans the plateau our small aggregate reaches; compare the extra 4–512 row.") #hide
 any(r -> startswith(r.target, "V-PRE3 (d)"), failing) && #hide
     push!(diag_lines, "Plateau level: the raw value is set by aggregate size (perimeter/area); see the size-free ratio R, row (c).") #hide
-Markdown.parse(isempty(failing) ? "No row fails or falls out of band in this run." : #hide
-               "Rows that fail or fall out of band: $(join([r.target for r in failing], "; ")).\n\n" * #hide
-               join(["- " * l for l in diag_lines], "\n")) #hide
+Markdown.parse(
+    isempty(failing) ? "No row fails or falls out of band in this run." : #hide
+        "Rows that fail or fall out of band: $(join([r.target for r in failing], "; ")).\n\n" * #hide
+        join(["- " * l for l in diag_lines], "\n")
+) #hide
 
 # #### Full-size records: every verdict
 #
@@ -1226,12 +1429,17 @@ Markdown.parse(isempty(failing) ? "No row fails or falls out of band in this run
 
 Markdown.parse(
     "Second full run: `data/09/full-2026-10-05/`, n = $rec_n, 1000 cells, to 2×10⁴ paper MCS, page commit\n" * """
-`$(first(TOML.parsefile(joinpath(full_dir, "provenance.toml"))["commit"], 8))`. V-PRE7: `data/09/vpre7-2026-10-07/`.
+        `$(first(TOML.parsefile(joinpath(full_dir, "provenance.toml"))["commit"], 8))`. V-PRE7: `data/09/vpre7-2026-10-07/`.
 
-| Target | Paper | Ours | Rule | Class | Result |
-|---|---|---|---|---|---|
-""" * join(["| $(r.target) | $(pipe(r.paper)) | $(pipe(r.ours)) | $(pipe(r.tol)) | $(r.class) | $(r.result) |"
-            for r in rec_verdicts], "\n"))
+        | Target | Paper | Ours | Rule | Class | Result |
+        |---|---|---|---|---|---|
+        """ * join(
+        [
+            "| $(r.target) | $(pipe(r.paper)) | $(pipe(r.ours)) | $(pipe(r.tol)) | $(r.class) | $(r.result) |"
+                for r in rec_verdicts
+        ], "\n"
+    )
+)
 
 # ### Open questions for the authors
 #
@@ -1276,9 +1484,11 @@ Markdown.parse(
 
 build_commit = git("rev-parse", "--short", "HEAD")
 build_dirty = !isempty(git("status", "--porcelain"))
-Markdown.parse("PottsModels $(pkgversion(PottsModels)), commit " *
-               (isempty(build_commit) ? "(git unavailable)" : "`$build_commit`") *
-               (build_dirty ? " with uncommitted changes" : "") * ".")
+Markdown.parse(
+    "PottsModels $(pkgversion(PottsModels)), commit " *
+        (isempty(build_commit) ? "(git unavailable)" : "`$build_commit`") *
+        (build_dirty ? " with uncommitted changes" : "") * "."
+)
 
 # This is an independent reimplementation; it has not been reviewed or endorsed by the
 # authors.

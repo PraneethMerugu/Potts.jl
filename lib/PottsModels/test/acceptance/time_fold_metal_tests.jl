@@ -162,9 +162,9 @@ end
 """Largest distance in Float32 units in the last place between two trajectories."""
 function time_fold_ulps(a, b)
     return maximum(
-            maximum(abs.(reinterpret.(Int32, Float32.(x)) .- reinterpret.(Int32, Float32.(y))))
-                for (x, y) in zip(a, b)
-        )
+        maximum(abs.(reinterpret.(Int32, Float32.(x)) .- reinterpret.(Int32, Float32.(y))))
+            for (x, y) in zip(a, b)
+    )
 end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end

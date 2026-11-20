@@ -126,7 +126,7 @@ end
 # truncation error is below x³/60 relative, < 2e-14).
 function _furth_g(t, P)
     x = t / P
-    return x < 1e-4 ? P * (x^2 / 2 - x^3 / 6 + x^4 / 24) : P * (x + expm1(-x))
+    return x < 1.0e-4 ? P * (x^2 / 2 - x^3 / 6 + x^4 / 24) : P * (x + expm1(-x))
 end
 
 function _furth_params(S, D, P, what)
@@ -236,14 +236,18 @@ _time_window(w, t) = findall(x -> first(w) <= x <= last(w), t)
 function _furth_paper(t, y, range, short, offset)
     n = length(t)
     h = t[2] - t[1]
-    all(i -> abs((t[i + 1] - t[i]) - h) <= 1e-9 * h, 1:(n - 1)) ||
+    all(i -> abs((t[i + 1] - t[i]) - h) <= 1.0e-9 * h, 1:(n - 1)) ||
         throw(ArgumentError("furth_fit: method = :paper needs uniformly spaced Δt (use method = :lsq)"))
     inner = 2:(n - 1)
     range === nothing || (inner = filter(in(_time_window(range, t)), inner))
     keep = [i for i in inner if (y[i + 1] - 2y[i] + y[i - 1]) / h^2 > 0]
     function nores()
-        throw(ArgumentError("furth_fit: no decaying second derivative (persistence not resolved); " *
-            "try method = :lsq"))
+        throw(
+            ArgumentError(
+                "furth_fit: no decaying second derivative (persistence not resolved); " *
+                    "try method = :lsq"
+            )
+        )
     end
     length(keep) >= 3 || nores()
     d = [(y[i + 1] - 2y[i] + y[i - 1]) / h^2 for i in keep]
@@ -303,7 +307,7 @@ function _furth_lsq(t, y, offset)
     φ = (sqrt(5) - 1) / 2
     x1, x2 = b - φ * (b - a), a + φ * (b - a)
     f1, f2 = f(x1), f(x2)
-    while b - a > 1e-10
+    while b - a > 1.0e-10
         if f1 <= f2                              # ties: keep the smaller P
             b, x2, f2 = x2, x1, f1
             x1 = b - φ * (b - a)

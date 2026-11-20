@@ -176,9 +176,9 @@ draft_o5(r) = InhibitionSweeps.inhibition_o5(r.u; β = r.β, γ = 0.0)
 o5_name(β, mcs) = openvt_filename(:O5; beta = β, mcs = mcs)
 function draft_hull(x, y)
     return PottsModels.Analysis.concave_hull(
-            zip(x, y); concavity = CONCAVITY,
-            length_threshold = LENGTH_THRESHOLD
-        )
+        zip(x, y); concavity = CONCAVITY,
+        length_threshold = LENGTH_THRESHOLD
+    )
 end
 draft_crel(x, y, inhibited) = openvt_metrics(x, y, 1 .- inhibited).C_rel
 # ---- readers -------------------------------------------------------------------------------------
@@ -191,11 +191,11 @@ draft_f(s) = parse(Float64, s)
 function draft_dirs(prefix)
     if isdir(DATA)
         return sort(
-                filter(
-                    d -> startswith(d, prefix) && isdir(joinpath(DATA, d)),
-                    readdir(DATA)
-                )
+            filter(
+                d -> startswith(d, prefix) && isdir(joinpath(DATA, d)),
+                readdir(DATA)
             )
+        )
     else
         return String[]
     end

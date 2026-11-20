@@ -217,46 +217,46 @@ neighborhood_gg() = (s = graner_glazier_state(); PottsProblem(GranerGlazier(; na
 wortel(; kw...) = PottsProblem(WortelAct(; name = :act, lattice = (8, 8), kw...), two_wortel(), (0, 10))
 function neighborhood_merks()
     return PottsProblem(
-            MerksVasculogenesis(; name = :merks, lattice = (8, 8)),
-            [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]], (0, 10);
-            field_solver = Potts.ExplicitEuler(substeps = 2, lower_bound = 0.0)
-        )
+        MerksVasculogenesis(; name = :merks, lattice = (8, 8)),
+        [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]], (0, 10);
+        field_solver = Potts.ExplicitEuler(substeps = 2, lower_bound = 0.0)
+    )
 end
 function neighborhood_openvt()
     return PottsProblem(
-            OpenVTGrowingMonolayer(; name = :openvt, lattice = (24, 24)),
-            openvt_monolayer_state(; lattice = (24, 24)), (0, 10); capacity = 64
-        )
+        OpenVTGrowingMonolayer(; name = :openvt, lattice = (24, 24)),
+        openvt_monolayer_state(; lattice = (24, 24)), (0, 10); capacity = 64
+    )
 end
 # default neighbourhoods: unchanged. The fixture values were recorded on f137f929 ("sq" is
 # also the D-121 fixture's pin); the PottsModels systems are the D-118 pins (4e81e1eb).
 function unchanged()
     return (
-            "sq" => () -> problem("sq"),
-            "sq proposal=VonNeumann(1)" => () -> problem("sq proposal=VonNeumann(1)"),
-            "sq contact=Moore(1)" => () -> problem("sq contact=Moore(1)"),
-            "hex" => () -> problem("hex"),
-            "cube" => () -> problem("cube"),
-            "sq Float32" => () -> problem("sq"; T = Float32),
-            "SingleDivisionFixture" => () -> PottsProblem(
-                SingleDivisionFixture(; name = :fixture),
-                [ownership => (s = zeros(Int32, 12, 8); s[5:8, 4:5] .= 1; s), kind => [:epithelial]], (0, 10)
-            ),
-            "AkeebInvasion" => () -> PottsProblem(
-                AkeebInvasion(; name = :akeeb, lattice = (60, 40)), akeeb_state(; lattice = (60, 40)), (0, 10);
-                capacity = 256
-            ),
-        )
+        "sq" => () -> problem("sq"),
+        "sq proposal=VonNeumann(1)" => () -> problem("sq proposal=VonNeumann(1)"),
+        "sq contact=Moore(1)" => () -> problem("sq contact=Moore(1)"),
+        "hex" => () -> problem("hex"),
+        "cube" => () -> problem("cube"),
+        "sq Float32" => () -> problem("sq"; T = Float32),
+        "SingleDivisionFixture" => () -> PottsProblem(
+            SingleDivisionFixture(; name = :fixture),
+            [ownership => (s = zeros(Int32, 12, 8); s[5:8, 4:5] .= 1; s), kind => [:epithelial]], (0, 10)
+        ),
+        "AkeebInvasion" => () -> PottsProblem(
+            AkeebInvasion(; name = :akeeb, lattice = (60, 40)), akeeb_state(; lattice = (60, 40)), (0, 10);
+            capacity = 256
+        ),
+    )
 end
 # `proposal = Moore(1)`: the fixture is what it claims, and its fingerprint is deterministic.
 function moved()
     return (
-            "GranerGlazier" => neighborhood_gg,
-            "WortelAct" => () -> wortel(),
-            "WortelAct connected" => () -> wortel(; connected = true),
-            "MerksVasculogenesis" => neighborhood_merks,
-            "OpenVTGrowingMonolayer" => neighborhood_openvt,
-        )
+        "GranerGlazier" => neighborhood_gg,
+        "WortelAct" => () -> wortel(),
+        "WortelAct connected" => () -> wortel(; connected = true),
+        "MerksVasculogenesis" => neighborhood_merks,
+        "OpenVTGrowingMonolayer" => neighborhood_openvt,
+    )
 end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end

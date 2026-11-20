@@ -63,8 +63,12 @@ end
 
 # a copy of `σ` annealed 10 paper MCS at T = 0 with the relaxation energies (PRE Fig. 5 caption)
 function annealed(σ, n)
-    q = PottsProblem(GranerGlazier(; name = :anneal), [ownership => copy(σ), kind => fill(:light, n),
-            :J => [0 8 8; 8 2 2; 8 2 2], :T => 0.0, :λ => 1.0, :V₀ => 40.0], (0, 160); seed = SEED + 2)
+    q = PottsProblem(
+        GranerGlazier(; name = :anneal), [
+            ownership => copy(σ), kind => fill(:light, n),
+            :J => [0 8 8; 8 2 2; 8 2 2], :T => 0.0, :λ => 1.0, :V₀ => 40.0,
+        ], (0, 160); seed = SEED + 2
+    )
     return solve(q, SequentialCPM(); saveat = 160).u[end].ownership
 end
 
@@ -75,8 +79,12 @@ function generate(outdir)
     rng = MersenneTwister(SEED)
     σ0 = brick_aggregate(rng)
     n = maximum(σ0)
-    relax = PottsProblem(GranerGlazier(; name = :relax), [ownership => σ0, kind => fill(:light, n),
-            :J => [0 8 8; 8 2 2; 8 2 2], :T => 5.0, :λ => 1.0, :V₀ => 40.0], (0, 6400); seed = SEED)
+    relax = PottsProblem(
+        GranerGlazier(; name = :relax), [
+            ownership => σ0, kind => fill(:light, n),
+            :J => [0 8 8; 8 2 2; 8 2 2], :T => 5.0, :λ => 1.0, :V₀ => 40.0,
+        ], (0, 6400); seed = SEED
+    )
     sol = solve(relax, SequentialCPM(); saveat = 0:100:6400)
     σ = sol.u[end].ownership
     all(c -> any(==(c), σ), 1:n) || error("a cell vanished during relaxation")

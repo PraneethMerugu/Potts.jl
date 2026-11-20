@@ -210,9 +210,9 @@ boundary_body(base::Expr, extra...) = (b = copy(base); foreach(e -> push!(b.args
 # `@parameters`, `@variables`) and returns `system(…)`.
 function system(eq, bcs, dims, xs, dvs, ps)
     return Potts.ModelingToolkitBase.PDESystem(
-            [eq], bcs,
-            Potts.LatticePDE.lattice_domain(Potts.t, Tuple(xs), dims), [Potts.t; xs], dvs, ps; name = :boundary_field
-        )
+        [eq], bcs,
+        Potts.LatticePDE.lattice_domain(Potts.t, Tuple(xs), dims), [Potts.t; xs], dvs, ps; name = :boundary_field
+    )
 end
 const boundary_laplacian = Potts.LatticePDE.laplacian
 const boundary_masked = Potts.LatticePDE.masked
@@ -367,9 +367,9 @@ function order_σ()
 end
 function order_problem(v; T = Float64, seed = 3)
     return problem(
-            Symbol(:Order_, v), [ownership => order_σ(), kind => [:A]], (0, 3);
-            field_solver = ExplicitEuler(substeps = 1), T, seed
-        )
+        Symbol(:Order_, v), [ownership => order_σ(), kind => [:A]], (0, 3);
+        field_solver = ExplicitEuler(substeps = 1), T, seed
+    )
 end
 # expected after MCS k (k = 1, 2, 3; s = 1): (c, wb, wa); `moves0`: copies in MCS 0
 const ORDER_EXPECT = (
@@ -402,9 +402,9 @@ SRC[:Life_listed] = boundary_body(LIFE_BASE, :(@schedule sweep, fields, lifecycl
 SRC[:Life_first] = boundary_body(LIFE_BASE, :(@schedule lifecycle, fields))
 function life_problem(v; seed = 3)
     return problem(
-            Symbol(:Life_, v), [ownership => order_σ(), kind => [:A]], (0, 2);
-            field_solver = ExplicitEuler(substeps = 1), capacity = 4, seed
-        )
+        Symbol(:Life_, v), [ownership => order_σ(), kind => [:A]], (0, 2);
+        field_solver = ExplicitEuler(substeps = 1), capacity = 4, seed
+    )
 end
 # --- 5b. Merks-shaped: per-MCS oracle from the saved states ---------------------------------------
 # `D(c) ~ Dc Δc + σc [A] − δc c [medium]`, c = 0 on the border sites
@@ -440,9 +440,9 @@ function merks_op()
 end
 function merks_problem(v; T = Float64, seed = 11)
     return problem(
-            Symbol(:Merks_, v), merks_op(), (0, 6);
-            field_solver = ExplicitEuler(substeps = MERKS_N), T, seed
-        )
+        Symbol(:Merks_, v), merks_op(), (0, 6);
+        field_solver = ExplicitEuler(substeps = MERKS_N), T, seed
+    )
 end
 # one MCS of the field from c with the kinds of σ (cell 1 = border, cells ≥ 2 = A)
 function merks_step(c, σ)

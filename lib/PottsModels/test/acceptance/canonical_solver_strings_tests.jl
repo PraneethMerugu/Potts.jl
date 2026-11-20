@@ -214,11 +214,11 @@ function build(stmts...)
 end
 function runs(m)
     return Symbol(
-            solve(
-                PottsProblem(m, [ownership => (s = zeros(Int32, 12, 12); s[3:5, 3:5] .= 1; s), kind => [:A]], (0, 2)),
-                SequentialCPM()
-            ).retcode
-        ) === :Success
+        solve(
+            PottsProblem(m, [ownership => (s = zeros(Int32, 12, 12); s[3:5, 3:5] .= 1; s), kind => [:A]], (0, 2)),
+            SequentialCPM()
+        ).retcode
+    ) === :Success
 end
 # `@potts_model` resolves a component's system in module scope: a global slot
 const SYSTEM = Ref{Any}(nothing)

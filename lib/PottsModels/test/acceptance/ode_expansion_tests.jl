@@ -254,18 +254,18 @@ function rodas_ref(M, sol)
         elseif M === If5
             function f_if5(y, v)
                 return ifelse(
-                        y > 0.1, 0.01 * v - log1p(y),
+                    y > 0.1, 0.01 * v - log1p(y),
+                    ifelse(
+                        y > 0.2, 0.02 * v - 2 * log1p(y),
                         ifelse(
-                            y > 0.2, 0.02 * v - 2 * log1p(y),
+                            y > 0.3, 0.03 * v - 3 * log1p(y),
                             ifelse(
-                                y > 0.3, 0.03 * v - 3 * log1p(y),
-                                ifelse(
-                                    y > 0.4, 0.04 * v - 4 * log1p(y),
-                                    ifelse(y > 0.5, 0.05 * v - 5 * log1p(y), 0.0)
-                                )
+                                y > 0.4, 0.04 * v - 4 * log1p(y),
+                                ifelse(y > 0.5, 0.05 * v - 5 * log1p(y), 0.0)
                             )
                         )
                     )
+                )
             end
             (y, _, _) -> [f_if5(y[1], v1), f_if5(y[2], v2)]
         elseif M === Sum16
