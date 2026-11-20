@@ -1,4 +1,4 @@
-# Moment trackers, shape descriptors and site trackers (ROADMAP M2.2).
+# Moment trackers, shape descriptors and site trackers.
 
 @testsetup module CP_geometry
 using Test, CorePotts, StaticArrays, Statistics, Random

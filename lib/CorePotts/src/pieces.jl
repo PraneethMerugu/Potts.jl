@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------------------
-# Whole-cell connectivity (P6.9a; D-075 Q6, D-189, D-197): the `Global(; window, adjacency)`
+# Whole-cell connectivity (D-075 Q6, D-189, D-197): the `Global(; window, adjacency)`
 # rule and the cell-scope `pieces` / `largest_piece` trackers.
 #
 # PIECES of a cell are the connected components of its sites under an adjacency: `:face`
@@ -45,7 +45,7 @@ const _SQUARE_XFACE = _bits(_SQUARE_SHELL, o -> sum(abs, o) == 1)
                                                         _CUBE_TABLES.xface
 
 # the shell pieces of the mask `m` (shell order) that meet its touches `touch`, with the
-# shell kernels (P6.3h): runs of the ring in 2D, dilation in the 3×3×3 box in 3D
+# shell kernels: runs of the ring in 2D, dilation in the 3×3×3 box in 3D
 @inline _touched_pieces(lat::Lattice, m::UInt32, touch::UInt32, ::Val{F}) where {F} = _touched_pieces(
     _ring_bits(lat), m, touch, F)
 @inline function _touched_pieces(r::Val{:ring8}, m::UInt32, touch::UInt32, full::Bool)
@@ -84,7 +84,7 @@ const GLOBAL_REFUSED = Int32(2)
     ConnectivityHooks(; post = nothing, defer = nothing, uses_global = false,
                       exact_veto = false, after_slots = 0)
 
-The whole-cell connectivity parts of a `CPMFunction` (P6.9a):
+The whole-cell connectivity parts of a `CPMFunction`:
 
   - `post(st, p, prop, ctx, stage) -> Int32`: the `Global` veto, evaluated after the
     acceptance draw (order local → ΔH → draw → Global): `stage` is `GlobalLocal()` or

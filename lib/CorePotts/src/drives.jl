@@ -1,4 +1,4 @@
-# Proposal drives, biases and constraints (ROADMAP M2.5, M2.6).
+# Proposal drives, biases and constraints.
 #
 # Drives are energy-like and returned by `delta_H` (divided by T in acceptance); biases add
 # directly to log α through `CPMFunction(…; bias)`; constraints veto through `constraint`.

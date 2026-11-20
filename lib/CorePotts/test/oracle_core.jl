@@ -1,4 +1,4 @@
-# Exact transition-matrix oracle (ROADMAP M1.4b).
+# Exact transition-matrix oracle.
 #
 # For a tiny closed lattice, propagate the exact distribution over lattice states through
 # m MCS of each algorithm's *stated* dynamics, then compare with the empirical distribution

@@ -18,7 +18,7 @@
 #   euler      (cells, then grid vertices) the Euler columns (`euler.jl`), zeroed and summed from σ
 #   finalize   (cells)   volume and moments of parents and daughters, removed cells' trackers
 #   clusters   re-root clusters whose root died; cluster volume (cells) and surface (sites)
-#   mask       (sites + one item) the P6.0d frozen-mask refresh and its counts, when the mask
+#   mask       (sites + one item) the frozen-mask refresh and its counts, when the mask
 #              follows the state
 #
 # Lifecycle statistics and the mask counts accumulate on the device and are folded into
@@ -126,7 +126,7 @@ end
 
 # `before` (`Lifecycle.before`, or `nothing`) runs for cell `c` first, in the same work item:
 # the trigger of `c` reads only `c`'s own values of what it writes (its contract), so no
-# barrier is needed between them (F1, D-101)
+# barrier is needed between them (D-101)
 @inline _before!(::Nothing, c, st, p, ctx, key, mcs) = nothing
 @inline _before!(f::F, c, st, p, ctx, key, mcs) where {F} =
     (c <= ncells(st) && f(st, p, ctx, key, mcs, c % Int32); nothing)
@@ -485,7 +485,7 @@ end
     return nothing
 end
 
-# `live = false` is the compile launch (compile before enqueue, v3 §4.4): one workgroup in
+# `live = false` is the compile launch (compile before enqueue): one workgroup in
 # which every stage is skipped, so nothing is read or written. The guard is an `if` around
 # each stage, not around the kernel: `@synchronize` stays at the top level, where every
 # work item reaches it. (KA's CPU backend splits the kernel at each `@synchronize` and needs
@@ -665,7 +665,7 @@ end
     return nothing
 end
 
-# F3-23 r1: a weighted surface in a float column adds integer weight units (`_units_for`) to
+# A weighted surface in a float column adds integer weight units (`_units_for`) to
 # `dv.wacc` (an exact, order-free sum); `_wfold!` adds the sum to the column once per cell
 @inline _wadd!(::Nothing, dv, col, c, v) = (Atomix.@atomic col[c] += v; nothing)
 @inline _wadd!(u::NamedTuple, dv, col, c, v) = _cr_add!(_wsc(dv), c, v, u.paired)
@@ -795,7 +795,7 @@ end
 end
 
 # ---------------------------------------------------------------------------------------
-# The P6.0d mask on a device: refreshed on event rounds; the change of the mobile count is
+# The frozen mask on a device: refreshed on event rounds; the change of the mobile count is
 # folded per round into `mask = [Σ d, Σ d·mcs, refreshes]` (Int64, one item), so the host
 # corrects `stats.attempts` exactly at its next read point
 

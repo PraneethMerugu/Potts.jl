@@ -1,4 +1,4 @@
-# Irregular lattice domains (ROADMAP M2.1b): a mask or predicate restricts the lattice; the
+# Irregular lattice domains: a mask or predicate restricts the lattice; the
 # domain edge is closed for copies, contacts, surfaces and fields.
 
 @testsetup module CP_domain

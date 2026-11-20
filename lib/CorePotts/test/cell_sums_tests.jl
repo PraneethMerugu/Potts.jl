@@ -1,9 +1,8 @@
-# F3-23 (user ruling 2026-10-28; research/field-compiler/f3/F3-23-integer-cell-sums.md): a float
-# `CellReduce` sum is an exact Int64 fixed-point sum, so it does not depend on the order of the
-# sites (thread count, backend). The order test permutes the lattice sites with their values:
+# A float `CellReduce` sum is an exact Int64 fixed-point sum, so it does not depend on the
+# order of the sites (thread count, backend). The order test permutes the lattice sites with their values:
 # a cell sum reads only `σ[i]` and `v[i]`, so any permutation is the same sum in another order.
-# Negative controls: the float-atomic path (`CorePotts._FLOAT_ATOMICS`, the code before F3-23)
-# gives different last bits on the permuted lattice; the old max/min CAS loop (copied below)
+# Negative controls: the float-atomic path (`CorePotts._FLOAT_ATOMICS`, the code before
+# integer cell sums) gives different last bits on the permuted lattice; the old max/min CAS loop (copied below)
 # loses a NaN in one order.
 
 @testsetup module CP_cell_sums
@@ -15,8 +14,8 @@ include("shared/cell_sums.jl")
 include("shared/export_all.jl")
 end
 
-@testitem "F3-23: float cell sums are exact fixed-point sums" setup = [CP_cell_sums] tags = [:corepotts, :cell_sums] begin
-@testset "F3-23: float cell sums are exact fixed-point sums" begin
+@testitem "float cell sums are exact fixed-point sums" setup = [CP_cell_sums] tags = [:corepotts, :cell_sums] begin
+@testset "float cell sums are exact fixed-point sums" begin
     dims = (96, 80)
     σ = cs_owners(dims)
     n = Int(maximum(σ))
@@ -39,7 +38,7 @@ end
                 CorePotts._CR_RUN_HOST[] = 256
             end
         end
-        # negative control: the float atomics of the code before F3-23 depend on the order
+        # negative control: the float atomics of the code before integer cell sums depend on the order
         T === Float16 && continue                                        # (a Float16 sum overflows its column)
         CorePotts._FLOAT_ATOMICS[] = true
         try
@@ -169,7 +168,7 @@ end
         @test length(CorePotts._cr(g).acc) == n + 5 && cs_run!(g)[1:n] == cs_run!(cs_state(σ, v, n))
     end
 
-    # F3-23 r1: the contact table of a weighted relation is a sum of integer weight units
+    # The contact table of a weighted relation is a sum of integer weight units
     # (`_units_for`): every measure is the exact sum of the quantized weights, rounded once,
     # whatever the order (the lattice is above `HOST_GRAIN` sites: threaded). Negative control:
     # the float atomics (in site order here) miss the once-rounded sum somewhere.

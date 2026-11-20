@@ -1,4 +1,4 @@
-# The Euler-characteristic tracker (P6.3j, D-192, `src/euler.jl`): ordinary tests (D-048).
+# The Euler-characteristic tracker (D-192, `src/euler.jl`): ordinary tests (D-048).
 # The per-copy Δχ against two from-scratch recounts (an independent one here, and
 # `recompute_euler`), on every square and hex shell and sampled cubic shells; the device
 # lifecycle's rebuild, fused and staged, on the CPU backend. The model-level acceptance

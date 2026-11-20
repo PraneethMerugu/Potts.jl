@@ -55,7 +55,7 @@ const _CV_ROOTB = Symbol("#cv_rootB")
 const _CV_WACC = Symbol("#cv_wacc")        # weighted surface changes in integer weight units (`_units_for`)
 const _CV_WLO = Symbol("#cv_wlo")          # (the paired 32-bit form of `#cv_wacc`, Metal)
 const _CV_WHI = Symbol("#cv_whi")
-# the compound writes' exact sums (F3-23 r1), rows j = 1:J (the pass's writes) of slot c (the
+# the compound writes' exact sums, rows j = 1:J (the pass's writes) of slot c (the
 # write's target cell; slot 1 for a model variable): the largest biased exponent, the
 # non-finite flags and the Int64 fixed-point sum (paired 32-bit words on Metal), as `CellReduce`
 const _CV_WEXP = Symbol("#cv_wexp")
@@ -122,7 +122,7 @@ One site conversion pass (R8 `@convert`, D-233), a phase of the MCS order
     `nothing`; `created` is true for exactly one conversion of an entity whose `to` this pass
     allocated (the lowest such site). Each compound write `j` is
     `cv_write!(acc, Val(j), dst, idx, w)` (`dst[idx] += w`); `wcols` names the `dst` of each write
-    (a `Part`), in order. A write into a float column is an exact sum (F3-23: the pass runs
+    (a `Part`), in order. A write into a float column is an exact sum (the pass runs
     `writes!` twice, an exponent pass and an Int64 fixed-point pass, as `CellReduce`, then adds
     each target's sum once), so it does not depend on the order of the sites; every write reads
     the state at the start of the writes. Because it runs twice, `writes!` must be pure: the
@@ -211,7 +211,7 @@ end
         j = linear_index(lat, y)
         a = @inbounds σ[j]                  # the neighbour's owner before the round
         b = after(j)                        # and after
-        w = _wt(u, rel, k, T)               # a weight, or its integer units (F3-23 r1: `_wfold!`)
+        w = _wt(u, rel, k, T)               # a weight, or its integer units (`_wfold!`)
         # site i's side of the bond
         (old > 0 && old != a) && _wadd!(u, sc, surf, old, -w)
         (new > 0 && new != b) && _wadd!(u, sc, surf, new, w)
@@ -440,7 +440,7 @@ end
     return nothing
 end
 
-# The compound writes (F3-23 r1). `writes!` runs in two passes, with `acc` = `_WriteExp` (the
+# The compound writes. `writes!` runs in two passes, with `acc` = `_WriteExp` (the
 # largest exponent per write and target) then `_WriteSum` (the fixed-point terms); then
 # `_cv_wfold_body!` adds each target's sum to its column once. `j` is the write's row.
 struct _WriteExp{S}

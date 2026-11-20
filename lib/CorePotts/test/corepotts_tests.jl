@@ -168,8 +168,8 @@ end
     end
 end
 
-@testitem "rng: two-word site picks (D-247)" setup = [CP_corepotts] tags = [:corepotts, :core] begin
-    @testset "rng: two-word site picks (D-247)" begin
+@testitem "rng: two-word site picks" setup = [CP_corepotts] tags = [:corepotts, :core] begin
+    @testset "rng: two-word site picks" begin
         rng = Random.Xoshiro(5)
         b64 = CorePotts.bounded64
         # exactly ⌊x·n / 2⁶⁴⌋ for the 64-bit x = hi·2³² + lo, always in 0:n-1
@@ -444,10 +444,10 @@ end
         step!(integ); step!(integ)
         @test @allocated(step!(integ)) == 0                # the host executor (PG-13)
         # (a `p` other than `prob.p`: the first remake that changes the parameters compiles the
-        # remake hooks, once for every problem type since TS1c)
+        # remake hooks, once for every problem type)
         solve(remake(prob; p = merge(gg_params(), (; T = 5.0)), seed = 1), CheckerboardCPM())
         # (and `solve` with `SequentialCPM`, which the testsets before this one did in the old
-        # single-process run; TS1b: this item runs alone too)
+        # single-process run; this item runs alone too)
         solve(prob, SequentialCPM())
         cold = merge(gg_params(), (; T = 4.0, λ = 2.0))
         stats = @timed solve(remake(prob; p = cold, seed = 2), CheckerboardCPM())

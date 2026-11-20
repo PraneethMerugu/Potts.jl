@@ -1,7 +1,7 @@
 # The device lifecycle planner (D-089, `src/lifecycle_device.jl`) runs on every GPU backend.
 # Here it runs on the CPU backend, in both of its forms, (`_FORCE_DEVICE_LIFECYCLE`), so the lifecycle, compartment
 # and relationship tests below check its kernels (scan-based id allocation, deferral,
-# cluster units and planes, links, trackers, the P6.0d mask counts) without a GPU, against
+# cluster units and planes, links, trackers, the frozen-mask counts) without a GPU, against
 # the same oracles as the host planner. By design (D-089), the device planner's statistics
 # are exact only at host read points (saves, `current_state(integ)`, `checkpoint`, the end of `solve!`).
 
@@ -309,7 +309,7 @@ end
 
 @testitem "device lifecycle planner: Lifecycle.before with the trigger" setup = [CP_lifecycle_device] tags = [:corepotts, :lifecycle_device] begin
     @testset "Lifecycle.before with the trigger" begin
-        # `Lifecycle.before` (F1, D-101): a cell update run with the trigger of each cell, in
+        # `Lifecycle.before` (D-101): a cell update run with the trigger of each cell, in
         # one work item on the device (one launch for both), on its own on the host planner
         # and on MCS the lifecycle does not check. Oracle: the same update as an after-MCS
         # `CellPhase` and no `before`, in every form (and through a failing form's handover)

@@ -24,7 +24,7 @@ include("shared/contact_counts.jl")
 include("shared/euler.jl")
 include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "props.jl"))
 
-# Whole-cell connectivity on the device (P6.9a, `pieces.jl`): the windowed veto (the parallel
+# Whole-cell connectivity on the device (`pieces.jl`): the windowed veto (the parallel
 # deferred kernel), the exact veto (the serial deferred kernel) and an inline exact search
 # (the serial kernel over the flood scratch). Compiles every connectivity kernel (D-157).
 # both cells: the gaining one locally, the losing one by the search
@@ -40,7 +40,7 @@ p69_penalty_dH(st, p, prop, ctx) = gg_delta_H(st, p, prop, ctx) +
 # D-157); the scan lives with the monorepo's shared test helpers
 const DEVICE_IR_SCAN = joinpath(@__DIR__, "..", "..", "..", "test", "shared", "device_ir_scan.jl")
 
-# Compile before enqueue (v3 §4.4): the staged lifecycle's compile set (`_CompileOnly`,
+# Compile before enqueue: the staged lifecycle's compile set (`_CompileOnly`,
 # `Exec.compile!` with `n = 0`) compiles exactly the kernels the launches then run, on host
 # tasks, and writes nothing. Counted in the backend's kernel-instance cache.
 @inline cp_compile_write!(i, a, v) = (@inbounds a[i] = v; nothing)      # i ≤ length(a)
@@ -362,9 +362,9 @@ end
 
 end
 
-@testitem "device: link_delta skips a dead partner on the device (P6.0l)" setup = [CP_gpu] tags = [:corepotts, :gpu, :device, :gpu_only] begin
+@testitem "device: link_delta skips a dead partner on the device" setup = [CP_gpu] tags = [:corepotts, :gpu, :device, :gpu_only] begin
     backend = PottsDevices.device_backend()
-    @testset "link_delta skips a dead partner on the device (P6.0l)" begin
+    @testset "link_delta skips a dead partner on the device" begin
         # the spring of the previous testset, plus cell 3: linked to cell 1 but owning no
         # site (copy-killed, volume 0, centroid 0/0). The kernel skips it: ΔH stays finite.
         latD = Lattice((60, 30))
@@ -396,9 +396,9 @@ end
 
 end
 
-@testitem "device: a killing copy removes the dying cell's links on the device (P6.0r)" setup = [CP_gpu] tags = [:corepotts, :gpu, :device, :gpu_only] begin
+@testitem "device: a killing copy removes the dying cell's links on the device" setup = [CP_gpu] tags = [:corepotts, :gpu, :device, :gpu_only] begin
     backend = PottsDevices.device_backend()
-    @testset "a killing copy removes the dying cell's links on the device (P6.0r)" begin
+    @testset "a killing copy removes the dying cell's links on the device" begin
         # cell 2 owns one site, 22.5 from blob 1's centroid, on a spring of rest 3 and
         # stiffness 1 (≈ 380 stretched). Dying costs it +λd = 50 (E = λd·v(v − 2)), growing
         # +50, and medium contacts with it are free: at T = 1 only the killing copy, whose
@@ -450,7 +450,7 @@ end
         f = CPMFunction(gg_delta_H; temperature = gg_temperature, fingerprint = 0x07)
         pc = (; J = SMatrix{3, 3, Float32}(gg_params().J), λ = 1.0f0, V0 = 36.0f0, T = 10.0f0)
         prob = PottsProblem(f, initial_state(σc, kc), latc, (0, 20), pc; seed = 3)
-        # the device run is not reproducible (lockless, P6.0bl): a checkpoint restores the state
+        # the device run is not reproducible (lockless): a checkpoint restores the state
         # it saved, and the continued run keeps its trackers
         integ = init(prob, CheckerboardCPM(); backend)
         for _ in 1:8
@@ -466,9 +466,9 @@ end
 
 end
 
-@testitem "device: transfer counters (D-085): exact counts of the helpers on the device" setup = [CP_gpu] tags = [:corepotts, :gpu, :device, :gpu_only] begin
+@testitem "device: transfer counters: exact counts of the helpers on the device" setup = [CP_gpu] tags = [:corepotts, :gpu, :device, :gpu_only] begin
     backend = PottsDevices.device_backend()
-    @testset "transfer counters (D-085): exact counts of the helpers on the device" begin
+    @testset "transfer counters: exact counts of the helpers on the device" begin
         stats = CorePotts.PottsStats()
         counts() = (stats.syncs, stats.transfers, stats.transfer_bytes)
         d = PottsDevices.device_array(Float32[1, 2, 3, 4]); d2 = PottsDevices.device_array(zeros(Float32, 4))

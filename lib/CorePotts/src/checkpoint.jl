@@ -1,4 +1,4 @@
-# Checkpoint and continuation (ROADMAP M2.10, INTERNALS §1.9).
+# Checkpoint and continuation (INTERNALS §1.9).
 #
 # Every random draw is addressed by (key, mcs, entity, stream), so a checkpoint needs no
 # RNG state: continuing from MCS t with the same key reproduces an uninterrupted run exactly
@@ -31,7 +31,7 @@ PottsCheckpoint(state, t, seed, replica, repeat, p, fingerprint, stats) =
 """
     CHECKPOINT_FORMAT
 
-The checkpoint format of this version. Format 2 starts at the field-compiler cutover (C8):
+The checkpoint format of this version. Format 2 starts at the field-compiler cutover:
 the fields of a state are stepped by the field compiler, so a checkpoint of format 1 (the
 `FieldStep` path, without a `format` field) is not continued.
 """
@@ -40,7 +40,7 @@ const CHECKPOINT_FORMAT = 2
 """Checkpoint the integrator (synchronizes)."""
 function checkpoint(integ::PottsIntegrator)
     prob = integ.prob
-    prob.tangent === nothing || throw(ArgumentError("a run with derivative parts (Dual parameters, F3-21b) has no " *
+    prob.tangent === nothing || throw(ArgumentError("a run with derivative parts (Dual parameters) has no " *
         "checkpoint: its derivative parts are not part of the state; run it from the start, or checkpoint the primal run " *
         "(`remake` with plain values)"))
     # `current_state` is the host read point that makes `stats` exact (D-089): it runs
@@ -111,7 +111,7 @@ function SciMLBase.reinit!(
     saves = _saveat_list(saveat, t0, tf)            # (checked before the state changes)
     stops = _in_span(_tstops_list(tstops), t0, tf)
     sync!(_stats(integ), integ.backend)            # reset below with the statistics
-    fresh = u0 === integ.prob.u0                    # (the problem's own state: its derivative parts, F3-21b)
+    fresh = u0 === integ.prob.u0                    # (the problem's own state: its derivative parts)
     # symbolic maps; a state is laid out for the model's functions (e.g. Potts' ODE scratch)
     u0 = remake_state(integ.f.sys, integ.prob, u0)
     _same_shape(integ.state, u0) || throw(ArgumentError(
@@ -131,7 +131,7 @@ function SciMLBase.reinit!(
     _restore_stats!(_stats(integ), _initial_stats(integ.f))      # `accepted_energy_change`: 0.0 when tracked
     _reset_cache!(integ.cache, integ)
     _clear_field_status!(integ.ctx)          # a new run: the field groups' failures and counters go
-    tangent_reinit!(integ.ctx, fresh ? integ.prob.tangent : nothing)   # (and the derivative parts, F3-21b)
+    tangent_reinit!(integ.ctx, fresh ? integ.prob.tangent : nothing)   # (and the derivative parts)
     _stats(integ).launches += run_phases(
         integ.f.phases.at_init, integ.state, integ.p, integ.ctx,
         integ.key, integ.t, integ.backend, _stats(integ))

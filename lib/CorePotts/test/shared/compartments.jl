@@ -1,4 +1,4 @@
-# Definitions of compartments_tests.jl that other test files use (moved here by TS1b).
+# Definitions of compartments_tests.jl that other test files use.
 """Nucleus/cytoplasm pairs: a `side`-box of kind 1 with a central nucleus of kind 2."""
 function compartment_cells(dims, side, core)
     σ, kinds = blocks(dims, side; gap = 2)

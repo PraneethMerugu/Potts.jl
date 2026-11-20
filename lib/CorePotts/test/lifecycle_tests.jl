@@ -1,4 +1,4 @@
-# Lifecycle: division, removal, transition, id reuse, capacity (ROADMAP M2.8).
+# Lifecycle: division, removal, transition, id reuse, capacity.
 
 @testsetup module CP_lifecycle
 using Test, CorePotts, StaticArrays, Statistics, Random
@@ -138,8 +138,8 @@ end
 end
 end
 
-@testitem "the frozen mask follows lifecycle events, callbacks and reinit! (P6.0d)" setup = [CP_lifecycle] tags = [:corepotts, :lifecycle] begin
-@testset "the frozen mask follows lifecycle events, callbacks and reinit! (P6.0d)" begin
+@testitem "the frozen mask follows lifecycle events, callbacks and reinit!" setup = [CP_lifecycle] tags = [:corepotts, :lifecycle] begin
+@testset "the frozen mask follows lifecycle events, callbacks and reinit!" begin
     S = 10
     before, after = 2:(S + 2), (S + 3):31       # saved u at t = 1 … S+1 and t = S+2 … 30
     @testset "transition into and out of the frozen kind ($(nameof(typeof(alg))), $(nameof(typeof(sys))))" for alg in (SequentialCPM(), CheckerboardCPM()),
@@ -217,7 +217,7 @@ end
             end
         end
         # a custom rule without `frozen_varies` is static: init warns once per logger,
-        # independent of prior test execution order or session warn cache (TS1-9)
+        # independent of prior test execution order or session warn cache
         @test_logs (:warn, r"frozen_varies") init(fk_problem(; sys = OnlyRemake()), SequentialCPM())
         io = IOBuffer()
         with_logger(ConsoleLogger(io, Warn)) do
@@ -313,11 +313,11 @@ end
 end
 end
 
-# P6.4b1 review: the skip constant log(1 - n/N) of `SequentialCPM(; skip_interior = true)`
+# The skip constant log(1 - n/N) of `SequentialCPM(; skip_interior = true)`
 # is keyed on both n = |B| and the mobile count N. Removing a frozen cell embedded in medium frees its sites (N grows by
 # 36) and leaves |B| unchanged; the constant must follow N.
-@testitem "skip_interior: the skip constant follows a mask change that keeps |B| (P6.4b1)" setup = [CP_lifecycle] tags = [:corepotts, :lifecycle] begin
-@testset "skip_interior: the skip constant follows a mask change that keeps |B| (P6.4b1)" begin
+@testitem "skip_interior: the skip constant follows a mask change that keeps |B|" setup = [CP_lifecycle] tags = [:corepotts, :lifecycle] begin
+@testset "skip_interior: the skip constant follows a mask change that keeps |B|" begin
     integ = init(fk_problem(), SequentialCPM(; skip_interior = true); save_start = false)
     step!(integ)
     B = integ.cache
@@ -336,7 +336,7 @@ end
 end
 
 # `transitioning` is kernel-safe (no throw, it runs in the trigger); a transition bit on an
-# event other than a division is refused on the host, by both planners (review of P6.5b, S5)
+# event other than a division is refused on the host, by both planners
 @testitem "transitioning: checked on the host, by both planners" setup = [CP_lifecycle] tags = [:corepotts, :lifecycle] begin
 @testset "transitioning: checked on the host, by both planners" begin
     @test CorePotts.transitioning(EVENT_DIVIDE) == EVENT_DIVIDE | Int32(0x10)

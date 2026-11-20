@@ -10,7 +10,7 @@ using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordin
 include("shared/gg_model.jl")
 using SciMLBase: ContinuousCallback
 
-# P6.15m m3: a CallbackSet of two differently typed DiscreteCallbacks with `saveat` segfaulted
+# A CallbackSet of two differently typed DiscreteCallbacks with `saveat` segfaulted
 # on the host CheckerboardCPM path (GC heap corruption, found in a later `_save!`). The
 # integrator looped `for cb in integ.callbacks`, which carries a `Union` of the callback types
 # (closures and a BitVector next to bits fields), and Julia 1.12's optimized code for that
@@ -20,7 +20,7 @@ using SciMLBase: ContinuousCallback
 struct AtMCS{K} end                     # a condition type per MCS: distinct callback types
 (::AtMCS{K})(u, t, integ) where {K} = t == K
 
-# D-009 (P6.0cc): without an algorithm, SequentialCPM() on the CPU; a device backend has no
+# D-009: without an algorithm, SequentialCPM() on the CPU; a device backend has no
 # default and says to pass CheckerboardCPM
 struct P60ccDevice <: CorePotts.KernelAbstractions.Backend end
 include("shared/export_all.jl")
@@ -184,8 +184,8 @@ end
     end
 end
 
-@testitem "default algorithm (D-009)" setup = [CP_sciml] tags = [:corepotts, :sciml] begin
-    @testset "default algorithm (D-009)" begin
+@testitem "default algorithm" setup = [CP_sciml] tags = [:corepotts, :sciml] begin
+    @testset "default algorithm" begin
         σ, kinds = blocks((20, 20), 5)
         prob = PottsProblem(GG, initial_state(σ, kinds), Lattice((20, 20)), (0, 4), gg_params(); seed = 3)
         @test solve(prob).u[end].ownership == solve(prob, SequentialCPM()).u[end].ownership
@@ -195,8 +195,8 @@ end
     end
 end
 
-@testitem "TS2-2: PottsProblem SciML conformance (solve, init, step!, reinit!, remake, SII, negative controls)" setup = [CP_sciml] tags = [:corepotts, :sciml] begin
-    @testset "TS2-2: PottsProblem SciML conformance" begin
+@testitem "PottsProblem SciML conformance (solve, init, step!, reinit!, remake, SII, negative controls)" setup = [CP_sciml] tags = [:corepotts, :sciml] begin
+    @testset "PottsProblem SciML conformance" begin
         σ, kinds = blocks((24, 24), 5)
         lat = Lattice((24, 24))
         prob = PottsProblem(GG, initial_state(σ, kinds), lat, (0, 8), gg_params(); seed = 11)
@@ -264,8 +264,8 @@ end
     end
 end
 
-@testitem "TS2-7 (Q7): CorePotts ForwardDiff.Dual refusal messages" setup = [CP_sciml] tags = [:corepotts, :sciml] begin
-    @testset "TS2-7 (Q7): CorePotts ForwardDiff.Dual refusal messages" begin
+@testitem "CorePotts ForwardDiff.Dual refusal messages" setup = [CP_sciml] tags = [:corepotts, :sciml] begin
+    @testset "CorePotts ForwardDiff.Dual refusal messages" begin
         # 1. Passing Dual parameters into a plain PottsProblem/SequentialCPM: CorePotts keeps CPM on
         #    concrete floats (derivative parts run through fields only); Dual in cell/temperature
         #    arithmetic or TrackEnergyChange is rejected cleanly.

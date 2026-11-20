@@ -1,4 +1,4 @@
-# Split from gpu_tests.jl (Wave T3b); uses CP_gpu setup.
+# Split from gpu_tests.jl; uses CP_gpu setup.
 @testitem "device: compartments on the device" setup = [CP_gpu] tags = [:corepotts, :gpu, :device, :gpu_only] begin
     backend = PottsDevices.device_backend()
     @testset "compartments on the device" begin
@@ -31,7 +31,7 @@
         @test ud.cell.volume[1:4] == Int32[68, 12, 68, 12]
         @test ud.cell.cluster[1:4] == Int32[1, 1, 3, 3]
 
-        # cells and clusters divide in one pass on the device (P6.0a): root 1 divides its
+        # cells and clusters divide in one pass on the device: root 1 divides its
         # cluster (member 2's own EVENT_DIVIDE yields to it); lone cell 3 divides alone
         σm = copy(σd); σm[3:8, 30:37] .= 3
         cm = merge(init_moments(σm, latd, 3), init_clusters(σm, [1, 1, 3], latd), (; tag = zeros(Float32, 3)))
@@ -77,7 +77,7 @@ end
 @testitem "device: a chain of two relationships on the device" setup = [CP_gpu] tags = [:corepotts, :gpu, :device, :gpu_only] begin
     backend = PottsDevices.device_backend()
     @testset "a chain of two relationships on the device" begin
-        # P6.0b4: a chain of two relationships: 1–2 a
+        # A chain of two relationships: 1–2 a
         # bond (rest 12), 2–3 a tether (len 18); every centroid distance starts at 25
         latR = Lattice((64, 30))
         σR = zeros(Int32, 64, 30); σR[5:10, 12:17] .= 1; σR[30:35, 12:17] .= 2; σR[55:60, 12:17] .= 3
@@ -135,9 +135,9 @@ end
 
 end
 
-@testitem "device: the frozen mask follows a lifecycle transition on the device (P6.0d)" setup = [CP_gpu] tags = [:corepotts, :gpu, :device, :gpu_only] begin
+@testitem "device: the frozen mask follows a lifecycle transition on the device" setup = [CP_gpu] tags = [:corepotts, :gpu, :device, :gpu_only] begin
     backend = PottsDevices.device_backend()
-    @testset "the frozen mask follows a lifecycle transition on the device (P6.0d)" begin
+    @testset "the frozen mask follows a lifecycle transition on the device" begin
         # fixture in lifecycle.jl: cell 1 → frozen kind 2, cell 2 → free kind 1 at MCS 10
         S = 10
         for sys in (FrozenKind(2), HostFrozen(2))       # device rule, host fallback
@@ -177,7 +177,7 @@ end
         )
         fk32 = fk_problem(rm2; T = Float32)
         if CorePotts._atomic64(backend)
-            # the device run is not reproducible (lockless, P6.0bl): both widths run the event
+            # the device run is not reproducible (lockless): both widths run the event
             a = solve(fk32, CheckerboardCPM(); backend, saveat = 1)
             b = wide(() -> solve(fk32, CheckerboardCPM(); backend, saveat = 1))
             @test a.stats.attempts == b.stats.attempts && a.stats.lifecycle.removals == b.stats.lifecycle.removals == 1
@@ -204,9 +204,9 @@ end
 
 end
 
-@testitem "device: 3D shell rule and the ΔH track on the device (P6.3a)" setup = [CP_gpu] tags = [:corepotts, :gpu, :device, :gpu_only] begin
+@testitem "device: 3D shell rule and the ΔH track on the device" setup = [CP_gpu] tags = [:corepotts, :gpu, :device, :gpu_only] begin
     backend = PottsDevices.device_backend()
-    @testset "3D shell rule and the ΔH track on the device (P6.3a)" begin
+    @testset "3D shell rule and the ΔH track on the device" begin
         # the arc-or-pair rule on the 26-site shell compiles for the device
         lat3 = Lattice((18, 18, 18))
         σ3, k3 = blocks((18, 18, 18), 4; gap = 1)
@@ -233,7 +233,7 @@ end
         @test a.stats.accepted_energy_change === nothing
         @test b.stats.accepted_energy_change isa Float64
         # concurrent copies of one cell each take ΔH against its totals before the other's commit
-        # (lockless, P6.0bl), so on a device the track is the energy change to within that
+        # (lockless), so on a device the track is the energy change to within that
         @test isapprox(b.stats.accepted_energy_change, H(b.u[end]) - H(b.u[1]); rtol = 0.01)
         @test abs(H(b.u[end]) - H(b.u[1])) > 100
         for f in (off, on)
@@ -309,8 +309,8 @@ end
     end
 end
 
-@testitem "whole-cell connectivity on the device (P6.9a)" setup = [CP_gpu] tags = [:corepotts, :gpu, :device, :gpu_only] begin
-    @testset "whole-cell connectivity on the device (P6.9a)" begin
+@testitem "whole-cell connectivity on the device" setup = [CP_gpu] tags = [:corepotts, :gpu, :device, :gpu_only] begin
+    @testset "whole-cell connectivity on the device" begin
         backend = PottsDevices.device_backend()
         σ, kinds = blocks((32, 32), 5)
         lat = Lattice((32, 32))
@@ -346,7 +346,7 @@ end
     end
 end
 
-# The lockless checkerboard on the device (P6.0bl): concurrent copies keep every tracker exact,
+# The lockless checkerboard on the device: concurrent copies keep every tracker exact,
 # the serial pass and the windowed search keep vetoed cells whole, and the device commits at
 # the CPU's rate (statistically: D-029; runs are not reproducible on a device)
 @testitem "lockless checkerboard on the device (PottsDevices.device_name())" setup = [CP_gpu] tags = [:corepotts, :gpu, :device, :gpu_only] begin
@@ -425,11 +425,11 @@ end
     end
 end
 
-# F3-23: a float cell sum on the device equals the host bitwise (exact fixed point), in the
+# A float cell sum on the device equals the host bitwise (exact fixed point), in the
 # Int64 form and in the paired 32-bit form of backends without 64-bit atomics (Metal), forced
-# here. Negative control: the float atomics of the code before F3-23 differ from the host.
-@testitem "F3-23: float cell sums on the device equal the host bitwise" setup = [CP_gpu] tags = [:corepotts, :gpu, :device, :gpu_only] begin
-    @testset "F3-23: float cell sums on the device equal the host bitwise" begin
+# here. Negative control: the float atomics of the code before integer cell sums differ from the host.
+@testitem "float cell sums on the device equal the host bitwise" setup = [CP_gpu] tags = [:corepotts, :gpu, :device, :gpu_only] begin
+    @testset "float cell sums on the device equal the host bitwise" begin
         backend = PottsDevices.device_backend()
         dims = (96, 80)
         σ = cs_owners(dims)
@@ -460,10 +460,10 @@ end
     end
 end
 
-# F3-23 r1 (S2): a weighted contact table on the device equals the host bitwise (integer
+# A weighted contact table on the device equals the host bitwise (integer
 # weight units, Int64 and paired forms)
-@testitem "F3-23 r1: weighted contact tables on the device equal the host bitwise" setup = [CP_gpu] tags = [:corepotts, :gpu, :device, :gpu_only] begin
-    @testset "F3-23 r1: weighted contact tables on the device equal the host bitwise" begin
+@testitem "weighted contact tables on the device equal the host bitwise" setup = [CP_gpu] tags = [:corepotts, :gpu, :device, :gpu_only] begin
+    @testset "weighted contact tables on the device equal the host bitwise" begin
         backend = PottsDevices.device_backend()
         dims = (96, 80)
         σ = cs_owners(dims)

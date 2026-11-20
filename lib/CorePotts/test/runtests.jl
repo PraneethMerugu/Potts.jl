@@ -1,4 +1,4 @@
-# CorePotts tests on ReTestItems (TS1b). Test items are in `*_tests.jl`; each file's
+# CorePotts tests on ReTestItems. Test items are in `*_tests.jl`; each file's
 # definitions are in its `@testsetup` module, and definitions that several files use are in
 # `shared/` (each setup includes the ones it needs). Every item runs in its own module, so
 # an item depends only on the setup it names. Groups are declared in test_groups.toml.

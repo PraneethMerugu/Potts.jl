@@ -1,5 +1,5 @@
 # Cell lifecycle: division, removal, kind transition, creation and id reuse
-# (ROADMAP M2.8, INTERNALS §1.7 as amended by D-035 and D-089).
+# (INTERNALS §1.7 as amended by D-035 and D-089).
 #
 # Two planners with the same semantics:
 # - On the CPU (the host path, D-035): per checked MCS one trigger kernel over cells writes
@@ -12,7 +12,7 @@
 #   folded into `integ.stats` at host read points.
 #
 # Cell ids are `1:capacity`; an id is free when its volume is zero. Reusing an id increments
-# its generation, so cell-addressed randomness never replays (F2).
+# its generation, so cell-addressed randomness never replays.
 
 """Lifecycle trigger code (`Int32(0)`) indicating no lifecycle event for the cell."""
 const EVENT_NONE = Int32(0)
@@ -628,7 +628,7 @@ rebuild_trackers!(st, ctx, backend) = _rebuild_trackers!(nothing, st, ctx, backe
 # `stats`: the integrator's `PottsStats` counting the host transfers (D-085), or `nothing`
 # `division = (daughter, removed)` (the host lifecycle round): a weighted float `surface` takes
 # the round's changes in integer weight units, added to the tracker, as the device lifecycle
-# does (`_dsurface_body!`, F3-23 r2), so the host and a device agree bitwise; otherwise (and
+# does (`_dsurface_body!`), so the host and a device agree bitwise; otherwise (and
 # for every other tracker) the trackers are recomputed from σ
 function _rebuild_trackers!(stats, st, ctx, backend; division = nothing)
     sync!(stats, backend)

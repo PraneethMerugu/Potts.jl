@@ -1,4 +1,4 @@
-# Relationships: links, link energies, host rules, lifecycle interaction (ROADMAP M2.9).
+# Relationships: links, link energies, host rules, lifecycle interaction.
 
 @testsetup module CP_relationships
 using Test, CorePotts, StaticArrays, Statistics, Random
@@ -75,8 +75,8 @@ end
 
 end
 
-@testitem "relationships: link_delta skips a dead partner (D-066 item 5, P6.0l)" setup = [CP_relationships] tags = [:corepotts, :relationships] begin
-    @testset "link_delta skips a dead partner (D-066 item 5, P6.0l)" begin
+@testitem "relationships: link_delta skips a dead partner" setup = [CP_relationships] tags = [:corepotts, :relationships] begin
+    @testset "link_delta skips a dead partner" begin
         # cells 1 and 2 alive and linked; cell 3 linked to 1 but owns no site (copy-killed):
         # volume 0, so its centroid is 0/0. Its link must contribute nothing.
         lat = Lattice((40, 30))
@@ -184,7 +184,7 @@ end
     end
 
     # -----------------------------------------------------------------------------------
-    # Several named relationships (P6.0b): one adjacency per name, payloads per variable
+    # Several named relationships: one adjacency per name, payloads per variable
 
 end
 

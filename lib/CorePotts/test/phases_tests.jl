@@ -1,4 +1,4 @@
-# Synchronous phases, state validation, history and accepted-copy affects (ROADMAP M2.3).
+# Synchronous phases, state validation, history and accepted-copy affects.
 
 # Jacobi step of u on the periodic lattice into u_next (bulk-synchronous: reads only u).
 
@@ -102,7 +102,7 @@ end
 end
 end
 
-# P6.3b (D-145): the MCS order is one static tuple with the sweep and the lifecycle as
+# D-145: the MCS order is one static tuple with the sweep and the lifecycle as
 # entries; a field step may carry a masked clamp.
 @testitem "MCS order and field clamps" setup = [CP_phases] tags = [:corepotts, :phases] begin
 @testset "MCS order and field clamps" begin
@@ -134,7 +134,7 @@ end
 end
 end
 
-# P6.0v (D-085): the counted transfer helpers. On host arrays they copy as before and count
+# D-085: the counted transfer helpers. On host arrays they copy as before and count
 # nothing; the counters add under `merge` and survive `_restore_stats!` (checkpoints).
 @testitem "transfer counters: host arrays count nothing; merge and restore" setup = [CP_phases] tags = [:corepotts, :phases] begin
 @testset "transfer counters: host arrays count nothing; merge and restore" begin

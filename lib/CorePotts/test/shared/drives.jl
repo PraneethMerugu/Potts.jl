@@ -1,4 +1,4 @@
-# Definitions of drives_tests.jl that other test files use (moved here by TS1b).
+# Definitions of drives_tests.jl that other test files use.
 """Independent check: the owner's sites in the Moore neighbourhood of x (minus x) form one
 face-connected component (flood fill over explicit coordinates); none at all is not one."""
 function brute_local(σ, lat::Lattice{N}, x, a) where {N}

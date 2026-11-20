@@ -32,10 +32,10 @@ end
 
 # Every kernel is a body `body(i, args...)` run for `i in 1:n` by `Exec.launch!`
 # (LatticeFields): the host executor on the CPU (plain loops; threaded chunks for large `n`),
-# the one generic `if`-guarded device kernel elsewhere (v3 §4.4). A warm MCS on the CPU
+# the one generic `if`-guarded device kernel elsewhere. A warm MCS on the CPU
 # allocates nothing (no KernelAbstractions CPU launch).
 
-# Device→device copies and fills in the step path (P6.0v8, D-101). Metal.jl's `copyto!`
+# Device→device copies and fills in the step path (D-101). Metal.jl's `copyto!`
 # between device arrays synchronizes before its blit and waits for it (two GPU waits per
 # copy), and its `fill!` of 1-byte elements is a waiting blit; a kernel enqueues and returns.
 # On the CPU both stay the Base calls they were.

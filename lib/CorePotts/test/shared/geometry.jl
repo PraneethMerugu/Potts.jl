@@ -1,4 +1,4 @@
-# Definitions of geometry_tests.jl that other test files use (moved here by TS1b).
+# Definitions of geometry_tests.jl that other test files use.
 using LinearAlgebra: eigvals, Symmetric
 
 """Brute-force geometry of cell c: unwrapped around its first site (cells < half box)."""

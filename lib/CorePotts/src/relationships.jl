@@ -1,4 +1,4 @@
-# Cell–cell relationships (ROADMAP M2.9): symmetric links with payloads, stored as fixed-
+# Cell–cell relationships: symmetric links with payloads, stored as fixed-
 # degree padded adjacency (`maxdeg × capacity`, 0 = empty slot) plus any payload matrices
 # `st.cell.link_<name>` of the same shape. Being cell quantities, links grow with
 # `with_capacity`; the lifecycle clears a daughter's links and drops the incident links of
@@ -7,7 +7,7 @@
 # A *link store* is anything with a `links` adjacency matrix and its `link_<name>` payloads:
 # the cell state itself (one unnamed relationship, column `links`), or a NamedTuple view
 # `(; links = st.cell.links__bond, link_rest = st.cell.link_rest)` over the columns of a
-# named relationship (P6.0b). Several relationships live side by side as adjacency
+# named relationship. Several relationships live side by side as adjacency
 # columns `links__<name>` (`adjacency_name`); payload names are unique per model, so a
 # payload column belongs to exactly one relationship. Views are plain NamedTuples of the
 # state's arrays: building one costs nothing, on the host or in a kernel.
@@ -203,7 +203,7 @@ end
 
 # `link_delta` in two steps, so generated code can evaluate the link energy inline instead of
 # passing it as a closure (a closure in a RuntimeGeneratedFunction body becomes an opaque
-# closure, which a downstream package cannot precompile; TS1c):
+# closure, which a downstream package cannot precompile):
 #   fr = link_frame(T, cell, lat, prop)
 #   for side in 1:2, k in 1:maxdegree(store)
 #       c, n, m, before, after = link_at(T, fr, cell, lat, store, side, k)

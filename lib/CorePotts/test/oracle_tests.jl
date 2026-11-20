@@ -1,4 +1,4 @@
-# Exact transition-matrix oracle (ROADMAP M1.4b): the `Oracle` module is in oracle_core.jl
+# Exact transition-matrix oracle: the `Oracle` module is in oracle_core.jl
 # (the Potts group reuses it against generated models).
 
 @testsetup module CP_oracle

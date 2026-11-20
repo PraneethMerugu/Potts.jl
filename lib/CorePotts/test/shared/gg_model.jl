@@ -1,4 +1,4 @@
-# Definitions of the old runtests.jl (its preamble) that other test files use (moved here by TS1b).
+# Definitions of the old runtests.jl (its preamble) that other test files use.
 using Test, CorePotts, StaticArrays, Statistics, Random
 using SciMLBase: SciMLBase, ReturnCode, remake
 using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift

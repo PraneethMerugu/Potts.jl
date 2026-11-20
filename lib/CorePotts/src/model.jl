@@ -42,7 +42,7 @@ volumes(st::CPMState) = st.cell.volume
 Build a host `CPMState`: `σ` labels sites with ids `1:length(kinds)` (`0` = medium) and
 `kinds[c] ≥ 1` is the kind of cell `c`. Volumes are computed from `σ`. Every site quantity
 has the lattice's size, except one named in `shapes`, which has that size (a field on a
-coarse grid, F3-17).
+coarse grid).
 """
 function initial_state(σ::AbstractArray{<:Integer}, kinds::AbstractVector{<:Integer};
         cell = (;), site = (;), model = (;), history = (;), shapes = (;))
@@ -136,7 +136,7 @@ The model, as plain Julia functions (the numerical analogue of `ODEFunction`). E
   values, `Float32` on Metal) to run under `CheckerboardCPM`, which accumulates per site in
   that type; `SequentialCPM` adds into a `Float64` and does not need it.
 - `connectivity` → `nothing` (the default), or the [`ConnectivityHooks`](@ref) of a model
-  with whole-cell connectivity (`Global`, cell-scope `pieces`; P6.9a)
+  with whole-cell connectivity (`Global`, cell-scope `pieces`)
 
 Symbolic models (`Potts.PottsProblem`) generate these functions; hand-written ones work
 identically.
@@ -372,7 +372,7 @@ function _recompute_surface(::Type{T}, σ, lat::Lattice, r::Relation, ncell::Int
     return S
 end
 
-# The same sum in integer weight units `u` (`_units_for`, F3-23 r2): each entry is the exact
+# The same sum in integer weight units `u` (`_units_for`): each entry is the exact
 # sum of the quantized weights, converted once, as the device lifecycle's cluster-surface fold
 # writes it (so the host and a device agree bitwise)
 function _recompute_surface(::Type{T}, σ, lat::Lattice, r::Relation, ncell::Integer, u::NamedTuple) where {T}

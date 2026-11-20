@@ -1,4 +1,4 @@
-# Compartments (ROADMAP M2.10a, D-036).
+# Compartments (D-036).
 
 @testsetup module CP_compartments
 using Test, CorePotts, StaticArrays, Statistics, Random

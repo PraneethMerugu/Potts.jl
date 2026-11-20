@@ -1,4 +1,4 @@
-# D-253 (P6.0cd Accept): the index math of the conversion pass and the floods at real site
+# The index math of the conversion pass and the floods at real site
 # indices above 2³¹ − 1 and 2³². The forced-width tests run on small lattices, where a
 # reintroduced `% Int32` or `Int32(r)` cannot show; here the kernel bodies run on a 2³²- or
 # 2³³-site lattice whose site arrays are sparse (only the touched entries are stored).
@@ -22,8 +22,8 @@ Base.setindex!(a::SparseSites, v, i::Int) = (a.d[i] = v; a)
 include("shared/export_all.jl")
 end
 
-@testitem "site index math above 2³¹ − 1 and 2³² sites (D-253)" setup = [CP_site_index_math] tags = [:corepotts, :site_index_math] begin
-@testset "site index math above 2³¹ − 1 and 2³² sites (D-253)" begin
+@testitem "site index math above 2³¹ − 1 and 2³² sites" setup = [CP_site_index_math] tags = [:corepotts, :site_index_math] begin
+@testset "site index math above 2³¹ − 1 and 2³² sites" begin
     @testset "@convert: the lowest converted site and `created`" begin
         lat = Lattice((2^16, 2^17))                      # 2³³ sites, no mask
         n = nsites(lat)

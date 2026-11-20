@@ -179,7 +179,7 @@ they run one after another. A copy whose decision needs a whole-cell search (a `
 without window, pieces off their local fast path) is decided after its phase by one work item,
 with no copy in flight.
 
-The kinetics match `SequentialCPM` within the statistical resolution of the P6.0bl checks
+The kinetics match `SequentialCPM` within the statistical resolution of the checkerboard kinetics checks
 (foam, cell sorting, the OpenVT chain and monolayer, Akeeb invasion, a 3D RPE sheet, the
 Act cell's persistence); the Act cell moves up to 6 % faster at weak activity. See
 `docs/design/research/checkerboard-kinetics.md`.
