@@ -40,9 +40,10 @@ determines (`steady_rows`), and the spec's `steady` lists those fields: their gr
 take `QuasiSteady` only. `steady` names more such fields (a front end that writes its steady
 rows as rates itself). A system with no time is a steady system (`spec.timefree`).
 """
-lower_group(sys::PDESystem, disc::LatticeDiscretization; fields = nothing, values::Bool = true, bound::Bool = true,
-    filled = (), steady = String[]) =
-    _lower_group(sys, disc; fields, values, bound, filled, steady).spec
+function lower_group(sys::PDESystem, disc::LatticeDiscretization; fields = nothing, values::Bool = true, bound::Bool = true,
+    filled = (), steady = String[])
+    return _lower_group(sys, disc; fields, values, bound, filled, steady).spec
+end
 
 """
     DeferredBound
@@ -55,8 +56,10 @@ struct DeferredBound
     cf::Any
     sys::Any
 end
-(::DeferredBound)(p) = throw(ArgumentError("the group's stability bound is not built yet (`lower_group(…; bound = false)`); " *
-                                           "build it with `LatticePDE.resolve_bound(spec)`"))
+function (::DeferredBound)(p)
+    throw(ArgumentError("the group's stability bound is not built yet (`lower_group(…; bound = false)`); " *
+        "build it with `LatticePDE.resolve_bound(spec)`"))
+end
 
 """
     resolve_bound(spec) -> GroupSpec
@@ -166,8 +169,9 @@ function _param_slots(cf::CompiledField, computed, values::Bool)
     end
     return out
 end
-_table_specs(cf::CompiledField, values::Bool) =
-    Problems.TableSpec[Problems.TableSpec(String(first(t)); values = values ? last(t) : nothing) for t in cf.tables]
+function _table_specs(cf::CompiledField, values::Bool)
+    return Problems.TableSpec[Problems.TableSpec(String(first(t)); values = values ? last(t) : nothing) for t in cf.tables]
+end
 function _input_specs(cf::CompiledField, sys::PDESystem, s, filled)
     fills = Set{String}(string(f) for f in filled)
     vars = Dict{String, Any}()

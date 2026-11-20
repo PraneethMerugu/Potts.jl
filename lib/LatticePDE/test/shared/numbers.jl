@@ -5,10 +5,12 @@ using LatticeFields: LatticeFields, Compile
 using SciMLStructures: SciMLStructures, Tunable
 
 @parameters Dn = 0.5 kn = 0.3 gn = 1.0 ωn = 3.0 K0n = 0.2
-nsys(; T = 0.1) = psys(
-    [D(ce) ~ Dn * laplacian(ce) - kn * ce],
-    [c(0, x, y) ~ 0.0, c(t, 0, y) ~ gn, Differential(x)(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)],
-    [Dn, kn, gn]; T)
+function nsys(; T = 0.1)
+    return psys(
+        [D(ce) ~ Dn * laplacian(ce) - kn * ce],
+        [c(0, x, y) ~ 0.0, c(t, 0, y) ~ gn, Differential(x)(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)],
+        [Dn, kn, gn]; T)
+end
 fd(f, x; h = 1e-6) = (f(x + h) - f(x - h)) / (2h)
 pidx(prob, s) = LatticePDE.Problems.SII.parameter_index(prob, s)
 withp(p, i, v) = (q = collect(promote_type(eltype(p), typeof(v)), p); q[i] = v; q)
@@ -25,8 +27,9 @@ withp(p, i, v) = (q = collect(promote_type(eltype(p), typeof(v)), p); q[i] = v; 
 tae, tbe = ta(t, x, y), tb(t, x, y)
 tdom = [t ∈ Interval(0.0, 0.3), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
 tsys(eqs, bcs; dvs = [ce]) = PDESystem(eqs, bcs, tdom, [t, x, y], dvs, [kt, Dt, gt]; name = :tg)
-town(sys, dims = (8, 6); geometry = LatticeFields.IR.CUBIC) =
-    LFP.field_problem(discretize(sys, LatticeDiscretization(Grid(dims; geometry); T = Float64)))
+function town(sys, dims = (8, 6); geometry = LatticeFields.IR.CUBIC)
+    return LFP.field_problem(discretize(sys, LatticeDiscretization(Grid(dims; geometry); T = Float64)))
+end
 const TTIGHT = LatticePCG(; reltol = 1.0e-13, maxiters = 200)
 # AD and central differences of `sum(out(solve))` in parameter `s`
 function tad(prob, alg, s; dt, out = sol -> sol.u[end])

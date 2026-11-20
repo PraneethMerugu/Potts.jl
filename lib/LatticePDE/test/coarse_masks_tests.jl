@@ -8,12 +8,14 @@
         # over them. Before the fix (7d101740): the mask folds by Majority, so a node
         # with 9 or more medium children is held and its sources are lost, and the others fold over
         # the whole block.
-        lvl(n) = Symbolics.wrap(
-            SymbolicUtils.setmetadata(
-                unwrap(Symbolics.variable(n; T = SymbolicUtils.FnType{Tuple, Real, Nothing})),
-                LatticePDE.LatticeLevel, Coarse(CK)
-            )
-        )
+        function lvl(n)
+            return Symbolics.wrap(
+                    SymbolicUtils.setmetadata(
+                        unwrap(Symbolics.variable(n; T = SymbolicUtils.FnType{Tuple, Real, Nothing})),
+                        LatticePDE.LatticeLevel, Coarse(CK)
+                    )
+                )
+        end
         q = first(@variables q(..)::Int32 [input = true])
         qe = q(t, x, y)
         # kind 1 (the source) next to the medium (kind 0) on blocks the medium covers in part: the
@@ -37,10 +39,12 @@
         @test sort(unique(nf)) == [0, 1, 4, 7, 8, 12, 16]
         S = 0.7
         csrc = lvl(:cb15src)
-        sys(c, v) = PDESystem(
-            [D(c(t, x, y)) ~ S * (qe == 1) + 0.25 * (qe == 2) * c(t, x, y)], [c(0, x, y) ~ 0.0, c(t, x, y) ~ masked(qe == 0, v)],
-            cdom(), [t, x, y], [c(t, x, y), qe], Num[]; name = :b15
-        )
+        function sys(c, v)
+            return PDESystem(
+                    [D(c(t, x, y)) ~ S * (qe == 1) + 0.25 * (qe == 2) * c(t, x, y)], [c(0, x, y) ~ 0.0, c(t, x, y) ~ masked(qe == 0, v)],
+                    cdom(), [t, x, y], [c(t, x, y), qe], Num[]; name = :b15
+                )
+        end
         op = discretize(sys(csrc, 0.5), LatticeDiscretization(Grid(CDIMS)); inputs = [qe => Q])
         du = similar(op.u0); op.f(du, zero(op.u0), op.p, 0.0)
         du = reshape(du, 4, 4)
@@ -111,10 +115,12 @@
         # hand-coarsened twin on blended nodes ("a coarse field equals the hand-coarsened problem")
         cod, hod = lvl(:cb15ode), first(@variables hb15ode(..))
         kq = first(@variables kq(..) [input = true, bounds = (0, 1)])
-        osys(c, k1, mq, dvs) = PDESystem(
-            [D(c(t, x, y)) ~ 0.02 * laplacian(c(t, x, y)) - c(t, x, y) * k1 + 0.3 * k1],
-            [c(0, x, y) ~ x * y, c(t, x, y) ~ masked(mq == 0, 0.5)], cdom(), [t, x, y], [c(t, x, y); dvs], Num[]; name = :b15o
-        )
+        function osys(c, k1, mq, dvs)
+            return PDESystem(
+                    [D(c(t, x, y)) ~ 0.02 * laplacian(c(t, x, y)) - c(t, x, y) * k1 + 0.3 * k1],
+                    [c(0, x, y) ~ x * y, c(t, x, y) ~ masked(mq == 0, 0.5)], cdom(), [t, x, y], [c(t, x, y); dvs], Num[]; name = :b15o
+                )
+        end
         oc = discretize(osys(cod, qe == 2, qe, [qe]), LatticeDiscretization(Grid(CDIMS)); inputs = [qe => Q])
         oh = discretize(
             osys(hod, kq(t, x, y), qe, [kq(t, x, y), qe]), LatticeDiscretization(Grid(CDIMS .÷ CK));
@@ -159,10 +165,12 @@ end
             Kd[s...] = n <= 9 ? 2.0 : 100.0
             Dd[s...] = n <= 9
         end
-        dsys(c) = PDESystem(
-            [D(c(t, x, y)) ~ kd(t, x, y)], [c(0, x, y) ~ 0.0, c(t, x, y) ~ masked(qd(t, x, y) == 0, 1.0)],
-            cdom(1.0e-6), [t, x, y], [c(t, x, y), dmd(t, x, y), qd(t, x, y), kd(t, x, y)], Num[]; name = :df
-        )
+        function dsys(c)
+            return PDESystem(
+                    [D(c(t, x, y)) ~ kd(t, x, y)], [c(0, x, y) ~ 0.0, c(t, x, y) ~ masked(qd(t, x, y) == 0, 1.0)],
+                    cdom(1.0e-6), [t, x, y], [c(t, x, y), dmd(t, x, y), qd(t, x, y), kd(t, x, y)], Num[]; name = :df
+                )
+        end
         p = cown(dsys(cdf), CDIMS; domain = dmd, ins = [dmd(t, x, y) => Dd, qd(t, x, y) => Qd, kd(t, x, y) => Kd])
         # (u0 = 0, one explicit window: the state is h times the rate)
         s = solve(p, ExplicitEuler(; substeps = 1); dt = 1.0e-6)
@@ -209,11 +217,13 @@ end
             end
             want[Tuple(J)] = kfi
         end
-        dsys(c) = PDESystem(
-            [D(c(t, x, y)) ~ kd(t, x, y)],
-            [c(0, x, y) ~ 0.0, c(t, x, y) ~ masked(qd(t, x, y) == 0, 1.0)], cdom(1.0e-6), [t, x, y],
-            [c(t, x, y), dmd(t, x, y), qd(t, x, y), kd(t, x, y)], Num[]; name = :pr15
-        )
+        function dsys(c)
+            return PDESystem(
+                    [D(c(t, x, y)) ~ kd(t, x, y)],
+                    [c(0, x, y) ~ 0.0, c(t, x, y) ~ masked(qd(t, x, y) == 0, 1.0)], cdom(1.0e-6), [t, x, y],
+                    [c(t, x, y), dmd(t, x, y), qd(t, x, y), kd(t, x, y)], Num[]; name = :pr15
+                )
+        end
         p = cown(dsys(cdf), CDIMS; domain = dmd, ins = [dmd(t, x, y) => Dd, qd(t, x, y) => Qd, kd(t, x, y) => Kd])
         s = solve(p, ExplicitEuler(; substeps = 1); dt = 1.0e-6)
         d = Array(s[cdf(t, x, y), length(s.t)]) ./ 1.0e-6
@@ -268,10 +278,12 @@ end
             count(Df[((I[1] - 1) * CK + 1):(I[1] * CK), ((I[2] - 1) * CK + 1):(I[2] * CK)]) > CK^2 ÷ 2
                 for I in CartesianIndices(CDIMS .÷ CK)
         ]
-        osys(c, K, kind1, dvs) = PDESystem(
-            [D(c(t, x, y)) ~ 0.05 * DivKGrad(:harmonic)(K, c(t, x, y)) - c(t, x, y) * 0.3 * kind1],
-            [c(0, x, y) ~ x * y, c(t, x, y) ~ masked(q2(t, x, y) == 3, 1.0)], cdom(), [t, x, y], [c(t, x, y); dvs], Num[]; name = :pr15o
-        )
+        function osys(c, K, kind1, dvs)
+            return PDESystem(
+                    [D(c(t, x, y)) ~ 0.05 * DivKGrad(:harmonic)(K, c(t, x, y)) - c(t, x, y) * 0.3 * kind1],
+                    [c(0, x, y) ~ x * y, c(t, x, y) ~ masked(q2(t, x, y) == 3, 1.0)], cdom(), [t, x, y], [c(t, x, y); dvs], Num[]; name = :pr15o
+                )
+        end
         pc = cown(
             osys(cq, ki(t, x, y), q2(t, x, y) == 1, [q2(t, x, y), ki(t, x, y), dm2(t, x, y)]), CDIMS; domain = dm2,
             ins = [q2(t, x, y) => Q, ki(t, x, y) => Ki, dm2(t, x, y) => Df]
@@ -322,13 +334,15 @@ end
             [c(0, x, y) ~ x, u(0, x, y) ~ y], cdom(), [t, x, y], [c(t, x, y), u(t, x, y)], [ka, kb]; name = :mix
         )
         p = cown(sys, (8, 8))
-        lap(n, h) = (
-            L = zeros(n * n, n * n); li = LinearIndices((n, n));
+        function lap(n, h)
+            L = zeros(n * n, n * n)
+            li = LinearIndices((n, n))
             for j in 1:n, i in 1:n, (di, dj) in ((1, 0), (-1, 0), (0, 1), (0, -1))
-                (1 <= i + di <= n && 1 <= j + dj <= n) || continue
-                L[li[i, j], li[i + di, j + dj]] += 1 / h^2; L[li[i, j], li[i, j]] -= 1 / h^2
-            end; L
-        )
+                    (1 <= i + di <= n && 1 <= j + dj <= n) || continue
+                    L[li[i, j], li[i + di, j + dj]] += 1 / h^2; L[li[i, j], li[i, j]] -= 1 / h^2
+                end
+            return L
+        end
         # restriction R (mean over the 2×2 block) and prolongation P (the node of the block)
         R, P = zeros(16, 64), zeros(64, 16)
         lf, lc = LinearIndices((8, 8)), LinearIndices((4, 4))
@@ -433,13 +447,15 @@ end
     using .LP_coarse: fd
     @testset "refusals name the cause and a route that works" begin
         q = first(@variables q(..)::Int32 [input = true])
-        mk(c; n = (16, 16)) = cown(
-            PDESystem(
-                [D(c(t, x, y)) ~ 0.01 * laplacian(c(t, x, y)) - c(t, x, y) * ismember(q(t, x, y), (2,))],
-                [c(0, x, y) ~ 1.0], cdom(), [t, x, y], [c(t, x, y), q(t, x, y)], Num[]; name = :r
-            ), n;
-            ins = [q(t, x, y) => zeros(Int32, n)]
-        )
+        function mk(c; n = (16, 16))
+            return cown(
+                    PDESystem(
+                        [D(c(t, x, y)) ~ 0.01 * laplacian(c(t, x, y)) - c(t, x, y) * ismember(q(t, x, y), (2,))],
+                        [c(0, x, y) ~ 1.0], cdom(), [t, x, y], [c(t, x, y), q(t, x, y)], Num[]; name = :r
+                    ), n;
+                    ins = [q(t, x, y) => zeros(Int32, n)]
+                )
+        end
         # a level that is not a grid
         ci = first(@variables cint(..) [lattice_level = 4])
         @test_throws ArgumentError mk(ci)
@@ -474,24 +490,27 @@ end
         @test_throws ArgumentError cown(am, (16, 16); ins = [q(t, x, y) => zeros(Int32, 16, 16)])
         # (in a substep a field reads the fields it depends on after their update: `L` from `cref`
         # after its step; the coarse Laplacian by hand, zero flux, spacing 1/4)
-        lap(v) = (
-            n = size(v, 1); [
-                sum(
-                    (1 <= i + a <= n && 1 <= j + b <= n ? v[i + a, j + b] - v[i, j] : 0.0)
-                        for (a, b) in ((1, 0), (-1, 0), (0, 1), (0, -1))
-                ) * 16 for i in 1:n, j in 1:n
-            ]
-        )
+        function lap(v)
+            n = size(v, 1)
+            return [
+                    sum(
+                        (1 <= i + a <= n && 1 <= j + b <= n ? v[i + a, j + b] - v[i, j] : 0.0)
+                            for (a, b) in ((1, 0), (-1, 0), (0, 1), (0, -1))
+                    ) * 16 for i in 1:n, j in 1:n
+                ]
+        end
         c0 = [((i - 0.5) / 4)^2 for i in 1:4, j in 1:4]
         Lh = lap(c0 .+ 0.01 * 0.01 .* lap(c0))
         @test sg[u(t, x, y), 2] ≈ 0.01 .* repeat(Lh; inner = (4, 4)) rtol = 1.0e-12
         # a map's offset read counts fine sites: a coarse field's must be a multiple of k
         @parameters dx [lattice_spacing = 1]
         mm = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(first(@variables mref(..))), LatticePDE.LatticeLevel, Coarse(4)))
-        msys(a) = PDESystem(
-            [Shift(t, 1)(mm(t, x, y)) ~ mm(t, x + a * dx, y)], [mm(0, x, y) ~ x], cdom(10.0), [t, x, y],
-            [mm(t, x, y)], [dx]; name = :mp
-        )
+        function msys(a)
+            return PDESystem(
+                    [Shift(t, 1)(mm(t, x, y)) ~ mm(t, x + a * dx, y)], [mm(0, x, y) ~ x], cdom(10.0), [t, x, y],
+                    [mm(t, x, y)], [dx]; name = :mp
+                )
+        end
         @test_throws ArgumentError cown(msys(1), (16, 16))
         sm = solve(cown(msys(4), (16, 16)), ExplicitMap(); saveat = [1.0])
         @test sm[mm(t, x, y), 2][1:3, :] == sm[mm(t, x, y), 1][2:4, :]          # one node to the left

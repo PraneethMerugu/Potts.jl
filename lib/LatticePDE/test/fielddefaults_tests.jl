@@ -25,14 +25,18 @@ using ForwardDiff: ForwardDiff
 dfdom = [t ∈ Interval(0.0, 0.2), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
 dfdisc() = LatticeDiscretization(Grid((8, 8)); T = Float64)
 # `dfc` decays and diffuses from its default; `dfa` is an aux field (its default is unused)
-dfsys(bcs = []; name = :df) = PDESystem(
-    [D(dfc(t, x, y)) ~ dfD * laplacian(dfc(t, x, y)) - dfk * dfc(t, x, y) + 0.1 * x],
-    bcs, dfdom, [t, x, y], [dfc(t, x, y)], [dfD, dfk]; name)
-dfmsg(f) = try
-    f()
-    "built"
-catch e
-    sprint(showerror, e)
+function dfsys(bcs = []; name = :df)
+    return PDESystem(
+        [D(dfc(t, x, y)) ~ dfD * laplacian(dfc(t, x, y)) - dfk * dfc(t, x, y) + 0.1 * x],
+        bcs, dfdom, [t, x, y], [dfc(t, x, y)], [dfD, dfk]; name)
+end
+function dfmsg(f)
+    return try
+            f()
+            "built"
+        catch e
+            sprint(showerror, e)
+        end
 end
 include("shared/export_all.jl")
 end

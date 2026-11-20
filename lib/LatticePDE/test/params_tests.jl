@@ -113,8 +113,10 @@ end
     @test eltype(q.values) <: ForwardDiff.Dual && q.tables == lp.tables && q.inputs == lp.inputs
     @test SciMLStructures.canonicalize(Tunable(), q)[1] == vd
     # a derivative through the replaced parameters, against a difference
-    J(θ) = sum(solve(remake(o; p = SciMLStructures.replace(Tunable(), o.p, [θ])), Tsit5(); abstol = 1e-12,
-        reltol = 1e-12).u[end])
+    function J(θ)
+        return sum(solve(remake(o; p = SciMLStructures.replace(Tunable(), o.p, [θ])), Tsit5(); abstol = 1e-12,
+            reltol = 1e-12).u[end])
+    end
     @test isapprox(ForwardDiff.derivative(J, 0.2), (J(0.2 + 1e-6) - J(0.2 - 1e-6)) / 2e-6; rtol = 1e-6)
     # `Constants` are the tables, `Discrete` the inputs and the step index
     @test SciMLStructures.canonicalize(Constants(), lp)[1] == [0.5, 1.0]

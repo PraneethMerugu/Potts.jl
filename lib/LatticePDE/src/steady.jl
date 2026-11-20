@@ -194,12 +194,14 @@ function steady_sign(rhs, c)
     num(x) = (v = _numval(unwrap(x)); v isa Real && isfinite(v) ? Float64(v) : nothing)
     # Symbolic probes (substituted expressions can raise DomainError, MethodError, InexactError, etc.)
     # fall back to the conservative steady sign rather than failing analysis.
-    at(vz, vc) = try
-        e = substitute(substitute(rhs, ops; fold = Val(false)), Dict{Any, Any}(c => vc, z => vz); fold = Val(false))
-        num(substitute(e, Dict{Any, Any}(v => 1.0 for v in Symbolics.get_variables(e)); fold = Val(true)))
-    catch e
-        isfatal(e) && rethrow()
-        nothing
+    function at(vz, vc)
+        return try
+                e = substitute(substitute(rhs, ops; fold = Val(false)), Dict{Any, Any}(c => vc, z => vz); fold = Val(false))
+                num(substitute(e, Dict{Any, Any}(v => 1.0 for v in Symbolics.get_variables(e)); fold = Val(true)))
+            catch e
+                isfatal(e) && rethrow()
+                nothing
+            end
     end
     hasop = any(v -> !(v isa Number), values(ops))            # (an operator on `c`: `z` or `z K`)
     if hasop

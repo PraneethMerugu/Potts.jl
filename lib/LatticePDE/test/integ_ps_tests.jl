@@ -20,10 +20,12 @@ include("shared/discretize.jl")
 include("shared/problems.jl")
 include("shared/silent.jl")
 include("shared/groups.jl")
-psmsg(f) = try
-    f(); ""
-catch e
-    sprint(showerror, e)
+function psmsg(f)
+    return try
+            f(); ""
+        catch e
+            sprint(showerror, e)
+        end
 end
 include("shared/export_all.jl")
 end

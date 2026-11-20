@@ -264,10 +264,12 @@ end
 
 @testitem "messages, the `:ode` path, `show`" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
     @testset "messages, the `:ode` path, `show`" begin
-    e(f) = try
-        f(); ""
-    catch err
-        err isa ArgumentError ? err.msg : sprint(showerror, err)
+    function e(f)
+        return try
+                f(); ""
+            catch err
+                err isa ArgumentError ? err.msg : sprint(showerror, err)
+            end
     end
         p = bown(bsys([D(bce) ~ bD * laplacian(bce)], [bc(0, x, y) ~ x], [bD]))
         # M1: a linear solver where a field solver goes names `BackwardEuler(; linsolve = …)`, which works
@@ -322,10 +324,12 @@ end
     using LinearSolve: KLUFactorization, LUFactorization, UMFPACKFactorization
     using LatticeFields.Solvers: BoundOperator
     @testset "LatticeNewton keywords and NLNewton semantics" begin
-        e(f) = try
-            f(); ""
-        catch err
-            err isa ArgumentError ? err.msg : sprint(showerror, err)
+        function e(f)
+            return try
+                    f(); ""
+                catch err
+                    err isa ArgumentError ? err.msg : sprint(showerror, err)
+                end
         end
         @test repr(LatticeNewton()) == "LatticeNewton()"
         @test repr(LatticeNewton(; κ = 1 // 100, max_iter = 10, check_div = true)) == "LatticeNewton()"

@@ -125,11 +125,13 @@ end
         # at a Dirichlet face (the coarse ghost, from the coarse spacing)
         cgh = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(first(@variables cghost(..))), LatticePDE.LatticeLevel, Coarse(CK)))
         hgh = first(@variables hghost(..))
-        gsys(c) = PDESystem(
-            [D(c(t, x, y)) ~ DivKGrad(:harmonic)(0.02 * (1 + c(t, x, y)), c(t, x, y)) - c(t, x, y)],
-            [c(0, x, y) ~ x * y, c(t, 0, y) ~ 2.0, 0.5 * c(t, 1, y) + Differential(x)(c(t, 1, y)) ~ 0.1], cdom(), [t, x, y],
-            [c(t, x, y)], Num[]; name = :gh
-        )
+        function gsys(c)
+            return PDESystem(
+                    [D(c(t, x, y)) ~ DivKGrad(:harmonic)(0.02 * (1 + c(t, x, y)), c(t, x, y)) - c(t, x, y)],
+                    [c(0, x, y) ~ x * y, c(t, 0, y) ~ 2.0, 0.5 * c(t, 1, y) + Differential(x)(c(t, 1, y)) ~ 0.1], cdom(), [t, x, y],
+                    [c(t, x, y)], Num[]; name = :gh
+                )
+        end
         for alg in (ExplicitEuler(; substeps = 4), BackwardEuler())
             sc, sh = solve(cown(gsys(cgh), CDIMS), alg; dt = 0.05), solve(cown(gsys(hgh), CDIMS .÷ CK), alg; dt = 0.05)
             @test sc[cgh(t, x, y), length(sc.t)] == sh[hgh(t, x, y), length(sh.t)]
@@ -138,10 +140,12 @@ end
         cc = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(first(@variables codec(..))), LatticePDE.LatticeLevel, Coarse(CK)))
         ch2 = first(@variables codeh(..))
         q, g = @variables q(..)::Int32 [input = true] g(..) [input = true]
-        osys(c, k2, extra) = PDESystem(
-            [D(c(t, x, y)) ~ cD * laplacian(c(t, x, y)) - ckd * c(t, x, y) * k2 + 0.05 * g(t, x, y)],
-            [c(0, x, y) ~ x * y], cdom(), [t, x, y], [c(t, x, y), g(t, x, y), extra], [cD, ckd]; name = :os
-        )
+        function osys(c, k2, extra)
+            return PDESystem(
+                    [D(c(t, x, y)) ~ cD * laplacian(c(t, x, y)) - ckd * c(t, x, y) * k2 + 0.05 * g(t, x, y)],
+                    [c(0, x, y) ~ x * y], cdom(), [t, x, y], [c(t, x, y), g(t, x, y), extra], [cD, ckd]; name = :os
+                )
+        end
         oc = discretize(
             osys(cc, ismember(q(t, x, y), (2,)), q(t, x, y)), LatticeDiscretization(Grid(CDIMS));
             inputs = [q(t, x, y) => CQ1, g(t, x, y) => CG]
@@ -237,12 +241,14 @@ end
         # multiples of 1/16) and complementary conditions sum to 1. Base 5e972579:
         # the block's plurality owner, off by up to the full rate
         Q = CQT
-        lvl(n) = Symbolics.wrap(
-            SymbolicUtils.setmetadata(
-                unwrap(Symbolics.variable(n; T = SymbolicUtils.FnType{Tuple, Real, Nothing})),
-                LatticePDE.LatticeLevel, Coarse(CK)
-            )
-        )
+        function lvl(n)
+            return Symbolics.wrap(
+                    SymbolicUtils.setmetadata(
+                        unwrap(Symbolics.variable(n; T = SymbolicUtils.FnType{Tuple, Real, Nothing})),
+                        LatticePDE.LatticeLevel, Coarse(CK)
+                    )
+                )
+        end
         cs1, K1, K2, M0, M1 = lvl(:cs1), lvl(:K1s1), lvl(:K2s1), lvl(:M0s1), lvl(:M1s1)
         q = first(@variables q(..)::Int32 [input = true])
         @parameters cR[1:4] = [0.0, 1.0, 0.5, 0.0]
@@ -266,10 +272,12 @@ end
         # mean at each face as a real input of the block means does
         cop, hop = lvl(:cops1), first(@variables hops1(..))
         kf = first(@variables kf(..) [input = true, bounds = (0, 1)])
-        osys(c, K, dvs) = PDESystem(
-            [D(c(t, x, y)) ~ 0.05 * DivKGrad(:arithmetic)(0.5 + K, c(t, x, y))],
-            [c(0, x, y) ~ x * y], cdom(), [t, x, y], [c(t, x, y); dvs], Num[]; name = :ops1
-        )
+        function osys(c, K, dvs)
+            return PDESystem(
+                    [D(c(t, x, y)) ~ 0.05 * DivKGrad(:arithmetic)(0.5 + K, c(t, x, y))],
+                    [c(0, x, y) ~ x * y], cdom(), [t, x, y], [c(t, x, y); dvs], Num[]; name = :ops1
+                )
+        end
         so = solve(cown(osys(cop, ismember(qe, (1, 2)), [qe]), CDIMS; ins = [qe => Q]), ExplicitEuler(; substeps = 4); dt = 0.05)
         sh = solve(
             cown(osys(hop, kf(t, x, y), [kf(t, x, y)]), CDIMS .÷ CK; ins = [kf(t, x, y) => cmean(Float64.(1 .<= Q .<= 2))]),
@@ -293,11 +301,13 @@ end
             )
             c2 = lvl(Symbol(:cs2, lab))
             ch = first(@variables chs2(..))
-            tsys(c, Kx) = PDESystem(
-                [D(c(t, x, y)) ~ 0.05 * DivKGrad(:harmonic)(Kx, c(t, x, y)) - c(t, x, y)],
-                [c(0, x, y) ~ x * y, c(t, 0, y) ~ 1.0, c(t, 1, y) ~ 0.0], cdom(), [t, x, y], [c(t, x, y), qe, ki(t, x, y)], [cKv];
-                name = :s2
-            )
+            function tsys(c, Kx)
+                return PDESystem(
+                        [D(c(t, x, y)) ~ 0.05 * DivKGrad(:harmonic)(Kx, c(t, x, y)) - c(t, x, y)],
+                        [c(0, x, y) ~ x * y, c(t, 0, y) ~ 1.0, c(t, 1, y) ~ 0.0], cdom(), [t, x, y], [c(t, x, y), qe, ki(t, x, y)], [cKv];
+                        name = :s2
+                    )
+            end
             for alg in (ExplicitEuler(; substeps = 4), BackwardEuler())
                 sc, sh = solve(cown(tsys(c2, K(qe)), CDIMS; ins = insf), alg; dt = 0.05), solve(cown(tsys(ch, ki(t, x, y)), CDIMS .÷ CK; ins = insc), alg; dt = 0.05)
                 @test sc[c2(t, x, y), length(sc.t)] == sh[ch(t, x, y), length(sh.t)] ||

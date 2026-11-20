@@ -309,9 +309,11 @@ function build_gate()
         Problems.compile!(DEV, bs)
         devsync()
     end
-    state(n) = (prob = discretize(rd, LatticeDiscretization(Grid((n, n)); T = Float32, backend = DEV));
-        init(prob, ExplicitEuler(); dt = 1.0f-2); devsync()
-    )
+    function state(n)
+        prob = discretize(rd, LatticeDiscretization(Grid((n, n)); T = Float32, backend = DEV))
+        init(prob, ExplicitEuler(); dt = 1.0f-2)
+        return devsync()
+    end
     big = SMOKE ? 512 : 4096
     build(64); build(big); state(64); state(big)            # warm: compile and first-call costs
     t64, tbig = (minimum(@elapsed(build(n)) for _ in 1:3) for n in (64, big))

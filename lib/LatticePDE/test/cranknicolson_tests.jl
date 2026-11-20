@@ -152,10 +152,12 @@ end
         @test maximum(abs, vec(ig[bce]) .- vec(fresh[bce])) < 1e-12
     end
     # the keywords and messages name the algorithm
-    e(f) = try
-        f(); ""
-    catch err
-        err isa ArgumentError ? err.msg : sprint(showerror, err)
+    function e(f)
+        return try
+                f(); ""
+            catch err
+                err isa ArgumentError ? err.msg : sprint(showerror, err)
+            end
     end
         @test startswith(e(() -> CrankNicolson(; nlsolve = 0)), "CrankNicolson: nlsolve = 0 must be `nothing`")
     @test e(() -> CrankNicolson(; theta = 0.5)) ==

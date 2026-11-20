@@ -78,16 +78,16 @@ end
         # conservative: the block mean times the block size is the net flux through the block's faces
         # (the faces inside the block cancel), summed from the face differences by hand
         h = 1 / 16
-        flux(I, J) = begin
+        function flux(I, J)
             s = 0.0
             for j in 1:4, i in 1:4
-                a, b = 4 * (I - 1) + i, 4 * (J - 1) + j
-                i == 1 && a > 1 && (s += (v0[a - 1, b] - v0[a, b]) / h^2)
-                i == 4 && a < 16 && (s += (v0[a + 1, b] - v0[a, b]) / h^2)
-                j == 1 && b > 1 && (s += (v0[a, b - 1] - v0[a, b]) / h^2)
-                j == 4 && b < 16 && (s += (v0[a, b + 1] - v0[a, b]) / h^2)
-            end
-            s
+                    a, b = 4 * (I - 1) + i, 4 * (J - 1) + j
+                    i == 1 && a > 1 && (s += (v0[a - 1, b] - v0[a, b]) / h^2)
+                    i == 4 && a < 16 && (s += (v0[a + 1, b] - v0[a, b]) / h^2)
+                    j == 1 && b > 1 && (s += (v0[a, b - 1] - v0[a, b]) / h^2)
+                    j == 4 && b < 16 && (s += (v0[a, b + 1] - v0[a, b]) / h^2)
+                end
+            return s
         end
         @test [flux(I, J) for I in 1:4, J in 1:4] ≈ 16 .* reshape(XR * vec(L), 4, 4) rtol = 1.0e-10
         @test abs(sum(c1) * 16 / (XT * 0.5)) < 1.0e-10 * maximum(abs, L) * 256          # no flux through the box
@@ -234,14 +234,14 @@ end
             [D(xe(xcc)) ~ 0.01 * laplacian(xe(xcc)) + 0.1 * laplacian(xe(xu)), D(xe(xu)) ~ 0.2 * laplacian(xe(xu)) + 0.5 * laplacian(xe(xcc)) - xe(xu)],
             [xcc(0, x, y) ~ x^2 + y, xu(0, x, y) ~ sin(5x)], xdom(), [t, x, y], [xe(xcc), xe(xu)], Num[]; name = :xcy
         )
-        err(nw) = (
+        function err(nw)
             s = solve(
-                xown(sys, (16, 16)),
-                BackwardEuler(; substeps = 1, nlsolve = LatticeNewton(; κ = 1.0e-4, max_iter = nw), linsolve = tight);
-                dt, saveat = [dt],
-            );
-            maximum(abs, [vec(s[xe(xcc), 2]); vec(s[xe(xu), 2])] .- ref)
-        )
+                    xown(sys, (16, 16)),
+                    BackwardEuler(; substeps = 1, nlsolve = LatticeNewton(; κ = 1.0e-4, max_iter = nw), linsolve = tight);
+                    dt, saveat = [dt],
+                )
+            return maximum(abs, [vec(s[xe(xcc), 2]); vec(s[xe(xu), 2])] .- ref)
+        end
         Test.@test_logs (:warn, r"`0\.1laplacian\(xuu\)` \(in the rate of `xcc`\) is not in the implicit operator") match_mode = :any min_level = Base.CoreLogging.Warn begin
             solve(xown(sys, (16, 16)), BackwardEuler(; substeps = 1, linsolve = tight); dt, saveat = [dt])
         end

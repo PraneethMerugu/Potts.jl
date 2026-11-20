@@ -124,10 +124,12 @@ end
 
 @testitem "refusals and messages in the user's words" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
     @testset "refusals and messages in the user's words" begin
-    emsg(f) = try
-        f(); ""
-    catch e
-        sprint(showerror, e)
+    function emsg(f)
+        return try
+                f(); ""
+            catch e
+                sprint(showerror, e)
+            end
     end
     # a diffusion coefficient whose interval holds negative values: no bound (not a refusal: the
     # enclosure does not show a negative value), the reason names it and its interval
@@ -160,19 +162,19 @@ end
     @testset "a derivative of the coordinates in a condition's value" begin
     Dx, Dy = Differential(x), Differential(y)
     @variables fk(..) [input = true]
-        run(g) = (
-            p = fown(fsys([D(fue) ~ 0.1 * laplacian(fue)], [fu(0, x, y) ~ 0.0, fu(t, 1, y) ~ g], [fue]), 8);
-            solve(p, ExplicitEuler(); dt = 0.01)[:fu, end]
-        )
+        function run(g)
+            p = fown(fsys([D(fue) ~ 0.1 * laplacian(fue)], [fu(0, x, y) ~ 0.0, fu(t, 1, y) ~ g], [fue]), 8)
+            return solve(p, ExplicitEuler(); dt = 0.01)[:fu, end]
+        end
     # `Dy(x y)` is `x`, which is 1 on the face x = 1: the run equals the plain value, bitwise
     @test run(Dy(x * y)) == run(1.0)
     @test maximum(abs, run(Dy(sin(x * y))) .- run(x * cos(x * y))) < 1e-14
     @test maximum(abs, run(Dx(x^2) / 2)) > 0 && run(Dx(x^2) / 2) == run(x)
     # … and in a Robin face's value and an initial value
-        rob(g) = (
-            p = fown(fsys([D(fue) ~ 0.1 * laplacian(fue)], [fu(0, x, y) ~ Dy(x * y^2) / 2, fu(t, 1, y) + Dx(fu(t, 1, y)) ~ g], [fue]), 8);
-            solve(p, ExplicitEuler(); dt = 0.01)[:fu, end]
-        )
+        function rob(g)
+            p = fown(fsys([D(fue) ~ 0.1 * laplacian(fue)], [fu(0, x, y) ~ Dy(x * y^2) / 2, fu(t, 1, y) + Dx(fu(t, 1, y)) ~ g], [fue]), 8)
+            return solve(p, ExplicitEuler(); dt = 0.01)[:fu, end]
+        end
     @test rob(Dy(y^2)) == rob(2y)
     # a derivative of a field read stays unevaluated: refused in words
     m = try

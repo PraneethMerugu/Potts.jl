@@ -79,13 +79,14 @@ end
         @test maximum(abs, sr[:c, end][:, 1] .- A \ b) < 1.0e-9
         @test maximum(abs, sr[:c, end][:, 1] .- (cosh.(2 .* (1 .- xc)) ./ cosh(2))) > 1.0e-4   # (negative control: continuous)
         # conservation: periodic and no-flux faces keep Σ c to roundoff; a Dirichlet face does not
-        cons(bcs) = (
+        function cons(bcs)
             s = solve(
-                owned(psys([D(ce) ~ laplacian(ce)], [c(0, x, y) ~ x + y^2; bcs], Num[]; T = 0.05), 8, 6),
-                ExplicitEuler()
-                ; dt = 1.0e-3
-            ); (sum(s[:c, 1]), sum(s[:c, end]))
-        )
+                    owned(psys([D(ce) ~ laplacian(ce)], [c(0, x, y) ~ x + y^2; bcs], Num[]; T = 0.05), 8, 6),
+                    ExplicitEuler()
+                    ; dt = 1.0e-3
+                )
+            return (sum(s[:c, 1]), sum(s[:c, end]))
+        end
         m0, m1 = cons([c(t, x, 0) ~ c(t, x, 1), Differential(x)(c(t, 0, y)) ~ 0.0, Differential(x)(c(t, 1, y)) ~ 0.0])
         @test abs(m1 - m0) < 1.0e-12 * abs(m0)
         m0, m1 = cons([c(t, x, 0) ~ c(t, x, 1), c(t, 0, y) ~ 0.0])
@@ -505,10 +506,12 @@ end
     @testset "discretize keywords" begin
         pidx(prob, s) = LatticePDE.Problems.SII.parameter_index(prob, s)
         withp(p, i, v) = (q = collect(promote_type(eltype(p), typeof(v)), p); q[i] = v; q)
-        emsg(f) = try
-            f(); ""
-        catch e
-            sprint(showerror, e)
+        function emsg(f)
+            return try
+                    f(); ""
+                catch e
+                    sprint(showerror, e)
+                end
         end
         @parameters kd = 1.0 Dd = 0.1
         @parameters Td[1:2] = [0.5, 1.0]
@@ -572,10 +575,12 @@ end
 # `integ[K]` failed the same way, also for a system with states.
 @testitem "aux fields in B (aux-only systems, sol[K], integ[K])" setup = [LP_problems] tags = [:latticepde, :problems] begin
     @testset "aux fields in B (aux-only systems, sol[K], integ[K])" begin
-        emsg(f) = try
-            f(); ""
-        catch e
-            sprint(showerror, e)
+        function emsg(f)
+            return try
+                    f(); ""
+                catch e
+                    sprint(showerror, e)
+                end
         end
         @parameters Kb = 2.0 Da = 0.1 ka = 1.0
         xc = ((1:4) .- 0.5) ./ 4

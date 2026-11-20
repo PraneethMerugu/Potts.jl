@@ -6,10 +6,12 @@ using Random: Xoshiro, randperm
 const CK = 4
 const CDIMS = (16, 16)
 cdom(T = 1.0) = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
-cmsg(f) = try
-    f(); ""
-catch err
-    err isa ArgumentError ? err.msg : sprint(showerror, err)
+function cmsg(f)
+    return try
+            f(); ""
+        catch err
+            err isa ArgumentError ? err.msg : sprint(showerror, err)
+        end
 end
 # a fine kind map whose every 4×4 block has a kind on 10 of its 16 sites (a strict majority),
 # the others drawn from the remaining kinds: the Majority fold of `q == k` is the block's kind
@@ -55,8 +57,10 @@ function cinfree(A, held, ind, k = CK)
     end
 end
 # the number of free children of each block
-cnfree(held, k = CK) = [count(!, held[((I[1] - 1) * k + 1):(I[1] * k), ((I[2] - 1) * k + 1):(I[2] * k)])
-                        for I in CartesianIndices(size(held) .÷ k)]
+function cnfree(held, k = CK)
+    return [count(!, held[((I[1] - 1) * k + 1):(I[1] * k), ((I[2] - 1) * k + 1):(I[2] * k)])
+        for I in CartesianIndices(size(held) .÷ k)]
+end
 # a fine kind map whose 4×4 blocks hold kind 3 (the mask's) on 16, 0, 1, 2, … 15 of their sites,
 # the others drawn from 0:2: masked, free and blended nodes
 function cblendkinds(seed; dims = CDIMS, k = CK)
@@ -72,12 +76,16 @@ function cblendkinds(seed; dims = CDIMS, k = CK)
     return Q
 end
 # the hand twin's mask input: kind 3 where the whole block is
-cwhole(Q, k = CK) = Int32[all(==(3), Q[((I[1] - 1) * k + 1):(I[1] * k), ((I[2] - 1) * k + 1):(I[2] * k)]) ? 3 : 0
-                          for I in CartesianIndices(size(Q) .÷ k)]
+function cwhole(Q, k = CK)
+    return Int32[all(==(3), Q[((I[1] - 1) * k + 1):(I[1] * k), ((I[2] - 1) * k + 1):(I[2] * k)]) ? 3 : 0
+        for I in CartesianIndices(size(Q) .÷ k)]
+end
 # the owned problem of `sys` on `dims` with inputs `ins`
 # (the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
-cown(sys, dims; T = Float64, ins = (), kw...) = LFP.field_problem(discretize(sys, LatticeDiscretization(Grid(dims); T, kw...);
-    inputs = collect(Pair, ins)))
+function cown(sys, dims; T = Float64, ins = (), kw...)
+    return LFP.field_problem(discretize(sys, LatticeDiscretization(Grid(dims); T, kw...);
+        inputs = collect(Pair, ins)))
+end
 
 # One system with the features a coarse field must carry: a face coefficient of the coordinates,
 # a decay at a kind, a source at a kind, a moving masked Dirichlet, a Robin face, a Dirichlet face
@@ -102,8 +110,10 @@ function csys(c, q, g; steady = false, hand = false)
 end
 # the hand twin's inputs for the fine kind map `Q`: the means of the kind expressions over the
 # free children (the mask is `q == 3`)
-chand(Q) = [cf1(t, x, y) => cfree(Float64.(Q .== 1), Q .== 3), cf2(t, x, y) => cfree(Float64.(Q .== 2), Q .== 3),
-    csv(t, x, y) => cfree(Float64[1.0, 2.0, 5.0, 3.0][Q .+ 1], Q .== 3)]
+function chand(Q)
+    return [cf1(t, x, y) => cfree(Float64.(Q .== 1), Q .== 3), cf2(t, x, y) => cfree(Float64.(Q .== 2), Q .== 3),
+        csv(t, x, y) => cfree(Float64[1.0, 2.0, 5.0, 3.0][Q .+ 1], Q .== 3)]
+end
 # equal to rounding: the fold multiplies the block mean last in a product, the twin in its term order
 capprox(a, b; rtol = 1e-13) = isapprox(a, b; rtol) || (println("coarse twin: max |Δ| ", maximum(abs, a .- b)); false)
 const CQ1, CQ1c = ckinds(11)

@@ -73,9 +73,12 @@ end
     @test ib.t ≈ 0.07 && only(ib.runtimes).cache.h == 0.01
     # BDF2 with one shortened window (a tstop off the grid, then the window back to it): each
     # change of the step starts BDF2 again, and the run keeps order 2
-        err(dt) = (
-            ig = init(p, BDF2(; linsolve = BTIGHT); dt); step!(ig, 0.1234, true); solve!(ig);
-               maximum(abs, ig.u .- exp(0.3λ * 0.4) .* vec(u0)))
+        function err(dt)
+            ig = init(p, BDF2(; linsolve = BTIGHT); dt)
+            step!(ig, 0.1234, true)
+            solve!(ig)
+            return maximum(abs, ig.u .- exp(0.3λ * 0.4) .* vec(u0))
+        end
     es = [err(0.4 / 2^k) for k in 4:7]
     os = log2.(es[1:(end - 1)] ./ es[2:end])
         @test all(o -> abs(o - 2) < 0.15, os) || (println("BDF2 orders ", os, " ", es); false)

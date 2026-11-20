@@ -156,8 +156,9 @@ ModelingToolkitBase `complete` (MTKBase 1.77): it requires the inputs in its own
 parameter order, which is hash order and so depends on the names and the machine. Give the
 inputs in the reverse order (`inputs = [b, a]`).
 """
-value_at(T::AbstractArray{<:Union{Integer, AbstractFloat}}, k::Union{Integer, AbstractFloat}) =
-    k == 0 ? zero(eltype(T)) : T[clamp(Int(k), 1, length(T))]
+function value_at(T::AbstractArray{<:Union{Integer, AbstractFloat}}, k::Union{Integer, AbstractFloat})
+    return k == 0 ? zero(eltype(T)) : T[clamp(Int(k), 1, length(T))]
+end
 # One registration for the table and the site forms (see `Advect`). The index is any `Real`
 # term: a kind or a cell id may be a `Real`-typed input (a CPM built-in), and an integer
 # literal reads that entry (`value_at(Dk, 2)`; `value_at(Dk, 0)` reads 0, as in the kernel).
@@ -167,8 +168,9 @@ value_at(T::AbstractArray{<:Union{Integer, AbstractFloat}}, k::Union{Integer, Ab
 value_at(T::Union{Num, Symbolics.Arr}, k::Union{Integer, AbstractFloat}) = value_at(T, Num(k))
 
 # the pair table form
-value_at(T::AbstractArray{<:Union{Integer, AbstractFloat}}, k::Union{Integer, AbstractFloat}, kp::Union{Integer, AbstractFloat}) =
-    k == 0 || kp == 0 ? zero(eltype(T)) : T[clamp(Int(k), 1, size(T, 1)), clamp(Int(kp), 1, size(T, 2))]
+function value_at(T::AbstractArray{<:Union{Integer, AbstractFloat}}, k::Union{Integer, AbstractFloat}, kp::Union{Integer, AbstractFloat})
+    return k == 0 || kp == 0 ? zero(eltype(T)) : T[clamp(Int(k), 1, size(T, 1)), clamp(Int(kp), 1, size(T, 2))]
+end
 # (`false`: the first registration's shape rule covers every arity; a second would overwrite
 # it, so the result type of this arity is declared here)
 @register_symbolic value_at(T::AbstractMatrix, k::Real, kp::Real) false
@@ -192,13 +194,15 @@ ismember(k::Union{Integer, AbstractFloat}, s::Tuple) = Int(k) in s
 boundary conditions: `c` is held at `v` on the sites where `pred` holds. `pred` is a
 symbolic `Bool` term; arrays are written per component, `u[i] ~ masked(pred, v)`.
 """
-masked(p, v) = throw(
-    ArgumentError(
-        "`masked(pred, v)` is a symbolic boundary-condition marker; its predicate must be a " *
-            "symbolic Bool term such as `kindₛ == 3` or `ismember(kindₛ, (2, 3))`. A kind set " *
-            "written with `∈` (`kindₛ ∈ (2, 3)`, `kindₛ ∈ Set(…)`) is not a term: use `ismember`."
-    )
-)
+function masked(p, v)
+    throw(
+            ArgumentError(
+                "`masked(pred, v)` is a symbolic boundary-condition marker; its predicate must be a " *
+                    "symbolic Bool term such as `kindₛ == 3` or `ismember(kindₛ, (2, 3))`. A kind set " *
+                    "written with `∈` (`kindₛ ∈ (2, 3)`, `kindₛ ∈ Set(…)`) is not a term: use `ismember`."
+            )
+        )
+end
 @register_symbolic masked(p::Bool, v::Real)
 
 """
@@ -223,17 +227,21 @@ prob = discretize(sys, LatticeDiscretization(Grid((16, 16)); clock = 1.0))   # `
 sol = solve(prob, ExplicitEuler(); dt = 0.25)       # 4 windows per step index
 ```
 """
-step_index(t::Real) = throw(ArgumentError("`step_index(t)` is the step index of a discretization's clock: it has a " *
-                                          "value only in an equation discretized with `LatticeDiscretization(…; clock = τ)`"))
+function step_index(t::Real)
+    throw(ArgumentError("`step_index(t)` is the step index of a discretization's clock: it has a " *
+        "value only in an equation discretized with `LatticeDiscretization(…; clock = τ)`"))
+end
 @register_symbolic step_index(t::Real)
 
 # No operator here has a symbolic derivative: the field operators are lowered, never
 # expanded, and the CPM reads are piecewise constant in their kind arguments. A derivative
 # that reaches one of them is an error, not the unevaluated `D(op(…))` Symbolics returns by
 # default. (`expand_derivatives` asks only for arguments whose own derivative is nonzero.)
-_no_derivative(op) = throw(ArgumentError("LatticePDE operators are opaque to symbolic differentiation; " *
-                                         "`$op` has no derivative rule (differentiate the field before applying " *
-                                         "the operator, or keep the derivative outside it)"))
+function _no_derivative(op)
+    throw(ArgumentError("LatticePDE operators are opaque to symbolic differentiation; " *
+        "`$op` has no derivative rule (differentiate the field before applying " *
+        "the operator, or keep the derivative outside it)"))
+end
 Symbolics.@register_derivative laplacian(x) I _no_derivative(laplacian)
 Symbolics.@register_derivative (op::DivKGrad)(K, c) I _no_derivative(op)
 Symbolics.@register_derivative (op::Advect)(u, c) I _no_derivative(op)
@@ -244,8 +252,10 @@ Symbolics.@register_derivative masked(p, v) I _no_derivative(masked)
 Symbolics.@register_derivative step_index(t) I _no_derivative(step_index)
 
 # the registered operators of this vocabulary (the scans check their arguments)
-_isvocabulary(f) = f === laplacian || f isa DivKGrad || f isa Advect || f === value_at || f === ismember ||
-                   f === masked
+function _isvocabulary(f)
+    return f === laplacian || f isa DivKGrad || f isa Advect || f === value_at || f === ismember ||
+        f === masked
+end
 
 # ---------------------------------------------------------------------------------------
 # Metadata keys (`@variables c(..) [lattice_placement = …]`). MTK's own `tunable` is reused;

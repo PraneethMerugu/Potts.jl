@@ -40,17 +40,21 @@ psdom = [t ∈ Interval(0.0, 0.2), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0,
 const PS_K = Bool[(i + 2j) % 3 == 0 for i in 1:8, j in 1:8]
 const PS_M = Int32[1 + (i > 4) for i in 1:8, j in 1:8]
 psdisc() = LatticeDiscretization(Grid((8, 8)); T = Float64)
-pseq() = [
-    D(psc(t, x, y)) ~ psD * laplacian(psc(t, x, y)) + 0.5 * psin(t, x, y) - psk * psc(t, x, y),
-    D(psu(t, x, y)) ~ 0.2 * laplacian(psu(t, x, y)) + value_at(psJ, psm(t, x, y)) * psc(t, x, y) - psu(t, x, y),
-]
+function pseq()
+    return [
+            D(psc(t, x, y)) ~ psD * laplacian(psc(t, x, y)) + 0.5 * psin(t, x, y) - psk * psc(t, x, y),
+            D(psu(t, x, y)) ~ 0.2 * laplacian(psu(t, x, y)) + value_at(psJ, psm(t, x, y)) * psc(t, x, y) - psu(t, x, y),
+        ]
+end
 psbc() = [psc(0, x, y) ~ x, psu(0, x, y) ~ 0.0, psc(t, 0, y) ~ 1.0]
 pslen(s) = (length(s.ivs), length(s.dvs), length(s.ps))
-psmsg(f) = try
-    f()
-    "built"
-catch e
-    sprint(showerror, e)
+function psmsg(f)
+    return try
+            f()
+            "built"
+        catch e
+            sprint(showerror, e)
+        end
 end
 
 # The inputs come after the fields in name order, not in SymbolicUtils'

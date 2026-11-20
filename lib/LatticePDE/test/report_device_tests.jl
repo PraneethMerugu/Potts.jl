@@ -41,8 +41,10 @@ end
         [dc(0, x, y) ~ 0.0, dc(t, 0, y) ~ 1.0, Differential(x)(dc(t, 1, y)) ~ 0.0, dc(t, x, 0) ~ dc(t, x, 1)],
         [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [dce], [dD, dk]; name = :d)
     mk(n, be) = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float32, backend = be))
-    body(r) = join(filter(l -> !(startswith(l, "  problem") || startswith(l, "  launches") || startswith(l, "  fusion") ||
-                                   startswith(l, "           ")), split(r, '\n')), '\n')
+    function body(r)
+        return join(filter(l -> !(startswith(l, "  problem") || startswith(l, "  launches") || startswith(l, "  fusion") ||
+            startswith(l, "           ")), split(r, '\n')), '\n')
+    end
     # the §7.4 count at 512² (12 substeps of the bound) on the device
     pd = mk(512, PDEV)
         ig = init(pd, ExplicitEuler(); dt = 0.01)

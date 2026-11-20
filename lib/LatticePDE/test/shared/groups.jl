@@ -26,19 +26,23 @@ LFP.substeps(::LFP.FieldProblem, ::GStub, p = nothing; tables = nothing, inputs 
 @variables gc(..) go(..)
 gce, goe = gc(t, x, y), go(t, x, y)
 # c diffuses and reads o; o decays and reads c
-gsys(; T = 0.1) = PDESystem(
-    [D(gce) ~ laplacian(gce) + ga * goe, D(goe) ~ -gb * goe + 0.1 * gce],
-    [gc(0, x, y) ~ x * y, go(0, x, y) ~ 1.0 + x, gc(t, 0, y) ~ gc(t, 1, y), gc(t, x, 0) ~ gc(t, x, 1),
-     go(t, 0, y) ~ go(t, 1, y), go(t, x, 0) ~ go(t, x, 1)],
-    [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [gce, goe], [ga, gb]; name = :g)
+function gsys(; T = 0.1)
+    return PDESystem(
+        [D(gce) ~ laplacian(gce) + ga * goe, D(goe) ~ -gb * goe + 0.1 * gce],
+        [gc(0, x, y) ~ x * y, go(0, x, y) ~ 1.0 + x, gc(t, 0, y) ~ gc(t, 1, y), gc(t, x, 0) ~ gc(t, x, 1),
+         go(t, 0, y) ~ go(t, 1, y), go(t, x, 0) ~ go(t, x, 1)],
+        [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [gce, goe], [ga, gb]; name = :g)
+end
 # (the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
 gown(sys; n = 8) = LFP.field_problem(discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64)))
 gwarm(ig) = (step!(ig); step!(ig); @allocated step!(ig))      # (a function barrier)
-gerr(f) = try
-    f(); ""
-catch e
-    e isa ArgumentError || rethrow()
-    sprint(showerror, e)
+function gerr(f)
+    return try
+            f(); ""
+        catch e
+            e isa ArgumentError || rethrow()
+            sprint(showerror, e)
+        end
 end
 
 # Hand FTCS on a 2D box (test/fields.jl:10–33, ported): `n` substeps of `dt/n`; periodic or

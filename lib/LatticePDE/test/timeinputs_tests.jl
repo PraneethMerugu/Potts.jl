@@ -33,16 +33,22 @@ const TI_N = 8
 tiQ(s) = [s > 0.08i ? 1.0 : 0.0 for i in 1:TI_N, j in 1:TI_N]
 tidom() = [t ∈ Interval(0.0, 0.5), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
 # a source that reads the input, and a mask that reads it
-tisrc() = PDESystem(
-    [D(tice) ~ tiD * laplacian(tice) - 0.5 * tice + tiqe], [tic(0, x, y) ~ 0.0], tidom(), [t, x, y],
-    [tice, tiqe], [tiD]; name = :tisrc)
-timask() = PDESystem(
-    [D(tice) ~ tiD * laplacian(tice) - 0.5 * tice], [tic(0, x, y) ~ 0.0, tice ~ masked(tiqe > 0.5, 2.0)],
-    tidom(), [t, x, y], [tice, tiqe], [tiD]; name = :timask)
+function tisrc()
+    return PDESystem(
+        [D(tice) ~ tiD * laplacian(tice) - 0.5 * tice + tiqe], [tic(0, x, y) ~ 0.0], tidom(), [t, x, y],
+        [tice, tiqe], [tiD]; name = :tisrc)
+end
+function timask()
+    return PDESystem(
+        [D(tice) ~ tiD * laplacian(tice) - 0.5 * tice], [tic(0, x, y) ~ 0.0, tice ~ masked(tiqe > 0.5, 2.0)],
+        tidom(), [t, x, y], [tice, tiqe], [tiD]; name = :timask)
+end
 tidisc() = LatticeDiscretization(Grid((TI_N, TI_N)); T = Float64)
 # the reference: the input's values at the start, written by a callback after each window or step
-tiwrite() = SciMLBase.DiscreteCallback((u, s, i) -> true, i -> (i.ps[tiqe] = tiQ(i.t); nothing);
-    save_positions = (false, false))
+function tiwrite()
+    return SciMLBase.DiscreteCallback((u, s, i) -> true, i -> (i.ps[tiqe] = tiQ(i.t); nothing);
+        save_positions = (false, false))
+end
 tiref(sys, alg; kw...) = solve(discretize(sys, tidisc(); inputs = [tiqe => tiQ(0.0)]), alg; callback = tiwrite(), kw...)
 tifn(sys, alg; kw...) = solve(discretize(sys, tidisc(); inputs = [tiqe => tiQ]), alg; kw...)
 tiwarm(ig) = (step!(ig); step!(ig); @allocated step!(ig))      # (a function barrier)
@@ -50,9 +56,11 @@ tiode(prob) = tiwarm(init(prob, Tsit5(); adaptive = false, dt = 0.01, save_every
 @variables tik(..)::Int32 [input = true]
 tike = tik(t, x, y)
 tiK(v) = s -> Int32[s > v * i ? 1 : 0 for i in 1:TI_N, j in 1:TI_N]
-tiint() = PDESystem(
-    [D(tice) ~ tiD * laplacian(tice) - 0.5 * tice + ifelse(tike == 1, 1.0, 0.0)], [tic(0, x, y) ~ 0.0],
-    tidom(), [t, x, y], [tice, tike], [tiD]; name = :tiint)
+function tiint()
+    return PDESystem(
+        [D(tice) ~ tiD * laplacian(tice) - 0.5 * tice + ifelse(tike == 1, 1.0, 0.0)], [tic(0, x, y) ~ 0.0],
+        tidom(), [t, x, y], [tice, tike], [tiD]; name = :tiint)
+end
 
 # On an OrdinaryDiffEq solver the right side evaluates the function at every call,
 # so an adaptive solver sees the front at its own stage times: Tsit5 and Rodas5P with no `dtmax`
@@ -64,9 +72,11 @@ tifine(sys) = tifn(sys, ExplicitEuler(); dt = 1.0e-4, saveat = 0.1)
 # alone, Crank–Nicolson and BDF2 equal their constant-input runs bit for bit, and with a smooth
 # source `sin(6t)` in the equation they stay second order (a reset every window made BDF2
 # Backward Euler and CN two half steps)
-tismooth() = PDESystem(
-    [D(tice) ~ tiD * laplacian(tice) - 0.5 * tice + sin(6t) * tiqe], [tic(0, x, y) ~ x], tidom(), [t, x, y],
-    [tice, tiqe], [tiD]; name = :tismooth)
+function tismooth()
+    return PDESystem(
+        [D(tice) ~ tiD * laplacian(tice) - 0.5 * tice + sin(6t) * tiqe], [tic(0, x, y) ~ x], tidom(), [t, x, y],
+        [tice, tiqe], [tiD]; name = :tismooth)
+end
 include("shared/export_all.jl")
 end
 
@@ -142,10 +152,12 @@ end
     # a new time span starts the function at its own start
         @test solve(remake(fp; tspan = (0.1, 0.5)), alg; dt = 0.01).u ==
             solve(remake(cp; tspan = (0.1, 0.5), inputs = [tiqe => tiQ(0.1)]), alg; dt = 0.01, callback = tiwrite()).u
-    msg(f) = try
-        f(); ""
-    catch e
-        e isa ArgumentError ? e.msg : sprint(showerror, e)
+    function msg(f)
+        return try
+                f(); ""
+            catch e
+                e isa ArgumentError ? e.msg : sprint(showerror, e)
+            end
     end
         ig = init(fp, alg; dt = 0.01)
     @test occursin("function of the time", msg(() -> (ig.ps[tiqe] = tiQ)))
@@ -168,9 +180,12 @@ end
     # the warm step of constant inputs allocates nothing; with a function, only what it returns
     # (here nothing: it writes one buffer, or returns a number)
     buf = zeros(TI_N, TI_N)
-    inplace(s) = (for j in 1:TI_N, i in 1:TI_N
-                      buf[i, j] = s > 0.08i ? 1.0 : 0.0
-                  end; buf)
+    function inplace(s)
+        for j in 1:TI_N, i in 1:TI_N
+                buf[i, j] = s > 0.08i ? 1.0 : 0.0
+            end
+        return buf
+    end
         for (a, dt) in ((ExplicitEuler(), 0.01), (BackwardEuler(), 0.05))
             @test tiwarm(init(cp, a; dt, save_everystep = false)) == 0
             @test tiwarm(init(remake(cp; inputs = [tiqe => inplace]), a; dt, save_everystep = false)) == 0
@@ -229,9 +244,12 @@ end
 @testitem "masks that read an input function: bytes and a fixed step" setup = [LP_timeinputs] tags = [:latticepde, :timeinputs] begin
     @testset "masks that read an input function: bytes and a fixed step" begin
     buf = zeros(TI_N, TI_N)
-    inplace(s) = (for j in 1:TI_N, i in 1:TI_N
-                      buf[i, j] = s > 0.08i ? 1.0 : 0.0
-                  end; buf)
+    function inplace(s)
+        for j in 1:TI_N, i in 1:TI_N
+                buf[i, j] = s > 0.08i ? 1.0 : 0.0
+            end
+        return buf
+    end
     mp = discretize(timask(), tidisc(); inputs = [tiqe => inplace])
         @test tiwarm(init(mp, ExplicitEuler(); dt = 0.01, save_everystep = false)) == 0
     o = tiode(mp)                          # (`adaptive = false`: not refused)

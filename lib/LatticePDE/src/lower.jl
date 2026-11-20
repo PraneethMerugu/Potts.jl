@@ -55,23 +55,30 @@ struct Env{N, B, L}
     # mask is a per-site modelling choice, the domain is where the equation is defined.
     domfree::Any
 end
-Env(kb, fields, params, tables, spacing, t, xs, lo::NTuple{N}, h, map, offset, policy, leaf, hex, domain) where {N} =
-    Env(kb, fields, params, tables, spacing, t, xs, lo, h, map, offset, policy, leaf, hex, domain, Int32[])
-Env(kb, fields, params, tables, spacing, t, xs, lo::NTuple{N}, h, map, offset, policy, leaf, hex, domain, ghosted) where {N} =
-    Env(kb, fields, params, tables, spacing, t, xs, lo, h, map, offset, policy, leaf, hex, domain, ghosted, 0,
+function Env(kb, fields, params, tables, spacing, t, xs, lo::NTuple{N}, h, map, offset, policy, leaf, hex, domain) where {N}
+    return Env(kb, fields, params, tables, spacing, t, xs, lo, h, map, offset, policy, leaf, hex, domain, Int32[])
+end
+function Env(kb, fields, params, tables, spacing, t, xs, lo::NTuple{N}, h, map, offset, policy, leaf, hex, domain, ghosted) where {N}
+    return Env(kb, fields, params, tables, spacing, t, xs, lo, h, map, offset, policy, leaf, hex, domain, ghosted, 0,
         Dict{Any, Int}(), ntuple(_ -> 2, N), 0)
-Env(kb, fields, params, tables, spacing, t, xs, lo::NTuple{N}, h, map, offset, policy, leaf, hex, domain, ghosted, level, flev,
-    dims, child) where {N} =
-    Env(kb, fields, params, tables, spacing, t, xs, lo, h, map, offset, policy, leaf, hex, domain, ghosted, level, flev, dims,
+end
+function Env(kb, fields, params, tables, spacing, t, xs, lo::NTuple{N}, h, map, offset, policy, leaf, hex, domain, ghosted, level, flev,
+    dims, child) where {N}
+    return Env(kb, fields, params, tables, spacing, t, xs, lo, h, map, offset, policy, leaf, hex, domain, ghosted, level, flev, dims,
         child, nothing, nothing)
+end
 # a coefficient at a neighbor: `face = true` (a face coefficient of a second difference) reads
 # the ghosted fields with `RESOLVE`, the others with `CLAMP`
-_shift(e::Env{N}, o; face::Bool = false) where {N} = Env(e.kb, e.fields, e.params, e.tables, e.spacing, e.t, e.xs, e.lo, e.h,
-    e.map, ntuple(d -> e.offset[d] + o[d], N), face ? RESOLVE : CLAMP, e.leaf, e.hex, e.domain, e.ghosted, e.level,
-    e.flev, e.dims, e.child, e.free, e.domfree)
+function _shift(e::Env{N}, o; face::Bool = false) where {N}
+    return Env(e.kb, e.fields, e.params, e.tables, e.spacing, e.t, e.xs, e.lo, e.h,
+        e.map, ntuple(d -> e.offset[d] + o[d], N), face ? RESOLVE : CLAMP, e.leaf, e.hex, e.domain, e.ghosted, e.level,
+        e.flev, e.dims, e.child, e.free, e.domfree)
+end
 # the environment inside a fold over the children `m` levels down
-_infold(e::Env, m) = Env(e.kb, e.fields, e.params, e.tables, e.spacing, e.t, e.xs, e.lo, e.h, e.map, e.offset, e.policy,
-    e.leaf, e.hex, e.domain, e.ghosted, e.level, e.flev, e.dims, m, e.free, e.domfree)
+function _infold(e::Env, m)
+    return Env(e.kb, e.fields, e.params, e.tables, e.spacing, e.t, e.xs, e.lo, e.h, e.map, e.offset, e.policy,
+        e.leaf, e.hex, e.domain, e.ghosted, e.level, e.flev, e.dims, m, e.free, e.domfree)
+end
 _flevel(e::Env, op) = get(e.flev, op, 0)
 """
     level_spacing(h, dims, level) -> NTuple
@@ -211,9 +218,11 @@ function _fold_kind(u, e::Env)
     return :mean
 end
 _fine_ops(e::Env) = Any[op for (op, l) in e.flev if l < e.level]
-_isbool_term(u) = (iscall(u) && (operation(u) === ismember || operation(u) === (!) || operation(u) === (!=) ||
-                                 operation(u) === (&) || operation(u) === (|) || any(r -> r[1] === operation(u), _CMP))) ||
-                  SymbolicUtils.symtype(u) <: Bool
+function _isbool_term(u)
+    return (iscall(u) && (operation(u) === ismember || operation(u) === (!) || operation(u) === (!=) ||
+                       operation(u) === (&) || operation(u) === (|) || any(r -> r[1] === operation(u), _CMP))) ||
+        SymbolicUtils.symtype(u) <: Bool
+end
 # a product on a coarse grid: the factors without fine reads stay outside; the factors with fine
 # reads fold together by the mean when there are two or more (a single one folds itself)
 function _fold_product(u, e::Env)
@@ -331,14 +340,16 @@ function _same_level!(e::Env, u, what)
     )
 end
 _isfield(e::Env, u) = iscall(u) && haskey(e.fields, operation(u))
-_fieldarg(e::Env, u) = (u = unwrap(u);
-                        if _isfield(e, u)
-                            (u, 0)
-                        elseif iscall(u) && operation(u) === getindex && _isfield(e, unwrap(arguments(u)[1]))
-                            (unwrap(arguments(u)[1]), Int(unwrap_const(arguments(u)[2])))
-                        else
-                            _lerr(u, "the operand must be a field read `c(t, x, y)`")
-                        end)
+function _fieldarg(e::Env, u)
+    u = unwrap(u)
+    return if _isfield(e, u)
+            (u, 0)
+        elseif iscall(u) && operation(u) === getindex && _isfield(e, unwrap(arguments(u)[1]))
+            (unwrap(arguments(u)[1]), Int(unwrap_const(arguments(u)[2])))
+        else
+            _lerr(u, "the operand must be a field read `c(t, x, y)`")
+        end
+end
 
 """Per-axis flux-form second difference `(1/h²) Σ± K_face (c± − c)` (K = nothing: K ≡ 1)."""
 function _secdiff(e::Env, d, K, c, mean)
@@ -386,8 +397,10 @@ function _hexlap(e::Env{N}, c) where {N}
     ids, lane = e.fields[operation(u)]
     f = ids[max(comp, 1)]
     c0 = load!(e.kb, f, lane; offset = (0, 0), policy = INSIDE)
-    inside(fid, o) = node!(e.kb, INSIDE_OP, BOOL, Int32[], access!(e.kb, Access{N}(
-        fid, Int8(0), Sel(Int16(1)), Sel(NTuple{N, Int16}(o)), Int8(0), INSIDE)))
+    function inside(fid, o)
+        return node!(e.kb, INSIDE_OP, BOOL, Int32[], access!(e.kb, Access{N}(
+            fid, Int8(0), Sel(Int16(1)), Sel(NTuple{N, Int16}(o)), Int8(0), INSIDE)))
+    end
     indom(o) = _indomain(e.kb, e.domain, N, o)
     ghost(o) = load!(e.kb, f, lane; offset = o, policy = RESOLVE)
     terms = map(HEX6) do o
@@ -436,8 +449,10 @@ function _advect(e::Env{N}, uvel, c) where {N}
     end
     u, comp = _fieldarg(e, c)
     _same_level!(e, u, "`Advect`")
-    cl(o) = load!(e.kb, e.fields[operation(u)][1][max(comp, 1)], e.fields[operation(u)][2];
-                  offset = o, policy = RESOLVE)
+    function cl(o)
+        return load!(e.kb, e.fields[operation(u)][1][max(comp, 1)], e.fields[operation(u)][2];
+            offset = o, policy = RESOLVE)
+    end
     z = _unit(e, 1, 0)
     divs = map(1:N) do d
         fl = map((-1, 1)) do s
@@ -489,8 +504,10 @@ call lowers consistently everywhere.
 The operators (`laplacian`, `DivKGrad`, `Advect`, `Differential`), the reads (`value_at`, `ismember`) and
 the field reads are terms of their own, not calls in this sense.
 """
-lowers_call(f) = f === identity || any(g -> g === f, _OPS) || any(r -> r[1] === f, _CMP) || any(r -> r[1] === f, _UNARY) ||
-                 (f isa Function && nameof(f) in CALLS)
+function lowers_call(f)
+    return f === identity || any(g -> g === f, _OPS) || any(r -> r[1] === f, _CMP) || any(r -> r[1] === f, _UNARY) ||
+        (f isa Function && nameof(f) in CALLS)
+end
 
 """
     lower(x, env) -> node id

@@ -15,6 +15,8 @@ function rs_window(prob, alg; dt)
     return ig, u0, vec(ig[bce])
 end
 # α(y) = 1 + y on x = 0, β(x) = 0.5 + x on y = 1 (as written: `α c + β ∂c/∂x_a = g`)
-rs_bcs(α0 = 1.0) = [bc(0, x, y) ~ x * y, (α0 + y) * bc(t, 0, y) - Differential(x)(bc(t, 0, y)) ~ bg,
-    2.0 * bc(t, x, 1) + (0.5 + x) * Differential(y)(bc(t, x, 1)) ~ 1.0]
+function rs_bcs(α0 = 1.0)
+    return [bc(0, x, y) ~ x * y, (α0 + y) * bc(t, 0, y) - Differential(x)(bc(t, 0, y)) ~ bg,
+        2.0 * bc(t, x, 1) + (0.5 + x) * Differential(y)(bc(t, x, 1)) ~ 1.0]
+end
 rs_faces(α0 = 1.0) = Dict((1, -1) => (:robin, (x, y) -> α0 + y, -1.0, 0.5), (2, 1) => (:robin, 2.0, (x, y) -> 0.5 + x, 1.0))

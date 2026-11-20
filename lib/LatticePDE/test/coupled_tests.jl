@@ -189,11 +189,13 @@ end
 @testitem "a coupled steady system with no unique stable steady state is refused, with its eigenvalue" setup = [LP_coupled] tags = [:latticepde, :coupled] begin
     @testset "a coupled steady system with no unique stable steady state is refused, with its eigenvalue" begin
     # each row decays (−a, −b), the coupling `k` grows: mode 0 of `[−1 k; k −1]` has λ = k − 1
-        ind(k) = cown(
-            PDESystem(
-                [0 ~ 0.1 * laplacian(cae) - cae + k * cbe + x, 0 ~ 0.1 * laplacian(cbe) - cbe + k * cae], [
-                    ca(0, x, y) ~ 0.0,
-        cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [cae, cbe], Any[]; name = :ind))
+        function ind(k)
+            return cown(
+                    PDESystem(
+                        [0 ~ 0.1 * laplacian(cae) - cae + k * cbe + x, 0 ~ 0.1 * laplacian(cbe) - cbe + k * cae], [
+                            ca(0, x, y) ~ 0.0,
+                cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [cae, cbe], Any[]; name = :ind))
+        end
         @test_throws ArgumentError init(ind(2.0), QuasiSteady(); dt = 0.1)
         @test_throws ArgumentError init(ind(1.0), QuasiSteady(); dt = 0.1)
         @test solve(ind(0.5), QuasiSteady(); dt = 0.1).retcode == ReturnCode.Success
@@ -258,10 +260,12 @@ end
     # constant-coefficient check cannot see it (a coefficient that varies by site). Base (51d1f386):
     # `Success` at the unstable steady state, no warning
     @parameters kv = 3.0
-        sv() = cown(
-            PDESystem(
-                [0 ~ 0.1 * laplacian(cae) - cae + (kv + 0.1 * x) * cbe + x, 0 ~ 0.1 * laplacian(cbe) + 3.0 * cae - cbe + y],
-        [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [cae, cbe], [kv]; name = :sv))
+        function sv()
+            return cown(
+                    PDESystem(
+                        [0 ~ 0.1 * laplacian(cae) - cae + (kv + 0.1 * x) * cbe + x, 0 ~ 0.1 * laplacian(cbe) + 3.0 * cae - cbe + y],
+                [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.2), [t, x, y], [cae, cbe], [kv]; name = :sv))
+        end
         @test_throws ArgumentError init(sv(), QuasiSteady(); dt = 0.1)
         A, _ = cjac(
             PDESystem(
@@ -303,10 +307,12 @@ end
         # nonlinear (a second case): `+ 0.01a²` turns the constant-coefficient check
     # off; the Jacobian at the steady state the solve finds has max Re λ ≈ +2.0, found at the
     # first window after that solve. Base (3f9d5909): `Success`, no warning
-        nl(c) = cown(
-            PDESystem(
-                [0 ~ 0.1 * laplacian(cae) - cae + c * cbe + x + 0.01 * cae^2, 0 ~ 0.1 * laplacian(cbe) + 3.0 * cae - cbe + y],
-        [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.3), [t, x, y], [cae, cbe], Any[]; name = :nlg))
+        function nl(c)
+            return cown(
+                    PDESystem(
+                        [0 ~ 0.1 * laplacian(cae) - cae + c * cbe + x + 0.01 * cae^2, 0 ~ 0.1 * laplacian(cbe) + 3.0 * cae - cbe + y],
+                [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.3), [t, x, y], [cae, cbe], Any[]; name = :nlg))
+        end
         m = cmsg(() -> solve(nl(3.0), QuasiSteady(); dt = 0.1))
     @test occursin("has a growing mode: an eigenvalue of its Jacobian with positive real part", m) &&
             occursin(", at the steady state its solve found)", m) || (println("growing-mode message: ", m); false)

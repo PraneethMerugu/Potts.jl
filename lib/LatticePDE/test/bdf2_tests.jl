@@ -172,10 +172,12 @@ end
         step!(ig); step!(fresh)
         @test maximum(abs, vec(ig[bce]) .- vec(fresh[bce])) < 1e-12
     end
-    e(f) = try
-        f(); ""
-    catch err
-        err isa ArgumentError ? err.msg : sprint(showerror, err)
+    function e(f)
+        return try
+                f(); ""
+            catch err
+                err isa ArgumentError ? err.msg : sprint(showerror, err)
+            end
     end
         @test startswith(e(() -> BDF2(; lower_bound = Inf)), "BDF2: lower_bound = Inf must be a finite number")
         a = BDF2(; substeps = 3, lower_bound = 0.0)

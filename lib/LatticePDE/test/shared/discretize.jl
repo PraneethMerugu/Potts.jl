@@ -26,12 +26,14 @@ function steps!(R, dt, n; P = R.P)
     end
     return R
 end
-throws_with(f, s) = (try
-                         f()
-                         false
-                     catch e
-                         e isa ArgumentError && occursin(s, sprint(showerror, e))
-                     end)
+function throws_with(f, s)
+    return try
+            f()
+            false
+        catch e
+            e isa ArgumentError && occursin(s, sprint(showerror, e))
+        end
+end
 
 @parameters x y z Dc = 1e-3 k = 0.1 h0 = 2.0 g0 = 0.5 K0 = 2.0 cT = 0.1 dx [lattice_spacing = 1] dy [lattice_spacing = 2]
 @parameters Dk[1:3] = [1.0, 2.0, 3.0]

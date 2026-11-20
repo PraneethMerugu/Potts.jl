@@ -39,10 +39,12 @@ const FAM_CASES = [
     ("ExplicitMap", fam_map, ExplicitMap(), (;)),
 ]
 fam_disc() = LatticeDiscretization(Grid((8, 8)); T = Float64)
-fmsg(f) = try
-    f(); ""
-catch e
-    sprint(showerror, e)
+function fmsg(f)
+    return try
+            f(); ""
+        catch e
+            sprint(showerror, e)
+        end
 end
 
 # a backend that is not the problem's: an array type whose backend is a stand-in GPU

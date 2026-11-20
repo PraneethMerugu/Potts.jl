@@ -211,9 +211,11 @@ function robin_slots(sys::PDESystem)
         k = findfirst(d -> isequal(unwrap(d.variables), v), get_domain(sys))
         k === nothing ? nothing : Float64(leftendpoint(get_domain(sys)[k].domain))
     end
-    simple(c) = _cval(c) !== nothing || unwrap(c) in params ||
-                (iscall(unwrap(c)) && operation(unwrap(c)) === (*) && count(y -> unwrap(y) in params, arguments(unwrap(c))) == 1 &&
-                 all(y -> unwrap(y) in params || _cval(y) !== nothing, arguments(unwrap(c))))
+    function simple(c)
+        return _cval(c) !== nothing || unwrap(c) in params ||
+            (iscall(unwrap(c)) && operation(unwrap(c)) === (*) && count(y -> unwrap(y) in params, arguments(unwrap(c))) == 1 &&
+             all(y -> unwrap(y) in params || _cval(y) !== nothing, arguments(unwrap(c))))
+    end
     onlyparams(c) = (vs = Symbolics.get_variables(unwrap(c)); !isempty(vs) && all(v -> v in params, vs))
     extra, ic = Any[], Dict{Any, Any}(_ics(sys))
     bcs = map(get_bcs(sys)) do eq

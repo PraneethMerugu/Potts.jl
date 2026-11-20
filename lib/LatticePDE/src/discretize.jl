@@ -96,8 +96,9 @@ lattice uses the same rule: axis `d` spans `[0, dims[d] * spacing[d]]`. `tspan` 
 interval, which is the default time span of `discretize`. The form without `t` is the domain
 of a system with no time (a steady system).
 """
-lattice_domain(t, xs, dims; spacing = 1, tspan = (0.0, 1.0)) =
-    [_time_interval(t, tspan); lattice_domain(xs, dims; spacing)]
+function lattice_domain(t, xs, dims; spacing = 1, tspan = (0.0, 1.0))
+    return [_time_interval(t, tspan); lattice_domain(xs, dims; spacing)]
+end
 function lattice_domain(xs, dims; spacing = 1)
     xs isa Union{Tuple, AbstractVector} || throw(ArgumentError(string("lattice_domain: give the coordinates as a ",
         "tuple, `(x, y)`; got ", repr(xs))))
@@ -181,11 +182,14 @@ function as_written(s::AbstractString)
     return s
 end
 _name(op) = string(nameof(op))
-_opof(x) = (u = unwrap(x); if iscall(u)
-    operation(u) === getindex ? _opof(arguments(u)[1]) : operation(u)
-else
-    u
-end)
+function _opof(x)
+    u = unwrap(x)
+    return if iscall(u)
+            operation(u) === getindex ? _opof(arguments(u)[1]) : operation(u)
+        else
+            u
+        end
+end
 function _lane(st, T)
     st <: Bool && return U8
     st <: Integer && return st <: Unsigned ? U32 : I32
@@ -341,15 +345,20 @@ function _value_reads_state(v, eq, states, what)
 end
 
 # whether the site is in the irregular domain (its Bool input, field id `dom`)
-_indomain(kb, dom, N, o = ntuple(_ -> 0, N)) = node!(kb, NOT, BOOL, Int32[compare!(kb, EQ,
-    cast!(kb, load!(kb, dom, U8; offset = o, policy = all(iszero, o) ? INSIDE : CLAMP), I32), constant!(kb, 0, I32))])
+function _indomain(kb, dom, N, o = ntuple(_ -> 0, N))
+    return node!(kb, NOT, BOOL, Int32[compare!(kb, EQ,
+        cast!(kb, load!(kb, dom, U8; offset = o, policy = all(iszero, o) ? INSIDE : CLAMP), I32), constant!(kb, 0, I32))])
+end
 
 """Kind of an equation: (:rate | :map | :aux, field read on the left at `(t, x, …)`)."""
 function _eqkind(eq, fields, ivs)
     l = unwrap(eq.lhs)
     bad(form) = _dverr("equation `$eq`: the left side must be $form")
-    plain(u) = (r = _fieldread(u, fields); r !== nothing && length(r.args) == length(ivs) &&
-                                            all(isequal.(r.args, ivs)))
+    function plain(u)
+        r = _fieldread(u, fields)
+        return r !== nothing && length(r.args) == length(ivs) &&
+            all(isequal.(r.args, ivs))
+    end
     if iscall(l) && operation(l) isa Differential
         f = operation(l)
         (f.order == 1 && isequal(f.x, ivs[1]) && plain(arguments(l)[1])) || bad("`D(c($(join(ivs, ", "))))`, a time rate")
@@ -399,10 +408,12 @@ function _clock_slot(sys::PDESystem, disc::LatticeDiscretization)
 end
 
 function _scan_clock(sys)
-    walk(u, eq) = iscall(u) && ((operation(u) isa Hold || operation(u) isa Sample ||
-                                 (operation(u) isa Shift && operation(u).steps != 1)) &&
-                                _dverr("`$eq`: `$(operation(u))` is not supported; only `Shift(t, 1)` maps are; $SHIFT_HINT");
-                                foreach(a -> walk(a, eq), arguments(u)))
+    function walk(u, eq)
+        return iscall(u) && ((operation(u) isa Hold || operation(u) isa Sample ||
+             (operation(u) isa Shift && operation(u).steps != 1)) &&
+            _dverr("`$eq`: `$(operation(u))` is not supported; only `Shift(t, 1)` maps are; $SHIFT_HINT");
+            foreach(a -> walk(a, eq), arguments(u)))
+    end
     return foreach(eq -> (walk(unwrap(eq.lhs), eq); walk(unwrap(eq.rhs), eq)), [get_eqs(sys); get_bcs(sys)])
 end
 
@@ -645,8 +656,10 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     # ghost, `_hexlap`; the others are zero flux there)
     hex && filter!(f -> any(b -> b.kind in (:dirichlet, :neumann, :robin) && (!isin[b.op] || cut[b.op]) &&
                                  fids[b.op][1][max(b.comp, 1)] == f, bcs), ghosted)
-    env(mapmode, kb, lv = 0, free = nothing, domfree = nothing) = Env(kb, fids, params, tables, spacing, ivs[1], ivs[2:end], lo,
-        level_spacing(h, dims, lv), mapmode, ntuple(_ -> 0, N), RESOLVE, leaf, hex, dl(lv), ghosted, lv, flev, dims, 0, free, domfree)
+    function env(mapmode, kb, lv = 0, free = nothing, domfree = nothing)
+        return Env(kb, fids, params, tables, spacing, ivs[1], ivs[2:end], lo,
+            level_spacing(h, dims, lv), mapmode, ntuple(_ -> 0, N), RESOLVE, leaf, hex, dl(lv), ghosted, lv, flev, dims, 0, free, domfree)
+    end
     # the coarse fields whose mask predicate reads fine fields blend: their equations fold
     # over each block's free children, and their mask holds a node when every child is masked
     free = Dict{String, Any}(key(b.op, b.comp) => b.pred for b in bcs

@@ -57,13 +57,17 @@ using .LP_device: fd, kron
             D(ce) ~ Dc7 * laplacian(ce) - k7 * ce,
         [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1.0, Differential(x)(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)],
         [t ∈ Interval(0, 10), x ∈ Interval(0, 1), y ∈ Interval(0, 1)], [t, x, y], [ce], [Dc7, k7]; name = :rd)
-    run(n, backend; T = 1.0) = solve(discretize(remake_t(rd, T), LatticeDiscretization(Grid((n, n)); T = Float32,
-                    backend
-                )
-            ), ExplicitEuler(); dt = 1.0f-2, saveat = T / 2
-        )
-    remake_t(s, T) = PDESystem(s.eqs, s.bcs, [t ∈ Interval(0, T), x ∈ Interval(0, 1), y ∈ Interval(0, 1)],
-        [t, x, y], [ce], [Dc7, k7]; name = :rd)
+    function run(n, backend; T = 1.0)
+        return solve(discretize(remake_t(rd, T), LatticeDiscretization(Grid((n, n)); T = Float32,
+                        backend
+                    )
+                ), ExplicitEuler(); dt = 1.0f-2, saveat = T / 2
+            )
+    end
+    function remake_t(s, T)
+        return PDESystem(s.eqs, s.bcs, [t ∈ Interval(0, T), x ∈ Interval(0, 1), y ∈ Interval(0, 1)],
+            [t, x, y], [ce], [Dc7, k7]; name = :rd)
+    end
     sd, sh = run(128, PDEV), run(128, KernelAbstractions.CPU())
     ulps(a, b) = maximum(abs.(Int64.(reinterpret(Int32, a)) .- Int64.(reinterpret(Int32, b))))
     d = [count(sd[ce, i] .!= sh[ce, i]) for i in eachindex(sd.t)]
@@ -180,8 +184,10 @@ using .LP_device: fd, kron
     msys = ssys([D(ce) ~ ifelse(qe == 1, 1.0, 0.0)], [c(0, x, y) ~ 0.0], [ce, qe], Num[])
     dk(vals) = (a = KernelAbstractions.allocate(PDEV, Int32, n, n); copyto!(a, vals); a)
     K = Int32[i <= 4 ? 1 : 0 for i in 1:n, j in 1:n]
-    mk(k) = discretize(msys, LatticeDiscretization(Grid((n, n)); T = Float32, backend = PDEV);
-        inputs = [qe => k])
+    function mk(k)
+        return discretize(msys, LatticeDiscretization(Grid((n, n)); T = Float32, backend = PDEV);
+            inputs = [qe => k])
+    end
         s = solve(mk(dk(K)), ExplicitEuler(); dt = 0.1f0)
     @test Array(s[:c, end]) ≈ Float32.(K)
         ig = init(mk(dk(K)), ExplicitEuler(); dt = 0.1f0)
@@ -203,8 +209,10 @@ using .LP_device: fd, kron
     half = [i <= 4 for i in 1:n, j in 1:n]
     db = KernelAbstractions.allocate(PDEV, Bool, n, n)
     copyto!(db, half)
-    mk(m) = discretize(dsys, LatticeDiscretization(Grid((n, n)); T = Float32, backend = PDEV,
-        domain = dm); inputs = [dm => m])
+    function mk(m)
+        return discretize(dsys, LatticeDiscretization(Grid((n, n)); T = Float32, backend = PDEV,
+            domain = dm); inputs = [dm => m])
+    end
         r = Threads.@spawn Array(solve(mk(db), ExplicitEuler(); dt = 0.1f0)[:c, end])
     @test timedwait(() -> istaskdone(r), 300.0) === :ok && fetch(r) ≈ Float32.(half)
     d2 = KernelAbstractions.allocate(PDEV, Int32, n, n)
@@ -402,8 +410,10 @@ using .LP_device: fd, kron
             @test maximum(abs, d .- dh) / maximum(abs, dh) <= 1e-5 && maximum(abs, d .- h) / maximum(abs, h) <= 1e-6
         end
     end
-    lv(n) = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(Symbolics.variable(n; T = SymbolicUtils.FnType{Tuple, Real, Nothing})),
-        LatticePDE.LatticeLevel, Coarse(CK)))
+    function lv(n)
+        return Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(Symbolics.variable(n; T = SymbolicUtils.FnType{Tuple, Real, Nothing})),
+            LatticePDE.LatticeLevel, Coarse(CK)))
+    end
     cs, K2, M0 = lv(:csdev), lv(:K2dev), lv(:M0dev)
     q = first(@variables q(..)::Int32 [input = true])
     @parameters cRd[1:4] = [0.0, 1.0, 0.5, 0.25]
@@ -446,8 +456,10 @@ using .LP_device: fd, kron
     dvsys = PDESystem([D(dvc(t, x, y)) ~ 0.05 * DivKGrad(:harmonic)(dvk(t, x, y), dvc(t, x, y)) - dvc(t, x, y) * 0.3],
         [dvc(0, x, y) ~ x * y, dvc(t, x, y) ~ masked(dvq(t, x, y) == 3, 1.0)], cdom(), [t, x, y],
         [dvc(t, x, y), dvq(t, x, y), dvk(t, x, y), dvm(t, x, y)], Num[]; name = :dv4)
-    mk(be) = cown(dvsys, CDIMS; T = Float32, backend = be, domain = dvm,
-        ins = [dvq(t, x, y) => dvQ, dvk(t, x, y) => dvK, dvm(t, x, y) => dvD])
+    function mk(be)
+        return cown(dvsys, CDIMS; T = Float32, backend = be, domain = dvm,
+            ins = [dvq(t, x, y) => dvQ, dvk(t, x, y) => dvK, dvm(t, x, y) => dvD])
+    end
         for alg in (ExplicitEuler(), BackwardEuler(; nlsolve = LatticeNewton(; max_iter = 2)))
             sd, sh = solve(mk(PDEV), alg; dt = 0.05), solve(mk(KernelAbstractions.CPU()), alg; dt = 0.05)
         a, b = Array(sd[dvc(t, x, y), end]), sh[dvc(t, x, y), end]
@@ -507,8 +519,10 @@ using .LP_device: fd, kron
         ]
     for (name, sys, alg) in cases, T in (Float32, Float64)
         k = name == "coupled QuasiSteady" ? (cae, cbe) : (bce,)
-        mk(be) = discretize(sys, LatticeDiscretization(Grid((40, 40); geometry = LatticeFields.IR.HEX); T, backend = be);
-            inputs = name == "coupled QuasiSteady" ? [] : [bqe => kind])
+        function mk(be)
+            return discretize(sys, LatticeDiscretization(Grid((40, 40); geometry = LatticeFields.IR.HEX); T, backend = be);
+                inputs = name == "coupled QuasiSteady" ? [] : [bqe => kind])
+        end
             sd, sh = solve(mk(PDEV), alg; dt = 0.1, saveat = 0.1), solve(mk(KernelAbstractions.CPU()), alg; dt = 0.1, saveat = 0.1)
         @test sd.retcode == sh.retcode == SciMLBase.ReturnCode.Success
         same = all(v -> all(i -> Array(sd[v, i]) == Array(sh[v, i]), eachindex(sh.t)), k)

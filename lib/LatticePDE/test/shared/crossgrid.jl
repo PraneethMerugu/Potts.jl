@@ -4,8 +4,10 @@ using ForwardDiff: ForwardDiff
 using LatticeFields.IR: HEX
 using OrdinaryDiffEqTsit5: Tsit5
 
-xlev(name, k) = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(first(Symbolics.variables(name, T = SymbolicUtils.FnType{Tuple, Real, Nothing}))),
-    LatticePDE.LatticeLevel, Coarse(k)))
+function xlev(name, k)
+    return Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(first(Symbolics.variables(name, T = SymbolicUtils.FnType{Tuple, Real, Nothing}))),
+        LatticePDE.LatticeLevel, Coarse(k)))
+end
 xfine(name) = first(@variables $name(..))
 const xcc, xLc = xlev(:xcc, 4), xlev(:xLc, 4)
 const xu, xv, xX = xfine(:xuu), xfine(:xvv), xfine(:xXf)

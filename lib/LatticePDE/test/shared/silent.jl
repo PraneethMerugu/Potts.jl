@@ -7,12 +7,15 @@ using Serialization: Serialization
 sdom(T = 1.0) = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
 ssys(eqs, bcs, dvs, ps; T = 1.0) = PDESystem(eqs, bcs, sdom(T), [t, x, y], dvs, ps; name = :s)
 # (the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
-sown(sys; n = 4, inputs = (), kw...) =
-    LFP.field_problem(discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64, kw...); inputs))
-emsg(f) = try
-    f(); ""
-catch e
-    sprint(showerror, e)
+function sown(sys; n = 4, inputs = (), kw...)
+    return LFP.field_problem(discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64, kw...); inputs))
+end
+function emsg(f)
+    return try
+            f(); ""
+        catch e
+            sprint(showerror, e)
+        end
 end
 
 @variables mm(..) dm(..)::Bool [input = true] kq(..)::Int32 [input = true] Lc(..)

@@ -146,8 +146,10 @@ end
     # a map: one step per unit of time; the clock is a whole number of map steps
     @variables km(..)
     kme = km(t, x, y)
-    sysm(T) = PDESystem([Shift(t, 1)(kme) ~ kme + step_index(t)], [km(0, x, y) ~ 0.0; km(t, 0, y) ~ km(t, 1, y);
-        km(t, x, 0) ~ km(t, x, 1)], kdom(T), [t, x, y], [kme], [kη]; name = :m)
+    function sysm(T)
+        return PDESystem([Shift(t, 1)(kme) ~ kme + step_index(t)], [km(0, x, y) ~ 0.0; km(t, 0, y) ~ km(t, 1, y);
+            km(t, x, 0) ~ km(t, x, 1)], kdom(T), [t, x, y], [kme], [kη]; name = :m)
+    end
         @test_throws ArgumentError solve(discretize(sysm(3.0), kdisc(; clock = 0.5)))
     @test solve(discretize(sysm(3.0), kdisc(; clock = 1.0)))[kme, end][1] == 0 + 1 + 2      # k = 0, 1, 2
     @test solve(discretize(sysm(4.0), kdisc(; clock = 2.0)))[kme, end][1] == 0 + 0 + 1 + 1  # k = 0, 0, 1, 1

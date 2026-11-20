@@ -150,8 +150,10 @@ end
     g = Grid((5, 4))
     bc = [c(t, 0, y) ~ 1.0, h0 * c(t, 1, y) + Dx(c(t, 1, y)) ~ g0, c(t, x, 0) ~ c(t, x, 1)]
     aux = [Ke ~ K0 + x]
-    low(rhs; e = Equation[]) = ir(symbolic_discretize(pde([D(ce) ~ rhs; e], bc, isempty(e) ? [ce] : [ce, Ke], [Dc, h0, g0, K0]),
-                                             LatticeDiscretization(g)))
+    function low(rhs; e = Equation[])
+        return ir(symbolic_discretize(pde([D(ce) ~ rhs; e], bc, isempty(e) ? [ce] : [ce, Ke], [Dc, h0, g0, K0]),
+            LatticeDiscretization(g)))
+    end
         @test low(Dc * (Dx(Dx(ce)) + Dy(Dy(ce)))) == low(Dc * laplacian(ce))
     @test low(Dx(Ke * Dx(ce)) + Dy(Ke * Dy(ce)); e = aux) == low(DivKGrad(:harmonic)(Ke, ce); e = aux)
     # negative controls: an axis missing, the arithmetic face mean, a doubled axis
@@ -389,14 +391,16 @@ end
                   Equation[], [ce, oe, Ke, ke], [Dc, k, K0, cT, g0, h0, Dk])
         return ir(symbolic_discretize(sys, LatticeDiscretization(Grid((4, 3)))))
     end
-        order() = string.(
-            arguments(
-                unwrap(
-                    Dc * laplacian(ce) + K0 * laplacian(oe) + h0 * ismember(ke, (2,)) + k * sin(ce) +
-                        cT * exp(oe) + g0 * cos(ce) + laplacian(Ke)
+        function order()
+            return string.(
+                    arguments(
+                        unwrap(
+                            Dc * laplacian(ce) + K0 * laplacian(oe) + h0 * ismember(ke, (2,)) + k * sin(ce) +
+                                cT * exp(oe) + g0 * cos(ce) + laplacian(Ke)
+                        )
+                    )
                 )
-            )
-        )
+        end
     base, base_order = build(), order()
     @test all(s -> salted(build, s) == base, 1:4)
     @test build() == base                                       # and over repeated builds
@@ -502,8 +506,10 @@ end
     copyto!(field(R, "kindₛ"), vec(kind))
     dt, Dv, kv, h = 0.01, 1e-3, 0.1, (1 / n, 1 / m)
     steps!(R, dt, 1; P = (Dv, kv))
-    lap(v, i, j, lo) = ((i < n ? v[i + 1, j] : v[i, j]) + (i > 1 ? v[i - 1, j] : lo(v[i, j])) - 2v[i, j]) / h[1]^2 +
-                       (v[i, mod1(j + 1, m)] + v[i, mod1(j - 1, m)] - 2v[i, j]) / h[2]^2
+    function lap(v, i, j, lo)
+        return ((i < n ? v[i + 1, j] : v[i, j]) + (i > 1 ? v[i - 1, j] : lo(v[i, j])) - 2v[i, j]) / h[1]^2 +
+            (v[i, mod1(j + 1, m)] + v[i, mod1(j - 1, m)] - 2v[i, j]) / h[2]^2
+    end
     w1 = [u1[i, j] + dt * (Dv * lap(u1, i, j, c -> 2 * 1.0 - c) - kv * u2[i, j]) for i in 1:n, j in 1:m]
     w2 = [kind[i, j] == 3 ? 0.5 : u2[i, j] + dt * (lap(u2, i, j, c -> c) + kv * u1[i, j]) for i in 1:n, j in 1:m]
     @test maximum(abs, reshape(field(R, "u[1]"), n, m) .- w1) < 1e-14
@@ -625,8 +631,10 @@ end
 @testitem "state type: lanes per T, default by backend, refusals" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
     @testset "state type: lanes per T, default by backend, refusals" begin
         sys = pde([D(ce) ~ Dc * laplacian(ce) - k * ce], [c(t, 0, y) ~ 1.0, Dx(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)], [ce], [Dc, k])
-    lanes(T) = [f.storage for f in symbolic_discretize(sys, LatticeDiscretization(Grid((8, 4)); T); update = euler).program.fields
-                if f.key == "c"]
+    function lanes(T)
+        return [f.storage for f in symbolic_discretize(sys, LatticeDiscretization(Grid((8, 4)); T); update = euler).program.fields
+            if f.key == "c"]
+    end
     @test lanes(Float32) == [F32] && lanes(Float64) == [F64] && lanes(Float16) == [F16]
     @test lanes(BigFloat) == [F64]                    # host problems fill F64 lanes with BigFloat
     @test lanes(nothing) == [F64]                     # default on the host: Float64

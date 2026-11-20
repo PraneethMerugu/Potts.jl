@@ -8,6 +8,7 @@ using SciMLBase: SciMLBase, ODEProblem, remake
 pdom(T = 1.0) = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
 psys(eqs, bcs, ps; T = 1.0, dvs = [ce]) = PDESystem(eqs, bcs, pdom(T), [t, x, y], dvs, ps; name = :p)
 # (the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
-owned(sys, n, m = n; T = Float64, inputs = (), kw...) =
-    LFP.field_problem(discretize(sys, LatticeDiscretization(Grid((n, m)); T, kw...); inputs))
+function owned(sys, n, m = n; T = Float64, inputs = (), kw...)
+    return LFP.field_problem(discretize(sys, LatticeDiscretization(Grid((n, m)); T, kw...); inputs))
+end
 fgrid(v, n, m) = reshape(v, n, m)

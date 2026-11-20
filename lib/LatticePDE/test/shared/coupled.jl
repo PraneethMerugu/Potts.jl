@@ -16,15 +16,19 @@ cown(sys; dims = (8, 8), T = Float64) = LFP.field_problem(discretize(sys, Lattic
 const CTIGHT = LatticeGMRES(; reltol = 1.0e-12, maxiters = 200)
 @variables ca(..) cb(..) cq(..) cz(..)
 const cae, cbe, cqe, cze = ca(t, x, y), cb(t, x, y), cq(t, x, y), cz(t, x, y)
-cmsg(f) = try
-    f(); ""
-catch err
-    err isa ArgumentError ? err.msg : sprint(showerror, err)
+function cmsg(f)
+    return try
+            f(); ""
+        catch err
+            err isa ArgumentError ? err.msg : sprint(showerror, err)
+        end
 end
 # the loop `q1` (a steady field and a rate field that feed each other, with sources, so the
 # steady state is not 0): `lhs` is `D`
 # (rate rows, which QuasiSteady solves as steady rows) or `0 ~` rows
-q1(δ, k; steady = false) = PDESystem(steady ?
-        [0 ~ 0.1 * laplacian(cae) - δ * cae + k * cbe + x, 0 ~ 0.1 * laplacian(cbe) - cbe - k * cae + y] :
-        [D(cae) ~ 0.1 * laplacian(cae) - δ * cae + k * cbe + x, D(cbe) ~ 0.1 * laplacian(cbe) - cbe - k * cae + y],
-    [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 1.0], bdom(0.2), [t, x, y], [cae, cbe], Any[]; name = :q1)
+function q1(δ, k; steady = false)
+    return PDESystem(steady ?
+            [0 ~ 0.1 * laplacian(cae) - δ * cae + k * cbe + x, 0 ~ 0.1 * laplacian(cbe) - cbe - k * cae + y] :
+            [D(cae) ~ 0.1 * laplacian(cae) - δ * cae + k * cbe + x, D(cbe) ~ 0.1 * laplacian(cbe) - cbe - k * cae + y],
+        [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 1.0], bdom(0.2), [t, x, y], [cae, cbe], Any[]; name = :q1)
+end

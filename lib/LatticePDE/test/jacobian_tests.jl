@@ -34,8 +34,10 @@ using OrdinaryDiffEqRosenbrock: Rodas5P
 @parameters jD = 0.05 ja = 0.7 jb = 0.4
 @variables jc(..) jv(..) jk(..)::Int32 [input = true] ja1(..) ja2(..)
 jdom(T = 0.1) = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
-jlev(name, k) = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(first(Symbolics.variables(name,
+function jlev(name, k)
+    return Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(first(Symbolics.variables(name,
         T = SymbolicUtils.FnType{Tuple, Real, Nothing}))), LatticePDE.LatticeLevel, Coarse(k)))
+end
 const jC2 = jlev(:jcoarse, 2)
 const JK1 = Int32[i <= 3 && j >= 6 ? 1 : 0 for i in 1:8, j in 1:8]
 jdisc(dims = (8, 8); kw...) = LatticeDiscretization(Grid(dims; kw...); T = Float64)
@@ -184,12 +186,14 @@ end
     # a dense Jacobian alone would take 128⁴ × 8 B = 2.1 GB
         @test bytes < 400 * 2^20 || (println("Rodas5P 128² allocated ", bytes / 2^20, " MiB"); false)
     # the owned BackwardEuler run tends to it at first order as dt halves
-        e(dt) = maximum(
-            abs, solve(
-                prob, BackwardEuler(; substeps = 1, linsolve = LatticePCG(; reltol = 1.0e-10, maxiters = 200)),
-                saveat = 0.05; dt
-            ).u[end] .- s.u[end]
-        )
+        function e(dt)
+            return maximum(
+                    abs, solve(
+                        prob, BackwardEuler(; substeps = 1, linsolve = LatticePCG(; reltol = 1.0e-10, maxiters = 200)),
+                        saveat = 0.05; dt
+                    ).u[end] .- s.u[end]
+                )
+        end
     e1, e2, e3 = e(0.01), e(0.005), e(0.0025)
         @test e1 > e2 > e3 && 1.6 < e1 / e2 < 2.4 && 1.6 < e2 / e3 < 2.4 || (println("BE errors ", (e1, e2, e3)); false)
 end

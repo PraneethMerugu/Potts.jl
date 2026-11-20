@@ -50,10 +50,12 @@ function qs_hand(; mask = nothing, mval = nothing, kw...)
     return A \ rhs
 end
 qs_window(p, alg) = (ig = init(p, alg; dt = 0.1); step!(ig); (ig, vec(ig[bce])))
-qmsg(f) = try
-    f(); ""
-catch err
-    err isa ArgumentError ? err.msg : sprint(showerror, err)
+function qmsg(f)
+    return try
+            f(); ""
+        catch err
+            err isa ArgumentError ? err.msg : sprint(showerror, err)
+        end
 end
 @parameters qg = 1.0
 
@@ -122,11 +124,13 @@ end
     # matrix to 1e-9, for the well-posed faces (max Re λ of the steady Jacobian −0.68 at decay 2,
         # −0.18 at 1.5). Before the fix (e7068add): the defect
     # correction, newton 40 and ~20 solves a window
-        rob(kd, β) = remake(
-            bown(
-                bsys(
-                    [D(bce) ~ bD * laplacian(bce) - bk * bce + x],
-        [bc(0, x, y) ~ 0.0, 2.0 * bc(t, x, 0) + β * Differential(y)(bc(t, x, 0)) ~ bg], [bD, bk, bg])); p = [bk => kd])
+        function rob(kd, β)
+            return remake(
+                    bown(
+                        bsys(
+                            [D(bce) ~ bD * laplacian(bce) - bk * bce + x],
+                [bc(0, x, y) ~ 0.0, 2.0 * bc(t, x, 0) + β * Differential(y)(bc(t, x, 0)) ~ bg], [bD, bk, bg])); p = [bk => kd])
+        end
     for kd in (2.0, 1.5)
         p = rob(kd, 1.0)
         want = qs_hand(; K = (x, y) -> 0.3, k = (x, y) -> kd, f = (x, y) -> x, faces = Dict((2, -1) => (:robin, 2.0, 1.0, 0.5)))
@@ -295,11 +299,13 @@ end
     @testset "a QuasiSteady group in a loop past its gain is refused, with its routes" begin
     @variables qa(..) qb(..)
     qae, qbe = qa(t, x, y), qb(t, x, y)
-        loop(δ, k, s) = discretize(
-            PDESystem(
-                [D(qae) ~ 0.1 * laplacian(qae) - δ * qae + s * k * qbe, D(qbe) ~ 0.1 * laplacian(qbe) - qbe - k * qae],
-            [qa(0, x, y) ~ 0.0, qb(0, x, y) ~ 1.0], bdom(1.0), [t, x, y], [qae, qbe], Any[]; name = :loop),
-        LatticeDiscretization(Grid((8, 8)); T = Float64))
+        function loop(δ, k, s)
+            return discretize(
+                    PDESystem(
+                        [D(qae) ~ 0.1 * laplacian(qae) - δ * qae + s * k * qbe, D(qbe) ~ 0.1 * laplacian(qbe) - qbe - k * qae],
+                    [qa(0, x, y) ~ 0.0, qb(0, x, y) ~ 1.0], bdom(1.0), [t, x, y], [qae, qbe], Any[]; name = :loop),
+                LatticeDiscretization(Grid((8, 8)); T = Float64))
+        end
     for (δ, k, s, κ) in ((0.1, 5.0, 1.0, "25.0"), (0.1, 5.0, -1.0, "25.0"), (1.0, 5.0, 1.0, "2.5"), (0.1, 9.0, 1.0, "81.0"))
         p = loop(δ, k, s)
             @test_throws ArgumentError init(p, FieldGroups(qae => QuasiSteady(), qbe => BackwardEuler()); dt = 0.1)
@@ -373,11 +379,13 @@ end
     @test err[2] < 2e-3 && 8 < err[1] / err[2] < 12 || (println("12c order ", err); false)       # (first order)
     # a face-anchored steady field with no decay (S4, S-b): `0 = 0.1Δa + k b`, `a = 0` at x = 0, 1;
     # its gain is max (A_x)⁻¹1 = 1.25 (the cell-centered Dirichlet line, L²/(8D)), finite
-        fa(k) = own8(
-            PDESystem(
-                [D(qae) ~ 0.1 * laplacian(qae) + k * qbe, D(qbe) ~ 0.1 * laplacian(qbe) - qbe - k * qae],
-        [qa(0, x, y) ~ 0.0, qb(0, x, y) ~ 1.0, qa(t, 0, y) ~ 0.0, qa(t, 1, y) ~ 0.0], bdom(1.0), [t, x, y], [qae, qbe], Any[];
-        name = :g2))
+        function fa(k)
+            return own8(
+                    PDESystem(
+                        [D(qae) ~ 0.1 * laplacian(qae) + k * qbe, D(qbe) ~ 0.1 * laplacian(qbe) - qbe - k * qae],
+                [qa(0, x, y) ~ 0.0, qb(0, x, y) ~ 1.0, qa(t, 0, y) ~ 0.0, qa(t, 1, y) ~ 0.0], bdom(1.0), [t, x, y], [qae, qbe], Any[];
+                name = :g2))
+        end
         @test_throws ArgumentError init(fa(4.0), gl(); dt = 0.1)
     # k = 1: κ = 0.125, accepted. The hand split (a from b at the window's start, then b's
     # Backward Euler step) and the coupled solution `b' = (L_b − I + k² L_a⁻¹) b`, `exp`
@@ -413,10 +421,12 @@ end
         # cascade is accepted
     @variables qc(..)
     qce = qc(t, x, y)
-        cas(k) = own8(
-            PDESystem(
-                [0 ~ 0.1 * laplacian(qae) - qae + k * qbe, 0 ~ 0.1 * laplacian(qce) - qce + 0.5 * qae, D(qbe) ~ 0.1 * laplacian(qbe) - qbe - 0.5 * qce],
-        [qa(0, x, y) ~ 0.0, qc(0, x, y) ~ 0.0, qb(0, x, y) ~ 1.0], bdom(1.0), [t, x, y], [qae, qce, qbe], Any[]; name = :cas))
+        function cas(k)
+            return own8(
+                    PDESystem(
+                        [0 ~ 0.1 * laplacian(qae) - qae + k * qbe, 0 ~ 0.1 * laplacian(qce) - qce + 0.5 * qae, D(qbe) ~ 0.1 * laplacian(qbe) - qbe - 0.5 * qce],
+                [qa(0, x, y) ~ 0.0, qc(0, x, y) ~ 0.0, qb(0, x, y) ~ 1.0], bdom(1.0), [t, x, y], [qae, qce, qbe], Any[]; name = :cas))
+        end
         # (by default the steady rows of `qa`, `qc` are one QuasiSteady group, whose gains
     # compose, so the loop is accepted; as two steady groups it is refused, with the route of one)
         @test solve(cas(0.3), BackwardEuler(); dt = 0.1).retcode == ReturnCode.Success
@@ -651,8 +661,10 @@ end
     @variables zc(..) zq(..)::Int32 [input = true]
     zce, zqe = zc(x, y), zq(x, y)
     fdom = [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
-    free(eqs, bcs, ps; q = false) = discretize(PDESystem(eqs, bcs, fdom, [x, y], q ? [zce, zqe] : [zce], ps; name = :free2),
-        LatticeDiscretization(Grid(BDIMS); T = Float64); (q ? (; inputs = [zqe => BKIND]) : (;))...)
+    function free(eqs, bcs, ps; q = false)
+        return discretize(PDESystem(eqs, bcs, fdom, [x, y], q ? [zce, zqe] : [zce], ps; name = :free2),
+            LatticeDiscretization(Grid(BDIMS); T = Float64); (q ? (; inputs = [zqe => BKIND]) : (;))...)
+    end
         alg = QuasiSteady(; linsolve = BTIGHT)
     xs = bxs()
     for β in (-1.0, 1.0)

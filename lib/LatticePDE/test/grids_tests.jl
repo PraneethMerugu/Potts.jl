@@ -51,10 +51,12 @@ end
 @testitem "save_idxs on owned and Tsit5 solves" setup = [LP_grids] tags = [:latticepde, :grids] begin
     @testset "save_idxs on owned and Tsit5 solves" begin
     p = discretize(qsys(), LatticeDiscretization(Grid((6, 4)); T = Float64))
-    msg(f) = try
-        f(); ""
-    catch e
-        sprint(showerror, e)
+    function msg(f)
+        return try
+                f(); ""
+            catch e
+                sprint(showerror, e)
+            end
     end
     # a field saved whole: its grids, on both paths
         for alg in (ExplicitEuler(), Tsit5())

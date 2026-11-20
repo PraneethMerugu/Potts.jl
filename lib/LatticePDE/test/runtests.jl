@@ -93,12 +93,16 @@ function latticepde_tests(groups = LATTICEPDE_SELECTED_GROUPS;
     group_specs = [(Symbol.(get(LATTICEPDE_GROUPS_TABLE[g], "tags", String[])),
                     Symbol.(get(LATTICEPDE_GROUPS_TABLE[g], "exclude_tags", String[])))
                    for g in groups]
-    in_group(ti) = any(((tgs, ex),) -> begin
-        effective_ex = allow_gpu ? filter(!=(:gpu_only), ex) : ex
-        (isempty(tgs) || any(in(ti.tags), tgs)) && !any(in(ti.tags), effective_ex)
-    end, group_specs)
-    picked(ti) = in_group(ti) && (isempty(want) || any(in(ti.tags), want)) &&
-        (allow_gpu || !(:gpu_only in ti.tags)) && (qa || !(:qa in ti.tags) || "qa" in groups)
+    function in_group(ti)
+        return any(((tgs, ex),) -> begin
+                effective_ex = allow_gpu ? filter(!=(:gpu_only), ex) : ex
+                (isempty(tgs) || any(in(ti.tags), tgs)) && !any(in(ti.tags), effective_ex)
+            end, group_specs)
+    end
+    function picked(ti)
+        return in_group(ti) && (isempty(want) || any(in(ti.tags), want)) &&
+            (allow_gpu || !(:gpu_only in ti.tags)) && (qa || !(:qa in ti.tags) || "qa" in groups)
+    end
     kw = (; name, test_end_expr, testitem_timeout = 3600, retries = 0, nworker_threads = string(Threads.nthreads()),
         logs = :batched)
     failed = Any[]

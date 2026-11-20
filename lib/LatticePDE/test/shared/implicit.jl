@@ -13,8 +13,9 @@ const BKIND = Int32[(i + j) % 3 for i in 1:8, j in 1:6]
 bdom(T = 1.0) = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
 bsys(eqs, bcs, ps; T = 1.0, dvs = [bce, bqe]) = PDESystem(eqs, bcs, bdom(T), [t, x, y], dvs, ps; name = :be)
 # (the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
-bown(sys; dims = BDIMS, T = Float64, kw...) =
-    LFP.field_problem(discretize(sys, LatticeDiscretization(Grid(dims); T, kw...); inputs = [bqe => BKIND]))
+function bown(sys; dims = BDIMS, T = Float64, kw...)
+    return LFP.field_problem(discretize(sys, LatticeDiscretization(Grid(dims); T, kw...); inputs = [bqe => BKIND]))
+end
 const BTIGHT = LatticePCG(; reltol = 1.0e-12, maxiters = 64)
 bwarm(ig) = (step!(ig); @allocated step!(ig))              # (a function barrier)
 blast(s) = s[bce, length(s.t)]                             # the last save
@@ -216,8 +217,9 @@ function hex_hand(; n = HEXN, D = 1.0, m = (x, y) -> 1.0, k = 0.0, f = (x, y) ->
     return L, b
 end
 const HEXKIND = Int32[(i + 2j) % 3 for i in 1:HEXN, j in 1:HEXN]
-hexdisc(sys; T = Float64, inputs = [bqe => HEXKIND], kw...) =
-    LFP.field_problem(discretize(sys, LatticeDiscretization(Grid((HEXN, HEXN); geometry = HEX); T, kw...); inputs))
+function hexdisc(sys; T = Float64, inputs = [bqe => HEXKIND], kw...)
+    return LFP.field_problem(discretize(sys, LatticeDiscretization(Grid((HEXN, HEXN); geometry = HEX); T, kw...); inputs))
+end
 const HEXPER = [bc(t, 0, y) ~ bc(t, 1, y), bc(t, x, 0) ~ bc(t, x, 1)]
 
 # An operator of another field in a row (cross-diffusion `0.1 laplacian(q)` in the rate of

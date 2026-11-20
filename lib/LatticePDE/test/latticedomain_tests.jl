@@ -25,8 +25,10 @@ end
 
 @testitem "lattice_domain is the hand-written domain" setup = [LP_latticedomain] tags = [:latticepde, :latticedomain] begin
     @testset "lattice_domain is the hand-written domain" begin
-    same(a, b) = length(a) == length(b) &&
-                 all(i -> isequal(a[i].variables, b[i].variables) && a[i].domain == b[i].domain, eachindex(a))
+    function same(a, b)
+        return length(a) == length(b) &&
+            all(i -> isequal(a[i].variables, b[i].variables) && a[i].domain == b[i].domain, eachindex(a))
+    end
     @test same(lattice_domain(t, (x, y), (8, 4); spacing = 0.5),
         [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 4.0), y ∈ Interval(0.0, 2.0)])
     @test same(lattice_domain(t, (x, y), (8, 4); spacing = (0.5, 0.25), tspan = (1, 3)),
@@ -45,12 +47,16 @@ end
     end
     # on a spaced lattice the discretization derives the spacing back: the same run as the
     # hand-written domain, bit for bit, and the site centers at (i − 1/2) h
-        sys(dom) = PDESystem(
-            [D(ldce) ~ ldD * laplacian(ldce) - 0.5 * ldce], [ldc(0, x, y) ~ x + 2y], dom, [t, x, y], [ldce], [ldD];
-        name = :lds)
-        run(dom) = solve(
-            discretize(sys(dom), LatticeDiscretization(Grid((8, 4)); T = Float64)), ExplicitEuler(); dt = 0.01,
-        saveat = 0.5)
+        function sys(dom)
+            return PDESystem(
+                    [D(ldce) ~ ldD * laplacian(ldce) - 0.5 * ldce], [ldc(0, x, y) ~ x + 2y], dom, [t, x, y], [ldce], [ldD];
+                name = :lds)
+        end
+        function run(dom)
+            return solve(
+                    discretize(sys(dom), LatticeDiscretization(Grid((8, 4)); T = Float64)), ExplicitEuler(); dt = 0.01,
+                saveat = 0.5)
+        end
     a = run(lattice_domain(t, (x, y), (8, 4); spacing = 0.5))
     @test a.u == run([t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 4.0), y ∈ Interval(0.0, 2.0)]).u
     @test a.u != run(lattice_domain(t, (x, y), (8, 4))).u                      # (control: the spacing matters)

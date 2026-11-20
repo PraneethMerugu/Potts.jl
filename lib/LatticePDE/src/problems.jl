@@ -106,8 +106,10 @@ function _condtree(c, params, ivars)
     return (:anycond,)
 end
 const _IVANY = (-Inf, Inf)
-_ivmul(a, b) = (q = (a[1] * b[1], a[1] * b[2], a[2] * b[1], a[2] * b[2]);
-                any(isnan, q) ? _IVANY : (minimum(q), maximum(q)))
+function _ivmul(a, b)
+    q = (a[1] * b[1], a[1] * b[2], a[2] * b[1], a[2] * b[2])
+    return any(isnan, q) ? _IVANY : (minimum(q), maximum(q))
+end
 # the current values of input `k` that `p` carries (`Problems.ParamsTables` inputs), or nothing
 function _input_now(p, k)
     p isa Problems.ParamsTables || return nothing
@@ -410,16 +412,18 @@ end
 # Δ and Dx(Dx(c)), K for DivKGrad(K, c) and Dx(K Dx(c)))
 function _diffusion_coefficient(term)
     reps = Dict{Any, Any}()
-    walk(y) = iscall(y) && (f = operation(y);
-        if f === laplacian
-            reps[y] = 1
-        elseif f isa DivKGrad
-            reps[y] = arguments(y)[1]
-        elseif f isa Differential
-            (r = _raw_flux(y); reps[y] = r === nothing || r[1] === nothing ? 1 : r[1])
-        else
-            foreach(walk, arguments(y))
-        end)
+    function walk(y)
+        return iscall(y) && (f = operation(y);
+            if f === laplacian
+                reps[y] = 1
+            elseif f isa DivKGrad
+                reps[y] = arguments(y)[1]
+            elseif f isa Differential
+                (r = _raw_flux(y); reps[y] = r === nothing || r[1] === nothing ? 1 : r[1])
+            else
+                foreach(walk, arguments(y))
+            end)
+    end
     walk(unwrap(term))
     return substitute(term, reps; fold = Val(false))
 end
@@ -429,17 +433,19 @@ end
 # `laplacian`, `K` of `DivKGrad(K, c)` or of `Dx(K Dx(c))`), read through face means of two sites
 function _site_parts(term)
     reps, K = Dict{Any, Any}(), Any[]
-    walk(y) = iscall(y) && (f = operation(y);
-        if f === laplacian
-            (reps[y] = 1; push!(K, 1))
-        elseif f isa DivKGrad
-            (reps[y] = 1; push!(K, arguments(y)[1]))
-        elseif f isa Differential
-            (r = _raw_flux(y); reps[y] = 1;
-                push!(K, r === nothing || r[1] === nothing ? 1 : r[1]))
-        else
-            foreach(walk, arguments(y))
-        end)
+    function walk(y)
+        return iscall(y) && (f = operation(y);
+            if f === laplacian
+                (reps[y] = 1; push!(K, 1))
+            elseif f isa DivKGrad
+                (reps[y] = 1; push!(K, arguments(y)[1]))
+            elseif f isa Differential
+                (r = _raw_flux(y); reps[y] = 1;
+                    push!(K, r === nothing || r[1] === nothing ? 1 : r[1]))
+            else
+                foreach(walk, arguments(y))
+            end)
+    end
     walk(unwrap(term))
     length(K) == 1 || return nothing
     return substitute(term, reps; fold = Val(false)), only(K)
@@ -454,10 +460,14 @@ struct RowTerms
     crossdiffusion::Vector{Tuple{CoefBound, Int}}   # coefficient, index of the other field
     advection::Vector{Tuple{CoefBound, Int}}        # `m v_a` of an upwind advection term, its axis
 end
-RowTerms() = RowTerms(CoefBound[], Tuple{CoefBound, CoefBound}[], CoefBound[], Tuple{CoefBound, Int}[], Tuple{CoefBound, Int}[],
-    Tuple{CoefBound, Int}[])
-Base.copy(r::RowTerms) = RowTerms(copy(r.diffusion), copy(r.sitediffusion), copy(r.linear), copy(r.crosslinear),
-    copy(r.crossdiffusion), copy(r.advection))
+function RowTerms()
+    return RowTerms(CoefBound[], Tuple{CoefBound, CoefBound}[], CoefBound[], Tuple{CoefBound, Int}[], Tuple{CoefBound, Int}[],
+        Tuple{CoefBound, Int}[])
+end
+function Base.copy(r::RowTerms)
+    return RowTerms(copy(r.diffusion), copy(r.sitediffusion), copy(r.linear), copy(r.crosslinear),
+        copy(r.crossdiffusion), copy(r.advection))
+end
 # a site-diffusion term's parts at `p`: max|m| max|K| (the independent bound) and the seen
 # product
 _sd(f, p) = f[1](p) * f[2](p)
@@ -808,8 +818,10 @@ function Problems.steady_loop_rates(b::StabilityBound, groups, p, steady, loops)
     n = length(groups)
     gof = Dict{String, Int}(k => g for (g, ks) in enumerate(groups) for k in ks)
     rowof = Dict{String, Int}(k => i for (i, k) in enumerate(b.keys))
-    terms(r, i) = Iterators.flatten((((f, j, f(p)) for (f, j) in r.crosslinear if j != 0),
-                                     ((f, j, f(p) * (4 * sum(b.invh2[j]) + _face_excess(b, j, p))) for (f, j) in r.crossdiffusion if j != 0)))
+    function terms(r, i)
+        return Iterators.flatten((((f, j, f(p)) for (f, j) in r.crosslinear if j != 0),
+            ((f, j, f(p) * (4 * sum(b.invh2[j]) + _face_excess(b, j, p))) for (f, j) in r.crossdiffusion if j != 0)))
+    end
     G, K = zeros(n), zeros(n)
     X = Dict{String, Float64}()                 # each steady field's response per unit lagged input
     why = Any[nothing for _ in 1:n]
@@ -1059,8 +1071,10 @@ _input_lower(v) = first(_input_bounds(v))
 
 # the intervals an interval coefficient reads, in words: `x ∈ [-0.03125, 1.031]` (the coordinates
 # over the lattice's sites and one ghost layer, a field or input over its declared bounds)
-_box_text(box) = join((string("`", k, "` ∈ [", round(b[1]; sigdigits = 4), ", ", round(b[2]; sigdigits = 4), "]")
-                       for (k, b) in box), ", ")
+function _box_text(box)
+    return join((string("`", k, "` ∈ [", round(b[1]; sigdigits = 4), ", ", round(b[2]; sigdigits = 4), "]")
+        for (k, b) in box), ", ")
+end
 # why a coefficient has no finite bound, in words (`_why`)
 function _why_text(text, w)
     w === :cap && return "`$text` reads more than $(_MAXEVALS) table index combinations"
