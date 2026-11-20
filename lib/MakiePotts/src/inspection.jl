@@ -9,7 +9,8 @@ end
 function _owner_label(frame, owner::RenderOwner)
     if owner.kind === CellSite
         metadata = cell_metadata(frame, owner)
-        return "Cell $(metadata.identity.id)\nGeneration $(metadata.identity.generation)\n" *
+        return "Cell $(metadata.identity.id)\n" *
+            "Generation $(metadata.identity.generation)\n" *
             "Cell type $(metadata.cell_type)"
     elseif owner.kind === ObstacleSite
         return "Obstacle medium $(owner.id)"

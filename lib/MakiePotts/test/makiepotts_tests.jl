@@ -13,7 +13,10 @@ include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "qa_common.jl"))
 include("shared/export_all.jl")
 end
 
-@testitem "MakiePotts test inventory" setup = [MP_makiepotts] tags = [:makiepotts, :core] begin
+@testitem "MakiePotts test inventory" setup = [MP_makiepotts] tags = [
+    :makiepotts,
+    :core,
+] begin
     @testset "MakiePotts test inventory" begin
         discovered = Set(
             filter(
@@ -25,7 +28,10 @@ end
     end
 end
 
-@testitem "validated semantic frames" setup = [MP_makiepotts] tags = [:makiepotts, :core] begin
+@testitem "validated semantic frames" setup = [MP_makiepotts] tags = [
+    :makiepotts,
+    :core,
+] begin
     @testset "validated semantic frames" begin
         fixture = render_fixture()
         frame = renderframe(fixture.state)
@@ -54,7 +60,10 @@ end
     end
 end
 
-@testitem "randomized frame invariants" setup = [MP_makiepotts] tags = [:makiepotts, :core] begin
+@testitem "randomized frame invariants" setup = [MP_makiepotts] tags = [
+    :makiepotts,
+    :core,
+] begin
     @testset "randomized frame invariants" begin
         rng = MersenneTwister(0x0000004d616b6965)
         for _ in 1:100
@@ -84,7 +93,9 @@ end
     end
 end
 
-@testitem "requests, slices, and retained observations" setup = [MP_makiepotts] tags = [:makiepotts, :core] begin
+@testitem "requests, slices, and retained observations" setup = [MP_makiepotts] tags = [
+    :makiepotts, :core,
+] begin
     @testset "requests, slices, and retained observations" begin
         fixture = render_fixture(dimensions = 3)
         request = RenderRequest(extent = OrthogonalSlice(3, 2))
@@ -104,7 +115,9 @@ end
     end
 end
 
-@testitem "open typed channels and encodings" setup = [MP_makiepotts] tags = [:makiepotts, :core] begin
+@testitem "open typed channels and encodings" setup = [MP_makiepotts] tags = [
+    :makiepotts, :core,
+] begin
     @testset "open typed channels and encodings" begin
         cells = [
             RenderCellMetadata(RenderCellIdentity(1, 2), 4),
@@ -145,7 +158,11 @@ end
     end
 end
 
-@testitem "Makie-native recipe interoperability and reactivity" setup = [MP_makiepotts] tags = [:makiepotts, :core] begin
+@testitem "Makie-native recipe interoperability and reactivity" setup = [
+    MP_makiepotts,
+] tags = [
+    :makiepotts, :core,
+] begin
     @testset "Makie-native recipe interoperability and reactivity" begin
         CairoMakie.activate!(type = "png")
         first_fixture = render_fixture()
@@ -200,7 +217,10 @@ end
     end
 end
 
-@testitem "recording and explorer lifecycle" setup = [MP_makiepotts] tags = [:makiepotts, :core] begin
+@testitem "recording and explorer lifecycle" setup = [MP_makiepotts] tags = [
+    :makiepotts,
+    :core,
+] begin
     @testset "recording and explorer lifecycle" begin
         fixture = render_fixture()
         first_frame = renderframe(fixture.state)
@@ -235,7 +255,9 @@ end
     end
 end
 
-@testitem "Float32 render frames and channels" setup = [MP_makiepotts] tags = [:makiepotts, :core] begin
+@testitem "Float32 render frames and channels" setup = [MP_makiepotts] tags = [
+    :makiepotts, :core,
+] begin
     @testset "Float32 render frames and channels" begin
         CairoMakie.activate!(type = "png")
         owners = fill(RenderOwner(MediumSite, 1), 3, 3)
@@ -269,13 +291,16 @@ end
     end
 end
 
-@testitem "clean install-to-PNG journey" setup = [MP_makiepotts] tags = [:makiepotts, :core] begin
+@testitem "clean install-to-PNG journey" setup = [MP_makiepotts] tags = [
+    :makiepotts,
+    :core,
+] begin
     @testset "clean install-to-PNG journey" begin
         CairoMakie.activate!(type = "png")
         frame = PottsRenderFrame(
             0,
             fill(RenderOwner(MediumSite, 1), 2, 2),
-            RenderCellMetadata[],
+            RenderCellMetadata[]
         )
         @test frame_size(frame) == (2, 2)
         figure, axis, plot = CairoMakie.plot(frame; boundaries = true)
@@ -292,7 +317,10 @@ end
     end
 end
 
-@testitem "MakiePotts package quality" setup = [MP_makiepotts] tags = [:makiepotts, :qa] begin
+@testitem "MakiePotts package quality" setup = [MP_makiepotts] tags = [
+    :makiepotts,
+    :qa,
+] begin
     @testset "MakiePotts package quality" begin
         qa_aqua(MakiePotts)
         qa_api_docs(MakiePotts; docs_dir = joinpath(@__DIR__, "..", "..", "..", "docs"))
@@ -300,9 +328,15 @@ end
     end
 end
 
-@testitem "QA: ExplicitImports (MakiePotts)" setup = [MP_makiepotts] tags = [:makiepotts, :qa] begin
+@testitem "QA: ExplicitImports (MakiePotts)" setup = [MP_makiepotts] tags = [
+    :makiepotts,
+    :qa,
+] begin
     @testset "QA: ExplicitImports (MakiePotts)" begin
-        qa_explicit_imports(MakiePotts; nonpublic_qualified = MAKIEPOTTS_NONPUBLIC_QUALIFIED)
+        qa_explicit_imports(
+            MakiePotts;
+            nonpublic_qualified = MAKIEPOTTS_NONPUBLIC_QUALIFIED
+        )
     end
 end
 
@@ -321,7 +355,9 @@ end
     end
 end
 
-@testitem "fresh-process MakiePotts load orders" setup = [MP_makiepotts] tags = [:makiepotts, :core] begin
+@testitem "fresh-process MakiePotts load orders" setup = [MP_makiepotts] tags = [
+    :makiepotts, :core,
+] begin
     @testset "fresh-process MakiePotts load orders" begin
         # Pkg.test owns a resolved temporary environment. Reuse that exact graph
         # rather than a developer's ignored package-local Manifest.toml.
@@ -345,14 +381,17 @@ end
             """,
         )
         for (script, output) in zip(orders, ("makie-first-ok", "corepotts-first-ok"))
-            command = `$(Base.julia_cmd()) --startup-file=no --project=$(project) -e $script`
+            command =
+                `$(Base.julia_cmd()) --startup-file=no --project=$(project) -e $script`
             @test read(command, String) == output
         end
     end
 end
 
 # JET's error analysis of the whole package: undefined names and fields (D-298)
-@testitem "QA: JET package analysis (MakiePotts)" setup = [MP_makiepotts] tags = [:makiepotts, :qa] begin
+@testitem "QA: JET package analysis (MakiePotts)" setup = [MP_makiepotts] tags = [
+    :makiepotts, :qa,
+] begin
     @testset "QA: JET package analysis (MakiePotts)" begin
         qa_jet_package(MakiePotts)
     end

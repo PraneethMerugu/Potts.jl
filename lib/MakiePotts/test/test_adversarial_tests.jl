@@ -8,7 +8,11 @@ import Makie
 import CorePotts
 include("shared/makiepotts.jl")
 function _saved_state_frame_oracle(state, request)
-    active = Set(Int32(id) for id in eachindex(CorePotts.volumes(state)) if CorePotts.volumes(state)[id] > 0)
+    active = Set(
+        Int32(id)
+            for id in eachindex(CorePotts.volumes(state))
+            if CorePotts.volumes(state)[id] > 0
+    )
     owners = map(CorePotts.ownership(state)) do id
         if id == 0
             RenderOwner(MediumSite, 1)
@@ -21,9 +25,11 @@ function _saved_state_frame_oracle(state, request)
     end
     metadata = [
         RenderCellMetadata(
-            RenderCellIdentity(id, CorePotts.cell_generations(state)[id]), CorePotts.cell_kinds(state)[id]
+            RenderCellIdentity(id, CorePotts.cell_generations(state)[id]),
+            CorePotts.cell_kinds(state)[id]
         )
-            for id in eachindex(CorePotts.volumes(state)) if CorePotts.volumes(state)[id] > 0
+            for id in eachindex(CorePotts.volumes(state))
+            if CorePotts.volumes(state)[id] > 0
     ]
     if request.extent isa FullDomain
         projected = owners
@@ -39,7 +45,11 @@ end
 include("shared/export_all.jl")
 end
 
-@testitem "adversarial geometry and ownership semantics" setup = [MP_test_adversarial] tags = [:makiepotts, :adversarial] begin
+@testitem "adversarial geometry and ownership semantics" setup = [
+    MP_test_adversarial,
+] tags = [
+    :makiepotts, :adversarial,
+] begin
     @testset "adversarial geometry and ownership semantics" begin
         one_geometry = RenderGeometry(
             (1, 1);
@@ -89,7 +99,9 @@ end
     end
 end
 
-@testitem "all slice axes and endpoints" setup = [MP_test_adversarial] tags = [:makiepotts, :adversarial] begin
+@testitem "all slice axes and endpoints" setup = [MP_test_adversarial] tags = [
+    :makiepotts, :adversarial,
+] begin
     @testset "all slice axes and endpoints" begin
         fixture = render_fixture(dimensions = 3)
         source_size = (5, 4, 3)
@@ -124,7 +136,11 @@ end
     end
 end
 
-@testitem "missing values and typed channel validation" setup = [MP_test_adversarial] tags = [:makiepotts, :adversarial] begin
+@testitem "missing values and typed channel validation" setup = [
+    MP_test_adversarial,
+] tags = [
+    :makiepotts, :adversarial,
+] begin
     @testset "missing values and typed channel validation" begin
         identity = RenderCellIdentity(1, 3)
         cells = [RenderCellMetadata(identity, 2)]
@@ -137,9 +153,7 @@ end
         medium_key = MediumChannelKey(:medium_missing, Float64)
         channels = (
             RenderChannel(
-                site_key, Union{Missing, Float64}[
-                    1.0 missing; missing 4.0
-                ]
+                site_key, Union{Missing, Float64}[1.0 missing; missing 4.0]
             ),
             RenderChannel(cell_key, Dict(identity => missing)),
             RenderChannel(medium_key, Dict(UInt32(1) => 2.0)),
@@ -163,9 +177,7 @@ end
         )
         @test site_overlay[1, 1] == Makie.RGBAf(0, 0, 0, 0)
 
-        many_cells = [
-            RenderCellMetadata(RenderCellIdentity(id, 0), id) for id in 1:3
-        ]
+        many_cells = [RenderCellMetadata(RenderCellIdentity(id, 0), id) for id in 1:3]
         many_owners = reshape(
             [RenderOwner(CellSite, id) for id in 1:3], 3, 1
         )
@@ -184,7 +196,11 @@ end
     end
 end
 
-@testitem "invalid frames and requests fail before publication" setup = [MP_test_adversarial] tags = [:makiepotts, :adversarial] begin
+@testitem "invalid frames and requests fail before publication" setup = [
+    MP_test_adversarial,
+] tags = [
+    :makiepotts, :adversarial,
+] begin
     @testset "invalid frames and requests fail before publication" begin
         @test_throws ArgumentError RenderGeometry((0, 2))
         @test_throws ArgumentError RenderGeometry((2, 2); spacing = (1.0, Inf))
@@ -279,7 +295,11 @@ end
     end
 end
 
-@testitem "frame construction owns mutable semantic inputs" setup = [MP_test_adversarial] tags = [:makiepotts, :adversarial] begin
+@testitem "frame construction owns mutable semantic inputs" setup = [
+    MP_test_adversarial,
+] tags = [
+    :makiepotts, :adversarial,
+] begin
     @testset "frame construction owns mutable semantic inputs" begin
         identity = RenderCellIdentity(1, 7)
         metadata = RenderCellMetadata(identity, 3; label = "Original")
@@ -292,7 +312,9 @@ end
         cell_key = CellChannelKey(:cell, Float64)
         medium_key = MediumChannelKey(:medium, Float64)
         frame = PottsRenderFrame(
-            4, owners, cells; channels = (
+            4, owners,
+            cells;
+            channels = (
                 RenderChannel(site_key, site_values),
                 RenderChannel(cell_key, cell_values),
                 RenderChannel(medium_key, medium_values),
@@ -325,7 +347,11 @@ end
     end
 end
 
-@testitem "rapid reactive replacement and recording guards" setup = [MP_test_adversarial] tags = [:makiepotts, :adversarial] begin
+@testitem "rapid reactive replacement and recording guards" setup = [
+    MP_test_adversarial,
+] tags = [
+    :makiepotts, :adversarial,
+] begin
     @testset "rapid reactive replacement and recording guards" begin
         geometry = RenderGeometry(
             (3, 2);
@@ -335,9 +361,11 @@ end
             PottsRenderFrame(
                 index,
                 fill(
-                    index % 2 == 0 ?
-                        RenderOwner(MediumSite, 1) :
-                        RenderOwner(ObstacleSite, 2), 3, 2
+                    if index % 2 == 0
+                        RenderOwner(MediumSite, 1)
+                    else
+                        RenderOwner(ObstacleSite, 2)
+                    end, 3, 2
                 ),
                 RenderCellMetadata[]; geometry
             )

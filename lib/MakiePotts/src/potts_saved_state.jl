@@ -1,5 +1,6 @@
 function _render_cells(state::CorePotts.CPMState)
-    kinds, generations, vols = CorePotts.cell_kinds(state), CorePotts.cell_generations(state),
+    kinds, generations, vols = CorePotts.cell_kinds(state),
+        CorePotts.cell_generations(state),
         CorePotts.volumes(state)
     return [
         RenderCellMetadata(RenderCellIdentity(id, Int(generations[id])), Int(kinds[id]))
@@ -14,7 +15,13 @@ function _render_owners(state::CorePotts.CPMState, cells, frozen)
     for site in CartesianIndices(owners)
         id = Int(σ[site])
         if id == 0
-            owners[site] = RenderOwner(frozen !== nothing && frozen[site] ? ObstacleSite : MediumSite, 1)
+            owners[site] = RenderOwner(
+                if frozen !== nothing && frozen[site]
+                    ObstacleSite
+                else
+                    MediumSite
+                end, 1
+            )
         else
             id in active || throw(
                 InvalidRenderFrameError(
@@ -57,15 +64,16 @@ end
 function _project_extent(
         owners::AbstractArray{RenderOwner, 3},
         spacing,
-        extent::OrthogonalSlice,
+        extent::OrthogonalSlice
     )
     projected = copy(_project_spatial_array(owners, extent))
     retained = Tuple(filter(!=(extent.axis), (1, 2, 3)))
     projected_spacing = ntuple(i -> spacing[retained[i]], Val(2))
-    return projected, RenderGeometry(
+    return projected,
+        RenderGeometry(
             size(projected);
             spacing = projected_spacing,
-            source_axes = retained,
+            source_axes = retained
         )
 end
 
@@ -78,10 +86,9 @@ end
 function _project_saved_state_channels(
         channels::Tuple,
         source_size::Tuple,
-        extent::AbstractRenderExtent,
+        extent::AbstractRenderExtent
     )
-    all(item -> item isa RenderChannel, channels) ||
-        throw(
+    all(item -> item isa RenderChannel, channels) || throw(
         InvalidRenderFrameError(
             ["saved-state channels must be an ordered tuple of RenderChannel values"]
         )
@@ -89,8 +96,7 @@ function _project_saved_state_channels(
     return map(channels) do item
         item.key isa RenderChannelKey{SiteChannelScope} || return item
         item.values isa AbstractArray || return item
-        size(item.values) == source_size ||
-            throw(
+        size(item.values) == source_size || throw(
             InvalidRenderFrameError(
                 [
                     "saved-state site-channel size must equal the full saved domain; " *
@@ -109,13 +115,16 @@ function _build_renderframe(
         channels::Tuple,
         mcs::Integer,
         frozen,
-        spacing,
+        spacing
     )
     cells = _render_cells(state)
     owners = _render_owners(state, cells, frozen)
-    spacing = spacing === nothing ? ntuple(_ -> 1.0, ndims(owners)) : Float64.(Tuple(spacing))
-    projected_owners, geometry =
-        _project_extent(owners, spacing, request.extent)
+    spacing = if spacing === nothing
+        ntuple(_ -> 1.0, ndims(owners))
+    else
+        Float64.(Tuple(spacing))
+    end
+    projected_owners, geometry = _project_extent(owners, spacing, request.extent)
     metadata = request.include_cell_metadata ? cells : RenderCellMetadata[]
     any(owner -> owner.kind === CellSite, projected_owners) &&
         isempty(metadata) && throw(
@@ -135,12 +144,13 @@ function _build_renderframe(
         metadata;
         channels = projected_channels,
         geometry,
-        provenance,
+        provenance
     )
 end
 
 """
-    renderframe(state::CPMState, request=RenderRequest(); mcs=0, channels=(), frozen=nothing, spacing=nothing)
+    renderframe(state::CPMState, request=RenderRequest(); mcs=0, channels=(),
+        frozen=nothing, spacing=nothing)
 
 Defensively materialize one native Makie frame from a saved host state (a
 `CorePotts.CPMState` snapshot). Site-channel arrays describe the full saved domain and use
@@ -154,7 +164,7 @@ function renderframe(
         mcs::Integer = 0,
         channels::Tuple = (),
         frozen = nothing,
-        spacing = nothing,
+        spacing = nothing
     )
     return _build_renderframe(state, request, channels, mcs, frozen, spacing)
 end
@@ -163,21 +173,22 @@ function renderframe(
         solution::CorePotts.PottsSolution,
         request::RenderRequest = RenderRequest();
         index::Integer = lastindex(solution.u),
-        channels::Tuple = (),
+        channels::Tuple = ()
     )
     checkbounds(solution.u, index)
     return renderframe(
         solution.u[index], request; mcs = solution.t[index], channels,
-        # the saved state's own obstacles: a frozen mask that follows the state (D-081) differs
-        # from the problem's t0 mask once a cell enters or leaves a frozen kind
-        frozen = CorePotts.frozen_sites(solution.prob, solution.u[index]), spacing = solution.prob.spacing
+        # the saved state's own obstacles: a frozen mask that follows the state (D-081)
+        # differs from the problem's t0 mask once a cell enters or leaves a frozen kind
+        frozen = CorePotts.frozen_sites(solution.prob, solution.u[index]),
+        spacing = solution.prob.spacing
     )
 end
 
 """Eagerly materialize independent frames from a retained solution."""
 function renderframes(
         solution::CorePotts.PottsSolution,
-        request::RenderRequest = RenderRequest(),
+        request::RenderRequest = RenderRequest()
     )
     return [renderframe(solution, request; index) for index in eachindex(solution.u)]
 end

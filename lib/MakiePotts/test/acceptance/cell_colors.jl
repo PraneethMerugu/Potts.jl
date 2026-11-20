@@ -87,7 +87,10 @@ end
 hue_bins(colours) = Set(floor(Int, 12 * h) for h in map(_hue, colours) if isfinite(h))
 
 function window_bin_counts(colours; width = 16)
-    return [length(hue_bins(colours[s:(s + width - 1)])) for s in 1:width:(length(colours) - width + 1)]
+    return [
+        length(hue_bins(colours[s:(s + width - 1)]))
+            for s in 1:width:(length(colours) - width + 1)
+    ]
 end
 
 # --- the package path: frame → encoding → automatic palette ---------------------------
@@ -138,7 +141,9 @@ function _ref_hsv(h, s = 0.62, v = 0.88)
 end
 _ref_key(id, generation) = (UInt64(id) << 32) ⊻ UInt64(generation)
 """The formula on the base (bba4d963): golden-ratio hue of the raw key."""
-old_colour(id, generation) = _ref_hsv(mod(Float64(_ref_key(id, generation)) * 0.6180339887498949, 1.0))
+function old_colour(id, generation)
+    return _ref_hsv(mod(Float64(_ref_key(id, generation)) * 0.6180339887498949, 1.0))
+end
 
 function _splitmix64(x::UInt64)
     x += 0x9e3779b97f4a7c15
@@ -147,7 +152,9 @@ function _splitmix64(x::UInt64)
     return x ⊻ (x >> 31)
 end
 """A good reference: splitmix64 of the key, its top 53 bits as the hue."""
-good_colour(id, generation) = _ref_hsv(Float64(_splitmix64(_ref_key(id, generation)) >> 11) * 2.0^-53)
+function good_colour(id, generation)
+    return _ref_hsv(Float64(_splitmix64(_ref_key(id, generation)) >> 11) * 2.0^-53)
+end
 
 passes_separation(colours) = all(<=(MAX_CONFUSABLE), confusable_fractions(colours))
 
@@ -165,14 +172,19 @@ const HIGH_WINDOWS = ((2^20):(2^20 + 2000), 4_000_000_000:4_000_002_000)
             good = [good_colour(id, generation) for id in LOW_IDS]
             @test passes_separation(good)
             @test length(hue_bins(good)) == 12
-            @test count(>=(6), window_bin_counts(good)) >= 0.95 * length(window_bin_counts(good))
+            @test count(>=(6), window_bin_counts(good)) >=
+                0.95 * length(window_bin_counts(good))
         end
         far = [old_colour(id, 1) for id in last(HIGH_WINDOWS)]
         @test all(==(1.0), confusable_fractions(far))          # one colour for every cell
         @test passes_separation([good_colour(id, 1) for id in last(HIGH_WINDOWS)])
         # Old type colours pass the guard (f), so (f) only forbids regressions.
         old_types = [_lab(_ref_hsv(mod(t * 0.6180339887498949, 1.0))) for t in 1:8]
-        @test minimum(_delta_e(old_types[i], old_types[j]) for i in 1:8 for j in (i + 1):8) >= 15
+        @test minimum(
+            _delta_e(old_types[i], old_types[j]) for i in 1:8
+                for j in (i + 1):8
+        ) >=
+            15
     end
 
     @testset "(a) neighbouring ids get clearly different colours" begin

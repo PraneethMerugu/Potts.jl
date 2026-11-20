@@ -14,9 +14,11 @@ function _site_slice_oracle(values, axis, index)
         values[
             CartesianIndex(
                 ntuple(
-                    source_axis ->
-                    source_axis == axis ? index :
-                        site[findfirst(==(source_axis), retained_axes)], Val(3)
+                    source_axis -> if source_axis == axis
+                        index
+                    else
+                        site[findfirst(==(source_axis), retained_axes)]
+                    end, Val(3)
                 )
             ),
         ]
@@ -33,19 +35,30 @@ CorePotts.frozen_kinds(s::_ReleasedFrozenKind) = (s.k,)
 include("shared/export_all.jl")
 end
 
-@testitem "saved-state channels use canonical frame projection and validation" setup = [MP_test_saved_state_channels] tags = [:makiepotts, :saved_state_channels] begin
+@testitem "saved-state channels use canonical frame projection and validation" setup = [
+    MP_test_saved_state_channels,
+] tags = [
+    :makiepotts, :saved_state_channels,
+] begin
     @testset "saved-state channels use canonical frame projection and validation" begin
         fixture = render_fixture(dimensions = 3)
         state = fixture.state
         site_key = SiteChannelKey(:activity, Float32)
         cell_key = CellChannelKey(:signal, Float64)
         medium_key = MediumChannelKey(:temperature, Float64)
-        site_values = reshape(Float32.(1:length(CorePotts.ownership(state))), size(CorePotts.ownership(state)))
+        site_values = reshape(
+            Float32.(1:length(CorePotts.ownership(state))),
+            size(CorePotts.ownership(state))
+        )
         active_identities = [
             RenderCellIdentity(id, CorePotts.cell_generations(state)[id])
-                for id in eachindex(CorePotts.volumes(state)) if CorePotts.volumes(state)[id] > 0
+                for id in eachindex(CorePotts.volumes(state))
+                if CorePotts.volumes(state)[id] > 0
         ]
-        cell_values = Dict(identity => Float64(identity.id) for identity in active_identities)
+        cell_values = Dict(
+            identity => Float64(identity.id)
+                for identity in active_identities
+        )
         medium_values = Dict(UInt32(1) => 2.5)
         channels = (
             RenderChannel(site_key, site_values; label = "Activity", units = "a.u."),
@@ -90,18 +103,22 @@ end
         solution = CorePotts.solve(solution_fixture.problem, CorePotts.SequentialCPM())
         solution_values = reshape(
             Float32.(1:length(CorePotts.ownership(solution_fixture.state))),
-            size(CorePotts.ownership(solution_fixture.state)),
+            size(CorePotts.ownership(solution_fixture.state))
         )
         from_solution = renderframe(
             solution;
             index = firstindex(solution.u),
-            channels = (RenderChannel(site_key, solution_values),),
+            channels = (RenderChannel(site_key, solution_values),)
         )
         @test frame_channel(from_solution, site_key).values == solution_values
     end
 end
 
-@testitem "saved-state channel rejection is all-or-nothing" setup = [MP_test_saved_state_channels] tags = [:makiepotts, :saved_state_channels] begin
+@testitem "saved-state channel rejection is all-or-nothing" setup = [
+    MP_test_saved_state_channels,
+] tags = [
+    :makiepotts, :saved_state_channels,
+] begin
     @testset "saved-state channel rejection is all-or-nothing" begin
         fixture = render_fixture(dimensions = 3)
         state = fixture.state
@@ -116,13 +133,21 @@ end
             state; channels = (RenderChannel(site_key, zeros(2, 2)),)
         )
         @test_throws MakiePotts.InvalidRenderFrameError renderframe(
-            state; channels = (RenderChannel(site_key, fill("wrong", size(CorePotts.ownership(state)))),)
+            state; channels = (
+                RenderChannel(site_key, fill("wrong", size(CorePotts.ownership(state)))),
+            )
         )
         @test_throws MakiePotts.InvalidRenderFrameError renderframe(
             state; channels = (
                 RenderChannel(
                     cell_key,
-                    Dict(RenderCellIdentity(first_identity.id, first_identity.generation + 1) => 1.0)
+                    Dict(
+                        RenderCellIdentity(
+                            first_identity.id,
+                            first_identity.generation + 1
+                        ) =>
+                            1.0
+                    )
                 ),
             )
         )
@@ -154,35 +179,67 @@ end
         )
         @test_throws BoundsError renderframe(
             state,
-            RenderRequest(extent = OrthogonalSlice(3, size(CorePotts.ownership(state), 3) + 1));
-            channels = (RenderChannel(site_key, valid_site),),
+            RenderRequest(
+                extent = OrthogonalSlice(
+                    3, size(CorePotts.ownership(state), 3) +
+                        1
+                )
+            );
+            channels = (RenderChannel(site_key, valid_site),)
         )
     end
 end
 
-@testitem "solution frames follow a frozen mask that changes during the run" setup = [MP_test_saved_state_channels] tags = [:makiepotts, :saved_state_channels] begin
+@testitem "solution frames follow a frozen mask that changes during the run" setup = [
+    MP_test_saved_state_channels,
+] tags = [
+    :makiepotts, :saved_state_channels,
+] begin
     @testset "solution frames follow a frozen mask that changes during the run" begin
         kindidx(st, c) = c == 0 ? 1 : Int(@inbounds st.cell.kind[c]) + 1
         function dH(st, p, prop, ctx)
             J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
             return CorePotts.contact_delta(st.ownership, ctx, prop, J) +
-                CorePotts.volume_delta(st.cell.volume, prop, (v, c) -> p.λ * (v - p.V0)^2)
+                CorePotts.volume_delta(
+                st.cell.volume, prop, (v, c) -> p.λ *
+                    (v - p.V0)^2
+            )
         end
         lat = CorePotts.Lattice((30, 30))
-        σ = zeros(Int32, 30, 30); σ[5:10, 5:10] .= 1; σ[18:23, 18:23] .= 2
-        st = CorePotts.with_capacity(CorePotts.initial_state(σ, Int32[1, 2]; cell = CorePotts.init_moments(σ, lat, 2)), 2)
+        σ = zeros(Int32, 30, 30)
+        σ[5:10, 5:10] .= 1
+        σ[18:23, 18:23] .= 2
+        st = CorePotts.with_capacity(
+            CorePotts.initial_state(
+                σ, Int32[1, 2];
+                cell = CorePotts.init_moments(σ, lat, 2)
+            ),
+            2
+        )
         release = CorePotts.Lifecycle(
-            (st, p, ctx, key, mcs, c) -> mcs == 5 && c == 2 ? CorePotts.EVENT_TRANSITION : CorePotts.EVENT_NONE;
+            (st, p, ctx, key, mcs, c) -> if mcs == 5 && c == 2
+                CorePotts.EVENT_TRANSITION
+            else
+                CorePotts.EVENT_NONE
+            end;
             kind = (st, p, ctx, key, mcs, c) -> Int32(1)
         )
-        f = CorePotts.CPMFunction(dH; temperature = (st, p, prop, ctx) -> p.T, lifecycle = release, sys = _ReleasedFrozenKind(2))
+        f = CorePotts.CPMFunction(
+            dH; temperature = (st, p, prop, ctx) -> p.T,
+            lifecycle = release, sys = _ReleasedFrozenKind(2)
+        )
         p = (; J = [0.0 16 16; 16 2 11; 16 11 14], λ = 1.0, V0 = 40.0, T = 10.0)
-        sol = CorePotts.solve(CorePotts.PottsProblem(f, st, lat, (0, 40), p; frozen = σ .== 2), CorePotts.SequentialCPM())
+        sol = CorePotts.solve(
+            CorePotts.PottsProblem(f, st, lat, (0, 40), p; frozen = σ .== 2),
+            CorePotts.SequentialCPM()
+        )
         obstacles(fr) = count(o -> o.kind === MakiePotts.ObstacleSite, fr.owners)
         @test CorePotts.frozen_sites(sol.prob, sol.u[1]) == (σ .== 2)
         @test CorePotts.frozen_sites(sol.prob, sol.u[end]) == falses(30, 30)
-        @test obstacles(renderframe(sol)) == 0                      # released: no obstacle left
-        # negative control: the problem's t0 mask draws the vacated medium sites as obstacles
+        # released: no obstacle left
+        @test obstacles(renderframe(sol)) == 0
+        # negative control: the problem's t0 mask draws the vacated medium sites as
+        # obstacles
         vacated = count((σ .== 2) .& (CorePotts.ownership(sol.u[end]) .== 0))
         @test vacated > 0
         @test obstacles(renderframe(sol.u[end]; frozen = sol.prob.frozen)) == vacated

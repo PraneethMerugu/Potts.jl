@@ -12,6 +12,9 @@ import CorePotts
 include("shared/export_all.jl")
 end
 
-@testitem "acceptance/cell_colors.jl" setup = [MP_acceptance] tags = [:makiepotts, :acceptance] begin
+@testitem "acceptance/cell_colors.jl" setup = [MP_acceptance] tags = [
+    :makiepotts,
+    :acceptance,
+] begin
     include(joinpath(@__DIR__, "acceptance", "cell_colors.jl"))
 end

@@ -12,8 +12,12 @@ function reference_frame()
     types = (1, 2, 3, 1, 2)
     signals = (0.15, 0.42, 0.76, 0.58, 0.91)
     signal_values = Dict{RenderCellIdentity, Float64}()
-    for (index, ((cx, cy), (rx, ry), cell_type, signal)) in
-        enumerate(zip(centers, radii, types, signals))
+    for (
+            index,
+            ((cx, cy), (rx, ry), cell_type, signal),
+        ) in enumerate(
+            zip(centers, radii, types, signals)
+        )
         identity = RenderCellIdentity(index, index == 4 ? 2 : 0)
         push!(cells, RenderCellMetadata(identity, cell_type))
         signal_values[identity] = signal

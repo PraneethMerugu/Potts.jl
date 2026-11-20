@@ -48,7 +48,7 @@ function visual_reference_figure()
     figure = Figure(
         size = (920, 380),
         backgroundcolor = :white,
-        fontsize = 14,
+        fontsize = 14
     )
 
     categorical_axis = Axis(

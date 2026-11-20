@@ -37,7 +37,9 @@ struct RenderChannelKey{S <: AbstractRenderChannelScope, T}
     name::Symbol
 end
 
-function RenderChannelKey(::S, name::Symbol, ::Type{T}) where {S <: AbstractRenderChannelScope, T}
+function RenderChannelKey(::S, name::Symbol, ::Type{T}) where {
+        S <: AbstractRenderChannelScope, T,
+    }
     return RenderChannelKey{S, T}(name)
 end
 """Construct a site-scoped [`RenderChannelKey`](@ref)."""

@@ -87,11 +87,12 @@ Makie.@recipe(PottsBoundaries, frame) do scene
         linewidth = Makie.theme(scene, :linewidth; default = 1.0),
         linestyle = nothing,
         visible = true,
-        inspectable = false,
+        inspectable = false
     )
 end
 @doc "Makie recipe type for a composable finite-cell boundary overlay." PottsBoundaries
-@doc "Add a [`PottsBoundaries`](@ref) overlay to an existing Makie scene or axis." pottsboundaries!
+@doc "Add a [`PottsBoundaries`](@ref) overlay to an existing Makie scene or \
+    axis." pottsboundaries!
 
 function Makie.plot!(plot::PottsBoundaries)
     validated_frame = Makie.lift(assert_render_frame_conformance, plot.frame)
@@ -129,7 +130,7 @@ Makie.@recipe(PottsPlot, frame) do scene
         visible = true,
         alpha = 1.0,
         inspectable = true,
-        inspector_label = Makie.automatic,
+        inspector_label = Makie.automatic
     )
 end
 @doc "Makie recipe type for a two-dimensional frame or orthogonal slice." PottsPlot
@@ -288,7 +289,7 @@ Makie.@recipe(PottsVolume, frame) do scene
         nan_color = :transparent,
         algorithm = :mip,
         absorption = 1.0,
-        visible = true,
+        visible = true
     )
 end
 @doc "Makie recipe type for a true three-dimensional frame." PottsVolume

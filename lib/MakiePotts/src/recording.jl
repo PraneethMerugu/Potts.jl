@@ -17,7 +17,8 @@ end
 function _validate_framerate(framerate::Real)
     value = Float64(framerate)
     isfinite(value) && value > 0 ||
-        throw(ArgumentError("recording framerate must be positive and finite; got $framerate"))
+        throw(ArgumentError("recording framerate must be positive and finite; \
+            got $framerate"))
     return isinteger(value) ? Int(value) : value
 end
 

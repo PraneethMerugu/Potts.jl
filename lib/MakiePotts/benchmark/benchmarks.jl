@@ -51,7 +51,7 @@ function _collect_report!(report, group, prefix = String[])
                 "median_time_ns" => value.time,
                 "gc_time_ns" => value.gctime,
                 "memory_bytes" => value.memory,
-                "allocations" => value.allocs,
+                "allocations" => value.allocs
             )
         end
     end
@@ -63,7 +63,7 @@ if !isempty(output)
     report = Dict(
         "schema_version" => "1.0.0",
         "frame_dimensions" => collect(frame_size(frame)),
-        "operations" => _collect_report!(Dict{String, Any}(), estimates),
+        "operations" => _collect_report!(Dict{String, Any}(), estimates)
     )
     open(output, "w") do io
         TOML.print(io, report; sorted = true)

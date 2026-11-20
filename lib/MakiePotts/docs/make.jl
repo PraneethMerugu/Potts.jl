@@ -19,5 +19,5 @@ makedocs(
         "Home" => "index.md",
         "Saved-state channels" => "saved_state_channels.md",
         "API" => "api/makiepotts.md",
-    ],
+    ]
 )

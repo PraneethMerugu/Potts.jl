@@ -7,7 +7,8 @@ abstract type AbstractPottsEncoding end
     ContinuousEncoding = 0x02
 end
 @doc "The encoding produces semantic categories and a discrete legend." CategoricalEncoding
-@doc "The encoding produces numeric values suitable for a Makie `Colorbar`." ContinuousEncoding
+@doc "The encoding produces numeric values suitable for a Makie \
+    `Colorbar`." ContinuousEncoding
 
 """Encode finite cells by biological cell type; this is the default."""
 struct CellTypeEncoding <: AbstractPottsEncoding
@@ -229,15 +230,20 @@ function _categorical_colors(entries::Vector{LegendEntry}, palette, medium_color
     isempty(entries) && return Makie.RGBf[]
     if palette === Makie.automatic
         colors = Makie.RGBf[Makie.to_color(medium_color)]
-        append!(colors, [_stable_category_color(entry.color_key) for entry in entries[2:end]])
+        append!(
+            colors, [
+                _stable_category_color(entry.color_key)
+                    for entry in entries[2:end]
+            ]
+        )
         return colors
     end
     requested = length(entries) - 1
     supplied = Makie.to_colormap(palette)
     length(supplied) >= requested || throw(
         ArgumentError(
-            "category palette supplies $(length(supplied)) colors for $requested categories; " *
-                "MakiePotts never cycles palettes silently"
+            "category palette supplies $(length(supplied)) colors for $requested " *
+                "categories; MakiePotts never cycles palettes silently"
         )
     )
     return vcat([Makie.to_color(medium_color)], supplied[1:requested])

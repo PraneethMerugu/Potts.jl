@@ -119,7 +119,10 @@ struct RenderGeometry{N, T <: AbstractFloat}
             throw(ArgumentError("source axes must be positive"))
         length(unique(normalized_axes)) == N ||
             throw(ArgumentError("source axes must be unique"))
-        return new{N, T}(normalized_size, normalized_spacing, normalized_origin, normalized_axes)
+        return new{N, T}(
+            normalized_size, normalized_spacing, normalized_origin,
+            normalized_axes
+        )
     end
 end
 function Base.:(==)(left::RenderGeometry, right::RenderGeometry)
@@ -216,8 +219,7 @@ function _frame_errors(mcs, owners, cells, channels, geometry)
             item.values isa AbstractDict ||
                 push!(errors, "medium-channel values must be domain-ID-keyed")
             if item.values isa AbstractDict
-                all(key -> key isa Integer && key > 0, keys(item.values)) ||
-                    push!(
+                all(key -> key isa Integer && key > 0, keys(item.values)) || push!(
                     errors,
                     "medium-channel keys must be positive integer domain IDs"
                 )
@@ -359,7 +361,10 @@ function render_frame_conformance(frame::AbstractPottsRenderFrame{N}) where {N}
                 break
             end
             if owner.kind === CellSite
-                ok, metadata = _probe_frame(issues, "cell_metadata failed", () -> cell_metadata(frame, owner))
+                ok, metadata = _probe_frame(
+                    issues, "cell_metadata failed",
+                    () -> cell_metadata(frame, owner)
+                )
                 ok || break
                 metadata isa RenderCellMetadata || begin
                     push!(issues, "cell_metadata must return RenderCellMetadata")
@@ -387,7 +392,10 @@ function render_frame_conformance(frame::AbstractPottsRenderFrame{N}) where {N}
             end
         end
     end
-    ok, keys = _probe_frame(issues, "available_channels failed", () -> available_channels(frame))
+    ok, keys = _probe_frame(
+        issues, "available_channels failed",
+        () -> available_channels(frame)
+    )
     ok || (keys = ())
     for key in keys
         key isa RenderChannelKey ||
@@ -400,7 +408,10 @@ function render_frame_conformance(frame::AbstractPottsRenderFrame{N}) where {N}
         item isa RenderChannel && item.key != key &&
             push!(issues, "channel must return the requested key")
     end
-    _, provenance = _probe_frame(issues, "frame_provenance failed", () -> frame_provenance(frame))
+    _, provenance = _probe_frame(
+        issues, "frame_provenance failed",
+        () -> frame_provenance(frame)
+    )
     provenance isa RenderProvenance ||
         push!(issues, "frame_provenance must return RenderProvenance")
     return RenderFrameConformance(isempty(issues), unique(issues))

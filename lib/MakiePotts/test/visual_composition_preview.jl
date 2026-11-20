@@ -123,7 +123,7 @@ occursin("a.u.", foreign_label) ||
 figure = Figure(
     size = (1600, 940),
     backgroundcolor = :white,
-    fontsize = 17,
+    fontsize = 17
 )
 
 Label(

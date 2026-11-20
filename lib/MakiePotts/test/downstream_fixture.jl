@@ -1,7 +1,8 @@
 module DownstreamFixture
 
 using MakiePotts
-import MakiePotts: available_channels, cell_metadata, frame_channel, encode_frame, LegendEntry
+import MakiePotts: available_channels, cell_metadata, frame_channel, encode_frame,
+    LegendEntry
 import MakiePotts: encoding_kind, encoding_label, frame_geometry, frame_mcs
 import MakiePotts: frame_provenance, frame_size
 import MakiePotts: owner_at, required_channels
@@ -57,11 +58,11 @@ function columnar_frame(phase::Integer = 0)
     site_records = Dict(site => owners[site] for site in CartesianIndices(shape))
     identity_records = Dict(
         first_identity => first_metadata,
-        second_identity => second_metadata,
+        second_identity => second_metadata
     )
     owner_records = Dict(
         first_identity.id => first_metadata,
-        second_identity.id => second_metadata,
+        second_identity.id => second_metadata
     )
     values = [
         phase + 0.0 phase + 0.2 phase + 0.4;

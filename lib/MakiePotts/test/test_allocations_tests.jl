@@ -10,7 +10,9 @@ include("shared/makiepotts.jl")
 include("shared/export_all.jl")
 end
 
-@testitem "generous allocation regression ceilings" setup = [MP_test_allocations] tags = [:makiepotts, :allocations] begin
+@testitem "generous allocation regression ceilings" setup = [MP_test_allocations] tags = [
+    :makiepotts, :allocations,
+] begin
     @testset "generous allocation regression ceilings" begin
         measurements = allocation_measurements()
         @test measurements.cell_type <= 8 * 2^20

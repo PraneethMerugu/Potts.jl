@@ -59,7 +59,10 @@ export visual_reference_figure, visual_properties_ok, _rgb, _distinct_chromatic_
     _border_uniform_white, _interior_nonblank_fraction
 end
 
-@testitem "visual properties (golden-free)" setup = [MP_visual] tags = [:makiepotts, :visual] begin
+@testitem "visual properties (golden-free)" setup = [MP_visual] tags = [
+    :makiepotts,
+    :visual,
+] begin
     using CairoMakie, MakiePotts
     import Makie
     @testset "visual properties (golden-free)" begin
@@ -98,11 +101,16 @@ end
         clean_img = Makie.colorbuffer(clean_fig; px_per_unit = 1)
         @test size(clean_img) == (200, 200)
         allowed = (_rgb(p1), _rgb(p2), _rgb(med))
-        exact_frac = count(px -> any(a -> maximum(abs.(_rgb(px) .- a)) < 0.02, allowed), clean_img) / length(clean_img)
+        exact_frac = count(
+            px -> any(a -> maximum(abs.(_rgb(px) .- a)) < 0.02, allowed),
+            clean_img
+        ) /
+            length(clean_img)
         @test exact_frac >= 0.7
         @test all(px -> maximum(_rgb(px)) >= 0.08, clean_img)  # zero black outline pixels
 
-        # Sensitivity negative controls: reject blank, monochrome, wrong-size, and shifted images
+        # Sensitivity negative controls: reject blank, monochrome, wrong-size, and shifted
+        # images
         blank = fill(Makie.RGBAf(1, 1, 1, 1), expected_size...)
         @test !visual_properties_ok(blank, expected_size)
 
