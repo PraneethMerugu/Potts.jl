@@ -579,3 +579,33 @@ end
         qa_missing_compat_control()
     end
 end
+
+# our exported names do not clash with each other or with the upstream packages users load
+# alongside: Makie, Symbolics, ModelingToolkitBase (ModelingToolkit re-exports it) and the
+# OrdinaryDiffEq solver libraries with SciMLBase and DiffEqBase, which OrdinaryDiffEq
+# re-exports (D-298)
+@testitem "QA: exported names do not clash" setup = [QaSetup] tags = [:potts, :qa] begin
+    @testset "QA: exported names do not clash" begin
+        pkg(name, uuid) = Base.require(Base.PkgId(Base.UUID(uuid), name))
+        ours = (
+            Potts, CorePotts,
+            pkg("LatticeFields", "27141c10-c94d-4a11-8a68-94c33ddb5bc4"),
+            pkg("LatticePDE", "8c13e429-a5cc-4e77-8f91-d2d1c866aeb6"),
+            pkg("MakiePotts", "95794c00-c762-4965-bf31-de18bcca2bc9"),
+            pkg("PottsModels", "7ddeed3b-134f-4313-a104-79862f0bd557"),
+        )
+        upstream = (
+            pkg("Makie", "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"),
+            pkg("Symbolics", "0c5d862f-8b57-4792-8d23-62f2024744c7"),
+            pkg("ModelingToolkitBase", "7771a370-6774-4173-bd38-47e70ca0b839"),
+            pkg("OrdinaryDiffEqTsit5", "b1df2697-797e-41e3-8120-5422d3b24e4a"),
+            pkg("OrdinaryDiffEqRosenbrock", "43230ef6-c299-4910-a778-202eb28ce4ce"),
+            pkg("OrdinaryDiffEqBDF", "6ad6398a-0878-4a85-9266-38940aa047c8"),
+            pkg("OrdinaryDiffEqSDIRK", "2d112036-d095-4a1e-ab9a-08536f3ecdbf"),
+            pkg("DiffEqBase", "2b5f629d-d688-5b77-993f-72d75c75574e"),
+            pkg("SciMLBase", "0bca4576-84f4-4d90-8ffe-ffa030f20462"),
+        )
+        @test isempty(Base.invokelatest(qa_export_clashes, ours, upstream))
+        qa_export_clash_control()
+    end
+end

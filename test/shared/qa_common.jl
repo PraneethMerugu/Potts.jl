@@ -700,4 +700,46 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
         return nothing
     end
 
+    _qa_exports(m::Module) = Set(n for n in names(m) if Base.isexported(m, n) && isdefined(m, n))
+
+    """
+        qa_export_clashes(ours, upstream = ()) -> Vector{String}
+
+    The exported names that clash when a user loads these modules together: a name exported
+    by two modules, at least one of them in `ours`, bound to different objects (so `using`
+    both leaves the name undefined in the user's session). A name re-exported as the same
+    object is not a clash. One `"name: A, B"` per clash, sorted; empty when clean.
+    """
+    function qa_export_clashes(ours, upstream = ())
+        mods = Module[ours..., upstream...]
+        ex = Dict(m => _qa_exports(m) for m in mods)
+        bad = String[]
+        for (i, a) in enumerate(mods), b in mods[(i + 1):end]
+            (a in ours || b in ours) || continue
+            for n in intersect(ex[a], ex[b])
+                getglobal(a, n) === getglobal(b, n) || push!(bad, "$n: $(nameof(a)), $(nameof(b))")
+            end
+        end
+        return sort!(bad)
+    end
+
+    """
+        qa_export_clash_control()
+
+    The negative control for [`qa_export_clashes`](@ref): two scratch modules that export
+    `shared` as different functions clash; one that re-exports the other's `shared` does not.
+    """
+    function qa_export_clash_control()
+        Test = Base.require(_QA_TEST)
+        a = Module(:ScratchExportsA)
+        Core.eval(a, :(export shared; shared() = 1))
+        b = Module(:ScratchExportsB)
+        Core.eval(b, :(export shared; shared() = 2))
+        c = Module(:ScratchExportsC)
+        Core.eval(c, :(export shared; const shared = $(getglobal(a, :shared))))
+        Test.@test Base.invokelatest(qa_export_clashes, (a,), (b,)) == ["shared: ScratchExportsA, ScratchExportsB"]
+        Test.@test isempty(Base.invokelatest(qa_export_clashes, (a,), (c,)))
+        return nothing
+    end
+
 end
