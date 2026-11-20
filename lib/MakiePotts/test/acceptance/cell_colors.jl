@@ -1,9 +1,9 @@
-# Frozen acceptance test for P6.0by (D-172): automatic per-cell colours separate
-# neighbouring ids. Run alone with
-#     julia --project=lib/MakiePotts/test lib/MakiePotts/test/acceptance/p6_0by_cell_colours.jl
+# Acceptance test (D-172): automatic per-cell colors separate
+# neighboring ids. Run alone with
+#     julia --project=lib/MakiePotts/test lib/MakiePotts/test/acceptance/cell_colors.jl
 # or include it from `lib/MakiePotts/test/runtests.jl`.
 #
-# The defect (AUDIT A-80). `CellIdentityEncoding` keys a cell by
+# The defect. `CellIdentityEncoding` keys a cell by
 # `(UInt64(id) << 32) ⊻ generation`, and the automatic palette maps a key to the hue
 # `frac(key · φ⁻¹)`. Since frac(2³² · φ⁻¹) ≈ 0.497, hues alternate between about 0.5 and
 # about 1.0 and drift −0.005 per id: ids two apart get nearly the same colour. Cells born
@@ -135,7 +135,7 @@ passes_separation(colours) = all(<=(MAX_CONFUSABLE), confusable_fractions(colour
 const LOW_IDS = 1:2000
 const HIGH_WINDOWS = (2^20:(2^20 + 2000), 4_000_000_000:4_000_002_000)
 
-@testset "P6.0by per-cell colours separate neighbouring ids (D-172)" begin
+@testset "per-cell colors separate neighboring ids" begin
     @testset "(e) negative control: the metric catches the old formula" begin
         for generation in (0, 1)
             old = [old_colour(id, generation) for id in LOW_IDS]

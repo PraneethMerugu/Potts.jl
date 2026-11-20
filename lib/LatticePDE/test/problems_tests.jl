@@ -490,7 +490,7 @@ end
         sv = solve(remake(owned(vsys, 8, 4); u0), alg; dt = 0.1)
         sa = solve(remake(owned(asys, 8, 4; inputs = [ve[1] => 0.3, ve[2] => 0.0]); u0), alg; dt = 0.1)
         @test sv.u[end] == sa.u[end] && sv.u[end] != u0
-        # a constant velocity vector (review M2 of F2 batch 4; base: refused, its route `[ux, uy]`)
+        # a constant velocity vector (before the fix: refused, its route `[ux, uy]`)
         csys = psys([D(ce) ~ -Advect(Upwind1())([0.3, 0.0], ce)], [c(0, x, y) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)], Num[])
         @test solve(remake(owned(csys, 8, 4); u0), alg; dt = 0.1).u[end] == sv.u[end]
         # the velocity's length is checked against the grid's axes

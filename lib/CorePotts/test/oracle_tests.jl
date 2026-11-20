@@ -25,8 +25,8 @@ const ORA_CLOSED_PROB = PottsProblem(
 include("shared/export_all.jl")
 end
 
-@testitem "exact transition oracle (M1.4b): Closed 3x2 (Sequential, skip_interior, Checkerboard)" setup = [CP_oracle] tags = [:corepotts, :oracle] begin
-    @testset "exact transition oracle (M1.4b): Closed 3x2" begin
+@testitem "exact transition oracle: Closed 3x2 (Sequential, skip_interior, Checkerboard)" setup = [CP_oracle] tags = [:corepotts, :oracle] begin
+    @testset "exact transition oracle: Closed 3x2" begin
     # the checkerboard's layout here: one block of one-site sub-regions, 64 phases per MCS
         l = init(ORA_CLOSED_PROB, CheckerboardCPM()).cache.layout
     @test CorePotts.nblocks(l) == 1 && CorePotts.boxsize(l) == 1 && l.k^2 == 64
@@ -51,8 +51,8 @@ end
     end
 end
 
-@testitem "exact transition oracle (M1.4b): Closed 3x2 mutant T=5 rejected" setup = [CP_oracle] tags = [:corepotts, :oracle] begin
-    @testset "exact transition oracle (M1.4b): Closed 3x2 mutant T=5" begin
+@testitem "exact transition oracle: Closed 3x2 mutant T=5 rejected" setup = [CP_oracle] tags = [:corepotts, :oracle] begin
+    @testset "exact transition oracle: Closed 3x2 mutant T=5" begin
     # power: the test rejects a mutant (T = 4 → 5) at this sample size
         ex = Oracle.exact(ORA_CLOSED_TINY, ORA_CLOSED_SIGMA0, 2, (m, d) -> Oracle.block_mcs(m, d, 64))
         mutant = remake(ORA_CLOSED_PROB; p = merge(ORA_P, (; T = 5.0)))
@@ -67,7 +67,7 @@ end
     end
 end
 
-@testitem "exact transition oracle (M1.4b): Periodic 3x3" setup = [CP_oracle] tags = [:corepotts, :oracle] begin
+@testitem "exact transition oracle: Periodic 3x3" setup = [CP_oracle] tags = [:corepotts, :oracle] begin
     @testset "Periodic 3x3" begin
         p_dims = (3, 3)
         p_σ0 = Int8[1, 1, 0, 2, 2, 0, 0, 0, 0]
@@ -98,7 +98,7 @@ end
     end
 end
 
-@testitem "exact transition oracle (M1.4b): Multi-block CheckerboardCPM 4x2 and mutant" setup = [CP_oracle] tags = [:corepotts, :oracle] begin
+@testitem "exact transition oracle: Multi-block CheckerboardCPM 4x2 and mutant" setup = [CP_oracle] tags = [:corepotts, :oracle] begin
     @testset "Multi-block CheckerboardCPM (nblocks > 1) on 4x2 Closed" begin
         mb_dims = (4, 2)
         mb_σ0 = Int8[1, 1, 0, 0, 2, 2, 0, 0]
@@ -131,7 +131,7 @@ end
     end
 end
 
-@testitem "exact transition oracle (M1.4b): Multi-site box CheckerboardCPM 3x2" setup = [CP_oracle] tags = [:corepotts, :oracle] begin
+@testitem "exact transition oracle: Multi-site box CheckerboardCPM 3x2" setup = [CP_oracle] tags = [:corepotts, :oracle] begin
     @testset "Multi-site sub-region CheckerboardCPM (boxsize > 1) on 3x2 Closed" begin
         bx_tiny = Oracle.Tiny(ORA_CLOSED_DIMS, ORA_VN, ORA_VN, [1, 2], ORA_JK, 1.0, 2.0, 4.0, false, 0.0)
         bx_prob = PottsProblem(
@@ -153,7 +153,7 @@ end
     end
 end
 
-@testitem "exact transition oracle (M1.4b): Copy direction bias and flipped mutant" setup = [CP_oracle] tags = [:corepotts, :oracle] begin
+@testitem "exact transition oracle: Copy direction bias and flipped mutant" setup = [CP_oracle] tags = [:corepotts, :oracle] begin
     @testset "Copy direction bias (x_target - x_source) on Closed 3x2" begin
         function dH_dir(st, par, prop, ctx)
             dx = coordinates(ctx.lattice, prop.target)[1] - coordinates(ctx.lattice, prop.source)[1]

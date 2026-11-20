@@ -63,8 +63,8 @@ end
     end
 end
 
-@testitem "rng: Philox4x32-10 KAT and address keying (D6)" setup = [CP_corepotts] tags = [:corepotts, :core] begin
-@testset "rng: Philox4x32-10 KAT and address keying (D6)" begin
+@testitem "rng: Philox4x32-10 KAT and address keying" setup = [CP_corepotts] tags = [:corepotts, :core] begin
+@testset "rng: Philox4x32-10 KAT and address keying" begin
     # Official Random123 (Salmon et al. 2011) Philox4x32-10 known-answer vectors
     kat_vectors = (
         ((0x00000000, 0x00000000, 0x00000000, 0x00000000), (0x00000000, 0x00000000),

@@ -94,9 +94,9 @@ using .LF_problems_device: instances
 end
 end
 
-@testitem "Dual{Float32} parameters on gpu (P5)" setup = [LF_problems_device] tags = [:latticefields, :problems, :gpu_only] begin
+@testitem "Dual{Float32} parameters on gpu" setup = [LF_problems_device] tags = [:latticefields, :problems, :gpu_only] begin
 using .LF_problems_device: instances
-@testset "Dual{Float32} parameters on $gpu (P5)" begin
+@testset "Dual{Float32} parameters on $gpu" begin
     dims = (16, 12)
     u0 = rand(Xoshiro(7), Float32, prod(dims))
     ix = LatticeIndex(; variables = [:u => FieldSlot(1:prod(dims), dims)], parameters = [:D => 1])

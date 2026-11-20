@@ -104,9 +104,9 @@ using .LP_device: fd, kron
 end
 end
 
-@testitem "number types on pgpu (P5)" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
+@testitem "number types on pgpu" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
 using .LP_device: fd, kron
-@testset "number types on $pgpu (P5)" begin
+@testset "number types on $pgpu" begin
     # Dual{Float32} through the owned path on the device equals the host derivative
     sys = nsys()
     mk(backend) = LFP.field_problem(discretize(sys, LatticeDiscretization(Grid((16, 8)); T = Float32, backend)))

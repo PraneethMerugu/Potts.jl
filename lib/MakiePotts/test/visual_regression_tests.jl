@@ -1,4 +1,4 @@
-# Golden-free pixel property checks for MakiePotts (TS-R2).
+# Golden-free pixel property checks for MakiePotts.
 # Replaces the old golden reference PNG with invariant visual properties and negative
 # controls that reject blank, monochrome, and shifted images.
 

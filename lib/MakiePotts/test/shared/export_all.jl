@@ -1,4 +1,4 @@
-# Included last by every @testsetup module of this suite (TS1b): export the setup's whole
+# Included last by every @testsetup module of this suite: export the setup's whole
 # namespace, its own definitions and the names its `using`s bring in, so a test item sees
 # what the old single-Main run saw.
 for n in names(@__MODULE__; all = true, imported = true, usings = true)

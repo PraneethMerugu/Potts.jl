@@ -802,7 +802,7 @@ end
 # the algorithm, `saveat` and the callbacks are not specialized on, so each call below is a
 # dynamic dispatch that compiles only that callee for the model's types (the setup runs once
 # per run; `step!` and the kernels stay fully specialized). Specialized on the model, this
-# body was 0.3–0.9 s of inference for every model (TS-R1 §1.1b).
+# body was 0.3–0.9 s of inference for every model (measured).
 Base.@nospecializeinfer function _init(
         @nospecialize(prob::PottsProblem), @nospecialize(alg::AbstractCPMAlgorithm), fresh::Bool,
         backend, opts::PottsOptions, @nospecialize(callback)

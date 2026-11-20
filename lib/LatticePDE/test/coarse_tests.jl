@@ -194,9 +194,9 @@ end
 
 end
 
-@testitem "M2: a nonlinear fine read is restricted by the mean of the whole subterm" setup = [LP_coarse] tags = [:latticepde, :coarse] begin
+@testitem "a nonlinear fine read is restricted by the mean of the whole subterm" setup = [LP_coarse] tags = [:latticepde, :coarse] begin
     using .LP_coarse: fd
-    @testset "M2: a nonlinear fine read is restricted by the mean of the whole subterm" begin
+    @testset "a nonlinear fine read is restricted by the mean of the whole subterm" begin
         # `D(c) ~ f` on Coarse(4) over 16²: Σ c · k² after t = 1 is the fine Σ f (before the fix,
         # cb20be97: `f(mean g)`, off by −25% for g², −75% for max(g − 0.5, 0),
         # −4% for exp(g), +2% for value_at(S, q) g, +25% for g/(0.2 + g))
@@ -228,9 +228,9 @@ end
 
 end
 
-@testitem "a kind expression folds by its block mean (blocks a kind covers in part); S2: the coarse-frame clamp" setup = [LP_coarse] tags = [:latticepde, :coarse] begin
+@testitem "a kind expression folds by its block mean (blocks a kind covers in part); the coarse-frame clamp" setup = [LP_coarse] tags = [:latticepde, :coarse] begin
     using .LP_coarse: fd
-    @testset "a kind expression folds by its block mean (blocks a kind covers in part); S2: the coarse-frame clamp" begin
+    @testset "a kind expression folds by its block mean (blocks a kind covers in part); the coarse-frame clamp" begin
         # blocks with ties and mixes: 8 P + 8 Q, 9 P + 7 Q, 6 P + 6 Q + 4 medium, 8 medium + 8 Q,
         # 8 Q + 8 N, ... Every spelling of a kind-dependent rate is the block mean of its fine
         # values, so the coarse total times the block size is the fine total (exact: the means are

@@ -89,7 +89,7 @@ end
 # Standalone LatticePDE: a parameter's declared `bounds` (MTK metadata) holds at every
 # write, refused at the write as in coupled Potts: `setp`, `integ.ps`, owned `remake`,
 # `discretize(…; p)`, ODE `remake` and the ODE integrator's `setp` (nothing changes). The bound
-# prints as A prints it. Base: the metadata was ignored (a write of 3 ran); review S1 of batch 5:
+# prints as Potts prints it. Before the fix the metadata was ignored (a write of 3 ran), and
 # `remake` and the ODE paths took the value and refused it only at `init`/`solve`/`step!`.
 @testitem "a parameter's declared bounds hold in B" setup = [LP_integ_ps] tags = [:latticepde, :integ_ps] begin
 @testset "a parameter's declared bounds hold in B" begin
@@ -114,7 +114,7 @@ end
 end
 end
 
-# Review M2/S4 of batch 5: a bound message names the user's parameter (never a slot `#i`) and
+# A bound message names the user's parameter (never a slot `#i`) and
 # blames the parameter written: base parameters are checked first, then computed ones, and a
 # computed parameter's message names the inputs to change (base: "parameter `#2` = 6.0 …" for
 # a write of `k = 3.0`)

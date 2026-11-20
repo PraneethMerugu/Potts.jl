@@ -306,8 +306,8 @@ end
 end
 end
 
-@testitem "R1: StalledSuccess does not skip the later groups" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
-@testset "R1: StalledSuccess does not skip the later groups" begin
+@testitem "StalledSuccess does not skip the later groups" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
+@testset "StalledSuccess does not skip the later groups" begin
     p = gown(gsys())
     for (code, moves) in ((ReturnCode.StalledSuccess, true), (ReturnCode.ConvergenceFailure, false))
             ig = init(p, FieldGroups(gce => StallStub(code); default = ExplicitEuler()); dt = 0.01)

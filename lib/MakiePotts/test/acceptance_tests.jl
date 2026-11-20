@@ -1,5 +1,5 @@
-# The acceptance file acceptance/p6_0by_cell_colours.jl runs unchanged, in this item's own
-# module, with the packages the old runner had loaded (TS1b).
+# The acceptance file acceptance/cell_colors.jl runs unchanged, in this item's own
+# module, with the packages the old runner had loaded.
 
 @testsetup module MP_acceptance
 using Test
@@ -12,6 +12,6 @@ import CorePotts
 include("shared/export_all.jl")
 end
 
-@testitem "acceptance/p6_0by_cell_colours.jl" setup = [MP_acceptance] tags = [:makiepotts, :acceptance] begin
-    include(joinpath(@__DIR__, "acceptance", "p6_0by_cell_colours.jl"))
+@testitem "acceptance/cell_colors.jl" setup = [MP_acceptance] tags = [:makiepotts, :acceptance] begin
+    include(joinpath(@__DIR__, "acceptance", "cell_colors.jl"))
 end

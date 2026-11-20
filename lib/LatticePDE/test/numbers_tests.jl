@@ -305,8 +305,8 @@ end
             i = run(T, ExplicitEuler(); dt = 0.05)
             @test eltype(i[wue]) == T && eltype(i[wKe]) == Float64 && eltype(i[whe]) == Float16
         end
-        # a state field whose declared storage differs from T keeps it on the owned path (batch 5
-        # Each state field its own arrays, as A's), and equals the all-Float64 run: a
+        # a state field whose declared storage differs from T keeps it on the owned path (each
+        # state field has its own arrays), and equals the all-Float64 run: a
         # Float64 field on a Float32 problem; a Float16 and a Float64 field beside a T field
         csys = PDESystem([D(wce) ~ 0.0625 * laplacian(wce) - 0.125 * wce], [wc(0, x, y) ~ x], wdom, [t, x, y], [wce], Any[]; name = :w)
         c32 = solve(
@@ -591,9 +591,9 @@ end
     end
 end
 
-@testitem "N4: Float64 on a backend without it; the registry's keys" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
+@testitem "Float64 on a backend without it; the registry's keys" setup = [LP_numbers] tags = [:latticepde, :numbers] begin
     using .LP_numbers: fd
-    @testset "N4: Float64 on a backend without it; the registry's keys" begin
+    @testset "Float64 on a backend without it; the registry's keys" begin
         LFP = LatticePDE.Problems
         @variables nw(..) [lattice_storage = Float64] nv(..)
         nwe, nve = nw(t, x, y), nv(t, x, y)

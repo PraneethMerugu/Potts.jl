@@ -155,8 +155,8 @@ end
     end
 end
 
-@testitem "M3: a nonlinear read of another row's field is a source in solve order" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
-    @testset "M3: a nonlinear read of another row's field is a source in solve order" begin
+@testitem "a nonlinear read of another row's field is a source in solve order" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
+    @testset "a nonlinear read of another row's field is a source in solve order" begin
         # acyclic (c reads o through a switch, o does not read c): the term is known when c is
         # solved, so the operator is exact, newton = 1 and no warning (base cb20be97: the term is
         # unseen, newton = 4 and the warning)

@@ -378,8 +378,8 @@ end
 end
 end
 
-@testitem "D-107: lowered IR independent of operator hashes" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
-@testset "D-107: lowered IR independent of operator hashes" begin
+@testitem "lowered IR independent of operator hashes" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
+@testset "lowered IR independent of operator hashes" begin
     function build()
             rhs = Dc * laplacian(ce) - k * ce + K0 * sin(ce) + cT * exp(-oe) + g0 * cos(oe) + h0 * ismember(ke, (2, 3)) +
               DivKGrad(:harmonic)(Ke, ce) + k * Dx(Dx(ce)) + max(ce - cT, 0) * ismember(ke, (1,)) +

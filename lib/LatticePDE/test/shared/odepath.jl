@@ -19,7 +19,7 @@ omsys() = PDESystem(
     [t, x, y], [ode_c, ode_k], [oD]; name = :om)
 const OTOL = (; abstol = 1e-11, reltol = 1e-11)
 
-# Review fixups (F4 batch 1, 2026-11-06). Negative controls at 0a182a0e, in each testset.
+# Negative controls at 0a182a0e, in each testset.
 @parameters qD = 0.5
 @variables qc(..) qk(..)::Int32 [input = true]
 qce, qke = qc(t, x, y), qk(t, x, y)

@@ -28,12 +28,12 @@ include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "props.jl"))
 # deferred kernel), the exact veto (the serial deferred kernel) and an inline exact search
 # (the serial kernel over the flood scratch). Compiles every connectivity kernel (D-157).
 # both cells: the gaining one locally, the losing one by the search
-p69_post_window(st, p, prop, ctx, stage) = CorePotts.global_gains(st.ownership, ctx, prop, Val(false)) ?
+global_post_window(st, p, prop, ctx, stage) = CorePotts.global_gains(st.ownership, ctx, prop, Val(false)) ?
     CorePotts.global_keeps(st.ownership, ctx, prop, Val(false), Val(2), Val(25), stage) : Int32(2)
-p69_post_exact(st, p, prop, ctx, stage) = CorePotts.global_gains(st.ownership, ctx, prop, Val(false)) ?
+global_post_exact(st, p, prop, ctx, stage) = CorePotts.global_gains(st.ownership, ctx, prop, Val(false)) ?
     CorePotts.global_keeps(st.ownership, ctx, prop, Val(false), Val(nothing), Val(0), stage) : Int32(2)
-p69_defer(st, p, prop, ctx) = CorePotts.global_defer(st.ownership, ctx, prop, Val(false))
-p69_penalty_dH(st, p, prop, ctx) = gg_delta_H(st, p, prop, ctx) +
+global_defer_check(st, p, prop, ctx) = CorePotts.global_defer(st.ownership, ctx, prop, Val(false))
+global_penalty_dH(st, p, prop, ctx) = gg_delta_H(st, p, prop, ctx) +
     40.0f0 * (CorePotts.global_keeps(st.ownership, ctx, prop, Val(false), Val(nothing), Val(0), CorePotts.GlobalSearch()) != Int32(0))
 
 # ROCm, last: no `double` in any kernel this suite compiled (full scan of the kernel cache,

@@ -317,16 +317,16 @@ end
         p = merge(gg_params(Float32), (; V0 = 25.0f0, T = 12.0f0))
         H = CorePotts.ConnectivityHooks
         for (f, splits) in (
-                (CPMFunction(gg_delta_H; temperature = gg_temperature, connectivity = H(; post = p69_post_window, uses_global = true)), false),
+                (CPMFunction(gg_delta_H; temperature = gg_temperature, connectivity = H(; post = global_post_window, uses_global = true)), false),
                 (
                     CPMFunction(
                         gg_delta_H; temperature = gg_temperature, connectivity = H(;
-                            post = p69_post_exact, uses_global = true,
+                            post = global_post_exact, uses_global = true,
                             exact_veto = true
                         )
                     ), false,
                 ),
-                (CPMFunction(p69_penalty_dH; temperature = gg_temperature, connectivity = H(; defer = p69_defer, uses_global = true)), true),
+                (CPMFunction(global_penalty_dH; temperature = gg_temperature, connectivity = H(; defer = global_defer_check, uses_global = true)), true),
             )
             prob = PottsProblem(f, initial_state(σ, kinds), lat, (0, 8), p)
             integ = init(prob, CheckerboardCPM(; proposal = Moore(1)); backend, save_start = false, save_end = false)

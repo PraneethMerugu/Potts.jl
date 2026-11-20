@@ -1,4 +1,4 @@
-# MakiePotts tests on ReTestItems (TS1b). Test items are in `*_tests.jl`; each file's
+# MakiePotts tests on ReTestItems. Test items are in `*_tests.jl`; each file's
 # definitions are in its `@testsetup` module, and the old runner's fixtures and helpers are in
 # shared/makiepotts.jl. The acceptance file runs unchanged from acceptance_tests.jl.
 # (`backends/` contains separate optional GL/WGL/visual scripts.)

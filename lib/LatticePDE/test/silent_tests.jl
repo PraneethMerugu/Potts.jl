@@ -213,8 +213,8 @@ end
 end
 end
 
-@testitem "V3: inputs are set, never read as zero" setup = [LP_silent] tags = [:latticepde, :silent] begin
-@testset "V3: inputs are set, never read as zero" begin
+@testitem "inputs are set, never read as zero" setup = [LP_silent] tags = [:latticepde, :silent] begin
+@testset "inputs are set, never read as zero" begin
     n = 4
     half = [i <= 2 for i in 1:n, j in 1:n]
     # a domain mask (base: the field never moved, extrema (0, 0)); `domain` takes the variable
