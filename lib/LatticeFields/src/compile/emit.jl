@@ -704,8 +704,8 @@ function _blocks(c::Ctx{N}, head, gate, pre, body) where {N}
         )
     end
     R > 0 ||
-        throw(AssertionError("_blocks called without reductions (internal error: please \
-            report it)"))
+        throw(AssertionError("_blocks called without reductions (internal error: \
+            please report it)"))
     site = Any[pre..., body...]
     ex = quote
         blk, item = $I(g), $I(it)
