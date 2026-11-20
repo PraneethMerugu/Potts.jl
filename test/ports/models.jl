@@ -22,8 +22,10 @@ function merks_delta_H(st, p, prop, ctx)
             )
         end
     end
-    return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
-        ℓ(prop.old, -1) + ℓ(prop.new, 1) + chemotaxis_delta(st.site.c, prop, p.χ)   # every copy
+    return contact_delta(st.ownership, ctx, prop, J) +
+        volume_delta(st.cell.volume, prop, E) +
+        # every copy
+        ℓ(prop.old, -1) + ℓ(prop.new, 1) + chemotaxis_delta(st.site.c, prop, p.χ)
 end
 function merks_commit!(st, p, prop, ctx)
     commit_volume!(st, p, prop, ctx)
@@ -40,10 +42,14 @@ function port_laplacian(c, lat, i)
     return acc
 end
 function merks_rate(st, p, ctx, i, c)
-    return p.D * port_laplacian(c, ctx.lattice, i) - p.k * @inbounds(c[i]) * (owner_kind(st, i) == 0) + p.s * (owner_kind(st, i) == 1)
+    return p.D * port_laplacian(c, ctx.lattice, i) -
+        p.k * @inbounds(c[i]) * (owner_kind(st, i) == 0) + p.s * (owner_kind(st, i) == 1)
 end
 function merks_substep!(st, p, ctx, key, mcs, i)
-    @inbounds st.site.c_next[i] = max(st.site.c[i] + 0.5 * merks_rate(st, p, ctx, i, st.site.c), 0.0)
+    @inbounds st.site.c_next[i] = max(
+        st.site.c[i] +
+            0.5 * merks_rate(st, p, ctx, i, st.site.c), 0.0
+    )
     return nothing
 end
 merks_temperature(st, p, prop, ctx) = p.T
@@ -57,25 +63,39 @@ function merks_problem(; tspan = (0, 40), seed = 0)
     σ = merks_state()
     lat = Lattice((12, 12); boundary = Closed())
     c = zeros(12, 12)
-    st = initial_state(σ, [1, 1]; cell = init_moments(σ, lat, 2), site = (; c, c_next = zero(c)))
+    st = initial_state(
+        σ, [1, 1]; cell = init_moments(σ, lat, 2), site = (;
+            c, c_next = zero(c),
+        )
+    )
     sub = (SitePhase(merks_substep!), CopyPhase((:site, :c) => (:site, :c_next)))
     ph = Phases(after_mcs = (sub..., sub...))
     f = CPMFunction(
         merks_delta_H; commit! = merks_commit!, temperature = merks_temperature,
         constraint = one_arc_connectivity, phases = ph
     )
-    return PottsProblem(f, st, lat, tspan, MERKS_PORT_P; contact = Moore(1), proposal = Moore(1), seed)
+    return PottsProblem(
+        f, st, lat, tspan, MERKS_PORT_P; contact = Moore(1), proposal = Moore(1), seed
+    )
 end
 
-# --- Niculescu et al. (2015) Act migration (Artistoo semantics, D-049), 16×16 periodic ------
+# --- Niculescu et al. (2015) Act migration (Artistoo semantics, D-049), 16×16 periodic
+# ------
 function wortel_delta_H(st, p, prop, ctx)
     J(a, b) = @inbounds p.J[a == 0 ? 1 : 2, b == 0 ? 1 : 2]
     E(v, c) = p.λ * (v - p.V0)^2
     S(s, c) = p.λs * (s - p.S0)^2
-    m(site, owner) = neighborhood_mean(st.site.act, st.ownership, ctx, site, owner; relation = ctx.act)
-    act = -(p.λact / p.maxact) * (m(prop.source, prop.new) - m(prop.target, prop.old))   # every copy
-    return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
-        surface_delta(st.cell.surface, prop, surface_change(st.ownership, ctx, prop), S) + act
+    function m(site, owner)
+        return neighborhood_mean(
+            st.site.act, st.ownership, ctx, site, owner; relation = ctx.act
+        )
+    end
+    # every copy
+    act = -(p.λact / p.maxact) * (m(prop.source, prop.new) - m(prop.target, prop.old))
+    return contact_delta(st.ownership, ctx, prop, J) +
+        volume_delta(st.cell.volume, prop, E) +
+        surface_delta(st.cell.surface, prop, surface_change(st.ownership, ctx, prop), S) +
+        act
 end
 function wortel_commit!(st, p, prop, ctx)
     commit_volume!(st, p, prop, ctx)
@@ -130,12 +150,24 @@ function openvt_commit!(st, p, prop, ctx)
 end
 
 function openvt_problem(; tspan = (0, 20), seed = 0)
-    σ = zeros(Int32, 12, 8); σ[5:8, 4:5] .= 1
+    σ = zeros(Int32, 12, 8)
+    σ[5:8, 4:5] .= 1
     lat = Lattice((12, 8); boundary = Closed())
-    st = with_capacity(initial_state(σ, [1]; cell = merge(init_moments(σ, lat, 1), (; mass = [8.0]))), 8)
+    st = with_capacity(
+        initial_state(
+            σ, [1]; cell = merge(
+                init_moments(σ, lat, 1), (;
+                    mass = [8.0],
+                )
+            )
+        ), 8
+    )
     f = CPMFunction(
         openvt_delta_H; commit! = openvt_commit!, temperature = merks_temperature,
-        lifecycle = Lifecycle(openvt_trigger; normal = openvt_normal, divide! = openvt_split!)
+        lifecycle = Lifecycle(
+            openvt_trigger; normal = openvt_normal,
+            divide! = openvt_split!
+        )
     )
     p = (; λ = 2.0, V0 = 8.0, Jt = 0.0, Jm = 4.0, T = 2.0)
     return PottsProblem(f, st, lat, tspan, p; contact = Moore(1), seed)

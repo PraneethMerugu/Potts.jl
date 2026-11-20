@@ -10,8 +10,14 @@ using Potts, Test
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "the precompile workload runs" setup = [PrecompileWorkloadSetup] tags = [:potts, :precompile_workload] begin
+@testitem "the precompile workload runs" setup = [PrecompileWorkloadSetup] tags = [
+    :potts, :precompile_workload,
+] begin
     @testset "the precompile workload runs" begin
-        @test (@test_logs min_level = Base.CoreLogging.Warn Potts._precompile_workload()) === nothing
+        @test (
+            @test_logs(
+                min_level = Base.CoreLogging.Warn, Potts._precompile_workload()
+            )
+        ) === nothing
     end
 end

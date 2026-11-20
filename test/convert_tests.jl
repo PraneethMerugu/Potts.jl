@@ -8,8 +8,8 @@
 # moment-scratch bound; the compile-time refusals of the writes.
 
 # Cytoplasm 1 (cluster 1) names the doomed cell 2 through `keep` and is bonded to it; the
-# sweep empties cell 2 early (its energy is 50·volume²). At MCS 3 the pass converts cell 1's 4
-# `sub` sites into a lamellipodium allocated in the lowest free slot, 2 (serial 3): the
+# sweep empties cell 2 early (its energy is 50·volume²). At MCS 3 the pass converts cell 1's
+# 4 `sub` sites into a lamellipodium allocated in the lowest free slot, 2 (serial 3): the
 # allocation first resets `keep` of cell 1, which names the dead slot 2, to 0, and drops the
 # dead cell's bond; `act` (cleared on an ownership change) is reset at the converted sites.
 
@@ -48,7 +48,6 @@ isdefined(@__MODULE__, :PottsDevices) || include(joinpath(@__DIR__, "shared", "d
     @sweep Metropolis(; temperature = 0.5)
 end
 
-
 const CV_SUB = [CartesianIndex(8, j) for j in 6:9]
 # interior sites: the sweep leaves them
 
@@ -64,35 +63,42 @@ function cv_device_problem()
         CVDevice(; name = :cv), [
             ownership => σ, kind => [:cytoplasm, :doomed], cluster => [1, 2],
             :keep => [2, 0], :sub => sub, :act => act, :bond => [(1, 2)],
-        ], (0, 4); T = Float32, capacity = 4
+        ],
+        (0, 4);
+        T = Float32,
+        capacity = 4
     )
 end
 
 # after the run: the lamellipodium in slot 2 (serial 3, cluster 1), `keep` of cell 1 reset,
 # one allocation, 4 conversions, the 4 units of `V_target` moved to the new cell; the reused
-# slot unlinked (no row names 2, its own row empty); `act` cleared at the converted sites only
+# slot unlinked (no row names 2, its own row empty); `act` cleared at the converted sites
+# only
 function cv_device_summary(u)
     v = Array(u.cell.volume)
     L = Array(getfield(u.cell, CorePotts.adjacency_name(:bond)))
     act = Array(u.site.act)
     return (;
-        alive = findall(>(0), v), kind2 = Array(u.cell.kind)[2], birth2 = Array(u.cell.birth)[2],
-        cluster2 = Array(u.cell.cluster)[2], keep1 = Array(u.cell.keep)[1], births = Array(u.model.births)[1],
-        nconv = Array(u.model.nconv)[1], vt = Array(u.cell.V_target)[1:2], unlinked = !any(==(2), L) && all(iszero, L[:, 2]),
+        alive = findall(>(0), v), kind2 = Array(u.cell.kind)[2],
+        birth2 = Array(u.cell.birth)[2],
+        cluster2 = Array(u.cell.cluster)[2], keep1 = Array(u.cell.keep)[1],
+        births = Array(u.model.births)[1],
+        nconv = Array(u.model.nconv)[1], vt = Array(u.cell.V_target)[1:2],
+        unlinked = !any(==(2), L) && all(iszero, L[:, 2]),
         cleared = all(iszero, act[CV_SUB]), kept = act[7, 7] == 1,
     )
 end
 
 const CV_EXPECTED = (;
-    alive = [1, 2], kind2 = 2, birth2 = 3, cluster2 = 1, keep1 = 0, births = 1.0f0, nconv = 4.0f0,
+    alive = [1, 2], kind2 = 2, birth2 = 3, cluster2 = 1, keep1 = 0, births = 1.0f0,
+    nconv = 4.0f0,
     vt = Float32[32, 4], unlinked = true, cleared = true, kept = true,
 )
 
-
-# Several entities allocating in one pass: three cytoplasm clusters (cells 1, 2, 3), the sweep
-# frozen, every `sub` site converting at MCS 1. Entities allocate in slot order, each the
-# lowest free slot: with capacity 5 (free slots 4, 5) cells 1 and 2 get 4 and 5, cell 3's
-# allocation is deferred and counted (it converts nothing that MCS; later passes convert
+# Several entities allocating in one pass: three cytoplasm clusters (cells 1, 2, 3), the
+# sweep frozen, every `sub` site converting at MCS 1. Entities allocate in slot order, each
+# the lowest free slot: with capacity 5 (free slots 4, 5) cells 1 and 2 get 4 and 5, cell
+# 3's allocation is deferred and counted (it converts nothing that MCS; later passes convert
 # nothing, p = 0).
 @potts_model CVMany begin
     @kinds medium cytoplasm lamellipodium
@@ -124,10 +130,11 @@ function cv_many_problem(model = CVMany; capacity = 5, σ3 = 3)
         model(; name = :many), [
             ownership => σ, kind => fill(:cytoplasm, maximum(σ)), cluster => [1, 2, 3],
             :sub => sub,
-        ], (0, 2); capacity
+        ],
+        (0, 2);
+        capacity
     )
 end
-
 
 # The Int32 moment scratch: an entity whose cells' second moments
 # exceed the bound converts nothing and is counted (the bound lowered here, as the device
@@ -146,7 +153,6 @@ end
     end
     @sweep Metropolis(; temperature = 1.0)
 end
-
 
 # The writes of a pass: at a cell named by a reference, and reading nothing the pass writes
 @potts_model CVWriteCase begin
@@ -210,14 +216,20 @@ end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "@convert: every stage on the CPU (reference reset, unlinking, ownership hook)" setup = [ConvertSetup] tags = [:potts, :convert] begin
-    @testset "@convert: every stage on the CPU (reference reset, unlinking, ownership hook)" begin
+@testitem "@convert: every stage on the CPU (reference reset, unlinking, ownership \
+    hook)" setup = [ConvertSetup] tags = [
+    :potts, :convert,
+] begin
+    @testset "@convert: every stage on the CPU (reference reset, unlinking, ownership \
+        hook)" begin
         prob = cv_device_problem()
-        @test getfield(prob.u0.cell, CorePotts.adjacency_name(:bond))[:, 2] != zeros(Int32, 2)   # control: linked
+        @test getfield(prob.u0.cell, CorePotts.adjacency_name(:bond))[:, 2] !=
+            zeros(Int32, 2)   # control: linked
         for alg in (SequentialCPM(), CheckerboardCPM())
             sol = solve(prob, alg; saveat = 1)
             @test cv_device_summary(sol.u[end]) == CV_EXPECTED
-            @test Array(sol.u[3].cell.keep)[1] == 2                        # before the allocation: still the dead slot
+            # before the allocation: still the dead slot
+            @test Array(sol.u[3].cell.keep)[1] == 2
         end
     end
 end
@@ -225,7 +237,9 @@ end
 # D-253: the lowest converted site (`#cv_first`, which decides `created`) and the flags are
 # `site_index_type`, Int64 above 2³¹ − 1 sites. Forced at construction on 24²: the same run
 # exactly, one `created` among the 4 conversions; unforced, Int32.
-@testitem "@convert: `created` at the Int64 site width" setup = [ConvertSetup] tags = [:potts, :convert] begin
+@testitem "@convert: `created` at the Int64 site width" setup = [ConvertSetup] tags = [
+    :potts, :convert,
+] begin
     @testset "@convert: `created` at the Int64 site width" begin
         function wide(f)
             CorePotts._FORCE_WIDE_SITES[] = true
@@ -241,14 +255,18 @@ end
         @test eltype(getfield(cv_device_problem().u0.cell, CorePotts._CV_FIRST)) === Int32
         for alg in (SequentialCPM(), CheckerboardCPM())
             sol = solve(prob, alg; saveat = 1)
-            ref = solve(cv_device_problem(), alg; saveat = 1)                    # the Int32 run
-            @test cv_device_summary(sol.u[end]) == CV_EXPECTED                  # births == 1
+            # the Int32 run
+            ref = solve(cv_device_problem(), alg; saveat = 1)
+            # births == 1
+            @test cv_device_summary(sol.u[end]) == CV_EXPECTED
             @test all(i -> sol.u[i].ownership == ref.u[i].ownership, eachindex(sol.u))
         end
     end
 end
 
-@testitem "@convert passes on the device (PottsDevices)" setup = [ConvertSetup] tags = [:potts, :convert, :device] begin
+@testitem "@convert passes on the device (PottsDevices)" setup = [ConvertSetup] tags = [
+    :potts, :convert, :device,
+] begin
     @testset "@convert passes on the device (PottsDevices)" begin
         if isdefined(@__MODULE__, :PottsDevices) && PottsDevices.on_device()
             backend = PottsDevices.device_backend()
@@ -258,7 +276,8 @@ end
             sol = solve(prob, CheckerboardCPM(); backend)
             @test Symbol(sol.retcode) === :Success
             @test cv_device_summary(sol.u[end]) == cpu
-            # D-253: the Int64 width on the device, or its refusal without 64-bit atomics (Metal)
+            # D-253: the Int64 width on the device, or its refusal without 64-bit atomics
+            # (Metal)
             wprob = (
                 CorePotts._FORCE_WIDE_SITES[] = true; try
                     cv_device_problem()
@@ -267,7 +286,8 @@ end
                 end
             )
             if CorePotts._atomic64(backend)
-                @test cv_device_summary(solve(wprob, CheckerboardCPM(); backend).u[end]) == cpu
+                @test cv_device_summary(solve(wprob, CheckerboardCPM(); backend).u[end]) ==
+                    cpu
             else
                 @test_throws ArgumentError init(wprob, CheckerboardCPM(); backend)
             end
@@ -277,24 +297,41 @@ end
     end
 end
 
-@testitem "@convert: several entities allocate lowest-first; the rest are deferred and reported" setup = [ConvertSetup] tags = [:potts, :convert] begin
-    @testset "@convert: several entities allocate lowest-first; the rest are deferred and reported" begin
+@testitem "@convert: several entities allocate lowest-first; the rest are deferred and \
+    reported" setup = [ConvertSetup] tags = [
+    :potts, :convert,
+] begin
+    @testset "@convert: several entities allocate lowest-first; the rest are deferred and \
+        reported" begin
         prob = cv_many_problem()
-        sol = @test_logs (:warn, r"1 allocation\(s\) deferred") match_mode = :any solve(prob, SequentialCPM())
+        sol = @test_logs (
+            :warn,
+            r"1 allocation\(s\) deferred",
+        ) match_mode = :any solve(prob, SequentialCPM())
         u = sol.u[end]
-        @test u.cell.kind[4:5] == [2, 2] && u.cell.cluster[4:5] == [1, 2]       # entity 1 → slot 4, entity 2 → slot 5
-        @test u.ownership[3, 3] == 4 && u.ownership[3, 11] == 5 && u.ownership[3, 19] == 3            # entity 3: deferred, nothing converted
+        # entity 1 → slot 4, entity 2 → slot 5
+        @test u.cell.kind[4:5] == [2, 2] && u.cell.cluster[4:5] == [1, 2]
+        # entity 3: deferred, nothing converted
+        @test u.ownership[3, 3] == 4 && u.ownership[3, 11] == 5 && u.ownership[3, 19] == 3
         @test u.model.births[1] == 2
         # control: with room for all three, nothing is deferred (and nothing is reported)
         @test_logs solve(cv_many_problem(; capacity = 6), SequentialCPM())
-        @test solve(cv_many_problem(; capacity = 6), SequentialCPM()).u[end].ownership[3, 19] == 6
+        @test solve(cv_many_problem(; capacity = 6), SequentialCPM()).u[end].ownership[
+            3,
+            19,
+        ] ==
+            6
     end
 end
 
-@testitem "@convert: a dead root that still names its cluster is not a free slot" setup = [ConvertSetup] tags = [:potts, :convert] begin
+@testitem "@convert: a dead root that still names its cluster is not a free slot" setup = [
+    ConvertSetup,
+] tags = [
+    :potts, :convert,
+] begin
     @testset "@convert: a dead root that still names its cluster is not a free slot" begin
-        # cell 2 is a dead slot that names the cluster of the live cell 3 (its root died): the
-        # allocation for entity 1 skips slot 2 (held) and takes slot 4
+        # cell 2 is a dead slot that names the cluster of the live cell 3 (its root died):
+        # the allocation for entity 1 skips slot 2 (held) and takes slot 4
         prob = cv_many_problem(; capacity = 4, σ3 = 3)
         u = deepcopy(prob.u0)
         u.ownership[u.ownership .== 2] .= 0
@@ -303,7 +340,8 @@ end
         p = remake(prob; u0 = u)
         sol = solve(p, SequentialCPM())
         v = sol.u[end]
-        @test v.cell.volume[2] == 0 && v.ownership[3, 3] == 4 && v.cell.kind[4] == 2 && v.cell.cluster[4] == 1
+        @test v.cell.volume[2] == 0 && v.ownership[3, 3] == 4 && v.cell.kind[4] == 2 &&
+            v.cell.cluster[4] == 1
         # control: when no live cell names cluster 2, slot 2 is free and is taken first
         u2 = deepcopy(u)
         u2.cell.cluster[3] = 3
@@ -311,13 +349,20 @@ end
     end
 end
 
-@testitem "@convert: cells too large for the Int32 moment scratch are skipped and reported" setup = [ConvertSetup] tags = [:potts, :convert] begin
-    @testset "@convert: cells too large for the Int32 moment scratch are skipped and reported" begin
+@testitem "@convert: cells too large for the Int32 moment scratch are skipped and \
+    reported" setup = [ConvertSetup] tags = [
+    :potts, :convert,
+] begin
+    @testset "@convert: cells too large for the Int32 moment scratch are skipped and \
+        reported" begin
         old = CorePotts._SCRATCH_LIMIT[]
         try
-            CorePotts._SCRATCH_LIMIT[] = 8                  # cell 1 (4×4): m2 = 20 per axis > 8 ÷ 4
+            # cell 1 (4×4): m2 = 20 per axis > 8 ÷ 4
+            CorePotts._SCRATCH_LIMIT[] = 8
             prob = cv_many_problem(CVLarge)
-            sol = @test_logs (:warn, r"entity pass\(es\) skipped") match_mode = :any solve(prob, SequentialCPM())
+            sol = @test_logs (:warn, r"entity pass\(es\) skipped") match_mode = :any solve(
+                prob, SequentialCPM()
+            )
             @test sol.u[end].ownership == prob.u0.ownership
         finally
             CorePotts._SCRATCH_LIMIT[] = old
@@ -327,7 +372,11 @@ end
     end
 end
 
-@testitem "@convert: writes at a reference, reading nothing the pass writes" setup = [ConvertSetup] tags = [:potts, :convert] begin
+@testitem "@convert: writes at a reference, reading nothing the pass writes" setup = [
+    ConvertSetup,
+] tags = [
+    :potts, :convert,
+] begin
     @testset "@convert: writes at a reference, reading nothing the pass writes" begin
         @test cv_write_error(:ok_to) === nothing                               # controls
         @test cv_write_error(:ok_read_to) === nothing

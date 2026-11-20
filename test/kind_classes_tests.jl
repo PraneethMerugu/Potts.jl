@@ -7,9 +7,7 @@ using Potts, Test
 using Potts: CorePotts
 isdefined(@__MODULE__, :PottsDevices) || include(joinpath(@__DIR__, "shared", "devices.jl"))
 
-
 using Potts, Test
-
 
 """The message of the exception `f()` throws (unwrapping a macro expansion's `LoadError`),
 or `nothing` if it throws none."""
@@ -18,7 +16,11 @@ function kc_error(f)
         f()
     catch e
         e isa LoadError && (e = e.error)
-        return e isa ArgumentError ? sprint(showerror, e) : "not an ArgumentError: " * sprint(showerror, e)
+        return if e isa ArgumentError
+            sprint(showerror, e)
+        else
+            "not an ArgumentError: " * sprint(showerror, e)
+        end
     end
     return nothing
 end
@@ -34,7 +36,6 @@ end
 
 has(msg, parts...) = msg !== nothing && !startswith(msg, "not an ArgumentError")
 
-
 const Q = 2
 # a global integer: never a class member
 
@@ -47,7 +48,11 @@ end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "kind classes: `kind == g` and `kind != g` are errors, not constants" setup = [KindClassTests] tags = [:potts, :kind_classes] begin
+@testitem "kind classes: `kind == g` and `kind != g` are errors, not constants" setup = [
+    KindClassTests,
+] tags = [
+    :potts, :kind_classes,
+] begin
     @testset "kind classes: `kind == g` and `kind != g` are errors, not constants" begin
         for (label, stmt) in (
                 ("==", :(@energy sites => 1.0 * (kind == endothelial))),
@@ -65,7 +70,10 @@ end
                     @sweep Metropolis(; temperature = 2.0)
                 end
             )
-            @test has(kc_build(ex, M), "`endothelial` is a kind class", "kind ∈ endothelial")
+            @test has(
+                kc_build(ex, M), "`endothelial` is a kind class",
+                "kind ∈ endothelial"
+            )
         end
         # control: membership builds, and on the host `∈` on kind numbers works
         @test kc_build(
@@ -83,7 +91,11 @@ end
     end
 end
 
-@testitem "kind classes: members are resolved when the macro expands" setup = [KindClassTests] tags = [:potts, :kind_classes] begin
+@testitem "kind classes: members are resolved when the macro expands" setup = [
+    KindClassTests,
+] tags = [
+    :potts, :kind_classes,
+] begin
     @testset "kind classes: members are resolved when the macro expands" begin
         function expand(body)
             return kc_error(
@@ -106,21 +118,29 @@ end
             expand(
                 :(
                     @kinds begin
-                        medium; fluid; tip; stalk
+                        medium
+                        fluid
+                        tip
+                        stalk
                         g1 = (g2, fluid)                     # a later class
                         g2 = (tip,)
                     end
                 )
             ), "kind class `g1`", "`g2`"
         )
-        @test has(expand(:(@kinds medium fluid tip g = (tip, Q))), "kind class `g`", "`Q`")   # a global
+        # a global
+        @test has(expand(:(@kinds medium fluid tip g = (tip, Q))), "kind class `g`", "`Q`")
         @test has(expand(:(@kinds medium tip g = (g, tip))), "cannot contain itself")
         # controls: kinds before or after the class line, earlier classes
         @test expand(
             :(
                 @kinds begin
-                    medium; g = (tip, stalk); tip; stalk
-                    h = (g, fluid); fluid
+                    medium
+                    g = (tip, stalk)
+                    tip
+                    stalk
+                    h = (g, fluid)
+                    fluid
                 end
             )
         ) === nothing
@@ -129,7 +149,10 @@ end
         @potts_model KCExt begin
             @extend endothelial = base = KCBase()
             @kinds begin
-                medium; fluid; tip; stalk
+                medium
+                fluid
+                tip
+                stalk
                 prolif
                 sprout = (endothelial, prolif)
             end
@@ -140,7 +163,10 @@ end
                 () -> macroexpand(
                     @__MODULE__, :(
                         @potts_model KCLate begin
-                            @kinds medium fluid tip stalk prolif sprout = (endothelial, prolif)
+                            @kinds medium fluid tip stalk prolif sprout = (
+                                endothelial,
+                                prolif,
+                            )
                             @extend endothelial = base = KCBase()
                         end
                     )
@@ -148,25 +174,34 @@ end
             ), "kind class `sprout`", "`endothelial`"
         )
         s = KCExt(; name = :m)
-        @test [(g.name, g.kinds) for g in Potts._p(s, :kind_classes)] == [(:endothelial, [2, 3]), (:sprout, [2, 3, 4])]
+        @test [(g.name, g.kinds) for g in Potts._p(s, :kind_classes)] ==
+            [(:endothelial, [2, 3]), (:sprout, [2, 3, 4])]
         @potts_model KCExtOnlyClass begin
             @extend tip, stalk = base = KCBase()
             @kinds pair = (tip, stalk)           # no kind lines: the kinds are the base's
         end
         s = KCExtOnlyClass(; name = :m)
         @test Potts._p(s, :kinds) == [:medium, :fluid, :tip, :stalk]
-        @test [(g.name, g.kinds) for g in Potts._p(s, :kind_classes)] == [(:endothelial, [2, 3]), (:pair, [2, 3])]
+        @test [(g.name, g.kinds) for g in Potts._p(s, :kind_classes)] ==
+            [(:endothelial, [2, 3]), (:pair, [2, 3])]
     end
 end
 
-@testitem "kind classes: an @extend restatement keeps the member order" setup = [KindClassTests] tags = [:potts, :kind_classes] begin
+@testitem "kind classes: an @extend restatement keeps the member order" setup = [
+    KindClassTests,
+] tags = [
+    :potts, :kind_classes,
+] begin
     @testset "kind classes: an @extend restatement keeps the member order" begin
         msg = kc_build(
             :(
                 @potts_model KCReorder begin
                     @extend base = KCBase()
                     @kinds begin
-                        medium; fluid; tip; stalk
+                        medium
+                        fluid
+                        tip
+                        stalk
                         endothelial = (stalk, tip)
                     end
                 end
@@ -176,37 +211,75 @@ end
     end
 end
 
-@testitem "kind classes: layouts against a model take kinds" setup = [KindClassTests] tags = [:potts, :kind_classes] begin
+@testitem "kind classes: layouts against a model take kinds" setup = [
+    KindClassTests,
+] tags = [
+    :potts, :kind_classes,
+] begin
     using Potts.Layouts
     @testset "kind classes: layouts against a model take kinds" begin
         sys = KCBase(; name = :m)
         tiles = Tiling((3, 3); kinds = [:tip, :stalk])
         for (l, what) in (
                 (Tiling((3, 3); kinds = [:endothelial]), "kind class"),
-                (overlay(tiles, InsertUntil(:tip; into = [:stalk, :endothelial], number = 2, seed = 1)), "kind class"),
-                (overlay(tiles, InsertUntil(:endothelial; into = [:stalk], number = 2, seed = 1)), "kind class"),
+                (
+                    overlay(
+                        tiles,
+                        InsertUntil(
+                            :tip; into = [:stalk, :endothelial], number = 2,
+                            seed = 1
+                        )
+                    ),
+                    "kind class",
+                ),
+                (
+                    overlay(
+                        tiles,
+                        InsertUntil(:endothelial; into = [:stalk], number = 2, seed = 1)
+                    ),
+                    "kind class",
+                ),
                 (Frame(:endothelial), "kind class"),
                 (Scattered(2, (2, 2); kinds = [:endothelial], seed = 1), "kind class"),
             )
             @test has(kc_error(() -> layout(l, sys)), what)
         end
-        @test has(kc_error(() -> layout(Tiling((3, 3); kinds = [:endothelial]), mtkcompile(sys))), "kind class")
+        @test has(
+            kc_error(() -> layout(Tiling((3, 3); kinds = [:endothelial]), mtkcompile(sys))),
+            "kind class"
+        )
         # controls: kinds of the model; a dims target knows no kinds; other names pass the
         # layout (a model may serve as a lattice) and are rejected by `PottsProblem`
-        @test has(kc_error(() -> PottsProblem(sys, layout(Tiling((3, 3); kinds = [:tpi]), sys), (0, 1))), "unknown kind `tpi`")
-        op = layout(overlay(tiles, InsertUntil(:tip; into = [:stalk], number = 2, seed = 1)), sys)
+        @test has(
+            kc_error(
+                () -> PottsProblem(
+                    sys, layout(Tiling((3, 3); kinds = [:tpi]), sys), (
+                        0, 1,
+                    )
+                )
+            ),
+            "unknown kind `tpi`"
+        )
+        op = layout(
+            overlay(tiles, InsertUntil(:tip; into = [:stalk], number = 2, seed = 1)), sys
+        )
         @test PottsProblem(sys, op, (0, 1)) isa PottsProblem
         @test layout(Tiling((3, 3); kinds = [:endothelial]), (12, 12)) isa Vector
     end
 end
 
-@testitem "kind classes: programmatic classes are checked" setup = [KindClassTests] tags = [:potts, :kind_classes] begin
+@testitem "kind classes: programmatic classes are checked" setup = [KindClassTests] tags = [
+    :potts, :kind_classes,
+] begin
     @testset "kind classes: programmatic classes are checked" begin
         s = KCBase(; name = :m)
         function with(classes)
             return kc_error(
                 () -> PottsSystem(;
-                    name = nameof(s), (f => Potts._p(s, f) for f in fieldnames(Potts.PottsPart))...,
+                    name = nameof(s), (
+                        f => Potts._p(s, f)
+                            for f in fieldnames(Potts.PottsPart)
+                    )...,
                     kind_classes = classes
                 )
             )
@@ -214,11 +287,15 @@ end
         @test with([Potts.KindClass(:ok, [1, 3])]) === nothing
         @test has(with([Potts.KindClass(:volume, [1])]), "kind class `volume`", "built-in")
         @test has(with([Potts.KindClass(:a, [1])]), "reserved")
-        @test has(with([Potts.KindClass(:tip, [1])]), "tip")                       # a kind's name
+        # a kind's name
+        @test has(with([Potts.KindClass(:tip, [1])]), "tip")
         @test has(with([Potts.KindClass(:g, [0])]), "kind class `g`", "not a cell kind")
         @test has(with([Potts.KindClass(:g, [4])]), "kind class `g`", "not a cell kind")
         @test has(with([Potts.KindClass(:g, Int[])]), "empty")
         @test has(with([Potts.KindClass(:g, [1, 1])]), "twice")
-        @test has(with([Potts.KindClass(:g, [1]), Potts.KindClass(:g, [2])]), "declared twice")
+        @test has(
+            with([Potts.KindClass(:g, [1]), Potts.KindClass(:g, [2])]),
+            "declared twice"
+        )
     end
 end

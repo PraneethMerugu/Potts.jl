@@ -19,27 +19,43 @@ module CpPDE
     const Dt = Differential(t)
     const laplacian = Potts.LatticePDE.laplacian
     @parameters x y Dc = 0.2 s = 0.5 kd = 0.1 av = 0.01
-    @variables c(..) u(..) endo(..)::Bool [input = true] vol(..) [input = true] med(..)::Bool [input = true]
+    @variables c(..) u(..) endo(..)::Bool [input = true] vol(..) [input = true] med(
+        ..
+    )::Bool [input = true]
     const DOM = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 24.0), y ∈ Interval(0.0, 20.0)]
     function sys(; name = :fields, dom = DOM)
         return PDESystem(
-            [Dt(c(t, x, y)) ~ Dc * laplacian(c(t, x, y)) + s * endo(t, x, y) - kd * c(t, x, y) + av * vol(t, x, y)],
-            [c(0, x, y) ~ 0.0], dom, [t, x, y], [c(t, x, y), endo(t, x, y), vol(t, x, y)], [Dc, s, kd, av]; name
+            [
+                Dt(c(t, x, y)) ~
+                    Dc * laplacian(c(t, x, y)) + s * endo(t, x, y) - kd * c(t, x, y) +
+                    av * vol(t, x, y),
+            ],
+            [c(0, x, y) ~ 0.0], dom, [t, x, y], [c(t, x, y), endo(t, x, y), vol(t, x, y)], [
+                Dc, s, kd, av,
+            ]; name
         )
     end
     function sys3(; name = :fields)
         return PDESystem(
             [
-                Dt(c(t, x, y)) ~ Dc * laplacian(c(t, x, y)) + s * endo(t, x, y) - kd * c(t, x, y),
-                Dt(u(t, x, y)) ~ 0.3 * laplacian(u(t, x, y)) + 0.2 * c(t, x, y) - 0.2 * u(t, x, y),
+                Dt(c(t, x, y)) ~
+                    Dc * laplacian(c(t, x, y)) + s * endo(t, x, y) - kd * c(t, x, y),
+                Dt(u(t, x, y)) ~
+                    0.3 * laplacian(u(t, x, y)) + 0.2 * c(t, x, y) - 0.2 * u(t, x, y),
             ],
-            [c(0, x, y) ~ 0.0, u(0, x, y) ~ 0.0], DOM, [t, x, y], [c(t, x, y), u(t, x, y), endo(t, x, y)], [Dc, s, kd]; name
+            [c(0, x, y) ~ 0.0, u(0, x, y) ~ 0.0], DOM, [t, x, y], [
+                c(t, x, y), u(t, x, y), endo(t, x, y),
+            ], [Dc, s, kd]; name
         )
     end
     function sys2(; name = :fields)
         return PDESystem(
-            [Dt(c(t, x, y)) ~ Dc * laplacian(c(t, x, y)) + s * endo(t, x, y) - kd * c(t, x, y)],
-            [c(0, x, y) ~ 0.0], DOM, [t, x, y], [c(t, x, y), endo(t, x, y)], [Dc, s, kd]; name
+            [
+                Dt(c(t, x, y)) ~ Dc * laplacian(c(t, x, y)) + s * endo(t, x, y) - kd *
+                    c(t, x, y),
+            ],
+            [c(0, x, y) ~ 0.0], DOM, [t, x, y], [c(t, x, y), endo(t, x, y)], [Dc, s, kd];
+            name
         )
     end
 end
@@ -119,10 +135,18 @@ CpOne(; name = :CpOne, kw...) = _CpDriveSys3(; drive_u = false, name, kw...)
     @sweep Metropolis(; temperature = 4.0)
 end
 
-cp_op() = (σ = zeros(Int32, 24, 20); σ[5:8, 5:8] .= 1; σ[14:17, 10:13] .= 2; [ownership => σ, kind => [:A, :A]])
+function cp_op()
+    σ = zeros(Int32, 24, 20)
+    σ[5:8, 5:8] .= 1
+    σ[14:17, 10:13] .= 2
+    return [ownership => σ, kind => [:A, :A]]
+end
 
 function cp_run(m, fs, k = 12; op = cp_op(), kw...)
-    return solve(PottsProblem(m, op, (0, k); field_solver = fs, seed = 3, kw...), SequentialCPM(); saveat = 0:3:k)
+    return solve(
+        PottsProblem(m, op, (0, k); field_solver = fs, seed = 3, kw...),
+        SequentialCPM(); saveat = 0:3:k
+    )
 end
 
 function cp_msg(f, E::Type{<:Exception} = ArgumentError)
@@ -139,7 +163,11 @@ function cp_compile_msg(f)
         f()
         "built"
     catch e
-        e isa Potts.PottsCompileError ? sprint(showerror, e) : "wrong exception $(typeof(e)), expected Potts.PottsCompileError"
+        if e isa Potts.PottsCompileError
+            sprint(showerror, e)
+        else
+            "wrong exception $(typeof(e)), expected Potts.PottsCompileError"
+        end
     end
 end
 
@@ -161,21 +189,39 @@ end
 cp_hand2(σ, kind) = cp_hand(σ, kind)[1:1]
 
 function cp_replay(
-        m, sys, ins, alg; op = cp_op(), k = 12, seed = 3, fs = ExplicitEuler(), fields = (:c,),
+        m, sys, ins, alg; op = cp_op(), k = 12, seed = 3,
+        fs = ExplicitEuler(), fields = (:c,),
         skip = (σ0, σ) -> false, p = nothing
     )
     integ = init(PottsProblem(m, op, (0, k); field_solver = fs, seed), SequentialCPM())
     σ = Array(current_state(integ).ownership)
-    prob = LP.discretize(sys, LP.LatticeDiscretization(LP.Grid(size(σ)); T = Float64); inputs = ins(σ, Array(current_state(integ).cell.kind)))
+    prob = LP.discretize(
+        sys, LP.LatticeDiscretization(LP.Grid(size(σ)); T = Float64);
+        inputs = ins(σ, Array(current_state(integ).cell.kind))
+    )
     p === nothing || (prob = LP.remake(prob; p))
-    state() = reduce(vcat, (vec(Array(getproperty(current_state(integ).site, f))) for f in fields))
+    function state()
+        return reduce(
+            vcat, (
+                vec(Array(getproperty(current_state(integ).site, f)))
+                    for f in fields
+            )
+        )
+    end
     err, n = 0.0, 0
     for _ in 1:k
         σ0, u0 = Array(current_state(integ).ownership), state()
         step!(integ)
         σ = Array(current_state(integ).ownership)
         skip(σ0, σ) && continue
-        o = LP.solve(LP.remake(prob; u0, tspan = (0.0, 1.0), inputs = ins(σ, Array(current_state(integ).cell.kind))), alg; dt = 1.0).u[end]
+        o = LP.solve(
+            LP.remake(
+                prob; u0, tspan = (0.0, 1.0),
+                inputs = ins(σ, Array(current_state(integ).cell.kind))
+            ),
+            alg;
+            dt = 1.0
+        ).u[end]
         err, n = max(err, maximum(abs, o .- state())), n + 1
     end
     return err, n
@@ -208,51 +254,84 @@ module CpCases
     const masked = Potts.LatticePDE.masked
     @parameters x y Dc = 0.2 s = 0.5 kd = 0.1 kq = 1.0
     @variables c(..) q(..) w(..) cc(..) [lattice_level = Potts.LatticePDE.Coarse(2)]
-    @variables endo(..)::Bool [input = true] isB(..)::Bool [input = true] vol(..) [input = true] cin(..) [input = true]
+    @variables endo(..)::Bool [input = true] isB(..)::Bool [input = true] vol(..) [
+        input = true,
+    ] cin(..) [input = true]
     @variables cnm(..) [input = true, lattice_input_name = "c"]
-    @variables kb(..)::Bool [input = true, lattice_input_name = "kind"] kr(..) [input = true, lattice_input_name = "kind"]
+    @variables kb(..)::Bool [input = true, lattice_input_name = "kind"] kr(..) [
+        input = true, lattice_input_name = "kind",
+    ]
     const DOM = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 24.0), y ∈ Interval(0.0, 20.0)]
     C, Q, W = c(t, x, y), q(t, x, y), w(t, x, y)
     function rich()
         return PDESystem(
-            [Dt(C) ~ Dc * laplacian(C) + s * endo(t, x, y) - kd * C + 0.01 * vol(t, x, y), 0 ~ 0.5 * laplacian(Q) - kq * Q + C],
-            [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 0.5, Differential(x)(c(t, 24, y)) ~ 0.0, C ~ masked(isB(t, x, y) == 1, 1.0)],
-            DOM, [t, x, y], [C, Q, endo(t, x, y), isB(t, x, y), vol(t, x, y)], [Dc, s, kd, kq]; name = :rich
+            [
+                Dt(C) ~ Dc * laplacian(C) + s * endo(t, x, y) - kd * C + 0.01 *
+                    vol(t, x, y),
+                0 ~ 0.5 * laplacian(Q) - kq * Q + C,
+            ],
+            [
+                c(0, x, y) ~ 0.0, c(t, 0, y) ~ 0.5, Differential(x)(c(t, 24, y)) ~ 0.0,
+                C ~ masked(isB(t, x, y) == 1, 1.0),
+            ],
+            DOM, [t, x, y], [C, Q, endo(t, x, y), isB(t, x, y), vol(t, x, y)],
+            [Dc, s, kd, kq]; name = :rich
         )
     end
     function first_sys()
         return PDESystem(
-            [Dt(C) ~ Dc * laplacian(C) + s * endo(t, x, y) - kd * C], [c(0, x, y) ~ 0.0], DOM, [t, x, y],
+            [Dt(C) ~ Dc * laplacian(C) + s * endo(t, x, y) - kd * C], [c(0, x, y) ~ 0.0],
+            DOM, [
+                t, x, y,
+            ],
             [C, endo(t, x, y)], [Dc, s, kd]; name = :one
         )
     end
     function second_unbound()
         return PDESystem(
-            [Dt(W) ~ 0.3 * laplacian(W) - W + 0.7 * cnm(t, x, y)], [w(0, x, y) ~ 0.0], DOM, [t, x, y],
+            [Dt(W) ~ 0.3 * laplacian(W) - W + 0.7 * cnm(t, x, y)], [w(0, x, y) ~ 0.0], DOM,
+            [
+                t, x, y,
+            ],
             [W, cnm(t, x, y)], Any[]; name = :two
         )
     end
     function second_bound()
         return PDESystem(
-            [Dt(W) ~ 0.3 * laplacian(W) - W + 0.7 * cin(t, x, y)], [w(0, x, y) ~ 0.0], DOM, [t, x, y],
+            [Dt(W) ~ 0.3 * laplacian(W) - W + 0.7 * cin(t, x, y)], [w(0, x, y) ~ 0.0], DOM,
+            [
+                t, x, y,
+            ],
             [W, cin(t, x, y)], Any[]; name = :twob
         )
     end
     function coarse_sys()
         return PDESystem(
-            [Dt(cc(t, x, y)) ~ Dc * laplacian(cc(t, x, y)) + s * endo(t, x, y) - kd * cc(t, x, y)], [cc(0, x, y) ~ 0.0],
+            [
+                Dt(cc(t, x, y)) ~
+                    Dc * laplacian(cc(t, x, y)) + s * endo(t, x, y) - kd * cc(t, x, y),
+            ], [
+                cc(0, x, y) ~
+                    0.0,
+            ],
             DOM, [t, x, y], [cc(t, x, y), endo(t, x, y)], [Dc, s, kd]; name = :crs
         )
     end
     function kind_bool()
         return PDESystem(
-            [Dt(C) ~ Dc * laplacian(C) + s * kb(t, x, y) - kd * C], [c(0, x, y) ~ 0.0], DOM, [t, x, y],
+            [Dt(C) ~ Dc * laplacian(C) + s * kb(t, x, y) - kd * C], [c(0, x, y) ~ 0.0], DOM,
+            [
+                t, x, y,
+            ],
             [C, kb(t, x, y)], [Dc, s, kd]; name = :kbs
         )
     end
     function kind_real()
         return PDESystem(
-            [Dt(C) ~ Dc * laplacian(C) + s * kr(t, x, y) - kd * C], [c(0, x, y) ~ 0.0], DOM, [t, x, y],
+            [Dt(C) ~ Dc * laplacian(C) + s * kr(t, x, y) - kd * C], [c(0, x, y) ~ 0.0], DOM,
+            [
+                t, x, y,
+            ],
             [C, kr(t, x, y)], [Dc, s, kd]; name = :krs
         )
     end
@@ -304,7 +383,8 @@ end
     @sweep Metropolis(; temperature = 4.0)
 end
 
-# ---- from fields_short.jl ---------------------------------------------------------------------------
+# ---- from fields_short.jl
+# ---------------------------------------------------------------------------
 module FsMerks
     using Potts: Potts
     using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters
@@ -313,16 +393,24 @@ module FsMerks
     @parameters x y Dc = 0.75 σc = 5.4e-3 δc = 5.4e-3
     @variables c(..) cell(..)::Bool [input = true] ecm(..)::Bool [input = true]
     const C = c(t, x, y)
-    eq() = Differential(t)(C) ~ Dc * laplacian(C) + σc * cell(t, x, y) - δc * C * ecm(t, x, y)
+    function eq()
+        return Differential(t)(C) ~ Dc * laplacian(C) + σc * cell(t, x, y) - δc * C *
+            ecm(t, x, y)
+    end
     function chemoattractant(lattice)
         return PDESystem(
             [eq()], [c(0, x, y) ~ 0.0], lattice_domain(t, (x, y), lattice), [t, x, y],
             [C, cell(t, x, y), ecm(t, x, y)], [Dc, σc, δc]; name = :merks_field
         )
     end
-    const SHORT = Potts.LatticePDE.pdesystem([eq()], [c(0, x, y) ~ 0.0]; name = :merks_field)
+    const SHORT = Potts.LatticePDE.pdesystem(
+        [eq()], [c(0, x, y) ~ 0.0];
+        name = :merks_field
+    )
     const NODOM = PDESystem(
-        [eq()], [c(0, x, y) ~ 0.0], [], [t, x, y], [C, cell(t, x, y), ecm(t, x, y)], [Dc, σc, δc];
+        [eq()], [c(0, x, y) ~ 0.0], [], [t, x, y], [C, cell(t, x, y), ecm(t, x, y)], [
+            Dc, σc, δc,
+        ];
         name = :merks_field
     )
 end
@@ -333,7 +421,10 @@ module FsShort
     @parameters Dc = 0.2 s = 0.5 kd = 0.1
     @variables c(..) = 0.0 endo(..)::Bool [input = true]
     const C = c(t, x, y)
-    const SYS = pdesystem([Differential(t)(C) ~ Dc * laplacian(C) + s * endo(t, x, y) - kd * C]; name = :fields)
+    const SYS = pdesystem(
+        [Differential(t)(C) ~ Dc * laplacian(C) + s * endo(t, x, y) - kd * C];
+        name = :fields
+    )
 end
 
 @potts_model _FsMerksBase begin
@@ -358,9 +449,27 @@ end
     @sweep Metropolis(; temperature = T)
 end
 
-FsMerksLong(; mode = :long, lattice = (40, 30), name = :FsMerksLong, kw...) = _FsMerksBase(; mode, lattice, name, kw...)
-FsMerksShort(; mode = :short, lattice = (40, 30), name = :FsMerksShort, kw...) = _FsMerksBase(; mode, lattice, name, kw...)
-FsMerksNoDom(; mode = :nodom, lattice = (40, 30), name = :FsMerksNoDom, kw...) = _FsMerksBase(; mode, lattice, name, kw...)
+function FsMerksLong(; mode = :long, lattice = (40, 30), name = :FsMerksLong, kw...)
+    return _FsMerksBase(;
+        mode, lattice, name, kw...
+    )
+end
+function FsMerksShort(;
+        mode = :short, lattice = (40, 30), name = :FsMerksShort,
+        kw...
+    )
+    return _FsMerksBase(;
+        mode, lattice, name, kw...
+    )
+end
+function FsMerksNoDom(;
+        mode = :nodom, lattice = (40, 30), name = :FsMerksNoDom,
+        kw...
+    )
+    return _FsMerksBase(;
+        mode, lattice, name, kw...
+    )
+end
 
 function fs_op(dims = (40, 30))
     σ = zeros(Int32, dims...)
@@ -370,23 +479,41 @@ function fs_op(dims = (40, 30))
     return [ownership => σ, kind => fill(:endothelial, 3)]
 end
 
-fs_run(m; op = fs_op(Potts._p(m, :lattice).dims), k = 20) = solve(PottsProblem(m, op, (0, k); seed = 5), SequentialCPM(); saveat = 0:5:k)
+function fs_run(m; op = fs_op(Potts._p(m, :lattice).dims), k = 20)
+    return solve(
+        PottsProblem(m, op, (0, k); seed = 5), SequentialCPM(); saveat = 0:5:k
+    )
+end
 
-# ---- from fields_couple_names_tests.jl -----------------------------------------------------------------------
+# ---- from fields_couple_names_tests.jl
+# -----------------------------------------------------------------------
 module CeS
     using Potts: Potts
     using Potts.Fields
     @parameters Dc = 0.2 s = 0.5 kd = 0.1
     @variables c(..) = 0.0 a(..)::Bool [input = true] sv(..) [input = true]
     const C = c(t, x, y)
-    named() = pdesystem([Differential(t)(C) ~ Dc * laplacian(C) + s * a(t, x, y) - kd * C]; name = :fields)
+    function named()
+        return pdesystem(
+            [Differential(t)(C) ~ Dc * laplacian(C) + s * a(t, x, y) - kd * C];
+            name = :fields
+        )
+    end
     function named_owned()
         return pdesystem(
-            [Differential(t)(C) ~ Dc * laplacian(C) + s * a(t, x, y) - kd * C]; name = :fields,
+            [Differential(t)(C) ~ Dc * laplacian(C) + s * a(t, x, y) - kd * C];
+            name = :fields,
             domain = lattice_domain(t, (x, y), (24, 20))
         )
     end
-    work() = pdesystem([Differential(t)(C) ~ Dc * laplacian(C) + sv(t, x, y) * a(t, x, y) - kd * C]; name = :fields)
+    function work()
+        return pdesystem(
+            [
+                Differential(t)(C) ~
+                    Dc * laplacian(C) + sv(t, x, y) * a(t, x, y) - kd * C,
+            ]; name = :fields
+        )
+    end
 end
 
 @potts_model CeNamed begin
@@ -422,7 +549,12 @@ module CeB
     @parameters Dc = 0.2
     @variables c(..) = 0.0
     const C = c(t, x, y)
-    face() = pdesystem([Differential(t)(C) ~ Dc * laplacian(C)], [c(t, 0, y) ~ 1.0]; name = :faced)
+    function face()
+        return pdesystem(
+            [Differential(t)(C) ~ Dc * laplacian(C)], [c(t, 0, y) ~ 1.0];
+            name = :faced
+        )
+    end
 end
 
 @potts_model _CePer12 begin
@@ -437,9 +569,15 @@ end
 end
 
 CePeriodic(; name = :CePeriodic, kw...) = _CePer12(; with_field = true, name, kw...)
-CePeriodicHost(; name = :CePeriodicHost, kw...) = _CePer12(; with_field = false, name, kw...)
+function CePeriodicHost(; name = :CePeriodicHost, kw...)
+    return _CePer12(;
+        with_field = false, name,
+        kw...
+    )
+end
 
-# ---- from fields_couple_arrays_faces_tests.jl ----------------------------------------------------------------------
+# ---- from fields_couple_arrays_faces_tests.jl
+# ----------------------------------------------------------------------
 ce_op(dims) = (σ = zeros(Int32, dims...); σ[4:6, 3:5] .= 1; [ownership => σ, kind => [:A]])
 
 function ce_steps(m, op, k; kw...)
@@ -447,7 +585,10 @@ function ce_steps(m, op, k; kw...)
     return [
         (
             step!(integ); st = current_state(integ).site;
-            [n => copy(Array(getproperty(st, n))) for n in sort!(collect(propertynames(st)))]
+            [
+                n => copy(Array(getproperty(st, n)))
+                    for n in sort!(collect(propertynames(st)))
+            ]
         ) for _ in 1:k
     ]
 end
@@ -460,29 +601,49 @@ module CeArr
     function fi()
         return pdesystem(
             [
-                Differential(t)(U[1]) ~ 0.5 * laplacian(U[1]) - 40 * U[1] / (0.025 + U[1]) + 20,
+                Differential(t)(U[1]) ~ 0.5 * laplacian(U[1]) - 40 * U[1] / (0.025 + U[1]) +
+                    20,
                 Differential(t)(U[2]) ~ 0.5 * laplacian(U[2]) - U[2] + U[1],
             ]; name = :fi
         )
     end
     function fc()
         return pdesystem(
-            [0 ~ 0.1 * laplacian(W[1]) - 0.1 * W[1] + 5.0 * W[2] + 0.5 * k(t, x, y), 0 ~ 0.1 * laplacian(W[2]) - W[2] - 5.0 * W[1]];
+            [
+                0 ~ 0.1 * laplacian(W[1]) - 0.1 * W[1] + 5.0 * W[2] + 0.5 * k(t, x, y),
+                0 ~ 0.1 * laplacian(W[2]) - W[2] - 5.0 * W[1],
+            ];
             name = :fc
         )
     end
     @variables q(..)[1:2, 1:2] = 0.0
     const Q = q(t, x, y)
-    mat() = pdesystem([Differential(t)(Q[i, j]) ~ -Q[i, j] for i in 1:2 for j in 1:2]; name = :mat)
+    function mat()
+        return pdesystem(
+            [Differential(t)(Q[i, j]) ~ -Q[i, j] for i in 1:2 for j in 1:2];
+            name = :mat
+        )
+    end
     @variables ua(..) = 0.5 ub(..) = 0.5 wa(..) = 0.0 wb(..) = 0.0
     const UA, UB, WA, WB = ua(t, x, y), ub(t, x, y), wa(t, x, y), wb(t, x, y)
     function sfi()
         return pdesystem(
-            [Differential(t)(UA) ~ 0.5 * laplacian(UA) - 40 * UA / (0.025 + UA) + 20, Differential(t)(UB) ~ 0.5 * laplacian(UB) - UB + UA];
+            [
+                Differential(t)(UA) ~ 0.5 * laplacian(UA) - 40 * UA / (0.025 + UA) + 20,
+                Differential(t)(UB) ~ 0.5 * laplacian(UB) - UB + UA,
+            ];
             name = :sfi
         )
     end
-    sfc() = pdesystem([0 ~ 0.1 * laplacian(WA) - 0.1 * WA + 5.0 * WB + 0.5 * k(t, x, y), 0 ~ 0.1 * laplacian(WB) - WB - 5.0 * WA]; name = :sfc)
+    function sfc()
+        return pdesystem(
+            [
+                0 ~ 0.1 * laplacian(WA) - 0.1 * WA + 5.0 * WB + 0.5 * k(t, x, y),
+                0 ~ 0.1 * laplacian(WB) - WB - 5.0 * WA,
+            ];
+            name = :sfc
+        )
+    end
 end
 
 @potts_model _CeArrBase begin
@@ -511,14 +672,37 @@ end
 end
 
 CeHostArr(; name = :CeHostArr, kw...) = _CeArrBase(; variant = :host, name, kw...)
-ArrayFieldsComponent(; name = :ArrayFieldsComponent, kw...) = _CeArrBase(; variant = :fi_comp, name, kw...)
-ArrayFieldsDrive(; name = :ArrayFieldsDrive, kw...) = _CeArrBase(; variant = :fi_drive, name, kw...)
-ArrayConstraintsComponent(; name = :ArrayConstraintsComponent, kw...) = _CeArrBase(; variant = :fc_comp, name, kw...)
+function ArrayFieldsComponent(; name = :ArrayFieldsComponent, kw...)
+    return _CeArrBase(;
+        variant = :fi_comp, name, kw...
+    )
+end
+function ArrayFieldsDrive(; name = :ArrayFieldsDrive, kw...)
+    return _CeArrBase(;
+        variant = :fi_drive,
+        name, kw...
+    )
+end
+function ArrayConstraintsComponent(; name = :ArrayConstraintsComponent, kw...)
+    return _CeArrBase(;
+        variant = :fc_comp, name, kw...
+    )
+end
 CeFiScal(; name = :CeFiScal, kw...) = _CeArrBase(; variant = :fi_scal, name, kw...)
-CeFiDriveScal(; name = :CeFiDriveScal, kw...) = _CeArrBase(; variant = :fi_drive_scal, name, kw...)
+function CeFiDriveScal(; name = :CeFiDriveScal, kw...)
+    return _CeArrBase(;
+        variant = :fi_drive_scal, name,
+        kw...
+    )
+end
 CeFcScal(; name = :CeFcScal, kw...) = _CeArrBase(; variant = :fc_scal, name, kw...)
 
-ce_values(r) = [last.(filter(p -> !endswith(string(first(p)), "__next"), step)) for step in r]
+function ce_values(r)
+    return [
+        last.(filter(p -> !endswith(string(first(p)), "__next"), step))
+            for step in r
+    ]
+end
 
 module CeArrF
     using Potts: Potts
@@ -527,13 +711,19 @@ module CeArrF
     const U, A, B = u(t, x, y), a(t, x, y), b(t, x, y)
     function arr()
         return pdesystem(
-            [Differential(t)(U[1]) ~ 0.5 * laplacian(U[1]) - 0.1 * U[1], Differential(t)(U[2]) ~ 0.5 * laplacian(U[2]) + 0.1 * U[1] - 0.2 * U[2]],
+            [
+                Differential(t)(U[1]) ~ 0.5 * laplacian(U[1]) - 0.1 * U[1],
+                Differential(t)(U[2]) ~ 0.5 * laplacian(U[2]) + 0.1 * U[1] - 0.2 * U[2],
+            ],
             [u(t, 0, y)[1] ~ 1.0]; name = :arrf
         )
     end
     function sca()
         return pdesystem(
-            [Differential(t)(A) ~ 0.5 * laplacian(A) - 0.1 * A, Differential(t)(B) ~ 0.5 * laplacian(B) + 0.1 * A - 0.2 * B],
+            [
+                Differential(t)(A) ~ 0.5 * laplacian(A) - 0.1 * A,
+                Differential(t)(B) ~ 0.5 * laplacian(B) + 0.1 * A - 0.2 * B,
+            ],
             [a(t, 0, y) ~ 1.0]; name = :scaf
         )
     end
@@ -546,7 +736,12 @@ module CeAdv
     @variables c(..) = 0.0 cb(..) = 0.5 [bounds = (0, 1)] ci(..) = 0.5
     const C, CB, CI = c(t, x, y), cb(t, x, y), ci(t, x, y)
     dom(dims) = dims === nothing ? Any[] : lattice_domain(t, (x, y), dims)
-    adv(dims = nothing) = pdesystem([Differential(t)(C) ~ -Advect(Upwind1())([ux, 0.0], C) + s * y]; name = :adv, domain = dom(dims))
+    function adv(dims = nothing)
+        return pdesystem(
+            [Differential(t)(C) ~ -Advect(Upwind1())([ux, 0.0], C) + s * y];
+            name = :adv, domain = dom(dims)
+        )
+    end
     function advconst(dims = nothing)
         return pdesystem(
             [Differential(t)(C) ~ -Advect(Upwind1())([0.3, 0.0], C) + s * y]; name = :advc,
@@ -556,12 +751,19 @@ module CeAdv
     function burgers(dims = nothing)
         return pdesystem(
             [Differential(t)(CB) ~ -Advect(Upwind1())([CB, 0.0], CB)],
-            dims === nothing ? Any[] : [cb(t, 0, y) ~ cb(t, dims[1], y), cb(t, x, 0) ~ cb(t, x, dims[2])]; name = :burgers, domain = dom(dims)
+            if dims === nothing
+                Any[]
+            else
+                [cb(t, 0, y) ~ cb(t, dims[1], y), cb(t, x, 0) ~ cb(t, x, dims[2])]
+            end; name = :burgers, domain = dom(dims)
         )
     end
     function ivadv(dims = nothing)
         return pdesystem(
-            [Differential(t)(CI) ~ 0.1 * laplacian(CI) - Advect(Upwind1())([0.05 * (1 + x), 0.0], CI)]; name = :ivadv,
+            [
+                Differential(t)(CI) ~
+                    0.1 * laplacian(CI) - Advect(Upwind1())([0.05 * (1 + x), 0.0], CI),
+            ]; name = :ivadv,
             domain = dom(dims)
         )
     end
@@ -580,17 +782,38 @@ end
     @sweep Metropolis(; temperature = 1.0)
 end
 
-CeAdvB(; name = :CeAdvB, kw...) = _CeAdvBase(; dims = (8, 6), periodic = false, sys_fn = CeAdv.adv, name, kw...)
-CeAdvConstB(; name = :CeAdvConstB, kw...) = _CeAdvBase(; dims = (8, 6), periodic = false, sys_fn = CeAdv.advconst, name, kw...)
-CeBurgersB(; name = :CeBurgersB, kw...) = _CeAdvBase(; dims = (32, 32), periodic = true, sys_fn = CeAdv.burgers, name, kw...)
-CeIvAdvB(; name = :CeIvAdvB, kw...) = _CeAdvBase(; dims = (16, 16), periodic = false, sys_fn = CeAdv.ivadv, name, kw...)
+function CeAdvB(; name = :CeAdvB, kw...)
+    return _CeAdvBase(;
+        dims = (8, 6), periodic = false, sys_fn = CeAdv.adv, name, kw...
+    )
+end
+function CeAdvConstB(; name = :CeAdvConstB, kw...)
+    return _CeAdvBase(;
+        dims = (8, 6), periodic = false, sys_fn = CeAdv.advconst, name, kw...
+    )
+end
+function CeBurgersB(; name = :CeBurgersB, kw...)
+    return _CeAdvBase(;
+        dims = (32, 32), periodic = true, sys_fn = CeAdv.burgers, name, kw...
+    )
+end
+function CeIvAdvB(; name = :CeIvAdvB, kw...)
+    return _CeAdvBase(;
+        dims = (16, 16), periodic = false, sys_fn = CeAdv.ivadv, name, kw...
+    )
+end
 
 module CeMask
     using Potts: Potts
     using Potts.Fields
     @variables c(..) = 0.0 m(..)::Bool [input = true]
     const C = c(t, x, y)
-    sys() = pdesystem([Differential(t)(C) ~ -C], [C ~ masked(m(t, x, y), 7.0)]; name = :mask)
+    function sys()
+        return pdesystem(
+            [Differential(t)(C) ~ -C], [C ~ masked(m(t, x, y), 7.0)];
+            name = :mask
+        )
+    end
 end
 
 @potts_model CeMaskB begin
@@ -613,8 +836,20 @@ module CeFace
     using Potts.Fields
     @variables c(..) = 0.0
     const C = c(t, x, y)
-    nolap() = pdesystem([Differential(t)(C) ~ 0.1 - 0.01 * C], [c(t, 0, y) ~ 1.0]; name = :nolap)
-    lap() = pdesystem([Differential(t)(C) ~ 0.1 * laplacian(C) + 0.1 - 0.01 * C], [c(t, 0, y) ~ 1.0]; name = :lap)
+    function nolap()
+        return pdesystem(
+            [Differential(t)(C) ~ 0.1 - 0.01 * C], [c(t, 0, y) ~ 1.0];
+            name = :nolap
+        )
+    end
+    function lap()
+        return pdesystem(
+            [Differential(t)(C) ~ 0.1 * laplacian(C) + 0.1 - 0.01 * C], [
+                c(t, 0, y) ~
+                    1.0,
+            ]; name = :lap
+        )
+    end
 end
 
 const CE_W1 = Potts.CorePotts.Weighted(Moore(1), o -> 1 / sqrt(sum(abs2, o)))
@@ -631,52 +866,127 @@ end
 CeW1(; name = :CeW1, kw...) = _CeWBase(; w = CE_W1, name, kw...)
 CeW2(; name = :CeW2, kw...) = _CeWBase(; w = CE_W2, name, kw...)
 
-# ---- from fields_couple_inputs_tests.jl -----------------------------------------------------------------------
+# ---- from fields_couple_inputs_tests.jl
+# -----------------------------------------------------------------------
 module Input
     using Potts: Potts
     using Potts.Fields
     @parameters Dc = 0.5 s = 0.4 k = 0.05
-    @variables c(..) = 0.0 u(..) = 0.0 K(..) = 0.0 secreting(..)::Bool [input = true] kin(..)::Int32 [input = true]
+    @variables c(..) = 0.0 u(..) = 0.0 K(..) = 0.0 secreting(..)::Bool [input = true] kin(
+        ..
+    )::Int32 [input = true]
     @variables kinl(..)::Int32 [input = true, lattice_input_name = "kind"]
     const C, U, KK = c(t, x, y), u(t, x, y), K(t, x, y)
     function withbc()
         return pdesystem(
-            [Differential(t)(C) ~ -0.1 * C, Differential(t)(U) ~ 0.5 * laplacian(C) - 0.1 * U], [c(t, 0, y) ~ 1.0];
+            [
+                Differential(t)(C) ~ -0.1 * C,
+                Differential(t)(U) ~ 0.5 * laplacian(C) - 0.1 * U,
+            ], [
+                c(t, 0, y) ~
+                    1.0,
+            ];
             name = :wbc
         )
     end
-    nobc() = pdesystem([Differential(t)(C) ~ -0.1 * C, Differential(t)(U) ~ 0.5 * laplacian(C) - 0.1 * U]; name = :nbc)
+    function nobc()
+        return pdesystem(
+            [
+                Differential(t)(C) ~ -0.1 * C,
+                Differential(t)(U) ~ 0.5 * laplacian(C) - 0.1 * U,
+            ];
+            name = :nbc
+        )
+    end
     function auxbc(bcs = [c(t, 0, y) ~ 1.0])
         return pdesystem(
-            [Differential(t)(C) ~ -0.1 * C, KK ~ laplacian(C), Differential(t)(U) ~ 0.5 * KK - 0.1 * U],
+            [
+                Differential(t)(C) ~ -0.1 * C, KK ~ laplacian(C), Differential(t)(U) ~
+                    0.5 * KK - 0.1 * U,
+            ],
             bcs; name = :abc
         )
     end
     auxnobc() = auxbc([])
-    sec() = pdesystem([Differential(t)(C) ~ Dc * laplacian(C) + s * secreting(t, x, y) - k * C]; name = :sec)
-    inset() = pdesystem([Differential(t)(C) ~ Dc * laplacian(C) + s * (kin(t, x, y) ∈ Set([1, 2])) - k * C]; name = :sec)
-    function insetlong()
-        return PDESystem(
-            [Differential(t)(C) ~ Dc * laplacian(C) + s * (kinl(t, x, y) ∈ Set([1, 2])) - k * C], [], [], [t, x, y],
-            [C, kinl(t, x, y)], [Dc, s, k]; name = :sec
-        )
-    end
-    cellread(q) = pdesystem([Differential(t)(C) ~ Dc * laplacian(C) + s * (q == 1) - k * C]; name = :sec)
-    function kindlong()
-        return PDESystem(
-            [Differential(t)(C) ~ Dc * laplacian(C) + s * (Potts.kind == 1) - k * C], [], [], [t, x, y], [C], [Dc, s, k];
+    function sec()
+        return pdesystem(
+            [Differential(t)(C) ~ Dc * laplacian(C) + s * secreting(t, x, y) - k * C];
             name = :sec
         )
     end
-    clockread(q) = pdesystem([Differential(t)(C) ~ Dc * laplacian(C) + s * sin(q) - k * C]; name = :clk)
-    clocklong(q) = PDESystem([Differential(t)(C) ~ Dc * laplacian(C) + s * sin(q) - k * C], [], [], [t, x, y], [C], [Dc, s, k]; name = :clk)
-    timeroute() = pdesystem([Differential(t)(C) ~ Dc * laplacian(C) + s * sin(t) - k * C]; name = :clk)
-    mcsroute() = pdesystem([Differential(t)(C) ~ Dc * laplacian(C) + s * sin(step_index(t)) - k * C]; name = :clk)
-    nops() = PDESystem([Differential(t)(C) ~ Dc * laplacian(C) - k * C], [], [], [t, x, y], [C], []; name = :sys)
+    function inset()
+        return pdesystem(
+            [
+                Differential(t)(C) ~ Dc * laplacian(C) + s * (kin(t, x, y) ∈ Set([1, 2])) -
+                    k *
+                    C,
+            ];
+            name = :sec
+        )
+    end
+    function insetlong()
+        return PDESystem(
+            [
+                Differential(t)(C) ~
+                    Dc * laplacian(C) + s * (kinl(t, x, y) ∈ Set([1, 2])) - k * C,
+            ], [], [], [t, x, y],
+            [C, kinl(t, x, y)], [Dc, s, k]; name = :sec
+        )
+    end
+    function cellread(q)
+        return pdesystem(
+            [Differential(t)(C) ~ Dc * laplacian(C) + s * (q == 1) - k * C];
+            name = :sec
+        )
+    end
+    function kindlong()
+        return PDESystem(
+            [Differential(t)(C) ~ Dc * laplacian(C) + s * (Potts.kind == 1) - k * C], [],
+            [], [
+                t, x, y,
+            ], [C], [Dc, s, k];
+            name = :sec
+        )
+    end
+    function clockread(q)
+        return pdesystem(
+            [Differential(t)(C) ~ Dc * laplacian(C) + s * sin(q) - k * C];
+            name = :clk
+        )
+    end
+    function clocklong(q)
+        return PDESystem(
+            [Differential(t)(C) ~ Dc * laplacian(C) + s * sin(q) - k * C],
+            [], [], [t, x, y], [C], [Dc, s, k]; name = :clk
+        )
+    end
+    function timeroute()
+        return pdesystem(
+            [Differential(t)(C) ~ Dc * laplacian(C) + s * sin(t) - k * C];
+            name = :clk
+        )
+    end
+    function mcsroute()
+        return pdesystem(
+            [
+                Differential(t)(C) ~
+                    Dc * laplacian(C) + s * sin(step_index(t)) - k * C,
+            ]; name = :clk
+        )
+    end
+    function nops()
+        return PDESystem(
+            [Differential(t)(C) ~ Dc * laplacian(C) - k * C],
+            [], [], [t, x, y], [C], []; name = :sys
+        )
+    end
     @parameters zz
     function zdom()
         return PDESystem(
-            [Differential(t)(C) ~ Dc * laplacian(C) - k * C], [], [zz ∈ Interval(0.0, 1.0)], [t, x, y], [C], [Dc, k];
+            [Differential(t)(C) ~ Dc * laplacian(C) - k * C], [], [zz ∈ Interval(0.0, 1.0)],
+            [
+                t, x, y,
+            ], [C], [Dc, k];
             name = :sys
         )
     end
@@ -703,7 +1013,13 @@ function input_model(fields; kinds = :(@kinds medium cell other))
     )
 end
 
-input_new(ex) = cp_msg(() -> (Core.eval(@__MODULE__, ex); Base.invokelatest(() -> InputM(; name = :m))))
+function input_new(ex)
+    return cp_msg(
+        () -> (
+            Core.eval(@__MODULE__, ex); Base.invokelatest(() -> InputM(; name = :m))
+        )
+    )
+end
 
 @potts_model _FaceOnly8x6 begin
     @structural_parameters sys_fn = CeFace.nolap
@@ -718,11 +1034,24 @@ CeFaceB(; name = :CeFaceB, kw...) = _FaceOnly8x6(; sys_fn = CeFace.nolap, name, 
 CeFaceLapB(; name = :CeFaceLapB, kw...) = _FaceOnly8x6(; sys_fn = CeFace.lap, name, kw...)
 InputFaceW(; name = :InputFaceW, kw...) = _FaceOnly8x6(; sys_fn = Input.withbc, name, kw...)
 InputFaceN(; name = :InputFaceN, kw...) = _FaceOnly8x6(; sys_fn = Input.nobc, name, kw...)
-InputAuxBcs(; name = :InputAuxBcs, kw...) = _FaceOnly8x6(; sys_fn = Input.auxbc, name, kw...)
-InputAuxNo(; name = :InputAuxNo, kw...) = _FaceOnly8x6(; sys_fn = Input.auxnobc, name, kw...)
+function InputAuxBcs(; name = :InputAuxBcs, kw...)
+    return _FaceOnly8x6(;
+        sys_fn = Input.auxbc, name,
+        kw...
+    )
+end
+function InputAuxNo(; name = :InputAuxNo, kw...)
+    return _FaceOnly8x6(;
+        sys_fn = Input.auxnobc, name,
+        kw...
+    )
+end
 
 input_face_op() = (σ = zeros(Int32, 8, 6); σ[4:6, 3:5] .= 1; [ownership => σ, kind => [:A]])
-input_u(m; kw...) = (pr = PottsProblem(m(; name = :m), input_face_op(), (0, 3); seed = 1, kw...); Array(solve(pr, SequentialCPM()).u[end].site.u))
+function input_u(m; kw...)
+    pr = PottsProblem(m(; name = :m), input_face_op(), (0, 3); seed = 1, kw...)
+    return Array(solve(pr, SequentialCPM()).u[end].site.u)
+end
 input_hand() = (u = zeros(8, 6); u[1, :] .= 10 * (1 - (1 - 0.1 / 4)^12); u)
 
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))

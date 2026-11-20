@@ -4,7 +4,8 @@
 module PottsDynamicQuantitiesExt
 
 using DynamicQuantities: DynamicQuantities as DQ
-using ModelingToolkitBase: ModelingToolkitBase as MTK, get_unit, VariableUnit, ValidationError
+using ModelingToolkitBase: ModelingToolkitBase as MTK, get_unit, VariableUnit,
+    ValidationError
 using Potts: Potts, PottsSystem, Split, info
 using Symbolics: Symbolics
 using SymbolicUtils: SymbolicUtils
@@ -15,7 +16,9 @@ _isunitless(u) = iszero(DQ.dimension(u))
 _same(a, b) = DQ.dimension(a) == DQ.dimension(b)
 
 # unit rules for Potts' symbolic operations
-MTK.get_unit(::Union{typeof(Potts.history_lag), typeof(Potts.cell_integral)}, args) = get_unit(args[1])
+function MTK.get_unit(::Union{typeof(Potts.history_lag), typeof(Potts.cell_integral)}, args)
+    return get_unit(args[1])
+end
 function MTK.get_unit(
         ::Union{
             typeof(Potts.cell_centroid), typeof(Potts.copy_displacement),
@@ -29,7 +32,10 @@ MTK.get_unit(::typeof(Potts.population), args) = _fold_unit(args[1], args[2])
 
 # a fresh symbol of type `T` whose unit is `u`
 function _with_unit(u, ::Type{T}) where {T}
-    return SymbolicUtils.setmetadata(Symbolics.unwrap(Symbolics.variable(gensym(:pre); T)), VariableUnit, u)
+    return SymbolicUtils.setmetadata(
+        Symbolics.unwrap(Symbolics.variable(gensym(:pre); T)),
+        VariableUnit, u
+    )
 end
 
 function _fold_unit(n, body)
@@ -41,15 +47,17 @@ function _fold_unit(n, body)
     return u
 end
 
-_hasunit(x) = SymbolicUtils.getmetadata(Symbolics.unwrap(x), VariableUnit, nothing) !== nothing
+function _hasunit(x)
+    return SymbolicUtils.getmetadata(Symbolics.unwrap(x), VariableUnit, nothing) !== nothing
+end
 
 # A literal zero takes any unit: `ifelse(c, x, 0)`, `max(x, 0)`, `min(0, x)` have x's unit.
 _iszeroconst(x) = SymbolicUtils.isconst(x) && iszero(SymbolicUtils.unwrap_const(x))
-# The rewrite before MTK's `get_unit` (Potts' own unit rules for operations that MTK owns, so
-# the extension adds no method to MTK's function for MTK's types, which would be piracy):
+# The rewrite before MTK's `get_unit` (Potts' own unit rules for operations that MTK owns,
+# so the extension adds no method to MTK's function for MTK's types, which would be piracy):
 # `Pre(x)` has x's unit, so it is a fresh symbol with that unit (not `x` itself, which would
-# cancel in `x - Pre(x)`); a logic operation (`&`, `|`, `!`, `xor`) takes
-# dimensionless operands and is dimensionless, so it is its first operand once each is checked.
+# cancel in `x - Pre(x)`); a logic operation (`&`, `|`, `!`, `xor`) takes dimensionless
+# operands and is dimensionless, so it is its first operand once each is checked.
 const _LOGIC_OPS = (&, |, !, xor)
 function _zero_free(x)
     x = Symbolics.unwrap(x)
@@ -64,7 +72,8 @@ function _zero_free(x)
         end
         return args[1]
     end
-    if op === ifelse && length(args) == 3          # keep the condition (it must be unitless)
+    # keep the condition (it must be unitless)
+    if op === ifelse && length(args) == 3
         _iszeroconst(args[3]) && (args = [args[1], args[2], args[2]])
         _iszeroconst(args[2]) && (args = [args[1], args[3], args[3]])
     elseif (op === max || op === min) && length(args) == 2
@@ -97,12 +106,15 @@ end
 _literal_zero(x) = (x isa Number && iszero(x)) || _iszeroconst(Symbolics.unwrap(x))
 
 function _require(label, u, want, what)
-    _same(u, want) || throw(Potts.PottsCompileError("units: in $label, $what has units [$u], expected [$want]"))
+    _same(u, want) ||
+        throw(Potts.PottsCompileError("units: in $label, $what has units [$u], expected \
+            [$want]"))
     return nothing
 end
 
 function Potts._check_units(sys::PottsSystem)
-    any(_hasunit, Potts._p(sys, :parameters)) || any(_hasunit, Potts._p(sys, :variables)) || return nothing
+    any(_hasunit, Potts._p(sys, :parameters)) || any(_hasunit, Potts._p(sys, :variables)) ||
+        return nothing
     # H: every energy term, drive and the temperature share one unit
     terms = Any[(Potts._describe(e), e.expr) for e in Potts._p(sys, :energies)]
     append!(terms, [(Potts._describe(d), d.expr) for d in Potts._p(sys, :drives)])
@@ -116,17 +128,20 @@ function Potts._check_units(sys::PottsSystem)
         else
             _same(u, first_term[2]) || throw(
                 Potts.PottsCompileError(
-                    "units: the terms of H disagree: [$(first_term[2])] in $(first_term[1]), [$u] in $label"
+                    "units: the terms of H disagree: [$(first_term[2])] \
+                        in $(first_term[1]), [$u] in $label"
                 )
             )
         end
     end
     for u in Potts._p(sys, :updates)
         label = Potts._describe(u)
-        _literal_zero(u.eq.rhs) || _require(label, _unit(label, u.eq.rhs), _unit(label, u.eq.lhs), "the right side")
+        _literal_zero(u.eq.rhs) ||
+            _require(label, _unit(label, u.eq.rhs), _unit(label, u.eq.lhs), "the right \
+                side")
     end
-    # `D(x) ~ rhs`: the clock is the MCS (`mcs_duration` is a plain number), so a rate has x's
-    # units per unit of time in whatever time unit its parameters use: [rhs]/[x] must be
+    # `D(x) ~ rhs`: the clock is the MCS (`mcs_duration` is a plain number), so a rate has
+    # x's units per unit of time in whatever time unit its parameters use: [rhs]/[x] must be
     # dimensionless or a pure inverse time
     for eq in Potts._p(sys, :equations)
         label = Potts._describe(eq)
@@ -134,18 +149,26 @@ function Potts._check_units(sys::PottsSystem)
         _literal_zero(eq.rhs) && continue
         x = SymbolicUtils.arguments(Symbolics.unwrap(eq.lhs))[1]
         q = DQ.dimension(r / _unit(label, x))
-        pertime = q.time == -1 && all(f -> f === :time || iszero(getfield(q, f)), fieldnames(typeof(q)))
+        pertime = q.time == -1 &&
+            all(f -> f === :time || iszero(getfield(q, f)), fieldnames(typeof(q)))
         (iszero(q) || pertime) ||
-            throw(Potts.PottsCompileError("units: in $label, the rate has units [$r]; expected [$(_unit(label, x))] per unit of time"))
+            throw(Potts.PottsCompileError("units: in $label, the rate has units [$r]; \
+                expected [$(_unit(label, x))] per unit of time"))
     end
     for c in Potts._p(sys, :constraints)
-        c.kind === :expr && _require(Potts._describe(c), _unit(Potts._describe(c), c.expr), UNITLESS, "the condition")
+        c.kind === :expr &&
+            _require(
+            Potts._describe(c), _unit(Potts._describe(c), c.expr), UNITLESS,
+            "the condition"
+        )
     end
     for d in Potts._p(sys, :divisions)
         label = Potts._describe(d)
         _require(label, _unit(label, d.when), UNITLESS, "the condition")
         for (x, r) in d.rules
-            r isa Split || _literal_zero(r) || _require(label, _unit(label, r), _unit(label, x), "the rule for $(info(x).name)")
+            r isa Split || _literal_zero(r) ||
+                _require(label, _unit(label, r), _unit(label, x), "the rule \
+                    for $(info(x).name)")
         end
     end
     for o in Potts._p(sys, :observed)

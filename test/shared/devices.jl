@@ -1,7 +1,8 @@
 # Backend-neutral device selection for the test suites (D-157).
 #
 #   POTTS_GPU ∈ {"", "metal", "rocm"}   (else COREPOTTS_GPU; both set must agree; the rule
-#                                         is `PottsDeviceSelect.requested`, device_select.jl)
+#                                         is `PottsDeviceSelect.requested`,
+#                                         device_select.jl)
 #
 # loads Metal.jl for "metal" and AMDGPU.jl for "rocm", and no GPU package at all when the
 # variable is empty: Metal.jl precompiles on Linux but cannot run there, and AMDGPU.jl
@@ -20,13 +21,14 @@
 # Off the device a test records the uniform skip
 #   @test_skip "device (POTTS_GPU=metal|rocm)"
 # written out literally (`@test_skip` records its expression unevaluated). Frozen acceptance
-# files guard every use with `isdefined(Main, :PottsDevices) && Main.PottsDevices.on_device()`;
-# the module below is that `Main.PottsDevices`.
+# files guard every use with `isdefined(Main, :PottsDevices) &&
+# Main.PottsDevices.on_device()`; the module below is that `Main.PottsDevices`.
 #
-# One `PottsDevices` per process. Every `@testsetup` of the Potts suite includes this file, and a
-# module defined once per setup gave each setup its own binding: an item that declares two setups
-# then has two exported `PottsDevices` and resolves neither (`export_visible.jl` exports both). So
-# the module is defined once, in `Main`, and every setup imports that one binding.
+# One `PottsDevices` per process. Every `@testsetup` of the Potts suite includes this file,
+# and a module defined once per setup gave each setup its own binding: an item that declares
+# two setups then has two exported `PottsDevices` and resolves neither (`export_visible.jl`
+# exports both). So the module is defined once, in `Main`, and every setup imports that one
+# binding.
 if !isdefined(Main, :PottsDevices)
     Core.eval(Main, :(module PottsDevices end))
     Base.include(Main.PottsDevices, joinpath(@__DIR__, "devices_module_body.jl"))

@@ -1,4 +1,5 @@
-# Top-level definitions for layouts test suites (`layouts_tests.jl`, `layouts_insert_voronoi_tests.jl`, `layouts_eden_splits_tests.jl`).
+# Top-level definitions for layouts test suites (`layouts_tests.jl`,
+# `layouts_insert_voronoi_tests.jl`, `layouts_eden_splits_tests.jl`).
 
 @testsetup module LayoutsSetup
 using Potts, Test
@@ -8,7 +9,6 @@ isdefined(@__MODULE__, :PottsDevices) || include(joinpath(@__DIR__, "shared", "d
 using PottsModels: akeeb_state
 
 using Test: Test
-
 
 _op(op, key) = only(last(p) for p in op if isequal(first(p), key))
 
@@ -26,20 +26,21 @@ function _separated(σ, gap)
     return all(_cheb(_sites(σ, a), _sites(σ, b)) > gap for a in 1:n for b in (a + 1):n)
 end
 
-
 @potts_model HexLayoutProbe begin
     @kinds medium wall[frozen] cell
     @parameters begin
         J[kind, kind] = [0 0 8; 0 0 12; 8 12 4]
     end
-    @lattice Lattice((18, 14); boundary = Closed(), geometry = Hexagonal(), neighborhood = Hex(1))
+    @lattice Lattice(
+        (18, 14); boundary = Closed(), geometry = Hexagonal(),
+        neighborhood = Hex(1)
+    )
     @energy begin
         cells(cell) => (volume - 9)^2
         contacts => J[kind, neighbor_kind]
     end
     @sweep Metropolis(; temperature = 4.0)
 end
-
 
 @potts_model PeriodicLayoutProbe begin
     @kinds medium cell
@@ -48,14 +49,12 @@ end
     @sweep Metropolis(; temperature = 1.0)
 end
 
-
 @potts_model ChannelLayoutProbe begin
     @kinds medium wall cell
     @lattice Lattice((11, 11); boundary = (Periodic(), Closed()))
     @energy contacts => 0
     @sweep Metropolis(; temperature = 1.0)
 end
-
 
 @potts_model DomainLayoutProbe begin
     @kinds medium cell
@@ -64,7 +63,6 @@ end
     @sweep Metropolis(; temperature = 1.0)
 end
 
-
 # a disk domain (Cartesian predicate) with a frozen wall kind; the same model with a mobile
 # wall is the negative control for "the frame stays put"
 @potts_model DiskFrameProbe begin
@@ -72,28 +70,32 @@ end
     @parameters begin
         J[kind, kind] = [0 0 8; 0 0 12; 8 12 4]
     end
-    @lattice Lattice((24, 24); boundary = Closed(), domain = x -> (x[1] - 12.5)^2 + (x[2] - 12.5)^2 <= 10.5^2)
+    @lattice Lattice(
+        (24, 24); boundary = Closed(), domain = x -> (x[1] - 12.5)^2 +
+            (x[2] - 12.5)^2 <= 10.5^2
+    )
     @energy begin
         cells(cell) => (volume - 9)^2
         contacts => J[kind, neighbor_kind]
     end
     @sweep Metropolis(; temperature = 4.0)
 end
-
 
 @potts_model DiskMobileWallProbe begin
     @kinds medium wall cell
     @parameters begin
         J[kind, kind] = [0 0 8; 0 0 12; 8 12 4]
     end
-    @lattice Lattice((24, 24); boundary = Closed(), domain = x -> (x[1] - 12.5)^2 + (x[2] - 12.5)^2 <= 10.5^2)
+    @lattice Lattice(
+        (24, 24); boundary = Closed(), domain = x -> (x[1] - 12.5)^2 +
+            (x[2] - 12.5)^2 <= 10.5^2
+    )
     @energy begin
         cells(cell) => (volume - 9)^2
         contacts => J[kind, neighbor_kind]
     end
     @sweep Metropolis(; temperature = 4.0)
 end
-
 
 # brute-force frame oracle: in-domain sites with a site outside the domain, or beyond a
 # closed lattice edge, within Chebyshev distance `w` (through the wrap on periodic axes)
@@ -109,7 +111,6 @@ function _frame_oracle(mask, per, w)
     ]
 end
 
-
 # two distinct cells touch (Moore(1)), through the wrap on axes marked periodic
 function _touching(σ, per)
     n = size(σ)
@@ -122,7 +123,6 @@ function _touching(σ, per)
     return false
 end
 
-
 # The extension API: a layout defined outside Potts, through public names only.
 module ScratchLayouts
     using Potts: Potts, AbstractLayout
@@ -133,7 +133,8 @@ module ScratchLayouts
         k::Symbol
     end
     function Potts.paint!(op::Potts.LayoutState, l::Sites, lat)
-        clat = Potts.core_lattice(lat)                      # CorePotts view, e.g. for `shift`
+        # CorePotts view, e.g. for `shift`
+        clat = Potts.core_lattice(lat)
         id = Potts.new_cell!(op, l.k)
         for i in l.idx
             _, j = CorePotts.shift(clat, i, ntuple(_ -> Int32(0), length(i)))
@@ -141,27 +142,37 @@ module ScratchLayouts
         end
         Potts.record!(op; requested = 1, painted = 1)
     end
-    # every qualified access above, as ExplicitImports' `check_all_qualified_accesses_are_public` sees them
+    # every qualified access above, as ExplicitImports'
+    # `check_all_qualified_accesses_are_public` sees them
     const QUALIFIED = (
-        (Potts, :paint!), (Potts, :LayoutState), (Potts, :core_lattice), (Potts, :new_cell!),
+        (Potts, :paint!), (Potts, :LayoutState), (Potts, :core_lattice),
+        (Potts, :new_cell!),
         (Potts, :assign!), (Potts, :record!), (CorePotts, :shift),
     )
 end
 
+function _warnings(f)
+    return [
+        r.message
+            for r in Test.collect_test_logs(f; min_level = Base.CoreLogging.Warn)[1]
+    ]
+end
 
-_warnings(f) = [r.message for r in Test.collect_test_logs(f; min_level = Base.CoreLogging.Warn)[1]]
-
-
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # InsertUntil (review §3 R2)
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 
 @potts_model InsertProbe begin
     @kinds medium host guest
     @parameters begin
         J[kind, kind] = [0 8 8; 8 4 6; 8 6 4]
     end
-    @lattice Lattice((16, 16); boundary = Closed(), domain = OnIndices(x -> x[1] + x[2] <= 26))
+    @lattice Lattice(
+        (16, 16); boundary = Closed(), domain = OnIndices(
+            x -> x[1] + x[2] <=
+                26
+        )
+    )
     @energy begin
         cells(host) => (volume - 16)^2
         cells(guest) => (volume - 4)^2
@@ -170,23 +181,24 @@ _warnings(f) = [r.message for r in Test.collect_test_logs(f; min_level = Base.Co
     @sweep Metropolis(; temperature = 4.0)
 end
 
-
 # the point and the InsertUntil rows of the layout report as (; painted, misses, counted)
 function _tally(l, x)
     op, rep = layout(l, x; report = true)
     return op, [(; r.painted, r.misses, r.counted) for r in rep if r.type === :InsertUntil]
 end
 
-_kind_sites(op, k) = (σ = _op(op, ownership); ks = _op(op, kind); findall(i -> σ[i] > 0 && ks[σ[i]] == k, CartesianIndices(σ)))
+function _kind_sites(op, k)
+    σ = _op(op, ownership)
+    ks = _op(op, kind)
+    return findall(i -> σ[i] > 0 && ks[σ[i]] == k, CartesianIndices(σ))
+end
 
-
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Eden, Splits, RandomPoints(replace = true), shortfall (D-141); the frozen acceptance
 # file holds the hand fixtures, the growth oracle and the spec 01 bands
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 
 using LinearAlgebra: Symmetric, eigen
-
 
 # An independent recursive oracle for Splits on a 1 × n strip: every cut is across x, at the
 # centroid, the daughter taking the sites right of it; daughters follow their mothers.
@@ -204,7 +216,6 @@ function _strip_splits(n, k)
     return cells
 end
 
-
 # The cut by an independent eigendecomposition: daughter = sites on the positive side of the
 # sign-fixed top eigenvector of the Cartesian scatter matrix.
 function _eig_cut(S, emb)
@@ -215,7 +226,6 @@ function _eig_cut(S, emb)
     v[findfirst(x -> abs(x) > 1.0e-9, v)] < 0 && (v = -v)
     return Set(S[i] for i in eachindex(S) if sum((P[i] - c) .* v) > 0)
 end
-
 
 # A custom layer painting given site sets, one cell of kind :c each.
 struct _SiteSets <: AbstractLayout
@@ -230,7 +240,6 @@ function Potts.paint!(op::Potts.LayoutState, l::_SiteSets, lat)
     return nothing
 end
 
-
 # Exact cut oracle (2D, BigFloat at 512 bits): the daughter is the sites with (p − c)·v > 0,
 # with exact zeros (|·| < 1e-60 at this precision) on the plane.
 function _exact_daughter_2d(S)
@@ -238,7 +247,8 @@ function _exact_daughter_2d(S)
         P = [BigFloat.(s) for s in S]
         n = length(P)
         c = (sum(p[1] for p in P) / n, sum(p[2] for p in P) / n)
-        a = sum((p[1] - c[1])^2 for p in P); d = sum((p[2] - c[2])^2 for p in P)
+        a = sum((p[1] - c[1])^2 for p in P)
+        d = sum((p[2] - c[2])^2 for p in P)
         b = sum((p[1] - c[1]) * (p[2] - c[2]) for p in P)
         λ = (a + d) / 2 + sqrt(((a - d) / 2)^2 + b^2)
         v = if abs(b) > 1.0e-60
@@ -250,14 +260,18 @@ function _exact_daughter_2d(S)
         end
         v ./= sqrt(sum(abs2, v))
         v[findfirst(x -> abs(x) > 1.0e-9, v)] < 0 && (v .*= -1)
-        Set(S[i] for i in eachindex(S) if (P[i][1] - c[1]) * v[1] + (P[i][2] - c[2]) * v[2] > 1.0e-60)
+        Set(
+            S[i]
+                for i in eachindex(S)
+                if (P[i][1] - c[1]) * v[1] + (P[i][2] - c[2]) * v[2] > 1.0e-60
+        )
     end
 end
 
-
 function ly_throws(T, pats, f)
     err = try
-        f(); nothing
+        f()
+        nothing
     catch e
         e
     end

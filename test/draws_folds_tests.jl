@@ -1,7 +1,7 @@
-# D-150: the contact fold `count(pred for _ in contacts)` and `randn()` in the DSL. The frozen
-# acceptance file (lib/PottsModels/test/acceptance/openvt_table_s1_tests.jl) checks their
-# values; this file checks what the DSL rejects, by name (ruling 5: a Base RNG call never
-# silently becomes a build-time constant), and that models without them are unchanged.
+# D-150: the contact fold `count(pred for _ in contacts)` and `randn()` in the DSL. The
+# frozen acceptance file (lib/PottsModels/test/acceptance/openvt_table_s1_tests.jl) checks
+# their values; this file checks what the DSL rejects, by name (ruling 5: a Base RNG call
+# never silently becomes a build-time constant), and that models without them are unchanged.
 
 @testsetup module DrawsFoldsSetup
 using Potts, Test
@@ -10,7 +10,6 @@ isdefined(@__MODULE__, :PottsDevices) || include(joinpath(@__DIR__, "shared", "d
 using Test, Potts
 
 using Potts: CorePotts
-
 
 # a model whose body is `ex` (an update, energy, …) on a small two-kind lattice
 function _df_model(sections::Expr...; extra = false, temperature = :T)
@@ -47,8 +46,13 @@ end
 
 _df_build(sections::Expr...; kws...) = mtkcompile(_df_model(sections...; kws...))
 
-_df_state() = (σ = zeros(Int32, 12, 12); σ[2:4, 2:4] .= 1; σ[5:7, 2:4] .= 2; σ[9:11, 9:11] .= 3; [ownership => σ, kind => [:A, :B, :A]])
-
+function _df_state()
+    σ = zeros(Int32, 12, 12)
+    σ[2:4, 2:4] .= 1
+    σ[5:7, 2:4] .= 2
+    σ[9:11, 9:11] .= 3
+    return [ownership => σ, kind => [:A, :B, :A]]
+end
 
 """The message of the error `f()` throws, unwrapping `LoadError`s and located errors."""
 function _df_msg(f)
@@ -65,70 +69,136 @@ end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "Base RNG calls in a model are rejected by name" setup = [DrawsFoldsSetup] tags = [:potts, :draws_folds] begin
+@testitem "Base RNG calls in a model are rejected by name" setup = [
+    DrawsFoldsSetup,
+] tags = [
+    :potts, :draws_folds,
+] begin
     @testset "Base RNG calls in a model are rejected by name" begin
         for (call, shown) in (
-                (:(rand(1:3)), "rand(1:3)"), (:(rand(2)), "rand(2)"), (:(randn(3)), "randn(3)"),
-                (:(randn(Float32)), "randn(Float32)"), (:(randexp()), "randexp()"), (:(Base.rand()), nothing),
-                (:(Random.randn(2, 3, 4)), "randn(2, 3, 4)"), (:(Random.randexp(2)), "randexp(2)"),
-                (:(shuffle([1, 2])), "shuffle([1, 2])"), (:(randn(; lower_bound = 0.0)), "randn(lower_bound = 0.0)"),
+                (:(rand(1:3)), "rand(1:3)"), (:(rand(2)), "rand(2)"),
+                (:(randn(3)), "randn(3)"),
+                (:(randn(Float32)), "randn(Float32)"), (:(randexp()), "randexp()"), (
+                    :(Base.rand()), nothing,
+                ),
+                (:(Random.randn(2, 3, 4)), "randn(2, 3, 4)"), (
+                    :(Random.randexp(2)), "randexp(2)",
+                ),
+                (:(shuffle([1, 2])), "shuffle([1, 2])"), (
+                    :(randn(; lower_bound = 0.0)), "randn(lower_bound = 0.0)",
+                ),
                 (:(rand(; x = 1)), "rand(x = 1)"),
             )
             ex = :(@after_mcs x ~ $call)
-            if shown === nothing          # `Base.rand()` is the model's `rand()` (a draw, not a constant)
+            # `Base.rand()` is the model's `rand()` (a draw, not a constant)
+            if shown === nothing
                 c = _df_build(ex)
-                @test any(u -> Potts._has_draw(u.eq.rhs), Potts._p(getfield(c, :sys), :updates))
+                @test any(
+                    u -> Potts._has_draw(u.eq.rhs),
+                    Potts._p(getfield(c, :sys), :updates)
+                )
             else
                 msg = _df_msg(() -> _df_build(ex))
                 @test occursin("`$shown`", msg)
             end
         end
         # the model's own forms build and draw
-        for call in (:(rand()), :(randn()), :(randn(1.0, 2.0)), :(randn(q, 2.0; lower_bound = 0.0)))
+        for call in (
+                :(rand()), :(randn()), :(randn(1.0, 2.0)),
+                :(randn(q, 2.0; lower_bound = 0.0)),
+            )
             c = _df_build(:(@after_mcs x ~ $call))
             @test any(u -> Potts._has_draw(u.eq.rhs), Potts._p(getfield(c, :sys), :updates))
         end
         # a negative SD is an error when it is a number
-        @test occursin("-0.5", _df_msg(() -> _df_build(:(@after_mcs x ~ randn(1.0, -0.5; lower_bound = 0.0)))))
-        # a plain helper computing a constant from Base's RNG is rejected too (it would be fixed at build)
+        @test occursin(
+            "-0.5", _df_msg(
+                () -> _df_build(
+                    :(
+                        @after_mcs x ~
+                            randn(1.0, -0.5; lower_bound = 0.0)
+                    )
+                )
+            )
+        )
+        # a plain helper computing a constant from Base's RNG is rejected too (it would be
+        # fixed at build)
         @test occursin("rand", _df_msg(() -> _df_build(:(@after_mcs x ~ q * rand(1:6)))))
         # not a model quantity where draws are not allowed
-        @test occursin("randn", _df_msg(() -> PottsProblem(_df_model(:(@energy cells(A) => randn() * volume)), _df_state(), (0, 1))))
+        @test occursin(
+            "randn",
+            _df_msg(
+                () -> PottsProblem(
+                    _df_model(:(@energy cells(A) => randn() * volume)), _df_state(), (0, 1)
+                )
+            )
+        )
     end
 end
 
-@testitem "the contact fold's scope and predicate" setup = [DrawsFoldsSetup] tags = [:potts, :draws_folds] begin
+@testitem "the contact fold's scope and predicate" setup = [DrawsFoldsSetup] tags = [
+    :potts, :draws_folds,
+] begin
     @testset "the contact fold's scope and predicate" begin
         # fine: cell updates, division conditions, cell observed, a population over cells
         c = _df_build(
-            :(@after_mcs x ~ count(neighbor_kind == medium for _ in contacts) + count(neighbor_kind == B for _ in contacts(vn))),
-            :(@divide cells(A) when = count(true for _ in contacts) > 100, along = RandomPlane()),
+            :(
+                @after_mcs x ~
+                    count(neighbor_kind == medium for _ in contacts) +
+                    count(neighbor_kind == B for _ in contacts(vn))
+            ),
+            :(
+                @divide cells(A) when = count(true for _ in contacts) > 100,
+                    along = RandomPlane()
+            ),
             :(@after_mcs z ~ sum(count(true for _ in contacts) for c in cells(A))),
-            :(@observed m ~ count(neighbor_kind == medium for _ in contacts(big))); extra = true
+            :(@observed m ~ count(neighbor_kind == medium for _ in contacts(big)));
+            extra = true
         )
         @test length(Potts._contact_folds(getfield(c, :sys))) == 4
-        @test Set(r for (_, r, _) in Potts._contact_folds(getfield(c, :sys))) == Set([:contact, :vn, :big])
-        @test getfield(c, :footprint).read == 2                                   # the Moore(2) fold's commit reads that far
+        @test Set(r for (_, r, _) in Potts._contact_folds(getfield(c, :sys))) ==
+            Set([:contact, :vn, :big])
+        # the Moore(2) fold's commit reads that far
+        @test getfield(c, :footprint).read == 2
         prob = PottsProblem(c, _df_state(), (0, 3); capacity = 8)
-        @test haskey(prob.relations, :contact_counts) && length(prob.relations.contact_counts.counts) == 4
+        @test haskey(prob.relations, :contact_counts) &&
+            length(prob.relations.contact_counts.counts) == 4
         sol = solve(prob, SequentialCPM(; proposal = Moore(1)))
         @test length(sol[:m][end]) == 8
-        # `cond` folds into the kind set, and equal kind sets written alike share one tracker
+        # `cond` folds into the kind set, and equal kind sets written alike share one
+        # tracker
         a = _df_build(
             :(
-                @after_mcs x ~ count(neighbor_kind == B for _ in contacts) + count(true for _ in contacts if neighbor_kind == B) +
-                    count((neighbor_kind == A) | (neighbor_kind == medium) for _ in contacts(vn))
+                @after_mcs x ~
+                    count(neighbor_kind == B for _ in contacts) +
+                    count(true for _ in contacts if neighbor_kind == B) +
+                    count(
+                    (neighbor_kind == A) | (neighbor_kind == medium)
+                        for _ in contacts(vn)
+                )
             )
         )
         @test length(Potts._contact_folds(getfield(a, :sys))) == 2
         @test sort(last.(Potts._contact_trackers(a))) == [UInt64(0b011), UInt64(0b100)]
         # rejected, each with a message naming the rule
         for (sections, needle) in (
-                ((:(@energy cells(A) => count(true for _ in contacts)),), "not available in a cell term"),
-                ((:(@drive copy => count(true for _ in contacts)),), "not available in a drive"),
-                ((:(@after_mcs z ~ count(true for _ in contacts)),), "not available in a model update"),
+                (
+                    (:(@energy cells(A) => count(true for _ in contacts)),),
+                    "not available in a cell term",
+                ),
+                (
+                    (:(@drive copy => count(true for _ in contacts)),),
+                    "not available in a drive",
+                ),
+                (
+                    (:(@after_mcs z ~ count(true for _ in contacts)),),
+                    "not available in a model update",
+                ),
                 ((:(@after_mcs y ~ count(true for _ in contacts)),), "site"),
-                ((:(@after_mcs x ~ count(neighbor_kind == q for _ in contacts)),), "neighbor_kind"),
+                (
+                    (:(@after_mcs x ~ count(neighbor_kind == q for _ in contacts)),),
+                    "neighbor_kind",
+                ),
                 ((:(@after_mcs x ~ count(kind == A for _ in contacts)),), "neighbor_kind"),
                 ((:(@after_mcs x ~ sum(1.0 for _ in contacts)),), "count"),
                 ((:(@after_mcs x ~ count(true for _ in contacts(nowhere))),), "nowhere"),
@@ -137,39 +207,73 @@ end
             msg = _df_msg(() -> _df_build(sections...; extra = true))
             @test occursin(needle, msg)
         end
-        # not in the sweep's temperature: it is read while copies change the counts (review F2)
+        # not in the sweep's temperature: it is read while copies change the counts (review
+        # F2)
         @test occursin(
             "@sweep",
-            _df_msg(() -> _df_build(; temperature = :(T + count(true for _ in contacts) / 100)))
+            _df_msg(
+                () -> _df_build(;
+                    temperature = :(T + count(true for _ in contacts) / 100)
+                )
+            )
         )
         # `count` stays Base's elsewhere: a population fold and a plain helper
         p = _df_build(:(@after_mcs z ~ count(volume > 5 for c in cells)))
-        @test !any(u -> occursin("contacts_", string(u.eq.rhs)), Potts._p(getfield(p, :sys), :updates))
+        @test !any(
+            u -> occursin("contacts_", string(u.eq.rhs)),
+            Potts._p(getfield(p, :sys), :updates)
+        )
         @test Potts.DSL.count(isodd, [1, 2, 3]) == 2 && nameof(Potts.DSL.count) === :count
     end
 end
 
-@testitem "models without folds or draws generate what they did" setup = [DrawsFoldsSetup] tags = [:potts, :draws_folds] begin
+@testitem "models without folds or draws generate what they did" setup = [
+    DrawsFoldsSetup,
+] tags = [
+    :potts, :draws_folds,
+] begin
     @testset "models without folds or draws generate what they did" begin
         c = _df_build(:(@after_mcs x ~ volume + 1))
-        # the constructor records that it built neither, so mtkcompile and PottsProblem skip the walks (review F1)
-        @test !Potts._may_have(getfield(c, :sys), :folds) && !Potts._may_have(getfield(c, :sys), :bounded)
+        # the constructor records that it built neither, so mtkcompile and PottsProblem skip
+        # the walks (review F1)
+        @test !Potts._may_have(getfield(c, :sys), :folds) &&
+            !Potts._may_have(getfield(c, :sys), :bounded)
         @test isempty(Potts._contact_trackers(c))
-        f = _df_build(:(@after_mcs x ~ count(true for _ in contacts) + randn(0.0, 1.0; lower_bound = -1.0)))
-        @test Potts._may_have(getfield(f, :sys), :folds) && Potts._may_have(getfield(f, :sys), :bounded) && length(Potts._contact_trackers(f)) == 1
+        f = _df_build(
+            :(
+                @after_mcs x ~
+                    count(true for _ in contacts) +
+                    randn(0.0, 1.0; lower_bound = -1.0)
+            )
+        )
+        @test Potts._may_have(getfield(f, :sys), :folds) &&
+            Potts._may_have(getfield(f, :sys), :bounded) &&
+            length(Potts._contact_trackers(f)) == 1
         prob = PottsProblem(c, _df_state(), (0, 1))
-        @test !haskey(prob.relations, :contact_counts) && !haskey(prob.u0.model, CorePotts.MODEL_STATUS)
+        @test !haskey(prob.relations, :contact_counts) &&
+            !haskey(prob.u0.model, CorePotts.MODEL_STATUS)
         integ = init(prob, SequentialCPM(); save_everystep = false)
         step!(integ)
         @test (@allocated step!(integ)) == 0
         @inferred Potts.SciMLBase.step!(integ)
-        b = PottsProblem(_df_build(:(@after_mcs x ~ randn(0.0, 1.0; lower_bound = 5.0))), _df_state(), (0, 1))
+        b = PottsProblem(
+            _df_build(:(@after_mcs x ~ randn(0.0, 1.0; lower_bound = 5.0))), _df_state(), (
+                0, 1,
+            )
+        )
         @test haskey(b.u0.model, CorePotts.MODEL_STATUS)
         # exhaustion (P ≈ 3·10⁻⁷ per attempt, 64 attempts) fails the run instead of throwing
-        b10 = PottsProblem(_df_build(:(@after_mcs x ~ randn(0.0, 1.0; lower_bound = 10.0))), _df_state(), (0, 4))
+        b10 = PottsProblem(
+            _df_build(:(@after_mcs x ~ randn(0.0, 1.0; lower_bound = 10.0))),
+            _df_state(), (0, 4)
+        )
         for alg in (SequentialCPM(), CheckerboardCPM())
-            sol = @test_logs (:warn, r"exhausted its 64 attempts") solve(b10, alg; saveat = 1)
-            @test sol.retcode == Potts.SciMLBase.ReturnCode.Failure && isnan(sol.u[end].cell.x[1]) && sol.t[end] == 1
+            sol = @test_logs (:warn, r"exhausted its 64 attempts") solve(
+                b10, alg;
+                saveat = 1
+            )
+            @test sol.retcode == Potts.SciMLBase.ReturnCode.Failure &&
+                isnan(sol.u[end].cell.x[1]) && sol.t[end] == 1
         end
     end
 end

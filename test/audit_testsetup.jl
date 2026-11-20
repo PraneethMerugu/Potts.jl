@@ -1,4 +1,5 @@
-# Shared setup for AUDIT regression tests (docs/design/AUDIT.md, D-041..D-045, F1/F2 field bounds).
+# Shared setup for AUDIT regression tests (docs/design/AUDIT.md, D-041..D-045, F1/F2 field
+# bounds).
 
 @testsetup module AuditSetup
 using Potts, Test
@@ -14,17 +15,56 @@ module AuPDE
     const C, U, DK = c(t, x, y), u(t, x, y), dk(t, x, y)
     const D8 = (16, 16)
     dup() = pdesys([Dt(C) ~ -C / 10, Dt(C) ~ -C / 10], [c(0, x, y) ~ 1.0], (8, 8), [C])
-    diffusion() = (@parameters Dc = 0.1; pdesys([Dt(C) ~ Dc * laplacian(C)], [c(0, x, y) ~ 0.0], D8, [C], [Dc]))
-    nonlinear() = (@parameters Dc = 0.1 k = 0.5; pdesys([Dt(C) ~ Dc * laplacian(C) - k * C^2], [c(0, x, y) ~ 0.0], D8, [C], [Dc, k]))
-    bounded() = (@parameters Dc = 1.0; pdesys([Dt(C) ~ Dc * laplacian(C) - DK * C], [c(0, x, y) ~ 0.0], D8, [C, DK], [Dc]))
+    function diffusion()
+        @parameters Dc = 0.1
+        return pdesys([Dt(C) ~ Dc * laplacian(C)], [c(0, x, y) ~ 0.0], D8, [C], [Dc])
+    end
+    function nonlinear()
+        @parameters Dc = 0.1 k = 0.5
+        return pdesys(
+            [Dt(C) ~ Dc * laplacian(C) - k * C^2], [c(0, x, y) ~ 0.0], D8, [C],
+            [Dc, k]
+        )
+    end
+    function bounded()
+        @parameters Dc = 1.0
+        return pdesys(
+            [Dt(C) ~ Dc * laplacian(C) - DK * C], [c(0, x, y) ~ 0.0], D8, [C, DK],
+            [Dc]
+        )
+    end
     kind_diffusion() = pdesys([Dt(C) ~ DK * laplacian(C)], [c(0, x, y) ~ 0.0], D8, [C, DK])
-    volume_diffusion() = pdesys([Dt(C) ~ 0.01 * DK * laplacian(C)], [c(0, x, y) ~ 0.0], D8, [C, DK])
-    mcs_diffusion() = pdesys([Dt(C) ~ DK * (1 + step_index(t)) * laplacian(C)], [c(0, x, y) ~ 0.0], D8, [C, DK])
-    inv_table() = (@parameters Dc = 0.1; pdesys([Dt(C) ~ Dc * laplacian(C) - (1 / DK) * C], [c(0, x, y) ~ 0.0], D8, [C, DK], [Dc]))
+    function volume_diffusion()
+        return pdesys(
+            [Dt(C) ~ 0.01 * DK * laplacian(C)], [c(0, x, y) ~ 0.0], D8, [
+                C, DK,
+            ]
+        )
+    end
+    function mcs_diffusion()
+        return pdesys(
+            [Dt(C) ~ DK * (1 + step_index(t)) * laplacian(C)], [
+                c(0, x, y) ~
+                    0.0,
+            ], D8, [
+                C, DK,
+            ]
+        )
+    end
+    function inv_table()
+        @parameters Dc = 0.1
+        return pdesys(
+            [Dt(C) ~ Dc * laplacian(C) - (1 / DK) * C], [c(0, x, y) ~ 0.0], D8, [C, DK],
+            [Dc]
+        )
+    end
     function int_div()
         @parameters Dc = 0.25
         Cx = c(t, x)
-        return pdesys([Dt(Cx) ~ Dc * laplacian(Cx) - dk(t, x) * Cx], [c(0, x) ~ 0.0], (16,), [Cx, dk(t, x)], [Dc])
+        return pdesys(
+            [Dt(Cx) ~ Dc * laplacian(Cx) - dk(t, x) * Cx],
+            [c(0, x) ~ 0.0], (16,), [Cx, dk(t, x)], [Dc]
+        )
     end
     function two(e1, e2)
         @parameters Dc = 0.5 Dx = 0.5
@@ -33,27 +73,50 @@ module AuPDE
             [c(0, x, y) ~ 0.0, u(0, x, y) ~ 0.0], (8, 8), [C, U], [Dc, Dx]
         )
     end
-    cross_field() = two((Dc, Dx) -> Dc * laplacian(C) - Dx * laplacian(U), (Dc, Dx) -> Dc * laplacian(U))
-    cross_linear() = two((Dc, Dx) -> Dc * laplacian(C) - Dx * U, (Dc, Dx) -> Dc * laplacian(U))
-    cross_loop() = two((Dc, Dx) -> Dc * laplacian(C) - Dx * laplacian(U), (Dc, Dx) -> Dc * laplacian(U) + Dx * laplacian(C))
-    field1() = (@parameters Dc = 0.5; pdesys([Dt(C) ~ Dc * laplacian(C)], [c(0, x, y) ~ 0.0], (8, 8), [C], [Dc]))
+    function cross_field()
+        return two(
+            (Dc, Dx) -> Dc * laplacian(C) - Dx * laplacian(U), (Dc, Dx) -> Dc *
+                laplacian(U)
+        )
+    end
+    function cross_linear()
+        return two(
+            (Dc, Dx) -> Dc * laplacian(C) - Dx * U,
+            (Dc, Dx) -> Dc * laplacian(U)
+        )
+    end
+    function cross_loop()
+        return two(
+            (Dc, Dx) -> Dc * laplacian(C) - Dx * laplacian(U),
+            (Dc, Dx) -> Dc * laplacian(U) + Dx * laplacian(C)
+        )
+    end
+    function field1()
+        @parameters Dc = 0.5
+        return pdesys([Dt(C) ~ Dc * laplacian(C)], [c(0, x, y) ~ 0.0], (8, 8), [C], [Dc])
+    end
     const MCS = step_index(t)
     function gate_rotation()
         @parameters t0 = 1000.0 k = 4.0
         return pdesys(
-            [Dt(C) ~ ifelse(MCS >= t0, -10 * C, -k * U), Dt(U) ~ ifelse(MCS >= t0, -10 * U, k * C)],
+            [
+                Dt(C) ~ ifelse(MCS >= t0, -10 * C, -k * U), Dt(U) ~
+                    ifelse(MCS >= t0, -10 * U, k * C),
+            ],
             [c(0, x, y) ~ 0.0, u(0, x, y) ~ 0.0], (8, 8), [C, U], [t0, k]
         )
     end
     function gate_dominant()
         @parameters t0 = 1000.0
         return pdesys(
-            [Dt(C) ~ ifelse(MCS >= t0, -10 * C - U, -10 * C + U), Dt(U) ~ ifelse(MCS >= t0, -10 * U, -5 * U)],
+            [
+                Dt(C) ~ ifelse(MCS >= t0, -10 * C - U, -10 * C + U),
+                Dt(U) ~ ifelse(MCS >= t0, -10 * U, -5 * U),
+            ],
             [c(0, x, y) ~ 0.0, u(0, x, y) ~ 0.0], (8, 8), [C, U], [t0]
         )
     end
 end
-
 
 function audit_blocks()
     σ = zeros(Int32, 20, 20)
@@ -68,7 +131,8 @@ audit_n(integ, j = 1) = CorePotts._runtime(getfield(integ.ctx, Symbol(:__fields,
 
 function audit_err(f)
     return try
-        f(); nothing
+        f()
+        nothing
     catch e
         e
     end
@@ -86,7 +150,6 @@ end
 
 helper_last(v) = v[end]
 
-
 @potts_model AuditPopCell begin
     @kinds medium A
     @variables q(cell) = 1.0
@@ -95,7 +158,6 @@ helper_last(v) = v[end]
     @after_mcs q ~ sum(q for c in cells)
     @sweep Metropolis(; temperature = 5.0)
 end
-
 
 @potts_model AuditJacobi begin
     @kinds medium A
@@ -120,7 +182,6 @@ end
     @sweep Metropolis(; temperature = 5.0)
 end
 
-
 @potts_model AuditCycle begin
     @kinds medium A
     @variables begin
@@ -136,14 +197,12 @@ end
     @sweep Metropolis(; temperature = 5.0)
 end
 
-
 @potts_model AuditEnergyPop begin
     @kinds medium A
     @lattice Lattice((20, 20))
     @energy cells => (volume - mean(volume for c in cells))^2 + (volume - 9)^2
     @sweep Metropolis(; temperature = 5.0)
 end
-
 
 @potts_model AuditOdePop begin
     @kinds medium A
@@ -154,7 +213,6 @@ end
     @sweep Metropolis(; temperature = 5.0)
 end
 
-
 @potts_model AuditKinds begin
     @kinds medium A B
     @parameters λ = 1.0
@@ -162,7 +220,6 @@ end
     @energy cells => λ * (volume - 9)^2
     @sweep Metropolis(; temperature = 5.0)
 end
-
 
 @potts_model AuditPosition begin
     @kinds medium A
@@ -182,7 +239,6 @@ end
     @sweep Metropolis(; temperature = 5.0)
 end
 
-
 @potts_model AuditDrawBase begin
     @kinds medium A
     @variables x(model) = 0.0
@@ -200,7 +256,6 @@ end
     @after_mcs y ~ rand()
     @sweep Metropolis(; temperature = 5.0)
 end
-
 
 # 8x8 parameter-free coupled / gated / duplicate field PDE variants
 @potts_model AuditField8 begin
@@ -226,7 +281,6 @@ end
     @sweep Metropolis(; temperature = mode === :dup ? 5.0 : 1.0)
 end
 
-
 # 16x16 linear vs nonlinear diffusion field variants
 @potts_model AuditField16 begin
     @structural_parameters mode = :diffusion
@@ -240,7 +294,6 @@ end
     end
     @sweep Metropolis(; temperature = 5.0)
 end
-
 
 # kind-table-bound 16x16 field variants (reaction rate, kind diffusion, mcs-gated diffusion)
 @potts_model AuditTableField begin
@@ -263,7 +316,6 @@ end
     @sweep Metropolis(; temperature = 5.0)
 end
 
-
 @potts_model AuditVolumeDiffusion begin
     @kinds medium A
     @lattice Lattice((16, 16))
@@ -271,7 +323,6 @@ end
     @fields AuPDE.volume_diffusion() (AuPDE.dk => volume[owner])
     @sweep Metropolis(; temperature = 5.0)
 end
-
 
 @potts_model AuditInvTable begin
     @kinds medium A
@@ -282,7 +333,6 @@ end
     @sweep Metropolis(; temperature = 5.0)
 end
 
-
 @potts_model AuditIntDivField begin
     @kinds medium A
     @parameters k₀ = 7.0
@@ -291,7 +341,6 @@ end
     @fields AuPDE.int_div() (AuPDE.dk => k₀ ÷ 2)
     @sweep Metropolis(; temperature = 1.0)
 end
-
 
 @potts_model AuditClear begin
     @kinds medium A
@@ -304,7 +353,6 @@ end
     @sweep Metropolis(; temperature = 20.0)
 end
 
-
 @potts_model AuditBadOption begin
     @kinds medium A
     @variables act(site) = 0.0, [clear_on_ownership_chnage = true]
@@ -312,7 +360,6 @@ end
     @energy cells => (volume - 4)^2
     @sweep Metropolis(; temperature = 1.0)
 end
-
 
 @potts_model AuditOnCopyEnergy begin
     @kinds medium A
@@ -332,7 +379,6 @@ end
     @sweep Metropolis(; temperature = 5.0)
 end
 
-
 @potts_model AuditOnCopyContact begin
     @kinds medium A
     @variables x(cell) = 1.0
@@ -344,7 +390,6 @@ end
     @on_copy x[new] ~ x[new] + 1
     @sweep Metropolis(; temperature = 5.0)
 end
-
 
 @potts_model AuditDerived begin
     @kinds medium A
@@ -364,7 +409,6 @@ end
     @sweep Metropolis(; temperature = 5.0)
 end
 
-
 @potts_model AuditOnCopyEvery begin
     @kinds medium A
     @variables act(site) = 0.0
@@ -373,7 +417,6 @@ end
     @on_copy Every(3) act[target] ~ 1.0
     @sweep Metropolis(; temperature = 1.0)
 end
-
 
 @potts_model AuditVecBase begin
     @kinds medium A
@@ -391,7 +434,6 @@ end
     @after_mcs c ~ centroid() .+ d
 end
 
-
 @potts_model AuditTrackers begin
     @kinds medium A
     @variables s(cell) = 0.0
@@ -401,7 +443,6 @@ end
     @divide cells(A) when = volume > 1000, s => surface
     @sweep Metropolis(; temperature = 1.0 + 0 * centroid(1))
 end
-
 
 # D-049: conditional sections, model-declared proposals, `major_length` in energies
 @potts_model AuditBranches begin
@@ -423,7 +464,6 @@ end
     end
     @sweep Metropolis(; temperature = 1.0)
 end
-
 
 @potts_model AuditLength begin
     @structural_parameters begin

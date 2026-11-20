@@ -16,7 +16,10 @@ module RefPDE
 
     function diff_decay_periodic(dims; Dc = 0.12, kc = 0.25)
         @parameters D = Dc k = kc
-        return pdesys([Dt(C) ~ D * laplacian(C) - k * C], [c(0, x, y) ~ 0.0], dims, [C], [D, k])
+        return pdesys(
+            [Dt(C) ~ D * laplacian(C) - k * C], [c(0, x, y) ~ 0.0], dims, [C],
+            [D, k]
+        )
     end
 
     function diff_decay_dirichlet(dims, spacing; Dc = 0.08, kc = 0.15)
@@ -30,7 +33,10 @@ module RefPDE
     end
 
     function map_step(dims)
-        return pdesys([ShiftT(C) ~ 0.8 * C + 0.05 * laplacian(C) + 0.1], [c(0, x, y) ~ 0.0], dims, [C])
+        return pdesys(
+            [ShiftT(C) ~ 0.8 * C + 0.05 * laplacian(C) + 0.1], [c(0, x, y) ~ 0.0],
+            dims, [C]
+        )
     end
 
     function coupled_source(dims)
@@ -135,7 +141,9 @@ function ref_step_euler(
     nx, ny = size(u)
     for _ in 1:nsteps
         for j in 1:ny, i in 1:nx
-            rate = ref_eval_site(rhs, C_sym, lap_sym, u, i, j, hx, hy, bc_x, bc_y, extra_subs)
+            rate = ref_eval_site(
+                rhs, C_sym, lap_sym, u, i, j, hx, hy, bc_x, bc_y, extra_subs
+            )
             unext[i, j] = u[i, j] + hdt * rate
         end
         u .= unext
@@ -152,7 +160,9 @@ function ref_step_map(
     nx, ny = size(u)
     for _ in 1:nsteps
         for j in 1:ny, i in 1:nx
-            unext[i, j] = ref_eval_site(rhs, C_sym, lap_sym, u, i, j, hx, hy, bc_x, bc_y, extra_subs)
+            unext[i, j] = ref_eval_site(
+                rhs, C_sym, lap_sym, u, i, j, hx, hy, bc_x, bc_y, extra_subs
+            )
         end
         u .= unext
     end
@@ -162,8 +172,12 @@ end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "Symbolics.substitute reference evaluator matches compiled field steps and BCs" setup = [FieldsReferenceSetup] tags = [:potts, :fields] begin
-    @testset "Symbolics.substitute reference evaluator matches compiled field steps and BCs" begin
+@testitem "Symbolics.substitute reference evaluator matches compiled field steps and \
+    BCs" setup = [FieldsReferenceSetup] tags = [
+    :potts, :fields,
+] begin
+    @testset "Symbolics.substitute reference evaluator matches compiled field steps and \
+        BCs" begin
         Symbolics.@variables C_sym lap_sym D_sym k_sym
         rhs_pde = D_sym * lap_sym - k_sym * C_sym
 
@@ -172,7 +186,9 @@ end
         σ_per[2:3, 2:3] .= 1
         c0_per = [0.2 + 0.1 * sin(0.7 * i + 1.1 * j) for i in 1:6, j in 1:6]
         prob_per = PottsProblem(
-            RefPerModel(; name = :rp), [ownership => σ_per, kind => [:A], :c => c0_per], (0, 2);
+            RefPerModel(; name = :rp), [ownership => σ_per, kind => [:A], :c => c0_per], (
+                0, 2,
+            );
             field_solver = ExplicitEuler(; substeps = 4), seed = 1
         )
         got_per = solve(prob_per, SequentialCPM()).u[end].site.c
@@ -202,7 +218,9 @@ end
         σ_dir[2:3, 2:3] .= 1
         c0_dir = [0.1 * cos(0.5 * i - 0.8 * j) for i in 1:6, j in 1:5]
         prob_dir = PottsProblem(
-            RefDirModel(; name = :rd), [ownership => σ_dir, kind => [:A], :c => c0_dir], (0, 2);
+            RefDirModel(; name = :rd), [ownership => σ_dir, kind => [:A], :c => c0_dir], (
+                0, 2,
+            );
             field_solver = ExplicitEuler(; substeps = 4), seed = 1
         )
         got_dir = solve(prob_dir, SequentialCPM()).u[end].site.c
@@ -224,7 +242,9 @@ end
         # 3. Discrete map step
         rhs_map = 0.8 * C_sym + 0.05 * lap_sym + 0.1
         prob_map = PottsProblem(
-            RefMapModel(; name = :rm), [ownership => σ_per, kind => [:A], :c => c0_per], (0, 3);
+            RefMapModel(; name = :rm), [ownership => σ_per, kind => [:A], :c => c0_per], (
+                0, 3,
+            );
             field_solver = ExplicitMap(), seed = 1
         )
         got_map = solve(prob_map, SequentialCPM()).u[end].site.c
@@ -236,8 +256,12 @@ end
     end
 end
 
-@testitem "Symbolics.substitute reference evaluator verifies coupled cell-field feedback" setup = [FieldsReferenceSetup] tags = [:potts, :fields] begin
-    @testset "Symbolics.substitute reference evaluator verifies coupled cell-field feedback" begin
+@testitem "Symbolics.substitute reference evaluator verifies coupled cell-field \
+    feedback" setup = [FieldsReferenceSetup] tags = [
+    :potts, :fields,
+] begin
+    @testset "Symbolics.substitute reference evaluator verifies coupled cell-field \
+        feedback" begin
         Symbolics.@variables C_sym lap_sym D_sym alpha_sym k_sym mem_sym
         rhs_coupled = D_sym * lap_sym - k_sym * C_sym + alpha_sym * mem_sym
 
@@ -252,8 +276,8 @@ end
         got_c = sol.u[end].site.c
         got_y = sol.u[end].cell.y[1]
 
-        # With T = 1e-12 and σ already at target volume 4, σ stays fixed; cell reads integral(c)
-        # from the previous MCS step (2 MCS = 8 substeps, dt = 2.0).
+        # With T = 1e-12 and σ already at target volume 4, σ stays fixed; cell reads
+        # integral(c) from the previous MCS step (2 MCS = 8 substeps, dt = 2.0).
         @test sol.u[end].ownership == σ
         ref_c = ref_step_euler(
             rhs_coupled, C_sym, lap_sym, c0; nsteps = 12, dt = 3.0,
@@ -279,7 +303,9 @@ end
         no_src = ref_step_euler(
             rhs_coupled, C_sym, lap_sym, c0; nsteps = 12, dt = 3.0,
             bc_x = :neumann0, bc_y = :neumann0,
-            extra_subs = (i, j) -> (D_sym => 0.1, k_sym => 0.2, alpha_sym => 0.4, mem_sym => 0.0)
+            extra_subs = (i, j) -> (
+                D_sym => 0.1, k_sym => 0.2, alpha_sym => 0.4, mem_sym => 0.0,
+            )
         )
         @test maximum(abs, got_c .- no_src) > 1.0e-1
     end

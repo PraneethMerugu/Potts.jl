@@ -1,21 +1,22 @@
-# Entity-local initialization through ModelingToolkit (D-170). The `@initialization_equations` of each scope (cell, model) are the
-# `initialization_eqs` of one MTK `System`, the template of one cell (or the model), built at
-# `mtkcompile` (`initialization_system`). When a problem is built, Potts builds MTK's
+# Entity-local initialization through ModelingToolkit (D-170). The
+# `@initialization_equations` of each scope (cell, model) are the `initialization_eqs` of
+# one MTK `System`, the template of one cell (or the model), built at `mtkcompile`
+# (`initialization_system`). When a problem is built, Potts builds MTK's
 # `InitializationProblem` of that scope once, with what is fixed for this problem (written
 # values, operating-point values, built-ins, model values) as its parameters, and solves it
 # for every cell on the host, before the first MCS: the model first, then the cells. The
 # batched kernels are unchanged.
 #
-# Semantics are MTK's, made strict (`fully_determined`): a written value (`= 0.0` included) or
-# an operating-point value fixes a variable, a variable declared without one is solved for
-# when its scope's conditions name it. An operating-point value of an algebraic variable
-# (`y ~ expr` in `@equations`) is the condition `expr ~ value`. Potts checks the counts itself
-# (a matching of conditions to free variables), so the messages name the variables. Every
-# result is checked against the conditions themselves (`_InitCheck`: a residual small against
-# the size of the terms, and a Jacobian that is not singular), so a condition without a
-# solution, or without a unique one, is an error rather than a least-squares answer or the
-# guess. Cross-entity reads (another cell, gathers, folds, site, field and edge variables) are
-# not supported yet.
+# Semantics are MTK's, made strict (`fully_determined`): a written value (`= 0.0` included)
+# or an operating-point value fixes a variable, a variable declared without one is solved
+# for when its scope's conditions name it. An operating-point value of an algebraic variable
+# (`y ~ expr` in `@equations`) is the condition `expr ~ value`. Potts checks the counts
+# itself (a matching of conditions to free variables), so the messages name the variables.
+# Every result is checked against the conditions themselves (`_InitCheck`: a residual small
+# against the size of the terms, and a Jacobian that is not singular), so a condition
+# without a solution, or without a unique one, is an error rather than a least-squares
+# answer or the guess. Cross-entity reads (another cell, gathers, folds, site, field and
+# edge variables) are not supported yet.
 
 """
     Potts.initialization_system(csys::CompiledPottsSystem, scope::Symbol)
@@ -44,15 +45,16 @@ When a problem is built (and on `remake(prob; u0 = map)`, not on `remake(prob; p
 Potts solves the model system once and then the cell system for every cell, with that cell's
 built-ins, fixed values and the model's values as inputs, and checks each result against the
 equations: one without a solution, or without a unique one (a singular Jacobian), is an
-`ArgumentError` naming the cell and the variables. An operating-point value for an algebraic variable is a condition
-of that problem alone and builds no system here. Any other scope, or a `PottsSystem` that has
-not been through `mtkcompile`, is an `ArgumentError`.
+`ArgumentError` naming the cell and the variables. An operating-point value for an algebraic
+variable is a condition of that problem alone and builds no system here. Any other scope, or
+a `PottsSystem` that has not been through `mtkcompile`, is an `ArgumentError`.
 """
 function initialization_system(c::CompiledPottsSystem, scope::Symbol)
     scope in _ODE_SCOPES || throw(
         ArgumentError(
-            "initialization_system: the scope is `:cell` or `:model`; got `:$scope` (site, field and edge " *
-                "initialization reads across entities, which is not supported yet)"
+            "initialization_system: the scope is `:cell` or `:model`; got `:$scope` " *
+                "(site, field and edge initialization reads across entities, which is not \
+                    supported yet)"
         )
     )
     s = get(getfield(c, :initialization), scope, nothing)
@@ -61,7 +63,8 @@ end
 function initialization_system(sys::PottsSystem, ::Symbol)
     throw(
         ArgumentError(
-            "initialization_system: `$(nameof(sys))` has not been compiled; call `initialization_system(mtkcompile(sys), scope)`"
+            "initialization_system: `$(nameof(sys))` has not been compiled; call \
+                `initialization_system(mtkcompile(sys), scope)`"
         )
     )
 end
@@ -69,15 +72,17 @@ end
 """One scope's `@initialization_equations`, compiled (`_compile_initialization`)."""
 struct _InitScope
     authored::Vector{Equation}       # as written
-    conditions::Vector{Equation}     # algebraic variables and `D(x)` replaced by their definitions and rates
+    # algebraic variables and `D(x)` replaced by their definitions and rates
+    conditions::Vector{Equation}
     template::ModelingToolkitBase.System
 end
 
 # what initialization equations read of a cell besides its variables
 const _INIT_BUILTINS = (:volume, :id, :kind)
 
-const _INIT_LOCAL = "initialization equations are entity-local: they read a cell's own variables, its built-ins " *
-    "`volume`, `id` and `kind`, parameters, model variables and `D(x)` of ODE variables"
+const _INIT_LOCAL = "initialization equations are entity-local: they read a cell's own " *
+    "variables, its built-ins `volume`, `id` and `kind`, parameters, model variables and \
+        `D(x)` of ODE variables"
 
 # `f()`, an error naming initialization equation `eq` and where it was written
 function _init_located(f, sys::PottsSystem, eq)
@@ -95,14 +100,17 @@ end
 
 """
 The `@initialization_equations` of a model by scope: each checked (entity-local reads only),
-algebraic variables replaced by their definitions, and its MTK template. Empty when the model
-has none (every published model), which costs nothing.
+algebraic variables replaced by their definitions, and its MTK template. Empty when the
+model has none (every published model), which costs nothing.
 """
 function _compile_initialization(sys::PottsSystem)
     out = Dict{Symbol, _InitScope}()
     eqs = _p(sys, :initialization_eqs)
     isempty(eqs) && return out
-    defs = Dict{Symbol, Any}(info(o.lhs).name => _unwrap(o.rhs) for o in _algebraic_observed(sys))
+    defs = Dict{Symbol, Any}(
+        info(o.lhs).name => _unwrap(o.rhs)
+            for o in _algebraic_observed(sys)
+    )
     rates = _init_rates(sys)
     byscope = Dict{Symbol, Vector{Tuple{Equation, Equation, Equation}}}()
     for eq in eqs
@@ -147,13 +155,23 @@ function _init_defs(eq::Equation, defs)
     for side in (eq.lhs, eq.rhs)
         _walk(side) do y
             i = info(y)
-            i !== nothing && i.role in _ODE_SCOPES && haskey(defs, i.name) && (sub[y] = defs[i.name])
+            i !== nothing && i.role in _ODE_SCOPES && haskey(defs, i.name) &&
+                (sub[y] = defs[i.name])
         end
     end
     isempty(sub) && return eq
     return _init_substitute(eq.lhs, sub) ~ _init_substitute(eq.rhs, sub)
 end
-_init_substitute(x, sub) = (u = _unwrap(x); u isa SymbolicUtils.BasicSymbolic ? Symbolics.substitute(u, sub; fold = Val(false)) : u)
+function _init_substitute(x, sub)
+    (
+        u = _unwrap(x);
+        if u isa SymbolicUtils.BasicSymbolic
+            Symbolics.substitute(u, sub; fold = Val(false))
+        else
+            u
+        end
+    )
+end
 
 # a read of a kind table at the cell's own kind (`g[kind]`, lowered to `value_at(g, kind)`)
 function _kind_read(y)
@@ -161,7 +179,9 @@ function _kind_read(y)
     i = info(_unwrap(arguments(y)[1]))
     return i !== nothing && i.role === :kindtable
 end
-_own_kind(k) = (i = info(_unwrap(k)); i !== nothing && i.role === :builtin && i.name === :kind)
+function _own_kind(k)
+    (i = info(_unwrap(k)); i !== nothing && i.role === :builtin && i.name === :kind)
+end
 
 # `_walk`, but a kind-table read is one quantity (its table and index are not visited)
 function _init_walk(f, x)
@@ -175,9 +195,9 @@ function _init_walk(f, x)
     return
 end
 
-# Every read of `x` is entity-local: the scope's variables, built-ins of the cell, parameters,
-# kind tables at the cell's own kind, model variables, `D(x)` of an ODE variable, and plain
-# functions of them.
+# Every read of `x` is entity-local: the scope's variables, built-ins of the cell,
+# parameters, kind tables at the cell's own kind, model variables, `D(x)` of an ODE
+# variable, and plain functions of them.
 function _check_init_reads(x, what)
     for side in (x isa Equation ? (x.lhs, x.rhs) : (x,))
         _init_walk(side) do y
@@ -187,9 +207,10 @@ function _check_init_reads(x, what)
                 n = info(_unwrap(args[1])).name
                 throw(
                     PottsCompileError(
-                        "$what reads the kind table `$n` at `$(join(args[2:end], ", "))`; in initialization " *
-                            "equations a kind table is read at the cell's own kind (`$n[kind]`, or " *
-                            "`$n[kind, kind]` for a matrix); $(_INIT_LOCAL)"
+                        "$what reads the kind table `$n` at " *
+                            "`$(join(args[2:end], ", "))`; in initialization equations a " *
+                            "kind table is read at the cell's own kind (`$n[kind]`, or \
+                                `$n[kind, kind]` for a matrix); $(_INIT_LOCAL)"
                     )
                 )
             end
@@ -199,33 +220,43 @@ function _check_init_reads(x, what)
                 i.role === :builtin && i.name in _INIT_BUILTINS && return
                 i.role === :kindtable && throw(
                     PottsCompileError(
-                        "$what reads the kind table `$(i.name)` as a whole; read it at the cell's own kind (`$(i.name)[kind]`)"
+                        "$what reads the kind table `$(i.name)` as a whole; read it at \
+                            the cell's own kind (`$(i.name)[kind]`)"
                     )
                 )
                 i.role in (:site, :field, :edge) && throw(
                     PottsCompileError(
-                        "$what reads the $(i.role) variable `$(i.name)`; $(_INIT_LOCAL). Initialization of site, field " *
-                            "and edge variables reads across entities and is not supported yet"
+                        "$what reads the $(i.role) variable `$(i.name)`; $(_INIT_LOCAL). " *
+                            "Initialization of site, field and edge variables reads across \
+                                entities and is not supported yet"
                     )
                 )
                 i.role === :builtin && throw(
                     PottsCompileError(
-                        "$what reads the built-in `$(i.name)`, which has no value at initialization; $(_INIT_LOCAL)"
+                        "$what reads the built-in `$(i.name)`, which has no value at \
+                            initialization; $(_INIT_LOCAL)"
                     )
                 )
-                throw(PottsCompileError("$what reads `$(i.name)` (a $(i.role) quantity); $(_INIT_LOCAL)"))
+                throw(
+                    PottsCompileError(
+                        "$what reads `$(i.name)` (a $(i.role) quantity); $(_INIT_LOCAL)"
+                    )
+                )
             end
             if !iscall(y)
                 SymbolicUtils.isconst(y) && return
-                throw(PottsCompileError("$what reads `$y`, which is not a quantity of the model; $(_INIT_LOCAL)"))
+                throw(PottsCompileError("$what reads `$y`, which is not a quantity of the \
+                    model; $(_INIT_LOCAL)"))
             end
             op = operation(y)
-            op isa Differential && return                    # checked with its rate (`_init_with_rates`)
+            # checked with its rate (`_init_with_rates`)
+            op isa Differential && return
             _template_op(op) && return
             op isa Function || throw(
                 PottsCompileError(
-                    "$what reads `$y`, which is not a cell or model variable of the model (a component's variables are " *
-                        "initialized by the component); $(_INIT_LOCAL)"
+                    "$what reads `$y`, which is not a cell or model variable of the " *
+                        "model (a component's variables are initialized by the \
+                            component); $(_INIT_LOCAL)"
                 )
             )
             if op === value_at
@@ -233,16 +264,17 @@ function _check_init_reads(x, what)
                 n = v === nothing ? string(arguments(y)[1]) : string(v.name)
                 throw(
                     PottsCompileError(
-                        "$what reads `$n` of another cell (`$y`); $(_INIT_LOCAL). Cross-entity " *
-                            "initialization is not supported yet"
+                        "$what reads `$n` of another cell (`$y`); $(_INIT_LOCAL). " *
+                            "Cross-entity initialization is not supported yet"
                     )
                 )
             end
             throw(
                 PottsCompileError(
-                    "$what reads `$y`, which reads across entities (a neighbor gather, a fold over " *
-                        "cells, an integral, a draw or a previous value); $(_INIT_LOCAL). Cross-entity " *
-                        "initialization is not supported yet"
+                    "$what reads `$y`, which reads across entities (a neighbor gather, a " *
+                        "fold over cells, an integral, a draw or a previous " *
+                        "value); $(_INIT_LOCAL). Cross-entity initialization is not \
+                            supported yet"
                 )
             )
         end
@@ -261,8 +293,9 @@ function _init_with_rates(eq::Equation, rates, what)
             dx = "D($(i === nothing ? a : i.name))"
             (i !== nothing && i.role in _ODE_SCOPES && haskey(rates, i.name)) || throw(
                 PottsCompileError(
-                    "$what reads `$dx`, but `$(i === nothing ? a : i.name)` has no ODE; `D(x)` is read for a cell or model " *
-                        "variable `x` with an ODE `D(x) ~ rate` in @equations"
+                    "$what reads `$dx`, but `$(i === nothing ? a : i.name)` has no ODE; " *
+                        "`D(x)` is read for a cell or model variable `x` with an ODE \
+                            `D(x) ~ rate` in @equations"
                 )
             )
             r = rates[i.name][2]
@@ -280,7 +313,9 @@ function _reads_cell(x)
     for side in (x isa Equation ? (x.lhs, x.rhs) : (x,))
         _walk(side) do y
             i = info(y)
-            i !== nothing && (i.role === :cell || (i.role === :builtin && i.name in _INIT_BUILTINS)) && (found[] = true)
+            i !== nothing &&
+                (i.role === :cell || (i.role === :builtin && i.name in _INIT_BUILTINS)) &&
+                (found[] = true)
         end
     end
     return found[]
@@ -293,7 +328,8 @@ function _scope_vars(xs, scope)
     for x in xs, side in (x isa Equation ? (x.lhs, x.rhs) : (x,))
         _walk(side) do y
             i = info(y)
-            i !== nothing && i.role === scope && !(i.name in seen) && (push!(seen, i.name); push!(out, y))
+            i !== nothing && i.role === scope && !(i.name in seen) &&
+                (push!(seen, i.name); push!(out, y))
         end
     end
     return out
@@ -310,21 +346,40 @@ read, else `D(v) ~ 0`), declared parameters its parameters, other quantities inp
 function _init_template(sys::PottsSystem, scope::Symbol, eqs, rates)
     dread = Set{Symbol}()
     for eq in eqs, side in (eq.lhs, eq.rhs)
-        _walk(y -> (iscall(y) && operation(y) isa Differential && push!(dread, info(_unwrap(arguments(y)[1])).name)), side)
+        _walk(
+            y -> (
+                iscall(y) && operation(y) isa Differential &&
+                    push!(dread, info(_unwrap(arguments(y)[1])).name)
+            ),
+            side
+        )
     end
     # `D(m)` of a model variable read by a cell equation is the model's rate, an input here
-    other = Dict{Any, Any}(D(rates[n][1]) => rates[n][2] for n in dread if info(rates[n][1]).role !== scope)
-    isempty(other) || (eqs = Equation[_init_substitute(eq.lhs, other) ~ _init_substitute(eq.rhs, other) for eq in eqs])
+    other = Dict{Any, Any}(
+        D(rates[n][1]) => rates[n][2]
+            for n in dread if info(rates[n][1]).role !== scope
+    )
+    isempty(other) ||
+        (
+        eqs = Equation[
+            _init_substitute(eq.lhs, other) ~ _init_substitute(eq.rhs, other)
+                for eq in eqs
+        ]
+    )
     odes = Any[rates[n][2] for n in dread if info(rates[n][1]).role === scope]
     vars = _scope_vars(Any[eqs; odes], scope)
     params = Any[]
     inputs = Dict{Any, Any}()
     ics = Dict{Any, Any}()
-    taken = Set{Symbol}(info(x).name for x in Iterators.flatten((_p(sys, :parameters), _p(sys, :variables))))
+    taken = Set{Symbol}(
+        info(x).name
+            for x in Iterators.flatten((_p(sys, :parameters), _p(sys, :variables)))
+    )
     function input(y)
         haskey(inputs, y) && return
         i = _kind_read(y) ? nothing : info(y)
-        if i === nothing                                # `g[kind]`: the cell's entry, an input
+        # `g[kind]`: the cell's entry, an input
+        if i === nothing
             n0 = Symbol(info(_unwrap(arguments(y)[1])).name, :_kind)
             n = n0
             k = 1
@@ -336,20 +391,28 @@ function _init_template(sys::PottsSystem, scope::Symbol, eqs, rates)
         elseif i.role === :param
             p = _unwrap(ModelingToolkitBase.toparam(y))
             i.default isa Real && (ics[p] = i.default)
-        else                                            # a built-in or a model variable in a cell system
+            # a built-in or a model variable in a cell system
+        else
             n = i.name
             k = 1
             while i.role === :builtin && n in taken
                 n = Symbol(i.name, :_, k += 1)
             end
-            p = _unwrap(ModelingToolkitBase.toparam(Symbolics.variable(n; T = SymbolicUtils.symtype(y))))
+            p = _unwrap(
+                ModelingToolkitBase.toparam(
+                    Symbolics.variable(n; T = SymbolicUtils.symtype(y))
+                )
+            )
         end
         push!(params, p)
         inputs[y] = p
         return
     end
     # the written values of the fixed variables are initial conditions: their parameters too
-    written = Any[info(x).default for x in vars if _written(x) && _is_symbolic(info(x).default)]
+    written = Any[
+        info(x).default
+            for x in vars if _written(x) && _is_symbolic(info(x).default)
+    ]
     for x in Any[eqs; odes; written], side in (x isa Equation ? (x.lhs, x.rhs) : (x,))
         _init_walk(side) do y
             _kind_read(y) && return input(y)
@@ -359,7 +422,11 @@ function _init_template(sys::PottsSystem, scope::Symbol, eqs, rates)
     end
     sub(x) = isempty(inputs) ? _unwrap(x) : _init_substitute(x, inputs)
     deqs = Equation[
-        n in dread && info(rates[n][1]).role === scope ? (D(rates[n][1]) ~ sub(rates[n][2])) : (D(x) ~ 0)
+        if n in dread && info(rates[n][1]).role === scope
+            D(rates[n][1]) ~ sub(rates[n][2])
+        else
+            D(x) ~ 0
+        end
             for x in vars for n in (info(x).name,)
     ]
     guesses = Dict{Any, Any}()
@@ -373,7 +440,8 @@ function _init_template(sys::PottsSystem, scope::Symbol, eqs, rates)
     end
     template = ModelingToolkitBase.System(
         deqs, t, vars, params; name = Symbol(nameof(sys), :₊, scope, :_init),
-        initialization_eqs = Equation[sub(eq.lhs) ~ sub(eq.rhs) for eq in eqs], guesses, initial_conditions = ics,
+        initialization_eqs = Equation[sub(eq.lhs) ~ sub(eq.rhs) for eq in eqs], guesses,
+        initial_conditions = ics,
         checks = ModelingToolkitBase.CheckComponents
     )
     return ModelingToolkitBase.complete(template)
@@ -387,7 +455,10 @@ Initialize the cell and model variables of a state being built (`_initial_state`
 model's conditions first, then each cell's. `cell` and `model` are the state's columns
 (name => array) and are written in place.
 """
-function _initialize!(c::CompiledPottsSystem, opd, σ, kinds, ncell, cell, model, pvals, init = _init_options(nothing))
+function _initialize!(
+        c::CompiledPottsSystem, opd, σ, kinds, ncell,
+        cell, model, pvals, init = _init_options(nothing)
+    )
     init.mode === :none && return nothing
     sys = getfield(c, :sys)
     alg = _algebraic_observed(sys)
@@ -403,30 +474,41 @@ function _initialize!(c::CompiledPottsSystem, opd, σ, kinds, ncell, cell, model
         cs = Any[o for o in conds if info(o.lhs).options.scope === scope]
         s === nothing && isempty(cs) && continue
         scope === :cell && ncell == 0 && continue
-        _initialize_scope!(c, scope, s, cs, opd, builtins, scope === :cell ? ncell : 1, cell, model, pvals, init)
+        _initialize_scope!(
+            c, scope, s, cs, opd, builtins,
+            scope === :cell ? ncell : 1, cell, model, pvals, init
+        )
     end
     return nothing
 end
 
 _column(cols, n) = last(cols[findfirst(q -> q.first === n, cols)])
 
-function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builtins, n, cell, model, pvals, init)
+function _initialize_scope!(
+        c::CompiledPottsSystem, scope, s, conds, opd, builtins, n, cell, model, pvals, init
+    )
     sys = getfield(c, :sys)
     where_ = scope === :cell ? "the cells" : "the model"
     authored = s === nothing ? Equation[] : s.authored
     eqs = s === nothing ? Equation[] : s.conditions
-    # an operating-point value of an algebraic variable `y`: the condition `definition ~ value`
+    # an operating-point value of an algebraic variable `y`: the condition `definition ~
+    # value`
     values = Any[]
     for o in conds
         name = info(o.lhs).name
-        what = "the operating-point value of the algebraic variable `$name` (the condition `$name ~ value`, `$name ~ $(o.rhs)`)"
+        what = "the operating-point value of the algebraic variable `$name` (the \
+            condition `$name ~ value`, `$name ~ $(o.rhs)`)"
         _check_init_reads(o.rhs, what)
         v = _evaluate(opd[_unwrap(o.lhs)], pvals, "the operating-point value of `$name`")
         if v isa AbstractArray
             length(v) == n ||
-                throw(ArgumentError("the operating-point value of `$name`: got $(length(v)) values for $n entities; pass a scalar or a length-$n vector"))
+                throw(ArgumentError("the operating-point value of `$name`: \
+                    got $(length(v)) values for $n entities; pass a scalar or a length-$n \
+                        vector"))
         else
-            v isa Real || throw(ArgumentError("the operating-point value of `$name`: a number or one number per cell; got $(repr(v))"))
+            v isa Real ||
+                throw(ArgumentError("the operating-point value of `$name`: a number or \
+                    one number per cell; got $(repr(v))"))
         end
         push!(values, v)
     end
@@ -440,11 +522,26 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
     # underdetermined (MTK would refuse it too, `fully_determined`, without naming it)
     rows = [
         (;
-            text = i <= length(eqs) ? "`$(authored[i])`" : "the operating-point value of the algebraic variable `$(info(conds[i - length(eqs)].lhs).name)`",
+            text = if i <= length(eqs)
+                "`$(authored[i])`"
+            else
+                "the operating-point value of the algebraic variable \
+                    `$(info(conds[i - length(eqs)].lhs).name)`"
+            end,
             label = i <= length(eqs) ? nothing : info(conds[i - length(eqs)].lhs).name,
-            free = Set{Symbol}(info(x).name for x in _scope_vars((exprs[i],), scope) if !fixed(x)),
-            fixed = Symbol[info(x).name for x in _scope_vars((exprs[i],), scope) if fixed(x)],
-            model = scope === :cell ? Symbol[info(x).name for x in _scope_vars((exprs[i],), :model)] : Symbol[],
+            free = Set{Symbol}(
+                info(x).name
+                    for x in _scope_vars((exprs[i],), scope) if !fixed(x)
+            ),
+            fixed = Symbol[
+                info(x).name
+                    for x in _scope_vars((exprs[i],), scope) if fixed(x)
+            ],
+            model = if scope === :cell
+                Symbol[info(x).name for x in _scope_vars((exprs[i],), :model)]
+            else
+                Symbol[]
+            end,
         )
             for i in eachindex(exprs)
     ]
@@ -467,9 +564,13 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
     for x in exprs, side in (x isa Equation ? (x.lhs, x.rhs) : (x,))
         _init_walk(side) do y
             haskey(pmap, y) && return
-            if _kind_read(y)                            # `g[kind]`: the cell's entry of the table
+            # `g[kind]`: the cell's entry of the table
+            if _kind_read(y)
                 g = _unwrap(arguments(y)[1])
-                src = (:table, pvals[g], length(arguments(y)) - 1, "the kind table `$(info(g).name)`")
+                src = (
+                    :table, pvals[g], length(arguments(y)) - 1,
+                    "the kind table `$(info(g).name)`",
+                )
                 p = fresh(Symbol(info(g).name, :_kind))
             else
                 i = info(y)
@@ -496,14 +597,19 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
         push!(targets, p)
     end
     sub(x) = isempty(pmap) ? _unwrap(x) : _init_substitute(x, pmap)
-    ieqs = Equation[[sub(eq.lhs) ~ sub(eq.rhs) for eq in eqs]; [sub(o.rhs) ~ p for (o, p) in zip(conds, targets)]]
+    ieqs = Equation[
+        [sub(eq.lhs) ~ sub(eq.rhs) for eq in eqs];
+        [sub(o.rhs) ~ p for (o, p) in zip(conds, targets)]
+    ]
     function value(src, k)
         if src[1] === :builtin
             return getproperty(builtins, src[2])[k]
         elseif src[1] === :param
             return src[2]
         elseif src[1] === :table
-            return Float64(_table_entry(src[4], src[2], ntuple(_ -> Int(builtins.kind[k]), src[3])...))
+            return Float64(
+                _table_entry(src[4], src[2], ntuple(_ -> Int(builtins.kind[k]), src[3])...)
+            )
         elseif src[1] === :condition
             return (v = values[src[2]]; Float64(v isa AbstractArray ? v[k] : v))
         elseif src[1] === :cell
@@ -517,7 +623,8 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
     # a guess may be an expression of parameters (as in MTK): its value for this problem
     gs = Float64[
         (
-            g = _init_guess(x); v = _evaluate(g, pvals, "the guess `$g` of `$(info(x).name)`");
+            g = _init_guess(x);
+            v = _evaluate(g, pvals, "the guess `$g` of `$(info(x).name)`");
             v isa Real || throw(
                 ArgumentError(
                     "the guess of `$(info(x).name)` is a number or an expression of " *
@@ -527,34 +634,44 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
             Float64(v)
         ) for x in free
     ]
-    # every result is checked against the conditions themselves (`_InitCheck`): a solve may stop
-    # on a small absolute residual, and a linear solve may return a least-squares answer
+    # every result is checked against the conditions themselves (`_InitCheck`): a solve may
+    # stop on a small absolute residual, and a linear solve may return a least-squares
+    # answer
     check = _InitCheck(ieqs, params, free)
     dst = Any[_column(scope === :cell ? cell : model, info(x).name) for x in free]
     entity(k) = scope === :cell ? "cell $k" : "the model"
     if init.mode === :check                            # `CheckInit()`: the values as built
         for k in 1:n
             bad = _init_residual(check, vals(k), Float64[d[k] for d in dst], init)
-            bad === nothing || throw(SciMLBase.CheckInitFailureError(abs(bad[2]), _init_tol(init, bad[3]), false))
+            bad === nothing ||
+                throw(
+                SciMLBase.CheckInitFailureError(
+                    abs(bad[2]), _init_tol(init, bad[3]),
+                    false
+                )
+            )
         end
         return nothing
     end
     ip = try
         isys = ModelingToolkitBase.System(
             Equation[D(x) ~ 0 for x in free], t, free, params;
-            name = Symbol(nameof(sys), :₊, scope, :_initialization), initialization_eqs = ieqs,
+            name = Symbol(nameof(sys), :₊, scope, :_initialization),
+            initialization_eqs = ieqs,
             checks = ModelingToolkitBase.CheckComponents
         )
         ModelingToolkitBase.InitializationProblem(
             ModelingToolkitBase.complete(isys), 0.0, Dict{Any, Any}(zip(params, vals(1)));
-            guesses = Dict{Any, Any}(zip(free, gs)), fully_determined = true, use_scc = false
+            guesses = Dict{Any, Any}(zip(free, gs)), fully_determined = true,
+            use_scc = false
         )
     catch e
         (isfatal(e) || e isa Union{ArgumentError, PottsCompileError}) && rethrow()
         throw(
             ArgumentError(
-                "initialization of $where_: ModelingToolkit could not build the initialization problem for " *
-                    "$names: $(first(sprint(showerror, e), 2000))"
+                "initialization of $where_: ModelingToolkit could not build the " *
+                    "initialization problem \
+                        for $names: $(first(sprint(showerror, e), 2000))"
             )
         )
     end
@@ -563,15 +680,21 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
     pv = SymbolicIndexingInterface.parameter_values(ip)
     pindex = Any[SymbolicIndexingInterface.parameter_index(ip, p) for p in params]
     setter!(vs) = (foreach((i, v) -> setindex!(pv, v, i), pindex, vs); nothing)
-    # MTK builds a `NonlinearProblem` (state: the implicit unknowns), one without a state when
-    # every condition is explicit (its values are MTK's observed values), or, for a linear
-    # system, an `SCCNonlinearProblem` around a `LinearProblem`
+    # MTK builds a `NonlinearProblem` (state: the implicit unknowns), one without a state
+    # when every condition is explicit (its values are MTK's observed values), or, for a
+    # linear system, an `SCCNonlinearProblem` around a `LinearProblem`
     plain = ip isa SciMLBase.NonlinearProblem
     u0 = plain ? ip.u0 : nothing
     explicit = plain && (u0 === nothing || isempty(u0))
-    # the solved unknowns are read from the state by index, the eliminated ones as MTK's observed
-    # values (one observed getter, compiled per model, only for these)
-    index = Any[plain && !explicit ? SymbolicIndexingInterface.variable_index(ip, x) : nothing for x in free]
+    # the solved unknowns are read from the state by index, the eliminated ones as MTK's
+    # observed values (one observed getter, compiled per model, only for these)
+    index = Any[
+        if plain && !explicit
+            SymbolicIndexingInterface.variable_index(ip, x)
+        else
+            nothing
+        end for x in free
+    ]
     observed = Any[x for (x, i) in zip(free, index) if i === nothing]
     getter = isempty(observed) ? nothing : SymbolicIndexingInterface.getu(ip, observed)
     opos = cumsum(Int[i === nothing for i in index])           # position among the observed
@@ -594,17 +717,20 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
         return Float64[i === nothing ? obs[opos[q]] : x[i] for (q, i) in enumerate(index)]
     end
     conditions = join((r.text for r in rows), ", ")
-    zero_guess = nlp !== nothing && any(x -> ModelingToolkitBase.getguess(x) === nothing, free)
+    zero_guess = nlp !== nothing &&
+        any(x -> ModelingToolkitBase.getguess(x) === nothing, free)
     hint = if zero_guess
-        " (a variable without a guess starts from 0.0, where the Jacobian of an equation symmetric " *
-            "in it, such as `r^2 ~ volume`, is singular: give it one, `r(cell), [guess = 1.0]`)"
+        " (a variable without a guess starts from 0.0, where the Jacobian of an equation " *
+            "symmetric in it, such as `r^2 ~ volume`, is singular: give it one, `r(cell), \
+                [guess = 1.0]`)"
     else
         ""
     end
     function failed(k, why)
         throw(
             ArgumentError(
-                "initialization of $(entity(k)) found no solution for $names ($why); check $conditions and the guesses$hint"
+                "initialization of $(entity(k)) found no solution for $names ($why); \
+                    check $conditions and the guesses$hint"
             )
         )
     end
@@ -622,7 +748,8 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
         retcode = nothing
         out = if explicit                              # MTK's observed values
             getter(ip)
-        elseif nlp !== nothing && init.nlsolve !== nothing    # the user's solver, once from the guess
+            # the user's solver, once from the guess
+        elseif nlp !== nothing && init.nlsolve !== nothing
             nlp.u0 .= guess
             sol = solving(() -> SciMLBase.solve(nlp, init.nlsolve; init.solvekw...), k)
             retcode = sol.retcode
@@ -630,22 +757,34 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
         elseif nlp !== nothing
             # Newton from the guess, stopped on a residual small against the terms of the
             # conditions (`_INIT_NEWTON_RTOL`), restarted with a tighter tolerance and a
-            # finite-difference step at the scale of the iterate while the result fails the check
+            # finite-difference step at the scale of the iterate while the result fails the
+            # check
             nlp.u0 .= guess
             abstol = if init.abstol === nothing
-                _INIT_NEWTON_RTOL * max(maximum(_init_scales(check, pk, at_state(guess)); init = 0.0), floatmin(Float64))
+                _INIT_NEWTON_RTOL *
+                    max(
+                    maximum(_init_scales(check, pk, at_state(guess)); init = 0.0),
+                    floatmin(Float64)
+                )
             else
                 init.abstol
             end
             step = _init_step(guess, guess)
             local x
             for _ in 1:_INIT_ROUNDS
-                sol = solving(() -> SciMLBase.solve(nlp, _init_solver(step); abstol, maxiters = 100), k)
+                sol = solving(
+                    () -> SciMLBase.solve(nlp, _init_solver(step); abstol, maxiters = 100),
+                    k
+                )
                 retcode = sol.retcode
                 x = at_state(sol.u)
                 all(isfinite, x) || break
                 _init_accept(check, pk, x, gs, init) === nothing && break
-                tighter = _INIT_NEWTON_RTOL * minimum((v for v in _init_scales(check, pk, x) if v > 0); init = floatmin(Float64))
+                tighter = _INIT_NEWTON_RTOL *
+                    minimum(
+                    (v for v in _init_scales(check, pk, x) if v > 0);
+                    init = floatmin(Float64)
+                )
                 step2 = _init_step(sol.u, guess)
                 (tighter < abstol / 2 || !(step / 2 < step2 < 2step)) || break
                 abstol = min(abstol, tighter)
@@ -654,7 +793,12 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
             end
             x
         else
-            sol = solving(() -> SciMLBase.solve(ip, something(init.nlsolve, _INIT_SOLVER); init.solvekw...), k)
+            sol = solving(
+                () -> SciMLBase.solve(
+                    ip, something(init.nlsolve, _INIT_SOLVER);
+                    init.solvekw...
+                ), k
+            )
             retcode = sol.retcode
             getter(sol)
         end
@@ -668,16 +812,18 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
         if bad !== nothing
             r, res, sc = bad
             failed(
-                k, "$(rows[r].text) is not satisfied: residual $res against terms of size $sc" *
+                k, "$(rows[r].text) is not satisfied: residual $res against terms of \
+                    size $sc" *
                     (retcode === nothing ? "" : "; the solve stopped with $retcode")
             )
         end
         _init_singular(check, pk, out, gs) && throw(
             ArgumentError(
-                "initialization of $(entity(k)) does not determine $names uniquely: their Jacobian at the solution is " *
-                    "singular (dependent conditions, as for `a + b ~ volume` with `2a + 2b ~ 2volume`; a coefficient that is " *
-                    "zero for this $(scope === :cell ? "cell" : "model"); or conditions that are flat in a variable there); " *
-                    "check $conditions"
+                "initialization of $(entity(k)) does not determine $names uniquely: " *
+                    "their Jacobian at the solution is singular (dependent conditions, " *
+                    "as for `a + b ~ volume` with `2a + 2b ~ 2volume`; a coefficient " *
+                    "that is zero for this $(scope === :cell ? "cell" : "model"); or \
+                        conditions that are flat in a variable there); check $conditions"
             )
         )
         for (j, v) in enumerate(out)
@@ -687,25 +833,32 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
     return nothing
 end
 
-# The nonlinear solver of initialization (MTKB has no default): Newton from the guess, with a
-# finite-difference Jacobian, so the residual is never compiled for dual numbers (≈ 0.2 s per
-# model cold), and a step that follows the scale of the values. It stops when MTK's residual is below `_INIT_NEWTON_RTOL` times the size of the
-# conditions' terms (`_init_scales`), tightened over up to `_INIT_ROUNDS` restarts while the
-# result fails the check; the result is accepted when every condition holds to `_INIT_RTOL`
-# relative to its terms (D-158: 1e-9 is the tolerance of nonlinear values).
+# The nonlinear solver of initialization (MTKB has no default): Newton from the guess, with
+# a finite-difference Jacobian, so the residual is never compiled for dual numbers (≈ 0.2 s
+# per model cold), and a step that follows the scale of the values. It stops when MTK's
+# residual is below `_INIT_NEWTON_RTOL` times the size of the conditions' terms
+# (`_init_scales`), tightened over up to `_INIT_ROUNDS` restarts while the result fails the
+# check; the result is accepted when every condition holds to `_INIT_RTOL` relative to its
+# terms (D-158: 1e-9 is the tolerance of nonlinear values).
 const _INIT_FD = cbrt(eps(Float64))
-# central differences, the step `_INIT_FD` relative to each value and at least `_INIT_FD * scale`
-# (one concrete solver type for every scale, compiled once)
+# central differences, the step `_INIT_FD` relative to each value and at least `_INIT_FD *
+# scale` (one concrete solver type for every scale, compiled once)
 function _init_solver(scale::Float64)
     return SimpleNewtonRaphson(;
-        autodiff = AutoFiniteDiff(; fdtype = Val(:central), relstep = _INIT_FD, absstep = _INIT_FD * scale)
+        autodiff = AutoFiniteDiff(;
+            fdtype = Val(:central), relstep = _INIT_FD, absstep = _INIT_FD *
+                scale
+        )
     )
 end
 const _INIT_SOLVER = _init_solver(1.0)
-# the scale of the step: the smallest nonzero scale among the values, each its magnitude or its
-# guess's (a value converging to 0 keeps its guess's scale), 1 when all are zero
+# the scale of the step: the smallest nonzero scale among the values, each its magnitude or
+# its guess's (a value converging to 0 keeps its guess's scale), 1 when all are zero
 function _init_step(x, g)
-    s = minimum((m for (v, w) in zip(x, g) for m in (max(abs(v), abs(w)),) if m != 0); init = Inf)
+    s = minimum(
+        (m for (v, w) in zip(x, g) for m in (max(abs(v), abs(w)),) if m != 0);
+        init = Inf
+    )
     return isfinite(s) ? Float64(s) : 1.0
 end
 const _INIT_NEWTON_RTOL = 1.0e-13
@@ -713,20 +866,26 @@ const _INIT_RTOL = 1.0e-9
 const _INIT_ROUNDS = 6
 
 # SciML's `initializealg` of a problem as the initialization reads it: `mode` (`:solve`,
-# `:check` or `:none`), the nonlinear solver (`nothing`: the Newton above) and the tolerances.
-# `OverrideInit(; abstol, reltol, nlsolve)`: `nlsolve` solves once from the guesses; `abstol`
-# stops the solve and lets a condition pass when its residual is below it; `reltol` (default
-# `_INIT_RTOL`) bounds a residual against the size of the condition's terms. `NoInit()` keeps
-# the values the state is built with. `CheckInit()` checks them against the conditions.
+# `:check` or `:none`), the nonlinear solver (`nothing`: the Newton above) and the
+# tolerances. `OverrideInit(; abstol, reltol, nlsolve)`: `nlsolve` solves once from the
+# guesses; `abstol` stops the solve and lets a condition pass when its residual is below it;
+# `reltol` (default `_INIT_RTOL`) bounds a residual against the size of the condition's
+# terms. `NoInit()` keeps the values the state is built with. `CheckInit()` checks them
+# against the conditions.
 function _init_options(alg)
-    plain(mode) = (; mode, nlsolve = nothing, abstol = nothing, reltol = _INIT_RTOL, solvekw = (;))
+    function plain(mode)
+        return (;
+            mode, nlsolve = nothing, abstol = nothing, reltol = _INIT_RTOL, solvekw = (;),
+        )
+    end
     alg === nothing && return plain(:solve)
     alg isa SciMLBase.NoInit && return plain(:none)
     alg isa SciMLBase.CheckInit && return plain(:check)
     alg isa SciMLBase.OverrideInit || throw(
         ArgumentError(
-            "`initializealg = $(repr(alg))`: a Potts model's state is initialized by `OverrideInit(; abstol, reltol, nlsolve)` " *
-                "(the default), checked by `CheckInit()` or kept by `NoInit()`"
+            "`initializealg = $(repr(alg))`: a Potts model's state is initialized by " *
+                "`OverrideInit(; abstol, reltol, nlsolve)` (the default), checked by \
+                    `CheckInit()` or kept by `NoInit()`"
         )
     )
     function tol(v, n)
@@ -735,22 +894,33 @@ function _init_options(alg)
         elseif v isa Real && v >= 0
             return Float64(v)
         else
-            throw(ArgumentError("`OverrideInit($n = $(repr(v)))`: a tolerance is a nonnegative number"))
+            throw(
+                ArgumentError(
+                    "`OverrideInit($n = $(repr(v)))`: a tolerance is a nonnegative number"
+                )
+            )
         end
     end
     abstol, reltol = tol(alg.abstol, :abstol), tol(alg.reltol, :reltol)
-    solvekw = (; (abstol === nothing ? (;) : (; abstol))..., (reltol === nothing ? (;) : (; reltol))...)
-    return (; mode = :solve, nlsolve = alg.nlsolve, abstol, reltol = something(reltol, _INIT_RTOL), solvekw)
+    solvekw = (;
+        (abstol === nothing ? (;) : (; abstol))...,
+        (reltol === nothing ? (;) : (; reltol))...,
+    )
+    return (;
+        mode = :solve, nlsolve = alg.nlsolve, abstol,
+        reltol = something(reltol, _INIT_RTOL), solvekw,
+    )
 end
 # the residual a condition whose terms have size `sc` may keep
 _init_tol(init, sc) = max(init.reltol * sc, something(init.abstol, 0.0))
-# the Jacobian of the conditions, equilibrated, is singular below this ratio of singular values
+# the Jacobian of the conditions, equilibrated, is singular below this ratio of singular
+# values
 const _INIT_SINGULAR = 1.0e-8
 
 """
 The conditions of one scope as a tape of numeric operations on (parameters…, free values…),
-evaluated without compiling anything per model: each condition's residual `lhs - rhs` and the
-size of its terms (`|a| + |b|` for a sum, `|a|·|b|` for a product, `|a|^n`, `|a|/|b|`,
+evaluated without compiling anything per model: each condition's residual `lhs - rhs` and
+the size of its terms (`|a| + |b|` for a sum, `|a|·|b|` for a product, `|a|^n`, `|a|/|b|`,
 otherwise the magnitude of the value), against which the residual is judged.
 """
 struct _InitCheck
@@ -770,9 +940,18 @@ function _InitCheck(eqs, params, free)
     for (j, x) in enumerate(Iterators.flatten((params, free)))
         slot[_unwrap(x)] = j
     end
-    code = UInt8[]; num = Float64[]; op = Any[]; args = Vector{Int}[]
+    code = UInt8[]
+    num = Float64[]
+    op = Any[]
+    args = Vector{Int}[]
     memo = Dict{Any, Int}()
-    node!(c, x, o, a) = (push!(code, c); push!(num, x); push!(op, o); push!(args, a); length(code))
+    function node!(c, x, o, a)
+        push!(code, c)
+        push!(num, x)
+        push!(op, o)
+        push!(args, a)
+        return length(code)
+    end
     function build(y)
         y = _unwrap(y)
         haskey(memo, y) && return memo[y]
@@ -794,7 +973,10 @@ function _InitCheck(eqs, params, free)
     end
     rows = Tuple{Int, Int}[(build(eq.lhs), build(eq.rhs)) for eq in eqs]
     nn = length(code)
-    return _InitCheck(code, num, op, args, rows, zeros(nn), zeros(nn), zeros(length(params) + length(free)), length(params))
+    return _InitCheck(
+        code, num, op, args, rows, zeros(nn), zeros(nn),
+        zeros(length(params) + length(free)), length(params)
+    )
 end
 
 function _init_eval!(c::_InitCheck, p, x)
@@ -819,17 +1001,23 @@ function _init_eval!(c::_InitCheck, p, x)
                 v[i] = v[b]
                 m[i] = m[b]
             elseif f === (+)
-                s = 0.0; t = 0.0
+                s = 0.0
+                t = 0.0
                 for j in a
-                    s += v[j]; t += m[j]
+                    s += v[j]
+                    t += m[j]
                 end
-                v[i] = s; m[i] = t
+                v[i] = s
+                m[i] = t
             elseif f === (*)
-                s = 1.0; t = 1.0
+                s = 1.0
+                t = 1.0
                 for j in a
-                    s *= v[j]; t *= m[j]
+                    s *= v[j]
+                    t *= m[j]
                 end
-                v[i] = s; m[i] = t
+                v[i] = s
+                m[i] = t
             elseif f === (^) && length(a) == 2
                 v[i] = Float64(v[a[1]]^v[a[2]])
                 m[i] = c.code[a[2]] === 0x00 && v[a[2]] > 0 ? m[a[1]]^v[a[2]] : abs(v[i])
@@ -865,7 +1053,10 @@ function _init_scales(c::_InitCheck, p, x)
     return Float64[c.m[l] + c.m[r] for (l, r) in c.rows]
 end
 
-"""The first condition not satisfied at (`p`, `x`): (row, residual, size of its terms), or `nothing`."""
+"""
+The first condition not satisfied at (`p`, `x`): (row, residual, size of its terms), or
+`nothing`.
+"""
 function _init_residual(c::_InitCheck, p, x, init = _init_options(nothing))
     # Treat any non-fatal evaluation failure in user expressions as unsatisfied.
     try
@@ -883,13 +1074,15 @@ function _init_residual(c::_InitCheck, p, x, init = _init_options(nothing))
 end
 
 # the scale of each free value: its magnitude or its guess's, 1 when both are zero
-_init_scale(x, g) = Float64[(s = max(abs(x[j]), abs(g[j])); s > 0 ? s : 1.0) for j in eachindex(x)]
+function _init_scale(x, g)
+    return Float64[(s = max(abs(x[j]), abs(g[j])); s > 0 ? s : 1.0) for j in eachindex(x)]
+end
 
 # the conditions' Jacobian in the free values (central differences). The step is relative to
 # the value's scale (`_init_scale`: a root at about 0, `exp(v) ~ 1` landing at 1e-17, is
-# judged at its guess's scale), and grows once, to `_INIT_FD_MAX` of the scale, while a column
-# is exactly zero: never so far that it crosses a kink or a branch (`max(v, 1000) ~ 1000` from
-# `v = 1` is flat, not unique).
+# judged at its guess's scale), and grows once, to `_INIT_FD_MAX` of the scale, while a
+# column is exactly zero: never so far that it crosses a kink or a branch (`max(v, 1000) ~
+# 1000` from `v = 1` is flat, not unique).
 const _INIT_FD_MAX = 1.0e-4
 function _init_jacobian!(J, c::_InitCheck, p, x, g)
     y = collect(Float64, x)
@@ -936,9 +1129,10 @@ end
 
 """
 Whether the result (`p`, `x`; guesses `g`) solves the conditions: `nothing`, or the first
-condition not satisfied (row, residual, size of its terms). A residual small against the size
-of the terms passes; so does one whose Newton correction `J⁻¹ r` is below `_INIT_RTOL` of each
-value (floored at 1e-9 of its guess), which covers roots where the terms themselves vanish (`sin(v) ~ 0` at `π`).
+condition not satisfied (row, residual, size of its terms). A residual small against the
+size of the terms passes; so does one whose Newton correction `J⁻¹ r` is below `_INIT_RTOL`
+of each value (floored at 1e-9 of its guess), which covers roots where the terms themselves
+vanish (`sin(v) ~ 0` at `π`).
 """
 function _init_accept(c::_InitCheck, p, x, g, init = _init_options(nothing))
     bad = _init_residual(c, p, x, init)
@@ -946,7 +1140,8 @@ function _init_accept(c::_InitCheck, p, x, g, init = _init_options(nothing))
     isfinite(bad[2]) || return bad
     n = length(x)
     J = zeros(n, n)
-    # SingularException, LAPACKException, or user-function evaluation errors reject the candidate.
+    # SingularException, LAPACKException, or user-function evaluation errors reject the
+    # candidate.
     δ = try
         _init_jacobian!(J, c, p, x, g)
         _init_eval!(c, p, x)
@@ -957,8 +1152,16 @@ function _init_accept(c::_InitCheck, p, x, g, init = _init_options(nothing))
         isfatal(e) && rethrow()
         return bad
     end
-    # against the value itself (a large guess must not loosen it), floored far below the guess
-    return all(j -> abs(δ[j]) <= init.reltol * max(abs(x[j]), 1.0e-9 * abs(g[j]), floatmin(Float64)), 1:n) ? nothing : bad
+    # against the value itself (a large guess must not loosen it), floored far below the
+    # guess
+    return if all(
+            j -> abs(δ[j]) <=
+                init.reltol * max(abs(x[j]), 1.0e-9 * abs(g[j]), floatmin(Float64)), 1:n
+        )
+        nothing
+    else
+        bad
+    end
 end
 
 """
@@ -974,7 +1177,8 @@ function _init_singular(c::_InitCheck, p, x, g)
         _init_jacobian!(J, c, p, x, g)
     catch e
         isfatal(e) && rethrow()
-        return false                                    # not evaluable beside the solution: not judged
+        # not evaluable beside the solution: not judged
+        return false
     end
     return _init_flat!(J)
 end
@@ -1011,18 +1215,27 @@ function _check_determined(where_, rows, free::Vector{Symbol})
             vs = join(("`$v`" for v in row.model), ", ")
             throw(
                 ArgumentError(
-                    "initialization of $where_: $(row.text) names no cell variable to solve for, and a cell " *
-                        "equation does not determine the model variable$(length(row.model) == 1 ? "" : "s") $vs " *
-                        "(it would give one value per cell); determine $vs by a model equation (one that reads " *
-                        "no cell quantity), or give $(length(row.model) == 1 ? "it" : "them") a value"
+                    "initialization of $where_: $(row.text) names no cell variable to " *
+                        "solve for, and a cell equation does not determine the model " *
+                        "variable$(length(row.model) == 1 ? "" : "s") $vs (it would give " *
+                        "one value per cell); determine $vs by a model equation (one that \
+                            reads no cell quantity), or \
+                            give $(length(row.model) == 1 ? "it" : "them") a value"
                 )
             )
         end
         if isempty(row.fixed)
             throw(
                 ArgumentError(
-                    "initialization of $where_ is overdetermined: $(row.text) adds a condition on " *
-                        (isempty(row.free) ? "no variable" : join(("`$v`" for v in row.free), ", ")) *
+                    "initialization of $where_ is overdetermined: $(row.text) adds a \
+                        condition on " *
+                        (
+                        if isempty(row.free)
+                            "no variable"
+                        else
+                            join(("`$v`" for v in row.free), ", ")
+                        end
+                    ) *
                         " beyond the others; remove one condition"
                 )
             )
@@ -1032,20 +1245,29 @@ function _check_determined(where_, rows, free::Vector{Symbol})
         throw(
             ArgumentError(
                 "initialization of $where_ is overdetermined: $(row.text)" *
-                    (row.label === nothing ? "" : " (the condition `$(row.label) ~ value`)") * " names $vs, which already $has a value " *
-                    "(written in @variables, `= 0.0` included, or given in the operating point), and no free " *
-                    "variable is left for it; declare $vs without a value to have initialization solve for it, or " *
-                    "remove the condition"
+                    (
+                    if row.label === nothing
+                        ""
+                    else
+                        " (the condition `$(row.label) ~ value`)"
+                    end
+                ) *
+                    " names $vs, which already $has a value " *
+                    "(written in @variables, `= 0.0` included, or given in the operating " *
+                    "point), and no free variable is left for it; declare $vs without a " *
+                    "value to have initialization solve for it, or remove the condition"
             )
         )
     end
     left = [v for v in free if !haskey(match, v)]
     isempty(left) || throw(
         ArgumentError(
-            "initialization of $where_ is underdetermined: $(length(rows)) condition$(length(rows) == 1 ? "" : "s") for " *
-                "$(length(free)) free variables, and $(join(("`$v`" for v in left), ", ")) $(length(left) == 1 ? "is" : "are") " *
-                "not determined; give $(length(left) == 1 ? "it" : "them") a value (in @variables or the operating point) or add " *
-                "an equation to @initialization_equations"
+            "initialization of $where_ is underdetermined: $(length(rows)) " *
+                "condition$(length(rows) == 1 ? "" : "s") for $(length(free)) free " *
+                "variables, and $(join(("`$v`" for v in left), ", ")) " *
+                "$(length(left) == 1 ? "is" : "are") not determined; give " *
+                "$(length(left) == 1 ? "it" : "them") a value (in @variables or the " *
+                "operating point) or add an equation to @initialization_equations"
         )
     )
     return nothing

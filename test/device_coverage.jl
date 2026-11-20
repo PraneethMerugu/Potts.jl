@@ -13,23 +13,39 @@ const ALLOWLIST = Dict{String, String}()
 
 @testset "device IR: every CorePotts kernel and launch body is scanned" begin
     dir = get(ENV, "POTTS_DEVICE_IR_DIR", "")
-    files = isempty(dir) ? String[] : filter(f -> endswith(f, ".txt"), readdir(dir; join = true))
+    files = if isempty(dir)
+        String[]
+    else
+        filter(f -> endswith(f, ".txt"), readdir(dir; join = true))
+    end
     @test length(files) == 2                                 # both suites wrote their scan
     sigs = join(read.(files, String), '\n')
     defined = sort!(
         [
-            string(n) for n in names(CorePotts; all = true)
+            string(n)
+                for n in names(CorePotts; all = true)
                 if (startswith(string(n), "gpu_") || endswith(string(n), "_body!")) &&
                 isdefined(CorePotts, n) && getfield(CorePotts, n) isa Function
         ]
     )
-    seen(n) = occursin(Regex("CorePotts\\." * replace(n, "!" => "\\!") * "(?![\\w!])"), sigs)
+    function seen(n)
+        return occursin(
+            Regex("CorePotts\\." * replace(n, "!" => "\\!") * "(?![\\w!])"),
+            sigs
+        )
+    end
     missing_ = filter(n -> !seen(n) && !haskey(ALLOWLIST, n), defined)
     stale = filter(n -> !(n in defined) || seen(n), collect(keys(ALLOWLIST)))
-    @info "device IR coverage" defined = length(defined) scanned = count(seen, defined) allowlisted = length(ALLOWLIST)
-    @test length(defined) > 20                               # control: the enumeration finds them
+    @info "device IR coverage" defined = length(defined) scanned = count(
+        seen,
+        defined
+    ) allowlisted = length(ALLOWLIST)
+    # control: the enumeration finds them
+    @test length(defined) > 20
     @test isempty(missing_)
-    isempty(missing_) || @error "device IR: kernels or bodies the GPU group never compiled" missing_
-    @test isempty(stale)                                     # an allowlist entry that is now covered or gone
+    isempty(missing_) ||
+        @error "device IR: kernels or bodies the GPU group never compiled" missing_
+    # an allowlist entry that is now covered or gone
+    @test isempty(stale)
     isempty(stale) || @error "device IR: stale allowlist entries" stale
 end

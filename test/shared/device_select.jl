@@ -12,7 +12,8 @@ function requested(env = ENV)
             error("POTTS_GPU/COREPOTTS_GPU must be \"\", \"metal\" or \"rocm\"; got \"$v\"")
     end
     isempty(a) || isempty(b) || a == b ||
-        error("POTTS_GPU = \"$a\" and COREPOTTS_GPU = \"$b\" disagree; set one, or both alike")
+        error("POTTS_GPU = \"$a\" and COREPOTTS_GPU = \"$b\" disagree; set one, or both \
+            alike")
     return isempty(a) ? b : a
 end
 

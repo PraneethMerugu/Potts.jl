@@ -35,42 +35,127 @@ module Check
     using Potts: Potts
     using Potts.Fields
     @parameters Dc = 0.2 s = 0.5 kd = 0.1 ra = 1.5 rb = -0.5 g = 0.2
-    @variables c(..) = 0.0 L(..) = 0.0 u(..) = 0.0 sec(..)::Bool [input = true] vol(..) [input = true] w(..) [input = true]
+    @variables c(..) = 0.0 L(..) = 0.0 u(..) = 0.0 sec(..)::Bool [input = true] vol(..) [
+        input = true,
+    ] w(..) [input = true]
     @variables cc(..) [lattice_level = Potts.LatticePDE.Coarse(2)] v(..) [input = true]
     const C, CC = c(t, x, y), cc(t, x, y)
-    att() = pdesystem([Differential(t)(C) ~ Dc * laplacian(C) + s * sec(t, x, y) * vol(t, x, y) / 16 - kd * C]; name = :att)
-    scaled() = pdesystem([Differential(t)(C) ~ Dc * laplacian(C) + s * w(t, x, y) - kd * C]; name = :scaled)
-    coarse() = pdesystem([Differential(t)(CC) ~ Dc * laplacian(CC) + s * sec(t, x, y) - kd * CC]; name = :crs)
-    conserve() = pdesystem([Differential(t)(CC) ~ Dc * laplacian(CC) + s * sec(t, x, y)]; name = :cons)
-    lapin() = pdesystem([Differential(t)(C) ~ 0.1 * laplacian(C) + 0.1 * laplacian(sec(t, x, y))]; name = :lapin)
-    lapsite() = pdesystem([Differential(t)(C) ~ 0.1 * laplacian(C) + 0.1 * laplacian(v(t, x, y))]; name = :lapsite)
+    function att()
+        return pdesystem(
+            [
+                Differential(t)(C) ~
+                    Dc * laplacian(C) + s * sec(t, x, y) * vol(t, x, y) / 16 - kd * C,
+            ];
+            name = :att
+        )
+    end
+    function scaled()
+        return pdesystem(
+            [Differential(t)(C) ~ Dc * laplacian(C) + s * w(t, x, y) - kd * C];
+            name = :scaled
+        )
+    end
+    function coarse()
+        return pdesystem(
+            [
+                Differential(t)(CC) ~
+                    Dc * laplacian(CC) + s * sec(t, x, y) - kd * CC,
+            ]; name = :crs
+        )
+    end
+    function conserve()
+        return pdesystem(
+            [Differential(t)(CC) ~ Dc * laplacian(CC) + s * sec(t, x, y)];
+            name = :cons
+        )
+    end
+    function lapin()
+        return pdesystem(
+            [
+                Differential(t)(C) ~
+                    0.1 * laplacian(C) + 0.1 * laplacian(sec(t, x, y)),
+            ]; name = :lapin
+        )
+    end
+    function lapsite()
+        return pdesystem(
+            [
+                Differential(t)(C) ~
+                    0.1 * laplacian(C) + 0.1 * laplacian(v(t, x, y)),
+            ]; name = :lapsite
+        )
+    end
     function faces()
         return pdesystem(
             [Differential(t)(C) ~ 0.3 * laplacian(C) - 0.2 * C + 0.05 * x],
-            [c(0, x, y) ~ 1.0, c(t, 0, y) ~ 0.0, ra * c(t, x, 0) + rb * Differential(y)(c(t, x, 0)) ~ g]; name = :faces
+            [
+                c(0, x, y) ~ 1.0, c(t, 0, y) ~ 0.0, ra * c(t, x, 0) +
+                    rb * Differential(y)(c(t, x, 0)) ~ g,
+            ]; name = :faces
         )
     end
     function faces_owned()
         return pdesystem(
             [Differential(t)(C) ~ 0.3 * laplacian(C) - 0.2 * C + 0.05 * x],
-            [c(0, x, y) ~ 1.0, c(t, 0, y) ~ 0.0, ra * c(t, x, 0) + rb * Differential(y)(c(t, x, 0)) ~ g]; name = :faces,
+            [
+                c(0, x, y) ~ 1.0, c(t, 0, y) ~ 0.0, ra * c(t, x, 0) +
+                    rb * Differential(y)(c(t, x, 0)) ~ g,
+            ]; name = :faces,
             domain = lattice_domain(t, (x, y), (8, 8))
         )
     end
-    xflux() = pdesystem([Differential(t)(C) ~ 0.1 * Differential(x)(Differential(x)(C)) + 0.01 * x]; name = :xflux)
-    zflux() = pdesystem([Differential(t)(C) ~ 0.1 * Differential(z)(Differential(z)(C))]; name = :zflux)
-    auxlap() = pdesystem([Differential(t)(C) ~ Dc * laplacian(C) - 0.1 * C + 0.1, L(t, x, y) ~ laplacian(C)]; name = :auxlap)
-    plain() = pdesystem([Differential(t)(C) ~ Dc * laplacian(C) - 0.1 * C + 0.1]; name = :plain)
+    function xflux()
+        return pdesystem(
+            [
+                Differential(t)(C) ~
+                    0.1 * Differential(x)(Differential(x)(C)) + 0.01 * x,
+            ]; name = :xflux
+        )
+    end
+    function zflux()
+        return pdesystem(
+            [Differential(t)(C) ~ 0.1 * Differential(z)(Differential(z)(C))];
+            name = :zflux
+        )
+    end
+    function auxlap()
+        return pdesystem(
+            [
+                Differential(t)(C) ~ Dc * laplacian(C) - 0.1 * C + 0.1,
+                L(t, x, y) ~ laplacian(C),
+            ];
+            name = :auxlap
+        )
+    end
+    function plain()
+        return pdesystem(
+            [Differential(t)(C) ~ Dc * laplacian(C) - 0.1 * C + 0.1];
+            name = :plain
+        )
+    end
     function robinu(a = u(t, x, y))
         return pdesystem(
-            [Differential(t)(C) ~ Dc * laplacian(C), Differential(t)(u(t, x, y)) ~ -0.1 * u(t, x, y)],
+            [
+                Differential(t)(C) ~ Dc * laplacian(C), Differential(t)(u(t, x, y)) ~
+                    -0.1 * u(t, x, y),
+            ],
             [(1 + a) * c(t, 0, y) - Differential(x)(c(t, 0, y)) ~ 0.3]; name = :fac
         )
     end
-    nonlin() = pdesystem([Differential(t)(C) ~ Dc * laplacian(C) - 0.1 * C^3]; name = :nonlin)
+    function nonlin()
+        return pdesystem(
+            [Differential(t)(C) ~ Dc * laplacian(C) - 0.1 * C^3];
+            name = :nonlin
+        )
+    end
 end
 
-check_op(dims = (24, 20)) = (σ = zeros(Int32, dims); σ[5:8, 5:8] .= 1; σ[14:17, 10:13] .= 2; [ownership => σ, kind => [:A, :A]])
+function check_op(dims = (24, 20))
+    σ = zeros(Int32, dims)
+    σ[5:8, 5:8] .= 1
+    σ[14:17, 10:13] .= 2
+    return [ownership => σ, kind => [:A, :A]]
+end
 
 @potts_model _CheckFrozen begin
     @structural_parameters variant = :fine
@@ -94,7 +179,12 @@ end
 CheckFine(; name = :CheckFine, kw...) = _CheckFrozen(; variant = :fine, name, kw...)
 CheckScaled(; name = :CheckScaled, kw...) = _CheckFrozen(; variant = :scaled, name, kw...)
 CheckCoarse(; name = :CheckCoarse, kw...) = _CheckFrozen(; variant = :coarse, name, kw...)
-CheckConserve(; name = :CheckConserve, kw...) = _CheckFrozen(; variant = :conserve, name, kw...)
+function CheckConserve(; name = :CheckConserve, kw...)
+    return _CheckFrozen(;
+        variant = :conserve, name,
+        kw...
+    )
+end
 
 @potts_model _CheckLapSite begin
     @structural_parameters y_periodic = false
@@ -107,7 +197,12 @@ CheckConserve(; name = :CheckConserve, kw...) = _CheckFrozen(; variant = :conser
     @sweep Metropolis(; temperature = 1.0)
 end
 
-CheckLapSite(; name = :CheckLapSite, kw...) = _CheckLapSite(; y_periodic = false, name, kw...)
+function CheckLapSite(; name = :CheckLapSite, kw...)
+    return _CheckLapSite(;
+        y_periodic = false, name,
+        kw...
+    )
+end
 CheckLapMix(; name = :CheckLapMix, kw...) = _CheckLapSite(; y_periodic = true, name, kw...)
 
 @potts_model CheckOde begin
@@ -123,7 +218,10 @@ end
 @potts_model _CheckSimple begin
     @structural_parameters variant = :hex
     @kinds medium A
-    @lattice Lattice((8, 8); geometry = variant === :hex ? Hexagonal() : CorePotts.Square(), boundary = Closed())
+    @lattice Lattice(
+        (8, 8); geometry = variant === :hex ? Hexagonal() : CorePotts.Square(),
+        boundary = Closed()
+    )
     @energy cells(A) => (volume - 4.0)^2
     @fields c = variant === :hex ? Check.faces() : Check.xflux()
     @sweep Metropolis(; temperature = 1.0)
@@ -151,14 +249,23 @@ end
 end
 
 function check_round_trip(m, fs, f)
-    integ = init(PottsProblem(m, check_op(), (0, 5); field_solver = fs, seed = 3), SequentialCPM())
+    integ = init(
+        PottsProblem(m, check_op(), (0, 5); field_solver = fs, seed = 3),
+        SequentialCPM()
+    )
     for _ in 1:3
         step!(integ)
     end
     F = Potts.fields(m)
-    prob = LatticePDE.discretize(F, LatticePDE.LatticeDiscretization(LatticePDE.Grid((24, 20)); T = Float64); inputs = collect(Potts.field_inputs(integ)))
+    prob = LatticePDE.discretize(
+        F, LatticePDE.LatticeDiscretization(LatticePDE.Grid((24, 20)); T = Float64);
+        inputs = collect(Potts.field_inputs(integ))
+    )
     u0 = vec(Array(getproperty(current_state(integ).site, f)))
-    o = LatticePDE.solve(LatticePDE.remake(prob; u0, tspan = (0.0, 1.0)), fs; dt = 1.0).u[end]
+    o = LatticePDE.solve(
+        LatticePDE.remake(prob; u0, tspan = (0.0, 1.0)), fs;
+        dt = 1.0
+    ).u[end]
     step!(integ)
     return maximum(abs, o .- vec(Array(getproperty(current_state(integ).site, f)))), integ
 end
@@ -167,16 +274,21 @@ function check_names(m)
     return sort!(
         [
             String(Potts.LatticePDE.get_lattice_input_name(Potts.Symbolics.unwrap(d)))
-                for d in Potts.fields(m).dvs if Potts.ModelingToolkitBase.isinput(Potts.Symbolics.unwrap(d))
+                for d in Potts.fields(m).dvs
+                if Potts.ModelingToolkitBase.isinput(Potts.Symbolics.unwrap(d))
         ]
     )
 end
 
 function check_owned(f)
     un = Potts.Symbolics.unwrap
-    ics = [Potts.SymbolicUtils.operation(un(d))(0, Check.x, Check.y) ~ 0.0 for d in f.dvs if !Potts.ModelingToolkitBase.isinput(un(d))]
+    ics = [
+        Potts.SymbolicUtils.operation(un(d))(0, Check.x, Check.y) ~ 0.0
+            for d in f.dvs if !Potts.ModelingToolkitBase.isinput(un(d))
+    ]
     return Potts.ModelingToolkitBase.PDESystem(
-        f.eqs, [f.bcs; ics], LatticePDE.lattice_domain(Potts.t, (Check.x, Check.y), (24, 20)), f.ivs, f.dvs,
+        f.eqs, [f.bcs; ics],
+        LatticePDE.lattice_domain(Potts.t, (Check.x, Check.y), (24, 20)), f.ivs, f.dvs,
         f.ps; name = nameof(f)
     )
 end
@@ -188,12 +300,15 @@ function check_pde_round_trip(m, pde, fs, f; op = check_op())
     end
     fi = Potts.field_inputs(integ, pde)
     prob = LatticePDE.discretize(
-        check_owned(pde), LatticePDE.LatticeDiscretization(LatticePDE.Grid((24, 20)); T = Float64); inputs = collect(fi),
+        check_owned(pde),
+        LatticePDE.LatticeDiscretization(LatticePDE.Grid((24, 20)); T = Float64);
+        inputs = collect(fi),
         u0 = [f => Array(getproperty(current_state(integ).site, f))], tspan = (0.0, 1.0)
     )
     o = LatticePDE.solve(prob, fs; dt = 1.0).u[end]
     step!(integ)
-    return maximum(abs, o .- vec(Array(getproperty(current_state(integ).site, f)))), fi, integ
+    return maximum(abs, o .- vec(Array(getproperty(current_state(integ).site, f)))), fi,
+        integ
 end
 
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))

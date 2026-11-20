@@ -17,13 +17,18 @@ struct LowerEnv
     mode::Symbol                     # :cell, :site, :contact, :proposal
     bind::Dict{Symbol, Any}          # built-in name (or :__site/:__cell) → code
     relname::Dict{Any, Symbol}       # gather relation spec → ctx field
-    keys::IdDict{Any, String}        # sort keys of the operand code lowered so far (`_code_key`)
+    # sort keys of the operand code lowered so far (`_code_key`)
+    keys::IdDict{Any, String}
 end
 LowerEnv(T, mode, bind, relname) = LowerEnv(T, mode, bind, relname, IdDict{Any, String}())
 
 const _MODE_NAMES = Dict(
     :cell => "a cell term (`cells(…) => …`)", :site => "a site term or site update",
-    :contact => "a contact term (`contacts => …`)", :model => "a model-scope expression (model update, observed)", :edge => "an edge term or link rule (`edges(rel) => …`, `@link`)", :edge_update => "an edge update (`@before_mcs`/`@after_mcs` writing an edge variable)", :proposal => "a copy-scoped expression (drive, constraint, on-copy update, temperature)"
+    :contact => "a contact term (`contacts => …`)",
+    :model => "a model-scope expression (model update, observed)",
+    :edge => "an edge term or link rule (`edges(rel) => …`, `@link`)",
+    :edge_update => "an edge update (`@before_mcs`/`@after_mcs` writing an edge variable)",
+    :proposal => "a copy-scoped expression (drive, constraint, on-copy update, temperature)"
 )
 
 _unwrap(x) = Symbolics.unwrap(x)
@@ -89,7 +94,9 @@ function _symkey!(names, x)
         push!(names, string(nameof(x)))
         return string(
             i.role, ":", i.name,
-            _canonical_checked(() -> "the bound variable `$(i.name)` (its relation or options)", i.options)
+            _canonical_checked(
+                () -> "the bound variable `$(i.name)` (its relation or options)", i.options
+            )
         )
     end
     issym(x) && return string("sym:", nameof(x))
@@ -100,7 +107,8 @@ function _symkey!(names, x)
 end
 _symop_key(op::Function) = string(nameof(parentmodule(op)), ".", nameof(op))
 _symop_key(op) = _canonical_checked(() -> "the operation `$(_key_string(op))`", op)
-# a constant in an expression, printed canonically (an `ArgumentError` naming it if too deep, D-130)
+# a constant in an expression, printed canonically (an `ArgumentError` naming it if too
+# deep, D-130)
 _symkey_value(v) = _canonical_checked(() -> "the symbolic constant `$(_key_string(v))`", v)
 
 """64-bit FNV-1a of a string: a content hash fixed by its definition (names, not order)."""
@@ -122,24 +130,31 @@ function lower(x, env::LowerEnv)
         return _lower_named(x, i, env)
     end
     if issym(x)
-        i === nothing && throw(PottsCompileError("unknown symbol `$x` in $(_MODE_NAMES[env.mode]); declare it in @parameters or @variables"))
+        i === nothing &&
+            throw(PottsCompileError("unknown symbol `$x` in $(_MODE_NAMES[env.mode]); \
+                declare it in @parameters or @variables"))
         return Symbol(nameof(x))                    # a gather's bound site
     end
     op = operation(x)
     args = arguments(x)
     op === value_at && return _lower_at(args, env)
-    op === ismember && return lower(_ismember_or(Symbolics.wrap(args[1]), SymbolicUtils.unwrap_const(args[2])), env)
+    op === ismember &&
+        return lower(
+        _ismember_or(Symbolics.wrap(args[1]), SymbolicUtils.unwrap_const(args[2])), env
+    )
     op === gather && return _lower_gather(args, env)
     op === _connected && return _lower_connected(args, env)
     op === population && return _lower_population(args, env)
     op === laplacian && throw(
         PottsCompileError(
-            "`laplacian` is a field operator: the field compiler lowers it in a field's PDESystem (`@fields`, `Potts.couple`); " *
-                "it is not available in $(_MODE_NAMES[env.mode])"
+            "`laplacian` is a field operator: the field compiler lowers it in a field's " *
+                "PDESystem (`@fields`, `Potts.couple`); it is not available \
+                    in $(_MODE_NAMES[env.mode])"
         )
     )
     # cell references (R6, D-066 item 5): liveness, sources, the enclosing cell of a fold
-    op === cell_alive && return :(Potts._alive_slot($(_refst(env)).cell.volume, $(lower(args[1], env))))
+    op === cell_alive &&
+        return :(Potts._alive_slot($(_refst(env)).cell.volume, $(lower(args[1], env))))
     if op === cluster_sibling
         cl, k = lower(args[1], env), lower(args[2], env)
         ctr = _ref_counter(_SIBLING_LABEL)
@@ -148,80 +163,131 @@ function lower(x, env::LowerEnv)
     end
     op === as_ref && return :(Int32($(lower(args[1], env))))
     if op === outer_value
-        haskey(env.bind, :__outer) || throw(PottsCompileError("`members(…)` is a fold domain: write `sum(… for m in members(cluster))`"))
+        haskey(env.bind, :__outer) ||
+            throw(PottsCompileError("`members(…)` is a fold domain: write `sum(… for m in \
+                members(cluster))`"))
         return lower(args[1], env.bind[:__outer])
     end
     if op === cell_centroid
-        haskey(env.bind, :__cell) || throw(PottsCompileError("`centroid(k)` needs a cell: use it in cell updates, division conditions or observed quantities"))
+        haskey(env.bind, :__cell) ||
+            throw(PottsCompileError("`centroid(k)` needs a cell: use it in cell updates, \
+                division conditions or observed quantities"))
         k = Int(SymbolicUtils.unwrap_const(_unwrap(args[1])))
-        return :(Potts._centroid_axis($(env.T), st.cell, ctx.lattice, $(env.bind[:__cell]), $k))
+        return :(
+            Potts._centroid_axis(
+                $(env.T), st.cell, ctx.lattice, $(env.bind[:__cell]), $k
+            )
+        )
     end
     if op === copy_displacement
-        env.mode === :proposal || throw(PottsCompileError("`displacement(c, k)` is only available in drives and on-copy updates"))
+        env.mode === :proposal ||
+            throw(PottsCompileError("`displacement(c, k)` is only available in drives and \
+                on-copy updates"))
         k = Int(SymbolicUtils.unwrap_const(_unwrap(args[2])))
-        return :(Potts._displacement_axis($(env.T), st.cell, ctx.lattice, prop, $(lower(args[1], env)), $k))
+        return :(
+            Potts._displacement_axis(
+                $(env.T), st.cell, ctx.lattice, prop, $(lower(args[1], env)), $k
+            )
+        )
     end
     if op === cell_integral
-        haskey(env.bind, :__cell) || throw(PottsCompileError("`integral(x)` is per cell: use it in cell updates, division conditions or observed quantities"))
+        haskey(env.bind, :__cell) ||
+            throw(PottsCompileError("`integral(x)` is per cell: use it in cell updates, \
+                division conditions or observed quantities"))
         return :(Potts._cellval(st.cell.$(_integral_name(args[1])), $(env.bind[:__cell])))
     end
     # the E7 geometry helpers (D-243)
     if op === cluster_integral_sum
         haskey(env.bind, :__cell) || throw(
             PottsCompileError(
-                "`integral(x; over = cluster)` is per cell (the sum over the cell's cluster): use it in cell updates, " *
-                    "division conditions or observed quantities, not in $(_MODE_NAMES[env.mode])"
+                "`integral(x; over = cluster)` is per cell (the sum over the cell's " *
+                    "cluster): use it in cell updates, division conditions or observed \
+                        quantities, not in $(_MODE_NAMES[env.mode])"
             )
         )
         y = _unwrap(args[1])
-        return :(Potts._over_cluster(st.cell, st.cell.$(_integral_name(arguments(y)[1])), $(env.bind[:__cell])))
+        return :(
+            Potts._over_cluster(
+                st.cell, st.cell.$(_integral_name(arguments(y)[1])),
+                $(env.bind[:__cell])
+            )
+        )
     end
     if op === ref_centroid || op === ref_separation
         name = op === ref_centroid ? "centroid(c, k)" : "separation(a, b)"
         # between sweeps (cell, model and site scope: updates, field equations, `@convert`
-        # decisions, @observed); energies are refused before lowering (`_check_energy_geometry`)
+        # decisions, @observed); energies are refused before lowering
+        # (`_check_energy_geometry`)
         env.mode in (:cell, :model, :site) || throw(
             PottsCompileError(
-                "`$name` reads cell centroids, which a copy changes: it is available between sweeps (cell and site " *
-                    "updates, field equations, division conditions and rules, @convert, @observed), not in $(_MODE_NAMES[env.mode])"
+                "`$name` reads cell centroids, which a copy changes: it is available " *
+                    "between sweeps (cell and site updates, field equations, division \
+                        conditions and rules, @convert, \
+                        @observed), not in $(_MODE_NAMES[env.mode])"
             )
         )
         k = _literal_axis(op === ref_centroid ? "centroid" : "separation", args[end])
         op === ref_centroid &&
-            return :(Potts._ref_centroid_axis($(env.T), st.cell, ctx.lattice, $(lower(args[1], env)), $k))
-        return :(Potts._separation_axis($(env.T), st.cell, ctx.lattice, $(lower(args[1], env)), $(lower(args[2], env)), $k))
+            return :(
+            Potts._ref_centroid_axis(
+                $(env.T), st.cell, ctx.lattice, $(lower(args[1], env)), $k
+            )
+        )
+        return :(
+            Potts._separation_axis(
+                $(env.T), st.cell, ctx.lattice,
+                $(lower(args[1], env)), $(lower(args[2], env)), $k
+            )
+        )
     end
     if op === axis_minimum_image
         k = _literal_axis("minimum_image", args[2])
         _PIECES_HEX[] && throw(PottsCompileError(_HEX_MINIMUM_IMAGE))
-        return :(Potts._minimum_image_axis($(env.T), ctx.lattice, $(lower(args[1], env)), $k))
+        return :(
+            Potts._minimum_image_axis($(env.T), ctx.lattice, $(lower(args[1], env)), $k)
+        )
     end
     if op === history_lag
-        (haskey(env.bind, :mcs) && env.mode !== :proposal) || throw(PottsCompileError("`Pre(x, k)` needs the MCS clock: use it in updates, equations, division conditions or link rules (not in $(_MODE_NAMES[env.mode]))"))
+        (haskey(env.bind, :mcs) && env.mode !== :proposal) ||
+            throw(PottsCompileError("`Pre(x, k)` needs the MCS clock: use it in updates, \
+                equations, division conditions or link rules (not \
+                    in $(_MODE_NAMES[env.mode]))"))
         _walk(args[1]) do y
             i = info(y)
             i !== nothing && i.role === :cell &&
-                throw(PottsCompileError("`Pre($(i.name), k)`: lags of cell variables are not tracked; chain lag variables instead (`$(i.name)_1 ~ Pre($(i.name))`, `$(i.name)_2 ~ Pre($(i.name)_1)`, …)"))
+                throw(PottsCompileError("`Pre($(i.name), k)`: lags of cell variables are \
+                    not tracked; chain lag variables instead (`$(i.name)_1 ~ \
+                        Pre($(i.name))`, `$(i.name)_2 ~ Pre($(i.name)_1)`, …)"))
         end
         k = Int(SymbolicUtils.unwrap_const(_unwrap(args[2])))
         return _retarget_history(lower(args[1], env), env.bind[:mcs], k)
     end
     if op === random_uniform
-        haskey(env.bind, :__draw) || throw(PottsCompileError("`rand()` is only available in updates, equations, division conditions and rules (not in $(_MODE_NAMES[env.mode]))"))
+        haskey(env.bind, :__draw) ||
+            throw(PottsCompileError("`rand()` is only available in updates, equations, \
+                division conditions and rules (not in $(_MODE_NAMES[env.mode]))"))
         key, mcs, entity = env.bind[:__draw]
-        stream = CorePotts.stream_id("Potts.draw.$(SymbolicUtils.unwrap_const(_unwrap(args[1])))")
-        return :(CorePotts.uniform($(env.T), CorePotts.draw($key, $mcs, $entity, $stream)[1]))
+        stream = CorePotts.stream_id(
+            "Potts.draw.$(SymbolicUtils.unwrap_const(_unwrap(args[1])))"
+        )
+        return :(
+            CorePotts.uniform($(env.T), CorePotts.draw($key, $mcs, $entity, $stream)[1])
+        )
     end
-    (op === random_normal || op === random_normal_above) && return _lower_normal(op, args, env)
+    (op === random_normal || op === random_normal_above) &&
+        return _lower_normal(op, args, env)
     op isa ModelingToolkitBase.Pre && return lower(args[1], env)     # previous value
-    # `_nonzero(value_at(_nonzero(v), j))` (`grn.A[j]` of a Bool node): the read is already a Bool
+    # `_nonzero(value_at(_nonzero(v), j))` (`grn.A[j]` of a Bool node): the read is already
+    # a Bool
     op === _nonzero && _is_bool_node_read(args[1]) && return lower(args[1], env)
-    op === ifelse && return :($(lower(args[1], env)) ? $(lower(args[2], env)) : $(lower(args[3], env)))
+    op === ifelse &&
+        return :($(lower(args[1], env)) ? $(lower(args[2], env)) : $(lower(args[3], env)))
     if op === (^) && SymbolicUtils.isconst(_unwrap(args[2]))
         e = SymbolicUtils.unwrap_const(_unwrap(args[2]))
         if e isa Integer || (e isa Real && isinteger(e))
-            # products (`LatticeFields.Compile.powi`), not `^`: Base's `Float32 ^ Int` and ROCm's
-            # `pow` compute in Float64; a negative power of an integer is in the model's float type
+            # products (`LatticeFields.Compile.powi`), not `^`: Base's `Float32 ^ Int` and
+            # ROCm's `pow` compute in Float64; a negative power of an integer is in the
+            # model's float type
             x = lower(args[1], env)
             e < 0 && (x = :(Potts._tofloat($(env.T), $x)))
             return :(Potts.LatticeFields.Compile.powi($x, $(Int(e))))
@@ -229,14 +295,20 @@ function lower(x, env::LowerEnv)
     end
     # float-valued functions compute in the model's scalar type (no Float64 from Int args)
     if op in _FLOAT_OPS || op === (^)
-        return Expr(:call, op, map(a -> :(Potts._tofloat($(env.T), $(lower(a, env)))), args)...)
+        return Expr(
+            :call, op,
+            map(a -> :(Potts._tofloat($(env.T), $(lower(a, env)))), args)...
+        )
     end
     # `+`/`*` as left-associated binary calls: varargs calls above 32 arguments allocate
     # (bitwise the same result: n-ary `+` is itself a left fold), D-014; a scalar sum or
     # product folds its operands in canonical order (D-107)
     if (SymbolicUtils.isadd(x) || SymbolicUtils.ismul(x)) && length(args) >= 2
         codes = map(a -> lower(a, env), args)
-        return foldl((a, b) -> Expr(:call, op, a, b), codes[sortperm(map(c -> _code_key(c, env.keys), codes))])
+        return foldl(
+            (a, b) -> Expr(:call, op, a, b),
+            codes[sortperm(map(c -> _code_key(c, env.keys), codes))]
+        )
     end
     if (op === (+) || op === (*)) && length(args) > 2
         return foldl((a, b) -> Expr(:call, op, a, b), map(a -> lower(a, env), args))
@@ -260,7 +332,11 @@ function _site_read(i::Entity, j)
         # bounds: j is a site index ≤ nsites (compile accepts only site-valued indices)
         :(@inbounds st.site.$(i.name)[$j])
     else
-        :(@inbounds st.site.$(i.name)[Potts._coarse_site($j, size(st.ownership), $(trailing_zeros(L.k)))])
+        :(
+            @inbounds st.site.$(i.name)[
+                Potts._coarse_site($j, size(st.ownership), $(trailing_zeros(L.k))),
+            ]
+        )
     end
 end
 """
@@ -284,31 +360,45 @@ end
 function _lower_named(x, i::Entity, env::LowerEnv)
     r = i.role
     r === :param && return :(p.$(i.name))
-    r === :kindtable && throw(PottsCompileError("kind table `$(i.name)` must be indexed by kinds, e.g. `$(i.name)[kind, neighbor_kind]`"))
+    r === :kindtable &&
+        throw(PottsCompileError("kind table `$(i.name)` must be indexed by kinds, e.g. \
+            `$(i.name)[kind, neighbor_kind]`"))
     if r === :builtin || r === :delta
         r === :builtin && i.name === :direction &&
-            throw(PottsCompileError("`direction` is a vector: write its component `direction[k]` (k = 1, …, N)"))
+            throw(PottsCompileError("`direction` is a vector: write its component \
+                `direction[k]` (k = 1, …, N)"))
         r === :builtin && i.name === :position && env.mode === :proposal &&
-            throw(PottsCompileError("`position` in $(_MODE_NAMES[env.mode]) needs a site: write `position[target][k]` or `position[source][k]`"))
+            throw(PottsCompileError("`position` in $(_MODE_NAMES[env.mode]) needs a site: \
+                write `position[target][k]` or `position[source][k]`"))
         key = r === :delta ? Symbol(:δ, i.name) : i.name
-        haskey(env.bind, key) || throw(PottsCompileError("`$(i.name)` is not available in $(_MODE_NAMES[env.mode])"))
+        haskey(env.bind, key) ||
+            throw(PottsCompileError("`$(i.name)` is not available \
+                in $(_MODE_NAMES[env.mode])"))
         return env.bind[key]
     end
     if r === :site || r === :field
-        haskey(env.bind, :__site) || throw(PottsCompileError("site variable `$(i.name)` needs a site: write `$(i.name)[target]` or `$(i.name)[source]`"))
+        haskey(env.bind, :__site) ||
+            throw(PottsCompileError("site variable `$(i.name)` needs a site: write \
+                `$(i.name)[target]` or `$(i.name)[source]`"))
         return _site_read(i, env.bind[:__site])
     elseif r === :cell
-        haskey(env.bind, :__cell) || throw(PottsCompileError("cell variable `$(i.name)` needs a cell: write `$(i.name)[new]` or `$(i.name)[owner[target]]`"))
+        haskey(env.bind, :__cell) ||
+            throw(PottsCompileError("cell variable `$(i.name)` needs a cell: write \
+                `$(i.name)[new]` or `$(i.name)[owner[target]]`"))
         return :(Potts._cellval(st.cell.$(i.name), $(env.bind[:__cell])))
     elseif r === :model
         # bounds: every model column has one entry
         return :(@inbounds st.model.$(i.name)[1])
     elseif r === :edge
-        haskey(env.bind, :__edge) || throw(PottsCompileError("edge variable `$(i.name)` is only available in edge terms and link rules"))
+        haskey(env.bind, :__edge) ||
+            throw(PottsCompileError("edge variable `$(i.name)` is only available in edge \
+                terms and link rules"))
         k, a = env.bind[:__edge]
         return :(@inbounds st.cell.$(Symbol(:link_, i.name))[$k, $a])
     elseif r === :contact_count          # a contact fold (D-150): its tracker column
-        haskey(env.bind, :__cell) || throw(PottsCompileError("`count(… for _ in contacts)` is per cell: use it in cell updates, division conditions or observed quantities"))
+        haskey(env.bind, :__cell) ||
+            throw(PottsCompileError("`count(… for _ in contacts)` is per cell: use it in \
+                cell updates, division conditions or observed quantities"))
         return :($(env.T)(Potts._cellval(st.cell.$(i.name), $(env.bind[:__cell]))))
     end
     throw(PottsCompileError("cannot lower `$x` (role $r)"))
@@ -324,14 +414,19 @@ function _retarget_history(ex, mcs, k)
     return Expr(ex.head, (_retarget_history(a, mcs, k) for a in ex.args)...)
 end
 
-"""Read-only linear view of the ring-buffer slot holding a lag (`CorePotts.history_slot`)."""
+"""
+Read-only linear view of the ring-buffer slot holding a lag (`CorePotts.history_slot`).
+"""
 struct _LagView{R}
     ring::R
     offset::Int
 end
 @inline function _LagView(ring, mcs, k)
     depth = size(ring, ndims(ring))
-    return _LagView(ring, (CorePotts.history_slot(depth, Int(mcs), k) - 1) * (length(ring) ÷ depth))
+    return _LagView(
+        ring, (CorePotts.history_slot(depth, Int(mcs), k) - 1) *
+            (length(ring) ÷ depth)
+    )
 end
 Base.@propagate_inbounds Base.getindex(v::_LagView, i::Integer) = v.ring[i + v.offset]
 
@@ -348,10 +443,18 @@ function _integrals_folds(sys::PottsSystem; observed = false)
     folds = Vector{Pair{Symbol, Any}}[]
     head = Any[
         (u.eq.rhs for u in _p(sys, :updates))..., (eq.rhs for eq in _p(sys, :equations))...,
-        (d.when for d in _p(sys, :divisions))..., (r for d in _p(sys, :divisions) for (_, r) in d.rules if !(r isa Split))...,
+        (d.when for d in _p(sys, :divisions))..., (
+            r for d in _p(sys, :divisions)
+                for (_, r) in d.rules if !(r isa Split)
+        )...,
         (r.when for r in _p(sys, :link_rules))...,
     ]
-    tail = Any[_p(sys, :sweep).temperature, (x for b in _p(sys, :discrete) for x in b.next)...]
+    tail = Any[
+        _p(sys, :sweep).temperature, (
+            x for b in _p(sys, :discrete)
+                for x in b.next
+        )...,
+    ]
     xs = Any[head..., (o.rhs for o in _p(sys, :observed))..., tail...]
     # operands read by a statement other than `@observed`
     stored = Any[]
@@ -368,9 +471,11 @@ function _integrals_folds(sys::PottsSystem; observed = false)
         _walk(x) do y
             iscall(y) && operation(y) === cell_integral || return
             a, fs = _integral_hoist(arguments(y)[1])
-            any(z -> isequal(z, a), out) || any(z -> isequal(z, a), new) || (push!(new, a); push!(newfolds, fs))
+            any(z -> isequal(z, a), out) || any(z -> isequal(z, a), new) ||
+                (push!(new, a); push!(newfolds, fs))
         end
-        perm = sortperm(map(_symkey, new))                 # canonical within a statement (D-107)
+        # canonical within a statement (D-107)
+        perm = sortperm(map(_symkey, new))
         append!(out, new[perm])
         append!(folds, newfolds[perm])
     end
@@ -383,9 +488,16 @@ end
 function _history_depths(sys::PottsSystem)
     return _history_depths(
         Any[
-            (u.eq.rhs for u in _p(sys, :updates))..., (eq.rhs for eq in _p(sys, :equations))...,
-            (d.when for d in _p(sys, :divisions))..., (r for d in _p(sys, :divisions) for (_, r) in d.rules if !(r isa Split))...,
-            (r.when for r in _p(sys, :link_rules))..., (x for b in _p(sys, :discrete) for x in b.next)...,
+            (u.eq.rhs for u in _p(sys, :updates))...,
+            (eq.rhs for eq in _p(sys, :equations))...,
+            (d.when for d in _p(sys, :divisions))..., (
+                r for d in _p(sys, :divisions)
+                    for (_, r) in d.rules if !(r isa Split)
+            )...,
+            (r.when for r in _p(sys, :link_rules))..., (
+                x for b in _p(sys, :discrete)
+                    for x in b.next
+            )...,
         ]
     )
 end
@@ -397,7 +509,8 @@ function _history_depths(xs::Vector{Any})
             k = Int(SymbolicUtils.unwrap_const(_unwrap(arguments(y)[2])))
             _walk(arguments(y)[1]) do z
                 i = info(z)
-                i !== nothing && i.role in (:site, :field, :model) && (depths[i.name] = max(get(depths, i.name, 0), k))
+                i !== nothing && i.role in (:site, :field, :model) &&
+                    (depths[i.name] = max(get(depths, i.name, 0), k))
             end
         end
     end
@@ -409,15 +522,20 @@ end
 # every context that check may not reach, so no kernel indexes past the lattice's axes)
 function _literal_axis(name, x)
     k = _unwrap(x)
-    k isa SymbolicUtils.BasicSymbolic && SymbolicUtils.isconst(k) && (k = SymbolicUtils.unwrap_const(k))
+    k isa SymbolicUtils.BasicSymbolic && SymbolicUtils.isconst(k) &&
+        (k = SymbolicUtils.unwrap_const(k))
     (k isa Real && !(k isa Bool) && isinteger(k)) ||
-        throw(PottsCompileError("`$name`: the axis is a literal axis of the lattice (1, 2, …); got `$x`"))
+        throw(PottsCompileError("`$name`: the axis is a literal axis of the lattice (1, \
+            2, …); got `$x`"))
     N = length(_LATTICE_DIMS[])
-    N == 0 || 1 <= k <= N || throw(PottsCompileError("`$name`: axis `$k` is not an axis of the $(N)D lattice (a literal 1 to $N)"))
+    N == 0 || 1 <= k <= N ||
+        throw(PottsCompileError("`$name`: axis `$k` is not an axis of the $(N)D lattice \
+            (a literal 1 to $N)"))
     return Int(k)
 end
-const _HEX_MINIMUM_IMAGE = "`minimum_image` wraps one lattice axis, which is not a displacement on a hexagonal lattice " *
-    "(the nearest image may be a diagonal one); use `separation(a, b)`"
+const _HEX_MINIMUM_IMAGE = "`minimum_image` wraps one lattice axis, which is not a " *
+    "displacement on a hexagonal lattice (the nearest image may be a diagonal one); use \
+        `separation(a, b)`"
 
 """Coordinate `k` of the centroid of referent `r` in `centroid(k)`'s convention (embedded,
 periodic axes wrapped); 0 when `r` is 0, out of range or dead."""
@@ -433,8 +551,8 @@ referents are alive."""
     return CorePotts.centroid_separation(T, cell, lat, Int(a), Int(b))[k]
 end
 
-"""`d` on axis `k`: on a periodic axis of length L, `d − L round(d / L)` (the image nearest 0;
-a tie |d| = L/2 keeps `d`), on a closed axis `d`."""
+"""`d` on axis `k`: on a periodic axis of length L, `d − L round(d / L)` (the image nearest
+0; a tie |d| = L/2 keeps `d`), on a closed axis `d`."""
 @inline function _minimum_image_axis(::Type{T}, lat, d, k) where {T}
     x = _tofloat(T, d)
     lat.periodic[k] || return x
@@ -462,17 +580,23 @@ end
     return CorePotts.centroid_position(T, cell, lat, Int(c))[k]
 end
 
-"""Centroid displacement of cell `c` along axis `k` by copy `prop` (0 unless `c` is its old or new cell)."""
+"""
+Centroid displacement of cell `c` along axis `k` by copy `prop` (0 unless `c` is its old or
+new cell).
+"""
 @inline function _displacement_axis(::Type{T}, cell, lat, prop, c, k) where {T}
     (c == 0 || (c != prop.new && c != prop.old)) && return zero(T)
-    return CorePotts.embed(lat, CorePotts.centroid_shift(T, cell, lat, Int(c), prop.x, c == prop.new ? 1 : -1))[k]
+    return CorePotts.embed(
+        lat, CorePotts.centroid_shift(
+            T, cell, lat, Int(c), prop.x, c == prop.new ? 1 : -1
+        )
+    )[k]
 end
 
 """Integers (and `Bool`s) in the model's scalar type; other numbers (dual numbers of an
 implicit solver's Jacobian, already-typed floats) unchanged."""
 @inline _tofloat(::Type{T}, x::Integer) where {T} = T(x)
 @inline _tofloat(::Type{T}, x) where {T} = x
-
 
 """
 Cartesian position of site `i`: the embedded lattice coordinates times the lattice
@@ -490,7 +614,10 @@ scaled as `_position`. A function of the two sites alone; the tie |d| = L/2 keep
 """
 @inline function _direction(::Type{T}, ctx, s, t) where {T}
     lat = ctx.lattice
-    d = map(_min_image, CorePotts.coordinates(lat, t), CorePotts.coordinates(lat, s), lat.dims, lat.periodic)
+    d = map(
+        _min_image, CorePotts.coordinates(lat, t),
+        CorePotts.coordinates(lat, s), lat.dims, lat.periodic
+    )
     e = CorePotts.embed(lat, map(T, d))
     return haskey(ctx, :spacing) ? map((x, h) -> x * T(h), e, ctx.spacing) : e
 end
@@ -510,9 +637,13 @@ end
 (the host hook)."""
 @inline _copy_mcs(ctx) = haskey(ctx, :mcs) ? ctx.mcs : 0
 
-# whether `x` is `value_at(position, s)`: the position of site `s` (indexed again by an axis)
+# whether `x` is `value_at(position, s)`: the position of site `s` (indexed again by an
+# axis)
 function _is_site_position(x)
-    (x isa SymbolicUtils.BasicSymbolic && iscall(x) && operation(x) === value_at && length(arguments(x)) == 2) || return false
+    (
+        x isa SymbolicUtils.BasicSymbolic && iscall(x) && operation(x) === value_at &&
+            length(arguments(x)) == 2
+    ) || return false
     i = info(arguments(x)[1])
     return i !== nothing && i.role === :builtin && i.name === :position
 end
@@ -528,10 +659,20 @@ end
 # Cell references (R6; D-066 item 5, D-231)
 
 """Whether `x` is a cell variable declared `::CellRef`."""
-_is_ref_var(x) = (i = info(x); i !== nothing && i.role === :cell && get(i.options, :reference, false) === true)
+function _is_ref_var(x)
+    (
+        i = info(x);
+        i !== nothing && i.role === :cell && get(i.options, :reference, false) === true
+    )
+end
 # a stand-in for a reference's value (the on-copy value ΔH reads, `_oncopy_after`; a
 # previous-value snapshot `x__pre`)
-_is_ref_standin(x) = (i = info(x); i !== nothing && i.role !== :cell && get(i.options, :reference, false) === true)
+function _is_ref_standin(x)
+    (
+        i = info(x);
+        i !== nothing && i.role !== :cell && get(i.options, :reference, false) === true
+    )
+end
 
 """
 Whether the cell expression `x` is a reference, read as a referent when it indexes a cell
@@ -548,9 +689,10 @@ function _is_ref(x)
     op = operation(x)
     (op === cluster_sibling || op === as_ref) && return true
     op isa ModelingToolkitBase.Pre && return _is_ref(arguments(x)[1])
-    # `ifelse(c, a, b)` with a reference in a branch: read as a reference (guarded), whichever
-    # branch is taken (a plain cell index such as `id` reads the same through the guard). The
-    # other branch must be a cell index too: a site index (`target`) would be read as a slot.
+    # `ifelse(c, a, b)` with a reference in a branch: read as a reference (guarded),
+    # whichever branch is taken (a plain cell index such as `id` reads the same through the
+    # guard). The other branch must be a cell index too: a site index (`target`) would be
+    # read as a slot.
     if op === ifelse
         br = arguments(x)[2:3]
         any(_is_ref, br) || return false
@@ -558,8 +700,9 @@ function _is_ref(x)
             _is_cell_index(b) || throw(
                 PottsCompileError(
                     "`$(Symbolics.wrap(x))`: one branch of this `ifelse` is a " *
-                        "reference, so the other must be a cell too (a reference, `old`, `new`, `id`, `owner[s]`, " *
-                        "`cluster`, or 0 for none); got `$(Symbolics.wrap(b))`"
+                        "reference, so the other must be a cell too (a reference, `old`, " *
+                        "`new`, `id`, `owner[s]`, `cluster`, or 0 for none); got \
+                            `$(Symbolics.wrap(b))`"
                 )
             )
         end
@@ -567,15 +710,17 @@ function _is_ref(x)
     end
     if op === value_at && length(arguments(x)) == 2
         a = _unwrap(arguments(x)[1])
-        iscall(a) && operation(a) isa ModelingToolkitBase.Pre && (a = _unwrap(arguments(a)[1]))
+        iscall(a) && operation(a) isa ModelingToolkitBase.Pre &&
+            (a = _unwrap(arguments(a)[1]))
         return _is_ref_var(a)
     end
     return false
 end
 
-# A cell index: a reference, a cell-valued built-in (`old`, `new`, `id`, `owner`, `neighbor_owner`,
-# `cluster`), `owner[s]` or `cluster[c]`, a nested `ifelse` of cell indices, or the integer 0
-# (none). Site indices (`target`, `source`, `site`) and numbers other than 0 are not.
+# A cell index: a reference, a cell-valued built-in (`old`, `new`, `id`, `owner`,
+# `neighbor_owner`, `cluster`), `owner[s]` or `cluster[c]`, a nested `ifelse` of cell
+# indices, or the integer 0 (none). Site indices (`target`, `source`, `site`) and numbers
+# other than 0 are not.
 const _CELL_INDEX_BUILTINS = (:old, :new, :id, :owner, :neighbor_owner, :cluster)
 function _is_cell_index(x)
     x = _unwrap(x)
@@ -595,8 +740,9 @@ function _is_cell_index(x)
     return false
 end
 
-"""The references in `x` that index a cell quantity or are tested with `alive` (each hop of a
-chain once), outermost first: the cells a copy's sweep functions read through references."""
+"""The references in `x` that index a cell quantity or are tested with `alive` (each hop of
+a chain once), outermost first: the cells a copy's sweep functions read through
+references."""
 function _ref_reads(x)
     out = Any[]
     _ref_reads!(out, _unwrap(x))
@@ -638,7 +784,10 @@ function _mentions_refs(x)
     _walk(x) do y
         iscall(y) || return
         op = operation(y)
-        ((op === value_at && length(arguments(y)) == 2 && _is_ref(arguments(y)[2])) || op === cell_alive) && (found[] = true)
+        (
+            (op === value_at && length(arguments(y)) == 2 && _is_ref(arguments(y)[2])) ||
+                op === cell_alive
+        ) && (found[] = true)
     end
     return found[]
 end
@@ -647,15 +796,18 @@ end
 # credit reads the readers' referents before the copy, `_vacated_energy_expr`)
 _refst(env) = get(env.bind, :__refst, :st)
 
-# Reference diagnostics (E4, E5; `track = (:references,)`): while a tracked problem's code is
-# generated, `_REF_SLOTS` maps each term label to its slot of the state's counter
+# Reference diagnostics (E4, E5; `track = (:references,)`): while a tracked problem's code
+# is generated, `_REF_SLOTS` maps each term label to its slot of the state's counter
 # `st.model[REF_COUNTS]`, and `_REF_TERM` names the term being lowered. Untracked (the
 # default), both are `nothing` and the lowered code is unchanged.
 const REF_COUNTS = Symbol("#ref_counts")
-const _SIBLING_LABEL = "sibling(k) found several alive members of kind k (the lowest birth is used)"
+const _SIBLING_LABEL =
+    "sibling(k) found several alive members of kind k (the lowest birth is used)"
 const _REF_SLOTS = Base.ScopedValues.ScopedValue{Union{Nothing, Dict{String, Int}}}(nothing)
 const _REF_TERM = Base.ScopedValues.ScopedValue{Union{Nothing, String}}(nothing)
-_with_ref_term(f, label) = _REF_SLOTS[] === nothing ? f() : Base.ScopedValues.with(f, _REF_TERM => label)
+function _with_ref_term(f, label)
+    return _REF_SLOTS[] === nothing ? f() : Base.ScopedValues.with(f, _REF_TERM => label)
+end
 # `(counter, slot)` for `label` (default: the term being lowered), or `nothing` (untracked)
 function _ref_counter(label = _REF_TERM[])
     slots = _REF_SLOTS[]
@@ -673,9 +825,12 @@ function _lower_deref(i::Entity, ref, env)
     # tracked: a dereference of a dead referent (nonzero, not alive) is counted for its term
     ctr === nothing || (r = :(Potts._count_dead($(ctr[1]), $(ctr[2]), $rs.cell.volume, $r)))
     if i.role === :cell
-        return :(Potts._deref($rs.cell.$(i.name), $rs.cell.volume, $r, $(_ref_default(i, env))))
+        return :(
+            Potts._deref($rs.cell.$(i.name), $rs.cell.volume, $r, $(_ref_default(i, env)))
+        )
     elseif i.role in (:site, :field)
-        throw(PottsCompileError("site variable `$(i.name)` indexed by a reference (a cell); a site variable is read at a site"))
+        throw(PottsCompileError("site variable `$(i.name)` indexed by a reference (a \
+            cell); a site variable is read at a site"))
     elseif i.role === :builtin
         n = i.name
         n === :kind && return :(Potts._deref_kind($rs.cell, $r))
@@ -683,23 +838,34 @@ function _lower_deref(i::Entity, ref, env)
         n === :birth && return :(Potts._deref_birth($rs.cell, $r))
         n === :cluster && return :(Potts._deref_cluster($rs.cell, $r))
         n in (:surface, :generation) &&
-            return :(Potts._deref($rs.cell.$n, $rs.cell.volume, $r, zero(eltype($rs.cell.$n))))
+            return :(
+            Potts._deref($rs.cell.$n, $rs.cell.volume, $r, zero(eltype($rs.cell.$n)))
+        )
         if n in (:euler, :euler_full) || n in _PIECES_NAMES
             col = n in _PIECES_NAMES ? _pieces_column(n) : _euler_column(n)
-            return :($(env.T)(Potts._deref($rs.cell.$col, $rs.cell.volume, $r, zero(eltype($rs.cell.$col)))))
+            return :(
+                $(env.T)(
+                    Potts._deref(
+                        $rs.cell.$col, $rs.cell.volume, $r,
+                        zero(eltype($rs.cell.$col))
+                    )
+                )
+            )
         end
         throw(PottsCompileError("`$n[…]` cannot be read through a reference"))
     end
     throw(PottsCompileError("cannot index `$(i.name)` by a reference"))
 end
 
-# the value a dead referent's cell variable reads as: its declared default (0 for a reference)
+# the value a dead referent's cell variable reads as: its declared default (0 for a
+# reference)
 function _ref_default(i::Entity, env)
     get(i.options, :reference, false) === true && return :(Int32(0))
     v = i.default
     v isa Bool && return env.T(v)
     (v isa Real && !_is_symbolic(v)) && return env.T(v)       # a `Num` is a `Real`
-    (v isa Union{Num, SymbolicUtils.BasicSymbolic} && _param_only(v)) && return :($(env.T)($(lower(v, env))))
+    (v isa Union{Num, SymbolicUtils.BasicSymbolic} && _param_only(v)) &&
+        return :($(env.T)($(lower(v, env))))
     # kind-conditional (E1): the default for kind 0, the medium
     if v isa Union{Num, SymbolicUtils.BasicSymbolic} && _param_only(v; kind = true)
         kenv = LowerEnv(env.T, :cell, Dict{Symbol, Any}(:kind => :(Int32(0))), env.relname)
@@ -707,20 +873,35 @@ function _ref_default(i::Entity, env)
     end
     throw(
         PottsCompileError(
-            "cell variable `$(i.name)` is read through a reference, so a dead referent reads its declared default; " *
-                "give `$(i.name)` a scalar default (a number or an expression of parameters)"
+            "cell variable `$(i.name)` is read through a reference, so a dead referent " *
+                "reads its declared default; give `$(i.name)` a scalar default (a number \
+                    or an expression of parameters)"
         )
     )
 end
 
 # bounds: 0 < r ≤ length(vol), checked first (the `_deref*` below check it too)
-"""Whether slot `r` (a reference) holds an alive cell: `0 < r ≤ capacity` and `volume[r] > 0`."""
+"""Whether slot `r` (a reference) holds an alive cell: `0 < r ≤ capacity` and
+`volume[r] > 0`."""
 @inline _alive_slot(vol, r) = (0 < r) & (r <= length(vol)) && @inbounds(vol[r] > 0)
+# r checked by `_alive_slot`
 """Column `a` of referent `r`, or `d` (the medium's value) when `r` is 0 or dead."""
-@inline _deref(a, vol, r, d) = _alive_slot(vol, r) ? @inbounds(a[r]) : d      # r checked by `_alive_slot`
+@inline _deref(a, vol, r, d) = _alive_slot(vol, r) ? @inbounds(a[r]) : d
 @inline _deref_volume(vol, r) = _alive_slot(vol, r) ? @inbounds(vol[r]) : zero(eltype(vol))
-@inline _deref_kind(cell, r) = _alive_slot(cell.volume, r) ? Int32(@inbounds cell.kind[r]) : Int32(0)
-@inline _deref_cluster(cell, r) = _alive_slot(cell.volume, r) ? @inbounds(cell.cluster[r]) : Int32(0)
+@inline function _deref_kind(cell, r)
+    return if _alive_slot(cell.volume, r)
+        Int32(@inbounds cell.kind[r])
+    else
+        Int32(0)
+    end
+end
+@inline function _deref_cluster(cell, r)
+    return if _alive_slot(cell.volume, r)
+        @inbounds(cell.cluster[r])
+    else
+        Int32(0)
+    end
+end
 """`birth` of cell `c`: its serial with a lifecycle (`cell.birth`), else its slot."""
 # (`c` is a cell slot in 1:capacity: the env's cell, `_birth_at` with c ≠ 0, or a referent
 # `_alive_slot` checked; every column has the capacity's length)
@@ -737,7 +918,8 @@ The alive member of kind `k` of cluster `cl`, or 0. With several, the one with t
     cl == 0 && return best, dup
     for m in 1:length(cell.kind)          # m ∈ 1:capacity: every column has that length
         # bounds: m ∈ 1:capacity, the length of every cell column
-        if @inbounds(cell.volume[m]) > 0 && @inbounds(cell.cluster[m]) == cl && @inbounds(cell.kind[m]) == k
+        if @inbounds(cell.volume[m]) > 0 && @inbounds(cell.cluster[m]) == cl &&
+                @inbounds(cell.kind[m]) == k
             dup |= best != 0
             b = Int32(_birth(cell, m))
             b < bb && ((best, bb) = (Int32(m), b))
@@ -770,33 +952,43 @@ function _sort(x)
             return :unknown
         end
     end
-    if x isa SymbolicUtils.BasicSymbolic && iscall(x) && operation(x) === value_at && length(arguments(x)) == 2
+    if x isa SymbolicUtils.BasicSymbolic && iscall(x) && operation(x) === value_at &&
+            length(arguments(x)) == 2
         a = info(arguments(x)[1])
         a !== nothing && a.role === :builtin && a.name === :owner && return :cell
     end
     return :unknown
 end
 
-# whether `x` is `value_at(_nonzero(v), …)` (or `value_at(Pre(_nonzero(v)), …)`): a Bool node read at an
-# index, which `_lower_at` lowers to a Bool already
+# whether `x` is `value_at(_nonzero(v), …)` (or `value_at(Pre(_nonzero(v)), …)`): a Bool
+# node read at an index, which `_lower_at` lowers to a Bool already
 function _is_bool_node_read(x)
     x = _unwrap(x)
-    (x isa SymbolicUtils.BasicSymbolic && iscall(x) && operation(x) === value_at && length(arguments(x)) == 2) || return false
+    (
+        x isa SymbolicUtils.BasicSymbolic && iscall(x) && operation(x) === value_at &&
+            length(arguments(x)) == 2
+    ) || return false
     a = _unwrap(arguments(x)[1])
     iscall(a) && operation(a) isa ModelingToolkitBase.Pre && (a = _unwrap(arguments(a)[1]))
     return iscall(a) && operation(a) === _nonzero
 end
 
-# A field operator read in a model statement (`laplacian(c)[target]` under `using Potts.Fields`): an
-# operator is a term of the fields' PDESystem; the model reads its value through an aux field
+# A field operator read in a model statement (`laplacian(c)[target]` under `using
+# Potts.Fields`): an operator is a term of the fields' PDESystem; the model reads its value
+# through an aux field
 function _operator_read_text(x)
     o = _unwrap(arguments(x)[end])
     n = info(o) === nothing ? "c" : string(info(o).name)
     op = _nopkg(replace(_builtin_text(string(x)), r"\b(\w+)\(t\)" => s"\1"))
     return string(
-        "`", op, "` is a field operator, a term of the fields' PDESystem; a model statement reads a field, not an ",
-        "operator of it: give the PDESystem an aux field `L(t, x, y) ~ ", replace(op, Regex("\\b" * n * "\\b") => "$n(t, x, y)"),
-        "` (with `L(t, x, y)` among its dependent variables), name it in `@fields $n, L = pdesys`, and read `L[target]`"
+        "`", op,
+        "` is a field operator, a term of the fields' PDESystem; a model statement reads \
+            a field, not an ",
+        "operator of it: give the PDESystem an aux field `L(t, x, y) ~ ", replace(
+            op, Regex("\\b" * n * "\\b") => "$n(t, x, y)"
+        ),
+        "` (with `L(t, x, y)` among its dependent variables), name it in `@fields $n, L = \
+            pdesys`, and read `L[target]`"
     )
 end
 
@@ -805,17 +997,25 @@ function _lower_at(args, env)
     # `Pre(x[i])` arrives as `value_at(Pre(x), i)`: the previous value is the stored one
     iscall(x) && operation(x) isa ModelingToolkitBase.Pre && (x = _unwrap(arguments(x)[1]))
     # a Bool node of a discrete component (`grn.A[new]`): its slot there, read as a Bool
-    iscall(x) && operation(x) === _nonzero && return :(Potts._nonzero($(_lower_at(Any[arguments(x)[1], args[2:end]...], env))))
+    iscall(x) && operation(x) === _nonzero &&
+        return :(Potts._nonzero($(_lower_at(Any[arguments(x)[1], args[2:end]...], env))))
     # `position[s][k]`: component `k` of site `s`'s position
     if _is_site_position(x)
         length(args) == 2 || throw(PottsCompileError("`position[s][k]` takes one axis"))
-        return :(Potts._position($(env.T), ctx, $(lower(arguments(x)[2], env)))[$(lower(args[2], env))])
+        return :(
+            Potts._position(
+                $(env.T), ctx,
+                $(lower(arguments(x)[2], env))
+            )[$(lower(args[2], env))]
+        )
     end
     i = info(x)
-    i === nothing && iscall(x) && _spatial_op(operation(x)) && throw(PottsCompileError(_operator_read_text(x)))
+    i === nothing && iscall(x) && _spatial_op(operation(x)) &&
+        throw(PottsCompileError(_operator_read_text(x)))
     i === nothing && throw(PottsCompileError("cannot index `$(_standin_var(x))`"))
     # `x[ref]`: the referent's value, the medium's when it is dead or 0 (D-066 item 5)
-    i.role !== :kindtable && length(args) == 2 && _is_ref(args[2]) && return _lower_deref(i, args[2], env)
+    i.role !== :kindtable && length(args) == 2 && _is_ref(args[2]) &&
+        return _lower_deref(i, args[2], env)
     idx = map(a -> lower(a, env), args[2:end])
     if i.role === :kindtable
         # bounds: kinds are in 0:nk - 1; the problem checks nk entries per kind-table axis
@@ -825,15 +1025,20 @@ function _lower_at(args, env)
     j = only(idx)
     s = _sort(args[2])
     if i.role === :site || i.role === :field
-        s === :cell && throw(PottsCompileError("site variable `$(i.name)` indexed by a cell"))
+        s === :cell &&
+            throw(PottsCompileError("site variable `$(i.name)` indexed by a cell"))
         return _site_read(i, j)
     elseif i.role === :cell
-        s === :site && throw(PottsCompileError("cell variable `$(i.name)` indexed by a site; use `$(i.name)[owner[s]]`"))
+        s === :site &&
+            throw(PottsCompileError("cell variable `$(i.name)` indexed by a site; use \
+                `$(i.name)[owner[s]]`"))
         return :(Potts._cellval(st.cell.$(i.name), $j))
     elseif i.role === :builtin
         i.name === :owner && return :(@inbounds st.ownership[$j])
         if i.name === :position
-            s === :site && throw(PottsCompileError("`position[$(args[2])]` is a vector: write its component `position[$(args[2])][k]`"))
+            s === :site &&
+                throw(PottsCompileError("`position[$(args[2])]` is a vector: write its \
+                    component `position[$(args[2])][k]`"))
             if !haskey(env.bind, :position)
                 env.mode === :proposal && throw(
                     PottsCompileError(
@@ -841,7 +1046,11 @@ function _lower_at(args, env)
                             "write `position[target][k]` or `position[source][k]`"
                     )
                 )
-                throw(PottsCompileError("`position` is not available in $(_MODE_NAMES[env.mode])"))
+                throw(
+                    PottsCompileError(
+                        "`position` is not available in $(_MODE_NAMES[env.mode])"
+                    )
+                )
             end
             return :($(env.bind[:position])[$j])
         end
@@ -849,38 +1058,48 @@ function _lower_at(args, env)
             haskey(env.bind, :direction) || throw(
                 PottsCompileError(
                     "`direction` is not available in $(_MODE_NAMES[env.mode]): it is the " *
-                        "copy's source→target offset, read in drives, constraints, on-copy updates and " *
-                        "the copy-scope @sweep temperature"
+                        "copy's source→target offset, read in drives, constraints, " *
+                        "on-copy updates and the copy-scope @sweep temperature"
                 )
             )
             return :($(env.bind[:direction])[$j])
         end
         if i.name === :kind
             s === :site && return :(CorePotts.owner_kind(st, $j))
-            if haskey(env.bind, :__kind_of)                   # `kind[old]`/`kind[new]`: bound once
+            # `kind[old]`/`kind[new]`: bound once
+            if haskey(env.bind, :__kind_of)
                 for (c, k) in env.bind[:__kind_of]
                     j === c && return k
                 end
             end
             s === :cell && return :(Potts._cellkind(st, $j))
-            throw(PottsCompileError("`kind[…]` needs a site (`source`, `target`) or a cell (`new`, `owner[s]`)"))
+            throw(PottsCompileError("`kind[…]` needs a site (`source`, `target`) or a \
+                cell (`new`, `owner[s]`)"))
         end
         i.name === :volume && return :($(env.T)(Potts._cellval(st.cell.volume, $j)))
         i.name in (:surface, :generation) && return :(Potts._cellval(st.cell.$(i.name), $j))
         if i.name === :birth
-            s === :site && throw(PottsCompileError("`birth[…]` needs a cell (`old`, `new`, a reference), not a site"))
+            s === :site &&
+                throw(PottsCompileError("`birth[…]` needs a cell (`old`, `new`, a \
+                    reference), not a site"))
             return :(Potts._birth_at(st.cell, $j))
         end
         if i.name in (:euler, :euler_full)
-            s === :site && throw(PottsCompileError("`$(i.name)[…]` needs a cell (`old`, `new`, `owner[s]`), not a site"))
+            s === :site &&
+                throw(PottsCompileError("`$(i.name)[…]` needs a cell (`old`, `new`, \
+                    `owner[s]`), not a site"))
             return :($(env.T)(Potts._cellval(st.cell.$(_euler_column(i.name)), $j)))
         end
         if i.name in _PIECES_NAMES
-            s === :site && throw(PottsCompileError("`$(i.name)[…]` needs a cell (`old`, `new`, `owner[s]`), not a site"))
+            s === :site &&
+                throw(PottsCompileError("`$(i.name)[…]` needs a cell (`old`, `new`, \
+                    `owner[s]`), not a site"))
             return :($(env.T)(Potts._cellval(st.cell.$(_pieces_column(i.name)), $j)))
         end
         if i.name === :cluster
-            s === :site && throw(PottsCompileError("`cluster[…]` needs a cell; write `cluster[owner[s]]`"))
+            s === :site &&
+                throw(PottsCompileError("`cluster[…]` needs a cell; write \
+                    `cluster[owner[s]]`"))
             return :(CorePotts.cluster_of(st.cell, $j))
         end
     end
@@ -901,30 +1120,57 @@ function _lower_population(args, env)
         merge!(
             bind, Dict{Symbol, Any}(
                 :volume => :($T(@inbounds st.cell.volume[$nsym])),
-                :surface => :(@inbounds st.cell.surface[$nsym]), :kind => :(Potts._cellkind(st, $nsym)),
-                :id => nsym, :generation => :(@inbounds st.cell.generation[$nsym]), :__cell => nsym,
+                :surface => :(@inbounds st.cell.surface[$nsym]), :kind =>
+                    :(Potts._cellkind(st, $nsym)),
+                :id => nsym, :generation => :(@inbounds st.cell.generation[$nsym]),
+                :__cell =>
+                    nsym,
                 :birth => :(Potts._birth(st.cell, $nsym)),
                 :euler => :($T(@inbounds st.cell.euler[$nsym])),
-                :euler_full => :($T(@inbounds st.cell.$(_euler_column(:euler_full))[$nsym])),
-                (n => :($T(@inbounds st.cell.$(_pieces_column(n))[$nsym])) for n in _PIECES_NAMES)...,
+                :euler_full =>
+                    :($T(@inbounds st.cell.$(_euler_column(:euler_full))[$nsym])),
+                (
+                    n => :($T(@inbounds st.cell.$(_pieces_column(n))[$nsym]))
+                        for n in _PIECES_NAMES
+                )...,
                 :cluster => :(CorePotts.cluster_of(st.cell, $nsym)),
-                :cluster_volume => :($T(Potts._cellval(st.cell.cluster_volume, CorePotts.cluster_of(st.cell, $nsym)))),
-                :cluster_surface => :(Potts._cellval(st.cell.cluster_surface, CorePotts.cluster_of(st.cell, $nsym)))
+                :cluster_volume =>
+                    :(
+                    $T(
+                        Potts._cellval(
+                            st.cell.cluster_volume,
+                            CorePotts.cluster_of(st.cell, $nsym)
+                        )
+                    )
+                ),
+                :cluster_surface =>
+                    :(
+                    Potts._cellval(
+                        st.cell.cluster_surface,
+                        CorePotts.cluster_of(st.cell, $nsym)
+                    )
+                )
             )
         )
         range = :(1:length(st.cell.kind))
-        skip = :((@inbounds st.cell.volume[$nsym]) > 0 && $(_kindtest(:(Potts._cellkind(st, $nsym)), ni.options.kinds)))
+        skip = :(
+            (@inbounds st.cell.volume[$nsym]) > 0 &&
+                $(_kindtest(:(Potts._cellkind(st, $nsym)), ni.options.kinds))
+        )
     else
         merge!(
             bind, Dict{Symbol, Any}(
-                :owner => :(@inbounds st.ownership[$nsym]), :kind => :(CorePotts.owner_kind(st, $nsym)),
-                :__site => nsym, :position => :(Potts._position($T, ctx, $nsym)), :site => nsym
+                :owner => :(@inbounds st.ownership[$nsym]), :kind =>
+                    :(CorePotts.owner_kind(st, $nsym)),
+                :__site => nsym, :position => :(Potts._position($T, ctx, $nsym)), :site =>
+                    nsym
             )
         )
         range = :(1:length(st.ownership))
         skip = :(CorePotts.in_domain(ctx.lattice, $nsym))
     end
-    bind[:__outer] = env                 # `members(cluster)`: the enclosing cell's `cluster`
+    # `members(cluster)`: the enclosing cell's `cluster`
+    bind[:__outer] = env
     inner = LowerEnv(T, env.mode, bind, env.relname, env.keys)
     op = ni.options.op
     init, step, fin = if op === :sum
@@ -959,14 +1205,16 @@ end
 function _lower_gather(args, env)
     n, anchor, body, cond = args
     _uses_builtin(anchor, :position) &&
-        throw(PottsCompileError("a gather is anchored at a site: use `site` (the current site), `source` or `target`, not `position`"))
+        throw(PottsCompileError("a gather is anchored at a site: use `site` (the current \
+            site), `source` or `target`, not `position`"))
     ni = info(n)
     spec = ni.options.relation
     T = env.T
     # the target's shell (`shell(s)`) is a fixed offset table of the lattice, not a
     # context relation
     if spec isa ShellRelation
-        len, offs = :(length(CorePotts.shell_offsets(ctx.lattice))), :(CorePotts.shell_offsets(ctx.lattice))
+        len, offs = :(length(CorePotts.shell_offsets(ctx.lattice))),
+            :(CorePotts.shell_offsets(ctx.lattice))
     else
         rel = spec isa RelationRef ? spec.name : env.relname[spec]
         len, offs = :(length(ctx.$rel)), :(ctx.$rel.offsets)
@@ -974,7 +1222,11 @@ function _lower_gather(args, env)
     nsym = Symbol(nameof(_unwrap(n)))
     # names derived from the (unique) bound variable: deterministic, so rebuilding a problem
     # yields the same generated function and never recompiles
-    acc, cnt, flag, x0, y, k, v, ins = map(p -> Symbol(p, :_, nsym), (:acc, :cnt, :zero, :x0, :y, :k, :v, :in))
+    acc, cnt, flag, x0, y, k, v, ins = map(
+        p -> Symbol(p, :_, nsym), (
+            :acc, :cnt, :zero, :x0, :y, :k, :v, :in,
+        )
+    )
     op = ni.options.op
     init, step, fin = if op === :sum
         :(zero($T)), :($acc += $v), acc
@@ -986,7 +1238,8 @@ function _lower_gather(args, env)
         :(zero($T)), :(($v > 0 ? ($acc += log($T($v))) : ($flag = true))),
             :(($cnt == 0 || $flag) ? zero($T) : exp($acc / $T($cnt)))
     elseif op === :log1p_geomean
-        :(zero($T)), :($acc += log1p(max(zero($T), $T($v)))), :($cnt == 0 ? zero($T) : expm1($acc / $T($cnt)))
+        :(zero($T)), :($acc += log1p(max(zero($T), $T($v)))),
+            :($cnt == 0 ? zero($T) : expm1($acc / $T($cnt)))
     elseif op === :minimum
         :(typemax($T)), :($acc = min($acc, $T($v))), acc
     elseif op === :maximum
@@ -998,8 +1251,10 @@ function _lower_gather(args, env)
     elseif op === :all
         true, :($acc &= $v), acc
     elseif op === :pieces             # a mask of the shell positions, then their pieces
-        :(UInt32(0)), :($acc |= UInt32(1) << ($k - 1)), :(CorePotts.shell_pieces(ctx.lattice, $acc, $(ni.options.full)))
-    elseif op === :distinct           # counted at its first occurrence: no earlier site gives it
+        :(UInt32(0)), :($acc |= UInt32(1) << ($k - 1)),
+            :(CorePotts.shell_pieces(ctx.lattice, $acc, $(ni.options.full)))
+        # counted at its first occurrence: no earlier site gives it
+    elseif op === :distinct
         nothing, nothing, acc
     end
     condc = lower(cond, env)
@@ -1022,8 +1277,10 @@ function _lower_gather(args, env)
         end
     end
     return quote
-        let $x0 = CorePotts.coordinates(ctx.lattice, $(lower(anchor, env))), $acc = $init, $cnt = 0, $flag = false
-            for $k in 1:$len
+        let $x0 = CorePotts.coordinates(ctx.lattice, $(lower(anchor, env))), $acc = $init,
+                $cnt = 0, $flag = false
+
+            for $k in 1:($len)
                 $ins, $y = CorePotts.shift(ctx.lattice, $x0, @inbounds $offs[$k])
                 if $ins
                     $nsym = CorePotts.linear_index(ctx.lattice, $y)
@@ -1041,12 +1298,18 @@ end
 
 # `connected(c; rule)`: the rule's CorePotts kernel on the copy, for `old` or `new`
 function _lower_connected(args, env)
-    env.mode === :proposal || throw(PottsCompileError("`connected(…)` and `connectivity(…)` read a copy: use them in @constraint or @drive"))
+    env.mode === :proposal ||
+        throw(PottsCompileError("`connected(…)` and `connectivity(…)` read a copy: use \
+            them in @constraint or @drive"))
     who = isequal(_unwrap(args[1]), _unwrap(B.old)) ? :old : :new
     code = Int(SymbolicUtils.unwrap_const(_unwrap(args[2])))
     g = _global_rule(code)
     g === nothing || return _lower_global(who, g)
-    code <= 3 && return :(CorePotts.local_rule(st.ownership, ctx, prop, $(isodd(code)), $(code >= 2)))
+    code <= 3 && return :(
+        CorePotts.local_rule(
+            st.ownership, ctx, prop, $(isodd(code)), $(code >= 2)
+        )
+    )
     code == 4 && return :(CorePotts.arc_or_pair(st.ownership, ctx, prop))
     return :(CorePotts.simple_point(st.ownership, ctx, prop, $who, $(code == 6)))
 end
@@ -1057,10 +1320,16 @@ function _lower_global(who, g)
     if who === :new
         return :(CorePotts.global_gains(st.ownership, ctx, prop, $(_global_adj(g))))
     else
-        return :(CorePotts.global_keeps(st.ownership, ctx, prop, $(_global_vals(g)...), CorePotts.GlobalSearch()) == Int32(0))
+        return :(
+            CorePotts.global_keeps(
+                st.ownership, ctx, prop, $(_global_vals(g)...), CorePotts.GlobalSearch()
+            ) ==
+                Int32(0)
+        )
     end
 end
-# `Val(full)` (hex has one adjacency: `:face`), and with it `Val(window)`, `Val(box capacity)`
+# `Val(full)` (hex has one adjacency: `:face`), and with it `Val(window)`, `Val(box
+# capacity)`
 _global_adj(g) = :(Val($(g.adjacency === :full && !_PIECES_HEX[])))
 function _global_vals(g)
     W = g.window
@@ -1097,19 +1366,26 @@ _uses_builtin(x, name) = (:builtin, name) in _uses(x)
 function _gathers(x)
     out = Any[]
     _walk(x) do y
-        iscall(y) && operation(y) === gather && push!(out, (info(arguments(y)[1]), arguments(y)[2]))
+        iscall(y) && operation(y) === gather &&
+            push!(out, (info(arguments(y)[1]), arguments(y)[2]))
     end
     return out
 end
 
-_has_op(x, op) = (found = Ref(false); _walk(y -> (iscall(y) && operation(y) === op && (found[] = true)), x); found[])
+function _has_op(x, op)
+    (
+        found = Ref(false);
+        _walk(y -> (iscall(y) && operation(y) === op && (found[] = true)), x); found[]
+    )
+end
 # whether `x` reads `connected(…; rule = Global(…))`
 function _reads_global(x)
     found = Ref(false)
     _walk(
         y -> (
             iscall(y) && operation(y) === _connected &&
-                _global_rule(Int(SymbolicUtils.unwrap_const(_unwrap(arguments(y)[2])))) !== nothing && (found[] = true)
+                _global_rule(Int(SymbolicUtils.unwrap_const(_unwrap(arguments(y)[2])))) !==
+                nothing && (found[] = true)
         ), x
     )
     return found[]

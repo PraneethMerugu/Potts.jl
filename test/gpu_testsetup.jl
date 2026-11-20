@@ -1,4 +1,5 @@
-# Top-level definitions for GPU device test suites (`gpu_tests.jl`, `gpu_fields_tests.jl`, `gpu_acceptance_tests.jl`).
+# Top-level definitions for GPU device test suites (`gpu_tests.jl`, `gpu_fields_tests.jl`,
+# `gpu_acceptance_tests.jl`).
 
 @testsetup module GpuSetup
 using Potts, Test
@@ -14,12 +15,11 @@ using Statistics: mean, var
 
 isdefined(@__MODULE__, :SingleDivisionFixture) ||
     include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "fixtures.jl"))
-isdefined(@__MODULE__, :stat_accept) || include(joinpath(@__DIR__, "shared", "stats_helpers.jl"))
-
+isdefined(@__MODULE__, :stat_accept) ||
+    include(joinpath(@__DIR__, "shared", "stats_helpers.jl"))
 
 # ROCm: the hook-based IR checks (negative controls, compile-only launches; D-157)
 # (PottsDevices.device_name() == "rocm" && include("device_ir.jl"): now its own item file)
-
 
 # Two relationships, each with its own store, law and shared read claims, on the device
 @potts_model MetalSprings begin
@@ -44,7 +44,6 @@ isdefined(@__MODULE__, :stat_accept) || include(joinpath(@__DIR__, "shared", "st
     end
     @sweep Metropolis(; temperature = 10.0)
 end
-
 
 # Every fixed-step ODE system expanded in place. The acceptance file's device testsets
 # (each rate shape compiles on the device and equals the CPU Float32 run; a gather ODE runs)
@@ -71,7 +70,6 @@ end
     end
     @sweep Metropolis(; temperature = 10.0)
 end
-
 
 # Exact host-transfer counts of the current device paths: transfer_counts_tests.jl
 

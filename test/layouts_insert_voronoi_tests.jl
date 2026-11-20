@@ -1,41 +1,76 @@
 # Layouts (D-138): InsertUntil, layer_rng, point patterns and Voronoi.
 
-@testitem "layouts: InsertUntil stop rules (hand-derived counts)" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+@testitem "layouts: InsertUntil stop rules (hand-derived counts)" setup = [
+    LayoutsSetup,
+] tags = [
+    :potts, :layouts,
+] begin
     using Potts.Layouts
     @testset "layouts: InsertUntil stop rules (hand-derived counts)" begin
-        # 16 hosts of 1 site and 4 guests of 9 sites. fraction 1/2 of guests, inserting guests into
-        # hosts: every hit kills a host, so N + counted stays 20 and the rule 4 + c ≥ 10 needs 6
-        # hits. Negative control: without the death, N would grow to 20 + c and need 12 hits.
-        hosts = Tiling((1, 1); spacing = 1, region = (1:8, 1:8), kinds = [:host])        # 16 one-site cells
-        guests = Tiling((3, 3); spacing = 1, region = (11:18, 11:18), kinds = [:guest])   # 4 cells
-        l = overlay(hosts, guests, InsertUntil(:guest; into = [:host], fraction = 1 // 2, seed = 5))
+        # 16 hosts of 1 site and 4 guests of 9 sites. fraction 1/2 of guests, inserting
+        # guests into hosts: every hit kills a host, so N + counted stays 20 and the rule 4
+        # + c ≥ 10 needs 6 hits. Negative control: without the death, N would grow to 20 + c
+        # and need 12 hits.
+        # 16 one-site cells
+        hosts = Tiling((1, 1); spacing = 1, region = (1:8, 1:8), kinds = [:host])
+        # 4 cells
+        guests = Tiling((3, 3); spacing = 1, region = (11:18, 11:18), kinds = [:guest])
+        l = overlay(
+            hosts, guests,
+            InsertUntil(:guest; into = [:host], fraction = 1 // 2, seed = 5)
+        )
         op, t = _tally(l, (20, 20))
         @test only(t).painted == 6 && only(t).counted == 6
         ks = _op(op, kind)
         @test count(==(:host), ks) == 10 && count(==(:guest), ks) == 10
         # `number` counts hits (retry) exactly; `number = 0` draws nothing
         for n in (0, 1, 7)
-            op, t = _tally(overlay(hosts, InsertUntil(:guest; into = [:host], number = n, seed = 1)), (20, 20))
+            op, t = _tally(
+                overlay(hosts, InsertUntil(:guest; into = [:host], number = n, seed = 1)), (
+                    20, 20,
+                )
+            )
             @test only(t) == (; painted = n, misses = only(t).misses, counted = n)
             @test length(_kind_sites(op, :guest)) == n
         end
         # running out of allowed sites before the rule is met throws (16 hosts, 17 wanted)
         ly_throws(
             ArgumentError, ["ran out of sites", "reduce `fraction`/`number`"],
-            () -> layout(overlay(hosts, InsertUntil(:guest; into = [:host], number = 17, seed = 1)), (20, 20))
+            () -> layout(
+                overlay(hosts, InsertUntil(:guest; into = [:host], number = 17, seed = 1)),
+                (
+                    20, 20,
+                )
+            )
         )
         @test length(
             _kind_sites(
-                layout(overlay(hosts, InsertUntil(:guest; into = [:host], number = 16, seed = 1)), (20, 20)),
+                layout(
+                    overlay(
+                        hosts,
+                        InsertUntil(:guest; into = [:host], number = 16, seed = 1)
+                    ), (
+                        20, 20,
+                    )
+                ),
                 :guest
             )
         ) == 16
         # inserted cells are never drawn again as hits, even when their kind is allowed
-        op, t = _tally(overlay(hosts, InsertUntil(:host; into = [:host], number = 16, seed = 2)), (20, 20))
-        @test only(t).painted == 16 && count(==(:host), _op(op, kind)) == 16     # every host replaced once
+        op, t = _tally(
+            overlay(hosts, InsertUntil(:host; into = [:host], number = 16, seed = 2)), (
+                20, 20,
+            )
+        )
+        # every host replaced once
+        @test only(t).painted == 16 && count(==(:host), _op(op, kind)) == 16
         ly_throws(
             ArgumentError, ["ran out of sites", "reduce `fraction`/`number`"],
-            () -> layout(overlay(hosts, InsertUntil(:host; into = [:host], number = 17, seed = 2)), (20, 20))
+            () -> layout(
+                overlay(hosts, InsertUntil(:host; into = [:host], number = 17, seed = 2)), (
+                    20, 20,
+                )
+            )
         )
         # no InsertUntil layer: no InsertUntil row; the point equals `layout`
         op, t = _tally(hosts, (20, 20))
@@ -43,14 +78,26 @@
     end
 end
 
-@testitem "layouts: InsertUntil draws uniformly over the region" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+@testitem "layouts: InsertUntil draws uniformly over the region" setup = [
+    LayoutsSetup,
+] tags = [
+    :potts, :layouts,
+] begin
     using Potts.Layouts
     @testset "layouts: InsertUntil draws uniformly over the region" begin
-        # 4 one-site hosts in a 2 × 2 region; one insertion per seed lands on each about 1/4 of the time
+        # 4 one-site hosts in a 2 × 2 region; one insertion per seed lands on each about 1/4
+        # of the time
         hosts = Tiling((1, 1); region = (3:4, 3:4), kinds = [:host])
         hits = zeros(Int, 4)
         for seed in 1:2000
-            op = layout(overlay(hosts, InsertUntil(:guest; into = [:host], number = 1, seed, region = (3:4, 3:4))), (6, 6))
+            op = layout(
+                overlay(
+                    hosts, InsertUntil(
+                        :guest; into = [:host], number = 1, seed, region = (3:4, 3:4)
+                    )
+                ),
+                (6, 6)
+            )
             i = only(_kind_sites(op, :guest))
             hits[LinearIndices((2, 2))[i[1] - 2, i[2] - 2]] += 1
         end
@@ -62,7 +109,10 @@ end
                     _tally(
                         overlay(
                             hosts,
-                            InsertUntil(:guest; into = [:host], number = 4, seed, misses = :count, region = (3:4, 3:6))
+                            InsertUntil(
+                                :guest; into = [:host], number = 4, seed,
+                                misses = :count, region = (3:4, 3:6)
+                            )
                         ), (6, 6)
                     )
                 )
@@ -75,19 +125,38 @@ end
     end
 end
 
-@testitem "layouts: InsertUntil on hex, 3D and domain lattices" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+@testitem "layouts: InsertUntil on hex, 3D and domain lattices" setup = [
+    LayoutsSetup,
+] tags = [
+    :potts, :layouts,
+] begin
     using Potts.Layouts
     @testset "layouts: InsertUntil on hex, 3D and domain lattices" begin
         # hex: axial indices, as every layer
         hexlat = Lattice((12, 12); boundary = Closed(), geometry = Hexagonal())
-        op = layout(overlay(Tiling((3, 3); kinds = [:a, :b]), InsertUntil(:x; into = [:b], number = 5, seed = 3)), hexlat)
+        op = layout(
+            overlay(
+                Tiling((3, 3); kinds = [:a, :b]),
+                InsertUntil(:x; into = [:b], number = 5, seed = 3)
+            ),
+            hexlat
+        )
         base = layout(Tiling((3, 3); kinds = [:a, :b]), hexlat)
         σ0, k0 = _op(base, ownership), _op(base, kind)
         xs = _kind_sites(op, :x)
         @test length(xs) == 5 && all(i -> k0[σ0[i]] == :b, xs)
         # 3D
-        op = layout(overlay(Tiling((2, 2, 2); kinds = [:a]), InsertUntil(:x; into = [:a], fraction = 1 // 5, seed = 4)), (6, 6, 6))
-        @test count(==(:x), _op(op, kind)) == 7                                  # 27 + n ≤ 5n ⇒ n = 7
+        op = layout(
+            overlay(
+                Tiling((2, 2, 2); kinds = [:a]), InsertUntil(
+                    :x; into = [:a], fraction = 1 //
+                        5, seed = 4
+                )
+            ),
+            (6, 6, 6)
+        )
+        # 27 + n ≤ 5n ⇒ n = 7
+        @test count(==(:x), _op(op, kind)) == 7
         # a domain: draws outside it land on medium and miss
         sys = InsertProbe(; name = :ins)
         op, t = _tally(
@@ -104,11 +173,27 @@ end
         # bad regions
         ly_throws(
             ArgumentError, ["lies outside the lattice", "keep each axis range within 1:n"],
-            () -> layout(overlay(Tiling((2, 2); kinds = [:a]), InsertUntil(:x; into = [:a], number = 1, seed = 1, region = (1:30, 1:4))), (8, 8))
+            () -> layout(
+                overlay(
+                    Tiling((2, 2); kinds = [:a]),
+                    InsertUntil(
+                        :x; into = [:a], number = 1, seed = 1, region = (1:30, 1:4)
+                    )
+                ),
+                (8, 8)
+            )
         )
         ly_throws(
-            ArgumentError, ["the layout is 1D, the lattice 2D", "match the layout dimension"],
-            () -> layout(overlay(Tiling((2, 2); kinds = [:a]), InsertUntil(:x; into = [:a], number = 1, seed = 1, region = (1:4,))), (8, 8))
+            ArgumentError, [
+                "the layout is 1D, the lattice 2D", "match the layout dimension",
+            ],
+            () -> layout(
+                overlay(
+                    Tiling((2, 2); kinds = [:a]),
+                    InsertUntil(:x; into = [:a], number = 1, seed = 1, region = (1:4,))
+                ),
+                (8, 8)
+            )
         )
         ly_throws(
             ArgumentError, ["is empty", "pass non-empty ranges"],
@@ -129,10 +214,10 @@ end
     end
 end
 
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Shapes, point patterns and Voronoi (D-138); the frozen acceptance file holds the
 # hand counts, the VoronoiBall pins and the brute-force oracle
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 @testitem "layouts: layer_rng" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
     using Potts.Layouts
     @testset "layouts: layer_rng" begin
@@ -140,17 +225,25 @@ end
         @test rand(Potts.layer_rng(5, :a), 3) != rand(Potts.layer_rng(5, :b), 3)
         @test rand(Potts.layer_rng(5, :a), 3) != rand(Potts.layer_rng(6, :a), 3)
         ly_throws(
-            ArgumentError, ["seed must be in 0:typemax(UInt64)", "pass a non-negative integer seed"],
+            ArgumentError, [
+                "seed must be in 0:typemax(UInt64)", "pass a non-negative integer seed",
+            ],
             () -> Potts.layer_rng(typemax(UInt64) + big(1))
         )
         ly_throws(
-            ArgumentError, ["seed must be in 0:typemax(UInt64)", "pass a non-negative integer seed"],
+            ArgumentError, [
+                "seed must be in 0:typemax(UInt64)", "pass a non-negative integer seed",
+            ],
             () -> RandomPoints(1; seed = typemax(UInt64) + big(1))
         )
     end
 end
 
-@testitem "layouts: Voronoi is equivariant under periodic translation" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+@testitem "layouts: Voronoi is equivariant under periodic translation" setup = [
+    LayoutsSetup,
+] tags = [
+    :potts, :layouts,
+] begin
     using Potts.Layouts
     @testset "layouts: Voronoi is equivariant under periodic translation" begin
         P = Point
@@ -160,7 +253,8 @@ end
             σ = _op(layout(Voronoi(gens; lloyd, kinds = [:a]), lat), ownership)
             for s in ((7, 0), (0, 11), (13, 6))
                 moved = [P(mod(g[1] + s[1], 20), mod(g[2] + s[2], 20)) for g in gens]
-                @test _op(layout(Voronoi(moved; lloyd, kinds = [:a]), lat), ownership) == circshift(σ, s)
+                @test _op(layout(Voronoi(moved; lloyd, kinds = [:a]), lat), ownership) ==
+                    circshift(σ, s)
             end
             # a generator given through another period is the same generator
             far = [P(g[1] + 40, g[2] - 20) for g in gens]
@@ -169,14 +263,20 @@ end
         # control: on a closed lattice a translation changes the tessellation
         σc = _op(layout(Voronoi(gens; kinds = [:a]), (20, 20)), ownership)
         moved = [P(mod(g[1] + 7, 20), g[2]) for g in gens]
-        @test _op(layout(Voronoi(moved; kinds = [:a]), (20, 20)), ownership) != circshift(σc, (7, 0))
+        @test _op(layout(Voronoi(moved; kinds = [:a]), (20, 20)), ownership) !=
+            circshift(σc, (7, 0))
     end
 end
 
-@testitem "layouts: shapes on periodic 3D lattices and boxes on domains" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+@testitem "layouts: shapes on periodic 3D lattices and boxes on domains" setup = [
+    LayoutsSetup,
+] tags = [
+    :potts, :layouts,
+] begin
     using Potts.Layouts
     @testset "layouts: shapes on periodic 3D lattices and boxes on domains" begin
-        # a sphere through the corner of a periodic cube wraps into all 8 corners, clips nothing
+        # a sphere through the corner of a periodic cube wraps into all 8 corners, clips
+        # nothing
         op, rep = layout(
             Voronoi(Center(); region = Sphere(Point(1.0, 1.0, 1.0), 2.0), kinds = [:a]),
             Lattice((10, 10, 10)); report = true
@@ -188,42 +288,60 @@ end
         @test only(
             last(
                 layout(
-                    Voronoi(Center(); region = Sphere(Point(1.0, 1.0, 1.0), 2.0), kinds = [:a]),
+                    Voronoi(
+                        Center(); region = Sphere(Point(1.0, 1.0, 1.0), 2.0),
+                        kinds = [:a]
+                    ),
                     (10, 10, 10); report = true
                 )
             )
         ).clipped == 22
         # a box region on a domain clips its out-of-domain sites
         dom = Lattice((10, 10); boundary = Closed(), domain = x -> x[1] <= 5)
-        op, rep = layout(Voronoi(Center(); region = (3:8, 1:2), kinds = [:a]), dom; report = true)
+        op, rep = layout(
+            Voronoi(Center(); region = (3:8, 1:2), kinds = [:a]), dom;
+            report = true
+        )
         @test count(!=(0), _op(op, ownership)) == 6 && only(rep).clipped == 6
         # a single Point is a one-generator pattern
         @test Potts.points(Point(2, 3), (5, 5)) == [Point(2.0, 3.0)]
     end
 end
 
-@testitem "layouts: Voronoi repair leaves a piece cut off by the domain" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+@testitem "layouts: Voronoi repair leaves a piece cut off by the domain" setup = [
+    LayoutsSetup,
+] tags = [
+    :potts, :layouts,
+] begin
     using Potts.Layouts
     @testset "layouts: Voronoi repair leaves a piece cut off by the domain" begin
-        # the domain splits the lattice into two strips; one generator: its cell is everything,
-        # in two pieces with no neighbouring cell, and the repair leaves it so
+        # the domain splits the lattice into two strips; one generator: its cell is
+        # everything, in two pieces with no neighbouring cell, and the repair leaves it so
         dom = Lattice((12, 6); boundary = Closed(), domain = x -> x[1] <= 4 || x[1] >= 8)
         σ = _op(layout(Voronoi([Point(2.0, 3.0)]; kinds = [:a]), dom), ownership)
         @test count(==(1), σ) == 4 * 6 + 5 * 6
         # two generators, one per strip: one piece each, nothing moves
-        σ2 = _op(layout(Voronoi([Point(2.0, 3.0), Point(10.0, 3.0)]; kinds = [:a]), dom), ownership)
+        σ2 = _op(
+            layout(Voronoi([Point(2.0, 3.0), Point(10.0, 3.0)]; kinds = [:a]), dom),
+            ownership
+        )
         @test all(==(1), σ2[1:4, :]) && all(==(2), σ2[8:12, :])
     end
 end
 
-@testitem "layouts: Voronoi arguments and remake" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+@testitem "layouts: Voronoi arguments and remake" setup = [LayoutsSetup] tags = [
+    :potts, :layouts,
+] begin
     using Potts.Layouts
     @testset "layouts: Voronoi arguments and remake" begin
         ly_throws(
             ArgumentError, ["a point list holds `Point`s and `Center()`s"],
             () -> Voronoi([1, 2]; kinds = [:a])
         )
-        ly_throws(ArgumentError, ["is not a point pattern"], () -> Voronoi(:nope; kinds = [:a]))
+        ly_throws(
+            ArgumentError, ["is not a point pattern"],
+            () -> Voronoi(:nope; kinds = [:a])
+        )
         ly_throws(
             ArgumentError, ["finite center and a finite, non-negative radius"],
             () -> Voronoi(Center(); region = Circle(Point(1.0, 1.0), -1.0), kinds = [:a])
@@ -244,41 +362,94 @@ end
             ArgumentError, ["the region has 1 ranges, the lattice is 2D"],
             () -> layout(Voronoi(Center(); region = (1:4,), kinds = [:a]), (8, 8))
         )
-        @test Potts.points(remake(RandomPoints(3; seed = 1); n = 5), (8, 8)) == Potts.points(RandomPoints(5; seed = 1), (8, 8))
+        @test Potts.points(remake(RandomPoints(3; seed = 1); n = 5), (8, 8)) ==
+            Potts.points(RandomPoints(5; seed = 1), (8, 8))
     end
 end
 
-@testitem "layouts: shape membership is closed up to rounding (site-centred discs)" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+@testitem "layouts: shape membership is closed up to rounding (site-centred discs)" setup =
+    [LayoutsSetup] tags = [
+    :potts, :layouts,
+] begin
     using Potts.Layouts
     @testset "layouts: shape membership is closed up to rounding (site-centred discs)" begin
         hexpos(x) = (x[1] + x[2] / 2, x[2] * sqrt(3) / 2)
         hexl = Lattice((24, 24); geometry = Hexagonal(), boundary = Closed())
-        # exact oracle: the axial offset (a, b) has squared Cartesian length a² + ab + b², an integer
-        for (r2, n) in ((1, 7), (3, 13), (4, 19), (7, 31)), c in ((12, 12), (9, 14), (15, 10))
+        # exact oracle: the axial offset (a, b) has squared Cartesian length a² + ab + b²,
+        # an integer
+        for (r2, n) in ((1, 7), (3, 13), (4, 19), (7, 31)),
+                c in ((12, 12), (9, 14), (15, 10))
+
             disc = Circle(Point(hexpos(c)), sqrt(r2))
-            σ = _op(layout(Voronoi([Point(hexpos(c))]; region = disc, kinds = [:a]), hexl), ownership)
-            exact = Set(x for x in CartesianIndices((24, 24)) if (a = x[1] - c[1]; b = x[2] - c[2]; a^2 + a * b + b^2 <= r2))
+            σ = _op(
+                layout(Voronoi([Point(hexpos(c))]; region = disc, kinds = [:a]), hexl),
+                ownership
+            )
+            exact = Set(
+                x
+                    for x in CartesianIndices((24, 24))
+                    if (a = x[1] - c[1]; b = x[2] - c[2]; a^2 + a * b + b^2 <= r2)
+            )
             @test length(exact) == n
             @test Set(findall(!=(0), σ)) == exact
         end
         # square and 3D: integer distances are exact, so nothing changes (29 and 33 points)
-        σs = _op(layout(Voronoi([Point(10.0, 10.0)]; region = Circle(Point(10.0, 10.0), 3.0), kinds = [:a]), (20, 20)), ownership)
+        σs = _op(
+            layout(
+                Voronoi(
+                    [Point(10.0, 10.0)]; region = Circle(Point(10.0, 10.0), 3.0),
+                    kinds = [:a]
+                ),
+                (20, 20)
+            ),
+            ownership
+        )
         @test count(!=(0), σs) == 29
-        σ3 = _op(layout(Voronoi([Point(5.0, 5.0, 5.0)]; region = Sphere(Point(5.0, 5.0, 5.0), 2.0), kinds = [:a]), (9, 9, 9)), ownership)
+        σ3 = _op(
+            layout(
+                Voronoi(
+                    [Point(5.0, 5.0, 5.0)]; region = Sphere(Point(5.0, 5.0, 5.0), 2.0),
+                    kinds = [:a]
+                ),
+                (9, 9, 9)
+            ),
+            ownership
+        )
         @test count(!=(0), σ3) == 33
-        # control: the tolerance is relative and tiny, a radius just below the ring excludes it
+        # control: the tolerance is relative and tiny, a radius just below the ring excludes
+        # it
         disc = Circle(Point(hexpos((12, 12))), 1 - 1.0e-9)
-        @test count(!=(0), _op(layout(Voronoi([Point(hexpos((12, 12)))]; region = disc, kinds = [:a]), hexl), ownership)) == 1
+        @test count(
+            !=(0),
+            _op(
+                layout(
+                    Voronoi([Point(hexpos((12, 12)))]; region = disc, kinds = [:a]),
+                    hexl
+                ), ownership
+            )
+        ) ==
+            1
     end
 end
 
-@testitem "layouts: generator points must be finite" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
+@testitem "layouts: generator points must be finite" setup = [LayoutsSetup] tags = [
+    :potts, :layouts,
+] begin
     using Potts.Layouts
     @testset "layouts: generator points must be finite" begin
         for bad in (Point(NaN, 1.0), Point(Inf, 1.0), Point(1.0e300, 1.0))
-            ly_throws(ArgumentError, ["point coordinates must be finite and below 1e15"], () -> Voronoi([bad]; kinds = [:a]))
-            ly_throws(ArgumentError, ["point coordinates must be finite and below 1e15"], () -> Voronoi(bad; kinds = [:a]))
-            ly_throws(ArgumentError, ["point coordinates must be finite and below 1e15"], () -> Potts.points([bad], (10, 10)))
+            ly_throws(
+                ArgumentError, ["point coordinates must be finite and below 1e15"],
+                () -> Voronoi([bad]; kinds = [:a])
+            )
+            ly_throws(
+                ArgumentError, ["point coordinates must be finite and below 1e15"],
+                () -> Voronoi(bad; kinds = [:a])
+            )
+            ly_throws(
+                ArgumentError, ["point coordinates must be finite and below 1e15"],
+                () -> Potts.points([bad], (10, 10))
+            )
         end
     end
 end

@@ -1,9 +1,13 @@
-# F2 metadata parity (`tunable`, `bounds`, `description`), component bindings/initial values,
-# and computed parameter routes & diagnostic messages.
+# F2 metadata parity (`tunable`, `bounds`, `description`), component bindings/initial
+# values, and computed parameter routes & diagnostic messages.
 
-@testitem "tunable, bounds, description" setup = [MetadataSetup] tags = [:potts, :mtk_native] begin
+@testitem "tunable, bounds, description" setup = [MetadataSetup] tags = [
+    :potts,
+    :mtk_native,
+] begin
     @testset "tunable, bounds, description" begin
-        σ = zeros(Int32, 12, 12); σ[2:5, 2:5] .= 1
+        σ = zeros(Int32, 12, 12)
+        σ[2:5, 2:5] .= 1
         op = [ownership => σ, kind => [1]]
         sys = WithMeta(; name = :m)
         prob = PottsProblem(sys, op, (0, 2))
@@ -11,22 +15,30 @@
         @test SS.canonicalize(SS.Tunable(), prob.p)[1] == [2.0, 9.0]
         @test SS.canonicalize(SS.Constants(), prob.p)[1] == [1.0]
         p0 = PottsProblem(NoMeta(; name = :m), op, (0, 2)).p
-        @test SS.canonicalize(SS.Tunable(), p0)[1] == [1.0, 2.0, 9.0] && typeof(p0) == typeof(Potts.PottsParameters(NamedTuple(p0)))
+        @test SS.canonicalize(SS.Tunable(), p0)[1] == [1.0, 2.0, 9.0] &&
+            typeof(p0) == typeof(Potts.PottsParameters(NamedTuple(p0)))
         # the metadata is MTK's
         λs = only(x for x in MTKB.parameters(sys) if Symbol(x) === :λ)
         Ts = only(x for x in MTKB.parameters(sys) if Symbol(x) === :T)
-        @test MTKB.getbounds(λs) == (0, 5) && MTKB.getdescription(λs) == "volume strength" && !MTKB.istunable(Ts)
+        @test MTKB.getbounds(λs) == (0, 5) &&
+            MTKB.getdescription(λs) == "volume strength" && !MTKB.istunable(Ts)
         @test occursin("λ (\"volume strength\")", sprint(show, MIME"text/plain"(), sys))
-        # `bounds`: refused at build, by `remake`, `setp`, `integ.ps`, `replace`; nothing changes
+        # `bounds`: refused at build, by `remake`, `setp`, `integ.ps`, `replace`; nothing
+        # changes
         bound(e) = occursin("bounds", e)
         @test bound(emsg(() -> PottsProblem(sys, [op; :λ => 7.0], (0, 2))))
         @test bound(emsg(() -> Potts.SciMLBase.remake(prob; p = [:λ => 7.0])))
         integ = init(prob, SequentialCPM())
-        @test bound(emsg(() -> setp(integ, :λ)(integ, 7.0))) && getp(integ, :λ)(integ) == 2.0
+        @test bound(emsg(() -> setp(integ, :λ)(integ, 7.0))) &&
+            getp(integ, :λ)(integ) == 2.0
         @test bound(emsg(() -> (integ.ps[:λ] = 7.0))) && integ.ps[:λ] == 2.0
-        @test bound(emsg(() -> setp(integ, [:V₀, :λ])(integ, [4.0, 7.0]))) && integ.ps[:V₀] == 9.0   # a list: none set
+        @test bound(emsg(() -> setp(integ, [:V₀, :λ])(integ, [4.0, 7.0]))) &&
+            integ.ps[:V₀] == 9.0   # a list: none set
         @test bound(emsg(() -> SS.replace(SS.Tunable(), prob.p, [7.0, 9.0])))
-        @test occursin("bounds", emsg(() -> WithMeta(; name = :m, λ = -1.0) |> m -> PottsProblem(m, op, (0, 2))))
+        @test occursin(
+            "bounds",
+            emsg(() -> WithMeta(; name = :m, λ = -1.0) |> m -> PottsProblem(m, op, (0, 2)))
+        )
         integ.ps[:λ] = 5.0
         @test integ.ps[:λ] == 5.0
         # options that are not MTK's are named
@@ -43,15 +55,24 @@
     end
 end
 
-@testitem "component bindings and initial values of parameters" setup = [MetadataSetup] tags = [:potts, :mtk_native] begin
+@testitem "component bindings and initial values of parameters" setup = [
+    MetadataSetup,
+] tags = [
+    :potts, :mtk_native,
+] begin
     @testset "component bindings and initial values of parameters" begin
         t = Potts.t
-        σ = zeros(Int32, 10, 10); σ[3:5, 3:5] .= 1
+        σ = zeros(Int32, 10, 10)
+        σ[3:5, 3:5] .= 1
         op = [ownership => σ, kind => [:A]]
         function run(sys; with_obs = false)
             return solve(
-                PottsProblem(BindParity(; name = :bp, comp_sys = sys, with_obs), op, (0, 2)),
-                SequentialCPM(),
+                PottsProblem(
+                    BindParity(; name = :bp, comp_sys = sys, with_obs), op, (
+                        0, 2,
+                    )
+                ),
+                SequentialCPM()
             )
         end
         MTKB.@parameters k = 0.3
@@ -63,34 +84,69 @@ end
         inline = run(MTKB.System([Potts.D(y) ~ -2k * y], t, [y], [k]; name = :comp))
         @test bound.u[end].cell.comp₊y == inline.u[end].cell.comp₊y ≈ [(1 - 0.6)^2]
         # a chain (`k3 = 3k2`), and the model reading `comp.k2`
-        chain = run(MTKB.System([Potts.D(y) ~ -k3 * y / 6], t, [y], [k, k2, k3]; name = :comp); with_obs = true)
-        @test chain.u[end].cell.comp₊y ≈ [(1 - 0.3)^2] && Potts.observe(chain, :ok2)[end][1] ≈ 0.6
+        chain = run(
+            MTKB.System(
+                [Potts.D(y) ~ -k3 * y / 6], t, [y], [k, k2, k3]; name = :comp
+            ); with_obs = true
+        )
+        @test chain.u[end].cell.comp₊y ≈ [(1 - 0.3)^2] &&
+            Potts.observe(chain, :ok2)[end][1] ≈ 0.6
         # an initial value of parameters (`z(t) = 2k`) and the same as `initial_conditions`
         s = run(MTKB.System([Potts.D(z) ~ -k * z], t, [z], [k]; name = :comp))
         @test s.u[1].cell.comp₊z ≈ [0.6] && s.u[end].cell.comp₊z ≈ [0.6 * 0.7^2]
         MTKB.@variables w(t)
-        s = run(MTKB.System([Potts.D(w) ~ -k * w], t, [w], [k]; name = :comp, initial_conditions = [w => 2k]))
+        s = run(
+            MTKB.System(
+                [Potts.D(w) ~ -k * w], t, [w], [k];
+                name = :comp, initial_conditions = [w => 2k]
+            )
+        )
         @test s.u[1].cell.comp₊w ≈ [0.6]
-        # negative control: an initial value that reads an unknown is still refused, naming it
+        # negative control: an initial value that reads an unknown is still refused, naming
+        # it
         MTKB.@variables o(t)
-        e = emsg(() -> run(MTKB.System([o ~ 2y, Potts.D(y) ~ -k * o], t; name = :comp, initial_conditions = [y => 2o])), Potts.PottsCompileError)
+        e = emsg(
+            () -> run(
+                MTKB.System(
+                    [o ~ 2y, Potts.D(y) ~ -k * o], t; name = :comp,
+                    initial_conditions = [y => 2o]
+                )
+            ),
+            Potts.PottsCompileError
+        )
         @test occursin("`comp`", e)
     end
 end
 
-@testitem "Foam has no computed parameter" setup = [MetadataSetup] tags = [:potts, :mtk_native] begin
+@testitem "Foam has no computed parameter" setup = [MetadataSetup] tags = [
+    :potts,
+    :mtk_native,
+] begin
     @testset "Foam has no computed parameter" begin
-        c = Potts.ModelingToolkitBase.mtkcompile(ShearedFoam(; name = :f, lattice = (32, 32)))
+        c = Potts.ModelingToolkitBase.mtkcompile(
+            ShearedFoam(;
+                name = :f, lattice = (
+                    32, 32,
+                )
+            )
+        )
         @test isempty(Potts._computed_params(Potts._p(getfield(c, :sys), :parameters)))
     end
 end
 
-@testitem "routes and messages of computed parameters" setup = [MetadataSetup] tags = [:potts, :mtk_native] begin
+@testitem "routes and messages of computed parameters" setup = [MetadataSetup] tags = [
+    :potts, :mtk_native,
+] begin
     @testset "routes and messages of computed parameters" begin
-        σ = zeros(Int32, 12, 12); σ[2:5, 2:5] .= 1
+        σ = zeros(Int32, 12, 12)
+        σ[2:5, 2:5] .= 1
         prob = PottsProblem(BoundChain(; name = :b), [ownership => σ, kind => [1]], (0, 2))
         e = emsg(() -> Potts.SciMLBase.remake(prob; p = [:α => 1.0]))
-        @test occursin("parameter `γ` = 2.05 is outside its declared bounds (0, 1): `γ` is computed from `α`", e) &&
+        @test occursin(
+            "parameter `γ` = 2.05 is outside its declared bounds (0, 1): `γ` is computed \
+                from `α`",
+            e
+        ) &&
             occursin("set `α`", e)
         ig = init(prob, SequentialCPM())
         e = emsg(() -> (ig[:β] = 1.0))
@@ -102,10 +158,15 @@ end
         MTKB.@variables y(t) = 1.0
         pb = compmodel(MTKB.System([Potts.D(y) ~ -k2 * y], t, [y], [k, k2]; name = :comp))
         e = emsg(() -> Potts.SciMLBase.remake(pb; p = [:comp₊k2 => 1.0]))
-        @test occursin("`comp₊k2` is computed from `comp₊k`", e) && occursin("give `k2` a number in `comp`'s parameters", e)
+        @test occursin("`comp₊k2` is computed from `comp₊k`", e) &&
+            occursin("give `k2` a number in `comp`'s parameters", e)
         MTKB.@parameters k2n = 1.0
         pr = compmodel(MTKB.System([Potts.D(y) ~ -k2n * y], t, [y], [k, k2n]; name = :comp))
-        @test getp(Potts.SciMLBase.remake(pr; p = [:comp₊k2n => 0.5]), :comp₊k2n)(Potts.SciMLBase.remake(pr; p = [:comp₊k2n => 0.5])) == 0.5
+        @test getp(Potts.SciMLBase.remake(pr; p = [:comp₊k2n => 0.5]), :comp₊k2n)(
+            Potts.SciMLBase.remake(
+                pr; p = [:comp₊k2n => 0.5]
+            )
+        ) == 0.5
         kk = MTKB.ShiftIndex(t, 0)
         MTKB.@parameters s::Bool = false
         MTKB.@parameters s2::Bool = !s

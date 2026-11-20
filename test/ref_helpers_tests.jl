@@ -7,23 +7,31 @@ using Potts: CorePotts
 isdefined(@__MODULE__, :PottsDevices) || include(joinpath(@__DIR__, "shared", "devices.jl"))
 using Potts: CorePotts
 
-
 # the field models' PDESystems: the CPM terms are bound inputs
 isdefined(@__MODULE__, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
 
 module RhPDE
     using ..FieldPDE
     @variables qf(..) qin(..) [input = true]
-    source() = (Q = qf(t, x, y); pdesys([Dt(Q) ~ qin(t, x, y)], [qf(0, x, y) ~ 0.0], (20, 12), [Q, qin(t, x, y)]))
+    function source()
+        Q = qf(t, x, y)
+        return pdesys(
+            [Dt(Q) ~ qin(t, x, y)], [qf(0, x, y) ~ 0.0], (20, 12),
+            [Q, qin(t, x, y)]
+        )
+    end
 end
-
 
 # --- Pairs: the same generated code (fingerprint) as the written-out matrix ---------------
 @potts_model RHPairs begin
     @kinds medium ka kb
     @parameters begin
         Jab = 5.0
-        J[kind, kind] = Pairs(default = 0.0, (medium, ka) => 12, (medium, kb) => 14.0, (ka, kb) => Jab)
+        J[kind, kind] = Pairs(
+            default = 0.0, (medium, ka) => 12, (medium, kb) => 14.0, (
+                ka, kb,
+            ) => Jab
+        )
     end
     @lattice Lattice((10, 10); boundary = Closed(), neighborhood = Moore(1))
     @energy begin
@@ -54,8 +62,8 @@ function rh_pairs_op()
     return [ownership => σ, kind => [:ka, :kb]]
 end
 
-
-# --- the reference helpers in further forms -------------------------------------------------
+# --- the reference helpers in further forms
+# -------------------------------------------------
 @potts_model RHE7Case begin
     @structural_parameters begin
         hex = false
@@ -100,13 +108,15 @@ function rh_build_error(; hex = false, mode = :ok)
     σ[2, 2] = 1
     σ[5, 5] = 2
     try
-        PottsProblem(RHE7Case(; name = :b, hex, mode), [ownership => σ, kind => [:ka, :ka], :partner => [2, 1]], (0, 1))
+        PottsProblem(
+            RHE7Case(; name = :b, hex, mode),
+            [ownership => σ, kind => [:ka, :ka], :partner => [2, 1]], (0, 1)
+        )
         return nothing
     catch e
         return e isa LoadError ? e.error : e
     end
 end
-
 
 @potts_model RHDead begin
     @kinds medium ka
@@ -122,8 +132,8 @@ end
     @sweep Metropolis(; temperature = 1.0)
 end
 
-
-# --- on the device: the helpers inside the after-MCS kernels, square and hexagonal ---------
+# --- on the device: the helpers inside the after-MCS kernels, square and hexagonal
+# ---------
 @potts_model RHDevice begin
     @kinds medium ka kb
     @variables begin
@@ -161,22 +171,32 @@ function rh_device_problem(hex; T = Float64)
     σ[2:3, 1:3] .= 2
     σ[8:9, 8:10] .= 3
     return PottsProblem(
-        RHDevice(; name = :dv, geom = hex ? Hexagonal() : Square(), nbh = hex ? Hex(1) : Moore(1)), [
+        RHDevice(;
+            name = :dv, geom = hex ? Hexagonal() : Square(), nbh = if hex
+                Hex(1)
+            else
+                Moore(1)
+            end
+        ), [
             ownership => σ, kind => [:ka, :kb, :ka], cluster => [1, 1, 3],
             :partner => [2, 1, 1],
-        ], (0, 3); seed = 2, T
+        ],
+        (0, 3);
+        seed = 2,
+        T
     )
 end
 
-
-# --- between-sweep site scope (the Fortuna model's forms): a @convert gate, a field equation, site updates
-# Sketch 14c's gate Q = minimum_image(position[1] − centroid(sibling(owner, cytoplasm), 1), 1)
-# (14_nucleus_migration.md) with a `separation` factor S. Fixture on 20 × 12, axis 1 periodic:
-# cytoplasm 1 across the seam (x ∈ {18, 19, 20, 1, 2, 3}, y 3:4), centroid x 20.5; nucleus 2
-# at (4, 8) (or at (17, 8), the negative control), cluster 1. So Q(x) = −2.5, −1.5, −0.5, 0.5,
+# --- between-sweep site scope (the Fortuna model's forms): a @convert gate, a field
+# equation, site updates Sketch 14c's gate Q = minimum_image(position[1] −
+# centroid(sibling(owner, cytoplasm), 1), 1) (14_nucleus_migration.md) with a `separation`
+# factor S. Fixture on 20 × 12, axis 1 periodic: cytoplasm 1 across the seam (x ∈ {18, 19,
+# 20, 1, 2, 3}, y 3:4), centroid x 20.5; nucleus 2 at (4, 8) (or at (17, 8), the negative
+# control), cluster 1. So Q(x) = −2.5, −1.5, −0.5, 0.5,
 # 1.5, 2.5 for x = 18, 19, 20, 1, 2, 3 (unwrapped, x = 1, 2, 3 would give −19.5, −18.5,
 # −17.5) and S = minimum_image(4 − 20.5) = 3.5 (17 − 20.5 = −3.5 for the control). The
-# energy holds every volume at its target (λ = 10⁶, T = 0.01), so σ stays put through the sweep.
+# energy holds every volume at its target (λ = 10⁶, T = 0.01), so σ stays put through the
+# sweep.
 @potts_model RHConvQ begin
     @kinds medium cytoplasm nucleus lamellipodium
     @variables begin
@@ -232,7 +252,12 @@ function rh_q_sigma(nx)
     return σ
 end
 
-rh_q_op(nx) = [ownership => rh_q_sigma(nx), kind => [:cytoplasm, :nucleus], cluster => [1, 1], :V_target => [12.0, 1.0]]
+function rh_q_op(nx)
+    return [
+        ownership => rh_q_sigma(nx), kind => [:cytoplasm, :nucleus],
+        cluster => [1, 1], :V_target => [12.0, 1.0],
+    ]
+end
 
 function rh_conv_problem(nx; T = Float64)
     return PottsProblem(
@@ -261,15 +286,15 @@ end
 function rh_conv_check(u, nx; converted)
     σ = Array(u.ownership)
     want = rh_q_sigma(nx)
-    converted && (want[1:3, 3:4] .= 3)                         # slot 3, the allocated lamellipodium
+    # slot 3, the allocated lamellipodium
+    converted && (want[1:3, 3:4] .= 3)
     return (σ == want, Array(u.model.nconv)[1], Array(u.cell.kind)[3])
 end
 
-
 # --- review regressions -----------------------------------------------------------
 # A model whose only cluster read is `integral(x; over = cluster)` keeps the cluster column:
-# with `cluster => [1, 1]` both cells read V₁² + V₂² = 4² + 2² = 20; without it each cell is its
-# own cluster (16, 4). The energy holds the volumes (λ = 10⁶, T = 0.01).
+# with `cluster => [1, 1]` both cells read V₁² + V₂² = 4² + 2² = 20; without it each cell is
+# its own cluster (16, 4). The energy holds the volumes (λ = 10⁶, T = 0.01).
 @potts_model RHOverOnly begin
     @kinds medium ka
     @variables a1(cell) = 0.0
@@ -285,7 +310,6 @@ function rh_over_sigma()
     σ[7, 7:8] .= 2
     return σ
 end
-
 
 # axis and hexagonal refusals in every context: @convert `at`, `p` and writes, the sweep
 # temperature (each built to the problem, so a refusal at either stage counts)
@@ -388,17 +412,21 @@ rh_msg(e, s) = e isa Potts.PottsCompileError && occursin(s, sprint(showerror, e)
     @sweep Metropolis(; temperature = 1.0)
 end
 
-
-# A masked condition of a coupled PDESystem (once a site mask of the removed `@boundary` section) is lowered in
-# site scope at the field step: when it is the model's only centroid read, the moment trackers
-# must still be allocated (re-review of 20b9a546). Two 3 × 3 cells held in place (λ = 10⁶,
-# T = 0.01): cell 1 at x 5:7 (centroid 6), cell 2 at x 1:3 (centroid 2). The mask
-# `centroid(owner, 1) > 4` clamps c = 7 at cell 1's sites only; `D(c) ~ -c` from c = 0 leaves
-# every other site at 0.
+# A masked condition of a coupled PDESystem (once a site mask of the removed `@boundary`
+# section) is lowered in site scope at the field step: when it is the model's only centroid
+# read, the moment trackers must still be allocated (re-review of 20b9a546). Two 3 × 3 cells
+# held in place (λ = 10⁶, T = 0.01): cell 1 at x 5:7 (centroid 6), cell 2 at x 1:3 (centroid
+# 2). The mask `centroid(owner, 1) > 4` clamps c = 7 at cell 1's sites only; `D(c) ~ -c`
+# from c = 0 leaves every other site at 0.
 module RHMaskPDE
     using Potts.Fields
     @variables c(..) = 0.0 m(..)::Bool [input = true]
-    sys() = pdesystem([Differential(t)(c(t, x, y)) ~ -c(t, x, y)], [c(t, x, y) ~ masked(m(t, x, y), 7.0)]; name = :rhmask)
+    function sys()
+        return pdesystem(
+            [Differential(t)(c(t, x, y)) ~ -c(t, x, y)],
+            [c(t, x, y) ~ masked(m(t, x, y), 7.0)]; name = :rhmask
+        )
+    end
 end
 
 @potts_model RHMaskCentroid begin
@@ -425,22 +453,31 @@ end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "Pairs: the matrix form's parameters and generated code" setup = [RefHelpersSetup] tags = [:potts, :ref_helpers] begin
+@testitem "Pairs: the matrix form's parameters and generated code" setup = [
+    RefHelpersSetup,
+] tags = [
+    :potts, :ref_helpers,
+] begin
     @testset "Pairs: the matrix form's parameters and generated code" begin
         pp = PottsProblem(RHPairs(; name = :r), rh_pairs_op(), (0, 2))
         pm = PottsProblem(RHMatrix(; name = :r), rh_pairs_op(), (0, 2))
         @test pp.p == pm.p && typeof(pp.p) == typeof(pm.p)
-        @test pp.f.fingerprint == pm.f.fingerprint                 # zero cost: the same code
+        # zero cost: the same code
+        @test pp.f.fingerprint == pm.f.fingerprint
         @test getp(pp, :J)(pp) == [0 12 14; 12 0 5; 14 5 0]
-        # negative control: another value of the parameter entry changes the table, on both sides
+        # negative control: another value of the parameter entry changes the table, on both
+        # sides
         pr = remake(pp; p = [:Jab => 1.5])
         @test getp(pr, :J)(pr)[2, 3] == 1.5 && getp(pr, :J)(pr)[3, 2] == 1.5 && pr.p != pp.p
     end
 end
 
-@testitem "Pairs: refusals and the runtime checks" setup = [RefHelpersSetup] tags = [:potts, :ref_helpers] begin
+@testitem "Pairs: refusals and the runtime checks" setup = [RefHelpersSetup] tags = [
+    :potts, :ref_helpers,
+] begin
     @testset "Pairs: refusals and the runtime checks" begin
-        # a kind class as a key, and a missing default (both open in D-243: refused at macro expansion)
+        # a kind class as a key, and a missing default (both open in D-243: refused at macro
+        # expansion)
         e = try
             macroexpand(
                 @__MODULE__, :(
@@ -451,8 +488,14 @@ end
                             kb
                             both = (ka, kb)
                         end
-                        @parameters J[kind, kind] = Pairs(default = 0.0, (medium, both) => 1.0)
-                        @lattice Lattice((6, 6); boundary = Closed(), neighborhood = Moore(1))
+                        @parameters J[kind, kind] = Pairs(
+                            default = 0.0, (medium, both) =>
+                                1.0
+                        )
+                        @lattice Lattice(
+                            (6, 6); boundary = Closed(),
+                            neighborhood = Moore(1)
+                        )
                         @energy contacts => J[kind, neighbor_kind]
                         @sweep Metropolis(; temperature = 1.0)
                     end
@@ -465,17 +508,28 @@ end
         @test e isa ArgumentError
         @test_throws ArgumentError Potts.DSL.Pairs((0, 1) => 1.0)
         @test_throws ArgumentError Potts.DSL.Pairs(1.0; default = 0.0)
-        # the matrix the macro lowers to: symmetric fill, the default, a repeated pair by number
+        # the matrix the macro lowers to: symmetric fill, the default, a repeated pair by
+        # number
         t = Potts.DSL.Pairs((0, 1) => 2, (1, 1) => 3.5; default = 0.0)
         @test Potts._pairs_matrix(t, 2, :J) == [0.0 2.0; 2.0 3.5]
         @test Potts._pairs_matrix(t, 2, :J) isa Matrix{Float64}
-        @test_throws ArgumentError Potts._pairs_matrix(Potts.DSL.Pairs((0, 1) => 1, (1, 0) => 1; default = 0), 2, :J)
-        @test Potts._pairs_matrix(Potts.DSL.Pairs((0, 1) => 1, (1, 0) => 2; default = 0, symmetric = false), 2, :J) == [0 1; 2 0]
-        @test_throws ArgumentError Potts._pairs_matrix(Potts.DSL.Pairs((0, 5) => 1; default = 0), 2, :J)   # not a kind
+        @test_throws ArgumentError Potts._pairs_matrix(
+            Potts.DSL.Pairs((0, 1) => 1, (1, 0) => 1; default = 0), 2, :J
+        )
+        @test Potts._pairs_matrix(
+            Potts.DSL.Pairs((0, 1) => 1, (1, 0) => 2; default = 0, symmetric = false),
+            2, :J
+        ) == [0 1; 2 0]
+        # not a kind
+        @test_throws ArgumentError Potts._pairs_matrix(
+            Potts.DSL.Pairs((0, 5) => 1; default = 0), 2, :J
+        )
     end
 end
 
-@testitem "E7 helpers: copy-scope and hexagonal refusals" setup = [RefHelpersSetup] tags = [:potts, :ref_helpers] begin
+@testitem "E7 helpers: copy-scope and hexagonal refusals" setup = [RefHelpersSetup] tags = [
+    :potts, :ref_helpers,
+] begin
     @testset "E7 helpers: copy-scope and hexagonal refusals" begin
         # control: the template builds
         @test rh_build_error(; hex = false, mode = :ok) === nothing
@@ -486,40 +540,56 @@ end
         @test e isa Potts.PottsCompileError
         # minimum_image is a pure function: allowed in a drive (control)
         @test rh_build_error(; hex = false, mode = :drive_m) === nothing
-        # on a hexagonal lattice minimum_image is refused (D-243 open: use separation), separation is not
+        # on a hexagonal lattice minimum_image is refused (D-243 open: use separation),
+        # separation is not
         e = rh_build_error(; hex = true, mode = :hex_m)
         @test e isa Potts.PottsCompileError
         @test rh_build_error(; hex = true, mode = :hex_s) === nothing
     end
 end
 
-@testitem "E7 helpers: a reference 0, no clusters" setup = [RefHelpersSetup] tags = [:potts, :ref_helpers] begin
+@testitem "E7 helpers: a reference 0, no clusters" setup = [RefHelpersSetup] tags = [
+    :potts, :ref_helpers,
+] begin
     @testset "E7 helpers: a reference 0, no clusters" begin
         σ = zeros(Int32, 8, 8)
         σ[2, 2] = 1
         σ[6, 3:4] .= 2
-        prob = PottsProblem(RHDead(; name = :d), [ownership => σ, kind => [:ka, :ka], :partner => [2, 0]], (0, 1))
+        prob = PottsProblem(
+            RHDead(; name = :d),
+            [ownership => σ, kind => [:ka, :ka], :partner => [2, 0]], (0, 1)
+        )
         u = prob.u0
-        @test observe(prob, :sx, u)[1:2] == [-4.0, 0.0]            # an alive pair; the reference 0 reads 0
+        # an alive pair; the reference 0 reads 0
+        @test observe(prob, :sx, u)[1:2] == [-4.0, 0.0]
         @test observe(prob, :cx, u)[1:2] == [6.0, 0.0]
         # without a cluster column every cell is its own cluster: over = cluster is integral
-        @test observe(prob, :iv, u)[1:2] == [1.0, 4.0]             # Σ V over own sites: 1·1, 2·2
-        @test observe(prob, :ii, u)[1:2] == [1.0, 2.0]             # control: the plain integral (cell volume)
+        # Σ V over own sites: 1·1, 2·2
+        @test observe(prob, :iv, u)[1:2] == [1.0, 4.0]
+        # control: the plain integral (cell volume)
+        @test observe(prob, :ii, u)[1:2] == [1.0, 2.0]
     end
 end
 
-@testitem "minimum_image: the scalar wrap on CPU types" setup = [RefHelpersSetup] tags = [:potts, :ref_helpers] begin
+@testitem "minimum_image: the scalar wrap on CPU types" setup = [RefHelpersSetup] tags = [
+    :potts, :ref_helpers,
+] begin
     @testset "minimum_image: the scalar wrap on CPU types" begin
         lat = CorePotts.Lattice((20, 12); boundary = (Periodic(), Closed()))
         @test Potts._minimum_image_axis(Float32, lat, 13.75f0, 1) === -6.25f0
-        @test Potts._minimum_image_axis(Float32, lat, 10.0f0, 1) === 10.0f0             # a tie keeps d
+        # a tie keeps d
+        @test Potts._minimum_image_axis(Float32, lat, 10.0f0, 1) === 10.0f0
         @test Potts._minimum_image_axis(Float32, lat, -10.0f0, 1) === -10.0f0
-        @test Potts._minimum_image_axis(Float32, lat, 13.75f0, 2) === 13.75f0           # closed axis
-        @test Potts._minimum_image_axis(Float32, lat, 3, 1) === 3.0f0                   # an integer in T
+        # closed axis
+        @test Potts._minimum_image_axis(Float32, lat, 13.75f0, 2) === 13.75f0
+        # an integer in T
+        @test Potts._minimum_image_axis(Float32, lat, 3, 1) === 3.0f0
     end
 end
 
-@testitem "E7 helpers on the device (PottsDevices)" setup = [RefHelpersSetup] tags = [:potts, :ref_helpers, :device] begin
+@testitem "E7 helpers on the device (PottsDevices)" setup = [RefHelpersSetup] tags = [
+    :potts, :ref_helpers, :device,
+] begin
     @testset "E7 helpers on the device (PottsDevices)" begin
         if isdefined(@__MODULE__, :PottsDevices) && PottsDevices.on_device()
             backend = PottsDevices.device_backend()
@@ -528,13 +598,18 @@ end
                 sol = solve(prob, CheckerboardCPM(); backend, saveat = 1)
                 @test Symbol(sol.retcode) === :Success
                 u = sol.u[end]
-                # the device's after-MCS writes against the host's evaluation on the same state
+                # the device's after-MCS writes against the host's evaluation on the same
+                # state
                 alive = findall(>(0), Array(u.cell.volume))
                 @test length(alive) == 3
                 for (col, ob) in ((:wc, :oc), (:ws, :os), (:wi, :oi))
-                    @test isapprox(Array(getfield(u.cell, col))[alive], observe(prob, ob, u)[alive]; atol = 1.0e-3)
+                    @test isapprox(
+                        Array(getfield(u.cell, col))[alive],
+                        observe(prob, ob, u)[alive]; atol = 1.0e-3
+                    )
                 end
-                @test all(>(0), Array(u.cell.ws)[alive])           # control: the pair is apart, the norm is read
+                # control: the pair is apart, the norm is read
+                @test all(>(0), Array(u.cell.ws)[alive])
             end
         else
             @test_skip "device (POTTS_GPU=metal|rocm)"
@@ -542,12 +617,17 @@ end
     end
 end
 
-@testitem "E7 helpers in a @convert gate (sketch 14c's Q)" setup = [RefHelpersSetup] tags = [:potts, :ref_helpers] begin
+@testitem "E7 helpers in a @convert gate (sketch 14c's Q)" setup = [
+    RefHelpersSetup,
+] tags = [
+    :potts, :ref_helpers,
+] begin
     @testset "E7 helpers in a @convert gate (sketch 14c's Q)" begin
         sol = solve(rh_conv_problem(4), SequentialCPM())
         @test Symbol(sol.retcode) === :Success
         ok, n, k3 = rh_conv_check(sol.u[end], 4; converted = true)
-        @test ok && n == 6 && k3 == 3                              # 6 sites with Q > 0, converted to a lamellipodium
+        # 6 sites with Q > 0, converted to a lamellipodium
+        @test ok && n == 6 && k3 == 3
         # negative control: S < 0 (the nucleus at x = 17) gates every candidate off
         sol = solve(rh_conv_problem(17), SequentialCPM())
         ok, n, _ = rh_conv_check(sol.u[end], 17; converted = false)
@@ -555,24 +635,37 @@ end
     end
 end
 
-@testitem "E7 helpers in a field equation, a site update and a site @observed" setup = [RefHelpersSetup] tags = [:potts, :ref_helpers] begin
+@testitem "E7 helpers in a field equation, a site update and a site @observed" setup = [
+    RefHelpersSetup,
+] tags = [
+    :potts, :ref_helpers,
+] begin
     @testset "E7 helpers in a field equation, a site update and a site @observed" begin
         prob = rh_field_problem(4)
         u = solve(prob, SequentialCPM()).u[end]
-        @test Array(u.ownership) == rh_q_sigma(4)                          # control: σ held through the sweep
+        # control: σ held through the sweep
+        @test Array(u.ownership) == rh_q_sigma(4)
         o = rh_q_oracle(3.5)
-        @test Array(u.site.qs) == o                                # the after-MCS site update
-        @test observe(prob, :oq, u) == o                           # the site-scope observed quantity
-        @test isapprox(Array(u.site.qf), o; atol = 1.0e-12)          # one explicit Euler step of length 1 from 0
-        @test Array(u.cell.qc)[1:2] == [-3.5, 0.0]                 # the cell update (14b's Πx form): wrap(20.5 − 4)
+        # the after-MCS site update
+        @test Array(u.site.qs) == o
+        # the site-scope observed quantity
+        @test observe(prob, :oq, u) == o
+        # one explicit Euler step of length 1 from 0
+        @test isapprox(Array(u.site.qf), o; atol = 1.0e-12)
+        # the cell update (14b's Πx form): wrap(20.5 − 4)
+        @test Array(u.cell.qc)[1:2] == [-3.5, 0.0]
         # negative control: another nucleus position changes S, and so every value
         u17 = solve(rh_field_problem(17), SequentialCPM()).u[end]
         @test Array(u17.site.qs) == rh_q_oracle(-3.5) && Array(u17.site.qs) != o
     end
 end
 
-@testitem "E7 helpers in a @convert gate and a field equation on the device (PottsDevices)" setup = [RefHelpersSetup] tags = [:potts, :ref_helpers, :device] begin
-    @testset "E7 helpers in a @convert gate and a field equation on the device (PottsDevices)" begin
+@testitem "E7 helpers in a @convert gate and a field equation on the device \
+    (PottsDevices)" setup = [RefHelpersSetup] tags = [
+    :potts, :ref_helpers, :device,
+] begin
+    @testset "E7 helpers in a @convert gate and a field equation on the device \
+        (PottsDevices)" begin
         if isdefined(@__MODULE__, :PottsDevices) && PottsDevices.on_device()
             backend = PottsDevices.device_backend()
             alg = CheckerboardCPM()
@@ -580,11 +673,15 @@ end
             @test Symbol(sol.retcode) === :Success
             ok, n, k3 = rh_conv_check(sol.u[end], 4; converted = true)
             @test ok && n == 6 && k3 == 3
-            ok, n, _ = rh_conv_check(solve(rh_conv_problem(17; T = Float32), alg; backend).u[end], 17; converted = false)
+            ok, n, _ = rh_conv_check(
+                solve(rh_conv_problem(17; T = Float32), alg; backend).u[end],
+                17; converted = false
+            )
             @test ok && n == 0
             u = solve(rh_field_problem(4; T = Float32), alg; backend).u[end]
             @test Array(u.ownership) == rh_q_sigma(4)
-            @test Array(u.site.qs) == Float32.(rh_q_oracle(3.5))      # dyadic values: exact in Float32
+            # dyadic values: exact in Float32
+            @test Array(u.site.qs) == Float32.(rh_q_oracle(3.5))
             @test Array(u.site.qf) == Float32.(rh_q_oracle(3.5))
             @test Array(u.cell.qc)[1:2] == Float32[-3.5, 0.0]
         else
@@ -593,49 +690,85 @@ end
     end
 end
 
-@testitem "integral(x; over = cluster) as a model's only cluster read" setup = [RefHelpersSetup] tags = [:potts, :ref_helpers] begin
+@testitem "integral(x; over = cluster) as a model's only cluster read" setup = [
+    RefHelpersSetup,
+] tags = [
+    :potts, :ref_helpers,
+] begin
     @testset "integral(x; over = cluster) as a model's only cluster read" begin
-        p = PottsProblem(RHOverOnly(; name = :o), [ownership => rh_over_sigma(), kind => [:ka, :ka], cluster => [1, 1]], (0, 1))
+        p = PottsProblem(
+            RHOverOnly(; name = :o),
+            [ownership => rh_over_sigma(), kind => [:ka, :ka], cluster => [1, 1]], (0, 1)
+        )
         @test hasproperty(p.u0.cell, :cluster)
         @test Array(solve(p, SequentialCPM()).u[end].cell.a1)[1:2] == [20.0, 20.0]
-        q = PottsProblem(RHOverOnly(; name = :o), [ownership => rh_over_sigma(), kind => [:ka, :ka]], (0, 1))
-        @test Array(solve(q, SequentialCPM()).u[end].cell.a1)[1:2] == [16.0, 4.0]     # control: one cluster each
+        q = PottsProblem(
+            RHOverOnly(; name = :o), [
+                ownership => rh_over_sigma(), kind => [:ka, :ka],
+            ], (0, 1)
+        )
+        # control: one cluster each
+        @test Array(solve(q, SequentialCPM()).u[end].cell.a1)[1:2] == [16.0, 4.0]
     end
 end
 
-@testitem "_over_cluster: a dead or out-of-range slot reads 0" setup = [RefHelpersSetup] tags = [:potts, :ref_helpers] begin
+@testitem "_over_cluster: a dead or out-of-range slot reads 0" setup = [
+    RefHelpersSetup,
+] tags = [
+    :potts, :ref_helpers,
+] begin
     @testset "_over_cluster: a dead or out-of-range slot reads 0" begin
         cell = (; volume = Int32[2, 0, 1, 3], cluster = Int32[1, 1, 1, 4])
         col = [1.0, 5.0, 2.0, 7.0]
-        @test Potts._over_cluster(cell, col, 1) == 3.0              # alive members 1 and 3; dead 2 left out
+        # alive members 1 and 3; dead 2 left out
+        @test Potts._over_cluster(cell, col, 1) == 3.0
         @test Potts._over_cluster(cell, col, 3) == 3.0
-        @test Potts._over_cluster(cell, col, 2) == 0.0              # dead slot: 0, not its cluster's total
-        @test Potts._over_cluster(cell, col, 0) == 0.0 && Potts._over_cluster(cell, col, 5) == 0.0
-        @test Potts._over_cluster((; volume = Int32[2, 0]), [1.5, 9.0], 1) == 1.5   # no clusters: the cell's own
+        # dead slot: 0, not its cluster's total
+        @test Potts._over_cluster(cell, col, 2) == 0.0
+        @test Potts._over_cluster(cell, col, 0) == 0.0 &&
+            Potts._over_cluster(cell, col, 5) == 0.0
+        # no clusters: the cell's own
+        @test Potts._over_cluster((; volume = Int32[2, 0]), [1.5, 9.0], 1) == 1.5
     end
 end
 
-@testitem "E7 helper axes and the hexagonal refusal in every context" setup = [RefHelpersSetup] tags = [:potts, :ref_helpers] begin
+@testitem "E7 helper axes and the hexagonal refusal in every context" setup = [
+    RefHelpersSetup,
+] tags = [
+    :potts, :ref_helpers,
+] begin
     @testset "E7 helper axes and the hexagonal refusal in every context" begin
-        @test rh_ctx_error(; mode = :ctrl_at) === nothing                                           # control
+        # control
+        @test rh_ctx_error(; mode = :ctrl_at) === nothing
         @test rh_msg(rh_ctx_error(; mode = :bad_at_axis), "minimum_image")
         @test rh_msg(rh_ctx_error(; mode = :bad_p_mi_axis), "minimum_image")
         @test rh_msg(rh_ctx_error(; mode = :bad_w_mi_axis), "minimum_image")
         @test rh_msg(rh_ctx_error(; mode = :bad_p_cent_axis), "centroid")
         @test rh_msg(rh_ctx_error(; hex = true, mode = :hex_p_mi), "minimum_image")
-        @test rh_ctx_error(; hex = true, mode = :hex_p_sep) === nothing                             # control: separation on hex
-        @test rh_msg(rh_ctx_error(; mode = :bad_temp_axis, clusters = false), "minimum_image")
-        @test rh_ctx_error(; mode = :ctrl_temp, clusters = false) === nothing                       # control
+        # control: separation on hex
+        @test rh_ctx_error(; hex = true, mode = :hex_p_sep) === nothing
+        @test rh_msg(
+            rh_ctx_error(; mode = :bad_temp_axis, clusters = false),
+            "minimum_image"
+        )
+        # control
+        @test rh_ctx_error(; mode = :ctrl_temp, clusters = false) === nothing
     end
 end
 
-@testitem "centroid(c, k) in a masked condition (the only centroid read)" setup = [RefHelpersSetup] tags = [:potts, :ref_helpers, :device] begin
+@testitem "centroid(c, k) in a masked condition (the only centroid read)" setup = [
+    RefHelpersSetup,
+] tags = [
+    :potts, :ref_helpers, :device,
+] begin
     @testset "centroid(c, k) in a masked condition (the only centroid read)" begin
         prob = rh_mask_problem()
-        @test hasproperty(prob.u0.cell, :anchor)                   # the moment trackers are allocated
+        # the moment trackers are allocated
+        @test hasproperty(prob.u0.cell, :anchor)
         u = solve(prob, SequentialCPM()).u[end]
         @test Array(u.ownership) == rh_mask_sigma()                        # control: σ held
-        @test Array(u.site.c) == 7.0 .* (rh_mask_sigma() .== 1)    # cell 1 clamped; cell 2 (centroid 2) and the medium not
+        # cell 1 clamped; cell 2 (centroid 2) and the medium not
+        @test Array(u.site.c) == 7.0 .* (rh_mask_sigma() .== 1)
         if isdefined(@__MODULE__, :PottsDevices) && PottsDevices.on_device()
             backend = PottsDevices.device_backend()
             ud = solve(rh_mask_problem(; T = Float32), CheckerboardCPM(); backend).u[end]
@@ -644,10 +777,16 @@ end
     end
 end
 
-@testitem "a geometry helper in a default value is a clear ArgumentError" setup = [RefHelpersSetup] tags = [:potts, :ref_helpers] begin
+@testitem "a geometry helper in a default value is a clear ArgumentError" setup = [
+    RefHelpersSetup,
+] tags = [
+    :potts, :ref_helpers,
+] begin
     @testset "a geometry helper in a default value is a clear ArgumentError" begin
         σ = zeros(Int32, 6, 6)
         σ[2:3, 2:3] .= 1
-        @test_throws ArgumentError PottsProblem(RHDefaultMI(; name = :d), [ownership => σ, kind => [:ka]], (0, 1))
+        @test_throws ArgumentError PottsProblem(
+            RHDefaultMI(; name = :d), [ownership => σ, kind => [:ka]], (0, 1)
+        )
     end
 end

@@ -1,4 +1,5 @@
-# Shared test setups for MTK-native symbols, SciMLStructures and F2 metadata/computed parameters.
+# Shared test setups for MTK-native symbols, SciMLStructures and F2 metadata/computed
+# parameters.
 
 @testsetup module MTKNativeTests
 using Potts, Test
@@ -29,7 +30,6 @@ _strip_ast(xs::AbstractVector) = map(_strip_ast, xs)
 _strip_ast(nt::NamedTuple) = NamedTuple{keys(nt)}(map(_strip_ast, values(nt)))
 _strip_ast(x) = x
 
-
 @potts_model MNModel begin
     @kinds medium tip stalk endothelial = (tip, stalk)
     @parameters begin
@@ -47,7 +47,6 @@ _strip_ast(x) = x
     @sweep Metropolis(; temperature = 2.0)
 end
 
-
 @potts_model MNScalarTable begin
     @kinds medium cell
     @parameters J[kind, kind] = 3.0
@@ -56,14 +55,12 @@ end
     @sweep Metropolis(; temperature = 1.0)
 end
 
-
 @potts_model MNEnergyIn begin
     @kinds medium tip stalk endothelial = (tip, stalk)
     @lattice Lattice((12, 12))
     @energy sites => 1.0 * (kind ∈ endothelial)
     @sweep Metropolis(; temperature = 2.0)
 end
-
 
 @potts_model MNIsMemberCase begin
     @structural_parameters mode = :ismember
@@ -83,7 +80,6 @@ end
     @sweep Metropolis(; temperature = 2.0)
 end
 
-
 # the field rates: the kind set is the binding of the input `e`
 isdefined(@__MODULE__, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
 
@@ -91,10 +87,20 @@ module MnPDE
     using ..FieldPDE
     @variables c(..) e(..)::Bool [input = true]
     const C, E = c(t, x, y), e(t, x, y)
-    reaction(k) = pdesys([Dt(C) ~ 0.1 * laplacian(C) - k * C * E], [c(0, x, y) ~ 0.0], (12, 12), [C, E])
-    diffusion() = pdesys([Dt(C) ~ 0.1 * E * laplacian(C)], [c(0, x, y) ~ 0.0], (12, 12), [C, E])
+    function reaction(k)
+        return pdesys(
+            [Dt(C) ~ 0.1 * laplacian(C) - k * C * E], [c(0, x, y) ~ 0.0], (12, 12), [
+                C, E,
+            ]
+        )
+    end
+    function diffusion()
+        return pdesys(
+            [Dt(C) ~ 0.1 * E * laplacian(C)], [c(0, x, y) ~ 0.0], (12, 12),
+            [C, E]
+        )
+    end
 end
-
 
 @potts_model MNFieldIsMemberCase begin
     @structural_parameters mode = :rx_im
@@ -117,14 +123,12 @@ end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-
 @testsetup module PottsParametersStructures
 using Potts, Test, PottsModels
 using Potts: CorePotts
 isdefined(@__MODULE__, :PottsDevices) || include(joinpath(@__DIR__, "shared", "devices.jl"))
 using SciMLStructures: SciMLStructures as SS
 using ForwardDiff: ForwardDiff
-
 
 @potts_model ComputedParams begin
     @kinds medium cell
@@ -138,7 +142,6 @@ using ForwardDiff: ForwardDiff
     @sweep Metropolis(; temperature = T)
 end
 
-
 @potts_model ComputedParams3 begin
     @kinds medium cell
     @parameters begin
@@ -150,7 +153,6 @@ end
     @lattice Lattice((12, 12))
     @sweep Metropolis(; temperature = T)
 end
-
 
 module DoubleFunction
     using Potts.Symbolics: Symbolics, @register_symbolic
@@ -188,7 +190,6 @@ end
     @sweep Metropolis(; temperature = T)
 end
 
-
 @potts_model ComputedSweep begin
     @structural_parameters begin
         s = 2
@@ -206,7 +207,6 @@ end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-
 @testsetup module MetadataSetup
 using Potts, Test, PottsModels
 using Potts: CorePotts
@@ -214,7 +214,6 @@ isdefined(@__MODULE__, :PottsDevices) || include(joinpath(@__DIR__, "shared", "d
 using SciMLStructures: SciMLStructures as SS
 using Potts.ModelingToolkitBase: ModelingToolkitBase as MTKB
 using Potts.SymbolicIndexingInterface: getp, setp
-
 
 @potts_model WithMeta begin
     @kinds medium cell
@@ -228,7 +227,6 @@ using Potts.SymbolicIndexingInterface: getp, setp
     @sweep Metropolis(; temperature = T)
 end
 
-
 @potts_model NoMeta begin
     @kinds medium cell
     @parameters begin
@@ -241,7 +239,6 @@ end
     @sweep Metropolis(; temperature = T)
 end
 
-
 @potts_model BoundChain begin
     @kinds medium cell
     @parameters begin
@@ -253,7 +250,6 @@ end
     @lattice Lattice((12, 12))
     @sweep Metropolis(; temperature = 1.0)
 end
-
 
 const _MN_DEFAULT_COMP = MTKB.System(Potts.Equation[], Potts.t; name = :comp)
 
@@ -281,15 +277,20 @@ end
     @sweep Metropolis(; temperature = 1.0e-6)
 end
 
-
 function compmodel(sys)
-    σ = zeros(Int32, 10, 10); σ[3:5, 3:5] .= 1
-    return PottsProblem(ComponentRoute(; name = :cr, comp_sys = sys), [ownership => σ, kind => [:A]], (0, 2))
+    σ = zeros(Int32, 10, 10)
+    σ[3:5, 3:5] .= 1
+    return PottsProblem(
+        ComponentRoute(; name = :cr, comp_sys = sys), [
+            ownership => σ, kind => [:A],
+        ], (0, 2)
+    )
 end
 
 function emsg(f, E::Type{<:Exception} = ArgumentError)
     return try
-        f(); ""
+        f()
+        ""
     catch e
         e isa E || return "wrong exception $(typeof(e)), expected $E"
         sprint(showerror, e)

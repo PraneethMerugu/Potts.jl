@@ -1,6 +1,10 @@
 # Split from test/symbolic_tests.jl
 
-@testitem "division rules are per kind; on-copy writes skip the medium" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+@testitem "division rules are per kind; on-copy writes skip the medium" setup = [
+    SymbolicSetup,
+] tags = [
+    :potts, :symbolic,
+] begin
     @testset "division rules are per kind; on-copy writes skip the medium" begin
         @potts_model TwoDivisions begin
             @kinds medium A B
@@ -15,7 +19,8 @@
             end
             @lattice Lattice((24, 24); neighborhood = Moore(1))
             @energy contacts => J[kind, neighbor_kind]
-            @on_copy y[new] ~ 1.0                     # new may be the medium: nothing to write
+            # new may be the medium: nothing to write
+            @on_copy y[new] ~ 1.0
             @divide cells(A) when = mcs == 0, m => Split()
             @divide cells(B) when = mcs == 1000, q => 0.0
             @constraint no_extinction
@@ -23,46 +28,82 @@
         end
 
         σ, kinds = two_kind_blocks()
-        prob = PottsProblem(TwoDivisions(; name = :td), [ownership => σ, kind => kinds], (0, 2))
-        u = solve(prob, SequentialCPM(; proposal = Moore(1))).u[end]      # retractions happen: no BoundsError
+        prob = PottsProblem(
+            TwoDivisions(; name = :td), [ownership => σ, kind => kinds], (
+                0, 2,
+            )
+        )
+        # retractions happen: no BoundsError
+        u = solve(prob, SequentialCPM(; proposal = Moore(1))).u[end]
         nA = count(==(1), kinds)
         @test count(>(0), u.cell.volume) == length(kinds) + nA
-        @test all(==(5.0), u.cell.q[u.cell.volume .> 0])                  # B's rule never ran on A cells
+        # B's rule never ran on A cells
+        @test all(==(5.0), u.cell.q[u.cell.volume .> 0])
         @test all(c -> u.cell.m[c] == (kinds[c] == 1 ? 4.0 : 8.0), 1:length(kinds))
     end
 end
 
-
-@testitem "compartments in the authoring surface" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+@testitem "compartments in the authoring surface" setup = [SymbolicSetup] tags = [
+    :potts, :symbolic,
+] begin
     @testset "compartments in the authoring surface" begin
         σ, kinds, groups = compartment_state()
-        prob = PottsProblem(Compartments(; name = :comp), [ownership => σ, kind => kinds, cluster => groups], (0, 1))
+        prob = PottsProblem(
+            Compartments(; name = :comp),
+            [ownership => σ, kind => kinds, cluster => groups], (0, 1)
+        )
         u0 = prob.u0
         @test Array(u0.cell.cluster)[1:18] == vcat(1:9, 1:9)
         @test Array(u0.cell.cluster_volume)[1:9] == fill(64, 9)
-        @test Array(u0.cell.cluster_surface) ≈ CorePotts.recompute_cluster_surface(σ, u0.cell.cluster, prob.lattice, Moore(1)) &&
+        @test Array(u0.cell.cluster_surface) ≈
+            CorePotts.recompute_cluster_surface(
+            σ, u0.cell.cluster, prob.lattice,
+            Moore(1)
+        ) &&
             allequal(Array(u0.cell.cluster_surface)[1:9])      # nuclei are internal
         # the hand-written CorePotts model (lib/CorePotts/test/compartments.jl)
         Jt = [0 16 16; 16 14 30; 16 30 14]
         ki(st, a) = a == 0 ? 1 : Int(st.cell.kind[a]) + 1
         function hand(st, p, prop, ctx)
-            J(a, b) = CorePotts.same_cluster(st.cell, a, b) ? 2.0 : Float64(Jt[ki(st, a), ki(st, b)])
+            function J(a, b)
+                return if CorePotts.same_cluster(st.cell, a, b)
+                    2.0
+                else
+                    Float64(Jt[ki(st, a), ki(st, b)])
+                end
+            end
             E(v, c) = (v - (48.0, 16.0)[st.cell.kind[c]])^2
             EC(v, k) = st.cell.kind[k] == 1 ? (v - 64.0)^2 : 0.0
             ES(s, k) = st.cell.kind[k] == 1 ? 0.1 * (s - 32.0)^2 : 0.0
-            return CorePotts.contact_delta(st.ownership, ctx, prop, J) + CorePotts.volume_delta(st.cell.volume, prop, E) +
+            return CorePotts.contact_delta(st.ownership, ctx, prop, J) +
+                CorePotts.volume_delta(st.cell.volume, prop, E) +
                 CorePotts.cluster_volume_delta(st.cell, prop, EC) +
-                CorePotts.cluster_surface_delta(st.cell, prop, CorePotts.cluster_surface_change(st.ownership, st.cell, ctx, prop), ES)
+                CorePotts.cluster_surface_delta(
+                st.cell, prop,
+                CorePotts.cluster_surface_change(st.ownership, st.cell, ctx, prop),
+                ES
+            )
         end
         ctx = ctx_of(prob)
         states = proposal_states(remake(prob; tspan = (0, 1)); mcs = (0, 1), n = 400)
-        @test maximum(((u, prop),) -> abs(prob.f.delta_H(u, prob.p, prop, ctx) - hand(u, prob.p, prop, ctx)), states) < 1.0e-9
+        @test maximum(
+            ((u, prop),) -> abs(
+                prob.f.delta_H(u, prob.p, prop, ctx) -
+                    hand(u, prob.p, prop, ctx)
+            ),
+            states
+        ) < 1.0e-9
         @test selfcheck(remake(prob; tspan = (0, 1))) < 1.0e-9
         # trackers stay exact through a run
         u = solve(prob, SequentialCPM(; proposal = Moore(1))).u[end]
         cl = Array(u.cell.cluster)
-        @test Array(u.cell.cluster_volume) == CorePotts.recompute_cluster_volume(Array(u.ownership), cl)
-        @test Array(u.cell.cluster_surface) ≈ CorePotts.recompute_cluster_surface(Array(u.ownership), cl, prob.lattice, Moore(1))
+        @test Array(u.cell.cluster_volume) ==
+            CorePotts.recompute_cluster_volume(Array(u.ownership), cl)
+        @test Array(u.cell.cluster_surface) ≈
+            CorePotts.recompute_cluster_surface(
+            Array(u.ownership), cl, prob.lattice,
+            Moore(1)
+        )
         # a cluster divides as a unit: both daughters keep a nucleus and a cytoplasm
         sol = solve(remake(prob; tspan = (0, 4)), SequentialCPM(; proposal = Moore(1)))
         v = sol.u[end]
@@ -70,35 +111,47 @@ end
         @test length(live) == 36
         roots = unique(Array(v.cell.cluster)[live])
         @test length(roots) == 18
-        @test all(r -> sort(Array(v.cell.kind)[filter(c -> v.cell.cluster[c] == r, live)]) == [1, 2], roots)
+        @test all(
+            r -> sort(Array(v.cell.kind)[filter(c -> v.cell.cluster[c] == r, live)]) ==
+                [1, 2], roots
+        )
         @test sum(Array(v.cell.mass)[live]) ≈ 36.0          # every member split its mass
         @test sort(Array(v.cell.mass)[live]) == fill(1.0, 36)
     end
 end
-
 
 @testitem "compartment validation" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
     @testset "compartment validation" begin
         @test_throws Potts.PottsCompileError mtkcompile(
             Potts.PottsSystem(;
                 name = :x, kinds = [:medium, :ka],
-                lattice = Potts.lattice_spec((8, 8)), sweep = Potts.sweep_spec(:metropolis; temperature = 1.0),
-                energies = [Potts.EnergyTerm(Potts.CellDomain(Int[]), Potts.B.cluster_volume^2)]
+                lattice = Potts.lattice_spec((8, 8)),
+                sweep = Potts.sweep_spec(:metropolis; temperature = 1.0),
+                energies = [
+                    Potts.EnergyTerm(Potts.CellDomain(Int[]), Potts.B.cluster_volume^2),
+                ]
             )
         )
         @test_throws Potts.PottsCompileError mtkcompile(
             Potts.PottsSystem(;
                 name = :x, kinds = [:medium, :ka],
-                lattice = Potts.lattice_spec((8, 8)), sweep = Potts.sweep_spec(:metropolis; temperature = 1.0),
-                energies = [Potts.EnergyTerm(Potts.ContactDomain(:contact), Potts.B.cluster_volume)]
+                lattice = Potts.lattice_spec((8, 8)),
+                sweep = Potts.sweep_spec(:metropolis; temperature = 1.0),
+                energies = [
+                    Potts.EnergyTerm(Potts.ContactDomain(:contact), Potts.B.cluster_volume),
+                ]
             )
         )
         # Cell and cluster divisions mix per kind, but one kind divides by one domain
         function divsys(cellk, clusterk)
             return Potts.PottsSystem(;
                 name = :x, kinds = [:medium, :ka, :kb],
-                lattice = Potts.lattice_spec((8, 8)), sweep = Potts.sweep_spec(:metropolis; temperature = 1.0),
-                divisions = [Potts.divide(cellk; when = Potts.B.volume > 1), Potts.divide(clusterk; when = Potts.B.volume > 1)]
+                lattice = Potts.lattice_spec((8, 8)),
+                sweep = Potts.sweep_spec(:metropolis; temperature = 1.0),
+                divisions = [
+                    Potts.divide(cellk; when = Potts.B.volume > 1),
+                    Potts.divide(clusterk; when = Potts.B.volume > 1),
+                ]
             )
         end
         err = try
@@ -107,37 +160,62 @@ end
             e
         end
         @test err isa Potts.PottsCompileError
-        @test_throws Potts.PottsCompileError mtkcompile(divsys(Potts.cells, Potts.clusters(2)))      # bare `cells` is every kind
-        @test mtkcompile(divsys(Potts.cells(2), Potts.clusters(1))) isa Potts.CompiledPottsSystem
+        # bare `cells` is every kind
+        @test_throws Potts.PottsCompileError mtkcompile(
+            divsys(Potts.cells, Potts.clusters(2))
+        )
+        @test mtkcompile(divsys(Potts.cells(2), Potts.clusters(1))) isa
+            Potts.CompiledPottsSystem
     end
 end
 
-
-@testitem "cell and cluster divisions in one model" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+@testitem "cell and cluster divisions in one model" setup = [SymbolicSetup] tags = [
+    :potts, :symbolic,
+] begin
     @testset "cell and cluster divisions in one model" begin
         σ, kinds, groups = compartment_state()
-        prob = PottsProblem(NucleusDivision(; name = :nd), [ownership => σ, kind => kinds, cluster => groups], (0, 5))
+        prob = PottsProblem(
+            NucleusDivision(; name = :nd),
+            [ownership => σ, kind => kinds, cluster => groups], (0, 5)
+        )
         @test selfcheck(remake(prob; tspan = (0, 1))) < 1.0e-9
-        for alg in (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
+        for alg in (
+                SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(;
+                    proposal = Moore(1)
+                ),
+            )
             check_nucleus_division(solve(prob, alg).u[end])
         end
     end
 end
 
-
-@testitem "cell and cluster divisions in one model on the device" setup = [SymbolicSetup] tags = [:potts, :symbolic, :device] begin
-    PottsDevices.on_device() && @testset "cell and cluster divisions in one model on the device" begin
+@testitem "cell and cluster divisions in one model on the device" setup = [
+    SymbolicSetup,
+] tags = [
+    :potts, :symbolic, :device,
+] begin
+    PottsDevices.on_device()&&
+        @testset "cell and cluster divisions in one model on the device" begin
         σ, kinds, groups = compartment_state()
         prob = PottsProblem(
-            NucleusDivision(; name = :nd), [ownership => σ, kind => kinds, cluster => groups], (0, 5);
+            NucleusDivision(; name = :nd), [
+                ownership => σ, kind => kinds, cluster => groups,
+            ], (0, 5);
             T = Float32
         )
-        check_nucleus_division(solve(prob, CheckerboardCPM(; proposal = Moore(1)); backend = PottsDevices.device_backend()).u[end])
+        check_nucleus_division(
+            solve(
+                prob, CheckerboardCPM(; proposal = Moore(1));
+                backend = PottsDevices.device_backend()
+            ).u[end]
+        )
     end
 end
 
-
-@testitem "compartment review regressions" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+@testitem "compartment review regressions" setup = [SymbolicSetup] tags = [
+    :potts,
+    :symbolic,
+] begin
     @testset "compartment review regressions" begin
         @potts_model ClusterCensus begin
             @kinds medium cytoplasm nucleus
@@ -146,15 +224,23 @@ end
             @lattice Lattice((30, 30); neighborhood = Moore(1))
             @energy cells => (volume - 40.0)^2
             @after_mcs total ~ sum(cluster_volume for c in cells)
-            @divide cells(nucleus) when = (cluster == id) && (mcs == 100), along = (1.0, 0.0)
+            @divide cells(nucleus) when = (cluster == id) && (mcs == 100), along = (
+                1.0, 0.0,
+            )
             @sweep Metropolis(; temperature = T)
         end
 
         σ, kinds, groups = compartment_state()
         # populations read the bound cell's cluster trackers
-        p = PottsProblem(ClusterCensus(; name = :cc), [ownership => σ, kind => kinds, cluster => groups], (0, 1))
+        p = PottsProblem(
+            ClusterCensus(; name = :cc),
+            [ownership => σ, kind => kinds, cluster => groups], (0, 1)
+        )
         u = solve(p, SequentialCPM(; proposal = Moore(1))).u[end]
-        @test u.model.total[1] == sum(u.cell.cluster_volume[u.cell.cluster[c]] for c in 1:18 if u.cell.volume[c] > 0)
+        @test u.model.total[1] == sum(
+            u.cell.cluster_volume[u.cell.cluster[c]]
+                for c in 1:18 if u.cell.volume[c] > 0
+        )
         # roots are chosen among the kinds that name clusters, whatever the numbering
         n = 9
         σn = map(s -> s == 0 ? s : Int32(s <= n ? s + n : s - n), σ)     # nuclei first
@@ -162,7 +248,8 @@ end
             Compartments(; name = :comp), [
                 ownership => σn, kind => vcat(kinds[(n + 1):end], kinds[1:n]),
                 cluster => groups,
-            ], (0, 1)
+            ],
+            (0, 1)
         )
         @test Array(pn.u0.cell.cluster)[1:18] == vcat((n + 1):2n, (n + 1):2n)
         @test total_energy(pn) ≈ total_energy(
@@ -172,12 +259,21 @@ end
             )
         )
         # remake with a new state recomputes the frozen mask
-        σk = zeros(Int32, 24, 24); σk[:, 1:2] .= 1; σk[10:14, 10:14] .= 2
-        kt = PottsProblem(KindTemperature(; name = :kt), [ownership => σk, kind => [:wall, :dark]], (0, 5))
-        σk2 = zeros(Int32, 24, 24); σk2[:, 23:24] .= 1; σk2[10:14, 10:14] .= 2
+        σk = zeros(Int32, 24, 24)
+        σk[:, 1:2] .= 1
+        σk[10:14, 10:14] .= 2
+        kt = PottsProblem(
+            KindTemperature(; name = :kt), [
+                ownership => σk, kind => [:wall, :dark],
+            ], (0, 5)
+        )
+        σk2 = zeros(Int32, 24, 24)
+        σk2[:, 23:24] .= 1
+        σk2[10:14, 10:14] .= 2
         kt2 = remake(kt; u0 = [ownership => σk2, kind => [:wall, :dark]])
         @test kt2.frozen == (σk2 .== 1)
-        # clusters used only in a division condition or an observed quantity still get storage
+        # clusters used only in a division condition or an observed quantity still get
+        # storage
         base = (;
             name = :x, kinds = [:medium, :ka], lattice = Potts.lattice_spec((8, 8)),
             sweep = Potts.sweep_spec(:metropolis; temperature = 1.0),
@@ -209,25 +305,32 @@ end
     end
 end
 
-
-@testitem "irregular lattice domains in the surface" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+@testitem "irregular lattice domains in the surface" setup = [SymbolicSetup] tags = [
+    :potts, :symbolic,
+] begin
     @testset "irregular lattice domains in the surface" begin
         sys = DiskSorting(; name = :disk)
         mask = Potts.lattice(sys).domain
         σ, kinds = two_kind_blocks()
-        σd = zeros(Int32, 40, 40); σd[9:32, 9:32] .= σ
+        σd = zeros(Int32, 40, 40)
+        σd[9:32, 9:32] .= σ
         @test all(mask[σd .> 0])
-        prob = PottsProblem(sys, [ownership => σd, kind => kinds], (0, 30); field_solver = ExplicitEuler())
+        prob = PottsProblem(
+            sys, [ownership => σd, kind => kinds], (0, 30);
+            field_solver = ExplicitEuler()
+        )
         @test count(prob.frozen) == count(!, mask)
         @test selfcheck(prob) < 1.0e-9
         u = solve(prob, CheckerboardCPM(; proposal = Moore(1))).u[end]
         @test all(u.ownership[.!mask] .== 0) && all(u.site.c[.!mask] .== 0)
         @test sum(u.site.c) > 0
-        σbad = copy(σd); σbad[1, 1] = 1
-        @test_throws ArgumentError PottsProblem(sys, [ownership => σbad, kind => kinds], (0, 1); field_solver = ExplicitEuler())
+        σbad = copy(σd)
+        σbad[1, 1] = 1
+        @test_throws ArgumentError PottsProblem(
+            sys, [ownership => σbad, kind => kinds], (0, 1); field_solver = ExplicitEuler()
+        )
     end
 end
-
 
 @testitem "3D models" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
     @testset "3D models" begin
@@ -237,7 +340,8 @@ end
                 λ = 1.0
                 V₀ = 64.0
                 λₛ = 0.01
-                S₀ = 430.0                         # a 4³ cube has 432 NeighborOrder(2) bonds
+                # a 4³ cube has 432 NeighborOrder(2) bonds
+                S₀ = 430.0
                 T = 12.0
                 J[kind, kind] = [0 16 16; 16 2 11; 16 11 14]
             end
@@ -252,7 +356,8 @@ end
             end
             @fields c = SyPDE.sorting3d() (SyPDE.src => kind == dark)
             @drive copy => -2.0 * (c[target] - c[source]) * (kind[new] == dark)
-            @divide cells(dark) when = (mcs == 3) && (volume >= 40), along = principal_axis(), mass => Split()
+            @divide cells(dark) when = (mcs == 3) && (volume >= 40),
+                along = principal_axis(), mass => Split()
             @sweep Metropolis(; temperature = T)
         end
 
@@ -263,14 +368,24 @@ end
             σ[i:(i + 3), j:(j + 3), k:(k + 3)] .= n
         end
         kinds = [isodd(c) ? :dark : :light for c in 1:n]
-        prob = PottsProblem(Sorting3D(; name = :s3), [ownership => σ, kind => kinds], (0, 6); field_solver = ExplicitEuler())
-        @test ndims(prob.lattice) == 3 && length(prob.contact) == 18                      # NeighborOrder(2) in 3D
+        prob = PottsProblem(
+            Sorting3D(; name = :s3), [ownership => σ, kind => kinds],
+            (0, 6); field_solver = ExplicitEuler()
+        )
+        # NeighborOrder(2) in 3D
+        @test ndims(prob.lattice) == 3 && length(prob.contact) == 18
         @test selfcheck(prob) < 1.0e-9
-        for alg in (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
+        for alg in (
+                SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(;
+                    proposal = Moore(1)
+                ),
+            )
             u = solve(prob, alg).u[end]
             live = findall(>(0), u.cell.volume)
-            @test length(live) > n                                                      # dark cells divided in 3D
-            @test u.cell.volume == [count(==(c), u.ownership) for c in eachindex(u.cell.volume)]
+            # dark cells divided in 3D
+            @test length(live) > n
+            @test u.cell.volume ==
+                [count(==(c), u.ownership) for c in eachindex(u.cell.volume)]
             @test u.cell.surface ≈ CorePotts.recompute_surface(
                 u.ownership, prob.lattice, prob.relations.surface, length(u.cell.volume);
                 T = eltype(u.cell.surface)
@@ -281,10 +396,14 @@ end
     end
 end
 
-
-@testitem "hexagonal lattices in the surface" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+@testitem "hexagonal lattices in the surface" setup = [SymbolicSetup] tags = [
+    :potts,
+    :symbolic,
+] begin
     @testset "hexagonal lattices in the surface" begin
-        σ = zeros(Int32, 30, 30); c0 = zeros(30, 30); c0[15, 15] = 100.0
+        σ = zeros(Int32, 30, 30)
+        c0 = zeros(30, 30)
+        c0[15, 15] = 100.0
         n = 0
         for q in 4:6:26, r in 4:6:26
             n += 1
@@ -293,25 +412,35 @@ end
             end
         end
         p = PottsProblem(
-            HexSorting(; name = :h), [ownership => σ, kind => [isodd(k) ? :dark : :light for k in 1:n], :c => c0], (0, 20);
+            HexSorting(; name = :h), [
+                ownership => σ, kind => [isodd(k) ? :dark : :light for k in 1:n], :c => c0,
+            ],
+            (0, 20);
             field_solver = ExplicitEuler()
         )
         @test p.lattice.geometry isa Hexagonal && length(p.contact) == 18
         for alg in (SequentialCPM(proposal = Hex(1)), CheckerboardCPM(proposal = Hex(1)))
             u = solve(p, alg).u[end]
             @test u.cell.volume == [count(==(k), u.ownership) for k in 1:n]
-            @test u.cell.surface ≈ CorePotts.recompute_surface(u.ownership, p.lattice, p.relations.surface, n)
-            @test sum(u.site.c) ≈ 100                                          # zero-sum 6-point Laplacian
-            pos = [embed(p.lattice, Float64.(Tuple(x))) for x in CartesianIndices(u.ownership)]
+            @test u.cell.surface ≈
+                CorePotts.recompute_surface(u.ownership, p.lattice, p.relations.surface, n)
+            # zero-sum 6-point Laplacian
+            @test sum(u.site.c) ≈ 100
+            pos = [
+                embed(p.lattice, Float64.(Tuple(x)))
+                    for x in CartesianIndices(u.ownership)
+            ]
             k = findfirst(>(0), u.cell.volume)
             mine = pos[u.ownership .== k]
-            @test u.cell.cx[k] ≈ sum(first, mine) / length(mine) atol = 1.0e-9   # centroid() is Cartesian (no wrap here)
+            # centroid() is Cartesian (no wrap here)
+            @test u.cell.cx[k] ≈ sum(first, mine) / length(mine) atol = 1.0e-9
         end
     end
 end
 
-
-@testitem "free slots add nothing to total_energy" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+@testitem "free slots add nothing to total_energy" setup = [SymbolicSetup] tags = [
+    :potts, :symbolic,
+] begin
     @testset "free slots add nothing to total_energy" begin
         @potts_model FreeSlots begin
             @kinds medium cytoplasm nucleus
@@ -327,8 +456,15 @@ end
             @sweep Metropolis(; temperature = 8.0)
         end
 
-        σc = zeros(Int32, 20, 20); σc[5, 5] = 1; σc[5, 6] = 2; σc[12:14, 12:14] .= 3; σc[13, 13] = 4
-        op = [ownership => σc, kind => [:cytoplasm, :nucleus, :cytoplasm, :nucleus], cluster => [1, 1, 3, 3]]
+        σc = zeros(Int32, 20, 20)
+        σc[5, 5] = 1
+        σc[5, 6] = 2
+        σc[12:14, 12:14] .= 3
+        σc[13, 13] = 4
+        op = [
+            ownership => σc, kind => [:cytoplasm, :nucleus, :cytoplasm, :nucleus],
+            cluster => [1, 1, 3, 3],
+        ]
         a = PottsProblem(FreeSlots(; name = :c), op, (0, 5))
         b = PottsProblem(FreeSlots(; name = :c), op, (0, 5); capacity = 50)
         @test length(b.u0.cell.volume) == 50

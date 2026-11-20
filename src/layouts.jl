@@ -6,10 +6,10 @@
 # lat)`. `op` is opaque: a layer allocates cells with `new_cell!`, paints sites with
 # `assign!`, reads the paint so far with `owner`/`kindof`/`ncells` and reports with
 # `record!`. `lat` is read only through the lattice queries `size`, `isperiodic` and
-# `indomain` (plus `core_lattice` for CorePotts' `shift`, `relation` and `embed`). Randomized
-# layouts own their seed, so adding a layer never changes another layer's draws. Box
-# coordinates are lattice indices: axial `(q, r)` on a hexagonal lattice, where a box is a
-# rhombus. Shapes and points (`Circle`, `Point`, …) are Cartesian (`embed`).
+# `indomain` (plus `core_lattice` for CorePotts' `shift`, `relation` and `embed`).
+# Randomized layouts own their seed, so adding a layer never changes another layer's draws.
+# Box coordinates are lattice indices: axial `(q, r)` on a hexagonal lattice, where a box is
+# a rhombus. Shapes and points (`Circle`, `Point`, …) are Cartesian (`embed`).
 
 """
     AbstractLayout
@@ -20,10 +20,10 @@ A layer of an initial condition. Turn layouts into an operating point with
 A new layout is a subtype with one method, `Potts.paint!(op::Potts.LayoutState, l, lat)`
 (the return value is ignored). `op` is opaque: the method reads and writes it only through
 [`new_cell!`](@ref), [`assign!`](@ref), [`owner`](@ref), [`kindof`](@ref),
-[`ncells`](@ref), [`record!`](@ref) and [`set_column!`](@ref), and reads the lattice only through `size(lat)`,
-[`isperiodic`](@ref)`(lat, d)` and [`indomain`](@ref)`(lat, x)` (and
-`core_lattice(lat)` for CorePotts' `shift`, `relation` and `embed`). Every name
-is `public`, so a layout in another package passes ExplicitImports' qualified-access check.
+[`ncells`](@ref), [`record!`](@ref) and [`set_column!`](@ref), and reads the lattice only
+through `size(lat)`, [`isperiodic`](@ref)`(lat, d)` and [`indomain`](@ref)`(lat, x)` (and
+`core_lattice(lat)` for CorePotts' `shift`, `relation` and `embed`). Every name is `public`,
+so a layout in another package passes ExplicitImports' qualified-access check.
 
 ```julia
 struct Column <: AbstractLayout
@@ -44,9 +44,9 @@ Every built-in layer (`Tiling`, `Scattered`, `Frame`, `InsertUntil`, `Voronoi`, 
 """
 abstract type AbstractLayout end
 
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # The paint state and its accessors
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 
 # One leaf layer's report entry (ids `first:last` are the cells it allocated).
 mutable struct _LayerRow
@@ -72,11 +72,14 @@ The paint so far, handed to `paint!(op::LayoutState, l, lat)`. Opaque: use
 mutable struct LayoutState{N}
     const ownership::Array{Int32, N}
     const kinds::Vector{Any}
-    const cutby::Vector{Int32}       # per cell before the current leaf: 0, the one cutter, or -1 (several)
+    # per cell before the current leaf: 0, the one cutter, or -1 (several)
+    const cutby::Vector{Int32}
     const cutwarn::Vector{Bool}      # … some cutter has `splits = :warn`
     const rows::Vector{_LayerRow}
-    const pieces::Vector{Tuple{Int, Int, Bool}}   # `Splits`: (cell, row, warn) of its cells left in pieces
-    const clusters::Dict{Int, Any}   # cell => its cluster label (`Group`, `set_column!(op, :cluster, …)`)
+    # `Splits`: (cell, row, warn) of its cells left in pieces
+    const pieces::Vector{Tuple{Int, Int, Bool}}
+    # cell => its cluster label (`Group`, `set_column!(op, :cluster, …)`)
+    const clusters::Dict{Int, Any}
     const colnames::Vector{Symbol}   # user columns (`set_column!`), in order of first use
     const colvals::Vector{Dict{Int, Any}}   # … cell => value, one dict per column
     layer::Int                       # the current leaf (0: none)
@@ -86,7 +89,10 @@ mutable struct LayoutState{N}
 end
 function LayoutState(dims::NTuple{N, Int}) where {N}
     return LayoutState{N}(
-        zeros(Int32, dims), Any[], Int32[], Bool[], _LayerRow[], Tuple{Int, Int, Bool}[], Dict{Int, Any}(),
+        zeros(Int32, dims), Any[], Int32[], Bool[], _LayerRow[], Tuple{Int, Int, Bool}[],
+        Dict{
+            Int, Any,
+        }(),
         Symbol[], Dict{Int, Any}[], 0, 0, true, 0
     )
 end
@@ -119,7 +125,10 @@ function assign!(op::LayoutState{N}, x::CartesianIndex{N}, id::Integer) where {N
     _assign_site!(op, x, _cell_id(op, id))
     return 1
 end
-function assign!(op::LayoutState{N}, x::NTuple{N, Union{Integer, AbstractUnitRange{<:Integer}}}, id::Integer) where {N}
+function assign!(
+        op::LayoutState{N}, x::NTuple{N, Union{Integer, AbstractUnitRange{<:Integer}}},
+        id::Integer
+    ) where {N}
     R = CartesianIndices(map(r -> r isa Integer ? (r:r) : r, x))
     return _assign_box!(op, R, _cell_id(op, id))
 end
@@ -129,7 +138,8 @@ function _cell_id(op::LayoutState, id::Integer)
     return id % Int32
 end
 @noinline function _unallocated(op, id)
-    throw(ArgumentError("assign!: cell $id is not allocated (ncells = $(length(op.kinds))); use new_cell!"))
+    throw(ArgumentError("assign!: cell $id is not allocated (ncells \
+        = $(length(op.kinds))); use new_cell!"))
 end
 
 # A site of a cell painted before the current leaf changes hands: the leaf cuts that cell.
@@ -206,9 +216,12 @@ function record!(
         op::LayoutState; requested::Integer, painted::Integer, misses::Integer = 0,
         counted::Integer = painted, clipped::Integer = 0
     )
-    op.layer == 0 && throw(ArgumentError("record!: called outside a layer's paint!; invoke only inside `Potts.paint!`"))
+    op.layer == 0 &&
+        throw(ArgumentError("record!: called outside a layer's paint!; invoke only inside \
+            `Potts.paint!`"))
     r = op.rows[op.layer]
-    r.requested, r.painted, r.misses, r.counted, r.clipped, r.recorded = requested, painted, misses, counted, clipped, true
+    r.requested, r.painted, r.misses, r.counted, r.clipped, r.recorded = requested,
+        painted, misses, counted, clipped, true
     return nothing
 end
 
@@ -216,28 +229,32 @@ end
     set_column!(op::LayoutState, name::Symbol, id, value)
 
 Record `value` for cell `id` (in `1:ncells(op)`) in the column `name` of the operating point
-[`layout`](@ref) returns; a second call for the same cell overwrites the first. Call it from a
-layer's `paint!`.
+[`layout`](@ref) returns; a second call for the same cell overwrites the first. Call it from
+a layer's `paint!`.
 
-- `name = :cluster`: `value` is a label, compared with `isequal`; the cells with equal labels
-  form one cluster (a compartment cell). `layout` then returns `cluster => ids`, where a
-  cell's id is the final id of the lowest-id surviving cell with its label, and a cell
-  without a label is a cluster of its own. [`Group`](@ref) is built on this, and its labels
-  never equal a user's.
+- `name = :cluster`: `value` is a label, compared with `isequal`; the cells with equal
+  labels form one cluster (a compartment cell). `layout` then returns `cluster => ids`,
+  where a cell's id is the final id of the lowest-id surviving cell with its label, and a
+  cell without a label is a cluster of its own. [`Group`](@ref) is built on this, and its
+  labels never equal a user's.
 - Any other name (a model's cell variable, such as `:V_target`): `layout` returns
-  `name => values`, one value per surviving cell, so `PottsProblem` uses them in place of the
-  variable's default. Every cell that survives the whole layout, from whichever layer,
+  `name => values`, one value per surviving cell, so `PottsProblem` uses them in place of
+  the variable's default. Every cell that survives the whole layout, from whichever layer,
   needs a value, otherwise `layout` throws, naming the column and the cells.
 
 Throws an `ArgumentError` for `name` `:ownership` or `:kind`, an `id` that is not allocated,
 and a call outside a layer's `paint!`.
 """
 function set_column!(op::LayoutState, name::Symbol, id::Integer, value)
-    op.layer == 0 && throw(ArgumentError("set_column!: called outside a layer's paint!; invoke only inside `Potts.paint!`"))
+    op.layer == 0 &&
+        throw(ArgumentError("set_column!: called outside a layer's paint!; invoke only \
+            inside `Potts.paint!`"))
     name in (:ownership, :kind) &&
-        throw(ArgumentError("set_column!: `$name` is not a column a layer sets (use new_cell! and assign!)"))
+        throw(ArgumentError("set_column!: `$name` is not a column a layer sets (use \
+            new_cell! and assign!)"))
     1 <= id <= ncells(op) ||
-        throw(ArgumentError("set_column!: cell $id is not allocated (ncells = $(ncells(op))); use new_cell!"))
+        throw(ArgumentError("set_column!: cell $id is not allocated (ncells \
+            = $(ncells(op))); use new_cell!"))
     if name === :cluster
         op.clusters[Int(id)] = value
         return nothing
@@ -252,16 +269,22 @@ function set_column!(op::LayoutState, name::Symbol, id::Integer, value)
     return nothing
 end
 
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Lattice queries
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 
 Base.size(lat::LatticeSpec) = lat.dims
 Base.size(lat::LatticeSpec, d::Integer) = lat.dims[d]
 
 function _periodic(lat::LatticeSpec{N}) where {N}
     b = lat.boundary
-    return map(x -> x isa Periodic, b isa CorePotts.AbstractBoundary ? ntuple(_ -> b, N) : Tuple(b))
+    return map(
+        x -> x isa Periodic, if b isa CorePotts.AbstractBoundary
+            ntuple(_ -> b, N)
+        else
+            Tuple(b)
+        end
+    )
 end
 
 """
@@ -278,36 +301,50 @@ Whether site `x` (a tuple of integers or a `CartesianIndex`) lies on the lattice
 its domain (every lattice site, without a domain). Unlike CorePotts' `in_domain(lattice, i)`
 it checks bounds and takes a layout's `lat`.
 """
-indomain(lat::LatticeSpec{N}, x::NTuple{N, Integer}) where {N} = indomain(lat, CartesianIndex(x))
+function indomain(lat::LatticeSpec{N}, x::NTuple{N, Integer}) where {N}
+    return indomain(lat, CartesianIndex(x))
+end
 function indomain(lat::LatticeSpec{N}, x::CartesianIndex{N}) where {N}
     checkbounds(Bool, CartesianIndices(lat.dims), x) || return false
     m = lat.domain
     return m === nothing || m[x]
 end
 
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Argument helpers
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 
 _tuple(x::Integer, N) = ntuple(_ -> Int(x), N)
-_tuple(x, N) = (length(x) == N || throw(ArgumentError("expected $N values, got $(length(x)); pass an integer or a $N-tuple")); Int.(Tuple(x)))
+function _tuple(x, N)
+    (
+        length(x) == N ||
+            throw(ArgumentError("expected $N values, got $(length(x)); pass an integer or \
+                a $N-tuple"));
+        Int.(Tuple(x))
+    )
+end
 
 function _check_size(sz, what)
-    all(>(0), sz) || throw(ArgumentError("$what: box size must be positive, got $sz; pass sizes >= 1 along every axis"))
+    all(>(0), sz) ||
+        throw(ArgumentError("$what: box size must be positive, got $sz; pass sizes >= 1 \
+            along every axis"))
     return sz
 end
 
 function _region_arg(region, N, what)
     region === nothing && return nothing
     length(region) == N ||
-        throw(ArgumentError("$what: region has $(length(region)) ranges, the box is $(N)D; match region length to $(N)D"))
+        throw(ArgumentError("$what: region has $(length(region)) ranges, the box \
+            is $(N)D; match region length to $(N)D"))
     function unit_range(x)
         x isa AbstractUnitRange ||
-            throw(ArgumentError("$what: region ranges must be unit ranges, got $x; pass contiguous ranges such as `1:10`"))
+            throw(ArgumentError("$what: region ranges must be unit ranges, got $x; pass \
+                contiguous ranges such as `1:10`"))
         return UnitRange{Int}(x)
     end
     r = map(unit_range, Tuple(region))
-    any(isempty, r) && throw(ArgumentError("$what: region $r is empty; pass non-empty ranges"))
+    any(isempty, r) &&
+        throw(ArgumentError("$what: region $r is empty; pass non-empty ranges"))
     return r
 end
 
@@ -318,7 +355,8 @@ function _kinds_arg(kinds, what)
 end
 
 function _splits_arg(s, what)
-    s in (:warn, :allow) || throw(ArgumentError("$what: `splits` must be :warn or :allow, got $(repr(s))"))
+    s in (:warn, :allow) ||
+        throw(ArgumentError("$what: `splits` must be :warn or :allow, got $(repr(s))"))
     return s
 end
 
@@ -327,24 +365,28 @@ function _region(region, dims::NTuple{N, Int}, what) where {N}
     region === nothing && return map(d -> 1:d, dims)
     for d in 1:N
         (first(region[d]) >= 1 && last(region[d]) <= dims[d]) ||
-            throw(ArgumentError("$what: region $region lies outside the lattice $dims; keep each axis range within 1:n"))
+            throw(ArgumentError("$what: region $region lies outside the lattice $dims; \
+                keep each axis range within 1:n"))
     end
     return region
 end
 
 function _check_rank(l, N, dims, what)
-    return N == length(dims) || throw(ArgumentError("$what: the layout is $(N)D, the lattice $(length(dims))D; match the layout dimension to the lattice"))
+    return N == length(dims) ||
+        throw(ArgumentError("$what: the layout is $(N)D, the lattice $(length(dims))D; \
+            match the layout dimension to the lattice"))
 end
 
 # The `splits` setting of a layer (custom layers: :warn).
 _splits(::AbstractLayout) = :warn
 
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Tiling
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 
 """
-    Tiling(size; spacing = 0, region = <whole lattice>, kinds, partial = :skip, splits = :warn)
+    Tiling(size; spacing = 0, region = <whole lattice>, kinds, partial = :skip,
+        splits = :warn)
 
 Boxes of `size` (a tuple, one entry per axis), `spacing` medium sites apart (an integer or
 a tuple), filling `region` (a tuple of ranges) in column-major order from its lower corner.
@@ -367,13 +409,19 @@ struct Tiling{N, K} <: AbstractLayout
     partial::Symbol
     splits::Symbol
 end
-function Tiling(size; spacing = 0, region = nothing, kinds, partial::Symbol = :skip, splits::Symbol = :warn)
+function Tiling(
+        size; spacing = 0, region = nothing, kinds,
+        partial::Symbol = :skip, splits::Symbol = :warn
+    )
     N = length(size)
     sz = _check_size(_tuple(size, N), "Tiling")
     sp = _tuple(spacing, N)
-    all(>=(0), sp) || throw(ArgumentError("Tiling: spacing must be non-negative, got $sp; pass spacing >= 0"))
+    all(>=(0), sp) ||
+        throw(ArgumentError("Tiling: spacing must be non-negative, got $sp; pass spacing \
+            >= 0"))
     partial in (:skip, :clip) ||
-        throw(ArgumentError("Tiling: `partial` must be :skip or :clip, got $(repr(partial))"))
+        throw(ArgumentError("Tiling: `partial` must be :skip or :clip, \
+            got $(repr(partial))"))
     return Tiling(
         sz, sp, _region_arg(region, N, "Tiling"), _kinds_arg(kinds, "Tiling"), partial,
         _splits_arg(splits, "Tiling")
@@ -397,10 +445,20 @@ function paint!(op::LayoutState, l::Tiling{N}, lat) where {N}
     dims = size(lat)
     _check_rank(l, N, dims, "Tiling")
     clip = l.partial === :clip
-    reg = clip && l.region !== nothing ? _clip_region(l.region, dims) : _region(l.region, dims, "Tiling")
-    starts = ntuple(d -> _tiling_starts(reg[d], l.size[d], l.spacing[d], dims[d], isperiodic(lat, d), clip), Val(N))
+    reg = if clip && l.region !== nothing
+        _clip_region(l.region, dims)
+    else
+        _region(l.region, dims, "Tiling")
+    end
+    starts = ntuple(
+        d -> _tiling_starts(
+            reg[d], l.size[d], l.spacing[d], dims[d], isperiodic(lat, d), clip
+        ),
+        Val(N)
+    )
     any(isempty, starts) &&
-        throw(ArgumentError("Tiling: no box of size $(l.size) fits the region $reg; use a smaller box size or a larger region"))
+        throw(ArgumentError("Tiling: no box of size $(l.size) fits the region $reg; use a \
+            smaller box size or a larger region"))
     n = 0
     for o in Iterators.product(starts...)
         n += 1
@@ -414,7 +472,9 @@ end
 # region ∩ lattice (`partial = :clip`)
 function _clip_region(region, dims)
     reg = map((r, n) -> max(first(r), 1):min(last(r), n), region, dims)
-    any(isempty, reg) && throw(ArgumentError("Tiling: region $region does not meet the lattice $dims; choose ranges overlapping the lattice extent"))
+    any(isempty, reg) &&
+        throw(ArgumentError("Tiling: region $region does not meet the lattice $dims; \
+            choose ranges overlapping the lattice extent"))
     return reg
 end
 
@@ -428,9 +488,9 @@ function _tiling_starts(r, s, p, n, wrap, clip)
     return st
 end
 
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Scattered
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 
 """
     Scattered(n, size; region = <whole lattice>, kinds, seed, gap = 1, splits = :warn)
@@ -446,8 +506,8 @@ Placement is random sequential: box after box is drawn with a `StableRNG(seed)` 
 deterministic in `seed` across Julia versions) and rejected while it is too close to a
 box placed earlier by this layer (cells of earlier layers do not count). The test runs on an
 occupancy mask of the region, so a draw costs `prod(size .+ 2gap)` site reads, independent
-of the number placed. `kinds` is cycled over the cells. Throws an `ArgumentError` when the boxes
-cannot fit the region, and also when a box cannot be placed after 10,000 draws: random
+of the number placed. `kinds` is cycled over the cells. Throws an `ArgumentError` when the
+boxes cannot fit the region, and also when a box cannot be placed after 10,000 draws: random
 sequential placement jams at about half of the densest packing, so a feasible but dense
 request can throw.
 """
@@ -465,12 +525,15 @@ function Scattered(
         splits::Symbol = :warn
     )
     N = length(size)
-    n >= 0 || throw(ArgumentError("Scattered: the number of boxes must be non-negative, got $n"))
+    n >= 0 ||
+        throw(ArgumentError("Scattered: the number of boxes must be non-negative, got $n"))
     gap >= 0 || throw(ArgumentError("Scattered: gap must be non-negative, got $gap"))
-    0 <= seed <= typemax(UInt64) || throw(ArgumentError("Scattered: seed must be in 0:typemax(UInt64), got $seed"))
+    0 <= seed <= typemax(UInt64) ||
+        throw(ArgumentError("Scattered: seed must be in 0:typemax(UInt64), got $seed"))
     sz = _check_size(_tuple(size, N), "Scattered")
     return Scattered(
-        Int(n), sz, _region_arg(region, N, "Scattered"), _kinds_arg(kinds, "Scattered"), UInt64(seed),
+        Int(n), sz, _region_arg(region, N, "Scattered"),
+        _kinds_arg(kinds, "Scattered"), UInt64(seed),
         Int(gap), _splits_arg(splits, "Scattered")
     )
 end
@@ -478,12 +541,13 @@ _splits(l::Scattered) = l.splits
 
 const _SCATTER_ATTEMPTS = 10_000   # rejection draws per box before giving up
 
-# The overlap test runs on an occupancy mask of the region (`occ`, indexed from `first(r)`): a draw is
-# rejected iff a site of an earlier box of this layer lies in the draw's box grown by `gap`
-# on every side. Per axis this is exactly the Chebyshev rule `a + s + gap <= b || b + s + gap
-# <= a` (closed) or `δ - s >= gap && n - δ - s >= gap` with `δ = mod(b - a, n)` (periodic):
-# the grown window wraps on a periodic axis and covers the whole ring once `s + 2gap >= n`.
-# Only boxes of this layer count, as before: sites painted by earlier layers do not.
+# The overlap test runs on an occupancy mask of the region (`occ`, indexed from `first(r)`):
+# a draw is rejected iff a site of an earlier box of this layer lies in the draw's box grown
+# by `gap` on every side. Per axis this is exactly the Chebyshev rule `a + s + gap <= b || b
+# + s + gap <= a` (closed) or `δ - s >= gap && n - δ - s >= gap` with `δ = mod(b - a, n)`
+# (periodic): the grown window wraps on a periodic axis and covers the whole ring once `s +
+# 2gap >= n`. Only boxes of this layer count, as before: sites painted by earlier layers do
+# not.
 #
 # The window along one axis is at most two pieces of `1:n`, each cut to the region `r` and
 # shifted into mask indices.
@@ -522,13 +586,17 @@ function paint!(op::LayoutState, l::Scattered{N}, lat) where {N}
     per = ntuple(d -> isperiodic(lat, d), Val(N))
     reg = _region(l.region, dims, "Scattered")
     ext = map(length, reg)
-    all(map(>=, ext, l.size)) || throw(ArgumentError("Scattered: boxes of size $(l.size) do not fit the region $reg; use smaller boxes or a larger region"))
+    all(map(>=, ext, l.size)) ||
+        throw(ArgumentError("Scattered: boxes of size $(l.size) do not fit the \
+            region $reg; use smaller boxes or a larger region"))
     # necessary: the boxes grown by `gap` on their upper sides are disjoint in the region
     # grown by `gap`; on a periodic axis they are disjoint around the ring, so at most `n`
     room = map((e, n, p) -> p ? min(e + l.gap, n) : e + l.gap, ext, dims, per)
     grown = map((s, n, p) -> p ? min(s + l.gap, n) : s + l.gap, l.size, dims, per)
     prod(room) >= l.n * prod(grown) ||
-        throw(ArgumentError("Scattered: $(l.n) boxes of size $(l.size) with gap $(l.gap) cannot fit the region $reg; reduce `n`, box size or `gap`, or enlarge the region"))
+        throw(ArgumentError("Scattered: $(l.n) boxes of size $(l.size) with gap $(l.gap) \
+            cannot fit the region $reg; reduce `n`, box size or `gap`, or enlarge the \
+                region"))
     rng = StableRNG(l.seed)
     ranges = map((r, s) -> first(r):(last(r) - s + 1), reg, l.size)
     occ = falses(ext)                  # sites of the boxes placed so far, in region indices
@@ -537,18 +605,31 @@ function paint!(op::LayoutState, l::Scattered{N}, lat) where {N}
         placed = false
         for _ in 1:_SCATTER_ATTEMPTS
             o = map(r -> rand(rng, r), ranges)
-            win = map((a, s, n, p, r) -> _scatter_window(a, s, l.gap, n, p, r), o, l.size, dims, per, reg)
+            win = map(
+                (a, s, n, p, r) -> _scatter_window(a, s, l.gap, n, p, r),
+                o, l.size, dims, per, reg
+            )
             _scatter_hit(occ, win) && continue
-            fill!(view(occ, map((a, s, r) -> (a - first(r) + 1):(a - first(r) + s), o, l.size, reg)...), true)
+            fill!(
+                view(
+                    occ,
+                    map(
+                        (a, s, r) -> (a - first(r) + 1):(a - first(r) + s), o, l.size,
+                        reg
+                    )...
+                ),
+                true
+            )
             corners[k] = o
             placed = true
             break
         end
         placed || throw(
             ArgumentError(
-                "Scattered: could not place box $k of $(l.n) (size $(l.size), gap $(l.gap)) " *
-                    "in the region $reg after $_SCATTER_ATTEMPTS draws (random sequential placement " *
-                    "jammed); use fewer or smaller boxes, a smaller gap or a larger region"
+                "Scattered: could not place box $k of $(l.n) (size $(l.size), " *
+                    "gap $(l.gap)) in the region $reg after $_SCATTER_ATTEMPTS draws " *
+                    "(random sequential placement jammed); use fewer or smaller boxes, a \
+                        smaller gap or a larger region"
             )
         )
     end
@@ -560,9 +641,9 @@ function paint!(op::LayoutState, l::Scattered{N}, lat) where {N}
     return nothing
 end
 
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Frame
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 
 """
     Frame(kind; width = 1, splits = :warn)
@@ -599,10 +680,14 @@ function paint!(op::LayoutState, l::Frame, lat)
     if !all(i -> indomain(lat, i), sites)
         _paint_domain_frame!(op, l, BitArray(indomain(lat, i) for i in sites), dims, per)
     else
-        all(per) && throw(ArgumentError("Frame: the lattice has no boundary (every axis is periodic, so it has no edge); use `Closed()` or `Free()` on at least one axis"))
+        all(per) &&
+            throw(ArgumentError("Frame: the lattice has no boundary (every axis is \
+                periodic, so it has no edge); use `Closed()` or `Free()` on at least one \
+                    axis"))
         id, w = new_cell!(op, l.kind), l.width
         for i in sites
-            any(ntuple(d -> !per[d] && (i[d] <= w || i[d] > dims[d] - w), N)) && assign!(op, i, id)
+            any(ntuple(d -> !per[d] && (i[d] <= w || i[d] > dims[d] - w), N)) &&
+                assign!(op, i, id)
         end
     end
     record!(op; requested = 1, painted = 1)
@@ -637,7 +722,9 @@ function _paint_domain_frame!(op, l::Frame, mask, dims, per)
         end
     end
     any(i -> mask[i] && near[i], eachindex(mask)) ||
-        throw(ArgumentError("Frame: the domain has no boundary (it fills a lattice that is periodic along every axis); use a bounded domain or `Closed()`/`Free()` on at least one axis"))
+        throw(ArgumentError("Frame: the domain has no boundary (it fills a lattice that \
+            is periodic along every axis); use a bounded domain or `Closed()`/`Free()` on \
+                at least one axis"))
     id = new_cell!(op, l.kind)
     for i in CartesianIndices(mask)
         mask[i] && near[i] && assign!(op, i, id)
@@ -645,24 +732,26 @@ function _paint_domain_frame!(op, l::Frame, mask, dims, per)
     return nothing
 end
 
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # InsertUntil
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 
 """
-    InsertUntil(kind; into, fraction = nothing, number = nothing, seed, region = <whole lattice>,
+    InsertUntil(kind; into, fraction = nothing, number = nothing, seed,
+        region = <whole lattice>,
                 misses = :retry, splits = :warn)
 
 One-site cells of `kind` inserted at random into cells of the kinds `into`, until a count is
 reached. Each draw picks a site of `region` (a tuple of ranges) uniformly with
-`StableRNG(seed)`. It *hits* when the site belongs to a cell whose kind is in `into` and that
-was painted before this layer: the site becomes a new one-site cell of `kind`. Any other
-draw (medium, a site outside the domain, another kind, a cell this layer inserted) *misses*.
+`StableRNG(seed)`. It *hits* when the site belongs to a cell whose kind is in `into` and
+that was painted before this layer: the site becomes a new one-site cell of `kind`. Any
+other draw (medium, a site outside the domain, another kind, a cell this layer
+inserted) *misses*.
 
 - `misses = :retry`: a miss changes nothing and is drawn again.
 - `misses = :count`: a miss also counts towards the stop rule, without creating a cell (the
-  empty cells that CompuCell3D-style seeding scripts create on a miss; they never own a site,
-  so they are never alive and are not allocated).
+  empty cells that CompuCell3D-style seeding scripts create on a miss; they never own a
+  site, so they are never alive and are not allocated).
 
 The count is `counted` = hits (+ misses under `:count`). Give exactly one stop rule:
 
@@ -675,12 +764,13 @@ The count is `counted` = hits (+ misses under `:count`). Give exactly one stop r
 
 The rule is checked before the first draw and after every hit, not after a miss, so under
 `:count` the count can overshoot by the misses drawn since the last hit (as in a script that
-recomputes its ratio only when it paints). A hit may take the last site of a cell, which then
-drops out of `N` (and `K`). Throws an `ArgumentError` when `region` holds no site to insert
-into, when the allowed sites run out before the rule is met, and for a missing, doubled or
-out-of-range stop rule. `layout(l, x; report = true)` reports how many cells the layer
-inserted (`painted`), how many draws missed (`misses`, in both modes) and what its stop rule
-counted (`counted`); `requested` is `number`, or `counted` under a `fraction` rule.
+recomputes its ratio only when it paints). A hit may take the last site of a cell, which
+then drops out of `N` (and `K`). Throws an `ArgumentError` when `region` holds no site to
+insert into, when the allowed sites run out before the rule is met, and for a missing,
+doubled or out-of-range stop rule. `layout(l, x; report = true)` reports how many cells the
+layer inserted (`painted`), how many draws missed (`misses`, in both modes) and what its
+stop rule counted (`counted`); `requested` is `number`, or `counted` under a `fraction`
+rule.
 """
 struct InsertUntil{K} <: AbstractLayout
     kind::K
@@ -697,19 +787,26 @@ function InsertUntil(
         misses::Symbol = :retry, splits::Symbol = :warn
     )
     (fraction === nothing) == (number === nothing) &&
-        throw(ArgumentError("InsertUntil: give exactly one stop rule, `fraction` or `number`"))
+        throw(ArgumentError("InsertUntil: give exactly one stop rule, `fraction` or \
+            `number`"))
     fraction === nothing || (fraction isa Real && 0 < fraction < 1) ||
-        throw(ArgumentError("InsertUntil: `fraction` must lie strictly between 0 and 1, got $fraction"))
+        throw(ArgumentError("InsertUntil: `fraction` must lie strictly between 0 and 1, \
+            got $fraction"))
     number === nothing || (number isa Integer && number >= 0) ||
-        throw(ArgumentError("InsertUntil: `number` must be a non-negative integer, got $number"))
+        throw(ArgumentError("InsertUntil: `number` must be a non-negative integer, \
+            got $number"))
     misses in (:retry, :count) ||
-        throw(ArgumentError("InsertUntil: `misses` must be :retry or :count, got $(repr(misses))"))
+        throw(ArgumentError("InsertUntil: `misses` must be :retry or :count, \
+            got $(repr(misses))"))
     0 <= seed <= typemax(UInt64) ||
         throw(ArgumentError("InsertUntil: seed must be in 0:typemax(UInt64), got $seed"))
     reg = region === nothing ? nothing : _region_arg(region, length(region), "InsertUntil")
     return InsertUntil(
         kind, collect(Any, _kinds_arg(into, "InsertUntil")), fraction,
-        number === nothing ? -1 : Int(number), UInt64(seed), reg, misses === :count, _splits_arg(splits, "InsertUntil")
+        number === nothing ? -1 : Int(number), UInt64(seed), reg, misses === :count,
+        _splits_arg(
+            splits, "InsertUntil"
+        )
     )
 end
 _splits(l::InsertUntil) = l.splits
@@ -742,7 +839,9 @@ function paint!(op::LayoutState, l::InsertUntil, lat)
         s = owner(op, i)
         s > 0 && target[s] && (free += 1)
     end
-    free == 0 && throw(ArgumentError("InsertUntil: the region $(sites.indices) holds no site of the kinds $(l.into); include target kinds in `into` or widen `region`"))
+    free == 0 &&
+        throw(ArgumentError("InsertUntil: the region $(sites.indices) holds no site of \
+            the kinds $(l.into); include target kinds in `into` or widen `region`"))
     rng = StableRNG(l.seed)
     painted = misses = 0
     done = _insert_done(l, N, K, 0)
@@ -750,7 +849,8 @@ function paint!(op::LayoutState, l::InsertUntil, lat)
         free == 0 && throw(
             ArgumentError(
                 "InsertUntil: the region ran out of sites of the kinds $(l.into) after " *
-                    "$painted insertions, before the stop rule was met; reduce `fraction`/`number` or enlarge `region`"
+                    "$painted insertions, before the stop rule was met; reduce \
+                        `fraction`/`number` or enlarge `region`"
             )
         )
         i = sites[rand(rng, 1:length(sites))]
@@ -774,24 +874,28 @@ function paint!(op::LayoutState, l::InsertUntil, lat)
     return nothing
 end
 
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Shapes and point patterns (D-138)
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 #
 # Shapes are GeometryBasics' `HyperSphere`s (`Circle`, `Sphere`) in Cartesian coordinates:
 # the lattice's `embed` of the index (the identity on square lattices, `(q + r/2, r√3/2)` on
-# hexagonal ones). Site `x` is in shape `s` iff `|center − embed(x)| ≤ r·(1 + 1e-12)` (closed,
-# up to rounding: on hexagonal lattices `embed` carries √3/2 rounding, so sites at exactly the
-# radius would otherwise drop out unevenly) for `x` or one of its images through periodic
-# edges, so a shape wraps
-# through a periodic edge and is clipped at a closed edge and at the domain. Generators are
-# kept in index coordinates, where distances are embedded and Lloyd's centroids are taken
-# (the embedding is linear, so a centroid maps to the Cartesian centroid).
+# hexagonal ones). Site `x` is in shape `s` iff `|center − embed(x)| ≤ r·(1 + 1e-12)`
+# (closed, up to rounding: on hexagonal lattices `embed` carries √3/2 rounding, so sites at
+# exactly the radius would otherwise drop out unevenly) for `x` or one of its images through
+# periodic edges, so a shape wraps through a periodic edge and is clipped at a closed edge
+# and at the domain. Generators are kept in index coordinates, where distances are embedded
+# and Lloyd's centroids are taken (the embedding is linear, so a centroid maps to the
+# Cartesian centroid).
 
 # The embedding as a matrix: column j is the embedded unit vector along axis j.
 function _embedding(clat, ::Val{N}) where {N}
     unit(j) = ntuple(d -> Float64(d == j), Val(N))
-    return SMatrix{N, N, Float64}(ntuple(k -> Float64(embed(clat, unit((k - 1) ÷ N + 1))[(k - 1) % N + 1]), Val(N * N)))
+    return SMatrix{N, N, Float64}(
+        ntuple(
+            k -> Float64(embed(clat, unit((k - 1) ÷ N + 1))[(k - 1) % N + 1]), Val(N * N)
+        )
+    )
 end
 
 # Per axis, the index half-width of the box that holds a Cartesian ball of radius 1: the
@@ -803,7 +907,8 @@ _cart(clat, x::NTuple{N, Real}) where {N} = Point{N, Float64}(embed(clat, map(Fl
 
 function _shape_arg(s::HyperSphere, what)
     (all(isfinite, s.center) && isfinite(s.r) && s.r >= 0) ||
-        throw(ArgumentError("$what: a shape needs a finite center and a finite, non-negative radius, got $s"))
+        throw(ArgumentError("$what: a shape needs a finite center and a finite, \
+            non-negative radius, got $s"))
     return s
 end
 
@@ -830,7 +935,10 @@ struct Interior{N, T}
     Interior(s::HyperSphere{N, T}) where {N, T} = new{N, T}(_shape_arg(s, "Interior"))
 end
 Interior(::Interior) = throw(ArgumentError("Interior: the shape is already an Interior"))
-Interior(s) = throw(ArgumentError("Interior: a round shape (Circle, Sphere, HyperSphere) is required, got $(repr(s))"))
+function Interior(s)
+    throw(ArgumentError("Interior: a round shape (Circle, Sphere, HyperSphere) is \
+        required, got $(repr(s))"))
+end
 
 # A round shape: closed (`HyperSphere`) or strict (`Interior`).
 const _Round = Union{HyperSphere, Interior}
@@ -855,7 +963,9 @@ function _region_sites(::Nothing, lat::LatticeSpec{N}, what) where {N}
     return CartesianIndex{N}[x for x in CartesianIndices(size(lat)) if indomain(lat, x)], 0
 end
 function _region_sites(region::Tuple, lat::LatticeSpec{N}, what) where {N}
-    length(region) == N || throw(ArgumentError("$what: the region has $(length(region)) ranges, the lattice is $(N)D"))
+    length(region) == N ||
+        throw(ArgumentError("$what: the region has $(length(region)) ranges, the lattice \
+            is $(N)D"))
     box = CartesianIndices(_region(region, size(lat), what))
     sites = CartesianIndex{N}[x for x in box if indomain(lat, x)]
     return sites, length(box) - length(sites)
@@ -875,7 +985,10 @@ function _region_sites(s::_Round, lat::LatticeSpec{N}, what) where {N}
     per = _periodic(lat)
     lo = ntuple(d -> floor(Int, c[d] - w[d]) - 1, Val(N))
     hi = ntuple(d -> ceil(Int, c[d] + w[d]) + 1, Val(N))
-    cand = ntuple(d -> per[d] ? _residues(lo[d], hi[d], dims[d]) : collect(lo[d]:hi[d]), Val(N))
+    cand = ntuple(
+        d -> per[d] ? _residues(lo[d], hi[d], dims[d]) : collect(lo[d]:hi[d]),
+        Val(N)
+    )
     sites = CartesianIndex{N}[]
     clipped = 0
     for x in Iterators.product(cand...)            # column-major: the axes are ascending
@@ -897,9 +1010,17 @@ _in_open(p::Point, s::HyperSphere) = sqrt(sum(abs2, p - s.center)) < s.r * (1 - 
 _member(p::Point, s::HyperSphere) = _in_closed(p, s)
 _member(p::Point, s::Interior) = _in_open(p, s.shape)
 
-# Index point `x`, or one of its images through periodic edges inside the box `lo:hi`, is in `s`.
+# Index point `x`, or one of its images through periodic edges inside the box `lo:hi`, is in
+# `s`.
 function _in_shape(s::_Round, clat, x::NTuple{N, Int}, lo, hi, dims, per) where {N}
-    images = ntuple(d -> per[d] ? ((x[d] + dims[d] * cld(lo[d] - x[d], dims[d])):dims[d]:hi[d]) : (x[d]:1:x[d]), Val(N))
+    images = ntuple(
+        d -> if per[d]
+            (x[d] + dims[d] * cld(lo[d] - x[d], dims[d])):dims[d]:hi[d]
+        else
+            x[d]:1:x[d]
+        end,
+        Val(N)
+    )
     for y in Iterators.product(images...)
         _member(_cart(clat, y), s) && return true
     end
@@ -909,9 +1030,10 @@ end
 """
     Center()
 
-A point pattern: the center of the lattice, the Cartesian point `embed((size(lat) .+ 1) ./ 2)`
-(`(20.5, 21.5)` on a 40 × 42 square lattice). Use it as a [`Voronoi`](@ref) generator, alone
-or in a vector of `Point`s. A shape's own center is an explicit `Point`.
+A point pattern: the center of the lattice, the Cartesian point
+`embed((size(lat) .+ 1) ./ 2)` (`(20.5, 21.5)` on a 40 × 42 square lattice). Use it as a
+[`Voronoi`](@ref) generator, alone or in a vector of `Point`s. A shape's own center is an
+explicit `Point`.
 """
 struct Center end
 
@@ -920,9 +1042,9 @@ struct Center end
 
 A point pattern: `n` lattice sites of `region` that lie in the lattice's domain, drawn
 uniformly. `region` is a shape (`Circle`, `Sphere`, `HyperSphere`, or an [`Interior`](@ref)
-of one; Cartesian, wrapping through periodic edges) or a tuple of index ranges. With the region's in-domain sites in
-column-major order s₁…sₘ and `rng = Potts.layer_rng(seed)`, each point draws
-`i = rand(rng, 1:m)`:
+of one; Cartesian, wrapping through periodic edges) or a tuple of index ranges. With the
+region's in-domain sites in column-major order s₁…sₘ and `rng = Potts.layer_rng(seed)`, each
+point draws `i = rand(rng, 1:m)`:
 
 - `replace = false`: the points are distinct; a draw is repeated while sᵢ is already taken,
   and `n > m` throws.
@@ -955,7 +1077,8 @@ _pattern_arg(p::Point, what) = [_check_point(p, what)]
 function _pattern_arg(v::AbstractVector, what)
     isempty(v) && throw(ArgumentError("$what: no generator (the point list is empty)"))
     all(p -> p isa Union{Point, Center}, v) ||
-        throw(ArgumentError("$what: a point list holds `Point`s and `Center()`s, got a $(typeof(v))"))
+        throw(ArgumentError("$what: a point list holds `Point`s and `Center()`s, got \
+            a $(typeof(v))"))
     foreach(p -> p isa Point && _check_point(p, what), v)
     return copy(v)
 end
@@ -963,11 +1086,13 @@ end
 # A generator's coordinates are finite and small enough to round to lattice indices.
 function _check_point(p::Point, what)
     all(x -> isfinite(x) && abs(x) < 1.0e15, p) ||
-        throw(ArgumentError("$what: point coordinates must be finite and below 1e15 in magnitude, got $p"))
+        throw(ArgumentError("$what: point coordinates must be finite and below 1e15 in \
+            magnitude, got $p"))
     return p
 end
 function _pattern_arg(p, what)
-    throw(ArgumentError("$what: $(repr(p)) is not a point pattern (RandomPoints, Center() or a vector of Points)"))
+    throw(ArgumentError("$what: $(repr(p)) is not a point pattern (RandomPoints, Center() \
+        or a vector of Points)"))
 end
 
 function _draw(p::RandomPoints, lat::LatticeSpec{N}, what) where {N}
@@ -976,10 +1101,14 @@ function _draw(p::RandomPoints, lat::LatticeSpec{N}, what) where {N}
     rng = layer_rng(p.seed)
     if p.replace                                 # one draw per point, no redraw (D-141)
         (p.n == 0 || m > 0) ||
-            throw(ArgumentError("$what: RandomPoints draws $(p.n) sites from a region with no site in the domain; target an in-domain region or set `n = 0`"))
+            throw(ArgumentError("$what: RandomPoints draws $(p.n) sites from a region \
+                with no site in the domain; target an in-domain region or set `n = 0`"))
         return CartesianIndex{N}[sites[rand(rng, 1:m)] for _ in 1:(p.n)]
     end
-    p.n <= m || throw(ArgumentError("$what: RandomPoints asks for $(p.n) distinct sites, the region holds $m in the domain; pass `n <= $m`, `replace = true`, or a larger region"))
+    p.n <= m ||
+        throw(ArgumentError("$what: RandomPoints asks for $(p.n) distinct sites, the \
+            region holds $m in the domain; pass `n <= $m`, `replace = \
+                true`, or a larger region"))
     taken = falses(m)
     out = Vector{CartesianIndex{N}}(undef, p.n)
     for k in 1:(p.n)
@@ -1004,10 +1133,15 @@ end
 function _index_points(p::RandomPoints, lat::LatticeSpec{N}, what) where {N}
     return NTuple{N, Float64}[map(Float64, Tuple(x)) for x in _draw(p, lat, what)]
 end
-_index_points(::Center, lat::LatticeSpec{N}, what) where {N} = NTuple{N, Float64}[_center_index(lat)]
+function _index_points(::Center, lat::LatticeSpec{N}, what) where {N}
+    return NTuple{N, Float64}[_center_index(lat)]
+end
 function _index_points(v::AbstractVector, lat::LatticeSpec{N}, what) where {N}
     Ei = inv(_embedding(core_lattice(lat), Val(N)))
-    return NTuple{N, Float64}[p isa Center ? _center_index(lat) : _point_index(p, Ei, what) for p in v]
+    return NTuple{N, Float64}[
+        p isa Center ? _center_index(lat) : _point_index(p, Ei, what)
+            for p in v
+    ]
 end
 
 """
@@ -1029,23 +1163,25 @@ function _cartesian_points(v::AbstractVector, lat::LatticeSpec{N}) where {N}
     out = Point{N, Float64}[]
     for p in v
         p isa Center && (push!(out, _cart(clat, _center_index(lat))); continue)
-        length(p) == N || throw(ArgumentError("points: a $(length(p))D point on a $(N)D lattice"))
+        length(p) == N ||
+            throw(ArgumentError("points: a $(length(p))D point on a $(N)D lattice"))
         push!(out, Point{N, Float64}(p))
     end
     return out
 end
 
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Voronoi
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 
 """
     Voronoi(points; region = <whole lattice>, lloyd = 0, kinds, splits = :warn)
 
 One cell per generator of `points` (`RandomPoints`, `Center()`, or a vector of `Point`s and
-`Center()`s), ids in generator order, `kinds` cycled over them. It *fills*: it paints only the
-sites of `region` (a shape, an [`Interior`](@ref) of one, or a tuple of index ranges) that are in the lattice's domain and
-still medium, so earlier layers are never cut (Morpheus' InitVoronoi).
+`Center()`s), ids in generator order, `kinds` cycled over them. It *fills*: it paints only
+the sites of `region` (a shape, an [`Interior`](@ref) of one, or a tuple of index ranges)
+that are in the lattice's domain and still medium, so earlier layers are never cut
+(Morpheus' InitVoronoi).
 
 - Each site goes to the nearest generator, Euclidean in the lattice's Cartesian embedding,
   minimum image along periodic axes. Ties, in floating point, go to the lower generator; on
@@ -1076,20 +1212,29 @@ struct Voronoi{P, R, K} <: AbstractLayout
     kinds::Vector{K}
     splits::Symbol
 end
-function Voronoi(points; region = nothing, lloyd::Integer = 0, kinds, splits::Symbol = :warn)
+function Voronoi(
+        points; region = nothing, lloyd::Integer = 0, kinds, splits::Symbol = :warn
+    )
     lloyd >= 0 || throw(ArgumentError("Voronoi: lloyd must be non-negative, got $lloyd"))
     return Voronoi(
-        _pattern_arg(points, "Voronoi"), _place_arg(region, "Voronoi"), Int(lloyd), _kinds_arg(kinds, "Voronoi"),
+        _pattern_arg(points, "Voronoi"), _place_arg(region, "Voronoi"), Int(lloyd),
+        _kinds_arg(
+            kinds, "Voronoi"
+        ),
         _splits_arg(splits, "Voronoi")
     )
 end
 _splits(l::Voronoi) = l.splits
-_layout_args(l::Voronoi) = (Voronoi, (:points,), (; l.points, l.region, l.lloyd, l.kinds, l.splits))
+function _layout_args(l::Voronoi)
+    return (Voronoi, (:points,), (; l.points, l.region, l.lloyd, l.kinds, l.splits))
+end
 
 function paint!(op::LayoutState, l::Voronoi, lat)
     region, clipped = _region_sites(l.region, lat, "Voronoi")
     gens = _index_points(l.points, lat, "Voronoi")
-    isempty(gens) && throw(ArgumentError("Voronoi: no generator (the point pattern is empty); pass at least one point or `RandomPoints(n)` with `n >= 1`"))
+    isempty(gens) &&
+        throw(ArgumentError("Voronoi: no generator (the point pattern is empty); pass at \
+            least one point or `RandomPoints(n)` with `n >= 1`"))
     sites = filter(x -> owner(op, x) == 0, region)          # fill medium only
     owners = _voronoi!(gens, sites, lat, l.lloyd)
     n = length(gens)
@@ -1101,22 +1246,27 @@ function paint!(op::LayoutState, l::Voronoi, lat)
     return nothing
 end
 
-# The generator owning each of `sites` after `lloyd` centroid moves and the one-piece repair.
-# `gens` (index coordinates) is moved in place.
-function _voronoi!(gens::Vector{NTuple{N, Float64}}, sites::Vector{CartesianIndex{N}}, lat, lloyd) where {N}
+# The generator owning each of `sites` after `lloyd` centroid moves and the one-piece
+# repair. `gens` (index coordinates) is moved in place.
+function _voronoi!(
+        gens::Vector{NTuple{N, Float64}}, sites::Vector{CartesianIndex{N}}, lat,
+        lloyd
+    ) where {N}
     m, n = length(sites), length(gens)
     owner = zeros(Int, m)
     m == 0 && return owner
     clat = core_lattice(lat)
     dims = size(lat)
     per = _periodic(lat)
-    index = zeros(Int, dims)                     # site => its position in `sites` (0: not painted here)
+    # site => its position in `sites` (0: not painted here)
+    index = zeros(Int, dims)
     for (i, x) in enumerate(sites)
         index[x] = i
     end
     scale = _box_scale(inv(_embedding(clat, Val(N))))
     best = zeros(m)
-    image = Vector{NTuple{N, Int}}(undef, m)     # the period shift of the image nearest the owner
+    # the period shift of the image nearest the owner
+    image = Vector{NTuple{N, Int}}(undef, m)
     sums, counts = zeros(N, n), zeros(Int, n)
     h = 2.0 * (m / n)^(1 / N)                     # about two cell radii (any h is exact)
     for _ in 1:lloyd
@@ -1132,7 +1282,13 @@ function _voronoi!(gens::Vector{NTuple{N, Float64}}, sites::Vector{CartesianInde
             end
         end
         for k in 1:n
-            counts[k] > 0 && (gens[k] = ntuple(d -> _wrap_coord(sums[d, k] / counts[k], dims[d], per[d]), Val(N)))
+            counts[k] > 0 &&
+                (
+                gens[k] = ntuple(
+                    d -> _wrap_coord(sums[d, k] / counts[k], dims[d], per[d]),
+                    Val(N)
+                )
+            )
         end
     end
     _voronoi_assign!(owner, best, image, index, gens, clat, per, scale, h)
@@ -1140,8 +1296,11 @@ function _voronoi!(gens::Vector{NTuple{N, Float64}}, sites::Vector{CartesianInde
     return owner
 end
 
-# A coordinate moved back into [½, n + ½) on a periodic axis (unchanged when already inside).
-_wrap_coord(g, n, periodic) = periodic && !(0.5 <= g < n + 0.5) ? g - n * fld(g - 0.5, n) : g
+# A coordinate moved back into [½, n + ½) on a periodic axis (unchanged when already
+# inside).
+function _wrap_coord(g, n, periodic)
+    return periodic && !(0.5 <= g < n + 0.5) ? g - n * fld(g - 0.5, n) : g
+end
 # the index range `c ± w` on an axis of `n` sites, cut to `1:n` on a closed axis
 function _window(periodic, c, w, n)
     periodic && return (c - w):(c + w)
@@ -1150,10 +1309,12 @@ end
 
 # Nearest generator of every site. Each generator scans the index box that holds its
 # Cartesian `h`-ball (`_box_scale`, plus ½ for rounding its position), wrapping on periodic
-# axes, so every image within `h` is seen. A site whose nearest scanned generator lies within
-# `h` has found its true nearest one; otherwise `h` doubles. Ties go to the lower generator.
-# Exact for any `h`; returns the `h` that sufficed.
-function _voronoi_assign!(owner, best, image, index::Array{Int, N}, gens, clat, per, scale, h) where {N}
+# axes, so every image within `h` is seen. A site whose nearest scanned generator lies
+# within `h` has found its true nearest one; otherwise `h` doubles. Ties go to the lower
+# generator. Exact for any `h`; returns the `h` that sufficed.
+function _voronoi_assign!(
+        owner, best, image, index::Array{Int, N}, gens, clat, per, scale, h
+    ) where {N}
     dims = size(index)
     while true
         fill!(owner, 0)
@@ -1162,7 +1323,9 @@ function _voronoi_assign!(owner, best, image, index::Array{Int, N}, gens, clat, 
         w = map(s -> ceil(Int, hh * s + 0.5), scale)
         for (k, g) in enumerate(gens)
             c = map(x -> round(Int, x), g)
-            box = CartesianIndices(ntuple(d -> _window(per[d], c[d], w[d], dims[d]), Val(N)))
+            box = CartesianIndices(
+                ntuple(d -> _window(per[d], c[d], w[d], dims[d]), Val(N))
+            )
             for y in box
                 x = ntuple(d -> per[d] ? mod1(y[d], dims[d]) : y[d], Val(N))
                 i = index[x...]
@@ -1187,8 +1350,8 @@ function _nearest_steps(clat, ::Val{N}) where {N}
     return offs[len .<= minimum(len) + 1.0e-9]
 end
 
-# The position in `sites` of the site one step `o` from `x` (wrapping on periodic axes; 0 off
-# the lattice or not painted by this layer).
+# The position in `sites` of the site one step `o` from `x` (wrapping on periodic axes; 0
+# off the lattice or not painted by this layer).
 function _step_index(index::Array{Int, N}, x::CartesianIndex{N}, o, per) where {N}
     y = ntuple(d -> per[d] ? mod1(x[d] + o[d], size(index, d)) : x[d] + o[d], Val(N))
     checkbounds(Bool, index, y...) || return 0
@@ -1196,11 +1359,11 @@ function _step_index(index::Array{Int, N}, x::CartesianIndex{N}, o, per) where {
 end
 
 # Make every cell one piece under the nearest-neighbor `steps` (D-063). Each pass labels the
-# pieces. A piece that is not its cell's largest (a stray piece) and touches the largest piece
-# of another cell goes to the cell whose largest piece it shares the most bonds with (ties:
-# the lower id). If no stray piece touches a largest piece, the lowest stray piece goes to the
-# neighbouring cell it shares the most bonds with. Either move lowers the number of stray
-# sites or pieces and never splits a cell, so the loop ends. A stray piece with no
+# pieces. A piece that is not its cell's largest (a stray piece) and touches the largest
+# piece of another cell goes to the cell whose largest piece it shares the most bonds with
+# (ties: the lower id). If no stray piece touches a largest piece, the lowest stray piece
+# goes to the neighbouring cell it shares the most bonds with. Either move lowers the number
+# of stray sites or pieces and never splits a cell, so the loop ends. A stray piece with no
 # neighbouring cell (a region split by the domain) stays.
 function _connect_pieces!(owner, sites, index, n, steps, per)
     m = length(sites)
@@ -1251,7 +1414,11 @@ function _connect_pieces!(owner, sites, index, n, steps, per)
             end
         end
         isempty(bonds) && return nothing
-        moves = isempty(tomain) ? _best_cells(bonds, minimum(first, keys(bonds))) : _best_cells(tomain, 0)
+        moves = if isempty(tomain)
+            _best_cells(bonds, minimum(first, keys(bonds)))
+        else
+            _best_cells(tomain, 0)
+        end
         for i in 1:m
             g = get(moves, piece[i], 0)
             g == 0 || (owner[i] = g)
@@ -1272,13 +1439,14 @@ function _best_cells(counts::Dict{Tuple{Int, Int}, Int}, only::Int)
     return Dict(p => g for (p, (_, g)) in best)
 end
 
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # shortfall (D-141)
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 
 function _shortfall_arg(s, what)
     s in (:error, :warn, :allow) ||
-        throw(ArgumentError("$what: `shortfall` must be :error, :warn or :allow, got $(repr(s))"))
+        throw(ArgumentError("$what: `shortfall` must be :error, :warn or :allow, \
+            got $(repr(s))"))
     return s
 end
 
@@ -1286,15 +1454,16 @@ end
 function _shortfall!(mode::Symbol, what, requested, painted)
     painted < requested || return nothing
     mode === :allow && return nothing
-    msg = "$what: shortfall: $requested cells requested, $painted painted; pass `shortfall = :allow` to accept fewer"
+    msg = "$what: shortfall: $requested cells requested, $painted painted; pass \
+        `shortfall = :allow` to accept fewer"
     mode === :error && throw(ArgumentError(msg))
     @warn msg
     return nothing
 end
 
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Eden (D-141)
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 
 """
     Eden(points; rounds, region = <whole lattice>, kinds, seed, neighborhood = nothing,
@@ -1312,23 +1481,23 @@ synchronous random (Eden) growth into the medium.
   cycled over the cells created; ids follow creation order.
 - **Growth.** Each round visits the medium sites of `region` ∩ domain in column-major order.
   A site with a neighbor (under `neighborhood`, default the lattice's own) owned by a cell
-  of this layer at the start of the round draws one neighbor uniformly, `j = rand(rng,
-  1:K)` over the `K` offsets of `CorePotts.relation`, with one `rng =
-  Potts.layer_rng(seed, :eden)` for the whole layer; if that neighbor is a cell of this
-  layer at the start of the round, the site joins it at the end of the round. This is TST's
-  law (every medium site draws one of its neighbors and copies it only from a growing
-  cell); sites with no growing neighbor cannot change, so they draw nothing. TST grows
-  with 8 neighbors even on a lattice with a larger neighborhood: pass `neighborhood =
-  Moore(1)` there.
+  of this layer at the start of the round draws one neighbor uniformly, `j = rand(rng, 1:K)`
+  over the `K` offsets of `CorePotts.relation`, with one
+  `rng = Potts.layer_rng(seed, :eden)` for the whole layer; if that neighbor is a cell of
+  this layer at the start of the round, the site joins it at the end of the round. This is
+  TST's law (every medium site draws one of its neighbors and copies it only from a growing
+  cell); sites with no growing neighbor cannot change, so they draw nothing. TST grows with
+  8 neighbors even on a lattice with a larger neighborhood: pass `neighborhood = Moore(1)`
+  there.
 
 Eden only fills: it never paints a site an earlier layer owns, nor outside `region` (a box
-of ranges, a shape or an [`Interior`](@ref) of one) or the domain. Each cell grows from one site, so it is one piece under
-`neighborhood`.
+of ranges, a shape or an [`Interior`](@ref) of one) or the domain. Each cell grows from one
+site, so it is one piece under `neighborhood`.
 
 The report row has `requested` = the points, `painted` = the cells created, `misses` = the
 points not placed, and `clipped` as for `Voronoi`. When fewer cells are painted than
-requested, `shortfall = :error` (the default) throws, `:warn` warns and `:allow` accepts
-it (seeds drawn with replacement merge by design: `RandomPoints(n; replace = true)`).
+requested, `shortfall = :error` (the default) throws, `:warn` warns and `:allow` accepts it
+(seeds drawn with replacement merge by design: `RandomPoints(n; replace = true)`).
 
 Throws an `ArgumentError` for `rounds < 0`, empty `kinds`, a bad seed, `shortfall` or
 `splits`, a `neighborhood` that is not a relation spec such as `Moore(1)`, an empty point
@@ -1336,7 +1505,8 @@ list and (at layout) a point or shape of another dimension. `remake(e; rounds = 
 
 ```julia
 # TST's de novo vasculogenesis start: 360 seeds with replacement, 10 rounds
-overlay(Frame(:border), Eden(RandomPoints(360; region = (2:199, 2:199), replace = true, seed = 1);
+overlay(Frame(:border), Eden(RandomPoints(360; region = (2:199, 2:199), replace = true, \
+seed = 1);
     rounds = 10, kinds = [:endothelial], seed = 1, shortfall = :allow))
 ```
 """
@@ -1351,16 +1521,20 @@ struct Eden{P, R, K, H} <: AbstractLayout
     splits::Symbol
 end
 function Eden(
-        points; rounds::Integer, region = nothing, kinds, seed::Integer, neighborhood = nothing,
+        points; rounds::Integer, region = nothing, kinds, seed::Integer,
+        neighborhood = nothing,
         shortfall::Symbol = :error, splits::Symbol = :warn
     )
     rounds >= 0 || throw(ArgumentError("Eden: rounds must be non-negative, got $rounds"))
     _check_seed(seed, "Eden")
     (neighborhood === nothing || neighborhood isa CorePotts.AbstractRelationSpec) ||
-        throw(ArgumentError("Eden: `neighborhood` must be a relation spec such as Moore(1), got $(repr(neighborhood))"))
+        throw(ArgumentError("Eden: `neighborhood` must be a relation spec such as \
+            Moore(1), got $(repr(neighborhood))"))
     return Eden(
-        _pattern_arg(points, "Eden"), _place_arg(region, "Eden"), Int(rounds), _kinds_arg(kinds, "Eden"),
-        UInt64(seed), neighborhood, _shortfall_arg(shortfall, "Eden"), _splits_arg(splits, "Eden")
+        _pattern_arg(points, "Eden"), _place_arg(region, "Eden"), Int(rounds),
+        _kinds_arg(kinds, "Eden"),
+        UInt64(seed), neighborhood, _shortfall_arg(shortfall, "Eden"),
+        _splits_arg(splits, "Eden")
     )
 end
 _splits(l::Eden) = l.splits
@@ -1414,7 +1588,8 @@ function _eden_grow!(op::LayoutState{N}, l::Eden, clat, offs, allowed, lo) where
     ci = CartesianIndices(σ)
     # Candidates: medium sites that may have a growing neighbor (a superset of the
     # frontier). A site leaves when it is painted or found with no growing neighbor, and
-    # re-enters when a neighbor is painted, so every eligible site of a round is a candidate.
+    # re-enters when a neighbor is painted, so every eligible site of a round is a
+    # candidate.
     cand = Int[]
     incand = falses(size(σ))
     for s in eachindex(σ)
@@ -1457,7 +1632,8 @@ function _eden_grow!(op::LayoutState{N}, l::Eden, clat, offs, allowed, lo) where
     return nothing
 end
 
-# Add the medium sites of region ∩ domain that have site `s` as a neighbor to the candidates.
+# Add the medium sites of region ∩ domain that have site `s` as a neighbor to the
+# candidates.
 function _eden_enqueue!(cand, incand, s, allowed, σ::Array{Int32, N}, clat, back) where {N}
     li, ci = LinearIndices(σ), CartesianIndices(σ)
     for o in back
@@ -1471,9 +1647,9 @@ function _eden_enqueue!(cand, incand, s, allowed, σ::Array{Int32, N}, clat, bac
     return nothing
 end
 
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Splits (D-141)
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 
 """
     Splits(layer, k; shortfall = :error, splits = :warn)
@@ -1493,9 +1669,9 @@ routine (no state, no trackers); it shares only the cut geometry with
   `AlongMinorAxis`' rule; for a repeated largest eigenvalue, the first standard axis
   projected onto its eigenspace), its first nonzero component positive. The daughter takes
   the sites with `(p − c)·v > 0`; sites on the plane (up to a relative 1e-9 of the cell's
-  largest `|(p − c)·v|`) stay with the mother. A cell spanning more than half a periodic axis
-  is unwrapped relative to its first site all the same, so its cut can be torn into pieces
-  (deterministically).
+  largest `|(p − c)·v|`) stay with the mother. A cell spanning more than half a periodic
+  axis is unwrapped relative to its first site all the same, so its cut can be torn into
+  pieces (deterministically).
 - After the passes, every cell of this layer that is not one piece under the lattice
   neighborhood (whether a cut or `layer` itself left it so) counts once in the report row's
   `splits` and, under `splits = :warn`, `layout` names it, by its id in the result, in a
@@ -1511,7 +1687,8 @@ warns, `:allow` accepts it. Throws an `ArgumentError` for `k` outside `0:30` or 
 
 ```julia
 # TST's sprout start: one Eden blob of 50 rounds at the center, divided 7 times (128 cells)
-overlay(Frame(:border), Splits(Eden(Center(); rounds = 50, kinds = [:endothelial], seed = 1), 7; splits = :allow))
+overlay(Frame(:border), Splits(Eden(Center(); rounds = 50, kinds = [:endothelial], seed = \
+1), 7; splits = :allow))
 ```
 """
 struct Splits{L <: AbstractLayout} <: AbstractLayout
@@ -1520,9 +1697,15 @@ struct Splits{L <: AbstractLayout} <: AbstractLayout
     shortfall::Symbol
     splits::Symbol
 end
-function Splits(layer::AbstractLayout, k::Integer; shortfall::Symbol = :error, splits::Symbol = :warn)
+function Splits(
+        layer::AbstractLayout, k::Integer; shortfall::Symbol = :error,
+        splits::Symbol = :warn
+    )
     0 <= k <= 30 || throw(ArgumentError("Splits: k must be in 0:30, got $k"))
-    return Splits(layer, Int(k), _shortfall_arg(shortfall, "Splits"), _splits_arg(splits, "Splits"))
+    return Splits(
+        layer, Int(k), _shortfall_arg(shortfall, "Splits"),
+        _splits_arg(splits, "Splits")
+    )
 end
 _splits(l::Splits) = l.splits
 
@@ -1564,29 +1747,37 @@ function paint!(op::LayoutState{N}, l::Splits, lat::LatticeSpec{N}) where {N}
     filter!(q -> q[1] < lo, op.pieces)
     warn, row = l.splits === :warn, op.layer
     _disconnected(op.ownership, check, lat) do c
-        push!(op.pieces, (c, row, warn))         # counted and warned by `layout` (final ids)
+        # counted and warned by `layout` (final ids)
+        push!(op.pieces, (c, row, warn))
     end
     record!(op; requested, painted, misses = requested - painted, clipped)
     _shortfall!(l.shortfall, "Splits", requested, painted)
     return nothing
 end
 
-# The daughter's sites: (p − c)·v > 0, where "0" is relative to the largest |(p − c)·v| of the
-# cell (1e-9): an inexact centroid and axis turn a site exactly on the plane into ±1e-16,
-# and it must stay with the mother.
+# The daughter's sites: (p − c)·v > 0, where "0" is relative to the largest |(p − c)·v| of
+# the cell (1e-9): an inexact centroid and axis turn a site exactly on the plane into
+# ±1e-16, and it must stay with the mother.
 function _daughter_side(P, cen, v)
     d = [_dot_from(p, cen, v) for p in P]
     tol = 1.0e-9 * maximum(abs, d)
     return [x > tol for x in d]
 end
 
-function _dot_from(p::NTuple{N, Float64}, c::NTuple{N, Float64}, v::NTuple{N, Float64}) where {N}
+function _dot_from(
+        p::NTuple{N, Float64}, c::NTuple{N, Float64}, v::NTuple{
+            N, Float64,
+        }
+    ) where {N}
     return sum(d -> (p[d] - c[d]) * v[d], 1:N)
 end
 
 # The Cartesian positions of a cell's sites `S`, each unwrapped along periodic axes to the
 # image nearest `S[1]` (displacement in [-n/2, n/2): ties to the lower image).
-function _split_points!(P::Vector{NTuple{N, Float64}}, S::Vector{CartesianIndex{N}}, clat, dims, per) where {N}
+function _split_points!(
+        P::Vector{NTuple{N, Float64}},
+        S::Vector{CartesianIndex{N}}, clat, dims, per
+    ) where {N}
     empty!(P)
     x0 = Tuple(S[1])
     for s in S
@@ -1615,8 +1806,8 @@ function _split_axis(P::Vector{NTuple{N, Float64}}) where {N}
     return c, ntuple(d -> v[d], Val(N))
 end
 
-# CorePotts' 2D `AlongMinorAxis` rule: (λ − C₂₂, C₁₂), or the larger diagonal's axis (e₁ on a
-# tie) when C₁₂ vanishes.
+# CorePotts' 2D `AlongMinorAxis` rule: (λ − C₂₂, C₁₂), or the larger diagonal's axis (e₁ on
+# a tie) when C₁₂ vanishes.
 function _major_axis_2d(C)
     a, b, d = C[1, 1], C[1, 2], C[2, 2]
     λ = (a + d) / 2 + sqrt(((a - d) / 2)^2 + b^2)
@@ -1645,41 +1836,71 @@ function _major_axis(C)
     return E.vectors[:, end]
 end
 
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # remake
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 
 # The keyword constructor of a layer, the names of its positional arguments, and every
 # argument (positional and keyword) as it would be passed.
-_layout_args(l::Tiling) = (Tiling, (:size,), (; l.size, l.spacing, l.region, l.kinds, l.partial, l.splits))
-_layout_args(l::Scattered) = (Scattered, (:n, :size), (; l.n, l.size, l.region, l.kinds, l.seed, l.gap, l.splits))
+function _layout_args(l::Tiling)
+    return (Tiling, (:size,), (; l.size, l.spacing, l.region, l.kinds, l.partial, l.splits))
+end
+function _layout_args(l::Scattered)
+    return (
+        Scattered, (:n, :size),
+        (; l.n, l.size, l.region, l.kinds, l.seed, l.gap, l.splits),
+    )
+end
 _layout_args(l::Frame) = (Frame, (:kind,), (; l.kind, l.width, l.splits))
 function _layout_args(l::InsertUntil)
     return (
-        InsertUntil, (:kind,), (;
+        InsertUntil, (:kind,),
+        (;
             l.kind, l.into, l.fraction,
-            number = l.number >= 0 ? l.number : nothing, l.seed, l.region, misses = l.count_misses ? :count : :retry, l.splits,
+            number = l.number >= 0 ? l.number : nothing, l.seed, l.region,
+            misses = if l.count_misses
+                :count
+            else
+                :retry
+            end, l.splits,
         ),
     )
 end
-_layout_args(l::Eden) = (Eden, (:points,), (; l.points, l.region, l.rounds, l.kinds, l.seed, l.neighborhood, l.shortfall, l.splits))
+function _layout_args(l::Eden)
+    return (
+        Eden,
+        (:points,),
+        (;
+            l.points, l.region, l.rounds, l.kinds, l.seed,
+            l.neighborhood, l.shortfall, l.splits,
+        ),
+    )
+end
 _layout_args(l::Splits) = (Splits, (:layer, :k), (; l.layer, l.k, l.shortfall, l.splits))
 function _layout_args(l::AbstractLayout)
-    throw(ArgumentError("remake: $(nameof(typeof(l))) does not support remake (no keyword constructor is known); rebuild the layer with its constructor"))
+    throw(ArgumentError("remake: $(nameof(typeof(l))) does not support remake (no keyword \
+        constructor is known); rebuild the layer with its constructor"))
 end
 
 function SciMLBase.remake(l::Union{AbstractLayout, RandomPoints}; kw...)
     ctor, pos, args = _layout_args(l)
     for k in keys(kw)
-        haskey(args, k) || throw(ArgumentError("remake: $(nameof(typeof(l))) has no argument `$k`; pass valid constructor keywords"))
+        haskey(args, k) ||
+            throw(ArgumentError("remake: $(nameof(typeof(l))) has no argument `$k`; pass \
+                valid constructor keywords"))
     end
     merged = merge(args, values(kw))
-    return ctor(map(k -> merged[k], pos)...; (k => merged[k] for k in keys(merged) if !(k in pos))...)
+    return ctor(
+        map(k -> merged[k], pos)...; (
+            k => merged[k]
+                for k in keys(merged) if !(k in pos)
+        )...
+    )
 end
 
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # overlay
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 
 # The layers of `overlay`, flattened.
 struct Overlay <: AbstractLayout
@@ -1736,9 +1957,9 @@ function _paint_leaf!(op::LayoutState, l::AbstractLayout, lat)
     return nothing
 end
 
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Fill, Objects and Group (D-087: in place of `Plane` and `Spheres`)
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 
 """
     Fill(kind; region = <whole lattice>, splits = :warn)
@@ -1754,8 +1975,8 @@ later layers paint over every site, and `clipped` the points of the region that 
 in-domain lattice sites (a shape's points lost to closed edges and the domain, a box's sites
 outside the domain). Deterministic: it draws nothing.
 
-Throws an `ArgumentError` for a region with no in-domain site, a box that reaches outside the
-lattice, a region of another dimension than the lattice, a bad `splits` and a vector of
+Throws an `ArgumentError` for a region with no in-domain site, a box that reaches outside
+the lattice, a region of another dimension than the lattice, a bad `splits` and a vector of
 kinds (`Fill` paints one cell). `remake(f; region = …)` works.
 """
 struct Fill{K, R} <: AbstractLayout
@@ -1765,7 +1986,8 @@ struct Fill{K, R} <: AbstractLayout
 end
 function Fill(kind; region = nothing, splits::Symbol = :warn)
     kind isa Union{AbstractArray, Tuple} &&
-        throw(ArgumentError("Fill: paints one cell, so `kind` is one kind, got $(repr(kind))"))
+        throw(ArgumentError("Fill: paints one cell, so `kind` is one kind, \
+            got $(repr(kind))"))
     return Fill(kind, _place_arg(region, "Fill"), _splits_arg(splits, "Fill"))
 end
 _splits(l::Fill) = l.splits
@@ -1775,14 +1997,17 @@ function paint!(op::LayoutState, l::Fill, lat::LatticeSpec{N}) where {N}
     if l.region isa Union{Nothing, Tuple} && lat.domain === nothing
         # a box on a lattice without a domain: paint it whole (no per-site list)
         l.region === nothing || length(l.region) == N ||
-            throw(ArgumentError("Fill: the region has $(length(l.region)) ranges, the lattice is $(N)D"))
+            throw(ArgumentError("Fill: the region has $(length(l.region)) ranges, the \
+                lattice is $(N)D"))
         id = new_cell!(op, l.kind)
         assign!(op, _region(l.region, size(lat), "Fill"), id)
         record!(op; requested = 1, painted = 1)
         return nothing
     end
     sites, clipped = _region_sites(l.region, lat, "Fill")
-    isempty(sites) && throw(ArgumentError("Fill: the region has no site in the lattice's domain; choose a region overlapping the domain"))
+    isempty(sites) &&
+        throw(ArgumentError("Fill: the region has no site in the lattice's domain; choose \
+            a region overlapping the domain"))
     id = new_cell!(op, l.kind)
     for x in sites
         assign!(op, x, id)
@@ -1796,9 +2021,9 @@ end
 
 One cell per copy of the round `shape` (`Circle`, `Sphere`, `HyperSphere` or an
 [`Interior`](@ref) of one). Without `points` there is one copy, the shape where it is. With
-`points` (`RandomPoints`, `Center()`, a `Point`, or a vector of `Point`s and `Center()`s), copy
-k is the shape translated by the Cartesian vector of point k, so write the template centered
-at the origin. Ids follow copy order and `kinds` is cycled over the copies.
+`points` (`RandomPoints`, `Center()`, a `Point`, or a vector of `Point`s and `Center()`s),
+copy k is the shape translated by the Cartesian vector of point k, so write the template
+centered at the origin. Ids follow copy order and `kinds` is cycled over the copies.
 
 Each copy owns the in-domain sites of its shape (wrapping through periodic edges, clipped at
 closed edges and the domain) and paints over earlier layers; within the layer the first copy
@@ -1806,7 +2031,8 @@ wins, so a copy never takes a site an earlier copy of the same layer owns.
 
 ```julia
 # two balls of radius 3, strict, so neither touches a plane at distance 3
-Objects(Interior(Sphere(Point(0.0, 0.0, 0.0), 3.0)), [Point(5.0, 5.0, 4.0), Point(13.0, 5.0, 4.0)]; kinds = [:cell])
+Objects(Interior(Sphere(Point(0.0, 0.0, 0.0), 3.0)), [Point(5.0, 5.0, 4.0), Point(13.0, \
+5.0, 4.0)]; kinds = [:cell])
 ```
 
 The report row has `requested = painted = counted =` the copies, `misses = 0`, `dropped` the
@@ -1825,30 +2051,42 @@ struct Objects{S, P, K} <: AbstractLayout
     splits::Symbol
 end
 function Objects(shape, points = nothing; kinds, splits::Symbol = :warn)
-    shape isa _Round ||
-        throw(
+    shape isa _Round || throw(
         ArgumentError(
-            "Objects: the shape must be round (Circle, Sphere, HyperSphere or an Interior of one), " *
-                "got $(repr(shape))"
+            "Objects: the shape must be round (Circle, Sphere, HyperSphere or an " *
+                "Interior of one), got $(repr(shape))"
         )
     )
     return Objects(
-        _place_arg(shape, "Objects"), points === nothing ? nothing : _pattern_arg(points, "Objects"),
+        _place_arg(shape, "Objects"), if points === nothing
+            nothing
+        else
+            _pattern_arg(points, "Objects")
+        end,
         _kinds_arg(kinds, "Objects"), _splits_arg(splits, "Objects")
     )
 end
 _splits(l::Objects) = l.splits
-_layout_args(l::Objects) = (Objects, (:shape, :points), (; l.shape, l.points, l.kinds, l.splits))
+function _layout_args(l::Objects)
+    return (Objects, (:shape, :points), (; l.shape, l.points, l.kinds, l.splits))
+end
 
 # The shape translated by the Cartesian vector `p`.
 function _translate(s::HyperSphere{N}, p) where {N}
-    return HyperSphere(Point{N, Float64}(ntuple(d -> Float64(s.center[d]) + Float64(p[d]), Val(N))), Float64(s.r))
+    return HyperSphere(
+        Point{N, Float64}(ntuple(d -> Float64(s.center[d]) + Float64(p[d]), Val(N))),
+        Float64(s.r)
+    )
 end
 _translate(s::Interior, p) = Interior(_translate(s.shape, p))
 
 function paint!(op::LayoutState, l::Objects, lat::LatticeSpec{N}) where {N}
     _check_dim(l.shape, N, "Objects")
-    copies = l.points === nothing ? [l.shape] : [_translate(l.shape, p) for p in _cartesian_points(l.points, lat)]
+    copies = if l.points === nothing
+        [l.shape]
+    else
+        [_translate(l.shape, p) for p in _cartesian_points(l.points, lat)]
+    end
     lo = ncells(op) + 1                          # this layer's cells are lo:ncells(op)
     clipped = 0
     for (k, s) in enumerate(copies)
@@ -1856,7 +2094,8 @@ function paint!(op::LayoutState, l::Objects, lat::LatticeSpec{N}) where {N}
         sites, c = _region_sites(s, lat, "Objects")
         clipped += c
         for x in sites
-            owner(op, x) >= lo && continue       # an earlier copy of this layer: the first wins
+            # an earlier copy of this layer: the first wins
+            owner(op, x) >= lo && continue
             assign!(op, x, id)
         end
     end
@@ -1868,15 +2107,16 @@ end
 """
     Group(layers...)
 
-The `layers`, painted in order exactly as by [`overlay`](@ref) (each one a row of the
-layout report, ids in paint order), with every cell they create in one cluster: a
-compartment cell. [`layout`](@ref) then also returns `cluster => ids` (see
-[`Potts.set_column!`](@ref)), which `PottsProblem` takes for a model with compartments.
-Many compartment cells are one `Group` per cell, `overlay((Group(…) for c in centers)...)`.
+The `layers`, painted in order exactly as by [`overlay`](@ref) (each one a row of the layout
+report, ids in paint order), with every cell they create in one cluster: a compartment cell.
+[`layout`](@ref) then also returns `cluster => ids` (see [`Potts.set_column!`](@ref)), which
+`PottsProblem` takes for a model with compartments. Many compartment cells are one `Group`
+per cell, `overlay((Group(…) for c in centers)...)`.
 
 ```julia
 # a cytoplasm disc and a nucleus box, one cell of two compartments, beside a wall
-overlay(Group(Objects(Interior(Circle(Point(5.0, 5.0), 3.0)); kinds = [:cyto]), Fill(:nuc; region = (5:6, 5:6))),
+overlay(Group(Objects(Interior(Circle(Point(5.0, 5.0), 3.0)); kinds = [:cyto]), \
+Fill(:nuc; region = (5:6, 5:6))),
     Fill(:wall; region = (1:10, 1:1)))
 ```
 
@@ -1901,9 +2141,10 @@ Group(layers::AbstractLayout...) = Group(AbstractLayout[layers...])
 @noinline function _group_placement()
     throw(
         ArgumentError(
-            "Group: a Group is the top-level layout or a member of a top-level overlay; it cannot be " *
-                "inside another Group, the layer of a Splits or painted by a custom layer's paint! (a custom " *
-                "layer groups its cells with Potts.set_column!(op, :cluster, label))"
+            "Group: a Group is the top-level layout or a member of a top-level overlay; " *
+                "it cannot be inside another Group, the layer of a Splits or painted by " *
+                "a custom layer's paint! (a custom layer groups its cells with \
+                    Potts.set_column!(op, :cluster, label))"
         )
     )
 end
@@ -1928,18 +2169,23 @@ function _paint_leaf!(op::LayoutState, g::Group, lat)
     return nothing
 end
 
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # The split check
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 
-# Call `f(c)` for every cell `c` with `check[c]` (a vector over the cells, `true` for at most
-# the cut ones) whose sites are not connected under the lattice neighbourhood, in id order.
-# One pass records each candidate's first site, site count and bounding box in dense
+# Call `f(c)` for every cell `c` with `check[c]` (a vector over the cells, `true` for at
+# most the cut ones) whose sites are not connected under the lattice neighbourhood, in id
+# order. One pass records each candidate's first site, site count and bounding box in dense
 # per-cell buffers; a cell that is still a full box is connected (every neighbourhood holds
 # the unit axis steps) and skipped; the rest are flood-filled, stamping `visited` with the
 # cell id so it never needs a reset. O(sites). `visited` (lattice-sized) is allocated only
 # when the first cell needs a flood fill.
-function _disconnected(f::F, σ::AbstractArray{<:Integer, N}, check, lat::LatticeSpec{N}) where {F, N}
+function _disconnected(
+        f::F, σ::AbstractArray{<:Integer, N}, check,
+        lat::LatticeSpec{N}
+    ) where {
+        F, N,
+    }
     K = length(check)
     first_site = zeros(Int, K)
     ncount = zeros(Int, K)
@@ -1994,13 +2240,15 @@ function _check_splits!(op::LayoutState, lat::LatticeSpec, counts, report::Bool)
     any(!=(0), cutby) || return warned         # no cell was cut
     check = falses(length(counts))              # cells of the last leaf were never cut
     for c in eachindex(cutby)
-        check[c] = cutby[c] != 0 && counts[c] > 0 && (cutwarn[c] || (report && cutby[c] > 0))
+        check[c] = cutby[c] != 0 && counts[c] > 0 &&
+            (cutwarn[c] || (report && cutby[c] > 0))
     end
     any(check) || return warned
     _disconnected(op.ownership, check, lat) do c
         if cutwarn[c]
             warned[c] = true
-            @warn "layout: later layers split cell $(_final_id(counts, c)) (kind $(op.kinds[c])) into disconnected pieces"
+            @warn "layout: later layers split cell $(_final_id(counts, c)) \
+                (kind $(op.kinds[c])) into disconnected pieces"
         end
         report && cutby[c] > 0 && (op.rows[cutby[c]].splits += 1)
     end
@@ -2022,15 +2270,15 @@ function _report_pieces!(op::LayoutState, lat::LatticeSpec, counts, warned)
     end
     any(check) || return nothing
     _disconnected(op.ownership, check, lat) do c
-        @warn "layout: cell $(_final_id(counts, c)) (kind $(op.kinds[c])) of a Splits layer is not one piece " *
-            "(pass `splits = :allow` to that Splits to accept it)"
+        @warn "layout: cell $(_final_id(counts, c)) (kind $(op.kinds[c])) of a Splits " *
+            "layer is not one piece (pass `splits = :allow` to that Splits to accept it)"
     end
     return nothing
 end
 
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # layout
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 
 """
     layout(l, x; report = false) -> [ownership => σ, kind => kinds]
@@ -2057,26 +2305,30 @@ With `report = true` it also returns one row per leaf layer, in paint order (an 
 contributes its flattened leaves), with the properties
 
 - `layer`: the leaf's position; `type`: `nameof` of its type (`:Tiling`, `:InsertUntil`, …);
-- `requested`: `Tiling` the boxes placed, `Scattered` `n`, `Frame` and `Fill` 1, `Objects` its copies, `InsertUntil` its
-  `number` (`counted` under a `fraction` rule), `Voronoi` and `Eden` their points, `Splits`
-  m·2ᵏ (m the inner layer's cells), a custom layer what it passed to [`record!`](@ref);
+- `requested`: `Tiling` the boxes placed, `Scattered` `n`, `Frame` and `Fill` 1, `Objects`
+  its copies, `InsertUntil` its `number` (`counted` under a `fraction` rule), `Voronoi` and
+  `Eden` their points, `Splits` m·2ᵏ (m the inner layer's cells), a custom layer what it
+  passed to [`record!`](@ref);
 - `painted`: the cells the layer created; `dropped`: of those, the cells left with no site
   after the whole layout;
 - `misses`: `InsertUntil` the missed draws (in both `misses` modes), `Eden` and `Splits`
-  `requested − painted` (their shortfall), a custom layer its `record!` value, other layers 0;
+  `requested − painted` (their shortfall), a custom layer its `record!` value, other layers
+  0;
 - `counted`: `InsertUntil` what its stop rule counted (`painted`, plus `misses` under
   `misses = :count`), other layers `painted`;
-- `clipped`: `Voronoi`, `Eden`, `Fill` and `Objects` (and a `Splits` of them) the points of its region (a shape or a box) that are not in-domain
-  lattice sites, lost to closed edges and to the domain (nothing is lost through a periodic
-  edge: a shape wraps); sites it skipped because an earlier layer owns them are not clipped.
-  A custom layer its `record!` value, other layers 0;
+- `clipped`: `Voronoi`, `Eden`, `Fill` and `Objects` (and a `Splits` of them) the points of
+  its region (a shape or a box) that are not in-domain lattice sites, lost to closed edges
+  and to the domain (nothing is lost through a periodic edge: a shape wraps); sites it
+  skipped because an earlier layer owns them are not clipped. A custom layer its `record!`
+  value, other layers 0;
 - `splits`: the cells cut only by this layer (it took at least one of their sites) whose
   remaining sites are disconnected after the whole layout, whatever its `splits` setting;
   for `Splits`, plus its own cells left in pieces by its divisions.
 """
 function layout(l::AbstractLayout, x; report::Bool = false)
     lat = _layout_spec(x)
-    _check_layout_kinds(x, _layer_kinds(l))                # before painting: `into` is never painted
+    # before painting: `into` is never painted
+    _check_layout_kinds(x, _layer_kinds(l))
     op = LayoutState(lat.dims)
     _paint_leaf!(op, l, lat)
     σ, kinds = op.ownership, op.kinds
@@ -2091,12 +2343,15 @@ function layout(l::AbstractLayout, x; report::Bool = false)
     if mask !== nothing
         bad = findfirst(i -> σ[i] != 0 && !mask[i], CartesianIndices(σ))
         bad === nothing ||
-            throw(ArgumentError("layout: cell $(σ[bad]) covers site $(Tuple(bad)), outside the lattice domain; ensure the layer's `paint!` assigns only in-domain sites"))
+            throw(ArgumentError("layout: cell $(σ[bad]) covers site $(Tuple(bad)), \
+                outside the lattice domain; ensure the layer's `paint!` assigns only \
+                    in-domain sites"))
     end
     rows = if report
         [
             (;
-                layer = j, r.type, r.requested, r.painted, dropped = count(c -> counts[c] == 0, r.first:r.last),
+                layer = j, r.type, r.requested, r.painted,
+                dropped = count(c -> counts[c] == 0, r.first:r.last),
                 r.misses, r.counted, r.clipped, r.splits,
             ) for (j, r) in enumerate(op.rows)
         ]
@@ -2115,7 +2370,8 @@ function _push_columns!(point, op::LayoutState, counts)
     isempty(op.clusters) && isempty(op.colnames) && return point
     alive = findall(>(0), counts)                # paint ids; final id f is alive[f]
     if !isempty(op.clusters)
-        root = Dict{Any, Int}()                  # label => the final id of its lowest surviving cell
+        # label => the final id of its lowest surviving cell
+        root = Dict{Any, Int}()
         ids = zeros(Int, length(alive))
         for (f, c) in enumerate(alive)
             ids[f] = haskey(op.clusters, c) ? get!(root, op.clusters[c], f) : f
@@ -2154,18 +2410,24 @@ _layer_kinds(l::InsertUntil) = Any[l.kind; l.into]
 # not the model's kinds pass here (a model may serve as a lattice only); `PottsProblem`
 # rejects them in the operating point.
 _check_layout_kinds(x, kinds) = nothing
-_check_layout_kinds(c::CompiledPottsSystem, kinds) = _check_layout_kinds(getfield(c, :sys), kinds)
+function _check_layout_kinds(c::CompiledPottsSystem, kinds)
+    return _check_layout_kinds(getfield(c, :sys), kinds)
+end
 function _check_layout_kinds(sys::PottsSystem, kinds)
     isempty(_p(sys, :kind_classes)) && return nothing
     for k in kinds
-        k isa Symbol && !(k in _p(sys, :kinds)) && any(g -> g.name === k, _p(sys, :kind_classes)) &&
-            throw(ArgumentError("layout: `$k` is a kind class, not a kind: layers take kinds; kinds are $(_p(sys, :kinds))"))
+        k isa Symbol && !(k in _p(sys, :kinds)) &&
+            any(g -> g.name === k, _p(sys, :kind_classes)) &&
+            throw(ArgumentError("layout: `$k` is a kind class, not a kind: layers take \
+                kinds; kinds are $(_p(sys, :kinds))"))
     end
     return nothing
 end
 
 function _layout_spec(dims::Tuple{Vararg{Integer}})
-    all(>(0), dims) || throw(ArgumentError("layout: lattice dimensions must be positive, got $dims; pass dimensions >= 1"))
+    all(>(0), dims) ||
+        throw(ArgumentError("layout: lattice dimensions must be positive, got $dims; pass \
+            dimensions >= 1"))
     return lattice_spec(dims; boundary = Closed())
 end
 function _layout_spec(lat::Lattice)
@@ -2180,7 +2442,8 @@ _layout_spec(sys::CompiledPottsSystem) = _layout_spec(getfield(sys, :sys))
 function _layout_spec(x)
     throw(
         ArgumentError(
-            "layout: the target is a lattice size (a tuple of integers), a `Lattice` or a model; got $(repr(x; context = :limit => true))"
+            "layout: the target is a lattice size (a tuple of integers), a `Lattice` or a \
+                model; got $(repr(x; context = :limit => true))"
         )
     )
 end

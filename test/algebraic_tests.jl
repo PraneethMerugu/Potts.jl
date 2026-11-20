@@ -1,7 +1,8 @@
 # Algebraic equations in `@equations` and the ODE templates (`Potts.ode_system`), beside
-# the acceptance file lib/PottsModels/test/acceptance/ode_mtkcompile_tests.jl: reads across scopes, components
-# beside algebraic variables, `@observed` over them, and the rejections the acceptance file
-# leaves to the implementer (indexed and lagged reads, `rand()`, division rules, couplings).
+# the acceptance file lib/PottsModels/test/acceptance/ode_mtkcompile_tests.jl: reads across
+# scopes, components beside algebraic variables, `@observed` over them, and the rejections
+# the acceptance file leaves to the implementer (indexed and lagged reads, `rand()`,
+# division rules, couplings).
 
 @testsetup module AlgebraicSetup
 using Potts, Test
@@ -23,7 +24,6 @@ function alg_error(f, words...)
         err isa Union{ArgumentError, Potts.PottsCompileError}
     end
 end
-
 
 # a cell definition reading a model algebraic variable, which reads a model ODE variable;
 # an `@observed` quantity and an update reading the algebraic variables
@@ -68,7 +68,6 @@ end
     @sweep Metropolis(; temperature = 1.0)
 end
 
-
 # components beside algebraic variables; a coupling reading one
 using Potts.ModelingToolkitBase: System as AlgSystem
 
@@ -108,7 +107,6 @@ end
     @sweep Metropolis(; temperature = 1.0)
 end
 
-
 @potts_model AlgDefault begin
     @kinds medium A
     @variables begin
@@ -120,7 +118,6 @@ end
     @equations y ~ x
     @sweep Metropolis(; temperature = 1.0)
 end
-
 
 function alg_model(body)
     m = eval(
@@ -145,42 +142,76 @@ end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "algebraic equations: reads across scopes, updates and @observed" setup = [AlgebraicSetup] tags = [:potts, :algebraic] begin
+@testitem "algebraic equations: reads across scopes, updates and @observed" setup = [
+    AlgebraicSetup,
+] tags = [
+    :potts, :algebraic,
+] begin
     @testset "algebraic equations: reads across scopes, updates and @observed" begin
         c = mtkcompile(AlgCross(; name = :a))
         cell = Potts.ode_system(c, :cell)
         model = Potts.ode_system(c, :model)
-        @test alg_names(ALG_M.unknowns(cell)) == Set([:x]) && :drive in alg_names(o.lhs for o in ALG_M.observed(cell))
-        @test alg_names(ALG_M.unknowns(model)) == Set([:m]) && :half in alg_names(o.lhs for o in ALG_M.observed(model))
+        @test alg_names(ALG_M.unknowns(cell)) == Set([:x]) &&
+            :drive in alg_names(o.lhs for o in ALG_M.observed(cell))
+        @test alg_names(ALG_M.unknowns(model)) == Set([:m]) &&
+            :half in alg_names(o.lhs for o in ALG_M.observed(model))
         @test alg_names(ALG_M.parameters(model)) == Set([:r])
-        @test :half in alg_names(ALG_M.parameters(cell))                 # the model's variable is an input of the cell's
+        # the model's variable is an input of the cell's
+        @test :half in alg_names(ALG_M.parameters(cell))
         @test :volume in alg_names(ALG_M.parameters(cell))
         for solver in (ExplicitEuler(), Potts.RK4(substeps = 2))
-            s = solve(PottsProblem(AlgCross(; name = :a), alg_op(), (0, 6); seed = 3, ode_solver = solver), SequentialCPM(); saveat = 1)
-            h = solve(PottsProblem(AlgCrossHand(; name = :h), alg_op(), (0, 6); seed = 3, ode_solver = solver), SequentialCPM(); saveat = 1)
+            s = solve(
+                PottsProblem(
+                    AlgCross(; name = :a), alg_op(), (0, 6); seed = 3, ode_solver = solver
+                ),
+                SequentialCPM();
+                saveat = 1
+            )
+            h = solve(
+                PottsProblem(
+                    AlgCrossHand(; name = :h), alg_op(),
+                    (0, 6); seed = 3, ode_solver = solver
+                ),
+                SequentialCPM();
+                saveat = 1
+            )
             @test [u.ownership for u in s.u] == [u.ownership for u in h.u]
-            @test all(isapprox.(s[:x], h[:x]; rtol = 1.0e-12)) && all(isapprox.(s[:seen], h[:seen]; rtol = 1.0e-12))
+            @test all(isapprox.(s[:x], h[:x]; rtol = 1.0e-12)) &&
+                all(isapprox.(s[:seen], h[:seen]; rtol = 1.0e-12))
             @test all(isapprox.(s[:half], s[:m] ./ 2; rtol = 1.0e-12))
             @test all(isapprox.(s[:twice], 2 .* s[:drive]; rtol = 1.0e-12))
-            @test all(v -> length(v) == 2, s[:drive])                       # one value per cell
+            # one value per cell
+            @test all(v -> length(v) == 2, s[:drive])
         end
     end
 end
 
-@testitem "algebraic equations beside components" setup = [AlgebraicSetup] tags = [:potts, :algebraic] begin
+@testitem "algebraic equations beside components" setup = [AlgebraicSetup] tags = [
+    :potts, :algebraic,
+] begin
     @testset "algebraic equations beside components" begin
         c = mtkcompile(AlgComponent(; name = :a))
-        @test alg_names(ALG_M.unknowns(Potts.ode_system(c, :cell))) == Set([:w])        # the component is its own system
+        # the component is its own system
+        @test alg_names(ALG_M.unknowns(Potts.ode_system(c, :cell))) == Set([:w])
         @test Potts.ode_system(c, :model) !== nothing
         @test isempty(ALG_M.unknowns(Potts.ode_system(c, :model)))
-        s = solve(PottsProblem(AlgComponent(; name = :a), alg_op(), (0, 5); seed = 2), SequentialCPM(); saveat = 1)
-        h = solve(PottsProblem(AlgComponentHand(; name = :h), alg_op(), (0, 5); seed = 2), SequentialCPM(); saveat = 1)
+        s = solve(
+            PottsProblem(AlgComponent(; name = :a), alg_op(), (0, 5); seed = 2),
+            SequentialCPM(); saveat = 1
+        )
+        h = solve(
+            PottsProblem(AlgComponentHand(; name = :h), alg_op(), (0, 5); seed = 2),
+            SequentialCPM(); saveat = 1
+        )
         @test s[:pk₊drug] == h[:pk₊drug] && s[:w] == h[:w]
         @test all(==(2.0), s[:cells_now])
     end
 end
 
-@testitem "algebraic equations: rejections" setup = [AlgebraicSetup] tags = [:potts, :algebraic] begin
+@testitem "algebraic equations: rejections" setup = [AlgebraicSetup] tags = [
+    :potts,
+    :algebraic,
+] begin
     @testset "algebraic equations: rejections" begin
         ok = alg_model(
             quote
@@ -190,7 +221,8 @@ end
                 end
             end
         )
-        @test mtkcompile(ok) isa CompiledPottsSystem                                   # control
+        # control
+        @test mtkcompile(ok) isa CompiledPottsSystem
         @test alg_error(
             () -> mtkcompile(
                 alg_model(
@@ -255,7 +287,8 @@ end
             () -> mtkcompile(
                 alg_model(
                     quote
-                        @equations m ~ x                                           # a model definition reading a cell variable bare
+                        # a model definition reading a cell variable bare
+                        @equations m ~ x
                     end
                 )
             ), "algebraic", "`x`", "bare"
@@ -303,7 +336,8 @@ end
                 end
             )
             err = try
-                mtkcompile(alg_model(body)); nothing
+                mtkcompile(alg_model(body))
+                nothing
             catch e
                 e
             end
@@ -329,15 +363,19 @@ end
                 )
             ), "algebraic", "`y"
         )
-        # a declared value is not used (D-165, kept by D-170): its value follows from its definition
+        # a declared value is not used (D-165, kept by D-170): its value follows from its
+        # definition
         @test alg_error(() -> mtkcompile(AlgDefault(; name = :d)), "`y`", "initial value")
-        # input names: a built-in keeps its name; a compound input never takes a declared name
+        # input names: a built-in keeps its name; a compound input never takes a declared
+        # name
         let s = Potts.ode_system(
                 mtkcompile(
                     alg_model(
                         quote
                             @variables input(cell) = 0.0
-                            @equations D(x) ~ volume + sum(volume[owner[n]] for n in Moore(1)(42)) - input
+                            @equations D(x) ~
+                                volume + sum(volume[owner[n]] for n in Moore(1)(42)) -
+                                input
                         end
                     )
                 ), :cell
@@ -345,13 +383,27 @@ end
             ps = alg_names(ALG_M.parameters(s))
             @test :volume in ps && :input in ps && length(ps) == 3
         end
-        # an operating-point value for an algebraic variable is the condition `y ~ value` (D-170):
-        # here its definition reads only the fixed `x`, so it overdetermines, by name and by symbol
-        @test alg_error(() -> PottsProblem(ok, alg_op(:y => 1.0), (0, 1)), "`y`", "algebraic", "overdetermined")
-        @test alg_error(() -> PottsProblem(ok, alg_op(ok.y => 1.0), (0, 1)), "`y`", "overdetermined")
-        @test PottsProblem(ok, alg_op(:x => 2.0), (0, 1)) isa PottsProblem               # control
+        # an operating-point value for an algebraic variable is the condition `y ~ value`
+        # (D-170): here its definition reads only the fixed `x`, so it overdetermines, by
+        # name and by symbol
+        @test alg_error(
+            () -> PottsProblem(ok, alg_op(:y => 1.0), (0, 1)), "`y`",
+            "algebraic", "overdetermined"
+        )
+        @test alg_error(
+            () -> PottsProblem(ok, alg_op(ok.y => 1.0), (0, 1)), "`y`",
+            "overdetermined"
+        )
+        # control
+        @test PottsProblem(ok, alg_op(:x => 2.0), (0, 1)) isa PottsProblem
         # every published-model-free model still compiles without templates
-        c = mtkcompile(alg_model(quote end))
-        @test Potts.ode_system(c, :cell) === nothing && Potts.ode_system(c, :model) === nothing
+        c = mtkcompile(
+            alg_model(
+                quote
+                end
+            )
+        )
+        @test Potts.ode_system(c, :cell) === nothing &&
+            Potts.ode_system(c, :model) === nothing
     end
 end

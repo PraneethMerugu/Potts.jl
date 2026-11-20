@@ -1,8 +1,9 @@
 # The discrete-time component fixtures (D-065): MTK clocked (`Shift`) systems
-# lowered into one per-cell tick phase per clock. Both `SymbolicSetup` and `QaSetup` include this
-# file: the QA items build `QADiscreteScratch`/`QADiscreteKinds` out of these systems and out of
-# `DiscreteHybrid`, `discrete_counter_model` and `_discrete_blocks`, and an item's setup cannot
-# see another setup's names (test/symbolic_tests.jl had them in Main with the rest).
+# lowered into one per-cell tick phase per clock. Both `SymbolicSetup` and `QaSetup` include
+# this file: the QA items build `QADiscreteScratch`/`QADiscreteKinds` out of these systems
+# and out of `DiscreteHybrid`, `discrete_counter_model` and `_discrete_blocks`, and an
+# item's setup cannot see another setup's names (test/symbolic_tests.jl had them in Main
+# with the rest).
 using Potts
 using Potts.ModelingToolkitBase: ShiftIndex, Clock, System, @parameters, @named
 
@@ -14,10 +15,11 @@ using Potts.ModelingToolkitBase: ShiftIndex, Clock
 
 const _kd = ShiftIndex(_tc, 0)
 
-Potts.ModelingToolkitBase.@variables fz(_tc) = 1.0 dn(_tc) = 0.0 dA(_tc)::Bool = false dB(_tc)::Bool = false
+Potts.ModelingToolkitBase.@variables fz(_tc) = 1.0 dn(_tc) = 0.0 dA(_tc)::Bool = false dB(
+    _tc
+)::Bool = false
 
 @parameters dinc = 1.0 dwnt::Bool = false dsig::Bool = false du = 0.5
-
 
 # a lag-2 recurrence: the older lag gets its own slot (`fib₊fzₜ₋₁`)
 @named fib = System([fz(_kd) ~ fz(_kd - 1) + fz(_kd - 2)], _tc)
@@ -36,12 +38,11 @@ Potts.ModelingToolkitBase.@variables yx(_tc) = 1.0 xt(_tc) = 0.0
 
 @named relax = System([Potts.D(yx) ~ -yr * yx, Potts.D(xt) ~ 1.0], _tc)
 
-# asynchronous-style updating in MTK form (gap G9): a per-cell draw decides whether A updates
+# asynchronous-style updating in MTK form (gap G9): a per-cell draw decides whether A
+# updates
 @named coin = System([dA(_kd) ~ ifelse(du < 0.5, !dA(_kd - 1), dA(_kd - 1))], _tc)
 
-
 const _DISCRETE_SYS = Ref{Any}(nothing)
-
 
 @potts_model DiscreteFib begin
     @kinds medium A
@@ -50,7 +51,6 @@ const _DISCRETE_SYS = Ref{Any}(nothing)
     @energy cells => (volume - 9.0)^2
     @sweep Metropolis(; temperature = 1.0e-6)
 end
-
 
 function discrete_counter_model(clock; mcs_duration = 1.0, scope = :cells)
     _DISCRETE_SYS[] = counter(clock)
@@ -76,7 +76,6 @@ function discrete_counter_model(clock; mcs_duration = 1.0, scope = :cells)
     end
 end
 
-
 @potts_model DiscreteHybrid begin
     @kinds medium A
     @variables seen(cell) = 0.0
@@ -86,15 +85,16 @@ end
         rel = relax
     end
     @equations begin
-        rel.yr ~ 0.1 * tg.dA                 # a Real parameter holds the latest tick (zero-order hold)
-        smp.dsig ~ rel.xt > 2.5              # a Bool parameter samples the ODE state at the tick
+        # a Real parameter holds the latest tick (zero-order hold)
+        rel.yr ~ 0.1 * tg.dA
+        # a Bool parameter samples the ODE state at the tick
+        smp.dsig ~ rel.xt > 2.5
     end
     @after_mcs seen ~ seen + tg.dA           # model statements read a node as 0/1
     @lattice Lattice((12, 12))
     @energy cells => (volume - 9.0)^2
     @sweep Metropolis(; temperature = 1.0e-6)
 end
-
 
 @potts_model DiscreteCoin begin
     @kinds medium A
@@ -105,22 +105,30 @@ end
     @sweep Metropolis(; temperature = 1.0e-6)
 end
 
-
 function _discrete_blocks(n = 4, L = 12)
     σ = zeros(Int32, L, L)
-    for (c, (i, j)) in enumerate(Iterators.take(((i, j) for i in 1:4:(L - 3), j in 1:4:(L - 3)), n))
+    for (c, (i, j)) in enumerate(
+            Iterators.take(
+                (
+                    (i, j)
+                        for i in 1:4:(L - 3), j in 1:4:(L - 3)
+                ), n
+            )
+        )
         σ[(i + 1):(i + 3), (j + 1):(j + 3)] .= c
     end
     return σ
 end
 
+const _DISCRETE_ALGS = (
+    SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)),
+)
 
-const _DISCRETE_ALGS = (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
-
-
-# Several tick phases (cell and model scope, clocks that coincide) read only pre-tick values:
-# the result does not depend on declaration order.
-Potts.ModelingToolkitBase.@variables dX(_tc)::Bool = false dM(_tc) = 0.0 dZ(_tc)::Bool = false dY(_tc)::Bool = false
+# Several tick phases (cell and model scope, clocks that coincide) read only pre-tick
+# values: the result does not depend on declaration order.
+Potts.ModelingToolkitBase.@variables dX(_tc)::Bool = false dM(_tc) = 0.0 dZ(
+    _tc
+)::Bool = false dY(_tc)::Bool = false
 
 @parameters ds::Bool = false dq = 0.0 dw::Bool = false
 

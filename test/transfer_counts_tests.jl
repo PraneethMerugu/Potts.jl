@@ -1,16 +1,17 @@
 # Exact host-transfer counts of the current device code paths. A regression test proving
 # `stats.syncs`, `stats.transfers` and `stats.transfer_bytes` count exactly: each expected
-# value is hand-counted from the call sites. Changes that remove transfers update the formulas
-# here (the lifecycle on the device did; so did column-only HostPhase / _AdaptiveODE copies).
-# Device only (POTTS_GPU = metal | rocm, test/shared/devices.jl); on the CPU nothing is counted
-# (the acceptance file `lib/PottsModels/test/acceptance/transfer_counters_tests.jl` checks that).
+# value is hand-counted from the call sites. Changes that remove transfers update the
+# formulas here (the lifecycle on the device did; so did column-only HostPhase /
+# _AdaptiveODE copies). Device only (POTTS_GPU = metal | rocm, test/shared/devices.jl); on
+# the CPU nothing is counted (the acceptance file
+# `lib/PottsModels/test/acceptance/transfer_counters_tests.jl` checks that).
 #
 # Counting rules: one contiguous host↔device array copy is one
 # transfer, including each array leaf of an `Adapt.adapt(Array, …)` snapshot; bytes are
 # `sizeof` of the device array; device→device copies and device `fill!` are not counted.
 #
-# Runs in the device suite of `test/runtests.jl` (POTTS_GPU = metal | rocm). Its names carry a
-# `transfer` prefix so that this file can share a session with the acceptance file.
+# Runs in the device suite of `test/runtests.jl` (POTTS_GPU = metal | rocm). Its names carry
+# a `transfer` prefix so that this file can share a session with the acceptance file.
 
 @testsetup module TransferCountsSetup
 using Potts, Test
@@ -20,9 +21,7 @@ using Test, Potts
 
 using Potts: CorePotts
 
-
 transfer_counts(s) = (s.syncs, s.transfers, s.transfer_bytes)
-
 
 # Division fixture: both 4×2 cells divide at MCS 0 (T = 0, weight-100 volume constraint:
 # every copy of MCS 0 is rejected), plane normal (1, 0), split 4 | 4.
@@ -45,44 +44,65 @@ function transfer_divide_problem(; T = Float64, tspan = (0, 4))
     )
 end
 
-
 """Hand count of the event MCS of the division fixture on a device backend. Since
 the lifecycle is planned and applied on the device (`run_lifecycle_device!`
 enqueues kernels only): (0, 0, 0). Before it, the host plan made (2, 18, 1098)."""
 transfer_division_counts(u0) = (0, 0, 0)
 
-
-"""Hand count of `current_state(integ)` (a host read point) for a model with a device lifecycle: one
-sync (`current_state`), the fold of the device lifecycle statistics (`_fold_lifecycle!`:
-one transfer of the `Int32` accumulators), the fold of the checkerboard's copy counts (one
-transfer of its per-block `Int32` counters, `nblocks`), and the snapshot (one transfer per
-array leaf of the state, `sizeof` bytes each). `u0` is the problem's host state."""
+"""Hand count of `current_state(integ)` (a host read point) for a model with a device
+lifecycle: one sync (`current_state`), the fold of the device lifecycle statistics
+(`_fold_lifecycle!`: one transfer of the `Int32` accumulators), the fold of the
+checkerboard's copy counts (one transfer of its per-block `Int32` counters, `nblocks`), and
+the snapshot (one transfer per array leaf of the state, `sizeof` bytes each). `u0` is the
+problem's host state."""
 function transfer_read_counts(u0, nblocks)
-    leaves = Any[u0.ownership, values(u0.cell)..., values(u0.site)..., values(u0.model)..., values(u0.history)...]
-    return (1, 2 + length(leaves), (CorePotts._NACC + nblocks) * sizeof(Int32) + sum(sizeof, leaves))
+    leaves = Any[
+        u0.ownership, values(u0.cell)..., values(u0.site)...,
+        values(u0.model)..., values(u0.history)...,
+    ]
+    return (
+        1, 2 + length(leaves),
+        (CorePotts._NACC + nblocks) * sizeof(Int32) + sum(sizeof, leaves),
+    )
 end
-
 
 # HostPhase fixture (CorePotts level): a no-op host phase after every sweep.
 function transfer_hostphase_problem(; T = Float64)
     σ = zeros(Int32, 12, 12)
     σ[3:6, 3:6] .= 1
     σ[8:11, 7:10] .= 2
-    u0 = CorePotts.initial_state(σ, Int32[1, 1]; cell = (; x = zeros(T, 2), y = zeros(T, 2)))
-    dH(st, p, prop, ctx) = CorePotts.volume_delta(st.cell.volume, prop, (v, c) -> p.λ * (v - p.V0)^2)
+    u0 = CorePotts.initial_state(
+        σ, Int32[1, 1]; cell = (;
+            x = zeros(T, 2), y = zeros(T, 2),
+        )
+    )
+    function dH(st, p, prop, ctx)
+        return CorePotts.volume_delta(
+            st.cell.volume, prop, (v, c) -> p.λ *
+                (
+                v -
+                    p.V0
+            )^2
+        )
+    end
     f = CorePotts.CPMFunction(
         dH; temperature = (st, p, prop, ctx) -> p.T,
-        phases = CorePotts.Phases(; after_mcs = (CorePotts.HostPhase((cell, st, p, ctx, mcs) -> nothing),))
+        phases = CorePotts.Phases(;
+            after_mcs = (CorePotts.HostPhase((cell, st, p, ctx, mcs) -> nothing),)
+        )
     )
-    return CorePotts.PottsProblem(f, u0, CorePotts.Lattice(size(σ)), (0, 4), (; λ = T(1), V0 = T(16), T = T(2)))
+    return CorePotts.PottsProblem(
+        f, u0, CorePotts.Lattice(size(σ)), (0, 4), (; λ = T(1), V0 = T(16), T = T(2))
+    )
 end
 
 """`HostPhase` (relationships.jl): 1 sync; the snapshot (σ and every cell column) down;
 every cell column up. (1, 11, 656) for this fixture with Float32."""
 function transfer_hostphase_counts(u0)
-    return (1, 1 + 2 * length(u0.cell), sizeof(u0.ownership) + 2 * sum(sizeof, values(u0.cell)))
+    return (
+        1, 1 + 2 * length(u0.cell), sizeof(u0.ownership) + 2 * sum(sizeof, values(u0.cell)),
+    )
 end
-
 
 # Declared HostPhase on a domain-masked lattice (D-092): y += x, reads (:x,),
 # writes (:y,).
@@ -90,12 +110,26 @@ function transfer_declared_problem(; T = Float64)
     σ = zeros(Int32, 12, 12)
     σ[3:6, 3:6] .= 1
     σ[8:11, 7:10] .= 2
-    u0 = CorePotts.initial_state(σ, Int32[1, 1]; cell = (; x = ones(T, 2), y = zeros(T, 2), z = zeros(T, 2)))
-    dH(st, p, prop, ctx) = CorePotts.volume_delta(st.cell.volume, prop, (v, c) -> p.λ * (v - p.V0)^2)
+    u0 = CorePotts.initial_state(
+        σ, Int32[1, 1]; cell = (;
+            x = ones(T, 2), y = zeros(T, 2), z = zeros(T, 2),
+        )
+    )
+    function dH(st, p, prop, ctx)
+        return CorePotts.volume_delta(
+            st.cell.volume, prop, (v, c) -> p.λ *
+                (
+                v -
+                    p.V0
+            )^2
+        )
+    end
     body!(cell, st, p, ctx, mcs) = (cell.y .+= cell.x; nothing)
     f = CorePotts.CPMFunction(
         dH; temperature = (st, p, prop, ctx) -> p.T,
-        phases = CorePotts.Phases(; after_mcs = (CorePotts.HostPhase(body!; reads = (:x,), writes = (:y,)),))
+        phases = CorePotts.Phases(;
+            after_mcs = (CorePotts.HostPhase(body!; reads = (:x,), writes = (:y,)),)
+        )
     )
     lat = CorePotts.Lattice(size(σ); domain = trues(size(σ)))
     return CorePotts.PottsProblem(f, u0, lat, (0, 4), (; λ = T(1), V0 = T(16), T = T(2)))
@@ -105,15 +139,27 @@ end
 `ctx.lattice`) comes down on the first run only (then cached)."""
 transfer_declared_counts(u0) = (1, 3, sizeof(u0.cell.x) + 2 * sizeof(u0.cell.y))
 
-
 # A HostPhase body gets the live `p`: an in-place change of a parameter array
-# between MCS is seen (no stale host copy), and a body's writes to a parameter array persist.
+# between MCS is seen (no stale host copy), and a body's writes to a parameter array
+# persist.
 function transfer_param_problem(body!; T = Float32, declared = true)
     σ = zeros(Int32, 12, 12)
     σ[3:6, 3:6] .= 1
     u0 = CorePotts.initial_state(σ, Int32[1, 1]; cell = (; y = zeros(T, 2)))
-    dH(st, p, prop, ctx) = CorePotts.volume_delta(st.cell.volume, prop, (v, c) -> p.λ * (v - p.V0)^2)
-    ph = declared ? CorePotts.HostPhase(body!; reads = (), writes = (:y,)) : CorePotts.HostPhase(body!)
+    function dH(st, p, prop, ctx)
+        return CorePotts.volume_delta(
+            st.cell.volume, prop, (v, c) -> p.λ *
+                (
+                v -
+                    p.V0
+            )^2
+        )
+    end
+    ph = if declared
+        CorePotts.HostPhase(body!; reads = (), writes = (:y,))
+    else
+        CorePotts.HostPhase(body!)
+    end
     f = CorePotts.CPMFunction(
         dH; temperature = (st, p, prop, ctx) -> p.T,
         phases = CorePotts.Phases(; after_mcs = (ph,))
@@ -128,12 +174,11 @@ transfer_read_q!(cell, st, p, ctx, mcs) = (cell.y[1] += Array(p.Q)[1]; nothing)
 
 transfer_write_acc!(cell, st, p, ctx, mcs) = (p.acc .+= 1; nothing)
 
-
 # Every GPU wait of a quiet MCS is a counted one. On Metal a
-# counted sync waits once and a counted transfer twice (Metal.jl synchronizes before the copy
-# and waits for its blit), so the waits of an MCS must equal `syncs + 2 transfers`. Waits the
-# counters cannot see (Metal.jl's device→device `copyto!`, `UInt8`/`Int8` `fill!`) break the
-# identity (D-101 removed them from the step path: kernel copies and fills).
+# counted sync waits once and a counted transfer twice (Metal.jl synchronizes before the
+# copy and waits for its blit), so the waits of an MCS must equal `syncs + 2 transfers`.
+# Waits the counters cannot see (Metal.jl's device→device `copyto!`, `UInt8`/`Int8` `fill!`)
+# break the identity (D-101 removed them from the step path: kernel copies and fills).
 # Test-only instrumentation: `Metal.wait_cmdbuf!` gains a counter; the queue-depth
 # back-pressure of `wait_oldest_cleanup!` (the host running ahead of the GPU) is not a sync
 # and is excluded. The redefinitions copy Metal.jl 1.10.0's bodies, hence the version guard.
@@ -169,15 +214,18 @@ function transfer_instrument_waits!()
     return nothing
 end
 
-
 # On Metal the instrumentation must apply: a Metal upgrade fails here
 # loudly instead of silently disabling the Merks reminder (update the copied bodies above).
 # The wait counter wraps Metal.jl internals, so it is Metal-only; ROCm skips it (D-157).
 # The gate models are the acceptance file's (`transfer_counters_tests.jl`); on Metal this
 # setup includes the file itself, which runs its testsets once more.
 if PottsDevices.device_name() == "metal"
-    let counters_path = joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "transfer_counters_tests.jl"),
+    let counters_path = joinpath(
+            @__DIR__, "..", "lib", "PottsModels", "test",
+            "acceptance", "transfer_counters_tests.jl"
+        ),
             runner = joinpath(@__DIR__, "shared", "pottsmodels_test_file.jl")
+
         Core.eval(
             @__MODULE__, :(
                 module TransferCountersOnDevice
@@ -188,9 +236,14 @@ if PottsDevices.device_name() == "metal"
         )
     end
 end
-const TRANSFER_ON_METAL = PottsDevices.device_name() == "metal" && isdefined(@__MODULE__, :TransferCountersOnDevice)
+const TRANSFER_ON_METAL = PottsDevices.device_name() == "metal" &&
+    isdefined(@__MODULE__, :TransferCountersOnDevice)
 
-const TRANSFER_METAL_VERSION = TRANSFER_ON_METAL ? pkgversion(PottsDevices.device_package()) : nothing
+const TRANSFER_METAL_VERSION = if TRANSFER_ON_METAL
+    pkgversion(PottsDevices.device_package())
+else
+    nothing
+end
 
 const TRANSFER_WAITS_ON = TRANSFER_ON_METAL && TRANSFER_METAL_VERSION == v"1.10.0"
 
@@ -209,63 +262,96 @@ const TRANSFER_STATS = Ref{Any}(nothing)
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "exact transfer counts of the current paths (device)" setup = [TransferCountsSetup] tags = [:potts, :transfer_counts, :gpu, :device] begin
+@testitem "exact transfer counts of the current paths (device)" setup = [
+    TransferCountsSetup,
+] tags = [
+    :potts, :transfer_counts, :gpu, :device,
+] begin
     @testset "exact transfer counts of the current paths (device)" begin
         if PottsDevices.on_device()
             backend = PottsDevices.device_backend()
             alg = CheckerboardCPM()
             prob = transfer_divide_problem(; T = Float32)
-            integ = init(prob, alg; backend, save_start = false, save_everystep = false, save_end = false)
+            integ = init(
+                prob, alg; backend, save_start = false,
+                save_everystep = false, save_end = false
+            )
             c0 = transfer_counts(integ.stats)
-            step!(integ)                                                     # MCS 0: both cells divide
+            # MCS 0: both cells divide
+            step!(integ)
             @test transfer_counts(integ.stats) .- c0 == transfer_division_counts(prob.u0)
             c1 = transfer_counts(integ.stats)
-            u = current_state(integ)                                                      # a host read point
-            @test transfer_counts(integ.stats) .- c1 == transfer_read_counts(prob.u0, CorePotts.nblocks(integ.cache.layout))
-            @test integ.stats.lifecycle.divisions == 2                       # folded at the read
+            # a host read point
+            u = current_state(integ)
+            @test transfer_counts(integ.stats) .- c1 ==
+                transfer_read_counts(prob.u0, CorePotts.nblocks(integ.cache.layout))
+            # folded at the read
+            @test integ.stats.lifecycle.divisions == 2
             @test count(>(0), u.cell.volume) == 4
             prob = transfer_hostphase_problem(; T = Float32)
-            integ = init(prob, alg; backend, save_start = false, save_everystep = false, save_end = false)
+            integ = init(
+                prob, alg; backend, save_start = false,
+                save_everystep = false, save_end = false
+            )
             for _ in 1:3
                 c0 = transfer_counts(integ.stats)
                 step!(integ)
-                @test transfer_counts(integ.stats) .- c0 == transfer_hostphase_counts(prob.u0)
+                @test transfer_counts(integ.stats) .- c0 ==
+                    transfer_hostphase_counts(prob.u0)
             end
             prob = transfer_declared_problem(; T = Float32)
-            integ = init(prob, alg; backend, save_start = false, save_everystep = false, save_end = false)
+            integ = init(
+                prob, alg; backend, save_start = false,
+                save_everystep = false, save_end = false
+            )
             c0 = transfer_counts(integ.stats)
-            step!(integ)                                                     # the mask comes down once
-            @test transfer_counts(integ.stats) .- c0 == transfer_declared_counts(prob.u0) .+ (0, 1, sizeof(prob.lattice.mask))
+            # the mask comes down once
+            step!(integ)
+            @test transfer_counts(integ.stats) .- c0 ==
+                transfer_declared_counts(prob.u0) .+ (0, 1, sizeof(prob.lattice.mask))
             for _ in 1:2
                 c0 = transfer_counts(integ.stats)
                 step!(integ)
-                @test transfer_counts(integ.stats) .- c0 == transfer_declared_counts(prob.u0)
+                @test transfer_counts(integ.stats) .- c0 ==
+                    transfer_declared_counts(prob.u0)
             end
-            @test Array(integ.state.cell.y) == 3 .* Array(integ.state.cell.x)    # the body ran
+            # the body ran
+            @test Array(integ.state.cell.y) == 3 .* Array(integ.state.cell.x)
         else
             @test_skip "device (POTTS_GPU=metal|rocm)"
         end
     end
 end
 
-@testitem "HostPhase bodies see and write the live p (device)" setup = [TransferCountsSetup] tags = [:potts, :transfer_counts, :gpu, :device] begin
+@testitem "HostPhase bodies see and write the live p (device)" setup = [
+    TransferCountsSetup,
+] tags = [
+    :potts, :transfer_counts, :gpu, :device,
+] begin
     @testset "HostPhase bodies see and write the live p (device)" begin
         if PottsDevices.on_device()
             alg = CheckerboardCPM()
             out = map((CorePotts.CPU(), PottsDevices.device_backend())) do backend
-                integ = init(transfer_param_problem(transfer_read_q!), alg; backend, save_start = false, save_everystep = false, save_end = false)
-                step!(integ); step!(integ)
+                integ = init(
+                    transfer_param_problem(transfer_read_q!), alg; backend,
+                    save_start = false, save_everystep = false, save_end = false
+                )
+                step!(integ)
+                step!(integ)
                 integ.p.Q .= 10                                  # in place, between MCS
-                step!(integ); step!(integ)
+                step!(integ)
+                step!(integ)
                 y = Array(integ.state.cell.y)[1]
                 integ = init(
-                    transfer_param_problem(transfer_write_acc!; declared = false), alg; backend,
+                    transfer_param_problem(transfer_write_acc!; declared = false), alg;
+                    backend,
                     save_start = false, save_everystep = false, save_end = false
                 )
                 foreach(_ -> step!(integ), 1:3)
                 (y, Array(integ.p.acc)[1])
             end
-            @test out[1] == (22.0f0, 3.0f0)                      # 1 + 1 + 10 + 10; the body ran 3 times
+            # 1 + 1 + 10 + 10; the body ran 3 times
+            @test out[1] == (22.0f0, 3.0f0)
             @test out[2] == out[1]
         else
             @test_skip "device (POTTS_GPU=metal|rocm)"
@@ -273,12 +359,18 @@ end
     end
 end
 
-@testitem "every GPU wait is counted (Metal; quiet, event and HostPhase MCS)" setup = [TransferCountsSetup] tags = [:potts, :transfer_counts, :gpu, :device] begin
+@testitem "every GPU wait is counted (Metal; quiet, event and HostPhase MCS)" setup = [
+    TransferCountsSetup,
+] tags = [
+    :potts, :transfer_counts, :gpu, :device,
+] begin
     @testset "every GPU wait is counted (Metal; quiet, event and HostPhase MCS)" begin
         if TRANSFER_ON_METAL
             @test TRANSFER_METAL_VERSION == v"1.10.0"
-            TRANSFER_METAL_VERSION == v"1.10.0" || @error "test/transfer_counts_tests.jl copies Metal.jl 1.10.0's " *
-                "`wait_cmdbuf!`/`wait_oldest_cleanup!`; Metal is $TRANSFER_METAL_VERSION: update the copies and the version"
+            TRANSFER_METAL_VERSION == v"1.10.0" ||
+                @error "test/transfer_counts_tests.jl copies Metal.jl 1.10.0's " *
+                "`wait_cmdbuf!`/`wait_oldest_cleanup!`; Metal is $TRANSFER_METAL_VERSION: \
+                    update the copies and the version"
         else
             @test_skip "device (POTTS_GPU=metal; Metal.jl wait counter)"
         end
@@ -286,28 +378,43 @@ end
             backend = PottsDevices.device_backend()
             alg = CheckerboardCPM()
             # quiet MCS of every gate model
-            for (label, _, make) in TransferCountersOnDevice.TransferCountersSetup.gate_models(Float32)
-                integ = init(make(), alg; backend, save_start = false, save_everystep = false, save_end = false)
+            for (
+                    label, _,
+                    make,
+                ) in TransferCountersOnDevice.TransferCountersSetup.gate_models(Float32)
+                integ = init(
+                    make(), alg; backend, save_start = false,
+                    save_everystep = false, save_end = false
+                )
                 TRANSFER_STATS[] = integ.stats
-                step!(integ); step!(integ)
+                step!(integ)
+                step!(integ)
                 PottsDevices.device_sync()
                 for _ in 1:3
                     waits, d = transfer_waits(() -> step!(integ))
-                    @test waits == d[1] + 2 * d[2]    # Merks too: the field phase copies by kernel (D-101)
+                    # Merks too: the field phase copies by kernel (D-101)
+                    @test waits == d[1] + 2 * d[2]
                 end
             end
             # the event MCS of the division fixture: planned on the device (D-089), no
             # wait at all (2 syncs + 2 × 18 transfers = 38 waits on the D-035 host plan)
             prob = transfer_divide_problem(; T = Float32)
-            integ = init(prob, alg; backend, save_start = false, save_everystep = false, save_end = false)
+            integ = init(
+                prob, alg; backend, save_start = false,
+                save_everystep = false, save_end = false
+            )
             TRANSFER_STATS[] = integ.stats
             PottsDevices.device_sync()
             waits, d = transfer_waits(() -> step!(integ))
             @test waits == d[1] + 2 * d[2]
             @test waits == 0
-            @test checkpoint(integ).stats.lifecycle.divisions == 2           # control: the event fired
+            # control: the event fired
+            @test checkpoint(integ).stats.lifecycle.divisions == 2
             # HostPhase MCS
-            integ = init(transfer_hostphase_problem(; T = Float32), alg; backend, save_start = false, save_everystep = false, save_end = false)
+            integ = init(
+                transfer_hostphase_problem(; T = Float32), alg; backend,
+                save_start = false, save_everystep = false, save_end = false
+            )
             TRANSFER_STATS[] = integ.stats
             PottsDevices.device_sync()
             for _ in 1:2

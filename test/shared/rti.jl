@@ -1,13 +1,15 @@
-# ReTestItems for the Potts suite (test/*_tests.jl), shared by test/runtests.jl and test/dev.jl.
+# ReTestItems for the Potts suite (test/*_tests.jl), shared by test/runtests.jl and
+# test/dev.jl.
 #
 #     include(joinpath(@__DIR__, "shared", "rti.jl"))   # defines the module `PottsRTI`
 #
-# `PottsRTI.rti(args...; kw...)` is `ReTestItems.runtests(args...; kw...)` in the active test
-# environment. ReTestItems expects `test/Project.toml` to be the test environment of a package
-# and refuses an unnamed project ("trying to activate test environment of an unnamed project").
-# Ours is the workspace's test project, already active, so `rti` tells ReTestItems so: it treats
-# a run as `Pkg.test`'s, in the current environment, when the task-local `SOURCE_PATH` is the
-# project's `test/runtests.jl` (`ReTestItems.is_running_test_runtests_jl`).
+# `PottsRTI.rti(args...; kw...)` is `ReTestItems.runtests(args...; kw...)` in the active
+# test environment. ReTestItems expects `test/Project.toml` to be the test environment of a
+# package and refuses an unnamed project ("trying to activate test environment of an unnamed
+# project"). Ours is the workspace's test project, already active, so `rti` tells
+# ReTestItems so: it treats a run as `Pkg.test`'s, in the current environment, when the
+# task-local `SOURCE_PATH` is the project's `test/runtests.jl`
+# (`ReTestItems.is_running_test_runtests_jl`).
 
 # the test files are included into the including module (`Main`), which must know the macros
 using ReTestItems: @testitem, @testsetup
@@ -47,7 +49,10 @@ module PottsRTI
         return sort!(out)
     end
 
-    function _ordered_paths(paths, spec::AbstractString = get(ENV, "POTTS_TEST_ORDER", "default"))
+    function _ordered_paths(
+            paths,
+            spec::AbstractString = get(ENV, "POTTS_TEST_ORDER", "default")
+        )
         s = lowercase(strip(String(spec)))
         (isempty(s) || s == "default") && return paths
         files = String[]
@@ -61,11 +66,16 @@ module PottsRTI
         if s == "reverse"
             reverse!(files)
         elseif s == "random" || startswith(s, "random:")
-            seed = s == "random" ? Int(time_ns() & 0x7fffffff) : parse(Int, s[(length("random:") + 1):end])
+            seed = if s == "random"
+                Int(time_ns() & 0x7fffffff)
+            else
+                parse(Int, s[(length("random:") + 1):end])
+            end
             @info "PottsRTI test order" order = "random" seed
             _shuffle!(files, seed)
         else
-            throw(ArgumentError("Unknown POTTS_TEST_ORDER=$(repr(spec)); expected default, reverse, or random[:seed]"))
+            throw(ArgumentError("Unknown POTTS_TEST_ORDER=$(repr(spec)); expected \
+                default, reverse, or random[:seed]"))
         end
         return Tuple(files)
     end
@@ -73,7 +83,8 @@ module PottsRTI
     function rti(args...; kw...)
         proj = ReTestItems.identify_project(TESTDIR)
         # ReTestItems accepts `(shouldrun, paths...)` or `(paths...)`
-        call_args = if !isempty(args) && !(first(args) isa AbstractString) && length(args) >= 2
+        call_args = if !isempty(args) && !(first(args) isa AbstractString) &&
+                length(args) >= 2
             (first(args), _ordered_paths(args[2:end])...)
         elseif !isempty(args) && all(a -> a isa AbstractString, args)
             _ordered_paths(args)
@@ -92,37 +103,48 @@ module PottsRTI
         )
     end
 
-    # Workers share the 24G memory scope of the run (one systemd scope per Julia process tree):
-    # 4 workers of one thread each (the old suite ran in one single-threaded process); a worker
-    # is restarted after an item when the scope is above 80 % of its limit; an item that runs
-    # longer than 20 min fails (the slowest testset took 4 min in the old suite).
+    # Workers share the 24G memory scope of the run (one systemd scope per Julia process
+    # tree): 4 workers of one thread each (the old suite ran in one single-threaded
+    # process); a worker is restarted after an item when the scope is above 80 % of its
+    # limit; an item that runs longer than 20 min fails (the slowest testset took 4 min in
+    # the old suite).
     const NWORKERS = parse(Int, get(ENV, "POTTS_TEST_WORKERS", "4"))
-    const OPTIONS = (; nworker_threads = 1, memory_threshold = 0.8, testitem_timeout = 1200, retries = 0)
+    const OPTIONS = (;
+        nworker_threads = 1, memory_threshold = 0.8, testitem_timeout = 1200, retries = 0,
+    )
 
-    # Items that time code in-process (`:timing`) or start Julia subprocesses (`:subprocess`) run
-    # after the others, one at a time, on uncontended cores.
+    # Items that time code in-process (`:timing`) or start Julia subprocesses
+    # (`:subprocess`) run after the others, one at a time, on uncontended cores.
     serial(ti) = :timing in ti.tags || :subprocess in ti.tags
 
-    # POTTS_TEST_PASSLOG=<file>: after each item, append one line per top-level testset of the item
-    # (item, testset, pass, fail, error, broken), the per-testset pass list of the old suite. Each
-    # process writes `<file>.<pid>`; the gate script concatenates them into `<file>`.
+    # POTTS_TEST_PASSLOG=<file>: after each item, append one line per top-level testset of
+    #     the item
+    # (item, testset, pass, fail, error, broken), the per-testset pass list of the old
+    # suite. Each process writes `<file>.<pid>`; the gate script concatenates them into
+    # `<file>`.
     #
-    # The expression is evaluated in the item's module in a *worker process*, and ReTestItems
-    # serializes it there: it must be code with only literals in it. Interpolating a function of this
-    # module (as an earlier version did with `_counts`) makes the payload a reference to a module the
-    # worker does not have, and the worker dies while deserializing its first item: the coordinator
-    # then fails with ECONNRESET on the next write.
+    # The expression is evaluated in the item's module in a *worker process*, and
+    # ReTestItems serializes it there: it must be code with only literals in it.
+    # Interpolating a function of this module (as an earlier version did with `_counts`)
+    # makes the payload a reference to a module the worker does not have, and the worker
+    # dies while deserializing its first item: the coordinator then fails with ECONNRESET on
+    # the next write.
     function passlog_expr()
         path = get(ENV, "POTTS_TEST_PASSLOG", "")
         isempty(path) && return Expr(:block)
         return quote
             let ts = Test.get_testset()
-                # the counts of a testset's subtree: its passes are cumulative, its failures are direct
+                # the counts of a testset's subtree: its passes are cumulative, its failures
+                # are direct
                 function counts(results, n_passed)
                     p, f, e, b = n_passed, 0, 0, 0
                     for r in results
                         if r isa Test.AbstractTestSet
-                            q = counts(r.results, r.n_passed); p += q[1]; f += q[2]; e += q[3]; b += q[4]
+                            q = counts(r.results, r.n_passed)
+                            p += q[1]
+                            f += q[2]
+                            e += q[3]
+                            b += q[4]
                         elseif r isa Test.Fail
                             f += 1
                         elseif r isa Test.Error
@@ -133,8 +155,9 @@ module PottsRTI
                     end
                     return (p, f, e, b)
                 end
-                # one file per process (the coordinator and each worker), merged after the run: two
-                # processes appending to one file split a row when a write lands in two pieces
+                # one file per process (the coordinator and each worker), merged after the
+                # run: two processes appending to one file split a row when a write lands in
+                # two pieces
                 emit(parts...) = open(string($path, ".", getpid()), "a") do io
                     write(io, join(parts, '\t'), '\n')
                 end
@@ -144,7 +167,8 @@ module PottsRTI
                 end
                 # results outside any testset of the item (a bare @test, an error): one row
                 d = (
-                    0, count(r -> r isa Test.Fail, ts.results), count(r -> r isa Test.Error, ts.results),
+                    0, count(r -> r isa Test.Fail, ts.results),
+                    count(r -> r isa Test.Error, ts.results),
                     count(r -> r isa Test.Broken, ts.results),
                 )
                 d[2] + d[3] + d[4] > 0 && emit(ts.description, "(item level)", d...)
@@ -155,15 +179,20 @@ module PottsRTI
     """
         potts_suite(; nworkers = NWORKERS, qa = ENV["POTTS_QA"] != "false", gpu = false)
 
-    GROUP=Potts: every item tagged `:potts` except the device files' (`:gpu`; with `gpu = true`
-    those too, the `:rocm` ones on ROCm only), and except `:qa` when `qa` is false. The serial
-    items run last, in one worker.
+    GROUP=Potts: every item tagged `:potts` except the device files' (`:gpu`; with
+    `gpu = true` those too, the `:rocm` ones on ROCm only), and except `:qa` when `qa` is
+    false. The serial items run last, in one worker.
     """
-    function potts_suite(; nworkers = NWORKERS, qa = get(ENV, "POTTS_QA", "true") == "true", gpu = false)
+    function potts_suite(;
+            nworkers = NWORKERS, qa = get(ENV, "POTTS_QA", "true") == "true",
+            gpu = false
+        )
         rocm = get(ENV, "POTTS_GPU", "") == "rocm"
         function keep(ti)
-            return :potts in ti.tags && (gpu || !(:gpu in ti.tags)) && (rocm || !(:rocm in ti.tags)) &&
-                (qa || !(:qa in ti.tags)) && !(:gpu_only in ti.tags) && !(:multithreaded in ti.tags)
+            return :potts in ti.tags && (gpu || !(:gpu in ti.tags)) &&
+                (rocm || !(:rocm in ti.tags)) &&
+                (qa || !(:qa in ti.tags)) && !(:gpu_only in ti.tags) &&
+                !(:multithreaded in ti.tags)
         end   # the D-157 scan needs the device cache
         return _two_passes(keep, nworkers)
     end
@@ -171,12 +200,14 @@ module PottsRTI
     """
         multithreaded_suite()
 
-    GROUP=Multithreaded: items tagged `:multithreaded`, run in-process (`nworkers = 0`) so all
-    threads of the `julia -t 4` process are available. Fails if `Threads.nthreads() < 4`.
+    GROUP=Multithreaded: items tagged `:multithreaded`, run in-process (`nworkers = 0`) so
+    all threads of the `julia -t 4` process are available. Fails if
+    `Threads.nthreads() < 4`.
     """
     function multithreaded_suite()
         Threads.nthreads() >= 4 ||
-            error("GROUP=Multithreaded requires at least 4 Julia threads (got $(Threads.nthreads())); run with `julia -t 4`")
+            error("GROUP=Multithreaded requires at least 4 Julia threads \
+                (got $(Threads.nthreads())); run with `julia -t 4`")
         keep(ti) = :multithreaded in ti.tags && !(:gpu_only in ti.tags) && !(:qa in ti.tags)
         return _two_passes(keep, 0)
     end
@@ -184,18 +215,20 @@ module PottsRTI
     """
         device_suite()
 
-    The Potts part of GROUP=GPU, run with POTTS_GPU set: the items that name a device (`:device`)
-    and the device files' items (`:gpu`; the `:rocm` ones on ROCm only), in-process, one at a time
-    (one device), without `:qa`; the `:device_scan` item last (`_phases`).
+    The Potts part of GROUP=GPU, run with POTTS_GPU set: the items that name a device
+    (`:device`) and the device files' items (`:gpu`; the `:rocm` ones on ROCm only),
+    in-process, one at a time (one device), without `:qa`; the `:device_scan` item last
+    (`_phases`).
     """
     function device_suite(; gpu = get(ENV, "POTTS_GPU", ""))
         function keep(ti)
             return (:device in ti.tags || :gpu in ti.tags) && !(:qa in ti.tags) &&
                 !(:multithreaded in ti.tags) && (gpu == "rocm" || !(:rocm in ti.tags))
         end
-        # the D-157 scan is an item tagged `:device_scan`, and it reads the process's kernel cache: it
-        # has to run after every other device item, in the process that compiled those kernels. Both
-        # phases run in-process (`nworkers = 0`), one item at a time; a worker's cache is its own.
+        # the D-157 scan is an item tagged `:device_scan`, and it reads the process's kernel
+        # cache: it has to run after every other device item, in the process that compiled
+        # those kernels. Both phases run in-process (`nworkers = 0`), one item at a time; a
+        # worker's cache is its own.
         return _phases(
             (
                 (ti -> keep(ti) && !(:device_scan in ti.tags), 0),
@@ -205,7 +238,12 @@ module PottsRTI
     end
 
     function _two_passes(keep, nworkers)
-        return _phases(((ti -> keep(ti) && !serial(ti), nworkers), (ti -> keep(ti) && serial(ti), min(nworkers, 1))))
+        return _phases(
+            (
+                (ti -> keep(ti) && !serial(ti), nworkers),
+                (ti -> keep(ti) && serial(ti), min(nworkers, 1)),
+            )
+        )
     end
 
     function _phases(phases)
@@ -218,8 +256,8 @@ module PottsRTI
                 push!(errs, (e, catch_backtrace()))
             end
         end
-        # report every pass that failed, and fail the run with the first one (its stack is the cause;
-        # a later pass's error is usually the same failure seen again)
+        # report every pass that failed, and fail the run with the first one (its stack is
+        # the cause; a later pass's error is usually the same failure seen again)
         for (e, bt) in errs[2:end]
             @error "a later pass failed too" exception = (e, bt)
         end

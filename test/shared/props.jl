@@ -1,8 +1,11 @@
 # Shared property-test helpers:
-# - `fp_props`: fingerprint sensitivity, invariance, checkpoint compatibility, and subprocess determinism
-# - `stat_accept` / `required_n`: normal/t/TOST statistical acceptance helpers with stated α and power
+# - `fp_props`: fingerprint sensitivity, invariance, checkpoint compatibility, and
+#   subprocess determinism
+# - `stat_accept` / `required_n`: normal/t/TOST statistical acceptance helpers with stated α
+#   and power
 # - `observed_orders` / `observed_order`: empirical convergence-order helpers
-# - `tiny_oracle_sample` / `tiny_oracle_check`: tiny-lattice transition-kernel enumerator helpers
+# - `tiny_oracle_sample` / `tiny_oracle_check`: tiny-lattice transition-kernel enumerator
+#   helpers
 #
 # Designed to be `include`d inside a ReTestItems `@testsetup` module.
 
@@ -33,7 +36,8 @@ end
 
 """
     fp_props(make_base; variants = (), invariants = (), check_checkpoint = true,
-             check_algorithms = false, subprocess_expr = nothing, project = dirname(@__DIR__))
+             check_algorithms = false, subprocess_expr = nothing,
+                 project = dirname(@__DIR__))
 
 Verify fingerprint properties for a problem family without stored literal pins:
 - same-session determinism (`make_base()` built twice gives equal fingerprints)
@@ -42,7 +46,8 @@ Verify fingerprint properties for a problem family without stored literal pins:
 - invariance: every `(label, make_eq)` in `invariants` preserves `prob.f.fingerprint`
   (and accepts a checkpoint from `base` when `check_checkpoint` is true)
 - optional algorithm independence (`SequentialCPM` vs `CheckerboardCPM`)
-- optional fresh-subprocess determinism (`subprocess_expr` prints `repr(fp)` or `string(fp)`).
+- optional fresh-subprocess determinism (`subprocess_expr` prints `repr(fp)` or
+  `string(fp)`).
 """
 function fp_props(
         make_base;
