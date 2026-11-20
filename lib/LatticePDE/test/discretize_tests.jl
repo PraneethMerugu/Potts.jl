@@ -17,7 +17,7 @@ include("shared/lp_runner.jl")
 include("shared/discretize.jl")
 
 # Salted operator hashes: another package build's hashes, in this process (the D-107 pattern
-# of `p6_0ah_canonical_term_order.jl`, extended to field terms). Inert at salt 0.
+# of PottsModels' `canonical_term_order_tests.jl`, extended to field terms). Inert at salt 0.
 const SALT = Ref{UInt}(0)
 for f in (laplacian, value_at, ismember, sin, cos, exp)
     @eval function Base.hash(g::typeof($f), h::UInt)

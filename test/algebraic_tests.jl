@@ -1,6 +1,6 @@
 # Algebraic equations in `@equations` and the ODE templates (`Potts.ode_system`), beside
-# the frozen acceptance file p6_0bn_ode_mtkcompile.jl: reads across scopes, components
-# beside algebraic variables, `@observed` over them, and the rejections the frozen file
+# the acceptance file lib/PottsModels/test/acceptance/ode_mtkcompile_tests.jl: reads across scopes, components
+# beside algebraic variables, `@observed` over them, and the rejections the acceptance file
 # leaves to the implementer (indexed and lagged reads, `rand()`, division rules, couplings).
 
 @testsetup module AlgebraicSetup

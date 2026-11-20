@@ -1,5 +1,5 @@
-# Whole-cell connectivity (P6.9a) beside the frozen acceptance file
-# p6_9a_global_connectivity.jl: the build check of every shell-based quantity on a periodic
+# Whole-cell connectivity (P6.9a) beside the acceptance file
+# lib/PottsModels/test/acceptance/global_connectivity_tests.jl: the build check of every shell-based quantity on a periodic
 # axis of length 1 (the shell wraps onto the target), and `reinit!` clearing the
 # checkerboard's deferred-refusal counter.
 

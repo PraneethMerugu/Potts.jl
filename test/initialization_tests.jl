@@ -1,8 +1,8 @@
 # Entity-local initialization (`@initialization_equations`, `Potts.initialization_system`),
-# beside the frozen acceptance file p6_0bo_initialization.jl: the `kind` built-in, parameter
+# beside the acceptance file lib/PottsModels/test/acceptance/initialization_tests.jl: the `kind` built-in, parameter
 # expressions as fixed values, vector components with guesses, `D(m)` of a model ODE, `extend`,
 # `Float32` problems, algebraic model variables from the operating point, many cells, and the
-# rejections the frozen file leaves to the implementer.
+# rejections the acceptance file leaves to the implementer.
 
 @testsetup module InitializationSetup
 using Potts, Test

@@ -1,6 +1,6 @@
-# Test-only models (D-254): not published, so not in PottsModels. The acceptance files use
-# them by their bare names; every runner that includes an acceptance file includes this file
-# first, guarded: `isdefined(Main, :SingleDivisionFixture) || include(…/fixtures.jl)`.
+# Test-only models (D-254): not published, so not in PottsModels. A test setup that needs
+# them includes this file (`include(joinpath(@__DIR__, "fixtures.jl"))`, or `"..", "fixtures.jl"`
+# from a subdirectory), and its items use them by their bare names.
 using Potts
 
 """

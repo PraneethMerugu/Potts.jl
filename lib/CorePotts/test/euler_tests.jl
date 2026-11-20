@@ -2,8 +2,8 @@
 # The per-copy Δχ against two from-scratch recounts (an independent one here, and
 # `recompute_euler`), on every square and hex shell and sampled cubic shells; the device
 # lifecycle's rebuild, fused and staged, on the CPU backend. The model-level acceptance
-# (exactness under every integrator, ΔH, observables) is PottsModels' frozen
-# `p6_3j_euler_tracker.jl`.
+# (exactness under every integrator, ΔH, observables) is PottsModels'
+# `lib/PottsModels/test/acceptance/euler_tracker_tests.jl`.
 
 # Independent recount: χ = Σ_S (−1)^|S| · #cells, a cell being the 2^|S| sites `i + {0,1}^S`
 # all in X (`:face`) or a grid face of the closed voxels of X (`:full`, its vertices counted

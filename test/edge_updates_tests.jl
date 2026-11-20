@@ -1,6 +1,6 @@
-# Edge-scope `@before_mcs`/`@after_mcs` updates (D-169), beside the frozen acceptance file
-# p6_0bv_edge_after_mcs.jl: several relationships in one stage, `Pre` reads of another edge
-# variable, model and parameter reads, the refusals the frozen file leaves to the implementer,
+# Edge-scope `@before_mcs`/`@after_mcs` updates (D-169), beside the acceptance file
+# lib/PottsModels/test/acceptance/edge_after_mcs_tests.jl: several relationships in one stage, `Pre` reads of another edge
+# variable, model and parameter reads, the refusals the acceptance file leaves to the implementer,
 # and zero warm allocations.
 
 @testsetup module EdgeUpdatesSetup
