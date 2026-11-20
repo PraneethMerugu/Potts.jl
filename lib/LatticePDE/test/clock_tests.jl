@@ -1,4 +1,4 @@
-# F2-08c: the discretization's clock (F2 design §2.6). `LatticeDiscretization(…; clock = τ)`
+# The discretization's clock. `LatticeDiscretization(…; clock = τ)`
 # sets the window of the owned steppers and the step index `k` that `step_index(t)` reads:
 # an integer kept by the stepper (the clock boundaries reached since the start of the time
 # span), never computed from a float time, so `k` does not depend on `dt` or `saveat`.
@@ -23,10 +23,10 @@ include("shared/clock.jl")
 include("shared/export_all.jl")
 end
 
-@testitem "F2-08c: step_index(t) reads k by integer bookkeeping (B)" setup = [LP_clock] tags = [:latticepde, :clock] begin
-@testset "F2-08c: step_index(t) reads k by integer bookkeeping (B)" begin
+@testitem "step_index(t) reads k by integer bookkeeping (B)" setup = [LP_clock] tags = [:latticepde, :clock] begin
+@testset "step_index(t) reads k by integer bookkeeping (B)" begin
     p = discretize(ksys(3.0), kdisc())
-    @test p isa SciMLBase.ODEProblem                               # (F4-01: one problem; base: a FieldProblem)
+    @test p isa SciMLBase.ODEProblem                               # (one problem; base: a FieldProblem)
     finals = Float64[]
     for (dt, saveat) in ((0.1, 0.3), (0.1, 0.7), (0.25, 0.5), (0.25, 0.75))
             s = solve(p, ExplicitEuler(); dt, saveat)
@@ -50,7 +50,7 @@ end
 end
 end
 
-@testitem "F2-08c: step_index refusals name their route (B)" setup = [LP_clock] tags = [:latticepde, :clock] begin
+@testitem "step_index refusals name their route (B)" setup = [LP_clock] tags = [:latticepde, :clock] begin
     @testset "step_index refusals" begin
         @test_throws ArgumentError discretize(ksys(1.0), LatticeDiscretization(Grid((4, 4)); T = Float64))
         @test_throws ArgumentError discretize(ksys(1.0; rate = step_index(2t)), kdisc())
@@ -67,8 +67,8 @@ end
 # REAL forms of the step index over several windows, in the default and the debug emission
 # modes: `η k` is hoisted into a derived parameter, `(1 + ε k)` multiplies the diffusion; a
 # slot bound once would read the first window's `k` from the second window on
-@testitem "F2-08c: REAL forms of step_index over several windows (default and debug emission)" setup = [LP_clock] tags = [:latticepde, :clock] begin
-@testset "F2-08c: REAL forms of step_index over several windows (default and debug emission)" begin
+@testitem "REAL forms of step_index over several windows (default and debug emission)" setup = [LP_clock] tags = [:latticepde, :clock] begin
+@testset "REAL forms of step_index over several windows (default and debug emission)" begin
     sysr = PDESystem([D(kce) ~ -kce + kη * step_index(t)], [kc(0, x, y) ~ 1.0; kperiodic], kdom(4.0), [t, x, y],
         [kce], [kη]; name = :r)
     p = discretize(sysr, kdisc())
@@ -105,31 +105,31 @@ end
 end
 end
 
-# Review round 1 of F2 batch 3: messages print `step_index(t)` (S1); a window that comes from
-# the clock is named so, with routes that work when followed (S2); `step_index` with
-# `FieldGroups` and with a map (S3); the clock's slot is not a parameter (N6)
-@testitem "F2-08c: messages and routes of the clock (B)" setup = [LP_clock] tags = [:latticepde, :clock] begin
-@testset "F2-08c: messages and routes of the clock (B)" begin
+# Messages print `step_index(t)`; a window that comes from
+# the clock is named so, with routes that work when followed; `step_index` with
+# `FieldGroups` and with a map; the clock's slot is not a parameter (N6)
+@testitem "messages and routes of the clock (B)" setup = [LP_clock] tags = [:latticepde, :clock] begin
+@testset "messages and routes of the clock (B)" begin
     # S1: the slot prints as the user wrote it
         sysf = PDESystem(
             [D(kce) ~ (1 + kη * step_index(t)) * laplacian(kce)], [kc(0, x, y) ~ 0.0; kperiodic], kdom(2.0), [t, x, y],
         [kce], [kη]; name = :f)
     e = kerr(() -> solve(discretize(sysf, kdisc()), ExplicitEuler()))
     @test occursin("step_index(t)", e) && !occursin("clock__tick", e)
-    # (a steady row that reads no free field: `0 ~ -kc + step_index(t)` is a steady row since F3-12b)
+    # (a steady row that reads no free field: `0 ~ -kc + step_index(t)` is a steady row)
     sys0 = PDESystem([D(kce) ~ -kce, 0 ~ -1 + step_index(t)], [kc(0, x, y) ~ 0.0; kperiodic], kdom(2.0), [t, x, y], [kce], [kη];
         name = :z)
     e = kerr(() -> discretize(sys0, kdisc()))
     @test occursin("step_index(t)", e) && !occursin("clock__tick", e) && occursin("reads none", e)
     # whole names only: a user parameter ending in `clock__tick` keeps its name
     @test LatticePDE._clocktext("`myclock__tick` and clock__tick") == "`myclock__tick` and step_index(t)"
-    # S2: saveat off the window from the clock: the saves between are interpolated (F4-05, Q2 (a);
-    # before, a refusal with the route `dt = 0.5`); the route still saves stepped states
+    # saveat off the window from the clock: the saves between are interpolated
+    # (before, a refusal with the route `dt = 0.5`); the route still saves stepped states
     p = discretize(ksys(3.0), kdisc())
     s = solve(p, ExplicitEuler(); saveat = 0.5)
     @test s.t ≈ 0:0.5:3 && s.u[2] ≈ (s.u[1] .+ s.u[3]) ./ 2
         @test solve(p, ExplicitEuler(); dt = 0.5, saveat = 0.5).t ≈ 0:0.5:3
-    # a span of 2.5 periods: the last window is shortened (F4-03; before, a refusal), and reads
+    # a span of 2.5 periods: the last window is shortened (before, a refusal), and reads
     # the step index of its period
     p25 = discretize(ksys(2.5), kdisc())
     @test isapprox(solve(p25, ExplicitEuler())[kce, end][1], 0 + 1 + 0.5 * 2; rtol = 1e-12)

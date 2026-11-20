@@ -1,10 +1,10 @@
-# F3-22 (F3 design §5 F3-22; batch 6 review r1 S3, r2 N3): a spatial operator whose operand lives
+# A spatial operator whose operand lives
 # on another grid than its row. A fine field in a coarse row: the block mean of the fine operator
 # (the net flux through the faces of the block over its volume). A coarse field in a fine row:
 # the coarse operator at the node of the site's block. Both are the aux field of the manual route
 # (`L ~ laplacian(c)` on the grid of `c`) that `crossgrid_form` adds, so the oracle is the route itself
 # (bitwise), a hand computation, and a dense implicit step (the term is a cross term, exact in
-# solve order). Base 5316bf1c (~/lpwork/f322/nc-*.log): the direct form is refused ("a spatial
+# solve order). Before the fix (5316bf1c): the direct form is refused ("a spatial
 # operator reads its field on that field's own grid"), so every testset here errors.
 
 @testsetup module LP_crossgrid
@@ -41,7 +41,7 @@ include("shared/crossgrid.jl")
 include("shared/export_all.jl")
 end
 
-@testitem "F3-22: the direct form is the manual route, bitwise, for every operator and both directions" setup = [LP_crossgrid] tags = [:latticepde, :crossgrid] begin
+@testitem "the direct form is the manual route, bitwise, for every operator and both directions" setup = [LP_crossgrid] tags = [:latticepde, :crossgrid] begin
     using .LP_crossgrid: fd, kron
     @testset "the direct form is the manual route, bitwise, for every operator and both directions" begin
         alg = ExplicitEuler(; substeps = 1)
@@ -61,7 +61,7 @@ end
 
 end
 
-@testitem "F3-22: hand computation: the block mean of the fine Laplacian, and the coarse Laplacian at the node" setup = [LP_crossgrid] tags = [:latticepde, :crossgrid] begin
+@testitem "hand computation: the block mean of the fine Laplacian, and the coarse Laplacian at the node" setup = [LP_crossgrid] tags = [:latticepde, :crossgrid] begin
     using .LP_crossgrid: fd, kron
     @testset "hand computation: the block mean of the fine Laplacian, and the coarse Laplacian at the node" begin
         alg = ExplicitEuler(; substeps = 1)
@@ -105,7 +105,7 @@ end
 
 end
 
-@testitem "F3-22: 3D and a hexagonal lattice: the direct form is the route" setup = [LP_crossgrid] tags = [:latticepde, :crossgrid] begin
+@testitem "3D and a hexagonal lattice: the direct form is the route" setup = [LP_crossgrid] tags = [:latticepde, :crossgrid] begin
     using .LP_crossgrid: fd, kron
     @testset "3D and a hexagonal lattice: the direct form is the route" begin
         @parameters z
@@ -142,7 +142,7 @@ end
 
 end
 
-@testitem "F3-22: the :ode path: the direct form is the route" setup = [LP_crossgrid] tags = [:latticepde, :crossgrid] begin
+@testitem "the :ode path: the direct form is the route" setup = [LP_crossgrid] tags = [:latticepde, :crossgrid] begin
     using .LP_crossgrid: fd, kron
     @testset "the :ode path: the direct form is the route" begin
         p = xpair(c -> laplacian(c))
@@ -156,7 +156,7 @@ end
 
 end
 
-@testitem "F3-22: implicit methods: the cross-grid term is exact in the operator (a dense step, no warning)" setup = [LP_crossgrid] tags = [:latticepde, :crossgrid] begin
+@testitem "implicit methods: the cross-grid term is exact in the operator (a dense step, no warning)" setup = [LP_crossgrid] tags = [:latticepde, :crossgrid] begin
     using .LP_crossgrid: fd, kron
     @testset "implicit methods: the cross-grid term is exact in the operator (a dense step, no warning)" begin
         dt = 0.05
@@ -202,7 +202,7 @@ end
         @test gather(xrun(s3, mk(BackwardEuler)), xcc, xu, 2) ≈ [cb; (I - 0.2 * Lu) \ (0.5 * XP * Lc * c0)] atol = 1.0e-9
         vb = (I - dt * 0.01 * Lu) \ v0
         @test gather(xrun(s4, mk(BackwardEuler)), xv, xcc, 2) ≈ [vb; (I - 0.2 * Lc) \ (0.5 * XR * Lu * v0)] atol = 1.0e-9
-        # QuasiSteady: every row steady, the second reads the first's new steady state (review r1 of F3-22)
+        # QuasiSteady: every row steady, the second reads the first's new steady state
         qs = QuasiSteady(; linsolve = tight)
         s5 = PDESystem(
             [D(xe(xcc)) ~ 0.05 * laplacian(xe(xcc)) - xe(xcc) + x + y, D(xe(xu)) ~ 0.2 * laplacian(xe(xu)) + 0.5 * laplacian(xe(xcc)) - xe(xu)],
@@ -220,7 +220,7 @@ end
 
 end
 
-@testitem "F3-22: a cycle across the grids is not in the operator: warned with the term as written, converges with LatticeNewton" setup = [LP_crossgrid] tags = [:latticepde, :crossgrid] begin
+@testitem "a cycle across the grids is not in the operator: warned with the term as written, converges with LatticeNewton" setup = [LP_crossgrid] tags = [:latticepde, :crossgrid] begin
     using .LP_crossgrid: fd, kron
     @testset "a cycle across the grids is not in the operator: warned with the term as written, converges with LatticeNewton" begin
         dt = 0.05
@@ -251,9 +251,9 @@ end
 
 end
 
-@testitem "F3-22: same grid: a term of aux fields is a cross term in solve order (review r1 of F3-22)" setup = [LP_crossgrid] tags = [:latticepde, :crossgrid] begin
+@testitem "same grid: a term of aux fields is a cross term in solve order" setup = [LP_crossgrid] tags = [:latticepde, :crossgrid] begin
     using .LP_crossgrid: fd, kron
-    @testset "same grid: a term of aux fields is a cross term in solve order (review r1 of F3-22)" begin
+    @testset "same grid: a term of aux fields is a cross term in solve order" begin
         # `L ~ b²` read by `a`, with `b` after `a` in state order: the row order follows the aux
         # kernel, and the term is a source of the new `b` (newton = 1, no warning). An aux chain
         # `L2 ~ 2 L`, `L ~ laplacian(b)` reads `b` through both. Base 33e960cf~1: unseen, `newton = 4` and a warning
@@ -298,7 +298,7 @@ end
 
 end
 
-@testitem "F3-22: two terms of one operator and operand: the second aux prints as written" setup = [LP_crossgrid] tags = [:latticepde, :crossgrid] begin
+@testitem "two terms of one operator and operand: the second aux prints as written" setup = [LP_crossgrid] tags = [:latticepde, :crossgrid] begin
     using .LP_crossgrid: fd, kron
     @testset "two terms of one operator and operand: the second aux prints as written" begin
         # (`DivKGrad(xkc)#2` is the second aux field's name; a warning prints `DivKGrad(xkc)`)
@@ -321,11 +321,11 @@ end
 
 end
 
-@testitem "F3-22: ExplicitEuler's default count: a cross-grid term read one way is bounded, a loop is refused" setup = [LP_crossgrid] tags = [:latticepde, :crossgrid] begin
+@testitem "ExplicitEuler's default count: a cross-grid term read one way is bounded, a loop is refused" setup = [LP_crossgrid] tags = [:latticepde, :crossgrid] begin
     using .LP_crossgrid: fd, kron
     @testset "ExplicitEuler's default count: a cross-grid term read one way is bounded, a loop is refused" begin
-        # (review r1: the rows read one way, so the Jacobian is block triangular and the dominance
-        # test does not apply; D-C7a item 2 amended. Base 9afaac05: "no automatic substeps")
+        # (the rows read one way, so the Jacobian is block triangular and the dominance
+        # test does not apply. Before the fix, 9afaac05: "no automatic substeps")
         one = PDESystem(
             [D(xe(xcc)) ~ 0.01 * laplacian(xe(xcc)), D(xe(xu)) ~ 0.2 * laplacian(xe(xu)) + 0.5 * laplacian(xe(xcc)) - xe(xu)],
             [xcc(0, x, y) ~ x^2 + y, xu(0, x, y) ~ 0.0], xdom(), [t, x, y], [xe(xcc), xe(xu)], Num[]; name = :xe1
@@ -351,7 +351,7 @@ end
 
 end
 
-@testitem "F3-22: Duals: ∂/∂p of a cross-grid run against finite differences" setup = [LP_crossgrid] tags = [:latticepde, :crossgrid] begin
+@testitem "Duals: ∂/∂p of a cross-grid run against finite differences" setup = [LP_crossgrid] tags = [:latticepde, :crossgrid] begin
     using .LP_crossgrid: fd, kron
     @testset "Duals: ∂/∂p of a cross-grid run against finite differences" begin
         tight = LatticePCG(; reltol = 1.0e-13, maxiters = 64)

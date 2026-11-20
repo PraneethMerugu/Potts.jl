@@ -1,4 +1,4 @@
-# Definitions of families_tests.jl that other test files use (moved here by TS1b).
+# Definitions of families_tests.jl that other test files use.
 using SciMLBase: SciMLBase, remake
 using OrdinaryDiffEqTsit5: Tsit5
 using OrdinaryDiffEqRosenbrock: Rodas5P
@@ -45,7 +45,7 @@ catch e
     sprint(showerror, e)
 end
 
-# a backend that is not the problem's (SX-12): an array type whose backend is a stand-in GPU
+# a backend that is not the problem's: an array type whose backend is a stand-in GPU
 struct FamFakeGPU <: KA.GPU end
 struct FamDevVec <: AbstractVector{Float64}
     v::Vector{Float64}

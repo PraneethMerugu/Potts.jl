@@ -1,11 +1,11 @@
-# F4-12b (F4 design §9.1, rulings Q14–Q17): Robin coefficients α and β that vary by site or in
+# Robin coefficients α and β that vary by site or in
 # time. Each lowers into a value field read by the face rule (`FaceRule.afield`, `bfield`); a
 # row with such a face is a field row, whose `jac:` kernel writes the boundary diagonal `w d⁺` per
 # site (the negative part stays out of the operator per site: a defect correction, and the
 # operator is exact only when no site can be negative). The tests compare one window with the
 # hand matrix of the ghost rule (`hand_rate`, `be_hand` of implicit.jl), a time-varying α with
 # owned ExplicitEuler at a small step, and Dual derivatives with finite differences.
-# Base (ca232825, ~/lpwork/f4c/nc12b-base-lp.log): every discretize refuses the coefficient
+# Before the fix (ca232825): every discretize refuses the coefficient
 # ("the Robin coefficient `1 + y` must be one value at every site; it reads `y`").
 
 @testsetup module LP_robin_site
@@ -33,8 +33,8 @@ include("shared/robin_site.jl")
 include("shared/export_all.jl")
 end
 
-@testitem "F4-12b: per-site α and β equal the hand ghost-rule matrix (BackwardEuler, ExplicitEuler)" setup = [LP_robin_site] tags = [:latticepde, :robin_site] begin
-@testset "F4-12b: per-site α and β equal the hand ghost-rule matrix (BackwardEuler, ExplicitEuler)" begin
+@testitem "per-site α and β equal the hand ghost-rule matrix (BackwardEuler, ExplicitEuler)" setup = [LP_robin_site] tags = [:latticepde, :robin_site] begin
+@testset "per-site α and β equal the hand ghost-rule matrix (BackwardEuler, ExplicitEuler)" begin
     h = 0.05
         p = rsown(rsys([D(bce) ~ bD * laplacian(bce) - bk * bce + x], rs_bcs(), [bD, bk, bg]))
     # the face rules read value fields; the row is a field row
@@ -53,8 +53,8 @@ end
 end
 end
 
-@testitem "F4-12b: a per-site α equal to a uniform one gives the uniform face's result" setup = [LP_robin_site] tags = [:latticepde, :robin_site] begin
-@testset "F4-12b: a per-site α equal to a uniform one gives the uniform face's result" begin
+@testitem "a per-site α equal to a uniform one gives the uniform face's result" setup = [LP_robin_site] tags = [:latticepde, :robin_site] begin
+@testset "a per-site α equal to a uniform one gives the uniform face's result" begin
     # `ifelse(y < 2, bg, 0)` reads `y` but is `bg` on every face site: a value field, a field row
     # (the multigrid folds its boundary diagonal with the shift); the result is the scalar face's
     h = 0.05
@@ -76,8 +76,8 @@ end
 end
 end
 
-@testitem "F4-12b: a mixed-sign α works per site (defect correction; not exact)" setup = [LP_robin_site] tags = [:latticepde, :robin_site] begin
-@testset "F4-12b: a mixed-sign α works per site (defect correction; not exact)" begin
+@testitem "a mixed-sign α works per site (defect correction; not exact)" setup = [LP_robin_site] tags = [:latticepde, :robin_site] begin
+@testset "a mixed-sign α works per site (defect correction; not exact)" begin
     # α = y − 0.4 on x = 0: d = α/(α/2 + β/h) changes sign along the face
     h = 0.05
     bcs = [bc(0, x, y) ~ x * y, (y - 0.4) * bc(t, 0, y) + Differential(x)(bc(t, 0, y)) ~ 0.5]
@@ -98,8 +98,8 @@ end
 end
 end
 
-@testitem "F4-12b: a time-varying α (BackwardEuler rebuilt at each stage; ExplicitEuler at a small step)" setup = [LP_robin_site] tags = [:latticepde, :robin_site] begin
-@testset "F4-12b: a time-varying α (BackwardEuler rebuilt at each stage; ExplicitEuler at a small step)" begin
+@testitem "a time-varying α (BackwardEuler rebuilt at each stage; ExplicitEuler at a small step)" setup = [LP_robin_site] tags = [:latticepde, :robin_site] begin
+@testset "a time-varying α (BackwardEuler rebuilt at each stage; ExplicitEuler at a small step)" begin
     bcs = [bc(0, x, y) ~ x * y, (1.5 + sin(4t)) * bc(t, 0, y) - Differential(x)(bc(t, 0, y)) ~ 1.0]
         p = rsown(rsys([D(bce) ~ bD * laplacian(bce) - bk * bce], bcs, [bD, bk]; T = 0.5))
         ig = init(p, BackwardEuler(; linsolve = BTIGHT); dt = 0.05)
@@ -118,8 +118,8 @@ end
 end
 end
 
-@testitem "F4-12b (Q15): ExplicitEuler's default count re-bounds each window over its time span" setup = [LP_robin_site] tags = [:latticepde, :robin_site] begin
-@testset "F4-12b (Q15): ExplicitEuler's default count re-bounds each window over its time span" begin
+@testitem "ExplicitEuler's default count re-bounds each window over its time span" setup = [LP_robin_site] tags = [:latticepde, :robin_site] begin
+@testset "ExplicitEuler's default count re-bounds each window over its time span" begin
     # α(t) = −1 − 40t with the outward β = 1/h > 0: the ghost diagonal d = α/(α/2 + β/h) is
     # negative and grows in size with t, so the face's excess |d − 1| − 1 (and the count) grows
     bcs = [bc(0, x, y) ~ x * y, (-1 - 40t) * bc(t, 0, y) - Differential(x)(bc(t, 0, y)) ~ 0.0]
@@ -143,8 +143,8 @@ end
 end
 end
 
-@testitem "F4-12b: Dual parameters in per-site α and β (BackwardEuler, ExplicitEuler)" setup = [LP_robin_site] tags = [:latticepde, :robin_site] begin
-@testset "F4-12b: Dual parameters in per-site α and β (BackwardEuler, ExplicitEuler)" begin
+@testitem "Dual parameters in per-site α and β (BackwardEuler, ExplicitEuler)" setup = [LP_robin_site] tags = [:latticepde, :robin_site] begin
+@testset "Dual parameters in per-site α and β (BackwardEuler, ExplicitEuler)" begin
     @parameters ra = 1.2 rb = 0.7
     bcs = [bc(0, x, y) ~ x * y, ra * (1 + y) * bc(t, 0, y) - rb * (1 + x) * Differential(x)(bc(t, 0, y)) ~ 1.0,
         (1 + x) * bc(t, x, 1) + rb * Differential(y)(bc(t, x, 1)) ~ 0.5]
@@ -153,16 +153,16 @@ end
             J(v) = sum(solve(remake(p; p = [q => v]), alg; dt = 0.05).u[end])
         d = ForwardDiff.derivative(J, v0)
         fd = (J(v0 + 1e-6) - J(v0 - 1e-6)) / 2e-6
-        @test abs(d - fd) < 1e-5 * abs(fd) && abs(fd) > 1e-3 || (println("F4-12b Dual ", q, " ", d, " ", fd); false)
+        @test abs(d - fd) < 1e-5 * abs(fd) && abs(fd) > 1e-3 || (println("Dual ", q, " ", d, " ", fd); false)
     end
 end
 end
 
-# F4-12b review (gap a): a per-site Robin face whose diagonal is positive at every site anchors a
+# A per-site Robin face whose diagonal is positive at every site anchors a
 # QuasiSteady group's steady gain (its smallest diagonal over the sites). Base (895c1a02): the face
 # did not count, so the loop was refused ("`qa` has no decay and no Dirichlet or Robin face").
-@testitem "F4-12b review: a per-site Robin face anchors a QuasiSteady group" setup = [LP_robin_site] tags = [:latticepde, :robin_site] begin
-@testset "F4-12b review: a per-site Robin face anchors a QuasiSteady group" begin
+@testitem "a per-site Robin face anchors a QuasiSteady group" setup = [LP_robin_site] tags = [:latticepde, :robin_site] begin
+@testset "a per-site Robin face anchors a QuasiSteady group" begin
     @variables qa(..) qb(..)
     qae, qbe = qa(t, x, y), qb(t, x, y)
         p = discretize(

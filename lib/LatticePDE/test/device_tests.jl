@@ -82,12 +82,12 @@ using .LP_device: fd, kron
 end
 end
 
-# F3-00 review r1 S7: the aux fields are evaluated at each save on the device (one aux launch on
+# The aux fields are evaluated at each save on the device (one aux launch on
 # device arrays, before the copy) and at `integ[K]`: `K ~ 2c + t` holds at every save and
 # equals the host executor's run
-@testitem "F3-00: B evaluates the aux fields at the saves on pgpu" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
+@testitem "B evaluates the aux fields at the saves on pgpu" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
 using .LP_device: fd, kron
-@testset "F3-00: B evaluates the aux fields at the saves on $pgpu" begin
+@testset "B evaluates the aux fields at the saves on $pgpu" begin
     @parameters Da7 = 0.1 ka7 = 1.0
         sys = psys([D(ce) ~ Da7 * laplacian(ce) - ka7 * ce, Ke ~ 2ce + t], [c(0, x, y) ~ 1.0 + x], [Da7, ka7]; dvs = [ce, Ke])
     mk(be) = discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float32, backend = be))
@@ -136,12 +136,12 @@ using .LP_device: fd, kron
 end
 end
 
-@testitem "integ[c] is a device array on pgpu (F1 round 5)" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
+@testitem "integ[c] is a device array on pgpu" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
 using .LP_device: fd, kron
-@testset "integ[c] is a device array on $pgpu (F1 round 5)" begin
-    # rounds 2–4: a read-only wrapper (`FieldValues`) failed or hung on device operations
-    # (scalar indexing; `v[1:2, 1]`, then `v[v .> 0]`, `vcat`, `hcat` hung); round 5 returns
-    # the copy itself, a device array, as SciML does
+@testset "integ[c] is a device array on $pgpu" begin
+    # a read-only wrapper (`FieldValues`) failed or hung on device operations
+    # (scalar indexing; `v[1:2, 1]`, then `v[v .> 0]`, `vcat`, `hcat` hung), so `integ[c]`
+    # returns the copy itself, a device array, as SciML does
     fs = PDESystem([D(ce) ~ -ce], [c(0, x, y) ~ 1.0], [t ∈ Interval(0, 1), x ∈ Interval(0, 1), y ∈ Interval(0, 1)],
         [t, x, y], [ce], Num[]; name = :fv)
     ig = init(discretize(fs, LatticeDiscretization(Grid((8, 8)); T = Float32, backend = PDEV)),
@@ -172,10 +172,10 @@ using .LP_device: fd, kron
 end
 end
 
-@testitem "an integer input given as a device array (F1 round 4)" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
+@testitem "an integer input given as a device array" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
 using .LP_device: fd, kron
-@testset "an integer input given as a device array (F1 round 4)" begin
-    # round 3: the integer check indexed the device array in a kernel ("KernelError")
+@testset "an integer input given as a device array" begin
+    # The integer check indexed the device array in a kernel ("KernelError")
     n = 8
     msys = ssys([D(ce) ~ ifelse(qe == 1, 1.0, 0.0)], [c(0, x, y) ~ 0.0], [ce, qe], Num[])
     dk(vals) = (a = KernelAbstractions.allocate(PDEV, Int32, n, n); copyto!(a, vals); a)
@@ -194,10 +194,10 @@ using .LP_device: fd, kron
 end
 end
 
-@testitem "a Bool input given as a device array (F1 round 5)" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
+@testitem "a Bool input given as a device array" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
 using .LP_device: fd, kron
-@testset "a Bool input given as a device array (F1 round 5)" begin
-    # round 4: scalar indexing
+@testset "a Bool input given as a device array" begin
+    # Scalar indexing
     n = 8
     dsys = ssys([D(ce) ~ 1.0], [c(0, x, y) ~ 0.0], [ce, de], Num[])
     half = [i <= 4 for i in 1:n, j in 1:n]
@@ -210,7 +210,7 @@ using .LP_device: fd, kron
     d2 = KernelAbstractions.allocate(PDEV, Int32, n, n)
     copyto!(d2, fill(Int32(2), n, n))
         @test_throws ArgumentError mk(d2)
-    # F2-09: the input reads back as a Bool array on the device (base: UInt8; `count` and `any`
+    # The input reads back as a Bool array on the device (base: UInt8; `count` and `any`
     # threw a non-boolean TypeError, `.!` a MethodError)
         m = init(mk(db), ExplicitEuler(); dt = 0.1f0)[dm]
     @test eltype(m) == Bool && typeof(KernelAbstractions.get_backend(m)) == typeof(PDEV)
@@ -218,9 +218,9 @@ using .LP_device: fd, kron
 end
 end
 
-@testitem "F3-04: B reads the status word at the saves on pgpu" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
+@testitem "B reads the status word at the saves on pgpu" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
 using .LP_device: fd, kron
-@testset "F3-04: B reads the status word at the saves on $pgpu" begin
+@testset "B reads the status word at the saves on $pgpu" begin
     p = discretize(gsys(), LatticeDiscretization(Grid((8, 8)); T = Float32, backend = PDEV))
         ig = init(p, WStub(; code = 2, at = 3); dt = 0.01, saveat = 0.05)
     s = @test_logs (:warn, r"the solve failed in window 3") solve!(ig)
@@ -230,15 +230,15 @@ using .LP_device: fd, kron
 end
 end
 
-# F3-15: the implicit algorithms of F3-07…F3-12 on the device in Float32 against the host form
+# The implicit algorithms on the device in Float32 against the host form
 # of the same problem (the host executor, the same Float32 program; with explicit `max_iter`,
 # host and device share early stopping via the device convergence gate): field and numeric rows, advection (a defect correction), a
 # switch, a Robin face, Crank–Nicolson's and BDF2's stages, a QuasiSteady window and a steady
 # start. The device and the host run the same reduction trees (the host's emulated form), so
 # they agree to the D-158 tolerance (`rtol = 1e-12` of the field's scale; measured below).
-@testitem "F3-15: implicit algorithms on pgpu equal the host form (Float32)" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
+@testitem "implicit algorithms on pgpu equal the host form (Float32)" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
 using .LP_device: fd, kron
-@testset "F3-15: implicit algorithms on $pgpu equal the host form (Float32)" begin
+@testset "implicit algorithms on $pgpu equal the host form (Float32)" begin
     @parameters Di = 0.05 ki = 1.0 vi = 0.5
     per = [c(t, x, 0) ~ c(t, x, 1), c(t, 0, y) ~ c(t, 1, y)]
     field = psys([D(ce) ~ DivKGrad(:harmonic)(Di * (1 + x), ce) - ki * ce + 1], [c(0, x, y) ~ x * y], [Di, ki])
@@ -260,10 +260,10 @@ using .LP_device: fd, kron
     for (name, sys, alg) in cases
             sd = solve(mk(sys, PDEV), alg; dt = 0.1, saveat = 0.5)
             sh = solve(mk(sys, KernelAbstractions.CPU()), alg; dt = 0.1, saveat = 0.5)
-        @info "F3-15 $name: retcodes $(sd.retcode) (device), $(sh.retcode) (host); saves $(sd.t), $(sh.t)"
+        @info "$name: retcodes $(sd.retcode) (device), $(sh.retcode) (host); saves $(sd.t), $(sh.t)"
         @test sd.retcode == sh.retcode && sd.t ≈ sh.t
         rel = maximum(i -> maximum(abs, Array(sd[ce, i]) .- sh[ce, i]) / maximum(abs, sh[ce, i]), eachindex(sd.t))
-        @info "F3-15 $name: device vs host (Float32) max relative difference $rel"
+        @info "$name: device vs host (Float32) max relative difference $rel"
         @test rel <= 1e-12
     end
     # control: the comparison sees a change of one Newton iteration (the advection case)
@@ -292,14 +292,14 @@ using .LP_device: fd, kron
 end
 end
 
-# F3-15, batch 3 review R1: under the automatic Newton count the device closes a gate once every
+# Under the automatic Newton count the device closes a gate once every
 # row met the tolerance (the later iterations' residuals are zeroed, so their solves are done at
 # setup and the update adds 0): the device's field is the host's early-stop form, and the gated
 # iterations cost launches only. The advection case of R1 (a site-varying velocity, `newton`
 # from rule 2). Base f5641ce1: no gate, the device ran every iteration (measured below).
-@testitem "F3-15 (R1): the device stops correcting once every row converged (pgpu)" setup = [LP_device] tags = [:latticepde, :device, :gpu_only, :timing] begin
+@testitem "(R1): the device stops correcting once every row converged (pgpu)" setup = [LP_device] tags = [:latticepde, :device, :gpu_only, :timing] begin
 using .LP_device: fd, kron
-@testset "F3-15 (R1): the device stops correcting once every row converged ($pgpu)" begin
+@testset "(R1): the device stops correcting once every row converged ($pgpu)" begin
     @parameters Dg = 0.01
         sys = psys([D(ce) ~ Dg * laplacian(ce) - Advect(Upwind1())([2 * (1 + x), 0.0], ce)], [c(0, x, y) ~ x * y], [Dg]; T = 0.1)
     mk(be, n) = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float32, backend = be))
@@ -309,9 +309,9 @@ using .LP_device: fd, kron
     cc = only(ig.runtimes).cache
     @test cc.gate !== nothing && cc.newton > 2               # the gate is on (automatic count, several iterations)
     rel = maximum(abs, Array(sd[ce, end]) .- sh[ce, end]) / maximum(abs, sh[ce, end])
-    @info "F3-15 R1: device vs host (early stop) max relative difference $rel; newton $(cc.newton)"
+    @info "R1: device vs host (early stop) max relative difference $rel; newton $(cc.newton)"
     @test sd.retcode == sh.retcode == ReturnCode.Success && rel <= 1e-5
-    # the device counts the solves that ran, as the host (batch 5 review N3; 97045a1b counted the
+    # the device counts the solves that ran, as the host (97045a1b counted the
     # gated ones too: 630 against 237 in the review's case)
     @test sd.stats.solves == sh.stats.solves
     # `field_stats` in the middle of a run reads the device's status words first (a device reads
@@ -325,17 +325,17 @@ using .LP_device: fd, kron
         run(a) = (solve(p, a; dt = 0.05); KernelAbstractions.synchronize(PDEV); @elapsed (solve(p, a; dt = 0.05); KernelAbstractions.synchronize(PDEV)))
         k = only(init(p, alg; dt = 0.05).runtimes).cache.newton
         tg, tk = minimum(_ -> run(alg), 1:3), minimum(_ -> run(BackwardEuler(; nlsolve = LatticeNewton(; max_iter = k))), 1:3)
-        @info "F3-15 R1 at 128² ($pgpu), $(init(p, alg; dt = 0.05).substeps) substeps per window: the gated run $(round(tg; digits = 3)) s, every iteration ($k) $(round(tk; digits = 3)) s"
+        @info "R1 at 128² ($pgpu), $(init(p, alg; dt = 0.05).substeps) substeps per window: the gated run $(round(tg; digits = 3)) s, every iteration ($k) $(round(tk; digits = 3)) s"
 end
 end
 
-# F3-16: a `Coarse(4)` field on the device (the features of coarse.jl's `csys`: the free-child
-# mean fold and the whole-block mask (F4-15b), the moving masked Dirichlet, Robin and field
+# A `Coarse(4)` field on the device (the features of coarse.jl's `csys`: the free-child
+# mean fold and the whole-block mask, the moving masked Dirichlet, Robin and field
 # faces). A fine field coupled to a `Coarse(2)` field (prolongation and restriction), Float32,
 # against the host executor. Base 85794414: `Coarse` is not defined (the testset errors).
-@testitem "F3-16: coarse fields on pgpu equal the host form (Float32)" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
+@testitem "coarse fields on pgpu equal the host form (Float32)" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
 using .LP_device: fd, kron
-@testset "F3-16: coarse fields on $pgpu equal the host form (Float32)" begin
+@testset "coarse fields on $pgpu equal the host form (Float32)" begin
     cd4 = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(first(@variables cdev(..))), LatticePDE.LatticeLevel, Coarse(4)))
     q, g = @variables q(..)::Int32 [input = true] g(..) [input = true]
     mk(be) = cown(csys(cd4, q, g), CDIMS; T = Float32, backend = be, ins = [q(t, x, y) => CQ1, g(t, x, y) => CG])
@@ -346,7 +346,7 @@ using .LP_device: fd, kron
             step!(id); step!(ih)
         end
         vd, vh = Array(id[cd4(t, x, y)]), ih[cd4(t, x, y)]
-        @info "F3-16 $(nameof(typeof(alg))) on $pgpu: coarse field $(size(vd)), max |device − host| $(maximum(abs, vd .- vh))"
+        @info "$(nameof(typeof(alg))) on $pgpu: coarse field $(size(vd)), max |device − host| $(maximum(abs, vd .- vh))"
         @test size(vd) == (4, 4) && maximum(abs, vd .- vh) / maximum(abs, vh) <= 1e-6
     end
     cm = Symbolics.wrap(SymbolicUtils.setmetadata(unwrap(first(@variables cmdev(..))), LatticePDE.LatticeLevel, Coarse(2)))
@@ -368,12 +368,12 @@ using .LP_device: fd, kron
 end
 end
 
-# Review r1: CrankNicolson, BDF2, BackwardEuler(init = :steady) and QuasiSteady on a coarse field
-# on the device equal the host form and the hand-coarsened twin (the reviewer's r3, Float32); and
-# the block mean of a kind expression on the device (F4-15; it replaced the plurality owner)
-@testitem "review r1: coarse fields under CN, BDF2, QS and the kind fold on pgpu" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
+# CrankNicolson, BDF2, BackwardEuler(init = :steady) and QuasiSteady on a coarse field
+# on the device equal the host form and the hand-coarsened twin (Float32); and
+# the block mean of a kind expression on the device (it replaced the plurality owner)
+@testitem "coarse fields under CN, BDF2, QS and the kind fold on pgpu" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
 using .LP_device: fd, kron
-@testset "review r1: coarse fields under CN, BDF2, QS and the kind fold on $pgpu" begin
+@testset "coarse fields under CN, BDF2, QS and the kind fold on $pgpu" begin
     for steady in (false, true)
             algs = steady ? (QuasiSteady(),) :
                 (CrankNicolson(), BDF2(), BackwardEuler(; init = :steady))
@@ -383,7 +383,7 @@ using .LP_device: fd, kron
                     ic, ih = init(pc, alg; dt = 0.05), init(ph, alg; dt = 0.05)
                 for n in 1:6
                     if n == 4
-                        # (F4-15b: the twin's mask input holds the predicate on whole blocks only,
+                        # (the twin's mask input holds the predicate on whole blocks only,
                         # and its folded inputs are the free means)
                         ic[q(t, x, y)] = CQ2; ih[q(t, x, y)] = cwhole(CQ2)
                         ih[g(t, x, y)] = cfree(CG, CQ2 .== 3)
@@ -394,7 +394,7 @@ using .LP_device: fd, kron
                 (Array(ic[c(t, x, y)]), Array(ih[ch(t, x, y)]), ic.retcode)
             end
             (d, dh, rd), (h, hh, rh) = out
-            @info "review r1 $(nameof(typeof(alg))) on $pgpu: max |device − host| $(maximum(abs, d .- h)), |device − twin| $(maximum(abs, d .- dh))"
+            @info "$(nameof(typeof(alg))) on $pgpu: max |device − host| $(maximum(abs, d .- h)), |device − twin| $(maximum(abs, d .- dh))"
             @test rd == rh == SciMLBase.ReturnCode.Default        # stepped, not finished
             @test maximum(abs, d .- dh) / maximum(abs, dh) <= 1e-5 && maximum(abs, d .- h) / maximum(abs, h) <= 1e-6
         end
@@ -420,9 +420,9 @@ using .LP_device: fd, kron
 end
 end
 
-@testitem "F4-15b: a masked coarse field on an irregular domain on pgpu" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
+@testitem "a masked coarse field on an irregular domain on pgpu" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
 using .LP_device: fd, kron
-@testset "F4-15b: a masked coarse field on an irregular domain on $pgpu" begin
+@testset "a masked coarse field on an irregular domain on $pgpu" begin
     # (review should-fix 4: the residual's free ∩ in-domain fold and the implicit rows, with a
     # fine-reading operator coefficient and an irregular domain, on the device)
     dvq = first(@variables dvq(..)::Int32 [input = true])
@@ -453,13 +453,13 @@ using .LP_device: fd, kron
 end
 end
 
-@testitem "F3-12d: the coupled steady solve on pgpu equals the host bitwise" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
+@testitem "the coupled steady solve on pgpu equals the host bitwise" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
 using .LP_device: fd, kron
-@testset "F3-12d: the coupled steady solve on $pgpu equals the host bitwise" begin
+@testset "the coupled steady solve on $pgpu equals the host bitwise" begin
     # Krylov.jl's FGMRES on `CoupledVector`s: fixed-order dot products on both backends, the
     # host's least-squares arithmetic shared, so device = host and a device rerun are bitwise.
     # Control: plain device arrays would reduce through rocBLAS, which differs from the host
-    # (F3 design §5 F3-12d: 1e-15 in Float64)
+    # (1e-15 in Float64)
         nl = PDESystem(
             [D(cae) ~ 0.1 * laplacian(cae) - 2.0 * cae / (0.5 + cae) + cbe + x, D(cbe) ~ 0.1 * laplacian(cbe) - cbe + 0.5 * cae^2],
         [ca(0, x, y) ~ 0.0, cb(0, x, y) ~ 0.0], bdom(0.3), [t, x, y], [cae, cbe], Any[]; name = :nldev)
@@ -485,9 +485,9 @@ using .LP_device: fd, kron
 end
 end
 
-@testitem "F3-20: implicit algorithms on a hexagonal lattice on pgpu equal the host form" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
+@testitem "implicit algorithms on a hexagonal lattice on pgpu equal the host form" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
 using .LP_device: fd, kron
-@testset "F3-20: implicit algorithms on a hexagonal lattice on $pgpu equal the host form" begin
+@testset "implicit algorithms on a hexagonal lattice on $pgpu equal the host form" begin
     # the six faces in the generated kernels, the bottom and the hex coarse build on the device:
     # BackwardEuler (numeric with a mask, a field row), CrankNicolson, BDF2, QuasiSteady and the
     # coupled steady solve, Float32 and Float64, against the host executor
@@ -509,16 +509,16 @@ using .LP_device: fd, kron
             sd, sh = solve(mk(PDEV), alg; dt = 0.1, saveat = 0.1), solve(mk(KernelAbstractions.CPU()), alg; dt = 0.1, saveat = 0.1)
         @test sd.retcode == sh.retcode == SciMLBase.ReturnCode.Success
         same = all(v -> all(i -> Array(sd[v, i]) == Array(sh[v, i]), eachindex(sh.t)), k)
-        @test same || (println("F3-20 hex dev ", name, " ", T, " ", maximum(abs, Array(sd[k[1]][end]) .- sh[k[1]][end])); false)
+        @test same || (println("hex dev ", name, " ", T, " ", maximum(abs, Array(sd[k[1]][end]) .- sh[k[1]][end])); false)
     end
 end
 end
 
-# F3-21a: derivatives through the implicit solve on the device (Float64: ROCm only) equal the
+# Derivatives through the implicit solve on the device (Float64: ROCm only) equal the
 # host's bit for bit (the primal solve and the tangent solves run the same kernels)
-@testitem "F3-21a: Dual results on pgpu equal the host's" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
+@testitem "Dual results on pgpu equal the host's" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
 using .LP_device: fd, kron
-pgpu == "rocm" && @testset "F3-21a: Dual results on $pgpu equal the host's" begin
+pgpu == "rocm" && @testset "Dual results on $pgpu equal the host's" begin
     @parameters kd = 0.7 Dd = 0.3 gd = 0.4
     @variables da(..) db(..)
     dae, dbe = da(t, x, y), db(t, x, y)
@@ -548,12 +548,12 @@ pgpu == "rocm" && @testset "F3-21a: Dual results on $pgpu equal the host's" begi
 end
 end
 
-# F3-22: a spatial operator across grids on a device (the aux field of the operand's grid, the
+# A spatial operator across grids on a device (the aux field of the operand's grid, the
 # block fold of the fine one): the device run equals the host's, Float32, both directions, for
 # the explicit and the implicit solvers (uses `xpair` of crossgrid.jl, which runs before).
-@testitem "F3-22: cross-grid operators on pgpu equal the host" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
+@testitem "cross-grid operators on pgpu equal the host" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
 using .LP_device: fd, kron
-@testset "F3-22: cross-grid operators on $pgpu equal the host" begin
+@testset "cross-grid operators on $pgpu equal the host" begin
         tight = LatticePCG(; reltol = 1.0f-6, maxiters = 64)
     for (name, op) in (("Δ", XOPS[1][2]), ("DivKGrad harmonic", XOPS[2][2]), ("Advect", XOPS[4][2]))
         p = xpair(op)
@@ -561,18 +561,18 @@ using .LP_device: fd, kron
                 run(backend) = solve(discretize(pr.dir, LatticeDiscretization(Grid((16, 16)); T = Float32, backend)), alg; dt, saveat = [0.02])
             sd, sh = run(PDEV), run(KernelAbstractions.CPU())
             a, b = sd[xe(row), 2], sh[xe(row), 2]
-            @info "F3-22 $pgpu $name $(row === xu ? "c to f" : "f to c") $(nameof(typeof(alg))): max |device − host| = $(maximum(abs, a .- b)) of $(maximum(abs, b))"
+            @info "$pgpu $name $(row === xu ? "c to f" : "f to c") $(nameof(typeof(alg))): max |device − host| = $(maximum(abs, a .- b)) of $(maximum(abs, b))"
             @test maximum(abs, b) > 0 && maximum(abs, a .- b) <= 1.0f-5 * maximum(abs, b)
         end
     end
 end
 end
 
-# F4-05/F4-06: an owned run on the device reads nothing back between saves with no callback; a
+# An owned run on the device reads nothing back between saves with no callback; a
 # callback's condition reads a host copy each window; an ensemble runs on the device
-@testitem "F4-05/F4-06: owned runs on pgpu: host copies only for callbacks; an ensemble" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
+@testitem "owned runs on pgpu: host copies only for callbacks; an ensemble" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
 using .LP_device: fd, kron
-@testset "F4-05/F4-06: owned runs on $pgpu: host copies only for callbacks; an ensemble" begin
+@testset "owned runs on $pgpu: host copies only for callbacks; an ensemble" begin
     p = discretize(cbsys(0.3), LatticeDiscretization(Grid((8, 8)); T = Float32, backend = PDEV))
         alg = ExplicitEuler()
         @test solve(p, alg; dt = 0.01f0).stats.syncs == 0
@@ -584,13 +584,13 @@ using .LP_device: fd, kron
 end
 end
 
-# F4-12b: Robin coefficients that vary by site and in time on a device (Float32): the value
+# Robin coefficients that vary by site and in time on a device (Float32): the value
 # fields, the field row's per-site diagonal (one sign, and both signs with a Newton count), the
 # time-varying α rebuilt at each stage, and ExplicitEuler's count re-bounded each window equal
 # the host's
-@testitem "F4-12b: per-site and time-varying Robin faces on pgpu equal the host" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
+@testitem "per-site and time-varying Robin faces on pgpu equal the host" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
 using .LP_device: fd, kron
-@testset "F4-12b: per-site and time-varying Robin faces on $pgpu equal the host" begin
+@testset "per-site and time-varying Robin faces on $pgpu equal the host" begin
     @parameters Dr = 0.05 kr = 1.0
         site = psys(
             [D(ce) ~ Dr * laplacian(ce) - kr * ce],
@@ -616,7 +616,7 @@ using .LP_device: fd, kron
         # (a Float32 implicit solve may stop at its rounding floor: `StalledSuccess`, on both)
         @test sd.retcode == sh.retcode && sd.retcode in (ReturnCode.Success, ReturnCode.StalledSuccess) && sd.t ≈ sh.t
         rel = maximum(i -> maximum(abs, Array(sd[ce][i]) .- sh[ce][i]) / maximum(abs, sh[ce][i]), eachindex(sd.t))
-        @info "F4-12b $name: device vs host (Float32) max relative difference $rel"
+        @info "$name: device vs host (Float32) max relative difference $rel"
         @test rel <= 1e-5
     end
         # Robin-defect row with explicit max_iter enables the device gate and matches host solve count
@@ -628,11 +628,11 @@ using .LP_device: fd, kron
 end
 end
 
-# F4-B1: an input given as a function of the time on the device (the result goes through a host
+# An input given as a function of the time on the device (the result goes through a host
 # buffer of the input's type into the device array each window) equals the host executor's run
-@testitem "F4-B1: an input as a function of t on pgpu" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
+@testitem "an input as a function of t on pgpu" setup = [LP_device] tags = [:latticepde, :device, :gpu_only] begin
 using .LP_device: fd, kron
-@testset "F4-B1: an input as a function of t on $pgpu" begin
+@testset "an input as a function of t on $pgpu" begin
     @variables dq(..) [input = true]
     dqe = dq(t, x, y)
         sys = PDESystem(

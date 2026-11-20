@@ -4,8 +4,8 @@
 # `(I/h − J̃) δ = G(uⁿ)`, `u = uⁿ + δ` at `tⁿ⁺¹`. The tests compare one window with the hand BE
 # matrix of the same stencil (faces, ghosts, masks), the order with the exact semi-discrete
 # solution, a manufactured solution, a stiff case and OrdinaryDiffEq's `ImplicitEuler`.
-# Base (437a84ef, ~/lpwork/f3b3-nc-base.log): `BackwardEuler` is not defined (every testset
-# errors); the negative controls below are mutations of this tree (~/lpwork/f3b3-nc-*.log).
+# Before the fix (437a84ef): `BackwardEuler` is not defined (every testset
+# errors); the negative controls below are mutations of this tree.
 
 @testsetup module LP_implicit
 using Test, LatticePDE
@@ -39,8 +39,8 @@ end
 include("shared/export_all.jl")
 end
 
-@testitem "F3-07: one BackwardEuler window equals the hand BE matrix" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
-@testset "F3-07: one BackwardEuler window equals the hand BE matrix" begin
+@testitem "one BackwardEuler window equals the hand BE matrix" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
+@testset "one BackwardEuler window equals the hand BE matrix" begin
     h = 0.05
         alg = BackwardEuler(; linsolve = BTIGHT)
     # a numeric operator: diffusion, decay, a source, a Dirichlet face, a mask with its value
@@ -60,8 +60,8 @@ end
 end
 end
 
-@testitem "F3-07: the solver capabilities in a BackwardEuler group (F3-05 in B)" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
-@testset "F3-07: the solver capabilities in a BackwardEuler group (F3-05 in B)" begin
+@testitem "the solver capabilities in a BackwardEuler group" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
+@testset "the solver capabilities in a BackwardEuler group" begin
     h = 0.05
     xs, ys = bxs(), bys()
     # a Robin face, positive part (α and β of the same sign with the outward normal)
@@ -129,8 +129,8 @@ end
 end
 end
 
-@testitem "F3-07: SiteDiffusion rows (row scaling; m = 0 rows in two stages)" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
-@testset "F3-07: SiteDiffusion rows (row scaling; m = 0 rows in two stages)" begin
+@testitem "SiteDiffusion rows (row scaling; m = 0 rows in two stages)" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
+@testset "SiteDiffusion rows (row scaling; m = 0 rows in two stages)" begin
     h = 0.05
         # `value_at(W, q) laplacian(c)`: the row scaled by 1/m keeps the faces symmetric (q = 0 reads 0: m = 0 rows)
         p = bown(bsys([D(bce) ~ value_at(bW, bqe) * laplacian(bce) - bk * bce + 1], [bc(0, x, y) ~ x], [bW, bk]))
@@ -161,8 +161,8 @@ end
 end
 end
 
-@testitem "F3-07: order 1, the manufactured solution, the stage tⁿ⁺¹" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
-@testset "F3-07: order 1, the manufactured solution, the stage tⁿ⁺¹" begin
+@testitem "order 1, the manufactured solution, the stage tⁿ⁺¹" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
+@testset "order 1, the manufactured solution, the stage tⁿ⁺¹" begin
     # the discrete sine is an eigenvector of the lattice Laplacian with Dirichlet 0 faces: the
     # semi-discrete solution is `e^{D λ t} u0`, so the BE error is the time error alone
     n = 16
@@ -201,8 +201,8 @@ end
 end
 end
 
-@testitem "F3-07: a stiff case, OrdinaryDiffEq's ImplicitEuler (SX-18)" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
-@testset "F3-07: a stiff case, OrdinaryDiffEq's ImplicitEuler (SX-18)" begin
+@testitem "a stiff case, OrdinaryDiffEq's ImplicitEuler" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
+@testset "a stiff case, OrdinaryDiffEq's ImplicitEuler" begin
     # D h/dx² = 10⁴: BackwardEuler stays bounded and monotone; ExplicitEuler with one substep
     # (forced) blows up (`Unstable`)
     n = 16
@@ -232,8 +232,8 @@ end
 end
 end
 
-@testitem "F3-07: nlsolve = nothing, the operator built only for implicit groups (S12)" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
-    @testset "F3-07: nlsolve = nothing, the operator built only for implicit groups (S12)" begin
+@testitem "nlsolve = nothing, the operator built only for implicit groups (S12)" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
+    @testset "nlsolve = nothing, the operator built only for implicit groups (S12)" begin
         p = bown(bsys([D(bce) ~ bD * laplacian(bce) - bk * bce], [bc(0, x, y) ~ x], [bD, bk]))
     b0 = LatticePDE.OPERATOR_BUILDS[]
         solve(p, ExplicitEuler(); dt = 0.01)
@@ -262,8 +262,8 @@ end
 end
 end
 
-@testitem "F3-07: messages, the `:ode` path, `show`" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
-@testset "F3-07: messages, the `:ode` path, `show`" begin
+@testitem "messages, the `:ode` path, `show`" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
+@testset "messages, the `:ode` path, `show`" begin
     e(f) = try
         f(); ""
     catch err
@@ -283,7 +283,7 @@ end
         LatticeDiscretization(Grid(BDIMS); T = Float64))
         m = e(() -> solve(po, LatticePCG()))
         @test occursin("give it to one, `BackwardEuler(; linsolve = LatticePCG())`", m)
-    # (F4-01: the field solvers step the problem `discretize` returns; base: refused, "discretize
+    # (the field solvers step the problem `discretize` returns; base: refused, "discretize
     # with `LatticeDiscretization(…; problem = :owned)`")
         @test init(po, BackwardEuler(); dt = 0.1).sol.t == [0.0]
     @test solve(po, ImplicitEuler(); dt = 0.01, adaptive = false).retcode == ReturnCode.Success   # the route

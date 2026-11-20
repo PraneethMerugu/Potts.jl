@@ -1,4 +1,4 @@
-# F2-13 (F2 design §2.13): integrator parameter access by SciML's convention. `integ.ps[x]`
+# Integrator parameter access by SciML's convention. `integ.ps[x]`
 # reads and writes scalars, whole tables and table entries, through the checks of `setp` and of
 # a table write (validation, the substep count, the masks and clamps run again, `reset!`).
 # `integ[p]` and `integ[p] = v` of a parameter or table are errors that give the `integ.ps`
@@ -28,8 +28,8 @@ end
 include("shared/export_all.jl")
 end
 
-@testitem "F2-13: integ.ps reads and writes; integ[p] gives the route" setup = [LP_integ_ps] tags = [:latticepde, :integ_ps] begin
-@testset "F2-13: integ.ps reads and writes; integ[p] gives the route" begin
+@testitem "integ.ps reads and writes; integ[p] gives the route" setup = [LP_integ_ps] tags = [:latticepde, :integ_ps] begin
+@testset "integ.ps reads and writes; integ[p] gives the route" begin
     @parameters Dp[1:2] = [1.0, 2.0] kp = 0.5 mvp = 1.0
     pdom = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
         sys = PDESystem([D(ce) ~ Dp[1] * laplacian(ce) - kp * ce], [c(0, x, y) ~ 1.0], pdom, [t, x, y], [ce], [Dp, kp]; name = :ps)
@@ -91,8 +91,8 @@ end
 # `discretize(…; p)`, ODE `remake` and the ODE integrator's `setp` (nothing changes). The bound
 # prints as A prints it. Base: the metadata was ignored (a write of 3 ran); review S1 of batch 5:
 # `remake` and the ODE paths took the value and refused it only at `init`/`solve`/`step!`.
-@testitem "F2-14: a parameter's declared bounds hold in B" setup = [LP_integ_ps] tags = [:latticepde, :integ_ps] begin
-@testset "F2-14: a parameter's declared bounds hold in B" begin
+@testitem "a parameter's declared bounds hold in B" setup = [LP_integ_ps] tags = [:latticepde, :integ_ps] begin
+@testset "a parameter's declared bounds hold in B" begin
     @parameters kb2 = 0.5 [bounds = (0, 2)]
     pdom = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
     sys = PDESystem([D(ce) ~ -kb2 * ce], [c(0, x, y) ~ 1.0], pdom, [t, x, y], [ce], [kb2]; name = :pb)
@@ -118,8 +118,8 @@ end
 # blames the parameter written: base parameters are checked first, then computed ones, and a
 # computed parameter's message names the inputs to change (base: "parameter `#2` = 6.0 …" for
 # a write of `k = 3.0`)
-@testitem "F2-15: bound messages name the parameter written, then the computed ones" setup = [LP_integ_ps] tags = [:latticepde, :integ_ps] begin
-@testset "F2-15: bound messages name the parameter written, then the computed ones" begin
+@testitem "bound messages name the parameter written, then the computed ones" setup = [LP_integ_ps] tags = [:latticepde, :integ_ps] begin
+@testset "bound messages name the parameter written, then the computed ones" begin
     @parameters kbd = 0.5 [bounds = (0, 2)]
     @parameters kbd2 = 2kbd [bounds = (0, 3)]
     pdom = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]

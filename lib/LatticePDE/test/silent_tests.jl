@@ -67,11 +67,11 @@ end
     o = discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64))
     os = SciMLBase.solve(o, Tsit5(); abstol = 1e-10, reltol = 1e-10)
     @test os.u[end][1] ≈ exp(-2) rtol = 1e-6
-    # a field's `initial_conditions` value reads it too (round 0: "`k2` reads k2")
+    # a field's `initial_conditions` value reads it too ("`k2` reads k2")
     s7 = PDESystem([D(ce) ~ -a0 * ce], Equation[], sdom(), [t, x, y], [ce], [a0, k2]; name = :s7,
         initial_conditions = Dict(ce => k2))
         @test solve(sown(s7), alg; dt = 0.01)[:c, 1][1] == 2.0
-    # a computed parameter reads (round 1: reading threw the "computed" message)
+    # a computed parameter reads (reading threw the "computed" message)
     @test getp(o, k2)(o) == 2.0 && o.ps[k2] == 2.0 && os.ps[k2] == 2.0 && getp(os, k2)(os) == 2.0
     @test remake(o; p = [a0 => 3.0]).ps[k2] == 6.0
     @test getp(o, [a0, k2])(o) == [1.0, 2.0] && getp(o, (k2, a0))(o) == (2.0, 1.0)
@@ -85,7 +85,7 @@ end
         @test_throws ArgumentError setp(pi1, k2)(pi1, 5.0)
         # … and refuses a remake of k2 by name
         @test_throws ArgumentError remake(o; p = [k2 => 5.0])
-    # a face value may read a computed parameter (F2-15: a slot; before: refused, "`gs = g1 +
+    # a face value may read a computed parameter (a slot; before: refused, "`gs = g1 +
     # g2` … give `gs` a number"), equal to the number, and it follows its inputs
     @parameters g1 = 1.0 g2 = 2.0
     @parameters gs = g1 + g2
@@ -140,7 +140,7 @@ end
     ig2 = init(remake(o; p = [Dp => 0.01]), Tsit5())
     setp(ig2, Dp)(ig2, NaN)
         @test_throws ArgumentError step!(ig2)
-    # the routes the messages give are LatticePDE's names too (round 1: not exported)
+    # the routes the messages give are LatticePDE's names too
     @test LatticePDE.remake === SciMLBase.remake && LatticePDE.setp === setp && isdefined(LatticePDE, :getp) &&
           isdefined(LatticePDE, :getu)
 end
@@ -180,8 +180,8 @@ end
     held = SymbolicIndexingInterface.state_values(integ)
     integ[kq] = zeros(Int32, 4, 4)
     @test all(==(1.0), integ[ce])                                     # clamped now, not at the next step
-    @test SymbolicIndexingInterface.state_values(integ) === held      # no slot swap (round 1: the zero step swapped)
-    # a map program too (round 1: maps were not clamped: m(t0)[3, 3] = 0.0, its neighbours 0.0
+    @test SymbolicIndexingInterface.state_values(integ) === held      # no slot swap
+    # a map program too (m(t0)[3, 3] = 0.0, its neighbours 0.0
     # after step 1, a newly masked site 0.0 after an input write)
     K3 = ones(Int32, 4, 4); K3[3, 3] = 0
         msys = ssys(
@@ -196,9 +196,9 @@ end
     K4 = copy(K3); K4[1, 1] = 0
     mi[kq] = K4
     @test mi[me][1, 1] == 1.0 && mi[me][3, 3] == 1.0
-    # masked conditions discretize (round 0: refused, "need problem = :owned"; F4-01: one problem)
+    # masked conditions discretize ("need problem = :owned" before `discretize` returned one problem)
     @test discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64); inputs = [qe => K]) isa SciMLBase.ODEProblem
-    # the clamp at a step's start uses the parameters the steps are bound to (round 2: `integ.p`,
+    # the clamp at a step's start uses the parameters the steps are bound to (`integ.p`,
     # so a direct `integ.p[1] = v`, which the steps ignore, moved the masked value the fluxes read)
     @parameters mv = 1.0
         sv = ssys([D(ce) ~ laplacian(ce)], [c(0, x, y) ~ 0.0, ce ~ masked(qe == 0, mv)], [ce, qe], [mv])
@@ -223,7 +223,7 @@ end
         s = solve(sown(dsys; domain = dm, inputs = [dm => half]), ExplicitEuler(); dt = 0.1)
     @test s[:c, end] ≈ Float64.(half)
     @test sown(dsys; domain = "dm", inputs = [dm => half]).inputs == sown(dsys; domain = dm, inputs = [dm => half]).inputs
-    @test sown(dsys; domain = :dm, inputs = [dm => half]).inputs == sown(dsys; domain = dm, inputs = [dm => half]).inputs  # (round 0: MethodError)
+    @test sown(dsys; domain = :dm, inputs = [dm => half]).inputs == sown(dsys; domain = dm, inputs = [dm => half]).inputs  # (MethodError)
     # a kind mask clamps only the kind-0 sites (base: every site clamped, extrema (1, 1))
     K = Int32[i <= 2 ? 1 : 0 for i in 1:n, j in 1:n]
     msys = ssys([D(ce) ~ 0.0], [c(0, x, y) ~ 0.0, ce ~ masked(qe == 0, 1.0)], [ce, qe], Num[])
@@ -233,8 +233,8 @@ end
     # … set during a run (the mask follows) and through remake
         integ = init(p, ExplicitEuler(); dt = 0.1)
     step!(integ)
-    # round 3: the `.=` message prints the name as written; a list's arrays are read-only too;
-    # a fractional value for an integer input is named (round 2: a bare InexactError)
+    # The `.=` message prints the name as written; a list's arrays are read-only too;
+    # a fractional value for an integer input is named (a bare InexactError)
         @test_throws ArgumentError (integ[:kq] .= 1)
         # a list's arrays are copies too: writing into one changes nothing
     (l = integ[[ce]]; l[1][1, 1] = 5.0)
@@ -257,7 +257,7 @@ end
         @test solve(sown(ssrc; inputs = [qe => K]), ExplicitEuler(); dt = 0.1)[:c, end] ≈ Float64.(K)
     o = discretize(ssrc, LatticeDiscretization(Grid((n, n)); T = Float64); inputs = [qe => K])
     @test reshape(SciMLBase.solve(o, Tsit5()).u[end], n, n) ≈ Float64.(K)
-    # (F4-01: an unset input is named at the solve, as on the owned path; base: at `discretize`)
+    # (an unset input is named at the solve, as on the owned path; base: at `discretize`)
         @test_throws ArgumentError SciMLBase.solve(discretize(ssrc, LatticeDiscretization(Grid((n, n)); T = Float64)), Tsit5())
     # a declared default needs no value
         s = solve(sown(ssys([D(ce) ~ 1.0], [c(0, x, y) ~ 0.0], [ce, ddv], Num[]); domain = dd), ExplicitEuler(); dt = 0.1)
@@ -276,9 +276,9 @@ end
 end
 end
 
-@testitem "messages: no stale or misleading diagnosis (F1, M items)" setup = [LP_silent] tags = [:latticepde, :silent] begin
+@testitem "messages: no stale or misleading diagnosis (M items)" setup = [LP_silent] tags = [:latticepde, :silent] begin
     using LatticeFields: IR
-@testset "messages: no stale or misleading diagnosis (F1, M items)" begin
+@testset "messages: no stale or misleading diagnosis (M items)" begin
         @test_throws ArgumentError LatticeDiscretization(Grid((4, 4)); problem = :linear)
         st = PDESystem(
             [0 ~ laplacian(c(x, y))], Equation[], [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [x, y], [c(x, y)],
@@ -296,8 +296,8 @@ end
 end
 end
 
-@testitem "SX-21: the other parts of a PDESystem are used or refused" setup = [LP_silent] tags = [:latticepde, :silent] begin
-@testset "SX-21: the other parts of a PDESystem are used or refused" begin
+@testitem "the other parts of a PDESystem are used or refused" setup = [LP_silent] tags = [:latticepde, :silent] begin
+@testset "the other parts of a PDESystem are used or refused" begin
     @parameters kv
     eqs, d = [D(ce) ~ -kv * ce], sdom()
         # `initial_conditions` give parameter values

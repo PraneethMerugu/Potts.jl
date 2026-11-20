@@ -1,4 +1,4 @@
-# The linearity table (v3 §5.2, R2 F-4, FR-27): `Symbolics.linear_expansion` cannot see
+# The linearity table: `Symbolics.linear_expansion` cannot see
 # through registered operators, so the classification is ours. Each additive term of a rate
 # right-hand side gets one class with respect to the equation's own field `c`:
 #

@@ -1,4 +1,4 @@
-# TS2-2: SciML interface conformance across FieldProblem (owned path) and ODEProblem
+# SciML interface conformance across FieldProblem (owned path) and ODEProblem
 # (OrdinaryDiffEq path), including callbacks mutating field parameters, reinit!, remake,
 # SII state_values/parameter_values/current_time, and negative controls.
 
@@ -26,8 +26,8 @@ include("shared/implicit.jl")
 include("shared/export_all.jl")
 end
 
-@testitem "TS2-2: LatticePDE SciML conformance on FieldProblem and ODEProblem paths" setup = [LP_sciml_conformance] tags = [:latticepde, :sciml] begin
-    @testset "TS2-2: LatticePDE SciML conformance" begin
+@testitem "LatticePDE SciML conformance on FieldProblem and ODEProblem paths" setup = [LP_sciml_conformance] tags = [:latticepde, :sciml] begin
+    @testset "LatticePDE SciML conformance" begin
         @parameters sD = 0.05 sk = 1.0
         @variables sc(..)
         sce = sc(t, x, y)

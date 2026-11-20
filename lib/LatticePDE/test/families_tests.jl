@@ -1,10 +1,10 @@
-# F4-01 (F4 design §3.2, rulings Q-B and Q1): `discretize` returns one SciML problem (an
+# `discretize` returns one SciML problem (an
 # `ODEProblem` of rates, a `DiscreteProblem` of maps) that the field algorithms and
 # OrdinaryDiffEq's solvers both take; `AbstractFieldAlgorithm <: SciMLBase.AbstractODEAlgorithm`; the
 # compiled right side is built at its first call only; the `problem` keyword is deleted.
 # Negative controls (the base 3ed05c3b): `ExplicitEuler <: AbstractDEAlgorithm` was false, and
 # the right side was built at `discretize` (one build before any solve).
-# This file at F4-00: 3 pass, 3 fail, 5 errors (every testset fails).
+# Before the fix: 3 pass, 3 fail, 5 errors (every testset fails).
 
 @testsetup module LP_families
 using Test, LatticePDE
@@ -25,8 +25,8 @@ include("shared/families.jl")
 include("shared/export_all.jl")
 end
 
-@testitem "F4-01: one problem per family; an owned solve builds no right side" setup = [LP_families] tags = [:latticepde, :families] begin
-@testset "F4-01: one problem per family; an owned solve builds no right side" begin
+@testitem "one problem per family; an owned solve builds no right side" setup = [LP_families] tags = [:latticepde, :families] begin
+@testset "one problem per family; an owned solve builds no right side" begin
         @test ExplicitEuler <: SciMLBase.AbstractODEAlgorithm && LFP.AbstractFieldAlgorithm <: SciMLBase.AbstractODEAlgorithm
         for (name, sys, alg, kw) in FAM_CASES
         prob = discretize(sys, fam_disc())
@@ -43,8 +43,8 @@ end
 end
 end
 
-@testitem "F4-01: OrdinaryDiffEq's solvers on the same problem" setup = [LP_families] tags = [:latticepde, :families] begin
-@testset "F4-01: OrdinaryDiffEq's solvers on the same problem" begin
+@testitem "OrdinaryDiffEq's solvers on the same problem" setup = [LP_families] tags = [:latticepde, :families] begin
+@testset "OrdinaryDiffEq's solvers on the same problem" begin
     prob = discretize(fam_rate, fam_disc())
     m = LFP.lattice_metadata(prob)
         be = solve(prob, BackwardEuler(; linsolve = FAM_INNER); dt = 1.0e-4)
@@ -52,7 +52,7 @@ end
     for alg in (Tsit5(), Rodas5P(), FBDF())
         s = solve(prob, alg; abstol = 1e-9, reltol = 1e-9)
         @test SciMLBase.successful_retcode(s) && s.t[end] == 0.2
-        @test maximum(abs, s.u[end] .- be.u[end]) < 1e-3 || (println("F4-01 ", nameof(typeof(alg)), " vs BE ",
+        @test maximum(abs, s.u[end] .- be.u[end]) < 1e-3 || (println("", nameof(typeof(alg)), " vs BE ",
             maximum(abs, s.u[end] .- be.u[end])); false)
     end
     @test m.builds[] == 1                                      # built once, at the first call
@@ -70,12 +70,12 @@ end
 end
 end
 
-# F4-01 (TS2): `FieldGroups`, one of the three cases whose recorded triple was its only value
+# `FieldGroups`, one of the three cases whose recorded triple was its only value
 # check, against an oracle instead. The group cut does not touch a field it does not feed: `u` reads
 # nothing but the coordinates, so its trajectory inside the grouped solve is the one it has alone,
 # at every save, bitwise.
-@testitem "F4-01 (TS2): the group cut leaves a field it does not feed bitwise unchanged" setup = [LP_families] tags = [:latticepde, :families] begin
-@testset "F4-01 (TS2): the group cut leaves a field it does not feed bitwise unchanged" begin
+@testitem "the group cut leaves a field it does not feed bitwise unchanged" setup = [LP_families] tags = [:latticepde, :families] begin
+@testset "the group cut leaves a field it does not feed bitwise unchanged" begin
         fg = FieldGroups(
             fam_u => ExplicitEuler(; substeps = 2),
             fam_v => BackwardEuler(; linsolve = FAM_INNER)
@@ -87,18 +87,18 @@ end
         su = solve(discretize(uonly, fam_disc()), ExplicitEuler(; substeps = 2); dt = 0.05)
     @test length(su.t) == length(sg.t) && su.t == sg.t
     bad = [k for k in eachindex(su.t) if !(Array(sg[fam_u, k]) == Array(su[fam_u, k]))]
-    @test isempty(bad) || (println("F4-01 TS2 grouped u differs at ", bad); false)
+    @test isempty(bad) || (println("grouped u differs at ", bad); false)
     @test Array(sg[fam_u, end]) != Array(sg[fam_v, end])          # control: the two fields differ
 end
 end
 
-# F4-01 (TS2): `ExplicitMap`, the second case whose recorded triple was its only value check. The
+# `ExplicitMap`, the second case whose recorded triple was its only value check. The
 # map is `(N(x + h) + N(x - h)) / 2`; `fam_map` gives no boundary rule, so a read beyond a face takes
 # 0 (measured at `9adc2be7`: the first and last cell of a column average with 0, the interior cells
 # average their two neighbours). Every value the map produces is dyadic, so the hand formula is
 # compared exactly, once against one map step of the problem and once over the whole span.
-@testitem "F4-01 (TS2): the map equals its analytic shift formula" setup = [LP_families] tags = [:latticepde, :families] begin
-@testset "F4-01 (TS2): the map equals its analytic shift formula" begin
+@testitem "the map equals its analytic shift formula" setup = [LP_families] tags = [:latticepde, :families] begin
+@testset "the map equals its analytic shift formula" begin
     handshift(c) = [(i == 1 ? 0.0 : c[i - 1, j]) + (i == 8 ? 0.0 : c[i + 1, j]) for i in 1:8, j in 1:8] ./ 2
     pm = discretize(fam_map, fam_disc())
     u0 = reshape(collect(Float64.(pm.u0)), 8, 8)
@@ -112,7 +112,7 @@ end
 end
 end
 
-# F4-01 (TS2): the `QuasiSteady` case, the third whose recorded triple was its only value check. The
+# The `QuasiSteady` case, the third whose recorded triple was its only value check. The
 # case is `BackwardEuler` on the two-field steady system `fam_steady`, and that system has an analytic
 # steady state: eliminating `v` (`v = (1 - 0.1Δ)⁻¹u`) from `0 = Dc Δu - k u + v` gives
 # `Δu (Dc + 0.1 k) - 0.1 Dc Δ²u + (1 - k) u = 0`, where `k = 1.0` cancels the last term and leaves
@@ -124,19 +124,19 @@ end
 # profile lies in [0, 1], so its mode amplitudes are at most 1; and the inner solve runs at rtol 1e-12
 # (`FAM_INNER`), three orders below the deviation. The 1e-6 asserted is one order above the derived
 # e^-18 = 1.5e-8 and six above the inner solve's accuracy.
-@testitem "F4-01 (TS2): the coupled steady system converges to its analytic solution u = v = 1" setup = [LP_families] tags = [:latticepde, :families] begin
-@testset "F4-01 (TS2): the coupled steady system converges to its analytic solution u = v = 1" begin
+@testitem "the coupled steady system converges to its analytic solution u = v = 1" setup = [LP_families] tags = [:latticepde, :families] begin
+@testset "the coupled steady system converges to its analytic solution u = v = 1" begin
     prob = discretize(fam_steady, fam_disc())
         @test SciMLBase.successful_retcode(solve(prob, BackwardEuler(; linsolve = FAM_INNER); dt = 0.05))
         long = solve(remake(prob; tspan = (0.0, 2000.0)), BackwardEuler(; linsolve = FAM_INNER); dt = 1.0)
     ue = collect(Float64.(long.u[end]))
     @test length(ue) == 128
-    @test maximum(abs, ue .- 1.0) < 1e-6 || (println("F4-01 TS2 steady max dev ", maximum(abs, ue .- 1.0)); false)
+    @test maximum(abs, ue .- 1.0) < 1e-6 || (println("steady max dev ", maximum(abs, ue .- 1.0)); false)
 end
 end
 
-@testitem "F4-01: the default algorithm (Q1), the map's function, the deleted keyword" setup = [LP_families] tags = [:latticepde, :families] begin
-@testset "F4-01: the default algorithm (Q1), the map's function, the deleted keyword" begin
+@testitem "the default algorithm, the map's function, the deleted keyword" setup = [LP_families] tags = [:latticepde, :families] begin
+@testset "the default algorithm, the map's function, the deleted keyword" begin
         # rates without a clock: DiffEqBase's default, as for every `ODEProblem` (none is loaded
         # here); with a clock, `ExplicitEuler()` at the clock's step
     prob = discretize(fam_rate, fam_disc())
@@ -156,8 +156,8 @@ end
 end
 end
 
-@testitem "F4-01: a state on another backend is refused, naming both (SX-12)" setup = [LP_families] tags = [:latticepde, :families] begin
-@testset "F4-01: a state on another backend is refused, naming both (SX-12)" begin
+@testitem "a state on another backend is refused, naming both" setup = [LP_families] tags = [:latticepde, :families] begin
+@testset "a state on another backend is refused, naming both" begin
     prob = discretize(fam_rate, fam_disc())
         @test_throws ArgumentError remake(prob; u0 = FamDevVec(zeros(64)))
     @test remake(prob; u0 = zeros(64)).u0 == zeros(64)        # control: a host state

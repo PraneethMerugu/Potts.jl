@@ -1,4 +1,4 @@
-# Definitions of bounds_tests.jl that other test files use (moved here by TS1b).
+# Definitions of bounds_tests.jl that other test files use.
 using LinearAlgebra: eigvals
 using LatticeFields: Problems as LFP
 
@@ -7,7 +7,7 @@ using LatticeFields: Problems as LFP
 fce, fue, fKe, foe = fc(t, x, y), fu(t, x, y), fK(t, x, y), fo(t, x, y)
 fdom(T = 1.0) = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
 fsys(eqs, bcs, dvs, ps = Any[fx_k, fx_a, fx_D]) = PDESystem(eqs, bcs, fdom(), [t, x, y], dvs, ps; name = :fb)
-# (F4-01: the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
+# (the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
 fown(sys, n = 32) = LFP.field_problem(discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64)))
 fode(sys, n = 32) = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64))
 # the rate's Jacobian at `u` by finite differences of the `:ode` path's right side, dense

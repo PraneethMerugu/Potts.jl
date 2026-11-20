@@ -1,4 +1,4 @@
-# Definitions of numbers_tests.jl that other test files use (moved here by TS1b).
+# Definitions of numbers_tests.jl that other test files use.
 using ForwardDiff: ForwardDiff
 using OrdinaryDiffEqRosenbrock: Rodas5P
 using LatticeFields: LatticeFields, Compile
@@ -13,11 +13,11 @@ fd(f, x; h = 1e-6) = (f(x + h) - f(x - h)) / (2h)
 pidx(prob, s) = LatticePDE.Problems.SII.parameter_index(prob, s)
 withp(p, i, v) = (q = collect(promote_type(eltype(p), typeof(v)), p); q[i] = v; q)
 
-# F3-21a: derivatives through the implicit solve. A Dual state runs the primal solve and, after
+# Derivatives through the implicit solve. A Dual state runs the primal solve and, after
 # each stage, its tangent step: the derivative parts solve the stage's linearization with the
 # primal operator, one solve per part (no Dual enters a solver). Each case against central
 # differences of the run. Base (57ea1baa): every case is refused ("holds ForwardDiff Duals").
-# Negative controls (mutations, ~/lpwork/f321-nc-*.log): the parameter part of the operator
+# Negative controls (mutations): the parameter part of the operator
 # (`(∂A/∂k) u`, the parameters of the face coefficients) dropped from the tangent fails ∂/∂D; the
 # right side's (the parameters of no face and no local term) dropped fails ∂/∂g
 @parameters kt = 0.7 Dt = 0.3 gt = 0.4

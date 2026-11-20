@@ -1,5 +1,5 @@
-# The precompile workload (F3 review round 2, F4-14): two small owned CPU 2D problems, one with
-# a source and a Dirichlet face only, one in the form of v3 §7.4 (`Dc Δc − k c` with a Dirichlet
+# The precompile workload: two small owned CPU 2D problems, one with
+# a source and a Dirichlet face only, one reaction–diffusion form (`Dc Δc − k c` with a Dirichlet
 # face, a Neumann face and a periodic pair). Each is discretized, initialized, stepped and
 # solved with `ExplicitEuler` and `BackwardEuler` in Float64 and Float32 and read back by name,
 # with one call of the ODE right side and one `field_report`, so a first problem of that kind

@@ -1,9 +1,9 @@
 # `BDF2` in standalone LatticePDE. Each substep solves
 # `(u − (4uⁿ − uⁿ⁻¹)/3)/(2h/3) = r(u)` at tⁿ⁺¹ through the implicit runtime (shift `3/(2h)`); a start
 # (init, `reset!`, every change of `h`) is one Backward Euler substep with the Backward Euler
-# operator. `uⁿ⁻¹` lives in the runtime's cache, never in the state. Base (the F3-10 commit,
-# ~/lpwork/f3b4-nc11-base.log): `BDF2` is not defined (every testset errors). Negative controls
-# (mutations, ~/lpwork/f3b4-nc11-*.log): the start from a zero history (zerohist), a change of
+# operator. `uⁿ⁻¹` lives in the runtime's cache, never in the state. Before `BDF2` was added,
+# every testset errors (`BDF2` is not defined). Negative controls
+# (mutations): the start from a zero history (zerohist), a change of
 # `h` without the restart (norestart).
 
 @testsetup module LP_bdf2
@@ -37,12 +37,12 @@ be_first(p, h) = (ig = init(p, BackwardEuler(; linsolve = BTIGHT); dt = h); step
 include("shared/export_all.jl")
 end
 
-@testitem "F3-11: BDF2: order 2, the manufactured solution, the stage" setup = [LP_bdf2] tags = [:latticepde, :bdf2] begin
-@testset "F3-11: BDF2: order 2, the manufactured solution, the stage" begin
+@testitem "BDF2: order 2, the manufactured solution, the stage" setup = [LP_bdf2] tags = [:latticepde, :bdf2] begin
+@testset "BDF2: order 2, the manufactured solution, the stage" begin
     p, λ, u0 = eig_problem(16)
         err(dt) = maximum(abs, blast(solve(p, BDF2(; linsolve = BTIGHT); dt)) .- exp(0.3λ * 0.4) .* u0)
     # (from h = 0.025 down: at h = 0.05 the Backward Euler start's error and BDF2's own cancel, so
-    # coarser ladders show orders like 7.1, −0.8; a scalar BDF2 recurrence reproduces them, r1 N1)
+    # coarser ladders show orders like 7.1, −0.8; a scalar BDF2 recurrence reproduces them)
     es = [err(0.4 / 2^k) for k in 4:7]
     @test all(o -> abs(o - 2) < 0.1, log2.(es[1:(end - 1)] ./ es[2:end])) || (println("BDF2 heat ", es); false)
         em, om = mf_orders(BDF2(; linsolve = BTIGHT), [0.025 / 2^k for k in 0:3])
@@ -60,8 +60,8 @@ end
 end
 end
 
-@testitem "F3-11: the Backward Euler start: init, reset!, a change of h" setup = [LP_bdf2] tags = [:latticepde, :bdf2] begin
-@testset "F3-11: the Backward Euler start: init, reset!, a change of h" begin
+@testitem "the Backward Euler start: init, reset!, a change of h" setup = [LP_bdf2] tags = [:latticepde, :bdf2] begin
+@testset "the Backward Euler start: init, reset!, a change of h" begin
     p, _, _ = eig_problem(16)
     h = 0.05
     # the first substep after init is one Backward Euler substep, bitwise (the Backward Euler
@@ -83,7 +83,7 @@ end
     @test c.rebuilds == 4 && c.γ == 2 / 3
     # a change of the substep length restarts it (the formula holds for one h): the window after
     # `substeps` doubles starts with a Backward Euler substep and the run keeps order 2 (without
-    # the restart, one halving of h drops BDF2 to order 1: reviewer probe (5), the norestart control)
+    # the restart, one halving of h drops BDF2 to order 1: the norestart control)
     function halved(dt)
             ig = init(p, BDF2(; substeps = 1, linsolve = BTIGHT); dt)
         m = ig.nsteps
@@ -114,8 +114,8 @@ end
 end
 end
 
-@testitem "F3-11: the history is not state; positivity is `lower`; SX-18" setup = [LP_bdf2] tags = [:latticepde, :bdf2] begin
-@testset "F3-11: the history is not state; positivity is `lower`; SX-18" begin
+@testitem "the history is not state; positivity is `lower`; against OrdinaryDiffEq" setup = [LP_bdf2] tags = [:latticepde, :bdf2] begin
+@testset "the history is not state; positivity is `lower`; against OrdinaryDiffEq" begin
     p, _, _ = eig_problem(16)
         s = solve(p, BDF2(); dt = 0.05, saveat = 0.1)
     @test all(u -> length(u) == length(p.u0), s.u)
@@ -125,7 +125,7 @@ end
     @test only(ig.runtimes).cache.rows[1].prev isa Vector{Float64}
     @test bwarm(ig) == 0                                       # the warm window allocates nothing
     # a decay with h λ = 10 from a smooth start: the BDF2 right side `(4uⁿ − uⁿ⁻¹)/3` is negative
-    # (reviewer probe (1): −0.028); `lower = 0` clips it
+    # (−0.028); `lower = 0` clips it
         sd = bsys([D(bce) ~ 1.0e-6 * laplacian(bce) - 100.0 * bce], [bc(0, x, y) ~ 1.0], Any[]; T = 0.4, dvs = [bce])
     pd = discretize(sd, LatticeDiscretization(Grid((4, 4)); T = Float64))
         neg = solve(pd, BDF2(); dt = 0.1, saveat = 0.1)
@@ -133,7 +133,7 @@ end
         pos = solve(pd, BDF2(; lower_bound = 0.0); dt = 0.1, saveat = 0.1)
     @test minimum(minimum.(pos.u)) >= 0
         @test minimum(minimum.(solve(pd, BackwardEuler(); dt = 0.1).u)) >= 0      # (Backward Euler needs no clip)
-    # SX-18: OrdinaryDiffEq's ABDF2 at a fixed step, whose first step is ImplicitEuler (its
+    # OrdinaryDiffEq's ABDF2 at a fixed step, whose first step is ImplicitEuler (its
     # `perform_step!` takes the Euler cache at `iter == 1`), as BDF2's start
         sx = bsys(
             [D(bce) ~ bD * laplacian(bce) - bk * bce + sin(3t) * x], [bc(0, x, y) ~ x * y, bc(t, 0, y) ~ 1.0], [bD, bk];
@@ -145,8 +145,8 @@ end
 end
 end
 
-@testitem "F3-11: components, parameter writes, messages" setup = [LP_bdf2] tags = [:latticepde, :bdf2] begin
-@testset "F3-11: components, parameter writes, messages" begin
+@testitem "components, parameter writes, messages" setup = [LP_bdf2] tags = [:latticepde, :bdf2] begin
+@testset "components, parameter writes, messages" begin
     @variables bu(..)[1:2]
     bue = bu(t, x, y)
         comp = nlsys(

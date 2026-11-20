@@ -1,4 +1,4 @@
-# TS2-1: Empirical convergence orders (temporal and spatial via `observed_orders`) and
+# Empirical convergence orders (temporal and spatial via `observed_orders`) and
 # multigrid mesh-independence across refined grids (h -> h/2 -> h/4).
 
 @testsetup module LP_convergence_orders
@@ -25,8 +25,8 @@ include("../../../test/shared/convergence_helpers.jl")
 include("shared/export_all.jl")
 end
 
-@testitem "TS2-1: temporal convergence orders (EE, BE, CN, BDF2, IMEX)" setup = [LP_convergence_orders] tags = [:latticepde, :convergence] begin
-    @testset "TS2-1: temporal convergence orders" begin
+@testitem "temporal convergence orders (EE, BE, CN, BDF2, IMEX)" setup = [LP_convergence_orders] tags = [:latticepde, :convergence] begin
+    @testset "temporal convergence orders" begin
         @variables u(..) v(..)
         ue, ve = u(t, x, y), v(t, x, y)
         # Manufactured solution u(t, x, y) = exp(t) * sin(pi * x) * sin(pi * y) on [0, 1]^2
@@ -93,8 +93,8 @@ end
     end
 end
 
-@testitem "TS2-1: spatial convergence orders (DivKGrad, Upwind1, Robin, Hex)" setup = [LP_convergence_orders] tags = [:latticepde, :convergence] begin
-    @testset "TS2-1: spatial convergence orders" begin
+@testitem "spatial convergence orders (DivKGrad, Upwind1, Robin, Hex)" setup = [LP_convergence_orders] tags = [:latticepde, :convergence] begin
+    @testset "spatial convergence orders" begin
         @variables u(..)
         ue = u(t, x, y)
         fdom = [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
@@ -199,8 +199,8 @@ end
     end
 end
 
-@testitem "TS2-1: multigrid mesh-independence under grid refinement (h -> h/2 -> h/4)" setup = [LP_convergence_orders] tags = [:latticepde, :convergence] begin
-    @testset "TS2-1: multigrid mesh-independence under grid refinement" begin
+@testitem "multigrid mesh-independence under grid refinement (h -> h/2 -> h/4)" setup = [LP_convergence_orders] tags = [:latticepde, :convergence] begin
+    @testset "multigrid mesh-independence under grid refinement" begin
         @variables w(..)
         fdom = [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
         exact_fn(xx, yy) = sin(pi * xx) * sin(pi * yy)

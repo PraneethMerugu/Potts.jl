@@ -1,6 +1,6 @@
-# F4-B1 (F4 design §11): `lattice_domain(t, (x, y), dims; spacing, tspan)` gives a PDESystem
+# `lattice_domain(t, (x, y), dims; spacing, tspan)` gives a PDESystem
 # the domain of its lattice (the discretization derives the spacing back from it), and `HEX`
-# is exported. Negative control at 8c3f01cf (~/lpwork/f4B1/nc.log): `lattice_domain` is not
+# is exported. Negative control at 8c3f01cf: `lattice_domain` is not
 # defined (11 of 11 checks fail or error) and `HEX` is not exported (2 of 2).
 
 @testsetup module LP_latticedomain
@@ -23,8 +23,8 @@ ldce = ldc(t, x, y)
 include("shared/export_all.jl")
 end
 
-@testitem "F4-B1: lattice_domain is the hand-written domain" setup = [LP_latticedomain] tags = [:latticepde, :latticedomain] begin
-@testset "F4-B1: lattice_domain is the hand-written domain" begin
+@testitem "lattice_domain is the hand-written domain" setup = [LP_latticedomain] tags = [:latticepde, :latticedomain] begin
+@testset "lattice_domain is the hand-written domain" begin
     same(a, b) = length(a) == length(b) &&
                  all(i -> isequal(a[i].variables, b[i].variables) && a[i].domain == b[i].domain, eachindex(a))
     @test same(lattice_domain(t, (x, y), (8, 4); spacing = 0.5),
@@ -58,8 +58,8 @@ end
 end
 end
 
-@testitem "F4-B1: HEX is exported" setup = [LP_latticedomain] tags = [:latticepde, :latticedomain] begin
-@testset "F4-B1: HEX is exported" begin
+@testitem "HEX is exported" setup = [LP_latticedomain] tags = [:latticepde, :latticedomain] begin
+@testset "HEX is exported" begin
     @test Base.isexported(LatticePDE, :HEX)
     m = Module(:TiHex)
     Core.eval(m, :(using LatticePDE))

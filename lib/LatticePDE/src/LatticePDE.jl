@@ -4,9 +4,9 @@
 The MTK-facing vocabulary of the lattice field compiler: the registered operators that
 field equations and CPM terms are written with, the metadata keys that tag variables and
 parameters, and the scans that refuse spellings MTK accepts but that do not mean what they
-say on a lattice (v3 §5.1, §5.5).
+say on a lattice.
 
-Every operator is a positional registered term (S-3): options that are not symbolic live
+Every operator is a positional registered term: options that are not symbolic live
 in a callable struct (`DivKGrad(:harmonic)`, `Advect(Upwind1())`), and every symbolic
 argument is positional, so `substitute`, `simplify` and `get_variables` see it.
 
@@ -152,7 +152,7 @@ index is clamped into its axis (`1:size(J, 1)`, `1:size(J, 2)`).
 
 With two or more integer inputs (for example the two kinds of a pair table read),
 `mtkcompile(sys; inputs = [a, b])` can fail with `AssertionError: last_idx <= idx` in
-ModelingToolkitBase `complete` (FR-36, MTKBase 1.77): it requires the inputs in its own
+ModelingToolkitBase `complete` (MTKBase 1.77): it requires the inputs in its own
 parameter order, which is hash order and so depends on the names and the machine. Give the
 inputs in the reverse order (`inputs = [b, a]`).
 """
@@ -280,7 +280,7 @@ inputs, a field of the lattice) are folded over each node's block:
     each face (at a face of the box, the node's own block). A fine coefficient is the
     arithmetic mean of its fine values over the block, not a homogenized coefficient (the
     block's effective conductivity, which the arithmetic mean bounds from above).
-  - A mask whose predicate reads fine values (`c ~ masked(kind == medium, v)`) blends (F4-15b).
+  - A mask whose predicate reads fine values (`c ~ masked(kind == medium, v)`) blends.
     A node is masked, and holds `v`, when the predicate holds at every site of its block.
     Elsewhere the node holds the value of its block's free part, the sites where the predicate
     is false: the fine reads in its equation and its operator coefficients fold over the free
@@ -468,7 +468,7 @@ include("operator.jl")
 include("derivation.jl")
 include("precompile.jl")
 
-# the operator builds of this session: the precompile workload's is in the package image (R2-N1)
+# the operator builds of this session: the precompile workload's is in the package image
 __init__() = (OPERATOR_BUILDS[] = 0; nothing)
 
 end # module LatticePDE

@@ -1,4 +1,4 @@
-# Definitions of discretize_tests.jl that other test files use (moved here by TS1b).
+# Definitions of discretize_tests.jl that other test files use.
 using LatticeFields: LatticeFields
 using Random: MersenneTwister
 include(joinpath(pkgdir(LatticeFields), "test", "host_runner.jl"))

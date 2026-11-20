@@ -1,4 +1,4 @@
-# Definitions of report_tests.jl that other test files use (moved here by TS1b).
+# Definitions of report_tests.jl that other test files use.
 using OrdinaryDiffEqTsit5: Tsit5
 using SciMLBase: SciMLBase, ReturnCode
 using LatticeFields.IR: HEX
@@ -24,7 +24,7 @@ rwarm(ig) = (step!(ig); step!(ig); @allocated step!(ig))   # (a function barrier
 rline(rep, label) = (l = filter(s -> startswith(s, "  " * rpad(label, 11)), split(rep, '\n')); isempty(l) ? "" : String(l[1]))
 rlines(rep, label) = [String(s) for s in split(rep, '\n') if startswith(s, "  " * rpad(label, 11))]
 
-# review S5: hand oracles
+# Hand oracles
 @parameters gF = 0.04 gk = 0.06
 @variables rq(..) ru(..) rv(..) rcy(..) rcz(..)
 rqe, rue, rve, rcye, rcze = rq(t, x, y), ru(t, x, y), rv(t, x, y), rcy(t, x, y), rcz(t, x, y)

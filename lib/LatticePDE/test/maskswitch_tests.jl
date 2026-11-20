@@ -3,8 +3,8 @@
 # sites ended at 0.0, the owned run at 2.0). A comparison of `t` with parameters and constants is
 # now a continuous callback at its root (`MaskEvent`): the switch is exact, and the run equals the
 # owned one. A predicate whose switch has no event (here `t > q`, an input) is refused on an
-# OrdinaryDiffEq solver unless `dtmax` or `tstops` is given. Negative control at 70400aba
-# (~/lpwork/f4b2-rev2/nc-maskswitch.log): the masked sites end at 0.0 under both solvers; the
+# OrdinaryDiffEq solver unless `dtmax` or `tstops` is given. Negative control at 70400aba:
+# the masked sites end at 0.0 under both solvers; the
 # unlocated predicate is not refused.
 
 @testsetup module LP_maskswitch

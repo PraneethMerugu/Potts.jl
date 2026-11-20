@@ -1,4 +1,4 @@
-# Definitions of coupled_tests.jl that other test files use (moved here by TS1b).
+# Definitions of coupled_tests.jl that other test files use.
 using LinearAlgebra: LinearAlgebra, I
 using Logging: Logging
 using KernelAbstractions: KernelAbstractions
@@ -11,7 +11,7 @@ function cjac(sys, dims)
     b0 = f(zeros(m))
     return hcat([f((e = zeros(m); e[j] = 1; e)) .- b0 for j in 1:m]...), b0
 end
-# (F4-01: the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
+# (the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
 cown(sys; dims = (8, 8), T = Float64) = LFP.field_problem(discretize(sys, LatticeDiscretization(Grid(dims); T)))
 const CTIGHT = LatticeGMRES(; reltol = 1.0e-12, maxiters = 200)
 @variables ca(..) cb(..) cq(..) cz(..)
@@ -21,7 +21,8 @@ cmsg(f) = try
 catch err
     err isa ArgumentError ? err.msg : sprint(showerror, err)
 end
-# the q1 loop of batch 4 review r2 (with sources, so the steady state is not 0): `lhs` is `D`
+# the loop `q1` (a steady field and a rate field that feed each other, with sources, so the
+# steady state is not 0): `lhs` is `D`
 # (rate rows, which QuasiSteady solves as steady rows) or `0 ~` rows
 q1(δ, k; steady = false) = PDESystem(steady ?
         [0 ~ 0.1 * laplacian(cae) - δ * cae + k * cbe + x, 0 ~ 0.1 * laplacian(cbe) - cbe - k * cae + y] :

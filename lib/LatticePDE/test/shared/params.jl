@@ -1,4 +1,4 @@
-# Definitions of params_tests.jl that other test files use (moved here by TS1b).
+# Definitions of params_tests.jl that other test files use.
 using SciMLBase: SciMLBase, remake
 using SymbolicIndexingInterface: getp, setp
 using SciMLStructures: SciMLStructures, Tunable, Constants, Discrete

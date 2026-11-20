@@ -1,7 +1,7 @@
-# Split from implicit_tests.jl (Wave T3b); uses LP_implicit setup.
+# Split from implicit_tests.jl; uses LP_implicit setup.
 
-@testitem "F3-09a: local nonlinear rows: one Newton step keeps order 1" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
-    @testset "F3-09a: local nonlinear rows: one Newton step keeps order 1" begin
+@testitem "local nonlinear rows: one Newton step keeps order 1" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
+    @testset "local nonlinear rows: one Newton step keeps order 1" begin
         dts = [0.02 / 2^k for k in 0:3]
         # logistic growth `3 c (1 − c)`
         es, o, pb, _ = nl_orders(0.05 * laplacian(bce) + 3 * bce * (1 - bce), NLIC; T = 0.5, dts)
@@ -20,8 +20,8 @@
     end
 end
 
-@testitem "F3-09a: the switch: newton = 2 by default keeps order 1" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
-    @testset "F3-09a: the switch: newton = 2 by default keeps order 1" begin
+@testitem "the switch: newton = 2 by default keeps order 1" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
+    @testset "the switch: newton = 2 by default keeps order 1" begin
         sw = 0.05 * laplacian(bce) - 8 * max(bce - 0.4, 0) / 0.6 + 2 + 2 * sin(6t)
         dts = [0.05 / 2^k for k in 0:3]
         e2, o2, pb, u2 = nl_orders(sw, NLIC; T = 0.3, dts)
@@ -38,10 +38,10 @@ end
     end
 end
 
-@testitem "F3-09a: the switch's flip pass counts no budget hit (review r1, M7)" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
-    @testset "F3-09a: the switch's flip pass counts no budget hit (review r1, M7)" begin
+@testitem "the switch's flip pass counts no budget hit" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
+    @testset "the switch's flip pass counts no budget hit" begin
         # the default count's second iteration fixes the switch state: no convergence test, so a
-        # default user sees no warning (base 2d213237, ~/lpwork/f3r1-nc-base.log: 2 hits and the
+        # default user sees no warning (before the fix, 2d213237: 2 hits and the
         # budget warning in Float32 and Float64); a given `nlsolve = LatticeNewton(; max_iter = 2)` checks as before
         sys = PDESystem(
             [D(bce) ~ 0.05 * laplacian(bce) - 8 * max(bce - 0.4, 0) / 0.6 + 2 + 2 * sin(6t)], [bc(0, x, y) ~ NLIC], bdom(3.0),
@@ -58,8 +58,8 @@ end
     end
 end
 
-@testitem "F3-09a: an unseen growth is clamped (the cause bit), not a failure" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
-    @testset "F3-09a: an unseen growth is clamped (the cause bit), not a failure" begin
+@testitem "an unseen growth is clamped (the cause bit), not a failure" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
+    @testset "an unseen growth is clamped (the cause bit), not a failure" begin
         # `20 c² − 20 c` from c = 0.75: `∂f/∂c = 10` at the start, `h = 0.1`: the shift `1/h − 10`
         # is clamped at `1/(2h)`; the rest stays in the residual and the field decays
         sys = PDESystem(
@@ -69,7 +69,7 @@ end
         pb = discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float64))
         ig = init(pb, BackwardEuler(); dt = 0.1)
         # with one Newton step nothing else tells: a warning names the field, the window and the
-        # route (review r1, S2; base 2d213237: no warning)
+        # route (S2; base 2d213237: no warning)
         @test_logs (:warn, r"^field `bc`: the implicit shift was clamped in window 1 \(t = 0\.0\) .*a larger `nlsolve = LatticeNewton\(; max_iter = k\)` checks the step") solve!(ig)
         rt = only(ig.runtimes)
         @test ig.retcode == ReturnCode.Success && rt.totals.cause & 0x08 != 0 && maximum(ig[bce]) < 1.0e-3
@@ -100,8 +100,8 @@ end
     end
 end
 
-@testitem "F3-09b: advection at the rule-2 count; the Newton check (R2-M1)" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
-    @testset "F3-09b: advection at the rule-2 count; the Newton check (R2-M1)" begin
+@testitem "advection at the rule-2 count; the Newton check" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
+    @testset "advection at the rule-2 count; the Newton check" begin
         # ρ_adv = 2 (1 + 0.5) · 16 = 48: n = ⌈2 · 0.25 · 48⌉ = 24 substeps, ρ_c = 1/2: newton = 10
         sys = nlsys([D(bce) ~ 0.01 * laplacian(bce) - Advect(Upwind1())([1.0, 0.5], bce) + 1 + sin(4t) * x], [bc(0, x, y) ~ x * y], [bce])
         p = nlown(sys)
@@ -132,8 +132,8 @@ end
     end
 end
 
-@testitem "F3-09b: a cycle in a group converges by Gauss–Seidel (count rule 2)" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
-    @testset "F3-09b: a cycle in a group converges by Gauss–Seidel (count rule 2)" begin
+@testitem "a cycle in a group converges by Gauss–Seidel (count rule 2)" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
+    @testset "a cycle in a group converges by Gauss–Seidel (count rule 2)" begin
         # κ_in = 2 (the largest cross sum): n = ⌈2 · 0.5 · 2⌉ = 2, ρ_c = 0.25 · 2 = 1/2: newton = 10
         sys = nlsys(
             [D(bce) ~ 0.1 * laplacian(bce) - bce + 2 * boe, D(boe) ~ 0.1 * laplacian(boe) - 3 * boe + 1.5 * bce + 1],
@@ -155,11 +155,11 @@ end
     end
 end
 
-@testitem "review r1 M3: a nonlinear read of another row's field is a source in solve order" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
-    @testset "review r1 M3: a nonlinear read of another row's field is a source in solve order" begin
+@testitem "M3: a nonlinear read of another row's field is a source in solve order" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
+    @testset "M3: a nonlinear read of another row's field is a source in solve order" begin
         # acyclic (c reads o through a switch, o does not read c): the term is known when c is
         # solved, so the operator is exact, newton = 1 and no warning (base cb20be97: the term is
-        # unseen, newton = 4 and the warning; ~/lpwork/f3b6r-nc-m3.log)
+        # unseen, newton = 4 and the warning)
         p = nlown(
             nlsys(
                 [D(bce) ~ 0.1 * laplacian(bce) - bce + 2.25 * max(boe - 0.5, 0), D(boe) ~ 0.1 * laplacian(boe) - boe + x],
@@ -189,10 +189,10 @@ end
     end
 end
 
-@testitem "F3-09b: a term no bound sees warns once; a divergence ends the run" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
-    @testset "F3-09b: a term no bound sees warns once; a divergence ends the run" begin
+@testitem "a term no bound sees warns once; a divergence ends the run" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
+    @testset "a term no bound sees warns once; a divergence ends the run" begin
         # a velocity that varies in time: no bound (the interval bound covers the coordinates, not
-        # the time; F3-13 bounds `50(1 + x)`, below), one substep, newton = 4, checked on the device
+        # the time; `50(1 + x)` is bounded, below), one substep, newton = 4, checked on the device
         p = nlown(nlsys([D(bce) ~ 0.01 * laplacian(bce) - Advect(Upwind1())([50 * (1 + x) + t, 0.0], bce)], [bc(0, x, y) ~ x * y], [bce]; T = 2.0))
         s = @test_logs (:warn, r"field `bc`: `-Advect\(Upwind1\(\)\)\(\[.*t.*, 0\.0\], bc\)` \(in the rate of `bc`\) is not in the implicit operator and no bound sees it") (
             :warn,
@@ -210,8 +210,8 @@ end
     end
 end
 
-@testitem "F3-13: a site-varying velocity at the rule-2 count; a site growth at rule 1 (batch 3 review R2, r1 S2)" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
-    @testset "F3-13: a site-varying velocity at the rule-2 count; a site growth at rule 1 (batch 3 review R2, r1 S2)" begin
+@testitem "a site-varying velocity at the rule-2 count; a site growth at rule 1" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
+    @testset "a site-varying velocity at the rule-2 count; a site growth at rule 1" begin
         # `50(1 + x)` over the box and one spacing past it (16²: x ≤ 1 + 1/16): ρ_adv = 2 · 50 (2 + 1/16)
         # · 16 = 3300, n = ⌈2 · 0.01 · 3300⌉ = 66, ρ_c = 1/2: newton = 10, no warning, and the run is
         # the BE matrix's (base b41b73c1: one substep, newton = 4, the warning; at dt = 1 it diverged)
@@ -223,7 +223,7 @@ end
         s = @test_logs min_level = WARN solve(p, BackwardEuler(; linsolve = BTIGHT); dt = 0.01)
         @test s.retcode == ReturnCode.Success && s.stats.newton_budget == 0
         ub = direct_be(sys, (16, 16), 0.01, 0.05, 66)
-        @test maximum(abs, vec(blast(s)) .- ub) / maximum(abs, ub) < 1.0e-3    # (batch 3 review r1 S2): a site growth the interval bound sees (`8(1 + x) c`, a field
+        @test maximum(abs, vec(blast(s)) .- ub) / maximum(abs, ub) < 1.0e-3    #: a site growth the interval bound sees (`8(1 + x) c`, a field
         # row) raises the count by rule 1 instead: n = ⌈2 · 0.1 · 8 (2 + 1/8)⌉ = 4 (x over the box and
         # one spacing past it), no clamp and no warning, and the run is the BE matrix's (base
         # b41b73c1: one substep, the clamp warning)
@@ -241,19 +241,19 @@ end
     end
 end
 
-@testitem "r1 M1: an operator that reads the time is built at each substep's end time" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
-    @testset "r1 M1: an operator that reads the time is built at each substep's end time" begin
-        # against BE with the matrix assembled at every substep's end time (base, ~/lpwork/f3r1-nc-base.log:
+@testitem "an operator that reads the time is built at each substep's end time" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
+    @testset "an operator that reads the time is built at each substep's end time" begin
+        # against BE with the matrix assembled at every substep's end time (before the fix:
         # 6.6e-2, 1.6e-3, 1.6e-3 relative: every substep took the first substep's operator)
         for rate in (0.1 * laplacian(bce) - (1 + 20t) * bce + 1, DivKGrad(:harmonic)(1 + 5t, bce) - bce + 1, (1 + 5t) * laplacian(bce) - bce + 1)
             sys = nlsys([D(bce) ~ rate], [bc(0, x, y) ~ x * y], [bce]; T = 0.4)
             p = nlown(sys; dims = (10, 8))
-            s = @test_logs min_level = WARN solve(p, BackwardEuler(; substeps = 4, linsolve = r1tight()); dt = 0.2)
-            @test r1rel(vec(blast(s)), direct_be(sys, (10, 8), 0.2, 0.4, 4; timed = true)) < 1.0e-10   # (measured 1.8e-14)
+            s = @test_logs min_level = WARN solve(p, BackwardEuler(; substeps = 4, linsolve = tightpcg()); dt = 0.2)
+            @test relerr(vec(blast(s)), direct_be(sys, (10, 8), 0.2, 0.4, 4; timed = true)) < 1.0e-10   # (measured 1.8e-14)
             c = only(init(p, BackwardEuler(; substeps = 4); dt = 0.2).runtimes).cache
             @test c.timed && c.exact && c.newton == 1
         end
-        # SX-18 with a time-dependent coefficient: OrdinaryDiffEq's ImplicitEuler at the substep
+        # The OrdinaryDiffEq oracle with a time-dependent coefficient: OrdinaryDiffEq's ImplicitEuler at the substep
         sx = nlsys(
             [D(bce) ~ DivKGrad(:harmonic)(0.3 * (1 + 5t), bce) - (1 + 20t) * bce + sin(3t) * x], [bc(0, x, y) ~ x * y, bc(t, 0, y) ~ 1.0],
             [bce]; T = 0.4
@@ -265,7 +265,7 @@ end
         ie = ImplicitEuler(; nlsolve = OrdinaryDiffEqSDIRK.NLNewton(; max_iter = 50, always_new = true))
         so = solve(po, ie; dt = 0.05, adaptive = false, abstol = 1.0e-12, reltol = 1.0e-12)
         @test so.retcode == ReturnCode.Success
-        sb = solve(nlown(sx; dims = (8, 8)), BackwardEuler(; substeps = 4, linsolve = r1tight()); dt = 0.2)
+        sb = solve(nlown(sx; dims = (8, 8)), BackwardEuler(; substeps = 4, linsolve = tightpcg()); dt = 0.2)
         @test maximum(abs, vec(blast(sb)) .- so.u[end]) < 1.0e-8                  # (base: 5.8e-3)
         # an operator that does not read the time is built once per window, as before
         pc = nlown(nlsys([D(bce) ~ DivKGrad(:harmonic)(1 + x, bce) - bce + sin(3t)], [bc(0, x, y) ~ x], [bce]; T = 0.4); dims = (10, 8))
@@ -275,8 +275,8 @@ end
     end
 end
 
-@testitem "r1 M2, S1: a Robin face's sign follows a parameter write; a negative face is bounded" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
-    @testset "r1 M2, S1: a Robin face's sign follows a parameter write; a negative face is bounded" begin
+@testitem "a Robin face's sign follows a parameter write; a negative face is bounded" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
+    @testset "a Robin face's sign follows a parameter write; a negative face is bounded" begin
         # `1.5 c − rb ∂c/∂x = 0.2` at x = 1: rb = −1 a positive diagonal, rb = +1 a negative one
         function robin(rate, v)
             @parameters rb = v
@@ -288,9 +288,9 @@ end
         for rate in (0.3 * laplacian(bce) - 2 * bce + 1, DivKGrad(:harmonic)(0.3 * (1 + x), bce) - 2 * bce + 1)   # numeric, field row
             for (b0, b1) in ((-1.0, 1.0), (1.0, -1.0))
                 sys0, rb = robin(rate, b0)
-                ig = init(nlown(sys0; dims = (10, 8)), BackwardEuler(; linsolve = r1tight()); dt = 0.1)
+                ig = init(nlown(sys0; dims = (10, 8)), BackwardEuler(; linsolve = tightpcg()); dt = 0.1)
                 ig.ps[rb] = b1
-                fresh = init(nlown(first(robin(rate, b1)); dims = (10, 8)), BackwardEuler(; linsolve = r1tight()); dt = 0.1)
+                fresh = init(nlown(first(robin(rate, b1)); dims = (10, 8)), BackwardEuler(; linsolve = tightpcg()); dt = 0.1)
                 c, cf = only(ig.runtimes).cache, only(fresh.runtimes).cache
                 @test (c.exact, c.seen, c.newton, c.check) == (cf.exact, cf.seen, cf.newton, cf.check)
                 @test ig.substeps == fresh.substeps
@@ -307,28 +307,28 @@ end
         # `newton` follows ρ_c = 0.49 (10); no budget hit, and the result is the converged step (base:
         # newton = 4 and budget hits with a warning)
         p = nlown(first(robin(0.3 * laplacian(bce) - 2 * bce + 1, 1.0)); dims = (10, 8))
-        ig = init(p, BackwardEuler(; linsolve = r1tight()); dt = 0.1)
+        ig = init(p, BackwardEuler(; linsolve = tightpcg()); dt = 0.1)
         c = only(ig.runtimes).cache
         @test !c.exact && c.seen && c.ρin ≈ 30 * 1.5 / 9.25 && ig.substeps == 1 && c.newton == 10
-        s = @test_logs min_level = WARN solve(p, BackwardEuler(; linsolve = r1tight()); dt = 0.1)
+        s = @test_logs min_level = WARN solve(p, BackwardEuler(; linsolve = tightpcg()); dt = 0.1)
         @test s.retcode == ReturnCode.Success && s.stats.newton_budget == 0
-        r = solve(p, BackwardEuler(; linsolve = r1tight(), nlsolve = LatticeNewton(; max_iter = 40)); dt = 0.1)
-        @test r1rel(vec(blast(s)), vec(blast(r))) < 1.0e-4                       # (measured 3.8e-5; base 2.1e-4)
-        # R2-S1: a field row's negative face is bounded by its largest face coefficient over the
+        r = solve(p, BackwardEuler(; linsolve = tightpcg(), nlsolve = LatticeNewton(; max_iter = 40)); dt = 0.1)
+        @test relerr(vec(blast(s)), vec(blast(r))) < 1.0e-4                       # (measured 3.8e-5; base 2.1e-4)
+        # A field row's negative face is bounded by its largest face coefficient over the
         # box and one spacing past it, `0.3 (1 + 1.1) / 0.1² = 63`: ρ_rob = 63 · 1.5/9.25, rule 2
         # takes ⌈2 · 0.1 · 10.2⌉ = 3 substeps, newton follows ρ_c (base: unseen, newton = 4 and a
         # budget warning in the run)
         pf = nlown(first(robin(DivKGrad(:harmonic)(0.3 * (1 + x), bce) - 2 * bce + 1, 1.0)); dims = (10, 8))
-        ig = init(pf, BackwardEuler(; linsolve = r1tight()); dt = 0.1)
+        ig = init(pf, BackwardEuler(; linsolve = tightpcg()); dt = 0.1)
         c = only(ig.runtimes).cache
         @test !c.exact && c.seen && c.ρin ≈ 0.3 * 2.1 / 0.01 * 1.5 / 9.25 && ig.substeps == 3 && c.newton > 4
-        s = @test_logs min_level = WARN solve(pf, BackwardEuler(; linsolve = r1tight()); dt = 0.1)
+        s = @test_logs min_level = WARN solve(pf, BackwardEuler(; linsolve = tightpcg()); dt = 0.1)
         @test s.retcode == ReturnCode.Success && s.stats.newton_budget == 0
         r = solve(
-            pf, BackwardEuler(; substeps = 3, linsolve = r1tight(), nlsolve = LatticeNewton(; κ = 1.0e-6, max_iter = 40));
+            pf, BackwardEuler(; substeps = 3, linsolve = tightpcg(), nlsolve = LatticeNewton(; κ = 1.0e-6, max_iter = 40));
             dt = 0.1, abstol = 1.0e-10, reltol = 1.0e-8,
         )
-        @test r1rel(vec(blast(s)), vec(blast(r))) < 1.0e-4
+        @test relerr(vec(blast(s)), vec(blast(r))) < 1.0e-4
         # … and a face coefficient no interval bounds (it reads an input field) is unseen: a warning
         # at `init` that names the face (base: none at `init`, only the budget warning later)
         @variables rk(..) [input = true]
@@ -349,8 +349,8 @@ end
     end
 end
 
-@testitem "r1 M3: a scaled row keeps the face coefficient with the largest bound" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
-    @testset "r1 M3: a scaled row keeps the face coefficient with the largest bound" begin
+@testitem "a scaled row keeps the face coefficient with the largest bound" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
+    @testset "a scaled row keeps the face coefficient with the largest bound" begin
         @parameters rW[1:2] = [50.0, 200.0]
         @variables rq(..)::Int32 [input = true]
         rqe = rq(t, x, y)
@@ -362,15 +362,15 @@ end
             )
             sys = PDESystem([D(bce) ~ rate], [bc(0, x, y) ~ x], bdom(0.2), [t, x, y], [bce, rqe], [rW]; name = :scaled)
             p = discretize(sys, LatticeDiscretization(Grid((16, 16)); T = Float64); inputs = [rqe => kind])
-            ig = init(p, BackwardEuler(; linsolve = r1tight()); dt = 0.05)
+            ig = init(p, BackwardEuler(; linsolve = tightpcg()); dt = 0.05)
             row = only(only(ig.runtimes).cache.rows).op
             @test only(row.inexact) == "`$out` (in the rate of `bc`)" && isempty(row.unseen) && only(ig.runtimes).cache.seen
             # base: the first term in the canonical order stays (here the small one), the stiff term
             # is out and unseen: `newton = 4`, a warning, and `ConvergenceFailure` in window 1
-            s = @test_logs min_level = WARN solve(p, BackwardEuler(; linsolve = r1tight()); dt = 0.05)
+            s = @test_logs min_level = WARN solve(p, BackwardEuler(; linsolve = tightpcg()); dt = 0.05)
             @test s.retcode == ReturnCode.Success && s.stats.newton_budget == 0
             ref = direct_be(sys, (16, 16), 0.05, 0.2, ig.substeps; inputs = [rqe => kind])
-            @test r1rel(vec(blast(s)), ref) < 1.0e-4                              # (base: 1.8e8, diverged)
+            @test relerr(vec(blast(s)), ref) < 1.0e-4                              # (base: 1.8e8, diverged)
         end
     end
 end

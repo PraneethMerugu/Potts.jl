@@ -1,4 +1,4 @@
-# Definitions of crossgrid_tests.jl that other test files use (moved here by TS1b).
+# Definitions of crossgrid_tests.jl that other test files use.
 using LinearAlgebra: I, Tridiagonal, kron
 using ForwardDiff: ForwardDiff
 using LatticeFields.IR: HEX
@@ -11,7 +11,7 @@ const xcc, xLc = xlev(:xcc, 4), xlev(:xLc, 4)
 const xu, xv, xX = xfine(:xuu), xfine(:xvv), xfine(:xXf)
 xe(f) = f(t, x, y)
 xdom(T = 1.0) = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
-# (F4-01: the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
+# (the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
 xown(sys, dims; kw...) = LFP.field_problem(discretize(sys, LatticeDiscretization(Grid(dims); kw...)))
 const XT = 0.002
 @parameters xDq = 0.01 xaq = 0.5

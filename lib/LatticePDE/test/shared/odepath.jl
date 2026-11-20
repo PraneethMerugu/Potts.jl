@@ -1,4 +1,4 @@
-# Definitions of odepath_tests.jl that other test files use (moved here by TS1b).
+# Definitions of odepath_tests.jl that other test files use.
 using SciMLBase: SciMLBase, remake
 using OrdinaryDiffEqTsit5: Tsit5
 using OrdinaryDiffEqRosenbrock: Rodas5P

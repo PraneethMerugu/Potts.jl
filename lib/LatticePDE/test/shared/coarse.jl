@@ -1,4 +1,4 @@
-# Definitions of coarse_tests.jl that other test files use (moved here by TS1b).
+# Definitions of coarse_tests.jl that other test files use.
 using LatticeFields.IR: print_program
 using LinearAlgebra: I
 using Random: Xoshiro, randperm
@@ -31,7 +31,7 @@ function cmean(A, k = CK)
     nc = size(A) .÷ k
     return [sum(A[(I[1] - 1) * k + i, (I[2] - 1) * k + j] for j in 1:k for i in 1:k) / k^2 for I in CartesianIndices(nc)]
 end
-# the mean of a fine array over each block's free children (F4-15b: the children where `held` is
+# the mean of a fine array over each block's free children (the children where `held` is
 # false; in the IR's order, so a block with no held child gives `cmean`), over every child of a
 # block no child of which is free
 function cfree(A, held, k = CK)
@@ -42,7 +42,7 @@ function cfree(A, held, k = CK)
         isempty(fr) ? sum(A[c] for c in ch) / k^2 : sum(A[c] for c in fr) / length(fr)
     end
 end
-# the mean of a fine array over each block's free in-domain children (F4-15b ruling: the fold's
+# the mean of a fine array over each block's free in-domain children (the fold's
 # support is free ∩ in-domain); a block with no such child gives the in-domain mean, and none of
 # those the whole mean
 function cinfree(A, held, ind, k = CK)
@@ -58,7 +58,7 @@ end
 cnfree(held, k = CK) = [count(!, held[((I[1] - 1) * k + 1):(I[1] * k), ((I[2] - 1) * k + 1):(I[2] * k)])
                         for I in CartesianIndices(size(held) .÷ k)]
 # a fine kind map whose 4×4 blocks hold kind 3 (the mask's) on 16, 0, 1, 2, … 15 of their sites,
-# the others drawn from 0:2 (F4-15b): masked, free and blended nodes
+# the others drawn from 0:2: masked, free and blended nodes
 function cblendkinds(seed; dims = CDIMS, k = CK)
     rng = Xoshiro(seed)
     Q = zeros(Int32, dims)
@@ -75,7 +75,7 @@ end
 cwhole(Q, k = CK) = Int32[all(==(3), Q[((I[1] - 1) * k + 1):(I[1] * k), ((I[2] - 1) * k + 1):(I[2] * k)]) ? 3 : 0
                           for I in CartesianIndices(size(Q) .÷ k)]
 # the owned problem of `sys` on `dims` with inputs `ins`
-# (F4-01: the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
+# (the owned problem field algorithms step, `LFP.field_problem` of the problem `discretize` returns)
 cown(sys, dims; T = Float64, ins = (), kw...) = LFP.field_problem(discretize(sys, LatticeDiscretization(Grid(dims); T, kw...);
     inputs = collect(Pair, ins)))
 
@@ -84,7 +84,7 @@ cown(sys, dims; T = Float64, ins = (), kw...) = LFP.field_problem(discretize(sys
 # whose value reads the coordinates, a face value that reads an input (a field face), a table at
 # the kind and a source from a real input. With `hand` (the twin), the kind expressions are real
 # inputs that hold their block means: `cf2` for `ismember(q, (2,))`, `cf1` for `q == 1`, `csv` for
-# `value_at(cSv, q + 1)` (F4-15: a kind expression folds by its mean, as a real input does). The names are
+# `value_at(cSv, q + 1)` (a kind expression folds by its mean, as a real input does). The names are
 # unique to this file: SymbolicUtils interns an applied term `sv(t, x, y)` whatever its function's
 # metadata, and unseen_loop.jl's plain `sv` (included before device.jl) drops `input = true`
 @parameters cD = 0.02 ckd = 3.0 cs = 0.5 cSv[1:4] = [1.0, 2.0, 5.0, 3.0]
@@ -101,7 +101,7 @@ function csys(c, q, g; steady = false, hand = false)
     return PDESystem(eqs, bcs, cdom(), [t, x, y], dvs, [cD, ckd, cs, cSv]; name = :cs)
 end
 # the hand twin's inputs for the fine kind map `Q`: the means of the kind expressions over the
-# free children (the mask is `q == 3`; F4-15b)
+# free children (the mask is `q == 3`)
 chand(Q) = [cf1(t, x, y) => cfree(Float64.(Q .== 1), Q .== 3), cf2(t, x, y) => cfree(Float64.(Q .== 2), Q .== 3),
     csv(t, x, y) => cfree(Float64[1.0, 2.0, 5.0, 3.0][Q .+ 1], Q .== 3)]
 # equal to rounding: the fold multiplies the block mean last in a product, the twin in its term order
@@ -112,7 +112,7 @@ const CQB1, CQB2 = cblendkinds(13), cblendkinds(14)
 # a real input whose block sums are exact (integers): the mean is exact in both problems
 const CG = Float64[(3i + 5j) % 7 for i in 1:16, j in 1:16]
 
-# a kind map with ties (review r1 S1): blocks of 8 P + 8 Q (owner P: the smaller kind), 9 P + 7 Q,
+# a kind map with ties: blocks of 8 P + 8 Q (owner P: the smaller kind), 9 P + 7 Q,
 # 6 P + 6 Q + 4 medium, 16 P, 8 medium + 8 Q (owner Q: the medium loses a tie), 16 medium,
 # 7 Q + 9 N, 8 Q + 8 N, two three-way mixes, and random blocks
 function ctiekinds(; seed = 31)

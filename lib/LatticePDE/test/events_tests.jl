@@ -1,6 +1,6 @@
-# F4-06 (F4 design §3.4, §5): `ContinuousCallback` on the owned path (Q3 (a): the condition at
+# `ContinuousCallback` on the owned path (the condition at
 # each window's end, the event located by linear interpolation, first order in time) and
-# ensembles of owned solves. Negative control at the F4-05 commit (~/lpwork/f4b5/nc06.log): a
+# ensembles of owned solves. Negative control before the fix: a
 # `ContinuousCallback` never fires (only the discrete callbacks run); the ensembles <…>.
 
 @testsetup module LP_events
@@ -29,8 +29,8 @@ include("shared/callbacks.jl")
 include("shared/export_all.jl")
 end
 
-@testitem "F4-06: a ContinuousCallback fires within one window of the event, at the interpolated state" setup = [LP_events] tags = [:latticepde, :events] begin
-@testset "F4-06: a ContinuousCallback fires within one window of the event, at the interpolated state" begin
+@testitem "a ContinuousCallback fires within one window of the event, at the interpolated state" setup = [LP_events] tags = [:latticepde, :events] begin
+@testset "a ContinuousCallback fires within one window of the event, at the interpolated state" begin
     p = cbprob()
     ev, st = Float64[], Vector{Float64}[]
     cb = SciMLBase.ContinuousCallback((u, t, i) -> maximum(u) - 0.5, i -> (push!(ev, i.t); push!(st, copy(i.u))))
@@ -40,7 +40,7 @@ end
     g = [maximum(u) - 0.5 for u in f.u]
     k = findfirst(i -> sign(g[i]) != sign(g[i + 1]), 1:(length(g) - 1))
     tref = f.t[k] + g[k] / (g[k] - g[k + 1]) * (f.t[k + 1] - f.t[k])
-    @test length(ev) == 1 && abs(ev[1] - tref) < 0.01 || (println("F4-06 event ", ev, " ref ", tref); false)
+    @test length(ev) == 1 && abs(ev[1] - tref) < 0.01 || (println("event ", ev, " ref ", tref); false)
         e = solve(p, ExplicitEuler(); dt = 0.01, save_everystep = true)
     @test maximum(abs, st[1] .- e(ev[1])) < 1e-13 && ev[1] in s.t && s.t[end] == 1.0
     # a VectorContinuousCallback: the first crossing of each component, its index given
@@ -52,8 +52,8 @@ end
 end
 end
 
-@testitem "F4-06: ensembles of owned solves equal the serial solves bitwise" setup = [LP_events] tags = [:latticepde, :events] begin
-@testset "F4-06: ensembles of owned solves equal the serial solves bitwise" begin
+@testitem "ensembles of owned solves equal the serial solves bitwise" setup = [LP_events] tags = [:latticepde, :events] begin
+@testset "ensembles of owned solves equal the serial solves bitwise" begin
     p = cbprob(0.3)
     ep = SciMLBase.EnsembleProblem(p; prob_func = (q, ctx) -> remake(q; p = [bk => 1.0 + ctx.sim_id]))
         alg = BackwardEuler(; linsolve = BTIGHT)

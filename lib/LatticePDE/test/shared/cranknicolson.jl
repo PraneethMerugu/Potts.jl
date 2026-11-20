@@ -1,4 +1,4 @@
-# Definitions of cranknicolson_tests.jl that other test files use (moved here by TS1b).
+# Definitions of cranknicolson_tests.jl that other test files use.
 using OrdinaryDiffEqSDIRK: Trapezoid
 
 # the manufactured solution `u = e^{−t} sin(πx) sin(πy) + t` (its source, the face value `t`) on

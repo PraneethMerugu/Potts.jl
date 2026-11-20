@@ -1,4 +1,4 @@
-# Definitions of groups_coupling_tests.jl that other test files use (moved here by TS1b).
+# Definitions of groups_coupling_tests.jl that other test files use.
 using SymbolicIndexingInterface: setu, getp
 
 @parameters gkc = 0.1 gDo = 0.3 gKt[1:2] = [1.0, 2.0]
@@ -14,7 +14,7 @@ rsys() = PDESystem([D(r1e) ~ -gk * r2e, D(r2e) ~ gk * r1e], [gr1(0, x, y) ~ 1.0,
 # two groups (two algorithms: equal ones would be one group)
 rtwo(n) = FieldGroups(r1e => ExplicitEuler(; substeps = n), r2e => ExplicitEuler(; substeps = n + 1))
 
-# Round 2 of the F2-06 review: only groups in a loop of the group read graph are limited.
+# Only groups in a loop of the group read graph are limited.
 @parameters gwk = 300.0 gwr = 5.0
 @variables gwc(..) gwu(..) gwo(..) gwv(..) gwa(..)
 wce, wue, woe, wve, wae = gwc(t, x, y), gwu(t, x, y), gwo(t, x, y), gwv(t, x, y), gwa(t, x, y)

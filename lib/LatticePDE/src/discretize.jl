@@ -1,5 +1,5 @@
-# The discretizer (v3 §2.3, §5): `PDESystem` + `LatticeDiscretization` → a LatticeFields
-# `Program`. PDEBase is not used (R2 F-2, S-5: its bc parsing and its symbolic discretizer
+# The discretizer: `PDESystem` + `LatticeDiscretization` → a LatticeFields
+# `Program`. PDEBase is not used (its bc parsing and its symbolic discretizer
 # interface do not fit a lattice IR); the analysis here is ours: operation-normalized keys,
 # the BC parser, the linearity table, map and offset-read classification, and the lowering.
 
@@ -42,7 +42,7 @@ each node's block, and a fine field reads a coarse one at the node of its block;
 `domain`, a node is in it when most of its block is. Every algorithm, the stability bound and
 the number types apply per field, on its own grid.
 
-`clock = τ` declares the discretization's clock (F2 design §2.6), of period `τ` (finite,
+`clock = τ` declares the discretization's clock, of period `τ` (finite,
 > 0). It sets the window of the owned steppers (`ExplicitEuler()` with no `dt` steps windows
 of `τ`; a given `dt` must divide `τ`) and the step index `k` that an equation reads as
 [`step_index(t)`](@ref): `k = 0` over the first period from the start of the time span,
@@ -130,14 +130,14 @@ struct CompiledField{N}
     tables::Vector
     initial::Dict{String, Any}
     linearity::Dict{String, Vector{Pair{Any, Symbol}}}
-    # the Robin coefficients that vary by site or in time (F4-12b), by `(key, axis, side)`:
+    # the Robin coefficients that vary by site or in time, by `(key, axis, side)`:
     # `(α, β)` in lattice units at the face's own coordinate, each an expression or `nothing`
     # (a number or a parameter, held by the face rule)
     sitecoefs::Dict{Tuple{String, Int, Int}, Tuple{Any, Any}}
-    # the coarse fields that blend (F4-15b): by key, the mask predicate, which reads fine fields
+    # the coarse fields that blend: by key, the mask predicate, which reads fine fields
     free::Dict{String, Any}
     # the irregular domain's Bool input when it is finer than a blending row's grid: the row's
-    # fold intersects the free support with the in-domain children (F4-15b ruling)
+    # fold intersects the free support with the in-domain children
     domfree::Any
 end
 
@@ -160,7 +160,7 @@ through it too.
 function as_written(s::AbstractString)
     s = replace(s, r"(?:LatticePDE\.)?Advect\{[\w.]+\}\(" => "Advect(", r"LatticePDE\.Upwind1\(" => "Upwind1(")
     s = replace(s, r"LatticePDE\.(laplacian|value_at|DivKGrad)\(" => s"\1(")      # (`laplacian(K)`, not `LatticePDE.laplacian(K)`)
-    s = replace(s, r"var\"([^\"]+\))(?:#\d+)?\"\(t(, \w+)*\)" => s"\1")   # an aux field added for an operator across grids: `laplacian(c)`, and `DivKGrad(c)#2` as `DivKGrad(c)` (F3-22)
+    s = replace(s, r"var\"([^\"]+\))(?:#\d+)?\"\(t(, \w+)*\)" => s"\1")   # an aux field added for an operator across grids: `laplacian(c)`, and `DivKGrad(c)#2` as `DivKGrad(c)`
     key = "SymbolicUtils.array_literal("
     while (r = findfirst(key, s)) !== nothing
         j = last(r)                                   # its `(`
@@ -190,7 +190,7 @@ function _statetype(disc::LatticeDiscretization)
     disc.T === nothing || return disc.T
     return disc.backend === nothing ? Float64 : Exec.default_float(disc.backend)
 end
-# The parts of a `PDESystem` beyond its six lowered fields (SX-21): `ps = NullParameters()`
+# The parts of a `PDESystem` beyond its six lowered fields: `ps = NullParameters()`
 # (MTKBase's default) is no parameters; `initial_conditions` give parameter values (over the
 # variable defaults) and field initial values (where no `c(0, …) ~ v` condition gives one);
 # subsystems and analytic solutions are refused by name, never ignored
@@ -230,8 +230,8 @@ end
 _promoted(vs) = (T = mapreduce(typeof, promote_type, vs; init = Float64); T.(vs))
 
 # a face coefficient, face value or mask value: a number, a parameter, or a number times a
-# parameter, else `nothing` (a value field: F3-07, and a Robin coefficient that reads the
-# coordinates or the time, F4-12b; one of parameters is a computed parameter by then, `robin_slots`)
+# parameter, else `nothing` (a value field, and a Robin coefficient that reads the
+# coordinates or the time, one of parameters is a computed parameter by then, `robin_slots`)
 function _coef(v, params, scale = 1.0)
     u = unwrap(v)
     c = _cval(u)
@@ -245,7 +245,7 @@ function _coef(v, params, scale = 1.0)
     end
     return nothing
 end
-# A face value or a masked value that is an expression (F3-07): of the time, the coordinates,
+# A face value or a masked value that is an expression: of the time, the coordinates,
 # the parameters and the inputs, never of a field of the state (the condition would be another
 # equation). It is lowered into a value field the kernels read (`FaceRule.gfield`,
 # `NodeValueRule.vfield`).
@@ -259,7 +259,7 @@ function _unpin_face_reads(bc, fids, ivs)
         substitute(bc.value, reps; fold = Val(false)), bc.pred, bc.eq)
 end
 # A Robin coefficient `v` of condition `bc` (`what`: "α" or "β", times `scale` into lattice
-# units) that reads the coordinates or the time (F4-12b): a value field `face:<key>:<axis><side>:<what>`
+# units) that reads the coordinates or the time: a value field `face:<key>:<axis><side>:<what>`
 # computed at each site by a kernel at the step's time, at the face's own coordinate (the
 # boundary sites read it). A read of an input is read at the boundary site; a read of the
 # state is refused (the condition would be another equation)
@@ -277,7 +277,7 @@ function _coef_field!(pb, bc, v, scale, what, k, d, s, op, lv, fids, ivs, ends, 
     add!(pb, kb, fk)
     return ff, x
 end
-# The time derivative of a masked value `v` (F4-02): the inputs and the step index are
+# The time derivative of a masked value `v`: the inputs and the step index are
 # piecewise constant in time (rate 0 between writes), the coordinates and parameters constant;
 # `nothing` when it is 0 or has no symbolic derivative (then the value is held between steps
 # and the mask callback writes it)
@@ -346,7 +346,7 @@ function _eqkind(eq, fields, ivs)
     _dverr("equation `$eq`: the left side must be `D(c)`, `Shift(t, 1)(c)`, a field `c` or `0` (a steady row)")
 end
 
-# The clock's step index (F2 design §2.6): every `step_index(t)` of the equations and
+# The clock's step index: every `step_index(t)` of the equations and
 # conditions becomes the reserved parameter slot `clock__tick` (appended to the parameters),
 # which the steppers write at every launch; refused without a declared clock, with an argument
 # other than the time, or when the system already has a parameter of that name
@@ -383,7 +383,7 @@ function _scan_clock(sys)
     return foreach(eq -> (walk(unwrap(eq.lhs), eq); walk(unwrap(eq.rhs), eq)), [get_eqs(sys); get_bcs(sys)])
 end
 
-# The `Coarse` level of each dependent variable (F3-16): `[lattice_level = Coarse(k)]` puts the
+# The `Coarse` level of each dependent variable: `[lattice_level = Coarse(k)]` puts the
 # field on the grid coarsened by `k`; every axis of the lattice but one of size 1 must have a
 # size that `k` divides (a remainder would make the last block wider, where the stencil of
 # spacing `k h` is inconsistent: refused, naming the axis and the route). `lattice_placement`
@@ -431,8 +431,8 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     check_vocabulary(sys)
     _scan_clock(sys)
     _check_parts(sys)
-    sys = first(steady_form(sys, N))                # steady rows as rates; a time-free system timed (F3-12b)
-    sys = crossgrid_form(sys)                       # an operator across `Coarse` grids as an aux field (F3-22)
+    sys = first(steady_form(sys, N))                # steady rows as rates; a time-free system timed
+    sys = crossgrid_form(sys)                       # an operator across `Coarse` grids as an aux field
     sys = _clock_slot(sys, disc)
     ps, ic = _params(sys), _ics(sys)
     any(p -> p isa Pair, ps) && _dverr("parameters are declared natively, `@parameters Dc = 1e-3`; " *
@@ -450,13 +450,13 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     # dependent variables, keyed by operation (the callable `c`, never the applied term)
     dvs = Dict{Any, Any}(_opof(v) => unwrap(v) for v in get_dvs(sys))
     isin = Dict{Any, Bool}(op => ModelingToolkitBase.isinput(v) for (op, v) in dvs)
-    # another group's field read by a spatial operator: an input with its face conditions (F3-22 review r1)
+    # another group's field read by a spatial operator: an input with its face conditions
     cut = Dict{Any, Bool}(op => isin[op] && _meta(v, LatticeCutField) === true for (op, v) in dvs)
     ncomp(v) = (st = SymbolicUtils.symtype(v); st <: AbstractArray ? length(v) : 0)
     keys = Dict{Any, Vector{String}}(op => (n = ncomp(v); n == 0 ? [_name(op)] : ["$(_name(op))[$i]" for i in 1:n])
                                      for (op, v) in dvs)
     key(op, comp) = keys[op][max(comp, 1)]
-    lev = _field_levels(sys, disc)       # `lattice_level = Coarse(k)` (F3-16): op → level (fine ones absent)
+    lev = _field_levels(sys, disc)       # `lattice_level = Coarse(k)`: op → level (fine ones absent)
     maxlev = maximum(values(lev); init = 0)
     for (k, m) in disc.methods
         op = _opof(k)
@@ -496,7 +496,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
         _reads(b.value, allops) && _dverr("`$(b.eq)`: an initial value cannot read a field")
     end
     initial = Dict{String, Any}(key(b.op, b.comp) => something(_cval(b.value), b.value) for b in bcs if b.kind == :initial)
-    for (op, v) in dvs                   # `initial_conditions` entries of the fields (SX-21)
+    for (op, v) in dvs                   # `initial_conditions` entries of the fields
         d = something(_icvalue(ic, v), _icvalue(ic, op), Some(nothing))
         d === nothing && continue
         isin[op] && _dverr("`initial_conditions` gives the input `$(_name(op))` a value; give input values to `discretize(…; inputs)`")
@@ -509,7 +509,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     end
     # a field's default (`@variables c(..) = v`) is its initial value where no condition
     # `c(0, …) ~ v` and no `initial_conditions` entry gives one; a condition wins, as in the
-    # coupling into a model (F4-E3). An aux field has no initial value, so its default is unused.
+    # coupling into a model. An aux field has no initial value, so its default is unused.
     for (op, v) in dvs
         (isin[op] || ncomp(v) != 0 || haskey(initial, key(op, 0))) && continue
         haskey(eqs, key(op, 0)) && eqs[key(op, 0)][1] in (:rate, :map) || continue
@@ -545,13 +545,13 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
                                              for p in arrays)
     fids = Dict{Any, Tuple{Vector{Int32}, Scalar}}()
     for (op, v) in dvs
-        S = get_lattice_storage(v)             # `lattice_storage` (v3 §5.1): the field's own storage
+        S = get_lattice_storage(v)             # `lattice_storage`: the field's own storage
         S === nothing || S in (Float16, Float32, Float64) ||
             _dverr("field `$(_name(op))`: `lattice_storage = $S` is not a storage type; give Float16, Float32 or Float64 " *
                    "(a field stored in the problem's own type needs no `lattice_storage`)")
         lane = _lane(eltype(SymbolicUtils.symtype(v)), S === nothing ? T : S)
         # a declared Float32 or Float64 storage holds its own type whatever the problem's value
-        # type (FE-17: `fixed`; Float16 is always its own)
+        # type (`fixed`; Float16 is always its own)
         fixed = S === Float32 || S === Float64
         levels = Int8[get(lev, op, 0)]
         fids[op] = (map(keys[op]) do k
@@ -583,7 +583,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     # a kernel on level `lv` (its field's `Coarse` level) and its environment, with that level's spacing
     kern(lv) = lv == 0 ? kernel(pb) : kernel(pb, Space{N}(FULL; level = lv))
     dims = ntuple(d -> Int(disc.grid.dims[d]), N)
-    # the domain on each coarse level (F3-16): a node is in it when most of its block is (the
+    # the domain on each coarse level: a node is in it when most of its block is (the
     # Majority fold of the Bool input), computed at a window's start with the masks; its mask
     # is the coarse field's domain edge
     domlev = Dict{Int, Tuple{Int32, Int32}}(0 => (dom, Int32(dom == 0 ? 0 : length(pb.masks))))
@@ -607,7 +607,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     # the domain's field on level `lv` (0: no domain)
     dl(lv) = dom == 0 ? Int32(0) : domlev[lv][1]
     # the rate fields (each has a face rule on every non-periodic face): a face coefficient reads
-    # them at the ghost site with the ghost value (F3-ghost)
+    # them at the ghost site with the ghost value
     ghosted = Int32[fids[op][1][max(comp, 1)] for (_, (kind, op, comp, _)) in eqs if kind == :rate]
     # (and another group's field that an operator reads, with its own group's faces)
     faced = Tuple{String, Any, Int}[(k, op, comp) for (k, (kind, op, comp, _)) in eqs if kind == :rate]
@@ -624,7 +624,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
                                  fids[b.op][1][max(b.comp, 1)] == f, bcs), ghosted)
     env(mapmode, kb, lv = 0, free = nothing, domfree = nothing) = Env(kb, fids, params, tables, spacing, ivs[1], ivs[2:end], lo,
         level_spacing(h, dims, lv), mapmode, ntuple(_ -> 0, N), RESOLVE, leaf, hex, dl(lv), ghosted, lv, flev, dims, 0, free, domfree)
-    # the coarse fields whose mask predicate reads fine fields blend (F4-15b): their equations fold
+    # the coarse fields whose mask predicate reads fine fields blend: their equations fold
     # over each block's free children, and their mask holds a node when every child is masked
     free = Dict{String, Any}(key(b.op, b.comp) => b.pred for b in bcs
                              if b.kind == :masked && !isin[b.op] && reads_fine(b.pred, flev, flev[b.op]))
@@ -634,7 +634,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
         f = fids[op][1][max(comp, 1)]
         lv = flev[op]
         hL = level_spacing(h, dims, lv)
-        # (a blending field's face values fold over the free children, as its rate does: F4-15b)
+        # (a blending field's face values fold over the free children, as its rate does)
         fenv = let fr = get(free, k, nothing)
             (m, kb, l) -> env(m, kb, l, fr, dompred)
         end
@@ -645,7 +645,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
             b === nothing && (rule!(pb, FaceRule(f, Int8(d), Int8(s), Coef(0.0), Coef(1.0), Coef(0.0))); continue)
             bc = bcs[b]
             α, β = _coef(bc.alpha, params), _coef(bc.beta, params, s / hL[d])
-            # a Robin coefficient that reads the coordinates or the time (F4-12b): a value field
+            # a Robin coefficient that reads the coordinates or the time: a value field
             # computed at each site at the step's time, as a face value (in lattice units)
             af, ax = α === nothing ? _coef_field!(pb, bc, bc.alpha, 1.0, "α", k, d, s, op, lv, fids, ivs, ends, allops, isin, kern, fenv) :
                      (Int32(0), nothing)
@@ -658,7 +658,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
                 _dverr("`$(bc.eq)`: α/2 + β/h = 0 on this face leaves the ghost value undefined")
             g = _coef(bc.value, params)
             # a field read at the face (`G(t, 1, y)`, an input) is read at the boundary site,
-            # where the value field is evaluated (batch 5 review N5)
+            # where the value field is evaluated
             g === nothing && (bc = _unpin_face_reads(bc, fids, ivs))
             if g === nothing
                 # a value of the time, the coordinates, parameters or inputs: a value field,
@@ -696,13 +696,13 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
             _value_reads_state(b.value, b.eq, [o for o in allops if !isin[o]], "masked value")
             vf = field!(pb, "maskvalue:$k"; storage = fids[b.op][2], role = :aux, epoch = PERSIGMA, levels = Int8[lv])
         end
-        # a value that reads the time: its rate `∂v/∂t` too (F4-02, review R1), the masked sites'
+        # a value that reads the time: its rate `∂v/∂t` too, the masked sites'
         # rate on an OrdinaryDiffEq solver (the owned steppers write the value at each step)
         dv = vf == 0 ? nothing : _time_rate(b.value, ivs[1], o -> get(isin, o, false))
         rf = dv === nothing ? Int32(0) :
              field!(pb, "maskrate:$k"; storage = fids[b.op][2], role = :aux, epoch = PERSIGMA, levels = Int8[lv])
         kb = kern(lv)
-        # (on a coarse grid a node is masked when its whole block is, F4-15b; a block masked in
+        # (on a coarse grid a node is masked when its whole block is, a block masked in
         # part is free, and the field's equation folds over its free children)
         pred = _cond(b.pred, env(false, kb, lv); fold = :all)
         dom == 0 || (pred = node!(kb, AND, BOOL, Int32[pred, _indomain(kb, dl(lv), N)]))   # the field lives in the domain
@@ -758,7 +758,7 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     return CompiledField{N}(program(pb), keys, plist, defaults, tvals, initial, lin, sitecoefs, free, dompred)
 end
 
-# An aux field read at a neighbor site across a closed face (`laplacian(K)`, F3-02 review S6) has no
+# An aux field read at a neighbor site across a closed face (`laplacian(K)`) has no
 # value there: an aux field takes no face rule (its values follow its expression), so the IR
 # would find no ghost value. Refused at the build (`discretize`, `lower_group`; the symbolic
 # form stays readable) in the equation's words, with the route. A read that needs no ghost (a

@@ -1,8 +1,8 @@
-# F4-05 (F4 design §3.4, §5): callbacks, `tstops`, `saveat` off the grid and the other keywords on
+# Callbacks, `tstops`, `saveat` off the grid and the other keywords on
 # the owned path. A callback runs after each window (SciML's order and `save_positions`); a
 # `tstop` off the grid lands by a shortened window; a `saveat` time off the grid is the linear
-# interpolation of its window's ends (Q2 (a)); `save_idxs` saves some fields; any other keyword
-# is an `ArgumentError` naming it. Negative control at the F4-04 commit (~/lpwork/f4b5/nc05.log):
+# interpolation of its window's ends; `save_idxs` saves some fields; any other keyword
+# is an `ArgumentError` naming it. Negative control before the fix:
 # "unsupported keyword argument" (`callback`, `tstops`, `save_idxs`), and `saveat = 0.015` refused.
 
 @testsetup module LP_callbacks
@@ -31,8 +31,8 @@ include("shared/callbacks.jl")
 include("shared/export_all.jl")
 end
 
-@testitem "F4-05: a callback that writes a parameter equals two chained solves (EE, BE)" setup = [LP_callbacks] tags = [:latticepde, :callbacks] begin
-@testset "F4-05: a callback that writes a parameter equals two chained solves (EE, BE)" begin
+@testitem "a callback that writes a parameter equals two chained solves (EE, BE)" setup = [LP_callbacks] tags = [:latticepde, :callbacks] begin
+@testset "a callback that writes a parameter equals two chained solves (EE, BE)" begin
     p = cbprob()
         for alg in (ExplicitEuler(), BackwardEuler(; linsolve = BTIGHT))
         cb = SciMLBase.DiscreteCallback((u, t, i) -> t == 0.5, i -> (i.ps[bk] = 3.0); save_positions = (false, false))
@@ -49,8 +49,8 @@ end
 end
 end
 
-@testitem "F4-05: PresetTimeCallback off the grid, PeriodicCallback, tstops" setup = [LP_callbacks] tags = [:latticepde, :callbacks] begin
-@testset "F4-05: PresetTimeCallback off the grid, PeriodicCallback, tstops" begin
+@testitem "PresetTimeCallback off the grid, PeriodicCallback, tstops" setup = [LP_callbacks] tags = [:latticepde, :callbacks] begin
+@testset "PresetTimeCallback off the grid, PeriodicCallback, tstops" begin
     p = cbprob()
     hit = Float64[]
         s = solve(p, ExplicitEuler(); dt = 0.01, callback = PresetTimeCallback([0.123, 0.5], i -> push!(hit, i.t)))
@@ -71,8 +71,8 @@ end
 end
 end
 
-@testitem "F4-05: saveat off the grid is the linear interpolation of the windows' ends; save_idxs; keywords" setup = [LP_callbacks] tags = [:latticepde, :callbacks] begin
-@testset "F4-05: saveat off the grid is the linear interpolation of the windows' ends; save_idxs; keywords" begin
+@testitem "saveat off the grid is the linear interpolation of the windows' ends; save_idxs; keywords" setup = [LP_callbacks] tags = [:latticepde, :callbacks] begin
+@testset "saveat off the grid is the linear interpolation of the windows' ends; save_idxs; keywords" begin
     p = cbprob(0.3)
         s = solve(p, ExplicitEuler(); dt = 0.01, saveat = 0.015)
         e = solve(p, ExplicitEuler(); dt = 0.01, save_everystep = true)
@@ -97,7 +97,7 @@ end
         @test SciMLBase.successful_retcode(solve(p, ExplicitEuler(); dt = 0.01, verbose = false, alias = SciMLBase.ODEAliasSpecifier(; alias_u0 = true), dense = true))
         @test solve(p, ExplicitEuler(); dt = 0.01, maxiters = 5).retcode == ReturnCode.MaxIters
         @test solve(p, ExplicitEuler(); dt = 0.01).stats.syncs == 0
-    # batch-end review (g): a long span over a short window, `(tf - t0) / (1e-9 dt)` past `Int`
+    # A long span over a short window, `(tf - t0) / (1e-9 dt)` past `Int`
     # (base ab34e226: InexactError at `init`); the start and the end are the save times, and a
     # saveat time within 1e-9 dt of another is one save
         ig = init(remake(p; tspan = (0.0, 1.0e6)), ExplicitEuler(); dt = 1.0e-4)

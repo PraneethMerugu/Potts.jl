@@ -1,7 +1,6 @@
-# Definitions of the old runtests.jl (its preamble) that other test files use (moved here by TS1b).
-# LatticePDE vocabulary (v3 §5.1, §5.5): registered operators, metadata keys and scans.
-# Ported from the pass-3 probes (research/field-compiler/pass3/mtk/o1_operators.jl, n7_map.jl,
-# s2_coupling.jl) on ModelingToolkitBase 1.77.
+# Definitions of the old runtests.jl (its preamble) that other test files use.
+# LatticePDE vocabulary: registered operators, metadata keys and scans.
+# Ported from design probes of the operators, maps and coupling on ModelingToolkitBase 1.77.
 using Test, LatticePDE
 using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
                            System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
@@ -11,7 +10,7 @@ using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
 using DomainSets: Interval
 using SciMLBase: SciMLBase
 using LatticeFields: LatticeFields, Problems as LFP
-# the byte-identity gate of the update pass (F2-07) runs in every owned `discretize` of the suite
+# the byte-identity gate of the update pass runs in every owned `discretize` of the suite
 get!(ENV, "LATTICEPDE_CHECK_FUSION", "1")
 
 opof(e) = (u = unwrap(e); iscall(u) ? operation(u) : nothing)

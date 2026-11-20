@@ -1,4 +1,4 @@
-# Problems from `discretize` (C7a): the owned FieldProblem (ExplicitEuler, ExplicitMap) and
+# Problems from `discretize`: the owned FieldProblem (ExplicitEuler, ExplicitMap) and
 # the SciML ODEProblem, solved through `solve`; analytic oracles (Fourier decay, steady
 # profiles, conservation), symbolic indexing of solutions and integrators, the stability
 # bound, the parameter checks of `remake`/`setp`, and negative controls for each claim.
@@ -109,13 +109,13 @@ end
         @test prob.stability(prob.p) ≈ 8n^2 + 3                       # recomputed at the new values
         @test S(prob, ExplicitEuler(); dt = 0.01) == ceil(Int, 0.01 * (8n^2 + 3) / 1.8)
         @test S(prob, ExplicitEuler(; substeps = 100); dt = 0.01) == 100   # a user count above the bound is kept
-        # a user count is a minimum (ruling Q2, F1): below the bound, the bound's count (on
+        # a user count is a minimum: below the bound, the bound's count (on
         # f9a77dd3 the count 1 was used as given)
         @test S(prob, ExplicitEuler(; substeps = 1); dt = 0.01) == ceil(Int, 0.01 * (8n^2 + 3) / 1.8)
         sol = solve(prob, ExplicitEuler(); dt = 0.01)
         @test SciMLBase.successful_retcode(sol)
         @test all(isfinite, sol[:c, end]) && 0 <= minimum(sol[:c, end]) && maximum(sol[:c, end]) < 1
-        # regression (review probe): D 1 → 4 through remake raises the substeps; the run stays finite
+        # regression: D 1 → 4 through remake raises the substeps; the run stays finite
         p4 = remake(base, p = [Dr => 4.0])
         s4 = solve(p4, ExplicitEuler(); dt = 0.01)
         @test first(substep_counts(s4)) == ceil(Int, 0.01 * 32n^2 / 1.8) && SciMLBase.successful_retcode(s4) &&
@@ -158,8 +158,8 @@ end
     end
 end
 
-@testitem "bound: kind-gated terms, cross coupling, array coefficients (review round 2)" setup = [LP_problems] tags = [:latticepde, :problems] begin
-    @testset "bound: kind-gated terms, cross coupling, array coefficients (review round 2)" begin
+@testitem "bound: kind-gated terms, cross coupling, array coefficients" setup = [LP_problems] tags = [:latticepde, :problems] begin
+    @testset "bound: kind-gated terms, cross coupling, array coefficients" begin
         n = 16
         S = LatticePDE.Problems.substeps
         @parameters ε = 0.5 α = 1.0 D2 = 1.0 kc = 0.0 a = 100.0 Dk[1:3] = [1.0, 2.0, 3.0]
@@ -189,7 +189,7 @@ end
         @test_throws ArgumentError S(nl, ExplicitEuler(); dt = 0.01)
         # cross-diffusion one way (`o` does not read `c`): the Jacobian is block triangular, its
         # eigenvalues those of each row's own block, so the bound is the Gershgorin row sum with no
-        # dominance test (F3-22 review r1, D-C7a item 2 amended; base 9afaac05: refused)
+        # dominance test (before the fix, 9afaac05: refused)
         x1 = owned(
             psys(
                 [D(ce) ~ Dr * laplacian(ce) + D2 * laplacian(oe), D(oe) ~ laplacian(oe)], [c(0, x, y) ~ 1.0; o(0, x, y) ~ cos(2π * x); per2],
@@ -211,7 +211,7 @@ end
         @test_throws ArgumentError solve(xd, ExplicitEuler(); dt = 0.01)
         px = remake(xd; p = [D2 => 50.0])
         sx = solve(px, ExplicitEuler(; substeps = 50); dt = 0.01)
-        # the count is a minimum (Q2): raised to the bound over the terms it sees (Gershgorin row sum)
+        # the count is a minimum: raised to the bound over the terms it sees (Gershgorin row sum)
         @test SciMLBase.successful_retcode(sx) &&
             first(substep_counts(sx)) == max(50, ceil(Int, 0.01 * LatticePDE.bound_parts(px.stability, px.p).ρ / 1.8)) > 50
         # … with a decay strong enough for dominance the bound is the Gershgorin row sum:
@@ -251,8 +251,8 @@ end
             ), 4
         )
         @test dom.stability(dom.p) ≈ 100.5
-        # indicators are 0 or 1 per site, and a coefficient need not be largest at 1 (review
-        # round 3): kind = 0 everywhere makes `1 − χ` = 1, so the rate is k = 1000 on every site
+        # indicators are 0 or 1 per site, and a coefficient need not be largest at 1:
+        # kind = 0 everywhere makes `1 − χ` = 1, so the rate is k = 1000 on every site
         @parameters kk = 1000.0 bb = 990.0 ee = 1000.0
         for (rhs, ρ) in (
                 (Dr * laplacian(ce) - kk * (1 - ismember(ke, (1,))) * ce, 512 + 1000),
@@ -278,7 +278,7 @@ end
         )
         @test isnan(grot.stability(grot.p))
         @test_throws ArgumentError solve(grot, ExplicitEuler(); dt = 0.01)
-        # an `ifelse` gate that reads no field is bounded arm by arm (C8 review round 2): the
+        # an `ifelse` gate that reads no field is bounded arm by arm: the
         # decaying arm never certifies the rotation of the other, never active at the same time
         @parameters t0 = 1000.0 kr = 4.0
         gr = owned(
@@ -298,12 +298,12 @@ end
         )
         @test gd.stability(gd.p) ≈ 11
         @test SciMLBase.successful_retcode(solve(gd, ExplicitEuler(); dt = 0.01))
-        # an aux field in an arm (C8 review round 3): `K ~ −1000 c` is an unknown of the states,
-        # so the arm's term `K` is not a source (before C8: ρ = Dr·Σ4/h², one substep, silent
-        # divergence); F3-13 bounds it through its definition, the arm `−1000 c`: ρ = Dr·Σ4/h² + 1000
+        # an aux field in an arm: `K ~ −1000 c` is an unknown of the states,
+        # so the arm's term `K` is not a source (formerly: ρ = Dr·Σ4/h², one substep, silent
+        # divergence); the bound follows it through its definition, the arm `−1000 c`: ρ = Dr·Σ4/h² + 1000
         # (base b41b73c1: no bound)
         # (the bound is checked on the symbolic form; the owned problem reads K of another field.
-        # Before F3-02 an owned `K ~ −1000 c` read in c's rate was refused as a read cycle)
+        # Formerly an owned `K ~ −1000 c` read in c's rate was refused as a read cycle)
         sa = psys(
             [D(ce) ~ Dr * laplacian(ce) + ifelse(t >= t0, Ke, 0.0), Ke ~ -1000 * ce], [c(0, x, y) ~ 1.0; per], [Dr, t0];
             T = 0.1, dvs = [ce, Ke]
@@ -317,11 +317,11 @@ end
             ), 4
         )
         ga = remake(ga; p = [t0 => 0.0])
-        # (`o` does not read `c` back: one way, so the arm's `−1000` needs no dominance; F3-22 review r1,
-        # D-C7a item 2 amended; base 9afaac05: no bound)
+        # (`o` does not read `c` back: one way, so the arm's `−1000` needs no dominance;
+        # before the fix, 9afaac05: no bound)
         @test ga.stability(ga.p) ≈ 4 * 2 * 16 + 1000
         @test SciMLBase.successful_retcode(solve(ga, ExplicitEuler(); dt = 0.01))
-        # … and a condition reading an aux field is not a gate; F3-13 bounds the switch through K's
+        # … and a condition reading an aux field is not a gate; the bound follows the switch through K's
         # definition by its Jacobian entries: `∂/∂c` is −1 or 0, and the condition's `o` enters through
         # its arms only (0): ρ = Dr·Σ4/h² + 1 (base b41b73c1: no bound)
         gc = owned(
@@ -331,7 +331,7 @@ end
             ), 4
         )
         @test gc.stability(gc.p) ≈ 4 * 2 * 16 + 1
-        # an array-element coefficient is bounded at its entry (F1 round 6; it was refused):
+        # an array-element coefficient is bounded at its entry (it was refused):
         # ρ = Dk[2] · 4 Σ_d 1/h² = 2 · 512 on 8×8 (h = 1/8); with no tables given there is no bound
         ae = owned(psys([D(ce) ~ Dk[2] * laplacian(ce)], [c(0, x, y) ~ 1.0; per], [Dk]; T = 0.1), 8)
         @test ae.stability(LatticePDE.Problems.with_tables(ae.p, ae.tables)) ≈ 1024
@@ -341,8 +341,8 @@ end
     end
 end
 
-@testitem "setp is atomic; init checks the faces (review round 2)" setup = [LP_problems] tags = [:latticepde, :problems] begin
-    @testset "setp is atomic; init checks the faces (review round 2)" begin
+@testitem "setp is atomic; init checks the faces" setup = [LP_problems] tags = [:latticepde, :problems] begin
+    @testset "setp is atomic; init checks the faces" begin
         per = [c(t, x, 0) ~ c(t, x, 1), c(t, 0, y) ~ c(t, 1, y)]
         prob = owned(psys([D(ce) ~ Dr * laplacian(ce)], [c(0, x, y) ~ cos(2π * x); per], [Dr]; T = 0.1), 32)
         integ = init(prob, ExplicitEuler(); dt = 0.01)
@@ -355,7 +355,7 @@ end
         i2 = init(prob, ExplicitEuler(); dt = 0.01)
         i2.p[1] = 4.0
         s2 = solve!(i2)
-        @test s2[:c][end] == s2[:c, end] && s2[:c][end] ≈ s[:c, end]     # (the last grid, both spellings: Q18)
+        @test s2[:c][end] == s2[:c, end] && s2[:c][end] ≈ s[:c, end]     # (the last grid, both spellings)
         # a degenerate face on a problem set through setp: refused at init with the face message
         rsys = psys(
             [D(ce) ~ laplacian(ce)], [
@@ -409,7 +409,7 @@ end
         @test_throws ArgumentError remake(prob; p = [βr => 0.125])      # α/2 + β/h = 1/2 − 1/2 = 0
         @test remake(prob; p = [βr => 0.25]) isa LFP.FieldProblem
         @test_throws ArgumentError remake(prob; p = [βr => 0.125 * (1 + 1.0e-9)])   # relative tolerance
-        # near-degenerate (review probe βr = 0.1249): the face stiffens the boundary row; the
+        # near-degenerate (βr = 0.1249): the face stiffens the boundary row; the
         # bound sees it, so the run stays finite
         near = remake(prob; p = [βr => 0.1249])
         @test near.stability(near.p) > 100 * prob.stability(prob.p)
@@ -420,7 +420,7 @@ end
         ode = discretize(sys, LatticeDiscretization(Grid((n, n)); T = Float64))
         @test_throws ArgumentError ode.f(similar(ode.u0), ode.u0, [0.125], 0.0)
         ode.f(similar(ode.u0), ode.u0, [0.25], 0.0)                   # negative control: fine
-        # F2 record (f): a part of a row that is not finite (the degenerate face's excess) never
+        # A part of a row that is not finite (the degenerate face's excess) never
         # drops the row from the seen bound, which keeps the diffusion Σ 4/h² = 128 (bda31989: the
         # row summed to Inf and counted 0, so an explicit count stayed as given)
         r = LatticePDE.bound_parts(prob.stability, [0.125])
@@ -438,7 +438,7 @@ end
             [Shift(t, 1)(Ne) ~ (N(t, x + dx, y) + N(t, x - dx, y)) / 2], [N(0, x, y) ~ x], [dx];
             T = 3.0, dvs = [Ne]
         )
-        prob = discretize(sys, LatticeDiscretization(Grid((8, 2)); T = Float64))     # a map: a DiscreteProblem (F4-01)
+        prob = discretize(sys, LatticeDiscretization(Grid((8, 2)); T = Float64))     # a map: a DiscreteProblem
         @test prob isa SciMLBase.DiscreteProblem && LFP.field_problem(prob).kind == :map
         sol = solve(prob, ExplicitMap(); saveat = 1)
         u = sol[Ne, 1][:, 1]
@@ -454,12 +454,12 @@ end
     @testset "refusals" begin
         sys = psys([D(ce) ~ laplacian(ce)], [c(0, x, y) ~ 0.0], Num[])
         @test_throws ArgumentError LatticeDiscretization(Grid((4, 4)); problem = :linear)
-        # (F4-03) a span that is not a whole number of windows ends by one shortened window
+        # a span that is not a whole number of windows ends by one shortened window
         s3 = solve(owned(sys, 4), ExplicitEuler(); dt = 0.3)
         @test s3.retcode == SciMLBase.ReturnCode.Success && s3.t[end] ≈ 1.0
         @test_throws ArgumentError solve(owned(sys, 4), ExplicitMap())
         @test_throws ArgumentError owned(psys([D(ce) ~ laplacian(ce)], Equation[], Num[]), 4)  # no initial value
-        # (F4-01: a masked condition discretizes to the one problem; base, with `problem = :ode`: refused)
+        # (a masked condition discretizes to the one problem; base, with `problem = :ode`: refused)
         @test discretize(
             psys(
                 [D(ce) ~ laplacian(ce)], [c(0, x, y) ~ 0.0, ce ~ masked(ke == 3, 0.0)], Num[];
@@ -469,12 +469,12 @@ end
     end
 end
 
-# F2-10 (F2 design §2.11): the one operator allowlist (`lowers_call`, which Potts `@equations`
+# The one operator allowlist (`lowers_call`, which Potts `@equations`
 # asks too), and `Advect` with a velocity written as a vector of terms (`[ux, 0.0]`), equal to
 # the same velocity given as an array input. Base (c2583722): no `lowers_call`; the vector
 # velocity refused ("`Advect` takes the velocity array field").
-@testitem "F2-10: one allowlist; Advect with a vector velocity" setup = [LP_problems] tags = [:latticepde, :problems] begin
-    @testset "F2-10: one allowlist; Advect with a vector velocity" begin
+@testitem "one allowlist; Advect with a vector velocity" setup = [LP_problems] tags = [:latticepde, :problems] begin
+    @testset "one allowlist; Advect with a vector velocity" begin
         for f in (
                 +, -, *, /, ^, min, max, abs, sqrt, exp, log, ifelse, ==, !=, <, <=, >, >=, !, &, |,
                 sin, cos, tan, tanh, sinh, cosh, cbrt, exp2, log2, log10, expm1, log1p, atan, floor, ceil, round,
@@ -498,11 +498,11 @@ end
     end
 end
 
-# F2-12 (F2 design §2.8, SX-03): `discretize(…; u0, p, tspan)` on both problem kinds equals the
+# `discretize(…; u0, p, tspan)` on both problem kinds equals the
 # `remake` route; any other keyword is an `ArgumentError` naming it. Base (c2583722): the
 # keywords were a `MethodError` (`discretize` took `inputs` only).
-@testitem "F2-12: discretize keywords" setup = [LP_problems] tags = [:latticepde, :problems] begin
-    @testset "F2-12: discretize keywords" begin
+@testitem "discretize keywords" setup = [LP_problems] tags = [:latticepde, :problems] begin
+    @testset "discretize keywords" begin
         pidx(prob, s) = LatticePDE.Problems.SII.parameter_index(prob, s)
         withp(p, i, v) = (q = collect(promote_type(eltype(p), typeof(v)), p); q[i] = v; q)
         emsg(f) = try
@@ -514,7 +514,7 @@ end
         @parameters Td[1:2] = [0.5, 1.0]
         sys = psys([D(ce) ~ Dd * laplacian(ce) - kd * ce - value_at(Td, ke) * ce], [c(0, x, y) ~ 1.0], [kd, Dd, Td]; dvs = [ce, ke])
         K = fill(Int32(1), 4, 4)
-        # (F4-01: one problem; the field algorithm and an OrdinaryDiffEq solver both step it)
+        # (one problem; the field algorithm and an OrdinaryDiffEq solver both step it)
         disc = LatticeDiscretization(Grid((4, 4)); T = Float64)
         base = discretize(sys, disc; inputs = [ke => K])
         i = pidx(base.f.sys, kd)
@@ -540,20 +540,20 @@ end
                 p = [Td => [0.25, 1.0]]
             ), Td
         )(pt)
-        # … and a `remake` of the problem gives it a new table (F4-00; base: on the ODE path refused,
+        # … and a `remake` of the problem gives it a new table (base: on the ODE path refused,
         # "an ODE problem's tables are fixed")
         o = discretize(
             sys, LatticeDiscretization(Grid((4, 4)); T = Float64); inputs = [ke => K],
             p = [Td => [0.25, 1.0]]
         )
         @test o.ps[Td] == [0.25, 1.0] && remake(o; p = [Td => [0.5, 1.0]]).ps[Td] == [0.5, 1.0]
-        # review S7: a Dual in `u0` promotes the state (base: `MethodError: no method matching
+        # A Dual in `u0` promotes the state (base: `MethodError: no method matching
         # Float64(::Dual)`); an input in `u0` says it is an input and prints its name as written
         dU = discretize(sys, disc; inputs = [ke => K], u0 = [ce => ForwardDiff.Dual(0.5, 1.0)])
         @test eltype(dU.u0) <: ForwardDiff.Dual && ForwardDiff.value(dU.u0[1]) == 0.5
         err = emsg(() -> discretize(sys, disc; inputs = [ke => K], u0 = [ke => 1]))
         @test occursin("`kindₛ`", err)
-        # any other keyword names itself (base: a `MethodError`); `jac` and `sparse` are keywords (F4-07)
+        # any other keyword names itself (base: a `MethodError`); `jac` and `sparse` are keywords
         @test discretize(sys, disc; inputs = [ke => K], jac = true).f.jac isa LFP.LatticeJacobian
         err = emsg(() -> discretize(sys, disc; inputs = [ke => K], saveat = 0.1))
         @test occursin("saveat", err)
@@ -564,14 +564,14 @@ end
     end
 end
 
-# F3-00 (F3 design §3.12, review r1 M1 and R2-M2): a system whose only equations are aux fields
+# A system whose only equations are aux fields
 # `K ~ rhs` has one group with no state, evaluated once per window (0 substeps); the aux fields
 # of any system are evaluated at each save, before the copy, and at each `integ[K]` read, so a
 # saved or read `K` is `rhs` of the state at that time. Base (743ab0a0): `sol[K]` was "Invalid
-# symbol K(t, x, y) for `getsym`" and an aux-only solve saved empty states (reviewer probe
-# `r1_auxonly_b`); `integ[K]` failed the same way, also for a system with states.
-@testitem "F3-00: aux fields in B (aux-only systems, sol[K], integ[K])" setup = [LP_problems] tags = [:latticepde, :problems] begin
-    @testset "F3-00: aux fields in B (aux-only systems, sol[K], integ[K])" begin
+# symbol K(t, x, y) for `getsym`" and an aux-only solve saved empty states;
+# `integ[K]` failed the same way, also for a system with states.
+@testitem "aux fields in B (aux-only systems, sol[K], integ[K])" setup = [LP_problems] tags = [:latticepde, :problems] begin
+    @testset "aux fields in B (aux-only systems, sol[K], integ[K])" begin
         emsg(f) = try
             f(); ""
         catch e
@@ -582,7 +582,7 @@ end
         # aux only: `:auto` gives the owned problem; `K` at every save (saves every second window)
         sys = psys([Ke ~ Kb + t + x], Equation[], [Kb]; dvs = [Ke])
         p = discretize(sys, LatticeDiscretization(Grid((4, 4)); T = Float64))
-        @test p isa SciMLBase.ODEProblem && isempty(p.u0)                    # (F4-01: one problem with no state)
+        @test p isa SciMLBase.ODEProblem && isempty(p.u0)                    # (one problem with no state)
         sol = solve(p, ExplicitEuler(); dt = 0.25, saveat = 0.5)
         @test sol.retcode == SciMLBase.ReturnCode.Success && sol.t == [0.0, 0.5, 1.0]
         @test LatticePDE.Problems.substep_counts(sol) == [0]          # no state: no substep
@@ -613,10 +613,9 @@ end
         @test occursin("`K` is an aux field", emsg(() -> (ig2[Ke] = zeros(4, 4))))
         # … and an unknown name lists it among the names
         @test occursin("`K`", emsg(() -> ig2[:nope]))
-        # the `:ode` path (review r1 M1): `:auto` gives the ODEProblem for a system with states, and
+        # the `:ode` path: `:auto` gives the ODEProblem for a system with states, and
         # `K` is an observed quantity, `rhs` at the state and time read: `sol[K]` at every save and
-        # `integ[K]`, equal to the owned path at t0 (base 8f658abd: "Invalid symbol K(t, x, y)", reviewer
-        # probe u2_b)
+        # `integ[K]`, equal to the owned path at t0 (base 8f658abd: "Invalid symbol K(t, x, y)")
         po = discretize(sys2, LatticeDiscretization(Grid((4, 4)); T = Float64))
         @test po isa ODEProblem
         so = SciMLBase.solve(po, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10, saveat = 0.5)
@@ -628,7 +627,7 @@ end
         @test so[ce, 1] == s2[ce, 1]
         @test so[Ke, 1] ≈ s2[Ke, 1] rtol = 1.0e-14                         # the owned path at t0
         io = init(po, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
-        # a write of `K` on the ODE path is refused in the user's words (review r2 nit; base
+        # a write of `K` on the ODE path is refused in the user's words (before the fix,
         # e0347d1a: "Invalid symbol K(t, x, y) for `setsym`")
         e = emsg(() -> (io[Ke] = zeros(16)))
         @test occursin("`K` is an aux field (`K ~ rhs`)", e) && occursin("cannot be written", e) && !occursin("Invalid symbol", e)

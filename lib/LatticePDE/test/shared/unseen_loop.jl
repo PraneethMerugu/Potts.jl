@@ -1,4 +1,4 @@
-# Definitions of unseen_loop_tests.jl that other test files use (moved here by TS1b).
+# Definitions of unseen_loop_tests.jl that other test files use.
 using Logging: Logging
 using Test: collect_test_logs
 

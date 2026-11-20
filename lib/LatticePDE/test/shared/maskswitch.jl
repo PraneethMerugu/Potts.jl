@@ -1,4 +1,4 @@
-# Definitions of maskswitch_tests.jl that other test files use (moved here by TS1b).
+# Definitions of maskswitch_tests.jl that other test files use.
 using OrdinaryDiffEqTsit5: Tsit5
 using OrdinaryDiffEqRosenbrock: Rodas5P
 

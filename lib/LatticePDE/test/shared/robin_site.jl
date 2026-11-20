@@ -1,4 +1,4 @@
-# Definitions of robin_site_tests.jl that other test files use (moved here by TS1b).
+# Definitions of robin_site_tests.jl that other test files use.
 using ForwardDiff: ForwardDiff
 using LatticeFields: Problems
 

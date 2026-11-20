@@ -3,8 +3,8 @@
 # the shift `2/h`; a start (init, `reset!`) is damped: two Backward Euler steps of `h/2` at
 # tⁿ + h/2 and tⁿ + h, with the same operator. The tests compare with the hand matrices, the
 # exact semi-discrete solution, a manufactured solution, step data and OrdinaryDiffEq's
-# `Trapezoid`. Base (69bef544, ~/lpwork/f3b4-nc10-base.log): `CrankNicolson` is not defined
-# (every testset errors). Negative controls (mutations of this tree, ~/lpwork/f3b4-nc10-*.log):
+# `Trapezoid`. Before the fix (69bef544): `CrankNicolson` is not defined
+# (every testset errors). Negative controls (mutations of this tree):
 # no damped start (nodamp), `r(uⁿ)` at tⁿ⁺¹ (stage).
 
 @testsetup module LP_cranknicolson
@@ -33,8 +33,8 @@ include("shared/cranknicolson.jl")
 include("shared/export_all.jl")
 end
 
-@testitem "F3-10: CrankNicolson: order 2, the manufactured solution, the stages" setup = [LP_cranknicolson] tags = [:latticepde, :cranknicolson] begin
-@testset "F3-10: CrankNicolson: order 2, the manufactured solution, the stages" begin
+@testitem "CrankNicolson: order 2, the manufactured solution, the stages" setup = [LP_cranknicolson] tags = [:latticepde, :cranknicolson] begin
+@testset "CrankNicolson: order 2, the manufactured solution, the stages" begin
     p, λ, u0 = eig_problem(16)
         err(dt) = maximum(abs, blast(solve(p, CrankNicolson(; linsolve = BTIGHT); dt)) .- exp(0.3λ * 0.4) .* u0)
     es = [err(0.4 / 2^k) for k in 2:5]
@@ -62,8 +62,8 @@ end
 end
 end
 
-@testitem "F3-10: the damped start: step data, `reset!`, no extra rebuild" setup = [LP_cranknicolson] tags = [:latticepde, :cranknicolson] begin
-@testset "F3-10: the damped start: step data, `reset!`, no extra rebuild" begin
+@testitem "the damped start: step data, `reset!`, no extra rebuild" setup = [LP_cranknicolson] tags = [:latticepde, :cranknicolson] begin
+@testset "the damped start: step data, `reset!`, no extra rebuild" begin
     # 1D step data at z = h/dx² = 400 (P1 (b)): the total variation after the first step stays
     # ≤ 1 (plain Crank–Nicolson rings, TV 2.86: the nodamp control)
     n = 200
@@ -99,8 +99,8 @@ end
 end
 end
 
-@testitem "F3-10: SX-18: OrdinaryDiffEq's Trapezoid with the start replicated" setup = [LP_cranknicolson] tags = [:latticepde, :cranknicolson] begin
-@testset "F3-10: SX-18: OrdinaryDiffEq's Trapezoid with the start replicated" begin
+@testitem "OrdinaryDiffEq's Trapezoid with the start replicated" setup = [LP_cranknicolson] tags = [:latticepde, :cranknicolson] begin
+@testset "OrdinaryDiffEq's Trapezoid with the start replicated" begin
     # the `:ode` path: two ImplicitEuler steps of h/2 (the damped start), then Trapezoid at h
         sx = bsys(
             [D(bce) ~ bD * laplacian(bce) - bk * bce + sin(3t) * x], [bc(0, x, y) ~ x * y, bc(t, 0, y) ~ 1.0], [bD, bk];
@@ -117,8 +117,8 @@ end
 end
 end
 
-@testitem "F3-10: counts, components, parameter writes, messages" setup = [LP_cranknicolson] tags = [:latticepde, :cranknicolson] begin
-@testset "F3-10: counts, components, parameter writes, messages" begin
+@testitem "counts, components, parameter writes, messages" setup = [LP_cranknicolson] tags = [:latticepde, :cranknicolson] begin
+@testset "counts, components, parameter writes, messages" begin
     # the growth rule with the shift 2/h: `+ g c` needs n ≥ ⌈2 · ½ · dt g⌉ (Backward Euler: ⌈2 dt g⌉)
         pg = bown(bsys([D(bce) ~ bD * laplacian(bce) + bk * bce], [bc(0, x, y) ~ x], [bD, bk]))
         @test init(pg, CrankNicolson(); dt = 0.5).substeps == 1 && init(pg, BackwardEuler(); dt = 0.5).substeps == 2
@@ -165,7 +165,7 @@ end
         phex = discretize(
             bsys([D(bce) ~ bD * laplacian(bce)], [bc(0, x, y) ~ x], [bD]; dvs = [bce]),
         LatticeDiscretization(Grid((8, 8); geometry = HEX); T = Float64))
-        @test solve(phex, CrankNicolson(); dt = 0.1).retcode == ReturnCode.Success     # (F3-20: was refused)
+        @test solve(phex, CrankNicolson(); dt = 0.1).retcode == ReturnCode.Success     # (was refused)
         p16 = discretize(
             bsys([D(bce) ~ bD * laplacian(bce)], [bc(0, x, y) ~ x], [bD]; dvs = [bce]),
         LatticeDiscretization(Grid(BDIMS); T = Float16))
@@ -173,13 +173,13 @@ end
 end
 end
 
-# Review r2 S2: in standalone LatticePDE a group's count reads the group's own fields: the damped start
+# In standalone LatticePDE a group's count reads the group's own fields: the damped start
 # rule of CrankNicolson sees another group's field (it moves between windows, so the group's
-# data jump) and the growth rule sees only the group's rows. Base (773f0957,
-# ~/lpwork/f3b5-nc-r2-s2.log): the other-group read counts 1 (the jump missed) and the growth
+# data jump) and the growth rule sees only the group's rows. Before the fix (773f0957):
+# the other-group read counts 1 (the jump missed) and the growth
 # of `bo` raises both groups' counts to 2.
-@testitem "F3-10/11 (r2 S2): B counts read the group's own fields" setup = [LP_cranknicolson] tags = [:latticepde, :cranknicolson] begin
-@testset "F3-10/11 (r2 S2): B counts read the group's own fields" begin
+@testitem "B counts read the group's own fields" setup = [LP_cranknicolson] tags = [:latticepde, :cranknicolson] begin
+@testset "B counts read the group's own fields" begin
         rd = bsys(
             [D(bce) ~ 0.3 * laplacian(bce) - bce + boe, D(boe) ~ 0.3 * laplacian(boe) - boe], [bc(0, x, y) ~ 0.0, bo(0, x, y) ~ 1.0], Any[];
         T = 0.4, dvs = [bce, boe])
