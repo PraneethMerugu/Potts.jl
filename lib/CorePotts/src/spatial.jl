@@ -387,7 +387,7 @@ function _units_for(::Type{T}, rel, n, backend) where {T <: AbstractFloat}
     _FLOAT_ATOMICS[] && return nothing                    # negative controls only (tests)
     u = _weight_units(rel, n)
     if u === nothing
-        T === Float16 || return nothing
+        T <: Float16 || return nothing
         u = _unit_weights(rel, n)
     end
     return (; u.e, u.q, paired = Val(_paired(backend)))
@@ -417,7 +417,7 @@ function _check_reduce_status!(stats, st, t, backend)
     j = Int(s >> 8)
     names = keys(st.cell)
     name, T = 1 <= j <= length(names) ? (names[j], eltype(getfield(st.cell, names[j]))) : (Symbol("?"), Float32)
-    route = if T === Float64
+    route = if T <: Float64
         "rescale the summed expression"
     elseif _atomic64(backend)
         "build the problem in Float64 (`PottsProblem(…; T = Float64)`) or rescale the summed expression"

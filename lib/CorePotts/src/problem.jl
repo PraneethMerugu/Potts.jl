@@ -796,7 +796,7 @@ CommonSolve.solve(prob::PottsProblem; kwargs...) = CommonSolve.solve!(CommonSolv
 # backend's default float, Float32 on a device). A notice, not an error: Float64 on a device
 # that has it (ROCm, CUDA) is a valid, slower run, and a backend without Float64 refuses at
 # compile with its own message. Once per session.
-_holds_float64(x::AbstractArray) = eltype(x) === Float64
+_holds_float64(x::AbstractArray) = eltype(x) <: Float64
 _holds_float64(x::Float64) = true
 _holds_float64(x::NamedTuple) = any(_holds_float64, values(x))
 _holds_float64(x) = false
@@ -1291,7 +1291,7 @@ _mobility_scratch(backend, prob, ::AllMobile) = nothing
 function _mobility_scratch(backend, prob, ::MaskMobility)
     (frozen_varies(prob.f.sys) && frozen_kinds(prob.f.sys) !== nothing) || return nothing
     I = site_index_type(nsites(prob.lattice))
-    I === Int64 && !_atomic64(backend) && throw(ArgumentError(
+    I <: Int64 && !_atomic64(backend) && throw(ArgumentError(
         "this lattice has $(nsites(prob.lattice)) sites and a frozen mask that follows the state: its refresh " *
                 "counts sites in Int64 atomics, which $(nameof(typeof(backend))) does not have; " *
         "run it on the CPU or on ROCm or CUDA"))
@@ -1302,7 +1302,7 @@ end
 # atomics (`convert_scratch`, D-253), which a backend without them cannot compile: refused
 function _check_convert_atomics(backend, u0)
     haskey(u0.model, CONVERT_FLAGS) || return nothing
-    (eltype(getfield(u0.model, CONVERT_FLAGS)) === Int64 && !_atomic64(backend)) && throw(ArgumentError(
+    (eltype(getfield(u0.model, CONVERT_FLAGS)) <: Int64 && !_atomic64(backend)) && throw(ArgumentError(
             "this lattice has $(length(u0.ownership)) sites and an @convert pass: it keeps site indices in Int64 atomics, " *
                 "which $(nameof(typeof(backend))) does not have; run it on the CPU or on ROCm or CUDA"
         )

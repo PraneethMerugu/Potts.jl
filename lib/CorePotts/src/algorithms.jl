@@ -22,7 +22,7 @@ _law(alg, f) = something(alg.acceptance, f.acceptance, Metropolis())
 # every device, so backends without doubles (Metal) never see a Float64 field.
 _device_law(law, backend) = law
 function _device_law(law::Metropolis{Float64}, backend)
-    return Exec.default_float(backend) === Float64 ? law : Metropolis(Float32(law.offset))
+    return Exec.default_float(backend) <: Float64 ? law : Metropolis(Float32(law.offset))
 end
 
 """
@@ -39,7 +39,7 @@ end
 Barker(; offset = 0) = Barker(offset)
 
 function _device_law(law::Barker{Float64}, backend)
-    return Exec.default_float(backend) === Float64 ? law : Barker(Float32(law.offset))
+    return Exec.default_float(backend) <: Float64 ? law : Barker(Float32(law.offset))
 end
 
 @inline function accept(law::Metropolis, dH::T, temperature::T, u::T) where {T}
