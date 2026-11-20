@@ -1133,7 +1133,7 @@ if FULL
                    "starts against $(fmt(mean(D_relaxed))) from their relaxed copies.")
 else
     Markdown.parse("The start check runs in the full build; the reduced build's start is already relaxed. " *
-                   "The pre-freeze check (1000 cells, 6 seeds, Voronoi against relaxed starts) found no start " *
+                   "The check run before the targets were fixed (1000 cells, 6 seeds, Voronoi against relaxed starts) found no start " *
                    "effect on D; its values are recorded in spec §9.1 V-PRE4.")
 end
 

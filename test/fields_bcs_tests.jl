@@ -183,7 +183,7 @@ end
     @testset "the refusals, each with its route" begin
         # a periodic pair on an axis the lattice closes: per-field periodicity is not supported
         # yet (`Robin` with β = 0 or α = 0, a face set twice and an initial condition were
-        # refusals of the removed `@bcs` section, gone with it)
+        # refusals of the removed boundary-condition section, gone with it)
         err = something(fd_err(() -> mtkcompile(FbPeriodicBcs(; name = :f))), "")
         @test occursin("periodic", err) || (println("periodic: ", err); false)
     end
