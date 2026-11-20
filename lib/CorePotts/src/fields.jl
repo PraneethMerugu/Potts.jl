@@ -112,7 +112,12 @@ FieldHandle(rt) = FieldHandle{typeof(rt)}(Ref{Any}(rt))
 _runtime(h::FieldHandle{R}) where {R} = h.ref[]::R
 Adapt.adapt_structure(to, ::FieldHandle) = nothing
 
-_arrays(arrays::Tuple, st) = map(a -> (a[1](st), a[2] === nothing ? nothing : a[2](st)), arrays)
+_arrays(arrays::Tuple, st) = map(_PhaseArrays(st), arrays)
+# a phase's (array, partner) parts of state `st` (every MCS): a functor, not a per-call closure
+struct _PhaseArrays{S}
+    st::S
+end
+@inline (f::_PhaseArrays)(a) = (a[1](f.st), a[2] === nothing ? nothing : a[2](f.st))
 
 """
     BindingScratch()

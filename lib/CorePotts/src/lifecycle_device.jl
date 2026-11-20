@@ -588,6 +588,19 @@ end
 # barrier or a kernel boundary) the state rules, which may read or write any cell's columns
 # or links (e.g. `add_link!(st.cell, parent, daughter)` in `divide!`)
 
+# `_copy_column!` and `_clean_links!` mapped over the columns: functors, not per-call closures
+struct _CopyColumn{C, D}
+    c::C
+    d::D
+end
+@inline (f::_CopyColumn)(a) = _copy_column!(a, f.c, f.d)
+struct _CleanLinks{C, R, B}
+    c::C
+    removed::R
+    newborn::B
+end
+@inline (f::_CleanLinks)(L) = _clean_links!(L, f.c, f.removed, f.newborn)
+
 @inline function _copy_column!(a::AbstractVector, c, d)
     @inbounds a[d] = a[c]
     return nothing
@@ -623,7 +636,7 @@ end
     _release!(release, st, c)
     d = @inbounds daughter[c]
     if d > 0
-        map(a -> _copy_column!(a, c, d), cols)
+        map(_CopyColumn(c, d), cols)
         @inbounds st.cell.generation[d] += one(eltype(st.cell.generation))
         if CL
             k = @inbounds st.cell.cluster[c]
@@ -636,7 +649,7 @@ end
             end
         end
     end
-    map(L -> _clean_links!(L, c, removed, dv.newborn), links)
+    map(_CleanLinks(c, removed, dv.newborn), links)
     return nothing
 end
 

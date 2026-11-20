@@ -410,9 +410,14 @@ end
         @inbounds cell.anchor[q, d] = cell.anchor[q, f]
     end
     surf === nothing || (@inbounds surf[d] = zero(eltype(surf)))
-    map(L -> _unlink_slot!(L, d), links)
+    map(_UnlinkSlot(d), links)
     return nothing
 end
+# `_unlink_slot!` mapped over the adjacencies: a functor, not a per-call closure
+struct _UnlinkSlot{D}
+    d::D
+end
+@inline (f::_UnlinkSlot)(L) = _unlink_slot!(L, f.d)
 @inline function _unlink_slot!(L, d)
     for c in 1:size(L, 2), k in 1:size(L, 1)
 
@@ -538,8 +543,15 @@ end
     end
     return nothing
 end
+struct _WFold{C, S, L, P}
+    c::C
+    sc::S
+    L::L
+    paired::P
+end
+@inline (f::_WFold)(dst, j) = _cw_fold!(dst, j, f.c, f.sc, f.L, f.paired)
 @inline function _cv_wfold_body!(c, dsts::D, js::J, sc, L, paired) where {D, J}
-    map((dst, j) -> _cw_fold!(dst, j, c, sc, L, paired), dsts, js)
+    map(_WFold(c, sc, L, paired), dsts, js)
     return nothing
 end
 
@@ -551,7 +563,9 @@ function _cv_writes!(ph::ConvertPass, st, p, ctx, key, mcs, sc, backend)
         Exec.ishost(backend) || throw(ArgumentError(string(
             "run on the CPU: the `@convert` compound writes into ", join(unique(string.(eltype.(dsts))), ", "),
             " columns add in site order on the host, and a device has no atomics for these number types")))
-        foreach(i -> _cv_writes_body!(i, ph.writes!, st, p, ctx, key, mcs, sc, _WriteSeq()), 1:n)
+        for i in 1:n
+            _cv_writes_body!(i, ph.writes!, st, p, ctx, key, mcs, sc, _WriteSeq())
+        end
         return 1
     end
     if _FLOAT_ATOMICS[]                                   # negative controls only (tests): float atomics

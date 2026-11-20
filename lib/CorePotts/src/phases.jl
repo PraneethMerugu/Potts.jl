@@ -264,8 +264,20 @@ Enqueue every phase; returns the number of launches. `stats` (the integrator's
 `PottsStats`, or `nothing`) counts the host transfers of phases that make them.
 """
 function run_phases(phases::Tuple, st, p, ctx, key, mcs, backend, stats = nothing, part::NTuple{2, Int} = (1, 1))
-    return sum(ph -> run_phase(ph, st, p, ctx, key, mcs, backend, stats, part), phases; init = 0)
+    return sum(_RunPhase(st, p, ctx, key, mcs, backend, stats, part), phases; init = 0)
 end
+# `run_phase` summed over the phases (every MCS): a functor, not a per-call closure
+struct _RunPhase{S, P, C, K, M, B, T}
+    st::S
+    p::P
+    ctx::C
+    key::K
+    mcs::M
+    backend::B
+    stats::T
+    part::NTuple{2, Int}
+end
+@inline (f::_RunPhase)(ph) = run_phase(ph, f.st, f.p, f.ctx, f.key, f.mcs, f.backend, f.stats, f.part)
 
 """
     run_phase(phase, st, p, ctx, key, mcs, backend, stats)

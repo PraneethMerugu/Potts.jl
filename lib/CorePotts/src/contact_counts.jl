@@ -137,9 +137,30 @@ _contact_counts(ctx) = haskey(ctx, :contact_counts) ? ctx.contact_counts : nothi
 _count_columns(st, ::Nothing) = nothing
 _count_columns(st, cc::ContactCounts) = map(x -> x.column(st), cc.counts)
 
+# the per-column work of the two kernels below: functors, not per-call closures
+struct _ZeroAt{C}
+    c::C
+end
+@inline function (f::_ZeroAt)(a)
+    @inbounds a[f.c] = zero(eltype(a))                              # c ≤ capacity = length(a)
+    return nothing
+end
+struct _AddContacts{S, K, L, I, C}
+    σ::S
+    kind::K
+    lat::L
+    i::I
+    s::C
+end
+@inline function (f::_AddContacts)(a, x)
+    v = _site_contacts(f.σ, f.kind, f.lat, x.relation, x.mask, Int(f.i), f.s)
+    v != 0 && Atomix.@atomic a[f.s] += eltype(a)(v)
+    return nothing
+end
+
 @inline function _dcount_zero_body!(c, dv, par, cols)
     _on(dv, par) || return nothing
-    map(a -> (@inbounds a[c] = zero(eltype(a)); nothing), cols)       # c ≤ capacity = length(a)
+    map(_ZeroAt(c), cols)
     return nothing
 end
 
@@ -147,10 +168,6 @@ end
     _on(dv, par) || return nothing
     s = @inbounds σ[i]
     s > 0 || return nothing
-    map(cols, cc.counts) do a, x
-        v = _site_contacts(σ, kind, lat, x.relation, x.mask, Int(i), s)
-        v != 0 && Atomix.@atomic a[s] += eltype(a)(v)
-        nothing
-    end
+    map(_AddContacts(σ, kind, lat, i, s), cols, cc.counts)
     return nothing
 end
