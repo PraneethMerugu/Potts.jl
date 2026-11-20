@@ -65,8 +65,8 @@ end
     _resolve_solvers(c; field_solver = nothing, ode_solver = ExplicitEuler(), solvers = ())
 
 Resolve the solver keywords against compiled model `c`:
-- `field_solver` (default `ExplicitEuler()`, the automatic substep count; D-075 as amended
-  for fields) integrates every field that `solvers` does not name, and is an error when the
+- `field_solver` (default `ExplicitEuler()`, the automatic substep count)
+  integrates every field that `solvers` does not name, and is an error when the
   model has no field. A default resolves, groups and fingerprints alike with the same
   solver given explicitly;
 - `ode_solver` (default `ExplicitEuler()`, one step per MCS) integrates every cell

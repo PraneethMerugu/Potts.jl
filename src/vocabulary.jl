@@ -302,7 +302,7 @@ _is_quantity_call(i) = i !== nothing && (i.role in SCOPES || i.role === :builtin
 
 """
 `variable(x, scope; default, guess, options...)`: tag an `x(t)` variable with its scope. Without
-`default` the variable starts at 0.0 and is free for `@initialization_equations` (D-170);
+`default` the variable starts at 0.0 and is free for `@initialization_equations`;
 `guess` (MTK's guess metadata) seeds its initialization solve. A scope
 outside `SCOPES` names a relationship: `rest(bond)` is an edge variable of `@relationship
 bond` (option `relationship = :bond`; `mtkcompile` checks the name). `rest(edge)` belongs
@@ -322,7 +322,7 @@ const _VARIABLE_OPTIONS = (:clear_on_ownership_change, :vector, :index, :relatio
 # scope's initialization conditions name it. A written value (`= 0.0` included) fixes it.
 struct _NoValue end
 const _NO_VALUE = _NoValue()
-"""Metadata key marking a variable declared without a value (D-170); see `_written`."""
+"""Metadata key marking a variable declared without a value; see `_written`."""
 struct PottsNoValue end
 _written(x) = (u = Symbolics.unwrap(x); !(u isa SymbolicUtils.BasicSymbolic && SymbolicUtils.getmetadata(u, PottsNoValue, false)))
 
@@ -600,9 +600,9 @@ _centroid() = Num[_centroid(k) for k in 1:_lattice_dim()]
 `centroid(c, k)`: coordinate `k` of the centroid of the cell that reference `c` names
 (`sibling(k)`, a `CellRef`, `root(cluster)`, a fold's cell), in `centroid(k)`'s convention:
 lattice units, embedded on a hexagonal lattice, periodic axes wrapped into [1, L + 1). A dead
-referent or 0 reads 0 (D-066). Between sweeps: cell and site updates, field equations,
+referent or 0 reads 0. Between sweeps: cell and site updates, field equations,
 `@convert` decisions (`sibling(owner, k)` names a site's cluster member), division
-conditions and rules, `@observed`, folds; not in energies (no ΔH, D-032) or copy-step code
+conditions and rules, `@observed`, folds; not in energies (no ΔH) or copy-step code
 (drives, constraints, on-copy updates).
 """
 _centroid(c, k) = Symbolics.wrap(ref_centroid(_symarg(c), _symarg(k)))
@@ -1048,7 +1048,7 @@ end
 """
     Local(; gain = true, adjacency = :face)
 
-The local connectivity rule (CompuCell3D's `Connectivity` plugin with its defaults, D-191):
+The local connectivity rule (CompuCell3D's `Connectivity` plugin with its defaults):
 a copy that the losing cell `old` takes no part in is free (the medium is never tested);
 otherwise it is accepted only if
 
@@ -1079,7 +1079,7 @@ The ring rule of the Tissue Simulation Toolkit (`ConnectivityPreservedP`; Merks 
 2008; Niculescu et al. 2015): accept when the losing cell's shell sites form at most one
 face piece (zero pieces pass, so the last site can be taken), or else exactly two distinct
 cells and no medium are on the shell. Out-of-domain shell positions (a closed face) count as
-one extra cell there, as TST's frame does (D-189 ruling 5). Not a connectivity test: it
+one extra cell there, as TST's frame does. Not a connectivity test: it
 allows splits at two-cell interfaces.
 """
 struct ArcOrPair end
@@ -1761,7 +1761,7 @@ const _AXIS_NAMES = (:x, :y, :z)
 # a number (a parameter is a `Num`, a `Real` too)
 _isnumber(v) = !(_unwrap(v) isa SymbolicUtils.BasicSymbolic) && _unwrap(v) isa Real
 
-"""The canonical phases of one MCS, in their default order (`@schedule`, D-145)."""
+"""The canonical phases of one MCS, in their default order (`@schedule`)."""
 const SCHEDULE_PHASES = (:before_mcs, :sweep, :after_mcs, :fields, :components, :operators, :lifecycle, :end_mcs)
 
 """
@@ -1841,9 +1841,9 @@ end
 """
     _placed_schedule(listed, converts = Symbol[]) -> Vector{Symbol}
 
-The full phase order of `@schedule listed…` (D-145): the listed phases in the listed order;
+The full phase order of `@schedule listed…`: the listed phases in the listed order;
 each unlisted phase, in default order, right after the last placed phase that precedes it in
-the default order (first if none). The `@convert` passes `converts` (R8, D-233) are phases
+the default order (first if none). The `@convert` passes `converts` are phases
 too, by default in declaration order right before `lifecycle`. Checks the names and the
 order rules, naming the offender.
 """
@@ -1878,12 +1878,12 @@ function _placed_schedule(listed, converts = Symbol[])
     at(n) = findfirst(==(n), seq)
     at(:before_mcs) < at(:sweep) || throw(
         ArgumentError(
-            "@schedule: `before_mcs` must come before `sweep` (the before-MCS updates precede the copy sweep, D-042)"
+            "@schedule: `before_mcs` must come before `sweep` (the before-MCS updates precede the copy sweep)"
         )
     )
     at(:after_mcs) > at(:sweep) || throw(
         ArgumentError(
-            "@schedule: `after_mcs` must come after `sweep` (the after-MCS updates follow the copy sweep, D-042)"
+            "@schedule: `after_mcs` must come after `sweep` (the after-MCS updates follow the copy sweep)"
         )
     )
     if r !== nothing
@@ -1932,7 +1932,7 @@ reference compares with `==` against `id`, another reference or 0, and dereferen
 `alive(partner)`, in chains (`partner[partner[old]]`). A dead referent (volume 0) and the
 reference 0 read as the medium: kind 0, volume 0, `birth` 0, `alive` false, every cell
 variable at its declared default. Daughters copy references; at an event MCS, before any slot
-is reused, every reference to a dead cell is reset to 0 (D-066 item 5 (a)).
+is reused, every reference to a dead cell is reset to 0.
 """
 struct CellRef end
 
@@ -1960,7 +1960,7 @@ _ref_kind(who, k) = (k isa Integer && !(k isa Bool) && k >= 1) ? k : throw(
     alive(ref)
 
 Whether the cell `ref` refers to is alive (owns a site, `volume[ref] > 0`); `false` for the
-reference 0 (D-066 item 1). Read-only.
+reference 0. Read-only.
 """
 alive(r) = Symbolics.wrap(cell_alive(_symarg(r)))
 """
@@ -1975,7 +1975,7 @@ sibling(c, k) = Symbolics.wrap(cluster_sibling(_index(B.cluster, c), Num(_ref_ki
 """
     root(cluster)
 
-The root of a compartment cluster (`cluster[c]`, D-036) as a reference; a lone cell is its own
+The root of a compartment cluster (`cluster[c]`) as a reference; a lone cell is its own
 root. A copy-killed root, which still names its cluster, reads as a dead referent.
 """
 root(x) = Symbolics.wrap(as_ref(_symarg(x)))
@@ -2003,7 +2003,7 @@ end
     Fresh(k)
 
 `to = sibling(k) | Fresh(k)` in a `@convert` block: when the entity has no alive `to`, the
-pass allocates a new cell of kind `k` for it on its first conversion (D-066 X2: born on its
+pass allocates a new cell of kind `k` for it on its first conversion (born on its
 first site). `to = sibling(k)` alone means the same.
 """
 Fresh(k) = FreshKind(_ref_kind("Fresh", k))
@@ -2054,7 +2054,7 @@ transfer(args...; per_site = nothing) = throw(
 """
     @convert name domain begin from = …; to = …; at = …; p = …; transfer(…); x[to] += … end
 
-One site conversion pass (R8, D-233): a named phase of the MCS (`@schedule`; by default
+One site conversion pass: a named phase of the MCS (`@schedule`; by default
 right before `lifecycle`). For each entity of `domain` (`clusters(k…)`: one per cluster whose
 root is of kind `k`; `cells(k…)`: one per alive cell of kind `k`), every site owned by `from`
 for which the site condition `at` holds converts to `to` independently, iff `u < clamp(p, 0,
@@ -2160,7 +2160,7 @@ The parameter object of a generated problem: an isbits wrapper of a `NamedTuple`
 scalars and kind tables in the model's scalar type. `p.λ` reads a parameter (generated code
 does this); `remake(prob; p = [λ => 2.0])` changes values without changing the type, so
 nothing recompiles. The second type parameter is `()` or `(names, fp)`: the computed parameters
-(D-112: a default that is an expression of other parameters) and a fingerprint of their
+(a default that is an expression of other parameters) and a fingerprint of their
 names and defaults. SciMLStructures leaves the computed parameters out of its portions
 and `SciMLStructures.replace` re-derives them through the derivation registered for this exact
 type when a problem of the model is built in the process.

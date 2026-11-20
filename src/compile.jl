@@ -1626,7 +1626,7 @@ _is_hex(sys) = core_lattice(_p(sys, :lattice)).geometry isa CorePotts.Hexagonal
 
 _energy_centroid_error(name) = PottsCompileError(
     "`$name` is not available in energies: a copy moves the centroids it " *
-        "reads and that shift is not part of ΔH (D-032); read it in cell " *
+        "reads and that shift is not part of ΔH; read it in cell " *
         "updates or @observed, or use `displacement(c, k)` in a @drive"
 )
 
@@ -1645,7 +1645,7 @@ function _check_energy_geometry(E)
 end
 
 """Axes of `centroid`/`displacement` and of the copy-scope `direction[k]` and `position[s][k]`
-(D-188) must be literal lattice axes; `centroid` has no ΔH in energies."""
+must be literal lattice axes; `centroid` has no ΔH in energies."""
 function _check_geometry(x, N; energy = false, hex = false)
     _walk(x) do y
         iscall(y) || return

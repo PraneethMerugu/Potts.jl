@@ -398,7 +398,7 @@ const _HEX_MINIMUM_IMAGE = "`minimum_image` wraps one lattice axis, which is not
                            "(the nearest image may be a diagonal one); use `separation(a, b)`"
 
 """Coordinate `k` of the centroid of referent `r` in `centroid(k)`'s convention (embedded,
-periodic axes wrapped); 0 when `r` is 0, out of range or dead (D-066)."""
+periodic axes wrapped); 0 when `r` is 0, out of range or dead."""
 @inline function _ref_centroid_axis(::Type{T}, cell, lat, r, k) where {T}
     _alive_slot(cell.volume, r) || return zero(T)
     return CorePotts.centroid_position(T, cell, lat, Int(r))[k]
@@ -421,7 +421,7 @@ a tie |d| = L/2 keeps `d`), on a closed axis `d`."""
 end
 
 """Column `col` (an integral) summed over the alive members of cell `c`'s compartment
-cluster (`c` alone in a model without clusters); 0 for the medium and a dead slot (D-066)."""
+cluster (`c` alone in a model without clusters); 0 for the medium and a dead slot."""
 # O(capacity) per cell, so O(capacity²) per refresh; member lists could replace the scan.
 @inline function _over_cluster(cell, col, c)
     s = zero(eltype(col))
@@ -462,7 +462,7 @@ spacing (on a square lattice with unit spacing, the coordinates themselves).
 end
 
 """
-Source→target offset of a copy (D-188): the coordinate difference of `t` and `s`,
+Source→target offset of a copy: the coordinate difference of `t` and `s`,
 the minimum image along periodic axes (a plain difference along closed ones), embedded and
 scaled as `_position`. A function of the two sites alone; the tie |d| = L/2 keeps `d`.
 """
@@ -683,7 +683,7 @@ end
 @inline _deref_volume(vol, r) = _alive_slot(vol, r) ? @inbounds(vol[r]) : zero(eltype(vol))
 @inline _deref_kind(cell, r) = _alive_slot(cell.volume, r) ? Int32(@inbounds cell.kind[r]) : Int32(0)
 @inline _deref_cluster(cell, r) = _alive_slot(cell.volume, r) ? @inbounds(cell.cluster[r]) : Int32(0)
-"""`birth` of cell `c` (D-066 item 3): its serial with a lifecycle (`cell.birth`), else its slot."""
+"""`birth` of cell `c`: its serial with a lifecycle (`cell.birth`), else its slot."""
 # (`c` is a cell slot in 1:capacity: the env's cell, `_birth_at` with c ≠ 0, or a referent
 # `_alive_slot` checked; every column has the capacity's length)
 @inline _birth(cell, c) = haskey(cell, :birth) ? @inbounds(cell.birth[c]) : Int32(c)

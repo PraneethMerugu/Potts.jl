@@ -1027,7 +1027,7 @@ still medium, so earlier layers are never cut (Morpheus' InitVoronoi).
   never moves.
 
 `Voronoi(RandomPoints(n; region = ball, seed); region = ball, lloyd = 30, kinds)` with
-`ball = Circle(Point(c), r)` is a round aggregate of `n` compact cells (D-063, the former
+`ball = Circle(Point(c), r)` is a round aggregate of `n` compact cells (the former
 `VoronoiBall`). The report row has `requested = painted =` the generators, `dropped` those
 left with no site and `clipped` the region's points lost to closed edges and the domain.
 With a domain, `clipped` depends on whether a region is given: the default (the whole

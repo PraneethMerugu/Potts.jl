@@ -112,7 +112,7 @@ end
 """
     Potts.PottsSweepSpec
 
-The lattice sweep of a Potts model as typed system metadata (D-160): both the metadata key
+The lattice sweep of a Potts model as typed system metadata: both the metadata key
 and the value type. It is metadata of the model's inner System (`Potts.inner(sys)`), set when
 the model is built (`Potts.wrap_system`), so generic code that holds the System detects a Potts model
 with MTK's metadata API:

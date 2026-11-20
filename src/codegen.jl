@@ -751,7 +751,7 @@ _stage_writes(stage) = Set{Symbol}(_update_name(u) for u in stage.updates)
 
 _phases(c::CompiledPottsSystem, T, values, spec::SolverSpec) = first(_phases_parts(c, T, values, spec))
 
-"""The model's MCS phase order (D-145): its `@schedule` placed, or the default order."""
+"""The model's MCS phase order: its `@schedule` placed, or the default order."""
 _phase_order(sys::PottsSystem) = isempty(_p(sys, :schedule)) ? _default_order(_convert_names(sys)) :
                                   _placed_schedule(_p(sys, :schedule), _convert_names(sys))
 
@@ -2120,7 +2120,7 @@ Self-check credit of copy `prop` from state `u` to state `a`: the energy that le
 that `energy_change(prob, u, prop) == total_energy(prob, a) − total_energy(prob, u) +
 credit` for every copy. Internal, host.
 
-With cell terms reading references (R6, D-231 item 2) ΔH reads every referent before the
+With cell terms reading references, ΔH reads every referent before the
 copy, so the credit is `E_cell(o, empty state; referents in u)` plus, over every other cell `c`
 alive in `a`, `E_c(c's values in a; referents in u) − E_c(a)`: the readers of the dead cell.
 """
