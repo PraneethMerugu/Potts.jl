@@ -1467,7 +1467,12 @@ function _substeps!(::Any, rt::GroupRuntime, t::Float64, h::Float64, k::Int, n::
     end
     return nothing
 end
-_swap!(cur, swaps) = (foreach(f -> cur[f] = 3 - cur[f], swaps); nothing)
+function _swap!(cur, swaps)
+    for f in swaps
+        cur[f] = 3 - cur[f]
+    end
+    return nothing
+end
 _slot1!(::Tuple{}, cur, swaps, i) = nothing
 function _slot1!(copies::Tuple, cur, swaps, i)
     f = swaps[i]

@@ -649,7 +649,9 @@ function tangent!(sv::FieldSolver, u::AbstractVector, coef; homogeneous::Bool = 
     rebuild!(sv)
     lift!(sv)
     _run_one!(sv, "tangent.rhs"; rt = (homogeneous ? 0.0 : 1.0, 0.0))
-    foreach(A -> fill!(A, zero(eltype(A))), sv.bufs[wid])
+    for A in sv.bufs[wid]
+        fill!(A, zero(eltype(A)))
+    end
     has_robin(op) && _run_one!(sv, "robin.b")     # the defect term at x = 0
     _defect_solve!(sv, maxiter)
     du = solver_solution(sv)
@@ -1202,7 +1204,9 @@ function steady!(sv::FieldSolver; maxiter::Int = 64)
     rebuild!(sv)
     lift!(sv)
     id = fid(sv, working_key(sv))
-    foreach(A -> fill!(A, zero(eltype(A))), sv.bufs[id])
+    for A in sv.bufs[id]
+        fill!(A, zero(eltype(A)))
+    end
     has_robin(sv.op) && _run_one!(sv, "robin.b")   # the defect term at x = 0
     return _defect_solve!(sv, maxiter)
 end

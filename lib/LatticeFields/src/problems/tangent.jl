@@ -253,7 +253,12 @@ end
 
 # the primal twins take the values of the store's arrays (each window's start: the masks, the
 # clamps and the other groups wrote the store)
-_tsync!(syncs, backend) = (foreach(((a, b),) -> Exec.launch!(backend, _tv_body!, length(b), (b, a)), syncs); nothing)
+function _tsync!(syncs, backend)
+    for (a, b) in syncs
+        Exec.launch!(backend, _tv_body!, length(b), (b, a))
+    end
+    return nothing
+end
 
 function _substeps!(c::TangentCache, rt::GroupRuntime, t::Float64, h::Float64, k::Int, n::Integer)
     (n == 0 || h == 0) && return _substeps!(nothing, rt, t, h, k, n)
@@ -363,6 +368,12 @@ end
 # the difference), one FGMRES per derivative part (an exact difference for a linear group, else
 # a few corrections with the Dual residual), each a solve of the group's LinearSolve cache with
 # the part as its right-hand side
+# each row's residual at slot `par` and time arguments `rt`: a functor, not a per-call closure
+struct _TangentResidual{R}
+    par::Int
+    rt::R
+end
+(f::_TangentResidual)(tr) = tr.res[f.par](f.rt)
 function _tcoupled!(c::TangentCache, cs::CoupledKrylov, par, t1, hγ, k)
     backend = c.backend
     A, ws, bt, lin = cs.A, cs.ws, c.bt, cs.lin
@@ -370,7 +381,7 @@ function _tcoupled!(c::TangentCache, cs::CoupledKrylov, par, t1, hγ, k)
     cs.walk(cs.rows, _csop(:residual, (par, false, t1, hγ, k, A.b.a, cs.part, backend, nothing)))
     Exec.launch!(backend, _cs_un_body!, 1, (cs.scal, cs.part, cs.nbt))
     for _ in 1:(cs.linear ? 1 : 3)
-        foreach(tr -> tr.res[par]((t1, hγ, k)), c.rows)
+        foreach(_TangentResidual(par, (t1, hγ, k)), c.rows)
         for j in 1:(c.np)
             for (cr, tr) in zip(cs.rows, c.rows)
                 Exec.launch!(backend, _tcload_body!, cr.n, (bt.a, cr.voff, tr.resarr, j, cr.row.mask, cr.row.dom))

@@ -449,7 +449,9 @@ function LinearAlgebra.ldiv!(y::AbstractVector, P::FusedVCycle{<:BoundOperator},
     end
     copyto!(field(sv, "in.f"), r)
     wid = fid(sv, working_key(sv))
-    foreach(a -> fill!(a, zero(eltype(a))), sv.bufs[wid])
+    for a in sv.bufs[wid]
+        fill!(a, zero(eltype(a)))
+    end
     lift!(sv)
     solve!(sv; maxiters = P.cycles)
     copyto!(y, field(sv, solution_key(sv)))

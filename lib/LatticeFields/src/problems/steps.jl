@@ -81,7 +81,10 @@ end
 The host slot swaps after a step of `sp` (no copy, no wait).
 """
 function swap!(st::FieldStore, sp::StepPlan)
-    (foreach(f -> st.cur[f] = 3 - st.cur[f], sp.swaps); st)
+    for f in sp.swaps
+        st.cur[f] = 3 - st.cur[f]
+    end
+    return st
 end
 
 """
