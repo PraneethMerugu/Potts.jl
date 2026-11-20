@@ -1,12 +1,14 @@
 # Whole-cell connectivity (`src/pieces.jl`): ordinary tests (D-048). `recompute_pieces`
 # and the per-copy after-values against an independent flood fill; `global_keeps` (exact
 # and windowed) and `global_gains` against brute force; the window's three outcomes on a
-# loop. The model-level acceptance is PottsModels' `lib/PottsModels/test/acceptance/global_connectivity_tests.jl`.
+# loop. The model-level acceptance is PottsModels'
+# `lib/PottsModels/test/acceptance/global_connectivity_tests.jl`.
 
 @testsetup module CP_pieces
 using Test, CorePotts, StaticArrays, Statistics, Random
 using SciMLBase: SciMLBase, ReturnCode, remake
-using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
+using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates,
+    linear_index, shift
 using CorePotts: FloodScratch, GlobalExact, GlobalBoard, GlobalSearch, GlobalLocal,
     global_keeps, global_gains,
     pieces_after!, pieces_defer, commit_pieces!, GLOBAL_PASS, GLOBAL_WINDOW,
@@ -44,12 +46,17 @@ random_labels(dims, n, rng) = Int32.(rand(rng, 0:n, dims))
 
 const PIECES_LATTICES = [
     Lattice((7, 6); boundary = Closed()), Lattice((7, 6); boundary = Periodic()),
-    Lattice((7, 7); boundary = Closed(), geometry = Hexagonal()), Lattice((5, 4, 4); boundary = Periodic()),
+    Lattice((7, 7); boundary = Closed(), geometry = Hexagonal()),
+    Lattice((5, 4, 4); boundary = Periodic()),
 ]
 include("shared/export_all.jl")
 end
 
-@testitem "pieces: recompute and per-copy after-values = flood fill" setup = [CP_pieces] tags = [:corepotts, :pieces] begin
+@testitem "pieces: recompute and per-copy after-values = flood fill" setup = [
+    CP_pieces,
+] tags = [
+    :corepotts, :pieces,
+] begin
     @testset "pieces: recompute and per-copy after-values = flood fill" begin
         rng = Xoshiro(9)
         for lat in PIECES_LATTICES, full in (false, true), trial in 1:6
@@ -63,16 +70,19 @@ end
             )
             bad = 0
             for t in 1:nsites(lat), k in 1:2
-
                 x = CorePotts.coordinates(lat, t)
-                ins, y = CorePotts.shift(lat, x, CorePotts.shell_offsets(lat)[mod1(t + k, end)])
+                ins, y = CorePotts.shift(
+                    lat, x,
+                    CorePotts.shell_offsets(lat)[mod1(t + k, end)]
+                )
                 ins || continue
                 s = CorePotts.linear_index(lat, y)
                 σ[t] == σ[s] && continue
                 prop = Proposal(t, s, x, 1, σ[t], σ[s])
                 stamp = ctx.flood.stamp[1]
                 po, lo, pn, ln = pieces_after!(σ, ctx, prop, P, L, V, Val(full), 1)
-                # a copy the checkerboard does not defer needs no flood (the scratch is untouched)
+                # a copy the checkerboard does not defer needs no flood (the scratch is
+                # untouched)
                 bad += !pieces_defer(σ, ctx, prop, P, V, Val(full)) &&
                     ctx.flood.stamp[1] != stamp
                 σ1 = copy(σ)
@@ -90,14 +100,17 @@ end
                 pieces_after!(σ, lctx, prop, P, L, V, Val(full), 1)
                 P3, L3 = copy(P), copy(L)
                 commit_pieces!(P3, L3, prop, lctx, 1)
-                bad += (P3, L3) != (P2, L2) || (prop.new != 0 && (P3[prop.new], L3[prop.new]) != (pn, ln))
+                bad += (P3, L3) != (P2, L2) ||
+                    (prop.new != 0 && (P3[prop.new], L3[prop.new]) != (pn, ln))
             end
             @test bad == 0
         end
     end
 end
 
-@testitem "Global: exact decision = brute force; gains" setup = [CP_pieces] tags = [:corepotts, :pieces] begin
+@testitem "Global: exact decision = brute force; gains" setup = [CP_pieces] tags = [
+    :corepotts, :pieces,
+] begin
     @testset "Global: exact decision = brute force; gains" begin
         rng = Xoshiro(10)
         for lat in PIECES_LATTICES, full in (false, true), trial in 1:4
@@ -127,7 +140,8 @@ end
                     agree += (
                         (
                             global_keeps(
-                                σ, ctx, prop, Val(full), Val(nothing), Val(0), GlobalSearch()
+                                σ, ctx, prop, Val(full), Val(nothing), Val(0),
+                                GlobalSearch()
                             ) ==
                                 GLOBAL_PASS
                         ) == keeps
@@ -140,10 +154,12 @@ end
     end
 end
 
-@testitem "Global: the window's three outcomes (loop fixture)" setup = [CP_pieces] tags = [:corepotts, :pieces] begin
+@testitem "Global: the window's three outcomes (loop fixture)" setup = [CP_pieces] tags = [
+    :corepotts, :pieces,
+] begin
     @testset "Global: the window's three outcomes (loop fixture)" begin
-        # a one-wide square loop of side s: removing a site never splits it, but the way round
-        # leaves the box of radius W unless s ≤ W + 1
+        # a one-wide square loop of side s: removing a site never splits it, but the way
+        # round leaves the box of radius W unless s ≤ W + 1
         lat = Lattice((12, 12); boundary = Closed())
         function loop(s)
             σ = zeros(Int32, 12, 12)
@@ -160,11 +176,14 @@ end
             )
             for (s, want) in ((W + 1, GLOBAL_PASS), (W + 2, GLOBAL_WINDOW))
                 σ = loop(s)
-                t = CorePotts.linear_index(lat, (4, 5))           # a side site: its two touches meet round the loop
+                # a side site: its two touches meet round the loop
+                t = CorePotts.linear_index(lat, (4, 5))
                 prop = Proposal(
                     t, CorePotts.linear_index(lat, (3, 5)), (4, 5), 1, Int32(1), Int32(0)
                 )
-                @test global_keeps(σ, ctx, prop, Val(false), Val(W), Val(cap), GlobalLocal()) ==
+                @test global_keeps(
+                    σ, ctx, prop, Val(false), Val(W), Val(cap), GlobalLocal()
+                ) ==
                     GLOBAL_WINDOW   # undecided locally
                 @test global_keeps(
                     σ, ctx, prop, Val(false), Val(W), Val(cap), GlobalSearch()
@@ -183,7 +202,9 @@ end
             prop = Proposal(
                 t, CorePotts.linear_index(lat, (5, 6)), (6, 6), 1, Int32(1), Int32(0)
             )
-            @test global_keeps(σ, ctx, prop, Val(false), Val(W), Val(cap), GlobalSearch()) ==
+            @test global_keeps(
+                σ, ctx, prop, Val(false), Val(W), Val(cap), GlobalSearch()
+            ) ==
                 GLOBAL_REFUSED
         end
     end

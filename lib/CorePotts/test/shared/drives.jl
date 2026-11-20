@@ -9,7 +9,8 @@ function brute_local(σ, lat::Lattice{N}, x, a) where {N}
         inside && σ[linear_index(lat, y)] == a && push!(own, o)
     end
     isempty(own) && return false
-    seen = Set([first(own)]); stack = [first(own)]
+    seen = Set([first(own)])
+    stack = [first(own)]
     while !isempty(stack)
         o = pop!(stack)
         for d in 1:N, s in (-1, 1)
@@ -44,6 +45,7 @@ end
 struct EffectiveTrack end
 (::EffectiveTrack)(st, p, prop, ctx, dH) = dH - p.T * p.b * (prop.new == 0 ? -1.0 : 1.0)
 CorePotts.track_eltype(::EffectiveTrack) = Float64
-# a custom track without `track_eltype`: fine sequentially, a clear error on the checkerboard
+# a custom track without `track_eltype`: fine sequentially, a clear error on the
+# checkerboard
 struct UntypedTrack end
 (::UntypedTrack)(st, p, prop, ctx, dH) = dH

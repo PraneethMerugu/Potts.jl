@@ -21,16 +21,25 @@ Link storage to merge into the cell state: the adjacency (`links`, or
 matrices (`payloads` gives the element type of each, e.g. `rest = Float64`).
 """
 function empty_links(maxdeg::Integer, ncell::Integer; payloads...)
-    return merge((; links = zeros(Int32, maxdeg, ncell)), _empty_payloads(maxdeg, ncell, payloads))
+    return merge(
+        (; links = zeros(Int32, maxdeg, ncell)),
+        _empty_payloads(maxdeg, ncell, payloads)
+    )
 end
 function empty_links(maxdeg::Integer, ncell::Integer, name::Symbol; payloads...)
-    return merge(NamedTuple{(adjacency_name(name),)}((zeros(Int32, maxdeg, ncell),)), _empty_payloads(maxdeg, ncell, payloads))
+    return merge(
+        NamedTuple{(adjacency_name(name),)}((zeros(Int32, maxdeg, ncell),)),
+        _empty_payloads(maxdeg, ncell, payloads)
+    )
 end
 function _empty_payloads(maxdeg, ncell, payloads)
     return NamedTuple(Symbol(:link_, k) => zeros(T, maxdeg, ncell) for (k, T) in payloads)
 end
 
-"""`adjacency_name(name)`: the cell-state column of relationship `name`'s adjacency, `links__<name>`."""
+"""
+`adjacency_name(name)`: the cell-state column of relationship `name`'s adjacency,
+`links__<name>`.
+"""
 adjacency_name(name::Symbol) = Symbol(:links__, name)
 _is_adjacency(name::Symbol) = name === :links || startswith(String(name), "links__")
 
@@ -68,7 +77,12 @@ Return `true` if cells `a` and `b` are nonzero and linked in link store `cell`.
 
 Number of active links incident on cell `a` in link store `cell`.
 """
-@inline link_count(cell, a) = count(k -> @inbounds(cell.links[k, a]) != 0, 1:maxdegree(cell))
+@inline function link_count(cell, a)
+    return count(
+        k -> @inbounds(cell.links[k, a]) != 0,
+        1:maxdegree(cell)
+    )
+end
 
 _payload_names(cell) = Tuple(k for k in keys(cell) if startswith(String(k), "link_"))
 
@@ -82,28 +96,35 @@ or a view, see the file header). Returns `false` if already linked or either row
 """
 function add_link!(cell, a, b; payload...)
     (a == b || a == 0 || b == 0 || linked(cell, a, b)) && return false
-    ka = link_slot(cell, a, 0); kb = link_slot(cell, b, 0)
+    ka = link_slot(cell, a, 0)
+    kb = link_slot(cell, b, 0)
     (ka == 0 || kb == 0) && return false
-    cell.links[ka, a] = b; cell.links[kb, b] = a
+    cell.links[ka, a] = b
+    cell.links[kb, b] = a
     for name in _payload_names(cell)             # payloads not given start at zero
         arr = getfield(cell, name)
-        arr[ka, a] = zero(eltype(arr)); arr[kb, b] = zero(eltype(arr))
+        arr[ka, a] = zero(eltype(arr))
+        arr[kb, b] = zero(eltype(arr))
     end
     for (name, v) in payload
         arr = getfield(cell, Symbol(:link_, name))
-        arr[ka, a] = v; arr[kb, b] = v
+        arr[ka, a] = v
+        arr[kb, b] = v
     end
     return true
 end
 
 """Remove the link between `a` and `b` (host arrays); returns whether it existed."""
 function remove_link!(cell, a, b)
-    ka = link_slot(cell, a, b); kb = link_slot(cell, b, a)
+    ka = link_slot(cell, a, b)
+    kb = link_slot(cell, b, a)
     ka == 0 && return false
-    cell.links[ka, a] = 0; cell.links[kb, b] = 0
+    cell.links[ka, a] = 0
+    cell.links[kb, b] = 0
     for name in _payload_names(cell)
         arr = getfield(cell, name)
-        arr[ka, a] = zero(eltype(arr)); arr[kb, b] = zero(eltype(arr))
+        arr[ka, a] = zero(eltype(arr))
+        arr[kb, b] = zero(eltype(arr))
     end
     return true
 end
@@ -119,18 +140,21 @@ end
 
 """Minimum-image distance between the centroids of `a` and `b`, in float type `T`."""
 @inline function centroid_distance(::Type{T}, cell, l::Lattice{N}, a, b) where {T, N}
-    ca = centroid(T, cell, l, a); cb = centroid(T, cell, l, b)
+    ca = centroid(T, cell, l, a)
+    cb = centroid(T, cell, l, b)
     return _periodic_norm(T, l, ntuple(d -> ca[d] - cb[d], Val(N)))
 end
 """
     centroid_separation(T, cell, lattice, a, b)
 
-Embedded minimum-image vector from the centroid of `b` to that of `a` (an `NTuple`), in float
-type `T`: on a square lattice the per-axis wrap, on a periodic hexagonal lattice the nearest
-image on the rhombic torus, so its norm is `centroid_distance`. Both cells must be alive.
+Embedded minimum-image vector from the centroid of `b` to that of `a` (an `NTuple`), in
+float type `T`: on a square lattice the per-axis wrap, on a periodic hexagonal lattice the
+nearest image on the rhombic torus, so its norm is `centroid_distance`. Both cells must be
+alive.
 """
 @inline function centroid_separation(::Type{T}, cell, l::Lattice{N}, a, b) where {T, N}
-    ca = centroid(T, cell, l, a); cb = centroid(T, cell, l, b)
+    ca = centroid(T, cell, l, a)
+    cb = centroid(T, cell, l, b)
     return _min_image(T, l, ntuple(d -> ca[d] - cb[d], Val(N)))
 end
 @inline function _periodic_norm(::Type{T}, l::Lattice{N}, δ) where {T, N}
@@ -155,8 +179,10 @@ may be a diagonal one, so the images one period away on each periodic axis are c
     return embed(l, w)
 end
 @inline function _min_image(::Type{T}, l::Lattice{2, M, Hexagonal}, δ) where {T, M}
-    w1 = T(δ[1]); w2 = T(δ[2])
-    L1 = T(l.dims[1]); L2 = T(l.dims[2])
+    w1 = T(δ[1])
+    w2 = T(δ[2])
+    L1 = T(l.dims[1])
+    L2 = T(l.dims[2])
     l.periodic[1] && (w1 -= L1 * round(w1 / L1))
     l.periodic[2] && (w2 -= L2 * round(w2 / L2))
     best = embed(l, (w1, w2))
@@ -192,7 +218,11 @@ copy ΔH equals the change of the brute-force sum over links with two alive ends
 test reads the same volume load as `old`'s centroid. Device-safe: no allocation, no
 `throw`.
 """
-@inline link_delta(::Type{T}, cell, ctx, prop::Proposal, E::F) where {T, F} = link_delta(T, cell, cell, ctx, prop, E)
+@inline function link_delta(::Type{T}, cell, ctx, prop::Proposal, E::F) where {T, F}
+    return link_delta(
+        T, cell, cell, ctx, prop, E
+    )
+end
 @inline function link_delta(::Type{T}, cell, store, ctx, prop::Proposal, E::F) where {T, F}
     lat = ctx.lattice
     fr = link_frame(T, cell, lat, prop)
@@ -206,22 +236,26 @@ test reads the same volume load as `old`'s centroid. Device-safe: no allocation,
     return dH
 end
 
-# `link_delta` in two steps, so generated code can evaluate the link energy inline instead of
-# passing it as a closure (a closure in a RuntimeGeneratedFunction body becomes an opaque
+# `link_delta` in two steps, so generated code can evaluate the link energy inline instead
+# of passing it as a closure (a closure in a RuntimeGeneratedFunction body becomes an opaque
 # closure, which a downstream package cannot precompile):
 #   fr = link_frame(T, cell, lat, prop)
 #   for side in 1:2, k in 1:maxdegree(store)
 #       c, n, m, before, after = link_at(T, fr, cell, lat, store, side, k)
-#       m == 0: no link; m == 1: the link dies with `old`, ΔH −= E(before); m == 2: ΔH += E(after) − E(before)
+#       m == 0: no link; m == 1: the link dies with `old`, ΔH −= E(before); m == 2: ΔH +=
+#       E(after) − E(before)
 
 """The copy's two cells, the kill flag, their centroid shifts and centroids (`link_at`)."""
-@inline function link_frame(::Type{T}, cell, lat::Lattice{N}, prop::Proposal{N}) where {T, N}
+@inline function link_frame(::Type{T}, cell, lat::Lattice{N}, prop::Proposal{N}) where {
+        T, N,
+    }
     a, b = prop.old, prop.new
     z = ntuple(_ -> zero(T), Val(N))
     # bounds: nonzero owners a, b are cell ids ≤ capacity = length(volume)
     Va = a == 0 ? zero(eltype(cell.volume)) : @inbounds cell.volume[a]
     Vb = b == 0 ? zero(eltype(cell.volume)) : @inbounds cell.volume[b]
-    kill = Va == 1                                    # the copy takes a's last site: a dies (D-083)
+    # the copy takes a's last site: a dies (D-083)
+    kill = Va == 1
     sa = (a == 0 || kill) ? z : centroid_shift(T, cell, lat, a, prop.x, -1)
     sb = b == 0 ? z : centroid_shift(T, cell, lat, b, prop.x, +1)
     ca = a == 0 ? z : _centroid(T, cell, lat, a, Va)
@@ -234,17 +268,26 @@ Link slot `k` of side `side` (1: `old`, 2: `new`) of frame `fr`: `(c, n, mode, b
 after)`, the cell, its partner, the mode (0: no link to count, 1: the link dies with `old`,
 2: it stays) and the centroid distances before and after the copy.
 """
-@inline function link_at(::Type{T}, fr, cell, lat::Lattice{N}, store, side::Int, k::Int) where {T, N}
-    c, sc, cc, other, so = side == 1 ? (fr.a, fr.sa, fr.ca, fr.b, fr.sb) : (fr.b, fr.sb, fr.cb, fr.a, fr.sa)
+@inline function link_at(
+        ::Type{T}, fr, cell, lat::Lattice{N}, store, side::Int, k::Int
+    ) where {T, N}
+    c, sc, cc, other, so = if side == 1
+        (fr.a, fr.sa, fr.ca, fr.b, fr.sb)
+    else
+        (fr.b, fr.sb, fr.cb, fr.a, fr.sa)
+    end
     c == 0 && return (c, c, 0, zero(T), zero(T))
-    n = @inbounds store.links[k, c]                   # (k ≤ maxdegree(store), c a cell of the copy)
+    # (k ≤ maxdegree(store), c a cell of the copy)
+    n = @inbounds store.links[k, c]
     n == 0 && return (c, n, 0, zero(T), zero(T))
-    n == other && c == fr.b && return (c, n, 0, zero(T), zero(T))   # the old–new link is counted once (from a)
+    # the old–new link is counted once (from a)
+    n == other && c == fr.b && return (c, n, 0, zero(T), zero(T))
     Vn = @inbounds cell.volume[n]
     Vn == 0 && return (c, n, 0, zero(T), zero(T))     # dead partner: skipped (D-066 item 5)
     cn = _centroid(T, cell, lat, n, Vn)
     before = _periodic_norm(T, lat, ntuple(d -> cc[d] - cn[d], Val(N)))
-    fr.kill && c == fr.a && return (c, n, 1, before, zero(T))   # a's links die with it: E(before) → 0
+    # a's links die with it: E(before) → 0
+    fr.kill && c == fr.a && return (c, n, 1, before, zero(T))
     sn = n == other ? so : fr.z
     after = _periodic_norm(T, lat, ntuple(d -> cc[d] + sc[d] - cn[d] - sn[d], Val(N)))
     return (c, n, 2, before, after)
@@ -258,8 +301,8 @@ MCS (`cell` is `st.cell`), e.g. relationship creation/removal/retuning from the 
 graph. Host-shaped and rare by design. `ctx.lattice` is a host copy (made once per run: the
 domain mask never changes); `p` is the live parameter object, as given to the integrator.
 
-`reads` and `writes` declare what the body touches, as tuples of `:ownership` (the labels) and cell
-column names, so that on a device only those leaves cross:
+`reads` and `writes` declare what the body touches, as tuples of `:ownership` (the labels)
+and cell column names, so that on a device only those leaves cross:
 - `reads`: copied to the host before the body;
 - `writes`: copied to the host before the body (bodies update them in place) and back after
   it; they are the only leaves written back.
@@ -270,13 +313,14 @@ column names, so that on a device only those leaves cross:
 `reads` columns are read-only. Writing a `reads`-only or undeclared leaf is undefined: on
 the host the change persists (the body runs on the live arrays), on a device it is dropped
 (only `writes` go back). What the body sees in leaves it does not declare is unspecified (on
-a device it is the device array, which must not be read on the host). A name that is neither `:ownership` nor a cell
-column of the state is an `ArgumentError` the first time the phase runs, on every backend.
-Model, site and history quantities are not declarable: a body that reads them leaves
-`reads = nothing`; it never writes them back.
+a device it is the device array, which must not be read on the host). A name that is neither
+`:ownership` nor a cell column of the state is an `ArgumentError` the first time the phase
+runs, on every backend. Model, site and history quantities are not declarable: a body that
+reads them leaves `reads = nothing`; it never writes them back.
 
 ```julia
-HostPhase((cell, st, p, ctx, mcs) -> (cell.y .+= cell.x; nothing); reads = (:x,), writes = (:y,))
+HostPhase((cell, st, p, ctx, mcs) -> (cell.y .+= cell.x; nothing); reads = (:x,), writes \
+= (:y,))
 ```
 """
 struct HostPhase{F, R, W}
@@ -292,7 +336,9 @@ _declared(::Nothing) = nothing
 _declared(s::Symbol) = (s,)
 function _declared(names)
     t = Tuple(names)
-    all(n -> n isa Symbol, t) || throw(ArgumentError("HostPhase `reads`/`writes` take Symbols (`:ownership` or cell column names); got $(repr(names))"))
+    all(n -> n isa Symbol, t) ||
+        throw(ArgumentError("HostPhase `reads`/`writes` take Symbols (`:ownership` or \
+            cell column names); got $(repr(names))"))
     return t
 end
 
@@ -306,7 +352,9 @@ function run_phase(ph::HostPhase{F}, st, p, ctx, key, mcs, backend, stats) where
     mcs % ph.every == 0 || return 0
     sync!(stats, backend)
     host = _host_state(ph, stats, backend, st)
-    ph.f!(host.cell, host, p, merge(ctx, (; lattice = host_lattice(stats, ctx.lattice))), mcs)
+    ph.f!(
+        host.cell, host, p, merge(ctx, (; lattice = host_lattice(stats, ctx.lattice))), mcs
+    )
     if ph.writes === nothing
         foreach(keys(st.cell)) do name
             _write_back!(stats, getfield(st.cell, name), getfield(host.cell, name))
@@ -328,8 +376,8 @@ function _check_declared(names, st)
     for n in names
         n === :ownership || haskey(st.cell, n) || throw(
             ArgumentError(
-                "HostPhase declares `$n`, which is neither `:ownership` nor a cell column of the state " *
-                    "(cell columns: $(join(keys(st.cell), ", ")))"
+                "HostPhase declares `$n`, which is neither `:ownership` nor a cell " *
+                    "column of the state (cell columns: $(join(keys(st.cell), ", ")))"
             )
         )
     end
@@ -341,10 +389,16 @@ end
 # host, declared leaves are the live arrays (no copy).
 function _host_state(ph::HostPhase, stats, backend, st)
     ph.reads === nothing && return snapshot(stats, backend, st)
-    used = ph.writes === nothing ? (ph.reads..., keys(st.cell)...) : (ph.reads..., ph.writes...)
+    used = if ph.writes === nothing
+        (ph.reads..., keys(st.cell)...)
+    else
+        (ph.reads..., ph.writes...)
+    end
     cell = unique(n for n in used if n !== :ownership)
     return host_leaves(stats, st; ownership = :ownership in used, cell)
 end
 
 # a host copy back to its live array (nothing when the body ran on the live array itself)
-_write_back!(stats, live, host) = live === host ? nothing : (counted_copy!(stats, live, host); nothing)
+function _write_back!(stats, live, host)
+    return live === host ? nothing : (counted_copy!(stats, live, host); nothing)
+end

@@ -6,15 +6,22 @@
 @testsetup module CP_site_index_math
 using Test, CorePotts, StaticArrays, Statistics, Random
 using SciMLBase: SciMLBase, ReturnCode, remake
-using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
-using CorePotts: FloodScratch, GlobalExact, GlobalBoard, GlobalSearch, global_keeps, GLOBAL_REFUSED, Proposal
+using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates,
+    linear_index, shift
+using CorePotts: FloodScratch, GlobalExact, GlobalBoard, GlobalSearch, global_keeps,
+    GLOBAL_REFUSED, Proposal
 
 struct SparseSites{T} <: AbstractVector{T}
     n::Int
     d::Dict{Int, T}
     default::T
 end
-sparse_sites(::Type{T}, n, pairs...) where {T} = SparseSites{T}(n, Dict{Int, T}(pairs...), zero(T))
+function sparse_sites(::Type{T}, n, pairs...) where {T}
+    return SparseSites{T}(
+        n, Dict{Int, T}(pairs...),
+        zero(T)
+    )
+end
 Base.size(a::SparseSites) = (a.n,)
 Base.IndexStyle(::Type{<:SparseSites}) = IndexLinear()
 Base.getindex(a::SparseSites, i::Int) = get(a.d, i, a.default)
@@ -22,32 +29,51 @@ Base.setindex!(a::SparseSites, v, i::Int) = (a.d[i] = v; a)
 include("shared/export_all.jl")
 end
 
-@testitem "site index math above 2³¹ − 1 and 2³² sites" setup = [CP_site_index_math] tags = [:corepotts, :site_index_math] begin
+@testitem "site index math above 2³¹ − 1 and 2³² sites" setup = [
+    CP_site_index_math,
+] tags = [
+    :corepotts, :site_index_math,
+] begin
     @testset "site index math above 2³¹ − 1 and 2³² sites" begin
         @testset "@convert: the lowest converted site and `created`" begin
             lat = Lattice((2^16, 2^17))                      # 2³³ sites, no mask
             n = nsites(lat)
-            lo, i1, i2 = 10, 2^31 + 10, 2^32 + 10              # i2 ≡ lo (mod 2³²): an Int32 index wraps onto it
+            # i2 ≡ lo (mod 2³²): an Int32 index wraps onto it
+            lo, i1, i2 = 10, 2^31 + 10, 2^32 + 10
             # cell 1 is entity 1, converting into slot 2, allocated this pass (`new`)
             function pass(sites)
-                st = (; ownership = sparse_sites(Int32, n, (i => Int32(1) for i in sites)...))
+                st = (;
+                    ownership = sparse_sites(Int32, n, (i => Int32(1) for i in sites)...),
+                )
                 sc = (;
-                    src = Int32[1, 0], to = Int32[2, 0], from = Int32[1, 0], new = Int32[1, 0], n = Int32[0, 0],
-                    first = fill(typemax(Int64), 2), flag = zeros(Int64, 4), site = sparse_sites(Int32, n),
+                    src = Int32[1, 0], to = Int32[2, 0], from = Int32[1, 0],
+                    new = Int32[1, 0], n = Int32[0, 0],
+                    first = fill(typemax(Int64), 2), flag = zeros(Int64, 4),
+                    site = sparse_sites(Int32, n),
                 )
                 ctx = (; lattice = lat)
                 for i in sites
-                    CorePotts._cv_decide_body!(i, (st, p, ctx, key, mcs, i, c, t) -> true, st, nothing, ctx, nothing, 0, sc, Int32(0))
+                    CorePotts._cv_decide_body!(
+                        i, (st, p, ctx, key, mcs, i, c, t) -> true,
+                        st, nothing, ctx, nothing, 0, sc, Int32(0)
+                    )
                 end
                 created = Int[]
-                w!(st, p, ctx, key, mcs, i, f, t, c, acc) = (c && push!(created, i); nothing)
+                function w!(st, p, ctx, key, mcs, i, f, t, c, acc)
+                    c && push!(created, i)
+                    return nothing
+                end
                 for i in sites
-                    CorePotts._cv_writes_body!(i, w!, st, nothing, ctx, nothing, 0, sc, nothing)
+                    CorePotts._cv_writes_body!(
+                        i, w!, st, nothing, ctx, nothing, 0, sc, nothing
+                    )
                 end
                 return sc.first[1], created, sc.flag[CorePotts._FLAG_CONVERTED]
             end
-            @test pass([i2, i1]) == (i1, [i1], 2)            # the lowest is exact above 2³¹ − 1
-            @test pass([i2, lo]) == (lo, [lo], 2)            # one `created`, not also at the wrapped i2
+            # the lowest is exact above 2³¹ − 1
+            @test pass([i2, i1]) == (i1, [i1], 2)
+            # one `created`, not also at the wrapped i2
+            @test pass([i2, lo]) == (lo, [lo], 2)
             @test pass([i1, i2, lo]) == (lo, [lo], 3)
         end
 
@@ -58,21 +84,36 @@ end
             a, b, c = (CorePotts.linear_index(lat, (x, y)) for x in 100:102)
             @test a > typemax(Int32)
             σ = sparse_sites(Int32, n, a => Int32(1), b => Int32(1), c => Int32(1))
-            scratch(T) = FloodScratch(sparse_sites(UInt32, n), sparse_sites(T, n), UInt32[0], nothing)
-            # the exact flood reaches the three sites; with an Int32 stack it cannot store them
+            function scratch(T)
+                return FloodScratch(
+                    sparse_sites(UInt32, n), sparse_sites(T, n),
+                    UInt32[0], nothing
+                )
+            end
+            # the exact flood reaches the three sites; with an Int32 stack it cannot store
+            # them
             for (T, ok) in ((Int64, true), (Int32, false))
                 fl = scratch(T)
                 S = CorePotts._stamps!(fl, UInt32(2))
                 fl.mark[a] = S
-                flood() = CorePotts._flood!(σ, lat, fl, a, Int32(1), 0, S, Val(false), 0, 0)[1]
-                ok ? (@test flood() == 3) : (@test_throws InexactError flood())   # negative control
+                function flood()
+                    return CorePotts._flood!(
+                        σ, lat, fl, a, Int32(1), 0, S, Val(false), 0, 0
+                    )[1]
+                end
+                # negative control
+                ok ? (@test flood() == 3) : (@test_throws InexactError flood())
             end
             # removing the middle site splits the cell: refused, exactly and in the window
-            prop = Proposal(b, CorePotts.linear_index(lat, (101, y + 1)), (101, y), 1, Int32(1), Int32(0))
+            prop = Proposal(
+                b, CorePotts.linear_index(lat, (101, y + 1)),
+                (101, y), 1, Int32(1), Int32(0)
+            )
             cap = Val(CorePotts._box_size(lat, 2))
             for mode in (GlobalExact(), GlobalBoard())
                 ctx = (; lattice = lat, flood = scratch(Int64), global_mode = mode)
-                @test global_keeps(σ, ctx, prop, Val(false), Val(2), cap, GlobalSearch()) == GLOBAL_REFUSED
+                @test global_keeps(σ, ctx, prop, Val(false), Val(2), cap, GlobalSearch()) ==
+                    GLOBAL_REFUSED
             end
         end
     end

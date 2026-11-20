@@ -3,11 +3,14 @@
 @testsetup module CP_checkpoint
 using Test, CorePotts, StaticArrays, Statistics, Random
 using SciMLBase: SciMLBase, ReturnCode, remake
-using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
+using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates,
+    linear_index, shift
 include("shared/gg_model.jl")
 function everything_problem()
     lat = Lattice((40, 40))
-    σ = zeros(Int32, 40, 40); σ[15:22, 15:22] .= 1; σ[5:10, 30:35] .= 2
+    σ = zeros(Int32, 40, 40)
+    σ[15:22, 15:22] .= 1
+    σ[5:10, 30:35] .= 2
     grow!(st, p, ctx, key, mcs, c) = (@inbounds st.cell.target[c] += 0.5; nothing)
     big(st, p, ctx, key, mcs, c) = st.cell.volume[c] >= 70 ? EVENT_DIVIDE : EVENT_NONE
     function reset!(st, p, ctx, key, mcs, parent, daughter)
@@ -18,11 +21,16 @@ function everything_problem()
     function dH(st, p, prop, ctx)
         J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
         E(v, c) = p.λ * (v - @inbounds(st.cell.target[c]))^2
-        return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
+        return contact_delta(st.ownership, ctx, prop, J) +
+            volume_delta(st.cell.volume, prop, E) +
             (is_extension(prop) ? chemotaxis_delta(st.site.c, prop, 3.0) : 0.0)
     end
-    commit!(st, p, prop, ctx) = (commit_volume!(st, p, prop, ctx); commit_moments!(st.cell, ctx, prop))
-    # a hand-written double-buffered field (zero flux): a site phase into `c_next`, then a publish
+    function commit!(st, p, prop, ctx)
+        commit_volume!(st, p, prop, ctx)
+        return commit_moments!(st.cell, ctx, prop)
+    end
+    # a hand-written double-buffered field (zero flux): a site phase into `c_next`, then a
+    # publish
     function lap(c, lat, i)
         x, acc = CorePotts.coordinates(lat, i), 0.0
         for d in 1:2, s in (-1, 1)
@@ -53,7 +61,8 @@ function everything_problem()
         dH; commit!, temperature = gg_temperature, fingerprint = 0x0abc,
         phases = Phases(
             before_mcs = (CellPhase(grow!),), after_mcs = (
-                SitePhase(diffuse!), CopyPhase((:site, :c) => (:site, :c_next)), SitePhase(noise!),
+                SitePhase(diffuse!), CopyPhase((:site, :c) => (:site, :c_next)),
+                SitePhase(noise!),
             )
         ),
         lifecycle = Lifecycle(big; divide! = reset!)
@@ -63,7 +72,11 @@ end
 include("shared/export_all.jl")
 end
 
-@testitem "checkpoint and continuation are exact (nameof(typeof(alg)))" setup = [CP_checkpoint] tags = [:corepotts, :checkpoint] begin
+@testitem "checkpoint and continuation are exact (nameof(typeof(alg)))" setup = [
+    CP_checkpoint,
+] tags = [
+    :corepotts, :checkpoint,
+] begin
     @testset "checkpoint and continuation are exact ($(nameof(typeof(alg))))" for alg in (
             SequentialCPM(), CheckerboardCPM(),
         )
@@ -98,20 +111,29 @@ end
     end
 end
 
-@testitem "checkpoint format: a pre-cutover checkpoint is refused by name" setup = [CP_checkpoint] tags = [:corepotts, :checkpoint] begin
+@testitem "checkpoint format: a pre-cutover checkpoint is refused by name" setup = [
+    CP_checkpoint,
+] tags = [
+    :corepotts, :checkpoint,
+] begin
     @testset "checkpoint format: a pre-cutover checkpoint is refused by name" begin
         prob = everything_problem()
         integ = init(prob, SequentialCPM())
         step!(integ)
         ck = checkpoint(integ)
         @test ck.format == CorePotts.CHECKPOINT_FORMAT == 2
-        @test init(prob, SequentialCPM(); checkpoint = ck).t == 1                         # control: current format
-        old = PottsCheckpoint(ck.state, ck.t, ck.seed, ck.replica, ck.repeat, ck.p, ck.fingerprint, ck.stats, 1)
+        # control: current format
+        @test init(prob, SequentialCPM(); checkpoint = ck).t == 1
+        old = PottsCheckpoint(
+            ck.state, ck.t, ck.seed, ck.replica,
+            ck.repeat, ck.p, ck.fingerprint, ck.stats, 1
+        )
         @test_throws ArgumentError init(prob, SequentialCPM(); checkpoint = old)
         # a file that does not deserialize to a checkpoint of this format: a named error
         path = tempname()
         write(path, "not a checkpoint")
         @test_throws ArgumentError load_checkpoint(path)
-        @test_throws SystemError load_checkpoint(tempname())                              # a missing file is not a format error
+        # a missing file is not a format error
+        @test_throws SystemError load_checkpoint(tempname())
     end
 end

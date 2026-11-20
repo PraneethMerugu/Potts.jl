@@ -1,7 +1,8 @@
 # Definitions of the old runtests.jl (its preamble) that other test files use.
 using Test, CorePotts, StaticArrays, Statistics, Random
 using SciMLBase: SciMLBase, ReturnCode, remake
-using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
+using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates,
+    linear_index, shift
 
 # ---------------------------------------------------------------------------------------
 # A hand-written Graner–Glazier model (what the symbolic layer will generate).
@@ -59,7 +60,8 @@ function gs_delta_H(st, p, prop, ctx)
     J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
     E(v, c) = p.λ * (v - p.V0)^2
     S(s, c) = p.λs * (s - p.S0)^2
-    return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
+    return contact_delta(st.ownership, ctx, prop, J) +
+        volume_delta(st.cell.volume, prop, E) +
         surface_delta(
         st.cell.surface, prop,
         surface_change(st.ownership, ctx, prop; T = eltype(st.cell.surface)), S

@@ -32,7 +32,10 @@ end
 @noinline function resolve_hip_calls()
     Libdl = Base.Libc.Libdl
     lib = Libdl.dlopen(AMDGPU.libhip)
-    return HIPCalls(Libdl.dlsym(lib, :hipStreamQuery), Libdl.dlsym(lib, :hipStreamSynchronize))
+    return HIPCalls(
+        Libdl.dlsym(lib, :hipStreamQuery),
+        Libdl.dlsym(lib, :hipStreamSynchronize)
+    )
 end
 
 """`done()` for `_spin_until`: the stream has no work left (any answer but "not ready":
@@ -52,7 +55,8 @@ function CorePotts._device_wait(::ROCBackend; timeout::Real = CorePotts.DEVICE_W
     CorePotts._spin_until(StreamDone(h.query, handle), timeout)
     code = ccall(h.sync, UInt32, (Ptr{Cvoid},), handle)
     code == HIP_SUCCESS || hip_failed(code)
-    AMDGPU.throw_if_exception(s.device)          # a kernel exception, as `synchronize` reports it
+    # a kernel exception, as `synchronize` reports it
+    AMDGPU.throw_if_exception(s.device)
     return nothing
 end
 
@@ -60,7 +64,9 @@ end
 # The stream is drained first: an async copy into pageable host memory may itself block in
 # HIP until earlier work finishes, with no yield (a hostcall kernel would deadlock) and no
 # timeout, so the copy is only enqueued on an idle stream.
-function CorePotts._copy_to_host!(dst::Array{T}, doff::Integer, src::ROCArray{T}, soff::Integer, n::Integer) where {T}
+function CorePotts._copy_to_host!(
+        dst::Array{T}, doff::Integer, src::ROCArray{T}, soff::Integer, n::Integer
+    ) where {T}
     CorePotts._device_wait(ROCBackend())
     copyto!(dst, doff, src, soff, n; async = true)
     CorePotts._device_wait(ROCBackend())
@@ -69,6 +75,8 @@ end
 function CorePotts._copy_to_host!(dst::Array{T}, src::ROCArray{T}) where {T}
     return CorePotts._copy_to_host!(dst, 1, src, 1, length(src))
 end
-CorePotts._host_copy(a::ROCArray{T, N}) where {T, N} = CorePotts._copy_to_host!(Array{T, N}(undef, size(a)), a)
+function CorePotts._host_copy(a::ROCArray{T, N}) where {T, N}
+    return CorePotts._copy_to_host!(Array{T, N}(undef, size(a)), a)
+end
 
 end # module CorePottsAMDGPUExt

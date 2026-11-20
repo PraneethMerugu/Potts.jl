@@ -12,7 +12,10 @@
 # lattices, angular order on the hexagonal one.
 const _SQUARE_SHELL = Tuple(Int32.((i, j)) for j in -1:1 for i in -1:1 if (i, j) != (0, 0))
 const _HEX_SHELL = map(o -> Int32.(o), ((1, 0), (0, 1), (-1, 1), (-1, 0), (0, -1), (1, -1)))
-const _CUBE_SHELL = Tuple(Int32.((i, j, k)) for k in -1:1 for j in -1:1 for i in -1:1 if (i, j, k) != (0, 0, 0))
+const _CUBE_SHELL = Tuple(
+    Int32.((i, j, k)) for k in -1:1 for j in -1:1
+        for i in -1:1 if (i, j, k) != (0, 0, 0)
+)
 
 """
     shell_offsets(lattice)
@@ -24,12 +27,20 @@ lattice, the 6 neighbors on a hexagonal one, the 26 sites of the 3×3×3 box in 
 @inline shell_offsets(::Lattice{2}) = _SQUARE_SHELL
 @inline shell_offsets(::Lattice{3}) = _CUBE_SHELL
 
-_bits(offs, pred) = foldl((m, j) -> pred(offs[j]) ? m | (UInt32(1) << (j - 1)) : m, eachindex(offs); init = UInt32(0))
+function _bits(offs, pred)
+    return foldl(
+        (m, j) -> pred(offs[j]) ? m | (UInt32(1) << (j - 1)) : m, eachindex(offs);
+        init = UInt32(0)
+    )
+end
 
 # cubic masks over `_CUBE_SHELL`: the face neighbours of x, the near set of `Simple()` (the
 # 18-neighbourhood), every position. The 2D shells are rings (`_RING_BIT2`, below).
 const _CUBE_TABLES = (;
-    xface = _bits(_CUBE_SHELL, o -> sum(abs, o) == 1), near = _bits(_CUBE_SHELL, o -> sum(abs, o) <= 2),
+    xface = _bits(_CUBE_SHELL, o -> sum(abs, o) == 1), near = _bits(
+        _CUBE_SHELL, o -> sum(abs, o) <=
+            2
+    ),
     all = _bits(_CUBE_SHELL, _ -> true),
 )
 
@@ -59,8 +70,8 @@ or outside the domain mask, whatever σ's eltype.
     end
 end
 
-# axis d of the 3^N box round x: the strided offsets of x[d] − 1, x[d], x[d] + 1 (wrapped on a
-# periodic axis, clamped onto a closed one, as `shift`) and whether each is in the lattice
+# axis d of the 3^N box round x: the strided offsets of x[d] − 1, x[d], x[d] + 1 (wrapped on
+# a periodic axis, clamped onto a closed one, as `shift`) and whether each is in the lattice
 @inline function _box_axis(lat::Lattice{N}, x, d) where {N}
     n = lat.dims[d]
     p = lat.periodic[d]
@@ -68,7 +79,8 @@ end
     stride = prod(ntuple(e -> e < d ? lat.dims[e] : 1, Val(N)))
     lo = ifelse(v > 1, v - 1, ifelse(p, n, 1))
     hi = ifelse(v < n, v + 1, ifelse(p, 1, n))
-    return ((lo - 1) * stride, (v - 1) * stride, (hi - 1) * stride), (p | (v > 1), true, p | (v < n))
+    return ((lo - 1) * stride, (v - 1) * stride, (hi - 1) * stride),
+        (p | (v > 1), true, p | (v < n))
 end
 @inline _mask_at(::Nothing, i) = true
 @inline _mask_at(m, i) = @inbounds m[i]          # i in 1:nsites (`shell_owners`)
@@ -86,9 +98,10 @@ function check_shell_lattice(lat::Lattice{N}, quantity::AbstractString) where {N
     for d in 1:N
         lat.periodic[d] && lat.dims[d] == 1 && throw(
             ArgumentError(
-                "`$quantity` reads the target's neighbor shell, which needs every periodic axis to have " *
-                    "length ≥ 2: axis $d is periodic with length 1, so the shell wraps onto the target itself; " *
-                    "use a $(N - 1)D lattice, or make axis $d Closed (or longer)"
+                "`$quantity` reads the target's neighbor shell, which needs every " *
+                    "periodic axis to have length ≥ 2: axis $d is periodic with length " *
+                    "1, so the shell wraps onto the target itself; use a $(N - 1)D \
+                        lattice, or make axis $d Closed (or longer)"
             )
         )
     end
@@ -122,10 +135,10 @@ end
 
 # ---------------------------------------------------------------------------------------
 # Ring masks. On the square 2D shell the kernels place position k at bit
-# `_RING_BIT2[k]`: round the box from (−1, −1) (`_SQUARE_RING`, the Euler tracker's order), so corners sit at the even
-# bits, face neighbours at the odd ones, and consecutive bits (cyclically) are exactly the
-# face-adjacent pairs. Face pieces are then runs; the hexagonal 6-ring (`_HEX_SHELL`, angular
-# order) is a ring already.
+# `_RING_BIT2[k]`: round the box from (−1, −1) (`_SQUARE_RING`, the Euler tracker's order),
+# so corners sit at the even bits, face neighbours at the odd ones, and consecutive bits
+# (cyclically) are exactly the face-adjacent pairs. Face pieces are then runs; the hexagonal
+# 6-ring (`_HEX_SHELL`, angular order) is a ring already.
 const _SQUARE_RING = ((-1, -1), (-1, 0), (-1, 1), (0, 1), (1, 1), (1, 0), (1, -1), (0, -1))
 const _RING_BIT2 = map(o -> Int32(findfirst(==(Int.(o)), _SQUARE_RING) - 1), _SQUARE_SHELL)
 const _RING_ALL8 = UInt32(0xff)
@@ -152,8 +165,18 @@ end
 @inline _rotr8(m::UInt32) = ((m >> 1) | (m << 7)) & _RING_ALL8      # bit i ← bit i + 1
 @inline _rotl6(m::UInt32) = ((m << 1) | (m >> 5)) & _RING_ALL6
 # runs of a cyclic ring mask (1 when every bit is set)
-@inline _runs8(m::UInt32) = ifelse(m == _RING_ALL8, Int32(1), count_ones(m & ~_rotl8(m)) % Int32)
-@inline _runs6(m::UInt32) = ifelse(m == _RING_ALL6, Int32(1), count_ones(m & ~_rotl6(m)) % Int32)
+@inline function _runs8(m::UInt32)
+    return ifelse(
+        m == _RING_ALL8, Int32(1), count_ones(m & ~_rotl8(m)) %
+            Int32
+    )
+end
+@inline function _runs6(m::UInt32)
+    return ifelse(
+        m == _RING_ALL6, Int32(1), count_ones(m & ~_rotl6(m)) %
+            Int32
+    )
+end
 # square ring: 8-adjacent pieces are the runs once each corner between two set face
 # neighbours is filled in (the two are diagonal neighbours)
 @inline _fill8(m::UInt32) = m | (_RING_CORNERS8 & _rotl8(m) & _rotr8(m))
@@ -163,7 +186,12 @@ end
 end
 
 # pieces of a mask in the lattice's bit order
-@inline _pieces(m::UInt32, full::Bool, ::Val{:ring8}, t) = _runs8(ifelse(full, _fill8(m), m))
+@inline function _pieces(
+        m::UInt32, full::Bool, ::Val{:ring8},
+        t
+    )
+    return _runs8(ifelse(full, _fill8(m), m))
+end
 @inline _pieces(m::UInt32, full::Bool, ::Val{:ring6}, t) = _runs6(m)
 @inline _pieces(m::UInt32, full::Bool, ::Val{:box}, t) = _components27(m, full)
 @inline _all_bits(::Val{:ring8}, t) = _RING_ALL8
@@ -174,16 +202,25 @@ end
 @inline _xface_bits(::Val{:box}, t) = t.xface
 
 # ternary-order square mask → ring order
-@inline _to_ring8(m::UInt32) = reduce(|, ntuple(k -> ((m >> (k - 1)) & UInt32(1)) << _bitpos(Val(:ring8), k), Val(8)))
+@inline function _to_ring8(m::UInt32)
+    return reduce(
+        |, ntuple(k -> ((m >> (k - 1)) & UInt32(1)) << _bitpos(Val(:ring8), k), Val(8))
+    )
+end
 
 # Pieces of a cubic shell mask: the 26 positions sit in a 27-bit 3×3×3 box (bit
-# i + 3j + 9k, the empty centre at bit 13), where one face step is a shift by 1, 3 or 9 and a
-# full step the product of the three axis dilations. Each piece grows from its lowest bit by
-# whole-mask dilation until it stops; no table, no division. The pieces counted are those
+# i + 3j + 9k, the empty centre at bit 13), where one face step is a shift by 1, 3 or 9 and
+# a full step the product of the three axis dilations. Each piece grows from its lowest bit
+# by whole-mask dilation until it stops; no table, no division. The pieces counted are those
 # meeting `touch`.
 @inline _to27(m::UInt32) = (m & UInt32(0x1fff)) | ((m & ~UInt32(0x1fff)) << 1)
 const _BOX27 = Tuple((i, j, k) for k in 0:2 for j in 0:2 for i in 0:2)
-_box27(f) = reduce(|, (UInt32(1) << (p - 1) for p in 1:27 if f(_BOX27[p]...)); init = UInt32(0))
+function _box27(f)
+    return reduce(
+        |, (UInt32(1) << (p - 1) for p in 1:27 if f(_BOX27[p]...));
+        init = UInt32(0)
+    )
+end
 const _NOT_I2 = ~_box27((i, j, k) -> i == 2)
 const _NOT_I0 = ~_box27((i, j, k) -> i == 0)
 const _NOT_J2 = ~_box27((i, j, k) -> j == 2)
@@ -236,7 +273,8 @@ to the target (a face neighbor, or any shell site when `full`). σ may be a
 [`ShellRead`](@ref).
 """
 @inline function local_rule(σ, ctx, prop::Proposal, gain::Bool, full::Bool)
-    return prop.old == 0 || _local_rule(read_shell(σ, ctx, prop), ctx.lattice, prop, gain, full)
+    return prop.old == 0 ||
+        _local_rule(read_shell(σ, ctx, prop), ctx.lattice, prop, gain, full)
 end
 @inline function _local_rule(s::ShellRead, lat, prop::Proposal, gain::Bool, full::Bool)
     r = _ring_bits(lat)
@@ -256,7 +294,10 @@ at most one face piece, or exactly two distinct cells and no medium are on the s
 out-of-domain positions (if any) counting as one extra cell (TST's frame). σ may be a
 [`ShellRead`](@ref).
 """
-@inline arc_or_pair(σ, ctx, prop::Proposal) = prop.old == 0 || _arc_or_pair(read_shell(σ, ctx, prop), ctx.lattice, prop)
+@inline function arc_or_pair(σ, ctx, prop::Proposal)
+    return prop.old == 0 ||
+        _arc_or_pair(read_shell(σ, ctx, prop), ctx.lattice, prop)
+end
 @inline function _arc_or_pair(s::ShellRead, lat, prop::Proposal)
     r = _ring_bits(lat)
     owners = s.owners
@@ -266,7 +307,8 @@ out-of-domain positions (if any) counting as one extra cell (TST's frame). σ ma
     # either one other cell owning every remaining position, or the frame alone (O(K), no
     # pairwise distinct count)
     neg = shell_mask(owners, -1)
-    rest = ~(shell_mask(owners, prop.old) | neg) & ((UInt32(1) << length(owners)) - UInt32(1))
+    rest = ~(shell_mask(owners, prop.old) | neg) &
+        ((UInt32(1) << length(owners)) - UInt32(1))
     rest == 0 && return neg != 0
     other = reduce(max, map(o -> ifelse(o == prop.old, Int32(0), o), owners))
     return neg == 0 && shell_mask(owners, other) == rest
@@ -301,7 +343,8 @@ end
 end
 @inline function _simple(X, Bg, full, ::Val{:box}, t)
     if full
-        return _components27(X, true) == 1 && _components27(Bg & t.near, false, t.xface) == 1
+        return _components27(X, true) == 1 &&
+            _components27(Bg & t.near, false, t.xface) == 1
     end
     return _components27(X & t.near, false, t.xface) == 1 && _components27(Bg, true) == 1
 end

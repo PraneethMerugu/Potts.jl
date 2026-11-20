@@ -9,8 +9,13 @@
 """Cluster of cell `c` (`0` for the medium)."""
 @inline cluster_of(cell, c) = c == 0 ? Int32(0) : @inbounds cell.cluster[c]
 
-"""`true` if `a` and `b` are cells of the same cluster (use for internal contact energies)."""
-@inline same_cluster(cell, a, b) = a != 0 && b != 0 && cluster_of(cell, a) == cluster_of(cell, b)
+"""
+`true` if `a` and `b` are cells of the same cluster (use for internal contact energies).
+"""
+@inline function same_cluster(cell, a, b)
+    return a != 0 && b != 0 &&
+        cluster_of(cell, a) == cluster_of(cell, b)
+end
 
 """
     init_clusters(σ, cluster, lattice; relation = nothing, T = Float64, kind = nothing,
@@ -31,7 +36,11 @@ function init_clusters(
     _normalize_clusters!(cl, _live(σ, length(cl)); kind, prefer, keep = false)
     out = (; cluster = cl, cluster_volume = recompute_cluster_volume(σ, cl))
     relation === nothing && return out
-    return merge(out, (; cluster_surface = recompute_cluster_surface(σ, cl, lat, relation; T)))
+    return merge(
+        out, (;
+            cluster_surface = recompute_cluster_surface(σ, cl, lat, relation; T),
+        )
+    )
 end
 
 _live(σ, n) = (v = zeros(Bool, n); foreach(s -> s > 0 && (v[s] = true), σ); v)
@@ -82,10 +91,14 @@ end
 
 """Cluster surfaces (bonds to sites outside the cluster) over `relation`, from scratch."""
 function recompute_cluster_surface(σ, cluster, lat::Lattice, r; T::Type = Float64)
-    return _recompute_cluster_surface(T, σ, cluster, lat, r isa Relation ? r : relation(r, lat))
+    return _recompute_cluster_surface(
+        T, σ, cluster, lat, r isa Relation ? r : relation(r, lat)
+    )
 end
 
-function _recompute_cluster_surface(::Type{T}, σ, cluster, lat::Lattice, rel::Relation) where {T}
+function _recompute_cluster_surface(
+        ::Type{T}, σ, cluster, lat::Lattice, rel::Relation
+    ) where {T}
     σK = map(s -> s == 0 ? Int32(0) : Int32(cluster[s]), σ)
     return _recompute_surface(T, σK, lat, rel, length(cluster))
 end
@@ -160,8 +173,8 @@ end
 
 """
 Apply `δ = cluster_surface_change(…)` to `cell.cluster_surface` (atomic). With a weighted
-relation in a float column the adds of two copies into one cluster round in their order, which
-a threaded or device checkerboard phase does not fix (lockless cells).
+relation in a float column the adds of two copies into one cluster round in their order,
+which a threaded or device checkerboard phase does not fix (lockless cells).
 """
 @inline function commit_cluster_surface!(cell, prop, δ)
     a, b = cluster_of(cell, prop.old), cluster_of(cell, prop.new)
@@ -180,7 +193,10 @@ _has_clusters(st) = haskey(st.cell, :cluster)
 # make free slots their own cluster. Host arrays.
 function _fix_clusters!(stats, st)
     cl = to_host(stats, st.cell.cluster)
-    _normalize_clusters!(cl, _live(to_host(stats, st.ownership), length(cl)); kind = to_host(stats, st.cell.kind))
+    _normalize_clusters!(
+        cl, _live(to_host(stats, st.ownership), length(cl));
+        kind = to_host(stats, st.cell.kind)
+    )
     counted_copy!(stats, st.cell.cluster, cl)
     return nothing
 end
@@ -188,13 +204,15 @@ end
 function _rebuild_cluster_trackers!(stats, st, σ, ctx)
     haskey(st.cell, :cluster_volume) || haskey(st.cell, :cluster_surface) || return nothing
     cl = to_host(stats, st.cell.cluster)
-    haskey(st.cell, :cluster_volume) && counted_copy!(stats, st.cell.cluster_volume, recompute_cluster_volume(σ, cl))
+    haskey(st.cell, :cluster_volume) &&
+        counted_copy!(stats, st.cell.cluster_volume, recompute_cluster_volume(σ, cl))
     if haskey(st.cell, :cluster_surface) && haskey(ctx, :surface)
         # in integer weight units for a weighted float column (as the device lifecycle)
         T = eltype(st.cell.cluster_surface)
         σK = map(s -> s == 0 ? Int32(0) : Int32(cl[s]), σ)
         counted_copy!(
-            stats, st.cell.cluster_surface, _recompute_surface(
+            stats, st.cell.cluster_surface,
+            _recompute_surface(
                 T, σK, ctx.lattice, ctx.surface, length(cl),
                 _units_for(T, ctx.surface, length(σ), CPU())
             )
@@ -219,7 +237,8 @@ function _cluster_planes!(stats, normals, bias, lc, st, p, ctx, key, mcs, roots,
     cellK = merge(
         mK, (;
             volume = recompute_cluster_volume(σ, cl),
-            generation = to_host(stats, st.cell.generation), kind = to_host(stats, st.cell.kind), cluster = cl,
+            generation = to_host(stats, st.cell.generation),
+            kind = to_host(stats, st.cell.kind), cluster = cl,
         )
     )
     stK = (; ownership = σK, cell = cellK)
@@ -227,13 +246,15 @@ function _cluster_planes!(stats, normals, bias, lc, st, p, ctx, key, mcs, roots,
         volume = to_host(stats, st.cell.volume), anchor = to_host(stats, st.cell.anchor),
         m1 = to_host(stats, st.cell.m1),
     )
-    nh = zeros(T, N, cap); bh = zeros(T, cap)
+    nh = zeros(T, N, cap)
+    bh = zeros(T, cap)
     for r in roots
         n = _plane(lc.cluster_normal, T)(stK, p, ctx, key, mcs, Int32(r))
         cK = centroid(T, cellK, lat, r)
         for m in members[r]
             cm = centroid(T, cell, lat, m)
-            δ = _min_image(T, lat, ntuple(d -> cm[d] - cK[d], Val(N)))   # member − cluster centroid
+            # member − cluster centroid
+            δ = _min_image(T, lat, ntuple(d -> cm[d] - cK[d], Val(N)))
             s = zero(T)
             for d in 1:N
                 s += T(δ[d]) * T(n[d])
@@ -242,6 +263,7 @@ function _cluster_planes!(stats, normals, bias, lc, st, p, ctx, key, mcs, roots,
             bh[m] = s
         end
     end
-    counted_copy!(stats, normals, nh); counted_copy!(stats, bias, bh)
+    counted_copy!(stats, normals, nh)
+    counted_copy!(stats, bias, bh)
     return nothing
 end

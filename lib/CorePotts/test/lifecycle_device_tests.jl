@@ -1,14 +1,16 @@
 # The device lifecycle planner (D-089, `src/lifecycle_device.jl`) runs on every GPU backend.
-# Here it runs on the CPU backend, in both of its forms, (`_FORCE_DEVICE_LIFECYCLE`), so the lifecycle, compartment
-# and relationship tests below check its kernels (scan-based id allocation, deferral,
-# cluster units and planes, links, trackers, the frozen-mask counts) without a GPU, against
-# the same oracles as the host planner. By design (D-089), the device planner's statistics
-# are exact only at host read points (saves, `current_state(integ)`, `checkpoint`, the end of `solve!`).
+# Here it runs on the CPU backend, in both of its forms, (`_FORCE_DEVICE_LIFECYCLE`), so the
+# lifecycle, compartment and relationship tests below check its kernels (scan-based id
+# allocation, deferral, cluster units and planes, links, trackers, the frozen-mask counts)
+# without a GPU, against the same oracles as the host planner. By design (D-089), the device
+# planner's statistics are exact only at host read points (saves, `current_state(integ)`,
+# `checkpoint`, the end of `solve!`).
 
 @testsetup module CP_lifecycle_device
 using Test, CorePotts, StaticArrays, Statistics, Random
 using SciMLBase: SciMLBase, ReturnCode, remake
-using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
+using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates,
+    linear_index, shift
 include("shared/gg_model.jl")
 include("shared/geometry.jl")
 include("shared/lifecycle.jl")
@@ -17,7 +19,8 @@ include("shared/include_items.jl")
 
 function ld_base_prob()
     lat = Lattice((20, 20))
-    σ = zeros(Int32, 20, 20); σ[5:12, 5:10] .= 1
+    σ = zeros(Int32, 20, 20)
+    σ[5:12, 5:10] .= 1
     st = with_capacity(initial_state(σ, Int32[1]; cell = init_moments(σ, lat, 1)), 3)
     once(st, p, ctx, key, mcs, c) = mcs == 1 && c == 1 ? EVENT_DIVIDE : EVENT_NONE
     f = CPMFunction(
@@ -29,13 +32,18 @@ function ld_base_prob()
 end
 
 function ld_growing_prob()
-    σg = zeros(Int32, 40, 40); σg[15:24, 15:24] .= 1
+    σg = zeros(Int32, 40, 40)
+    σg[15:24, 15:24] .= 1
     lg = Lattice((40, 40))
     stg = with_capacity(initial_state(σg, Int32[1]; cell = init_moments(σg, lg, 1)), 16)
     fg = CPMFunction(
         gg_delta_H; temperature = gg_temperature,
         lifecycle = Lifecycle(
-            (st, p, ctx, key, mcs, c) -> st.cell.volume[c] >= 60 ? EVENT_DIVIDE : EVENT_NONE;
+            (st, p, ctx, key, mcs, c) -> if st.cell.volume[c] >= 60
+                EVENT_DIVIDE
+            else
+                EVENT_NONE
+            end;
             normal = RandomPlane()
         )
     )
@@ -45,38 +53,56 @@ end
 include("shared/export_all.jl")
 end
 
-@testitem "device lifecycle planner: attachment, deferred stats folding, and determinism" setup = [CP_lifecycle_device] tags = [:corepotts, :lifecycle_device] begin
-    @testset "device lifecycle planner: attachment, deferred stats folding, and determinism" begin
+@testitem "device lifecycle planner: attachment, deferred stats folding, and \
+    determinism" setup = [CP_lifecycle_device] tags = [
+    :corepotts, :lifecycle_device,
+] begin
+    @testset "device lifecycle planner: attachment, deferred stats folding, and \
+        determinism" begin
         CorePotts._FORCE_DEVICE_LIFECYCLE[] = true
         try
             # the planner is really the device one (negative control: off by default)
             prob = ld_base_prob().prob
-            integ = init(prob, CheckerboardCPM(); save_start = false, save_end = false, save_everystep = false)
+            integ = init(
+                prob, CheckerboardCPM(); save_start = false,
+                save_end = false, save_everystep = false
+            )
             @test integ.lcache.device isa CorePotts.DeviceLifecycle
-            @test integ.lcache.device.fused! !== nothing                 # small: one fused launch
+            # small: one fused launch
+            @test integ.lcache.device.fused! !== nothing
             CorePotts._FORCE_DEVICE_LIFECYCLE[] = false
             @test init(prob, CheckerboardCPM()).lcache.device === nothing
             CorePotts._FORCE_DEVICE_LIFECYCLE[] = true
             # statistics live on the device and are folded at a host read point
-            step!(integ); step!(integ)                             # MCS 1: the division
+            step!(integ)
+            step!(integ)                             # MCS 1: the division
             @test count(>(0), Array(integ.state.cell.volume)) == 2  # applied at once …
-            @test integ.stats.lifecycle.divisions == 0             # … counted at the next read
+            # … counted at the next read
+            @test integ.stats.lifecycle.divisions == 0
             u = current_state(integ)
             @test integ.stats.lifecycle.divisions == 1 && count(>(0), u.cell.volume) == 2
-            current_state(integ)                                                # folding twice adds nothing
+            # folding twice adds nothing
+            current_state(integ)
             @test integ.stats.lifecycle.divisions == 1
             # deterministic: two runs of a growing population agree exactly (random planes)
             pg = ld_growing_prob()
             g, h = (solve(pg, CheckerboardCPM(); saveat = 5) for _ in 1:2)
             @test g.stats.lifecycle.divisions == h.stats.lifecycle.divisions >= 2
-            @test all(i -> g.u[i].ownership == h.u[i].ownership && g.u[i].cell == h.u[i].cell, eachindex(g.u))
+            @test all(
+                i -> g.u[i].ownership == h.u[i].ownership &&
+                    g.u[i].cell == h.u[i].cell, eachindex(g.u)
+            )
         finally
             CorePotts._FORCE_DEVICE_LIFECYCLE[] = false
         end
     end
 end
 
-@testitem "device lifecycle planner (fused): lifecycle_tests" setup = [CP_lifecycle_device] tags = [:corepotts, :lifecycle_device] begin
+@testitem "device lifecycle planner (fused): lifecycle_tests" setup = [
+    CP_lifecycle_device,
+] tags = [
+    :corepotts, :lifecycle_device,
+] begin
     @testset "fused lifecycle_tests" begin
         CorePotts._FORCE_DEVICE_LIFECYCLE[] = true
         try
@@ -89,7 +115,11 @@ end
     end
 end
 
-@testitem "device lifecycle planner (fused): compartments_tests" setup = [CP_lifecycle_device] tags = [:corepotts, :lifecycle_device] begin
+@testitem "device lifecycle planner (fused): compartments_tests" setup = [
+    CP_lifecycle_device,
+] tags = [
+    :corepotts, :lifecycle_device,
+] begin
     @testset "fused compartments_tests" begin
         CorePotts._FORCE_DEVICE_LIFECYCLE[] = true
         try
@@ -102,7 +132,11 @@ end
     end
 end
 
-@testitem "device lifecycle planner (fused): relationships_tests" setup = [CP_lifecycle_device] tags = [:corepotts, :lifecycle_device] begin
+@testitem "device lifecycle planner (fused): relationships_tests" setup = [
+    CP_lifecycle_device,
+] tags = [
+    :corepotts, :lifecycle_device,
+] begin
     @testset "fused relationships_tests" begin
         CorePotts._FORCE_DEVICE_LIFECYCLE[] = true
         try
@@ -115,7 +149,11 @@ end
     end
 end
 
-@testitem "device lifecycle planner (staged): lifecycle_tests" setup = [CP_lifecycle_device] tags = [:corepotts, :lifecycle_device] begin
+@testitem "device lifecycle planner (staged): lifecycle_tests" setup = [
+    CP_lifecycle_device,
+] tags = [
+    :corepotts, :lifecycle_device,
+] begin
     @testset "staged lifecycle_tests" begin
         CorePotts._FORCE_DEVICE_LIFECYCLE[] = true
         CorePotts._FORCE_STAGED_LIFECYCLE[] = true
@@ -130,7 +168,11 @@ end
     end
 end
 
-@testitem "device lifecycle planner (staged): compartments_tests" setup = [CP_lifecycle_device] tags = [:corepotts, :lifecycle_device] begin
+@testitem "device lifecycle planner (staged): compartments_tests" setup = [
+    CP_lifecycle_device,
+] tags = [
+    :corepotts, :lifecycle_device,
+] begin
     @testset "staged compartments_tests" begin
         CorePotts._FORCE_DEVICE_LIFECYCLE[] = true
         CorePotts._FORCE_STAGED_LIFECYCLE[] = true
@@ -145,7 +187,11 @@ end
     end
 end
 
-@testitem "device lifecycle planner (staged): relationships_tests" setup = [CP_lifecycle_device] tags = [:corepotts, :lifecycle_device] begin
+@testitem "device lifecycle planner (staged): relationships_tests" setup = [
+    CP_lifecycle_device,
+] tags = [
+    :corepotts, :lifecycle_device,
+] begin
     @testset "staged relationships_tests" begin
         CorePotts._FORCE_DEVICE_LIFECYCLE[] = true
         CorePotts._FORCE_STAGED_LIFECYCLE[] = true
@@ -160,7 +206,11 @@ end
     end
 end
 
-@testitem "device lifecycle planner: a form that cannot launch hands over" setup = [CP_lifecycle_device] tags = [:corepotts, :lifecycle_device] begin
+@testitem "device lifecycle planner: a form that cannot launch hands over" setup = [
+    CP_lifecycle_device,
+] tags = [
+    :corepotts, :lifecycle_device,
+] begin
     @testset "a form that cannot launch hands over" begin
         # A form whose first launch fails (on a device: its workgroup exceeds what the
         # kernel's pipeline allows; simulated here) hands over to the next one, fused →
@@ -185,7 +235,11 @@ end
                 @test_logs step!(integ)                                   # once
                 sol = @test_logs (:warn, r"cannot launch") solve(pg, alg; saveat = 5)
                 @test sol.stats.lifecycle.divisions == want.stats.lifecycle.divisions >= 2
-                @test all(i -> sol.u[i].ownership == want.u[i].ownership && sol.u[i].cell == want.u[i].cell, eachindex(want.u))
+                @test all(
+                    i -> sol.u[i].ownership == want.u[i].ownership &&
+                        sol.u[i].cell == want.u[i].cell,
+                    eachindex(want.u)
+                )
             end
         finally
             CorePotts._LAUNCH_FAULT[] = 0
@@ -194,10 +248,14 @@ end
     end
 end
 
-@testitem "device lifecycle planner: the staged form failing midway" setup = [CP_lifecycle_device] tags = [:corepotts, :lifecycle_device] begin
+@testitem "device lifecycle planner: the staged form failing midway" setup = [
+    CP_lifecycle_device,
+] tags = [
+    :corepotts, :lifecycle_device,
+] begin
     @testset "the staged form failing midway" begin
-        # The staged form failing midway (D-108, `_STAGED_FAULT_AFTER`): after the trigger or
-        # the planner it hands over, counting the kernels that ran; after the partition
+        # The staged form failing midway (D-108, `_STAGED_FAULT_AFTER`): after the trigger
+        # or the planner it hands over, counting the kernels that ran; after the partition
         # (which writes σ) the state is not consistent, and the failure is rethrown
         pg = ld_growing_prob()
         staged = CheckerboardCPM(; fused_lifecycle_max_sites = 0)
@@ -221,8 +279,10 @@ end
             catch e
                 e
             end
-            @test err isa CorePotts._StagedFailedMidway && err.enqueued == CorePotts._STAGED_PARTITION
-            @test integ.lcache.device.form[] == CorePotts._FORM_STAGED       # not handed over
+            @test err isa CorePotts._StagedFailedMidway &&
+                err.enqueued == CorePotts._STAGED_PARTITION
+            # not handed over
+            @test integ.lcache.device.form[] == CorePotts._FORM_STAGED
         finally
             CorePotts._STAGED_FAULT_AFTER[] = 0
             CorePotts._FORCE_DEVICE_LIFECYCLE[] = false
@@ -230,7 +290,11 @@ end
     end
 end
 
-@testitem "device lifecycle planner: divide! links and moment-scratch bound" setup = [CP_lifecycle_device] tags = [:corepotts, :lifecycle_device] begin
+@testitem "device lifecycle planner: divide! links and moment-scratch bound" setup = [
+    CP_lifecycle_device,
+] tags = [
+    :corepotts, :lifecycle_device,
+] begin
     @testset "divide! links and moment-scratch bound" begin
         base = ld_base_prob()
         σ, lat, once = base.σ, base.lat, base.once
@@ -238,16 +302,26 @@ end
         lim = CorePotts._SCRATCH_LIMIT[]
         CorePotts._FORCE_DEVICE_LIFECYCLE[] = true
         try
-            # A daughter rule that links mother and daughter: the newborn's links are cleaned
-            # (and its columns copied) for every cell before any rule runs, so the rule's link
-            # survives exactly as on the host planner (a race before: the link was dropped)
-            @testset "a divide! rule's links ($form)" for (form, sites) in (("fused", fuse), ("staged", 0))
+            # A daughter rule that links mother and daughter: the newborn's links are
+            # cleaned (and its columns copied) for every cell before any rule runs, so the
+            # rule's link survives exactly as on the host planner (a race before: the link
+            # was dropped)
+            @testset "a divide! rule's links ($form)" for (form, sites) in (
+                    ("fused", fuse), (
+                        "staged", 0,
+                    ),
+                )
                 alg = CheckerboardCPM(; fused_lifecycle_max_sites = sites)
-                link_md!(st, p, ctx, key, mcs, parent, daughter) = (add_link!(st.cell, parent, daughter); nothing)
+                function link_md!(st, p, ctx, key, mcs, parent, daughter)
+                    add_link!(st.cell, parent, daughter)
+                    return nothing
+                end
                 cl = merge(init_moments(σ, lat, 1), empty_links(2, 1))
                 stl = with_capacity(initial_state(σ, Int32[1]; cell = cl), 3)
                 fl = CPMFunction(
-                    gg_delta_H; temperature = gg_temperature, constraint = (st, p, prop, ctx) -> false,
+                    gg_delta_H; temperature = gg_temperature, constraint = (
+                        st, p, prop, ctx
+                    ) -> false,
                     lifecycle = Lifecycle(once; divide! = link_md!)
                 )
                 probl = PottsProblem(fl, stl, lat, (0, 3), gg_params())
@@ -262,14 +336,21 @@ end
             end
 
             # A cell too large for the Int32 moment scratch (here: a lowered bound) does not
-            # divide: the division is deferred and counted, the state stays exact, the host warns
-            # once per report, later reads and `reinit!` do not throw (the count is not sticky)
-            @testset "moment-scratch bound ($form)" for (form, sites) in (("fused", fuse), ("staged", 0))
+            # divide: the division is deferred and counted, the state stays exact, the host
+            # warns once per report, later reads and `reinit!` do not throw (the count is
+            # not sticky)
+            @testset "moment-scratch bound ($form)" for (form, sites) in (
+                    ("fused", fuse), (
+                        "staged", 0,
+                    ),
+                )
                 alg = CheckerboardCPM(; fused_lifecycle_max_sites = sites)
-                # cell 1 (8 × 6 sites: m2 about its anchor 264 in x, 152 in y) alone; cluster
-                # {2, 3} with root 2 (a small and a large member) as a unit
-                σs = zeros(Int32, 30, 30); σs[3:10, 3:8] .= 1
-                σs[15:16, 15:16] .= 2; σs[20:27, 15:20] .= 3
+                # cell 1 (8 × 6 sites: m2 about its anchor 264 in x, 152 in y) alone;
+                # cluster {2, 3} with root 2 (a small and a large member) as a unit
+                σs = zeros(Int32, 30, 30)
+                σs[3:10, 3:8] .= 1
+                σs[15:16, 15:16] .= 2
+                σs[20:27, 15:20] .= 3
                 function trs(st, p, ctx, key, mcs, c)
                     if mcs != 1
                         return EVENT_NONE
@@ -282,30 +363,47 @@ end
                     end
                 end
                 latS = Lattice((30, 30))
-                cells = merge(init_moments(σs, latS, 3), init_clusters(σs, Int32[1, 2, 2], latS))
+                cells = merge(
+                    init_moments(σs, latS, 3),
+                    init_clusters(σs, Int32[1, 2, 2], latS)
+                )
                 sts = with_capacity(initial_state(σs, Int32[1, 1, 1]; cell = cells), 8)
                 fs = CPMFunction(
                     gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
                     lifecycle = Lifecycle(trs)
                 )
                 probs = PottsProblem(fs, sts, latS, (0, 3), gg_params())
-                CorePotts._SCRATCH_LIMIT[] = 20                  # the two large cells exceed it
-                integ = init(probs, alg; save_start = false, save_end = false, save_everystep = false)
-                step!(integ); step!(integ); step!(integ)
+                # the two large cells exceed it
+                CorePotts._SCRATCH_LIMIT[] = 20
+                integ = init(
+                    probs, alg; save_start = false,
+                    save_end = false, save_everystep = false
+                )
+                step!(integ)
+                step!(integ)
+                step!(integ)
                 u = @test_logs (:warn, r"Int32 scratch") current_state(integ)
                 @test integ.stats.lifecycle.divisions == 0
                 @test integ.stats.lifecycle.deferred == 2         # cell 1 and cluster 2
                 @test u.ownership == σs && u.cell.volume[1:3] == Int32[48, 4, 48]
                 @test u.cell.m1[:, 1:3] == cells.m1 && u.cell.m2[:, 1:3] == cells.m2
-                @test_logs current_state(integ)                                # reported once
+                # reported once
+                @test_logs current_state(integ)
                 reinit!(integ)
                 @test integ.stats.lifecycle.deferred == 0
-                # control: within the bound, both divide (cell 1 alone, the cluster as a unit)
+                # control: within the bound, both divide (cell 1 alone, the cluster as a
+                # unit)
                 CorePotts._SCRATCH_LIMIT[] = typemax(Int32)
-                integ = init(probs, alg; save_start = false, save_end = false, save_everystep = false)
-                step!(integ); step!(integ); step!(integ)
+                integ = init(
+                    probs, alg; save_start = false,
+                    save_end = false, save_everystep = false
+                )
+                step!(integ)
+                step!(integ)
+                step!(integ)
                 u = current_state(integ)
-                @test integ.stats.lifecycle.divisions == 3 && integ.stats.lifecycle.deferred == 0
+                @test integ.stats.lifecycle.divisions == 3 &&
+                    integ.stats.lifecycle.deferred == 0
                 @test u.cell.volume == Int32[count(==(c), u.ownership) for c in 1:8]
                 @test same_moments(u, latS, 8, CheckerboardCPM())
             end
@@ -316,52 +414,94 @@ end
     end
 end
 
-@testitem "device lifecycle planner: Lifecycle.before with the trigger" setup = [CP_lifecycle_device] tags = [:corepotts, :lifecycle_device] begin
+@testitem "device lifecycle planner: Lifecycle.before with the trigger" setup = [
+    CP_lifecycle_device,
+] tags = [
+    :corepotts, :lifecycle_device,
+] begin
     @testset "Lifecycle.before with the trigger" begin
         # `Lifecycle.before` (D-101): a cell update run with the trigger of each cell, in
         # one work item on the device (one launch for both), on its own on the host planner
         # and on MCS the lifecycle does not check. Oracle: the same update as an after-MCS
         # `CellPhase` and no `before`, in every form (and through a failing form's handover)
-        σb = zeros(Int32, 30, 30); σb[4:11, 4:11] .= 1; σb[18:25, 18:25] .= 2
+        σb = zeros(Int32, 30, 30)
+        σb[4:11, 4:11] .= 1
+        σb[18:25, 18:25] .= 2
         latb = Lattice((30, 30))
-        stb = with_capacity(initial_state(σb, Int32[1, 1]; cell = merge(init_moments(σb, latb, 2), (; g = [0.0, 2.0]))), 8)
-        tick!(st, p, ctx, key, mcs, c) = (st.cell.volume[c] > 0 && (st.cell.g[c] += 1.0); nothing)
-        ripe(st, p, ctx, key, mcs, c) = st.cell.g[c] >= 4.0 ? EVENT_DIVIDE : EVENT_NONE    # its own `g`
-        restart!(st, p, ctx, key, mcs, parent, daughter) = (st.cell.g[parent] = 0.0; st.cell.g[daughter] = 0.0; nothing)
+        stb = with_capacity(
+            initial_state(
+                σb, Int32[1, 1]; cell = merge(
+                    init_moments(σb, latb, 2), (;
+                        g = [0.0, 2.0],
+                    )
+                )
+            ),
+            8
+        )
+        function tick!(st, p, ctx, key, mcs, c)
+            st.cell.volume[c] > 0 && (st.cell.g[c] += 1.0)
+            return nothing
+        end
+        # its own `g`
+        ripe(st, p, ctx, key, mcs, c) = st.cell.g[c] >= 4.0 ? EVENT_DIVIDE : EVENT_NONE
+        function restart!(st, p, ctx, key, mcs, parent, daughter)
+            st.cell.g[parent] = 0.0
+            st.cell.g[daughter] = 0.0
+            return nothing
+        end
         function make(fused, every)
             return PottsProblem(
                 CPMFunction(
                     gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
                     phases = Phases(after_mcs = fused ? () : (CellPhase(tick!),)),
-                    lifecycle = Lifecycle(ripe; divide! = restart!, every, before = fused ? tick! : nothing)
+                    lifecycle = Lifecycle(
+                        ripe; divide! = restart!, every, before = if fused
+                            tick!
+                        else
+                            nothing
+                        end
+                    )
                 ),
                 stb, latb, (0, 9), gg_params()
             )
         end
         fuse = CheckerboardCPM().fused_lifecycle_max_sites
         try
-            for every in (1, 2), (form, device, sites, fault) in (
+            for every in (1, 2),
+                    (form, device, sites, fault) in (
                         ("host", false, fuse, 0), ("fused", true, fuse, 0),
-                        ("staged", true, 0, 0), ("fused → staged", true, fuse, CorePotts._FORM_FUSED),
+                        ("staged", true, 0, 0), (
+                            "fused → staged", true, fuse, CorePotts._FORM_FUSED,
+                        ),
                         ("staged → host", true, 0, CorePotts._FORM_STAGED),
                     )
+
                 alg = CheckerboardCPM(; fused_lifecycle_max_sites = sites)
                 # the reference runs the planner that ends up running (the host planner's
                 # trackers may differ from the device planner's in representation)
-                CorePotts._FORCE_DEVICE_LIFECYCLE[] = device && fault != CorePotts._FORM_STAGED
+                CorePotts._FORCE_DEVICE_LIFECYCLE[] = device &&
+                    fault != CorePotts._FORM_STAGED
                 ref = solve(make(false, every), alg; saveat = 1)
                 CorePotts._FORCE_DEVICE_LIFECYCLE[] = device
                 CorePotts._LAUNCH_FAULT[] = fault
                 sol = if fault == 0
                     solve(make(true, every), alg; saveat = 1)
                 else
-                    @test_logs (:warn, r"cannot launch") solve(make(true, every), alg; saveat = 1)
+                    @test_logs (:warn, r"cannot launch") solve(
+                        make(true, every), alg;
+                        saveat = 1
+                    )
                 end
                 CorePotts._LAUNCH_FAULT[] = 0
                 @test sol.stats.lifecycle.divisions == ref.stats.lifecycle.divisions >= 3
-                @test all(i -> sol.u[i].ownership == ref.u[i].ownership && sol.u[i].cell == ref.u[i].cell, eachindex(ref.u))
+                @test all(
+                    i -> sol.u[i].ownership == ref.u[i].ownership &&
+                        sol.u[i].cell == ref.u[i].cell,
+                    eachindex(ref.u)
+                )
                 # one launch fewer per checked MCS where the device lifecycle runs it
-                fault == 0 && @test sol.stats.launches == ref.stats.launches - (device ? cld(9, every) : 0)
+                fault == 0 && @test sol.stats.launches ==
+                    ref.stats.launches - (device ? cld(9, every) : 0)
             end
         finally
             CorePotts._LAUNCH_FAULT[] = 0

@@ -93,7 +93,10 @@ struct SequentialCPM{A, R, S} <: AbstractCPMAlgorithm
         return new{A, R, skip_interior}(acceptance, proposal, skip_interior)
     end
 end
-function SequentialCPM(; acceptance = nothing, proposal = nothing, skip_interior::Bool = false)
+function SequentialCPM(;
+        acceptance = nothing, proposal = nothing,
+        skip_interior::Bool = false
+    )
     return SequentialCPM(acceptance, proposal, skip_interior)
 end
 
@@ -102,7 +105,8 @@ end
 function Base.show(io::IO, a::SequentialCPM)
     print(io, "SequentialCPM(")
     kw = String[]
-    a.acceptance === nothing || push!(kw, "acceptance = " * repr(a.acceptance; context = io))
+    a.acceptance === nothing ||
+        push!(kw, "acceptance = " * repr(a.acceptance; context = io))
     a.proposal === nothing || push!(kw, "proposal = " * repr(a.proposal; context = io))
     a.skip_interior && push!(kw, "skip_interior = true")
     isempty(kw) || print(io, "; ", join(kw, ", "))
@@ -111,8 +115,10 @@ function Base.show(io::IO, a::SequentialCPM)
 end
 
 """
-    CheckerboardCPM(; acceptance = nothing, proposal = nothing, parts = nothing, region = nothing,
-        switches = 1, threads = :auto, inline_max_blocks = 512, fused_lifecycle_max_sites = 65536,
+    CheckerboardCPM(; acceptance = nothing, proposal = nothing, parts = nothing,
+        region = nothing,
+        switches = 1, threads = :auto, inline_max_blocks = 512,
+            fused_lifecycle_max_sites = 65536,
         fused_lifecycle_max_cells = 8192)
 
 Parallel dynamics on the CPU or a GPU (KernelAbstractions), lockless (after Sultan et al.,
@@ -144,20 +150,20 @@ at random, so every site is attempted once per MCS on average, as with `Sequenti
 `stats.accepted` and `stats.committed` count the copies (equal: a copy commits when it is
 accepted), brought up to date at the host read points.
 
-Reproducibility. Every phase is checked before it runs. One whose work items would share a cell
-(possible when a cell is wider than the block spacing) runs inline, one work item after another,
-so its decisions are exact and order-free; every other phase is a colouring, whose items share no
-cell (of those a copy's decision or commit touches: its target's, its source's, or a neighbour's),
-so it reaches the same decisions inline or threaded. A CPU
-run is therefore reproducible from its seed at any thread count: the same seed gives the same
-trajectory at one thread and at four. Device runs depend on the timing of the work items and are
-not (user ruling 2026-11-04).
+Reproducibility. Every phase is checked before it runs. One whose work items would share a
+cell (possible when a cell is wider than the block spacing) runs inline, one work item after
+another, so its decisions are exact and order-free; every other phase is a colouring, whose
+items share no cell (of those a copy's decision or commit touches: its target's, its
+source's, or a neighbour's), so it reaches the same decisions inline or threaded. A CPU run
+is therefore reproducible from its seed at any thread count: the same seed gives the same
+trajectory at one thread and at four. Device runs depend on the timing of the work items and
+are not (user ruling 2026-11-04).
 
-Threading. A phase whose items share a cell runs inline, so a geometry whose cells are wider than
-`(parts - 1) * region + 1` across serialises every phase that contains two of them, and gains
-nothing from threads. Measured on the PC, 2026-11-12, on a 200 × 200 and a 400 × 400 lattice tiled
-by 10 × 10 cells and on 30 × 30 lattices tiled by 5 × 5 cells; the serialised count is a property of
-the layout and the state, the times were taken on a loaded lane:
+Threading. A phase whose items share a cell runs inline, so a geometry whose cells are wider
+than `(parts - 1) * region + 1` across serialises every phase that contains two of them, and
+gains nothing from threads. Measured on the PC, 2026-11-12, on a 200 × 200 and a 400 × 400
+lattice tiled by 10 × 10 cells and on 30 × 30 lattices tiled by 5 × 5 cells; the serialised
+count is a property of the layout and the state, the times were taken on a loaded lane:
 
 | geometry | items per phase | cell side | spacing | serialised phases |
 | --- | --- | --- | --- | --- |
@@ -167,25 +173,26 @@ the layout and the state, the times were taken on a loaded lane:
 | 200 × 200, 10 × 10 cells, default | 625 | 10 | 8 | 64 / 64 |
 | 400 × 400, 10 × 10 cells, default | 2500 | 10 | 8 | 64 / 64 |
 
-So threading survives on small-cell geometries and is gone on the wide-cell ones, which are the
-ones the default layout produces: 10 × 10 cells are wider than the 8-site spacing the default
-`parts = 8, region = 1` gives. The trade at 400 × 400 with 1600 cells is the four-thread gain such a
-geometry had before this rule, about 1.4× (2.76 ms to 1.96 ms per MCS); the 3.3–3.7× recorded for
-`inline_max_blocks` is a 5000-block measurement and does not describe it.
+So threading survives on small-cell geometries and is gone on the wide-cell ones, which are
+the ones the default layout produces: 10 × 10 cells are wider than the 8-site spacing the
+default `parts = 8, region = 1` gives. The trade at 400 × 400 with 1600 cells is the
+four-thread gain such a geometry had before this rule, about 1.4× (2.76 ms to 1.96 ms per
+MCS); the 3.3–3.7× recorded for `inline_max_blocks` is a 5000-block measurement and does not
+describe it.
 
-Cell trackers stay exact: moments add atomically and re-center once per MCS, pieces trackers add
-their changes, and an `@on_copy` write that reads its own cell value adds the difference. (A
-float-valued column accumulated by concurrent commits can differ in its last bits by thread
-count: an integer column is exact.) `stats.accepted_energy_change` sums the accepted copies' ΔH and
-reconciles with the trajectory's energy change, since no two work items act on one cell unless
-they run one after another. A copy whose decision needs a whole-cell search (a `Global` veto
-without window, pieces off their local fast path) is decided after its phase by one work item,
-with no copy in flight.
+Cell trackers stay exact: moments add atomically and re-center once per MCS, pieces trackers
+add their changes, and an `@on_copy` write that reads its own cell value adds the
+difference. (A float-valued column accumulated by concurrent commits can differ in its last
+bits by thread count: an integer column is exact.) `stats.accepted_energy_change` sums the
+accepted copies' ΔH and reconciles with the trajectory's energy change, since no two work
+items act on one cell unless they run one after another. A copy whose decision needs a
+whole-cell search (a `Global` veto without window, pieces off their local fast path) is
+decided after its phase by one work item, with no copy in flight.
 
-The kinetics match `SequentialCPM` within the statistical resolution of the checkerboard kinetics checks
-(foam, cell sorting, the OpenVT chain and monolayer, Akeeb invasion, a 3D RPE sheet, the
-Act cell's persistence); the Act cell moves up to 6 % faster at weak activity. See
-`docs/design/research/checkerboard-kinetics.md`.
+The kinetics match `SequentialCPM` within the statistical resolution of the checkerboard
+kinetics checks (foam, cell sorting, the OpenVT chain and monolayer, Akeeb invasion, a 3D
+RPE sheet, the Act cell's persistence); the Act cell moves up to 6 % faster at weak
+activity. See `docs/design/research/checkerboard-kinetics.md`.
 """
 Base.@kwdef struct CheckerboardCPM{A, R} <: AbstractCPMAlgorithm
     acceptance::A = nothing
@@ -202,7 +209,9 @@ Base.@kwdef struct CheckerboardCPM{A, R} <: AbstractCPMAlgorithm
             fused_lifecycle_max_sites, fused_lifecycle_max_cells
         ) where {A, R}
         for (k, v) in (
-                (:inline_max_blocks, inline_max_blocks), (:fused_lifecycle_max_sites, fused_lifecycle_max_sites),
+                (:inline_max_blocks, inline_max_blocks), (
+                    :fused_lifecycle_max_sites, fused_lifecycle_max_sites,
+                ),
                 (:fused_lifecycle_max_cells, fused_lifecycle_max_cells),
             )
             v >= 0 || throw(ArgumentError("CheckerboardCPM(; $k = $v): use at least 0"))
@@ -213,15 +222,20 @@ Base.@kwdef struct CheckerboardCPM{A, R} <: AbstractCPMAlgorithm
         )
     end
 end
-CheckerboardCPM(acceptance::A, proposal::R, args...) where {A, R} = CheckerboardCPM{A, R}(acceptance, proposal, args...)
+function CheckerboardCPM(acceptance::A, proposal::R, args...) where {A, R}
+    return CheckerboardCPM{A, R}(acceptance, proposal, args...)
+end
 
 # printed as the keyword call that rebuilds it; keywords at their defaults are left out
 function Base.show(io::IO, a::CheckerboardCPM)
     kw = String[]
     for (k, d) in (
-            (:acceptance, nothing), (:proposal, nothing), (:region, nothing), (:parts, nothing),
+            (:acceptance, nothing), (:proposal, nothing), (:region, nothing),
+            (:parts, nothing),
             (:switches, 1), (:threads, :auto), (:inline_max_blocks, _INLINE_MAX_BLOCKS),
-            (:fused_lifecycle_max_sites, _FUSED_LIFECYCLE_MAX_SITES), (:fused_lifecycle_max_cells, _FUSED_LIFECYCLE_MAX_CELLS),
+            (:fused_lifecycle_max_sites, _FUSED_LIFECYCLE_MAX_SITES), (
+                :fused_lifecycle_max_cells, _FUSED_LIFECYCLE_MAX_CELLS,
+            ),
         )
         v = getfield(a, k)
         v == d || push!(kw, "$k = " * repr(v; context = io))

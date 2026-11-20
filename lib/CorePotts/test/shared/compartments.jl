@@ -6,7 +6,8 @@ function compartment_cells(dims, side, core)
     cluster = collect(Int32, 1:ncl)
     for c in 1:ncl
         idx = findall(==(c), σ)
-        lo = minimum(idx); off = (side - core) ÷ 2
+        lo = minimum(idx)
+        off = (side - core) ÷ 2
         box = ntuple(d -> (lo[d] + off):(lo[d] + off + core - 1), length(dims))
         σ[box...] .= ncl + c
         push!(cluster, c)
@@ -16,13 +17,23 @@ end
 
 function compartment_model(; λc = 1.0, Vc = 64.0, λs = 0.0, Sc = 32.0, Jint = 2.0)
     function dH(st, p, prop, ctx)
-        J(a, b) = same_cluster(st.cell, a, b) ? p.Jint : @inbounds p.J[kindidx(st, a), kindidx(st, b)]
+        function J(a, b)
+            return if same_cluster(st.cell, a, b)
+                p.Jint
+            else
+                @inbounds p.J[kindidx(st, a), kindidx(st, b)]
+            end
+        end
         E(v, c) = p.λ * (v - @inbounds(p.V0[st.cell.kind[c]]))^2
         EC(v, k) = p.λc * (v - p.Vc)^2
         ES(s, k) = p.λs * (s - p.Sc)^2
-        return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
+        return contact_delta(st.ownership, ctx, prop, J) +
+            volume_delta(st.cell.volume, prop, E) +
             cluster_volume_delta(st.cell, prop, EC) +
-            cluster_surface_delta(st.cell, prop, cluster_surface_change(st.ownership, st.cell, ctx, prop), ES)
+            cluster_surface_delta(
+            st.cell, prop,
+            cluster_surface_change(st.ownership, st.cell, ctx, prop), ES
+        )
     end
     function commit!(st, p, prop, ctx)
         δ = cluster_surface_change(st.ownership, st.cell, ctx, prop)
@@ -41,8 +52,8 @@ function compartment_model(; λc = 1.0, Vc = 64.0, λs = 0.0, Sc = 32.0, Jint = 
     return f, p
 end
 
-"""Moment trackers of `u` exact: on the host planner equal to a recount from σ; on the device
-planner, which keeps the parent's anchor for a daughter (a representation choice),
+"""Moment trackers of `u` exact: on the host planner equal to a recount from σ; on the
+device planner, which keeps the parent's anchor for a daughter (a representation choice),
 the same centroid and covariance of every live cell as the recount."""
 function same_moments(u, lat::Lattice{N}, cap, alg) where {N}
     m = init_moments(u.ownership, lat, cap)
@@ -52,6 +63,11 @@ function same_moments(u, lat::Lattice{N}, cap, alg) where {N}
     return all(1:cap) do c
         ref.volume[c] == 0 && return u.cell.volume[c] == 0
         all(isapprox.(centroid(u.cell, lat, c), centroid(ref, lat, c); atol = 1.0e-9)) &&
-            all(isapprox.(CorePotts.covariance(Float64, u.cell, c, Val(N)), CorePotts.covariance(Float64, ref, c, Val(N)); atol = 1.0e-9))
+            all(
+            isapprox.(
+                CorePotts.covariance(Float64, u.cell, c, Val(N)),
+                CorePotts.covariance(Float64, ref, c, Val(N)); atol = 1.0e-9
+            )
+        )
     end
 end

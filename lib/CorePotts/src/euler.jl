@@ -18,12 +18,15 @@
 const _EULER_RING2 = _SQUARE_RING
 const _EULER_FACE4 = UInt32(0b10101010)
 # corner | face | face: x and the trio make one 2×2 block
-const _EULER_TRIOS2 = (UInt32(0b10000011), UInt32(0b00001110), UInt32(0b00111000), UInt32(0b11100000))
+const _EULER_TRIOS2 = (
+    UInt32(0b10000011), UInt32(0b00001110), UInt32(0b00111000), UInt32(0b11100000),
+)
 
 # Cubic shell: bit k-1 ↔ `_CUBIC_SHELL[k]`.
 _euler_bit3(o) = UInt32(1) << (findfirst(==(o), _CUBIC_SHELL) - 1)
 const _EULER_FACE6 = reduce(|, _euler_bit3(o) for o in _CUBIC_SHELL if count(!=(0), o) == 1)
-# an edge-diagonal neighbour with its two face neighbours: x and the trio make one 2×2 square
+# an edge-diagonal neighbour with its two face neighbours: x and the trio make one 2×2
+# square
 const _EULER_TRIOS3 = Tuple(
     _euler_bit3(o) | _euler_bit3(ntuple(k -> k == a ? o[a] : 0, 3)) |
         _euler_bit3(ntuple(k -> k == b ? o[b] : 0, 3))
@@ -32,7 +35,10 @@ const _EULER_TRIOS3 = Tuple(
 )
 # the 7 shell voxels of one 2×2×2 cube containing x
 const _EULER_OCTANTS = Tuple(
-    reduce(|, _euler_bit3(o) for o in _CUBIC_SHELL if all(k -> o[k] == 0 || o[k] == s[k], 1:3))
+    reduce(
+        |, _euler_bit3(o)
+            for o in _CUBIC_SHELL if all(k -> o[k] == 0 || o[k] == s[k], 1:3)
+    )
         for s in Iterators.product((-1, 1), (-1, 1), (-1, 1))
 )
 const _EULER_ALL26 = UInt32(0x03ffffff)
@@ -48,14 +54,21 @@ const _EULER_ALL26 = UInt32(0x03ffffff)
 end
 
 # Δχ when the target joins a set with shell mask `m`
-@inline _euler_d4(m::UInt32) = Int32(1) - _popcount32(m & _EULER_FACE4) + _count_has(m, _EULER_TRIOS2)
+@inline function _euler_d4(m::UInt32)
+    return Int32(1) - _popcount32(m & _EULER_FACE4) +
+        _count_has(m, _EULER_TRIOS2)
+end
 @inline _euler_d8(m::UInt32) = _euler_d4(~m & UInt32(0xff))                 # 2D duality
-@inline _euler_dhex(m::UInt32) = Int32(1) - _popcount32(m) + _popcount32(m & ((m >> 1) | ((m & UInt32(1)) << 5)))
+@inline function _euler_dhex(m::UInt32)
+    return Int32(1) - _popcount32(m) +
+        _popcount32(m & ((m >> 1) | ((m & UInt32(1)) << 5)))
+end
 @inline function _euler_d6(m::UInt32)
     return Int32(1) - _popcount32(m & _EULER_FACE6) + _count_has(m, _EULER_TRIOS3) -
         _count_has(m, _EULER_OCTANTS)
 end
-@inline _euler_d26(m::UInt32) = -_euler_d6(~m & _EULER_ALL26)              # 3D: χ(X) = χ(Xᶜ)
+# 3D: χ(X) = χ(Xᶜ)
+@inline _euler_d26(m::UInt32) = -_euler_d6(~m & _EULER_ALL26)
 
 """
     euler_change(σ, ctx, prop, Val(adjacency)) -> (δold::Int32, δnew::Int32)
@@ -68,20 +81,33 @@ periodic axis of length 1 the shell wraps onto the target and the change is wron
 [`recompute_euler`](@ref), which every problem reading `euler` calls when it is built,
 rejects such a lattice. The medium's side is zero.
 """
-@inline euler_change(σ, ctx, prop::Proposal, adj::Val) = _euler_change(ctx.lattice, read_shell(σ, ctx, prop), prop, adj)
+@inline function euler_change(σ, ctx, prop::Proposal, adj::Val)
+    return _euler_change(
+        ctx.lattice, read_shell(σ, ctx, prop), prop, adj
+    )
+end
 
 # the masks come from the shared shell read (`shell.jl`): ring order (`_EULER_RING2`) on the
 # square lattice, `_HEX_RING` (= `_HEX_SHELL`) on the hexagonal one, `_CUBIC_SHELL` in 3D
-@inline function _euler_change(lat::Lattice{2, M, Hexagonal}, s::ShellRead, prop::Proposal{2}, ::Val) where {M}
+@inline function _euler_change(
+        lat::Lattice{2, M, Hexagonal}, s::ShellRead,
+        prop::Proposal{2}, ::Val
+    ) where {M}
     mo, mn = _masks2(s.owners, prop.old, prop.new, _ring_bits(lat))
     return _euler_sides(prop, _euler_dhex(mo), _euler_dhex(mn))
 end
-@inline function _euler_change(lat::Lattice{2}, s::ShellRead, prop::Proposal{2}, ::Val{A}) where {A}
+@inline function _euler_change(
+        lat::Lattice{2}, s::ShellRead, prop::Proposal{2},
+        ::Val{A}
+    ) where {A}
     mo, mn = _masks2(s.owners, prop.old, prop.new, _ring_bits(lat))
     A === :full && return _euler_sides(prop, _euler_d8(mo), _euler_d8(mn))
     return _euler_sides(prop, _euler_d4(mo), _euler_d4(mn))
 end
-@inline function _euler_change(lat::Lattice{3}, s::ShellRead, prop::Proposal{3}, ::Val{A}) where {A}
+@inline function _euler_change(
+        lat::Lattice{3}, s::ShellRead, prop::Proposal{3},
+        ::Val{A}
+    ) where {A}
     mo, mn = _masks2(s.owners, prop.old, prop.new, _ring_bits(lat))
     A === :full && return _euler_sides(prop, _euler_d26(mo), _euler_d26(mn))
     return _euler_sides(prop, _euler_d6(mo), _euler_d6(mn))
@@ -93,8 +119,10 @@ end
 
 """Apply `δ = euler_change(…)` to an Euler tracker (the old and new cells only)."""
 @inline function commit_euler!(euler, prop, δ)
-    # bounds: a nonzero owner is a cell id in 1:capacity, the tracker's length (as `commit_surface!`)
-    prop.old != 0 && @inbounds(Atomix.@atomic euler[prop.old] += δ[1])           # atomic: as `commit_volume!`
+    # bounds: a nonzero owner is a cell id in 1:capacity, the tracker's length (as
+    # `commit_surface!`)
+    # atomic: as `commit_volume!`
+    prop.old != 0 && @inbounds(Atomix.@atomic euler[prop.old] += δ[1])
     prop.new != 0 && @inbounds(Atomix.@atomic euler[prop.new] += δ[2])
     return nothing
 end
@@ -105,7 +133,12 @@ end
 # of the complex cells it anchors to their cells (atomically: the same body runs as a device
 # kernel, `_deuler_body!`), so the per-cell sums are exact integers in any order.
 
-@inline _euler_extent(lat::Lattice{N}) where {N} = ntuple(d -> lat.dims[d] + (lat.periodic[d] ? 0 : 1), Val(N))
+@inline function _euler_extent(lat::Lattice{N}) where {N}
+    return ntuple(
+        d -> lat.dims[d] +
+            (lat.periodic[d] ? 0 : 1), Val(N)
+    )
+end
 """Number of anchors of the rebuild (`_euler_window!`)."""
 @inline _euler_anchors(lat::Lattice) = prod(_euler_extent(lat))
 
@@ -120,9 +153,13 @@ end
 # the owner of index `j` (wrapped on periodic axes), −1 outside the lattice or its domain
 @inline function _euler_owner(lat::Lattice{N}, σ, j::NTuple{N, Int}) where {N}
     inside = all(ntuple(d -> lat.periodic[d] || 1 <= j[d] <= lat.dims[d], Val(N)))
-    w = ntuple(d -> lat.periodic[d] ? mod1(j[d], lat.dims[d]) : clamp(j[d], 1, lat.dims[d]), Val(N))
+    w = ntuple(
+        d -> lat.periodic[d] ? mod1(j[d], lat.dims[d]) : clamp(j[d], 1, lat.dims[d]),
+        Val(N)
+    )
     inside || return -one(eltype(σ))
-    i = linear_index(lat, w)           # w is wrapped or clamped into the lattice: i in 1:nsites
+    # w is wrapped or clamped into the lattice: i in 1:nsites
+    i = linear_index(lat, w)
     _euler_in_domain(lat.mask, i) || return -one(eltype(σ))
     return @inbounds σ[i]              # σ and the domain mask have the lattice's size
 end
@@ -132,23 +169,31 @@ end
 @inline _euler_add!(col, c, s) = (c > 0 && (Atomix.@atomic col[c] += s); nothing)
 
 # corner `v` plus the 0/1 pattern `e` (bit d-1 ↔ axis d), signed
-@inline _euler_offset(v::NTuple{N, Int}, e::Int, sgn::Int) where {N} = ntuple(d -> v[d] + sgn * ((e >> (d - 1)) & 1), Val(N))
+@inline function _euler_offset(v::NTuple{N, Int}, e::Int, sgn::Int) where {N}
+    return ntuple(
+        d -> v[d] + sgn * ((e >> (d - 1)) & 1), Val(N)
+    )
+end
 
 """
 Add the contributions of anchor `a` (`1:_euler_anchors(lat)`) to `col`, the Euler tracker
 under `adjacency`.
 """
-@inline function _euler_window!(col, σ, lat::Lattice{2, M, Hexagonal}, a::Int, ::Val) where {M}
+@inline function _euler_window!(
+        col, σ, lat::Lattice{2, M, Hexagonal}, a::Int, ::Val
+    ) where {M}
     v = _euler_anchor(lat, a)
     all(ntuple(d -> v[d] <= lat.dims[d], Val(2))) || return nothing
     c = _euler_owner(lat, σ, v)
     r = _euler_owner(lat, σ, (v[1] + 1, v[2]))
     u = _euler_owner(lat, σ, (v[1], v[2] + 1))
-    s = Int32(1) - Int32(r == c) - Int32(u == c) - Int32(_euler_owner(lat, σ, (v[1] - 1, v[2] + 1)) == c) +
+    s = Int32(1) - Int32(r == c) - Int32(u == c) -
+        Int32(_euler_owner(lat, σ, (v[1] - 1, v[2] + 1)) == c) +
         Int32(r == c && u == c)
     _euler_add!(col, c, s)
     # the triangle (v + (1, 0), v + (0, 1), v + (1, 1)), which v is not in
-    (r == u && _euler_owner(lat, σ, (v[1] + 1, v[2] + 1)) == r) && _euler_add!(col, r, Int32(1))
+    (r == u && _euler_owner(lat, σ, (v[1] + 1, v[2] + 1)) == r) &&
+        _euler_add!(col, r, Int32(1))
     return nothing
 end
 
@@ -188,7 +233,8 @@ end
             c = _euler_owner(lat, σ, _euler_offset(v, e, -1))
             c > 0 || continue
             seen = false
-            for f in 0:(e - 1)                  # owners of the earlier voxels round this face
+            # owners of the earlier voxels round this face
+            for f in 0:(e - 1)
                 (f & rest) == f || continue
                 _euler_owner(lat, σ, _euler_offset(v, f, -1)) == c && (seen = true)
             end
@@ -228,14 +274,17 @@ end
 
 # host rebuild of every Euler column (`_rebuild_trackers!`)
 function _rebuild_euler!(stats, st, σ, lat, cap)
-    haskey(st.cell, :euler) && counted_copy!(stats, st.cell.euler, recompute_euler(σ, lat, Val(:face), cap))
-    haskey(st.cell, :euler_full) && counted_copy!(stats, st.cell.euler_full, recompute_euler(σ, lat, Val(:full), cap))
+    haskey(st.cell, :euler) &&
+        counted_copy!(stats, st.cell.euler, recompute_euler(σ, lat, Val(:face), cap))
+    haskey(st.cell, :euler_full) &&
+        counted_copy!(stats, st.cell.euler_full, recompute_euler(σ, lat, Val(:full), cap))
     return nothing
 end
 
 # device rebuild (`lifecycle_device.jl`): zero every slot, then sum the windows
 @inline _ezero!(::Nothing, c) = nothing
-@inline _ezero!(col, c) = (@inbounds col[c] = Int32(0); nothing)   # c in 1:capacity (the launch range)
+# c in 1:capacity (the launch range)
+@inline _ezero!(col, c) = (@inbounds col[c] = Int32(0); nothing)
 @inline function _deuler_zero_body!(c, dv, par, cols)
     _on(dv, par) || return nothing
     _ezero!(cols[1], c)

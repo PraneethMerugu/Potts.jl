@@ -18,4 +18,6 @@ function gm_commit!(st, p, prop, ctx)
     return commit_moments!(st.cell, ctx, prop)
 end
 const GM = CPMFunction(gg_delta_H; commit! = gm_commit!, temperature = gg_temperature)
-moment_state(σ, kinds, lat) = initial_state(σ, kinds; cell = init_moments(σ, lat, length(kinds)))
+function moment_state(σ, kinds, lat)
+    return initial_state(σ, kinds; cell = init_moments(σ, lat, length(kinds)))
+end

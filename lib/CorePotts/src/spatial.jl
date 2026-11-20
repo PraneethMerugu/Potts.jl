@@ -1,6 +1,6 @@
 # Spatial queries: site predicates, per-cell reductions and the cell contact
-# graph. Site predicates are device functions; `CellReduce` and `ContactPhase` are phases; the
-# host `contact_graph` (CSR) is built at a synchronization point.
+# graph. Site predicates are device functions; `CellReduce` and `ContactPhase` are phases;
+# the host `contact_graph` (CSR) is built at a synchronization point.
 
 """`true` if some in-domain `relation` neighbor of site `i` has a different owner."""
 @inline function is_boundary_site(σ, ctx, i; relation = ctx.contact)
@@ -38,24 +38,25 @@ satisfying a predicate (return a `Bool`/`Int32`), and structured owner sums.
 The result is the same for every order of the sites, so for every thread count and backend:
 
   - an integer column, and `max`/`min`, use atomics, which are exact;
-  - a float sum (Float16, Float32, Float64) is an exact Int64 fixed-point sum with a power-of-two
-    scale per cell, chosen from the largest value `m` in the cell (two passes over the sites).
-    Each term is rounded to a unit of about `m * N * 2^-62` (`N` the number of lattice sites;
-    1.5e-11 m at 300³), so the cell average is within about `m * N * 2^-62` of the exact
-    average. For a cell whose sum sits in values far below `m`, the relative error of the sum
-    can reach `n_c * N * 2^-62` (`n_c` the cell's sites): 3.7e-6 for one cell of 2048² with one
-    site at `m`, coarser than a Float64 sum and no finer than a sequential Float32 sum. `f` may
-    not read `dst` (the column keeps its old values until the sum is written). The integer sum
-    cannot overflow. A NaN in a cell gives NaN; ±Inf give ±Inf (NaN if both).
-    A sum beyond its column's number type is stored as ±Inf and the integrator warns at its
-    next read point. On a device without 64-bit atomics (Metal) the sum is held in a pair of
-    32-bit words, with the same result;
-  - any other number type (a `BigFloat`, a `Dual`) is summed in site order on the host, and is
-    refused on a device.
+  - a float sum (Float16, Float32, Float64) is an exact Int64 fixed-point sum with a
+    power-of-two scale per cell, chosen from the largest value `m` in the cell (two passes
+    over the sites). Each term is rounded to a unit of about `m * N * 2^-62` (`N` the number
+    of lattice sites; 1.5e-11 m at 300³), so the cell average is within about
+    `m * N * 2^-62` of the exact average. For a cell whose sum sits in values far below `m`,
+    the relative error of the sum can reach `n_c * N * 2^-62` (`n_c` the cell's sites):
+    3.7e-6 for one cell of 2048² with one site at `m`, coarser than a Float64 sum and no
+    finer than a sequential Float32 sum. `f` may not read `dst` (the column keeps its old
+    values until the sum is written). The integer sum cannot overflow. A NaN in a cell gives
+    NaN; ±Inf give ±Inf (NaN if both). A sum beyond its column's number type is stored as
+    ±Inf and the integrator warns at its next read point. On a device without 64-bit atomics
+    (Metal) the sum is held in a pair of 32-bit words, with the same result;
+  - any other number type (a `BigFloat`, a `Dual`) is summed in site order on the host, and
+    is refused on a device.
 
-A float sum needs the reduction scratch in the state: `sc = CorePotts.reduce_scratch(ncell)`,
-merged into the cell and model state (`initial_state(σ, kinds; cell = (; …, sc.cell...),
-model = sc.model)`). Potts adds it to every model with an `integral`.
+A float sum needs the reduction scratch in the state:
+`sc = CorePotts.reduce_scratch(ncell)`, merged into the cell and model state
+(`initial_state(σ, kinds; cell = (; …, sc.cell...), model =
+sc.model)`). Potts adds it to every model with an `integral`.
 """
 struct CellReduce{D <: Part, F, O}
     dst::D
@@ -103,12 +104,19 @@ end
 function _cell_reduce!(op::O, f::F, dst, ::Type, st, p, ctx, key, mcs, backend) where {O, F}
     return _cell_reduce_atomic!(op, f, dst, st, p, ctx, key, mcs, backend)
 end
-function _cell_reduce!(::typeof(+), f::F, dst::AbstractArray{<:Integer}, ::Type, st, p, ctx, key, mcs, backend) where {F}
+function _cell_reduce!(
+        ::typeof(+), f::F, dst::AbstractArray{<:Integer},
+        ::Type, st, p, ctx, key, mcs, backend
+    ) where {F}
     return _cell_reduce_atomic!(+, f, dst, st, p, ctx, key, mcs, backend)
 end
 function _cell_reduce_atomic!(op::O, f::F, dst, st, p, ctx, key, mcs, backend) where {O, F}
     _device_fill!(backend, dst, _identity(op, eltype(dst)))
-    Exec.launch!(backend, _cell_reduce_body!, length(st.ownership), (f, op, dst, st, p, ctx, key, mcs))
+    Exec.launch!(
+        backend, _cell_reduce_body!, length(st.ownership), (
+            f, op, dst, st, p, ctx, key, mcs,
+        )
+    )
     return 2
 end
 
@@ -122,8 +130,8 @@ end
 #                      L = ⌈log₂ N⌉: every |term| < 2^(62 − L), so |acc| < 2^62 + N
 #   finalize  (cells)  `dst[c] = T(ldexp(W(acc[c]), −e_c))`, or the flags' NaN/±Inf
 #
-# The work type `W` widens Float16 to Float32 (v·2^e reaches 2^62). Without 64-bit atomics the
-# accumulator is a pair: a UInt32 low word (its carry read from the returned sum) and an
+# The work type `W` widens Float16 to Float32 (v·2^e reaches 2^62). Without 64-bit atomics
+# the accumulator is a pair: a UInt32 low word (its carry read from the returned sum) and an
 # Int32 high word, exact modulo 2^64.
 
 const _CR_ACC = Symbol("#cr_acc")
@@ -166,15 +174,20 @@ end
 # `_FORCE_PAIRED` (tests) takes it on any backend
 const _FORCE_PAIRED = Ref(false)
 _paired(backend) = _FORCE_PAIRED[] || !_atomic64(backend)
-# Negative controls only (tests): `true` restores the float atomics (order-dependent) of a float
-# cell sum, of the weight-unit sums (`_units_for`) and of the `@convert` compound writes
+# Negative controls only (tests): `true` restores the float atomics (order-dependent) of a
+# float cell sum, of the weight-unit sums (`_units_for`) and of the `@convert` compound
+# writes
 const _FLOAT_ATOMICS = Ref(false)
 
 _has_reduce_scratch(st) = haskey(st.cell, _CR_ACC) && haskey(st.model, REDUCE_STATUS)
 @inline function _cr(st)
     return (;
-        acc = getfield(st.cell, _CR_ACC), lo = getfield(st.cell, _CR_LO), hi = getfield(st.cell, _CR_HI),
-        exp = getfield(st.cell, _CR_EXP), flag = getfield(st.cell, _CR_FLAG), status = getfield(st.model, REDUCE_STATUS),
+        acc = getfield(st.cell, _CR_ACC), lo = getfield(st.cell, _CR_LO),
+        hi = getfield(st.cell, _CR_HI),
+        exp = getfield(st.cell, _CR_EXP), flag = getfield(st.cell, _CR_FLAG),
+        status = getfield(
+            st.model, REDUCE_STATUS
+        ),
     )
 end
 
@@ -183,8 +196,9 @@ end
 function _reduce_bits(n::Integer)
     n <= 2^61 || throw(
         ArgumentError(
-            "a float cell sum (`integral`, `CellReduce`) over $n lattice sites cannot be held exactly in Int64 " *
-                "fixed point (at most 2^61 sites); use a smaller lattice"
+            "a float cell sum (`integral`, `CellReduce`) over $n lattice sites cannot be " *
+                "held exactly in Int64 fixed point (at most 2^61 sites); use a smaller \
+                    lattice"
         )
     )
     return n <= 1 ? 0 : 64 - leading_zeros(n - 1)
@@ -195,13 +209,17 @@ _cr_work(::Type{T}) where {T <: Union{Float32, Float64}} = T
 # (unsigned type, significand bits, exponent bias) of the work type
 _cr_bits(::Type{Float32}) = (UInt32, 23, 127)
 _cr_bits(::Type{Float64}) = (UInt64, 52, 1023)
-# the biased exponent of finite nonzero `w`, at least 1 (a subnormal's bound is the smallest normal's)
+# the biased exponent of finite nonzero `w`, at least 1 (a subnormal's bound is the smallest
+# normal's)
 @inline function _cr_biased(w::W) where {W}
     U, m, _ = _cr_bits(W)
     return max((reinterpret(U, abs(w)) >> m) % Int32, Int32(1))
 end
 # the scale e_c of a cell whose largest biased exponent is `b`
-@inline _cr_shift(::Type{W}, b::Int32, L::Int) where {W} = 62 - (Int(b) - _cr_bits(W)[3] + 1) - L
+@inline function _cr_shift(::Type{W}, b::Int32, L::Int) where {W}
+    return 62 -
+        (Int(b) - _cr_bits(W)[3] + 1) - L
+end
 # the value of site `i` in the column's type, then in the work type
 @inline function _cr_value(f::F, ::Type{T}, st, p, ctx, key, mcs, i) where {F, T}
     return _cr_work(T)(convert(T, f(st, p, ctx, key, mcs, i)))
@@ -209,16 +227,21 @@ end
 
 @inline function _cr_zero_body!(c, sc)
     @inbounds begin                                  # c ≤ capacity = length of every column
-        sc.acc[c] = 0; sc.lo[c] = 0; sc.hi[c] = 0; sc.exp[c] = 0; sc.flag[c] = 0
+        sc.acc[c] = 0
+        sc.lo[c] = 0
+        sc.hi[c] = 0
+        sc.exp[c] = 0
+        sc.flag[c] = 0
     end
     return nothing
 end
 
 # The site passes take a run of `k` consecutive sites per work item and keep a local
 # exponent maximum or integer sum while the owner stays the same (sites of a cell are mostly
-# contiguous along the first axis): one atomic per run of a cell instead of one per site. A local
-# integer sum is exact, so the result is unchanged; a partial sum is bounded by the cell's.
-# Measured on ROCm (300³, Float32): runs of 1, 4, 8, 16 sites take 3.8, 2.9, 4.0, 8.2 ms; on the
+# contiguous along the first axis): one atomic per run of a cell instead of one per site. A
+# local integer sum is exact, so the result is unchanged; a partial sum is bounded by the
+# cell's. Measured on ROCm (300³, Float32): runs of 1, 4, 8, 16 sites take 3.8, 2.9, 4.0,
+# 8.2 ms; on the
 # CPU (-t 8, Float64) runs of 1, 64, 256, 1024 take 48, 23, 22, 40 ms.
 # `_CR_RUN_DEVICE` / `_CR_RUN_HOST` are Refs for such probes.
 const _CR_RUN_HOST = Ref(256)
@@ -229,7 +252,8 @@ _cr_run_length(backend) = Exec.ishost(backend) ? _CR_RUN_HOST[] : _CR_RUN_DEVICE
 
 @inline function _cr_exp_flush!(sc, c, b)
     # an atomic (monotonic) load: a stale value only adds an atomic; c ≤ capacity
-    (c != 0 && b > (@inbounds Atomix.@atomic :monotonic sc.exp[c])) && Atomix.@atomic sc.exp[c] max b
+    (c != 0 && b > (@inbounds Atomix.@atomic :monotonic sc.exp[c])) &&
+        Atomix.@atomic sc.exp[c] max b
     return nothing
 end
 @inline function _cr_exp_body!(j, k, f::F, dst, sc, st, p, ctx, key, mcs) where {F}
@@ -250,7 +274,8 @@ end
             else
                 Int32(4)
             end
-            Atomix.@atomic sc.flag[c] |= bit                                  # (rare: no local form)
+            # (rare: no local form)
+            Atomix.@atomic sc.flag[c] |= bit
         elseif !iszero(w)
             b = max(b, _cr_biased(w))
         end
@@ -265,7 +290,10 @@ end
     return unsafe_trunc(Int64, round(ldexp(w, e)))       # |ldexp(w, e)| < 2^(62 − L)
 end
 
-@inline _cr_add!(sc, c, q, ::Val{false}) = (q != 0 && Atomix.@atomic sc.acc[c] += q; nothing)
+@inline function _cr_add!(sc, c, q, ::Val{false})
+    q != 0 && Atomix.@atomic sc.acc[c] += q
+    return nothing
+end
 @inline function _cr_add!(sc, c, q, ::Val{true})
     q == 0 && return nothing
     lo = q % UInt32
@@ -276,7 +304,9 @@ end
     return nothing
 end
 
-@inline function _cr_sum_body!(j, k, f::F, dst, L, sc, st, p, ctx, key, mcs, paired::Val) where {F}
+@inline function _cr_sum_body!(
+        j, k, f::F, dst, L, sc, st, p, ctx, key, mcs, paired::Val
+    ) where {F}
     σ = st.ownership
     W = _cr_work(eltype(dst))
     cur = zero(eltype(σ))
@@ -301,7 +331,10 @@ end
 # bounds: c ≤ length of the accumulator columns (a cell id, or a cell's pair row)
 @inline _cr_acc(sc, c, ::Val{false}) = @inbounds sc.acc[c]
 # bounds: as above, for the paired (hi, lo) accumulator columns
-@inline _cr_acc(sc, c, ::Val{true}) = (Int64(@inbounds sc.hi[c]) << 32) + Int64(@inbounds sc.lo[c])
+@inline function _cr_acc(sc, c, ::Val{true})
+    return (Int64(@inbounds sc.hi[c]) << 32) +
+        Int64(@inbounds sc.lo[c])
+end
 
 @inline function _cr_final_body!(c, dst, L, sc, paired::Val, col::UInt32)
     T = eltype(dst)
@@ -332,12 +365,15 @@ function _cell_reduce!(
         ::typeof(+), f::F, dst::AbstractArray{T}, ::Type{D}, st, p, ctx, key, mcs,
         backend
     ) where {F, T <: Union{Float16, Float32, Float64}, D}
-    _FLOAT_ATOMICS[] && return _cell_reduce_atomic!(+, f, dst, st, p, ctx, key, mcs, backend)
+    _FLOAT_ATOMICS[] &&
+        return _cell_reduce_atomic!(+, f, dst, st, p, ctx, key, mcs, backend)
     _has_reduce_scratch(st) || throw(
         ArgumentError(
             string(
-                "the cell sum into the ", T, " column `", _part_name(D), "` (`CellReduce`) needs the reduction scratch in the ",
-                "state: merge `sc = CorePotts.reduce_scratch(ncell)` into it (`initial_state(σ, kinds; cell = (; …, sc.cell...), ",
+                "the cell sum into the ", T, " column `", _part_name(D),
+                "` (`CellReduce`) needs the reduction scratch in the ",
+                "state: merge `sc = CorePotts.reduce_scratch(ncell)` into it \
+                    (`initial_state(σ, kinds; cell = (; …, sc.cell...), ",
                 "model = sc.model)`)"
             )
         )
@@ -346,15 +382,26 @@ function _cell_reduce!(
     n = length(st.ownership)
     L = _reduce_bits(n)
     ncap = length(dst)
-    col = UInt32(something(findfirst(==(_part_name(D)), keys(st.cell)), 0))   # for the range warning
+    # for the range warning
+    col = UInt32(something(findfirst(==(_part_name(D)), keys(st.cell)), 0))
     Exec.launch!(backend, _cr_zero_body!, ncap, (sc,))
     k = _cr_run_length(backend)
-    Exec.launch!(backend, _cr_exp_body!, _cr_runs(n, k), (k, f, dst, sc, st, p, ctx, key, mcs))
+    Exec.launch!(
+        backend, _cr_exp_body!, _cr_runs(n, k), (
+            k, f, dst, sc, st, p, ctx, key, mcs,
+        )
+    )
     if _paired(backend)
-        Exec.launch!(backend, _cr_sum_body!, _cr_runs(n, k), (k, f, dst, L, sc, st, p, ctx, key, mcs, Val(true)))
+        Exec.launch!(
+            backend, _cr_sum_body!, _cr_runs(n, k),
+            (k, f, dst, L, sc, st, p, ctx, key, mcs, Val(true))
+        )
         Exec.launch!(backend, _cr_final_body!, ncap, (dst, L, sc, Val(true), col))
     else
-        Exec.launch!(backend, _cr_sum_body!, _cr_runs(n, k), (k, f, dst, L, sc, st, p, ctx, key, mcs, Val(false)))
+        Exec.launch!(
+            backend, _cr_sum_body!, _cr_runs(n, k),
+            (k, f, dst, L, sc, st, p, ctx, key, mcs, Val(false))
+        )
         Exec.launch!(backend, _cr_final_body!, ncap, (dst, L, sc, Val(false), col))
     end
     return 4
@@ -368,7 +415,8 @@ function _cell_reduce!(
     Exec.ishost(backend) || throw(
         ArgumentError(
             string(
-                "run on the CPU: the cell sum into the ", T, " column `", _part_name(D), "` (`CellReduce`) runs on the host ",
+                "run on the CPU: the cell sum into the ", T, " column `", _part_name(D),
+                "` (`CellReduce`) runs on the host ",
                 "only, because a device has no atomics for ", T,
                 (T <: AbstractFloat ? "; or use a Float32 or Float64 column" : "")
             )
@@ -387,10 +435,10 @@ _part_name(::Type{Part{A, B}}) where {A, B} = B
 # ---------------------------------------------------------------------------------------
 # Integer weight units. A float sum of relation weights over the sites (the device
 # lifecycle's surface and cluster surface recomputes, `ContactPhase`) adds each weight as an
-# integer number of units 2^-e, in Int64, so the sum is exact and does not depend on the order.
-# The scale is static: one site adds at most W = Σ_k |w_k| to an entry and at most n sites add
-# to it, so e = 62 − ⌈log₂ n⌉ − ⌈log₂ W⌉ − 1 keeps the sum below 2^62. A weight is held to
-# 2^-e (2^-31 for Moore(1) 1/|o| weights at 300³; 2^-40 at 512²), and the sum of the
+# integer number of units 2^-e, in Int64, so the sum is exact and does not depend on the
+# order. The scale is static: one site adds at most W = Σ_k |w_k| to an entry and at most n
+# sites add to it, so e = 62 − ⌈log₂ n⌉ − ⌈log₂ W⌉ − 1 keeps the sum below 2^62. A weight is
+# held to 2^-e (2^-31 for Moore(1) 1/|o| weights at 300³; 2^-40 at 512²), and the sum of the
 # quantized weights is then exact. Unweighted relations (`weight` = 1) and integer columns
 # keep their atomic adds: their sums are integers, exact in any order (in a float column,
 # below 2^24 for Float32 and 2^53 for Float64 per entry).
@@ -400,11 +448,11 @@ _part_name(::Type{Part{A, B}}) where {A, B} = B
 
 The integer weight units of relation `rel` for sums over at most `n` sites: `q[k]` is
 `round(weight(rel, k) · 2^e)` (`Int64`). `nothing` for an unweighted relation. A weight
-below half a unit, `2^-(e+1)`, rounds to 0 units (its bonds add nothing); its contribution is
-then below `2^-(e+1)` per bond. Copies add the float weights, so a weighted tracker can differ
-from `recompute_surface` by up to `4 N W 2^-62` per division, plus the tracker column's own
-rounding, about `eps(T)/2` of its value per add (each copy commit and each division round; the
-larger term in Float32): compare with a tolerance.
+below half a unit, `2^-(e+1)`, rounds to 0 units (its bonds add nothing); its contribution
+is then below `2^-(e+1)` per bond. Copies add the float weights, so a weighted tracker can
+differ from `recompute_surface` by up to `4 N W 2^-62` per division, plus the tracker
+column's own rounding, about `eps(T)/2` of its value per add (each copy commit and each
+division round; the larger term in Float32): compare with a tolerance.
 """
 _weight_units(::Relation{N, K, Nothing}, n::Integer) where {N, K} = nothing
 function _weight_units(rel::Relation{N, K}, n::Integer) where {N, K}
@@ -449,16 +497,22 @@ function _check_reduce_status!(stats, st, t, backend)
     s & STATUS_SUM_RANGE == 0 && return nothing
     j = Int(s >> 8)
     names = keys(st.cell)
-    name, T = 1 <= j <= length(names) ? (names[j], eltype(getfield(st.cell, names[j]))) : (Symbol("?"), Float32)
+    name, T = if 1 <= j <= length(names)
+        (names[j], eltype(getfield(st.cell, names[j])))
+    else
+        (Symbol("?"), Float32)
+    end
     route = if T <: Float64
         "rescale the summed expression"
     elseif _atomic64(backend)
-        "build the problem in Float64 (`PottsProblem(…; T = Float64)`) or rescale the summed expression"
+        "build the problem in Float64 (`PottsProblem(…; T = Float64)`) or rescale the \
+            summed expression"
     else
         "rescale the summed expression (this device has no Float64)"
     end
     @warn string(
-        "the cell sum `", name, "` (`integral`, `CellReduce`) exceeded floatmax(", T, ") = ", floatmax(T),
+        "the cell sum `", name, "` (`integral`, `CellReduce`) exceeded floatmax(", T,
+        ") = ", floatmax(T),
         " by MCS ", t, " and is stored as ±Inf; ", route
     )
     fill!(w, zero(eltype(w)))
@@ -513,10 +567,12 @@ function contact_graph(σ, lat::Lattice, r::Relation, ncell::Integer)
         counts[a] += 1
     end
     row_ptr = Int32[1; 1 .+ cumsum(counts)]
-    col = zeros(Int32, length(pairs)); measure = zeros(T, length(pairs))
+    col = zeros(Int32, length(pairs))
+    measure = zeros(T, length(pairs))
     fill_ptr = copy(row_ptr[1:ncell])
     for ((a, b), m) in sort!(collect(pairs); by = first)
-        col[fill_ptr[a]] = b; measure[fill_ptr[a]] = m
+        col[fill_ptr[a]] = b
+        measure[fill_ptr[a]] = m
         fill_ptr[a] += 1
     end
     return ContactGraph(row_ptr, col, measure, medium)
@@ -541,15 +597,17 @@ end
 Device-resident contact table to merge into the cell state, filled by `ContactPhase`:
 `contact_nbr[k, c]` (0 = empty slot, rows in no particular order), `contact_measure[k, c]`
 (shared weighted bond count), `contact_medium[c]` and `contact_overflow[c]` (bonds dropped
-because `c`'s row was full; nonzero means `maxdeg` is too small, and which bonds were dropped
-then depends on the order). The `#ct_` columns are the scratch of a weighted relation's
-exact sums (integer weight units).
+because `c`'s row was full; nonzero means `maxdeg` is too small, and which bonds were
+dropped then depends on the order). The `#ct_` columns are the scratch of a weighted
+relation's exact sums (integer weight units).
 """
 function empty_contacts(maxdeg::Integer, ncell::Integer; T::Type = Float32)
     return (;
-        contact_nbr = zeros(Int32, maxdeg, ncell), contact_measure = zeros(T, maxdeg, ncell),
+        contact_nbr = zeros(Int32, maxdeg, ncell),
+        contact_measure = zeros(T, maxdeg, ncell),
         contact_medium = zeros(T, ncell), contact_overflow = zeros(Int32, ncell),
-        _CT_ACC => zeros(Int64, maxdeg + 1, ncell), _CT_LO => zeros(UInt32, maxdeg + 1, ncell),
+        _CT_ACC => zeros(Int64, maxdeg + 1, ncell), _CT_LO =>
+            zeros(UInt32, maxdeg + 1, ncell),
         _CT_HI => zeros(Int32, maxdeg + 1, ncell),
     )
 end
@@ -605,7 +663,8 @@ ContactPhase(relation::Symbol = :contact) = ContactPhase{relation}()
     end
 end
 
-# a weight into the table: an atomic add, or its units into row `s` of column `a` of the scratch
+# a weight into the table: an atomic add, or its units into row `s` of column `a` of the
+# scratch
 @inline _ct_add!(::Nothing, sc, col, I, s, a, w) = (Atomix.@atomic col[I] += w; nothing)
 @inline function _ct_add!(u::NamedTuple, sc, col, I, s, a, w)
     return _cr_add!(sc, (a - 1) * size(sc.acc, 1) + s, w, u.paired)
@@ -623,7 +682,9 @@ end
             @inbounds medium[a] = v
         end
         @inbounds begin
-            sc.acc[j] = 0; sc.lo[j] = 0; sc.hi[j] = 0
+            sc.acc[j] = 0
+            sc.lo[j] = 0
+            sc.hi[j] = 0
         end
     end
     return nothing
@@ -637,22 +698,35 @@ function (ph::ContactPhase{R})(st, p, ctx, key, mcs, backend) where {R}
     u === nothing || haskey(c, _CT_ACC) || throw(
         ArgumentError(
             string(
-                "the contact table (`ContactPhase`) over the weighted relation `", R, "` needs the `#ct_` scratch columns ",
-                "of `empty_contacts`: build the table with `empty_contacts(maxdeg, ncell; T)` and merge all of its columns"
+                "the contact table (`ContactPhase`) over the weighted relation `", R,
+                "` needs the `#ct_` scratch columns ",
+                "of `empty_contacts`: build the table with `empty_contacts(maxdeg, ncell; \
+                    T)` and merge all of its columns"
             )
         )
     )
-    sc = u === nothing ? nothing : (; acc = getfield(c, _CT_ACC), lo = getfield(c, _CT_LO), hi = getfield(c, _CT_HI))
-    _device_fill!(backend, c.contact_nbr, 0); _device_fill!(backend, c.contact_measure, 0)
-    _device_fill!(backend, c.contact_medium, 0); _device_fill!(backend, c.contact_overflow, 0)
+    sc = if u === nothing
+        nothing
+    else
+        (; acc = getfield(c, _CT_ACC), lo = getfield(c, _CT_LO), hi = getfield(c, _CT_HI))
+    end
+    _device_fill!(backend, c.contact_nbr, 0)
+    _device_fill!(backend, c.contact_measure, 0)
+    _device_fill!(backend, c.contact_medium, 0)
+    _device_fill!(backend, c.contact_overflow, 0)
     Exec.launch!(
-        backend, _contact_body!, n, (
+        backend, _contact_body!,
+        n,
+        (
             c.contact_nbr, c.contact_measure, c.contact_medium,
             c.contact_overflow, st.ownership, ctx.lattice, rel, u, sc,
         )
     )
     u === nothing && return 5
-    Exec.launch!(backend, _contact_fold_body!, size(c.contact_measure, 2), (c.contact_measure, c.contact_medium, sc, u))
+    Exec.launch!(
+        backend, _contact_fold_body!, size(c.contact_measure, 2),
+        (c.contact_measure, c.contact_medium, sc, u)
+    )
     return 6
 end
 
@@ -664,10 +738,16 @@ end
     end
     return 0
 end
-"""Shared interface measure of cells `a` and `b` from the contact table (`b = 0`: medium)."""
+"""
+Shared interface measure of cells `a` and `b` from the contact table (`b = 0`: medium).
+"""
 @inline function contact_measure(cell, a, b)
     # bounds: a is a cell id ≤ capacity = length(cell.contact_medium)
     b == 0 && return @inbounds cell.contact_medium[a]
     k = contact_slot(cell, a, b)
-    return k == 0 ? zero(eltype(cell.contact_measure)) : @inbounds cell.contact_measure[k, a]
+    return if k == 0
+        zero(eltype(cell.contact_measure))
+    else
+        @inbounds cell.contact_measure[k, a]
+    end
 end

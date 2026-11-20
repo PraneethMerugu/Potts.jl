@@ -3,7 +3,8 @@
 @testsetup module CP_geometry
 using Test, CorePotts, StaticArrays, Statistics, Random
 using SciMLBase: SciMLBase, ReturnCode, remake
-using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
+using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates,
+    linear_index, shift
 include("shared/gg_model.jl")
 include("shared/geometry.jl")
 include("shared/export_all.jl")
@@ -22,7 +23,8 @@ end
             @test min_image(c, (10, 1), (1, 1)) == (9, 0)         # closed axes never wrap
         end
 
-        @testset "trackers match brute force after runs ($(length(dims))-D, $(nameof(typeof(alg))))" for (
+        @testset "trackers match brute force after runs \
+            ($(length(dims))-D, $(nameof(typeof(alg))))" for (
                 dims, alg,
             ) in (
                 ((40, 40), SequentialCPM()), ((40, 40), CheckerboardCPM()),
@@ -46,7 +48,9 @@ end
                     )
                 )
                 λ = sort(eigvals(Symmetric(C)); rev = true)
-                @test all(isapprox.(principal_moments(upper(C, length(dims))), λ; atol = 1.0e-9))
+                @test all(
+                    isapprox.(principal_moments(upper(C, length(dims))), λ; atol = 1.0e-9)
+                )
             end
             # sums stay small: re-centring keeps every mean offset within RECENTER
             @test all(abs.(u.cell.m1) .<= 2 .* max.(u.cell.volume', 1))
@@ -58,7 +62,8 @@ end
             σ[11:30, 21:25] .= 1                                   # 20 × 5 rectangle
             cell = merge(init_moments(σ, lat, 1), (; volume = Int32[100]))
             s = cell_shape(cell, lat, 1)
-            @test covariance(Float64, cell, 1, Val(2)) == ((20^2 - 1) / 12, 0.0, (5^2 - 1) / 12)
+            @test covariance(Float64, cell, 1, Val(2)) ==
+                ((20^2 - 1) / 12, 0.0, (5^2 - 1) / 12)
             @test s.elongation ≈ sqrt((20^2 - 1) / (5^2 - 1))
             @test s.major_length ≈ 4sqrt((20^2 - 1) / 12)
             @test abs(s.orientation) < 1.0e-12                       # along x
@@ -70,23 +75,52 @@ end
             # 3D box a × b × c: semiaxes √(5(n²−1)/12)
             l3 = Lattice((30, 30, 30))
             σ3 = zeros(Int32, 30, 30, 30)
-            σ3[1:12, 1:6, 1:3] .= 1                                # straddles nothing, closed-free
-            σ3 = circshift(σ3, (-4, -2, -1))                       # now straddles every seam
+            # straddles nothing, closed-free
+            σ3[1:12, 1:6, 1:3] .= 1
+            # now straddles every seam
+            σ3 = circshift(σ3, (-4, -2, -1))
             cell3 = merge(init_moments(σ3, l3, 1), (; volume = Int32[216]))
             s3 = cell_shape(cell3, l3, 1)
             @test all(isapprox.(s3.semiaxes, sqrt.(5 .* ((12, 6, 3) .^ 2 .- 1) ./ 12)))
             @test major_length(Float64, cell3, l3, 1) ≈ s3.major_length
             @test s3.elongation ≈ sqrt((12^2 - 1) / (3^2 - 1))
-            @test all(isapprox.(centroid(cell3, l3, 1), mod.((6.5, 3.5, 2.0) .- (4, 2, 1) .- 1, 30) .+ 1))
+            @test all(
+                isapprox.(
+                    centroid(cell3, l3, 1), mod.(
+                        (6.5, 3.5, 2.0) .- (4, 2, 1) .-
+                            1, 30
+                    ) .+ 1
+                )
+            )
         end
 
         @testset "major_length_after equals the committed length" begin
-            # every add/remove of a boundary site, on cells that straddle periodic seams, in 2D
-            # (square and hex) and 3D
+            # every add/remove of a boundary site, on cells that straddle periodic seams, in
+            # 2D (square and hex) and 3D
             for (lat, σ) in (
-                    (Lattice((24, 20)), circshift((s = zeros(Int32, 24, 20); s[1:9, 1:4] .= 1; s[3:5, 5:7] .= 1; s), (-3, -2))),
-                    (Lattice((24, 24); geometry = Hexagonal()), (s = zeros(Int32, 24, 24); s[5:12, 6:9] .= 1; s)),
-                    (Lattice((12, 12, 12)), circshift((s = zeros(Int32, 12, 12, 12); s[1:6, 1:3, 1:2] .= 1; s), (-2, -1, -1))),
+                    (
+                        Lattice((24, 20)),
+                        circshift(
+                            (
+                                s = zeros(Int32, 24, 20); s[1:9, 1:4] .= 1;
+                                s[3:5, 5:7] .= 1; s
+                            ), (
+                                -3, -2,
+                            )
+                        ),
+                    ),
+                    (
+                        Lattice((24, 24); geometry = Hexagonal()),
+                        (s = zeros(Int32, 24, 24); s[5:12, 6:9] .= 1; s),
+                    ),
+                    (
+                        Lattice((12, 12, 12)),
+                        circshift(
+                            (s = zeros(Int32, 12, 12, 12); s[1:6, 1:3, 1:2] .= 1; s), (
+                                -2, -1, -1,
+                            )
+                        ),
+                    ),
                 )
                 N = ndims(σ)
                 V = count(==(1), σ)
@@ -99,15 +133,18 @@ end
                         [ntuple(k -> k == d ? e : 0, N) for d in 1:N for e in (-1, 1)]
                     ) && continue
                     s == -1 && V == 1 && continue
-                    σ2 = copy(σ); σ2[i] = s == 1 ? 1 : 0
+                    σ2 = copy(σ)
+                    σ2[i] = s == 1 ? 1 : 0
                     after = merge(init_moments(σ2, lat, 1), (; volume = Int32[V + s]))
-                    @test major_length_after(Float64, base, lat, 1, x, s) ≈ major_length(Float64, after, lat, 1) atol = 1.0e-9
+                    @test major_length_after(Float64, base, lat, 1, x, s) ≈
+                        major_length(Float64, after, lat, 1) atol = 1.0e-9
                 end
             end
             # a first site: length zero
             lat = Lattice((8, 8))
             empty = merge(init_moments(zeros(Int32, 8, 8), lat, 1), (; volume = Int32[0]))
-            @test major_length_after(Float64, empty, lat, 1, (3, 3), 1) == 0 && major_length(Float64, empty, lat, 1) == 0
+            @test major_length_after(Float64, empty, lat, 1, (3, 3), 1) == 0 &&
+                major_length(Float64, empty, lat, 1) == 0
         end
 
         @testset "centroid_shift equals the committed centroid change" begin
@@ -115,7 +152,10 @@ end
             σ = circshift(σ, (2, 2))
             lat = Lattice((30, 30))
             st = moment_state(σ, kinds, lat)
-            ctx = (; lattice = lat, proposal = relation(VonNeumann(1), lat), contact = relation(Moore(1), lat))
+            ctx = (;
+                lattice = lat, proposal = relation(VonNeumann(1), lat),
+                contact = relation(Moore(1), lat),
+            )
             n = 0
             for t in 1:nsites(lat), dir in 1:4
                 inside, y = shift(lat, coordinates(lat, t), ctx.proposal.offsets[dir])
@@ -126,11 +166,27 @@ end
                 δa = centroid_shift(Float64, st.cell, lat, a, prop.x, -1)
                 δb = centroid_shift(Float64, st.cell, lat, b, prop.x, +1)
                 ca, cb = centroid(st.cell, lat, a), centroid(st.cell, lat, b)
-                after = deepcopy(st); after.ownership[t] = b
+                after = deepcopy(st)
+                after.ownership[t] = b
                 gm_commit!(after, nothing, prop, ctx)
-                wrapdiff(u, v) = map((x, y, m) -> mod(x - y + m / 2, m) - m / 2, u, v, lat.dims)
-                @test all(isapprox.(wrapdiff(centroid(after.cell, lat, a), ca), δa; atol = 1.0e-12))
-                @test all(isapprox.(wrapdiff(centroid(after.cell, lat, b), cb), δb; atol = 1.0e-12))
+                function wrapdiff(u, v)
+                    return map(
+                        (x, y, m) -> mod(x - y + m / 2, m) - m / 2, u, v,
+                        lat.dims
+                    )
+                end
+                @test all(
+                    isapprox.(
+                        wrapdiff(centroid(after.cell, lat, a), ca), δa;
+                        atol = 1.0e-12
+                    )
+                )
+                @test all(
+                    isapprox.(
+                        wrapdiff(centroid(after.cell, lat, b), cb), δb;
+                        atol = 1.0e-12
+                    )
+                )
                 (n += 1) >= 60 && break
             end
             @test n >= 30
@@ -143,7 +199,8 @@ end
             vmin = fill(Inf, length(kinds))
             recompute_site_min!(vmin, falses(length(kinds)), σ, v; all = true)
             st = initial_state(
-                σ, kinds; cell = (;
+                σ, kinds;
+                cell = (;
                     vsum = recompute_site_sum(σ, v, length(kinds)),
                     vmin, stale = falses(length(kinds)),
                 )
@@ -154,23 +211,38 @@ end
                 return commit_site_min!(st.cell.vmin, st.cell.stale, prop, v[prop.target])
             end
             f = CPMFunction(gg_delta_H; commit!, temperature = gg_temperature)
-            u = solve(PottsProblem(f, st, lat, (0, 10), gg_params()), SequentialCPM()).u[end]
+            u = solve(
+                PottsProblem(f, st, lat, (0, 10), gg_params()),
+                SequentialCPM()
+            ).u[end]
             @test u.cell.vsum ≈ recompute_site_sum(u.ownership, v, length(kinds))
-            truth = recompute_site_min!(fill(Inf, length(kinds)), falses(length(kinds)), u.ownership, v; all = true)
-            @test all(u.cell.vmin[.!u.cell.stale] .== truth[.!u.cell.stale])   # exact unless stale
-            @test all(u.cell.vmin .<= truth)                                    # stale ⇒ lower bound
+            truth = recompute_site_min!(
+                fill(Inf, length(kinds)), falses(length(kinds)), u.ownership, v; all = true
+            )
+            # exact unless stale
+            @test all(u.cell.vmin[.!u.cell.stale] .== truth[.!u.cell.stale])
+            # stale ⇒ lower bound
+            @test all(u.cell.vmin .<= truth)
             recompute_site_min!(u.cell.vmin, u.cell.stale, u.ownership, v)
             @test u.cell.vmin == truth
 
-            # structured (vector-valued) owner sums use the same tracker with any additive type
+            # structured (vector-valued) owner sums use the same tracker with any additive
+            # type
             w = [SVector(Float64(i), Float64(j), 1.0) for i in 1:30, j in 1:30]
-            st2 = initial_state(σ, kinds; cell = (; wsum = recompute_site_sum(σ, w, length(kinds))))
+            st2 = initial_state(
+                σ, kinds; cell = (;
+                    wsum = recompute_site_sum(σ, w, length(kinds)),
+                )
+            )
             function c2!(st, p, prop, ctx)
                 commit_volume!(st, p, prop, ctx)
                 return commit_site_sum!(st.cell.wsum, prop, w[prop.target])
             end
             f2 = CPMFunction(gg_delta_H; commit! = c2!, temperature = gg_temperature)
-            u2 = solve(PottsProblem(f2, st2, lat, (0, 10), gg_params()), CheckerboardCPM()).u[end]
+            u2 = solve(
+                PottsProblem(f2, st2, lat, (0, 10), gg_params()),
+                CheckerboardCPM()
+            ).u[end]
             @test u2.cell.wsum ≈ recompute_site_sum(u2.ownership, w, length(kinds))
             @test getindex.(u2.cell.wsum, 3) == u2.cell.volume
         end

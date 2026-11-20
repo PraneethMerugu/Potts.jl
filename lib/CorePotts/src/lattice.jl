@@ -11,11 +11,11 @@ abstract type AbstractGeometry end
 """Square (cubic in 3D) lattice: site coordinates are positions."""
 struct Square <: AbstractGeometry end
 """
-Hexagonal 2D lattice in axial coordinates: site `(q, r)` sits at `(q + r/2, r·√3/2)`, and its
-six nearest neighbors are the offsets `(±1, 0)`, `(0, ±1)`, `(1, -1)`, `(-1, 1)` — a subset of
-Moore(1), so checkerboard coloring, periodic wrapping and the integer moment trackers carry
-over. Periodic axes make a rhombic torus. Positions, distances, centroids, shapes and division
-planes use the embedding; `Moore(k)`/`VonNeumann(k)` mean `Hex(k)` here.
+Hexagonal 2D lattice in axial coordinates: site `(q, r)` sits at `(q + r/2, r·√3/2)`, and
+its six nearest neighbors are the offsets `(±1, 0)`, `(0, ±1)`, `(1, -1)`, `(-1, 1)` — a
+subset of Moore(1), so checkerboard coloring, periodic wrapping and the integer moment
+trackers carry over. Periodic axes make a rhombic torus. Positions, distances, centroids,
+shapes and division planes use the embedding; `Moore(k)`/`VonNeumann(k)` mean `Hex(k)` here.
 """
 struct Hexagonal <: AbstractGeometry end
 
@@ -24,11 +24,11 @@ struct Hexagonal <: AbstractGeometry end
 
 A Cartesian lattice. `boundary` is one boundary for all axes or a tuple with one per axis.
 `domain` restricts it to an irregular region: a `Bool` array over the
-lattice or a predicate of the site position, `x -> …` (Cartesian: `embed`ded coordinates on a
-hexagonal lattice; wrap it in `OnIndices` to receive lattice coordinates). Sites outside the domain never
-change owner and must belong to the medium. The domain edge is closed: `shift` reports
-neighbors outside it as outside the lattice, so contacts, surfaces, gathers, proposals and
-field stencils (zero flux) all stop there.
+lattice or a predicate of the site position, `x -> …` (Cartesian: `embed`ded coordinates on
+a hexagonal lattice; wrap it in `OnIndices` to receive lattice coordinates). Sites outside
+the domain never change owner and must belong to the medium. The domain edge is closed:
+`shift` reports neighbors outside it as outside the lattice, so contacts, surfaces, gathers,
+proposals and field stencils (zero flux) all stop there.
 """
 struct Lattice{N, M, G <: AbstractGeometry}
     dims::NTuple{N, Int}
@@ -36,21 +36,32 @@ struct Lattice{N, M, G <: AbstractGeometry}
     mask::M                       # `nothing`, or a Bool array (`true` = in the domain)
     geometry::G
 end
-Lattice{N}(dims, periodic) where {N} = Lattice{N, Nothing, Square}(dims, periodic, nothing, Square())
-Lattice{N, M}(dims, periodic, mask) where {N, M} = Lattice{N, M, Square}(dims, periodic, mask, Square())
+function Lattice{N}(dims, periodic) where {N}
+    return Lattice{N, Nothing, Square}(dims, periodic, nothing, Square())
+end
+function Lattice{N, M}(dims, periodic, mask) where {N, M}
+    return Lattice{N, M, Square}(dims, periodic, mask, Square())
+end
 
 function Lattice(
         dims::NTuple{N, Integer}; boundary = Periodic(), domain = nothing,
         geometry::AbstractGeometry = Square()
     ) where {N}
-    geometry isa Hexagonal && N != 2 && throw(ArgumentError("hexagonal lattices are 2D, got $(N)D dims $dims; pass a 2-tuple for dims or use `Square()`"))
+    geometry isa Hexagonal && N != 2 &&
+        throw(ArgumentError("hexagonal lattices are 2D, got $(N)D dims $dims; pass a \
+            2-tuple for dims or use `Square()`"))
     b = boundary isa AbstractBoundary ? ntuple(_ -> boundary, N) : Tuple(boundary)
     length(b) == N || throw(ArgumentError("need $N boundaries, got $(length(b))"))
     all(>(0), dims) || throw(ArgumentError("lattice dimensions must be positive"))
     d = Int.(dims)
     mask = _domain_mask(domain, d, geometry)
-    mask === nothing || any(mask) || throw(ArgumentError("the domain contains no sites: widen `domain` so at least one lattice site is inside"))
-    return Lattice{N, typeof(mask), typeof(geometry)}(d, map(x -> x isa Periodic, b), mask, geometry)
+    mask === nothing || any(mask) ||
+        throw(ArgumentError("the domain contains no sites: widen `domain` so at least one \
+            lattice site is inside"))
+    return Lattice{N, typeof(mask), typeof(geometry)}(
+        d, map(x -> x isa Periodic, b), mask,
+        geometry
+    )
 end
 
 """
@@ -65,12 +76,12 @@ end
 
 _domain_mask(::Nothing, dims, g) = nothing
 function _domain_mask(m::AbstractArray{Bool}, dims, g)
-    size(m) == dims || throw(ArgumentError("domain mask has size $(size(m)), lattice $dims"))
+    size(m) == dims ||
+        throw(ArgumentError("domain mask has size $(size(m)), lattice $dims"))
     return Array{Bool}(m)
 end
 _domain_mask(f, dims, g) = Bool[f(_embed(g, Tuple(x))) for x in CartesianIndices(dims)]
 _domain_mask(f::OnIndices, dims, g) = Bool[f.f(Tuple(x)) for x in CartesianIndices(dims)]
-
 
 # `embed` by geometry alone (for construction, before the lattice exists)
 _embed(::Square, v) = v
@@ -82,16 +93,23 @@ function Adapt.adapt_structure(to, l::Lattice{N}) where {N}
 end
 function Base.:(==)(a::Lattice, b::Lattice)
     return a.dims == b.dims && a.periodic == b.periodic && a.geometry == b.geometry &&
-        (a.mask === b.mask || (a.mask !== nothing && b.mask !== nothing && Array(a.mask) == Array(b.mask)))
+        (
+        a.mask === b.mask ||
+            (a.mask !== nothing && b.mask !== nothing && Array(a.mask) == Array(b.mask))
+    )
 end
-Base.hash(l::Lattice, h::UInt) = hash((l.dims, l.periodic, l.mask === nothing ? nothing : Array(l.mask), l.geometry), h)
+function Base.hash(l::Lattice, h::UInt)
+    return hash(
+        (l.dims, l.periodic, l.mask === nothing ? nothing : Array(l.mask), l.geometry), h
+    )
+end
 
 """
     embed(lattice, v) -> NTuple
 
-Lattice-coordinate vector `v` (an offset, or a position) as a Cartesian vector: the identity on
-square lattices, `(q + r/2, r·√3/2)` on hexagonal ones. Linear, so it maps centroids, shifts
-and offsets alike.
+Lattice-coordinate vector `v` (an offset, or a position) as a Cartesian vector: the identity
+on square lattices, `(q + r/2, r·√3/2)` on hexagonal ones. Linear, so it maps centroids,
+shifts and offsets alike.
 """
 @inline embed(::Lattice{N, M, Square}, v) where {N, M} = v
 @inline function embed(::Lattice{2, M, Hexagonal}, v) where {M}
@@ -116,7 +134,8 @@ end
 """The lattice with its domain mask on the host (for host code given a device context). The
 mask is static: its host copy is made once per device mask and reused (read-only)."""
 host_lattice(l::Lattice) = host_lattice(nothing, l)
-# `stats` counts the mask copy (D-085), or `nothing`; the copy is cached (D-092, audit A4/H3)
+# `stats` counts the mask copy (D-085), or `nothing`; the copy is cached (D-092, audit
+# A4/H3)
 """
     host_lattice(stats, l::Lattice)
 
@@ -175,7 +194,14 @@ does a pair with either site outside the lattice domain.
     w = ntuple(Val(N)) do d
         n = l.dims[d]
         v = y[d]
-        ifelse(v < 1, ifelse(l.periodic[d], v + n, 1), ifelse(v > n, ifelse(l.periodic[d], v - n, n), v))
+        ifelse(
+            v < 1, ifelse(l.periodic[d], v + n, 1), ifelse(
+                v > n, ifelse(
+                    l.periodic[d], v -
+                        n, n
+                ), v
+            )
+        )
     end
     return inside && _in_domain(l.mask, l, x, w), w
 end
@@ -188,7 +214,10 @@ end
 end
 @inline _in_domain(::Nothing, l, x, w) = true
 # bounds: x and w are lattice sites (shifted inside), so ≤ nsites = length(m)
-@inline _in_domain(m, l, x, w) = @inbounds(m[linear_index(l, x)]) && @inbounds(m[linear_index(l, w)])
+@inline function _in_domain(m, l, x, w)
+    return @inbounds(m[linear_index(l, x)]) &&
+        @inbounds(m[linear_index(l, w)])
+end
 
 # ---------------------------------------------------------------------------------------
 # Relations
@@ -223,7 +252,13 @@ lattice with no domain mask.
 """
 @inline function interior(l::Lattice{N, Nothing}, x, rel::Relation{N, K}) where {N, K}
     # bounds: k ≤ K offsets of rel, each with N components
-    r = foldl(max, ntuple(k -> foldl(max, ntuple(d -> abs(Int(@inbounds rel.offsets[k][d])), Val(N))), Val(K)))
+    r = foldl(
+        max,
+        ntuple(
+            k -> foldl(max, ntuple(d -> abs(Int(@inbounds rel.offsets[k][d])), Val(N))),
+            Val(K)
+        )
+    )
     return all(ntuple(d -> r < x[d] <= l.dims[d] - r, Val(N)))
 end
 @inline interior(l::Lattice, x, rel) = false
@@ -236,18 +271,27 @@ Linear index of neighbor `k` of site `t` (with coordinates `x`) under `relation`
 otherwise calls [`shift`](@ref) and [`linear_index`](@ref), returning `(false, t)` if
 outside the domain.
 """
-@inline function neighbor_index(l::Lattice{N}, x, t::Int, rel::Relation{N}, k, inner::Bool) where {N}
+@inline function neighbor_index(
+        l::Lattice{N}, x, t::Int, rel::Relation{N}, k, inner::Bool
+    ) where {N}
     # bounds: k ≤ length(rel), an offset of the relation
     inner && return true, t + _linear_offset(l, @inbounds rel.offsets[k])
     inside, y = shift(l, x, @inbounds rel.offsets[k])
     return inside, inside ? linear_index(l, y) : t
 end
 @inline function _linear_offset(l::Lattice{N}, o::NTuple{N, Int32}) where {N}
-    return foldl(+, ntuple(d -> Int(o[d]) * prod(ntuple(e -> e < d ? l.dims[e] : 1, Val(N))), Val(N)))
+    return foldl(
+        +, ntuple(
+            d -> Int(o[d]) *
+                prod(ntuple(e -> e < d ? l.dims[e] : 1, Val(N))), Val(N)
+        )
+    )
 end
 
-
-"""The supertype of a relation's specification (a neighborhood or stencil before it is bound to a lattice)."""
+"""
+The supertype of a relation's specification (a neighborhood or stencil before it is bound to
+a lattice).
+"""
 abstract type AbstractRelationSpec end
 
 """Chebyshev ball: all offsets with `maximum(abs, o) ≤ k` (order 1 = 8 in 2D, 26 in 3D)."""
@@ -308,7 +352,9 @@ function _candidates(spec::Moore, N)
     return [o for o in _box(N, spec.k)]
 end
 _candidates(spec::VonNeumann, N) = [o for o in _box(N, spec.k) if sum(abs, o) <= spec.k]
-_candidates(spec::EuclideanBall, N) = [o for o in _box(N, floor(Int, spec.r)) if _sq(o) <= spec.r^2]
+function _candidates(spec::EuclideanBall, N)
+    return [o for o in _box(N, floor(Int, spec.r)) if _sq(o) <= spec.r^2]
+end
 function _candidates(spec::NeighborOrder, N)
     box = _box(N, spec.k)
     shells = sort!(unique(_sq(o) for o in box if _sq(o) > 0))
@@ -338,11 +384,20 @@ _hexdist(o) = (abs(o[1]) + abs(o[2]) + abs(o[1] + o[2])) ÷ 2
 # Candidates per geometry: on hexagonal lattices Moore/VonNeumann are the hex balls and
 # Euclidean specs use embedded distances.
 _candidates(spec, N, ::Square) = _candidates(spec, N)
-_candidates(spec::Hex, N, ::Square) = throw(ArgumentError("`Hex(k)` needs a hexagonal lattice (`geometry = Hexagonal()`)"))
-_candidates(spec::Union{Hex, Moore, VonNeumann}, N, ::Hexagonal) = [o for o in _box(2, spec.k) if _hexdist(o) <= spec.k]
+function _candidates(spec::Hex, N, ::Square)
+    throw(ArgumentError("`Hex(k)` needs a hexagonal lattice (`geometry = Hexagonal()`)"))
+end
+function _candidates(spec::Union{Hex, Moore, VonNeumann}, N, ::Hexagonal)
+    return [o for o in _box(2, spec.k) if _hexdist(o) <= spec.k]
+end
 _candidates(spec::Stencil, N, ::Hexagonal) = _candidates(spec, N)
 _hexsq(o) = (x = o[1] + o[2] / 2; y = o[2] * sqrt(3) / 2; x^2 + y^2)
-_candidates(spec::EuclideanBall, N, ::Hexagonal) = [o for o in _box(2, ceil(Int, 2spec.r / sqrt(3))) if _hexsq(o) <= spec.r^2 + 1.0e-9]
+function _candidates(spec::EuclideanBall, N, ::Hexagonal)
+    return [
+        o for o in _box(2, ceil(Int, 2spec.r / sqrt(3)))
+            if _hexsq(o) <= spec.r^2 + 1.0e-9
+    ]
+end
 function _candidates(spec::NeighborOrder, N, ::Hexagonal)
     box = _box(2, 2spec.k)
     shells = sort!(unique(round(_hexsq(o); digits = 9) for o in box if _hexsq(o) > 0))
@@ -385,7 +440,9 @@ relation(r::Relation, ::Lattice) = r
 """Whether relation `r` includes the origin offset (a site is its own neighbor)."""
 has_origin(r::Relation) = any(o -> all(iszero, o), r.offsets)
 
-"""Whether every offset's negation is in `r` with the same weight (a symmetric pair relation)."""
+"""
+Whether every offset's negation is in `r` with the same weight (a symmetric pair relation).
+"""
 function is_symmetric(r::Relation)
     for (k, o) in enumerate(r.offsets)
         j = findfirst(==(map(-, o)), r.offsets)
@@ -414,7 +471,9 @@ end
 # is part of the array types, chosen once from the site count, so a lattice that fits keeps
 # the Int32 arrays and their code exactly; there is no per-site branch.
 const _FORCE_WIDE_SITES = Ref(false)    # tests: the Int64 width on a small lattice
-site_index_type(nsite::Integer) = (_FORCE_WIDE_SITES[] || nsite > typemax(Int32)) ? Int64 : Int32
+function site_index_type(nsite::Integer)
+    return (_FORCE_WIDE_SITES[] || nsite > typemax(Int32)) ? Int64 : Int32
+end
 # Whether the backend's kernels have 64-bit atomics, which the Int64 mask counters and the
 # `@convert` scratch need. Metal's do not (its extension says so): there, a lattice above
 # 2³¹ − 1 sites whose mask follows the state, or with an `@convert` pass, is refused at
@@ -431,9 +490,10 @@ struct AllMobile end
 """
 Sites with `frozen[i] = true` never change owner and never donate. On the host, `sites`
 lists the mobile sites (SequentialCPM draws its targets from them; the count is
-`length(sites)`), as `Int32` or, above 2³¹ − 1 sites, `Int64` (`site_index_type`). On a device `sites` is `nothing`: CheckerboardCPM reads only `frozen`, and
-the integrator keeps the mobile count on the host. A refresh (`refresh_frozen!`, `reinit!`)
-rewrites both in place, so the integrator's context stays valid.
+`length(sites)`), as `Int32` or, above 2³¹ − 1 sites, `Int64` (`site_index_type`). On a
+device `sites` is `nothing`: CheckerboardCPM reads only `frozen`, and the integrator keeps
+the mobile count on the host. A refresh (`refresh_frozen!`, `reinit!`) rewrites both in
+place, so the integrator's context stays valid.
 """
 struct MaskMobility{M, S}
     frozen::M
@@ -443,17 +503,24 @@ Adapt.@adapt_structure MaskMobility
 
 function mobility(frozen::Union{Nothing, AbstractArray{Bool}}, l::Lattice)
     frozen === nothing && return AllMobile()
-    size(frozen) == l.dims || throw(ArgumentError("frozen mask has size $(size(frozen)), lattice $(l.dims)"))
-    any(!, frozen) || throw(ArgumentError("every site is frozen: clear at least one entry in `frozen` or use `constraint = frozen_dynamics` to keep all sites fixed"))     # at construction only
+    size(frozen) == l.dims ||
+        throw(ArgumentError("frozen mask has size $(size(frozen)), lattice $(l.dims)"))
+    any(!, frozen) ||
+        # at construction only
+        throw(ArgumentError("every site is frozen: clear at least one entry in `frozen` \
+            or use `constraint = frozen_dynamics` to keep all sites fixed"))
     sites = site_index_type(length(frozen))[]
     _mobile_sites!(sites, frozen)
     return MaskMobility(Array{Bool}(frozen), sites)
 end
 
-# The mobility in the integrator's context: on a device, the mask alone (see `MaskMobility`).
+# The mobility in the integrator's context: on a device, the mask alone (see
+# `MaskMobility`).
 _backend_mobility(backend, m::AllMobile) = m
 _backend_mobility(::KernelAbstractions.CPU, m::MaskMobility) = m
-_backend_mobility(backend, m::MaskMobility) = MaskMobility(_to_backend(backend, m.frozen), nothing)
+function _backend_mobility(backend, m::MaskMobility)
+    return MaskMobility(_to_backend(backend, m.frozen), nothing)
+end
 
 # `sites` ← the mobile sites of a host mask, in place. The first `resize!` grows the list to
 # the full site count once (later calls stay within that capacity and do not allocate). A
@@ -471,8 +538,8 @@ function _mobile_sites!(sites::Union{Vector{Int32}, Vector{Int64}}, frozen)
     return sites
 end
 
-# Overwrite a mask mobility from a host mask (the custom-rule fallback of `refresh_frozen!`).
-# `stats` counts the host→device copy (D-085), or `nothing`.
+# Overwrite a mask mobility from a host mask (the custom-rule fallback of
+# `refresh_frozen!`). `stats` counts the host→device copy (D-085), or `nothing`.
 function _set_mobility!(stats, m::MaskMobility, frozen::AbstractArray{Bool})
     counted_copy!(stats, m.frozen, frozen isa Array{Bool} ? frozen : Array{Bool}(frozen))
     m.sites === nothing || _mobile_sites!(m.sites, frozen)
@@ -481,7 +548,9 @@ end
 function _set_mobility!(stats, m, frozen)
     throw(
         ArgumentError(
-            "the frozen mask changed from $(frozen === nothing ? "a mask to none" : "none to a mask"); use `remake` and `init`"
+            "the frozen mask changed \
+                from $(frozen === nothing ? "a mask to none" : "none to a mask"); use \
+                    `remake` and `init`"
         )
     )
 end

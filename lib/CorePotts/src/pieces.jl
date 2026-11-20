@@ -86,7 +86,10 @@ algorithms), or windowed search (`GlobalBoard`, used by `CheckerboardCPM`).
 """
 struct GlobalExact end
 
-"""Windowed global connectivity evaluation mode used by `CheckerboardCPM` when a rule sets a search window."""
+"""
+Windowed global connectivity evaluation mode used by `CheckerboardCPM` when a rule sets a
+search window.
+"""
 struct GlobalBoard end
 
 """
@@ -95,7 +98,10 @@ Stage of the `Global` veto (`ConnectivityHooks.post`): local shell test only (`0
 """
 struct GlobalLocal end
 
-"""Full-search stage of the `Global` veto (`ConnectivityHooks.post`): returns `0` (pass), `1` (refused for want of window), or `2` (refused)."""
+"""
+Full-search stage of the `Global` veto (`ConnectivityHooks.post`): returns `0` (pass), `1`
+(refused for want of window), or `2` (refused).
+"""
 struct GlobalSearch end
 
 const GLOBAL_PASS = Int32(0)
@@ -116,7 +122,8 @@ The whole-cell connectivity parts of a `CPMFunction`:
     serial kernel over the scratch;
   - `uses_global`: the model uses `Global` (veto, penalty or `connected`): the integrator
     counts `stats.connectivity_deferred`;
-  - `exact_veto`: a veto `Global()` without window (exact search: host only on the checkerboard);
+  - `exact_veto`: a veto `Global()` without window (exact search: host only on the
+    checkerboard);
   - `after_slots`: the cell-scope adjacencies tracked (0, 1 or 2): the after-value buffer;
   - `window`: the largest window of the model's windowed `Global` searches (0: none). The
     checkerboard keeps concurrent copies farther apart than it.
@@ -199,7 +206,8 @@ function _flood!(
     stack = fl.stack
     offs = _adjacency_offsets(lat, adj)
     top = 1
-    @inbounds stack[1] = eltype(stack)(s0)      # stack has nsites entries: each site enters once
+    # stack has nsites entries: each site enters once
+    @inbounds stack[1] = eltype(stack)(s0)
     size = 1
     while top > 0
         s = Int(@inbounds stack[top])
@@ -226,7 +234,8 @@ function _flood!(
     return size, found
 end
 
-# pre-mark the touches (shell positions in `touch`) of x with `S + 1`; their count and the first
+# pre-mark the touches (shell positions in `touch`) of x with `S + 1`; their count and the
+# first
 function _mark_touches!(lat, fl::FloodScratch, x, touch::UInt32, S::UInt32)
     n = 0
     first = 0
@@ -235,7 +244,8 @@ function _mark_touches!(lat, fl::FloodScratch, x, touch::UInt32, S::UInt32)
         k = trailing_zeros(m) + 1
         m &= m - UInt32(1)
         s = _shell_site(lat, x, k)
-        if @inbounds(fl.mark[s]) != S + UInt32(1)        # a short periodic axis may repeat a site
+        # a short periodic axis may repeat a site
+        if @inbounds(fl.mark[s]) != S + UInt32(1)
             @inbounds fl.mark[s] = S + UInt32(1)
             n += 1
             first == 0 && (first = s)
@@ -302,7 +312,8 @@ end
     )
 end
 
-@inline _bit(v, i::Int) = (@inbounds(v[(i >> 5) + 1]) >> (i & 31)) & UInt32(1) != 0      # i < 32 length(v)
+# i < 32 length(v)
+@inline _bit(v, i::Int) = (@inbounds(v[(i >> 5) + 1]) >> (i & 31)) & UInt32(1) != 0
 # bounds: i < 32 length(v), as for `_bit`
 @inline _setbit!(v, i::Int) = (@inbounds(v[(i >> 5) + 1] |= UInt32(1) << (i & 31)); nothing)
 
@@ -349,7 +360,8 @@ function _keeps_window(
         _setbit!(seen, i0)
         found += 1
         top = 1
-        @inbounds stack[1] = I(linear_index(lat, y0))             # each box site enters once: top ≤ CAP
+        # each box site enters once: top ≤ CAP
+        @inbounds stack[1] = I(linear_index(lat, y0))
         escaped = false
         while top > 0
             s = Int(@inbounds stack[top])
@@ -374,7 +386,8 @@ function _keeps_window(
         end
         first && found == ntouch && return GLOBAL_PASS
         first = false
-        escaped || return GLOBAL_REFUSED           # a whole piece inside the box: a true split
+        # a whole piece inside the box: a true split
+        escaped || return GLOBAL_REFUSED
     end
     return GLOBAL_WINDOW
 end
@@ -384,7 +397,9 @@ end
 
 `Global`'s decision for the losing cell `old` (always `GLOBAL_PASS` for the medium): 0
 passes, 1 is a refusal for want of window, 2 a refusal. `GlobalLocal()` runs the local
-test only (1: undecided); `GlobalSearch()` decides, exactly under `ctx.global_mode = GlobalExact()` (or without window), in the box of radius `window` under `GlobalBoard()`.
+test only (1: undecided); `GlobalSearch()` decides, exactly under
+`ctx.global_mode = GlobalExact()` (or without window), in the box of radius `window` under
+`GlobalBoard()`.
 """
 @inline function global_keeps(σ, ctx, prop::Proposal, adj::Val, w::Val, cap::Val, stage)
     prop.old == 0 && return GLOBAL_PASS
@@ -412,7 +427,8 @@ end
 end
 @inline function _keeps_search(::GlobalBoard, σ, ctx, prop, touch, adj, w::Val, cap)
     return _keeps_window(
-        σ, ctx.lattice, prop.x, prop.target, prop.old, touch, adj, w, cap, eltype(ctx.flood.stack)
+        σ, ctx.lattice, prop.x, prop.target, prop.old,
+        touch, adj, w, cap, eltype(ctx.flood.stack)
     )
 end
 
@@ -435,8 +451,7 @@ end
 Whether `global_keeps` needs the search for this copy (the local test fails).
 """
 @inline function global_defer(σ, ctx, prop::Proposal, adj::Val)
-    return prop.old != 0 &&
-        !_losing_shell(
+    return prop.old != 0 && !_losing_shell(
         σ, ctx.lattice, prop.x, prop.old, adj
     )[3]
 end
@@ -453,7 +468,8 @@ function _pieces_lose(σ, ctx, prop::Proposal, P, L, V, adj::Val)
     v == 1 && return Int32(0), Int32(0), p0, l0
     lat = ctx.lattice
     _, touch, ok = _losing_shell(σ, lat, prop.x, a, adj)
-    touch == 0 && return Int32(p0 - 1), Int32(l0), p0, l0          # an isolated site: its piece goes
+    # an isolated site: its piece goes
+    touch == 0 && return Int32(p0 - 1), Int32(l0), p0, l0
     p0 == 1 && ok && return Int32(1), Int32(v - 1), p0, l0
     # the pieces of P_x \ {x}, from the touches
     fl = ctx.flood
@@ -474,7 +490,8 @@ function _pieces_lose(σ, ctx, prop::Proposal, P, L, V, adj::Val)
         sz, found = _flood!(
             σ, lat, fl, s, a, prop.target, S, adj, found, p0 == 1 && k == 0 ? n : 0
         )
-        p0 == 1 && k == 0 && found == n && return Int32(1), Int32(v - 1), p0, l0   # one piece, still connected
+        # one piece, still connected
+        p0 == 1 && k == 0 && found == n && return Int32(1), Int32(v - 1), p0, l0
         k += 1
         total += sz
         maxc = max(maxc, sz)
@@ -525,20 +542,29 @@ function _pieces_gain(σ, ctx, prop::Proposal, P, L, V, adj::Val)
 end
 
 """
-    pieces_after!(σ, ctx, prop, P, L, V, Val(full), slot) -> (pieces_old, largest_old, pieces_new, largest_new)
+    pieces_after!(σ, ctx, prop, P, L, V, Val(full), slot) -> (pieces_old, largest_old,
+        pieces_new, largest_new)
 
 The exact pieces and largest piece of the old and new cells after the copy (0 for the
 medium), from the trackers `P`, `L` (this adjacency) and the volumes `V`. The values are
 also stored for the target in `ctx.flood.after` (rows `4(slot − 1) + 1:4`) for
-[`commit_pieces!`](@ref): on the lockless checkerboard (`ctx.lockless`) as the changes from the
-values read. A cell in one piece that stays in one piece changes its largest piece by ∓1 (its
-volume's change), not by a difference of two reads that a concurrent copy of the cell may
-separate; every other change is local (the copy's own site) or comes from the floods, which
-run with nothing in flight.
+[`commit_pieces!`](@ref): on the lockless checkerboard (`ctx.lockless`) as the changes from
+the values read. A cell in one piece that stays in one piece changes its largest piece by ∓1
+(its volume's change), not by a difference of two reads that a concurrent copy of the cell
+may separate; every other change is local (the copy's own site) or comes from the floods,
+which run with nothing in flight.
 """
 @inline function pieces_after!(σ, ctx, prop::Proposal, P, L, V, adj::Val, slot::Int)
-    po, lo, p0, l0 = prop.old == 0 ? (Int32(0), Int32(0), 0, 0) : _pieces_lose(σ, ctx, prop, P, L, V, adj)
-    pn, ln, q0, m0 = prop.new == 0 ? (Int32(0), Int32(0), 0, 0) : _pieces_gain(σ, ctx, prop, P, L, V, adj)
+    po, lo, p0, l0 = if prop.old == 0
+        (Int32(0), Int32(0), 0, 0)
+    else
+        _pieces_lose(σ, ctx, prop, P, L, V, adj)
+    end
+    pn, ln, q0, m0 = if prop.new == 0
+        (Int32(0), Int32(0), 0, 0)
+    else
+        _pieces_gain(σ, ctx, prop, P, L, V, adj)
+    end
     a = ctx.flood.after
     r = 4 * (slot - 1)
     t = prop.target
@@ -584,8 +610,8 @@ other copies of its cells are in flight (no flood runs outside the serial pass).
 end
 
 """
-Apply the after-values `pieces_after!` stored for the target to the trackers `P`, `L` (on the
-lockless checkerboard, add the stored changes atomically).
+Apply the after-values `pieces_after!` stored for the target to the trackers `P`, `L` (on
+the lockless checkerboard, add the stored changes atomically).
 """
 @inline function commit_pieces!(P, L, prop::Proposal, ctx, slot::Int)
     a = ctx.flood.after

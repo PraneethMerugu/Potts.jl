@@ -7,7 +7,8 @@ function jacobi!(st, p, ctx, key, mcs, i)
         _, y = shift(lat, x, off)
         acc += @inbounds st.site.u[linear_index(lat, y)]
     end
-    @inbounds st.site.u_next[i] = st.site.u[i] + p.D * (acc - length(ctx.contact) * st.site.u[i])
+    @inbounds st.site.u_next[i] = st.site.u[i] +
+        p.D * (acc - length(ctx.contact) * st.site.u[i])
     return nothing
 end
 function host_jacobi(u, lat, rel, D)

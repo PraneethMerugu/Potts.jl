@@ -16,13 +16,25 @@
 
 """Lifecycle trigger code (`Int32(0)`) indicating no lifecycle event for the cell."""
 const EVENT_NONE = Int32(0)
-"""Lifecycle trigger code (`Int32(1)`) indicating that the cell divides alone along `Lifecycle.normal`."""
+"""
+Lifecycle trigger code (`Int32(1)`) indicating that the cell divides alone along
+`Lifecycle.normal`.
+"""
 const EVENT_DIVIDE = Int32(1)
-"""Lifecycle trigger code (`Int32(2)`) indicating that the cell is removed and its sites become medium."""
+"""
+Lifecycle trigger code (`Int32(2)`) indicating that the cell is removed and its sites become
+medium.
+"""
 const EVENT_REMOVE = Int32(2)
-"""Lifecycle trigger code (`Int32(3)`) indicating that the cell transitions to the kind returned by `Lifecycle.kind`."""
+"""
+Lifecycle trigger code (`Int32(3)`) indicating that the cell transitions to the kind
+returned by `Lifecycle.kind`.
+"""
 const EVENT_TRANSITION = Int32(3)
-"""Lifecycle trigger code (`Int32(4)`) indicating that the cell's compartment cluster divides as a unit (evaluated at the root)."""
+"""
+Lifecycle trigger code (`Int32(4)`) indicating that the cell's compartment cluster divides
+as a unit (evaluated at the root).
+"""
 const EVENT_DIVIDE_CLUSTER = Int32(4)
 # A division that also transitions the dividing cell (A-17): the transition bit on
 # `EVENT_DIVIDE` or `EVENT_DIVIDE_CLUSTER` (`transitioning`). The transition is applied
@@ -65,7 +77,8 @@ end
 @inline _base_event(e) = e & ~_TRANSITIONING
 @inline _transitions(e) = e == EVENT_TRANSITION || (e & _TRANSITIONING) != Int32(0)
 @inline _divides_with_cluster(e) = _base_event(e) == EVENT_DIVIDE_CLUSTER
-# a planned cell whose division did not happen (deferred, or its cluster's): a transition stays
+# a planned cell whose division did not happen (deferred, or its cluster's): a transition
+# stays
 @inline _undivided(e) = (e & _TRANSITIONING) != Int32(0) ? EVENT_TRANSITION : EVENT_NONE
 
 # Rule-carrying events (`Lifecycle(…; rules = true)`): the trigger returns
@@ -73,19 +86,23 @@ end
 # fired above it, so the daughter state rule of that rule alone runs.
 const _RULE_SHIFT = 8
 const _EVENT_MASK = Int32(0xff)
-"""`ruled_event(event, i)`: `event` fired by rule `i` (for a `Lifecycle(…; rules = true)` trigger).
-Return `EVENT_NONE` itself, not `ruled_event(EVENT_NONE, i)`, when no rule fires: a nonzero
-value counts as an event and forces a host plan."""
+"""`ruled_event(event, i)`: `event` fired by rule `i` (for a `Lifecycle(…; rules = true)`
+trigger). Return `EVENT_NONE` itself, not `ruled_event(EVENT_NONE, i)`, when no rule fires:
+a nonzero value counts as an event and forces a host plan."""
 @inline ruled_event(event, i) = Int32(event) | (Int32(i) << _RULE_SHIFT)
 public ruled_event
 @inline _event(::Val{false}, raw) = raw
 @inline _event(::Val{true}, raw) = raw & _EVENT_MASK
 @inline _rule(raw) = raw >> _RULE_SHIFT
 # the daughter state rule: with rule-carrying events it also gets the index of the rule
-@inline function _divide_rule!(::Val{false}, f::F, st, p, ctx, key, mcs, parent, daughter, raw) where {F}
+@inline function _divide_rule!(
+        ::Val{false}, f::F, st, p, ctx, key, mcs, parent, daughter, raw
+    ) where {F}
     return f(st, p, ctx, key, mcs, parent, daughter)
 end
-@inline function _divide_rule!(::Val{true}, f::F, st, p, ctx, key, mcs, parent, daughter, raw) where {F}
+@inline function _divide_rule!(
+        ::Val{true}, f::F, st, p, ctx, key, mcs, parent, daughter, raw
+    ) where {F}
     return f(st, p, ctx, key, mcs, parent, daughter, _rule(raw))
 end
 
@@ -114,21 +131,22 @@ hand-written):
   the device.
 - `every` — check triggers every `every` MCS.
 - `rules` — rule-carrying events. With `rules = true` the trigger returns
-  `ruled_event(event, i)`, naming the rule `i ≥ 1` that fired, and `divide!`/`cluster_divide!`
-  take an eighth argument, that index (a cluster member gets its root's), so only the firing
-  rule's daughter state rule runs. Needed only when two rules can fire for one cell.
+  `ruled_event(event, i)`, naming the rule `i ≥ 1` that fired, and
+  `divide!`/`cluster_divide!` take an eighth argument, that index (a cluster member gets its
+  root's), so only the firing rule's daughter state rule runs. Needed only when two rules
+  can fire for one cell.
 - `cluster_normal`, `cluster_divide!` — `normal` and `divide!` for cluster divisions.
 - `before(st, p, ctx, key, mcs, c)` — a cell update run for every cell `c` in
-  `1:ncells(st)` at the start of the lifecycle of every MCS (also the MCS it does not check),
-  as a `CellPhase` run just before it would. It must write only cell `c`'s own columns, and
-  the trigger of cell `c` may read a column `before` writes only at index `c` (other values
-  only if `before` does not write them). Then the device lifecycle runs `before` and the
-  trigger of each cell in one work item, one launch for both; the host
+  `1:ncells(st)` at the start of the lifecycle of every MCS (also the MCS it does not
+  check), as a `CellPhase` run just before it would. It must write only cell `c`'s own
+  columns, and the trigger of cell `c` may read a column `before` writes only at index `c`
+  (other values only if `before` does not write them). Then the device lifecycle runs
+  `before` and the trigger of each cell in one work item, one launch for both; the host
   planner runs `before` as its own launch.
 - `release(st, c)` — the boundary of a model's cell references: run for
-  every cell `c` of an event round before any id is allocated (on a device in the copy stage,
-  before the daughter column copies, while every volume is still the pre-event one), it
-  resets each reference of a live cell `c` whose referent is dead (volume 0) to 0, so no
+  every cell `c` of an event round before any id is allocated (on a device in the copy
+  stage, before the daughter column copies, while every volume is still the pre-event one),
+  it resets each reference of a live cell `c` whose referent is dead (volume 0) to 0, so no
   reference aliases the cell that reuses the slot, and daughters copy the reset value. It
   writes only cell `c`'s own columns and reads `volume`; `nothing` (the default) for a model
   without references.
@@ -138,23 +156,23 @@ hand-written):
   `nothing` (the default): no hook. Copy hooks (`@on_copy`) never run from the lifecycle.
 
 Cell serials: when `st.cell` has a `birth` column (`Int32`, never copied to a
-daughter) and `st.model` the counter `NEXT_BIRTH` (a 1-element `Int32` array), every daughter
-takes the next serial, in increasing daughter-slot order (the allocation order), and the
-counter advances; a serial is never reused, and a checkpoint keeps the counter.
+daughter) and `st.model` the counter `NEXT_BIRTH` (a 1-element `Int32` array), every
+daughter takes the next serial, in increasing daughter-slot order (the allocation order),
+and the counter advances; a serial is never reused, and a checkpoint keeps the counter.
 
 Both kinds of division can happen in one MCS:
 
 - `EVENT_DIVIDE_CLUSTER` divides a compartment cluster as a unit (`st.cell.cluster`).
   Only the root's event counts (members' `EVENT_DIVIDE_CLUSTER` are ignored).
   `cluster_normal` is evaluated with the cluster's moments (`st.cell` then holds the
-  cluster's volume and moments at the root's index), and every live member splits along that plane
-  through the cluster centroid; `cluster_divide!` runs for each member. A portable
+  cluster's volume and moments at the root's index), and every live member splits along that
+  plane through the cluster centroid; `cluster_divide!` runs for each member. A portable
   `cluster_normal` reads `st.cell.volume`, `anchor`, `m1`, `m2` only at the root's index,
-  any other cell column only as `generation`, `kind` or `cluster`, and not `st.ownership`: the host
-  planner passes a cluster-labeled `σ` and cluster moments at every root, the device planner
-  the cell-labeled `σ`, the full cell columns, and the cluster's volume and moments
-  at every index. The daughters form
-  a new cluster. A dividing cluster takes precedence over its members' own `EVENT_DIVIDE`.
+  any other cell column only as `generation`, `kind` or `cluster`, and not `st.ownership`:
+  the host planner passes a cluster-labeled `σ` and cluster moments at every root, the
+  device planner the cell-labeled `σ`, the full cell columns, and the cluster's volume and
+  moments at every index. The daughters form a new cluster. A dividing cluster takes
+  precedence over its members' own `EVENT_DIVIDE`.
 - `EVENT_DIVIDE` divides the cell alone along `normal`; `divide!` runs. A compartment's
   daughter (the parent shares its cluster with another live cell) stays in the parent's
   cluster; a lone cell's daughter is a lone cell (its own cluster).
@@ -173,15 +191,18 @@ struct Lifecycle{TR, NO, CN, KI, DV, CD, RB, RU <: Val, BE, RL, OC}
     rules::RU                   # Val(true): rule-carrying events
     before::BE                  # a cell update fused with the trigger, or `nothing`
     release::RL                 # the reference reset of an event round, or `nothing`
-    owner_changed::OC           # the site hook at every site whose owner changes, or `nothing`
+    # the site hook at every site whose owner changes, or `nothing`
+    owner_changed::OC
 end
 function Lifecycle(
         trigger; normal = AlongMinorAxis(), kind = keep_kind, divide! = no_divide_rule,
-        rebuild! = no_rebuild, every::Integer = 1, cluster_normal = normal, cluster_divide! = divide!,
+        rebuild! = no_rebuild, every::Integer = 1, cluster_normal = normal,
+        cluster_divide! = divide!,
         rules::Bool = false, before = nothing, release = nothing, owner_changed = nothing
     )
     return Lifecycle(
-        trigger, normal, cluster_normal, kind, divide!, cluster_divide!, rebuild!, Int(every), Val(rules), before,
+        trigger, normal, cluster_normal, kind, divide!, cluster_divide!,
+        rebuild!, Int(every), Val(rules), before,
         release, owner_changed
     )
 end
@@ -202,7 +223,9 @@ const NEXT_BIRTH = Symbol("#next_birth")
 # the reference reset of an event round (`Lifecycle.release`), one launch over the cells
 @inline _release_body!(c, release::F, st) where {F} = (release(st, c % Int32); nothing)
 _run_release!(::Nothing, st, backend) = 0
-_run_release!(f::F, st, backend) where {F} = (Exec.launch!(backend, _release_body!, ncells(st), (f, st)); 1)
+function _run_release!(f::F, st, backend) where {F}
+    (Exec.launch!(backend, _release_body!, ncells(st), (f, st)); 1)
+end
 @inline _release!(::Nothing, st, c) = nothing
 @inline _release!(f::F, st, c) where {F} = (f(st, c % Int32); nothing)
 
@@ -224,13 +247,17 @@ end
 
 # `before` as its own launch (the host planner; MCS the lifecycle does not check)
 _run_before(::Nothing, st, p, ctx, key, mcs, backend) = 0
-_run_before(f::F, st, p, ctx, key, mcs, backend) where {F} = CellPhase(f)(st, p, ctx, key, mcs, backend)
+function _run_before(f::F, st, p, ctx, key, mcs, backend) where {F}
+    return CellPhase(f)(st, p, ctx, key, mcs, backend)
+end
 
 no_rebuild(st, p, ctx, backend) = nothing
 
 # bounds: c is a live cell id ≤ capacity (the lifecycle calls it per cell)
 @inline keep_kind(st, p, ctx, key, mcs, c) = @inbounds st.cell.kind[c]
-"""The no-division-rule default: a daughter keeps the default copy of its parent's values."""
+"""
+The no-division-rule default: a daughter keeps the default copy of its parent's values.
+"""
 @inline no_divide_rule(st, p, ctx, key, mcs, parent, daughter) = nothing
 @inline no_divide_rule(st, p, ctx, key, mcs, parent, daughter, rule) = nothing
 
@@ -277,7 +304,10 @@ end
 end
 @inline function (::RandomPlane{T})(st, p, ctx, key, mcs, c) where {T}
     # bounds: c is a live cell id ≤ capacity (the lifecycle calls it per cell)
-    r = draw(key, mcs, cell_entity(c, @inbounds st.cell.generation[c]), STREAM_DIVISION_PLANE)
+    r = draw(
+        key, mcs, cell_entity(c, @inbounds st.cell.generation[c]),
+        STREAM_DIVISION_PLANE
+    )
     return _random_unit(T, r, Val(ndims(ctx.lattice)))
 end
 @inline function _random_unit(::Type{T}, r, ::Val{2}) where {T}
@@ -318,10 +348,17 @@ end
     C = covariance(T, cell, c, Val(3))
     λ = principal_moments(C)[k]
     a, b, e, d, f, g = C[1], C[2], C[3], C[4], C[5], C[6]      # [a b e; b d f; e f g]
-    r1 = (a - λ, b, e); r2 = (b, d - λ, f); r3 = (e, f, g - λ)
-    cross(u, v) = (u[2] * v[3] - u[3] * v[2], u[3] * v[1] - u[1] * v[3], u[1] * v[2] - u[2] * v[1])
+    r1 = (a - λ, b, e)
+    r2 = (b, d - λ, f)
+    r3 = (e, f, g - λ)
+    function cross(u, v)
+        return (
+            u[2] * v[3] - u[3] * v[2], u[3] * v[1] - u[1] * v[3], u[1] * v[2] - u[2] * v[1],
+        )
+    end
     cands = (cross(r1, r2), cross(r1, r3), cross(r2, r3))
-    best = cands[1]; nb = sum(abs2, best)
+    best = cands[1]
+    nb = sum(abs2, best)
     for v in cands
         n = sum(abs2, v)
         n > nb && (best = v; nb = n)
@@ -343,20 +380,26 @@ end
 # ---------------------------------------------------------------------------------------
 # Kernels
 
-# `count[slot]` counts this round's events; item 1 zeroes the other slot, the next round's (its
-# value was read after the previous round), so no separate reset command is enqueued (T3)
+# `count[slot]` counts this round's events; item 1 zeroes the other slot, the next round's
+# (its value was read after the previous round), so no separate reset command is enqueued
+# (T3)
 @inline function _trigger_body!(c, events, count, slot, trigger, st, p, ctx, key, mcs)
-    c == 1 && (@inbounds count[3 - slot] = Int32(0))     # count has 2 entries, slot ∈ (1, 2)
+    # count has 2 entries, slot ∈ (1, 2)
+    c == 1 && (@inbounds count[3 - slot] = Int32(0))
     e = EVENT_NONE
     if @inbounds(st.cell.volume[c]) > 0
         e = trigger(st, p, ctx, key, mcs, c % Int32) % Int32
     end
     @inbounds events[c] = e
-    return e != EVENT_NONE && @inbounds Atomix.@atomic count[slot] += Int32(1)     # slot ∈ (1, 2) = axes(count)
+    # slot ∈ (1, 2) = axes(count)
+    return e != EVENT_NONE && @inbounds Atomix.@atomic count[slot] += Int32(1)
 end
 
-@inline function _normal_body!(c, normals, events, daughter, normal, st, p, ctx, key, mcs, ruled)
-    return if _base_event(_event(ruled, @inbounds(events[c]))) == EVENT_DIVIDE && @inbounds(daughter[c]) > 0    # cell divisions only
+@inline function _normal_body!(
+        c, normals, events, daughter, normal, st, p, ctx, key, mcs, ruled
+    )
+    return if _base_event(_event(ruled, @inbounds(events[c]))) == EVENT_DIVIDE &&
+            @inbounds(daughter[c]) > 0    # cell divisions only
         n = normal(st, p, ctx, key, mcs, Int32(c))
         for d in 1:length(n)
             @inbounds normals[d, c] = n[d]
@@ -364,7 +407,9 @@ end
     end
 end
 
-@inline function _partition_body!(i, σ, daughter, normals, bias, removed, cell, lat, hook::H, st) where {H}
+@inline function _partition_body!(
+        i, σ, daughter, normals, bias, removed, cell, lat, hook::H, st
+    ) where {H}
     c = @inbounds σ[i]
     return if c > 0
         if @inbounds(removed[c])
@@ -375,8 +420,13 @@ end
             δ = min_image(lat, coordinates(lat, i), anchor(cell, c, Val(N)))
             T = eltype(normals)
             V = T(@inbounds cell.volume[c])
-            side = @inbounds bias[c]                     # 0 unless it divides with its cluster
-            offset = embed(lat, ntuple(d -> T(δ[d]) - T(@inbounds cell.m1[d, c]) / V, Val(N)))   # site − centroid
+            # 0 unless it divides with its cluster
+            side = @inbounds bias[c]
+            # site − centroid
+            offset = embed(
+                lat,
+                ntuple(d -> T(δ[d]) - T(@inbounds cell.m1[d, c]) / V, Val(N))
+            )
             for d in 1:N
                 side += T(offset[d]) * @inbounds(normals[d, c])
             end
@@ -392,7 +442,9 @@ end
 # divide"): the `kind` hook reads the cell before the state rules run (its columns are the
 # parent's, the daughter holds their copy), both halves take the new kind, and the daughter
 # state rule reads it.
-@inline function _cell_rule_body!(c, events, daughter, kindf, divide!, cluster_divide!, st, p, ctx, key, mcs, ruled)
+@inline function _cell_rule_body!(
+        c, events, daughter, kindf, divide!, cluster_divide!, st, p, ctx, key, mcs, ruled
+    )
     # bounds: launched over c ∈ 1:capacity; daughters are cell ids ≤ capacity
     raw = @inbounds events[c]
     e = _event(ruled, raw)
@@ -421,7 +473,8 @@ device planner's state (`DeviceLifecycle`), or `nothing` for the host path."""
 struct LifecycleCache{E, C, D, R, NM, B, DL}
     events::E
     count::C            # the event counts of alternate rounds (host path; `_trigger_body!`)
-    host::Vector{Int32} # host copy of this round's count: one transfer per lifecycle MCS (host path)
+    # host copy of this round's count: one transfer per lifecycle MCS (host path)
+    host::Vector{Int32}
     round::Base.RefValue{Int}   # host-path rounds run (selects the slot of `count`)
     daughter::D
     removed::R
@@ -430,7 +483,10 @@ struct LifecycleCache{E, C, D, R, NM, B, DL}
     device::DL
 end
 
-function LifecycleCache(backend, N::Int, capacity::Int, st = nothing, device::Bool = false; fused_limits = (;))
+function LifecycleCache(
+        backend, N::Int, capacity::Int, st = nothing,
+        device::Bool = false; fused_limits = (;)
+    )
     T = Exec.default_float(backend)
     return LifecycleCache(
         KernelAbstractions.zeros(backend, Int32, capacity),
@@ -454,7 +510,9 @@ end
 """A division with no free cell slot waits for one; the first per run warns (silently fewer
 divisions otherwise skew any proliferation result)."""
 function _defer!(stats, cap)
-    stats.deferred == 0 && @warn "lifecycle: all $cap cell slots are in use; divisions are deferred until slots free up. Pass a larger `capacity`."
+    stats.deferred == 0 &&
+        @warn "lifecycle: all $cap cell slots are in use; divisions are deferred until \
+            slots free up. Pass a larger `capacity`."
     stats.deferred += 1
     return nothing
 end
@@ -465,8 +523,9 @@ host hooks, see `Lifecycle`). Returns `(launches, events)`: the number of kernel
 and whether any cell had an event (then kinds, owners and cell ids may have changed, and
 the integrator refreshes the frozen mask). Synchronizes once and reads back the 4-byte event
 count (counted on a device). Quiet MCS return after the trigger kernel.
-`pstats` is the integrator's `PottsStats` (lifecycle counts, host transfers). `before = false`:
-`lc.before` has already run this MCS (a device form that failed after launching it).
+`pstats` is the integrator's `PottsStats` (lifecycle counts, host transfers).
+`before = false`: `lc.before` has already run this MCS (a device form that failed after
+launching it).
 """
 function run_lifecycle!(
         lc::Lifecycle, cache::LifecycleCache, st, p, ctx, key, mcs, backend, pstats,
@@ -477,7 +536,10 @@ function run_lifecycle!(
     stats = pstats.lifecycle
     cap = length(st.cell.kind)
     slot = Int32((cache.round[] += 1) % 2 + 1)
-    Exec.launch!(backend, _trigger_body!, cap, (cache.events, cache.count, slot, lc.trigger, st, p, ctx, key, mcs))
+    Exec.launch!(
+        backend, _trigger_body!, cap,
+        (cache.events, cache.count, slot, lc.trigger, st, p, ctx, key, mcs)
+    )
     launches = 1 + nb
     sync!(pstats, backend)
     counted_copy!(pstats, cache.host, 1, cache.count, slot, 1)
@@ -485,19 +547,34 @@ function run_lifecycle!(
     # D-066 item 5 (a): references to dead cells are reset before any id is allocated
     launches += _run_release!(lc.release, st, backend)
 
-    # plan (host): daughter ids lowest-first among free ids; defer when capacity is exhausted
+    # plan (host): daughter ids lowest-first among free ids; defer when capacity is
+    # exhausted
     events = to_host(pstats, cache.events)
-    # rule-carrying events: split off the firing rules (`rule[c]`), re-attached for the device
-    rule = lc.rules === Val(true) ? (r = events .>> _RULE_SHIFT; events .&= _EVENT_MASK; r) : nothing
-    # `transitioning(e)` (A-17): the transition bit is set apart and re-attached to the planned event
+    # rule-carrying events: split off the firing rules (`rule[c]`), re-attached for the
+    # device
+    rule = if lc.rules === Val(true)
+        (r = events .>> _RULE_SHIFT; events .&= _EVENT_MASK; r)
+    else
+        nothing
+    end
+    # `transitioning(e)` (A-17): the transition bit is set apart and re-attached to the
+    # planned event
     nbad = count(_bad_transition, events)
     nbad > 0 && throw(_bad_transition_error(nbad))
     tb = (events .& _TRANSITIONING) .!= 0
     events .&= ~_TRANSITIONING
     volume = to_host(pstats, st.cell.volume)
     # a dead root still names its cluster while members live: never reuse its id
-    held = _has_clusters(st) ? _referenced_clusters(to_host(pstats, st.cell.cluster), volume) : Set{Int32}()
-    free = [c for c in 1:cap if volume[c] == 0 && events[c] == EVENT_NONE && !(Int32(c) in held)]
+    held = if _has_clusters(st)
+        _referenced_clusters(to_host(pstats, st.cell.cluster), volume)
+    else
+        Set{Int32}()
+    end
+    free = [
+        c
+            for c in 1:cap
+            if volume[c] == 0 && events[c] == EVENT_NONE && !(Int32(c) in held)
+    ]
     daughter = zeros(Int32, cap)
     removed = zeros(Bool, cap)          # not a BitVector: copies to device arrays
     nextfree = 1
@@ -529,20 +606,26 @@ function run_lifecycle!(
                         EVENT_DIVIDE_CLUSTER
                     end
                     tb[m] = false
-                    rule === nothing || (rule[m] = rule[c])      # members follow the root's rule
+                    # members follow the root's rule
+                    rule === nothing || (rule[m] = rule[c])
                     daughter[m] = free[nextfree]
                     nextfree += 1
                 end
                 push!(roots, Int32(c))
                 stats.divisions += length(ms)
             else
-                events[c] = tb[c] ? EVENT_TRANSITION : EVENT_NONE      # a deferred division: the transition stays
+                # a deferred division: the transition stays
+                events[c] = tb[c] ? EVENT_TRANSITION : EVENT_NONE
                 tb[c] = false
                 _defer!(stats, cap)
             end
         end
     elseif any(==(EVENT_DIVIDE_CLUSTER), events)
-        throw(ArgumentError("lifecycle: EVENT_DIVIDE_CLUSTER needs cluster state (`init_clusters`)"))
+        throw(
+            ArgumentError(
+                "lifecycle: EVENT_DIVIDE_CLUSTER needs cluster state (`init_clusters`)"
+            )
+        )
     end
     # pass 2: cells dividing alone, removals
     for c in 1:cap
@@ -559,23 +642,36 @@ function run_lifecycle!(
             stats.removals += 1
         end
     end
-    # a cell dividing alone that transitions: the transition before its division, or alone when deferred
+    # a cell dividing alone that transitions: the transition before its division, or alone
+    # when deferred
     for c in 1:cap
-        tb[c] && events[c] == EVENT_DIVIDE && (events[c] = daughter[c] > 0 ? EVENT_DIVIDE | _TRANSITIONING : EVENT_TRANSITION)
+        tb[c] && events[c] == EVENT_DIVIDE &&
+            (events[c] = daughter[c] > 0 ? EVENT_DIVIDE | _TRANSITIONING : EVENT_TRANSITION)
     end
     stats.transitions += count(_transitions, events)
     counted_copy!(pstats, cache.daughter, daughter)
     counted_copy!(pstats, cache.removed, removed)
-    counted_copy!(pstats, cache.events, rule === nothing ? events : events .| (rule .<< _RULE_SHIFT))
+    counted_copy!(
+        pstats, cache.events, if rule === nothing
+            events
+        else
+            events .| (rule .<< _RULE_SHIFT)
+        end
+    )
 
     if isempty(roots)
         fill!(cache.bias, zero(eltype(cache.bias)))
     else
-        _cluster_planes!(pstats, cache.normals, cache.bias, lc, st, p, ctx, key, mcs, roots, members)
+        _cluster_planes!(
+            pstats, cache.normals, cache.bias, lc, st, p, ctx, key, mcs, roots, members
+        )
     end
-    if any(c -> daughter[c] > 0 && _base_event(events[c]) == EVENT_DIVIDE, 1:cap)    # after the host planes
+    # after the host planes
+    if any(c -> daughter[c] > 0 && _base_event(events[c]) == EVENT_DIVIDE, 1:cap)
         Exec.launch!(
-            backend, _normal_body!, cap, (
+            backend, _normal_body!,
+            cap,
+            (
                 cache.normals, cache.events, cache.daughter,
                 _plane(lc.normal, eltype(cache.normals)), st, p, ctx, key, mcs, lc.rules,
             )
@@ -584,21 +680,25 @@ function run_lifecycle!(
     end
     n = length(st.ownership)
     Exec.launch!(
-        backend, _partition_body!, n, (
+        backend, _partition_body!,
+        n,
+        (
             st.ownership, cache.daughter, cache.normals, cache.bias, cache.removed,
             st.cell, ctx.lattice, lc.owner_changed, st,
         )
     )
     launches += 1
 
-    # daughters: copy every non-tracker cell quantity from the parent, same kind, new generation
+    # daughters: copy every non-tracker cell quantity from the parent, same kind, new
+    # generation
     parents = findall(>(0), daughter)
     if !isempty(parents)
         ds = daughter[parents]
         # `map` over (name, array) unrolls statically: no runtime dispatch per quantity
         map(keys(st.cell), values(st.cell)) do name, a
             (
-                name in (:volume, :surface, :anchor, :m1, :m2, :generation, :birth) || _is_link_data(name) ||
+                name in (:volume, :surface, :anchor, :m1, :m2, :generation, :birth) ||
+                    _is_link_data(name) ||
                     _is_scratch_column(name)
             ) ||
                 _copy_columns!(pstats, a, ds, parents)          # daughters start unlinked
@@ -612,11 +712,13 @@ function run_lifecycle!(
             clh = to_host(pstats, st.cell.cluster)
             for m in parents
                 d = daughter[m]
-                if _divides_with_cluster(events[m])      # the root's daughter names the new cluster
+                # the root's daughter names the new cluster
+                if _divides_with_cluster(events[m])
                     clh[d] = daughter[cl[m]]
                 elseif length(members[cl[m]]) == 1       # a lone cell's daughter is lone
                     clh[d] = d
-                end                                      # else it stays in the parent's cluster
+                    # else it stays in the parent's cluster
+                end
             end
             counted_copy!(pstats, st.cell.cluster, clh)
         end
@@ -624,7 +726,9 @@ function run_lifecycle!(
     any(_is_adjacency, keys(st.cell)) && (any(removed) || !isempty(parents)) &&
         _lifecycle_links!(pstats, st, findall(removed), daughter[parents])
     Exec.launch!(
-        backend, _cell_rule_body!, cap, (
+        backend, _cell_rule_body!,
+        cap,
+        (
             cache.events, cache.daughter, lc.kind, lc.divide!,
             lc.cluster_divide!, st, p, ctx, key, mcs, lc.rules,
         )
@@ -657,17 +761,17 @@ end
     rebuild_trackers!(st, ctx, backend)
 
 Recompute the built-in trackers present in `st.cell` exactly from `σ`: `volume`, `surface`
-(over `ctx.surface`, if both exist), `euler` and `euler_full`, the `pieces` columns, moments (`anchor`, `m1`, `m2`), the cluster
-trackers (`cluster_volume`, `cluster_surface`) and the contact counts named in
-`ctx.contact_counts` (`ContactCounts`). Host-side; used at
-lifecycle events and after host edits of `σ`.
+(over `ctx.surface`, if both exist), `euler` and `euler_full`, the `pieces` columns, moments
+(`anchor`, `m1`, `m2`), the cluster trackers (`cluster_volume`, `cluster_surface`) and the
+contact counts named in `ctx.contact_counts` (`ContactCounts`). Host-side; used at lifecycle
+events and after host edits of `σ`.
 """
 rebuild_trackers!(st, ctx, backend) = _rebuild_trackers!(nothing, st, ctx, backend)
 
 # `stats`: the integrator's `PottsStats` counting the host transfers (D-085), or `nothing`
-# `division = (daughter, removed)` (the host lifecycle round): a weighted float `surface` takes
-# the round's changes in integer weight units, added to the tracker, as the device lifecycle
-# does (`_dsurface_body!`), so the host and a device agree bitwise; otherwise (and
+# `division = (daughter, removed)` (the host lifecycle round): a weighted float `surface`
+# takes the round's changes in integer weight units, added to the tracker, as the device
+# lifecycle does (`_dsurface_body!`), so the host and a device agree bitwise; otherwise (and
 # for every other tracker) the trackers are recomputed from σ
 function _rebuild_trackers!(stats, st, ctx, backend; division = nothing)
     sync!(stats, backend)
@@ -684,7 +788,11 @@ function _rebuild_trackers!(stats, st, ctx, backend; division = nothing)
         T = eltype(st.cell.surface)
         u = division === nothing ? nothing : _units_for(T, ctx.surface, length(σ), CPU())
         if u === nothing
-            counted_copy!(stats, st.cell.surface, _recompute_surface(T, σ, lat, ctx.surface, cap))
+            counted_copy!(
+                stats, st.cell.surface, _recompute_surface(
+                    T, σ, lat, ctx.surface, cap
+                )
+            )
         else
             surf = to_host(stats, st.cell.surface)
             _surface_unit_deltas!(surf, σ, lat, ctx.surface, u, division...)
@@ -695,7 +803,9 @@ function _rebuild_trackers!(stats, st, ctx, backend; division = nothing)
     _rebuild_pieces!(stats, st, σ, lat, cap)
     if haskey(st.cell, :m1)
         m = init_moments(σ, lat, cap)
-        counted_copy!(stats, st.cell.anchor, m.anchor); counted_copy!(stats, st.cell.m1, m.m1); counted_copy!(stats, st.cell.m2, m.m2)
+        counted_copy!(stats, st.cell.anchor, m.anchor)
+        counted_copy!(stats, st.cell.m1, m.m1)
+        counted_copy!(stats, st.cell.m2, m.m2)
     end
     _has_clusters(st) && _rebuild_cluster_trackers!(stats, st, σ, ctx)
     _rebuild_contact_counts!(stats, st, σ, lat, _contact_counts(ctx))
@@ -706,7 +816,9 @@ end
 # arithmetic of the device lifecycle (`_plan_h!` zeroes a daughter's surface,
 # `_dsurface_body!` sums the changes of parents and daughters, `_dfinalize_body!` adds each
 # cell's sum once, then resets a removed cell). σ is after the partition.
-function _surface_unit_deltas!(surf::AbstractVector{T}, σ, lat, rel, u, daughter, removed) where {T}
+function _surface_unit_deltas!(
+        surf::AbstractVector{T}, σ, lat, rel, u, daughter, removed
+    ) where {T}
     cap = length(surf)
     parent = zeros(Int32, cap)
     for c in 1:cap
@@ -746,14 +858,21 @@ end
 
 A copy of host state `st` whose cell quantities have `capacity` slots (free slots have
 volume 0, kind 1, generation 0). History rings are not resized: build rings of cell
-quantities after `with_capacity` (a `HistoryPush` with a mismatched ring is an error). Lifecycle models preallocate capacity.
+quantities after `with_capacity` (a `HistoryPush` with a mismatched ring is an error).
+Lifecycle models preallocate capacity.
 """
 function with_capacity(st::CPMState, capacity::Integer)
     n = length(st.cell.kind)
     capacity >= n || throw(ArgumentError("capacity $capacity < $n existing cells"))
-    grow(a::AbstractVector) = (b = similar(a, capacity); fill!(b, zero(eltype(a))); b[1:n] .= a; b)
+    function grow(a::AbstractVector)
+        b = similar(a, capacity)
+        fill!(b, zero(eltype(a)))
+        b[1:n] .= a
+        return b
+    end
     function grow(a::AbstractArray)
-        b = similar(a, (size(a)[1:(end - 1)]..., capacity)); fill!(b, zero(eltype(a)))
+        b = similar(a, (size(a)[1:(end - 1)]..., capacity))
+        fill!(b, zero(eltype(a)))
         b[ntuple(_ -> Colon(), ndims(a) - 1)..., 1:n] .= a
         return b
     end

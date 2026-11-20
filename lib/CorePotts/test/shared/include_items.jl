@@ -1,6 +1,6 @@
 # Run a converted test file the way `include` ran the old one inside a testset: the
-# statements of its @testsetup, then the body of each @testitem in file order, all in one new
-# module. The testsets nest in the caller's current testset.
+# statements of its @testsetup, then the body of each @testitem in file order, all in one
+# new module. The testsets nest in the caller's current testset.
 function include_items(parent::Module, path::AbstractString)
     path = abspath(path)
     m = Core.eval(parent, Expr(:module, true, gensym(:included_items), Expr(:block)))

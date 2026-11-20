@@ -13,9 +13,11 @@
 #   COREPOTTS_QA = false          skip the `:qa` items when running All
 #   COREPOTTS_TEST_NAME = regex   only items whose name matches
 #   COREPOTTS_TEST_TAGS = a,b     only items that carry one of these tags
-#   RETESTITEMS_NWORKERS          worker processes (default 3, sized for the 24G scope; 0 runs
-#                                 in this process). Workers get this process's thread count.
-#   POTTS_TEST_END_EXPR_FILE      a file whose expression runs after each item (gate tooling)
+#   RETESTITEMS_NWORKERS          worker processes (default 3, sized for the 24G scope; 0
+#                                 runs in this process). Workers get this process's thread
+#                                 count.
+#   POTTS_TEST_END_EXPR_FILE      a file whose expression runs after each item (gate
+#                                 tooling)
 # Items tagged `:timing` run after the others, one at a time in one worker.
 #
 # One item from the REPL (Revise-friendly):
@@ -29,7 +31,8 @@ function _load_corepotts_groups()
     raw = Pkg.TOML.parsefile(joinpath(COREPOTTS_TESTDIR, "test_groups.toml"))
     out = Dict{String, Dict{String, Any}}()
     for (name, val) in raw
-        val isa AbstractDict || throw(ArgumentError("Invalid entry \"$name\" in CorePotts test_groups.toml"))
+        val isa AbstractDict ||
+            throw(ArgumentError("Invalid entry \"$name\" in CorePotts test_groups.toml"))
         out[string(name)] = Dict{String, Any}(string(k) => v for (k, v) in val)
     end
     return out
@@ -57,14 +60,20 @@ function _resolve_corepotts_groups(groups_table, raw_groups)
             push!(selected, target)
         else
             valid = join(["All"; sort!(collect(keys(groups_table)))], ", ")
-            throw(ArgumentError("Unknown CorePotts test group \"$g\". Valid groups: $valid"))
+            throw(
+                ArgumentError(
+                    "Unknown CorePotts test group \"$g\". Valid groups: $valid"
+                )
+            )
         end
     end
     return unique(selected)
 end
 
 const COREPOTTS_GROUPS_TABLE = _load_corepotts_groups()
-const COREPOTTS_SELECTED_GROUPS = let cli = filter(a -> normpath(abspath(a)) != normpath(abspath(@__FILE__)), ARGS)
+const COREPOTTS_SELECTED_GROUPS = let cli = filter(
+        a -> normpath(abspath(a)) != normpath(abspath(@__FILE__)), ARGS
+    )
     raw = if !isempty(cli)
         cli
     elseif !isempty(strip(get(ENV, "GROUP", "")))
@@ -75,13 +84,18 @@ const COREPOTTS_SELECTED_GROUPS = let cli = filter(a -> normpath(abspath(a)) != 
     _resolve_corepotts_groups(COREPOTTS_GROUPS_TABLE, raw)
 end
 
-if "gpu" in COREPOTTS_SELECTED_GROUPS && isempty(strip(get(ENV, "COREPOTTS_GPU", ""))) && isempty(strip(get(ENV, "POTTS_GPU", "")))
+if "gpu" in COREPOTTS_SELECTED_GROUPS && isempty(strip(get(ENV, "COREPOTTS_GPU", ""))) &&
+        isempty(strip(get(ENV, "POTTS_GPU", "")))
     ENV["COREPOTTS_GPU"] = Sys.isapple() ? "metal" : "rocm"
 end
 
-const COREPOTTS_DEVICES = joinpath(@__DIR__, "..", "..", "..", "test", "shared", "devices.jl")
-isdefined(@__MODULE__, :PottsDevices) || !isfile(COREPOTTS_DEVICES) || include(COREPOTTS_DEVICES)
-const COREPOTTS_ON_DEVICE = isdefined(@__MODULE__, :PottsDevices) && PottsDevices.on_device()
+const COREPOTTS_DEVICES = joinpath(
+    @__DIR__, "..", "..", "..", "test", "shared", "devices.jl"
+)
+isdefined(@__MODULE__, :PottsDevices) || !isfile(COREPOTTS_DEVICES) ||
+    include(COREPOTTS_DEVICES)
+const COREPOTTS_ON_DEVICE = isdefined(@__MODULE__, :PottsDevices) &&
+    PottsDevices.on_device()
 
 function corepotts_tests(
         groups = COREPOTTS_SELECTED_GROUPS;
@@ -91,7 +105,11 @@ function corepotts_tests(
     name = (n = get(ENV, "COREPOTTS_TEST_NAME", ""); isempty(n) ? nothing : Regex(n))
     want = Symbol.(filter(!isempty, split(get(ENV, "COREPOTTS_TEST_TAGS", ""), ',')))
     endfile = get(ENV, "POTTS_TEST_END_EXPR_FILE", "")
-    test_end_expr = isempty(endfile) ? Expr(:block) : Meta.parse("begin\n" * read(endfile, String) * "\nend")
+    test_end_expr = if isempty(endfile)
+        Expr(:block)
+    else
+        Meta.parse("begin\n" * read(endfile, String) * "\nend")
+    end
 
     group_specs = [
         (
@@ -100,27 +118,50 @@ function corepotts_tests(
         )
             for g in groups
     ]
-    in_group(ti) = any(((tgs, ex),) -> (isempty(tgs) || any(in(ti.tags), tgs)) && !any(in(ti.tags), ex), group_specs)
-    picked(ti) = in_group(ti) && (isempty(want) || any(in(ti.tags), want)) && (qa || !(:qa in ti.tags) || "qa" in groups)
+    function in_group(ti)
+        return any(
+            ((tgs, ex),) -> (isempty(tgs) || any(in(ti.tags), tgs)) &&
+                !any(in(ti.tags), ex),
+            group_specs
+        )
+    end
+    function picked(ti)
+        return in_group(ti) && (isempty(want) || any(in(ti.tags), want)) &&
+            (qa || !(:qa in ti.tags) || "qa" in groups)
+    end
     kw = (;
-        name, test_end_expr, testitem_timeout = 3600, retries = 0, nworker_threads = string(Threads.nthreads()),
+        name, test_end_expr, testitem_timeout = 3600, retries = 0,
+        nworker_threads = string(Threads.nthreads()),
         logs = :batched,
     )
     phases = if COREPOTTS_ON_DEVICE || "gpu" in groups
         [
-            (ti -> (isempty(want) || any(in(ti.tags), want)) && :device in ti.tags && !(:device_scan in ti.tags), 0),
+            (
+                ti -> (isempty(want) || any(in(ti.tags), want)) && :device in ti.tags &&
+                    !(:device_scan in ti.tags),
+                0,
+            ),
             (ti -> (isempty(want) || any(in(ti.tags), want)) && :device_scan in ti.tags, 0),
         ]
     else
         [
-            (ti -> picked(ti) && !(:gpu_only in ti.tags) && !(:timing in ti.tags), nworkers),
-            (ti -> picked(ti) && !(:gpu_only in ti.tags) && :timing in ti.tags, min(nworkers, 1)),
+            (
+                ti -> picked(ti) && !(:gpu_only in ti.tags) && !(:timing in ti.tags),
+                nworkers,
+            ),
+            (
+                ti -> picked(ti) && !(:gpu_only in ti.tags) && :timing in ti.tags,
+                min(nworkers, 1),
+            ),
         ]
     end
     failed = Any[]
     for (f, nw) in phases
         try
-            task_local_storage(:SOURCE_PATH, Pkg.Operations.testfile(dirname(Base.active_project()))) do
+            task_local_storage(
+                :SOURCE_PATH,
+                Pkg.Operations.testfile(dirname(Base.active_project()))
+            ) do
                 runtests(f, COREPOTTS_TESTDIR; nworkers = nw, kw...)
             end
         catch e

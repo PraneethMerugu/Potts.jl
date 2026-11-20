@@ -3,7 +3,8 @@
 @testsetup module CP_compartments
 using Test, CorePotts, StaticArrays, Statistics, Random
 using SciMLBase: SciMLBase, ReturnCode, remake
-using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
+using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates,
+    linear_index, shift
 include("shared/gg_model.jl")
 include("shared/geometry.jl")
 include("shared/lifecycle.jl")
@@ -15,9 +16,13 @@ end
     @testset "compartments" begin
         @testset "cluster bookkeeping" begin
             lat = Lattice((10, 10))
-            σ = zeros(Int32, 10, 10); σ[2:4, 2:4] .= 1; σ[3, 3] = 2; σ[7:8, 7:8] .= 3
+            σ = zeros(Int32, 10, 10)
+            σ[2:4, 2:4] .= 1
+            σ[3, 3] = 2
+            σ[7:8, 7:8] .= 3
             c = init_clusters(σ, [5, 5, 1, 9], lat; relation = VonNeumann(1))
-            @test c.cluster == Int32[1, 1, 3, 4]              # lowest live member; dead slot 4 alone
+            # lowest live member; dead slot 4 alone
+            @test c.cluster == Int32[1, 1, 3, 4]
             @test c.cluster_volume == Int32[9, 0, 4, 0]
             @test c.cluster_surface ≈ [12.0, 0.0, 8.0, 0.0]     # the nucleus is internal
             @test same_cluster(c, 1, 2) && !same_cluster(c, 1, 3) && !same_cluster(c, 1, 0)
@@ -43,20 +48,31 @@ end
                 function H(σ)
                     cv = recompute_cluster_volume(σ, cell.cluster)
                     cs = recompute_cluster_surface(σ, cell.cluster, lat, r)
-                    return sum(k -> cell.cluster[k] == k ? EC(cv[k], k) + ES(cs[k], k) : 0.0, 1:5)
+                    return sum(
+                        k -> if cell.cluster[k] == k
+                            EC(cv[k], k) + ES(cs[k], k)
+                        else
+                            0.0
+                        end, 1:5
+                    )
                 end
-                σ2 = copy(σ); σ2[t] = new
+                σ2 = copy(σ)
+                σ2[t] = new
                 δ = cluster_surface_change(σ, cell, ctx, prop)
-                dH = cluster_volume_delta(cell, prop, EC) + cluster_surface_delta(cell, prop, δ, ES)
+                dH = cluster_volume_delta(cell, prop, EC) +
+                    cluster_surface_delta(cell, prop, δ, ES)
                 worst = max(worst, abs(dH - (H(σ2) - H(σ))))
-                commit_cluster_volume!(cell, prop); commit_cluster_surface!(cell, prop, δ)
+                commit_cluster_volume!(cell, prop)
+                commit_cluster_surface!(cell, prop, δ)
                 @test cell.cluster_volume == recompute_cluster_volume(σ2, cell.cluster)
-                @test cell.cluster_surface ≈ recompute_cluster_surface(σ2, cell.cluster, lat, r)
+                @test cell.cluster_surface ≈
+                    recompute_cluster_surface(σ2, cell.cluster, lat, r)
             end
             @test worst < 1.0e-9
         end
 
-        @testset "compartments stay together; trackers exact ($(nameof(typeof(alg))))" for alg in (
+        @testset "compartments stay together; trackers exact \
+            ($(nameof(typeof(alg))))" for alg in (
                 SequentialCPM(), CheckerboardCPM(),
             )
             σ, kinds, cluster = compartment_cells((48, 48), 8, 4)
@@ -64,35 +80,60 @@ end
             n = length(kinds)
             function run(Jint)
                 f, p = compartment_model(; λs = 0.05, Jint)
-                st = initial_state(σ, kinds; cell = init_clusters(σ, cluster, lat; relation = Moore(1)))
-                return solve(PottsProblem(f, st, lat, (0, 150), p; relations = (; surface = Moore(1))), alg).u[end]
+                st = initial_state(
+                    σ, kinds;
+                    cell = init_clusters(σ, cluster, lat; relation = Moore(1))
+                )
+                return solve(
+                    PottsProblem(
+                        f, st, lat, (0, 150), p; relations = (; surface = Moore(1))
+                    ), alg
+                ).u[end]
             end
             m = n ÷ 2
-            function internal_fraction(u)       # nuclei's interface shared with their own cytoplasm
+            # nuclei's interface shared with their own cytoplasm
+            function internal_fraction(u)
                 g = contact_graph(u.ownership, lat, relation(VonNeumann(1), lat), n)
                 internal = sum(c -> contact_measure(g, c, c - m), (m + 1):n)
-                total = sum(c -> contact_measure(g, c, 0) + sum(b -> contact_measure(g, c, b), contact_neighbors(g, c); init = 0), (m + 1):n)
+                total = sum(
+                    c -> contact_measure(g, c, 0) +
+                        sum(
+                        b -> contact_measure(g, c, b), contact_neighbors(g, c);
+                        init = 0
+                    ),
+                    (m + 1):n
+                )
                 return internal / total
             end
             u = run(2.0)
-            @test u.cell.cluster_volume == recompute_cluster_volume(u.ownership, u.cell.cluster)
-            @test u.cell.cluster_surface ≈ recompute_cluster_surface(u.ownership, u.cell.cluster, lat, Moore(1))
-            control = run(14.0)                 # internal contacts no better than homotypic ones
-            @info "nucleus interface with its own cytoplasm" alg internal = internal_fraction(u) control = internal_fraction(control)
+            @test u.cell.cluster_volume ==
+                recompute_cluster_volume(u.ownership, u.cell.cluster)
+            @test u.cell.cluster_surface ≈
+                recompute_cluster_surface(u.ownership, u.cell.cluster, lat, Moore(1))
+            # internal contacts no better than homotypic ones
+            control = run(14.0)
+            @info "nucleus interface with its own cytoplasm" alg internal =
+                internal_fraction(u) control = internal_fraction(control)
             @test internal_fraction(u) > 0.9
             @test internal_fraction(u) > internal_fraction(control) + 0.1
         end
 
         @testset "clusters divide as a unit" begin
             lat = Lattice((40, 40))
-            σ = zeros(Int32, 40, 40); σ[11:30, 15:22] .= 1; σ[18:23, 17:20] .= 2   # elongated in x
+            σ = zeros(Int32, 40, 40)
+            σ[11:30, 15:22] .= 1
+            σ[18:23, 17:20] .= 2   # elongated in x
             cluster = Int32[1, 1]
             tr(st, p, ctx, key, mcs, c) = mcs == 0 ? EVENT_DIVIDE_CLUSTER : EVENT_NONE
             function half!(st, p, ctx, key, mcs, parent, daughter)
                 st.cell.mass[daughter] = st.cell.mass[parent] /= 2
                 return nothing
             end
-            cell = merge(init_moments(σ, lat, 2), init_clusters(σ, cluster, lat), (; mass = [8.0, 2.0]))
+            cell = merge(
+                init_moments(σ, lat, 2), init_clusters(σ, cluster, lat), (;
+                    mass = [8.0, 2.0],
+                )
+            )
             st = with_capacity(initial_state(σ, Int32[1, 2]; cell), 6)
             @test st.cell.cluster == Int32[1, 1, 3, 4, 5, 6]
             f = CPMFunction(
@@ -102,76 +143,142 @@ end
             sol = solve(PottsProblem(f, st, lat, (0, 1), gg_params()), SequentialCPM())
             u = sol.u[end]
             @test sol.stats.lifecycle.divisions == 2
-            @test u.cell.volume[1:4] == Int32[68, 12, 68, 12]              # one plane through the cluster
-            @test u.cell.cluster[1:4] == Int32[1, 1, 3, 3]                 # daughters form cluster 3
+            # one plane through the cluster
+            @test u.cell.volume[1:4] == Int32[68, 12, 68, 12]
+            # daughters form cluster 3
+            @test u.cell.cluster[1:4] == Int32[1, 1, 3, 3]
             @test u.cell.cluster_volume[[1, 3]] == Int32[80, 80]
             @test u.cell.mass[1:4] == [4.0, 1.0, 4.0, 1.0]
-            side(c) = unique(coordinates(lat, i)[1] > 20.5 for i in 1:nsites(lat) if u.ownership[i] == c)
+            function side(c)
+                return unique(
+                    coordinates(lat, i)[1] > 20.5
+                        for i in 1:nsites(lat) if u.ownership[i] == c
+                )
+            end
             @test length(side(3)) == 1 && side(3) == side(4) != side(1) == side(2)
 
-            # `EVENT_DIVIDE`: compartments divide on their own and daughters stay in the cluster
+            # `EVENT_DIVIDE`: compartments divide on their own and daughters stay in the
+            # cluster
             f2 = CPMFunction(
                 gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
-                lifecycle = Lifecycle((st, p, ctx, key, mcs, c) -> mcs == 0 && c == 2 ? EVENT_DIVIDE : EVENT_NONE)
+                lifecycle = Lifecycle(
+                    (st, p, ctx, key, mcs, c) -> if mcs == 0 && c == 2
+                        EVENT_DIVIDE
+                    else
+                        EVENT_NONE
+                    end
+                )
             )
-            u2 = solve(PottsProblem(f2, st, lat, (0, 1), gg_params()), SequentialCPM()).u[end]
+            u2 = solve(
+                PottsProblem(f2, st, lat, (0, 1), gg_params()),
+                SequentialCPM()
+            ).u[end]
             @test u2.cell.cluster[1:3] == Int32[1, 1, 1]
 
             # removing the root re-roots the cluster
             f3 = CPMFunction(
                 gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
-                lifecycle = Lifecycle((st, p, ctx, key, mcs, c) -> mcs == 0 && c == 1 ? EVENT_REMOVE : EVENT_NONE)
+                lifecycle = Lifecycle(
+                    (st, p, ctx, key, mcs, c) -> if mcs == 0 && c == 1
+                        EVENT_REMOVE
+                    else
+                        EVENT_NONE
+                    end
+                )
             )
-            u3 = solve(PottsProblem(f3, st, lat, (0, 1), gg_params()), SequentialCPM()).u[end]
+            u3 = solve(
+                PottsProblem(f3, st, lat, (0, 1), gg_params()),
+                SequentialCPM()
+            ).u[end]
             @test u3.cell.cluster[1:2] == Int32[1, 2] && u3.cell.cluster_volume[2] == 24
             # a dead root keeps naming its cluster: its id is never handed to a daughter
-            σd = zeros(Int32, 40, 40); σd[3:8, 3:8] .= 2; σd[11:30, 15:22] .= 3; σd[18:23, 17:20] .= 4
-            cd = merge(init_moments(σd, lat, 4), init_clusters(σd, Int32[1, 2, 3, 4], lat), (; mass = ones(4)))
+            σd = zeros(Int32, 40, 40)
+            σd[3:8, 3:8] .= 2
+            σd[11:30, 15:22] .= 3
+            σd[18:23, 17:20] .= 4
+            cd = merge(
+                init_moments(σd, lat, 4), init_clusters(σd, Int32[1, 2, 3, 4], lat), (;
+                    mass = ones(4),
+                )
+            )
             std = with_capacity(initial_state(σd, Int32[1, 2, 1, 2]; cell = cd), 8)
-            std.cell.cluster[1:4] .= Int32[1, 1, 3, 3]          # cell 1 (the root of {1, 2}) has died
+            # cell 1 (the root of {1, 2}) has died
+            std.cell.cluster[1:4] .= Int32[1, 1, 3, 3]
             std.cell.cluster_volume .= recompute_cluster_volume(σd, std.cell.cluster)
             fd = CPMFunction(
                 gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
-                lifecycle = Lifecycle((st, p, ctx, key, mcs, c) -> mcs == 0 && c == 3 ? EVENT_DIVIDE_CLUSTER : EVENT_NONE)
+                lifecycle = Lifecycle(
+                    (st, p, ctx, key, mcs, c) -> if mcs == 0 && c == 3
+                        EVENT_DIVIDE_CLUSTER
+                    else
+                        EVENT_NONE
+                    end
+                )
             )
-            ud = solve(PottsProblem(fd, std, lat, (0, 1), gg_params()), SequentialCPM()).u[end]
-            @test ud.cell.cluster[2] == 2                         # re-rooted at its surviving member
+            ud = solve(
+                PottsProblem(fd, std, lat, (0, 1), gg_params()),
+                SequentialCPM()
+            ).u[end]
+            # re-rooted at its surviving member
+            @test ud.cell.cluster[2] == 2
             @test ud.cell.cluster[3] == ud.cell.cluster[4] == 3
             daughters = findall(c -> c > 4 && ud.cell.volume[c] > 0, 1:8)
-            @test length(daughters) == 2 && all(c -> ud.cell.cluster[c] == daughters[1], daughters)
+            @test length(daughters) == 2 &&
+                all(c -> ud.cell.cluster[c] == daughters[1], daughters)
             @test !(ud.cell.cluster[2] in ud.cell.cluster[daughters])
 
-            # a live root stays the root when a lower id is reused (the cluster keeps its kind)
-            σr = zeros(Int32, 40, 40); σr[11:30, 15:22] .= 2; σr[18:23, 17:20] .= 3   # slot 1 empty
+            # a live root stays the root when a lower id is reused (the cluster keeps its
+            # kind)
+            σr = zeros(Int32, 40, 40)
+            σr[11:30, 15:22] .= 2
+            σr[18:23, 17:20] .= 3   # slot 1 empty
             cr = merge(init_moments(σr, lat, 3), init_clusters(σr, Int32[1, 2, 2], lat))
             str = with_capacity(initial_state(σr, Int32[1, 1, 2]; cell = cr), 4)
             @test str.cell.cluster[1:3] == Int32[1, 2, 2]
             fr = CPMFunction(
                 gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
-                lifecycle = Lifecycle((st, p, ctx, key, mcs, c) -> mcs == 0 && c == 3 ? EVENT_DIVIDE : EVENT_NONE)
+                lifecycle = Lifecycle(
+                    (st, p, ctx, key, mcs, c) -> if mcs == 0 && c == 3
+                        EVENT_DIVIDE
+                    else
+                        EVENT_NONE
+                    end
+                )
             )
-            ur = solve(PottsProblem(fr, str, lat, (0, 1), gg_params()), SequentialCPM()).u[end]
+            ur = solve(
+                PottsProblem(fr, str, lat, (0, 1), gg_params()),
+                SequentialCPM()
+            ).u[end]
             @test ur.cell.volume[1] > 0 && ur.cell.cluster[1:3] == Int32[2, 2, 2]
 
             # init: the root is the lowest member of a preferred kind
-            @test init_clusters(σr, Int32[1, 2, 2], lat; kind = Int32[1, 2, 1], prefer = (1,)).cluster == Int32[1, 3, 3]
+            @test init_clusters(
+                σr, Int32[1, 2, 2], lat; kind = Int32[1, 2, 1], prefer = (1,)
+            ).cluster ==
+                Int32[1, 3, 3]
         end
 
-        @testset "cells and clusters divide in one lifecycle pass ($(nameof(typeof(alg))))" for alg in (
+        @testset "cells and clusters divide in one lifecycle pass \
+            ($(nameof(typeof(alg))))" for alg in (
                 SequentialCPM(), CheckerboardCPM(),
             )
             # cluster {1, 2} elongated in x; lone cell 3; cluster {4, 5}
             lat = Lattice((40, 40))
             σ = zeros(Int32, 40, 40)
-            σ[11:30, 15:22] .= 1; σ[18:23, 17:20] .= 2
+            σ[11:30, 15:22] .= 1
+            σ[18:23, 17:20] .= 2
             σ[3:8, 30:37] .= 3
-            σ[33:38, 28:37] .= 4; σ[34:37, 30:35] .= 5
+            σ[33:38, 28:37] .= 4
+            σ[34:37, 30:35] .= 5
             cell = merge(
                 init_moments(σ, lat, 5), init_clusters(σ, Int32[1, 1, 3, 4, 4], lat),
                 (; alone = zeros(5), together = zeros(5))
             )
             st = with_capacity(initial_state(σ, Int32[1, 2, 2, 1, 2]; cell), 10)
-            alone!(st, p, ctx, key, mcs, parent, daughter) = (st.cell.alone[parent] = st.cell.alone[daughter] = 1.0; nothing)
+            function alone!(st, p, ctx, key, mcs, parent, daughter)
+                st.cell.alone[parent] = st.cell.alone[daughter] = 1.0
+                return nothing
+            end
             function together!(st, p, ctx, key, mcs, parent, daughter)
                 st.cell.together[parent] = st.cell.together[daughter] = 1.0
                 return nothing
@@ -180,16 +287,20 @@ end
                 return solve(
                     PottsProblem(
                         CPMFunction(
-                            gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
+                            gg_delta_H; temperature = gg_temperature,
+                            constraint = frozen_dynamics,
                             lifecycle = Lifecycle(
-                                tr; normal = (st, p, ctx, key, mcs, c) -> (0.0, 1.0), divide! = alone!,
-                                cluster_normal = AlongMinorAxis(), cluster_divide! = together!
+                                tr; normal = (st, p, ctx, key, mcs, c) -> (0.0, 1.0),
+                                divide! = alone!,
+                                cluster_normal = AlongMinorAxis(),
+                                cluster_divide! = together!
                             )
                         ), st, lat, (0, 1), gg_params()
                     ), alg
                 )
             end
-            # root 1 divides its cluster (member 2's own EVENT_DIVIDE yields to it); 3 and 5 alone
+            # root 1 divides its cluster (member 2's own EVENT_DIVIDE yields to it); 3 and 5
+            # alone
             function tr(st, p, ctx, key, mcs, c)
                 if mcs != 0
                     return EVENT_NONE
@@ -204,23 +315,33 @@ end
             sol = run(tr)
             u = sol.u[end]
             @test sol.stats.lifecycle.divisions == 4
-            # daughters lowest-first: the cluster first (1 → 6, 2 → 7), then cells (3 → 8, 5 → 9)
+            # daughters lowest-first: the cluster first (1 → 6, 2 → 7), then cells (3 → 8, 5
+            # → 9)
             @test count(>(0), u.cell.volume) == 9 && u.cell.volume[10] == 0
             @test u.cell.cluster[1:9] == Int32[1, 1, 3, 4, 4, 6, 6, 8, 4]
-            @test u.cell.volume[[1, 2, 6, 7]] == Int32[68, 12, 68, 12]         # one plane (x) through the cluster
-            @test u.cell.volume[[3, 8, 5, 9]] == Int32[24, 24, 12, 12]         # each cell along its own (y) plane
-            ys(c) = unique(coordinates(lat, i)[2] for i in 1:nsites(lat) if u.ownership[i] == c)
+            # one plane (x) through the cluster
+            @test u.cell.volume[[1, 2, 6, 7]] == Int32[68, 12, 68, 12]
+            # each cell along its own (y) plane
+            @test u.cell.volume[[3, 8, 5, 9]] == Int32[24, 24, 12, 12]
+            function ys(c)
+                return unique(
+                    coordinates(lat, i)[2]
+                        for i in 1:nsites(lat) if u.ownership[i] == c
+                )
+            end
             @test maximum(ys(3)) < minimum(ys(8)) && maximum(ys(5)) < minimum(ys(9))
             # each division ran its own domain's rule
             @test findall(==(1.0), u.cell.alone) == [3, 5, 8, 9]
             @test findall(==(1.0), u.cell.together) == [1, 2, 6, 7]
             # trackers exact after the mixed division (brute force from σ)
             @test u.cell.volume == Int32[count(==(c), u.ownership) for c in 1:10]
-            @test u.cell.cluster_volume == recompute_cluster_volume(u.ownership, u.cell.cluster)
+            @test u.cell.cluster_volume ==
+                recompute_cluster_volume(u.ownership, u.cell.cluster)
             @test same_moments(u, lat, 10, alg)
 
-            # negative controls: a non-root's EVENT_DIVIDE_CLUSTER (5) is ignored; without its
-            # root's cluster event, member 2 divides alone and its daughter stays in cluster 1
+            # negative controls: a non-root's EVENT_DIVIDE_CLUSTER (5) is ignored; without
+            # its root's cluster event, member 2 divides alone and its daughter stays in
+            # cluster 1
             function tr2(st, p, ctx, key, mcs, c)
                 if mcs != 0
                     return EVENT_NONE
@@ -238,18 +359,22 @@ end
             u2 = sol2.u[end]
             @test sol2.stats.lifecycle.divisions == 1
             @test u2.cell.cluster[[1, 2, 6]] == Int32[1, 1, 1] && u2.cell.volume[1] == 136
-            @test findall(==(1.0), u2.cell.alone) == [2, 6] && !any(==(1.0), u2.cell.together)
+            @test findall(==(1.0), u2.cell.alone) == [2, 6] &&
+                !any(==(1.0), u2.cell.together)
         end
 
         @testset "capacity-limited mixed division ($(nameof(typeof(alg))))" for alg in (
                 SequentialCPM(), CheckerboardCPM(),
             )
-            # cluster {1, 2, 3}: cytoplasm 1 with nuclei 2 and 3 side by side in x; lone cell 4.
-            # Root 1 divides its cluster, nuclei 2 and 3 and lone cell 4 divide alone (D-055 item 4);
-            # every plane is normal to y, through y = 17.5 for the cluster and each nucleus
+            # cluster {1, 2, 3}: cytoplasm 1 with nuclei 2 and 3 side by side in x; lone
+            # cell 4. Root 1 divides its cluster, nuclei 2 and 3 and lone cell 4 divide
+            # alone (D-055 item 4); every plane is normal to y, through y = 17.5 for the
+            # cluster and each nucleus
             lat = Lattice((40, 40))
             σ = zeros(Int32, 40, 40)
-            σ[11:30, 11:24] .= 1; σ[13:18, 15:20] .= 2; σ[23:28, 15:20] .= 3
+            σ[11:30, 11:24] .= 1
+            σ[13:18, 15:20] .= 2
+            σ[23:28, 15:20] .= 3
             σ[33:38, 30:37] .= 4
             function tr(st, p, ctx, key, mcs, c)
                 if mcs != 0
@@ -261,7 +386,10 @@ end
                 end
             end
             function run(capacity)
-                cell = merge(init_moments(σ, lat, 4), init_clusters(σ, Int32[1, 1, 1, 4], lat))
+                cell = merge(
+                    init_moments(σ, lat, 4),
+                    init_clusters(σ, Int32[1, 1, 1, 4], lat)
+                )
                 st = with_capacity(initial_state(σ, Int32[1, 2, 2, 1]; cell), capacity)
                 f = CPMFunction(
                     gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
@@ -274,23 +402,33 @@ end
             end
             brute(u, cap) = Int32[count(==(c), u.ownership) for c in 1:cap]
 
-            # 2 free slots < 3 members: only the root's event is deferred; nuclei 2 and 3 take
-            # the slots (2 → 5, 3 → 6) and stay in cluster 1; lone cell 4 finds none and waits
+            # 2 free slots < 3 members: only the root's event is deferred; nuclei 2 and 3
+            # take the slots (2 → 5, 3 → 6) and stay in cluster 1; lone cell 4 finds none
+            # and waits
             sol = @test_logs (:warn, r"deferred") match_mode = :any run(6)
             u = sol.u[end]
             @test sol.stats.lifecycle.divisions == 2
-            @test sol.stats.lifecycle.deferred == 2                           # root 1 and lone cell 4
+            # root 1 and lone cell 4
+            @test sol.stats.lifecycle.deferred == 2
             @test u.cell.volume == Int32[208, 18, 18, 48, 18, 18]
             @test u.cell.cluster == Int32[1, 1, 1, 4, 1, 1]
-            ys(c) = unique(coordinates(lat, i)[2] for i in 1:nsites(lat) if u.ownership[i] == c)
-            @test maximum(ys(2)) < minimum(ys(5)) && maximum(ys(3)) < minimum(ys(6))   # their own (y) planes
+            function ys(c)
+                return unique(
+                    coordinates(lat, i)[2]
+                        for i in 1:nsites(lat) if u.ownership[i] == c
+                )
+            end
+            # their own (y) planes
+            @test maximum(ys(2)) < minimum(ys(5)) && maximum(ys(3)) < minimum(ys(6))
             @test u.cell.volume == brute(u, 6)
-            @test u.cell.cluster_volume == recompute_cluster_volume(u.ownership, u.cell.cluster)
+            @test u.cell.cluster_volume ==
+                recompute_cluster_volume(u.ownership, u.cell.cluster)
             @test u.cell.cluster_volume[1] == 280
             @test same_moments(u, lat, 6, alg)
 
-            # control, 3 free slots: the cluster fits and takes precedence over its members' own
-            # events (1 → 5, 2 → 6, 3 → 7, one cluster plane); now only lone cell 4 is deferred
+            # control, 3 free slots: the cluster fits and takes precedence over its members'
+            # own events (1 → 5, 2 → 6, 3 → 7, one cluster plane); now only lone cell 4 is
+            # deferred
             solc = @test_logs (:warn, r"deferred") match_mode = :any run(7)
             uc = solc.u[end]
             @test solc.stats.lifecycle.divisions == 3
@@ -298,18 +436,26 @@ end
             @test uc.cell.volume == Int32[104, 18, 18, 48, 104, 18, 18]
             @test uc.cell.cluster == Int32[1, 1, 1, 4, 5, 5, 5]
             @test uc.cell.volume == brute(uc, 7)
-            @test uc.cell.cluster_volume == recompute_cluster_volume(uc.ownership, uc.cell.cluster)
+            @test uc.cell.cluster_volume ==
+                recompute_cluster_volume(uc.ownership, uc.cell.cluster)
         end
 
         @testset "EVENT_DIVIDE_CLUSTER needs cluster state" begin
             lat = Lattice((20, 20))
-            σ = zeros(Int32, 20, 20); σ[5:10, 5:10] .= 1
-            st = with_capacity(initial_state(σ, Int32[1]; cell = init_moments(σ, lat, 1)), 2)
+            σ = zeros(Int32, 20, 20)
+            σ[5:10, 5:10] .= 1
+            st = with_capacity(
+                initial_state(σ, Int32[1]; cell = init_moments(σ, lat, 1)),
+                2
+            )
             f = CPMFunction(
                 gg_delta_H; temperature = gg_temperature, constraint = frozen_dynamics,
                 lifecycle = Lifecycle((st, p, ctx, key, mcs, c) -> EVENT_DIVIDE_CLUSTER)
             )
-            @test_throws ArgumentError solve(PottsProblem(f, st, lat, (0, 1), gg_params()), SequentialCPM())
+            @test_throws ArgumentError solve(
+                PottsProblem(f, st, lat, (0, 1), gg_params()),
+                SequentialCPM()
+            )
         end
     end
 end

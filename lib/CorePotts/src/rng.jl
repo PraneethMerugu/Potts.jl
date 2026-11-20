@@ -68,11 +68,14 @@ function stream_id(name::AbstractString)
 end
 stream_id(name::Symbol) = stream_id(String(name))
 
-const STREAM_PROPOSAL = stream_id("CorePotts.proposal")      # direction, acceptance, priority
+# direction, acceptance, priority
+const STREAM_PROPOSAL = stream_id("CorePotts.proposal")
 const STREAM_SEQUENTIAL_TARGET = stream_id("CorePotts.sequential_target")
 const STREAM_COLOR_ORDER = stream_id("CorePotts.color_order")
-const STREAM_BLOCK = stream_id("CorePotts.block")                  # block scheme: direction, acceptance, site
-const STREAM_BOUNDARY_SITE = stream_id("CorePotts.boundary_site")  # skip, target, direction, acceptance
+# block scheme: direction, acceptance, site
+const STREAM_BLOCK = stream_id("CorePotts.block")
+# skip, target, direction, acceptance
+const STREAM_BOUNDARY_SITE = stream_id("CorePotts.boundary_site")
 const RESERVED_STREAMS = (
     STREAM_PROPOSAL, STREAM_SEQUENTIAL_TARGET, STREAM_COLOR_ORDER, STREAM_BLOCK,
     STREAM_BOUNDARY_SITE,
@@ -85,14 +88,15 @@ Four independent 32-bit words for one address. `entity` is a site index or a cel
 `cell_entity(id, generation)`; `local` packs round/substep/draw/retry.
 
 `entity` is 64-bit: its low word is the counter word, and its high word is folded into the
-key as `k0 ⊻ hi * W1` (a bijection of `hi`; `hi = 0` leaves the key as it is). An entity below
-2³² therefore draws exactly as before, and no two entities below 2⁶⁴ share a stream.
+key as `k0 ⊻ hi * W1` (a bijection of `hi`; `hi = 0` leaves the key as it is). An entity
+below 2³² therefore draws exactly as before, and no two entities below 2⁶⁴ share a stream.
 """
 @inline function draw(
         key::RNGKey, mcs::Integer, entity::Integer, stream::UInt32,
         local_index::Integer = 0
     )
-    # wrapping conversions: in range by construction, and no exception branch in kernels (X1)
+    # wrapping conversions: in range by construction, and no exception branch in kernels
+    # (X1)
     e = entity % UInt64
     hi = (e >> 32) % UInt32
     # the branch keeps the key loop-invariant on the common `hi = 0` path, so its schedule
@@ -109,17 +113,20 @@ end
 """Lemire multiply-shift draw on `0:n-1` (bias ≤ n / 2³²)."""
 @inline bounded(x::UInt32, n::Integer) = Int((UInt64(x) * UInt64(n)) >> 32)
 
-"""Multiply-shift draw on `0:n-1` from two words, `hi` and `lo` (bias ≤ n / 2⁶⁴; host only)."""
+"""
+Multiply-shift draw on `0:n-1` from two words, `hi` and `lo` (bias ≤ n / 2⁶⁴; host only).
+"""
 @inline function bounded64(hi::UInt32, lo::UInt32, n::Integer)
     return Int((UInt128((UInt64(hi) << 32) | lo) * UInt128(n)) >> 64)
 end
 
-# Site picks of the sequential sweeps over `n` sites (D-247): one word up to 2^24 mobile sites,
-# where the bias n / 2³² is at most 2⁻⁸ and every existing run keeps its draws; two words
-# above (bias ≤ n / 2⁶⁴). The regime is part of the sweep context's type: the caller adds
-# `var"#pick" = TwoWordPick()` above the threshold, and a context without it compiles to the
-# one-word sweep exactly (a runtime branch in the loop slowed the CPU sweeps). The key is not
-# an identifier, so no relation (whose names share the context) can take or shadow it.
+# Site picks of the sequential sweeps over `n` sites (D-247): one word up to 2^24 mobile
+# sites, where the bias n / 2³² is at most 2⁻⁸ and every existing run keeps its draws; two
+# words above (bias ≤ n / 2⁶⁴). The regime is part of the sweep context's type: the caller
+# adds `var"#pick" = TwoWordPick()` above the threshold, and a context without it compiles
+# to the one-word sweep exactly (a runtime branch in the loop slowed the CPU sweeps). The
+# key is not an identifier, so no relation (whose names share the context) can take or
+# shadow it.
 const PICK_ONE_WORD_MAX = 2^24
 struct TwoWordPick end
 # tests: the two-word pick on a small lattice (read by the caller once per MCS)
@@ -127,13 +134,28 @@ const _FORCE_TWO_WORD_PICK = Ref(false)
 const PICK_KEY = Symbol("#pick")
 _with_two_word_pick(ctx::NamedTuple) = merge(ctx, NamedTuple{(PICK_KEY,)}((TwoWordPick(),)))
 _two_word_pick(n) = _FORCE_TWO_WORD_PICK[] || n > PICK_ONE_WORD_MAX
-# resolved at compile time; dispatch on the folded `Val` leaves no branch (`get` left an empty block)
-@inline _pick_regime(ctx::NamedTuple{names}) where {names} = _pick_regime(ctx, Val(PICK_KEY in names))
+# resolved at compile time; dispatch on the folded `Val` leaves no branch (`get` left an
+# empty block)
+@inline function _pick_regime(ctx::NamedTuple{names}) where {names}
+    return _pick_regime(
+        ctx, Val(
+            PICK_KEY in
+                names
+        )
+    )
+end
 @inline _pick_regime(::NamedTuple, ::Val{false}) = nothing
 @inline _pick_regime(ctx::NamedTuple, ::Val{true}) = getfield(ctx, PICK_KEY)
-# dispatch, not a ternary, and the one-word method is `bounded`'s body rather than a call to it,
-# so it inlines to exactly the old IR (each wrapper layer leaves an empty block)
-@inline site_pick(::Nothing, hi::UInt32, lo::UInt32, n::Integer) = Int((UInt64(hi) * UInt64(n)) >> 32)
+# dispatch, not a ternary, and the one-word method is `bounded`'s body rather than a call to
+# it, so it inlines to exactly the old IR (each wrapper layer leaves an empty block)
+@inline function site_pick(::Nothing, hi::UInt32, lo::UInt32, n::Integer)
+    return Int(
+        (
+            UInt64(hi) *
+                UInt64(n)
+        ) >> 32
+    )
+end
 @inline site_pick(::TwoWordPick, hi::UInt32, lo::UInt32, n::Integer) = bounded64(hi, lo, n)
 
 """
@@ -162,7 +184,9 @@ end
 
 """Most attempts of a bounded normal draw (`bounded_normal`)."""
 const MAX_DRAW_ATTEMPTS = 64
-"""Status bit: a bounded draw found no value above its bound in `MAX_DRAW_ATTEMPTS` attempts."""
+"""
+Status bit: a bounded draw found no value above its bound in `MAX_DRAW_ATTEMPTS` attempts.
+"""
 const STATUS_DRAW_EXHAUSTED = UInt32(2)
 """Status bit: a bounded draw was given a negative SD `σ`."""
 const STATUS_DRAW_NEGATIVE_SD = UInt32(4)
@@ -176,13 +200,15 @@ const MODEL_STATUS = Symbol("#status")
 """
     bounded_normal(T, key, mcs, entity, stream, μ, σ, lower, status)
 
-`μ + σ z` with `z` standard normal, redrawn while `≤ lower`: attempt `k = 0, 1, …` is the draw
-at local index `k` of the address `(mcs, entity, stream)`, at most `MAX_DRAW_ATTEMPTS`. On
-exhaustion the status word `status` (a 1-element `UInt32` array, or `nothing`) takes
+`μ + σ z` with `z` standard normal, redrawn while `≤ lower`: attempt `k = 0, 1, …` is the
+draw at local index `k` of the address `(mcs, entity, stream)`, at most `MAX_DRAW_ATTEMPTS`.
+On exhaustion the status word `status` (a 1-element `UInt32` array, or `nothing`) takes
 `STATUS_DRAW_EXHAUSTED` and the value is NaN: no throw, so it runs inside kernels. A
 negative `σ` gives NaN and `STATUS_DRAW_NEGATIVE_SD`.
 """
-@inline function bounded_normal(::Type{T}, key::RNGKey, mcs, entity, stream::UInt32, μ, σ, lower, status) where {T}
+@inline function bounded_normal(
+        ::Type{T}, key::RNGKey, mcs, entity, stream::UInt32, μ, σ, lower, status
+    ) where {T}
     σ < 0 && (_set_status!(status, STATUS_DRAW_NEGATIVE_SD); return T(NaN))
     for k in 0:(MAX_DRAW_ATTEMPTS - 1)
         a, b, _, _ = draw(key, mcs, entity, stream, k)
@@ -193,7 +219,8 @@ negative `σ` gives NaN and `STATUS_DRAW_NEGATIVE_SD`.
     return T(NaN)
 end
 @inline _set_status!(::Nothing, bit) = nothing
-@inline _set_status!(status, bit) = (Atomix.@atomic status[1] |= bit; nothing)     # status has 1 entry
+# status has 1 entry
+@inline _set_status!(status, bit) = (Atomix.@atomic status[1] |= bit; nothing)
 """
     bump!(cnt, j)
 
@@ -208,11 +235,23 @@ construction) incremented atomically, on the host or the device.
 skipped): `@convert` transfers and writes.
 """
 @inline function atomic_add!(a, j, v)
-    ((0 < j) & (j <= length(a))) && (@inbounds Atomix.@atomic a[j] += convert(eltype(a), v))   # bound checked here
+    # bound checked here
+    ((0 < j) & (j <= length(a))) && (@inbounds Atomix.@atomic a[j] += convert(eltype(a), v))
     return nothing
 end
 # the model's status word at a host read point (`_check_status!`); 0 without one
-_model_status(stats, model::NamedTuple) = haskey(model, MODEL_STATUS) ? _readback(stats, getfield(model, MODEL_STATUS)) : UInt32(0)
+function _model_status(stats, model::NamedTuple)
+    return if haskey(model, MODEL_STATUS)
+        _readback(stats, getfield(model, MODEL_STATUS))
+    else
+        UInt32(0)
+    end
+end
 _model_status(stats, model) = UInt32(0)
 """`normal(T, words)`: `normal(T, words[1], words[2])` of a `draw`."""
-@inline normal(::Type{T}, w::NTuple{4, UInt32}) where {T <: AbstractFloat} = normal(T, w[1], w[2])
+@inline function normal(::Type{T}, w::NTuple{4, UInt32}) where {T <: AbstractFloat}
+    return normal(
+        T, w[1],
+        w[2]
+    )
+end
