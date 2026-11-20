@@ -1,4 +1,4 @@
-# the `solver_placement_tests.jl` round-3 follow-ups (D-078): canonical solver
+# follow-ups of D-078 (solver placement): canonical solver
 # strings and reserved internal suffixes. Decision: D-130 (amends D-016/D-078, after D-123).
 #
 # The defects, measured on c0f80561:
@@ -80,13 +80,13 @@ const DEFS = raw"""
     end
     @sweep Metropolis(; temperature = 1.0)
 end
-function sigma()
+function solver_string_sigma()
     σ = zeros(Int32, 12, 12)
     σ[2:4, 2:4] .= 1
     σ[7:9, 7:9] .= 2
     return σ
 end
-solver_string_op() = [ownership => sigma(), kind => [:A, :A]]
+solver_string_op() = [ownership => solver_string_sigma(), kind => [:A, :A]]
 
 ood(u, p, t) = false                            # a named function
 struct SolverStringGuard{G}                                  # a callable struct (an `isoutofdomain`)

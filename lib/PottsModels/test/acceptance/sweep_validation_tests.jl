@@ -1,7 +1,7 @@
 # `@sweep` validation and `combine` hashing.
 # Decision: D-123 (amends D-016/D-121).
 #
-# The defects (`acceptance_law_fingerprint_tests.jl` review, D-121 "Review"), measured on b14a81cd:
+# The defects (D-121 "Review"), measured on b14a81cd:
 #  1. `sweep_spec` (src/vocabulary.jl) converts `offset` with `Float64(offset)` and accepts
 #     NaN, Inf and -Inf. A NaN offset makes every acceptance comparison false (the run is
 #     meaningless); ±Inf accepts or rejects every copy whatever ΔH is.
@@ -77,13 +77,13 @@ for (i, (label, c)) in enumerate(NAMED)
     NAMED_MODELS[label] = @eval $name
 end
 
-function sigma()
+function sweep_sigma()
     σ = zeros(Int32, 12, 12)
     σ[2:4, 2:4] .= 1
     σ[7:9, 7:9] .= 2
     return σ
 end
-sweep_op() = [ownership => sigma(), kind => [:A, :A]]
+sweep_op() = [ownership => sweep_sigma(), kind => [:A, :A]]
 named_problem(label; T = Float64) = PottsProblem(NAMED_MODELS[label](; name = :sweep), sweep_op(), (0, 12); T, seed = 1)
 """
 # The definitions are evaluated in `Main`, as the worker process below evaluates them, so the

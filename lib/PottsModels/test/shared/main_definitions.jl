@@ -23,14 +23,22 @@ function main_defined_name(ex)
     return nothing
 end
 
+"""The names that the top level of `defs` defines (see `main_defined_name`)."""
+main_defined_names(defs::String) =
+    Symbol[n for n in (main_defined_name(ex) for ex in Meta.parseall(defs).args) if n !== nothing]
+
 function define_in_main(into::Module, marker::Symbol, preamble::Expr, defs::String, label::String)
+    defined = main_defined_names(defs)
     if !isdefined(Main, marker)
+        # Two files that define one name in `Main` would share it silently in one process.
+        owned = names(Main; all = true)
+        clash = filter(in(owned), defined)
+        isempty(clash) || error("$label: `Main` already defines $(join(clash, ", "))")
         Core.eval(Main, preamble)
         include_string(Main, defs, label)
     end
-    for ex in Meta.parseall(defs).args
-        n = main_defined_name(ex)
-        n === nothing || Core.eval(into, :(const $n = Main.$n))
+    for n in defined
+        Core.eval(into, :(const $n = Main.$n))
     end
     return nothing
 end
