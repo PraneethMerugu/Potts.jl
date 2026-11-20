@@ -64,9 +64,11 @@ end
         owners = Array{RenderOwner}(undef, dims)
         for site in eachindex(owners)
             id = rand(rng, 0:cell_count)
-            owners[site] = id == 0 ?
-                           RenderOwner(MediumSite, 1) :
-                           RenderOwner(CellSite, id)
+            owners[site] = if id == 0
+                RenderOwner(MediumSite, 1)
+            else
+                RenderOwner(CellSite, id)
+            end
         end
         frame = PottsRenderFrame(rand(rng, 0:10_000), owners, cells)
         @test assert_render_frame_conformance(frame) === frame

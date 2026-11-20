@@ -81,8 +81,11 @@ function encode_frame(frame::AbstractPottsRenderFrame, encoding::CellTypeEncodin
     values = Array{Float64}(undef, frame_size(frame))
     for site in CartesianIndices(values)
         owner = owner_at(frame, site)
-        values[site] = owner.kind === CellSite ?
-                       code[cell_metadata(frame, owner).cell_type] : 1.0
+        values[site] = if owner.kind === CellSite
+            code[cell_metadata(frame, owner).cell_type]
+        else
+            1.0
+        end
     end
     entries = LegendEntry[LegendEntry(:medium, "Medium", 0)]
     append!(entries, [
@@ -105,8 +108,11 @@ function encode_frame(frame::AbstractPottsRenderFrame, encoding::CellIdentityEnc
     values = Array{Float64}(undef, frame_size(frame))
     for site in CartesianIndices(values)
         owner = owner_at(frame, site)
-        values[site] = owner.kind === CellSite ?
-                       code[_cell_identity(frame, owner)] : 1.0
+        values[site] = if owner.kind === CellSite
+            code[_cell_identity(frame, owner)]
+        else
+            1.0
+        end
     end
     entries = LegendEntry[LegendEntry(:medium, "Medium", 0)]
     append!(entries, [

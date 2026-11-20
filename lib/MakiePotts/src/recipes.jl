@@ -146,8 +146,11 @@ function Makie.plot!(plot::PottsPlot)
     colorrange = Makie.lift(_plot_colorrange, encoded, plot.colorrange)
     labeler = Makie.lift(
             plot.inspector_label, validated_frame, plot.encoding) do custom, frame, enc
-        custom === Makie.automatic ?
-        ((child, index, position) -> inspection_label(frame, enc, index)) : custom
+        if custom === Makie.automatic
+            (child, index, position) -> inspection_label(frame, enc, index)
+        else
+            custom
+        end
     end
 
     Makie.heatmap!(plot, heatmap_xs, heatmap_ys, values;

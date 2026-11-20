@@ -220,8 +220,11 @@ function PottsRenderFrame(mcs::Integer, owners::AbstractArray{RenderOwner, N},
     frozen_owners = copy(owners)
     frozen_cells = collect(cells)
     frozen_channels = map(channels) do item
-        values = item.values isa AbstractArray || item.values isa AbstractDict ?
-                 copy(item.values) : item.values
+        values = if item.values isa AbstractArray || item.values isa AbstractDict
+            copy(item.values)
+        else
+            item.values
+        end
         RenderChannel(item.key, values; label = item.label, units = item.units)
     end
     lookup = Dict(cell.identity.id => index for (index, cell) in pairs(frozen_cells))

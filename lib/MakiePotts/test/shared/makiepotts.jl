@@ -37,9 +37,11 @@ function render_fixture(; dimensions = 2)
     f = CorePotts.CPMFunction(energy; temperature)
     problem = CorePotts.PottsProblem(f, CorePotts.initial_state(labels, kinds), lattice, (0, 0),
         (; T = 2.0); seed = 1)
-    state = dimensions == 2 ?
-            only(CorePotts.solve(problem, CorePotts.SequentialCPM()).u) :
-            CorePotts.initial_state(labels, kinds)
+    state = if dimensions == 2
+        only(CorePotts.solve(problem, CorePotts.SequentialCPM()).u)
+    else
+        CorePotts.initial_state(labels, kinds)
+    end
     return (; state, problem)
 end
 

@@ -55,8 +55,13 @@ function _resolve_mp_groups(groups_table, raw_groups)
 end
 
 const MAKIEPOTTS_GROUPS_TABLE = _load_mp_groups()
-const MAKIEPOTTS_RAW_GROUPS = !isempty(ARGS) ? ARGS :
-    (!isempty(strip(get(ENV, "GROUP", ""))) ? [strip(ENV["GROUP"])] : ["All"])
+const MAKIEPOTTS_RAW_GROUPS = if !isempty(ARGS)
+    ARGS
+elseif !isempty(strip(get(ENV, "GROUP", "")))
+    [strip(ENV["GROUP"])]
+else
+    ["All"]
+end
 const MAKIEPOTTS_SELECTED_GROUPS = _resolve_mp_groups(MAKIEPOTTS_GROUPS_TABLE, MAKIEPOTTS_RAW_GROUPS)
 
 function makiepotts_tests(groups = MAKIEPOTTS_SELECTED_GROUPS;

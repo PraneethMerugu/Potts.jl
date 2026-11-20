@@ -60,7 +60,13 @@ function _hue(rgb::NTuple{3, Float64})
     hi, lo = max(r, g, b), min(r, g, b)
     chroma = hi - lo
     chroma == 0 && return NaN
-    h = hi == r ? mod((g - b) / chroma, 6) : hi == g ? (b - r) / chroma + 2 : (r - g) / chroma + 4
+    h = if hi == r
+        mod((g - b) / chroma, 6)
+    elseif hi == g
+        (b - r) / chroma + 2
+    else
+        (r - g) / chroma + 4
+    end
     return h / 6
 end
 
@@ -114,8 +120,19 @@ function _ref_hsv(h, s = 0.62, v = 0.88)
     f = sector - i
     p, q, t = v * (1 - s), v * (1 - s * f), v * (1 - s * (1 - f))
     m = mod(i, 6)
-    return m == 0 ? (v, t, p) : m == 1 ? (q, v, p) : m == 2 ? (p, v, t) :
-        m == 3 ? (p, q, v) : m == 4 ? (t, p, v) : (v, p, q)
+    if m == 0
+        return (v, t, p)
+    elseif m == 1
+        return (q, v, p)
+    elseif m == 2
+        return (p, v, t)
+    elseif m == 3
+        return (p, q, v)
+    elseif m == 4
+        return (t, p, v)
+    else
+        return (v, p, q)
+    end
 end
 _ref_key(id, generation) = (UInt64(id) << 32) ⊻ UInt64(generation)
 """The formula on the base (bba4d963): golden-ratio hue of the raw key."""

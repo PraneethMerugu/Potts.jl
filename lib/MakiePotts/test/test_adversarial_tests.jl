@@ -10,9 +10,13 @@ include("shared/makiepotts.jl")
 function _saved_state_frame_oracle(state, request)
     active = Set(Int32(id) for id in eachindex(CorePotts.volumes(state)) if CorePotts.volumes(state)[id] > 0)
     owners = map(CorePotts.ownership(state)) do id
-        id == 0 ? RenderOwner(MediumSite, 1) : begin
-            id in active || error("oracle encountered an inactive finite owner")
-            RenderOwner(CellSite, id)
+        if id == 0
+            RenderOwner(MediumSite, 1)
+        else
+            begin
+                    id in active || error("oracle encountered an inactive finite owner")
+                    RenderOwner(CellSite, id)
+                end
         end
     end
     metadata = [
