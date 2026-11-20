@@ -551,26 +551,24 @@ function _bcs_reads(b, ext)
     return [filter(in(own), fields); filter(!in(own), fields)], unique!(pins)
 end
 # the fields that the terms of a condition's left side read as their own: `c(t, 0, y)`,
-# `Differential(x)(c(t, 0, y))`, a bare field `c`, or one of these as a factor of a product
+# `Differential(x)(c(t, 0, y))`, a bare field `c`, or one of these as a factor of a
+# product, the numerator of a quotient or the base of a power
 function _bcs_own(lhs)
     own = Symbol[]
-    read(f) = if iscall(f) && _is_field_at(operation(f))
+    own_read(f) = if iscall(f) && _is_field_at(operation(f))
         push!(own, _field_at_name(f))
     elseif iscall(f) && operation(f) isa Differential
-        read(_unwrap(first(arguments(f))))
+        own_read(_unwrap(first(arguments(f))))
+    elseif iscall(f) && operation(f) === (*)
+        foreach(g -> own_read(_unwrap(g)), arguments(f))
+    elseif iscall(f) && (operation(f) === (/) || operation(f) === (^))
+        own_read(_unwrap(first(arguments(f))))
     else
         i = info(f)
         i !== nothing && i.role === :field && push!(own, i.name)
     end
     terms = iscall(lhs) && operation(lhs) === (+) ? arguments(lhs) : (lhs,)
-    for tm in terms
-        tm = _unwrap(tm)
-        if iscall(tm) && operation(tm) === (*)
-            foreach(f -> read(_unwrap(f)), arguments(tm))
-        else
-            read(tm)
-        end
-    end
+    foreach(tm -> own_read(_unwrap(tm)), terms)
     return own
 end
 
