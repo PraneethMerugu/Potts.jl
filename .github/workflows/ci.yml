@@ -108,13 +108,13 @@ jobs:
             $PIN julia --project=benchmark "$f"
           done
       - name: LatticeFields under --check-bounds=yes
-        # Our tree had not been tested under
-        # --check-bounds, while eight installed SciML workflows run --check-bounds=yes and
-        # OrdinaryDiffEq's passes `check-bounds: auto`. It is the cheapest real defect detector
-        # available and needs no test edits. Measured on 1.13.3 at the pin-free head: the
-        # LatticeFields group is 1588/1588 in 9m53s under the flag (exit
-        # status 0), so the pass costs one cheap group. Add groups here as
-        # each one is measured clean under the flag; do not add a group that has not been.
+        # Our tree had not been tested under --check-bounds, while eight installed SciML
+        # workflows run --check-bounds=yes and OrdinaryDiffEq's passes `check-bounds: auto`.
+        # It is the cheapest real defect detector available and needs no test edits.
+        # Measured on 1.13.3 at the pin-free head: the LatticeFields group is 1588/1588 in
+        # 9m53s under the flag (exit status 0), so the pass costs one cheap group. Add groups
+        # here as each one is measured clean under the flag; do not add a group that has not
+        # been.
         run: $PIN julia --check-bounds=yes --project=lib/LatticeFields/test lib/LatticeFields/test/runtests.jl
       - name: Keep this Manifest as the dependency lock
         # only reached when every step above passed

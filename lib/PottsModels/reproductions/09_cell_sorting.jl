@@ -1257,7 +1257,7 @@ Markdown.parse("PottsModels $(pkgversion(PottsModels)), commit " *
 #
 # | Date | Change | Reason |
 # |---|---|---|
-# | 2026-09-30 | First version (pilot tutorial, reduced run) | |
+# | 2026-09-30 | First version (pilot tutorial, reduced run) | a pilot of the reproduction-page format |
 # | 2026-09-30 | The full run uses a 1000-cell aggregate (`graner_glazier_aggregate`) | the paper's size, started as a Voronoi aggregate without relaxation |
 # | 2026-09-30 | Targets revised before freezing: nominal-time verdicts, two-run envelope, size-free plateau ratio | spec 09 §9 |
 # | 2026-10-05 | Full-run margin 10 → 60 and an isolation guard; no target changed. The first full run failed V-PRE3 (b) because aggregates touched their periodic image | spec 09 §9.4 |
