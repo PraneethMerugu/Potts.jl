@@ -1,7 +1,9 @@
 # CompatHelper: opens one pull request per dependency whose new release falls outside a
-# [compat] bound, for every package and test project of the workspace. It only opens pull
-# requests: it never pushes to an existing branch, merges, or tags. It runs on a GitHub-hosted
-# runner, so it does not take the self-hosted CI machine. Pull requests opened with the
+# [compat] bound, for every package and test project of the workspace, against `monorepo`. It
+# only opens pull requests: it never pushes to an existing branch, merges, or tags. It runs on
+# a GitHub-hosted runner, so it does not take the self-hosted CI machine. The schedule fires
+# only once this file is on the default branch (main), and opening pull requests needs the
+# repository setting that allows GitHub Actions to create them. Pull requests opened with the
 # default GITHUB_TOKEN do not start CI; run CI on them by hand (or push to them).
 name: CompatHelper
 
@@ -42,4 +44,5 @@ jobs:
                     "lib/MakiePotts", "lib/MakiePotts/test",
                     "lib/PottsModels", "lib/PottsModels/test"],
                 bump_version = false,
+                master_branch = "monorepo",
             )'

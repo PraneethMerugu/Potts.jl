@@ -1,0 +1,43 @@
+# The Potts suite under --check-bounds=yes, weekly on the self-hosted runner (D-298). It takes
+# about 26 minutes, too long for every push; CorePotts and LatticeFields run under the flag in
+# the push CI. Scheduled workflows fire from the default branch, so the checkout names
+# `monorepo` explicitly. Run it by hand with workflow_dispatch.
+name: Check bounds (Potts, weekly)
+
+on:
+  schedule:
+    - cron: '0 2 * * 3'
+  workflow_dispatch:
+
+concurrency:
+  group: check-bounds-weekly
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  JULIA_PKG_PRECOMPILE_AUTO: "0"
+  PIN: taskset -c 0-11,16-27
+
+jobs:
+  potts-check-bounds:
+    name: Potts under --check-bounds=yes
+    runs-on: [self-hosted, Linux, X64, rocm]
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: monorepo
+      - name: Julia on PATH
+        run: echo "$HOME/.juliaup/bin" >> "$GITHUB_PATH"
+      - name: Resolve, instantiate and precompile from the last green CI Manifest
+        run: |
+          LOCK="$HOME/potts-ci/Manifest.toml"
+          if [ -f "$LOCK" ]; then cp "$LOCK" Manifest.toml; fi
+          $PIN julia --project=. -e 'using Pkg; Pkg.resolve(); Pkg.instantiate(); Pkg.precompile()'
+          $PIN julia --check-bounds=yes --project=test -e 'using Pkg; Pkg.precompile()'
+      - name: Potts under --check-bounds=yes
+        # 1557 s with 4 workers on the PC (13 835 passes, 6 broken); the flag reaches the
+        # group's process and its workers
+        run: GROUP=Potts POTTS_CHECK_BOUNDS_LANE=true $PIN julia --check-bounds=yes --project=test test/runtests.jl

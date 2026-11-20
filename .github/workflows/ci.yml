@@ -119,12 +119,9 @@ jobs:
       - name: CorePotts under --check-bounds=yes
         # Measured on 1.13.4 on the PC (D-298): 262 s, exit status 0. The lane's control item
         # requires the flag when POTTS_CHECK_BOUNDS_LANE is set, and an out-of-bounds read
-        # under `@inbounds` to throw.
+        # under `@inbounds` to throw. Potts under the flag takes about 26 min, so it runs
+        # weekly instead (check-bounds-weekly.yml).
         run: POTTS_CHECK_BOUNDS_LANE=true $PIN julia --check-bounds=yes --project=lib/CorePotts/test lib/CorePotts/test/runtests.jl
-      - name: Potts under --check-bounds=yes
-        # Measured on 1.13.4 on the PC (D-298): 1557 s with 4 workers (13 835 passes, 6
-        # broken), exit status 0. The flag reaches the group's process and its workers.
-        run: GROUP=Potts POTTS_CHECK_BOUNDS_LANE=true $PIN julia --check-bounds=yes --project=test test/runtests.jl
       - name: Keep this Manifest as the dependency lock
         # only reached when every step above passed
         run: mkdir -p "$HOME/potts-ci" && cp Manifest.toml "$HOME/potts-ci/Manifest.toml"
