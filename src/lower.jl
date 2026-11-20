@@ -517,11 +517,11 @@ function _is_site_position(x)
     return i !== nothing && i.role === :builtin && i.name === :position
 end
 
-"""Value of a cell array at `c`, zero for the medium (`c == 0`)."""
 # bounds: c ≠ 0 is a cell id from σ or a copy, ≤ capacity = length(a)
+"""Value of a cell array at `c`, zero for the medium (`c == 0`)."""
 @inline _cellval(a, c) = c == 0 ? zero(eltype(a)) : @inbounds a[c]
-"""Kind of cell `c` (`0` for the medium)."""
 # bounds: c ≠ 0 is a cell id from σ or a copy, ≤ capacity
+"""Kind of cell `c` (`0` for the medium)."""
 @inline _cellkind(st, c) = c == 0 ? Int32(0) : Int32(@inbounds st.cell.kind[c])
 
 # ---------------------------------------------------------------------------------------
@@ -713,8 +713,8 @@ function _ref_default(i::Entity, env)
     )
 end
 
-"""Whether slot `r` (a reference) holds an alive cell: `0 < r ≤ capacity` and `volume[r] > 0`."""
 # bounds: 0 < r ≤ length(vol), checked first (the `_deref*` below check it too)
+"""Whether slot `r` (a reference) holds an alive cell: `0 < r ≤ capacity` and `volume[r] > 0`."""
 @inline _alive_slot(vol, r) = (0 < r) & (r <= length(vol)) && @inbounds(vol[r] > 0)
 """Column `a` of referent `r`, or `d` (the medium's value) when `r` is 0 or dead."""
 @inline _deref(a, vol, r, d) = _alive_slot(vol, r) ? @inbounds(a[r]) : d      # r checked by `_alive_slot`
