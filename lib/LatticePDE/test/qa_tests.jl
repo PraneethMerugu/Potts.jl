@@ -70,6 +70,16 @@ end
 # JET's error analysis of the whole package: undefined names and fields (D-298)
 @testitem "QA: JET package analysis (LatticePDE)" setup = [LP_qa] tags = [:latticepde, :qa] begin
     @testset "QA: JET package analysis (LatticePDE)" begin
-        qa_jet_package(LatticePDE)
+        qa_jet_package(
+            LatticePDE;
+            locals = [
+                # assigned with the irregular domain, read only when it is set
+                r"`dop` (may be undefined|is not defined) \(discretize\.jl\)" => "assigned under the condition of its use",
+                # captured by the face-rule closure; `dompred` is assigned twice
+                r"`(env|dompred)` is not defined \(discretize\.jl\)" => "boxed capture",
+                # captured by the scaled-row closures and reassigned after them
+                r"`diff` is not defined \(operator\.jl\)" => "boxed capture",
+            ]
+        )
     end
 end

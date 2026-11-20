@@ -85,6 +85,11 @@ end
         @eval using DynamicPolynomials: DynamicPolynomials
         @eval using SparseArrays: SparseArrays
         @test isempty(Test.detect_ambiguities(LatticeFields; recursive = true))
+        # control: an array type whose `getindex` takes any key, as the solution's did, is
+        # ambiguous with BlockArrays' `Block` methods
+        scratch = Module(:ScratchIndex)
+        Core.eval(scratch, :(struct V <: AbstractVector{Int} end; Base.size(::V) = (1,); Base.getindex(::V, k) = 1))
+        @test !isempty(Test.detect_ambiguities(scratch))
     end
 end
 
@@ -107,6 +112,11 @@ end
                 # algorithms that have no such field
                 r"LatticeGMRES has no field `init`" => "a branch JET cannot rule out",
                 r"LatticePCG has no field `init`" => "a branch JET cannot rule out",
+            ],
+            locals = [
+                # the PCG and tangent kernel builders reassign `kb` (and `b`) after closures
+                # that capture it: boxed captures, each read after its assignment
+                r"`(kb|b)` is not defined \(kernels\.jl\)" => "boxed capture",
             ]
         )
     end

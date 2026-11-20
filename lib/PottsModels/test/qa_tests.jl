@@ -55,6 +55,13 @@ end
 # JET's error analysis of the whole package: undefined names and fields (D-298)
 @testitem "PottsModels QA: JET package analysis" setup = [QualitySetup] tags = [:pottsmodels, :qa] begin
     @testset "PottsModels QA: JET package analysis" begin
-        qa_jet_package(PottsModels)
+        qa_jet_package(
+            PottsModels;
+            locals = [
+                # the `&&` in the OpenVT reference model's update lowers to a closure, which
+                # captures the parameter `γ` of the generated constructor through a box
+                r"`γ` is not defined \(macro\.jl\)" => "boxed capture in generated code",
+            ]
+        )
     end
 end

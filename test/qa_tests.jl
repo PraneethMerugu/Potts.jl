@@ -554,7 +554,19 @@ end
 # JET's error analysis of the whole package: undefined names and fields (D-298)
 @testitem "QA: JET package analysis (Potts)" setup = [QaSetup] tags = [:potts, :qa] begin
     @testset "QA: JET package analysis (Potts)" begin
-        qa_jet_package(Potts)
+        qa_jet_package(
+            Potts;
+            locals = [
+                # the build closure assigns `phases` and `lifecycle`, which the enclosing
+                # function assigns again after it: a boxed capture, read after its assignment
+                r"`(phases|lifecycle)` is not defined \(problem\.jl\)" => "boxed capture",
+            ]
+        )
+    end
+end
+
+@testitem "QA: the JET analysis flags an undefined name and field" setup = [QaSetup] tags = [:potts, :qa] begin
+    @testset "QA: the JET analysis flags an undefined name and field" begin
         qa_jet_control()
     end
 end

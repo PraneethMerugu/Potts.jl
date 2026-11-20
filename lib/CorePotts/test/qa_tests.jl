@@ -158,7 +158,14 @@ end
 # JET's error analysis of the whole package: undefined names and fields (D-298)
 @testitem "QA: JET package analysis (CorePotts)" setup = [CP_qa] tags = [:corepotts, :qa] begin
     @testset "QA: JET package analysis (CorePotts)" begin
-        qa_jet_package(CorePotts)
+        qa_jet_package(
+            CorePotts;
+            locals = [
+                # assigned when the state has clusters, read only then (or when a cluster root
+                # was found, which needs clusters)
+                r"`(members|cl)` may be undefined \(lifecycle\.jl\)" => "assigned under the condition of its use",
+            ]
+        )
     end
 end
 
