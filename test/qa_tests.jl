@@ -424,22 +424,35 @@ end
                 ("front " * "end A", "front " * "end A"), ("W-" * "lite", "W-" * "lite"),
                 ("cutover " * "C8", "cutover " * "C8"), ("F3 " * "design §3.4", "F3 " * "design"),
                 ("v3 " * "§7.1", "v3 " * "§"), ("D-" * "F2" * "-1", "D-" * "F2" * "-1"),
+                ("P60" * "ccDevice", "P60" * "ccD"), ("review" * " M2", "review" * " M2"),
+                ("review" * " 4", "review" * " 4"), ("review" * " B1 #1", "review" * " B1"),
+                ("gating (B" * "1)", "(B" * "1)"), ("P3" * "-mg §6", "P3" * "-mg"),
             )
             @test qa_phase_tokens(s) == [tok]
         end
         # Negative controls: domain names of the same shape.
         for s in (
                 "before_mcs", "frozen_kinds", "Float64", "RK4", "BDF2", "F1-F4", "V-C12", "O5",
-                "C12(curve, k)", "T1 transition", "## Step 1: the lattice", "paired A/B", "D-157",
+                "C12(curve, k)", "T1 transition", "## Step 1: the lattice", "paired A/B", "D-" * "157",
+                "50 Eden rounds", "round 1", "review the code", "PRE §III B4", "p53 levels",
             )
             @test isempty(qa_phase_tokens(s))
         end
+        # Plain decision IDs: allowed in code comments only.
+        @test qa_decision_ids("msg = \"see D-" * "123\"") == ["D-" * "123"]
+        @test isempty(qa_decision_ids("x = 1   # D-" * "123"))
+        @test qa_decision_ids("# D-" * "123"; prose = true) == ["D-" * "123"]
+        @test isempty(qa_decision_ids("D-12, D-1234, VD-123"))
         # Scratch-directory control: a planted ID fails, and an allowlist entry lets it pass.
         mktempdir() do tmp
             mkpath(joinpath(tmp, "src"))
             write(joinpath(tmp, "src", "planted.jl"), "# see " * "P6" * ".0as\nx = 1\n")
-            write(joinpath(tmp, "src", "clean.jl"), "# the copy sweep, D-157\n")
+            write(joinpath(tmp, "src", "clean.jl"), "# the copy sweep, D-" * "157\n")
             @test qa_no_phase_names(tmp) == ["src/planted.jl:1: " * "P6" * ".0as"]
+            mkpath(joinpath(tmp, "docs", "src"))
+            write(joinpath(tmp, "docs", "src", "page.md"), "The sweep (D-" * "157).\n")
+            @test qa_no_phase_names(tmp) == ["docs/src/page.md:1: D-" * "157", "src/planted.jl:1: " * "P6" * ".0as"]
+            rm(joinpath(tmp, "docs"); recursive = true)
             allow = joinpath(tmp, "allow.txt")
             write(allow, "src/planted.jl\t" * "P6" * ".0as\ta planted control\n")
             @test isempty(qa_no_phase_names(tmp; allow = qa_phase_allowlist(allow)))

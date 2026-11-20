@@ -38,5 +38,9 @@ lib/PottsModels/test/reproductions/15_openvt_page_tests.jl	P6.15f	the `item` val
 lib/PottsModels/test/reproductions/15_openvt_page_tests.jl	P6.15g	the `item` value of a committed record's provenance.toml, compared with the record
 lib/PottsModels/test/reproductions/15_openvt_page_tests.jl	P6.15h	the `item` value of a committed record's provenance.toml, compared with the record
 lib/PottsModels/test/reproductions/15_openvt_page_tests.jl	P6.15k	the `item` value of a committed record's provenance.toml, compared with the record
-test/shared/qa_common.jl	front end A	qa_error_rules bans this stale wording; its docstring and negative controls name it
-test/shared/qa_common.jl	front end B	qa_error_rules bans this stale wording; its docstring and negative controls name it
+lib/PottsModels/test/reproductions/01_merks_page_tests.jl	D-200	the `decision` field of the committed amendment record (data/01) holds it
+lib/PottsModels/test/reproductions/04_foam_bulk_shear_scan_tests.jl	D-203	writes the `decision` field of the scan record in the committed record format
+lib/PottsModels/test/reproductions/15_openvt_checkerboard_tests.jl	D-008	input of the cause parser, in the form of the committed cause strings
+lib/PottsModels/test/reproductions/15_openvt_checkerboard_tests.jl	D-029	input of the cause parser, in the form of the committed cause strings
+lib/PottsModels/test/reproductions/15_openvt_checkerboard_tests.jl	D-051	input of the cause parser, in the form of the committed cause strings
+lib/PottsModels/test/reproductions/15_openvt_manuscript_draft_tests.jl	D-211	the `decisions` list of the committed record's provenance.toml holds it

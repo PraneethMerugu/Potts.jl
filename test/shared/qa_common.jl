@@ -302,8 +302,6 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
     - no bare `catch` clauses (`try ... catch; ... end` without an exception binding),
     - internal `"please report"` invariants thrown exclusively via `AssertionError` and matching
       `reviewed_invariants`,
-    that `src/`, `ext/`, and `test/` contain no stale front-end wording (`"front end A"`,
-    `"front end B"`, `"both front ends"`, `"@bcs"` outside explicit legacy section refusal),
     and run negative controls proving every guard flags synthetic violations.
     """
     function qa_error_rules(
@@ -311,6 +309,8 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
             reviewed_invariants::AbstractVector{<:AbstractString} = String[],
             allowed_bcs_files::AbstractVector{<:AbstractString} = String[]
         )
+        # also: `src/`, `ext/` and `test/` hold no stale front-end wording (a front end named by
+        # a letter, "both front ends", "@bcs" outside the explicit legacy-section refusal)
         Test = Base.require(Base.PkgId(Base.UUID("8dfed614-e22c-5e08-85e1-65c5234f0b40"), "Test"))
         (; bad_errors, bad_catches, bad_invariant_forms, bad_stale, found_invariants) =
             _qa_collect_tree(pkg_root, allowed_bcs_files)
@@ -346,7 +346,7 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
             Test.@test !_qa_invariants_match(planted.found_invariants, String[])
             Test.@test _qa_invariants_match(planted.found_invariants, ["src/planted.jl"])
         end
-        stale_neg = _qa_scan_error_rules("# front end A\nmsg = \"write @bcs: x\"")
+        stale_neg = _qa_scan_error_rules("# front " * "end A\nmsg = \"write @bcs: x\"")
         Test.@test stale_neg.stale_terms == [1, 2]
         bcs_neg = _qa_scan_error_rules("op === Symbol(\"@bcs\")"; allow_bcs = false)
         Test.@test bcs_neg.stale_terms == [1]
@@ -356,7 +356,7 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
         Test.@test bcs_test_neg.stale_terms == [1]
         bcs_test_ok = _qa_scan_error_rules("msg = \"@bcs\""; allow_bcs_test = true)
         Test.@test isempty(bcs_test_ok.stale_terms)
-        bcs_test_fe = _qa_scan_error_rules("# front end A"; allow_bcs_test = true)
+        bcs_test_fe = _qa_scan_error_rules("# front " * "end A"; allow_bcs_test = true)
         Test.@test bcs_test_fe.stale_terms == [1]
         return nothing
     end
@@ -365,19 +365,23 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
     # Development-process IDs (roadmap items, review rounds, design drafts) do not belong in
     # names, titles, comments or messages: a reader with no project history cannot decode them.
     # The pattern matches ID shapes only, never prose words. Each alternative is written in
-    # pieces so that this file does not match itself.
+    # pieces so that this file does not match itself. "round" and a number is not matched on
+    # purpose: domain text uses it too (the rounds of an Eden growth).
     const _QA_PHASE_RE = Regex(
         join(
             (
                 raw"\bP[0-9]+\.(?:[0-9]+[a-z]{0,2}[0-9]?[a-z]?|ci)\b",        # roadmap items
                 raw"\b[pP][0-9]+_[0-9]+[a-z0-9]*",                           # the same in file names
                 raw"\b[pP][0-9]{2,4}[A-Za-z]{1,3}[0-9]?_",                   # identifier prefixes
+                raw"\b[pP][0-9]{2,4}[a-z]{1,3}[0-9]?[A-Z]",                  # and CamelCase names
                 raw"\bF[0-9]-(?:[A-EG-Z]?[0-9]+[a-z]?)\b",                   # field-compiler items
                 raw"\bF[0-9] (?:design|round|review)\b", raw"\bv[0-9] §",    # design drafts
                 raw"\bTS(?:-R)?[0-9]+[a-z]?\b",                              # test-suite passes
                 raw"\bM[0-9]+\.[0-9]+[a-z]?\b",                              # milestones
                 raw"\breview r[0-9]\b", raw"\br[0-9] [SMN][0-9]+\b", raw"\bR[0-9]-[MSN][0-9]+\b",
                 raw"\bbatch(?:-end| [0-9]+) review\b",                       # review rounds and findings
+                raw"\breview (?:[SMN][0-9]+|[0-9]+|B[0-9])", raw"\(B[0-9]\)",
+                raw"\bP[0-9]-(?:mg|rev|mtk|wlite)",                           # design studies
                 "\\bfront " * raw"end [AB]\b", "\\bW-" * raw"lite\b",        # superseded design labels
                 "\\bcutover " * raw"C[0-9]+\b", raw"\bC[0-9]{1,2} (?:gate|review)\b",
                 raw"\bPG-[0-9]\b", raw"\bP[0-9]-gates\b",
@@ -392,10 +396,35 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
     The development-process IDs in `text`, in order: roadmap items and their file-name and
     identifier forms, field-compiler and test-suite items, milestones, review rounds and
     findings, design-draft sections, superseded design labels, and phase-scoped decision IDs.
-    Plain decision IDs (`D-123`) are not matched: they cite `docs/design/DECISIONS.md` as
-    rationale. The controls in `test/qa_tests.jl` show the shapes.
+    Plain decision IDs (`D-` and three digits) are not matched here; see
+    [`qa_decision_ids`](@ref). The controls in `test/qa_tests.jl` show the shapes.
     """
     qa_phase_tokens(text::AbstractString) = String[m.match for m in eachmatch(_QA_PHASE_RE, text)]
+
+    # Plain decision IDs may stay in code comments, as links to the rationale in
+    # docs/design/DECISIONS.md. Messages, docstrings and docs pages say the reason in words.
+    const _QA_DECISION_RE = r"\bD-[0-9]{3}\b"
+    const _QA_CODE_EXTS = (".jl", ".sh", ".toml", ".yml", ".yaml", ".py")
+
+    # A file whose comments are not code comments: docs pages, READMEs, and the Literate pages
+    # (reproductions and model pages), whose comments render as the page's prose.
+    function _qa_prose_file(p::AbstractString)
+        endswith(p, _QA_CODE_EXTS) || return true
+        occursin(r"^lib/[^/]+/reproductions/[^/]+\.jl$", p) && return true
+        return occursin(r"^docs/models/[^/]+\.jl$", p) && basename(p) != "render.jl"
+    end
+
+    """
+        qa_decision_ids(line; prose = false) -> Vector{String}
+
+    The plain decision IDs (`D-` and three digits) in `line` that are not in a comment: every
+    one when `prose`, otherwise those before the line's first `#`. A `#` inside a string ends
+    the code part too, so an ID after it is missed; docstring lines have no `#` as a rule.
+    """
+    function qa_decision_ids(line::AbstractString; prose::Bool = false)
+        h = prose ? nothing : findfirst('#', line)
+        return String[m.match for m in eachmatch(_QA_DECISION_RE, line) if h === nothing || m.offset < h]
+    end
 
     const _QA_PHASE_EXCLUDE = ("docs/design/", ".claude/", "lib/PottsModels/reproductions/data/")
     const _QA_PHASE_ALLOWLIST = "test/phase_names_allow.txt"
@@ -405,7 +434,7 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
             return false
         elseif startswith(basename(p), "README") || startswith(basename(p), "CONTRIBUTING") || p == "docs/make.jl"
             return true
-        elseif any(d -> startswith(p, d), ("src/", "ext/", "test/", "benchmark/", "docs/src/", "docs/models/", "tools/", ".github/"))
+        elseif any(d -> startswith(p, d), ("src/", "ext/", "test/", "benchmark/", "docs/src/", "docs/models/", "docs/status/", "tools/", ".github/"))
             return true
         end
         return occursin(r"^lib/[^/]+/(?:src|ext|test)/", p) || occursin(r"^lib/[^/]+/reproductions/[^/]+\.jl$", p)
@@ -450,8 +479,9 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
 
     Scan the tracked files of the checkout at `root` (`git ls-files`, or every file when git or
     the repository is absent) in the package sources, extensions, tests, benchmarks, docs pages
-    and models, reproduction pages, tools, CI files, READMEs and CONTRIBUTING files for
-    [`qa_phase_tokens`](@ref), in file contents and in the paths themselves. Skipped:
+    and models, the status page, reproduction pages, tools, CI files, READMEs and CONTRIBUTING files for
+    [`qa_phase_tokens`](@ref), in file contents and in the paths themselves, and for
+    [`qa_decision_ids`](@ref) in file contents (comments of code files exempt). Skipped:
     `docs/design/`, `CLAUDE.md`, `.claude/`, the committed records under
     `lib/PottsModels/reproductions/data/` and the allowlist itself. Returns one
     `"file:line: token"` per hit not in `allow` (line 0 for a path); empty when clean.
@@ -470,8 +500,11 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
             isfile(file) || continue
             bytes = read(file)
             (0x00 in bytes || !isvalid(String, bytes)) && continue
-            for (i, ln) in enumerate(eachsplit(String(bytes), '\n'; keepempty = true)), t in qa_phase_tokens(ln)
-                (p, t) in allow || push!(bad, "$p:$i: $t")
+            prose = _qa_prose_file(p)
+            for (i, ln) in enumerate(eachsplit(String(bytes), '\n'; keepempty = true))
+                for t in Iterators.flatten((qa_phase_tokens(ln), qa_decision_ids(ln; prose)))
+                    (p, t) in allow || push!(bad, "$p:$i: $t")
+                end
             end
         end
         return bad
