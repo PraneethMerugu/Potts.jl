@@ -8,8 +8,8 @@ include(joinpath(@__DIR__, "shared", "selfcheck.jl"))
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "PottsModels" setup = [PublishedModelsSetup] tags = [:pottsmodels, :core] begin
-    @testset "PottsModels" begin
+@testitem "published models build, run and match the brute-force ΔH" setup = [PublishedModelsSetup] tags = [:pottsmodels, :core] begin
+    @testset "published models build, run and match the brute-force ΔH" begin
         σ, kinds = graner_glazier_state()
         @test size(σ) == (72, 72) && length(kinds) == 64 && size(first(graner_glazier_state(2))) == (144, 144)
         two(dims, a, b) = (s = zeros(Int32, dims); s[a...] .= 1; s[b...] .= 2; s)

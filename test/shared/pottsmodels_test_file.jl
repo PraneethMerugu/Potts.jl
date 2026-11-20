@@ -30,7 +30,9 @@ function _run_item(into::Module, ex)
         push!(body.args, Expr(:using, Expr(:., :., :., s)))   # `using ..S`: the item module is in `into`
     end
     append!(body.args, ex.args[end].args)
-    ReTestItems.softscope_all!(body)           # top-level loops assign globals, as in the runner
+    # `ReTestItems.softscope_all!` is an internal ReTestItems API (check it on dependency updates):
+    # top-level loops assign globals, as in the runner.
+    ReTestItems.softscope_all!(body)
     mod = Expr(:module, true, gensym(title), body)
     @testset "$title" begin
         Core.eval(into, mod)

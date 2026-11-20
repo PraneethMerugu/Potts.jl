@@ -66,6 +66,8 @@ function _resolve_pm_groups(groups_table, raw_groups)
 end
 
 const POTTSMODELS_GROUPS_TABLE = _load_pm_groups()
+# A caller that forwards its own command line (for example `julia runtests.jl Core`) can leave this
+# script's path in ARGS; that path is not a group, so it is dropped.
 const POTTSMODELS_SELECTED_GROUPS = let cli = filter(a -> normpath(abspath(a)) != normpath(abspath(@__FILE__)), ARGS)
     raw = !isempty(cli) ? cli : (!isempty(strip(get(ENV, "GROUP", ""))) ? [strip(ENV["GROUP"])] : ["All"])
     _resolve_pm_groups(POTTSMODELS_GROUPS_TABLE, raw)
@@ -139,6 +141,8 @@ function pottsmodels_tests(
     endfile = get(ENV, "POTTS_TEST_END_EXPR_FILE", "")
     test_end_expr = isempty(endfile) ? Expr(:block) : Meta.parse("begin\n" * read(endfile, String) * "\nend")
     paths = [joinpath(POTTSMODELS_TESTDIR, f) for f in mine]
+    # `Pkg.Operations.testfile` is an internal Pkg API (check it on dependency updates). It gives the
+    # `runtests.jl` path, which `ReTestItems.runtests` reads from `:SOURCE_PATH` as under `Pkg.test`.
     task_local_storage(:SOURCE_PATH, Pkg.Operations.testfile(dirname(Base.active_project()))) do
         runtests(
             paths...; nworkers, name, test_end_expr, testitem_timeout = 7200, retries = 0,
