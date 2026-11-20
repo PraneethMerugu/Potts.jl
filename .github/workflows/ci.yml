@@ -32,7 +32,7 @@ env:
 
 jobs:
   format:
-    name: Runic formatting check (changed .jl files)
+    name: Runic formatting check
     runs-on: [self-hosted, Linux, X64, rocm]
     timeout-minutes: 10
     steps:
@@ -45,7 +45,7 @@ jobs:
         run: |
           # every tracked Julia file except recorded run data and vendored references
           git ls-files -z -- '*.jl' ':!:lib/PottsModels/reproductions/data/**' ':!:docs/references/**' |
-            xargs -0 $PIN julia --startup-file=no --project=.github/ci/runic -e '
+            xargs -0 -r $PIN julia --startup-file=no --project=.github/ci/runic -e '
               using Pkg
               Pkg.instantiate(; io = devnull)
               using Runic
