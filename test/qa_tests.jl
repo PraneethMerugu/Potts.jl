@@ -302,6 +302,14 @@ end
         @eval using DynamicQuantities: DynamicQuantities
         exts = qa_extension_piracies(Potts)
         @test Base.get_extension(Potts, :PottsDynamicQuantitiesExt) in exts
+        # CorePotts' DiffEqBase extension: its own test environment does not load DiffEqBase
+        @test Base.get_extension(CorePotts, :CorePottsDiffEqBaseExt) in qa_extension_piracies(CorePotts)
+    end
+end
+
+@testitem "QA: the extension piracy check flags a planted pirate" setup = [QaSetup] tags = [:potts, :qa] begin
+    @testset "QA: the extension piracy check flags a planted pirate" begin
+        qa_piracy_control()
     end
 end
 

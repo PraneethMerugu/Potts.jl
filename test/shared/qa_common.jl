@@ -26,6 +26,42 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
         return nothing
     end
 
+    const _QA_AQUA = Base.PkgId(Base.UUID("4c88cf16-eb10-579e-8560-4a9242c79595"), "Aqua")
+    const _QA_TEST = Base.PkgId(Base.UUID("8dfed614-e22c-5e08-85e1-65c5234f0b40"), "Test")
+
+    # The functions and types of `owners` and of their submodules.
+    function _qa_owned(owners)
+        own = Any[]
+        seen = Set{Module}()
+        function walk(o::Module)
+            o in seen && return
+            push!(seen, o)
+            for n in names(o; all = true, imported = false)
+                isdefined(o, n) || continue
+                v = getfield(o, n)
+                if v isa Module
+                    v !== o && parentmodule(v) === o && walk(v)
+                elseif v isa Function || v isa Type
+                    push!(own, v)
+                end
+            end
+            return
+        end
+        foreach(walk, owners)
+        return own
+    end
+
+    """
+        qa_pirates(ext; owners) -> Vector{Method}
+
+    The methods of module `ext` that Aqua's piracy hunt flags, with the functions and types of
+    `owners` (and their submodules) treated as `ext`'s own. Empty when `ext` pirates nothing.
+    """
+    function qa_pirates(ext::Module; owners)
+        Aqua = Base.require(_QA_AQUA)
+        return Base.invokelatest(Aqua.Piracy.hunt, ext; treat_as_own = _qa_owned(owners))
+    end
+
     """
         qa_extension_piracies(mod; owners = (mod,)) -> Vector{Module}
 
@@ -36,20 +72,7 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
     method on foreign types. Returns the extensions checked; load the trigger packages first.
     """
     function qa_extension_piracies(mod::Module; owners = (mod,))
-        Aqua = Base.require(Base.PkgId(Base.UUID("4c88cf16-eb10-579e-8560-4a9242c79595"), "Aqua"))
-        Test = Base.require(Base.PkgId(Base.UUID("8dfed614-e22c-5e08-85e1-65c5234f0b40"), "Test"))
-        own = Any[]
-        _qa_owned!(own, o::Module) =
-            for n in names(o; all = true, imported = false)
-            isdefined(o, n) || continue
-            v = getfield(o, n)
-            if v isa Module
-                v !== o && parentmodule(v) === o && _qa_owned!(own, v)
-            elseif v isa Function || v isa Type
-                push!(own, v)
-            end
-        end
-        foreach(o -> _qa_owned!(own, o), owners)
+        Test = Base.require(_QA_TEST)
         TOML = Base.require(Base.PkgId(Base.UUID("fa267f1f-6049-4f14-aa54-33bafae1ed76"), "TOML"))
         project = Base.invokelatest(TOML.parsefile, joinpath(pkgdir(mod), "Project.toml"))
         exts = Module[]
@@ -57,9 +80,35 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
             ext = Base.get_extension(mod, Symbol(name))
             ext === nothing && continue
             push!(exts, ext)
-            Base.invokelatest(Aqua.test_piracies, ext; treat_as_own = own)
+            pirates = qa_pirates(ext; owners)
+            isempty(pirates) || @error "type piracy in the extension $name" pirates
+            Test.@test isempty(pirates)
         end
         return exts
+    end
+
+    """
+        qa_piracy_control()
+
+    The negative control of [`qa_extension_piracies`](@ref): a scratch parent module and a
+    scratch extension of it. The extension's method of a parent function and its method of a
+    foreign function on a parent type are not flagged; its method of a foreign function on
+    foreign types (`Base.nameof` on a `Pair{Char, Int8}`) is the one pirate found. (Two scratch
+    modules count as one package, so the control cannot show what the owners add; the
+    extension checks of the packages do, by passing.)
+    """
+    function qa_piracy_control()
+        Test = Base.require(_QA_TEST)
+        parent = Module(:ScratchParent)
+        Core.eval(parent, :(struct Owned end; owned_function(x) = x))
+        ext = Module(:ScratchParentExt)
+        Core.eval(ext, :(const P = $parent))
+        Core.eval(ext, :(P.owned_function(::Int) = 1))
+        Core.eval(ext, :(Base.show(io::IO, ::P.Owned) = print(io, "owned")))
+        Core.eval(ext, :(Base.nameof(::Pair{Char, Int8}) = :pirate))
+        pirates = qa_pirates(ext; owners = (parent,))
+        Test.@test length(pirates) == 1 && only(pirates).name === :nameof
+        return nothing
     end
 
     """
