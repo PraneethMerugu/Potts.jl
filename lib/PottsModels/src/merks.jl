@@ -3,9 +3,8 @@
 # kind tests: `cell` (an endothelial site), `ecm` (a medium site) and `frame` (a border site).
 # The parameters keep the names and defaults of the models.
 module MerksField
-using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters, t_nounits
+using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters, t_nounits as t
     using Potts.LatticePDE: laplacian, masked, step_index, lattice_domain
-const t = t_nounits                     # the time of every Potts model (`Potts.t`)
 const Dt = Differential(t)
 @parameters x y
 @variables c(..) cell(..)::Bool [input = true] ecm(..)::Bool [input = true] frame(..)::Bool [input = true]
