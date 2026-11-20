@@ -16,8 +16,15 @@ evaluates it after every write of base values.
 function derivation(base::AbstractVector, computed::AbstractVector)
     names = Symbol[Symbol(first(c)) for c in computed]
     defs = Dict{Symbol, Any}(Symbol(first(c)) => last(c) for c in computed)
-    reads(e) = e isa AbstractArray ? reduce(union, (reads(x) for x in e); init = Set{Symbol}()) :
-               _isterm(e) ? Set{Symbol}(_varname(v) for v in Symbolics.get_variables(e)) : Set{Symbol}()
+    function reads(e)
+        if e isa AbstractArray
+            return reduce(union, (reads(x) for x in e); init = Set{Symbol}())
+        elseif _isterm(e)
+            return Set{Symbol}(_varname(v) for v in Symbolics.get_variables(e))
+        else
+            return Set{Symbol}()
+        end
+    end
     deps = Dict(n => intersect(reads(defs[n]), names) for n in names)
     order, done = Symbol[], Set{Symbol}()
     while length(order) < length(names)

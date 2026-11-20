@@ -85,9 +85,14 @@ function steady_rows(sys::PDESystem)
     if bad != 0
         eq = get_eqs(sys)[rows[bad]]
         left = [free[k] for k in eachindex(free) if !(k in picks)]
+        unread = if isempty(left)
+            " (every field has an equation)"
+        else
+            string(" of the fields with no equation (",
+                join(("`$(_slotkey(f))`" for f in left), ", "), ")")
+        end
         _dverr(string("equation `", eq, "`: a steady equation `0 ~ rhs` is solved for a field that it reads and that ",
-            "has no other equation, and it reads none", isempty(left) ? " (every field has an equation)" :
-            string(" of the fields with no equation (", join(("`$(_slotkey(f))`" for f in left), ", "), ")"),
+            "has no other equation, and it reads none", unread,
                 "; write the field's operator into the row (`0 ~ D * laplacian(c) - k * c + s` for `c`)"
             )
         )

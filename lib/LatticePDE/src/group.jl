@@ -93,7 +93,13 @@ function _lower_group(sys::PDESystem, disc::LatticeDiscretization; fields = noth
     values && _check_tables(cf, sys)
     s = cf.program
     hasmap = any(k -> startswith(k.key, "map:"), s.kernels)
-    stab = hasmap ? (p -> NaN) : bound ? stability_bound(cf, sys) : DeferredBound(cf, sys)
+    stab = if hasmap
+        p -> NaN
+    elseif bound
+        stability_bound(cf, sys)
+    else
+        DeferredBound(cf, sys)
+    end
     spec = Problems.GroupSpec(s; state = _states(s), external, kind = hasmap ? :map : :rate, clock = disc.clock,
         init = [k.key for k in s.kernels if any(q -> startswith(k.key, q), ("mask:", "domain:"))], stability = stab,
         params = _param_slots(cf, defaults, values), tables = _table_specs(cf, values),
@@ -149,7 +155,13 @@ function _param_slots(cf::CompiledField, computed, values::Bool)
         k = string(q)
         d = values && i <= length(cf.defaults) ? cf.defaults[i] : nothing
         d isa AbstractFloat && isnan(d) && (d = nothing)
-        role = _isclock(q) ? :clock : haskey(comp, k) ? :computed : :base
+        role = if _isclock(q)
+            :clock
+        elseif haskey(comp, k)
+            :computed
+        else
+            :base
+        end
         push!(out, Problems.ParamSlot(k; text = _clocktext(k), default = d, role, derivation = get(comp, k, nothing)))
     end
     return out

@@ -132,7 +132,11 @@ function _load(e::Env{N}, u, comp) where {N}
     e.level > 0 && any(!iszero, o) && (o = _level_offset(e, u, o, e.level))
     any(!iszero, o) &&                       # map read: wraps on a periodic axis, else 0 outside
         return load!(e.kb, f, lane; offset = ntuple(d -> o[d] + e.offset[d], N), policy = ZERO)
-    pol = any(!iszero, e.offset) ? (e.policy == RESOLVE && f in e.ghosted ? RESOLVE : CLAMP) : e.policy
+    pol = if any(!iszero, e.offset)
+        e.policy == RESOLVE && f in e.ghosted ? RESOLVE : CLAMP
+    else
+        e.policy
+    end
     return load!(e.kb, f, lane; offset = e.offset, policy = pol)
 end
 # A read of a field on another `Coarse` level than the kernel's. A coarser field (`rel >
@@ -151,7 +155,13 @@ function _level_load(e::Env{N}, u, f, lane, o, rel) where {N}
     fr = rel >= 0 ? e.level : lf
     o = _level_offset(e, u, o, fr)
     off = ntuple(d -> o[d] + (rel < 0 && e.dims[d] != 1 ? e.offset[d] * 2^(-rel) : e.offset[d]), N)
-    pol = all(iszero, off) ? INSIDE : any(!iszero, o) ? ZERO : CLAMP
+    pol = if all(iszero, off)
+        INSIDE
+    elseif any(!iszero, o)
+        ZERO
+    else
+        CLAMP
+    end
     return load!(e.kb, f, lane; offset = off, level = rel, policy = pol)
 end
 
@@ -322,10 +332,13 @@ function _same_level!(e::Env, u, what)
 end
 _isfield(e::Env, u) = iscall(u) && haskey(e.fields, operation(u))
 _fieldarg(e::Env, u) = (u = unwrap(u);
-                        _isfield(e, u) ? (u, 0) :
-                        iscall(u) && operation(u) === getindex && _isfield(e, unwrap(arguments(u)[1])) ?
-                        (unwrap(arguments(u)[1]), Int(unwrap_const(arguments(u)[2]))) :
-                        _lerr(u, "the operand must be a field read `c(t, x, y)`"))
+                        if _isfield(e, u)
+                            (u, 0)
+                        elseif iscall(u) && operation(u) === getindex && _isfield(e, unwrap(arguments(u)[1]))
+                            (unwrap(arguments(u)[1]), Int(unwrap_const(arguments(u)[2])))
+                        else
+                            _lerr(u, "the operand must be a field read `c(t, x, y)`")
+                        end)
 
 """Per-axis flux-form second difference `(1/h²) Σ± K_face (c± − c)` (K = nothing: K ≡ 1)."""
 function _secdiff(e::Env, d, K, c, mean)
@@ -343,9 +356,12 @@ function _secdiff(e::Env, d, K, c, mean)
         K === nothing && return diff
         Kn = _real(e, lower(K, _shift(e, o; face = true)))
         sum_ = _op(e, ADD, Kc, Kn)
-        face = mean === :arithmetic ? _op(e, MUL, constant!(e.kb, 0.5), sum_) :
-               select!(e.kb, _cmp(e, EQ, sum_, constant!(e.kb, 0.0)), constant!(e.kb, 0.0),
-                       _op(e, DIV, _op(e, MUL, constant!(e.kb, 2.0), Kc, Kn), sum_))
+        face = if mean === :arithmetic
+            _op(e, MUL, constant!(e.kb, 0.5), sum_)
+        else
+            select!(e.kb, _cmp(e, EQ, sum_, constant!(e.kb, 0.0)), constant!(e.kb, 0.0),
+                _op(e, DIV, _op(e, MUL, constant!(e.kb, 2.0), Kc, Kn), sum_))
+        end
         return _op(e, MUL, face, diff)
     end
     return _op(e, MUL, constant!(e.kb, 1 / e.h[d]^2), _op(e, ADD, terms...))
@@ -407,11 +423,17 @@ function _advect(e::Env{N}, uvel, c) where {N}
         length(comps) == N || _lerr(uvel, "`Advect` takes a velocity of $N components (one per axis); got $(length(comps))")
     end
     # (a velocity field on another `Coarse` level is read as any field read is there)
-    vel(d, o) = comps === nothing ?
-                (_flevel(e, operation(v)) == e.level ?
-                 _real(e, load!(e.kb, e.fields[operation(v)][1][d], e.fields[operation(v)][2]; offset = o, policy = CLAMP)) :
-                 _real(e, lower(unwrap(Symbolics.wrap(v)[d]), _shift(e, o)))) :
-                _real(e, lower(comps[d], _shift(e, o)))
+    function vel(d, o)
+        if comps === nothing
+            if _flevel(e, operation(v)) == e.level
+                return _real(e, load!(e.kb, e.fields[operation(v)][1][d], e.fields[operation(v)][2]; offset = o, policy = CLAMP))
+            else
+                return _real(e, lower(unwrap(Symbolics.wrap(v)[d]), _shift(e, o)))
+            end
+        else
+            return _real(e, lower(comps[d], _shift(e, o)))
+        end
+    end
     u, comp = _fieldarg(e, c)
     _same_level!(e, u, "`Advect`")
     cl(o) = load!(e.kb, e.fields[operation(u)][1][max(comp, 1)], e.fields[operation(u)][2];
@@ -542,8 +564,10 @@ function lower(x, e::Env{N}) where {N}
     ids = Int32[lower(y, e) for y in a]
     f === (+) && return _op(e, ADD, ids...)
     f === (*) && return _op(e, MUL, ids...)
-    f === (-) && return length(ids) == 1 ? arith!(e.kb, NEG, _num(e, ids)...) :
-                        _op(e, ADD, ids[1], arith!(e.kb, NEG, _num(e, ids[2:2])...))
+    if f === (-)
+        length(ids) == 1 && return arith!(e.kb, NEG, _num(e, ids)...)
+        return _op(e, ADD, ids[1], arith!(e.kb, NEG, _num(e, ids[2:2])...))
+    end
     f === (/) && return arith!(e.kb, DIV, _real(e, ids[1]), _real(e, ids[2]))
     (f === min || f === max) && return _op(e, f === min ? MIN : MAX, ids...)
     if f === (^)

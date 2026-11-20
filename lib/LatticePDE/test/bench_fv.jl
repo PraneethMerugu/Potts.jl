@@ -156,8 +156,11 @@ function bandwidth_gate()
         bytes = 8n
         tg = timeit(first(bound(species(dims, 1, 0), 1)))
         u, o = dev(rand(Float32, n)), dev(zeros(Float32, n))
-        th = N == 2 ? timeit(() -> hand2_k!(DEV, 256)(o, u, 0.01f0, Int32.(dims)...; ndrange = n)) :
-             timeit(() -> hand3_k!(DEV, 256)(o, u, 0.01f0, Int32.(dims)...; ndrange = n))
+        th = if N == 2
+            timeit(() -> hand2_k!(DEV, 256)(o, u, 0.01f0, Int32.(dims)...; ndrange = n))
+        else
+            timeit(() -> hand3_k!(DEV, 256)(o, u, 0.01f0, Int32.(dims)...; ndrange = n))
+        end
         cg = copy_gbs(n)
         gg, gh = bytes / tg / 1e9, bytes / th / 1e9
         @printf(

@@ -23,7 +23,13 @@
         for (b, J) in enumerate(CartesianIndices(CDIMS .÷ CK))
             sites = [CartesianIndex((J[1] - 1) * CK + i, (J[2] - 1) * CK + j) for j in 1:CK for i in 1:CK]
             for (n, st) in enumerate(sites)
-                Q[st] = n <= nmed[b] ? 0 : n <= nmed[b] + 3 ? 1 : 2
+                Q[st] = if n <= nmed[b]
+                    0
+                elseif n <= nmed[b] + 3
+                    1
+                else
+                    2
+                end
             end
         end
         held = Q .== 0
@@ -192,7 +198,13 @@ end
             for (n, s) in enumerate(psites(J))
                 inb, free = n in ins, n in frs
                 Qd[s...] = free ? 1 : 0
-                Kd[s...] = free ? (inb ? kfi : kfo) : (inb ? kmi : kmo)
+                Kd[s...] = if free
+                    inb ? kfi : kfo
+                elseif inb
+                    kmi
+                else
+                    kmo
+                end
                 Dd[s...] = inb
             end
             want[Tuple(J)] = kfi

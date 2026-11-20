@@ -66,7 +66,13 @@ function LatticeDiscretization(grid::Grid; methods = Dict(), T::Union{Type, Noth
         throw(ArgumentError("clock = $(repr(clock)) must be a finite period > 0 (or left out: no clock)"))
     grid.domain == 0 || throw(ArgumentError("give an irregular domain as `domain = dom` (a Bool input field), not in the grid"))
     grid.geometry == HEX && length(grid.dims) != 2 && throw(ArgumentError("a hexagonal grid is 2D"))
-    key = domain === nothing ? nothing : domain isa Union{AbstractString, Symbol} ? String(domain) : _name(_opof(domain))
+    key = if domain === nothing
+        nothing
+    elseif domain isa Union{AbstractString, Symbol}
+        String(domain)
+    else
+        _name(_opof(domain))
+    end
     return LatticeDiscretization(grid, methods, T, backend, key, clock === nothing ? nothing : Float64(clock))
 end
 
@@ -175,7 +181,11 @@ function as_written(s::AbstractString)
     return s
 end
 _name(op) = string(nameof(op))
-_opof(x) = (u = unwrap(x); iscall(u) ? (operation(u) === getindex ? _opof(arguments(u)[1]) : operation(u)) : u)
+_opof(x) = (u = unwrap(x); if iscall(u)
+    operation(u) === getindex ? _opof(arguments(u)[1]) : operation(u)
+else
+    u
+end)
 function _lane(st, T)
     st <: Bool && return U8
     st <: Integer && return st <: Unsigned ? U32 : I32
@@ -224,7 +234,13 @@ function _default(p, ic = Dict())
     d = _icvalue(ic, p)
     d === nothing && !ModelingToolkitBase.hasdefault(p) && return NaN
     v = unwrap_const(unwrap(d === nothing ? ModelingToolkitBase.getdefault(p) : d))
-    return v isa Real && !(v isa Bool) ? v : v isa Bool ? Float64(v) : NaN
+    if v isa Real && !(v isa Bool)
+        return v
+    elseif v isa Bool
+        return Float64(v)
+    else
+        return NaN
+    end
 end
 # values as one vector: the promotion of Float64 with each value's type (an integer is a Float64)
 _promoted(vs) = (T = mapreduce(typeof, promote_type, vs; init = Float64); T.(vs))
@@ -251,8 +267,15 @@ end
 # `NodeValueRule.vfield`).
 function _unpin_face_reads(bc, fids, ivs)
     reps = Dict{Any, Any}()
-    walk(y) = iscall(y) && (haskey(fids, operation(y)) ? (reps[y] = unwrap(operation(y)(ivs...))) :
-                                                        foreach(a -> walk(unwrap(a)), arguments(y)))
+    function walk(y)
+        iscall(y) || return
+        if haskey(fids, operation(y))
+            reps[y] = unwrap(operation(y)(ivs...))
+        else
+            foreach(a -> walk(unwrap(a)), arguments(y))
+        end
+        return
+    end
     walk(unwrap(bc.value))
     isempty(reps) && return bc
     return BC(bc.kind, bc.op, bc.comp, bc.axis, bc.side, bc.alpha, bc.beta,
@@ -647,10 +670,16 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
             α, β = _coef(bc.alpha, params), _coef(bc.beta, params, s / hL[d])
             # a Robin coefficient that reads the coordinates or the time: a value field
             # computed at each site at the step's time, as a face value (in lattice units)
-            af, ax = α === nothing ? _coef_field!(pb, bc, bc.alpha, 1.0, "α", k, d, s, op, lv, fids, ivs, ends, allops, isin, kern, fenv) :
-                     (Int32(0), nothing)
-            bf, bx = β === nothing ? _coef_field!(pb, bc, bc.beta, s / hL[d], "β", k, d, s, op, lv, fids, ivs, ends, allops, isin, kern, fenv) :
-                     (Int32(0), nothing)
+            af, ax = if α === nothing
+                _coef_field!(pb, bc, bc.alpha, 1.0, "α", k, d, s, op, lv, fids, ivs, ends, allops, isin, kern, fenv)
+            else
+                (Int32(0), nothing)
+            end
+            bf, bx = if β === nothing
+                _coef_field!(pb, bc, bc.beta, s / hL[d], "β", k, d, s, op, lv, fids, ivs, ends, allops, isin, kern, fenv)
+            else
+                (Int32(0), nothing)
+            end
             (af == 0 && bf == 0) || (sitecoefs[(k, d, s)] = (ax, bx))
             α, β = something(α, Coef(1.0)), something(β, Coef(1.0))
             val(c) = c.param == 0 ? c.value : c.value * defaults[c.param]     # parameter defaults bind here
@@ -699,8 +728,11 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
         # a value that reads the time: its rate `∂v/∂t` too, the masked sites'
         # rate on an OrdinaryDiffEq solver (the owned steppers write the value at each step)
         dv = vf == 0 ? nothing : _time_rate(b.value, ivs[1], o -> get(isin, o, false))
-        rf = dv === nothing ? Int32(0) :
-             field!(pb, "maskrate:$k"; storage = fids[b.op][2], role = :aux, epoch = PERSIGMA, levels = Int8[lv])
+        rf = if dv === nothing
+            Int32(0)
+        else
+            field!(pb, "maskrate:$k"; storage = fids[b.op][2], role = :aux, epoch = PERSIGMA, levels = Int8[lv])
+        end
         kb = kern(lv)
         # (on a coarse grid a node is masked when its whole block is, a block masked in
         # part is free, and the field's equation folds over its free children)
@@ -718,8 +750,11 @@ function symbolic_discretize(sys::PDESystem, disc::LatticeDiscretization{N};
     lin = Dict{String, Vector{Pair{Any, Symbol}}}()
     states = [op for op in Base.keys(dvs) if !isin[op]]
     # the unknown fields of the linearity table: an array field by its components
-    staterefs = Any[r for op in states for r in (SymbolicUtils.symtype(dvs[op]) <: AbstractArray ?
-                                                 [_Comp(op, i) for i in eachindex(fids[op][1])] : [op])]
+    function staterefs_of(op)
+        SymbolicUtils.symtype(dvs[op]) <: AbstractArray || return [op]
+        return [_Comp(op, i) for i in eachindex(fids[op][1])]
+    end
+    staterefs = Any[r for op in states for r in staterefs_of(op)]
     for k in sort!(collect(Base.keys(eqs)))
         kind, op, comp, rhs = eqs[k]
         f, lane = fids[op][1][max(comp, 1)], fids[op][2]
@@ -778,7 +813,13 @@ function _check_aux_offsets(prog::Program{N}, sys::PDESystem) where {N}
             r = _neighbor_read(eq.rhs, ops, get_ivs(sys), prog.periodic)
             r === nothing || break
         end
-        what = kind == "aux" ? "the expression of the aux field" : kind == "map" ? "the map of" : "the rate of"
+        what = if kind == "aux"
+            "the expression of the aux field"
+        elseif kind == "map"
+            "the map of"
+        else
+            "the rate of"
+        end
         _dverr(string(what, " `", k, "` reads the aux field `", K, "` at a neighbor site across a closed face of axis ", d,
             r === nothing ? "" : string(" (`", replace(as_written(string(r[1])), r"\(t(, \w+)*\)" => ""), "`)"),
             ": an aux field has no value beyond a ",

@@ -24,7 +24,17 @@ function _xg_operand(u)
     return r === nothing ? nothing : r[2]
 end
 _xg_isop(u) = iscall(u) && (operation(u) === laplacian || operation(u) isa Union{DivKGrad, Advect, Differential})
-_xg_label(f) = f === laplacian ? "laplacian" : f isa DivKGrad ? "DivKGrad" : f isa Advect ? "Advect" : "flux"
+function _xg_label(f)
+    if f === laplacian
+        return "laplacian"
+    elseif f isa DivKGrad
+        return "DivKGrad"
+    elseif f isa Advect
+        return "Advect"
+    else
+        return "flux"
+    end
+end
 
 """
     crossgrid_form(sys) -> sys

@@ -39,12 +39,17 @@ end
 function _diffusion_parts(term, xs)
     reps, parts = Dict{Any, Any}(), Any[]
     walk(y) = iscall(y) && (f = operation(y);
-        f === laplacian ? (reps[y] = 1; push!(parts, (1, :all, :harmonic))) :
-                            f isa DivKGrad ? (reps[y] = 1; push!(parts, (arguments(y)[1], :all, f.mean))) :
-                            f isa Differential ? (r = _raw_flux(y); reps[y] = 1;
-                                                  push!(parts, (r === nothing || r[1] === nothing ? 1 : r[1],
-                                                      findfirst(v -> isequal(v, unwrap(f.x)), xs), :harmonic))) :
-                            foreach(walk, arguments(y)))
+        if f === laplacian
+            (reps[y] = 1; push!(parts, (1, :all, :harmonic)))
+        elseif f isa DivKGrad
+            (reps[y] = 1; push!(parts, (arguments(y)[1], :all, f.mean)))
+        elseif f isa Differential
+            (r = _raw_flux(y); reps[y] = 1;
+                push!(parts, (r === nothing || r[1] === nothing ? 1 : r[1],
+                    findfirst(v -> isequal(v, unwrap(f.x)), xs), :harmonic)))
+        else
+            foreach(walk, arguments(y))
+        end)
     walk(unwrap(term))
     length(parts) == 1 || return nothing
     K, ax, mean = only(parts)
@@ -167,6 +172,13 @@ function _cross_bound(k, term, others, cf, params, bysite)
     end
     return ("", Coef(NaN), _optext(k, term))
 end
+# the face directions of a diffusion operator on `axes` (`:all` or one axis) of an `N`-axis
+# lattice: the three of a hexagonal lattice
+function _face_axes(hex, axes, N)
+    hex && return 1:3
+    axes === :all && return 1:N
+    return (axes,)
+end
 # a cross diffusion term `m Op(o)` of another field `o` (key `key`) with a numeric face
 # coefficient (a number or a number times a parameter, free of the coordinates and the inputs):
 # its faces per axis `m K / h_a²` (a hexagonal lattice: per face direction, `2m/(3h²)`) as `Coef`s (the coupled steady system's modes);
@@ -178,7 +190,7 @@ function _cross_faces(term, key, xs, params, bysite, h, N; hex::Bool = false)
     mK = _coefof(unwrap(substitute(p.m * p.K, Dict(); fold = Val(true))), params)
     mK === nothing && return nothing
     faces = [Coef[] for _ in 1:(hex ? 3 : N)]       # (a hexagonal lattice: its three face directions)
-    for a in (hex ? (1:3) : p.axes === :all ? (1:N) : (p.axes,))
+    for a in _face_axes(hex, p.axes, N)
         push!(faces[a], Coef(mK.value * (hex ? 2 / (3 * h[1]^2) : 1 / h[a]^2), mK.param))
     end
     return faces
@@ -190,7 +202,15 @@ end
 # coefficient reads anything else (the time, a field, an input outside a table read) or keeps
 # a call with no interval rule
 _ihull(a, b) = (min(a[1], b[1]), max(a[2], b[2]))
-_iabs(a) = a[1] >= 0 ? a : a[2] <= 0 ? (-a[2], -a[1]) : (0.0, max(-a[1], a[2]))
+function _iabs(a)
+    if a[1] >= 0
+        return a
+    elseif a[2] <= 0
+        return (-a[2], -a[1])
+    else
+        return (0.0, max(-a[1], a[2]))
+    end
+end
 function _imul(a, b)
     v = (a[1] * b[1], a[1] * b[2], a[2] * b[1], a[2] * b[2])
     any(isnan, v) && return (-Inf, Inf)
@@ -485,8 +505,11 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
             for (i, p) in enumerate(diff)
                 same(p, diff[best]) && continue
                 push!(inexact, _optext(k, p.term))
-                bs[i] === nothing ? push!(unseen, _optext(k, p.term)) :
-                push!(bounds, (bs[i], _optext(k, p.term), _diffusion_ratio(p, kept, params, tabset, box)))
+                if bs[i] === nothing
+                    push!(unseen, _optext(k, p.term))
+                else
+                    push!(bounds, (bs[i], _optext(k, p.term), _diffusion_ratio(p, kept, params, tabset, box)))
+                end
             end
             diff = Any[kept]
             # a coordinate multiplier that may be negative over the site centers: the
@@ -501,7 +524,7 @@ function _build_operator(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDisc
         for p in diff
             mK = scaled ? nothing : _coefof(unwrap(substitute(p.m * p.K, Dict(); fold = Val(true))), params)
             if !scaled && !bysite(p.m) && !bysite(p.K) && mK !== nothing
-                for a in (hex ? (1:3) : p.axes === :all ? (1:N) : (p.axes,))
+                for a in _face_axes(hex, p.axes, N)
                     push!(faces[a], Coef(mK.value * (hex ? 2 / (3 * hk[1]^2) : 1 / hk[a]^2), mK.param))
                 end
             else
@@ -680,9 +703,12 @@ function _jac_program(cf::CompiledField{N}, sys::PDESystem, disc::LatticeDiscret
                     function facecoef(oo)
                         Kn = one_ ? constant!(kb, 1.0) : _real(e, lower(q.K, _shift(e, oo)))
                         sum_ = _op(e, ADD, Kc, Kn)
-                        face = q.mean === :arithmetic ? _op(e, MUL, constant!(kb, 0.5), sum_) :
-                               select!(kb, _cmp(e, EQ, sum_, constant!(kb, 0.0)), constant!(kb, 0.0),
-                                   _op(e, DIV, _op(e, MUL, constant!(kb, 2.0), Kc, Kn), sum_))
+                        face = if q.mean === :arithmetic
+                            _op(e, MUL, constant!(kb, 0.5), sum_)
+                        else
+                            select!(kb, _cmp(e, EQ, sum_, constant!(kb, 0.0)), constant!(kb, 0.0),
+                                _op(e, DIV, _op(e, MUL, constant!(kb, 2.0), Kc, Kn), sum_))
+                        end
                         return _op(e, MUL, constant!(kb, 1 / e.h[a]^2), mult, face)
                     end
                     w = _op(e, ADD, w, facecoef(o))
@@ -758,5 +784,10 @@ function _facecoefs(e, kb, cf::CompiledField, k, a, side, fr)
     return node(fr.alpha, sc[1]), node(fr.beta, sc[2])
 end
 fieldid_in(pb::ProgramBuilder, key) = Int32(findfirst(f -> f.key == key, pb.fields))
-_coefnode(kb, c::Coef) = c.param == 0 ? constant!(kb, c.value) :
-                         arith!(kb, MUL, constant!(kb, c.value), cast!(kb, param!(kb, c.param), REAL))
+function _coefnode(kb, c::Coef)
+    if c.param == 0
+        return constant!(kb, c.value)
+    else
+        return arith!(kb, MUL, constant!(kb, c.value), cast!(kb, param!(kb, c.param), REAL))
+    end
+end

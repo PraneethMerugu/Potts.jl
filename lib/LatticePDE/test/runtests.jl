@@ -62,13 +62,22 @@ function _resolve_lp_groups(groups_table, raw_groups)
 end
 
 const LATTICEPDE_GROUPS_TABLE = _load_lp_groups()
-const LATTICEPDE_RAW_GROUPS = !isempty(ARGS) ? ARGS :
-    (!isempty(strip(get(ENV, "GROUP", ""))) ? [strip(ENV["GROUP"])] : ["All"])
+const LATTICEPDE_RAW_GROUPS = if !isempty(ARGS)
+    ARGS
+elseif !isempty(strip(get(ENV, "GROUP", "")))
+    [strip(ENV["GROUP"])]
+else
+    ["All"]
+end
 const LATTICEPDE_SELECTED_GROUPS = _resolve_lp_groups(LATTICEPDE_GROUPS_TABLE, LATTICEPDE_RAW_GROUPS)
 
 if "gpu" in LATTICEPDE_SELECTED_GROUPS && isempty(strip(get(ENV, "LATTICEPDE_GPU", "")))
     pgpu = lowercase(strip(get(ENV, "POTTS_GPU", "")))
-    ENV["LATTICEPDE_GPU"] = isempty(pgpu) ? (Sys.isapple() ? "metal" : "rocm") : pgpu
+    ENV["LATTICEPDE_GPU"] = if isempty(pgpu)
+        Sys.isapple() ? "metal" : "rocm"
+    else
+        pgpu
+    end
 end
 
 const LATTICEPDE_DEVICE = !isempty(get(ENV, "LATTICEPDE_GPU", ""))

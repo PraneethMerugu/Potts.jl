@@ -154,7 +154,8 @@ function linearity(rhs, c, fields; inputs = (), aux = ())
         _reads(t, aux) && return t => :Other                  # an aux field hides its dependence
         _reads(t, (op,)) && return t => _linclass(t, op, fields, inputs)
         others = [f for f in fields if _reads(t, (f,))]
-        return t => (length(others) == 1 &&
-                     _linclass(t, only(others), fields, inputs) in (:LinearLocal, :Diffusion) ? :CrossLinear : :Other)
+        cross = length(others) == 1 &&
+            _linclass(t, only(others), fields, inputs) in (:LinearLocal, :Diffusion)
+        return t => (cross ? :CrossLinear : :Other)
     end
 end

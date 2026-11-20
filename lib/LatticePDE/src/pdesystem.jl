@@ -92,8 +92,9 @@ function pdesystem(eqs, bcs = Equation[]; name, domain = Any[], kwargs...)
         op = operation(u)
         any(o -> isequal(o, op), ops) && continue
         push!(ops, op)
-        push!(dvs, all(i -> isequal(arguments(u)[i], ivs[i]), eachindex(ivs)) && length(arguments(u)) == length(ivs) ? u :
-                   op(ivs...))
+        same = all(i -> isequal(arguments(u)[i], ivs[i]), eachindex(ivs)) &&
+            length(arguments(u)) == length(ivs)
+        push!(dvs, same ? u : op(ivs...))
     end
     # the fields with equations in the order of the equations, then the inputs by name (the
     # term order of an expression is SymbolicUtils')

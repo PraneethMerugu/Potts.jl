@@ -63,9 +63,14 @@ function _pins(eq, args, ivs, ends)
         v = _cval(a)
         v === nothing && _bcerr(eq, "the argument `$a` is neither `$(ivs[i])` nor a number")
         lo, hi = ends[i]
-        v == lo ? push!(pins, (i, -1)) : v == hi ? push!(pins, (i, 1)) :
-        _bcerr(eq, "`$(ivs[i]) = $v` is not on a face of $lo .. $hi: the low face is `$(ivs[i]) = $lo` and the high face is " *
-                   "`$(ivs[i]) = $hi` (the domain's extent)")
+        if v == lo
+            push!(pins, (i, -1))
+        elseif v == hi
+            push!(pins, (i, 1))
+        else
+            _bcerr(eq, "`$(ivs[i]) = $v` is not on a face of $lo .. $hi: the low face is `$(ivs[i]) = $lo` and the high face is " *
+                "`$(ivs[i]) = $hi` (the domain's extent)")
+        end
     end
     return pins
 end
@@ -141,7 +146,13 @@ function parse_bcs(bcs, fields, ivs, ends)
             (length(terms) == 1 && isequal(α, 1)) || _bcerr(eq, "an initial condition is written `c(0, x, y) ~ value`")
             push!(out, BC(:initial, r.op, r.comp, 0, 0, α, 0, _bc_value(eq, rhs, r.op, fields), nothing, eq))
         else
-            kind = isequal(β, 0) ? :dirichlet : isequal(α, 0) ? :neumann : :robin
+            kind = if isequal(β, 0)
+                :dirichlet
+            elseif isequal(α, 0)
+                :neumann
+            else
+                :robin
+            end
             push!(out, BC(kind, r.op, r.comp, axis - 1, side, α, β, _bc_value(eq, rhs, r.op, fields), nothing, eq))
         end
     end
@@ -165,12 +176,16 @@ function _bc_value(eq, v, op = nothing, fields = Dict{Any, Bool}())
         input = !isempty(ops) && all(o -> fields[o], ops)          # (`fields`: operation → is an input)
         # the route: an input's derivative is an input of its own; the
         # condition's own field takes its flux form; another state field has none yet
-        route = own ? "a condition on the field's own normal derivative is its flux form, with the derivative on " *
-                      "the left: `Dx(c) ~ g` (Neumann) or `α c + β Dx(c) ~ g` (Robin); a derivative along the face " *
-                      "has no condition form in this version" :
-                input ? "give the input's derivative as an input field of its own and read that" :
-                "a derivative of another state field in a condition's value is not lowered in this version: write " *
+        route = if own
+            "a condition on the field's own normal derivative is its flux form, with the derivative on " *
+                "the left: `Dx(c) ~ g` (Neumann) or `α c + β Dx(c) ~ g` (Robin); a derivative along the face " *
+                "has no condition form in this version"
+        elseif input
+            "give the input's derivative as an input field of its own and read that"
+        else
+            "a derivative of another state field in a condition's value is not lowered in this version: write " *
                 "the condition with that field's value, or with a value of the time, the coordinates and parameters"
+        end
         _bcerr(eq, "its value holds `$d`, a derivative of a field; a condition's value may differentiate " *
                    "expressions of the time, the coordinates and parameters only ($route)")
     end

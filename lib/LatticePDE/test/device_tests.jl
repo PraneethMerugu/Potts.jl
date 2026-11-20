@@ -375,8 +375,11 @@ end
 using .LP_device: fd, kron
     @testset "coarse fields under CN, BDF2, QS and the kind fold on $pgpu" begin
     for steady in (false, true)
-            algs = steady ? (QuasiSteady(),) :
+            algs = if steady
+                (QuasiSteady(),)
+            else
                 (CrankNicolson(), BDF2(), BackwardEuler(; init = :steady))
+            end
         for alg in algs
             out = map((PDEV, KernelAbstractions.CPU())) do be
                 pc, ph, (c, ch, q, g) = ctwins(; steady, T = Float32, backend = be)

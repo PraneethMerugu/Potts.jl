@@ -68,8 +68,11 @@ function hand_rate(; dims = BDIMS, K = (x, y) -> 1.0, m = (i, j) -> 1.0, k = (x,
                 ev(v) = v isa Function ? v(fp...) : v
                 g = ev(fc[end])
                 # (α and β may vary along the face, functions of the face point)
-                p, q = fc[1] === :dir ? (-1.0, 2g) :
-                       (al = ev(fc[2]); bl = ev(fc[3]) * s / hs[a]; den = al / 2 + bl; ((bl - al / 2) / den, g / den))
+                p, q = if fc[1] === :dir
+                    (-1.0, 2g)
+                else
+                    (al = ev(fc[2]); bl = ev(fc[3]) * s / hs[a]; den = al / 2 + bl; ((bl - al / 2) / den, g / den))
+                end
                 L[r, r] += c * (p - 1)
                 b[r] += c * q
             end
@@ -195,8 +198,11 @@ function hex_hand(; n = HEXN, D = 1.0, m = (x, y) -> 1.0, k = 0.0, f = (x, y) ->
                 sd = a == 1 ? sign(di) : sign(dj)
                 haskey(faces, (a, sd)) || continue
                 fc = faces[(a, sd)]
-                pg, qg = fc[1] === :dir ? (-1.0, 2fc[2]) :
-                         (bl = fc[3] * sd / h; den = fc[2] / 2 + bl; ((bl - fc[2] / 2) / den, fc[4] / den))
+                pg, qg = if fc[1] === :dir
+                    (-1.0, 2fc[2])
+                else
+                    (bl = fc[3] * sd / h; den = fc[2] / 2 + bl; ((bl - fc[2] / 2) / den, fc[4] / den))
+                end
                 L[r, r] += c * (pg - 1)
                 b[r] += c * qg
                 continue
