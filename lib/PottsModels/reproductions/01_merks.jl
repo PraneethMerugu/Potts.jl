@@ -485,7 +485,7 @@ end
 # Provisional defaults ship labeled (D-155).
 
 aq(item) = "not asked (on our open question list: README §5, Merks item $item; Details below)"
-Markdown.parse("""
+deviations_md = """
 | Item | Ours | Paper | Suspected cause | Author question |
 |---|---|---|---|---|
 | 2006 target length L (provisional) | 50 px; variant `Merks2006(; L = 60.0)` | "about 100 µm" = 50 px (01a p.50); 60 px in every 2006-labeled file | the text and the files conflict (D-050 M2) | $(aq(1)) |
@@ -499,8 +499,8 @@ Markdown.parse("""
 | χ(c,c) | a real parameter (`χcc`) | a continuous ratio swept (01b Fig. 5); files: boolean, χ(c,c) ∈ {0, χ(c,M)} | the sweep's code is not released (D-050 M7; spec A-20) | $(aq(4)) |
 | Parameter sets | `Merks2006`, `Merks2008`, no shared values; keywords on either | two papers, two sets (spec A-17); files: `longcells.par` (2006-labeled), Dataset S1 (2008) | none (D-050 M1) | not an author question |
 | 2008 seeding | one Eden blob, 50 rounds, 7 divisions → 128 cells (`merks2008_sprout`; variant `divisions = 8`, 256 cells) | "rounded clusters" (01b p.5); the files as ours | none (D-050 M11, D-141) | not an author question |
-    | 2008 attempts per MCS | 39 204 = 198², one per mobile site of the framed 202² lattice, as TST (ca.cpp:385) | N = the number of lattice sites (01b p.11), 200² = 40 000 on the 200² lattice of the 01b parameter files (Dataset S1) | we followed TST; our MCS is 2 % shorter than the paper's, a 2 % difference in time scale. The paper is the target: the next full run uses its N through `attempts`, not a re-run for this alone (D-200 item 2) | not an author question |
-    | Border | 1-site frame (2006); 2-site frame on 202² (2008) | frozen pixels, J(c,B) = 100; files: a 1-px frame, the 20-site stencil reading the off-lattice ring as border | none: the same contacts and attempts (D-050 M4) | not an author question |
+| 2008 attempts per MCS | 39 204 = 198², one per mobile site of the framed 202² lattice, as TST (ca.cpp:385) | N = the number of lattice sites (01b p.11), 200² = 40 000 on the 200² lattice of the 01b parameter files (Dataset S1) | we followed TST; our MCS is 2 % shorter than the paper's, a 2 % difference in time scale. The paper is the target: the next full run uses its N through `attempts`, not a re-run for this alone (D-200 item 2) | not an author question |
+| Border | 1-site frame (2006); 2-site frame on 202² (2008) | frozen pixels, J(c,B) = 100; files: a 1-px frame, the 20-site stencil reading the off-lattice ring as border | none: the same contacts and attempts (D-050 M4) | not an author question |
 | Copy proposal | random source, random target among its neighbors | source among the neighbors of a random target (files the same) | the same ordered-pair law away from the frame (spec D-8) | not an author question |
 | Compactness | TST's `Compactness()`: all cell sites over the hull of their centers | A_cluster / A_hull (01b p.5); the files' function is never called | the analysis scripts are not released (spec D-18, A-14) | $(aq(3)) |
 | PARKED: V-E2–V-E4 (lacunae and branch points; decay vs in vitro) | not run | 01a Fig. 5 | the 01a morphometry pipeline and its pixel scale are not released (spec A-18) | $(aq(3)) |
@@ -515,7 +515,8 @@ Markdown.parse("""
 | 01b I6: time axis (provisional) | includes the 100 relaxation MCS | not stated | as the 2008 time origin row (D-202 I6) | $(aq(2)) |
 | 01b I7: Fig. 10 legend (provisional) | the flatter solid curve read as 1024 cells | the legend and the caption disagree | a figure inconsistency (D-202 I7) | $(aq(4)) |
 $(join([full_deviation_rows; b01_deviation_rows], "\n"))
-""")
+"""
+Markdown.parse(deviations_md)
 
 # ## 4. Details
 #

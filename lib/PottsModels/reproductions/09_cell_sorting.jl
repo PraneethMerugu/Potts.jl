@@ -1194,8 +1194,7 @@ Markdown.parse(isempty(failing) ? "No row fails or falls out of band in this run
 # row was re-derived from the record's time series when its rule was re-targeted on
 # 2026-10-13 (it had been written under an earlier "> 0.07 over [10³, 10⁴]" bar).
 
-Markdown.parse("""
-    Second full run: `data/09/full-2026-10-05/`, n = $rec_n, 1000 cells, to 2×10⁴ paper MCS, page commit
+Markdown.parse("Second full run: `data/09/full-2026-10-05/`, n = $rec_n, 1000 cells, to 2×10⁴ paper MCS, page commit\n" * """
 `$(first(TOML.parsefile(joinpath(full_dir, "provenance.toml"))["commit"], 8))`. V-PRE7: `data/09/vpre7-2026-10-07/`.
 
 | Target | Paper | Ours | Rule | Class | Result |
