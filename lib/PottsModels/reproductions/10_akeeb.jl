@@ -335,10 +335,10 @@ let #hide
             "PARKED, $(cnt("reported")) reported.** The two FAIL rows are one " * #hide
             "deviation: at P6 no cell detaches, so invasive and infiltrative area " * #hide
             "are the same quantity.\n\n| Target | Checks | Rows | Result " * #hide
-                "|\n|---|---|---|---|\n" * #hide
+            "|\n|---|---|---|---|\n" * #hide
             join(summ.(order), "\n") * "\n\n" * #hide
             "Headline rows:\n\n| Target | Authors / paper | Ours | Tolerance " * #hide
-                "| Result |\n|---|---|---|---|---|\n" * #hide
+            "| Result |\n|---|---|---|---|---|\n" * #hide
             join( #hide
             [ #hide
                 "| $(cell(r["target"])) | $(cell(r["paper"])) | $(cell(r["ours"])) " * #hide
