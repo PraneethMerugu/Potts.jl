@@ -1132,9 +1132,11 @@ if FULL
     Markdown.parse("V-PRE4 start check, replicates $(relax_ids): D = $(fmt(mean(Dmm[relax_ids]))) from the Voronoi " *
                    "starts against $(fmt(mean(D_relaxed))) from their relaxed copies.")
 else
-    Markdown.parse("The start check runs in the full build; the reduced build's start is already relaxed. " *
+    Markdown.parse(
+        "The start check runs in the full build; the reduced build's start is already relaxed. " *
             "The check run before the targets were fixed (1000 cells, 6 seeds, Voronoi against relaxed starts) found no start " *
-            "effect on D; its values are recorded in spec §9.1 V-PRE4.")
+            "effect on D; its values are recorded in spec §9.1 V-PRE4."
+    )
 end
 
 # Diagnosis of the rows that fail or fall out of band, generated from the table:
