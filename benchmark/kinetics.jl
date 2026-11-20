@@ -1,10 +1,11 @@
 # Kinetic closeness harness (docs/design/research/checkerboard-kinetics.md): runs one
 # arm (an algorithm or a control) on one case over many seeds, and compares every observable
-# with SequentialCPM as the ratio r = mean(arm) / mean(reference), with a 95% bootstrap interval
-# over seeds and the pre-registered verdict (§4).
+# with SequentialCPM as the ratio r = mean(arm) / mean(reference), with a 95% bootstrap
+# interval over seeds and the pre-registered verdict (§4).
 #
 #     julia --project=benchmark -t 16 benchmark/kinetics.jl run <case> <arm> <seeds> <out>
-#     julia --project=benchmark benchmark/kinetics.jl compare <out> <case> <arm> [<reference>]
+#     julia --project=benchmark benchmark/kinetics.jl compare <out> <case> <arm> \
+#         [<reference>]
 #
 # Cases (Graner–Glazier, 144²: four tiles of the 72² baseline, 256 cells, T = 10, Moore(1)):
 #   sort  K1, the two kinds: heterotypic boundary length H(t) / H(0) at fixed checkpoints
@@ -13,7 +14,8 @@
 # Arms:
 #   seq    SequentialCPM, the reference
 #   seq2   SequentialCPM on disjoint seeds: the positive control
-#   clock  SequentialCPM with 0.3 N attempts per MCS (run 0.3 t, labelled t): the clock control
+#   clock SequentialCPM with 0.3 N attempts per MCS (run 0.3 t, labelled t): the clock
+#   control
 #   cb     stock CheckerboardCPM: the negative control
 #   cb_…   a CheckerboardCPM variant (`arm_alg`)
 include("models.jl")
@@ -36,8 +38,8 @@ const CASE_OBS = Dict(
     "foam" => vcat(["committed", "D", "tauV"], STATIC)
 )
 
-# checkerboard variants: `cb` plus `_`-separated options, e.g. `cb_b1_k8_w2` (region = 1, parts = 8,
-# switches = 2); `cb` alone is the default
+# checkerboard variants: `cb` plus `_`-separated options, e.g. `cb_b1_k8_w2` (region = 1,
+# parts = 8, switches = 2); `cb` alone is the default
 function arm_alg(arm)
     arm in ("seq", "seq2", "clock") && return SequentialCPM(; proposal = Moore(1))
     tok = split(arm, '_')
@@ -94,8 +96,10 @@ function snapshot(σ, kinds, ncell)
         end
         if a > 0
             θ1, θ2 = 2π * i / L1, 2π * j / L2
-            cs[a, 1] += cos(θ1); cs[a, 2] += sin(θ1)
-            cs[a, 3] += cos(θ2); cs[a, 4] += sin(θ2)
+            cs[a, 1] += cos(θ1)
+            cs[a, 2] += sin(θ1)
+            cs[a, 3] += cos(θ2)
+            cs[a, 4] += sin(θ2)
         end
     end
     cen = [mod(atan(cs[c, 2], cs[c, 1]), 2π) * L1 / 2π for c in 1:ncell],
@@ -115,8 +119,13 @@ function run_one(case, arm, seed)
         contact = Moore(1), seed
     )
     alg = arm_alg(arm)
-    # (no saves; `save_everystep` only where `init` takes it, so that an older base runs this file)
-    nosave = hasmethod(init, Tuple{typeof(prob), typeof(alg)}, (:save_everystep,)) ? (; save_everystep = false) : (;)
+    # (no saves; `save_everystep` only where `init` takes it, so that an older base runs
+    # this file)
+    nosave = if hasmethod(init, Tuple{typeof(prob), typeof(alg)}, (:save_everystep,))
+        (; save_everystep = false)
+    else
+        (;)
+    end
     integ = init(prob, alg; save_start = false, save_end = false, nosave...)
     st = integ.state
     ncell = length(kinds)
@@ -124,7 +133,8 @@ function run_one(case, arm, seed)
     prev = copy(st.ownership)
     _, het0, cen = snapshot(st.ownership, kinds, ncell)
     pos = (copy(cen[1]), copy(cen[2]))         # unwrapped centroids
-    vols, pers, xs, ys, hets = Vector{Int32}[], Vector{Int}[], Vector{Float64}[], Vector{Float64}[], Int[]
+    vols, pers, xs, ys, hets = Vector{Int32}[],
+        Vector{Int}[], Vector{Float64}[], Vector{Float64}[], Int[]
     changed, counted = 0, 0
     wall = @elapsed for k in 1:nmcs
         copyto!(prev, st.ownership)
@@ -139,8 +149,11 @@ function run_one(case, arm, seed)
                 pos[a] .+= minimage.(c[a] .- cen[a], a == 1 ? L1 : L2)
                 cen[a] .= c[a]
             end
-            push!(vols, copy(st.cell.volume)); push!(pers, per); push!(hets, het)
-            push!(xs, copy(pos[1])); push!(ys, copy(pos[2]))
+            push!(vols, copy(st.cell.volume))
+            push!(pers, per)
+            push!(hets, het)
+            push!(xs, copy(pos[1]))
+            push!(ys, copy(pos[2]))
         end
     end
     obs = Dict{String, Float64}("committed" => f * changed / counted, "wall" => wall / NMCS)
@@ -162,7 +175,8 @@ function run_one(case, arm, seed)
     end
     τ = EVERY .* LAGS
     obs["D"] = cov(τ, msd) / var(τ) / 4
-    # integrated autocorrelation time of each cell's volume, cut at the first non-positive lag
+    # integrated autocorrelation time of each cell's volume, cut at the first non-positive
+    # lag
     obs["tauV"] = mean(alive) do c
         x = [Float64(vols[s][c]) for s in keep]
         x .-= mean(x)
@@ -211,7 +225,8 @@ end
 
 function compare(out, case, arm, ref = "seq")
     A, B = load(out, case, arm), load(out, case, ref)
-    println("$case: $arm against $ref ($(length(A["wall"])) and $(length(B["wall"])) seeds)")
+    println("$case: $arm against $ref ($(length(A["wall"])) and $(length(B["wall"])) \
+        seeds)")
     println(
         rpad("observable", 12), rpad("arm", 12), rpad("ref", 12), rpad("r", 8),
         rpad("95% interval", 20), rpad("margin", 8), "verdict"
@@ -230,7 +245,8 @@ function compare(out, case, arm, ref = "seq")
         resolved = (hi - lo) / 2 <= m / 2
         resolved || (verdict *= " (unresolved)")
         @printf(
-            "%-12s%-12.4g%-12.4g%-8.3f[%.3f, %.3f]      %-8.2f%s\n", o, mean(A[o]), mean(B[o]),
+            "%-12s%-12.4g%-12.4g%-8.3f[%.3f, %.3f]      %-8.2f%s\n",
+            o, mean(A[o]), mean(B[o]),
             r, lo, hi, m, verdict
         )
         push!(rows, (o, mean(A[o]), mean(B[o]), r, lo, hi, m, verdict))
@@ -240,7 +256,13 @@ function compare(out, case, arm, ref = "seq")
         mean(A["wall"]), mean(B["wall"])
     )
     open(joinpath(out, "compare_$(case)_$(arm)_vs_$(ref).tsv"), "w") do io
-        println(io, join(("observable", "arm", "ref", "r", "lo", "hi", "margin", "verdict"), '\t'))
+        println(
+            io, join(
+                (
+                    "observable", "arm", "ref", "r", "lo", "hi", "margin", "verdict",
+                ), '\t'
+            )
+        )
         foreach(r -> println(io, join(r, '\t')), rows)
     end
     return rows
@@ -253,6 +275,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     elseif cmd == "compare"
         compare(ARGS[2:end]...)
     else
-        throw(ArgumentError("usage: run <case> <arm> <seeds> <out> | compare <out> <case> <arm> [<ref>]"))
+        throw(ArgumentError("usage: run <case> <arm> <seeds> <out> | compare <out> <case> \
+            <arm> [<ref>]"))
     end
 end

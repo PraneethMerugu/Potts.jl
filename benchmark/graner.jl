@@ -10,7 +10,11 @@ nmcs = parse(Int, get(ARGS, 2, "200"))
 scale = parse(Int, get(ARGS, 3, "1"))
 backend = which == "metal" ? (@eval using Metal; Metal.MetalBackend()) : CPU()
 T = which == "metal" ? Float32 : Float64
-alg = which == "seq" ? SequentialCPM(; proposal = Moore(1)) : CheckerboardCPM(; proposal = Moore(1))
+alg = if which == "seq"
+    SequentialCPM(; proposal = Moore(1))
+else
+    CheckerboardCPM(; proposal = Moore(1))
+end
 
 t = time()
 prob = graner_problem(; scale, nmcs, T)

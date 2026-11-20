@@ -1,12 +1,13 @@
 # Child of benchmark/ab.jl: warm-MCS times of gate cases in the active project's checkout.
 #
 #     julia --project=<checkout>/benchmark benchmark/ab_one.jl <cases> <variants> [options]
-#     julia --project=<checkout>/benchmark benchmark/ab_one.jl --variants=<file.jl> <variant> [options]
+#     julia --project=<checkout>/benchmark benchmark/ab_one.jl --variants=<file.jl> \
+#         <variant> [options]
 #
 # <cases>: gate case names, comma-separated, or `all`. <variants>: `sequential`,
-# `checkerboard`, `boundary` (CPU, Float64), `metal` or `rocm` (checkerboard on that device, Float32),
-# comma-separated; at most one device. Timed like the gate: on a device, `step!` followed by
-# the device wait `device_sync` (D-090).
+# `checkerboard`, `boundary` (CPU, Float64), `metal` or `rocm` (checkerboard on that device,
+# Float32), comma-separated; at most one device. Timed like the gate: on a device, `step!`
+# followed by the device wait `device_sync` (D-090).
 #
 # In `--prepare` mode (used by `ab.jl`'s parallel-compile path), the process:
 #  1. loads the packages, seeds the Tuple type cache (on CPU/Metal), builds all problems,
@@ -20,9 +21,10 @@
 #  3. once `GO` arrives (already re-pinned by the parent to `<cpu>` while the parent holds
 #     `tools/exclusive.sh`), checks start disturbances (excluding live sibling PIDs), runs
 #     a 1.5 s fixed burn-in on the benchmark core so boost clocks settle before the first
-#     sample, prints the post-seed `TC <entries> <capacity>`, runs the timed trials (`ABR`/`ABSKIP` lines),
-#     checks end disturbances, prints `DISTURBED`, final `TC`, and `DONE`, and waits for
-#     stdin EOF so the parent can re-pin it off the benchmark core before heap teardown.
+#     sample, prints the post-seed `TC <entries> <capacity>`, runs the timed trials
+#     (`ABR`/`ABSKIP` lines), checks end disturbances, prints `DISTURBED`, final `TC`, and
+#     `DONE`, and waits for stdin EOF so the parent can re-pin it off the benchmark core
+#     before heap teardown.
 #
 # Without `--prepare` (used by `--serial`, `--inprocess`, and direct runs), the process
 # runs steps 1–2 and times immediately in one pass without reading stdin or printing
@@ -30,27 +32,28 @@
 #
 # Options:
 #   --prepare        build and compile all cases first, print `READY <pid>`, wait for `GO`
-#   --seed=<n>       seed the Tuple type cache to n entries (default BenchMachine.SEED_ENTRIES;
-#                    0 = no seeding). Seeding runs after the packages load, before any build
-#                    (except ROCm `--prepare`, where problems build first and seeding runs
-#                    after `GO` once AMDGPU loads).
+#   --seed=<n>       seed the Tuple type cache to n entries (default
+#                    BenchMachine.SEED_ENTRIES; 0 = no seeding). Seeding runs after the
+#                    packages load, before any build (except ROCm `--prepare`, where
+#                    problems build first and seeding runs after `GO` once AMDGPU loads).
 #   --samples=<n>    samples per measurement (default 60), --seconds=<s> (default 40)
 #   --gctrial, --no-gctrial  BenchmarkTools' GC scrub (`gctrial`: three full collections
-#                    once per trial, before its first sample). Default (D-252): off for the CPU
-#                    variants, on for device variants. Each `ABR`
-#                    line ends with the trial's largest per-sample GC time (ns) and the minimum
-#                    allocations and bytes over its samples; on the CPU, a GC inside any timed
-#                    sample is reported as DISTURBED, which there means the timed step allocated
-#                    (an allocation regression, not machine noise)
+#                    once per trial, before its first sample). Default (D-252): off for the
+#                    CPU variants, on for device variants. Each `ABR` line ends with the
+#                    trial's largest per-sample GC time (ns) and the minimum allocations and
+#                    bytes over its samples; on the CPU, a GC inside any timed sample is
+#                    reported as DISTURBED, which there means the timed step allocated (an
+#                    allocation regression, not machine noise)
 #   --wait=<all|gpu|none>  what to wait for: CI jobs and (rocm) other GPU clients (`all`,
 #                    default), other GPU clients only, or nothing
 #   --deadline=<t>   stop waiting at `time()` = t (default: 4 h from now) and time anyway
 #   --variants=<f>   in-process A/B: `f` defines `AB_VARIANTS`, a vector of
 #                    `label => T -> PottsProblem` (base first, candidate second; `T` is the
-#                    float type). Measured `--rounds` times (default 8) in rotating order with
-#                    two controls, separately built copies of the base and of the candidate
-#                    (labels `base`, `candidate`, `base-ctl`, `cand-ctl`; `--no-control`:
-#                    only the first two). Labels print as `<label>:<variant>`.
+#                    float type). Measured `--rounds` times (default 8) in rotating order
+#                    with two controls, separately built copies of the base and of the
+#                    candidate (labels `base`, `candidate`, `base-ctl`, `cand-ctl`;
+#                    `--no-control`: only the first two). Labels print as
+#                    `<label>:<variant>`.
 isdefined(Main, :BenchMachine) || include(joinpath(@__DIR__, "machine.jl"))
 
 function ab_one_opts(args)
@@ -112,33 +115,47 @@ const AB_ALGS = Dict(
 
 function ab_variant(v; load_backend = true)
     haskey(AB_ALGS, v) ||
-        error("unknown variant $(repr(v)); one of $(join(sort(collect(keys(AB_ALGS))), ", "))")
+        error("unknown variant $(repr(v)); one \
+            of $(join(sort(collect(keys(AB_ALGS))), ", "))")
     alg, dev = AB_ALGS[v]
     dev && v != DEVICE && error("variant $v needs the $v backend loaded")
-    return alg, load_backend && dev ? device_backend() : nothing, dev ? Float32 : Float64, dev
+    return alg, load_backend && dev ? device_backend() : nothing, dev ? Float32 : Float64,
+        dev
 end
 
 # the number of sites of a state (the ownership array is `σ` in older checkouts: an A/B base
 # may be one)
-# The old name is accepted only so an A/B can run against a base older than the renames; drop it once no base predates them.
+# The old name is accepted only so an A/B can run against a base older than the renames;
+# drop it once no base predates them.
 nsites(u) = length(hasproperty(u, :ownership) ? u.ownership : u.σ)
 
 function ab_time(prob, alg, backend; samples, seconds, gctrial = backend !== nothing)
     fresh_integrator(prob, alg, backend)
-    b = run(@benchmarkable timed_step!(i, $backend) setup = (i = fresh_integrator($prob, $alg, $backend)) evals = 1 samples = samples seconds = seconds gctrial = gctrial)
+    b = run(
+        @benchmarkable timed_step!(
+            i,
+            $backend
+        ) setup = (
+            i = fresh_integrator($prob, $alg, $backend)
+        ) evals = 1 samples =
+            samples seconds = seconds gctrial = gctrial
+    )
     n = nsites(prob.u0)
-    # the largest per-sample GC time, and the allocations and bytes (BenchmarkTools keeps the
-    # minimum over samples, so these only show allocation in every sample; the GC field is the check)
-    return median(b).time / n, minimum(b).time / n, length(b.times), maximum(b.gctimes), b.allocs, b.memory
+    # the largest per-sample GC time, and the allocations and bytes (BenchmarkTools keeps
+    # the minimum over samples, so these only show allocation in every sample; the GC field
+    # is the check)
+    return median(b).time / n,
+        minimum(b).time / n, length(b.times), maximum(b.gctimes), b.allocs, b.memory
 end
 
-# D-252: the CPU step allocates nothing, so no collection may land inside a timed sample; one
-# thread, the step never yields, and gc time is read after setup, so a GC here means the step
-# allocated (it recurs on re-timing: treat it as an allocation regression, not noise)
+# D-252: the CPU step allocates nothing, so no collection may land inside a timed sample;
+# one thread, the step never yields, and gc time is read after setup, so a GC here means the
+# step allocated (it recurs on re-timing: treat it as an allocation regression, not noise)
 const AB_GC_DISTURBANCES = String[]
 function ab_check_gc!(label, backend, maxgc)
     backend === nothing && maxgc > 0 &&
-        push!(AB_GC_DISTURBANCES, "a GC ran inside a timed sample of $label ($(round(Int, maxgc)) ns)")
+        push!(AB_GC_DISTURBANCES, "a GC ran inside a timed sample of $label \
+            ($(round(Int, maxgc)) ns)")
     return nothing
 end
 
@@ -245,7 +262,8 @@ function ab_run_prepared!(
     println("TC ", join(BenchMachine.type_cache_stats(), " "))
     println("DONE")
     flush(stdout)
-    # Wait for parent to re-pin us off the benchmark core and close stdin before tearing down.
+    # Wait for parent to re-pin us off the benchmark core and close stdin before tearing
+    # down.
     eof(stdin)
     return 0
 end
@@ -283,7 +301,8 @@ function ab_one_main(pos, opts)
         prepared = ab_build_cases(pos)
         for item in prepared
             item.prob === nothing && continue
-            # Build and compile every case/variant before READY so no child compiles during timing.
+            # Build and compile every case/variant before READY so no child compiles during
+            # timing.
             integ = fresh_integrator(item.prob, item.alg, item.backend)
             timed_step!(integ, item.backend)
         end

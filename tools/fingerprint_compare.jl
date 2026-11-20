@@ -82,7 +82,8 @@ function archive_copy(checkout)
         run(pipeline(`git -C $checkout archive HEAD`, `tar -x -C $dir`))
         manifest = joinpath(checkout, "Manifest.toml")
         isfile(manifest) && cp(manifest, joinpath(dir, "Manifest.toml"))
-        run(`$(Base.julia_cmd()) --startup-file=no --project=$dir -e "using Pkg; Pkg.instantiate()"`)
+        run(`$(Base.julia_cmd()) --startup-file=no --project=$dir -e \
+            "using Pkg; Pkg.instantiate()"`)
     catch
         rm(dir; recursive = true, force = true)
         rethrow()
@@ -94,11 +95,18 @@ end
 so the problems they touch show as DIFFER."""
 function warn_if_dirty(checkout)
     status = try
-        read(pipeline(`git -C $checkout status --porcelain --untracked-files=no`; stderr = devnull), String)
+        read(
+            pipeline(
+                `git -C $checkout status --porcelain --untracked-files=no`;
+                stderr = devnull
+            ), String
+        )
     catch
-        return nothing                                   # not a git checkout: nothing to compare
+        # not a git checkout: nothing to compare
+        return nothing
     end
-    isempty(strip(status)) || @warn "$checkout has uncommitted changes; they are not in the `git archive HEAD` " *
+    isempty(strip(status)) ||
+        @warn "$checkout has uncommitted changes; they are not in the `git archive HEAD` " *
         "copy B, so the problems they touch show as DIFFER" status
     return nothing
 end
@@ -117,9 +125,17 @@ function main(args)
             x, y = get(fa, n, "missing"), get(fb, n, "missing")
             same = x == y && !startswith(x, "error")
             same || (differ += 1)
-            println(rpad(n, 40), same ? "same  " : "DIFFER", "  ", x, same ? "" : "  vs  $y")
+            println(
+                rpad(n, 40), same ? "same  " : "DIFFER", "  ", x, same ? "" : "  vs  $y"
+            )
         end
-        println(differ == 0 ? "all $(length(names)) fingerprints agree" : "$differ of $(length(names)) differ")
+        println(
+            if differ == 0
+                "all $(length(names)) fingerprints agree"
+            else
+                "$differ of $(length(names)) differ"
+            end
+        )
         return differ == 0
     finally
         auto && rm(b; recursive = true, force = true)   # the temporary archive copy

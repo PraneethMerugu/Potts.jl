@@ -2,8 +2,8 @@
 #     julia --project=docs docs/make_models_preview.jl [page ...]
 # e.g. `… make_models_preview.jl merks` builds the index and the Merks page only.
 # Output: docs/build/models-preview/ (open models/index.html there). Pretty URLs as in
-# docs/make.jl: each page is <page>/index.html, next to its movies. The full site is built by
-# docs/make.jl, which includes docs/models/render.jl the same way.
+# docs/make.jl: each page is <page>/index.html, next to its movies. The full site is built
+# by docs/make.jl, which includes docs/models/render.jl the same way.
 using Documenter
 using Potts, CorePotts, PottsModels
 

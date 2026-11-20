@@ -33,13 +33,15 @@
 #   doi:[10.1016/j.ydbio.2005.10.003](https://doi.org/10.1016/j.ydbio.2005.10.003).
 # - R. M. H. Merks, E. D. Perryn, A. Shirinifard and J. A. Glazier, "Contact-inhibited
 #   chemotaxis in de novo and sprouting blood-vessel growth", *PLoS Comput. Biol.* **4**,
-#   e1000163 (2008), doi:[10.1371/journal.pcbi.1000163](https://doi.org/10.1371/journal.pcbi.1000163).
+#   e1000163 (2008),
+#   doi:[10.1371/journal.pcbi.1000163](https://doi.org/10.1371/journal.pcbi.1000163).
 #
-# Equation numbers below are those of the 2006 paper (01a) unless marked 01b (2008). The energy is Eq. (1) plus the
-# length constraint of Eq. (4):
+# Equation numbers below are those of the 2006 paper (01a) unless marked 01b (2008). The
+# energy is Eq. (1) plus the length constraint of Eq. (4):
 #
 # ```math
-# H = \sum_{\langle i,j \rangle} J\big(\tau(\sigma_i), \tau(\sigma_j)\big)\,(1 - \delta_{\sigma_i \sigma_j})
+# H = \sum_{\langle i,j \rangle} J\big(\tau(\sigma_i), \tau(\sigma_j)\big)
+#   \,(1 - \delta_{\sigma_i \sigma_j})
 #   + \lambda \sum_\sigma (a_\sigma - A)^2 + \lambda_L \sum_\sigma (l_\sigma - L)^2 .
 # ```
 #
@@ -49,7 +51,8 @@
 # ``c`` obeys Eq. (6),
 #
 # ```math
-# \frac{\partial c}{\partial t} = D \nabla^2 c + \alpha\,[\text{cell}] - \varepsilon\,c\,[\text{matrix}] ,
+# \frac{\partial c}{\partial t} = D \nabla^2 c + \alpha\,[\text{cell}]
+#   - \varepsilon\,c\,[\text{matrix}] ,
 # ```
 #
 # secreted at rate ``\alpha`` inside cells and decaying at rate ``\varepsilon`` in the
@@ -71,11 +74,13 @@
 #   with ``J(c, B) = 100``, and the field held at ``c = 0`` on it (the authors' absorbing
 #   ring).
 # - **Field** (Eq. 6): ``\partial c/\partial t = D \nabla^2 c + \alpha[\text{cell}] -
-#   \varepsilon c[\text{matrix}]``, stepped *before* each sweep (`@schedule fields, sweep`) with
-#   15 explicit substeps of 2 s per MCS.
+#   \varepsilon
+#   c[\text{matrix}]``, stepped *before* each sweep (`@schedule fields, sweep`) with 15
+#   explicit substeps of 2 s per MCS.
 # - **Parameters** in lattice units (2 µm per site, 30 s per MCS): ``T = 50``,
 #   ``\lambda = 50``, ``A = 100``, ``\lambda_L = 5``, ``L = 50`` px ("about 100 µm"),
-#   ``D = 0.75``, ``\alpha = \varepsilon = 5.4 \cdot 10^{-3}``, ``J_{cM} = 20``, ``J_{cc} = 40``.
+#   ``D = 0.75``, ``\alpha = \varepsilon = 5.4 \cdot 10^{-3}``, ``J_{cM} = 20``,
+#   ``J_{cc} = 40``.
 # - **Clocks:** one MCS is 30 s, so the paper's 48 h are 5760 MCS and 50 h are 6000 MCS.
 #   The paper run below shows both.
 #
@@ -86,8 +91,12 @@
 # function merks2006(lattice)            # in module MerksField
 #     @parameters Dc = 0.75 α = 5.4e-3 ε = 5.4e-3
 #     eq = Dt(C) ~ Dc * laplacian(C) + α * cell(t, x, y) - ε * C * ecm(t, x, y)
-#     return PDESystem([eq], [c(0, x, y) ~ 0.0, C ~ masked(frame(t, x, y), 0.0)], lattice_domain(t, (x, y), lattice),
-#         [t, x, y], [C, cell(t, x, y), ecm(t, x, y), frame(t, x, y)], [Dc, α, ε]; name = :merks_field)
+#     return PDESystem(
+#         [eq], [c(0, x, y) ~ 0.0, C ~ masked(frame(t, x, y), 0.0)],
+#         lattice_domain(t, (x, y), lattice),
+#         [t, x, y], [C, cell(t, x, y), ecm(t, x, y), frame(t, x, y)], [Dc, α, ε];
+#         name = :merks_field
+#     )
 # end
 #
 # @potts_model Merks2006 begin
@@ -101,8 +110,10 @@
 #         χcM = 1000.0; χcc = 1000.0; s = 0.0
 #     end
 #     @lattice Lattice(lattice; boundary = Closed(), neighborhood = Moore(1))
-#     @fields c = MerksField.merks2006(lattice) (MerksField.cell => kind == endothelial, MerksField.ecm => kind == medium,
-#         MerksField.frame => kind == border)
+#     @fields c = MerksField.merks2006(lattice) (
+#         MerksField.cell => kind == endothelial, MerksField.ecm => kind == medium,
+#         MerksField.frame => kind == border,
+#     )
 #     @parameters J[kind, kind] = [0.0 20.0 0.0; 20.0 40.0 100.0; 0.0 100.0 0.0]
 #     @relations proposal = Moore(1)
 #     @energy begin
@@ -145,7 +156,8 @@ prob06 = PottsProblem(
 sol06 = solve(prob06, SequentialCPM(); saveat = 0:10:480)
 record_potts(
     "merks/merks2006.mp4", sol06; framerate = 15, title = "Merks2006, 200², to 4 h",
-    encoding = CellIdentityEncoding(), figure = (; size = (420, 420)), axis = (; limits = (1.5, 199.5, 1.5, 199.5))
+    encoding = CellIdentityEncoding(), figure = (; size = (420, 420)),
+    axis = (; limits = (1.5, 199.5, 1.5, 199.5))
 )
 nothing #hide
 
@@ -172,7 +184,8 @@ nothing #hide
 # (the authors' relaxation). Its time origin is the authors' loop counter, which includes
 # those 100 MCS; reproduction 01 reports both clocks. `mode = :extension_only` gives the
 # extension-only chemotaxis of 01b Eq. 4. The sprouting start is `merks2008_sprout()`: one
-# Eden blob divided into 128 cells on 202 × 202. Here it runs 600 MCS (500 after relaxation):
+# Eden blob divided into 128 cells on 202 × 202. Here it runs 600 MCS (500 after
+# relaxation):
 
 @named m8 = Merks2008()
 prob08 = PottsProblem(
@@ -182,7 +195,8 @@ prob08 = PottsProblem(
 sol08 = solve(prob08, SequentialCPM(); saveat = 0:10:600)
 record_potts(
     "merks/merks2008.mp4", sol08; framerate = 15, title = "Merks2008 sprout, 600 MCS",
-    encoding = CellIdentityEncoding(), figure = (; size = (420, 420)), axis = (; limits = (2.5, 200.5, 2.5, 200.5))
+    encoding = CellIdentityEncoding(), figure = (; size = (420, 420)),
+    axis = (; limits = (2.5, 200.5, 2.5, 200.5))
 )
 nothing #hide
 
@@ -315,24 +329,33 @@ nothing #hide
 #
 # The paper scatters 282 cells at random over the central 333 × 333 sites of its lattice
 # (Fig. 4). `merks_state` builds this start: square cells of 10 × 10 sites (the target
-# area; the paper does not state the initial cell shape) at random, non-overlapping positions with gaps of at least one site.
-# Scaled to our lattice, 45 cells over the central 133 × 133 sites keep the paper's
-# density:
+# area; the paper does not state the initial cell shape) at random, non-overlapping
+# positions with gaps of at least one site. Scaled to our lattice, 45 cells over the central
+# 133 × 133 sites keep the paper's density:
 
 u0 = merks_state(; lattice = (200, 200), region = (133, 133), n = 45)
 length(u0[2].second)
 
 # The same kind of start is one `Scattered` layer of the layout vocabulary, for example
-# `layout(Scattered(45, (10, 10); kinds = [:endothelial], region = (34:166, 34:166), seed = 1), vasc)`.
+#
+# ```julia
+# layout(
+#     Scattered(45, (10, 10); kinds = [:endothelial], region = (34:166, 34:166), seed = 1),
+#     vasc
+# )
+# ```
 
 # ### Solving
 #
 # A model with a field needs a *field solver*, chosen when the problem is built. The paper
 # integrates the field with 15 explicit Euler steps per MCS (2 s each); `substeps = 15`
-# does the same, and `lower_bound = 0.0` clips the concentration at zero. One MCS is 30 s, so
-# 1000 MCS are about 8 hours (paper: 50 hours; here: 1000 MCS, to keep the build short):
+# does the same, and `lower_bound = 0.0` clips the concentration at zero. One MCS is 30 s,
+# so 1000 MCS are about 8 hours (paper: 50 hours; here: 1000 MCS, to keep the build short):
 
-prob = PottsProblem(vasc, u0, (0, 1000); seed = 1, field_solver = ExplicitEuler(substeps = 15, lower_bound = 0.0))
+prob = PottsProblem(
+    vasc, u0, (0, 1000); seed = 1,
+    field_solver = ExplicitEuler(substeps = 15, lower_bound = 0.0)
+)
 sol = solve(prob, SequentialCPM(); saveat = 0:10:1000)
 
 # The paper's central claim is that elongation makes the network. `remake` builds the same
@@ -363,11 +386,14 @@ nothing #hide
 # Elongated cells join into branched cords, the start of a network; round cells gather
 # into compact islands (the paper's Fig. 6 makes this comparison). With only 45 cells the
 # small network coarsens if run much longer; the paper run at the top (`Merks2006`) shows
-# the full-size network over 50 hours. `sol[:c]` reads the chemoattractant at every saved time (symbolic
-# indexing, as in ModelingToolkit); at the end it follows the network:
+# the full-size network over 50 hours. `sol[:c]` reads the chemoattractant at every saved
+# time (symbolic indexing, as in ModelingToolkit); at the end it follows the network:
 
 CairoMakie.activate!(type = "png")
-heatmap(sol[:c][end]; axis = (title = "chemoattractant c, MCS $(sol.t[end])", aspect = DataAspect()))
+heatmap(
+    sol[:c][end];
+    axis = (title = "chemoattractant c, MCS $(sol.t[end])", aspect = DataAspect())
+)
 
 # ### Measuring elongation
 #
@@ -399,8 +425,8 @@ fig
 # | Field integration | 15 explicit substeps per MCS (p. 49) | the same, `ExplicitEuler(substeps = 15)`, clipped at 0 |
 #
 # The cell size, contact energies, temperature, chemotaxis strength, the field
-# integration, the diffusion, secretion and decay rates inside the lattice, the 2006 model's neighborhoods and the cell density
-# are the paper's.
+# integration, the diffusion, secretion and decay rates inside the lattice, the 2006 model's
+# neighborhoods and the cell density are the paper's.
 #
 # ### This variant ships as `MerksVasculogenesis`
 #

@@ -5,8 +5,8 @@
 # `benchmark/ab.jl` with its same-commit controls, not here.
 #
 #     julia --project=benchmark benchmark/gate.jl              # CPU rows
-#     julia --project=benchmark benchmark/gate.jl rocm         # CPU rows and ROCm (AMDGPU.jl)
-#     julia --project=benchmark benchmark/gate.jl metal        # CPU rows and Metal (Metal.jl)
+#     julia --project=benchmark benchmark/gate.jl rocm         # CPU rows, ROCm (AMDGPU.jl)
+#     julia --project=benchmark benchmark/gate.jl metal        # CPU rows, Metal (Metal.jl)
 #     julia --project=benchmark benchmark/gate.jl rocm update  # rewrite this machine's rows
 #
 # Exit 1 when a CPU row allocates in a warm MCS. Options:
@@ -21,11 +21,12 @@
 # `[nucbox.cpu]`, `[nucbox.rocm]`; machines in `machine.jl`), and each machine reads and
 # `update`s only its own tables; a slow row is flagged `A/B`.
 #
-# On a machine that pins (the NucBox), the gate re-runs itself pinned to one reserved logical
-# CPU (`machine.jl`). Run it alone on the machine (on the Mac under `tools/exclusive.sh`): it
-# runs single-threaded, because a threaded KernelAbstractions launch allocates a fixed few
-# KB for its tasks, which would hide per-site allocations, and one thread gives steadier
-# timings. Its Tuple type cache is seeded like an A/B side (D-145).
+# On a machine that pins (the NucBox), the gate re-runs itself pinned to one reserved
+# logical CPU (`machine.jl`). Run it alone on the machine (on the Mac under
+# `tools/exclusive.sh`): it runs single-threaded, because a threaded KernelAbstractions
+# launch allocates a fixed few KB for its tasks, which would hide per-site allocations, and
+# one thread gives steadier timings. Its Tuple type cache is seeded like an A/B side
+# (D-145).
 #
 # On a device backend `step!` only enqueues kernels, so every device timing is `step!`
 # followed by a wait for the device (`device_sync`: `KernelAbstractions.synchronize`, or on
@@ -87,17 +88,22 @@ end
 """
 The device backend object for `DEVICE` (`nothing` when none was named).
 """
-device_backend() = isempty(DEVICE) ? nothing : Base.invokelatest(PottsDevices.device_backend)
+function device_backend()
+    return isempty(DEVICE) ? nothing : Base.invokelatest(PottsDevices.device_backend)
+end
 
 const TOLERANCE = 0.05
 const BASELINE = joinpath(@__DIR__, "baseline.toml")
 const BASELINE_HEADER = """
-# Informational per-machine baselines (D-157): [<machine>.<backend>], rows <case>.<alg> in ns/site per warm MCS.
-# Written by `gate.jl ... update`; machines are defined in machine.jl. A slowdown is decided by ab.jl, not by these.
+# Informational per-machine baselines (D-157): [<machine>.<backend>], rows <case>.<alg> \
+in ns/site per warm MCS.
+# Written by `gate.jl ... update`; machines are defined in machine.jl. A slowdown is \
+decided by ab.jl, not by these.
 """
 
-# ExplicitEuler with a lower clamp (the keyword is `lower` in older checkouts: an A/B base may be one)
-# The old name is accepted only so an A/B can run against a base older than the renames; drop it once no base predates them.
+# ExplicitEuler with a lower clamp (the keyword is `lower` in older checkouts: an A/B base
+# may be one) The old name is accepted only so an A/B can run against a base older than the
+# renames; drop it once no base predates them.
 function clamped_euler(n, lo)
     if :lower_bound in fieldnames(ExplicitEuler)
         return ExplicitEuler(; substeps = n, lower_bound = lo)
@@ -126,7 +132,8 @@ function cases(T)
         "merks_100" =>
             () -> PottsProblem(
             MerksVasculogenesis(; name = :m, lattice = (100, 100)),
-            merks_state(; lattice = (100, 100), n = 25), (0, 10^6); T,          # 10² cells, ≈ 25 % cover
+            # 10² cells, ≈ 25 % cover
+            merks_state(; lattice = (100, 100), n = 25), (0, 10^6); T,
             field_solver = clamped_euler(15, 0.0)
         ),
         "openvt_monolayer_100" =>
@@ -140,7 +147,8 @@ function cases(T)
             akeeb_state(; lattice = (99, 60)), (0, 10^6); T, capacity = 1000
         ),
         # D-150: the Table S1 model, a 6 × 6 colony of 7 × 7 cells (every cell reads the two
-        # contact folds after every MCS); X ≡ 2, so no cell reaches its threshold while timed
+        # contact folds after every MCS); X ≡ 2, so no cell reaches its threshold while
+        # timed
         "openvt_reference_100" =>
             () -> (
             σ = zeros(Int32, 100, 100);
@@ -150,7 +158,8 @@ function cases(T)
             );
             PottsProblem(
                 OpenVTReferenceMonolayer(; name = :r, lattice = (100, 100)),
-                [ownership => σ, kind => fill(:cell, 36), :σ_X => 0.0], (0, 10^6); T, capacity = 128
+                [ownership => σ, kind => fill(:cell, 36), :σ_X => 0.0], (0, 10^6); T,
+                capacity = 128
             )
         ),
         # D-153: the 2006 set on merks_100's start inside its 1-site frame (soft E₀ drive,
@@ -206,11 +215,15 @@ timed_step!(integ, ::Nothing) = (step!(integ); nothing)
 timed_step!(integ, backend) = (step!(integ); device_sync(backend); nothing)
 
 # A warmed-up integrator (two MCS) with no work still in flight. No saves: a step is timed
-# alone. (`save_everystep` only where `init` takes it, so that an A/B base before it runs this
-# same file.)
+# alone. (`save_everystep` only where `init` takes it, so that an A/B base before it runs
+# this same file.)
 function fresh_integrator(prob, alg, backend)
     kw = backend === nothing ? (;) : (; backend)
-    nosave = hasmethod(init, Tuple{typeof(prob), typeof(alg)}, (:save_everystep,)) ? (; save_everystep = false) : (;)
+    nosave = if hasmethod(init, Tuple{typeof(prob), typeof(alg)}, (:save_everystep,))
+        (; save_everystep = false)
+    else
+        (;)
+    end
     integ = init(prob, alg; save_start = false, save_end = false, nosave..., kw...)
     step!(integ)
     step!(integ)
@@ -223,8 +236,17 @@ function measure(make, alg; backend = nothing)
     integ = fresh_integrator(prob, alg, backend)
     timed_step!(integ, backend)
     allocs = backend === nothing ? warm_allocs(integ) : 0
-    b = run(@benchmarkable timed_step!(i, $backend) setup = (i = fresh_integrator($prob, $alg, $backend)) evals = 1 samples = 40 seconds = 30)
-    # `σ` is accepted only so an A/B can run against a base older than the renames; drop it once no base predates them
+    b = run(
+        @benchmarkable timed_step!(
+            i,
+            $backend
+        ) setup = (
+            i = fresh_integrator($prob, $alg, $backend)
+        ) evals = 1 samples =
+            40 seconds = 30
+    )
+    # `σ` is accepted only so an A/B can run against a base older than the renames; drop it
+    # once no base predates them
     n = length(hasproperty(integ.state, :ownership) ? integ.state.ownership : integ.state.σ)
     return minimum(b).time / n, allocs
 end
@@ -262,14 +284,16 @@ function main(args; baseline = BASELINE)
     end
     println(
         "machine $(m.key) ($(BenchMachine.cpu_model())); CPUs $(isempty(c) ? "all" : c); ",
-        "Tuple cache $(tc.entries)/$(tc.capacity)", isempty(dist) ? "" :
+        "Tuple cache $(tc.entries)/$(tc.capacity)", if isempty(dist)
+            ""
+        else
             "; DISTURBED: " * join(dist, "; ")
+        end
     )
     new = Dict{String, Dict{String, Any}}()
     failed = String[]
     flagged = String[]
     for (aname, (alg, backend, T)) in algs, (name, make) in cases(T)
-
         bk = backend === nothing ? "cpu" : aname
         rkey = "$name.$(backend === nothing ? aname : "checkerboard")"
         key = "$name.$aname"
@@ -306,7 +330,8 @@ function main(args; baseline = BASELINE)
         return 0
     end
     isempty(flagged) ||
-        println("slower than the informational baseline, decide with benchmark/ab.jl: ", join(flagged, ", "))
+        println("slower than the informational baseline, decide with \
+            benchmark/ab.jl: ", join(flagged, ", "))
     isempty(failed) || (println("FAIL: ", join(failed, ", ")); return 1)
     println("performance gate: pass")
     return 0

@@ -30,7 +30,8 @@
 # The energy is Eq. (2) of the PRL:
 #
 # ```math
-# H = \sum_{\langle i,j \rangle} J\big(\tau(\sigma_i), \tau(\sigma_j)\big)\,(1 - \delta_{\sigma_i \sigma_j})
+# H = \sum_{\langle i,j \rangle} J\big(\tau(\sigma_i), \tau(\sigma_j)\big)
+#   \,(1 - \delta_{\sigma_i \sigma_j})
 #   + \lambda \sum_{\sigma} (a_\sigma - A)^2 ,
 # ```
 #
@@ -159,7 +160,12 @@ radius = sqrt(40n / π)
 side = 2ceil(Int, radius) + 1 + 2 * 10
 @named sorting = CellSorting(; lattice = (side, side))
 disk = Circle(Point((side + 1) / 2, (side + 1) / 2), radius)     # centered on the lattice
-u0 = layout(Voronoi(RandomPoints(n; region = disk, seed = 1); region = disk, lloyd = 30, kinds = [:dark, :light]), sorting)
+u0 = layout(
+    Voronoi(
+        RandomPoints(n; region = disk, seed = 1); region = disk, lloyd = 30,
+        kinds = [:dark, :light]
+    ), sorting
+)
 first(u0[2].second, 6)
 
 # `layout` returns an operating point, `[ownership => σ, kind => kinds]`, the same form a
@@ -200,9 +206,9 @@ nothing #hide
 # ## Measuring sorting
 #
 # The paper measures sorting by the share of cell–cell boundary that is heterotypic
-# (dark–light). Each saved state `u` holds the owner array `u.ownership`, and `u.cell.kind` gives
-# each cell's kind (1 dark, 2 light). We count every Moore bond once, through the periodic
-# edges:
+# (dark–light). Each saved state `u` holds the owner array `u.ownership`, and `u.cell.kind`
+# gives each cell's kind (1 dark, 2 light). We count every Moore bond once, through the
+# periodic edges:
 
 function heterotypic_fraction(u)
     σ, k = u.ownership, u.cell.kind
@@ -219,7 +225,10 @@ CairoMakie.activate!(type = "png")
 paper_t = sol.t[2:end] ./ 16                       # in paper MCS
 lines(
     paper_t, heterotypic_fraction.(sol.u[2:end]);
-    axis = (xscale = log10, xlabel = "time (paper MCS)", ylabel = "heterotypic boundary fraction")
+    axis = (
+        xscale = log10, xlabel = "time (paper MCS)",
+        ylabel = "heterotypic boundary fraction",
+    )
 )
 
 # The fraction falls about linearly in the logarithm of time, the slow coarsening the

@@ -15,7 +15,8 @@
 # The parent prints the median over `reps` of every number, per case. The D-047 case is
 # Akeeb in Float32, Sequential then Checkerboard (the PottsModels compile workload's
 # configuration; D-047 target: first MCS under 15 s). `benchmark/graner.jl` times the
-# hand-written CorePotts Graner model and never loads Potts, so this script stands in for it.
+# hand-written CorePotts Graner model and never loads Potts, so this script stands in for
+# it.
 #
 # With a third argument, a base checkout (e.g. a `git worktree` of 33f681df with the
 # workspace Manifest copied in), the children alternate base, this, base, this … and the
@@ -43,10 +44,13 @@ if CHILD
 end
 const LOAD = time() - T0
 using Printf: @printf, @sprintf
-median(x) = (y = sort(x); n = length(y); isodd(n) ? y[(n + 1) ÷ 2] : (y[n ÷ 2] + y[n ÷ 2 + 1]) / 2)
+function median(x)
+    (y = sort(x); n = length(y); isodd(n) ? y[(n + 1) ÷ 2] : (y[n ÷ 2] + y[n ÷ 2 + 1]) / 2)
+end
 
 const CASES = [
-    "graner_glazier_72", "wortel_act_100", "merks_100", "openvt_monolayer_100", "akeeb_99x60",
+    "graner_glazier_72", "wortel_act_100", "merks_100", "openvt_monolayer_100",
+    "akeeb_99x60",
     "akeeb_f32_first_mcs",
 ]
 
@@ -58,15 +62,18 @@ function spec(case)
     elseif case == "wortel_act_100"
         σ = zeros(Int32, 100, 100)
         σ[40:62, 40:62] .= 1
-        return () -> WortelAct(; name = :w, lattice = (100, 100)), [ownership => σ, kind => [:cell]], (;)
+        return () -> WortelAct(; name = :w, lattice = (100, 100)),
+            [ownership => σ, kind => [:cell]], (;)
     elseif case == "merks_100"
-        return () -> MerksVasculogenesis(; name = :m, lattice = (100, 100)), merks_state(; lattice = (100, 100), n = 25),
+        return () -> MerksVasculogenesis(; name = :m, lattice = (100, 100)),
+            merks_state(; lattice = (100, 100), n = 25),
             (; field_solver = ExplicitEuler(substeps = 15, lower_bound = 0.0))
     elseif case == "openvt_monolayer_100"
         return () -> OpenVTGrowingMonolayer(; name = :o, lattice = (100, 100), τ = 1.0e6),
             openvt_monolayer_state(; lattice = (100, 100)), (; capacity = 64)
     else                                      # akeeb_99x60, akeeb_f32_first_mcs
-        return () -> AkeebInvasion(; name = :a, lattice = (99, 60)), akeeb_state(; lattice = (99, 60)), (; capacity = 1000)
+        return () -> AkeebInvasion(; name = :a, lattice = (99, 60)),
+            akeeb_state(; lattice = (99, 60)), (; capacity = 1000)
     end
 end
 
@@ -83,7 +90,10 @@ function child(case, nwarm)
     tf2 = 0.0
     if case == "akeeb_f32_first_mcs"         # D-047: also the checkerboard's first MCS
         tf2 = @elapsed begin
-            integ2 = init(prob, CheckerboardCPM(); save_start = false, save_everystep = false)
+            integ2 = init(
+                prob, CheckerboardCPM(); save_start = false,
+                save_everystep = false
+            )
             step!(integ2)
         end
     end
@@ -97,8 +107,10 @@ function child(case, nwarm)
     println(
         "RESULT ", join(
             (
-                "load=$LOAD", "construct=$tc", "mtkcompile=$tm", "problem=$tp", "first_mcs=$tf",
-                "first_mcs_checkerboard=$tf2", "to_first_mcs=$first_total", "warm_construct=$(median(wc))",
+                "load=$LOAD", "construct=$tc", "mtkcompile=$tm", "problem=$tp",
+                "first_mcs=$tf",
+                "first_mcs_checkerboard=$tf2", "to_first_mcs=$first_total",
+                "warm_construct=$(median(wc))",
                 "warm_mtkcompile=$(median(wm))", "warm_problem=$(median(wp))",
             ), " "
         )
@@ -125,28 +137,43 @@ function parent(reps, nwarm, other)
         local out
         wall = @elapsed out = read(cmd, String)
         line = only(filter(startswith("RESULT "), split(out, '\n')))
-        d = Dict{String, Float64}(String(k) => parse(Float64, v) for (k, v) in (split(kv, '=') for kv in split(line)[2:end]))
+        d = Dict{String, Float64}(
+            String(k) => parse(Float64, v)
+                for (k, v) in (split(kv, '=') for kv in split(line)[2:end])
+        )
         d["total"] = wall
         push!(get!(results, (side, case), Dict{String, Float64}[]), d)
-        @printf("rep %d %-5s %-22s to_first_mcs %.2f s, total %.2f s\n", r, side, case, d["to_first_mcs"], wall)
+        @printf(
+            "rep %d %-5s %-22s to_first_mcs %.2f s, total %.2f s\n",
+            r, side, case, d["to_first_mcs"], wall
+        )
     end
     med(side, case, k) = median(getindex.(results[(side, case)], k))
-    println("\n# medians over $reps fresh processes ($nwarm warm repetitions each); seconds")
+    println("\n# medians over $reps fresh processes ($nwarm warm repetitions each); \
+        seconds")
     println("side,case,", join(KEYS, ","))
     for (side, _) in sides, case in CASES
-        println(side, ",", case, ",", join((@sprintf("%.4g", med(side, case, k)) for k in KEYS), ","))
+        println(
+            side, ",", case, ",",
+            join((@sprintf("%.4g", med(side, case, k)) for k in KEYS), ",")
+        )
     end
     if other !== nothing
         println(
-            "\n# ratio this/base of the medians (acceptance: construct, mtkcompile, problem, ",
+            "\n# ratio this/base of the medians (acceptance: construct, mtkcompile, \
+                problem, ",
             "warm_* and to_first_mcs each <= 1.05)"
         )
         println("case,", join(KEYS, ","))
         for case in CASES
             println(
-                case, ",", join(
+                case, ",",
+                join(
                     (
-                        @sprintf("%.3f", med("this", case, k) / max(med("base", case, k), eps()))
+                        @sprintf(
+                            "%.3f",
+                            med("this", case, k) / max(med("base", case, k), eps())
+                        )
                             for k in KEYS
                     ), ","
                 )
@@ -164,5 +191,8 @@ end
 if CHILD
     child(ARGS[2], parse(Int, ARGS[3]))
 else
-    parent(parse(Int, get(ARGS, 1, "5")), parse(Int, get(ARGS, 2, "10")), get(ARGS, 3, nothing))
+    parent(
+        parse(Int, get(ARGS, 1, "5")), parse(Int, get(ARGS, 2, "10")),
+        get(ARGS, 3, nothing)
+    )
 end

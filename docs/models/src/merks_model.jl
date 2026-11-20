@@ -1,7 +1,7 @@
 # The model built in docs/models/merks.jl. The page shows its fragments (the lines after
 # each `#> name` marker, up to the next marker or `#<`) and then runs the whole file;
-# lib/PottsModels/test/tutorial_models_tests.jl checks that it compiles to the same problem as
-# `PottsModels.MerksVasculogenesis`.
+# lib/PottsModels/test/tutorial_models_tests.jl checks that it compiles to the same problem
+# as `PottsModels.MerksVasculogenesis`.
 using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters
 using Potts.LatticePDE: laplacian, lattice_domain
 
@@ -38,7 +38,9 @@ end
         χ = 1000.0
     end
     #> field
-    @fields c = chemoattractant(lattice) (:cell => kind == endothelial, :ecm => kind == medium)
+    @fields c = chemoattractant(lattice) (
+        :cell => kind == endothelial, :ecm => kind == medium,
+    )
     #> contact_parameters
     @parameters begin
         T = 50.0
@@ -54,7 +56,11 @@ end
     end
     #> drive
     if contact_inhibited
-        @drive copy => ifelse((old == 0) && (kind[new] == endothelial), -χ * (c[target] - c[source]), 0.0)
+        @drive copy =>
+            ifelse(
+            (old == 0) && (kind[new] == endothelial), -χ * (c[target] - c[source]),
+            0.0
+        )
     else
         @drive copy => -χ * (c[target] - c[source])
     end

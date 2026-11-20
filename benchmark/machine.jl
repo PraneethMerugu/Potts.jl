@@ -273,8 +273,8 @@ function gpu_users(; exclude = _default_gpu_exclude(), dir = "/sys/class/kfd/kfd
 end
 
 """
-Wait up to `timeout` s for exiting KFD clients (whose `/proc/<pid>` is already gone) to finish
-kernel teardown before declaring the GPU busy.
+Wait up to `timeout` s for exiting KFD clients (whose `/proc/<pid>` is already gone) to
+finish kernel teardown before declaring the GPU busy.
 """
 function wait_kfd_clear(;
         exclude = _default_gpu_exclude(), timeout = 2.0,
@@ -367,7 +367,9 @@ reserved cores. Timed children are pinned explicitly.
 """
 function pin_self_to_work!(m)
     pins(m) && !isempty(m.work) || return false
-    p = run(pipeline(ignorestatus(`taskset -a -cp $(m.work) $(getpid())`); stdout = devnull))
+    p = run(
+        pipeline(ignorestatus(`taskset -a -cp $(m.work) $(getpid())`); stdout = devnull)
+    )
     return success(p)
 end
 
@@ -387,8 +389,10 @@ function pin_or_reexec(m, args)
         return nothing
     )
     proj = Base.active_project()
-    cmd = `$(mem_cmd(m)) $(pin_cmd(m, c)) $(Base.julia_cmd()) --startup-file=no --project=$(dirname(proj)) $(abspath(PROGRAM_FILE)) $args`
-    println("pinning to logical CPU $c (machine $(m.key)); siblings $(siblings(c)) left idle")
+    cmd = `$(mem_cmd(m)) $(pin_cmd(m, c)) $(Base.julia_cmd()) --startup-file=no \
+        --project=$(dirname(proj)) $(abspath(PROGRAM_FILE)) $args`
+    println("pinning to logical CPU $c (machine $(m.key)); siblings $(siblings(c)) left \
+        idle")
     p = run(ignorestatus(setenv(cmd, merge(ENV, Dict("POTTS_BENCH_PINNED" => "1")))))
     return p.exitcode
 end
@@ -412,7 +416,8 @@ end
 """
 function type_cache_stats()
     # read the field at run time: the cache vector is replaced when it grows, and a load
-    # from the constant `Tuple.name` may otherwise be folded to the vector seen at compile time
+    # from the constant `Tuple.name` may otherwise be folded to the vector seen at compile
+    # time
     c = getfield(Base.inferencebarrier(Tuple.name), :cache)
     c isa Core.SimpleVector || return (0, 0)
     n = 0

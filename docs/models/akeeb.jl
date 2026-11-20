@@ -28,7 +28,8 @@
 # The paper's energy, Eq. (1), is
 #
 # ```math
-# H = \sum_{\langle i,j \rangle} J\big(\tau(\sigma_i), \tau(\sigma_j)\big)\,(1 - \delta_{\sigma_i \sigma_j})
+# H = \sum_{\langle i,j \rangle} J\big(\tau(\sigma_i), \tau(\sigma_j)\big)
+#   \,(1 - \delta_{\sigma_i \sigma_j})
 #   + \sum_\sigma \lambda_V (V_\sigma - V_{T,\sigma})^2
 #   - \sum_x \lambda\, c(x)\, \delta_{\sigma(x), \text{LC}} ,
 # ```
@@ -96,9 +97,10 @@ using Potts.Layouts
 #
 # Eq. (1)'s third term is a potential summed over leader sites. The authors' code applies
 # it as CompuCell3D's default chemotaxis instead: each copy whose gaining (`new`) or losing
-# (`old`) cell is a leader changes ``\Delta H`` by ``-\mu\,(c(\text{target}) - c(\text{source}))``.
-# The model follows the code. With the cue ``c = y - 1`` (set in the starting state, as
-# in the paper, p. 6) leaders are biased upwards, into the empty matrix.
+# (`old`) cell is a leader changes ``\Delta H`` by
+# ``-\mu\,(c(\text{target}) - c(\text{source}))``. The model follows the code. With the cue
+# ``c = y - 1`` (set in the starting state, as in the paper, p. 6) leaders are biased
+# upwards, into the empty matrix.
 #
 # ## Step 7: constraints
 #
@@ -198,7 +200,8 @@ sol.stats.lifecycle.divisions
 using MakiePotts, CairoMakie
 mkpath("akeeb") #hide
 record_potts(
-    "akeeb/invasion.mp4", sol; framerate = 15, title = "Leader–follower invasion", figure = (; size = (640, 420)),
+    "akeeb/invasion.mp4", sol; framerate = 15, title = "Leader–follower invasion",
+    figure = (; size = (640, 420)),
     plot = (; category_palette = [:red3, :forestgreen], medium_color = :white)
 )
 nothing #hide
@@ -217,7 +220,15 @@ nothing #hide
 # of the followers:
 
 using Statistics: mean
-mean_height(u, k) = mean(I[2] for I in CartesianIndices(u.ownership) if u.ownership[I] > 0 && u.cell.kind[u.ownership[I]] == k)
+function mean_height(
+        u,
+        k
+    )
+    return mean(
+        I[2] for I in CartesianIndices(u.ownership)
+            if u.ownership[I] > 0 && u.cell.kind[u.ownership[I]] == k
+    )
+end
 CairoMakie.activate!(type = "png")
 fig = Figure(size = (520, 340))
 ax = Axis(fig[1, 1]; xlabel = "MCS (the authors' count)", ylabel = "mean height (sites)")

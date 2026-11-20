@@ -1,4 +1,5 @@
-# Benchmark models, hand-written against CorePotts (the symbolic layer will generate the same).
+# Benchmark models, hand-written against CorePotts (the symbolic layer will generate the
+# same).
 using CorePotts, StaticArrays, DelimitedFiles
 
 kindidx(st, c) = c == 0 ? 1 : Int(@inbounds st.cell.kind[c]) + 1
