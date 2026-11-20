@@ -49,28 +49,28 @@ deviations = [
 spec = "05"
 name = "ECM topography in angiogenesis (Bauer, Jackson & Jiang 2009)"
 status = "not started"
-status_note = "Steps 6–12, P6.9"
+status_note = "planned: see the remaining build order below"
 deviations = ["Planned provisional default B2: pixel size 0.55 µm/px."]
 
 [[model]]
 spec = "06"
 name = "3D multiscale avascular tumour (Jiang et al. 2005)"
 status = "not started"
-status_note = "Steps 6–12, P6.11"
+status_note = "planned: see the remaining build order below"
 deviations = ["Planned provisional default J3: Rb → E2F inhibitory; T, α, θ, γ_P and the lattice calibrated."]
 
 [[model]]
 spec = "07"
 name = "Sprouting angiogenesis (Bauer, Jackson & Jiang 2007)"
 status = "not started"
-status_note = "Steps 6–12, P6.8"
+status_note = "planned: see the remaining build order below"
 deviations = ["Planned provisional default B2: pixel size 0.55 µm/px; recruitment and degradation calibrated."]
 
 [[model]]
 spec = "08"
 name = "Flux balance analysis with a CPM (Graudenzi, Maspero & Damiani 2020, FBCA)"
 status = "not started"
-status_note = "Steps 6–12, P6.12"
+status_note = "planned: see the remaining build order below"
 deviations = ["X5 settled from the published supplementary table, flagged; 08a reproduced, 08b calibrated."]
 
 [[model]]
@@ -105,35 +105,35 @@ deviations = [
 spec = "11"
 name = "2D multiscale: Boolean network / cell / ECM-PDE (Jafari Nivlouei et al. 2021; Andasari et al. 2012 as an ODE conformance test)"
 status = "not started"
-status_note = "Steps 6–12, P6.10"
+status_note = "planned: see the remaining build order below"
 deviations = ["Planned provisional defaults N1–N3: a clamp, per-cell uptake, χ calibrated; hypoxia, necrosis, Wnt and division calibrated."]
 
 [[model]]
 spec = "12"
 name = "Convergent extension (Zajac, Jones & Glazier 2000, 2003)"
 status = "not started"
-status_note = "Steps 6–12, P6.7"
+status_note = "planned: see the remaining build order below"
 deviations = ["A reconstruction: T and α calibrated (Z2)."]
 
 [[model]]
 spec = "13"
 name = "Myxobacteria (Starruß et al. 2007)"
 status = "not started"
-status_note = "Steps 6–12, P6.6"
+status_note = "planned: see the remaining build order below"
 deviations = ["Planned provisional default Y1: the unit vector. Sequential first, then checkerboard validated statistically (Y2)."]
 
 [[model]]
 spec = "14"
 name = "Cell nucleus and migration (Fortuna et al. 2020; 14a, 14b, 14c)"
 status = "not started"
-status_note = "Step 5, P6.5a–P6.5d; 14c in P6.7b"
+status_note = "in progress: see the remaining build order below; 14c comes with the chemotaxis variant"
 deviations = ["No provisional default planned: C4 was resolved from the CompuCell3D source."]
 
 [[model]]
 spec = "15"
 name = "OpenVT monolayer benchmark (growing monolayer with contact inhibition)"
 status = "partial"
-status_note = "Every figure and table of the benchmark has a FULL record (Figures 1–8, Tables 1, S1, S5); open: the submission package (P6.15j, not yet submitted) and Q10 on our open question list"
+status_note = "Every figure and table of the benchmark has a FULL record (Figures 1–8, Tables 1, S1, S5); open: the submission package (prepared, not yet submitted) and Q10 on our open question list"
 data = "15"
 models_page = "model-openvt"
 published = "15_openvt_monolayer"

@@ -6,7 +6,7 @@ include(joinpath(@__DIR__, "render.jl"))
 
 row(; kw...) = Dict{String, String}(string(k) => v for (k, v) in kw)
 
-@testset "status page: control convention (P6.0cb)" begin
+@testset "status page: control convention" begin
     rows = [
         row(id = "V1", result = "PASS", required = ""),                       # ordinary check
         row(id = "V2", result = "FAIL", required = ""),
