@@ -182,8 +182,9 @@ composed component may carry. `sys` is named `name` (`@named`); a Catalyst react
 sys = compose(model, [Potts.component(:decay, decay, model)])
 ```
 """
-component(name::Symbol, sys::ModelingToolkitBase.System, model::PottsSystem) =
-    wrap_system(name, sys, nothing, _component_part(model))
+function component(name::Symbol, sys::ModelingToolkitBase.System, model::PottsSystem)
+    return wrap_system(name, sys, nothing, _component_part(model))
+end
 
 """
     Potts.component(name, pdesys::PDESystem, model::PottsSystem) -> PottsSystem
@@ -203,8 +204,9 @@ variable (`[input = true]`) is filled by the CPM by its `lattice_input_name` (or
 own name): `"kind"` is the kind of each site (0 for the medium), and the name of a field
 or site variable of the model reads that variable.
 """
-component(name::Symbol, pdesys::ModelingToolkitBase.PDESystem, model::PottsSystem) =
-    wrap_system(name, ModelingToolkitBase.System(Equation[], _unwrap(t); name), pdesys, _component_part(model))
+function component(name::Symbol, pdesys::ModelingToolkitBase.PDESystem, model::PottsSystem)
+    return wrap_system(name, ModelingToolkitBase.System(Equation[], _unwrap(t); name), pdesys, _component_part(model))
+end
 
 """
     Potts.couple(model::PottsSystem, pdesys::PDESystem; inputs = []) -> PottsSystem
@@ -274,8 +276,9 @@ function is_kind(model::PottsSystem, names::Symbol...)
 end
 
 # the payload of a component of `model`: its kinds, lattice and sweep, and nothing else
-_component_part(model::PottsSystem) =
-    PottsPart(; kinds = copy(_p(model, :kinds)), lattice = _p(model, :lattice), sweep = _p(model, :sweep))
+function _component_part(model::PottsSystem)
+    return PottsPart(; kinds = copy(_p(model, :kinds)), lattice = _p(model, :lattice), sweep = _p(model, :sweep))
+end
 
 """
     Potts.fields(sys::PottsSystem)
@@ -340,11 +343,14 @@ function _named_inputs(f::ModelingToolkitBase.PDESystem, sys::PottsSystem)
         (w === nothing || !Base.isidentifier(w) || w == string(g)) && continue
         renamed[operation(u)] = _renamed_input(u, Symbol(w))
     end
-    rename(u) = (u = _unwrap(u); if iscall(u) && haskey(names, nameof(operation(u)))
-        SymbolicUtils.setmetadata(u, LatticePDE.LatticeInputName, names[nameof(operation(u))])
-    else
-        u
-    end)
+    function rename(u)
+        u = _unwrap(u)
+        return if iscall(u) && haskey(names, nameof(operation(u)))
+                SymbolicUtils.setmetadata(u, LatticePDE.LatticeInputName, names[nameof(operation(u))])
+            else
+                u
+            end
+    end
     function sub(x)
         reps = Dict{Any, Any}()
         _walk_all(x) do y
@@ -392,9 +398,10 @@ function _input_names(sys::PottsSystem)
     return out
 end
 # a CPM read as the model writes it: `volume[owner]`, not `LatticePDE.value_at(volume, owner)`
-_cpm_read_text(ex) = (s = LatticePDE.as_written(replace(_builtin_text(string(ex)), "LatticePDE." => ""));
-    replace(replace(s, r"(\w+)\(t\)" => s"\1"), r"value_at\((\w+), (\w+)\)" => s"\1[\2]")
-)
+function _cpm_read_text(ex)
+    s = LatticePDE.as_written(replace(_builtin_text(string(ex)), "LatticePDE." => ""))
+    return replace(replace(s, r"(\w+)\(t\)" => s"\1"), r"value_at\((\w+), (\w+)\)" => s"\1[\2]")
+end
 
 # the PDESystem `f` of a model's fields with the model's defaults added to its
 # `initial_conditions` (a value already there is kept): the initial value of each field
@@ -559,17 +566,23 @@ function _check_robin_coefs(eq, N = 2)
     # a field or site variable as the PDESystem writes it, `u(t, x, y)` (the model's `u(t)`)
     args = join(("t", ("x", "y", "z")[1:N]...), ", ")
     pde(s) = replace(_builtin_text(s), r"\b(\w+)\(t\)" => SubstitutionString("\\1($args)"))
-    refuse(c, what) = throw(
-        PottsCompileError(
-            string(
-                "the Robin coefficient `", pde(string(c)), "` reads `", what,
-        "`; a Robin coefficient α or β is an expression of numbers, parameters, the coordinates `x`, `y`, `z` ",
-        "and the time `t`")))
+    function refuse(c, what)
+        throw(
+            PottsCompileError(
+                string(
+                    "the Robin coefficient `", pde(string(c)), "` reads `", what,
+            "`; a Robin coefficient α or β is an expression of numbers, parameters, the coordinates `x`, `y`, `z` ",
+            "and the time `t`")))
+    end
     for c in coefs
         # a field read at a point (`u(t, 0, y)`), named as written (its arguments are no leaves)
         at = Ref{Any}(nothing)
-        walk(y) = (y = _unwrap(y); y isa SymbolicUtils.BasicSymbolic && iscall(y) || return nothing;
-                   _is_field_at(operation(y)) ? (at[] === nothing && (at[] = y)) : foreach(walk, arguments(y)); nothing)
+        function walk(y)
+            y = _unwrap(y)
+            y isa SymbolicUtils.BasicSymbolic && iscall(y) || return nothing
+            _is_field_at(operation(y)) ? (at[] === nothing && (at[] = y)) : foreach(walk, arguments(y))
+            return nothing
+        end
         walk(c)
         at[] === nothing || refuse(c, _builtin_text(string(at[])))
         for y in _param_leaves(c)
@@ -589,13 +602,18 @@ function _check_robin_coefs(eq, N = 2)
     return nothing
 end
 # a coefficient the field compiler binds as it is: a parameter, or a number times one
-_robin_simple(u) = (j = info(u); j !== nothing && j.role === :param) ||
-                   (iscall(u) && operation(u) === (*) && count(y -> (j = info(y); j !== nothing && j.role === :param), arguments(u)) == 1 &&
-                    all(y -> (j = info(y); j !== nothing && j.role === :param) || _isnumber(y) ||
-                                 (SymbolicUtils.isconst(_unwrap(y)) && SymbolicUtils.unwrap_const(_unwrap(y)) isa Real), arguments(u)))
+function _robin_simple(u)
+    return (j = info(u); j !== nothing && j.role === :param) ||
+        (iscall(u) && operation(u) === (*) && count(y -> (j = info(y); j !== nothing && j.role === :param), arguments(u)) == 1 &&
+         all(y -> (j = info(y); j !== nothing && j.role === :param) || _isnumber(y) ||
+                      (SymbolicUtils.isconst(_unwrap(y)) && SymbolicUtils.unwrap_const(_unwrap(y)) isa Real), arguments(u)))
+end
 # the face read of a condition's term, `c(t, 0, y)` or `Differential(x)(c(t, 0, y))`
-_robin_core(f) = (u = _unwrap(f); iscall(u) && (_is_field_at(operation(u)) ||
-                                                 (operation(u) isa Differential && (a = _unwrap(arguments(u)[1]); iscall(a) && _is_field_at(operation(a))))))
+function _robin_core(f)
+    u = _unwrap(f)
+    return iscall(u) && (_is_field_at(operation(u)) ||
+        (operation(u) isa Differential && (a = _unwrap(arguments(u)[1]); iscall(a) && _is_field_at(operation(a)))))
+end
 # the model quantities and other symbols an expression reads (not inside a built-in's call)
 function _param_leaves(x)
     out = Any[]
@@ -624,9 +642,13 @@ _empty_inner(name) = ModelingToolkitBase.System(Equation[], _unwrap(t); name)
 # (`Potts.fields`) only.
 _is_field_variable(x) = (i = info(x); i !== nothing && i.role === :field)
 function _inner_system(sys::PottsSystem)
-    spatial(eq) = (u = _unwrap(eq.rhs); found = Ref(false);
-                   _walk_all(y -> iscall(y) && operation(y) isa Differential && !isequal(operation(y).x, _unwrap(t)) &&
-                                  (found[] = true), u); found[])
+    function spatial(eq)
+        u = _unwrap(eq.rhs)
+        found = Ref(false)
+        _walk_all(y -> iscall(y) && operation(y) isa Differential && !isequal(operation(y).x, _unwrap(t)) &&
+            (found[] = true), u)
+        return found[]
+    end
     of_field(eq) = (f = _field_lhs(eq, sys); f !== nothing && (f[1] === nothing || _is_field_variable(f[1])))
     eqs = [eq for eq in _p(sys, :equations) if !spatial(eq) && !of_field(eq)]
     # a field the remaining equations read (`integral(c)` in a cell equation) is an input of
@@ -690,11 +712,16 @@ function _wrap_payload(name::Symbol, fields, part::PottsPart)
 end
 
 # whether `sys` carries a PDESystem that its payload does not build (a hand-wrapped one)
-_foreign_fields(sys::PottsSystem) = (f = _stored_fields(sys);
-                                     f !== nothing && get(_p(sys, :metadata), _FieldsFrom, nothing) != _pde_digest(f))
+function _foreign_fields(sys::PottsSystem)
+    f = _stored_fields(sys)
+    return f !== nothing && get(_p(sys, :metadata), _FieldsFrom, nothing) != _pde_digest(f)
+end
 
-_built_from_part(sys::PottsSystem) = (I = getfield(sys, :inner); m = SymbolicUtils.getmetadata(I, _BuiltFrom, nothing);
-                                      m isa Tuple && m[1] === getfield(sys, :part) && m[2][] === I)
+function _built_from_part(sys::PottsSystem)
+    I = getfield(sys, :inner)
+    m = SymbolicUtils.getmetadata(I, _BuiltFrom, nothing)
+    return m isa Tuple && m[1] === getfield(sys, :part) && m[2][] === I
+end
 
 # the unflattened hierarchy of a complete System (`complete` does not carry every field, e.g.
 # noise equations, into the flattened system)
@@ -911,34 +938,43 @@ end
 # a component of `p` for `compose`: a Potts model as it is, an MTK system as `Potts.component`
 _as_component(c::PottsSystem, ::PottsSystem) = c
 _as_component(c::Union{ModelingToolkitBase.System, ModelingToolkitBase.PDESystem}, p::PottsSystem) = component(nameof(c), c, p)
-_as_component(c, p::PottsSystem) = throw(
-    ArgumentError(
-        "compose: a component of the Potts model `$(nameof(p))` is a Potts model, an MTK `System` or `PDESystem`, " *
-            "or a `Potts.component`; got a $(typeof(c))"
-    )
-)
+function _as_component(c, p::PottsSystem)
+    throw(
+            ArgumentError(
+                "compose: a component of the Potts model `$(nameof(p))` is a Potts model, an MTK `System` or `PDESystem`, " *
+                    "or a `Potts.component`; got a $(typeof(c))"
+            )
+        )
+end
 
 # MTK's `compose` with a plain System around a Potts model: a Potts model is not a subsystem
 # of an MTK System (its lattice and sweep have no place there)
-ModelingToolkitBase.compose(s::ModelingToolkitBase.System, ::AbstractArray{<:PottsSystem}; kw...) = throw(
-    ArgumentError(
-        "compose($(nameof(s)), …): a Potts model is not a component of an MTK System; compose the other way round, " *
-            "`compose(model, [$(nameof(s))])`, or declare `$(nameof(s))` in the model with `@components`"
-    )
-)
+function ModelingToolkitBase.compose(s::ModelingToolkitBase.System, ::AbstractArray{<:PottsSystem}; kw...)
+    throw(
+            ArgumentError(
+                "compose($(nameof(s)), …): a Potts model is not a component of an MTK System; compose the other way round, " *
+                    "`compose(model, [$(nameof(s))])`, or declare `$(nameof(s))` in the model with `@components`"
+            )
+        )
+end
 # the same with the Potts model among other systems (`compose(s, [other, model])`,
 # `System(…; systems = [model])`): MTK converts each subsystem to a `System`
-Base.convert(::Type{ModelingToolkitBase.System}, p::PottsSystem) = throw(
-    ArgumentError(
-        "the Potts model `$(nameof(p))` is not a component of an MTK System; compose the other way round, " *
-            "`compose($(nameof(p)), [system])`, or declare the system in the model with `@components`"
-    )
-)
+function Base.convert(::Type{ModelingToolkitBase.System}, p::PottsSystem)
+    throw(
+            ArgumentError(
+                "the Potts model `$(nameof(p))` is not a component of an MTK System; compose the other way round, " *
+                    "`compose($(nameof(p)), [system])`, or declare the system in the model with `@components`"
+            )
+        )
+end
 
 # whether the inner System `I` holds nothing (a `Potts.component` of a PDESystem)
-_empty_system(I) = (M = ModelingToolkitBase; P = something(M.get_parent(I), I);
-                    isempty(M.unknowns(I)) && isempty(M.parameters(I)) && isempty(M.equations(I)) &&
-                    isempty(M.observed(I)) && isempty(M.get_systems(P)))
+function _empty_system(I)
+    M = ModelingToolkitBase
+    P = something(M.get_parent(I), I)
+    return isempty(M.unknowns(I)) && isempty(M.parameters(I)) && isempty(M.equations(I)) &&
+        isempty(M.observed(I)) && isempty(M.get_systems(P))
+end
 
 # `p` with the PDESystem of each component of `pdes` as fields, named `component₊n`, rebuilt
 # from its payload (its own composed components lowered first, as `mtkcompile` does)
@@ -1057,8 +1093,10 @@ end
 # The link endpoints `a`, `b` (bound in edge terms and link rules) are reserved globally
 # (D-075 Q8); `@potts_model` rejects them at expansion (`_declare!`), this at construction.
 const _ENDPOINT_NAMES = (:a, :b)
-_endpoint_message(what, k) = "$what `$k`: `$k` is reserved (`a` and `b` are the link endpoints in edge terms and " *
-                             "link rules); choose another name, e.g. `$(k)₀`"
+function _endpoint_message(what, k)
+    return "$what `$k`: `$k` is reserved (`a` and `b` are the link endpoints in edge terms and " *
+        "link rules); choose another name, e.g. `$(k)₀`"
+end
 
 function _check_reserved_names(sys)
     check(what, n) = n in _ENDPOINT_NAMES && throw(ArgumentError(_endpoint_message(what, n)))
@@ -1162,8 +1200,9 @@ function Base.getproperty(s::PottsSystem, n::Symbol)
     f = _field_named(s, n)
     return f === nothing ? getproperty(getfield(s, :inner), n) : f
 end
-Base.propertynames(s::PottsSystem) =
-    (propertynames(getfield(s, :inner))..., (info(x).name for x in _p(s, :variables) if _is_field_variable(x))...)
+function Base.propertynames(s::PottsSystem)
+    return (propertynames(getfield(s, :inner))..., (info(x).name for x in _p(s, :variables) if _is_field_variable(x))...)
+end
 _MTKB.equations(s::PottsSystem) = _MTKB.equations(getfield(s, :inner))
 _MTKB.unknowns(s::PottsSystem) = _MTKB.unknowns(getfield(s, :inner))
 _MTKB.parameters(s::PottsSystem; kw...) = _MTKB.parameters(getfield(s, :inner); kw...)
@@ -1198,8 +1237,9 @@ end
 # MTK's metadata of a model is its inner System's (`Potts.PottsSweepSpec` among it)
 SymbolicUtils.getmetadata(s::PottsSystem, k::DataType, default) = SymbolicUtils.getmetadata(getfield(s, :inner), k, default)
 SymbolicUtils.hasmetadata(s::PottsSystem, k::DataType) = SymbolicUtils.hasmetadata(getfield(s, :inner), k)
-SymbolicUtils.setmetadata(s::PottsSystem, k::DataType, v) =
-    _with_inner(s, getfield(s, :name), SymbolicUtils.setmetadata(getfield(s, :inner), k, v), getfield(s, :fields))
+function SymbolicUtils.setmetadata(s::PottsSystem, k::DataType, v)
+    return _with_inner(s, getfield(s, :name), SymbolicUtils.setmetadata(getfield(s, :inner), k, v), getfield(s, :fields))
+end
 # MTK's description of a model is its inner System's
 _MTKB.description(s::PottsSystem) = _MTKB.description(getfield(s, :inner))
 
@@ -1248,13 +1288,15 @@ end
 # `@set`, fails on its `nothing` metadata). `analytic` and `analytic_func` are read as
 # properties (`PDESystem`'s `getproperty`); switch to `get_analytic` once a ModelingToolkitBase
 # release has it (SciML/ModelingToolkit.jl#5420).
-_renamed_pde(f::ModelingToolkitBase.PDESystem, name::Symbol) = ModelingToolkitBase.PDESystem(
-    _MTKB.get_eqs(f), _MTKB.get_bcs(f), _MTKB.get_domain(f), _MTKB.get_ivs(f), _MTKB.get_dvs(f), _MTKB.get_ps(f);
-    name, initial_conditions = _MTKB.get_initial_conditions(f), systems = _MTKB.get_systems(f),
-    connector_type = _MTKB.get_connector_type(f), metadata = _MTKB.get_metadata(f), analytic = f.analytic,
-    analytic_func = f.analytic_func, gui_metadata = _MTKB.get_gui_metadata(f),
-    description = _MTKB.get_description(f), checks = false
-)
+function _renamed_pde(f::ModelingToolkitBase.PDESystem, name::Symbol)
+    return ModelingToolkitBase.PDESystem(
+            _MTKB.get_eqs(f), _MTKB.get_bcs(f), _MTKB.get_domain(f), _MTKB.get_ivs(f), _MTKB.get_dvs(f), _MTKB.get_ps(f);
+            name, initial_conditions = _MTKB.get_initial_conditions(f), systems = _MTKB.get_systems(f),
+            connector_type = _MTKB.get_connector_type(f), metadata = _MTKB.get_metadata(f), analytic = f.analytic,
+            analytic_func = f.analytic_func, gui_metadata = _MTKB.get_gui_metadata(f),
+            description = _MTKB.get_description(f), checks = false
+        )
+end
 
 """
     PottsSystem(name, inner, fields, part; checks = false)
@@ -1291,8 +1333,10 @@ _SII.parameter_observed(s::PottsSystem, sym) = _SII.parameter_observed(getfield(
 const _REFUSED_PROBLEMS = (:ODEProblem, :NonlinearProblem, :SteadyStateProblem, :SDEProblem, :DAEProblem, :DDEProblem,
     :SDDEProblem, :BVProblem, :DiscreteProblem, :ImplicitDiscreteProblem, :NonlinearLeastSquaresProblem, :LinearProblem,
     :IntervalNonlinearProblem, :HomotopyProblem, :OptimizationProblem)
-_problem_msg(f) = "$f: a Potts model is not an ODE or jump system; build its problem with `PottsProblem(sys, op, tspan)` " *
-    "and solve it with a CPM algorithm (for the cell/model ODE alone, use `Potts.inner(sys)`)"
+function _problem_msg(f)
+    return "$f: a Potts model is not an ODE or jump system; build its problem with `PottsProblem(sys, op, tspan)` " *
+        "and solve it with a CPM algorithm (for the cell/model ODE alone, use `Potts.inner(sys)`)"
+end
 for (M, n) in ((:JumpProcesses, :JumpProblem), ((:SciMLBase, n) for n in _REFUSED_PROBLEMS)...)
     P = Expr(:., M, QuoteNode(n))
     msg = String(n)
@@ -1309,8 +1353,9 @@ end
 # tspan)` with `tspan` a tuple, `nothing` or a vector, and `JumpProblem(sys, op)` with `op` an
 # operating point (a collection, a pair, a number or `nothing`). One method per type, for both
 # system types (compose.jl).
-SciMLBase.ODEProblem{iip, SciMLBase.FunctionWrapperSpecialize}(::PottsSystem, args...; kw...) where {iip} =
+function SciMLBase.ODEProblem{iip, SciMLBase.FunctionWrapperSpecialize}(::PottsSystem, args...; kw...) where {iip}
     throw(ArgumentError(_problem_msg("ODEProblem")))
+end
 const _JUMP_TSPANS = (:Tuple, :Nothing, :AbstractVector)
 const _JUMP_OPS = (:AbstractArray, :AbstractDict, :NamedTuple, :Tuple, :Pair, :Number, :Nothing)
 for T in _JUMP_TSPANS
@@ -1321,13 +1366,17 @@ for T in _JUMP_OPS
 end
 # MTK's `extend` with a Potts model on one side and another system on the other (D-039): a
 # clear refusal naming the ways that work, not MTK's rebuild of the container.
-_extend_msg(a, b) = "extend($(nameof(a)), $(nameof(b))): a Potts model extends only a Potts model " *
-    "(`extend(sys, base)` with both Potts models); add an MTK System to a Potts model as " *
-    "`@components`, or with `compose(model, [system])`"
-ModelingToolkitBase.extend(a::PottsSystem, b::ModelingToolkitBase.AbstractSystem; kw...) =
+function _extend_msg(a, b)
+    return "extend($(nameof(a)), $(nameof(b))): a Potts model extends only a Potts model " *
+        "(`extend(sys, base)` with both Potts models); add an MTK System to a Potts model as " *
+        "`@components`, or with `compose(model, [system])`"
+end
+function ModelingToolkitBase.extend(a::PottsSystem, b::ModelingToolkitBase.AbstractSystem; kw...)
     throw(ArgumentError(_extend_msg(a, b)))
-ModelingToolkitBase.extend(a::ModelingToolkitBase.AbstractSystem, b::PottsSystem; kw...) =
+end
+function ModelingToolkitBase.extend(a::ModelingToolkitBase.AbstractSystem, b::PottsSystem; kw...)
     throw(ArgumentError(_extend_msg(a, b)))
+end
 
 # --- Keys namespaced by the model itself (D-137). `sys.x` of an uncompleted `sys`
 # is `pr₊x`; wherever a key names a model quantity (operating point, `remake`, `getu`/`setu`/
@@ -1341,9 +1390,11 @@ function _key_name(u)
     return SymbolicIndexingInterface.getname(u)
 end
 _namespaced(n::Symbol) = occursin('₊', String(n))
-_declared_quantities(sys::PottsSystem) = Dict{Symbol, Any}(i.name => _unwrap(x) for x in Iterators.flatten((
-    _p(sys, :parameters), _p(sys, :variables), (o.lhs for o in _p(sys, :observed))))
-                                                           for i in (info(x),) if i !== nothing)
+function _declared_quantities(sys::PottsSystem)
+    return Dict{Symbol, Any}(i.name => _unwrap(x) for x in Iterators.flatten((
+        _p(sys, :parameters), _p(sys, :variables), (o.lhs for o in _p(sys, :observed))))
+                                                               for i in (info(x),) if i !== nothing)
+end
 # `pr₊x` → `:x` when `x` is declared and `pr₊x` is not; otherwise `nothing`
 function _own_name(sys::PottsSystem, n::Symbol, declared)
     haskey(declared, n) && return nothing
@@ -1427,10 +1478,12 @@ function _localize(sys::PottsSystem, k; strict::Bool = false)
     return Symbolics.substitute(u, subs; fold = Val(false))
 end
 
-Base.show(io::IO, sys::PottsSystem) = print(
-    io, "PottsSystem(", getfield(sys, :name), ", ", join(_p(sys, :lattice).dims, "×"), ", ",
-    _count_string(length(_p(sys, :kinds)) - 1, "cell kind"), ")"
-)
+function Base.show(io::IO, sys::PottsSystem)
+    return print(
+            io, "PottsSystem(", getfield(sys, :name), ", ", join(_p(sys, :lattice).dims, "×"), ", ",
+            _count_string(length(_p(sys, :kinds)) - 1, "cell kind"), ")"
+        )
+end
 function Base.show(io::IO, ::MIME"text/plain", sys::PottsSystem)
     println(io, "PottsSystem ", getfield(sys, :name), " on ", join(_p(sys, :lattice).dims, "×"), " (", length(_p(sys, :lattice).dims), "D)")
     println(io, "  kinds: ", join(_p(sys, :kinds), ", "))
@@ -1487,8 +1540,10 @@ function Base.show(io::IO, ::MIME"text/plain", sys::PottsSystem)
 end
 
 # a parameter with its MTK description: `Dc ("diffusion of c")`
-_param_show(p) = (d = SymbolicUtils.getmetadata(_unwrap(p), ModelingToolkitBase.VariableDescription, nothing);
-                  d === nothing ? string(info(p).name) : string(info(p).name, " (", repr(d), ")"))
+function _param_show(p)
+    d = SymbolicUtils.getmetadata(_unwrap(p), ModelingToolkitBase.VariableDescription, nothing)
+    return d === nothing ? string(info(p).name) : string(info(p).name, " (", repr(d), ")")
+end
 
 # with the model's kind names (`kinds`, the medium first), kinds print as authored
 _domain_string(d::CellDomain, kinds = nothing) = isempty(d.kinds) ? "cells" : "cells(" * _kind_list(d.kinds, kinds) * ")"

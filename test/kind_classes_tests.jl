@@ -23,8 +23,10 @@ function kc_error(f)
     return nothing
 end
 
-kc_build(ex::Expr, M::Symbol) = kc_error(() -> (Core.eval(@__MODULE__, ex);
-                                                Base.invokelatest(() -> getfield(@__MODULE__, M)(; name = :m))))
+function kc_build(ex::Expr, M::Symbol)
+    return kc_error(() -> (Core.eval(@__MODULE__, ex);
+        Base.invokelatest(() -> getfield(@__MODULE__, M)(; name = :m))))
+end
 
 has(msg, parts...) = msg !== nothing && !startswith(msg, "not an ArgumentError")
 
@@ -71,11 +73,13 @@ end
 
 @testitem "kind classes: members are resolved when the macro expands" setup = [KindClassTests] tags = [:potts, :kind_classes] begin
     @testset "kind classes: members are resolved when the macro expands" begin
-        expand(body) = kc_error(() -> macroexpand(@__MODULE__, :(@potts_model KCX begin
-            $body
-            @lattice Lattice((12, 12))
-            @sweep Metropolis(; temperature = 2.0)
-        end)))
+        function expand(body)
+            return kc_error(() -> macroexpand(@__MODULE__, :(@potts_model KCX begin
+                    $body
+                    @lattice Lattice((12, 12))
+                    @sweep Metropolis(; temperature = 2.0)
+                end)))
+        end
         @test has(expand(:(@kinds medium fluid tip stalk endothelial = (tip, stlk))),
             "kind class `endothelial`", "`stlk` is not a kind or an earlier kind class")
         @test has(expand(:(@kinds begin
@@ -155,8 +159,10 @@ end
 @testitem "kind classes: programmatic classes are checked" setup = [KindClassTests] tags = [:potts, :kind_classes] begin
     @testset "kind classes: programmatic classes are checked" begin
         s = KCBase(; name = :m)
-        with(classes) = kc_error(() -> PottsSystem(; name = nameof(s), (f => Potts._p(s, f) for f in fieldnames(Potts.PottsPart))...,
-                                                    kind_classes = classes))
+        function with(classes)
+            return kc_error(() -> PottsSystem(; name = nameof(s), (f => Potts._p(s, f) for f in fieldnames(Potts.PottsPart))...,
+                kind_classes = classes))
+        end
         @test with([Potts.KindClass(:ok, [1, 3])]) === nothing
         @test has(with([Potts.KindClass(:volume, [1])]), "kind class `volume`", "built-in")
         @test has(with([Potts.KindClass(:a, [1])]), "reserved")

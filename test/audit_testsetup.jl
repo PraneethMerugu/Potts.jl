@@ -21,52 +21,57 @@ module AuPDE
     volume_diffusion() = pdesys([Dt(C) ~ 0.01 * DK * laplacian(C)], [c(0, x, y) ~ 0.0], D8, [C, DK])
     mcs_diffusion() = pdesys([Dt(C) ~ DK * (1 + step_index(t)) * laplacian(C)], [c(0, x, y) ~ 0.0], D8, [C, DK])
     inv_table() = (@parameters Dc = 0.1; pdesys([Dt(C) ~ Dc * laplacian(C) - (1 / DK) * C], [c(0, x, y) ~ 0.0], D8, [C, DK], [Dc]))
-    int_div() = (
-        @parameters Dc = 0.25; Cx = c(t, x);
-        pdesys([Dt(Cx) ~ Dc * laplacian(Cx) - dk(t, x) * Cx], [c(0, x) ~ 0.0], (16,), [Cx, dk(t, x)], [Dc])
-    )
-    two(e1, e2) = (
-        @parameters Dc = 0.5 Dx = 0.5; pdesys(
-            [Dt(C) ~ e1(Dc, Dx), Dt(U) ~ e2(Dc, Dx)],
-            [c(0, x, y) ~ 0.0, u(0, x, y) ~ 0.0], (8, 8), [C, U], [Dc, Dx]
-        )
-    )
+    function int_div()
+        @parameters Dc = 0.25
+        Cx = c(t, x)
+        return pdesys([Dt(Cx) ~ Dc * laplacian(Cx) - dk(t, x) * Cx], [c(0, x) ~ 0.0], (16,), [Cx, dk(t, x)], [Dc])
+    end
+    function two(e1, e2)
+        @parameters Dc = 0.5 Dx = 0.5
+        return pdesys(
+                [Dt(C) ~ e1(Dc, Dx), Dt(U) ~ e2(Dc, Dx)],
+                [c(0, x, y) ~ 0.0, u(0, x, y) ~ 0.0], (8, 8), [C, U], [Dc, Dx]
+            )
+    end
     cross_field() = two((Dc, Dx) -> Dc * laplacian(C) - Dx * laplacian(U), (Dc, Dx) -> Dc * laplacian(U))
     cross_linear() = two((Dc, Dx) -> Dc * laplacian(C) - Dx * U, (Dc, Dx) -> Dc * laplacian(U))
     cross_loop() = two((Dc, Dx) -> Dc * laplacian(C) - Dx * laplacian(U), (Dc, Dx) -> Dc * laplacian(U) + Dx * laplacian(C))
     field1() = (@parameters Dc = 0.5; pdesys([Dt(C) ~ Dc * laplacian(C)], [c(0, x, y) ~ 0.0], (8, 8), [C], [Dc]))
     const MCS = step_index(t)
-    gate_rotation() = (
-        @parameters t0 = 1000.0 k = 4.0;
-        pdesys(
-            [Dt(C) ~ ifelse(MCS >= t0, -10 * C, -k * U), Dt(U) ~ ifelse(MCS >= t0, -10 * U, k * C)],
-            [c(0, x, y) ~ 0.0, u(0, x, y) ~ 0.0], (8, 8), [C, U], [t0, k]
-        )
-    )
-    gate_dominant() = (
-        @parameters t0 = 1000.0;
-        pdesys(
-            [Dt(C) ~ ifelse(MCS >= t0, -10 * C - U, -10 * C + U), Dt(U) ~ ifelse(MCS >= t0, -10 * U, -5 * U)],
-            [c(0, x, y) ~ 0.0, u(0, x, y) ~ 0.0], (8, 8), [C, U], [t0]
-        )
-    )
+    function gate_rotation()
+        @parameters t0 = 1000.0 k = 4.0
+        return pdesys(
+                [Dt(C) ~ ifelse(MCS >= t0, -10 * C, -k * U), Dt(U) ~ ifelse(MCS >= t0, -10 * U, k * C)],
+                [c(0, x, y) ~ 0.0, u(0, x, y) ~ 0.0], (8, 8), [C, U], [t0, k]
+            )
+    end
+    function gate_dominant()
+        @parameters t0 = 1000.0
+        return pdesys(
+                [Dt(C) ~ ifelse(MCS >= t0, -10 * C - U, -10 * C + U), Dt(U) ~ ifelse(MCS >= t0, -10 * U, -5 * U)],
+                [c(0, x, y) ~ 0.0, u(0, x, y) ~ 0.0], (8, 8), [C, U], [t0]
+            )
+    end
 end
 
 
-audit_blocks() = (
-    σ = zeros(Int32, 20, 20);
+function audit_blocks()
+    σ = zeros(Int32, 20, 20)
     for (k, (i, j)) in enumerate(Iterators.product(1:5:16, 1:5:16))
-        σ[i:(i + 2), j:(j + 2)] .= k
-    end; σ
-)
+            σ[i:(i + 2), j:(j + 2)] .= k
+        end
+    return σ
+end
 
 # the substep count of the field phase `j` of a running integrator
 audit_n(integ, j = 1) = CorePotts._runtime(getfield(integ.ctx, Symbol(:__fields, j))).n
 
-audit_err(f) = try
-    f(); nothing
-catch e
-    e
+function audit_err(f)
+    return try
+            f(); nothing
+        catch e
+            e
+        end
 end
 
 # the field phase of a problem

@@ -162,10 +162,12 @@ end
     @testset "messages name BackwardEuler as the route, and it works" begin
         op = [ownership => zeros(Int32, 16, 8), kind => Symbol[], :c => zeros(16, 8)]
         mk(; kw...) = PottsProblem(FiPeriodic(; name = :f), op, (0, 1); kw...)
-        e(f) = try
-            f(); ""
-        catch err
-            err isa ArgumentError ? err.msg : sprint(showerror, err)
+        function e(f)
+            return try
+                    f(); ""
+                catch err
+                    err isa ArgumentError ? err.msg : sprint(showerror, err)
+                end
         end
         @test_throws ArgumentError mk(; field_solver = LatticePCG())
         @test solve(mk(; field_solver = BackwardEuler(; linsolve = LatticePCG())), SequentialCPM()).retcode == FiRC.Success
@@ -354,10 +356,12 @@ end
     @testset "multi-group and masked field derivatives against central differences" begin
         tight = LatticePCG(; reltol = 1.0e-11, maxiters = 60)
         # a group reading another group's field: ∂w/∂ra through `u`'s twin, ∂w/∂rb in `w`'s own group
-        two(ps) = solve(PottsProblem(FiDualTwo(; name = :m), [fi_dop(); ps], (0, 12); field_solver = ExplicitEuler(),
-                solvers = [:w => BackwardEuler(; linsolve = tight)], seed = 3
-            ), SequentialCPM()
-        ).u[end].site.w
+        function two(ps)
+            return solve(PottsProblem(FiDualTwo(; name = :m), [fi_dop(); ps], (0, 12); field_solver = ExplicitEuler(),
+                        solvers = [:w => BackwardEuler(; linsolve = tight)], seed = 3
+                    ), SequentialCPM()
+                ).u[end].site.w
+        end
         for (name, v) in ((:ra, 0.3), (:rb, 0.2))
             d = two([name => ForwardDiff.Dual(v, 1.0)])
             fd = (sum(FI_DW .* two([name => v + 1e-4 * v])) - sum(FI_DW .* two([name => v - 1e-4 * v]))) / (2e-4 * v)
@@ -443,8 +447,10 @@ end
         tight = LatticePCG(; reltol = 1.0e-11, maxiters = 60)
         σ = zeros(Int32, 12, 10); σ[4:6, 3:5] .= 1
         msum(sol) = sum(FI_DW[1:12, 1:10] .* sol.u[end].site.c)
-        mrun(fs, ops) = solve(PottsProblem(FiDualMask(; name = :m), vcat([ownership => σ, kind => [:A]], ops), (0, 6); field_solver = fs),
-            SequentialCPM())
+        function mrun(fs, ops)
+            return solve(PottsProblem(FiDualMask(; name = :m), vcat([ownership => σ, kind => [:A]], ops), (0, 6); field_solver = fs),
+                SequentialCPM())
+        end
         for fs in (ExplicitEuler(), BackwardEuler(; linsolve = tight), CrankNicolson(; linsolve = tight))
             # a Dual initial value: ∂/∂(a uniform shift of c's start)
             c0 = [0.1 + 0.01 * (i - j) for i in 1:12, j in 1:10]

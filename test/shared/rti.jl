@@ -32,9 +32,10 @@ end
 
 const TESTDIR = dirname(@__DIR__)
 
-_is_test_file(f::AbstractString) =
-    endswith(f, "_tests.jl") || endswith(f, "_test.jl") ||
-    endswith(f, "-tests.jl") || endswith(f, "-test.jl")
+function _is_test_file(f::AbstractString)
+    return endswith(f, "_tests.jl") || endswith(f, "_test.jl") ||
+        endswith(f, "-tests.jl") || endswith(f, "-test.jl")
+end
 
 function _collect_test_files(dir::AbstractString)
     out = String[]
@@ -157,8 +158,10 @@ items run last, in one worker.
 """
 function potts_suite(; nworkers = NWORKERS, qa = get(ENV, "POTTS_QA", "true") == "true", gpu = false)
     rocm = get(ENV, "POTTS_GPU", "") == "rocm"
-    keep(ti) = :potts in ti.tags && (gpu || !(:gpu in ti.tags)) && (rocm || !(:rocm in ti.tags)) &&
-            (qa || !(:qa in ti.tags)) && !(:gpu_only in ti.tags) && !(:multithreaded in ti.tags)   # the D-157 scan needs the device cache
+    function keep(ti)
+        return :potts in ti.tags && (gpu || !(:gpu in ti.tags)) && (rocm || !(:rocm in ti.tags)) &&
+            (qa || !(:qa in ti.tags)) && !(:gpu_only in ti.tags) && !(:multithreaded in ti.tags)
+    end   # the D-157 scan needs the device cache
     return _two_passes(keep, nworkers)
 end
 
@@ -183,8 +186,10 @@ and the device files' items (`:gpu`; the `:rocm` ones on ROCm only), in-process,
 (one device), without `:qa`; the `:device_scan` item last (`_phases`).
 """
 function device_suite(; gpu = get(ENV, "POTTS_GPU", ""))
-        keep(ti) = (:device in ti.tags || :gpu in ti.tags) && !(:qa in ti.tags) &&
-            !(:multithreaded in ti.tags) && (gpu == "rocm" || !(:rocm in ti.tags))
+        function keep(ti)
+            return (:device in ti.tags || :gpu in ti.tags) && !(:qa in ti.tags) &&
+                !(:multithreaded in ti.tags) && (gpu == "rocm" || !(:rocm in ti.tags))
+        end
     # the D-157 scan is an item tagged `:device_scan`, and it reads the process's kernel cache: it
     # has to run after every other device item, in the process that compiled those kernels. Both
     # phases run in-process (`nworkers = 0`), one item at a time; a worker's cache is its own.
@@ -192,8 +197,9 @@ function device_suite(; gpu = get(ENV, "POTTS_GPU", ""))
                     (ti -> keep(ti) && :device_scan in ti.tags, 0)))
 end
 
-_two_passes(keep, nworkers) =
-    _phases(((ti -> keep(ti) && !serial(ti), nworkers), (ti -> keep(ti) && serial(ti), min(nworkers, 1))))
+function _two_passes(keep, nworkers)
+    return _phases(((ti -> keep(ti) && !serial(ti), nworkers), (ti -> keep(ti) && serial(ti), min(nworkers, 1))))
+end
 
 function _phases(phases)
     errs = Tuple{Any, Any}[]                 # (exception, backtrace), in pass order

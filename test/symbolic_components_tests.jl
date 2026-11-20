@@ -196,11 +196,13 @@ end
             mtkcompile(m)
             return solve(PottsProblem(m, op, (0, 2)), SequentialCPM())
         end
-        rejected(sys, word; kw...) = try
-            run(sys; kw...)
-            false
-        catch e
-            e isa Potts.PottsCompileError
+        function rejected(sys, word; kw...)
+            return try
+                    run(sys; kw...)
+                    false
+                catch e
+                    e isa Potts.PottsCompileError
+                end
         end
         let
             @parameters k = 0.3

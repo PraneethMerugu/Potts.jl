@@ -234,15 +234,19 @@ end
 
 rh_q_op(nx) = [ownership => rh_q_sigma(nx), kind => [:cytoplasm, :nucleus], cluster => [1, 1], :V_target => [12.0, 1.0]]
 
-rh_conv_problem(nx; T = Float64) = PottsProblem(
-    RHConvQ(; name = :cq), [rh_q_op(nx); :sub => Float64.(rh_q_sigma(nx) .== 1)],
-    (0, 1); T, capacity = 4
-)
+function rh_conv_problem(nx; T = Float64)
+    return PottsProblem(
+            RHConvQ(; name = :cq), [rh_q_op(nx); :sub => Float64.(rh_q_sigma(nx) .== 1)],
+            (0, 1); T, capacity = 4
+        )
+end
 
-rh_field_problem(nx; T = Float64) = PottsProblem(
-    RHFieldQ(; name = :fq), rh_q_op(nx), (0, 1); T,
-    field_solver = ExplicitEuler(substeps = 1)
-)
+function rh_field_problem(nx; T = Float64)
+    return PottsProblem(
+            RHFieldQ(; name = :fq), rh_q_op(nx), (0, 1); T,
+            field_solver = ExplicitEuler(substeps = 1)
+        )
+end
 
 # the hand oracle: (Q + S) at the cytoplasm's sites, 0 elsewhere
 function rh_q_oracle(S)
@@ -412,10 +416,12 @@ function rh_mask_sigma()
     return σ
 end
 
-rh_mask_problem(; T = Float64) = PottsProblem(
-    RHMaskCentroid(; name = :bm), [ownership => rh_mask_sigma(), kind => [:ka, :ka]],
-    (0, 1); T, field_solver = ExplicitEuler(substeps = 1)
-)
+function rh_mask_problem(; T = Float64)
+    return PottsProblem(
+            RHMaskCentroid(; name = :bm), [ownership => rh_mask_sigma(), kind => [:ka, :ka]],
+            (0, 1); T, field_solver = ExplicitEuler(substeps = 1)
+        )
+end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 

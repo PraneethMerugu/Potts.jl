@@ -51,22 +51,29 @@ end
 # `seen` (an `IdDict`), when given, maps each new statement to the one it replaces.
 function _map_statements(f, sys::PottsSystem; seen = nothing)
     src = IdDict{Any, LineNumberNode}()
-    keep(old, new) = (haskey(_p(sys, :sources), old) && (src[new] = _p(sys, :sources)[old]);
-                      seen === nothing || (seen[new] = old); new)
+    function keep(old, new)
+        haskey(_p(sys, :sources), old) && (src[new] = _p(sys, :sources)[old])
+        seen === nothing || (seen[new] = old)
+        return new
+    end
     fe(e::EnergyTerm) = keep(e, EnergyTerm(e.domain, f(e.expr)))
     fd(d::Drive) = keep(d, Drive(f(d.expr)))
     fc(c::Constraint) = keep(c, c.kind === :expr ? Constraint(c.kind, c.kinds, f(c.expr)) : c)
     fu(u::Update) = keep(u, Update(u.phase, f(u.eq.lhs) ~ f(u.eq.rhs), u.every))
     fq(eq::Equation) = keep(eq, f(eq.lhs) ~ f(eq.rhs))
-    fv(d::DivideRule) = keep(d, DivideRule(d.domain, f(d.when), d.along,
-        Pair{Any, Any}[f(k) => (r isa Split ? r : f(r)) for (k, r) in d.rules], d.every))
+    function fv(d::DivideRule)
+        return keep(d, DivideRule(d.domain, f(d.when), d.along,
+            Pair{Any, Any}[f(k) => (r isa Split ? r : f(r)) for (k, r) in d.rules], d.every))
+    end
     fl(r::LinkRule) = keep(r, LinkRule(r.relationship, r.action, f(r.when), r.every))
     fo(o::Equation) = keep(o, Equation(o.lhs, _unwrap(f(o.rhs))))
     fb(b::DiscreteBlock) = DiscreteBlock(b.name, b.scope, b.kinds, b.slots, Any[f(x) for x in b.next], b.every, b.offset)
     fx(x) = x isa Union{Nothing, Real} ? x : f(x)
-    fcv(v::ConvertSpec) = keep(v, ConvertSpec(v.name, v.domain, f(v.from), f(v.to), v.fresh, fx(v.at), fx(v.p),
-        ConvertTransfer[ConvertTransfer(f(t.var), f(t.from), f(t.to), fx(t.per_site)) for t in v.transfers],
-        Pair{Any, Any}[f(a) => fx(b) for (a, b) in v.writes]))
+    function fcv(v::ConvertSpec)
+        return keep(v, ConvertSpec(v.name, v.domain, f(v.from), f(v.to), v.fresh, fx(v.at), fx(v.p),
+            ConvertTransfer[ConvertTransfer(f(t.var), f(t.from), f(t.to), fx(t.per_site)) for t in v.transfers],
+            Pair{Any, Any}[f(a) => fx(b) for (a, b) in v.writes]))
+    end
     fs = _p(sys, :sweep)
     sweep = SweepSpec(fs.law, f(fs.temperature), fs.combine, fs.offset, fs.mcs_duration)
     return (; energies = map(fe, _p(sys, :energies)), drives = map(fd, _p(sys, :drives)),
@@ -286,14 +293,18 @@ function _reject_ignored_features(comp)
 end
 
 # MTK's costs, without its zero placeholder (a system with no cost reports `0`)
-_nonzero_costs(sys) = filter(c -> !(SymbolicUtils.unwrap_const(_unwrap(c)) isa Number && iszero(SymbolicUtils.unwrap_const(_unwrap(c)))),
-    collect(ModelingToolkitBase.costs(sys)))
+function _nonzero_costs(sys)
+    return filter(c -> !(SymbolicUtils.unwrap_const(_unwrap(c)) isa Number && iszero(SymbolicUtils.unwrap_const(_unwrap(c)))),
+        collect(ModelingToolkitBase.costs(sys)))
+end
 
 # the poissonians and noise equations of a system and its subsystems (MTKBase has no recursive
 # accessor for either; `get_*` read the system's own)
 _all_poissonians(sys) = Any[ModelingToolkitBase.get_poissonians(sys); (x for s in ModelingToolkitBase.get_systems(sys) for x in _all_poissonians(s))...]
-_all_noise_eqs(sys) = (n = ModelingToolkitBase.get_noise_eqs(sys);
-                       Any[(n === nothing ? () : n)...; (x for s in ModelingToolkitBase.get_systems(sys) for x in _all_noise_eqs(s))...])
+function _all_noise_eqs(sys)
+    n = ModelingToolkitBase.get_noise_eqs(sys)
+    return Any[(n === nothing ? () : n)...; (x for s in ModelingToolkitBase.get_systems(sys) for x in _all_noise_eqs(s))...]
+end
 
 # the tstops of a system and its subsystems (`get_tstops` is the system's own)
 _all_tstops(sys) = Any[ModelingToolkitBase.get_tstops(sys); (x for s in ModelingToolkitBase.get_systems(sys) for x in _all_tstops(s))...]
@@ -567,11 +578,14 @@ end
 
 # the default of a slot: its own, or its entry in the default of its array variable (G11)
 function _element_default(ics, x)
-    const_of(y) = (v = get(ics, _unwrap(y), nothing); if v === nothing
-        nothing
-    else
-        (w = _unwrap(v); SymbolicUtils.isconst(w) ? SymbolicUtils.unwrap_const(w) : nothing)
-    end)
+    function const_of(y)
+        v = get(ics, _unwrap(y), nothing)
+        return if v === nothing
+                nothing
+            else
+                (w = _unwrap(v); SymbolicUtils.isconst(w) ? SymbolicUtils.unwrap_const(w) : nothing)
+            end
+    end
     v = const_of(x)
     v isa Real && return Float64(v)
     u = _unwrap(x)

@@ -12,8 +12,9 @@ module FgPDE
     const MCS = step_index(t)
     ic(f, v = 0.0) = f(0, x, y) ~ v
     field1(rate, dims, ps = []; bcs = [], c0 = 0.0, dvs = [C]) = pdesys([Dt(C) ~ rate], [ic(c, c0); bcs], dims, dvs, ps)
-    ode(rates, fs, u0, ps = []; dims = (6, 6)) =
-        pdesys([Dt(f(X...)) ~ r for (f, r) in zip(fs, rates)], [ic(f, v) for (f, v) in zip(fs, u0)], dims, [f(X...) for f in fs], ps)
+    function ode(rates, fs, u0, ps = []; dims = (6, 6))
+        return pdesys([Dt(f(X...)) ~ r for (f, r) in zip(fs, rates)], [ic(f, v) for (f, v) in zip(fs, u0)], dims, [f(X...) for f in fs], ps)
+    end
     rot() = (@parameters k = 0.5; ode([-k * O, k * C], (c, o), [1.0, 0.0], [k]))
     one_way() = (@parameters k = 3.0; ode([-0.1 * C, k * C - U], (c, u), [1.0, 0.0], [k]))
     loop3() = (@parameters k = 3.0; ode([-k * O, -k * V, k * C], (c, o, v), [1.0, 0.0, 0.0], [k]))
@@ -26,10 +27,10 @@ module FgPDE
     end
     self_src() = (@parameters k = 3.0; ode([-0.1 * S1^2, k * S1 - U], (s1, u), [1.0, 0.0], [k]))
     chain_loop() = (@parameters k = 3.0 w = 0.05; ode([-0.1 * S1, k * S1 - w * C, w * S2], (s1, s2, c), [1.0, 0.0, 0.5], [k, w]))
-    rot_cells() = (
-        @parameters k = 0.5 Dc = 0.1;
-        pdesys([Dt(C) ~ Dc * laplacian(C) - k * O - DK * O, Dt(O) ~ k * C], [ic(c, 1.0), ic(o)], (6, 6), [C, O, DK], [k, Dc])
-    )
+    function rot_cells()
+        @parameters k = 0.5 Dc = 0.1
+        return pdesys([Dt(C) ~ Dc * laplacian(C) - k * O - DK * O, Dt(O) ~ k * C], [ic(c, 1.0), ic(o)], (6, 6), [C, O, DK], [k, Dc])
+    end
     mcs_source() = (@parameters η = 0.5; field1(-C + η * MCS, (6, 6), [η]; c0 = 1.0))
     mcs_diff() = (@parameters ε = 0.5; field1((1 + ε * MCS) * laplacian(C), (6, 6), [ε]))
     clock_repeat() = ode([MCS, t], (c, u), [0.0, 0.0]; dims = (4, 4))

@@ -93,15 +93,15 @@ end
         # over the evaluation cap (a 5000-entry table): an explicit count runs as given, and no
         # count is refused with the route
         p3 = PottsProblem(AuditInvTable(; name = :v), op, (0, 1); field_solver = ExplicitEuler(substeps = 3))
-        big(prob) = (
-            ph = audit_phase(prob);
-            (
-                ph.substeps, CorePotts.Problems.with_tables(
-                    Float64[getproperty(prob.p, n) for n in ph.params],
-                    Pair{String, Vector{Float64}}[ph.program.tables[i].key => fill(1.0, 5000) for (i, _) in ph.tables]
-                ),
-            )
-        )
+        function big(prob)
+            ph = audit_phase(prob)
+            return (
+                    ph.substeps, CorePotts.Problems.with_tables(
+                        Float64[getproperty(prob.p, n) for n in ph.params],
+                        Pair{String, Vector{Float64}}[ph.program.tables[i].key => fill(1.0, 5000) for (i, _) in ph.tables]
+                    ),
+                )
+        end
         s3, b3 = big(p3)
         # warned once per group, term and cause; the warning has no error route (
         # bda31989 printed "with no count, give `PottsProblem` `field_solver = …`" inside it)

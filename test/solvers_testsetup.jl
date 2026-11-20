@@ -83,10 +83,12 @@ solver_sigma() = (σ = zeros(Int32, 16, 16); σ[5:8, 5:8] .= 1; σ)
 solver_op() = [ownership => solver_sigma(), kind => [:A]]
 solver_var(sys, n) = only(filter(x -> string(x) in (string(n), string(n, "(t)")), Potts.declared_variables(sys)))
 
-solver_err(f) = try
-    f(); nothing
-catch e
-    e
+function solver_err(f)
+    return try
+            f(); nothing
+        catch e
+            e
+        end
 end
 
 function sv_throws(T, pats, f)

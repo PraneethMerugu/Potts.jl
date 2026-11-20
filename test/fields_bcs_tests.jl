@@ -3,15 +3,16 @@
         LP, MTKB = Potts.LatticePDE, Potts.ModelingToolkitBase
         dims, n = (8, 6), 4
         c0 = rand(StableRNG(5), dims...)
-        run(M; k = 2) = (
+        function run(M; k = 2)
             integ = init(
-                PottsProblem(
-                    M(; name = :f), [fd_empty(dims); :c => c0], (0, k);
-                    field_solver = ExplicitEuler(; substeps = n)
-                ), SequentialCPM()
-            );
-            foreach(_ -> step!(integ), 1:k); Array(current_state(integ).site.c)
-        )
+                    PottsProblem(
+                        M(; name = :f), [fd_empty(dims); :c => c0], (0, k);
+                        field_solver = ExplicitEuler(; substeps = n)
+                    ), SequentialCPM()
+                )
+            foreach(_ -> step!(integ), 1:k)
+            return Array(current_state(integ).site.c)
+        end
         # `c(t, 0, y) ~ 1` is the face value: the hand FTCS with the ghost `2 − c` (the face value is
         # the mean of the edge site and its ghost); without it the run differs
         a1 = run(FbBcsFace; k = 1)
@@ -65,12 +66,14 @@ end
         # (a): a mask that reads the field it clamps: clamped first, evaluated at each MCS start on
         # the clamped values, held over the MCS (hand oracle)
         c0 = rand(StableRNG(9), 8, 6)
-        run(M; k = 3, n = 1) = solve(
-            PottsProblem(
-                M(; name = :f), [fd_empty((8, 6)); :c => c0], (0, k);
-                field_solver = ExplicitEuler(; substeps = n)
-            ), SequentialCPM()
-        ).u[end].site.c
+        function run(M; k = 3, n = 1)
+            return solve(
+                    PottsProblem(
+                        M(; name = :f), [fd_empty((8, 6)); :c => c0], (0, k);
+                        field_solver = ExplicitEuler(; substeps = n)
+                    ), SequentialCPM()
+                ).u[end].site.c
+        end
         hand = map(v -> v >= 0.8 ? 0.8 : v, c0)
         for _ in 1:3
             m = hand .>= 0.8

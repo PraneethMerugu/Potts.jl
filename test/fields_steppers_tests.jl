@@ -11,8 +11,12 @@
 @testitem "CrankNicolson components and binding" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
     @testset "CrankNicolson components and binding" begin
         dims = (12, 10)
-        run(M) = (i = init(PottsProblem(M(; name = :f), fi_op(dims), (0, 3); field_solver = CrankNicolson()), SequentialCPM());
-                  foreach(_ -> step!(i), 1:3); st = current_state(i).site; [Array(getproperty(st, n)) for n in sort!(collect(propertynames(st)))])
+        function run(M)
+            i = init(PottsProblem(M(; name = :f), fi_op(dims), (0, 3); field_solver = CrankNicolson()), SequentialCPM())
+            foreach(_ -> step!(i), 1:3)
+            st = current_state(i).site
+            return [Array(getproperty(st, n)) for n in sort!(collect(propertynames(st)))]
+        end
         @test run(FiComp) == run(FiScal)
         m = Module()
         Core.eval(m, :(using Potts; using Potts.LatticePDE))
@@ -26,9 +30,10 @@ end
         # (one substep: two Backward Euler halves) is closer than one Backward Euler substep
         σ = zeros(Int32, 24, 24); σ[5:8, 5:8] .= 1; σ[14:17, 12:15] .= 2
         op = [ownership => σ, kind => [:A, :A]]
-        run(fs) = (s = solve(PottsProblem(FiMove(; name = :f), op, (0, 12); field_solver = fs, seed = 7), SequentialCPM());
-            (Array(s.u[end].site.c), s.u[end].ownership)
-        )
+        function run(fs)
+            s = solve(PottsProblem(FiMove(; name = :f), op, (0, 12); field_solver = fs, seed = 7), SequentialCPM())
+            return (Array(s.u[end].site.c), s.u[end].ownership)
+        end
         (ref, σr), (be, σb), (cn, σc) = run(BackwardEuler(; substeps = 20)), run(BackwardEuler()), run(CrankNicolson())
         @test σr == σb == σc                                       # (the field does not steer the CPM)
         eb, ec = maximum(abs, be .- ref), maximum(abs, cn .- ref)
@@ -79,8 +84,12 @@ end
 @testitem "BDF2 history is no state; components and binding" setup = [ImplicitSetup] tags = [:potts, :fields_steppers] begin
     @testset "BDF2 history is no state; components and binding" begin
         dims = (12, 10)
-        run(M) = (i = init(PottsProblem(M(; name = :f), fi_op(dims), (0, 3); field_solver = BDF2()), SequentialCPM());
-                  foreach(_ -> step!(i), 1:3); st = current_state(i).site; [Array(getproperty(st, n)) for n in sort!(collect(propertynames(st)))])
+        function run(M)
+            i = init(PottsProblem(M(; name = :f), fi_op(dims), (0, 3); field_solver = BDF2()), SequentialCPM())
+            foreach(_ -> step!(i), 1:3)
+            st = current_state(i).site
+            return [Array(getproperty(st, n)) for n in sort!(collect(propertynames(st)))]
+        end
         @test run(FiComp) == run(FiScal)
         # the history lives in the runtime: `st.site`, the saved states and a checkpoint hold what a
         # Backward Euler run holds

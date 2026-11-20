@@ -8,12 +8,14 @@
         # the older lag has no MTK default: the operating point must give it
         @test_throws ArgumentError PottsProblem(cs, [ownership => σ, kind => [1, 1]], (0, 6))
         prob = PottsProblem(cs, [ownership => σ, kind => [1, 1], Symbol("fib₊fzₜ₋₁") => [0.0, 1.0]], (0, 6))
-        fibs(a, b, n) = (
-            out = [a]; for _ in 1:n
-                a, b = a + b, a
-                push!(out, a)
-            end; out
-        )
+        function fibs(a, b, n)
+            out = [a]
+            for _ in 1:n
+                    a, b = a + b, a
+                    push!(out, a)
+                end
+            return out
+        end
         for alg in _DISCRETE_ALGS
             sol = solve(prob, alg; saveat = 0:6)
             @test [u.cell.fib₊fz[1] for u in sol.u] == fibs(1.0, 0.0, 6)       # 1, 1, 2, 3, 5, 8, 13

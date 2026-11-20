@@ -30,8 +30,9 @@ const Dt = Differential(t)
 zz() = System([Dt(zq) ~ -zq], t; name = :zz)
     # `D(u) ~ Dd Δu − kd u` with the conditions `bcs` (for the checks of names, start values, ivs)
 const DOM = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 12.0), y ∈ Interval(0.0, 10.0)]
-plain(bcs; name = :drug, ivs = [t, x, y], ps = [Dd, kd], dom = DOM) =
-        PDESystem([Dt(u(t, x, y)) ~ Dd * Potts.LatticePDE.laplacian(u(t, x, y)) - kd * u(t, x, y)], bcs, dom, ivs, [u(t, x, y)], ps; name)
+function plain(bcs; name = :drug, ivs = [t, x, y], ps = [Dd, kd], dom = DOM)
+    return PDESystem([Dt(u(t, x, y)) ~ Dd * Potts.LatticePDE.laplacian(u(t, x, y)) - kd * u(t, x, y)], bcs, dom, ivs, [u(t, x, y)], ps; name)
+end
 const Dx = Differential(x)
 # `D(u) ~ Dd Δu − kd u + [kind = 1]`, `u = 1` on the low x face, zero flux on the others
 function drug(L; name = :drug, extra = Equation[], dvs = [u(t, x, y), kin(t, x, y)],
@@ -42,9 +43,11 @@ function drug(L; name = :drug, extra = Equation[], dvs = [u(t, x, y), kin(t, x, 
 end
     # the references, coupled with `@fields`: `drug` with the kind as the bound input `kA`
 @variables kA(..)::Bool [input = true]
-ref(L) = drug(L; name = :fields, dvs = [u(t, x, y), kA(t, x, y)],
-        rhs = Dd * Potts.LatticePDE.laplacian(u(t, x, y)) - kd * u(t, x, y) + ifelse(kA(t, x, y), 1.0, 0.0)
-    )
+function ref(L)
+    return drug(L; name = :fields, dvs = [u(t, x, y), kA(t, x, y)],
+            rhs = Dd * Potts.LatticePDE.laplacian(u(t, x, y)) - kd * u(t, x, y) + ifelse(kA(t, x, y), 1.0, 0.0)
+        )
+end
 # a host field `zz` with its own `kd`, and a host field `u`
 function hostk()
     @parameters kd = 0.9
@@ -91,14 +94,17 @@ end
 
 fcm_op() = (σ = zeros(Int32, 12, 10); σ[4:6, 3:5] .= 1; [ownership => σ, kind => [:A]])
 
-fc_run(m, field, k; op = fcm_op(), kw...) =
-    Array(getproperty(solve(PottsProblem(m, op, (0, k); seed = 1, kw...), SequentialCPM()).u[end].site, field))
+function fc_run(m, field, k; op = fcm_op(), kw...)
+    return Array(getproperty(solve(PottsProblem(m, op, (0, k); seed = 1, kw...), SequentialCPM()).u[end].site, field))
+end
 
-fc_msg(f, E::Type{<:Exception} = ArgumentError) = try
-    f()
-    "built"
-catch e
-    e isa E ? sprint(showerror, e) : "wrong exception $(typeof(e)), expected $E"
+function fc_msg(f, E::Type{<:Exception} = ArgumentError)
+    return try
+            f()
+            "built"
+        catch e
+            e isa E ? sprint(showerror, e) : "wrong exception $(typeof(e)), expected $E"
+        end
 end
 
 
@@ -206,8 +212,10 @@ end
         hosth = FcHostH(; name = :m)
         T, X, Y = FcPDE.t, FcPDE.x, FcPDE.y
         hand = FcPDE.drug((6, 5))
-        with(dom) = FcPDE.PDESystem(getfield(hand, :eqs), getfield(hand, :bcs), dom, getfield(hand, :ivs),
-            getfield(hand, :dvs), getfield(hand, :ps); name = :drug)
+        function with(dom)
+            return FcPDE.PDESystem(getfield(hand, :eqs), getfield(hand, :bcs), dom, getfield(hand, :ivs),
+                getfield(hand, :dvs), getfield(hand, :ps); name = :drug)
+        end
         a = fc_run(
             compose(
                 hosth, Potts.component(

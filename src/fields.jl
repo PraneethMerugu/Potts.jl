@@ -59,18 +59,26 @@ end
 # the variable info of field `name` of `sys`
 _field_info(sys, name) = info(only(x for x in _p(sys, :variables) if info(x) !== nothing && info(x).name === name))
 # the `lattice_level` of field `name` of `sys` (`nothing`: the lattice itself)
-_field_level(sys, name) = (x = only(x for x in _p(sys, :variables) if info(x) !== nothing && info(x).name === name);
-                           get(info(x).options, :lattice_level, nothing))
+function _field_level(sys, name)
+    x = only(x for x in _p(sys, :variables) if info(x) !== nothing && info(x).name === name)
+    return get(info(x).options, :lattice_level, nothing)
+end
 # the dims of a site array of variable info `i` on lattice dims `dims` (a coarse field's: its grid)
-_site_dims(i, dims) = (L = get(i.options, :lattice_level, nothing);
-                       L === nothing ? dims : map(n -> n == 1 ? 1 : n ÷ L.k, dims))
+function _site_dims(i, dims)
+    L = get(i.options, :lattice_level, nothing)
+    return L === nothing ? dims : map(n -> n == 1 ? 1 : n ÷ L.k, dims)
+end
 # the `lattice_storage` of field `name` of `sys` (`nothing`: the state type)
-_field_storage(sys, name) = (x = only(x for x in _p(sys, :variables) if info(x) !== nothing && info(x).name === name);
-                             get(info(x).options, :lattice_storage, nothing))
+function _field_storage(sys, name)
+    x = only(x for x in _p(sys, :variables) if info(x) !== nothing && info(x).name === name)
+    return get(info(x).options, :lattice_storage, nothing)
+end
 # the declared `bounds` of field `name` of `sys` (`nothing`: none), MTK's bounds metadata
 # of the PDESystem's field, which the stability bound reads
-_field_bounds(sys, name) = (x = only(x for x in _p(sys, :variables) if info(x) !== nothing && info(x).name === name);
-                            get(info(x).options, :bounds, nothing))
+function _field_bounds(sys, name)
+    x = only(x for x in _p(sys, :variables) if info(x) !== nothing && info(x).name === name)
+    return get(info(x).options, :bounds, nothing)
+end
 
 # the calls the lattice compiler lowers: LatticePDE's one allowlist, so a
 # call lowers in `@equations` exactly when it lowers in a PDESystem
@@ -149,8 +157,10 @@ function _field_term(x, cv)
         f isa Differential && _check_axis(u, f, cv)
         # a velocity written as a vector (`Advect(Upwind1())([ux, uy], c)`, a vector quantity)
         # converts per component
-        conv(y) = (v = LatticePDE.velocity_terms(_unwrap(y));
-                   v === nothing ? Symbolics.wrap(_field_term(y, cv)) : [Symbolics.wrap(_field_term(z, cv)) for z in v])
+        function conv(y)
+            v = LatticePDE.velocity_terms(_unwrap(y))
+            return v === nothing ? Symbolics.wrap(_field_term(y, cv)) : [Symbolics.wrap(_field_term(z, cv)) for z in v]
+        end
         return _unwrap(f(map(conv, a)...))
     elseif f === ismember
         return _unwrap(ismember(Symbolics.wrap(_field_term(a[1], cv)), SymbolicUtils.unwrap_const(a[2])))
@@ -201,8 +211,12 @@ function _check_operand(u, f, y, cv)
                         "an input `v(..) [input = true]` left unbound (the CPM fills it by its name), and apply `$op` to it"))
 end
 # whether `v` reads the site's kind
-_reads_kind(v) = (hit = Ref(false); _walk(y -> (i = info(y); i !== nothing && i.role === :builtin && i.name === :kind &&
-                                                (hit[] = true)), v); hit[])
+function _reads_kind(v)
+    hit = Ref(false)
+    _walk(y -> (i = info(y); i !== nothing && i.role === :builtin && i.name === :kind &&
+        (hit[] = true)), v)
+    return hit[]
+end
 
 # A raw derivative `Differential(x)` differentiates along a lattice axis, a spatial variable of
 # the PDESystem (`x`, `y`, `z`); any other variable (`z` on a 2D lattice) is refused. (A model
@@ -331,9 +345,11 @@ function _canonical_filled(raw)
                                     last_in]
 end
 
-_field_conv(ivs, states, T, known, kinds = nothing) = (; ivs, states, direct = Dict{Symbol, Any}(), kinds,
-    filled = Tuple{Symbol, Any, Type}[known...], inputs = Dict{Symbol, Any}(), params = Set{Any}(), T,
-    bcsrc = Pair{Any, Any}[])           # each translated condition => the condition as written
+function _field_conv(ivs, states, T, known, kinds = nothing)
+    return (; ivs, states, direct = Dict{Symbol, Any}(), kinds,
+        filled = Tuple{Symbol, Any, Type}[known...], inputs = Dict{Symbol, Any}(), params = Set{Any}(), T,
+        bcsrc = Pair{Any, Any}[])
+end           # each translated condition => the condition as written
 
 # The field equations of a model: `(x, kind, op)` for a rate `D(c) ~ rhs`
 # (`:rate`) or a map `Shift(t, 1)(m) ~ rhs` (`:map`, one application per MCS) of a field or
@@ -421,8 +437,10 @@ function _steady_assign(sys::PottsSystem)
 end
 # the stepped fields of a model, `(x, rhs, op)`: its rates, maps and steady rows (`op` the
 # `Differential` or the `Shift` of the left side, or `:steady`)
-_field_equations(sys::PottsSystem) = [(f[1], eq.rhs, f[3]) for eq in _p(sys, :equations)
-                                      for f in (_field_lhs(eq, sys),) if f !== nothing && f[2] !== :aux]
+function _field_equations(sys::PottsSystem)
+    return [(f[1], eq.rhs, f[3]) for eq in _p(sys, :equations)
+        for f in (_field_lhs(eq, sys),) if f !== nothing && f[2] !== :aux]
+end
 """
     steady_fields(model) -> Vector{Pair{String, Symbol}}
 
@@ -431,11 +449,15 @@ shared rule (`LatticePDE.steady_choice`).
 """
 LatticeFields.Problems.steady_fields(sys::PottsSystem) = Pair{String, Symbol}[string(eq) => info(x).name for (eq, x) in _steady_assign(sys)]
 # the steady fields (`0 ~ rhs`) among `names`, as the group's state keys
-_steady_names(sys::PottsSystem, names) = String[string(info(x).name) for (x, _, op) in _field_equations(sys)
-                                                if op === :steady && info(x).name in names]
+function _steady_names(sys::PottsSystem, names)
+    return String[string(info(x).name) for (x, _, op) in _field_equations(sys)
+        if op === :steady && info(x).name in names]
+end
 # the aux fields of a model, `(x, rhs)`: each group that steps fields computes them
-_field_aux(sys::PottsSystem) = [(f[1], eq.rhs) for eq in _p(sys, :equations) for f in (_field_lhs(eq),)
-                                if f !== nothing && f[2] === :aux]
+function _field_aux(sys::PottsSystem)
+    return [(f[1], eq.rhs) for eq in _p(sys, :equations) for f in (_field_lhs(eq),)
+        if f !== nothing && f[2] === :aux]
+end
 
 # a condition's field read `c(t, 0, y)` as the group's state read: its arguments are the time `t`,
 # the coordinates or numbers (a face)
@@ -585,17 +607,19 @@ end
 # product, the numerator of a quotient or the base of a power
 function _bcs_own(lhs)
     own = Symbol[]
-    own_read(f) = if iscall(f) && _is_field_at(operation(f))
-        push!(own, _field_at_name(f))
-    elseif iscall(f) && operation(f) isa Differential
-        own_read(_unwrap(first(arguments(f))))
-    elseif iscall(f) && operation(f) === (*)
-        foreach(g -> own_read(_unwrap(g)), arguments(f))
-    elseif iscall(f) && (operation(f) === (/) || operation(f) === (^))
-        own_read(_unwrap(first(arguments(f))))
-    else
-        i = info(f)
-        i !== nothing && i.role === :field && push!(own, i.name)
+    function own_read(f)
+        return if iscall(f) && _is_field_at(operation(f))
+                push!(own, _field_at_name(f))
+            elseif iscall(f) && operation(f) isa Differential
+                own_read(_unwrap(first(arguments(f))))
+            elseif iscall(f) && operation(f) === (*)
+                foreach(g -> own_read(_unwrap(g)), arguments(f))
+            elseif iscall(f) && (operation(f) === (/) || operation(f) === (^))
+                own_read(_unwrap(first(arguments(f))))
+            else
+                i = info(f)
+                i !== nothing && i.role === :field && push!(own, i.name)
+            end
     end
     terms = iscall(lhs) && operation(lhs) === (+) ? arguments(lhs) : (lhs,)
     foreach(tm -> own_read(_unwrap(tm)), terms)
@@ -691,8 +715,9 @@ function _field_inputs(sys::PottsSystem, T::Type = Float64)
     end
 end
 # those of compiled model `c`, made once per state type (cached on `c`)
-_field_inputs(c::CompiledPottsSystem, T::Type = Float64) =
-    _field_cached(() -> _field_inputs(getfield(c, :sys), T), c, (:inputs, T))
+function _field_inputs(c::CompiledPottsSystem, T::Type = Float64)
+    return _field_cached(() -> _field_inputs(getfield(c, :sys), T), c, (:inputs, T))
+end
 
 """The masked fields of `sys` (each has a mask site array `name__mask`): the masked conditions
 (`c ~ masked(pred, v)`)."""
@@ -747,9 +772,10 @@ struct _FieldGroup
     options::Any
     rule_tables::Vector{Pair{String, Symbol}}   # the whole system's tables the substep rule reads
 end
-_FieldGroup(names, group, alg, program, masks, step, arrays, tables, params, substeps, fingerprint, options) =
-    _FieldGroup(names, group, alg, program, masks, step, arrays, tables, params, substeps, fingerprint, options,
+function _FieldGroup(names, group, alg, program, masks, step, arrays, tables, params, substeps, fingerprint, options)
+    return _FieldGroup(names, group, alg, program, masks, step, arrays, tables, params, substeps, fingerprint, options,
         Pair{String, Symbol}[])
+end
 
 # The substep rule of a map group: one application per field window (the
 # MCS), whatever the parameters; a map has no stability bound
@@ -907,9 +933,10 @@ function LatticeFields.Problems.refuse_parameters(t::_PottsTexts, c)
         coupled = String[])))))
 end
 # (`LatticePDE.StabilityBound` tracks cross terms across callers)
-LatticeFields.Problems.coupling_unknown_text(t::_PottsTexts, c; refuse::Bool) =
-    "the stability bound of the fields $(_fieldlist(t.names)) does not see their coupling to the other solver groups" *
-    (refuse ? "; give `solvers` an explicit `ExplicitEuler(; substeps = n)` for the group" : ": the count is the user's")
+function LatticeFields.Problems.coupling_unknown_text(t::_PottsTexts, c; refuse::Bool)
+    return "the stability bound of the fields $(_fieldlist(t.names)) does not see their coupling to the other solver groups" *
+        (refuse ? "; give `solvers` an explicit `ExplicitEuler(; substeps = n)` for the group" : ": the count is the user's")
+end
 function LatticeFields.Problems.coupling_unbounded_text(t::_PottsTexts, c; refuse::Bool)
     q, lf, n = c.q, c.lf, length(t.names)
     u(k) = string("`", k, "`")
@@ -1347,18 +1374,22 @@ end
 (ph::_DiscretizedFields)(st, p, ctx, key, mcs, backend) = CorePotts.run_phase(ph, st, p, ctx, key, mcs, backend, nothing)
 
 # the inputs by name, converted only when the site array's element type differs
-_input_values(ph::_DiscretizedFields, st) = [
-    k => (a = getproperty(st.site, n); eltype(a) === E ? a : E.(a))
-        for (k, n, E) in ph.inputs
-]
+function _input_values(ph::_DiscretizedFields, st)
+    return [
+            k => (a = getproperty(st.site, n); eltype(a) === E ? a : E.(a))
+                for (k, n, E) in ph.inputs
+        ]
+end
 
-_discretized_refusal(ph::_DiscretizedFields, what) = ArgumentError(
-    string(
-        "`discretization = ", repr(ph.disc), "`: ", what, ". The contract: `discretize(Potts.fields(model), d; ",
-        "inputs = [name => array, …])` returns a problem whose integrator reads and writes each field by name as a vector ",
-        "of the lattice's sites in column-major order (`getu`, `setu`) and sets each input and parameter by name (`setp`)"
-    )
-)
+function _discretized_refusal(ph::_DiscretizedFields, what)
+    return ArgumentError(
+            string(
+                "`discretization = ", repr(ph.disc), "`: ", what, ". The contract: `discretize(Potts.fields(model), d; ",
+                "inputs = [name => array, …])` returns a problem whose integrator reads and writes each field by name as a vector ",
+                "of the lattice's sites in column-major order (`getu`, `setu`) and sets each input and parameter by name (`setp`)"
+            )
+        )
+end
 
 # the discretization's problem for the given inputs (a discretizer without `inputs` refused)
 function _discretized_problem(ph::_DiscretizedFields, ins)

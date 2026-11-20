@@ -222,9 +222,9 @@ function fco_throws(T, pats, f)
     return err
 end
 
-fx_run(M, k, fs; ps = Pair[]) = begin
+function fx_run(M, k, fs; ps = Pair[])
     integ = init(PottsProblem(M(; name = :x), [fc_op(); ps], (0, k); field_solver = fs, seed = 3), SequentialCPM(); save_start = false)
-    [(step!(integ); st = current_state(integ).site; map(a -> copy(Array(a)), (st.c, st.v, st.u))) for _ in 1:k]
+    return [(step!(integ); st = current_state(integ).site; map(a -> copy(Array(a)), (st.c, st.v, st.u))) for _ in 1:k]
 end
 
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))

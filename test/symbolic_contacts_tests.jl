@@ -15,14 +15,14 @@
             @sweep Metropolis(; temperature = 1.0)
         end
 
-        allows(local_only, σ, x, y) = (
+        function allows(local_only, σ, x, y)
             p = PottsProblem(
-                ConnectivityProbe(; name = :r, local_only),
-                [ownership => σ, kind => fill(:A, maximum(σ))], (0, 1)
-            );
-            prop = CorePotts.Proposal(CorePotts.linear_index(p.lattice, x), CorePotts.linear_index(p.lattice, y), x, 1, σ[x...], σ[y...]);
-            p.f.constraint(p.u0, p.p, prop, Potts._host_ctx(p))
-        )
+                    ConnectivityProbe(; name = :r, local_only),
+                    [ownership => σ, kind => fill(:A, maximum(σ))], (0, 1)
+                )
+            prop = CorePotts.Proposal(CorePotts.linear_index(p.lattice, x), CorePotts.linear_index(p.lattice, y), x, 1, σ[x...], σ[y...])
+            return p.f.constraint(p.u0, p.p, prop, Potts._host_ctx(p))
+        end
         σ = zeros(Int32, 12, 12); σ[6, 6] = 1
         @test allows(false, σ, (6, 6), (7, 6))            # the last site: 0 arcs pass
         @test !allows(true, σ, (6, 6), (7, 6))            # negative control: the local rule rejects it
@@ -66,10 +66,10 @@ end
         function chemo(mode)
             σ = zeros(Int32, 12, 12); σ[4:7, 4:7] .= 1
             p = PottsProblem(_ChemoWhen(; name = :c, mode), [ownership => σ, kind => [:A], :c => [Float64(i) for i in 1:12, j in 1:12]], (0, 1))
-            d(x, y) = (
-                prop = CorePotts.Proposal(CorePotts.linear_index(p.lattice, x), CorePotts.linear_index(p.lattice, y), x, 1, σ[x...], σ[y...]);
-                p.f.delta_H(p.u0, p.p, prop, Potts._host_ctx(p)) - energy_change(p, p.u0, prop)
-            )
+            function d(x, y)
+                prop = CorePotts.Proposal(CorePotts.linear_index(p.lattice, x), CorePotts.linear_index(p.lattice, y), x, 1, σ[x...], σ[y...])
+                return p.f.delta_H(p.u0, p.p, prop, Potts._host_ctx(p)) - energy_change(p, p.u0, prop)
+            end
             return d((7, 5), (8, 5)), d((8, 5), (7, 5))     # (retraction, extension)
         end
         @test all(isapprox.(chemo(:every), (1.0, -1.0)))      # every copy
@@ -159,11 +159,13 @@ end
             end
         ) isa Expr     # control
         V = Potts.B.volume
-        prog(; kinds = [:medium, :cell], variables = Any[]) = Potts.PottsSystem(;
-            name = :prog, kinds,
-            lattice = Potts.lattice_spec((12, 12)), variables, energies = [Potts.energy(Potts.cells(1) => (V - 16)^2)],
-            sweep = Potts.sweep_spec(:metropolis; temperature = 1.0)
-        )
+        function prog(; kinds = [:medium, :cell], variables = Any[])
+            return Potts.PottsSystem(;
+                    name = :prog, kinds,
+                    lattice = Potts.lattice_spec((12, 12)), variables, energies = [Potts.energy(Potts.cells(1) => (V - 16)^2)],
+                    sweep = Potts.sweep_spec(:metropolis; temperature = 1.0)
+                )
+        end
         @test prog() isa Potts.PottsSystem                                               # control
         @test_throws ArgumentError prog(; variables = Any[Potts.variable(only(Potts.Symbolics.@variables b(Potts.t)), :cell; default = 0.0)])
         @test_throws ArgumentError prog(; kinds = [:medium, :a])
@@ -213,10 +215,12 @@ end
 
 @testitem "x′ outside contact terms is rejected" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
     @testset "x′ outside contact terms is rejected" begin
-        bad(E) = Potts.PottsSystem(;
-            name = :bad, kinds = [:medium, :A], lattice = Potts.lattice_spec((8, 8)),
-            variables = [c], energies = [Potts.energy(E)], sweep = Potts.sweep_spec(:metropolis; temperature = 1.0)
-        )
+        function bad(E)
+            return Potts.PottsSystem(;
+                    name = :bad, kinds = [:medium, :A], lattice = Potts.lattice_spec((8, 8)),
+                    variables = [c], energies = [Potts.energy(E)], sweep = Potts.sweep_spec(:metropolis; temperature = 1.0)
+                )
+        end
         c = Potts.variable(only(Potts.Symbolics.@variables c(Potts.t)), :site)
         @test_throws Potts.PottsCompileError mtkcompile(bad(Potts.SITES => Potts._primed(c)))
         @test mtkcompile(bad(Potts.CONTACTS => c * Potts._primed(c))) isa Potts.CompiledPottsSystem
@@ -245,10 +249,12 @@ end
         end
 
         σ, kinds, cue = site_contact_state((20, 20); side = 4)
-        mk(; kw...) = PottsProblem(
-            SiteContactsOnCopy(; name = :oc, kw...),
-            [ownership => σ, kind => fill(:A, length(kinds)), :mark => cue, :tag => 2 .* cue], (0, 4)
-        )
+        function mk(; kw...)
+            return PottsProblem(
+                    SiteContactsOnCopy(; name = :oc, kw...),
+                    [ownership => σ, kind => fill(:A, length(kinds)), :mark => cue, :tag => 2 .* cue], (0, 4)
+                )
+        end
         prob = mk()
         @test site_selfcheck(prob, Moore(1)) < 1.0e-9
         # negative controls: ΔH of the model without the write (or the clear) misses the change
@@ -465,11 +471,13 @@ end
             @extend b = PrimeBase(; λ = q′)
         end
 
-        rejects(f, n, what) = try
-            f()
-            false
-        catch e
-            e isa ArgumentError
+        function rejects(f, n, what)
+            return try
+                    f()
+                    false
+                catch e
+                    e isa ArgumentError
+                end
         end
         # locals named `x′` (x declared) are ordinary Julia and build
         for case in 1:5
@@ -528,10 +536,10 @@ end
 
         σ = zeros(Int32, 12, 12); σ[2:4, 2:4] .= 1; σ[7:9, 7:9] .= 2
         op = Any[ownership => σ, kind => [:A, :A]]
-        run(mk) = (
-            prob = PottsProblem(mk(; name = :g), op, (0, 6); seed = 7, capacity = 16);
-            (prob, solve(prob, SequentialCPM(); saveat = 1))
-        )
+        function run(mk)
+            prob = PottsProblem(mk(; name = :g), op, (0, 6); seed = 7, capacity = 16)
+            return (prob, solve(prob, SequentialCPM(); saveat = 1))
+        end
         (pi, si), (pn, sn) = run(OnCopyIndexInline), run(OnCopyIndexNamed)
         @test [u.ownership for u in si.u] == [u.ownership for u in sn.u]
         @test [u.cell.y for u in si.u] == [u.cell.y for u in sn.u]

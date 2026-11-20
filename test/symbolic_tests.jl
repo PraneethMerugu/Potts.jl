@@ -140,8 +140,10 @@ end
         @test !has(code(IntPowers), is_pow)
         # the negative power of the integer `volume` takes a float base in the model's type
         reads_volume(x) = x == :(st.cell.volume)
-        is_float_volume_power(x) = x isa Expr && x.head === :call && x.args[1] == :(Potts.LatticeFields.Compile.powi) &&
-            _has_ast(x.args[2], reads_volume) && _has_ast(x.args[2], y -> y == :(Potts._tofloat))
+        function is_float_volume_power(x)
+            return x isa Expr && x.head === :call && x.args[1] == :(Potts.LatticeFields.Compile.powi) &&
+                _has_ast(x.args[2], reads_volume) && _has_ast(x.args[2], y -> y == :(Potts._tofloat))
+        end
         @test has(code(PowerValues), is_float_volume_power)
         @test has(code(FloatPower), is_pow) && has(code(ParameterPower), is_pow)
     end
@@ -422,11 +424,13 @@ end
         @test vals(remake(prob; p = [:p₃ => 1.0])) == (p₁ = 1.0, p₂ = 2.0, p₃ = 1.0, p₄ = 3.0, p₅ = 5.0, λ = 1.0)
         # a write of a computed parameter names it, its expression and its base inputs; a list
         # naming one is refused whole
-        err(f) = try
-            f(); ""
-        catch e
-            e isa ArgumentError || rethrow()
-            sprint(showerror, e)
+        function err(f)
+            return try
+                    f(); ""
+                catch e
+                    e isa ArgumentError || rethrow()
+                    sprint(showerror, e)
+                end
         end
         e = err(() -> remake(prob; p = [:p₄ => 0.0, :p₁ => 3.0]))
         @test !isempty(e)

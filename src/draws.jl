@@ -56,8 +56,10 @@ const _BOUNDED_BUILT = Threads.Atomic{Int}(0)
 """Metadata key: `(; folds, bounded)`, what the model constructor built."""
 struct _BuiltFeatures end
 _feature_counts() = (_FOLDS_BUILT[], _BOUNDED_BUILT[])
-_built_metadata(c0) = Base.ImmutableDict(Base.ImmutableDict{DataType, Any}(), _BuiltFeatures => (; folds = _FOLDS_BUILT[] != c0[1],
-                                                                                                bounded = _BOUNDED_BUILT[] != c0[2]))
+function _built_metadata(c0)
+    return Base.ImmutableDict(Base.ImmutableDict{DataType, Any}(), _BuiltFeatures => (; folds = _FOLDS_BUILT[] != c0[1],
+        bounded = _BOUNDED_BUILT[] != c0[2]))
+end
 """Whether `sys` may contain feature `k` (`:folds`, `:bounded`): `false` only if its constructor built none."""
 function _may_have(sys, k::Symbol)
     m = get(_p(sys, :metadata), _BuiltFeatures, nothing)

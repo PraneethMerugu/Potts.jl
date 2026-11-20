@@ -45,10 +45,10 @@ module FdPDE
     domain_word() = (DW = domain(X...); pdesys([Dt(DW) ~ 0.1 * laplacian(DW)], [ic(domain)], (9, 9), [DW]))
     tab() = (@parameters Dc = 0.2; field1(Dc * laplacian(C) - DK * C, (10, 8), [Dc]; c0 = 1.0, dvs = [C, DK]))
     gate() = (@parameters Dc = 1.0 t0 = 1.0; field1(ifelse(MCS >= t0, Dc * laplacian(C), 0.0), (12, 10), [Dc, t0]))
-    computed_face() = (
-        @parameters Dc = 0.2 g1 = 1.0 g2 = 2.0 g = g1 + g2;
-        field1(Dc * laplacian(C), (8, 8), [Dc, g1, g2, g]; bcs = [c(t, 0, y) ~ g])
-    )
+    function computed_face()
+        @parameters Dc = 0.2 g1 = 1.0 g2 = 2.0 g = g1 + g2
+        return field1(Dc * laplacian(C), (8, 8), [Dc, g1, g2, g]; bcs = [c(t, 0, y) ~ g])
+    end
     expr_face() = (@parameters Dc = 0.2 g1 = 1.0 g2 = 2.0; field1(Dc * laplacian(C), (8, 8), [Dc, g1, g2]; bcs = [c(t, 0, y) ~ g1 + g2]))
     kind_nonlinear() = (@parameters Dc = 0.2; field1(Dc * laplacian(C) - C^2 * ifelse(K1, 1.0, 0.0), (8, 8), [Dc]; dvs = [C, K1]))
     divk() = (@parameters Dc = 0.2; field1(DivKGrad(:harmonic)(Dc, C), (8, 8), [Dc]))
@@ -107,23 +107,27 @@ end
 
 fd_empty(dims) = [ownership => zeros(Int32, dims...), kind => Symbol[]]
 fd_rand(dims) = rand(StableRNG(7), dims...)
-fd_mcs(prob, n; alg = SequentialCPM()) = (
-    integ = init(prob, alg; save_start = false);
-    [(step!(integ); copy(Array(current_state(integ).site.c))) for _ in 1:n]
-)
+function fd_mcs(prob, n; alg = SequentialCPM())
+    integ = init(prob, alg; save_start = false)
+    return [(step!(integ); copy(Array(current_state(integ).site.c))) for _ in 1:n]
+end
 fd_source_op(dims) = (σ = zeros(Int32, dims...); σ[4:6, 3:5] .= 1; [ownership => σ, kind => [:A]])
-fd_err(f) = try
-    f(); nothing
-catch e
-    sprint(showerror, e)
+function fd_err(f)
+    return try
+            f(); nothing
+        catch e
+            sprint(showerror, e)
+        end
 end
 fd_n(integ, j = 1) = CorePotts._runtime(getfield(integ.ctx, Symbol(:__fields, j))).n
 fdvar(sys, n) = only(filter(x -> string(x) in (n, n * "(t)"), Potts.declared_variables(sys)))
-fdargerr(f) = try
-    f(); ""
-catch err
-    err isa ArgumentError || rethrow()
-    replace(sprint(showerror, err), r"\s+" => " ")
+function fdargerr(f)
+    return try
+            f(); ""
+        catch err
+            err isa ArgumentError || rethrow()
+            replace(sprint(showerror, err), r"\s+" => " ")
+        end
 end
 
 const FD_HEX6 = ((1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1))

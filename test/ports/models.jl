@@ -3,8 +3,9 @@
 using CorePotts, StaticArrays
 
 endo(st, c) = c != 0 && @inbounds(st.cell.kind[c]) == 1
-one_arc_connectivity(st, p, prop, ctx) =
-    endo(st, prop.old) ? locally_connected(st.ownership, ctx, prop) : true
+function one_arc_connectivity(st, p, prop, ctx)
+    return endo(st, prop.old) ? locally_connected(st.ownership, ctx, prop) : true
+end
 
 # --- Merks et al. (2006) vasculogenesis (D-049), 12×12 closed ----------------------------
 function merks_delta_H(st, p, prop, ctx)
@@ -36,10 +37,13 @@ function port_laplacian(c, lat, i)
     end
     return acc
 end
-merks_rate(st, p, ctx, i, c) =
-    p.D * port_laplacian(c, ctx.lattice, i) - p.k * @inbounds(c[i]) * (owner_kind(st, i) == 0) + p.s * (owner_kind(st, i) == 1)
-merks_substep!(st, p, ctx, key, mcs, i) =
-    (@inbounds st.site.c_next[i] = max(st.site.c[i] + 0.5 * merks_rate(st, p, ctx, i, st.site.c), 0.0); nothing)
+function merks_rate(st, p, ctx, i, c)
+    return p.D * port_laplacian(c, ctx.lattice, i) - p.k * @inbounds(c[i]) * (owner_kind(st, i) == 0) + p.s * (owner_kind(st, i) == 1)
+end
+function merks_substep!(st, p, ctx, key, mcs, i)
+    @inbounds st.site.c_next[i] = max(st.site.c[i] + 0.5 * merks_rate(st, p, ctx, i, st.site.c), 0.0)
+    return nothing
+end
 merks_temperature(st, p, prop, ctx) = p.T
 
 const MERKS_PORT_P = (; J = SMatrix{2, 2}(0.0, 5.0, 5.0, 8.0), λ = 2.0, V0 = 9.0, λL = 1.0, L = 5.0, χ = 50.0,
@@ -73,8 +77,10 @@ function wortel_commit!(st, p, prop, ctx)
     @inbounds st.site.act[prop.target] = prop.new != 0 ? p.maxact : zero(p.maxact)
     return nothing
 end
-decay_act!(st, p, ctx, key, mcs, i) =
-    (@inbounds st.site.act[i] = max(st.site.act[i] - one(p.maxact), zero(p.maxact)); nothing)
+function decay_act!(st, p, ctx, key, mcs, i)
+    @inbounds st.site.act[i] = max(st.site.act[i] - one(p.maxact), zero(p.maxact))
+    return nothing
+end
 
 const WORTEL_PORT_P = (; J = SMatrix{2, 2}(0.0, 10.0, 10.0, 20.0), λ = 5.0, V0 = 16.0, λs = 0.5,
     S0 = 24.0, λact = 40.0, maxact = 10.0, T = 10.0)
@@ -91,11 +97,16 @@ function wortel_problem(; tspan = (0, 40), seed = 0)
 end
 
 # --- OpenVT monolayer with one scheduled division, 12×8 closed --------------------------
-openvt_trigger(st, p, ctx, key, mcs, c) =
-    mcs == 0 && @inbounds(st.cell.volume[c]) >= 8 ? EVENT_DIVIDE : EVENT_NONE   # AtMCS(1)
+function openvt_trigger(st, p, ctx, key, mcs, c)
+    return mcs == 0 && @inbounds(st.cell.volume[c]) >= 8 ? EVENT_DIVIDE : EVENT_NONE
+end   # AtMCS(1)
 openvt_normal(st, p, ctx, key, mcs, c) = (1.0, 0.0)
-openvt_split!(st, p, ctx, key, mcs, parent, daughter) =
-    (m = st.cell.mass[parent] / 2; st.cell.mass[parent] = m; st.cell.mass[daughter] = m; nothing)
+function openvt_split!(st, p, ctx, key, mcs, parent, daughter)
+    m = st.cell.mass[parent] / 2
+    st.cell.mass[parent] = m
+    st.cell.mass[daughter] = m
+    return nothing
+end
 function openvt_delta_H(st, p, prop, ctx)
     J(a, b) = (a == 0 || b == 0) ? p.Jm : p.Jt
     E(v, c) = p.λ * (v - p.V0)^2

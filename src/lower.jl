@@ -246,13 +246,14 @@ end
 
 # The read of site variable `i` at site `j`. A `Coarse(k)` field holds one value per node
 # of its grid: the site reads the node whose block holds it
-_site_read(i::Entity, j) = (L = get(i.options, :lattice_level, nothing);
-                            if L === nothing
-                                :(@inbounds st.site.$(i.name)[$j])
-                            else
-                                :(@inbounds st.site.$(i.name)[Potts._coarse_site($j, size(st.ownership), $(trailing_zeros(L.k)))])
-                            end
-)
+function _site_read(i::Entity, j)
+    L = get(i.options, :lattice_level, nothing)
+    return if L === nothing
+            :(@inbounds st.site.$(i.name)[$j])
+        else
+            :(@inbounds st.site.$(i.name)[Potts._coarse_site($j, size(st.ownership), $(trailing_zeros(L.k)))])
+        end
+end
 """
     _coarse_site(j, dims, s) -> Int
 
@@ -367,9 +368,11 @@ function _integrals_folds(sys::PottsSystem; observed = false)
 end
 
 """Largest lag `k` of `Pre(x, k)` per site/model variable name in the model's statements."""
-_history_depths(sys::PottsSystem) = _history_depths(Any[(u.eq.rhs for u in _p(sys, :updates))..., (eq.rhs for eq in _p(sys, :equations))...,
-    (d.when for d in _p(sys, :divisions))..., (r for d in _p(sys, :divisions) for (_, r) in d.rules if !(r isa Split))...,
-    (r.when for r in _p(sys, :link_rules))..., (x for b in _p(sys, :discrete) for x in b.next)...])
+function _history_depths(sys::PottsSystem)
+    return _history_depths(Any[(u.eq.rhs for u in _p(sys, :updates))..., (eq.rhs for eq in _p(sys, :equations))...,
+        (d.when for d in _p(sys, :divisions))..., (r for d in _p(sys, :divisions) for (_, r) in d.rules if !(r isa Split))...,
+        (r.when for r in _p(sys, :link_rules))..., (x for b in _p(sys, :discrete) for x in b.next)...])
+end
 function _history_depths(xs::Vector{Any})
     depths = Dict{Symbol, Int}()
     for x in xs
@@ -1066,5 +1069,9 @@ end
 
 _has_op(x, op) = (found = Ref(false); _walk(y -> (iscall(y) && operation(y) === op && (found[] = true)), x); found[])
 # whether `x` reads `connected(…; rule = Global(…))`
-_reads_global(x) = (found = Ref(false); _walk(y -> (iscall(y) && operation(y) === _connected &&
-    _global_rule(Int(SymbolicUtils.unwrap_const(_unwrap(arguments(y)[2])))) !== nothing && (found[] = true)), x); found[])
+function _reads_global(x)
+    found = Ref(false)
+    _walk(y -> (iscall(y) && operation(y) === _connected &&
+        _global_rule(Int(SymbolicUtils.unwrap_const(_unwrap(arguments(y)[2])))) !== nothing && (found[] = true)), x)
+    return found[]
+end

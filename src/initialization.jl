@@ -57,8 +57,10 @@ function initialization_system(c::CompiledPottsSystem, scope::Symbol)
     s = get(getfield(c, :initialization), scope, nothing)
     return s === nothing ? nothing : s.template
 end
-initialization_system(sys::PottsSystem, ::Symbol) = throw(ArgumentError(
-    "initialization_system: `$(nameof(sys))` has not been compiled; call `initialization_system(mtkcompile(sys), scope)`"))
+function initialization_system(sys::PottsSystem, ::Symbol)
+    throw(ArgumentError(
+        "initialization_system: `$(nameof(sys))` has not been compiled; call `initialization_system(mtkcompile(sys), scope)`"))
+end
 
 """One scope's `@initialization_equations`, compiled (`_compile_initialization`)."""
 struct _InitScope
@@ -556,13 +558,17 @@ function _initialize_scope!(c::CompiledPottsSystem, scope, s, conds, opd, builti
     else
         ""
     end
-    failed(k, why) = throw(ArgumentError(
-        "initialization of $(entity(k)) found no solution for $names ($why); check $conditions and the guesses$hint"))
-    solving(f, k) = try
-        f()
-    catch e
-        (isfatal(e) || e isa Union{ArgumentError, PottsCompileError}) && rethrow()
-        failed(k, "the solve failed: $(first(sprint(showerror, e), 300))")
+    function failed(k, why)
+        throw(ArgumentError(
+            "initialization of $(entity(k)) found no solution for $names ($why); check $conditions and the guesses$hint"))
+    end
+    function solving(f, k)
+        return try
+                f()
+            catch e
+                (isfatal(e) || e isa Union{ArgumentError, PottsCompileError}) && rethrow()
+                failed(k, "the solve failed: $(first(sprint(showerror, e), 300))")
+            end
     end
     for k in 1:n
         pk = vals(k)
@@ -637,13 +643,17 @@ end
 const _INIT_FD = cbrt(eps(Float64))
 # central differences, the step `_INIT_FD` relative to each value and at least `_INIT_FD * scale`
 # (one concrete solver type for every scale, compiled once)
-_init_solver(scale::Float64) = SimpleNewtonRaphson(;
-    autodiff = AutoFiniteDiff(; fdtype = Val(:central), relstep = _INIT_FD, absstep = _INIT_FD * scale))
+function _init_solver(scale::Float64)
+    return SimpleNewtonRaphson(;
+        autodiff = AutoFiniteDiff(; fdtype = Val(:central), relstep = _INIT_FD, absstep = _INIT_FD * scale))
+end
 const _INIT_SOLVER = _init_solver(1.0)
 # the scale of the step: the smallest nonzero scale among the values, each its magnitude or its
 # guess's (a value converging to 0 keeps its guess's scale), 1 when all are zero
-_init_step(x, g) = (s = minimum((m for (v, w) in zip(x, g) for m in (max(abs(v), abs(w)),) if m != 0); init = Inf);
-                    isfinite(s) ? Float64(s) : 1.0)
+function _init_step(x, g)
+    s = minimum((m for (v, w) in zip(x, g) for m in (max(abs(v), abs(w)),) if m != 0); init = Inf)
+    return isfinite(s) ? Float64(s) : 1.0
+end
 const _INIT_NEWTON_RTOL = 1.0e-13
 const _INIT_RTOL = 1.0e-9
 const _INIT_ROUNDS = 6

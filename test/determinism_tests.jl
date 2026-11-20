@@ -108,9 +108,11 @@ end
     fpB = PottsProblem(DetModelB(; name = :b), [ownership => σ, kind => [:alpha]], (0, 2)).f.fingerprint
     println(repr(fpA), " ", repr(fpB))
     """
-    run_order(defs) = split(strip(read(
-        `$(Base.julia_cmd()) --startup-file=no --project=$proj -e $("using Potts\n" * defs * eval_tail)`,
-        String)))
+    function run_order(defs)
+        return split(strip(read(
+            `$(Base.julia_cmd()) --startup-file=no --project=$proj -e $("using Potts\n" * defs * eval_tail)`,
+            String)))
+    end
     ab = run_order(def_A * def_B)
     ba = run_order(def_B * def_A)
     uab = run_order(def_U * def_A * def_B)

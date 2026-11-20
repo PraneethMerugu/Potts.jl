@@ -48,10 +48,12 @@ end
         t = Potts.t
         σ = zeros(Int32, 10, 10); σ[3:5, 3:5] .= 1
         op = [ownership => σ, kind => [:A]]
-        run(sys; with_obs = false) = solve(
-            PottsProblem(BindParity(; name = :bp, comp_sys = sys, with_obs), op, (0, 2)),
-            SequentialCPM(),
-        )
+        function run(sys; with_obs = false)
+            return solve(
+                    PottsProblem(BindParity(; name = :bp, comp_sys = sys, with_obs), op, (0, 2)),
+                    SequentialCPM(),
+                )
+        end
         MTKB.@parameters k = 0.3
         MTKB.@parameters k2 = 2k
         MTKB.@parameters k3 = 3k2

@@ -117,11 +117,13 @@ function run_potts_subgroup(groups, name::AbstractString)
     want = Symbol.(get(opts, "tags", String[]))
     excl = Symbol.(get(opts, "exclude_tags", String[]))
     rocm = get(ENV, "POTTS_GPU", "") == "rocm"
-    keep(ti) = :potts in ti.tags &&
-        (isempty(want) || any(in(ti.tags), want)) &&
-        !any(in(ti.tags), excl) &&
-        (:multithreaded in want || !(:multithreaded in ti.tags)) &&
-        (rocm || !(:rocm in ti.tags))
+    function keep(ti)
+        return :potts in ti.tags &&
+            (isempty(want) || any(in(ti.tags), want)) &&
+            !any(in(ti.tags), excl) &&
+            (:multithreaded in want || !(:multithreaded in ti.tags)) &&
+            (rocm || !(:rocm in ti.tags))
+    end
     @info "Running Potts group $target" tags = want
     return PottsRTI._two_passes(keep, PottsRTI.NWORKERS)
 end

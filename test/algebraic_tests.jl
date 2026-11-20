@@ -15,11 +15,13 @@ alg_op(extra...) = Any[ownership => alg_sigma(), kind => [1, 1], extra...]
 
 alg_names(xs) = Set{Symbol}(Potts.SymbolicIndexingInterface.getname(x) for x in xs)
 
-alg_error(f, words...) = try
-    f()
-    false
-catch err
-    err isa Union{ArgumentError, Potts.PottsCompileError}
+function alg_error(f, words...)
+    return try
+            f()
+            false
+        catch err
+            err isa Union{ArgumentError, Potts.PottsCompileError}
+        end
 end
 
 

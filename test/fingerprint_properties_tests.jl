@@ -100,11 +100,12 @@ end
             return [ownership => σ, kind => [:cell]]
         end
 
-        make_base(; sys = FPBase(; name = :fp), dims = (12, 12), kw...) =
-            PottsProblem(
-            sys, base_state(dims), (0, 4);
-            ode_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0), kw...
-        )
+        function make_base(; sys = FPBase(; name = :fp), dims = (12, 12), kw...)
+            return PottsProblem(
+                    sys, base_state(dims), (0, 4);
+                    ode_solver = ExplicitEuler(substeps = 2, lower_bound = 0.0), kw...
+                )
+        end
 
         res = fp_props(
             make_base;
@@ -316,16 +317,18 @@ end
         fp_m = PottsProblem(sys_m, op, (0, 2)).f.fingerprint
         fp_b = PottsProblem(sys_b, op, (0, 2)).f.fingerprint
         @test fp_m != fp_b
-        naive_no_law(sys) = hash(
-            (
-                nameof(sys),
-                string.(Potts.declared_parameters(sys)),
-                Potts.part(sys).kinds,
-                string(Potts.part(sys).lattice),
-                string.(Potts.part(sys).energies),
-                string(Potts.part(sys).relations),
-            )
-        )
+        function naive_no_law(sys)
+            return hash(
+                    (
+                        nameof(sys),
+                        string.(Potts.declared_parameters(sys)),
+                        Potts.part(sys).kinds,
+                        string(Potts.part(sys).lattice),
+                        string.(Potts.part(sys).energies),
+                        string(Potts.part(sys).relations),
+                    )
+                )
+        end
         @test naive_no_law(sys_m) == naive_no_law(sys_b)   # negative control: omitting law collides
 
         # Non-default proposal relation must enter the fingerprint
@@ -333,16 +336,18 @@ end
         sys_mo = NCBase(; name = :m, proposal_rel = Moore(1))
         @test PottsProblem(sys_vn, op, (0, 2)).f.fingerprint !=
             PottsProblem(sys_mo, op, (0, 2)).f.fingerprint
-        naive_no_prop(sys) = hash(
-            (
-                nameof(sys),
-                string.(Potts.declared_parameters(sys)),
-                Potts.part(sys).kinds,
-                string(Potts.part(sys).lattice),
-                string.(Potts.part(sys).energies),
-                string(Potts.part(sys).sweep),
-            )
-        )
+        function naive_no_prop(sys)
+            return hash(
+                    (
+                        nameof(sys),
+                        string.(Potts.declared_parameters(sys)),
+                        Potts.part(sys).kinds,
+                        string(Potts.part(sys).lattice),
+                        string.(Potts.part(sys).energies),
+                        string(Potts.part(sys).sweep),
+                    )
+                )
+        end
         @test naive_no_prop(sys_vn) == naive_no_prop(sys_mo)  # negative control: omitting proposal collides
 
         # Phase cadence (every = 1 vs every = 2) must enter the fingerprint

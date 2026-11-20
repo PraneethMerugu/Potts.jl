@@ -70,12 +70,14 @@ end
         @test abs(sum(sol.u[end].site.c) - sum(c0)) < 1.0e-11 * sum(c0)
         @test maximum(abs.(sol.u[end].site.c .- c0)) > 1.0e-3                              # the field moved
         c1 = [1.0 + sin(i) * cos(2j) for i in 1:12, j in 1:10]
-        closed(k) = solve(
-            PottsProblem(
-                FdClosed(; name = :f), [fd_empty((12, 10)); :c => c1; :k => k], (0, 5);
-                field_solver = ExplicitEuler()
-            ), SequentialCPM()
-        ).u[end].site.c
+        function closed(k)
+            return solve(
+                    PottsProblem(
+                        FdClosed(; name = :f), [fd_empty((12, 10)); :c => c1; :k => k], (0, 5);
+                        field_solver = ExplicitEuler()
+                    ), SequentialCPM()
+                ).u[end].site.c
+        end
         @test abs(sum(closed(0.0)) - sum(c1)) < 1.0e-11 * sum(c1)
         @test sum(closed(0.05)) < 0.9 * sum(c1)                                          # control: a sink
     end

@@ -68,18 +68,20 @@ end
 
 @testitem "MTK-native: a kind set in @equations is `ismember`, never `∈`" setup = [MTKNativeTests] tags = [:potts, :mtk_native] begin
     @testset "MTK-native: a kind set in @equations is `ismember`, never `∈`" begin
-        eq_check(M, eq) = mn_error(
-            () -> Potts._potts_model(
-                M, quote
-                    @kinds medium tip stalk fluid endothelial = (tip, stalk)
-                    @variables q(cell) = 0.0
-                    @lattice Lattice((12, 12))
-                    @energy cells => (volume - 9)^2
-                    @equations $eq
-                    @sweep Metropolis(; temperature = 2.0)
-                end, @__MODULE__
-            )
-        )
+        function eq_check(M, eq)
+            return mn_error(
+                    () -> Potts._potts_model(
+                        M, quote
+                            @kinds medium tip stalk fluid endothelial = (tip, stalk)
+                            @variables q(cell) = 0.0
+                            @lattice Lattice((12, 12))
+                            @energy cells => (volume - 9)^2
+                            @equations $eq
+                            @sweep Metropolis(; temperature = 2.0)
+                        end, @__MODULE__
+                    )
+                )
+        end
         @test has(eq_check(:MNIn, :(D(q) ~ 0.25 * (kind ∈ endothelial))), "@equations", "∈", "ismember(kind, endothelial)")
         @test has(eq_check(:MNNotIn, :(D(q) ~ 0.25 * (kind ∉ endothelial))), "!ismember(kind, endothelial)")
         @test has(eq_check(:MNInTuple, :(D(q) ~ 0.25 * (kind ∈ (tip, stalk)))), "ismember(kind, (tip, stalk))")
@@ -94,10 +96,10 @@ end
 
 @testitem "MTK-native: `ismember` in a field rate is analysed as its `|` of equalities" setup = [MTKNativeTests] tags = [:potts, :mtk_native] begin
     @testset "MTK-native: `ismember` in a field rate is analysed as its `|` of equalities" begin
-        field_ast(mode) = (
-            g = generated_code(MNFieldIsMemberCase(; name = :m, mode); field_solver = ExplicitEuler(substeps = 2));
-            (_strip_ast(g.delta_H), _strip_ast(g.commit!), _strip_ast(g.phases))
-        )
+        function field_ast(mode)
+            g = generated_code(MNFieldIsMemberCase(; name = :m, mode); field_solver = ExplicitEuler(substeps = 2))
+            return (_strip_ast(g.delta_H), _strip_ast(g.commit!), _strip_ast(g.phases))
+        end
         @test field_ast(:rx_im) == field_ast(:rx_sp)
         @test field_ast(:diff_im) == field_ast(:diff_sp)
         # negative control: another reaction rate changes the AST (the comparison can fail)

@@ -50,10 +50,12 @@ function proposal_states(prob; mcs = (0, 5, 20), n = 400, rng = Xoshiro(11))
 end
 
 
-ctx_of(prob) = (;
-    lattice = prob.lattice, contact = prob.contact, prob.relations...,
-    (prob.spacing === nothing ? (;) : (; spacing = prob.spacing))...,
-)
+function ctx_of(prob)
+    return (;
+            lattice = prob.lattice, contact = prob.contact, prob.relations...,
+            (prob.spacing === nothing ? (;) : (; spacing = prob.spacing))...,
+        )
+end
 
 
 @potts_model Spring begin
@@ -617,11 +619,10 @@ function site_contact_state(dims; side = 4, rng = Xoshiro(3))
 end
 
 
-site_contact_problem(sys, dims; tspan = (0, 4), side = 4, kw...) =
-    (
-    (σ, kinds, cue) = site_contact_state(dims; side);
-    PottsProblem(sys, [ownership => σ, kind => kinds, :cue => cue], tspan; kw...)
-)
+function site_contact_problem(sys, dims; tspan = (0, 4), side = 4, kw...)
+    (σ, kinds, cue) = site_contact_state(dims; side)
+    return PottsProblem(sys, [ownership => σ, kind => kinds, :cue => cue], tspan; kw...)
+end
 
 
 """ΔH of random copies against H(after) − H(before); `dH` defaults to the generated ΔH."""
@@ -741,10 +742,11 @@ function rule_cadence_state(dims; w = 12)
     return σ, [:ka, :kb]
 end
 
-live_kinds(u) = (
-    v = Array(u.cell.volume); k = Array(u.cell.kind);
-    (count(c -> v[c] > 0 && k[c] == 1, eachindex(v)), count(c -> v[c] > 0 && k[c] == 2, eachindex(v)))
-)
+function live_kinds(u)
+    v = Array(u.cell.volume)
+    k = Array(u.cell.kind)
+    return (count(c -> v[c] > 0 && k[c] == 1, eachindex(v)), count(c -> v[c] > 0 && k[c] == 2, eachindex(v)))
+end
 
 # every live cell divides at each checked MCS: 2^(checked MCS in 0:N-1) cells
 cadence_oracle(n, N) = 2^count(m -> m % n == 0, 0:(N - 1))
@@ -752,24 +754,30 @@ cadence_oracle(n, N) = 2^count(m -> m % n == 0, 0:(N - 1))
 _has_ast(ex, pred) = pred(ex) || (ex isa Expr && any(a -> _has_ast(a, pred), ex.args))
 _count_ast(ex, pred) = (pred(ex) ? 1 : 0) + (ex isa Expr ? sum(a -> _count_ast(a, pred), ex.args; init = 0) : 0)
 _trigger_ast(sys) = Potts.generated_code(sys).lifecycle.trigger
-_has_modulo_gate(ex, n) = _has_ast(
-    ex,
-    x -> x isa Expr && x.head === :call && length(x.args) == 3 && x.args[1] === :(==) && x.args[3] == 0 &&
-        x.args[2] isa Expr && x.args[2].head === :call && length(x.args[2].args) == 3 &&
-        x.args[2].args[1] === :% && x.args[2].args[2] === :mcs && x.args[2].args[3] == n
-)
-_has_any_modulo_gate(ex) = _has_ast(
-    ex,
-    x -> x isa Expr && x.head === :call && length(x.args) == 3 &&
-        x.args[1] === :% && x.args[2] === :mcs
-)
+function _has_modulo_gate(ex, n)
+    return _has_ast(
+            ex,
+            x -> x isa Expr && x.head === :call && length(x.args) == 3 && x.args[1] === :(==) && x.args[3] == 0 &&
+                x.args[2] isa Expr && x.args[2].head === :call && length(x.args[2].args) == 3 &&
+                x.args[2].args[1] === :% && x.args[2].args[2] === :mcs && x.args[2].args[3] == n
+        )
+end
+function _has_any_modulo_gate(ex)
+    return _has_ast(
+            ex,
+            x -> x isa Expr && x.head === :call && length(x.args) == 3 &&
+                x.args[1] === :% && x.args[2] === :mcs
+        )
+end
 _has_ruled_event(ex) = _has_ast(ex, x -> x isa Expr && x.head === :call && x.args[1] == :(CorePotts.ruled_event))
 _has_true_and(ex) = _has_ast(ex, x -> x isa Expr && x.head === :&& && !isempty(x.args) && x.args[1] === true)
-_has_ruled_divide(sys) = any(
-    e -> e isa Expr && e.head === :(->) && e.args[1] isa Expr && e.args[1].head === :tuple &&
-        :daughter in e.args[1].args && :rule in e.args[1].args,
-    Potts.generated_code(sys).phases
-)
+function _has_ruled_divide(sys)
+    return any(
+            e -> e isa Expr && e.head === :(->) && e.args[1] isa Expr && e.args[1].head === :tuple &&
+                :daughter in e.args[1].args && :rule in e.args[1].args,
+            Potts.generated_code(sys).phases
+        )
+end
 
 
 # Only the rule that fired writes the daughters' state: rules sharing a kind
@@ -880,13 +888,14 @@ for f in (Potts.population, Potts.gather, Potts.value_at, Potts.cell_integral)
     end
 end
 
-with_hash_salt(f, s) = (
-    HASH_SALT[] = s; try
-        f()
-    finally
-        HASH_SALT[] = 0
-    end
-)
+function with_hash_salt(f, s)
+    HASH_SALT[] = s
+    return try
+            f()
+        finally
+            HASH_SALT[] = 0
+        end
+end
 
 
 function tie_code(M, solver)

@@ -28,10 +28,12 @@ end
 @testitem "layouts: invalid arguments" setup = [LayoutsSetup] tags = [:potts, :layouts] begin
     using Potts.Layouts
     @testset "layouts: invalid arguments" begin
-        err(f) = try
-            f(); ""
-        catch e
-            e isa ArgumentError ? e.msg : rethrow()
+        function err(f)
+            return try
+                    f(); ""
+                catch e
+                    e isa ArgumentError ? e.msg : rethrow()
+                end
         end
         @test_throws ArgumentError layout(Tiling((2, 2); region = (1:5, 1:11), kinds = [:a]), (10, 10))
         @test_throws ArgumentError layout(Tiling((2, 2); region = (0:5, 1:5), kinds = [:a]), (10, 10))
@@ -108,8 +110,10 @@ end
         σ = _op(layout(Scattered(8, (2, 2); kinds = [:a], seed = 3, gap = 0), (8, 8)), ownership)
         @test maximum(σ) == 8 && all(c -> length(_sites(σ, c)) == 4, 1:8)
         # deterministic in the seed (StableRNG): the same seed gives the same corners, another differs
-        corners(seed) = (σ = _op(layout(Scattered(3, (2, 2); kinds = [:a], seed), (30, 30)), ownership);
-            [Tuple(minimum(_sites(σ, c))) for c in 1:3])
+        function corners(seed)
+            σ = _op(layout(Scattered(3, (2, 2); kinds = [:a], seed), (30, 30)), ownership)
+            return [Tuple(minimum(_sites(σ, c))) for c in 1:3]
+        end
         @test corners(7) == corners(7)
         @test corners(7) != corners(8)
         ly_throws(
@@ -239,9 +243,10 @@ end
         )
         # hex (axial indices): a concave domain (a disk minus a wedge) gets the oracle ring, and
         # no in-domain site off the ring has a Hex(1) neighbour outside the domain (it seals)
-        domain_frame(mask, bnd, w; geometry = Potts.CorePotts.Square()) =
-            _op(layout(Frame(:w; width = w), Potts.lattice_spec(size(mask); boundary = bnd, domain = mask, geometry)),
+        function domain_frame(mask, bnd, w; geometry = Potts.CorePotts.Square())
+            return _op(layout(Frame(:w; width = w), Potts.lattice_spec(size(mask); boundary = bnd, domain = mask, geometry)),
                 ownership) .== 1
+        end
         pacman = [(x - 9)^2 + (y - 9)^2 <= 49 && !(x > 9 && abs(y - 9) <= 2) for x in 1:18, y in 1:18]
         hexlat = Lattice((18, 18); boundary = Closed(), geometry = Hexagonal())
         hoffs = Potts.CorePotts.relation(Hex(1), hexlat).offsets

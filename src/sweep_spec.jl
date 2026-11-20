@@ -174,5 +174,7 @@ end
 # `CompiledPottsSystem` reads every key from the authored model's inner System; it is read-only.
 SymbolicUtils.getmetadata(c::CompiledPottsSystem, k::DataType, default) = SymbolicUtils.getmetadata(inner(getfield(c, :authored)), k, default)
 SymbolicUtils.hasmetadata(c::CompiledPottsSystem, k::DataType) = SymbolicUtils.hasmetadata(inner(getfield(c, :authored)), k)
-SymbolicUtils.setmetadata(::CompiledPottsSystem, k::DataType, v) = throw(ArgumentError(
-    "setmetadata(…, $k, …) on a CompiledPottsSystem: a compiled system is read-only; set metadata before mtkcompile"))
+function SymbolicUtils.setmetadata(::CompiledPottsSystem, k::DataType, v)
+    throw(ArgumentError(
+        "setmetadata(…, $k, …) on a CompiledPottsSystem: a compiled system is read-only; set metadata before mtkcompile"))
+end

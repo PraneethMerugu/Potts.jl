@@ -128,10 +128,12 @@ end
         # independent oracle: total energy minus the link-free model is Σ over both stores
         bare = PottsProblem(ChainNoLinks(; name = :bare), [ownership => chain_state()], (0, 20))
         u = solve(prob, SequentialCPM()).u[end]
-        link_energy(store, k, ℓ) = sum(
-            k * (CorePotts.centroid_distance(Float64, u.cell, prob.lattice, a, b) - ℓ)^2
-                for (a, b) in store
-        )
+        function link_energy(store, k, ℓ)
+            return sum(
+                    k * (CorePotts.centroid_distance(Float64, u.cell, prob.lattice, a, b) - ℓ)^2
+                        for (a, b) in store
+                )
+        end
         oracle = link_energy(((1, 2), (3, 4)), 0.7, 6.0) + link_energy(((2, 3), (1, 4)), 1.3, 9.0)
         diff = total_energy(prob, u) - total_energy(bare, u)
         @test diff ≈ oracle rtol = 1.0e-10
@@ -235,11 +237,13 @@ end
     @testset "programmatic extend: a re-declared edge variable keeps the base's relationship" begin
         base = Spring(; name = :s)                       # `rest(edge)`: `bond`
         rest_sym = only(Potts.Symbolics.@variables rest(Potts.t))
-        ext(scope; rels = [Potts.relationship(:tether; capacity = 1)]) = Potts.PottsSystem(;
-            name = :x,
-            kinds = Potts._p(base, :kinds), lattice = Potts.lattice(base), sweep = Potts._p(base, :sweep), relationships = rels,
-            variables = Any[Potts.variable(rest_sym, scope; default = 9.0)]
-        )
+        function ext(scope; rels = [Potts.relationship(:tether; capacity = 1)])
+            return Potts.PottsSystem(;
+                    name = :x,
+                    kinds = Potts._p(base, :kinds), lattice = Potts.lattice(base), sweep = Potts._p(base, :sweep), relationships = rels,
+                    variables = Any[Potts.variable(rest_sym, scope; default = 9.0)]
+                )
+        end
         σ = zeros(Int32, 60, 30); σ[5:10, 12:17] .= 1; σ[20:25, 12:17] .= 2
         op = [ownership => σ, kind => [:blob, :blob], :bond => [(1, 2)]]
         for (scope, rels) in (

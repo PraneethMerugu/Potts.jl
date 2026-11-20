@@ -80,10 +80,12 @@ end
     @schedule repeat(4, sweep(fraction = 1 // 4), fields)
 end
 
-fd_chemo_op() = (
-    σ = zeros(Int32, 24, 20); σ[5:8, 5:8] .= 1; σ[14:17, 10:13] .= 2;
-    [ownership => σ, kind => [:A, :A], :c => [0.05 * i for i in 1:24, j in 1:20]]
-)
+function fd_chemo_op()
+    σ = zeros(Int32, 24, 20)
+    σ[5:8, 5:8] .= 1
+    σ[14:17, 10:13] .= 2
+    return [ownership => σ, kind => [:A, :A], :c => [0.05 * i for i in 1:24, j in 1:20]]
+end
 
 @potts_model MomentVetoBase begin
     @kinds medium A

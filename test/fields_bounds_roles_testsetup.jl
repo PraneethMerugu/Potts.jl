@@ -22,10 +22,10 @@ module FbrPDE
     dir3() = bounded(c -> DivKGrad(:harmonic)(c, c); bcs = [c(t, 16, y) ~ 3.0])
     burgers() = bounded(c -> -Advect(Upwind1())([c, 0.0], c); dims = (32, 32))
     iv_advect() = field1(0.1 * laplacian(C) - Advect(Upwind1())([0.05 * (1 + x), 0.0], C), (16, 16); c0 = 0.5)
-    drift() = (
-        @parameters Dc = 0.2 s = 1.0 k = 0.05;
-        bounded(c -> DivKGrad(:harmonic)(Dc * (1 + c), c) + s - k * c, 0.0; b = (0, 3), ps = [Dc, s, k])
-    )
+    function drift()
+        @parameters Dc = 0.2 s = 1.0 k = 0.05
+        return bounded(c -> DivKGrad(:harmonic)(Dc * (1 + c), c) + s - k * c, 0.0; b = (0, 3), ps = [Dc, s, k])
+    end
     function w_roles()
         @parameters Dc = 0.25
         @variables c(..) [lattice_storage = Float64] h(..) [lattice_storage = Float16] s(..) [lattice_storage = Float32]

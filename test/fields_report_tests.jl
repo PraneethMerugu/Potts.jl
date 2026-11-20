@@ -28,13 +28,17 @@ const lattice_domain = Potts.LatticePDE.lattice_domain
 const C, U, E = c(t, x, y), u(t, x, y), endo(t, x, y)
 # Merks' VEGF: secreted by the endothelial cells, decaying in the medium, `Do = 50` (the audit's
 # case: ⌈8 Do / 1.8⌉ = 223 substeps per MCS, 2026-10-18 usability audit, item 12)
-    vegf() = PDESystem(
-        [Dt(C) ~ Do * laplacian(C) + sc * E - ec * (1 - E) * C], [], lattice_domain(t, (x, y), (24, 20)), [t, x, y],
-    [C, E], [Do, sc, ec]; name = :vegf)
+    function vegf()
+        return PDESystem(
+                [Dt(C) ~ Do * laplacian(C) + sc * E - ec * (1 - E) * C], [], lattice_domain(t, (x, y), (24, 20)), [t, x, y],
+            [C, E], [Do, sc, ec]; name = :vegf)
+    end
 # two fields that read each other (a loop of two groups under `solvers`)
-    loop() = PDESystem(
-        [Dt(C) ~ Du * laplacian(C) + ka * U - 0.1 * C + sc * E, Dt(U) ~ -kb * U + 0.1 * C], [],
-    lattice_domain(t, (x, y), (24, 20)), [t, x, y], [C, U, E], [Du, ka, kb, sc]; name = :loop)
+    function loop()
+        return PDESystem(
+                [Dt(C) ~ Du * laplacian(C) + ka * U - 0.1 * C + sc * E, Dt(U) ~ -kb * U + 0.1 * C], [],
+            lattice_domain(t, (x, y), (24, 20)), [t, x, y], [C, U, E], [Du, ka, kb, sc]; name = :loop)
+    end
 end
 
 

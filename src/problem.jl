@@ -577,11 +577,13 @@ end
 # The fingerprint's structural part as a canonical string: the lattice (dims, boundaries,
 # domain, geometry), spacing, neighbourhood and scalar type by content. Hashing the objects
 # would fall back to `objectid` for package structs and tie the fingerprint to the build.
-_fingerprint_seed(sys::PottsSystem, T) = string(
-    "lattice=", _canonical_value(core_lattice(_p(sys, :lattice))),
-    ";spacing=", _canonical_value(_p(sys, :lattice).spacing), ";neighborhood=", _canonical_neighborhood(sys),
-    ";T=", string(T)
-)
+function _fingerprint_seed(sys::PottsSystem, T)
+    return string(
+            "lattice=", _canonical_value(core_lattice(_p(sys, :lattice))),
+            ";spacing=", _canonical_value(_p(sys, :lattice).spacing), ";neighborhood=", _canonical_neighborhood(sys),
+            ";T=", string(T)
+        )
+end
 # The neighbourhood by content. A neighbourhood that holds a compiler-generated name (an
 # anonymous weight, `Weighted(Moore(1), o -> 1 / norm(o))`) printed as `var"#24#25"`, a number
 # that depends on what was defined before it in the session, so it is written by its
@@ -641,8 +643,9 @@ function _track(track)
     return Tuple(track)
 end
 _track_names(f::CorePotts.CPMFunction) = f.track === nothing ? () : (:energy_change,)
-_track_names(prob::CorePotts.PottsProblem) =
-    (_track_names(prob.f)..., (haskey(prob.u0.model, REF_COUNTS) ? (:references,) : ())...)
+function _track_names(prob::CorePotts.PottsProblem)
+    return (_track_names(prob.f)..., (haskey(prob.u0.model, REF_COUNTS) ? (:references,) : ())...)
+end
 
 # The reference counters of a tracked problem (`track = (:references,)`, E4/E5): one `UInt32`
 # per term of `_ref_count_labels`, in `st.model`; removed from a state of an untracked one
@@ -1479,16 +1482,18 @@ end
 
 # Kinds that name clusters (`clusters(k)` terms and divisions): a cluster's root is chosen
 # among its members of these kinds, so the filters select it.
-_cluster_kinds(c::CompiledPottsSystem) = Tuple(
-    unique(
-        Iterators.flatten(
-            (
-                first.(getfield(c, :cluster_terms))...,
-                (d.domain.kinds for d in getfield(c, :divisions) if d.domain isa ClusterDomain)...,
+function _cluster_kinds(c::CompiledPottsSystem)
+    return Tuple(
+            unique(
+                Iterators.flatten(
+                    (
+                        first.(getfield(c, :cluster_terms))...,
+                        (d.domain.kinds for d in getfield(c, :divisions) if d.domain isa ClusterDomain)...,
+                    )
+                )
             )
         )
-    )
-)
+end
 
 # Sites of cells of frozen kinds never change owner (walls, obstacles).
 function _frozen_mask(sys::PottsSystem, st)
@@ -1509,11 +1514,13 @@ function _kind_index(sys::PottsSystem, k::Symbol)
 end
 
 # with the flood scratch of a model with whole-cell connectivity, exact (`GlobalExact`)
-_host_ctx(prob) = (;
-    lattice = prob.lattice, contact = prob.contact, prob.relations...,
-    (prob.spacing === nothing ? (;) : (; spacing = prob.spacing))...,
-    CorePotts.connectivity_ctx(CorePotts.CPU(), prob.f, prob.lattice, CorePotts.GlobalExact())...,
-)
+function _host_ctx(prob)
+    return (;
+            lattice = prob.lattice, contact = prob.contact, prob.relations...,
+            (prob.spacing === nothing ? (;) : (; spacing = prob.spacing))...,
+            CorePotts.connectivity_ctx(CorePotts.CPU(), prob.f, prob.lattice, CorePotts.GlobalExact())...,
+        )
+end
 
 """
     energy_change(prob, u, prop)
@@ -1600,8 +1607,9 @@ _model_info(x::Union{CorePotts.PottsProblem, CorePotts.PottsIntegrator}) = _mode
 _model_info(x) = throw(ArgumentError("remake_buffer: `$(nameof(typeof(x)))` does not describe a Potts model"))
 
 # `remake(prob; p = (λ = 3.0,))`: a NamedTuple is the map of its fields (D-115)
-CorePotts.remake_parameters(@nospecialize(info::PottsModelInfo), @nospecialize(prob), p::NamedTuple) =
-    CorePotts.remake_parameters(info, prob, _field_pairs(p))
+function CorePotts.remake_parameters(@nospecialize(info::PottsModelInfo), @nospecialize(prob), p::NamedTuple)
+    return CorePotts.remake_parameters(info, prob, _field_pairs(p))
+end
 
 # a whole parameter object gives its base values, and the computed parameters are derived again
 # from them (this amends D-115: a checkpoint's object restores bitwise, as the derivation is
@@ -1680,11 +1688,13 @@ function CorePotts.set_parameter(info::PottsModelInfo, p::PottsParameters, v, i:
     return _finish_parameters(info, p, q, Set([i]))
 end
 
-SymbolicIndexingInterface.setp(sys::PottsModelInfo, ps::Union{Tuple, AbstractVector}; run_hook = true) =
-    CorePotts.parameter_setter(sys, ps, run_hook)
+function SymbolicIndexingInterface.setp(sys::PottsModelInfo, ps::Union{Tuple, AbstractVector}; run_hook = true)
+    return CorePotts.parameter_setter(sys, ps, run_hook)
+end
 SymbolicIndexingInterface.setp(sys::PottsModelInfo, p; run_hook = true) = CorePotts.name_setter(sys, p, run_hook)
-SymbolicIndexingInterface.setsym(sys::PottsModelInfo, syms::Union{Tuple, AbstractVector}) =
-    CorePotts.symbol_setter(sys, syms)
+function SymbolicIndexingInterface.setsym(sys::PottsModelInfo, syms::Union{Tuple, AbstractVector})
+    return CorePotts.symbol_setter(sys, syms)
+end
 
 # `setp(integ, [x, y])`: every value set first, then one derivation for the whole change
 function CorePotts.set_parameters(info::PottsModelInfo, p::PottsParameters, vals, names)
@@ -1703,18 +1713,20 @@ end
 
 # `[frozen]` kinds: the mask follows the kinds, by CorePotts' standard rule (built on the
 # device after lifecycle events, D-081; `frozen_varies` follows from it)
-CorePotts.frozen_kinds(info::PottsModelInfo) =
-    isempty(_p(getfield(info.csys, :sys), :frozen_kinds)) ? nothing : Tuple(Int32.(_p(getfield(info.csys, :sys), :frozen_kinds)))
+function CorePotts.frozen_kinds(info::PottsModelInfo)
+    return isempty(_p(getfield(info.csys, :sys), :frozen_kinds)) ? nothing : Tuple(Int32.(_p(getfield(info.csys, :sys), :frozen_kinds)))
+end
 
 # a state given as such (`remake(prob; u0 = st)`, `reinit!(integ, st)`, a saved state of another
 # problem of the model): its values, laid out for this problem's ODE scratch
-CorePotts.remake_state(info::PottsModelInfo, prob, u0::CorePotts.CPMState, kw = prob.kwargs) =
-    _track_layout(
-    _ode_layout(
-        _reduce_layout(_convert_layout(_check_births(u0, info.csys), info.csys), info.csys), info.csys,
-        info.solvers
-    ), info.csys, _track_names(prob)
-)
+function CorePotts.remake_state(info::PottsModelInfo, prob, u0::CorePotts.CPMState, kw = prob.kwargs)
+    return _track_layout(
+            _ode_layout(
+                _reduce_layout(_convert_layout(_check_births(u0, info.csys), info.csys), info.csys), info.csys,
+                info.solvers
+            ), info.csys, _track_names(prob)
+        )
+end
 
 # `@convert` (D-233): the allocations deferred for want of a free slot and the entities
 # skipped for the Int32 moment scratch, read once per solve (as the lifecycle's deferrals)
@@ -1752,12 +1764,14 @@ function _check_births(st::CorePotts.CPMState, c::CompiledPottsSystem)
 end
 
 # a NamedTuple operating point is the map of its fields (D-115)
-CorePotts.remake_state(info::PottsModelInfo, prob, u0::NamedTuple, kw = prob.kwargs) =
-    CorePotts.remake_state(info, prob, _field_pairs(u0), kw)
+function CorePotts.remake_state(info::PottsModelInfo, prob, u0::NamedTuple, kw = prob.kwargs)
+    return CorePotts.remake_state(info, prob, _field_pairs(u0), kw)
+end
 
 # `u0 = nothing`/`missing` keeps the problem's state (laid out for this model's functions)
-CorePotts.remake_state(info::PottsModelInfo, prob, ::Union{Nothing, Missing}, kw = prob.kwargs) =
-    CorePotts.remake_state(info, prob, prob.u0, kw)
+function CorePotts.remake_state(info::PottsModelInfo, prob, ::Union{Nothing, Missing}, kw = prob.kwargs)
+    return CorePotts.remake_state(info, prob, prob.u0, kw)
+end
 
 function CorePotts.remake_state(info::PottsModelInfo, prob, u0, kw = prob.kwargs)
     _is_pairs(u0) && return CorePotts.remake_state(info, prob, Pair[x for x in u0], kw)

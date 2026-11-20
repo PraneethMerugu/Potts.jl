@@ -9,11 +9,13 @@ using Potts: CorePotts
 isdefined(@__MODULE__, :PottsDevices) || include(joinpath(@__DIR__, "shared", "devices.jl"))
 const EU_CP = Potts.CorePotts
 
-eu_error(f, words...) = try
-    f()
-    false
-catch err
-    err isa Union{ArgumentError, Potts.PottsCompileError}
+function eu_error(f, words...)
+    return try
+            f()
+            false
+        catch err
+            err isa Union{ArgumentError, Potts.PottsCompileError}
+        end
 end
 
 
@@ -24,10 +26,10 @@ function eu_state()
     return σ
 end
 
-eu_payload(cell, r, x, a, b) = (
-    k = EU_CP.link_slot(EU_CP.link_store(cell, r), a, b);
-    k == 0 ? nothing : Float64(Array(getproperty(cell, Symbol(:link_, x)))[k, a])
-)
+function eu_payload(cell, r, x, a, b)
+    k = EU_CP.link_slot(EU_CP.link_store(cell, r), a, b)
+    return k == 0 ? nothing : Float64(Array(getproperty(cell, Symbol(:link_, x)))[k, a])
+end
 
 
 # two relationships updated in one stage (one cadence): each from its own links and payload;

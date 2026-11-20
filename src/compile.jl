@@ -87,8 +87,9 @@ fields(c::CompiledPottsSystem) = fields(getfield(c, :sys))
 # `getproperty`), whatever its name: Potts reads the compiled payload with `getfield`, as MTK
 # reads a system's fields
 Base.getproperty(c::CompiledPottsSystem, n::Symbol) = getproperty(getfield(c, :authored), n)
-Base.propertynames(c::CompiledPottsSystem; private::Bool = false) =
-    private ? fieldnames(CompiledPottsSystem) : propertynames(getfield(c, :authored))
+function Base.propertynames(c::CompiledPottsSystem; private::Bool = false)
+    return private ? fieldnames(CompiledPottsSystem) : propertynames(getfield(c, :authored))
+end
 
 # MTK's accessors: the model's own (`authored`, before its components are lowered)
 _MTKB.get_systems(::CompiledPottsSystem) = _MTKB.AbstractSystem[]
@@ -110,25 +111,31 @@ inner(c::CompiledPottsSystem) = inner(getfield(c, :sys))
 # `extend`, `setmetadata` and `toggle_namespacing` refuse it already (`extend` in compose.jl,
 # `setmetadata` in sweep_spec.jl, `toggle_namespacing` in MTK: a Potts system has no
 # `namespacing` flag).
-Symbolics.rename(c::CompiledPottsSystem, name::Symbol) = throw(
-    ArgumentError(
-        "rename($(nameof(c)), :$name): a compiled system is read-only; rename the model, then compile it: " *
-            "`mtkcompile(rename(sys, :$name))`"
-    )
-)
-ModelingToolkitBase.compose(c::CompiledPottsSystem, ::AbstractArray; kw...) = throw(
-    ArgumentError(
-        "compose($(nameof(c)), …): a compiled system is read-only; compose the model, then compile it: " *
-            "`mtkcompile(compose(sys, components))`"
-    )
-)
+function Symbolics.rename(c::CompiledPottsSystem, name::Symbol)
+    throw(
+            ArgumentError(
+                "rename($(nameof(c)), :$name): a compiled system is read-only; rename the model, then compile it: " *
+                    "`mtkcompile(rename(sys, :$name))`"
+            )
+        )
+end
+function ModelingToolkitBase.compose(c::CompiledPottsSystem, ::AbstractArray; kw...)
+    throw(
+            ArgumentError(
+                "compose($(nameof(c)), …): a compiled system is read-only; compose the model, then compile it: " *
+                    "`mtkcompile(compose(sys, components))`"
+            )
+        )
+end
 # a compiled system among an MTK System's components (`clock ∘ csys`, `System(…; systems)`)
-Base.convert(::Type{ModelingToolkitBase.System}, c::CompiledPottsSystem) = throw(
-    ArgumentError(
-        "the compiled system `$(nameof(c))` is not a component of an MTK System; compose the model the other way " *
-            "round, `compose(sys, [system])`, then compile it"
-    )
-)
+function Base.convert(::Type{ModelingToolkitBase.System}, c::CompiledPottsSystem)
+    throw(
+            ArgumentError(
+                "the compiled system `$(nameof(c))` is not a component of an MTK System; compose the model the other way " *
+                    "round, `compose(sys, [system])`, then compile it"
+            )
+        )
+end
 
 Base.show(io::IO, c::CompiledPottsSystem) = (print(io, "Compiled"); show(io, getfield(c, :authored)))
 # the authored model's `@description` (MTK's fallback would read the compiled container's)
@@ -559,12 +566,14 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
     end
     # each rule divides by its own domain; a kind is divided by one domain only
     cluster_division = any(d -> d.domain isa ClusterDomain, _p(sys, :divisions))
-    domain_kinds(D) = unique(
-        Iterators.flatten(
-            isempty(d.domain.kinds) ? (1:(length(_p(sys, :kinds)) - 1)) : d.domain.kinds
-                for d in _p(sys, :divisions) if d.domain isa D
-        )
-    )
+    function domain_kinds(D)
+        return unique(
+                Iterators.flatten(
+                    isempty(d.domain.kinds) ? (1:(length(_p(sys, :kinds)) - 1)) : d.domain.kinds
+                        for d in _p(sys, :divisions) if d.domain isa D
+                )
+            )
+    end
     both = intersect(domain_kinds(CellDomain), domain_kinds(ClusterDomain))
     isempty(both) || throw(
         PottsCompileError(
@@ -610,8 +619,10 @@ function _compile_bound(authored::PottsSystem, sys::PottsSystem, ode_systems, in
         end
         writers[k] = u
     end
-    geometric(x) = _has_op(x, cell_centroid) || _has_op(x, copy_displacement) || _uses_builtin(x, :major_length) ||
-        _has_op(x, ref_centroid) || _has_op(x, ref_separation)
+    function geometric(x)
+        return _has_op(x, cell_centroid) || _has_op(x, copy_displacement) || _uses_builtin(x, :major_length) ||
+            _has_op(x, ref_centroid) || _has_op(x, ref_separation)
+    end
     needs_moments = !isempty(_p(sys, :divisions)) || !isempty(relationships) || !isempty(converts) ||
         any(
         geometric, Any[
@@ -821,10 +832,12 @@ end
 _convert_names(sys::PottsSystem) = Symbol[v.name for v in _p(sys, :converts)]
 
 # the expressions of a pass, as they are evaluated against the state (tracker flags, gathers)
-_convert_exprs(v::ConvertSpec) = Any[
-    v.from, v.to, (v.at isa Bool ? () : (v.at,))..., v.p,
-    (x for t in v.transfers for x in (t.from, t.to, t.per_site))..., (x for (a, b) in v.writes for x in (a, b))...,
-]
+function _convert_exprs(v::ConvertSpec)
+    return Any[
+            v.from, v.to, (v.at isa Bool ? () : (v.at,))..., v.p,
+            (x for t in v.transfers for x in (t.from, t.to, t.per_site))..., (x for (a, b) in v.writes for x in (a, b))...,
+        ]
+end
 
 const _CONVERT_SITE_BUILTINS = (_SITE_BUILTINS..., :from, :to)
 
@@ -1029,10 +1042,10 @@ _describe_text(::_FieldSystemLine, kinds = nothing) = "the fields' PDESystem"
 function _check_discrete_slots(sys)
     isempty(_p(sys, :discrete)) && return nothing
     slots = Dict{Symbol, Symbol}(info(x).name => b.name for b in _p(sys, :discrete) for x in b.slots)
-    target(lhs) = (
-        x = _standin_var(lhs);
-        iscall(x) && ((operation(x) === value_at && length(arguments(x)) == 2) || operation(x) isa Differential) ? _standin_var(arguments(x)[1]) : x
-    )
+    function target(lhs)
+        x = _standin_var(lhs)
+        return iscall(x) && ((operation(x) === value_at && length(arguments(x)) == 2) || operation(x) isa Differential) ? _standin_var(arguments(x)[1]) : x
+    end
     for s in Iterators.flatten((_p(sys, :updates), _p(sys, :equations)))
         lhs = _unwrap(s isa Update ? s.eq.lhs : s.lhs)
         i = info(target(lhs))
@@ -1095,18 +1108,21 @@ end
 _pop_bound(x) = (i = info(x); i !== nothing && i.role in (:bound_cell, :bound_site))
 # `owner[…]` or `kind[…]`: σ at a site (not at a population fold's bound variable)
 # (`kind[ref]` reads the referent's kind column, not σ: R6)
-_is_sigma_at(y) = iscall(y) && (operation(y) === value_at && length(arguments(y)) == 2) && !_pop_bound(arguments(y)[2]) && !_is_ref(arguments(y)[2]) &&
-    (i = info(arguments(y)[1]); i !== nothing && i.role === :builtin && i.name in (:owner, :kind))
+function _is_sigma_at(y)
+    return iscall(y) && (operation(y) === value_at && length(arguments(y)) == 2) && !_pop_bound(arguments(y)[2]) && !_is_ref(arguments(y)[2]) &&
+        (i = info(arguments(y)[1]); i !== nothing && i.role === :builtin && i.name in (:owner, :kind))
+end
 _reads_sigma(x) = (found = Ref(false); _walk(y -> (_is_sigma_at(y) && (found[] = true)), x); found[])
 # cell builtins a copy changes, which ΔH substitutes only when read bare
 const _COPY_VARYING_INDEXED = (:volume, :surface, :euler, :euler_full, _PIECES_NAMES...)
 # an explicit site index: not a pair's own site (`x′` is `x[neighbor_site]`), not a bound variable
-_explicit_index(i) = (
-    r = info(i); r === nothing || !(
-        r.role in (:bound, :bound_cell, :bound_site) ||
-            (r.role === :builtin && r.name in (:site, :neighbor_site))
-    )
-)
+function _explicit_index(i)
+    r = info(i)
+    return r === nothing || !(
+            r.role in (:bound, :bound_cell, :bound_site) ||
+                (r.role === :builtin && r.name in (:site, :neighbor_site))
+        )
+end
 
 # The first read in `x` that a copy changes (outermost first), as (read as written, bare form
 # to suggest or `nothing`), or `nothing`. `sites`: copy-written site variables, refused at any
@@ -1275,8 +1291,10 @@ function _cellvars_at_owner(E)
     isempty(sub) && return E
     return Symbolics.substitute(E, sub; fold = Val(false), filterer = _pair_scope)
 end
-_not_indexed(ex) = !(iscall(ex) && operation(ex) === value_at) &&
-    SymbolicUtils.default_substitute_filter(ex)
+function _not_indexed(ex)
+    return !(iscall(ex) && operation(ex) === value_at) &&
+        SymbolicUtils.default_substitute_filter(ex)
+end
 # the pair's names, not inside a population fold (its body reads the bound cell or site)
 _outside_population(ex) = !(iscall(ex) && operation(ex) === population) && SymbolicUtils.default_substitute_filter(ex)
 _pair_scope(ex) = _not_indexed(ex) && _outside_population(ex)
@@ -1429,8 +1447,9 @@ struct _BcsLine
 end
 _source_key(x) = x
 _source_key(b::_BcsLine) = b.eq
-_describe_text(b::_BcsLine, kinds = nothing) =
-    "the condition `" * (kinds === nothing ? _builtin_text(string(b.eq)) : _bc_text(b.eq, kinds)) * "` of the fields' PDESystem"
+function _describe_text(b::_BcsLine, kinds = nothing)
+    return "the condition `" * (kinds === nothing ? _builtin_text(string(b.eq)) : _bc_text(b.eq, kinds)) * "` of the fields' PDESystem"
+end
 
 # descriptions are built only when reporting (printing symbolic expressions is slow); a
 # built-in shows as written (`volume`, not the input `volume(t)`), and an operator of the field
@@ -1440,10 +1459,10 @@ _describe_text(e::EnergyTerm, kinds = nothing) = "@energy $(_domain_string(e.dom
 _describe_text(d::Drive) = "@drive copy => $(d.expr)"
 _describe_text(c::Constraint) = "@constraint $(c.expr)"
 _describe_text(u::Update) = "@$(u.phase) $(u.eq)"
-_describe_text(eq::Equation, kinds = nothing) = (
-    i = info(eq.lhs);
-    i !== nothing && i.role === :observed ? "@observed $(eq.lhs) ~ $(eq.rhs)" : "@equations " * _eq_text(eq, kinds)
-)
+function _describe_text(eq::Equation, kinds = nothing)
+    i = info(eq.lhs)
+    return i !== nothing && i.role === :observed ? "@observed $(eq.lhs) ~ $(eq.rhs)" : "@equations " * _eq_text(eq, kinds)
+end
 # an equation as written: a condition inside arithmetic keeps its parentheses
 # (Symbolics prints `(kind == 1) - c` as `kind == 1 - c`), and a kind compared by number is named
 function _eq_text(eq::Equation, kinds)
@@ -1654,11 +1673,13 @@ _bcs_exprs(sys::PottsSystem) = Any[x for b in _p(sys, :bcs) for x in (b.lhs, b.r
 
 _is_hex(sys) = core_lattice(_p(sys, :lattice)).geometry isa CorePotts.Hexagonal
 
-_energy_centroid_error(name) = PottsCompileError(
-    "`$name` is not available in energies: a copy moves the centroids it " *
-        "reads and that shift is not part of ΔH; read it in cell " *
-        "updates or @observed, or use `displacement(c, k)` in a @drive"
-)
+function _energy_centroid_error(name)
+    return PottsCompileError(
+            "`$name` is not available in energies: a copy moves the centroids it " *
+                "reads and that shift is not part of ΔH; read it in cell " *
+                "updates or @observed, or use `displacement(c, k)` in a @drive"
+        )
+end
 
 # The E7 helpers an energy may not read (D-243), refused before the reference checks so the
 # error names the helper: `centroid(c, k)` and `separation` (no ΔH, D-032 until R7) and

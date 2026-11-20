@@ -76,8 +76,9 @@ end
 
 """`HostPhase` (relationships.jl): 1 sync; the snapshot (σ and every cell column) down;
 every cell column up. (1, 11, 656) for this fixture with Float32."""
-transfer_hostphase_counts(u0) =
-    (1, 1 + 2 * length(u0.cell), sizeof(u0.ownership) + 2 * sum(sizeof, values(u0.cell)))
+function transfer_hostphase_counts(u0)
+    return (1, 1 + 2 * length(u0.cell), sizeof(u0.ownership) + 2 * sum(sizeof, values(u0.cell)))
+end
 
 
 # Declared HostPhase on a domain-masked lattice (D-092): y += x, reads (:x,),

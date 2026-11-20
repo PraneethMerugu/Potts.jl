@@ -127,10 +127,12 @@ const JS = Base.JuliaSyntax
 # earlier have one `MacroName` leaf whose value is `Symbol("@name")`. A macro name keeps the `@`
 # its allowlist key has always had, either way (`_macro_text`), so both versions report the same
 # hits on the same lines.
-_js_kind(name) = try
-    JS.Kind(name)
-catch
-    nothing
+function _js_kind(name)
+    return try
+            JS.Kind(name)
+        catch
+            nothing
+        end
 end
 const _K_IDENT = _js_kind("Identifier")
 const _K_STRING = _js_kind("String")

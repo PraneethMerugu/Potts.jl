@@ -9,10 +9,12 @@
     if PottsDevices.device_name() == "rocm"
         @testset "field kernels compile in the pending task, the clamp fused into the masks (ROCm)" begin
             AM = PottsDevices.device_package()
-            lfkernels() = Set(
-                s for s in (string(typeof(k)) for k in collect(values(AM.Compiler._kernel_instances)))
-                    if occursin("LatticeFields.Problems", s) || occursin("LatticeFields.Compile", s)
-            )
+            function lfkernels()
+                return Set(
+                        s for s in (string(typeof(k)) for k in collect(values(AM.Compiler._kernel_instances)))
+                            if occursin("LatticeFields.Problems", s) || occursin("LatticeFields.Compile", s)
+                    )
+            end
             backend = PottsDevices.device_backend()
             σ = zeros(Int32, 12, 12); σ[5:7, 5:7] .= 1
             prob = PottsProblem(
@@ -81,10 +83,12 @@ end
     if PottsDevices.device_name() == "rocm"
         @testset "the implicit kernels compile in the pending task (ROCm)" begin
             AM = PottsDevices.device_package()
-            lfkernels() = Set(
-                s for s in (string(typeof(k)) for k in collect(values(AM.Compiler._kernel_instances)))
-                    if occursin("LatticeFields.", s)
-            )
+            function lfkernels()
+                return Set(
+                        s for s in (string(typeof(k)) for k in collect(values(AM.Compiler._kernel_instances)))
+                            if occursin("LatticeFields.", s)
+                    )
+            end
             backend = PottsDevices.device_backend()
             for fs in (BackwardEuler(lower_bound = 0.0), CrankNicolson(lower_bound = 0.0), BDF2(lower_bound = 0.0), QuasiSteady())
                 prob = PottsProblem(
@@ -164,21 +168,27 @@ end
         @testset "cell averages on ROCm are bitwise reproducible and equal the host" begin
             backend = PottsDevices.device_backend()
             bits(x) = reinterpret(UInt32, vec(Array(x)))
-            merks() = solve(
-                PottsProblem(CsThreshold(; name = :m), cs_threshold_op(), (0, 30); T = Float32, seed = 7),
-                CheckerboardCPM(); backend, save_start = false
-            ).u[end]
+            function merks()
+                return solve(
+                        PottsProblem(CsThreshold(; name = :m), cs_threshold_op(), (0, 30); T = Float32, seed = 7),
+                        CheckerboardCPM(); backend, save_start = false
+                    ).u[end]
+            end
             σj, kj = jiang_state(JG_DIMS)
-            jiang() = solve(
-                PottsProblem(
-                    JiangLike(; name = :j), [ownership => σj, kind => kj], (0, 12); T = Float32, seed = 7,
-                    field_solver = BackwardEuler()
-                ), CheckerboardCPM(); backend, save_start = false
-            ).u[end]
-            site(b) = solve(
-                PottsProblem(CsSiteAvg(; name = :s), cs_site_op(), (0, 2); T = Float32, seed = 7),
-                CheckerboardCPM(); backend = b, save_start = false
-            ).u[end]
+            function jiang()
+                return solve(
+                        PottsProblem(
+                            JiangLike(; name = :j), [ownership => σj, kind => kj], (0, 12); T = Float32, seed = 7,
+                            field_solver = BackwardEuler()
+                        ), CheckerboardCPM(); backend, save_start = false
+                    ).u[end]
+            end
+            function site(b)
+                return solve(
+                        PottsProblem(CsSiteAvg(; name = :s), cs_site_op(), (0, 2); T = Float32, seed = 7),
+                        CheckerboardCPM(); backend = b, save_start = false
+                    ).u[end]
+            end
             # copies on the device checkerboard are not reproducible (live reads), so two runs
             # can end in different states; the fixed-point cell sums are, so equal states give
             # bitwise-equal averages

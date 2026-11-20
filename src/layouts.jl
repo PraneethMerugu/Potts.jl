@@ -84,9 +84,10 @@ mutable struct LayoutState{N}
     warn::Bool                       # the current leaf has `splits = :warn`
     groups::Int                      # the `Group`s painted so far (their labels)
 end
-LayoutState(dims::NTuple{N, Int}) where {N} =
-    LayoutState{N}(zeros(Int32, dims), Any[], Int32[], Bool[], _LayerRow[], Tuple{Int, Int, Bool}[], Dict{Int, Any}(),
+function LayoutState(dims::NTuple{N, Int}) where {N}
+    return LayoutState{N}(zeros(Int32, dims), Any[], Int32[], Bool[], _LayerRow[], Tuple{Int, Int, Bool}[], Dict{Int, Any}(),
         Symbol[], Dict{Int, Any}[], 0, 0, true, 0)
+end
 
 """
     new_cell!(op::LayoutState, kind) -> id
@@ -125,8 +126,9 @@ function _cell_id(op::LayoutState, id::Integer)
     0 <= id <= length(op.kinds) || _unallocated(op, id)
     return id % Int32
 end
-@noinline _unallocated(op, id) =
+@noinline function _unallocated(op, id)
     throw(ArgumentError("assign!: cell $id is not allocated (ncells = $(length(op.kinds))); use new_cell!"))
+end
 
 # A site of a cell painted before the current leaf changes hands: the leaf cuts that cell.
 function _cut!(op::LayoutState, o::Int32)
@@ -253,8 +255,10 @@ end
 Base.size(lat::LatticeSpec) = lat.dims
 Base.size(lat::LatticeSpec, d::Integer) = lat.dims[d]
 
-_periodic(lat::LatticeSpec{N}) where {N} = (b = lat.boundary;
-    map(x -> x isa Periodic, b isa CorePotts.AbstractBoundary ? ntuple(_ -> b, N) : Tuple(b)))
+function _periodic(lat::LatticeSpec{N}) where {N}
+    b = lat.boundary
+    return map(x -> x isa Periodic, b isa CorePotts.AbstractBoundary ? ntuple(_ -> b, N) : Tuple(b))
+end
 
 """
     isperiodic(lat, d) -> Bool
@@ -942,8 +946,9 @@ function _check_point(p::Point, what)
         throw(ArgumentError("$what: point coordinates must be finite and below 1e15 in magnitude, got $p"))
     return p
 end
-_pattern_arg(p, what) =
+function _pattern_arg(p, what)
     throw(ArgumentError("$what: $(repr(p)) is not a point pattern (RandomPoints, Center() or a vector of Points)"))
+end
 
 function _draw(p::RandomPoints, lat::LatticeSpec{N}, what) where {N}
     sites, _ = _region_sites(p.region, lat, what)
@@ -976,8 +981,9 @@ function _point_index(p::Point{M}, Ei::SMatrix{N, N}, what) where {M, N}
 end
 
 # The points of a pattern in index coordinates (drawn sites stay exact integers).
-_index_points(p::RandomPoints, lat::LatticeSpec{N}, what) where {N} =
-    NTuple{N, Float64}[map(Float64, Tuple(x)) for x in _draw(p, lat, what)]
+function _index_points(p::RandomPoints, lat::LatticeSpec{N}, what) where {N}
+    return NTuple{N, Float64}[map(Float64, Tuple(x)) for x in _draw(p, lat, what)]
+end
 _index_points(::Center, lat::LatticeSpec{N}, what) where {N} = NTuple{N, Float64}[_center_index(lat)]
 function _index_points(v::AbstractVector, lat::LatticeSpec{N}, what) where {N}
     Ei = inv(_embedding(core_lattice(lat), Val(N)))
@@ -1544,8 +1550,9 @@ function _daughter_side(P, cen, v)
     return [x > tol for x in d]
 end
 
-_dot_from(p::NTuple{N, Float64}, c::NTuple{N, Float64}, v::NTuple{N, Float64}) where {N} =
-    sum(d -> (p[d] - c[d]) * v[d], 1:N)
+function _dot_from(p::NTuple{N, Float64}, c::NTuple{N, Float64}, v::NTuple{N, Float64}) where {N}
+    return sum(d -> (p[d] - c[d]) * v[d], 1:N)
+end
 
 # The Cartesian positions of a cell's sites `S`, each unwrapped along periodic axes to the
 # image nearest `S[1]` (displacement in [-n/2, n/2): ties to the lower image).
@@ -1617,12 +1624,15 @@ end
 _layout_args(l::Tiling) = (Tiling, (:size,), (; l.size, l.spacing, l.region, l.kinds, l.partial, l.splits))
 _layout_args(l::Scattered) = (Scattered, (:n, :size), (; l.n, l.size, l.region, l.kinds, l.seed, l.gap, l.splits))
 _layout_args(l::Frame) = (Frame, (:kind,), (; l.kind, l.width, l.splits))
-_layout_args(l::InsertUntil) = (InsertUntil, (:kind,), (; l.kind, l.into, l.fraction,
-    number = l.number >= 0 ? l.number : nothing, l.seed, l.region, misses = l.count_misses ? :count : :retry, l.splits))
+function _layout_args(l::InsertUntil)
+    return (InsertUntil, (:kind,), (; l.kind, l.into, l.fraction,
+        number = l.number >= 0 ? l.number : nothing, l.seed, l.region, misses = l.count_misses ? :count : :retry, l.splits))
+end
 _layout_args(l::Eden) = (Eden, (:points,), (; l.points, l.region, l.rounds, l.kinds, l.seed, l.neighborhood, l.shortfall, l.splits))
 _layout_args(l::Splits) = (Splits, (:layer, :k), (; l.layer, l.k, l.shortfall, l.splits))
-_layout_args(l::AbstractLayout) =
+function _layout_args(l::AbstractLayout)
     throw(ArgumentError("remake: $(nameof(typeof(l))) does not support remake (no keyword constructor is known); rebuild the layer with its constructor"))
+end
 
 function SciMLBase.remake(l::Union{AbstractLayout, RandomPoints}; kw...)
     ctor, pos, args = _layout_args(l)
@@ -1791,8 +1801,9 @@ _splits(l::Objects) = l.splits
 _layout_args(l::Objects) = (Objects, (:shape, :points), (; l.shape, l.points, l.kinds, l.splits))
 
 # The shape translated by the Cartesian vector `p`.
-_translate(s::HyperSphere{N}, p) where {N} =
-    HyperSphere(Point{N, Float64}(ntuple(d -> Float64(s.center[d]) + Float64(p[d]), Val(N))), Float64(s.r))
+function _translate(s::HyperSphere{N}, p) where {N}
+    return HyperSphere(Point{N, Float64}(ntuple(d -> Float64(s.center[d]) + Float64(p[d]), Val(N))), Float64(s.r))
+end
 _translate(s::Interior, p) = Interior(_translate(s.shape, p))
 
 function paint!(op::LayoutState, l::Objects, lat::LatticeSpec{N}) where {N}
@@ -1847,10 +1858,11 @@ struct Group <: AbstractLayout
     end
 end
 Group(layers::AbstractLayout...) = Group(AbstractLayout[layers...])
-@noinline _group_placement() =
+@noinline function _group_placement()
     throw(ArgumentError("Group: a Group is the top-level layout or a member of a top-level overlay; it cannot be " *
-                        "inside another Group, the layer of a Splits or painted by a custom layer's paint! (a custom " *
-                        "layer groups its cells with Potts.set_column!(op, :cluster, label))"))
+        "inside another Group, the layer of a Splits or painted by a custom layer's paint! (a custom " *
+        "layer groups its cells with Potts.set_column!(op, :cluster, label))"))
+end
 
 # A group's cluster label: never `isequal` to a user's (the type is private).
 struct _GroupLabel
@@ -2104,16 +2116,20 @@ function _layout_spec(dims::Tuple{Vararg{Integer}})
     all(>(0), dims) || throw(ArgumentError("layout: lattice dimensions must be positive, got $dims; pass dimensions >= 1"))
     return lattice_spec(dims; boundary = Closed())
 end
-_layout_spec(lat::Lattice) = LatticeSpec(lat.dims, map(p -> p ? Periodic() : Closed(), lat.periodic), nothing,
-    Moore(1), lat.mask, lat.geometry)
+function _layout_spec(lat::Lattice)
+    return LatticeSpec(lat.dims, map(p -> p ? Periodic() : Closed(), lat.periodic), nothing,
+        Moore(1), lat.mask, lat.geometry)
+end
 _layout_spec(lat::LatticeSpec) = lat
 _layout_spec(sys::PottsSystem) = _layout_spec(_p(sys, :lattice))
 _layout_spec(sys::CompiledPottsSystem) = _layout_spec(getfield(sys, :sys))
-_layout_spec(x) = throw(
-    ArgumentError(
-        "layout: the target is a lattice size (a tuple of integers), a `Lattice` or a model; got $(repr(x; context = :limit => true))"
-    )
-)
+function _layout_spec(x)
+    throw(
+            ArgumentError(
+                "layout: the target is a lattice size (a tuple of integers), a `Lattice` or a model; got $(repr(x; context = :limit => true))"
+            )
+        )
+end
 
 # Drop cells with no site left and renumber the rest in order.
 function _compact(σ, kinds, counts)

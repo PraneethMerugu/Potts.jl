@@ -45,8 +45,10 @@ function ode_system(c::CompiledPottsSystem, scope::Symbol)
     end
     return get(getfield(c, :ode_systems), scope, nothing)
 end
-ode_system(sys::PottsSystem, ::Symbol) = throw(ArgumentError(
-    "ode_system: `$(nameof(sys))` has not been compiled; call `ode_system(mtkcompile(sys), scope)`"))
+function ode_system(sys::PottsSystem, ::Symbol)
+    throw(ArgumentError(
+        "ode_system: `$(nameof(sys))` has not been compiled; call `ode_system(mtkcompile(sys), scope)`"))
+end
 
 const _ODE_SCOPES = (:cell, :model)
 
@@ -54,8 +56,10 @@ _is_derivative(l) = iscall(l) && operation(l) isa Differential
 
 # `comp.p ~ expr`: a coupling of a component parameter (`_bind_components`), not an
 # algebraic equation: its left side is an MTK variable without Potts metadata
-_is_coupling(l) = l isa SymbolicUtils.BasicSymbolic && !SymbolicUtils.isconst(l) && info(l) === nothing &&
-                  (!iscall(l) || !(operation(l) isa Function) || operation(l) === getindex)
+function _is_coupling(l)
+    return l isa SymbolicUtils.BasicSymbolic && !SymbolicUtils.isconst(l) && info(l) === nothing &&
+        (!iscall(l) || !(operation(l) isa Function) || operation(l) === getindex)
+end
 
 # Operations MTK sees inside a template: plain functions (arithmetic, `exp`, comparisons,
 # `ifelse`, registered user functions). Potts' own operations (`gather`, `population`,
@@ -307,8 +311,10 @@ function _check_algebraic(sys::PottsSystem, deqs, aeqs)
         alg[x] = (; eq, order = (n += 1))
     end
     # self-references and cycles, by depth-first search over the definitions
-    reads(x) = unique!(Symbol[i.name for i in (info(y) for y in _leaves(alg[x].eq.rhs))
-                              if i !== nothing && i.role in _ODE_SCOPES && haskey(byname, i.name)])
+    function reads(x)
+        return unique!(Symbol[i.name for i in (info(y) for y in _leaves(alg[x].eq.rhs))
+            if i !== nothing && i.role in _ODE_SCOPES && haskey(byname, i.name)])
+    end
     state = Dict{Symbol, Int}()                        # 1: on the path, 2: done
     function visit(name, path)
         get(state, name, 0) == 2 && return
@@ -332,8 +338,10 @@ function _check_algebraic(sys::PottsSystem, deqs, aeqs)
     end
     foreach(x -> visit(info(x).name, [info(x).name]), _algebraic_order(alg))
     # nothing writes an algebraic variable
-    message(name, by) = "`$name` is defined by an algebraic equation (`$(alg[byname[name]].eq)`); it is not a stored " *
-                        "variable, so $by cannot write it"
+    function message(name, by)
+        return "`$name` is defined by an algebraic equation (`$(alg[byname[name]].eq)`); it is not a stored " *
+            "variable, so $by cannot write it"
+    end
     target(l) = (l = _unwrap(l); iscall(l) && operation(l) === value_at ? _unwrap(arguments(l)[1]) : l)
     for u in _p(sys, :updates)
         i = info(target(u.eq.lhs))
@@ -426,8 +434,10 @@ function _ode_template(sys::PottsSystem, scope::Symbol, d, a, rates, defs)
     template = ModelingToolkitBase.System(eqs, t, targets, params; name = Symbol(nameof(sys), :₊, scope), checks = ModelingToolkitBase.CheckComponents)
     compiled = ModelingToolkitBase.mtkcompile(template)
     obs = Dict{Any, Any}(_unwrap(o.lhs) => _unwrap(o.rhs) for o in ModelingToolkitBase.observed(compiled))
-    restore(x) = _unwrap(Symbolics.substitute(
-        _fixpoint(y -> _unwrap(Symbolics.substitute(y, obs; fold = Val(false))), _unwrap(x)), back; fold = Val(false)))
+    function restore(x)
+        return _unwrap(Symbolics.substitute(
+            _fixpoint(y -> _unwrap(Symbolics.substitute(y, obs; fold = Val(false))), _unwrap(x)), back; fold = Val(false)))
+    end
     differential = Set{Symbol}(info(x).name for x in targets[1:length(d)])
     for eq in ModelingToolkitBase.equations(compiled)
         l = _unwrap(eq.lhs)

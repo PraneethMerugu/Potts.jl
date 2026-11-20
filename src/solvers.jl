@@ -234,14 +234,16 @@ function _discretization(c::CompiledPottsSystem, d, T::Type)
             )
         )
     )
-    bad(k, route) = throw(
-        ArgumentError(
-            string(
-                "`discretization`: `LatticeDiscretization(…; ", k, ")` is set by the ",
-                "problem: ", route
+    function bad(k, route)
+        throw(
+                ArgumentError(
+                    string(
+                        "`discretization`: `LatticeDiscretization(…; ", k, ")` is set by the ",
+                        "problem: ", route
+                    )
+                )
             )
-        )
-    )
+    end
     d.T === nothing || d.T == T || bad("T = $(d.T)", "give the state type as `PottsProblem(…; T = $(d.T))`")
     d.backend === nothing || bad("backend", "give the backend to `PottsProblem` and `solve`")
     d.domain === nothing || bad("domain", "the lattice's domain is the fields' domain")
@@ -398,9 +400,10 @@ end
 """Whether the ODEs of `scope` (`:cell`, `:model`) step through scratch slots `x__ode`:
 when they run in several solver groups (Jacobi across groups), or when a cell ODE
 reads another cell's ODE unknowns (Jacobi across cells)."""
-_ode_scratch(c::CompiledPottsSystem, spec::SolverSpec, scope) =
-    length(_ode_groups(scope === :cell ? getfield(c, :cell_odes) : getfield(c, :model_odes), spec)) > 1 ||
-    (scope === :cell && _ode_reads_other_cells(c))
+function _ode_scratch(c::CompiledPottsSystem, spec::SolverSpec, scope)
+    return length(_ode_groups(scope === :cell ? getfield(c, :cell_odes) : getfield(c, :model_odes), spec)) > 1 ||
+        (scope === :cell && _ode_reads_other_cells(c))
+end
 
 # A cell ODE whose rate reads a cell-ODE unknown of another cell (`y[j]`, also in a gather's
 # body or an index, or a population fold left in the kernel because it reads `time`) must not
@@ -412,8 +415,11 @@ function _ode_reads_other_cells(c::CompiledPottsSystem)
     names = Set{Symbol}(info(x).name for (x, _) in getfield(c, :cell_odes))
     isempty(names) && return false
     hit = Ref(false)
-    reads(y) = (found = Ref(false);
-        _walk_all(z -> (i = info(z); i !== nothing && i.role === :cell && i.name in names && (found[] = true)), y); found[])
+    function reads(y)
+        found = Ref(false)
+        _walk_all(z -> (i = info(z); i !== nothing && i.role === :cell && i.name in names && (found[] = true)), y)
+        return found[]
+    end
     for (_, r) in getfield(c, :cell_odes)
         _walk_all(r) do y
             hit[] && return
@@ -487,9 +493,10 @@ const _CANONICAL_DEPTH = 8
 struct _CanonicalDepthError <: Exception
     type::String
 end
-Base.showerror(io::IO, e::_CanonicalDepthError) =
-    print(io, "a value nested deeper than $(_CANONICAL_DEPTH) levels, or a cyclic value (at a `", e.type,
+function Base.showerror(io::IO, e::_CanonicalDepthError)
+    return print(io, "a value nested deeper than $(_CANONICAL_DEPTH) levels, or a cyclic value (at a `", e.type,
         "`), too deep to print in canonical form; pass a flatter value")
+end
 
 # Values print with their full type. Scalars, enums and other primitives, strings and
 # ranges by `repr`; containers element by element (dictionaries and sets sorted by the

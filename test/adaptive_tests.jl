@@ -66,8 +66,9 @@ _sentinel(a::AbstractArray{<:Integer}) = fill!(similar(a), one(eltype(a)))
 
 _sentinel(a) = a
 
-_keep_only(nt::NamedTuple, keep) =
-    NamedTuple{keys(nt)}(map(n -> n in keep ? deepcopy(getfield(nt, n)) : _sentinel(getfield(nt, n)), keys(nt)))
+function _keep_only(nt::NamedTuple, keep)
+    return NamedTuple{keys(nt)}(map(n -> n in keep ? deepcopy(getfield(nt, n)) : _sentinel(getfield(nt, n)), keys(nt)))
+end
 
 
 function _sentinel_state(st, ph; drop = nothing)

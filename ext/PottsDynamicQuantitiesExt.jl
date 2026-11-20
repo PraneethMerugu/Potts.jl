@@ -16,16 +16,19 @@ _same(a, b) = DQ.dimension(a) == DQ.dimension(b)
 
 # unit rules for Potts' symbolic operations
 MTK.get_unit(::Union{typeof(Potts.history_lag), typeof(Potts.cell_integral)}, args) = get_unit(args[1])
-MTK.get_unit(::Union{typeof(Potts.cell_centroid), typeof(Potts.copy_displacement),
-        typeof(Potts.random_uniform),
-    }, args
-) = UNITLESS                    # lattice units
+function MTK.get_unit(::Union{typeof(Potts.cell_centroid), typeof(Potts.copy_displacement),
+            typeof(Potts.random_uniform),
+        }, args
+    )
+    return UNITLESS
+end                    # lattice units
 MTK.get_unit(::typeof(Potts.gather), args) = _fold_unit(args[1], args[3])
 MTK.get_unit(::typeof(Potts.population), args) = _fold_unit(args[1], args[2])
 
 # a fresh symbol of type `T` whose unit is `u`
-_with_unit(u, ::Type{T}) where {T} =
-    SymbolicUtils.setmetadata(Symbolics.unwrap(Symbolics.variable(gensym(:pre); T)), VariableUnit, u)
+function _with_unit(u, ::Type{T}) where {T}
+    return SymbolicUtils.setmetadata(Symbolics.unwrap(Symbolics.variable(gensym(:pre); T)), VariableUnit, u)
+end
 
 function _fold_unit(n, body)
     op = info(n).options.op

@@ -37,14 +37,18 @@ end
 
 
 # Akeeb on 24 × 30 with early divisions (clock threshold 10–20 MCS, V_max = 5): ~50 in 60 MCS
-bs_akeeb(; T = Float64, tspan = (0, 60), seed = 0) = PottsProblem(AkeebInvasion(; name = :a, lattice = (24, 30)),
-    [akeeb_state(; lattice = (24, 30)); :clock_min => 10.0; :clock_spread => 10.0; :V_max => 5.0], tspan;
-    T, seed, capacity = 200)
+function bs_akeeb(; T = Float64, tspan = (0, 60), seed = 0)
+    return PottsProblem(AkeebInvasion(; name = :a, lattice = (24, 30)),
+        [akeeb_state(; lattice = (24, 30)); :clock_min => 10.0; :clock_spread => 10.0; :V_max => 5.0], tspan;
+        T, seed, capacity = 200)
+end
 
 # the growing OpenVT monolayer on 24² with τ = 4 (divisions within 60 MCS)
-bs_openvt(; T = Float64, tspan = (0, 60), seed = 0) = PottsProblem(
-    OpenVTGrowingMonolayer(; name = :o, lattice = (24, 24), τ = 4.0), openvt_monolayer_state(; lattice = (24, 24)),
-    tspan; T, seed, capacity = 64)
+function bs_openvt(; T = Float64, tspan = (0, 60), seed = 0)
+    return PottsProblem(
+        OpenVTGrowingMonolayer(; name = :o, lattice = (24, 24), τ = 4.0), openvt_monolayer_state(; lattice = (24, 24)),
+        tspan; T, seed, capacity = 64)
+end
 
 
 # σ and every cell column but `birth` of two trajectories, bitwise
@@ -167,8 +171,10 @@ end
 
 bs_sigma() = (σ = zeros(Int32, 24, 24); σ[3:6, 3:6] .= 1; σ[12:15, 12:15] .= 2; σ[3:6, 16:19] .= 3; σ)
 
-bs_blob(model; tspan = (0, 30), seed = 1, kw...) = PottsProblem(model, [ownership => bs_sigma(), kind => fill(:blob, 3)],
-    tspan; seed, capacity = 64, kw...)
+function bs_blob(model; tspan = (0, 30), seed = 1, kw...)
+    return PottsProblem(model, [ownership => bs_sigma(), kind => fill(:blob, 3)],
+        tspan; seed, capacity = 64, kw...)
+end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 

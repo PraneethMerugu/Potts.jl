@@ -35,10 +35,12 @@ end
     @testset "fields: the coupling between solver groups is bounded (K-unsafe)" begin
         sys = FdRot(; name = :r)
         ovar = only(filter(x -> string(x) in ("o", "o(t)"), Potts.declared_variables(sys)))
-        two(k; n = 1) = PottsProblem(
-            sys, [fd_empty((6, 6)); :k => k], (0, 4); field_solver = ExplicitEuler(substeps = n),
-            solvers = [ovar => ExplicitEuler(substeps = 2)]
-        )
+        function two(k; n = 1)
+            return PottsProblem(
+                    sys, [fd_empty((6, 6)); :k => k], (0, 4); field_solver = ExplicitEuler(substeps = n),
+                    solvers = [ovar => ExplicitEuler(substeps = 2)]
+                )
+        end
         # k · window = 3 in two groups: refused, explicit counts or not (base: built and run)
         for n in (1, 40)
             e = try
@@ -99,19 +101,23 @@ end
 @testitem "fields: loops of solver groups are limited, chains next to them are not" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
     @testset "fields: loops of solver groups are limited, chains next to them are not" begin
         s3 = FdLoop3(; name = :l3)
-        three(k) = PottsProblem(
-            s3, [fd_empty((6, 6)); :k => k], (0, 2); field_solver = ExplicitEuler(substeps = 1),
-            solvers = [fdvar(s3, "o") => ExplicitEuler(substeps = 2), fdvar(s3, "v") => ExplicitEuler(substeps = 3)]
-        )
+        function three(k)
+            return PottsProblem(
+                    s3, [fd_empty((6, 6)); :k => k], (0, 2); field_solver = ExplicitEuler(substeps = 1),
+                    solvers = [fdvar(s3, "o") => ExplicitEuler(substeps = 2), fdvar(s3, "v") => ExplicitEuler(substeps = 3)]
+                )
+        end
         e = fdargerr(() -> three(3.0))
         @test occursin("the fields `c`, `o`, `v` are in solver groups that read one another in a loop", e) &&
             occursin("window · Σ max|coefficient| = 3.0 > 1", e)
         @test Symbol(solve(three(0.5), SequentialCPM()).retcode) === :Success
         sc = FdLoopChain(; name = :lc)
-        lc(; k, r) = PottsProblem(
-            sc, [fd_empty((6, 6)); :k => k; :r => r], (0, 2); field_solver = ExplicitEuler(substeps = 1),
-            solvers = [fdvar(sc, "o") => ExplicitEuler(substeps = 2), fdvar(sc, "u") => ExplicitEuler(substeps = 3)]
-        )
+        function lc(; k, r)
+            return PottsProblem(
+                    sc, [fd_empty((6, 6)); :k => k; :r => r], (0, 2); field_solver = ExplicitEuler(substeps = 1),
+                    solvers = [fdvar(sc, "o") => ExplicitEuler(substeps = 2), fdvar(sc, "u") => ExplicitEuler(substeps = 3)]
+                )
+        end
         # u's window · k = 30 (u is in no loop), the loop's 0.5: accepted
         @test Symbol(solve(lc(; k = 30.0, r = 0.5), SequentialCPM()).retcode) === :Success
         # the loop past the limit: refused, naming the loop's fields only
@@ -123,10 +129,12 @@ end
 @testitem "fields: an unseen term that reads another field counts as reading every group" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
     @testset "fields: an unseen term that reads another field counts as reading every group" begin
         sys = FdUnseenChain(; name = :uc)
-        three(k) = PottsProblem(
-            sys, [fd_empty((6, 6)); :k => k], (0, 2); field_solver = ExplicitEuler(substeps = 2),
-            solvers = [fdvar(sys, "u") => ExplicitEuler(substeps = 3), fdvar(sys, "z") => ExplicitEuler(substeps = 1)]
-        )
+        function three(k)
+            return PottsProblem(
+                    sys, [fd_empty((6, 6)); :k => k], (0, 2); field_solver = ExplicitEuler(substeps = 2),
+                    solvers = [fdvar(sys, "u") => ExplicitEuler(substeps = 3), fdvar(sys, "z") => ExplicitEuler(substeps = 1)]
+                )
+        end
         e = fdargerr(() -> three(3.0))
         @test occursin("the fields `c`, `u` are in solver groups that read one another in a loop", e) &&
             occursin("window · Σ max|coefficient| = 3.0", e) &&
@@ -152,10 +160,12 @@ end
 @testitem "fields: a loop of solver groups counts only the reads inside it" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
     @testset "fields: a loop of solver groups counts only the reads inside it" begin
         sys = FdChainLoop(; name = :cl)
-        cl(w) = PottsProblem(
-            sys, [fd_empty((6, 6)); :w => w], (0, 10); field_solver = ExplicitEuler(substeps = 1),
-            solvers = [fdvar(sys, "s2") => ExplicitEuler(substeps = 2), fdvar(sys, "c") => ExplicitEuler(substeps = 3)]
-        )
+        function cl(w)
+            return PottsProblem(
+                    sys, [fd_empty((6, 6)); :w => w], (0, 10); field_solver = ExplicitEuler(substeps = 1),
+                    solvers = [fdvar(sys, "s2") => ExplicitEuler(substeps = 2), fdvar(sys, "c") => ExplicitEuler(substeps = 3)]
+                )
+        end
         sol = solve(cl(0.05), SequentialCPM())                        # s1 → weak loop (0.05): accepted
         @test Symbol(sol.retcode) === :Success
         @test sol.u[end].site.s2[1] ≈ 16.438457412956836 rtol = 1.0e-12 # the values at 2c91f854
@@ -509,11 +519,13 @@ end
 @testitem "FieldGroups in a model; one canonical text" setup = [FieldsSetup, FieldsGroupsSetup] tags = [:potts, :fields] begin
     @testset "FieldGroups in a model; one canonical text" begin
         LFP, LP = Potts.LatticeFields.Problems, Potts.LatticePDE
-        msg(f) = try
-            f(); ""
-        catch e
-            e isa ArgumentError || rethrow()
-            sprint(showerror, e)
+        function msg(f)
+            return try
+                    f(); ""
+                catch e
+                    e isa ArgumentError || rethrow()
+                    sprint(showerror, e)
+                end
         end
         op = fd_source_op((12, 10))
         sys = FdTwo(; name = :t)
@@ -604,10 +616,12 @@ end
     @testset "a linear solver where a model takes a field solver" begin
         op = [fd_empty((16, 8)); :c => zeros(16, 8)]
         mk(; kw...) = PottsProblem(FdPeriodic(; name = :f), op, (0, 1); kw...)
-        e(f) = try
-            f(); ""
-        catch err
-            err isa ArgumentError ? err.msg : sprint(showerror, err)
+        function e(f)
+            return try
+                    f(); ""
+                catch err
+                    err isa ArgumentError ? err.msg : sprint(showerror, err)
+                end
         end
         @test_throws ArgumentError mk(; field_solver = LatticePCG())
         @test solve(mk(; field_solver = ExplicitEuler()), SequentialCPM()).retcode == Potts.SciMLBase.ReturnCode.Success

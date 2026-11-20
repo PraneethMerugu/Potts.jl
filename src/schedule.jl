@@ -373,8 +373,11 @@ function _schedule_block(sys, us::Vector{Update}, rn, popslots::Vector{Pair{Symb
     infos = Dict(_update_name(u) => info(_unwrap(u.eq.lhs)) for u in us)
     # a snapshot keeps its variable's default and reference flag (R6): `q[partner]` of a dead
     # referent reads `q`'s default, and `Pre(partner)` is still a reference
-    snapinfo(n) = (i = infos[n]; Entity(roles[n] === :field ? :site : roles[n], Symbol(n, :__pre), i.default,
-                                     get(i.options, :reference, false) === true ? (; reference = true) : (;)))
+    function snapinfo(n)
+        i = infos[n]
+        return Entity(roles[n] === :field ? :site : roles[n], Symbol(n, :__pre), i.default,
+            get(i.options, :reference, false) === true ? (; reference = true) : (;))
+    end
     snap = Dict{Symbol, Any}(n => _unwrap(_tag(_sym(Symbol(n, :__pre)), snapinfo(n))) for n in snapnames)
     order = Dict(:model => 1, :cell => 2, :site => 3, :edge => 4)
     # Edge updates (D-169): nothing reads an edge variable's new value (`_check_edge_block`),

@@ -94,11 +94,13 @@ end
             )
         )
         # Cell and cluster divisions mix per kind, but one kind divides by one domain
-        divsys(cellk, clusterk) = Potts.PottsSystem(;
-            name = :x, kinds = [:medium, :ka, :kb],
-            lattice = Potts.lattice_spec((8, 8)), sweep = Potts.sweep_spec(:metropolis; temperature = 1.0),
-            divisions = [Potts.divide(cellk; when = Potts.B.volume > 1), Potts.divide(clusterk; when = Potts.B.volume > 1)]
-        )
+        function divsys(cellk, clusterk)
+            return Potts.PottsSystem(;
+                    name = :x, kinds = [:medium, :ka, :kb],
+                    lattice = Potts.lattice_spec((8, 8)), sweep = Potts.sweep_spec(:metropolis; temperature = 1.0),
+                    divisions = [Potts.divide(cellk; when = Potts.B.volume > 1), Potts.divide(clusterk; when = Potts.B.volume > 1)]
+                )
+        end
         err = try
             mtkcompile(divsys(Potts.cells(1), Potts.clusters(1, 2)))
         catch e

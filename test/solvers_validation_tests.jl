@@ -53,10 +53,12 @@ end
     @testset "@sweep: mcs_duration validated; a hand-built SweepSpec is checked too" begin
         spec(; kw...) = Potts.sweep_spec(:metropolis; temperature = 1.0, kw...)
         hand(o, md) = Potts.SweepSpec(:metropolis, 1.0, min, o, md)
-        sys(sw) = Potts.PottsSystem(;
-            name = :hand, kinds = [:medium, :A], lattice = Potts.lattice_spec((8, 8)),
-            energies = [Potts.energy(Potts.cells(1) => (Potts.B.volume - 9.0)^2)], sweep = sw
-        )
+        function sys(sw)
+            return Potts.PottsSystem(;
+                    name = :hand, kinds = [:medium, :A], lattice = Potts.lattice_spec((8, 8)),
+                    energies = [Potts.energy(Potts.cells(1) => (Potts.B.volume - 9.0)^2)], sweep = sw
+                )
+        end
         isoff(e) = e isa ArgumentError
         ismd(e) = e isa ArgumentError
         bad_md = (
@@ -98,10 +100,11 @@ end
         # control: a valid hand-built spec builds, compiles, and fingerprints like the `@sweep` one
         good = sys(hand(0, 0.5))
         @test Potts._p(good, :sweep).mcs_duration === 0.5
-        fp(sw) = (
-            σ = zeros(Int32, 8, 8); σ[3:5, 3:5] .= 1;
-            PottsProblem(mtkcompile(sys(sw)), [ownership => σ, kind => [:A]], (0, 2)).f.fingerprint
-        )
+        function fp(sw)
+            σ = zeros(Int32, 8, 8)
+            σ[3:5, 3:5] .= 1
+            return PottsProblem(mtkcompile(sys(sw)), [ownership => σ, kind => [:A]], (0, 2)).f.fingerprint
+        end
         @test fp(hand(0, 0.5)) == fp(spec(mcs_duration = 0.5))
         @test fp(hand(0, 0.5)) != fp(spec(mcs_duration = 0.25))                     # control
     end

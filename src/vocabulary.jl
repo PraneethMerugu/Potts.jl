@@ -102,11 +102,13 @@ function _euler_builtin(adjacency)
 end
 _euler(; adjacency = :face) = _euler_builtin(adjacency)
 _euler(c; adjacency = :face) = _index(_euler_builtin(adjacency), c)
-_euler(args...; kwargs...) = throw(
-    ArgumentError(
-        "`euler` takes at most one cell (`euler(old; adjacency)`) and only the keyword `adjacency`"
-    )
-)
+function _euler(args...; kwargs...)
+    throw(
+            ArgumentError(
+                "`euler` takes at most one cell (`euler(old; adjacency)`) and only the keyword `adjacency`"
+            )
+        )
+end
 
 # Cell-scope `pieces` and `largest_piece` (D-189 ruling 9): the number of connected
 # components of a cell's sites and the site count of the largest, under `:face` (the bare
@@ -124,11 +126,13 @@ function _pieces_builtin(name, adjacency)
 end
 _largest_piece(; adjacency = :face) = _pieces_builtin(:largest_piece, adjacency)
 _largest_piece(c; adjacency = :face) = _index(_pieces_builtin(:largest_piece, adjacency), c)
-_largest_piece(args...; kwargs...) = throw(
-    ArgumentError(
-        "`largest_piece` takes at most one cell (`largest_piece(old; adjacency)`) and only the keyword `adjacency`"
-    )
-)
+function _largest_piece(args...; kwargs...)
+    throw(
+            ArgumentError(
+                "`largest_piece` takes at most one cell (`largest_piece(old; adjacency)`) and only the keyword `adjacency`"
+            )
+        )
+end
 
 # ---------------------------------------------------------------------------------------
 # Declarations
@@ -140,15 +144,16 @@ MTK's metadata: `unit` (`VariableUnit`), `tunable = false` (out of
 write) and `description` (shown with the model). The metadata is MTK's own, so
 `ModelingToolkitBase.istunable`, `getbounds` and `getdescription` read it.
 """
-parameter(name::Symbol, default; unit = nothing, tunable = true, bounds = nothing, description = nothing, origin = nothing) =
-    _with_meta(
-    _tag(
-        _param(name; tunable = _tunable(name, tunable)), Entity(
-            :param, name, default,
-            _origin(_meta_options(name, tunable, bounds, description), origin)
+function parameter(name::Symbol, default; unit = nothing, tunable = true, bounds = nothing, description = nothing, origin = nothing)
+    return _with_meta(
+            _tag(
+                _param(name; tunable = _tunable(name, tunable)), Entity(
+                    :param, name, default,
+                    _origin(_meta_options(name, tunable, bounds, description), origin)
+                )
+            ), unit, bounds, description
         )
-    ), unit, bounds, description
-)
+end
 # a component's bound parameter keeps where it was bound, `(component, name)`, for its messages
 _origin(opts, ::Nothing) = opts
 _origin(opts, o) = (; opts..., origin = o)
@@ -251,12 +256,14 @@ function Pairs(entries::Pair...; default = nothing, symmetric::Bool = true)
     default === nothing && throw(ArgumentError("`Pairs(…)`: give the value of the unlisted entries, `default = …`"))
     return Pairs(Pair{Any, Any}[e for e in entries], default, symmetric)
 end
-Pairs(args...; kws...) = throw(
-    ArgumentError(
-        "`Pairs` takes kind pairs `(k₁, k₂) => v` and the keywords `default`, " *
-            "`symmetric`; got $(join(map(repr, args), ", "))"
-    )
-)
+function Pairs(args...; kws...)
+    throw(
+            ArgumentError(
+                "`Pairs` takes kind pairs `(k₁, k₂) => v` and the keywords `default`, " *
+                    "`symmetric`; got $(join(map(repr, args), ", "))"
+            )
+        )
+end
 
 _pairs_kind_name(k) = (u = _unwrap(k); i = u isa SymbolicUtils.BasicSymbolic ? info(u) : nothing; i === nothing ? repr(k) : string(i.name))
 
@@ -521,8 +528,10 @@ end
 _D(x) = D(x)
 _D(v::AbstractVector) = map(_D, v)
 
-_dot(a::AbstractVector, b::AbstractVector) =
-    (length(a) == length(b) || throw(DimensionMismatch("dot of vectors of lengths $(length(a)) and $(length(b))")); sum(a .* b))
+function _dot(a::AbstractVector, b::AbstractVector)
+    length(a) == length(b) || throw(DimensionMismatch("dot of vectors of lengths $(length(a)) and $(length(b))"))
+    return sum(a .* b)
+end
 _norm(a::AbstractVector) = sqrt(sum(abs2, a))
 """`normalize(v)`: `v / norm(v)`, and zero where `norm(v) == 0`."""
 _normalize(a::AbstractVector) = (n = _norm(a); [ifelse(n > 0, x / n, zero(x)) for x in a])
@@ -617,8 +626,10 @@ _centroid(c, k) = Symbolics.wrap(ref_centroid(_symarg(c), _symarg(k)))
 
 # called only when a value is computed outside a model's statements: a default (evaluated
 # from parameters alone, with no lattice or state)
-_GEOMETRY_DEFAULT(name) = "`$name` reads the lattice and the cells, so it cannot be computed in a default value " *
-    "(defaults are expressions of parameters); write it in an update, equation or @observed"
+function _GEOMETRY_DEFAULT(name)
+    return "`$name` reads the lattice and the cells, so it cannot be computed in a default value " *
+        "(defaults are expressions of parameters); write it in an update, equation or @observed"
+end
 """`ref_centroid(c, k)`: coordinate `k` of the centroid of referent `c` (cell scope)."""
 ref_centroid(c, k) = throw(ArgumentError(_GEOMETRY_DEFAULT("centroid(c, k)")))
 Symbolics.@register_symbolic ref_centroid(c, k)
@@ -942,12 +953,14 @@ Base.hash(g::KindClass, h::UInt) = hash(g.kinds, hash(g.name, hash(KindClass, h)
 Base.show(io::IO, g::KindClass) = print(io, "kind class `", g.name, "` = ", Tuple(g.kinds))
 Base.in(x::Integer, g::KindClass) = x in g.kinds
 # `kind == g` would otherwise fall back to `===` and silently become `false` (`!=`: `true`)
-_class_compare(g::KindClass) = throw(
-    ArgumentError(
-        "`$(g.name)` is a kind class; test membership with " *
-            "`ismember(kind, $(g.name))` (or `kind ∈ $(g.name)` outside @equations)"
-    )
-)
+function _class_compare(g::KindClass)
+    throw(
+            ArgumentError(
+                "`$(g.name)` is a kind class; test membership with " *
+                    "`ismember(kind, $(g.name))` (or `kind ∈ $(g.name)` outside @equations)"
+            )
+        )
+end
 Base.:(==)(::Num, g::KindClass) = _class_compare(g)
 Base.:(==)(g::KindClass, ::Num) = _class_compare(g)
 Base.:(!=)(::Num, g::KindClass) = _class_compare(g)
@@ -1332,19 +1345,23 @@ _index(::_Pieces, i) = _index(B.pieces, i)
 `pieces` shadows it and is returned as is)."""
 _bare_pieces(::_Pieces) = B.pieces
 _bare_pieces(x) = x
-(::_Pieces)(args...; kws...) = throw(
-    ArgumentError(
-        "pieces: write `pieces(c, shell(target))`, " *
-            "`pieces(n for n in shell(target) if cond)`, or the cell's `pieces`, " *
-            "`pieces(; adjacency)`, `pieces[c]`, `pieces(c; adjacency)`"
-    )
-)
-_not_shell() = throw(
-    ArgumentError(
-        "pieces: the relation must be `shell` (`pieces(c, shell(target))`); " *
-            "no other relation is a shell in v1"
-    )
-)
+function (::_Pieces)(args...; kws...)
+    throw(
+            ArgumentError(
+                "pieces: write `pieces(c, shell(target))`, " *
+                    "`pieces(n for n in shell(target) if cond)`, or the cell's `pieces`, " *
+                    "`pieces(; adjacency)`, `pieces[c]`, `pieces(c; adjacency)`"
+            )
+        )
+end
+function _not_shell()
+    throw(
+            ArgumentError(
+                "pieces: the relation must be `shell` (`pieces(c, shell(target))`); " *
+                    "no other relation is a shell in v1"
+            )
+        )
+end
 
 """
     distinct(body(n) for n in R(s) if cond(n))
@@ -1466,12 +1483,14 @@ function drive(c::Constraint)
     throw(ArgumentError("a drive must be `copy => expr`"))
 end
 constraint(c::Constraint) = c
-constraint(::ConnectivityPenalty) = throw(
-    ArgumentError(
-        "@constraint connectivity(…; penalty): a `penalty` is the soft form, which goes in @drive " *
-            "(`@drive connectivity(k; rule, penalty)`); @constraint takes the veto form, without `penalty`"
-    )
-)
+function constraint(::ConnectivityPenalty)
+    throw(
+            ArgumentError(
+                "@constraint connectivity(…; penalty): a `penalty` is the soft form, which goes in @drive " *
+                    "(`@drive connectivity(k; rule, penalty)`); @constraint takes the veto form, without `penalty`"
+            )
+        )
+end
 constraint(x) = Constraint(:expr, Int[], x)
 
 """Synchronous or on-copy update `lhs ~ rhs` in `phase` (`:before_mcs`, `:after_mcs`, `:on_copy`)."""
@@ -1600,8 +1619,10 @@ Convert a layout [`LatticeSpec`](@ref) into a [`CorePotts.Lattice`](@ref) for
 """
 core_lattice(l::LatticeSpec) = Lattice(l.dims; boundary = l.boundary, domain = l.domain, geometry = l.geometry)
 # by content (the domain is an array)
-Base.:(==)(a::LatticeSpec, b::LatticeSpec) = a.dims == b.dims && a.boundary == b.boundary &&
-    a.spacing == b.spacing && a.neighborhood == b.neighborhood && a.domain == b.domain && a.geometry == b.geometry
+function Base.:(==)(a::LatticeSpec, b::LatticeSpec)
+    return a.dims == b.dims && a.boundary == b.boundary &&
+        a.spacing == b.spacing && a.neighborhood == b.neighborhood && a.domain == b.domain && a.geometry == b.geometry
+end
 Base.hash(l::LatticeSpec, h::UInt) = hash((l.dims, l.boundary, l.spacing, l.neighborhood, l.domain, l.geometry), h)
 
 # `ExplicitEuler` is LatticeFields' (`LatticeFields.Problems.ExplicitEuler`). As a
@@ -1706,14 +1727,16 @@ end
 # fields) carries a session counter. Module paths such as Pluto's `var"workspace#3"` pass:
 # stable within a session, the user's contract across sessions.
 _stable_callable(f) = !occursin("var\"#", string(:($f(a, b))))
-_sweep_combine(combine) = _stable_callable(combine) || throw(
-    ArgumentError(
-        "`@sweep`: `combine` must print without a compiler-generated name, got $combine: an anonymous " *
-            "function or closure, or a wrapper holding one, is named differently in every session, so " *
-            "checkpoints could not be matched. Use a top-level named function, `f(a, b) = …` and " *
-            "`combine = f`, or a callable struct whose fields are values, not anonymous functions"
-    )
-)
+function _sweep_combine(combine)
+    return _stable_callable(combine) || throw(
+            ArgumentError(
+                "`@sweep`: `combine` must print without a compiler-generated name, got $combine: an anonymous " *
+                    "function or closure, or a wrapper holding one, is named differently in every session, so " *
+                    "checkpoints could not be matched. Use a top-level named function, `f(a, b) = …` and " *
+                    "`combine = f`, or a callable struct whose fields are values, not anonymous functions"
+            )
+        )
+end
 """
     sweep_spec(law; temperature, combine = min, offset = 0.0, mcs_duration = 1.0)
 
@@ -1809,8 +1832,9 @@ struct ScheduleRepeat
 end
 Base.:(==)(a::ScheduleRepeat, b::ScheduleRepeat) = a.n == b.n && a.names == b.names
 Base.hash(a::ScheduleRepeat, h::UInt) = hash((a.n, a.names), hash(:ScheduleRepeat, h))
-Base.show(io::IO, r::ScheduleRepeat) =
-    print(io, "repeat(", r.n, ", ", join((n === :sweep ? "sweep(fraction = 1//$(r.n))" : string(n) for n in r.names), ", "), ")")
+function Base.show(io::IO, r::ScheduleRepeat)
+    return print(io, "repeat(", r.n, ", ", join((n === :sweep ? "sweep(fraction = 1//$(r.n))" : string(n) for n in r.names), ", "), ")")
+end
 
 # the phases a sub-MCS repeat may hold: the sweep, the fields, the after-MCS updates, the
 # operators and the `@convert` passes (one step of a cell ODE spans a whole MCS)
@@ -2099,12 +2123,14 @@ function transfer(x, pair::Pair; per_site)
     )
     return ConvertTransfer(_unwrap(x), _unwrap(pair.first), _unwrap(pair.second), _unwrap(per_site))
 end
-transfer(args...; per_site = nothing) = throw(
-    ArgumentError(
-        "`transfer` takes a cell variable, a pair `from => to` and `per_site = …`: " *
-            "`transfer(x, from => to, per_site = 1.0)`"
-    )
-)
+function transfer(args...; per_site = nothing)
+    throw(
+            ArgumentError(
+                "`transfer` takes a cell variable, a pair `from => to` and `per_site = …`: " *
+                    "`transfer(x, from => to, per_site = 1.0)`"
+            )
+        )
+end
 
 """
     @convert name domain begin from = …; to = …; at = …; p = …; transfer(…); x[to] += … end
@@ -2231,13 +2257,14 @@ struct PottsParameters{NT <: NamedTuple, D}
     values::NT
     PottsParameters{NT, D}(values::NT) where {NT <: NamedTuple, D} = new{NT, D}(values)
 end
-PottsParameters(
-    values::NamedTuple, tag::Union{
-        Tuple{}, Tuple{Tuple{Vararg{Symbol}}, UInt64},
-        Tuple{Tuple{Vararg{Symbol}}, UInt64, Tuple{Tuple{Vararg{Symbol}}, Tuple}},
-    } = ()
-) =
-    PottsParameters{typeof(values), tag}(values)
+function PottsParameters(
+        values::NamedTuple, tag::Union{
+            Tuple{}, Tuple{Tuple{Vararg{Symbol}}, UInt64},
+            Tuple{Tuple{Vararg{Symbol}}, UInt64, Tuple{Tuple{Vararg{Symbol}}, Tuple}},
+        } = ()
+    )
+    return PottsParameters{typeof(values), tag}(values)
+end
 _computed(::PottsParameters{NT, D}) where {NT, D} = D === () ? () : D[1]
 # the MTK metadata in the type, only when a parameter has some: the names declared
 # `tunable = false`, and `(name, lo, hi)` of each declared `bounds`
@@ -2269,18 +2296,20 @@ SciMLStructures.hasportion(::SciMLStructures.Tunable, ::PottsParameters) = true
 SciMLStructures.hasportion(::SciMLStructures.Constants, ::PottsParameters) = true
 SciMLStructures.hasportion(::SciMLStructures.AbstractPortion, ::PottsParameters) = false
 
-_portion_keys(::SciMLStructures.Tunable, p) =
-    (nt = NamedTuple(p); Tuple(k for k in keys(nt) if nt[k] isa AbstractFloat && !(k in _computed(p)) && !(k in _nontunable(p))))
-_portion_keys(::SciMLStructures.Constants, p) =
-    (
-    nt = NamedTuple(p); Tuple(
-        k for k in keys(nt) if (
-                nt[k] isa StaticArrays.StaticArray ||
-                (nt[k] isa Number && !(nt[k] isa AbstractFloat)) ||
-                (nt[k] isa AbstractFloat && k in _nontunable(p))
-            ) && !(k in _computed(p))
-    )
-)
+function _portion_keys(::SciMLStructures.Tunable, p)
+    nt = NamedTuple(p)
+    return Tuple(k for k in keys(nt) if nt[k] isa AbstractFloat && !(k in _computed(p)) && !(k in _nontunable(p)))
+end
+function _portion_keys(::SciMLStructures.Constants, p)
+    nt = NamedTuple(p)
+    return Tuple(
+            k for k in keys(nt) if (
+                    nt[k] isa StaticArrays.StaticArray ||
+                    (nt[k] isa Number && !(nt[k] isa AbstractFloat)) ||
+                    (nt[k] isa AbstractFloat && k in _nontunable(p))
+                ) && !(k in _computed(p))
+        )
+end
 _flat(x::Number) = (x,)
 _flat(x) = Tuple(x)
 

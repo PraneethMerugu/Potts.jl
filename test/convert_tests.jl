@@ -227,13 +227,14 @@ end
 # exactly, one `created` among the 4 conversions; unforced, Int32.
 @testitem "@convert: `created` at the Int64 site width" setup = [ConvertSetup] tags = [:potts, :convert] begin
     @testset "@convert: `created` at the Int64 site width" begin
-        wide(f) = (
-            CorePotts._FORCE_WIDE_SITES[] = true; try
-                f()
-            finally
-                CorePotts._FORCE_WIDE_SITES[] = false
-            end
-        )
+        function wide(f)
+            CorePotts._FORCE_WIDE_SITES[] = true
+            return try
+                    f()
+                finally
+                    CorePotts._FORCE_WIDE_SITES[] = false
+                end
+        end
         prob = wide(cv_device_problem)
         @test eltype(getfield(prob.u0.cell, CorePotts._CV_FIRST)) === Int64
         @test eltype(getfield(prob.u0.model, CorePotts.CONVERT_FLAGS)) === Int64

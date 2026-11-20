@@ -90,13 +90,15 @@ function shapes(W)
 end
 
 """The refusal methods on `PottsSystem` (plain, `{iip}` and `{iip, spec}` forms of every constructor)."""
-refusal_methods() = unique(
-    [
-        m for P in CONSTRUCTORS
-            for Q in (P, P{true}, P{true, SB.FullSpecialize}, P{true, SB.FunctionWrapperSpecialize}) for m in methods(Q)
-            if m.module === Potts && any(==(PottsSystem), Base.unwrap_unionall(m.sig).parameters)
-    ]
-)
+function refusal_methods()
+    return unique(
+            [
+                m for P in CONSTRUCTORS
+                    for Q in (P, P{true}, P{true, SB.FullSpecialize}, P{true, SB.FunctionWrapperSpecialize}) for m in methods(Q)
+                    if m.module === Potts && any(==(PottsSystem), Base.unwrap_unionall(m.sig).parameters)
+            ]
+        )
+end
 
 tally(m) = Dict(c => count(p -> last(p) === c, m) for c in (:REFUSED, :LOUD, :BUILT))
 built(m) = [first(p) for p in m if last(p) === :BUILT]

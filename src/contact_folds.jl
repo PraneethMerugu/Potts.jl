@@ -163,12 +163,13 @@ function _check_contact_folds(sys::PottsSystem, relations, contact_spec, lat)
 end
 
 """The per-copy updates of the model's contact counts (generated `commit!`)."""
-_contact_count_commits(c::CompiledPottsSystem) =
-    Any[
-    :(
-        CorePotts.commit_contact_count!(
-            st.cell.$n, st.ownership, st.cell.kind, $(r === :contact ? :(ctx.contact) : :(ctx.$r)),
-              $m, ctx.lattice, prop)) for (n, r, m) in _contact_trackers(c)]
+function _contact_count_commits(c::CompiledPottsSystem)
+    return Any[
+        :(
+            CorePotts.commit_contact_count!(
+                st.cell.$n, st.ownership, st.cell.kind, $(r === :contact ? :(ctx.contact) : :(ctx.$r)),
+                  $m, ctx.lattice, prop)) for (n, r, m) in _contact_trackers(c)]
+end
 
 """The initial count columns (`Int32`) of the model's folds, from σ."""
 function _contact_count_columns(c::CompiledPottsSystem, σ, kinds, lat, ncell)

@@ -1,14 +1,16 @@
 @testitem "fields: the threaded host loop equals one thread and allocates nothing" setup = [FieldsSetup, FieldsScheduleSetup] tags = [:potts, :fields, :subprocess] begin
     @testset "fields: the threaded host loop equals one thread and allocates nothing" begin
         @test 120 * 100 > Potts.CorePotts.Exec.HOST_GRAIN
-        run(t) = split(
-            strip(
-                read(
-                    `$(Base.julia_cmd()) --startup-file=no -t $t --project=$(Base.active_project()) -e $FD_THREADS_RUN`,
-                    String
+        function run(t)
+            return split(
+                    strip(
+                        read(
+                            `$(Base.julia_cmd()) --startup-file=no -t $t --project=$(Base.active_project()) -e $FD_THREADS_RUN`,
+                            String
+                        )
+                    )
                 )
-            )
-        )
+        end
         one, three = run(1), run(3)
         @test parse(Int, one[1]) == 1 && parse(Int, three[1]) == 3
         @test parse(Int, three[2]) == 0 && parse(Int, one[2]) == 0

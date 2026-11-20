@@ -260,8 +260,10 @@ SII.is_time_dependent(::PottsModelInfo) = true
 SII.constant_structure(::PottsModelInfo) = true
 SII.all_symbols(sys::PottsModelInfo) = vcat(SII.all_variable_symbols(sys), _p(getfield(sys.csys, :sys), :parameters), [t])
 SII.default_values(::PottsModelInfo) = Dict()
-SII.is_observed(sys::PottsModelInfo, x) = _potts_quantity(x) && !SII.is_parameter(sys, x) &&
-    !SII.is_variable(sys, x) && !SII.is_independent_variable(sys, x)
+function SII.is_observed(sys::PottsModelInfo, x)
+    return _potts_quantity(x) && !SII.is_parameter(sys, x) &&
+        !SII.is_variable(sys, x) && !SII.is_independent_variable(sys, x)
+end
 function SII.observed(sys::PottsModelInfo, x)
     # a list of quantities (`sol[[a, b]]`, `getsym(sol, (a, b))`): one function per entry, read
     # together, a vector for a vector and a tuple for a tuple (SymbolicIndexingInterface's contract)
@@ -289,12 +291,14 @@ function _named_quantity(sys::PottsModelInfo, x::Symbol)
 end
 # a vector name (`u` of `@variables u(field)[1:2]`, an array field of a PDESystem) is observed
 # only so that `sol[:u]` reaches `SII.observed`, which names its components
-SII.is_observed(sys::PottsModelInfo, x::Symbol) = !SII.is_parameter(sys, x) && !SII.is_variable(sys, x) &&
-    (
-    _named_quantity(sys, _localize(getfield(sys.csys, :sys), x)) !== nothing ||
-        _computed_info(sys, x) !== nothing ||
-        !isempty(_vector_components(getfield(sys.csys, :sys), _localize(getfield(sys.csys, :sys), x)))
-)
+function SII.is_observed(sys::PottsModelInfo, x::Symbol)
+    return !SII.is_parameter(sys, x) && !SII.is_variable(sys, x) &&
+            (
+            _named_quantity(sys, _localize(getfield(sys.csys, :sys), x)) !== nothing ||
+                _computed_info(sys, x) !== nothing ||
+                !isempty(_vector_components(getfield(sys.csys, :sys), _localize(getfield(sys.csys, :sys), x)))
+        )
+end
 function SII.observed(sys::PottsModelInfo, x::Symbol)
     ci = _computed_info(sys, x)
     ci === nothing || (n = ci.name; return (u, p, t) -> getproperty(p, n))
@@ -303,12 +307,16 @@ function SII.observed(sys::PottsModelInfo, x::Symbol)
     return _observed_function(sys, q)
 end
 # the component names of the vector quantity `x` of model `m` (`[:u_1, :u_2]`), or none
-_vector_components(m, x) = Symbol[
-    info(v).name for v in Iterators.flatten((_p(m, :parameters), _p(m, :variables)))
-        if get(info(v).options, :vector, nothing) === x
-]
-_vector_message(m, x) = "`$x` is a vector quantity of $(nameof(m)): read its components " *
-    "($(join((":" * string(n) for n in _vector_components(m, x)), ", ")))"
+function _vector_components(m, x)
+    return Symbol[
+            info(v).name for v in Iterators.flatten((_p(m, :parameters), _p(m, :variables)))
+                if get(info(v).options, :vector, nothing) === x
+        ]
+end
+function _vector_message(m, x)
+    return "`$x` is a vector quantity of $(nameof(m)): read its components " *
+        "($(join((":" * string(n) for n in _vector_components(m, x)), ", ")))"
+end
 
 """
     observe(prob_or_sol, x[, u])
@@ -322,8 +330,9 @@ quantity of that name, looked up in this order: a declared variable or `@observe
 quantity, then a built-in such as `:volume`, then a parameter. An unknown name is an
 `ArgumentError`.
 """
-observe(prob::CorePotts.PottsProblem, x, u = prob.u0) =
-    _observed_function(prob.f.sys, _observe_quantity(prob.f.sys, x))(u, prob.p, prob.tspan[1])
+function observe(prob::CorePotts.PottsProblem, x, u = prob.u0)
+    return _observed_function(prob.f.sys, _observe_quantity(prob.f.sys, x))(u, prob.p, prob.tspan[1])
+end
 function observe(sol::CorePotts.PottsSolution, x)
     f = _observed_function(sol.prob.f.sys, _observe_quantity(sol.prob.f.sys, x))
     return map((u, s) -> f(u, sol.prob.p, s), sol.u, sol.t)
@@ -406,10 +415,12 @@ covers in part included. A PDESystem whose inputs are neither those of a
 coupled PDESystem of the same name nor those of `Potts.fields(model)` is an `ArgumentError`
 that names both lists.
 """
-field_inputs(integ::CorePotts.PottsIntegrator, pdesys::ModelingToolkitBase.PDESystem) =
-    _field_inputs_at(integ.f.sys, CorePotts.current_state(integ), integ.p, integ.t, _pde_inputs(integ.f.sys, pdesys))
-field_inputs(prob::CorePotts.PottsProblem, pdesys::ModelingToolkitBase.PDESystem) =
-    _field_inputs_at(prob.f.sys, prob.u0, prob.p, prob.tspan[1], _pde_inputs(prob.f.sys, pdesys))
+function field_inputs(integ::CorePotts.PottsIntegrator, pdesys::ModelingToolkitBase.PDESystem)
+    return _field_inputs_at(integ.f.sys, CorePotts.current_state(integ), integ.p, integ.t, _pde_inputs(integ.f.sys, pdesys))
+end
+function field_inputs(prob::CorePotts.PottsProblem, pdesys::ModelingToolkitBase.PDESystem)
+    return _field_inputs_at(prob.f.sys, prob.u0, prob.p, prob.tspan[1], _pde_inputs(prob.f.sys, pdesys))
+end
 
 _exported(info::PottsModelInfo) = lock(() -> get!(() -> _exported_inputs(info.csys), info.cache, :field_inputs), _OBSERVED_LOCK)
 # the inputs of the PDESystem `f`, `(key, how, what, eltype)` as `_exported_inputs` gives them: a

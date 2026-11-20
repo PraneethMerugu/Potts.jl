@@ -467,12 +467,16 @@ end
         slots = filter(n -> startswith(String(n), "__ifold_"), propertynames(prob.u0.model))
         @test length(slots) == 4
         mark!(u) = foreach(n -> fill!(getfield(u.model, n), -7.0), slots)
-        unchanged(u, cell) = all(n -> all(==(-7.0), getfield(u.model, n)), slots) &&
-            all(n -> getfield(u.cell, n) == getfield(cell, n), propertynames(cell))
-        oracle(u) = (
-            V = u.cell.volume; L = V .> 0; mv = sum(V[L]) / count(L);
-            [sum((w0[i] * mv for i in findall(==(k), u.ownership)); init = 0.0) for k in eachindex(V)]
-        )
+        function unchanged(u, cell)
+            return all(n -> all(==(-7.0), getfield(u.model, n)), slots) &&
+                all(n -> getfield(u.cell, n) == getfield(cell, n), propertynames(cell))
+        end
+        function oracle(u)
+            V = u.cell.volume
+            L = V .> 0
+            mv = sum(V[L]) / count(L)
+            return [sum((w0[i] * mv for i in findall(==(k), u.ownership)); init = 0.0) for k in eachindex(V)]
+        end
         mark!(prob.u0); c0 = deepcopy(prob.u0.cell)
         @test prob[:o] ≈ oracle(prob.u0)
         @test unchanged(prob.u0, c0)
@@ -514,10 +518,10 @@ end
     @testset "an integral read only in a tick's population fold is fresh ($(nameof(typeof(alg))))" for
         alg in (SequentialCPM(), CheckerboardCPM())
         σ = zeros(Int32, 16, 16); σ[3:5, 3:5] .= 1; σ[10:12, 10:12] .= 2
-        dn(use_integral) = (
-            sol = solve(PottsProblem(TickFoldIntegral(; name = :x, use_integral), [ownership => σ, kind => [:A, :A]], (0, 12); seed = 1), alg; saveat = 0:12);
-            [Array(u.cell.ctr₊dn)[1] for u in sol.u]
-        )
+        function dn(use_integral)
+            sol = solve(PottsProblem(TickFoldIntegral(; name = :x, use_integral), [ownership => σ, kind => [:A, :A]], (0, 12); seed = 1), alg; saveat = 0:12)
+            return [Array(u.cell.ctr₊dn)[1] for u in sol.u]
+        end
         a, b = dn(true), dn(false)
         @test a == b
         @test length(unique(diff(b))) > 1                  # the volumes move: a lag would show

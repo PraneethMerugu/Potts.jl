@@ -90,10 +90,12 @@ end
         step!(integ); step!(integ)
         c2, v2 = copy(Array(current_state(integ).site.c)), copy(Array(current_state(integ).site.v))
         step!(integ)
-        lap(a) = [
-            sum(a[clamp(i + di, 1, 8), clamp(j + dj, 1, 8)] - a[i, j] for (di, dj) in ((1, 0), (-1, 0), (0, 1), (0, -1)))
-                for i in 1:8, j in 1:8
-        ]
+        function lap(a)
+            return [
+                    sum(a[clamp(i + di, 1, 8), clamp(j + dj, 1, 8)] - a[i, j] for (di, dj) in ((1, 0), (-1, 0), (0, 1), (0, -1)))
+                        for i in 1:8, j in 1:8
+                ]
+        end
         @test v2 == Float64.(σ .!= 0)
         @test maximum(abs, Array(current_state(integ).site.c) .- (c2 .+ 0.1 .* lap(c2) .+ 0.1 .* lap(v2))) <= 1.0e-14
         @test maximum(abs, Array(current_state(integ).site.c)) > 0.01
@@ -112,10 +114,12 @@ end
         step!(integ); step!(integ)
         c2, v2 = copy(Array(current_state(integ).site.c)), copy(Array(current_state(integ).site.v))
         step!(integ)
-        lap(a) = [
-            sum(a[clamp(i + di, 1, 8), mod1(j + dj, 8)] - a[i, j] for (di, dj) in ((1, 0), (-1, 0), (0, 1), (0, -1)))
-                for i in 1:8, j in 1:8
-        ]
+        function lap(a)
+            return [
+                    sum(a[clamp(i + di, 1, 8), mod1(j + dj, 8)] - a[i, j] for (di, dj) in ((1, 0), (-1, 0), (0, 1), (0, -1)))
+                        for i in 1:8, j in 1:8
+                ]
+        end
         @test v2 == Float64.(σ .!= 0)
         @test maximum(abs, Array(current_state(integ).site.c) .- (c2 .+ 0.1 .* lap(c2) .+ 0.1 .* lap(v2))) <= 1.0e-14
         @test maximum(abs, Array(current_state(integ).site.c)) > 0.01

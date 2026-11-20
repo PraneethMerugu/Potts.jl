@@ -137,14 +137,16 @@ for (M, n) in ((:JumpProcesses, :JumpProblem), ((:SciMLBase, n) for n in _REFUSE
     n === :JumpProblem || @eval $P(::CompiledPottsSystem, args...; kw...) = throw(ArgumentError(_problem_msg($msg)))
 end
 for T in _JUMP_TSPANS
-    @eval JumpProcesses.JumpProblem(::CompiledPottsSystem, op, tspan::$T, args...; kw...) =
+    @eval function JumpProcesses.JumpProblem(::CompiledPottsSystem, op, tspan::$T, args...; kw...)
         throw(ArgumentError(_problem_msg("JumpProblem")))
+    end
 end
 for T in _JUMP_OPS
     @eval JumpProcesses.JumpProblem(::CompiledPottsSystem, op::$T; kw...) = throw(ArgumentError(_problem_msg("JumpProblem")))
 end
-SciMLBase.ODEProblem{iip, SciMLBase.FunctionWrapperSpecialize}(::CompiledPottsSystem, args...; kw...) where {iip} =
+function SciMLBase.ODEProblem{iip, SciMLBase.FunctionWrapperSpecialize}(::CompiledPottsSystem, args...; kw...) where {iip}
     throw(ArgumentError(_problem_msg("ODEProblem")))
+end
 
 """
 The variables `xs` of an extension, each edge variable that re-declares one of the base's
@@ -258,12 +260,15 @@ end
 
 """Reject a vector of `mine` with fewer components than the base's vector of its name."""
 function _check_vector_lengths(model, inbase, theirs, mine)
-    components(xs) = (out = Dict{Symbol, Vector{Symbol}}();
+    function components(xs)
+        out = Dict{Symbol, Vector{Symbol}}()
         for x in xs
-            i = info(x)
-            v = i === nothing ? nothing : get(i.options, :vector, nothing)
-            v === nothing || push!(get!(out, v, Symbol[]), i.name)
-        end; out)
+                i = info(x)
+                v = i === nothing ? nothing : get(i.options, :vector, nothing)
+                v === nothing || push!(get!(out, v, Symbol[]), i.name)
+            end
+        return out
+    end
     ours = components(mine)
     for (v, names) in components(theirs)
         new = get(ours, v, nothing)
@@ -276,15 +281,20 @@ function _check_vector_lengths(model, inbase, theirs, mine)
 end
 
 """`parameter `bias_2` (a component of the vector `bias`)`: a category label with its name."""
-_labelled(what, n) = (i = findfirst(" (", what); if i === nothing
-    "$what `$n`"
-else
-    "$(what[1:prevind(what, first(i))]) `$n`$(what[first(i):end])"
-end)
+function _labelled(what, n)
+    i = findfirst(" (", what)
+    return if i === nothing
+            "$what `$n`"
+        else
+            "$(what[1:prevind(what, first(i))]) `$n`$(what[first(i):end])"
+        end
+end
 
-_category_clash(model, n, what, old) = ArgumentError(
-    "$model: $(_labelled(what, n)): `$n` is already declared as $(_with_article(old)) (kinds, parameters, variables, " *
-    "observed quantities, relations, relationships and components share one namespace); rename one of them")
+function _category_clash(model, n, what, old)
+    return ArgumentError(
+        "$model: $(_labelled(what, n)): `$n` is already declared as $(_with_article(old)) (kinds, parameters, variables, " *
+        "observed quantities, relations, relationships and components share one namespace); rename one of them")
+end
 
 _kinds_overlap(a, b) = isempty(a.kinds) || isempty(b.kinds) || !isempty(intersect(a.kinds, b.kinds))
 
@@ -296,11 +306,17 @@ _target_key(u::Update) = (u.phase, string(u.eq.lhs))
 
 # Draws are numbered per model (`random_uniform(k)`); two separately built models both start
 # at 1, so the extension's draws move past the base's to keep their streams independent.
-_draw_indices(xs) = (out = Int[]; foreach(x -> _walk_all(y -> (iscall(y) && operation(y) === random_uniform &&
-    push!(out, Int(SymbolicUtils.unwrap_const(_unwrap(arguments(y)[1]))))), x), xs); out)
-_random_exprs(s::PottsSystem) = Any[(u.eq.rhs for u in _p(s, :updates))..., (eq.rhs for eq in _p(s, :equations))...,
-    (d.when for d in _p(s, :divisions))..., (r for d in _p(s, :divisions) for (_, r) in d.rules)..., (r.when for r in _p(s, :link_rules))...,
-    (x for b in _p(s, :discrete) for x in b.next)...]
+function _draw_indices(xs)
+    out = Int[]
+    foreach(x -> _walk_all(y -> (iscall(y) && operation(y) === random_uniform &&
+        push!(out, Int(SymbolicUtils.unwrap_const(_unwrap(arguments(y)[1]))))), x), xs)
+    return out
+end
+function _random_exprs(s::PottsSystem)
+    return Any[(u.eq.rhs for u in _p(s, :updates))..., (eq.rhs for eq in _p(s, :equations))...,
+        (d.when for d in _p(s, :divisions))..., (r for d in _p(s, :divisions) for (_, r) in d.rules)..., (r.when for r in _p(s, :link_rules))...,
+        (x for b in _p(s, :discrete) for x in b.next)...]
+end
 function _renumber_draws(sys::PottsSystem, base::PottsSystem)
     mine = _draw_indices(_random_exprs(sys))
     theirs = _draw_indices(_random_exprs(base))

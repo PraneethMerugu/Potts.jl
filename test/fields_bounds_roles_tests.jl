@@ -49,18 +49,21 @@ end
         Potts.ModelingToolkitBase.@variables c(..) [bounds = (0.0, 1.0)] u(..) K(..)
         ce, ue, Ke = c(tt, x, y), u(tt, x, y), K(tt, x, y)
         dom = [tt ∈ LP.Interval(0.0, 2.0), x ∈ LP.Interval(0.0, 16.0), y ∈ LP.Interval(0.0, 16.0)]
-        bcount(eqs, dvs, ps, ic) = (
+        function bcount(eqs, dvs, ps, ic)
             p = LP.discretize(
-                MTKB.PDESystem(eqs, ic, dom, [tt, x, y], dvs, ps; name = :b),
-                LP.LatticeDiscretization(LP.Grid(dims); T = Float64)
-            ); LP.Problems.substeps(LP.Problems.field_problem(p), LP.ExplicitEuler(); dt = 1.0)
-        )
-        acount(M; kw...) = substep_counts(
-            init(
-                PottsProblem(M(; name = :f), fd_empty(dims), (0, 2); field_solver = ExplicitEuler(), kw...),
-                SequentialCPM()
-            )
-        )
+                    MTKB.PDESystem(eqs, ic, dom, [tt, x, y], dvs, ps; name = :b),
+                    LP.LatticeDiscretization(LP.Grid(dims); T = Float64)
+                )
+            return LP.Problems.substeps(LP.Problems.field_problem(p), LP.ExplicitEuler(); dt = 1.0)
+        end
+        function acount(M; kw...)
+            return substep_counts(
+                    init(
+                        PottsProblem(M(; name = :f), fd_empty(dims), (0, 2); field_solver = ExplicitEuler(), kw...),
+                        SequentialCPM()
+                    )
+                )
+        end
         # `DivKGrad(c, c)` with c ∈ (0, 1): ρ = 8 max K = 8, n = ⌈8/1.8⌉ = 5, as B
         @test acount(FbIvDivK) == [5] == [bcount([DD(ce) ~ LP.DivKGrad(:harmonic)(ce, ce)], [ce], Any[], [c(0, x, y) ~ 0.5])]
         # … and the run equals B's, bitwise (σ frozen: no cells)
@@ -103,20 +106,23 @@ end
         σ[3:5, 3:5] .= 1
         σ[8:10, 6:8] .= 2
         c0 = rand(StableRNG(14), 12, 10)
-        prob(T, alg) = PottsProblem(
-            FwRoles(; name = :w), [ownership => σ, kind => [:A, :A], :c => c0, :h => c0, :s => c0], (0, 3);
-            T, seed = 3, field_solver = alg
-        )
-        run(T, alg; M = FwRoles) = (
+        function prob(T, alg)
+            return PottsProblem(
+                    FwRoles(; name = :w), [ownership => σ, kind => [:A, :A], :c => c0, :h => c0, :s => c0], (0, 3);
+                    T, seed = 3, field_solver = alg
+                )
+        end
+        function run(T, alg; M = FwRoles)
             integ = init(
-                M === FwRoles ? prob(T, alg) :
-                    PottsProblem(
-                        FwWide(; name = :w), [ownership => σ, kind => [:A, :A], :c => c0], (0, 3);
-                        T, seed = 3, field_solver = alg
-                    ), SequentialCPM()
-            );
-            foreach(_ -> step!(integ), 1:3); integ
-        )
+                    M === FwRoles ? prob(T, alg) :
+                        PottsProblem(
+                            FwWide(; name = :w), [ownership => σ, kind => [:A, :A], :c => c0], (0, 3);
+                            T, seed = 3, field_solver = alg
+                        ), SequentialCPM()
+                )
+            foreach(_ -> step!(integ), 1:3)
+            return integ
+        end
         # the stores have the declared types, the undeclared field the state type
         for T in (Float32, Float64)
             st = current_state(run(T, ExplicitEuler(substeps = 8)))
@@ -156,12 +162,14 @@ end
 
 @testitem "compute_type = Float64 reaches a Float32 model's field kernels" setup = [FieldsSetup, FieldsBoundsRolesSetup] tags = [:potts, :fields] begin
     @testset "compute_type = Float64 reaches a Float32 model's field kernels" begin
-        run1(T, alg) = (
+        function run1(T, alg)
             integ = init(
-                PottsProblem(FwNarrow(; name = :w), fd_empty((12, 10)), (0, 1); T, seed = 3, field_solver = alg),
-                SequentialCPM()
-            ); step!(integ); Array(current_state(integ).site.c)
-        )
+                    PottsProblem(FwNarrow(; name = :w), fd_empty((12, 10)), (0, 1); T, seed = 3, field_solver = alg),
+                    SequentialCPM()
+                )
+            step!(integ)
+            return Array(current_state(integ).site.c)
+        end
         wide, narrow = run1(Float32, ExplicitEuler(; substeps = 1, compute_type = Float64)), run1(Float32, ExplicitEuler(; substeps = 1))
         ref = run1(Float64, ExplicitEuler(; substeps = 1))
         @test eltype(wide) === eltype(narrow) === Float32

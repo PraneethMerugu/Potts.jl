@@ -80,12 +80,14 @@ const _BOUND_BUILTINS = (
 const _PRIMED_ALIASES = (Symbol("kind′") => :neighbor_kind, Symbol("owner′") => :neighbor_owner)
 # `euler_full`, `pieces_full`, `largest_piece_full` are the columns of the `adjacency = :full`
 # forms: reserved, not bound
-_reserved_names() = Set{Symbol}(
-    [
-        _BOUND_BUILTINS..., first.(_PRIMED_ALIASES)..., keys(DSL)..., :t, :D, :Pre, :name, :euler_full, :pieces_full,
-        :largest_piece_full,
-    ]
-)
+function _reserved_names()
+    return Set{Symbol}(
+            [
+                _BOUND_BUILTINS..., first.(_PRIMED_ALIASES)..., keys(DSL)..., :t, :D, :Pre, :name, :euler_full, :pieces_full,
+                :largest_piece_full,
+            ]
+        )
+end
 # DSL names added after published models used them as structural parameters
 # (`WortelAct(; connected)`): a structural parameter may take one of these names, and then it
 # shadows the DSL name in its model (which cannot use that helper)
@@ -210,8 +212,10 @@ function _reads_free(ex, s)
     end
     return any(a -> _reads_free(a, s), ex.args)
 end
-_is_fundef(ex) = ex isa Expr && (ex.head === :function || ex.head === :(=)) && length(ex.args) == 2 &&
-    _sig_call(ex.args[1]) !== nothing
+function _is_fundef(ex)
+    return ex isa Expr && (ex.head === :function || ex.head === :(=)) && length(ex.args) == 2 &&
+        _sig_call(ex.args[1]) !== nothing
+end
 function _sig_call(sig)
     sig isa Expr || return nothing
     sig.head === :call && return sig
@@ -254,8 +258,10 @@ function _sig_defaults(sig)
     foreach(walk, c.args[2:end])
     return out
 end
-_gen_binders(ex) = Any[a.head === :filter ? a.args[2:end] : a for a in ex.args[2:end] if a isa Expr] |>
-    v -> reduce(vcat, (b isa Vector ? b : Any[b] for b in v); init = Any[])
+function _gen_binders(ex)
+    return Any[a.head === :filter ? a.args[2:end] : a for a in ex.args[2:end] if a isa Expr] |>
+        v -> reduce(vcat, (b isa Vector ? b : Any[b] for b in v); init = Any[])
+end
 _assigns(b, s) = b isa Expr && b.head === :(=) && (b.args[1] === s || s in _sig_binders(b.args[1]))
 # whether a top-level statement of the body assigns `s` (`x = 2.0` or `x, y = …`): it hides
 # the coordinate in the whole body
@@ -572,8 +578,10 @@ const _UNCONDITIONAL = (
 )
 _has_section(ex, sec) = ex isa Expr && ((ex.head === :macrocall && ex.args[1] === sec) || any(a -> _has_section(a, sec), ex.args))
 _is_section(st) = st isa Expr && st.head === :macrocall && st.args[1] in SECTIONS
-_conditional_sections(ex) = ex isa Expr && ex.head in (:if, :elseif) &&
-    any(b -> b isa Expr && (b.head === :block ? any(_is_section, b.args) : _conditional_sections(b)), ex.args[2:end])
+function _conditional_sections(ex)
+    return ex isa Expr && ex.head in (:if, :elseif) &&
+        any(b -> b isa Expr && (b.head === :block ? any(_is_section, b.args) : _conditional_sections(b)), ex.args[2:end])
+end
 function _conditional!(parts::_Parts, ex)
     function branch(b)
         if b isa Expr && b.head in (:if, :elseif)
@@ -1188,14 +1196,18 @@ end
 
 # Edge-scoped statements see the link endpoints `a`, `b` (bound only there). No
 # declaration can be named `a`/`b` (`_ENDPOINT_NAMES`), so nothing is shadowed.
-_edge_scope(ex) = :(
-    let a = Potts.B.a, b = Potts.B.b
-        $ex
-    end
-)
+function _edge_scope(ex)
+    return :(
+            let a = Potts.B.a, b = Potts.B.b
+                $ex
+            end
+        )
+end
 
-_is_edges(l) = l isa Expr && l.head === :call && l.args[1] === :(=>) &&
-    l.args[2] isa Expr && l.args[2].head === :call && l.args[2].args[1] === :edges
+function _is_edges(l)
+    return l isa Expr && l.head === :call && l.args[1] === :(=>) &&
+        l.args[2] isa Expr && l.args[2].head === :call && l.args[2].args[1] === :edges
+end
 
 function _replace_copy(ex)
     if ex isa Expr && ex.head === :call && ex.args[1] === :(=>) && ex.args[2] === :copy
@@ -1407,8 +1419,10 @@ function _div_definition(ex)
     end
     return nothing
 end
-_has_endbegin(x) = x === :end || x === :begin || (x isa Expr && any(_has_endbegin, x.args)) ||
-    (x isa AbstractVector && any(_has_endbegin, x))
+function _has_endbegin(x)
+    return x === :end || x === :begin || (x isa Expr && any(_has_endbegin, x.args)) ||
+        (x isa AbstractVector && any(_has_endbegin, x))
+end
 
 _isparams(e) = e isa Expr && e.head === :parameters
 _relation_call(e) = e isa Expr && e.head === :call && length(e.args) == 2 && !_isparams(e.args[2])

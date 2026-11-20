@@ -159,10 +159,12 @@ end
 
 
 # a state of the dividing model without its serial column and counter: another layout
-cr_old_layout(st) = CorePotts.CPMState(
-    st.ownership, Base.structdiff(st.cell, NamedTuple{(:birth,)}),
-    st.site, Base.structdiff(st.model, NamedTuple{(CorePotts.NEXT_BIRTH,)}), st.history
-)
+function cr_old_layout(st)
+    return CorePotts.CPMState(
+            st.ownership, Base.structdiff(st.cell, NamedTuple{(:birth,)}),
+            st.site, Base.structdiff(st.model, NamedTuple{(CorePotts.NEXT_BIRTH,)}), st.history
+        )
+end
 
 
 # E4/E5/E8 (ergonomics review): the reference debug mode `track = (:references,)`, the
@@ -415,12 +417,14 @@ end
 @testitem "sibling(k) with several members: the lowest birth, reported in the debug mode (E5)" setup = [CellRefsSetup] tags = [:potts, :cell_refs] begin
     @testset "sibling(k) with several members: the lowest birth, reported in the debug mode (E5)" begin
         σ = zeros(Int32, 16, 16); σ[3:9, 3:9] .= 1; σ[4:5, 4:5] .= 2; σ[7:8, 7:8] .= 3
-        mk(track) = PottsProblem(
-            CRSibling(; name = :s), [
-                ownership => σ, kind => [:cyto, :nucleus, :nucleus],
-                cluster => [1, 1, 1],
-            ], (0, 1); capacity = 6, track
-        )
+        function mk(track)
+            return PottsProblem(
+                    CRSibling(; name = :s), [
+                        ownership => σ, kind => [:cyto, :nucleus, :nucleus],
+                        cluster => [1, 1, 1],
+                    ], (0, 1); capacity = 6, track
+                )
+        end
         p = mk(())
         @test solve(p, SequentialCPM()).u[end].cell.nuc[1] == 2                  # birth = slot: 2 is older
         u = deepcopy(p.u0); u.cell.birth[1:3] .= Int32[1, 7, 3]                   # now 3 is older

@@ -45,15 +45,19 @@ module ContainerModels
     @parameters x y Dc = 1.0e-3
     @variables c(..) kindₛ(..)::Int32 [input = true]
     const Dx, Dy = Potts.ModelingToolkitBase.Differential(x), Potts.ModelingToolkitBase.Differential(y)
-    pde(name) = PDESystem(
-        [D(c(t, x, y)) ~ Dc * (Dx(Dx(c(t, x, y))) + Dy(Dy(c(t, x, y))))], [c(0.0, x, y) ~ 0.0],
-        [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [c(t, x, y), kindₛ(t, x, y)],
-        [Dc]; name
-    )
-    part(; kw...) = Potts.PottsPart(;
-        kinds = [:medium, :cell], lattice = Potts.lattice_spec((8, 8)),
-        sweep = Potts.sweep_spec(:metropolis; temperature = 1.0), kw...
-    )
+    function pde(name)
+        return PDESystem(
+                [D(c(t, x, y)) ~ Dc * (Dx(Dx(c(t, x, y))) + Dy(Dy(c(t, x, y))))], [c(0.0, x, y) ~ 0.0],
+                [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [t, x, y], [c(t, x, y), kindₛ(t, x, y)],
+                [Dc]; name
+            )
+    end
+    function part(; kw...)
+        return Potts.PottsPart(;
+                kinds = [:medium, :cell], lattice = Potts.lattice_spec((8, 8)),
+                sweep = Potts.sweep_spec(:metropolis; temperature = 1.0), kw...
+            )
+    end
 end
 
 using .ContainerModels: xv, a, excess, volume, decay, inner_all, inner_empty

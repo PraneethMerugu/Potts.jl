@@ -22,38 +22,45 @@ const X = (t, x, y)
 const C, E, KA = c(X...), e(X...), kA(X...)
 const D = (12, 10)
 ic(f, v = 0.0) = f(0, x, y) ~ v
-mix() = (@parameters Dc = 0.4 kd = 0.3 s = 0.5 v = 1.5;
-        pdesys(
-            [Dt(C) ~ Dc * laplacian(C) - kd * C + s * KA, Dt(E) ~ 0.02 + 0.01 * x], [ic(c), ic(e), C ~ masked(E >= 0.5, v)], D,
-             [C, E, KA], [Dc, kd, s, v]))
+function mix()
+    @parameters Dc = 0.4 kd = 0.3 s = 0.5 v = 1.5
+    return pdesys(
+        [Dt(C) ~ Dc * laplacian(C) - kd * C + s * KA, Dt(E) ~ 0.02 + 0.01 * x], [ic(c), ic(e), C ~ masked(E >= 0.5, v)], D,
+         [C, E, KA], [Dc, kd, s, v])
+end
 # `rate` with the conditions `bcs`, no parameters, on lattice `dims`
 field1(rate, bcs = []; dims = D, c0 = 0.0, dvs = [C], ps = []) = pdesys([Dt(C) ~ rate], [ic(c, c0); bcs], dims, dvs, ps)
     robin_p() = field1(0.4 * laplacian(C) - 0.3 * C + 0.1 * x, [1.0 * c(t, x, 0) - Differential(y)(c(t, x, 0)) ~ 0.5])
     robin_n() = field1(0.4 * laplacian(C) - 0.3 * C + 0.1 * x, [1.0 * c(t, x, 0) + Differential(y)(c(t, x, 0)) ~ 0.5])
 field_face() = field1(DivKGrad(:harmonic)(1 + 0.05 * x * y, C) - 0.3 * C, [c(t, 0, y) ~ 1.0 + 0.1 * y])
     mask_field() = field1(0.4 * laplacian(C) - 0.3 * C, [C ~ masked(KA, 1 + 0.1 * x)]; dvs = [C, KA])
-moving() = (@parameters Dc = 0.5 kd = 0.4;
-        field1(Dc * laplacian(C) + 0.5 * KA - kd * C * kM(X...); dims = (16, 16), dvs = [C, KA, kM(X...)], ps = [Dc, kd])
-    )
+function moving()
+    @parameters Dc = 0.5 kd = 0.4
+    return field1(Dc * laplacian(C) + 0.5 * KA - kd * C * kM(X...); dims = (16, 16), dvs = [C, KA, kM(X...)], ps = [Dc, kd])
+end
     blowup() = (@parameters g = 1.0; field1(0.1 * laplacian(C) + g * C^3; dims = (8, 6), c0 = 1000.0, ps = [g]))
 still() = (@parameters Dc = 0.4 kd = 0.3; field1(DivKGrad(:harmonic)(Dc * (1 + 0.05 * x), C) - kd * C + 0.1 * x; ps = [Dc, kd]))
     periodic() = (@parameters Dc = 1.0; pdesys([Dt(C) ~ Dc * laplacian(C)], [ic(c)], (16, 8), [C], [Dc]; spacing = 2.0))
     timed() = field1(0.1 * laplacian(C) - (1 + 20 * t) * C; dims = (8, 8), c0 = 1.0)
-robin_w() = (@parameters rb = -1.0;
-        field1(0.4 * laplacian(C) - 0.3 * C + 0.1 * x, [1.5 * c(t, x, 0) - rb * Differential(y)(c(t, x, 0)) ~ 0.5]; ps = [rb])
-    )
+function robin_w()
+    @parameters rb = -1.0
+    return field1(0.4 * laplacian(C) - 0.3 * C + 0.1 * x, [1.5 * c(t, x, 0) - rb * Differential(y)(c(t, x, 0)) ~ 0.5]; ps = [rb])
+end
     hex() = field1(2.0 * laplacian(C) - C + 0.1 * KA; dims = (16, 16), dvs = [C, KA])
     hex_f() = field1(0.4 * laplacian(C) - 0.3 * C + 0.1 * x, [C ~ masked(KA, 1.5)]; dvs = [C, KA])
-    hex_face() = field1(
-        0.4 * laplacian(C) - 0.3 * C + 0.1 * x,
-    [c(t, 0, y) ~ 1.0, 1.5 * c(t, x, 0) - 0.5 * Differential(y)(c(t, x, 0)) ~ 0.2])
+    function hex_face()
+        return field1(
+                0.4 * laplacian(C) - 0.3 * C + 0.1 * x,
+            [c(t, 0, y) ~ 1.0, 1.5 * c(t, x, 0) - 0.5 * Differential(y)(c(t, x, 0)) ~ 0.2])
+    end
 kind3() = field1(1.0 * KA; dvs = [C, KA])
-    scal() = (
-        O = o(X...); pdesys(
-            [Dt(C) ~ 0.5 * laplacian(C) - 40 * C / (0.025 + C) + 20, Dt(O) ~ 0.5 * laplacian(O) - O + C],
-            [ic(c, 0.5), ic(o, 0.5)], D, [C, O]
-        )
-    )
+    function scal()
+        O = o(X...)
+        return pdesys(
+                [Dt(C) ~ 0.5 * laplacian(C) - 40 * C / (0.025 + C) + 20, Dt(O) ~ 0.5 * laplacian(O) - O + C],
+                [ic(c, 0.5), ic(o, 0.5)], D, [C, O]
+            )
+    end
 function comp()
     @variables u(..)[1:2] = [0.5, 0.5]
     Ua = u(X...)
@@ -67,22 +74,30 @@ end
     site_m() = field1(0.04 * (1 + x) * laplacian(C) - 0.3 * C + 0.1 * y)
     site_k() = field1(0.04 * (1 + x) * DivKGrad(:harmonic)(1 + 0.05 * y, C) - 0.3 * C + 0.1 * y)
 const DD = (24, 20)
-dual() = (@parameters Dc = 0.2 s = 0.5 kd = 0.1 Dh = 0.5 * Dc;
-        field1(Dh * laplacian(C) + Dh * laplacian(C) + s * KA - kd * C; dims = DD, dvs = [C, KA], ps = [Dc, s, kd, Dh])
-    )
-dual_mask() = (@parameters Dc = 0.4 kd = 0.3 v = 1.5 c0 = 0.2;
-        field1(Dc * laplacian(C) - kd * C, [C ~ masked(KA, v)]; c0, dvs = [C, KA], ps = [Dc, kd, v, c0])
-    )
-dual_two() = (@parameters ra = 0.3 rb = 0.2; U = u(X...); W = w(X...);
-        pdesys(
-            [Dt(U) ~ 0.2 * laplacian(U) + ra * KA - 0.1 * U, Dt(W) ~ 0.3 * laplacian(W) + rb * U - 0.2 * W], [ic(u), ic(w)], DD,
-                  [U, W, KA], [ra, rb]))
-dual_fill() = (@parameters V0 = 14.0 s0 = 0.5;
-        field1(0.2 * laplacian(C) + ifelse(big(X...), s0, 0.0) - 0.1 * C; dims = DD, dvs = [C, big(X...)], ps = [V0, s0])
-    )
-dual_vol() = (@parameters V0 = 14.0;
-        field1(0.2 * laplacian(C) + 0.01 * KA * (vol(X...) - V0) - 0.1 * C; dims = DD, dvs = [C, KA, vol(X...)], ps = [V0])
-    )
+function dual()
+    @parameters Dc = 0.2 s = 0.5 kd = 0.1 Dh = 0.5 * Dc
+    return field1(Dh * laplacian(C) + Dh * laplacian(C) + s * KA - kd * C; dims = DD, dvs = [C, KA], ps = [Dc, s, kd, Dh])
+end
+function dual_mask()
+    @parameters Dc = 0.4 kd = 0.3 v = 1.5 c0 = 0.2
+    return field1(Dc * laplacian(C) - kd * C, [C ~ masked(KA, v)]; c0, dvs = [C, KA], ps = [Dc, kd, v, c0])
+end
+function dual_two()
+    @parameters ra = 0.3 rb = 0.2
+    U = u(X...)
+    W = w(X...)
+    return pdesys(
+        [Dt(U) ~ 0.2 * laplacian(U) + ra * KA - 0.1 * U, Dt(W) ~ 0.3 * laplacian(W) + rb * U - 0.2 * W], [ic(u), ic(w)], DD,
+              [U, W, KA], [ra, rb])
+end
+function dual_fill()
+    @parameters V0 = 14.0 s0 = 0.5
+    return field1(0.2 * laplacian(C) + ifelse(big(X...), s0, 0.0) - 0.1 * C; dims = DD, dvs = [C, big(X...)], ps = [V0, s0])
+end
+function dual_vol()
+    @parameters V0 = 14.0
+    return field1(0.2 * laplacian(C) + 0.01 * KA * (vol(X...) - V0) - 0.1 * C; dims = DD, dvs = [C, KA, vol(X...)], ps = [V0])
+end
     dual_kind() = field1(0.2 * laplacian(C) + dk(X...) - 0.1 * C; dims = DD, dvs = [C, dk(X...)])
 end
 
@@ -97,10 +112,10 @@ module FsPDE
     ic(f, v = 0.0) = f(0, x, y) ~ v
     move() = pdesys([Dt(C) ~ 4.0 * laplacian(C) - 2.0 * C], [ic(c), C ~ masked(KA, 1.0)], (24, 24), [C, KA])
     secrete() = pdesys([Dt(C) ~ 1.0 * laplacian(C) - 0.2 * C + 1.0 * KA], [ic(c)], (24, 24), [C, KA])
-    steady(; zero = false) = (
-        @parameters Dc = 0.4 kd = 0.3 s = 0.5;
-        pdesys([(zero ? 0 : Dt(C)) ~ Dc * laplacian(C) - kd * C + s * KA], [ic(c)], D, [C, KA], [Dc, kd, s])
-    )
+    function steady(; zero = false)
+        @parameters Dc = 0.4 kd = 0.3 s = 0.5
+        return pdesys([(zero ? 0 : Dt(C)) ~ Dc * laplacian(C) - kd * C + s * KA], [ic(c)], D, [C, KA], [Dc, kd, s])
+    end
     island() = (@parameters kd = 1.0; pdesys([Dt(C) ~ 0.5 * laplacian(C) - kd * KA * C + 1.0], [ic(c)], (24, 12), [C, KA], [kd]))
     no_island() = pdesys([Dt(C) ~ 0.5 * laplacian(C) - 0.1 * C + 1.0], [ic(c)], (24, 12), [C])
     grow() = (@parameters g = -0.5; pdesys([Dt(C) ~ 0.4 * laplacian(C) - g * C + 0.1 * KA], [ic(c)], D, [C, KA], [g]))
@@ -110,20 +125,20 @@ module FsPDE
     loop_t() = (@parameters kc = 0.5; loop(0.1 * laplacian(U) - dk(X...) * U + kc * W, 0.1 * laplacian(W) - W - kc * U, [kc], [dk(X...)]))
     loop_x() = loop(0.1 * laplacian(U) - 1.0 * U + kout(X...) * W, 0.1 * laplacian(W) - W - kinp(X...) * U, [], [kout(X...), kinp(X...)])
     steady_mix() = pdesys([Dt(E) ~ 0.1 * laplacian(E) - E + C, 0 ~ 0.4 * laplacian(C) - 0.3 * C + 0.5 * KA], [ic(e), ic(c)], D, [E, C, KA])
-    steady_neg() = (
-        @parameters Dc = 0.4 kd = 0.3 s = 0.5;
-        pdesys([0 ~ kd * C - Dc * laplacian(C) - s * KA], [ic(c)], D, [C, KA], [Dc, kd, s])
-    )
+    function steady_neg()
+        @parameters Dc = 0.4 kd = 0.3 s = 0.5
+        return pdesys([0 ~ kd * C - Dc * laplacian(C) - s * KA], [ic(c)], D, [C, KA], [Dc, kd, s])
+    end
     local_() = pdesys([0 ~ -2.0 * C + 0.5 * E, Dt(E) ~ 0.1 * laplacian(E) - E + 0.5 * KA], [ic(c), ic(e)], D, [C, E, KA])
     robin_q() = pdesys([Dt(C) ~ 0.4 * laplacian(C) - 1.0 * C + 0.1 * x], [ic(c), 1.0 * c(t, x, 0) + Differential(y)(c(t, x, 0)) ~ 0.5], D, [C])
     pair() = pdesys([0 ~ 0.1 * laplacian(U) - 0.1 * U + 5.0 * V + 0.5 * KA, 0 ~ 0.1 * laplacian(V) - V - 5.0 * U], [ic(u), ic(v)], D, [U, V, KA])
-    feed() = (
-        @parameters k = 0.5;
-        pdesys(
-            [Dt(E) ~ 0.1 * laplacian(E) - E + 0.5 * V + 0.5 * KA, 0 ~ 0.1 * laplacian(U) - U + k * V + 0.2 * E, 0 ~ 0.1 * laplacian(V) - V - k * U],
-            [ic(e), ic(u), ic(v)], D, [E, U, V, KA], [k]
-        )
-    )
+    function feed()
+        @parameters k = 0.5
+        return pdesys(
+                [Dt(E) ~ 0.1 * laplacian(E) - E + 0.5 * V + 0.5 * KA, 0 ~ 0.1 * laplacian(U) - U + k * V + 0.2 * E, 0 ~ 0.1 * laplacian(V) - V - k * U],
+                [ic(e), ic(u), ic(v)], D, [E, U, V, KA], [k]
+            )
+    end
     function comp()
         @variables w(..)[1:2] = [0.0, 0.0]
         Wa = w(X...)
@@ -213,13 +228,15 @@ FcHalf(; name = :FcHalf, kw...) = _Fi12x10(; sys_fn = FsPDE.half, has_kA = true,
     end
 end
 
-FiMoving(; name = :FiMoving, kw...) =
-    _FiMovable(; sys_fn = FiPDE.moving, inp = :kAkM, dims = (16, 16), v0 = 12.0, temp = 8.0, sched_sf = true, name, kw...)
+function FiMoving(; name = :FiMoving, kw...)
+    return _FiMovable(; sys_fn = FiPDE.moving, inp = :kAkM, dims = (16, 16), v0 = 12.0, temp = 8.0, sched_sf = true, name, kw...)
+end
 FiMove(; name = :FiMove, kw...) = _FiMovable(; sys_fn = FsPDE.move, temp = 12.0, sched_sf = true, name, kw...)
 FiSecrete(; name = :FiSecrete, kw...) = _FiMovable(; sys_fn = FsPDE.secrete, temp = 10.0, name, kw...)
 FiTimed(; name = :FiTimed, kw...) = _FiMovable(; sys_fn = FiPDE.timed, inp = :none, dims = (8, 8), v0 = 4.0, mcs_dur = 0.2, name, kw...)
-FiPeriodic(; name = :FiPeriodic, kw...) =
-    _FiMovable(; sys_fn = FiPDE.periodic, inp = :none, dims = (16, 8), boundary = Periodic(), spacing = (2.0, 2.0), v0 = 4.0, name, kw...)
+function FiPeriodic(; name = :FiPeriodic, kw...)
+    return _FiMovable(; sys_fn = FiPDE.periodic, inp = :none, dims = (16, 8), boundary = Periodic(), spacing = (2.0, 2.0), v0 = 4.0, name, kw...)
+end
 
 # ---- Hexagonal & multi-kind models ---------------------------------------------------------------------
 @potts_model FiHex begin
@@ -422,13 +439,16 @@ const FI_DW = [0.01 * (i + 2j) for i in 1:24, j in 1:20]
 
 fi_dq(sol) = sum(FI_DW .* sol.u[end].site.c)
 
-fi_drun(fs, ps; M = FiDual, op = fi_dop(), alg = SequentialCPM(), kw...) =
-    solve(PottsProblem(M(; name = :m), [op; ps], (0, 12); field_solver = fs, seed = 3, kw...), alg; saveat = 0:3:12)
+function fi_drun(fs, ps; M = FiDual, op = fi_dop(), alg = SequentialCPM(), kw...)
+    return solve(PottsProblem(M(; name = :m), [op; ps], (0, 12); field_solver = fs, seed = 3, kw...), alg; saveat = 0:3:12)
+end
 
-fi_derr(f) = try
-    f(); ""
-catch err
-    sprint(showerror, err)
+function fi_derr(f)
+    return try
+            f(); ""
+        catch err
+            sprint(showerror, err)
+        end
 end
 
 function fi_throws(T, pats, f)

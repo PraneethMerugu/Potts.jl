@@ -14,10 +14,10 @@ module FpPDE
     field1(rate, dims, ps = []; bcs = [], c0 = 0.0, dvs = [C], kw...) = pdesys([Dt(C) ~ rate], [ic(c, c0); bcs], dims, dvs, ps; kw...)
     p_divk() = (@parameters K0 = 0.4 s = 0.01; field1(DivKGrad(:harmonic)(K0, C) + s * x, (8, 6), [K0, s]))
     p_raw() = (@parameters K0 = 0.4 s = 0.01; field1(Dx(K0 * Dx(C)) + Dy(K0 * Dy(C)) + s * x, (8, 6), [K0, s]))
-    p_aux() = (
-        @parameters K0 = 0.4 s = 0.01;
-        pdesys([KK ~ K0 * (1 + 0.05 * x), Dt(C) ~ DivKGrad(:arithmetic)(KK, C) + s * x], [ic(c), ic(K)], (8, 6), [C, KK], [K0, s])
-    )
+    function p_aux()
+        @parameters K0 = 0.4 s = 0.01
+        return pdesys([KK ~ K0 * (1 + 0.05 * x), Dt(C) ~ DivKGrad(:arithmetic)(KK, C) + s * x], [ic(c), ic(K)], (8, 6), [C, KK], [K0, s])
+    end
     p_map() = (@parameters g = 0.5; pdesys([Shift(t, 1)(M) ~ g * M + x], [ic(m)], (6, 4), [M], [g]))
     p_advect() = (@parameters ux = 0.3 s = 0.01; field1(-Advect(Upwind1())([ux, 0.0], C) + s * y, (8, 6), [ux, s]))
     p_advect_const() = (@parameters s = 0.01; field1(-Advect(Upwind1())([0.3, 0.0], C) + s * y, (8, 6), [s]))
@@ -61,10 +61,10 @@ module FpPDE
     a_kind() = pdesys([KK ~ KA], [ic(K)], (12, 12), [KK, KA])
     a_block() = (@parameters m0 = 0.0; pdesys([KK ~ ifelse(MCS >= m0, 1.0, 0.0)], [ic(K)], (12, 12), [KK], [m0]))
     w_nonlinear() = (@parameters Dc = 0.1 kw = 0.5; field1(Dc * laplacian(C) - kw * C^2, (8, 8), [Dc, kw]))
-    x_loop() = (
-        @parameters kx = 1.0;
-        pdesys([KK ~ C, Dt(W) ~ -kx * KK, Dt(C) ~ kx * W], [ic(w, 1.0), ic(c), ic(K)], (6, 4), [W, C, KK], [kx])
-    )
+    function x_loop()
+        @parameters kx = 1.0
+        return pdesys([KK ~ C, Dt(W) ~ -kx * KK, Dt(C) ~ kx * W], [ic(w, 1.0), ic(c), ic(K)], (6, 4), [W, C, KK], [kx])
+    end
 end
 
 @potts_model _Fp8x6 begin

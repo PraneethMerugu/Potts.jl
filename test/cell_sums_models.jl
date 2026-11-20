@@ -76,8 +76,9 @@ cs_digests() = vcat(cs_digests1(false), cs_digests1(false; run = 1), cs_digests1
     @sweep Metropolis(; temperature = 4.0)
 end
 # values whose float sums depend on the order: magnitudes over 8 decades, both signs
-cs_site_values(dims = (200, 200)) =
-    Float32[(0.5 + sin(1.3i + 0.7j)) * 10.0f0^((3i + 5j) % 9 - 4) for i in 1:dims[1], j in 1:dims[2]]
+function cs_site_values(dims = (200, 200))
+    return Float32[(0.5 + sin(1.3i + 0.7j)) * 10.0f0^((3i + 5j) % 9 - 4) for i in 1:dims[1], j in 1:dims[2]]
+end
 cs_site_op() = (op = cs_threshold_op(); [op[1], op[2], :h => cs_site_values()])
 
 # The other sums over sites. Weighted surfaces after divisions (the device
@@ -183,10 +184,12 @@ function cs_site_sum_digests(backend = CorePotts.CPU(); ctl::Bool = false, mcs =
     try
         # Pin `threads = false` so the 1-thread vs 4-thread comparison stays deterministic
         # regardless of `inline_max_blocks`.
-        run(m, op, t; kw...) = solve(
-            PottsProblem(m, op, (0, t); T = Float32, seed = 7, capacity = 2000),
-            CheckerboardCPM(; threads = false, kw...); backend, save_start = false
-        )
+        function run(m, op, t; kw...)
+            return solve(
+                    PottsProblem(m, op, (0, t); T = Float32, seed = 7, capacity = 2000),
+                    CheckerboardCPM(; threads = false, kw...); backend, save_start = false
+                )
+        end
         # the weighted surface in the staged device lifecycle (one kernel per stage), the
         # compartments in the fused one (one workgroup: `fused_lifecycle_max_sites`)
         sw = run(CsWSurf(; name = :w), cs_wsurf_op(), mcs; fused_lifecycle_max_sites = 0)

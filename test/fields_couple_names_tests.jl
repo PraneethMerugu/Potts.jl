@@ -45,15 +45,17 @@ end
         ]
         fi = Potts.field_inputs(PottsProblem(CeAny(; name = :m), op, (0, 1)))[:a]
         @test fi == nb && count(nb) > 32                                         # cells' edges and their medium rims
-        hand(σ, kind) = [
-            :a => [
-                any(
-                    1 <= i + di <= size(σ, 1) && 1 <= j + dj <= size(σ, 2) && σ[i + di, j + dj] != 0 &&
-                        kind[σ[i + di, j + dj]] == 1 for (di, dj) in ((1, 0), (-1, 0), (0, 1), (0, -1))
-                )
-                    for i in axes(σ, 1), j in axes(σ, 2)
-            ],
-        ]
+        function hand(σ, kind)
+            return [
+                    :a => [
+                        any(
+                            1 <= i + di <= size(σ, 1) && 1 <= j + dj <= size(σ, 2) && σ[i + di, j + dj] != 0 &&
+                                kind[σ[i + di, j + dj]] == 1 for (di, dj) in ((1, 0), (-1, 0), (0, 1), (0, -1))
+                        )
+                            for i in axes(σ, 1), j in axes(σ, 2)
+                    ],
+                ]
+        end
         err, n = cp_replay(CeAny(; name = :m), CeS.named_owned(), hand, ExplicitEuler())
         @test n == 12 && err <= 1.0e-14 || (println("CeAny: $err"); false)   # (measured 4.4e-16, 2026-11-10: one rounding)
         host = CpHost(; name = :m)

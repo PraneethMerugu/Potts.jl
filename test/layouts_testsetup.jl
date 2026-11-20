@@ -21,10 +21,10 @@ _sites(σ, c) = findall(==(c), σ)
 _cheb(a, b) = minimum(maximum(abs.(Tuple(x - y))) for x in a, y in b)
 
 # every pair of distinct cells is more than `gap` sites apart (Chebyshev)
-_separated(σ, gap) = (
-    n = maximum(σ);
-    all(_cheb(_sites(σ, a), _sites(σ, b)) > gap for a in 1:n for b in (a + 1):n)
-)
+function _separated(σ, gap)
+    n = maximum(σ)
+    return all(_cheb(_sites(σ, a), _sites(σ, b)) > gap for a in 1:n for b in (a + 1):n)
+end
 
 
 @potts_model HexLayoutProbe begin

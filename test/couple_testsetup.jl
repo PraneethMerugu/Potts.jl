@@ -21,20 +21,26 @@ const Dt = Differential(t)
 @parameters x y Dc = 0.2 s = 0.5 kd = 0.1 av = 0.01
 @variables c(..) u(..) endo(..)::Bool [input = true] vol(..) [input = true] med(..)::Bool [input = true]
     const DOM = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 24.0), y ∈ Interval(0.0, 20.0)]
-sys(; name = :fields, dom = DOM) = PDESystem(
-        [Dt(c(t, x, y)) ~ Dc * laplacian(c(t, x, y)) + s * endo(t, x, y) - kd * c(t, x, y) + av * vol(t, x, y)],
-        [c(0, x, y) ~ 0.0], dom, [t, x, y], [c(t, x, y), endo(t, x, y), vol(t, x, y)], [Dc, s, kd, av]; name
-    )
-    sys3(; name = :fields) = PDESystem(
-        [
-            Dt(c(t, x, y)) ~ Dc * laplacian(c(t, x, y)) + s * endo(t, x, y) - kd * c(t, x, y),
-            Dt(u(t, x, y)) ~ 0.3 * laplacian(u(t, x, y)) + 0.2 * c(t, x, y) - 0.2 * u(t, x, y),
-        ],
-        [c(0, x, y) ~ 0.0, u(0, x, y) ~ 0.0], DOM, [t, x, y], [c(t, x, y), u(t, x, y), endo(t, x, y)], [Dc, s, kd]; name
-    )
-    sys2(; name = :fields) = PDESystem(
-        [Dt(c(t, x, y)) ~ Dc * laplacian(c(t, x, y)) + s * endo(t, x, y) - kd * c(t, x, y)],
-    [c(0, x, y) ~ 0.0], DOM, [t, x, y], [c(t, x, y), endo(t, x, y)], [Dc, s, kd]; name)
+function sys(; name = :fields, dom = DOM)
+    return PDESystem(
+            [Dt(c(t, x, y)) ~ Dc * laplacian(c(t, x, y)) + s * endo(t, x, y) - kd * c(t, x, y) + av * vol(t, x, y)],
+            [c(0, x, y) ~ 0.0], dom, [t, x, y], [c(t, x, y), endo(t, x, y), vol(t, x, y)], [Dc, s, kd, av]; name
+        )
+end
+    function sys3(; name = :fields)
+        return PDESystem(
+                [
+                    Dt(c(t, x, y)) ~ Dc * laplacian(c(t, x, y)) + s * endo(t, x, y) - kd * c(t, x, y),
+                    Dt(u(t, x, y)) ~ 0.3 * laplacian(u(t, x, y)) + 0.2 * c(t, x, y) - 0.2 * u(t, x, y),
+                ],
+                [c(0, x, y) ~ 0.0, u(0, x, y) ~ 0.0], DOM, [t, x, y], [c(t, x, y), u(t, x, y), endo(t, x, y)], [Dc, s, kd]; name
+            )
+    end
+    function sys2(; name = :fields)
+        return PDESystem(
+                [Dt(c(t, x, y)) ~ Dc * laplacian(c(t, x, y)) + s * endo(t, x, y) - kd * c(t, x, y)],
+            [c(0, x, y) ~ 0.0], DOM, [t, x, y], [c(t, x, y), endo(t, x, y)], [Dc, s, kd]; name)
+    end
 end
 
 const CE_ALIAS = CpPDE.endo
@@ -114,21 +120,26 @@ end
 
 cp_op() = (σ = zeros(Int32, 24, 20); σ[5:8, 5:8] .= 1; σ[14:17, 10:13] .= 2; [ownership => σ, kind => [:A, :A]])
 
-cp_run(m, fs, k = 12; op = cp_op(), kw...) =
-    solve(PottsProblem(m, op, (0, k); field_solver = fs, seed = 3, kw...), SequentialCPM(); saveat = 0:3:k)
-
-cp_msg(f, E::Type{<:Exception} = ArgumentError) = try
-    f()
-    "built"
-catch e
-    e isa E ? sprint(showerror, e) : "wrong exception $(typeof(e)), expected $E"
+function cp_run(m, fs, k = 12; op = cp_op(), kw...)
+    return solve(PottsProblem(m, op, (0, k); field_solver = fs, seed = 3, kw...), SequentialCPM(); saveat = 0:3:k)
 end
 
-cp_compile_msg(f) = try
-    f()
-    "built"
-catch e
-    e isa Potts.PottsCompileError ? sprint(showerror, e) : "wrong exception $(typeof(e)), expected Potts.PottsCompileError"
+function cp_msg(f, E::Type{<:Exception} = ArgumentError)
+    return try
+            f()
+            "built"
+        catch e
+            e isa E ? sprint(showerror, e) : "wrong exception $(typeof(e)), expected $E"
+        end
+end
+
+function cp_compile_msg(f)
+    return try
+            f()
+            "built"
+        catch e
+            e isa Potts.PottsCompileError ? sprint(showerror, e) : "wrong exception $(typeof(e)), expected Potts.PottsCompileError"
+        end
 end
 
 const CP_W = [0.01 * (i + 2j) for i in 1:24, j in 1:20]
@@ -139,8 +150,10 @@ const CP_ODE_TOL = 6e-5
 
 const LP = Potts.LatticePDE
 
-cp_hand(σ, kind) = [:endo => [s != 0 && kind[s] == 1 for s in σ],
-                    :vol => [s == 0 ? 0.0 : Float64(count(==(s), σ)) for s in σ]]
+function cp_hand(σ, kind)
+    return [:endo => [s != 0 && kind[s] == 1 for s in σ],
+        :vol => [s == 0 ? 0.0 : Float64(count(==(s), σ)) for s in σ]]
+end
 
 cp_hand2(σ, kind) = cp_hand(σ, kind)[1:1]
 
@@ -166,14 +179,18 @@ end
 cp_tol(::ExplicitEuler) = 0.0
 cp_tol(::BackwardEuler) = 1e-9
 
-cp_same(r, a) = all(r.u[i].ownership == a.u[i].ownership for i in eachindex(r.u)) &&
-                all(r.u[i].site == a.u[i].site for i in eachindex(r.u))
+function cp_same(r, a)
+    return all(r.u[i].ownership == a.u[i].ownership for i in eachindex(r.u)) &&
+        all(r.u[i].site == a.u[i].site for i in eachindex(r.u))
+end
 
-cp_build_err(ex) = try
-    Core.eval(@__MODULE__, ex)
-    "built"
-catch err
-    sprint(showerror, err)
+function cp_build_err(ex)
+    return try
+            Core.eval(@__MODULE__, ex)
+            "built"
+        catch err
+            sprint(showerror, err)
+        end
 end
 
 module CpCases
@@ -191,29 +208,43 @@ const masked = Potts.LatticePDE.masked
 @variables kb(..)::Bool [input = true, lattice_input_name = "kind"] kr(..) [input = true, lattice_input_name = "kind"]
 const DOM = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 24.0), y ∈ Interval(0.0, 20.0)]
     C, Q, W = c(t, x, y), q(t, x, y), w(t, x, y)
-    rich() = PDESystem(
-        [Dt(C) ~ Dc * laplacian(C) + s * endo(t, x, y) - kd * C + 0.01 * vol(t, x, y), 0 ~ 0.5 * laplacian(Q) - kq * Q + C],
-    [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 0.5, Differential(x)(c(t, 24, y)) ~ 0.0, C ~ masked(isB(t, x, y) == 1, 1.0)],
-    DOM, [t, x, y], [C, Q, endo(t, x, y), isB(t, x, y), vol(t, x, y)], [Dc, s, kd, kq]; name = :rich)
-    first_sys() = PDESystem(
-        [Dt(C) ~ Dc * laplacian(C) + s * endo(t, x, y) - kd * C], [c(0, x, y) ~ 0.0], DOM, [t, x, y],
-    [C, endo(t, x, y)], [Dc, s, kd]; name = :one)
-    second_unbound() = PDESystem(
-        [Dt(W) ~ 0.3 * laplacian(W) - W + 0.7 * cnm(t, x, y)], [w(0, x, y) ~ 0.0], DOM, [t, x, y],
-    [W, cnm(t, x, y)], Any[]; name = :two)
-    second_bound() = PDESystem(
-        [Dt(W) ~ 0.3 * laplacian(W) - W + 0.7 * cin(t, x, y)], [w(0, x, y) ~ 0.0], DOM, [t, x, y],
-    [W, cin(t, x, y)], Any[]; name = :twob)
-    coarse_sys() = PDESystem(
-        [Dt(cc(t, x, y)) ~ Dc * laplacian(cc(t, x, y)) + s * endo(t, x, y) - kd * cc(t, x, y)], [cc(0, x, y) ~ 0.0],
-        DOM, [t, x, y], [cc(t, x, y), endo(t, x, y)], [Dc, s, kd]; name = :crs
-    )
-    kind_bool() = PDESystem(
-        [Dt(C) ~ Dc * laplacian(C) + s * kb(t, x, y) - kd * C], [c(0, x, y) ~ 0.0], DOM, [t, x, y],
-    [C, kb(t, x, y)], [Dc, s, kd]; name = :kbs)
-    kind_real() = PDESystem(
-        [Dt(C) ~ Dc * laplacian(C) + s * kr(t, x, y) - kd * C], [c(0, x, y) ~ 0.0], DOM, [t, x, y],
-    [C, kr(t, x, y)], [Dc, s, kd]; name = :krs)
+    function rich()
+        return PDESystem(
+                [Dt(C) ~ Dc * laplacian(C) + s * endo(t, x, y) - kd * C + 0.01 * vol(t, x, y), 0 ~ 0.5 * laplacian(Q) - kq * Q + C],
+            [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 0.5, Differential(x)(c(t, 24, y)) ~ 0.0, C ~ masked(isB(t, x, y) == 1, 1.0)],
+            DOM, [t, x, y], [C, Q, endo(t, x, y), isB(t, x, y), vol(t, x, y)], [Dc, s, kd, kq]; name = :rich)
+    end
+    function first_sys()
+        return PDESystem(
+                [Dt(C) ~ Dc * laplacian(C) + s * endo(t, x, y) - kd * C], [c(0, x, y) ~ 0.0], DOM, [t, x, y],
+            [C, endo(t, x, y)], [Dc, s, kd]; name = :one)
+    end
+    function second_unbound()
+        return PDESystem(
+                [Dt(W) ~ 0.3 * laplacian(W) - W + 0.7 * cnm(t, x, y)], [w(0, x, y) ~ 0.0], DOM, [t, x, y],
+            [W, cnm(t, x, y)], Any[]; name = :two)
+    end
+    function second_bound()
+        return PDESystem(
+                [Dt(W) ~ 0.3 * laplacian(W) - W + 0.7 * cin(t, x, y)], [w(0, x, y) ~ 0.0], DOM, [t, x, y],
+            [W, cin(t, x, y)], Any[]; name = :twob)
+    end
+    function coarse_sys()
+        return PDESystem(
+                [Dt(cc(t, x, y)) ~ Dc * laplacian(cc(t, x, y)) + s * endo(t, x, y) - kd * cc(t, x, y)], [cc(0, x, y) ~ 0.0],
+                DOM, [t, x, y], [cc(t, x, y), endo(t, x, y)], [Dc, s, kd]; name = :crs
+            )
+    end
+    function kind_bool()
+        return PDESystem(
+                [Dt(C) ~ Dc * laplacian(C) + s * kb(t, x, y) - kd * C], [c(0, x, y) ~ 0.0], DOM, [t, x, y],
+            [C, kb(t, x, y)], [Dc, s, kd]; name = :kbs)
+    end
+    function kind_real()
+        return PDESystem(
+                [Dt(C) ~ Dc * laplacian(C) + s * kr(t, x, y) - kd * C], [c(0, x, y) ~ 0.0], DOM, [t, x, y],
+            [C, kr(t, x, y)], [Dc, s, kd]; name = :krs)
+    end
 end
 
 @potts_model CrHost2 begin
@@ -237,19 +268,21 @@ function cp_fresh_err(ex, E::Type{<:Exception} = ArgumentError)
     end
 end
 
-cp_a_model(lines...) = quote
-    @potts_model CpA begin
-        @kinds medium A
-        @variables begin
-            c(field) = 0.0
-            x(cell) = 1.0
+function cp_a_model(lines...)
+    return quote
+            @potts_model CpA begin
+                @kinds medium A
+                @variables begin
+                    c(field) = 0.0
+                    x(cell) = 1.0
+                end
+                @lattice Lattice((8, 8); boundary = Closed())
+                @energy cells(A) => (volume - 9.0)^2
+                $(lines...)
+                @sweep Metropolis(; temperature = 1.0)
+            end
+            CpA(; name = :m)
         end
-        @lattice Lattice((8, 8); boundary = Closed())
-        @energy cells(A) => (volume - 9.0)^2
-        $(lines...)
-        @sweep Metropolis(; temperature = 1.0)
-    end
-    CpA(; name = :m)
 end
 
 @potts_model CeKindNamed begin
@@ -270,9 +303,11 @@ const t = Potts.t
 @variables c(..) cell(..)::Bool [input = true] ecm(..)::Bool [input = true]
 const C = c(t, x, y)
     eq() = Differential(t)(C) ~ Dc * laplacian(C) + σc * cell(t, x, y) - δc * C * ecm(t, x, y)
-chemoattractant(lattice) = PDESystem([eq()], [c(0, x, y) ~ 0.0], lattice_domain(t, (x, y), lattice), [t, x, y],
-        [C, cell(t, x, y), ecm(t, x, y)], [Dc, σc, δc]; name = :merks_field
-    )
+function chemoattractant(lattice)
+    return PDESystem([eq()], [c(0, x, y) ~ 0.0], lattice_domain(t, (x, y), lattice), [t, x, y],
+            [C, cell(t, x, y), ecm(t, x, y)], [Dc, σc, δc]; name = :merks_field
+        )
+end
 const SHORT = Potts.LatticePDE.pdesystem([eq()], [c(0, x, y) ~ 0.0]; name = :merks_field)
 const NODOM = PDESystem([eq()], [c(0, x, y) ~ 0.0], [], [t, x, y], [C, cell(t, x, y), ecm(t, x, y)], [Dc, σc, δc];
     name = :merks_field)
@@ -313,8 +348,13 @@ FsMerksLong(; mode = :long, lattice = (40, 30), name = :FsMerksLong, kw...) = _F
 FsMerksShort(; mode = :short, lattice = (40, 30), name = :FsMerksShort, kw...) = _FsMerksBase(; mode, lattice, name, kw...)
 FsMerksNoDom(; mode = :nodom, lattice = (40, 30), name = :FsMerksNoDom, kw...) = _FsMerksBase(; mode, lattice, name, kw...)
 
-fs_op(dims = (40, 30)) = (σ = zeros(Int32, dims...); σ[5:9, 5:9] .= 1; σ[20:24, 12:16] .= 2; σ[30:34, 20:24] .= 3;
-    [ownership => σ, kind => fill(:endothelial, 3)])
+function fs_op(dims = (40, 30))
+    σ = zeros(Int32, dims...)
+    σ[5:9, 5:9] .= 1
+    σ[20:24, 12:16] .= 2
+    σ[30:34, 20:24] .= 3
+    return [ownership => σ, kind => fill(:endothelial, 3)]
+end
 
 fs_run(m; op = fs_op(Potts._p(m, :lattice).dims), k = 20) = solve(PottsProblem(m, op, (0, k); seed = 5), SequentialCPM(); saveat = 0:5:k)
 
@@ -326,10 +366,12 @@ using Potts.Fields
 @variables c(..) = 0.0 a(..)::Bool [input = true] sv(..) [input = true]
 const C = c(t, x, y)
     named() = pdesystem([Differential(t)(C) ~ Dc * laplacian(C) + s * a(t, x, y) - kd * C]; name = :fields)
-    named_owned() = pdesystem(
-        [Differential(t)(C) ~ Dc * laplacian(C) + s * a(t, x, y) - kd * C]; name = :fields,
-        domain = lattice_domain(t, (x, y), (24, 20))
-    )
+    function named_owned()
+        return pdesystem(
+                [Differential(t)(C) ~ Dc * laplacian(C) + s * a(t, x, y) - kd * C]; name = :fields,
+                domain = lattice_domain(t, (x, y), (24, 20))
+            )
+    end
     work() = pdesystem([Differential(t)(C) ~ Dc * laplacian(C) + sv(t, x, y) * a(t, x, y) - kd * C]; name = :fields)
 end
 
@@ -397,23 +439,29 @@ using Potts: Potts
 using Potts.Fields
 @variables u(..)[1:2] = [0.5, 0.5] w(..)[1:2] = [0.0, 0.0] k(..)::Bool [input = true]
 const U, W = u(t, x, y), w(t, x, y)
-    fi() = pdesystem(
-        [
-            Differential(t)(U[1]) ~ 0.5 * laplacian(U[1]) - 40 * U[1] / (0.025 + U[1]) + 20,
-            Differential(t)(U[2]) ~ 0.5 * laplacian(U[2]) - U[2] + U[1],
-        ]; name = :fi
-    )
-    fc() = pdesystem(
-        [0 ~ 0.1 * laplacian(W[1]) - 0.1 * W[1] + 5.0 * W[2] + 0.5 * k(t, x, y), 0 ~ 0.1 * laplacian(W[2]) - W[2] - 5.0 * W[1]];
-    name = :fc)
+    function fi()
+        return pdesystem(
+                [
+                    Differential(t)(U[1]) ~ 0.5 * laplacian(U[1]) - 40 * U[1] / (0.025 + U[1]) + 20,
+                    Differential(t)(U[2]) ~ 0.5 * laplacian(U[2]) - U[2] + U[1],
+                ]; name = :fi
+            )
+    end
+    function fc()
+        return pdesystem(
+                [0 ~ 0.1 * laplacian(W[1]) - 0.1 * W[1] + 5.0 * W[2] + 0.5 * k(t, x, y), 0 ~ 0.1 * laplacian(W[2]) - W[2] - 5.0 * W[1]];
+            name = :fc)
+    end
 @variables q(..)[1:2, 1:2] = 0.0
 const Q = q(t, x, y)
     mat() = pdesystem([Differential(t)(Q[i, j]) ~ -Q[i, j] for i in 1:2 for j in 1:2]; name = :mat)
 @variables ua(..) = 0.5 ub(..) = 0.5 wa(..) = 0.0 wb(..) = 0.0
 const UA, UB, WA, WB = ua(t, x, y), ub(t, x, y), wa(t, x, y), wb(t, x, y)
-    sfi() = pdesystem(
-        [Differential(t)(UA) ~ 0.5 * laplacian(UA) - 40 * UA / (0.025 + UA) + 20, Differential(t)(UB) ~ 0.5 * laplacian(UB) - UB + UA];
-    name = :sfi)
+    function sfi()
+        return pdesystem(
+                [Differential(t)(UA) ~ 0.5 * laplacian(UA) - 40 * UA / (0.025 + UA) + 20, Differential(t)(UB) ~ 0.5 * laplacian(UB) - UB + UA];
+            name = :sfi)
+    end
     sfc() = pdesystem([0 ~ 0.1 * laplacian(WA) - 0.1 * WA + 5.0 * WB + 0.5 * k(t, x, y), 0 ~ 0.1 * laplacian(WB) - WB - 5.0 * WA]; name = :sfc)
 end
 
@@ -457,12 +505,16 @@ using Potts: Potts
 using Potts.Fields
 @variables u(..)[1:2] = [0.0, 0.0] a(..) = 0.0 b(..) = 0.0
 const U, A, B = u(t, x, y), a(t, x, y), b(t, x, y)
-    arr() = pdesystem(
-        [Differential(t)(U[1]) ~ 0.5 * laplacian(U[1]) - 0.1 * U[1], Differential(t)(U[2]) ~ 0.5 * laplacian(U[2]) + 0.1 * U[1] - 0.2 * U[2]],
-    [u(t, 0, y)[1] ~ 1.0]; name = :arrf)
-    sca() = pdesystem(
-        [Differential(t)(A) ~ 0.5 * laplacian(A) - 0.1 * A, Differential(t)(B) ~ 0.5 * laplacian(B) + 0.1 * A - 0.2 * B],
-    [a(t, 0, y) ~ 1.0]; name = :scaf)
+    function arr()
+        return pdesystem(
+                [Differential(t)(U[1]) ~ 0.5 * laplacian(U[1]) - 0.1 * U[1], Differential(t)(U[2]) ~ 0.5 * laplacian(U[2]) + 0.1 * U[1] - 0.2 * U[2]],
+            [u(t, 0, y)[1] ~ 1.0]; name = :arrf)
+    end
+    function sca()
+        return pdesystem(
+                [Differential(t)(A) ~ 0.5 * laplacian(A) - 0.1 * A, Differential(t)(B) ~ 0.5 * laplacian(B) + 0.1 * A - 0.2 * B],
+            [a(t, 0, y) ~ 1.0]; name = :scaf)
+    end
 end
 
 module CeAdv
@@ -473,14 +525,20 @@ using Potts.Fields
     const C, CB, CI = c(t, x, y), cb(t, x, y), ci(t, x, y)
 dom(dims) = dims === nothing ? Any[] : lattice_domain(t, (x, y), dims)
 adv(dims = nothing) = pdesystem([Differential(t)(C) ~ -Advect(Upwind1())([ux, 0.0], C) + s * y]; name = :adv, domain = dom(dims))
-advconst(dims = nothing) = pdesystem([Differential(t)(C) ~ -Advect(Upwind1())([0.3, 0.0], C) + s * y]; name = :advc,
-        domain = dom(dims)
-    )
-burgers(dims = nothing) = pdesystem([Differential(t)(CB) ~ -Advect(Upwind1())([CB, 0.0], CB)],
-    dims === nothing ? Any[] : [cb(t, 0, y) ~ cb(t, dims[1], y), cb(t, x, 0) ~ cb(t, x, dims[2])]; name = :burgers, domain = dom(dims))
-    ivadv(dims = nothing) = pdesystem(
-        [Differential(t)(CI) ~ 0.1 * laplacian(CI) - Advect(Upwind1())([0.05 * (1 + x), 0.0], CI)]; name = :ivadv,
-    domain = dom(dims))
+function advconst(dims = nothing)
+    return pdesystem([Differential(t)(C) ~ -Advect(Upwind1())([0.3, 0.0], C) + s * y]; name = :advc,
+            domain = dom(dims)
+        )
+end
+function burgers(dims = nothing)
+    return pdesystem([Differential(t)(CB) ~ -Advect(Upwind1())([CB, 0.0], CB)],
+        dims === nothing ? Any[] : [cb(t, 0, y) ~ cb(t, dims[1], y), cb(t, x, 0) ~ cb(t, x, dims[2])]; name = :burgers, domain = dom(dims))
+end
+    function ivadv(dims = nothing)
+        return pdesystem(
+                [Differential(t)(CI) ~ 0.1 * laplacian(CI) - Advect(Upwind1())([0.05 * (1 + x), 0.0], CI)]; name = :ivadv,
+            domain = dom(dims))
+    end
 end
 
 @potts_model _CeAdvBase begin
@@ -555,34 +613,44 @@ using Potts.Fields
 @variables c(..) = 0.0 u(..) = 0.0 K(..) = 0.0 secreting(..)::Bool [input = true] kin(..)::Int32 [input = true]
 @variables kinl(..)::Int32 [input = true, lattice_input_name = "kind"]
     const C, U, KK = c(t, x, y), u(t, x, y), K(t, x, y)
-    withbc() = pdesystem(
-        [Differential(t)(C) ~ -0.1 * C, Differential(t)(U) ~ 0.5 * laplacian(C) - 0.1 * U], [c(t, 0, y) ~ 1.0];
-    name = :wbc)
+    function withbc()
+        return pdesystem(
+                [Differential(t)(C) ~ -0.1 * C, Differential(t)(U) ~ 0.5 * laplacian(C) - 0.1 * U], [c(t, 0, y) ~ 1.0];
+            name = :wbc)
+    end
     nobc() = pdesystem([Differential(t)(C) ~ -0.1 * C, Differential(t)(U) ~ 0.5 * laplacian(C) - 0.1 * U]; name = :nbc)
-    auxbc(bcs = [c(t, 0, y) ~ 1.0]) = pdesystem(
-        [Differential(t)(C) ~ -0.1 * C, KK ~ laplacian(C), Differential(t)(U) ~ 0.5 * KK - 0.1 * U],
-    bcs; name = :abc)
+    function auxbc(bcs = [c(t, 0, y) ~ 1.0])
+        return pdesystem(
+                [Differential(t)(C) ~ -0.1 * C, KK ~ laplacian(C), Differential(t)(U) ~ 0.5 * KK - 0.1 * U],
+            bcs; name = :abc)
+    end
 auxnobc() = auxbc([])
     sec() = pdesystem([Differential(t)(C) ~ Dc * laplacian(C) + s * secreting(t, x, y) - k * C]; name = :sec)
     inset() = pdesystem([Differential(t)(C) ~ Dc * laplacian(C) + s * (kin(t, x, y) ∈ Set([1, 2])) - k * C]; name = :sec)
-    insetlong() = PDESystem(
-        [Differential(t)(C) ~ Dc * laplacian(C) + s * (kinl(t, x, y) ∈ Set([1, 2])) - k * C], [], [], [t, x, y],
-        [C, kinl(t, x, y)], [Dc, s, k]; name = :sec
-    )
+    function insetlong()
+        return PDESystem(
+                [Differential(t)(C) ~ Dc * laplacian(C) + s * (kinl(t, x, y) ∈ Set([1, 2])) - k * C], [], [], [t, x, y],
+                [C, kinl(t, x, y)], [Dc, s, k]; name = :sec
+            )
+    end
     cellread(q) = pdesystem([Differential(t)(C) ~ Dc * laplacian(C) + s * (q == 1) - k * C]; name = :sec)
-    kindlong() = PDESystem(
-        [Differential(t)(C) ~ Dc * laplacian(C) + s * (Potts.kind == 1) - k * C], [], [], [t, x, y], [C], [Dc, s, k];
-        name = :sec
-    )
+    function kindlong()
+        return PDESystem(
+                [Differential(t)(C) ~ Dc * laplacian(C) + s * (Potts.kind == 1) - k * C], [], [], [t, x, y], [C], [Dc, s, k];
+                name = :sec
+            )
+    end
     clockread(q) = pdesystem([Differential(t)(C) ~ Dc * laplacian(C) + s * sin(q) - k * C]; name = :clk)
     clocklong(q) = PDESystem([Differential(t)(C) ~ Dc * laplacian(C) + s * sin(q) - k * C], [], [], [t, x, y], [C], [Dc, s, k]; name = :clk)
     timeroute() = pdesystem([Differential(t)(C) ~ Dc * laplacian(C) + s * sin(t) - k * C]; name = :clk)
     mcsroute() = pdesystem([Differential(t)(C) ~ Dc * laplacian(C) + s * sin(step_index(t)) - k * C]; name = :clk)
     nops() = PDESystem([Differential(t)(C) ~ Dc * laplacian(C) - k * C], [], [], [t, x, y], [C], []; name = :sys)
 @parameters zz
-    zdom() = PDESystem(
-        [Differential(t)(C) ~ Dc * laplacian(C) - k * C], [], [zz ∈ Interval(0.0, 1.0)], [t, x, y], [C], [Dc, k];
-    name = :sys)
+    function zdom()
+        return PDESystem(
+                [Differential(t)(C) ~ Dc * laplacian(C) - k * C], [], [zz ∈ Interval(0.0, 1.0)], [t, x, y], [C], [Dc, k];
+            name = :sys)
+    end
 end
 
 @potts_model InputHost begin
@@ -594,14 +662,16 @@ end
 
 input_op() = (σ = zeros(Int32, 12, 10); σ[4:6, 3:5] .= 1; [ownership => σ, kind => [:cell]])
 
-input_model(fields; kinds = :(@kinds medium cell other)) = :(
-    @potts_model InputM begin
-    $kinds
-    @lattice Lattice((12, 10); boundary = Closed())
-    @energy cells => (volume - 9.0)^2
-    $fields
-    @sweep Metropolis(; temperature = 1.0)
-end)
+function input_model(fields; kinds = :(@kinds medium cell other))
+    return :(
+            @potts_model InputM begin
+            $kinds
+            @lattice Lattice((12, 10); boundary = Closed())
+            @energy cells => (volume - 9.0)^2
+            $fields
+            @sweep Metropolis(; temperature = 1.0)
+        end)
+end
 
 input_new(ex) = cp_msg(() -> (Core.eval(@__MODULE__, ex); Base.invokelatest(() -> InputM(; name = :m))))
 

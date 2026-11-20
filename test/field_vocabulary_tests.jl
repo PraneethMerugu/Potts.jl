@@ -15,8 +15,11 @@ using OrdinaryDiffEqRosenbrock: OrdinaryDiffEqRosenbrock
 
 fv_exports() = [n for n in names(Potts.Fields) if n !== :Fields]
 
-fv_ambiguous(mods...) = (m = Module(); foreach(p -> Core.eval(m, Expr(:using, Expr(:., p...))), mods);
-    [n for n in fv_exports() if (try; Core.eval(m, n); false; catch e; e isa UndefVarError; end)])
+function fv_ambiguous(mods...)
+    m = Module()
+    foreach(p -> Core.eval(m, Expr(:using, Expr(:., p...))), mods)
+    return [n for n in fv_exports() if (try; Core.eval(m, n); false; catch e; e isa UndefVarError; end)]
+end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 

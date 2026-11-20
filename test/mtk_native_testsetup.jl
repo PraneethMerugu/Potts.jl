@@ -287,11 +287,13 @@ function compmodel(sys)
     return PottsProblem(ComponentRoute(; name = :cr, comp_sys = sys), [ownership => σ, kind => [:A]], (0, 2))
 end
 
-emsg(f, E::Type{<:Exception} = ArgumentError) = try
-    f(); ""
-catch e
-    e isa E || return "wrong exception $(typeof(e)), expected $E"
-    sprint(showerror, e)
+function emsg(f, E::Type{<:Exception} = ArgumentError)
+    return try
+            f(); ""
+        catch e
+            e isa E || return "wrong exception $(typeof(e)), expected $E"
+            sprint(showerror, e)
+        end
 end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end

@@ -18,20 +18,20 @@ module BsPDE
     const X = (t, x, y)
     const C, U = c(X...), u(X...)
     # `D(c) ~ Dc Δc`: c = S on the face x = 0, no flux on x = 12, 0 on the wall's sites
-    base() = (
-        @parameters Dc = 0.2 S = 1.0;
-        pdesys(
-            [Dt(C) ~ Dc * laplacian(C)], [
-                c(0, x, y) ~ 0.0, c(t, 0, y) ~ S, Differential(x)(c(t, 12, y)) ~ 0.0,
-                C ~ masked(wall(X...), 0.0),
-            ], (12, 10), [C, wall(X...)], [Dc, S]
-        )
-    )
+    function base()
+        @parameters Dc = 0.2 S = 1.0
+        return pdesys(
+                [Dt(C) ~ Dc * laplacian(C)], [
+                    c(0, x, y) ~ 0.0, c(t, 0, y) ~ S, Differential(x)(c(t, 12, y)) ~ 0.0,
+                    C ~ masked(wall(X...), 0.0),
+                ], (12, 10), [C, wall(X...)], [Dc, S]
+            )
+    end
     relax() = pdesys([Dt(C) ~ 1.0 - C], [c(0, x, y) ~ 0.0], (8, 8), [C])
-    clamp_ck() = (
-        @parameters Dc = 0.2 s = 0.05;
-        pdesys([Dt(C) ~ Dc * laplacian(C) + s], [c(0, x, y) ~ 0.0, C ~ masked(sink(X...), 0.0)], (16, 16), [C, sink(X...)], [Dc, s])
-    )
+    function clamp_ck()
+        @parameters Dc = 0.2 s = 0.05
+        return pdesys([Dt(C) ~ Dc * laplacian(C) + s], [c(0, x, y) ~ 0.0, C ~ masked(sink(X...), 0.0)], (16, 16), [C, sink(X...)], [Dc, s])
+    end
     face_obs() = pdesys([Dt(C) ~ 0.1 * laplacian(C)], [c(0, x, y) ~ 0.0, c(t, 0, y) ~ 1.0], (8, 4), [C])
     mask_self() = pdesys([Dt(C) ~ 0.1 * laplacian(C)], [c(0, x, y) ~ 0.0, C ~ masked(C > 0.5, 0.0)], (8, 8), [C])
     two(mask) = pdesys([Dt(C) ~ 0.1 * laplacian(C), Dt(U) ~ 0.1 * laplacian(U)], [c(0, x, y) ~ 0.0, u(0, x, y) ~ 0.0, mask], (8, 8), [C, U])
@@ -85,13 +85,15 @@ bs_problem(sys; kw...) = PottsProblem(sys, bs_op(), (0, 2); field_solver = Expli
 end
 
 
-bs_error(f) = try
-    f(); nothing
-catch e
-    while e isa LoadError
-        e = e.error
-    end
-    sprint(showerror, e)
+function bs_error(f)
+    return try
+            f(); nothing
+        catch e
+            while e isa LoadError
+                e = e.error
+            end
+            sprint(showerror, e)
+        end
 end
 
 

@@ -480,21 +480,21 @@ end
 # `volume[owner]`): a field equation reads only the site words bare (`kind`, `owner`, …)
 function _bare_cell_reads(e)
     out = Symbol[]
-    walk(x) = begin
+    function walk(x)
         x isa SymbolicUtils.BasicSymbolic || return
         SymbolicUtils.isconst(x) && return
         i = info(x)
         if i !== nothing
-            i.role === :builtin && !(i.name in _SITE_WORDS) && push!(out, i.name)
-            return
-        end
+                i.role === :builtin && !(i.name in _SITE_WORDS) && push!(out, i.name)
+                return
+            end
         iscall(x) || return
         a = arguments(x)
-        if operation(x) === value_at && length(a) == 2
-            walk(a[2])                       # `volume[owner]`: the property read at a cell
-        else
-            foreach(walk, a)
-        end
+        return if operation(x) === value_at && length(a) == 2
+                walk(a[2])                       # `volume[owner]`: the property read at a cell
+            else
+                foreach(walk, a)
+            end
     end
     walk(e)
     return unique!(out)
@@ -515,13 +515,16 @@ function _binding_kind(f, name::Symbol, kinds)
         "; its kinds are ", join(("`$k`" for k in kinds), ", "))))
 end
 # a kind name of model `sys` for messages (its second kind, else its first, else `A`)
-_example_kind(sys) = (ks = _p(sys, :kinds); if length(ks) >= 2
-    ks[2]
-elseif isempty(ks)
-    :A
-else
-    ks[1]
-end)
+function _example_kind(sys)
+    ks = _p(sys, :kinds)
+    return if length(ks) >= 2
+            ks[2]
+        elseif isempty(ks)
+            :A
+        else
+            ks[1]
+        end
+end
 
 # a bare-symbol key of an `@fields` binding (`cell => kind == cell`): its name, matched against
 # the inputs of the PDESystem first, and its value in the constructor (a closure), read only when
@@ -724,9 +727,10 @@ function _fields_name(c, n::Symbol, f)
 end
 # the build record of a model with the inputs of its `@fields` PDESystems (`Potts.field_inputs`),
 # the PDESystem each of its conditions came from and the fields they brought
-_with_field_inputs(md, ins, origins = (), coupled = ()) =
-    _with_coupled(_with_bcs_origins(isempty(ins) ? md : Base.ImmutableDict(md, _FieldInputs => collect(Tuple{Symbol, Any, Type, Symbol}, ins)),
-            origins), coupled)
+function _with_field_inputs(md, ins, origins = (), coupled = ())
+    return _with_coupled(_with_bcs_origins(isempty(ins) ? md : Base.ImmutableDict(md, _FieldInputs => collect(Tuple{Symbol, Any, Type, Symbol}, ins)),
+        origins), coupled)
+end
 
 # payload metadata key: the names of the fields that coupled PDESystems brought (`@fields`,
 # `Potts.couple`, `compose`, `Potts.wrap_system`). Their equations are the model's field equations;

@@ -49,18 +49,20 @@ using PottsModels: OpenVTReferenceMonolayer
 function ss_names(e)
     SU = Potts.SymbolicUtils
     out = Set{Symbol}()
-    walk(y) = (y = Potts.Symbolics.unwrap(y);
-               y isa SU.BasicSymbolic || return;
-               if SU.issym(y)
-                   push!(out, Potts.SymbolicIndexingInterface.getname(y))
-               elseif SU.iscall(y)
-                   op = SU.operation(y)
-                   if op isa SU.BasicSymbolic && SU.issym(op)
-                       push!(out, Potts.SymbolicIndexingInterface.getname(op))
-                   else
-                       foreach(walk, SU.arguments(y))
-                   end
-               end)
+    function walk(y)
+        y = Potts.Symbolics.unwrap(y)
+        y isa SU.BasicSymbolic || return
+        return if SU.issym(y)
+                push!(out, Potts.SymbolicIndexingInterface.getname(y))
+            elseif SU.iscall(y)
+                op = SU.operation(y)
+                if op isa SU.BasicSymbolic && SU.issym(op)
+                    push!(out, Potts.SymbolicIndexingInterface.getname(op))
+                else
+                    foreach(walk, SU.arguments(y))
+                end
+            end
+    end
     walk(e)
     return out
 end

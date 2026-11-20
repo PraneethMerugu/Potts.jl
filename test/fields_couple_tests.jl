@@ -87,16 +87,18 @@ end
         # control: a wrong binding is caught by the oracles
         @test cp_run(CpWrong(; name = :m), ExplicitEuler()).u[end].site.c != cp_run(CpFields(; name = :m), ExplicitEuler()).u[end].site.c
         @test cp_replay(CpWrong(; name = :m), CpPDE.sys(), cp_hand, ExplicitEuler())[1] > 1.0e-3
-        body(line; pre = :(), post = :()) = quote
-            @potts_model CpBadNames begin
-                @kinds medium A
-                $pre
-                @lattice Lattice((24, 20); boundary = Closed())
-                $line
-                $post
-                @sweep Metropolis(; temperature = 4.0)
-            end
-            CpBadNames(; name = :m)
+        function body(line; pre = :(), post = :())
+            return quote
+                    @potts_model CpBadNames begin
+                        @kinds medium A
+                        $pre
+                        @lattice Lattice((24, 20); boundary = Closed())
+                        $line
+                        $post
+                        @sweep Metropolis(; temperature = 4.0)
+                    end
+                    CpBadNames(; name = :m)
+                end
         end
         # a name that is not a field of the PDESystem (an input is not a field)
         for n in (:w, :endo)
@@ -361,15 +363,17 @@ end
 
 @testitem "messages name the @fields binding and line order" setup = [CoupleSetup] tags = [:potts, :fields_couple] begin
     @testset "messages name the @fields binding and line order" begin
-        hdr(line; first = :(@kinds medium A)) = quote
-            @potts_model CrMsg begin
-                $first
-                @lattice Lattice((24, 20); boundary = Closed())
-                @energy cells => (volume - 16.0)^2
-                $line
-                @sweep Metropolis(; temperature = 4.0)
-            end
-            CrMsg(; name = :m)
+        function hdr(line; first = :(@kinds medium A))
+            return quote
+                    @potts_model CrMsg begin
+                        $first
+                        @lattice Lattice((24, 20); boundary = Closed())
+                        @energy cells => (volume - 16.0)^2
+                        $line
+                        @sweep Metropolis(; temperature = 4.0)
+                    end
+                    CrMsg(; name = :m)
+                end
         end
         e = cp_build_err(hdr(:(@fields CpPDE.sys() (CpPDE.endo => kind == A, CpPDE.vol => volume))))
         @test occursin("@fields: the input `vol` is bound to `volume`", e) && occursin("`volume[owner]`", e) &&

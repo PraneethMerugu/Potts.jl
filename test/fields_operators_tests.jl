@@ -51,12 +51,14 @@ end
         # M2: the old refusal's route followed verbatim, `[0.3, 0.0]`, equals the parameter form
         # bitwise (base: "`Advect` takes … or a vector of 2 terms (`[ux, uy]`)")
         c0 = rand(StableRNG(3), 8, 6)
-        run(M) = solve(
-            PottsProblem(
-                M(; name = :f), [fd_empty((8, 6)); :c => c0], (0, 2);
-                field_solver = ExplicitEuler(; substeps = 4)
-            ), SequentialCPM()
-        ).u[end].site.c
+        function run(M)
+            return solve(
+                    PottsProblem(
+                        M(; name = :f), [fd_empty((8, 6)); :c => c0], (0, 2);
+                        field_solver = ExplicitEuler(; substeps = 4)
+                    ), SequentialCPM()
+                ).u[end].site.c
+        end
         @test run(FpAdvectConst) == run(FpAdvect)
         # M3: a module global `y` read in a body (here a binding of `@fields`) warns (base: the
         # coordinate replaced it silently); a declared `x` does not
@@ -232,13 +234,13 @@ end
         # the sweep after that phase sees `K = 1` and moves nothing
         s3 = zeros(Int32, 12, 12)
         s3[4:7, 4:7] .= 1
-        run(m0, n) = (
+        function run(m0, n)
             ig = init(
-                PottsProblem(FaBlock(; name = :a), [ownership => s3, kind => [:A], :m0 => m0], (0, n); seed = 5),
-                SequentialCPM()
-            );
-            [(step!(ig); Array(st(ig).ownership)) for _ in 1:n]
-        )
+                    PottsProblem(FaBlock(; name = :a), [ownership => s3, kind => [:A], :m0 => m0], (0, n); seed = 5),
+                    SequentialCPM()
+                )
+            return [(step!(ig); Array(st(ig).ownership)) for _ in 1:n]
+        end
         @test all(==(s3), run(0.0, 2))
         late = run(2.0, 5)
         @test late[1] != s3 && late[2] != late[1] && late[3] != late[2]   # K = 0 in the sweeps of MCS 1–3

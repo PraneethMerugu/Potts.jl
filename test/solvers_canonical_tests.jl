@@ -87,15 +87,19 @@ end
 @testitem "a non-default mcs_duration is in the fingerprint" setup = [SolversSetup] tags = [:potts, :solvers] begin
     @testset "a non-default mcs_duration is in the fingerprint" begin
         md_sigma() = (s = zeros(Int32, 12, 12); s[3:5, 3:5] .= 1; s)
-        refused(p, ck) = try
-            init(p, SequentialCPM(); checkpoint = ck); false
-        catch e
-            e isa ArgumentError
+        function refused(p, ck)
+            return try
+                    init(p, SequentialCPM(); checkpoint = ck); false
+                catch e
+                    e isa ArgumentError
+                end
         end
-        ad(md) = PottsProblem(
-            md_ode_model(md), [ownership => md_sigma(), kind => [:A]], (0, 4);
-            ode_solver = Adaptive(Tsit5(); reltol = 1.0e-10, abstol = 1.0e-12)
-        )
+        function ad(md)
+            return PottsProblem(
+                    md_ode_model(md), [ownership => md_sigma(), kind => [:A]], (0, 4);
+                    ode_solver = Adaptive(Tsit5(); reltol = 1.0e-10, abstol = 1.0e-12)
+                )
+        end
         a1, a2, ah = ad(1.0), ad(1.0), ad(0.5)
         # the runs differ: y = e^{-4} after 4 MCS of length 1, e^{-2} of length 0.5
         @test solve(a1, SequentialCPM()).u[end].cell.y[1] ≈ exp(-4) rtol = 1.0e-6
@@ -108,10 +112,12 @@ end
         @test init(a2, SequentialCPM(); checkpoint = ck).t == i1.t      # control: same schedule loads
         # an explicit-substeps field step (no parameter bound): already distinct through its code;
         # kept as a regression guard
-        fd(md) = PottsProblem(
-            md_field_model(md), [ownership => md_sigma(), kind => [:A], :c => [Float64(x + y) for x in 1:12, y in 1:12]],
-            (0, 3); field_solver = ExplicitEuler(substeps = 4)
-        )
+        function fd(md)
+            return PottsProblem(
+                    md_field_model(md), [ownership => md_sigma(), kind => [:A], :c => [Float64(x + y) for x in 1:12, y in 1:12]],
+                    (0, 3); field_solver = ExplicitEuler(substeps = 4)
+                )
+        end
         f1, fh = fd(1.0), fd(0.5)
         @test solve(f1, SequentialCPM()).u[end].site.c != solve(fh, SequentialCPM()).u[end].site.c
         @test f1.f.fingerprint == fd(1.0).f.fingerprint
