@@ -1,7 +1,7 @@
 # D-139: `Potts.boundary_lengths` against an independent brute-force count over all site
 # pairs, and `Potts.anneal`'s contract (T = 0 whatever the temperature, the run's own ΔH with
 # drives and acceptance law, copy attempts only), each claim with a negative control. The
-# frozen acceptance file (lib/PottsModels/test/acceptance/p6_1b_boundary_anneal.jl) has the
+# frozen acceptance file (lib/PottsModels/test/acceptance/boundary_anneal_tests.jl) has the
 # hand-counted fixtures and the agreement with reproduction 09.
 
 @testsetup module AnalysisSetup

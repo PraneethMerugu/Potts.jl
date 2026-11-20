@@ -4,7 +4,7 @@ This page states exactly what Potts.jl takes from
 [ModelingToolkit](https://docs.sciml.ai/ModelingToolkit/stable/) (MTK) and what it does
 itself. Each claim below comes with the public function that makes it true and a short
 example that you can run. The acceptance test
-`lib/PottsModels/test/acceptance/p6_0bs_mtk_claims.jl` checks every claim on every
+`lib/PottsModels/test/acceptance/modelingtoolkit_claims_tests.jl` checks every claim on every
 published model, and checks that this page keeps saying them. The test's testset for a
 claim is given in brackets, e.g. [C1].
 

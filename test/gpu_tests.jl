@@ -392,37 +392,37 @@ end
     # P6.0d: the frozen acceptance scenario on the device (Float32, CheckerboardCPM). The `[frozen]`
     # kinds are the standard rule, so the mask is rebuilt on the device after the transition.
     module P60dOnDevice
-    using Test, Potts
-    include(joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "p6_0d_frozen_kind_mask.jl"))
+    include(joinpath(@__DIR__, "shared", "pottsmodels_test_file.jl"))
+    PottsModelsTestFile.run_file(@__MODULE__, joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "frozen_kind_mask_tests.jl"))
     end
     @testset "P6.0d frozen-kind transitions on the device (Float32, device-built mask)" begin
-        M = P60dOnDevice
+        M = P60dOnDevice.FrozenKindMaskSetup
         backend = PottsDevices.device_backend()
         σ = zeros(Int32, 30, 30); σ[5:10, 5:10] .= 1; σ[18:23, 18:23] .= 2
         function device_problem(moves...)
-            prob = PottsProblem(M.P60dKinds(; name = :p60d), [ownership => σ, kind => [:cell, :wall]], (0, M.P60D_T1);
+            prob = PottsProblem(M.Kinds(; name = :p60d), [ownership => σ, kind => [:cell, :wall]], (0, M.FROZEN_T1);
                 seed = 1, T = Float32)
             f = prob.f
-            sw = M.P60dSwitch(moves)
-            lc = Lifecycle(M.P60dTrigger(sw); kind = M.P60dKind(sw), normal = AlongMinorAxis{Float32}())
+            sw = M.Switch(moves)
+            lc = Lifecycle(M.Trigger(sw); kind = M.Kind(sw), normal = AlongMinorAxis{Float32}())
             g = CPMFunction(f.delta_H; f.commit!, f.constraint, f.temperature, f.bias, f.phases,
                 lifecycle = lc, f.acceptance, f.footprint, f.fingerprint, f.sys)
             return remake(prob; f = g)
         end
-        prob = device_problem(M.P60D_CELL => M.P60D_WALL, M.P60D_WALL => M.P60D_CELL)
-        @test Potts.CorePotts.frozen_varies(prob.f.sys) && Potts.CorePotts.frozen_kinds(prob.f.sys) == (M.P60D_WALL,)
+        prob = device_problem(M.CELL => M.WALL, M.WALL => M.CELL)
+        @test Potts.CorePotts.frozen_varies(prob.f.sys) && Potts.CorePotts.frozen_kinds(prob.f.sys) == (M.WALL,)
         sol = solve(prob, CheckerboardCPM(); backend, saveat = 1)
         @test Symbol(sol.retcode) === :Success && sol.stats.lifecycle.transitions == 2
         @test sol.stats.refreshes == 1
-        @test M.p60d_moved(sol, 1, M.P60D_BEFORE) >= length(M.P60D_BEFORE) ÷ 2
-        @test M.p60d_moved(sol, 2, M.P60D_BEFORE) == 0
-        @test M.p60d_moved(sol, 1, M.P60D_AFTER) == 0                       # frozen after the transition
-        @test M.p60d_moved(sol, 2, M.P60D_AFTER) >= length(M.P60D_AFTER) ÷ 2   # released
+        @test M.moved(sol, 1, M.BEFORE) >= length(M.BEFORE) ÷ 2
+        @test M.moved(sol, 2, M.BEFORE) == 0
+        @test M.moved(sol, 1, M.AFTER) == 0                       # frozen after the transition
+        @test M.moved(sol, 2, M.AFTER) >= length(M.AFTER) ÷ 2   # released
         @test frozen_sites(prob, sol.u[end]) == (Array(sol.u[end].ownership) .== 1)
         # negative control: the transition into a free kind keeps moving
-        ctl = solve(device_problem(M.P60D_CELL => M.P60D_OTHER), CheckerboardCPM(); backend, saveat = 1)
-        @test M.p60d_moved(ctl, 1, M.P60D_AFTER) >= length(M.P60D_AFTER) ÷ 2
-        @test M.p60d_moved(ctl, 2, 2:(M.P60D_T1 + 1)) == 0
+        ctl = solve(device_problem(M.CELL => M.OTHER), CheckerboardCPM(); backend, saveat = 1)
+        @test M.moved(ctl, 1, M.AFTER) >= length(M.AFTER) ÷ 2
+        @test M.moved(ctl, 2, 2:(M.FROZEN_T1 + 1)) == 0
     end
 end
 

@@ -25,7 +25,7 @@ Rules:
   primitive must be general: it works on square, hex and 3D lattices, and under sequential
   and checkerboard (or you state the exception for the coordinator to record). Its reads
   go into the footprint and claim set. Kind filtering belongs in model expressions.
-  - Add a sibling in `lib/PottsModels/test/siblings.jl` that uses each new primitive
+  - Add a sibling in `lib/PottsModels/test/siblings_tests.jl` that uses each new primitive
     outside its first model.
 - **SciML first.** Use SciMLBase, MTK, OrdinaryDiffEq, SteadyStateDiffEq and
   NonlinearSolve interfaces before writing your own.
