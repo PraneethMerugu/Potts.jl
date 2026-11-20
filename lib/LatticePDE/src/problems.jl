@@ -2836,8 +2836,8 @@ function _check_fusion(rate::Program, sys::PDESystem, disc)
         for T in (Float64, Float32)
             fingerprint_text(pass; T) == fingerprint_text(sym; T) ||
                 throw(AssertionError("the update pass differs from the symbolic fusion \
-                    (`$(nameof(sys))`, lower = $lower, T = $T) (internal error: please \
-                        report it)"))
+                    (`$(nameof(sys))`, lower = $lower, T = $T) \
+                    (internal error: please report it)"))
         end
     end
     return nothing
