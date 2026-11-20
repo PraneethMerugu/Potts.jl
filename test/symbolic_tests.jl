@@ -60,6 +60,44 @@ end
 end
 
 
+@testitem "symbolic surface: a constant integer power is a product chain" setup = [SymbolicSetup] tags = [:potts, :symbolic] begin
+    @testset "symbolic surface: a constant integer power is a product chain" begin
+        # values: ≈ Base's `^`, in the argument's own type
+        for T in (Float32, Float64), n in (-3, -1, 0, 1, 2, 4, 5, 7, 13), x in T[0.37, 1.9, -2.3]
+            @test Potts._powi(x, n) isa T
+            @test Potts._powi(x, n) ≈ x^n rtol = 8 * eps(T)
+        end
+        @test Potts._powi(3, 4) === 81
+        @potts_model IntPowers begin
+            @kinds medium A
+            @variables y(cell) = 1.0 z(cell) = 1.0
+            @lattice Lattice((12, 8))
+            @energy cells => (volume - 16.0)^2
+            @equations begin
+                D(y) ~ 2.0 * z^4 / (0.5^4 + z^5) - 0.3 * y^7
+                D(z) ~ -0.2 * z^-3
+            end
+            @sweep Metropolis(; temperature = 1.0)
+        end
+        @potts_model FloatPower begin
+            @kinds medium A
+            @variables y(cell) = 1.0
+            @lattice Lattice((12, 8))
+            @energy cells => (volume - 16.0)^2
+            @equations D(y) ~ 0.1 * y^2.5
+            @sweep Metropolis(; temperature = 1.0)
+        end
+        is_pow(x) = x isa Expr && x.head === :call && (x.args[1] === :^ || x.args[1] === ^)
+        is_powi(x) = x isa Expr && x.head === :call && x.args[1] == :(Potts._powi)
+        has(x, pred) = x isa Union{Tuple, NamedTuple, AbstractVector} ? any(y -> has(y, pred), x) : _has_ast(x, pred)
+        ints, floats = generated_code(IntPowers(; name = :m)), generated_code(FloatPower(; name = :m))
+        @test !has(ints, is_pow) && has(ints, is_powi)
+        # control: a float exponent still calls `^`
+        @test has(floats, is_pow)
+    end
+end
+
+
 @testitem "rebuilding a problem reuses the generated code" setup = [SymbolicSetup, PortsSetup] tags = [:potts, :symbolic] begin
     @testset "rebuilding a problem reuses the generated code" begin
         a = symbolic_wortel_problem(; seed = 1)
