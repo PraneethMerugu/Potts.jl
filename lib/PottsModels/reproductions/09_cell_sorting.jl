@@ -423,7 +423,8 @@ summary_md = """
     |---|---|---|---|---|
     """ * join(
     [
-        "| $(r.target) | $(pipe(r.paper)) | $(pipe(r.ours)) | $(pipe(r.tol)) | **$(r.result)** |"
+        "| $(r.target) | $(pipe(r.paper)) | $(pipe(r.ours)) | $(pipe(r.tol)) " *
+            "| **$(r.result)** |"
             for r in rec_verdicts if r.target in headline || r.result == "FAIL"
     ], "\n"
 )
@@ -967,7 +968,9 @@ Markdown.parse(
 
     | Run | Paper outcome | engulfed (of $n) | dark–medium | heterotypic |
     |---|---|---|---|---|
-    """ * join(["| $r | $o | $(e) | $(fmt(dm)) | $(fmt(h)) |" for (r, o, (e, dm, h)) in rows], "\n")
+    """ * join(
+        ["| $r | $o | $(e) | $(fmt(dm)) | $(fmt(h)) |" for (r, o, (e, dm, h)) in rows], "\n"
+    )
 )
 
 # #### Variant run: periodic boundaries
@@ -1046,7 +1049,8 @@ for (j, t) in enumerate(t_pad), key in (:dl, :dM, :total)
     push!(pad_oks, ok)
     push!(
         pad_rows,
-        "| $t | $key | $(fmt(mean(base))) ± $(fmt(std(base))) | $(fmt(mean(wide))) ± $(fmt(std(wide))) | " *
+        "| $t | $key | $(fmt(mean(base))) ± $(fmt(std(base))) " *
+            "| $(fmt(mean(wide))) ± $(fmt(std(wide))) | " *
             "$(fmt(Δ)) | $(fmt(q_pad * se)) | $(ok ? "yes" : "no") |"
     )
 end
@@ -1162,7 +1166,8 @@ if !FULL
         |---|---|---|---|---|
         """ * join(
             [
-                "| $(Int(T)) | $(fmt(s[100][1])) | $(fmt(s[1000][1])) | $(haskey(s, 2000) ? fmt(s[2000][1]) : "—") | $(fmt(s[500][2])) |"
+                "| $(Int(T)) | $(fmt(s[100][1])) | $(fmt(s[1000][1])) " *
+                    "| $(haskey(s, 2000) ? fmt(s[2000][1]) : "—") | $(fmt(s[500][2])) |"
                     for (T, s) in zip(smoke7_T, smoke7)
             ], "\n"
         )
@@ -1555,7 +1560,10 @@ Markdown.parse(
     | Target | Paper | Ours (mean ± SD, n = $n) | Tolerance | Class | Result (nominal time) | at s = $(fmt(best)) (informational) |
     |---|---|---|---|---|---|---|
     """ * join(
-        ["| $(r.target) | $(r.paper) | $(r.ours) | $(r.tol) | $(r.class) | $(r.result) | $(at_s(r)) |" for r in targets],
+        [
+            "| $(r.target) | $(r.paper) | $(r.ours) | $(r.tol) | $(r.class) " *
+                "| $(r.result) | $(at_s(r)) |" for r in targets
+        ],
         "\n"
     ) * """
 
@@ -1717,7 +1725,8 @@ Markdown.parse(
         |---|---|---|---|---|---|
         """ * join(
         [
-            "| $(r.target) | $(pipe(r.paper)) | $(pipe(r.ours)) | $(pipe(r.tol)) | $(r.class) | $(r.result) |"
+            "| $(r.target) | $(pipe(r.paper)) | $(pipe(r.ours)) | $(pipe(r.tol)) " *
+                "| $(r.class) | $(r.result) |"
                 for r in rec_verdicts
         ], "\n"
     )

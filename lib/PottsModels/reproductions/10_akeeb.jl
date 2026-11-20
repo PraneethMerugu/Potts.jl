@@ -334,12 +334,15 @@ let #hide
         "**$(cnt("PASS")) PASS, $(cnt("FAIL")) FAIL, $(cnt("PARKED")) " * #hide
             "PARKED, $(cnt("reported")) reported.** The two FAIL rows are one " * #hide
             "deviation: at P6 no cell detaches, so invasive and infiltrative area " * #hide
-            "are the same quantity.\n\n| Target | Checks | Rows | Result |\n|---|---|---|---|\n" * #hide
+            "are the same quantity.\n\n| Target | Checks | Rows | Result " * #hide
+                "|\n|---|---|---|---|\n" * #hide
             join(summ.(order), "\n") * "\n\n" * #hide
-            "Headline rows:\n\n| Target | Authors / paper | Ours | Tolerance | Result |\n|---|---|---|---|---|\n" * #hide
+            "Headline rows:\n\n| Target | Authors / paper | Ours | Tolerance " * #hide
+                "| Result |\n|---|---|---|---|---|\n" * #hide
             join( #hide
             [ #hide
-                "| $(cell(r["target"])) | $(cell(r["paper"])) | $(cell(r["ours"])) | $(cell(r["tolerance"])) | " * #hide
+                "| $(cell(r["target"])) | $(cell(r["paper"])) | $(cell(r["ours"])) " * #hide
+                    "| $(cell(r["tolerance"])) | " * #hide
                     (r["result"] == "FAIL" ? "**FAIL**" : r["result"]) * " |" #hide
                     for r in head #hide
             ], "\n" #hide
@@ -389,7 +392,8 @@ va8 = [ #hide
         for p in ("P1", "P2") #hide
 ] #hide
 p6 = rec(rec_page, "V-A2 P6 invasive") #hide
-p6A = parse.(Float64, match(r"^([0-9.]+) ± ([0-9.]+)", p6["paper"]).captures)        # A at P6, n = 10 #hide
+## A at P6, n = 10 #hide
+p6A = parse.(Float64, match(r"^([0-9.]+) ± ([0-9.]+)", p6["paper"]).captures) #hide
 p6s_band = #hide
     r1( #hide
         p6A..., 10, mean(rec_p6s), std(rec_p6s), length(rec_p6s), #hide
@@ -398,24 +402,94 @@ p6s_band = #hide
 dev_rows = [ #hide
     "| Item | Ours | Paper | Suspected cause | Author question |", #hide
     "|---|---|---|---|---|", #hide
-    "| V-A2 P6 (−2, 6, 0.5) invasive = infiltrative (**FAIL**, full run) | $(p6["ours"]); the same point in the full sweep (other seeds): $(rfmt(mean(rec_p6s))) ± $(rfmt(std(rec_p6s))) (n = $(length(rec_p6s))), $p6s_band; pooled over all 11 PP at (−2, 6): $(rfmt(mean(rec_p6))) ± $(rfmt(std(rec_p6))) (n = $(length(rec_p6))) | $(p6["paper"]), tolerance $(p6["tolerance"]); A pooled over all 11 PP at (−2, 6): $(A_P6_POOLED[1]) ± $(A_P6_POOLED[2]) (n = $(A_P6_POOLED[3])) | reference sampling: A's PP = 0.5 cell is low against A's own (−2, 6) runs, and PP does not matter (V-A7); pooled, ours is $(round(100 * (mean(rec_p6) / A_P6_POOLED[1] - 1); digits = 1)) % above A, inside the 10 % floor. Both FAIL rows of the full run are this one deviation: at P6 invasive and infiltrative are the same quantity (no detached cells) | not an author question |", #hide
-    "| V-A6 phenotype fractions (provisional classifier; **$va6_result**, full sweep) | $va6_ours (N = $(last(split(first(split(va6[1]["ours"], ")")), "N = "))) classified runs) | 22 / 1 / 23 / 54 % (p.13, Fig. 5B) | provisional: the area-equality classifier (`akeeb_phenotype`), identified from the released notebooks as the one behind Fig. 5B and S1 Table; Fig. 5A uses a fingers/singles/clusters rule (spec 10 §5.3.5). The paper does not say. R3's floor of 5 percentage points means the Single-cell row (≈ 1 %) cannot fail: it is a check on the other three | $(aq("q1")) |", #hide
-    "| V-A8 (paper) cluster composition (**PARKED**) | V-A8 binds on the released `cluster_data.csv` instead: P1 $(va8[1]["ours"]), P2 $(va8[2]["ours"]) ($(va8[1]["result"]), $(va8[2]["result"]), full run) | mean ≈ 7 cells, 60–70 % leaders, median 4 L / 3 F (p.14–17); the released cluster tables give ≈ 4.6 cells and 55 % leaders | the subset or weighting behind the paper's values is not stated | $(aq("q8")) |", #hide
-    "| V-A9 leader speed (**PARKED**) | not run (no measurement to reproduce) | 0.4 px/MCS at λ = 20 (p.6) | no definition, code or data | $(aq("q6")) |", #hide
-    "| Chemotaxis term (D6) | the code: CC3D Merks ΔH = −λ[c(tgt) − c(src)] if the new or old cell is a leader | absolute potential −λ Σ c(x) over leader sites, Eq. (1) | the paper's numbers come from the code (paper-vs-code item A3; spec 10 §2.1) | $(aq("q2")) |", #hide
-    "| Leader creation (D1) | the code: new one-site leaders inserted into followers until 25 % of the inventory (`akeeb_state`, S:64–75); planned variant `leaders = :reassign` (paper-vs-code item A1) | 25 % of the followers \"reassigned\" (p.5) | the 1559 cells in the authors' files come from the code (spec 10 §4 #23) | not an author question |", #hide
-    "| Missed seeding draws (MD-1) | the authors' count (≈ 382 painted of 390 counted), no ghost cell allocated; variant `akeeb_state(; seeding = :retry)` paints exactly 390 | — (code: a draw on a leader leaves an empty \"ghost\" leader in the inventory, S:68–75) | emulates the released code (spec 10 §5.3.6) | $(aq("q7")) |", #hide
-    "| Division timer (D3) | the code: clock > 75 + U{0…49}, redrawn every MCS (S:143–146) | one U(25, 125) draw per cycle (p.6) | the paper's numbers come from the code (paper-vs-code item A2) | not an author question |", #hide
-    "| Competent followers (D4) | the code: Bernoulli(PP) per follower (S:131) | a subset of size PP × N_FC (p.6) | the paper's numbers come from the code (spec 10 §2.4) | not an author question |", #hide
-    "| Growth (D5) | the code: every follower grows while its target is below 20 (S:113–115) | f_grow only (Table 1) | the paper's numbers come from the code (spec 10 §2.4) | not an author question |", #hide
-    "| Connectivity (D7) | a hard constraint, plus no extinction | not mentioned (code: penalty 10⁵ on copies that break the losing cell's 8-ring arc, X:29–31) | e^(−10⁴) at T = 10: the soft penalty is never paid; the plugin also protects one-site cells (spec 10 §7.1 P2) | not an author question |", #hide
-    "| Closed bottom edge (D7) | ring positions off the lattice read as nothing | not mentioned (code: CompuCell3D reads ring positions off the lattice as the cell at pixel (0, 0, 0)) | a CompuCell3D source artifact we do not reproduce; suspected small, affects bottom-wall cells only; unmeasured | not an author question |", #hide
-    "| Metrics (D12–D17) | the code (`akeeb_observables`, spec 10 §5.3.3 O1–O8): per-column areas above the lowest main top; no spline; `distance = 10` then merge `> 15`; singles = leaders only; FC-seeded clusters (S:458–671); planned: paper-definition observables (paper-vs-code item A4) | invasive area = main-tumor volume; infiltrative = convex hull; spline-smoothed front; fingers ≥ 20 px apart; singles of either kind; leader-only satellites counted | the paper's numbers reproduce only from the code's quantities (spec 10 §7 D12) | $(aq("q5")) |", #hide
-    "| Main-tumor seed row (D19) | the code: x ∈ 1:499, y = 2 (1-based; S:496, x ∈ 0…498) | all cells at y = 1 (p.7) | negligible | not an author question |", #hide
-    "| Time (A6) | 701 MCS, read as the authors' 700 | 700 MCS (p.4); code: 701 steps, sweep first (X:15) | settled by the authors' MCS-0 data (spec 10 §5.3.2) | not an author question |", #hide
-    "| μ default (A5) | 24 (`μ` keyword) | λ = 24 for the sample; code 24 (S:25) | none (paper-vs-code item A5) | not an author question |", #hide
-    "| RNG (D11) | `StableRNG` layouts, counter-based Potts streams; seeds listed in the Details (`seed`) | seeds 0–9 (p.6); the code sets no seed | ensemble agreement only | not an author question |", #hide
-    "| CC3D version (D9) | CC3D 4.6.0 semantics | 4.6.0 (p.3); XML header 4.3.1 (X:1) | which release produced the runs (spec 10 §7) | $(aq("q3")) |", #hide
+    "| V-A2 P6 (−2, 6, 0.5) invasive = infiltrative (**FAIL**, full run) " * #hide
+        "| $(p6["ours"]); the same point in the full sweep (other " * #hide
+        "seeds): $(rfmt(mean(rec_p6s))) ± $(rfmt(std(rec_p6s))) (n " * #hide
+        "= $(length(rec_p6s))), $p6s_band; pooled over all 11 PP at (−2, " * #hide
+        "6): $(rfmt(mean(rec_p6))) ± $(rfmt(std(rec_p6))) (n = $(length(rec_p6))) " * #hide
+        "| $(p6["paper"]), tolerance $(p6["tolerance"]); A pooled over all 11 PP " * #hide
+        "at (−2, 6): $(A_P6_POOLED[1]) ± $(A_P6_POOLED[2]) (n = $(A_P6_POOLED[3])) " * #hide
+        "| reference sampling: A's PP = 0.5 cell is low against A's own (−2, 6) " * #hide
+        "runs, and PP does not matter (V-A7); pooled, ours " * #hide
+        "is $(round(100 * (mean(rec_p6) / A_P6_POOLED[1] - 1); digits = 1)) % " * #hide
+        "above A, inside the 10 % floor. Both FAIL rows of the full run are this " * #hide
+        "one deviation: at P6 invasive and infiltrative are the same quantity (no " * #hide
+        "detached cells) | not an author question |", #hide
+    "| V-A6 phenotype fractions (provisional classifier; **$va6_result**, full " * #hide
+        "sweep) " * #hide
+        "| $va6_ours (N " * #hide
+        "= $(last(split(first(split(va6[1]["ours"], ")")), "N = "))) classified " * #hide
+        "runs) | 22 / 1 / 23 / 54 % (p.13, Fig. 5B) " * #hide
+        "| provisional: the area-equality classifier (`akeeb_phenotype`), " * #hide
+        "identified from the released notebooks as the one behind Fig. 5B and S1 " * #hide
+        "Table; Fig. 5A uses a fingers/singles/clusters rule (spec 10 §5.3.5). The " * #hide
+        "paper does not say. R3's floor of 5 percentage points means the " * #hide
+        "Single-cell row (≈ 1 %) cannot fail: it is a check on the other three " * #hide
+        "| $(aq("q1")) |", #hide
+    "| V-A8 (paper) cluster composition (**PARKED**) | V-A8 binds on the released " * #hide
+        "`cluster_data.csv` instead: P1 $(va8[1]["ours"]), P2 $(va8[2]["ours"]) " * #hide
+        "($(va8[1]["result"]), $(va8[2]["result"]), full run) " * #hide
+        "| mean ≈ 7 cells, 60–70 % leaders, median 4 L / 3 F (p.14–17); the " * #hide
+        "released cluster tables give ≈ 4.6 cells and 55 % leaders " * #hide
+        "| the subset or weighting behind the paper's values is not stated " * #hide
+        "| $(aq("q8")) |", #hide
+    "| V-A9 leader speed (**PARKED**) | not run (no measurement to reproduce) " * #hide
+        "| 0.4 px/MCS at λ = 20 (p.6) | no definition, code or data | $(aq("q6")) |", #hide
+    "| Chemotaxis term (D6) | the code: CC3D Merks ΔH = −λ[c(tgt) − c(src)] if the " * #hide
+        "new or old cell is a leader | absolute potential −λ Σ c(x) over leader " * #hide
+        "sites, Eq. (1) | the paper's numbers come from the code (paper-vs-code " * #hide
+        "item A3; spec 10 §2.1) | $(aq("q2")) |", #hide
+    "| Leader creation (D1) | the code: new one-site leaders inserted into " * #hide
+        "followers until 25 % of the inventory (`akeeb_state`, S:64–75); planned " * #hide
+        "variant `leaders = :reassign` (paper-vs-code item A1) " * #hide
+        "| 25 % of the followers \"reassigned\" (p.5) " * #hide
+        "| the 1559 cells in the authors' files come from the code (spec 10 §4 " * #hide
+        "#23) | not an author question |", #hide
+    "| Missed seeding draws (MD-1) | the authors' count (≈ 382 painted of 390 " * #hide
+        "counted), no ghost cell allocated; variant `akeeb_state(; seeding = " * #hide
+        ":retry)` paints exactly 390 | — (code: a draw on a leader leaves an " * #hide
+        "empty \"ghost\" leader in the inventory, S:68–75) " * #hide
+        "| emulates the released code (spec 10 §5.3.6) | $(aq("q7")) |", #hide
+    "| Division timer (D3) | the code: clock > 75 + U{0…49}, redrawn every MCS " * #hide
+        "(S:143–146) | one U(25, 125) draw per cycle (p.6) " * #hide
+        "| the paper's numbers come from the code (paper-vs-code item A2) " * #hide
+        "| not an author question |", #hide
+    "| Competent followers (D4) | the code: Bernoulli(PP) per follower (S:131) " * #hide
+        "| a subset of size PP × N_FC (p.6) | the paper's numbers come from the " * #hide
+        "code (spec 10 §2.4) | not an author question |", #hide
+    "| Growth (D5) | the code: every follower grows while its target is below 20 " * #hide
+        "(S:113–115) | f_grow only (Table 1) | the paper's numbers come from the " * #hide
+        "code (spec 10 §2.4) | not an author question |", #hide
+    "| Connectivity (D7) | a hard constraint, plus no extinction " * #hide
+        "| not mentioned (code: penalty 10⁵ on copies that break the losing cell's " * #hide
+        "8-ring arc, X:29–31) | e^(−10⁴) at T = 10: the soft penalty is never " * #hide
+        "paid; the plugin also protects one-site cells (spec 10 §7.1 P2) " * #hide
+        "| not an author question |", #hide
+    "| Closed bottom edge (D7) | ring positions off the lattice read as nothing " * #hide
+        "| not mentioned (code: CompuCell3D reads ring positions off the lattice " * #hide
+        "as the cell at pixel (0, 0, 0)) | a CompuCell3D source artifact we do not " * #hide
+        "reproduce; suspected small, affects bottom-wall cells only; unmeasured " * #hide
+        "| not an author question |", #hide
+    "| Metrics (D12–D17) | the code (`akeeb_observables`, spec 10 §5.3.3 O1–O8): " * #hide
+        "per-column areas above the lowest main top; no spline; `distance = 10` " * #hide
+        "then merge `> 15`; singles = leaders only; FC-seeded clusters " * #hide
+        "(S:458–671); planned: paper-definition observables (paper-vs-code item " * #hide
+        "A4) | invasive area = main-tumor volume; infiltrative = convex hull; " * #hide
+        "spline-smoothed front; fingers ≥ 20 px apart; singles of either kind; " * #hide
+        "leader-only satellites counted | the paper's numbers reproduce only from " * #hide
+        "the code's quantities (spec 10 §7 D12) | $(aq("q5")) |", #hide
+    "| Main-tumor seed row (D19) | the code: x ∈ 1:499, y = 2 (1-based; S:496, x ∈ " * #hide
+        "0…498) | all cells at y = 1 (p.7) | negligible | not an author question |", #hide
+    "| Time (A6) | 701 MCS, read as the authors' 700 | 700 MCS (p.4); code: 701 " * #hide
+        "steps, sweep first (X:15) | settled by the authors' MCS-0 data (spec 10 " * #hide
+        "§5.3.2) | not an author question |", #hide
+    "| μ default (A5) | 24 (`μ` keyword) | λ = 24 for the sample; code 24 (S:25) " * #hide
+        "| none (paper-vs-code item A5) | not an author question |", #hide
+    "| RNG (D11) | `StableRNG` layouts, counter-based Potts streams; seeds listed " * #hide
+        "in the Details (`seed`) | seeds 0–9 (p.6); the code sets no seed " * #hide
+        "| ensemble agreement only | not an author question |", #hide
+    "| CC3D version (D9) | CC3D 4.6.0 semantics | 4.6.0 (p.3); XML header 4.3.1 " * #hide
+        "(X:1) | which release produced the runs (spec 10 §7) | $(aq("q3")) |", #hide
 ] #hide
 Markdown.parse(join(dev_rows, "\n")) #hide
 
@@ -1180,7 +1254,13 @@ Markdown.parse(
 
     | Target | Authors / paper | Ours | Tolerance | Class | Result |
     |---|---|---|---|---|---|
-    """ * join(["| $(r.target) | $(r.paper) | $(r.ours) | $(r.tol) | $(r.class) | $(display_result(r)) |" for r in rows], "\n")
+    """ * join(
+        [
+            "| $(r.target) | $(r.paper) | $(r.ours) | $(r.tol) | $(r.class) " *
+                "| $(display_result(r)) |" for r in rows
+        ],
+        "\n"
+    )
 )
 
 # Rows of class "FULL record" are read from the committed full sweep
@@ -1274,7 +1354,13 @@ Markdown.parse(
     """
     | Quantity | Paper / authors | Ours (full sweep) | Band | Result |
     |---|---|---|---|---|
-    """ * join(["| $(r["target"]) | $(r["paper"]) | $(r["ours"]) | $(r["tolerance"]) | $(r["result"]) |" for r in rec_sweep if r["class"] == "info"], "\n")
+    """ * join(
+        [
+            "| $(r["target"]) | $(r["paper"]) | $(r["ours"]) | $(r["tolerance"]) " *
+                "| $(r["result"]) |" for r in rec_sweep if r["class"] == "info"
+        ],
+        "\n"
+    )
 )
 
 # ### Known limitations and open questions

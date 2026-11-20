@@ -428,7 +428,10 @@ Markdown.parse( #hide
             "| Item | Ours | Paper | Suspected cause | Author question |", #hide
             "|---|---|---|---|---|", #hide
             ( #hide
-                "| $(r["id"]): $(cellesc(r["target"])) (**FAIL**) | $(cellesc(r["ours"])) | $(cellesc(r["paper"])) | $(cellesc(r["suspected_cause"])) | $(cellesc(r["author_question"])) |" #hide
+                "| $(r["id"]): $(cellesc(r["target"])) (**FAIL**) " * #hide
+                    "| $(cellesc(r["ours"])) | $(cellesc(r["paper"])) " * #hide
+                    "| $(cellesc(r["suspected_cause"])) " * #hide
+                    "| $(cellesc(r["author_question"])) |" #hide
                     for r in rec_rows( #hide
                         if isfile(joinpath(rec_dir, "deviations_amended.tsv")) #hide
                             "deviations_amended.tsv" #hide
@@ -437,13 +440,44 @@ Markdown.parse( #hide
                     end #hide
                     ) #hide
             )..., #hide
-            "| DV1 proposal law and time scale τ | a uniform neighbor among the 20, at wall sites (`SequentialCPM(; skip_interior = true)`); like neighbors are null draws, so a wall site is updated less often per MCS than in the paper. One paper MCS is τ = 1/ū of our MCS, ū the mean unlike share of the wall sites' 20 neighbors: τ = $(fmt(τ_brick; d = 2)) on the brick wall; the full run measured τ = $(fmt(τ_rec; d = 2)) on its 5 relaxed ordered foams, and every shear time is in paper MCS | a wall site picked at random, a copy only to an unlike neighbor, every pick counted as a trial (p.5822) | the paper's unlike-neighbor proposal (`UnlikeNeighbor`) is not in the engine yet. τ corrects the mean rate, not the per-site spread | $(NA("A-4, A-5")) |", #hide
-            "| DV2 T = 0 | T = 10⁻⁶ (the T → 0⁺ limit: ties accepted, uphill rejected) | T = 0 in Eq. 3, the ΔH = 0 case typeset ambiguously | Eq. 3 (A-6) | $(NA("A-6")) |", #hide
-            "| DV3 shear form and scale κ | the bias γ(y, t)·(x_target − x_source) per copy, minimum image in x; model γ = κ × paper γ, κ calibrated so that the first T1 per cycle at J = 3 falls at the paper's γ0/J ≈ 1.9 (two-stage, pre-registered) | Eq. 2 written with an absolute x_i and a free index j | a literal reading makes the bias grow with x and breaks Fig. 3(c)'s lines through the origin (A-1) | $(NA("A-1")) |", #hide
-            "| DV4 lattice of the low-μ2(a) foams | d095 and d107 on 320² (400 bricks) | 377 and 380 bubbles (Fig. 9) | 256² holds only 256 bricks of 16² (A-14) | $(NA("A-14")) |", #hide
-            "| DV5 unstated values | steady boundary γ0 = 7 (Figs. 2, 6), β = 0.01 for Fig. 11(b), run lengths 2¹⁵ (N̄) and 10⁴ (μ2(n) rise); anneal 10 MCS at T = 3, relax 1000 MCS, coarsen at Γ = 0, T = 3 to the μ2(n) target | not stated | pre-registered choices | $(NA("A-8, A-12")) |", #hide
-            "| Wall type (A-2) | closed y edges without wall cells; a wall is not a side: μ2(n) = 7/16 = 0.4375 on the brick wall | 0.437 (Fig. 11(c)); the wall type is not stated | the reading that matches the paper's baseline (0.109 if the wall counted as a side, 0 with periodic y) | $(NA("A-2")) |", #hide
-            "| T1 counting unit (A-15) | one T1 = 1 (`t1_events(…; unit = :t1)`); only ratios are targets | even-valued T1 bars (Figs. 4(b), 5(b)) | the paper seems to count each T1 twice | $(NA("A-15")) |", #hide
+            "| DV1 proposal law and time scale τ | a uniform neighbor among the " * #hide
+                "20, at wall sites (`SequentialCPM(; skip_interior = true)`); like " * #hide
+                "neighbors are null draws, so a wall site is updated less often " * #hide
+                "per MCS than in the paper. One paper MCS is τ = 1/ū of our MCS, ū " * #hide
+                "the mean unlike share of the wall sites' 20 neighbors: τ " * #hide
+                "= $(fmt(τ_brick; d = 2)) on the brick wall; the full run measured " * #hide
+                "τ = $(fmt(τ_rec; d = 2)) on its 5 relaxed ordered foams, and " * #hide
+                "every shear time is in paper MCS | a wall site picked at random, " * #hide
+                "a copy only to an unlike neighbor, every pick counted as a trial " * #hide
+                "(p.5822) | the paper's unlike-neighbor proposal " * #hide
+                "(`UnlikeNeighbor`) is not in the engine yet. τ corrects the mean " * #hide
+                "rate, not the per-site spread | $(NA("A-4, A-5")) |", #hide
+            "| DV2 T = 0 | T = 10⁻⁶ (the T → 0⁺ limit: ties accepted, uphill " * #hide
+                "rejected) | T = 0 in Eq. 3, the ΔH = 0 case typeset ambiguously " * #hide
+                "| Eq. 3 (A-6) | $(NA("A-6")) |", #hide
+            "| DV3 shear form and scale κ | the bias γ(y, t)·(x_target − x_source) " * #hide
+                "per copy, minimum image in x; model γ = κ × paper γ, κ calibrated " * #hide
+                "so that the first T1 per cycle at J = 3 falls at the paper's γ0/J " * #hide
+                "≈ 1.9 (two-stage, pre-registered) " * #hide
+                "| Eq. 2 written with an absolute x_i and a free index j " * #hide
+                "| a literal reading makes the bias grow with x and breaks Fig. " * #hide
+                "3(c)'s lines through the origin (A-1) | $(NA("A-1")) |", #hide
+            "| DV4 lattice of the low-μ2(a) foams | d095 and d107 on 320² (400 " * #hide
+                "bricks) | 377 and 380 bubbles (Fig. 9) " * #hide
+                "| 256² holds only 256 bricks of 16² (A-14) | $(NA("A-14")) |", #hide
+            "| DV5 unstated values | steady boundary γ0 = 7 (Figs. 2, 6), β = 0.01 " * #hide
+                "for Fig. 11(b), run lengths 2¹⁵ (N̄) and 10⁴ (μ2(n) rise); anneal " * #hide
+                "10 MCS at T = 3, relax 1000 MCS, coarsen at Γ = 0, T = 3 to the " * #hide
+                "μ2(n) target | not stated | pre-registered choices " * #hide
+                "| $(NA("A-8, A-12")) |", #hide
+            "| Wall type (A-2) | closed y edges without wall cells; a wall is not " * #hide
+                "a side: μ2(n) = 7/16 = 0.4375 on the brick wall " * #hide
+                "| 0.437 (Fig. 11(c)); the wall type is not stated " * #hide
+                "| the reading that matches the paper's baseline (0.109 if the " * #hide
+                "wall counted as a side, 0 with periodic y) | $(NA("A-2")) |", #hide
+            "| T1 counting unit (A-15) | one T1 = 1 (`t1_events(…; unit = :t1)`); " * #hide
+                "only ratios are targets | even-valued T1 bars (Figs. 4(b), 5(b)) " * #hide
+                "| the paper seems to count each T1 twice | $(NA("A-15")) |", #hide
         ], "\n" #hide
     ) #hide
 ) #hide
