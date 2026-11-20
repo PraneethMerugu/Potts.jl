@@ -155,7 +155,9 @@ function openvt_submission_package(outdir::AbstractString; bulk = get(ENV, _OPEN
     recs = _openvt_pkg_records()
     for k in keys(_OPENVT_PKG_ITEMS)
         haskey(recs, k) || (allow_pending && k in _OPENVT_PKG_LATER) ||
-            throw(ArgumentError("openvt_submission_package: no record of $(_OPENVT_PKG_FIGURES[k]) in data/15" *
+            throw(
+            ArgumentError(
+                "openvt_submission_package: no record of $(_OPENVT_PKG_FIGURES[k]) in data/15" *
                                 (k in _OPENVT_PKG_LATER ? " (pass allow_pending = true for a draft build without it)" : "")))
     end
     o1 = _openvt_pkg_o1(joinpath(_OPENVT_PKG_DATA, recs[:o1g]), recs[:o1],
@@ -476,7 +478,8 @@ end
 # (in member order), the archives (O1 per case and the O2 zip), the O2 files
 function _openvt_pkg_o1(rec, raw, o2runs)
     need(f) = (p = joinpath(rec, f); isfile(p) ? _openvt_pkg_tsv(p)[2] :
-                                     throw(ArgumentError("openvt_submission_package: the O1 post-processing record has no $f")))
+            throw(ArgumentError("openvt_submission_package: the O1 post-processing record has no $f"))
+    )
     src = get(TOML.parsefile(joinpath(rec, "provenance.toml")), "source", "")
     src == raw || throw(ArgumentError("openvt_submission_package: the O1 post-processing record maps $(repr(src)), not the O1 re-run record $raw"))
     members = Dict{String, Vector{Any}}()
@@ -498,9 +501,13 @@ function _openvt_pkg_o1(rec, raw, o2runs)
          parse(Int, only(o2zip)["members"]) == length(o2) &&
          [parse(Int, r["k"]) + 1 for r in o2] == sort(collect(keys(o2runs))) &&
          all(r -> r["file"] == "$(_OPENVT_PKG_O2_DIR)/cell_data_no_inhibition_$(r["k"]).csv", o2)
-    ok || throw(ArgumentError("openvt_submission_package: the O1 post-processing record's manifests are incomplete: archives.tsv " *
+    ok || throw(
+        ArgumentError(
+            "openvt_submission_package: the O1 post-processing record's manifests are incomplete: archives.tsv " *
                               "must list one zip per case of o1_manifest.tsv with its member count and the O2 zip, " *
-                              "and o2_manifest.tsv one file per case (b) run of the Figure 5 record (k = run − 1)"))
+                "and o2_manifest.tsv one file per case (b) run of the Figure 5 record (k = run − 1)"
+        )
+    )
     return (; members, archives, o2zip = only(o2zip), o2, o2runs, cases = sort(collect(keys(members))))
 end
 
@@ -586,7 +593,8 @@ function _openvt_pkg_figures(res, recs)
     end
     if haskey(recs, :f8beta)
         _openvt_pkg_copyall(joinpath(_OPENVT_PKG_DATA, recs[:f8beta], "f8"), joinpath(res, "Monolayer", "final_snapshot_data"),
-            _OPENVT_PKG_O5_BETA, m -> _openvt_pkg_o5_name(m[1], "0.0", m[2])) || throw(ArgumentError("openvt_submission_package: the β-colonies record has no f8/ snapshots"))
+            _OPENVT_PKG_O5_BETA, m -> _openvt_pkg_o5_name(m[1], "0.0", m[2])
+        ) || throw(ArgumentError("openvt_submission_package: the β-colonies record has no f8/ snapshots"))
     end
     return nothing
 end
@@ -1108,7 +1116,7 @@ function _openvt_pkg_results_readme(recs, prov, meta, facts, o1)
     # the case (b) seeds of the Figure 5 runs, as `seed = <offset> + k` when they are consecutive
     offs = unique(s - k for (k, s) in o1.o2runs)
     o2seed = length(offs) == 1 ? "seed $(only(offs)) + k" :
-             "seeds $(minimum(values(o1.o2runs)))–$(maximum(values(o1.o2runs))), by run k in the Figure 5 record's `runs.tsv`"
+        "seeds $(minimum(values(o1.o2runs)))–$(maximum(values(o1.o2runs))), by run k in the Figure 5 record's `runs.tsv`"
     print(io, """
     | `Monolayer/<stem>.zip` | O1 per-cell time series, one zip per case: $(o1zips). One file per run and save (MCS 0, every $(_OPENVT_PKG_GRID) MCS and the stop; $(nfiles) files in all), `<stem>/s<seed>/potts_<case>_s<seed>_<MCS:06d>.csv`, one row per live cell. Unzipped in `Monolayer/`, the files land in `Monolayer/<stem>/s<seed>/` | `x`, `y` (R, from the lattice centre), `i` (inhibition code: 0 growing, 1 type 1, 2 type 2, 3 both), `n` (number of neighbour cells), `g` (1 if i = 0, else 0; the column `metrics.cpp` reads) |
     | `Monolayer/$(_OPENVT_PKG_O1_MANIFEST)` | every O1 file: its zip, name, row count, size and sha256 | `archive`, `file`, `rows` (cells), `bytes`, `sha256` |

@@ -22,7 +22,7 @@ end
     end
 
     # PCG and stationary V(2,2) convergence across geometries, shifts, and precisions:
-    # PCG takes <= 12 iterations; stationary V(2,2) with rho < 0.35 reaches 1e-6 within 15-20 cycles.
+        # PCG takes <= 12 iterations; stationary V(2,2) with rho < 0.35 reaches 1e-6 within 15-20 cycles.
     for (name, ss) in (("disk128", (5.5e-6, 1.9e-3, 0.022, 0.063)),
         ("sphere42", (5.5e-6, 1.9e-3, 0.022, 0.063)), ("box300x192", (5.5e-6, 1.9e-3)))
         for s in ss
@@ -46,7 +46,7 @@ end
 end
 
 @testitem "rule M against ½Σ with the Any fold, factors" setup = [LF_solvers_convergence] tags = [:latticefields, :solvers] begin
-@testset "rule M against ½Σ with the Any fold, factors" begin
+    @testset "rule M against ½Σ with the Any fold, factors" begin
     half = RuleWeights(inside = 0.5, plane = 0.5, inherited = 0.5)
     sph = named_case("sphere42", 5.5e-6)
     @test cycle_factor(sph) < 0.25                     # reference 0.196 (2-norm)

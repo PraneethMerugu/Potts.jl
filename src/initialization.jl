@@ -51,7 +51,9 @@ not been through `mtkcompile`, is an `ArgumentError`.
 function initialization_system(c::CompiledPottsSystem, scope::Symbol)
     scope in _ODE_SCOPES || throw(ArgumentError(
         "initialization_system: the scope is `:cell` or `:model`; got `:$scope` (site, field and edge " *
-        "initialization reads across entities, which is not supported yet)"))
+                "initialization reads across entities, which is not supported yet)"
+        )
+    )
     s = get(getfield(c, :initialization), scope, nothing)
     return s === nothing ? nothing : s.template
 end
@@ -191,7 +193,9 @@ function _check_init_reads(x, what)
                 i.role in (:site, :field, :edge) && throw(
                     PottsCompileError(
                     "$what reads the $(i.role) variable `$(i.name)`; $(_INIT_LOCAL). Initialization of site, field " *
-                    "and edge variables reads across entities and is not supported yet"))
+                            "and edge variables reads across entities and is not supported yet"
+                    )
+                )
                 i.role === :builtin && throw(
                     PottsCompileError(
                     "$what reads the built-in `$(i.name)`, which has no value at initialization; $(_INIT_LOCAL)"))
@@ -214,13 +218,17 @@ function _check_init_reads(x, what)
                 throw(
                     PottsCompileError(
                         "$what reads `$n` of another cell (`$y`); $(_INIT_LOCAL). Cross-entity " *
-                                    "initialization is not supported yet"))
+                            "initialization is not supported yet"
+                    )
+                )
             end
             throw(
                 PottsCompileError(
                     "$what reads `$y`, which reads across entities (a neighbor gather, a fold over " *
                                 "cells, an integral, a draw or a previous value); $(_INIT_LOCAL). Cross-entity " *
-                                "initialization is not supported yet"))
+                        "initialization is not supported yet"
+                )
+            )
         end
     end
     return nothing

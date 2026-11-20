@@ -9,8 +9,10 @@ using Printf
 # ARGS[5]: block,switches,parts (default: the CheckerboardCPM defaults)
 const MC_SR = split(get(ARGS, 5, ""), ',', keepempty = false)
 const MC_ALG = isempty(MC_SR) ? CheckerboardCPM(; proposal = Moore(1)) :
-               CheckerboardCPM(; proposal = Moore(1), region = parse(Int, MC_SR[1]), switches = parse(Int, MC_SR[2]),
-                   parts = parse(Int, MC_SR[3]))
+    CheckerboardCPM(;
+        proposal = Moore(1), region = parse(Int, MC_SR[1]), switches = parse(Int, MC_SR[2]),
+        parts = parse(Int, MC_SR[3])
+    )
 const MC_OUT = expanduser(get(ARGS, 4, "monolayer_cases"))
 const MC_CASES = Tuple(Symbol.(split(get(ARGS, 3, "b,f"), ',')))
 const MC_RUNS = parse(Int, ARGS[2])
@@ -21,20 +23,27 @@ mc_seed(c, k) = 217_000_000 + 1000 * findfirst(==(c), MC_CASES) + k
 function mc_run(prob, seed, c; backend = cb_backend())
     rec = NamedTuple[]
     record(integ) = push!(rec, p615f_row(current_state(integ), integ.t; c.beta, c.gamma))
-    cbr = Potts.DiscreteCallback((u, t, integ) -> t % CB_EVERY == 0 || count(>(0), u.cell.volume) >= c.cells,
-        record; initialize = (cb, u, t, integ) -> record(integ), save_positions = (false, false))
+    cbr = Potts.DiscreteCallback(
+        (u, t, integ) -> t % CB_EVERY == 0 || count(>(0), u.cell.volume) >= c.cells,
+        record; initialize = (cb, u, t, integ) -> record(integ), save_positions = (false, false)
+    )
     pr = remake(prob; seed, p = [:β => c.beta, :γ => c.gamma, :σ_X => c.sigma_X, :α => α])
     integ = init(
         pr, MC_ALG; backend, save_start = false, save_everystep = false,
-        callback = Potts.CorePotts.CallbackSet(cbr, PottsModels.stop_at_cells(c.cells),
-            PottsModels.edge_guard(P615F_GUARD; terminate = true)))
+        callback = Potts.CorePotts.CallbackSet(
+            cbr, PottsModels.stop_at_cells(c.cells),
+            PottsModels.edge_guard(P615F_GUARD; terminate = true)
+        )
+    )
     sol = solve!(integ)
     cb_sync()
     u = sol.u[end]
     fr = PottsModels.openvt_frame(u; beta = c.beta, gamma = c.gamma)
     o1 = (; n_mean = mean(fr.n), n_sd = std(fr.n), n6 = mean(fr.n .== 6), i0 = mean(fr.i .== 0), cells = length(fr.n))
-    return (; retcode = Symbol(sol.retcode), mcs = Int(sol.t[end]), rec, divisions = sol.stats.lifecycle.divisions,
-        live = count(>(0), Array(u.cell.volume)), o1, committed = sol.stats.committed)
+    return (;
+        retcode = Symbol(sol.retcode), mcs = Int(sol.t[end]), rec, divisions = sol.stats.lifecycle.divisions,
+        live = count(>(0), Array(u.cell.volume)), o1, committed = sol.stats.committed,
+    )
 end
 tsf, o1f, rf = joinpath(MC_OUT, "timeseries.tsv"), joinpath(MC_OUT, "o1.tsv"), joinpath(MC_OUT, "runs.tsv")
 open(io -> println(io, join(TS_HEADER, '\t')), tsf, "w")
@@ -51,8 +60,16 @@ for c in MC_CASES, k in 1:MC_RUNS
             println(io, join((c, sd, x.mcs, x.N, cb_f64(x.r), cb_f64(x.A), cb_f64(x.C), cb_f64(x.w), cb_f64(x.g)), '\t'))
         end
     end
-    open(io -> println(io, join((c, sd, r.mcs, r.o1.cells, cb_f64(r.o1.n_mean), cb_f64(r.o1.n_sd), cb_f64(r.o1.n6),
-        cb_f64(r.o1.i0)), '\t')), o1f, "a")
+    open(
+        io -> println(
+            io, join(
+                (
+                    c, sd, r.mcs, r.o1.cells, cb_f64(r.o1.n_mean), cb_f64(r.o1.n_sd), cb_f64(r.o1.n6),
+                    cb_f64(r.o1.i0),
+                ), '\t'
+            )
+        ), o1f, "a"
+    )
     open(io -> println(io, join((c, k, sd, r.retcode, r.mcs, r.divisions, r.live, round(wall; digits = 2), r.committed), '\t')), rf, "a")
     k % 10 == 0 && @info "run" c k r.mcs lost = r.divisions + 1 - r.live wall = round(wall; digits = 1)
 end
@@ -69,8 +86,9 @@ for c in string.(MC_CASES)
     P = P615M_CASES[c]
     M = Dict{String, Any}()
     for (alg, sers, lost, o1) in (
-        ("sequential", p615m_record_series(ref_ts, c; cycle = P615M_CYCLE_SEQ), lostof([r for r in replay if r["case"] == c]), o1seq),
-        ("variant", p615m_record_series(ts, c; cycle), lostof([r for r in rp if r["case"] == c]), o1v))
+            ("sequential", p615m_record_series(ref_ts, c; cycle = P615M_CYCLE_SEQ), lostof([r for r in replay if r["case"] == c]), o1seq),
+            ("variant", p615m_record_series(ts, c; cycle), lostof([r for r in rp if r["case"] == c]), o1v),
+        )
         T = Dict(k => Dict{Int, Float64}() for k in P615M_ALL)
         for (sd, s) in sers
             m = p615m_seed_metrics(s, P.cells)
@@ -81,14 +99,18 @@ for c in string.(MC_CASES)
         M[alg] = T
     end
     zc = p615m_crit(length(M["sequential"]["lost"]), length(M["variant"]["lost"]))
-    tab = PottsModels.openvt_spread_table(Dict(k => p615m_vals(M["sequential"][k]) for k in P615M_ALL),
-        Dict(k => p615m_vals(M["variant"][k]) for k in P615M_ALL); z = zc)
+    tab = PottsModels.openvt_spread_table(
+        Dict(k => p615m_vals(M["sequential"][k]) for k in P615M_ALL),
+        Dict(k => p615m_vals(M["variant"][k]) for k in P615M_ALL); z = zc
+    )
     open(joinpath(MC_OUT, "comparison_$c.tsv"), "w") do io
         println(io, join(("metric", "mean_ref", "mean_alt", "ratio", "z", "beyond"), '\t'))
         for t in tab
             println(io, join((t.metric, cb_f64(t.mean_ref), cb_f64(t.mean_alt), cb_f64(t.mean_alt / t.mean_ref), cb_f64(t.z), t.beyond), '\t'))
-            @printf("%s %-10s seq %10.4g  variant %10.4g  ratio %6.3f  z %6.2f %s\n", c, t.metric, t.mean_ref, t.mean_alt,
-                t.mean_alt / t.mean_ref, t.z, t.beyond ? "BEYOND" : "")
+            @printf(
+                "%s %-10s seq %10.4g  variant %10.4g  ratio %6.3f  z %6.2f %s\n", c, t.metric, t.mean_ref, t.mean_alt,
+                t.mean_alt / t.mean_ref, t.z, t.beyond ? "BEYOND" : ""
+            )
         end
     end
     global nflag += count(t -> t.beyond, tab)

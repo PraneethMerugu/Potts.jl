@@ -10,10 +10,12 @@ using Potts
 const MTKB = Potts.ModelingToolkitBase
 const SB = Potts.SciMLBase
 
-const CONSTRUCTORS = Any[SB.ODEProblem, SB.NonlinearProblem, SB.SteadyStateProblem, SB.SDEProblem, SB.DAEProblem,
+const CONSTRUCTORS = Any[
+    SB.ODEProblem, SB.NonlinearProblem, SB.SteadyStateProblem, SB.SDEProblem, SB.DAEProblem,
     Potts.JumpProcesses.JumpProblem, SB.OptimizationProblem, SB.DDEProblem, SB.SDDEProblem, SB.BVProblem,
     SB.DiscreteProblem, SB.ImplicitDiscreteProblem, SB.NonlinearLeastSquaresProblem, SB.LinearProblem,
-    SB.IntervalNonlinearProblem, SB.HomotopyProblem]
+    SB.IntervalNonlinearProblem, SB.HomotopyProblem,
+]
 
 function classify(f)
     try
@@ -30,8 +32,10 @@ function matrix(W, other)
     out = Pair{String, Symbol}[]
     for P in CONSTRUCTORS
         n = nameof(P)
-        for (a, args) in (("(W, [])", (W, [])), ("(W, [], (0,1))", (W, [], (0.0, 1.0))),
-                          ("(W, Dict(), (0,1))", (W, Dict(), (0.0, 1.0))))
+        for (a, args) in (
+                ("(W, [])", (W, [])), ("(W, [], (0,1))", (W, [], (0.0, 1.0))),
+                ("(W, Dict(), (0,1))", (W, Dict(), (0.0, 1.0))),
+            )
             push!(out, "$n$a" => classify(() -> P(args...)))
         end
         push!(out, "$n{true}" => classify(() -> P{true}(W, [], (0.0, 1.0))))
@@ -40,7 +44,8 @@ function matrix(W, other)
     t = Potts.t
     x = first(MTKB.unknowns(other))
     empty() = MTKB.System(Potts.Equation[], t; name = :p)
-    paths = ["mtkcompile(W)" => () -> MTKB.mtkcompile(W),
+    paths = [
+        "mtkcompile(W)" => () -> MTKB.mtkcompile(W),
         "mtkcompile(W; inputs)" => () -> MTKB.mtkcompile(W; inputs = [x]),
         "complete(W)" => () -> MTKB.complete(W),
         "complete(W; flatten = false)" => () -> MTKB.complete(W; flatten = false),
@@ -58,7 +63,8 @@ function matrix(W, other)
         "expand_connections(W)" => () -> MTKB.expand_connections(W),
         "toggle_namespacing(W, false)" => () -> MTKB.toggle_namespacing(W, false),
         "rename(W, :q)" => () -> MTKB.rename(W, :q),
-        "convert(System, W)" => () -> convert(MTKB.System, W)]
+        "convert(System, W)" => () -> convert(MTKB.System, W),
+    ]
     for (l, f) in paths
         push!(out, l => classify(f))
     end
@@ -84,9 +90,13 @@ function shapes(W)
 end
 
 """The refusal methods on `PottsSystem` (plain, `{iip}` and `{iip, spec}` forms of every constructor)."""
-refusal_methods() = unique([m for P in CONSTRUCTORS
-                            for Q in (P, P{true}, P{true, SB.FullSpecialize}, P{true, SB.FunctionWrapperSpecialize}) for m in methods(Q)
-                            if m.module === Potts && any(==(PottsSystem), Base.unwrap_unionall(m.sig).parameters)])
+refusal_methods() = unique(
+    [
+        m for P in CONSTRUCTORS
+            for Q in (P, P{true}, P{true, SB.FullSpecialize}, P{true, SB.FunctionWrapperSpecialize}) for m in methods(Q)
+            if m.module === Potts && any(==(PottsSystem), Base.unwrap_unionall(m.sig).parameters)
+    ]
+)
 
 tally(m) = Dict(c => count(p -> last(p) === c, m) for c in (:REFUSED, :LOUD, :BUILT))
 built(m) = [first(p) for p in m if last(p) === :BUILT]

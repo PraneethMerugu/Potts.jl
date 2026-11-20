@@ -35,7 +35,7 @@ include("shared/export_all.jl")
 end
 
 @testitem "the owned solution is an ODESolution: sol(t), Array, stats, ps" setup = [LP_solution] tags = [:latticepde, :solution] begin
-@testset "the owned solution is an ODESolution: sol(t), Array, stats, ps" begin
+    @testset "the owned solution is an ODESolution: sol(t), Array, stats, ps" begin
         sp = discretize(
             bsys([D(bce) ~ bD * laplacian(bce) - bk * bce + x], [bc(0, x, y) ~ x * y], [bD, bk]; T = 0.3, dvs = [bce]),
         LatticeDiscretization(Grid((8, 8)); T = Float64))
@@ -53,7 +53,7 @@ end
 end
 
 @testitem "sol[c] is one grid per save; field_series is time first; sol[x]; sol[c] by the callable" setup = [LP_solution] tags = [:latticepde, :solution] begin
-@testset "sol[c] is one grid per save; field_series is time first; sol[x]; sol[c] by the callable" begin
+    @testset "sol[c] is one grid per save; field_series is time first; sol[x]; sol[c] by the callable" begin
         sp = discretize(
             bsys([D(bce) ~ bD * laplacian(bce) - bk * bce + x], [bc(0, x, y) ~ x * y], [bD, bk]; T = 0.3, dvs = [bce]),
         LatticeDiscretization(Grid((8, 8)); T = Float64))
@@ -76,7 +76,7 @@ end
         saveat = 0.1)
     lazy(s) = @allocated field_series(s, bce)
     lazy(s32)
-    @test lazy(s32) < 8 * 32^2 || (println("lazy ", lazy(s32)); false)
+        @test lazy(s32) < 8 * 32^2 || (println("lazy ", lazy(s32)); false)
     @test maximum(abs, Array(field_series(so, bce)) .- Array(field_series(st, bce))) < 0.05  # (EE against Tsit5)
     # sol(t, x, y): multilinear between the site centers, linear in time between the saves
     g = reshape(so(0.15), 8, 8)

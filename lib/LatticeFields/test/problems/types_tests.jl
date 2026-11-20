@@ -82,7 +82,7 @@ end
 end
 
 @testitem "init-written aux in every ODE variant and after parameter changes" setup = [LF_problems_types] tags = [:latticefields, :problems] begin
-@testset "init-written aux in every ODE variant and after parameter changes" begin
+    @testset "init-written aux in every ODE variant and after parameter changes" begin
     u0 = rand(Xoshiro(11), 24)
     p0 = [0.1, 2.0]
     ode = ode_problem(initaux(), u0, (0.0, 0.5), p0; state = ["u"], rates = Dict("u" => "∂u"),
@@ -111,7 +111,7 @@ end
     dk = ForwardDiff.derivative(J, 2.0)
     @test isapprox(dk, (J(2.0 + h) - J(2.0 - h)) / 2h; rtol = 1e-5) && dk != 0
     # chunked ForwardDiff re-seeds the partials of one Dual vector in place (same object, same
-    # primal values): init must re-run. Negative control: the old skip rule,
+        # primal values): init must re-run. Negative control: the old skip rule,
     # which compared primal values only, would leave ∂a/∂k from chunk 1 and give dJ/dk = 0.
     Jp(θ) = sum(SciMLBase.solve(SciMLBase.remake(ode; p = θ, u0 = eltype(θ).(u0)), Rodas5P();
         abstol = 1e-10, reltol = 1e-10).u[end])

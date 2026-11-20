@@ -149,7 +149,7 @@ end
 
 @testitem "review refusals and hygiene" setup = [LF_compile_regressions] tags = [:latticefields, :compile] begin
 @testset "review refusals and hygiene" begin
-    # :accumulate adds to the current value at the own site
+        # :accumulate adds to the current value at the own site
     pb = ProgramBuilder(Grid((4,)); periodic = (true,))
     r, o = field!(pb, "r"; role = :input), field!(pb, "v"; role = :output)
     kb = kernel(pb)

@@ -38,7 +38,7 @@ include("shared/export_all.jl")
 end
 
 @testitem "a field's default is its initial value (owned path and Tsit5)" setup = [LP_fielddefaults] tags = [:latticepde, :fielddefaults] begin
-@testset "a field's default is its initial value (owned path and Tsit5)" begin
+    @testset "a field's default is its initial value (owned path and Tsit5)" begin
     pd = discretize(dfsys(), dfdisc())
     pc = discretize(dfsys([dfc(0, x, y) ~ 0.3]), dfdisc())
     @test pd.u0 == pc.u0 && all(==(0.3), pd.u0)
@@ -59,7 +59,7 @@ end
 end
 
 @testitem "with a default and a condition, the condition wins" setup = [LP_fielddefaults] tags = [:latticepde, :fielddefaults] begin
-@testset "with a default and a condition, the condition wins" begin
+    @testset "with a default and a condition, the condition wins" begin
     p = discretize(dfsys([dfc(0, x, y) ~ x]), dfdisc())
         q = discretize(
             PDESystem(
@@ -85,7 +85,7 @@ end
 end
 
 @testitem "a Dual default: the derivative against central differences" setup = [LP_fielddefaults] tags = [:latticepde, :fielddefaults] begin
-@testset "a Dual default: the derivative against central differences" begin
+    @testset "a Dual default: the derivative against central differences" begin
     function J(v)
         @variables dfv(..) = v
             s = PDESystem(

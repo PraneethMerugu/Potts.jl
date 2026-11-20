@@ -23,7 +23,7 @@ include("shared/export_all.jl")
 end
 
 @testitem "site index math above 2³¹ − 1 and 2³² sites" setup = [CP_site_index_math] tags = [:corepotts, :site_index_math] begin
-@testset "site index math above 2³¹ − 1 and 2³² sites" begin
+    @testset "site index math above 2³¹ − 1 and 2³² sites" begin
     @testset "@convert: the lowest converted site and `created`" begin
         lat = Lattice((2^16, 2^17))                      # 2³³ sites, no mask
         n = nsites(lat)

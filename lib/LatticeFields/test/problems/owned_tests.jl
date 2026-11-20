@@ -50,7 +50,7 @@ end
         integ = init(prob, ExplicitEuler(); dt = 0.05)
     LatticeFields.Problems.SII.setp(integ, :D)(integ, 100.0)
     @test integ.substeps == ceil(Int, 0.05 * 800 / 1.8)
-    # a user count is a minimum: raised to the bound's count, kept above it, and
+        # a user count is a minimum: raised to the bound's count, kept above it, and
     # used as given when there is no bound (`unknown` above). On f9a77dd3 the count was used
     # as given below the bound too: substeps = 1 gave 1 here, not 2
         @test S(prob, ExplicitEuler(; substeps = 1); dt = 0.5) == ceil(Int, 0.5 * 4 / 1.8) == 2
@@ -122,8 +122,8 @@ end
 end
 
 @testitem "a U8 input takes 0…255 unless declared Bool" setup = [LF_problems_owned] tags = [:latticefields, :problems] begin
-@testset "a U8 input takes 0…255 unless declared Bool" begin
-    # Every U8 input was held to 0/1, so a raw U8 IR input refused 7
+    @testset "a U8 input takes 0…255 unless declared Bool" begin
+        # Every U8 input was held to 0/1, so a raw U8 IR input refused 7
     pb = ProgramBuilder(Grid((3, 3)); nparams = 0)
     k8 = field!(pb, "k"; storage = U8, role = :input)
     x = field!(pb, "x")

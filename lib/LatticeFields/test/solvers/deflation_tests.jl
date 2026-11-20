@@ -82,13 +82,13 @@ end
     case = named_case("per256", 5.5e-6)
     sv, ref = case_solver(case, Float64), case_solver(case, Float64; deflate = false)
     k = steady!(sv)
-    @test scalars(sv).done && k <= 12 && scalars(sv).rnorm <= 1e-6 * scalars(sv).bnorm   # PCG <= 12
+        @test scalars(sv).done && k <= 12 && scalars(sv).rnorm <= 1.0e-6 * scalars(sv).bnorm   # PCG <= 12
     @test scalars(sv).mean ≈ 0.5 / 5.5e-6 rtol = 1e-12 # mean(b)/s
     steady!(ref)
     u, uref = field(sv, "pcg.u"), field(ref, "pcg.x")
     @test maximum(abs, u .- uref) / maximum(abs, uref) < 1e-6
     @test abs(sum(field(sv, "pcg.x"))) / length(u) < 1e-9 * maximum(abs, u)   # zero-mean part
-    # The iteration budget on odd periodic axes is ≤ 12 (user ruling). per300 (75 → 37): measured
+        # The iteration budget on odd periodic axes is ≤ 12 (user ruling). per300 (75 → 37): measured
     # 11 deflated (12 undeflated); 3D per45 (45 → 22): measured 12.
     sv = case_solver(named_case("per300", 5.5e-6), Float64)
     @test steady!(sv) <= 12 && scalars(sv).done
@@ -302,7 +302,7 @@ end
 
 @testitem "coefficients are validated; set_coefficients! warns once about solver_type" setup = [LF_solvers_deflation] tags = [:latticefields, :solvers] begin
     @testset "coefficients are validated; set_coefficients! warns once about solver_type" begin
-    # refusals in the user's words: an ArgumentError naming the field and the axis
+        # refusals in the user's words: an ArgumentError naming the field and the axis
     E(f) = try
         f(); ""
     catch e

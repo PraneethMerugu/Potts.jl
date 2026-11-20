@@ -28,7 +28,7 @@ const Dt = Differential(t)
 @variables vol(..) [input = true, lattice_input_name = "volume"]
 @variables zq(t) = 1.0
 zz() = System([Dt(zq) ~ -zq], t; name = :zz)
-# `D(u) ~ Dd Δu − kd u` with the conditions `bcs` (for the checks of names, start values, ivs)
+    # `D(u) ~ Dd Δu − kd u` with the conditions `bcs` (for the checks of names, start values, ivs)
 const DOM = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 12.0), y ∈ Interval(0.0, 10.0)]
 plain(bcs; name = :drug, ivs = [t, x, y], ps = [Dd, kd], dom = DOM) =
         PDESystem([Dt(u(t, x, y)) ~ Dd * Potts.LatticePDE.laplacian(u(t, x, y)) - kd * u(t, x, y)], bcs, dom, ivs, [u(t, x, y)], ps; name)
@@ -40,7 +40,7 @@ function drug(L; name = :drug, extra = Equation[], dvs = [u(t, x, y), kin(t, x, 
     return PDESystem([Dt(u(t, x, y)) ~ rhs], [u(0, x, y) ~ 0.0; u(t, 0, y) ~ 1.0; extra],
         [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, L[1]), y ∈ Interval(0.0, L[2])], [t, x, y], dvs, [Dd, kd]; name)
 end
-# the references, coupled with `@fields`: `drug` with the kind as the bound input `kA`
+    # the references, coupled with `@fields`: `drug` with the kind as the bound input `kA`
 @variables kA(..)::Bool [input = true]
 ref(L) = drug(L; name = :fields, dvs = [u(t, x, y), kA(t, x, y)],
         rhs = Dd * Potts.LatticePDE.laplacian(u(t, x, y)) - kd * u(t, x, y) + ifelse(kA(t, x, y), 1.0, 0.0)

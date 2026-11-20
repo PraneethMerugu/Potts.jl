@@ -160,7 +160,8 @@ function bandwidth_gate()
              timeit(() -> hand3_k!(DEV, 256)(o, u, 0.01f0, Int32.(dims)...; ndrange = n))
         cg = copy_gbs(n)
         gg, gh = bytes / tg / 1e9, bytes / th / 1e9
-        @printf("bandwidth %dD %s: generated %.1f GB/s, hand %.1f GB/s, copy %.1f GB/s; generated/hand = %.3f (gate ≥ 0.90), generated/copy = %.3f (floor %s)\n",
+        @printf(
+            "bandwidth %dD %s: generated %.1f GB/s, hand %.1f GB/s, copy %.1f GB/s; generated/hand = %.3f (gate ≥ 0.90), generated/copy = %.3f (floor %s)\n",
             N, join(dims, "×"), gg, gh, cg, gg / gh, gg / cg, N == 2 ? "0.75" : "0.70")
     end
 end
@@ -172,7 +173,8 @@ function fusion_gate()
     tf, spf = bound(p, 2; fuse = true)
     ts, sps = bound(p, 2; fuse = false)
     a, b = timeit(tf), timeit(ts)
-    @printf("fusion two species %s: fused %d launch(es) %.1f µs, separate %d launches %.1f µs; separate/fused = %.3f (gate ≥ 1.4)\n",
+    return @printf(
+        "fusion two species %s: fused %d launch(es) %.1f µs, separate %d launches %.1f µs; separate/fused = %.3f (gate ≥ 1.4)\n",
         join(dims, "×"), length(spf.launches), a * 1e6, length(sps.launches), b * 1e6, b / a)
 end
 
@@ -225,7 +227,8 @@ function species_gate()
         p = ntuple(_ -> 0.01f0, np)
         d3 = D == 2 ? (dims..., 1) : dims
         tr = timeit(() -> Exec.launch!(DEV, f, n, (OUT, IN, p, 0.1f0, d3..., n)))
-        @printf("species %dD %s K=%d (%d streams): generated %.1f µs, generator %.1f µs; generated/generator = %.3f (gate ≥ 0.95)\n",
+        @printf(
+            "species %dD %s K=%d (%d streams): generated %.1f µs, generator %.1f µs; generated/generator = %.3f (gate ≥ 0.95)\n",
             D, join(dims, "×"), K, 2K, tg * 1e6, tr * 1e6, tr / tg)
     end
     for m in (SMOKE ? (16, 32) : (42, 128, 256))
@@ -235,7 +238,8 @@ function species_gate()
         a, b = timeit(tf), timeit(ts)
         planner = length(spf.launches) < 4 ? "fused" : "split"
         measured = a < b ? "fused" : "split"
-        @printf("species choice %d³ K=4: planner %s (%d launches); measured fused %.1f µs, split %.1f µs → %s; %s\n",
+        @printf(
+            "species choice %d³ K=4: planner %s (%d launches); measured fused %.1f µs, split %.1f µs → %s; %s\n",
             m, planner, length(spf.launches), a * 1e6, b * 1e6, measured, planner == measured ? "MATCH" : "MISMATCH")
     end
 end
@@ -254,13 +258,15 @@ function compile_gate()
     # compile rows; the first pays the first-kernel cost
     same = [compile_one(2, 0.1k) for k in 1:9]
     further = sort(same[2:end])
-    @printf("compile (same arity): first body %.2f s (gate ≤ 1.8), further mean %.3f s, median %.3f s over %d (gate ≤ 0.4): %s\n",
+    @printf(
+        "compile (same arity): first body %.2f s (gate ≤ 1.8), further mean %.3f s, median %.3f s over %d (gate ≤ 0.4): %s\n",
         same[1], sum(further) / length(further), further[cld(length(further), 2)], length(further),
         join(map(t -> @sprintf("%.3f", t), same), " "))
     # a new arity (K = 1, 3, 4, 5: new argument types) also specializes the host-side launch
     # and wrapper code; reported apart, not a compile row
     arity = [compile_one(K, 0.7) for K in (1, 3, 4, 5)]
-    @printf("compile info, new arity per body (K = 1, 3, 4, 5): mean %.3f s: %s\n",
+    @printf(
+        "compile info, new arity per body (K = 1, 3, 4, 5): mean %.3f s: %s\n",
         sum(arity) / length(arity), join(map(t -> @sprintf("%.3f", t), arity), " "))
     # a parameter change does not recompile: remake + init + steps add no kernel instance
     @parameters t x y Dc = 1e-3 k = 0.1
@@ -275,7 +281,7 @@ function compile_gate()
     n0 = ninstances()
     solve(LatticePDE.Problems.SciMLBase.remake(prob; p = [2.0e-3, 0.3]), ExplicitEuler(); dt = 0.1f0)
     devsync()
-    @printf("compile parameter change: %d new kernel instances (gate 0)\n", ninstances() - n0)
+    return @printf("compile parameter change: %d new kernel instances (gate 0)\n", ninstances() - n0)
 end
 
 # ---- build -------------------------------------------------------------------------------
@@ -307,9 +313,10 @@ function build_gate()
     build(64); build(big); state(64); state(big)            # warm: compile and first-call costs
     t64, tbig = (minimum(@elapsed(build(n)) for _ in 1:3) for n in (64, big))
     s64, sbig = (minimum(@elapsed(state(n)) for _ in 1:3) for n in (64, big))
-    @printf("build (lower, passes, plan, bind, compile; arrays preallocated): 64² %.4f s, %d² %.4f s; ratio %.2f (gate < 1.5)\n",
+    @printf(
+        "build (lower, passes, plan, bind, compile; arrays preallocated): 64² %.4f s, %d² %.4f s; ratio %.2f (gate < 1.5)\n",
         t64, big, tbig, tbig / t64)
-    @printf("build info: discretize + init incl. the state (O(sites)): 64² %.4f s, %d² %.4f s\n", s64, big, sbig)
+    return @printf("build info: discretize + init incl. the state (O(sites)): 64² %.4f s, %d² %.4f s\n", s64, big, sbig)
 end
 
 for g in GATES

@@ -33,7 +33,7 @@ end
     end
     # 2D 4096², independent fields, K = 8: split
     @test nlaunch(independent((4096, 4096), 8)) == 8
-    # modeled launch-bound smoother time is in the measured range (15.8–18.1 µs)
+        # modeled launch-bound smoother time is in the measured range (15.8–18.1 µs)
     tf, ts = all_vs_split(smoother((42, 42, 42), 4))
     @test 12e-6 < tf < 22e-6 && 1.3 < ts / tf < 2.2
 end
@@ -99,7 +99,7 @@ end
 end
 
 @testitem "a one-buffer field inside a Jacobi group is read new (its writer first)" setup = [LF_schedule_fusion] tags = [:latticefields, :schedule] begin
-@testset "a one-buffer field inside a Jacobi group is read new (its writer first)" begin
+    @testset "a one-buffer field inside a Jacobi group is read new (its writer first)" begin
     # x, y two-buffer, K one-buffer: `z_K` (K ← x) sorts last by key, but `fy` reads K's new
     # value, so `z_K` runs before it; x and y keep the Jacobi rule (old values)
     function auxloop(off)

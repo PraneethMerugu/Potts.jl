@@ -24,7 +24,7 @@ include("shared/export_all.jl")
 end
 
 @testitem "lattice_domain is the hand-written domain" setup = [LP_latticedomain] tags = [:latticepde, :latticedomain] begin
-@testset "lattice_domain is the hand-written domain" begin
+    @testset "lattice_domain is the hand-written domain" begin
     same(a, b) = length(a) == length(b) &&
                  all(i -> isequal(a[i].variables, b[i].variables) && a[i].domain == b[i].domain, eachindex(a))
     @test same(lattice_domain(t, (x, y), (8, 4); spacing = 0.5),
@@ -59,7 +59,7 @@ end
 end
 
 @testitem "HEX is exported" setup = [LP_latticedomain] tags = [:latticepde, :latticedomain] begin
-@testset "HEX is exported" begin
+    @testset "HEX is exported" begin
     @test Base.isexported(LatticePDE, :HEX)
     m = Module(:TiHex)
     Core.eval(m, :(using LatticePDE))

@@ -16,7 +16,7 @@ include("shared/export_all.jl")
 end
 
 @testitem "checkerboard" setup = [CP_checkerboard_passes] tags = [:corepotts, :checkerboard_passes] begin
-@testset "checkerboard" begin
+    @testset "checkerboard" begin
     lat = Lattice((30, 30))
     σ, kinds = blocks((30, 30), 5)
         tracked = CPMFunction(gg_delta_H; temperature = gg_temperature, track = CorePotts.TrackEnergyChange{Float64}())

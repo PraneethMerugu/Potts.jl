@@ -17,17 +17,19 @@
         end
         @test count(==(:s), [Potts.info(p).name for p in Potts.declared_parameters(CeNamed(; name = :m))]) == 1
         # a name that is neither a field nor a parameter: the refusal lists both
-        e = cp_build_err(quote
-            @potts_model CeNoName begin
-                @kinds medium A
-                @lattice Lattice((24, 20); boundary = Closed())
-                @fields c, q = CeS.named() (a => kind == A)
-                @sweep Metropolis(; temperature = 4.0)
+        e = cp_build_err(
+            quote
+                @potts_model CeNoName begin
+                    @kinds medium A
+                    @lattice Lattice((24, 20); boundary = Closed())
+                    @fields c, q = CeS.named() (a => kind == A)
+                    @sweep Metropolis(; temperature = 4.0)
+                end
+                CeNoName(; name = :m)
             end
-            CeNoName(; name = :m)
-        end)
+        )
         @test occursin("`q` is not a field of the PDESystem `fields`; its fields are `c`", e) &&
-              occursin("its parameters (a name may be one too) ", e) && occursin("`s`", e) || (println(e); false)
+            occursin("its parameters (a name may be one too) ", e) && occursin("`s`", e) || (println(e); false)
     end
 end
 
@@ -35,15 +37,25 @@ end
     @testset "a Bool input takes a truth-valued expression (any over a relation)" begin
         op = cp_op()
         σ = first(op).second
-        nb = [any(1 <= i + di <= size(σ, 1) && 1 <= j + dj <= size(σ, 2) && σ[i + di, j + dj] != 0
-                  for (di, dj) in ((1, 0), (-1, 0), (0, 1), (0, -1))) for i in axes(σ, 1), j in axes(σ, 2)]
+        nb = [
+            any(
+                1 <= i + di <= size(σ, 1) && 1 <= j + dj <= size(σ, 2) && σ[i + di, j + dj] != 0
+                    for (di, dj) in ((1, 0), (-1, 0), (0, 1), (0, -1))
+            ) for i in axes(σ, 1), j in axes(σ, 2)
+        ]
         fi = Potts.field_inputs(PottsProblem(CeAny(; name = :m), op, (0, 1)))[:a]
         @test fi == nb && count(nb) > 32                                         # cells' edges and their medium rims
-        hand(σ, kind) = [:a => [any(1 <= i + di <= size(σ, 1) && 1 <= j + dj <= size(σ, 2) && σ[i + di, j + dj] != 0 &&
-                                    kind[σ[i + di, j + dj]] == 1 for (di, dj) in ((1, 0), (-1, 0), (0, 1), (0, -1)))
-                                for i in axes(σ, 1), j in axes(σ, 2)]]
+        hand(σ, kind) = [
+            :a => [
+                any(
+                    1 <= i + di <= size(σ, 1) && 1 <= j + dj <= size(σ, 2) && σ[i + di, j + dj] != 0 &&
+                        kind[σ[i + di, j + dj]] == 1 for (di, dj) in ((1, 0), (-1, 0), (0, 1), (0, -1))
+                )
+                    for i in axes(σ, 1), j in axes(σ, 2)
+            ],
+        ]
         err, n = cp_replay(CeAny(; name = :m), CeS.named_owned(), hand, ExplicitEuler())
-        @test n == 12 && err <= 1e-14 || (println("CeAny: $err"); false)   # (measured 4.4e-16, 2026-11-10: one rounding)
+        @test n == 12 && err <= 1.0e-14 || (println("CeAny: $err"); false)   # (measured 4.4e-16, 2026-11-10: one rounding)
         host = CpHost(; name = :m)
         k, vol = Potts.kind, Potts.value_at(Potts.B.volume, Potts.B.owner)
         # the other truth-valued forms couple; a numeric one is refused
@@ -54,15 +66,17 @@ end
             e = cp_msg(() -> Potts.couple(host, CeS.named(); inputs = [CeS.a => b]))
             @test occursin("the input `a` is a `Bool`", e) && occursin("is not a truth value", e) || (println(e); false)
         end
-        e = cp_build_err(quote
-            @potts_model CeSum begin
-                @kinds medium A
-                @lattice Lattice((24, 20); boundary = Closed())
-                @fields c = CeS.named() (a => sum(volume[n] for n in VonNeumann(1)(site)))
-                @sweep Metropolis(; temperature = 4.0)
+        e = cp_build_err(
+            quote
+                @potts_model CeSum begin
+                    @kinds medium A
+                    @lattice Lattice((24, 20); boundary = Closed())
+                    @fields c = CeS.named() (a => sum(volume[n] for n in VonNeumann(1)(site)))
+                    @sweep Metropolis(; temperature = 4.0)
+                end
+                CeSum(; name = :m)
             end
-            CeSum(; name = :m)
-        end)
+        )
         @test occursin("is not a truth value", e) || (println(e); false)
     end
 end

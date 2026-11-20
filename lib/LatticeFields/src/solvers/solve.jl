@@ -459,7 +459,8 @@ function lowered_type(exec, S, role; op = nothing)
     S in LOWERED_TYPES ||
         bad("number type ", S, " (", role, ") is not lowered for this solver; ",
             "lowered: ", join(LOWERED_TYPES, ", "),
-            S <: AbstractFloat ? "" : " (a Dual or BigFloat implicit solve is not supported yet)")
+        S <: AbstractFloat ? "" : " (a Dual or BigFloat implicit solve is not supported yet)"
+    )
     S === Float32 || supports(exec, S) ||
         bad("number type ", S, " (", role, ") is not supported by this executor ",
             "(supports(exec, ", S, ") is false: the device has no ", S, "); use Float32")

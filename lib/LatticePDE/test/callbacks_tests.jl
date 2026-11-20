@@ -32,7 +32,7 @@ include("shared/export_all.jl")
 end
 
 @testitem "a callback that writes a parameter equals two chained solves (EE, BE)" setup = [LP_callbacks] tags = [:latticepde, :callbacks] begin
-@testset "a callback that writes a parameter equals two chained solves (EE, BE)" begin
+    @testset "a callback that writes a parameter equals two chained solves (EE, BE)" begin
     p = cbprob()
         for alg in (ExplicitEuler(), BackwardEuler(; linsolve = BTIGHT))
         cb = SciMLBase.DiscreteCallback((u, t, i) -> t == 0.5, i -> (i.ps[bk] = 3.0); save_positions = (false, false))
@@ -50,7 +50,7 @@ end
 end
 
 @testitem "PresetTimeCallback off the grid, PeriodicCallback, tstops" setup = [LP_callbacks] tags = [:latticepde, :callbacks] begin
-@testset "PresetTimeCallback off the grid, PeriodicCallback, tstops" begin
+    @testset "PresetTimeCallback off the grid, PeriodicCallback, tstops" begin
     p = cbprob()
     hit = Float64[]
         s = solve(p, ExplicitEuler(); dt = 0.01, callback = PresetTimeCallback([0.123, 0.5], i -> push!(hit, i.t)))
@@ -72,7 +72,7 @@ end
 end
 
 @testitem "saveat off the grid is the linear interpolation of the windows' ends; save_idxs; keywords" setup = [LP_callbacks] tags = [:latticepde, :callbacks] begin
-@testset "saveat off the grid is the linear interpolation of the windows' ends; save_idxs; keywords" begin
+    @testset "saveat off the grid is the linear interpolation of the windows' ends; save_idxs; keywords" begin
     p = cbprob(0.3)
         s = solve(p, ExplicitEuler(); dt = 0.01, saveat = 0.015)
         e = solve(p, ExplicitEuler(); dt = 0.01, save_everystep = true)
@@ -97,7 +97,7 @@ end
         @test SciMLBase.successful_retcode(solve(p, ExplicitEuler(); dt = 0.01, verbose = false, alias = SciMLBase.ODEAliasSpecifier(; alias_u0 = true), dense = true))
         @test solve(p, ExplicitEuler(); dt = 0.01, maxiters = 5).retcode == ReturnCode.MaxIters
         @test solve(p, ExplicitEuler(); dt = 0.01).stats.syncs == 0
-    # A long span over a short window, `(tf - t0) / (1e-9 dt)` past `Int`
+        # A long span over a short window, `(tf - t0) / (1e-9 dt)` past `Int`
     # (base ab34e226: InexactError at `init`); the start and the end are the save times, and a
     # saveat time within 1e-9 dt of another is one save
         ig = init(remake(p; tspan = (0.0, 1.0e6)), ExplicitEuler(); dt = 1.0e-4)

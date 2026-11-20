@@ -25,9 +25,9 @@ const COREPOTTS_NONPUBLIC_QUALIFIED = (
     :RefValue,                  # Base.RefValue: concrete `Ref` type for type-stable fields
     :typename,                  # Base.typename(A).wrapper: the unparameterised device array type for Adapt
     :afoldl,                    # Base.afoldl: unrolled fold over the MCS-order tuple; public `foldl`
-                                # and `sum` allocate there on SequentialCPM
+    # and `sum` allocate there on SequentialCPM
     Symbol("@nospecializeinfer"), # Base.@nospecializeinfer (documented, not declared public): the host
-                                  # setup of `init`, `remake` and `PottsProblem` inferred once for every model
+    # setup of `init`, `remake` and `PottsProblem` inferred once for every model
 )
 include(joinpath(@__DIR__, "..", "..", "..", "test", "shared", "qa_common.jl"))
 include("shared/export_all.jl")

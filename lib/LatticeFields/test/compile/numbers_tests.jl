@@ -73,7 +73,7 @@ end
 # registry (every test errors).
 @testitem "fixed lanes, a compute type wider than the storage, the Float64 registry" setup = [LF_compile_numbers] tags = [:latticefields, :compile] begin
     using .LF_compile_numbers: value_type
-@testset "fixed lanes, a compute type wider than the storage, the Float64 registry" begin
+    @testset "fixed lanes, a compute type wider than the storage, the Float64 registry" begin
     @test lanetype(F64, Float32, :state, true) == Float64 && lanetype(F32, Float64, :state, true) == Float32
     @test lanetype(F64, Float32, :state, false) == Float32                         # control: the value class
     E = Dual{Nothing, Float64, 1}

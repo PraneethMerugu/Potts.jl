@@ -48,8 +48,8 @@ _labf(t) = t > 216 / 24389 ? cbrt(t) : (24389 / 27 * t + 16) / 116
 function _lab(rgb::NTuple{3, Float64})
     r, g, b = map(_linear, rgb)
     x = 0.4124564r + 0.3575761g + 0.1804375b
-    y = 0.2126729r + 0.7151522g + 0.0721750b
-    z = 0.0193339r + 0.1191920g + 0.9503041b
+    y = 0.2126729r + 0.7151522g + 0.072175b
+    z = 0.0193339r + 0.119192g + 0.9503041b
     fx, fy, fz = _labf(x / 0.95047), _labf(y), _labf(z / 1.08883)
     return (116fy - 16, 500(fx - fy), 200(fy - fz))
 end
@@ -115,7 +115,7 @@ function _ref_hsv(h, s = 0.62, v = 0.88)
     p, q, t = v * (1 - s), v * (1 - s * f), v * (1 - s * (1 - f))
     m = mod(i, 6)
     return m == 0 ? (v, t, p) : m == 1 ? (q, v, p) : m == 2 ? (p, v, t) :
-           m == 3 ? (p, q, v) : m == 4 ? (t, p, v) : (v, p, q)
+        m == 3 ? (p, q, v) : m == 4 ? (t, p, v) : (v, p, q)
 end
 _ref_key(id, generation) = (UInt64(id) << 32) ⊻ UInt64(generation)
 """The formula on the base (bba4d963): golden-ratio hue of the raw key."""
@@ -133,7 +133,7 @@ good_colour(id, generation) = _ref_hsv(Float64(_splitmix64(_ref_key(id, generati
 passes_separation(colours) = all(<=(MAX_CONFUSABLE), confusable_fractions(colours))
 
 const LOW_IDS = 1:2000
-const HIGH_WINDOWS = (2^20:(2^20 + 2000), 4_000_000_000:4_000_002_000)
+const HIGH_WINDOWS = ((2^20):(2^20 + 2000), 4_000_000_000:4_000_002_000)
 
 @testset "per-cell colors separate neighboring ids" begin
     @testset "(e) negative control: the metric catches the old formula" begin
@@ -184,9 +184,13 @@ const HIGH_WINDOWS = (2^20:(2^20 + 2000), 4_000_000_000:4_000_002_000)
         owners = fill(RenderOwner(MediumSite, 1), 6, 4)
         owners[2, 2] = RenderOwner(CellSite, 30)
         owners[5, 3] = RenderOwner(CellSite, 31)
-        sparse = PottsRenderFrame(7, owners,
-            [RenderCellMetadata(RenderCellIdentity(30, 1), 2),
-             RenderCellMetadata(RenderCellIdentity(31, 1), 3)])
+        sparse = PottsRenderFrame(
+            7, owners,
+            [
+                RenderCellMetadata(RenderCellIdentity(30, 1), 2),
+                RenderCellMetadata(RenderCellIdentity(31, 1), 3),
+            ]
+        )
         sparse_colours = package_colours(sparse)
         @test sparse_colours[RenderCellIdentity(30, 1)] == whole[RenderCellIdentity(30, 1)]
         @test sparse_colours[RenderCellIdentity(31, 1)] == whole[RenderCellIdentity(31, 1)]
@@ -197,8 +201,10 @@ const HIGH_WINDOWS = (2^20:(2^20 + 2000), 4_000_000_000:4_000_002_000)
         first_generation = package_sequence(ids, 1)
         second_generation = package_sequence(ids, 2)
         @test all(first_generation .!= second_generation)
-        confusable = count(i -> _delta_e(_lab(first_generation[i]), _lab(second_generation[i])) <
-                               CONFUSABLE_DE, eachindex(ids))
+        confusable = count(
+            i -> _delta_e(_lab(first_generation[i]), _lab(second_generation[i])) <
+                CONFUSABLE_DE, eachindex(ids)
+        )
         @test confusable <= MAX_CONFUSABLE * length(ids)
     end
 

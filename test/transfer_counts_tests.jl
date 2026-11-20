@@ -39,7 +39,8 @@ function tc_divide_problem(; T = Float64, tspan = (0, 4))
     σ = zeros(Int32, 16, 8)
     σ[3:6, 2:3] .= 1
     σ[10:13, 5:6] .= 2
-    return PottsProblem(TcDivide(; name = :tc), [ownership => σ, kind => [:A, :A]], tspan;
+    return PottsProblem(
+        TcDivide(; name = :tc), [ownership => σ, kind => [:A, :A]], tspan;
         T, capacity = 6)
 end
 
@@ -167,7 +168,9 @@ end
 if PottsDevices.device_name() == "metal"
     let counters_path = joinpath(@__DIR__, "..", "lib", "PottsModels", "test", "acceptance", "transfer_counters_tests.jl"),
             runner = joinpath(@__DIR__, "shared", "pottsmodels_test_file.jl")
-        Core.eval(@__MODULE__, :(module TransferCountersOnDevice
+        Core.eval(
+            @__MODULE__, :(
+                module TransferCountersOnDevice
                     include($runner)
                     PottsModelsTestFile.run_file(@__MODULE__, $counters_path)
         end))
@@ -243,7 +246,8 @@ end
                 integ.p.Q .= 10                                  # in place, between MCS
                 step!(integ); step!(integ)
                 y = Array(integ.state.cell.y)[1]
-                integ = init(tc_param_problem(tc_write_acc!; declared = false), alg; backend,
+                integ = init(
+                    tc_param_problem(tc_write_acc!; declared = false), alg; backend,
                     save_start = false, save_everystep = false, save_end = false
                 )
                 foreach(_ -> step!(integ), 1:3)

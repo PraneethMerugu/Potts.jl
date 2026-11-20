@@ -37,7 +37,7 @@ include("shared/export_all.jl")
 end
 
 @testitem "BC parser" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
-@testset "BC parser" begin
+    @testset "BC parser" begin
     fields = Dict{Any, Bool}(operation(unwrap(v)) => MTKB.isinput(unwrap(v)) for v in (ce, ke, ue))
     ivs = unwrap.([t, x, y])
     ends = [(0.0, 1.0), (0.0, 1.0), (0.0, 1.0)]
@@ -122,13 +122,13 @@ end
     for (rhs, want) in table, form in (identity, simplify, Symbolics.expand)
         @test Set(last.(LatticePDE.linearity(form(rhs), ce, states; inputs))) == want
     end
-    # the conservative rule: a coefficient that reads an unknown field makes the term
+        # the conservative rule: a coefficient that reads an unknown field makes the term
     # Other, and a diffusion multiplier reads no field at all
     for (rhs, want) in [DivKGrad(:harmonic)(Ke, ce) => :Other,    # K ~ c^2 would make it nonlinear
                 Ke * ce => :Other, ce * oe => :Other, oe * laplacian(ce) => :Other,
                 ifelse(ke == 2, laplacian(ce), 0) => :Other, Dc * laplacian(ce) => :Diffusion, ismember(ke, (2,)) * ce => :LinearLocal,
         # a multiplier that reads inputs through table reads and indicators only varies by
-        # site and is bounded; one that reads an input directly is Other
+                # site and is bounded; one that reads an input directly is Other
                 value_at(Dk, ke) * laplacian(ce) => :SiteDiffusion, ismember(ke, (2,)) * laplacian(ce) => :SiteDiffusion,
                 (value_at(Dk, ke) - value_at(Dk, ke + 1) + 2) * laplacian(ce) => :SiteDiffusion,
                 (1 / value_at(Dk, ke)) * DivKGrad(:arithmetic)(value_at(Dk, ke), ce) => :SiteDiffusion,
@@ -140,7 +140,7 @@ end
     cf = symbolic_discretize(pde([D(ce) ~ DivKGrad(:harmonic)(Ke, ce) + Ke * ce, Ke ~ ce^2], Equation[], [ce, Ke], Num[]),
                     LatticeDiscretization(Grid((4, 4))))
     @test Set(last.(cf.linearity["c"])) == Set([:Other])
-    # Symbolics' own expansion is blind to the registered operators: the reason for the table
+        # Symbolics' own expansion is blind to the registered operators: the reason for the table
         @test !Symbolics.linear_expansion(Dc * laplacian(ce) - k * ce, ce)[3]
 end
 end
@@ -379,7 +379,7 @@ end
 end
 
 @testitem "lowered IR independent of operator hashes" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
-@testset "lowered IR independent of operator hashes" begin
+    @testset "lowered IR independent of operator hashes" begin
     function build()
             rhs = Dc * laplacian(ce) - k * ce + K0 * sin(ce) + cT * exp(-oe) + g0 * cos(oe) + h0 * ismember(ke, (2, 3)) +
               DivKGrad(:harmonic)(Ke, ce) + k * Dx(Dx(ce)) + max(ce - cT, 0) * ismember(ke, (1,)) +
@@ -406,7 +406,7 @@ end
 end
 
 @testitem "masked averaging map: Moore neighborhood, empty sites only (Rational oracle)" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
-@testset "masked averaging map: Moore neighborhood, empty sites only (Rational oracle)" begin
+    @testset "masked averaging map: Moore neighborhood, empty sites only (Rational oracle)" begin
     # [N(l_i)] ← (D/|I_i|) Σ_{j∈I_i} [N(l_j)], I_i = empty sites of Moore(i) ∪ {i}; empty sites
     # update synchronously, cell sites keep their value. Empty is kind 1, the cell kind 2.
     n = 5
@@ -415,7 +415,7 @@ end
     rhs = ifelse(ismember(ke, (1,)),
                  Dc * sum(m * N(t, x + a * dx, y + b * dy) for (m, (a, b)) in zip(mem, offs)) / sum(mem), Ne)
     per = [N(t, 0, y) ~ N(t, 1, y), N(t, x, 0) ~ N(t, x, 1)]
-    function exact(N, empty, D, periodic)                       # the hand `step`, Rational
+        function exact(N, empty, D, periodic)                       # the hand `step`, Rational
         out = copy(N)
         for i in 1:n, j in 1:n
             empty[i, j] || continue
@@ -546,7 +546,7 @@ end
 end
 
 @testitem "refusals: faces, conditions and offsets" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
-@testset "refusals: faces, conditions and offsets" begin
+    @testset "refusals: faces, conditions and offsets" begin
     g = LatticeDiscretization(Grid((4, 4)); T = Float64)
     fields = Dict{Any, Bool}(operation(unwrap(ce)) => false, operation(unwrap(ke)) => true)
     ivs = unwrap.([t, x, y])
@@ -583,7 +583,7 @@ end
 end
 
 @testitem "refusals: offsets, aux reads and initial values" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
-@testset "refusals: offsets, aux reads and initial values" begin
+    @testset "refusals: offsets, aux reads and initial values" begin
     g = LatticeDiscretization(Grid((4, 4)); T = Float64)
     map(r; ps = [dx]) = () -> symbolic_discretize(pde([Shift(t, 1)(Ne) ~ r], Equation[], [Ne], ps), g)
     # 1. an offset is `a * dx` exactly
@@ -623,7 +623,7 @@ end
 end
 
 @testitem "state type: lanes per T, default by backend, refusals" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
-@testset "state type: lanes per T, default by backend, refusals" begin
+    @testset "state type: lanes per T, default by backend, refusals" begin
         sys = pde([D(ce) ~ Dc * laplacian(ce) - k * ce], [c(t, 0, y) ~ 1.0, Dx(c(t, 1, y)) ~ 0.0, c(t, x, 0) ~ c(t, x, 1)], [ce], [Dc, k])
     lanes(T) = [f.storage for f in symbolic_discretize(sys, LatticeDiscretization(Grid((8, 4)); T); update = euler).program.fields
                 if f.key == "c"]
@@ -644,7 +644,7 @@ end
 # Before the fix (925110cc): 1 error, the expression refused ("the boundary value
 # `g1 + g2` must be a number, …").
 @testitem "a Robin coefficient of parameters" setup = [LP_discretize] tags = [:latticepde, :discretize] begin
-@testset "a Robin coefficient of parameters" begin
+    @testset "a Robin coefficient of parameters" begin
     @parameters g1 = 1.0 g2 = 2.0 ar = g1 + g2
     g = LatticeDiscretization(Grid((8, 8)); T = Float64)
         sysr(bc, ps) = pde([D(ce) ~ Dc * laplacian(ce)], [c(0, x, y) ~ 0.0, bc], [ce], [Dc; ps])
@@ -658,13 +658,13 @@ end
     @test rhs(remake(ex; p = [g1 => 4.0])) == rhs(remake(ref; p = [g1 => 4.0])) != rhs(ref)
     # β too; and a coefficient that reads a coordinate is refused
     exb = discretize(sysr(c(t, 0, y) - (g1 + g2) * Dx(c(t, 0, y)) ~ 1.0, [g1, g2]), g)
-    # (the slot holds β of the outward ∂c/∂n, as A's `Robin`, on either face; the written
+        # (the slot holds β of the outward ∂c/∂n, as A's `Robin`, on either face; the written
     # coefficient of ∂c/∂x on the low face is −β. Base 6d11bc85: −3.0)
     @test getp(exb, :c_x_low_β)(exb) == 3.0
     hib = discretize(sysr(c(t, 1, y) + (g1 + g2) * Dx(c(t, 1, y)) ~ 1.0, [g1, g2]), g)
     @test getp(hib, :c_x_high_β)(hib) == 3.0
     @test rhs(exb) == rhs(discretize(sysr(c(t, 0, y) - ar * Dx(c(t, 0, y)) ~ 1.0, [g1, g2, ar]), g))
-    # (one that reads a coordinate is a value field of the face, not a slot; robin_site.jl)
+        # (one that reads a coordinate is a value field of the face, not a slot; robin_site.jl)
     sy = discretize(sysr((g1 + y) * c(t, 0, y) - Dx(c(t, 0, y)) ~ 1.0, [g1, g2]), g)
     @test any(r -> r isa LatticeFields.IR.FaceRule && r.afield != 0, LFP.field_problem(sy).program.rules)
 end

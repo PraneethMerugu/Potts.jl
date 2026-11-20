@@ -62,7 +62,7 @@ end
 
 @testitem "pdesystem works out the lists of the hand-built PDESystem" setup = [LP_pdesystem_ctor] tags = [:latticepde, :pdesystem_ctor] begin
 using .LP_pdesystem_ctor: fd
-@testset "pdesystem works out the lists of the hand-built PDESystem" begin
+    @testset "pdesystem works out the lists of the hand-built PDESystem" begin
     a = LatticePDE.pdesystem(pseq(), psbc(); name = :ps, domain = psdom)
     @test a isa PDESystem && nameof(a) === :ps
     @test isequal(collect(a.ivs), [t, x, y])
@@ -94,7 +94,7 @@ end
 
 @testitem "pdesystem refusals" setup = [LP_pdesystem_ctor] tags = [:latticepde, :pdesystem_ctor] begin
 using .LP_pdesystem_ctor: fd
-@testset "pdesystem refusals" begin
+    @testset "pdesystem refusals" begin
     m = psmsg(() -> LatticePDE.pdesystem([D(psc(t, x, y)) ~ psu(t, x) - psc(t, x, y)]; name = :bad))
     @test occursin("different independent variables", m) || (println(m); false)
     m = psmsg(() -> LatticePDE.pdesystem(Equation[]; name = :bad))
@@ -106,7 +106,7 @@ end
 
 @testitem "pdesystem orders the inputs by name" setup = [LP_pdesystem_ctor] tags = [:latticepde, :pdesystem_ctor] begin
 using .LP_pdesystem_ctor: fd
-@testset "pdesystem orders the inputs by name" begin
+    @testset "pdesystem orders the inputs by name" begin
     dvnames(s) = [string(nameof(operation(unwrap(u)))) for u in s.dvs]
     for rhs in (psz(t, x, y) - psc(t, x, y), psc(t, x, y) * psz(t, x, y), 2.0 * psz(t, x, y) - psc(t, x, y))
         s = LatticePDE.pdesystem([D(psc(t, x, y)) ~ rhs], [psc(t, 0, y) ~ psa(t, 0, y)]; name = :pso)

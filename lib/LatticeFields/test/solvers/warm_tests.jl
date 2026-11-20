@@ -62,7 +62,7 @@ end
 using .LF_solvers_warm: fd
 @testset "the host reduction fast path equals the emulated workgroups bitwise" begin
     rng = Xoshiro(21)
-    extra = (                                             # face-condition operators
+        extra = (                                             # face-condition operators
         "robin" => (CellOperator((40, 24); shift = 0.05, robin = (((0.4, 0.25, 0.3), (0.1, -1.0, 0.4)), (nothing, (1.0, 0.6, 0.2)))),
             ("in.f" => rand(rng, 960),)),
         "fieldface" => (CellOperator((40, 24); shift = 0.02, face = ("in.wx", "in.wy"), mask = "in.mask", value = "in.v",

@@ -40,7 +40,7 @@ include("shared/export_all.jl")
 end
 
 @testitem "one BackwardEuler window equals the hand BE matrix" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
-@testset "one BackwardEuler window equals the hand BE matrix" begin
+    @testset "one BackwardEuler window equals the hand BE matrix" begin
     h = 0.05
         alg = BackwardEuler(; linsolve = BTIGHT)
     # a numeric operator: diffusion, decay, a source, a Dirichlet face, a mask with its value
@@ -61,7 +61,7 @@ end
 end
 
 @testitem "the solver capabilities in a BackwardEuler group" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
-@testset "the solver capabilities in a BackwardEuler group" begin
+    @testset "the solver capabilities in a BackwardEuler group" begin
     h = 0.05
     xs, ys = bxs(), bys()
     # a Robin face, positive part (α and β of the same sign with the outward normal)
@@ -130,7 +130,7 @@ end
 end
 
 @testitem "SiteDiffusion rows (row scaling; m = 0 rows in two stages)" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
-@testset "SiteDiffusion rows (row scaling; m = 0 rows in two stages)" begin
+    @testset "SiteDiffusion rows (row scaling; m = 0 rows in two stages)" begin
     h = 0.05
         # `value_at(W, q) laplacian(c)`: the row scaled by 1/m keeps the faces symmetric (q = 0 reads 0: m = 0 rows)
         p = bown(bsys([D(bce) ~ value_at(bW, bqe) * laplacian(bce) - bk * bce + 1], [bc(0, x, y) ~ x], [bW, bk]))
@@ -162,7 +162,7 @@ end
 end
 
 @testitem "order 1, the manufactured solution, the stage tⁿ⁺¹" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
-@testset "order 1, the manufactured solution, the stage tⁿ⁺¹" begin
+    @testset "order 1, the manufactured solution, the stage tⁿ⁺¹" begin
     # the discrete sine is an eigenvector of the lattice Laplacian with Dirichlet 0 faces: the
     # semi-discrete solution is `e^{D λ t} u0`, so the BE error is the time error alone
     n = 16
@@ -202,7 +202,7 @@ end
 end
 
 @testitem "a stiff case, OrdinaryDiffEq's ImplicitEuler" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
-@testset "a stiff case, OrdinaryDiffEq's ImplicitEuler" begin
+    @testset "a stiff case, OrdinaryDiffEq's ImplicitEuler" begin
     # D h/dx² = 10⁴: BackwardEuler stays bounded and monotone; ExplicitEuler with one substep
     # (forced) blows up (`Unstable`)
     n = 16
@@ -263,7 +263,7 @@ end
 end
 
 @testitem "messages, the `:ode` path, `show`" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
-@testset "messages, the `:ode` path, `show`" begin
+    @testset "messages, the `:ode` path, `show`" begin
     e(f) = try
         f(); ""
     catch err
@@ -283,7 +283,7 @@ end
         LatticeDiscretization(Grid(BDIMS); T = Float64))
         m = e(() -> solve(po, LatticePCG()))
         @test occursin("give it to one, `BackwardEuler(; linsolve = LatticePCG())`", m)
-    # (the field solvers step the problem `discretize` returns; base: refused, "discretize
+        # (the field solvers step the problem `discretize` returns; base: refused, "discretize
     # with `LatticeDiscretization(…; problem = :owned)`")
         @test init(po, BackwardEuler(); dt = 0.1).sol.t == [0.0]
     @test solve(po, ImplicitEuler(); dt = 0.01, adaptive = false).retcode == ReturnCode.Success   # the route
@@ -307,7 +307,7 @@ end
 end
 
 @testitem "StalledSuccess does not skip the later groups" setup = [LP_implicit] tags = [:latticepde, :implicit] begin
-@testset "StalledSuccess does not skip the later groups" begin
+    @testset "StalledSuccess does not skip the later groups" begin
     p = gown(gsys())
     for (code, moves) in ((ReturnCode.StalledSuccess, true), (ReturnCode.ConvergenceFailure, false))
             ig = init(p, FieldGroups(gce => StallStub(code); default = ExplicitEuler()); dt = 0.01)

@@ -25,7 +25,7 @@ include("shared/export_all.jl")
 end
 
 @testitem "integ.ps writes give the next window of a restart (owned and Tsit5)" setup = [LP_params] tags = [:latticepde, :params] begin
-@testset "integ.ps writes give the next window of a restart (owned and Tsit5)" begin
+    @testset "integ.ps writes give the next window of a restart (owned and Tsit5)" begin
     # the owned integrator: a scalar, a table and an input written through `integ.ps`, then one
     # window against a fresh problem started from the written values
     po = discretize(wsys(), wdisc(); inputs = [wke => WK1])
@@ -72,7 +72,7 @@ end
 end
 
 @testitem "remake with inputs, tables and u0 pairs on the ODE problem" setup = [LP_params] tags = [:latticepde, :params] begin
-@testset "remake with inputs, tables and u0 pairs on the ODE problem" begin
+    @testset "remake with inputs, tables and u0 pairs on the ODE problem" begin
     o = discretize(wsys(), wdisc(); inputs = [wke => WK1])
     # inputs through `remake` reach an OrdinaryDiffEq solve (base: SciML's "Unrecognized keyword
     # arguments: [:inputs]" from `solve`)
@@ -101,7 +101,7 @@ end
 end
 
 @testitem "SciMLStructures portions of LatticeParameters" setup = [LP_params] tags = [:latticepde, :params] begin
-@testset "SciMLStructures portions of LatticeParameters" begin
+    @testset "SciMLStructures portions of LatticeParameters" begin
     o = discretize(wsys(), wdisc(); inputs = [wke => WK1])
     lp = o.p
     @test lp isa LatticePDE.Problems.LatticeParameters && SciMLStructures.isscimlstructure(lp)
@@ -126,7 +126,7 @@ end
 end
 
 @testitem "a table written on an OrdinaryDiffEq integrator is checked at the next call" setup = [LP_params] tags = [:latticepde, :params] begin
-@testset "a table written on an OrdinaryDiffEq integrator is checked at the next call" begin
+    @testset "a table written on an OrdinaryDiffEq integrator is checked at the next call" begin
     o = discretize(wsys(), wdisc(); inputs = [wke => WK1])
     oi = init(o, Tsit5())
     step!(oi)
@@ -143,7 +143,7 @@ end
 end
 
 @testitem "(review 5): a plain parameter vector holds no inputs, which are not read as zero" setup = [LP_params] tags = [:latticepde, :params] begin
-@testset "(review 5): a plain parameter vector holds no inputs, which are not read as zero" begin
+    @testset "(review 5): a plain parameter vector holds no inputs, which are not read as zero" begin
     o = discretize(wsys(), wdisc(); inputs = [wke => WK1])
     raw = SciMLBase.ODEProblem(o.f, o.u0, o.tspan, copy(o.p.values))
         # (at 0a182a0e: no error; the input read as zero, so `value_at(Dw, 0)` gave the rate 0)

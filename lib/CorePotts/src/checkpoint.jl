@@ -40,7 +40,9 @@ const CHECKPOINT_FORMAT = 2
 """Checkpoint the integrator (synchronizes)."""
 function checkpoint(integ::PottsIntegrator)
     prob = integ.prob
-    prob.tangent === nothing || throw(ArgumentError("a run with derivative parts (Dual parameters) has no " *
+    prob.tangent === nothing || throw(
+        ArgumentError(
+            "a run with derivative parts (Dual parameters) has no " *
         "checkpoint: its derivative parts are not part of the state; run it from the start, or checkpoint the primal run " *
         "(`remake` with plain values)"))
     # `current_state` is the host read point that makes `stats` exact (D-089): it runs

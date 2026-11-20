@@ -591,7 +591,8 @@ end
 
 inp_op() = (σ = zeros(Int32, 12, 10); σ[4:6, 3:5] .= 1; [ownership => σ, kind => [:cell]])
 
-inp_model(fields; kinds = :(@kinds medium cell other)) = :(@potts_model InpM begin
+inp_model(fields; kinds = :(@kinds medium cell other)) = :(
+    @potts_model InpM begin
     $kinds
     @lattice Lattice((12, 10); boundary = Closed())
     @energy cells => (volume - 9.0)^2

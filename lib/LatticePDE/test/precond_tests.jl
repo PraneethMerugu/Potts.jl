@@ -39,19 +39,19 @@ end
     @test SciMLBase.successful_retcode(s0) && SciMLBase.successful_retcode(s1)
     @test maximum(abs, s1.u[end] .- s0.u[end]) < 1e-4
     # Preconditioned GMRES keeps Krylov iterations O(1) (<= 6) and >= 5x fewer than unpreconditioned GMRES
-    @test k1 <= 6 && k0 >= 5k1 || (println("iterations ", (k0, k1)); false)
+        @test k1 <= 6 && k0 >= 5k1 || (println("iterations ", (k0, k1)); false)
     P = only(values(mg.engines))
     @test P isa LFP.MGPreconditioner && P.applies > 0 && isfinite(P.γ)
         @test repr(mg) == "LatticeMultigrid()" && occursin("cycle = (3, 3)", repr(LatticeMultigrid(; cycle = (3, 3))))
     # the documented small memory (`gmres_restart = 10`): the same steps, W builds and iterations
         s2, k2 = qfbdf(prob; precs = LatticeMultigrid(), gmres_restart = 10)
     @test (s2.stats.naccept, s2.stats.nw, s2.stats.nsolve) == (s1.stats.naccept, s1.stats.nw, s1.stats.nsolve) && k2 == k1 ||
-          (println("gmres_restart 10 ", (s2.stats, k2), " against 200 ", (s1.stats, k1)); false)
+            (println("gmres_restart 10 ", (s2.stats, k2), " against 200 ", (s1.stats, k1)); false)
 end
 end
 
 @testitem "LatticePCG solves a linear system with no time" setup = [LP_precond] tags = [:latticepde, :precond] begin
-@testset "LatticePCG solves a linear system with no time" begin
+    @testset "LatticePCG solves a linear system with no time" begin
     fdom = [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
         sl = PDESystem([0 ~ 0.3 * laplacian(qw(x, y)) - 2.0 * qw(x, y) + x], [qw(0, y) ~ 1.0], fdom, [x, y], [qw(x, y)], Num[]; name = :ql)
     lp = discretize(sl, qdisc(32))
@@ -61,7 +61,7 @@ end
         g = solve(lp, LatticeGMRES(); reltol = 1.0e-12, abstol = 0.0)
         @test SciMLBase.successful_retcode(g) && norm(g.u .- want) <= 1.0e-8 * norm(want)
     # Contraction rho <= 0.25 at rtol = 1e-13 bounds iterations <= ceil(log(1e-13)/log(0.25)) = 22
-    @test a.iters <= 22 || (println("LatticePCG iterations ", a.iters); false)
+        @test a.iters <= 22 || (println("LatticePCG iterations ", a.iters); false)
     d = solve(lp)                                        # (the default: the owned QuasiSteady)
     @test norm(d.u[1] .- want) <= 1e-6 * norm(want)
     @test occursin("LatticePCG", repr(LatticePCG()))
@@ -76,19 +76,19 @@ end
 end
 
 @testitem "OrdinaryDiffEq oracles at 64², OrdinaryDiffEq's ImplicitEuler and Trapezoid" setup = [LP_precond] tags = [:latticepde, :precond] begin
-@testset "OrdinaryDiffEq oracles at 64², OrdinaryDiffEq's ImplicitEuler and Trapezoid" begin
+    @testset "OrdinaryDiffEq oracles at 64², OrdinaryDiffEq's ImplicitEuler and Trapezoid" begin
     f = sin(3t) * x
     prob = discretize(qsys(0.4; f), qdisc(64); sparse = true)
     h = 0.05
     so = solve(prob, ImplicitEuler(); dt = h, adaptive = false, abstol = 1e-12, reltol = 1e-12)
         sb = solve(discretize(qsys(0.4; f), qdisc(64)), BackwardEuler(; linsolve = QTIGHT); dt = h)
-    @test maximum(abs, sb.u[end] .- so.u[end]) < 1e-8 || (println("IE ", maximum(abs, sb.u[end] .- so.u[end])); false)
+        @test maximum(abs, sb.u[end] .- so.u[end]) < 1.0e-8 || (println("IE ", maximum(abs, sb.u[end] .- so.u[end])); false)
     # Crank–Nicolson's damped start is two Backward Euler steps of h/2
     s0 = solve(prob, ImplicitEuler(); dt = h / 2, adaptive = false, abstol = 1e-12, reltol = 1e-12, tspan = (0.0, h))
     st = solve(SciMLBase.remake(prob; u0 = s0.u[end], tspan = (h, 0.4)), Trapezoid(); dt = h, adaptive = false,
         abstol = 1e-12, reltol = 1e-12)
         sc = solve(discretize(qsys(0.4; f), qdisc(64)), CrankNicolson(; linsolve = QTIGHT); dt = h)
-    @test maximum(abs, sc.u[end] .- st.u[end]) < 1e-8 || (println("TR ", maximum(abs, sc.u[end] .- st.u[end])); false)
+        @test maximum(abs, sc.u[end] .- st.u[end]) < 1.0e-8 || (println("TR ", maximum(abs, sc.u[end] .- st.u[end])); false)
 end
 end
 

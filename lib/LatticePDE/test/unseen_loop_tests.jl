@@ -43,7 +43,7 @@ end
 
 @testitem "a loop coupled only through unseen terms warns once, and runs as before" setup = [LP_unseen_loop] tags = [:latticepde, :unseen_loop] begin
 using .LP_unseen_loop: fd
-@testset "a loop coupled only through unseen terms warns once, and runs as before" begin
+    @testset "a loop coupled only through unseen terms warns once, and runs as before" begin
     p = discretize(gsys(su, sv, sue, sve; name = :gs13c), LatticeDiscretization(Grid((12, 12))))
         alg = FieldGroups(sue => ExplicitEuler(; substeps = 4), sve => BackwardEuler())
     local ig
@@ -70,7 +70,7 @@ end
 
 @testitem "no warning for one group, for a loop the bound sees, or with intervals that let it see the terms" setup = [LP_unseen_loop] tags = [:latticepde, :unseen_loop] begin
 using .LP_unseen_loop: fd
-@testset "no warning for one group, for a loop the bound sees, or with intervals that let it see the terms" begin
+    @testset "no warning for one group, for a loop the bound sees, or with intervals that let it see the terms" begin
     # one group: no loop between groups
     p1 = discretize(gsys(su, sv, sue, sve; name = :gs13c1), LatticeDiscretization(Grid((10, 10))))
         @test isempty(loopwarns(() -> init(p1, BackwardEuler(); dt = 1.0)))
@@ -98,7 +98,7 @@ end
 
 @testitem "the trigger reads each unseen term's own reads" setup = [LP_unseen_loop] tags = [:latticepde, :unseen_loop] begin
 using .LP_unseen_loop: fd
-@testset "the trigger reads each unseen term's own reads" begin
+    @testset "the trigger reads each unseen term's own reads" begin
     sdisc = LatticeDiscretization(Grid((8, 8)))
     per(fs...) = reduce(vcat, [[f(t, 0, y) ~ f(t, 1, y), f(t, x, 0) ~ f(t, x, 1)] for f in fs])
     # S1: a loop a ⇄ b closed by seen reads; a's unseen term reads c, outside the loop: no warning

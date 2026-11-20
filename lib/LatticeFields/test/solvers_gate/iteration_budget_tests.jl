@@ -14,7 +14,7 @@
 using Test, LatticeFields
 include("../host_runner.jl")
 include("../solvers_cases.jl")
-const FLOAT32_FLOOR = Dict("per256" => 3e-4, "per300" => 1.5e-3)  # measured best: 1.0e-4, 4.8e-4
+const FLOAT32_FLOOR = Dict("per256" => 3.0e-4, "per300" => 1.5e-3)  # measured best: 1.0e-4, 4.8e-4
 
 function auto_run(case, T; kw...)
     sv = case_solver(case, T; kw...)
@@ -25,29 +25,32 @@ include("../shared/export_all.jl")
 end
 
 @testitem "solver iteration budget sweep" setup = [LF_solvers_gate_iteration_budget] tags = [:latticefields, :solvers_gate] begin
-@testset "solver iteration budget sweep" begin
-    mg32 = Dict{String, Int}()
-    for ((name, s), ref) in sort(collect(REFERENCE); by = first)
-        case = named_case(name, s)
-        f64 = counts(case, Float64)
-        k64, s64 = auto_run(case, Float64)
-        k32, s32 = auto_run(case, Float32)
+    @testset "solver iteration budget sweep" begin
+        mg32 = Dict{String, Int}()
+        for ((name, s), ref) in sort(collect(REFERENCE); by = first)
+            case = named_case(name, s)
+            f64 = counts(case, Float64)
+            k64, s64 = auto_run(case, Float64)
+            k32, s32 = auto_run(case, Float32)
             mg = steady!(
                 case_solver(case, Float32; linsolve = LatticeMultigrid(), solver_type = Float32);
-            maxiter = 40)
-        s == 5.5e-6 && (mg32[name] = mg)
-        println(rpad(name, 12), " s=", rpad(s, 8), " ref ", ref, "  F64 ", f64,
-            "  auto F64 ", k64, " ", s64.status, "  auto F32 ", k32, " ", s32.status,
-            " best ", round(s32.best / s32.bnorm; sigdigits = 2), "  MG F32 ", mg)
-        @test f64[1] <= 12 && f64[2] <= 25
-        @test k64 <= 12 && s64.done && s64.rnorm <= 1e-6 * s64.bnorm
-        @test k32 <= 12 && s32.done && s32.rnorm <= 1e-6 * s32.bnorm
-        if startswith(name, "per")
+                maxiter = 40
+            )
+            s == 5.5e-6 && (mg32[name] = mg)
+            println(
+                rpad(name, 12), " s=", rpad(s, 8), " ref ", ref, "  F64 ", f64,
+                "  auto F64 ", k64, " ", s64.status, "  auto F32 ", k32, " ", s32.status,
+                " best ", round(s32.best / s32.bnorm; sigdigits = 2), "  MG F32 ", mg
+            )
+            @test f64[1] <= 12 && f64[2] <= 25
+            @test k64 <= 12 && s64.done && s64.rnorm <= 1.0e-6 * s64.bnorm
+            @test k32 <= 12 && s32.done && s32.rnorm <= 1.0e-6 * s32.bnorm
+            if startswith(name, "per")
                 _, f32 = auto_run(case, Float32; solver_type = Float32)
-            @test f32.status === :floor                # never :done above the tolerance
-            @test f32.best / f32.bnorm <= FLOAT32_FLOOR[name]
+                @test f32.status === :floor                # never :done above the tolerance
+                @test f32.best / f32.bnorm <= FLOAT32_FLOOR[name]
+            end
         end
+        @test mg32["box512"] - mg32["box128"] <= 2         # the depth bound, on measured counts
     end
-    @test mg32["box512"] - mg32["box128"] <= 2         # the depth bound, on measured counts
-end
 end

@@ -19,7 +19,7 @@
         @test last(eltype(b).parameters) === Potts.Num
         e = cp_msg(() -> Potts.couple(host, CpPDE.sys(); inputs = b))
         @test occursin("the input `endo` is bound to the constant `false`", e) &&
-              occursin("Potts.is_kind(model, :A)", e) || (println(e); false)
+            occursin("Potts.is_kind(model, :A)", e) || (println(e); false)
         # either order, and a `Bool` and a numeric input mixed with a test
         e = cp_msg(() -> Potts.couple(host, CpPDE.sys(); inputs = [CpPDE.vol => vol, CpPDE.endo => Potts.kind == :A]))
         @test occursin("bound to the constant `false`", e) || (println(e); false)
@@ -48,29 +48,33 @@ end
         @test count(==(1), Potts.field_inputs(PottsProblem(CeKindNamed(; name = :m), ce_op(:endo), (0, 1)))[:kind]) == 32
         @test cp_same(cp_run(CeAlias(; name = :m), ExplicitEuler()), ref)            # the value of a name that is no input
         # a key that names neither an input nor a value: the refusal names the inputs
-        e = cp_build_err(quote
-            @potts_model CeNeither begin
-                @kinds medium A
-                @lattice Lattice((24, 20); boundary = Closed())
-                @energy cells(A) => (volume - 16.0)^2
-                @fields CpPDE.sys2() (ce_nothing_here => kind == A)
-                @sweep Metropolis(; temperature = 4.0)
+        e = cp_build_err(
+            quote
+                @potts_model CeNeither begin
+                    @kinds medium A
+                    @lattice Lattice((24, 20); boundary = Closed())
+                    @energy cells(A) => (volume - 16.0)^2
+                    @fields CpPDE.sys2() (ce_nothing_here => kind == A)
+                    @sweep Metropolis(; temperature = 4.0)
+                end
+                CeNeither(; name = :m)
             end
-            CeNeither(; name = :m)
-        end)
+        )
         @test occursin("`ce_nothing_here` is not a dependent variable of the PDESystem `fields`", e) && occursin("`endo`", e) ||
-              (println(e); false)
+            (println(e); false)
         # a key whose value is no input (a kind number) keeps the existing refusal
-        e = cp_build_err(quote
-            @potts_model CeKindKey begin
-                @kinds medium A
-                @lattice Lattice((24, 20); boundary = Closed())
-                @energy cells(A) => (volume - 16.0)^2
-                @fields CpPDE.sys2() (A => kind == A)
-                @sweep Metropolis(; temperature = 4.0)
+        e = cp_build_err(
+            quote
+                @potts_model CeKindKey begin
+                    @kinds medium A
+                    @lattice Lattice((24, 20); boundary = Closed())
+                    @energy cells(A) => (volume - 16.0)^2
+                    @fields CpPDE.sys2() (A => kind == A)
+                    @sweep Metropolis(; temperature = 4.0)
+                end
+                CeKindKey(; name = :m)
             end
-            CeKindKey(; name = :m)
-        end)
+        )
         @test occursin("`1` is not a dependent variable", e) || (println(e); false)
     end
 end

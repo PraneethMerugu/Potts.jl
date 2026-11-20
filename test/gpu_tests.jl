@@ -114,7 +114,9 @@
         # integral(x) with site-independent folds: computed once into model slots on the device
         σf, wf = hoisted_init((16, 16))
         wf = Float32.(wf)
-        solf = solve(PottsProblem(HoistedRefresh(; name = :x), [ownership => σf, kind => [:A, :A], :w => wf], (0, 3);
+        solf = solve(
+            PottsProblem(
+                HoistedRefresh(; name = :x), [ownership => σf, kind => [:A, :A], :w => wf], (0, 3);
                 T = Float32, seed = 5), CheckerboardCPM(); backend)
         uf = solf.u[end]
         σh, Vf = Array(uf.ownership), Array(uf.cell.volume)

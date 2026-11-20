@@ -125,7 +125,7 @@ end
 
 @testitem "a hex solve equals the hand system of the six faces" setup = [LF_solvers_hex] tags = [:latticefields, :solvers] begin
 using .LF_solvers_hex: fd
-@testset "a hex solve equals the hand system of the six faces" begin
+    @testset "a hex solve equals the hand system of the six faces" begin
     # closed box: a Robin face (axis 2 low, d > 0), a Robin face whose diagonal is negative (axis 1
     # low, the defect correction), a Dirichlet face (axis 1 high), no-flux axis 2 high
     op, inp = hex_case((13, 11); robin = (((-0.2, 1.0, 0.5), nothing), ((1.0, 0.5, 0.4), nothing)),
@@ -161,9 +161,9 @@ end
 
 @testitem "multigrid on hex grids: the residual reduction per V-cycle" setup = [LF_solvers_hex] tags = [:latticefields, :solvers] begin
 using .LF_solvers_hex: fd
-@testset "multigrid on hex grids: the residual reduction per V-cycle" begin
+    @testset "multigrid on hex grids: the residual reduction per V-cycle" begin
     # 7×6 coarsens two levels, 13×11 and 12×8 three (odd axes: the last coarse cell takes three
-    # children); 160×150 has generated levels above the bottom (lb = 2). Measured:
+        # children); 160×150 has generated levels above the bottom (lb = 2). Measured:
     # 0.15–0.24 (two levels), 0.19–0.34 (three), 0.37–0.42 at 160×150; the Cartesian grids of
     # the same faces 0.25–0.33 (likely because the hexagonal lattice is not bipartite: with constant
     # faces D⁻¹A ends at 1.5, below
@@ -189,7 +189,7 @@ end
 
 @testitem "the tangent solve of the diagonal face equals a finite difference" setup = [LF_solvers_hex] tags = [:latticefields, :solvers] begin
 using .LF_solvers_hex: fd
-@testset "the tangent solve of the diagonal face equals a finite difference" begin
+    @testset "the tangent solve of the diagonal face equals a finite difference" begin
     op = CellOperator((12, 10); hex = true, face = (1.0, 0.8, 0.6), shift = 0.4,
         robin = ((nothing, nothing), ((1.0, 0.5, 0.7), nothing)), dirichlet = ((nothing, 1.0), (nothing, nothing)))
     f = rand(Xoshiro(5), 120)

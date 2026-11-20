@@ -51,7 +51,7 @@ end
 # `Coarse(k)` fields: an access m > 1 levels away. Before the fix (85794414):
 # `legality` refused every case ("an access shifts more than one level").
 @testitem "RESTRICT over m > 1 levels, mixed depths, level +m reads, divisibility" setup = [LF_compile_multilevel] tags = [:latticefields, :compile] begin
-@testset "RESTRICT over m > 1 levels, mixed depths, level +m reads, divisibility" begin
+    @testset "RESTRICT over m > 1 levels, mixed depths, level +m reads, divisibility" begin
     for (dims, m) in (((8, 4), 2), ((4, 1, 8), 2), ((16,), 3))
         N = length(dims)
         pb = ProgramBuilder(Grid(dims); levels = m + 1)
@@ -85,7 +85,7 @@ end
     for got in ml_modes(pb, ("e" => Float32[10, 20],))
         @test got == Float32[10, 10, 10, 20, 20, 20, 20, 20]     # blocks of 2..9, clamped to 8
     end
-    # an axis that 2^m does not divide is refused, naming it (the front end refuses first)
+        # an axis that 2^m does not divide is refused, naming it (the front end refuses first)
     pb = ProgramBuilder(Grid((6, 8)); levels = 3)
     r = field!(pb, "r"; role = :input)
     v = field!(pb, "v"; role = :output, levels = [2])

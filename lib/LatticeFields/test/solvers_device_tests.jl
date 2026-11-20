@@ -137,7 +137,7 @@ end
 
 @testitem "Exec as the solver executor on gpu: capability, not policy" setup = [LF_solvers_device] tags = [:latticefields, :solvers, :gpu_only] begin
 using .LF_solvers_device: instances
-@testset "Exec as the solver executor on $gpu: capability, not policy" begin
+    @testset "Exec as the solver executor on $gpu: capability, not policy" begin
     # `Schedule.supports(DEV, Float64)` is the hardware capability (`Exec.supports`), never the
     # Float32 default-float policy: on ROCm `:auto` keeps the periodic Float64 solve
     case = named_case("per256", 5.5e-6)

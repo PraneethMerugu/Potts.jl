@@ -914,7 +914,7 @@ mutable struct GroupRuntime{ST <: FieldStore, A, B, M, CL, SC, CP, PV, S, H, DC}
     host::H
     totals::StatusTotals                # the status word's host totals (`check_status!`)
     declared::DC                        # the fields whose declared interval the bound used, with
-                                        # their buffers (`check_declared!`)
+    # their buffers (`check_declared!`)
     recount::Any                        # an explicit group whose bound reads the time:
                                         # its group spec, the count re-bounded each window; or nothing
 end

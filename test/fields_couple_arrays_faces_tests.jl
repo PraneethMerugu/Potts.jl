@@ -42,7 +42,10 @@ end
         e0(dims) = [ownership => zeros(Int32, dims...), kind => Symbol[]]
         run(M, op, k, fs) = solve(PottsProblem(M(; name = :f), op, (0, k); field_solver = fs, seed = 1), SequentialCPM()).u[end].site
         # LatticePDE's own run of the same system (no cells: σ is the medium), `k` windows of length 1
-        own(sys, u0, k, alg) = reshape(LP.solve(LP.remake(LP.discretize(sys, LP.LatticeDiscretization(LP.Grid(size(u0)); T = Float64));
+        own(sys, u0, k, alg) = reshape(
+            LP.solve(
+                LP.remake(
+                    LP.discretize(sys, LP.LatticeDiscretization(LP.Grid(size(u0)); T = Float64));
                     u0 = vec(u0), tspan = (0.0, Float64(k))
                 ), alg; dt = 1.0
             ).u[end], size(u0)
@@ -68,8 +71,10 @@ end
 @testitem "a centroid in a masked condition allocates the moment trackers" setup = [CoupleSetup] tags = [:potts, :fields_couple_arrays_faces] begin
     @testset "a centroid in a masked condition allocates the moment trackers" begin
         for M in (CeMaskB,)
-            prob = PottsProblem(M(; name = :bm), [ownership => ce_mask_sigma(), kind => [:ka, :ka]], (0, 1); T = Float64,
-                field_solver = ExplicitEuler(substeps = 1))
+            prob = PottsProblem(
+                M(; name = :bm), [ownership => ce_mask_sigma(), kind => [:ka, :ka]], (0, 1); T = Float64,
+                field_solver = ExplicitEuler(substeps = 1)
+            )
             @test hasproperty(prob.u0.cell, :anchor)
             u = solve(prob, SequentialCPM()).u[end]
             @test Array(u.ownership) == ce_mask_sigma() && Array(u.site.c) == 7.0 .* (ce_mask_sigma() .== 1)
@@ -82,7 +87,7 @@ end
         op = [ownership => zeros(Int32, 8, 6), kind => Symbol[]]
         e = cp_msg(() -> PottsProblem(CeFaceB(; name = :f), op, (0, 1)), Potts.PottsCompileError)
         @test occursin("the PDESystem `nolap`", e) && occursin("has no `laplacian(c)`", e) && occursin("would do nothing", e) ||
-              (println(e); false)
+            (println(e); false)
         @test PottsProblem(CeFaceLapB(; name = :f), op, (0, 1)) isa PottsProblem          # control: with `laplacian(c)`
     end
 end

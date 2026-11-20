@@ -93,7 +93,7 @@ end
         for n in names
             got, want = s[n, length(s.t)], Array(getproperty(current_state(integ).site, n))
             @test maximum(abs, got .- want) <= 1e-14 * max(1.0, maximum(abs, want)) ||
-                  (println("Jiang $n: ", maximum(abs, got .- want)); false)
+                (println("Jiang $n: ", maximum(abs, got .- want)); false)
         end
     end
 end

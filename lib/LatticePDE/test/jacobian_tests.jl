@@ -99,7 +99,7 @@ include("shared/export_all.jl")
 end
 
 @testitem "the pattern from the IR equals the dense Jacobian's" setup = [LP_jacobian] tags = [:latticepde, :jacobian] begin
-@testset "the pattern from the IR equals the dense Jacobian's" begin
+    @testset "the pattern from the IR equals the dense Jacobian's" begin
     for (label, sys, disc, ins) in jcases()
         prob = jprob(sys, disc, ins)
             P = LFP.field_jacobian_sparsity(prob)
@@ -110,12 +110,14 @@ end
             free = jprob(sys, disc, (jk(t, x, y) => zeros(Int32, 8, 8),))
             want = jpattern(jdense(free, u))
             got = jpattern(jdense(prob, u))
-            @test P == want || (println("pattern ", label, ": ", nnz(P), " vs ", nnz(want)); false)
+                @test P == want || (println("pattern ", label, ": ", nnz(P), " vs ", nnz(want)); false)
             @test all(P[got])
             @test nnz(got) < nnz(want)                     # control: the masked rows are empty in the run
         else
             want = jpattern(jdense(prob, u))
-            @test P == want || (println("pattern ", label, ": ", nnz(P), " vs ", nnz(want), " missing ",
+                @test P == want || (
+                    println(
+                        "pattern ", label, ": ", nnz(P), " vs ", nnz(want), " missing ",
                 count(want .& .!P), " extra ", count(P .& .!want)); false)
         end
     end
@@ -123,7 +125,7 @@ end
 end
 
 @testitem "jac = true is the dense Jacobian; jvp is J v" setup = [LP_jacobian] tags = [:latticepde, :jacobian] begin
-@testset "jac = true is the dense Jacobian; jvp is J v" begin
+    @testset "jac = true is the dense Jacobian; jvp is J v" begin
     for (label, sys, disc, ins) in jcases()
         prob = jprob(sys, disc, ins; jac = true, sparse = true)
         @test prob.f.jac_prototype isa SparseArrays.SparseMatrixCSC && prob.f.colorvec isa Vector{Int}
@@ -132,7 +134,7 @@ end
         J = copy(prob.f.jac_prototype)
         prob.f.jac(J, u, prob.p, prob.tspan[1])
         @test maximum(abs, Matrix(J) .- Jd) <= 1e-12 * max(1, maximum(abs, Jd)) ||
-              (println("jac ", label, " ", maximum(abs, Matrix(J) .- Jd)); false)
+                (println("jac ", label, " ", maximum(abs, Matrix(J) .- Jd)); false)
         Jm = zeros(size(Jd))                               # a dense matrix takes the same entries
         prob.f.jac(Jm, u, prob.p, prob.tspan[1])
         @test Jm == Matrix(J)
@@ -164,7 +166,7 @@ end
 end
 
 @testitem "Rodas5P with sparse = true at 128² runs in bounded memory" setup = [LP_jacobian] tags = [:latticepde, :jacobian] begin
-@testset "Rodas5P with sparse = true at 128² runs in bounded memory" begin
+    @testset "Rodas5P with sparse = true at 128² runs in bounded memory" begin
     @parameters jr = 2.0
     c = jc(t, x, y)
         sys = PDESystem(
@@ -180,7 +182,7 @@ end
     bytes = @allocated s = solve(prob, Rodas5P(); abstol = 1e-8, reltol = 1e-8)
     @test SciMLBase.successful_retcode(s)
     # a dense Jacobian alone would take 128⁴ × 8 B = 2.1 GB
-    @test bytes < 400 * 2^20 || (println("Rodas5P 128² allocated ", bytes / 2^20, " MiB"); false)
+        @test bytes < 400 * 2^20 || (println("Rodas5P 128² allocated ", bytes / 2^20, " MiB"); false)
     # the owned BackwardEuler run tends to it at first order as dt halves
         e(dt) = maximum(
             abs, solve(
@@ -189,6 +191,6 @@ end
             ).u[end] .- s.u[end]
         )
     e1, e2, e3 = e(0.01), e(0.005), e(0.0025)
-    @test e1 > e2 > e3 && 1.6 < e1 / e2 < 2.4 && 1.6 < e2 / e3 < 2.4 || (println("BE errors ", (e1, e2, e3)); false)
+        @test e1 > e2 > e3 && 1.6 < e1 / e2 < 2.4 && 1.6 < e2 / e3 < 2.4 || (println("BE errors ", (e1, e2, e3)); false)
 end
 end

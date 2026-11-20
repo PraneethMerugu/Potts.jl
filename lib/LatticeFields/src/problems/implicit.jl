@@ -531,7 +531,7 @@ function _implicit_eltype(u, key, alg, V)
         "field `lattice_storage = Float16` (it is then solved in Float32, each update rounded to Float16), or step it ",
         "with `ExplicitEuler`")))
     throw(ArgumentError(string(_algname(alg), ": the field `", key, "` holds ", _typetext(T), "; an implicit solve runs in ",
-        "Float32 or Float64 (BigFloat through the implicit solve is not supported yet). ",
+                "Float32 or Float64 (BigFloat through the implicit solve is not supported yet). ",
         "Give the field `lattice_storage = Float32` or Float64, or step it with `ExplicitEuler`")))
 end
 # a number type in messages: a ForwardDiff Dual by its value type, not its full tag

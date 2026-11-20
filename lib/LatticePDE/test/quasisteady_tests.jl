@@ -69,7 +69,7 @@ include("shared/export_all.jl")
 end
 
 @testitem "one QuasiSteady window is the steady state (the hand matrix)" setup = [LP_quasisteady] tags = [:latticepde, :quasisteady] begin
-@testset "one QuasiSteady window is the steady state (the hand matrix)" begin
+    @testset "one QuasiSteady window is the steady state (the hand matrix)" begin
         alg = QuasiSteady(; linsolve = BTIGHT)
     # a numeric operator: diffusion, decay, a source, a Dirichlet face, a mask with its value
         p = bown(
@@ -106,7 +106,7 @@ end
 end
 
 @testitem "the solver capabilities in a QuasiSteady group" setup = [LP_quasisteady] tags = [:latticepde, :quasisteady] begin
-@testset "the solver capabilities in a QuasiSteady group" begin
+    @testset "the solver capabilities in a QuasiSteady group" begin
         alg = QuasiSteady(; linsolve = BTIGHT)
     xs = bxs()
     # a Robin face, positive part
@@ -118,9 +118,9 @@ end
     want = qs_hand(; K = (x, y) -> 0.3, k = (x, y) -> 2.0, f = (x, y) -> x, faces = Dict((2, -1) => (:robin, 2.0, -1.0, 0.5)))
     @test maximum(abs, u .- want) < 1e-10 && only(ig.runtimes).cache.newton == 1
     # opposite signs: a steady solve takes the Robin face's negative part into its operator (it is
-    # diagonal, so the operator stays symmetric): one exact solve, newton 1, the hand
+        # diagonal, so the operator stays symmetric): one exact solve, newton 1, the hand
     # matrix to 1e-9, for the well-posed faces (max Re λ of the steady Jacobian −0.68 at decay 2,
-    # −0.18 at 1.5). Before the fix (e7068add): the defect
+        # −0.18 at 1.5). Before the fix (e7068add): the defect
     # correction, newton 40 and ~20 solves a window
         rob(kd, β) = remake(
             bown(
@@ -170,7 +170,7 @@ end
 end
 
 @testitem "nonlinear rows: Michaelis–Menten within the default 8 iterations" setup = [LP_quasisteady] tags = [:latticepde, :quasisteady] begin
-@testset "nonlinear rows: Michaelis–Menten within the default 8 iterations" begin
+    @testset "nonlinear rows: Michaelis–Menten within the default 8 iterations" begin
         sys = nlsys([D(bce) ~ 0.05 * laplacian(bce) - 40 * bce / (0.025 + bce) + 20], [bc(0, x, y) ~ 0.5, bc(t, 0, y) ~ 1.0], [bce]; T = 0.3)
         ig = init(nlown(sys), QuasiSteady(; linsolve = BTIGHT); dt = 0.1)
     step!(ig)
@@ -190,7 +190,7 @@ end
 end
 
 @testitem "the refusals: growth, no unique steady state; keywords, show" setup = [LP_quasisteady] tags = [:latticepde, :quasisteady] begin
-@testset "the refusals: growth, no unique steady state; keywords, show" begin
+    @testset "the refusals: growth, no unique steady state; keywords, show" begin
     # a growth the operator sees, at build and at a parameter write
         pg = bown(bsys([D(bce) ~ bD * laplacian(bce) + qg * bce], [bc(0, x, y) ~ x, bc(t, 0, y) ~ 1.0], [bD, qg]))
         @test_throws ArgumentError init(pg, QuasiSteady(); dt = 0.1)
@@ -224,7 +224,7 @@ end
 end
 
 @testitem "budget hits: a real reduction stays Success, none (an island) is ConvergenceFailure" setup = [LP_quasisteady] tags = [:latticepde, :quasisteady] begin
-@testset "budget hits: a real reduction stays Success, none (an island) is ConvergenceFailure" begin
+    @testset "budget hits: a real reduction stays Success, none (an island) is ConvergenceFailure" begin
     # a budget of 2 PCG iterations on 32²: the residual falls by more than half but not to the
     # tolerance; counted and warned with the route, `Success`
         p = discretize(
@@ -265,7 +265,7 @@ end
 end
 
 @testitem "components equal scalars; a hexagonal lattice runs QuasiSteady" setup = [LP_quasisteady] tags = [:latticepde, :quasisteady] begin
-@testset "components equal scalars; a hexagonal lattice runs QuasiSteady" begin
+    @testset "components equal scalars; a hexagonal lattice runs QuasiSteady" begin
     @variables bu(..)[1:2]
     bue = bu(t, x, y)
         comp = nlsys(
@@ -292,7 +292,7 @@ end
 # whose lag of one window grew to 1e37 (δ = 0.1, k = 5: κ = 25). Before the fix (773f0957):
 # every loop accepted (the refusal tests fail).
 @testitem "a QuasiSteady group in a loop past its gain is refused, with its routes" setup = [LP_quasisteady] tags = [:latticepde, :quasisteady] begin
-@testset "a QuasiSteady group in a loop past its gain is refused, with its routes" begin
+    @testset "a QuasiSteady group in a loop past its gain is refused, with its routes" begin
     @variables qa(..) qb(..)
     qae, qbe = qa(t, x, y), qb(t, x, y)
         loop(δ, k, s) = discretize(
@@ -308,13 +308,13 @@ end
                 r = solve(p, alg; dt = 0.1)
             # (`s = −1` grows: `a`, `b` have an eigenvalue `k − (1 + δ)/2` > 0; the others decay)
             @test r.retcode == ReturnCode.Success && all(isfinite, r[qbe, length(r.t)]) &&
-                  (s < 0 || maximum(abs, r[qbe, length(r.t)]) < 1) || (println("route ", (δ, k, s), " ", r.retcode, " ", maximum(abs, r[qbe, length(r.t)])); false)
+                    (s < 0 || maximum(abs, r[qbe, length(r.t)]) < 1) || (println("route ", (δ, k, s), " ", r.retcode, " ", maximum(abs, r[qbe, length(r.t)])); false)
         end
     end
     # the loop in one steady group: a well-posed system (max Re λ −0.55) whose block iteration
-    # does not contract (≈ k/√(δμ) = 15.8): solved together
+        # does not contract (≈ k/√(δμ) = 15.8): solved together
     # (coupled.jl: against the dense steady solve; until then `ConvergenceFailure`, naming the
-    # coupling)
+        # coupling)
     p = loop(0.1, 5.0, 1.0)
         r = solve(p, QuasiSteady(); dt = 0.1)
     @test r.retcode == ReturnCode.Success
@@ -350,7 +350,7 @@ end
 # the limit are accepted (6 fail); the face anchors left out of the gain: the
 # zero-shift loop has no bound and is refused (1 fails, 1 errors).
 @testitem "the QuasiSteady gain in the coupling rule: accepted loops match the coupled solution" setup = [LP_quasisteady] tags = [:latticepde, :quasisteady] begin
-@testset "the QuasiSteady gain in the coupling rule: accepted loops match the coupled solution" begin
+    @testset "the QuasiSteady gain in the coupling rule: accepted loops match the coupled solution" begin
     @variables qa(..) qb(..)
     qae, qbe = qa(t, x, y), qb(t, x, y)
     own8(sys) = LFP.field_problem(discretize(sys, LatticeDiscretization(Grid((8, 8)); T = Float64)))
@@ -409,15 +409,15 @@ end
         @test_throws ArgumentError init(pm, gl(); dt = 0.1)
         @test solve(pm, BackwardEuler(); dt = 0.1).retcode == ReturnCode.Success                     # (the route)
     # two steady groups in a loop with a transient one: a steady field that reads a steady field
-    # of the loop is refused, the groups named (the verb agrees); one way, the
-    # cascade is accepted
+        # of the loop is refused, the groups named (the verb agrees); one way, the
+        # cascade is accepted
     @variables qc(..)
     qce = qc(t, x, y)
         cas(k) = own8(
             PDESystem(
                 [0 ~ 0.1 * laplacian(qae) - qae + k * qbe, 0 ~ 0.1 * laplacian(qce) - qce + 0.5 * qae, D(qbe) ~ 0.1 * laplacian(qbe) - qbe - 0.5 * qce],
         [qa(0, x, y) ~ 0.0, qc(0, x, y) ~ 0.0, qb(0, x, y) ~ 1.0], bdom(1.0), [t, x, y], [qae, qce, qbe], Any[]; name = :cas))
-    # (by default the steady rows of `qa`, `qc` are one QuasiSteady group, whose gains
+        # (by default the steady rows of `qa`, `qc` are one QuasiSteady group, whose gains
     # compose, so the loop is accepted; as two steady groups it is refused, with the route of one)
         @test solve(cas(0.3), BackwardEuler(); dt = 0.1).retcode == ReturnCode.Success
         two = FieldGroups(qae => QuasiSteady(), qce => QuasiSteady(; nlsolve = LatticeNewton(; max_iter = 3)); default = BackwardEuler())
@@ -444,7 +444,7 @@ end
 # keyword (the testset errors). Negative control (mutation, nc-12c-reinit): `reinit!` without
 # the steady starts keeps the zero start (1 fails).
 @testitem "`init = :steady`: every algorithm starts at the steady state" setup = [LP_quasisteady] tags = [:latticepde, :quasisteady] begin
-@testset "`init = :steady`: every algorithm starts at the steady state" begin
+    @testset "`init = :steady`: every algorithm starts at the steady state" begin
         sys = bsys([D(bce) ~ bD * laplacian(bce) - bk * bce + x], [bc(0, x, y) ~ 0.0, bc(t, 0, y) ~ 1.0], [bD, bk]; T = 0.3)
     p = bown(sys)
     want = qs_hand(; K = (x, y) -> 0.3, k = (x, y) -> 2.0, f = (x, y) -> x, faces = Dict((1, -1) => (:dir, 1.0)))
@@ -463,12 +463,12 @@ end
     # steady state to 1e-9 (the algorithm's own `inner`)
         @test init(p, BackwardEuler(); dt = 0.1).sol.u[1] == zeros(48)
         @test maximum(abs, init(p, BackwardEuler(; init = :steady, linsolve = BTIGHT); dt = 0.1).sol.u[1] .- want) < 1.0e-9
-    # the PCG count of `ExplicitEuler(init = :steady)` from zero (design §5): one
+        # the PCG count of `ExplicitEuler(init = :steady)` from zero (design §5): one
     # solve on the start's own runtime, 5 iterations of the default inner (rtol 1e-6) on the CPU
     # (the design's "6, as C7b": at most 6)
         ig = init(p, ExplicitEuler(; init = :steady); dt = 0.01)
     ne = LSB.iterations(only(ig.starts).cache.rows[1].solver)
-    @test only(ig.starts).totals.solves == 1 && 1 <= ne <= 6 || (println("EE start PCG ", ne); false)
+        @test only(ig.starts).totals.solves == 1 && 1 <= ne <= 6 || (println("EE start PCG ", ne); false)
     # `reinit!` solves again, at the current parameters
         ig = init(p, BackwardEuler(; init = :steady, linsolve = BTIGHT); dt = 0.1)
     solve!(ig)
@@ -507,13 +507,13 @@ end
 end
 
 @testitem "steady rows `0 ~ rhs`: the rate row's solve, QuasiSteady only, the steady groups first" setup = [LP_quasisteady] tags = [:latticepde, :quasisteady] begin
-@testset "steady rows `0 ~ rhs`: the rate row's solve, QuasiSteady only, the steady groups first" begin
+    @testset "steady rows `0 ~ rhs`: the rate row's solve, QuasiSteady only, the steady groups first" begin
         alg = QuasiSteady(; linsolve = BTIGHT)
         s0 = bsys([0 ~ bD * laplacian(bce) - bk * bce + x + t], [bc(t, 0, y) ~ 1.0], [bD, bk]; T = 0.3)
         s1 = bsys([D(bce) ~ bD * laplacian(bce) - bk * bce + x + t], [bc(0, x, y) ~ 0.0, bc(t, 0, y) ~ 1.0], [bD, bk]; T = 0.3)
     p0, p1 = bown(s0), bown(s1)
     @test p0.group.spec.steady == ["bc"] && !p0.group.spec.timefree && p1.group.spec.steady == String[]
-    # the choice shown: an accessor and the problem's display
+        # the choice shown: an accessor and the problem's display
     @test steady_fields(p0) == ["bc"] && steady_fields(p1) == String[]
     @test occursin("steady rows `0 ~ rhs` (`QuasiSteady`), solved for `bc`", sprint(show, MIME"text/plain"(), p0))
         r0 = solve(p0, alg; dt = 0.1)
@@ -550,8 +550,8 @@ end
         @test_throws ArgumentError qown(bsys([0 ~ x - 1, D(bce) ~ -bce], [bc(0, x, y) ~ 0.0], Any[]; dvs = [bce]))
         # a row's sign does not matter: the elliptic form `0 ~ k c − D laplacian(c) − s` is the row
     # with its operator a diffusion, and a local row `0 ~ qf − c²` (for `qf`) is `0 ~ c² − qf`; a
-    # row whose operator and local term disagree is refused as indefinite. Before the fix (e7068add):
-    # "the diffusion coefficient … is negative", and the growth refusal
+        # row whose operator and local term disagree is refused as indefinite. Before the fix (e7068add):
+        # "the diffusion coefficient … is negative", and the growth refusal
         se = bsys([0 ~ bk * bce - bD * laplacian(bce) - x], [bc(t, 0, y) ~ 1.0], [bD, bk]; T = 0.3)
         re = solve(bown(se), alg; dt = 0.1)
     want = qs_hand(; K = (x, y) -> 0.3, k = (x, y) -> 2.0, f = (x, y) -> x, faces = Dict((1, -1) => (:dir, 1.0)))
@@ -568,7 +568,7 @@ end
     # (`qf2` is solved at each window's start, from the `bc` of that start: the window before the end)
     @test maximum(abs, rq[qe2, length(rq.t)] .- rq[bce, length(rq.t) - 1] .^ 2) < 1e-6
         @test_throws ArgumentError init(bown(bsys([0 ~ -bD * laplacian(bce) - bk * bce + x], [bc(t, 0, y) ~ 1.0], [bD, bk])), alg; dt = 0.1)
-    # an OrdinaryDiffEq solver: a steady row is a row of the mass matrix (base: "the
+        # an OrdinaryDiffEq solver: a steady row is a row of the mass matrix (base: "the
     # steady rows of `bc` make the system a DAE", refused); the field algorithms step the same problem
     psm = discretize(sm, LatticeDiscretization(Grid(BDIMS); T = Float64))
     @test psm isa SciMLBase.ODEProblem && count(iszero, psm.f.mass_matrix.diag) == prod(BDIMS)
@@ -576,7 +576,7 @@ end
 end
 
 @testitem "a steady row's time source is read at the window's start" setup = [LP_quasisteady] tags = [:latticepde, :quasisteady] begin
-@testset "a steady row's time source is read at the window's start" begin
+    @testset "a steady row's time source is read at the window's start" begin
     # `0 = 0.1 Δu − u + f(t)` with `u = (1 + t) sin(πx) sin(πy)` (zero faces) on 32²: window k
     # solves at its start time t_{k−1}, so the field is the solution at t_{k−1}, not at t_k
     n = 32
@@ -598,7 +598,7 @@ end
 end
 
 @testitem "a system with no time: one steady solve from a cold start; Helmholtz is order 2" setup = [LP_quasisteady] tags = [:latticepde, :quasisteady] begin
-@testset "a system with no time: one steady solve from a cold start; Helmholtz is order 2" begin
+    @testset "a system with no time: one steady solve from a cold start; Helmholtz is order 2" begin
     @variables fc(..)
     fce = fc(x, y)
     fdom = [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
@@ -618,8 +618,8 @@ end
         @test_throws ArgumentError solve(pf; saveat = 0.1)
         @test_throws ArgumentError solve(pf, BackwardEuler(); dt = 0.1)
         @test_throws ArgumentError discretize(sf, LatticeDiscretization(Grid(BDIMS); T = Float64); tspan = (0, 1))
-    # the `LinearProblem` of a linear system with no time, `A u = b` at the steady state
-    # (base: `problem = :ode` gave a `SteadyStateProblem`)
+        # the `LinearProblem` of a linear system with no time, `A u = b` at the steady state
+        # (base: `problem = :ode` gave a `SteadyStateProblem`)
     ps = discretize(sf, LatticeDiscretization(Grid(BDIMS); T = Float64))
     @test ps isa SciMLBase.LinearProblem
         # SciML's `hasTime` matches the problem type: `Val(false)` without a time
@@ -647,7 +647,7 @@ end
 # face with a face-Dirichlet value, a mask value field, an input bound by aliasing (a new input
 # changes the next solve)
 @testitem "the solver capabilities in a system with no time" setup = [LP_quasisteady] tags = [:latticepde, :quasisteady] begin
-@testset "the solver capabilities in a system with no time" begin
+    @testset "the solver capabilities in a system with no time" begin
     @variables zc(..) zq(..)::Int32 [input = true]
     zce, zqe = zc(x, y), zq(x, y)
     fdom = [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
@@ -659,7 +659,7 @@ end
             pf = free([0 ~ bD * laplacian(zce) - bk * zce + x], [2.0 * zc(x, 0) + β * Differential(y)(zc(x, 0)) ~ bg], [bD, bk, bg])
         want = qs_hand(; K = (x, y) -> 0.3, k = (x, y) -> 2.0, f = (x, y) -> x, faces = Dict((2, -1) => (:robin, 2.0, β, 0.5)))
         s = solve(pf, alg)
-        @test s.retcode == ReturnCode.Success && maximum(abs, s.u[1] .- want) < 1e-9 || (println("free robin ", β); false)
+            @test s.retcode == ReturnCode.Success && maximum(abs, s.u[1] .- want) < 1.0e-9 || (println("free robin ", β); false)
     end
     pf = free([0 ~ DivKGrad(:harmonic)(1 + x * y, zce) - bk * zce], [zc(0, y) ~ 1.0 + y], [bk])
     want = qs_hand(; K = (x, y) -> 1 + x * y, k = (x, y) -> 2.0, faces = Dict((1, -1) => (:dir, (x, y) -> 1.0 + y)))

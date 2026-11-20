@@ -26,7 +26,7 @@ include("shared/export_all.jl")
 end
 
 @testitem "counts against the spectral radius; half the count blows up" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
-@testset "counts against the spectral radius; half the count blows up" begin
+    @testset "counts against the spectral radius; half the count blows up" begin
     per = [fc(t, x, 0) ~ fc(t, x, 1), fc(t, 0, y) ~ fc(t, 1, y)]
         cases = [
             ("(1 + x) laplacian(c)", D(fce) ~ (1 + x) * laplacian(fce), [fc(0, x, y) ~ 0.5], 0.5),
@@ -56,11 +56,11 @@ end
 end
 
 @testitem "aux fields, switches, declared intervals, site-varying velocities" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
-@testset "aux fields, switches, declared intervals, site-varying velocities" begin
+    @testset "aux fields, switches, declared intervals, site-varying velocities" begin
     s4 = 4 * 2 * 16^2                                         # Σ_a 4/h_a² on 16²
     b(sys) = (p = fown(sys, 16); p.stability(p.p))
         # an aux field through its definition (`K ~ k c`, `D(c) ~ D laplacian(c) − K`): the decay `k`
-    # (before the fix: no bound)
+        # (before the fix: no bound)
         aux = fsys([D(fue) ~ fx_D * laplacian(fue) - fKe, fKe ~ fx_k * fue], [fu(0, x, y) ~ 0.5], [fue, fKe])
     @test b(aux) ≈ 0.1 * s4 + 2.0
     pa = fown(aux, 16)
@@ -80,7 +80,7 @@ end
         nb = fsys([D(fue) ~ fx_D * laplacian(fue) + fx_a * fue * (1 - fue)], [fu(0, x, y) ~ 0.5], [fue])
     @test isnan(b(nb))
     @test occursin("cannot see", LFP.unbounded_reason(fown(nb, 16).stability, fown(nb, 16).p))
-    # a site-varying velocity: `Σ_a 2 max|v_a| / h_a` over the box (16²:
+        # a site-varying velocity: `Σ_a 2 max|v_a| / h_a` over the box (16²:
     # x ∈ [−1/32, 1 + 1/32], a face mean reads a ghost site)
         v = fsys([D(fue) ~ 0.01 * laplacian(fue) - Advect(Upwind1())([50 * (1 + x), 0.0], fue)], [fu(0, x, y) ~ 0.5], [fue])
     @test b(v) ≈ 0.01 * s4 + 2 * 50 * (2 + 1 / 32) * 16
@@ -96,7 +96,7 @@ end
 # unseen, as in the implicit operator. Before the fix (97045a1b): ρ = 64 (the
 # frozen bound 2 max|c|/h), count 18, and that count amplifies (max|1 + hλ| = 1.78 at c ≡ 1).
 @testitem "Burgers stays unseen; the frozen count amplifies" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
-@testset "Burgers stays unseen; the frozen count amplifies" begin
+    @testset "Burgers stays unseen; the frozen count amplifies" begin
     per = [fc(t, x, 0) ~ fc(t, x, 1), fc(t, 0, y) ~ fc(t, 1, y)]
     burg = fsys([D(fce) ~ -Advect(Upwind1())([fce, 0.0], fce)], [fc(0, x, y) ~ 0.5 + 0.4 * sin(2π * x); per], [fce])
     pr, po = fown(burg), fode(burg)
@@ -123,7 +123,7 @@ end
 end
 
 @testitem "refusals and messages in the user's words" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
-@testset "refusals and messages in the user's words" begin
+    @testset "refusals and messages in the user's words" begin
     emsg(f) = try
         f(); ""
     catch e
@@ -157,7 +157,7 @@ end
 # would not do inside a `Differential` (the steady.jl `_timed` pattern). Before the fix (f5641ce1): every case refused, "cannot lower
 # `Differential(y, 1)(x*y)`: a raw derivative that is not a flux form".
 @testitem "a derivative of the coordinates in a condition's value" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
-@testset "a derivative of the coordinates in a condition's value" begin
+    @testset "a derivative of the coordinates in a condition's value" begin
     Dx, Dy = Differential(x), Differential(y)
     @variables fk(..) [input = true]
         run(g) = (
@@ -185,7 +185,7 @@ end
         sprint(showerror, e)
     end
     @test occursin("a derivative of a field; a condition's value may differentiate", m)
-    # the route by the field read: an input's derivative is an input of its own;
+        # the route by the field read: an input's derivative is an input of its own;
     # the condition's own field takes its flux form (`Dx(c) ~ g`), which then runs
     @test occursin("give the input's derivative as an input field of its own", m)
     m = try
@@ -207,7 +207,7 @@ end
             ), ExplicitEuler(); dt = 0.01
         )
     @test SciMLBase.successful_retcode(s.retcode) && maximum(s[:fu, end]) > 0
-    # a face value that reads another field is a face value, not a periodic pair: an input
+        # a face value that reads another field is a face value, not a periodic pair: an input
     # runs; an aux field of the state is refused in words
         pk = fown(
             PDESystem(
@@ -240,7 +240,7 @@ end
 # undershoot 0 by about 2% next to a step (6a46731f: `Unstable` at
 # window 2 with "-0.0207…" and "-0.0233…").
 @testitem "an implicit leak warns and goes on" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
-@testset "an implicit leak warns and goes on" begin
+    @testset "an implicit leak warns and goes on" begin
     RC = SciMLBase.ReturnCode
         us = PDESystem(
             [D(fce) ~ 0.01 * laplacian(fce) - 10 * fce + 0.5 * fce * (1 - fce)], [fc(0, x, y) ~ ifelse(x < 0.5, 1.0, 0.0)],
@@ -317,7 +317,7 @@ end
     @test maximum(ig[fce]) == 0.5                                    # nothing changed
     ig[fce] = fill(0.75, 16, 16)                                     # a write inside is accepted
     @test maximum(ig[fce]) == 0.75
-    # a state that is not finite warns once, naming the field
+        # a state that is not finite warns once, naming the field
     un = fown(fsys([D(fue) ~ 100 * fue^3], [fu(0, x, y) ~ 0.5], [fue]), 8)
     s = @test_logs (:warn, r"field `fu`: the state is not finite at t = .*`ReturnCode\.Unstable`, the run stops\. Give more substeps") match_mode = :any solve(un,
             ExplicitEuler(; substeps = 1); dt = 0.1, saveat = 0.1
@@ -334,7 +334,7 @@ end
 # with the ghost value the front enters and spreads as a fine 1D reference with the exact face
 # value `K(1)` does. The automatic count bounds the coefficient over the ghost values too.
 @testitem "a Dirichlet face coefficient reads the ghost value" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
-@testset "a Dirichlet face coefficient reads the ghost value" begin
+    @testset "a Dirichlet face coefficient reads the ghost value" begin
     RC = SciMLBase.ReturnCode
     T = 0.05
     pm = PDESystem([D(fce) ~ DivKGrad(:arithmetic)(fce^3, fce)], [fc(0, x, y) ~ 0.0, fc(t, 0, y) ~ 1.0],
@@ -344,10 +344,10 @@ end
     # the count covers the ghost values (c ∈ (0, 1): ghosts 2 − c ∈ (1, 2), K up to 8): from
     # rough data inside the bounds the automatic count's run stays inside them (each explicit
     # update a convex combination; the run's check would end it `Unstable` otherwise). Also
-    # `exp(3c)` with `c = 0` on the face (ghost −c ∈ (−1, 0)). The frozen-form
+        # `exp(3c)` with `c = 0` on the face (ghost −c ∈ (−1, 0)). The frozen-form
     # claim, not the linearized radius, which `K′(c)∇c` terms of rough states exceed (0.80 for
     # exp(3c)). The mutation that keeps the old bound gives 46 substeps where 114 are needed and
-    # ends `Unstable`.
+        # ends `Unstable`.
     rough = vec([isodd(i + j) ? 1.0 : mod(7919i + 104729j, 101) / 100 for i in 1:n, j in 1:n])
     ex = PDESystem([D(fce) ~ DivKGrad(:arithmetic)(exp(3 * fce), fce)], [fc(0, x, y) ~ 0.5, fc(t, 0, y) ~ 0.0],
         fdom(T), [t, x, y], [fce], Any[]; name = :ex)
@@ -357,7 +357,7 @@ end
         @test all(u -> -1e-12 <= minimum(u) && maximum(u) <= 1 + 1e-12, sr.u)
     end
     # a coefficient that goes negative at the ghost (`c(1 − c) + 0.01`, ghost 2 − c): no bound,
-    # and the reason names the ghost values, not only c's interval
+        # and the reason names the ghost values, not only c's interval
     neg = PDESystem([D(fce) ~ DivKGrad(:arithmetic)(fce * (1 - fce) + 0.01, fce)], [fc(0, x, y) ~ 0.5, fc(t, 0, y) ~ 1.0],
         fdom(T), [t, x, y], [fce], Any[]; name = :neg)
     mneg = try
@@ -365,7 +365,7 @@ end
     catch e
         sprint(showerror, e)
     end
-    @info "N4" mneg
+        @info "N4" mneg
     @test occursin("may be negative", mneg) && occursin("ghost values of the faces", mneg) && occursin("`fc` → `", mneg)
         s = solve(po, ExplicitEuler(); dt = 0.01, saveat = T)
     @test s.retcode == RC.Success
@@ -396,7 +396,7 @@ end
 # loop and `fc`'s row is refused. With a coordinate coefficient instead, `fo` does not read `fc`:
 # one way, bounded. Base 1ec7b424: the loop was missed (a bound)
 @testitem "a loop through a coefficient over a declared interval" setup = [LP_bounds] tags = [:latticepde, :bounds] begin
-@testset "a loop through a coefficient over a declared interval" begin
+    @testset "a loop through a coefficient over a declared interval" begin
     ic = [fc(0, x, y) ~ 0.5, fo(0, x, y) ~ 0.0]
         loop = fown(fsys([D(fce) ~ 0.1 * laplacian(fce) + 5 * foe, D(foe) ~ DivKGrad(:harmonic)(fce, foe) - foe], ic, [fce, foe]), 8)
     @test isnan(loop.stability(loop.p))

@@ -26,7 +26,7 @@ include("shared/export_all.jl")
 end
 
 @testitem "one problem per family; an owned solve builds no right side" setup = [LP_families] tags = [:latticepde, :families] begin
-@testset "one problem per family; an owned solve builds no right side" begin
+    @testset "one problem per family; an owned solve builds no right side" begin
         @test ExplicitEuler <: SciMLBase.AbstractODEAlgorithm && LFP.AbstractFieldAlgorithm <: SciMLBase.AbstractODEAlgorithm
         for (name, sys, alg, kw) in FAM_CASES
         prob = discretize(sys, fam_disc())
@@ -44,7 +44,7 @@ end
 end
 
 @testitem "OrdinaryDiffEq's solvers on the same problem" setup = [LP_families] tags = [:latticepde, :families] begin
-@testset "OrdinaryDiffEq's solvers on the same problem" begin
+    @testset "OrdinaryDiffEq's solvers on the same problem" begin
     prob = discretize(fam_rate, fam_disc())
     m = LFP.lattice_metadata(prob)
         be = solve(prob, BackwardEuler(; linsolve = FAM_INNER); dt = 1.0e-4)
@@ -52,7 +52,9 @@ end
     for alg in (Tsit5(), Rodas5P(), FBDF())
         s = solve(prob, alg; abstol = 1e-9, reltol = 1e-9)
         @test SciMLBase.successful_retcode(s) && s.t[end] == 0.2
-        @test maximum(abs, s.u[end] .- be.u[end]) < 1e-3 || (println("", nameof(typeof(alg)), " vs BE ",
+            @test maximum(abs, s.u[end] .- be.u[end]) < 1.0e-3 || (
+                println(
+                    "", nameof(typeof(alg)), " vs BE ",
             maximum(abs, s.u[end] .- be.u[end])); false)
     end
     @test m.builds[] == 1                                      # built once, at the first call
@@ -75,7 +77,7 @@ end
 # nothing but the coordinates, so its trajectory inside the grouped solve is the one it has alone,
 # at every save, bitwise.
 @testitem "the group cut leaves a field it does not feed bitwise unchanged" setup = [LP_families] tags = [:latticepde, :families] begin
-@testset "the group cut leaves a field it does not feed bitwise unchanged" begin
+    @testset "the group cut leaves a field it does not feed bitwise unchanged" begin
         fg = FieldGroups(
             fam_u => ExplicitEuler(; substeps = 2),
             fam_v => BackwardEuler(; linsolve = FAM_INNER)
@@ -87,7 +89,7 @@ end
         su = solve(discretize(uonly, fam_disc()), ExplicitEuler(; substeps = 2); dt = 0.05)
     @test length(su.t) == length(sg.t) && su.t == sg.t
     bad = [k for k in eachindex(su.t) if !(Array(sg[fam_u, k]) == Array(su[fam_u, k]))]
-    @test isempty(bad) || (println("grouped u differs at ", bad); false)
+        @test isempty(bad) || (println("grouped u differs at ", bad); false)
     @test Array(sg[fam_u, end]) != Array(sg[fam_v, end])          # control: the two fields differ
 end
 end
@@ -98,7 +100,7 @@ end
 # average their two neighbours). Every value the map produces is dyadic, so the hand formula is
 # compared exactly, once against one map step of the problem and once over the whole span.
 @testitem "the map equals its analytic shift formula" setup = [LP_families] tags = [:latticepde, :families] begin
-@testset "the map equals its analytic shift formula" begin
+    @testset "the map equals its analytic shift formula" begin
     handshift(c) = [(i == 1 ? 0.0 : c[i - 1, j]) + (i == 8 ? 0.0 : c[i + 1, j]) for i in 1:8, j in 1:8] ./ 2
     pm = discretize(fam_map, fam_disc())
     u0 = reshape(collect(Float64.(pm.u0)), 8, 8)
@@ -125,18 +127,18 @@ end
 # (`FAM_INNER`), three orders below the deviation. The 1e-6 asserted is one order above the derived
 # e^-18 = 1.5e-8 and six above the inner solve's accuracy.
 @testitem "the coupled steady system converges to its analytic solution u = v = 1" setup = [LP_families] tags = [:latticepde, :families] begin
-@testset "the coupled steady system converges to its analytic solution u = v = 1" begin
+    @testset "the coupled steady system converges to its analytic solution u = v = 1" begin
     prob = discretize(fam_steady, fam_disc())
         @test SciMLBase.successful_retcode(solve(prob, BackwardEuler(; linsolve = FAM_INNER); dt = 0.05))
         long = solve(remake(prob; tspan = (0.0, 2000.0)), BackwardEuler(; linsolve = FAM_INNER); dt = 1.0)
     ue = collect(Float64.(long.u[end]))
     @test length(ue) == 128
-    @test maximum(abs, ue .- 1.0) < 1e-6 || (println("steady max dev ", maximum(abs, ue .- 1.0)); false)
+        @test maximum(abs, ue .- 1.0) < 1.0e-6 || (println("steady max dev ", maximum(abs, ue .- 1.0)); false)
 end
 end
 
 @testitem "the default algorithm, the map's function, the deleted keyword" setup = [LP_families] tags = [:latticepde, :families] begin
-@testset "the default algorithm, the map's function, the deleted keyword" begin
+    @testset "the default algorithm, the map's function, the deleted keyword" begin
         # rates without a clock: DiffEqBase's default, as for every `ODEProblem` (none is loaded
         # here); with a clock, `ExplicitEuler()` at the clock's step
     prob = discretize(fam_rate, fam_disc())
@@ -157,7 +159,7 @@ end
 end
 
 @testitem "a state on another backend is refused, naming both" setup = [LP_families] tags = [:latticepde, :families] begin
-@testset "a state on another backend is refused, naming both" begin
+    @testset "a state on another backend is refused, naming both" begin
     prob = discretize(fam_rate, fam_disc())
         @test_throws ArgumentError remake(prob; u0 = FamDevVec(zeros(64)))
     @test remake(prob; u0 = zeros(64)).u0 == zeros(64)        # control: a host state

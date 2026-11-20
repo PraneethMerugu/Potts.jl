@@ -87,12 +87,12 @@ end
 end
 
 @testitem "an input as a function of t, OrdinaryDiffEq path (nameof(typeof(alg)))" setup = [LP_timeinputs] tags = [:latticepde, :timeinputs] begin
-@testset "an input as a function of t, OrdinaryDiffEq path ($(nameof(typeof(alg))))" for alg in (Tsit5(), Rodas5P())
+    @testset "an input as a function of t, OrdinaryDiffEq path ($(nameof(typeof(alg))))" for alg in (Tsit5(), Rodas5P())
     a = tifn(tisrc(), alg; TI_ODE...)
     o = tifine(tisrc())
     @test a.t ≈ o.t
     e = maximum(i -> maximum(abs, a.u[i] .- o.u[i]), eachindex(a.t))
-    @test e < 1e-3 * maximum(o.u[end]) || (println("ODE ", nameof(typeof(alg)), " vs fine owned: ", e); false)
+        @test e < 1.0e-3 * maximum(o.u[end]) || (println("ODE ", nameof(typeof(alg)), " vs fine owned: ", e); false)
     # (control: with the input held at its start value the field stays 0)
     c = solve(discretize(tisrc(), tidisc(); inputs = [tiqe => tiQ(0.0)]), alg; TI_ODE...)
     @test maximum(abs, c.u[end]) == 0 && maximum(o.u[end]) > 0.05
@@ -104,7 +104,7 @@ end
 end
 
 @testitem "a mask that reads a function input moves (nameof(typeof(alg)))" setup = [LP_timeinputs] tags = [:latticepde, :timeinputs] begin
-@testset "a mask that reads a function input moves ($(nameof(typeof(alg))))" for alg in
+    @testset "a mask that reads a function input moves ($(nameof(typeof(alg))))" for alg in
         (ExplicitEuler(), Tsit5())
     # (on an OrdinaryDiffEq solver a masked value jumps where the input switches, written after
     # the step: the step is bounded, as for a mask whose switch has no event)
@@ -116,7 +116,7 @@ end
     else
         o = tifine(timask())
         e = maximum(abs, a.u[end] .- o.u[end])
-        @test e < 2e-2 * maximum(o.u[end]) || (println("ODE mask vs fine owned: ", e); false)
+            @test e < 2.0e-2 * maximum(o.u[end]) || (println("ODE mask vs fine owned: ", e); false)
             @test_throws ArgumentError tifn(timask(), alg; TI_ODE...)
     end
     on(i) = vec(tiQ(a.t[i]) .> 0.5)
@@ -131,7 +131,7 @@ end
 end
 
 @testitem "remake, refusals and allocations of function inputs" setup = [LP_timeinputs] tags = [:latticepde, :timeinputs] begin
-@testset "remake, refusals and allocations of function inputs" begin
+    @testset "remake, refusals and allocations of function inputs" begin
     fp = discretize(tisrc(), tidisc(); inputs = [tiqe => tiQ])
     cp = discretize(tisrc(), tidisc(); inputs = [tiqe => tiQ(0.0)])
         alg = ExplicitEuler()
@@ -194,9 +194,9 @@ end
 # under -t 4: Tsit5 19, 24 and 24 of 24 trajectories differ (the
 # shared integer input races); the owned path already equal there.
 @testitem "function inputs under EnsembleThreads equal EnsembleSerial (nameof(typeof(alg)))" setup = [LP_timeinputs] tags = [:latticepde, :timeinputs] begin
-@testset "function inputs under EnsembleThreads equal EnsembleSerial ($(nameof(typeof(alg))))" for alg in
+    @testset "function inputs under EnsembleThreads equal EnsembleSerial ($(nameof(typeof(alg))))" for alg in
         (Tsit5(), ExplicitEuler())
-    Threads.nthreads() > 1 || @warn "ensemble test: one thread (run under `julia -t 4`)"
+        Threads.nthreads() > 1 || @warn "ensemble test: one thread (run under `julia -t 4`)"
     base = discretize(tiint(), tidisc(); inputs = [tike => tiK(0.05)])
     pf = (prob, ctx) -> remake(prob; inputs = [tike => tiK(0.01 + 0.005 * ctx.sim_id)])
     ep = SciMLBase.EnsembleProblem(base; prob_func = pf, safetycopy = false)
@@ -206,7 +206,7 @@ end
     for _ in 1:3
             th = solve(ep, alg, SciMLBase.EnsembleThreads(); dt = 0.01, trajectories = 24, kw...)
         bad = count(i -> th.u[i].u != s.u[i].u, 1:24)
-        @test bad == 0 || (println("ensemble ", nameof(typeof(alg)), ": ", bad, " of 24 trajectories differ"); false)
+            @test bad == 0 || (println("ensemble ", nameof(typeof(alg)), ": ", bad, " of 24 trajectories differ"); false)
     end
 end
 end
@@ -227,7 +227,7 @@ end
 # Review B1 #2, #3: a mask that reads an input function reruns its init launches with no
 # allocation (owned window, ODE call), and a fixed step counts as bounded
 @testitem "masks that read an input function: bytes and a fixed step" setup = [LP_timeinputs] tags = [:latticepde, :timeinputs] begin
-@testset "masks that read an input function: bytes and a fixed step" begin
+    @testset "masks that read an input function: bytes and a fixed step" begin
     buf = zeros(TI_N, TI_N)
     inplace(s) = (for j in 1:TI_N, i in 1:TI_N
                       buf[i, j] = s > 0.08i ? 1.0 : 0.0
@@ -236,7 +236,7 @@ end
         @test tiwarm(init(mp, ExplicitEuler(); dt = 0.01, save_everystep = false)) == 0
     o = tiode(mp)                          # (`adaptive = false`: not refused)
     o = tiode(mp)
-    @test o <= 4096 || (println("ODE mask step bytes: ", o); false)
+        @test o <= 4096 || (println("ODE mask step bytes: ", o); false)
     s = solve(mp, Tsit5(); adaptive = false, dt = 0.01, saveat = 0.1)
     @test s.retcode == ReturnCode.Success
 end

@@ -276,7 +276,8 @@ end
             c = cr_run(CrCrs(; name = :m), fs)
             @test size(c.u[end].site.cc) == (12, 10)
             @test all(u -> cr_partial(u.ownership, 2) > 0, c.u)
-            err, n = cp_replay(CrCrs(; name = :m), CpCases.coarse_sys(), (σ, kind) -> [:endo => [s != 0 && kind[s] == 1 for s in σ]],
+            err, n = cp_replay(
+                CrCrs(; name = :m), CpCases.coarse_sys(), (σ, kind) -> [:endo => [s != 0 && kind[s] == 1 for s in σ]],
                 fs; fs, k = 10, seed = 5, fields = (:cc,)
             )
             @test n == 10 && err <= max(cp_tol(fs), 1e-14) || (println("CrCrs $fs: $err"); false)
@@ -291,7 +292,7 @@ end
                 @kinds medium A B
                 @lattice Lattice((24, 20); boundary = Closed())
                 @energy cells => (volume - 16.0)^2
-                @fields CpCases.kind_bool()
+                    @fields CpCases.kind_bool()
                 @sweep Metropolis(; temperature = 4.0)
             end
             CrKindBool(; name = :m)
@@ -300,7 +301,8 @@ end
         e = cp_msg(() -> Potts.couple(CrHost2(; name = :m), CpCases.kind_bool()))
         @test occursin("bind it: `kb => Potts.kind == :A`", e) || (println(e); false)
         # a numeric input filled by `kind` reads the kind number; `field_inputs` gives the same values
-        err, n = cp_replay(CrKindReal(; name = :m), CpCases.kind_real(), (σ, kind) -> [:kind => [s == 0 ? 0.0 : Float64(kind[s]) for s in σ]],
+        err, n = cp_replay(
+            CrKindReal(; name = :m), CpCases.kind_real(), (σ, kind) -> [:kind => [s == 0 ? 0.0 : Float64(kind[s]) for s in σ]],
             ExplicitEuler(); k = 10, seed = 5, op = cr_kop()
         )
         @test n == 10 && err <= 1e-14 || (println("CrKindReal: $err"); false)   # (measured 4.4e-16, 2026-11-10)
@@ -316,7 +318,7 @@ end
                 @kinds medium A
                 @lattice Lattice((24, 20); boundary = Closed())
                 @energy cells => (volume - 16.0)^2
-                @fields CpCases.first_sys() (CpCases.endo => kind == A)
+                    @fields CpCases.first_sys() (CpCases.endo => kind == A)
                 @parameters kd = 5.0
                 @sweep Metropolis(; temperature = 4.0)
             end
@@ -328,7 +330,7 @@ end
                 @kinds medium A
                 @lattice Lattice((24, 20); boundary = Closed())
                 @energy cells => (volume - 16.0)^2
-                @fields CpCases.first_sys() (CpCases.endo => kind == A)
+                    @fields CpCases.first_sys() (CpCases.endo => kind == A)
                 @variables c(site) = 0.0
                 @sweep Metropolis(; temperature = 4.0)
             end

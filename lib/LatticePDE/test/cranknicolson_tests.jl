@@ -34,7 +34,7 @@ include("shared/export_all.jl")
 end
 
 @testitem "CrankNicolson: order 2, the manufactured solution, the stages" setup = [LP_cranknicolson] tags = [:latticepde, :cranknicolson] begin
-@testset "CrankNicolson: order 2, the manufactured solution, the stages" begin
+    @testset "CrankNicolson: order 2, the manufactured solution, the stages" begin
     p, λ, u0 = eig_problem(16)
         err(dt) = maximum(abs, blast(solve(p, CrankNicolson(; linsolve = BTIGHT); dt)) .- exp(0.3λ * 0.4) .* u0)
     es = [err(0.4 / 2^k) for k in 2:5]
@@ -63,7 +63,7 @@ end
 end
 
 @testitem "the damped start: step data, `reset!`, no extra rebuild" setup = [LP_cranknicolson] tags = [:latticepde, :cranknicolson] begin
-@testset "the damped start: step data, `reset!`, no extra rebuild" begin
+    @testset "the damped start: step data, `reset!`, no extra rebuild" begin
     # 1D step data at z = h/dx² = 400 (P1 (b)): the total variation after the first step stays
     # ≤ 1 (plain Crank–Nicolson rings, TV 2.86: the nodamp control)
     n = 200
@@ -100,7 +100,7 @@ end
 end
 
 @testitem "OrdinaryDiffEq's Trapezoid with the start replicated" setup = [LP_cranknicolson] tags = [:latticepde, :cranknicolson] begin
-@testset "OrdinaryDiffEq's Trapezoid with the start replicated" begin
+    @testset "OrdinaryDiffEq's Trapezoid with the start replicated" begin
     # the `:ode` path: two ImplicitEuler steps of h/2 (the damped start), then Trapezoid at h
         sx = bsys(
             [D(bce) ~ bD * laplacian(bce) - bk * bce + sin(3t) * x], [bc(0, x, y) ~ x * y, bc(t, 0, y) ~ 1.0], [bD, bk];
@@ -118,7 +118,7 @@ end
 end
 
 @testitem "counts, components, parameter writes, messages" setup = [LP_cranknicolson] tags = [:latticepde, :cranknicolson] begin
-@testset "counts, components, parameter writes, messages" begin
+    @testset "counts, components, parameter writes, messages" begin
     # the growth rule with the shift 2/h: `+ g c` needs n ≥ ⌈2 · ½ · dt g⌉ (Backward Euler: ⌈2 dt g⌉)
         pg = bown(bsys([D(bce) ~ bD * laplacian(bce) + bk * bce], [bc(0, x, y) ~ x], [bD, bk]))
         @test init(pg, CrankNicolson(); dt = 0.5).substeps == 1 && init(pg, BackwardEuler(); dt = 0.5).substeps == 2
@@ -179,7 +179,7 @@ end
 # the other-group read counts 1 (the jump missed) and the growth
 # of `bo` raises both groups' counts to 2.
 @testitem "B counts read the group's own fields" setup = [LP_cranknicolson] tags = [:latticepde, :cranknicolson] begin
-@testset "B counts read the group's own fields" begin
+    @testset "B counts read the group's own fields" begin
         rd = bsys(
             [D(bce) ~ 0.3 * laplacian(bce) - bce + boe, D(boe) ~ 0.3 * laplacian(boe) - boe], [bc(0, x, y) ~ 0.0, bo(0, x, y) ~ 1.0], Any[];
         T = 0.4, dvs = [bce, boe])

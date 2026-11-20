@@ -32,8 +32,10 @@ K species on `dims`. `layout = :sep` (K fields) or `:slab` (one K-component fiel
 (one kernel per species, ordered and fused by the planner).
 """
 function species(dims::NTuple{N}, K, T; layout = :sep, kernels = :one) where {N}
-    pb = ProgramBuilder(Grid(dims); periodic = ntuple(_ -> true, N), nparams = 1 +
-                                                                               K * (2 + T))
+    pb = ProgramBuilder(
+        Grid(dims); periodic = ntuple(_ -> true, N), nparams = 1 +
+            K * (2 + T)
+    )
     cpl = couplings(K, T)
     if layout == :sep
         fs = [field!(pb, "u$k"; buffers = 2) for k in 1:K]
@@ -59,7 +61,7 @@ function species(dims::NTuple{N}, K, T; layout = :sep, kernels = :one) where {N}
 end
 
 function speciesP(K, T)
-    (0.01, (x for k in 1:K for x in (1.0 + 0.1k, 0.3, (0.05 * j for j in 1:T)...))...)
+    return (0.01, (x for k in 1:K for x in (1.0 + 0.1k, 0.3, (0.05 * j for j in 1:T)...))...)
 end
 function inputs(dims, K; seed = 11)
     (rng = Xoshiro(seed); [rand(rng, Float32, prod(dims)) .* 0.1f0 for _ in 1:K])
@@ -78,9 +80,12 @@ function run_species(s, sp, X, P, layout)
     end
     run_step!(s, sp, st, P)
     out = layout == :sep ? [copy(current(st, s, "u$k")) for k in 1:K] :
-          collect(Iterators.partition(copy(current(st, s, "u")), length(X[1])))
+        collect(Iterators.partition(copy(current(st, s, "u")), length(X[1])))
     return reduce(vcat, map(o -> reinterpret(UInt32, collect(o)), out))
 end
 
-stores_last = merge(LOWERING, (;
-    order = c -> Int32[loads_first(c); [s.value for s in c.k.stores]]))
+stores_last = merge(
+    LOWERING, (;
+        order = c -> Int32[loads_first(c); [s.value for s in c.k.stores]],
+    )
+)

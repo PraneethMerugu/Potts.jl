@@ -18,7 +18,7 @@ include("shared/export_all.jl")
 end
 
 @testitem "the precompile workload runs" setup = [LP_precompile] tags = [:latticepde, :precompile] begin
-@testset "the precompile workload runs" begin
+    @testset "the precompile workload runs" begin
     @test (@test_logs min_level = Base.CoreLogging.Warn LatticePDE._precompile_workload()) === nothing
 end
 end

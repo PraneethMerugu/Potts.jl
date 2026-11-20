@@ -6,35 +6,37 @@
     @testset "the old @bcs and @boundary sections are refused with the route" begin
         e = chk_build_err(
             quote
-            @potts_model ChkBcs begin
-                @kinds medium cell
-                @lattice Lattice((20, 20); boundary = Closed())
-                @energy cells(cell) => (volume - 16.0)^2
-                @bcs c(t, 0, y) ~ 1.0
-                @sweep Metropolis(; temperature = 4.0)
+                @potts_model ChkBcs begin
+                    @kinds medium cell
+                    @lattice Lattice((20, 20); boundary = Closed())
+                    @energy cells(cell) => (volume - 16.0)^2
+                    @bcs c(t, 0, y) ~ 1.0
+                    @sweep Metropolis(; temperature = 4.0)
+                end
             end
-        end)
+        )
         @test occursin("`@bcs` is not a section of a model body", e) && occursin("second argument of its PDESystem", e) &&
-              occursin("[c(t, 0, y) ~ v, Differential(x)(c(t, L, y)) ~ 0, c ~ masked(wall(t, x, y), 0.0)]", e) &&
-              occursin("@fields c = pdesys (wall => kind == border)", e) && !occursin("UndefVarError", e) || (println(e); false)
+            occursin("[c(t, 0, y) ~ v, Differential(x)(c(t, L, y)) ~ 0, c ~ masked(wall(t, x, y), 0.0)]", e) &&
+            occursin("@fields c = pdesys (wall => kind == border)", e) && !occursin("UndefVarError", e) || (println(e); false)
         e = chk_build_err(
             quote
-            @potts_model ChkBoundary begin
-                @kinds medium cell
-                @lattice Lattice((20, 20); boundary = Closed())
-                @energy cells(cell) => (volume - 16.0)^2
-                if true
-                    @boundary c begin
-                        x => (Dirichlet(1.0), NoFlux())
+                @potts_model ChkBoundary begin
+                    @kinds medium cell
+                    @lattice Lattice((20, 20); boundary = Closed())
+                    @energy cells(cell) => (volume - 16.0)^2
+                    if true
+                        @boundary c begin
+                            x => (Dirichlet(1.0), NoFlux())
+                        end
                     end
+                    @sweep Metropolis(; temperature = 4.0)
                 end
-                @sweep Metropolis(; temperature = 4.0)
             end
-        end)
+        )
         @test occursin("`@boundary` is not a section of a model body", e) && occursin("Dirichlet `c(t, 0, y) ~ v`", e) &&
-              occursin("NoFlux `Differential(x)(c(t, 0, y)) ~ 0`", e) &&
-              occursin("Robin `α * c(t, 0, y) - β * Differential(x)(c(t, 0, y)) ~ g`", e) &&
-              occursin("`α * c(t, L, y) + β * Differential(x)(c(t, L, y)) ~ g`", e) || (println(e); false)
+            occursin("NoFlux `Differential(x)(c(t, 0, y)) ~ 0`", e) &&
+            occursin("Robin `α * c(t, 0, y) - β * Differential(x)(c(t, 0, y)) ~ g`", e) &&
+            occursin("`α * c(t, L, y) + β * Differential(x)(c(t, L, y)) ~ g`", e) || (println(e); false)
     end
 end
 
@@ -63,18 +65,18 @@ end
     @testset "Δ of a bound input is refused in the model's words, with a route" begin
         e = chk_build_err(
             quote
-            @potts_model ChkLap begin
-                @kinds medium A
-                @lattice Lattice((8, 8); boundary = Closed())
-                @energy cells(A) => (volume - 4.0)^2
-                @fields c = Chk.lapin() (Chk.sec => kind == A)
-                @sweep Metropolis(; temperature = 1.0)
-            end
-            Potts.mtkcompile(ChkLap(; name = :m))
+                @potts_model ChkLap begin
+                    @kinds medium A
+                    @lattice Lattice((8, 8); boundary = Closed())
+                    @energy cells(A) => (volume - 4.0)^2
+                    @fields c = Chk.lapin() (Chk.sec => kind == A)
+                    @sweep Metropolis(; temperature = 1.0)
+                end
+                Potts.mtkcompile(ChkLap(; name = :m))
             end, Potts.PottsCompileError
         )
         @test occursin("applies `laplacian` to `kind == A`, a CPM value", e) && occursin("an input of the PDESystem bound to `kind == A`", e) &&
-              occursin("`@after_mcs v ~ kind == A`", e) && !occursin("kind__in", e) && !occursin("cannot lower", e) ||
+            occursin("`@after_mcs v ~ kind == A`", e) && !occursin("kind__in", e) && !occursin("cannot lower", e) ||
             (println(e); false)
         @test occursin("\n  in the equation of `c` in the PDESystem `lapin`: `Differential(t)(c(t, x, y)) ~ ", e) &&
             occursin("laplacian(c(t, x, y))", e) && !occursin("@equations", e) && !occursin("c(t))", e) || (println(e); false)
@@ -82,12 +84,16 @@ end
         integ = init(
             PottsProblem(
                 ChkLapSite(; name = :m), [ownership => σ, kind => [:A]], (0, 4);
-            field_solver = ExplicitEuler(; substeps = 1)), SequentialCPM())
+                field_solver = ExplicitEuler(; substeps = 1)
+            ), SequentialCPM()
+        )
         step!(integ); step!(integ)
         c2, v2 = copy(Array(current_state(integ).site.c)), copy(Array(current_state(integ).site.v))
         step!(integ)
-        lap(a) = [sum(a[clamp(i + di, 1, 8), clamp(j + dj, 1, 8)] - a[i, j] for (di, dj) in ((1, 0), (-1, 0), (0, 1), (0, -1)))
-                  for i in 1:8, j in 1:8]
+        lap(a) = [
+            sum(a[clamp(i + di, 1, 8), clamp(j + dj, 1, 8)] - a[i, j] for (di, dj) in ((1, 0), (-1, 0), (0, 1), (0, -1)))
+                for i in 1:8, j in 1:8
+        ]
         @test v2 == Float64.(σ .!= 0)
         @test maximum(abs, Array(current_state(integ).site.c) .- (c2 .+ 0.1 .* lap(c2) .+ 0.1 .* lap(v2))) <= 1.0e-14
         @test maximum(abs, Array(current_state(integ).site.c)) > 0.01
@@ -97,13 +103,19 @@ end
 @testitem "a site variable under Δ, x closed and y periodic" setup = [CoupleChecksSetup] tags = [:potts, :fields_couple_checks] begin
     @testset "a site variable under Δ, x closed and y periodic" begin
         σ = zeros(Int32, 8, 8); σ[1:2, [8, 1, 2]] .= 1
-        integ = init(PottsProblem(ChkLapMix(; name = :m), [ownership => σ, kind => [:A]], (0, 4);
-            field_solver = ExplicitEuler(; substeps = 1)), SequentialCPM())
+        integ = init(
+            PottsProblem(
+                ChkLapMix(; name = :m), [ownership => σ, kind => [:A]], (0, 4);
+                field_solver = ExplicitEuler(; substeps = 1)
+            ), SequentialCPM()
+        )
         step!(integ); step!(integ)
         c2, v2 = copy(Array(current_state(integ).site.c)), copy(Array(current_state(integ).site.v))
         step!(integ)
-        lap(a) = [sum(a[clamp(i + di, 1, 8), mod1(j + dj, 8)] - a[i, j] for (di, dj) in ((1, 0), (-1, 0), (0, 1), (0, -1)))
-                  for i in 1:8, j in 1:8]
+        lap(a) = [
+            sum(a[clamp(i + di, 1, 8), mod1(j + dj, 8)] - a[i, j] for (di, dj) in ((1, 0), (-1, 0), (0, 1), (0, -1)))
+                for i in 1:8, j in 1:8
+        ]
         @test v2 == Float64.(σ .!= 0)
         @test maximum(abs, Array(current_state(integ).site.c) .- (c2 .+ 0.1 .* lap(c2) .+ 0.1 .* lap(v2))) <= 1.0e-14
         @test maximum(abs, Array(current_state(integ).site.c)) > 0.01
@@ -136,7 +148,7 @@ end
         h = 2.0^-10
         one = CHK_LP.solve(CHK_LP.remake(prob; u0 = ones(64), tspan = (0.0, h)), ExplicitEuler(; substeps = 1); dt = h).u[end]
         hand = 0.3 * 2 / 3 * (2 * (-1 - 1)) - 0.2 + 0.05 * 0.5
-        @test abs((one[1 + 3 * 8] - 1) / h - hand) <= 1e-12 || (println("hex rate: ", (one[1 + 3 * 8] - 1) / h, " vs ", hand); false)
+        @test abs((one[1 + 3 * 8] - 1) / h - hand) <= 1.0e-12 || (println("hex rate: ", (one[1 + 3 * 8] - 1) / h, " vs ", hand); false)
     end
 end
 
@@ -148,18 +160,18 @@ end
         @test a == b && maximum(a) > 0.01
         e = chk_build_err(
             quote
-            @potts_model ChkZ begin
-                @kinds medium A
-                @lattice Lattice((8, 8); boundary = Closed())
-                @energy cells(A) => (volume - 4.0)^2
-                @fields c = Chk.zflux()
-                @sweep Metropolis(; temperature = 1.0)
-            end
-            Potts.mtkcompile(ChkZ(; name = :m))
+                @potts_model ChkZ begin
+                    @kinds medium A
+                    @lattice Lattice((8, 8); boundary = Closed())
+                    @energy cells(A) => (volume - 4.0)^2
+                    @fields c = Chk.zflux()
+                    @sweep Metropolis(; temperature = 1.0)
+                end
+                Potts.mtkcompile(ChkZ(; name = :m))
             end
         )
         @test occursin("differentiates along `z`, which is not one of its independent variables", e) &&
-              !occursin("declares its own", e) || (println(e); false)
+            !occursin("declares its own", e) || (println(e); false)
     end
 end
 
@@ -180,34 +192,34 @@ end
             Potts.PottsCompileError,
         )
         @test occursin("`laplacian(c)` is a field operator", e) && occursin("aux field `L(t, x, y) ~ laplacian(c(t, x, y))`", e) &&
-              occursin("read `L[target]`", e) && !occursin("cannot index", e) || (println(e); false)
+            occursin("read `L[target]`", e) && !occursin("cannot index", e) || (println(e); false)
         σ = zeros(Int32, 20, 20); σ[8:11, 8:11] .= 1
         @test string(solve(PottsProblem(ChkAux(; name = :m), [ownership => σ, kind => [:A]], (0, 2)), SequentialCPM()).retcode) == "Success"
         for (a, w) in ((:(Chk.u(Chk.t, Chk.x, Chk.y)), "u(t, x, y)"), (:(Chk.u(Chk.t, 0, Chk.y)), "u(t, 0, y)"))
             e = chk_build_err(
                 quote
-                @potts_model ChkRobin begin
-                    @kinds medium A
-                    @lattice Lattice((20, 10); boundary = Closed())
-                    @energy cells(A) => (volume - 9.0)^2
-                    @fields Chk.robinu($a)
-                    @sweep Metropolis(; temperature = 1.0)
-                end
-                Potts.mtkcompile(ChkRobin(; name = :m))
+                    @potts_model ChkRobin begin
+                        @kinds medium A
+                        @lattice Lattice((20, 10); boundary = Closed())
+                        @energy cells(A) => (volume - 9.0)^2
+                        @fields Chk.robinu($a)
+                        @sweep Metropolis(; temperature = 1.0)
+                    end
+                    Potts.mtkcompile(ChkRobin(; name = :m))
                 end, Potts.PottsCompileError
             )
             @test occursin("Robin coefficient", e) && occursin("the PDESystem `fac`", e) || (println(e); false)
         end
         e = chk_build_err(
             quote
-            @potts_model ChkNonlin begin
-                @kinds medium A
-                @lattice Lattice((20, 10); boundary = Closed())
-                @energy cells(A) => (volume - 9.0)^2
-                @fields Chk.nonlin()
-                @sweep Metropolis(; temperature = 1.0)
-            end
-            PottsProblem(ChkNonlin(; name = :m), [ownership => zeros(Int32, 20, 10), kind => Symbol[]], (0, 1))
+                @potts_model ChkNonlin begin
+                    @kinds medium A
+                    @lattice Lattice((20, 10); boundary = Closed())
+                    @energy cells(A) => (volume - 9.0)^2
+                    @fields Chk.nonlin()
+                    @sweep Metropolis(; temperature = 1.0)
+                end
+                PottsProblem(ChkNonlin(; name = :m), [ownership => zeros(Int32, 20, 10), kind => Symbol[]], (0, 1))
             end
         )
         @test occursin("`@variables c(..) = 0.5 [bounds = (0, 1)]` in its PDESystem", e) && !occursin("c(field)", e) || (println(e); false)
@@ -217,13 +229,14 @@ end
         @test occursin("`@variables c(..) = 0.5 [lattice_level = Coarse(4)]` in a PDESystem", e) || (println(e); false)
         e = chk_build_err(
             quote
-            @potts_model ChkScope begin
-                @kinds medium A
-                @variables q = 1.0
-                @lattice Lattice((8, 8); boundary = Closed())
-                @sweep Metropolis(; temperature = 1.0)
+                @potts_model ChkScope begin
+                    @kinds medium A
+                    @variables q = 1.0
+                    @lattice Lattice((8, 8); boundary = Closed())
+                    @sweep Metropolis(; temperature = 1.0)
+                end
             end
-        end)
+        )
         @test occursin("a field is a dependent variable of a PDESystem, `@variables c(..) = 0.5 [bounds = (0, 1)]`", e) &&
             !occursin("`c(field)`", e) || (println(e); false)
         q = Potts.Symbolics.variable(:q)
@@ -246,8 +259,10 @@ end
         σ = first(chk_op()).second
         fi = Potts.field_inputs(PottsProblem(ChkFine(; name = :m), chk_op(), (0, 1)), Chk.att())
         @test fi[:vol] == [s == 0 ? 0.0 : 16.0 for s in σ]
-        odd = (σ = zeros(Int32, 24, 20); σ[2:6, 3:9] .= 1; σ[7:7, 10:10] .= 2; σ[9:14, 4:8] .= 3; σ[15:19, 13:18] .= 4;
-               [ownership => σ, kind => [:A, :A, :A, :A]])
+        odd = (
+            σ = zeros(Int32, 24, 20); σ[2:6, 3:9] .= 1; σ[7:7, 10:10] .= 2; σ[9:14, 4:8] .= 3; σ[15:19, 13:18] .= 4;
+            [ownership => σ, kind => [:A, :A, :A, :A]]
+        )
         meet = (σ = zeros(Int32, 24, 20); σ[3:8, 3:8] .= 1; σ[9:13, 3:8] .= 2; σ[4:9, 11:15] .= 3; [ownership => σ, kind => [:A, :A, :A]])
         for op in (chk_op(), odd, meet), fs in (ExplicitEuler(), BackwardEuler())
             err, fi, _ = chk_pde_round_trip(ChkCoarse(; name = :m), Chk.coarse(), fs, :cc; op)
@@ -259,7 +274,7 @@ end
             foreach(_ -> step!(integ), 1:3)
             tot = sum(Array(current_state(integ).site.cc)) * 4
             want = 3 * 0.5 * count(!=(0), first(op).second)
-            @test isapprox(tot, want; rtol = fs isa ExplicitEuler ? 1e-14 : 1e-9) || (println("conservation $fs: $tot vs $want"); false)
+            @test isapprox(tot, want; rtol = fs isa ExplicitEuler ? 1.0e-14 : 1.0e-9) || (println("conservation $fs: $tot vs $want"); false)
         end
         F = Potts.fields(ChkFine(; name = :m))
         @test occursin("vol(t, x, y)", string(F.eqs)) && !occursin("field1__in", string(F.eqs)) || (println(F.eqs); false)
@@ -268,7 +283,9 @@ end
         rep = sprint(
             field_report, CHK_LP.discretize(
                 F, CHK_LP.LatticeDiscretization(CHK_LP.Grid((24, 20)); T = Float64);
-            inputs = collect(Potts.field_inputs(integ))))
+                inputs = collect(Potts.field_inputs(integ))
+            )
+        )
         @test occursin(r"inputs: [^\n]*\bvol\b", rep) && !occursin("field1__in", rep) || (println(rep); false)
         σ8 = zeros(Int32, 8, 8); σ8[1:3, 3:5] .= 1
         integ2 = init(PottsProblem(ChkLapSite(; name = :m), [ownership => σ8, kind => [:A]], (0, 4)), SequentialCPM())
@@ -276,12 +293,14 @@ end
         @test Potts.field_inputs(integ2, Chk.lapsite())[:v] == Array(current_state(integ2).site.v)
         e = chk_msg(() -> Potts.field_inputs(integ, Chk.scaled()))
         @test occursin("the inputs of the PDESystem `scaled` (`w`)", e) && occursin("`att`", e) && occursin("`kind`, `vol`", e) ||
-              (println(e); false)
+            (println(e); false)
         e = chk_msg(
             () -> CHK_LP.discretize(
                 chk_owned(Chk.att()), CHK_LP.LatticeDiscretization(CHK_LP.Grid((24, 20)); T = Float64);
-            inputs = collect(Potts.field_inputs(integ))))
+                inputs = collect(Potts.field_inputs(integ))
+            )
+        )
         @test occursin("`kind` is not an input field of the problem", e) && occursin("Potts.field_inputs(integ, pdesys)", e) ||
-              (println(e); false)
+            (println(e); false)
     end
 end

@@ -15,7 +15,7 @@ include("shared/export_all.jl")
 end
 
 @testitem "float cell sums are exact fixed-point sums" setup = [CP_cell_sums] tags = [:corepotts, :cell_sums] begin
-@testset "float cell sums are exact fixed-point sums" begin
+    @testset "float cell sums are exact fixed-point sums" begin
     dims = (96, 80)
     σ = cs_owners(dims)
     n = Int(maximum(σ))
@@ -38,7 +38,7 @@ end
                 CorePotts._CR_RUN_HOST[] = 256
             end
         end
-        # negative control: the float atomics of the code before integer cell sums depend on the order
+            # negative control: the float atomics of the code before integer cell sums depend on the order
         T === Float16 && continue                                        # (a Float16 sum overflows its column)
         CorePotts._FLOAT_ATOMICS[] = true
         try
@@ -168,7 +168,7 @@ end
         @test length(CorePotts._cr(g).acc) == n + 5 && cs_run!(g)[1:n] == cs_run!(cs_state(σ, v, n))
     end
 
-    # The contact table of a weighted relation is a sum of integer weight units
+        # The contact table of a weighted relation is a sum of integer weight units
     # (`_units_for`): every measure is the exact sum of the quantized weights, rounded once,
     # whatever the order (the lattice is above `HOST_GRAIN` sites: threaded). Negative control:
     # the float atomics (in site order here) miss the once-rounded sum somewhere.

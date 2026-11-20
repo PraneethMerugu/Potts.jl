@@ -32,7 +32,7 @@ include("shared/export_all.jl")
 end
 
 @testitem "field_report on nameof(typeof(PDEV))" setup = [LP_report_device] tags = [:latticepde, :report_device, :gpu_only] begin
-@testset "field_report on $(nameof(typeof(PDEV)))" begin
+    @testset "field_report on $(nameof(typeof(PDEV)))" begin
     @parameters dD = 1e-3 dk = 0.1
     @variables dc(..)
     dce = dc(t, x, y)
@@ -71,7 +71,7 @@ end
     st = solve(mk(32, PDEV), Tsit5())
     rt = sprint(field_report, st)
     @test occursin("SciML solve, Tsit5, retcode Success", rt) && occursin("backend $(nameof(typeof(PDEV)))", rt)
-    # (the device's matrix-free `JacobianOperator`, a SciMLOperators `FunctionOperator`)
+        # (the device's matrix-free `JacobianOperator`, a SciMLOperators `FunctionOperator`)
     @test occursin("jac update_coefficients!; jac_prototype FunctionOperator; jvp LatticeJVP", rt)
 end
 end

@@ -496,13 +496,13 @@ function _bcs_equation(sys, b, names, cv, core, ext, kinds, N, stepped)
             throw(
                 PottsCompileError(
                     "the condition $text makes axis `$ax` of `$n` periodic, but the lattice closes " *
-                "`$ax`; periodicity is the lattice's, for every field (per-field periodicity is not supported yet): make " *
+                        "`$ax`; periodicity is the lattice's, for every field (per-field periodicity is not supported yet): make " *
                 "the lattice periodic on `$ax`, or remove the condition"))
         end
         core.periodic[d] && throw(
             PottsCompileError(
                 "the condition $text sets a face of axis `$ax`, which the " *
-            "lattice makes periodic (per-field periodicity is not supported yet); close `$ax` on the lattice, or remove " *
+                    "lattice makes periodic (per-field periodicity is not supported yet); close `$ax` on the lattice, or remove " *
             "the condition"))
     end
     # a face condition sets the ghost values of a spatial operator of `n`: with none in any

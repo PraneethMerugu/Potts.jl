@@ -29,19 +29,19 @@ include("shared/export_all.jl")
 end
 
 @testitem "a masked condition under Tsit5 holds its value and equals the owned run" setup = [LP_odepath] tags = [:latticepde, :odepath] begin
-@testset "a masked condition under Tsit5 holds its value and equals the owned run" begin
+    @testset "a masked condition under Tsit5 holds its value and equals the owned run" begin
     prob = discretize(omsys(), odisc(); inputs = [ode_k => OK1])
     s = solve(prob, Tsit5(); OTOL..., saveat = 0.02)
     @test SciMLBase.successful_retcode(s) && length(s.t) == 11
     @test all(u -> all(==(2.0), reshape(u, 8, 8)[OK1 .== 1]), s.u)         # every save, the first too
         o = solve(prob, ExplicitEuler(); dt = 1.0e-5, saveat = 0.2)
-    @test maximum(abs, s.u[end] .- o.u[end]) < 1e-4 || (println("masked vs owned ", maximum(abs, s.u[end] .- o.u[end])); false)
+        @test maximum(abs, s.u[end] .- o.u[end]) < 1.0e-4 || (println("masked vs owned ", maximum(abs, s.u[end] .- o.u[end])); false)
     @test maximum(abs, reshape(s.u[end], 8, 8)[OK1 .== 0] .- 2.0) > 0.1    # control: the other sites move
 end
 end
 
 @testitem "a mask moves with an input write in a callback" setup = [LP_odepath] tags = [:latticepde, :odepath] begin
-@testset "a mask moves with an input write in a callback" begin
+    @testset "a mask moves with an input write in a callback" begin
     prob = discretize(omsys(), odisc(); inputs = [ode_k => OK1])
     cb = SciMLBase.DiscreteCallback((u, t, i) -> t == 0.1, i -> (i.ps[ode_k] = OK2; nothing))
     s = solve(prob, Tsit5(); OTOL..., callback = cb, tstops = [0.1], saveat = [0.1, 0.2])
@@ -56,14 +56,14 @@ end
 end
 
 @testitem "step_index(t) under Tsit5 lands on every boundary" setup = [LP_odepath] tags = [:latticepde, :odepath] begin
-@testset "step_index(t) under Tsit5 lands on every boundary" begin
+    @testset "step_index(t) under Tsit5 lands on every boundary" begin
     sk = PDESystem([D(ode_c) ~ -ode_c + 0.1 * step_index(t)], [oc(0, x, y) ~ x], odom(1.0), [t, x, y], [ode_c], Num[];
         name = :ok)
     prob = discretize(sk, odisc(; clock = 0.25))
     s = solve(prob, Tsit5(); OTOL...)
     @test SciMLBase.successful_retcode(s) && all(b -> b in s.t, (0.25, 0.5, 0.75))
         o = solve(prob, ExplicitEuler(); dt = 1.0e-5, saveat = 1.0)
-    @test maximum(abs, s.u[end] .- o.u[end]) < 1e-5 || (println("step_index vs owned ", maximum(abs, s.u[end] .- o.u[end])); false)
+        @test maximum(abs, s.u[end] .- o.u[end]) < 1.0e-5 || (println("step_index vs owned ", maximum(abs, s.u[end] .- o.u[end])); false)
     # the exact value at t = 1 (a piecewise decay to 0.1 k on each period)
     u = collect(prob.u0)
     for k in 0:3
@@ -81,7 +81,7 @@ end
 end
 
 @testitem "a steady row under Rodas5P equals the owned QuasiSteady run" setup = [LP_odepath] tags = [:latticepde, :odepath] begin
-@testset "a steady row under Rodas5P equals the owned QuasiSteady run" begin
+    @testset "a steady row under Rodas5P equals the owned QuasiSteady run" begin
         ss = PDESystem(
             [D(ode_c) ~ oD * laplacian(ode_c) - ode_c + ode_v, 0 ~ 0.1 * laplacian(ode_v) - ode_v + ode_c],
         [oc(0, x, y) ~ x, oc(t, 0, y) ~ 1.0], odom(0.1), [t, x, y], [ode_c, ode_v], [oD]; name = :os)
@@ -91,7 +91,7 @@ end
     s = solve(prob, Rodas5P(); OTOL...)
     @test SciMLBase.successful_retcode(s)
         o = solve(prob, BackwardEuler(; linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 64)); dt = 1.0e-5, saveat = 0.1)
-    @test maximum(abs, s.u[end] .- o.u[end]) < 1e-4 || (println("steady vs owned ", maximum(abs, s.u[end] .- o.u[end])); false)
+        @test maximum(abs, s.u[end] .- o.u[end]) < 1.0e-4 || (println("steady vs owned ", maximum(abs, s.u[end] .- o.u[end])); false)
     # the steady rows hold at the end (the residual of `v`'s row is 0)
     du = similar(s.u[end])
     prob.f(du, s.u[end], prob.p, 0.1)
@@ -100,7 +100,7 @@ end
 end
 
 @testitem "a system with no time gives a LinearProblem or a NonlinearProblem" setup = [LP_odepath] tags = [:latticepde, :odepath] begin
-@testset "a system with no time gives a LinearProblem or a NonlinearProblem" begin
+    @testset "a system with no time gives a LinearProblem or a NonlinearProblem" begin
     fdom = [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
     @variables ow(..)
     owe = ow(x, y)
@@ -127,7 +127,7 @@ end
 end
 
 @testitem "(R1): a mask value that reads t moves at its rate ∂v/∂t, at the solver's order" setup = [LP_odepath] tags = [:latticepde, :odepath] begin
-@testset "(R1): a mask value that reads t moves at its rate ∂v/∂t, at the solver's order" begin
+    @testset "(R1): a mask value that reads t moves at its rate ∂v/∂t, at the solver's order" begin
     prob = discretize(qsys(1.0 + sin(10 * t)), LatticeDiscretization(Grid((16, 16)); T = Float64); inputs = [qke => QK])
     # the owned reference: ExplicitEuler at dt and 2dt, extrapolated (Richardson, order 2)
         r1 = solve(prob, ExplicitEuler(); dt = 1.0e-5, saveat = [0.5, 1.0])
@@ -150,7 +150,7 @@ end
 end
 
 @testitem "(re-review): masked values jump at a new step index and at a write on the integrator" setup = [LP_odepath] tags = [:latticepde, :odepath] begin
-@testset "(re-review): masked values jump at a new step index and at a write on the integrator" begin
+    @testset "(re-review): masked values jump at a new step index and at a write on the integrator" begin
     # E1: a value that reads step_index(t) (clock 0.25) is 1 + k in period k, as the owned run
     # (9d30a15a: 1.0 at every save; the other sites off by 2.19)
     prob = discretize(rrsys(1.0 + step_index(t)), odisc(; clock = 0.25); inputs = [rrke => RRK, rrqe => zeros(8, 8)])
@@ -175,7 +175,7 @@ end
 end
 
 @testitem "(gate): a Dual parameter that a mask value reads promotes the state" setup = [LP_odepath] tags = [:latticepde, :odepath] begin
-@testset "(gate): a Dual parameter that a mask value reads promotes the state" begin
+    @testset "(gate): a Dual parameter that a mask value reads promotes the state" begin
     # (4f2217e2: remake raised "no method matching Float64(::ForwardDiff.Dual…)" in _clamp_masks!)
     prob = discretize(rrsys(2.0 * rra), odisc(); inputs = [rrke => RRK, rrqe => zeros(8, 8)])
     i = LatticePDE.Problems.SII.parameter_index(prob, rra)
@@ -200,7 +200,7 @@ end
 end
 
 @testitem "(review 2): prob.u0 holds the masked values, on every route" setup = [LP_odepath] tags = [:latticepde, :odepath] begin
-@testset "(review 2): prob.u0 holds the masked values, on every route" begin
+    @testset "(review 2): prob.u0 holds the masked values, on every route" begin
     prob = discretize(omsys(), odisc(); inputs = [ode_k => OK1])
     M1 = vec(OK1 .== 1)
     # (0a182a0e: u0 at the masked sites 0.25 … the initial value x, f4b1-rev/pC.log)
@@ -219,7 +219,7 @@ end
 end
 
 @testitem "(review 4): parameter writes on a time-free LinearProblem; factorizations" setup = [LP_odepath] tags = [:latticepde, :odepath] begin
-@testset "(review 4): parameter writes on a time-free LinearProblem; factorizations" begin
+    @testset "(review 4): parameter writes on a time-free LinearProblem; factorizations" begin
     @parameters ls = 1.0 la = 2.0
     @variables lw(..)
     lwe = lw(x, y)
@@ -235,7 +235,7 @@ end
     @test maximum(abs, q .- qs(remake(discretize(sl, odisc()); p = [ls => 3.0, la => 5.0]))) < 1e-12
     # (0a182a0e: GMRES 1.1 off after a write, f4b1-rev/pA.log P2)
     r = solve(lp, LinearSolve.KrylovJL_GMRES(); abstol = 1e-13, reltol = 1e-13)
-    @test maximum(abs, r.u .- q) < 1e-9 || (println("4 GMRES ", maximum(abs, r.u .- q)); false)
+        @test maximum(abs, r.u .- q) < 1.0e-9 || (println("4 GMRES ", maximum(abs, r.u .- q)); false)
     # a factorization names its routes (0a182a0e: "no method matching copy(::LatticeOperator)");
     # the assembled matrix is one
     e = try
@@ -250,7 +250,7 @@ end
 end
 
 @testitem "(R2): steady rows start from our QuasiSteady solve at t0; explicit inits stay" setup = [LP_odepath] tags = [:latticepde, :odepath] begin
-@testset "(R2): steady rows start from our QuasiSteady solve at t0; explicit inits stay" begin
+    @testset "(R2): steady rows start from our QuasiSteady solve at t0; explicit inits stay" begin
         ss = PDESystem(
             [D(ode_c) ~ oD * laplacian(ode_c) - ode_c + ode_v, 0 ~ 0.1 * laplacian(ode_v) - ode_v + ode_c],
         [oc(0, x, y) ~ x, oc(t, 0, y) ~ 1.0], odom(0.1), [t, x, y], [ode_c, ode_v], [oD]; name = :os2)
