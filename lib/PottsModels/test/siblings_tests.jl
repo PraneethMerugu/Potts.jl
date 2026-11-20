@@ -288,15 +288,15 @@ const SIBLINGS = Dict(
     :Merks2006 => (
         "CC3D length constraint, hard connectivity, von Neumann copies", function ()
             σ = block((40, 40), (8:13, 8:13), (26:31, 8:13), (8:13, 26:31), (26:31, 26:31))
-            len(λ_L, seed) = (
+            function len(λ_L, seed)
                 p = PottsProblem(
-                    ElongatedCells(; name = :e), [ownership => σ, kind => fill(:cell, 4), :λ_L => λ_L],
-                    (0, 300); seed
-                );
-                seed == 1 && λ_L > 0 && @test(selfcheck(p) < 1.0e-9);
-                u = solve(p, SequentialCPM()).u[end];
-                mean(c -> sib_length(u.ownership, c), 1:4)
-            )
+                        ElongatedCells(; name = :e), [ownership => σ, kind => fill(:cell, 4), :λ_L => λ_L],
+                        (0, 300); seed
+                    )
+                seed == 1 && λ_L > 0 && @test(selfcheck(p) < 1.0e-9)
+                u = solve(p, SequentialCPM()).u[end]
+                return mean(c -> sib_length(u.ownership, c), 1:4)
+            end
             # seeds 1–3 at 300 MCS: 11.5–12.2 with λ_L = 5, 7.3–8.1 with λ_L = 0 (6.8 as squares)
             el, ro = mean(s -> len(5.0, s), 1:2), mean(s -> len(0.0, s), 1:2)
             @test el > 10 && el > ro + 2.5                        # cells stretch towards L = 16
@@ -305,16 +305,18 @@ const SIBLINGS = Dict(
     :Merks2008 => (
         "CC3D chemotaxis towards the medium only", function ()
             cue = [0.05 * x for x in 1:40, y in 1:40]
-            drift(χ) = map(1:4) do seed
-                p = PottsProblem(
-                    MediumOnlyChemotaxis(; name = :m), [
-                        ownership => block((40, 40), (18:22, 18:22)),
-                        kind => [:cell], :c => copy(cue), :χ => χ,
-                    ], (0, 150); seed
-                )
-                seed == 1 && χ > 0 && @test selfcheck(p) < 1.0e-9
-                u = solve(p, SequentialCPM()).u[end]
-                mean(i[1] for i in findall(==(1), u.ownership)) - 20.0
+            function drift(χ)
+                return map(1:4) do seed
+                        p = PottsProblem(
+                            MediumOnlyChemotaxis(; name = :m), [
+                                ownership => block((40, 40), (18:22, 18:22)),
+                                kind => [:cell], :c => copy(cue), :χ => χ,
+                            ], (0, 150); seed
+                        )
+                        seed == 1 && χ > 0 && @test selfcheck(p) < 1.0e-9
+                        u = solve(p, SequentialCPM()).u[end]
+                        mean(i[1] for i in findall(==(1), u.ownership)) - 20.0
+                    end
             end
             @test mean(drift(300.0)) > 3 && abs(mean(drift(0.0))) < 2.5     # extensions alone carry the cell up the cue
         end
@@ -382,14 +384,16 @@ const SIBLINGS = Dict(
     :ShearedFoam => (
         "CC3D external potential, uniform along x", function ()
             σ = block((60, 20), (14:18, 6:10), (14:18, 11:15))
-            drift(λx) = map(1:3) do seed
-                p = PottsProblem(
-                    ExternalPotentialCells(; name = :e), [ownership => σ, kind => [:cell, :cell], :λx => λx],
-                    (0, 150); seed
-                )
-                seed == 1 && λx != 0 && @test selfcheck(p) < 1.0e-9
-                u = solve(p, SequentialCPM()).u[end]
-                mean(i[1] for i in findall(>(0), u.ownership)) - 16.0
+            function drift(λx)
+                return map(1:3) do seed
+                        p = PottsProblem(
+                            ExternalPotentialCells(; name = :e), [ownership => σ, kind => [:cell, :cell], :λx => λx],
+                            (0, 150); seed
+                        )
+                        seed == 1 && λx != 0 && @test selfcheck(p) < 1.0e-9
+                        u = solve(p, SequentialCPM()).u[end]
+                        mean(i[1] for i in findall(>(0), u.ownership)) - 16.0
+                    end
             end
             @test mean(drift(-2.0)) > 4 && abs(mean(drift(0.0))) < 2.5    # λx < 0 pushes the cells +x
         end
@@ -665,12 +669,14 @@ end
         σ = zeros(Int32, 24, 24); σ[9:16, 9:16] .= 1
         # splits or holes (hex is self-dual: one adjacency for the cell and the background)
         broken(u) = (c = sib_comps(u.ownership .== 1, hex); b = sib_comps(u.ownership .!= 1, hex); c[1] > 1 || b[1] - b[2] > 0)
-        runs(simple) = [
-            solve(
-                PottsProblem(HexSimpleCell(; name = :h, simple), [ownership => σ, kind => [:cell]], (0, 60); seed),
-                SequentialCPM(); saveat = 10:10:60
-            ) for seed in 1:3
-        ]
+        function runs(simple)
+            return [
+                    solve(
+                        PottsProblem(HexSimpleCell(; name = :h, simple), [ownership => σ, kind => [:cell]], (0, 60); seed),
+                        SequentialCPM(); saveat = 10:10:60
+                    ) for seed in 1:3
+                ]
+        end
         p = PottsProblem(HexSimpleCell(; name = :h), [ownership => σ, kind => [:cell]], (0, 1))
         @test selfcheck(p) < 1.0e-9
         held, free = runs(true), runs(false)
@@ -682,14 +688,16 @@ end
         # (with Moore(1) copies a medium loser lets a corner-only gain detach a piece)
         face3 = ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1))
         σ3 = zeros(Int32, 10, 10, 10); σ3[4:6, 4:6, 4:6] .= 1
-        split3(rule) = sum(1:2) do seed
-            sol = solve(
-                PottsProblem(
-                    CubicConnectedOrDead(; name = :c, connected_rule = rule), [ownership => σ3, kind => [:cell]],
-                    (0, 40); seed
-                ), SequentialCPM(; proposal = VonNeumann(1)); saveat = 5:5:40
-            )
-            count(u -> sib_comps(u.ownership .== 1, face3)[1] > 1, sol.u)
+        function split3(rule)
+            return sum(1:2) do seed
+                    sol = solve(
+                        PottsProblem(
+                            CubicConnectedOrDead(; name = :c, connected_rule = rule), [ownership => σ3, kind => [:cell]],
+                            (0, 40); seed
+                        ), SequentialCPM(; proposal = VonNeumann(1)); saveat = 5:5:40
+                    )
+                    count(u -> sib_comps(u.ownership .== 1, face3)[1] > 1, sol.u)
+                end
         end
         @test selfcheck(PottsProblem(CubicConnectedOrDead(; name = :c), [ownership => σ3, kind => [:cell]], (0, 1))) < 1.0e-9
         @test split3(true) == 0

@@ -21,13 +21,17 @@
 include(joinpath(@__DIR__, "..", "shared", "common.jl"))
 using Potts: CorePotts
 # drive part of ΔH = full ΔH (energies + drives) − authored ΔH (energies only)
-reserved_drive(prob, prop) = prob.f.delta_H(prob.u0, prob.p, prop, Potts._host_ctx(prob)) -
-    energy_change(prob, prob.u0, prop)
+function reserved_drive(prob, prop)
+    return prob.f.delta_H(prob.u0, prob.p, prop, Potts._host_ctx(prob)) -
+        energy_change(prob, prob.u0, prop)
+end
 allows(prob, u, prop) = prob.f.constraint(u, prob.p, prop, Potts._host_ctx(prob))
-reserved_prop(lat, σ, x, y) = CorePotts.Proposal(
-    CorePotts.linear_index(lat, x), CorePotts.linear_index(lat, y),
-    x, 1, σ[x...], σ[y...]
-)
+function reserved_prop(lat, σ, x, y)
+    return CorePotts.Proposal(
+            CorePotts.linear_index(lat, x), CorePotts.linear_index(lat, y),
+            x, 1, σ[x...], σ[y...]
+        )
+end
 # target x takes source y's owner
 
 # ---------------------------------------------------------------------------------------
@@ -265,27 +269,31 @@ end
 @testitem "connectivity and reserved names: parameters and variables named `a` or `b` are rejected" setup = [ConnectivityAndReservedNamesSetup] tags = [:pottsmodels, :acceptance] begin
     @testset "connectivity and reserved names: parameters and variables named `a` or `b` are rejected" begin
         # the reviewer's case: a parameter `b` used in an edge term, where `b` is the endpoint
-        edge_body(bname) = quote
-            @kinds medium A
-            @parameters begin
-                $bname = 5.0
-                k = 1.0
-            end
-            @variables rest(edge) = 3.0
-            @relationship bond(cell, cell) capacity = 1
-            @lattice Lattice((20, 20))
-            @energy begin
-                cells => (volume - 16)^2
-                edges(bond) => k * (distance - rest)^2 + $bname
-            end
-            @sweep Metropolis(; temperature = 1.0)
+        function edge_body(bname)
+            return quote
+                    @kinds medium A
+                    @parameters begin
+                        $bname = 5.0
+                        k = 1.0
+                    end
+                    @variables rest(edge) = 3.0
+                    @relationship bond(cell, cell) capacity = 1
+                    @lattice Lattice((20, 20))
+                    @energy begin
+                        cells => (volume - 16)^2
+                        edges(bond) => k * (distance - rest)^2 + $bname
+                    end
+                    @sweep Metropolis(; temperature = 1.0)
+                end
         end
-        decl_body(decl) = quote
-            @kinds medium A
-            $decl
-            @lattice Lattice((12, 12))
-            @energy cells => (volume - 16)^2
-            @sweep Metropolis(; temperature = 1.0)
+        function decl_body(decl)
+            return quote
+                    @kinds medium A
+                    $decl
+                    @lattice Lattice((12, 12))
+                    @energy cells => (volume - 16)^2
+                    @sweep Metropolis(; temperature = 1.0)
+                end
         end
         # controls: the same bodies with other names build (the error below is the name)
         @test reserved_build(:EdgeOK, edge_body(:bb)) isa Potts.CompiledPottsSystem

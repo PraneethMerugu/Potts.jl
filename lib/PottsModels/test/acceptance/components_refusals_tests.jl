@@ -213,15 +213,17 @@ end
 const INTEGRAL_PRE = "`integral(Pre(x))` is only available in update blocks"
 # ---------------------------------------------------------------------------------------
 # Unchanged pins: the fixtures this item touches build the same code
-pinned() = (
-    "continuous component" => () -> refusal_fingerprint(refusal_model(refusal_continuous(), :comp7)),
-    "continuous component (model)" => () -> refusal_fingerprint(refusal_model(refusal_continuous(), :comp7; scope = :model)),
-    "discrete component" => () -> refusal_fingerprint(refusal_model(refusal_discrete(), :net7)),
-    "nested component" => () -> refusal_fingerprint(refusal_model(refusal_nested(), :comp7)),
-    "guesses" => () -> refusal_fingerprint(refusal_model(refusal_continuous((y, z, k) -> (; guesses = [z => 0.0])), :comp7)),
-    "extension of a hand-written base" => () -> refusal_fingerprint(OuterOK(; name = :o)),
-    "temperature integral(w)" => () -> refusal_fingerprint(refusal_temperature(:(1.0 + 0.01 * integral(w)))),
-)
+function pinned()
+    return (
+            "continuous component" => () -> refusal_fingerprint(refusal_model(refusal_continuous(), :comp7)),
+            "continuous component (model)" => () -> refusal_fingerprint(refusal_model(refusal_continuous(), :comp7; scope = :model)),
+            "discrete component" => () -> refusal_fingerprint(refusal_model(refusal_discrete(), :net7)),
+            "nested component" => () -> refusal_fingerprint(refusal_model(refusal_nested(), :comp7)),
+            "guesses" => () -> refusal_fingerprint(refusal_model(refusal_continuous((y, z, k) -> (; guesses = [z => 0.0])), :comp7)),
+            "extension of a hand-written base" => () -> refusal_fingerprint(OuterOK(; name = :o)),
+            "temperature integral(w)" => () -> refusal_fingerprint(refusal_temperature(:(1.0 + 0.01 * integral(w)))),
+        )
+end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
@@ -242,8 +244,9 @@ end
             refusal_names("comp7"), "continuous_events"
         ) === :ok
 
-        rejected(sys, comp, word; scope = :(cells(A))) =
-            rejection(() -> mtkcompile(refusal_model(sys, comp; scope)), refusal_names(String(comp)), word)
+        function rejected(sys, comp, word; scope = :(cells(A)))
+            return rejection(() -> mtkcompile(refusal_model(sys, comp; scope)), refusal_names(String(comp)), word)
+        end
         # tstops: today accepted, and the run never stops at t = 0.5
         @test rejected(refusal_continuous((y, z, k) -> (; tstops = [0.5])), :comp7, "tstops") === :ok
         @test rejected(refusal_continuous((y, z, k) -> (; tstops = [0.5])), :comp7, "tstops"; scope = :model) === :ok
@@ -266,10 +269,12 @@ end
     @testset "components refusals 2: bindings of parameters build; bindings of unknowns are rejected, naming the component ($scope)" for scope in (:(cells(A)), :model)
         t = Potts.t
         D = Potts.D
-        rejected(sys, comp, words...) = rejection(
-            () -> full(refusal_model(sys, comp; scope)),
-            refusal_names(String(comp)), words...
-        )
+        function rejected(sys, comp, words...)
+            return rejection(
+                    () -> full(refusal_model(sys, comp; scope)),
+                    refusal_names(String(comp)), words...
+                )
+        end
         builds(sys, comp) = refusal_builds(refusal_model(sys, comp; scope))
         problem(sys, comp) = (m = refusal_model(sys, comp; scope); mtkcompile(m); PottsProblem(m, REFUSAL_OP, (0, 1)))
         first_value(prob, name) = first(vcat(Potts.observe(prob, name)))

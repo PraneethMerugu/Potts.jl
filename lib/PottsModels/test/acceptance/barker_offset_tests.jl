@@ -98,10 +98,10 @@ function problem(model; seed = 7, tspan = (0, 20))
     kinds = [isodd(k) ? :dark : :light for k in 1:id]
     return PottsProblem(model(; name = :barker), [ownership => σ, kind => kinds], tspan; seed)
 end
-barker_run(prob, alg) = (
-    sol = solve(prob, alg; saveat = 1);
-    (; σs = [copy(u.ownership) for u in sol.u], accepted = sol.stats.accepted, attempts = sol.stats.attempts)
-)
+function barker_run(prob, alg)
+    sol = solve(prob, alg; saveat = 1)
+    return (; σs = [copy(u.ownership) for u in sol.u], accepted = sol.stats.accepted, attempts = sol.stats.attempts)
+end
 same(a, b) = a.σs == b.σs && a.accepted == b.accepted && a.attempts == b.attempts
 # Activity: sites changed between consecutive saved states (CheckerboardCPM does not count
 # acceptances in `sol.stats`, so the direction check uses this for both algorithms).

@@ -225,10 +225,11 @@ end
 zip_names(z) = filter(!isempty, readlines(`unzip -Z1 $z`))
 zip_read(z, m) = read(`unzip -p $z $m`)
 isreadme(p) = occursin(r"^README[^/]*\.md$"i, basename(p))
-delivery_tsv(path) = (
-    ls = filter(!isempty, split(read(path, String), '\n'));
-    h = split(ls[1], '\t'); [Dict(zip(h, split(l, '\t'))) for l in ls[2:end]]
-)
+function delivery_tsv(path)
+    ls = filter(!isempty, split(read(path, String), '\n'))
+    h = split(ls[1], '\t')
+    return [Dict(zip(h, split(l, '\t'))) for l in ls[2:end]]
+end
 function records()
     recs = Dict{String, String}()
     for d in sort(readdir(DATA))
@@ -376,13 +377,14 @@ delivery_tag() = isdefined(PottsModels, :OPENVT_BULK_RELEASE_TAG) ? PottsModels.
 bulkfiles(s) = (d = joinpath(s, "bulk"); isdir(d) ? sort(readdir(d)) : String[])
 url(tag, f) = RELEASE_BASE * "$(tag)/$(f)"
 # the core's README*.md texts
-core_readmes(s) = (
-    z = joinpath(s, "core.zip"); if isfile(z)
-        [m => String(zip_read(z, m)) for m in zip_names(z) if isreadme(m)]
-    else
-        Pair{String, String}[]
-    end
-)
+function core_readmes(s)
+    z = joinpath(s, "core.zip")
+    return if isfile(z)
+            [m => String(zip_read(z, m)) for m in zip_names(z) if isreadme(m)]
+        else
+            Pair{String, String}[]
+        end
+end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 

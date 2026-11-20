@@ -77,14 +77,18 @@ function sigma()
     return σ
 end
 setter_Jf(x) = [0 x x; x 2 x - 5; x x - 5 14]
-ivals(i) = (
-    α = i.ps[:α], β = i.ps[:β], γ = i.ps[:γ], λ = i.ps[:λ], Jx = i.ps[:Jx],
-    J = Matrix(i.ps[:J]), V₀ = Vector(i.ps[:V₀]),
-)
-pvals(q) = (
-    α = getp(q, :α)(q), β = getp(q, :β)(q), γ = getp(q, :γ)(q), λ = getp(q, :λ)(q),
-    Jx = getp(q, :Jx)(q), J = Matrix(getp(q, :J)(q)), V₀ = Vector(getp(q, :V₀)(q)),
-)
+function ivals(i)
+    return (
+            α = i.ps[:α], β = i.ps[:β], γ = i.ps[:γ], λ = i.ps[:λ], Jx = i.ps[:Jx],
+            J = Matrix(i.ps[:J]), V₀ = Vector(i.ps[:V₀]),
+        )
+end
+function pvals(q)
+    return (
+            α = getp(q, :α)(q), β = getp(q, :β)(q), γ = getp(q, :γ)(q), λ = getp(q, :λ)(q),
+            Jx = getp(q, :Jx)(q), J = Matrix(getp(q, :J)(q)), V₀ = Vector(getp(q, :V₀)(q)),
+        )
+end
 setter_w(i) = Vector(i[:w])[1:2]
 function setter_error(f)
     try

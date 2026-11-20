@@ -299,22 +299,26 @@ end
 # always: the rule on synthetic tables, the early-stop oracle, the design
 # ---------------------------------------------------------------------------------------------
 """A synthetic complete table: t(κ, β, k) and n1(κ, β, k)."""
-synth(tf, n1; grid = GRID) = [
-    Dict{String, Any}(
-        "kappa_b" => κ, "beta" => β, "k" => k, "t_first" => tf(κ, β, k),
-        "t1_total" => n1(κ, β, k)
-    ) for κ in grid for β in SCAN_BETAS for k in 1:SCAN_N
-]
+function synth(tf, n1; grid = GRID)
+    return [
+            Dict{String, Any}(
+                "kappa_b" => κ, "beta" => β, "k" => k, "t_first" => tf(κ, β, k),
+                "t1_total" => n1(κ, β, k)
+            ) for κ in grid for β in SCAN_BETAS for k in 1:SCAN_N
+        ]
+end
 """t ∝ 1/κ_b through the targets at κ01 (β = 0.01) and κ05 (β = 0.05); others ∝ 1/(κβ)."""
-pow(κ01, κ05; cap = 2^16) = (κ, β, k) -> begin
-    t = if β == 0.01
-        4300κ01 / κ
-    elseif β == 0.05
-        420κ05 / κ
-    else
-        43κ01 / (κ * β)
-    end
-    t > cap ? -1 : round(Int, t)
+function pow(κ01, κ05; cap = 2^16)
+    return (κ, β, k) -> begin
+            t = if β == 0.01
+                4300κ01 / κ
+            elseif β == 0.05
+                420κ05 / κ
+            else
+                43κ01 / (κ * β)
+            end
+            t > cap ? -1 : round(Int, t)
+        end
 end
 scan_cons(κc; who = 1:SCAN_N) = (κ, β, k) -> (β >= 1.0e-3 && κ >= κc * (1 - 1.0e-12) && k in who) ? 3.0 : 0.0
 # ---------------------------------------------------------------------------------------------
@@ -407,10 +411,10 @@ end
 @testitem "04 κ_b scan: early stop equals the full-cap yield_strain" setup = [FoamBulkShearScanSetup] tags = [:pottsmodels, :reproductions] begin
     @testset "04 κ_b scan: early stop equals the full-cap yield_strain" begin
         τ, w = 3.447, round(Int, 100 * 3.447)
-        full(N) = (
-            r = FOAM_AN.yield_strain(collect(1:length(N)) ./ τ, N; threshold = 1, window = w);
-            r === nothing ? -1 : round(Int, r)
-        )
+        function full(N)
+            r = FOAM_AN.yield_strain(collect(1:length(N)) ./ τ, N; threshold = 1, window = w)
+            return r === nothing ? -1 : round(Int, r)
+        end
         early(N) = (o = online(N, τ, w); o.tf === nothing ? -1 : round(Int, o.tf))
         for s in 1:200
             T = 2000 + 37s

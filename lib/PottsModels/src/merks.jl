@@ -168,9 +168,10 @@ overlay(Frame(:border; width = 2),
 
 A few of the 128 cells are cut into pieces, as in the authors' code, so `splits = :allow`.
 """
-merks2008_sprout(; rounds = 50, divisions = 7, seed = 1) =
-    overlay(Frame(:border; width = 2),
+function merks2008_sprout(; rounds = 50, divisions = 7, seed = 1)
+    return overlay(Frame(:border; width = 2),
         Splits(Eden(Center(); rounds, kinds = [:endothelial], seed, neighborhood = Moore(1)), divisions; splits = :allow))
+end
 
 """
     merks2008_denovo(; lattice = (202, 202), n = 360, rounds = 10,
@@ -190,11 +191,12 @@ The default is the released files' (`denovo_*.par`: 360 seeds on the 198² inter
 about 355 cells of 47 sites). 01b Fig. 2's geometry is
 `merks2008_denovo(; lattice = (502, 502), n = 1000, region = (85:417, 85:417))`.
 """
-merks2008_denovo(; lattice = (202, 202), n = 360, rounds = 10, region = (3:(lattice[1] - 2), 3:(lattice[2] - 2)),
-    seed = 1) =
-    overlay(Frame(:border; width = 2),
+function merks2008_denovo(; lattice = (202, 202), n = 360, rounds = 10, region = (3:(lattice[1] - 2), 3:(lattice[2] - 2)),
+    seed = 1)
+    return overlay(Frame(:border; width = 2),
         Eden(RandomPoints(n; region, replace = true, seed); rounds, kinds = [:endothelial], seed,
             neighborhood = Moore(1), shortfall = :allow))
+end
 
 function _merks_choice(x, allowed, model, key)
     if x in allowed

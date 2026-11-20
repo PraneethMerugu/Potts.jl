@@ -78,20 +78,20 @@ update_name(x) = SII.getname(x)
 # the names of the symbols in `e` (`x(t)` is `x`; through `Pre`, indexing and calls)
 function update_names(e)
     out = Set{Symbol}()
-    walk(y) = (
-        y = UPDATE_S.unwrap(y);
-        y isa UPDATE_SU.BasicSymbolic || return;
-        if UPDATE_SU.issym(y)
-            push!(out, update_name(y))
-        elseif UPDATE_SU.iscall(y)
-            op = UPDATE_SU.operation(y)
-            if op isa UPDATE_SU.BasicSymbolic && UPDATE_SU.issym(op)
-                push!(out, update_name(op))
-            else
-                foreach(walk, UPDATE_SU.arguments(y))
+    function walk(y)
+        y = UPDATE_S.unwrap(y)
+        y isa UPDATE_SU.BasicSymbolic || return
+        return if UPDATE_SU.issym(y)
+                push!(out, update_name(y))
+            elseif UPDATE_SU.iscall(y)
+                op = UPDATE_SU.operation(y)
+                if op isa UPDATE_SU.BasicSymbolic && UPDATE_SU.issym(op)
+                    push!(out, update_name(op))
+                else
+                    foreach(walk, UPDATE_SU.arguments(y))
+                end
             end
-        end
-    )
+    end
     walk(e)
     return out
 end
@@ -99,12 +99,12 @@ isPre(y) = UPDATE_SU.iscall(y) && UPDATE_SU.operation(y) isa UPDATE_M.Pre
 # the names of the variables read through MTK's `Pre` in `e`
 function pre_args(e)
     out = Set{Symbol}()
-    walk(y) = (
-        y = UPDATE_S.unwrap(y);
-        y isa UPDATE_SU.BasicSymbolic || return;
-        isPre(y) && union!(out, update_names(UPDATE_SU.arguments(y)[1]));
-        UPDATE_SU.iscall(y) && foreach(walk, UPDATE_SU.arguments(y))
-    )
+    function walk(y)
+        y = UPDATE_S.unwrap(y)
+        y isa UPDATE_SU.BasicSymbolic || return
+        isPre(y) && union!(out, update_names(UPDATE_SU.arguments(y)[1]))
+        return UPDATE_SU.iscall(y) && foreach(walk, UPDATE_SU.arguments(y))
+    end
     walk(e)
     return out
 end
@@ -112,15 +112,15 @@ end
 function update_eval(e, vals::AbstractDict{Symbol})
     x = UPDATE_S.unwrap(e)
     pre = Dict{Any, Any}()
-    walk(y) = (
-        y = UPDATE_S.unwrap(y);
-        y isa UPDATE_SU.BasicSymbolic || return;
-        if isPre(y)
-            pre[y] = vals[Symbol(:Pre_, only(update_names(UPDATE_SU.arguments(y)[1])))]
-        elseif UPDATE_SU.iscall(y)
-            foreach(walk, UPDATE_SU.arguments(y))
-        end
-    )
+    function walk(y)
+        y = UPDATE_S.unwrap(y)
+        y isa UPDATE_SU.BasicSymbolic || return
+        return if isPre(y)
+                pre[y] = vals[Symbol(:Pre_, only(update_names(UPDATE_SU.arguments(y)[1])))]
+            elseif UPDATE_SU.iscall(y)
+                foreach(walk, UPDATE_SU.arguments(y))
+            end
+    end
     walk(x)
     isempty(pre) || (x = UPDATE_S.unwrap(UPDATE_S.substitute(x, pre)))
     vs = UPDATE_S.get_variables(x)
@@ -130,14 +130,18 @@ function update_eval(e, vals::AbstractDict{Symbol})
     return Float64(v isa Number ? v : Core.eval(@__MODULE__, UPDATE_S.toexpr(v)))
 end
 row(u) = (u.phase, u.scope, u.every)
-same(a, b) = length(a) == length(b) &&
-    all(i -> row(a[i]) == row(b[i]) && isequal(a[i].eq, b[i].eq), eachindex(a, b))
-clear(f, words...) = try
-    f()
-    false
-catch err
-    err isa Union{ArgumentError, Potts.PottsCompileError} &&
-        (isempty(words) || occursin(first(words), sprint(showerror, err)))
+function same(a, b)
+    return length(a) == length(b) &&
+        all(i -> row(a[i]) == row(b[i]) && isequal(a[i].eq, b[i].eq), eachindex(a, b))
+end
+function clear(f, words...)
+    return try
+            f()
+            false
+        catch err
+            err isa Union{ArgumentError, Potts.PottsCompileError} &&
+                (isempty(words) || occursin(first(words), sprint(showerror, err)))
+        end
 end
 # ---------------------------------------------------------------------------------------
 # Fixtures

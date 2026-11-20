@@ -192,10 +192,10 @@ function link_problem(; T = Float64, lattice = (16, 16))
 end
 device_lifecycle_bonds(u) = Set(minmax(Int(a), Int(c)) for c in axes(u.cell.links__bond, 2) for a in u.cell.links__bond[:, c] if a != 0)
 # the store is symmetric: every entry has its mirror
-device_lifecycle_symmetric(u) = (
-    L = u.cell.links__bond;
-    all(c -> all(a -> a == 0 || any(==(c), L[:, a]), L[:, c]), axes(L, 2))
-)
+function device_lifecycle_symmetric(u)
+    L = u.cell.links__bond
+    return all(c -> all(a -> a == 0 || any(==(c), L[:, a]), L[:, c]), axes(L, 2))
+end
 # ---------------------------------------------------------------------------------------
 # Fixture F4: the `frozen_kind_mask_tests.jl` mask. Cell 1 (kind `cell`) becomes `wall` (frozen) at the lifecycle
 # of MCS DEVICE_LIFECYCLE_S (a public `Lifecycle` transition); cell 2 is a wall from the start, cell
@@ -295,8 +295,10 @@ end
 """Device state `g` against CPU state `c` at the same MCS: equal up to relabelling of the
 daughters, the same slots in use (lowest-first), and every cell live before the event
 (`before`, ids) owning exactly the same sites on both."""
-matches(g, c, before) = same_canon(g, c) && device_lifecycle_live(g) == device_lifecycle_live(c) &&
-    all(id -> device_lifecycle_sites(g, id) == device_lifecycle_sites(c, id), intersect(before, device_lifecycle_live(c)))
+function matches(g, c, before)
+    return same_canon(g, c) && device_lifecycle_live(g) == device_lifecycle_live(c) &&
+        all(id -> device_lifecycle_sites(g, id) == device_lifecycle_sites(c, id), intersect(before, device_lifecycle_live(c)))
+end
 # ---------------------------------------------------------------------------------------
 # The published models (the same enumeration as the siblings guardrail): a builder per
 # model. A new published model must be added here; those with a lifecycle are measured.
@@ -443,10 +445,12 @@ const FIXTURES = (
 # every saved Metal state: trackers exact, at most one live cell more per division, and
 # Σ generation = initial + divisions (each division raises one slot's generation by one).
 const OPENVT_SEEDS = 1:24
-openvt(seed; T = Float32) = PottsProblem(
-    OpenVTGrowingMonolayer(; name = :o, lattice = (40, 40), τ = 8.0),
-    openvt_monolayer_state(; lattice = (40, 40)), (0, 70); T, capacity = 256, seed
-)
+function openvt(seed; T = Float32)
+    return PottsProblem(
+            OpenVTGrowingMonolayer(; name = :o, lattice = (40, 40), τ = 8.0),
+            openvt_monolayer_state(; lattice = (40, 40)), (0, 70); T, capacity = 256, seed
+        )
+end
 function openvt_invariants(sol)
     ok = true
     g0 = sum(device_lifecycle_host(sol.u[1]).cell.generation)

@@ -77,11 +77,13 @@ function substream_splitmix64(x::UInt64)
     z = (z ⊻ (z >> 27)) * 0x94d049bb133111eb
     return z ⊻ (z >> 31)
 end
-fnv(name) = (
-    h = 0x811c9dc5; for b in codeunits(String(name))
-        h = (h ⊻ b) * 0x01000193
-    end; h
-)
+function fnv(name)
+    h = 0x811c9dc5
+    for b in codeunits(String(name))
+            h = (h ⊻ b) * 0x01000193
+        end
+    return h
+end
 ref(seed, stream) = substream_splitmix64(substream_splitmix64(UInt64(seed)) ⊻ UInt64(fnv(stream)))
 has() = isdefined(Potts, :_substream_seed)
 mix(seed, stream) = Potts._substream_seed(seed, stream)
@@ -152,12 +154,16 @@ function substream_name(f)
     end
 end
 iscall(ex, names) = ex isa Expr && ex.head === :call && substream_name(ex.args[1]) in names
-seedlike(x) = (n = x isa Symbol ? x : qname(x); n isa Symbol && occursin("seed", lowercase(String(n)))) ||
-    (iscall(x, CONV) && any(seedlike, x.args[2:end]))
-plain(x) = x isa Symbol || x isa Integer || x isa QuoteNode ||
-    (x isa Expr && x.head === :. && length(x.args) == 2 && x.args[2] isa QuoteNode) ||
-    iscall(x, (:_substream_seed,)) ||
-    (iscall(x, CONV) && all(plain, x.args[2:end]))
+function seedlike(x)
+    return (n = x isa Symbol ? x : qname(x); n isa Symbol && occursin("seed", lowercase(String(n)))) ||
+        (iscall(x, CONV) && any(seedlike, x.args[2:end]))
+end
+function plain(x)
+    return x isa Symbol || x isa Integer || x isa QuoteNode ||
+        (x isa Expr && x.head === :. && length(x.args) == 2 && x.args[2] isa QuoteNode) ||
+        iscall(x, (:_substream_seed,)) ||
+        (iscall(x, CONV) && all(plain, x.args[2:end]))
+end
 function defname(ex)
     ex isa Expr && ex.head in (:function, :(=)) || return nothing
     sig = ex.args[1]

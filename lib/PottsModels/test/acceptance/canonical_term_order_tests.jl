@@ -272,14 +272,16 @@ end
             @test hash(f, UInt(17)) == invoke(hash, Tuple{Function, UInt}, f, UInt(17))
         end
         Potts.Symbolics.@variables a b
-        sx() = string.(
-            Potts.SymbolicUtils.arguments(
-                Potts.Symbolics.unwrap(
-                    Potts.population(a, b, true) + Potts.gather(a, b, a, b) +
-                        Potts.value_at(a, b) + Potts.population(b, a, true) + sin(a)
+        function sx()
+            return string.(
+                    Potts.SymbolicUtils.arguments(
+                        Potts.Symbolics.unwrap(
+                            Potts.population(a, b, true) + Potts.gather(a, b, a, b) +
+                                Potts.value_at(a, b) + Potts.population(b, a, true) + sin(a)
+                        )
+                    )
                 )
-            )
-        )
+        end
         sx0 = sx()
         orders = [canonical_salted(sx, POTTS_OPS, s) for s in SALTS]
         @test all(o -> sort(o) == sort(sx0), orders)       # the same terms

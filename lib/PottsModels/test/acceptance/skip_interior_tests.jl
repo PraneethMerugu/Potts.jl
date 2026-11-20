@@ -106,10 +106,12 @@ end
     @constraint no_extinction
     @sweep Metropolis(; temperature = T)
 end
-brick(L, b) = Int32[
-    (r = (y - 1) ÷ b; r * (L[1] ÷ b) + mod(x - 1 - (isodd(r) ? b ÷ 2 : 0), L[1]) ÷ b + 1)
-        for x in 1:L[1], y in 1:L[2]
-]
+function brick(L, b)
+    return Int32[
+            (r = (y - 1) ÷ b; r * (L[1] ÷ b) + mod(x - 1 - (isodd(r) ? b ÷ 2 : 0), L[1]) ÷ b + 1)
+                for x in 1:L[1], y in 1:L[2]
+        ]
+end
 function interior_foam(; tspan = (0, 30), T = 3.0, seed)
     σ = brick((64, 64), 16)
     return PottsProblem(
@@ -136,16 +138,19 @@ function walled(; tspan = (0, 20), seed)
     end
     return PottsProblem(Walled(; name = :walled), [ownership => σ, kind => [:wall; fill(:A, k - 1)]], tspan; seed)
 end
-interior_gg(; tspan = (0, 20), seed) =
-    (gg = graner_glazier_state(); PottsProblem(GranerGlazier(; name = :interior_gg), [ownership => gg[1], kind => gg[2]], tspan; seed))
+function interior_gg(; tspan = (0, 20), seed)
+    gg = graner_glazier_state()
+    return PottsProblem(GranerGlazier(; name = :interior_gg), [ownership => gg[1], kind => gg[2]], tspan; seed)
+end
 # the 15 configuration: OpenVT reference model with divisions (σ_X = 0: the first by ~800 MCS)
-openvt(; tspan = (0, 1000), seed) =
-    remake(
-    PottsProblem(
-        OpenVTReferenceMonolayer(; name = :ovt, lattice = (60, 60)),
-        openvt_reference_state(; lattice = (60, 60)), tspan; capacity = 64, seed
-    ); p = [:σ_X => 0.0]
-)
+function openvt(; tspan = (0, 1000), seed)
+    return remake(
+            PottsProblem(
+                OpenVTReferenceMonolayer(; name = :ovt, lattice = (60, 60)),
+                openvt_reference_state(; lattice = (60, 60)), tspan; capacity = 64, seed
+            ); p = [:σ_X => 0.0]
+        )
+end
 # The cases: (label, problem, keywords of the algorithm). Short runs (< 1 s each, warm).
 const CASES = [
     ("GG 72² periodic, problem's proposal, seed 1", () -> interior_gg(; seed = 1), (;)),

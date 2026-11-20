@@ -438,8 +438,10 @@ end
 const DET_SEEDS = 15_001:15_004
 const STO_SEEDS = 15_001:15_006
 """N(MCS) in the case-(f) windows: 1 on 0:650, 2 on 800:1400, 4 on 1600:2100, 8 at 2400."""
-monolayer_windows(N) = all(N[m + 1] == 1 for m in 0:650) && all(N[m + 1] == 2 for m in 800:1400) &&
-    all(N[m + 1] == 4 for m in 1600:2100) && N[2401] == 8
+function monolayer_windows(N)
+    return all(N[m + 1] == 1 for m in 0:650) && all(N[m + 1] == 2 for m in 800:1400) &&
+        all(N[m + 1] == 4 for m in 1600:2100) && N[2401] == 8
+end
 # ---------------------------------------------------------------------------------------------
 # G11: stop at N cells, and the O2 snapshot
 # ---------------------------------------------------------------------------------------------

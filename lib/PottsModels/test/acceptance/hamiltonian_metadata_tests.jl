@@ -208,11 +208,13 @@ const MODELS = [
     ("OpenVTChain", () -> OpenVTChain(; name = :chain), 3),
     ("OpenVTReferenceMonolayer", () -> OpenVTReferenceMonolayer(; name = :ref, lattice = (24, 24)), 2),
 ]
-clear(f, words...) = try
-    f()
-    false
-catch err
-    err isa ArgumentError && (isempty(words) || occursin(first(words), sprint(showerror, err)))
+function clear(f, words...)
+    return try
+            f()
+            false
+        catch err
+            err isa ArgumentError && (isempty(words) || occursin(first(words), sprint(showerror, err)))
+        end
 end
 # ---------------------------------------------------------------------------------------
 # M. The typed metadata payload
@@ -220,8 +222,10 @@ end
 # a PottsSystem keeps its metadata on the complete System it wraps (D-256)
 meta(s) = s isa PottsSystem ? Potts.inner(s) : s
 hamiltonian_spec(s) = HAMILTONIAN_M.getmetadata(meta(s), Potts.PottsSweepSpec, nothing)
-same_terms(a, b) = length(a) == length(b) &&
-    all(i -> isequal(HAMILTONIAN_S.unwrap(last(a[i])), HAMILTONIAN_S.unwrap(last(b[i]))), eachindex(a, b))
+function same_terms(a, b)
+    return length(a) == length(b) &&
+        all(i -> isequal(HAMILTONIAN_S.unwrap(last(a[i])), HAMILTONIAN_S.unwrap(last(b[i]))), eachindex(a, b))
+end
 # ---------------------------------------------------------------------------------------
 # X. Downstream detection, and the misuse refusal
 

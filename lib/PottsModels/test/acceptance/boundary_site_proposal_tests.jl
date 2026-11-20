@@ -523,8 +523,10 @@ function boundary_ok(integ, offsets; kw...)
     return allunique(got) && Set(got) == Set(want)
 end
 # Item 6 and the recorded SequentialCPM values: the gate's cases.
-gg_problem(; tspan = (0, 10^6), seed = 1) =
-    (gg = graner_glazier_state(); PottsProblem(GranerGlazier(; name = :boundary_site_gg), [ownership => gg[1], kind => gg[2]], tspan; seed))
+function gg_problem(; tspan = (0, 10^6), seed = 1)
+    gg = graner_glazier_state()
+    return PottsProblem(GranerGlazier(; name = :boundary_site_gg), [ownership => gg[1], kind => gg[2]], tspan; seed)
+end
 function openvt100_problem()
     σ = zeros(Int32, 100, 100)
     foreach(((k, (a, b)),) -> σ[29 + 7a .+ (1:7), 29 + 7b .+ (1:7)] .= k, enumerate(Iterators.product(0:5, 0:5)))
@@ -533,11 +535,12 @@ function openvt100_problem()
         [ownership => σ, kind => fill(:cell, 36), :σ_X => 0.0], (0, 10^6); capacity = 128
     )
 end
-openvt_problem(L; tspan = (0, 10^6), seed = 1, capacity = 64) =
-    PottsProblem(
-    OpenVTReferenceMonolayer(; name = Symbol(:ovt, L), lattice = (L, L)),
-    openvt_reference_state(; lattice = (L, L)), tspan; capacity, seed
-)
+function openvt_problem(L; tspan = (0, 10^6), seed = 1, capacity = 64)
+    return PottsProblem(
+            OpenVTReferenceMonolayer(; name = Symbol(:ovt, L), lattice = (L, L)),
+            openvt_reference_state(; lattice = (L, L)), tspan; capacity, seed
+        )
+end
 sha(σ) = bytes2hex(sha256(reinterpret(UInt8, vec(Array{Int32}(σ)))))
 function warm_allocs(integ)          # a function barrier, as in benchmark/gate.jl
     m = typemax(Int)

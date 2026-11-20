@@ -349,13 +349,14 @@ function energy_sigma()
     σ[9:10, 14:15] .= 6
     return σ
 end
-energy_problem(; tspan = (0, 4), seed = 1, partner = E_PARTNER, q = E_Q, T = Float64) =
-    PottsProblem(
-    system(:Energy; sysname = :en), [
-        ownership => energy_sigma(), kind => E_KINDS,
-        :partner => partner, :q => q,
-    ], tspan; seed, T, capacity = 8
-)
+function energy_problem(; tspan = (0, 4), seed = 1, partner = E_PARTNER, q = E_Q, T = Float64)
+    return PottsProblem(
+            system(:Energy; sysname = :en), [
+                ownership => energy_sigma(), kind => E_KINDS,
+                :partner => partner, :q => q,
+            ], tspan; seed, T, capacity = 8
+        )
+end
 # (alive cells relabelled 1:n, kinds kept: the contact energy depends only on site kinds)
 function contact_energy(u)
     σ = Array(u.ownership)
@@ -889,10 +890,11 @@ end
             kw = (; tspan = (0, 1000), burn = 100)
             seq = sample(SequentialCPM(), 1001:1200; kw...)
             cb = sample(CheckerboardCPM(), 1001:1200; kw...)
-            ci(x) = (
-                d = (mean(x) - mean(seq)) / mean(seq);
-                h = 3.29 * sqrt(var(x) / length(x) + var(seq) / length(seq)) / mean(seq); (d - h, d + h)
-            )
+            function ci(x)
+                d = (mean(x) - mean(seq)) / mean(seq)
+                h = 3.29 * sqrt(var(x) / length(x) + var(seq) / length(seq)) / mean(seq)
+                return (d - h, d + h)
+            end
             lo, hi = ci(cb)
             @info "cell references FULL checkerboard vs sequential" ci_cb = (lo, hi)
             @test -0.06 <= lo && hi <= 0.06                          # equivalence within ±6 %

@@ -294,11 +294,13 @@ figure_cross(o, a, b) = (a[1] - o[1]) * (b[2] - o[2]) - (a[2] - o[2]) * (b[1] - 
 function hull_area(pts)
     P = sort(unique(pts))
     length(P) < 3 && return 0.0
-    chain(Q) = foldl(Q; init = eltype(Q)[]) do h, q
-        while length(h) >= 2 && figure_cross(h[end - 1], h[end], q) <= 0
-            pop!(h)
-        end
-        push!(h, q)
+    function chain(Q)
+        return foldl(Q; init = eltype(Q)[]) do h, q
+                while length(h) >= 2 && figure_cross(h[end - 1], h[end], q) <= 0
+                    pop!(h)
+                end
+                push!(h, q)
+            end
     end
     h = [chain(P)[1:(end - 1)]; chain(reverse(P))[1:(end - 1)]]
     length(h) < 3 && return 0.0
@@ -444,11 +446,13 @@ function figure_verdicts(msweep, mseries)
         (:row, :check, :ours, :rule, :ok, :control),
         Tuple{String, String, String, String, Bool, Bool},
     }[]
-    add!(row, check, ours, rule, ok; control = false) = push!(
-        V, (;
-            row, check, ours, rule, ok, control,
-        )
-    )
+    function add!(row, check, ours, rule, ok; control = false)
+        return push!(
+                V, (;
+                    row, check, ours, rule, ok, control,
+                )
+            )
+    end
     S(fig, curve, x) = msweep[(fig, curve, Float64(x))]
     C12(arm, t) = mseries[(arm, Int(t))].C
     H13(arm, t) = mseries[(arm, Int(t))].dH / 1.0e8
@@ -551,10 +555,12 @@ function figure_verdicts(msweep, mseries)
         )
     end
     # negative controls (each must fail)
-    ctl!(row, r) = add!(
-        row, "points outside band", "$(r.nout)/$(r.n)",
-        "≤ $(allowed(r.n)) (must fail)", r.ok; control = true
-    )
+    function ctl!(row, r)
+        return add!(
+                row, "points outside band", "$(r.nout)/$(r.n)",
+                "≤ $(allowed(r.n)) (must fail)", r.ok; control = true
+            )
+    end
     sh = [t for t in f5 if t[3] <= 0.85 + 1.0e-9 && isinteger(round(t[3] / 0.05; digits = 6))]       # r = 0.05:0.05:0.85
     ctl!(
         "NC-F5",

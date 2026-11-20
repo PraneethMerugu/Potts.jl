@@ -95,8 +95,9 @@ const LEADER = [false, true, false, false, true, true, false, false, true, true,
 # leaders needs n with 4n ≥ 36 + n, so the quota is n = 12 (11/47 < 1/4 ≤ 12/48). No
 # follower can lose all 16 sites to 12 one-site insertions, so the live count stays 36.
 followers() = Tiling((4, 4); region = (1:24, 1:24), kinds = [:follower])
-leaders(seed; misses = :retry, region = nothing) =
-    InsertUntil(:leader; into = [:follower], fraction = 1 // 4, seed, misses, region)
+function leaders(seed; misses = :retry, region = nothing)
+    return InsertUntil(:leader; into = [:follower], fraction = 1 // 4, seed, misses, region)
+end
 # ---------------------------------------------------------------------------------------------
 # Consistency with the authors' released sample runs (spec 10 §5.3.4, D-069)
 # ---------------------------------------------------------------------------------------------
@@ -471,10 +472,12 @@ end
             Tiling((3, 3); region = (1:498, 1:21), kinds = [:follower]),
             Tiling((2, 3); region = (499:500, 1:21), kinds = [:follower])
         )
-        seeding(seed, m) = overlay(
-            slab,
-            InsertUntil(:leader; into = [:follower], fraction = 1 // 4, seed, misses = m, region = (2:500, 2:20))
-        )
+        function seeding(seed, m)
+            return overlay(
+                    slab,
+                    InsertUntil(:leader; into = [:follower], fraction = 1 // 4, seed, misses = m, region = (2:500, 2:20))
+                )
+        end
         @test length(invasion_get(layout(slab, (500, 40)), kind)) == 1169
         # Several leaders in one follower can cut it in pieces, and `overlay` warns: silenced.
         quiet(f) = Base.CoreLogging.with_logger(f, Base.CoreLogging.NullLogger())

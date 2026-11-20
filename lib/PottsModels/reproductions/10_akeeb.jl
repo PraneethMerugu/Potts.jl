@@ -230,11 +230,19 @@ let #hide
         "per-run invariants" => "infiltrative ≥ invasive, detached ≥ singles") #hide
     order = unique(fam(r["target"]) for r in rows) #hide
     cnt(k) = count(r -> r["result"] == k, rows) #hide
-    summ(f) = (rs = filter(r -> fam(r["target"]) == f, rows); #hide
-        nf = count(r -> r["result"] == "FAIL", rs); np = count(r -> r["result"] == "PASS", rs); #hide
-        res = nf > 0 ? "$np PASS, **$nf FAIL**" : np == length(rs) ? "all PASS" : #hide
-              join(["$(count(r -> r["result"] == k, rs)) $k" for k in unique(r["result"] for r in rs)], ", "); #hide
-        "| $f | $(get(what, f, "")) | $(length(rs)) | $res |") #hide
+    function summ(f) #hide
+        rs = filter(r -> fam(r["target"]) == f, rows) #hide
+        nf = count(r -> r["result"] == "FAIL", rs) #hide
+        np = count(r -> r["result"] == "PASS", rs) #hide
+        res = if nf > 0 #hide
+            "$np PASS, **$nf FAIL**" #hide
+        elseif np == length(rs) #hide
+            "all PASS" #hide
+        else #hide
+            join(["$(count(r -> r["result"] == k, rs)) $k" for k in unique(r["result"] for r in rs)], ", ") #hide
+        end #hide
+        return "| $f | $(get(what, f, "")) | $(length(rs)) | $res |" #hide
+    end #hide
     head = [rec(rec_page, "V-A2 P6 invasive"), rec(rec_page, "V-A2 P6 infiltrative"), rec(rec_page, "V-A2 P1 invasive"), #hide
         rec(rec_page, "V-A1 (c) divisions by MCS 700"), rec(rec_page, "V-A4 order of invasive area"), #hide
         rec(rec_page, "V-A5 cluster incidence, all"), rec(rec_sweep, "V-A6 Multimodal fraction"), #hide
@@ -424,8 +432,10 @@ nothing #hide
 # for 701 MCS on the CPU, timed after a warm-up:
 
 alg = SequentialCPM(; proposal = VonNeumann(1))
-run_prob(point, seed; tmax = 701) = remake(base; u0 = akeeb_state(; pp = point[3], seed),
-    p = [:μ => point[2], :J => akeeb_contacts(point[1])], seed, tspan = (0, tmax))
+function run_prob(point, seed; tmax = 701)
+    return remake(base; u0 = akeeb_state(; pp = point[3], seed),
+        p = [:μ => point[2], :J => akeeb_contacts(point[1])], seed, tspan = (0, tmax))
+end
 solve(run_prob((2.0, 24.0, 0.5), 1; tmax = 2), alg; save_everystep = false)                  # warm-up (compilation)
 t_one = @elapsed sol_one = solve(run_prob((2.0, 24.0, 0.5), 1), alg; save_everystep = false)
 const MACHINE = "$(strip(Sys.cpu_info()[1].model)) ($(Sys.MACHINE)), CPU backend, one thread"
@@ -549,10 +559,12 @@ nothing #hide
 
 ## status of this page, read from git
 page = joinpath(pkgdir(PottsModels), "reproductions", "10_akeeb.jl")
-git(args...) = try
-    readchomp(Cmd(`git $args`; dir = dirname(page)))
-catch
-    ""
+function git(args...)
+    return try
+            readchomp(Cmd(`git $args`; dir = dirname(page)))
+        catch
+            ""
+        end
 end
 page_commit = git("log", "-1", "--format=%h %cs", "--", basename(page))
 page_dirty = !isempty(git("status", "--porcelain", "--", basename(page)))
@@ -665,8 +677,10 @@ slice_runs = if FULL
 else
     nothing
 end
-marginal(m, set) = [Float64(getproperty(r.obs[700], m)) for s in slice_runs
-                    if set === :all || SETS[set](s.k) for r in s.runs]
+function marginal(m, set)
+    return [Float64(getproperty(r.obs[700], m)) for s in slice_runs
+        if set === :all || SETS[set](s.k) for r in s.runs]
+end
 Markdown.parse(FULL ? "121 points × 10 runs at MCS 700 (authors' count)." :
                "Not run in the reduced build: the V-A3, V-A4 and V-A5 rows below are pending the full run.")
 
@@ -857,8 +871,10 @@ Markdown.parse(isempty(failing) ? "None in this run." : join(["- $(r.target): ou
 # threads and wall time below (`provenance.toml`, `sweep_provenance.toml`):
 
 ## top-level keys of a provenance file (tables such as `[first_session]` are not read)
-prov(file) = Dict(m[1] => m[2] for m in eachmatch(r"^(\w+) = \"?([^\"\n]*)\"?$"m,
-    first(split(read(joinpath(rec_dir, file), String), "\n["))))
+function prov(file)
+    return Dict(m[1] => m[2] for m in eachmatch(r"^(\w+) = \"?([^\"\n]*)\"?$"m,
+        first(split(read(joinpath(rec_dir, file), String), "\n["))))
+end
 pp, ps = prov("provenance.toml"), prov("sweep_provenance.toml")
 tally = Dict(k => count(r -> r["result"] == k, rec_page) for k in unique(r["result"] for r in rec_page))
 Markdown.parse("""

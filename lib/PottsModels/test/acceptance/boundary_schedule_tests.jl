@@ -208,10 +208,12 @@ boundary_body(base::Expr, extra...) = (b = copy(base); foreach(e -> push!(b.args
 # masked condition `c ~ masked(mask, v)`, its 0/1 input `mask` bound to a kind test at `@fields`.
 # Each builder declares its axes, field, inputs and parameters (`Potts.ModelingToolkitBase`'s
 # `@parameters`, `@variables`) and returns `system(…)`.
-system(eq, bcs, dims, xs, dvs, ps) = Potts.ModelingToolkitBase.PDESystem(
-    [eq], bcs,
-    Potts.LatticePDE.lattice_domain(Potts.t, Tuple(xs), dims), [Potts.t; xs], dvs, ps; name = :boundary_field
-)
+function system(eq, bcs, dims, xs, dvs, ps)
+    return Potts.ModelingToolkitBase.PDESystem(
+            [eq], bcs,
+            Potts.LatticePDE.lattice_domain(Potts.t, Tuple(xs), dims), [Potts.t; xs], dvs, ps; name = :boundary_field
+        )
+end
 const boundary_laplacian = Potts.LatticePDE.laplacian
 const boundary_masked = Potts.LatticePDE.masked
 # --- 1. the 2D absorbing ring ---------------------------------------------------------------
@@ -242,8 +244,9 @@ function ring_op(; cb = 0.0)
     c0 = 0.2 .+ rand(StableRNG(2), RING_DIMS...); c0[ring] .= cb
     return [ownership => σ, kind => [:border], :c => c0], c0
 end
-ring_oracle(c0, n, k; cb = 0.0, clamp = :post) =
-    ftcs(c0, n, k; D = 0.2, src = 0.05, axes = NOFLUX2, mask = ring_mask(), val = cb, clamp)
+function ring_oracle(c0, n, k; cb = 0.0, clamp = :post)
+    return ftcs(c0, n, k; D = 0.2, src = 0.05, axes = NOFLUX2, mask = ring_mask(), val = cb, clamp)
+end
 # --- 2. a moving sink -------------------------------------------------------------------------
 function sink_pde()
     Potts.ModelingToolkitBase.@parameters x y Dc = 0.2 s = 0.05
@@ -314,8 +317,9 @@ function face3_op()
     c0 = rand(StableRNG(4), FACE3_DIMS...); c0[block()] .= 0.0
     return [ownership => σ, kind => [:border], :c => c0], c0
 end
-face3_oracle(c0, n, k; S = 2.0) =
-    ftcs(c0, n, k; D = 0.15, axes = ((1.0, 0.0), (:noflux, S), :periodic), mask = block(), val = 0.0)
+function face3_oracle(c0, n, k; S = 2.0)
+    return ftcs(c0, n, k; D = 0.15, axes = ((1.0, 0.0), (:noflux, S), :periodic), mask = block(), val = 0.0)
+end
 # --- 5a/6. order: a drive gated on the field, before/after site updates -----------------------
 # `D(c) ~ rate`, its input `rate` bound to the model's parameter `s` (which the drive reads too)
 function order_pde()
@@ -361,11 +365,12 @@ function order_σ()
     σ = zeros(Int32, 12, 12); σ[5:8, 5:8] .= 1
     return σ
 end
-order_problem(v; T = Float64, seed = 3) =
-    problem(
-    Symbol(:Order_, v), [ownership => order_σ(), kind => [:A]], (0, 3);
-    field_solver = ExplicitEuler(substeps = 1), T, seed
-)
+function order_problem(v; T = Float64, seed = 3)
+    return problem(
+            Symbol(:Order_, v), [ownership => order_σ(), kind => [:A]], (0, 3);
+            field_solver = ExplicitEuler(substeps = 1), T, seed
+        )
+end
 # expected after MCS k (k = 1, 2, 3; s = 1): (c, wb, wa); `moves0`: copies in MCS 0
 const ORDER_EXPECT = (
     none = (c = k -> k, wb = k -> k - 1, wa = k -> k - 1, moves0 = false),
@@ -395,11 +400,12 @@ end
 SRC[:Life_none] = boundary_body(LIFE_BASE)
 SRC[:Life_listed] = boundary_body(LIFE_BASE, :(@schedule sweep, fields, lifecycle))
 SRC[:Life_first] = boundary_body(LIFE_BASE, :(@schedule lifecycle, fields))
-life_problem(v; seed = 3) =
-    problem(
-    Symbol(:Life_, v), [ownership => order_σ(), kind => [:A]], (0, 2);
-    field_solver = ExplicitEuler(substeps = 1), capacity = 4, seed
-)
+function life_problem(v; seed = 3)
+    return problem(
+            Symbol(:Life_, v), [ownership => order_σ(), kind => [:A]], (0, 2);
+            field_solver = ExplicitEuler(substeps = 1), capacity = 4, seed
+        )
+end
 # --- 5b. Merks-shaped: per-MCS oracle from the saved states ---------------------------------------
 # `D(c) ~ Dc Δc + σc [A] − δc c [medium]`, c = 0 on the border sites
 function merks_pde()
@@ -432,11 +438,12 @@ function merks_op()
     σ[4:6, 4:6] .= 2; σ[10:12, 5:7] .= 3; σ[6:8, 10:12] .= 4
     return [ownership => σ, kind => [:border, :A, :A, :A]]
 end
-merks_problem(v; T = Float64, seed = 11) =
-    problem(
-    Symbol(:Merks_, v), merks_op(), (0, 6);
-    field_solver = ExplicitEuler(substeps = MERKS_N), T, seed
-)
+function merks_problem(v; T = Float64, seed = 11)
+    return problem(
+            Symbol(:Merks_, v), merks_op(), (0, 6);
+            field_solver = ExplicitEuler(substeps = MERKS_N), T, seed
+        )
+end
 # one MCS of the field from c with the kinds of σ (cell 1 = border, cells ≥ 2 = A)
 function merks_step(c, σ)
     σ = Array(σ)
@@ -528,8 +535,11 @@ struct HandRate{B}
     bc::B
     h::Float64
 end
-(r::HandRate)(st, p, ctx, key, mcs, i) =
-    (c = st.site.c; st.site.c__next[i] = c[i] + r.h * (r.D * hand_lap(c, ctx.lattice, i, r.bc) + r.src); nothing)
+function (r::HandRate)(st, p, ctx, key, mcs, i)
+    c = st.site.c
+    st.site.c__next[i] = c[i] + r.h * (r.D * hand_lap(c, ctx.lattice, i, r.bc) + r.src)
+    return nothing
+end
 hand_substep(r) = (CorePotts.SitePhase(r), CorePotts.CopyPhase((:site, :c) => (:site, :c__next)))
 struct HandClamp
     sites::Vector{Int}

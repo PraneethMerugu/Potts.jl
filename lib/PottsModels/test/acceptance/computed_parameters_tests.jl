@@ -58,14 +58,18 @@ end
 computed_Jf(x) = [0 x x; x 2 x - 5; x x - 5 14]
 const COMPUTED_M = [0 5 5; 5 1 3; 5 3 1]
 # the values a test reads, as a NamedTuple of plain arrays/numbers
-vals(q) = (
-    α = getp(q, :α)(q), β = getp(q, :β)(q), γ = getp(q, :γ)(q), λ = getp(q, :λ)(q),
-    Jx = getp(q, :Jx)(q), J = Matrix(getp(q, :J)(q)), V₀ = Vector(getp(q, :V₀)(q)),
-)
-ivals(i) = (
-    α = i.ps[:α], β = i.ps[:β], γ = i.ps[:γ], λ = i.ps[:λ], Jx = i.ps[:Jx],
-    J = Matrix(i.ps[:J]), V₀ = Vector(i.ps[:V₀]),
-)
+function vals(q)
+    return (
+            α = getp(q, :α)(q), β = getp(q, :β)(q), γ = getp(q, :γ)(q), λ = getp(q, :λ)(q),
+            Jx = getp(q, :Jx)(q), J = Matrix(getp(q, :J)(q)), V₀ = Vector(getp(q, :V₀)(q)),
+        )
+end
+function ivals(i)
+    return (
+            α = i.ps[:α], β = i.ps[:β], γ = i.ps[:γ], λ = i.ps[:λ], Jx = i.ps[:Jx],
+            J = Matrix(i.ps[:J]), V₀ = Vector(i.ps[:V₀]),
+        )
+end
 function computed_error(f)
     try
         f()
@@ -75,10 +79,11 @@ function computed_error(f)
     end
 end
 # a write of computed parameter `name` refused, naming it and its base inputs `ins`
-computed_refused(f, name, ins...) = (
-    e = computed_error(f); e isa ArgumentError &&
+function computed_refused(f, name, ins...)
+    e = computed_error(f)
+    return e isa ArgumentError &&
         (m = sprint(showerror, e); occursin("`$name` is computed from", m) && all(i -> occursin("`$i`", m), ins))
-)
+end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 

@@ -73,8 +73,9 @@ end
 struct Trigger{S}
     sw::S
 end
-(t::Trigger)(st, p, ctx, key, mcs, c) =
-    mcs == FROZEN_S && dest(t.sw, st.cell.kind[c]) != st.cell.kind[c] ? EVENT_TRANSITION : EVENT_NONE
+function (t::Trigger)(st, p, ctx, key, mcs, c)
+    return mcs == FROZEN_S && dest(t.sw, st.cell.kind[c]) != st.cell.kind[c] ? EVENT_TRANSITION : EVENT_NONE
+end
 struct Kind{S}
     sw::S
 end

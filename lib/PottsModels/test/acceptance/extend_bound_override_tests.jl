@@ -144,12 +144,14 @@ override_energy(m) = override_try(() -> total_energy(override_problem(m)))
 override_value(m, k) = override_try(() -> (v = getp(override_problem(m), k)(override_problem(m)); v isa Number ? v : Matrix(v)))
 """The declared default of quantity `k` in `m` as plain numbers, or the error (a symbolic
 default does not convert)."""
-override_default(m, k) = override_try(
-    () -> (
-        d = Potts.info(Potts.lookup(m, k)).default;
-        d isa AbstractArray ? Matrix{Float64}(d) : Float64(d)
-    )
-)
+function override_default(m, k)
+    return override_try(
+            () -> (
+                d = Potts.info(Potts.lookup(m, k)).default;
+                d isa AbstractArray ? Matrix{Float64}(d) : Float64(d)
+            )
+        )
+end
 override_count(m, k) = count(p -> Potts.info(p).name === k, Potts.declared_parameters(m))
 build(F; kws...) = override_try(() -> F(; name = :ext, kws...))
 const OVERRIDE_J0 = [0 2 2; 2 1 4; 2 4 1]

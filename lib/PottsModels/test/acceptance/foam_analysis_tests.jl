@@ -86,8 +86,9 @@ pic(rows) = (Y = length(rows); [rows[Y - y + 1][x] for x in eachindex(rows[1]), 
 # An L×L tiling of w×w bricks; odd brick rows (0-based, from y = 1) shifted by `offset` in x
 # with wrap ("a brick wall arranged in common bond", 04b p.5823, for offset = w ÷ 2; a plain
 # square grid for offset = 0). Brick row r, column c has id r·(L ÷ w) + c + 1.
-bricks(L, w; offset = w ÷ 2) =
-    [(r = (y - 1) ÷ w; r * (L ÷ w) + mod(x - 1 - (isodd(r) ? offset : 0), L) ÷ w + 1) for x in 1:L, y in 1:L]
+function bricks(L, w; offset = w ÷ 2)
+    return [(r = (y - 1) ÷ w; r * (L ÷ w) + mod(x - 1 - (isodd(r) ? offset : 0), L) ÷ w + 1) for x in 1:L, y in 1:L]
+end
 # Independent φ oracle: explicit offset lists, each unordered pair once (offsets o > 0
 # lexicographically), wrap on periodic axes, pairs leaving a closed axis skipped.
 const FOAM_ANALYSIS_VN = ((1, 0), (0, 1), (-1, 0), (0, -1))

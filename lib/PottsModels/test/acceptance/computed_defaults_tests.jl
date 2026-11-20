@@ -166,14 +166,18 @@ function blocks()
     return [ownership => σ, kind => [:P, :Q]]
 end
 const SCALARS = (:a₀, :w, :e₁, :g, :c, :c₂, :c₃, :h, :m, :u, :u_P, :Jx, :j, :z, :λ)
-vals(q) = merge(
-    NamedTuple(k => getp(q, k)(q) for k in SCALARS),
-    (J = Matrix(getp(q, :J)(q)), V₀ = Vector(getp(q, :V₀)(q)), V₁ = Vector(getp(q, :V₁)(q)))
-)
-ivals(i) = merge(
-    NamedTuple(k => i.ps[k] for k in SCALARS),
-    (J = Matrix(i.ps[:J]), V₀ = Vector(i.ps[:V₀]), V₁ = Vector(i.ps[:V₁]))
-)
+function vals(q)
+    return merge(
+            NamedTuple(k => getp(q, k)(q) for k in SCALARS),
+            (J = Matrix(getp(q, :J)(q)), V₀ = Vector(getp(q, :V₀)(q)), V₁ = Vector(getp(q, :V₁)(q)))
+        )
+end
+function ivals(i)
+    return merge(
+            NamedTuple(k => i.ps[k] for k in SCALARS),
+            (J = Matrix(i.ps[:J]), V₀ = Vector(i.ps[:V₀]), V₁ = Vector(i.ps[:V₁]))
+        )
+end
 defaults_Jf(s, x) = [0 s s; s 2 x - 5; s x - 5 14]
 # J with sqrt(Jx) = s, Jx = x
 defaults_e₁(a) = exp(a - 4) + log(a / 4) + abs(a) + a^2 + sqrt(a) + min(a, 3.0) + max(a, 3.0)

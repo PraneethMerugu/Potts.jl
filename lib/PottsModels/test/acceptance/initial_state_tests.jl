@@ -139,10 +139,12 @@ closed_int(r2) = d2 -> round(Int, d2) <= r2
 strict_tol(r) = d2 -> sqrt(d2) < r * (1 - 1.0e-12)
 closed_tol(r) = d2 -> sqrt(d2) <= r * (1 + 1.0e-12)
 # the hexagonal squared distance between site-centred points is a² + ab + b² (exact)
-hex_count(r2; strict) = count(
-    ((a, b),) -> (q = a^2 + a * b + b^2; strict ? q < r2 : q <= r2),
-    Iterators.product(-10:10, -10:10)
-)
+function hex_count(r2; strict)
+    return count(
+            ((a, b),) -> (q = a^2 + a * b + b^2; strict ? q < r2 : q <= r2),
+            Iterators.product(-10:10, -10:10)
+        )
+end
 const ROW_KEYS = (:layer, :type, :requested, :painted, :dropped, :misses, :counted, :clipped, :splits)
 # A custom layer (D-091 protocol) that paints one site per entry of `labels` along row
 # `y`, starting at column `x0`, and, for each non-`nothing` label, calls
@@ -204,14 +206,17 @@ function Potts.paint!(op::Potts.LayoutState, ::Keep, lat)
 end
 # a custom layer that paints a `Group` inside its own `paint!` (must throw)
 struct PaintsGroup <: Potts.AbstractLayout end
-Potts.paint!(op::Potts.LayoutState, ::PaintsGroup, lat) =
-    Potts.paint!(op, Group(Fill(:a; region = (1:2, 1:2))), lat)
+function Potts.paint!(op::Potts.LayoutState, ::PaintsGroup, lat)
+    return Potts.paint!(op, Group(Fill(:a; region = (1:2, 1:2))), lat)
+end
 # the error message of `f()` ("" if it does not throw an ArgumentError)
-initial_msg(f) = try
-    f()
-    ""
-catch e
-    e isa ArgumentError ? e.msg : ""
+function initial_msg(f)
+    return try
+            f()
+            ""
+        catch e
+            e isa ArgumentError ? e.msg : ""
+        end
 end
 # ---------------------------------------------------------------------------------------
 # 2. Strict vs closed membership: the brief's A1 table (centre on a site, lattice large

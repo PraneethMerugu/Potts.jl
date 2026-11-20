@@ -298,8 +298,10 @@ cellesc(x) = replace(x, "|" => "\\|", "_" => "\\_") #hide
 V = rec_rows("verdicts.tsv") #hide
 rows, ctrl = filter(r -> r["kind"] == "row", V), filter(r -> r["kind"] == "control", V) #hide
 npass(rs) = count(r -> r["result"] == "PASS", rs) #hide
-short(v) = (w = replace(v, r"-?\d+\.\d+(e-?\d+)?" => m -> string(round(parse(Float64, m); sigdigits = 3))); #hide
-    length(w) > 90 ? "per-run values (in the record's verdicts table)" : cellesc(w)) #hide
+function short(v) #hide
+    w = replace(v, r"-?\d+\.\d+(e-?\d+)?" => m -> string(round(parse(Float64, m); sigdigits = 3))) #hide
+    return length(w) > 90 ? "per-run values (in the record's verdicts table)" : cellesc(w) #hide
+end #hide
 Markdown.parse(join([ #hide
     "**Full run: $(npass(rows)) of $(length(rows)) rows pass, $(npass(ctrl)) of $(length(ctrl)) negative controls pass, " * #hide
     "$(count(r -> r["result"] == "FAIL", V)) rows fail.** Calibrations: κ = $(fmt(κ; d = 2)) (model γ per paper γ), " * #hide

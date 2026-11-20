@@ -144,13 +144,14 @@ mask the layout tests a draw against is the Cartesian product of the per-axis di
 a draw is refused when its box overlaps that product in every axis, so it is placed when some
 axis is `gap` clear. The predicate below is that rule, written out.
 """
-apart(a, b, size, dims, per, gap) =
-    any(
-    ntuple(
-        d -> per[d] ? (δ = mod(b[d] - a[d], dims[d]); δ - size[d] >= gap && dims[d] - δ - size[d] >= gap) :
-            (abs(a[d] - b[d]) >= size[d] + gap), length(dims)
-    )
-)
+function apart(a, b, size, dims, per, gap)
+    return any(
+            ntuple(
+                d -> per[d] ? (δ = mod(b[d] - a[d], dims[d]); δ - size[d] >= gap && dims[d] - δ - size[d] >= gap) :
+                    (abs(a[d] - b[d]) >= size[d] + gap), length(dims)
+            )
+        )
+end
 """Mark the sites of `blocked` (region indices) that are within `gap` of the box at `o`,
 wrapping a periodic axis and dropping a closed one's sites outside the lattice."""
 function mark_blocked!(blocked, region, dims, per, gap, o, size)
@@ -202,13 +203,14 @@ function oracle_σ(placed, size, dims)
 end
 """The cells' kinds: `kinds` cycled over the boxes, in placement order."""
 kinds_of(placed, kinds) = [kinds[mod1(k, length(kinds))] for k in eachindex(placed)]
-scattered_error(l, x) =
-try
-    layout(l, x)
-    "no error"
-catch e
-    e isa ArgumentError || rethrow()
-    sprint(showerror, e)
+function scattered_error(l, x)
+    return try
+            layout(l, x)
+            "no error"
+        catch e
+            e isa ArgumentError || rethrow()
+            sprint(showerror, e)
+        end
 end
 # The best (minimum) of up to `runs` timed calls of `f`, a `GC.gc()` before each; stops at
 # the first run for which `done(best)` holds. Returns `(best seconds, value of the last call)`.

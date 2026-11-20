@@ -114,10 +114,12 @@ const SHEAR_EXPR = :(
 Core.eval(@__MODULE__, SHEAR_EXPR)
 const ALG = SequentialCPM(; skip_interior = true)
 const TEMPLATES = Dict{Tuple{Bool, Tuple{Int, Int}}, Any}()
-brick(L) = Int32[
-    (r = (y - 1) ÷ BRICK; r * (L[1] ÷ BRICK) + mod(x - 1 - (isodd(r) ? BRICK ÷ 2 : 0), L[1]) ÷ BRICK + 1)
-        for x in 1:L[1], y in 1:L[2]
-]
+function brick(L)
+    return Int32[
+            (r = (y - 1) ÷ BRICK; r * (L[1] ÷ BRICK) + mod(x - 1 - (isodd(r) ? BRICK ÷ 2 : 0), L[1]) ÷ BRICK + 1)
+                for x in 1:L[1], y in 1:L[2]
+        ]
+end
 foam_lat(L) = Lattice(L; boundary = (Periodic(), Closed()))
 """The template problem of (shear?, L); built once, outside any threaded loop."""
 function foam_template(shear::Bool, L)
@@ -330,11 +332,14 @@ function foam_crossing(r, v, thr)
     (i === nothing || i == 1) && return nothing
     return r[i - 1] + (thr - v[i - 1]) / (v[i] - v[i - 1]) * (r[i] - r[i - 1])
 end
-ranks(x) = (
-    p = sortperm(x); r = similar(x, Float64); for (j, i) in enumerate(p)
-        r[i] = j
-    end; [mean(r[findall(==(x[i]), x)]) for i in eachindex(x)]
-)
+function ranks(x)
+    p = sortperm(x)
+    r = similar(x, Float64)
+    for (j, i) in enumerate(p)
+            r[i] = j
+        end
+    return [mean(r[findall(==(x[i]), x)]) for i in eachindex(x)]
+end
 function spearman(x, y)
     a, b = ranks(x), ranks(y)
     return sum((a .- mean(a)) .* (b .- mean(b))) / sqrt(sum(abs2, a .- mean(a)) * sum(abs2, b .- mean(b)))
@@ -599,10 +604,11 @@ curve(rows) = mean(r["phi_bins"] for r in rows)
 foam_height(rows) = (c = curve(rows); maximum(c) - minimum(c))
 foam_in(x, lo, hi) = lo <= x <= hi
 med(x) = isempty(x) ? NaN : median(x)
-ens_spec(R, foam, β, series) = (
-    rows = sel(R["spectra"]; foam, beta = β, series);
-    fs = sort(unique(r["f"] for r in rows)); (fs, [mean(r["S"] for r in rows if r["f"] == f) for f in fs])
-)
+function ens_spec(R, foam, β, series)
+    rows = sel(R["spectra"]; foam, beta = β, series)
+    fs = sort(unique(r["f"] for r in rows))
+    return (fs, [mean(r["S"] for r in rows if r["f"] == f) for f in fs])
+end
 """V7 (i) / V8: the mid share of non-hexagonal interior bubble-frames after t_first, pooled."""
 function mid_share(R, foam, β)
     m = a = 0
@@ -769,10 +775,12 @@ function foam_verdicts(R)
     h1, h2 = α("d165", 0.005, "phi"; hi = 1.0e-3), α("d165", 0.005, "phi"; lo = 1.0e-3)
     add!("V13b", :row, (h1, h2), "both ∈ [0.5, 1.2]", foam_in(h1, 0.5, 1.2) && foam_in(h2, 0.5, 1.2))
     # V14
-    nbar(foam, β) = mean(
-        FOAM_AN.mean_t1([r["t1_total"]], r["nbub"], β * r["mcs"])
-            for r in sel(R["bulk"]; set = "v14", foam, beta = β)
-    )
+    function nbar(foam, β)
+        return mean(
+                FOAM_AN.mean_t1([r["t1_total"]], r["nbub"], β * r["mcs"])
+                    for r in sel(R["bulk"]; set = "v14", foam, beta = β)
+            )
+    end
     N14 = Dict((f, β) => nbar(f, β) for f in ("d165", "d172", "d107", "d095") for β in BETAS14)
     r1 = [N14[(f, 1.0e-4)] / N14[(f, 1.0e-3)] for f in ("d165", "d172", "d107", "d095")]
     r2 = [N14[(f, 1.0e-3)] / N14[(f, 5.0e-2)] for f in ("d165", "d172", "d107", "d095")]
@@ -781,10 +789,10 @@ function foam_verdicts(R)
     add!("V14b", :row, r2, "≥ 10 each foam (finite)", all(x -> isfinite(x) && x >= 10, r2))
     add!("V14c", :row, sep, "≥ 5 at β ≥ 5e-3 (finite)", all(x -> isfinite(x) && x >= 5, sep))
     # V15
-    εy(foam, β) = (
-        rs = sel(R["bulk"]; set = "spec", foam, beta = β);
-        median(r["t_first"] < 0 ? Inf : β * r["t_first"] for r in rs)
-    )
+    function εy(foam, β)
+        rs = sel(R["bulk"]; set = "spec", foam, beta = β)
+        return median(r["t_first"] < 0 ? Inf : β * r["t_first"] for r in rs)
+    end
     eo = [εy("ordered", β) for β in BETAS]
     plateau = median(eo[1:3])
     add!(
@@ -801,9 +809,11 @@ function foam_verdicts(R)
     add!("V15d", :row, ed ./ plateau, "≤ 0.045 (all yield)", isfinite(plateau) && all(x -> isfinite(x) && x <= 0.045 * plateau, ed))
     add!("V15e", :info, C_YIELD .* eo, "ε_y with c = 0.023 (paper 1.13, 1.10, 1.11, 0.80, 0.43)", true)
     # V16
-    rise(set, foam, β) = map(sel(R["bulk"]; set, foam, beta = β)) do r
-        ws = filter(w -> 2000 <= 100w["w"] <= 10_000, sel(R["windows"]; set, foam, beta = β, k = r["k"]))
-        mean(w["mu2n"] for w in ws) - r["mu2n0"]
+    function rise(set, foam, β)
+        return map(sel(R["bulk"]; set, foam, beta = β)) do r
+                ws = filter(w -> 2000 <= 100w["w"] <= 10_000, sel(R["windows"]; set, foam, beta = β, k = r["k"]))
+                mean(w["mu2n"] for w in ws) - r["mu2n0"]
+            end
     end
     v16 = Dict(f => rise("v16", f, 0.01) for f in ("d081", "d165", "d172", "d202"))
     add!("V16", :row, v16, "rise ≥ 0.1 in ≥ 4/5, each foam", all(x -> count(>=(0.1), x) >= 4, values(v16)))
@@ -847,9 +857,11 @@ end
 const FOAM_SMOKE = Dict{Symbol, Any}()
 # the two ordered smoke foams, built once per process: the ordered-foam item checks them, and
 # the shear item starts from the first
-smoke_ordered_foams() = get!(FOAM_SMOKE, :ordered) do
-    foam_template(false, FOAM_L)
-    [make_foam(:ordered, k; seedf = _ -> smoke_seed(k)) for k in 1:2]
+function smoke_ordered_foams()
+    return get!(FOAM_SMOKE, :ordered) do
+            foam_template(false, FOAM_L)
+            [make_foam(:ordered, k; seedf = _ -> smoke_seed(k)) for k in 1:2]
+        end
 end
 # ---------------------------------------------------------------------------------------------
 # SMOKE: shear (κ-free checks)
@@ -929,11 +941,12 @@ function foam_full()
     for L in (FOAM_L, L_LOW), s in (false, true)
         foam_template(s, L)
     end
-    tag!(d; kw...) = (
+    function tag!(d; kw...)
         for (k, v) in kw
-            d[string(k)] = v
-        end; d
-    )
+                d[string(k)] = v
+            end
+        return d
+    end
     # foams, then τ (A-5)
     jobs = [[(:ordered, k) for k in 1:10]; [(f, k) for f in keys(FOAMS) if f !== :ordered for k in 1:REPS]]
     res = tmap(((f, k),) -> (f, k, make_foam(f, k)), jobs)

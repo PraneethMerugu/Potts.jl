@@ -106,8 +106,10 @@ end
 # Integer coordinates below 2²⁵ in magnitude: differences < 2²⁶, products < 2⁵¹ and the
 # three-term sum < 2⁵³, all exact in Float64, so `v` itself is exact (lattice data).
 _small_int(x) = isinteger(x) & (abs(x) < 33554432.0)
-_small_integers(a, b, c) = _small_int(a[1]) & _small_int(a[2]) & _small_int(b[1]) & _small_int(b[2]) &
-    _small_int(c[1]) & _small_int(c[2])
+function _small_integers(a, b, c)
+    return _small_int(a[1]) & _small_int(a[2]) & _small_int(b[1]) & _small_int(b[2]) &
+        _small_int(c[1]) & _small_int(c[2])
+end
 
 function _orientation_exact(a::_Point2, b::_Point2, c::_Point2)
     R(x) = Rational{BigInt}(x)
@@ -116,14 +118,16 @@ function _orientation_exact(a::_Point2, b::_Point2, c::_Point2)
 end
 
 # concaveman.h `orient2d`
-_orient2d(p1::_Point2, p2::_Point2, p3::_Point2) =
-    (p2[2] - p1[2]) * (p3[1] - p2[1]) - (p2[1] - p1[1]) * (p3[2] - p2[2])
+function _orient2d(p1::_Point2, p2::_Point2, p3::_Point2)
+    return (p2[2] - p1[2]) * (p3[1] - p2[1]) - (p2[1] - p1[1]) * (p3[2] - p2[2])
+end
 
 # concaveman.h `intersects`: edges (p1, q1) and (p2, q2) cross
-_intersects(p1::_Point2, q1::_Point2, p2::_Point2, q2::_Point2) =
-    p1 != q2 && q1 != p2 &&
-    (_orient2d(p1, q1, p2) > 0) != (_orient2d(p1, q1, q2) > 0) &&
-    (_orient2d(p2, q2, p1) > 0) != (_orient2d(p2, q2, q1) > 0)
+function _intersects(p1::_Point2, q1::_Point2, p2::_Point2, q2::_Point2)
+    return p1 != q2 && q1 != p2 &&
+        (_orient2d(p1, q1, p2) > 0) != (_orient2d(p1, q1, q2) > 0) &&
+        (_orient2d(p2, q2, p1) > 0) != (_orient2d(p2, q2, q1) > 0)
+end
 
 # concaveman.h `getSqDist`
 function _sqdist(p1::_Point2, p2::_Point2)
@@ -212,13 +216,16 @@ function _Grid(pts::Vector{_Point2})
     return _Grid(xmin, ymin, h, nx, ny)
 end
 
-_cellaxis(v, v0, h, n) = (s = (v - v0) / h; if s < 1
-    1
-elseif s >= n
-    n
-else
-    floor(Int, s) + 1
-end)
+function _cellaxis(v, v0, h, n)
+    s = (v - v0) / h
+    return if s < 1
+            1
+        elseif s >= n
+            n
+        else
+            floor(Int, s) + 1
+        end
+end
 _cell(g::_Grid, p::_Point2) = (_cellaxis(p[1], g.x0, g.h, g.nx), _cellaxis(p[2], g.y0, g.h, g.ny))
 _cellid(g::_Grid, i::Int, j::Int) = i + (j - 1) * g.nx
 

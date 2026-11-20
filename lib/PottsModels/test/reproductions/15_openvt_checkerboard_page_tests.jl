@@ -168,10 +168,10 @@ const TIME = get(META, "time", Dict{String, Any}())
 const TIME_KEYS = ["T_lambda2", "T_seq", "T_seq_p1b", "z", "z_p1b", "cycle_mcs", "alpha_text", "phases_chain", "phases_monolayer"]
 const COMMIT8 = first(string(get(PROV, "commit", "")), 8)
 const MACHINE = lowercase(strip(first(split(string(get(PROV, "cpu", "")), " w/"))))
-flagged() = (
-    rows = isfile(rec("comparison.tsv")) ? checkerboard_page_tsv(rec("comparison.tsv")) : Dict{String, String}[];
-    (count(r -> r["beyond"] == "true", rows), length(rows))
-)
+function flagged()
+    rows = isfile(rec("comparison.tsv")) ? checkerboard_page_tsv(rec("comparison.tsv")) : Dict{String, String}[]
+    return (count(r -> r["beyond"] == "true", rows), length(rows))
+end
 checkerboard_page_devs() = isfile(rec("entry", "deviations.tsv")) ? checkerboard_page_tsv(rec("entry", "deviations.tsv")) : Dict{String, String}[]
 function maxcolours()
     if isfile(rec("ablation.tsv"))

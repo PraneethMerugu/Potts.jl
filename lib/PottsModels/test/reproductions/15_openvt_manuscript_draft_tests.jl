@@ -174,10 +174,12 @@ draft_q(β) = round(Int, β * 10_000)
 draft_job(prob, β; kw...) = InhibitionSweeps.inhibition_job(prob, :beta, draft_q(β), 1; kw...)
 draft_o5(r) = InhibitionSweeps.inhibition_o5(r.u; β = r.β, γ = 0.0)
 o5_name(β, mcs) = openvt_filename(:O5; beta = β, mcs = mcs)
-draft_hull(x, y) = PottsModels.Analysis.concave_hull(
-    zip(x, y); concavity = CONCAVITY,
-    length_threshold = LENGTH_THRESHOLD
-)
+function draft_hull(x, y)
+    return PottsModels.Analysis.concave_hull(
+            zip(x, y); concavity = CONCAVITY,
+            length_threshold = LENGTH_THRESHOLD
+        )
+end
 draft_crel(x, y, inhibited) = openvt_metrics(x, y, 1 .- inhibited).C_rel
 # ---- readers -------------------------------------------------------------------------------------
 function draft_tsv(path)

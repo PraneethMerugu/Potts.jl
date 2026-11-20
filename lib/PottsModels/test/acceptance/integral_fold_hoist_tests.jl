@@ -116,8 +116,9 @@ function sigma(L)
     return σ
 end
 hoist_w(L) = [1.0 + 0.5 * sin(x / 7) * cos(y / 11) for x in 1:L, y in 1:L]
-hoist_problem(M, L; n = 10, seed = 3) =
-    PottsProblem(M(; name = :x), Any[ownership => sigma(L), kind => fill(:A, (L ÷ 10)^2), :w => hoist_w(L)], (0, n); seed)
+function hoist_problem(M, L; n = 10, seed = 3)
+    return PottsProblem(M(; name = :x), Any[ownership => sigma(L), kind => fill(:A, (L ÷ 10)^2), :w => hoist_w(L)], (0, n); seed)
+end
 relerr(a, b) = maximum(abs.(a .- b) ./ max.(abs.(b), 1.0e-300))
 # ---------------------------------------------------------------------------------------
 # 2. Cost

@@ -131,8 +131,9 @@ const ORACLE = Dict(
     "Clock(3.0)" => oracle(3, 0, 12), "Clock(3.0; phase = 1.0)" => oracle(3, 1, 12),
     "Clock(3.0; phase = 2.0)" => oracle(3, 2, 12)
 )
-ticks(prob; scope = :cell) =
-    [getproperty(getproperty(u, scope), :ctr₊n)[1] for u in solve(prob, SequentialCPM(); saveat = 0:12).u]
+function ticks(prob; scope = :cell)
+    return [getproperty(getproperty(u, scope), :ctr₊n)[1] for u in solve(prob, SequentialCPM(); saveat = 0:12).u]
+end
 # ---------------------------------------------------------------------------------------
 # Fixtures: rule cadences (no clocked component)
 @potts_model Divide begin

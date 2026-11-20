@@ -105,18 +105,21 @@ end
 # field-compiler cutover (C8, CorePotts.FieldStep deleted) each substep is a site phase into
 # the scratch and a device copy back (the field-compiler switch): the same operations, the same order.
 const FDIMS = (16, 16)
-field_rate(st, p, ctx, key, mcs, i, c) = (
-    n = length(c); l = i == 1 ? n : i - 1; r = i == n ? 1 : i + 1;
-    p.D * (c[l] + c[r] - 2 * c[i]) + p.s * (st.ownership[i] != 0) - p.k * c[i]
-)
+function field_rate(st, p, ctx, key, mcs, i, c)
+    n = length(c)
+    l = i == 1 ? n : i - 1
+    r = i == n ? 1 : i + 1
+    return p.D * (c[l] + c[r] - 2 * c[i]) + p.s * (st.ownership[i] != 0) - p.k * c[i]
+end
 """One explicit-Euler substep of length `h` into `c__next`, clipped below at 0."""
 struct FieldSubstep{T}
     h::T
 end
-(f::FieldSubstep)(st, p, ctx, key, mcs, i) = (
-    c = vec(st.site.c);
-    @inbounds st.site.c__next[i] = max(c[i] + f.h * field_rate(st, p, ctx, key, mcs, i, c), zero(f.h)); nothing
-)
+function (f::FieldSubstep)(st, p, ctx, key, mcs, i)
+    c = vec(st.site.c)
+    @inbounds st.site.c__next[i] = max(c[i] + f.h * field_rate(st, p, ctx, key, mcs, i, c), zero(f.h))
+    return nothing
+end
 field_c0(T) = T[sin(Float64(i))^2 for i in 1:prod(FDIMS)]
 function field_σ()
     σ = zeros(Int32, FDIMS)
@@ -177,11 +180,12 @@ function pair_problem(; T = Float64, nmcs = 4)
 end
 pair_oracle(T, nmcs) = T.(isodd(nmcs) ? reverse(collect(FUSION_Y0)) : collect(FUSION_Y0))
 # Merks at a small size with the paper's 15 substeps (or `substeps`), a fixed seed.
-merks_problem(; T = Float64, substeps = 15, seed = 7, nmcs = 6) =
-    PottsProblem(
-    MerksVasculogenesis(; name = :m, lattice = (32, 32)), merks_state(; lattice = (32, 32), n = 6, side = 7),
-    (0, nmcs); T, seed, field_solver = ExplicitEuler(; substeps, lower_bound = 0.0)
-)
+function merks_problem(; T = Float64, substeps = 15, seed = 7, nmcs = 6)
+    return PottsProblem(
+            MerksVasculogenesis(; name = :m, lattice = (32, 32)), merks_state(; lattice = (32, 32), n = 6, side = 7),
+            (0, nmcs); T, seed, field_solver = ExplicitEuler(; substeps, lower_bound = 0.0)
+        )
+end
 # Two adaptive-ODE phases in one MCS: a cell ODE and a model ODE, both `Adaptive`
 # (y(t) = exp(−k t), g(t) = exp(−k t)). The control model has the cell ODE only.
 @potts_model TwoOde begin

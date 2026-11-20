@@ -295,10 +295,12 @@ end
 function page_verdicts(R)
     V = NamedTuple{(:row, :check, :ours, :rule, :result), NTuple{5, String}}[]
     add!(row, check, ours, rule, ok) = push!(V, (; row, check, ours, rule, result = ok ? "PASS" : "FAIL"))
-    sel(row; kw...) = sort(
-        filter(r -> r["row"] == row && all(val_eq(get(r, string(k), ""), v) for (k, v) in kw), R);
-        by = r -> parse(Int, r["seed"])
-    )
+    function sel(row; kw...)
+        return sort(
+                filter(r -> r["row"] == row && all(val_eq(get(r, string(k), ""), v) for (k, v) in kw), R);
+                by = r -> parse(Int, r["seed"])
+            )
+    end
     mC(rs, t) = mean(r -> num(r, "C_$t"), rs)
     # V-E1
     std_ = sel("V-E1"; arm = "standard")
@@ -600,10 +602,12 @@ end
         runner = string(get(prov, "runner", ""))
         @test startswith(runner, "lib/PottsModels/reproductions/data/01/$RECNAME/") && isfile(joinpath(ROOT, runner))
         # the producing commit is in our history
-        git(args...) = try
-            readchomp(Cmd(`git $args`; dir = ROOT))
-        catch
-            nothing
+        function git(args...)
+            return try
+                    readchomp(Cmd(`git $args`; dir = ROOT))
+                catch
+                    nothing
+                end
         end
         shallow = git("rev-parse", "--is-shallow-repository")
         if shallow == "false" && length(commit) == 40
@@ -713,10 +717,12 @@ end
                 @test ok
             end
             # negative controls: the rules move with the data
-            lowpass(R, x) = [
-                r["row"] == "V-C3" && parse(Float64, r["ratio"]) <= 0.4 ?
-                    merge(r, Dict("C_10000" => string(x))) : r for r in R
-            ]
+            function lowpass(R, x)
+                return [
+                        r["row"] == "V-C3" && parse(Float64, r["ratio"]) <= 0.4 ?
+                            merge(r, Dict("C_10000" => string(x))) : r for r in R
+                    ]
+            end
             vlow(R) = only(filter(v -> v.check == "low plateau (ratio 0–0.4)", page_verdicts(R))).result
             @test vlow(lowpass(PAGE_R, 0.35)) == "PASS"
             @test vlow(lowpass(PAGE_R, 0.55)) == "FAIL"

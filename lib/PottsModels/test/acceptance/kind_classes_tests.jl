@@ -107,12 +107,14 @@ function class_error(f)
     return nothing, ""
 end
 """Evaluate a model definition and construct it (`M(; name = :m)`), returning the error."""
-build_error(ex::Expr, M::Symbol) = class_error(
-    () -> (
-        Core.eval(@__MODULE__, ex);
-        Base.invokelatest(() -> getfield(@__MODULE__, M)(; name = :m))
-    )
-)
+function build_error(ex::Expr, M::Symbol)
+    return class_error(
+            () -> (
+                Core.eval(@__MODULE__, ex);
+                Base.invokelatest(() -> getfield(@__MODULE__, M)(; name = :m))
+            )
+        )
+end
 """Every leaf of a saved state, as host arrays."""
 function leaves(u)
     out = Pair{String, Any}["σ" => Array(u.ownership)]
@@ -126,18 +128,19 @@ function leaves(u)
     return out
 end
 class_same(a, b) = length(a.u) == length(b.u) && all(leaves(x) == leaves(y) for (x, y) in zip(a.u, b.u))
-class_code(sys; kw...) = (
-    g = generated_code(sys; kw...); string(
-        Base.remove_linenums!(
-            deepcopy(
-                Any[
-                    g.delta_H, g.commit!,
-                    g.constraint, g.temperature, g.total_energy, g.delta_E, g.phases, g.lifecycle,
-                ]
+function class_code(sys; kw...)
+    g = generated_code(sys; kw...)
+    return string(
+            Base.remove_linenums!(
+                deepcopy(
+                    Any[
+                        g.delta_H, g.commit!,
+                        g.constraint, g.temperature, g.total_energy, g.delta_E, g.phases, g.lifecycle,
+                    ]
+                )
             )
         )
-    )
-)
+end
 """ΔH (no drives) against H(after) − H(before) on copies of saved states (the suite's selfcheck)."""
 function class_selfcheck(prob; n = 200)
     sol = solve(remake(prob; tspan = (0, 3)), SequentialCPM(; proposal = Moore(1)))
@@ -159,11 +162,12 @@ function class_selfcheck(prob; n = 200)
     return worst
 end
 class_ctx(prob) = (; lattice = prob.lattice, contact = prob.contact, prob.relations...)
-class_prop(prob, u, t::NTuple{2, Int}, s::NTuple{2, Int}) = (
-    lat = prob.lattice;
-    ti = CorePotts.linear_index(lat, t); si = CorePotts.linear_index(lat, s);
-    CorePotts.Proposal(ti, si, t, 1, u.ownership[ti], u.ownership[si])
-)
+function class_prop(prob, u, t::NTuple{2, Int}, s::NTuple{2, Int})
+    lat = prob.lattice
+    ti = CorePotts.linear_index(lat, t)
+    si = CorePotts.linear_index(lat, s)
+    return CorePotts.Proposal(ti, si, t, 1, u.ownership[ti], u.ownership[si])
+end
 """The drive part of ΔH for one proposal: ΔH − ΔE."""
 class_drive(prob, u, prop) = prob.f.delta_H(u, prob.p, prop, class_ctx(prob)) - energy_change(prob, u, prop)
 allowed(prob, u, prop) = Bool(prob.f.constraint(u, prob.p, prop, class_ctx(prob)))
@@ -404,10 +408,12 @@ end
 const KINDS = [:fluid, :matrix, :matrix, :tip, :stalk, :stalk]
 const CLASS_V = [x / 32 for x in 1:32, y in 1:24]
 # VEGF, rising along x
-class_op(σ = class_state(), kinds = KINDS) =
-    [ownership => σ, kind => kinds, :V => CLASS_V, :tgt => Float64[count(==(c), σ) for c in 1:length(kinds)]]
-problem(M, K = 8; T = Float64, op = class_op()) =
-    PottsProblem(M(; name = :bauer), op, (0, K); T, field_solver = ExplicitEuler(), seed = 7)
+function class_op(σ = class_state(), kinds = KINDS)
+    return [ownership => σ, kind => kinds, :V => CLASS_V, :tgt => Float64[count(==(c), σ) for c in 1:length(kinds)]]
+end
+function problem(M, K = 8; T = Float64, op = class_op())
+    return PottsProblem(M(; name = :bauer), op, (0, K); T, field_solver = ExplicitEuler(), seed = 7)
+end
 # --- independent oracles (plain Julia over σ) ---
 const CLASS_J = [0 0 0 0 0; 0 6 9 8 8; 0 9 9 7 7; 0 8 7 3 3; 0 8 7 3 3]
 isec(k) = k == 3 || k == 4
@@ -436,13 +442,15 @@ function class_energy(σ, kd, tgt; ec = isec)
     return E
 end
 """Per site, the Moore neighbours (periodic) owned by an ECM cell."""
-class_near(σ, kd) = [
-    count(
-        ((dx, dy),) -> (dx, dy) != (0, 0) &&
-            (c = σ[wrap(x + dx, y + dy, size(σ))...]; c != 0 && isecm(kd[c])), Iterators.product(-1:1, -1:1)
-    )
-        for x in 1:size(σ, 1), y in 1:size(σ, 2)
-]
+function class_near(σ, kd)
+    return [
+            count(
+                ((dx, dy),) -> (dx, dy) != (0, 0) &&
+                    (c = σ[wrap(x + dx, y + dy, size(σ))...]; c != 0 && isecm(kd[c])), Iterators.product(-1:1, -1:1)
+            )
+                for x in 1:size(σ, 1), y in 1:size(σ, 2)
+        ]
+end
 ecmask(σ, kd) = [c != 0 && isec(kd[c]) for c in σ]
 # connectivity bridge state: 1 fluid; 2 matrix = two 3×3 blocks joined at (7, 15);
 # 3 tip = two 3×3 blocks joined at (7, 5); 4 stalk below the matrix bridge (7, 13:14)
@@ -503,8 +511,9 @@ function life_state()
     σ[10:13, 5:8] .= 3
     return σ
 end
-life_problem(M; T = Float64, K = 6) =
-    PottsProblem(M(; name = :life), [ownership => life_state(), kind => [:fluid, :tip, :stalk]], (0, K); T, capacity = 8, seed = 3)
+function life_problem(M; T = Float64, K = 6)
+    return PottsProblem(M(; name = :life), [ownership => life_state(), kind => [:fluid, :tip, :stalk]], (0, K); T, capacity = 8, seed = 3)
+end
 # ---------------------------------------------------------------------------------------
 # 3. Clusters: `clusters(g)` selects clusters whose root is of a kind in g. Kinds: medium 0,
 # fluid 1, tip 2, stalk 3. Cluster A = {2 tip, 3 stalk} (root tip), B = {4 stalk, 5 tip}
@@ -539,10 +548,12 @@ function cluster_state()
     σ[12:15, 9:12] .= 4; σ[16:18, 9:12] .= 5    # B: 16 + 12 = 28
     return σ
 end
-cluster_problem(M; T = Float64) = PottsProblem(
-    M(; name = :cl),
-    [ownership => cluster_state(), kind => [:fluid, :tip, :stalk, :stalk, :tip], cluster => [1, 2, 2, 4, 4]], (0, 6); T, seed = 5
-)
+function cluster_problem(M; T = Float64)
+    return PottsProblem(
+            M(; name = :cl),
+            [ownership => cluster_state(), kind => [:fluid, :tip, :stalk, :stalk, :tip], cluster => [1, 2, 2, 4, 4]], (0, 6); T, seed = 5
+        )
+end
 """H of the cluster model: contact pairs (Moore, periodic) + Σ over endothelial-rooted clusters."""
 cluster_contacts(σ, kd, cl) = cluster_energy(σ, kd, cl; clusters = false)
 const CLUSTER_E0 = 1016.0
@@ -645,14 +656,18 @@ function ext_state()
     σ[3:5, 3:6] .= 2; σ[10:12, 3:6] .= 3; σ[10:12, 10:13] .= 4
     return σ
 end
-ext_problem(M; T = Float64) = PottsProblem(
-    M(; name = :ext),
-    [ownership => ext_state(), kind => [:fluid, :tip, :stalk, :tip], :V => [x / 20 for x in 1:20, y in 1:16]], (0, 6); T, seed = 11
-)
-ext2_problem(M; T = Float64) = PottsProblem(
-    M(; name = :ext2),
-    [ownership => ext_state(), kind => [:fluid, :tip, :prolif, :stalk]], (0, 6); T, seed = 13
-)
+function ext_problem(M; T = Float64)
+    return PottsProblem(
+            M(; name = :ext),
+            [ownership => ext_state(), kind => [:fluid, :tip, :stalk, :tip], :V => [x / 20 for x in 1:20, y in 1:16]], (0, 6); T, seed = 11
+        )
+end
+function ext2_problem(M; T = Float64)
+    return PottsProblem(
+            M(; name = :ext2),
+            [ownership => ext_state(), kind => [:fluid, :tip, :prolif, :stalk]], (0, 6); T, seed = 13
+        )
+end
 # ---------------------------------------------------------------------------------------
 # Tests
 const CLASS_FIXTURES = (:ClassC, :CTip, :XSpare, :LifeC, :ClusterC, :BaseC, :ExtC, :Ext2C)

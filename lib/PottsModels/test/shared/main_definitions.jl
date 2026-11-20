@@ -24,8 +24,9 @@ function main_defined_name(ex)
 end
 
 """The names that the top level of `defs` defines (see `main_defined_name`)."""
-main_defined_names(defs::String) =
-    Symbol[n for n in (main_defined_name(ex) for ex in Meta.parseall(defs).args) if n !== nothing]
+function main_defined_names(defs::String)
+    return Symbol[n for n in (main_defined_name(ex) for ex in Meta.parseall(defs).args) if n !== nothing]
+end
 
 function define_in_main(into::Module, marker::Symbol, preamble::Expr, defs::String, label::String)
     defined = main_defined_names(defs)

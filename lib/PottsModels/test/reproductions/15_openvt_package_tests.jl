@@ -315,10 +315,10 @@ const O1_STEM = Dict(
     "e" => "$(PACKAGE_FW)_beta0.8_gamma0.0", "f" => "$(PACKAGE_FW)_No_CI_deterministic"
 )
 o1_zip(case) = get(O1_STEM, case, "$(PACKAGE_FW)_case_$(case)") * ".zip"
-o1_case(zipname) = (
-    i = findfirst(c -> o1_zip(c) == zipname, collect(keys(O1_STEM)));
-    i === nothing ? nothing : collect(keys(O1_STEM))[i]
-)
+function o1_case(zipname)
+    i = findfirst(c -> o1_zip(c) == zipname, collect(keys(O1_STEM)))
+    return i === nothing ? nothing : collect(keys(O1_STEM))[i]
+end
 const O1_MEMBER = r"^([^/]+)/s(\d+)/potts_([a-z]+)_s(\d+)_(\d{6})\.csv$"
 # stem, seed, case, seed, MCS
 # the O1 re-run record keeps its own (historical) names: the D-215 post-processing
@@ -410,8 +410,10 @@ end
 # the F5 run k (1…100) ↦ its O2 member in the package's O2 zip (D-215 (3): k − 1)
 o2_member(k_f5) = "$(O2_DIR)/cell_data_no_inhibition_$(k_f5 - 1).csv"
 package_f(s) = parse(Float64, strip(s))
-package_eq(a, b; rtol = 1.0e-12, atol = 1.0e-12) = (isnan(a) && isnan(b)) || (a == b) ||
-    (isfinite(a) && isfinite(b) && abs(a - b) <= atol + rtol * max(abs(a), abs(b)))
+function package_eq(a, b; rtol = 1.0e-12, atol = 1.0e-12)
+    return (isnan(a) && isnan(b)) || (a == b) ||
+        (isfinite(a) && isfinite(b) && abs(a - b) <= atol + rtol * max(abs(a), abs(b)))
+end
 col(head, name) = findfirst(==(name), head)
 # records by item ID (as `15_openvt_page_tests.jl` finds them)
 function package_records()
@@ -655,10 +657,10 @@ function o5_sources()
     end
     return out
 end
-o5_key(f) = (
-    m = match(REQUIRED[findfirst(x -> x[1] == :O5, REQUIRED)][3], f);
-    m === nothing ? nothing : (parse(Float64, m[1]), parse(Float64, m[2]), parse(Int, m[3]))
-)
+function o5_key(f)
+    m = match(REQUIRED[findfirst(x -> x[1] == :O5, REQUIRED)][3], f)
+    return m === nothing ? nothing : (parse(Float64, m[1]), parse(Float64, m[2]), parse(Int, m[3]))
+end
 # the formerly optional items, all required (D-204) -----------------------------------------------
 function package_present(rels, key)
     re = only(x[3] for x in REQUIRED if x[1] == key)
@@ -1065,8 +1067,10 @@ end
     @testset "15 openvt package (8) allowlist: nothing but the pinned files (no G data, no stray files)" begin
         @test build()
         tree = package_tree(PACKAGE_A)
-        impl_ok(f) = f in ("README.md", "parameters.csv", "src/openvt_reference.jl", "src/openvt_chain.jl") ||
-            occursin(r"^scripts/[^/]+/[^/]+\.jl$", f)
+        function impl_ok(f)
+            return f in ("README.md", "parameters.csv", "src/openvt_reference.jl", "src/openvt_chain.jl") ||
+                occursin(r"^scripts/[^/]+/[^/]+\.jl$", f)
+        end
         lam_files = ["Relaxation/lambda_scan/11cells_lambda$(λ)_width.csv" for λ in LAMBDAS]
         res_fixed = Set(
             [
@@ -1074,10 +1078,12 @@ end
                 "Relaxation/11+10cells/inner_width.csv", "Relaxation/table_S5.csv", lam_files...,
             ]
         )
-        res_ok(f) = f in res_fixed || occursin(r"^provenance/[^/]+\.toml$", f) ||
-            occursin(r"^Monolayer/metrics/[a-z]+/measurements_s\d+\.csv$", f) ||
-            occursin(r"^Monolayer/metrics/(measurements_[a-z]+_mean|neighbors_[a-z]+)\.csv$", f) ||
-            any(x -> occursin(x[3], f), REQUIRED)
+        function res_ok(f)
+            return f in res_fixed || occursin(r"^provenance/[^/]+\.toml$", f) ||
+                occursin(r"^Monolayer/metrics/[a-z]+/measurements_s\d+\.csv$", f) ||
+                occursin(r"^Monolayer/metrics/(measurements_[a-z]+_mean|neighbors_[a-z]+)\.csv$", f) ||
+                any(x -> occursin(x[3], f), REQUIRED)
+        end
         stray = String[]
         for f in tree
             ip, rp = "implementations/$(PACKAGE_FW)/", "results/$(PACKAGE_FW)/"

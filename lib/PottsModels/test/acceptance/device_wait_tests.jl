@@ -124,10 +124,11 @@ function collect_leaves!(out, x)
     return out
 end
 leaves(u) = collect_leaves!(Any[], u)
-same(a, b) = (
-    la = leaves(a); lb = leaves(b);
-    length(la) == length(lb) && all(isequal(x, y) for (x, y) in zip(la, lb))
-)
+function same(a, b)
+    la = leaves(a)
+    lb = leaves(b)
+    return length(la) == length(lb) && all(isequal(x, y) for (x, y) in zip(la, lb))
+end
 # --- the gate cases (benchmark/gate.jl `cases`, D-171), as functions of T and tspan -------
 function cases(T, tspan)
     gg = graner_glazier_state()
@@ -213,10 +214,11 @@ end
 # 2026-11-04), so runs cannot be compared bitwise. A stale or torn read still shows: every
 # saved state, and the state stepped with no wait, must be consistent in itself (each cell's
 # tracked volume equals its site count in σ), at the save times asked for, and the state moves.
-consistent(u) = (
-    σ = Array(u.ownership); v = Array(u.cell.volume);
-    all(c -> v[c] == count(==(c), σ), eachindex(v))
-)
+function consistent(u)
+    σ = Array(u.ownership)
+    v = Array(u.cell.volume)
+    return all(c -> v[c] == count(==(c), σ), eachindex(v))
+end
 function saves_consistent(prob, alg, backend)
     prob = remake(prob; tspan = (0, WAIT_N))
     every = solve(prob, alg; saveat = 1:WAIT_N, save_start = false, save_end = false, backend)

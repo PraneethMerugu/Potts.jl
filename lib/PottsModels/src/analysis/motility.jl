@@ -66,8 +66,10 @@ function _unwrap_track(points, dims, periodic, ::Val{N}) where {N}
 end
 
 # One track (a vector of points) or a vector of tracks.
-_is_point(p) = p isa Tuple || (p isa AbstractVector && eltype(p) <: Real) ||
-               (p isa AbstractVector && !isempty(p) && first(p) isa Real)
+function _is_point(p)
+    return p isa Tuple || (p isa AbstractVector && eltype(p) <: Real) ||
+        (p isa AbstractVector && !isempty(p) && first(p) isa Real)
+end
 
 """
     mean_squared_displacement(tracks; lags = 1:(n − 1)) -> Vector{Float64}
@@ -239,8 +241,10 @@ function _furth_paper(t, y, range, short, offset)
     inner = 2:(n - 1)
     range === nothing || (inner = filter(in(_time_window(range, t)), inner))
     keep = [i for i in inner if (y[i + 1] - 2y[i] + y[i - 1]) / h^2 > 0]
-    nores() = throw(ArgumentError("furth_fit: no decaying second derivative (persistence not resolved); " *
-                                  "try method = :lsq"))
+    function nores()
+        throw(ArgumentError("furth_fit: no decaying second derivative (persistence not resolved); " *
+            "try method = :lsq"))
+    end
     length(keep) >= 3 || nores()
     d = [(y[i + 1] - 2y[i] + y[i - 1]) / h^2 for i in keep]
     c1, c0 = _ols_line(t[keep], log.(d), true)

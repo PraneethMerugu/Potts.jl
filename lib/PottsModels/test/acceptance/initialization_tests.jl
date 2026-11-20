@@ -93,14 +93,16 @@ initialization_names(xs) = Set{Symbol}(initialization_name(x) for x in xs)
 byname(xs, n) = only(x for x in xs if initialization_name(x) === n)
 initialization_init(c, scope) = Potts.initialization_system(c, scope)
 unwrap_load_error(err) = err isa LoadError ? unwrap_load_error(err.error) : err
-clear(E::Type{<:Exception}, f, word = nothing) = try
-    f()
-    false
-catch err
-    e = unwrap_load_error(err)
-    ok = e isa E && (word === nothing || occursin(word, sprint(showerror, e)))
-    ok || @info "expected $E$(word === nothing ? "" : " naming $word")" exception = e
-    ok
+function clear(E::Type{<:Exception}, f, word = nothing)
+    return try
+            f()
+            false
+        catch err
+            e = unwrap_load_error(err)
+            ok = e isa E && (word === nothing || occursin(word, sprint(showerror, e)))
+            ok || @info "expected $E$(word === nothing ? "" : " naming $word")" exception = e
+            ok
+        end
 end
 clear(f, word = nothing) = clear(ArgumentError, f, word)
 # Fixtures are defined by evaluating their `@potts_model` here and capturing any error, so

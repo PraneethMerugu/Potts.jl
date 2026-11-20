@@ -301,11 +301,13 @@ function sigma()
     σ[5:7, 2:4] .= 2
     return σ
 end
-gather_energy_op(label) = Any[
-    ownership => sigma(), kind => [:A, :A], :q => Float64.(sigma()),
-    (occursin("edges", label) ? [:bond => [(1, 2)]] : [])..., (label in Y15 ? [:y => [1.0, 5.0]] : [])...,
-    (label in TAG1 ? [:tag => fill(1.0, 12, 12)] : [])...,
-]
+function gather_energy_op(label)
+    return Any[
+            ownership => sigma(), kind => [:A, :A], :q => Float64.(sigma()),
+            (occursin("edges", label) ? [:bond => [(1, 2)]] : [])..., (label in Y15 ? [:y => [1.0, 5.0]] : [])...,
+            (label in TAG1 ? [:tag => fill(1.0, 12, 12)] : [])...,
+        ]
+end
 system(label) = Base.invokelatest(MODELS[label]; name = :g)
 problem(label; tspan = (0, 3), seed = 1) = PottsProblem(system(label), gather_energy_op(label), tspan; seed, capacity = 16)
 """The exception `mtkcompile` throws for fixture `label`, or `nothing` if it compiles."""

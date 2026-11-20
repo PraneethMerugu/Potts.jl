@@ -115,10 +115,12 @@ end
     @sweep Metropolis(; temperature = 0.0)
 end
 pre_cell(sol, n) = [Array(getproperty(u.cell, n))[1] for u in sol.u]
-pre_solve(M, alg, σ, K; kw...) = solve(
-    PottsProblem(M(; name = :m), [ownership => σ, kind => [:A]], (0, K); kw...), alg;
-    saveat = 0:K
-)
+function pre_solve(M, alg, σ, K; kw...)
+    return solve(
+            PottsProblem(M(; name = :m), [ownership => σ, kind => [:A]], (0, K); kw...), alg;
+            saveat = 0:K
+        )
+end
 # ---------------------------------------------------------------------------------------
 # Moving cell (T = 4): the sweep changes the cell's sites, so the integral must fold the
 # post-sweep σ (the block's σ) with the block-start w. w0[i, j] = i, w ~ Pre(w) + 1, so at

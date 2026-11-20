@@ -92,8 +92,9 @@ end
 const GATHERS = (XVol, XCross, XRing)
 const CONTROLS = (XPlain, XPair)
 sigma() = (s = zeros(Int32, 12, 8); s[3:6, 3:6] .= 1; s[7:10, 3:6] .= 2; s)
-problem(M, tspan; T = Float64, kw...) =
-    PottsProblem(M(; name = :x), [ownership => sigma(), kind => [:A, :A], :y => [1.0, 2.0]], tspan; T, seed = 7, kw...)
+function problem(M, tspan; T = Float64, kw...)
+    return PottsProblem(M(; name = :x), [ownership => sigma(), kind => [:A, :A], :y => [1.0, 2.0]], tspan; T, seed = 7, kw...)
+end
 """Bytes allocated by each of five warm `step!`s (after two warm-up steps)."""
 function warm_allocs(prob, alg)
     integ = init(prob, alg; save_start = false, save_end = false, save_everystep = false)

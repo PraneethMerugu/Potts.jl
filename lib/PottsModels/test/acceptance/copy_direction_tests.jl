@@ -224,8 +224,9 @@ function direction_labels(dims, seed)
         all(c -> any(==(c), σ), 0:2) && return σ
     end
 end
-probe_problem(M, dims; seed = 1) =
-    PottsProblem(M(; name = :probe), [ownership => direction_labels(dims, 640 + seed), kind => [:A, :B]], (0, 1))
+function probe_problem(M, dims; seed = 1)
+    return PottsProblem(M(; name = :probe), [ownership => direction_labels(dims, 640 + seed), kind => [:A, :B]], (0, 1))
+end
 # the offsets tried from every target: Moore(1) (which contains VonNeumann(1)), the reach-2
 # shell of NeighborOrder(4), and far pairs along every axis
 function offsets(nd)
@@ -274,10 +275,11 @@ function direction_pairs(prob, dims, periodic)
     end
     return out
 end
-direction_prop(prob, xt, xs; dir = 1) = (
-    lat = prob.lattice; σ = prob.u0.ownership;
-    CorePotts.Proposal(CorePotts.linear_index(lat, xt), CorePotts.linear_index(lat, xs), xt, dir, σ[xt...], σ[xs...])
-)
+function direction_prop(prob, xt, xs; dir = 1)
+    lat = prob.lattice
+    σ = prob.u0.ownership
+    return CorePotts.Proposal(CorePotts.linear_index(lat, xt), CorePotts.linear_index(lat, xs), xt, dir, σ[xt...], σ[xs...])
+end
 # ---------------------------------------------------------------------------------------
 # 2. The kernel path: the shear drive written with `direction`, `position` and `mcs`, and a
 # reference written with features that exist today.

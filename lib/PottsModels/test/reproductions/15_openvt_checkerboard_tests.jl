@@ -210,12 +210,13 @@ const ALPHA = 1.0e-3 / NCHECKS
 # onto (0, 1] and both integrals by composite Simpson (n intervals)
 function ttail(c, ν; n = 20_000)
     g(t) = (1 + t^2 / ν)^(-(ν + 1) / 2)
-    simpson(f) = (
-        h = 1 / n; h / 3 * (
-            f(0.0) + f(1.0) + 4sum(f((2i - 1) * h) for i in 1:(n ÷ 2)) +
-                2sum(f(2i * h) for i in 1:(n ÷ 2 - 1))
-        )
-    )
+    function simpson(f)
+        h = 1 / n
+        return h / 3 * (
+                f(0.0) + f(1.0) + 4sum(f((2i - 1) * h) for i in 1:(n ÷ 2)) +
+                    2sum(f(2i * h) for i in 1:(n ÷ 2 - 1))
+            )
+    end
     tail(c) = simpson(u -> u == 0 ? 0.0 : g(c / u) * c / u^2)
     return tail(c) / (simpson(t -> g(t)) + tail(1.0))
 end
@@ -363,15 +364,18 @@ end
 # the cycle the time-scale rule demands from the item-5 comparison
 checkerboard_cycle(beyond::Bool, T_lambda2) = beyond ? 5 * T_lambda2 : CYCLE_SEQ
 # the reason's wording agrees with the verdict ("insignificant" is neither)
-reason_ok(beyond::Bool, why) = !occursin(r"insignificant"i, why) &&
-    (beyond ? occursin(r"\bsignificant"i, why) && !occursin(r"not significant"i, why) : occursin(r"not significant"i, why))
+function reason_ok(beyond::Bool, why)
+    return !occursin(r"insignificant"i, why) &&
+        (beyond ? occursin(r"\bsignificant"i, why) && !occursin(r"not significant"i, why) : occursin(r"not significant"i, why))
+end
 # ---------------------------------------------------------------------------------------------
 # API (implementer): openvt_spread_compare / openvt_spread_table
 # ---------------------------------------------------------------------------------------------
 checkerboard_var(x) = sum(abs2, x .- mean(x)) / (length(x) - 1)
 # a table of 34 metrics with `n` seeds per arm, every metric from one law, from `rng`
-draws(rng, n; shift = Dict{String, Float64}()) =
-    Dict(k => randn(rng, n) .* (1 + i / 10) .+ 3i .+ get(shift, k, 0.0) for (i, k) in enumerate(ALL))
+function draws(rng, n; shift = Dict{String, Float64}())
+    return Dict(k => randn(rng, n) .* (1 + i / 10) .+ 3i .+ get(shift, k, 0.0) for (i, k) in enumerate(ALL))
+end
 # ---------------------------------------------------------------------------------------------
 # The record (D-146; no GPU needed to check it)
 # ---------------------------------------------------------------------------------------------
@@ -442,10 +446,11 @@ end
         @test interp([0.0, 1.0], [0.0, 10.0], 3.0) == 10
         @test_throws ArgumentError interp([1.0, 2.0], [0.0, 1.0], 0.5)
         # grid-free: a run whose r grows linearly in t reads the same on any save grid
-        lin(every, phase) = (
-            mcs = [0; phase:every:8000]; N = [2^min(10, floor(Int, x / 775)) for x in mcs];
-            checkerboard_series(mcs, N, 1.0 .+ mcs ./ 100, 2.0 .+ mcs ./ 10, 10 .+ mcs, 0.0 .* mcs, ones(length(mcs)); cycle = 775)
-        )
+        function lin(every, phase)
+            mcs = [0; phase:every:8000]
+            N = [2^min(10, floor(Int, x / 775)) for x in mcs]
+            return checkerboard_series(mcs, N, 1.0 .+ mcs ./ 100, 2.0 .+ mcs ./ 10, 10 .+ mcs, 0.0 .* mcs, ones(length(mcs)); cycle = 775)
+        end
         m39, m13 = seed_metrics(lin(39, 39), 1000), seed_metrics(lin(13, 20), 1000)
         @test all(isapprox(m39[k], m13[k]; rtol = 1.0e-12) for k in ("r@4.5", "r@8.5", "A@6.5", "L@3.5"))
         # the critical values: the t quadrature against tabulated quantiles, and the normal limit
@@ -481,11 +486,12 @@ end
             (; case = "b", metric = "L@4.5", mean_ref = 4.157, mean_alt = 4.16, beyond = false),
             (; case = "f", metric = "O1.n6", mean_ref = 0.41, mean_alt = 0.47, beyond = true),
         ]
-        row(case, id, ours, paper, cause; q = "not asked") =
-            Dict(
-            "target" => "$id beyond seed spread", "case" => case, "ours" => ours, "paper" => paper,
-            "suspected_cause" => cause, "author_question" => q
-        )
+        function row(case, id, ours, paper, cause; q = "not asked")
+            return Dict(
+                    "target" => "$id beyond seed spread", "case" => case, "ours" => ours, "paper" => paper,
+                    "suspected_cause" => cause, "author_question" => q
+                )
+        end
         good = [
             row("b", "t_stop", "10.81 cycles (100 seeds, sd 0.31)", "10.36 cycles (sd 0.29)", "update order: …"),
             row("f", "O1.n6", "0.470 (sd 0.02)", "0.410 (sd 0.02)", "claim widening + thinning: …"),
@@ -575,12 +581,14 @@ end
         # negative control 3: the same law on different save grids (39 MCS against 13 MCS at
         # another phase, and the critical value of the record tier) flags nothing
         rng = StableRNG(214_005)
-        regrid(s, every, phase) = (
-            m = round.(Int, s.t .* 775); keep = [
-                i for i in eachindex(m) if i == 1 || i == length(m) ||
-                    (m[i] - phase) % every == 0
-            ]; map(v -> v[keep], s)
-        )
+        function regrid(s, every, phase)
+            m = round.(Int, s.t .* 775)
+            keep = [
+                    i for i in eachindex(m) if i == 1 || i == length(m) ||
+                        (m[i] - phase) % every == 0
+                ]
+            return map(v -> v[keep], s)
+        end
         fine = [ideal(; lag = 0.02 + 0.3rand(rng), every = 13) for _ in 1:40]
         ga = [seed_metrics(regrid(s, 39, 13), 1000) for s in fine[1:2:end]]
         gb = [seed_metrics(regrid(s, 13, 0), 1000) for s in fine[2:2:end]]

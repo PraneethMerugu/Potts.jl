@@ -127,11 +127,13 @@ function runs_peak(h; skip0 = false)
     return (argmax(s) - 0.5) / 100
 end
 # Pooled summary of a set of cells: everything V4 reads
-runs_summary(f, a) = (;
-    n = length(f), n_f0 = count(==(0), f), sum_f = sum(f; init = 0.0),
-    sum_a = sum(a; init = 0.0), f_max = maximum(f), a_min = minimum(a), a_max = maximum(a),
-    hf = runs_hist(f), ha = runs_hist(a),
-)
+function runs_summary(f, a)
+    return (;
+            n = length(f), n_f0 = count(==(0), f), sum_f = sum(f; init = 0.0),
+            sum_a = sum(a; init = 0.0), f_max = maximum(f), a_min = minimum(a), a_max = maximum(a),
+            hf = runs_hist(f), ha = runs_hist(a),
+        )
+end
 function runs_merge(ss)
     return (;
         n = sum(s.n for s in ss), n_f0 = sum(s.n_f0 for s in ss), sum_f = sum(s.sum_f for s in ss),

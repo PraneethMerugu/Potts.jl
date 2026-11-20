@@ -156,8 +156,9 @@ function flood(M::AbstractArray{Bool}, nbrs, periodic)
     return n, big
 end
 """(pieces, largest piece) of cell `c` of `σ` (the medium and dead cells: (0, 0))."""
-global_pieces(σ, c, geom, adj; periodic) =
-    c == 0 ? (0, 0) : flood(σ .== c, global_nbrs(geom, adj), periodic)
+function global_pieces(σ, c, geom, adj; periodic)
+    return c == 0 ? (0, 0) : flood(σ .== c, global_nbrs(geom, adj), periodic)
+end
 """Pieces of cell `c` after the copy x ← `new` (σ is restored)."""
 function global_after(σ, x, new, c, geom, adj; periodic)
     was = σ[x...]
@@ -167,8 +168,9 @@ function global_after(σ, x, new, c, geom, adj; periodic)
     return out
 end
 """`Global`'s per-cell test: `c` is the medium or its pieces do not increase."""
-no_increase(σ, x, new, c, geom, adj; periodic) =
-    c == 0 || global_after(σ, x, new, c, geom, adj; periodic)[1] <= global_pieces(σ, c, geom, adj; periodic)[1]
+function no_increase(σ, x, new, c, geom, adj; periodic)
+    return c == 0 || global_after(σ, x, new, c, geom, adj; periodic)[1] <= global_pieces(σ, c, geom, adj; periodic)[1]
+end
 """Pieces of `old`'s in-domain shell sites under `adj` (the local proxy, for a mutant)."""
 function global_shell_pieces(σ, x, old, geom, adj; periodic)
     dims = size(σ)
@@ -430,8 +432,9 @@ end
     @constraint connected(old; rule = Global()) | (kind[old] == B)
     @sweep Metropolis(; temperature = 2.0)
 end
-global_problem(M, σ; tspan = (0, 10), kw...) =
-    PottsProblem(M(; name = :global_connectivity), [ownership => σ, kind => KINDS[1:maximum(σ)]], tspan; seed = 5, kw...)
+function global_problem(M, σ; tspan = (0, 10), kw...)
+    return PottsProblem(M(; name = :global_connectivity), [ownership => σ, kind => KINDS[1:maximum(σ)]], tspan; seed = 5, kw...)
+end
 # ---------------------------------------------------------------------------------------
 # Section 1: the rule's decisions through compiled drives (exact, host)
 """The six decisions (bit i−1 set when decision i refuses) by brute force."""
@@ -444,10 +447,12 @@ function bits(σ, x, new, geom; periodic)
     return sum(r[i] << (i - 1) for i in 1:6)
 end
 """Sources of the enumeration: the shell and distance 2 along each axis (detached gains)."""
-sources(geom) = (
-    global_shell(geom)...,
-    (ntuple(k -> k == a ? s : 0, geom === :cubic ? 3 : 2) for a in 1:(geom === :cubic ? 3 : 2) for s in (-2, 2))...,
-)
+function sources(geom)
+    return (
+            global_shell(geom)...,
+            (ntuple(k -> k == a ? s : 0, geom === :cubic ? 3 : 2) for a in 1:(geom === :cubic ? 3 : 2) for s in (-2, 2))...,
+        )
+end
 # the models' lattices (GEOMS): the enumerations run on the same dims
 const ENUM_DIMS = Dict(:square => (10, 10), :hex => (10, 10), :cubic => (6, 6, 6))
 # ---------------------------------------------------------------------------------------
@@ -539,9 +544,10 @@ function global_energy(σ, geom; periodic)
     return E
 end
 """The drive ρ pieces[old] + κ largest_piece(new; :full) by brute force (medium 0)."""
-global_drive(σ, old, new, geom; periodic) =
-    0.125 * global_pieces(σ, old, geom, :face; periodic)[1] +
-    2.0 * global_pieces(σ, new, geom, geom === :hex ? :face : :full; periodic)[2]
+function global_drive(σ, old, new, geom; periodic)
+    return 0.125 * global_pieces(σ, old, geom, :face; periodic)[1] +
+        2.0 * global_pieces(σ, new, geom, geom === :hex ? :face : :full; periodic)[2]
+end
 """Every `step`-th copy of `u` (state of `prob`) checked against brute force; returns counts."""
 function check_dh(prob, u, geom; periodic, step = 3, tol = 0.0)
     σ = Array(u.ownership)
@@ -594,18 +600,18 @@ function global_build(ex)
     end
 end
 const BUILD_N = Ref(0)
-case(line) = (
-    name = Symbol(:Build, BUILD_N[] += 1);
-    :(
-        @potts_model $name begin
-            @kinds medium A
-            @lattice Lattice((10, 10))
-            @energy cells => (volume - 9)^2
-            $line
-            @sweep Metropolis(; temperature = 1.0)
-        end
-    )
-)
+function case(line)
+    name = Symbol(:Build, BUILD_N[] += 1)
+    return :(
+            @potts_model $name begin
+                @kinds medium A
+                @lattice Lattice((10, 10))
+                @energy cells => (volume - 9)^2
+                $line
+                @sweep Metropolis(; temperature = 1.0)
+            end
+        )
+end
 # ---------------------------------------------------------------------------------------
 # Section 8: zero warm allocations; the AllocCheck proof
 """Bytes allocated by each of five warm `step!`s (after two warm-up steps)."""

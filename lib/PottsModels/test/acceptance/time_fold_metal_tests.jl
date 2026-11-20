@@ -119,8 +119,9 @@ function sigma(n)
     end
     return σ
 end
-problem(model, kw; T = Float64, tspan = (0, TIME_FOLD_M)) =
-    PottsProblem(model(; name = :fold), [ownership => sigma(3), kind => fill(:A, 3), :y => TIME_FOLD_Y0], tspan; T, kw...)
+function problem(model, kw; T = Float64, tspan = (0, TIME_FOLD_M))
+    return PottsProblem(model(; name = :fold), [ownership => sigma(3), kind => fill(:A, 3), :y => TIME_FOLD_Y0], tspan; T, kw...)
+end
 time_fold_traj(sol) = [Float64.(Array(u.cell.y)) for u in sol.u]
 """Jacobi oracle: per MCS n, S = Σ y (start of step), held; each cell integrates
 y' = S (1 + ε τ + η (n − 1)) − 2y over [n − 1, n] with `substeps` steps of `solver`, τ the
@@ -154,13 +155,17 @@ function time_fold_oracle(ε, η, m; solver = :ee, substeps = 1, stagetime = tru
     end
     return traj
 end
-time_fold_close(a, b, T) = length(a) == length(b) &&
-    all(isapprox.(a, b; rtol = T === Float32 ? 1.0e-5 : 1.0e-12, atol = T === Float32 ? 1.0e-5 : 1.0e-12))
+function time_fold_close(a, b, T)
+    return length(a) == length(b) &&
+        all(isapprox.(a, b; rtol = T === Float32 ? 1.0e-5 : 1.0e-12, atol = T === Float32 ? 1.0e-5 : 1.0e-12))
+end
 """Largest distance in Float32 units in the last place between two trajectories."""
-time_fold_ulps(a, b) = maximum(
-    maximum(abs.(reinterpret.(Int32, Float32.(x)) .- reinterpret.(Int32, Float32.(y))))
-        for (x, y) in zip(a, b)
-)
+function time_fold_ulps(a, b)
+    return maximum(
+            maximum(abs.(reinterpret.(Int32, Float32.(x)) .- reinterpret.(Int32, Float32.(y))))
+                for (x, y) in zip(a, b)
+        )
+end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 

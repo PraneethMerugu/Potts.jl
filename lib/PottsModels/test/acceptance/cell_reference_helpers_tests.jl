@@ -228,18 +228,20 @@ const PAIRS_BODY = quote
     end
     @sweep Metropolis(; temperature = T)
 end
-pairs_expr(name::Symbol, Jline::Expr, μline::Expr) = :(
-    @potts_model $name begin
-        @kinds medium substrate cytoplasm nucleus
-        @parameters begin
-            Jcn = 7.0
-            T = 4.0
-            $Jline
-            $μline
-        end
-        $(PAIRS_BODY.args...)
-    end
-)
+function pairs_expr(name::Symbol, Jline::Expr, μline::Expr)
+    return :(
+            @potts_model $name begin
+                @kinds medium substrate cytoplasm nucleus
+                @parameters begin
+                    Jcn = 7.0
+                    T = 4.0
+                    $Jline
+                    $μline
+                end
+                $(PAIRS_BODY.args...)
+            end
+        )
+end
 const J_PAIRS = :(
     J[kind, kind] = Pairs(
         default = 0.0, (medium, substrate) => 20, (medium, cytoplasm) => 16,
@@ -423,10 +425,12 @@ function wrap_sigma()
     return σ
 end
 const WRAP_OP = [ownership => wrap_sigma(), kind => fill(:cell, 3), :q => [17.25, -12.5, 4.0]]
-wrap_problem(; seed = 1, T = Float64, tspan = (0, 5)) =
-    PottsProblem(system(:Wrap; sysname = :wr), WRAP_OP, tspan; seed, T)
-wrapref_problem(; seed = 1, T = Float64, tspan = (0, 5), Lw = 20.0) =
-    PottsProblem(WrapRef(; name = :wf, Lw), WRAP_OP, tspan; seed, T)
+function wrap_problem(; seed = 1, T = Float64, tspan = (0, 5))
+    return PottsProblem(system(:Wrap; sysname = :wr), WRAP_OP, tspan; seed, T)
+end
+function wrapref_problem(; seed = 1, T = Float64, tspan = (0, 5), Lw = 20.0)
+    return PottsProblem(WrapRef(; name = :wf, Lw), WRAP_OP, tspan; seed, T)
+end
 const WRAP_CELL_TERM = 0.25 * (6.25^2 + 4.0^2 + 0.5^2)
 # μ Σ minimum_image(q − x0)² = 13.828125
 
@@ -468,26 +472,28 @@ function hex_problem()
     )
 end
 # F5. Refusal templates (section 8): one model per refused form, on F2's lattice.
-bad_expr(name::Symbol; energy = :((volume - 9.0)^2), update = :(w ~ 0.0)) = :(
-    @potts_model $name begin
-        @kinds medium cytoplasm nucleus
-        @parameters begin
-            ax = 1.0
-        end
-        @variables begin
-            dd(cell) = 0.0
-            w(cell) = 0.0
-            F(site) = 0.0
-        end
-        @lattice Lattice((20, 12); boundary = (Periodic(), Closed()), neighborhood = Moore(1))
-        @energy begin
-            cells => $energy
-            contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 0.5, 1.0)
-        end
-        @after_mcs $update
-        @sweep Metropolis(; temperature = 1.0)
-    end
-)
+function bad_expr(name::Symbol; energy = :((volume - 9.0)^2), update = :(w ~ 0.0))
+    return :(
+            @potts_model $name begin
+                @kinds medium cytoplasm nucleus
+                @parameters begin
+                    ax = 1.0
+                end
+                @variables begin
+                    dd(cell) = 0.0
+                    w(cell) = 0.0
+                    F(site) = 0.0
+                end
+                @lattice Lattice((20, 12); boundary = (Periodic(), Closed()), neighborhood = Moore(1))
+                @energy begin
+                    cells => $energy
+                    contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 0.5, 1.0)
+                end
+                @after_mcs $update
+                @sweep Metropolis(; temperature = 1.0)
+            end
+        )
+end
 function bad_op(sys)
     σ = zeros(Int32, 20, 12)
     σ[3:5, 3:5] .= 1
@@ -527,11 +533,13 @@ end
     # 1. The fixtures build
     @testset "cell reference helpers: the fixtures build" begin
         # (the constructor runs the model body, where the new names are resolved)
-        builds(name) = try
-            system(name)
-            true
-        catch
-            false
+        function builds(name)
+            return try
+                    system(name)
+                    true
+                catch
+                    false
+                end
         end
         for name in (:HelperPairs, :Refs, :Wrap, :HelperHex)
             @test builds(name)                                       # DEFECT CHECK: `Pairs`, `minimum_image`, … unknown today

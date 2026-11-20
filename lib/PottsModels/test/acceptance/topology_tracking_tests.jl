@@ -171,12 +171,15 @@ function random_σ(dims, seed)
     σ[1] = 1; σ[2] = 2; σ[3] = 3
     return σ
 end
-problem(M, σ; tspan = (0, 1), kw...) =
-    PottsProblem(M(; name = :topology), [ownership => σ, kind => [:A, :B, :A]], tspan; kw...)
-topology_prop(lat, x, y, σ) = CorePotts.Proposal(
-    CorePotts.linear_index(lat, x), CorePotts.linear_index(lat, y),
-    x, 1, σ[x...], σ[y...]
-)
+function problem(M, σ; tspan = (0, 1), kw...)
+    return PottsProblem(M(; name = :topology), [ownership => σ, kind => [:A, :B, :A]], tspan; kw...)
+end
+function topology_prop(lat, x, y, σ)
+    return CorePotts.Proposal(
+            CorePotts.linear_index(lat, x), CorePotts.linear_index(lat, y),
+            x, 1, σ[x...], σ[y...]
+        )
+end
 """Every (target, shell neighbour) pair of `σ` with different owners, inside the lattice."""
 function topology_pairs(σ, geom; periodic)
     out = Tuple{Any, Any}[]
@@ -326,11 +329,12 @@ function track_σ()
     end
     return σ
 end
-track_problem(M = Track; T = Float64, tspan = (0, 12), seed = 5, kw...) =
-    PottsProblem(
-    M(; name = :tr), [ownership => track_σ(), kind => fill(:A, 9), :w => copy(TOPOLOGY_W)], tspan;
-    T, seed, kw...
-)
+function track_problem(M = Track; T = Float64, tspan = (0, 12), seed = 5, kw...)
+    return PottsProblem(
+            M(; name = :tr), [ownership => track_σ(), kind => fill(:A, 9), :w => copy(TOPOLOGY_W)], tspan;
+            T, seed, kw...
+        )
+end
 """Φ = H + G: the state function whose difference the accepted ΔH must equal."""
 topology_Φ(prob, u) = total_energy(prob, u) + 3.0 * sum(TOPOLOGY_W[i] for i in eachindex(TOPOLOGY_W) if u.ownership[i] != 0)
 topology_G(u) = 3.0 * sum(TOPOLOGY_W[i] for i in eachindex(TOPOLOGY_W) if u.ownership[i] != 0)

@@ -86,13 +86,15 @@ claims_name(x) = SII.getname(x)
 claims_names(xs) = Set{Symbol}(claims_name(x) for x in xs)
 byname(xs, n) = only(x for x in xs if claims_name(x) === n)
 claims_symbolic(e) = CLAIMS_S.unwrap(e) isa Potts.SymbolicUtils.BasicSymbolic
-clear(f, words...) = try
-    f()
-    false
-catch err
-    ok = err isa ArgumentError && (isempty(words) || occursin(first(words), sprint(showerror, err)))
-    ok || @info "expected an ArgumentError" exception = err
-    ok
+function clear(f, words...)
+    return try
+            f()
+            false
+        catch err
+            ok = err isa ArgumentError && (isempty(words) || occursin(first(words), sprint(showerror, err)))
+            ok || @info "expected an ArgumentError" exception = err
+            ok
+        end
 end
 # ---------------------------------------------------------------------------------------
 # Fixtures
@@ -162,10 +164,12 @@ end
 # two cells: 16 sites (id 1) and 12 sites (id 2)
 const Claimsσ = (s = zeros(Int32, 12, 8); s[3:6, 3:6] .= 1; s[7:10, 3:5] .= 2; s)
 const CLAIMS_N = 5
-claims_prob() = PottsProblem(
-    All(; name = :all), [ownership => Claimsσ, kind => [:A, :A]], (0, CLAIMS_N);
-    seed = 3, field_solver = ExplicitEuler(substeps = 2)
-)
+function claims_prob()
+    return PottsProblem(
+            All(; name = :all), [ownership => Claimsσ, kind => [:A, :A]], (0, CLAIMS_N);
+            seed = 3, field_solver = ExplicitEuler(substeps = 2)
+        )
+end
 # every published model (construction only)
 const MODELS = [
     ("GranerGlazier", () -> GranerGlazier(; name = :gg)),
@@ -434,13 +438,14 @@ end
             r = CLAIMS_S.unwrap(u.eq.rhs)
             # `Pre(acc)` appears in MTK's own operator
             found = Ref(false)
-            walk(e) = (
+            function walk(e)
                 Potts.SymbolicUtils.iscall(e) &&
-                    (
-                    Potts.SymbolicUtils.operation(e) isa CLAIMS_M.Pre && (found[] = true);
-                    foreach(walk, Potts.SymbolicUtils.arguments(e))
-                ); nothing
-            )
+                        (
+                        Potts.SymbolicUtils.operation(e) isa CLAIMS_M.Pre && (found[] = true);
+                        foreach(walk, Potts.SymbolicUtils.arguments(e))
+                    )
+                return nothing
+            end
             walk(r)
             @test found[]
         end

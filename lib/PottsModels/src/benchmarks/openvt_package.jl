@@ -481,12 +481,14 @@ end
 # the O1 post-processing record (the D-215 post-processing of the O1 re-run record `raw`): O1 members by case
 # (in member order), the archives (O1 per case and the O2 zip), the O2 files
 function _openvt_pkg_o1(rec, raw, o2runs)
-    need(f) = (p = joinpath(rec, f); if isfile(p)
-        _openvt_pkg_tsv(p)[2]
-    else
-        throw(ArgumentError("openvt_submission_package: the O1 post-processing record has no $f"))
+    function need(f)
+        p = joinpath(rec, f)
+        return if isfile(p)
+                _openvt_pkg_tsv(p)[2]
+            else
+                throw(ArgumentError("openvt_submission_package: the O1 post-processing record has no $f"))
+            end
     end
-    )
     src = get(TOML.parsefile(joinpath(rec, "provenance.toml")), "source", "")
     src == raw || throw(ArgumentError("openvt_submission_package: the O1 post-processing record maps $(repr(src)), not the O1 re-run record $raw"))
     members = Dict{String, Vector{Any}}()
@@ -1043,10 +1045,11 @@ function _openvt_pkg_figures_section(recs)
     return String(take!(io))
 end
 
-_openvt_pkg_sweep_row(recs) =
-    _openvt_pkg_row("F6, T1, F7", "run in the record `$(recs[:sweeps])`; its failing rows are listed above",
-    "Figure 6, Table 1, Figure 7", "the protocol and targets were frozen before the run",
-        "not an author question")
+function _openvt_pkg_sweep_row(recs)
+    return _openvt_pkg_row("F6, T1, F7", "run in the record `$(recs[:sweeps])`; its failing rows are listed above",
+        "Figure 6, Table 1, Figure 7", "the protocol and targets were frozen before the run",
+            "not an author question")
+end
 
 # the licence line of both READMEs (D-181)
 const _OPENVT_PKG_LICENCE = "Licence: Potts.jl and these files are released under the MIT license; see the `LICENSE` file of " *

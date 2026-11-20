@@ -48,8 +48,10 @@ const SORTING_TS = (0.0, 2.0, 5.0, 10.0, 15.0, 20.0, 40.0, 80.0)
 sorting_rows(file) = (l = split.(readlines(file), '\t'); [Dict(zip(l[1], r)) for r in l[2:end]])
 num(r, k) = parse(Float64, r[k])
 frac(r, key) = num(r, "mismatched_bonds") == 0 ? 0.0 : num(r, "F_" * key)
-sorting_gone(r) = 1 - (num(r, "alive_dark") + num(r, "alive_light")) /
-    (num(r, "cells_dark") + num(r, "cells_light"))
+function sorting_gone(r)
+    return 1 - (num(r, "alive_dark") + num(r, "alive_light")) /
+        (num(r, "cells_dark") + num(r, "cells_light"))
+end
 # the four V-PRE7 statistics and verdicts of a record (spec §9.1, verbatim rules)
 function sorting_verdicts(rows)
     sel(T, t) = filter(r -> num(r, "T") == T && num(r, "paper_mcs") == t, rows)

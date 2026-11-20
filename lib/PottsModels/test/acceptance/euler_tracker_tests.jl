@@ -420,8 +420,9 @@ function blocks(dims)
     return σ
 end
 const KINDS = [:A, :B, :A, :B]
-euler_problem(M, σ; tspan = (0, 20), kw...) =
-    PottsProblem(M(; name = :euler), [ownership => σ, kind => KINDS[1:maximum(σ)]], tspan; seed = 3, kw...)
+function euler_problem(M, σ; tspan = (0, 20), kw...)
+    return PottsProblem(M(; name = :euler), [ownership => σ, kind => KINDS[1:maximum(σ)]], tspan; seed = 3, kw...)
+end
 euler_col(u, adj) = Array(adj === :face ? u.cell.euler : u.cell.euler_full)
 """Tracked vs oracle (a) for every cell and adjacency; returns (mismatches, checks, values seen)."""
 function compare(u, geom, adjs; periodic)
@@ -462,13 +463,14 @@ end
 
 # small lattices: random states of 3 cells (fragmented, holed) and every copy pair
 const DH_DIMS = Dict(:square => (9, 8), :hex => (9, 8), :cubic => (5, 5, 4))
-dh_lattice(geom, periodic) =
-let b = periodic ? :(Periodic()) : :(Closed()), d = DH_DIMS[geom]
-    if geom === :hex
-        :(Lattice($d; geometry = Hexagonal(), boundary = $b, neighborhood = Hex(1)))
-    else
-        :(Lattice($d; boundary = $b, neighborhood = Moore(1)))
-    end
+function dh_lattice(geom, periodic)
+    return let b = periodic ? :(Periodic()) : :(Closed()), d = DH_DIMS[geom]
+            if geom === :hex
+                :(Lattice($d; geometry = Hexagonal(), boundary = $b, neighborhood = Hex(1)))
+            else
+                :(Lattice($d; boundary = $b, neighborhood = Moore(1)))
+            end
+        end
 end
 for ((geom, periodic), (_, prop, _)) in GEOMS
     hex = geom === :hex
@@ -500,10 +502,15 @@ for ((geom, periodic), (_, prop, _)) in GEOMS
     end
 end
 """The drive's terms: (adjacency, side, weight) per geometry (the medium reads 0)."""
-drive_terms(geom) =
-    geom === :square ? ((:full, :old, 0.25), (:face, :new, 0.125)) :
-    geom === :hex ? ((:face, :old, 0.25), (:face, :new, 0.125)) :     # hex `:full` == `:face`
-    ((:face, :new, 0.25), (:full, :old, 0.125))
+function drive_terms(geom)
+    if geom === :square
+        return ((:full, :old, 0.25), (:face, :new, 0.125))
+    elseif geom === :hex
+        return ((:face, :old, 0.25), (:face, :new, 0.125))     # hex `:full` == `:face`
+    else
+        return ((:face, :new, 0.25), (:full, :old, 0.125))
+    end
+end
 """Brute-force energy: Σ_A 3(1 − χ_face)² + Σ_B ½ χ_full (hex: χ_face), kinds A, B, A."""
 function euler_energy(σ, geom; periodic)
     E = 0.0
@@ -513,10 +520,12 @@ function euler_energy(σ, geom; periodic)
     end
     return E
 end
-euler_prop(lat, x, y, σ) = CorePotts.Proposal(
-    CorePotts.linear_index(lat, x), CorePotts.linear_index(lat, y),
-    x, 1, σ[x...], σ[y...]
-)
+function euler_prop(lat, x, y, σ)
+    return CorePotts.Proposal(
+            CorePotts.linear_index(lat, x), CorePotts.linear_index(lat, y),
+            x, 1, σ[x...], σ[y...]
+        )
+end
 # every geometry and boundary in Float64; the closed ones also in Float32
 const DH_ROWS = [[(g, p, Float64) for ((g, p), _) in GEOMS]; [(g, false, Float32) for g in (:square, :hex, :cubic)]]
 # ---------------------------------------------------------------------------------------

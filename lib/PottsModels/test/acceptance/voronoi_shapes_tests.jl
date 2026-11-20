@@ -94,16 +94,18 @@ meta(l::Lattice) = (l.dims, l.periodic, l.geometry isa Hexagonal, l.mask)
 cart(x, hex) = hex ? (x[1] + x[2] / 2, x[2] * sqrt(3) / 2) : Float64.(Tuple(x))
 voronoi_indomain(mask, x) = all(d -> 1 <= x[d], eachindex(x)) && (mask === nothing || mask[x...])
 # the images of index point x along periodic axes (k ∈ -1:1 suffices for the small shapes here)
-images(x, dims, per) = [
-    ntuple(d -> x[d] + k[d] * dims[d], length(dims))
-        for k in Iterators.product(ntuple(d -> per[d] ? (-1:1) : (0:0), length(dims))...)
-]
+function images(x, dims, per)
+    return [
+            ntuple(d -> x[d] + k[d] * dims[d], length(dims))
+                for k in Iterators.product(ntuple(d -> per[d] ? (-1:1) : (0:0), length(dims))...)
+        ]
+end
 # closed ball membership in Cartesian coordinates, any periodic image
 inball(x, c, r, dims, per, hex) = any(y -> sqrt(sum(abs2, cart(y, hex) .- c)) <= r, images(x, dims, per))
-ballsites(c, r, target) = (
-    m = meta(target);
-    [x for x in CartesianIndices(m[1]) if (m[4] === nothing || m[4][x]) && inball(Tuple(x), c, r, m[1], m[2], m[3])]
-)
+function ballsites(c, r, target)
+    m = meta(target)
+    return [x for x in CartesianIndices(m[1]) if (m[4] === nothing || m[4][x]) && inball(Tuple(x), c, r, m[1], m[2], m[3])]
+end
 # nearest generator (Cartesian generators g), minimum image, ties to the lowest index
 function voronoi_nearest(x, gens, dims, per, hex)
     best, o = Inf, 0

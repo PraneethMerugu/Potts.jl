@@ -244,9 +244,10 @@ function _openvt_lengths(name, cols...)
     return n
 end
 
-_openvt_format(format::Symbol) =
-    format in (:O1, :O2, :O3, :O4, :O5, :O6, :O6_neighbors) ||
-    throw(ArgumentError("unknown OpenVT format $format; use :O1–:O6 or :O6_neighbors"))
+function _openvt_format(format::Symbol)
+    return format in (:O1, :O2, :O3, :O4, :O5, :O6, :O6_neighbors) ||
+        throw(ArgumentError("unknown OpenVT format $format; use :O1–:O6 or :O6_neighbors"))
+end
 
 function _openvt_keys(format, data, want)
     keys(data) == want || throw(ArgumentError("write_openvt: $format takes the fields $want, got $(keys(data))"))

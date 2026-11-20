@@ -203,10 +203,12 @@ function ftcs(c0, D, k, h, dt, n, T; periodic = true, mask = ones(size(c0)), low
     return c
 end
 # a deterministic field with every mode present
-substep_rich(dims) = [
-    1.0 + 0.5 * (iseven(sum(Tuple(I))) ? 1 : -1) + 0.3 * cos(2π * I[1] / dims[1]) +
-        0.2 * sin(1.3 * I[1] + 0.7 * I[2]^2) for I in CartesianIndices(dims)
-]
+function substep_rich(dims)
+    return [
+            1.0 + 0.5 * (iseven(sum(Tuple(I))) ? 1 : -1) + 0.3 * cos(2π * I[1] / dims[1]) +
+                0.2 * sin(1.3 * I[1] + 0.7 * I[2]^2) for I in CartesianIndices(dims)
+        ]
+end
 # (D, k, n): an explicit substep count above any count the stability rule allows
 const EXPLICIT = [(0.1, 0.1, 3), (0.1, 0.1, 5), (0.5, 0.2, 6)]
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))

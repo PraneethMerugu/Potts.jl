@@ -302,8 +302,10 @@ record_figure("sweeps-2026-10-08", "fig6.png"; alt = "Figure 6: time to 10^4 cel
 #-
 
 let t1 = tsv("sweeps-2026-10-08", "table1.tsv")
-    v(p, m) = (r = filter(r -> startswith(r["target"], (p == "beta" ? "V2." : "V3.") * replace(m, ".0" => "") * "x"), sweeps);
-               isempty(r) ? "—" : only(r)["result"])
+    function v(p, m)
+        r = filter(r -> startswith(r["target"], (p == "beta" ? "V2." : "V3.") * replace(m, ".0" => "") * "x"), sweeps)
+        return isempty(r) ? "—" : only(r)["result"]
+    end
     val(s) = isempty(s) ? "—" : s
     out = "| Parameter | Multiple (cycles) | Potts.jl | TST | Artistoo | Band | Verdict |\n|---|---|---|---|---|---|---|\n"
     for r in t1
@@ -406,8 +408,10 @@ record_figure("f8beta-2026-10-09", "fig8_grid.png"; alt = "Figure 8: 10^4-cell c
 # ### Verdicts at a glance
 
 let
-    pre(rows) = filter(r -> r["result"] in ("PASS", "FAIL") && get(r, "case", "") != "control" &&
-                            !occursin("must FAIL", get(r, "band", "")) && !occursin("(all rows)", r["target"]), rows)
+    function pre(rows)
+        return filter(r -> r["result"] in ("PASS", "FAIL") && get(r, "case", "") != "control" &&
+            !occursin("must FAIL", get(r, "band", "")) && !occursin("(all rows)", r["target"]), rows)
+    end
     tally(rows) = (p = count(r -> r["result"] == "PASS", rows); "$p of $(length(rows))")
     fails(rows) = (f = [String(first(split(r["target"]))) for r in rows if r["result"] == "FAIL"]; isempty(f) ? "—" : "**" * join(f, ", ") * "**")
     calr = filter(r -> r["result"] in ("PASS", "FAIL"), cal)

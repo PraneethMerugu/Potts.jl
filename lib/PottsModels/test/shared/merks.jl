@@ -13,11 +13,13 @@ non-collinear points."""
 function hull_area(pts)
     P = sort(unique(pts))
     length(P) < 3 && return 0.0
-    chain(Q) = foldl(Q; init = eltype(Q)[]) do h, q
-        while length(h) >= 2 && merks_cross(h[end - 1], h[end], q) <= 0
-            pop!(h)
-        end
-        push!(h, q)
+    function chain(Q)
+        return foldl(Q; init = eltype(Q)[]) do h, q
+                while length(h) >= 2 && merks_cross(h[end - 1], h[end], q) <= 0
+                    pop!(h)
+                end
+                push!(h, q)
+            end
     end
     h = [chain(P)[1:(end - 1)]; chain(reverse(P))[1:(end - 1)]]
     length(h) < 3 && return 0.0
@@ -153,10 +155,12 @@ end
 # ---------------------------------------------------------------------------------------------
 # FULL (offline; POTTS_FULL_REPRODUCTION=true)
 # ---------------------------------------------------------------------------------------------
-tmap(f, xs) = (
-    out = Vector{Any}(undef, length(xs)); Threads.@threads(
-        for i in eachindex(xs)
-            out[i] = f(xs[i])
-        end
-    ); out
-)
+function tmap(f, xs)
+    out = Vector{Any}(undef, length(xs))
+    Threads.@threads(
+            for i in eachindex(xs)
+                out[i] = f(xs[i])
+            end
+        )
+    return out
+end

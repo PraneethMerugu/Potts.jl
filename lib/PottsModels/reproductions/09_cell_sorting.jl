@@ -67,8 +67,10 @@ nothing #hide
 # start and seed:
 
 σ_demo, k_demo = graner_glazier_state()
-run_of(model) = ownership(solve(PottsProblem(model, [ownership => σ_demo, kind => k_demo], (0, 160); seed = 1),
-    SequentialCPM(); saveat = 160).u[end])
+function run_of(model)
+    return ownership(solve(PottsProblem(model, [ownership => σ_demo, kind => k_demo], (0, 160); seed = 1),
+        SequentialCPM(); saveat = 160).u[end])
+end
 run_of(CellSorting(; name = :cs)) == run_of(GranerGlazier(; name = :gg_shipped))
 
 # ## A minimal run
@@ -601,10 +603,12 @@ nothing #hide
 
 ## status of this page, read from git
 page = joinpath(pkgdir(PottsModels), "reproductions", "09_cell_sorting.jl")
-git(args...) = try
-    readchomp(Cmd(`git $args`; dir = dirname(page)))
-catch
-    ""
+function git(args...)
+    return try
+            readchomp(Cmd(`git $args`; dir = dirname(page)))
+        catch
+            ""
+        end
 end
 page_commit = git("log", "-1", "--format=%h %cs", "--", basename(page))
 page_dirty = !isempty(git("status", "--porcelain", "--", basename(page)))
@@ -727,9 +731,11 @@ prob_sym = remake(prob; p = [:J => [0 16 16; 16 11 11; 16 11 11]])
 ens_sym = solve(EnsembleProblem(prob_sym; prob_func = from_start), alg, EnsembleThreads(); trajectories = n,
     saveat = PAPER_MCS .* ts_ctrl)
 sym_states = last_states(ens_sym)
-regime(states, run) = (count(i -> engulfed(states[i], kinds_of(i), run), eachindex(states)),
-    mean(i -> fractions(states[i], kinds_of(i), run)[:dM], eachindex(states)),
-    mean(i -> fractions(states[i], kinds_of(i), run)[:dl], eachindex(states)))
+function regime(states, run)
+    return (count(i -> engulfed(states[i], kinds_of(i), run), eachindex(states)),
+        mean(i -> fractions(states[i], kinds_of(i), run)[:dM], eachindex(states)),
+        mean(i -> fractions(states[i], kinds_of(i), run)[:dl], eachindex(states)))
+end
 rows = [("sorting (PRL defaults)", "engulfment", regime(sorted_states, prob)),
     ("partial sorting (PRE §III E)", "no monolayer", regime(partial_states, prob_partial)),
     ("symmetric contacts (NC1)", "no sorting", regime(sym_states, prob_sym))]
@@ -762,8 +768,10 @@ function simpson(f, a, b; m = 2000)
     h = (b - a) / m
     return h / 3 * (f(a) + f(b) + sum((isodd(i) ? 4 : 2) * f(a + i * h) for i in 1:(m - 1)))
 end
-tcdf(x, ν) = 0.5 + 0.5sign(x) * simpson(θ -> cos(θ)^(ν - 1), 0, atan(abs(x) / sqrt(ν))) /
-                              simpson(θ -> cos(θ)^(ν - 1), 0, π / 2)
+function tcdf(x, ν)
+    return 0.5 + 0.5sign(x) * simpson(θ -> cos(θ)^(ν - 1), 0, atan(abs(x) / sqrt(ν))) /
+        simpson(θ -> cos(θ)^(ν - 1), 0, π / 2)
+end
 function tquantile(p, ν)
     lo, hi = 0.0, 1000.0
     for _ in 1:200
@@ -921,9 +929,10 @@ end
 ## a row: text columns, the class, `ok` at the nominal time (nothing if not run), and
 ## `timed(s)` (nothing if the row has no time)
 targets = []
-addrow!(target, paper, ours, tol, class, ok; timed = nothing, info = (;)) =
-    push!(targets, (; target, paper, ours, tol, class, ok, timed, info,
+function addrow!(target, paper, ours, tol, class, ok; timed = nothing, info = (;))
+    return push!(targets, (; target, paper, ours, tol, class, ok, timed, info,
         result = ok === nothing ? "pending full run" : result(ok, class)))
+end
 
 ## isolation guard (spec §9.0, §9.4): a validity condition of the run, not a paper target; when it
 ## fails, every row read after the first touching save is void, whatever its own result
@@ -1048,8 +1057,10 @@ end
 ## V-PRE7: temperature regimes, read from the committed full-size record (Details, "Temperature
 ## regimes"), so these rows carry their verdict in both builds
 v7class = "FULL (record)"
-addrecord!(target, paper, ours, tol, ok) = push!(targets, (; target, paper, ours, tol, class = v7class, ok,
-    timed = nothing, info = (;), result = pf(ok)))
+function addrecord!(target, paper, ours, tol, ok)
+    return push!(targets, (; target, paper, ours, tol, class = v7class, ok,
+        timed = nothing, info = (;), result = pf(ok)))
+end
 addrecord!("V-PRE7 T = 0 freezes", "T = 0 freezes, no sorting (PRE Fig. 15, p.2144)",
     "\\|F_dl(2000) − F_dl(100)\\| = $(fmt(v7_d0))", "< 0.02", v7_d0 < 0.02)
 addrecord!("V-PRE7 order at 10³", "slower sorting at lower T: T = 2 ≈ 0.3 at 3×10³; T = 5 slower than T = 10 (PRE Fig. 15(a))",

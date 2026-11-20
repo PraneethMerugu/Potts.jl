@@ -165,8 +165,9 @@ function connectivity_owner(σ, x, o, periodic)
 end
 owners(σ, x, geom, periodic) = [connectivity_owner(σ, x, o, periodic) for o in connectivity_shell(geom)]
 connectivity_sites(geom, own, pred) = [connectivity_shell(geom)[k] for k in eachindex(own) if pred(own[k])]
-connectivity_pieces(geom, own, c; adjacency = :face) =
-    ncomp(connectivity_sites(geom, own, ==(c)), (a, b) -> connectivity_adj(geom, adjacency, a, b))
+function connectivity_pieces(geom, own, c; adjacency = :face)
+    return ncomp(connectivity_sites(geom, own, ==(c)), (a, b) -> connectivity_adj(geom, adjacency, a, b))
+end
 """`Local(; gain, adjacency)`, the losing-side test (true for the medium)."""
 function connectivity_local(geom, own, old, new; gain = true, adjacency = :face)
     old == 0 && return true
@@ -211,8 +212,10 @@ con(c) = c > 0 && KIND[c] === :A
 """The seven veto decisions (true = accept), in the order of the readback penalties."""
 function connectivity_rules(geom, own, old, new)
     lo(f) = !con(old) || f
-    simple(adj) = (!con(old) || connectivity_simple(geom, own, old; adjacency = adj)) &&
-        (!con(new) || connectivity_simple(geom, own, new; adjacency = adj))
+    function simple(adj)
+        return (!con(old) || connectivity_simple(geom, own, old; adjacency = adj)) &&
+            (!con(new) || connectivity_simple(geom, own, new; adjacency = adj))
+    end
     return (
         lo(connectivity_local(geom, own, old, new)),
         lo(connectivity_local(geom, own, old, new; adjacency = :full)),
@@ -450,12 +453,12 @@ function allows(M, σ, x, y)
     prop = CorePotts.Proposal(CorePotts.linear_index(lat, x), CorePotts.linear_index(lat, y), x, 1, σ[x...], σ[y...])
     return prob.f.constraint(prob.u0, prob.p, prop, Potts._host_ctx(prob))
 end
-rulesread(geom, periodic, σ, x, y) =
-    (
-    M = connectivity_model("Rules", geom, periodic);
-    prob = PottsProblem(M(; name = :v), [ownership => σ, kind => collect(KIND)], (0, 1));
-    b = connectivity_read(prob, prob.u0, Potts._host_ctx(prob), x, y); ntuple(i -> (b >> (i - 1)) & 1 == 0, 7)
-)
+function rulesread(geom, periodic, σ, x, y)
+    M = connectivity_model("Rules", geom, periodic)
+    prob = PottsProblem(M(; name = :v), [ownership => σ, kind => collect(KIND)], (0, 1))
+    b = connectivity_read(prob, prob.u0, Potts._host_ctx(prob), x, y)
+    return ntuple(i -> (b >> (i - 1)) & 1 == 0, 7)
+end
 """A 7×7 state with cells 1, 2, 3 present (2 and 3 in the far corner column)."""
 connectivity_σ(fill1) = (σ = zeros(Int32, 7, 7); fill1(σ); σ[7, 6] = 2; σ[7, 7] = 3; σ)
 # ---------------------------------------------------------------------------------------
@@ -465,22 +468,23 @@ connectivity_σ(fill1) = (σ = zeros(Int32, 7, 7); fill1(σ); σ[7, 6] = 2; σ[7
 function connectivity_topology(X, objadj)
     P = falses(size(X) .+ 2)
     P[2:(end - 1), 2:(end - 1)] .= X
-    comps(M, eight) = begin
-        seen = falses(size(M)); n = 0
+    function comps(M, eight)
+        seen = falses(size(M))
+        n = 0
         for I in CartesianIndices(M)
-            (M[I] && !seen[I]) || continue
-            n += 1; seen[I] = true; st = [I]
-            while !isempty(st)
-                J = pop!(st)
-                for d in CartesianIndices((-1:1, -1:1))
-                    (d == CartesianIndex(0, 0) || (!eight && sum(abs, Tuple(d)) != 1)) && continue
-                    K = J + d
-                    (checkbounds(Bool, M, K) && M[K] && !seen[K]) || continue
-                    seen[K] = true; push!(st, K)
+                (M[I] && !seen[I]) || continue
+                n += 1; seen[I] = true; st = [I]
+                while !isempty(st)
+                    J = pop!(st)
+                    for d in CartesianIndices((-1:1, -1:1))
+                        (d == CartesianIndex(0, 0) || (!eight && sum(abs, Tuple(d)) != 1)) && continue
+                        K = J + d
+                        (checkbounds(Bool, M, K) && M[K] && !seen[K]) || continue
+                        seen[K] = true; push!(st, K)
+                    end
                 end
             end
-        end
-        n
+        return n
     end
     return (comps(P, objadj === :full), comps(.!P, objadj !== :full))
 end
@@ -533,10 +537,12 @@ function code(M)
     g = Potts.generated_code(M(; name = :x))
     return [string(k) => string(strip_lines!(deepcopy(getproperty(g, k)))) for k in propertynames(g)]
 end
-connectivity_fp(M) = (
-    σ = zeros(Int32, 8, 8); σ[3:5, 3:5] .= 1; σ[6:7, 6:7] .= 2;
-    PottsProblem(M(; name = :x), [ownership => σ, kind => [:A, :B]], (0, 1)).f.fingerprint
-)
+function connectivity_fp(M)
+    σ = zeros(Int32, 8, 8)
+    σ[3:5, 3:5] .= 1
+    σ[6:7, 6:7] .= 2
+    return PottsProblem(M(; name = :x), [ownership => σ, kind => [:A, :B]], (0, 1)).f.fingerprint
+end
 const ALIASES = [
     "Local() ≡ default" => [:(@constraint connectivity(A; rule = Local())), :(@constraint connectivity(A))],
     "ring_cells ≡ distinct(…shell…)" => [
@@ -593,12 +599,14 @@ for (name, rule) in (
         @sweep Metropolis(; temperature = T)
     end
 end
-connectivity_tissue() = (
-    σ = zeros(Int32, 24, 24); k = 0;
+function connectivity_tissue()
+    σ = zeros(Int32, 24, 24)
+    k = 0
     for i in 0:3, j in 0:3
-        k += 1; σ[(6i + 1):(6i + 6), (6j + 1):(6j + 6)] .= k
-    end; σ
-)
+            k += 1; σ[(6i + 1):(6i + 6), (6j + 1):(6j + 6)] .= k
+        end
+    return σ
+end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
@@ -930,15 +938,17 @@ end
 @testitem "hole control, one adhesive cell in medium" setup = [ConnectivityVocabularySetup] tags = [:pottsmodels, :acceptance] begin
     @testset "hole control, one adhesive cell in medium $(prop)" for prop in (Moore(1), NeighborOrder(3))
         σ0 = zeros(Int32, 24, 24); σ0[9:16, 9:16] .= 1
-        runs(M) = [
-            solve(
-                remake(
-                    PottsProblem(M(; name = :h), [ownership => σ0, kind => [:A]], (0, 100); seed),
-                    p = [:T => 6.0, :V => 64.0, :J => [0.0 -1.0; -1.0 4.0]]
-                ),
-                SequentialCPM(; proposal = prop); saveat = 10:10:100
-            ) for seed in 1:3
-        ]
+        function runs(M)
+            return [
+                    solve(
+                        remake(
+                            PottsProblem(M(; name = :h), [ownership => σ0, kind => [:A]], (0, 100); seed),
+                            p = [:T => 6.0, :V => 64.0, :J => [0.0 -1.0; -1.0 4.0]]
+                        ),
+                        SequentialCPM(; proposal = prop); saveat = 10:10:100
+                    ) for seed in 1:3
+                ]
+        end
         holes_local = sum(count(u -> holes(u.ownership, 1) > 0, sol.u) for sol in runs(NcLocal))
         @test holes_local >= 10            # control: Local() lets holes form (measured 30 and 29 of 30)
         for (M, eight) in ((NcSimple, false), (NcSimpleFull, true))

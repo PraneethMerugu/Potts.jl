@@ -235,10 +235,12 @@ function signature(label, sys)
         reused = sort!([n for (n, s) in b if length(s) > 1]),
     )
 end
-concurrent_build(label) = try
-    CASES[label][1]()
-catch e
-    e
+function concurrent_build(label)
+    return try
+            CASES[label][1]()
+        catch e
+            e
+        end
 end
 const SERIAL = Dict(l => signature(l, concurrent_build(l)) for l in keys(CASES))
 """Compare the systems `built` (label => system) with the serial builds; return the failures."""

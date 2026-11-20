@@ -149,12 +149,14 @@ predicate_fields(sol) = [Array(u.site.F) for u in sol.u]
 predicate_run(args...; alg = SequentialCPM(), kw...) = predicate_fields(solve(problem(args...; kw...), alg; saveat = 1))
 # the substep count of the field step of a running integrator with the automatic count
 # (`ExplicitEuler()`), at parameters `p` (the field-compiler switch: LatticePDE's stability bound)
-live_n(; p = ()) = CorePotts._runtime(
-    getfield(
-        init(problem(; p, solver = ExplicitEuler()), SequentialCPM()).ctx,
-        :__fields1
-    )
-).n
+function live_n(; p = ())
+    return CorePotts._runtime(
+            getfield(
+                init(problem(; p, solver = ExplicitEuler()), SequentialCPM()).ctx,
+                :__fields1
+            )
+        ).n
+end
 # The source sites of a σ: `lam` sites with a VonNeumann(1) neighbour in the substrate,
 # x, y periodic, z closed unless `zper` (independent of the code under test)
 function sources(σ; zper = false)

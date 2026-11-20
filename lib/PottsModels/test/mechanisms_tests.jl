@@ -60,20 +60,25 @@ function ring_owners(σ, x, periodic)
     end
 end
 # an out-of-domain site reads -1 (neither cell nor medium)
-arcs(σ, x, a, periodic) = (
-    own = ring_owners(σ, x, periodic); n = count(k -> own[k] == a && own[mod1(k - 1, 8)] != a, 1:8);
-    n == 0 && all(==(a), own) ? 1 : n
-)
+function arcs(σ, x, a, periodic)
+    own = ring_owners(σ, x, periodic)
+    n = count(k -> own[k] == a && own[mod1(k - 1, 8)] != a, 1:8)
+    return n == 0 && all(==(a), own) ? 1 : n
+end
 one_arc(σ, x, a, periodic) = arcs(σ, x, a, periodic) == 1
 # `Local()` (D-191, CC3D rules 1 and 2): one arc, not a full ring, and the gaining cell `n`
 # (the medium included) owns a face neighbour of the target
-cc3d_local(σ, x, a, n, periodic) = one_arc(σ, x, a, periodic) && !all(==(a), ring_owners(σ, x, periodic)) &&
-    any(k -> isodd(k) ? false : ring_owners(σ, x, periodic)[k] == n, 1:8)
-ring_rule(σ, x, a, periodic) = arcs(σ, x, a, periodic) <= 1 ||
-    (
-    length(unique(filter(>(0), collect(ring_owners(σ, x, periodic))))) == 2 &&
-        !any(==(0), ring_owners(σ, x, periodic))
-)
+function cc3d_local(σ, x, a, n, periodic)
+    return one_arc(σ, x, a, periodic) && !all(==(a), ring_owners(σ, x, periodic)) &&
+        any(k -> isodd(k) ? false : ring_owners(σ, x, periodic)[k] == n, 1:8)
+end
+function ring_rule(σ, x, a, periodic)
+    return arcs(σ, x, a, periodic) <= 1 ||
+            (
+            length(unique(filter(>(0), collect(ring_owners(σ, x, periodic))))) == 2 &&
+                !any(==(0), ring_owners(σ, x, periodic))
+        )
+end
 blockstate(dims, blocks...) = (s = zeros(Int32, dims); foreach(((k, b),) -> s[b...] .= k, enumerate(blocks)); s)
 # The paper-size aggregate (`graner_glazier_aggregate_tests.jl`) and its layout, a `Voronoi` tessellation of a ball (the
 # former `VoronoiBall`, D-138), checked against their definitions: a centroidal Voronoi
@@ -172,13 +177,15 @@ _cross(o, a, b) = (a[1] - o[1]) * (b[2] - o[2]) - (a[2] - o[2]) * (b[1] - o[1])
 """Area of the convex hull of points (Andrew's monotone chain)."""
 function hull_area(pts)
     P = sort(unique(pts))
-    half(Q) = foldl(
-        (h, q) -> (
-            while length(h) >= 2 && _cross(h[end - 1], h[end], q) <= 0
-                pop!(h)
-            end; push!(h, q)
-        ), Q; init = eltype(Q)[]
-    )
+    function half(Q)
+        return foldl(
+                (h, q) -> (
+                    while length(h) >= 2 && _cross(h[end - 1], h[end], q) <= 0
+                        pop!(h)
+                    end; push!(h, q)
+                ), Q; init = eltype(Q)[]
+            )
+    end
     h = [half(P)[1:(end - 1)]; half(reverse(P))[1:(end - 1)]]
     return abs(sum(k -> h[k][1] * h[mod1(k + 1, end)][2] - h[mod1(k + 1, end)][1] * h[k][2], eachindex(h))) / 2
 end
@@ -204,16 +211,18 @@ end
             return he / (he + ho)
         end
         h0 = hetero(σ)
-        sorted(J) = [
-            hetero(
-                solve(
-                    PottsProblem(
-                        GranerGlazier(; name = :gg), [ownership => σ, kind => k, :J => J],
-                        (0, 300); seed
-                    ), SequentialCPM(; proposal = Moore(1))
-                ).u[end].ownership
-            ) for seed in 1:3
-        ]
+        function sorted(J)
+            return [
+                    hetero(
+                        solve(
+                            PottsProblem(
+                                GranerGlazier(; name = :gg), [ownership => σ, kind => k, :J => J],
+                                (0, 300); seed
+                            ), SequentialCPM(; proposal = Moore(1))
+                        ).u[end].ownership
+                    ) for seed in 1:3
+                ]
+        end
         # differential adhesion sorts; equal adhesion does not; reversed adhesion mixes
         @test all(<(h0 - 0.1), sorted([0 16 16; 16 2 11; 16 11 14]))
         @test all(h -> abs(h - h0) < 0.05, sorted([0 16 16; 16 11 11; 16 11 11]))
@@ -314,18 +323,20 @@ end
             return he / (he + ho)
         end
         h0 = hetero(σ)
-        run(J) = [
-            hetero(
-                Array(
-                    solve(
-                        PottsProblem(
-                            GranerGlazier(; name = :gg, lattice = size(σ)),
-                            [ownership => σ, kind => k, :J => J], (0, 300); seed
-                        ), SequentialCPM(; proposal = Moore(1))
-                    ).u[end].ownership
-                )
-            ) for seed in 1:2
-        ]
+        function run(J)
+            return [
+                    hetero(
+                        Array(
+                            solve(
+                                PottsProblem(
+                                    GranerGlazier(; name = :gg, lattice = size(σ)),
+                                    [ownership => σ, kind => k, :J => J], (0, 300); seed
+                                ), SequentialCPM(; proposal = Moore(1))
+                            ).u[end].ownership
+                        )
+                    ) for seed in 1:2
+                ]
+        end
         @test all(<(h0 - 0.1), run([0 16 16; 16 2 11; 16 11 14]))
         @test all(h -> abs(h - h0) < 0.05, run([0 16 16; 16 11 11; 16 11 11]))
     end
@@ -412,20 +423,22 @@ end
         # χ > 0, descends for χ < 0, and does not drift for χ = 0
         G = 40
         cue = [0.05 * x for x in 1:G, y in 1:G]
-        drift(χ) = map(1:8) do seed
-            s = blockstate((G, G), (18:23, 18:23))
-            u = solve(
-                PottsProblem(
-                    MerksVasculogenesis(; name = :m, lattice = (G, G)),
-                    [
-                        ownership => s, kind => [:endothelial], :c => copy(cue), :Dc => 0.0, :δc => 0.0, :σc => 0.0,
-                        :χ => χ, :V₀ => 36.0, :λ => 1.0, :λ_L => 0.0, :T => 6.0, :J => zeros(2, 2),
-                    ], (0, 200); seed,
-                    field_solver = MERKS_SOLVER
-                ),
-                SequentialCPM()
-            ).u[end]
-            mean(i[1] for i in findall(==(1), u.ownership)) - 20.5
+        function drift(χ)
+            return map(1:8) do seed
+                    s = blockstate((G, G), (18:23, 18:23))
+                    u = solve(
+                        PottsProblem(
+                            MerksVasculogenesis(; name = :m, lattice = (G, G)),
+                            [
+                                ownership => s, kind => [:endothelial], :c => copy(cue), :Dc => 0.0, :δc => 0.0, :σc => 0.0,
+                                :χ => χ, :V₀ => 36.0, :λ => 1.0, :λ_L => 0.0, :T => 6.0, :J => zeros(2, 2),
+                            ], (0, 200); seed,
+                            field_solver = MERKS_SOLVER
+                        ),
+                        SequentialCPM()
+                    ).u[end]
+                    mean(i[1] for i in findall(==(1), u.ownership)) - 20.5
+                end
         end
         @test mean(drift(100.0)) > 10
         @test abs(mean(drift(0.0))) < 4
@@ -558,13 +571,15 @@ end
         # the mass. The cell is frozen (no copy can pay the volume cost), so the partition is
         # exactly the sites right of the centroid.
         σ0 = blockstate((12, 8), (5:8, 4:5))                          # area 8, centroid x = 6.5
-        run(V₀) = solve(
-            PottsProblem(
-                SingleDivisionFixture(; name = :o),
-                [ownership => σ0, kind => [:epithelial], :λ => 1.0e6, :V₀ => V₀], (0, 1); capacity = 4
-            ),
-            SequentialCPM(; proposal = Moore(1))
-        ).u[end]
+        function run(V₀)
+            return solve(
+                    PottsProblem(
+                        SingleDivisionFixture(; name = :o),
+                        [ownership => σ0, kind => [:epithelial], :λ => 1.0e6, :V₀ => V₀], (0, 1); capacity = 4
+                    ),
+                    SequentialCPM(; proposal = Moore(1))
+                ).u[end]
+        end
         u = run(8.0)
         d = only(filter(c -> c != 1 && u.cell.volume[c] > 0, eachindex(u.cell.volume)))
         @test findall(==(1), u.ownership) == findall(!iszero, blockstate((12, 8), (5:6, 4:5)))

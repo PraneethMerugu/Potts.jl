@@ -176,8 +176,9 @@ function relation_op(lk::Symbol)
     end
     return [ownership => σ, kind => [:A, :A], :q => Float64.(σ)]   # q: static owner labels (`gather_energy_tests.jl`)
 end
-problem(label; T = Float64, tspan = (0, 12), seed = 1) =
-    PottsProblem(MODELS[label](; name = :rel), relation_op(LATTICE_OF[label]), tspan; T, seed)
+function problem(label; T = Float64, tspan = (0, 12), seed = 1)
+    return PottsProblem(MODELS[label](; name = :rel), relation_op(LATTICE_OF[label]), tspan; T, seed)
+end
 relation_fp(label; T = Float64) = problem(label; T).f.fingerprint
 relation_energy(label) = (p = problem(label); total_energy(p, p.u0))
 """The fingerprints `label => fp` differ pairwise (one @test per pair; a failure names the pair)."""
@@ -250,12 +251,14 @@ end
 # fingerprint; a proposal or a compute type does.
 # models that read an inline gather: the fixture is what it claims, and its fingerprint is
 # deterministic.
-moved() = (
-    "WortelAct" => () -> wortel(),
-    "WortelAct connected" => () -> wortel(; connected = true),
-    "CanonicalAt RK4" => () -> relation_ah(Potts.RK4()),
-    "CanonicalAt ExplicitEuler" => () -> relation_ah(Potts.ExplicitEuler()),
-)
+function moved()
+    return (
+            "WortelAct" => () -> wortel(),
+            "WortelAct connected" => () -> wortel(; connected = true),
+            "CanonicalAt RK4" => () -> relation_ah(Potts.RK4()),
+            "CanonicalAt ExplicitEuler" => () -> relation_ah(Potts.ExplicitEuler()),
+        )
+end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 

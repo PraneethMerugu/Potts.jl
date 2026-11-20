@@ -162,8 +162,10 @@ function field_mcs(c, σ, p; split)
     X, Y = size(c)
     h = 1 / 15
     ec, med, ring = σ .>= 2, σ .== 0, σ .== 1
-    lap(c, x, y) = sum(((a, b),) -> (1 <= x + a <= X && 1 <= y + b <= Y) ? c[x + a, y + b] - c[x, y] : 0.0,
-        ((1, 0), (-1, 0), (0, 1), (0, -1)))
+    function lap(c, x, y)
+        return sum(((a, b),) -> (1 <= x + a <= X && 1 <= y + b <= Y) ? c[x + a, y + b] - c[x, y] : 0.0,
+            ((1, 0), (-1, 0), (0, 1), (0, -1)))
+    end
     for _ in 1:15
         if split
             r = c .+ h .* (p.α .* ec .- p.ε .* c .* med)
@@ -579,9 +581,13 @@ Markdown.parse(deviations_md)
 #
 # The parameters, read from the constructed problems (lattice units: Δx = 2 µm, 1 MCS = 30 s):
 
-frame_op(dims, w) = (σ = zeros(Int32, dims); for I in CartesianIndices(σ)
-                         (min(I[1], I[2], dims[1] + 1 - I[1], dims[2] + 1 - I[2]) <= w) && (σ[I] = 1)
-                     end; [ownership => σ, kind => [:border]])
+function frame_op(dims, w)
+    σ = zeros(Int32, dims)
+    for I in CartesianIndices(σ)
+            (min(I[1], I[2], dims[1] + 1 - I[1], dims[2] + 1 - I[2]) <= w) && (σ[I] = 1)
+        end
+    return [ownership => σ, kind => [:border]]
+end
 p06 = PottsProblem(Merks2006(; name = :m6, lattice = (20, 20)), frame_op((20, 20), 1), (0, 1); field_solver = SOLVER)
 p08 = PottsProblem(Merks2008(; name = :m8, lattice = (20, 20)), frame_op((20, 20), 2), (0, 1); field_solver = SOLVER)
 v6(n) = getp(p06, n)(p06)
@@ -660,10 +666,12 @@ Markdown.parse(parameters_md)
 # two round seeds).
 
 page = joinpath(pkgdir(PottsModels), "reproductions", "01_merks.jl")
-git(args...) = try
-    readchomp(Cmd(`git $args`; dir = dirname(page)))
-catch
-    ""
+function git(args...)
+    return try
+            readchomp(Cmd(`git $args`; dir = dirname(page)))
+        catch
+            ""
+        end
 end
 page_commit = git("log", "-1", "--format=%h %cs", "--", basename(page))
 page_dirty = !isempty(git("status", "--porcelain", "--", basename(page)))
@@ -683,11 +691,13 @@ cross2(o, a, b) = (a[1] - o[1]) * (b[2] - o[2]) - (a[2] - o[2]) * (b[1] - o[1])
 function hull_area(pts)
     P = sort(unique(pts))
     length(P) < 3 && return 0.0
-    chain(Q) = foldl(Q; init = eltype(Q)[]) do h, q
-        while length(h) >= 2 && cross2(h[end - 1], h[end], q) <= 0
-            pop!(h)
-        end
-        push!(h, q)
+    function chain(Q)
+        return foldl(Q; init = eltype(Q)[]) do h, q
+                while length(h) >= 2 && cross2(h[end - 1], h[end], q) <= 0
+                    pop!(h)
+                end
+                push!(h, q)
+            end
     end
     h = [chain(P)[1:(end - 1)]; chain(reverse(P))[1:(end - 1)]]
     length(h) < 3 && return 0.0
@@ -741,9 +751,13 @@ nothing #hide
 # (no CI 7500 + 100k + i), V-C9 9000 + 100k + i, V-C12 12001–12010 and 12101–12110, V-C1
 # 20001–20005 and 20101–20105.
 
-tmap(f, xs) = (out = Vector{Any}(undef, length(xs)); Threads.@threads(for i in eachindex(xs)
-                                                                  out[i] = f(xs[i])
-                                                              end); out)
+function tmap(f, xs)
+    out = Vector{Any}(undef, length(xs))
+    Threads.@threads(for i in eachindex(xs)
+            out[i] = f(xs[i])
+        end)
+    return out
+end
 function run06(seed, saves; lattice = (500, 500), n = 282, p = Pair[])
     prob = PottsProblem(Merks2006(; name = :m6, lattice), [layout(merks2006_layout(; lattice, n, seed), lattice); p...],
         (0, maximum(saves)); field_solver = SOLVER, seed)
@@ -844,11 +858,13 @@ full = if FULL
                                       (compactness(r[5000]), compactness(r[5100]))), 1:10)
                for (k, (T, mode)) in enumerate(((50.0, :extension_only), (50.0, :extension_retraction),
                                                  (800.0, :extension_only), (800.0, :extension_retraction))))
-    disp(seed; p) = (
-        r = run08(seed, [0, 19_300]; p); mean(
-            ((a, b),) -> hypot((b .- a)...),            # from MCS 0
-        zip([(mean(I[1] for I in findall(==(c), r[0])), mean(I[2] for I in findall(==(c), r[0]))) for c in 2:129],
-            [(mean(I[1] for I in findall(==(c), r[19_300])), mean(I[2] for I in findall(==(c), r[19_300]))) for c in 2:129])))
+    function disp(seed; p)
+        r = run08(seed, [0, 19_300]; p)
+        return mean(
+                ((a, b),) -> hypot((b .- a)...),            # from MCS 0
+            zip([(mean(I[1] for I in findall(==(c), r[0])), mean(I[2] for I in findall(==(c), r[0]))) for c in 2:129],
+                [(mean(I[1] for I in findall(==(c), r[19_300])), mean(I[2] for I in findall(==(c), r[19_300]))) for c in 2:129]))
+    end
     vc12 = (; ci = tmap(i -> disp(12_000 + i; p = Pair[]), 1:10), no = tmap(i -> disp(12_100 + i; p = [:χcc => 500.0]), 1:10))
     vc1 = (; ci = tmap(i -> network(run08(20_000 + i, [10_000, 10_100]; denovo = true)[10_000]), 1:5),
         no = tmap(i -> network(run08(20_100 + i, [10_000, 10_100]; denovo = true, p = [:χcc => 500.0])[10_000]), 1:5))
@@ -898,9 +914,11 @@ function record_field(file, sol; title, figsize, every = 1)
     field(i) = Float64.(Array(sol.u[i].site.c))
     ## endothelial sites by kind (every cell that is not of the frame's kind); NaN is transparent
     frame_kind = sol.u[1].cell.kind[Array(sol.u[1].ownership)[1, 1]]         # the corner site is the frozen frame
-    cells(i) = (
-        σ = Array(sol.u[i].ownership); kd = sol.u[i].cell.kind;
-                [c != 0 && kd[c] != frame_kind ? 1.0 : NaN for c in σ])
+    function cells(i)
+        σ = Array(sol.u[i].ownership)
+        kd = sol.u[i].cell.kind
+        return [c != 0 && kd[c] != frame_kind ? 1.0 : NaN for c in σ]
+    end
     nx, ny = frame_size(frames[1])
     ox, oy = frame_geometry(frames[1]).origin
     cmax = max(maximum(i -> maximum(field(i)), eachindex(sol.u)), 1e-12)

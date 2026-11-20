@@ -202,8 +202,10 @@ function mixed_gauss_seidel(y0, z0, m)
     end
     return ys, zs
 end
-jacobi_close(a, b, T) = length(a) == length(b) &&
-    all(isapprox.(a, b; rtol = T === Float32 ? 1.0e-5 : 1.0e-9, atol = T === Float32 ? 1.0e-5 : 1.0e-9))
+function jacobi_close(a, b, T)
+    return length(a) == length(b) &&
+        all(isapprox.(a, b; rtol = T === Float32 ? 1.0e-5 : 1.0e-9, atol = T === Float32 ? 1.0e-5 : 1.0e-9))
+end
 function warm_allocs(prob, alg)
     integ = init(prob, alg; save_start = false, save_end = false, save_everystep = false)
     step!(integ)
@@ -282,42 +284,46 @@ end
         for alg in ALGS
             # the pair, labels swapped (the model is symmetric under 1 ↔ 2)
             for k in (1.0, 0.25)
-                go(labels) = jacobi_traj(
-                    solve(
-                        remake(
-                            problem(
-                                JacobiPair(; name = :pair), 2, (0, jacobi_M); labels,
-                                vals = (:y => [1.0, 2.0],)
-                            ); p = [:k => k]
-                        ), alg; saveat = 0:jacobi_M
-                    ), :y
-                )
+                function go(labels)
+                    return jacobi_traj(
+                            solve(
+                                remake(
+                                    problem(
+                                        JacobiPair(; name = :pair), 2, (0, jacobi_M); labels,
+                                        vals = (:y => [1.0, 2.0],)
+                                    ); p = [:k => k]
+                                ), alg; saveat = 0:jacobi_M
+                            ), :y
+                        )
+                end
                 a, b = go([1, 2]), go([2, 1])
                 @test all(t -> b[t][[2, 1]] ≈ a[t], eachindex(a))
             end
             # the fold over three cells, under every relabelling of a 3-cycle and a reversal
             y0 = [1.0, 2.0, 4.0]
-            run3(labels) = jacobi_traj(
-                solve(
-                    problem(Fold(; name = :fold), 3, (0, jacobi_M); labels, vals = (:y => y0,)),
-                    alg; saveat = 0:jacobi_M
-                ), :y
-            )
+            function run3(labels)
+                return jacobi_traj(
+                        solve(
+                            problem(Fold(; name = :fold), 3, (0, jacobi_M); labels, vals = (:y => y0,)),
+                            alg; saveat = 0:jacobi_M
+                        ), :y
+                    )
+            end
             a = run3([1, 2, 3])
             for labels in ([3, 2, 1], [2, 3, 1], [3, 1, 2])
                 b = run3(labels)
                 @test all(t -> b[t][labels] ≈ a[t], eachindex(a))
             end
             # the mixed model, labels swapped, with an adaptive group
-            runm(labels) = (
+            function runm(labels)
                 sol = solve(
-                    problem(
-                        JacobiMixed(; name = :mixed), 2, (0, 3); labels,
-                        vals = (:y => [1.0, 2.0], :z => [4.0, 8.0]), solvers = [:z => rodas()]
-                    ), alg; saveat = 0:3
-                );
-                (jacobi_traj(sol, :y), jacobi_traj(sol, :z))
-            )
+                        problem(
+                            JacobiMixed(; name = :mixed), 2, (0, 3); labels,
+                            vals = (:y => [1.0, 2.0], :z => [4.0, 8.0]), solvers = [:z => rodas()]
+                        ), alg; saveat = 0:3
+                    )
+                return (jacobi_traj(sol, :y), jacobi_traj(sol, :z))
+            end
             (ya, za), (yb, zb) = runm([1, 2]), runm([2, 1])
             @test all(t -> isapprox(yb[t][[2, 1]], ya[t]; rtol = 1.0e-9) && isapprox(zb[t][[2, 1]], za[t]; rtol = 1.0e-9), eachindex(ya))
         end

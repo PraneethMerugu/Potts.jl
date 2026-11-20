@@ -91,24 +91,30 @@ gather_s(r, who = :id; site = 40) = :(count(q[n] == $who for n in $r($site)))
 spair(r; site = 40) = :($(gather_s(r, :a; site)) + $(gather_s(r, :b; site)))
 const STATIC = :(@constraint source < 0)
 const BOND = :(@relationship bond(cell, cell) capacity = 1)
-gather_divwhen(r; site = 40) = [
-    STATIC,
-    :(@divide cells(A) when = (y == 0.0) & (mcs * $(gather_g(r; site)) >= 12), y => mcs + 1.0)
-]
-gather_divrule(r) = [
-    STATIC,
-    :(@divide cells(A) when = (y == 0.0) & (id == 1) & (mcs == 2), y => 1.0 + $(gather_g(r, 2; site = 29)))
-]
+function gather_divwhen(r; site = 40)
+    return [
+            STATIC,
+            :(@divide cells(A) when = (y == 0.0) & (mcs * $(gather_g(r; site)) >= 12), y => mcs + 1.0)
+        ]
+end
+function gather_divrule(r)
+    return [
+            STATIC,
+            :(@divide cells(A) when = (y == 0.0) & (id == 1) & (mcs == 2), y => 1.0 + $(gather_g(r, 2; site = 29)))
+        ]
+end
 gather_link(r; site = 40) = [BOND, STATIC, :(@link bond when = new_contact(a, b) && (mcs * $(gather_pair(r; site)) >= 24))]
 gather_unlink(r) = [BOND, STATIC, :(@unlink bond when = mcs * $(gather_pair(r)) >= 24)]
 gather_edge(r) = [BOND, STATIC, :(@energy edges(bond) => 0.1 * $(spair(r)))]
 gather_obs(r) = [:(@observed o(cell) ~ $(gather_g(r)))]
 # dynamic (no veto): the same sites under copies, for the inline/named equivalence
 dyn_div(r) = [:(@divide cells(A) when = (y == 0.0) & ($(gather_g(r)) >= 3), y => mcs + 1.0 + $(gather_g(r, 2; site = 29)))]
-dyn_link(r) = [
-    BOND, :(@link bond when = new_contact(a, b) && ($(gather_pair(r)) >= 5)),
-    :(@unlink bond when = $(gather_pair(r)) <= 3), :(@energy edges(bond) => 2.0 * $(spair(r)))
-]
+function dyn_link(r)
+    return [
+            BOND, :(@link bond when = new_contact(a, b) && ($(gather_pair(r)) >= 5)),
+            :(@unlink bond when = $(gather_pair(r)) <= 3), :(@energy edges(bond) => 2.0 * $(spair(r)))
+        ]
+end
 # label => (layout, @relations body or nothing, statements after the volume energy)
 const FIXTURES = [
     "sq" => (:relation_fingerprint, nothing, []),
@@ -214,16 +220,19 @@ function sigma(lk::Symbol)
     σ[r2...] .= 2
     return σ
 end
-gather_op(lk; links = false) = Any[
-    ownership => sigma(lk), kind => [:A, :A], :q => Float64.(sigma(lk)),   # q: `gather_energy_tests.jl`
-    (links ? [:bond => [(1, 2)]] : [])...,
-]
+function gather_op(lk; links = false)
+    return Any[
+            ownership => sigma(lk), kind => [:A, :A], :q => Float64.(sigma(lk)),   # q: `gather_energy_tests.jl`
+            (links ? [:bond => [(1, 2)]] : [])...,
+        ]
+end
 """The problem of fixture `label` (a build error propagates: it is the defect)."""
-gather_problem(label; T = Float64, tspan = (0, 16), seed = 1, links = false) =
-    PottsProblem(
-    Base.invokelatest(MODELS[label]; name = :g), gather_op(LAYOUT_OF[label]; links), tspan;
-    T, seed, capacity = 16
-)
+function gather_problem(label; T = Float64, tspan = (0, 16), seed = 1, links = false)
+    return PottsProblem(
+            Base.invokelatest(MODELS[label]; name = :g), gather_op(LAYOUT_OF[label]; links), tspan;
+            T, seed, capacity = 16
+        )
+end
 gather_solve(label; alg = SequentialCPM(), kw...) = solve(gather_problem(label; kw...), alg; saveat = 1)
 # every MCS
 gather_fp(label; T = Float64) = gather_problem(label; T).f.fingerprint

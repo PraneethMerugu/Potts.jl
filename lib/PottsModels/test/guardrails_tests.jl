@@ -98,8 +98,10 @@ function dsl_docs_corpus()
 end
 # a docstring bound to Potts's own name (not one Potts takes from Base or a stdlib, like
 # `rand`), or the name in backticks in a docstring or the manual
-dsl_documented(corpus, n) = (Docs.Binding(Potts, n).mod === Potts && Base.Docs.hasdoc(Potts, n)) ||
-    occursin(Regex("`" * string(n) * "[`(\\[ ]"), corpus)
+function dsl_documented(corpus, n)
+    return (Docs.Binding(Potts, n).mod === Potts && Base.Docs.hasdoc(Potts, n)) ||
+        occursin(Regex("`" * string(n) * "[`(\\[ ]"), corpus)
+end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 

@@ -173,13 +173,13 @@ const BASE = PottsProblem(AkeebInvasion(; name = :akeeb), akeeb_state(; seed = 1
 # division count, and the V-A1 (b) / V-C1 bookkeeping.
 function akeeb_run(point, seeds; tmax = 701, saves = SAVES)
     jlf, μ, pp = point
-    prob_func(q, ctx) = (
-        s = seeds[ctx.sim_id];
-        remake(
-            q; u0 = akeeb_state(; pp, seed = s), p = [:μ => μ, :J => akeeb_contacts(jlf)], seed = s,
-            tspan = (0, tmax)
-        )
-    )
+    function prob_func(q, ctx)
+        s = seeds[ctx.sim_id]
+        return remake(
+                q; u0 = akeeb_state(; pp, seed = s), p = [:μ => μ, :J => akeeb_contacts(jlf)], seed = s,
+                tspan = (0, tmax)
+            )
+    end
     ens = solve(
         EnsembleProblem(BASE; prob_func), ALG, EnsembleThreads();
         trajectories = length(seeds), saveat = saves
@@ -252,10 +252,11 @@ function verdicts(PP, met, phen)
 end
 # the recomputed values agree with the record's "ours" column to its printed digits (half a
 # unit of the last digit: 2 decimals for the percentages, 3 for r) and give its verdicts
-near(x, printed) = (
-    d = something(findfirst('.', printed), lastindex(printed)); digs = length(printed) - d;
-    abs(x - parse(Float64, printed)) <= 0.5 * 10.0^-digs + 1.0e-9
-)
+function near(x, printed)
+    d = something(findfirst('.', printed), lastindex(printed))
+    digs = length(printed) - d
+    return abs(x - parse(Float64, printed)) <= 0.5 * 10.0^-digs + 1.0e-9
+end
 function agrees(v, rows)
     rec(t) = only(r for r in rows if r["target"] == t)
     ok = true
@@ -311,10 +312,10 @@ akeeb_at(rows, k, j) = [v[j] for (kk, v) in rows if kk == k]
 # `x` matches the printed reference `ref` to one unit of its last printed digit (0 to 3
 # decimals, read off the value). One unit, not half, since D-152; the slip it
 # absorbed (2889 printed for 2888.46) is corrected under D-152
-akeeb_printed(x, ref) = (
-    d = findfirst(d -> round(ref; digits = d) == ref, 0:3) - 1;
-    abs(x - ref) <= 10.0^-d * (1 + 1.0e-6)
-)
+function akeeb_printed(x, ref)
+    d = findfirst(d -> round(ref; digits = d) == ref, 0:3) - 1
+    return abs(x - ref) <= 10.0^-d * (1 + 1.0e-6)
+end
 akeeb_stats(v) = (mean(v), akeeb_sd(v), length(v))
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
@@ -553,10 +554,12 @@ end
             (k = pt, runs = akeeb_run(pt, [1_000_000 + 100j + i for i in 1:10]; saves = [701]))
                 for (j, pt) in enumerate(SLICE)
         ]
-        marginal(m, set) = [
-            Float64(getproperty(r.obs[700], m)) for s in SLICE_RUNS
-                if set === :all || SLICE_SETS[set](s.k) for r in s.runs
-        ]
+        function marginal(m, set)
+            return [
+                    Float64(getproperty(r.obs[700], m)) for s in SLICE_RUNS
+                        if set === :all || SLICE_SETS[set](s.k) for r in s.runs
+                ]
+        end
 
         @testset "10 akeeb FULL: V-A3 / V-A4 slice marginals (R2)" begin
             @test length(SLICE_RUNS) == 121
@@ -658,10 +661,12 @@ end
         else
             A = akeeb_csv(joinpath(DATA, "invasion_metrics.csv"), COLS_A)
             B(t) = akeeb_csv(joinpath(DATA, "Invasion_Metrics_By_MCS", "invasion_metrics_$(t)_mcs.csv"), COLS_B)
-            C(t) = akeeb_csv(
-                joinpath(DATA, "NEW", "Invasion_Metrics_By_MCS", "invasion_metrics_at_$(t)_mcs.csv"),
-                COLS_C
-            )
+            function C(t)
+                return akeeb_csv(
+                        joinpath(DATA, "NEW", "Invasion_Metrics_By_MCS", "invasion_metrics_at_$(t)_mcs.csv"),
+                        COLS_C
+                    )
+            end
             @test length(A) == 13_305
             # the recorded constants are dataset A / B as printed in the spec (rounded)
             for name in keys(POINTS), (j, ref) in enumerate(REF_A[name])

@@ -157,16 +157,18 @@ g_exact(t) = exp(-COLUMN_K * t)
 # The wide member adds cell columns z1 (Float), z2 (Int32), z3 (3 × capacity), a model
 # quantity q, a site field h and a parameter table Q.
 const NCELL = 32
-copy_x_to_y!(cell, st, p, ctx, mcs) = (
+function copy_x_to_y!(cell, st, p, ctx, mcs)
     for c in eachindex(cell.y)
-        cell.y[c] += cell.x[c]
-    end; nothing
-)
-copy_sigma_to_y!(cell, st, p, ctx, mcs) = (
+            cell.y[c] += cell.x[c]
+        end
+    return nothing
+end
+function copy_sigma_to_y!(cell, st, p, ctx, mcs)
     for c in 1:2
-        cell.y[c] = count(==(Int32(c)), st.ownership)
-    end; nothing
-)
+            cell.y[c] = count(==(Int32(c)), st.ownership)
+        end
+    return nothing
+end
 function hostphase(body; bad = false)
     body === :none && return CorePotts.HostPhase(copy_x_to_y!)
     body === :xy && return CorePotts.HostPhase(copy_x_to_y!; reads = bad ? (:x, :nonexistent) : (:x,), writes = (:y,))

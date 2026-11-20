@@ -381,10 +381,12 @@ end
 @testitem "Eden: fills medium only; region, domain and clipping" setup = [EdenSplitsSetup] tags = [:pottsmodels, :acceptance] begin
     @testset "Eden: fills medium only; region, domain and clipping" begin
         # a seed on an earlier cell is not placed; the tile is never painted over in 20 rounds
-        l(sf) = overlay(
-            Tiling((2, 2); region = (3:4, 3:4), kinds = [:x]),
-            Eden([Point(3.0, 3.0), Point(1.0, 1.0)]; rounds = 20, kinds = [:e], seed = 1, shortfall = sf)
-        )
+        function l(sf)
+            return overlay(
+                    Tiling((2, 2); region = (3:4, 3:4), kinds = [:x]),
+                    Eden([Point(3.0, 3.0), Point(1.0, 1.0)]; rounds = 20, kinds = [:e], seed = 1, shortfall = sf)
+                )
+        end
         op, rep = layout(l(:allow), (6, 6); report = true)
         σ = eden_σ(op)
         @test all(==(1), σ[3:4, 3:4]) && count(==(1), σ) == 4 && σ[1, 1] == 2
@@ -557,13 +559,15 @@ end
     @testset "01b de novo (01 §7.6): the:allow consumer, and the GrowInCells law" begin
         # TST denovo_*.par: 200², a one-site border, 360 seeds with replacement over the 198²
         # interior, 10 synchronous Eden rounds, no division.
-        denovo(s; sf = :allow) = overlay(
-            Frame(:border; width = 1),
-            Eden(
-                RandomPoints(360; region = (2:199, 2:199), replace = true, seed = s);
-                rounds = 10, kinds = [:endothelial], seed = 100 + s, shortfall = sf
-            )
-        )
+        function denovo(s; sf = :allow)
+            return overlay(
+                    Frame(:border; width = 1),
+                    Eden(
+                        RandomPoints(360; region = (2:199, 2:199), replace = true, seed = s);
+                        rounds = 10, kinds = [:endothelial], seed = 100 + s, shortfall = sf
+                    )
+                )
+        end
         # seed 1 draws a coinciding pair (the oracle's count): the default refuses, :allow paints
         @test length(unique(eden_rp(box(2:199, 2:199), 360, 1))) < 360
         @test_throws ArgumentError layout(denovo(1; sf = :error), (200, 200))

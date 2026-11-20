@@ -90,10 +90,12 @@ function quietly(f)                 # f(), with its log records captured, not pr
     Base.CoreLogging.with_logger(() -> (v = f()), Test.TestLogger(min_level = Base.CoreLogging.Debug))
     return v
 end
-splitwarns(f) = count(
-    r -> r.level == Base.CoreLogging.Warn && occursin(r"split cell", string(r.message)),
-    protocol_logs(f)
-)
+function splitwarns(f)
+    return count(
+            r -> r.level == Base.CoreLogging.Warn && occursin(r"split cell", string(r.message)),
+            protocol_logs(f)
+        )
+end
 # ---------------------------------------------------------------------------------------------
 # Custom layers, written against the new protocol only
 # ---------------------------------------------------------------------------------------------
@@ -196,10 +198,12 @@ const AKEEB = [
     ((99, 60), :retry, 3, 231, (77, 3, 77)),
 ]
 # The published slab written with public layers only.
-protocol_akeeb(X, slab, seed, misses; splits = :allow) = overlay(
-    Tiling((3, 3); region = (1:X, 1:(3 * cld(slab, 3))), kinds = [:follower], partial = :clip),
-    InsertUntil(:leader; into = [:follower], fraction = 1 // 4, seed, misses, region = (2:X, 2:(slab - 1)), splits)
-)
+function protocol_akeeb(X, slab, seed, misses; splits = :allow)
+    return overlay(
+            Tiling((3, 3); region = (1:X, 1:(3 * cld(slab, 3))), kinds = [:follower], partial = :clip),
+            InsertUntil(:leader; into = [:follower], fraction = 1 // 4, seed, misses, region = (2:X, 2:(slab - 1)), splits)
+        )
+end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
@@ -346,12 +350,14 @@ end
         #      hit; c1 keeps 8 connected sites. counted = 1 + misses.
         # Final ids: c1 = 1, c2 = 2, b = 3, x = 4, y = 5.
         S = 8
-        l(s3) = overlay(
-            Tiling((3, 3); region = (1:8, 1:3), kinds = [:a], partial = :clip),
-            Tiling((2, 3); region = (7:8, 1:3), kinds = [:b]),
-            Tiling((1, 3); region = (5:5, 1:3), kinds = [:x], splits = s3),
-            InsertUntil(:y; into = [:a], number = 1, seed = S, misses = :count, region = (2:2, 3:4))
-        )
+        function l(s3)
+            return overlay(
+                    Tiling((3, 3); region = (1:8, 1:3), kinds = [:a], partial = :clip),
+                    Tiling((2, 3); region = (7:8, 1:3), kinds = [:b]),
+                    Tiling((1, 3); region = (5:5, 1:3), kinds = [:x], splits = s3),
+                    InsertUntil(:y; into = [:a], number = 1, seed = S, misses = :count, region = (2:2, 3:4))
+                )
+        end
         # the misses from the documented draw rule: StableRNG(seed), rand(rng, 1:length(sites))
         rng = StableRNG(S)
         m = 0

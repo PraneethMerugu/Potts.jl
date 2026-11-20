@@ -183,45 +183,47 @@ function two_wortel()
     s[6:7, 6:7] .= 2
     return [ownership => s, kind => [:cell, :cell]]
 end
-unchanged() = (
-    "default" => () -> problem(Default(; name = :ode)),
-    "md = 1.0" => () -> problem(ODE(; name = :ode, md = 1.0)),
-    "md = 1" => () -> problem(ODE(; name = :ode, md = 1)),
-    "md = 0.5" => () -> problem(ODE(; name = :ode, md = 0.5)),
-    "md = 1//2" => () -> problem(ODE(; name = :ode, md = 1 // 2)),
-    "md = 0.5f0" => () -> problem(ODE(; name = :ode, md = 0.5f0)),
-    "md = 2" => () -> problem(ODE(; name = :ode, md = 2)),
-    "md = 0.1f0" => () -> problem(ODE(; name = :ode, md = 0.1f0)),
-    "Barker md = 0.5" => () -> problem(ODE(; name = :ode, md = 0.5, barker = true)),
-    "md = 0.5 Adaptive" => () -> problem(ODE(; name = :ode, md = 0.5); ode_solver = Adaptive(Rodas5P())),
-    "md = 0.5 Float32" => () -> problem(ODE(; name = :ode, md = 0.5); T = Float32),
-    "extension inheriting md = 0.5" => () -> problem(ExtInherit(; name = :ext, md = 0.5)),
-    "field md = 0.5" => () -> PottsProblem(
-        Field(; name = :fd, md = 0.5), [duration_op(); :c => ones(12, 12)], (0, 3);
-        field_solver = ExplicitEuler()
-    ),
-    "clock md = 0.5" => () -> PottsProblem(DurationClock(; name = :clk, md = 0.5), duration_op(), (0, 4)),
-    "GranerGlazier" => () -> (s = graner_glazier_state(); PottsProblem(GranerGlazier(; name = :gg), [ownership => s[1], kind => s[2]], (0, 10))),
-    "WortelAct" => () -> PottsProblem(WortelAct(; name = :act, lattice = (8, 8)), two_wortel(), (0, 10)),
-    "WortelAct connected" => () -> PottsProblem(WortelAct(; name = :act, lattice = (8, 8), connected = true), two_wortel(), (0, 10)),
-    "MerksVasculogenesis" => () -> PottsProblem(
-        MerksVasculogenesis(; name = :merks, lattice = (8, 8)),
-        [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]], (0, 10);
-        field_solver = Potts.ExplicitEuler(substeps = 2, lower_bound = 0.0)
-    ),
-    "SingleDivisionFixture" => () -> PottsProblem(
-        SingleDivisionFixture(; name = :fixture),
-        [ownership => (s = zeros(Int32, 12, 8); s[5:8, 4:5] .= 1; s), kind => [:epithelial]], (0, 10)
-    ),
-    "OpenVTGrowingMonolayer" => () -> PottsProblem(
-        OpenVTGrowingMonolayer(; name = :openvt, lattice = (24, 24)),
-        openvt_monolayer_state(; lattice = (24, 24)), (0, 10); capacity = 64
-    ),
-    "AkeebInvasion" => () -> PottsProblem(
-        AkeebInvasion(; name = :akeeb, lattice = (60, 40)), akeeb_state(; lattice = (60, 40)), (0, 10);
-        capacity = 256
-    ),
-)
+function unchanged()
+    return (
+            "default" => () -> problem(Default(; name = :ode)),
+            "md = 1.0" => () -> problem(ODE(; name = :ode, md = 1.0)),
+            "md = 1" => () -> problem(ODE(; name = :ode, md = 1)),
+            "md = 0.5" => () -> problem(ODE(; name = :ode, md = 0.5)),
+            "md = 1//2" => () -> problem(ODE(; name = :ode, md = 1 // 2)),
+            "md = 0.5f0" => () -> problem(ODE(; name = :ode, md = 0.5f0)),
+            "md = 2" => () -> problem(ODE(; name = :ode, md = 2)),
+            "md = 0.1f0" => () -> problem(ODE(; name = :ode, md = 0.1f0)),
+            "Barker md = 0.5" => () -> problem(ODE(; name = :ode, md = 0.5, barker = true)),
+            "md = 0.5 Adaptive" => () -> problem(ODE(; name = :ode, md = 0.5); ode_solver = Adaptive(Rodas5P())),
+            "md = 0.5 Float32" => () -> problem(ODE(; name = :ode, md = 0.5); T = Float32),
+            "extension inheriting md = 0.5" => () -> problem(ExtInherit(; name = :ext, md = 0.5)),
+            "field md = 0.5" => () -> PottsProblem(
+                Field(; name = :fd, md = 0.5), [duration_op(); :c => ones(12, 12)], (0, 3);
+                field_solver = ExplicitEuler()
+            ),
+            "clock md = 0.5" => () -> PottsProblem(DurationClock(; name = :clk, md = 0.5), duration_op(), (0, 4)),
+            "GranerGlazier" => () -> (s = graner_glazier_state(); PottsProblem(GranerGlazier(; name = :gg), [ownership => s[1], kind => s[2]], (0, 10))),
+            "WortelAct" => () -> PottsProblem(WortelAct(; name = :act, lattice = (8, 8)), two_wortel(), (0, 10)),
+            "WortelAct connected" => () -> PottsProblem(WortelAct(; name = :act, lattice = (8, 8), connected = true), two_wortel(), (0, 10)),
+            "MerksVasculogenesis" => () -> PottsProblem(
+                MerksVasculogenesis(; name = :merks, lattice = (8, 8)),
+                [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s), kind => [:endothelial]], (0, 10);
+                field_solver = Potts.ExplicitEuler(substeps = 2, lower_bound = 0.0)
+            ),
+            "SingleDivisionFixture" => () -> PottsProblem(
+                SingleDivisionFixture(; name = :fixture),
+                [ownership => (s = zeros(Int32, 12, 8); s[5:8, 4:5] .= 1; s), kind => [:epithelial]], (0, 10)
+            ),
+            "OpenVTGrowingMonolayer" => () -> PottsProblem(
+                OpenVTGrowingMonolayer(; name = :openvt, lattice = (24, 24)),
+                openvt_monolayer_state(; lattice = (24, 24)), (0, 10); capacity = 64
+            ),
+            "AkeebInvasion" => () -> PottsProblem(
+                AkeebInvasion(; name = :akeeb, lattice = (60, 40)), akeeb_state(; lattice = (60, 40)), (0, 10);
+                capacity = 256
+            ),
+        )
+end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 

@@ -55,14 +55,18 @@ const EDGE_UPDATE_S = Potts.Symbolics
 const EDGE_UPDATE_SU = Potts.SymbolicUtils
 const SII = Potts.SymbolicIndexingInterface
 row(u) = (u.phase, u.scope, u.every)
-same(a, b) = length(a) == length(b) &&
-    all(i -> row(a[i]) == row(b[i]) && isequal(a[i].eq, b[i].eq), eachindex(a, b))
+function same(a, b)
+    return length(a) == length(b) &&
+        all(i -> row(a[i]) == row(b[i]) && isequal(a[i].eq, b[i].eq), eachindex(a, b))
+end
 lhsname(u) = SII.getname(EDGE_UPDATE_S.unwrap(u.eq.lhs))
-clear(f, words...) = try
-    f()
-    false
-catch err
-    err isa Potts.PottsCompileError
+function clear(f, words...)
+    return try
+            f()
+            false
+        catch err
+            err isa Potts.PottsCompileError
+        end
 end
 # ---------------------------------------------------------------------------------------
 # Fixtures

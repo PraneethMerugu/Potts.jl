@@ -89,11 +89,13 @@ msd(args...; kw...) = getfield(DISPLACEMENT_A, :mean_squared_displacement)(args.
 furth_msd(args...; kw...) = getfield(DISPLACEMENT_A, :furth_mean_squared_displacement)(args...; kw...)
 displacement_furth_fit(args...; kw...) = getfield(DISPLACEMENT_A, :furth_fit)(args...; kw...)
 displacement_natural_units(args...; kw...) = getfield(DISPLACEMENT_A, :natural_units)(args...; kw...)
-displacement_msg(f) = try
-    f()
-    ""
-catch e
-    e isa ArgumentError ? e.msg : ""
+function displacement_msg(f)
+    return try
+            f()
+            ""
+        catch e
+            e isa ArgumentError ? e.msg : ""
+        end
 end
 # Eq. 1 written out (the test's own)
 eq1(t; S, D, P) = 2D * (t - P * (1 - exp(-t / P))) + 2D * S / (1 - S) * t
