@@ -64,6 +64,8 @@ function _field_centers(sites::Tuple, dims)
     return ntuple(length(dims)) do k
         r, n = sites[k], dims[k]
         length(r) == n && return collect(Float64, r)
+        # a grid whose size does not divide the lattice's (or a single site) has no centers
+        # to derive: its axis counts nodes, 1 to n, as with no coordinates at all
         (n > 0 && length(r) % n == 0 && length(r) > 1) || return collect(Float64, 1:n)
         h = (last(r) - first(r)) / (length(r) - 1)
         b = length(r) ÷ n

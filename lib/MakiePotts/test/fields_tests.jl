@@ -122,6 +122,11 @@ end
     @test cplt.ys[] ≈ [1.0, 3.0]
     _, _, fplt = fieldplot(csol, cc)
     @test fplt.xs[] ≈ collect(csol[cx])
+    # `site_centers` reads a field solution's axes; anything else is a MethodError
+    using LatticeFields.Problems: site_centers
+    sx, sy = site_centers(sol)
+    @test sx ≈ collect(sol[x]) && sy ≈ collect(sol[y])
+    @test_throws MethodError site_centers(sol.u)
 end
 
 @testitem "fieldplot: attribute and data changes redraw" setup = [MP_fields] tags = [
