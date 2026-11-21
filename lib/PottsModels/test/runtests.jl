@@ -1,7 +1,7 @@
-# PottsModels tests on ReTestItems. Test items are in `*_tests.jl`; each file's definitions are
-# in its `@testsetup` module, and definitions that several files use are in `shared/` (each
-# setup includes the ones it needs). Every item runs in its own module, so an item depends only
-# on the setup it names. Groups are declared in test_groups.toml.
+# PottsModels tests on ReTestItems. Test items are in `*_tests.jl`; each file's definitions
+# are in its `@testsetup` module, and definitions that several files use are in `shared/`
+# (each setup includes the ones it needs). Every item runs in its own module, so an item
+# depends only on the setup it names. Groups are declared in test_groups.toml.
 #
 #   julia --project=lib/PottsModels/test lib/PottsModels/test/runtests.jl [group...]
 #
@@ -31,7 +31,8 @@ function _load_pm_groups()
     raw = TOML.parsefile(joinpath(POTTSMODELS_TESTDIR, "test_groups.toml"))
     out = Dict{String, Dict{String, Any}}()
     for (name, val) in raw
-        val isa AbstractDict || throw(ArgumentError("Invalid entry \"$name\" in PottsModels test_groups.toml"))
+        val isa AbstractDict ||
+            throw(ArgumentError("Invalid entry \"$name\" in PottsModels test_groups.toml"))
         out[string(name)] = Dict{String, Any}(string(k) => v for (k, v) in val)
     end
     return out
@@ -59,17 +60,29 @@ function _resolve_pm_groups(groups_table, raw_groups)
             push!(selected, target)
         else
             valid = join(["All"; sort!(collect(keys(groups_table)))], ", ")
-            throw(ArgumentError("Unknown PottsModels test group \"$g\". Valid groups: $valid"))
+            throw(
+                ArgumentError(
+                    "Unknown PottsModels test group \"$g\". Valid groups: $valid"
+                )
+            )
         end
     end
     return unique(selected)
 end
 
 const POTTSMODELS_GROUPS_TABLE = _load_pm_groups()
-# A caller that forwards its own command line (for example `julia runtests.jl Core`) can leave this
-# script's path in ARGS; that path is not a group, so it is dropped.
-const POTTSMODELS_SELECTED_GROUPS = let cli = filter(a -> normpath(abspath(a)) != normpath(abspath(@__FILE__)), ARGS)
-    raw = !isempty(cli) ? cli : (!isempty(strip(get(ENV, "GROUP", ""))) ? [strip(ENV["GROUP"])] : ["All"])
+# A caller that forwards its own command line (for example `julia runtests.jl Core`) can
+# leave this script's path in ARGS; that path is not a group, so it is dropped.
+const POTTSMODELS_SELECTED_GROUPS = let cli = filter(
+        a -> normpath(abspath(a)) != normpath(abspath(@__FILE__)), ARGS
+    )
+    raw = if !isempty(cli)
+        cli
+    elseif !isempty(strip(get(ENV, "GROUP", "")))
+        [strip(ENV["GROUP"])]
+    else
+        ["All"]
+    end
     _resolve_pm_groups(POTTSMODELS_GROUPS_TABLE, raw)
 end
 
@@ -77,7 +90,10 @@ if "gpu" in POTTSMODELS_SELECTED_GROUPS && isempty(strip(get(ENV, "POTTS_GPU", "
     ENV["POTTS_GPU"] = Sys.isapple() ? "metal" : "rocm"
 end
 
-const POTTSMODELS_SHARD = let (k, n) = parse.(Int, split(get(ENV, "POTTSMODELS_SHARD", "1/1"), '/'))
+const POTTSMODELS_SHARD = let (k, n) = parse.(
+        Int,
+        split(get(ENV, "POTTSMODELS_SHARD", "1/1"), '/')
+    )
     1 <= k <= n || throw(ArgumentError("POTTSMODELS_SHARD = $k/$n: need 1 ≤ k ≤ n"))
     (k, n)
 end
@@ -86,7 +102,8 @@ end
 function pottsmodels_test_files()
     out = String[]
     for (root, _, files) in walkdir(POTTSMODELS_TESTDIR), f in files
-        endswith(f, "_tests.jl") && push!(out, relpath(joinpath(root, f), POTTSMODELS_TESTDIR))
+        endswith(f, "_tests.jl") &&
+            push!(out, relpath(joinpath(root, f), POTTSMODELS_TESTDIR))
     end
     return sort!(replace.(out, '\\' => '/'))
 end
@@ -103,7 +120,8 @@ function pottsmodels_group_files(groups = POTTSMODELS_SELECTED_GROUPS)
         excl = get(opts, "exclude_files", String[])
         for f in all
             f in excl && continue
-            sel = (isempty(dirs) && isempty(files)) || any(d -> startswith(f, d * "/"), dirs) || f in files
+            sel = (isempty(dirs) && isempty(files)) ||
+                any(d -> startswith(f, d * "/"), dirs) || f in files
             sel && push!(picked, f)
         end
     end
@@ -113,7 +131,14 @@ end
 """Deal `files` to `n` shards, longest first by the weights of shard_weights.toml."""
 function pottsmodels_shards(files, n)
     weights = let p = joinpath(POTTSMODELS_TESTDIR, "shard_weights.toml")
-        isfile(p) ? Dict{String, Float64}(k => Float64(v) for (k, v) in TOML.parsefile(p)["seconds"]) : Dict{String, Float64}()
+        if isfile(p)
+            Dict{
+                String,
+                Float64,
+            }(k => Float64(v) for (k, v) in TOML.parsefile(p)["seconds"])
+        else
+            Dict{String, Float64}()
+        end
     end
     known = [weights[f] for f in files if haskey(weights, f)]
     fallback = isempty(known) ? 1.0 : sort(known)[cld(length(known), 2)]
@@ -139,11 +164,19 @@ function pottsmodels_tests(
     isempty(mine) && return nothing
     name = (s = get(ENV, "POTTSMODELS_TEST_NAME", ""); isempty(s) ? nothing : Regex(s))
     endfile = get(ENV, "POTTS_TEST_END_EXPR_FILE", "")
-    test_end_expr = isempty(endfile) ? Expr(:block) : Meta.parse("begin\n" * read(endfile, String) * "\nend")
+    test_end_expr = if isempty(endfile)
+        Expr(:block)
+    else
+        Meta.parse("begin\n" * read(endfile, String) * "\nend")
+    end
     paths = [joinpath(POTTSMODELS_TESTDIR, f) for f in mine]
-    # `Pkg.Operations.testfile` is an internal Pkg API (check it on dependency updates). It gives the
-    # `runtests.jl` path, which `ReTestItems.runtests` reads from `:SOURCE_PATH` as under `Pkg.test`.
-    task_local_storage(:SOURCE_PATH, Pkg.Operations.testfile(dirname(Base.active_project()))) do
+    # `Pkg.Operations.testfile` is an internal Pkg API (check it on dependency updates). It
+    # gives the `runtests.jl` path, which `ReTestItems.runtests` reads from `:SOURCE_PATH`
+    # as under `Pkg.test`.
+    task_local_storage(
+        :SOURCE_PATH,
+        Pkg.Operations.testfile(dirname(Base.active_project()))
+    ) do
         runtests(
             paths...; nworkers, name, test_end_expr, testitem_timeout = 7200, retries = 0,
             nworker_threads = string(Threads.nthreads()), logs = :batched

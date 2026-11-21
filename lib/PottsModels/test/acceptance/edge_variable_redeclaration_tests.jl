@@ -68,7 +68,8 @@ using Potts: CorePotts
     end
     @sweep Metropolis(; temperature = T)
 end
-# the oracle for A: the same extension with the base's relationship written out (works today)
+# the oracle for A: the same extension with the base's relationship written out (works
+# today)
 @potts_model Explicit begin
     @extend base = Spring()
     @variables begin
@@ -186,10 +187,16 @@ end
 end
 function three()
     σ = zeros(Int32, 60, 30)
-    σ[5:10, 12:17] .= 1; σ[20:25, 12:17] .= 2; σ[40:45, 12:17] .= 3
+    σ[5:10, 12:17] .= 1
+    σ[20:25, 12:17] .= 2
+    σ[40:45, 12:17] .= 3
     return σ
 end
-edge_op(extra...) = Any[ownership => three(), kind => [:blob, :blob, :blob], :bond => [(1, 2)], extra...]
+function edge_op(extra...)
+    return Any[
+        ownership => three(), kind => [:blob, :blob, :blob], :bond => [(1, 2)], extra...,
+    ]
+end
 op2(extra...) = edge_op(:tether => [(2, 3)], extra...)
 compile(M) = mtkcompile(M(; name = :m))
 edge_names(c, r) = [Potts.info(x).name for x in getfield(c, :edge_vars)[r]]
@@ -201,61 +208,86 @@ function payload(u, rel, x, a, b)
 end
 function linker_state()
     σ = zeros(Int32, 40, 20)
-    σ[3:8, 8:13] .= 1; σ[20:25, 8:13] .= 2; σ[26:31, 8:13] .= 3   # 2 and 3 touch (6 sites); 1 is 11 away
+    σ[3:8, 8:13] .= 1
+    σ[20:25, 8:13] .= 2
+    σ[26:31, 8:13] .= 3   # 2 and 3 touch (6 sites); 1 is 11 away
     return σ
 end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "edge variable redeclaration: a re-declared base edge variable keeps the base's relationship" setup = [EdgeVariableRedeclarationSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "edge variable redeclaration: a re-declared base edge variable keeps the base's \
+    relationship" setup = [EdgeVariableRedeclarationSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # A. a re-declared inherited edge variable keeps its relationship
-    @testset "edge variable redeclaration: a re-declared base edge variable keeps the base's relationship" begin
+    @testset "edge variable redeclaration: a re-declared base edge variable keeps the \
+        base's relationship" begin
         oracle = compile(Explicit)
-        @test edge_names(oracle, :bond) == [:rest] && edge_names(oracle, :tether) == [:len]   # control
+        # control
+        @test edge_names(oracle, :bond) == [:rest] && edge_names(oracle, :tether) == [:len]
         for M in (Redeclare, RedeclareBound)
             c = compile(M)
             @test edge_names(c, :bond) == [:rest]
             @test edge_names(c, :tether) == [:len]
             prob = problem(M, op2())
             u = prob.u0
-            @test payload(u, :bond, :rest, 1, 2) == payload(u, :bond, :rest, 2, 1) == 9.0   # the extension's default
+            # the extension's default
+            @test payload(u, :bond, :rest, 1, 2) == payload(u, :bond, :rest, 2, 1) == 9.0
             @test payload(u, :tether, :len, 2, 3) == 18.0
-            @test total_energy(prob) == 3264 + 72 + 6 == total_energy(problem(Explicit, op2()))
-            @test prob.f.fingerprint == problem(Explicit, op2()).f.fingerprint   # the same code
+            @test total_energy(prob) == 3264 + 72 + 6 ==
+                total_energy(problem(Explicit, op2()))
+            # the same code
+            @test prob.f.fingerprint == problem(Explicit, op2()).f.fingerprint
             @test selfcheck(prob) < 1.0e-9
         end
     end
 end
 
-@testitem "edge variable redeclaration: re-declarations without, or with several, relationships of their own" setup = [EdgeVariableRedeclarationSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "edge variable redeclaration: re-declarations without, or with several, relationships of their own" begin
+@testitem "edge variable redeclaration: re-declarations without, or with several, \
+    relationships of their own" setup = [EdgeVariableRedeclarationSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "edge variable redeclaration: re-declarations without, or with several, \
+        relationships of their own" begin
         c = compile(RedeclareOverTwo)
         @test edge_names(c, :bond) == [:rest] && edge_names(c, :tether) == [:len]
         prob = problem(RedeclareOverTwo, op2())
         @test payload(prob.u0, :bond, :rest, 1, 2) == 9.0
         @test payload(prob.u0, :tether, :len, 3, 2) == 20.0
-        @test total_energy(prob) == 3264 + 72 + 0 == total_energy(problem(ExplicitOverTwo, op2()))
-        @test prob.f.fingerprint == problem(ExplicitOverTwo, op2()).f.fingerprint   # the same code
+        @test total_energy(prob) == 3264 + 72 + 0 ==
+            total_energy(problem(ExplicitOverTwo, op2()))
+        # the same code
+        @test prob.f.fingerprint == problem(ExplicitOverTwo, op2()).f.fingerprint
 
         c = compile(RedeclareTwoOwn)
         @test edge_names(c, :bond) == [:rest]
         @test edge_names(c, :tether) == [:len] && edge_names(c, :glue) == [:w]
         prob = problem(RedeclareTwoOwn, op2(:glue => [(1, 3)]))
-        @test payload(prob.u0, :bond, :rest, 1, 2) == 9.0 && payload(prob.u0, :glue, :w, 1, 3) == 1.0
+        @test payload(prob.u0, :bond, :rest, 1, 2) == 9.0 &&
+            payload(prob.u0, :glue, :w, 1, 3) == 1.0
         @test total_energy(prob) == 3264 + 72 + 6
     end
 end
 
-@testitem "edge variable redeclaration: the re-declared variable is the base relationship's, not the extension's" setup = [EdgeVariableRedeclarationSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "edge variable redeclaration: the re-declared variable is the base relationship's, not the extension's" begin
+@testitem "edge variable redeclaration: the re-declared variable is the base \
+    relationship's, not the extension's" setup = [EdgeVariableRedeclarationSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "edge variable redeclaration: the re-declared variable is the base \
+        relationship's, not the extension's" begin
         # the extension's own edge term may not read it (it has no slot on `tether` links)
         @test_throws Potts.PottsCompileError compile(RedeclareOwnRead)
     end
 end
 
-@testitem "edge variable redeclaration: an explicit re-scope to another relationship is rejected when built" setup = [EdgeVariableRedeclarationSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "edge variable redeclaration: an explicit re-scope to another relationship is rejected when built" begin
+@testitem "edge variable redeclaration: an explicit re-scope to another relationship is \
+    rejected when built" setup = [EdgeVariableRedeclarationSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "edge variable redeclaration: an explicit re-scope to another relationship \
+        is rejected when built" begin
         for (M, _) in ((Rescope, "rest"), (RescopeUnread, "age"))
             @test_throws ArgumentError M(; name = :m)
         end
@@ -264,8 +296,12 @@ end
     end
 end
 
-@testitem "edge variable redeclaration: new unscoped edge variables keep (controls)" setup = [EdgeVariableRedeclarationSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "edge variable redeclaration: new unscoped edge variables keep (controls)" begin
+@testitem "edge variable redeclaration: new unscoped edge variables keep (controls)" setup =
+    [EdgeVariableRedeclarationSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "edge variable redeclaration: new unscoped edge variables keep \
+        (controls)" begin
         c = compile(NewUnscoped)
         @test edge_names(c, :tether) == [:len] && edge_names(c, :bond) == [:rest]
         @test_throws Potts.PottsCompileError compile(NewAmbiguous)
@@ -278,20 +314,27 @@ end
     end
 end
 
-@testitem "edge variable redeclaration: an operating-point edge value seeds every initial link" setup = [EdgeVariableRedeclarationSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "edge variable redeclaration: an operating-point edge value seeds every initial \
+    link" setup = [EdgeVariableRedeclarationSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # B. edge-variable values in the operating point
-    @testset "edge variable redeclaration: an operating-point edge value seeds every initial link" begin
+    @testset "edge variable redeclaration: an operating-point edge value seeds every \
+        initial link" begin
         base = problem(Spring, edge_op())
-        @test payload(base.u0, :bond, :rest, 1, 2) == 12.0 && total_energy(base) == 3264 + 18   # control
+        @test payload(base.u0, :bond, :rest, 1, 2) == 12.0 &&
+            total_energy(base) == 3264 + 18   # control
         prob = problem(Spring, edge_op(:rest => 9.0))
         @test payload(prob.u0, :bond, :rest, 1, 2) == 9.0
         @test payload(prob.u0, :bond, :rest, 2, 1) == 9.0
         @test payload(prob.u0, :bond, :rest, 1, 3) === nothing   # no other link
         @test total_energy(prob) == 3264 + 72
         @test total_energy(prob) - total_energy(base) == 54
-        @test selfcheck(prob) < 1.0e-9                       # ΔH reads the seeded payload too
-        @test payload(problem(Spring, edge_op(:rest => 9)).u0, :bond, :rest, 1, 2) === 9.0   # an Int
+        # ΔH reads the seeded payload too
+        @test selfcheck(prob) < 1.0e-9
+        # an Int
+        @test payload(problem(Spring, edge_op(:rest => 9)).u0, :bond, :rest, 1, 2) === 9.0
         p32 = problem(Spring, edge_op(:rest => 9.0); T = Float32)
         @test payload(p32.u0, :bond, :rest, 1, 2) === 9.0f0
         # equal to the default: no change (control)
@@ -302,11 +345,17 @@ end
     end
 end
 
-@testitem "edge variable redeclaration: operating-point edge values per relationship" setup = [EdgeVariableRedeclarationSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "edge variable redeclaration: operating-point edge values per relationship" begin
+@testitem "edge variable redeclaration: operating-point edge values per \
+    relationship" setup = [EdgeVariableRedeclarationSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "edge variable redeclaration: operating-point edge values per \
+        relationship" begin
         prob = problem(Two, op2(:len => 20.0))
-        @test payload(prob.u0, :tether, :len, 2, 3) == payload(prob.u0, :tether, :len, 3, 2) == 20.0
-        @test payload(prob.u0, :bond, :rest, 1, 2) == 12.0   # the other relationship keeps its default
+        @test payload(prob.u0, :tether, :len, 2, 3) ==
+            payload(prob.u0, :tether, :len, 3, 2) == 20.0
+        # the other relationship keeps its default
+        @test payload(prob.u0, :bond, :rest, 1, 2) == 12.0
         @test total_energy(prob) == 3264 + 18 + 0
         prob = problem(Two, op2(:rest => 9.0, :len => 20.0))
         @test total_energy(prob) == 3264 + 72 + 0
@@ -316,36 +365,53 @@ end
     end
 end
 
-@testitem "edge variable redeclaration: remake(prob; u0 = op) honours edge values" setup = [EdgeVariableRedeclarationSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "edge variable redeclaration: remake(prob; u0 = op) honours edge values" setup = [
+    EdgeVariableRedeclarationSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "edge variable redeclaration: remake(prob; u0 = op) honours edge values" begin
         prob = problem(Spring, edge_op())
         q = remake(prob; u0 = edge_op(:rest => 7.5))
         @test payload(q.u0, :bond, :rest, 1, 2) == 7.5 && total_energy(q) == 3264 + 112.5
-        r = remake(q; u0 = edge_op())                    # without the key: the default again
+        # without the key: the default again
+        r = remake(q; u0 = edge_op())
         @test payload(r.u0, :bond, :rest, 1, 2) == 12.0
     end
 end
 
-@testitem "edge variable redeclaration: links made by @link start at the declared default" setup = [EdgeVariableRedeclarationSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "edge variable redeclaration: links made by @link start at the declared default" begin
+@testitem "edge variable redeclaration: links made by @link start at the declared \
+    default" setup = [EdgeVariableRedeclarationSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "edge variable redeclaration: links made by @link start at the declared \
+        default" begin
         prob = PottsProblem(
             Linker(; name = :m), [
                 ownership => linker_state(), kind => [:blob, :blob, :blob],
                 :bond => [(1, 2)], :age => 5.0,
-            ], (0, 2)
+            ],
+            (0, 2)
         )
-        @test payload(prob.u0, :bond, :age, 1, 2) == payload(prob.u0, :bond, :age, 2, 1) == 5.0
+        @test payload(prob.u0, :bond, :age, 1, 2) == payload(prob.u0, :bond, :age, 2, 1) ==
+            5.0
         @test payload(prob.u0, :bond, :age, 2, 3) === nothing
         for seed in 1:2
             u = solve(remake(prob; seed), SequentialCPM()).u[end]
-            @test payload(u, :bond, :age, 1, 2) == 5.0       # the initial link keeps the op value
-            @test payload(u, :bond, :age, 2, 3) == 1.5       # the new one (2 and 3 touch) the default
+            # the initial link keeps the op value
+            @test payload(u, :bond, :age, 1, 2) == 5.0
+            # the new one (2 and 3 touch) the default
+            @test payload(u, :bond, :age, 2, 3) == 1.5
             @test payload(u, :bond, :age, 3, 2) == 1.5
         end
     end
 end
 
-@testitem "edge variable redeclaration: a non-number edge value is rejected" setup = [EdgeVariableRedeclarationSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "edge variable redeclaration: a non-number edge value is rejected" setup = [
+    EdgeVariableRedeclarationSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "edge variable redeclaration: a non-number edge value is rejected" begin
         for v in ([1.0, 2.0], fill(9.0, 1, 3), "9")
             @test_throws ArgumentError problem(Spring, edge_op(:rest => v))
@@ -355,13 +421,18 @@ end
     end
 end
 
-@testitem "edge variable redeclaration: link model defaults" setup = [EdgeVariableRedeclarationSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "edge variable redeclaration: link model defaults" setup = [
+    EdgeVariableRedeclarationSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # defaults of link models
     @testset "edge variable redeclaration: link model defaults" begin
         # defaults without an operating-point value are as before
         two = problem(Two, op2())
-        @test two.u0.cell.link_rest == [12.0 12.0 0.0] && two.u0.cell.link_len == [0.0 18.0 18.0]
+        @test two.u0.cell.link_rest == [12.0 12.0 0.0] &&
+            two.u0.cell.link_len == [0.0 18.0 18.0]
         @test total_energy(two) == 3264 + 18 + 6
     end
 end

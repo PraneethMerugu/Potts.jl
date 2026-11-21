@@ -1,7 +1,8 @@
 # The body of `PottsDevices` (test/shared/devices.jl): included into the one module per
 # process, so this file is not a test file and ReTestItems does not scan it.
 
-isdefined(@__MODULE__, :PottsDeviceSelect) || include(joinpath(@__DIR__, "device_select.jl"))
+isdefined(@__MODULE__, :PottsDeviceSelect) ||
+    include(joinpath(@__DIR__, "device_select.jl"))
 
 const NAME = PottsDeviceSelect.requested()
 
@@ -40,4 +41,3 @@ function device_arraytype()
 end
 
 device_array(x::AbstractArray) = device_arraytype()(x)
-

@@ -7,8 +7,20 @@ module FsSchedPDE
     using .FieldPDE
     @variables c(..) kA(..)::Bool [input = true]
     const C, KA = c(t, x, y), kA(t, x, y)
-    chemo() = (@parameters Dc = 0.2; pdesys([Dt(C) ~ Dc * laplacian(C) + 0.5 * KA - 0.1 * C], [c(0, x, y) ~ 0.0], (24, 20), [C, KA], [Dc]))
-    source() = (@parameters Dc = 0.2 s = 0.05; pdesys([Dt(C) ~ Dc * laplacian(C) + s * KA], [c(0, x, y) ~ 0.0], (12, 10), [C, KA], [Dc, s]))
+    function chemo()
+        @parameters Dc = 0.2
+        return pdesys(
+            [Dt(C) ~ Dc * laplacian(C) + 0.5 * KA - 0.1 * C],
+            [c(0, x, y) ~ 0.0], (24, 20), [C, KA], [Dc]
+        )
+    end
+    function source()
+        @parameters Dc = 0.2 s = 0.05
+        return pdesys(
+            [Dt(C) ~ Dc * laplacian(C) + s * KA],
+            [c(0, x, y) ~ 0.0], (12, 10), [C, KA], [Dc, s]
+        )
+    end
 end
 
 const FD_THREADS_RUN = raw"""
@@ -80,10 +92,12 @@ end
     @schedule repeat(4, sweep(fraction = 1 // 4), fields)
 end
 
-fd_chemo_op() = (
-    σ = zeros(Int32, 24, 20); σ[5:8, 5:8] .= 1; σ[14:17, 10:13] .= 2;
-    [ownership => σ, kind => [:A, :A], :c => [0.05 * i for i in 1:24, j in 1:20]]
-)
+function fd_chemo_op()
+    σ = zeros(Int32, 24, 20)
+    σ[5:8, 5:8] .= 1
+    σ[14:17, 10:13] .= 2
+    return [ownership => σ, kind => [:A, :A], :c => [0.05 * i for i in 1:24, j in 1:20]]
+end
 
 @potts_model MomentVetoBase begin
     @kinds medium A
@@ -105,8 +119,18 @@ end
     end
 end
 
-MomentVetoPlain(; name = :MomentVetoPlain, kw...) = _MomentVetoRun(; split = false, name, kw...)
-MomentVetoSplit(; name = :MomentVetoSplit, kw...) = _MomentVetoRun(; split = true, name, kw...)
+function MomentVetoPlain(; name = :MomentVetoPlain, kw...)
+    return _MomentVetoRun(;
+        split = false, name,
+        kw...
+    )
+end
+function MomentVetoSplit(; name = :MomentVetoSplit, kw...)
+    return _MomentVetoRun(;
+        split = true, name,
+        kw...
+    )
+end
 
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end

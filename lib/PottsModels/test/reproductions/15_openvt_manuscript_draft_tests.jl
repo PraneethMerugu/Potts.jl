@@ -1,105 +1,116 @@
 # page 15 and its records follow the 9 Oct 2026 OpenVT
 # manuscript draft (M). Spec 15 §1.2 lists the changes; this file
 # pins R1–R4 on the records and on page 15. The package side (D-204) is in
-# `15_openvt_package_tests.jl`, the page layout (headings, items, records) in `15_openvt_page_tests.jl`.
+# `15_openvt_package_tests.jl`, the page layout (headings, items, records) in
+# `15_openvt_page_tests.jl`.
 #
 # R1  M's Fig 7 is now a grid "Tissue Snapshots with Surface Inhibition": one row per
 #     framework, columns 1.1×, 2×, 5×, 10×, 20× (the T1 multiples), one 10⁴-cell colony per
 #     cell at that multiple's T1 γ, empty where T1 is "—". Our row is a RENDER of the sweeps
 #     record (`data/15/sweeps-2026-10-08/`): its O5 files `f7/` at the T1 γ values of
-#     its `table1.tsv` (5×, 10×, 20×: γ = 0.1625, 0.5375, 0.7625, replicate 1); 1.1× and 2× are
-#     empty (T1 "—"). New files in that record (the run files stay byte for byte):
+#     its `table1.tsv` (5×, 10×, 20×: γ = 0.1625, 0.5375, 0.7625, replicate 1); 1.1× and 2×
+#     are empty (T1 "—"). New files in that record (the run files stay byte for byte):
 #       plot_f7_grid.jl   the render script
 #       fig7_grid.png     the Potts row in M's grid form
 #       fig7_grid.tsv     one row per drawn colony (header H_GRID)
 #       fig7_hull.tsv     the drawn tissue outline of each colony, vertex by vertex (H_HULL)
 #       fig7_grid.toml    the figure's form (keys below)
 # R2  M's new Fig 8 "Tissue Snapshots with Area Inhibition": the same grid for β at γ = 0.
-#     Our row: five runs to 10⁴ cells at our T1 β values 0.625, 0.9375, 0.9875, 1.007, 1.0212
-#     (`table1.tsv`), in a new record `data/15/f8beta-<date>/`.
+#     Our row: five runs to 10⁴ cells at our T1 β values 0.625, 0.9375, 0.9875, 1.007,
+#     1.0212 (`table1.tsv`), in a new record `data/15/f8beta-<date>/`.
 #     - REPLAY (decided here). The sweeps record's runs are pure functions of their seed
 #       (its README: resumable, "a run is a pure function of its seed"), and each T1 β is a
 #       final bracket end with replicates k = 1…6 in `runs.tsv` (k = 1 the bisection run).
 #       Replicate 1 of each point is replayed with the sweeps test's own job function
 #       (`problem(1400)`, `inhibition_job(prob, :beta, q, 1)`, seed 160 000 000 + 100 q + 1,
 #       `SequentialCPM(; skip_interior = true, proposal = Moore(1))`, 1400², closed with
-#       `edge_guard(5; terminate = true)`, stop at the end of the first MCS with ≥ 10⁴ cells,
-#       cap CAP = 210 335 MCS = 20 × 13.57 cycles, the per-run cap). Checked before this
-#       run on the Mac at base 4e8668f8: β = 0.625, k = 1 (seed 160 625 001) replayed to
-#       MCS 11389 with N = 10005, the record's row exactly, in 146 s; and β = 0, k = 1 replayed
-#       to the record's f7 O5 file byte for byte. So every R2 run must equal its sweeps row
-#       (stop MCS, N, return code): replicate 1 is then one of the six runs behind T1's mean.
-#       Replicate 1 is the colony M's rule would show: γ's Fig 7 panels are replicate 1 too.
-#       No run is capped: the 20× run (β = 1.0212, k = 1) stopped at MCS 203 045 (262 cycles).
-#     - O5 writer: `openvt_filename(:O5; beta, mcs)` = "Potts.jl_beta_<β>_<mcs>MCS.csv" (β as
-#       `string` writes it; the γ form is unchanged), columns x_pos, y_pos, radius_i, inhibited
-#       (`inhibition_o5`: inhibited = i > 0; at γ = 0 that is area inhibition, a < β).
+#       `edge_guard(5; terminate = true)`, stop at the end of the first MCS with ≥ 10⁴
+#       cells, cap CAP = 210 335 MCS = 20 × 13.57 cycles, the per-run cap). Checked before
+#       this run on the Mac at base 4e8668f8: β = 0.625, k = 1 (seed 160 625 001) replayed
+#       to MCS 11389 with N = 10005, the record's row exactly, in 146 s; and β = 0, k = 1
+#       replayed to the record's f7 O5 file byte for byte. So every R2 run must equal its
+#       sweeps row (stop MCS, N, return code): replicate 1 is then one of the six runs
+#       behind T1's mean. Replicate 1 is the colony M's rule would show: γ's Fig 7 panels
+#       are replicate 1 too. No run is capped: the 20× run (β = 1.0212, k = 1) stopped at
+#       MCS 203 045 (262 cycles).
+#     - O5 writer: `openvt_filename(:O5; beta, mcs)` = "Potts.jl_beta_<β>_<mcs>MCS.csv" (β
+#       as `string` writes it; the γ form is unchanged), columns x_pos, y_pos, radius_i,
+#       inhibited (`inhibition_o5`: inhibited = i > 0; at γ = 0 that is area inhibition, a <
+#       β).
 #     Record files:
 #       run_f8beta.jl     the runner: evaluates this file's top-level `DRAFT*`/`draft*`
-#                         definitions (as run_sweeps.jl does for its test) and runs `draft_job`
-#       provenance.toml   item (the record's item ID, checked below), commit (40 hex), dirty_tracked = false, runner (in
-#                         this directory), test (this file) and test_sha256, decisions ∋ "D-211",
-#                         cpu, threads, julia, started/finished, wall_s; no key "work" (D-195)
+#                         definitions (as run_sweeps.jl does for its test) and runs
+#                         `draft_job`
+#       provenance.toml   item (the record's item ID, checked below), commit (40 hex),
+#                         dirty_tracked = false, runner (in this directory), test (this
+#                         file) and test_sha256, decisions ∋ "D-211", cpu, threads, julia,
+#                         started/finished, wall_s; no key "work" (D-195)
 #       meta.toml         replay = true, cap_mcs, cells = 10000, lattice = 1400, algorithm
 #       runs.tsv          header H_RUNS, the five runs in multiple order; inhibited = the
 #                         O5 count of inhibited = 1
 #       f8/               the five O5 files
-#       plot_f8_grid.jl, fig8_grid.png, fig8_grid.tsv, fig8_hull.tsv, fig8_grid.toml   as for R1
+#       plot_f8_grid.jl, fig8_grid.png, fig8_grid.tsv, fig8_hull.tsv, fig8_grid.toml   as
+#           for R1
 #       README.md
 #     Checks: the run is the pre-registered job; it equals the sweeps row (replay); N ≥ 10⁴;
-#     O5 rows = N; the inhibited shares s(m): s(1.1×) > 0.01 (inhibition is present; the β = 0
-#     colony has none), s(1.1×) < 1 − g_e < s(2×), with g_e = 0.2973 the F3/F8 record's mean
-#     growing fraction at 10⁴ cells for case (e), β = 0.8 (F8.4; 0.625 < 0.8 < 0.9375), and
-#     s non-decreasing in β within 0.02 (sampling noise at 10⁴ cells is ≈ 0.005).
+#     O5 rows = N; the inhibited shares s(m): s(1.1×) > 0.01 (inhibition is present; the β =
+#     0 colony has none), s(1.1×) < 1 − g_e < s(2×), with g_e = 0.2973 the F3/F8 record's
+#     mean growing fraction at 10⁴ cells for case (e), β = 0.8 (F8.4; 0.625 < 0.8 < 0.9375),
+#     and s non-decreasing in β within 0.02 (sampling noise at 10⁴ cells is ≈ 0.005).
 # R1/R2 grid files (both figures):
 #   fig<k>_grid.tsv   multiple parameter value file N inhibited B C_rel: one row per drawn
 #                     colony, in column order; multiple as "5x"; parameter "gamma" | "beta";
-#                     file the O5 file's path in the record ("f7/…", "f8/…"); B and C_rel from
-#                     the tissue outline below; floats written with Julia's `string` (exact)
+#                     file the O5 file's path in the record ("f7/…", "f8/…"); B and C_rel
+#                     from the tissue outline below; floats written with Julia's `string`
+#                     (exact)
 #   fig<k>_hull.tsv   multiple j x y: the outline's vertices in order (j = 1…B), x, y in R
 #   The tissue outline is the consortium's (G `results/postprocessing/metrics.cpp`, spec 15
 #   §3.2): the concave hull of the O5 centroids by concaveman with concavity 1.5 and
 #   lengthThreshold 0, i.e. `PottsModels.Analysis.concave_hull(zip(x, y); concavity = 1.5,
 #   length_threshold = 0.0)`, and C_rel = C/C_circle = C/(2√(πA)) of that outline, i.e.
 #   `openvt_metrics(x, y, g).C_rel` ("roughness 1" of metrics.cpp). The panels carry NO
-#   numeric label: M's label quantity is unstated (D-211 R5; no candidate matched; Q24 on our
-#   open question list), so C/C_circle goes in the caption or in a table under the figure,
-#   named as metrics.cpp's C/C_circle, never as M's quantity.
-#   fig<k>_grid.toml
-#     title          M's title: "Tissue Snapshots with Surface Inhibition" | "… Area Inhibition"
+#   numeric label: M's label quantity is unstated (D-211 R5; no candidate matched; Q24 on
+#   our open question list), so C/C_circle goes in the caption or in a table under the
+#   figure, named as metrics.cpp's C/C_circle, never as M's quantity. fig<k>_grid.toml
+#     title          M's title: "Tissue Snapshots with Surface Inhibition" | "… Area
+#                    Inhibition"
 #     columns        ["1.1x", "2x", "5x", "10x", "20x"]
-#     empty          the columns without a colony: ["1.1x", "2x"] for Fig 7 (T1 "—"), [] for Fig 8
+#     empty          the columns without a colony: ["1.1x", "2x"] for Fig 7 (T1 "—"), [] for
+#                    Fig 8
 #     panel_label    "none"
 #     measure        "C/C_circle"
-#     legend         ["No Inhibition", "Surface Inhibition" | "Area Inhibition", "Concave Hull"]
-#     [colours]      none, inhibited, hull: "#rrggbb". M's colours (D-185): none yellow; Fig 7
-#                    inhibited teal, Fig 8 inhibited red; hull black. Both figures use the same
-#                    yellow.
+#     legend         ["No Inhibition", "Surface Inhibition" | "Area Inhibition", "Concave
+#                    Hull"]
+#     [colours]      none, inhibited, hull: "#rrggbb". M's colours (D-185): none yellow; Fig
+#                    7 inhibited teal, Fig 8 inhibited red; hull black. Both figures use the
+#                    same yellow.
 #     [hull]         method = "concaveman", concavity = 1.5, length_threshold = 0.0,
 #                    points = "centroids"
-#   fig<k>_grid.png   holds the declared colours (yellow, the inhibited colour, black) and not
-#                     the other figure's inhibited colour; it is drawn large enough that cell
-#                     fills keep their exact colour (≥ 300 px per panel); the script draws no text
-#                     in the panels (no `text!`, `annotations!` or `annotate` call; column headers
-#                     and the legend go through `Label`/`Legend` or axis titles).
-# R3  M's metrics figure is Fig 9 (was Fig 8). On page 15 a line that labels Figure 8 outside
+#   fig<k>_grid.png   holds the declared colours (yellow, the inhibited colour, black) and
+#                     not the other figure's inhibited colour; it is drawn large enough that
+#                     cell fills keep their exact colour (≥ 300 px per panel); the script
+#                     draws no text in the panels (no `text!`, `annotations!` or `annotate`
+#                     call; column headers and the legend go through `Label`/`Legend` or
+#                     axis titles).
+# R3 M's metrics figure is Fig 9 (was Fig 8). On page 15 a line that labels Figure 8 outside
 #     the Fig 8 (β grid) section must be about the β grid or say that it was the old number
 #     ("formerly", "2 Oct"); dated change-log rows are history and exempt; record names
 #     (f3-f8-*, fig8.png, F8.1–F8.4) stay. The page test
 #     pins the headings ("Figures 3 and 9", a Figure 8 heading, a Figure 9 item).
-# R4  M's Fig 5 uses one set of distance bins for every row: edges 0, 18.6, 37.2, 55.8, 74.4,
+# R4 M's Fig 5 uses one set of distance bins for every row: edges 0, 18.6, 37.2, 55.8, 74.4,
 #     93 ("radii"). Our row is re-rendered on them from the case (b) O2 files (distance from
 #     the initial cell's centre, in R, as before). New files in the F5 record
 #     (`data/15/f5-2026-10-07/`; its run files and verdicts stay byte for byte, so V4 is
 #     unchanged):
 #       plot_f5_shared.jl  the render script
-#       hist_shared.tsv    hist.tsv's schema and value bins (width 0.01, floor(100x + 1e-9)),
-#                          distance bin j = min(5, searchsortedlast(edges, d)); rows with count > 0
+#       hist_shared.tsv    hist.tsv's schema and value bins (width 0.01, floor(100x +
+#                          1e-9)), distance bin j = min(5, searchsortedlast(edges, d)); rows
+#                          with count > 0
 #       fig5_shared.png    M's four columns for case (b) on the shared bins
 #     Checks: the edges; every case's value histogram summed over distance bins equals
-#     hist.tsv's (re-binning moves cells between distance bins only); the totals equal Σ N of
-#     runs.tsv; bins beyond the case's largest distance are empty. Opt-in (the bulk O2 files in
-#     OPENVT_PACKAGE_BULK): every case (b) count recomputed from the 100 O2 files.
+#     hist.tsv's (re-binning moves cells between distance bins only); the totals equal Σ N
+#     of runs.tsv; bins beyond the case's largest distance are empty. Opt-in (the bulk O2
+#     files in OPENVT_PACKAGE_BULK): every case (b) count recomputed from the 100 O2 files.
 # Page 15: the Fig 7 section shows fig7_grid.png, the Fig 8 section fig8_grid.png, both with
 # "C/C_circle", "metrics.cpp" and each colony's C_rel to two decimals; a note that M's label
 # quantity is unstated and on our open question list; the Fig 5 section shows
@@ -116,7 +127,8 @@ include(joinpath(@__DIR__, "..", "shared", "common.jl"))
 using Test, TOML, Printf, Potts, PottsModels
 using Statistics: mean
 import CairoMakie
-const DRAFT_FULL = get(ENV, "POTTS_FULL_REPRODUCTION", "false") == "true" || get(ENV, "REPRO", "") == "full"
+const DRAFT_FULL = get(ENV, "POTTS_FULL_REPRODUCTION", "false") == "true" ||
+    get(ENV, "REPRO", "") == "full"
 const ROOT = normpath(joinpath(@__DIR__, "..", "..", "..", ".."))
 const DATA = joinpath(ROOT, "lib", "PottsModels", "reproductions", "data", "15")
 const PAGE = joinpath(ROOT, "lib", "PottsModels", "reproductions", "15_openvt_monolayer.jl")
@@ -141,12 +153,16 @@ const DRAFT_GE = 0.2973
 # F3/F8 F8.4, case (e), β = 0.8
 const SHARE_SLACK = 0.02
 const H_RUNS = [
-    "multiple", "beta", "q", "k", "seed", "lattice", "retcode", "mcs", "N", "capped", "edge_gap",
+    "multiple", "beta", "q", "k", "seed", "lattice", "retcode", "mcs", "N", "capped",
+    "edge_gap",
     "inhibited", "wall_s",
 ]
 const H_GRID = ["multiple", "parameter", "value", "file", "N", "inhibited", "B", "C_rel"]
 const H_HULL = ["multiple", "j", "x", "y"]
-const TITLE = Dict(7 => "Tissue Snapshots with Surface Inhibition", 8 => "Tissue Snapshots with Area Inhibition")
+const TITLE = Dict(
+    7 => "Tissue Snapshots with Surface Inhibition",
+    8 => "Tissue Snapshots with Area Inhibition"
+)
 const LEGEND = Dict(
     7 => ["No Inhibition", "Surface Inhibition", "Concave Hull"],
     8 => ["No Inhibition", "Area Inhibition", "Concave Hull"]
@@ -165,33 +181,48 @@ const RUN_FILES = [
     "sweeps-2026-10-08/f7/Potts.jl_gamma_0.5375_108081MCS.csv",
     "sweeps-2026-10-08/f7/Potts.jl_gamma_0.7625_201438MCS.csv",
 ]
-# ---- the sweeps reproduction's job functions (reused, not copied) --------------------------------
+# ---- the sweeps reproduction's job functions (reused, not copied)
+# --------------------------------
 module InhibitionSweeps
     include(joinpath(@__DIR__, "..", "shared", "openvt_sweeps.jl"))
 end
-# ---- the R2 job (pinned; the runner calls these) -------------------------------------------------
+# ---- the R2 job (pinned; the runner calls these)
+# -------------------------------------------------
 draft_q(β) = round(Int, β * 10_000)
-draft_job(prob, β; kw...) = InhibitionSweeps.inhibition_job(prob, :beta, draft_q(β), 1; kw...)
+function draft_job(prob, β; kw...)
+    return InhibitionSweeps.inhibition_job(
+        prob, :beta, draft_q(β), 1; kw...
+    )
+end
 draft_o5(r) = InhibitionSweeps.inhibition_o5(r.u; β = r.β, γ = 0.0)
 o5_name(β, mcs) = openvt_filename(:O5; beta = β, mcs = mcs)
-draft_hull(x, y) = PottsModels.Analysis.concave_hull(
-    zip(x, y); concavity = CONCAVITY,
-    length_threshold = LENGTH_THRESHOLD
-)
+function draft_hull(x, y)
+    return PottsModels.Analysis.concave_hull(
+        zip(x, y); concavity = CONCAVITY,
+        length_threshold = LENGTH_THRESHOLD
+    )
+end
 draft_crel(x, y, inhibited) = openvt_metrics(x, y, 1 .- inhibited).C_rel
-# ---- readers -------------------------------------------------------------------------------------
+# ---- readers
+# -------------------------------------------------------------------------------------
 function draft_tsv(path)
     ls = filter(!isempty, readlines(path))
     head = String.(split(ls[1], '\t'))
     return head, [Dict(zip(head, String.(split(l, '\t')))) for l in ls[2:end]]
 end
 draft_f(s) = parse(Float64, s)
-draft_dirs(prefix) = isdir(DATA) ? sort(
-        filter(
-            d -> startswith(d, prefix) && isdir(joinpath(DATA, d)),
-            readdir(DATA)
+function draft_dirs(prefix)
+    if isdir(DATA)
+        return sort(
+            filter(
+                d -> startswith(d, prefix) && isdir(joinpath(DATA, d)),
+                readdir(DATA)
+            )
         )
-    ) : String[]
+    else
+        return String[]
+    end
+end
 function draft_table1()
     _, rows = draft_tsv(joinpath(DATA, SWEEPS, "table1.tsv"))
     return rows
@@ -208,8 +239,14 @@ function rgb(s)
     return Tuple(parse(Int, m[i]; base = 16) for i in 1:3)
 end
 draft_yellow(c) = c !== nothing && c[1] >= 200 && c[2] >= 180 && c[3] <= 100
-draft_teal(c) = c !== nothing && c[2] >= c[1] + 40 && c[3] >= c[1] + 40 && abs(c[2] - c[3]) <= 60 && max(c[2], c[3]) <= 210
-draft_red(c) = c !== nothing && c[1] >= 180 && c[2] <= 120 && c[3] <= 130 && c[1] >= c[2] + 80
+function draft_teal(c)
+    return c !== nothing && c[2] >= c[1] + 40 && c[3] >= c[1] + 40 &&
+        abs(c[2] - c[3]) <= 60 && max(c[2], c[3]) <= 210
+end
+function draft_red(c)
+    return c !== nothing && c[1] >= 180 && c[2] <= 120 && c[3] <= 130 &&
+        c[1] >= c[2] + 80
+end
 draft_black(c) = c !== nothing && max(c...) <= 40
 # pixels of a PNG within `tol` (per channel, 0:255) of each colour, and near-black pixels
 function png_counts(path, colours; tol = 16)
@@ -219,7 +256,10 @@ function png_counts(path, colours; tol = 16)
     black = 0
     for p in img
         C.alpha(p) < 0.5 && continue
-        v = (round(Int, 255 * Float64(C.red(p))), round(Int, 255 * Float64(C.green(p))), round(Int, 255 * Float64(C.blue(p))))
+        v = (
+            round(Int, 255 * Float64(C.red(p))), round(Int, 255 * Float64(C.green(p))),
+            round(Int, 255 * Float64(C.blue(p))),
+        )
         for (k, c) in enumerate(colours)
             maximum(abs.(v .- c)) <= tol && (counts[k] += 1)
         end
@@ -243,15 +283,26 @@ function fig7_expected()
 end
 function fig7_empty()
     t1 = filter(r -> r["parameter"] == "gamma", draft_table1())
-    return [COLS[j] for (j, m) in enumerate(MULTS) if only(filter(x -> draft_f(x["multiple"]) == m, t1))["threshold"] == "—"]
+    return [
+        COLS[j]
+            for (j, m) in enumerate(MULTS)
+            if only(filter(x -> draft_f(x["multiple"]) == m, t1))["threshold"] == "—"
+    ]
 end
 # every check of one grid figure k ∈ (7, 8) in record directory D
 function check_grid(D, k, expected, empty)
     stem = "fig$(k)_grid"
-    for f in ("plot_$(k == 7 ? "f7" : "f8")_grid.jl", "$(stem).png", "$(stem).tsv", "fig$(k)_hull.tsv", "$(stem).toml")
+    for f in (
+            "plot_$(k == 7 ? "f7" : "f8")_grid.jl", "$(stem).png",
+            "$(stem).tsv", "fig$(k)_hull.tsv", "$(stem).toml",
+        )
         @test isfile(joinpath(D, f))
     end
-    all(f -> isfile(joinpath(D, f)), ("$(stem).png", "$(stem).tsv", "fig$(k)_hull.tsv", "$(stem).toml")) || return nothing
+    all(
+        f -> isfile(joinpath(D, f)), (
+            "$(stem).png", "$(stem).tsv", "fig$(k)_hull.tsv", "$(stem).toml",
+        )
+    ) || return nothing
     # the form
     meta = TOML.parsefile(joinpath(D, "$(stem).toml"))
     @test get(meta, "title", "") == TITLE[k]
@@ -261,10 +312,13 @@ function check_grid(D, k, expected, empty)
     @test get(meta, "measure", "") == "C/C_circle"
     @test get(meta, "legend", nothing) == LEGEND[k]
     hull = get(meta, "hull", Dict{String, Any}())
-    @test get(hull, "method", "") == "concaveman" && get(hull, "concavity", NaN) == CONCAVITY &&
-        get(hull, "length_threshold", NaN) == LENGTH_THRESHOLD && get(hull, "points", "") == "centroids"
+    @test get(hull, "method", "") == "concaveman" &&
+        get(hull, "concavity", NaN) == CONCAVITY &&
+        get(hull, "length_threshold", NaN) == LENGTH_THRESHOLD &&
+        get(hull, "points", "") == "centroids"
     col = get(meta, "colours", Dict{String, Any}())
-    none, inh, hc = rgb(get(col, "none", "")), rgb(get(col, "inhibited", "")), rgb(get(col, "hull", ""))
+    none, inh, hc = rgb(get(col, "none", "")), rgb(get(col, "inhibited", "")),
+        rgb(get(col, "hull", ""))
     @test draft_yellow(none)
     @test k == 7 ? draft_teal(inh) : draft_red(inh)
     @test draft_black(hc)
@@ -274,28 +328,42 @@ function check_grid(D, k, expected, empty)
     _, hrows = draft_tsv(joinpath(D, "fig$(k)_hull.tsv"))
     @test first(draft_tsv(joinpath(D, "$(stem).tsv"))) == H_GRID
     @test first(draft_tsv(joinpath(D, "fig$(k)_hull.tsv"))) == H_HULL
-    @test [(r["multiple"], r["parameter"], draft_f(r["value"]), r["file"]) for r in rows] == expected
+    @test [(r["multiple"], r["parameter"], draft_f(r["value"]), r["file"]) for r in rows] ==
+        expected
     @test isempty(intersect(empty, [r["multiple"] for r in rows]))
     for r in rows
         f = joinpath(D, r["file"])
         isfile(f) || (@test isfile(f); continue)
         o5 = read_openvt(f, :O5)
         x, y, inhibited = o5.x_pos, o5.y_pos, o5.inhibited
-        @test parse(Int, r["N"]) == length(x) && parse(Int, r["inhibited"]) == count(==(1), inhibited)
+        @test parse(Int, r["N"]) == length(x) &&
+            parse(Int, r["inhibited"]) == count(==(1), inhibited)
         h = draft_hull(x, y)
         @test parse(Int, r["B"]) == length(h)
         crel = draft_crel(x, y, inhibited)
         @test isapprox(draft_f(r["C_rel"]), crel; rtol = 1.0e-12) && crel >= 1
-        hv = sort(filter(v -> v["multiple"] == r["multiple"], hrows); by = v -> parse(Int, v["j"]))
+        hv = sort(
+            filter(v -> v["multiple"] == r["multiple"], hrows);
+            by = v -> parse(Int, v["j"])
+        )
         @test [parse(Int, v["j"]) for v in hv] == 1:length(h)
-        @test length(hv) == length(h) && all(draft_f(v["x"]) == p[1] && draft_f(v["y"]) == p[2] for (v, p) in zip(hv, h))
+        @test length(hv) == length(h) && all(
+            draft_f(v["x"]) == p[1] && draft_f(v["y"]) == p[2]
+                for (v, p) in zip(hv, h)
+        )
     end
     @test Set(v["multiple"] for v in hrows) == Set(r["multiple"] for r in rows)
     # the picture: M's colours present, the other figure's inhibited colour absent
-    other = k == 7 ? (217, 95, 105) : (44, 123, 140)            # a representative red / teal
+    # a representative red / teal
+    other = k == 7 ? (217, 95, 105) : (44, 123, 140)
     if none !== nothing && inh !== nothing
-        (cn, ci, co), black, npx = png_counts(joinpath(D, "$(stem).png"), [none, inh, other])
-        @info "15 openvt manuscript draft fig$(k)_grid.png" none = cn inhibited = ci other = co black npx
+        (cn, ci, co), black, npx = png_counts(
+            joinpath(D, "$(stem).png"), [
+                none, inh, other,
+            ]
+        )
+        @info "15 openvt manuscript draft fig$(k)_grid.png" none = cn inhibited = ci other =
+            co black npx
         @test cn >= 50 && ci >= 500 && black >= 200
         @test co <= max(20, npx ÷ 10_000)
     end
@@ -314,13 +382,17 @@ function marg(rows, c, q)
     end
     return d
 end
-# ---- page 15 ------------------------------------------------------------------------------------
+# ---- page 15
+# ------------------------------------------------------------------------------------
 const SRC = isfile(PAGE) ? read(PAGE, String) : ""
 const LINES = split(SRC, '\n')
 # labels a text names: ("F", "3"), ("F", "9") for "Figures 3 and 9" or "Figure 3/9"
 function labels(text)
     out = Tuple{String, String}[]
-    for m in eachmatch(r"\b(Figures?|Figs?\.?|Tables?)\s*((?:S?\d+)(?:\s*(?:,|and|&|/|–)\s*S?\d+)*)", text)
+    for m in eachmatch(
+            r"\b(Figures?|Figs?\.?|Tables?)\s*((?:S?\d+)(?:\s*(?:,|and|&|/|–)\s*S?\d+)*)",
+            text
+        )
         k = startswith(m[1], "T") ? "T" : "F"
         for n in eachmatch(r"S?\d+", m[2])
             push!(out, (k, String(n.match)))
@@ -344,9 +416,13 @@ const CCIRCLE = r"C\s*/\s*C_?\{?circle\}?|C/C<sub>circle</sub>"
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "15 openvt manuscript draft R1: the Fig 7 grid, rendered from the sweeps record" setup = [OpenVTManuscriptDraftSetup] tags = [:pottsmodels, :reproductions] begin
-    # =================================================================================================
-    @testset "15 openvt manuscript draft R1: the Fig 7 grid, rendered from the sweeps record" begin
+@testitem "15 openvt manuscript draft R1: the Fig 7 grid, rendered from the sweeps \
+    record" setup = [OpenVTManuscriptDraftSetup] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    # ======================================================================================
+    @testset "15 openvt manuscript draft R1: the Fig 7 grid, rendered from the sweeps \
+        record" begin
         D = joinpath(DATA, SWEEPS)
         @test isdir(D)
         # the run files the render reads
@@ -362,8 +438,12 @@ end
     end
 end
 
-@testitem "15 openvt manuscript draft R4: the Fig 5 row on M's shared distance bins" setup = [OpenVTManuscriptDraftSetup] tags = [:pottsmodels, :reproductions] begin
-    @testset "15 openvt manuscript draft R4: the Fig 5 row on M's shared distance bins" begin
+@testitem "15 openvt manuscript draft R4: the Fig 5 row on M's shared distance bins" setup =
+    [OpenVTManuscriptDraftSetup] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    @testset "15 openvt manuscript draft R4: the Fig 5 row on M's shared distance \
+        bins" begin
         D = joinpath(DATA, DRAFT_F5)
         for rel in RUN_FILES
             startswith(rel, DRAFT_F5) && @test isfile(joinpath(DATA, rel))
@@ -380,7 +460,8 @@ end
             @test "b" in cases && issubset(cases, unique(r["case"] for r in old))
             for r in new
                 j = parse(Int, r["dbin"])
-                @test 1 <= j <= 5 && draft_f(r["d_lo_R"]) == EDGES[j] && draft_f(r["d_hi_R"]) == EDGES[j + 1]
+                @test 1 <= j <= 5 && draft_f(r["d_lo_R"]) == EDGES[j] &&
+                    draft_f(r["d_hi_R"]) == EDGES[j + 1]
                 @test parse(Int, r["count"]) > 0 && r["quantity"] in ("f", "a")
             end
             for c in cases, q in ("f", "a")
@@ -390,11 +471,16 @@ end
                 @test sum(values(marg(new, c, q))) == n
                 # bins beyond the case's furthest cell are empty
                 dmax = maximum(draft_f(r["d_max_R"]) for r in runs if r["case"] == c)
-                @test all(r -> !(r["case"] == c && EDGES[parse(Int, r["dbin"])] > dmax), new)
+                @test all(
+                    r -> !(r["case"] == c && EDGES[parse(Int, r["dbin"])] > dmax),
+                    new
+                )
             end
             # premise: case (b) reaches past 37.2 R but not 55.8 R, so three bins are filled
-            @test sort(unique(parse(Int, r["dbin"]) for r in new if r["case"] == "b")) == [1, 2, 3]
-            # opt-in: every case (b) count from the 100 O2 files (x, y from the lattice centre)
+            @test sort(unique(parse(Int, r["dbin"]) for r in new if r["case"] == "b")) ==
+                [1, 2, 3]
+            # opt-in: every case (b) count from the 100 O2 files (x, y from the lattice
+            # centre)
             o2 = joinpath(BULK, "Potts.jl_5T_MonolayerGrowth_1000_Data")
             if !isempty(BULK) && isdir(o2)
                 want = Dict{Tuple{String, Int, Int}, Int}()
@@ -411,12 +497,14 @@ end
                     end
                 end
                 got = Dict(
-                    (r["quantity"], parse(Int, r["dbin"]), parse(Int, r["bin"])) => parse(Int, r["count"]) for r in new
+                    (r["quantity"], parse(Int, r["dbin"]), parse(Int, r["bin"])) =>
+                        parse(Int, r["count"]) for r in new
                         if r["case"] == "b"
                 )
                 @test got == want
             else
-                @info "15 openvt manuscript draft R4: OPENVT_PACKAGE_BULK not set; the O2 recount is skipped"
+                @info "15 openvt manuscript draft R4: OPENVT_PACKAGE_BULK not set; the O2 \
+                    recount is skipped"
             end
         end
         p = joinpath(D, "fig5_shared.png")
@@ -424,21 +512,31 @@ end
     end
 end
 
-@testitem "15 openvt manuscript draft SMOKE: a β job through the sweeps job function, its O5 rows" setup = [OpenVTManuscriptDraftSetup] tags = [:pottsmodels, :reproductions] begin
-    # ---- SMOKE: the β job and the O5 writer -----------------------------------------------------------
+@testitem "15 openvt manuscript draft SMOKE: a β job through the sweeps job function, its \
+    O5 rows" setup = [OpenVTManuscriptDraftSetup] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    # ---- SMOKE: the β job and the O5 writer
+    # -----------------------------------------------------------
     if !DRAFT_FULL
-        @testset "15 openvt manuscript draft SMOKE: a β job through the sweeps job function, its O5 rows" begin
+        @testset "15 openvt manuscript draft SMOKE: a β job through the sweeps job \
+            function, its O5 rows" begin
             prob = InhibitionSweeps.problem(300; cells = 250, cap = 20_000)
             r = draft_job(prob, 0.9375; cells = 250, cap = 20_000)
-            free = InhibitionSweeps.inhibition_job(prob, :beta, 0, 1; cells = 250, cap = 20_000)
+            free = InhibitionSweeps.inhibition_job(
+                prob, :beta, 0, 1; cells = 250, cap = 20_000
+            )
             @info "15 openvt manuscript draft SMOKE" r.mcs r.N free.mcs free.N
             @test r.seed == 160_937_501 && r.β == 0.9375 && r.γ == 0.0
             @test r.retcode === :Terminated && r.N >= 250 && !r.capped
             o = draft_o5(r)
             @test length(o.x_pos) == r.N && all(in((0, 1)), o.inhibited)
-            @test all(<=(1), PottsModels.openvt_frame(r.u; beta = r.β, gamma = 0.0).i)   # γ = 0: area inhibition only
-            @test count(==(1), o.inhibited) > 0                                   # inhibition is present …
-            @test all(==(0), draft_o5((; u = free.u, β = 0.0)).inhibited)         # … and absent at β = 0
+            # γ = 0: area inhibition only
+            @test all(<=(1), PottsModels.openvt_frame(r.u; beta = r.β, gamma = 0.0).i)
+            # inhibition is present …
+            @test count(==(1), o.inhibited) > 0
+            # … and absent at β = 0
+            @test all(==(0), draft_o5((; u = free.u, β = 0.0)).inhibited)
             tmp = mktempdir()
             f = joinpath(tmp, "Potts.jl_beta_0.9375_$(r.mcs)MCS.csv")
             write_openvt(f, :O5, o)
@@ -454,17 +552,27 @@ end
     end
 end
 
-@testitem "15 openvt manuscript draft O5 file names for β (the writer)" setup = [OpenVTManuscriptDraftSetup] tags = [:pottsmodels, :reproductions] begin
+@testitem "15 openvt manuscript draft O5 file names for β (the writer)" setup = [
+    OpenVTManuscriptDraftSetup,
+] tags = [
+    :pottsmodels, :reproductions,
+] begin
     @testset "15 openvt manuscript draft O5 file names for β (the writer)" begin
         @test o5_name(0.9375, 20771) == "Potts.jl_beta_0.9375_20771MCS.csv"
         @test o5_name(1.0212, 203045) == "Potts.jl_beta_1.0212_203045MCS.csv"
-        @test openvt_filename(:O5; gamma = 0.1625, mcs = 52907) == "Potts.jl_gamma_0.1625_52907MCS.csv"   # unchanged
+        @test openvt_filename(:O5; gamma = 0.1625, mcs = 52907) ==
+            "Potts.jl_gamma_0.1625_52907MCS.csv"   # unchanged
     end
 end
 
-@testitem "15 openvt manuscript draft R2 record: the Fig 8 β colonies (data/15/f8beta-*)" setup = [OpenVTManuscriptDraftSetup] tags = [:pottsmodels, :reproductions] begin
-    # ---- the R2 record ---------------------------------------------------------------------------------
-    @testset "15 openvt manuscript draft R2 record: the Fig 8 β colonies (data/15/f8beta-*)" begin
+@testitem "15 openvt manuscript draft R2 record: the Fig 8 β colonies \
+    (data/15/f8beta-*)" setup = [OpenVTManuscriptDraftSetup] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    # ---- the R2 record
+    # ---------------------------------------------------------------------------------
+    @testset "15 openvt manuscript draft R2 record: the Fig 8 β colonies \
+        (data/15/f8beta-*)" begin
         # premises from the merged records
         t1 = filter(r -> r["parameter"] == "beta", draft_table1())
         @test [draft_f(r["multiple"]) for r in t1] == MULTS
@@ -473,20 +581,35 @@ end
         for (j, β) in enumerate(BETA)
             q = draft_q(β)
             sr = runs[("beta", q, 1)]
-            @test sr["retcode"] == "Terminated" && sr["capped"] == "false" && parse(Int, sr["N"]) >= CELLS
-            # agreement with table1.tsv: replicate 1 is one of the six runs behind the reported end
+            @test sr["retcode"] == "Terminated" && sr["capped"] == "false" &&
+                parse(Int, sr["N"]) >= CELLS
+            # agreement with table1.tsv: replicate 1 is one of the six runs behind the
+            # reported end
             reps = [runs[("beta", q, kk)] for kk in 1:6 if haskey(runs, ("beta", q, kk))]
             @test length(reps) == 6
             row = t1[j]
-            tend = draft_f(draft_f(row["threshold"]) == draft_f(row["bracket_lo"]) ? row["t_lo"] : row["t_hi"])
+            tend = draft_f(
+                if draft_f(row["threshold"]) == draft_f(row["bracket_lo"])
+                    row["t_lo"]
+                else
+                    row["t_hi"]
+                end
+            )
             tm = InhibitionSweeps.inhibition_mean(rtime.(reps))
             @test isinf(tm) ? tend == Inf : abs(tend - tm) <= 0.0005 + 1.0e-9
         end
         _, v3 = draft_tsv(joinpath(DATA, F3F8, "verdicts.tsv"))
-        @test draft_f(only(r["ours"] for r in v3 if startswith(r["target"], "F8.4") && r["case"] == "e")) == DRAFT_GE
+        @test draft_f(
+            only(
+                r["ours"]
+                    for r in v3 if startswith(r["target"], "F8.4") && r["case"] == "e"
+            )
+        ) == DRAFT_GE
 
         dirs = draft_dirs("f8beta-")
-        length(dirs) == 1 || @info "15 openvt manuscript draft: no R2 record yet (expected exactly one data/15/f8beta-* directory)" dirs
+        length(dirs) == 1 ||
+            @info "15 openvt manuscript draft: no R2 record yet (expected exactly one \
+                data/15/f8beta-* directory)" dirs
         @test length(dirs) == 1
         if length(dirs) == 1
             D = joinpath(DATA, only(dirs))
@@ -494,24 +617,42 @@ end
             for f in ("README.md", "provenance.toml", "meta.toml", "runs.tsv")
                 @test isfile(joinpath(D, f))
             end
-            prov = isfile(joinpath(D, "provenance.toml")) ? TOML.parsefile(joinpath(D, "provenance.toml")) : Dict{String, Any}()
+            prov = if isfile(joinpath(D, "provenance.toml"))
+                TOML.parsefile(joinpath(D, "provenance.toml"))
+            else
+                Dict{String, Any}()
+            end
             @test get(prov, "item", "") == "P6.15k"
             @test occursin(r"^[0-9a-f]{40}$", string(get(prov, "commit", "")))
             @test get(prov, "dirty_tracked", true) === false
             runner = string(get(prov, "runner", ""))
-            @test startswith(runner, "lib/PottsModels/reproductions/data/15/$(only(dirs))/") && isfile(joinpath(ROOT, runner))
+            @test startswith(
+                runner,
+                "lib/PottsModels/reproductions/data/15/$(only(dirs))/"
+            ) &&
+                isfile(joinpath(ROOT, runner))
             # the record names the test file by its name at the record's commit
-            @test get(prov, "test", "") == "lib/PottsModels/test/reproductions/15_openvt_d211.jl"
+            @test get(prov, "test", "") ==
+                "lib/PottsModels/test/reproductions/15_openvt_d211.jl"
             @test occursin(r"^[0-9a-f]{64}$", string(get(prov, "test_sha256", "")))
             @test "D-211" in get(prov, "decisions", String[])
             @test !haskey(prov, "work")
-            meta = isfile(joinpath(D, "meta.toml")) ? TOML.parsefile(joinpath(D, "meta.toml")) : Dict{String, Any}()
+            meta = if isfile(joinpath(D, "meta.toml"))
+                TOML.parsefile(joinpath(D, "meta.toml"))
+            else
+                Dict{String, Any}()
+            end
             @test get(meta, "replay", false) === true
-            @test get(meta, "cap_mcs", 0) == InhibitionSweeps.CAP && get(meta, "cells", 0) == CELLS &&
+            @test get(meta, "cap_mcs", 0) == InhibitionSweeps.CAP &&
+                get(meta, "cells", 0) == CELLS &&
                 get(meta, "lattice", 0) == LATTICE
             @test occursin("skip_interior = true", string(get(meta, "algorithm", "")))
 
-            head, rr = isfile(joinpath(D, "runs.tsv")) ? draft_tsv(joinpath(D, "runs.tsv")) : (String[], Dict{String, String}[])
+            head, rr = if isfile(joinpath(D, "runs.tsv"))
+                draft_tsv(joinpath(D, "runs.tsv"))
+            else
+                (String[], Dict{String, String}[])
+            end
             @test head == H_RUNS
             @test [get(r, "multiple", "") for r in rr] == string.(MULTS)
             o5dir = joinpath(D, "f8")
@@ -523,17 +664,20 @@ end
                 β = BETA[j]
                 q = draft_q(β)
                 # the pre-registered job
-                @test draft_f(r["beta"]) == β && parse(Int, r["q"]) == q && parse(Int, r["k"]) == 1
+                @test draft_f(r["beta"]) == β && parse(Int, r["q"]) == q &&
+                    parse(Int, r["k"]) == 1
                 @test parse(Int, r["seed"]) == InhibitionSweeps.inhibition_seed(:beta, q, 1)
                 @test parse(Int, r["lattice"]) == LATTICE
                 mcs, N = parse(Int, r["mcs"]), parse(Int, r["N"])
-                @test r["retcode"] == "Terminated" && r["capped"] == "false" && N >= CELLS && mcs <= InhibitionSweeps.CAP
+                @test r["retcode"] == "Terminated" && r["capped"] == "false" &&
+                    N >= CELLS && mcs <= InhibitionSweeps.CAP
                 @test parse(Int, r["edge_gap"]) >= InhibitionSweeps.GUARD
                 # the replay: the sweeps record's replicate 1, exactly
                 sr = runs[("beta", q, 1)]
-                @test mcs == parse(Int, sr["mcs"]) && N == parse(Int, sr["N"]) && r["retcode"] == sr["retcode"]
-                # so the run is one of the six replicates behind table1.tsv's reported end (premise above)
-                # the O5 file
+                @test mcs == parse(Int, sr["mcs"]) && N == parse(Int, sr["N"]) &&
+                    r["retcode"] == sr["retcode"]
+                # so the run is one of the six replicates behind table1.tsv's reported end
+                # (premise above) the O5 file
                 name = "Potts.jl_beta_$(β)_$(mcs)MCS.csv"
                 push!(expected, (COLS[j], "beta", β, "f8/" * name))
                 f = joinpath(o5dir, name)
@@ -547,8 +691,8 @@ end
                 end
             end
             @test names == sort([basename(e[4]) for e in expected])
-            # inhibition shares (area inhibition, a < β): present at 1.1×, below / above case (e)'s
-            # share at β = 0.8, non-decreasing in β
+            # inhibition shares (area inhibition, a < β): present at 1.1×, below / above
+            # case (e)'s share at β = 0.8, non-decreasing in β
             @info "15 openvt manuscript draft R2 inhibited shares" shares
             @test length(shares) == 5
             if length(shares) == 5
@@ -562,8 +706,13 @@ end
     end
 end
 
-@testitem "15 openvt manuscript draft FULL: the five β runs, rerun" setup = [OpenVTManuscriptDraftSetup] tags = [:pottsmodels, :reproductions] begin
-    # ---- FULL: rerun the five R2 runs (offline, on the PC) ---------------------------------------------
+@testitem "15 openvt manuscript draft FULL: the five β runs, rerun" setup = [
+    OpenVTManuscriptDraftSetup,
+] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    # ---- FULL: rerun the five R2 runs (offline, on the PC)
+    # ---------------------------------------------
     if DRAFT_FULL
         @testset "15 openvt manuscript draft FULL: the five β runs, rerun" begin
             dirs = draft_dirs("f8beta-")
@@ -587,15 +736,20 @@ end
     end
 end
 
-@testitem "15 openvt manuscript draft page 15: Fig 7 and Fig 8 grids, C/C_circle, the label note (R1, R2)" setup = [OpenVTManuscriptDraftSetup] tags = [:pottsmodels, :reproductions] begin
-    @testset "15 openvt manuscript draft page 15: Fig 7 and Fig 8 grids, C/C_circle, the label note (R1, R2)" begin
+@testitem "15 openvt manuscript draft page 15: Fig 7 and Fig 8 grids, C/C_circle, the \
+    label note (R1, R2)" setup = [OpenVTManuscriptDraftSetup] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    @testset "15 openvt manuscript draft page 15: Fig 7 and Fig 8 grids, C/C_circle, the \
+        label note (R1, R2)" begin
         @test !isempty(SRC)
         for k in (7, 8)
             sec = draft_text(section(("F", string(k))))
             @test !isempty(sec)
             @test occursin("fig$(k)_grid.png", sec)
             @test occursin(CCIRCLE, sec) && occursin("metrics.cpp", sec)
-            @test occursin(r"concave"i, sec) && occursin(r"yellow"i, sec) && occursin(k == 7 ? r"teal"i : r"\bred\b"i, sec)
+            @test occursin(r"concave"i, sec) && occursin(r"yellow"i, sec) &&
+                occursin(k == 7 ? r"teal"i : r"\bred\b"i, sec)
             # each colony's C/C_circle to two decimals, from the record
             dirs = k == 7 ? [SWEEPS] : draft_dirs("f8beta-")
             if length(dirs) == 1 && isfile(joinpath(DATA, only(dirs), "fig$(k)_grid.tsv"))
@@ -605,26 +759,36 @@ end
                     @test occursin(@sprintf("%.2f", draft_f(r["C_rel"])), sec)
                 end
             else
-                @test false                                      # the grid table is not there yet
+                # the grid table is not there yet
+                @test false
             end
         end
         # the note: M's label quantity is unstated and on our open question list (D-211 R5)
         grids = draft_text(section(("F", "7"))) * "\n" * draft_text(section(("F", "8")))
         paras = split(replace(grids, r"(?m)^# ?" => ""), r"\n\s*\n")
-        @test any(p -> occursin(r"label"i, p) && occursin(r"unstated|not stated"i, p) && occursin("our open question list", p), paras)
+        @test any(
+            p -> occursin(r"label"i, p) && occursin(r"unstated|not stated"i, p) &&
+                occursin("our open question list", p),
+            paras
+        )
     end
 end
 
-@testitem "15 openvt manuscript draft page 15: Fig 5 on the shared bins (R4) and the metrics figure as Fig 9 (R3)" setup = [OpenVTManuscriptDraftSetup] tags = [:pottsmodels, :reproductions] begin
-    @testset "15 openvt manuscript draft page 15: Fig 5 on the shared bins (R4) and the metrics figure as Fig 9 (R3)" begin
+@testitem "15 openvt manuscript draft page 15: Fig 5 on the shared bins (R4) and the \
+    metrics figure as Fig 9 (R3)" setup = [OpenVTManuscriptDraftSetup] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    @testset "15 openvt manuscript draft page 15: Fig 5 on the shared bins (R4) and the \
+        metrics figure as Fig 9 (R3)" begin
         sec5 = draft_text(section(("F", "5")))
         @test occursin("fig5_shared.png", sec5)
         @test all(e -> occursin(e, sec5), ("18.6", "37.2", "55.8", "74.4", "93"))
         # R3: the metrics figure is Figure 9; the heading that names Figure 3 names 9, not 8
         h3 = [h for h in HEADS if h[2] == 3 && ("F", "3") in labels(h[3])]
-        @test length(h3) == 1 && ("F", "9") in labels(only(h3)[3]) && !(("F", "8") in labels(only(h3)[3]))
-        # every other line that labels Figure 8 is about the β grid, or names the old number;
-        # dated rows of the page's change log (history) are exempt
+        @test length(h3) == 1 && ("F", "9") in labels(only(h3)[3]) &&
+            !(("F", "8") in labels(only(h3)[3]))
+        # every other line that labels Figure 8 is about the β grid, or names the old
+        # number; dated rows of the page's change log (history) are exempt
         f8 = section(("F", "8"))
         bad = String[]
         for (i, l) in enumerate(LINES)
@@ -633,7 +797,9 @@ end
             ("F", "8") in labels(l) || continue
             occursin(r"β|beta|area[- ]inhibit|formerly|2 Oct"i, l) || push!(bad, strip(l))
         end
-        isempty(bad) || @info "15 openvt manuscript draft: lines that still call the metrics figure Figure 8" bad
+        isempty(bad) ||
+            @info "15 openvt manuscript draft: lines that still call the metrics figure \
+                Figure 8" bad
         @test isempty(bad)
         # the metrics figure's own section shows the F3/F8 record's fig8.png
         @test occursin("fig8.png", draft_text(section(("F", "9"))))

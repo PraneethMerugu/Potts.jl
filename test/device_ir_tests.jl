@@ -5,9 +5,10 @@
 # check `test/device_coverage.jl`; this file holds what needs GPUCompiler's compile hook:
 #
 # - negative controls for the scan itself: a kernel that widens to Float64 through a
-#   Float64 literal, and one that converts explicitly, are flagged; their Float32 twin is not;
-# - the staged lifecycle's compile-only launch (`_CompileOnly`, lifecycle_device.jl) compiles
-#   the kernel the launch then runs, and writes nothing, on ROCm.
+#   Float64 literal, and one that converts explicitly, are flagged; their Float32 twin is
+#   not;
+# - the staged lifecycle's compile-only launch (`_CompileOnly`, lifecycle_device.jl)
+#   compiles the kernel the launch then runs, and writes nothing, on ROCm.
 #
 # ROCm only (included first from test/gpu.jl when POTTS_GPU=rocm).
 
@@ -24,7 +25,6 @@ using Potts, Test
 using Potts: CorePotts
 isdefined(@__MODULE__, :PottsDevices) || include(joinpath(@__DIR__, "shared", "devices.jl"))
 
-
 using Test, Potts, PottsModels
 
 using Potts: CorePotts
@@ -35,10 +35,8 @@ const GPUCompiler = AMDGPU.GPUCompiler
 
 const KA = CorePotts.KernelAbstractions
 
-
 # the LLVM type token `double`, not part of a name (`%double`, `@julia_double_1`, `.double`)
 const DOUBLE = r"(?<![%@.\w\"])double(?![\w.\"])"
-
 
 """Run `g()` with GPUCompiler's compile hook set to `h`: a `Ref` up to GPUCompiler 1, a
 `ScopedValue` from GPUCompiler 2 on."""
@@ -54,7 +52,6 @@ function with_compile_hook(g, h)
         GPUCompiler.compile_hook[] = old
     end
 end
-
 
 """`[(kernel, optimized LLVM module)]` of every distinct kernel compiled while `f()` runs.
 While a hook is set GPUCompiler recompiles at every launch, so `f` should be short."""
@@ -79,10 +76,8 @@ function kernels_ir(f)
     return out
 end
 
-
 """The lines of `ir` that mention `double`."""
 doubles(ir) = filter(l -> occursin(DOUBLE, l), split(ir, '\n'))
-
 
 # --- negative controls ----------------------------------------------------------------
 KA.@kernel function devir_f64_literal!(a)
@@ -100,32 +95,45 @@ KA.@kernel function devir_f32!(a)
     @inbounds a[i] = a[i] * 1.000000001f0
 end
 
-
 # --- the staged lifecycle's compile-only launch (lifecycle_device.jl, `_CompileOnly`) -----
 # `Exec.compile!`: a launch of the kernel `Exec.launch!` runs, with `n = 0` (no work item
 # passes the guard). On ROCm: the hook sees the kernel, the array is untouched, and the
 # launch that follows compiles nothing new (`_kernel_instances` does not grow).
 @inline devir_write!(i, a) = (@inbounds a[i] = 2.0f0; nothing)
-      # i ≤ length(a)
+# i ≤ length(a)
 @inline devir_write3!(i, a) = (@inbounds a[i] = 3.0f0; nothing)
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "device IR: the scan flags a Float64-touching kernel (negative control)" setup = [DeviceIR] tags = [:potts, :device_ir, :gpu, :rocm, :device] begin
+@testitem "device IR: the scan flags a Float64-touching kernel (negative control)" setup = [
+    DeviceIR,
+] tags = [
+    :potts, :device_ir, :gpu, :rocm, :device,
+] begin
     @testset "device IR: the scan flags a Float64-touching kernel (negative control)" begin
         backend = AMDGPU.ROCBackend()
-        for (k, flagged) in ((devir_f64_literal!, true), (devir_f64_convert!, true), (devir_f32!, false))
+        for (k, flagged) in (
+                (devir_f64_literal!, true), (devir_f64_convert!, true), (
+                    devir_f32!, false,
+                ),
+            )
             a = AMDGPU.ROCArray(ones(Float32, 8))
             irs = kernels_ir(() -> k(backend)(a; ndrange = 8))
-            @test length(irs) == 1                                          # the hook saw the kernel
+            # the hook saw the kernel
+            @test length(irs) == 1
             @test any(!isempty ∘ doubles ∘ last, irs) == flagged
-            @test Array(a)[1] ≈ (k === devir_f64_convert! ? 1.0f0 : 1.000000001f0)  # and it ran
+            # and it ran
+            @test Array(a)[1] ≈ (k === devir_f64_convert! ? 1.0f0 : 1.000000001f0)
         end
     end
 end
 
-     # i ≤ length(a)
-@testitem "device IR: a compile-only launch compiles and does not dispatch (ROCm)" setup = [DeviceIR] tags = [:potts, :device_ir, :gpu, :rocm, :device] begin
+# i ≤ length(a)
+@testitem "device IR: a compile-only launch compiles and does not dispatch (ROCm)" setup = [
+    DeviceIR,
+] tags = [
+    :potts, :device_ir, :gpu, :rocm, :device,
+] begin
     @testset "device IR: a compile-only launch compiles and does not dispatch (ROCm)" begin
         backend = AMDGPU.ROCBackend()
         a = AMDGPU.ROCArray(ones(Float32, 4))
@@ -135,7 +143,8 @@ end
         irs = kernels_ir(() -> CorePotts._compile!(m, backend))
         @test length(irs) == 1 && occursin("devir_write!", first(only(irs)))
         @test Array(a) == ones(Float32, 4)
-        CorePotts._stage!(CorePotts._Enqueue(), devir_write!, backend, 4, (a,))   # control: a launch writes
+        # control: a launch writes
+        CorePotts._stage!(CorePotts._Enqueue(), devir_write!, backend, 4, (a,))
         AMDGPU.synchronize()
         @test Array(a) == fill(2.0f0, 4)
         # without the hook (which recompiles at every launch): the compile adds one kernel

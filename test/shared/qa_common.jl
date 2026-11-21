@@ -4,7 +4,8 @@
 if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
     const _POTTS_QA_COMMON_DEFINED = true
 
-    const _QA_DEFAULT_BANNED = r"\b(Jiang|Merks|Bauer|Graner|Glazier|Fortuna|Hogeweg|Szabo|Marée|FBCA|OpenVT)\b"
+    const _QA_DEFAULT_BANNED =
+        r"\b(Jiang|Merks|Bauer|Graner|Glazier|Fortuna|Hogeweg|Szabo|Marée|FBCA|OpenVT)\b"
 
     """
         qa_aqua(mod; ambiguities = true, persistent_tasks = true,
@@ -21,8 +22,12 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
             deps_compat = (; check_extras = true),
             kwargs...
         )
-        Aqua = Base.require(Base.PkgId(Base.UUID("4c88cf16-eb10-579e-8560-4a9242c79595"), "Aqua"))
-        Base.invokelatest(Aqua.test_all, mod; ambiguities, persistent_tasks, deps_compat, kwargs...)
+        Aqua = Base.require(
+            Base.PkgId(Base.UUID("4c88cf16-eb10-579e-8560-4a9242c79595"), "Aqua")
+        )
+        Base.invokelatest(
+            Aqua.test_all, mod; ambiguities, persistent_tasks, deps_compat, kwargs...
+        )
         return nothing
     end
 
@@ -54,8 +59,9 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
     """
         qa_pirates(ext; owners) -> Vector{Method}
 
-    The methods of module `ext` that Aqua's piracy hunt flags, with the functions and types of
-    `owners` (and their submodules) treated as `ext`'s own. Empty when `ext` pirates nothing.
+    The methods of module `ext` that Aqua's piracy hunt flags, with the functions and types
+    of `owners` (and their submodules) treated as `ext`'s own. Empty when `ext` pirates
+    nothing.
     """
     function qa_pirates(ext::Module; owners)
         Aqua = Base.require(_QA_AQUA)
@@ -65,15 +71,17 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
     """
         qa_extension_piracies(mod; owners = (mod,)) -> Vector{Module}
 
-    Aqua's piracy check on each loaded package extension of `mod` (`Aqua.test_all`
-    does not look inside extensions), with the functions and types of `owners` (and their
-    submodules) treated as the extension's own: an extension may extend its parent's
-    functions and add methods on its parent's types, but not add a foreign function's
-    method on foreign types. Returns the extensions checked; load the trigger packages first.
+    Aqua's piracy check on each loaded package extension of `mod` (`Aqua.test_all` does not
+    look inside extensions), with the functions and types of `owners` (and their submodules)
+    treated as the extension's own: an extension may extend its parent's functions and add
+    methods on its parent's types, but not add a foreign function's method on foreign types.
+    Returns the extensions checked; load the trigger packages first.
     """
     function qa_extension_piracies(mod::Module; owners = (mod,))
         Test = Base.require(_QA_TEST)
-        TOML = Base.require(Base.PkgId(Base.UUID("fa267f1f-6049-4f14-aa54-33bafae1ed76"), "TOML"))
+        TOML = Base.require(
+            Base.PkgId(Base.UUID("fa267f1f-6049-4f14-aa54-33bafae1ed76"), "TOML")
+        )
         project = Base.invokelatest(TOML.parsefile, joinpath(pkgdir(mod), "Project.toml"))
         exts = Module[]
         for name in sort!(collect(keys(get(project, "extensions", Dict{String, Any}()))))
@@ -93,9 +101,9 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
     The negative control of [`qa_extension_piracies`](@ref): a scratch parent module and a
     scratch extension of it. The extension's method of a parent function and its method of a
     foreign function on a parent type are not flagged; its method of a foreign function on
-    foreign types (`Base.nameof` on a `Pair{Char, Int8}`) is the one pirate found. (Two scratch
-    modules count as one package, so the control cannot show what the owners add; the
-    extension checks of the packages do, by passing.)
+    foreign types (`Base.nameof` on a `Pair{Char, Int8}`) is the one pirate found. (Two
+    scratch modules count as one package, so the control cannot show what the owners add;
+    the extension checks of the packages do, by passing.)
     """
     function qa_piracy_control()
         Test = Base.require(_QA_TEST)
@@ -113,8 +121,8 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
 
     const _QA_JET = Base.PkgId(Base.UUID("c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"), "JET")
 
-    # the reports of a JET result as message texts: `locals` (a local variable that "may be" or
-    # "is not" defined, with the file it is in) and `errors` (the others)
+    # the reports of a JET result as message texts: `locals` (a local variable that "may be"
+    # or "is not" defined, with the file it is in) and `errors` (the others)
     function _qa_jet_split(JET, result)
         reports = Base.invokelatest(JET.get_reports, result)
         is_local(r) = r isa JET.UndefVarErrorReport && r.var isa Symbol
@@ -129,15 +137,16 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
     """
         qa_jet_reports(mod) -> (; errors, locals)
 
-    JET's error analysis of the whole package `mod` (`JET.report_package` in `:typo` mode, with
-    `target_modules = (mod,)`): references to undefined names and fields. `locals` are the
-    reports of a local variable that "may be" or "is not" defined, each with its file name;
-    `errors` are the other reports. Each is the report's message text.
+    JET's error analysis of the whole package `mod` (`JET.report_package` in `:typo` mode,
+    with `target_modules = (mod,)`): references to undefined names and fields. `locals` are
+    the reports of a local variable that "may be" or "is not" defined, each with its file
+    name; `errors` are the other reports. Each is the report's message text.
     """
     function qa_jet_reports(mod::Module)
         JET = Base.require(_QA_JET)
         result = Base.invokelatest(
-            JET.report_package, mod; target_modules = (mod,), mode = :typo, toplevel_logger = nothing
+            JET.report_package, mod; target_modules = (mod,), mode = :typo,
+            toplevel_logger = nothing
         )
         return _qa_jet_split(JET, result)
     end
@@ -148,15 +157,22 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
     Fail on every report of [`qa_jet_reports`](@ref) that no pattern lists. `broken` lists
     known reports as `pattern => reason`: the reports a pattern matches are a `@test_broken`
     (which turns into an error, an unexpected pass, once the report is gone). `locals` lists
-    the local-variable reports that were checked and are not defects, as `pattern => reason`:
-    JET does not follow a variable that a closure captures through a `Core.Box`, nor a
-    variable assigned under the same condition that guards its use.
+    the local-variable reports that were checked and are not defects, as
+    `pattern => reason`: JET does not follow a variable that a closure captures through a
+    `Core.Box`, nor a variable assigned under the same condition that guards its use.
     """
-    function qa_jet_package(mod::Module; broken = Pair{Regex, String}[], locals = Pair{Regex, String}[])
+    function qa_jet_package(
+            mod::Module; broken = Pair{Regex, String}[], locals = Pair{
+                Regex, String,
+            }[]
+        )
         Test = Base.require(_QA_TEST)
         r = qa_jet_reports(mod)
         listed(m, pats) = any(((p, _),) -> occursin(p, m), pats)
-        unexpected = [filter(m -> !listed(m, broken), r.errors); filter(m -> !listed(m, locals), r.locals)]
+        unexpected = [
+            filter(m -> !listed(m, broken), r.errors);
+            filter(m -> !listed(m, locals), r.locals)
+        ]
         isempty(unexpected) || @error "JET reports in $mod" unexpected
         Test.@test isempty(unexpected)
         for (p, _) in broken
@@ -168,11 +184,11 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
     """
         qa_jet_control()
 
-    The negative control of [`qa_jet_package`](@ref): JET's analysis of a scratch module in a
-    temporary file (`JET.report_file`, so nothing is loaded or cached), whose functions read
-    an undefined global and a field their argument's type does not have (through `getfield`:
-    JET does not report `p.y` on Julia 1.13, where `getproperty` throws the `FieldError`).
-    Both are reported.
+    The negative control of [`qa_jet_package`](@ref): JET's analysis of a scratch module in
+    a temporary file (`JET.report_file`, so nothing is loaded or cached), whose functions
+    read an undefined global and a field their argument's type does not have (through
+    `getfield`: JET does not report `p.y` on Julia 1.13, where `getproperty` throws the
+    `FieldError`). Both are reported.
     """
     function qa_jet_control()
         Test = Base.require(_QA_TEST)
@@ -191,7 +207,8 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
                 """
             )
             result = Base.invokelatest(
-                JET.report_file, file; analyze_from_definitions = true, mode = :typo, toplevel_logger = nothing
+                JET.report_file, file; analyze_from_definitions = true,
+                mode = :typo, toplevel_logger = nothing
             )
             (; errors) = _qa_jet_split(JET, result)
             Test.@test any(m -> occursin("undefined_global_name", m), errors)
@@ -206,10 +223,11 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
     """
         qa_check_bounds_control()
 
-    The negative control of the check-bounds lanes. Under `--check-bounds=yes`, a read one past
-    the end of a vector inside `@inbounds` throws a `BoundsError`. With the environment variable
-    `POTTS_CHECK_BOUNDS_LANE=true` (set by the CI lanes), the flag itself must be on, so a lane
-    that lost it fails. Without the flag the read is not made (it is undefined behavior).
+    The negative control of the check-bounds lanes. Under `--check-bounds=yes`, a read one
+    past the end of a vector inside `@inbounds` throws a `BoundsError`. With the environment
+    variable `POTTS_CHECK_BOUNDS_LANE=true` (set by the CI lanes), the flag itself must be
+    on, so a lane that lost it fails. Without the flag the read is not made (it is undefined
+    behavior).
     """
     function qa_check_bounds_control()
         Test = Base.require(_QA_TEST)
@@ -232,15 +250,32 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
             nonpublic_qualified = (),
             skip_owners = false
         )
-        EI = Base.require(Base.PkgId(Base.UUID("7d51a73a-1435-4ff3-83d9-f097790105c7"), "ExplicitImports"))
-        Test = Base.require(Base.PkgId(Base.UUID("8dfed614-e22c-5e08-85e1-65c5234f0b40"), "Test"))
+        EI = Base.require(
+            Base.PkgId(
+                Base.UUID("7d51a73a-1435-4ff3-83d9-f097790105c7"),
+                "ExplicitImports"
+            )
+        )
+        Test = Base.require(
+            Base.PkgId(Base.UUID("8dfed614-e22c-5e08-85e1-65c5234f0b40"), "Test")
+        )
         Test.@test Base.invokelatest(EI.check_no_implicit_imports, mod) === nothing
-        Test.@test Base.invokelatest(EI.check_all_explicit_imports_are_public, mod; ignore = nonpublic_explicit) === nothing
+        Test.@test Base.invokelatest(
+            EI.check_all_explicit_imports_are_public, mod; ignore = nonpublic_explicit
+        ) ===
+            nothing
         Test.@test Base.invokelatest(EI.check_no_stale_explicit_imports, mod) === nothing
         if !skip_owners
-            Test.@test Base.invokelatest(EI.check_all_qualified_accesses_via_owners, mod) === nothing
+            Test.@test Base.invokelatest(
+                EI.check_all_qualified_accesses_via_owners,
+                mod
+            ) ===
+                nothing
         end
-        Test.@test Base.invokelatest(EI.check_all_qualified_accesses_are_public, mod; ignore = nonpublic_qualified) === nothing
+        Test.@test Base.invokelatest(
+            EI.check_all_qualified_accesses_are_public,
+            mod; ignore = nonpublic_qualified
+        ) === nothing
         return nothing
     end
 
@@ -288,23 +323,32 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
             doc_module_names::AbstractVector{<:AbstractString} = String[],
             extra_documented::AbstractVector{Symbol} = Symbol[]
         )
-        Test = Base.require(Base.PkgId(Base.UUID("8dfed614-e22c-5e08-85e1-65c5234f0b40"), "Test"))
+        Test = Base.require(
+            Base.PkgId(Base.UUID("8dfed614-e22c-5e08-85e1-65c5234f0b40"), "Test")
+        )
         Test.@test isempty(Docs.undocumented_names(mod; private = false))
         for sub in submodules
             Test.@test isempty(Docs.undocumented_names(sub; private = false))
         end
         if check_docs_blocks && docs_dir !== nothing && isdir(docs_dir)
             autodoc_modules, doc_entries = _qa_collect_docs_coverage(docs_dir)
-            candidates = isempty(doc_module_names) ? [string(nameof(mod))] : collect(String, doc_module_names)
+            candidates = if isempty(doc_module_names)
+                [string(nameof(mod))]
+            else
+                collect(String, doc_module_names)
+            end
             if !any(in(autodoc_modules), candidates)
                 public_names = [
-                    n for n in names(mod; all = false, imported = false)
+                    n
+                        for n in names(mod; all = false, imported = false)
                         if n !== nameof(mod) && !(n in extra_documented)
                 ]
                 prefix = string(nameof(mod), ".")
                 missing_docs = [
-                    n for n in public_names
-                        if !(string(n) in doc_entries) && !((prefix * string(n)) in doc_entries)
+                    n
+                        for n in public_names
+                        if !(string(n) in doc_entries) &&
+                        !((prefix * string(n)) in doc_entries)
                 ]
                 Test.@test isempty(missing_docs)
             end
@@ -326,17 +370,24 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
             check_no_generated::Bool = true,
             exclude_files::AbstractVector{<:AbstractString} = String[]
         )
-        Test = Base.require(Base.PkgId(Base.UUID("8dfed614-e22c-5e08-85e1-65c5234f0b40"), "Test"))
+        Test = Base.require(
+            Base.PkgId(Base.UUID("8dfed614-e22c-5e08-85e1-65c5234f0b40"), "Test")
+        )
         excluded = Set(normpath.(exclude_files))
         files = [
             joinpath(d, f) for dir in ("src", "test")
                 for (d, _, fs) in walkdir(joinpath(pkg_root, dir))
                 for f in fs if endswith(f, ".jl")
         ]
-        hits = [f for f in files if !(normpath(f) in excluded) && occursin(banned_pattern, read(f, String))]
+        hits = [
+            f
+                for f in files
+                if !(normpath(f) in excluded) && occursin(banned_pattern, read(f, String))
+        ]
         Test.@test isempty(hits)
         if check_no_generated
-            src_prefix = normpath(joinpath(pkg_root, "src")) * Base.Filesystem.path_separator
+            src_prefix = normpath(joinpath(pkg_root, "src")) *
+                Base.Filesystem.path_separator
             src_files = filter(f -> startswith(normpath(f), src_prefix), files)
             Test.@test !any(f -> occursin("@generated", read(f, String)), src_files)
         end
@@ -347,61 +398,83 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
 
     function _qa_walk_ast_rules!(
             ex, line::Base.RefValue{Int},
-            error_calls::Vector{Int}, bare_catches::Vector{Int}, non_assertion_invariants::Vector{Int};
+            error_calls::Vector{Int}, bare_catches::Vector{Int},
+            non_assertion_invariants::Vector{Int};
             in_assertion::Bool = false
         )
         if ex isa LineNumberNode
             ex.line > 0 && (line[] = ex.line)
             return nothing
         elseif ex isa String
-            !in_assertion && occursin("please report", ex) && push!(non_assertion_invariants, line[])
+            !in_assertion && occursin("please report", ex) &&
+                push!(non_assertion_invariants, line[])
             return nothing
         end
         ex isa Expr || return nothing
         # Skip docstring text on `@doc` macrocalls; scan only the documented expression.
-        if ex.head === :macrocall && length(ex.args) >= 4 && ex.args[1] == GlobalRef(Core, Symbol("@doc"))
-            _qa_walk_ast_rules!(ex.args[end], line, error_calls, bare_catches, non_assertion_invariants; in_assertion)
+        if ex.head === :macrocall && length(ex.args) >= 4 &&
+                ex.args[1] == GlobalRef(Core, Symbol("@doc"))
+            _qa_walk_ast_rules!(
+                ex.args[end], line, error_calls, bare_catches,
+                non_assertion_invariants; in_assertion
+            )
             return nothing
         end
         next_assertion = in_assertion
         if ex.head === :call && !isempty(ex.args)
             callee = ex.args[1]
-            if callee === :error || callee == :(Base.error) || callee === :ErrorException || callee == :(Base.ErrorException)
+            if callee === :error || callee == :(Base.error) || callee === :ErrorException ||
+                    callee == :(Base.ErrorException)
                 push!(error_calls, line[])
             elseif callee === :AssertionError || callee == :(Base.AssertionError)
                 next_assertion = true
             end
         elseif ex.head === :try && length(ex.args) >= 3
             # `try ... catch; ... end` leaves the catch binding slot `ex.args[2] === false`
-            # with a catch body (`ex.args[3] !== false`); `try ... finally` has `ex.args[3] === false`.
+            # with a catch body (`ex.args[3] !== false`); `try ... finally` has `ex.args[3]
+            # === false`.
             ex.args[2] === false && ex.args[3] !== false && push!(bare_catches, line[])
         end
         for a in ex.args
-            _qa_walk_ast_rules!(a, line, error_calls, bare_catches, non_assertion_invariants; in_assertion = next_assertion)
+            _qa_walk_ast_rules!(
+                a, line, error_calls, bare_catches,
+                non_assertion_invariants; in_assertion = next_assertion
+            )
         end
         return nothing
     end
 
-    function _qa_scan_error_rules(text::AbstractString; allow_bcs::Bool = false, allow_bcs_test::Bool = false)
+    function _qa_scan_error_rules(
+            text::AbstractString; allow_bcs::Bool = false,
+            allow_bcs_test::Bool = false
+        )
         ast = Base.Meta.parseall(text)
         error_calls = Int[]
         bare_catches = Int[]
         non_assertion_invariants = Int[]
-        _qa_walk_ast_rules!(ast, Ref(1), error_calls, bare_catches, non_assertion_invariants)
+        _qa_walk_ast_rules!(
+            ast, Ref(1), error_calls, bare_catches, non_assertion_invariants
+        )
         stale_terms = Int[]
         for (i, ln) in enumerate(eachsplit(text, '\n'; keepempty = true))
             if occursin(_QA_STALE_FRONTEND_RE, ln)
                 !occursin(r"\bfront[- ]end\s+[AB]\b|\bboth\s+front\s+ends\b", ln) &&
-                    ((allow_bcs && occursin("Symbol(\"@bcs\")", ln)) || allow_bcs_test) && continue
+                    ((allow_bcs && occursin("Symbol(\"@bcs\")", ln)) || allow_bcs_test) &&
+                    continue
                 push!(stale_terms, i)
             end
         end
         return (; error_calls, bare_catches, non_assertion_invariants, stale_terms)
     end
 
-    _qa_invariants_match(found, reviewed) = sort(collect(String, found)) == sort(collect(String, reviewed))
+    function _qa_invariants_match(found, reviewed)
+        return sort(collect(String, found)) == sort(collect(String, reviewed))
+    end
 
-    function _qa_collect_tree(pkg_root::AbstractString, allowed_bcs_files::AbstractVector{<:AbstractString})
+    function _qa_collect_tree(
+            pkg_root::AbstractString,
+            allowed_bcs_files::AbstractVector{<:AbstractString}
+        )
         allowed_bcs = Set(normpath.(allowed_bcs_files))
         qa_self = normpath(joinpath(pkg_root, "test", "shared", "qa_common.jl"))
 
@@ -458,21 +531,26 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
     # - no bare `catch` clauses (`try ... catch; ... end` without an exception binding),
     # - internal `"please report"` invariants thrown exclusively via `AssertionError` and
     #   matching `reviewed_invariants`,
-    # that `src/`, `ext/`, and `test/` contain no stale front-end wording (a front end named by a
-    # letter, "both front ends", "@bcs" outside the explicit legacy-section refusal), and run
-    # negative controls proving every guard flags synthetic violations.
+    # that `src/`, `ext/`, and `test/` contain no stale front-end wording (a front end named
+    # by a letter, "both front ends", "@bcs" outside the explicit legacy-section refusal),
+    # and run negative controls proving every guard flags synthetic violations.
     function qa_error_rules(
             pkg_root::AbstractString;
             reviewed_invariants::AbstractVector{<:AbstractString} = String[],
             allowed_bcs_files::AbstractVector{<:AbstractString} = String[]
         )
-        Test = Base.require(Base.PkgId(Base.UUID("8dfed614-e22c-5e08-85e1-65c5234f0b40"), "Test"))
-        (; bad_errors, bad_catches, bad_invariant_forms, bad_stale, found_invariants) =
-            _qa_collect_tree(pkg_root, allowed_bcs_files)
+        Test = Base.require(
+            Base.PkgId(Base.UUID("8dfed614-e22c-5e08-85e1-65c5234f0b40"), "Test")
+        )
+        (;
+            bad_errors, bad_catches, bad_invariant_forms,
+            bad_stale, found_invariants,
+        ) = _qa_collect_tree(pkg_root, allowed_bcs_files)
 
         isempty(bad_errors) || @error "untyped error() / ErrorException calls" bad_errors
         isempty(bad_catches) || @error "bare catch clauses" bad_catches
-        isempty(bad_invariant_forms) || @error "non-AssertionError invariant throws" bad_invariant_forms
+        isempty(bad_invariant_forms) ||
+            @error "non-AssertionError invariant throws" bad_invariant_forms
         isempty(bad_stale) || @error "stale front-end terms" bad_stale
         Test.@test isempty(bad_errors)
         Test.@test isempty(bad_catches)
@@ -480,22 +558,32 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
         Test.@test isempty(bad_stale)
         Test.@test _qa_invariants_match(found_invariants, reviewed_invariants)
 
-        # Negative controls: each guard flags synthetic scratch inputs and spares valid ones.
+        # Negative controls: each guard flags synthetic scratch inputs and spares valid
+        # ones.
         err_neg = _qa_scan_error_rules(
-            "f() = error(\"boom\")\ng() = Base.error(\"boom\")\nh() = throw(ErrorException(\"boom\"))\nk() = throw(Base.ErrorException(\"boom\"))"
+            "f() = error(\"boom\")\ng() = Base.error(\"boom\")\nh() = \
+                throw(ErrorException(\"boom\"))\nk() = throw(Base.ErrorException(\"boom\"))"
         )
         Test.@test err_neg.error_calls == [1, 2, 3, 4]
         catch_neg = _qa_scan_error_rules("f() = try x() catch; 1 end")
         Test.@test length(catch_neg.bare_catches) == 1
-        catch_ok = _qa_scan_error_rules("f() = try x() catch e; isfatal(e) && rethrow(); 1 end\ng() = try x() finally 1 end")
+        catch_ok = _qa_scan_error_rules("f() = try x() catch e; isfatal(e) && rethrow(); \
+            1 end\ng() = try x() finally 1 end")
         Test.@test isempty(catch_ok.bare_catches)
-        inv_form_neg = _qa_scan_error_rules("f() = throw(ArgumentError(\"bad (please report it)\"))")
+        inv_form_neg = _qa_scan_error_rules(
+            "f() = throw(ArgumentError(\"bad (please report it)\"))"
+        )
         Test.@test inv_form_neg.non_assertion_invariants == [1]
-        inv_form_ok = _qa_scan_error_rules("f() = throw(AssertionError(\"bad (please report it)\"))")
+        inv_form_ok = _qa_scan_error_rules(
+            "f() = throw(AssertionError(\"bad (please report it)\"))"
+        )
         Test.@test isempty(inv_form_ok.non_assertion_invariants)
         mktempdir() do tmp
             mkdir(joinpath(tmp, "src"))
-            write(joinpath(tmp, "src", "planted.jl"), "f() = throw(AssertionError(\"bad (please report)\"))\n")
+            write(
+                joinpath(tmp, "src", "planted.jl"),
+                "f() = throw(AssertionError(\"bad (please report)\"))\n"
+            )
             planted = _qa_collect_tree(tmp, String[])
             Test.@test isempty(planted.bad_invariant_forms)
             Test.@test !_qa_invariants_match(planted.found_invariants, String[])
@@ -516,31 +604,43 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
         return nothing
     end
 
-    # ── Phase names ──────────────────────────────────────────────────────────────────────────
+    # ── Phase names
+    # ──────────────────────────────────────────────────────────────────────────
     # Development-process IDs (roadmap items, review rounds, design drafts) do not belong in
-    # names, titles, comments or messages: a reader with no project history cannot decode them.
-    # The pattern matches ID shapes only, never prose words. Each alternative is written in
-    # pieces so that this file does not match itself. "round" and a number is not matched on
-    # purpose: domain text uses it too (the rounds of an Eden growth).
+    # names, titles, comments or messages: a reader with no project history cannot decode
+    # them. The pattern matches ID shapes only, never prose words. Each alternative is
+    # written in pieces so that this file does not match itself. "round" and a number is not
+    # matched on purpose: domain text uses it too (the rounds of an Eden growth).
     const _QA_PHASE_RE = Regex(
         join(
             (
-                raw"\bP[0-9]+\.(?:[0-9]+[a-z]{0,2}[0-9]?[a-z]?|ci)\b",        # roadmap items
-                raw"\b[pP][0-9]+_[0-9]+[a-z0-9]*",                           # the same in file names
-                raw"\b[pP][0-9]{2,4}[A-Za-z]{1,3}[0-9]?_",                   # identifier prefixes
-                raw"\b[pP][0-9]{2,4}[a-z]{1,3}[0-9]?[A-Z]",                  # and CamelCase names
-                raw"\bF[0-9]-(?:[A-EG-Z]?[0-9]+[a-z]?)\b",                   # field-compiler items
+                # roadmap items
+                raw"\bP[0-9]+\.(?:[0-9]+[a-z]{0,2}[0-9]?[a-z]?|ci)\b",
+                # the same in file names
+                raw"\b[pP][0-9]+_[0-9]+[a-z0-9]*",
+                # identifier prefixes
+                raw"\b[pP][0-9]{2,4}[A-Za-z]{1,3}[0-9]?_",
+                # and CamelCase names
+                raw"\b[pP][0-9]{2,4}[a-z]{1,3}[0-9]?[A-Z]",
+                # field-compiler items
+                raw"\bF[0-9]-(?:[A-EG-Z]?[0-9]+[a-z]?)\b",
                 raw"\bF[0-9] (?:design|round|review)\b", raw"\bv[0-9] §",    # design drafts
-                raw"\bTS(?:-R)?[0-9]+[a-z]?\b",                              # test-suite passes
+                # test-suite passes
+                raw"\bTS(?:-R)?[0-9]+[a-z]?\b",
                 raw"\bM[0-9]+\.[0-9]+[a-z]?\b",                              # milestones
-                raw"\breview r[0-9]\b", raw"\br[0-9] [SMN][0-9]+\b", raw"\bR[0-9]-[MSN][0-9]+\b",
-                raw"\bbatch(?:-end| [0-9]+) review\b",                       # review rounds and findings
+                raw"\breview r[0-9]\b", raw"\br[0-9] [SMN][0-9]+\b",
+                raw"\bR[0-9]-[MSN][0-9]+\b",
+                # review rounds and findings
+                raw"\bbatch(?:-end| [0-9]+) review\b",
                 raw"\breview (?:[SMN][0-9]+|[0-9]+|B[0-9])", raw"\(B[0-9]\)",
-                raw"\bP[0-9]-(?:mg|rev|mtk|wlite)",                           # design studies
-                "\\bfront " * raw"end [AB]\b", "\\bW-" * raw"lite\b",        # superseded design labels
+                # design studies
+                raw"\bP[0-9]-(?:mg|rev|mtk|wlite)",
+                # superseded design labels
+                "\\bfront " * raw"end [AB]\b", "\\bW-" * raw"lite\b",
                 "\\bcutover " * raw"C[0-9]+\b", raw"\bC[0-9]{1,2} (?:gate|review)\b",
                 raw"\bPG-[0-9]\b", raw"\bP[0-9]-gates\b",
-                raw"\bD-[A-Z][0-9]?[a-z]?-?[0-9]+[a-z]?\b",                  # phase-scoped decision IDs
+                # phase-scoped decision IDs
+                raw"\bD-[A-Z][0-9]?[a-z]?-?[0-9]+[a-z]?\b",
             ), "|"
         )
     )
@@ -550,19 +650,21 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
 
     The development-process IDs in `text`, in order: roadmap items and their file-name and
     identifier forms, field-compiler and test-suite items, milestones, review rounds and
-    findings, design-draft sections, superseded design labels, and phase-scoped decision IDs.
-    Plain decision IDs (`D-` and three digits) are not matched here; see
+    findings, design-draft sections, superseded design labels, and phase-scoped decision
+    IDs. Plain decision IDs (`D-` and three digits) are not matched here; see
     [`qa_decision_ids`](@ref). The controls in `test/qa_tests.jl` show the shapes.
     """
-    qa_phase_tokens(text::AbstractString) = String[m.match for m in eachmatch(_QA_PHASE_RE, text)]
+    function qa_phase_tokens(text::AbstractString)
+        return String[m.match for m in eachmatch(_QA_PHASE_RE, text)]
+    end
 
     # Plain decision IDs may stay in code comments, as links to the rationale in
     # docs/design/DECISIONS.md. Messages, docstrings and docs pages say the reason in words.
     const _QA_DECISION_RE = r"\bD-[0-9]{3}\b"
     const _QA_CODE_EXTS = (".jl", ".sh", ".toml", ".yml", ".yaml", ".py")
 
-    # A file whose comments are not code comments: docs pages, READMEs, and the Literate pages
-    # (reproductions and model pages), whose comments render as the page's prose.
+    # A file whose comments are not code comments: docs pages, READMEs, and the Literate
+    # pages (reproductions and model pages), whose comments render as the page's prose.
     function _qa_prose_file(p::AbstractString)
         any(e -> endswith(p, e), _QA_CODE_EXTS) || return true
         occursin(r"^lib/[^/]+/reproductions/[^/]+\.jl$", p) && return true
@@ -572,34 +674,52 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
     """
         qa_decision_ids(line; prose = false) -> Vector{String}
 
-    The plain decision IDs (`D-` and three digits) in `line` that are not in a comment: every
-    one when `prose`, otherwise those before the line's first `#`. A `#` inside a string ends
-    the code part too, so an ID after it is missed; docstring lines have no `#` as a rule.
+    The plain decision IDs (`D-` and three digits) in `line` that are not in a comment:
+    every one when `prose`, otherwise those before the line's first `#`. A `#` inside a
+    string ends the code part too, so an ID after it is missed; docstring lines have no `#`
+    as a rule.
     """
     function qa_decision_ids(line::AbstractString; prose::Bool = false)
         h = prose ? nothing : findfirst('#', line)
-        return String[m.match for m in eachmatch(_QA_DECISION_RE, line) if h === nothing || m.offset < h]
+        return String[
+            m.match
+                for m in eachmatch(_QA_DECISION_RE, line)
+                if h === nothing || m.offset < h
+        ]
     end
 
-    const _QA_PHASE_EXCLUDE = ("docs/design/", ".claude/", "lib/PottsModels/reproductions/data/")
+    const _QA_PHASE_EXCLUDE = (
+        "docs/design/", ".claude/", "lib/PottsModels/reproductions/data/",
+    )
     const _QA_PHASE_ALLOWLIST = "test/phase_names_allow.txt"
 
     function _qa_phase_in_scope(p::AbstractString)
-        if any(e -> startswith(p, e), _QA_PHASE_EXCLUDE) || basename(p) == "CLAUDE.md" || p == _QA_PHASE_ALLOWLIST
+        if any(e -> startswith(p, e), _QA_PHASE_EXCLUDE) || basename(p) == "CLAUDE.md" ||
+                p == _QA_PHASE_ALLOWLIST
             return false
-        elseif startswith(basename(p), "README") || startswith(basename(p), "CONTRIBUTING") || p == "docs/make.jl"
+        elseif startswith(basename(p), "README") ||
+                startswith(basename(p), "CONTRIBUTING") || p == "docs/make.jl"
             return true
-        elseif any(d -> startswith(p, d), ("src/", "ext/", "test/", "benchmark/", "docs/src/", "docs/models/", "docs/status/", "tools/", ".github/"))
+        elseif any(
+                d -> startswith(p, d),
+                (
+                    "src/", "ext/", "test/", "benchmark/", "docs/src/",
+                    "docs/models/", "docs/status/", "tools/", ".github/",
+                )
+            )
             return true
         end
-        return occursin(r"^lib/[^/]+/(?:src|ext|test)/", p) || occursin(r"^lib/[^/]+/reproductions/[^/]+\.jl$", p)
+        return occursin(r"^lib/[^/]+/(?:src|ext|test)/", p) ||
+            occursin(r"^lib/[^/]+/reproductions/[^/]+\.jl$", p)
     end
 
     function _qa_phase_files(root::AbstractString)
         git = Sys.which("git")
         if git !== nothing && ispath(joinpath(root, ".git"))
             out = IOBuffer()
-            ok = success(pipeline(`$git -C $root ls-files -z`; stdout = out, stderr = devnull))
+            ok = success(
+                pipeline(`$git -C $root ls-files -z`; stdout = out, stderr = devnull)
+            )
             ok && return sort!(filter!(!isempty, split(String(take!(out)), '\0')))
         end
         files = String[]
@@ -629,15 +749,16 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
     end
 
     """
-        qa_no_phase_names(root; allow = qa_phase_allowlist(joinpath(root, "test", "phase_names_allow.txt")))
+        qa_no_phase_names(root; allow = qa_phase_allowlist(joinpath(root, "test", \
+    "phase_names_allow.txt")))
             -> Vector{String}
 
-    Scan the tracked files of the checkout at `root` (`git ls-files`, or every file when git or
-    the repository is absent) in the package sources, extensions, tests, benchmarks, docs pages
-    and models, the status page, reproduction pages, tools, CI files, READMEs and CONTRIBUTING files for
-    [`qa_phase_tokens`](@ref), in file contents and in the paths themselves, and for
-    [`qa_decision_ids`](@ref) in file contents (comments of code files exempt). Skipped:
-    `docs/design/`, `CLAUDE.md`, `.claude/`, the committed records under
+    Scan the tracked files of the checkout at `root` (`git ls-files`, or every file when git
+    or the repository is absent) in the package sources, extensions, tests, benchmarks, docs
+    pages and models, the status page, reproduction pages, tools, CI files, READMEs and
+    CONTRIBUTING files for [`qa_phase_tokens`](@ref), in file contents and in the paths
+    themselves, and for [`qa_decision_ids`](@ref) in file contents (comments of code files
+    exempt). Skipped: `docs/design/`, `CLAUDE.md`, `.claude/`, the committed records under
     `lib/PottsModels/reproductions/data/` and the allowlist itself. Returns one
     `"file:line: token"` per hit not in `allow` (line 0 for a path); empty when clean.
     """
@@ -657,10 +778,108 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
             (0x00 in bytes || !isvalid(String, bytes)) && continue
             prose = _qa_prose_file(p)
             for (i, ln) in enumerate(eachsplit(String(bytes), '\n'; keepempty = true))
-                for t in Iterators.flatten((qa_phase_tokens(ln), qa_decision_ids(ln; prose)))
+                for t in Iterators.flatten(
+                        (
+                            qa_phase_tokens(ln), qa_decision_ids(ln; prose),
+                        )
+                    )
                     (p, t) in allow || push!(bad, "$p:$i: $t")
                 end
             end
+        end
+        return bad
+    end
+
+    const _QA_LINE_LIMIT = 92
+    const _QA_LINE_ALLOWLIST = "test/line_length_allow.txt"
+    const _QA_LINE_EXCLUDE = (
+        "lib/PottsModels/reproductions/data/", "docs/design/", "docs/references/",
+    )
+    # Long lines that cannot be wrapped, by kind: a Markdown table row in a comment or
+    # docstring (the line starts with `|`), and a URL, raw HTML or a Markdown heading in a
+    # comment. Code that builds a table row is not exempt: its string splits with `*`.
+    const _QA_LINE_KINDS = (
+        r"^\s*(?:#\s*)?\|(?!\|)",
+        r"^\s*#.*https?://",
+        r"^\s*#\s*</?[a-zA-Z]",
+        r"^\s*#\s+#{1,6} ",
+    )
+    # A URL, regex or raw string literal takes no `\` line continuation: a code line is
+    # exempt when such a literal is what makes it long, that is, the rest of the line fits
+    # in half the limit.
+    const _QA_LINE_LITERAL = r"https?://\S+|\b(?:r|raw)\"(?:[^\"\\]|\\.)*\""
+    function _qa_line_exempt(ln, limit)
+        any(r -> occursin(r, ln), _QA_LINE_KINDS) && return true
+        occursin(_QA_LINE_LITERAL, ln) || return false
+        return textwidth(replace(ln, _QA_LINE_LITERAL => "")) <= limit ÷ 2
+    end
+
+    """
+        qa_line_allowlist(path) -> Vector{Tuple{String, String}}
+
+    Read an allowlist of `path<TAB>text<TAB>reason` lines (`#` lines and blank lines are
+    skipped): a long line of the file `path` that contains `text` passes
+    [`qa_long_lines`](@ref); the text `*` passes every line of the file. Every entry needs a
+    reason.
+    """
+    function qa_line_allowlist(path::AbstractString)
+        allow = Tuple{String, String}[]
+        isfile(path) || return allow
+        for (i, l) in enumerate(eachline(path))
+            (isempty(strip(l)) || startswith(l, "#")) && continue
+            f = split(l, '\t')
+            (length(f) == 3 && !isempty(f[2]) && !isempty(strip(f[3]))) ||
+                throw(ArgumentError("$path:$i: expected `path<TAB>text<TAB>reason`"))
+            push!(allow, (String(f[1]), String(f[2])))
+        end
+        return allow
+    end
+
+    """
+        qa_long_lines(root; limit = 92, allow = qa_line_allowlist(joinpath(root, "test",
+            "line_length_allow.txt"))) -> Vector{String}
+
+    The lines of the tracked Julia files of the checkout at `root` (`git ls-files`, or every
+    file when git or the repository is absent) that are wider than `limit` columns
+    (`textwidth`), as `"file:line: width"`. Skipped: `docs/design/`, `docs/references/` and
+    the committed records under `lib/PottsModels/reproductions/data/`. Exempt: a line that
+    cannot be wrapped (a Markdown table row in a comment or docstring; a URL, raw HTML or a
+    heading in a comment; a line made long by a URL, regex or raw string literal; a line
+    inside a raw triple-quoted string) and a line that an `allow` entry matches. Each entry
+    that matches no long line is returned too, as `"allowlist: file: text"`. Empty when
+    clean.
+    """
+    function qa_long_lines(
+            root::AbstractString; limit::Integer = _QA_LINE_LIMIT,
+            allow = qa_line_allowlist(joinpath(root, _QA_LINE_ALLOWLIST))
+        )
+        bad = String[]
+        used = falses(length(allow))
+        for p in _qa_phase_files(root)
+            endswith(p, ".jl") || continue
+            any(e -> startswith(p, e), _QA_LINE_EXCLUDE) && continue
+            file = joinpath(root, p)
+            isfile(file) || continue
+            inraw = false
+            for (i, ln) in enumerate(eachline(file))
+                wasraw = inraw
+                if inraw
+                    occursin("\"\"\"", ln) && (inraw = false)
+                elseif occursin(r"\braw\"\"\"", ln) && count("\"\"\"", ln) == 1
+                    inraw = true
+                end
+                (textwidth(ln) <= limit || wasraw) && continue
+                _qa_line_exempt(ln, limit) && continue
+                k = findfirst(((q, t),) -> q == p && (t == "*" || occursin(t, ln)), allow)
+                if k === nothing
+                    push!(bad, "$p:$i: $(textwidth(ln))")
+                else
+                    used[k] = true
+                end
+            end
+        end
+        for (k, (q, t)) in enumerate(allow)
+            used[k] || push!(bad, "allowlist: $q: $t")
         end
         return bad
     end
@@ -677,7 +896,13 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
         toml = Base.parsed_toml(project_file)
         compat = get(toml, "compat", Dict{String, Any}())
         std = readdir(Sys.STDLIB)
-        return sort!([n for n in keys(get(toml, "deps", Dict{String, Any}())) if !(n in std) && !(n in own) && !haskey(compat, n)])
+        return sort!(
+            [
+                n
+                    for n in keys(get(toml, "deps", Dict{String, Any}()))
+                    if !(n in std) && !(n in own) && !haskey(compat, n)
+            ]
+        )
     end
 
     """
@@ -706,7 +931,9 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
         return nothing
     end
 
-    _qa_exports(m::Module) = Set(n for n in names(m) if Base.isexported(m, n) && isdefined(m, n))
+    function _qa_exports(m::Module)
+        return Set(n for n in names(m) if Base.isexported(m, n) && isdefined(m, n))
+    end
 
     """
         qa_export_clashes(ours, upstream = ()) -> Vector{String}
@@ -723,7 +950,8 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
         for (i, a) in enumerate(mods), b in mods[(i + 1):end]
             (a in ours || b in ours) || continue
             for n in intersect(ex[a], ex[b])
-                getglobal(a, n) === getglobal(b, n) || push!(bad, "$n: $(nameof(a)), $(nameof(b))")
+                getglobal(a, n) === getglobal(b, n) ||
+                    push!(bad, "$n: $(nameof(a)), $(nameof(b))")
             end
         end
         return sort!(bad)
@@ -733,7 +961,8 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
         qa_export_clash_control()
 
     The negative control for [`qa_export_clashes`](@ref): two scratch modules that export
-    `shared` as different functions clash; one that re-exports the other's `shared` does not.
+    `shared` as different functions clash; one that re-exports the other's `shared` does
+    not.
     """
     function qa_export_clash_control()
         Test = Base.require(_QA_TEST)
@@ -743,7 +972,8 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
         Core.eval(b, :(export shared; shared() = 2))
         c = Module(:ScratchExportsC)
         Core.eval(c, :(export shared; const shared = $(getglobal(a, :shared))))
-        Test.@test Base.invokelatest(qa_export_clashes, (a,), (b,)) == ["shared: ScratchExportsA, ScratchExportsB"]
+        Test.@test Base.invokelatest(qa_export_clashes, (a,), (b,)) ==
+            ["shared: ScratchExportsA, ScratchExportsB"]
         Test.@test isempty(Base.invokelatest(qa_export_clashes, (a,), (c,)))
         return nothing
     end
@@ -764,7 +994,13 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
         parent isa _QACapture && _QA_TESTMOD.record(parent, ts)
         return ts
     end
-    _qa_flatten(r) = r isa _QACapture ? reduce(vcat, map(_qa_flatten, r.results); init = Any[]) : Any[r]
+    function _qa_flatten(r)
+        return if r isa _QACapture
+            reduce(vcat, map(_qa_flatten, r.results); init = Any[])
+        else
+            Any[r]
+        end
+    end
 
     # (defined through `Core.eval`: `@testset` is expanded once Test is loaded)
     Core.eval(
@@ -774,14 +1010,17 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
 
             Run `f()` (a guard) in a test set of its own and return its failed and errored
             results (`Test.Fail`, `Test.Error`), including an exception `f` throws outside a
-            test. The enclosing test set does not see them: a negative control requires them to
-            be non-empty.
+            test. The enclosing test set does not see them: a negative control requires them
+            to be non-empty.
             """
             function qa_failures(f)
                 ts = _QA_TESTMOD.@testset _QACapture "negative control" begin
                     f()
                 end
-                return filter(r -> r isa Union{_QA_TESTMOD.Fail, _QA_TESTMOD.Error}, _qa_flatten(ts))
+                return filter(
+                    r -> r isa Union{_QA_TESTMOD.Fail, _QA_TESTMOD.Error},
+                    _qa_flatten(ts)
+                )
             end
         end
     )
@@ -790,19 +1029,20 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
     # ModelingToolkitBase's public `AbstractSystem` interface (version 1.77):
     #   - `nameof` and `get_systems`, the two methods every system type must answer (the
     #     `AbstractSystem` docstring);
-    #   - the exported accessors `independent_variables`, `unknowns`, `parameters`, `observed`,
-    #     `equations`, `full_equations`, `initial_conditions`, `bindings` and `guesses`, and the
-    #     scalar extension point `independent_variable`;
+    #   - the exported accessors `independent_variables`, `unknowns`, `parameters`,
+    #     `observed`, `equations`, `full_equations`, `initial_conditions`, `bindings` and
+    #     `guesses`, and the scalar extension point `independent_variable`;
     #   - the public `inputs`, `outputs`, `iscomplete` and `does_namespacing`;
     #   - the metadata functions `getmetadata`, `hasmetadata`, `setmetadata`;
-    #   - the exported operations `@named` (with an index range), `extend`, `compose` (and `∘`),
-    #     `complete`, `toggle_namespacing` and `rename`;
+    #   - the exported operations `@named` (with an index range), `extend`, `compose` (and
+    #     `∘`), `complete`, `toggle_namespacing` and `rename`;
     #   - `mtkcompile` and its keywords.
     # Each call must give a value of MTK's kind, or refuse with an `ArgumentError`: never a
-    # `FieldError`, a `MethodError` or a stack overflow, which are not answers a user can act on.
-    # Defined only where the including module has `ModelingToolkitBase` (its `@named` is
-    # expanded when the helper is defined).
-    if isdefined(@__MODULE__, :ModelingToolkitBase) && !isdefined(@__MODULE__, :qa_mtk_system_interface)
+    # `FieldError`, a `MethodError` or a stack overflow, which are not answers a user can
+    # act on. Defined only where the including module has `ModelingToolkitBase` (its
+    # `@named` is expanded when the helper is defined).
+    if isdefined(@__MODULE__, :ModelingToolkitBase) &&
+            !isdefined(@__MODULE__, :qa_mtk_system_interface)
         Core.eval(
             @__MODULE__, quote
                 """A metadata key that no system sets."""
@@ -817,16 +1057,20 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
                     end
                 end
 
-                """Whether `x` is a value, or the `ArgumentError` of a refusal (not another exception)."""
+                """
+                Whether `x` is a value, or the `ArgumentError` of a refusal (not another
+                exception).
+                """
                 mtk_answered(x) = !(x isa Exception) || x isa ArgumentError
 
                 """
                     qa_mtk_system_interface(sys; rebuild, component)
 
-                Walk MTK's public system interface on `sys` (see the list above). `rebuild(; name)` builds
-                the same model under `name` (for `@named models[1:2]` and `extend`), and `component` is an MTK
-                `System` that `compose(sys, [component])` adds. Every call must answer (`mtk_answered`), and
-                the values must have MTK's types and agree with each other.
+                Walk MTK's public system interface on `sys` (see the list above).
+                `rebuild(; name)` builds the same model under `name` (for
+                `@named models[1:2]` and `extend`), and `component` is an MTK `System` that
+                `compose(sys, [component])` adds. Every call must answer (`mtk_answered`),
+                and the values must have MTK's types and agree with each other.
                 """
                 function qa_mtk_system_interface(sys; rebuild, component)
                     M = ModelingToolkitBase
@@ -834,9 +1078,13 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
                         Test.@test nameof(sys) isa Symbol
                         Test.@test mtk_outcome(() -> M.get_systems(sys)) isa AbstractVector
                         for f in (M.equations, M.full_equations, M.observed)
-                            Test.@test mtk_outcome(() -> f(sys)) isa AbstractVector{<:M.Equation}
+                            Test.@test mtk_outcome(() -> f(sys)) isa
+                                AbstractVector{<:M.Equation}
                         end
-                        for f in (M.unknowns, M.parameters, M.inputs, M.outputs, M.independent_variables)
+                        for f in (
+                                M.unknowns, M.parameters, M.inputs, M.outputs,
+                                M.independent_variables,
+                            )
                             Test.@test mtk_outcome(() -> f(sys)) isa AbstractVector
                         end
                         for f in (M.initial_conditions, M.bindings, M.guesses)
@@ -850,71 +1098,152 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
                         complete = mtk_outcome(() -> M.iscomplete(sys))
                         namespacing = mtk_outcome(() -> M.does_namespacing(sys))
                         Test.@test complete isa Bool && namespacing isa Bool
-                        # `does_namespacing` says what `sys.p` is: the parameter itself, or a namespaced copy
+                        # `does_namespacing` says what `sys.p` is: the parameter itself, or
+                        # a namespaced copy
                         p = first(M.parameters(sys))
                         name = Symbol(M.getname(p))
-                        Test.@test isequal(M.unwrap(getproperty(sys, name)), M.unwrap(p)) == !namespacing
+                        Test.@test isequal(M.unwrap(getproperty(sys, name)), M.unwrap(p)) ==
+                            !namespacing
                         done = mtk_outcome(() -> M.complete(sys))
-                        Test.@test done isa M.AbstractSystem && M.iscomplete(done) && nameof(done) === nameof(sys)
-                        Test.@test mtk_answered(mtk_outcome(() -> M.complete(sys; split = false)))
-                        Test.@test mtk_answered(mtk_outcome(() -> M.toggle_namespacing(sys, false)))
+                        Test.@test done isa M.AbstractSystem && M.iscomplete(done) &&
+                            nameof(done) === nameof(sys)
+                        Test.@test mtk_answered(
+                            mtk_outcome(() -> M.complete(sys; split = false))
+                        )
+                        Test.@test mtk_answered(
+                            mtk_outcome(() -> M.toggle_namespacing(sys, false))
+                        )
                     end
                     Test.@testset "metadata" begin
-                        Test.@test mtk_outcome(() -> M.getmetadata(sys, MTKInterfaceKey, :none)) === :none
-                        Test.@test mtk_outcome(() -> M.hasmetadata(sys, MTKInterfaceKey)) === false
+                        Test.@test mtk_outcome(
+                            () -> M.getmetadata(sys, MTKInterfaceKey, :none)
+                        ) ===
+                            :none
+                        Test.@test mtk_outcome(
+                            () -> M.hasmetadata(sys, MTKInterfaceKey)
+                        ) ===
+                            false
                         set = mtk_outcome(() -> M.setmetadata(sys, MTKInterfaceKey, 42))
-                        Test.@test set isa typeof(sys) && M.getmetadata(set, MTKInterfaceKey, :none) == 42 &&
-                            M.hasmetadata(set, MTKInterfaceKey) && nameof(set) === nameof(sys)
+                        Test.@test set isa typeof(sys) &&
+                            M.getmetadata(set, MTKInterfaceKey, :none) == 42 &&
+                            M.hasmetadata(set, MTKInterfaceKey) &&
+                            nameof(set) === nameof(sys)
                     end
-                    Test.@testset "rename, @named with an index range, compose, extend" begin
+                    Test.@testset "rename, @named with an index range, compose, \
+                        extend" begin
                         renamed = mtk_outcome(() -> M.rename(sys, :renamed))
                         Test.@test renamed isa typeof(sys) && nameof(renamed) === :renamed
-                        several = mtk_outcome(() -> (ModelingToolkitBase.@named models[1:2] = rebuild(); models))
-                        Test.@test several isa AbstractVector && nameof.(several) == [:models_1, :models_2]
+                        several = mtk_outcome(
+                            () -> (
+                                ModelingToolkitBase.@named models[1:2] = rebuild(); models
+                            )
+                        )
+                        Test.@test several isa AbstractVector &&
+                            nameof.(several) == [:models_1, :models_2]
                         composed = mtk_outcome(() -> M.compose(sys, [component]))
-                        Test.@test composed isa M.AbstractSystem && nameof(composed) === nameof(sys) &&
-                            length(M.unknowns(composed)) == length(M.unknowns(sys)) + length(M.unknowns(component))
-                        # a system with `sys` as its component, alone or among other systems: a composed
-                        # system, or a refusal naming the route
-                        Test.@test mtk_answered(mtk_outcome(() -> M.compose(component, [sys])))
-                        Test.@test mtk_answered(mtk_outcome(() -> M.compose(component, [rebuild(; name = :other), sys])))
+                        Test.@test composed isa M.AbstractSystem &&
+                            nameof(composed) === nameof(sys) &&
+                            length(M.unknowns(composed)) ==
+                            length(M.unknowns(sys)) + length(M.unknowns(component))
+                        # a system with `sys` as its component, alone or among other
+                        # systems: a composed system, or a refusal naming the route
+                        Test.@test mtk_answered(
+                            mtk_outcome(() -> M.compose(component, [sys]))
+                        )
+                        Test.@test mtk_answered(
+                            mtk_outcome(
+                                () -> M.compose(
+                                    component, [rebuild(; name = :other), sys]
+                                )
+                            )
+                        )
                         Test.@test mtk_answered(mtk_outcome(() -> component ∘ sys))
                         Test.@test mtk_answered(
-                            mtk_outcome(() -> M.System(M.Equation[], M.independent_variable(sys); name = :outer, systems = [sys]))
+                            mtk_outcome(
+                                () -> M.System(
+                                    M.Equation[], M.independent_variable(sys);
+                                    name = :outer, systems = [sys]
+                                )
+                            )
                         )
-                        extended = mtk_outcome(() -> M.extend(rebuild(; name = :extension), rebuild(; name = :base)))
-                        Test.@test extended isa typeof(sys) && nameof(extended) === :extension &&
-                            Set(M.getname.(M.parameters(extended))) == Set(M.getname.(M.parameters(sys)))
+                        extended = mtk_outcome(
+                            () -> M.extend(
+                                rebuild(; name = :extension), rebuild(; name = :base)
+                            )
+                        )
+                        Test.@test extended isa typeof(sys) &&
+                            nameof(extended) === :extension &&
+                            Set(M.getname.(M.parameters(extended))) ==
+                            Set(M.getname.(M.parameters(sys)))
                     end
                     Test.@testset "mtkcompile" begin
                         compiled = mtk_outcome(() -> M.mtkcompile(sys))
-                        Test.@test compiled isa M.AbstractSystem && M.iscomplete(compiled) && nameof(compiled) === nameof(sys)
+                        Test.@test compiled isa M.AbstractSystem &&
+                            M.iscomplete(compiled) &&
+                            nameof(compiled) === nameof(sys)
                         for f in (M.equations, M.observed)
-                            Test.@test mtk_outcome(() -> f(compiled)) isa AbstractVector{<:M.Equation}
+                            Test.@test mtk_outcome(() -> f(compiled)) isa
+                                AbstractVector{<:M.Equation}
                         end
-                        for f in (M.unknowns, M.parameters, M.inputs, M.outputs, M.get_systems)
+                        for f in (
+                                M.unknowns, M.parameters, M.inputs, M.outputs,
+                                M.get_systems,
+                            )
                             Test.@test mtk_outcome(() -> f(compiled)) isa AbstractVector
                         end
-                        Test.@test isequal(mtk_outcome(() -> M.independent_variable(compiled)), M.independent_variable(sys))
-                        Test.@test mtk_outcome(() -> M.getmetadata(compiled, MTKInterfaceKey, :none)) === :none
+                        Test.@test isequal(
+                            mtk_outcome(() -> M.independent_variable(compiled)),
+                            M.independent_variable(sys)
+                        )
+                        Test.@test mtk_outcome(
+                            () -> M.getmetadata(compiled, MTKInterfaceKey, :none)
+                        ) ===
+                            :none
                         # MTK's keywords: compiled, or refused by name
                         for kw in ((; simplify = false), (; inputs = [], outputs = []))
-                            Test.@test mtk_answered(mtk_outcome(() -> M.mtkcompile(sys; kw...)))
+                            Test.@test mtk_answered(
+                                mtk_outcome(() -> M.mtkcompile(sys; kw...))
+                            )
                         end
-                        # MTK's operations on the compiled system: a value, or a refusal naming the route
-                        Test.@test mtk_answered(mtk_outcome(() -> M.rename(compiled, :renamed)))
-                        Test.@test mtk_answered(mtk_outcome(() -> M.compose(compiled, [component])))
-                        Test.@test mtk_answered(mtk_outcome(() -> M.compose(component, [compiled])))
+                        # MTK's operations on the compiled system: a value, or a refusal
+                        # naming the route
+                        Test.@test mtk_answered(
+                            mtk_outcome(() -> M.rename(compiled, :renamed))
+                        )
+                        Test.@test mtk_answered(
+                            mtk_outcome(() -> M.compose(compiled, [component]))
+                        )
+                        Test.@test mtk_answered(
+                            mtk_outcome(() -> M.compose(component, [compiled]))
+                        )
                         Test.@test mtk_answered(mtk_outcome(() -> component ∘ compiled))
-                        Test.@test mtk_answered(mtk_outcome(() -> M.extend(compiled, rebuild(; name = :base))))
-                        Test.@test mtk_answered(mtk_outcome(() -> M.setmetadata(compiled, MTKInterfaceKey, 42)))
-                        Test.@test mtk_answered(mtk_outcome(() -> M.toggle_namespacing(compiled, false)))
+                        Test.@test mtk_answered(
+                            mtk_outcome(
+                                () -> M.extend(
+                                    compiled, rebuild(;
+                                        name = :base
+                                    )
+                                )
+                            )
+                        )
+                        Test.@test mtk_answered(
+                            mtk_outcome(
+                                () -> M.setmetadata(
+                                    compiled, MTKInterfaceKey, 42
+                                )
+                            )
+                        )
+                        Test.@test mtk_answered(
+                            mtk_outcome(() -> M.toggle_namespacing(compiled, false))
+                        )
                         Test.@test mtk_answered(mtk_outcome(() -> M.complete(compiled)))
                     end
                     return nothing
                 end
 
-                """A system type that answers `nameof` and nothing else (the control's defect)."""
+                """
+                A system type that answers `nameof` and nothing else (the control's defect).
+                """
                 struct _QAScratchSystem <: ModelingToolkitBase.AbstractSystem
                     name::Symbol
                 end
@@ -923,13 +1252,18 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
                 """
                     qa_mtk_system_interface_control()
 
-                The negative control for [`qa_mtk_system_interface`](@ref): a system type that
-                answers `nameof` but has no other accessor fails the walk.
+                The negative control for [`qa_mtk_system_interface`](@ref): a system type
+                that answers `nameof` but has no other accessor fails the walk.
                 """
                 function qa_mtk_system_interface_control()
                     M = ModelingToolkitBase
                     sys = _QAScratchSystem(:scratch)
-                    bad = qa_failures(() -> qa_mtk_system_interface(sys; rebuild = (; name = :r) -> _QAScratchSystem(name), component = sys))
+                    bad = qa_failures(
+                        () -> qa_mtk_system_interface(
+                            sys; rebuild = (; name = :r) -> _QAScratchSystem(name),
+                            component = sys
+                        )
+                    )
                     Test.@test !isempty(bad)
                     return nothing
                 end
@@ -937,7 +1271,10 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
         )
     end
 
-    const _QA_SCIMLBASE = Base.PkgId(Base.UUID("0bca4576-84f4-4d90-8ffe-ffa030f20462"), "SciMLBase")
+    const _QA_SCIMLBASE = Base.PkgId(
+        Base.UUID("0bca4576-84f4-4d90-8ffe-ffa030f20462"),
+        "SciMLBase"
+    )
 
     """
         qa_sciml_interface(prob, alg; kw = (;), h, stop, nwin, tf, state_copy, live_write!,
@@ -946,15 +1283,17 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
     SciMLBase's problem, integrator and solution interface on one owned path: `init`,
     `step!(integ, h, true)` landing on `t + h`, `add_tstop!` (landed on at `stop`),
     `check_error`, the stats, iteration (one step per window, `nwin` windows to `tf`), the
-    default saves (every step) and fewer with `save_everystep = false`, `sol(t)` at a save, the
-    refusal of an unknown keyword, and a write into the live state (`live_write!(integ)`)
-    followed by `derivative_discontinuity!` changing the next steps (`state_copy(integ)`
-    compares two runs). `kw` are the solve keywords of `alg`. With
+    default saves (every step) and fewer with `save_everystep = false`, `sol(t)` at a save,
+    the refusal of an unknown keyword, and a write into the live state
+    (`live_write!(integ)`) followed by `derivative_discontinuity!` changing the next steps
+    (`state_copy(integ)` compares two runs). `kw` are the solve keywords of `alg`. With
     `callbacks = (; preset, periodic, times, period, want)` (DiffEqCallbacks' constructors),
-    `PresetTimeCallback` fires at `times` and `PeriodicCallback` every `period`, first at `want`.
+    `PresetTimeCallback` fires at `times` and `PeriodicCallback` every `period`, first at
+    `want`.
     """
     function qa_sciml_interface(
-            prob, alg; kw = (;), h, stop, nwin, tf, state_copy, live_write!, callbacks = nothing
+            prob, alg; kw = (;), h, stop, nwin, tf, state_copy, live_write!,
+            callbacks = nothing
         )
         S = Base.require(_QA_SCIMLBASE)
         Test.@test S.isinplace(prob) === true
@@ -967,7 +1306,8 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
             S.step!(integ)
         end
         Test.@test integ.t ≈ stop
-        Test.@test S.check_error(integ) == S.ReturnCode.Success        # a healthy run in progress
+        # a healthy run in progress
+        Test.@test S.check_error(integ) == S.ReturnCode.Success
         Test.@test integ.sol.retcode == S.ReturnCode.Default
         Test.@test S.has_stats(integ) && integ.stats !== nothing
 
@@ -982,11 +1322,18 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
 
         if callbacks !== nothing
             hits = Float64[]
-            S.solve(prob, alg; kw..., save_everystep = false, callback = callbacks.preset(callbacks.times, i -> push!(hits, i.t)))
+            S.solve(
+                prob, alg; kw..., save_everystep = false,
+                callback = callbacks.preset(callbacks.times, i -> push!(hits, i.t))
+            )
             Test.@test hits ≈ callbacks.times
             per = Float64[]
-            S.solve(prob, alg; kw..., save_everystep = false, callback = callbacks.periodic(i -> push!(per, i.t), callbacks.period))
-            Test.@test per[1:length(callbacks.want)] ≈ callbacks.want && all(t -> t <= tf + 1.0e-9, per)
+            S.solve(
+                prob, alg; kw..., save_everystep = false,
+                callback = callbacks.periodic(i -> push!(per, i.t), callbacks.period)
+            )
+            Test.@test per[1:length(callbacks.want)] ≈ callbacks.want &&
+                all(t -> t <= tf + 1.0e-9, per)
         end
 
         # the default saves every step (SciML); `save_everystep = false` saves the ends
@@ -998,20 +1345,24 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
         # an unknown keyword is refused
         Test.@test_throws ArgumentError S.solve(prob, alg; kw..., not_a_keyword = 1)
 
-        # a write into the live state, then `derivative_discontinuity!`, changes the next step
+        # a write into the live state, then `derivative_discontinuity!`, changes the next
+        # step
         a = S.init(prob, alg; kw..., save_everystep = false)
         b = S.init(prob, alg; kw..., save_everystep = false)
-        S.step!(a); S.step!(b)
+        S.step!(a)
+        S.step!(b)
         live_write!(a)
         S.derivative_discontinuity!(a, true)
         for _ in 1:3
-            S.step!(a); S.step!(b)
+            S.step!(a)
+            S.step!(b)
         end
         Test.@test state_copy(a) != state_copy(b)
         return nothing
     end
 
-    # the control's defect: a problem whose integrator steps but has no `add_tstop!` and no stats
+    # the control's defect: a problem whose integrator steps but has no `add_tstop!` and no
+    # stats
     struct _QAScratchProblem end
     mutable struct _QAScratchIntegrator
         t::Float64
@@ -1020,8 +1371,8 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
     """
         qa_sciml_interface_control()
 
-    The negative control for [`qa_sciml_interface`](@ref): a problem whose integrator answers
-    `init` and `step!` but nothing else fails it.
+    The negative control for [`qa_sciml_interface`](@ref): a problem whose integrator
+    answers `init` and `step!` but nothing else fails it.
     """
     function qa_sciml_interface_control()
         S = Base.require(_QA_SCIMLBASE)
@@ -1029,12 +1380,15 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
             @__MODULE__, quote
                 $S.isinplace(::_QAScratchProblem) = true
                 $S.init(::_QAScratchProblem, alg; kw...) = _QAScratchIntegrator(0.0)
-                $S.step!(i::_QAScratchIntegrator, h = 1.0, stop = false) = (i.t += h; nothing)
+                $S.step!(i::_QAScratchIntegrator, h = 1.0, stop = false) = (
+                    i.t += h; nothing
+                )
             end
         )
         bad = qa_failures(
             () -> Base.invokelatest(
-                qa_sciml_interface, _QAScratchProblem(), nothing; h = 1.0, stop = 3.0, nwin = 1, tf = 1.0,
+                qa_sciml_interface, _QAScratchProblem(), nothing; h = 1.0, stop = 3.0,
+                nwin = 1, tf = 1.0,
                 state_copy = i -> i.t, live_write! = i -> nothing
             )
         )
@@ -1042,5 +1396,4 @@ if !isdefined(@__MODULE__, :_POTTS_QA_COMMON_DEFINED)
         Test.@test any(r -> occursin("add_tstop!", sprint(show, r)), bad)
         return nothing
     end
-
 end

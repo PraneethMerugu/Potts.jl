@@ -1,5 +1,6 @@
 # `remake` with a NamedTuple.
-# the read-only computed-parameter rule (user OK 2026-10-20): computed parameters are read-only.
+# the read-only computed-parameter rule (user OK 2026-10-20): computed parameters are
+# read-only.
 #
 # Today (a1c3ed57) `remake(prob; p = (λ = 3.0,))` on a model's problem falls back to
 # CorePotts' default `remake_parameters` (identity, for hand-written problems), so `prob.p`
@@ -12,12 +13,13 @@
 #
 # Rule (D-115). On a problem of a Potts model:
 #   * a NamedTuple given as `p` is a parameter map, the same as the pairs of its fields:
-#     `remake(prob; p = (λ = 3.0, Jx = 20.0))` ≡ `remake(prob; p = [:λ => 3.0, :Jx => 20.0])`.
-#     It is one change (the read-only computed-parameter rule): the parameters it names are set, then every computed
-#     parameter is derived again from the base values; values take the problem's scalar type,
-#     tables keep their size and are checked (symmetry); a field that is not a parameter is
-#     an `ArgumentError` naming it, and so is a computed parameter (read-only: the whole
-#     NamedTuple is refused, nothing is set). The empty NamedTuple changes nothing.
+#     `remake(prob; p = (λ = 3.0, Jx = 20.0))` ≡ `remake(prob; p = [:λ => 3.0, :Jx =>
+#     20.0])`. It is one change (the read-only computed-parameter rule): the parameters it
+#     names are set, then every computed parameter is derived again from the base values;
+#     values take the problem's scalar type, tables keep their size and are checked
+#     (symmetry); a field that is not a parameter is an `ArgumentError` naming it, and so is
+#     a computed parameter (read-only: the whole NamedTuple is refused, nothing is set). The
+#     empty NamedTuple changes nothing.
 #   * a vector or tuple whose elements are all `Pair`s (`Any[:λ => 3.0]`, `(:λ => 3.0,)`) is
 #     a parameter map too; a `PottsParameters` is a whole parameter object (its base values,
 #     the computed ones derived again);
@@ -31,9 +33,9 @@
 # object is the user's own: `remake(prob; p = x)` replaces it with `x` as given (CorePotts'
 # contract, unchanged), whatever `x` is (a partial NamedTuple included).
 #
-# Energies by hand (fixture of `computed_parameters_tests.jl`): two 3×3 cells on a 12×12 lattice, von Neumann
-# contacts, P at x = 3:5 and Q at x = 6:8 (y = 3:5). P–Q share 3 contact pairs, P–medium
-# and Q–medium 9 each (pairs counted once):
+# Energies by hand (fixture of `computed_parameters_tests.jl`): two 3×3 cells on a 12×12
+# lattice, von Neumann contacts, P at x = 3:5 and Q at x = 6:8 (y = 3:5). P–Q share 3
+# contact pairs, P–medium and Q–medium 9 each (pairs counted once):
 #   contacts = 9 J[M,P] + 9 J[M,Q] + 3 J[P,Q];  Jf(x) = [0 x x; x 2 x-5; x x-5 14] gives
 #   21x − 15 (x = 16: 321, x = 20: 405); M = [0 5 5; 5 1 3; 5 3 1] gives 99.
 #   cells = λ ((9 − V₀[P])² + (9 − V₀[Q])²), V₀ = [0, γ, β], α = 4 → β = 8 → γ = 9.
@@ -70,14 +72,18 @@ function sigma(; apart = false)
 end
 remake_Jf(x) = [0 x x; x 2 x - 5; x x - 5 14]
 const REMAKE_M = [0 5 5; 5 1 3; 5 3 1]
-vals(q) = (
-    α = getp(q, :α)(q), β = getp(q, :β)(q), γ = getp(q, :γ)(q), λ = getp(q, :λ)(q),
-    Jx = getp(q, :Jx)(q), J = Matrix(getp(q, :J)(q)), V₀ = Vector(getp(q, :V₀)(q)),
-)
-ivals(i) = (
-    α = i.ps[:α], β = i.ps[:β], γ = i.ps[:γ], λ = i.ps[:λ], Jx = i.ps[:Jx],
-    J = Matrix(i.ps[:J]), V₀ = Vector(i.ps[:V₀]),
-)
+function vals(q)
+    return (
+        α = getp(q, :α)(q), β = getp(q, :β)(q), γ = getp(q, :γ)(q), λ = getp(q, :λ)(q),
+        Jx = getp(q, :Jx)(q), J = Matrix(getp(q, :J)(q)), V₀ = Vector(getp(q, :V₀)(q)),
+    )
+end
+function ivals(i)
+    return (
+        α = i.ps[:α], β = i.ps[:β], γ = i.ps[:γ], λ = i.ps[:λ], Jx = i.ps[:Jx],
+        J = Matrix(i.ps[:J]), V₀ = Vector(i.ps[:V₀]),
+    )
+end
 function remake_error(f)
     try
         f()
@@ -94,7 +100,11 @@ const REMAKE_HW = CorePotts.CPMFunction(hw_dH; temperature = hw_T)
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "remake namedtuple: remake with a NamedTuple" setup = [RemakeNamedTupleSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "remake namedtuple: remake with a NamedTuple" setup = [
+    RemakeNamedTupleSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "remake namedtuple: remake with a NamedTuple" begin
         sys = Chain(; name = :chain)
         op = [ownership => sigma(), kind => [:P, :Q]]
@@ -134,8 +144,12 @@ end
                 @test typeof(a.p) === typeof(b.p)
                 @test total_energy(a) == total_energy(b)
             end
-            # a NamedTuple naming a computed parameter is refused whole, in each form (the read-only computed-parameter rule)
-            for nt in ((β = 5.0, λ = 2.0), (J = M,), (Jx = 20.0, J = M), (V₀ = [0.0, 9.0, 9.0],), (α = 5.0, β = 3.0))
+            # a NamedTuple naming a computed parameter is refused whole, in each form (the
+            # read-only computed-parameter rule)
+            for nt in (
+                    (β = 5.0, λ = 2.0), (J = M,), (Jx = 20.0, J = M),
+                    (V₀ = [0.0, 9.0, 9.0],), (α = 5.0, β = 3.0),
+                )
                 for form in (nt, [k => v for (k, v) in pairs(nt)], Dict(pairs(nt)))
                     err = remake_error(() -> remake(prob; p = form))
                     @test err isa ArgumentError && occursin("is computed from", msg(err))
@@ -156,13 +170,17 @@ end
             # a computed scalar is read-only: refused, naming its input
             for nt in ((β = 5.0,), (α = 5.0, β = 3.0))
                 err = remake_error(() -> remake(prob; p = nt))
-                @test err isa ArgumentError && occursin("`β` is computed from `α`", msg(err))
+                @test err isa ArgumentError &&
+                    occursin("`β` is computed from `α`", msg(err))
             end
         end
 
         @testset "a whole kind table as a NamedTuple value" begin
             # a computed table is read-only; its input re-derives it
-            @test occursin("`J` is computed from `Jx`", msg(remake_error(() -> remake(prob; p = (J = M,)))))
+            @test occursin(
+                "`J` is computed from `Jx`",
+                msg(remake_error(() -> remake(prob; p = (J = M,))))
+            )
             r1 = remake(prob; p = (Jx = 20.0,))
             @test vals(r1).J == remake_Jf(20.0)
             @test total_energy(r1) == 405 + 1                       # 406
@@ -186,8 +204,8 @@ end
             @test (v.α, v.β, v.γ, v.V₀) == (5.0, 10.0, 11.0, [0.0, 11.0, 10.0])
             @test typeof(q.p) === typeof(prob.p)
             @test total_energy(q) == 326.0
-            # the NamedTuple of the parameter object names computed parameters: refused; the object
-            # itself round-trips
+            # the NamedTuple of the parameter object names computed parameters: refused; the
+            # object itself round-trips
             @test remake_error(() -> remake(prob; p = NamedTuple(prob.p))) isa ArgumentError
             @test remake(prob; p = prob.p).p == prob.p
             # the empty NamedTuple changes nothing
@@ -205,7 +223,8 @@ end
             @test t.p isa Potts.PottsParameters && vals(t).J == remake_Jf(20.0)
             @test total_energy(t) == 405 + 3                        # 408
             # a whole parameter object (as today)
-            @test remake(prob; p = remake(prob; p = (λ = 2.0,)).p).p == remake(prob; p = [:λ => 2.0]).p
+            @test remake(prob; p = remake(prob; p = (λ = 2.0,)).p).p ==
+                remake(prob; p = [:λ => 2.0]).p
             # values that cannot be a parameter map: a clear error, not a silent replacement
             for bad in (3.0, (3.0,), (3.0, 1.0), [1.0, 2.0])
                 err = remake_error(() -> remake(prob; p = bad))
@@ -246,14 +265,16 @@ end
             @test total_energy(r) == 408.0f0
             s = remake(p32; p = (α = 5,))
             @test getp(s, :β)(s) === 10.0f0 && getp(s, :γ)(s) === 11.0f0
-            f = remake(p32; p = (α = 4.0, λ = 1.0, Jx = 16.0))     # Float64 values, every base name
+            # Float64 values, every base name
+            f = remake(p32; p = (α = 4.0, λ = 1.0, Jx = 16.0))
             @test typeof(f.p) === typeof(p32.p)
             @test total_energy(f) == 322.0f0
         end
 
         @testset "u0 as a NamedTuple" begin
             σB = sigma(; apart = true)
-            b = remake(prob; u0 = [:ownership => σB, :kind => [:P, :Q]])     # control: pairs
+            # control: pairs
+            b = remake(prob; u0 = [:ownership => σB, :kind => [:P, :Q]])
             @test total_energy(b) == 384 + 1                        # 385
             q = remake(prob; u0 = (ownership = σB, kind = [:P, :Q]))
             @test Array(q.u0.ownership) == σB
@@ -297,7 +318,8 @@ end
                 v = vals(s.prob)
                 @test v.λ == 3.0 && v.J == remake_Jf(16.0) && v.V₀ == [0.0, 9.0, 8.0]
             end
-            @test ens.u[1].u[end].ownership != ens.u[2].u[end].ownership             # still distinct replicas
+            # still distinct replicas
+            @test ens.u[1].u[end].ownership != ens.u[2].u[end].ownership
             pj(q, ctx) = remake(q; p = (Jx = 20.0,))
             e2 = solve(
                 EnsembleProblem(prob; prob_func = pj), SequentialCPM(), EnsembleSerial();
@@ -325,7 +347,13 @@ end
             step!(hi)
             @test hi.p === (h = 0.0, T = 5.0) && hi.t == 1
             e = solve(
-                EnsembleProblem(hp; prob_func = (q, ctx) -> remake(q; p = (h = 0.0, T = 2.0))),
+                EnsembleProblem(
+                    hp; prob_func = (q, ctx) -> remake(
+                        q; p = (
+                            h = 0.0, T = 2.0,
+                        )
+                    )
+                ),
                 SequentialCPM(), EnsembleSerial(); trajectories = 2
             )
             @test all(s -> s.prob.p === (h = 0.0, T = 2.0), e.u)

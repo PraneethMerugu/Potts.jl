@@ -10,8 +10,9 @@ Structure-of-arrays model state.
 - `cell`: `NamedTuple` of per-cell arrays (last dimension = cell id); must contain
   `kind::Vector{Int32}` and `volume::Vector{Int32}`; may contain any other tracked or
   authored cell quantity.
-- `site`: per-site arrays shaped like `ownership`. `model`: model-level quantities as 1-element
-  arrays (medium properties live here). `history`: ring buffers (`history_buffer`).
+- `site`: per-site arrays shaped like `ownership`. `model`: model-level quantities as
+  1-element arrays (medium properties live here). `history`: ring buffers
+  (`history_buffer`).
 """
 struct CPMState{A, C, S, M, H}
     ownership::A
@@ -20,8 +21,9 @@ struct CPMState{A, C, S, M, H}
     model::M
     history::H
 end
-CPMState(ownership, cell; site = (;), model = (;), history = (;)) =
-    CPMState(ownership, cell, site, model, history)
+function CPMState(ownership, cell; site = (;), model = (;), history = (;))
+    return CPMState(ownership, cell, site, model, history)
+end
 Adapt.@adapt_structure CPMState
 
 ncells(st::CPMState) = length(st.cell.kind)
@@ -44,8 +46,10 @@ Build a host `CPMState`: `σ` labels sites with ids `1:length(kinds)` (`0` = med
 has the lattice's size, except one named in `shapes`, which has that size (a field on a
 coarse grid).
 """
-function initial_state(σ::AbstractArray{<:Integer}, kinds::AbstractVector{<:Integer};
-        cell = (;), site = (;), model = (;), history = (;), shapes = (;))
+function initial_state(
+        σ::AbstractArray{<:Integer}, kinds::AbstractVector{<:Integer};
+        cell = (;), site = (;), model = (;), history = (;), shapes = (;)
+    )
     n = length(kinds)
     volume = zeros(Int32, n)
     for s in σ
@@ -57,12 +61,17 @@ function initial_state(σ::AbstractArray{<:Integer}, kinds::AbstractVector{<:Int
     for (name, a) in pairs(site)
         want = haskey(shapes, name) ? Tuple(shapes[name]) : size(σ)
         size(a) == want && continue
-        throw(ArgumentError(want == size(σ) ? "site quantity `$name` has size $(size(a)), lattice $(size(σ))" :
-                            "site quantity `$name` has size $(size(a)), its grid $want (lattice $(size(σ)))"))
+        grid = if want == size(σ)
+            "lattice $(size(σ))"
+        else
+            "its grid $want (lattice $(size(σ)))"
+        end
+        throw(ArgumentError("site quantity `$name` has size $(size(a)), $grid"))
     end
     for (name, a) in pairs(cell)
         size(a, ndims(a)) == n ||
-            throw(ArgumentError("cell quantity `$name` has last dimension $(size(a, ndims(a))), expected $n cells"))
+            throw(ArgumentError("cell quantity `$name` has last \
+                dimension $(size(a, ndims(a))), expected $n cells"))
     end
     for (name, a) in pairs(model)
         a isa AbstractArray && length(a) == 1 ||
@@ -102,7 +111,9 @@ Base.@kwdef struct Footprint
     source_write::Int = -1
 end
 
-"""Effective `(read, write)` distances from the target under proposal relation `proposal`."""
+"""
+Effective `(read, write)` distances from the target under proposal relation `proposal`.
+"""
 function reach(fp::Footprint, proposal)
     rp = radius(proposal)
     read = max(fp.read, rp, fp.source_read >= 0 ? rp + fp.source_read : 0)
@@ -112,7 +123,8 @@ end
 
 """
     CPMFunction(delta_H; commit! = commit_volume!, constraint = always, temperature,
-                bias = no_bias, phases = Phases(), lifecycle = nothing, acceptance = nothing,
+                bias = no_bias, phases = Phases(), lifecycle = nothing,
+                    acceptance = nothing,
                 footprint = Footprint(), fingerprint = 0, sys = nothing, track = nothing,
                 connectivity = nothing)
 
@@ -126,15 +138,16 @@ The model, as plain Julia functions (the numerical analogue of `ODEFunction`). E
 - `bias` → added to log α (not energy-like: `ΔH_eff = ΔH − T·bias`); default none
 - `phases` → synchronous work before/after each copy sweep (`Phases`)
 - `lifecycle` → division/removal/transition rules (`Lifecycle`), or `nothing`
-- `acceptance` → the model's acceptance law (`Metropolis(; offset)`, `Barker(; offset)`), used
-  unless the algorithm sets one; `nothing` means `Metropolis()`
+- `acceptance` → the model's acceptance law (`Metropolis(; offset)`, `Barker(; offset)`),
+  used unless the algorithm sets one; `nothing` means `Metropolis()`
 - `track` → `nothing` (the default: nothing is accumulated, nothing is compiled), or a
   callable `track(st, p, prop, ctx, dH)` whose value, for every committed copy, is summed
-  into `stats.accepted_energy_change` (`dH` is `delta_H`'s value, without the bias and the acceptance
-  law's offset). [`TrackEnergyChange`](@ref) sums `dH` itself (`Potts`: `track = (:energy_change,)`). A
-  custom callable must also define [`track_eltype`](@ref)`(track)` (the scalar type of its
-  values, `Float32` on Metal) to run under `CheckerboardCPM`, which accumulates per site in
-  that type; `SequentialCPM` adds into a `Float64` and does not need it.
+  into `stats.accepted_energy_change` (`dH` is `delta_H`'s value, without the bias and the
+  acceptance law's offset). [`TrackEnergyChange`](@ref) sums `dH` itself (`Potts`:
+  `track = (:energy_change,)`). A custom callable must also define
+  [`track_eltype`](@ref)`(track)` (the scalar type of its values, `Float32` on Metal) to run
+  under `CheckerboardCPM`, which accumulates per site in that type; `SequentialCPM` adds
+  into a `Float64` and does not need it.
 - `connectivity` → `nothing` (the default), or the [`ConnectivityHooks`](@ref) of a model
   with whole-cell connectivity (`Global`, cell-scope `pieces`)
 
@@ -143,8 +156,9 @@ identically.
 
 `CheckerboardCPM` spaces its blocks by `footprint`, widened to the contact relation and any
 relation in the problem when one reaches farther. A symbolic layer may narrow
-that to the relations its generated copy-step functions read (`CorePotts.copy_step_relations(sys, f)`,
-keyed on `sys`); it does so only while every copy-step function above is its own.
+that to the relations its generated copy-step functions read
+(`CorePotts.copy_step_relations(sys, f)`, keyed on `sys`); it does so only while every
+copy-step function above is its own.
 """
 struct CPMFunction{DH, CM, CN, TT, BI, PH, LC, AC, SYS, TK, CO}
     delta_H::DH
@@ -162,24 +176,28 @@ struct CPMFunction{DH, CM, CN, TT, BI, PH, LC, AC, SYS, TK, CO}
     connectivity::CO
 end
 
-function CPMFunction(delta_H; commit! = commit_volume!, constraint = always,
+function CPMFunction(
+        delta_H; commit! = commit_volume!, constraint = always,
         temperature, bias = no_bias, phases = NO_PHASES,
         lifecycle = nothing, acceptance = nothing, footprint = Footprint(), fingerprint = 0,
-        sys = nothing, track = nothing, connectivity = nothing)
-    return CPMFunction(delta_H, commit!, constraint, temperature, bias, phases,
-        lifecycle, acceptance, footprint, UInt64(fingerprint), sys, track, connectivity)
+        sys = nothing, track = nothing, connectivity = nothing
+    )
+    return CPMFunction(
+        delta_H, commit!, constraint, temperature, bias, phases,
+        lifecycle, acceptance, footprint, UInt64(fingerprint), sys, track, connectivity
+    )
 end
 
 """
     TrackEnergyChange{T}()
 
-The `track` of `CPMFunction` that sums each committed copy's ΔH (`track = (:energy_change,)` in
-Potts). `T` is the model's scalar type: the checkerboard accumulates per site in `T` (on
+The `track` of `CPMFunction` that sums each committed copy's ΔH (`track = (:energy_change,)`
+in Potts). `T` is the model's scalar type: the checkerboard accumulates per site in `T` (on
 the device) between the host read points, which reduce into the `Float64`
-`stats.accepted_energy_change`; `SequentialCPM` adds into a `Float64` directly. On a device the
-checkerboard's copies of one cell can be in flight together, each with ΔH taken against the
-cell's totals before the other's commit, so the sum can differ slightly from the change of
-the energy (0.1 % over 20 MCS of a 48² test monolayer); on the CPU it is exact.
+`stats.accepted_energy_change`; `SequentialCPM` adds into a `Float64` directly. On a device
+the checkerboard's copies of one cell can be in flight together, each with ΔH taken against
+the cell's totals before the other's commit, so the sum can differ slightly from the change
+of the energy (0.1 % over 20 MCS of a 48² test monolayer); on the CPU it is exact.
 """
 struct TrackEnergyChange{T} end
 @inline (::TrackEnergyChange)(st, p, prop, ctx, dH) = dH
@@ -191,9 +209,15 @@ accumulates them per site in this type between host read points. Define it for a
 track (`CorePotts.track_eltype(::MyTrack) = Float64`; `Float32` on Metal).
 """
 track_eltype(::TrackEnergyChange{T}) where {T} = T
-track_eltype(track) = throw(ArgumentError(
-    "CheckerboardCPM needs the scalar type of the custom track $(typeof(track)): define " *
-    "`CorePotts.track_eltype(::$(typeof(track))) = Float64` (Float32 on a device)"))
+function track_eltype(track)
+    throw(
+        ArgumentError(
+            "CheckerboardCPM needs the scalar type of the custom track $(typeof(track)): " *
+                "define `CorePotts.track_eltype(::$(typeof(track))) = Float64` (Float32 on \
+                    a device)"
+        )
+    )
+end
 
 """
 The device-side part of a `CPMFunction`: the per-proposal functions, without host-only
@@ -205,17 +229,24 @@ struct DeviceFunctions{DH, CM, CN, TT, BI, PO, DF}
     constraint::CN
     temperature::TT
     bias::BI
-    post::PO            # the `Global` veto after the draw (`ConnectivityHooks`), or `nothing`
+    # the `Global` veto after the draw (`ConnectivityHooks`), or `nothing`
+    post::PO
     defer::DF           # copies the checkerboard runs serially, or `nothing`
 end
-DeviceFunctions(delta_H, commit!, constraint, temperature, bias) =
-    DeviceFunctions(delta_H, commit!, constraint, temperature, bias, nothing, nothing)
+function DeviceFunctions(delta_H, commit!, constraint, temperature, bias)
+    return DeviceFunctions(
+        delta_H, commit!, constraint, temperature, bias, nothing, nothing
+    )
+end
 # The track (D-140) is not part of it: the checkerboard carries it with its buffers and
 # `SequentialCPM` takes it as an argument, so untracked kernels see exactly these fields
 # (`post` and `defer` are `nothing`, zero-size, without whole-cell connectivity).
-device_functions(f::CPMFunction) =
-    DeviceFunctions(f.delta_H, f.commit!, f.constraint, f.temperature, f.bias,
-        _hook(f.connectivity, :post), _hook(f.connectivity, :defer))
+function device_functions(f::CPMFunction)
+    return DeviceFunctions(
+        f.delta_H, f.commit!, f.constraint, f.temperature, f.bias,
+        _hook(f.connectivity, :post), _hook(f.connectivity, :defer)
+    )
+end
 _hook(::Nothing, name) = nothing
 _hook(h, name) = getfield(h, name)
 # the hooks of `DeviceFunctions` (or of a `CPMFunction` passed directly)
@@ -230,8 +261,9 @@ _hook(h, name) = getfield(h, name)
 
 """The no-constraint default: every copy attempt is allowed."""
 @inline always(st, p, prop, ctx) = true
-"""Whether the context is the lockless checkerboard's (`lockless = true`; a type-level constant):
-commit hooks that would overwrite a cell value add their change atomically instead."""
+"""Whether the context is the lockless checkerboard's (`lockless = true`; a type-level
+constant): commit hooks that would overwrite a cell value add their change atomically
+instead."""
 @inline _lockless(::NamedTuple{K}) where {K} = :lockless in K
 @inline _lockless(ctx) = false
 """The no-bias default: no copy attempt is biased."""
@@ -243,25 +275,28 @@ commit hooks that would overwrite a cell value add their change atomically inste
 """
     oncopy_cell!(a, j, v, pre, ctx)
 
-The `@on_copy` write of `v` into cell `j` (0, the medium: nothing) of the cell column `a`, where
-`v` was computed while `a[j] == pre`. On the lockless checkerboard (`ctx.lockless`) a numeric
-column gets the change `v - pre` by an atomic add, so concurrent copies to one cell all count
-(`n[new] ~ n[new] + 1`); otherwise, and for other element types, `v` is stored.
+The `@on_copy` write of `v` into cell `j` (0, the medium: nothing) of the cell column `a`,
+where `v` was computed while `a[j] == pre`. On the lockless checkerboard (`ctx.lockless`) a
+numeric column gets the change `v - pre` by an atomic add, so concurrent copies to one cell
+all count (`n[new] ~ n[new] + 1`); otherwise, and for other element types, `v` is stored.
 """
 @inline function oncopy_cell!(a, j, v, pre, ctx)
     j == 0 && return nothing
     T = eltype(a)
     if _lockless(ctx) && T <: Union{Integer, AbstractFloat} && !(T <: Bool)
-        Atomix.@atomic a[j] += convert(T, v) - convert(T, pre)     # a cell id is in 1:capacity
+        # a cell id is in 1:capacity
+        Atomix.@atomic a[j] += convert(T, v) - convert(T, pre)
     else
+        # bounds: j is a cell id in 1:capacity = length(a)
         @inbounds a[j] = convert(T, v)
     end
     return nothing
 end
 
-"""Default `commit!`: maintain `st.cell.volume` (atomic adds: shared-cell checkerboard copies
-to one cell commit concurrently)."""
+"""Default `commit!`: maintain `st.cell.volume` (atomic adds: shared-cell checkerboard
+copies to one cell commit concurrently)."""
 @inline function commit_volume!(st, p, prop, ctx)
+    # bounds: nonzero owners are cell ids ≤ capacity = length(volume)
     prop.old != 0 && @inbounds(Atomix.@atomic st.cell.volume[prop.old] -= Int32(1))
     prop.new != 0 && @inbounds(Atomix.@atomic st.cell.volume[prop.new] += Int32(1))
     return nothing
@@ -273,15 +308,18 @@ end
 """
     contact_delta(σ, ctx, prop, J; relation = ctx.contact)
 
-Change of `Σ_{unordered pairs} w·J(owner, neighbor_owner)` over a (possibly weighted) relation when
-`prop` is accepted. `J(a, b)` takes cell ids (`0` = medium) and is only evaluated for
-`a ≠ b`.
+Change of `Σ_{unordered pairs} w·J(owner, neighbor_owner)` over a (possibly weighted)
+relation when `prop` is accepted. `J(a, b)` takes cell ids (`0` = medium) and is only
+evaluated for `a ≠ b`.
 """
-@inline function contact_delta(σ, ctx, prop::Proposal{N}, J::F;
-        relation = ctx.contact) where {N, F}
+@inline function contact_delta(
+        σ, ctx, prop::Proposal{N}, J::F;
+        relation = ctx.contact
+    ) where {N, F}
     a, b = prop.old, prop.new
     dH = zero(typeof(J(a, b)))
     for k in 1:length(relation)
+        # bounds: k ≤ length(relation); inside sites have linear indices ≤ nsites
         inside, y = shift(ctx.lattice, prop.x, @inbounds relation.offsets[k])
         inside || continue
         n = @inbounds σ[linear_index(ctx.lattice, y)]
@@ -299,12 +337,15 @@ Change of the old and new cells' surfaces (weighted count of bonds to other owne
 `relation`) when `prop` is accepted, accumulated in `T` (pass the tracker's element type;
 Float32 weights convert exactly). Only these two cells' surfaces change.
 """
-@inline function surface_change(σ, ctx, prop::Proposal{N}; relation = ctx.surface,
-        T::Type = typeof(weight(relation, 1))) where {N}
+@inline function surface_change(
+        σ, ctx, prop::Proposal{N}; relation = ctx.surface,
+        T::Type = typeof(weight(relation, 1))
+    ) where {N}
     a, b = prop.old, prop.new
     δa = zero(T)
     δb = δa
     for k in 1:length(relation)
+        # bounds: k ≤ length(relation); inside sites have linear indices ≤ nsites
         inside, y = shift(ctx.lattice, prop.x, @inbounds relation.offsets[k])
         inside || continue
         n = @inbounds σ[linear_index(ctx.lattice, y)]
@@ -325,6 +366,7 @@ Change of `Σ_cells E(surface, cell)` given `δ = surface_change(…)`.
     δa, δb = δ
     dH = zero(typeof(E(zero(eltype(surface)), Int32(1))))
     if a != 0
+        # bounds: nonzero owners a, b are cell ids ≤ capacity = length(surface)
         s = @inbounds surface[a]
         dH += E(s + δa, a) - E(s, a)
     end
@@ -340,13 +382,19 @@ Apply `δ = surface_change(…)` to a surface tracker. Valid before or after the
 write, because the surface relation excludes the origin (checked at `init`).
 """
 @inline function commit_surface!(surface, prop, δ)
-    prop.old != 0 && @inbounds(Atomix.@atomic surface[prop.old] += δ[1])         # atomic: as `commit_volume!`
+    # atomic: as `commit_volume!`
+    prop.old != 0 && @inbounds(Atomix.@atomic surface[prop.old] += δ[1])
     prop.new != 0 && @inbounds(Atomix.@atomic surface[prop.new] += δ[2])
     return nothing
 end
 
-"""Change of `Σ_sites E(site, owner)` when the target's owner changes: `E(t, new) − E(t, old)`."""
-@inline site_delta(prop, E::F) where {F} = E(prop.target, prop.new) - E(prop.target, prop.old)
+"""
+Change of `Σ_sites E(site, owner)` when the target's owner changes: `E(t, new) − E(t, old)`.
+"""
+@inline function site_delta(prop, E::F) where {F}
+    return E(prop.target, prop.new) -
+        E(prop.target, prop.old)
+end
 
 """
     recompute_surface(σ, lattice, relation, ncell; T = <weight type>) -> Vector{T}
@@ -354,10 +402,15 @@ end
 Surfaces from scratch (initialization and tracker checks). Weighted surfaces default to
 `Float32` (device-portable); pass `T = Float64` for long CPU runs.
 """
-recompute_surface(σ, lat::Lattice, r::Relation, ncell::Integer; T::Type = typeof(weight(r, 1))) =
-    _recompute_surface(T, σ, lat, r, ncell)
+function recompute_surface(
+        σ, lat::Lattice, r::Relation, ncell::Integer; T::Type = typeof(weight(r, 1))
+    )
+    return _recompute_surface(T, σ, lat, r, ncell)
+end
 
-function _recompute_surface(::Type{T}, σ, lat::Lattice, r::Relation, ncell::Integer) where {T}
+function _recompute_surface(
+        ::Type{T}, σ, lat::Lattice, r::Relation, ncell::Integer
+    ) where {T}
     S = zeros(T, ncell)
     for i in 1:nsites(lat)
         c = σ[i]
@@ -373,9 +426,11 @@ function _recompute_surface(::Type{T}, σ, lat::Lattice, r::Relation, ncell::Int
 end
 
 # The same sum in integer weight units `u` (`_units_for`): each entry is the exact
-# sum of the quantized weights, converted once, as the device lifecycle's cluster-surface fold
-# writes it (so the host and a device agree bitwise)
-function _recompute_surface(::Type{T}, σ, lat::Lattice, r::Relation, ncell::Integer, u::NamedTuple) where {T}
+# sum of the quantized weights, converted once, as the device lifecycle's cluster-surface
+# fold writes it (so the host and a device agree bitwise)
+function _recompute_surface(
+        ::Type{T}, σ, lat::Lattice, r::Relation, ncell::Integer, u::NamedTuple
+    ) where {T}
     A = zeros(Int64, ncell)
     for i in 1:nsites(lat)
         c = σ[i]
@@ -389,14 +444,18 @@ function _recompute_surface(::Type{T}, σ, lat::Lattice, r::Relation, ncell::Int
     end
     return [_wvalue(T, a, u.e) for a in A]
 end
-_recompute_surface(::Type{T}, σ, lat::Lattice, r::Relation, ncell::Integer, ::Nothing) where {T} =
-    _recompute_surface(T, σ, lat, r, ncell)
+function _recompute_surface(
+        ::Type{T}, σ, lat::Lattice, r::Relation, ncell::Integer, ::Nothing
+    ) where {T}
+    return _recompute_surface(T, σ, lat, r, ncell)
+end
 
 """Change of `Σ_cells E(volume, cell)` when `prop` moves one site from `old` to `new`."""
 @inline function volume_delta(volume, prop, E::F) where {F}
     a, b = prop.old, prop.new
     dH = zero(typeof(E(Int32(1), Int32(1))))
     if a != 0
+        # bounds: nonzero owners a, b are cell ids ≤ capacity = length(volume)
         v = @inbounds volume[a]
         dH += E(v - Int32(1), a) - E(v, a)
     end

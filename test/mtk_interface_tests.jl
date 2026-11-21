@@ -65,25 +65,42 @@ end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "MTK's system interface: a plain System, a Potts model and a coupled Potts model" setup = [MTKInterfaceSetup] tags = [:potts, :mtk_interface] begin
+@testitem "MTK's system interface: a plain System, a Potts model and a coupled Potts \
+    model" setup = [MTKInterfaceSetup] tags = [
+    :potts, :mtk_interface,
+] begin
     @testset "plain System" begin
-        qa_mtk_system_interface(decay_system(; name = :decay); rebuild = decay_system, component = clock_system())
+        qa_mtk_system_interface(
+            decay_system(; name = :decay);
+            rebuild = decay_system, component = clock_system()
+        )
     end
     @testset "Potts model" begin
-        qa_mtk_system_interface(GranerGlazier(; name = :gg); rebuild = GranerGlazier, component = clock_system())
+        qa_mtk_system_interface(
+            GranerGlazier(; name = :gg);
+            rebuild = GranerGlazier, component = clock_system()
+        )
     end
     @testset "Potts model with fields" begin
         merks(; name) = MerksVasculogenesis(; name, lattice = (8, 8))
-        qa_mtk_system_interface(merks(; name = :merks); rebuild = merks, component = clock_system())
+        qa_mtk_system_interface(
+            merks(; name = :merks); rebuild = merks,
+            component = clock_system()
+        )
     end
     @testset "a system type missing an accessor fails the walk" begin
         qa_mtk_system_interface_control()
     end
 end
 
-@testitem "MTK's operations on Potts models: values and refusals" setup = [MTKInterfaceSetup] tags = [:potts, :mtk_interface] begin
+@testitem "MTK's operations on Potts models: values and refusals" setup = [
+    MTKInterfaceSetup,
+] tags = [
+    :potts, :mtk_interface,
+] begin
     gg = GranerGlazier(; name = :gg)
-    @test M.independent_variable(gg) === Potts.t || isequal(M.independent_variable(gg), Potts.t)
+    @test M.independent_variable(gg) === Potts.t ||
+        isequal(M.independent_variable(gg), Potts.t)
     @test M.iscomplete(gg) && !M.does_namespacing(gg) && M.complete(gg) === gg
     @test isequal(M.get_iv(gg), Potts.t)
     err = try
@@ -92,39 +109,50 @@ end
         e
     end
     @test err isa ArgumentError
-    # the metadata is the inner System's: the sweep is there, and a value set stays through mtkcompile
+    # the metadata is the inner System's: the sweep is there, and a value set stays through
+    # mtkcompile
     @test M.getmetadata(gg, Potts.PottsSweepSpec, nothing) isa Potts.PottsSweepSpec
     tagged = M.setmetadata(gg, MTKInterfaceKey, :tagged)
     @test M.getmetadata(Potts.inner(tagged), MTKInterfaceKey, nothing) === :tagged
     @test M.getmetadata(mtkcompile(tagged), MTKInterfaceKey, nothing) === :tagged
-    @test M.getmetadata(gg, MTKInterfaceKey, nothing) === nothing           # `gg` is unchanged
+    # `gg` is unchanged
+    @test M.getmetadata(gg, MTKInterfaceKey, nothing) === nothing
     # a renamed model solves as the original does
     σ, kinds = graner_glazier_state()
     op = [ownership => σ, kind => kinds]
     renamed = M.rename(gg, :other)
     @test nameof(Potts.inner(renamed)) === :other
-    @test PottsProblem(renamed, op, (0, 1)).f.fingerprint == PottsProblem(gg, op, (0, 1)).f.fingerprint
+    @test PottsProblem(renamed, op, (0, 1)).f.fingerprint ==
+        PottsProblem(gg, op, (0, 1)).f.fingerprint
     # compose takes an MTK System as it is; a Potts model inside a plain System is refused
     @test :clock₊z in Symbol.(M.getname.(M.unknowns(compose(gg, [clock_system()]))))
     @test compose(gg) === gg
     @test_throws ArgumentError compose(clock_system(), [gg])
     @test_throws ArgumentError compose(clock_system(), gg)
     @test_throws ArgumentError compose(clock_system(), [decay_system(; name = :decay), gg])
-    @test_throws ArgumentError M.System(M.Equation[], Potts.t; name = :outer, systems = [gg])
+    @test_throws ArgumentError M.System(
+        M.Equation[], Potts.t; name = :outer,
+        systems = [gg]
+    )
     @test_throws ArgumentError compose(gg, [1.0])
     # extend merges two Potts models; with a plain System, or an MTK keyword, it is refused
     @test_throws ArgumentError extend(gg, decay_system(; name = :decay))
     @test_throws ArgumentError extend(decay_system(; name = :decay), gg)
-    @test_throws ArgumentError extend(gg, GranerGlazier(; name = :base); description = "merged")
+    @test_throws ArgumentError extend(
+        gg, GranerGlazier(; name = :base);
+        description = "merged"
+    )
     # mtkcompile: an MTK system that is complete; MTK's keywords are refused by name
     c = mtkcompile(gg)
     @test c isa CompiledPottsSystem && c isa M.AbstractSystem && M.iscomplete(c)
     @test isequal(M.parameters(c), M.parameters(gg)) && isequal(c.λ, gg.λ)
     @test mtkcompile(c) === c
-    @test isequal(M.get_iv(c), Potts.t) && Potts.inner(c) isa M.System && nameof(Potts.inner(c)) === :gg
+    @test isequal(M.get_iv(c), Potts.t) && Potts.inner(c) isa M.System &&
+        nameof(Potts.inner(c)) === :gg
     # a compiled model is read-only: operations that build a new system name the model route
     for op in (
-            () -> M.rename(c, :other), () -> compose(c, [clock_system()]), () -> clock_system() ∘ c,
+            () -> M.rename(c, :other), () -> compose(c, [clock_system()]),
+            () -> clock_system() ∘ c,
             () -> M.setmetadata(c, MTKInterfaceKey, 1), () -> M.complete(c; split = false),
         )
         @test_throws ArgumentError op()
@@ -140,7 +168,10 @@ end
     @test_throws ArgumentError Potts.SciMLBase.NonlinearProblem(c, [])
 end
 
-@testitem "getters and setters built from a model work on its problem, integrator and solution" setup = [MTKInterfaceSetup] tags = [:potts, :mtk_interface] begin
+@testitem "getters and setters built from a model work on its problem, integrator and \
+    solution" setup = [MTKInterfaceSetup] tags = [
+    :potts, :mtk_interface,
+] begin
     gg = GranerGlazier(; name = :gg)
     c = mtkcompile(gg)
     σ, kinds = graner_glazier_state()
@@ -163,7 +194,11 @@ end
     @test integ.ps[gg.T] == 7.0 && prob.ps[gg.T] != 7.0
 end
 
-@testitem "parameter values are the inner System's initial conditions" setup = [MTKInterfaceSetup] tags = [:potts, :mtk_interface] begin
+@testitem "parameter values are the inner System's initial conditions" setup = [
+    MTKInterfaceSetup,
+] tags = [
+    :potts, :mtk_interface,
+] begin
     value(x) = Potts.SymbolicUtils.unwrap_const(x)
     gg = GranerGlazier(; name = :gg, λ = 3.0)
     @test value(M.initial_conditions(gg)[M.unwrap(gg.λ)]) == 3.0
@@ -178,7 +213,11 @@ end
     @test all(p -> haskey(M.initial_conditions(merks), M.unwrap(p)), M.parameters(merks))
 end
 
-@testitem "a compiled model's quantities are found by name, whatever the name" setup = [MTKInterfaceSetup] tags = [:potts, :mtk_interface] begin
+@testitem "a compiled model's quantities are found by name, whatever the name" setup = [
+    MTKInterfaceSetup,
+] tags = [
+    :potts, :mtk_interface,
+] begin
     m = FieldNamedQuantities(; name = :m)
     c = mtkcompile(m)
     for n in (:sys, :footprint, :drive)
@@ -193,7 +232,11 @@ end
     @test solve(prob, SequentialCPM()).retcode == Potts.SciMLBase.ReturnCode.Success
 end
 
-@testitem "`@description` and `@metadata` set MTK's description and metadata" setup = [MTKInterfaceSetup] tags = [:potts, :mtk_interface] begin
+@testitem "`@description` and `@metadata` set MTK's description and metadata" setup = [
+    MTKInterfaceSetup,
+] tags = [
+    :potts, :mtk_interface,
+] begin
     m = DescribedModel(; name = :m)
     @test M.description(m) == "One cell kind held near a target volume."
     @test M.getmetadata(m, MTKInterfaceKey, nothing) === :described
@@ -215,7 +258,10 @@ end
     )
 end
 
-@testitem "models, problems, integrators and states show in one line and name the lattice" setup = [MTKInterfaceSetup] tags = [:potts, :mtk_interface] begin
+@testitem "models, problems, integrators and states show in one line and name the \
+    lattice" setup = [MTKInterfaceSetup] tags = [
+    :potts, :mtk_interface,
+] begin
     m = DescribedModel(; name = :m)
     σ = zeros(Int32, 8, 8)
     σ[3:5, 3:5] .= 1
@@ -235,14 +281,20 @@ end
     @test occursin(string(typemax(UInt64)), sprint(show, MIME"text/plain"(), big))
 end
 
-@testitem "JumpProblem of a Potts model is refused for MTK's argument shapes" setup = [MTKInterfaceSetup] tags = [:potts, :mtk_interface] begin
+@testitem "JumpProblem of a Potts model is refused for MTK's argument shapes" setup = [
+    MTKInterfaceSetup,
+] tags = [
+    :potts, :mtk_interface,
+] begin
     J = Potts.JumpProcesses.JumpProblem
     m = DescribedModel(; name = :m)
     σ = zeros(Int32, 8, 8)
     for sys in (m, mtkcompile(m))
         for args in (
-                ([ownership => σ], (0, 2)), ([ownership => σ], nothing), ([ownership => σ], [0, 2]),
-                (Dict(ownership => σ), (0, 2)), ([ownership => σ],), (ownership => σ,), (nothing,), (1.0,),
+                ([ownership => σ], (0, 2)), ([ownership => σ], nothing),
+                ([ownership => σ], [0, 2]),
+                (Dict(ownership => σ), (0, 2)), ([ownership => σ],), (ownership => σ,),
+                (nothing,), (1.0,),
             )
             @test_throws ArgumentError J(sys, args...)
         end

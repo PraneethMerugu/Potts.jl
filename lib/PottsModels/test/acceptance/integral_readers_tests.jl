@@ -32,9 +32,9 @@
 #     strength), expression constraints (bare; in a cell fold; in a block next to
 #     `connectivity` and `no_extinction`); `integral(Pre(u))` in a drive is rejected too.
 #  2. The workaround runs and reads the right values (Sequential and Checkerboard): the
-#     cell variable equals the oracle fold over the saved σ of the previous MCS, a constraint
-#     and a drive reading it veto the growth of exactly the cell above the threshold, and
-#     a control without the veto lets that cell grow.
+#     cell variable equals the oracle fold over the saved σ of the previous MCS, a
+#     constraint and a drive reading it veto the growth of exactly the cell above the
+#     threshold, and a control without the veto lets that cell grow.
 #  3. Integrals elsewhere are still accepted with their values (before block, after block,
 #     `@observed`, temperature), and energies still reject them.
 #  4. Negative control: drives and constraints with population folds over cells that read
@@ -216,7 +216,12 @@ problem(M, K = 12; extra = ()) = PottsProblem(M(; name = :m), readers_op(extra..
 readers_fold(σ, x) = [sum(x[i] for i in eachindex(σ) if σ[i] == c; init = 0.0) for c in 1:2]
 readers_cell(sol, n) = [Array(getproperty(u.cell, n)) for u in sol.u]
 """Whether cell `c` owns, in some saved state, a site it did not own in the previous one."""
-gained(σs, c) = any(k -> any(i -> σs[k + 1][i] == c && σs[k][i] != c, eachindex(σs[k])), 1:(length(σs) - 1))
+function gained(σs, c)
+    return any(
+        k -> any(i -> σs[k + 1][i] == c && σs[k][i] != c, eachindex(σs[k])),
+        1:(length(σs) - 1)
+    )
+end
 """The message of the exception `f()` throws (`nothing` if it throws none)."""
 function readers_error(f)
     try
@@ -229,12 +234,19 @@ end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "integral readers: integral in a @ is rejected at build" setup = [IntegralReadersSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "integral readers: integral in a @ is rejected at build" setup = [
+    IntegralReadersSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 1. Rejections at build
-    @testset "integral readers: integral in a @$section ($label) is rejected at build" for (section, label, M) in REJECTED
+    @testset "integral readers: integral in a @$section ($label) is rejected at build" for (
+            section, label, M,
+        ) in REJECTED
         e, msg = readers_error(() -> mtkcompile(M(; name = :m)))
-        @test e isa Potts.PottsCompileError                                 # DEFECT CHECK (fold: builds today)
+        # DEFECT CHECK (fold: builds today)
+        @test e isa Potts.PottsCompileError
         @test occursin("integral", msg)
         # and so does building the problem, before any step
         e2, msg2 = readers_error(() -> PottsProblem(M(; name = :m), readers_op(), (0, 2)))
@@ -243,30 +255,52 @@ end
     end
 end
 
-@testitem "integral readers: integral(Pre(u)) in a drive is rejected at build" setup = [IntegralReadersSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "integral readers: integral(Pre(u)) in a drive is rejected at build" setup = [
+    IntegralReadersSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "integral readers: integral(Pre(u)) in a drive is rejected at build" begin
-        e, msg = readers_error(() -> PottsProblem(DrivePre(; name = :m), readers_op(), (0, 2)))
-        @test e isa Potts.PottsCompileError                                 # DEFECT CHECK (builds today)
+        e, msg = readers_error(
+            () -> PottsProblem(
+                DrivePre(; name = :m), readers_op(), (
+                    0, 2,
+                )
+            )
+        )
+        # DEFECT CHECK (builds today)
+        @test e isa Potts.PottsCompileError
         @test occursin("integral", msg)
     end
 end
 
-@testitem "integral readers: the workaround reads the integral through a cell variable" setup = [IntegralReadersSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "integral readers: the workaround reads the integral through a cell \
+    variable" setup = [IntegralReadersSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 2. The workaround
-    @testset "integral readers: the workaround reads the integral through a cell variable ($(nameof(typeof(alg))))" for alg in ALGS
+    @testset "integral readers: the workaround reads the integral through a cell variable \
+        ($(nameof(typeof(alg))))" for alg in ALGS
         K = 12
         for M in (WorkConstraint, WorkDrive)
             sol = solve(problem(M, K), alg; saveat = 0:K)
             σs = [Array(u.ownership) for u in sol.u]
             @test all(u -> Array(u.site.u) == READERS_U0, sol.u)
             # s after MCS k: the fold over σ at the end of MCS k - 1 (the before block)
-            @test readers_cell(sol, :s)[2:end] ≈ [readers_fold(σs[k], READERS_U0) for k in 1:K]
-            # fixture: the threshold separates the cells with margin in every state the rule sees
-            # (SequentialCPM only, D-271: the checkerboard's cell 2 holds a hot site for one MCS)
+            @test readers_cell(sol, :s)[2:end] ≈
+                [readers_fold(σs[k], READERS_U0) for k in 1:K]
+            # fixture: the threshold separates the cells with margin in every state the rule
+            # sees (SequentialCPM only, D-271: the checkerboard's cell 2 holds a hot site
+            # for one MCS)
             alg isa SequentialCPM &&
-                @test all(k -> readers_fold(σs[k], READERS_U0)[1] >= 100 && readers_fold(σs[k], READERS_U0)[2] <= 25, 1:K)
-            @test all(k -> all(>(0), readers_fold(σs[k + 1], ones(16, 16))), 0:K)    # both cells live
+                @test all(
+                k -> readers_fold(σs[k], READERS_U0)[1] >= 100 &&
+                    readers_fold(σs[k], READERS_U0)[2] <= 25,
+                1:K
+            )
+            # both cells live
+            @test all(k -> all(>(0), readers_fold(σs[k + 1], ones(16, 16))), 0:K)
             # the veto: cell 1 (s ≥ 100 > θ) never gains a site; cell 2 does
             @test !gained(σs, 1)
             @test gained(σs, 2)
@@ -277,23 +311,34 @@ end
     end
 end
 
-@testitem "integral readers: integrals outside drives and constraints still work" setup = [IntegralReadersSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "integral readers: integrals outside drives and constraints still work" setup = [
+    IntegralReadersSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 3. Integrals elsewhere
-    @testset "integral readers: integrals outside drives and constraints still work ($(nameof(typeof(alg))))" for alg in ALGS
+    @testset "integral readers: integrals outside drives and constraints still work \
+        ($(nameof(typeof(alg))))" for alg in ALGS
         K = 8
         prob = problem(Elsewhere, K)
         sol = solve(prob, alg; saveat = 0:K)
         @test Symbol(sol.retcode) === :Success
         σs = [Array(u.ownership) for u in sol.u]
-        @test any(k -> σs[k] != σs[k + 1], 1:K)                                    # the cells move
+        # the cells move
+        @test any(k -> σs[k] != σs[k + 1], 1:K)
         @test readers_cell(sol, :sb)[2:end] ≈ [readers_fold(σs[k], READERS_U0) for k in 1:K]
-        @test readers_cell(sol, :sa)[2:end] ≈ [readers_fold(σs[k + 1], READERS_U0) for k in 1:K]
+        @test readers_cell(sol, :sa)[2:end] ≈
+            [readers_fold(σs[k + 1], READERS_U0) for k in 1:K]
         @test Array.(sol[:ob]) ≈ [readers_fold(σs[k + 1], 2 .* READERS_U0) for k in 0:K]
     end
 end
 
-@testitem "integral readers: energies still reject integral" setup = [IntegralReadersSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "integral readers: energies still reject integral" setup = [
+    IntegralReadersSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "integral readers: energies still reject integral" begin
         e, msg = readers_error(() -> mtkcompile(Energy(; name = :m)))
         @test e isa Potts.PottsCompileError
@@ -301,10 +346,14 @@ end
     end
 end
 
-@testitem "integral readers: cell folds without integral in drives and constraints" setup = [IntegralReadersSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "integral readers: cell folds without integral in drives and constraints" setup =
+    [IntegralReadersSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 4. Negative control
-    @testset "integral readers: cell folds without integral in drives and constraints ($(nameof(typeof(alg))))" for alg in ALGS
+    @testset "integral readers: cell folds without integral in drives and constraints \
+        ($(nameof(typeof(alg))))" for alg in ALGS
         K = 6
         sol = solve(problem(FoldNoIntegral, K), alg; saveat = 0:K)
         @test Symbol(sol.retcode) === :Success

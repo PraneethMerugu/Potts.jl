@@ -135,11 +135,15 @@ nothing #hide
 # The 2008 contact-inhibited sprout, for 600 MCS (500 after the relaxation). The field
 # solver is the papers' scheme: 15 explicit substeps of 2 s per MCS.
 
-prob = PottsProblem(Merks2008(; name = :m8), layout(merks2008_sprout(; seed = 1), (202, 202)), (0, 600);
-    field_solver = ExplicitEuler(substeps = 15), seed = 1)
+prob = PottsProblem(
+    Merks2008(; name = :m8), layout(merks2008_sprout(; seed = 1), (202, 202)), (0, 600);
+    field_solver = ExplicitEuler(substeps = 15), seed = 1
+)
 sol = solve(prob, SequentialCPM(); saveat = 0:10:600)
-record_potts("01_merks_minimal.mp4", sol; framerate = 15, title = "Merks2008 sprout, 600 MCS",
-    encoding = CellIdentityEncoding(), plot = (; medium_color = :white), figure = (; size = (420, 440)))
+record_potts(
+    "01_merks_minimal.mp4", sol; framerate = 15, title = "Merks2008 sprout, 600 MCS",
+    encoding = CellIdentityEncoding(), plot = (; medium_color = :white), figure = (; size = (420, 440))
+)
 nothing #hide
 
 # ```@raw html
@@ -162,8 +166,12 @@ function field_mcs(c, σ, p; split)
     X, Y = size(c)
     h = 1 / 15
     ec, med, ring = σ .>= 2, σ .== 0, σ .== 1
-    lap(c, x, y) = sum(((a, b),) -> (1 <= x + a <= X && 1 <= y + b <= Y) ? c[x + a, y + b] - c[x, y] : 0.0,
-        ((1, 0), (-1, 0), (0, 1), (0, -1)))
+    function lap(c, x, y)
+        return sum(
+            ((a, b),) -> (1 <= x + a <= X && 1 <= y + b <= Y) ? c[x + a, y + b] - c[x, y] : 0.0,
+            ((1, 0), (-1, 0), (0, 1), (0, -1))
+        )
+    end
     for _ in 1:15
         if split
             r = c .+ h .* (p.α .* ec .- p.ε .* c .* med)
@@ -179,7 +187,7 @@ dev_u = sol.u[end]
 dev_c, dev_σ = Float64.(Array(dev_u.site.c)), Int.(Array(dev_u.ownership))
 dev_p = (; α = getp(prob, :α)(prob), ε = getp(prob, :ε)(prob), Dc = getp(prob, :Dc)(prob))
 split_rel = maximum(abs, field_mcs(dev_c, dev_σ, dev_p; split = true) .- field_mcs(dev_c, dev_σ, dev_p; split = false)) /
-            maximum(dev_c)
+    maximum(dev_c)
 Markdown.parse("Largest difference after one MCS: **$(round(100 * split_rel; digits = 2)) %** of max c.")
 
 # ## 3. Results
@@ -200,8 +208,12 @@ record_verdicts = record_tsv("verdicts.tsv")
 record_points = record_tsv("points.tsv")
 record_causes = record_tsv("deviations.tsv")        # cause and question status of each failing check
 full_verdicts_md = "| Target | Paper | Ours | Tolerance | Class | Result |\n|---|---|---|---|---|---|\n" *
-                   join(["| $(v["row"]) $(v["check"]) | $(v["paper"]) | $(v["ours"]) | $(v["rule"]) | FULL record | $(v["result"]) |"
-                         for v in record_verdicts], "\n")
+    join(
+    [
+        "| $(v["row"]) $(v["check"]) | $(v["paper"]) | $(v["ours"]) | $(v["rule"]) | FULL record | $(v["result"]) |"
+            for v in record_verdicts
+    ], "\n"
+)
 function deviation_row(v)
     c = findfirst(d -> d["row"] == v["row"] && d["check"] == v["check"], record_causes)
     cause = c === nothing ? "not yet diagnosed" : record_causes[c]["suspected_cause"]
@@ -229,7 +241,7 @@ let
     paperband!(ax, x0, x1, lo, hi) = poly!(ax, Rect(x0, lo, x1 - x0, hi - lo); color = grey)
     function oursline!(ax, x, ps; color = ours, label = nothing)
         errorbars!(ax, x, m(ps), sd(ps); color, whiskerwidth = 6)
-        scatterlines!(ax, x, m(ps); color, label)
+        return scatterlines!(ax, x, m(ps); color, label)
     end
     fig = Figure(; size = (1200, 640))
     ## V-C3, 01b Fig. 5: compactness against the χcc/χcM ratio
@@ -248,8 +260,10 @@ let
     oursline!(ax, xval.(pts("V-C4", !isci)), pts("V-C4", !isci); color = ours2, label = "no CI")
     axislegend(ax; position = :rb)
     ## V-C5, 01b Fig. 8: compactness against χ(c,M)
-    ax = Axis(fig[1, 3]; title = "V-C5 · 01b Fig. 8", xlabel = "χ(c,M)", xticks = (1:3, ["0", "500", "5000"]),
-        limits = ((0.5, 3.5), (0, 1.05)))
+    ax = Axis(
+        fig[1, 3]; title = "V-C5 · 01b Fig. 8", xlabel = "χ(c,M)", xticks = (1:3, ["0", "500", "5000"]),
+        limits = ((0.5, 3.5), (0, 1.05))
+    )
     for (k, y) in ((1, 0.9), (2, 0.4), (3, 0.2), (1, 0.95), (3, 0.7))
         paperband!(ax, k - 0.15, k + 0.15, y - 0.1, y + 0.1)
     end
@@ -263,9 +277,15 @@ let
     oursline!(ax, xval.(pts("V-C7", !isci)), pts("V-C7", !isci); color = ours2)
     ## V-C9, 01b Fig. 11: temperature and chemotaxis mode
     p9 = filter(p -> p["row"] == "V-C9", record_points)
-    ax = Axis(fig[2, 1]; title = "V-C9 · 01b Fig. 11", ylabel = "compactness C", limits = ((0.5, 4.5), (0, 1.05)),
-        xticks = (1:4, replace.(getindex.(p9, "point"), "extension_only" => "ext.-only", "extension_retraction" => "ext.-retr.",
-            "T " => "T = ", ".0, " => "\n")))
+    ax = Axis(
+        fig[2, 1]; title = "V-C9 · 01b Fig. 11", ylabel = "compactness C", limits = ((0.5, 4.5), (0, 1.05)),
+        xticks = (
+            1:4, replace.(
+                getindex.(p9, "point"), "extension_only" => "ext.-only", "extension_retraction" => "ext.-retr.",
+                "T " => "T = ", ".0, " => "\n"
+            ),
+        )
+    )
     for (k, (lo, hi)) in enumerate(((0.85, 1.0), (0.0, 0.5), (0.0, 0.3), (0.0, 0.3)))
         paperband!(ax, k - 0.3, k + 0.3, lo, hi)
     end
@@ -274,8 +294,10 @@ let
     ## V-C12, 01b Fig. 6E: mean displacement from MCS 0 to code MCS 19 300
     rep = record_tsv("vc12_mcs0.tsv")
     dmu(ci) = 2 .* [parse(Float64, r["displacement_sites_0"]) for r in rep if r["CI"] == ci]   # 2 µm per site
-    ax = Axis(fig[2, 2]; title = "V-C12 · 01b Fig. 6E", ylabel = "displacement from MCS 0 (µm)", xticks = (1:2, ["CI", "no CI"]),
-        limits = ((0.4, 2.6), (0, 100)))
+    ax = Axis(
+        fig[2, 2]; title = "V-C12 · 01b Fig. 6E", ylabel = "displacement from MCS 0 (µm)", xticks = (1:2, ["CI", "no CI"]),
+        limits = ((0.4, 2.6), (0, 100))
+    )
     for (k, y) in ((1, 85.0), (2, 42.0))
         paperband!(ax, k - 0.3, k + 0.3, y - 1.5, y + 1.5)
     end
@@ -284,23 +306,31 @@ let
     ## V-E5 and V-E6, 01a Figs. 6 and 7: networks out of 10 replicates at 48 h
     nets(v) = parse(Int, first(split(v["ours"], '/')))
     e5 = filter(v -> v["row"] == "V-E5", record_verdicts)
-    ax = Axis(fig[2, 3]; title = "V-E5 · 01a Fig. 6", xlabel = "target length (µm)", ylabel = "networks of 10 at 48 h",
-        xticks = (1:5, ["20", "40", "60", "80", "100"]), limits = ((0.4, 5.6), (0, 10.5)))
+    ax = Axis(
+        fig[2, 3]; title = "V-E5 · 01a Fig. 6", xlabel = "target length (µm)", ylabel = "networks of 10 at 48 h",
+        xticks = (1:5, ["20", "40", "60", "80", "100"]), limits = ((0.4, 5.6), (0, 10.5))
+    )
     for k in 1:5
         k <= 2 ? paperband!(ax, k - 0.4, k + 0.4, 0, 2) : paperband!(ax, k - 0.4, k + 0.4, 8, 10)
     end
     barplot!(ax, 1:5, nets.(e5); color = (ours, 0.7), width = 0.5)
     e6 = filter(v -> v["row"] == "V-E6" && occursin("networks", v["check"]), record_verdicts)
-    ax = Axis(fig[2, 4]; title = "V-E6 · 01a Fig. 7", xlabel = "J(c,c)", xticks = (1:3, ["20", "5", "1"]),
-        limits = ((0.4, 3.6), (0, 10.5)))
+    ax = Axis(
+        fig[2, 4]; title = "V-E6 · 01a Fig. 7", xlabel = "J(c,c)", xticks = (1:3, ["20", "5", "1"]),
+        limits = ((0.4, 3.6), (0, 10.5))
+    )
     for k in 1:3
         paperband!(ax, k - 0.4, k + 0.4, 8, 10)
     end
     barplot!(ax, 1:3, nets.(e6); color = (ours, 0.7), width = 0.5)
-    Legend(fig[3, :], [PolyElement(; color = grey), MarkerElement(; marker = :circle, color = ours),
-            MarkerElement(; marker = :circle, color = ours2)],
+    Legend(
+        fig[3, :], [
+            PolyElement(; color = grey), MarkerElement(; marker = :circle, color = ours),
+            MarkerElement(; marker = :circle, color = ours2),
+        ],
         ["paper ± pre-registered tolerance", "ours, mean ± sd (with contact inhibition, CI)", "ours, no contact inhibition"];
-        orientation = :horizontal, framevisible = false)
+        orientation = :horizontal, framevisible = false
+    )
     fig
 end
 
@@ -332,14 +362,22 @@ let n = length(record_verdicts)
     e = filter(v -> startswith(v["row"], "V-E"), record_verdicts)
     c = filter(v -> startswith(v["row"], "V-C"), record_verdicts)
     pick(row, check) = record_verdicts[findfirst(v -> v["row"] == row && startswith(v["check"], check), record_verdicts)]
-    head = [pick("V-E1", "network at 1440"), pick("V-E1", "control"), pick("V-E5", "L = 30"), pick("V-E10", "elongated"),
+    head = [
+        pick("V-E1", "network at 1440"), pick("V-E1", "control"), pick("V-E5", "L = 30"), pick("V-E10", "elongated"),
         pick("V-C1", "CI:"), pick("V-C2", "mean C"), pick("V-C3", "low plateau"), pick("V-C3", "high plateau"),
-        pick("V-C3", "midpoint"), pick("V-C12", "displacement")]
-    Markdown.parse("**$(pass(record_verdicts)) of $n checks pass**: $(pass(e)) of $(length(e)) for 2006 and " *
-                   "$(pass(c)) of $(length(c)) for 2008. Headline checks:\n\n" *
-                   "| Check | Paper | Ours | Rule | Result |\n|---|---|---|---|---|\n" *
-                   join(["| $(v["row"]) $(v["check"]) | $(v["paper"]) | $(v["ours"]) | $(v["rule"]) | " *
-                         (v["result"] == "FAIL" ? "**FAIL**" : "PASS") * " |" for v in head], "\n"))
+        pick("V-C3", "midpoint"), pick("V-C12", "displacement"),
+    ]
+    Markdown.parse(
+        "**$(pass(record_verdicts)) of $n checks pass**: $(pass(e)) of $(length(e)) for 2006 and " *
+            "$(pass(c)) of $(length(c)) for 2008. Headline checks:\n\n" *
+            "| Check | Paper | Ours | Rule | Result |\n|---|---|---|---|---|\n" *
+            join(
+            [
+                "| $(v["row"]) $(v["check"]) | $(v["paper"]) | $(v["ours"]) | $(v["rule"]) | " *
+                    (v["result"] == "FAIL" ? "**FAIL**" : "PASS") * " |" for v in head
+            ], "\n"
+        )
+    )
 end
 
 # V-C3 was the at-risk row before the full run. Its low plateau now passes at
@@ -376,8 +414,11 @@ function tsv01b(path)
 end
 const DIGI_01B = joinpath(pkgdir(PottsModels), "test", "reproductions", "data", "01b")
 b01_verdicts = RECORD_01B === nothing ? Dict{String, String}[] : tsv01b(joinpath(RECORD_01B, "verdicts.tsv"))
-b01_causes = (RECORD_01B === nothing || !isfile(joinpath(RECORD_01B, "deviations.tsv"))) ? Dict{String, String}[] :
-             tsv01b(joinpath(RECORD_01B, "deviations.tsv"))
+b01_causes = if RECORD_01B === nothing || !isfile(joinpath(RECORD_01B, "deviations.tsv"))
+    Dict{String, String}[]
+else
+    tsv01b(joinpath(RECORD_01B, "deviations.tsv"))
+end
 b01_rows = filter(v -> !startswith(v["check"], "point ") && v["control"] == "false", b01_verdicts)
 b01_ctls = filter(v -> v["control"] == "true", b01_verdicts)
 mdcell(s) = replace(s, "|" => "\\|")
@@ -391,13 +432,16 @@ b01_deviation_rows = [b01_deviation_row(v) for v in b01_rows if v["result"] == "
 if RECORD_01B === nothing
     Markdown.parse(
         "**Provisional.** The 01b record (1330 runs) has not landed yet, so the panels show " *
-                   "the paper's digitized curves alone and no 01b verdict is claimed.")
+            "the paper's digitized curves alone and no 01b verdict is claimed."
+    )
 else
     p01b = TOML.parsefile(joinpath(RECORD_01B, "provenance.toml"))
-    Markdown.parse("**$(count(v -> v["result"] == "PASS", b01_rows)) of $(length(b01_rows)) 01b rows pass**, and " *
-                   "$(count(v -> v["result"] == "FAIL", b01_ctls)) of $(length(b01_ctls)) negative controls fail as " *
-                   "required. Record `$(basename(RECORD_01B))`: commit `$(p01b["commit"][1:8])`, $(p01b["cpu"]) " *
-                   "($(p01b["threads"]) threads), $(p01b["jobs"]) runs. Every 01b check is in the Details.")
+    Markdown.parse(
+        "**$(count(v -> v["result"] == "PASS", b01_rows)) of $(length(b01_rows)) 01b rows pass**, and " *
+            "$(count(v -> v["result"] == "FAIL", b01_ctls)) of $(length(b01_ctls)) negative controls fail as " *
+            "required. Record `$(basename(RECORD_01B))`: commit `$(p01b["commit"][1:8])`, $(p01b["cpu"]) " *
+            "($(p01b["threads"]) threads), $(p01b["jobs"]) runs. Every 01b check is in the Details."
+    )
 end
 
 let
@@ -405,9 +449,11 @@ let
     curvecolor["CI128"] = curvecolor["CI"]
     curvecolor["noCI128"] = curvecolor["noCI"]
     curvecolor["EO200"] = Makie.wong_colors()[4]          # yellow is too faint on white
-    curvename = Dict("CI" => "CI", "noCI" => "no CI", "CI128" => "CI, 128 cells", "CI1024" => "CI, 1024 cells",
+    curvename = Dict(
+        "CI" => "CI", "noCI" => "no CI", "CI128" => "CI, 128 cells", "CI1024" => "CI, 1024 cells",
         "noCI128" => "no CI, 128 cells", "ER50" => "ext.-retr., T = 50", "ER200" => "ext.-retr., T = 200",
-        "EO200" => "ext.-only, T = 200")
+        "EO200" => "ext.-only, T = 200"
+    )
     num(s) = parse(Float64, s)
     sweeps = RECORD_01B === nothing ? Dict{String, String}[] : tsv01b(joinpath(RECORD_01B, "sweeps.tsv"))
     series = RECORD_01B === nothing ? Dict{String, String}[] : tsv01b(joinpath(RECORD_01B, "series.tsv"))
@@ -415,10 +461,12 @@ let
         rows = sort(filter(r -> r["curve"] == curve, tsv01b(joinpath(DIGI_01B, file))); by = r -> num(r["x"]))
         x, y, c = num.(getindex.(rows, "x")), scale .* num.(getindex.(rows, "y")), curvecolor[curve]
         sd = filter(r -> r["sd"] != "NA", rows)
-        isempty(sd) || errorbars!(ax, num.(getindex.(sd, "x")), num.(getindex.(sd, "y")), num.(getindex.(sd, "sd"));
-            color = (c, 0.5), whiskerwidth = 4)
+        isempty(sd) || errorbars!(
+            ax, num.(getindex.(sd, "x")), num.(getindex.(sd, "y")), num.(getindex.(sd, "sd"));
+            color = (c, 0.5), whiskerwidth = 4
+        )
         lines!(ax, x, y; color = c, linestyle = :dash)
-        scatter!(ax, x, y; color = :white, strokecolor = c, strokewidth = 1.5, markersize = 8, label = curvename[curve])
+        return scatter!(ax, x, y; color = :white, strokecolor = c, strokewidth = 1.5, markersize = 8, label = curvename[curve])
     end
     function ours!(ax, fig, curve)
         rows = filter(r -> r["fig"] == fig && r["curve"] == curve, sweeps)
@@ -427,7 +475,7 @@ let
         C = [num.(getindex.(filter(r -> num(r["x"]) == x, rows), "C_N")) for x in xs]
         c = curvecolor[curve]
         errorbars!(ax, xs, mean.(C), std.(C); color = c, whiskerwidth = 4)
-        scatterlines!(ax, xs, mean.(C); color = c, markersize = 7)
+        return scatterlines!(ax, xs, mean.(C); color = c, markersize = 7)
     end
     function ours_t!(ax, arm, col; scale = 1.0)
         rows = filter(r -> r["arm"] == arm, series)
@@ -435,17 +483,21 @@ let
         ts = sort(unique(num.(getindex.(rows, "t"))))
         v = [scale .* num.(getindex.(filter(r -> num(r["t"]) == t, rows), col)) for t in ts]
         band!(ax, ts, mean.(v) .- std.(v), mean.(v) .+ std.(v); color = (curvecolor[arm], 0.2))
-        lines!(ax, ts, mean.(v); color = curvecolor[arm], linewidth = 2)
+        return lines!(ax, ts, mean.(v); color = curvecolor[arm], linewidth = 2)
     end
     fig = Figure(; size = (1200, 680))
-    panels = [("F5", "fig05.tsv", ["CI"], "χcc / χcM", "Fig. 5 · 10⁴ MCS"),
+    panels = [
+        ("F5", "fig05.tsv", ["CI"], "χcc / χcM", "Fig. 5 · 10⁴ MCS"),
         ("F7", "fig07.tsv", ["CI", "noCI"], "J(c,c)", "Fig. 7"),
         ("F8", "fig08.tsv", ["CI", "noCI"], "χ(c,M)", "Fig. 8"),
         ("F9", "fig09.tsv", ["CI", "noCI"], "s", "Fig. 9"),
-        ("F10", "fig10.tsv", ["CI128", "CI1024", "noCI128"], "D (10⁻¹³ m²/s)", "Fig. 10")]
+        ("F10", "fig10.tsv", ["CI128", "CI1024", "noCI128"], "D (10⁻¹³ m²/s)", "Fig. 10"),
+    ]
     for (k, (f, file, curves, xl, title)) in enumerate(panels)
-        ax = Axis(fig[(k - 1) ÷ 4 + 1, (k - 1) % 4 + 1]; title = "01b $title", xlabel = xl,
-            ylabel = k in (1, 5) ? "compactness C at N" : "", limits = (nothing, (0, 1.05)))
+        ax = Axis(
+            fig[(k - 1) ÷ 4 + 1, (k - 1) % 4 + 1]; title = "01b $title", xlabel = xl,
+            ylabel = k in (1, 5) ? "compactness C at N" : "", limits = (nothing, (0, 1.05))
+        )
         for c in curves
             paper!(ax, file, c)
             ours!(ax, f, c)
@@ -458,12 +510,16 @@ let
         paper!(ax12, "fig12.tsv", arm)
         ours_t!(ax12, arm, "C")
         paper!(ax13, "fig13.tsv", arm)
-        ours_t!(ax13, arm, "dH"; scale = 1e-8)
+        ours_t!(ax13, arm, "dH"; scale = 1.0e-8)
     end
     axislegend(ax12; position = :rt, labelsize = 10, framevisible = false)
-    Legend(fig[2, 4], [MarkerElement(; marker = :circle, color = :white, strokecolor = :black, strokewidth = 1.5),
-            [LineElement(; color = :black), MarkerElement(; marker = :circle, color = :black)]],
-        ["paper (digitized) ± its SD", "ours, mean ± sd"]; framevisible = false, tellwidth = false)
+    Legend(
+        fig[2, 4], [
+            MarkerElement(; marker = :circle, color = :white, strokecolor = :black, strokewidth = 1.5),
+            [LineElement(; color = :black), MarkerElement(; marker = :circle, color = :black)],
+        ],
+        ["paper (digitized) ± its SD", "ours, mean ± sd"]; framevisible = false, tellwidth = false
+    )
     fig
 end
 
@@ -576,9 +632,13 @@ Markdown.parse(deviations_md)
 #
 # The parameters, read from the constructed problems (lattice units: Δx = 2 µm, 1 MCS = 30 s):
 
-frame_op(dims, w) = (σ = zeros(Int32, dims); for I in CartesianIndices(σ)
-                         (min(I[1], I[2], dims[1] + 1 - I[1], dims[2] + 1 - I[2]) <= w) && (σ[I] = 1)
-                     end; [ownership => σ, kind => [:border]])
+function frame_op(dims, w)
+    σ = zeros(Int32, dims)
+    for I in CartesianIndices(σ)
+        (min(I[1], I[2], dims[1] + 1 - I[1], dims[2] + 1 - I[2]) <= w) && (σ[I] = 1)
+    end
+    return [ownership => σ, kind => [:border]]
+end
 p06 = PottsProblem(Merks2006(; name = :m6, lattice = (20, 20)), frame_op((20, 20), 1), (0, 1); field_solver = SOLVER)
 p08 = PottsProblem(Merks2008(; name = :m8, lattice = (20, 20)), frame_op((20, 20), 2), (0, 1); field_solver = SOLVER)
 v6(n) = getp(p06, n)(p06)
@@ -657,16 +717,20 @@ Markdown.parse(parameters_md)
 # two round seeds).
 
 page = joinpath(pkgdir(PottsModels), "reproductions", "01_merks.jl")
-git(args...) = try
-    readchomp(Cmd(`git $args`; dir = dirname(page)))
-catch
-    ""
+function git(args...)
+    return try
+        readchomp(Cmd(`git $args`; dir = dirname(page)))
+    catch
+        ""
+    end
 end
 page_commit = git("log", "-1", "--format=%h %cs", "--", basename(page))
 page_dirty = !isempty(git("status", "--porcelain", "--", basename(page)))
-Markdown.parse("This table was last changed in commit " *
-               (isempty(page_commit) ? "(git unavailable)" : "`$page_commit`") *
-               (page_dirty ? ", with uncommitted edits in this build" : "") * ".")
+Markdown.parse(
+    "This table was last changed in commit " *
+        (isempty(page_commit) ? "(git unavailable)" : "`$page_commit`") *
+        (page_dirty ? ", with uncommitted edits in this build" : "") * "."
+)
 
 # ### Measurement
 #
@@ -680,11 +744,13 @@ cross2(o, a, b) = (a[1] - o[1]) * (b[2] - o[2]) - (a[2] - o[2]) * (b[1] - o[1])
 function hull_area(pts)
     P = sort(unique(pts))
     length(P) < 3 && return 0.0
-    chain(Q) = foldl(Q; init = eltype(Q)[]) do h, q
-        while length(h) >= 2 && cross2(h[end - 1], h[end], q) <= 0
-            pop!(h)
+    function chain(Q)
+        return foldl(Q; init = eltype(Q)[]) do h, q
+            while length(h) >= 2 && cross2(h[end - 1], h[end], q) <= 0
+                pop!(h)
+            end
+            push!(h, q)
         end
-        push!(h, q)
     end
     h = [chain(P)[1:(end - 1)]; chain(reverse(P))[1:(end - 1)]]
     length(h) < 3 && return 0.0
@@ -738,20 +804,30 @@ nothing #hide
 # (no CI 7500 + 100k + i), V-C9 9000 + 100k + i, V-C12 12001–12010 and 12101–12110, V-C1
 # 20001–20005 and 20101–20105.
 
-tmap(f, xs) = (out = Vector{Any}(undef, length(xs)); Threads.@threads(for i in eachindex(xs)
-                                                                  out[i] = f(xs[i])
-                                                              end); out)
+function tmap(f, xs)
+    out = Vector{Any}(undef, length(xs))
+    Threads.@threads(
+        for i in eachindex(xs)
+            out[i] = f(xs[i])
+        end
+    )
+    return out
+end
 function run06(seed, saves; lattice = (500, 500), n = 282, p = Pair[])
-    prob = PottsProblem(Merks2006(; name = :m6, lattice), [layout(merks2006_layout(; lattice, n, seed), lattice); p...],
-        (0, maximum(saves)); field_solver = SOLVER, seed)
+    prob = PottsProblem(
+        Merks2006(; name = :m6, lattice), [layout(merks2006_layout(; lattice, n, seed), lattice); p...],
+        (0, maximum(saves)); field_solver = SOLVER, seed
+    )
     sol = solve(prob, SequentialCPM(); saveat = saves)
     return Dict(Int(t) => Int.(Array(u.ownership)) for (t, u) in zip(sol.t, sol.u))
 end
 function run08(seed, saves; p = Pair[], mode = :extension_retraction, denovo = false)
     lattice = denovo ? (502, 502) : (202, 202)
     l = denovo ? merks2008_denovo(; lattice, n = 1000, region = (85:417, 85:417), seed) : merks2008_sprout(; seed)
-    prob = PottsProblem(Merks2008(; name = :m8, lattice, mode), [layout(l, lattice); p...], (0, maximum(saves));
-        field_solver = SOLVER, seed)
+    prob = PottsProblem(
+        Merks2008(; name = :m8, lattice, mode), [layout(l, lattice); p...], (0, maximum(saves));
+        field_solver = SOLVER, seed
+    )
     sol = solve(prob, SequentialCPM(); saveat = saves)
     return Dict(Int(t) => Int.(Array(u.ownership)) for (t, u) in zip(sol.t, sol.u))
 end
@@ -764,7 +840,13 @@ function anisotropy(σs)
         sxx, syy = mean((I[1] - ma[1])^2 for I in A), mean((I[2] - ma[2])^2 for I in A)
         sxy = mean((I[1] - ma[1]) * (I[2] - ma[2]) for I in A)
         λ = (sxx + syy) / 2 + sqrt(((sxx - syy) / 2)^2 + sxy^2)
-        e = abs(sxy) > 1e-12 ? (λ - syy, sxy) : (sxx >= syy ? (1.0, 0.0) : (0.0, 1.0))
+        e = if abs(sxy) > 1.0e-12
+            (λ - syy, sxy)
+        elseif sxx >= syy
+            (1.0, 0.0)
+        else
+            (0.0, 1.0)
+        end
         e = e ./ hypot(e...)
         d = mb .- ma
         pa = (d[1] * e[1] + d[2] * e[2])^2
@@ -775,9 +857,11 @@ function anisotropy(σs)
 end
 function walk(seed; p = Pair[], tend = 2000)
     G = (160, 160)
-    prob = PottsProblem(Merks2006(; name = :m6, lattice = G),
+    prob = PottsProblem(
+        Merks2006(; name = :m6, lattice = G),
         [layout(merks2006_layout(; lattice = G, region = (120, 120), n = 9, seed), G); :χcM => 0.0; :χcc => 0.0; p...],
-        (0, tend); field_solver = SOLVER, seed)
+        (0, tend); field_solver = SOLVER, seed
+    )
     return anisotropy(σs(solve(prob, SequentialCPM(); saveat = 200:10:tend)))
 end
 function crossing(xs, ys, level)
@@ -797,49 +881,85 @@ e1 = if FULL
     std_runs = tmap(s -> run06(s, [480, 1080, 1440, 2880, 5760]), 1001:1010)
     (; std = std_runs, round = tmap(s -> run06(s, [1440]; p = [:λ_L => 0.0]), 1101:1110), t12 = 1440, t48 = 5760)
 else
-    (; std = [run06(s, [1440]; lattice = (200, 200), n = 100) for s in 90001:90001],
-        round = [run06(s, [1440]; lattice = (200, 200), n = 100, p = [:λ_L => 0.0]) for s in 90001:90001], t12 = 1440, t48 = nothing)
+    (;
+        std = [run06(s, [1440]; lattice = (200, 200), n = 100) for s in 90001:90001],
+        round = [run06(s, [1440]; lattice = (200, 200), n = 100, p = [:λ_L => 0.0]) for s in 90001:90001], t12 = 1440, t48 = nothing,
+    )
 end
-smoke08 = FULL ? nothing :
-          (; ci = [compactness(run08(s, [1000])[1000]) for s in 90011:90011],
-              noci = [compactness(run08(s, [1000]; p = [:χcc => 500.0])[1000]) for s in 90011:90011],
-              eo = [compactness(run08(s, [1000]; mode = :extension_only)[1000]) for s in 90011:90011])
-walks = (; el = tmap(s -> walk(s; tend = FULL ? 2000 : 1000), FULL ? (1401:1410) : (90021:90021)),
-    ro = tmap(s -> walk(s; p = [:L => 10.0, :λ_L => 50.0], tend = FULL ? 2000 : 1000), FULL ? (1411:1420) : (90021:90022)))
+smoke08 = if FULL
+    nothing
+else
+    (;
+        ci = [compactness(run08(s, [1000])[1000]) for s in 90011:90011],
+        noci = [compactness(run08(s, [1000]; p = [:χcc => 500.0])[1000]) for s in 90011:90011],
+        eo = [compactness(run08(s, [1000]; mode = :extension_only)[1000]) for s in 90011:90011],
+    )
+end
+walks = (;
+    el = tmap(s -> walk(s; tend = FULL ? 2000 : 1000), FULL ? (1401:1410) : (90021:90021)),
+    ro = tmap(s -> walk(s; p = [:L => 10.0, :λ_L => 50.0], tend = FULL ? 2000 : 1000), FULL ? (1411:1420) : (90021:90022)),
+)
 nothing #hide
 
 # Full build only: the 2006 sweeps and the 2008 compactness sweeps.
 
 full = if FULL
-    ve5 = Dict(L => tmap(i -> network(run06(1200 + 10(k - 1) + i, [5760]; p = [:L => L])[5760]), 1:10)
-               for (k, L) in enumerate((10.0, 20.0, 30.0, 40.0, 50.0)))
-    ve6 = Dict(J => tmap(i -> network(run06(1300 + 10(k - 1) + i, [5760]; p = [:J => Jm(J)])[5760]), 1:10)
-               for (k, J) in enumerate((20.0, 5.0, 1.0)))
+    ve5 = Dict(
+        L => tmap(i -> network(run06(1200 + 10(k - 1) + i, [5760]; p = [:L => L])[5760]), 1:10)
+            for (k, L) in enumerate((10.0, 20.0, 30.0, 40.0, 50.0))
+    )
+    ve6 = Dict(
+        J => tmap(i -> network(run06(1300 + 10(k - 1) + i, [5760]; p = [:J => Jm(J)])[5760]), 1:10)
+            for (k, J) in enumerate((20.0, 5.0, 1.0))
+    )
     ratios = collect(0.0:0.1:1.0)
     vc3 = [tmap(i -> run08(3000 + 100j + i, [10_000, 10_100]; p = [:χcc => 500.0 * r]), 1:10) for (j, r) in enumerate(ratios)]
     C5(seed; p) = (r = run08(seed, [5000, 5100]; p); (compactness(r[5000]), compactness(r[5100])))
-    pts4 = [(0.0, true), (20.0, true), (40.0, true), (60.0, true), (80.0, true),
-        (0.0, false), (5.0, false), (10.0, false), (15.0, false), (20.0, false), (40.0, false)]
-    vc4 = Dict(pt => tmap(i -> C5(4000 + 100k + i; p = [:J => Jm(pt[1]); pt[2] ? Pair[] : [:χcc => 500.0]]), 1:10)
-               for (k, pt) in enumerate(pts4))
+    pts4 = [
+        (0.0, true), (20.0, true), (40.0, true), (60.0, true), (80.0, true),
+        (0.0, false), (5.0, false), (10.0, false), (15.0, false), (20.0, false), (40.0, false),
+    ]
+    vc4 = Dict(
+        pt => tmap(i -> C5(4000 + 100k + i; p = [:J => Jm(pt[1]); pt[2] ? Pair[] : [:χcc => 500.0]]), 1:10)
+            for (k, pt) in enumerate(pts4)
+    )
     pts5 = [((0.0, true), 0.9), ((500.0, true), 0.4), ((5000.0, true), 0.2), ((0.0, false), 0.95), ((5000.0, false), 0.7)]
-    vc5 = [(pt, want, tmap(i -> C5(5000 + 100k + i; p = [:χcM => pt[1]; pt[2] ? Pair[] : [:χcc => pt[1]]]), 1:10))
-           for (k, (pt, want)) in enumerate(pts5)]
+    vc5 = [
+        (pt, want, tmap(i -> C5(5000 + 100k + i; p = [:χcM => pt[1]; pt[2] ? Pair[] : [:χcc => pt[1]]]), 1:10))
+            for (k, (pt, want)) in enumerate(pts5)
+    ]
     ss = [0.0, 0.025, 0.05, 0.075, 0.1, 0.125, 0.15, 0.175, 0.2, 0.25]
     vc7 = [tmap(i -> C5(7000 + 100k + i; p = [:s => s]), 1:10) for (k, s) in enumerate(ss)]
     vc7n = [tmap(i -> C5(7500 + 100k + i; p = [:s => s, :χcc => 500.0]), 1:10) for (k, s) in enumerate((0.0, 0.1, 0.25))]
-    vc9 = Dict((T, mode) => tmap(i -> (r = run08(9000 + 100k + i, [5000, 5100]; p = [:T => T], mode);
-                                      (compactness(r[5000]), compactness(r[5100]))), 1:10)
-               for (k, (T, mode)) in enumerate(((50.0, :extension_only), (50.0, :extension_retraction),
-                                                 (800.0, :extension_only), (800.0, :extension_retraction))))
-    disp(seed; p) = (
-        r = run08(seed, [0, 19_300]; p); mean(
+    vc9 = Dict(
+        (T, mode) => tmap(
+            i -> (
+                r = run08(9000 + 100k + i, [5000, 5100]; p = [:T => T], mode);
+                (compactness(r[5000]), compactness(r[5100]))
+            ), 1:10
+        )
+            for (k, (T, mode)) in enumerate(
+                (
+                    (50.0, :extension_only), (50.0, :extension_retraction),
+                    (800.0, :extension_only), (800.0, :extension_retraction),
+                )
+            )
+    )
+    function disp(seed; p)
+        r = run08(seed, [0, 19_300]; p)
+        return mean(
             ((a, b),) -> hypot((b .- a)...),            # from MCS 0
-        zip([(mean(I[1] for I in findall(==(c), r[0])), mean(I[2] for I in findall(==(c), r[0]))) for c in 2:129],
-            [(mean(I[1] for I in findall(==(c), r[19_300])), mean(I[2] for I in findall(==(c), r[19_300]))) for c in 2:129])))
+            zip(
+                [(mean(I[1] for I in findall(==(c), r[0])), mean(I[2] for I in findall(==(c), r[0]))) for c in 2:129],
+                [(mean(I[1] for I in findall(==(c), r[19_300])), mean(I[2] for I in findall(==(c), r[19_300]))) for c in 2:129]
+            )
+        )
+    end
     vc12 = (; ci = tmap(i -> disp(12_000 + i; p = Pair[]), 1:10), no = tmap(i -> disp(12_100 + i; p = [:χcc => 500.0]), 1:10))
-    vc1 = (; ci = tmap(i -> network(run08(20_000 + i, [10_000, 10_100]; denovo = true)[10_000]), 1:5),
-        no = tmap(i -> network(run08(20_100 + i, [10_000, 10_100]; denovo = true, p = [:χcc => 500.0])[10_000]), 1:5))
+    vc1 = (;
+        ci = tmap(i -> network(run08(20_000 + i, [10_000, 10_100]; denovo = true)[10_000]), 1:5),
+        no = tmap(i -> network(run08(20_100 + i, [10_000, 10_100]; denovo = true, p = [:χcc => 500.0])[10_000]), 1:5),
+    )
     (; ve5, ve6, ratios, vc3, vc4, pts5, vc5, ss, vc7, vc7n, vc9, vc12, vc1)
 else
     nothing
@@ -858,18 +978,24 @@ nothing #hide
 
 lat06, n06 = FULL ? ((500, 500), 282) : ((200, 200), 100)
 m06 = Merks2006(; name = :m6, lattice = lat06)
-prob06 = PottsProblem(m06, layout(merks2006_layout(; lattice = lat06, n = n06, seed = 1), lat06), (0, FULL ? 5760 : 1440);
-    field_solver = SOLVER, seed = 1)
+prob06 = PottsProblem(
+    m06, layout(merks2006_layout(; lattice = lat06, n = n06, seed = 1), lat06), (0, FULL ? 5760 : 1440);
+    field_solver = SOLVER, seed = 1
+)
 t06 = @elapsed sol06 = solve(prob06, SequentialCPM(); saveat = 0:20:(FULL ? 5760 : 1440))
 const MACHINE = "$(strip(Sys.cpu_info()[1].model)) ($(Sys.MACHINE)), CPU backend, one thread"
-Markdown.parse("One run, $(join(lat06, " × ")), $(Int(last(sol06.t))) MCS ($(Int(last(sol06.t)) ÷ 120) h), " *
-               "`SequentialCPM`: **$(round(t06; digits = 1)) s** on $MACHINE (not warmed up: includes compilation).")
+Markdown.parse(
+    "One run, $(join(lat06, " × ")), $(Int(last(sol06.t))) MCS ($(Int(last(sol06.t)) ÷ 120) h), " *
+        "`SequentialCPM`: **$(round(t06; digits = 1)) s** on $MACHINE (not warmed up: includes compilation)."
+)
 
 # One color per cell (the frozen frame is a cell too), the matrix white, every 20
 # MCS (10 min); cells are drawn without outlines:
 
-record_potts("01_merks_2006.mp4", sol06; framerate = 15, title = "Merks2006, $(lat06[1])²",
-    encoding = CellIdentityEncoding(), plot = (; medium_color = :white), figure = (; size = (600, 620)))
+record_potts(
+    "01_merks_2006.mp4", sol06; framerate = 15, title = "Merks2006, $(lat06[1])²",
+    encoding = CellIdentityEncoding(), plot = (; medium_color = :white), figure = (; size = (600, 620))
+)
 # ```@raw html
 # <video src="../01_merks_2006.mp4" controls autoplay loop muted playsinline width="600"></video>
 # ```
@@ -886,29 +1012,39 @@ function record_field(file, sol; title, figsize, every = 1)
     field(i) = Float64.(Array(sol.u[i].site.c))
     ## endothelial sites by kind (every cell that is not of the frame's kind); NaN is transparent
     frame_kind = sol.u[1].cell.kind[Array(sol.u[1].ownership)[1, 1]]         # the corner site is the frozen frame
-    cells(i) = (
-        σ = Array(sol.u[i].ownership); kd = sol.u[i].cell.kind;
-                [c != 0 && kd[c] != frame_kind ? 1.0 : NaN for c in σ])
+    function cells(i)
+        σ = Array(sol.u[i].ownership)
+        kd = sol.u[i].cell.kind
+        return [c != 0 && kd[c] != frame_kind ? 1.0 : NaN for c in σ]
+    end
     nx, ny = frame_size(frames[1])
     ox, oy = frame_geometry(frames[1]).origin
-    cmax = max(maximum(i -> maximum(field(i)), eachindex(sol.u)), 1e-12)
+    cmax = max(maximum(i -> maximum(field(i)), eachindex(sol.u)), 1.0e-12)
     k = Observable(1)
     fig = Figure(; size = figsize)
     ax = Axis(fig[1, 1]; title, aspect = DataAspect())
-    heatmap!(ax, ox .+ (0:nx), oy .+ (0:ny), @lift(log10.(max.(field($k), 1e-3 * cmax)));
-        colormap = :grays, colorrange = (log10(cmax) - 3, log10(cmax)))
-    contour!(ax, ox .+ (1:nx) .- 0.5, oy .+ (1:ny) .- 0.5, @lift(field($k));
-        levels = @lift(collect(range(0.05, 0.95; length = 10)) .* max(maximum(field($k)), 1e-12)),
-        color = :green, linewidth = 0.8)
-    heatmap!(ax, ox .+ (0:nx), oy .+ (0:ny), @lift(cells($k)); colormap = [(:red3, 0.45), (:red3, 0.45)],
-        colorrange = (0, 1), nan_color = :transparent)
+    heatmap!(
+        ax, ox .+ (0:nx), oy .+ (0:ny), @lift(log10.(max.(field($k), 1.0e-3 * cmax)));
+        colormap = :grays, colorrange = (log10(cmax) - 3, log10(cmax))
+    )
+    contour!(
+        ax, ox .+ (1:nx) .- 0.5, oy .+ (1:ny) .- 0.5, @lift(field($k));
+        levels = @lift(collect(range(0.05, 0.95; length = 10)) .* max(maximum(field($k)), 1.0e-12)),
+        color = :green, linewidth = 0.8
+    )
+    heatmap!(
+        ax, ox .+ (0:nx), oy .+ (0:ny), @lift(cells($k)); colormap = [(:red3, 0.45), (:red3, 0.45)],
+        colorrange = (0, 1), nan_color = :transparent
+    )
     record(fig, file, 1:every:length(sol.u); framerate = 15) do i
         k[] = i
     end
     return file
 end
-record_field("01_merks_2006_field.mp4", sol06; title = "Merks2006, $(lat06[1])²: c (log gray), isolines, cells",
-    figsize = (520, 540), every = 2)                      # every 40 MCS (20 min), to keep the file small
+record_field(
+    "01_merks_2006_field.mp4", sol06; title = "Merks2006, $(lat06[1])²: c (log gray), isolines, cells",
+    figsize = (520, 540), every = 2
+)                      # every 40 MCS (20 min), to keep the file small
 # ```@raw html
 # <video src="../01_merks_2006_field.mp4" controls autoplay loop muted playsinline width="520"></video>
 # ```
@@ -926,15 +1062,21 @@ t_ci = @elapsed sol_ci = solve(prob_ci, SequentialCPM(); saveat = 0:20:t08)
 sol_noci = solve(prob_noci, SequentialCPM(); saveat = 0:20:t08)
 sol_eo = solve(prob_eo, SequentialCPM(); saveat = 0:20:t08)
 const T_RELAX = Int(v8(:t_relax))
-Markdown.parse("One sprout run, 202 × 202, $t08 code MCS ($(t08 - T_RELAX) MCS after relaxation): " *
-               "**$(round(t_ci; digits = 1)) s** on $MACHINE.")
+Markdown.parse(
+    "One sprout run, 202 × 202, $t08 code MCS ($(t08 - T_RELAX) MCS after relaxation): " *
+        "**$(round(t_ci; digits = 1)) s** on $MACHINE."
+)
 
 #-
-for (file, sol, title) in (("01_merks_2008_ci.mp4", sol_ci, "contact-inhibited (χcc = 0)"),
-                           ("01_merks_2008_noci.mp4", sol_noci, "no contact inhibition (χcc = χcM)"),
-                           ("01_merks_2008_eo.mp4", sol_eo, "extension only"))
-    record_potts(file, sol; framerate = 15, title,
-        encoding = CellIdentityEncoding(), plot = (; medium_color = :white), figure = (; size = (520, 540)))
+for (file, sol, title) in (
+        ("01_merks_2008_ci.mp4", sol_ci, "contact-inhibited (χcc = 0)"),
+        ("01_merks_2008_noci.mp4", sol_noci, "no contact inhibition (χcc = χcM)"),
+        ("01_merks_2008_eo.mp4", sol_eo, "extension only"),
+    )
+    record_potts(
+        file, sol; framerate = 15, title,
+        encoding = CellIdentityEncoding(), plot = (; medium_color = :white), figure = (; size = (520, 540))
+    )
 end
 # ```@raw html
 # <video src="../01_merks_2008_ci.mp4" controls autoplay loop muted playsinline width="520"></video>
@@ -945,8 +1087,10 @@ end
 # The contact-inhibited sprout with its field, in the style of 01a Fig. 4 (the field is 0
 # during the 100 relaxation MCS):
 
-record_field("01_merks_2008_ci_field.mp4", sol_ci; title = "contact-inhibited sprout: c (log gray), isolines, cells",
-    figsize = (520, 540))
+record_field(
+    "01_merks_2008_ci_field.mp4", sol_ci; title = "contact-inhibited sprout: c (log gray), isolines, cells",
+    figsize = (520, 540)
+)
 # ```@raw html
 # <video src="../01_merks_2008_ci_field.mp4" controls autoplay loop muted playsinline width="520"></video>
 # ```
@@ -958,8 +1102,10 @@ record_field("01_merks_2008_ci_field.mp4", sol_ci; title = "contact-inhibited sp
 fig = Figure(; size = (640, 360))
 ax = Axis(fig[1, 1]; xlabel = "MCS after relaxation (code MCS = this + $T_RELAX)", ylabel = "compactness C")
 vlines!(ax, [0]; color = :gray70, linestyle = :dash)
-for (sol, lab, col) in ((sol_ci, "contact-inhibited", :red3), (sol_noci, "no contact inhibition", :black),
-                        (sol_eo, "extension only", :steelblue))
+for (sol, lab, col) in (
+        (sol_ci, "contact-inhibited", :red3), (sol_noci, "no contact inhibition", :black),
+        (sol_eo, "extension only", :steelblue),
+    )
     lines!(ax, sol.t .- T_RELAX, compactness.(σs(sol)); label = lab, color = col)
 end
 axislegend(ax; position = :lb)
@@ -969,7 +1115,15 @@ fig
 
 pf(ok) = ok ? "PASS" : "FAIL"
 binding(class) = class == "SMOKE+FULL" || (class == "FULL" && FULL)
-verdict(ok, class) = ok === nothing ? "see the FULL record table" : binding(class) ? pf(ok) : "info"
+function verdict(ok, class)
+    if ok === nothing
+        return "see the FULL record table"
+    elseif binding(class)
+        return pf(ok)
+    else
+        return "info"
+    end
+end
 fmt(x) = string(round(x; digits = 3))
 ms(v) = length(v) > 1 ? "$(fmt(mean(v))) ± $(fmt(std(v))) (n = $(length(v)))" : "$(fmt(mean(v))) (n = 1)"
 rows = []
@@ -978,26 +1132,36 @@ addrow!(target, paper, ours, tol, class, ok) = push!(rows, (; target, paper, our
 ## V-E1
 n12 = [network(r[e1.t12]) for r in e1.std]
 nr = [network(r[1440]) for r in e1.round]
-addrow!("V-E1 network at 12 h" * (FULL ? "" : " (200², reduced)"), "network (01a Fig. 4)",
+addrow!(
+    "V-E1 network at 12 h" * (FULL ? "" : " (200², reduced)"), "network (01a Fig. 4)",
     "$(count(isnetwork, n12))/$(length(n12)) networks; share $(ms(getproperty.(n12, :share))), lacunae $(ms(getproperty.(n12, :lacunae)))",
-    FULL ? "≥ 8/10" : "all", "SMOKE+FULL", FULL ? count(isnetwork, n12) >= 8 : all(isnetwork, n12))
-addrow!("V-E1 control: λ_L = 0 share", "round islands (01a p.50)", ms(getproperty.(nr, :share)),
-    "≤ elongated − 0.2", "SMOKE+FULL", mean(getproperty.(nr, :share)) <= mean(getproperty.(n12, :share)) - 0.2)
+    FULL ? "≥ 8/10" : "all", "SMOKE+FULL", FULL ? count(isnetwork, n12) >= 8 : all(isnetwork, n12)
+)
+addrow!(
+    "V-E1 control: λ_L = 0 share", "round islands (01a p.50)", ms(getproperty.(nr, :share)),
+    "≤ elongated − 0.2", "SMOKE+FULL", mean(getproperty.(nr, :share)) <= mean(getproperty.(n12, :share)) - 0.2
+)
 if FULL
     n48 = [network(r[5760]) for r in e1.std]
-    addrow!("V-E1 coarser at 48 h", "lacunae fall (01a Figs. 4, 5)", "lacunae $(ms(getproperty.(n48, :lacunae))); share $(ms(getproperty.(n48, :share)))",
+    addrow!(
+        "V-E1 coarser at 48 h", "lacunae fall (01a Figs. 4, 5)", "lacunae $(ms(getproperty.(n48, :lacunae))); share $(ms(getproperty.(n48, :share)))",
         "mean lacunae < 12 h; share ≥ 0.9", "FULL", mean(getproperty.(n48, :lacunae)) < mean(getproperty.(n12, :lacunae)) &&
-                                                     mean(getproperty.(n48, :share)) >= 0.9)
+            mean(getproperty.(n48, :share)) >= 0.9
+    )
     for L in (10.0, 20.0, 30.0, 40.0, 50.0)
         k = count(isnetwork, full.ve5[L])
-        addrow!("V-E5 L = $(Int(2L)) µm at 48 h", L <= 20 ? "islands" : "network", "$k/10 networks", "≥ 8/10",
-            "FULL", L <= 20 ? 10 - k >= 8 : k >= 8)
+        addrow!(
+            "V-E5 L = $(Int(2L)) µm at 48 h", L <= 20 ? "islands" : "network", "$k/10 networks", "≥ 8/10",
+            "FULL", L <= 20 ? 10 - k >= 8 : k >= 8
+        )
     end
     for J in (20.0, 5.0, 1.0)
         k = count(isnetwork, full.ve6[J])
-        addrow!("V-E6 J_cc = $J at 48 h", "network", "$k/10 networks; lacunae $(ms(getproperty.(full.ve6[J], :lacunae)))",
+        addrow!(
+            "V-E6 J_cc = $J at 48 h", "network", "$k/10 networks; lacunae $(ms(getproperty.(full.ve6[J], :lacunae)))",
             J == 1.0 ? "≥ 8/10; lacunae ≤ standard" : "≥ 8/10", "FULL",
-            k >= 8 && (J != 1.0 || mean(getproperty.(full.ve6[J], :lacunae)) <= mean(getproperty.(n48, :lacunae))))
+            k >= 8 && (J != 1.0 || mean(getproperty.(full.ve6[J], :lacunae)) <= mean(getproperty.(n48, :lacunae)))
+        )
     end
 else
     addrow!("V-E1 coarser at 48 h", "lacunae fall", "not run", "", "FULL", nothing)
@@ -1005,65 +1169,97 @@ else
 end
 ## V-E10
 addrow!("V-E10 anisotropy, elongated", "> 1 (01a Fig. 11)", ms(walks.el), "> 1.2", "SMOKE+FULL", mean(walks.el) > 1.2)
-addrow!("V-E10 control: round (L = 10, λ_L = 50)", "isotropic", ms(walks.ro), "< 1.2 and < elongated", "SMOKE+FULL",
-    mean(walks.ro) < 1.2 && mean(walks.ro) < mean(walks.el))
+addrow!(
+    "V-E10 control: round (L = 10, λ_L = 50)", "isotropic", ms(walks.ro), "< 1.2 and < elongated", "SMOKE+FULL",
+    mean(walks.ro) < 1.2 && mean(walks.ro) < mean(walks.el)
+)
 ## 2008
 if FULL
     C10 = [[compactness(r[10_000]) for r in runs] for runs in full.vc3]
     C10b = [[compactness(r[10_100]) for r in runs] for runs in full.vc3]
     m3 = mean.(C10)
-    addrow!("V-C2 C(CI) vs C(no CI) at 10⁴ MCS", "sprouts vs compact (01b Fig. 4)", "$(fmt(m3[1])) vs $(fmt(m3[end]))",
-        "difference > 0.3", "SMOKE+FULL", m3[1] < m3[end] - 0.3)
+    addrow!(
+        "V-C2 C(CI) vs C(no CI) at 10⁴ MCS", "sprouts vs compact (01b Fig. 4)", "$(fmt(m3[1])) vs $(fmt(m3[end]))",
+        "difference > 0.3", "SMOKE+FULL", m3[1] < m3[end] - 0.3
+    )
     low, high = mean(m3[1:5]), mean(m3[8:11])
     mid = crossing(full.ratios, m3, (low + high) / 2)
-    addrow!("V-C3 plateaus", "0.35 / 0.9 (01b Fig. 5)", "$(fmt(low)) / $(fmt(high))", "± 0.07", "FULL",
-        abs(low - 0.35) <= 0.07 && abs(high - 0.9) <= 0.07)
-    addrow!("V-C3 transition midpoint", "≈ 0.5 (01b p.6)", mid === nothing ? "none" : fmt(mid), "[0.45, 0.65]", "FULL",
-        mid !== nothing && 0.45 <= mid <= 0.65)
-    addrow!("V-C3 at 10⁴ + 100 MCS (time from the end of relaxation)", "—", "plateaus $(fmt(mean(mean.(C10b)[1:5]))) / $(fmt(mean(mean.(C10b)[8:11])))",
-        "—", "reported", nothing)
+    addrow!(
+        "V-C3 plateaus", "0.35 / 0.9 (01b Fig. 5)", "$(fmt(low)) / $(fmt(high))", "± 0.07", "FULL",
+        abs(low - 0.35) <= 0.07 && abs(high - 0.9) <= 0.07
+    )
+    addrow!(
+        "V-C3 transition midpoint", "≈ 0.5 (01b p.6)", mid === nothing ? "none" : fmt(mid), "[0.45, 0.65]", "FULL",
+        mid !== nothing && 0.45 <= mid <= 0.65
+    )
+    addrow!(
+        "V-C3 at 10⁴ + 100 MCS (time from the end of relaxation)", "—", "plateaus $(fmt(mean(mean.(C10b)[1:5]))) / $(fmt(mean(mean.(C10b)[8:11])))",
+        "—", "reported", nothing
+    )
     c4(pt) = mean(first.(full.vc4[pt]))
-    addrow!("V-C4 CI at J_cc = 20, 40, 80", "0.3, 0.4, 0.85 (01b Fig. 7)", join(fmt.(c4.(((20.0, true), (40.0, true), (80.0, true)))), ", "),
-        "± 0.1", "FULL", abs(c4((20.0, true)) - 0.3) <= 0.1 && abs(c4((40.0, true)) - 0.4) <= 0.1 && abs(c4((80.0, true)) - 0.85) <= 0.1)
-    addrow!("V-C4 no CI at J_cc = 0, 15, 20, 40", "0.35, 0.83, 0.83, 0.83", join(fmt.(c4.(((0.0, false), (15.0, false), (20.0, false), (40.0, false)))), ", "),
-        "± 0.1", "FULL", abs(c4((0.0, false)) - 0.35) <= 0.1 && all(J -> abs(c4((J, false)) - 0.83) <= 0.1, (15.0, 20.0, 40.0)))
-    addrow!("V-C4 rise", "monotone", "CI $(fmt(c4((80.0, true)) - c4((0.0, true)))); no CI $(fmt(c4((40.0, false)) - c4((0.0, false))))",
-        "> 0.3 both", "FULL", c4((80.0, true)) - c4((0.0, true)) > 0.3 && c4((40.0, false)) - c4((0.0, false)) > 0.3)
+    addrow!(
+        "V-C4 CI at J_cc = 20, 40, 80", "0.3, 0.4, 0.85 (01b Fig. 7)", join(fmt.(c4.(((20.0, true), (40.0, true), (80.0, true)))), ", "),
+        "± 0.1", "FULL", abs(c4((20.0, true)) - 0.3) <= 0.1 && abs(c4((40.0, true)) - 0.4) <= 0.1 && abs(c4((80.0, true)) - 0.85) <= 0.1
+    )
+    addrow!(
+        "V-C4 no CI at J_cc = 0, 15, 20, 40", "0.35, 0.83, 0.83, 0.83", join(fmt.(c4.(((0.0, false), (15.0, false), (20.0, false), (40.0, false)))), ", "),
+        "± 0.1", "FULL", abs(c4((0.0, false)) - 0.35) <= 0.1 && all(J -> abs(c4((J, false)) - 0.83) <= 0.1, (15.0, 20.0, 40.0))
+    )
+    addrow!(
+        "V-C4 rise", "monotone", "CI $(fmt(c4((80.0, true)) - c4((0.0, true)))); no CI $(fmt(c4((40.0, false)) - c4((0.0, false))))",
+        "> 0.3 both", "FULL", c4((80.0, true)) - c4((0.0, true)) > 0.3 && c4((40.0, false)) - c4((0.0, false)) > 0.3
+    )
     for (pt, want, v) in full.vc5
         got = mean(first.(v))
         addrow!("V-C5 χ(c,M) = $(pt[1]), $(pt[2] ? "CI" : "no CI")", "$want (01b Fig. 8)", fmt(got), "± 0.1", "FULL", abs(got - want) <= 0.1)
     end
     m7 = [mean(first.(v)) for v in full.vc7]
     mid7 = crossing(full.ss, m7, (m7[1] + m7[end]) / 2)
-    addrow!("V-C7 CI transition in s", "≈ 0.08–0.13 (01b Fig. 9)", mid7 === nothing ? "none" : fmt(mid7), "[0.07, 0.15]", "FULL",
-        mid7 !== nothing && 0.07 <= mid7 <= 0.15)
+    addrow!(
+        "V-C7 CI transition in s", "≈ 0.08–0.13 (01b Fig. 9)", mid7 === nothing ? "none" : fmt(mid7), "[0.07, 0.15]", "FULL",
+        mid7 !== nothing && 0.07 <= mid7 <= 0.15
+    )
     m7n = [mean(first.(v)) for v in full.vc7n]
     addrow!("V-C7 no CI at s = 0, 0.1, 0.25", "0.93–0.97", join(fmt.(m7n), ", "), "0.95 ± 0.1", "FULL", all(x -> abs(x - 0.95) <= 0.1, m7n))
     c9(T, mode) = mean(first.(full.vc9[(T, mode)]))
-    addrow!("V-C9 T = 50", "ext-only ≈ 1, ext-retr sprouts (01b Fig. 11)",
+    addrow!(
+        "V-C9 T = 50", "ext-only ≈ 1, ext-retr sprouts (01b Fig. 11)",
         "ext-only $(fmt(c9(50.0, :extension_only))); ext-retr $(fmt(c9(50.0, :extension_retraction)))", "> 0.85; < 0.5", "SMOKE+FULL",
-        c9(50.0, :extension_only) > 0.85 && c9(50.0, :extension_retraction) < 0.5)
-    addrow!("V-C9 T = 800", "break-up", "ext-only $(fmt(c9(800.0, :extension_only))); ext-retr $(fmt(c9(800.0, :extension_retraction)))",
-        "both < 0.3", "FULL", c9(800.0, :extension_only) < 0.3 && c9(800.0, :extension_retraction) < 0.3)
+        c9(50.0, :extension_only) > 0.85 && c9(50.0, :extension_retraction) < 0.5
+    )
+    addrow!(
+        "V-C9 T = 800", "break-up", "ext-only $(fmt(c9(800.0, :extension_only))); ext-retr $(fmt(c9(800.0, :extension_retraction)))",
+        "both < 0.3", "FULL", c9(800.0, :extension_only) < 0.3 && c9(800.0, :extension_retraction) < 0.3
+    )
     ratio12 = mean(full.vc12.ci) / mean(full.vc12.no)
-    addrow!("V-C12 displacement CI / no CI, MCS 0 to 19 300", "85 / 42 µm ≈ 2.0 (01b Fig. 6E)",
-        "$(fmt(2mean(full.vc12.ci))) / $(fmt(2mean(full.vc12.no))) µm = $(fmt(ratio12))", "[1.5, 2.5]", "FULL", 1.5 <= ratio12 <= 2.5)
+    addrow!(
+        "V-C12 displacement CI / no CI, MCS 0 to 19 300", "85 / 42 µm ≈ 2.0 (01b Fig. 6E)",
+        "$(fmt(2mean(full.vc12.ci))) / $(fmt(2mean(full.vc12.no))) µm = $(fmt(ratio12))", "[1.5, 2.5]", "FULL", 1.5 <= ratio12 <= 2.5
+    )
     addrow!("V-C1 1000 cells, CI", "network (01b Fig. 2D)", "$(count(isnetwork, full.vc1.ci))/5 networks", "≥ 4/5", "FULL", count(isnetwork, full.vc1.ci) >= 4)
-    addrow!("V-C1 1000 cells, no CI", "islands (01b Fig. 2C)", "shares $(join(fmt.(getproperty.(full.vc1.no, :share)), ", "))",
-        "share < 0.5 in ≥ 4/5", "FULL", count(r -> r.share < 0.5, full.vc1.no) >= 4)
+    addrow!(
+        "V-C1 1000 cells, no CI", "islands (01b Fig. 2C)", "shares $(join(fmt.(getproperty.(full.vc1.no, :share)), ", "))",
+        "share < 0.5 in ≥ 4/5", "FULL", count(r -> r.share < 0.5, full.vc1.no) >= 4
+    )
 else
-    addrow!("V-C2 (1000 MCS, reduced)", "CI sprouts, no CI compact", "CI $(ms(smoke08.ci)); no CI $(ms(smoke08.noci))",
-        "difference > 0.2", "SMOKE+FULL", mean(smoke08.ci) < mean(smoke08.noci) - 0.2)
-    addrow!("V-C9 (1000 MCS, reduced, T = 50)", "ext-only stays compact", "ext-only $(ms(smoke08.eo)); ext-retr $(ms(smoke08.ci))",
-        "difference > 0.2", "SMOKE+FULL", mean(smoke08.eo) - mean(smoke08.ci) > 0.2)
+    addrow!(
+        "V-C2 (1000 MCS, reduced)", "CI sprouts, no CI compact", "CI $(ms(smoke08.ci)); no CI $(ms(smoke08.noci))",
+        "difference > 0.2", "SMOKE+FULL", mean(smoke08.ci) < mean(smoke08.noci) - 0.2
+    )
+    addrow!(
+        "V-C9 (1000 MCS, reduced, T = 50)", "ext-only stays compact", "ext-only $(ms(smoke08.eo)); ext-retr $(ms(smoke08.ci))",
+        "difference > 0.2", "SMOKE+FULL", mean(smoke08.eo) - mean(smoke08.ci) > 0.2
+    )
     for t in ("V-C1", "V-C3", "V-C4", "V-C5", "V-C7", "V-C9 (T = 50, 800)", "V-C12")
         addrow!(t, "01b", "not run", "", "FULL", nothing)
     end
 end
-Markdown.parse("""
-| Target | Paper | Ours | Tolerance | Class | Result |
-|---|---|---|---|---|---|
-""" * join(["| $(r.target) | $(r.paper) | $(r.ours) | $(r.tol) | $(r.class) | $(r.result) |" for r in rows], "\n"))
+Markdown.parse(
+    """
+    | Target | Paper | Ours | Tolerance | Class | Result |
+    |---|---|---|---|---|---|
+    """ * join(["| $(r.target) | $(r.paper) | $(r.ours) | $(r.tol) | $(r.class) | $(r.result) |" for r in rows], "\n")
+)
 
 # ### Every check of the full run
 #
@@ -1076,27 +1272,37 @@ Markdown.parse(full_verdicts_md)
 
 # The record's provenance:
 
-Markdown.parse("Commit `$(record_prov["commit"][1:8])`, $(record_prov["cpu"]) (" *
-               "$(record_prov["threads"]) threads, Julia $(record_prov["julia"])); $(record_prov["jobs"]) runs; " *
-               "the record's stamp of the test file's sha256 `$(record_prov["frozen_test_sha256"][1:12])…`. V-C12 was re-read from MCS 0 " *
-               "on $(record_prov["vc12_mcs0"]["date"]) ($(record_prov["vc12_mcs0"]["decision"])) from the stored snapshots, " *
-               "with no new runs, at commit `$(record_prov["vc12_mcs0"]["commit"][1:8])` (`vc12_mcs0.jl`, `vc12_mcs0.tsv`); " *
-               "the amended record's stamp of the test file's sha256 is `$(record_prov["vc12_mcs0"]["frozen_test_sha256"][1:12])…`.")
+Markdown.parse(
+    "Commit `$(record_prov["commit"][1:8])`, $(record_prov["cpu"]) (" *
+        "$(record_prov["threads"]) threads, Julia $(record_prov["julia"])); $(record_prov["jobs"]) runs; " *
+        "the record's stamp of the test file's sha256 `$(record_prov["frozen_test_sha256"][1:12])…`. V-C12 was re-read from MCS 0 " *
+        "on $(record_prov["vc12_mcs0"]["date"]) ($(record_prov["vc12_mcs0"]["decision"])) from the stored snapshots, " *
+        "with no new runs, at commit `$(record_prov["vc12_mcs0"]["commit"][1:8])` (`vc12_mcs0.jl`, `vc12_mcs0.tsv`); " *
+        "the amended record's stamp of the test file's sha256 is `$(record_prov["vc12_mcs0"]["frozen_test_sha256"][1:12])…`."
+)
 
 # The 2008 sweep means at both clocks (`points.tsv`). The binding reading is the
 # code counter N; the other is N + 100 code MCS, which is N MCS after relaxation:
 
-Markdown.parse("| Row | Point | n | mean C at N code MCS | mean C at N MCS after relaxation (code MCS = N + 100) |\n|---|---|---|---|---|\n" *
-               join(["| $(p["row"]) | $(p["point"]) | $(p["n"]) | $(p["mean_C_N"]) ± $(p["std_C_N"]) | $(p["mean_C_N+100"]) ± $(p["std_C_N+100"]) |"
-                     for p in record_points], "\n"))
+Markdown.parse(
+    "| Row | Point | n | mean C at N code MCS | mean C at N MCS after relaxation (code MCS = N + 100) |\n|---|---|---|---|---|\n" *
+        join(
+        [
+            "| $(p["row"]) | $(p["point"]) | $(p["n"]) | $(p["mean_C_N"]) ± $(p["std_C_N"]) | $(p["mean_C_N+100"]) ± $(p["std_C_N+100"]) |"
+                for p in record_points
+        ], "\n"
+    )
+)
 
 # V-C3 (01b Fig. 5) from the record, at both clocks:
 
 let pts = filter(p -> p["row"] == "V-C3", record_points)
     x = [parse(Float64, split(p["point"])[end]) for p in pts]
     fig = Figure(; size = (640, 360))
-    ax = Axis(fig[1, 1]; xlabel = "χcc / χcM", ylabel = "compactness C",
-        title = "V-C3: 10⁴ MCS after relaxation (code MCS 10 100) and code MCS 10⁴")
+    ax = Axis(
+        fig[1, 1]; xlabel = "χcc / χcM", ylabel = "compactness C",
+        title = "V-C3: 10⁴ MCS after relaxation (code MCS 10 100) and code MCS 10⁴"
+    )
     band!(ax, [0.0, 0.4], [0.28, 0.28], [0.42, 0.42]; color = (:gray80, 0.6))
     band!(ax, [0.7, 1.0], [0.83, 0.83], [0.97, 0.97]; color = (:gray80, 0.6))
     scatterlines!(ax, x, [parse(Float64, p["mean_C_N+100"]) for p in pts]; label = "10⁴ MCS after relaxation", color = :red3)
@@ -1109,8 +1315,10 @@ end
 #
 # Rows that fail:
 
-failing = [["- $(r.target): ours $(r.ours), tolerance $(r.tol)." for r in rows if r.result == "FAIL"];
-           ["- $(v["row"]) $(v["check"]) (full run): ours $(v["ours"]), tolerance $(v["rule"])." for v in record_verdicts if v["result"] == "FAIL"]]
+failing = [
+    ["- $(r.target): ours $(r.ours), tolerance $(r.tol)." for r in rows if r.result == "FAIL"];
+    ["- $(v["row"]) $(v["check"]) (full run): ours $(v["ours"]), tolerance $(v["rule"])." for v in record_verdicts if v["result"] == "FAIL"]
+]
 Markdown.parse(isempty(failing) ? "None." : join(failing, "\n"))
 
 # ### 01b: every check
@@ -1119,11 +1327,17 @@ Markdown.parse(isempty(failing) ? "None." : join(failing, "\n"))
 # `verdicts.tsv` gives them; the frozen record tier recomputes each from `sweeps.tsv` and
 # `series.tsv`. Controls must fail.
 
-Markdown.parse(RECORD_01B === nothing ? "No 01b record yet (provisional; see §3)." :
-               "| Row | Check | Ours | Rule | Result |\n|---|---|---|---|---|\n" *
-               join(["| $(v["row"]) | $(v["check"]) | $(mdcell(v["ours"])) | $(mdcell(v["rule"])) | " *
-                     (v["control"] == "true" ? "$(v["result"]) (control; must fail)" : v["result"]) * " |"
-                     for v in b01_verdicts], "\n"))
+Markdown.parse(
+    RECORD_01B === nothing ? "No 01b record yet (provisional; see §3)." :
+        "| Row | Check | Ours | Rule | Result |\n|---|---|---|---|---|\n" *
+        join(
+            [
+                "| $(v["row"]) | $(v["check"]) | $(mdcell(v["ours"])) | $(mdcell(v["rule"])) | " *
+                (v["control"] == "true" ? "$(v["result"]) (control; must fail)" : v["result"]) * " |"
+                for v in b01_verdicts
+            ], "\n"
+        )
+)
 
 # ### Open questions for the authors
 #
@@ -1154,9 +1368,11 @@ Markdown.parse(RECORD_01B === nothing ? "No 01b record yet (provisional; see §3
 
 build_commit = git("rev-parse", "--short", "HEAD")
 build_dirty = !isempty(git("status", "--porcelain"))
-Markdown.parse("PottsModels $(pkgversion(PottsModels)), commit " *
-               (isempty(build_commit) ? "(git unavailable)" : "`$build_commit`") *
-               (build_dirty ? " with uncommitted changes" : "") * ".")
+Markdown.parse(
+    "PottsModels $(pkgversion(PottsModels)), commit " *
+        (isempty(build_commit) ? "(git unavailable)" : "`$build_commit`") *
+        (build_dirty ? " with uncommitted changes" : "") * "."
+)
 
 # This is an independent reimplementation; it has not been reviewed or endorsed by the
 # authors.

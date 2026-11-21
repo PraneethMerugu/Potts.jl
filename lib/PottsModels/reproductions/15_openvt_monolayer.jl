@@ -49,8 +49,10 @@ end
 function record_figure(dir, file; alt, width = 900)
     name = "15_openvt_" * replace(dir, r"[^A-Za-z0-9]+" => "_") * "_" * file
     cp(joinpath(DATA15, dir, file), name; force = true)
-    return HTML("<figure><img src=\"../$name\" alt=\"$alt\" style=\"max-width:100%\" " *
-                "width=\"$width\"></figure>")
+    return HTML(
+        "<figure><img src=\"../$name\" alt=\"$alt\" style=\"max-width:100%\" " *
+            "width=\"$width\"></figure>"
+    )
 end
 
 ## a record's TSV as rows of Dicts
@@ -117,10 +119,14 @@ nothing #hide
 #     # the first cell draws its X before its first division check
 #     @before_mcs X ~ ifelse(Pre(X) > 0, Pre(X), randn(μ_X, σ_X; lower_bound = 0.0))
 #     @after_mcs begin                   # f, then growth unless inhibited (type 1 and type 2)
-#         f ~ ifelse(count(true for _ in contacts) > 0,
-#             count(neighbor_kind == medium for _ in contacts) / count(true for _ in contacts), 1.0
+#         f ~ ifelse(
+#             count(true for _ in contacts) > 0,
+#             count(neighbor_kind == medium for _ in contacts) /
+#                 count(true for _ in contacts),
+#             1.0
 #         )
-#         A_star ~ ifelse((volume / Pre(A_star) >= β) && (f >= γ), Pre(A_star) + α, Pre(A_star))
+#         A_star ~
+#             ifelse((volume / Pre(A_star) >= β) && (f >= γ), Pre(A_star) + α, Pre(A_star))
 #     end
 #     # division on the actual area; each daughter draws its own X
 #     @divide cells(cell) when = volume >= X * A₀, along = RandomPlane(), A_star => Split(),
@@ -189,8 +195,10 @@ record_figure("checkerboard-2026-11-05", "fig2.png"; alt = "Figure 2 b: chain re
 #-
 
 let rows = filter(r -> r["result"] in ("PASS", "FAIL"), cal)
-    Markdown.parse("**PASS: $(count(r -> r["result"] == "PASS", rows)) of $(length(rows)) calibration rows** " *
-                   "(V6–V8). T = 156 MCS at λ = 2 against Table S5's 155, so one cycle is 5T = 775 MCS.")
+    Markdown.parse(
+        "**PASS: $(count(r -> r["result"] == "PASS", rows)) of $(length(rows)) calibration rows** " *
+            "(V6–V8). T = 156 MCS at λ = 2 against Table S5's 155, so one cycle is 5T = 775 MCS."
+    )
 end
 
 # ### Figure 5: 100 runs of 1000 cells
@@ -302,15 +310,17 @@ record_figure("sweeps-2026-10-08", "fig6.png"; alt = "Figure 6: time to 10^4 cel
 #-
 
 let t1 = tsv("sweeps-2026-10-08", "table1.tsv")
-    v(p, m) = (r = filter(r -> startswith(r["target"], (p == "beta" ? "V2." : "V3.") * replace(m, ".0" => "") * "x"), sweeps);
-               isempty(r) ? "—" : only(r)["result"])
+    function v(p, m)
+        r = filter(r -> startswith(r["target"], (p == "beta" ? "V2." : "V3.") * replace(m, ".0" => "") * "x"), sweeps)
+        return isempty(r) ? "—" : only(r)["result"]
+    end
     val(s) = isempty(s) ? "—" : s
     out = "| Parameter | Multiple (cycles) | Potts.jl | TST | Artistoo | Band | Verdict |\n|---|---|---|---|---|---|---|\n"
     for r in t1
         p = r["parameter"] == "beta" ? "β" : "γ"
         verdict = v(r["parameter"], r["multiple"])
         out *= "| $p | $(replace(r["multiple"], r"\.0$" => ""))× ($(r["tau_cycles"])) | $(val(r["threshold"])) | $(val(r["TST"])) | " *
-               "$(val(r["Artistoo"])) | $(val(r["band"])) | $(verdict == "FAIL" ? "**FAIL**" : verdict) |\n"
+            "$(val(r["Artistoo"])) | $(val(r["band"])) | $(verdict == "FAIL" ? "**FAIL**" : verdict) |\n"
     end
     Markdown.parse(out)
 end
@@ -406,8 +416,12 @@ record_figure("f8beta-2026-10-09", "fig8_grid.png"; alt = "Figure 8: 10^4-cell c
 # ### Verdicts at a glance
 
 let
-    pre(rows) = filter(r -> r["result"] in ("PASS", "FAIL") && get(r, "case", "") != "control" &&
-                            !occursin("must FAIL", get(r, "band", "")) && !occursin("(all rows)", r["target"]), rows)
+    function pre(rows)
+        return filter(
+            r -> r["result"] in ("PASS", "FAIL") && get(r, "case", "") != "control" &&
+                !occursin("must FAIL", get(r, "band", "")) && !occursin("(all rows)", r["target"]), rows
+        )
+    end
     tally(rows) = (p = count(r -> r["result"] == "PASS", rows); "$p of $(length(rows))")
     fails(rows) = (f = [String(first(split(r["target"]))) for r in rows if r["result"] == "FAIL"]; isempty(f) ? "—" : "**" * join(f, ", ") * "**")
     calr = filter(r -> r["result"] in ("PASS", "FAIL"), cal)
@@ -417,15 +431,17 @@ let
     ctl = filter(r -> r["case"] == "control" || occursin("must FAIL", get(r, "band", "")), f3f8)
     sw = pre(sweeps)
     swc = filter(r -> occursin("must FAIL", r["band"]), sweeps)
-    Markdown.parse("""
-    | Item | Pre-registered rows passing | Failing | Negative controls |
-    |---|---|---|---|
-    | Figure 2, Table S5 (calibration) | $(tally(calr)) | $(fails(calr)) | — |
-    | Figure 3 (cases f, b) | $(tally(f3)) | $(fails(f3)) | $(count(r -> r["result"] == "FAIL", ctl)) of $(length(ctl)) fail, as required |
-    | Figure 5 (case b) | $(tally(v4)) | $(fails(v4)) | the γ = 10⁻⁴ control fails V4.4 and V4.6, as required |
-    | Figure 9 (cases a, e) | $(tally(f8)) | $(fails(f8)) | — |
-    | Figures 6, 7 and Table 1 (sweeps, with V1) | $(tally(sw)) | $(fails(sw)) | $(count(r -> r["result"] == "FAIL", swc)) of $(length(swc)) fail, as required |
-    """)
+    Markdown.parse(
+        """
+        | Item | Pre-registered rows passing | Failing | Negative controls |
+        |---|---|---|---|
+        | Figure 2, Table S5 (calibration) | $(tally(calr)) | $(fails(calr)) | — |
+        | Figure 3 (cases f, b) | $(tally(f3)) | $(fails(f3)) | $(count(r -> r["result"] == "FAIL", ctl)) of $(length(ctl)) fail, as required |
+        | Figure 5 (case b) | $(tally(v4)) | $(fails(v4)) | the γ = 10⁻⁴ control fails V4.4 and V4.6, as required |
+        | Figure 9 (cases a, e) | $(tally(f8)) | $(fails(f8)) | — |
+        | Figures 6, 7 and Table 1 (sweeps, with V1) | $(tally(sw)) | $(fails(sw)) | $(count(r -> r["result"] == "FAIL", swc)) of $(length(swc)) fail, as required |
+        """
+    )
 end
 
 # ### Deviations
@@ -576,16 +592,22 @@ nothing #hide
 #
 # Calibration (Figure 2, Table S5), from `calibration-2026-10-05/verdicts.tsv`:
 
-verdict_table(cal, ["target", "paper", "ours", "tolerance", "result"],
-    ["Target", "Table S5 or lattice spread", "Potts.jl", "Band", "Verdict"])
+verdict_table(
+    cal, ["target", "paper", "ours", "tolerance", "result"],
+    ["Target", "Table S5 or lattice spread", "Potts.jl", "Band", "Verdict"]
+)
 
 # Figure 3 (L = log₂ N; r̄, Ā; t̄_s the time to 10³ cells; sync(k) the fraction of runs with
 # exactly 2ᵏ cells at t = k + 0.5), from `f3-f8-2026-10-08/verdicts.tsv`:
 
 cols = ["target", "case", "paper", "ours", "band", "result"]
 hdr = ["Target", "Case", "Consortium (TST)", "Potts.jl", "Band", "Verdict"]
-verdict_table(filter(r -> startswith(r["target"], "F3") && r["case"] in ("f", "b") &&
-                          !occursin("must FAIL", r["band"]), f3f8), cols, hdr)
+verdict_table(
+    filter(
+        r -> startswith(r["target"], "F3") && r["case"] in ("f", "b") &&
+            !occursin("must FAIL", r["band"]), f3f8
+    ), cols, hdr
+)
 
 # The negative controls, which must fail:
 
@@ -593,10 +615,14 @@ verdict_table(filter(r -> occursin("must FAIL", r["band"]), f3f8), cols, hdr)
 
 # Figure 9 and V5:
 
-verdict_table(filter(r -> (startswith(r["target"], "V5.") || startswith(r["target"], "F8.")) &&
-                          r["case"] in ("a", "e"), f3f8),
+verdict_table(
+    filter(
+        r -> (startswith(r["target"], "V5.") || startswith(r["target"], "F8.")) &&
+            r["case"] in ("a", "e"), f3f8
+    ),
     ["target", "case", "paper", "ours", "band", "result"],
-    ["Target", "Case", "Consortium", "Potts.jl", "Band", "Verdict"])
+    ["Target", "Case", "Consortium", "Potts.jl", "Band", "Verdict"]
+)
 
 # F8.1 (g ≡ 1 without inhibition), F8.2 (the isoperimetric inequality) and F8.3 (whose band
 # contains 6, the mean neighbor number of any confluent planar tiling) cannot fail by
@@ -607,14 +633,18 @@ verdict_table(filter(r -> (startswith(r["target"], "V5.") || startswith(r["targe
 # Figures 6 and 7, Table 1 (V1, V2, V2b, V3, V3b, F7.1 and the three negative controls,
 # which must fail), from `sweeps-2026-10-08/verdicts.tsv`:
 
-verdict_table(sweeps, ["target", "paper", "ours", "band", "result"],
-    ["Target", "Consortium", "Potts.jl", "Band", "Verdict"])
+verdict_table(
+    sweeps, ["target", "paper", "ours", "band", "result"],
+    ["Target", "Consortium", "Potts.jl", "Band", "Verdict"]
+)
 
 # Figure 5 (V4), from `f5-2026-10-07/verdicts.tsv`:
 
-verdict_table(filter(r -> r["case"] in ("b", "control") && startswith(r["target"], "V4."), f5),
+verdict_table(
+    filter(r -> r["case"] in ("b", "control") && startswith(r["target"], "V4."), f5),
     ["target", "case", "paper", "ours", "band", "result"],
-    ["Target", "Case", "Consortium", "Potts.jl", "Band", "Verdict"])
+    ["Target", "Case", "Consortium", "Potts.jl", "Band", "Verdict"]
+)
 
 # The V4.2 rule was re-frozen once after the run, because the record showed that the
 # lowest f bin also holds 26 cells with 0 < f < 0.01: V4.2 now drops exactly the f = 0
@@ -760,8 +790,10 @@ Markdown.parse(s5)
 # **How to cite.** Cite the OpenVT consortium's monolayer reference model first, then
 # PottsModels at the version and commit of the records above:
 
-Markdown.parse("PottsModels $(pkgversion(PottsModels)); records at commits `30c39601`, " *
-               "`3af81ae8`, `a64ae188`, `c6ca4bc4`, `41fb2ba6` and `97c326bf`.")
+Markdown.parse(
+    "PottsModels $(pkgversion(PottsModels)); records at commits `30c39601`, " *
+        "`3af81ae8`, `a64ae188`, `c6ca4bc4`, `41fb2ba6` and `97c326bf`."
+)
 
 # | Date | Change | Reason |
 # |---|---|---|

@@ -1,7 +1,8 @@
 # Definitions of the old runtests.jl (its preamble) that other test files use.
 using Test, CorePotts, StaticArrays, Statistics, Random
 using SciMLBase: SciMLBase, ReturnCode, remake
-using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates, linear_index, shift
+using CorePotts: RNGKey, draw, uniform, bounded, stream_id, cell_entity, coordinates,
+    linear_index, shift
 
 # ---------------------------------------------------------------------------------------
 # A hand-written Graner–Glazier model (what the symbolic layer will generate).
@@ -14,8 +15,12 @@ function gg_delta_H(st, p, prop, ctx)
 end
 gg_temperature(st, p, prop, ctx) = p.T
 const GG = CPMFunction(gg_delta_H; temperature = gg_temperature)
-gg_params(T = Float64) = (; J = SMatrix{3, 3, T}(0, 16, 16, 16, 2, 11, 16, 11, 14),
-    λ = T(1), V0 = T(40), T = T(10))
+function gg_params(T = Float64)
+    return (;
+        J = SMatrix{3, 3, T}(0, 16, 16, 16, 2, 11, 16, 11, 14),
+        λ = T(1), V0 = T(40), T = T(10),
+    )
+end
 
 """Blocky initial condition with cells of `side` sites per axis and alternating kinds."""
 function blocks(dims::NTuple{N}, side; gap = 1) where {N}
@@ -55,14 +60,17 @@ function gs_delta_H(st, p, prop, ctx)
     J(a, b) = @inbounds p.J[kindidx(st, a), kindidx(st, b)]
     E(v, c) = p.λ * (v - p.V0)^2
     S(s, c) = p.λs * (s - p.S0)^2
-    return contact_delta(st.ownership, ctx, prop, J) + volume_delta(st.cell.volume, prop, E) +
-           surface_delta(st.cell.surface, prop,
+    return contact_delta(st.ownership, ctx, prop, J) +
+        volume_delta(st.cell.volume, prop, E) +
+        surface_delta(
+        st.cell.surface, prop,
         surface_change(st.ownership, ctx, prop; T = eltype(st.cell.surface)), S
     )
 end
 function gs_commit!(st, p, prop, ctx)
     commit_volume!(st, p, prop, ctx)
-    commit_surface!(st.cell.surface, prop,
+    return commit_surface!(
+        st.cell.surface, prop,
         surface_change(st.ownership, ctx, prop; T = eltype(st.cell.surface))
     )
 end
@@ -95,5 +103,9 @@ function total_H_surface(st, lat, ctx, p)
     S = brute_surface(st.ownership, lat, ctx.surface, n)
     return H + sum(p.λ * (v - p.V0)^2 for v in vol) + sum(p.λs * (s - p.S0)^2 for s in S)
 end
-surface_state(σ, kinds, lat, r; T = Float64) = initial_state(σ, kinds;
-    cell = (; surface = recompute_surface(σ, lat, relation(r, lat), length(kinds); T)))
+function surface_state(σ, kinds, lat, r; T = Float64)
+    return initial_state(
+        σ, kinds;
+        cell = (; surface = recompute_surface(σ, lat, relation(r, lat), length(kinds); T))
+    )
+end

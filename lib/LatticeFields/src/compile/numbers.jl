@@ -17,11 +17,11 @@ primitive of emitted bodies.
     powi(x, n::Int)
 
 `x^n` for an integer `n`, by squaring and multiplying, with one reciprocal for `n < 0`. No
-library `pow` is called on any backend (Base's `Float32 ^ Int` and the ROCm device libraries'
-`pow` compute in Float64), so a float or Dual `x` keeps its type. An integer `x` with `n < 0`
-gives `inv` of an integer; convert it to the compute type first. The relative error grows
-to about `(|n| - 1) * eps` against a correctly rounded power. A leaf primitive of emitted
-bodies and of Potts' generated code.
+library `pow` is called on any backend (Base's `Float32 ^ Int` and the ROCm device
+libraries' `pow` compute in Float64), so a float or Dual `x` keeps its type. An integer `x`
+with `n < 0` gives `inv` of an integer; convert it to the compute type first. The relative
+error grows to about `(|n| - 1) * eps` against a correctly rounded power. A leaf primitive
+of emitted bodies and of Potts' generated code.
 """
 @inline function powi(x, n::Int)
     m, r, b = abs(n), one(x), x
@@ -36,13 +36,18 @@ end
 """
     plurality(vals, oks)
 
-The most frequent of the values `vals[i]` whose `oks[i]` holds (a RESTRICT's `:plurality` over
-a coarse site's children); a tie goes to the smallest nonzero value, and 0 wins only when no
-nonzero value ties. A leaf primitive of emitted bodies.
+The most frequent of the values `vals[i]` whose `oks[i]` holds (a RESTRICT's `:plurality`
+over a coarse site's children); a tie goes to the smallest nonzero value, and 0 wins only
+when no nonzero value ties. A leaf primitive of emitted bodies.
 """
-@inline function plurality(vals::Tuple{T, Vararg{T}}, oks::Tuple{Bool, Vararg{Bool}}) where {T}
+@inline function plurality(
+        vals::Tuple{T, Vararg{T}}, oks::Tuple{
+            Bool, Vararg{Bool},
+        }
+    ) where {T}
     M = length(vals)
-    length(oks) == M || return zero(T)                  # (the emitter passes one flag per value)
+    # (the emitter passes one flag per value)
+    length(oks) == M || return zero(T)
     best, bc = zero(T), 0
     for j in 1:M
         # (@inbounds: `i` and `j` run over 1:M, the length of both tuples)
@@ -70,8 +75,9 @@ value_type(::Type{T}) where {T} = T
 """
     primal(x)
 
-The value of `x` with derivative parts removed: `x` for a plain number (extension for Duals).
-Values that only drive a policy (substep counts, face checks, float → integer casts) use it.
+The value of `x` with derivative parts removed: `x` for a plain number (extension for
+Duals). Values that only drive a policy (substep counts, face checks, float → integer casts)
+use it.
 """
 @inline primal(x) = x
 
@@ -124,7 +130,10 @@ type `V` (Float32, Float64, BigFloat on the host), and only the explicitly narro
 reference near 1e-16 relative in geometry. `fixed = true` (a field with a declared storage,
 `lattice_storage`): the lane holds its own type under `:state` too.
 """
-function lanetype(lane::Scalar, ::Type{V}, lanes::Symbol = :fixed, fixed::Bool = false) where {V}
+function lanetype(
+        lane::Scalar, ::Type{V}, lanes::Symbol = :fixed,
+        fixed::Bool = false
+    ) where {V}
     lanes == :state && !fixed && lane != F16 && return V
     return juliatype(lane)
 end

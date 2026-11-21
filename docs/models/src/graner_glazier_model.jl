@@ -1,7 +1,7 @@
 # The model built in docs/models/graner_glazier.jl. The page shows its fragments (the lines
 # after each `#> name` marker, up to the next marker or `#<`) and then runs the whole file;
-# lib/PottsModels/test/tutorial_models_tests.jl checks that it compiles to the same problem as
-# `PottsModels.GranerGlazier`.
+# lib/PottsModels/test/tutorial_models_tests.jl checks that it compiles to the same problem
+# as `PottsModels.GranerGlazier`.
 @potts_model CellSorting begin
     #> lattice
     @structural_parameters begin

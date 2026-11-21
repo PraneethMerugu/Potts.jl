@@ -1,7 +1,7 @@
 # The model built in docs/models/openvt.jl. The page shows its fragments (the lines after
 # each `#> name` marker, up to the next marker or `#<`) and then runs the whole file;
-# lib/PottsModels/test/tutorial_models_tests.jl checks that it compiles to the same problem as
-# `PottsModels.OpenVTGrowingMonolayer`.
+# lib/PottsModels/test/tutorial_models_tests.jl checks that it compiles to the same problem
+# as `PottsModels.OpenVTGrowingMonolayer`.
 @potts_model GrowingMonolayer begin
     #> lattice
     @structural_parameters begin
@@ -31,7 +31,8 @@
         #<
     end
     #> growth
-    @after_mcs V_target ~ ifelse(volume >= β * Pre(V_target), Pre(V_target) + A₀ / τ, Pre(V_target))
+    @after_mcs V_target ~
+        ifelse(volume >= β * Pre(V_target), Pre(V_target) + A₀ / τ, Pre(V_target))
     #> division
     @divide cells(cell) when = volume >= 2A₀, along = RandomPlane(), V_target => A₀
     #> sweep

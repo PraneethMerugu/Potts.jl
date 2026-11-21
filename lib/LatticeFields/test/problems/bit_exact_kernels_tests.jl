@@ -16,21 +16,30 @@ include("../shared/problems_bit_exact.jl")
 include("../shared/export_all.jl")
 end
 
-@testitem "generated FV kernels are bit-exact (length(dims)D K=K T=T)" setup = [LF_problems_bit_exact] tags = [:latticefields, :problems] begin
-    @testset "generated FV kernels are bit-exact ($(length(dims))D K=$K T=$T)" for (dims, K, T) in (
+@testitem "generated FV kernels are bit-exact (length(dims)D K=K T=T)" setup = [
+    LF_problems_bit_exact,
+] tags = [
+    :latticefields, :problems,
+] begin
+    @testset "generated FV kernels are bit-exact ($(length(dims))D K=$K T=$T)" for (
+            dims, K,
+            T,
+        ) in (
             ((24, 20), 4, 0), ((24, 20), 4, 3), ((24, 20), 8, 3), ((10, 9, 8), 4, 3), (
                 (10, 9, 8), 8, 0,
             ),
         )
         X, P = inputs(dims, K), speciesP(K, T)
-        one(layout; stages = LOWERING) = (
-            b = build(species(dims, K, T; layout); stages); run_species(b..., X, P, layout)
-        )
+        function one(layout; stages = LOWERING)
+            b = build(species(dims, K, T; layout); stages)
+            return run_species(b..., X, P, layout)
+        end
         ref = one(:sep)
         @test one(:slab) == ref                                           # layout
         @test one(:sep; stages = stores_last) == ref                      # store order
         @test one(:slab; stages = stores_last) == ref
-        # fusion: the planner's fused launches vs one launch per species (same order semantics)
+        # fusion: the planner's fused launches vs one launch per species (same order
+        # semantics)
         s, fused = build(species(dims, K, T; kernels = :each))
         _, split = build(species(dims, K, T; kernels = :each); fuse = false)
         @test length(split.launches) == K && length(fused.launches) < K

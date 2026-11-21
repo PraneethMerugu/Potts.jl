@@ -21,11 +21,15 @@ using Statistics: mean
     @lattice Lattice((48, 24); boundary = Periodic(), neighborhood = Moore(1))
     @energy begin
         cells(dark, light) => λ * (volume - V₀)^2
-        contacts => J[kind, neighbor_kind] + β * (kind != neighbor_kind) * (owner != 0) * (neighbor_owner != 0) * (cue + cue′) / 2
+        contacts =>
+            J[kind, neighbor_kind] +
+            β * (kind != neighbor_kind) * (owner != 0) * (neighbor_owner != 0) *
+            (cue + cue′) / 2
     end
     @sweep Metropolis(; temperature = T)
 end
-# a confluent 48×24 sheet of 4×4 cells in a checkerboard of kinds; the cue is 1 on the right half
+# a confluent 48×24 sheet of 4×4 cells in a checkerboard of kinds; the cue is 1 on the right
+# half
 function cue_gated_problem(tspan)
     σ = zeros(Int32, 48, 24)
     n = 0
@@ -35,7 +39,11 @@ function cue_gated_problem(tspan)
     end
     kinds = [isodd((c - 1) ÷ 6 + (c - 1) % 6) ? :light : :dark for c in 1:n]
     cue = [i > 24 ? 1.0 : 0.0 for i in 1:48, j in 1:24]
-    return PottsProblem(CueGatedSorting(; name = :cg), [ownership => σ, kind => kinds, :cue => cue], tspan)
+    return PottsProblem(
+        CueGatedSorting(; name = :cg), [
+            ownership => σ, kind => kinds, :cue => cue,
+        ], tspan
+    )
 end
 # fraction of unlike cell–cell bonds (von Neumann) among cell–cell bonds, per half
 function unlike_fraction(σ, kd, cols)
@@ -51,7 +59,11 @@ end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "contact sites: contact energies read site values" setup = [ContactSitesSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "contact sites: contact energies read site values" setup = [
+    ContactSitesSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "contact sites: contact energies read site values" begin
         prob = cue_gated_problem((0, 400))
         @test selfcheck(prob) < 1.0e-9
@@ -62,7 +74,8 @@ end
                 (unlike_fraction(σ, kd, 1:24), unlike_fraction(σ, kd, 25:48))
             end
             left, right = mean(first.(f)), mean(last.(f))
-            @test right < left - 0.1          # the cue-high half sorts; the cue-free half does not
+            # the cue-high half sorts; the cue-free half does not
+            @test right < left - 0.1
         end
     end
 end

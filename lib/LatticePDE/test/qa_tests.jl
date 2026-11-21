@@ -1,8 +1,10 @@
 @testsetup module LP_qa
 using Test, LatticePDE
-using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
-                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
-                           t_nounits as t, D_nounits as D
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables,
+    Differential, PDESystem,
+    System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex,
+    Shift, Pre,
+    t_nounits as t, D_nounits as D
 using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
 using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
 using DomainSets: Interval
@@ -40,7 +42,9 @@ end
     end
 end
 
-@testitem "QA: JET and AllocCheck (LatticePDE steppers)" setup = [LP_qa] tags = [:latticepde, :qa] begin
+@testitem "QA: JET and AllocCheck (LatticePDE steppers)" setup = [LP_qa] tags = [
+    :latticepde, :qa,
+] begin
     @testset "QA: JET and AllocCheck (LatticePDE steppers)" begin
         @parameters x y D = 0.01
         @variables u(..)
@@ -51,12 +55,15 @@ end
             [t, x, y],
             [u(t, x, y)],
             [D];
-            name = :qa_diff,
+            name = :qa_diff
         )
         grid = Grid((16, 16))
         prob = discretize(sys, LatticeDiscretization(grid; T = Float64))
         for alg in (ExplicitEuler(substeps = 2), BackwardEuler())
-            integ = init(prob, alg; dt = 0.05, save_start = false, save_everystep = false, save_end = false)
+            integ = init(
+                prob, alg; dt = 0.05, save_start = false,
+                save_everystep = false, save_end = false
+            )
             step!(integ)
             @test_opt target_modules = (LatticePDE,) step!(integ)
             if alg isa ExplicitEuler
@@ -68,13 +75,17 @@ end
 end
 
 # JET's error analysis of the whole package: undefined names and fields (D-298)
-@testitem "QA: JET package analysis (LatticePDE)" setup = [LP_qa] tags = [:latticepde, :qa] begin
+@testitem "QA: JET package analysis (LatticePDE)" setup = [LP_qa] tags = [
+    :latticepde,
+    :qa,
+] begin
     @testset "QA: JET package analysis (LatticePDE)" begin
         qa_jet_package(
             LatticePDE;
             locals = [
                 # assigned with the irregular domain, read only when it is set
-                r"`dop` (may be undefined|is not defined) \(discretize\.jl\)" => "assigned under the condition of its use",
+                r"`dop` (may be undefined|is not defined) \(discretize\.jl\)" =>
+                    "assigned under the condition of its use",
                 # captured by the face-rule closure; `dompred` is assigned twice
                 r"`(env|dompred)` is not defined \(discretize\.jl\)" => "boxed capture",
                 # captured by the scaled-row closures and reassigned after them

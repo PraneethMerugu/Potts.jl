@@ -9,15 +9,24 @@ const REPO = dirname(dirname(@__DIR__))
 const ASSETS = joinpath(REPO, "docs", "src", "assets", "paper_runs")
 mkpath(ASSETS)
 
-git_commit() = try
-    strip(read(`git -C $REPO rev-parse --short HEAD`, String)) *
-    (isempty(strip(read(`git -C $REPO status --porcelain -- lib src`, String))) ? "" : "-dirty")
-catch
-    "unknown"
+function git_commit()
+    return try
+        strip(read(`git -C $REPO rev-parse --short HEAD`, String)) *
+            (
+            if isempty(strip(read(`git -C $REPO status --porcelain -- lib src`, String)))
+                ""
+            else
+                "-dirty"
+            end
+        )
+    catch
+        "unknown"
+    end
 end
 
 """
-    Panel(name; encoding = CellTypeEncoding(), plot = (;), channels = u -> (), colorbar = nothing)
+    Panel(name; encoding = CellTypeEncoding(), plot = (;), channels = u -> (),
+        colorbar = nothing)
 
 One panel of a paper-run video: a `pottsplot` of every saved state with `encoding` and the
 recipe attributes `plot`. `channels(u)` returns the `RenderChannel`s the encoding needs
@@ -34,11 +43,23 @@ Base.@kwdef struct Panel
 end
 Panel(name; kw...) = Panel(; name, kw...)
 
-"""Record the saved states of `sol` as an mp4: one axis per panel, a fixed title, an MCS clock."""
-function record_run(file, sol, panels; title, framerate = 30, size = (720, 760),
-        clock = t -> "t = $t MCS", frames = eachindex(sol.u), state = nothing)
-    frame(p, i) = state === nothing ? renderframe(sol; index = i, channels = p.channels(sol.u[i])) :
-                  (u = state(sol.u[i], i); renderframe(u; mcs = sol.t[i], channels = p.channels(u)))
+"""
+Record the saved states of `sol` as an mp4: one axis per panel, a fixed title, an MCS clock.
+"""
+function record_run(
+        file, sol, panels; title, framerate = 30, size = (720, 760),
+        clock = t -> "t = $t MCS", frames = eachindex(sol.u), state = nothing
+    )
+    function frame(p, i)
+        if state === nothing
+            return renderframe(sol; index = i, channels = p.channels(sol.u[i]))
+        else
+            return (
+                u = state(sol.u[i], i);
+                renderframe(u; mcs = sol.t[i], channels = p.channels(u))
+            )
+        end
+    end
     fig = Figure(; size, fontsize = 14)
     Label(fig[0, 1:length(panels)], title; fontsize = 15, font = :bold, tellwidth = false)
     clk = Observable(clock(sol.t[first(frames)]))
@@ -69,7 +90,8 @@ function record_run(file, sol, panels; title, framerate = 30, size = (720, 760),
 end
 
 """
-    paper_run(name; prob, alg, saveat, title, panels, framerate, size, clock, frames, meta, solve_kw)
+    paper_run(name; prob, alg, saveat, title, panels, framerate, size, clock, frames, meta,
+        solve_kw)
 
 Warm up (a 2-MCS copy of `prob`), solve `prob` with `alg` saving at `saveat`, record
 `docs/src/assets/paper_runs/<name>.mp4` (`record_run`), re-encode it with ffmpeg (H.264,
@@ -78,20 +100,28 @@ CRF 28, yuv420p) when it is larger than 5 MB, and write the sidecar `<name>.toml
 `sol` and the recorded frame indices. `state(u, i)` maps saved state `i` to the state drawn
 (default: `u` itself; the Graner–Glazier run draws a T = 0 annealed copy).
 """
-function paper_run(name; prob, alg, saveat, title, panels, framerate = 30, size = (720, 760),
-        clock = t -> "t = $t MCS", frames = sol -> eachindex(sol.u), meta = Dict{String, Any}(), solve_kw = (;),
-        state = nothing)
+function paper_run(
+        name; prob, alg, saveat, title, panels, framerate = 30, size = (720, 760),
+        clock = t -> "t = $t MCS", frames = sol -> eachindex(sol.u), meta = Dict{
+            String, Any,
+        }(), solve_kw = (;),
+        state = nothing
+    )
     t0, t1 = prob.tspan
     solve(remake(prob; tspan = (t0, t0 + 2)), alg; solve_kw...)          # compile
     wall = @elapsed sol = solve(prob, alg; saveat, save_start = true, solve_kw...)
-    @info "$name: solved $(t1 - t0) MCS in $(round(wall; digits = 1)) s, $(length(sol.u)) frames"
+    @info "$name: solved $(t1 - t0) MCS in $(round(wall; digits = 1)) s, $(length(sol.u)) \
+        frames"
     mp4 = joinpath(ASSETS, "$name.mp4")
     idx = frames(sol)
     title isa Function && (title = title(sol, idx))
     meta isa Function && (meta = meta(sol, idx))
-    rec = @elapsed record_run(mp4, sol, panels; title, framerate, size, clock, frames = idx, state)
+    rec = @elapsed record_run(
+        mp4, sol, panels; title, framerate, size, clock, frames = idx, state
+    )
     reencode(mp4)
-    info = merge(run_info(name; wall, rec, mp4), Dict{String, Any}(
+    info = merge(
+        run_info(name; wall, rec, mp4), Dict{String, Any}(
             "title" => title,
             "lattice" => collect(Base.size(sol.u[1].ownership)),
             "tspan" => [t0, t1],
@@ -99,34 +129,43 @@ function paper_run(name; prob, alg, saveat, title, panels, framerate = 30, size 
             "recorded_mcs" => [sol.t[first(idx)], sol.t[last(idx)]],
             "framerate" => framerate,
             "seed" => Int(prob.seed),
-            "algorithm" => string(alg)), meta)
+            "algorithm" => string(alg)
+        ),
+        meta
+    )
     write_sidecar(name, info)
     return sol, info
 end
 
-"""Re-encode `mp4` in place with ffmpeg (H.264, CRF 28, yuv420p) when it is larger than 5 MB."""
+"""
+Re-encode `mp4` in place with ffmpeg (H.264, CRF 28, yuv420p) when it is larger than 5 MB.
+"""
 function reencode(mp4)
     if filesize(mp4) > 5 * 2^20
         tmp = joinpath(dirname(mp4), "." * basename(mp4) * ".reenc.mp4")
-        run(`$(CairoMakie.Makie.FFMPEG_jll.ffmpeg()) -v error -y -i $mp4 -c:v libx264 -crf 28 -preset slow -pix_fmt yuv420p -an $tmp`)
+        run(`$(CairoMakie.Makie.FFMPEG_jll.ffmpeg()) -v error -y -i $mp4 -c:v libx264 \
+            -crf 28 -preset slow -pix_fmt yuv420p -an $tmp`)
         mv(tmp, mp4; force = true)
     end
     return mp4
 end
 
 """The provenance entries every sidecar carries: machine, backend, times, commit, Julia."""
-run_info(name; wall, rec, mp4) = Dict{String, Any}(
-    "backend" => "CPU",
-    "cpu" => strip(Sys.cpu_info()[1].model),
-    "machine" => Sys.MACHINE,
-    "threads" => Threads.nthreads(),
-    "solve_wall_s" => round(wall; digits = 1),
-    "record_wall_s" => round(rec; digits = 1),
-    "video_mb" => round(filesize(mp4) / 2^20; digits = 2),
-    "git_commit" => git_commit(),
-    "julia" => string(VERSION),
-    "date" => string(now()),
-    "script" => "docs/paper_runs/$name.jl")
+function run_info(name; wall, rec, mp4)
+    return Dict{String, Any}(
+        "backend" => "CPU",
+        "cpu" => strip(Sys.cpu_info()[1].model),
+        "machine" => Sys.MACHINE,
+        "threads" => Threads.nthreads(),
+        "solve_wall_s" => round(wall; digits = 1),
+        "record_wall_s" => round(rec; digits = 1),
+        "video_mb" => round(filesize(mp4) / 2^20; digits = 2),
+        "git_commit" => git_commit(),
+        "julia" => string(VERSION),
+        "date" => string(now()),
+        "script" => "docs/paper_runs/$name.jl"
+    )
+end
 
 """Write the sidecar `docs/src/assets/paper_runs/<name>.toml`."""
 function write_sidecar(name, info)
@@ -138,5 +177,8 @@ function write_sidecar(name, info)
 end
 
 """The caption's provenance clause: machine, backend, threads and commit of this render."""
-rendered_on() = "Rendered on $(strip(Sys.cpu_info()[1].model)), CPU backend, " *
-                "$(Threads.nthreads() == 1 ? "one thread" : "$(Threads.nthreads()) threads"), commit $(git_commit())."
+function rendered_on()
+    return "Rendered on $(strip(Sys.cpu_info()[1].model)), CPU backend, " *
+        "$(Threads.nthreads() == 1 ? "one thread" : "$(Threads.nthreads()) threads"), \
+            commit $(git_commit())."
+end

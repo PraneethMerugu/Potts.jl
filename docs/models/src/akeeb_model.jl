@@ -1,7 +1,7 @@
 # The model built in docs/models/akeeb.jl. The page shows its fragments (the lines after
 # each `#> name` marker, up to the next marker or `#<`) and then runs the whole file;
-# lib/PottsModels/test/tutorial_models_tests.jl checks that it compiles to the same problem as
-# `PottsModels.AkeebInvasion`.
+# lib/PottsModels/test/tutorial_models_tests.jl checks that it compiles to the same problem
+# as `PottsModels.AkeebInvasion`.
 @potts_model LeaderFollowerInvasion begin
     #> lattice
     @structural_parameters begin
@@ -37,7 +37,10 @@
         #<
     end
     #> drive
-    @drive copy => ifelse((kind[new] == leader) || (kind[old] == leader), -μ * (cue[target] - cue[source]), 0.0)
+    @drive copy => ifelse(
+        (kind[new] == leader) || (kind[old] == leader), -μ *
+            (cue[target] - cue[source]), 0.0
+    )
     #> constraints
     @constraint connectivity(leader, follower)
     @constraint no_extinction
@@ -47,7 +50,8 @@
         clock ~ ifelse(Pre(clock) >= 0, Pre(clock) + 1, Pre(clock))
     end
     #> division
-    @divide cells(follower) when = (clock >= 0) && (volume > V_max) && (clock > clock_min + clock_spread * rand()),
+    @divide cells(follower) when = (clock >= 0) && (volume > V_max) &&
+        (clock > clock_min + clock_spread * rand()),
         along = RandomPlane(), V_target => Split(), clock => 0.0
     #> sweep
     @sweep Metropolis(; temperature = T)

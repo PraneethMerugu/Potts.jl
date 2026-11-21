@@ -34,17 +34,22 @@ function canonical_frame(mcs::Integer)
     for j in 13:21, i in 1:4
         owners[i, j] = RenderOwner(ObstacleSite, 2)
     end
-    geometry = RenderGeometry(dims;
-        spacing = (0.5, 0.75), origin = (-2.0, 1.0))
+    geometry = RenderGeometry(
+        dims;
+        spacing = (0.5, 0.75), origin = (-2.0, 1.0)
+    )
     provenance = RenderProvenance(
-        :visual_composition_preview, typeof(owners), :host, RenderRequest())
+        :visual_composition_preview, typeof(owners), :host, RenderRequest()
+    )
     return PottsRenderFrame(mcs, owners, cells; geometry, provenance)
 end
 
 function downstream_frame()
     shape = (36, 24)
-    spatial = RenderGeometry(shape;
-        spacing = (0.6, 0.6), origin = (0.0, -1.0))
+    spatial = RenderGeometry(
+        shape;
+        spacing = (0.6, 0.6), origin = (0.0, -1.0)
+    )
     identities = (
         RenderCellIdentity(11, 4),
         RenderCellIdentity(29, 8),
@@ -66,27 +71,34 @@ function downstream_frame()
     for j in 18:24, i in 32:36
         owner_array[i, j] = RenderOwner(ObstacleSite, 2)
     end
-    site_records = Dict(site => owner_array[site]
-        for site in CartesianIndices(shape))
+    site_records = Dict(
+        site => owner_array[site]
+            for site in CartesianIndices(shape)
+    )
     identity_records = Dict(item.identity => item for item in metadata)
     owner_records = Dict(item.identity.id => item for item in metadata)
     values = Matrix{Float64}(undef, shape)
     for j in axes(values, 2), i in axes(values, 1)
-        values[i, j] = clamp(0.05 + 0.72 * (i - 1) / (shape[1] - 1) +
-                                    0.18 * (j - 1) / (shape[2] - 1), 0, 1)
+        values[i, j] = clamp(
+            0.05 + 0.72 * (i - 1) / (shape[1] - 1) +
+                0.18 * (j - 1) / (shape[2] - 1), 0, 1
+        )
     end
     values[map(owner -> owner == RenderOwner(ObstacleSite, 2), owner_array)] .= NaN
     stream_records = Dict{Any, Any}(
         DownstreamFixture.SIGNAL_KEY => RenderChannel(
             DownstreamFixture.SIGNAL_KEY, values;
-            label = "Foreign signal", units = "a.u."),
+            label = "Foreign signal", units = "a.u."
+        ),
     )
     lineage = RenderProvenance(
         :unrelated_downstream, DownstreamFixture.ColumnarFrame,
-        :host, RenderRequest())
+        :host, RenderRequest()
+    )
     return DownstreamFixture.ColumnarFrame(
         100, shape, spatial, site_records, identity_records,
-        owner_records, stream_records, lineage)
+        owner_records, stream_records, lineage
+    )
 end
 
 frames = canonical_frame.((0, 50, 100))
@@ -101,7 +113,8 @@ all(keys -> keys == first(category_keys), category_keys) ||
     error("categorical identity keys drifted across the MCS sequence")
 assert_render_frame_conformance(foreign_frame)
 foreign_label = inspection_label(
-    foreign_frame, foreign_encoding, CartesianIndex(10, 8))
+    foreign_frame, foreign_encoding, CartesianIndex(10, 8)
+)
 occursin("Square-root signal", foreign_label) ||
     error("downstream inspection label lost the custom encoding label")
 occursin("a.u.", foreign_label) ||
@@ -110,80 +123,112 @@ occursin("a.u.", foreign_label) ||
 figure = Figure(
     size = (1600, 940),
     backgroundcolor = :white,
-    fontsize = 17,
+    fontsize = 17
 )
 
-Label(figure[0, 1:2], "MakiePotts · native recipes in a standard Makie composition";
-    fontsize = 28, font = :bold, tellwidth = false)
+Label(
+    figure[0, 1:2], "MakiePotts · native recipes in a standard Makie composition";
+    fontsize = 28, font = :bold, tellwidth = false
+)
 
 hero = GridLayout()
 figure[1, 1] = hero
-hero_axis = Axis(hero[1, 1];
+hero_axis = Axis(
+    hero[1, 1];
     title = "Canonical frame · categorical cell type",
-    xlabel = "x (μm)", ylabel = "y (μm)", aspect = DataAspect())
-hero_plot = pottsplot!(hero_axis, current_frame;
+    xlabel = "x (μm)", ylabel = "y (μm)", aspect = DataAspect()
+)
+hero_plot = pottsplot!(
+    hero_axis, current_frame;
     boundaries = true, boundary_width = 0.85,
     medium_color = :gray93, obstacle_color = :gray30,
-    boundary_color = (:black, 0.72))
-potts_legend(hero[1, 2], hero_plot;
-    title = "Cell type", framevisible = false, patchsize = (26, 18))
+    boundary_color = (:black, 0.72)
+)
+potts_legend(
+    hero[1, 2], hero_plot;
+    title = "Cell type", framevisible = false, patchsize = (26, 18)
+)
 
 foreign = GridLayout()
 figure[1, 2] = foreign
-foreign_axis = Axis(foreign[1, 1];
+foreign_axis = Axis(
+    foreign[1, 1];
     title = "Downstream frame + downstream encoding",
-    xlabel = "x (μm)", ylabel = "y (μm)", aspect = DataAspect())
-foreign_plot = pottsplot!(foreign_axis, foreign_frame;
+    xlabel = "x (μm)", ylabel = "y (μm)", aspect = DataAspect()
+)
+foreign_plot = pottsplot!(
+    foreign_axis, foreign_frame;
     encoding = foreign_encoding,
     colormap = :viridis,
     boundaries = true, boundary_width = 0.65,
     medium_color = :gray94, obstacle_color = :gray25,
-    boundary_color = (:white, 0.72), nan_color = :gray78)
-Colorbar(foreign[1, 2], foreign_plot;
-    label = "Square-root signal (a.u.)", width = 18)
+    boundary_color = (:white, 0.72), nan_color = :gray78
+)
+Colorbar(
+    foreign[1, 2], foreign_plot;
+    label = "Square-root signal (a.u.)", width = 18
+)
 
 sequence = GridLayout()
 figure[2, 1] = sequence
-Label(sequence[0, 1:3], "Stable categorical identity across Monte Carlo time";
-    fontsize = 20, font = :bold, tellwidth = false)
+Label(
+    sequence[0, 1:3], "Stable categorical identity across Monte Carlo time";
+    fontsize = 20, font = :bold, tellwidth = false
+)
 sequence_plots = PottsPlot[]
 for (column, frame) in enumerate(frames)
-    axis = Axis(sequence[1, column];
+    axis = Axis(
+        sequence[1, column];
         title = "MCS $(frame_mcs(frame))",
         xlabel = column == 2 ? "x (μm)" : "",
         ylabel = column == 1 ? "y (μm)" : "",
-        aspect = DataAspect())
-    plot = pottsplot!(axis, frame;
+        aspect = DataAspect()
+    )
+    plot = pottsplot!(
+        axis, frame;
         boundaries = true, boundary_width = 0.55,
         medium_color = :gray93, obstacle_color = :gray30,
-        boundary_color = (:black, 0.65))
+        boundary_color = (:black, 0.65)
+    )
     push!(sequence_plots, plot)
     column == 1 || hideydecorations!(axis; grid = false)
 end
 
 timeseries = GridLayout()
 figure[2, 2] = timeseries
-series_axis = Axis(timeseries[1, 1];
+series_axis = Axis(
+    timeseries[1, 1];
     title = "Ordinary Makie time series",
-    xlabel = "Monte Carlo step", ylabel = "Interface energy (a.u.)")
+    xlabel = "Monte Carlo step", ylabel = "Interface energy (a.u.)"
+)
 mcs_values = collect(0:10:100)
 energy_values = @. 78 - 0.34mcs_values + 3.2sin(mcs_values / 14)
-lines!(series_axis, mcs_values, energy_values;
-    color = :dodgerblue3, linewidth = 3, label = "Interface energy")
-scatter!(series_axis, mcs_values, energy_values;
-    color = :dodgerblue3, markersize = 7)
+lines!(
+    series_axis, mcs_values, energy_values;
+    color = :dodgerblue3, linewidth = 3, label = "Interface energy"
+)
+scatter!(
+    series_axis, mcs_values, energy_values;
+    color = :dodgerblue3, markersize = 7
+)
 current_mcs = Observable(100.0)
 current_energy = Observable(energy_values[end])
-vlines!(series_axis, lift(value -> [value], current_mcs);
+vlines!(
+    series_axis, lift(value -> [value], current_mcs);
     color = :orangered3, linewidth = 2.5, linestyle = :dash,
-    label = "Current frame")
-scatter!(series_axis, current_mcs, current_energy;
-    color = :orangered3, marker = :diamond, markersize = 15)
+    label = "Current frame"
+)
+scatter!(
+    series_axis, current_mcs, current_energy;
+    color = :orangered3, marker = :diamond, markersize = 15
+)
 xlims!(series_axis, -3, 105)
 axislegend(series_axis; position = :rt, framevisible = false)
-Label(timeseries[2, 1],
+Label(
+    timeseries[2, 1],
     lift(value -> "Linked marker · MCS $(round(Int, value))", current_mcs);
-    tellwidth = false, color = :gray35)
+    tellwidth = false, color = :gray35
+)
 
 colsize!(figure.layout, 1, Relative(0.61))
 colsize!(figure.layout, 2, Relative(0.39))
@@ -196,7 +241,8 @@ output = only(ARGS)
 save(output, figure; px_per_unit = 2)
 
 expected_bounds = Makie.Rect3d(
-    Makie.Point3d(-2.0, 1.0, 0), Makie.Vec3d(24.0, 24.0, 0))
+    Makie.Point3d(-2.0, 1.0, 0), Makie.Vec3d(24.0, 24.0, 0)
+)
 Makie.data_limits(hero_plot) ≈ expected_bounds ||
     error("canonical physical bounds changed during Visual Audit B")
 all(plot -> Makie.data_limits(plot) ≈ expected_bounds, sequence_plots) ||

@@ -1,9 +1,10 @@
 # The refusal matrix of the system container: every SciMLBase problem
 # constructor MTKBase extends, plus `JumpProblem`, in 3 plain argument shapes, `{true}` and
 # `{true, FullSpecialize}` (16 × 5 = 80 routes), and 19 MTK paths, on one `PottsSystem`.
-# Each route is REFUSED (an `ArgumentError` naming `PottsProblem`), LOUD (any other exception)
-# or BUILT (returns). Included by system_container_tests.jl and by its negative-control subprocess
-# (test/system_refusal_negctl.jl), which runs it with the refusal methods deleted.
+# Each route is REFUSED (an `ArgumentError` naming `PottsProblem`), LOUD (any other
+# exception) or BUILT (returns). Included by system_container_tests.jl and by its
+# negative-control subprocess (test/system_refusal_negctl.jl), which runs it with the
+# refusal methods deleted.
 module RefusalMatrix
 
 using Potts
@@ -12,8 +13,10 @@ const SB = Potts.SciMLBase
 
 const CONSTRUCTORS = Any[
     SB.ODEProblem, SB.NonlinearProblem, SB.SteadyStateProblem, SB.SDEProblem, SB.DAEProblem,
-    Potts.JumpProcesses.JumpProblem, SB.OptimizationProblem, SB.DDEProblem, SB.SDDEProblem, SB.BVProblem,
-    SB.DiscreteProblem, SB.ImplicitDiscreteProblem, SB.NonlinearLeastSquaresProblem, SB.LinearProblem,
+    Potts.JumpProcesses.JumpProblem, SB.OptimizationProblem, SB.DDEProblem, SB.SDDEProblem,
+    SB.BVProblem,
+    SB.DiscreteProblem, SB.ImplicitDiscreteProblem, SB.NonlinearLeastSquaresProblem,
+    SB.LinearProblem,
     SB.IntervalNonlinearProblem, SB.HomotopyProblem,
 ]
 
@@ -27,7 +30,10 @@ function classify(f)
     end
 end
 
-"""`label => class` for every route on `W`; `other` is an MTK `System` to compose and extend with."""
+"""
+`label => class` for every route on `W`; `other` is an MTK `System` to compose and extend
+with.
+"""
 function matrix(W, other)
     out = Pair{String, Symbol}[]
     for P in CONSTRUCTORS
@@ -39,7 +45,10 @@ function matrix(W, other)
             push!(out, "$n$a" => classify(() -> P(args...)))
         end
         push!(out, "$n{true}" => classify(() -> P{true}(W, [], (0.0, 1.0))))
-        push!(out, "$n{true,FullSpecialize}" => classify(() -> P{true, SB.FullSpecialize}(W, [], (0.0, 1.0))))
+        push!(
+            out, "$n{true,FullSpecialize}" =>
+                classify(() -> P{true, SB.FullSpecialize}(W, [], (0.0, 1.0)))
+        )
     end
     t = Potts.t
     x = first(MTKB.unknowns(other))
@@ -51,9 +60,11 @@ function matrix(W, other)
         "complete(W; flatten = false)" => () -> MTKB.complete(W; flatten = false),
         "structural_simplify(W)" => () -> MTKB.structural_simplify(W),
         "InitializationProblem(W, 0.0, [])" => () -> MTKB.InitializationProblem(W, 0.0, []),
-        "InitializationProblem{true}(W, 0.0, [])" => () -> MTKB.InitializationProblem{true}(W, 0.0, []),
+        "InitializationProblem{true}(W, 0.0, [])" =>
+            () -> MTKB.InitializationProblem{true}(W, 0.0, []),
         "compose(System, [W])" => () -> MTKB.compose(empty(), [W]),
-        "mtkcompile(compose(System, [W]))" => () -> MTKB.mtkcompile(MTKB.compose(empty(), [W])),
+        "mtkcompile(compose(System, [W]))" =>
+            () -> MTKB.mtkcompile(MTKB.compose(empty(), [W])),
         "compose(W, [System])" => () -> MTKB.compose(W, [other]),
         "compose(W, W)" => () -> MTKB.compose(W, W),
         "extend(System, W)" => () -> MTKB.extend(empty(), W),
@@ -72,31 +83,54 @@ function matrix(W, other)
 end
 
 """`label => class` for further argument shapes on `W` (a symbol, a string, a symbolic
-variable after the system; a steady-state call without `tspan`): every one must be REFUSED."""
+variable after the system; a steady-state call without `tspan`): every one must be
+REFUSED."""
 function shapes(W)
     x = first(MTKB.unknowns(Potts.inner(W)) ∪ MTKB.parameters(Potts.inner(W)))
     out = Pair{String, Symbol}[]
     for P in CONSTRUCTORS
         n = nameof(P)
-        for (a, arg) in ((":x", :x), ("\"s\"", "s"), ("'c'", 'c'), ("identity", identity), ("x", x))
+        for (a, arg) in (
+                (":x", :x), ("\"s\"", "s"), ("'c'", 'c'), ("identity", identity), (
+                    "x", x,
+                ),
+            )
             push!(out, "$n($a, (0,1))" => classify(() -> P(W, arg, (0.0, 1.0))))
             push!(out, "$n{true}($a, (0,1))" => classify(() -> P{true}(W, arg, (0.0, 1.0))))
-            push!(out, "$n{true,FullSpecialize}($a, (0,1))" => classify(() -> P{true, SB.FullSpecialize}(W, arg, (0.0, 1.0))))
+            push!(
+                out,
+                "$n{true,FullSpecialize}($a, (0,1))" =>
+                    classify(() -> P{true, SB.FullSpecialize}(W, arg, (0.0, 1.0)))
+            )
         end
     end
-    push!(out, "SteadyStateProblem{true}(:x)" => classify(() -> SB.SteadyStateProblem{true}(W, :x)))
+    push!(
+        out, "SteadyStateProblem{true}(:x)" =>
+            classify(() -> SB.SteadyStateProblem{true}(W, :x))
+    )
     push!(out, "SteadyStateProblem(:x)" => classify(() -> SB.SteadyStateProblem(W, :x)))
     return out
 end
 
-"""The refusal methods on `PottsSystem` (plain, `{iip}` and `{iip, spec}` forms of every constructor)."""
-refusal_methods() = unique(
-    [
-        m for P in CONSTRUCTORS
-            for Q in (P, P{true}, P{true, SB.FullSpecialize}, P{true, SB.FunctionWrapperSpecialize}) for m in methods(Q)
-            if m.module === Potts && any(==(PottsSystem), Base.unwrap_unionall(m.sig).parameters)
-    ]
-)
+"""
+The refusal methods on `PottsSystem` (plain, `{iip}` and `{iip, spec}` forms of every
+constructor).
+"""
+function refusal_methods()
+    return unique(
+        [
+            m for P in CONSTRUCTORS
+                for Q in (
+                    P, P{true}, P{true, SB.FullSpecialize}, P{
+                        true, SB.FunctionWrapperSpecialize,
+                    },
+                )
+                for m in methods(Q)
+                if m.module === Potts &&
+                any(==(PottsSystem), Base.unwrap_unionall(m.sig).parameters)
+        ]
+    )
+end
 
 tally(m) = Dict(c => count(p -> last(p) === c, m) for c in (:REFUSED, :LOUD, :BUILT))
 built(m) = [first(p) for p in m if last(p) === :BUILT]

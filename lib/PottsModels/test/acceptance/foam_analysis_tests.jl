@@ -35,7 +35,8 @@
 #       values (Vector{Int}), `ρ` their fractions. Empty input is an ArgumentError.
 #   central_moment(x, m = 2)
 #       μ_m ≡ Σ_v ρ(v)(v − ⟨v⟩)^m (04b p.5823) = (1/N) Σ (x − x̄)^m, the population moment.
-#   topology_moments(σ, lat; neighborhood = VonNeumann(1)) -> (; mean_n, mu2_n, mean_a, mu2_a)
+#   topology_moments(σ, lat; neighborhood = VonNeumann(1)) -> (; mean_n, mu2_n, mean_a,
+#       mu2_a)
 #       ⟨n⟩, μ2(n), ⟨a⟩, μ2(a) over the bubbles that own at least one site (an id with no
 #       site is not a bubble); a in sites, n from side_counts.
 #   power_spectrum(x; dt = 1) -> (; f, S)
@@ -70,7 +71,8 @@
 #      cannot be variances in sites²; areas here are in sites and any rescaling is a
 #      `04_foam_tests.jl` calibration.
 #  (d) A-15: three units are offered; `:pairs` matches the even-valued bars, `:t1`'s halves
-#      match the half-integers of the Fig. 5 inset. The choice stays a `04_foam_tests.jl` calibration.
+#      match the half-integers of the Fig. 5 inset. The choice stays a `04_foam_tests.jl`
+#      calibration.
 #  (e) The yield strain follows the paper's definition (first T1 avalanche), not the yield
 #      point of a stress–strain curve; φ ("Stress", Fig. 11(c)) is not an input.
 #
@@ -86,13 +88,22 @@ pic(rows) = (Y = length(rows); [rows[Y - y + 1][x] for x in eachindex(rows[1]), 
 # An L×L tiling of w×w bricks; odd brick rows (0-based, from y = 1) shifted by `offset` in x
 # with wrap ("a brick wall arranged in common bond", 04b p.5823, for offset = w ÷ 2; a plain
 # square grid for offset = 0). Brick row r, column c has id r·(L ÷ w) + c + 1.
-bricks(L, w; offset = w ÷ 2) =
-    [(r = (y - 1) ÷ w; r * (L ÷ w) + mod(x - 1 - (isodd(r) ? offset : 0), L) ÷ w + 1) for x in 1:L, y in 1:L]
+function bricks(L, w; offset = w ÷ 2)
+    return [
+        (
+            r = (y - 1) ÷ w;
+            r * (L ÷ w) + mod(x - 1 - (isodd(r) ? offset : 0), L) ÷ w + 1
+        )
+            for x in 1:L, y in 1:L
+    ]
+end
 # Independent φ oracle: explicit offset lists, each unordered pair once (offsets o > 0
 # lexicographically), wrap on periodic axes, pairs leaving a closed axis skipped.
 const FOAM_ANALYSIS_VN = ((1, 0), (0, 1), (-1, 0), (0, -1))
 const FOAM_ANALYSIS_N4 = (
-    (1, 0), (0, 1), (-1, 0), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1), (2, 0), (0, 2), (-2, 0),
+    (1, 0), (0, 1), (-1, 0), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1), (2, 0), (0, 2), (
+        -2, 0,
+    ),
     (0, -2), (1, 2), (2, 1), (-1, 2), (2, -1), (1, -2), (-2, 1), (-1, -2), (-2, -1),
 )
 function phi(σ, offsets, periodic)
@@ -152,30 +163,39 @@ end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "foam analysis: surface" setup = [FoamAnalysisSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "foam analysis: surface" setup = [FoamAnalysisSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
     # wrong rule
     @testset "foam analysis: surface" begin
         for name in (
-                :stored_energy, :side_counts, :contact_changes, :t1_events, :topology_distribution, :central_moment,
-                :topology_moments, :power_spectrum, :spectral_exponent, :mean_t1, :yield_strain,
+                :stored_energy, :side_counts, :contact_changes, :t1_events,
+                :topology_distribution, :central_moment,
+                :topology_moments, :power_spectrum, :spectral_exponent, :mean_t1,
+                :yield_strain,
             )
             @test isdefined(FoamAnalysis, name) && Base.ispublic(FoamAnalysis, name)
         end
     end
 end
 
-@testitem "foam analysis: hexagonal foam, every bubble n = 6, μ2(n) = 0" setup = [FoamAnalysisSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "foam analysis: hexagonal foam, every bubble n = 6, μ2(n) = 0" setup = [
+    FoamAnalysisSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # Neighbour lists and n on hexagonal (brick-wall) foams
-    # ---------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     @testset "foam analysis: hexagonal foam, every bubble n = 6, μ2(n) = 0" begin
-        # 64², 16² bricks in common bond, periodic on both axes: 4 rows of 4. Every brick meets
-        # its two row neighbours and two bricks above and two below (offset 8 = half a brick,
-        # so no corner-only contacts), all distinct: n = 6.
+        # 64², 16² bricks in common bond, periodic on both axes: 4 rows of 4. Every brick
+        # meets its two row neighbours and two bricks above and two below (offset 8 = half a
+        # brick, so no corner-only contacts), all distinct: n = 6.
         lat = Lattice((64, 64); boundary = (Periodic(), Periodic()))
         σ = bricks(64, 16)
         g = FoamAnalysis.cell_graph(σ, lat)
-        @test g[1] == [2, 4, 5, 8, 13, 16]       # row 0 col 0: 4, 2 (row); 5, 8 (row 1 above, wrapped); 13, 16 (row 3 below)
+        # row 0 col 0: 4, 2 (row); 5, 8 (row 1 above, wrapped); 13, 16 (row 3 below)
+        @test g[1] == [2, 4, 5, 8, 13, 16]
         n = FoamAnalysis.side_counts(σ, lat)
         @test n == fill(6, 16) && n == length.(g)
         @test FoamAnalysis.topology_distribution(n) == (n = [6], ρ = [1.0])
@@ -184,8 +204,8 @@ end
         @test m.mean_n == 6 && m.mu2_n == 0 && m.mean_a == 256 && m.mu2_a == 0
         # Moore(1) sees the same six: the half-brick offset leaves no corner-only contacts
         @test FoamAnalysis.side_counts(σ, lat; neighborhood = Moore(1)) == fill(6, 16)
-        # control: a plain square grid (no offset) has n = 4 under VonNeumann(1) but n = 8 under
-        # Moore(1) (corner contacts), the inflation spec §2.8 warns about
+        # control: a plain square grid (no offset) has n = 4 under VonNeumann(1) but n = 8
+        # under Moore(1) (corner contacts), the inflation spec §2.8 warns about
         sq = bricks(64, 16; offset = 0)
         @test FoamAnalysis.side_counts(sq, lat) == fill(4, 16)
         @test FoamAnalysis.side_counts(sq, lat; neighborhood = Moore(1)) == fill(8, 16)
@@ -193,21 +213,27 @@ end
     end
 end
 
-@testitem "foam analysis: the paper's 256² ordered foam (periodic x, closed y)" setup = [FoamAnalysisSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "foam analysis: the paper's 256² ordered foam (periodic x, closed y)" setup = [
+    FoamAnalysisSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "foam analysis: the paper's 256² ordered foam (periodic x, closed y)" begin
         σ = bricks(256, 16)                 # 16 rows × 16 bricks, ids 1:256
         n = FoamAnalysis.side_counts(σ, FOAM)
         rows = [(id - 1) ÷ 16 for id in 1:256]
         @test all(n[id] == 6 for id in 1:256 if 0 < rows[id] < 15)      # interior: hexagons
-        @test all(n[id] == 4 for id in 1:256 if rows[id] in (0, 15))     # boundary rows: 4 (the wall is not a side)
+        # boundary rows: 4 (the wall is not a side)
+        @test all(n[id] == 4 for id in 1:256 if rows[id] in (0, 15))
         g = FoamAnalysis.cell_graph(σ, FOAM)
-        # across the x seam: brick 16 (row 0, x 241:256) touches brick 1 (x 1:16) through the
-        # wrap, and bricks 31 (x 233:248) and 32 (x 249:256 ∪ 1:8, itself wrapped) above
+        # across the x seam: brick 16 (row 0, x 241:256) touches brick 1 (x 1:16) through
+        # the wrap, and bricks 31 (x 233:248) and 32 (x 249:256 ∪ 1:8, itself wrapped) above
         @test g[16] == [1, 15, 31, 32]
         @test g[32] == [1, 16, 17, 31, 33, 48]
         @test g[1] == [2, 16, 17, 32]
         # ρ(n) and μ2(n): 32 four-sided, 224 six-sided; ⟨n⟩ = 5.75,
-        # μ2(n) = (32·1.75² + 224·0.25²)/256 = (98 + 14)/256 = 7/16 (paper Fig. 11(c): ≈ 0.437)
+        # μ2(n) = (32·1.75² + 224·0.25²)/256 = (98 + 14)/256 = 7/16 (paper Fig. 11(c): ≈
+        #     0.437)
         @test FoamAnalysis.topology_distribution(n) == (n = [4, 6], ρ = [0.125, 0.875])
         m = FoamAnalysis.topology_moments(σ, FOAM)
         @test m.mean_n == 5.75
@@ -219,11 +245,18 @@ end
         @test gw[16] == [15, 31, 32] && gw[1] == [2, 17, 32]
         nw = FoamAnalysis.side_counts(σ, NOWRAP)
         @test nw[16] == 3 && nw[1] == 3 && nw != n
-        @test !isapprox(FoamAnalysis.topology_moments(σ, NOWRAP).mu2_n, 7 / 16; atol = 1.0e-3)
+        @test !isapprox(
+            FoamAnalysis.topology_moments(σ, NOWRAP).mu2_n, 7 / 16;
+            atol = 1.0e-3
+        )
     end
 end
 
-@testitem "foam analysis: ρ(n) and μ_m on known configurations" setup = [FoamAnalysisSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "foam analysis: ρ(n) and μ_m on known configurations" setup = [
+    FoamAnalysisSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "foam analysis: ρ(n) and μ_m on known configurations" begin
         # n = 4, 5, 5, 6, 6, 6, 7, 7: ρ = 1/8, 2/8, 3/8, 2/8; ⟨n⟩ = 46/8 = 5.75;
         # μ2 = (1.75² + 2·0.75² + 3·0.25² + 2·1.25²)/8 = 7.5/8 = 0.9375;
@@ -232,7 +265,8 @@ end
         d = FoamAnalysis.topology_distribution(n)
         @test d.n == [4, 5, 6, 7] && d.ρ ≈ [1, 2, 3, 2] ./ 8
         @test sum(d.ρ) ≈ 1
-        @test FoamAnalysis.central_moment(n) ≈ 0.9375 && FoamAnalysis.central_moment(n, 2) ≈ 0.9375
+        @test FoamAnalysis.central_moment(n) ≈ 0.9375 &&
+            FoamAnalysis.central_moment(n, 2) ≈ 0.9375
         @test FoamAnalysis.central_moment(n, 3) ≈ -0.28125
         # the same moment written as Σ ρ(n)(n − ⟨n⟩)² from the distribution
         nbar = sum(d.n .* d.ρ)
@@ -257,53 +291,66 @@ end
     end
 end
 
-@testitem "foam analysis: stored energy φ (Eq. 8)" setup = [FoamAnalysisSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "foam analysis: stored energy φ (Eq. 8)" setup = [FoamAnalysisSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # φ, Eq. (8)
-    # ---------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     @testset "foam analysis: stored energy φ (Eq. 8)" begin
         # Two halves of a 16×16 lattice (x ≤ 8 → 1). A straight vertical wall crossed by the
-        # VonNeumann(1) shell: 16 pairs. By NeighborOrder(4) (offsets with dx > 0: (1,0), (1,±1),
-        # (2,0), (1,±2), (2,±1)): Σ dx·(16 − |dy|) = 16 + 2·15 + 2·16 + 2·14 + 4·15 = 166 with y
-        # closed (11L − 10), 11·16 = 176 with y periodic.
+        # VonNeumann(1) shell: 16 pairs. By NeighborOrder(4) (offsets with dx > 0: (1,0),
+        # (1,±1), (2,0), (1,±2), (2,±1)): Σ dx·(16 − |dy|) = 16 + 2·15 + 2·16 + 2·14 + 4·15
+        # = 166 with y closed (11L − 10), 11·16 = 176 with y periodic.
         σ = [x <= 8 ? 1 : 2 for x in 1:16, y in 1:16]
-        foam = Lattice((16, 16); boundary = (Periodic(), Closed()))     # two walls: x 8|9 and the seam 16|1
+        # two walls: x 8|9 and the seam 16|1
+        foam = Lattice((16, 16); boundary = (Periodic(), Closed()))
         nowrap = Lattice((16, 16); boundary = (Closed(), Closed()))     # one wall
         torus = Lattice((16, 16); boundary = (Periodic(), Periodic()))
         @test FoamAnalysis.stored_energy(σ, foam; neighborhood = VonNeumann(1)) == 32
         @test FoamAnalysis.stored_energy(σ, nowrap; neighborhood = VonNeumann(1)) == 16
-        @test FoamAnalysis.stored_energy(σ, foam) == 332                       # default: NeighborOrder(4)
+        # default: NeighborOrder(4)
+        @test FoamAnalysis.stored_energy(σ, foam) == 332
         @test FoamAnalysis.stored_energy(σ, nowrap) == 166
         @test FoamAnalysis.stored_energy(σ, torus) == 352
         @test FoamAnalysis.stored_energy(σ, foam; θ = 2) == 664
         @test FoamAnalysis.stored_energy(fill(7, 16, 16), foam) == 0
-        # independent oracle on a random 12×10 foam (ids 1:5): the brute-force pair count, each
-        # unordered pair once
+        # independent oracle on a random 12×10 foam (ids 1:5): the brute-force pair count,
+        # each unordered pair once
         rng = StableRNG(0x64b2)
         r = rand(rng, 1:5, 12, 10)
         lat = Lattice((12, 10); boundary = (Periodic(), Closed()))
         @test FoamAnalysis.stored_energy(r, lat) == phi(r, FOAM_ANALYSIS_N4, (true, false))
-        @test FoamAnalysis.stored_energy(r, lat; neighborhood = VonNeumann(1)) == phi(r, FOAM_ANALYSIS_VN, (true, false))
-        # negative controls: the oracle without the wrap, and the ordered-pair (double) count,
-        # are different numbers and would be caught
+        @test FoamAnalysis.stored_energy(r, lat; neighborhood = VonNeumann(1)) ==
+            phi(r, FOAM_ANALYSIS_VN, (true, false))
+        # negative controls: the oracle without the wrap, and the ordered-pair (double)
+        # count, are different numbers and would be caught
         @test phi(r, FOAM_ANALYSIS_N4, (false, false)) != FoamAnalysis.stored_energy(r, lat)
-        @test 2 * phi(r, FOAM_ANALYSIS_N4, (true, false)) != FoamAnalysis.stored_energy(r, lat)
+        @test 2 * phi(r, FOAM_ANALYSIS_N4, (true, false)) !=
+            FoamAnalysis.stored_energy(r, lat)
         # the ordered 256² foam: interior hexagonal walls, wrap included
         b = bricks(256, 16)
         @test FoamAnalysis.stored_energy(b, FOAM) == phi(b, FOAM_ANALYSIS_N4, (true, false))
-        @test FoamAnalysis.stored_energy(b, FOAM; neighborhood = VonNeumann(1)) == phi(b, FOAM_ANALYSIS_VN, (true, false))
+        @test FoamAnalysis.stored_energy(b, FOAM; neighborhood = VonNeumann(1)) ==
+            phi(b, FOAM_ANALYSIS_VN, (true, false))
     end
 end
 
-@testitem "foam analysis: one scripted T1 is one T1 in every unit" setup = [FoamAnalysisSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "foam analysis: one scripted T1 is one T1 in every unit" setup = [
+    FoamAnalysisSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "foam analysis: one scripted T1 is one T1 in every unit" begin
         lat = Lattice((6, 6); boundary = (Closed(), Closed()))
         g0 = FoamAnalysis.cell_graph(BEFORE, lat)
         g1 = FoamAnalysis.cell_graph(AFTER, lat)
-        @test g0 == [[2, 3, 4], [1, 3, 4], [1, 2], [1, 2]]               # the oracle, by hand
+        # the oracle, by hand
+        @test g0 == [[2, 3, 4], [1, 3, 4], [1, 2], [1, 2]]
         @test g1 == [[3, 4], [3, 4], [1, 2, 4], [1, 2, 3]]
         @test FoamAnalysis.contact_changes(g0, g1) == (lost = [(1, 2)], gained = [(3, 4)])
-        @test FoamAnalysis.t1_events(g0, g1) == 1                               # default unit :t1
+        # default unit :t1
+        @test FoamAnalysis.t1_events(g0, g1) == 1
         @test FoamAnalysis.t1_events(g0, g1; unit = :t1) == 1
         @test FoamAnalysis.t1_events(g0, g1; unit = :pairs) == 2
         @test FoamAnalysis.t1_events(g0, g1; unit = :bubbles) == 4
@@ -315,36 +362,47 @@ end
             @test FoamAnalysis.t1_events(g0, g0; unit = u) == 0
             @test FoamAnalysis.t1_events(g1, deepcopy(g1); unit = u) == 0
         end
-        @test FoamAnalysis.contact_changes(g0, g0) == (lost = Tuple{Int, Int}[], gained = Tuple{Int, Int}[])
+        @test FoamAnalysis.contact_changes(g0, g0) ==
+            (lost = Tuple{Int, Int}[], gained = Tuple{Int, Int}[])
         @test_throws ArgumentError FoamAnalysis.t1_events(g0, g1; unit = :events)
 
         # Two independent T1s side by side (the second with ids 5:8) on 12×6: 2, 4, 8. The
         # contacts across the join (3–7, 2–5, 4–8) are the same before and after.
-        two(a) = vcat(a, a .+ 4)                                         # σ[x, y]: x is the first axis
+        # σ[x, y]: x is the first axis
+        two(a) = vcat(a, a .+ 4)
         lat2 = Lattice((12, 6); boundary = (Closed(), Closed()))
         h0 = FoamAnalysis.cell_graph(two(BEFORE), lat2)
         h1 = FoamAnalysis.cell_graph(two(AFTER), lat2)
-        @test FoamAnalysis.contact_changes(h0, h1) == (lost = [(1, 2), (5, 6)], gained = [(3, 4), (7, 8)])
+        @test FoamAnalysis.contact_changes(h0, h1) ==
+            (lost = [(1, 2), (5, 6)], gained = [(3, 4), (7, 8)])
         @test FoamAnalysis.t1_events(h0, h1; unit = :t1) == 2
         @test FoamAnalysis.t1_events(h0, h1; unit = :pairs) == 4
         @test FoamAnalysis.t1_events(h0, h1; unit = :bubbles) == 8
 
-        # A T1 through a transient 4-fold vertex, as two per-MCS steps (hand-written lists): the
-        # 1–2 contact goes first, the 3–4 contact comes one MCS later. Each step is half a T1
-        # in :t1 (the half-integers of the Fig. 5 inset), one pair change, two bubbles.
+        # A T1 through a transient 4-fold vertex, as two per-MCS steps (hand-written lists):
+        # the 1–2 contact goes first, the 3–4 contact comes one MCS later. Each step is half
+        # a T1 in :t1 (the half-integers of the Fig. 5 inset), one pair change, two bubbles.
         mid = [[3, 4], [3, 4], [1, 2], [1, 2]]
-        @test FoamAnalysis.contact_changes(g0, mid) == (lost = [(1, 2)], gained = Tuple{Int, Int}[])
-        @test FoamAnalysis.t1_events(g0, mid) == 0.5 && FoamAnalysis.t1_events(mid, g1) == 0.5
-        @test FoamAnalysis.t1_events(g0, mid; unit = :pairs) == 1 && FoamAnalysis.t1_events(mid, g1; unit = :bubbles) == 2
-        @test FoamAnalysis.t1_events(g0, mid) + FoamAnalysis.t1_events(mid, g1) == FoamAnalysis.t1_events(g0, g1)
+        @test FoamAnalysis.contact_changes(g0, mid) ==
+            (lost = [(1, 2)], gained = Tuple{Int, Int}[])
+        @test FoamAnalysis.t1_events(g0, mid) == 0.5 &&
+            FoamAnalysis.t1_events(mid, g1) == 0.5
+        @test FoamAnalysis.t1_events(g0, mid; unit = :pairs) == 1 &&
+            FoamAnalysis.t1_events(mid, g1; unit = :bubbles) == 2
+        @test FoamAnalysis.t1_events(g0, mid) + FoamAnalysis.t1_events(mid, g1) ==
+            FoamAnalysis.t1_events(g0, g1)
     end
 end
 
-@testitem "foam analysis: T1 detection across the periodic x seam" setup = [FoamAnalysisSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "foam analysis: T1 detection across the periodic x seam" setup = [
+    FoamAnalysisSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "foam analysis: T1 detection across the periodic x seam" begin
         # The scripted T1 inside an 8-wide strip with a fifth bubble in columns 7:8, then
-        # shifted by 4 in x so the T1 straddles the seam. On the periodic-x lattice, shifting is
-        # a symmetry: the same one T1.
+        # shifted by 4 in x so the T1 straddles the seam. On the periodic-x lattice,
+        # shifting is a symmetry: the same one T1.
         pad(a) = vcat(a, fill(5, 2, 6))
         s0 = circshift(pad(BEFORE), (4, 0))
         s1 = circshift(pad(AFTER), (4, 0))
@@ -352,27 +410,38 @@ end
         g0, g1 = FoamAnalysis.cell_graph(s0, foam), FoamAnalysis.cell_graph(s1, foam)
         @test g0[5] == g1[5] == [1, 2, 3, 4]
         @test FoamAnalysis.contact_changes(g0, g1) == (lost = [(1, 2)], gained = [(3, 4)])
-        @test FoamAnalysis.t1_events(g0, g1) == 1 && FoamAnalysis.t1_events(g0, g1; unit = :bubbles) == 4
-        # The 6-wide pictures themselves on a periodic-x lattice: 1 and 2 still meet across the
-        # seam after the swap, so only the 3–4 contact is new (half a T1). Ignoring the wrap
-        # (closed x) reports a full T1: the wrong rule changes the answer.
+        @test FoamAnalysis.t1_events(g0, g1) == 1 &&
+            FoamAnalysis.t1_events(g0, g1; unit = :bubbles) == 4
+        # The 6-wide pictures themselves on a periodic-x lattice: 1 and 2 still meet across
+        # the seam after the swap, so only the 3–4 contact is new (half a T1). Ignoring the
+        # wrap (closed x) reports a full T1: the wrong rule changes the answer.
         w = Lattice((6, 6); boundary = (Periodic(), Closed()))
         gw0, gw1 = FoamAnalysis.cell_graph(BEFORE, w), FoamAnalysis.cell_graph(AFTER, w)
-        @test FoamAnalysis.contact_changes(gw0, gw1) == (lost = Tuple{Int, Int}[], gained = [(3, 4)])
+        @test FoamAnalysis.contact_changes(gw0, gw1) ==
+            (lost = Tuple{Int, Int}[], gained = [(3, 4)])
         @test FoamAnalysis.t1_events(gw0, gw1) == 0.5
         c = Lattice((6, 6); boundary = (Closed(), Closed()))
-        @test FoamAnalysis.t1_events(FoamAnalysis.cell_graph(BEFORE, c), FoamAnalysis.cell_graph(AFTER, c)) == 1
+        @test FoamAnalysis.t1_events(
+            FoamAnalysis.cell_graph(BEFORE, c),
+            FoamAnalysis.cell_graph(AFTER, c)
+        ) ==
+            1
     end
 end
 
-@testitem "foam analysis: power spectrum (Eq. 9) of signals with known spectra" setup = [FoamAnalysisSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "foam analysis: power spectrum (Eq. 9) of signals with known spectra" setup = [
+    FoamAnalysisSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "foam analysis: power spectrum (Eq. 9) of signals with known spectra" begin
         L = 4096
         t = 0:(L - 1)
         # a pure tone at bin 64 with amplitude 3: S_64 = 9L/4, every other bin ≈ 0
         x = 3 .* cos.(2π * 64 .* t ./ L)
         P = FoamAnalysis.power_spectrum(x)
-        @test P.f ≈ (1:(L ÷ 2)) ./ L                                    # cycles per sample, up to Nyquist 0.5
+        # cycles per sample, up to Nyquist 0.5
+        @test P.f ≈ (1:(L ÷ 2)) ./ L
         @test length(P.S) == L ÷ 2 && P.f[end] == 0.5
         @test argmax(P.S) == 64
         @test P.S[64] ≈ 9L / 4 rtol = 1.0e-9
@@ -394,7 +463,8 @@ end
             a = (k ./ L) .^ (-α / 2)
             S = FoamAnalysis.power_spectrum(synth(L, a, ϕ))
             @test S.S[k] ≈ L .* a .^ 2 ./ 4 rtol = 1.0e-6
-            @test FoamAnalysis.spectral_exponent(S.f, S.S, (1.0e-3, 1.0e-1)) ≈ α atol = 1.0e-6
+            @test FoamAnalysis.spectral_exponent(S.f, S.S, (1.0e-3, 1.0e-1)) ≈
+                α atol = 1.0e-6
         end
         # white noise is flat; its running sum (a random walk) is f^−2 (the V13 exclusion)
         w = randn(StableRNG(3), 2^14)
@@ -403,16 +473,23 @@ end
         Sr = FoamAnalysis.power_spectrum(cumsum(w))
         @test 1.8 < FoamAnalysis.spectral_exponent(Sr.f, Sr.S, (1.0e-3, 1.0e-1)) < 2.2
         # the fit uses only the bins in range: a tone outside it does not move α
-        Sp = FoamAnalysis.power_spectrum(synth(L, (k ./ L) .^ (-0.5), ϕ) .+ 100 .* cos.(2π * 1500 .* t ./ L))
+        Sp = FoamAnalysis.power_spectrum(
+            synth(L, (k ./ L) .^ (-0.5), ϕ) .+
+                100 .* cos.(2π * 1500 .* t ./ L)
+        )
         @test FoamAnalysis.spectral_exponent(Sp.f, Sp.S, (1.0e-3, 1.0e-1)) ≈ 1 atol = 1.0e-6
         @test_throws ArgumentError FoamAnalysis.spectral_exponent(P.f, P.S, (0.3, 0.30001))
     end
 end
 
-@testitem "foam analysis: N̄, T1s per bubble per unit shear" setup = [FoamAnalysisSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "foam analysis: N̄, T1s per bubble per unit shear" setup = [
+    FoamAnalysisSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # N̄ and the yield strain
-    # ---------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     @testset "foam analysis: N̄, T1s per bubble per unit shear" begin
         @test FoamAnalysis.mean_t1([0, 2, 0, 4], 4, 0.5) == 3.0      # 6 / (4 · 0.5)
         @test FoamAnalysis.mean_t1(zeros(Int, 10), 256, 2) == 0
@@ -422,26 +499,37 @@ end
     end
 end
 
-@testitem "foam analysis: yield strain, the first T1 avalanche" setup = [FoamAnalysisSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "foam analysis: yield strain, the first T1 avalanche" setup = [
+    FoamAnalysisSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "foam analysis: yield strain, the first T1 avalanche" begin
         strain = 0.01 .* (0:99)
         N = zeros(Int, 100)
-        N[41] = 1                                                        # an isolated T1 at strain 0.40
-        N[61:63] = [2, 1, 2]                                             # a burst from strain 0.60
+        # an isolated T1 at strain 0.40
+        N[41] = 1
+        # a burst from strain 0.60
+        N[61:63] = [2, 1, 2]
         @test FoamAnalysis.yield_strain(strain, N) ≈ 0.4
         @test FoamAnalysis.yield_strain(strain, N; threshold = 2) ≈ 0.6
-        # window: the burst's 5 T1s over 5 samples pass threshold 4; the lone T1 does not, and
-        # the avalanche starts at its first T1, not before it
+        # window: the burst's 5 T1s over 5 samples pass threshold 4; the lone T1 does not,
+        # and the avalanche starts at its first T1, not before it
         @test FoamAnalysis.yield_strain(strain, N; threshold = 4, window = 5) ≈ 0.6
         @test FoamAnalysis.yield_strain(strain, N; threshold = 6, window = 5) === nothing
-        @test FoamAnalysis.yield_strain(strain, zeros(Int, 100)) === nothing            # never yields
-        # disordered foam under boundary shear (Fig. 6): T1s in the first bin → zero yield strain
-        M = zeros(Int, 50); M[1] = 88
+        # never yields
+        @test FoamAnalysis.yield_strain(strain, zeros(Int, 100)) === nothing
+        # disordered foam under boundary shear (Fig. 6): T1s in the first bin → zero yield
+        # strain
+        M = zeros(Int, 50)
+        M[1] = 88
         @test FoamAnalysis.yield_strain(0.1 .* (0:49), M) == 0
         # the ordered bulk-shear calibration of spec §3.2: ε = c·β·t, c = 0.0258, β = 0.01,
         # first T1 at 4300 MCS → ε_y ≈ 1.11 (Fig. 11(a))
         t = 0:9999
-        T1 = zeros(Int, 10_000); T1[4301] = 2; T1[4302:4400] .= 2
+        T1 = zeros(Int, 10_000)
+        T1[4301] = 2
+        T1[4302:4400] .= 2
         @test FoamAnalysis.yield_strain(0.0258 * 0.01 .* t, T1) ≈ 1.1094
         @test_throws DimensionMismatch FoamAnalysis.yield_strain(strain, zeros(Int, 99))
         @test_throws ArgumentError FoamAnalysis.yield_strain(strain, N; threshold = 0)

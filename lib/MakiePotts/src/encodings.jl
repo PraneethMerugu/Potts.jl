@@ -7,21 +7,24 @@ abstract type AbstractPottsEncoding end
     ContinuousEncoding = 0x02
 end
 @doc "The encoding produces semantic categories and a discrete legend." CategoricalEncoding
-@doc "The encoding produces numeric values suitable for a Makie `Colorbar`." ContinuousEncoding
+@doc "The encoding produces numeric values suitable for a Makie \
+    `Colorbar`." ContinuousEncoding
 
 """Encode finite cells by biological cell type; this is the default."""
 struct CellTypeEncoding <: AbstractPottsEncoding
     label::String
 end
-CellTypeEncoding(; label::AbstractString = "Cell type") =
-    CellTypeEncoding(String(label))
+function CellTypeEncoding(; label::AbstractString = "Cell type")
+    return CellTypeEncoding(String(label))
+end
 
 """Encode finite cells by generation-aware identity."""
 struct CellIdentityEncoding <: AbstractPottsEncoding
     label::String
 end
-CellIdentityEncoding(; label::AbstractString = "Cell identity") =
-    CellIdentityEncoding(String(label))
+function CellIdentityEncoding(; label::AbstractString = "Cell identity")
+    return CellIdentityEncoding(String(label))
+end
 
 """Encode one requested numeric channel."""
 struct ChannelEncoding{K <: RenderChannelKey} <: AbstractPottsEncoding
@@ -40,8 +43,9 @@ required_channels(::Union{CellTypeEncoding, CellIdentityEncoding}) = ()
 required_channels(encoding::ChannelEncoding) = (encoding.key,)
 """Return the human-readable label of an encoding."""
 encoding_label(encoding::Union{CellTypeEncoding, CellIdentityEncoding}) = encoding.label
-encoding_label(encoding::ChannelEncoding) =
-    encoding.label === nothing ? String(encoding.key.name) : encoding.label
+function encoding_label(encoding::ChannelEncoding)
+    return encoding.label === nothing ? String(encoding.key.name) : encoding.label
+end
 
 """One semantic categorical legend entry independent of any Makie Block."""
 struct LegendEntry
@@ -81,16 +85,23 @@ function encode_frame(frame::AbstractPottsRenderFrame, encoding::CellTypeEncodin
     values = Array{Float64}(undef, frame_size(frame))
     for site in CartesianIndices(values)
         owner = owner_at(frame, site)
-        values[site] = owner.kind === CellSite ?
-                       code[cell_metadata(frame, owner).cell_type] : 1.0
+        values[site] = if owner.kind === CellSite
+            code[cell_metadata(frame, owner).cell_type]
+        else
+            1.0
+        end
     end
     entries = LegendEntry[LegendEntry(:medium, "Medium", 0)]
-    append!(entries, [
-        LegendEntry(type_id, "Cell type $type_id", UInt64(type_id))
-        for type_id in type_ids
-    ])
-    return EncodedPottsFrame(values, encoding, entries,
-        encoding.label, nothing, nothing)
+    append!(
+        entries, [
+            LegendEntry(type_id, "Cell type $type_id", UInt64(type_id))
+                for type_id in type_ids
+        ]
+    )
+    return EncodedPottsFrame(
+        values, encoding, entries,
+        encoding.label, nothing, nothing
+    )
 end
 
 function encode_frame(frame::AbstractPottsRenderFrame, encoding::CellIdentityEncoding)
@@ -105,18 +116,27 @@ function encode_frame(frame::AbstractPottsRenderFrame, encoding::CellIdentityEnc
     values = Array{Float64}(undef, frame_size(frame))
     for site in CartesianIndices(values)
         owner = owner_at(frame, site)
-        values[site] = owner.kind === CellSite ?
-                       code[_cell_identity(frame, owner)] : 1.0
+        values[site] = if owner.kind === CellSite
+            code[_cell_identity(frame, owner)]
+        else
+            1.0
+        end
     end
     entries = LegendEntry[LegendEntry(:medium, "Medium", 0)]
-    append!(entries, [
-        LegendEntry(identity,
-            "Cell $(identity.id) · generation $(identity.generation)",
-            (UInt64(identity.id) << 32) ⊻ identity.generation)
-        for identity in identities
-    ])
-    return EncodedPottsFrame(values, encoding, entries,
-        encoding.label, nothing, nothing)
+    append!(
+        entries, [
+            LegendEntry(
+                identity,
+                "Cell $(identity.id) · generation $(identity.generation)",
+                (UInt64(identity.id) << 32) ⊻ identity.generation
+            )
+                for identity in identities
+        ]
+    )
+    return EncodedPottsFrame(
+        values, encoding, entries,
+        encoding.label, nothing, nothing
+    )
 end
 
 function _finite_range(values)
@@ -153,14 +173,17 @@ function encode_frame(frame::AbstractPottsRenderFrame, encoding::ChannelEncoding
         end
     end
     label = encoding.label === nothing ? item.label : encoding.label
-    return EncodedPottsFrame(values, encoding, LegendEntry[],
-        label, item.units, _finite_range(values))
+    return EncodedPottsFrame(
+        values, encoding, LegendEntry[],
+        label, item.units, _finite_range(values)
+    )
 end
 
 """Return a copy of the semantic legend entries produced by an encoding."""
 legend_entries(encoded::EncodedPottsFrame) = copy(encoded.categories)
-legend_entries(frame::AbstractPottsRenderFrame, encoding::AbstractPottsEncoding) =
-    legend_entries(encode_frame(frame, encoding))
+function legend_entries(frame::AbstractPottsRenderFrame, encoding::AbstractPottsEncoding)
+    return legend_entries(encode_frame(frame, encoding))
+end
 
 function _hsv_rgb(h::Float64, s::Float64 = 0.62, v::Float64 = 0.88)
     sector = 6h
@@ -207,13 +230,21 @@ function _categorical_colors(entries::Vector{LegendEntry}, palette, medium_color
     isempty(entries) && return Makie.RGBf[]
     if palette === Makie.automatic
         colors = Makie.RGBf[Makie.to_color(medium_color)]
-        append!(colors, [_stable_category_color(entry.color_key) for entry in entries[2:end]])
+        append!(
+            colors, [
+                _stable_category_color(entry.color_key)
+                    for entry in entries[2:end]
+            ]
+        )
         return colors
     end
     requested = length(entries) - 1
     supplied = Makie.to_colormap(palette)
-    length(supplied) >= requested || throw(ArgumentError(
-        "category palette supplies $(length(supplied)) colors for $requested categories; " *
-        "MakiePotts never cycles palettes silently"))
+    length(supplied) >= requested || throw(
+        ArgumentError(
+            "category palette supplies $(length(supplied)) colors for $requested " *
+                "categories; MakiePotts never cycles palettes silently"
+        )
+    )
     return vcat([Makie.to_color(medium_color)], supplied[1:requested])
 end

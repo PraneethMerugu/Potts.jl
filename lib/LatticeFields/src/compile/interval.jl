@@ -1,8 +1,8 @@
 # Interval coefficient evaluator, emitted as host code: given parameter
 # bounds it returns enclosures of chosen nodes with no allocation, which is what stability
-# bounds and stage counts need. A load takes its field's declared state interval; a load with
-# no declared interval is a build error naming the field. Bounds are widened outward by one
-# ulp per operation, so they enclose the Float64 values.
+# bounds and stage counts need. A load takes its field's declared state interval; a load
+# with no declared interval is a build error naming the field. Bounds are widened outward by
+# one ulp per operation, so they enclose the Float64 values.
 
 const Iv = Tuple{Float64, Float64}
 _out(lo, hi) = (prevfloat(Float64(lo)), nextfloat(Float64(hi)))
@@ -12,11 +12,24 @@ function iv_mul(a::Iv, b::Iv)
     return _out(minimum(p), maximum(p))
 end
 iv_neg(a::Iv) = (-a[2], -a[1])
-iv_div(a::Iv, b::Iv) = b[1] <= 0 <= b[2] ? (-Inf, Inf) :
-                       iv_mul(a, _out(1 / b[2], 1 / b[1]))
+function iv_div(a::Iv, b::Iv)
+    if b[1] <= 0 <= b[2]
+        return (-Inf, Inf)
+    else
+        return iv_mul(a, _out(1 / b[2], 1 / b[1]))
+    end
+end
 iv_min(a::Iv, b::Iv) = (min(a[1], b[1]), min(a[2], b[2]))
 iv_max(a::Iv, b::Iv) = (max(a[1], b[1]), max(a[2], b[2]))
-iv_abs(a::Iv) = a[1] >= 0 ? a : a[2] <= 0 ? iv_neg(a) : (0.0, max(-a[1], a[2]))
+function iv_abs(a::Iv)
+    if a[1] >= 0
+        return a
+    elseif a[2] <= 0
+        return iv_neg(a)
+    else
+        return (0.0, max(-a[1], a[2]))
+    end
+end
 function iv_powi(a::Iv, n::Int)
     n == 0 && return (1.0, 1.0)
     n < 0 && return iv_div((1.0, 1.0), iv_powi(a, -n))
@@ -26,7 +39,7 @@ end
 iv_mono(f::F, a::Iv) where {F} = _out(f(a[1]), f(a[2]))
 iv_sqrt(a::Iv) = iv_mono(sqrt, (max(a[1], 0.0), max(a[2], 0.0)))
 function iv_log(a::Iv)
-    a[1] <= 0 ? (-Inf, a[2] <= 0 ? -Inf : nextfloat(log(a[2]))) : iv_mono(log, a)
+    return a[1] <= 0 ? (-Inf, a[2] <= 0 ? -Inf : nextfloat(log(a[2]))) : iv_mono(log, a)
 end
 iv_hull(a::Iv, b::Iv) = (min(a[1], b[1]), max(a[2], b[2]))
 const _MONO_CALLS = (:tanh, :sinh, :cbrt, :exp2, :expm1, :atan, :floor, :ceil, :round)
@@ -37,11 +50,17 @@ function _ivexpr(k::Kernel, i, p::Program, bounds, a)
     op == CONST && return (k.consts[n.imm], k.consts[n.imm])
     op == PARAM && return :((Plo[$(Int(n.imm))], Phi[$(Int(n.imm))]))
     if op in (LOAD, TABLE, RUNTIME)
-        key = op == LOAD ? p.fields[k.accesses[n.imm].field].key :
-              op == TABLE ? p.tables[n.imm].key : "runtime#$(n.imm)"
-        haskey(bounds, key) ||
-            irerror("interval evaluator: `", key, "` has no declared interval",
-                " (kernel `", k.key, "`, node v", i, ")")
+        key = if op == LOAD
+            p.fields[k.accesses[n.imm].field].key
+        elseif op == TABLE
+            p.tables[n.imm].key
+        else
+            "runtime#$(n.imm)"
+        end
+        haskey(bounds, key) || irerror(
+            "interval evaluator: `", key, "` has no declared interval",
+            " (kernel `", k.key, "`, node v", i, ")"
+        )
         return Float64.(bounds[key])
     end
     op == COORD && return (1.0, Float64(maximum(leveldims(p, k.space.level))))
@@ -65,8 +84,10 @@ function _ivexpr(k::Kernel, i, p::Program, bounds, a)
         f in (:sin, :cos) && return (-1.0, 1.0)
         f in _MONO_CALLS && return :(iv_mono($f, $(a[1])))
     end
-    irerror("interval evaluator: op `", opname(op),
-        "` has no interval rule (kernel `", k.key, "`)")
+    irerror(
+        "interval evaluator: op `", opname(op),
+        "` has no interval rule (kernel `", k.key, "`)"
+    )
 end
 
 """
@@ -89,5 +110,5 @@ function interval_expr(p::Program, k::Kernel, nodes; bounds = Dict{String, Iv}()
     return Expr(:->, Expr(:tuple, :Plo, :Phi), Expr(:block, body..., ret))
 end
 function interval_function(p::Program, k::Kernel, nodes; kw...)
-    rgf(interval_expr(p, k, nodes; kw...))
+    return rgf(interval_expr(p, k, nodes; kw...))
 end

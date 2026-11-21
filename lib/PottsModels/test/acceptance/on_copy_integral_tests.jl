@@ -7,30 +7,30 @@
 # `_check_copy_integral` (D-125) but lowers an `@on_copy` right-hand side in the proposal
 # environment without it. Today:
 #   - bare, `@on_copy w[target] ~ integral(u)` / `@on_copy y[new] ~ integral(u)`: rejected
-#     while lowering, by accident, with the generic "`integral(x)` is per cell: use it in cell
-#     updates, …" (no copy-scope cell is bound), which names no workaround;
+#     while lowering, by accident, with the generic "`integral(x)` is per cell: use it in
+#     cell updates, …" (no copy-scope cell is bound), which names no workaround;
 #   - inside a population fold over cells (`sum(integral(u) for c in cells if c == new)`,
-#     also with `Pre(u)`), the model builds and runs on Sequential and Checkerboard, and each
-#     accepted copy writes the integral as refreshed at the start of the MCS (measured: the
-#     fold over the σ saved at the end of the previous MCS), while σ, and the volume of the
-#     very cell being read, change at every accepted copy of the sweep. When an energy reads
-#     the written cell variable (D-045), that stale value enters ΔH, i.e. the acceptance
-#     decision, exactly the case D-125 rejects for drives.
+#     also with `Pre(u)`), the model builds and runs on Sequential and Checkerboard, and
+#     each accepted copy writes the integral as refreshed at the start of the MCS (measured:
+#     the fold over the σ saved at the end of the previous MCS), while σ, and the volume of
+#     the very cell being read, change at every accepted copy of the sweep. When an energy
+#     reads the written cell variable (D-045), that stale value enters ΔH, i.e. the
+#     acceptance decision, exactly the case D-125 rejects for drives.
 #
 # Rule (D-129): an `@on_copy` right-hand side runs once per accepted copy inside the sweep,
-# like a drive or a constraint runs once per copy attempt, while an integral is refreshed only
-# between sweeps. Rather than define a second, implicit "start-of-MCS" meaning for `integral`
-# in copy scope, any `integral(…)` in an `@on_copy` right-hand side, site-scope
+# like a drive or a constraint runs once per copy attempt, while an integral is refreshed
+# only between sweeps. Rather than define a second, implicit "start-of-MCS" meaning for
+# `integral` in copy scope, any `integral(…)` in an `@on_copy` right-hand side, site-scope
 # (`x[target] ~ …`) or cell-scope (`y[new] ~ …`, `y[old] ~ …`), bare, in a fold, or with
 # `Pre`, is a `PottsCompileError` at build (`mtkcompile`, hence `PottsProblem`) with the
-# message and workaround: it names `integral`, the statement (`@on_copy`) and the workaround,
-# keep the integral in a cell variable updated `@before_mcs` (`s ~ integral(x)`) and read
-# `s[new]`, `s[old]`. The workaround gives the same start-of-MCS value, explicitly.
+# message and workaround: it names `integral`, the statement (`@on_copy`) and the
+# workaround, keep the integral in a cell variable updated `@before_mcs` (`s ~ integral(x)`)
+# and read `s[new]`, `s[old]`. The workaround gives the same start-of-MCS value, explicitly.
 #
 # Pinned here:
 #  1. Rejections at build, each naming `integral`, `@on_copy`, the refresh "between sweeps"
-#     and `@before_mcs` with `s ~ integral(x)`: site scope (bare; cell fold; `maximum` fold in
-#     a block next to an accepted write), cell scope (bare at `new`; fold at `new`;
+#     and `@before_mcs` with `s ~ integral(x)`: site scope (bare; cell fold; `maximum` fold
+#     in a block next to an accepted write), cell scope (bare at `new`; fold at `new`;
 #     `integral(Pre(u))` fold at `old`; a cell write that an energy reads, D-045).
 #  2. The workaround runs and writes the hand-checked start-of-MCS value (Sequential and
 #     Checkerboard): a site write `w[target] ~ s[new]` and a cell write `y[new] ~ s[new]`
@@ -208,22 +208,35 @@ end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "on copy integral: integral in a -scope @on_copy is rejected at build" setup = [OnCopyIntegralSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "on copy integral: integral in a -scope @on_copy is rejected at build" setup = [
+    OnCopyIntegralSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 1. Rejections at build
-    @testset "on copy integral: integral in a $scope-scope @on_copy ($label) is rejected at build" for (scope, label, M) in REJECTED
-        for build in (() -> mtkcompile(M(; name = :m)), () -> PottsProblem(M(; name = :m), on_copy_op(), (0, 2)))
+    @testset "on copy integral: integral in a $scope-scope @on_copy ($label) is rejected \
+        at build" for (scope, label, M) in REJECTED
+        for build in (
+                () -> mtkcompile(M(; name = :m)),
+                () -> PottsProblem(M(; name = :m), on_copy_op(), (0, 2)),
+            )
             e, msg = on_copy_error(build)
-            @test e isa Potts.PottsCompileError                             # DEFECT CHECK (folds: build today)
+            # DEFECT CHECK (folds: build today)
+            @test e isa Potts.PottsCompileError
             @test occursin("integral", msg)
         end
     end
 end
 
-@testitem "on copy integral: @on_copy reads the integral through a @before_mcs cell variable" setup = [OnCopyIntegralSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "on copy integral: @on_copy reads the integral through a @before_mcs cell \
+    variable" setup = [OnCopyIntegralSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 2. The workaround writes the start-of-MCS value
-    @testset "on copy integral: @on_copy reads the integral through a @before_mcs cell variable ($(nameof(typeof(alg))))" for alg in ALGS
+    @testset "on copy integral: @on_copy reads the integral through a @before_mcs cell \
+        variable ($(nameof(typeof(alg))))" for alg in ALGS
         K = 12
         sol = solve(problem(Work, K), alg; saveat = 0:K)
         @test Symbol(sol.retcode) === :Success
@@ -232,11 +245,18 @@ end
         ys = [Array(u.cell.y) for u in sol.u]
         @test all(u -> Array(u.site.u) == ON_COPY_U0, sol.u)
         # s during MCS k (saved at k + 1): the fold of u over σ saved at k
-        @test [Array(u.cell.s) for u in sol.u][2:end] ≈ [on_copy_fold(σs[k], ON_COPY_U0) for k in 1:K]
-        # fixture: the two cells' integrals stay apart by orders of magnitude, so a value read
-        # from the wrong cell or the wrong MCS cannot pass by accident
-        @test all(k -> on_copy_fold(σs[k], ON_COPY_U0)[1] >= 1500 && on_copy_fold(σs[k], ON_COPY_U0)[2] <= 400, 1:(K + 1))
-        nsite = 0; ncell = 0; nmoved = 0
+        @test [Array(u.cell.s) for u in sol.u][2:end] ≈
+            [on_copy_fold(σs[k], ON_COPY_U0) for k in 1:K]
+        # fixture: the two cells' integrals stay apart by orders of magnitude, so a value
+        # read from the wrong cell or the wrong MCS cannot pass by accident
+        @test all(
+            k -> on_copy_fold(σs[k], ON_COPY_U0)[1] >= 1500 &&
+                on_copy_fold(σs[k], ON_COPY_U0)[2] <= 400,
+            1:(K + 1)
+        )
+        nsite = 0
+        ncell = 0
+        nmoved = 0
         for k in 1:K
             S = on_copy_fold(σs[k], ON_COPY_U0)
             # site scope: a site that changed owner to a cell got, at its last accepted copy
@@ -251,7 +271,8 @@ end
             for c in gainers(σs[k], σs[k + 1])
                 ncell += 1
                 @test ys[k + 1][c] ≈ S[c]
-                # the start-of-MCS value differs from the end-of-MCS one (the check sees the MCS)
+                # the start-of-MCS value differs from the end-of-MCS one (the check sees the
+                # MCS)
                 nmoved += abs(on_copy_fold(σs[k + 1], ON_COPY_U0)[c] - S[c]) > 50
             end
             # a cell that has never gained a site keeps its default
@@ -259,26 +280,37 @@ end
                 any(j -> c in gainers(σs[j], σs[j + 1]), 1:k) || @test ys[k + 1][c] == -1.0
             end
         end
-        @test nsite >= 10 && ncell >= 4 && nmoved >= 2                      # the checks are not vacuous
-        @test any(k -> 1 in gainers(σs[k], σs[k + 1]), 1:K) && any(k -> 2 in gainers(σs[k], σs[k + 1]), 1:K)
+        # the checks are not vacuous
+        @test nsite >= 10 && ncell >= 4 && nmoved >= 2
+        @test any(k -> 1 in gainers(σs[k], σs[k + 1]), 1:K) &&
+            any(k -> 2 in gainers(σs[k], σs[k + 1]), 1:K)
         # sites far from both cells (no copy reaches them in K MCS) keep their default
         @test all(==(-1.0), ws[end][:, 15:16]) && all(==(-1.0), ws[end][:, 1:1])
     end
 end
 
-@testitem "on copy integral: @on_copy without integral still works" setup = [OnCopyIntegralSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "on copy integral: @on_copy without integral still works" setup = [
+    OnCopyIntegralSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 3. Negative controls
-    @testset "on copy integral: @on_copy without integral still works ($(nameof(typeof(alg))))" for alg in ALGS
+    @testset "on copy integral: @on_copy without integral still works \
+        ($(nameof(typeof(alg))))" for alg in ALGS
         K = 8
         sol = solve(problem(NoIntegral, K), alg; saveat = 0:K)
         @test Symbol(sol.retcode) === :Success
         σs = [Array(u.ownership) for u in sol.u]
         hs = [Array(u.site.hits) for u in sol.u]
-        @test any(k -> σs[k] != σs[k + 1], 1:K)                                    # the cells move
+        # the cells move
+        @test any(k -> σs[k] != σs[k + 1], 1:K)
         for k in 1:K
             # every site that changed owner was hit at least once more; hits never decrease
-            @test all(i -> σs[k + 1][i] == σs[k][i] || hs[k + 1][i] >= hs[k][i] + 1, eachindex(σs[k]))
+            @test all(
+                i -> σs[k + 1][i] == σs[k][i] || hs[k + 1][i] >= hs[k][i] + 1,
+                eachindex(σs[k])
+            )
             @test all(hs[k + 1] .>= hs[k])
             # a cell that gained a site counted at least one copy into it
             for c in gainers(σs[k], σs[k + 1])
@@ -288,7 +320,8 @@ end
             # @after_mcs integral of the on-copy-written site variable: the end-of-MCS sum
             @test Array(sol.u[k + 1].cell.h) ≈ on_copy_fold(σs[k + 1], hs[k + 1])
         end
-        # total hits = total copies counted into cells plus copies into the medium (≥ cell count)
+        # total hits = total copies counted into cells plus copies into the medium (≥ cell
+        # count)
         @test sum(hs[end]) >= sum(Array(sol.u[end].cell.n))
     end
 end

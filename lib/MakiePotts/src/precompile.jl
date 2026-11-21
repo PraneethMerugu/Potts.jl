@@ -4,8 +4,10 @@ PrecompileTools.@setup_workload begin
     cell = RenderCellMetadata(RenderCellIdentity(1, 0), 1)
     key = CellChannelKey(:precompile_value, Float64)
     values = Dict(cell.identity => 0.5)
-    frame = PottsRenderFrame(0, owners, [cell];
-        channels = (RenderChannel(key, values),))
+    frame = PottsRenderFrame(
+        0, owners, [cell];
+        channels = (RenderChannel(key, values),)
+    )
 
     PrecompileTools.@compile_workload begin
         encode_frame(frame, CellTypeEncoding())

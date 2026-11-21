@@ -22,7 +22,13 @@ npairs(N) = N * (N + 1) ÷ 2
     end
 end
 
-@inline anchor(cell, c, ::Val{N}) where {N} = ntuple(d -> Int(@inbounds cell.anchor[d, c]), Val(N))
+# bounds: c ≤ capacity and d ≤ N, the rows of anchor
+@inline function anchor(cell, c, ::Val{N}) where {N}
+    return ntuple(
+        d -> Int(@inbounds cell.anchor[d, c]),
+        Val(N)
+    )
+end
 
 """
     init_moments(σ, lattice, ncell) -> (; anchor, m1, m2)
@@ -32,7 +38,10 @@ sites (the circular mean on periodic axes), so the minimum-image offsets are val
 the cell spans less than the whole axis about its center.
 """
 function init_moments(σ, l::Lattice{N}, ncell::Integer) where {N}
-    S = zeros(N, ncell); C = zeros(N, ncell); M = zeros(N, ncell); V = zeros(Int, ncell)
+    S = zeros(N, ncell)
+    C = zeros(N, ncell)
+    M = zeros(N, ncell)
+    V = zeros(Int, ncell)
     for i in 1:nsites(l)
         c = σ[i]
         c == 0 && continue
@@ -40,7 +49,9 @@ function init_moments(σ, l::Lattice{N}, ncell::Integer) where {N}
         V[c] += 1
         for d in 1:N
             θ = 2π * (x[d] - 1) / l.dims[d]
-            S[d, c] += sin(θ); C[d, c] += cos(θ); M[d, c] += x[d]
+            S[d, c] += sin(θ)
+            C[d, c] += cos(θ)
+            M[d, c] += x[d]
         end
     end
     anchor = ones(Int32, N, ncell)
@@ -67,6 +78,7 @@ end
 
 @inline function _accumulate!(m1, m2, c, δ::NTuple{N, Int}, s::Int) where {N}
     for d in 1:N
+        # bounds: c ≤ capacity; d, e ≤ N index the N rows of m1 and npairs(N) of m2
         @inbounds m1[d, c] += s * δ[d]
         for e in d:N
             @inbounds m2[_pair(N, d, e), c] += s * δ[d] * δ[e]
@@ -77,13 +89,15 @@ end
 
 @inline function _recenter!(cell, l::Lattice{N}, c, V) where {N}
     V > 0 || return nothing
-    shift = ntuple(d -> Int(fld(2 * @inbounds(cell.m1[d, c]) + V, 2V)), Val(N))  # round(mean)
+    # round(mean)
+    shift = ntuple(d -> Int(fld(2 * @inbounds(cell.m1[d, c]) + V, 2V)), Val(N))
     any(s -> abs(s) >= RECENTER, shift) || return nothing
     for d in 1:N                           # Σ(δ−s)(δ−s)ᵀ = m2 − s m1ᵀ − m1 sᵀ + V s sᵀ
         for e in d:N
             p = _pair(N, d, e)
-            @inbounds cell.m2[p, c] += -shift[d] * cell.m1[e, c] - shift[e] * cell.m1[d, c] +
-                                      V * shift[d] * shift[e]
+            @inbounds cell.m2[p, c] += -shift[d] * cell.m1[e, c] -
+                shift[e] * cell.m1[d, c] +
+                V * shift[d] * shift[e]
         end
     end
     for d in 1:N
@@ -101,12 +115,16 @@ end
 
 Move the target site from `prop.old` to `prop.new` in the moment trackers. Call after
 `commit_volume!` (re-centering uses the updated volumes). In a `commit!`, pass the context
-`ctx`: on `CheckerboardCPM` the sums then move by atomic adds and re-center once per MCS, since
-another copy of the cell may be in flight; the `lattice` form re-centers at every copy.
+`ctx`: on `CheckerboardCPM` the sums then move by atomic adds and re-center once per MCS,
+since another copy of the cell may be in flight; the `lattice` form re-centers at every
+copy.
 """
 @inline function commit_moments!(cell, l::Lattice{N}, prop::Proposal{N}) where {N}
     if prop.old != 0
-        _accumulate!(cell.m1, cell.m2, prop.old, min_image(l, prop.x, anchor(cell, prop.old, Val(N))), -1)
+        _accumulate!(
+            cell.m1, cell.m2, prop.old,
+            min_image(l, prop.x, anchor(cell, prop.old, Val(N))), -1
+        )
         _recenter!(cell, l, prop.old, @inbounds cell.volume[prop.old])
     end
     if prop.new != 0
@@ -115,22 +133,32 @@ another copy of the cell may be in flight; the `lattice` form re-centers at ever
                 @inbounds cell.anchor[d, prop.new] = prop.x[d]
             end
         end
-        _accumulate!(cell.m1, cell.m2, prop.new, min_image(l, prop.x, anchor(cell, prop.new, Val(N))), 1)
+        _accumulate!(
+            cell.m1, cell.m2, prop.new,
+            min_image(l, prop.x, anchor(cell, prop.new, Val(N))), 1
+        )
         _recenter!(cell, l, prop.new, @inbounds cell.volume[prop.new])
     end
     return nothing
 end
 
-# `commit_moments!` from a copy function: on the lockless checkerboard (`ctx.lockless`) the sums
-# move by atomic adds and the anchors re-center once per MCS (`recenter_kernel!`), since a
-# re-centering rewrites a cell's sums and another copy of the cell may be in flight
-@inline commit_moments!(cell, ctx::NamedTuple, prop::Proposal) = _lockless(ctx) ?
-                                                                 _commit_moments_atomic!(cell, ctx.lattice, prop) :
-                                                                 commit_moments!(cell, ctx.lattice, prop)
+# `commit_moments!` from a copy function: on the lockless checkerboard (`ctx.lockless`) the
+# sums move by atomic adds and the anchors re-center once per MCS (`recenter_kernel!`),
+# since a re-centering rewrites a cell's sums and another copy of the cell may be in flight
+@inline function commit_moments!(cell, ctx::NamedTuple, prop::Proposal)
+    if _lockless(ctx)
+        return _commit_moments_atomic!(cell, ctx.lattice, prop)
+    else
+        return commit_moments!(cell, ctx.lattice, prop)
+    end
+end
 
 @inline function _commit_moments_atomic!(cell, l::Lattice{N}, prop::Proposal{N}) where {N}
     if prop.old != 0
-        _accumulate_atomic!(cell.m1, cell.m2, prop.old, min_image(l, prop.x, anchor(cell, prop.old, Val(N))), -1)
+        _accumulate_atomic!(
+            cell.m1, cell.m2, prop.old,
+            min_image(l, prop.x, anchor(cell, prop.old, Val(N))), -1
+        )
     end
     if prop.new != 0
         if @inbounds(cell.volume[prop.new]) == 1   # first site: anchor there
@@ -138,7 +166,10 @@ end
                 @inbounds cell.anchor[d, prop.new] = prop.x[d]
             end
         end
-        _accumulate_atomic!(cell.m1, cell.m2, prop.new, min_image(l, prop.x, anchor(cell, prop.new, Val(N))), 1)
+        _accumulate_atomic!(
+            cell.m1, cell.m2, prop.new,
+            min_image(l, prop.x, anchor(cell, prop.new, Val(N))), 1
+        )
     end
     return nothing
 end
@@ -156,20 +187,35 @@ end
 # ---------------------------------------------------------------------------------------
 # Queries (host or device). `T` is the float type of the result.
 
-"""Centroid of cell `c` in lattice coordinates, wrapped into `[1, n + 1)` on periodic axes."""
-@inline centroid(::Type{T}, cell, l::Lattice, c) where {T} = _centroid(T, cell, l, c, @inbounds cell.volume[c])
+# bounds: c is a cell id ≤ capacity (callers pass ids from σ or a proposal)
+"""Centroid of cell `c` in lattice coordinates, wrapped into `[1, n + 1)` on periodic \
+axes."""
+@inline function centroid(::Type{T}, cell, l::Lattice, c) where {T}
+    return _centroid(
+        T, cell, l, c, @inbounds cell.volume[c]
+    )
+end
 # … from an already-loaded volume `V` (one load for a caller that also tests `V`, e.g.
 # `link_delta`'s dead-partner skip: no second, possibly racing, read of the volume)
 @inline function _centroid(::Type{T}, cell, l::Lattice{N}, c, V) where {T, N}
     return ntuple(Val(N)) do d
+        # bounds: c ≤ capacity; d ≤ N, the rows of anchor and m1
         x = T(@inbounds cell.anchor[d, c]) + T(@inbounds cell.m1[d, c]) / T(V)
         l.periodic[d] ? mod(x - one(T), T(l.dims[d])) + one(T) : x
     end
 end
 centroid(cell, l::Lattice, c) = centroid(Float64, cell, l, c)
 
-"""Centroid of cell `c` as a Cartesian position (`embed` of `centroid`; equal on square lattices)."""
-@inline centroid_position(::Type{T}, cell, l::Lattice, c) where {T} = embed(l, centroid(T, cell, l, c))
+"""
+Centroid of cell `c` as a Cartesian position (`embed` of `centroid`; equal on square
+lattices).
+"""
+@inline function centroid_position(::Type{T}, cell, l::Lattice, c) where {T}
+    return embed(
+        l,
+        centroid(T, cell, l, c)
+    )
+end
 
 """
     centroid_shift(T, cell, lattice, c, x, s) -> NTuple{N, T}
@@ -177,8 +223,11 @@ centroid(cell, l::Lattice, c) = centroid(Float64, cell, l, c)
 Centroid displacement of cell `c` if site `x` is added (`s = +1`) or removed (`s = -1`):
 `δcentroid` for drives.
 """
-@inline function centroid_shift(::Type{T}, cell, l::Lattice{N}, c, x::NTuple{N, Int},
-        s::Int) where {T, N}
+@inline function centroid_shift(
+        ::Type{T}, cell, l::Lattice{N}, c, x::NTuple{N, Int},
+        s::Int
+    ) where {T, N}
+    # bounds: c is a cell id ≤ capacity; k ≤ N rows (and pairs) of the moments
     V = Int(@inbounds cell.volume[c])
     V + s <= 0 && return ntuple(_ -> zero(T), Val(N))
     δ = min_image(l, x, anchor(cell, c, Val(N)))
@@ -190,10 +239,12 @@ end
 
 """Covariance of cell `c`'s site coordinates, as the `npairs(N)` upper-triangle entries."""
 @inline function covariance(::Type{T}, cell, c, ::Val{N}) where {T, N}
+    # bounds: c is a cell id ≤ capacity; p ≤ npairs(N) rows of m2
     V = T(@inbounds cell.volume[c])
     return ntuple(Val(npairs(N))) do p
         d, e = _unpair(N, p)
-        T(@inbounds cell.m2[p, c]) / V - T(@inbounds cell.m1[d, c]) * T(@inbounds cell.m1[e, c]) / V^2
+        T(@inbounds cell.m2[p, c]) / V -
+            T(@inbounds cell.m1[d, c]) * T(@inbounds cell.m1[e, c]) / V^2
     end
 end
 @inline function _unpair(N, p)
@@ -222,7 +273,7 @@ end
     p = sqrt(p2 / 6)
     B = ((a - q) / p, b / p, c / p, (d - q) / p, e / p, (f - q) / p)
     detB = B[1] * (B[4] * B[6] - B[5]^2) - B[2] * (B[2] * B[6] - B[5] * B[3]) +
-           B[3] * (B[2] * B[5] - B[4] * B[3])
+        B[3] * (B[2] * B[5] - B[4] * B[3])
     φ = acos(clamp(detB / 2, -one(T), one(T))) / 3
     λ1 = q + 2p * cos(φ)
     λ3 = q + 2p * cos(φ + 2T(π) / 3)
@@ -252,31 +303,42 @@ CompuCell3D shape descriptors of cell `c` from the covariance eigenvalues `λ₁
     λ2 = max(λ2, zero(T))
     major, minor = 4sqrt(λ1), 4sqrt(λ2)
     orientation = atan(2C[2], C[1] - C[3]) / 2
-    return (; major_length = major, minor_length = minor, elongation = major / minor,
-        eccentricity = λ1 > 0 ? sqrt(1 - λ2 / λ1) : zero(T), orientation)
+    return (;
+        major_length = major, minor_length = minor, elongation = major / minor,
+        eccentricity = λ1 > 0 ? sqrt(1 - λ2 / λ1) : zero(T), orientation,
+    )
 end
 @inline function cell_shape(::Type{T}, cell, l::Lattice{3}, c) where {T}
     λ = map(v -> max(v, zero(T)), principal_moments(covariance(T, cell, c, Val(3))))
     semiaxes = map(v -> sqrt(5v), λ)
     major, minor = 2semiaxes[1], 2semiaxes[3]
-    return (; major_length = major, minor_length = minor, semiaxes,
-        elongation = major / minor, eccentricity = λ[1] > 0 ? sqrt(1 - λ[3] / λ[1]) : zero(T))
+    return (;
+        major_length = major, minor_length = minor, semiaxes,
+        elongation = major / minor, eccentricity = if λ[1] > 0
+            sqrt(1 - λ[3] / λ[1])
+        else
+            zero(T)
+        end,
+    )
 end
 cell_shape(cell, l::Lattice, c) = cell_shape(Float64, cell, l, c)
 
 # Major length from the covariance upper triangle (square-lattice axes), as in `shape`
-@inline _major_length(l::Lattice{2}, C::NTuple{3, T}) where {T} =
-    4sqrt(max(first(principal_moments(embed_covariance(l, C))), zero(T)))
-@inline _major_length(::Lattice{3}, C::NTuple{6, T}) where {T} =
-    2sqrt(5max(first(principal_moments(C)), zero(T)))
+@inline function _major_length(l::Lattice{2}, C::NTuple{3, T}) where {T}
+    return 4sqrt(max(first(principal_moments(embed_covariance(l, C))), zero(T)))
+end
+@inline function _major_length(::Lattice{3}, C::NTuple{6, T}) where {T}
+    return 2sqrt(5max(first(principal_moments(C)), zero(T)))
+end
 
 """
     major_length(T, cell, lattice, c)
 
-`cell_shape(T, cell, lattice, c).major_length` alone: `4√λ₁` of the covariance in 2D (Merks et
-al. 2006, Eq. 5: `4√(λ_max(I)/a)`), `2√(5λ₁)` in 3D. Zero for an empty cell.
+`cell_shape(T, cell, lattice, c).major_length` alone: `4√λ₁` of the covariance in 2D (Merks
+et al. 2006, Eq. 5: `4√(λ_max(I)/a)`), `2√(5λ₁)` in 3D. Zero for an empty cell.
 """
 @inline function major_length(::Type{T}, cell, l::Lattice{N}, c) where {T, N}
+    # bounds: c is a cell id ≤ capacity
     @inbounds(cell.volume[c]) > 0 || return zero(T)
     return _major_length(l, covariance(T, cell, c, Val(N)))
 end
@@ -287,8 +349,11 @@ end
 [`major_length`](@ref) of cell `c` if site `x` is added (`s = +1`) or removed (`s = -1`),
 from the moment sums without committing: the ΔH of a length constraint.
 """
-@inline function major_length_after(::Type{T}, cell, l::Lattice{N}, c, x::NTuple{N, Int},
-        s::Int) where {T, N}
+@inline function major_length_after(
+        ::Type{T}, cell, l::Lattice{N}, c, x::NTuple{N, Int},
+        s::Int
+    ) where {T, N}
+    # bounds: c is a cell id ≤ capacity; the moment rows as in centroid_shift
     V = Int(@inbounds cell.volume[c]) + s
     V > 0 || return zero(T)
     δ = V == 1 && s > 0 ? ntuple(_ -> 0, Val(N)) : min_image(l, x, anchor(cell, c, Val(N)))
@@ -299,4 +364,3 @@ from the moment sums without committing: the ΔH of a length constraint.
     end
     return _major_length(l, C)
 end
-

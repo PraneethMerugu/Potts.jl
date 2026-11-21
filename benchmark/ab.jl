@@ -3,7 +3,8 @@
 # controls.
 #
 #     julia benchmark/ab.jl <base> <candidate> <cases> <backend> [rounds] [options]
-#     julia benchmark/ab.jl --inprocess <checkout> <variants.jl> <backend> [rounds] [options]
+#     julia benchmark/ab.jl --inprocess <checkout> <variants.jl> <backend> [rounds] \
+#         [options]
 #
 # <base>, <candidate>: checkouts (each with its workspace Manifest.toml). <cases>: gate case
 # names (`benchmark/gate.jl`), comma-separated, or `all`. <backend>: `cpu` (sequential and
@@ -20,31 +21,31 @@
 #    `--prepare`, which builds problems before AMDGPU loads and seeds after `GO` so the
 #    parallel build can run without opening KFD).
 #  - Interleaving. Each round runs every side once, each in a fresh process, and the order
-#    rotates from round to round, so each side runs first equally often (default 16 rounds on
-#    cpu, 8 on rocm/metal, for the 4 sides). By default, all sides in a round start
+#    rotates from round to round, so each side runs first equally often (default 16 rounds
+#    on cpu, 8 on rocm/metal, for the 4 sides). By default, all sides in a round start
 #    concurrently on distinct non-benchmark cores (`machine.jl` `compile_cpus`), load, seed
 #    the type cache, build and compile every case (on ROCm, problems are built before READY,
 #    while AMDGPU loading, Tuple cache seeding, and GPU kernel compile stay after `GO` so no
 #    sibling holds a KFD handle during timing), print `READY <pid>`, and block on stdin.
-#    Prepare runs outside the lock (only one A/B runs in the `ab` lane; peak memory 4 × 8G). Once all
-#    are READY, the parent lets parallel-compile heat settle (2 s),
-#    acquires `tools/exclusive.sh` and, in the round's rotated order, waits idle, moves each
-#    child (all its threads, `taskset -a -cp`) to the benchmark core, sends
-#    `GO <cpu> <sibling_pids>`, collects results until `DONE`, moves the finished child off
-#    the benchmark core before closing stdin so heap teardown runs elsewhere, and waits for
-#    it to exit inside the lock before starting the next side (an uncatchable parent SIGKILL
-#    can still release the lock via stdin EOF). Pass `--serial` to run one child at a time under
-#    the lock from process start (waiting inside the lock before loading).
+#    Prepare runs outside the lock (only one A/B runs in the `ab` lane; peak memory 4 × 8G).
+#    Once all are READY, the parent lets parallel-compile heat settle (2 s), acquires
+#    `tools/exclusive.sh` and, in the round's rotated order, waits idle, moves each child
+#    (all its threads, `taskset -a -cp`) to the benchmark core, sends `GO <cpu>
+#    <sibling_pids>`, collects results until `DONE`, moves the finished child off the
+#    benchmark core before closing stdin so heap teardown runs elsewhere, and waits for it
+#    to exit inside the lock before starting the next side (an uncatchable parent SIGKILL
+#    can still release the lock via stdin EOF). Pass `--serial` to run one child at a time
+#    under the lock from process start (waiting inside the lock before loading).
 #  - Identical environments. Every side runs `--project=<side>/benchmark` with its own test
 #    project stacked on JULIA_LOAD_PATH (where the device packages come from), so no side
 #    differs from another in what its environment provides.
-#  - Waiting. Before spawning a round and inside the lock before each `GO` (or in `--serial`,
-#    inside each child before loading), the harness waits while a CI job runs on the machine
-#    (for rocm also while another process holds the GPU, excluding live sibling A/B
-#    children), until one overall deadline (`--max-wait`, 4 h from the start). Just before
-#    and after timing, each child reports what disturbed it (a CI job, another GPU client
-#    excluding live sibling A/B children, a busy SMT sibling or another busy reserved CPU);
-#    disturbed runs are counted in the verdict.
+#  - Waiting. Before spawning a round and inside the lock before each `GO` (or in
+#    `--serial`, inside each child before loading), the harness waits while a CI job runs on
+#    the machine (for rocm also while another process holds the GPU, excluding live sibling
+#    A/B children), until one overall deadline (`--max-wait`, 4 h from the start). Just
+#    before and after timing, each child reports what disturbed it (a CI job, another GPU
+#    client excluding live sibling A/B children, a busy SMT sibling or another busy reserved
+#    CPU); disturbed runs are counted in the verdict.
 #  - Memory cap. On the NucBox every child runs under `systemd-run --user --scope -p
 #    MemoryMax=8G` (`POTTS_BENCH_MEMMAX` to change, 0 for none): the machine is shared.
 #  - Pinning. On a machine that pins (the NucBox, `machine.jl`), every timed process runs on
@@ -83,7 +84,8 @@
 # enters the verdict through `dev`.
 #
 # Options:
-#   --alg=<sequential|checkerboard|boundary,…>  CPU algorithms (default sequential,checkerboard)
+#   --alg=<sequential|checkerboard|boundary,…>  CPU algorithms (default
+#                                               sequential,checkerboard)
 #   --rounds=<n>        rounds (default 16 for cpu, 8 for rocm/metal; also the optional
 #                       positional [rounds])
 #   --stat=<paired|fastest>  the verdict statistic (default paired; fastest for metal)
@@ -103,7 +105,8 @@
 #                       `--parallel`)
 #   --parallel          force the parallel-compile READY/GO/DONE protocol (e.g. for a custom
 #                       `--child` stub that implements it)
-#   --ready-timeout=<s> seconds to wait for all sides in a round to print READY (default 600;
+#   --ready-timeout=<s> seconds to wait for all sides in a round to print READY (default
+#   600;
 #                       passing `--no-warm` can make 4 single-core precompiles exceed 600 s)
 #   --no-warm           skip the untimed precompile run of each checkout
 #   --child=<file>      the timed child script (default: this checkout's `ab_one.jl`); a
@@ -130,11 +133,14 @@ function parse_ab(args)
     end
     inprocess = haskey(opts, "inprocess")
     n = inprocess ? 3 : 4
-    length(pos) in (n, n + 1) ||
-        error(inprocess ?
-              "usage: ab.jl --inprocess <checkout> <variants.jl> <backend> [rounds] [options]" :
-              "usage: ab.jl <base> <candidate> <cases> <backend> [rounds] [options] " *
-              "(the backend is required: cpu, rocm or metal)")
+    length(pos) in (n, n + 1) || error(
+        if inprocess
+            "usage: ab.jl --inprocess <checkout> <variants.jl> <backend> [rounds] [options]"
+        else
+            "usage: ab.jl <base> <candidate> <cases> <backend> [rounds] [options] " *
+                "(the backend is required: cpu, rocm or metal)"
+        end
+    )
     backend = pos[n]
     algs = get(opts, "alg", "sequential,checkerboard")
     backend in ("cpu", "metal", "rocm") ||
@@ -150,11 +156,17 @@ function parse_ab(args)
     haskey(opts, "serial") && haskey(opts, "parallel") &&
         error("--serial and --parallel cannot both be set")
     m = BenchMachine.machine()
-    seed = haskey(opts, "no-seed") ? 0 :
-           parse(Int, get(opts, "seed", string(BenchMachine.SEED_ENTRIES)))
+    seed = if haskey(opts, "no-seed")
+        0
+    else
+        parse(Int, get(opts, "seed", string(BenchMachine.SEED_ENTRIES)))
+    end
     pin = !haskey(opts, "no-pin") && BenchMachine.pins(m)
-    cpu = pin ?
-          (haskey(opts, "cpu") ? parse(Int, opts["cpu"]) : BenchMachine.bench_cpu(m)) : -1
+    cpu = if pin
+        haskey(opts, "cpu") ? parse(Int, opts["cpu"]) : BenchMachine.bench_cpu(m)
+    else
+        -1
+    end
     child = get(opts, "child", CHILD)
     parallel = !haskey(opts, "serial") && !inprocess &&
         (
@@ -164,14 +176,29 @@ function parse_ab(args)
     ready_timeout = parse(Float64, get(opts, "ready-timeout", "600"))
     ready_timeout > 0 || error("--ready-timeout must be positive")
     default_rounds = backend == "cpu" ? "16" : "8"
-    return (; inprocess, pos, backend, variants = backend == "cpu" ? algs : backend,
-        rounds = parse(Int, get(opts, "rounds", length(pos) > n ? pos[n + 1] : default_rounds)),
+    return (;
+        inprocess, pos, backend, variants = backend == "cpu" ? algs : backend,
+        rounds = parse(
+            Int, get(
+                opts, "rounds", if length(pos) > n
+                    pos[n + 1]
+                else
+                    default_rounds
+                end
+            )
+        ),
         machine = m, seed, pin, cpu, stat, wait, parallel, ready_timeout,
         tolerance = parse(Float64, get(opts, "tolerance", "0.05")),
         control = !haskey(opts, "no-control"),
         maxwait = 3600 * parse(Float64, get(opts, "max-wait", "4")),
         samples = get(opts, "samples", "60"), seconds = get(opts, "seconds", "40"),
-        gctrial = haskey(opts, "gctrial") ? true : haskey(opts, "no-gctrial") ? false : backend != "cpu",
+        gctrial = if haskey(opts, "gctrial")
+            true
+        elseif haskey(opts, "no-gctrial")
+            false
+        else
+            backend != "cpu"
+        end,
         warm = !haskey(opts, "no-warm"), child,
     )
 end
@@ -207,9 +234,10 @@ end
 """
 function require_toplevel(dir, what)
     t = toplevel(dir)
-    t == realpath(dir) ||
-        error("$what $dir is not the top level of a git checkout",
-            t === nothing ? "" : " (it lies inside $t)")
+    t == realpath(dir) || error(
+        "$what $dir is not the top level of a git checkout",
+        t === nothing ? "" : " (it lies inside $t)"
+    )
     return dir
 end
 
@@ -227,14 +255,16 @@ function control_checkout(dir)
     ctl = dir * "-abctl"
     isdir(ctl) && require_toplevel(ctl, "the control checkout")
     sha = git(dir, "rev-parse", "HEAD")
-    isclean(dir) ||
-        error("the checkout $dir has uncommitted changes: a same-commit control needs a ",
-            "clean checkout (commit them, or pass --no-control)")
+    isclean(dir) || error(
+        "the checkout $dir has uncommitted changes: a same-commit control needs a ",
+        "clean checkout (commit them, or pass --no-control)"
+    )
     gitdir = common_dir(dir)
     if !isdir(ctl)
         println(
             "creating control $ctl: `git worktree add --detach` writes a worktree entry ",
-            "into $gitdir")
+            "into $gitdir"
+        )
         run(`git -C $dir worktree add --quiet --detach $ctl $sha`)
     else
         common_dir(ctl) == gitdir ||
@@ -256,20 +286,30 @@ The environment of a child run in checkout `dir`: the same shape for every side.
 """
 function child_env(dir, o)
     sep = Sys.iswindows() ? ';' : ':'
-    return merge(ENV,
-        Dict{String, String}("JULIA_NUM_THREADS" => "1",
+    return merge(
+        ENV,
+        Dict{String, String}(
+            "JULIA_NUM_THREADS" => "1",
             "POTTS_BENCH_PINNED" => o.pin ? "1" : "0",
-            "JULIA_LOAD_PATH" => join(["@", joinpath(dir, "test"), "@stdlib"], sep)))
+            "JULIA_LOAD_PATH" => join(["@", joinpath(dir, "test"), "@stdlib"], sep)
+        )
+    )
 end
 
 julia_bin() = joinpath(Sys.BINDIR, Base.julia_exename())
 
 function warm(dir, o)
-    dev = o.backend == "metal" ? "; import Metal" :
-          o.backend == "rocm" ? "; import AMDGPU" : ""
+    dev = if o.backend == "metal"
+        "; import Metal"
+    elseif o.backend == "rocm"
+        "; import AMDGPU"
+    else
+        ""
+    end
     code = "using BenchmarkTools, Potts, PottsModels, KernelAbstractions$dev"
     proj = joinpath(dir, "benchmark")
-    cmd = `$(BenchMachine.mem_cmd(o.machine)) $(BenchMachine.work_cmd(o.machine)) $(julia_bin()) --startup-file=no --project=$proj -e $code`
+    cmd = `$(BenchMachine.mem_cmd(o.machine)) $(BenchMachine.work_cmd(o.machine)) \
+        $(julia_bin()) --startup-file=no --project=$proj -e $code`
     println("precompiling $dir ...")
     flush(stdout)
     return run(setenv(cmd, child_env(dir, o); dir))
@@ -298,12 +338,19 @@ function child_cmd(
         dir, childargs, o, deadline; pin_cpu = o.cpu, prepare = false,
         use_work = false
     )
-    pin = pin_cpu >= 0 ? BenchMachine.pin_cmd(o.machine, pin_cpu) :
-        (use_work ? BenchMachine.work_cmd(o.machine) : ``)
+    pin = if pin_cpu >= 0
+        BenchMachine.pin_cmd(o.machine, pin_cpu)
+    elseif use_work
+        BenchMachine.work_cmd(o.machine)
+    else
+        ``
+    end
     mem = BenchMachine.mem_cmd(o.machine)
     proj = joinpath(dir, "benchmark")
     prep = prepare ? ["--prepare"] : String[]
-    return `$mem $pin $(julia_bin()) --startup-file=no --project=$proj $(o.child) $childargs $prep --seed=$(o.seed) --samples=$(o.samples) --seconds=$(o.seconds) --wait=$(o.wait) --deadline=$deadline $(o.gctrial ? "--gctrial" : "--no-gctrial")`
+    return `$mem $pin $(julia_bin()) --startup-file=no --project=$proj $(o.child) \
+        $childargs $prep --seed=$(o.seed) --samples=$(o.samples) --seconds=$(o.seconds) \
+        --wait=$(o.wait) --deadline=$deadline $(o.gctrial ? "--gctrial" : "--no-gctrial")`
 end
 
 """
@@ -314,7 +361,12 @@ and the child's Tuple-cache lines.
 function child(dir, childargs, o, deadline)
     cmd = `$LOCK $(child_cmd(dir, childargs, o, deadline; pin_cpu = o.pin ? o.cpu : -1))`
     buf = IOBuffer()
-    p = run(pipeline(ignorestatus(setenv(cmd, child_env(dir, o); dir)); stdout = buf, stderr = buf))
+    p = run(
+        pipeline(
+            ignorestatus(setenv(cmd, child_env(dir, o); dir)); stdout = buf,
+            stderr = buf
+        )
+    )
     out = String(take!(buf))
     success(p) || (print(out); error("timed run in $dir failed (exit $(p.exitcode))"))
     res = Pair{String, Tuple{Float64, Float64}}[]
@@ -447,12 +499,14 @@ function wait_all_ready!(children, o)
                 end
                 wait(item.proc)
                 isempty(item.log) || println(join(item.log, "\n"))
-                error("timed run in $(item.dir) ($(item.side)) exited before READY (exit $(item.proc.exitcode))")
+                error("timed run in $(item.dir) ($(item.side)) exited before READY \
+                    (exit $(item.proc.exitcode))")
             elseif kind === :timeout
                 pending = [x for x in children if !x.is_ready[]]
                 for x in pending
                     isempty(x.log) ||
-                        println("--- output from $(x.side) ($(x.dir)) ---\n", join(x.log, "\n"))
+                        println("--- output from $(x.side) ($(x.dir)) \
+                            ---\n", join(x.log, "\n"))
                 end
                 error(
                     "timed out after $(o.ready_timeout) s waiting for READY from: " *
@@ -518,7 +572,8 @@ function run_go_child!(c, reader, children, idx, o, deadline; off_cpu = -1)
         !isempty(f) && f[1] == "DONE" && (got_done = true; break)
         parse_child_line!(res, skips, dist, tcs, l)
     end
-    # Move the finished child off the benchmark core before it tears down its heap and exits.
+    # Move the finished child off the benchmark core before it tears down its heap and
+    # exits.
     off_cpu >= 0 && c.child_pid[] > 0 && BenchMachine.repin!(c.child_pid[], off_cpu)
     close(c.inp)
     wait(reader)
@@ -551,8 +606,7 @@ end
 const MAY_SKIP = ("base", "base-ctl")
 
 function record_side!(R, D, skipped, r, side, dir, res, skips, dist, tcs)
-    isempty(skips) || side in MAY_SKIP ||
-        error(
+    isempty(skips) || side in MAY_SKIP || error(
         "the $side ($dir) skipped $(join(skips, ", ")): only the base and ",
         "its control may lack a case"
     )
@@ -594,7 +648,8 @@ function run_round_parallel!(R, D, skipped, r, order, cases, o, deadline)
     ]
     try
         readers = wait_all_ready!(children, o)
-        # Let parallel-compile heat/boost settle before the first child runs on the benchmark core.
+        # Let parallel-compile heat/boost settle before the first child runs on the
+        # benchmark core.
         sleep(2.0)
         with_machine_lock() do
             for (i, (c, reader)) in enumerate(zip(children, readers))
@@ -694,11 +749,18 @@ end
 function verdict(R, D, o)
     none = Dict{String, Vector{Tuple{Float64, Float64}}}()
     b, c = get(R, "base", none), get(R, "candidate", none)
-    ctls = o.control ? [("base-ctl", "base"), ("cand-ctl", "candidate")] :
-           Tuple{String, String}[]
-    keys_ = sort([k
-                  for k in keys(b)
-                  if haskey(c, k) && all(haskey(get(R, s, none), k) for (s, _) in ctls)])
+    ctls = if o.control
+        [("base-ctl", "base"), ("cand-ctl", "candidate")]
+    else
+        Tuple{String, String}[]
+    end
+    keys_ = sort(
+        [
+            k
+                for k in keys(b)
+                if haskey(c, k) && all(haskey(get(R, s, none), k) for (s, _) in ctls)
+        ]
+    )
     isempty(keys_) && error("no case was timed on every side")
     point(x, y) = o.stat == "paired" ? paired(x, y) : fastest(y) / fastest(x)
     iv(x, y) = boot_interval(ratios(x, y))
@@ -707,7 +769,6 @@ function verdict(R, D, o)
     dev, half = 0.0, 0.0
     ctlv = Dict{Tuple{String, String}, Tuple{Float64, Tuple{Float64, Float64}}}()
     for k in keys_, (s, ref) in ctls
-
         x, y = R[ref][k], R[s][k]
         rk, (lo, hi) = point(x, y), iv(x, y)
         ctlv[(k, s)] = (rk, (lo, hi))
@@ -716,9 +777,11 @@ function verdict(R, D, o)
     end
     margin = 1 + o.tolerance - dev
     slow, unread = String[], String[]
-    @printf("\n%-34s %9s %9s | %-26s",
+    @printf(
+        "\n%-34s %9s %9s | %-26s",
         "case (ns/site, fastest median)", "base", "candidate",
-        "candidate/base ($(o.stat)) 95%")
+        "candidate/base ($(o.stat)) 95%"
+    )
     for (s, ref) in ctls
         @printf(" | %-26s", "$s/$ref ($(o.stat)) 95%")
     end
@@ -733,8 +796,10 @@ function verdict(R, D, o)
             push!(unread, k)
             push!(flags, "UNREADABLE")
         end
-        @printf("%-34s %9.2f %9.2f | %.4f %s", k, fastest(b[k]), fastest(c[k]), rc,
-            fmt(iv(b[k], c[k])))
+        @printf(
+            "%-34s %9.2f %9.2f | %.4f %s", k, fastest(b[k]), fastest(c[k]), rc,
+            fmt(iv(b[k], c[k]))
+        )
         for (s, ref) in ctls
             rk, (lo, hi) = ctlv[(k, s)]
             lo <= 1 <= hi || push!(flags, "$s interval excludes 1")
@@ -744,18 +809,36 @@ function verdict(R, D, o)
     end
     nd = length(D)
     o.control &&
-        @printf("resolution: largest control deviation %.4f, largest control interval half-width %.4f\n",
-            dev, half)
-    @printf("pass margin: candidate/base <= %.4f (1 + tolerance %.3f - largest control deviation %.4f)\n",
-        margin, o.tolerance, dev)
+        @printf(
+        "resolution: largest control deviation %.4f, largest control interval half-width \
+            %.4f\n",
+        dev, half
+    )
+    @printf(
+        "pass margin: candidate/base <= %.4f (1 + tolerance %.3f - largest control \
+            deviation %.4f)\n",
+        margin, o.tolerance, dev
+    )
     nd == 0 || println("disturbed runs ($nd):\n  ", join(D, "\n  "))
-    code = nd > 0 ? 3 : !isempty(slow) ? 1 : !isempty(unread) ? 2 : 0
-    msg = code == 3 ? "$nd disturbed run(s): time again with the machine idle" :
-          code == 1 ? "REGRESSION: " * join(slow, ", ") :
-          code == 2 ?
-          "UNREADABLE: $(join(unread, ", ")) above the margin " *
-          "$(@sprintf("%.4f", margin)): re-run, or judge with the controls' range stated" :
-          "pass"
+    code = if nd > 0
+        3
+    elseif !isempty(slow)
+        1
+    elseif !isempty(unread)
+        2
+    else
+        0
+    end
+    msg = if code == 3
+        "$nd disturbed run(s): time again with the machine idle"
+    elseif code == 1
+        "REGRESSION: " * join(slow, ", ")
+    elseif code == 2
+        "UNREADABLE: $(join(unread, ", ")) above the margin " *
+            "$(@sprintf("%.4f", margin)): re-run, or judge with the controls' range stated"
+    else
+        "pass"
+    end
     println("verdict ($(o.stat)): ", msg)
     return code
 end
@@ -766,13 +849,21 @@ function ab_main(args)
     BenchMachine.pin_self_to_work!(m)     # the parent and the lock's keeper stay off 12–15
     harness = dirname(@__DIR__)
     deadline = time() + o.maxwait
-    mode = o.inprocess ? "; inprocess" : o.parallel ? "; parallel compile" : "; serial"
+    mode = if o.inprocess
+        "; inprocess"
+    elseif o.parallel
+        "; parallel compile"
+    else
+        "; serial"
+    end
     @printf(
-        "machine %s (%s); backend %s (%s); %s; Tuple cache seeded to %s; %d rounds; wait %s%s%s\n",
+        "machine %s (%s); backend %s (%s); %s; Tuple cache seeded to %s; %d rounds; wait \
+            %s%s%s\n",
         m.key, BenchMachine.cpu_model(), o.backend, o.variants,
         o.pin ?
-        "pinned to logical CPU $(o.cpu), siblings $(BenchMachine.siblings(o.cpu)) idle" :
-        "not pinned", o.seed > 0 ? string(o.seed) : "– (off)", o.rounds, o.wait,
+            "pinned to logical CPU $(o.cpu), siblings $(BenchMachine.siblings(o.cpu)) \
+                idle" :
+            "not pinned", o.seed > 0 ? string(o.seed) : "– (off)", o.rounds, o.wait,
         o.gctrial ? "; gctrial on" : "; gctrial off", mode
     )
     println("harness: $(o.child) (checkout $harness at $(describe(harness)))")
@@ -785,8 +876,12 @@ function ab_main(args)
     else
         base, cand, cases = o.pos[1], o.pos[2], o.pos[3]
         sides = ["base" => base, "candidate" => cand]
-        o.control && append!(sides, ["base-ctl" => control_checkout(base),
-            "cand-ctl" => control_checkout(cand)])
+        o.control && append!(
+            sides, [
+                "base-ctl" => control_checkout(base),
+                "cand-ctl" => control_checkout(cand),
+            ]
+        )
         for (s, d) in sides
             println(@sprintf("%-9s %s at %s", s, d, describe(d)))
         end
@@ -810,9 +905,9 @@ function ab_cli(args)
     end
 end
 
-# When run as a script, stderr shares stdout's file description. A caller that sends both to one
-# file by name (two opens, two offsets) would otherwise get stderr written over the report's
-# first lines; with the shared description neither stream overwrites the other.
+# When run as a script, stderr shares stdout's file description. A caller that sends both to
+# one file by name (two opens, two offsets) would otherwise get stderr written over the
+# report's first lines; with the shared description neither stream overwrites the other.
 if abspath(PROGRAM_FILE) == (@__FILE__)
     redirect_stderr(stdout)
     exit(ab_cli(ARGS))

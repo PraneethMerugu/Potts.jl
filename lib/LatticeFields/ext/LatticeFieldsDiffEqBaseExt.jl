@@ -7,6 +7,8 @@ using LatticeFields: Problems
 
 DiffEqBase.get_tstops(i::Problems.FieldIntegrator) = getfield(i, :tstops)
 DiffEqBase.get_tstops_array(i::Problems.FieldIntegrator) = getfield(i, :tstops)
-DiffEqBase.get_tstops_max(i::Problems.FieldIntegrator) = max(getfield(i, :tend), maximum(getfield(i, :tstops); init = -Inf))
+function DiffEqBase.get_tstops_max(i::Problems.FieldIntegrator)
+    return max(getfield(i, :tend), maximum(getfield(i, :tstops); init = -Inf))
+end
 
 end # module LatticeFieldsDiffEqBaseExt

@@ -1,7 +1,7 @@
 # `integral(Pre(w))` in an update block.
 # Decisions: D-042 (update-block semantics: `Pre(x)` is the value before the block),
-# D-076 (fresh integrals: a bare `integral(x)` sees the block's new values), D-078 (after-MCS
-# order: updates first).
+# D-076 (fresh integrals: a bare `integral(x)` sees the block's new values), D-078
+# (after-MCS order: updates first).
 #
 # Semantics pinned here:
 #  1. `integral(Pre(w))` read in an update block is, per cell, the sum over the cell's sites
@@ -115,10 +115,12 @@ end
     @sweep Metropolis(; temperature = 0.0)
 end
 pre_cell(sol, n) = [Array(getproperty(u.cell, n))[1] for u in sol.u]
-pre_solve(M, alg, σ, K; kw...) = solve(
-    PottsProblem(M(; name = :m), [ownership => σ, kind => [:A]], (0, K); kw...), alg;
-    saveat = 0:K
-)
+function pre_solve(M, alg, σ, K; kw...)
+    return solve(
+        PottsProblem(M(; name = :m), [ownership => σ, kind => [:A]], (0, K); kw...), alg;
+        saveat = 0:K
+    )
+end
 # ---------------------------------------------------------------------------------------
 # Moving cell (T = 4): the sweep changes the cell's sites, so the integral must fold the
 # post-sweep σ (the block's σ) with the block-start w. w0[i, j] = i, w ~ Pre(w) + 1, so at
@@ -145,52 +147,87 @@ end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "integral pre: integral(Pre(w)) reads the block-start values" setup = [IntegralPreSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "integral pre: integral(Pre(w)) reads the block-start values ($(nameof(typeof(alg))))" for
-        alg in (SequentialCPM(), CheckerboardCPM())
-        σ = zeros(Int32, 12, 12); σ[4:7, 4:7] .= 1
+@testitem "integral pre: integral(Pre(w)) reads the block-start values" setup = [
+    IntegralPreSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "integral pre: integral(Pre(w)) reads the block-start values \
+        ($(nameof(typeof(alg))))" for alg in (SequentialCPM(), CheckerboardCPM())
+        σ = zeros(Int32, 12, 12)
+        σ[4:7, 4:7] .= 1
         K = 4
         pre = [k == 0 ? 0.0 : 16.0 * (k - 1) for k in 0:K]      # 0, 0, 16, 32, 48
         new = [16.0 * k for k in 0:K]                             # 0, 16, 32, 48, 64
         diff = [k == 0 ? 0.0 : 16.0 for k in 0:K]                 # 0, 16, 16, 16, 16
-        # negative controls: the oracle tells the semantics from the two plausible wrong fixes
-        after_writer = new                                        # refreshed after the write
-        stale_snapshot = [k == 0 ? 0.0 : 16.0 * max(k - 2, 0) for k in 0:K]   # w__pre before its copy
+        # negative controls: the oracle tells the semantics from the two plausible wrong
+        # fixes
+        # refreshed after the write
+        after_writer = new
+        # w__pre before its copy
+        stale_snapshot = [k == 0 ? 0.0 : 16.0 * max(k - 2, 0) for k in 0:K]
         @test pre != after_writer && pre != stale_snapshot
 
         @test pre_cell(pre_solve(BeforeWriter, alg, σ, K), :s) == new   # control
 
-        @testset "Pre only $order" for (M, order) in ((WriterFirst, "writer first"), (ReaderFirst, "reader first"))
-            sol = pre_solve(M, alg, σ, K)                                     # DEFECT CHECK (FieldError)
+        @testset "Pre only $order" for (M, order) in (
+                (WriterFirst, "writer first"), (
+                    ReaderFirst, "reader first",
+                ),
+            )
+            # DEFECT CHECK (FieldError)
+            sol = pre_solve(M, alg, σ, K)
             @test pre_cell(sol, :volume) == fill(16, K + 1)
-            @test [sum(Array(u.site.w)[Array(u.ownership) .== 1]) for u in sol.u] == new   # w itself is right
-            @test pre_cell(sol, :s) == pre                                       # DEFECT CHECK
+            # w itself is right
+            @test [sum(Array(u.site.w)[Array(u.ownership) .== 1]) for u in sol.u] == new
+            # DEFECT CHECK
+            @test pre_cell(sol, :s) == pre
         end
         @testset "Pre and fresh $order" for (M, order) in (
                 (MixedWriterFirst, "writer first"),
                 (MixedReaderFirst, "reader first"),
             )
-            sol = pre_solve(M, alg, σ, K)                                     # DEFECT CHECK (FieldError)
+            # DEFECT CHECK (FieldError)
+            sol = pre_solve(M, alg, σ, K)
             @test pre_cell(sol, :volume) == fill(16, K + 1)
-            @test pre_cell(sol, :s) == pre                                       # DEFECT CHECK
-            @test pre_cell(sol, :f) == new                                       # fresh (D-076)
-            @test pre_cell(sol, :d) == diff                                      # DEFECT CHECK
+            # DEFECT CHECK
+            @test pre_cell(sol, :s) == pre
+            # fresh (D-076)
+            @test pre_cell(sol, :f) == new
+            # DEFECT CHECK
+            @test pre_cell(sol, :d) == diff
         end
     end
 end
 
-@testitem "integral pre: integral(Pre(w)) folds the post-sweep sites" setup = [IntegralPreSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "integral pre: integral(Pre(w)) folds the post-sweep sites ($(nameof(typeof(alg))))" for
-        alg in (SequentialCPM(), CheckerboardCPM())
-        σ = zeros(Int32, 12, 12); σ[4:7, 4:7] .= 1
+@testitem "integral pre: integral(Pre(w)) folds the post-sweep sites" setup = [
+    IntegralPreSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "integral pre: integral(Pre(w)) folds the post-sweep sites \
+        ($(nameof(typeof(alg))))" for alg in (SequentialCPM(), CheckerboardCPM())
+        σ = zeros(Int32, 12, 12)
+        σ[4:7, 4:7] .= 1
         w0 = [Float64(i) for i in 1:12, j in 1:12]
         K = 6
-        sol = solve(PottsProblem(Moving(; name = :m), [ownership => σ, kind => [:A], :w => w0], (0, K)), alg; saveat = 0:K)
+        sol = solve(
+            PottsProblem(
+                Moving(; name = :m), [ownership => σ, kind => [:A], :w => w0], (
+                    0, K,
+                )
+            ),
+            alg;
+            saveat = 0:K
+        )
         σs = [Array(u.ownership) for u in sol.u]
-        # negative control: the cell moved, so pre-sweep and post-sweep σ give different folds
+        # negative control: the cell moved, so pre-sweep and post-sweep σ give different
+        # folds
         @test any(k -> fold(σs[k + 1], k - 1) != fold(σs[k], k - 1), 1:K)
         @test all(k -> Array(sol.u[k + 1].site.w) == w0 .+ k, 0:K)
-        @test pre_cell(sol, :s)[2:end] ≈ [fold(σs[k + 1], k - 1) for k in 1:K]   # DEFECT CHECK
-        @test pre_cell(sol, :f)[2:end] ≈ [fold(σs[k + 1], k) for k in 1:K]       # fresh (D-076)
+        # DEFECT CHECK
+        @test pre_cell(sol, :s)[2:end] ≈ [fold(σs[k + 1], k - 1) for k in 1:K]
+        # fresh (D-076)
+        @test pre_cell(sol, :f)[2:end] ≈ [fold(σs[k + 1], k) for k in 1:K]
     end
 end

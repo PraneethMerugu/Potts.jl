@@ -33,8 +33,10 @@ const _VAR_ROLES = (:site, :field, :cell, :model)
 # `integral_pre = false`, `Pre` reads inside an `integral` are left out: `integral(Pre(w))`
 # is its own cell slot, refreshed at the start of the block's phases while `w` still holds
 # its block-start value (D-042), so it needs neither a snapshot nor a writer dependency.
-function _reads!(out, x, pre::Bool = false, nonlocal::Bool = false, inint::Bool = false;
-        integral_pre::Bool = true)
+function _reads!(
+        out, x, pre::Bool = false, nonlocal::Bool = false, inint::Bool = false;
+        integral_pre::Bool = true
+    )
     x = _unwrap(x)
     x isa SymbolicUtils.BasicSymbolic || return out
     i = info(x)
@@ -46,7 +48,8 @@ function _reads!(out, x, pre::Bool = false, nonlocal::Bool = false, inint::Bool 
     op = operation(x)
     op === history_lag && return out                  # reads the ring, not the variable
     p = pre || op isa ModelingToolkitBase.Pre
-    nl = nonlocal || op === gather || op === population || op === value_at || op === laplacian
+    nl = nonlocal || op === gather || op === population || op === value_at ||
+        op === laplacian
     ii = inint || op === cell_integral
     foreach(a -> _reads!(out, a, p, nl, ii; integral_pre), arguments(x))
     return out
@@ -66,7 +69,9 @@ function _integral_pre(x)
 end
 
 # A symbolic stand-in read as a stored array `st.<scope>.name` (role :site/:cell/:model).
-_standin(role::Symbol, name::Symbol) = _unwrap(_tag(_sym(name), Entity(role, name, nothing, (;))))
+function _standin(role::Symbol, name::Symbol)
+    return _unwrap(_tag(_sym(name), Entity(role, name, nothing, (;))))
+end
 
 # Replace `Pre(x)` (and bare `x` when `self(x)`) for snapshotted names by their snapshot.
 # Integrals are left intact: `integral(Pre(x))` and `integral(x)` are cell slots of their
@@ -85,15 +90,18 @@ function _to_snapshots(x, snap::Dict{Symbol, Any}, self)
             i !== nothing && haskey(snap, i.name) && (key = snap[i.name])
         else
             i = info(y)
-            i !== nothing && i.role in _VAR_ROLES && self(i.name) && haskey(snap, i.name) && (key = snap[i.name])
+            i !== nothing && i.role in _VAR_ROLES && self(i.name) && haskey(snap, i.name) &&
+                (key = snap[i.name])
         end
         key === nothing || (inint ? push!(inside, y) : (sub[y] = key))
-        iscall(y) && foreach(a -> visit(a, inint || operation(y) === cell_integral), arguments(y))
+        iscall(y) &&
+            foreach(a -> visit(a, inint || operation(y) === cell_integral), arguments(y))
         return
     end
     visit(x, false)
     isempty(sub) && return x
-    any(in(inside), keys(sub)) || return _unwrap(Symbolics.substitute(x, sub; fold = Val(false)))
+    any(in(inside), keys(sub)) ||
+        return _unwrap(Symbolics.substitute(x, sub; fold = Val(false)))
     # a term both outside and inside an integral: shield the integrals from the substitution
     ints = Dict{Any, Any}()
     _walk_all(x) do y
@@ -102,7 +110,12 @@ function _to_snapshots(x, snap::Dict{Symbol, Any}, self)
     end
     y = _unwrap(Symbolics.substitute(x, ints; fold = Val(false)))
     y = _unwrap(Symbolics.substitute(y, sub; fold = Val(false)))
-    return _unwrap(Symbolics.substitute(y, Dict{Any, Any}(v => k for (k, v) in ints); fold = Val(false)))
+    return _unwrap(
+        Symbolics.substitute(
+            y, Dict{Any, Any}(v => k for (k, v) in ints);
+            fold = Val(false)
+        )
+    )
 end
 
 # Whether a population fold can be computed once, outside any cell or site (its body does
@@ -121,25 +134,31 @@ end
 # statement order and, within `x`, in canonical order (`_symkey`, D-107); equal folds share
 # a slot). Folds inside `integral(…)` stay: the integral's own refresh computes them
 # (`_integral_hoist`).
-function _hoist_populations(x, slots::Vector{Pair{Symbol, Any}}, rn, prefix::Symbol; strict = false)
+function _hoist_populations(
+        x, slots::Vector{Pair{Symbol, Any}}, rn, prefix::Symbol; strict = false
+    )
     pops = Any[]
     function visit(y)
         y = _unwrap(y)
         (y isa SymbolicUtils.BasicSymbolic && iscall(y)) || return
         operation(y) === cell_integral && return
         operation(y) === population && push!(pops, y)
-        foreach(visit, arguments(y))
+        return foreach(visit, arguments(y))
     end
     visit(x)
     isempty(pops) && return x
     length(pops) > 1 && (pops = pops[sortperm(map(_symkey, pops))])
     sub = Dict{Any, Any}()
     for p in pops
-        _hoistable(p, rn) || (
-            strict ? throw(
-                    PottsCompileError(
-            "a population fold in an energy is computed once per MCS, so its body must not read " *
-            "the current cell or site; got `$p`")) : continue)
+        if !_hoistable(p, rn)
+            strict || continue
+            throw(
+                PottsCompileError(
+                    "a population fold in an energy is computed once per MCS, so its " *
+                        "body must not read the current cell or site; got `$p`"
+                )
+            )
+        end
         j = findfirst(s -> isequal(s.second, p), slots)
         if j === nothing
             push!(slots, Symbol(prefix, length(slots) + 1) => p)
@@ -148,16 +167,21 @@ function _hoist_populations(x, slots::Vector{Pair{Symbol, Any}}, rn, prefix::Sym
         sub[p] = _standin(:model, slots[j].first)
     end
     isempty(sub) && return x
-    return _unwrap(Symbolics.substitute(x, sub; fold = Val(false), filterer = _outside_integrals))
+    return _unwrap(
+        Symbolics.substitute(x, sub; fold = Val(false), filterer = _outside_integrals)
+    )
 end
-_outside_integrals(ex) = !(iscall(ex) && operation(ex) === cell_integral) && SymbolicUtils.default_substitute_filter(ex)
+function _outside_integrals(ex)
+    return !(iscall(ex) && operation(ex) === cell_integral) &&
+        SymbolicUtils.default_substitute_filter(ex)
+end
 
 # Population folds in the operand of `integral(x)` that read neither the site nor the cell
-# (D-110) are the same at every site: each is computed once per refresh of the integral, into
-# a model slot named after the fold's content (`_symkey`, D-107), and the operand reads the
-# slot. Only outermost folds are candidates (an inner fold may read the outer one's bound
-# variable), and not folds that draw random numbers (a draw per site is not one per MCS).
-# Returns the operand with the folds substituted and the slots (`name => fold`).
+# (D-110) are the same at every site: each is computed once per refresh of the integral,
+# into a model slot named after the fold's content (`_symkey`, D-107), and the operand reads
+# the slot. Only outermost folds are candidates (an inner fold may read the outer one's
+# bound variable), and not folds that draw random numbers (a draw per site is not one per
+# MCS). Returns the operand with the folds substituted and the slots (`name => fold`).
 function _integral_hoist(x)
     x = _unwrap(x)
     slots = Pair{Symbol, Any}[]
@@ -169,24 +193,31 @@ function _integral_hoist(x)
             (haskey(sub, y) || !_integral_hoistable(y)) && return
             n = Symbol(:__ifold_, string(_fnv64(_symkey(y)); base = 62))
             any(s -> s.first === n, slots) || push!(slots, n => y)
-            sub[y] = _standin(:model, n)               # (a `count`, `any`, `all` stored exactly)
+            # (a `count`, `any`, `all` stored exactly)
+            sub[y] = _standin(:model, n)
             return
         end
-        foreach(visit, arguments(y))
+        return foreach(visit, arguments(y))
     end
     visit(x)
     isempty(sub) && return x, slots
-    sort!(slots; by = first)                           # by content, not by walk order (D-107)
+    # by content, not by walk order (D-107)
+    sort!(slots; by = first)
     return _unwrap(Symbolics.substitute(x, sub; fold = Val(false))), slots
 end
 
-"""The operand of `integral(x)` as stored: `x` with its site-independent folds read from slots."""
+"""
+The operand of `integral(x)` as stored: `x` with its site-independent folds read from slots.
+"""
 _integral_operand(x) = first(_integral_hoist(x))
 
 function _integral_hoistable(pop)
     _has_op(pop, random_uniform) && return false
-    rn = Dict{Any, Symbol}(ni.options.relation => :__gather for (ni, _) in _gathers(pop)
-                           if !(ni.options.relation isa Union{RelationRef, ShellRelation}))
+    rn = Dict{Any, Symbol}(
+        ni.options.relation => :__gather
+            for (ni, _) in _gathers(pop)
+            if !(ni.options.relation isa Union{RelationRef, ShellRelation})
+    )
     return _hoistable(pop, rn)
 end
 
@@ -202,10 +233,14 @@ function _check_integral_pre(sys, u::Update, writers)
         _located(sys, u) do
             throw(
                 PottsCompileError(
-                    "`$(replace(string(y), r"\S*cell_integral" => "integral"))` reads $(join(pres, ", ")) through `Pre` (the values before the block) " *
-                                "and $(join(bares, ", ")) bare (the block's new values), all written in the " *
-                                "same block; split it into `integral(…Pre…)` and `integral(…)` terms, or keep " *
-                                "`Pre(x)` in a site variable (`xp ~ Pre(x)`) and fold that"))
+                    "`$(replace(string(y), r"\S*cell_integral" => "integral"))` " *
+                        "reads $(join(pres, ", ")) through `Pre` (the values before the " *
+                        "block) and $(join(bares, ", ")) bare (the block's new values), " *
+                        "all written in the same block; split it into `integral(…Pre…)` \
+                            and `integral(…)` terms, or keep `Pre(x)` in a site variable \
+                            (`xp ~ Pre(x)`) and fold that"
+                )
+            )
         end
     end
     return nothing
@@ -216,7 +251,11 @@ end
 _update_scope(u::Update) = (r = role(_written(u)); r === :field ? :site : r)
 function _written(u::Update)
     x = _unwrap(u.eq.lhs)
-    return u.phase === :on_copy && iscall(x) && operation(x) === value_at ? arguments(x)[1] : x
+    return if u.phase === :on_copy && iscall(x) && operation(x) === value_at
+        arguments(x)[1]
+    else
+        x
+    end
 end
 _update_name(u::Update) = info(_unwrap(u.eq.lhs)).name
 
@@ -242,7 +281,8 @@ end
 function _check_edge_block(sys, us)
     cadences = Dict{Symbol, Set{Int}}()               # edge variable => cadences writing it
     for u in us
-        _update_scope(u) === :edge && push!(get!(cadences, _update_name(u), Set{Int}()), u.every)
+        _update_scope(u) === :edge &&
+            push!(get!(cadences, _update_name(u), Set{Int}()), u.every)
     end
     for u in us
         _update_scope(u) === :edge || continue
@@ -253,10 +293,19 @@ function _check_edge_block(sys, us)
             _located(sys, u) do
                 throw(
                     PottsCompileError(
-                        "the edge update of `$me` reads `$n`, which the same block writes " *
-                                    (pre ? "at another cadence" : "(a bare read is its new value)") *
-                                    "; an edge update reads the edge variables its block writes only as " *
-                                    "`Pre(x)`, written at the update's own cadence"))
+                        "the edge update of `$me` reads `$n`, which the same block \
+                            writes " *
+                            (
+                            if pre
+                                "at another cadence"
+                            else
+                                "(a bare read is its new value)"
+                            end
+                        ) *
+                            "; an edge update reads the edge variables its block writes " *
+                            "only as `Pre(x)`, written at the update's own cadence"
+                    )
+                )
             end
         end
     end
@@ -268,11 +317,13 @@ end
 # in which the cadences first appear. Writers whose order no cadence order can keep (`x` at
 # 1 then 2, `y` at 2 then 1) are an error naming the variables.
 function _edge_stage_ranks(sys, us, isedge)
-    cads = Int[]                                       # cadences in order of first appearance
+    # cadences in order of first appearance
+    cads = Int[]
     for j in eachindex(us)
         isedge[j] && !(us[j].every in cads) && push!(cads, us[j].every)
     end
-    before = Dict(c => Set{Int}() for c in cads)       # cadence => cadences that must run first
+    # cadence => cadences that must run first
+    before = Dict(c => Set{Int}() for c in cads)
     why = Dict{Tuple{Int, Int}, Symbol}()
     lastw = Dict{Symbol, Int}()                        # variable => its previous writer
     for j in eachindex(us)
@@ -294,10 +345,14 @@ function _edge_stage_ranks(sys, us, isedge)
             _located(sys, us[j]) do
                 throw(
                     PottsCompileError(
-                        "the edge updates of $(join(("`$v`" for v in vars), ", ")) at cadences " *
-                                    "$(join(("Every($c)" for c in sort(left)), ", ")) cannot run in declaration " *
-                                    "order: each cadence's edge updates run together, and these writers alternate " *
-                                    "between them; write each variable's updates at those cadences in the same order"))
+                        "the edge updates of $(join(("`$v`" for v in vars), ", ")) at " *
+                            "cadences $(join(("Every($c)" for c in sort(left)), ", ")) " *
+                            "cannot run in declaration order: each cadence's edge " *
+                            "updates run together, and these writers alternate between \
+                                them; write each variable's updates at those cadences in \
+                                the same order"
+                    )
+                )
             end
         end
         rank[cads[k]] = length(rank) + 1
@@ -353,7 +408,10 @@ function _schedule_block(sys, us::Vector{Update}, rn, popslots::Vector{Pair{Symb
                 throw(
                     PottsCompileError(
                         "updates depend on each other's new values in a cycle " *
-                                    "($(join([cyc; names[j]], " → "))); read one of them through `Pre`"))
+                            "($(join([cyc; names[j]], " → "))); read one of them through \
+                                `Pre`"
+                    )
+                )
             end
         end
         state[j] = 1
@@ -367,25 +425,36 @@ function _schedule_block(sys, us::Vector{Update}, rn, popslots::Vector{Pair{Symb
 
     roles = Dict(_update_name(u) => info(_unwrap(u.eq.lhs)).role for u in us)
     infos = Dict(_update_name(u) => info(_unwrap(u.eq.lhs)) for u in us)
-    # a snapshot keeps its variable's default and reference flag (R6): `q[partner]` of a dead
-    # referent reads `q`'s default, and `Pre(partner)` is still a reference
-    snapinfo(n) = (i = infos[n]; Entity(roles[n] === :field ? :site : roles[n], Symbol(n, :__pre), i.default,
-                                     get(i.options, :reference, false) === true ? (; reference = true) : (;)))
-    snap = Dict{Symbol, Any}(n => _unwrap(_tag(_sym(Symbol(n, :__pre)), snapinfo(n))) for n in snapnames)
+    # a snapshot keeps its variable's default and reference flag (R6): `q[partner]` of a
+    # dead referent reads `q`'s default, and `Pre(partner)` is still a reference
+    function snapinfo(n)
+        i = infos[n]
+        return Entity(
+            roles[n] === :field ? :site : roles[n], Symbol(n, :__pre), i.default,
+            get(i.options, :reference, false) === true ? (; reference = true) : (;)
+        )
+    end
+    snap = Dict{Symbol, Any}(
+        n => _unwrap(_tag(_sym(Symbol(n, :__pre)), snapinfo(n)))
+            for n in snapnames
+    )
     order = Dict(:model => 1, :cell => 2, :site => 3, :edge => 4)
-    # Edge updates (D-169): nothing reads an edge variable's new value (`_check_edge_block`),
-    # so all edge updates of one cadence form one stage, after every other update of the
-    # block. The edge stages run in a topological order: for each edge variable written at
-    # several cadences, its writers in declaration order (D-042); otherwise in the order
-    # their cadences first appear (`_edge_stage_ranks`). Other stages keep their keys
-    # `(level, scope order, 0, every)`.
+    # Edge updates (D-169): nothing reads an edge variable's new value
+    # (`_check_edge_block`), so all edge updates of one cadence form one stage, after every
+    # other update of the block. The edge stages run in a topological order: for each edge
+    # variable written at several cadences, its writers in declaration order (D-042);
+    # otherwise in the order their cadences first appear (`_edge_stage_ranks`). Other stages
+    # keep their keys `(level, scope order, 0, every)`.
     isedge = [_update_scope(u) === :edge for u in us]
     last_level = 1 + maximum((level[j] for j in eachindex(us) if !isedge[j]); init = 0)
     rank = _edge_stage_ranks(sys, us, isedge)
     groups = Dict{NTuple{4, Int}, Vector{Int}}()
     for (j, u) in enumerate(us)
-        key = isedge[j] ? (last_level, order[:edge], rank[u.every], u.every) :
-              (level[j], order[_update_scope(u)], 0, u.every)
+        key = if isedge[j]
+            (last_level, order[:edge], rank[u.every], u.every)
+        else
+            (level[j], order[_update_scope(u)], 0, u.every)
+        end
         push!(get!(groups, key, Int[]), j)
     end
     stages = Stage[]
@@ -396,18 +465,23 @@ function _schedule_block(sys, us::Vector{Update}, rn, popslots::Vector{Pair{Symb
         rewritten = map(idx) do j
             u = us[j]
             rhs = _to_snapshots(_unwrap(u.eq.rhs), snap, n -> same(n, j))
-            if scope !== :model                        # a model update is one work item already
+            # a model update is one work item already
+            if scope !== :model
                 before = length(popslots)
                 rhs = _hoist_populations(rhs, popslots, rn, :__pop)
                 used = Set(n for (n, _, _) in _reads(rhs))
                 for s in popslots
-                    s.first in used && !any(q -> q.first === s.first, pops) && push!(pops, s)
+                    s.first in used && !any(q -> q.first === s.first, pops) &&
+                        push!(pops, s)
                 end
             end
             Update(u.phase, Equation(u.eq.lhs, rhs), u.every)
         end
         push!(stages, Stage(scope, key[4], rewritten, pops))
     end
-    snaps = sort!([(roles[n] === :field ? :site : roles[n], n) for n in snapnames]; by = last)
+    snaps = sort!(
+        [(roles[n] === :field ? :site : roles[n], n) for n in snapnames];
+        by = last
+    )
     return stages, snaps
 end

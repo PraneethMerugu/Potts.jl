@@ -1,6 +1,7 @@
 # Cell references (R6): regressions found in review of the D-231 implementation. The
-# specification is the frozen acceptance test lib/PottsModels/test/acceptance/cell_references_tests.jl;
-# these cover forms it does not reach.
+# specification is the frozen acceptance test
+# lib/PottsModels/test/acceptance/cell_references_tests.jl; these cover forms it does not
+# reach.
 
 @testsetup module CellRefsSetup
 using Potts, Test
@@ -8,9 +9,7 @@ using Potts: CorePotts
 isdefined(@__MODULE__, :PottsDevices) || include(joinpath(@__DIR__, "shared", "devices.jl"))
 using Potts: CorePotts
 
-
 cr_ctx(prob) = Potts._host_ctx(prob)
-
 
 # every Moore(1) copy of state `u` (target t takes source s's owner)
 function cr_props(prob, u)
@@ -50,7 +49,6 @@ function cr_worst_gap(prob, u)
     return worst
 end
 
-
 # 1. an on-copy update writes the gainer's reference, which the energy dereferences
 @potts_model CROnCopy begin
     @kinds medium ka
@@ -67,7 +65,6 @@ end
     @sweep Metropolis(; temperature = 10.0)
 end
 
-
 # 2. references chosen with `ifelse`
 @potts_model CRIfelse begin
     @kinds medium ka
@@ -83,7 +80,6 @@ end
     @sweep Metropolis(; temperature = 10.0)
 end
 
-
 # 3. a population fold over references in a drive
 @potts_model CRFold begin
     @kinds medium ka
@@ -97,7 +93,6 @@ end
     @sweep Metropolis(; temperature = 10.0)
 end
 
-
 @potts_model CRFoldBad begin
     @kinds medium ka
     @variables begin
@@ -108,7 +103,6 @@ end
     @energy contacts => 0.1 * sum(q[partner[c]] for c in cells(ka))
     @sweep Metropolis(; temperature = 10.0)
 end
-
 
 # 4. a literal reference beyond the capacity
 @potts_model CRLiteral begin
@@ -123,7 +117,6 @@ end
     @sweep Metropolis(; temperature = 10.0)
 end
 
-
 # 5. an update reading its own variable through a reference (a previous-value snapshot)
 @potts_model CRSnapshot begin
     @kinds medium ka
@@ -136,7 +129,6 @@ end
     @after_mcs q ~ q[partner] + 1.0
     @sweep Metropolis(; temperature = 0.0001)
 end
-
 
 # 7. a dividing model (birth serials)
 @potts_model CRDivide begin
@@ -151,19 +143,20 @@ end
     @sweep Metropolis(; temperature = 4.0)
 end
 
-
 const CR_σ = let σ = zeros(Int32, 12, 12)
-    σ[2:4, 2:4] .= 1; σ[8:10, 8:10] .= 2; σ[2:3, 9:10] .= 3
+    σ[2:4, 2:4] .= 1
+    σ[8:10, 8:10] .= 2
+    σ[2:3, 9:10] .= 3
     σ
 end
 
-
 # a state of the dividing model without its serial column and counter: another layout
-cr_old_layout(st) = CorePotts.CPMState(
-    st.ownership, Base.structdiff(st.cell, NamedTuple{(:birth,)}),
-    st.site, Base.structdiff(st.model, NamedTuple{(CorePotts.NEXT_BIRTH,)}), st.history
-)
-
+function cr_old_layout(st)
+    return CorePotts.CPMState(
+        st.ownership, Base.structdiff(st.cell, NamedTuple{(:birth,)}),
+        st.site, Base.structdiff(st.model, NamedTuple{(CorePotts.NEXT_BIRTH,)}), st.history
+    )
+end
 
 # E4/E5/E8 (ergonomics review): the reference debug mode `track = (:references,)`, the
 # `sibling` rule with several members, and the refusal message naming the alternatives
@@ -187,7 +180,6 @@ cr_old_layout(st) = CorePotts.CPMState(
     @sweep Metropolis(; temperature = 0.01)
 end
 
-
 @potts_model CRBadVolume begin
     @kinds medium ka
     @variables begin
@@ -198,21 +190,26 @@ end
     @sweep Metropolis(; temperature = 10.0)
 end
 
-
 function cr_dead_problem(; track = ())
-    σ = zeros(Int32, 12, 12); σ[3:5, 3:5] .= 1; σ[3:5, 6:8] .= 2; σ[9, 9] = 3
+    σ = zeros(Int32, 12, 12)
+    σ[3:5, 3:5] .= 1
+    σ[3:5, 6:8] .= 2
+    σ[9, 9] = 3
     p = PottsProblem(
-        CROnCopy(; name = :rb), [ownership => σ, :partner => [3, 3, 0], :q => [1.0, 2.0, 3.0]],
+        CROnCopy(; name = :rb), [
+            ownership => σ, :partner => [3, 3, 0], :q => [1.0, 2.0, 3.0],
+        ],
         (0, 2); capacity = 4, track
     )
-    u = deepcopy(p.u0); u.ownership[9, 9] = 0; u.cell.volume[3] = 0        # cell 3 is dead: 1 and 2 read it
+    u = deepcopy(p.u0)
+    u.ownership[9, 9] = 0
+    u.cell.volume[3] = 0        # cell 3 is dead: 1 and 2 read it
     return remake(p; u0 = u)
 end
 
-
 # The reference reset of an event round on the device (D-066 item 5 (a)): the host planner
-# form launches `Lifecycle.release` as its own kernel (`CorePotts._release_body!`), which the
-# GPU group must compile (device IR coverage, D-157); the device forms run it inside the
+# form launches `Lifecycle.release` as its own kernel (`CorePotts._release_body!`), which
+# the GPU group must compile (device IR coverage, D-157); the device forms run it inside the
 # copies stage. Compared with the CPU Float32 run.
 @potts_model CRRelease begin
     @kinds medium blob doomed
@@ -232,11 +229,15 @@ end
     @sweep Metropolis(; temperature = 10.0)
 end
 
-
 function cr_release_problem()
-    σ = zeros(Int32, 30, 30); σ[5:10, 5:10] .= 1; σ[5:10, 18:23] .= 2; σ[25, 15] = 3
+    σ = zeros(Int32, 30, 30)
+    σ[5:10, 5:10] .= 1
+    σ[5:10, 18:23] .= 2
+    σ[25, 15] = 3
     return PottsProblem(
-        CRRelease(; name = :rel), [ownership => σ, kind => [:blob, :blob, :doomed], :partner => [2, 3, 1]],
+        CRRelease(; name = :rel), [
+            ownership => σ, kind => [:blob, :blob, :doomed], :partner => [2, 3, 1],
+        ],
         (0, 8); T = Float32, capacity = 6
     )
 end
@@ -244,17 +245,18 @@ end
 # after the event: blobs 1, 2 and their two daughters alive (one in the dead cell's slot 3);
 # 1 and its daughter still name 2, 2 and its daughter were reset (2 named the dead cell 3)
 function cr_release_summary(u)
-    v = Array(u.cell.volume); pr = Array(u.cell.partner)
+    v = Array(u.cell.volume)
+    pr = Array(u.cell.partner)
     alive = findall(>(0), v)
     return (;
-        nalive = length(alive), slot3 = v[3] > 0, names2 = count(==(2), pr[alive]), names0 = count(==(0), pr[alive]),
+        nalive = length(alive), slot3 = v[3] > 0, names2 = count(==(2), pr[alive]),
+        names0 = count(==(0), pr[alive]),
         other = count(r -> r ∉ (0, 2), pr[alive]),
     )
 end
 
-
-# `ifelse` with a reference in one branch reads as a reference, so its other branch must be a
-# cell index too: a site index (`target`) would be dereferenced as a cell slot. Negative
+# `ifelse` with a reference in one branch reads as a reference, so its other branch must be
+# a cell index too: a site index (`target`) would be dereferenced as a cell slot. Negative
 # control: the same `ifelse` with a cell index (`old`, 0) builds and runs.
 @potts_model CRSiteBranch begin
     @kinds medium ka
@@ -270,17 +272,28 @@ end
     @variables partner(cell)::CellRef
     @lattice Lattice((12, 12); boundary = Closed(), neighborhood = Moore(1))
     @energy cells => (volume - 6.0)^2
-    @drive copy => 0.1 * kind[ifelse(mcs > 0, partner[old], old)] + 0.1 * volume[ifelse(mcs > 0, partner[new], 0)]
+    @drive copy =>
+        0.1 * kind[ifelse(mcs > 0, partner[old], old)] +
+        0.1 * volume[ifelse(mcs > 0, partner[new], 0)]
     @sweep Metropolis(; temperature = 10.0)
 end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "references written on copy are dereferenced exactly (ΔH = H(a) − H(u) + credit)" setup = [CellRefsSetup] tags = [:potts, :cell_refs] begin
-    @testset "references written on copy are dereferenced exactly (ΔH = H(a) − H(u) + credit)" begin
-        σ = zeros(Int32, 12, 12); σ[3:5, 3:5] .= 1; σ[3:5, 6:8] .= 2; σ[9, 9] = 3
+@testitem "references written on copy are dereferenced exactly (ΔH = H(a) − H(u) + \
+    credit)" setup = [CellRefsSetup] tags = [
+    :potts, :cell_refs,
+] begin
+    @testset "references written on copy are dereferenced exactly (ΔH = H(a) − H(u) + \
+        credit)" begin
+        σ = zeros(Int32, 12, 12)
+        σ[3:5, 3:5] .= 1
+        σ[3:5, 6:8] .= 2
+        σ[9, 9] = 3
         p = PottsProblem(
-            CROnCopy(; name = :rb), [ownership => σ, :partner => [2, 3, 1], :q => [1.0, 2.0, 3.0]],
+            CROnCopy(; name = :rb), [
+                ownership => σ, :partner => [2, 3, 1], :q => [1.0, 2.0, 3.0],
+            ],
             (0, 2); capacity = 4
         )
         u = p.u0
@@ -288,39 +301,61 @@ end
         pr = first(filter(x -> x.old == 0 && x.new == 1, cr_props(p, u)))
         a = cr_apply(p, u, pr)
         @test a.cell.partner[1] == 0
-        @test energy_change(p, u, pr) ≈ total_energy(p, a) - total_energy(p, u) atol = 1.0e-9
-        @test cr_worst_gap(p, u) < 1.0e-9                       # every copy, kills (cell 3) included
+        @test energy_change(p, u, pr) ≈ total_energy(p, a) -
+            total_energy(p, u) atol = 1.0e-9
+        # every copy, kills (cell 3) included
+        @test cr_worst_gap(p, u) < 1.0e-9
         sol = solve(p, SequentialCPM(); saveat = 1)
         @test cr_worst_gap(p, sol.u[end]) < 1.0e-9
     end
 end
 
-@testitem "a reference chosen with ifelse is guarded" setup = [CellRefsSetup] tags = [:potts, :cell_refs] begin
+@testitem "a reference chosen with ifelse is guarded" setup = [CellRefsSetup] tags = [
+    :potts, :cell_refs,
+] begin
     @testset "a reference chosen with ifelse is guarded" begin
         p = PottsProblem(
-            CRIfelse(; name = :c1), [ownership => CR_σ, :partner => [2, 0, 0], :other => [3, 0, 0]],
+            CRIfelse(; name = :c1), [
+                ownership => CR_σ, :partner => [2, 0, 0], :other => [3, 0, 0],
+            ],
             (0, 2); capacity = 4
         )
         @test Symbol(solve(p, CheckerboardCPM()).retcode) === :Success
         p7 = PottsProblem(
-            CRIfelse(; name = :c7), [ownership => CR_σ, :partner => [3, 3, 1], :q => [1.0, 2.0, 7.0]],
+            CRIfelse(; name = :c7), [
+                ownership => CR_σ, :partner => [3, 3, 1], :q => [1.0, 2.0, 7.0],
+            ],
             (0, 1); capacity = 4
         )
-        v = deepcopy(p7.u0); v.ownership[v.ownership .== 3] .= 0; v.cell.volume[3] = 0
-        @test observe(p7, :viaif, v)[1:2] == [5.0, 5.0]       # a dead referent reads the default
+        v = deepcopy(p7.u0)
+        v.ownership[v.ownership .== 3] .= 0
+        v.cell.volume[3] = 0
+        # a dead referent reads the default
+        @test observe(p7, :viaif, v)[1:2] == [5.0, 5.0]
         @test observe(p7, :viaif, p7.u0)[1:2] == [7.0, 7.0]
     end
 end
 
-@testitem "a fold over references in a drive runs on every solver" setup = [CellRefsSetup] tags = [:potts, :cell_refs] begin
+@testitem "a fold over references in a drive runs on every solver" setup = [
+    CellRefsSetup,
+] tags = [
+    :potts, :cell_refs,
+] begin
     @testset "a fold over references in a drive runs on every solver" begin
-        p = PottsProblem(CRFold(; name = :c2), [ownership => CR_σ, :partner => [2, 3, 1]], (0, 2); capacity = 4)
+        p = PottsProblem(
+            CRFold(; name = :c2), [ownership => CR_σ, :partner => [2, 3, 1]], (
+                0, 2,
+            ); capacity = 4
+        )
         for alg in (SequentialCPM(), CheckerboardCPM())
             @test Symbol(solve(p, alg).retcode) === :Success
         end
         # an energy of another domain still may not read through a reference, even in a fold
         err = try
-            PottsProblem(CRFoldBad(; name = :bad), [ownership => CR_σ, :partner => [2, 3, 1]], (0, 2); capacity = 4)
+            PottsProblem(
+                CRFoldBad(; name = :bad),
+                [ownership => CR_σ, :partner => [2, 3, 1]], (0, 2); capacity = 4
+            )
             nothing
         catch e
             e
@@ -329,9 +364,16 @@ end
     end
 end
 
-@testitem "a reference beyond the capacity runs under the checkerboard" setup = [CellRefsSetup] tags = [:potts, :cell_refs] begin
+@testitem "a reference beyond the capacity runs under the checkerboard" setup = [
+    CellRefsSetup,
+] tags = [
+    :potts, :cell_refs,
+] begin
     @testset "a reference beyond the capacity runs under the checkerboard" begin
-        p = PottsProblem(CRLiteral(; name = :c5), [ownership => CR_σ, :partner => [2, 3, 1]], (0, 3); capacity = 4)
+        p = PottsProblem(
+            CRLiteral(; name = :c5),
+            [ownership => CR_σ, :partner => [2, 3, 1]], (0, 3); capacity = 4
+        )
         sol = solve(p, CheckerboardCPM(); saveat = 1)
         @test Symbol(sol.retcode) === :Success
         u = sol.u[end]
@@ -339,21 +381,42 @@ end
     end
 end
 
-@testitem "an update reads its own variable through a reference (snapshot default)" setup = [CellRefsSetup] tags = [:potts, :cell_refs] begin
+@testitem "an update reads its own variable through a reference (snapshot default)" setup =
+    [CellRefsSetup] tags = [
+    :potts, :cell_refs,
+] begin
     @testset "an update reads its own variable through a reference (snapshot default)" begin
-        σ = zeros(Int32, 12, 12); σ[2:4, 2:4] .= 1; σ[8:10, 8:10] .= 2
-        p = PottsProblem(CRSnapshot(; name = :eu), [ownership => σ, :partner => [2, 1], :q => [1.0, 10.0]], (0, 1))
-        @test solve(p, SequentialCPM(); saveat = 1).u[end].cell.q[1:2] == [11.0, 2.0]       # previous values
-        p0 = PottsProblem(CRSnapshot(; name = :eu), [ownership => σ, :partner => [0, 1], :q => [1.0, 10.0]], (0, 1))
-        @test solve(p0, SequentialCPM(); saveat = 1).u[end].cell.q[1:2] == [1.0, 2.0]        # ref 0: default 0.0
+        σ = zeros(Int32, 12, 12)
+        σ[2:4, 2:4] .= 1
+        σ[8:10, 8:10] .= 2
+        p = PottsProblem(
+            CRSnapshot(; name = :eu),
+            [ownership => σ, :partner => [2, 1], :q => [1.0, 10.0]], (0, 1)
+        )
+        # previous values
+        @test solve(p, SequentialCPM(); saveat = 1).u[end].cell.q[1:2] == [11.0, 2.0]
+        p0 = PottsProblem(
+            CRSnapshot(; name = :eu),
+            [ownership => σ, :partner => [0, 1], :q => [1.0, 10.0]], (0, 1)
+        )
+        # ref 0: default 0.0
+        @test solve(p0, SequentialCPM(); saveat = 1).u[end].cell.q[1:2] == [1.0, 2.0]
     end
 end
 
-@testitem "a state without the serials of a model that reads `birth` is an ArgumentError" setup = [CellRefsSetup] tags = [:potts, :cell_refs] begin
-    @testset "a state without the serials of a model that reads `birth` is an ArgumentError" begin
-        σ = zeros(Int32, 24, 24); σ[4:9, 4:9] .= 1; σ[15:20, 15:20] .= 2
+@testitem "a state without the serials of a model that reads `birth` is an \
+    ArgumentError" setup = [CellRefsSetup] tags = [
+    :potts, :cell_refs,
+] begin
+    @testset "a state without the serials of a model that reads `birth` is an \
+        ArgumentError" begin
+        σ = zeros(Int32, 24, 24)
+        σ[4:9, 4:9] .= 1
+        σ[15:20, 15:20] .= 2
         p = PottsProblem(
-            CRDivide(; name = :d), [ownership => σ, kind => [:blob, :blob], :partner => [2, 1]], (0, 4);
+            CRDivide(; name = :d), [
+                ownership => σ, kind => [:blob, :blob], :partner => [2, 1],
+            ], (0, 4);
             capacity = 8
         )
         old = cr_old_layout(p.u0)
@@ -377,18 +440,24 @@ end
         @test_throws ArgumentError reinit!(init(p, SequentialCPM()), old)
         # control: the state with its serials
         q = remake(p; u0 = deepcopy(p.u0))
-        @test q.u0.cell.birth == p.u0.cell.birth && q.u0.model[CorePotts.NEXT_BIRTH] == p.u0.model[CorePotts.NEXT_BIRTH]
+        @test q.u0.cell.birth == p.u0.cell.birth &&
+            q.u0.model[CorePotts.NEXT_BIRTH] == p.u0.model[CorePotts.NEXT_BIRTH]
         @test Symbol(solve(q, SequentialCPM()).retcode) === :Success
     end
 end
 
-@testitem "track = (:references,) counts dereferences of dead referents (E4)" setup = [CellRefsSetup] tags = [:potts, :cell_refs] begin
+@testitem "track = (:references,) counts dereferences of dead referents (E4)" setup = [
+    CellRefsSetup,
+] tags = [
+    :potts, :cell_refs,
+] begin
     @testset "track = (:references,) counts dereferences of dead referents (E4)" begin
         plain = cr_dead_problem()
         tracked = cr_dead_problem(; track = (:references,))
         # off: no counters, no counting code, no warning
         @test !haskey(plain.u0.model, Potts.REF_COUNTS)
-        σ0 = copy(plain.u0.ownership); σ0[9, 9] = 3
+        σ0 = copy(plain.u0.ownership)
+        σ0[9, 9] = 3
         @test plain.f.fingerprint == PottsProblem(
             CROnCopy(; name = :rb), [ownership => σ0, :partner => [3, 3, 0]],
             (0, 2); capacity = 4
@@ -397,8 +466,14 @@ end
         @test_logs solve(plain, SequentialCPM())
         # on: one warning naming the energy term
         @test haskey(tracked.u0.model, Potts.REF_COUNTS)
-        @test_logs (:warn, r"@energy cells read a dead referent \d+ time") solve(tracked, SequentialCPM())
-        @test_logs (:warn, r"@energy cells read a dead referent") solve(tracked, CheckerboardCPM())
+        @test_logs (:warn, r"@energy cells read a dead referent \d+ time") solve(
+            tracked,
+            SequentialCPM()
+        )
+        @test_logs (:warn, r"@energy cells read a dead referent") solve(
+            tracked,
+            CheckerboardCPM()
+        )
         # the debug mode changes nothing in the run
         a = solve(plain, SequentialCPM()).u[end]
         b = Base.CoreLogging.with_logger(Base.CoreLogging.NullLogger()) do
@@ -412,29 +487,55 @@ end
     end
 end
 
-@testitem "sibling(k) with several members: the lowest birth, reported in the debug mode (E5)" setup = [CellRefsSetup] tags = [:potts, :cell_refs] begin
-    @testset "sibling(k) with several members: the lowest birth, reported in the debug mode (E5)" begin
-        σ = zeros(Int32, 16, 16); σ[3:9, 3:9] .= 1; σ[4:5, 4:5] .= 2; σ[7:8, 7:8] .= 3
-        mk(track) = PottsProblem(
-            CRSibling(; name = :s), [
-                ownership => σ, kind => [:cyto, :nucleus, :nucleus],
-                cluster => [1, 1, 1],
-            ], (0, 1); capacity = 6, track
-        )
+@testitem "sibling(k) with several members: the lowest birth, reported in the debug mode \
+    (E5)" setup = [CellRefsSetup] tags = [
+    :potts, :cell_refs,
+] begin
+    @testset "sibling(k) with several members: the lowest birth, reported in the debug \
+        mode (E5)" begin
+        σ = zeros(Int32, 16, 16)
+        σ[3:9, 3:9] .= 1
+        σ[4:5, 4:5] .= 2
+        σ[7:8, 7:8] .= 3
+        function mk(track)
+            return PottsProblem(
+                CRSibling(; name = :s), [
+                    ownership => σ, kind => [:cyto, :nucleus, :nucleus],
+                    cluster => [1, 1, 1],
+                ],
+                (0, 1);
+                capacity = 6,
+                track
+            )
+        end
         p = mk(())
-        @test solve(p, SequentialCPM()).u[end].cell.nuc[1] == 2                  # birth = slot: 2 is older
-        u = deepcopy(p.u0); u.cell.birth[1:3] .= Int32[1, 7, 3]                   # now 3 is older
+        # birth = slot: 2 is older
+        @test solve(p, SequentialCPM()).u[end].cell.nuc[1] == 2
+        u = deepcopy(p.u0)
+        u.cell.birth[1:3] .= Int32[1, 7, 3]                   # now 3 is older
         @test solve(remake(p; u0 = u), SequentialCPM()).u[end].cell.nuc[1] == 3
         t = mk((:references,))
-        @test_logs (:warn, r"sibling\(k\) found several alive members") solve(t, SequentialCPM())
-        @test_logs solve(p, SequentialCPM())                                       # untracked: silent
+        @test_logs (:warn, r"sibling\(k\) found several alive members") solve(
+            t,
+            SequentialCPM()
+        )
+        # untracked: silent
+        @test_logs solve(p, SequentialCPM())
     end
 end
 
-@testitem "the refusal of an unbound cell read through a reference names the alternatives" setup = [CellRefsSetup] tags = [:potts, :cell_refs] begin
-    @testset "the refusal of an unbound cell read through a reference names the alternatives" begin
+@testitem "the refusal of an unbound cell read through a reference names the \
+    alternatives" setup = [CellRefsSetup] tags = [
+    :potts, :cell_refs,
+] begin
+    @testset "the refusal of an unbound cell read through a reference names the \
+        alternatives" begin
         err = try
-            PottsProblem(CRBadVolume(; name = :bv), [ownership => CR_σ, :partner => [2, 3, 1]], (0, 1))
+            PottsProblem(
+                CRBadVolume(; name = :bv), [
+                    ownership => CR_σ, :partner => [2, 3, 1],
+                ], (0, 1)
+            )
             nothing
         catch e
             e
@@ -443,7 +544,10 @@ end
     end
 end
 
-@testitem "references are released on the device (host planner form; PottsDevices)" setup = [CellRefsSetup] tags = [:potts, :cell_refs, :device] begin
+@testitem "references are released on the device (host planner form; PottsDevices)" setup =
+    [CellRefsSetup] tags = [
+    :potts, :cell_refs, :device,
+] begin
     @testset "references are released on the device (host planner form; PottsDevices)" begin
         if isdefined(@__MODULE__, :PottsDevices) && PottsDevices.on_device()
             backend = PottsDevices.device_backend()
@@ -453,7 +557,8 @@ end
             integ = init(prob, CheckerboardCPM(); backend)
             D = integ.lcache.device
             @test D isa CorePotts.DeviceLifecycle
-            D.form[] = CorePotts._FORM_HOST                 # the host planner: `_run_release!` launches on the device
+            # the host planner: `_run_release!` launches on the device
+            D.form[] = CorePotts._FORM_HOST
             dev = cr_release_summary(solve!(integ).u[end])
             @test Symbol(integ.retcode) === :Success
             @test dev == cpu
@@ -465,7 +570,11 @@ end
     end
 end
 
-@testitem "a reference `ifelse` refuses a site-index branch" setup = [CellRefsSetup] tags = [:potts, :cell_refs] begin
+@testitem "a reference `ifelse` refuses a site-index branch" setup = [
+    CellRefsSetup,
+] tags = [
+    :potts, :cell_refs,
+] begin
     @testset "a reference `ifelse` refuses a site-index branch" begin
         err = try
             mtkcompile(CRSiteBranch(; name = :sb))
@@ -474,8 +583,14 @@ end
             e
         end
         @test err isa Potts.PottsCompileError
-        σ = zeros(Int32, 12, 12); σ[3:5, 3:5] .= 1; σ[3:5, 6:8] .= 2
-        p = PottsProblem(CRCellBranch(; name = :cb), [ownership => σ, :partner => [2, 1]], (0, 2))
+        σ = zeros(Int32, 12, 12)
+        σ[3:5, 3:5] .= 1
+        σ[3:5, 6:8] .= 2
+        p = PottsProblem(
+            CRCellBranch(; name = :cb), [ownership => σ, :partner => [2, 1]], (
+                0, 2,
+            )
+        )
         @test Symbol(solve(p, SequentialCPM()).retcode) === :Success
     end
 end

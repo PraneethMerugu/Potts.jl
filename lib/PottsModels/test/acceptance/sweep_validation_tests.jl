@@ -16,14 +16,14 @@
 #       - an instance of a callable struct `Mix(0.3)`: the type path and field values,
 #         printed by `show`. Stable, and two instances with other fields differ.
 #       - an anonymous function: `var"#2#3"()` in one process, `var"#23#24"()` in the
-#         other; an inline `(a, b) -> …` in the `@sweep`: `var"#50#51"()` vs `var"#71#72"()`.
-#         The counter is session-global, so the same model fingerprints differently in two
-#         sessions (a checkpoint is refused for no reason) and two different anonymous
-#         functions can get the same name in two sessions (a checkpoint loads across them:
-#         unsafe). The body is never hashed.
-#       - a closure from a generator `mk(w) = (a, b) -> …`: `var"#mk##0#mk##1"{Float64}(0.3)`,
-#         a compiler-generated name (stable only while the source of `mk` keeps its
-#         closures in the same order) plus the captured values.
+#         other; an inline `(a, b) -> …` in the `@sweep`: `var"#50#51"()` vs
+#         `var"#71#72"()`. The counter is session-global, so the same model fingerprints
+#         differently in two sessions (a checkpoint is refused for no reason) and two
+#         different anonymous functions can get the same name in two sessions (a checkpoint
+#         loads across them: unsafe). The body is never hashed.
+#       - a closure from a generator `mk(w) = (a, b) -> …`:
+#         `var"#mk##0#mk##1"{Float64}(0.3)`, a compiler-generated name (stable only while
+#         the source of `mk` keeps its closures in the same order) plus the captured values.
 #     No PottsModels system sets `combine` (they all keep the default `min`, or use a
 #     copy-scope temperature where `combine` is not called).
 #
@@ -86,10 +86,13 @@ end
 sweep_op() = [ownership => sweep_sigma(), kind => [:A, :A]]
 named_problem(label; T = Float64) = PottsProblem(NAMED_MODELS[label](; name = :sweep), sweep_op(), (0, 12); T, seed = 1)
 """
-# The definitions are evaluated in `Main`, as the worker process below evaluates them, so the
-# fingerprints of the two agree (shared/main_definitions.jl).
+# The definitions are evaluated in `Main`, as the worker process below evaluates them, so
+# the fingerprints of the two agree (shared/main_definitions.jl).
 include(joinpath(@__DIR__, "..", "shared", "main_definitions.jl"))
-define_in_main(@__MODULE__, :NAMED_MODELS, :(using Potts, PottsModels, TOML), DEFS, "sweep_validation_definitions")
+define_in_main(
+    @__MODULE__, :NAMED_MODELS, :(using Potts, PottsModels, TOML),
+    DEFS, "sweep_validation_definitions"
+)
 # a model per sweep form; built lazily, so a form `@sweep` rejects throws at `M(; name)`
 const SWEEPS = Dict{String, Any}()
 function def(label, sweep; cell = false)
@@ -117,11 +120,17 @@ end
 sys(label) = SWEEPS[label](; name = :sweep)
 problem(label; T = Float64) = PottsProblem(sys(label), sweep_op(), (0, 12); T, seed = 1)
 # A. offsets
-const BAD_OFFSETS = ["NaN" => :NaN, "Inf" => :Inf, "-Inf" => :(-Inf), "NaN32" => :NaN32, "-Inf32" => :(-Inf32)]
+const BAD_OFFSETS = [
+    "NaN" => :NaN, "Inf" => :Inf, "-Inf" => :(-Inf),
+    "NaN32" => :NaN32, "-Inf32" => :(-Inf32),
+]
 for law in (:Metropolis, :Barker), (l, o) in BAD_OFFSETS
     def("$law(offset = $l)", :($law(; temperature = 2.0, offset = $o)))
 end
-const GOOD_OFFSETS = ["0" => 0, "-0.0" => -0.0, "2" => 2, "-1.5" => -1.5, "2.0f0" => 2.0f0, "1e300" => 1.0e300]
+const GOOD_OFFSETS = [
+    "0" => 0, "-0.0" => -0.0, "2" => 2, "-1.5" => -1.5,
+    "2.0f0" => 2.0f0, "1e300" => 1.0e300,
+]
 for law in (:Metropolis, :Barker), (l, o) in GOOD_OFFSETS
     def("$law(offset = $l)", :($law(; temperature = 2.0, offset = $o)))
 end
@@ -148,7 +157,8 @@ const UNSTABLE = [
 ]
 for (l, c) in UNSTABLE
     def("cell: $l", :(Metropolis(; temperature = Tc, combine = $c)); cell = true)
-    def("copy: $l", :(Metropolis(; temperature = 2.0, combine = $c)))           # combine unused, still rejected
+    # combine unused, still rejected
+    def("copy: $l", :(Metropolis(; temperature = 2.0, combine = $c)))
     def("barker cell: $l", :(Barker(; temperature = Tc, combine = $c)); cell = true)
 end
 """`f()` throws an ArgumentError whose message contains every one of `words`."""
@@ -167,8 +177,8 @@ function argerror(f, words...)
 end
 # ---------------------------------------------------------------------------------------
 # C. Named and callable-struct `combine` is session-stable
-"""Run the named-combine fixtures in a fresh `julia` process (perturbed first) and return its
-fingerprints and the paths of checkpoints it wrote after 3 MCS."""
+"""Run the named-combine fixtures in a fresh `julia` process (perturbed first) and return
+its fingerprints and the paths of checkpoints it wrote after 3 MCS."""
 function sweep_worker(dir)
     outfile = joinpath(dir, "out.toml")
     script = joinpath(dir, "worker.jl")
@@ -204,11 +214,14 @@ end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "sweep validation: controls" setup = [SweepValidationSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "sweep validation: controls" setup = [SweepValidationSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # Controls (pass on the base)
     @testset "sweep validation: controls" begin
-        # an `@sweep` ArgumentError surfaces from building the system (the channel A and B use)
+        # an `@sweep` ArgumentError surfaces from building the system (the channel A and B
+        # use)
         argerror(() -> sys("unknown keyword"), "ofset")
         # offset 0 / -0.0 are the default law
         fp_default = problem("Metropolis()").f.fingerprint
@@ -222,8 +235,12 @@ end
     end
 end
 
-@testitem "sweep validation: a non-finite offset is an ArgumentError" setup = [SweepValidationSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "sweep validation: a non-finite offset is an ArgumentError" setup = [
+    SweepValidationSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # A. A non-finite offset is rejected; finite offsets are accepted
     @testset "sweep validation: a non-finite offset is an ArgumentError" begin
         for law in (:Metropolis, :Barker), (l, _) in BAD_OFFSETS
@@ -238,24 +255,34 @@ end
     end
 end
 
-@testitem "sweep validation: finite offsets are accepted" setup = [SweepValidationSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "sweep validation: finite offsets are accepted" setup = [
+    SweepValidationSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "sweep validation: finite offsets are accepted" begin
         for law in (:Metropolis, :Barker), (l, o) in GOOD_OFFSETS
             @testset "$law(offset = $l)" begin
                 prob = problem("$law(offset = $l)")
-                @test prob.f.acceptance isa (law === :Metropolis ? CorePotts.Metropolis : CorePotts.Barker)
+                @test prob.f.acceptance isa
+                    (law === :Metropolis ? CorePotts.Metropolis : CorePotts.Barker)
                 @test Symbol(solve(prob, SequentialCPM()).retcode) === :Success
             end
         end
-        for law in (:metropolis, :barker), o in (0, -0.0, 3, -2.5, 1.0f-3, floatmax(Float64))
+        for law in (:metropolis, :barker),
+                o in (0, -0.0, 3, -2.5, 1.0f-3, floatmax(Float64))
+
             s = Potts.sweep_spec(law; temperature = 2.0, offset = o)
             @test s.offset == Float64(o)
         end
     end
 end
 
-@testitem "sweep validation: combine without a stable identity is an ArgumentError" setup = [SweepValidationSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "sweep validation: combine without a stable identity is an ArgumentError" setup =
+    [SweepValidationSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # B. An anonymous function or closure as `combine` is rejected
     @testset "sweep validation: combine without a stable identity is an ArgumentError" begin
         for (l, _) in UNSTABLE, scope in ("cell", "copy", "barker cell")
@@ -264,16 +291,24 @@ end
             end
         end
         for f in (anon, ANON_C3, LOCAL, (a, b) -> a)
-            @test_throws ArgumentError Potts.sweep_spec(:metropolis; temperature = 2.0, combine = f)
+            @test_throws ArgumentError Potts.sweep_spec(
+                :metropolis; temperature = 2.0,
+                combine = f
+            )
         end
         # named functions and callable structs are accepted by the constructor
         for f in (min, max, +, sweep_mean, Combine.mix, Mix(0.3))
-            @test Potts.sweep_spec(:metropolis; temperature = 2.0, combine = f).combine === f
+            @test Potts.sweep_spec(:metropolis; temperature = 2.0, combine = f).combine ===
+                f
         end
     end
 end
 
-@testitem "sweep validation: named combine fingerprints alike in another process" setup = [SweepValidationSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "sweep validation: named combine fingerprints alike in another process" setup = [
+    SweepValidationSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "sweep validation: named combine fingerprints alike in another process" begin
         mktempdir() do dir
             r = sweep_worker(dir)
@@ -289,15 +324,18 @@ end
                     @test current_state(integ).ownership == ck.state.ownership
                 end
             end
-            # negative controls: the harness compares real values (another combine differs, and
-            # a checkpoint of another combine is refused)
+            # negative controls: the harness compares real values (another combine differs,
+            # and a checkpoint of another combine is refused)
             @test parse(UInt64, r["fp max"]) != named_problem("min").f.fingerprint
             @test parse(UInt64, r["fp Mix(0.3)"]) != named_problem("Mix(0.7)").f.fingerprint
             @test_throws ArgumentError init(
                 named_problem("Mix(0.7)"), SequentialCPM();
                 checkpoint = load_checkpoint(r["ck Mix(0.3)"])
             )
-            @test_throws ArgumentError init(named_problem("min"), SequentialCPM(); checkpoint = load_checkpoint(r["ck max"]))
+            @test_throws ArgumentError init(
+                named_problem("min"), SequentialCPM();
+                checkpoint = load_checkpoint(r["ck max"])
+            )
         end
     end
 end

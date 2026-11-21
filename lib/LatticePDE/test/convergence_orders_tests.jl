@@ -3,7 +3,8 @@
 
 @testsetup module LP_convergence_orders
 using Test, LatticePDE
-using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables,
+    Differential, PDESystem,
     System, t_nounits as t, D_nounits as D
 using Symbolics: Num
 using DomainSets: Interval
@@ -25,7 +26,11 @@ include("../../../test/shared/convergence_helpers.jl")
 include("shared/export_all.jl")
 end
 
-@testitem "temporal convergence orders (EE, BE, CN, BDF2, IMEX)" setup = [LP_convergence_orders] tags = [:latticepde, :convergence] begin
+@testitem "temporal convergence orders (EE, BE, CN, BDF2, IMEX)" setup = [
+    LP_convergence_orders,
+] tags = [
+    :latticepde, :convergence,
+] begin
     @testset "temporal convergence orders" begin
         @variables u(..) v(..)
         ue, ve = u(t, x, y), v(t, x, y)
@@ -63,9 +68,13 @@ end
 
         @testset "IMEX FieldGroups (ExplicitEuler + BackwardEuler)" begin
             imex_sys = PDESystem(
-                [D(ue) ~ Dcoef * laplacian(ue) - 0.5 * ve + src, D(ve) ~ 0.2 * laplacian(ve) - ve + 0.5 * ue],
                 [
-                    u(0, x, y) ~ sin(pi * x) * sin(pi * y), v(0, x, y) ~ x * (1 - x) * y * (1 - y),
+                    D(ue) ~ Dcoef * laplacian(ue) - 0.5 * ve + src,
+                    D(ve) ~ 0.2 * laplacian(ve) - ve + 0.5 * ue,
+                ],
+                [
+                    u(0, x, y) ~ sin(pi * x) * sin(pi * y), v(0, x, y) ~
+                        x * (1 - x) * y * (1 - y),
                     u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0, u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
                     v(t, 0, y) ~ 0.0, v(t, 1, y) ~ 0.0, v(t, x, 0) ~ 0.0, v(t, x, 1) ~ 0.0,
                 ],
@@ -93,7 +102,11 @@ end
     end
 end
 
-@testitem "spatial convergence orders (DivKGrad, Upwind1, Robin, Hex)" setup = [LP_convergence_orders] tags = [:latticepde, :convergence] begin
+@testitem "spatial convergence orders (DivKGrad, Upwind1, Robin, Hex)" setup = [
+    LP_convergence_orders,
+] tags = [
+    :latticepde, :convergence,
+] begin
     @testset "spatial convergence orders" begin
         @variables u(..)
         ue = u(t, x, y)
@@ -101,10 +114,12 @@ end
 
         @testset "DivKGrad(:harmonic and :arithmetic) variable coefficient O(h^2)" begin
             # Exact steady u(x, y) = sin(pi * x) * sin(pi * y), K(x, y) = 1 + 0.5 * x
-            # -div(K grad u) + u = K * 2*pi^2 * sin(pi*x)*sin(pi*y) - 0.5*pi*cos(pi*x)*sin(pi*y) + u
+            # -div(K grad u) + u = K * 2*pi^2 * sin(pi*x)*sin(pi*y) -
+            # 0.5*pi*cos(pi*x)*sin(pi*y) + u
             Kexpr = 1.0 + 0.5 * x
             exact_fn(xx, yy) = sin(pi * xx) * sin(pi * yy)
-            rhs_src = Kexpr * 2 * pi^2 * sin(pi * x) * sin(pi * y) - 0.5 * pi * cos(pi * x) * sin(pi * y) + exact_fn(x, y)
+            rhs_src = Kexpr * 2 * pi^2 * sin(pi * x) * sin(pi * y) -
+                0.5 * pi * cos(pi * x) * sin(pi * y) + exact_fn(x, y)
             for mean_kind in (:harmonic, :arithmetic)
                 sys = PDESystem(
                     [0 ~ DivKGrad(mean_kind)(Kexpr, u(x, y)) - u(x, y) + rhs_src],
@@ -130,7 +145,11 @@ end
         @testset "Advect(Upwind1()) spatial order O(h)" begin
             # Steady periodic advection-reaction: 0 = -∂_x u - u + (2π cos(2πx) + sin(2πx))
             sys = PDESystem(
-                [0 ~ -Advect(Upwind1())([1.0, 0.0], u(x, y)) - u(x, y) + 2 * pi * cos(2 * pi * x) + sin(2 * pi * x)],
+                [
+                    0 ~
+                        -Advect(Upwind1())([1.0, 0.0], u(x, y)) - u(x, y) +
+                        2 * pi * cos(2 * pi * x) + sin(2 * pi * x),
+                ],
                 [u(0, y) ~ u(1, y), u(x, 0) ~ u(x, 1)],
                 fdom, [x, y], [u(x, y)], Num[]; name = :upwind_order
             )
@@ -176,16 +195,24 @@ end
         end
 
         @testset "Hexagonal Laplacian spatial order O(h^2)" begin
-            # Periodic 1D Helmholtz on axial Hex grid: Δ_hex u = (4/3) ∂_x^2 u for u(x, y) = sin(2πx)
+            # Periodic 1D Helmholtz on axial Hex grid: Δ_hex u = (4/3) ∂_x^2 u for u(x, y) =
+            # sin(2πx)
             sys = PDESystem(
-                [0 ~ 0.75 * laplacian(u(x, y)) - u(x, y) + (4 * pi^2 + 1) * sin(2 * pi * x)],
+                [
+                    0 ~
+                        0.75 * laplacian(u(x, y)) - u(x, y) + (4 * pi^2 + 1) *
+                        sin(2 * pi * x),
+                ],
                 [u(0, y) ~ u(1, y), u(x, 0) ~ u(x, 1)],
                 fdom, [x, y], [u(x, y)], Num[]; name = :hex_order
             )
             ns = [16, 32, 64]
             hs = 1.0 ./ ns
             errs = map(ns) do N
-                lp = discretize(sys, LatticeDiscretization(Grid((N, N); geometry = HEX); T = Float64))
+                lp = discretize(
+                    sys,
+                    LatticeDiscretization(Grid((N, N); geometry = HEX); T = Float64)
+                )
                 sol = solve(lp, LatticePCG(); reltol = 1.0e-12, abstol = 0.0)
                 h = 1.0 / N
                 xs = ((1:N) .- 0.5) .* h
@@ -199,7 +226,11 @@ end
     end
 end
 
-@testitem "multigrid mesh-independence under grid refinement (h -> h/2 -> h/4)" setup = [LP_convergence_orders] tags = [:latticepde, :convergence] begin
+@testitem "multigrid mesh-independence under grid refinement (h -> h/2 -> h/4)" setup = [
+    LP_convergence_orders,
+] tags = [
+    :latticepde, :convergence,
+] begin
     @testset "multigrid mesh-independence under grid refinement" begin
         @variables w(..)
         fdom = [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]

@@ -1,0 +1,22 @@
+# Exceptions to the line-length check (`qa_long_lines`, test/qa_tests.jl): one
+# path<TAB>text<TAB>reason per line; a line over 92 columns of that file that contains the
+# text passes. Only for lines that cannot be wrapped: tables, paths and data whose layout
+# carries the meaning. Every entry needs a reason.
+benchmark/latency.jl	#   case                  to_first_mcs	the header of a recorded timing table; one row per line keeps the columns aligned
+benchmark/latency.jl	#   graner_glazier_72 	a row of a recorded timing table; one row per line keeps the columns aligned
+benchmark/latency.jl	#   wortel_act_100 	a row of a recorded timing table; one row per line keeps the columns aligned
+benchmark/latency.jl	#   merks_100 	a row of a recorded timing table; one row per line keeps the columns aligned
+benchmark/latency.jl	#   openvt_monolayer_100 	a row of a recorded timing table; one row per line keeps the columns aligned
+benchmark/latency.jl	#   akeeb_99x60 	a row of a recorded timing table; one row per line keeps the columns aligned
+benchmark/latency.jl	#   akeeb_f32_first_mcs 	a row of a recorded timing table; one row per line keeps the columns aligned
+lib/PottsModels/test/acceptance/akeeb_analysis_tests.jl	right stops at base 3 (x 1)	a row of a worked peak-width table whose last column (w) is aligned
+lib/PottsModels/test/acceptance/akeeb_analysis_tests.jl	right at 5 (x 4)	a row of a worked peak-width table whose last column (w) is aligned
+lib/PottsModels/test/acceptance/akeeb_analysis_tests.jl	#   6: h = 6 − 1 = 5.	a row of a worked peak-width table whose last column (w) is aligned
+lib/PottsModels/test/acceptance/akeeb_analysis_tests.jl	right at 9 (x 1)	a row of a worked peak-width table whose last column (w) is aligned
+lib/PottsModels/test/acceptance/inline_gather_numbering_tests.jl	:apart   EuclideanBall(2.0)	a row of the hand-count table whose c1 and c2 columns are aligned
+lib/PottsModels/test/acceptance/inline_gather_numbering_tests.jl	EuclideanBall(3.0)  c1 8	a row of the hand-count table whose c1 and c2 columns are aligned
+lib/PottsModels/test/acceptance/inline_gather_numbering_tests.jl	Moore(2)   c1 8	a row of the hand-count table whose c1 and c2 columns are aligned
+lib/PottsModels/test/acceptance/openvt_analysis_port_tests.jl	Parameter_Plane_Morpheus_Centroids.zip	a file path in the consortium repository, quoted whole in a code span
+lib/PottsModels/test/acceptance/openvt_analysis_port_tests.jl	"0.0515463917525773,3,0.654039	one CSV row of the expected output that the test compares, kept whole
+lib/PottsModels/reproductions/01_merks.jl	*	the page tests read this Literate page as text (table rows, banner, helper definitions), so its lines keep their layout
+lib/PottsModels/reproductions/15_openvt_monolayer.jl	*	the page tests read this Literate page as text (figure calls, machine names in prose), so its lines keep their layout

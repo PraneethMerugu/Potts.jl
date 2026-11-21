@@ -5655,3 +5655,30 @@ Each guard is a test with a negative control, a planted defect it must fail on; 
 - **Macro round trip.** Seven models that together use each `@potts_model` section are rebuilt from their payload by `PottsSystem(; name, <payload fields>...)` and must give the same fingerprint and the same state at every save. Controls: a dropped payload field and another seed. It does not show that each section can be written by hand with public constructors (a follow-up), and the `@description` and `@metadata` system metadata is not in the payload. 35 s.
 - **CorePotts workload.** A hand-written two-cell `CPMFunction`, 2 MCS with `SequentialCPM`. A user's first hand-written run in a fresh process: 4.1 s before, 0.36 s after; `using CorePotts` 0.98 s before, 1.00 s after.
 - **Coordinates in site updates.** `@after_mcs h ~ x` is refused today with a `PottsCompileError` that names `x`; the test is a `@test_broken` against the site-center oracle. The lowering is not in this change.
+
+## D-299 Style: Runic on every file, 92 columns, runtime closures and `@inbounds` (2026-11-20; ruling R2 of D-287)
+
+The last batch of the conformance series, one commit per package per change.
+
+- **Fixed per R2.** Runic formatting of every Julia file, the 92-column limit, and closures on runtime paths.
+- **Kept per R2.** Single-underscore private names, multi-letter type parameters, and closures on the compiler side (build time, lowering, `Expr` building).
+- **Edits that change no behavior.**
+  - Lowercase constants become uppercase constants, imports (`t_nounits as t`) or constructors (CorePotts division-plane normals).
+  - Chained and multi-line ternaries become `if`/`elseif`, a helper or dispatch: 493 by script, 130 by hand, about 186 more where wrapping split a ternary.
+  - Short-form definitions over several lines become long form: 1147, and 245 more from wrapping.
+  - `===` on types becomes `<:` where a subtype test is meant (46 sites); about 23 identity tests stay.
+  - Imports move to the module headers; no file mixes `import` and `using` blocks.
+  - Splats of runtime collections become plain calls or loops. Splats into varargs builders (`arith!` in the LatticePDE lowering) and inside `Expr` building stay; both are build time.
+- **Hot-path edits** (the A/B judges these).
+  - Closures created per call: CorePotts, 8 functors and 1 `foreach` that becomes a loop (`_cv_writes!`); LatticeFields, 6 per-step closures become loops and 1 a functor.
+  - `@inbounds`: every kept use (about 696) has an adjacent comment that states the bound. 4 uses are dropped, all cold scalar reads: `NonFiniteStop` (`r[end]`) in the Krylov stop, and `x.host[1]`, `rn[1]` and `rn[end]` in `coupled.jl`. `_csc_add!` now checks that the entry is in the column's pattern before its `@inbounds` update.
+  - A/B result (d8e9c45f against 23d10fae, paired, controls): CPU pass, every case within 0.6 % (worst 1.0056, margin 1.0349); ROCm pass, every case within 0.2 % (worst 1.0020, margin 1.0039, a noisy merks2008 control). No measurable change.
+- **Format check.** CI job "Runic formatting check": `Runic --check --diff` on every tracked `.jl` file except `lib/PottsModels/reproductions/data/` and `docs/references/`. The full clone (`fetch-depth: 0`) is gone. String literals are unchanged by formatting.
+- **Fingerprints.** Unchanged between the batch base and its head, so earlier checkpoints stay valid. Compared: `prob.f.fingerprint` of the 12 reference models of the fingerprint property test (the PottsModels models and the division fixture), the hashes of every LatticeFields kernel compiled for them, and, for two LatticePDE systems (one field and two fields, Float32 and Float64, explicit steps; the one-field system also with BackwardEuler and CrankNicolson), the LatticeFields `fingerprint_text` and kernel hashes.
+- **Line length.** At most 92 columns (`textwidth`). Wrapping keeps the parsed code (strings keep their value through `*` chains and `\` continuations) and the Literate `#hide` markers.
+  - **Check.** `qa_long_lines` and `qa_line_allowlist` (`test/shared/qa_common.jl`), in the Potts QA item "lines fit in 92 columns", over the tracked `.jl` files minus `docs/design/`, `docs/references/` and `lib/PottsModels/reproductions/data/`. Negative controls: planted long lines, code that builds a table row, long code holding a short regex, a stale allowlist entry and an entry without a reason all fail.
+  - **Counts.** Long lines in scope: 29,017 before, 818 after. Of the 818: 566 exempt by kind, 236 in the two whole-file entries, 16 matched by line entries.
+  - **Exempt by kind** (566): a Markdown table row in a comment or docstring (403), a comment with a URL (26), raw HTML (31) or a Markdown heading (4) in a comment, a line made long by a URL, regex or raw string literal (the rest fits in 46 columns; 49), and a line inside a raw triple-quoted string (53). Code that builds a table row is not exempt.
+  - **Allowlist** (`test/line_length_allow.txt`, 18 entries, each with a reason): 16 line entries (a recorded timing table, two aligned worked tables, a repository path, a CSV row of expected output) and 2 whole-file entries, the pages `01_merks.jl` and `15_openvt_monolayer.jl`, whose page tests read them as text.
+  - **Follow-up.** Make the 01 and 15 page tests parse the tables instead of matching source text, then wrap the pages and replace the two `*` entries with per-block entries.
+- **Test data.** `test/privileged_allow.txt`: the entry for the example `act[target] ~ …` in a `src/compile.jl` error message names the string chunk that holds it after wrapping. No assertion changed.

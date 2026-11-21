@@ -6,18 +6,19 @@
 # G:results/free_surface.tex and G:results/colors.tex at 54f375f (read on the PC; no G file
 # is copied here, the F4 configuration and dashes below are a transcription).
 #
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # F4 (M Fig 4, lattice panel; G:results/free_surface.tex:31-110)
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # The drawing is a 7 × 7 crop of a square lattice: medium (13 sites), cell i (12), cell i−1
 # (7), cell i+1 (9), cell i+2 (8). Tikz pixel (x, y), x, y ∈ 0:6, spans [x, x+1] × [y, y+1];
-# here σ[x + 1, y + 1] holds it and cell i = 1, i−1 = 2, i+1 = 3, i+2 = 4 (the `openvt_table_s1_tests.jl`
-# convention). Every (site of cell i, Moore(1) neighbour of another owner) pair is drawn as a
-# short dashed segment across the pair's shared edge (axis neighbours) or corner (diagonal
-# neighbours), along the pair's direction: magenta m = RGB(231,41,138) for medium partners,
-# amber c = RGB(255,192,0) for other cells. The .tex draws 13 magenta and 25 amber dashes,
-# exactly the Moore pair counts, so f_i = 13 / (13 + 25) = 13/38 (TST "method 3", spec §2.4).
-# (A commented-out older caption reads 11/(11 + 29); the drawn dashes are 13 and 25.)
+# here σ[x + 1, y + 1] holds it and cell i = 1, i−1 = 2, i+1 = 3, i+2 = 4 (the
+# `openvt_table_s1_tests.jl` convention). Every (site of cell i, Moore(1) neighbour of
+# another owner) pair is drawn as a short dashed segment across the pair's shared edge (axis
+# neighbours) or corner (diagonal neighbours), along the pair's direction: magenta m =
+# RGB(231,41,138) for medium partners, amber c = RGB(255,192,0) for other cells. The .tex
+# draws 13 magenta and 25 amber dashes, exactly the Moore pair counts, so f_i = 13 / (13 +
+# 25) = 13/38 (TST "method 3", spec §2.4). (A commented-out older caption reads 11/(11 +
+# 29); the drawn dashes are 13 and 25.)
 #
 # The Potts deliverable `PottsModels.openvt_f4_figure(σ, c) -> Makie.Figure`:
 # - one Axis (title text "Lattice models") holding one `pottsplot` of σ (frame owners equal
@@ -32,29 +33,30 @@
 #   black outline of cell i and its partial cell boundaries are left out on purpose.
 #
 # G1 (spec §6) is the per-cell medium/unlike Moore(1) pair count. The F5 analysis (
-# `15_openvt_f5_tests.jl`) reads it through `PottsModels.openvt_snapshot(u).f`; `openvt_table_s1_tests.jl` already
-# checks the in-model contact fold against M's Fig 4 (13/38). Here the figure's marks are
-# decoded back to pairs and must equal (i) the transcribed .tex dashes (the hand count),
+# `15_openvt_f5_tests.jl`) reads it through `PottsModels.openvt_snapshot(u).f`;
+# `openvt_table_s1_tests.jl` already checks the in-model contact fold against M's Fig 4
+# (13/38). Here the figure's marks are decoded back to pairs and must equal (i) the
+# transcribed .tex dashes (the hand count),
 # (ii) a brute-force pair oracle and (iii) `openvt_snapshot`'s f, for every cell of the
 # configuration (cells 2–4 touch the crop's closed edge).
 #
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # F1 (M Fig 1; G:results/introduction.tex:52-92)
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # One 45 × 45 mm closeup per framework with a 45 × 5 mm banner 1 mm above it, filled in the
 # framework colour, the name centred in white bold. The closeups show the colony's
 # upper-right rim (colony lower left, medium upper right) on a white background.
 # The Potts deliverable `PottsModels.openvt_f1_figure(frame; window = 64) -> Makie.Figure`,
-# where `frame` is a 2D MakiePotts render frame (in use: `renderframe(sol)` of the final state
-# of case (a), D-175):
+# where `frame` is a 2D MakiePotts render frame (in use: `renderframe(sol)` of the final
+# state of case (a), D-175):
 # - the panel (amended under D-185, which amends D-156/D-172/D-175 for the consortium
 #   figures): one Axis holding one `pottsplot` that colours each cell by its area with
-#   `coolwarm` (a cell `ChannelEncoding`), scaled to the min–max of the areas of the cells in
-#   the panel, on a white medium. The areas are those of the whole frame (or the `areas`
+#   `coolwarm` (a cell `ChannelEncoding`), scaled to the min–max of the areas of the cells
+#   in the panel, on a white medium. The areas are those of the whole frame (or the `areas`
 #   keyword), so a cell cut by the window keeps its full area. Thin black boundaries are
-#   drawn along exactly the pixel edges between unlike ids (cell–cell and cell–medium) inside
-#   the block, each once, with no gaps and no other line or stroked polygon. It shows a
-#   window × window block of the frame's sites, unchanged (same owners, same cell
+#   drawn along exactly the pixel edges between unlike ids (cell–cell and cell–medium)
+#   inside the block, each once, with no gaps and no other line or stroked polygon. It shows
+#   a window × window block of the frame's sites, unchanged (same owners, same cell
 #   identities and generations), centred on the colony rim along the 45° diagonal from the
 #   colony centroid (the "top-right quadrant crop" of spec §4.0.2 F1). 64 sites ≈ 8 cell
 #   diameters (2R = 7.98 px), what the TST closeup shows;
@@ -77,7 +79,8 @@ const MAKIE = try
     @eval using CairoMakie: Makie
     true
 catch err
-    @warn "15 openvt f1 f4: CairoMakie and MakiePotts must be in the test environment" exception = err
+    @warn "15 openvt f1 f4: CairoMakie and MakiePotts must be in the test \
+        environment" exception = err
     false
 end
 const SCHEMATIC_M = (231, 41, 138)
@@ -89,16 +92,22 @@ const MEDIUM_F4 = (236, 236, 236)
 const POTTS = (8, 29, 88)
 # spec §4.0.2, Q18
 const WINDOW = 64
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # F4 configuration and the .tex dashes (transcribed)
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 function fig4()
     σ = zeros(Int32, 7, 7)
     cells = (
-        [(3, 1), (2, 2), (3, 2), (4, 2), (2, 3), (3, 3), (4, 3), (5, 3), (2, 4), (3, 4), (4, 4), (3, 5)],   # i
-        [(0, 0), (1, 0), (2, 0), (3, 0), (0, 1), (1, 1), (2, 1)],                                           # i−1
-        [(4, 0), (5, 0), (6, 0), (4, 1), (5, 1), (6, 1), (5, 2), (6, 2), (6, 3)],                           # i+1
-        [(4, 6), (5, 6), (6, 6), (4, 5), (5, 5), (6, 5), (5, 4), (6, 4)],                                   # i+2
+        [
+            (3, 1), (2, 2), (3, 2), (4, 2), (2, 3), (3, 3),
+            (4, 3), (5, 3), (2, 4), (3, 4), (4, 4), (3, 5),
+        ],   # i
+        # i−1
+        [(0, 0), (1, 0), (2, 0), (3, 0), (0, 1), (1, 1), (2, 1)],
+        # i+1
+        [(4, 0), (5, 0), (6, 0), (4, 1), (5, 1), (6, 1), (5, 2), (6, 2), (6, 3)],
+        # i+2
+        [(4, 6), (5, 6), (6, 6), (4, 5), (5, 5), (6, 5), (5, 4), (6, 4)],
     )
     for (c, px) in enumerate(cells), (x, y) in px
         σ[x + 1, y + 1] = c
@@ -129,11 +138,22 @@ const TEX_C = [
     ((5, 3), :a), ((4, 2), :a),
 ]
 const DIR = Dict(:h => (1, 0), :v => (0, 1), :d => (1, 1), :a => (-1, 1))
-# a pair as (site of cell c, partner site), from a dash centre (tikz units) and its direction
+# a pair as (site of cell c, partner site), from a dash centre (tikz units) and its
+# direction
 function tex_pair(σ, c, (centre, dir))
     o = DIR[dir]
-    a = CartesianIndex(round(Int, centre[1] - o[1] / 2 + 0.5), round(Int, centre[2] - o[2] / 2 + 0.5))
-    b = CartesianIndex(round(Int, centre[1] + o[1] / 2 + 0.5), round(Int, centre[2] + o[2] / 2 + 0.5))
+    a = CartesianIndex(
+        round(Int, centre[1] - o[1] / 2 + 0.5), round(
+            Int, centre[2] -
+                o[2] / 2 + 0.5
+        )
+    )
+    b = CartesianIndex(
+        round(Int, centre[1] + o[1] / 2 + 0.5), round(
+            Int, centre[2] +
+                o[2] / 2 + 0.5
+        )
+    )
     return σ[a] == c ? (a, b) : (b, a)
 end
 # brute force: every (site of c, in-bounds Moore(1) neighbour not of c) pair
@@ -158,9 +178,9 @@ function schematic_state(σ)
     vol = Float64[count(==(c), σ) for c in 1:n]
     return (; ownership = σ, cell = (; volume = vol, A_star = fill(50.0, n)))
 end
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Figure inspection
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 rgb(t) = Makie.RGBf((t ./ 255)...)
 function schematic_close(a, b; tol = 1.5 / 255)
     x = try
@@ -200,7 +220,12 @@ function schematic_panel(fig)
     axs = [ax for ax in schematic_axes(fig) if !isempty(pottsplots(ax.scene))]
     return length(axs) == 1 ? only(axs) : nothing
 end
-schematic_owners(frame) = [(o = owner_at(frame, I); o.kind === CellSite ? Int(o.id) : 0) for I in CartesianIndices(frame_size(frame))]
+function schematic_owners(frame)
+    return [
+        (o = owner_at(frame, I); o.kind === CellSite ? Int(o.id) : 0)
+            for I in CartesianIndices(frame_size(frame))
+    ]
+end
 # (a, b, colour) for each segment of the visible lines / linesegments plots under `scene`
 function segments(scene)
     segs = Tuple{NTuple{2, Float64}, NTuple{2, Float64}, Any}[]
@@ -208,7 +233,13 @@ function segments(scene)
         (p isa Makie.Lines || p isa Makie.LineSegments) || continue
         pts = [(Float64(q[1]), Float64(q[2])) for q in p[1][]]
         col = p.color[]
-        colour(k) = col isa AbstractVector ? (k <= length(col) ? col[k] : nothing) : col
+        function colour(k)
+            if col isa AbstractVector
+                return k <= length(col) ? col[k] : nothing
+            else
+                return col
+            end
+        end
         if p isa Makie.LineSegments
             for k in 1:2:(length(pts) - 1)
                 push!(segs, (pts[k], pts[k + 1], colour(k)))
@@ -222,7 +253,8 @@ function segments(scene)
     end
     return segs
 end
-# stroked polygons under `scene` (outlines), except the full-extent rectangle (a panel frame)
+# stroked polygons under `scene` (outlines), except the full-extent rectangle (a panel
+# frame)
 function stroked(scene, geom)
     n = 0
     for p in schematic_plots(scene)
@@ -239,8 +271,13 @@ function stroked(scene, geom)
         end
         (sw > 0 && sc.alpha > 0) || continue
         g = p[1][]
-        full = g isa Makie.Rect && all(isapprox.(Tuple(minimum(g))[1:2], geom.origin; atol = 1.0e-3)) &&
-            all(isapprox.(Tuple(maximum(g))[1:2], geom.origin .+ geom.size .* geom.spacing; atol = 1.0e-3))
+        full = g isa Makie.Rect &&
+            all(isapprox.(Tuple(minimum(g))[1:2], geom.origin; atol = 1.0e-3)) && all(
+            isapprox.(
+                Tuple(maximum(g))[1:2], geom.origin .+
+                    geom.size .* geom.spacing; atol = 1.0e-3
+            )
+        )
         full || (n += 1)
     end
     return n
@@ -250,15 +287,25 @@ function fullspan((a, b, _), geom)
     lo = geom.origin
     hi = geom.origin .+ geom.size .* geom.spacing
     tol = 1.0e-3 * minimum(geom.spacing)
-    online(v, k) = (r = (v - lo[k]) / geom.spacing[k]; abs(r - round(r)) * geom.spacing[k] <= tol)
+    function online(v, k)
+        r = (v - lo[k]) / geom.spacing[k]
+        return abs(r - round(r)) * geom.spacing[k] <= tol
+    end
     if abs(a[2] - b[2]) <= tol      # horizontal
-        return online(a[2], 2) && isapprox(min(a[1], b[1]), lo[1]; atol = tol) && isapprox(max(a[1], b[1]), hi[1]; atol = tol)
+        return online(a[2], 2) && isapprox(min(a[1], b[1]), lo[1]; atol = tol) &&
+            isapprox(max(a[1], b[1]), hi[1]; atol = tol)
     elseif abs(a[1] - b[1]) <= tol  # vertical
-        return online(a[1], 1) && isapprox(min(a[2], b[2]), lo[2]; atol = tol) && isapprox(max(a[2], b[2]), hi[2]; atol = tol)
+        return online(a[1], 1) && isapprox(min(a[2], b[2]), lo[2]; atol = tol) &&
+            isapprox(max(a[2], b[2]), hi[2]; atol = tol)
     end
     return false
 end
-marker_colour(col) = col !== nothing && (schematic_close(col, rgb(SCHEMATIC_M)) || schematic_close(col, rgb(SCHEMATIC_C)))
+function marker_colour(col)
+    return col !== nothing && (
+        schematic_close(col, rgb(SCHEMATIC_M)) ||
+            schematic_close(col, rgb(SCHEMATIC_C))
+    )
+end
 # decode the pair marks of cell c: (; medium, cell, bad, outline) where `bad` counts marks
 # that are not one pair of c in the right colour and `outline` counts every other segment
 # that is not a full-length lattice line
@@ -288,7 +335,8 @@ function schematic_marks(scene, geom, σ, c)
         end
         I1 = CartesianIndex(round(Int, s1[1] + 0.5), round(Int, s1[2] + 0.5))
         I2 = CartesianIndex(round(Int, s2[1] + 0.5), round(Int, s2[2] + 0.5))
-        if !(checkbounds(Bool, σ, I1) && checkbounds(Bool, σ, I2)) || ((σ[I1] == c) == (σ[I2] == c))
+        if !(checkbounds(Bool, σ, I1) && checkbounds(Bool, σ, I2)) ||
+                ((σ[I1] == c) == (σ[I2] == c))
             bad += 1
             continue
         end
@@ -326,11 +374,17 @@ function schematic_outlines(ax, σ, c; markers)
     n = count(p -> p isa MakiePotts.PottsBoundaries, schematic_plots(ax.scene))
     n += count(p -> p.boundaries[] === true, pottsplots(ax.scene))
     n += stroked(ax.scene, geom)
-    n += markers ? schematic_marks(ax.scene, geom, σ, c).outline : length(segments(ax.scene))
+    n += if markers
+        schematic_marks(ax.scene, geom, σ, c).outline
+    else
+        length(segments(ax.scene))
+    end
     return n
 end
 # a hand-made F4-like figure for the detector controls
-function control_figure(σ; boundaries = false, overlay = false, outline_lines = false, marks = true)
+function control_figure(
+        σ; boundaries = false, overlay = false, outline_lines = false, marks = true
+    )
     owners = [x == 0 ? RenderOwner(MediumSite, 1) : RenderOwner(CellSite, x) for x in σ]
     cells = [RenderCellMetadata(RenderCellIdentity(c, 0), 1) for c in 1:Int(maximum(σ))]
     frame = PottsRenderFrame(0, owners, cells)
@@ -343,8 +397,10 @@ function control_figure(σ; boundaries = false, overlay = false, outline_lines =
         for (list, col) in ((pr.med, SCHEMATIC_M), (pr.cel, SCHEMATIC_C))
             pts = Makie.Point2f[]
             for (s, t) in list
-                cs = (s[1] - 0.5, s[2] - 0.5); ct = (t[1] - 0.5, t[2] - 0.5)
-                mid = (cs .+ ct) ./ 2; d = (ct .- cs) ./ hypot((ct .- cs)...)
+                cs = (s[1] - 0.5, s[2] - 0.5)
+                ct = (t[1] - 0.5, t[2] - 0.5)
+                mid = (cs .+ ct) ./ 2
+                d = (ct .- cs) ./ hypot((ct .- cs)...)
                 push!(pts, Makie.Point2f(mid .- 0.25 .* d), Makie.Point2f(mid .+ 0.25 .* d))
             end
             Makie.linesegments!(ax, pts; color = rgb(col))
@@ -352,15 +408,25 @@ function control_figure(σ; boundaries = false, overlay = false, outline_lines =
     end
     grid = Makie.Point2f[]
     for k in 0:7
-        append!(grid, (Makie.Point2f(k, 0), Makie.Point2f(k, 7), Makie.Point2f(0, k), Makie.Point2f(7, k)))
+        append!(
+            grid, (
+                Makie.Point2f(k, 0), Makie.Point2f(k, 7),
+                Makie.Point2f(0, k), Makie.Point2f(7, k),
+            )
+        )
     end
-    Makie.linesegments!(ax, grid; color = :white)                       # a uniform site grid
-    outline_lines && Makie.lines!(ax, [Makie.Point2f(2, 2), Makie.Point2f(5, 2), Makie.Point2f(5, 3)]; color = :black)
+    # a uniform site grid
+    Makie.linesegments!(ax, grid; color = :white)
+    outline_lines &&
+        Makie.lines!(
+        ax, [Makie.Point2f(2, 2), Makie.Point2f(5, 2), Makie.Point2f(5, 3)];
+        color = :black
+    )
     return fig, ax
 end
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # F1 fixture: a disc colony of 6 × 6 block cells, generations id mod 4
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 function colony(; L = 200, radius = 80)
     σ = zeros(Int, L, L)
     c = (L + 1) / 2
@@ -407,7 +473,10 @@ function schematic_rim(σ)
 end
 function bbox(b)
     r = b.layoutobservables.computedbbox[]
-    return (; x = Float64(minimum(r)[1]), y = Float64(minimum(r)[2]), w = Float64(Makie.widths(r)[1]), h = Float64(Makie.widths(r)[2]))
+    return (;
+        x = Float64(minimum(r)[1]), y = Float64(minimum(r)[2]),
+        w = Float64(Makie.widths(r)[1]), h = Float64(Makie.widths(r)[2]),
+    )
 end
 # the pixel edges between unlike owners of a block `w` whose site (i, j) spans
 # [ox + i − 1, ox + i] × [oy + j − 1, oy + j]: the set of (endpoint, endpoint), rounded
@@ -422,21 +491,29 @@ function edge_oracle(w, (ox, oy))
     end
     return E
 end
-# the panel's line segments as the same kind of set (one unit edge each), plus a count of the
-# segments that are not one black unit lattice edge
+# the panel's line segments as the same kind of set (one unit edge each), plus a count of
+# the segments that are not one black unit lattice edge
 function edge_marks(scene)
     E = NTuple{2, NTuple{2, Int}}[]
     other = 0
     for (a, b, col) in segments(scene)
-        ra = round.(Int, a); rb = round.(Int, b)
-        ok = col !== nothing && schematic_close(col, Makie.RGBf(0, 0, 0)) && all(abs.(a .- ra) .< 1.0e-3) &&
+        ra = round.(Int, a)
+        rb = round.(Int, b)
+        ok = col !== nothing && schematic_close(col, Makie.RGBf(0, 0, 0)) &&
+            all(abs.(a .- ra) .< 1.0e-3) &&
             all(abs.(b .- rb) .< 1.0e-3) && sum(abs.(ra .- rb)) == 1
         ok ? push!(E, ra < rb ? (ra, rb) : (rb, ra)) : (other += 1)
     end
     return E, other
 end
 # line widths of the visible line plots under a scene
-linewidths(scene) = [Float64(maximum(p.linewidth[])) for p in schematic_plots(scene) if p isa Makie.Lines || p isa Makie.LineSegments]
+function linewidths(scene)
+    return [
+        Float64(maximum(p.linewidth[]))
+            for p in schematic_plots(scene)
+            if p isa Makie.Lines || p isa Makie.LineSegments
+    ]
+end
 # the panel's heatmap values (NaN off cells), as the pottsplot draws them
 function schematic_values(ax)
     hm = [p for p in schematic_plots(ax.scene) if p isa Makie.Heatmap]
@@ -446,28 +523,42 @@ end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "15 openvt f1 f4 (a) G1 oracle: the .tex dashes are the Moore pair count (f_i = 13/38)" setup = [OpenVTF1F4Setup] tags = [:pottsmodels, :reproductions] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "15 openvt f1 f4 (a) G1 oracle: the .tex dashes are the Moore pair count (f_i = \
+    13/38)" setup = [OpenVTF1F4Setup] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    # --------------------------------------------------------------------------------------
     # (a) G1: the F5 analysis count equals the drawn count and the hand count
-    # ---------------------------------------------------------------------------------------------
-    @testset "15 openvt f1 f4 (a) G1 oracle: the .tex dashes are the Moore pair count (f_i = 13/38)" begin
+    # --------------------------------------------------------------------------------------
+    @testset "15 openvt f1 f4 (a) G1 oracle: the .tex dashes are the Moore pair count \
+        (f_i = 13/38)" begin
         σ = fig4()
         @test [count(==(c), σ) for c in 0:4] == [13, 12, 7, 9, 8]
         pr = schematic_pairs(σ, 1)
         tm = [tex_pair(σ, 1, d) for d in TEX_M]
         tc = [tex_pair(σ, 1, d) for d in TEX_C]
-        @test length(tm) == 13 == length(unique(tm)) && length(tc) == 25 == length(unique(tc))
-        @test all(((s, t),) -> σ[s] == 1 && σ[t] == 0, tm) && all(((s, t),) -> σ[s] == 1 && σ[t] ∉ (0, 1), tc)
+        @test length(tm) == 13 == length(unique(tm)) &&
+            length(tc) == 25 == length(unique(tc))
+        @test all(((s, t),) -> σ[s] == 1 && σ[t] == 0, tm) &&
+            all(((s, t),) -> σ[s] == 1 && σ[t] ∉ (0, 1), tc)
         @test Set(tm) == Set(pr.med) && Set(tc) == Set(pr.cel)
         o = PottsModels.openvt_snapshot(schematic_state(σ))
         @test o.f[1] == 13 / 38
-        @test o.f == [length(schematic_pairs(σ, c).med) / (length(schematic_pairs(σ, c).med) + length(schematic_pairs(σ, c).cel)) for c in 1:4]
+        @test o.f == [
+            length(schematic_pairs(σ, c).med) /
+                (length(schematic_pairs(σ, c).med) + length(schematic_pairs(σ, c).cel))
+                for c in 1:4
+        ]
         @test [length(schematic_pairs(σ, c).med) for c in 1:4] == [13, 5, 0, 2]
     end
 end
 
-@testitem "15 openvt f1 f4 (a) G1: openvt_f4_figure marks exactly the pairs openvt_snapshot counts" setup = [OpenVTF1F4Setup] tags = [:pottsmodels, :reproductions] begin
-    @testset "15 openvt f1 f4 (a) G1: openvt_f4_figure marks exactly the pairs openvt_snapshot counts" begin
+@testitem "15 openvt f1 f4 (a) G1: openvt_f4_figure marks exactly the pairs \
+    openvt_snapshot counts" setup = [OpenVTF1F4Setup] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    @testset "15 openvt f1 f4 (a) G1: openvt_f4_figure marks exactly the pairs \
+        openvt_snapshot counts" begin
         @test MAKIE
         σ = fig4()
         o = PottsModels.openvt_snapshot(schematic_state(σ))
@@ -479,7 +570,8 @@ end
             mk = schematic_marks(ax.scene, geom, σ, c)
             pr = schematic_pairs(σ, c)
             @test mk.bad == 0
-            @test length(mk.medium) == length(unique(mk.medium)) && length(mk.cell) == length(unique(mk.cell))
+            @test length(mk.medium) == length(unique(mk.medium)) &&
+                length(mk.cell) == length(unique(mk.cell))
             @test Set(mk.medium) == Set(pr.med) && Set(mk.cell) == Set(pr.cel)
             @test length(mk.medium) / (length(mk.medium) + length(mk.cell)) == o.f[c]
             if c == 1
@@ -491,11 +583,15 @@ end
     end
 end
 
-@testitem "15 openvt f1 f4 (b) F4 figure: panel, colours, identity encoding, no outlines" setup = [OpenVTF1F4Setup] tags = [:pottsmodels, :reproductions] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "15 openvt f1 f4 (b) F4 figure: panel, colours, identity encoding, no \
+    outlines" setup = [OpenVTF1F4Setup] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    # --------------------------------------------------------------------------------------
     # (b) structure of the figure functions
-    # ---------------------------------------------------------------------------------------------
-    @testset "15 openvt f1 f4 (b) F4 figure: panel, colours, identity encoding, no outlines" begin
+    # --------------------------------------------------------------------------------------
+    @testset "15 openvt f1 f4 (b) F4 figure: panel, colours, identity encoding, no \
+        outlines" begin
         @test MAKIE
         @test Base.ispublic(PottsModels, :openvt_f4_figure)
         σ = fig4()
@@ -520,13 +616,20 @@ end
     end
 end
 
-@testitem "15 openvt f1 f4 (b) F1 figure: Potts.jl panel and banner" setup = [OpenVTF1F4Setup] tags = [:pottsmodels, :reproductions] begin
+@testitem "15 openvt f1 f4 (b) F1 figure: Potts.jl panel and banner" setup = [
+    OpenVTF1F4Setup,
+] tags = [
+    :pottsmodels, :reproductions,
+] begin
     @testset "15 openvt f1 f4 (b) F1 figure: Potts.jl panel and banner" begin
         @test MAKIE
         @test Base.ispublic(PottsModels, :openvt_f1_figure)
         σ, frame = colony()
         c, rim = schematic_rim(σ)
-        for (W, fig) in ((WINDOW, PottsModels.openvt_f1_figure(frame)), (40, PottsModels.openvt_f1_figure(frame; window = 40)))
+        for (W, fig) in (
+                (WINDOW, PottsModels.openvt_f1_figure(frame)),
+                (40, PottsModels.openvt_f1_figure(frame; window = 40)),
+            )
             @test fig isa Makie.Figure
             Makie.colorbuffer(fig)
             @test length(pottsplots(fig.scene)) == 1
@@ -546,11 +649,15 @@ end
             @test vals !== nothing && size(vals) == size(w)
             if off !== nothing && vals !== nothing
                 full = Dict(id => count(==(id), σ) for id in unique(filter(>(0), vec(w))))
-                @test all(I -> w[I] == 0 ? isnan(vals[I]) : vals[I] == full[w[I]], CartesianIndices(w))
+                @test all(
+                    I -> w[I] == 0 ? isnan(vals[I]) : vals[I] == full[w[I]],
+                    CartesianIndices(w)
+                )
                 # cells cut by the window keep their full-state area (the fixture has some)
                 @test any(id -> count(==(id), w) < full[id], keys(full))
                 @test all(Float64.(pp.colorrange[]) .== Float64.(extrema(values(full))))
-                # boundaries (D-185): thin black, exactly the unlike-id pixel edges, each once
+                # boundaries (D-185): thin black, exactly the unlike-id pixel edges, each
+                # once
                 E, other = edge_marks(ax.scene)
                 @test other == 0
                 @test length(E) == length(unique(E)) && Set(E) == edge_oracle(w, off)
@@ -570,27 +677,46 @@ end
                 )
             end
             # the banner
-            boxes = [b for b in fig.content if b isa Makie.Box && schematic_close(b.color[], rgb(POTTS); tol = 0.6 / 255)]
-            labels = [b for b in fig.content if b isa Makie.Label && string(b.text[]) == "Potts.jl"]
+            boxes = [
+                b
+                    for b in fig.content
+                    if b isa Makie.Box &&
+                    schematic_close(b.color[], rgb(POTTS); tol = 0.6 / 255)
+            ]
+            labels = [
+                b
+                    for b in fig.content
+                    if b isa Makie.Label && string(b.text[]) == "Potts.jl"
+            ]
             @test length(boxes) == 1 && length(labels) == 1
             if length(boxes) == 1 && length(labels) == 1
                 pv = ax.scene.viewport[]
-                P = (; x = Float64(minimum(pv)[1]), y = Float64(minimum(pv)[2]), w = Float64(Makie.widths(pv)[1]), h = Float64(Makie.widths(pv)[2]))
+                P = (;
+                    x = Float64(minimum(pv)[1]), y = Float64(minimum(pv)[2]),
+                    w = Float64(Makie.widths(pv)[1]), h = Float64(Makie.widths(pv)[2]),
+                )
                 B = bbox(only(boxes))
                 Lb = bbox(only(labels))
-                @test isapprox(P.w, P.h; rtol = 0.01)                          # square panel
-                @test isapprox(B.w, P.w; rtol = 0.01) && isapprox(B.x, P.x; atol = 0.01 * P.w)
+                # square panel
+                @test isapprox(P.w, P.h; rtol = 0.01)
+                @test isapprox(B.w, P.w; rtol = 0.01) &&
+                    isapprox(B.x, P.x; atol = 0.01 * P.w)
                 @test isapprox(B.h / P.h, 5 / 45; rtol = 0.1)
                 @test isapprox((B.y - (P.y + P.h)) / P.h, 1 / 45; atol = 0.5 / 45)
-                @test B.x <= Lb.x + Lb.w / 2 <= B.x + B.w && B.y <= Lb.y + Lb.h / 2 <= B.y + B.h
+                @test B.x <= Lb.x + Lb.w / 2 <= B.x + B.w &&
+                    B.y <= Lb.y + Lb.h / 2 <= B.y + B.h
                 lab = only(labels)
                 @test schematic_close(lab.color[], Makie.RGBf(1, 1, 1))
                 @test occursin("bold", lowercase(string(lab.font[])))
             end
         end
-        # `areas` overrides the frame's site counts, and the scale follows (bare panel, no banner)
+        # `areas` overrides the frame's site counts, and the scale follows (bare panel, no
+        # banner)
         fig = PottsModels.openvt_f1_figure(
-            frame; areas = Dict(id => 3 * count(==(id), σ) + 1 for id in unique(filter(>(0), vec(σ)))),
+            frame; areas = Dict(
+                id => 3 * count(==(id), σ) + 1
+                    for id in unique(filter(>(0), vec(σ)))
+            ),
             banner = false
         )
         ax = schematic_panel(fig)
@@ -598,24 +724,40 @@ end
         @test isempty([b for b in fig.content if b isa Makie.Box])
         w, _, _ = schematic_visible(ax)
         vals = schematic_values(ax)
-        @test all(I -> w[I] == 0 ? isnan(vals[I]) : vals[I] == 3 * count(==(w[I]), σ) + 1, CartesianIndices(w))
+        @test all(
+            I -> w[I] == 0 ? isnan(vals[I]) : vals[I] == 3 * count(==(w[I]), σ) + 1,
+            CartesianIndices(w)
+        )
         pp = only(pottsplots(ax.scene))
-        @test all(Float64.(pp.colorrange[]) .== extrema(3 * count(==(id), σ) + 1.0 for id in unique(filter(>(0), vec(w)))))
+        @test all(
+            Float64.(pp.colorrange[]) .== extrema(
+                3 * count(==(id), σ) + 1.0
+                    for id in unique(filter(>(0), vec(w)))
+            )
+        )
     end
 end
 
-@testitem "15 openvt f1 f4 (c) a perturbed configuration changes the count, and the figure follows" setup = [OpenVTF1F4Setup] tags = [:pottsmodels, :reproductions] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "15 openvt f1 f4 (c) a perturbed configuration changes the count, and the \
+    figure follows" setup = [OpenVTF1F4Setup] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    # --------------------------------------------------------------------------------------
     # (c) negative controls
-    # ---------------------------------------------------------------------------------------------
-    @testset "15 openvt f1 f4 (c) a perturbed configuration changes the count, and the figure follows" begin
+    # --------------------------------------------------------------------------------------
+    @testset "15 openvt f1 f4 (c) a perturbed configuration changes the count, and the \
+        figure follows" begin
         σ = fig4()
         f0 = PottsModels.openvt_snapshot(schematic_state(σ)).f[1]
-        # tikz (1, 3) medium → cell i−1: three medium pairs of cell i become cell pairs (10 + 28)
-        σ1 = copy(σ); σ1[2, 4] = 2
+        # tikz (1, 3) medium → cell i−1: three medium pairs of cell i become cell pairs (10
+        # + 28)
+        σ1 = copy(σ)
+        σ1[2, 4] = 2
         # tikz (3, 5) (cell i's tip) → medium: cell i's pairs change on both counts
-        σ2 = copy(σ); σ2[4, 6] = 0
-        @test (length(schematic_pairs(σ1, 1).med), length(schematic_pairs(σ1, 1).cel)) == (10, 28)
+        σ2 = copy(σ)
+        σ2[4, 6] = 0
+        @test (length(schematic_pairs(σ1, 1).med), length(schematic_pairs(σ1, 1).cel)) ==
+            (10, 28)
         for σp in (σ1, σ2)
             pr = schematic_pairs(σp, 1)
             fp = PottsModels.openvt_snapshot(schematic_state(σp)).f[1]
@@ -631,12 +773,20 @@ end
             @test Set(mk.medium) == Set(pr.med) && Set(mk.cell) == Set(pr.cel)
             @test length(mk.medium) / (length(mk.medium) + length(mk.cell)) == fp
             @test (length(mk.medium), length(mk.cell)) != (13, 25)
-            @test any(t -> occursin(string(length(pr.med)), t) && occursin(string(length(pr.cel)), t), texts(fig))
+            @test any(
+                t -> occursin(string(length(pr.med)), t) &&
+                    occursin(string(length(pr.cel)), t),
+                texts(fig)
+            )
         end
     end
 end
 
-@testitem "15 openvt f1 f4 (c) the detectors catch outlines and wrong marks" setup = [OpenVTF1F4Setup] tags = [:pottsmodels, :reproductions] begin
+@testitem "15 openvt f1 f4 (c) the detectors catch outlines and wrong marks" setup = [
+    OpenVTF1F4Setup,
+] tags = [
+    :pottsmodels, :reproductions,
+] begin
     @testset "15 openvt f1 f4 (c) the detectors catch outlines and wrong marks" begin
         @test MAKIE
         σ = fig4()
@@ -647,39 +797,77 @@ end
         @test mk.bad == 0 && mk.outline == 0
         @test (length(mk.medium), length(mk.cell)) == (13, 25)
         @test schematic_outlines(ax, σ, 1; markers = true) == 0
-        @test schematic_outlines(ax, σ, 1; markers = false) > 0                 # F1's stricter rule sees the marks
+        # F1's stricter rule sees the marks
+        @test schematic_outlines(ax, σ, 1; markers = false) > 0
         # outlines in three forms are caught
-        @test schematic_outlines(control_figure(σ; boundaries = true)[2], σ, 1; markers = true) > 0
-        @test schematic_outlines(control_figure(σ; overlay = true)[2], σ, 1; markers = true) > 0
-        @test schematic_outlines(control_figure(σ; outline_lines = true)[2], σ, 1; markers = true) > 0
+        @test schematic_outlines(
+            control_figure(σ; boundaries = true)[2], σ, 1;
+            markers = true
+        ) >
+            0
+        @test schematic_outlines(
+            control_figure(σ; overlay = true)[2], σ, 1;
+            markers = true
+        ) >
+            0
+        @test schematic_outlines(
+            control_figure(σ; outline_lines = true)[2], σ, 1;
+            markers = true
+        ) >
+            0
         # marks decoded against the wrong cell are flagged, not counted
         @test schematic_marks(ax.scene, geom, σ, 2).bad > 0
-        # F1 (D-185): the edge decoder sees a missing edge (a gap), an extra segment, and a grey line
+        # F1 (D-185): the edge decoder sees a missing edge (a gap), an extra segment, and a
+        # grey line
         σf = fig4()
         Ef = edge_oracle(σf, (0, 0))
-        gapfig = Makie.Figure(); gax = Makie.Axis(gapfig[1, 1])
+        gapfig = Makie.Figure()
+        gax = Makie.Axis(gapfig[1, 1])
         segs = collect(Ef)
-        Makie.linesegments!(gax, [Makie.Point2f(p) for e in segs[2:end] for p in e]; color = :black)
+        Makie.linesegments!(
+            gax, [Makie.Point2f(p) for e in segs[2:end] for p in e];
+            color = :black
+        )
         E, other = edge_marks(gax.scene)
         @test other == 0 && Set(E) != Ef && length(E) == length(Ef) - 1
-        Makie.linesegments!(gax, [Makie.Point2f(0.5, 0.5), Makie.Point2f(2.5, 0.5)]; color = :black)
+        Makie.linesegments!(
+            gax, [Makie.Point2f(0.5, 0.5), Makie.Point2f(2.5, 0.5)];
+            color = :black
+        )
         @test edge_marks(gax.scene)[2] == 1
-        greyfig = Makie.Figure(); grax = Makie.Axis(greyfig[1, 1])
-        Makie.linesegments!(grax, [Makie.Point2f(p) for e in segs for p in e]; color = :gray70)
+        greyfig = Makie.Figure()
+        grax = Makie.Axis(greyfig[1, 1])
+        Makie.linesegments!(
+            grax, [Makie.Point2f(p) for e in segs for p in e];
+            color = :gray70
+        )
         @test edge_marks(grax.scene)[2] == length(Ef)
-        # the snapshot of a configuration without any medium contact has f = 0 and no magenta marks
-        σ3 = copy(σ); σ3[σ3 .== 0] .= 4
-        @test PottsModels.openvt_snapshot(schematic_state(σ3)).f[1] == 0.0 && isempty(schematic_pairs(σ3, 1).med)
+        # the snapshot of a configuration without any medium contact has f = 0 and no
+        # magenta marks
+        σ3 = copy(σ)
+        σ3[σ3 .== 0] .= 4
+        @test PottsModels.openvt_snapshot(schematic_state(σ3)).f[1] == 0.0 &&
+            isempty(schematic_pairs(σ3, 1).med)
     end
 end
 
-@testitem "15 openvt f1 f4 openvt_colony_panel!: color and state_colors keywords" setup = [OpenVTF1F4Setup] tags = [:pottsmodels, :reproductions] begin
+@testitem "15 openvt f1 f4 openvt_colony_panel!: color and state_colors keywords" setup = [
+    OpenVTF1F4Setup,
+] tags = [
+    :pottsmodels, :reproductions,
+] begin
     @testset "15 openvt f1 f4 openvt_colony_panel!: color and state_colors keywords" begin
         σ, frame = colony()
         inh = Dict(id => isodd(id) for id in unique(filter(>(0), vec(σ))))
         ax() = Makie.Axis(Makie.Figure()[1, 1])
         @test PottsModels.openvt_colony_panel!(ax(), frame; color = :area) !== nothing
-        @test PottsModels.openvt_colony_panel!(ax(), frame; color = :state, inhibited = inh, state_colors = (:yellow, :teal)) !== nothing
-        @test_throws ArgumentError PottsModels.openvt_colony_panel!(ax(), frame; color = :nope)
+        @test PottsModels.openvt_colony_panel!(
+            ax(), frame; color = :state, inhibited = inh,
+            state_colors = (:yellow, :teal)
+        ) !== nothing
+        @test_throws ArgumentError PottsModels.openvt_colony_panel!(
+            ax(), frame;
+            color = :nope
+        )
     end
 end

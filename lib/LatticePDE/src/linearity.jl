@@ -2,13 +2,14 @@
 # through registered operators, so the classification is ours. Each additive term of a rate
 # right-hand side gets one class with respect to the equation's own field `c`:
 #
-#   Diffusion     laplacian(c), DivKGrad(K, c), raw Dx(Dx(c)), Dx(K * Dx(c)), times a constant or
-#                 parameter
+#   Diffusion     laplacian(c), DivKGrad(K, c), raw Dx(Dx(c)), Dx(K * Dx(c)), times a
+#                 constant or parameter
 #   SiteDiffusion the same times a multiplier `m` that reads inputs only through table reads
-#                 (`value_at(T, k)`, `T[k]`, `value_at`) and indicators (kind sets, comparisons):
-#                 `value_at(Dk, k) * laplacian(c)`, `ifelse(k == 2, Da, Db) * laplacian(c)`. `m A` is not
-#                 conservative (not symmetric), so it is not plain Diffusion; the stability
-#                 bound takes max|m| over the site and max K over the faces independently
+#                 (`value_at(T, k)`, `T[k]`, `value_at`) and indicators (kind sets,
+#                 comparisons): `value_at(Dk, k) * laplacian(c)`, `ifelse(k == 2, Da, Db) *
+#                 laplacian(c)`. `m A` is not conservative (not symmetric), so it is not
+#                 plain Diffusion; the stability bound takes max|m| over the site and max K
+#                 over the faces independently
 #   LinearLocal   coefficient × c
 #   LaggedSwitch  coefficient × max(a, 0) or ifelse(·, a, 0), a affine in c (a LinearLocal
 #                 term whose switch the implicit solvers lag, §5.2)
@@ -21,16 +22,16 @@
 # divisor, `K`, `u`, the switch's other terms) reads no unknown field of the system, only
 # constants, parameters and inputs. Unknowns are every non-input field, aux fields included
 # (`K ~ c^2` makes `DivKGrad(K, c)` Other), because the solve groups are not known here. A
-# multiplier of a diffusion or advection term must also read no input: `kind * laplacian(c)` is not
-# conservative (the one exception is SiteDiffusion, a diffusion multiplier that reads inputs
-# through table reads and indicators only). A term that reads an aux field at all is Other
-# (its dependence is hidden).
+# multiplier of a diffusion or advection term must also read no input: `kind * laplacian(c)`
+# is not conservative (the one exception is SiteDiffusion, a diffusion multiplier that reads
+# inputs through table reads and indicators only). A term that reads an aux field at all is
+# Other (its dependence is hidden).
 #
-# Operator classes match with `isa` on the struct's UnionAll (`Advect{S}` is parametric), and
-# literals are read through `unwrap_const` (SymbolicUtils 4 wraps them in `Const`).
+# Operator classes match with `isa` on the struct's UnionAll (`Advect{S}` is parametric),
+# and literals are read through `unwrap_const` (SymbolicUtils 4 wraps them in `Const`).
 
-# A field is named by its operation (`c` for `c(t, x, y)`), a component of an array field by a
-# `_Comp` (`u[2]`, read as `getindex(u(t, x, y), 2)`): a component row's own field is its
+# A field is named by its operation (`c` for `c(t, x, y)`), a component of an array field by
+# a `_Comp` (`u[2]`, read as `getindex(u(t, x, y), 2)`): a component row's own field is its
 # component only, and another component of the same array is another field
 struct _Comp
     op::Any
@@ -45,7 +46,8 @@ function _hit(o::_Comp, u)
     a = arguments(u)
     length(a) == 2 || return false
     w = unwrap(a[1])
-    return iscall(w) && isequal(operation(w), o.op) && isequal(unwrap_const(unwrap(a[2])), o.i)
+    return iscall(w) && isequal(operation(w), o.op) &&
+        isequal(unwrap_const(unwrap(a[2])), o.i)
 end
 # the field `x` names: its `_Comp` for a component read `u(t, x, y)[i]`, else its operation
 function _ref(x)
@@ -59,11 +61,22 @@ function _ref(x)
     return operation(u)
 end
 # a field list's entry as a field: an operation, or a component read as its `_Comp`
-_asref(f) = f isa _Comp ? f : (u = unwrap(f); iscall(u) && operation(u) === getindex ? _ref(u) : f)
-_reads(x, ops) = (u = unwrap(x); iscall(u) && (any(o -> _hit(o, u), ops) || any(a -> _reads(a, ops), arguments(u))))
-# whether `x` reads the inputs `I` only inside a table read's index (`value_at(T, k)`, `T[k]`,
-# `value_at(J, a, b)`) or an indicator (a comparison or `ismember`): a site factor whose values a
-# table-aware bound can enumerate
+function _asref(f)
+    return if f isa _Comp
+        f
+    else
+        (u = unwrap(f); iscall(u) && operation(u) === getindex ? _ref(u) : f)
+    end
+end
+function _reads(x, ops)
+    (
+        u = unwrap(x);
+        iscall(u) && (any(o -> _hit(o, u), ops) || any(a -> _reads(a, ops), arguments(u)))
+    )
+end
+# whether `x` reads the inputs `I` only inside a table read's index (`value_at(T, k)`,
+# `T[k]`, `value_at(J, a, b)`) or an indicator (a comparison or `ismember`): a site factor
+# whose values a table-aware bound can enumerate
 function _site_factor(x, I)
     function ok(u, inside)
         iscall(u) || return true
@@ -81,15 +94,18 @@ end
 _iszero(x) = (v = unwrap_const(unwrap(x)); v isa Number && iszero(v))
 _isread(x, op) = (u = unwrap(x); iscall(u) && _hit(op, u))
 
-# Dx(K * Dx(c)) or Dx(Dx(c)) (collapsed to order 2): (K or nothing, c) when it is the flux form
+# Dx(K * Dx(c)) or Dx(Dx(c)) (collapsed to order 2): (K or nothing, c) when it is the flux
+# form
 function _raw_flux(u)
     d = operation(u)
     a = only(arguments(u))
     d.order == 2 && return (nothing, a)
     d.order == 1 || return nothing
     fs = iscall(a) && operation(a) === (*) ? arguments(a) : [a]
-    k = findfirst(f -> iscall(f) && operation(f) isa Differential && operation(f).order == 1 &&
-                           isequal(operation(f).x, d.x), fs)
+    k = findfirst(
+        f -> iscall(f) && operation(f) isa Differential && operation(f).order == 1 &&
+            isequal(operation(f).x, d.x), fs
+    )
     k === nothing && return nothing
     K = length(fs) == 1 ? 1 : prod(fs[setdiff(eachindex(fs), k)])
     return (K, only(arguments(fs[k])))
@@ -138,11 +154,12 @@ end
     linearity(rhs, c, fields; inputs = (), aux = ()) -> Vector{Pair{Any, Symbol}}
 
 The class of each additive term of `rhs` with respect to field `c` (an applied dependent
-variable, a component read `u(t, x, y)[i]`, or its operation). `fields` lists the operations of
-the unknown fields of the system (every non-input field; an array field by its components, as
-their reads `u(t, x, y)[i]`, so that another component is another field), `inputs` those of the inputs and `aux` those of the algebraic
-(`K ~ expr`) fields; a term that reads an aux field is `Other`. A coefficient that reads an unknown
-makes the term `Other` (the conservative rule in the file header).
+variable, a component read `u(t, x, y)[i]`, or its operation). `fields` lists the operations
+of the unknown fields of the system (every non-input field; an array field by its
+components, as their reads `u(t, x, y)[i]`, so that another component is another field),
+`inputs` those of the inputs and `aux` those of the algebraic (`K ~ expr`) fields; a term
+that reads an aux field is `Other`. A coefficient that reads an unknown makes the term
+`Other` (the conservative rule in the file header).
 """
 function linearity(rhs, c, fields; inputs = (), aux = ())
     op = c isa _Comp ? c : _ref(c)
@@ -151,10 +168,12 @@ function linearity(rhs, c, fields; inputs = (), aux = ())
     terms = iscall(u) && operation(u) === (+) ? arguments(u) : [u]
     return map(terms) do t
         _reads(t, fields) || return t => :Source
-        _reads(t, aux) && return t => :Other                  # an aux field hides its dependence
+        # an aux field hides its dependence
+        _reads(t, aux) && return t => :Other
         _reads(t, (op,)) && return t => _linclass(t, op, fields, inputs)
         others = [f for f in fields if _reads(t, (f,))]
-        return t => (length(others) == 1 &&
-                     _linclass(t, only(others), fields, inputs) in (:LinearLocal, :Diffusion) ? :CrossLinear : :Other)
+        cross = length(others) == 1 &&
+            _linclass(t, only(others), fields, inputs) in (:LinearLocal, :Diffusion)
+        return t => (cross ? :CrossLinear : :Other)
     end
 end

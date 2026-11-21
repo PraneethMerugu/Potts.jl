@@ -10,7 +10,8 @@
 #         over the central 333² (01a Fig. 4).
 #   2008: Merks2008() on 202² (2-site frame = TST 200²), merks2008_sprout(; seed) = 128
 #         cells (Figs. 5–11); the paper's de novo geometry (V-C1, D-050 M10)
-#         merks2008_denovo(; lattice = (502, 502), n = 1000, region = (85:417, 85:417), seed).
+#         merks2008_denovo(; lattice = (502, 502), n = 1000, region = (85:417, 85:417),
+#         seed).
 #   Every run: SequentialCPM() (the model's own neighbourhood), field_solver =
 #   ExplicitEuler(substeps = 15), solver seed = layout seed = the run's seed.
 #
@@ -35,8 +36,9 @@
 #      centroid step d of each cell and the unit major axis e of its site covariance at the
 #      earlier save; ratio = Σ (d·e)² / Σ (|d|² − (d·e)²) pooled over cells and steps.
 #
-# Tiers. SMOKE runs in the PottsModels suite (one thread, about 1.5 min on an idle machine); its rows are
-# reduced versions of READY targets, binding at their reduced size. FULL runs with
+# Tiers. SMOKE runs in the PottsModels suite (one thread, about 1.5 min on an idle machine);
+# its rows are reduced versions of READY targets, binding at their reduced size. FULL runs
+# with
 # POTTS_FULL_REPRODUCTION=true (or REPRO=full) offline on an idle machine (D-146; about 20
 # CPU-h, EnsembleThreads), and its outputs are committed to reproductions/data/01/.
 #
@@ -56,10 +58,10 @@
 # | V-C12 | displacement CI ≈ 85 µm vs no CI ≈ 42 µm over 160 h (Fig. 6E) | O5 from MCS 0 to 19 300: ratio CI/no CI in [1.5, 2.5] | — | 2 × 10 runs |
 # | M6 time | — | every 2008 binding value also at N + 100 MCS | — | reported |
 #
-# Re-targeted under D-240 (2026-10-13 paper audit; spec 01 §5): V-C4's CI target at J_cc = 40
-# is 0.40 (was 0.3) and V-C5's CI target at χcM = 500 is 0.40 (was 0.35), both ± 0.1, from
-# 01b Figs. 7 and 8 read at 400 dpi (digitised 0.401 and 0.396). Every other value and every
-# tolerance is unchanged.
+# Re-targeted under D-240 (2026-10-13 paper audit; spec 01 §5): V-C4's CI target at J_cc =
+# 40 is 0.40 (was 0.3) and V-C5's CI target at χcM = 500 is 0.40 (was 0.35), both ± 0.1,
+# from 01b Figs. 7 and 8 read at 400 dpi (digitised 0.401 and 0.396). Every other value and
+# every tolerance is unchanged.
 #
 # PARKED (D-153; not run, listed on the page): V-E2, V-E3, V-E4 (lacunae and branch points
 # need the 01a morphometry pipeline, whose pixel scale is unknown: A-18; G12 not built),
@@ -80,110 +82,191 @@ include(joinpath(@__DIR__, "..", "shared", "merks.jl"))
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "01 observables on hand-built states" setup = [MerksSetup] tags = [:pottsmodels, :reproductions] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "01 observables on hand-built states" setup = [MerksSetup] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    # --------------------------------------------------------------------------------------
     # Observable checks (always): hand-built states with hand-derived values
-    # ---------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     @testset "01 observables on hand-built states" begin
-        frame(dims) = (σ = zeros(Int32, dims); σ[[1, dims[1]], :] .= 1; σ[:, [1, dims[2]]] .= 1; σ)
+        function frame(dims)
+            σ = zeros(Int32, dims)
+            σ[[1, dims[1]], :] .= 1
+            σ[:, [1, dims[2]]] .= 1
+            return σ
+        end
         # a filled 10 × 10 square: 100 sites, hull of centres 9 × 9 = 81 → C = 100/81
-        σ = frame((20, 20)); σ[5:14, 5:14] .= 2
+        σ = frame((20, 20))
+        σ[5:14, 5:14] .= 2
         @test merks_compactness(σ) ≈ 100 / 81
-        # a plus of two 1-wide bars (cells 2 and 3): hull of centres of {x = 10, y 3:17} ∪ {y = 10, x 3:17}
-        # is the diamond with vertices (10,3), (17,10), (10,17), (3,10): area 2·7² = 98; 29 sites
-        σ = frame((20, 20)); σ[10, 3:17] .= 2; σ[3:17, 10] .= 3
+        # a plus of two 1-wide bars (cells 2 and 3): hull of centres of {x = 10, y 3:17} ∪
+        # {y = 10, x 3:17} is the diamond with vertices (10,3), (17,10), (10,17), (3,10):
+        # area 2·7² = 98; 29 sites
+        σ = frame((20, 20))
+        σ[10, 3:17] .= 2
+        σ[3:17, 10] .= 3
         @test merks_compactness(σ) ≈ 29 / 98
         # a ring of cells around a 6 × 6 hole: one component, one lacuna of 36 sites
-        σ = frame((20, 20)); σ[5:14, 5:14] .= 2; σ[7:12, 7:12] .= 0
+        σ = frame((20, 20))
+        σ[5:14, 5:14] .= 2
+        σ[7:12, 7:12] .= 0
         r = merks_network(σ)
         @test r.share == 1.0 && r.lacunae == 1 && !isnetwork(r)
         # three rings joined into a chain (one component, three lacunae ≥ 10): a network
         σ = frame((30, 40))
         for x0 in (3, 13, 23)
-            σ[5:14, x0:(x0 + 9)] .= 2; σ[7:12, (x0 + 2):(x0 + 7)] .= 0
+            σ[5:14, x0:(x0 + 9)] .= 2
+            σ[7:12, (x0 + 2):(x0 + 7)] .= 0
         end
         r = merks_network(σ)
         @test r.share == 1.0 && r.lacunae == 3 && isnetwork(r)
         # a hole of 9 sites is not a lacuna; medium touching the frame is not one either
-        σ = frame((20, 20)); σ[5:14, 5:14] .= 2; σ[8:10, 8:10] .= 0; σ[2:4, :] .= 0
+        σ = frame((20, 20))
+        σ[5:14, 5:14] .= 2
+        σ[8:10, 8:10] .= 0
+        σ[2:4, :] .= 0
         @test merks_network(σ).lacunae == 0
         # islands: four separate blocks → largest share 1/4
-        σ = frame((30, 30)); σ[3:6, 3:6] .= 2; σ[3:6, 20:23] .= 3; σ[20:23, 3:6] .= 4; σ[20:23, 20:23] .= 5
+        σ = frame((30, 30))
+        σ[3:6, 3:6] .= 2
+        σ[3:6, 20:23] .= 3
+        σ[20:23, 3:6] .= 4
+        σ[20:23, 20:23] .= 5
         @test merks_network(σ).share == 0.25 && !isnetwork(merks_network(σ))
         # displacement: cell 2 moves by (3, 4), cell 3 stays → mean 2.5 sites
-        a = frame((20, 20)); a[3:4, 3:4] .= 2; a[10:11, 10:11] .= 3
-        b = frame((20, 20)); b[6:7, 7:8] .= 2; b[10:11, 10:11] .= 3
+        a = frame((20, 20))
+        a[3:4, 3:4] .= 2
+        a[10:11, 10:11] .= 3
+        b = frame((20, 20))
+        b[6:7, 7:8] .= 2
+        b[10:11, 10:11] .= 3
         @test merks_displacement(a, b) ≈ 2.5
-        # anisotropy: a 2 × 6 bar along y stepping 1 along y (parallel) vs along x (perpendicular)
-        a = frame((20, 20)); a[5:6, 5:10] .= 2
-        b = frame((20, 20)); b[5:6, 6:11] .= 2
-        c = frame((20, 20)); c[6:7, 5:10] .= 2
+        # anisotropy: a 2 × 6 bar along y stepping 1 along y (parallel) vs along x
+        # (perpendicular)
+        a = frame((20, 20))
+        a[5:6, 5:10] .= 2
+        b = frame((20, 20))
+        b[5:6, 6:11] .= 2
+        c = frame((20, 20))
+        c[6:7, 5:10] .= 2
         @test merks_anisotropy([a, b]) == (1.0, 0.0)
         @test merks_anisotropy([a, c]) == (0.0, 1.0)
         @test crossing([0.0, 0.5, 1.0], [0.3, 0.5, 0.9], 0.6) ≈ 0.5 + 0.5 * 0.1 / 0.4
     end
 end
 
-@testitem "01 SMOKE: V-E1 (reduced) — 2006 network at 12 h, density-matched 200²" setup = [MerksSetup] tags = [:pottsmodels, :reproductions] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "01 SMOKE: V-E1 (reduced) — 2006 network at 12 h, density-matched 200²" setup = [
+    MerksSetup,
+] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    # --------------------------------------------------------------------------------------
     # SMOKE (binding in the suite)
-    # ---------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     @testset "01 SMOKE: V-E1 (reduced) — 2006 network at 12 h, density-matched 200²" begin
         # 100 cells of 10² on a framed 200² (≈ the paper's 282·100 / 333²), 1440 MCS = 12 h
-        el = [merks_network(run06(s, [1440]; lattice = (200, 200), n = 100)[1440]) for s in 90001:90001]
-        ro = [merks_network(run06(s, [1440]; lattice = (200, 200), n = 100, p = [:λ_L => 0.0])[1440]) for s in 90001:90001]
+        el = [
+            merks_network(run06(s, [1440]; lattice = (200, 200), n = 100)[1440])
+                for s in 90001:90001
+        ]
+        ro = [
+            merks_network(
+                run06(
+                    s, [1440]; lattice = (200, 200), n = 100, p = [:λ_L => 0.0]
+                )[1440]
+            )
+                for s in 90001:90001
+        ]
         @info "01 SMOKE V-E1 (share, lacunae)" el ro
         @test all(isnetwork, el)
-        @test mean(r -> r.share, ro) <= mean(r -> r.share, el) - 0.2               # control: round cells
+        # control: round cells
+        @test mean(r -> r.share, ro) <= mean(r -> r.share, el) - 0.2
     end
 end
 
-@testitem "01 SMOKE: V-C2 / V-C9 (reduced) — the sprout at 1000 MCS" setup = [MerksSetup] tags = [:pottsmodels, :reproductions] begin
+@testitem "01 SMOKE: V-C2 / V-C9 (reduced) — the sprout at 1000 MCS" setup = [
+    MerksSetup,
+] tags = [
+    :pottsmodels, :reproductions,
+] begin
     @testset "01 SMOKE: V-C2 / V-C9 (reduced) — the sprout at 1000 MCS" begin
         C(seed; kw...) = merks_compactness(run08(seed, [1000]; kw...)[1000])
         ci = [C(s) for s in 90011:90011]
         noci = [C(s; p = [:χcc => 500.0]) for s in 90011:90011]
         eo = [C(s; mode = :extension_only) for s in 90011:90011]
         @info "01 SMOKE V-C2/V-C9 compactness at 1000 MCS" ci noci eo
-        @test mean(ci) < mean(noci) - 0.2                                          # V-C2: CI sprouts
-        @test mean(eo) - mean(ci) > 0.2                                            # V-C9: retractions matter at T = 50
+        # V-C2: CI sprouts
+        @test mean(ci) < mean(noci) - 0.2
+        # V-C9: retractions matter at T = 50
+        @test mean(eo) - mean(ci) > 0.2
     end
 end
 
-@testitem "01 SMOKE: V-E10 (reduced) — elongated cells walk along their long axis" setup = [MerksSetup] tags = [:pottsmodels, :reproductions] begin
+@testitem "01 SMOKE: V-E10 (reduced) — elongated cells walk along their long axis" setup = [
+    MerksSetup,
+] tags = [
+    :pottsmodels, :reproductions,
+] begin
     @testset "01 SMOKE: V-E10 (reduced) — elongated cells walk along their long axis" begin
         el = [merks_walk(s; tend = 1000) for s in 90021:90021]
-        ro = [merks_walk(s; p = [:L => 10.0, :λ_L => 50.0], tend = 1000) for s in 90021:90022]
+        ro = [
+            merks_walk(s; p = [:L => 10.0, :λ_L => 50.0], tend = 1000)
+                for s in 90021:90022
+        ]
         @info "01 SMOKE V-E10 anisotropy" el ro
         @test mean(el) > 1.2
         @test mean(ro) < 1.2 && mean(ro) < mean(el)
     end
 end
 
-@testitem "01 FULL: V-E1, V-E5, V-E6 (2006, paper size)" setup = [MerksSetup] tags = [:pottsmodels, :reproductions] begin
+@testitem "01 FULL: V-E1, V-E5, V-E6 (2006, paper size)" setup = [MerksSetup] tags = [
+    :pottsmodels, :reproductions,
+] begin
     if FULLREPRO
-
         @testset "01 FULL: V-E1, V-E5, V-E6 (2006, paper size)" begin
-            H = [480, 1080, 1440, 2880, 5760]                                      # 4, 9, 12, 24, 48 h
+            # 4, 9, 12, 24, 48 h
+            H = [480, 1080, 1440, 2880, 5760]
             std_runs = tmap(s -> run06(s, H), 1001:1010)
             net(t) = [merks_network(r[t]) for r in std_runs]
             @test count(isnetwork, net(1440)) >= 8
             @test mean(r -> r.lacunae, net(5760)) < mean(r -> r.lacunae, net(1440))
             @test mean(r -> r.share, net(5760)) >= 0.9
-            round_runs = tmap(s -> merks_network(run06(s, [1440]; p = [:λ_L => 0.0])[1440]), 1101:1110)
+            round_runs = tmap(
+                s -> merks_network(run06(s, [1440]; p = [:λ_L => 0.0])[1440]),
+                1101:1110
+            )
             @test mean(r -> r.share, round_runs) <= mean(r -> r.share, net(1440)) - 0.2
             # V-E5: L in px (20, 40, 60, 80, 100 µm)
             for (k, L) in enumerate((10.0, 20.0, 30.0, 40.0, 50.0))
-                rs = tmap(i -> merks_network(run06(1200 + 10(k - 1) + i, [5760]; p = [:L => L])[5760]), 1:10)
+                rs = tmap(
+                    i -> merks_network(
+                        run06(
+                            1200 + 10(k - 1) + i, [5760]; p = [
+                                :L =>
+                                    L,
+                            ]
+                        )[5760]
+                    ), 1:10
+                )
                 nnet = count(isnetwork, rs)
                 @test L <= 20 ? (10 - nnet >= 8) : (nnet >= 8)
             end
             # V-E6: J_cc = 20, 5, 1 (J_cM = 20)
             for (k, Jcc) in enumerate((20.0, 5.0, 1.0))
                 J = [0.0 20.0 0.0; 20.0 Jcc 100.0; 0.0 100.0 0.0]
-                rs = tmap(i -> merks_network(run06(1300 + 10(k - 1) + i, [5760]; p = [:J => J])[5760]), 1:10)
+                rs = tmap(
+                    i -> merks_network(
+                        run06(
+                            1300 + 10(k - 1) + i, [5760]; p = [
+                                :J =>
+                                    J,
+                            ]
+                        )[5760]
+                    ), 1:10
+                )
                 @test count(isnetwork, rs) >= 8
-                Jcc == 1.0 && @test mean(r -> r.lacunae, rs) <= mean(r -> r.lacunae, net(5760))
+                Jcc == 1.0 &&
+                    @test mean(r -> r.lacunae, rs) <= mean(r -> r.lacunae, net(5760))
             end
         end
 
@@ -197,11 +280,22 @@ end
         @testset "01 FULL: V-C2, V-C3 (compactness vs χcc/χcM at 10⁴ MCS)" begin
             ratios = 0.0:0.1:1.0
             C = [
-                tmap(i -> merks_compactness(run08(3000 + 100j + i, [10_000, 10_100]; p = [:χcc => 500.0 * r])[10_000]), 1:10)
+                tmap(
+                    i -> merks_compactness(
+                        run08(
+                            3000 + 100j + i, [10_000, 10_100]; p = [
+                                :χcc =>
+                                    500.0 * r,
+                            ]
+                        )[10_000]
+                    ),
+                    1:10
+                )
                     for (j, r) in enumerate(ratios)
             ]
             m = mean.(C)
-            @test m[1] < m[end] - 0.3                                              # V-C2 (ratio 0 = CI, 1 = no CI)
+            # V-C2 (ratio 0 = CI, 1 = no CI)
+            @test m[1] < m[end] - 0.3
             low, high = mean(m[1:5]), mean(m[8:11])
             @test abs(low - 0.35) <= 0.07 && abs(high - 0.9) <= 0.07
             mid = crossing(collect(ratios), m, (low + high) / 2)
@@ -214,33 +308,80 @@ end
             # V-C4: (J_cc, CI?) points
             pts4 = [
                 (0.0, true), (20.0, true), (40.0, true), (60.0, true), (80.0, true),
-                (0.0, false), (5.0, false), (10.0, false), (15.0, false), (20.0, false), (40.0, false),
+                (0.0, false), (5.0, false), (10.0, false), (15.0, false), (20.0, false), (
+                    40.0, false,
+                ),
             ]
             m4 = Dict(
-                pt => mean(tmap(i -> C(4000 + 100k + i; p = [:J => Jm(pt[1]); pt[2] ? Pair[] : [:χcc => 500.0]]), 1:10))
+                pt => mean(
+                    tmap(
+                        i -> C(
+                            4000 + 100k + i; p = [
+                                :J => Jm(pt[1]);
+                                pt[2] ? Pair[] : [:χcc => 500.0]
+                            ]
+                        ),
+                        1:10
+                    )
+                )
                     for (k, pt) in enumerate(pts4)
             )
-            @test abs(m4[(20.0, true)] - 0.3) <= 0.1 && abs(m4[(40.0, true)] - 0.4) <= 0.1 && abs(m4[(80.0, true)] - 0.85) <= 0.1
-            @test abs(m4[(0.0, false)] - 0.35) <= 0.1 && all(J -> abs(m4[(J, false)] - 0.83) <= 0.1, (15.0, 20.0, 40.0))
-            @test m4[(80.0, true)] - m4[(0.0, true)] > 0.3 && m4[(40.0, false)] - m4[(0.0, false)] > 0.3
+            @test abs(m4[(20.0, true)] - 0.3) <= 0.1 &&
+                abs(m4[(40.0, true)] - 0.4) <= 0.1 && abs(m4[(80.0, true)] - 0.85) <= 0.1
+            @test abs(m4[(0.0, false)] - 0.35) <= 0.1 &&
+                all(J -> abs(m4[(J, false)] - 0.83) <= 0.1, (15.0, 20.0, 40.0))
+            @test m4[(80.0, true)] - m4[(0.0, true)] > 0.3 &&
+                m4[(40.0, false)] - m4[(0.0, false)] > 0.3
             # V-C5: (χcM, CI?) → paper value
-            pts5 = [((0.0, true), 0.9), ((500.0, true), 0.4), ((5000.0, true), 0.2), ((0.0, false), 0.95), ((5000.0, false), 0.7)]
+            pts5 = [
+                ((0.0, true), 0.9), ((500.0, true), 0.4), ((5000.0, true), 0.2),
+                ((0.0, false), 0.95), ((5000.0, false), 0.7),
+            ]
             for (k, ((χ, ci), want)) in enumerate(pts5)
-                got = mean(tmap(i -> C(5000 + 100k + i; p = [:χcM => χ; ci ? Pair[] : [:χcc => χ]]), 1:10))
+                got = mean(
+                    tmap(
+                        i -> C(
+                            5000 + 100k + i; p = [
+                                :χcM => χ;
+                                ci ? Pair[] : [:χcc => χ]
+                            ]
+                        ), 1:10
+                    )
+                )
                 @test abs(got - want) <= 0.1
             end
             # V-C7: s sweep
             ss = [0.0, 0.025, 0.05, 0.075, 0.1, 0.125, 0.15, 0.175, 0.2, 0.25]
-            mci = [mean(tmap(i -> C(7000 + 100k + i; p = [:s => s]), 1:10)) for (k, s) in enumerate(ss)]
+            mci = [
+                mean(tmap(i -> C(7000 + 100k + i; p = [:s => s]), 1:10))
+                    for (k, s) in enumerate(ss)
+            ]
             mid = crossing(ss, mci, (mci[1] + mci[end]) / 2)
             @test mid !== nothing && 0.07 <= mid <= 0.15
             for (k, s) in enumerate((0.0, 0.1, 0.25))
-                @test abs(mean(tmap(i -> C(7500 + 100k + i; p = [:s => s, :χcc => 500.0]), 1:10)) - 0.95) <= 0.1
+                @test abs(
+                    mean(
+                        tmap(
+                            i -> C(
+                                7500 + 100k + i; p = [
+                                    :s => s, :χcc => 500.0,
+                                ]
+                            ), 1:10
+                        )
+                    ) - 0.95
+                ) <= 0.1
             end
         end
 
         @testset "01 FULL: V-C9 (T and the extension-only mode at 5000 MCS)" begin
-            C(seed, T, mode) = merks_compactness(run08(seed, [5000, 5100]; p = [:T => T], mode)[5000])
+            function C(
+                    seed, T,
+                    mode
+                )
+                return merks_compactness(
+                    run08(seed, [5000, 5100]; p = [:T => T], mode)[5000]
+                )
+            end
             m = Dict(
                 (T, mode) => mean(tmap(i -> C(9000 + 100k + i, T, mode), 1:10))
                     for (k, (T, mode)) in enumerate(
@@ -252,22 +393,41 @@ end
             )
             @test m[(50.0, :extension_only)] > 0.85
             @test m[(50.0, :extension_retraction)] < 0.5
-            @test m[(800.0, :extension_only)] < 0.3 && m[(800.0, :extension_retraction)] < 0.3
+            @test m[(800.0, :extension_only)] < 0.3 &&
+                m[(800.0, :extension_retraction)] < 0.3
         end
 
         @testset "01 FULL: V-C12 (displacement over 160 h, CI vs no CI)" begin
-            # D-200 item 1: displacement from MCS 0, the start before the 100 relaxation MCS, as
-            # 01b Fig. 6E measures it ("from original positions": both curves start at 0 at t = 0
-            # and jump within ≈ 1 h). Was MCS 100 (D-153). End time and band unchanged.
-            D(seed; p) = (r = run08(seed, [0, 19_300]; p); merks_displacement(r[0], r[19_300]))
+            # D-200 item 1: displacement from MCS 0, the start before the 100 relaxation
+            # MCS, as 01b Fig. 6E measures it ("from original positions": both curves start
+            # at 0 at t = 0 and jump within ≈ 1 h). Was MCS 100 (D-153). End time and band
+            # unchanged.
+            function D(seed; p)
+                r = run08(seed, [0, 19_300]; p)
+                return merks_displacement(r[0], r[19_300])
+            end
             ci = tmap(i -> D(12_000 + i; p = Pair[]), 1:10)
             no = tmap(i -> D(12_100 + i; p = [:χcc => 500.0]), 1:10)
             @test 1.5 <= mean(ci) / mean(no) <= 2.5
         end
 
         @testset "01 FULL: V-C1 (1000 cells, the paper geometry, 10⁴ MCS)" begin
-            ci = tmap(i -> merks_network(run08(20_000 + i, [10_000, 10_100]; denovo = true)[10_000]), 1:5)
-            no = tmap(i -> merks_network(run08(20_100 + i, [10_000, 10_100]; denovo = true, p = [:χcc => 500.0])[10_000]), 1:5)
+            ci = tmap(
+                i -> merks_network(
+                    run08(20_000 + i, [10_000, 10_100]; denovo = true)[10_000]
+                ), 1:5
+            )
+            no = tmap(
+                i -> merks_network(
+                    run08(
+                        20_100 + i, [10_000, 10_100]; denovo = true, p = [
+                            :χcc =>
+                                500.0,
+                        ]
+                    )[10_000]
+                ),
+                1:5
+            )
             @test count(isnetwork, ci) >= 4
             @test count(r -> r.share < 0.5, no) >= 4
         end

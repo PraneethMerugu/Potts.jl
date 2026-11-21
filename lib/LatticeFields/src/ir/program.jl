@@ -1,6 +1,6 @@
-# Program assembly. Front ends declare fields, masks, tables and rules in any order and build
-# kernels against provisional ids; `program` sorts every table by key, renumbers the ids and
-# rebuilds each kernel canonically, so declaration order never reaches the IR.
+# Program assembly. Front ends declare fields, masks, tables and rules in any order and
+# build kernels against provisional ids; `program` sorts every table by key, renumbers the
+# ids and rebuilds each kernel canonically, so declaration order never reaches the IR.
 
 mutable struct ProgramBuilder{N}
     hierarchy::Vector{Level{N}}
@@ -16,11 +16,13 @@ mutable struct ProgramBuilder{N}
 end
 function ProgramBuilder(
         grid::Grid{N}; periodic = ntuple(_ -> false, N), spacing = ntuple(_ -> 1.0, N),
-        nparams = 0, levels = 1) where {N}
+        nparams = 0, levels = 1
+    ) where {N}
     return ProgramBuilder{N}(
         [Level(grid, s) for s in 0:(levels - 1)], FieldDecl{N}[], TableDecl[],
         MaskDecl[], FlagDecl[], AbstractBoundaryRule[], Kernel{N}[], Tuple(periodic),
-        Float64.(Tuple(spacing)), nparams)
+        Float64.(Tuple(spacing)), nparams
+    )
 end
 
 """
@@ -31,14 +33,19 @@ holds the problem's value type ([`lanetype`](@ref LatticeFields.Compile.lanetype
 function field!(
         pb::ProgramBuilder{N}, key; storage = F32, shape = Int16[], symmetric = false,
         buffers = 1, role = :state, epoch = PERSTEP, levels = Int8[0],
-        classes = [Placement{N}()], fixed = false) where {N}
+        classes = [Placement{N}()], fixed = false
+    ) where {N}
     any(f -> f.key == key, pb.fields) && irerror("field `$key` declared twice")
     role in (:state, :aux, :input, :output, :scratch) ||
         irerror("field `$key`: unknown role `$role`")
     storage in LANES || irerror("field `$key`: `$storage` is not a storage lane")
-    push!(pb.fields,
-        FieldDecl{N}(String(key), classes, Int16.(shape), symmetric, storage,
-            Int8.(levels), epoch, Int8(buffers), role, fixed))
+    push!(
+        pb.fields,
+        FieldDecl{N}(
+            String(key), classes, Int16.(shape), symmetric, storage,
+            Int8.(levels), epoch, Int8(buffers), role, fixed
+        )
+    )
     return Int32(length(pb.fields))
 end
 
@@ -60,9 +67,12 @@ rule!(pb::ProgramBuilder, r::AbstractBoundaryRule) = (push!(pb.rules, r); nothin
 A kernel builder for space `space` (default: the full space at level 0).
 """
 function kernel(pb::ProgramBuilder{N}, space::Space{N} = Space{N}()) where {N}
-    KernelBuilder{N}(
-        [f.key for f in pb.fields], [f.storage for f in pb.fields], [t.key
-                                                                     for t in pb.tables], space)
+    return KernelBuilder{N}(
+        [f.key for f in pb.fields], [f.storage for f in pb.fields], [
+            t.key
+                for t in pb.tables
+        ], space
+    )
 end
 
 """
@@ -83,22 +93,30 @@ constant(kb::KernelBuilder, v::Real, t::Scalar = REAL) = Ex(kb, constant!(kb, v,
 cast(x::Ex, t::Scalar) = Ex(x.b, cast!(x.b, x.id, t))
 bittest(x::Ex, bit::Integer) = Ex(x.b, bittest!(x.b, x.id, bit))
 function table(kb::KernelBuilder, t::Integer, storage::Scalar, i::Ex)
-    Ex(kb, table!(kb, t, storage, i.id))
+    return Ex(kb, table!(kb, t, storage, i.id))
 end
 function store(kb::KernelBuilder, f::Integer, v::Ex; kw...)
-    store!(kb, f, kb.fieldlanes[f], v.id; kw...)
+    return store!(kb, f, kb.fieldlanes[f], v.id; kw...)
 end
 function store(kb::KernelBuilder, f::Integer, v::Real; kw...)
-    store!(kb, f, kb.fieldlanes[f], constant!(kb, v); kw...)
+    return store!(kb, f, kb.fieldlanes[f], constant!(kb, v); kw...)
 end
 
 _perm(keys) = (p = sortperm(keys); inv = similar(p); inv[p] = 1:length(p); (p, inv))
 
-_rulemap(r::FaceRule, fm, mm) = FaceRule(fm(r.field), r.axis, r.side, r.alpha, r.beta, r.g, fm(r.gfield),
-    fm(r.afield), fm(r.bfield))
-_rulemap(r::DomainEdgeRule, fm, mm) = DomainEdgeRule(fm(r.field), r.kind, r.mask == 0 ? Int32(0) : mm(r.mask))
+function _rulemap(r::FaceRule, fm, mm)
+    return FaceRule(
+        fm(r.field), r.axis, r.side, r.alpha, r.beta, r.g, fm(r.gfield),
+        fm(r.afield), fm(r.bfield)
+    )
+end
+function _rulemap(r::DomainEdgeRule, fm, mm)
+    return DomainEdgeRule(fm(r.field), r.kind, r.mask == 0 ? Int32(0) : mm(r.mask))
+end
 _rulemap(r::ImmersedRule, fm, mm) = ImmersedRule(fm(r.field), mm(r.mask), r.kind)
-_rulemap(r::NodeValueRule, fm, mm) = NodeValueRule(fm(r.field), mm(r.mask), r.value, r.face, fm(r.vfield))
+function _rulemap(r::NodeValueRule, fm, mm)
+    return NodeValueRule(fm(r.field), mm(r.mask), r.value, r.face, fm(r.vfield))
+end
 
 """
 Sort fields, masks, tables, rules and kernels by key and rebuild every kernel canonically.
@@ -114,31 +132,43 @@ function program(pb::ProgramBuilder{N}) where {N}
     tables = pb.tables[tp]
     keys = ([f.key for f in fields], [f.storage for f in fields], [t.key for t in tables])
     masks = [MaskDecl(m.key, fm(m.field), m.epoch) for m in pb.masks[mp]]
-    flags = [FlagDecl(g.key, fm(g.field), [b => mm(s) for (b, s) in g.bits], g.epoch)
-             for g in pb.flags]
+    flags = [
+        FlagDecl(g.key, fm(g.field), [b => mm(s) for (b, s) in g.bits], g.epoch)
+            for g in pb.flags
+    ]
     kernels = map(sort(pb.kernels; by = k -> k.key)) do k
         sp = k.space
         space = Space{N}(sp.kind, sp.level, sp.class, mm(sp.mask), sp.inset)
         rebuild(copy_node!, k, keys; space, fieldmap = fm, tablemap = tm)
     end
     grid = pb.hierarchy[1].grid
-    hier = [Level{N}(Grid{N}(grid.dims, grid.geometry, mm(grid.domain)), l.shift, l.widths)
-            for l in pb.hierarchy]
+    hier = [
+        Level{N}(Grid{N}(grid.dims, grid.geometry, mm(grid.domain)), l.shift, l.widths)
+            for l in pb.hierarchy
+    ]
     rules = AbstractBoundaryRule[_rulemap(r, fm, mm) for r in pb.rules]
     p = Program{N}(
         hier, fields, tables, masks, sort(flags; by = g -> g.key), rules, kernels,
-        pb.periodic, pb.spacing, pb.nparams)
-    return Program{N}(hier, fields, tables, masks, p.flags,
-        sort(rules; by = r -> sprint(print_rule, p, r)), kernels, pb.periodic, pb.spacing, pb.nparams)
+        pb.periodic, pb.spacing, pb.nparams
+    )
+    return Program{N}(
+        hier, fields, tables, masks, p.flags,
+        sort(rules; by = r -> sprint(print_rule, p, r)), kernels, pb.periodic, pb.spacing,
+        pb.nparams
+    )
 end
 
 """
 Replace the kernels of `p` (passes return new programs; nothing is mutated).
 """
 function with_kernels(p::Program{N}, ks) where {N}
-    Program{N}(p.hierarchy, p.fields, p.tables, p.masks,
-        p.flags, p.rules, collect(Kernel{N}, ks), p.periodic, p.spacing, p.nparams)
+    return Program{N}(
+        p.hierarchy, p.fields, p.tables, p.masks,
+        p.flags, p.rules, collect(Kernel{N}, ks), p.periodic, p.spacing, p.nparams
+    )
 end
 function buildkeys(p::Program)
-    ([f.key for f in p.fields], [f.storage for f in p.fields], [t.key for t in p.tables])
+    return (
+        [f.key for f in p.fields], [f.storage for f in p.fields], [t.key for t in p.tables],
+    )
 end

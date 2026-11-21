@@ -16,7 +16,7 @@ struct OrthogonalSlice <: AbstractRenderExtent
     function OrthogonalSlice(axis::Integer, index::Integer)
         1 <= axis <= 3 || throw(ArgumentError("slice axis must be 1, 2, or 3"))
         index > 0 || throw(ArgumentError("slice index must be positive"))
-        new(Int(axis), Int(index))
+        return new(Int(axis), Int(index))
     end
 end
 
@@ -37,22 +37,33 @@ struct RenderChannelKey{S <: AbstractRenderChannelScope, T}
     name::Symbol
 end
 
-RenderChannelKey(::S, name::Symbol, ::Type{T}) where {S <: AbstractRenderChannelScope, T} =
-    RenderChannelKey{S, T}(name)
+function RenderChannelKey(::S, name::Symbol, ::Type{T}) where {
+        S <: AbstractRenderChannelScope, T,
+    }
+    return RenderChannelKey{S, T}(name)
+end
 """Construct a site-scoped [`RenderChannelKey`](@ref)."""
-SiteChannelKey(name::Symbol, ::Type{T} = Any) where {T} =
-    RenderChannelKey(SiteChannelScope(), name, T)
+function SiteChannelKey(name::Symbol, ::Type{T} = Any) where {T}
+    return RenderChannelKey(SiteChannelScope(), name, T)
+end
 """Construct a finite-cell-scoped [`RenderChannelKey`](@ref)."""
-CellChannelKey(name::Symbol, ::Type{T} = Any) where {T} =
-    RenderChannelKey(CellChannelScope(), name, T)
+function CellChannelKey(name::Symbol, ::Type{T} = Any) where {T}
+    return RenderChannelKey(CellChannelScope(), name, T)
+end
 """Construct a medium-domain-scoped [`RenderChannelKey`](@ref)."""
-MediumChannelKey(name::Symbol, ::Type{T} = Any) where {T} =
-    RenderChannelKey(MediumChannelScope(), name, T)
+function MediumChannelKey(name::Symbol, ::Type{T} = Any) where {T}
+    return RenderChannelKey(MediumChannelScope(), name, T)
+end
 
 function Base.show(io::IO, key::RenderChannelKey{S, T}) where {S, T}
-    scope = S === SiteChannelScope ? "site" :
-            S === CellChannelScope ? "cell" : "medium"
-    print(io, scope, " channel :", key.name, "::", T)
+    scope = if S <: SiteChannelScope
+        "site"
+    elseif S <: CellChannelScope
+        "cell"
+    else
+        "medium"
+    end
+    return print(io, scope, " channel :", key.name, "::", T)
 end
 
 """
@@ -67,8 +78,10 @@ struct RenderChannel{K <: RenderChannelKey, V}
     units::Union{Nothing, String}
 end
 
-function RenderChannel(key::RenderChannelKey, values;
-        label::AbstractString = String(key.name), units = nothing)
+function RenderChannel(
+        key::RenderChannelKey, values;
+        label::AbstractString = String(key.name), units = nothing
+    )
     normalized_units = units === nothing ? nothing : String(units)
     return RenderChannel(key, values, String(label), normalized_units)
 end
@@ -85,7 +98,9 @@ struct RenderRequest{E <: AbstractRenderExtent}
     include_cell_metadata::Bool
 end
 
-function RenderRequest(; extent::AbstractRenderExtent = FullDomain(),
-        include_cell_metadata::Bool = true)
+function RenderRequest(;
+        extent::AbstractRenderExtent = FullDomain(),
+        include_cell_metadata::Bool = true
+    )
     return RenderRequest(extent, include_cell_metadata)
 end

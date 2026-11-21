@@ -1,42 +1,94 @@
 # Generic level code (package bodies, the same for every operator): the rule-M hierarchy
 # build and the in-workgroup bottom V-cycle. Every level stores the same arrays, so these
-# bodies never vary with the model: `active` (U8, 1 = unknown), `w[a]` (face to +e_a, raw: the
-# active and mask role of a face follows from `active` on both sides), `s` (shift), `sbox`
-# (box face-Dirichlet absorption) and `sint` (absorption folded inside coarse cells). For an
-# active site, A x = (s + sbox + sint) x + Σ_faces w (x − active_j x_j) (flux-difference form).
-# Indices: every index below is built from the level's own dims (wrapped on periodic axes,
-# a face across a non-periodic box face has w = 0 and is skipped), which is the bounds
-# argument for each `@inbounds`.
+# bodies never vary with the model: `active` (U8, 1 = unknown), `w[a]` (face to +e_a, raw:
+# the active and mask role of a face follows from `active` on both sides), `s` (shift),
+# `sbox` (box face-Dirichlet absorption) and `sint` (absorption folded inside coarse cells).
+# For an active site, A x = (s + sbox + sint) x + Σ_faces w (x − active_j x_j)
+# (flux-difference form). Indices: every index below is built from the level's own dims
+# (wrapped on periodic axes, a face across a non-periodic box face has w = 0 and is
+# skipped), which is the bounds argument for each `@inbounds`.
 
 # (`prod`/`sum` widen Int32 to Int; these folds keep the index type.)
-@inline _stride(dims::NTuple{N, Int32}, a) where {N} = foldl(*, ntuple(
-    d -> d < a ?
-         dims[d] :
-         one(Int32), N))
+@inline function _stride(dims::NTuple{N, Int32}, a) where {N}
+    return foldl(
+        *, ntuple(
+            d -> if d < a
+                dims[d]
+            else
+                one(Int32)
+            end, N
+        )
+    )
+end
+# the coarse step of a face along axis `a`: none on an axis of one coarse site, else ±1
+# where the face offset `o` leaves the fine block `lo:hi` of coarse site `c`
+@inline function _coarse_step(dimsc, o, c, lo, hi, a)
+    if dimsc[a] == one(Int32)
+        return zero(Int32)
+    elseif o[a] == 1 && c[a] == hi[a]
+        return one(Int32)
+    elseif o[a] == -1 && c[a] == lo[a]
+        return -one(Int32)
+    else
+        return zero(Int32)
+    end
+end
+# the part of a hexagonal face's widths `f1`, `f2` that direction `e` takes (both on the
+# diagonal)
+@inline function _hex_part(e, f1, f2)
+    if e == 3
+        return f1 + f2
+    elseif e == 1
+        return f1
+    else
+        return f2
+    end
+end
+# the coarse coordinate of fine coordinate `X` on axis `e` (an axis of one site keeps it)
+@inline function _parent_coord(X, dl, dp, e)
+    dl[e] == one(Int32) && return X[e]
+    return min((X[e] - one(Int32)) >> 1 + one(Int32), dp[e])
+end
 @inline function _coords(i::Int32, dims::NTuple{N, Int32}) where {N}
     t = i - one(Int32)
     return ntuple(d -> rem(div(t, _stride(dims, d)), dims[d]) + one(Int32), N)
 end
-@inline _lin(x::NTuple{N, Int32}, dims::NTuple{N, Int32}) where {N} = one(Int32) +
-                                                                      foldl(
-    +, ntuple(d -> (x[d] - one(Int32)) * _stride(dims, d), N))
+@inline function _lin(x::NTuple{N, Int32}, dims::NTuple{N, Int32}) where {N}
+    return one(Int32) +
+        foldl(
+        +, ntuple(d -> (x[d] - one(Int32)) * _stride(dims, d), N)
+    )
+end
 """
 Neighbor of `x` along axis `a` by `σ = ±1`: `(x′, exists)`; periodic axes wrap.
 """
 @inline function _nb(x::NTuple{N, Int32}, a, σ, dims, per) where {N}
     v0 = x[a] + Int32(σ)
     ok = one(Int32) <= v0 <= dims[a]
-    v = ok ? v0 : per[a] ? (v0 < one(Int32) ? dims[a] : one(Int32)) : x[a]
+    v = if ok
+        v0
+    elseif per[a]
+        v0 < one(Int32) ? dims[a] : one(Int32)
+    else
+        x[a]
+    end
     return ntuple(d -> d == a ? v : x[d], N), ok | per[a]
 end
 """
-Neighbor of `x` by the offset `o` (each entry −1, 0 or 1): `(x′, exists)`; periodic axes wrap.
+Neighbor of `x` by the offset `o` (each entry −1, 0 or 1): `(x′, exists)`; periodic axes
+wrap.
 """
 @inline function _nbo(x::NTuple{N, Int32}, o, dims, per) where {N}
     y = ntuple(N) do d
         v0 = x[d] + Int32(o[d])
         ok = one(Int32) <= v0 <= dims[d]
-        ok ? v0 : per[d] ? (v0 < one(Int32) ? dims[d] : one(Int32)) : x[d]
+        if ok
+            v0
+        elseif per[d]
+            v0 < one(Int32) ? dims[d] : one(Int32)
+        else
+            x[d]
+        end
     end
     return y, all(ntuple(d -> (one(Int32) <= x[d] + Int32(o[d]) <= dims[d]) | per[d], N))
 end
@@ -53,11 +105,17 @@ end
 Physical width (in finest cells) of cell `i` of a level with `n` cells, `ℓ` coarsenings
 below a finest axis of `n0` cells: 2^ℓ, the last cell takes the rest.
 """
-@inline _width(i::Int32, n::Int32, n0::Int32, ℓ::Int32) = n0 == one(Int32) ? one(Int32) :
-                                                          i < n ? (one(Int32) << ℓ) :
-                                                          n0 -
-                                                          (n - one(Int32)) *
-                                                          (one(Int32) << ℓ)
+@inline function _width(i::Int32, n::Int32, n0::Int32, ℓ::Int32)
+    if n0 == one(Int32)
+        return one(Int32)
+    elseif i < n
+        return one(Int32) << ℓ
+    else
+        return n0 -
+            (n - one(Int32)) *
+            (one(Int32) << ℓ)
+    end
+end
 
 """
 Rule-M weights of the hierarchy build: `inside` for a mask face inside a coarse
@@ -84,7 +142,12 @@ const RULE_M = RuleWeights()
     nch = zero(Int32)
     for c in CartesianIndices(ntuple(d -> lo[d]:hi[d], length(X)))
         nch += one(Int32)
-        @inbounds cnt += active[_lin(Int32.(Tuple(c)), dimsf)] != 0 ? one(Int32) : zero(Int32)
+        # bounds: c runs over the fine children of X, inside dimsf, so _lin ≤ length(active)
+        @inbounds cnt += if active[_lin(Int32.(Tuple(c)), dimsf)] != 0
+            one(Int32)
+        else
+            zero(Int32)
+        end
     end
     return majority ? Int32(2) * cnt > nch : cnt > zero(Int32)
 end
@@ -94,8 +157,8 @@ end
 
 One coarse site of the rule-M build (§6.3): Any fold, `S_c = ΣS_f`, box absorption `box·Σ`,
 active–active faces rediscretized with physical widths, mask faces folded by rule M.
-`S = ((active, w..., s, sbox, sint) fine, (…) coarse)`, `P = (inside, plane, inherited, box)`,
-`G = (n, dimsf, dimsc, n0, ℓ, per, majority)`.
+`S = ((active, w..., s, sbox, sint) fine, (…) coarse)`,
+`P = (inside, plane, inherited, box)`, `G = (n, dimsf, dimsc, n0, ℓ, per, majority)`.
 """
 function build_site!(j, S::Tuple{F, C}, P, G) where {F, C}
     (af, wf, sf, bf, if_), (ac, wc, sc, bc, ic) = S
@@ -111,6 +174,7 @@ function build_site!(j, S::Tuple{F, C}, P, G) where {F, C}
     for ci in CartesianIndices(ntuple(d -> lo[d]:hi[d], N))
         c = Int32.(Tuple(ci))
         i = _lin(c, dimsf)
+        # bounds: ci runs over the fine children of the coarse site, inside dimsf, so i ≤ nf
         @inbounds active = af[i] != 0
         if active
             @inbounds s += sf[i]
@@ -138,8 +202,10 @@ function build_site!(j, S::Tuple{F, C}, P, G) where {F, C}
                 cn, _ = _nb(c, a, 1, dimsf, per)
                 i = _lin(c, dimsf)
                 @inbounds w, x, y = wf[a][i], af[i] != 0, af[_lin(cn, dimsf)] != 0
-                f = T(_width(c[a], dimsf[a], n0[a], ℓ - one(Int32)) +
-                      _width(cn[a], dimsf[a], n0[a], ℓ - one(Int32))) / fd
+                f = T(
+                    _width(c[a], dimsf[a], n0[a], ℓ - one(Int32)) +
+                        _width(cn[a], dimsf[a], n0[a], ℓ - one(Int32))
+                ) / fd
                 cf, dcf = (x & y) ? w : zero(T), (x != y) ? w : zero(T)
                 if activeJ & actn
                     acc += f * cf
@@ -151,7 +217,8 @@ function build_site!(j, S::Tuple{F, C}, P, G) where {F, C}
         end
         @inbounds wc[a][J] = acc
     end
-    for a in 1:N                                              # low planes: mask faces into J
+    # low planes: mask faces into J
+    for a in 1:N
         (dimsc[a] == one(Int32) || (!per[a] && X[a] == one(Int32))) && continue
         Xp, _ = _nb(X, a, -1, dimsc, per)
         (activeJ && _fold(Xp, af, dimsf, dimsc, G.majority)) || continue
@@ -172,24 +239,28 @@ end
 """
     build_hex!(J, S, P, G)
 
-One coarse site of the rule-M build on a hexagonal lattice (axial coordinates; coarsening by 2
-per axis keeps the lattice hexagonal): as `build_site!`, with three face directions `e₁`, `e₂`,
-`e₁ − e₂`. A fine face crosses from the children of `J` to those of `J + Δ`, `Δ` one of
-`±e₁`, `±e₂`, `±(e₁ − e₂)` (a diagonal fine face can cross an axial plane: it then feeds that
-axial coarse face). A coarse face is the mean of the fine faces that cross it, times its
-rediscretized factor (the fine faces of its own direction, with the physical widths as in
-`build_site!`; the one diagonal fine face of a diagonal coarse face takes the sum of its axial
-factors), so a constant coefficient keeps its value on every level and in every direction;
-mask faces fold by rule M. `P = (inside, plane, inherited, box, diagonal)`, `diagonal` the
-weight of the diagonal fine faces in the coarse faces (1; 0 drops them, the negative control).
+One coarse site of the rule-M build on a hexagonal lattice (axial coordinates; coarsening by
+2 per axis keeps the lattice hexagonal): as `build_site!`, with three face directions `e₁`,
+`e₂`, `e₁ − e₂`. A fine face crosses from the children of `J` to those of `J + Δ`, `Δ` one
+of `±e₁`, `±e₂`, `±(e₁ − e₂)` (a diagonal fine face can cross an axial plane: it then feeds
+that axial coarse face). A coarse face is the mean of the fine faces that cross it, times
+its rediscretized factor (the fine faces of its own direction, with the physical widths as
+in `build_site!`; the one diagonal fine face of a diagonal coarse face takes the sum of its
+axial factors), so a constant coefficient keeps its value on every level and in every
+direction; mask faces fold by rule M. `P = (inside, plane, inherited, box, diagonal)`,
+`diagonal` the weight of the diagonal fine faces in the coarse faces (1; 0 drops them, the
+negative control).
 """
 # the tuple `t` with entry `e` replaced by `v`
 @inline _tset(t::NTuple{3, T}, v, e) where {T} = ntuple(q -> q == e ? T(v) : t[q], 3)
 # the factor of a fine face `c → cn` along axis `a` in the coarse face `X → Xn`: fine over
 # coarse center distance, from the physical widths (`build_site!`)
 @inline function _hexfac(::Type{T}, a, c, cn, X, Xn, dimsf, dimsc, n0, ℓ) where {T}
-    T(_width(c[a], dimsf[a], n0[a], ℓ - one(Int32)) + _width(cn[a], dimsf[a], n0[a], ℓ - one(Int32))) /
-    T(_width(X[a], dimsc[a], n0[a], ℓ) + _width(Xn[a], dimsc[a], n0[a], ℓ))
+    return T(
+        _width(c[a], dimsf[a], n0[a], ℓ - one(Int32)) +
+            _width(cn[a], dimsf[a], n0[a], ℓ - one(Int32))
+    ) /
+        T(_width(X[a], dimsc[a], n0[a], ℓ) + _width(Xn[a], dimsc[a], n0[a], ℓ))
 end
 function build_hex!(j, S::Tuple{F, C}, P, G) where {F, C}
     (af, wf, sf, bf, if_), (ac, wc, sc, bc, ic) = S
@@ -202,17 +273,32 @@ function build_hex!(j, S::Tuple{F, C}, P, G) where {F, C}
     activeJ = _fold(X, af, dimsf, dimsc, G.majority)
     # the coarse neighbors J + E (E = e₁, e₂, e₁ − e₂) and J − E: active after the fold
     E = ((Int32(1), Int32(0)), (Int32(0), Int32(1)), (Int32(1), Int32(-1)))
-    actp = ntuple(e -> (Y = _nbo(X, E[e], dimsc, per); Y[2] && _fold(Y[1], af, dimsf, dimsc, G.majority)), 3)
-    actm = ntuple(e -> (Y = _nbo(X, (-E[e][1], -E[e][2]), dimsc, per); Y[2] && _fold(Y[1], af, dimsf, dimsc, G.majority)), 3)
+    actp = ntuple(
+        e -> (
+            Y = _nbo(X, E[e], dimsc, per); Y[2] &&
+                _fold(Y[1], af, dimsf, dimsc, G.majority)
+        ), 3
+    )
+    actm = ntuple(
+        e -> (
+            Y = _nbo(X, (-E[e][1], -E[e][2]), dimsc, per);
+            Y[2] && _fold(Y[1], af, dimsf, dimsc, G.majority)
+        ),
+        3
+    )
     s, sb, si = zero(T), zero(T), zero(T)
-    cf = (zero(T), zero(T), zero(T))         # per coarse direction: Σ active–active fine faces,
-    dcf = cf                                 # Σ mask faces, Σ mask faces with an active child of J,
+    # per coarse direction: Σ active–active fine faces,
+    cf = (zero(T), zero(T), zero(T))
+    # Σ mask faces, Σ mask faces with an active child of J,
+    dcf = cf
     dcx = cf
-    nc = (zero(T), zero(T), zero(T))         # the count of crossing faces, the rediscretized factor
+    # the count of crossing faces, the rediscretized factor
+    nc = (zero(T), zero(T), zero(T))
     gf = nc
     for ci in CartesianIndices((lo[1]:hi[1], lo[2]:hi[2]))
         c = Int32.(Tuple(ci))
         i = _lin(c, dimsf)
+        # bounds: ci runs over the fine children of the coarse site, inside dimsf, so i ≤ nf
         @inbounds active = af[i] != 0
         if active
             @inbounds s += sf[i]
@@ -227,14 +313,18 @@ function build_hex!(j, S::Tuple{F, C}, P, G) where {F, C}
             @inbounds w = σ > 0 ? wf[d][i] : wf[d][jn]
             @inbounds y = af[jn] != 0
             # the coarse step Δ of the face (an axis of one coarse site: no step)
-            Δ = ntuple(a -> dimsc[a] == one(Int32) ? zero(Int32) :
-                            o[a] == 1 && c[a] == hi[a] ? one(Int32) :
-                            o[a] == -1 && c[a] == lo[a] ? -one(Int32) : zero(Int32), 2)
+            Δ = ntuple(a -> _coarse_step(dimsc, o, c, lo, hi, a), 2)
             if Δ == (zero(Int32), zero(Int32))           # inside J: once per face
                 σ > 0 && active != y && (si += T(P[1]) * w)
                 continue
             end
-            e = Δ[2] == zero(Int32) ? 1 : Δ[1] == zero(Int32) ? 2 : 3
+            e = if Δ[2] == zero(Int32)
+                1
+            elseif Δ[1] == zero(Int32)
+                2
+            else
+                3
+            end
             if Δ == E[e]                                 # J → J + E: the coarse face of J
                 d == 3 && (w *= T(P[5]))
                 x2 = active & y
@@ -242,13 +332,15 @@ function build_hex!(j, S::Tuple{F, C}, P, G) where {F, C}
                 dcf = _tset(dcf, dcf[e] + (active != y ? w : zero(T)), e)
                 dcx = _tset(dcx, dcx[e] + (active & !y ? w : zero(T)), e)
                 nc = _tset(nc, nc[e] + one(T), e)
-                if d == e && σ > 0                       # its own direction: the physical widths
+                # its own direction: the physical widths
+                if d == e && σ > 0
                     Xn = _nbo(X, E[e], dimsc, per)[1]
                     f1 = _hexfac(T, 1, c, cn, X, Xn, dimsf, dimsc, n0, ℓ)
                     f2 = _hexfac(T, 2, c, cn, X, Xn, dimsf, dimsc, n0, ℓ)
-                    gf = _tset(gf, gf[e] + (e == 3 ? f1 + f2 : e == 1 ? f1 : f2), e)
+                    gf = _tset(gf, gf[e] + _hex_part(e, f1, f2), e)
                 end
-            elseif activeJ && actm[e] && active && !y    # J − E → J: a mask face on its plane
+                # J − E → J: a mask face on its plane
+            elseif activeJ && actm[e] && active && !y
                 si += T(P[2]) * w
             end
         end
@@ -273,12 +365,14 @@ function build_hex!(j, S::Tuple{F, C}, P, G) where {F, C}
     return nothing
 end
 
-# ---- the bottom: one workgroup, barrier-separated phases (contract item 5) -----------------
+# ---- the bottom: one workgroup, barrier-separated phases (contract item 5)
+# -----------------
 """
 `(b − A x)ᵢ` and the diagonal `Dᵢ` of site `i` on a level (0 at masked sites).
 """
 @inline function _resid(i::Int32, active, w, s, sb, si, x, b, dims, per)
     T = eltype(x)
+    # bounds: i ≤ prod(dims), every level array's length; neighbors wrap or are checked
     @inbounds active[i] != 0 || return zero(T), one(T)
     X = _coords(i, dims)
     @inbounds xi = x[i]
@@ -335,7 +429,7 @@ Phases of the bottom over `K` levels: per level above the coarsest Chebyshev(ν�
 Chebyshev (`1 + 2(degree − 1)`); per level prolongation and Chebyshev(ν₂) (`1 + 2ν₂`).
 """
 function bottom_phases(K, nu1, nu2, degree)
-    (K - 1) * (2nu1 + 1) + 2degree - 1 + (K - 1) * (2nu2 + 1)
+    return (K - 1) * (2nu1 + 1) + 2degree - 1 + (K - 1) * (2nu2 + 1)
 end
 
 """
@@ -370,16 +464,18 @@ end
 
 The bottom V-cycle over levels `ℓB…L` as one workgroup: phase `ph` runs step `_phase(ph)`
 (see `bottom_phases`) with item `t` on sites `t, t + G.wg, …`. `S` holds
-per-level tuples `(acts, ws, ss, sboxs, sints, xs, bs, rs, ds)` (`ws[a][l]`: faces per axis), the device scalars and the
-coarsest Gershgorin interval `gb`; gated on the `done` flag (every phase returns at once,
-the barriers stay uniform).
+per-level tuples `(acts, ws, ss, sboxs, sints, xs, bs, rs, ds)` (`ws[a][l]`: faces per
+axis), the device scalars and the coarsest Gershgorin interval `gb`; gated on the `done`
+flag (every phase returns at once, the barriers stay uniform).
 """
 function bottom!(ph, g, t, lds, S, P, G)
     acts, ws, ss, sbs, sis, xs, bs, rs, ds, scal, gb = S
     T = eltype(xs[1])
     @inbounds scal[1] != zero(T) && return nothing                 # DONE is scal[1]
-    kind, l, k, coarse = _phase(Int32(ph), Int32(length(G.dims)), Int32(G.nu1),
-        Int32(G.nu2), Int32(G.degree))
+    kind, l, k, coarse = _phase(
+        Int32(ph), Int32(length(G.dims)), Int32(G.nu1),
+        Int32(G.nu2), Int32(G.degree)
+    )
     dims, per, W = G.dims, G.per, Int32(G.wg)
     @inbounds lo, hi = coarse ? (gb[1], gb[2]) : (T(0.5), T(2))   # gb has 2 entries
     c1, c2 = _coarse_coefs(k, lo, hi)
@@ -398,10 +494,7 @@ function bottom!(ph, g, t, lds, S, P, G)
         @inbounds xc, dp = xs[l + 1], dims[l + 1]                  # KP has l < K
         for i in t:W:n
             X = _coords(i, dl)
-            Pc = ntuple(
-                e -> dl[e] == one(Int32) ? X[e] :
-                     min((X[e] - one(Int32)) >> 1 + one(Int32), dp[e]),
-                length(X))
+            Pc = ntuple(e -> _parent_coord(X, dl, dp, e), length(X))
             @inbounds active[i] != 0 && (x[i] += xc[_lin(Pc, dp)])   # i ≤ n
         end
         return nothing
@@ -432,8 +525,11 @@ Coarse site `J`: `bc[J] = Σ` of the fine residual over its children.
 @inline function _restrict_site!(bc, rf, J, dimsf, dimsc)
     X = _coords(J, dimsc)
     acc = zero(eltype(bc))
-    for ci in CartesianIndices(ntuple(
-        e -> range(_kids(X[e], dimsf[e], dimsc[e])...), length(X)))
+    for ci in CartesianIndices(
+            ntuple(
+                e -> range(_kids(X[e], dimsf[e], dimsc[e])...), length(X)
+            )
+        )
         @inbounds acc += rf[_lin(Int32.(Tuple(ci)), dimsf)]        # children of J are in rf
     end
     @inbounds bc[J] = acc                                           # J ≤ length(bc)
@@ -446,12 +542,12 @@ or singular row).
 """
 @inline function _gersh_site(i::Int32, active, w, s, sb, si, dims, per)
     T = eltype(s)
+    # bounds: i ≤ prod(dims), every level array's length; neighbors wrap or are checked
     @inbounds active[i] != 0 || return floatmax(T), zero(T)
     X = _coords(i, dims)
     @inbounds D = s[i] + sb[i] + si[i]
     off = zero(T)
     for a in 1:length(dims), σ in (1, -1)
-
         Y, ok = _nb(X, a, σ, dims, per)
         ok || continue
         j = _lin(Y, dims)

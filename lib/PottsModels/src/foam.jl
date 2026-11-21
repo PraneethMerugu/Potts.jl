@@ -37,7 +37,8 @@ Differences from the paper:
     @kinds medium bubble                           # dry foam: no site is medium
     @parameters begin
         J = 3.0                                    # wall energy per unlike pair (p.5823)
-        Γ = 1.0                                    # area constraint (p.5823); Γ = 0 coarsens
+        # area constraint (p.5823); Γ = 0 coarsens
+        Γ = 1.0
         T = 1.0e-6                                 # T → 0⁺ (DV2)
         γ0 = 0.0                                   # boundary shear amplitude (Eq. 6)
         β = 0.0                                    # bulk shear rate (Eq. 7)
@@ -51,17 +52,26 @@ Differences from the paper:
         A(cell) = 256.0                            # target area, 16² (p.5823)
     end
     # x periodic, y closed walls (no wall cells, A-2)
-    @lattice Lattice(lattice; boundary = (Periodic(), Closed()), neighborhood = NeighborOrder(4))
+    @lattice Lattice(
+        lattice; boundary = (Periodic(), Closed()),
+        neighborhood = NeighborOrder(4)
+    )
     @relations proposal = NeighborOrder(4)
     @energy begin
         contacts => J
         cells(bubble) => Γ * (volume - A)^2
     end
     # γ > 0 biases copies towards −x: the top row moves +x and the bottom −x (Figs. 2, 4, 5)
-    @drive copy => ifelse(periodic > 0.5, sin(ω * mcs), 1.0) *
-                   ifelse(bulk > 0.5, -β * (position[target][2] - ymid),
-        γ0 * (ifelse(position[target][2] < 1.5, 1.0, 0.0) - ifelse(position[target][2] > ytop - 0.5, 1.0, 0.0))) *
-                   direction[1]
+    @drive copy =>
+        ifelse(periodic > 0.5, sin(ω * mcs), 1.0) *
+        ifelse(
+        bulk > 0.5, -β * (position[target][2] - ymid),
+        γ0 * (
+            ifelse(position[target][2] < 1.5, 1.0, 0.0) -
+                ifelse(position[target][2] > ytop - 0.5, 1.0, 0.0)
+        )
+    ) *
+        direction[1]
     @sweep Metropolis(; temperature = T)
 end
 
@@ -77,8 +87,14 @@ Brick row `r = 0, 1, …` covers `y = side·r + 1 … side·(r + 1)`; odd rows a
 """
 function sheared_foam_state(; lattice = (256, 256), side::Integer = 16)
     L = Tuple(lattice)
-    σ = Int32[(r = (y - 1) ÷ side; r * (L[1] ÷ side) + mod(x - 1 - (isodd(r) ? side ÷ 2 : 0), L[1]) ÷ side + 1)
-              for x in 1:L[1], y in 1:L[2]]
+    σ = Int32[
+        (
+            r = (y - 1) ÷ side;
+            r * (L[1] ÷ side) + mod(x - 1 - (isodd(r) ? side ÷ 2 : 0), L[1]) ÷ side +
+                1
+        )
+            for x in 1:L[1], y in 1:L[2]
+    ]
     n = Int(maximum(σ))
     return [ownership => σ, kind => fill(:bubble, n), :A => fill(Float64(side)^2, n)]
 end

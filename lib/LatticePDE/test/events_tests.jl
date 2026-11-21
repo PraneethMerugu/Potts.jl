@@ -5,9 +5,11 @@
 
 @testsetup module LP_events
 using Test, LatticePDE
-using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables, Differential, PDESystem,
-                           System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex, Shift, Pre,
-                           t_nounits as t, D_nounits as D
+using ModelingToolkitBase: ModelingToolkitBase as MTKB, @parameters, @variables,
+    Differential, PDESystem,
+    System, mtkcompile, ODEProblem, unknowns, parameters, ShiftIndex,
+    Shift, Pre,
+    t_nounits as t, D_nounits as D
 using Symbolics: Symbolics, Num, Equation, unwrap, simplify, substitute, get_variables
 using SymbolicUtils: SymbolicUtils, iscall, operation, arguments, unwrap_const
 using DomainSets: Interval
@@ -29,38 +31,58 @@ include("shared/callbacks.jl")
 include("shared/export_all.jl")
 end
 
-@testitem "a ContinuousCallback fires within one window of the event, at the interpolated state" setup = [LP_events] tags = [:latticepde, :events] begin
-    @testset "a ContinuousCallback fires within one window of the event, at the interpolated state" begin
-    p = cbprob()
-    ev, st = Float64[], Vector{Float64}[]
-    cb = SciMLBase.ContinuousCallback((u, t, i) -> maximum(u) - 0.5, i -> (push!(ev, i.t); push!(st, copy(i.u))))
+@testitem "a ContinuousCallback fires within one window of the event, at the interpolated \
+    state" setup = [LP_events] tags = [
+    :latticepde, :events,
+] begin
+    @testset "a ContinuousCallback fires within one window of the event, at the \
+        interpolated state" begin
+        p = cbprob()
+        ev, st = Float64[], Vector{Float64}[]
+        cb = SciMLBase.ContinuousCallback(
+            (u, t, i) -> maximum(u) - 0.5, i -> (push!(ev, i.t); push!(st, copy(i.u)))
+        )
         s = solve(p, ExplicitEuler(); dt = 0.01, callback = cb)
-    # the reference: a fine run, the crossing of max(c) = 0.5 located between its steps
+        # the reference: a fine run, the crossing of max(c) = 0.5 located between its steps
         f = solve(p, ExplicitEuler(); dt = 1.0e-4, save_everystep = true)
-    g = [maximum(u) - 0.5 for u in f.u]
-    k = findfirst(i -> sign(g[i]) != sign(g[i + 1]), 1:(length(g) - 1))
-    tref = f.t[k] + g[k] / (g[k] - g[k + 1]) * (f.t[k + 1] - f.t[k])
-        @test length(ev) == 1 && abs(ev[1] - tref) < 0.01 || (println("event ", ev, " ref ", tref); false)
+        g = [maximum(u) - 0.5 for u in f.u]
+        k = findfirst(i -> sign(g[i]) != sign(g[i + 1]), 1:(length(g) - 1))
+        tref = f.t[k] + g[k] / (g[k] - g[k + 1]) * (f.t[k + 1] - f.t[k])
+        @test length(ev) == 1 && abs(ev[1] - tref) < 0.01 ||
+            (println("event ", ev, " ref ", tref); false)
         e = solve(p, ExplicitEuler(); dt = 0.01, save_everystep = true)
-    @test maximum(abs, st[1] .- e(ev[1])) < 1e-13 && ev[1] in s.t && s.t[end] == 1.0
-    # a VectorContinuousCallback: the first crossing of each component, its index given
-    hits = Int[]
-    vc = SciMLBase.VectorContinuousCallback((out, u, t, i) -> (out[1] = maximum(u) - 0.5; out[2] = t - 0.3),
-        (i, idx) -> push!(hits, idx), 2)
+        @test maximum(abs, st[1] .- e(ev[1])) < 1.0e-13 && ev[1] in s.t && s.t[end] == 1.0
+        # a VectorContinuousCallback: the first crossing of each component, its index given
+        hits = Int[]
+        vc = SciMLBase.VectorContinuousCallback(
+            (out, u, t, i) -> (out[1] = maximum(u) - 0.5; out[2] = t - 0.3),
+            (i, idx) -> push!(hits, idx), 2
+        )
         solve(p, ExplicitEuler(); dt = 0.01, callback = vc)
-    @test sort(hits) == [1, 2]
-end
-end
-
-@testitem "ensembles of owned solves equal the serial solves bitwise" setup = [LP_events] tags = [:latticepde, :events] begin
-    @testset "ensembles of owned solves equal the serial solves bitwise" begin
-    p = cbprob(0.3)
-    ep = SciMLBase.EnsembleProblem(p; prob_func = (q, ctx) -> remake(q; p = [bk => 1.0 + ctx.sim_id]))
-        alg = BackwardEuler(; linsolve = BTIGHT)
-        ref = [solve(remake(p; p = [bk => 1.0 + i]), alg; dt = 0.01).u[end] for i in 1:4]
-    for ea in (SciMLBase.EnsembleSerial(), SciMLBase.EnsembleThreads())
-            es = solve(ep, alg, ea; dt = 0.01, trajectories = 4)
-        @test all(i -> es.u[i].u[end] == ref[i] && es.u[i].ps[bk] == 1.0 + i, 1:4)
+        @test sort(hits) == [1, 2]
     end
 end
+
+@testitem "ensembles of owned solves equal the serial solves bitwise" setup = [
+    LP_events,
+] tags = [
+    :latticepde, :events,
+] begin
+    @testset "ensembles of owned solves equal the serial solves bitwise" begin
+        p = cbprob(0.3)
+        ep = SciMLBase.EnsembleProblem(
+            p; prob_func = (q, ctx) -> remake(
+                q; p = [
+                    bk =>
+                        1.0 + ctx.sim_id,
+                ]
+            )
+        )
+        alg = BackwardEuler(; linsolve = BTIGHT)
+        ref = [solve(remake(p; p = [bk => 1.0 + i]), alg; dt = 0.01).u[end] for i in 1:4]
+        for ea in (SciMLBase.EnsembleSerial(), SciMLBase.EnsembleThreads())
+            es = solve(ep, alg, ea; dt = 0.01, trajectories = 4)
+            @test all(i -> es.u[i].u[end] == ref[i] && es.u[i].ps[bk] == 1.0 + i, 1:4)
+        end
+    end
 end

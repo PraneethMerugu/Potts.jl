@@ -135,7 +135,11 @@ function partner_centroid(σ, c)
     idx = findall(==(c), σ)
     return (sum(i -> i[1], idx) / length(idx), sum(i -> i[2], idx) / length(idx))
 end
-dist(σ, a, b) = (ca = partner_centroid(σ, a); cb = partner_centroid(σ, b); hypot(ca[1] - cb[1], ca[2] - cb[2]))
+function dist(σ, a, b)
+    ca = partner_centroid(σ, a)
+    cb = partner_centroid(σ, b)
+    return hypot(ca[1] - cb[1], ca[2] - cb[2])
+end
 edge(σ) = PARTNER_K * (dist(σ, 1, 2) - ELL)^2
 # every Moore(1) copy (target t takes source s's owner) that touches cell c
 function partner_props(prob, u, c)
@@ -159,8 +163,12 @@ end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "link partner death: a live link's energy acts (negative control)" setup = [LinkPartnerDeathSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "link partner death: a live link's energy acts (negative control)" setup = [
+    LinkPartnerDeathSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 3. Negative control: both cells alive, the link energy acts (independent oracle)
     @testset "link partner death: a live link's energy acts (negative control)" begin
         prob = problem(PartnerPair)
@@ -173,79 +181,113 @@ end
         # ΔH share of the link on every copy touching the blob equals the oracle's change
         props = partner_props(prob, u, 1)
         @test length(props) > 20
-        worst = 0.0; biggest = 0.0
+        worst = 0.0
+        biggest = 0.0
         for prop in props
             share = energy_change(prob, u, prop) - energy_change(prob, unlinked(u), prop)
-            after = copy(σ); after[prop.target] = prop.new
+            after = copy(σ)
+            after[prop.target] = prop.new
             oracle = edge(after) - edge(σ)
-            worst = max(worst, abs(share - oracle)); biggest = max(biggest, abs(share))
+            worst = max(worst, abs(share - oracle))
+            biggest = max(biggest, abs(share))
         end
         @test worst < 1.0e-9
-        @test biggest > 0.1                                          # the link is not a no-op
+        # the link is not a no-op
+        @test biggest > 0.1
     end
 end
 
-@testitem "link partner death: a copy-killed partner is skipped" setup = [LinkPartnerDeathSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "link partner death: a copy-killed partner is skipped" setup = [
+    LinkPartnerDeathSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 1. Skip: the survivor of a copy-killed partner keeps moving, ΔH and H finite
-    @testset "link partner death: a copy-killed partner is skipped ($(nameof(typeof(alg))))" for alg in
-        (SequentialCPM(), CheckerboardCPM())
+    @testset "link partner death: a copy-killed partner is skipped \
+        ($(nameof(typeof(alg))))" for alg in (SequentialCPM(), CheckerboardCPM())
         prob = problem(PartnerPair)
         sol = solve(prob, alg; saveat = 1)
-        @test Symbol(sol.retcode) === :Success                      # DEFECT CHECK (currently Failure)
-        @test sol.t[end] == 60                                       # the run is not cut short
+        # DEFECT CHECK (currently Failure)
+        @test Symbol(sol.retcode) === :Success
+        # the run is not cut short
+        @test sol.t[end] == 60
         vols = [Array(u.cell.volume)[2] for u in sol.u]
         i = findfirst(==(0), vols)
-        @test i !== nothing                                          # fixture: the partner dies by copies
-        @test i <= 11                                                # … within 10 MCS (margin: ≥ 50 MCS after)
+        # fixture: the partner dies by copies
+        @test i !== nothing
+        # … within 10 MCS (margin: ≥ 50 MCS after)
+        @test i <= 11
         @test all(==(0), vols[i:end])                                # and stays dead
-        @test all(u -> Array(u.cell.volume)[1] > 0, sol.u)           # the survivor stays alive
+        # the survivor stays alive
+        @test all(u -> Array(u.cell.volume)[1] > 0, sol.u)
         post = sol.u[i:end]
         @test length(post) >= 50
 
         # the survivor keeps moving: its site set changes in most MCS after the death
         # (the defect freezes it: zero changes)
         moves = count(j -> mask(post[j], 1) != mask(post[j - 1], 1), 2:length(post))
-        @test moves >= (length(post) - 1) ÷ 2                        # DEFECT CHECK (currently 0)
+        # DEFECT CHECK (currently 0)
+        @test moves >= (length(post) - 1) ÷ 2
         @test mask(post[end], 1) != mask(post[1], 1)
 
         # total H finite after the death, and the dead link adds nothing to it
-        @test all(u -> isfinite(total_energy(prob, u)), post)        # DEFECT CHECK (currently NaN)
-        @test all(u -> isapprox(total_energy(prob, u), total_energy(prob, unlinked(u)); atol = 1.0e-9), post)
+        # DEFECT CHECK (currently NaN)
+        @test all(u -> isfinite(total_energy(prob, u)), post)
+        @test all(
+            u -> isapprox(
+                total_energy(prob, u), total_energy(prob, unlinked(u));
+                atol = 1.0e-9
+            ), post
+        )
 
         # every ΔH of a copy touching the survivor is finite and ignores the dead link
         for u in (post[1], post[end])
             props = partner_props(prob, u, 1)
             @test length(props) > 20
             dH = [energy_change(prob, u, prop) for prop in props]
-            @test all(isfinite, dH)                                  # DEFECT CHECK (currently NaN)
+            # DEFECT CHECK (currently NaN)
+            @test all(isfinite, dH)
             free = unlinked(u)
-            @test all(j -> isapprox(dH[j], energy_change(prob, free, props[j]); atol = 1.0e-9), eachindex(props))
+            @test all(
+                j -> isapprox(dH[j], energy_change(prob, free, props[j]); atol = 1.0e-9),
+                eachindex(props)
+            )
         end
     end
 end
 
-@testitem "link partner death: the `` phase drops a dead partner's link" setup = [LinkPartnerDeathSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "link partner death: the `` phase drops a dead partner's link" setup = [
+    LinkPartnerDeathSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 2. Boundary (c): an `@unlink`/`@link` host phase drops the dead cell's link
-    @testset "link partner death: the `$rule` phase drops a dead partner's link ($(nameof(typeof(alg))))" for (rule, model) in
-            (
+    @testset "link partner death: the `$rule` phase drops a dead partner's link \
+        ($(nameof(typeof(alg))))" for (rule, model) in (
                 ("@unlink", Unlink),
                 ("@link", LinkRule),
             ),
             alg in (SequentialCPM(), CheckerboardCPM())
+
         prob = problem(model)
         sol = solve(prob, alg)
-        @test Symbol(sol.retcode) === :Success                      # DEFECT CHECK (currently Failure)
-        @test sol.t[end] == 60                                       # the run reaches its end
+        # DEFECT CHECK (currently Failure)
+        @test Symbol(sol.retcode) === :Success
+        # the run reaches its end
+        @test sol.t[end] == 60
         u = sol.u[end]
-        @test Array(u.cell.volume)[2] == 0                          # fixture: the partner died
+        # fixture: the partner died
+        @test Array(u.cell.volume)[2] == 0
         bond = (; links = Array(u.cell.links__bond))
-        @test !linked(bond, 1, 2)                                    # DEFECT CHECK (currently linked)
+        # DEFECT CHECK (currently linked)
+        @test !linked(bond, 1, 2)
         @test link_count(bond, 1) == 0 && link_count(bond, 2) == 0
         @test isfinite(total_energy(prob, u))
 
-        # negative control: both cells alive (the second is a blob too); the rule keeps the link
+        # negative control: both cells alive (the second is a blob too); the rule keeps the
+        # link
         alive = problem(model; kinds = [:blob, :blob])
         solv = solve(alive, alg)
         @test Symbol(solv.retcode) === :Success

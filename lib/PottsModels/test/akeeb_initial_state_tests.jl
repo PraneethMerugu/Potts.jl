@@ -12,17 +12,23 @@ using Test, Potts, PottsModels
 function akeeb_u0_counts(u)
     k, v = Array(u.cell.kind), Array(u.cell.volume)
     live = findall(>(0), v)
-    return (; leaders = count(c -> k[c] == 1, live), followers = count(c -> k[c] == 2, live))
+    return (;
+        leaders = count(c -> k[c] == 1, live), followers = count(c -> k[c] == 2, live),
+    )
 end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "Akeeb u0: leader and follower kinds survive (no swap)" setup = [AkeebInitialStateSetup] tags = [:pottsmodels, :core] begin
+@testitem "Akeeb u0: leader and follower kinds survive (no swap)" setup = [
+    AkeebInitialStateSetup,
+] tags = [
+    :pottsmodels, :core,
+] begin
     @testset "Akeeb u0: leader and follower kinds survive (no swap)" begin
         @testset "hand-built 12×8" begin
             # follower slab (cell 1) on y = 1:2; a lone leader (2) at y = 6; a group of two
-            # followers and a leader (3, 4, 5) at y = 6. Two leaders and three followers, so a
-            # swap changes both counts; the lone cell is a single only if it is a leader.
+            # followers and a leader (3, 4, 5) at y = 6. Two leaders and three followers, so
+            # a swap changes both counts; the lone cell is a single only if it is a leader.
             σ = zeros(Int, 12, 8)
             σ[:, 1:2] .= 1
             σ[3, 6] = 2
@@ -30,10 +36,12 @@ end
             σ[9, 6] = 4
             σ[10, 6] = 5
             cue = [Float64(y - 1) for x in 1:12, y in 1:8]
-            op(kinds) = [
-                ownership => σ, kind => kinds, :clock => fill(-1.0, 5),
-                :rate => [k === :leader ? 0.0 : 0.015 for k in kinds], :cue => cue,
-            ]
+            function op(kinds)
+                return [
+                    ownership => σ, kind => kinds, :clock => fill(-1.0, 5),
+                    :rate => [k === :leader ? 0.0 : 0.015 for k in kinds], :cue => cue,
+                ]
+            end
             sys = AkeebInvasion(; name = :akeeb_u0, lattice = (12, 8))
             good = [:follower, :leader, :follower, :follower, :leader]
             u = PottsProblem(sys, op(good), (0, 1); capacity = 16).u0
@@ -48,21 +56,27 @@ end
             @test akeeb_u0_counts(w) == (; leaders = 3, followers = 2)
             @test akeeb_u0_counts(w) != (; leaders = 2, followers = 3)
             ow = akeeb_observables(w)
-            @test ow.singles == 0 && ow.cluster_leaders == [2] && ow.cluster_followers == [1]
+            @test ow.singles == 0 && ow.cluster_leaders == [2] &&
+                ow.cluster_followers == [1]
         end
 
         @testset "akeeb_state after 1 MCS (99×60)" begin
             op = akeeb_state(; lattice = (99, 60))
             kinds = op[2].second
             nl, nf = count(==(:leader), kinds), count(==(:follower), kinds)
-            @test nl != nf                                    # so a swap changes both counts
+            # so a swap changes both counts
+            @test nl != nf
             sys = AkeebInvasion(; name = :akeeb_u0_swept, lattice = (99, 60))
             prob = PottsProblem(sys, op, (0, 1); capacity = 1000)
             @test akeeb_u0_counts(prob.u0) == (; leaders = nl, followers = nf)
             u = solve(prob, SequentialCPM(; proposal = VonNeumann(1))).u[end]
-            @test akeeb_u0_counts(u) == (; leaders = nl, followers = nf)   # no extinction, no division in 1 MCS
+            # no extinction, no division in 1 MCS
+            @test akeeb_u0_counts(u) == (; leaders = nl, followers = nf)
             # each id keeps the kind it was given
-            @test all(c -> Array(u.cell.kind)[c] == (kinds[c] === :leader ? 1 : 2), eachindex(kinds))
+            @test all(
+                c -> Array(u.cell.kind)[c] == (kinds[c] === :leader ? 1 : 2),
+                eachindex(kinds)
+            )
             # negative control: the same state with the kinds swapped fails the count
             swapped = [k === :leader ? :follower : :leader for k in kinds]
             rates = [k === :leader ? 0.0 : 0.015 for k in swapped]

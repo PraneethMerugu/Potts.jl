@@ -6,12 +6,12 @@
 using Potts, Test
 using Potts: CorePotts
 isdefined(@__MODULE__, :PottsDevices) || include(joinpath(@__DIR__, "shared", "devices.jl"))
-isdefined(@__MODULE__, :stat_accept) || include(joinpath(@__DIR__, "shared", "stats_helpers.jl"))
+isdefined(@__MODULE__, :stat_accept) ||
+    include(joinpath(@__DIR__, "shared", "stats_helpers.jl"))
 using PottsModels: WortelAct, GranerGlazier
 using Random: Xoshiro
 
 using InteractiveUtils: code_llvm
-
 
 # the field models' PDESystems
 isdefined(@__MODULE__, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
@@ -20,25 +20,52 @@ module SyPDE
     using ..FieldPDE
     @variables c(..) src(..)::Bool [input = true]
     const C, S = c(t, x, y), src(t, x, y)
-    float() = pdesys([Dt(C) ~ 0.1 * laplacian(C) - C / 10 + exp(-1) * S], [c(0, x, y) ~ 0.0], (16, 16), [C, S])
-    disk() = pdesys([Dt(C) ~ 0.2 * laplacian(C) + 0.01 * S], [c(0, x, y) ~ 0.0], (40, 40), [C, S])
-    chemo(dims) = pdesys([Dt(C) ~ 0.1 * laplacian(C) + 0.02 * S - 0.01 * C], [c(0, x, y) ~ 0.0], dims, [C, S])
+    function float()
+        return pdesys(
+            [Dt(C) ~ 0.1 * laplacian(C) - C / 10 + exp(-1) * S], [c(0, x, y) ~ 0.0], (
+                16, 16,
+            ), [C, S]
+        )
+    end
+    function disk()
+        return pdesys(
+            [Dt(C) ~ 0.2 * laplacian(C) + 0.01 * S], [c(0, x, y) ~ 0.0], (40, 40), [
+                C, S,
+            ]
+        )
+    end
+    function chemo(dims)
+        return pdesys(
+            [Dt(C) ~ 0.1 * laplacian(C) + 0.02 * S - 0.01 * C], [c(0, x, y) ~ 0.0], dims, [
+                C, S,
+            ]
+        )
+    end
     function sorting3d()
         C3, S3 = c(t, x, y, z), src(t, x, y, z)
-        return pdesys([Dt(C3) ~ 0.1 * laplacian(C3) + 0.05 * S3 - 0.01 * C3], [c(0, x, y, z) ~ 0.0], (24, 24, 24), [C3, S3])
+        return pdesys(
+            [Dt(C3) ~ 0.1 * laplacian(C3) + 0.05 * S3 - 0.01 * C3],
+            [c(0, x, y, z) ~ 0.0], (24, 24, 24), [C3, S3]
+        )
     end
-    hex() = (@parameters Dc = 0.1; pdesys([Dt(C) ~ Dc * laplacian(C)], [c(0, x, y) ~ 0.0], (30, 30), [C], [Dc]))
+    function hex()
+        @parameters Dc = 0.1
+        return pdesys([Dt(C) ~ Dc * laplacian(C)], [c(0, x, y) ~ 0.0], (30, 30), [C], [Dc])
+    end
 end
-
 
 """Random proposals (Moore(1) sources) on states along a trajectory of `prob`."""
 function proposal_states(prob; mcs = (0, 5, 20), n = 400, rng = Xoshiro(11))
-    sol = solve(remake(prob; tspan = (0, maximum(mcs))), SequentialCPM(; proposal = Moore(1)); saveat = collect(mcs))
+    sol = solve(
+        remake(prob; tspan = (0, maximum(mcs))),
+        SequentialCPM(; proposal = Moore(1)); saveat = collect(mcs)
+    )
     lat = prob.lattice
     moore = CorePotts.relation(Moore(1), lat)
     out = Tuple{Any, Any}[]
     for u in sol.u, _ in 1:n
-        t = rand(rng, 1:length(u.ownership)); x = CorePotts.coordinates(lat, t)
+        t = rand(rng, 1:length(u.ownership))
+        x = CorePotts.coordinates(lat, t)
         d = rand(rng, 1:length(moore))
         ins, y = CorePotts.shift(lat, x, moore.offsets[d])
         ins || continue
@@ -49,12 +76,12 @@ function proposal_states(prob; mcs = (0, 5, 20), n = 400, rng = Xoshiro(11))
     return out
 end
 
-
-ctx_of(prob) = (;
-    lattice = prob.lattice, contact = prob.contact, prob.relations...,
-    (prob.spacing === nothing ? (;) : (; spacing = prob.spacing))...,
-)
-
+function ctx_of(prob)
+    return (;
+        lattice = prob.lattice, contact = prob.contact, prob.relations...,
+        (prob.spacing === nothing ? (;) : (; spacing = prob.spacing))...,
+    )
+end
 
 @potts_model Spring begin
     @kinds medium blob
@@ -76,20 +103,28 @@ ctx_of(prob) = (;
     @sweep Metropolis(; temperature = T)
 end
 
-
 # ---------------------------------------------------------------------------------------
 # Regressions from the review of the symbolic layer
 
 function selfcheck(prob; n = 300)
     worst = 0.0
     for (u, prop) in proposal_states(remake(prob; tspan = (0, 3)); mcs = (0, 3), n)
-        a = deepcopy(u); a.ownership[prop.target] = prop.new
+        a = deepcopy(u)
+        a.ownership[prop.target] = prop.new
         prob.f.commit!(a, prob.p, prop, ctx_of(prob))
-        worst = max(worst, abs(energy_change(prob, u, prop) - (total_energy(prob, a) - total_energy(prob, u) + Potts._killing_credit(prob, u, prop, a))))
+        worst = max(
+            worst,
+            abs(
+                energy_change(prob, u, prop) -
+                    (
+                    total_energy(prob, a) - total_energy(prob, u) +
+                        Potts._killing_credit(prob, u, prop, a)
+                )
+            )
+        )
     end
     return worst
 end
-
 
 # ---------------------------------------------------------------------------------------
 # Several named relationships: a link store, law and rules per name
@@ -117,9 +152,7 @@ end
     @sweep Metropolis(; temperature = 8.0)
 end
 
-
 # the same model without link energies: the difference of total energies is the link energy
-
 
 # four touching 6×6 cells in a row; 2 has a bond partner (1) and a tether partner (3)
 function chain_state()
@@ -132,9 +165,8 @@ end
 
 const CHAIN_LINKS = (:bond => [(1, 2), (3, 4)], :tether => [(2, 3), (1, 4)])
 
-
-# ΔH of random copies on relation `rel` against H(after) − H(before), over a short trajectory
-
+# ΔH of random copies on relation `rel` against H(after) − H(before), over a short
+# trajectory
 
 @potts_model AmbiguousEdge begin
     @kinds medium blob
@@ -146,13 +178,10 @@ const CHAIN_LINKS = (:bond => [(1, 2), (3, 4)], :tether => [(2, 3), (1, 4)])
     @sweep Metropolis(; temperature = 1.0)
 end
 
-
 # a base whose `rest(edge)` means its only relationship, extended by a second relationship
-
 
 # a body built on its own (no @extend), whose `rest(edge)` binds to its only relationship
 # `tether`, then extended functionally over `Spring` (`rest(edge)` on `bond`)
-
 
 @potts_model RestOnTether begin                        # `rest(edge)`: `tether`
     @kinds medium blob
@@ -163,7 +192,6 @@ end
     @sweep Metropolis(; temperature = 10.0)
 end
 
-
 function two_kind_blocks()
     σ = zeros(Int32, 24, 24)
     for (c, (i, j)) in enumerate(Iterators.product(2:6:20, 2:6:20))
@@ -171,7 +199,6 @@ function two_kind_blocks()
     end
     return σ, [isodd(c) ? 1 : 2 for c in 1:maximum(σ)]
 end
-
 
 @potts_model Census begin
     @kinds medium dark light
@@ -204,7 +231,6 @@ end
     @sweep Metropolis(; temperature = T)
 end
 
-
 @potts_model KindTemperature begin
     @kinds medium wall[frozen] dark light
     @parameters begin
@@ -220,7 +246,6 @@ end
     @drive Chemotaxis(c; strength = 3.0, kinds = (dark,))
     @sweep Metropolis(; temperature = Tk[kind], combine = min)
 end
-
 
 # Compartments (D-036) in the authoring surface: the CorePotts nucleus/cytoplasm test model.
 @potts_model Compartments begin
@@ -240,14 +265,17 @@ end
     @lattice Lattice((30, 30); neighborhood = Moore(1))
     @energy begin
         cells => λ * (volume - V₀[kind])^2
-        contacts => ifelse(cluster[owner] == cluster[neighbor_owner], Jint, J[kind, neighbor_kind])
+        contacts =>
+            ifelse(cluster[owner] == cluster[neighbor_owner], Jint, J[kind, neighbor_kind])
         clusters(cytoplasm) => λc * (cluster_volume - Vc)^2 + λs * (cluster_surface - Sc)^2
     end
     @constraint no_extinction
-    @divide clusters(cytoplasm) when = (mcs == 2) && (cluster_volume >= 56), along = (1.0, 0.0), mass => Split()
+    @divide clusters(cytoplasm) when = (mcs == 2) && (cluster_volume >= 56), along = (
+            1.0, 0.0,
+        ),
+        mass => Split()
     @sweep Metropolis(; temperature = T)
 end
-
 
 function compartment_state()
     σ = zeros(Int32, 30, 30)
@@ -257,12 +285,12 @@ function compartment_state()
         σ[i:(i + 7), j:(j + 7)] .= n
     end
     for c in 1:n
-        idx = findall(==(c), σ); lo = minimum(idx)
+        idx = findall(==(c), σ)
+        lo = minimum(idx)
         σ[(lo[1] + 2):(lo[1] + 5), (lo[2] + 2):(lo[2] + 5)] .= n + c
     end
     return σ, vcat(fill(:cytoplasm, n), fill(:nucleus, n)), vcat(1:n, 1:n)
 end
-
 
 # A nucleus dividing alone inside a cluster runs only its cell rule, and its daughter
 # stays in the cluster; the cluster division runs only the cluster rule
@@ -284,15 +312,19 @@ end
     @lattice Lattice((30, 30); neighborhood = Moore(1))
     @energy begin
         cells => λ * (volume - V₀[kind])^2
-        contacts => ifelse(cluster[owner] == cluster[neighbor_owner], Jint, J[kind, neighbor_kind])
+        contacts =>
+            ifelse(cluster[owner] == cluster[neighbor_owner], Jint, J[kind, neighbor_kind])
         clusters(cytoplasm) => λc * (cluster_volume - Vc)^2
     end
     @constraint no_extinction
-    @divide clusters(cytoplasm) when = (mcs == 2) && (cluster_volume >= 56), along = (1.0, 0.0), mass => Split()
-    @divide cells(nucleus) when = (mcs == 3) && (volume >= 2), along = (0.0, 1.0), ndiv => ndiv + 1
+    @divide clusters(cytoplasm) when = (mcs == 2) && (cluster_volume >= 56), along = (
+            1.0, 0.0,
+        ),
+        mass => Split()
+    @divide cells(nucleus) when = (mcs == 3) && (volume >= 2), along = (0.0, 1.0),
+        ndiv => ndiv + 1
     @sweep Metropolis(; temperature = T)
 end
-
 
 function check_nucleus_division(v)
     live = findall(>(0), Array(v.cell.volume))
@@ -300,14 +332,17 @@ function check_nucleus_division(v)
     cl = Array(v.cell.cluster)
     roots = unique(cl[live])
     @test length(live) == 54 && length(roots) == 18
-    @test all(r -> sort(kd[filter(c -> cl[c] == r, live)]) == [1, 2, 2], roots)   # nuclei stay inside
-    @test all(==(1), Array(v.cell.mass)[live])                    # Split once, by the cluster rule
+    # nuclei stay inside
+    @test all(r -> sort(kd[filter(c -> cl[c] == r, live)]) == [1, 2, 2], roots)
+    # Split once, by the cluster rule
+    @test all(==(1), Array(v.cell.mass)[live])
     cnt = Array(v.cell.ndiv)
-    @test all(c -> cnt[c] == (kd[c] == 2 ? 1 : 0), live)           # the cell rule once, nuclei only
-    @test Array(v.cell.cluster_volume) == CorePotts.recompute_cluster_volume(Array(v.ownership), cl)
+    # the cell rule once, nuclei only
+    @test all(c -> cnt[c] == (kd[c] == 2 ? 1 : 0), live)
+    @test Array(v.cell.cluster_volume) ==
+        CorePotts.recompute_cluster_volume(Array(v.ownership), cl)
     @test Array(v.cell.volume) == [count(==(c), Array(v.ownership)) for c in eachindex(kd)]
 end
-
 
 @potts_model DiskSorting begin
     @kinds medium dark light
@@ -315,7 +350,10 @@ end
         T = 10.0
         J[kind, kind] = [0 16 16; 16 2 11; 16 11 14]
     end
-    @lattice Lattice((40, 40); boundary = Closed(), domain = x -> (x[1] - 20.5)^2 + (x[2] - 20.5)^2 <= 18^2)
+    @lattice Lattice(
+        (40, 40); boundary = Closed(), domain = x -> (x[1] - 20.5)^2 +
+            (x[2] - 20.5)^2 <= 18^2
+    )
     @energy begin
         Volume(dark, light; target = 25.0)
         Adhesion(J)
@@ -324,14 +362,12 @@ end
     @sweep Metropolis(; temperature = T)
 end
 
-
 # Composition: a chemotactic extension of the Graner model and an obstacle kind added to it.
-
 
 # D-114: a bound vector parameter redeclared takes the extension's default or keyword.
 # Fixture: cell 1 (A, volume 9) and cell 2 (B, volume 12) on a 12×12 von Neumann lattice;
-# the base without the `d` terms is 9 + 52 + 10.5 = 71.5, and the `d` terms add 9 d₁ + 12 d₂.
-
+# the base without the `d` terms is 9 + 52 + 10.5 = 71.5, and the `d` terms add 9 d₁ + 12
+# d₂.
 
 # Components: MTK systems instantiated per cell, advanced by a batched cell ODE kernel.
 using Potts.ModelingToolkitBase: System, @parameters
@@ -345,7 +381,6 @@ Potts.ModelingToolkitBase.@variables y_c(_tc) = 1.0 m_c(_tc) = 0.0
 @named decay = System([Potts.D(y_c) ~ -k_c * y_c], _tc)
 
 @named clock = System([Potts.D(m_c) ~ r_c / τ_c], _tc)
-
 
 function component_model()
     @potts_model Decaying begin
@@ -364,14 +399,11 @@ function component_model()
     return Decaying(; name = :decaying)
 end
 
-
 # First-class 3D: the same surface, N-generic generated code.
-
 
 @parameters k_nd
 
 @named nodefault = System([Potts.D(y_c) ~ -k_nd * y_c], _tc)
-
 
 module UserFunctions
     using Potts
@@ -389,13 +421,11 @@ module UserFunctions
     end
 end
 
-
 # D-237 oracle: generated cell draws are addressed by `cell_entity(id, generation)` with the
 # generation the cell holds when it draws, independently of the pins. Single-site B cells
 # vanish (50 per site) and free the lowest ids, so at MCS 8 the first daughters take reused
 # slots (generation 1 → 2) while their parents stay at generation 1: the post-increment,
 # pre-increment, parent's and raw-id addressings all differ.
-
 
 @potts_model Persistent begin
     @kinds medium A
@@ -411,7 +441,8 @@ end
         Volume(A; target = 25.0, strength = 2.0)
         contacts => 4 * (kind != neighbor_kind)
     end
-    @drive copy => -μ * (
+    @drive copy =>
+        -μ * (
         px[new] * displacement(new, 1) + py[new] * displacement(new, 2) +
             px[old] * displacement(old, 1) + py[old] * displacement(old, 2)
     )
@@ -425,10 +456,8 @@ end
     @sweep Metropolis(; temperature = T)
 end
 
-
 # A model built inside an `@extend` base's body is a build of its own: it neither continues
 # the outer numbering nor changes the lattice dimension `centroid()` reads afterwards.
-
 
 @potts_model Lags begin
     @kinds medium A
@@ -448,7 +477,6 @@ end
     end
     @sweep Metropolis(; temperature = 1.0)
 end
-
 
 @potts_model Integrals begin
     @kinds medium A
@@ -472,7 +500,6 @@ end
     @sweep Metropolis(; temperature = 2.0)
 end
 
-
 @potts_model VectorBits begin
     @kinds medium A
     @parameters begin
@@ -493,7 +520,6 @@ end
     @divide cells(A) when = mcs == 1, q => Split()
     @sweep Metropolis(; temperature = T)
 end
-
 
 @potts_model Fresh begin
     @kinds medium A
@@ -520,20 +546,16 @@ end
     @sweep Metropolis(; temperature = 1.0)
 end
 
-
 # D-042: an integral read in a block that writes its operand bare folds the new
 # values; readers after the block (equations, the temperature) see them too.
-
 
 # D-042, D-076: `integral(Pre(w))` is its own slot, refreshed at the start of the
 # after block (σ post-sweep, w at its block-start value). It needs no `w__pre` snapshot and
 # is left intact when another read does snapshot `w`; in @before_mcs the boundary refresh is
 # already the block-start fold.
 
-
 # The ring rule is TST's `ConnectivityPreservedP` (Merks reference), not CC3D's local
 # rule, so D-074 leaves it alone: at most one arc (zero included) or exactly two ring cells
-
 
 Potts.ModelingToolkitBase.@variables drug_c(_tc) = 0.0
 
@@ -541,20 +563,19 @@ Potts.ModelingToolkitBase.@variables drug_c(_tc) = 0.0
 
 @named drug = System([Potts.D(drug_c) ~ drug_dose - drug_k * drug_c], _tc)
 
-
 @potts_model Systemic begin
     @kinds medium A
     @variables g(model) = 1.0
     @components model pk = drug
     @equations begin
         D(g) ~ -0.5 * g
-        pk.drug_dose ~ count(true for c in cells)           # dosing ∝ the number of live cells
+        # dosing ∝ the number of live cells
+        pk.drug_dose ~ count(true for c in cells)
     end
     @lattice Lattice((20, 20))
     @energy cells => (volume - 9.0)^2
     @sweep Metropolis(; temperature = 1.0)
 end
-
 
 @potts_model HexSorting begin
     @kinds medium dark light
@@ -570,12 +591,10 @@ end
     @sweep Metropolis(; temperature = 8.0)
 end
 
-
 # ---------------------------------------------------------------------------------------
 # Contact energies read site values `x` (at s) and `x′` (at s′)
 
 using Statistics: Statistics
-
 
 @potts_model SiteContacts begin
     @structural_parameters begin
@@ -604,7 +623,6 @@ using Statistics: Statistics
     @sweep Metropolis(; temperature = T)
 end
 
-
 """Blocks of `side`ⁿ cells (kinds A/B alternating) with medium gaps, and a random cue."""
 function site_contact_state(dims; side = 4, rng = Xoshiro(3))
     σ = zeros(Int32, dims...)
@@ -616,42 +634,51 @@ function site_contact_state(dims; side = 4, rng = Xoshiro(3))
     return σ, [isodd(c) ? :A : :B for c in 1:n], rand(rng, dims...)
 end
 
-
-site_contact_problem(sys, dims; tspan = (0, 4), side = 4, kw...) =
-    (
-    (σ, kinds, cue) = site_contact_state(dims; side);
-    PottsProblem(sys, [ownership => σ, kind => kinds, :cue => cue], tspan; kw...)
-)
-
+function site_contact_problem(sys, dims; tspan = (0, 4), side = 4, kw...)
+    (σ, kinds, cue) = site_contact_state(dims; side)
+    return PottsProblem(sys, [ownership => σ, kind => kinds, :cue => cue], tspan; kw...)
+end
 
 """ΔH of random copies against H(after) − H(before); `dH` defaults to the generated ΔH."""
 function site_selfcheck(prob, rel; n = 400, dH = (u, prop) -> energy_change(prob, u, prop))
-    sol = solve(remake(prob; tspan = (0, 4)), SequentialCPM(; proposal = rel); saveat = [0, 2, 4])
+    sol = solve(
+        remake(prob; tspan = (0, 4)), SequentialCPM(; proposal = rel); saveat = [
+            0, 2, 4,
+        ]
+    )
     lat = prob.lattice
     R = CorePotts.relation(rel, lat)
     rng = Xoshiro(5)
     worst = 0.0
     for u in sol.u, _ in 1:n
-        t = rand(rng, 1:length(u.ownership)); x = CorePotts.coordinates(lat, t)
+        t = rand(rng, 1:length(u.ownership))
+        x = CorePotts.coordinates(lat, t)
         ins, y = CorePotts.shift(lat, x, R.offsets[rand(rng, 1:length(R))])
         ins || continue
         s = CorePotts.linear_index(lat, y)
         u.ownership[t] == u.ownership[s] && continue
         prop = CorePotts.Proposal(t, s, x, 1, u.ownership[t], u.ownership[s])
-        a = deepcopy(u); a.ownership[t] = prop.new
+        a = deepcopy(u)
+        a.ownership[t] = prop.new
         prob.f.commit!(a, prob.p, prop, ctx_of(prob))
-        worst = max(worst, abs(dH(u, prop) - (total_energy(prob, a) - total_energy(prob, u) + Potts._killing_credit(prob, u, prop, a))))
+        worst = max(
+            worst,
+            abs(
+                dH(u, prop) - (
+                    total_energy(prob, a) - total_energy(prob, u) +
+                        Potts._killing_credit(prob, u, prop, a)
+                )
+            )
+        )
     end
     return worst
 end
 
-
 # the generated ΔH with the pair's site reads exchanged (`x[target]` ↔ `x[s′]`): a mutant
 # lowering that confuses `x` and `x′`
 
-
-# an on-copy write and a clear-on-ownership-change variable read by contact (and site) terms:
-# ΔH sees the target's value after the copy (D-045)
+# an on-copy write and a clear-on-ownership-change variable read by contact (and site)
+# terms: ΔH sees the target's value after the copy (D-045)
 @potts_model SiteContactsOnCopy begin
     @structural_parameters begin
         write = true
@@ -671,7 +698,9 @@ end
     @lattice Lattice((20, 20); neighborhood = Moore(1))
     @energy begin
         cells(A) => (volume - 16)^2
-        contacts => J[kind, neighbor_kind] + β * mark * (1 + mark′) * (owner != 0) + γ * (tag - tag′)^2
+        contacts =>
+            J[kind, neighbor_kind] + β * mark * (1 + mark′) * (owner != 0) +
+            γ * (tag - tag′)^2
         sites => 0.3 * mark * (kind == A)
     end
     if write
@@ -680,12 +709,11 @@ end
     @sweep Metropolis(; temperature = T)
 end
 
-
 # a population fold in a contact term reads its own bound site: `cue` and `kind` there are
 # not the pair's (neither placed at `site` nor mirrored)
 
-
-# `x′` in an extension: bound next to `x` by `@extend`, or named explicitly (scalar and vector)
+# `x′` in an extension: bound next to `x` by `@extend`, or named explicitly (scalar and
+# vector)
 @potts_model SiteContactsBase begin
     @kinds medium A B
     @parameters J[kind, kind] = [0 10 10; 10 2 6; 10 6 2]
@@ -701,13 +729,10 @@ end
     @sweep Metropolis(; temperature = 6.0)
 end
 
-
 # two site terms and an on-copy write both read: each site term sees the written value
-
 
 # `x′` of a quantity that is not a site/field variable is a Potts error, raised when
 # the constructor reads the unbound `x′`; a local named `x′` is ordinary Julia
-
 
 # ---------------------------------------------------------------------------------------
 # `Every(n)` per lifecycle rule
@@ -731,46 +756,75 @@ end
     @sweep Metropolis(; temperature = T)
 end
 
-
 # one cell of each kind, `w` sites wide
 function rule_cadence_state(dims; w = 12)
     σ = zeros(Int32, dims)
-    idx(o) = ntuple(d -> d == 1 ? (o:(o + w - 1)) : (2:(1 + min(w, dims[d] - 2))), length(dims))
+    function idx(o)
+        return ntuple(
+            d -> d == 1 ? (o:(o + w - 1)) : (2:(1 + min(w, dims[d] - 2))),
+            length(dims)
+        )
+    end
     σ[idx(2)...] .= 1
     σ[idx(dims[1] ÷ 2 + 2)...] .= 2
     return σ, [:ka, :kb]
 end
 
-live_kinds(u) = (
-    v = Array(u.cell.volume); k = Array(u.cell.kind);
-    (count(c -> v[c] > 0 && k[c] == 1, eachindex(v)), count(c -> v[c] > 0 && k[c] == 2, eachindex(v)))
-)
+function live_kinds(u)
+    v = Array(u.cell.volume)
+    k = Array(u.cell.kind)
+    return (
+        count(c -> v[c] > 0 && k[c] == 1, eachindex(v)),
+        count(c -> v[c] > 0 && k[c] == 2, eachindex(v)),
+    )
+end
 
 # every live cell divides at each checked MCS: 2^(checked MCS in 0:N-1) cells
 cadence_oracle(n, N) = 2^count(m -> m % n == 0, 0:(N - 1))
 
 _has_ast(ex, pred) = pred(ex) || (ex isa Expr && any(a -> _has_ast(a, pred), ex.args))
-_count_ast(ex, pred) = (pred(ex) ? 1 : 0) + (ex isa Expr ? sum(a -> _count_ast(a, pred), ex.args; init = 0) : 0)
+function _count_ast(ex, pred)
+    return (pred(ex) ? 1 : 0) +
+        (ex isa Expr ? sum(a -> _count_ast(a, pred), ex.args; init = 0) : 0)
+end
 _trigger_ast(sys) = Potts.generated_code(sys).lifecycle.trigger
-_has_modulo_gate(ex, n) = _has_ast(
-    ex,
-    x -> x isa Expr && x.head === :call && length(x.args) == 3 && x.args[1] === :(==) && x.args[3] == 0 &&
-        x.args[2] isa Expr && x.args[2].head === :call && length(x.args[2].args) == 3 &&
-        x.args[2].args[1] === :% && x.args[2].args[2] === :mcs && x.args[2].args[3] == n
-)
-_has_any_modulo_gate(ex) = _has_ast(
-    ex,
-    x -> x isa Expr && x.head === :call && length(x.args) == 3 &&
-        x.args[1] === :% && x.args[2] === :mcs
-)
-_has_ruled_event(ex) = _has_ast(ex, x -> x isa Expr && x.head === :call && x.args[1] == :(CorePotts.ruled_event))
-_has_true_and(ex) = _has_ast(ex, x -> x isa Expr && x.head === :&& && !isempty(x.args) && x.args[1] === true)
-_has_ruled_divide(sys) = any(
-    e -> e isa Expr && e.head === :(->) && e.args[1] isa Expr && e.args[1].head === :tuple &&
-        :daughter in e.args[1].args && :rule in e.args[1].args,
-    Potts.generated_code(sys).phases
-)
-
+function _has_modulo_gate(ex, n)
+    return _has_ast(
+        ex,
+        x -> x isa Expr && x.head === :call && length(x.args) == 3 && x.args[1] === :(==) &&
+            x.args[3] == 0 &&
+            x.args[2] isa Expr && x.args[2].head === :call &&
+            length(x.args[2].args) == 3 &&
+            x.args[2].args[1] === :% && x.args[2].args[2] === :mcs &&
+            x.args[2].args[3] == n
+    )
+end
+function _has_any_modulo_gate(ex)
+    return _has_ast(
+        ex,
+        x -> x isa Expr && x.head === :call && length(x.args) == 3 &&
+            x.args[1] === :% && x.args[2] === :mcs
+    )
+end
+function _has_ruled_event(ex)
+    return _has_ast(
+        ex, x -> x isa Expr && x.head === :call && x.args[1] == :(CorePotts.ruled_event)
+    )
+end
+function _has_true_and(ex)
+    return _has_ast(
+        ex, x -> x isa Expr && x.head === :&& && !isempty(x.args) &&
+            x.args[1] === true
+    )
+end
+function _has_ruled_divide(sys)
+    return any(
+        e -> e isa Expr && e.head === :(->) && e.args[1] isa Expr &&
+            e.args[1].head === :tuple &&
+            :daughter in e.args[1].args && :rule in e.args[1].args,
+        Potts.generated_code(sys).phases
+    )
+end
 
 # Only the rule that fired writes the daughters' state: rules sharing a kind
 # are tried in model order, and the first whose cadence, kinds and `when` hold wins, its
@@ -794,7 +848,6 @@ _has_ruled_divide(sys) = any(
     @sweep Metropolis(; temperature = 10.0)
 end
 
-
 # cluster rules at cadences that are not the gcd, sharing their kind (rule-carrying events
 # on the cluster path: every member takes its root's rule)
 @potts_model ClusterCadences begin
@@ -807,23 +860,25 @@ end
     @lattice Lattice((30, 30); neighborhood = Moore(1))
     @energy begin
         cells => (volume - V₀[kind])^2
-        contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 2.0, J[kind, neighbor_kind])
+        contacts =>
+            ifelse(cluster[owner] == cluster[neighbor_owner], 2.0, J[kind, neighbor_kind])
         clusters(cytoplasm) => (cluster_volume - 64.0)^2
     end
     @constraint no_extinction
-    @divide clusters(cytoplasm) Every(3) when = cluster_volume >= 16, along = (1.0, 0.0), mass => 3.0
-    @divide clusters(cytoplasm) Every(2) when = cluster_volume >= 16, along = (1.0, 0.0), mass => 5.0
+    @divide clusters(cytoplasm) Every(3) when = cluster_volume >= 16, along = (1.0, 0.0),
+        mass => 3.0
+    @divide clusters(cytoplasm) Every(2) when = cluster_volume >= 16, along = (1.0, 0.0),
+        mass => 5.0
     @sweep Metropolis(; temperature = 10.0)
 end
 
-
 # The discrete-time component fixtures are in shared/discrete_fixtures.jl: the QA items read
 # them too and a setup cannot see another setup's names.
-isdefined(@__MODULE__, :discrete_counter_model) || include(joinpath(@__DIR__, "shared", "discrete_fixtures.jl"))
+isdefined(@__MODULE__, :discrete_counter_model) ||
+    include(joinpath(@__DIR__, "shared", "discrete_fixtures.jl"))
 
-
-# A tick reading another cell's node sees its pre-tick value (Jacobi across cells), under both
-# algorithms: a shift register moves one cell per tick.
+# A tick reading another cell's node sees its pre-tick value (Jacobi across cells), under
+# both algorithms: a shift register moves one cell per tick.
 @named shiftcell = System([dX(_kd) ~ ds], _tc)
 
 @potts_model DiscreteShiftRegister begin
@@ -836,7 +891,6 @@ isdefined(@__MODULE__, :discrete_counter_model) || include(joinpath(@__DIR__, "s
 end
 
 shift_register_oracle(m) = Float64[c <= m for c in 1:6]
-
 
 # Array variables: one scalar slot per element, `name₊z_i` (G11)
 Potts.ModelingToolkitBase.@variables dz(_tc)[1:2]::Bool = [false, true]
@@ -851,19 +905,15 @@ Potts.ModelingToolkitBase.@variables dz(_tc)[1:2]::Bool = [false, true]
     @sweep Metropolis(; temperature = 1.0e-6)
 end
 
-
 # MTK's compile of a discrete component raises `PottsCompileError` naming the component; an
 # error raised in Potts' own code propagates unchanged.
 Potts.ModelingToolkitBase.@variables k2X(_tc)::Bool = false k2Y(_tc)::Bool = false
 
-
 # D-083: free slots (capacity > n; kind 1, their own cluster roots) add nothing to H
-
 
 # D-101: the last after-MCS cell update moves into `Lifecycle.before` (one
 # device launch with the trigger) exactly when the trigger reads what it writes only at its
 # own cell; otherwise it stays a phase of its own
-
 
 # ---------------------------------------------------------------------------------------
 # D-107: textually equal folds over different bound variables in one statement keep
@@ -880,37 +930,50 @@ for f in (Potts.population, Potts.gather, Potts.value_at, Potts.cell_integral)
     end
 end
 
-with_hash_salt(f, s) = (
-    HASH_SALT[] = s; try
+function with_hash_salt(f, s)
+    HASH_SALT[] = s
+    return try
         f()
     finally
         HASH_SALT[] = 0
     end
-)
-
+end
 
 function tie_code(M, solver)
-    strip!(x) = x isa Expr ?
-        (
-            Base.remove_linenums!(x);
-            x.head === :macrocall && length(x.args) >= 2 && x.args[2] isa LineNumberNode && (x.args[2] = nothing);
-            x.args .= strip!.(x.args); x
-        ) :
-        x isa NamedTuple ? NamedTuple{keys(x)}(map(strip!, values(x))) :
-        x isa Tuple ? map(strip!, x) :
-        x isa AbstractVector ? map(strip!, x) : x
+    function strip!(x)
+        if x isa Expr
+            return (
+                Base.remove_linenums!(x);
+                x.head === :macrocall && length(x.args) >= 2 &&
+                    x.args[2] isa LineNumberNode && (x.args[2] = nothing);
+                x.args .= strip!.(x.args); x
+            )
+        elseif x isa NamedTuple
+            return NamedTuple{keys(x)}(map(strip!, values(x)))
+        elseif x isa Tuple
+            return map(strip!, x)
+        elseif x isa AbstractVector
+            return map(strip!, x)
+        else
+            return x
+        end
+    end
     g = Potts.generated_code(M(; name = :x); ode_solver = solver)
     return [
-        strip!(deepcopy(x)) for k in propertynames(g) for x in (
-                getproperty(g, k) isa AbstractVector ?
-                getproperty(g, k) : (getproperty(g, k),)
+        strip!(deepcopy(x)) for k in propertynames(g)
+            for x in (
+                if getproperty(g, k) isa AbstractVector
+                    getproperty(g, k)
+            else
+                    (getproperty(g, k),)
+            end
             )
     ]
 end
 
-
 # A change re-derives a computed parameter iff it is not named and an input is named or
-# re-derived (transitively); every other value is kept. Diamond p₁ → p₂, (p₂, p₃) → p₄, p₃ → p₅.
+# re-derived (transitively); every other value is kept. Diamond p₁ → p₂, (p₂, p₃) → p₄, p₃ →
+# p₅.
 @potts_model ParamDiamond begin
     @kinds medium A
     @parameters begin
@@ -928,11 +991,9 @@ end
     @sweep Metropolis(; temperature = 1.0)
 end
 
-
 # One name, one category, for vectors: a vector claims its name and each component name
 # (`vb_1`, `vb_2`); a quantity of another category, or a scalar of the same category, named
 # like a component is rejected (in one model, through `@extend`/`extend`, programmatically).
-
 
 # ---------------------------------------------------------------------------------------
 # D-110: a population fold inside `integral(x)` that reads neither the site nor the
@@ -940,18 +1001,21 @@ end
 # slot must be current at every refresh: in a block after a write to what the fold reads, at
 # the MCS boundary after the lifecycle, at init, and for observed integrals.
 
-
 function hoisted_init(dims)
     σ = zeros(Int32, dims)
     if length(dims) == 2
-        σ[3:6, 3:6] .= 1; σ[10:13, 9:12] .= 2
+        σ[3:6, 3:6] .= 1
+        σ[10:13, 9:12] .= 2
     else
-        σ[2:3, 2:3, 2:5] .= 1; σ[5:6, 5:6, 3:6] .= 2
+        σ[2:3, 2:3, 2:5] .= 1
+        σ[5:6, 5:6, 3:6] .= 2
     end
-    w = [1 + 0.5 * sin(I[1] / 3) * cos(sum(Tuple(I)[2:end]) / 5) for I in CartesianIndices(dims)]
+    w = [
+        1 + 0.5 * sin(I[1] / 3) * cos(sum(Tuple(I)[2:end]) / 5)
+            for I in CartesianIndices(dims)
+    ]
     return σ, w
 end
-
 
 # Every refresh point of a hoisted fold's slot: at init (read by a before-MCS update in the
 # first MCS), a gated reader of a fold whose operand the block writes, an equation reading
@@ -975,10 +1039,8 @@ end
     @sweep Metropolis(; temperature = 2.0)
 end
 
-
 # `div`/`÷` on parameters and cell quantities in step code, and a variable default computed
 # with a function of parameters (D-117)
-
 
 # ---------------------------------------------------------------------------------------
 # D-120: the start-of-after refresh covers the integrals read after the sweep, and
@@ -986,10 +1048,8 @@ end
 # inside a tick's fold must still count as read after the sweep. Twin: the same fold over
 # `volume` (w ≡ 1 makes `integral(w)` the volume); a stale integral lags one MCS.
 
-
 # Stored integrals keep the full gather's order (and the fingerprint) when no integral is
 # read only by `@observed`: here `@observed` is the first statement to read pb.
-
 
 # ---------------------------------------------------------------------------------------
 # D-137 review: namespaced keys of the model's own `sys.x`, `@set` on the MTK mirror
@@ -1022,16 +1082,13 @@ let t = Potts.t
     NS_DECAY[] = Potts.ModelingToolkitBase.System([Potts.D(y) ~ -k * y], t; name = :decay)
 end
 
-
 struct NsKey end
 
 using Potts.ModelingToolkitBase: Setfield as NsSetfield
 
-
 # D-188: the copy scope reads `direction[k]`, `position[s][k]` and `mcs`.
 # The acceptance file pins the values on the host hook and the kernel path; here: the
 # `mcs` convention read back through an on-copy write, and the diagnostics.
-
 
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end

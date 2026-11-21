@@ -6,8 +6,10 @@ using LatticeFields.Solvers: set_coefficients!, tangent!, coef_values
 """
 function with(op; kw...)
     f(k) = get(kw, k, getfield(op, k))
-    CellOperator(op.dims; periodic = op.periodic, face = f(:face), shift = f(:shift),
-        mask = op.mask, value = f(:value), dirichlet = f(:dirichlet))
+    return CellOperator(
+        op.dims; periodic = op.periodic, face = f(:face), shift = f(:shift),
+        mask = op.mask, value = f(:value), dirichlet = f(:dirichlet)
+    )
 end
 
 tight(inner_rtol) = LatticePCG(; maxiters = 64, reltol = inner_rtol)
@@ -27,13 +29,21 @@ function fd(case, coef, δ)
         coef === :shift && return with(op; shift = op.shift + h)
         coef === :value && return with(op; value = op.value + h)
         if coef[1] === :face
-            return with(op; face = ntuple(a -> a == coef[2] ? op.face[a] + h : op.face[a],
-                length(op.face)))
+            return with(
+                op; face = ntuple(
+                    a -> a == coef[2] ? op.face[a] + h : op.face[a],
+                    length(op.face)
+                )
+            )
         end
-        return with(op; dirichlet = ((op.dirichlet[1][1], op.dirichlet[1][2] + h),
-            op.dirichlet[2]))
+        return with(
+            op; dirichlet = (
+                (op.dirichlet[1][1], op.dirichlet[1][2] + h),
+                op.dirichlet[2],
+            )
+        )
     end
-    (primal_solve((up(δ), inputs))[2] .- primal_solve((up(-δ), inputs))[2]) ./ (2δ)
+    return (primal_solve((up(δ), inputs))[2] .- primal_solve((up(-δ), inputs))[2]) ./ (2δ)
 end
 
 relmax(a, b) = maximum(abs, a .- b) / maximum(abs, b)

@@ -10,13 +10,18 @@
 #              positive side of its plane → the daughter; the daughter's volume and moment
 #              sums accumulate in integer scratch (exact, order-independent)
 #   copies     (cells)   daughter column copies, generation, cluster ids, links (removed
-#              cells' links dropped, daughters unlinked), for every cell before any rule runs
+#              cells' links dropped, daughters unlinked), for every cell before any rule
+#              runs
 #   rules      (cells)   the daughter state rules and transitions (they see the trackers as
 #              the CPU path's rules do: not yet updated)
-#   surface    (sites)   the surface change of each parent and daughter (only the moved sites)
-#   counts     (cells, then sites) contact counts (`ctx.contact_counts`), zeroed and summed from σ
-#   euler      (cells, then grid vertices) the Euler columns (`euler.jl`), zeroed and summed from σ
-#   finalize   (cells)   volume and moments of parents and daughters, removed cells' trackers
+#   surface    (sites)   the surface change of each parent and daughter (only the moved
+#                        sites)
+#   counts     (cells, then sites) contact counts (`ctx.contact_counts`), zeroed and summed
+#              from σ
+#   euler      (cells, then grid vertices) the Euler columns (`euler.jl`), zeroed and summed
+#              from σ
+#   finalize   (cells)   volume and moments of parents and daughters, removed cells'
+#                        trackers
 #   clusters   re-root clusters whose root died; cluster volume (cells) and surface (sites)
 #   mask       (sites + one item) the frozen-mask refresh and its counts, when the mask
 #              follows the state
@@ -24,6 +29,11 @@
 # Lifecycle statistics and the mask counts accumulate on the device and are folded into
 # `integ.stats` only at host read points (saves, `current_state`, `checkpoint`, the end of
 # `solve!`), which synchronize anyway (`_fold_lifecycle!`).
+#
+# Index bounds of the `@inbounds` below: cell ids (`c`, `d`, `k`, `r`, `m`: live cells,
+# daughters, free slots and cluster ids) are ≤ cap, the length of every cell column and of
+# each per-cell scratch of `dv` (`_device_scratch`); a site index `i` is ≤ length(σ); a
+# planner item `t` is ≤ PLAN_WG, the rows of `cnt`; `par` ∈ (1, 2) = axes(dv.flag).
 
 # Items of the planner's (and the fused form's) single workgroup. Fewer cost time on a
 # quiet MCS (each item runs the trigger of capacity/PLAN_WG slots; 128 measured about 1.2×
@@ -38,13 +48,15 @@ const PLAN_WG = 256
 const _FORM_FUSED = 1
 const _FORM_STAGED = 2
 const _FORM_HOST = 3
-const _LAUNCH_FAULT = Ref(0)        # tests: the first launch of this form fails (not public API)
-# Tests (not public API, D-108): with k = `_STAGED_FAULT_AFTER[]` > 0, the staged form's first
-# (not yet proven) launch enqueues its first k kernels (1: the trigger with `Lifecycle.before`;
-# 2: also the planner) and then throws as if the next kernel's launch had failed; 0 is off.
-# Like `_LAUNCH_FAULT` it acts only on an unproven form, so once per integrator. A launch
-# failure is expected only before the partition kernel (`run_lifecycle_device!`); a failure
-# after it (k ≥ 3 here) is not handed over but rethrown (`_StagedFailedMidway`).
+# tests: the first launch of this form fails (not public API)
+const _LAUNCH_FAULT = Ref(0)
+# Tests (not public API, D-108): with k = `_STAGED_FAULT_AFTER[]` > 0, the staged form's
+# first (not yet proven) launch enqueues its first k kernels (1: the trigger with
+# `Lifecycle.before`; 2: also the planner) and then throws as if the next kernel's launch
+# had failed; 0 is off. Like `_LAUNCH_FAULT` it acts only on an unproven form, so once per
+# integrator. A launch failure is expected only before the partition kernel
+# (`run_lifecycle_device!`); a failure after it (k ≥ 3 here) is not handed over but rethrown
+# (`_StagedFailedMidway`).
 const _STAGED_FAULT_AFTER = Ref(0)
 # The staged form's kernels are the trigger, the planner, then the partition, the first to
 # write σ: a failure once this many kernels were enqueued leaves no consistent state
@@ -57,9 +69,11 @@ const _ACC_TRANSITIONS = 3
 const _ACC_DEFERRED = 4
 const _ACC_EMPTY = 5
 const _ACC_NOCLUSTER = 6            # EVENT_DIVIDE_CLUSTER without cluster state (an error)
-const _ACC_LARGE = 7                # divisions deferred: the cell is too large for the Int32
-                                    # moment scratch (`_scratch_ok`; also counted as deferred)
-const _ACC_BADTRANS = 8             # `transitioning` on an event other than a division (an error)
+# divisions deferred: the cell is too large for the Int32 moment scratch (`_scratch_ok`;
+# also counted as deferred)
+const _ACC_LARGE = 7
+# `transitioning` on an event other than a division (an error)
+const _ACC_BADTRANS = 8
 const _NACC = 8
 
 # The bound of `_scratch_ok` (`typemax(Int32)`); a `Ref` read when the scratch is built, so
@@ -67,22 +81,35 @@ const _NACC = 8
 const _SCRATCH_LIMIT = Ref{Int64}(typemax(Int32))
 
 # Cell columns that the lifecycle maintains itself (never copied from parent to daughter)
-const _LIFECYCLE_OWNED = (:volume, :surface, :anchor, :m1, :m2, :generation, :birth, :cluster,
-    :cluster_volume, :cluster_surface, :euler, :euler_full, :pieces, :largest_piece, :pieces_full, :largest_piece_full)
+const _LIFECYCLE_OWNED = (
+    :volume, :surface, :anchor, :m1, :m2, :generation, :birth, :cluster,
+    :cluster_volume, :cluster_surface, :euler, :euler_full, :pieces,
+    :largest_piece, :pieces_full, :largest_piece_full,
+)
 
 """Device scratch of the lifecycle (sized by capacity) and the host buffers of its fold."""
 function _device_scratch(backend, N::Int, cap::Int, nsite::Int)
     z(T, dims...) = KernelAbstractions.zeros(backend, T, dims...)
-    return (; flag = z(Int32, 2), held = z(Int32, cap), newborn = z(Int32, cap), req = z(Int32, cap),
-        nmem = z(Int32, cap), nlive = z(Int32, cap), coff = z(Int32, cap), freelist = z(Int32, cap),
+    return (;
+        flag = z(Int32, 2), held = z(Int32, cap), newborn = z(Int32, cap),
+        req = z(Int32, cap),
+        nmem = z(Int32, cap), nlive = z(Int32, cap), coff = z(Int32, cap),
+        freelist = z(Int32, cap),
         dvol = z(Int32, cap), dm1 = z(Int32, N, cap), dm2 = z(Int32, npairs(N), cap),
-        rootA = z(Int32, cap), rootB = z(Int32, cap), okc = z(Bool, cap), acc = z(Int32, _NACC),
-        mcnt = z(_atomic64(backend) ? site_index_type(nsite) : Int32, 3), mask = z(Int64, 3), taken = z(Int32, 1),
-        wacc = z(Int64, cap), wlo = z(UInt32, cap), whi = z(Int32, cap), limit = _SCRATCH_LIMIT[])
+        rootA = z(Int32, cap), rootB = z(Int32, cap), okc = z(Bool, cap),
+        acc = z(Int32, _NACC),
+        mcnt = z(_atomic64(backend) ? site_index_type(nsite) : Int32, 3),
+        mask = z(Int64, 3), taken = z(
+            Int32, 1
+        ),
+        wacc = z(Int64, cap), wlo = z(UInt32, cap), whi = z(Int32, cap),
+        limit = _SCRATCH_LIMIT[],
+    )
 end
 
 """Host side of the device lifecycle: the round counter, the kernel objects and the fold
-buffers (`acc`/`mask` are read at host read points; `seen` are the values already folded)."""
+buffers (`acc`/`mask` are read at host read points; `seen` are the values already
+folded)."""
 struct DeviceLifecycle{DV, CO, LI, K, KF}
     dv::DV
     cols::CO            # the cell columns a daughter copies from its parent
@@ -90,9 +117,11 @@ struct DeviceLifecycle{DV, CO, LI, K, KF}
     plan!::K
     fused!::KF          # the whole lifecycle in one workgroup (small problems), or nothing
     form::Base.RefValue{Int}        # `_FORM_*`
-    before_ran::Base.RefValue{Bool} # this MCS's `Lifecycle.before` was enqueued (with the trigger)
+    # this MCS's `Lifecycle.before` was enqueued (with the trigger)
+    before_ran::Base.RefValue{Bool}
     proven::Base.RefValue{Bool}     # the form has launched once (its workgroup fits)
-    enqueued::Base.RefValue{Int}    # kernels the unproven staged launch enqueued (`_Counted`)
+    # kernels the unproven staged launch enqueued (`_Counted`)
+    enqueued::Base.RefValue{Int}
     round::Base.RefValue{Int}
     acc::Vector{Int32}
     acc_seen::Vector{Int32}
@@ -100,10 +129,10 @@ struct DeviceLifecycle{DV, CO, LI, K, KF}
     mask_seen::Vector{Int64}
 end
 
-# The defaults of `CheckerboardCPM`'s `fused_lifecycle_max_sites` and `fused_lifecycle_max_cells`:
-# up to these sizes the whole lifecycle runs as one launch of one workgroup (a quiet MCS
-# then costs one launch, as the trigger alone did); larger problems launch one kernel per
-# stage over all sites or cells.
+# The defaults of `CheckerboardCPM`'s `fused_lifecycle_max_sites` and
+# `fused_lifecycle_max_cells`: up to these sizes the whole lifecycle runs as one launch of
+# one workgroup (a quiet MCS then costs one launch, as the trigger alone did); larger
+# problems launch one kernel per stage over all sites or cells.
 const _FUSED_LIFECYCLE_MAX_SITES = 1 << 16
 const _FUSED_LIFECYCLE_MAX_CELLS = 1 << 13
 
@@ -112,26 +141,42 @@ function DeviceLifecycle(
         max_cells::Int = _FUSED_LIFECYCLE_MAX_CELLS
     )
     names = keys(st.cell)
-    cols = Tuple(getfield(st.cell, k) for k in names if !(k in _LIFECYCLE_OWNED) && !_is_link_data(k) && !_is_scratch_column(k))
+    cols = Tuple(
+        getfield(st.cell, k)
+            for k in names
+            if !(k in _LIFECYCLE_OWNED) && !_is_link_data(k) && !_is_scratch_column(k)
+    )
     links = Tuple(getfield(st.cell, k) for k in names if _is_adjacency(k))
-    fused = !_FORCE_STAGED_LIFECYCLE[] && length(st.ownership) <= max_sites && cap <= max_cells ? _fused_kernel!(backend, PLAN_WG) : nothing
+    fused = if !_FORCE_STAGED_LIFECYCLE[] && length(st.ownership) <= max_sites &&
+            cap <= max_cells
+        _fused_kernel!(backend, PLAN_WG)
+    else
+        nothing
+    end
     return DeviceLifecycle(
-        _device_scratch(backend, N, cap, length(st.ownership)), cols, links, _plan_kernel!(backend, PLAN_WG), fused,
-        Ref(fused === nothing ? _FORM_STAGED : _FORM_FUSED), Ref(false), Ref(false), Ref(0), Ref(0),
-        zeros(Int32, _NACC), zeros(Int32, _NACC), zeros(Int64, 3), zeros(Int64, 3))
+        _device_scratch(backend, N, cap, length(st.ownership)), cols, links,
+        _plan_kernel!(backend, PLAN_WG), fused,
+        Ref(fused === nothing ? _FORM_STAGED : _FORM_FUSED), Ref(false), Ref(false), Ref(0),
+        Ref(0),
+        zeros(Int32, _NACC), zeros(Int32, _NACC), zeros(Int64, 3), zeros(Int64, 3)
+    )
 end
 
 # ---------------------------------------------------------------------------------------
 # Trigger
 
-# `before` (`Lifecycle.before`, or `nothing`) runs for cell `c` first, in the same work item:
-# the trigger of `c` reads only `c`'s own values of what it writes (its contract), so no
-# barrier is needed between them (D-101)
+# `before` (`Lifecycle.before`, or `nothing`) runs for cell `c` first, in the same work
+# item: the trigger of `c` reads only `c`'s own values of what it writes (its contract), so
+# no barrier is needed between them (D-101)
 @inline _before!(::Nothing, c, st, p, ctx, key, mcs) = nothing
-@inline _before!(f::F, c, st, p, ctx, key, mcs) where {F} =
-    (c <= ncells(st) && f(st, p, ctx, key, mcs, c % Int32); nothing)
-@inline function _dtrigger_body!(c, events, dv, par, round, before::B, trigger::F, st, p, ctx, key, mcs,
-        ::Val{CL}) where {B, F, CL}
+@inline function _before!(f::F, c, st, p, ctx, key, mcs) where {F}
+    c <= ncells(st) && f(st, p, ctx, key, mcs, c % Int32)
+    return nothing
+end
+@inline function _dtrigger_body!(
+        c, events, dv, par, round, before::B, trigger::F, st, p, ctx, key, mcs,
+        ::Val{CL}
+    ) where {B, F, CL}
     _before!(before, c, st, p, ctx, key, mcs)
     e = EVENT_NONE
     if @inbounds(st.cell.volume[c]) > 0
@@ -140,10 +185,12 @@ end
         CL && (@inbounds dv.held[st.cell.cluster[c]] = round)
     end
     @inbounds events[c] = e
-    e != EVENT_NONE && @inbounds Atomix.@atomic dv.flag[par] += Int32(1)    # par ∈ (1, 2) = axes(dv.flag)
+    # par ∈ (1, 2) = axes(dv.flag)
+    e != EVENT_NONE && @inbounds Atomix.@atomic dv.flag[par] += Int32(1)
     return nothing
 end
 
+# bounds: par ∈ (1, 2) = axes(dv.flag)
 @inline _on(dv, par) = @inbounds(dv.flag[par]) != Int32(0)
 
 # ---------------------------------------------------------------------------------------
@@ -156,13 +203,17 @@ end
     return lo, min(t * K, cap)
 end
 
-@inline _is_free(st, dv, round, e, c, ::Val{CL}) where {CL} =
-    @inbounds(st.cell.volume[c]) == 0 && e == EVENT_NONE && (!CL || @inbounds(dv.held[c]) != round)
+@inline function _is_free(st, dv, round, e, c, ::Val{CL}) where {CL}
+    # bounds: c ≤ cap (cell columns and dv.held; see the file header)
+    return @inbounds(st.cell.volume[c]) == 0 && e == EVENT_NONE &&
+        (!CL || @inbounds(dv.held[c]) != round)
+end
 
 # exclusive prefix sum of `cnt[1:PLAN_WG, j]` in place; returns the total (one item runs it)
 @inline function _scan!(cnt, j)
     s = Int32(0)
     for t in 1:PLAN_WG
+        # bounds: t ≤ PLAN_WG rows and j ≤ 3 columns of cnt
         v = @inbounds cnt[t, j]
         @inbounds cnt[t, j] = s
         s += v
@@ -172,7 +223,10 @@ end
 
 # A: normalize events (only a cluster's root may divide it), reset the per-slot scratch,
 # count free slots per item
-@inline function _plan_a!(t, cnt, events, daughter, removed, bias, dv, par, round, ruled, st, cl::Val{CL}) where {CL}
+@inline function _plan_a!(
+        t, cnt, events, daughter, removed, bias, dv,
+        par, round, ruled, st, cl::Val{CL}
+    ) where {CL}
     t == 1 && (@inbounds dv.flag[3 - par] = Int32(0))       # the next round's flag
     nfree = Int32(0)
     if _on(dv, par)
@@ -180,14 +234,17 @@ end
         for c in lo:hi
             raw = @inbounds events[c]
             e = _event(ruled, raw)
-            if _bad_transition(e)                          # counted, thrown on the host; the bit dropped
+            # counted, thrown on the host; the bit dropped
+            if _bad_transition(e)
                 Atomix.@atomic dv.acc[_ACC_BADTRANS] += Int32(1)
                 e = _base_event(e)
                 @inbounds events[c] = _with_rule(ruled, e, raw)
             end
-            if _base_event(e) == EVENT_DIVIDE_CLUSTER && (!CL || @inbounds(st.cell.cluster[c]) != c)
+            if _base_event(e) == EVENT_DIVIDE_CLUSTER &&
+                    (!CL || @inbounds(st.cell.cluster[c]) != c)
                 CL || Atomix.@atomic dv.acc[_ACC_NOCLUSTER] += Int32(1)
-                e = _undivided(e)                          # a transition (`transitioning`) stays
+                # a transition (`transitioning`) stays
+                e = _undivided(e)
                 @inbounds events[c] = _with_rule(ruled, e, raw)
             end
             @inbounds removed[c] = e == EVENT_REMOVE
@@ -213,11 +270,12 @@ end
     (CL && _on(dv, par)) || return nothing
     lo, hi = _chunk(t, length(events))
     for c in lo:hi
+        # bounds: c ∈ _chunk(t, cap) ⊆ 1:cap; cluster ids r ≤ cap (file header)
         @inbounds(st.cell.volume[c]) > 0 || continue
         r = @inbounds st.cell.cluster[c]
         Atomix.@atomic dv.nlive[r] += Int32(1)
         if _base_event(_event(ruled, @inbounds events[r])) == EVENT_DIVIDE_CLUSTER &&
-           _event(ruled, @inbounds events[c]) != EVENT_REMOVE
+                _event(ruled, @inbounds events[c]) != EVENT_REMOVE
             Atomix.@atomic dv.nmem[r] += Int32(1)
         end
     end
@@ -230,7 +288,9 @@ end
     if CL && _on(dv, par)
         lo, hi = _chunk(t, length(events))
         for c in lo:hi
-            _base_event(_event(ruled, @inbounds events[c])) == EVENT_DIVIDE_CLUSTER && (dem += @inbounds dv.nmem[c])
+            # bounds: c ∈ _chunk(t, cap) ⊆ 1:cap; t ≤ PLAN_WG rows of cnt
+            _base_event(_event(ruled, @inbounds events[c])) == EVENT_DIVIDE_CLUSTER &&
+                (dem += @inbounds dv.nmem[c])
         end
     end
     @inbounds cnt[t, 2] = dem
@@ -258,7 +318,8 @@ end
                 @inbounds dv.coff[r] = next
                 next += n
             else
-                @inbounds events[r] = _with_rule(ruled, _undivided(_event(ruled, raw)), raw)    # a transition stays
+                # a transition stays
+                @inbounds events[r] = _with_rule(ruled, _undivided(_event(ruled, raw)), raw)
                 Atomix.@atomic dv.acc[_ACC_DEFERRED] += Int32(1)
             end
         end
@@ -270,7 +331,9 @@ end
 end
 
 # E: the free list in slot order; cluster offsets (no deferral); cells dividing alone
-@inline function _plan_e!(t, cnt, tot, events, dv, par, round, ruled, st, cl::Val{CL}) where {CL}
+@inline function _plan_e!(
+        t, cnt, tot, events, dv, par, round, ruled, st, cl::Val{CL}
+    ) where {CL}
     nreq = Int32(0)
     if _on(dv, par)
         lo, hi = _chunk(t, length(events))
@@ -289,7 +352,9 @@ end
             end
             if _base_event(e) == EVENT_DIVIDE
                 # a member of a dividing cluster divides with it, not alone
-                member = CL && _base_event(_event(ruled, @inbounds events[st.cell.cluster[c]])) == EVENT_DIVIDE_CLUSTER
+                member = CL &&
+                    _base_event(_event(ruled, @inbounds events[st.cell.cluster[c]])) ==
+                    EVENT_DIVIDE_CLUSTER
                 if !member
                     @inbounds dv.req[c] = Int32(1)
                     nreq += Int32(1)
@@ -310,31 +375,40 @@ end
     ndiv > 0 && Atomix.@atomic dv.acc[_ACC_DIVISIONS] += ndiv
     nreq > ndiv && Atomix.@atomic dv.acc[_ACC_DEFERRED] += nreq - ndiv
     # free-list entries taken this round (serials): scratch, committed to the counter after
-    # the partition (`_advance_births!`), so a staged launch that fails in the planner leaves
-    # the state's counter as it was for the host planner
+    # the partition (`_advance_births!`), so a staged launch that fails in the planner
+    # leaves the state's counter as it was for the host planner
     @inbounds dv.taken[1] = @inbounds(tot[2]) + ndiv          # taken has 1 entry, tot 3
     return nothing
 end
 
 # Cell serials (D-066 item 3; `Lifecycle`): the daughter in free-list entry `k + 1` (0-based
-# `k`, the allocation order: slot order) takes serial `next + k`; after the round the counter
-# advances past every entry taken (a division deferred for the moment scratch leaves its
-# serial unused, never reused). `births` is `nothing` without a `birth` column.
+# `k`, the allocation order: slot order) takes serial `next + k`; after the round the
+# counter advances past every entry taken (a division deferred for the moment scratch leaves
+# its serial unused, never reused). `births` is `nothing` without a `birth` column.
 @inline _birth!(::Nothing, d, k) = nothing
 @inline function _birth!(b, d, k)
-    @inbounds b.col[d] = b.next[1] + k % Int32         # `next` has one entry; d is a free slot
+    # `next` has one entry; d is a free slot
+    @inbounds b.col[d] = b.next[1] + k % Int32
     return nothing
 end
 @inline _advance_births!(::Nothing, dv) = nothing
-@inline _advance_births!(b, dv) = (@inbounds b.next[1] += dv.taken[1]; nothing)   # both have one entry
-_births(st) = haskey(st.cell, :birth) && haskey(st.model, NEXT_BIRTH) ?
-              (; col = st.cell.birth, next = getfield(st.model, NEXT_BIRTH)) : nothing
+# both have one entry
+@inline _advance_births!(b, dv) = (@inbounds b.next[1] += dv.taken[1]; nothing)
+function _births(st)
+    if haskey(st.cell, :birth) && haskey(st.model, NEXT_BIRTH)
+        return (; col = st.cell.birth, next = getfield(st.model, NEXT_BIRTH))
+    else
+        return nothing
+    end
+end
 
 # G: daughters and planes. A cell dividing alone takes its slot and its normal; the item of
 # a dividing cluster's root assigns its members' daughters in slot order and evaluates the
 # cluster plane on the cluster's moments
-@inline function _plan_g!(t, cnt, tot, events, daughter, normals, bias, dv, par, normal::NF, cnormal::CF,
-        ruled, st, p, ctx, key, mcs, ::Val{CL}, births) where {NF, CF, CL}
+@inline function _plan_g!(
+        t, cnt, tot, events, daughter, normals, bias, dv, par, normal::NF, cnormal::CF,
+        ruled, st, p, ctx, key, mcs, ::Val{CL}, births
+    ) where {NF, CF, CL}
     _on(dv, par) || return nothing
     lo, hi = _chunk(t, length(events))
     rk = @inbounds(tot[2]) + @inbounds(cnt[t, 3])
@@ -356,8 +430,12 @@ _births(st) = haskey(st.cell, :birth) && haskey(st.model, NEXT_BIRTH) ?
             rk += Int32(1)
         end
         # a root (its cluster id is itself) whose cluster divides: members are found by id
-        if CL && @inbounds(st.cell.cluster[c]) == c && _base_event(_event(ruled, @inbounds events[c])) == EVENT_DIVIDE_CLUSTER
-            _plan_cluster!(c % Int32, events, daughter, normals, bias, dv, cnormal, ruled, st, p, ctx, key, mcs, births)
+        if CL && @inbounds(st.cell.cluster[c]) == c &&
+                _base_event(_event(ruled, @inbounds events[c])) == EVENT_DIVIDE_CLUSTER
+            _plan_cluster!(
+                c % Int32, events, daughter, normals, bias, dv,
+                cnormal, ruled, st, p, ctx, key, mcs, births
+            )
         end
     end
     return nothing
@@ -377,6 +455,7 @@ end
 @inline function _scratch_ok(dv, cell, c, ::Val{N}) where {N}
     ok = true
     for k in 1:N
+        # bounds: c ≤ cap; _pair(N, k, k) ≤ npairs(N), the rows of m2
         ok &= @inbounds(cell.m2[_pair(N, k, k), c]) <= dv.limit
     end
     return ok
@@ -397,10 +476,13 @@ end
 struct _OneColumn{V}
     v::V
 end
+# bounds: a.v is one cell's column (anchor, m1 or m2); d runs over that column's rows
 @inline Base.getindex(a::_OneColumn, d, c) = @inbounds a.v[d]
 
-@inline function _plan_cluster!(r, events, daughter, normals, bias, dv, cnormal::CF, ruled, st, p, ctx, key,
-        mcs, births) where {CF}
+@inline function _plan_cluster!(
+        r, events, daughter, normals, bias, dv, cnormal::CF, ruled, st, p, ctx, key,
+        mcs, births
+    ) where {CF}
     cell = st.cell
     lat = ctx.lattice
     N = ndims(lat)
@@ -431,7 +513,8 @@ end
         m1m = ntuple(d -> Int64(@inbounds cell.m1[d, m]), Val(N))
         inc2 = ntuple(Val(npairs(N))) do q
             d, e = _unpair(N, q)
-            Int64(@inbounds cell.m2[q, m]) + δa[d] * m1m[e] + δa[e] * m1m[d] + Int64(Vm) * δa[d] * δa[e]
+            Int64(@inbounds cell.m2[q, m]) + δa[d] * m1m[e] + δa[e] * m1m[d] +
+                Int64(Vm) * δa[d] * δa[e]
         end
         inc1 = ntuple(d -> m1m[d] + Int64(Vm) * δa[d], Val(N))
         VK += Vm
@@ -442,16 +525,25 @@ end
         @inbounds daughter[m] = dv.freelist[j + 1]
         _birth!(births, @inbounds(dv.freelist[j + 1]), j)
         j += Int32(1)
-        ev = _transitions(em) ? _EVENT_DIVIDE_CLUSTER_TRANSITION : EVENT_DIVIDE_CLUSTER     # A-17: it transitions first
-        @inbounds events[m] = _with_rule(ruled, ev, raw_r)            # members follow the root's rule
+        # A-17: it transitions first
+        ev = _transitions(em) ? _EVENT_DIVIDE_CLUSTER_TRANSITION : EVENT_DIVIDE_CLUSTER
+        # members follow the root's rule
+        @inbounds events[m] = _with_rule(ruled, ev, raw_r)
     end
-    cellK = merge(cell, (; volume = _OneValue(VK), anchor = _OneColumn(ar), m1 = _OneColumn(m1K), m2 = _OneColumn(m2K)))
+    cellK = merge(
+        cell,
+        (;
+            volume = _OneValue(VK), anchor = _OneColumn(ar),
+            m1 = _OneColumn(m1K), m2 = _OneColumn(m2K),
+        )
+    )
     n = cnormal((; ownership = st.ownership, cell = cellK), p, ctx, key, mcs, r)
     cK = centroid(T, cellK, lat, r)
     for m in 1:cap
         (@inbounds(cell.volume[m]) > 0 && @inbounds(cell.cluster[m]) == r) || continue
         cm = centroid(T, cell, lat, m)
-        δ = _min_image(T, lat, ntuple(d -> cm[d] - cK[d], Val(N)))     # member − cluster centroid
+        # member − cluster centroid
+        δ = _min_image(T, lat, ntuple(d -> cm[d] - cK[d], Val(N)))
         s = zero(T)
         for d in 1:N
             s += T(δ[d]) * T(n[d])
@@ -471,6 +563,7 @@ end
     ntrans = Int32(0)
     nrem = Int32(0)
     for c in lo:hi
+        # bounds: c ∈ _chunk(t, cap); daughters d ≤ cap (file header)
         d = @inbounds daughter[c]
         if d > 0
             @inbounds dv.newborn[d] = c % Int32
@@ -490,13 +583,17 @@ end
 # each stage, not around the kernel: `@synchronize` stays at the top level, where every
 # work item reaches it. (KA's CPU backend splits the kernel at each `@synchronize` and needs
 # `@index` as its own statement in each part.)
-@kernel function _plan_kernel!(live, events, daughter, removed, normals, bias, dv, par, round, normal, cnormal,
-        ruled, st, p, ctx, key, mcs, clusters, surf, births)
+@kernel function _plan_kernel!(
+        live, events, daughter, removed, normals, bias, dv, par, round, normal, cnormal,
+        ruled, st, p, ctx, key, mcs, clusters, surf, births
+    )
     cnt = @localmem Int32 (PLAN_WG, 3)
     tot = @localmem Int32 (3,)
     ta = @index(Local, Linear)
     if live
-        _plan_a!(ta, cnt, events, daughter, removed, bias, dv, par, round, ruled, st, clusters)
+        _plan_a!(
+            ta, cnt, events, daughter, removed, bias, dv, par, round, ruled, st, clusters
+        )
     end
     @synchronize
     tb = @index(Local, Linear)
@@ -526,8 +623,11 @@ end
     @synchronize
     tg = @index(Local, Linear)
     if live
-        _plan_g!(tg, cnt, tot, events, daughter, normals, bias, dv, par, normal, cnormal, ruled, st, p, ctx, key, mcs,
-            clusters, births)
+        _plan_g!(
+            tg, cnt, tot, events, daughter, normals, bias, dv,
+            par, normal, cnormal, ruled, st, p, ctx, key, mcs,
+            clusters, births
+        )
     end
     @synchronize
     th = @index(Local, Linear)
@@ -541,7 +641,9 @@ end
 # side of its plane go to the daughter, whose volume and moment sums (about the parent's
 # anchor) accumulate in integer scratch
 
-@inline function _dpartition_body!(i, dv, par, σ, daughter, normals, bias, removed, cell, lat, hook::H, st) where {H}
+@inline function _dpartition_body!(
+        i, dv, par, σ, daughter, normals, bias, removed, cell, lat, hook::H, st
+    ) where {H}
     _on(dv, par) || return nothing
     c = @inbounds σ[i]
     c > 0 || return nothing
@@ -554,7 +656,8 @@ end
         T = eltype(normals)
         V = T(@inbounds cell.volume[c])
         side = @inbounds bias[c]                     # 0 unless it divides with its cluster
-        offset = embed(lat, ntuple(k -> T(δ[k]) - T(@inbounds cell.m1[k, c]) / V, Val(N)))   # site − centroid
+        # site − centroid
+        offset = embed(lat, ntuple(k -> T(δ[k]) - T(@inbounds cell.m1[k, c]) / V, Val(N)))
         for k in 1:N
             side += T(offset[k]) * @inbounds(normals[k, c])
         end
@@ -580,13 +683,29 @@ end
 # barrier or a kernel boundary) the state rules, which may read or write any cell's columns
 # or links (e.g. `add_link!(st.cell, parent, daughter)` in `divide!`)
 
+# `_copy_column!` and `_clean_links!` mapped over the columns: functors, not per-call
+# closures
+struct _CopyColumn{C, D}
+    c::C
+    d::D
+end
+@inline (f::_CopyColumn)(a) = _copy_column!(a, f.c, f.d)
+struct _CleanLinks{C, R, B}
+    c::C
+    removed::R
+    newborn::B
+end
+@inline (f::_CleanLinks)(L) = _clean_links!(L, f.c, f.removed, f.newborn)
+
 @inline function _copy_column!(a::AbstractVector, c, d)
+    # bounds: c, d ≤ cap = length(a)
     @inbounds a[d] = a[c]
     return nothing
 end
 @inline function _copy_column!(a::AbstractArray, c, d)
     n = length(a) ÷ size(a, ndims(a))               # entries per cell
     for k in 1:n
+        # bounds: n entries per cell and c, d ≤ cap cells: both ranges are in a
         @inbounds a[(d - 1) * n + k] = a[(c - 1) * n + k]
     end
     return nothing
@@ -595,17 +714,21 @@ end
 # links: a removed cell and a daughter (whose slot may be reused) lose every link; their
 # partners drop them (each item writes only its own row: the store is symmetric)
 @inline function _clean_links!(L, c, removed, newborn)
+    # bounds: c ≤ cap columns of L; partners b > 0 are cell ids ≤ cap
     clear = @inbounds(removed[c]) || @inbounds(newborn[c]) > 0
     for k in 1:size(L, 1)
         b = @inbounds L[k, c]
         b == 0 && continue
-        (clear || @inbounds(removed[b]) || @inbounds(newborn[b]) > 0) && (@inbounds L[k, c] = zero(eltype(L)))
+        (clear || @inbounds(removed[b]) || @inbounds(newborn[b]) > 0) &&
+            (@inbounds L[k, c] = zero(eltype(L)))
     end
     return nothing
 end
 
-@inline function _dcopies_body!(c, dv, par, events, daughter, removed, cols, links, st, ruled,
-        ::Val{CL}, release::RL, births::BT) where {CL, RL, BT}
+@inline function _dcopies_body!(
+        c, dv, par, events, daughter, removed, cols, links, st, ruled,
+        ::Val{CL}, release::RL, births::BT
+    ) where {CL, RL, BT}
     _on(dv, par) || return nothing
     # the serial counter passes the entries the planner took (the first stage writing state)
     c == 1 && _advance_births!(births, dv)
@@ -613,25 +736,36 @@ end
     # this stage, so a slot reused this round still reads as dead), and the daughter copies
     # the reset value; only a live cell's own columns are written (`Lifecycle.release`)
     _release!(release, st, c)
+    # bounds: c, d, k ≤ cap (file header)
     d = @inbounds daughter[c]
     if d > 0
-        map(a -> _copy_column!(a, c, d), cols)
+        map(_CopyColumn(c, d), cols)
         @inbounds st.cell.generation[d] += one(eltype(st.cell.generation))
         if CL
             k = @inbounds st.cell.cluster[c]
-            @inbounds st.cell.cluster[d] = _divides_with_cluster(_event(ruled, @inbounds events[c])) ?
-                                           daughter[k] :              # the root's daughter names the new cluster
-                                           dv.nlive[k] == 1 ? d : k   # a lone cell's daughter is lone
+            @inbounds st.cell.cluster[d] = if _divides_with_cluster(
+                    _event(ruled, @inbounds events[c])
+                )
+                daughter[k]               # the root's daughter names the new cluster
+            elseif dv.nlive[k] == 1
+                d                         # a lone cell's daughter is lone
+            else
+                k
+            end
         end
     end
-    map(L -> _clean_links!(L, c, removed, dv.newborn), links)
+    map(_CleanLinks(c, removed, dv.newborn), links)
     return nothing
 end
 
-@inline function _drules_body!(c, dv, par, events, daughter, kindf::KF, divide!::DF, cluster_divide!::CF, st, p,
-        ctx, key, mcs, ruled) where {KF, DF, CF}
+@inline function _drules_body!(
+        c, dv, par, events, daughter, kindf::KF, divide!::DF, cluster_divide!::CF, st, p,
+        ctx, key, mcs, ruled
+    ) where {KF, DF, CF}
     _on(dv, par) || return nothing
-    _cell_rule_body!(c, events, daughter, kindf, divide!, cluster_divide!, st, p, ctx, key, mcs, ruled)
+    _cell_rule_body!(
+        c, events, daughter, kindf, divide!, cluster_divide!, st, p, ctx, key, mcs, ruled
+    )
     return nothing
 end
 
@@ -643,6 +777,7 @@ end
 
 @inline function _dsurface_body!(i, dv, par, σ, surf, rel, lat, u)
     _on(dv, par) || return nothing
+    # bounds: i ≤ length(σ); owners and newborn parents ≤ cap; k ≤ length(rel)
     s = @inbounds σ[i]
     s > 0 || return nothing
     pc = @inbounds dv.newborn[s]
@@ -681,7 +816,9 @@ end
         @inbounds col[c] += v
     end
     @inbounds begin
-        sc.acc[c] = 0; sc.lo[c] = 0; sc.hi[c] = 0
+        sc.acc[c] = 0
+        sc.lo[c] = 0
+        sc.hi[c] = 0
     end
     return nothing
 end
@@ -691,8 +828,10 @@ end
 
 @inline function _dfinalize_body!(c, dv, par, daughter, removed, cell, surf, lat, u)
     _on(dv, par) || return nothing
-    _wfold!(u, dv, surf, c, Val(false))                   # the surface stage's units (before a removal's reset)
+    # the surface stage's units (before a removal's reset)
+    _wfold!(u, dv, surf, c, Val(false))
     N = ndims(lat)
+    # bounds: c, d ≤ cap; k ≤ N and q ≤ npairs(N) rows of the moment columns
     if @inbounds(removed[c])
         @inbounds cell.volume[c] = zero(eltype(cell.volume))
         for k in 1:N
@@ -736,12 +875,14 @@ end
 
 @inline function _dcluster_mark_body!(c, dv, par, cell)
     _on(dv, par) || return nothing
+    # bounds: c and its cluster id k ≤ cap (file header)
     @inbounds(cell.volume[c]) > 0 || return nothing
     k = @inbounds cell.cluster[c]
     ok = @inbounds(cell.volume[k]) > 0 && @inbounds(cell.cluster[k]) == k
     @inbounds dv.okc[c] = ok
     if !ok
-        @inbounds(cell.kind[c]) == @inbounds(cell.kind[k]) && Atomix.@atomic dv.rootA[k] min (c % Int32)
+        @inbounds(cell.kind[c]) == @inbounds(cell.kind[k]) &&
+            Atomix.@atomic dv.rootA[k] min (c % Int32)
         Atomix.@atomic dv.rootB[k] min (c % Int32)
     end
     return nothing
@@ -749,6 +890,7 @@ end
 
 @inline function _dcluster_root_body!(c, dv, par, cell, cvol, csurf)
     _on(dv, par) || return nothing
+    # bounds: c and its cluster id k ≤ cap (file header)
     if @inbounds(cell.volume[c]) == 0
         @inbounds cell.cluster[c] = c % Int32
     elseif !@inbounds(dv.okc[c])
@@ -763,6 +905,7 @@ end
 
 @inline function _dcluster_volume_body!(c, dv, par, cell, cvol)
     _on(dv, par) || return nothing
+    # bounds: c ≤ cap (file header)
     V = @inbounds cell.volume[c]
     V > 0 || return nothing
     k = @inbounds cell.cluster[c]
@@ -772,6 +915,7 @@ end
 
 @inline function _dcluster_surface_body!(i, dv, par, σ, cell, csurf, rel, lat, u)
     _on(dv, par) || return nothing
+    # bounds: i ≤ length(σ); owners s > 0 ≤ cap (file header)
     s = @inbounds σ[i]
     s > 0 || return nothing
     K = @inbounds cell.cluster[s]
@@ -820,8 +964,8 @@ end
 # Host orchestration (enqueue only)
 
 # The built-in planes compute in the state's float type, on the host and on a device (the
-# planner compiles every plane of the model, also those of rules that never fire: a `Float64`
-# default must not reach Metal)
+# planner compiles every plane of the model, also those of rules that never fire: a
+# `Float64` default must not reach Metal)
 _plane(::AlongMinorAxis, ::Type{T}) where {T} = AlongMinorAxis{T}()
 _plane(::AlongMajorAxis, ::Type{T}) where {T} = AlongMajorAxis{T}()
 _plane(::RandomPlane, ::Type{T}) where {T} = RandomPlane{T}()
@@ -847,22 +991,43 @@ function run_lifecycle_device!(lc::Lifecycle, cache, st, p, ctx, key, mcs, backe
     round = Int32(r % typemax(Int32))
     T = eltype(cache.normals)
     buf = (; cache.events, cache.daughter, cache.removed, cache.normals, cache.bias)
-    fns = (; lc.before, lc.trigger, normal = _plane(lc.normal, T), cnormal = _plane(lc.cluster_normal, T), lc.kind, lc.divide!,
-        lc.cluster_divide!, lc.release, lc.owner_changed)
-    opt = (; surf = haskey(st.cell, :surface) && haskey(ctx, :surface) ? st.cell.surface : nothing,
-        cvol = _has_clusters(st) && haskey(st.cell, :cluster_volume) ? st.cell.cluster_volume : nothing,
-        csurf = _has_clusters(st) && haskey(st.cell, :cluster_surface) && haskey(ctx, :surface) ?
-                st.cell.cluster_surface : nothing,
+    fns = (;
+        lc.before, lc.trigger, normal = _plane(lc.normal, T),
+        cnormal = _plane(lc.cluster_normal, T), lc.kind, lc.divide!,
+        lc.cluster_divide!, lc.release, lc.owner_changed,
+    )
+    surface = haskey(st.cell, :surface) && haskey(ctx, :surface)
+    csurface = _has_clusters(st) && haskey(st.cell, :cluster_surface) &&
+        haskey(ctx, :surface)
+    nsite = length(st.ownership)
+    opt = (;
+        surf = surface ? st.cell.surface : nothing,
+        cvol = if _has_clusters(st) && haskey(st.cell, :cluster_volume)
+            st.cell.cluster_volume
+        else
+            nothing
+        end,
+        csurf = csurface ? st.cell.cluster_surface : nothing,
         rel = haskey(ctx, :surface) ? ctx.surface : nothing, refresh,
-        su = haskey(st.cell, :surface) && haskey(ctx, :surface) ?
-            _units_for(eltype(st.cell.surface), ctx.surface, length(st.ownership), backend) : nothing,
-        cu = _has_clusters(st) && haskey(st.cell, :cluster_surface) && haskey(ctx, :surface) ?
-            _units_for(eltype(st.cell.cluster_surface), ctx.surface, length(st.ownership), backend) : nothing,
-        cc = _contact_counts(ctx), ccols = _count_columns(st, _contact_counts(ctx)), eul = _euler_columns(st.cell),
-        births = _births(st))
+        su = if surface
+            _units_for(eltype(st.cell.surface), ctx.surface, nsite, backend)
+        else
+            nothing
+        end,
+        cu = if csurface
+            _units_for(eltype(st.cell.cluster_surface), ctx.surface, nsite, backend)
+        else
+            nothing
+        end,
+        cc = _contact_counts(ctx), ccols = _count_columns(st, _contact_counts(ctx)),
+        eul = _euler_columns(st.cell),
+        births = _births(st),
+    )
     CL = Val(_has_clusters(st))
     if D.form[] == _FORM_FUSED
-        D.proven[] && return _run_fused!(D, buf, fns, opt, par, round, lc.rules, CL, st, p, ctx, key, mcs)
+        D.proven[] && return _run_fused!(
+            D, buf, fns, opt, par, round, lc.rules, CL, st, p, ctx, key, mcs
+        )
         n = try
             _LAUNCH_FAULT[] == _FORM_FUSED && throw(ArgumentError("launch refused (test)"))
             _run_fused!(D, buf, fns, opt, par, round, lc.rules, CL, st, p, ctx, key, mcs)
@@ -873,27 +1038,36 @@ function run_lifecycle_device!(lc::Lifecycle, cache, st, p, ctx, key, mcs, backe
     end
     if D.form[] == _FORM_STAGED
         D.proven[] &&
-            return _run_staged!(D, buf, fns, opt, par, round, lc.rules, CL, st, p, ctx, key, mcs, backend, _Enqueue())
+            return _run_staged!(
+            D, buf, fns, opt, par, round, lc.rules, CL,
+            st, p, ctx, key, mcs, backend, _Enqueue()
+        )
         D.enqueued[] = 0
         k = _STAGED_FAULT_AFTER[]
         mode = _Counted(k > 0 ? k : -1, D.enqueued)
         n = try
             _LAUNCH_FAULT[] == _FORM_STAGED && throw(ArgumentError("launch refused (test)"))
-            # Every kernel of the form is compiled (with this launch's argument types) before
-            # any is enqueued, so a compilation failure hands over an untouched MCS. What can
-            # still fail is a launch whose workgroup exceeds its compiled pipeline's limit:
-            # only the planner has a fixed workgroup (`PLAN_WG`); every other kernel's group is
-            # sized by the backend from that limit (`Exec.launch!`). So
-            # a real failure happens at the trigger (nothing enqueued) or at the planner (the
-            # trigger and `before` ran): before the partition writes σ or any cell column, and
-            # the host planner takes the MCS without `before` (`before_ran[]`) and without
-            # this MCS's device counts (`_drop_device_counts!`). Should a launch fail after the
-            # partition all the same (an environmental error), the state is partly divided
-            # with stale trackers: that failure is rethrown, not handed over.
+            # Every kernel of the form is compiled (with this launch's argument types)
+            # before any is enqueued, so a compilation failure hands over an untouched MCS.
+            # What can still fail is a launch whose workgroup exceeds its compiled
+            # pipeline's limit: only the planner has a fixed workgroup (`PLAN_WG`); every
+            # other kernel's group is sized by the backend from that limit (`Exec.launch!`).
+            # So a real failure happens at the trigger (nothing enqueued) or at the planner
+            # (the trigger and `before` ran): before the partition writes σ or any cell
+            # column, and the host planner takes the MCS without `before` (`before_ran[]`)
+            # and without this MCS's device counts (`_drop_device_counts!`). Should a launch
+            # fail after the partition all the same (an environmental error), the state is
+            # partly divided with stale trackers: that failure is rethrown, not handed over.
             compile = _CompileOnly()
-            _run_staged!(D, buf, fns, opt, par, round, lc.rules, CL, st, p, ctx, key, mcs, backend, compile)
+            _run_staged!(
+                D, buf, fns, opt, par, round, lc.rules, CL,
+                st, p, ctx, key, mcs, backend, compile
+            )
             _compile!(compile, backend)
-            _run_staged!(D, buf, fns, opt, par, round, lc.rules, CL, st, p, ctx, key, mcs, backend, mode)
+            _run_staged!(
+                D, buf, fns, opt, par, round, lc.rules,
+                CL, st, p, ctx, key, mcs, backend, mode
+            )
         catch e
             isfatal(e) && rethrow()
             D.enqueued[] >= _STAGED_PARTITION && throw(_StagedFailedMidway(D.enqueued[], e))
@@ -907,23 +1081,26 @@ end
 # The first launch of a form failed (e.g. its workgroup exceeds the kernel's limit): the
 # next form takes over. The staged form's trigger (with `before`) and planner may have run:
 # neither writes σ or a cell column (the planner only writes its scratch, the event buffers,
-# the device counts and the `surface` and `birth` of the free slots it picks as daughters, which
-# the host planner recomputes from σ with the other trackers at an event, or assigns again from
-# the serial counter that only the copies stage advances), so
-# the host planner takes the MCS from scratch, rerunning the trigger but not `before`
-# (`before_ran[]`), and drops this MCS's device counts (`_drop_device_counts!`)
+# the device counts and the `surface` and `birth` of the free slots it picks as daughters,
+# which the host planner recomputes from σ with the other trackers at an event, or assigns
+# again from the serial counter that only the copies stage advances), so the host planner
+# takes the MCS from scratch, rerunning the trigger but not `before` (`before_ran[]`), and
+# drops this MCS's device counts (`_drop_device_counts!`)
 function _form_failed!(D, e)
     isfatal(e) && throw(e)
     next = D.form[] == _FORM_FUSED ? "one kernel per stage" : "the host planner"
-    @warn "device lifecycle: the $(D.form[] == _FORM_FUSED ? "fused" : "staged") form cannot launch " *
-          "($(sprint(showerror, e))); using $next"
+    @warn "device lifecycle: the $(D.form[] == _FORM_FUSED ? "fused" : "staged") form " *
+        "cannot launch ($(sprint(showerror, e))); using $next"
     D.form[] += 1
     D.proven[] = false
     return -1
 end
 
 function _run_fused!(D, buf, fns, opt, par, round, ruled, CL, st, p, ctx, key, mcs)
-    D.fused!(buf, D.dv, D.cols, D.links, fns, opt, par, round, ruled, CL, st, p, ctx, key, mcs; ndrange = PLAN_WG)
+    D.fused!(
+        buf, D.dv, D.cols, D.links, fns, opt, par, round,
+        ruled, CL, st, p, ctx, key, mcs; ndrange = PLAN_WG
+    )
     D.before_ran[] = true
     return 1
 end
@@ -941,10 +1118,13 @@ _CompileOnly() = _CompileOnly(Any[])
 _compile!(m::_CompileOnly, backend) = Exec.compile_all!(backend, m.jobs)
 struct _Counted
     k::Int
-    n::Base.RefValue{Int}               # kernels enqueued so far (`DeviceLifecycle.enqueued`)
+    # kernels enqueued so far (`DeviceLifecycle.enqueued`)
+    n::Base.RefValue{Int}
 end
 
-_stage!(::_Enqueue, body::B, backend, n, args::A) where {B, A} = Exec.launch!(backend, body, n, args)
+function _stage!(::_Enqueue, body::B, backend, n, args::A) where {B, A}
+    return Exec.launch!(backend, body, n, args)
+end
 function _stage!(m::_Counted, body::B, backend, n, args::A) where {B, A}
     _fault_point(m)
     Exec.launch!(backend, body, n, args)
@@ -954,22 +1134,32 @@ end
 # Compile without enqueueing work: `Exec.compile!`, a launch of the kernel `Exec.launch!`
 # runs, with `n = 0`, so no work item passes its guard (the kernel type does not depend on
 # the ndrange: the launch that follows reuses the compile; a launch over an empty range is
-# not used, since KA 0.10 returns before compiling it). Guarded by `test/device_ir.jl` (ROCm)
-# and the CorePotts Metal suite. The host executor has no compilation step.
+# not used, since KA 0.10 returns before compiling it). Guarded by `test/device_ir.jl`
+# (ROCm) and the CorePotts Metal suite. The host executor has no compilation step.
 function _stage!(m::_CompileOnly, body::B, backend, n, args::A) where {B, A}
     push!(m.jobs, () -> Exec.compile!(backend, body, args))
     return nothing
 end
 
-_stage_plan!(::_Enqueue, D, backend, args::A) where {A} = (D.plan!(true, args...; ndrange = PLAN_WG); nothing)
-_stage_plan!(m::_Counted, D, backend, args::A) where {A} =
-    (_fault_point(m); D.plan!(true, args...; ndrange = PLAN_WG); m.n[] += 1; nothing)
+function _stage_plan!(::_Enqueue, D, backend, args::A) where {A}
+    (D.plan!(true, args...; ndrange = PLAN_WG); nothing)
+end
+function _stage_plan!(m::_Counted, D, backend, args::A) where {A}
+    _fault_point(m)
+    D.plan!(true, args...; ndrange = PLAN_WG)
+    m.n[] += 1
+    return nothing
+end
 # the planner's compile: one workgroup with `live = false` (no stage runs)
-_stage_plan!(m::_CompileOnly, D, backend, args::A) where {A} =
-    (push!(m.jobs, () -> D.plan!(false, args...; ndrange = PLAN_WG)); nothing)
+function _stage_plan!(m::_CompileOnly, D, backend, args::A) where {A}
+    push!(m.jobs, () -> D.plan!(false, args...; ndrange = PLAN_WG))
+    return nothing
+end
 
-_fault_point(m::_Counted) =
-    (m.n[] == m.k && throw(ArgumentError("launch refused (test: `_STAGED_FAULT_AFTER`)")); nothing)
+function _fault_point(m::_Counted)
+    m.n[] == m.k && throw(ArgumentError("launch refused (test: `_STAGED_FAULT_AFTER`)"))
+    return nothing
+end
 
 """The staged form's first launch failed after its partition kernel was enqueued: σ may be
 partly divided and the trackers stale, so no form can take the MCS over."""
@@ -977,50 +1167,101 @@ struct _StagedFailedMidway <: Exception
     enqueued::Int
     cause::Any
 end
-Base.showerror(io::IO, e::_StagedFailedMidway) =
-    print(io, "device lifecycle: the staged form failed after $(e.enqueued) of its kernels were enqueued, ",
-        "the partition (which writes σ) among them; the state is no longer consistent and cannot be ",
-        "handed to the host planner. Cause: ", sprint(showerror, e.cause))
+function Base.showerror(io::IO, e::_StagedFailedMidway)
+    return print(
+        io, "device lifecycle: the staged form failed after $(e.enqueued) of its kernels \
+            were enqueued, ",
+        "the partition (which writes σ) among them; the state is no longer consistent and \
+            cannot be ",
+        "handed to the host planner. Cause: ", sprint(showerror, e.cause)
+    )
+end
 
 _enqueues(mode) = true
 _enqueues(::_CompileOnly) = false
 
 # one kernel per stage (large problems)
-function _run_staged!(D, buf, fns, opt, par, round, ruled, CL, st, p, ctx, key, mcs, backend, mode::M) where {M}
+function _run_staged!(
+        D, buf, fns, opt, par, round, ruled, CL, st,
+        p, ctx, key, mcs, backend, mode::M
+    ) where {M}
     dv = D.dv
     cap = length(st.cell.kind)
     n = length(st.ownership)
     lat = ctx.lattice
     surf, cvol, csurf, refresh = opt.surf, opt.cvol, opt.csurf, opt.refresh
-    _stage!(mode, _dtrigger_body!, backend, cap,
-        (buf.events, dv, par, round, fns.before, fns.trigger, st, p, ctx, key, mcs, CL))
-    _enqueues(mode) && (D.before_ran[] = true)
-    _stage_plan!(mode, D, backend, (buf.events, buf.daughter, buf.removed, buf.normals, buf.bias, dv, par, round,
-        fns.normal, fns.cnormal, ruled, st, p, ctx, key, mcs, CL, surf, opt.births))
-    _stage!(mode, _dpartition_body!, backend, n,
-        (dv, par, st.ownership, buf.daughter, buf.normals, buf.bias, buf.removed, st.cell, lat, fns.owner_changed, st)
+    _stage!(
+        mode, _dtrigger_body!, backend, cap,
+        (buf.events, dv, par, round, fns.before, fns.trigger, st, p, ctx, key, mcs, CL)
     )
-    _stage!(mode, _dcopies_body!, backend, cap, (dv, par, buf.events, buf.daughter, buf.removed, D.cols, D.links, st,
-        ruled, CL, fns.release, opt.births))
-    _stage!(mode, _drules_body!, backend, cap, (dv, par, buf.events, buf.daughter, fns.kind, fns.divide!,
-        fns.cluster_divide!, st, p, ctx, key, mcs, ruled))
+    _enqueues(mode) && (D.before_ran[] = true)
+    _stage_plan!(
+        mode, D,
+        backend,
+        (
+            buf.events, buf.daughter, buf.removed, buf.normals, buf.bias, dv, par, round,
+            fns.normal, fns.cnormal, ruled, st, p, ctx, key, mcs, CL, surf, opt.births,
+        )
+    )
+    _stage!(
+        mode, _dpartition_body!, backend, n,
+        (
+            dv, par, st.ownership, buf.daughter, buf.normals, buf.bias,
+            buf.removed, st.cell, lat, fns.owner_changed, st,
+        )
+    )
+    _stage!(
+        mode, _dcopies_body!,
+        backend,
+        cap,
+        (
+            dv, par, buf.events, buf.daughter, buf.removed, D.cols, D.links, st,
+            ruled, CL, fns.release, opt.births,
+        )
+    )
+    _stage!(
+        mode, _drules_body!,
+        backend,
+        cap,
+        (
+            dv, par, buf.events, buf.daughter, fns.kind, fns.divide!,
+            fns.cluster_divide!, st, p, ctx, key, mcs, ruled,
+        )
+    )
     launches = 5
     if surf !== nothing
-        _stage!(mode, _dsurface_body!, backend, n, (dv, par, st.ownership, surf, ctx.surface, lat, opt.su))
+        _stage!(
+            mode, _dsurface_body!, backend, n,
+            (dv, par, st.ownership, surf, ctx.surface, lat, opt.su)
+        )
         launches += 1
     end
-    if opt.cc !== nothing          # contact counts: zeroed, then summed from σ (`contact_counts.jl`)
+    # contact counts: zeroed, then summed from σ (`contact_counts.jl`)
+    if opt.cc !== nothing
         _stage!(mode, _dcount_zero_body!, backend, cap, (dv, par, opt.ccols))
-        _stage!(mode, _dcount_body!, backend, n, (dv, par, st.ownership, st.cell.kind, opt.cc, opt.ccols, lat))
+        _stage!(
+            mode, _dcount_body!, backend, n,
+            (dv, par, st.ownership, st.cell.kind, opt.cc, opt.ccols, lat)
+        )
         launches += 2
     end
     if opt.eul !== nothing         # Euler columns: zeroed, then summed from σ (`euler.jl`)
         _stage!(mode, _deuler_zero_body!, backend, cap, (dv, par, opt.eul))
-        _stage!(mode, _deuler_body!, backend, _euler_anchors(lat), (dv, par, st.ownership, opt.eul, lat))
+        _stage!(
+            mode, _deuler_body!, backend, _euler_anchors(lat),
+            (dv, par, st.ownership, opt.eul, lat)
+        )
         launches += 2
     end
-    _stage!(mode, _dfinalize_body!, backend, cap, (dv, par, buf.daughter, buf.removed, st.cell, surf, lat,
-        surf === nothing ? nothing : opt.su))
+    _stage!(
+        mode, _dfinalize_body!,
+        backend,
+        cap,
+        (
+            dv, par, buf.daughter, buf.removed, st.cell, surf, lat,
+            surf === nothing ? nothing : opt.su,
+        )
+    )
     launches += 1
     if _has_clusters(st)
         _stage!(mode, _dcluster_mark_body!, backend, cap, (dv, par, st.cell))
@@ -1031,16 +1272,25 @@ function _run_staged!(D, buf, fns, opt, par, round, ruled, CL, st, p, ctx, key, 
             launches += 1
         end
         if csurf !== nothing
-            _stage!(mode, _dcluster_surface_body!, backend, n, (dv, par, st.ownership, st.cell, csurf, ctx.surface, lat, opt.cu))
+            _stage!(
+                mode, _dcluster_surface_body!, backend, n,
+                (dv, par, st.ownership, st.cell, csurf, ctx.surface, lat, opt.cu)
+            )
             launches += 1
             if opt.cu !== nothing
-                _stage!(mode, _dcluster_surface_fold_body!, backend, cap, (dv, par, csurf, opt.cu))
+                _stage!(
+                    mode, _dcluster_surface_fold_body!,
+                    backend, cap, (dv, par, csurf, opt.cu)
+                )
                 launches += 1
             end
         end
     end
     if refresh !== nothing
-        _stage!(mode, _dfrozen_body!, backend, n, (dv, par, refresh.frozen, st.ownership, st.cell.kind, refresh.kinds, lat))
+        _stage!(
+            mode, _dfrozen_body!, backend, n,
+            (dv, par, refresh.frozen, st.ownership, st.cell.kind, refresh.kinds, lat)
+        )
         _stage!(mode, _dmask_fold_body!, backend, 1, (dv, par, mcs))
         launches += 2
     end
@@ -1061,27 +1311,52 @@ end
     return nothing
 end
 # the stages after the trigger (`args` start with `dv, par`): a quiet round skips the loop
-@inline _each_on!(body::B, t, n, args::A) where {B, A} =
-    (_on(args[1], args[2]) && _each!(body, t, n, args); nothing)
+@inline function _each_on!(body::B, t, n, args::A) where {B, A}
+    _on(args[1], args[2]) && _each!(body, t, n, args)
+    return nothing
+end
 @inline _each_if!(body::B, t, n, x::Nothing, args::A) where {B, A} = nothing
 @inline _each_if!(body::B, t, n, x, args::A) where {B, A} = _each_on!(body, t, n, args)
 @inline _clusters_each!(::Val{false}, body::B, t, n, args::A) where {B, A} = nothing
-@inline _clusters_each!(::Val{true}, body::B, t, n, args::A) where {B, A} = _each_on!(body, t, n, args)
+@inline function _clusters_each!(::Val{true}, body::B, t, n, args::A) where {B, A}
+    return _each_on!(
+        body,
+        t, n, args
+    )
+end
 @inline _refresh_each!(body::B, t, n, ::Nothing, dv, par, st, lat) where {B} = nothing
-@inline _refresh_each!(body::B, t, n, r, dv, par, st, lat) where {B} =
-    _each_on!(body, t, n, (dv, par, r.frozen, st.ownership, st.cell.kind, r.kinds, lat))
+@inline function _refresh_each!(body::B, t, n, r, dv, par, st, lat) where {B}
+    return _each_on!(
+        body, t, n, (
+            dv, par, r.frozen, st.ownership, st.cell.kind, r.kinds, lat,
+        )
+    )
+end
 @inline _refresh_fold!(t, ::Nothing, dv, par, mcs) = nothing
-@inline _refresh_fold!(t, r, dv, par, mcs) = (t == 1 && _dmask_fold_body!(1, dv, par, mcs); nothing)
+@inline function _refresh_fold!(t, r, dv, par, mcs)
+    t == 1 && _dmask_fold_body!(1, dv, par, mcs)
+    return nothing
+end
 
-@kernel function _fused_kernel!(buf, dv, cols, links, fns, opt, par, round, ruled, clusters, st, p, ctx, key, mcs)
+@kernel function _fused_kernel!(
+        buf, dv, cols, links, fns, opt, par, round, ruled, clusters, st, p, ctx, key, mcs
+    )
     cnt = @localmem Int32 (PLAN_WG, 3)
     tot = @localmem Int32 (3,)
     t0 = @index(Local, Linear)
-    _each!(_dtrigger_body!, t0, length(buf.events),
-        (buf.events, dv, par, round, fns.before, fns.trigger, st, p, ctx, key, mcs, clusters))
+    _each!(
+        _dtrigger_body!, t0, length(buf.events),
+        (
+            buf.events, dv, par, round, fns.before,
+            fns.trigger, st, p, ctx, key, mcs, clusters,
+        )
+    )
     @synchronize
     ta = @index(Local, Linear)
-    _plan_a!(ta, cnt, buf.events, buf.daughter, buf.removed, buf.bias, dv, par, round, ruled, st, clusters)
+    _plan_a!(
+        ta, cnt, buf.events, buf.daughter, buf.removed,
+        buf.bias, dv, par, round, ruled, st, clusters
+    )
     @synchronize
     tb = @index(Local, Linear)
     _plan_b!(tb, buf.events, dv, par, ruled, st, clusters)
@@ -1099,8 +1374,11 @@ end
     _plan_f!(tf, cnt, tot, dv, par)
     @synchronize
     tg = @index(Local, Linear)
-    _plan_g!(tg, cnt, tot, buf.events, buf.daughter, buf.normals, buf.bias, dv, par, fns.normal, fns.cnormal, ruled,
-        st, p, ctx, key, mcs, clusters, opt.births)
+    _plan_g!(
+        tg, cnt, tot, buf.events, buf.daughter, buf.normals,
+        buf.bias, dv, par, fns.normal, fns.cnormal, ruled,
+        st, p, ctx, key, mcs, clusters, opt.births
+    )
     @synchronize
     th = @index(Local, Linear)
     _plan_h!(th, buf.events, buf.daughter, dv, par, ruled, opt.surf)
@@ -1108,45 +1386,87 @@ end
     tp = @index(Local, Linear)
     _each_on!(
         _dpartition_body!, tp, length(st.ownership),
-        (dv, par, st.ownership, buf.daughter, buf.normals, buf.bias, buf.removed, st.cell, ctx.lattice, fns.owner_changed, st)
+        (
+            dv, par, st.ownership, buf.daughter, buf.normals, buf.bias,
+            buf.removed, st.cell, ctx.lattice, fns.owner_changed, st,
+        )
     )
     @synchronize
     tq = @index(Local, Linear)
-    _each_on!(_dcopies_body!, tq, length(buf.events), (dv, par, buf.events, buf.daughter, buf.removed, cols, links,
-        st, ruled, clusters, fns.release, opt.births))
+    _each_on!(
+        _dcopies_body!, tq,
+        length(buf.events),
+        (
+            dv, par, buf.events, buf.daughter, buf.removed, cols, links,
+            st, ruled, clusters, fns.release, opt.births,
+        )
+    )
     @synchronize
     tu = @index(Local, Linear)
-    _each_on!(_drules_body!, tu, length(buf.events), (dv, par, buf.events, buf.daughter, fns.kind, fns.divide!,
-        fns.cluster_divide!, st, p, ctx, key, mcs, ruled))
+    _each_on!(
+        _drules_body!, tu,
+        length(buf.events),
+        (
+            dv, par, buf.events, buf.daughter, fns.kind, fns.divide!,
+            fns.cluster_divide!, st, p, ctx, key, mcs, ruled,
+        )
+    )
     @synchronize
     ts = @index(Local, Linear)
-    _each_if!(_dsurface_body!, ts, length(st.ownership), opt.surf, (dv, par, st.ownership, opt.surf, opt.rel, ctx.lattice, opt.su))
+    _each_if!(
+        _dsurface_body!, ts, length(st.ownership), opt.surf,
+        (dv, par, st.ownership, opt.surf, opt.rel, ctx.lattice, opt.su)
+    )
     _each_if!(_dcount_zero_body!, ts, length(buf.events), opt.cc, (dv, par, opt.ccols))
     _each_if!(_deuler_zero_body!, ts, length(buf.events), opt.eul, (dv, par, opt.eul))
     @synchronize
     tz = @index(Local, Linear)
-    _each_on!(_dfinalize_body!, tz, length(buf.events),
-        (dv, par, buf.daughter, buf.removed, st.cell, opt.surf, ctx.lattice, opt.surf === nothing ? nothing : opt.su))
-    _each_if!(_dcount_body!, tz, length(st.ownership), opt.cc, (dv, par, st.ownership, st.cell.kind, opt.cc, opt.ccols, ctx.lattice))
-    _each_if!(_deuler_body!, tz, _euler_anchors(ctx.lattice), opt.eul, (dv, par, st.ownership, opt.eul, ctx.lattice))
+    _each_on!(
+        _dfinalize_body!, tz, length(buf.events),
+        (
+            dv, par, buf.daughter, buf.removed, st.cell, opt.surf,
+            ctx.lattice, opt.surf === nothing ? nothing : opt.su,
+        )
+    )
+    _each_if!(
+        _dcount_body!, tz, length(st.ownership), opt.cc,
+        (dv, par, st.ownership, st.cell.kind, opt.cc, opt.ccols, ctx.lattice)
+    )
+    _each_if!(
+        _deuler_body!, tz, _euler_anchors(ctx.lattice),
+        opt.eul, (dv, par, st.ownership, opt.eul, ctx.lattice)
+    )
     @synchronize
     tk = @index(Local, Linear)
-    _clusters_each!(clusters, _dcluster_mark_body!, tk, length(buf.events), (dv, par, st.cell))
+    _clusters_each!(
+        clusters, _dcluster_mark_body!, tk, length(buf.events), (dv, par, st.cell)
+    )
     @synchronize
     tl = @index(Local, Linear)
-    _clusters_each!(clusters, _dcluster_root_body!, tl, length(buf.events), (dv, par, st.cell, opt.cvol, opt.csurf))
+    _clusters_each!(
+        clusters, _dcluster_root_body!, tl, length(buf.events),
+        (dv, par, st.cell, opt.cvol, opt.csurf)
+    )
     @synchronize
     tm = @index(Local, Linear)
-    _each_if!(_dcluster_volume_body!, tm, length(buf.events), opt.cvol, (dv, par, st.cell, opt.cvol))
+    _each_if!(
+        _dcluster_volume_body!, tm, length(buf.events),
+        opt.cvol, (dv, par, st.cell, opt.cvol)
+    )
     _each_if!(
         _dcluster_surface_body!, tm, length(st.ownership), opt.csurf,
         (dv, par, st.ownership, st.cell, opt.csurf, opt.rel, ctx.lattice, opt.cu)
     )
-    _refresh_each!(_dfrozen_body!, tm, length(st.ownership), opt.refresh, dv, par, st, ctx.lattice)
+    _refresh_each!(
+        _dfrozen_body!, tm, length(st.ownership), opt.refresh, dv, par, st, ctx.lattice
+    )
     @synchronize
     tr = @index(Local, Linear)
     _refresh_fold!(tr, opt.refresh, dv, par, mcs)
-    _each_if!(_dcluster_surface_fold_body!, tr, length(buf.events), opt.cu, (dv, par, opt.csurf, opt.cu))
+    _each_if!(
+        _dcluster_surface_fold_body!, tr, length(buf.events),
+        opt.cu, (dv, par, opt.csurf, opt.cu)
+    )
 end
 
 """
@@ -1188,7 +1508,7 @@ function _fold_lifecycle!(integ; report::Bool = true)
     large = δ(_ACC_LARGE)              # of which for the moment scratch (warned below)
     deferred > large && s.deferred == 0 && report &&
         @warn "lifecycle: all $(length(lc.events)) cell slots are in use; " *
-              "divisions are deferred until slots free up. Pass a larger `capacity`."
+        "divisions are deferred until slots free up. Pass a larger `capacity`."
     s.divisions += δ(_ACC_DIVISIONS)
     s.removals += δ(_ACC_REMOVALS)
     s.transitions += δ(_ACC_TRANSITIONS)
@@ -1208,10 +1528,13 @@ function _fold_lifecycle!(integ; report::Bool = true)
         D.mask_seen .= D.mask
     end
     report || return nothing
-    large > 0 && @warn "lifecycle: $large division(s) deferred: the dividing cell's second moments exceed the " *
-                       "device planner's Int32 scratch (a cell far larger than any in use); such a cell divides " *
-                       "only on the CPU"
-    nocluster > 0 && throw(ArgumentError("lifecycle: EVENT_DIVIDE_CLUSTER needs cluster state (`init_clusters`)"))
+    large > 0 &&
+        @warn "lifecycle: $large division(s) deferred: the dividing cell's second " *
+        "moments exceed the device planner's Int32 scratch (a cell far larger than any " *
+        "in use); such a cell divides only on the CPU"
+    nocluster > 0 &&
+        throw(ArgumentError("lifecycle: EVENT_DIVIDE_CLUSTER needs cluster state \
+            (`init_clusters`)"))
     badtrans > 0 && throw(_bad_transition_error(badtrans))
     return nothing
 end

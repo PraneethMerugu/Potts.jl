@@ -85,7 +85,10 @@ end
         cells(leader, follower) => λ * (volume - V₀)^2
         contacts => J[kind, neighbor_kind]
     end
-    @drive Chemotaxis(cue; strength = μ, when = (kind[new] == leader) | (kind[old] == leader))
+    @drive Chemotaxis(
+        cue; strength = μ, when = (kind[new] == leader) |
+            (kind[old] == leader)
+    )
     @drive copy => λ_conn * (local_components > 1)
     @sweep Metropolis(; temperature = T)
 end
@@ -110,9 +113,9 @@ end
     @divide cells(cell) when = volume >= 2A₀, along = major_axis(), V_target => A₀
     @sweep Metropolis(; temperature = T)
 end
-# Compression release scheduled inside the model, CompuCell3D's way (a steppable doubles each
-# cell's target at a fixed MCS; the chain's left end rests on a closed lattice edge), with a
-# per-cell target variable instead of OpenVTChain's parameter switch by callback
+# Compression release scheduled inside the model, CompuCell3D's way (a steppable doubles
+# each cell's target at a fixed MCS; the chain's left end rests on a closed lattice edge),
+# with a per-cell target variable instead of OpenVTChain's parameter switch by callback
 @potts_model ScheduledRelease begin
     @kinds medium cell
     @parameters begin
@@ -162,12 +165,17 @@ end
     @after_mcs begin
         free ~ ifelse(
             count(true for _ in contacts(vn)) > 0,
-            1 - ifelse(kind == A, count(neighbor_kind == B for _ in contacts(vn)), count(neighbor_kind == A for _ in contacts(vn))) /
+            1 -
+                ifelse(
+                kind == A, count(neighbor_kind == B for _ in contacts(vn)),
+                count(neighbor_kind == A for _ in contacts(vn))
+            ) /
                 count(true for _ in contacts(vn)), 1.0
         )
         A_star ~ ifelse(free >= φ, Pre(A_star) + α, Pre(A_star))
     end
-    @divide cells(A, B) when = volume >= θ * A₀, along = RandomPlane(), A_star => Split(), θ => 1.5 + rand()
+    @divide cells(A, B) when = volume >= θ * A₀, along = RandomPlane(), A_star => Split(),
+        θ => 1.5 + rand()
     @sweep Metropolis(; temperature = T)
 end
 # CompuCell3D's LengthConstraint (λ (l − L)², l from the inertia tensor) with its
@@ -216,9 +224,10 @@ end
     @drive Chemotaxis(c; strength = χ, when = (old == 0) & (new != 0))
     @sweep Metropolis(; temperature = T)
 end
-# CompuCell3D's `ExternalPotential` plugin (pixel-based: a copy pays λ·(x_target − x_source),
-# one uniform λ for the whole lattice) on cells in medium with a closed box and Moore(1)
-# copies, instead of the sheared foam's γ(y, t)·direction[1] on a dry foam with 20 neighbours
+# CompuCell3D's `ExternalPotential` plugin (pixel-based: a copy pays λ·(x_target −
+# x_source), one uniform λ for the whole lattice) on cells in medium with a closed box and
+# Moore(1) copies, instead of the sheared foam's γ(y, t)·direction[1] on a dry foam with 20
+# neighbours
 @potts_model ExternalPotentialCells begin
     @kinds medium cell
     @parameters begin
@@ -237,7 +246,11 @@ end
     @drive copy => λx * direction[1]
     @sweep Metropolis(; temperature = T)
 end
-block(dims, blocks...) = (s = zeros(Int32, dims); foreach(((k, b),) -> s[b...] .= k, enumerate(blocks)); s)
+function block(dims, blocks...)
+    s = zeros(Int32, dims)
+    foreach(((k, b),) -> s[b...] .= k, enumerate(blocks))
+    return s
+end
 # 4√λ_max of the covariance of cell `c`'s site coordinates (the inertia-tensor length)
 function sib_length(σ, c)
     I = findall(==(c), σ)
@@ -250,11 +263,17 @@ end
 const SIBLINGS = Dict(
     :GranerGlazier => (
         "hexagonal sorting", function ()
-            σ = zeros(Int32, 30, 30); n = 0
+            σ = zeros(Int32, 30, 30)
+            n = 0
             for i in 6:5:21, j in 6:5:21
-                n += 1; σ[i:(i + 3), j:(j + 3)] .= n
+                n += 1
+                σ[i:(i + 3), j:(j + 3)] .= n
             end
-            p = PottsProblem(HexSorting(; name = :h), [ownership => σ, kind => [isodd(k) ? :dark : :light for k in 1:n]], (0, 40))
+            p = PottsProblem(
+                HexSorting(; name = :h),
+                [ownership => σ, kind => [isodd(k) ? :dark : :light for k in 1:n]],
+                (0, 40)
+            )
             @test selfcheck(p) < 1.0e-9
             H(u) = total_energy(p, u)
             @test H(solve(p, SequentialCPM(; proposal = Moore(1))).u[end]) < H(p.u0)
@@ -262,7 +281,11 @@ const SIBLINGS = Dict(
     ),
     :WortelAct => (
         "arithmetic-mean Act", function ()
-            p = PottsProblem(ActArithmetic(; name = :a), [ownership => block((24, 24), (8:12, 8:12)), kind => [:cell]], (0, 30))
+            p = PottsProblem(
+                ActArithmetic(; name = :a),
+                [ownership => block((24, 24), (8:12, 8:12)), kind => [:cell]],
+                (0, 30)
+            )
             @test selfcheck(p) < 1.0e-9
             u = solve(p, SequentialCPM()).u[end]
             return @test any(>(0), u.site.act) && count(==(1), u.ownership) > 0
@@ -276,7 +299,9 @@ const SIBLINGS = Dict(
                     SaturatingChemotaxis(; name = :s), [
                         ownership => block((40, 40), (18:23, 18:23)),
                         kind => [:cell], :c => copy(cue),
-                    ], (0, 150); seed
+                    ],
+                    (0, 150);
+                    seed
                 )
                 seed == 1 && @test selfcheck(p) < 1.0e-9
                 u = solve(p, SequentialCPM()).u[end]
@@ -288,35 +313,44 @@ const SIBLINGS = Dict(
     :Merks2006 => (
         "CC3D length constraint, hard connectivity, von Neumann copies", function ()
             σ = block((40, 40), (8:13, 8:13), (26:31, 8:13), (8:13, 26:31), (26:31, 26:31))
-            len(λ_L, seed) = (
+            function len(λ_L, seed)
                 p = PottsProblem(
-                    ElongatedCells(; name = :e), [ownership => σ, kind => fill(:cell, 4), :λ_L => λ_L],
+                    ElongatedCells(; name = :e), [
+                        ownership => σ, kind => fill(:cell, 4), :λ_L => λ_L,
+                    ],
                     (0, 300); seed
-                );
-                seed == 1 && λ_L > 0 && @test(selfcheck(p) < 1.0e-9);
-                u = solve(p, SequentialCPM()).u[end];
-                mean(c -> sib_length(u.ownership, c), 1:4)
-            )
-            # seeds 1–3 at 300 MCS: 11.5–12.2 with λ_L = 5, 7.3–8.1 with λ_L = 0 (6.8 as squares)
+                )
+                seed == 1 && λ_L > 0 && @test(selfcheck(p) < 1.0e-9)
+                u = solve(p, SequentialCPM()).u[end]
+                return mean(c -> sib_length(u.ownership, c), 1:4)
+            end
+            # seeds 1–3 at 300 MCS: 11.5–12.2 with λ_L = 5, 7.3–8.1 with λ_L = 0 (6.8 as
+            # squares)
             el, ro = mean(s -> len(5.0, s), 1:2), mean(s -> len(0.0, s), 1:2)
-            @test el > 10 && el > ro + 2.5                        # cells stretch towards L = 16
+            # cells stretch towards L = 16
+            @test el > 10 && el > ro + 2.5
         end
     ),
     :Merks2008 => (
         "CC3D chemotaxis towards the medium only", function ()
             cue = [0.05 * x for x in 1:40, y in 1:40]
-            drift(χ) = map(1:4) do seed
-                p = PottsProblem(
-                    MediumOnlyChemotaxis(; name = :m), [
-                        ownership => block((40, 40), (18:22, 18:22)),
-                        kind => [:cell], :c => copy(cue), :χ => χ,
-                    ], (0, 150); seed
-                )
-                seed == 1 && χ > 0 && @test selfcheck(p) < 1.0e-9
-                u = solve(p, SequentialCPM()).u[end]
-                mean(i[1] for i in findall(==(1), u.ownership)) - 20.0
+            function drift(χ)
+                return map(1:4) do seed
+                    p = PottsProblem(
+                        MediumOnlyChemotaxis(; name = :m), [
+                            ownership => block((40, 40), (18:22, 18:22)),
+                            kind => [:cell], :c => copy(cue), :χ => χ,
+                        ],
+                        (0, 150);
+                        seed
+                    )
+                    seed == 1 && χ > 0 && @test selfcheck(p) < 1.0e-9
+                    u = solve(p, SequentialCPM()).u[end]
+                    mean(i[1] for i in findall(==(1), u.ownership)) - 20.0
+                end
             end
-            @test mean(drift(300.0)) > 3 && abs(mean(drift(0.0))) < 2.5     # extensions alone carry the cell up the cue
+            # extensions alone carry the cell up the cue
+            @test mean(drift(300.0)) > 3 && abs(mean(drift(0.0))) < 2.5
         end
     ),
     :AkeebInvasion => (
@@ -327,18 +361,24 @@ const SIBLINGS = Dict(
                 SoftConnectedLeaders(; name = :l), [
                     ownership => σ, kind => [:leader, :follower, :follower],
                     :cue => cue,
-                ], (0, 60)
+                ],
+                (0, 60)
             )
             @test selfcheck(p) < 1.0e-9
             u = solve(p, SequentialCPM(; proposal = VonNeumann(1))).u[end]
-            @test split_cells(u.ownership, (false, false)) == 0                     # the penalty keeps cells whole
-            return @test mean(i[2] for i in findall(==(1), u.ownership)) > 7                # the leader climbs the cue
+            # the penalty keeps cells whole
+            @test split_cells(u.ownership, (false, false)) == 0
+            # the leader climbs the cue
+            return @test mean(i[2] for i in findall(==(1), u.ownership)) > 7
         end
     ),
     :OpenVTGrowingMonolayer => (
         "major-axis division", function ()
             p = PottsProblem(
-                MajorAxisGrowth(; name = :g), [ownership => block((40, 40), (18:21, 18:21)), kind => [:cell]], (0, 120);
+                MajorAxisGrowth(; name = :g), [
+                    ownership => block((40, 40), (18:21, 18:21)), kind => [:cell],
+                ],
+                (0, 120);
                 capacity = 64
             )
             @test selfcheck(p) < 1.0e-9
@@ -347,23 +387,33 @@ const SIBLINGS = Dict(
         end
     ),
     :OpenVTReferenceMonolayer => (
-        "von Neumann inhibition by the other kind, uniform thresholds per daughter", function ()
-            σ = block((40, 40), (14:17, 14:17), (18:21, 14:17), (14:17, 18:21), (18:21, 18:21))
+        "von Neumann inhibition by the other kind, uniform thresholds per daughter",
+        function ()
+            σ = block(
+                (40, 40), (14:17, 14:17), (18:21, 14:17), (14:17, 18:21),
+                (18:21, 18:21)
+            )
             p = PottsProblem(
-                KindInhibitedGrowth(; name = :k), [ownership => σ, kind => [:A, :B, :B, :A]], (0, 150);
+                KindInhibitedGrowth(; name = :k), [
+                    ownership => σ, kind => [:A, :B, :B, :A],
+                ], (0, 150);
                 capacity = 128, seed = 2
             )
             @test selfcheck(p) < 1.0e-9
             sol = solve(p, SequentialCPM(; proposal = Moore(1)); saveat = 1)
             @test sol.stats.lifecycle.divisions >= 4
-            # the fold is exact: free = (medium or same-kind pairs) / pairs over von Neumann, from σ
+            # the fold is exact: free = (medium or same-kind pairs) / pairs over von
+            # Neumann, from σ
             bad = 0
             for i in 2:length(sol.u)
                 u, v = sol.u[i], sol.u[i - 1]
-                count(>(0), u.cell.volume) == count(>(0), v.cell.volume) || continue    # quiet MCS only
+                # quiet MCS only
+                count(>(0), u.cell.volume) == count(>(0), v.cell.volume) || continue
                 for c in findall(>(0), u.cell.volume)
                     n = m = 0
-                    for I in findall(==(c), u.ownership), o in ((1, 0), (-1, 0), (0, 1), (0, -1))
+                    for I in findall(==(c), u.ownership),
+                            o in ((1, 0), (-1, 0), (0, 1), (0, -1))
+
                         J = Tuple(I) .+ o
                         all(1 .<= J .<= size(u.ownership)) || continue
                         q = u.ownership[J...]
@@ -371,45 +421,64 @@ const SIBLINGS = Dict(
                         n += 1
                         m += q == 0 || u.cell.kind[q] == u.cell.kind[c]
                     end
-                    bad += !isapprox(u.cell.free[c], m / n; atol = 1.0e-12)       # 1 - (n - m)/n vs m/n
+                    # 1 - (n - m)/n vs m/n
+                    bad += !isapprox(u.cell.free[c], m / n; atol = 1.0e-12)
                 end
             end
             @test bad == 0
             θs = sol.u[end].cell.θ[sol.u[end].cell.volume .> 0]
-            @test all(x -> 1.5 < x < 2.5, θs) && length(unique(θs)) == length(θs)      # one draw per daughter
+            # one draw per daughter
+            @test all(x -> 1.5 < x < 2.5, θs) && length(unique(θs)) == length(θs)
         end
     ),
     :ShearedFoam => (
         "CC3D external potential, uniform along x", function ()
             σ = block((60, 20), (14:18, 6:10), (14:18, 11:15))
-            drift(λx) = map(1:3) do seed
-                p = PottsProblem(
-                    ExternalPotentialCells(; name = :e), [ownership => σ, kind => [:cell, :cell], :λx => λx],
-                    (0, 150); seed
-                )
-                seed == 1 && λx != 0 && @test selfcheck(p) < 1.0e-9
-                u = solve(p, SequentialCPM()).u[end]
-                mean(i[1] for i in findall(>(0), u.ownership)) - 16.0
+            function drift(λx)
+                return map(1:3) do seed
+                    p = PottsProblem(
+                        ExternalPotentialCells(; name = :e), [
+                            ownership => σ, kind => [:cell, :cell], :λx => λx,
+                        ],
+                        (0, 150); seed
+                    )
+                    seed == 1 && λx != 0 && @test selfcheck(p) < 1.0e-9
+                    u = solve(p, SequentialCPM()).u[end]
+                    mean(i[1] for i in findall(>(0), u.ownership)) - 16.0
+                end
             end
-            @test mean(drift(-2.0)) > 4 && abs(mean(drift(0.0))) < 2.5    # λx < 0 pushes the cells +x
+            # λx < 0 pushes the cells +x
+            @test mean(drift(-2.0)) > 4 && abs(mean(drift(0.0))) < 2.5
         end
     ),
     :OpenVTChain => (
         "compression released by a scheduled per-cell target", function ()
-            σ = block((60, 4), [((1 + 4(c - 1)):(4c), 1:4) for c in 1:6]...)       # 6 cells of 16 sites from x = 1
-            p = PottsProblem(ScheduledRelease(; name = :r), [ownership => σ, kind => fill(:cell, 6)], (0, 300); seed = 3)
+            # 6 cells of 16 sites from x = 1
+            σ = block((60, 4), [((1 + 4(c - 1)):(4c), 1:4) for c in 1:6]...)
+            p = PottsProblem(
+                ScheduledRelease(; name = :r),
+                [ownership => σ, kind => fill(:cell, 6)], (0, 300); seed = 3
+            )
             @test selfcheck(p) < 1.0e-9
-            sol = solve(p, SequentialCPM(; proposal = Moore(1)); saveat = [20, 300], save_start = false)
-            span(u) = (x = [c[1] for c in PottsModels.Analysis.centroids(u.ownership)]; maximum(x) - minimum(x))
-            @test sol.u[1].cell.V_target == fill(16.0, 6) && sol.u[2].cell.V_target == fill(32.0, 6)
-            @test span(sol.u[1]) < 24 && span(sol.u[2]) > 32                  # the chain lengthens after the release
+            sol = solve(
+                p, SequentialCPM(; proposal = Moore(1)); saveat = [20, 300],
+                save_start = false
+            )
+            function span(u)
+                x = [c[1] for c in PottsModels.Analysis.centroids(u.ownership)]
+                return maximum(x) - minimum(x)
+            end
+            @test sol.u[1].cell.V_target == fill(16.0, 6) &&
+                sol.u[2].cell.V_target == fill(32.0, 6)
+            # the chain lengthens after the release
+            @test span(sol.u[1]) < 24 && span(sol.u[2]) > 32
         end
-    ),
+    )
 )
-# The Eden and splits (D-141) primitives outside their first model (Merks 2008's TST seeding on a closed
-# square lattice): Eden seeding with replacement (`shortfall = :allow`, its code consumer)
-# and host-side Splits on the periodic hexagonal sorting sibling, growing under its own
-# Hex(2) neighbourhood and wrapping through its edges.
+# The Eden and splits (D-141) primitives outside their first model (Merks 2008's TST seeding
+# on a closed square lattice): Eden seeding with replacement (`shortfall = :allow`, its code
+# consumer) and host-side Splits on the periodic hexagonal sorting sibling, growing under
+# its own Hex(2) neighbourhood and wrapping through its edges.
 struct SibSites <: AbstractLayout          # one cell of :dark on the given sites
     sites::Vector{NTuple{2, Int}}
 end
@@ -418,9 +487,10 @@ function Potts.paint!(op::Potts.LayoutState, l::SibSites, lat)
     foreach(x -> Potts.assign!(op, x, id), l.sites)
     return nothing
 end
-# The connectivity vocabulary primitives outside their first model (Merks, Akeeb, WortelAct use `connectivity`):
-# the simple-point rule on a hexagonal lattice with the shell folds `pieces` and `distinct`
-# in a drive, and `connected` composed with a death clause on a cubic 3D lattice
+# The connectivity vocabulary primitives outside their first model (Merks, Akeeb, WortelAct
+# use `connectivity`): the simple-point rule on a hexagonal lattice with the shell folds
+# `pieces` and `distinct` in a drive, and `connected` composed with a death clause on a
+# cubic 3D lattice
 @potts_model HexSimpleCell begin
     @structural_parameters begin
         simple = true
@@ -432,13 +502,17 @@ end
         λ_mix = 1.0
         J[kind, kind] = [0.0 -1.0; -1.0 4.0]
     end
-    @lattice Lattice((24, 24); geometry = Hexagonal(), boundary = Closed(), neighborhood = Hex(1))
+    @lattice Lattice(
+        (24, 24); geometry = Hexagonal(), boundary = Closed(),
+        neighborhood = Hex(1)
+    )
     @energy begin
         cells(cell) => (volume - 64.0)^2
         contacts => J[kind, neighbor_kind]
     end
     # soft: copies that split the target's medium shell sites, or touch three cells
-    @drive copy => λ_lumen * (pieces(n for n in shell(target) if owner[n] == 0) > 1) +
+    @drive copy =>
+        λ_lumen * (pieces(n for n in shell(target) if owner[n] == 0) > 1) +
         λ_mix * (distinct(owner[n] for n in shell(target) if owner[n] != 0) > 2)
     if simple
         @constraint connectivity(cell; rule = Simple())
@@ -461,19 +535,27 @@ end
     end
     @sweep Metropolis(; temperature = T)
 end
-"""Components of `mask` under `offs` adjacency (closed edges), and how many touch the edge."""
+"""
+Components of `mask` under `offs` adjacency (closed edges), and how many touch the edge.
+"""
 function sib_comps(mask, offs)
-    seen = falses(size(mask)); n = 0; edge = 0
+    seen = falses(size(mask))
+    n = 0
+    edge = 0
     for I in CartesianIndices(mask)
         (mask[I] && !seen[I]) || continue
-        n += 1; seen[I] = true; st = [I]; e = false
+        n += 1
+        seen[I] = true
+        st = [I]
+        e = false
         while !isempty(st)
             J = pop!(st)
             e |= any(d -> J[d] in (1, size(mask, d)), 1:ndims(mask))
             for o in offs
                 K = J + CartesianIndex(o)
                 (checkbounds(Bool, mask, K) && mask[K] && !seen[K]) || continue
-                seen[K] = true; push!(st, K)
+                seen[K] = true
+                push!(st, K)
             end
         end
         edge += e
@@ -483,31 +565,52 @@ end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "siblings from public primitives" setup = [SiblingsSetup] tags = [:pottsmodels, :core] begin
+@testitem "siblings from public primitives" setup = [SiblingsSetup] tags = [
+    :pottsmodels,
+    :core,
+] begin
     @testset "siblings from public primitives" begin
-        models = filter(n -> (f = getfield(PottsModels, n); f isa Function && isuppercase(first(string(n)))), names(PottsModels))
-        @test Set(models) == Set(keys(SIBLINGS))          # every published model has a sibling
+        models = filter(
+            n -> (
+                f = getfield(PottsModels, n);
+                f isa Function && isuppercase(first(string(n)))
+            ),
+            names(PottsModels)
+        )
+        # every published model has a sibling
+        @test Set(models) == Set(keys(SIBLINGS))
         @testset "$m: $label" for (m, (label, check)) in SIBLINGS
             check()
         end
     end
 end
 
-@testitem "InsertUntil and Analysis on the hexagonal sorting sibling" setup = [SiblingsSetup] tags = [:pottsmodels, :core] begin
-    # The Akeeb analysis primitives outside their first model (Akeeb's seeding and code metrics): seed light
-    # cells into a dark tiling on the hexagonal sorting sibling with `InsertUntil`, run it, and
-    # read the result with the analysis functions on the hex lattice.
+@testitem "InsertUntil and Analysis on the hexagonal sorting sibling" setup = [
+    SiblingsSetup,
+] tags = [
+    :pottsmodels, :core,
+] begin
+    # The Akeeb analysis primitives outside their first model (Akeeb's seeding and code
+    # metrics): seed light cells into a dark tiling on the hexagonal sorting sibling with
+    # `InsertUntil`, run it, and read the result with the analysis functions on the hex
+    # lattice.
     @testset "InsertUntil and Analysis on the hexagonal sorting sibling" begin
         sys = HexSorting(; name = :hs)
         l = overlay(
             Tiling((5, 5); region = (1:30, 1:15), kinds = [:dark]),
-            InsertUntil(:light; into = [:dark], fraction = 1 // 3, seed = 11, misses = :count, region = (1:30, 1:20))
+            InsertUntil(
+                :light; into = [:dark], fraction = 1 // 3,
+                seed = 11, misses = :count, region = (1:30, 1:20)
+            )
         )
-        op, report = Base.CoreLogging.with_logger(() -> layout(l, sys; report = true), Base.CoreLogging.NullLogger())
+        op, report = Base.CoreLogging.with_logger(
+            () -> layout(l, sys; report = true), Base.CoreLogging.NullLogger()
+        )
         t = only(r for r in report if r.type === :InsertUntil)
         ks = last(op[2])
         @test count(==(:light), ks) == t.painted && t.painted + t.misses == t.counted
-        @test 3 * t.counted >= 18 + t.counted                   # 18 dark tiles: at least 9 counted
+        # 18 dark tiles: at least 9 counted
+        @test 3 * t.counted >= 18 + t.counted
         prob = PottsProblem(sys, op, (0, 20))
         @test selfcheck(prob) < 1.0e-9
         u = solve(prob, SequentialCPM()).u[end]
@@ -519,34 +622,55 @@ end
         @test all(c -> PottsModels.Analysis.reachable(g, [first(c)]) == c, comps)
         com = PottsModels.Analysis.centroids(σ)
         @test all(c -> all(isfinite, com[c]), eachindex(g))
-        # negative control: square Moore(1) adjacency sees the axial (1, 1) diagonal that hex does not
+        # negative control: square Moore(1) adjacency sees the axial (1, 1) diagonal that
+        # hex does not
         @test PottsModels.Analysis.cell_graph(σ; neighborhood = Moore(1)) != g
     end
 end
 
-@testitem "boundary_lengths and anneal on the hexagonal sorting sibling" setup = [SiblingsSetup] tags = [:pottsmodels, :core] begin
-    # The boundary anneal (D-139) outside its first model (Graner–Glazier's sorting analysis): the boundary
-    # split by kind pair and the annealed copy on the hexagonal sorting sibling (Hex(2) contacts,
-    # a volume term besides the contacts).
+@testitem "boundary_lengths and anneal on the hexagonal sorting sibling" setup = [
+    SiblingsSetup,
+] tags = [
+    :pottsmodels, :core,
+] begin
+    # The boundary anneal (D-139) outside its first model (Graner–Glazier's sorting
+    # analysis): the boundary split by kind pair and the annealed copy on the hexagonal
+    # sorting sibling (Hex(2) contacts, a volume term besides the contacts).
     @testset "boundary_lengths and anneal on the hexagonal sorting sibling" begin
-        σ = zeros(Int32, 30, 30); n = 0
+        σ = zeros(Int32, 30, 30)
+        n = 0
         for i in 6:5:21, j in 6:5:21
-            n += 1; σ[i:(i + 3), j:(j + 3)] .= n
+            n += 1
+            σ[i:(i + 3), j:(j + 3)] .= n
         end
-        prob = PottsProblem(HexSorting(; name = :hb), [ownership => σ, kind => [isodd(k) ? :dark : :light for k in 1:n]], (0, 30); seed = 3)
+        prob = PottsProblem(
+            HexSorting(; name = :hb),
+            [ownership => σ, kind => [isodd(k) ? :dark : :light for k in 1:n]],
+            (0, 30); seed = 3
+        )
         L = Potts.boundary_lengths(prob)
-        @test Set(keys(L)) == Set([(:medium, :medium), (:medium, :dark), (:medium, :light), (:dark, :dark), (:dark, :light), (:light, :light)])
-        @test L[(:medium, :medium)] == 0 && all(>(0), (L[k] for k in keys(L) if k != (:medium, :medium)))
-        # Hex(2) bonds include second neighbours: more than the Hex(1) boundary of the same state
+        @test Set(keys(L)) == Set(
+            [
+                (:medium, :medium), (:medium, :dark), (:medium, :light),
+                (:dark, :dark), (:dark, :light), (:light, :light),
+            ]
+        )
+        @test L[(:medium, :medium)] == 0 &&
+            all(>(0), (L[k] for k in keys(L) if k != (:medium, :medium)))
+        # Hex(2) bonds include second neighbours: more than the Hex(1) boundary of the same
+        # state
         @test sum(values(L)) > sum(values(Potts.boundary_lengths(prob; relation = Hex(1))))
-        # the 4×4 blocks are far from the T = 0 minimum (V₀ = 20, rough Hex(2) edges): annealing lowers H
+        # the 4×4 blocks are far from the T = 0 minimum (V₀ = 20, rough Hex(2) edges):
+        # annealing lowers H
         a = Potts.anneal(prob, 8; seed = 1)
         @test total_energy(prob, a) < total_energy(prob)
-        @test a.ownership == Potts.anneal(prob, 8; seed = 1).ownership && prob.u0.ownership == σ
+        @test a.ownership == Potts.anneal(prob, 8; seed = 1).ownership &&
+            prob.u0.ownership == σ
         # negative control: no MCS, no change
         @test total_energy(prob, Potts.anneal(prob, 0)) == total_energy(prob)
-        # no drive, offset 0: H never rises along the annealing (the same seed extends the same
-        # path; a killing copy pays λ·V₀² > 0 more in ΔH than in H, so it also lowers H)
+        # no drive, offset 0: H never rises along the annealing (the same seed extends the
+        # same path; a killing copy pays λ·V₀² > 0 more in ΔH than in H, so it also lowers
+        # H)
         Hs = [total_energy(prob, Potts.anneal(prob, m; seed = 4)) for m in (0, 1, 2, 4, 8)]
         @test issorted(Hs; rev = true) && Hs[end] < Hs[1]
         # and from a state the run has moved (T = 4), H falls again
@@ -555,10 +679,15 @@ end
     end
 end
 
-@testitem "Voronoi and RandomPoints on the periodic hexagonal sorting sibling" setup = [SiblingsSetup] tags = [:pottsmodels, :core] begin
-    # The Voronoi and shape primitives outside their first model (the Graner–Glazier aggregate on a closed square
-    # lattice): a centroidal `Voronoi` of `RandomPoints` filling the periodic hexagonal sorting
-    # sibling, wrapping through its edges, with kinds cycled; it runs and its cells start compact.
+@testitem "Voronoi and RandomPoints on the periodic hexagonal sorting sibling" setup = [
+    SiblingsSetup,
+] tags = [
+    :pottsmodels, :core,
+] begin
+    # The Voronoi and shape primitives outside their first model (the Graner–Glazier
+    # aggregate on a closed square lattice): a centroidal `Voronoi` of `RandomPoints`
+    # filling the periodic hexagonal sorting sibling, wrapping through its edges, with kinds
+    # cycled; it runs and its cells start compact.
     @testset "Voronoi and RandomPoints on the periodic hexagonal sorting sibling" begin
         sys = HexSorting(; name = :hs)
         v = Voronoi(RandomPoints(45; seed = 3); lloyd = 20, kinds = [:dark, :light])
@@ -569,12 +698,15 @@ end
         @test all(>(0), σ0) && count(==(:dark), ks) == 23
         sd(a) = sqrt(sum(abs2, a .- mean(a)) / (length(a) - 1))
         areas = [count(==(c), σ0) for c in 1:45]
-        @test sum(areas) == 900 && sd(areas) < 4                          # 20 sites each, SD ≈ 3 (seeds 1–5)
-        # cells cross the periodic edges (the wrap is used), yet every cell is one Hex(1) piece
+        # 20 sites each, SD ≈ 3 (seeds 1–5)
+        @test sum(areas) == 900 && sd(areas) < 4
+        # cells cross the periodic edges (the wrap is used), yet every cell is one Hex(1)
+        # piece
         @test any(c -> c in σ0[1, :] && c in σ0[30, :], 1:45)
         hex1 = ((1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1))
         nb(q, o) = CartesianIndex(mod1(q[1] + o[1], 30), mod1(q[2] + o[2], 30))
-        function pieces(σ, c)                     # Hex(1) pieces of cell c, wrapping on both axes
+        # Hex(1) pieces of cell c, wrapping on both axes
+        function pieces(σ, c)
             idx = findall(==(c), σ)
             seen, st = Set([idx[1]]), [idx[1]]
             while !isempty(st)
@@ -588,35 +720,60 @@ end
         end
         @test all(c -> pieces(σ0, c) == 1, 1:45)
         # control: a site of another cell, not touching cell 1, given to cell 1 splits it
-        far = findfirst(x -> σ0[x] != 1 && all(o -> σ0[nb(x, o)] != 1, hex1), CartesianIndices(σ0))
-        split = copy(σ0); split[far] = 1
+        far = findfirst(
+            x -> σ0[x] != 1 && all(o -> σ0[nb(x, o)] != 1, hex1),
+            CartesianIndices(σ0)
+        )
+        split = copy(σ0)
+        split[far] = 1
         @test pieces(split, 1) == 2
         # negative control: without Lloyd the areas spread more
         σr = layout(remake(v; lloyd = 0), sys)[1].second
         ar = [count(==(c), σr) for c in 1:45]
-        @test sd(ar) > 2sd(areas)                                         # SD ≈ 8.5–11 without
+        # SD ≈ 8.5–11 without
+        @test sd(ar) > 2sd(areas)
         prob = PottsProblem(sys, op, (0, 20))
         @test selfcheck(prob) < 1.0e-9
         u = solve(prob, SequentialCPM()).u[end]
-        @test count(>(0), unique(u.ownership)) >= 30          # the tessellation runs (a few small cells shrink away)
+        # the tessellation runs (a few small cells shrink away)
+        @test count(>(0), unique(u.ownership)) >= 30
     end
 end
 
-@testitem "Eden and Splits on the periodic hexagonal sorting sibling" setup = [SiblingsSetup] tags = [:pottsmodels, :core] begin
+@testitem "Eden and Splits on the periodic hexagonal sorting sibling" setup = [
+    SiblingsSetup,
+] tags = [
+    :pottsmodels, :core,
+] begin
     @testset "Eden and Splits on the periodic hexagonal sorting sibling" begin
         sys = HexSorting(; name = :he)
         seeds = RandomPoints(60; replace = true, seed = 2)
         distinct = length(unique(Potts.points(seeds, sys)))
-        @test distinct < 60                                               # this seed draws a coinciding pair
-        denovo(sf) = Eden(seeds; rounds = 4, kinds = [:dark, :light], seed = 7, shortfall = sf)
-        @test_throws ArgumentError layout(denovo(:error), sys)            # merged seeds are a shortfall
+        # this seed draws a coinciding pair
+        @test distinct < 60
+        function denovo(sf)
+            return Eden(
+                seeds; rounds = 4, kinds = [:dark, :light], seed = 7, shortfall = sf
+            )
+        end
+        # merged seeds are a shortfall
+        @test_throws ArgumentError layout(denovo(:error), sys)
         op, report = layout(denovo(:allow), sys; report = true)
         row = only(report)
-        @test (row.type, row.requested, row.painted, row.misses, row.dropped) == (:Eden, 60, distinct, 60 - distinct, 0)
+        @test (row.type, row.requested, row.painted, row.misses, row.dropped) ==
+            (:Eden, 60, distinct, 60 - distinct, 0)
         σ0, ks = op[1].second, op[2].second
-        @test maximum(σ0) == distinct && ks == [isodd(c) ? :dark : :light for c in 1:distinct]
-        # every cell is one piece under the growth neighbourhood (Hex(2), wrapping on both axes)
-        hex2 = [Tuple(Int.(o)) for o in CorePotts.relation(Hex(2), Potts.core_lattice(Potts._layout_spec(sys))).offsets]
+        @test maximum(σ0) == distinct &&
+            ks == [isodd(c) ? :dark : :light for c in 1:distinct]
+        # every cell is one piece under the growth neighbourhood (Hex(2), wrapping on both
+        # axes)
+        hex2 = [
+            Tuple(Int.(o))
+                for o in CorePotts.relation(
+                    Hex(2),
+                    Potts.core_lattice(Potts._layout_spec(sys))
+                ).offsets
+        ]
         nb(q, o) = CartesianIndex(mod1(q[1] + o[1], 30), mod1(q[2] + o[2], 30))
         function onepiece(σ, c, offs)
             idx = findall(==(c), σ)
@@ -638,15 +795,26 @@ end
         nblob = count(>(0), layout(blob, sys)[1].second)
         sop, srep = layout(Splits(blob, 3; splits = :allow), sys; report = true)
         σs = sop[1].second
-        @test (only(srep).requested, only(srep).painted) == (8, 8) && count(>(0), σs) == nblob
-        @test any(c -> c in σs[1, :] && c in σs[30, :], 1:8) || any(c -> c in σs[:, 1] && c in σs[:, 30], 1:8)
+        @test (only(srep).requested, only(srep).painted) == (8, 8) &&
+            count(>(0), σs) == nblob
+        @test any(c -> c in σs[1, :] && c in σs[30, :], 1:8) ||
+            any(c -> c in σs[:, 1] && c in σs[:, 30], 1:8)
         # the cut is translation-equivariant through the wrap: the blob's sites moved to the
-        # centre divide into the moved cells. (The unwrap takes each site's image nearest the
-        # cell's first site, so this holds while the blob spans less than half the lattice.)
+        # centre divide into the moved cells. (The unwrap takes each site's image nearest
+        # the cell's first site, so this holds while the blob spans less than half the
+        # lattice.)
         S = Tuple.(findall(>(0), layout(blob, sys)[1].second))
         moved = [(mod1(x[1] + 15, 30), mod1(x[2] + 15, 30)) for x in S]
-        @test all(d -> maximum(getindex.(moved, d)) - minimum(getindex.(moved, d)) < 15, 1:2)
-        cut(sites, target) = layout(Splits(SibSites(sites), 3; splits = :allow), target)[1].second
+        @test all(
+            d -> maximum(getindex.(moved, d)) - minimum(getindex.(moved, d)) < 15,
+            1:2
+        )
+        function cut(sites, target)
+            return layout(
+                Splits(SibSites(sites), 3; splits = :allow),
+                target
+            )[1].second
+        end
         @test circshift(cut(S, sys), (15, 15)) == cut(moved, sys)
         # negative control: on a closed lattice the corner pieces are cut in index space
         closed = Lattice((30, 30); geometry = Hexagonal(), boundary = Closed())
@@ -659,39 +827,71 @@ end
     end
 end
 
-@testitem "connectivity vocabulary primitives outside their first model" setup = [SiblingsSetup] tags = [:pottsmodels, :core] begin
+@testitem "connectivity vocabulary primitives outside their first model" setup = [
+    SiblingsSetup,
+] tags = [
+    :pottsmodels, :core,
+] begin
     @testset "connectivity vocabulary primitives outside their first model" begin
         hex = ((1, 0), (0, 1), (-1, 1), (-1, 0), (0, -1), (1, -1))
-        σ = zeros(Int32, 24, 24); σ[9:16, 9:16] .= 1
+        σ = zeros(Int32, 24, 24)
+        σ[9:16, 9:16] .= 1
         # splits or holes (hex is self-dual: one adjacency for the cell and the background)
-        broken(u) = (c = sib_comps(u.ownership .== 1, hex); b = sib_comps(u.ownership .!= 1, hex); c[1] > 1 || b[1] - b[2] > 0)
-        runs(simple) = [
-            solve(
-                PottsProblem(HexSimpleCell(; name = :h, simple), [ownership => σ, kind => [:cell]], (0, 60); seed),
-                SequentialCPM(); saveat = 10:10:60
-            ) for seed in 1:3
-        ]
-        p = PottsProblem(HexSimpleCell(; name = :h), [ownership => σ, kind => [:cell]], (0, 1))
+        function broken(u)
+            c = sib_comps(u.ownership .== 1, hex)
+            b = sib_comps(u.ownership .!= 1, hex)
+            return c[1] > 1 || b[1] - b[2] > 0
+        end
+        function runs(simple)
+            return [
+                solve(
+                    PottsProblem(
+                        HexSimpleCell(; name = :h, simple),
+                        [ownership => σ, kind => [:cell]], (0, 60); seed
+                    ),
+                    SequentialCPM(); saveat = 10:10:60
+                ) for seed in 1:3
+            ]
+        end
+        p = PottsProblem(
+            HexSimpleCell(; name = :h), [ownership => σ, kind => [:cell]], (
+                0, 1,
+            )
+        )
         @test selfcheck(p) < 1.0e-9
         held, free = runs(true), runs(false)
-        @test sum(sol -> count(broken, sol.u), held) == 0                # Simple(): no split, no hole
-        @test sum(sol -> count(broken, sol.u), free) > 0                 # control: without it, some
-        @test all(sol -> sol.u[end].ownership != σ, held)                         # the cell moved
-        # 3D: `connected(old) | (volume[old] == 1)` keeps the cell face-connected. `Local()` tests
-        # only a losing cell, so gains must be face-connected by construction: VonNeumann(1) copies
-        # (with Moore(1) copies a medium loser lets a corner-only gain detach a piece)
+        # Simple(): no split, no hole
+        @test sum(sol -> count(broken, sol.u), held) == 0
+        # control: without it, some
+        @test sum(sol -> count(broken, sol.u), free) > 0
+        # the cell moved
+        @test all(sol -> sol.u[end].ownership != σ, held)
+        # 3D: `connected(old) | (volume[old] == 1)` keeps the cell face-connected. `Local()`
+        # tests only a losing cell, so gains must be face-connected by construction:
+        # VonNeumann(1) copies (with Moore(1) copies a medium loser lets a corner-only gain
+        # detach a piece)
         face3 = ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1))
-        σ3 = zeros(Int32, 10, 10, 10); σ3[4:6, 4:6, 4:6] .= 1
-        split3(rule) = sum(1:2) do seed
-            sol = solve(
-                PottsProblem(
-                    CubicConnectedOrDead(; name = :c, connected_rule = rule), [ownership => σ3, kind => [:cell]],
-                    (0, 40); seed
-                ), SequentialCPM(; proposal = VonNeumann(1)); saveat = 5:5:40
-            )
-            count(u -> sib_comps(u.ownership .== 1, face3)[1] > 1, sol.u)
+        σ3 = zeros(Int32, 10, 10, 10)
+        σ3[4:6, 4:6, 4:6] .= 1
+        function split3(rule)
+            return sum(1:2) do seed
+                sol = solve(
+                    PottsProblem(
+                        CubicConnectedOrDead(; name = :c, connected_rule = rule), [
+                            ownership => σ3, kind => [:cell],
+                        ],
+                        (0, 40); seed
+                    ), SequentialCPM(; proposal = VonNeumann(1)); saveat = 5:5:40
+                )
+                count(u -> sib_comps(u.ownership .== 1, face3)[1] > 1, sol.u)
+            end
         end
-        @test selfcheck(PottsProblem(CubicConnectedOrDead(; name = :c), [ownership => σ3, kind => [:cell]], (0, 1))) < 1.0e-9
+        @test selfcheck(
+            PottsProblem(
+                CubicConnectedOrDead(; name = :c),
+                [ownership => σ3, kind => [:cell]], (0, 1)
+            )
+        ) < 1.0e-9
         @test split3(true) == 0
         @test split3(false) > 0                                          # control
     end

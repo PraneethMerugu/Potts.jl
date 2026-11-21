@@ -21,49 +21,71 @@ ModelingToolkitBase, LatticePDE`.
 module LatticePDE
 
 using DomainSets: Interval, leftendpoint, rightendpoint
-using LatticeFields.IR: F16, Grid, Program, ProgramBuilder, Coef, FaceRule, NodeValueRule, MaskDecl,
-                        Access, Sel, Scalar, Bpolicy, Ex, field!, rule!, kernel, add!, program,
-                        node!, constant!, param!, runtime!, coord!, table!, call!, cast!, arith!,
-                        compare!, select!, cond!, load!, access!, store!, isfloat, CALLS,
-                        F32, F64, I32, U8, U32, REAL, BOOL, RESOLVE, CLAMP, INSIDE, ZERO, PERSIGMA,
-                        ADD, MUL, NEG, DIV, MIN, MAX, ABS, SQRT, EXP, LOG, POWI, EQ, LT, LE,
-                        NOT, AND, OR, INSIDE_OP, HEX, DomainEdgeRule, Level, STATIC, RESTRICT, Space, FULL
+using LatticeFields.IR: F16, Grid, Program, ProgramBuilder, Coef, FaceRule, NodeValueRule,
+    MaskDecl,
+    Access, Sel, Scalar, Bpolicy, Ex, field!, rule!, kernel, add!,
+    program,
+    node!, constant!, param!, runtime!, coord!, table!, call!, cast!,
+    arith!,
+    compare!, select!, cond!, load!, access!, store!, isfloat, CALLS,
+    F32, F64, I32, U8, U32, REAL, BOOL, RESOLVE, CLAMP, INSIDE, ZERO,
+    PERSIGMA,
+    ADD, MUL, NEG, DIV, MIN, MAX, ABS, SQRT, EXP, LOG, POWI, EQ, LT, LE,
+    NOT, AND, OR, INSIDE_OP, HEX, DomainEdgeRule, Level, STATIC,
+    RESTRICT, Space, FULL
 using CommonSolve: solve, init, step!, solve!
 using KernelAbstractions: KernelAbstractions
 using LatticeFields: Exec, Problems, isfatal
-using LatticeFields.Solvers: LatticePCG, LatticeGMRES, LatticeMultigrid, LatticeBlockSolve, VCycle
-using LatticeFields.Compile: CompileOptions, fingerprint_text, fuse_update, promote_dual, primal
+using LatticeFields.Solvers: LatticePCG, LatticeGMRES, LatticeMultigrid, LatticeBlockSolve,
+    VCycle
+using LatticeFields.Compile: CompileOptions, fingerprint_text, fuse_update, promote_dual,
+    primal
 using LatticeFields.IR: fieldid, RESOLVE, degenerate, leveldims, sitecoefs
 using LatticeFields.Problems: FieldProblem, FieldSlot, LatticeIndex,
-    ExplicitEuler, ExplicitMap, LatticeNewton, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, RT_DT,
-    substep_counts, steady_fields, field_series, field_jacobian_sparsity,
-                              field_report
-using ModelingToolkitBase: ModelingToolkitBase, PDESystem, Pre, ShiftIndex, Shift, Hold, Sample, get_bcs, get_domain, get_dvs,
+    ExplicitEuler, ExplicitMap, LatticeNewton, BackwardEuler,
+    CrankNicolson, BDF2, QuasiSteady, FieldGroups, RT_DT,
+    substep_counts, steady_fields, field_series,
+    field_jacobian_sparsity,
+    field_report
+using ModelingToolkitBase: ModelingToolkitBase, PDESystem, Pre, ShiftIndex, Shift, Hold,
+    Sample, get_bcs, get_domain, get_dvs,
     get_eqs, get_initial_conditions, get_ivs, get_ps, get_systems
+using PrecompileTools: @setup_workload, @compile_workload
 using SciMLBase: AbstractDiscretization, NullParameters, remake
 using SymbolicIndexingInterface: getp, getu, setp, parameter_index
-import SciMLBase: discretize, symbolic_discretize
-using Symbolics: Symbolics, Differential, Equation, Num, VarDomainPairing, @register_symbolic,
-                 unwrap, substitute
+using Symbolics: Symbolics, Differential, Equation, Num, VarDomainPairing,
+    @register_symbolic,
+    unwrap, substitute
 using SymbolicUtils: SymbolicUtils, arguments, iscall, operation, unwrap_const
 using SymbolicUtils.Code: toexpr
 using TermInterface: TermInterface
 
-public Δ, pdesystem, pdesystem_refusal, is_crossgrid_key, operand_reads, LatticeCutField, euler_update, bound_parts, StabilityBound, lower_group, DeferredBound, DeferredOperator, OPERATOR_BUILDS, resolve_bound, lowers_call, check_one_kind, velocity_terms, as_written,
+import SciMLBase: discretize, symbolic_discretize
+
+public Δ, pdesystem, pdesystem_refusal, is_crossgrid_key, operand_reads, LatticeCutField,
+    euler_update, bound_parts, StabilityBound, lower_group, DeferredBound,
+    DeferredOperator, OPERATOR_BUILDS, resolve_bound, lowers_call, check_one_kind,
+    velocity_terms, as_written,
     derivation, VCycle, steady_rows, steady_form, steady_choice, steady_sign
-export laplacian, DivKGrad, Advect, AbstractAdvectionScheme, Upwind1, value_at, ismember, masked, step_index
-export LatticePlacement, LatticeStorage, LatticeLevel, Coarse, LatticeSpacing, LatticeInputName
+export laplacian, DivKGrad, Advect, AbstractAdvectionScheme, Upwind1, value_at, ismember,
+    masked, step_index
+export LatticePlacement, LatticeStorage, LatticeLevel, Coarse, LatticeSpacing,
+    LatticeInputName
 export get_lattice_placement, get_lattice_storage, get_lattice_level, get_lattice_spacing,
     get_lattice_input_name
 export vocabulary_issues, check_vocabulary
 export LatticeDiscretization, FiniteVolume, CompiledField, discretize, symbolic_discretize,
-       parse_bcs, linearity, Grid, HEX, Interval, lattice_domain
-export ExplicitEuler, ExplicitMap, LatticeNewton, BackwardEuler, CrankNicolson, BDF2, QuasiSteady, FieldGroups, solve, init, step!, solve!, stability_bound,
-       substep_counts, steady_fields, field_series, field_report
-export LatticePCG, LatticeGMRES, LatticeMultigrid   # the linear solvers (LinearSolve algorithms; `linsolve = …`); `VCycle` is public
-export LatticeBlockSolve                          # coupled block preconditioner (LinearSolve `precs` function)
+    parse_bcs, linearity, Grid, HEX, Interval, lattice_domain
+export ExplicitEuler, ExplicitMap, LatticeNewton, BackwardEuler, CrankNicolson, BDF2,
+    QuasiSteady, FieldGroups, solve, init, step!, solve!, stability_bound,
+    substep_counts, steady_fields, field_series, field_report
+# the linear solvers (LinearSolve algorithms; `linsolve = …`); `VCycle` is public
+export LatticePCG, LatticeGMRES, LatticeMultigrid
+# coupled block preconditioner (LinearSolve `precs` function)
+export LatticeBlockSolve
 export field_jacobian_sparsity              # the Jacobian's pattern
-export remake, getp, getu, setp            # the routes its messages give (SciMLBase, SymbolicIndexingInterface)
+# the routes its messages give (SciMLBase, SymbolicIndexingInterface)
+export remake, getp, getu, setp
 
 # ---------------------------------------------------------------------------------------
 # Field operators: opaque terms, lowered by the discretizer and never evaluated here
@@ -76,7 +98,10 @@ lowering it is `DivKGrad` with `K ≡ 1`. `Δ` is the same function, for equatio
 mathematical notation (public, not exported).
 """
 function laplacian end
-laplacian(x) = throw(ArgumentError("`laplacian` is symbolic-only: apply it inside a `PDESystem` equation and discretize with `LatticePDE.discretize`"))
+function laplacian(x)
+    throw(ArgumentError("`laplacian` is symbolic-only: apply it inside a `PDESystem` \
+        equation and discretize with `LatticePDE.discretize`"))
+end
 @register_symbolic laplacian(x)
 """
     Δ
@@ -98,12 +123,19 @@ arguments; the face mean is an option of the operator, kept through `substitute`
 struct DivKGrad
     mean::Symbol
     function DivKGrad(mean::Symbol)
-        mean in FACE_MEANS || throw(ArgumentError("DivKGrad: the face mean must be one of " *
-                                                  "$(join(repr.(FACE_MEANS), ", ")); got $(repr(mean))"))
+        mean in FACE_MEANS || throw(
+            ArgumentError(
+                "DivKGrad: the face mean must be one of " *
+                    "$(join(repr.(FACE_MEANS), ", ")); got $(repr(mean))"
+            )
+        )
         return new(mean)
     end
 end
-(op::DivKGrad)(K, c) = throw(ArgumentError("`DivKGrad($(repr(op.mean)))` is symbolic-only: apply it inside a `PDESystem` equation and discretize with `LatticePDE.discretize`"))
+function (op::DivKGrad)(K, c)
+    throw(ArgumentError("`DivKGrad($(repr(op.mean)))` is symbolic-only: apply it inside a \
+        `PDESystem` equation and discretize with `LatticePDE.discretize`"))
+end
 @register_symbolic (op::DivKGrad)(K, c)
 
 """Discretization scheme of an [`Advect`](@ref) term."""
@@ -120,7 +152,10 @@ component, or the velocity array). `scheme` is an [`AbstractAdvectionScheme`](@r
 struct Advect{S <: AbstractAdvectionScheme}
     scheme::S
 end
-(op::Advect)(u, c) = throw(ArgumentError("`Advect` is symbolic-only: apply it inside a `PDESystem` equation and discretize with `LatticePDE.discretize`"))
+function (op::Advect)(u, c)
+    throw(ArgumentError("`Advect` is symbolic-only: apply it inside a `PDESystem` \
+        equation and discretize with `LatticePDE.discretize`"))
+end
 # One registration for a velocity component and the velocity array: SymbolicUtils 4 gives
 # scalar and array symbolics one `BasicSymbolic` type, so two registrations (`u` and
 # `u::AbstractVector`) define the same methods twice, an error under precompilation.
@@ -134,9 +169,10 @@ end
     value_at(T, k)
     value_at(J, a, b)
 
-`value_at(T, k)`: entry `k` of the kind table `T` (`value_at(Dk, kindₛ)`), or the value of `c` at an
-explicit site or cell `s` (`value_at(c, target)`). Never index an array parameter with a symbolic
-input (`Dk[kindₛ]`): `mtkcompile(; inputs)` then keeps the input as an unknown.
+`value_at(T, k)`: entry `k` of the kind table `T` (`value_at(Dk, kindₛ)`), or the value of
+`c` at an explicit site or cell `s` (`value_at(c, target)`). Never index an array parameter
+with a symbolic input (`Dk[kindₛ]`): `mtkcompile(; inputs)` then keeps the input as an
+unknown.
 
 A table read follows the lattice kernel: index 0 reads 0 (an input value 0 reads no entry),
 and any other index is clamped into `1:length(T)` (an index above the table reads its last
@@ -146,9 +182,9 @@ interval of the index expression over the declared bounds of its inputs
 input the host writes (`discretize(…; inputs)`, `remake(prob; inputs)`, `integ[k] = K`),
 over its current values. Index 0 is evaluated only when that interval holds 0.
 
-`value_at(J, a, b)`: entry `(a, b)` of the pair table `J` (`value_at(J, kindₛ, kindₛ′)`). It reads
-as the two-argument form does along each axis: index 0 in either argument reads 0, and each
-index is clamped into its axis (`1:size(J, 1)`, `1:size(J, 2)`).
+`value_at(J, a, b)`: entry `(a, b)` of the pair table `J` (`value_at(J, kindₛ, kindₛ′)`). It
+reads as the two-argument form does along each axis: index 0 in either argument reads 0, and
+each index is clamped into its axis (`1:size(J, 1)`, `1:size(J, 2)`).
 
 With two or more integer inputs (for example the two kinds of a pair table read),
 `mtkcompile(sys; inputs = [a, b])` can fail with `AssertionError: last_idx <= idx` in
@@ -156,27 +192,51 @@ ModelingToolkitBase `complete` (MTKBase 1.77): it requires the inputs in its own
 parameter order, which is hash order and so depends on the names and the machine. Give the
 inputs in the reverse order (`inputs = [b, a]`).
 """
-value_at(T::AbstractArray{<:Union{Integer, AbstractFloat}}, k::Union{Integer, AbstractFloat}) =
-    k == 0 ? zero(eltype(T)) : T[clamp(Int(k), 1, length(T))]
+function value_at(
+        T::AbstractArray{<:Union{Integer, AbstractFloat}}, k::Union{
+            Integer, AbstractFloat,
+        }
+    )
+    return k == 0 ? zero(eltype(T)) : T[clamp(Int(k), 1, length(T))]
+end
 # One registration for the table and the site forms (see `Advect`). The index is any `Real`
 # term: a kind or a cell id may be a `Real`-typed input (a CPM built-in), and an integer
 # literal reads that entry (`value_at(Dk, 2)`; `value_at(Dk, 0)` reads 0, as in the kernel).
 @register_symbolic value_at(T::Union{Real, AbstractVector}, k::Real)
 # literal indices into symbolic tables and site values (the registration covers a symbolic
 # index only)
-value_at(T::Union{Num, Symbolics.Arr}, k::Union{Integer, AbstractFloat}) = value_at(T, Num(k))
+function value_at(T::Union{Num, Symbolics.Arr}, k::Union{Integer, AbstractFloat})
+    return value_at(T, Num(k))
+end
 
 # the pair table form
-value_at(T::AbstractArray{<:Union{Integer, AbstractFloat}}, k::Union{Integer, AbstractFloat}, kp::Union{Integer, AbstractFloat}) =
-    k == 0 || kp == 0 ? zero(eltype(T)) : T[clamp(Int(k), 1, size(T, 1)), clamp(Int(kp), 1, size(T, 2))]
+function value_at(
+        T::AbstractArray{<:Union{Integer, AbstractFloat}},
+        k::Union{Integer, AbstractFloat}, kp::Union{Integer, AbstractFloat}
+    )
+    return if k == 0 || kp == 0
+        zero(eltype(T))
+    else
+        T[clamp(Int(k), 1, size(T, 1)), clamp(Int(kp), 1, size(T, 2))]
+    end
+end
 # (`false`: the first registration's shape rule covers every arity; a second would overwrite
 # it, so the result type of this arity is declared here)
 @register_symbolic value_at(T::AbstractMatrix, k::Real, kp::Real) false
 SymbolicUtils.promote_symtype(::typeof(value_at), ::Type, ::Type, ::Type) = Real
-value_at(T::Symbolics.Arr, k::Union{Integer, AbstractFloat}, kp::Union{Integer, AbstractFloat}) = value_at(T, Num(k), Num(kp))
+function value_at(
+        T::Symbolics.Arr, k::Union{Integer, AbstractFloat}, kp::Union{
+            Integer, AbstractFloat,
+        }
+    )
+    return value_at(T, Num(k), Num(kp))
+end
 
-# unit inference (MTK `get_unit`): a read has the unit of what it reads, `laplacian(c)` that of `c`
-ModelingToolkitBase.get_unit(::Union{typeof(value_at), typeof(laplacian)}, args) = ModelingToolkitBase.get_unit(args[1])
+# unit inference (MTK `get_unit`): a read has the unit of what it reads, `laplacian(c)` that
+# of `c`
+function ModelingToolkitBase.get_unit(::Union{typeof(value_at), typeof(laplacian)}, args)
+    return ModelingToolkitBase.get_unit(args[1])
+end
 
 """
 `ismember(k, s)`: whether the integer `k` (a kind) is one of the tuple `s` of integer
@@ -192,24 +252,27 @@ ismember(k::Union{Integer, AbstractFloat}, s::Tuple) = Int(k) in s
 boundary conditions: `c` is held at `v` on the sites where `pred` holds. `pred` is a
 symbolic `Bool` term; arrays are written per component, `u[i] ~ masked(pred, v)`.
 """
-masked(p, v) = throw(
-    ArgumentError(
-        "`masked(pred, v)` is a symbolic boundary-condition marker; its predicate must be a " *
-            "symbolic Bool term such as `kindₛ == 3` or `ismember(kindₛ, (2, 3))`. A kind set " *
-            "written with `∈` (`kindₛ ∈ (2, 3)`, `kindₛ ∈ Set(…)`) is not a term: use `ismember`."
+function masked(p, v)
+    throw(
+        ArgumentError(
+            "`masked(pred, v)` is a symbolic boundary-condition marker; its predicate " *
+                "must be a symbolic Bool term such as `kindₛ == 3` or `ismember(kindₛ, " *
+                "(2, 3))`. A kind set written with `∈` (`kindₛ ∈ (2, 3)`, `kindₛ ∈ \
+                    Set(…)`) is not a term: use `ismember`."
+        )
     )
-)
+end
 @register_symbolic masked(p::Bool, v::Real)
 
 """
     step_index(t)
 
-The step index of the discretization's clock (`LatticeDiscretization(…; clock = τ)`), read in
-an equation of a system discretized with it: `k = 0` over the first period `τ` from the start
-of the time span, then `1`, `2`, … (`k` counts from `tspan[1]`, also after a `remake` of the
-span; a Potts model's `mcs` is the absolute MCS number instead: a span `(2, 5)` reads 2
-first). The owned steppers keep `k` as an integer and never step
-across a clock boundary, so `k` does not depend on `dt` or on the save times. A gate such as
+The step index of the discretization's clock (`LatticeDiscretization(…; clock = τ)`), read
+in an equation of a system discretized with it: `k = 0` over the first period `τ` from the
+start of the time span, then `1`, `2`, … (`k` counts from `tspan[1]`, also after a `remake`
+of the span; a Potts model's `mcs` is the absolute MCS number instead: a span `(2, 5)` reads
+2 first). The owned steppers keep `k` as an integer and never step across a clock boundary,
+so `k` does not depend on `dt` or on the save times. A gate such as
 `ifelse(step_index(t) >= 3, a, b)` is bounded through both arms; a factor that reads it
 (`(1 + ε * step_index(t)) * laplacian(c)`) is a term the stability bound cannot see (give
 `ExplicitEuler(; substeps = n)`). Refused without a declared clock. An OrdinaryDiffEq solver
@@ -219,21 +282,35 @@ lands on every boundary of the clock (a `tstop` at each, where the step index ch
 @parameters x y
 @variables c(..)
 eqs = [D(c(t, x, y)) ~ -c(t, x, y) + 0.1 * step_index(t)]
-prob = discretize(sys, LatticeDiscretization(Grid((16, 16)); clock = 1.0))   # `sys`: a PDESystem of `eqs`
+prob = discretize(sys, LatticeDiscretization(Grid((16, 16)); clock = 1.0))   # `sys`: a \
+PDESystem of `eqs`
 sol = solve(prob, ExplicitEuler(); dt = 0.25)       # 4 windows per step index
 ```
 """
-step_index(t::Real) = throw(ArgumentError("`step_index(t)` is the step index of a discretization's clock: it has a " *
-                                          "value only in an equation discretized with `LatticeDiscretization(…; clock = τ)`"))
+function step_index(t::Real)
+    throw(
+        ArgumentError(
+            "`step_index(t)` is the step index of a discretization's clock: it has a " *
+                "value only in an equation discretized with `LatticeDiscretization(…; \
+                    clock = τ)`"
+        )
+    )
+end
 @register_symbolic step_index(t::Real)
 
 # No operator here has a symbolic derivative: the field operators are lowered, never
 # expanded, and the CPM reads are piecewise constant in their kind arguments. A derivative
 # that reaches one of them is an error, not the unevaluated `D(op(…))` Symbolics returns by
 # default. (`expand_derivatives` asks only for arguments whose own derivative is nonzero.)
-_no_derivative(op) = throw(ArgumentError("LatticePDE operators are opaque to symbolic differentiation; " *
-                                         "`$op` has no derivative rule (differentiate the field before applying " *
-                                         "the operator, or keep the derivative outside it)"))
+function _no_derivative(op)
+    throw(
+        ArgumentError(
+            "LatticePDE operators are opaque to symbolic differentiation; " *
+                "`$op` has no derivative rule (differentiate the field before applying " *
+                "the operator, or keep the derivative outside it)"
+        )
+    )
+end
 Symbolics.@register_derivative laplacian(x) I _no_derivative(laplacian)
 Symbolics.@register_derivative (op::DivKGrad)(K, c) I _no_derivative(op)
 Symbolics.@register_derivative (op::Advect)(u, c) I _no_derivative(op)
@@ -244,8 +321,11 @@ Symbolics.@register_derivative masked(p, v) I _no_derivative(masked)
 Symbolics.@register_derivative step_index(t) I _no_derivative(step_index)
 
 # the registered operators of this vocabulary (the scans check their arguments)
-_isvocabulary(f) = f === laplacian || f isa DivKGrad || f isa Advect || f === value_at || f === ismember ||
-                   f === masked
+function _isvocabulary(f)
+    return f === laplacian || f isa DivKGrad || f isa Advect || f === value_at ||
+        f === ismember ||
+        f === masked
+end
 
 # ---------------------------------------------------------------------------------------
 # Metadata keys (`@variables c(..) [lattice_placement = …]`). MTK's own `tunable` is reused;
@@ -260,52 +340,63 @@ struct LatticeLevel end
 """
     Coarse(k)
 
-The grid of a field coarsened by `k` on every axis, `[lattice_level = Coarse(k)]` (`k` a power
-of two; `Coarse(1)` is the lattice itself). Each node of the coarse grid is a block of `k` sites
-per axis, its value the field over that block, with the spacing `k h`. Every axis of the lattice
-must have a size that `k` divides (an axis of size 1 is never coarsened). The field's equation,
-its conditions and its solver run on the coarse grid; the fine reads in its terms (the CPM
-inputs, a field of the lattice) are folded over each node's block:
+The grid of a field coarsened by `k` on every axis, `[lattice_level = Coarse(k)]` (`k` a
+power of two; `Coarse(1)` is the lattice itself). Each node of the coarse grid is a block of
+`k` sites per axis, its value the field over that block, with the spacing `k h`. Every axis
+of the lattice must have a size that `k` divides (an axis of size 1 is never coarsened). The
+field's equation, its conditions and its solver run on the coarse grid; the fine reads in
+its terms (the CPM inputs, a field of the lattice) are folded over each node's block:
 
-  - One rule holds for every fine read: a real, `Bool` or integer (`kind`) input and a field of
-    the lattice. The largest part of a term that reads a fine field and is not linear in it is
-    replaced by its mean over the block, with the fine reads at each site of the block. A sum
-    is folded per term, and the factors of a product that read no fine field stay outside. The
-    coarse field then receives the fine integral of the term: `max(g - gT, 0)`, `g / (K + g)`,
-    `value_at(S, kind) * g`, `kind == P` and `value_at(R, kind)` are restricted exactly. A condition used as
-    a number (in a sum, a product, a coefficient, the right side itself) is a 0/1 value and
-    folds by its mean: on a block a quarter of whose sites are of kind P, `kind == P` is 0.25,
-    so `(kind == P) + 0.5 (kind == Q)` and `value_at(R, kind)` agree, and `kind == 0` and `kind != 0`
-    sum to 1. A spatial operator of the coarse field is not folded; its coefficient is, at
-    each face (at a face of the box, the node's own block). A fine coefficient is the
-    arithmetic mean of its fine values over the block, not a homogenized coefficient (the
-    block's effective conductivity, which the arithmetic mean bounds from above).
+  - One rule holds for every fine read: a real, `Bool` or integer (`kind`) input and a field
+    of the lattice. The largest part of a term that reads a fine field and is not linear in
+    it is replaced by its mean over the block, with the fine reads at each site of the
+    block. A sum is folded per term, and the factors of a product that read no fine field
+    stay outside. The coarse field then receives the fine integral of the term:
+    `max(g - gT, 0)`, `g / (K + g)`, `value_at(S, kind) * g`, `kind == P` and
+    `value_at(R, kind)` are restricted exactly. A condition used as a number (in a sum, a
+    product, a coefficient, the right side itself) is a 0/1 value and folds by its mean: on
+    a block a quarter of whose sites are of kind P, `kind == P` is 0.25, so
+    `(kind == P) + 0.5 (kind == Q)` and `value_at(R, kind)` agree, and `kind == 0` and
+    `kind != 0` sum to 1. A spatial operator of the coarse field is not folded; its
+    coefficient is, at each face (at a face of the box, the node's own block). A fine
+    coefficient is the arithmetic mean of its fine values over the block, not a homogenized
+    coefficient (the block's effective conductivity, which the arithmetic mean bounds from
+    above).
   - A mask whose predicate reads fine values (`c ~ masked(kind == medium, v)`) blends.
     A node is masked, and holds `v`, when the predicate holds at every site of its block.
-    Elsewhere the node holds the value of its block's free part, the sites where the predicate
-    is false: the fine reads in its equation and its operator coefficients fold over the free
-    sites, so the free volume times a folded source is the fine sum of that source over the free
-    sites. On an irregular domain the fold's support is the free sites inside the domain: an
-    out-of-domain site is not where the equation holds, so it never enters a fold. A spatial operator acts on the node values as before: its flux is the operator's,
-    not a sum over the free children. The block's mean is `f v + (1 - f) c`, with `f` its
-    masked fraction.
+    Elsewhere the node holds the value of its block's free part, the sites where the
+    predicate is false: the fine reads in its equation and its operator coefficients fold
+    over the free sites, so the free volume times a folded source is the fine sum of that
+    source over the free sites. On an irregular domain the fold's support is the free sites
+    inside the domain: an out-of-domain site is not where the equation holds, so it never
+    enters a fold. A spatial operator acts on the node values as before: its flux is the
+    operator's, not a sum over the free children. The block's mean is `f v + (1 - f) c`,
+    with `f` its masked fraction.
 
 A term of a fine
 field that reads a coarse one reads the node whose block holds the site. A spatial operator
-(`laplacian`, `DivKGrad`, `Advect`, a raw flux `Dx(K * Dx(c))`) acts on its operand's own grid. In a row of
-another grid it is an aux field of the operand's grid that LatticePDE adds (named `laplacian(c)`), and the row
-reads it as it reads any field of that grid. The Laplacian of a coarse field in a fine row
-is the coarse Laplacian at the node of the site's block. The Laplacian of a fine field in a coarse
-row is the block mean of the fine Laplacian: the net flux through the faces of the block over its
-volume, so the sum over the blocks is the net flux through the faces of the box. A map's offset read of a coarse
-field moves by a multiple of `k` sites (`k * dx`). With an irregular `domain`, a node is in it
-when most of its block is (the Majority fold), and its edge is the coarse field's zero-flux edge.
+(`laplacian`, `DivKGrad`, `Advect`, a raw flux `Dx(K * Dx(c))`) acts on its operand's own
+grid. In a row of another grid it is an aux field of the operand's grid that LatticePDE adds
+(named `laplacian(c)`), and the row reads it as it reads any field of that grid. The
+Laplacian of a coarse field in a fine row is the coarse Laplacian at the node of the site's
+block. The Laplacian of a fine field in a coarse row is the block mean of the fine
+Laplacian: the net flux through the faces of the block over its volume, so the sum over the
+blocks is the net flux through the faces of the box. A map's offset read of a coarse field
+moves by a multiple of `k` sites (`k * dx`). With an irregular `domain`, a node is in it
+when most of its block is (the Majority fold), and its edge is the coarse field's zero-flux
+edge.
 """
 struct Coarse
     k::Int
     function Coarse(k::Integer)
-        (k >= 1 && ispow2(k)) || throw(ArgumentError(string("Coarse(", k, "): the factor is a power of two (1, 2, 4, 8, …), ",
-            "the number of lattice sites per axis in each node of the coarse grid")))
+        (k >= 1 && ispow2(k)) || throw(
+            ArgumentError(
+                string(
+                    "Coarse(", k, "): the factor is a power of two (1, 2, 4, 8, …), ",
+                    "the number of lattice sites per axis in each node of the coarse grid"
+                )
+            )
+        )
         return new(Int(k))
     end
 end
@@ -326,8 +417,8 @@ that generates its input variables (Potts' `kind__in`) sets it to the user's wor
 """
 struct LatticeInputName end
 """
-Metadata key `LatticeCutField` (`true`): an input that is the field of another group (such as
-the cut of `lower_group(…; fields)`) and that a spatial operator of the group reads. It
+Metadata key `LatticeCutField` (`true`): an input that is the field of another group (such
+as the cut of `lower_group(…; fields)`) and that a spatial operator of the group reads. It
 carries that field's face conditions, so its ghost values are those of its own group; its
 masks and initial values stay with its own group.
 """
@@ -348,7 +439,10 @@ get_lattice_storage(x) = _meta(x, LatticeStorage)
 get_lattice_level(x) = _meta(x, LatticeLevel)
 """`get_lattice_spacing(x)`: the axis of the spacing parameter `x`, or `nothing`."""
 get_lattice_spacing(x) = _meta(x, LatticeSpacing)
-"""`get_lattice_input_name(x)`: the `lattice_input_name` of the input `x` (or of its operation), or `nothing`."""
+"""
+`get_lattice_input_name(x)`: the `lattice_input_name` of the input `x` (or of its
+operation), or `nothing`.
+"""
 function get_lattice_input_name(x)
     n = _meta(x, LatticeInputName)
     n === nothing || return String(n)
@@ -386,7 +480,9 @@ already `0`, so the term is gone from the equation before any scan runs.
 vocabulary_issues(sys::PDESystem) = vocabulary_issues(get_eqs(sys), get_bcs(sys))
 function vocabulary_issues(eqs, bcs = Equation[])
     issues = String[]
-    for (where, list) in (("equation", eqs), ("boundary condition", bcs)), (i, e) in enumerate(list)
+    for (where, list) in (("equation", eqs), ("boundary condition", bcs)),
+            (i, e) in enumerate(list)
+
         _scan_entry!(issues, "$where $i", e)
     end
     return issues
@@ -401,8 +497,12 @@ when there are none.
 """
 function check_vocabulary(args...)
     issues = vocabulary_issues(args...)
-    isempty(issues) || throw(ArgumentError("LatticePDE refuses $(length(issues)) term" *
-                                           "$(length(issues) == 1 ? "" : "s"):\n  - " * join(issues, "\n  - ")))
+    isempty(issues) || throw(
+        ArgumentError(
+            "LatticePDE refuses $(length(issues)) term" *
+                "$(length(issues) == 1 ? "" : "s"):\n  - " * join(issues, "\n  - ")
+        )
+    )
     return nothing
 end
 
@@ -420,11 +520,15 @@ function _scan_side!(issues, where, x)
     x isa AbstractArray && (foreach(y -> _scan_side!(issues, where, y), x); return issues)
     v = unwrap_const(Symbolics.unwrap(x))
     if v isa VarDomainPairing
-        push!(issues, "$where: `$(v.variables) ∈ $(v.domain)` is a domain pairing (an interval), " *
-                      "not a kind set; $ISMEMBER_HINT")
+        push!(
+            issues, "$where: `$(v.variables) ∈ $(v.domain)` is a domain pairing (an " *
+                "interval), not a kind set; $ISMEMBER_HINT"
+        )
     elseif v isa Bool
-        push!(issues, "$where: the side is the literal `$v`; `kindₛ ∈ Set(…)` evaluates before a term " *
-                      "exists; $ISMEMBER_HINT")
+        push!(
+            issues, "$where: the side is the literal `$v`; `kindₛ ∈ Set(…)` evaluates " *
+                "before a term exists; $ISMEMBER_HINT"
+        )
     elseif v isa AbstractArray
         foreach(y -> _scan_side!(issues, where, y), v)
     else
@@ -440,16 +544,22 @@ function _scan_term!(issues, where, u)
     if f === in
         push!(issues, "$where: `$u` is an `in` term, not a kind set; $ISMEMBER_HINT")
     elseif f isa Pre
-        push!(issues, "$where: `$u` uses `Pre`, the callback previous value, which has no meaning " *
-                      "in a field system; $SHIFT_HINT")
+        push!(
+            issues, "$where: `$u` uses `Pre`, the callback previous value, which has no " *
+                "meaning in a field system; $SHIFT_HINT"
+        )
     end
     if _isvocabulary(f) && any(a -> unwrap_const(a) isa Bool, args)
-        push!(issues, "$where: `$u` has a literal `Bool` argument; `kindₛ ∈ Set(…)` evaluates before a " *
-                      "term exists; $ISMEMBER_HINT")
+        push!(
+            issues, "$where: `$u` has a literal `Bool` argument; `kindₛ ∈ Set(…)` " *
+                "evaluates before a term exists; $ISMEMBER_HINT"
+        )
     end
     if any(a -> unwrap_const(a) isa ShiftIndex, args)
-        push!(issues, "$where: `$u` has a `ShiftIndex` argument (the `c(k + 1)` notation does not " *
-                      "apply to space-time variables); $SHIFT_HINT")
+        push!(
+            issues, "$where: `$u` has a `ShiftIndex` argument (the `c(k + 1)` notation " *
+                "does not apply to space-time variables); $SHIFT_HINT"
+        )
     end
     foreach(a -> _scan_term!(issues, where, a), args)
     return issues

@@ -5,8 +5,10 @@ function allocation_frame(dims = (256, 256); cell_width = 16)
     seen = Set{UInt32}()
     for site in CartesianIndices(owners)
         x, y = Tuple(site)
-        id = UInt32((x - 1) ÷ cell_width +
-                    ((y - 1) ÷ cell_width) * cells_per_row + 1)
+        id = UInt32(
+            (x - 1) ÷ cell_width +
+                ((y - 1) ÷ cell_width) * cells_per_row + 1
+        )
         owners[site] = RenderOwner(CellSite, id)
         id in seen && continue
         push!(seen, id)
@@ -30,8 +32,10 @@ function allocation_measurements(frame = allocation_frame())
             () -> encode_frame(frame, CellIdentityEncoding())
         ),
         boundaries = _minimum_allocated(
-            () -> MakiePotts._boundary_segments(frame)),
+            () -> MakiePotts._boundary_segments(frame)
+        ),
         conformance = _minimum_allocated(
-            () -> render_frame_conformance(frame)),
+            () -> render_frame_conformance(frame)
+        ),
     )
 end

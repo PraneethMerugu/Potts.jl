@@ -1,22 +1,23 @@
 # computed parameters and the changes that touch them.
 #
 # A parameter whose default is an expression of other parameters (a scalar `β = 2α`, or a
-# kind table whose entries are expressions, D-111) is "computed". Before the read-only computed-parameter rule (D-112) an
-# explicit value of it could be given (`remake`, a setter, the operating point) and survived
-# changes that touched none of its inputs.
+# kind table whose entries are expressions, D-111) is "computed". Before the read-only
+# computed-parameter rule (D-112) an explicit value of it could be given (`remake`, a
+# setter, the operating point) and survived changes that touched none of its inputs.
 #
-# Rule (the read-only computed-parameter rule, as in ModelingToolkit). A computed parameter is read-only:
+# Rule (the read-only computed-parameter rule, as in ModelingToolkit). A computed parameter
+# is read-only:
 #   * every write of it (an operating-point entry, `remake(prob; p = …)`, `integ.ps[x] = v`,
 #     `setp`) is an `ArgumentError` that names it, its expression and its base inputs, and
 #     nothing is set;
 #   * after every change of base parameters, every computed parameter is derived again from
-#     them, along chains: α → β = 2α → γ = β + 1, and a kind table whose entries read β and γ
-#     (`V₀[kind] = [0, γ, β]`) follows both;
+#     them, along chains: α → β = 2α → γ = β + 1, and a kind table whose entries read β and
+#     γ (`V₀[kind] = [0, γ, β]`) follows both;
 #   * a fixed value is a redeclaration: the constructor keyword `Chain(; β = 5.0)` makes
-#     β a base parameter (a number default), so it then survives every change, and what reads
-#     it follows it;
-#   * a parameter object given whole (a checkpoint's `p`) gives its base values; the computed
-#     ones are derived again, so a checkpoint restores bitwise;
+#     β a base parameter (a number default), so it then survives every change, and what
+#     reads it follows it;
+#   * a parameter object given whole (a checkpoint's `p`) gives its base values; the
+#     computed ones are derived again, so a checkpoint restores bitwise;
 #   * values keep the problem's scalar type (Float32 problems stay Float32).
 #
 # Energies are checked by hand. Fixture: two 3×3 cells on a 12×12 lattice with von Neumann
@@ -58,14 +59,18 @@ end
 computed_Jf(x) = [0 x x; x 2 x - 5; x x - 5 14]
 const COMPUTED_M = [0 5 5; 5 1 3; 5 3 1]
 # the values a test reads, as a NamedTuple of plain arrays/numbers
-vals(q) = (
-    α = getp(q, :α)(q), β = getp(q, :β)(q), γ = getp(q, :γ)(q), λ = getp(q, :λ)(q),
-    Jx = getp(q, :Jx)(q), J = Matrix(getp(q, :J)(q)), V₀ = Vector(getp(q, :V₀)(q)),
-)
-ivals(i) = (
-    α = i.ps[:α], β = i.ps[:β], γ = i.ps[:γ], λ = i.ps[:λ], Jx = i.ps[:Jx],
-    J = Matrix(i.ps[:J]), V₀ = Vector(i.ps[:V₀]),
-)
+function vals(q)
+    return (
+        α = getp(q, :α)(q), β = getp(q, :β)(q), γ = getp(q, :γ)(q), λ = getp(q, :λ)(q),
+        Jx = getp(q, :Jx)(q), J = Matrix(getp(q, :J)(q)), V₀ = Vector(getp(q, :V₀)(q)),
+    )
+end
+function ivals(i)
+    return (
+        α = i.ps[:α], β = i.ps[:β], γ = i.ps[:γ], λ = i.ps[:λ], Jx = i.ps[:Jx],
+        J = Matrix(i.ps[:J]), V₀ = Vector(i.ps[:V₀]),
+    )
+end
 function computed_error(f)
     try
         f()
@@ -75,15 +80,23 @@ function computed_error(f)
     end
 end
 # a write of computed parameter `name` refused, naming it and its base inputs `ins`
-computed_refused(f, name, ins...) = (
-    e = computed_error(f); e isa ArgumentError &&
-        (m = sprint(showerror, e); occursin("`$name` is computed from", m) && all(i -> occursin("`$i`", m), ins))
-)
+function computed_refused(f, name, ins...)
+    e = computed_error(f)
+    return e isa ArgumentError &&
+        (
+        m = sprint(showerror, e);
+        occursin("`$name` is computed from", m) && all(i -> occursin("`$i`", m), ins)
+    )
+end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "computed parameters: computed parameters are read-only and follow their inputs" setup = [ComputedParametersSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "computed parameters: computed parameters are read-only and follow their inputs" begin
+@testitem "computed parameters: computed parameters are read-only and follow their \
+    inputs" setup = [ComputedParametersSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "computed parameters: computed parameters are read-only and follow their \
+        inputs" begin
         sys = Chain(; name = :chain)
         op = blocks()
         M = COMPUTED_M
@@ -102,15 +115,18 @@ end
             # a computed parameter follows its inputs (β, γ, V₀ from α)
             q = remake(prob; p = [:α => 5.0])
             v = vals(q)
-            @test (v.β, v.γ, v.V₀, v.J) == (10.0, 11.0, [0.0, 11.0, 10.0], computed_Jf(16.0))
+            @test (v.β, v.γ, v.V₀, v.J) ==
+                (10.0, 11.0, [0.0, 11.0, 10.0], computed_Jf(16.0))
             @test total_energy(q) == 321 + 4 + 1                  # 326
         end
 
         @testset "a table: writes refused, derived from its input" begin
             @test computed_refused(() -> remake(prob; p = [:J => M]), :J, :Jx)
-            @test computed_refused(() -> remake(prob; p = [:Jx => 20.0, :J => M]), :J, :Jx)   # refused whole
+            # refused whole
+            @test computed_refused(() -> remake(prob; p = [:Jx => 20.0, :J => M]), :J, :Jx)
             @test vals(prob).J == computed_Jf(16.0)
-            # its input re-derives it, and it stays the expression's value through other changes
+            # its input re-derives it, and it stays the expression's value through other
+            # changes
             r1 = remake(prob; p = [:Jx => 20.0])
             @test vals(r1).J == computed_Jf(20.0)
             @test total_energy(r1) == 405 + 1                     # 406
@@ -136,7 +152,10 @@ end
             # writes of β, γ or V₀ are refused, naming their base input α
             @test computed_refused(() -> remake(prob; p = [:β => 5.0]), :β, :α)
             @test computed_refused(() -> remake(prob; p = [:γ => 7.0]), :γ, :α)
-            @test computed_refused(() -> remake(prob; p = [:V₀ => [0.0, 9.0, 9.0]]), :V₀, :α)
+            @test computed_refused(
+                () -> remake(prob; p = [:V₀ => [0.0, 9.0, 9.0]]), :V₀,
+                :α
+            )
             @test computed_refused(() -> remake(prob; p = [:α => 5.0, :β => 3.0]), :β, :α)
             # α moves β, γ and V₀ along the chain; λ and Jx move none of them
             s4 = remake(prob; p = [:α => 5.0])
@@ -144,7 +163,8 @@ end
             @test (v.β, v.γ, v.V₀) == (10.0, 11.0, [0.0, 11.0, 10.0])
             @test total_energy(s4) == 321 + 4 + 1                 # 326
             v = vals(remake(s4; p = [:λ => 2.0, :Jx => 20.0]))
-            @test (v.β, v.γ, v.V₀, v.J) == (10.0, 11.0, [0.0, 11.0, 10.0], computed_Jf(20.0))
+            @test (v.β, v.γ, v.V₀, v.J) ==
+                (10.0, 11.0, [0.0, 11.0, 10.0], computed_Jf(20.0))
             # the fixed-value route: β declared with a number; γ and V₀ follow it
             v = vals(pβ)
             @test (v.α, v.β, v.γ, v.V₀) == (4.0, 5.0, 6.0, [0.0, 6.0, 5.0])
@@ -178,7 +198,8 @@ end
 
             i2 = init(prob, SequentialCPM())
             for f in (
-                    () -> (i2.ps[:J] = M), () -> (i2.ps[:β] = 5.0), () -> setp(i2, :γ)(i2, 7.0),
+                    () -> (i2.ps[:J] = M), () -> (i2.ps[:β] = 5.0),
+                    () -> setp(i2, :γ)(i2, 7.0),
                     () -> setp(i2, [:λ, :V₀])(i2, [2.0, [0.0, 9.0, 9.0]]),
                 )
                 @test computed_error(f) isa ArgumentError
@@ -190,16 +211,29 @@ end
             i2.ps[:α] = 5.0
             v = ivals(i2)
             @test (v.β, v.γ, v.V₀) == (10.0, 11.0, [0.0, 11.0, 10.0])
-            # the run reads the derived values: the integrator's parameters give the hand energy
+            # the run reads the derived values: the integrator's parameters give the hand
+            # energy
             i3 = init(pβ, SequentialCPM())
             i3.ps[:λ] = 2.0
             @test total_energy(remake(pβ; p = i3.p)) == 371.0
         end
 
         @testset "operating point" begin
-            @test computed_refused(() -> PottsProblem(sys, [op; :J => M], (0, 5); seed = 7), :J, :Jx)
-            @test computed_refused(() -> PottsProblem(sys, [op; :β => 5.0], (0, 5); seed = 7), :β, :α)
-            @test computed_refused(() -> PottsProblem(sys, [op; Potts.lookup(sys, :β) => 5.0], (0, 5); seed = 7), :β, :α)
+            @test computed_refused(
+                () -> PottsProblem(sys, [op; :J => M], (0, 5); seed = 7),
+                :J, :Jx
+            )
+            @test computed_refused(
+                () -> PottsProblem(sys, [op; :β => 5.0], (0, 5); seed = 7), :β, :α
+            )
+            @test computed_refused(
+                () -> PottsProblem(
+                    sys, [op; Potts.lookup(sys, :β) => 5.0], (0, 5);
+                    seed = 7
+                ),
+                :β,
+                :α
+            )
             # an input in the operating point (control): the computed values follow it
             pa = PottsProblem(sys, [op; :α => 5.0], (0, 5); seed = 7)
             @test (vals(pa).β, vals(pa).γ) == (10.0, 11.0)
@@ -225,7 +259,8 @@ end
             v = vals(r2)
             @test v.J == computed_Jf(20.0) && (v.β, v.γ) == (5.0, 6.0)
             @test total_energy(r2) == 405 + 3 * 25                # 480
-            # a hand-edited object gets consistent computed values (γ follows β), never a mix
+            # a hand-edited object gets consistent computed values (γ follows β), never a
+            # mix
             hand = Potts._with_values(ck2.p, merge(NamedTuple(ck2.p), (γ = 1.0,)))
             @test vals(remake(pβ; p = hand)).γ == 6.0
             # a continuation from the checkpoint, then a setter of another parameter
@@ -245,7 +280,12 @@ end
             @test eltype(J) === Float32 && Matrix(J) == Float32.(M)
             @test typeof(q.p) === typeof(p32.p)
             @test total_energy(q) == 102.0f0
-            s = remake(PottsProblem(sysβ, op, (0, 5); seed = 7, T = Float32); p = [:λ => 2.0])
+            s = remake(
+                PottsProblem(sysβ, op, (0, 5); seed = 7, T = Float32); p = [
+                    :λ =>
+                        2.0,
+                ]
+            )
             @test getp(s, :β)(s) === 5.0f0 && getp(s, :γ)(s) === 6.0f0
             @test total_energy(s) == 371.0f0
             i32 = init(p32, SequentialCPM())

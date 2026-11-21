@@ -28,7 +28,8 @@
 # The paper's energy, Eq. (1), is
 #
 # ```math
-# H = \sum_{\langle i,j \rangle} J\big(\tau(\sigma_i), \tau(\sigma_j)\big)\,(1 - \delta_{\sigma_i \sigma_j})
+# H = \sum_{\langle i,j \rangle} J\big(\tau(\sigma_i), \tau(\sigma_j)\big)
+#   \,(1 - \delta_{\sigma_i \sigma_j})
 #   + \sum_\sigma \lambda_V (V_\sigma - V_{T,\sigma})^2
 #   - \sum_x \lambda\, c(x)\, \delta_{\sigma(x), \text{LC}} ,
 # ```
@@ -96,9 +97,10 @@ using Potts.Layouts
 #
 # Eq. (1)'s third term is a potential summed over leader sites. The authors' code applies
 # it as CompuCell3D's default chemotaxis instead: each copy whose gaining (`new`) or losing
-# (`old`) cell is a leader changes ``\Delta H`` by ``-\mu\,(c(\text{target}) - c(\text{source}))``.
-# The model follows the code. With the cue ``c = y - 1`` (set in the starting state, as
-# in the paper, p. 6) leaders are biased upwards, into the empty matrix.
+# (`old`) cell is a leader changes ``\Delta H`` by
+# ``-\mu\,(c(\text{target}) - c(\text{source}))``. The model follows the code. With the cue
+# ``c = y - 1`` (set in the starting state, as in the paper, p. 6) leaders are biased
+# upwards, into the empty matrix.
 #
 # ## Step 7: constraints
 #
@@ -154,9 +156,13 @@ dims = (500, 300)
 # draw that misses (lands on a leader) towards the quota, as the authors' loop does.
 # `overlay` paints the layers in order:
 
-slab = overlay(Tiling((3, 3); region = (1:500, 1:21), kinds = [:follower], partial = :clip),
-    InsertUntil(:leader; into = [:follower], fraction = 1 // 4, seed = 0x5cd2609, misses = :count,
-        region = (2:500, 2:20), splits = :allow))
+slab = overlay(
+    Tiling((3, 3); region = (1:500, 1:21), kinds = [:follower], partial = :clip),
+    InsertUntil(
+        :leader; into = [:follower], fraction = 1 // 4, seed = 0x05cd2609, misses = :count,
+        region = (2:500, 2:20), splits = :allow
+    )
+)
 point = layout(slab, dims)
 kinds = point[2].second
 count(==(:leader), kinds), count(==(:follower), kinds)
@@ -193,8 +199,11 @@ sol.stats.lifecycle.divisions
 
 using MakiePotts, CairoMakie
 mkpath("akeeb") #hide
-record_potts("akeeb/invasion.mp4", sol; framerate = 15, title = "Leader–follower invasion", figure = (; size = (640, 420)),
-    plot = (; category_palette = [:red3, :forestgreen], medium_color = :white))
+record_potts(
+    "akeeb/invasion.mp4", sol; framerate = 15, title = "Leader–follower invasion",
+    figure = (; size = (640, 420)),
+    plot = (; category_palette = [:red3, :forestgreen], medium_color = :white)
+)
 nothing #hide
 
 # ```@raw html
@@ -211,7 +220,15 @@ nothing #hide
 # of the followers:
 
 using Statistics: mean
-mean_height(u, k) = mean(I[2] for I in CartesianIndices(u.ownership) if u.ownership[I] > 0 && u.cell.kind[u.ownership[I]] == k)
+function mean_height(
+        u,
+        k
+    )
+    return mean(
+        I[2] for I in CartesianIndices(u.ownership)
+            if u.ownership[I] > 0 && u.cell.kind[u.ownership[I]] == k
+    )
+end
 CairoMakie.activate!(type = "png")
 fig = Figure(size = (520, 340))
 ax = Axis(fig[1, 1]; xlabel = "MCS (the authors' count)", ylabel = "mean height (sites)")
@@ -231,13 +248,20 @@ fig
 
 obs = akeeb_observables(sol.u[end])
 using Markdown
-reference = (invasive = "15734 ± 1362", infiltrative = "44029 ± 1669", singles = "204.5 ± 9.3",
-    fingers = "12.0 ± 1.2", detached = "239.4 ± 11.1", clusters = "5.5 ± 2.3")
+reference = (
+    invasive = "15734 ± 1362", infiltrative = "44029 ± 1669", singles = "204.5 ± 9.3",
+    fingers = "12.0 ± 1.2", detached = "239.4 ± 11.1", clusters = "5.5 ± 2.3",
+)
 fmt(v) = v isa Integer ? string(v) : string(round(v; digits = 1))
-Markdown.parse("""
-| Measure | This run | Authors (10 runs) |
-|:--|--:|--:|
-""" * join(["| $m | $(fmt(getproperty(obs, m))) | $(reference[m]) |" for m in keys(reference)], "\n"))
+Markdown.parse(
+    """
+    | Measure | This run | Authors (10 runs) |
+    |:--|--:|--:|
+    """ * join(
+        ["| $m | $(fmt(getproperty(obs, m))) | $(reference[m]) |" for m in keys(reference)],
+        "\n"
+    )
+)
 
 # One run is not an ensemble: the reproduction of this paper compares ensembles of runs
 # with every reference point and its tolerance.

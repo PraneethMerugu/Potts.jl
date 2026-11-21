@@ -15,12 +15,20 @@ include(joinpath(@__DIR__, "..", "..", "..", "..", "test", "shared", "qa_common.
 include("../shared/export_all.jl")
 end
 
-@testitem "FieldProblem SciML interface conformance (solve, step!, reinit!, remake, SS, SII)" setup = [LF_problems_sciml] tags = [:latticefields, :problems] begin
+@testitem "FieldProblem SciML interface conformance (solve, step!, reinit!, remake, SS, \
+    SII)" setup = [LF_problems_sciml] tags = [
+    :latticefields, :problems,
+] begin
     using .LF_problems_sciml: SS, SII
     @testset "FieldProblem SciML interface conformance" begin
         dims = (10, 8)
         u0 = rand(Xoshiro(17), prod(dims))
-        ix = LatticeIndex(; variables = [:u => FieldSlot(1:prod(dims), dims)], parameters = [:D => 1])
+        ix = LatticeIndex(;
+            variables = [:u => FieldSlot(1:prod(dims), dims)], parameters = [
+                :D =>
+                    1,
+            ]
+        )
         prob = FieldProblem(
             euler2(dims; storage = LatticeFields.IR.F64), copy(u0), (0.0, 0.2), [0.5];
             state = ["u"], kind = :rate, index = ix
@@ -128,14 +136,21 @@ end
 
 # `hash` agrees with `==` (equal objects are one `Set` element and one `Dict` key).
 # `verbose = false` silences the run's warnings. `retcode` is `Default` until
-# the run ends, `check_error` is `Success` while it is healthy. Controls on the code before this change: equal
-# objects hashed apart, the `maxiters` warning printed at `verbose = false`, `check_error` threw
-# (no `force_dtmin` in the options) and `retcode` was `Success` before the first step.
-@testitem "FieldIntegrator: hash agrees with ==, verbose, check_error, retcode in progress" setup = [LF_problems_sciml] tags = [:latticefields, :problems] begin
+# the run ends, `check_error` is `Success` while it is healthy. Controls on the code before
+# this change: equal objects hashed apart, the `maxiters` warning printed at `verbose =
+# false`, `check_error` threw (no `force_dtmin` in the options) and `retcode` was `Success`
+# before the first step.
+@testitem "FieldIntegrator: hash agrees with ==, verbose, check_error, retcode in \
+    progress" setup = [LF_problems_sciml] tags = [
+    :latticefields, :problems,
+] begin
     LP = LatticeFields.Problems
     dims = (10, 8)
     u0 = rand(Xoshiro(17), prod(dims))
-    ix = LatticeIndex(; variables = [:u => FieldSlot(1:prod(dims), dims)], parameters = [:D => 1])
+    ix = LatticeIndex(;
+        variables = [:u => FieldSlot(1:prod(dims), dims)],
+        parameters = [:D => 1]
+    )
     prob = FieldProblem(
         euler2(dims; storage = LatticeFields.IR.F64), copy(u0), (0.0, 0.2), [0.5];
         state = ["u"], kind = :rate, index = ix
@@ -150,20 +165,23 @@ end
             @test a == b && isequal(a, b) && hash(a) == hash(b)
             @test length(Set([a, b])) == 1 && haskey(Dict(a => 1), b)
         end
-        # `-0.0 == 0.0` but they are not `isequal` (and hash apart): isequal objects hash equal
+        # `-0.0 == 0.0` but they are not `isequal` (and hash apart): isequal objects hash
+        # equal
         z, nz = LP.LatticeParameters([0.0, 1.0]), LP.LatticeParameters([-0.0, 1.0])
         @test z == nz && !isequal(z, nz) && isequal(z, copy(z)) && hash(z) == hash(copy(z))
         @test length(Set([z, nz, copy(z)])) == 2
         s1 = LP.LatticeStats(LP.finish!(init(prob, alg; dt = 0.05)))
         s2 = LP.LatticeStats(LP.finish!(init(prob, alg; dt = 0.05)))
-        @test s1 == s2 && isequal(s1, s2) && hash(s1) == hash(s2) && length(Set([s1, s2])) == 1
+        @test s1 == s2 && isequal(s1, s2) && hash(s1) == hash(s2) &&
+            length(Set([s1, s2])) == 1
     end
     @testset "retcode and check_error" begin
         integ = init(prob, alg; dt = 0.05)
         @test integ.retcode == ReturnCode.Default
         @test SciMLBase.check_error(integ) == ReturnCode.Success
         step!(integ)
-        @test integ.retcode == ReturnCode.Default && SciMLBase.check_error(integ) == ReturnCode.Success
+        @test integ.retcode == ReturnCode.Default &&
+            SciMLBase.check_error(integ) == ReturnCode.Success
         @test solve!(integ).retcode == ReturnCode.Success
         @test SciMLBase.check_error(integ) == ReturnCode.Success
         reinit!(integ)
@@ -188,17 +206,31 @@ end
 end
 
 # SciMLBase's integrator and solution interface on a FieldProblem (the shared check)
-@testitem "FieldProblem: the shared SciMLBase interface check" setup = [LF_problems_sciml] tags = [:latticefields, :problems] begin
+@testitem "FieldProblem: the shared SciMLBase interface check" setup = [
+    LF_problems_sciml,
+] tags = [
+    :latticefields, :problems,
+] begin
     @testset "FieldProblem: the shared SciMLBase interface check" begin
         dims = (10, 8)
-        ix = LatticeIndex(; variables = [:u => FieldSlot(1:prod(dims), dims)], parameters = [:D => 1])
+        ix = LatticeIndex(;
+            variables = [:u => FieldSlot(1:prod(dims), dims)], parameters = [
+                :D =>
+                    1,
+            ]
+        )
         prob = FieldProblem(
-            euler2(dims; storage = LatticeFields.IR.F64), rand(Xoshiro(17), prod(dims)), (0.0, 0.2), [0.5];
+            euler2(dims; storage = LatticeFields.IR.F64), rand(Xoshiro(17), prod(dims)), (
+                0.0, 0.2,
+            ), [0.5];
             state = ["u"], kind = :rate, index = ix
         )
         qa_sciml_interface(
-            prob, ExplicitEuler(; substeps = 1); kw = (; dt = 0.05), h = 0.05, stop = 0.15, nwin = 4, tf = 0.2,
-            state_copy = integ -> copy(Array(integ.u)), live_write! = integ -> (integ.u .= 2.0; nothing)
+            prob, ExplicitEuler(; substeps = 1); kw = (; dt = 0.05),
+            h = 0.05, stop = 0.15, nwin = 4, tf = 0.2,
+            state_copy = integ -> copy(Array(integ.u)), live_write! = integ -> (
+                integ.u .= 2.0; nothing
+            )
         )
     end
 end

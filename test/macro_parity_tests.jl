@@ -1,11 +1,11 @@
-# Round trip through the keyword constructor: every model `@potts_model` builds is rebuilt by
-# `PottsSystem(; name, <the PottsPart fields>...)` from its own payload (`Potts.part`), and the
-# test requires the same problem and the same run, step by step. Each model below uses a
-# group of the macro's sections. This shows that the macro adds nothing outside the payload
-# and that the keyword constructor takes every payload field. It does not show that a user
-# can write each section by hand with public constructors (a separate test, not here). The
-# system metadata of `@description` and `@metadata` lives in the inner system, not in the
-# payload, so the round trip does not carry it and the test does not check it.
+# Round trip through the keyword constructor: every model `@potts_model` builds is rebuilt
+# by `PottsSystem(; name, <the PottsPart fields>...)` from its own payload (`Potts.part`),
+# and the test requires the same problem and the same run, step by step. Each model below
+# uses a group of the macro's sections. This shows that the macro adds nothing outside the
+# payload and that the keyword constructor takes every payload field. It does not show that
+# a user can write each section by hand with public constructors (a separate test, not
+# here). The system metadata of `@description` and `@metadata` lives in the inner system,
+# not in the payload, so the round trip does not carry it and the test does not check it.
 
 @testsetup module MacroParitySetup
 using Potts, Test
@@ -152,7 +152,15 @@ end
 end
 
 # the model rebuilt by the keyword constructor from its payload
-mp_rebuild(sys) = (p = Potts.part(sys); PottsSystem(; name = nameof(sys), (f => getfield(p, f) for f in fieldnames(Potts.PottsPart))...))
+function mp_rebuild(sys)
+    p = Potts.part(sys)
+    return PottsSystem(;
+        name = nameof(sys), (
+            f => getfield(p, f)
+                for f in fieldnames(Potts.PottsPart)
+        )...
+    )
+end
 
 function mp_two_cells()
     σ = zeros(Int32, 12, 8)
@@ -163,33 +171,69 @@ end
 
 # (model, operating point, time span, problem keywords)
 function mp_cases()
-    σ20 = zeros(Int32, 20, 20); σ20[6:9, 6:9] .= 1
-    σ30 = zeros(Int32, 30, 30); σ30[5:10, 12:17] .= 1; σ30[12:17, 12:17] .= 2
-    σ24 = zeros(Int32, 24, 24); σ24[7:18, 7:18] .= 1
-    sub = zeros(24, 24); sub[10:14, 10:14] .= 1.0
+    σ20 = zeros(Int32, 20, 20)
+    σ20[6:9, 6:9] .= 1
+    σ30 = zeros(Int32, 30, 30)
+    σ30[5:10, 12:17] .= 1
+    σ30[12:17, 12:17] .= 2
+    σ24 = zeros(Int32, 24, 24)
+    σ24[7:18, 7:18] .= 1
+    sub = zeros(24, 24)
+    sub[10:14, 10:14] .= 1.0
     one = [ownership => mp_two_cells(), kind => [:A, :A]]
     return [
-        (MPCells(; name = :cells), [ownership => mp_two_cells(), kind => [:A, :B]], (0, 4), (;)),
-        (MPSites(; name = :sites), [ownership => σ20, kind => [:A]], (0, 3), (; capacity = 8)),
-        (MPLinks(; name = :links), [ownership => σ30, kind => [:leader, :follower]], (0, 4), (;)),
+        (
+            MPCells(; name = :cells),
+            [ownership => mp_two_cells(), kind => [:A, :B]], (0, 4), (;),
+        ),
+        (
+            MPSites(; name = :sites), [ownership => σ20, kind => [:A]],
+            (0, 3), (; capacity = 8),
+        ),
+        (
+            MPLinks(; name = :links),
+            [ownership => σ30, kind => [:leader, :follower]], (0, 4), (;),
+        ),
         (MPComponent(; name = :component), one, (0, 4), (;)),
         (MPExtended(; name = :extended), one, (0, 2), (;)),
         (MPFields(; name = :fields), one, (0, 3), (; field_solver = ExplicitEuler())),
-        (MPConvert(; name = :convert), [ownership => σ24, kind => [:cytoplasm], cluster => [1], :sub => sub], (0, 3), (; capacity = 8)),
+        (
+            MPConvert(; name = :convert),
+            [ownership => σ24, kind => [:cytoplasm], cluster => [1], :sub => sub],
+            (0, 3), (; capacity = 8),
+        ),
     ]
 end
 
-# every array a state holds (ownership, kinds, cell, site, model and edge stores), flattened in
-# the state's own order, for an exact comparison of two runs
+# every array a state holds (ownership, kinds, cell, site, model and edge stores), flattened
+# in the state's own order, for an exact comparison of two runs
 mp_leaves(x::AbstractArray{<:Number}) = Any[copy(x)]
 mp_leaves(x::Number) = Any[x]
-mp_leaves(x::Union{NamedTuple, Tuple}) = reduce(vcat, (mp_leaves(v) for v in values(x)); init = Any[])
-mp_leaves(x) = isstructtype(typeof(x)) ? reduce(vcat, (mp_leaves(getfield(x, i)) for i in 1:fieldcount(typeof(x))); init = Any[]) : Any[x]
+function mp_leaves(x::Union{NamedTuple, Tuple})
+    return reduce(
+        vcat, (mp_leaves(v) for v in values(x));
+        init = Any[]
+    )
+end
+function mp_leaves(x)
+    return if isstructtype(typeof(x))
+        reduce(
+            vcat, (mp_leaves(getfield(x, i)) for i in 1:fieldcount(typeof(x)));
+            init = Any[]
+        )
+    else
+        Any[x]
+    end
+end
 
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "@potts_model models round-trip through PottsSystem(...)" setup = [MacroParitySetup] tags = [:potts, :symbolic] begin
+@testitem "@potts_model models round-trip through PottsSystem(...)" setup = [
+    MacroParitySetup,
+] tags = [
+    :potts, :symbolic,
+] begin
     @testset "@potts_model models round-trip through PottsSystem(...)" begin
         for (sys, op, tspan, kw) in mp_cases()
             again = mp_rebuild(sys)
@@ -206,9 +250,15 @@ end
         # the comparison sees a dropped section and a different run
         sys, op, tspan, _ = first(mp_cases())
         p = Potts.part(sys)
-        fewer = PottsSystem(; name = nameof(sys), (f => getfield(p, f) for f in fieldnames(Potts.PottsPart) if f !== :updates)...)
+        fewer = PottsSystem(;
+            name = nameof(sys),
+            (f => getfield(p, f) for f in fieldnames(Potts.PottsPart) if f !== :updates)...
+        )
         a = PottsProblem(sys, op, tspan; seed = 5)
         @test PottsProblem(fewer, op, tspan; seed = 5).f.fingerprint != a.f.fingerprint
-        @test !isequal(mp_leaves(solve(a, SequentialCPM()).u[end]), mp_leaves(solve(remake(a; seed = 6), SequentialCPM()).u[end]))
+        @test !isequal(
+            mp_leaves(solve(a, SequentialCPM()).u[end]),
+            mp_leaves(solve(remake(a; seed = 6), SequentialCPM()).u[end])
+        )
     end
 end

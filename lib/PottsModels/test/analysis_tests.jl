@@ -6,7 +6,8 @@
 include(joinpath(@__DIR__, "shared", "common.jl"))
 using Random: MersenneTwister
 const AN = PottsModels.Analysis
-# --- independent oracles (definitions, not the SciPy scans) ------------------------------------
+# --- independent oracles (definitions, not the SciPy scans)
+# ------------------------------------
 
 # peaks: every maximal run of equal samples [l, r], strictly inside the signal, higher than
 # both its neighbours; the peak is its midpoint (l + r) ÷ 2
@@ -18,7 +19,8 @@ function oracle_maxima(x)
         while r < length(x) && x[r + 1] == x[l]
             r += 1
         end
-        l > 1 && r < length(x) && x[l - 1] < x[l] && x[r + 1] < x[l] && push!(out, (l + r) ÷ 2)
+        l > 1 && r < length(x) && x[l - 1] < x[l] && x[r + 1] < x[l] &&
+            push!(out, (l + r) ÷ 2)
         l = r + 1
     end
     return out
@@ -77,7 +79,11 @@ const MOORE8 = [(a, b) for a in -1:1 for b in -1:1 if (a, b) != (0, 0)]
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "Analysis: find_peaks against definitional oracles" setup = [AnalysisSetup] tags = [:pottsmodels, :core] begin
+@testitem "Analysis: find_peaks against definitional oracles" setup = [
+    AnalysisSetup,
+] tags = [
+    :pottsmodels, :core,
+] begin
     # distinct heights
     @testset "Analysis: find_peaks against definitional oracles" begin
         rng = MersenneTwister(62)
@@ -87,11 +93,16 @@ end
             @test pk == oracle_maxima(x)
             isempty(pk) && continue
             pr = AN.peak_prominences(x, pk)
-            @test all(k -> (pr.prominences[k], pr.left_bases[k], pr.right_bases[k]) == oracle_prominence(x, pk[k]), eachindex(pk))
+            @test all(
+                k -> (pr.prominences[k], pr.left_bases[k], pr.right_bases[k]) ==
+                    oracle_prominence(x, pk[k]),
+                eachindex(pk)
+            )
             for rel in (0.25, 0.5, 1.0)
                 wd = AN.peak_widths(x, pk; rel_height = rel)
                 o = [oracle_width(x, p, rel) for p in pk]
-                @test wd.widths ≈ first.(o) && wd.left_ips ≈ getindex.(o, 2) && wd.right_ips ≈ last.(o)
+                @test wd.widths ≈ first.(o) && wd.left_ips ≈ getindex.(o, 2) &&
+                    wd.right_ips ≈ last.(o)
             end
             for pmin in (1, 3), wmin in (1.0, 2.5)
                 w = AN.peak_widths(x, pk).widths
@@ -99,9 +110,9 @@ end
                 @test AN.find_peaks(x; width = wmin) == pk[w .>= wmin]
             end
         end
-        # the distance filter: distinct heights (no ties) against the greedy definition; with ties
-        # its invariants (kept peaks ≥ ceil(d) apart; each removed peak lies within reach of a kept
-        # peak at least as high)
+        # the distance filter: distinct heights (no ties) against the greedy definition;
+        # with ties its invariants (kept peaks ≥ ceil(d) apart; each removed peak lies
+        # within reach of a kept peak at least as high)
         for n in (30, 100, 400), rep in 1:30, d in (1, 2, 3.5, 7)
             x = randperm_signal(rng, n)
             pk = AN.find_peaks(x)
@@ -109,7 +120,10 @@ end
             y = rand(rng, 0:3, n)
             kept = AN.find_peaks(y; distance = d)
             @test all(>=(ceil(d)), diff(kept))
-            @test all(p -> p in kept || any(q -> abs(p - q) < ceil(d) && y[q] >= y[p], kept), AN.find_peaks(y))
+            @test all(
+                p -> p in kept ||
+                    any(q -> abs(p - q) < ceil(d) && y[q] >= y[p], kept), AN.find_peaks(y)
+            )
         end
         # negative control: the oracle notices a wrong tie rule (leftmost plateau sample)
         @test oracle_maxima([0, 2, 2, 2, 2, 0]) == [3] != [2]
@@ -118,7 +132,11 @@ end
     end
 end
 
-@testitem "Analysis: the NumPy argsort port and its tie order" setup = [AnalysisSetup] tags = [:pottsmodels, :core] begin
+@testitem "Analysis: the NumPy argsort port and its tie order" setup = [
+    AnalysisSetup,
+] tags = [
+    :pottsmodels, :core,
+] begin
     @testset "Analysis: the NumPy argsort port and its tie order" begin
         rng = MersenneTwister(2026)
         for n in [0:40; 100; 1000], rep in 1:20
@@ -131,28 +149,35 @@ end
         @test AN._np_argsort([2.0, 1, 2, 1, 2]) == [2, 4, 1, 3, 5]
         # NaN sorts last (DOUBLE_LT)
         @test AN._np_argsort([NaN, 1.0, 0.0]) == [3, 2, 1]
-        # heapsort fallback, by hand: five equal keys. Heapify moves nothing (no key is strictly
-        # larger); each extraction swaps the root to the end and sifts nothing: [5,2,3,4,1] →
-        # [4,2,3,5,1] → [3,2,4,5,1] → [2,3,4,5,1].
+        # heapsort fallback, by hand: five equal keys. Heapify moves nothing (no key is
+        # strictly larger); each extraction swaps the root to the end and sifts nothing:
+        # [5,2,3,4,1] → [4,2,3,5,1] → [3,2,4,5,1] → [2,3,4,5,1].
         @test AN._np_aheapsort!(collect(1:5), ones(5), 1, 5) == [2, 3, 4, 5, 1]
-        # An organ pipe [1:89; 89:-1:1] exhausts the introsort depth budget (2⌊log₂ 178⌋ = 14)
-        # and reaches the heapsort fallback. Each value occurs twice (at k and 179 − k); below
-        # are the values whose right copy comes first, cross-checked against an independent
-        # literal transcription of NumPy 1.21 `aquicksort_double` (D-069). A stable
-        # sort would put every left copy first.
+        # An organ pipe [1:89; 89:-1:1] exhausts the introsort depth budget (2⌊log₂ 178⌋ =
+        # 14) and reaches the heapsort fallback. Each value occurs twice (at k and 179 − k);
+        # below are the values whose right copy comes first, cross-checked against an
+        # independent literal transcription of NumPy 1.21 `aquicksort_double` (D-069). A
+        # stable sort would put every left copy first.
         v = Float64.([1:89; 89:-1:1])
         t = AN._np_argsort(v)
         @test issorted(v[t])
         @test [k for k in 1:89 if t[2k - 1] != k] ==
             [
-            2, 5, 6, 7, 8, 9, 12, 15, 16, 17, 18, 19, 22, 23, 24, 26, 28, 29, 30, 31, 33, 38, 47, 49, 51, 52, 53,
-            54, 55, 57, 58, 59, 60, 62, 64, 65, 66, 67, 69, 72, 76, 77, 79, 80, 81, 83, 85, 87, 89,
+            2, 5, 6, 7, 8, 9, 12, 15, 16, 17, 18, 19, 22, 23, 24,
+            26, 28, 29, 30, 31, 33, 38, 47, 49, 51, 52, 53,
+            54, 55, 57, 58, 59, 60, 62, 64, 65, 66, 67,
+            69, 72, 76, 77, 79, 80, 81, 83, 85, 87, 89,
         ]
-        @test t != sortperm(v)                                   # negative control: not stable
+        # negative control: not stable
+        @test t != sortperm(v)
     end
 end
 
-@testitem "Analysis: merge_peaks, column_tops and trapezoid_integral" setup = [AnalysisSetup] tags = [:pottsmodels, :core] begin
+@testitem "Analysis: merge_peaks, column_tops and trapezoid_integral" setup = [
+    AnalysisSetup,
+] tags = [
+    :pottsmodels, :core,
+] begin
     @testset "Analysis: merge_peaks, column_tops and trapezoid_integral" begin
         rng = MersenneTwister(3)
         for rep in 1:50
@@ -164,10 +189,16 @@ end
         end
         σ = rand(rng, 0:4, 9, 7)
         pred = isodd
-        @test AN.column_tops(pred, σ) == [maximum((y for y in 1:7 if σ[x, y] != 0 && pred(σ[x, y])); init = 0) for x in 1:9]
-        @test AN.column_tops(σ) == [maximum((y for y in 1:7 if σ[x, y] != 0); init = 0) for x in 1:9]
+        @test AN.column_tops(pred, σ) ==
+            [
+            maximum((y for y in 1:7 if σ[x, y] != 0 && pred(σ[x, y])); init = 0)
+                for x in 1:9
+        ]
+        @test AN.column_tops(σ) ==
+            [maximum((y for y in 1:7 if σ[x, y] != 0); init = 0) for x in 1:9]
         @test AN.column_tops(zeros(Int, 3, 2)) == [0, 0, 0]
-        # trapezoid_integral is exact for piecewise-linear data on uneven samples: ∫₀⁵ (2t + 1) dt = 30
+        # trapezoid_integral is exact for piecewise-linear data on uneven samples: ∫₀⁵ (2t +
+        # 1) dt = 30
         xs = [0, 0.5, 2, 3.25, 5]
         @test AN.trapezoid_integral(xs, 2 .* xs .+ 1) == 30
         @test AN.trapezoid_integral(1:4, [1, 1, 1, 1]) == 3.0
@@ -175,24 +206,33 @@ end
     end
 end
 
-@testitem "Analysis: cell_graph, reachable, components and centroids against brute force" setup = [AnalysisSetup] tags = [:pottsmodels, :core] begin
-    @testset "Analysis: cell_graph, reachable, components and centroids against brute force" begin
+@testitem "Analysis: cell_graph, reachable, components and centroids against brute \
+    force" setup = [AnalysisSetup] tags = [
+    :pottsmodels, :core,
+] begin
+    @testset "Analysis: cell_graph, reachable, components and centroids against brute \
+        force" begin
         rng = MersenneTwister(7)
         for rep in 1:20, per in ((false, false), (true, false), (true, true))
             σ = rand(rng, 0:12, 11, 8)
             @test AN.cell_graph(σ; periodic = per) == oracle_graph(σ, per, VN4)
-            @test AN.cell_graph(σ; periodic = per, neighborhood = Moore(1)) == oracle_graph(σ, per, MOORE8)
+            @test AN.cell_graph(σ; periodic = per, neighborhood = Moore(1)) ==
+                oracle_graph(σ, per, MOORE8)
         end
         # 3D, von Neumann
         σ3 = rand(rng, 0:6, 4, 4, 4)
         vn6 = [ntuple(k -> k == d ? s : 0, 3) for d in 1:3 for s in (-1, 1)]
         @test AN.cell_graph(σ3) == oracle_graph(σ3, (false, false, false), vn6)
-        # hex (axial): the neighbours are (±1, 0), (0, ±1), (1, −1), (−1, 1); (1, 1) is not one
-        hexσ = [0 0 0; 0 1 0; 0 0 2]                            # 1 at (2, 2), 2 at (3, 3): axial (1, 1) apart
+        # hex (axial): the neighbours are (±1, 0), (0, ±1), (1, −1), (−1, 1); (1, 1) is not
+        # one
+        # 1 at (2, 2), 2 at (3, 3): axial (1, 1) apart
+        hexσ = [0 0 0; 0 1 0; 0 0 2]
         hex = Lattice((3, 3); boundary = Closed(), geometry = Hexagonal())
         @test AN.cell_graph(hexσ, hex; neighborhood = Hex(1)) == [Int[], Int[]]
-        @test AN.cell_graph(hexσ; neighborhood = Moore(1)) == [[2], [1]]      # control: Moore sees it
-        hexσ2 = [0 0 0; 0 1 0; 0 2 0]                           # (2, 2) and (3, 2): axial (1, 0)
+        # control: Moore sees it
+        @test AN.cell_graph(hexσ; neighborhood = Moore(1)) == [[2], [1]]
+        # (2, 2) and (3, 2): axial (1, 0)
+        hexσ2 = [0 0 0; 0 1 0; 0 2 0]
         @test AN.cell_graph(hexσ2, hex; neighborhood = Hex(1)) == [[2], [1]]
         @test_throws ArgumentError AN.cell_graph(σ3; periodic = (true, false))
 
@@ -206,7 +246,12 @@ end
             for a in cells, b in g[a]
                 b in cells && (parent[root(a)] = root(b))
             end
-            groups = sort!([sort!(filter(c -> root(c) == r, cells)) for r in unique(root.(cells))]; by = first)
+            groups = sort!(
+                [
+                    sort!(filter(c -> root(c) == r, cells))
+                        for r in unique(root.(cells))
+                ]; by = first
+            )
             @test AN.components(g, cells) == groups
             s = rand(rng, 1:30)
             full = AN.components(g, 1:30)
@@ -220,13 +265,16 @@ end
         com = AN.centroids(σ)
         for c in (1, 2, 4, 5)
             s = findall(==(c), σ)
-            @test com[c][1] ≈ sum(i -> i[1], s) / length(s) && com[c][2] ≈ sum(i -> i[2], s) / length(s)
+            @test com[c][1] ≈ sum(i -> i[1], s) / length(s) &&
+                com[c][2] ≈ sum(i -> i[2], s) / length(s)
         end
         @test all(isnan, com[3])
     end
 end
 
-@testitem "Analysis: cell_graph on a 500 × 300 state" setup = [AnalysisSetup] tags = [:pottsmodels, :core] begin
+@testitem "Analysis: cell_graph on a 500 × 300 state" setup = [AnalysisSetup] tags = [
+    :pottsmodels, :core,
+] begin
     @testset "Analysis: cell_graph on a 500 × 300 state" begin
         σ = zeros(Int32, 500, 300)
         k = 0
@@ -236,14 +284,19 @@ end
         AN.cell_graph(σ[1:30, 1:30]; periodic = (true, false))
         bytes = @allocated g = AN.cell_graph(σ; periodic = (true, false))
         @test length(g) == k && all(c -> length(g[c]) <= 4, 1:k)
-        @test bytes < 50 * 2^20                                  # ~2 MB measured; no per-site allocation
+        # ~2 MB measured; no per-site allocation
+        @test bytes < 50 * 2^20
     end
 end
 
-@testitem "akeeb_observables reads kinds only of ids that own sites" setup = [AnalysisSetup] tags = [:pottsmodels, :core] begin
+@testitem "akeeb_observables reads kinds only of ids that own sites" setup = [
+    AnalysisSetup,
+] tags = [
+    :pottsmodels, :core,
+] begin
     @testset "akeeb_observables reads kinds only of ids that own sites" begin
-        # 6 × 5: follower 1 at (3, 2) is the main tumour; leader 3 at (5, 4) is alone above it;
-        # id 2 owns no site, so its kind (here not a leader or follower) is never read
+        # 6 × 5: follower 1 at (3, 2) is the main tumour; leader 3 at (5, 4) is alone above
+        # it; id 2 owns no site, so its kind (here not a leader or follower) is never read
         σ = zeros(Int, 6, 5)
         σ[3, 2] = 1
         σ[5, 4] = 3
@@ -256,31 +309,46 @@ end
     end
 end
 
-@testitem "akeeb_phenotype: the authors' area-equality classifier (V-A6)" setup = [AnalysisSetup] tags = [:pottsmodels, :core] begin
+@testitem "akeeb_phenotype: the authors' area-equality classifier (V-A6)" setup = [
+    AnalysisSetup,
+] tags = [
+    :pottsmodels, :core,
+] begin
     @testset "akeeb_phenotype: the authors' area-equality classifier (V-A6)" begin
-        o(inv, inf, f, s, c) = (; invasive = inv, infiltrative = inf, fingers = f, singles = s, clusters = c)
+        function o(inv, inf, f, s, c)
+            return (;
+                invasive = inv, infiltrative = inf, fingers = f, singles = s, clusters = c,
+            )
+        end
         @test akeeb_phenotype(o(2233.0, 2233.0, 0, 0, 0)) === :none
         @test akeeb_phenotype(o(2950.0, 3100.5, 0, 7, 0)) === :single
         @test akeeb_phenotype(o(4897.0, 4897.0, 4, 0, 0)) === :bulk
         @test akeeb_phenotype(o(15734.0, 44029.0, 12, 204, 5)) === :multimodal
-        @test akeeb_phenotype(o(15734.0, 44029.0, 12, 204, 0)) === :multimodal     # clusters ≥ 0
+        # clusters ≥ 0
+        @test akeeb_phenotype(o(15734.0, 44029.0, 12, 204, 0)) === :multimodal
         # the areas are compared exactly: half a pixel of detached area is not "no invasion"
         @test akeeb_phenotype(o(2233.0, 2233.5, 0, 0, 0)) === :unclassified
         @test akeeb_phenotype(o(4897.0, 4897.5, 4, 0, 0)) === :unclassified
         # the authors' 42 unclassified rows: fingers and detached area but no singles
         @test akeeb_phenotype(o(5464.0, 5515.0, 9, 0, 1)) === :unclassified
-        @test akeeb_phenotype(o(2950.0, 3100.5, 0, 7, 1)) === :unclassified       # singles + clusters, no fingers
+        # singles + clusters, no fingers
+        @test akeeb_phenotype(o(2950.0, 3100.5, 0, 7, 1)) === :unclassified
         # it reads the fields of `akeeb_observables`
         σ = zeros(Int, 6, 5)
         σ[3, 2] = 1
         @test akeeb_phenotype(akeeb_observables(σ, [:follower])) === :none
         σ[5, 4] = 2
-        @test akeeb_phenotype(akeeb_observables(σ, [:follower, :leader])) === :unclassified # one kept column
+        # one kept column
+        @test akeeb_phenotype(akeeb_observables(σ, [:follower, :leader])) === :unclassified
         # oracle: the authors' `phenotype_classification.csv` is this classifier applied to
-        # `invasion_metrics.csv` with the unclassified rows dropped (spec 10 §5.3.5), when the
-        # released data are on disk (`docs/references` is gitignored)
+        # `invasion_metrics.csv` with the unclassified rows dropped (spec 10 §5.3.5), when
+        # the released data are on disk (`docs/references` is gitignored)
         data = joinpath(
-            get(ENV, "POTTS_REFERENCES", joinpath(@__DIR__, "..", "..", "..", "docs", "references")),
+            get(
+                ENV, "POTTS_REFERENCES", joinpath(
+                    @__DIR__, "..", "..", "..", "docs", "references"
+                )
+            ),
             "codebases", "10_Akeeb2026_Leader_Follower_Invasion_Model", "Data"
         )
         if isfile(joinpath(data, "phenotype_classification.csv"))
@@ -288,13 +356,15 @@ end
             A = filter(r -> !isempty(r[4]), rows("invasion_metrics.csv"))
             P = rows("phenotype_classification.csv")
             name = Dict(
-                :none => "No invasion", :single => "Single cell invasion", :bulk => "Bulk invasion",
+                :none => "No invasion", :single => "Single cell invasion",
+                :bulk => "Bulk invasion",
                 :multimodal => "Multimodal invasion"
             )
             labels = [
                 akeeb_phenotype(
                     o(
-                        parse.(Float64, r[4:5])..., parse(Float64, r[7]), parse(Float64, r[6]),
+                        parse.(Float64, r[4:5])..., parse(Float64, r[7]),
+                        parse(Float64, r[6]),
                         parse(Float64, r[9])
                     )
                 ) for r in A
@@ -302,10 +372,16 @@ end
             @test count(==(:unclassified), labels) == 42
             kept = [(r, l) for (r, l) in zip(A, labels) if l !== :unclassified]
             @test length(kept) == length(P) == 13263
-            @test all(i -> kept[i][1] == P[i][1:9] && name[kept[i][2]] == P[i][10], eachindex(P))
+            @test all(
+                i -> kept[i][1] == P[i][1:9] && name[kept[i][2]] == P[i][10],
+                eachindex(P)
+            )
         else
-            @info "akeeb_phenotype oracle skipped: the authors' released data are not on disk (set POTTS_REFERENCES to the docs/references directory)" data
-            @test_skip "akeeb_phenotype oracle against the authors' phenotype_classification.csv (data not on disk)" == ""
+            @info "akeeb_phenotype oracle skipped: the authors' released data are not on \
+                disk (set POTTS_REFERENCES to the docs/references directory)" data
+            @test_skip "akeeb_phenotype oracle against the authors' \
+                phenotype_classification.csv (data not on disk)" ==
+                ""
         end
     end
 end

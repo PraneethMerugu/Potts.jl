@@ -20,12 +20,17 @@ using Potts: CorePotts
     @lattice Lattice((40, 30); neighborhood = Moore(1))
     @energy begin
         cells => λ * (volume - V₀[kind])^2
-        contacts => ifelse(cluster[owner] == cluster[neighbor_owner], Jint, J[kind, neighbor_kind])
+        contacts =>
+            ifelse(cluster[owner] == cluster[neighbor_owner], Jint, J[kind, neighbor_kind])
         clusters(cytoplasm) => λc * (cluster_volume - Vc)^2
     end
     @constraint no_extinction
-    @divide clusters(cytoplasm) when = (mcs == 2) && (cluster_volume >= 56), along = (1.0, 0.0), mass => Split()
-    @divide cells(free) when = (mcs == 2) && (volume >= 12), along = (0.0, 1.0), mass => Split()
+    @divide clusters(cytoplasm) when = (mcs == 2) && (cluster_volume >= 56), along = (
+            1.0, 0.0,
+        ),
+        mass => Split()
+    @divide cells(free) when = (mcs == 2) && (volume >= 12), along = (0.0, 1.0),
+        mass => Split()
     @sweep Metropolis(; temperature = T)
 end
 # nine 8×8 cytoplasm/nucleus clusters in 30×30, three free 5×5 cells in rows 32:36
@@ -49,12 +54,23 @@ end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "division kinds: cell and cluster division in one model" setup = [DivisionKindsSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "division kinds: cell and cluster division in one model" setup = [
+    DivisionKindsSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "division kinds: cell and cluster division in one model" begin
         σ, kinds, groups = mixed_division_state()
-        prob = PottsProblem(MixedDivision(; name = :mixed), [ownership => σ, kind => kinds, cluster => groups], (0, 4))
+        prob = PottsProblem(
+            MixedDivision(; name = :mixed),
+            [ownership => σ, kind => kinds, cluster => groups], (0, 4)
+        )
         @test selfcheck(remake(prob; tspan = (0, 1))) < 1.0e-9
-        for alg in (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
+        for alg in (
+                SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(;
+                    proposal = Moore(1)
+                ),
+            )
             v = solve(prob, alg).u[end]
             live = findall(>(0), Array(v.cell.volume))
             kd = Array(v.cell.kind)
@@ -62,24 +78,34 @@ end
             free = filter(c -> kd[c] == 3, live)
             members = filter(c -> kd[c] != 3, live)
             roots = unique(cl[members])
-            @test length(roots) == 18                                  # every cluster divided as a unit
+            # every cluster divided as a unit
+            @test length(roots) == 18
             @test all(r -> sort(kd[filter(c -> cl[c] == r, members)]) == [1, 2], roots)
-            @test length(free) == 6                                    # every free cell divided alone
-            @test all(c -> cl[c] == c, free)                           # free daughters are singletons
-            @test sort(Array(v.cell.mass)[live]) == fill(1.0, 42)      # every divided cell split its mass
+            # every free cell divided alone
+            @test length(free) == 6
+            # free daughters are singletons
+            @test all(c -> cl[c] == c, free)
+            # every divided cell split its mass
+            @test sort(Array(v.cell.mass)[live]) == fill(1.0, 42)
             # trackers stay exact through both kinds of division
-            @test Array(v.cell.cluster_volume) == CorePotts.recompute_cluster_volume(Array(v.ownership), cl)
+            @test Array(v.cell.cluster_volume) ==
+                CorePotts.recompute_cluster_volume(Array(v.ownership), cl)
         end
     end
 end
 
-@testitem "division kinds: one kind cannot be divided by both a cell rule and a cluster rule" setup = [DivisionKindsSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "division kinds: one kind cannot be divided by both a cell rule and a cluster rule" begin
+@testitem "division kinds: one kind cannot be divided by both a cell rule and a cluster \
+    rule" setup = [DivisionKindsSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "division kinds: one kind cannot be divided by both a cell rule and a \
+        cluster rule" begin
         base = MixedDivision(; name = :m)
         @test_throws Potts.PottsCompileError mtkcompile(
             Potts.PottsSystem(;
                 name = :x, kinds = [:medium, :ka],
-                lattice = Potts.lattice_spec((8, 8)), sweep = Potts.sweep_spec(:metropolis; temperature = 1.0),
+                lattice = Potts.lattice_spec((8, 8)),
+                sweep = Potts.sweep_spec(:metropolis; temperature = 1.0),
                 divisions = [
                     Potts.divide(Potts.cells(1); when = Potts.B.volume > 1),
                     Potts.divide(Potts.clusters(1); when = Potts.B.volume > 1),

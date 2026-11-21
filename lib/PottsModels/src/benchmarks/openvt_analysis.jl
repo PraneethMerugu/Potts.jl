@@ -51,9 +51,13 @@ the reference is the arm64 build, where `long double` is `double`.
 
 See also [`openvt_neighbor_histogram`](@ref) for `metrics.cpp`'s third output.
 """
-function openvt_metrics(x::AbstractVector{<:Real}, y::AbstractVector{<:Real}, g::AbstractVector{<:Real})
+function openvt_metrics(
+        x::AbstractVector{<:Real}, y::AbstractVector{<:Real},
+        g::AbstractVector{<:Real}
+    )
     length(x) == length(y) == length(g) ||
-        throw(DimensionMismatch("openvt_metrics: x, y and g have lengths $(length(x)), $(length(y)) and $(length(g))"))
+        throw(DimensionMismatch("openvt_metrics: x, y and g have \
+            lengths $(length(x)), $(length(y)) and $(length(g))"))
     N = length(x)
     N > 0 || throw(ArgumentError("openvt_metrics: no cells"))
     b = Analysis.concave_hull(zip(x, y); concavity = 1.5)
@@ -92,11 +96,16 @@ function openvt_metrics(x::AbstractVector{<:Real}, y::AbstractVector{<:Real}, g:
     end
     ng = 0
     for v in g
-        isinteger(v) || throw(ArgumentError("openvt_metrics: g must hold integers (0/1 flags), got $v"))
+        isinteger(v) ||
+            throw(ArgumentError("openvt_metrics: g must hold integers (0/1 flags), got $v"))
         ng += Int(v)
     end
     gfrac = ng / N
-    return NamedTuple{_OPENVT_METRICS}((N, r, A, C, w, gfrac, C / (2 * sqrt(pi * A)), w / r))
+    return NamedTuple{_OPENVT_METRICS}(
+        (
+            N, r, A, C, w, gfrac, C / (2 * sqrt(pi * A)), w / r,
+        )
+    )
 end
 
 function openvt_metrics(path::AbstractString)
@@ -105,14 +114,20 @@ function openvt_metrics(path::AbstractString)
     xi, yi, gi, ii = col("x"), col("y"), col("g"), col("i")
     xi === nothing && throw(ArgumentError("openvt_metrics: $path: missing column x"))
     yi === nothing && throw(ArgumentError("openvt_metrics: $path: missing column y"))
-    gi === nothing && ii === nothing && throw(ArgumentError("openvt_metrics: $path: missing column g (or i)"))
+    gi === nothing && ii === nothing &&
+        throw(ArgumentError("openvt_metrics: $path: missing column g (or i)"))
     last = max(xi, yi, something(gi, ii))
     for (k, row) in enumerate(rows)
-        length(row) >= last || throw(ArgumentError("openvt_metrics: $path: ill-formatted data row $k"))
+        length(row) >= last ||
+            throw(ArgumentError("openvt_metrics: $path: ill-formatted data row $k"))
     end
     x = [_stod(row[xi], "x") for row in rows]
     y = [_stod(row[yi], "y") for row in rows]
-    g = gi === nothing ? [Int(_stoi(row[ii]) == 0) for row in rows] : [_stoi(row[gi]) for row in rows]
+    g = if gi === nothing
+        [Int(_stoi(row[ii]) == 0) for row in rows]
+    else
+        [_stoi(row[gi]) for row in rows]
+    end
     return openvt_metrics(x, y, g)
 end
 
@@ -123,7 +138,9 @@ The line `metrics.cpp` prints for the metrics `m` of [`openvt_metrics`](@ref):
 `N,r,A,C,w,g,C_rel,w_rel` and a newline, each value as C++'s `ostream <<` writes it (C's
 `%g`, six significant digits; `NaN` as `nan`).
 """
-openvt_metrics_line(m::NamedTuple) = join((_cpp_g(m[k]) for k in _OPENVT_METRICS), ',') * "\n"
+function openvt_metrics_line(m::NamedTuple)
+    return join((_cpp_g(m[k]) for k in _OPENVT_METRICS), ',') * "\n"
+end
 
 """
     openvt_neighbor_histogram(n) -> (; n, p)
@@ -135,7 +152,8 @@ No cells or a negative neighbor count is an `ArgumentError`.
 """
 function openvt_neighbor_histogram(n::AbstractVector{<:Integer})
     isempty(n) && throw(ArgumentError("openvt_neighbor_histogram: no cells"))
-    any(<(0), n) && throw(ArgumentError("openvt_neighbor_histogram: negative neighbor count"))
+    any(<(0), n) &&
+        throw(ArgumentError("openvt_neighbor_histogram: negative neighbor count"))
     nmax = Int(maximum(n; init = 0))
     counts = zeros(Int, nmax + 1)
     for k in n
@@ -150,11 +168,13 @@ end
 
 The benchmark's per-cell inhibition code (the `i` of an O1 file): 0 growing, 1 inhibited by
 type 1 only, 2 by type 2 only, 3 by both. Type 1 (area) inhibits a cell with relative area
-`a` unless `a ≥ beta` (the model's β); type 2 (free surface) inhibits a cell with free-surface
-fraction `f` unless `f ≥ gamma` (γ). The comparisons are the benchmark text's `≥` (spec C9), so
-`a = beta` grows.
+`a` unless `a ≥ beta` (the model's β); type 2 (free surface) inhibits a cell with
+free-surface fraction `f` unless `f ≥ gamma` (γ). The comparisons are the benchmark text's
+`≥` (spec C9), so `a = beta` grows.
 """
-openvt_inhibition_code(a::Real, f::Real; beta::Real, gamma::Real) = (a >= beta ? 0 : 1) + (f >= gamma ? 0 : 2)
+function openvt_inhibition_code(a::Real, f::Real; beta::Real, gamma::Real)
+    return (a >= beta ? 0 : 1) + (f >= gamma ? 0 : 2)
+end
 
 """
     openvt_inhibition_fractions(i) -> (; uninhibited, type1, type2, both)
@@ -167,14 +187,20 @@ function openvt_inhibition_fractions(i::AbstractVector{<:Integer})
     isempty(i) && throw(ArgumentError("openvt_inhibition_fractions: no cells"))
     counts = zeros(Int, 4)
     for c in i
-        0 <= c <= 3 || throw(ArgumentError("openvt_inhibition_fractions: inhibition code $c is not in 0:3"))
+        0 <= c <= 3 ||
+            throw(ArgumentError("openvt_inhibition_fractions: inhibition code $c is not \
+                in 0:3"))
         counts[c + 1] += 1
     end
     N = length(i)
-    return (uninhibited = counts[1] / N, type1 = counts[2] / N, type2 = counts[3] / N, both = counts[4] / N)
+    return (
+        uninhibited = counts[1] / N, type1 = counts[2] / N,
+        type2 = counts[3] / N, both = counts[4] / N,
+    )
 end
 
-# ── C++ reading and printing ───────────────────────────────────────────────────────────────
+# ── C++ reading and printing
+# ───────────────────────────────────────────────────────────────
 
 # std::getline(is, field, ','): a trailing separator adds no empty field
 function _cpp_split(line::AbstractString)
@@ -196,8 +222,12 @@ end
 function _stod(s::AbstractString, name::AbstractString)
     v = tryparse(Float64, s)
     if v === nothing
-        m = match(r"^\s*[+-]?(?:inf(?:inity)?|nan|(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)"i, s)
-        m === nothing && throw(ArgumentError("openvt_metrics: column $name: not a number: \"$s\""))
+        m = match(
+            r"^\s*[+-]?(?:inf(?:inity)?|nan|(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)"i,
+            s
+        )
+        m === nothing &&
+            throw(ArgumentError("openvt_metrics: column $name: not a number: \"$s\""))
         v = parse(Float64, strip(m.match))
     end
     isinf(v) && !occursin(r"inf"i, s) &&
@@ -219,10 +249,14 @@ function _cpp_g(x::Real)
     return @sprintf("%g", x)
 end
 
-# ── O1–O6 files (spec §3.1) ────────────────────────────────────────────────────────────────
+# ── O1–O6 files (spec §3.1)
+# ────────────────────────────────────────────────────────────────
 
 # columns of the per-cell formats; the integer columns are listed separately
-const _OPENVT_COLUMNS = (O1 = (:x, :y, :i, :n), O2 = (:x, :y, :r, :f, :a), O5 = (:x_pos, :y_pos, :radius_i, :inhibited))
+const _OPENVT_COLUMNS = (
+    O1 = (:x, :y, :i, :n), O2 = (:x, :y, :r, :f, :a),
+    O5 = (:x_pos, :y_pos, :radius_i, :inhibited),
+)
 const _OPENVT_INTCOLS = (O1 = (:i, :n), O2 = (), O5 = (:inhibited,))
 const _OPENVT_O6 = (:t, :N, :r, :A, :C, :w, :g, :C_rel, :w_rel)
 
@@ -235,21 +269,30 @@ function _openvt_float(x::Real)
     return string(v)
 end
 
-_openvt_int(x::Real) = (isinteger(x) || throw(ArgumentError("write_openvt: $x is not an integer")); string(Int(x)))
+function _openvt_int(x::Real)
+    (
+        isinteger(x) || throw(ArgumentError("write_openvt: $x is not an integer"));
+        string(Int(x))
+    )
+end
 
 function _openvt_lengths(name, cols...)
     n = length(first(cols))
     all(c -> length(c) == n, cols) ||
-        throw(DimensionMismatch("write_openvt: the columns of $name have different lengths $(map(length, cols))"))
+        throw(DimensionMismatch("write_openvt: the columns of $name have different \
+            lengths $(map(length, cols))"))
     return n
 end
 
-_openvt_format(format::Symbol) =
-    format in (:O1, :O2, :O3, :O4, :O5, :O6, :O6_neighbors) ||
-    throw(ArgumentError("unknown OpenVT format $format; use :O1–:O6 or :O6_neighbors"))
+function _openvt_format(format::Symbol)
+    return format in (:O1, :O2, :O3, :O4, :O5, :O6, :O6_neighbors) ||
+        throw(ArgumentError("unknown OpenVT format $format; use :O1–:O6 or :O6_neighbors"))
+end
 
 function _openvt_keys(format, data, want)
-    keys(data) == want || throw(ArgumentError("write_openvt: $format takes the fields $want, got $(keys(data))"))
+    keys(data) == want ||
+        throw(ArgumentError("write_openvt: $format takes the fields $want, \
+            got $(keys(data))"))
     return nothing
 end
 
@@ -267,20 +310,24 @@ Write `data` as the OpenVT benchmark file `format` (spec 15 §3.1) to `dest`, a 
 | `:O1` | `(; x, y, i, n)`: centroid, inhibition code in `0:3`, neighbor count | `x,y,i,n` |
 | `:O2` | `(; x, y, r, f, a)` | `x,y,r,f,a` |
 | `:O3` | `(; beta, mcs)` or `(; gamma, mcs)`; `mcs = NaN` for a run that never reached 10⁴ cells | `beta,Time to 10k (MCS),Time to 10k (5T)`; the 5T column is `mcs/775` |
-| `:O4` | `(; t, widths)`, `widths[k, rep]` in cell diameters | `Normalized time (T),Tissue width rep1 (CD),…,Mean Tissue width (CD),STD Tissue width (CD)`; the mean and the population SD (divisor = replicates) of each row, from sequential sums |
+| `:O4` | `(; t, widths)`, `widths[k, rep]` in cell diameters | `Normalized time (T),Tissue width rep1 (CD),…,Mean Tissue width (CD),STD Tissue width (CD)`;
+the mean and the population SD (divisor = replicates) of each row,
+        from sequential sums |
 | `:O5` | `(; x_pos, y_pos, radius_i, inhibited)`, `inhibited` 0 or 1 | `x_pos,y_pos,radius_i,inhibited` |
-| `:O6` | `(; t, metrics)`, `metrics[k]` from [`openvt_metrics`](@ref) | `t,N,r,A,C,w,g,C_rel,w_rel`; a row is `t` as `run_metrics.sh` prints it (`%.15g`), `,`, and [`openvt_metrics_line`](@ref) |
+| `:O6` | `(; t, metrics)`, `metrics[k]` from [`openvt_metrics`](@ref) | `t,N,r,A,C,w,g,C_rel,w_rel`; a row is `t` as `run_metrics.sh` prints it (`%.15g`), `,`,
+        and [`openvt_metrics_line`](@ref) |
 | `:O6_neighbors` | `(; n, p)` from [`openvt_neighbor_histogram`](@ref) | `n,p`; `p` as `metrics.cpp` prints it |
 
 The O4 mean and SD are summed left to right; NumPy sums pairwise, so with 8 or more
-replicates they can differ from `numpy.mean`/`numpy.std` in the last bit. The O6 values
-have `metrics.cpp`'s six significant digits. Other fields, an unknown
-format, an O1 code outside `0:3` or an O5 flag other than 0/1 is an `ArgumentError`;
-columns of different lengths are a `DimensionMismatch`. Read a file back with
-[`read_openvt`](@ref); name it with [`openvt_filename`](@ref).
+replicates they can differ from `numpy.mean`/`numpy.std` in the last bit. The O6 values have
+`metrics.cpp`'s six significant digits. Other fields, an unknown format, an O1 code outside
+`0:3` or an O5 flag other than 0/1 is an `ArgumentError`; columns of different lengths are a
+`DimensionMismatch`. Read a file back with [`read_openvt`](@ref); name it with
+[`openvt_filename`](@ref).
 """
 function write_openvt(path::AbstractString, format::Symbol, data::NamedTuple)
-    text = sprint(io -> write_openvt(io, format, data))   # validate before touching the file
+    # validate before touching the file
+    text = sprint(io -> write_openvt(io, format, data))
     write(path, text)
     return path
 end
@@ -292,29 +339,51 @@ function write_openvt(io::IO, format::Symbol, data::NamedTuple)
         ints = _OPENVT_INTCOLS[format]
         _openvt_keys(format, data, cols)
         n = _openvt_lengths(format, values(data)...)
-        format === :O1 && (all(in(0:3), data.i) || throw(ArgumentError("write_openvt: O1 inhibition codes must be in 0:3")))
-        format === :O5 && (all(in(0:1), data.inhibited) || throw(ArgumentError("write_openvt: O5 `inhibited` must be 0 or 1")))
+        format === :O1 && (
+            all(in(0:3), data.i) ||
+                throw(ArgumentError("write_openvt: O1 inhibition codes must be in 0:3"))
+        )
+        format === :O5 && (
+            all(in(0:1), data.inhibited) ||
+                throw(ArgumentError("write_openvt: O5 `inhibited` must be 0 or 1"))
+        )
         print(io, join(cols, ','), '\n')
         for k in 1:n
-            print(io, join((c in ints ? _openvt_int(data[c][k]) : _openvt_float(data[c][k]) for c in cols), ','), '\n')
+            print(
+                io,
+                join(
+                    (
+                        c in ints ? _openvt_int(data[c][k]) : _openvt_float(data[c][k])
+                            for c in cols
+                    ), ','
+                ),
+                '\n'
+            )
         end
     elseif format === :O3
         (length(data) == 2 && keys(data)[1] in (:beta, :gamma) && keys(data)[2] === :mcs) ||
-            throw(ArgumentError("write_openvt: O3 takes the fields (beta, mcs) or (gamma, mcs), got $(keys(data))"))
+            throw(ArgumentError("write_openvt: O3 takes the fields (beta, mcs) or (gamma, \
+                mcs), got $(keys(data))"))
         n = _openvt_lengths(format, data[1], data.mcs)
         print(io, keys(data)[1], ",Time to 10k (MCS),Time to 10k (5T)\n")
         for k in 1:n
             mcs = Float64(data.mcs[k])
-            print(io, _openvt_float(data[1][k]), ',', _openvt_float(mcs), ',', _openvt_float(mcs / 775), '\n')
+            print(
+                io, _openvt_float(data[1][k]), ',', _openvt_float(mcs),
+                ',', _openvt_float(mcs / 775), '\n'
+            )
         end
     elseif format === :O4
         _openvt_keys(format, data, (:t, :widths))
         W = data.widths
         ndims(W) == 2 && size(W, 1) == length(data.t) ||
-            throw(DimensionMismatch("write_openvt: O4 widths must be a length(t) × replicates matrix"))
+            throw(DimensionMismatch("write_openvt: O4 widths must be a length(t) × \
+                replicates matrix"))
         R = size(W, 2)
-        print(io, "Normalized time (T),", join(("Tissue width rep$k (CD)" for k in 1:R), ','),
-            R > 0 ? "," : "", "Mean Tissue width (CD),STD Tissue width (CD)\n")
+        print(
+            io, "Normalized time (T),", join(("Tissue width rep$k (CD)" for k in 1:R), ','),
+            R > 0 ? "," : "", "Mean Tissue width (CD),STD Tissue width (CD)\n"
+        )
         for (k, row) in enumerate(eachrow(W))
             s = 0.0
             for v in row
@@ -376,25 +445,45 @@ function read_openvt(path::AbstractString, format::Symbol)
     rows = [split(l, ',') for l in lines[2:end]]
     width = length(header)
     for (k, row) in enumerate(rows)
-        length(row) == width || throw(ArgumentError("read_openvt: $path: row $k has $(length(row)) fields, the header $width"))
+        length(row) == width ||
+            throw(ArgumentError("read_openvt: $path: row $k has $(length(row)) fields, \
+                the header $width"))
     end
     fcol(c) = Float64[parse(Float64, r[c]) for r in rows]
     icol(c) = Int[parse(Int, r[c]) for r in rows]
     if format in (:O1, :O2, :O5)
         cols = _OPENVT_COLUMNS[format]
         _openvt_header(path, format, header, cols)
-        return NamedTuple{cols}(Tuple(c in _OPENVT_INTCOLS[format] ? icol(k) : fcol(k) for (k, c) in enumerate(cols)))
+        return NamedTuple{cols}(
+            Tuple(
+                c in _OPENVT_INTCOLS[format] ? icol(k) : fcol(k)
+                    for (k, c) in enumerate(cols)
+            )
+        )
     elseif format === :O3
         p = Symbol(header[1])
-        p in (:beta, :gamma) && width == 3 || throw(ArgumentError("read_openvt: $path is not an O3 file"))
+        p in (:beta, :gamma) && width == 3 ||
+            throw(ArgumentError("read_openvt: $path is not an O3 file"))
         return NamedTuple{(p, :mcs)}((fcol(1), fcol(2)))
     elseif format === :O4
-        (width >= 3 && header[1] == "Normalized time (T)") || throw(ArgumentError("read_openvt: $path is not an O4 file"))
+        (width >= 3 && header[1] == "Normalized time (T)") ||
+            throw(ArgumentError("read_openvt: $path is not an O4 file"))
         R = width - 3
-        return (t = fcol(1), widths = Float64[parse(Float64, rows[k][1 + j]) for k in eachindex(rows), j in 1:R])
+        return (
+            t = fcol(1),
+            widths = Float64[
+                parse(Float64, rows[k][1 + j])
+                    for k in eachindex(rows), j in 1:R
+            ],
+        )
     elseif format === :O6
         _openvt_header(path, format, header, _OPENVT_O6)
-        return NamedTuple{_OPENVT_O6}(Tuple(c === :N ? icol(k) : fcol(k) for (k, c) in enumerate(_OPENVT_O6)))
+        return NamedTuple{_OPENVT_O6}(
+            Tuple(
+                c === :N ? icol(k) : fcol(k)
+                    for (k, c) in enumerate(_OPENVT_O6)
+            )
+        )
     else # :O6_neighbors
         _openvt_header(path, format, header, (:n, :p))
         return (n = icol(1), p = fcol(2))
@@ -403,7 +492,8 @@ end
 
 function _openvt_header(path, format, header, cols)
     Tuple(Symbol.(header)) == cols ||
-        throw(ArgumentError("read_openvt: $path: expected the $format header $(join(cols, ',')), got $(join(header, ','))"))
+        throw(ArgumentError("read_openvt: $path: expected the $format \
+            header $(join(cols, ',')), got $(join(header, ','))"))
     return nothing
 end
 
@@ -413,8 +503,9 @@ end
 The file name the OpenVT benchmark expects for `format` (spec 15 §3.1):
 
 - `openvt_filename(:O1; case, seed, mcs)`: `"potts_<case>_s<seed>_<mcs:06d>.csv"`;
-- `openvt_filename(:O2; k)`: `"Potts.jl_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv"`
-  (joined with the platform's separator);
+- `openvt_filename(:O2; k)`:
+  `"Potts.jl_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv"` (joined with the
+  platform's separator);
 - `openvt_filename(:O3; parameter)`, `parameter` `:beta` or `:gamma`:
   `"Potts.jl_time_to_10k_vs_<parameter>.csv"`;
 - `openvt_filename(:O5; gamma, mcs)`: `"Potts.jl_gamma_<gamma>_<mcs>MCS.csv"`, with `gamma`
@@ -428,35 +519,51 @@ O4 and O6 have no fixed names. Another format or an O3 `parameter` other than `:
 """
 function openvt_filename(format::Symbol; kw...)
     if format === :O1
-        return string("potts_", kw[:case], "_s", kw[:seed], "_", lpad(Int(kw[:mcs]), 6, '0'), ".csv")
+        return string(
+            "potts_", kw[:case], "_s", kw[:seed], "_", lpad(Int(kw[:mcs]), 6, '0'), ".csv"
+        )
     elseif format === :O2
-        return joinpath("Potts.jl_5T_MonolayerGrowth_1000_Data", string("cell_data_no_inhibition_", kw[:k], ".csv"))
+        return joinpath(
+            "Potts.jl_5T_MonolayerGrowth_1000_Data",
+            string("cell_data_no_inhibition_", kw[:k], ".csv")
+        )
     elseif format === :O3
         p = Symbol(kw[:parameter])
-        p in (:beta, :gamma) || throw(ArgumentError("openvt_filename: O3 parameter must be :beta or :gamma, got $p"))
+        p in (:beta, :gamma) ||
+            throw(ArgumentError("openvt_filename: O3 parameter must be :beta or :gamma, \
+                got $p"))
         return string("Potts.jl_time_to_10k_vs_", p, ".csv")
     elseif format === :O5
         (haskey(kw, :gamma) ⊻ haskey(kw, :beta)) ||
-            throw(ArgumentError("openvt_filename: O5 takes exactly one of `gamma` and `beta`"))
+            throw(ArgumentError("openvt_filename: O5 takes exactly one of `gamma` and \
+                `beta`"))
         p = haskey(kw, :gamma) ? :gamma : :beta
         return string("Potts.jl_", p, "_", kw[p], "_", kw[:mcs], "MCS.csv")
     end
-    throw(ArgumentError("openvt_filename: no file name for format $format; use :O1, :O2, :O3 or :O5"))
+    throw(
+        ArgumentError(
+            "openvt_filename: no file name for format $format; use :O1, :O2, :O3 or :O5"
+        )
+    )
 end
 
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Algorithm-against-algorithm comparison of per-seed values (D-214, D-216)
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 
-# sample mean and sd (n − 1) of finite values; a constant sample has its value as mean and sd exactly 0
+# sample mean and sd (n − 1) of finite values; a constant sample has its value as mean and
+# sd exactly 0
 _spread_mean(x) = allequal(x) ? Float64(first(x)) : sum(Float64, x) / length(x)
 function _spread_sd(x, m)
     allequal(x) && return 0.0
     return sqrt(sum(v -> abs2(Float64(v) - m), x) / (length(x) - 1))
 end
 function _spread_check(x, name)
-    length(x) >= 2 || throw(ArgumentError("openvt_spread_compare: `$name` needs at least 2 values, got $(length(x))"))
-    all(isfinite, x) || throw(ArgumentError("openvt_spread_compare: `$name` has a non-finite value"))
+    length(x) >= 2 ||
+        throw(ArgumentError("openvt_spread_compare: `$name` needs at least 2 values, \
+            got $(length(x))"))
+    all(isfinite, x) ||
+        throw(ArgumentError("openvt_spread_compare: `$name` has a non-finite value"))
     return nothing
 end
 
@@ -472,7 +579,8 @@ by the Welch two-sample z of independent runs (spec 15 §1.3):
 - `se == 0` gives `z = 0` when `diff == 0` and `±Inf` (the sign of `diff`) otherwise;
 - `beyond = |z| > z`, where the keyword `z` is the critical value. The default 4.42 is
   Φ⁻¹(1 − 5·10⁻⁶): a family false-alarm budget of 10⁻³ split over at most 100 two-sided
-  checks, the convention of the ensemble check of `BoundarySiteCPM` against the sequential sampler.
+  checks, the convention of the ensemble check of `BoundarySiteCPM` against the sequential
+  sampler.
 
 Returns `(; n_ref, n_alt, mean_ref, mean_alt, sd_ref, sd_alt, diff, se, z, beyond)`: the
 counts are `Int`, `beyond` a `Bool`, the rest `Float64`. `ref` and `alt` are vectors of
@@ -481,7 +589,10 @@ statistic uses the normal limit, so it is meant for about 100 seeds per arm.
 
 See also [`openvt_spread_table`](@ref PottsModels.openvt_spread_table).
 """
-function openvt_spread_compare(ref::AbstractVector{<:Real}, alt::AbstractVector{<:Real}; z::Real = 4.42)
+function openvt_spread_compare(
+        ref::AbstractVector{<:Real}, alt::AbstractVector{<:Real};
+        z::Real = 4.42
+    )
     _spread_check(ref, "ref")
     _spread_check(alt, "alt")
     n_ref, n_alt = length(ref), length(alt)
@@ -489,8 +600,15 @@ function openvt_spread_compare(ref::AbstractVector{<:Real}, alt::AbstractVector{
     sd_ref, sd_alt = _spread_sd(ref, mean_ref), _spread_sd(alt, mean_alt)
     diff = mean_alt - mean_ref
     se = sqrt(sd_ref^2 / n_ref + sd_alt^2 / n_alt)
-    zs = se == 0 ? (diff == 0 ? 0.0 : copysign(Inf, diff)) : diff / se
-    return (; n_ref, n_alt, mean_ref, mean_alt, sd_ref, sd_alt, diff, se, z = zs, beyond = abs(zs) > z)
+    zs = if se == 0
+        diff == 0 ? 0.0 : copysign(Inf, diff)
+    else
+        diff / se
+    end
+    return (;
+        n_ref, n_alt, mean_ref, mean_alt, sd_ref,
+        sd_alt, diff, se, z = zs, beyond = abs(zs) > z,
+    )
 end
 
 """
@@ -501,10 +619,19 @@ table: `ref` and `alt` map metric ids (`String`) to per-seed values and must hav
 key set (else `ArgumentError`). One row per metric, sorted by metric id, each
 `merge((; metric), openvt_spread_compare(ref[metric], alt[metric]; z))`.
 """
-function openvt_spread_table(ref::AbstractDict{String, <:AbstractVector}, alt::AbstractDict{String, <:AbstractVector}; z::Real = 4.42)
-    Set(keys(ref)) == Set(keys(alt)) ||
-        throw(ArgumentError("openvt_spread_table: `ref` and `alt` have different metrics: " *
-                            "only in ref $(sort!(collect(setdiff(keys(ref), keys(alt))))), " *
-                            "only in alt $(sort!(collect(setdiff(keys(alt), keys(ref)))))"))
-    return [merge((; metric), openvt_spread_compare(ref[metric], alt[metric]; z)) for metric in sort!(collect(keys(ref)))]
+function openvt_spread_table(
+        ref::AbstractDict{String, <:AbstractVector},
+        alt::AbstractDict{String, <:AbstractVector}; z::Real = 4.42
+    )
+    Set(keys(ref)) == Set(keys(alt)) || throw(
+        ArgumentError(
+            "openvt_spread_table: `ref` and `alt` have different metrics: " *
+                "only in ref $(sort!(collect(setdiff(keys(ref), keys(alt))))), " *
+                "only in alt $(sort!(collect(setdiff(keys(alt), keys(ref)))))"
+        )
+    )
+    return [
+        merge((; metric), openvt_spread_compare(ref[metric], alt[metric]; z))
+            for metric in sort!(collect(keys(ref)))
+    ]
 end

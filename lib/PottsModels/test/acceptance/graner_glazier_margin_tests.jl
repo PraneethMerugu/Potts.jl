@@ -39,7 +39,8 @@
 include(joinpath(@__DIR__, "..", "shared", "common.jl"))
 core(n) = 2ceil(Int, sqrt(40n / π)) + 1
 # lattice side minus 2margin
-function margin_edge(σ)                                          # min edge distance of a cell site
+# min edge distance of a cell site
+function margin_edge(σ)
     L1, L2 = size(σ)
     d = typemax(Int)
     for x in CartesianIndices(σ)
@@ -58,8 +59,12 @@ function circgap(occ::AbstractVector{Bool})               # longest circular run
     end
     return min(best, L)
 end
-imagegap(σ) = (c = σ .!= 0; min(circgap(vec(any(c; dims = 2))), circgap(vec(any(c; dims = 1)))))
-# The long run of testset 3: n = 200 (seed 1), run seed 16, 25 000 MCS, frames every 100 MCS.
+function imagegap(σ)
+    c = σ .!= 0
+    return min(circgap(vec(any(c; dims = 2))), circgap(vec(any(c; dims = 1))))
+end
+# The long run of testset 3: n = 200 (seed 1), run seed 16, 25 000 MCS, frames every 100
+# MCS.
 const RUN = (n = 200, seed = 1, run_seed = 16, mcs = 25_000, every = 100)
 function margin_run(σ, k)
     prob = PottsProblem(
@@ -76,7 +81,11 @@ end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "graner glazier margin: Graner–Glazier aggregate margin" setup = [GranerGlazierMarginSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "graner glazier margin: Graner–Glazier aggregate margin" setup = [
+    GranerGlazierMarginSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "graner glazier margin: Graner–Glazier aggregate margin" begin
         @testset "1. default margin ≥ 60 on every side; lattice sized by the formula" begin
             margins = Int[]
@@ -84,15 +93,18 @@ end
                 σ, k = graner_glazier_aggregate(n; seed)
                 L = size(σ, 1)
                 @test size(σ) == (L, L)
-                @test margin_edge(σ) >= 60                                    # measured from σ
+                # measured from σ
+                @test margin_edge(σ) >= 60
                 @test iseven(L - core(n))
                 M = (L - core(n)) ÷ 2                                  # the default margin
                 push!(margins, M)
                 @test M >= 60
-                σM, kM = graner_glazier_aggregate(n; seed, margin = M)      # default ≡ margin = M
+                # default ≡ margin = M
+                σM, kM = graner_glazier_aggregate(n; seed, margin = M)
                 @test σM == σ && kM == k
             end
-            @test allequal(margins)                                         # one default for every n
+            # one default for every n
+            @test allequal(margins)
         end
 
         @testset "2. explicit margin sets the lattice side and keeps the margin" begin
@@ -104,13 +116,15 @@ end
             end
         end
 
-        @testset "3. a long sorting run at the default margin stays off the lattice edge" begin
+        @testset "3. a long sorting run at the default margin stays off the lattice \
+            edge" begin
             (; n, seed) = RUN
             # negative control: margin 10 reaches the edge (today at t = 22 800 MCS)
             ctl = margin_run(graner_glazier_aggregate(n; seed, margin = 10)...)
             @test ctl.frames == RUN.mcs ÷ RUN.every + 1 && ctl.cells == n
             @test ctl.edge == 0
-            @test ctl.gap >= 1                     # (drift, not a join with the image: see header)
+            # (drift, not a join with the image: see header)
+            @test ctl.gap >= 1
             # the default margin: no cell site on the outermost rows/columns at any frame
             def = margin_run(graner_glazier_aggregate(n; seed)...)
             @test def.frames == RUN.mcs ÷ RUN.every + 1 && def.cells == n

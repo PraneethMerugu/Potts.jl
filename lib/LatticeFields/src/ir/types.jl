@@ -14,7 +14,17 @@ isunsigned_lane(t::Scalar) = t in (U8, U32)
 """
 Storage size in bytes of one element of lane `t`.
 """
-lanebytes(t::Scalar) = t == U8 ? 1 : t == F16 ? 2 : t == F64 ? 8 : 4
+function lanebytes(t::Scalar)
+    if t == U8
+        return 1
+    elseif t == F16
+        return 2
+    elseif t == F64
+        return 8
+    else
+        return 4
+    end
+end
 """
 Host Julia type of an integer or storage lane.
 """
@@ -36,17 +46,23 @@ Boundary policy of an access: `RESOLVE` (pass 2 rewrites out-of-domain reads), `
 
 # The op set. Printing and fingerprints use the names, never the codes, so adding
 # an op never changes an existing program's text.
-@enum Op::UInt8 CONST PARAM LOAD TABLE COORD INSIDE_OP BITTEST RUNTIME ADD MUL NEG DIV FMA MIN MAX ABS POWI SQRT EXP LOG CALL EQ LT LE AND OR NOT XOR SELECT COND CAST IDX RESTRICT ELEMENT_SUM
+@enum(
+    Op::UInt8,
+    CONST, PARAM, LOAD, TABLE, COORD, INSIDE_OP, BITTEST, RUNTIME, ADD, MUL, NEG, DIV, FMA,
+    MIN, MAX, ABS, POWI, SQRT, EXP, LOG, CALL, EQ, LT, LE, AND, OR, NOT, XOR, SELECT, COND,
+    CAST, IDX, RESTRICT, ELEMENT_SUM
+)
 
-# RESTRICT(x; imm = 0 sum | 1 max | 2 plurality) at a coarse site combines `x` over the site's
-# children (plurality: the most frequent value, ties to the smallest nonzero value, 0 last)
-# (2 per coarsened axis, 3 at the last site of an odd axis): inside `x`, an access at level −1
-# is taken relative to each child in turn (offset in the fine frame).
+# RESTRICT(x; imm = 0 sum | 1 max | 2 plurality) at a coarse site combines `x` over the
+# site's children (plurality: the most frequent value, ties to the smallest nonzero value, 0
+# last) (2 per coarsened axis, 3 at the last site of an odd axis): inside `x`, an access at
+# level −1 is taken relative to each child in turn (offset in the fine frame).
 opname(op::Op) = op == INSIDE_OP ? "inside" : lowercase(string(op))
 const COMMUTATIVE = (ADD, MUL, MIN, MAX, EQ, AND, OR, XOR)
 const CALLS = (
     :sin, :cos, :tan, :tanh, :sinh, :cosh, :cbrt, :exp2, :log2, :log10, :expm1, :log1p,
-    :atan, :floor, :ceil, :round)
+    :atan, :floor, :ceil, :round,
+)
 
 """
     Grid(dims; geometry = CUBIC, domain = 0)
@@ -60,8 +76,9 @@ struct Grid{N}
     domain::Int32                    # mask id of the irregular domain, 0 for the full box
 end
 function Grid(dims::NTuple{N, Integer}; geometry = CUBIC, domain = 0) where {N}
-    Grid{N}(
-        Int32.(dims), geometry, Int32(domain))
+    return Grid{N}(
+        Int32.(dims), geometry, Int32(domain)
+    )
 end
 
 """
@@ -73,8 +90,8 @@ struct Level{N}
     widths::Union{Nothing, NTuple{N, Vector{Int8}}}
 end
 Level(g::Grid{N}, shift = 0) where {N} = Level{N}(g, Int8(shift), nothing)
-# Coarse levels: each coarsening halves an axis with floor, `n ÷ 2`; the last aggregate of an
-# odd axis takes width 3 (at the high end; see contract.jl). An axis of size 1 is never
+# Coarse levels: each coarsening halves an axis with floor, `n ÷ 2`; the last aggregate of
+# an odd axis takes width 3 (at the high end; see contract.jl). An axis of size 1 is never
 # coarsened (it stays 1, identity map); an axis that would reach 0 sites makes the level
 # illegal (`coarsenable`, checked by legality).
 leveldims(l::Level) = map(d -> Int32(d == 1 ? 1 : max(d >> l.shift, 1)), l.grid.dims)
@@ -91,18 +108,25 @@ Placement{N}() where {N} = Placement{N}(ntuple(_ -> Int8(0), N))
 struct FieldDecl{N}
     key::String
     classes::Vector{Placement{N}}
-    shape::Vector{Int16}             # empty: scalar; `[k]`: k components (flat, after symmetry)
+    # empty: scalar; `[k]`: k components (flat, after symmetry)
+    shape::Vector{Int16}
     symmetric::Bool
     storage::Scalar
     levels::Vector{Int8}
     epoch::Epoch
     buffers::Int8                    # 1, or 2 for host ping-pong
     role::Symbol                     # :state | :aux | :input | :output | :scratch
-    fixed::Bool                      # a declared storage (`lattice_storage`): the float lane
-                                     # holds its own type under `lanes = :state` (`lanetype`)
+    # a declared storage (`lattice_storage`): the float lane holds its own type under `lanes
+    # = :state` (`lanetype`)
+    fixed::Bool
 end
-FieldDecl{N}(key, classes, shape, symmetric, storage, levels, epoch, buffers, role) where {N} =
-    FieldDecl{N}(key, classes, shape, symmetric, storage, levels, epoch, buffers, role, false)
+function FieldDecl{N}(
+        key, classes, shape, symmetric, storage, levels, epoch, buffers, role
+    ) where {N}
+    return FieldDecl{N}(
+        key, classes, shape, symmetric, storage, levels, epoch, buffers, role, false
+    )
+end
 ncomp(f::FieldDecl) = isempty(f.shape) ? 1 : Int(prod(f.shape))
 
 """
@@ -166,10 +190,13 @@ struct Space{N}
     mask::Int32                      # MASKED: mask id
     inset::NTuple{N, NTuple{2, Int16}} # RESTRICTED: (low, high) sites skipped per axis
 end
-function Space{N}(kind = FULL; level = 0, class = 0, mask = 0,
-        inset = ntuple(_ -> (Int16(0), Int16(0)), N)) where {N}
-    Space{N}(
-        kind, Int8(level), Int8(class), Int32(mask), inset)
+function Space{N}(
+        kind = FULL; level = 0, class = 0, mask = 0,
+        inset = ntuple(_ -> (Int16(0), Int16(0)), N)
+    ) where {N}
+    return Space{N}(
+        kind, Int8(level), Int8(class), Int32(mask), inset
+    )
 end
 
 """
@@ -230,12 +257,12 @@ Coef(v::Real) = Coef(Float64(v), Int32(0))
 
 """
 `α c + β ∂c/∂n = g` on the face (`axis`, `side = ±1`) of a cell-centered field. Dirichlet:
-α = 1, β = 0. No flux: α = 0, β = 1, g = 0. `β` is in lattice units (the front end divides by h).
-`gfield` (0: none) is a field holding the value at each boundary site (a value that reads the
-time, the coordinates or an input): then `g` is that field's value times the
-coefficient `g` (a kernel of the program computes the field at the step's time). `afield` and
-`bfield` (0: none) do the same for `α` and `β`: a Robin coefficient that varies by
-site or in time is that field's value at the boundary site times the coefficient.
+α = 1, β = 0. No flux: α = 0, β = 1, g = 0. `β` is in lattice units (the front end divides
+by h). `gfield` (0: none) is a field holding the value at each boundary site (a value that
+reads the time, the coordinates or an input): then `g` is that field's value times the
+coefficient `g` (a kernel of the program computes the field at the step's time). `afield`
+and `bfield` (0: none) do the same for `α` and `β`: a Robin coefficient that varies by site
+or in time is that field's value at the boundary site times the coefficient.
 """
 struct FaceRule <: AbstractBoundaryRule
     field::Int32
@@ -248,8 +275,9 @@ struct FaceRule <: AbstractBoundaryRule
     afield::Int32
     bfield::Int32
 end
-FaceRule(field, axis, side, alpha::Coef, beta::Coef, g::Coef, gfield = 0) =
-    FaceRule(field, axis, side, alpha, beta, g, Int32(gfield), Int32(0), Int32(0))
+function FaceRule(field, axis, side, alpha::Coef, beta::Coef, g::Coef, gfield = 0)
+    return FaceRule(field, axis, side, alpha, beta, g, Int32(gfield), Int32(0), Int32(0))
+end
 
 """
 Does the face rule `r` have a coefficient `α` or `β` that varies by site or in time (a value
@@ -258,7 +286,7 @@ field)?
 sitecoefs(r::FaceRule) = r.afield != 0 || r.bfield != 0
 
 """Relative tolerance of the degenerate-face test: `|α/2 + β| ≤ tol (|α|/2 + |β|)`."""
-const FACE_RTOL = 1e-6
+const FACE_RTOL = 1.0e-6
 
 """
     degenerate(α, β) -> Bool
@@ -291,9 +319,9 @@ struct ImmersedRule <: AbstractBoundaryRule
     kind::Symbol
 end
 """
-Masked node value: stores at masked sites write `value` (identity row). `vfield` (0: none) is
-a field holding the value at each site (a value that reads the time, the coordinates or an
-input): the value is then that field's value times the coefficient `value` (the mask's
+Masked node value: stores at masked sites write `value` (identity row). `vfield` (0: none)
+is a field holding the value at each site (a value that reads the time, the coordinates or
+an input): the value is then that field's value times the coefficient `value` (the mask's
 kernel computes the field with the mask).
 """
 struct NodeValueRule <: AbstractBoundaryRule
@@ -303,7 +331,9 @@ struct NodeValueRule <: AbstractBoundaryRule
     face::Symbol                     # :harmonic | :active
     vfield::Int32
 end
-NodeValueRule(field, mask, value::Coef, face::Symbol) = NodeValueRule(field, mask, value, face, Int32(0))
+function NodeValueRule(field, mask, value::Coef, face::Symbol)
+    return NodeValueRule(field, mask, value, face, Int32(0))
+end
 
 struct Program{N}
     hierarchy::Vector{Level{N}}
@@ -318,6 +348,9 @@ struct Program{N}
     nparams::Int
 end
 leveldims(p::Program, level::Integer) = leveldims(p.hierarchy[level + 1])
-"""`nsites(p, level)`: the number of nodes of program `p` on grid level `level` (0: the lattice)."""
+"""
+`nsites(p, level)`: the number of nodes of program `p` on grid level `level` (0: the
+lattice).
+"""
 nsites(p::Program, level::Integer) = Int(prod(leveldims(p, level)))
 fieldid(p::Program, key::AbstractString) = Int32(findfirst(f -> f.key == key, p.fields))

@@ -22,12 +22,20 @@ function launch!(b::KA.Backend, l::Launch)
         # the host fast path: the halving tree's idle items skipped, blocks threaded
         # over chunks when the launch has more than `HOST_GRAIN` items; bitwise equal to the
         # emulated form (the same calls in the same order within each block)
-        nc = l.n * l.wg <= Exec.HOST_GRAIN ? 1 : min(Threads.nthreads(), l.n, length(l.lds) ÷ l.ldslen)
-        Schedule.host_reduce!(l.body, l.n, l.wg, l.lds, l.ldslen, l.S, l.P, l.G; chunks = nc)
+        nc = if l.n * l.wg <= Exec.HOST_GRAIN
+            1
+        else
+            min(Threads.nthreads(), l.n, length(l.lds) ÷ l.ldslen)
+        end
+        Schedule.host_reduce!(
+            l.body, l.n, l.wg, l.lds, l.ldslen, l.S, l.P, l.G; chunks = nc
+        )
     elseif Exec.ishost(b)
         Schedule.host_workgroups!(l.body, l.n, l.wg, l.phases, l.lds, l.S, l.P, l.G)
     else
-        Schedule.workgroups!(b, l.body, l.n, l.wg, l.phases, eltype(l.lds), l.ldslen, l.S, l.P, l.G)
+        Schedule.workgroups!(
+            b, l.body, l.n, l.wg, l.phases, eltype(l.lds), l.ldslen, l.S, l.P, l.G
+        )
     end
     return nothing
 end

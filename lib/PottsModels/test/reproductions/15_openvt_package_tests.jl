@@ -2,47 +2,51 @@
 # prepared locally. Submitting it is the maintainer's call; this test
 # never contacts anyone and needs neither the PC nor the consortium clone (G).
 #
-# D-204 amendment (the package completed): every item the first version listed as optional or
-# "Pending" is now REQUIRED: O1 (per-cell time series of cases a, b, e, f, re-run from the
-# recorded seeds), O2 (case b), A3 (inhibition shares over time, from O1), O3 and O5 (the
-# sweeps record is merged), the MIT line (D-181), and a deterministic build outside
-# git. The O1 files and the O2 files are too large for git (D-168, D-204): they live in a BULK
-# directory outside git, `ENV["OPENVT_PACKAGE_BULK"]`, and git pins their MANIFEST (names, row
-# counts, byte counts, inhibition-code counts, sha256), never their bytes. See "BULK inputs",
-# "The O1 re-run record" and "The O1 recorder" below. On a machine without the bulk directory
-# this test is red by design: a package without its data is not a submission. Reading the
-# archives needs Info-ZIP `unzip` (`unzip -Z1`, `unzip -p`), present on macOS and on the PC.
+# D-204 amendment (the package completed): every item the first version listed as optional
+# or "Pending" is now REQUIRED: O1 (per-cell time series of cases a, b, e, f, re-run from
+# the recorded seeds), O2 (case b), A3 (inhibition shares over time, from O1), O3 and O5
+# (the sweeps record is merged), the MIT line (D-181), and a deterministic build outside
+# git. The O1 files and the O2 files are too large for git (D-168, D-204): they live in a
+# BULK directory outside git, `ENV["OPENVT_PACKAGE_BULK"]`, and git pins their MANIFEST
+# (names, row counts, byte counts, inhibition-code counts, sha256), never their bytes. See
+# "BULK inputs", "The O1 re-run record" and "The O1 recorder" below. On a machine without
+# the bulk directory this test is red by design: a package without its data is not a
+# submission. Reading the archives needs Info-ZIP `unzip` (`unzip -Z1`, `unzip -p`), present
+# on macOS and on the PC.
 #
 # Sources: spec 15 (docs/design/research/model-specs/15_openvt_monolayer.md) §3.1 (O1–O6),
-# §4.0 (inventory), §4.0.1 (submission requirements), §1.1 (C1–C17); G at 54f375f, read on the
-# PC only (nothing copied): G:README.md ("Each framework has a subfolder with its name in the
-# "implementations" (for source code, scripts etc.) and "results" (for main simulation output)
-# directories"), G:schema/README.md "Data Collection" (mean of 10 replicates for stochastic
-# frameworks; a time series of centroid files, one per time point; CSV with a header line) and
-# "Data Analysis" (lengths in R = √(A₀(0)/π), times in T), and the layouts of
-# G:results/TST/ (Relaxation/11cells/width.csv, Relaxation/11+10cells/{width,inner_width}.csv,
-# TST_time_to_10k_vs_{beta,gamma}.csv, final_snapshot_data/TST_beta_<b>_gamma_<g>_<MCS>MCS.csv,
-# TST_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv), G:results/<FW>/closeup.png
-# and G:implementations/<FW>/ (model files, runner scripts, a README). Decisions: D-146, D-154,
-# D-168, D-173, D-174 (+ amendment), D-175, D-178, D-185; amended under D-181 and D-204.
+# §4.0 (inventory), §4.0.1 (submission requirements), §1.1 (C1–C17); G at 54f375f, read on
+# the PC only (nothing copied): G:README.md ("Each framework has a subfolder with its name
+# in the "implementations" (for source code, scripts etc.) and "results" (for main
+# simulation output) directories"), G:schema/README.md "Data Collection" (mean of 10
+# replicates for stochastic frameworks; a time series of centroid files, one per time point;
+# CSV with a header line) and "Data Analysis" (lengths in R = √(A₀(0)/π), times in T), and
+# the layouts of G:results/TST/ (Relaxation/11cells/width.csv,
+# Relaxation/11+10cells/{width,inner_width}.csv, TST_time_to_10k_vs_{beta,gamma}.csv,
+# final_snapshot_data/TST_beta_<b>_gamma_<g>_<MCS>MCS.csv,
+# TST_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv),
+# G:results/<FW>/closeup.png and G:implementations/<FW>/ (model files, runner scripts, a
+# README). Decisions: D-146, D-154, D-168, D-173, D-174 (+ amendment), D-175, D-178, D-185;
+# amended under D-181 and D-204.
 #
 # Consortium layout (G at 54f375f, read on the PC; nothing copied), against which the D-204
 # items are pinned where spec 15 agrees:
-# - per-cell time series ship as .zip archives under results/<FW>/Monolayer/ (TST_No_CI_*.zip,
-#   polyhoop noCI/*.zip, Morpheus per-replicate zips, PhysiCell pc_run<k>.zip); spec §4.0.1
-#   says "compressed archives" without a format, so .zip.
-# - their columns differ by framework (TST x_pos,y_pos,radius_i,a_i,f_i; Morpheus "x","y","g",
-#   "n"; PhysiCell x,y,g,n; Artistoo cell_id,x,y,active,neighbors) and metrics.cpp reads x,y,
-#   g,n. The spec (M, C8) says x,y,i,n: followed (disagreement 1).
+# - per-cell time series ship as .zip archives under results/<FW>/Monolayer/
+#   (TST_No_CI_*.zip, polyhoop noCI/*.zip, Morpheus per-replicate zips, PhysiCell
+#   pc_run<k>.zip); spec §4.0.1 says "compressed archives" without a format, so .zip.
+# - their columns differ by framework (TST x_pos,y_pos,radius_i,a_i,f_i; Morpheus
+#   "x","y","g", "n"; PhysiCell x,y,g,n; Artistoo cell_id,x,y,active,neighbors) and
+#   metrics.cpp reads x,y, g,n. The spec (M, C8) says x,y,i,n: followed (disagreement 1).
 # - their file names stamp the time point (Morpheus_timepoint_%05d, cell_data_no_inhibition_
 #   <MCS>, pc_%03d, centroids_neighbors_mcs_<n>), one directory per run; the spec's
 #   potts_<case>_s<seed>_<MCS:06d>.csv carries the seed instead: followed (disagreement 2).
-#   run_metrics.sh's `seq 0 10000` index loop would skip our MCS stamps above 10 000 (a limit
-#   of the script, not of the names).
+#   run_metrics.sh's `seq 0 10000` index loop would skip our MCS stamps above 10 000 (a
+#   limit of the script, not of the names).
 # - TST ships the F5 1000-cell files zipped (TST_5T_MonolayerGrowth_1000_Data.zip); the spec
 #   names the loose directory, which the first version checks file by file: kept loose
 #   (disagreement 3).
-# - lengths in R and time stamps in MCS with 5T = 775 MCS (TST README, Morpheus README): agree.
+# - lengths in R and time stamps in MCS with 5T = 775 MCS (TST README, Morpheus README):
+#   agree.
 #
 # D-211 amendment (the 9 Oct 2026 draft is M): M's Figures 5, 7 and 8 become REQUIRED
 # package figures, byte copies of their records' renders, with M's new Fig 8 colonies as O5:
@@ -51,92 +55,104 @@
 #   figures/fig7.png   the sweeps record's fig7_grid.png (Fig 7 colony grid, γ; R1)
 #   figures/fig8.png   the Fig 8 β record's fig8_grid.png (new Fig 8 colony grid, β; R2)
 #   Monolayer/final_snapshot_data/Potts.jl_beta_<β>_<MCS>MCS.csv
-#                      O5 of the five Fig 8 colonies, byte copies of the Fig 8 β record's f8/
-# The Fig 8 β record (`data/15/f8beta-*`, item `ITEMS[:f8beta]`) joins the records: its runner goes to
-# scripts/, its provenance to provenance/. The results README gets a level-2 "Figures"
-# section naming the three figures, M's colours (yellow, teal, red) and the shared bin edges,
-# and, in a caption or a table, each drawn colony's C/C_circle from its record's
+#                      O5 of the five Fig 8 colonies, byte copies of the Fig 8 β record's
+#                      f8/
+# The Fig 8 β record (`data/15/f8beta-*`, item `ITEMS[:f8beta]`) joins the records: its
+# runner goes to scripts/, its provenance to provenance/. The results README gets a level-2
+# "Figures" section naming the three figures, M's colours (yellow, teal, red) and the shared
+# bin edges, and, in a caption or a table, each drawn colony's C/C_circle from its record's
 # fig<k>_grid.tsv to two decimals, named as metrics.cpp's C/C_circle of the concave hull
 # (concaveman, concavity 1.5); a note that M's panel label quantity is unstated and on our
-# open question list (D-211 R5). R3: in both READMEs the metrics figure is Fig 9; a line that
-# labels Figure 8 is about the β grid (β, beta, area inhibition) or names the old number
-# ("formerly", "2 Oct"), and some line labels Figure 9 with the metrics (O6) files.
+# open question list (D-211 R5). R3: in both READMEs the metrics figure is Fig 9; a line
+# that labels Figure 8 is about the β grid (β, beta, area inhibition) or names the old
+# number ("formerly", "2 Oct"), and some line labels Figure 9 with the metrics (O6) files.
 # Specifications of the renders: `15_openvt_manuscript_draft_tests.jl`.
 #
 # D-215 amendment (the conformance audit against G's own scripts, which hard-code
 # what the manuscript leaves open). It SUPERSEDES the names and columns given further down
 # wherever they differ; the checks below are the D-215 ones. <FW> is the framework token
-# PACKAGE_FW ("Potts.jl"; D-215 (9): a parameter without spaces, "Potts.jl_checkerboard" later).
-#   1. O1 members have the columns x,y,i,n,g with g = 1 if i == 0 else 0 (metrics.cpp needs g).
+# PACKAGE_FW ("Potts.jl"; D-215 (9): a parameter without spaces, "Potts.jl_checkerboard"
+# later).
+#   1. O1 members have the columns x,y,i,n,g with g = 1 if i == 0 else 0 (metrics.cpp needs
+#      g).
 #   2. measurements_s<seed>.csv: MCS,t,N,R,A,C,w,g; the means MCS,t,N,R,A,C,w,g,runs.
-#   3. O2: one zip Monolayer/<FW>_5T_MonolayerGrowth_1000_Data.zip whose members are exactly,
-#      in sorted order, <FW>_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv,
-#      k = 0…99 (the Fig 5 notebook's range(0,100)); member k is the F5 run k + 1 (seed
-#      15000 + k + 1), bytes unchanged. No loose O2 files.
-#   4. O5: Monolayer/final_snapshot_data/<FW>_beta_<β>_gamma_<γ>_<MCS>MCS.csv, one per colony
-#      of the sweeps f7/ (β = 0) and Fig 8 β f8/ (γ = 0) records, byte copies; β, γ and MCS
-#      equal the record names' as parsed numbers.
+#   3. O2: one zip Monolayer/<FW>_5T_MonolayerGrowth_1000_Data.zip whose members are
+#      exactly, in sorted order,
+#      <FW>_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv, k = 0…99 (the Fig
+#      5 notebook's range(0,100)); member k is the F5 run k + 1 (seed 15000 + k + 1), bytes
+#      unchanged. No loose O2 files.
+#   4. O5: Monolayer/final_snapshot_data/<FW>_beta_<β>_gamma_<γ>_<MCS>MCS.csv, one per
+#      colony of the sweeps f7/ (β = 0) and Fig 8 β f8/ (γ = 0) records, byte copies; β, γ
+#      and MCS equal the record names' as parsed numbers.
 #   5. O1 archives: Monolayer/<stem>.zip with stem (b) <FW>_No_CI_stochastic, (f)
 #      <FW>_No_CI_deterministic, (e) <FW>_beta0.8_gamma0.0 and, chosen here in e's style,
 #      (a) <FW>_beta0.0_gamma0.0 (β = γ = 0, to 10⁴ cells). Members, sorted by path:
-#      <stem>/s<seed>/potts_<case>_s<seed>_<MCS:06d>.csv (the seed in the folder and the name).
+#      <stem>/s<seed>/potts_<case>_s<seed>_<MCS:06d>.csv (the seed in the folder and the
+#      name).
 #   6. Table 1: Monolayer/<FW>_table1.csv, header starting parameter,multiple,threshold, one
 #      row per row of the sweeps record's table1.tsv in its order ("—": NaN or empty).
-#   The post-processing is no re-run: a new git-pinned record (provenance.toml item `ITEMS[:o1g]`,
-#   `source` = the O1 re-run record's directory name, its runner in the directory) holds
-#   o1_manifest.tsv, archives.tsv and o2_manifest.tsv (the O1 re-run record's headers) for the renamed
-#   files: same case, seed, MCS, rows and codes as the O1 re-run record, bytes + 2 per line for the g
-#   column, new sha256; O2 rows k = 0…99 with the O1 re-run record's row k + 1's bytes and sha256;
-#   archives.tsv one row per O1 case plus a row with case "O2" for the O2 zip. The bulk
-#   directory then holds the new archives under these names (the old ones may stay; they are
-#   not read): <bulk>/<stem>.zip per case and <bulk>/<FW>_5T_MonolayerGrowth_1000_Data.zip,
-#   copied into the package byte for byte. The O1 re-run record is still checked as before (11);
-#   the package's archives, O1 manifest CSV and O2 against the post-processing record (11b, 12).
-#   The e-mail split and the README/EMAIL notes (D-215 (7), (8)) are in 15_openvt_package_delivery_tests.jl.
+#   The post-processing is no re-run: a new git-pinned record (provenance.toml item
+#   `ITEMS[:o1g]`, `source` = the O1 re-run record's directory name, its runner in the
+#   directory) holds o1_manifest.tsv, archives.tsv and o2_manifest.tsv (the O1 re-run
+#   record's headers) for the renamed files: same case, seed, MCS, rows and codes as the O1
+#   re-run record, bytes + 2 per line for the g column, new sha256; O2 rows k = 0…99 with
+#   the O1 re-run record's row k + 1's bytes and sha256; archives.tsv one row per O1 case
+#   plus a row with case "O2" for the O2 zip. The bulk directory then holds the new archives
+#   under these names (the old ones may stay; they are not read): <bulk>/<stem>.zip per case
+#   and <bulk>/<FW>_5T_MonolayerGrowth_1000_Data.zip, copied into the package byte for byte.
+#   The O1 re-run record is still checked as before (11); the package's archives, O1
+#   manifest CSV and O2 against the post-processing record (11b, 12). The e-mail split and
+#   the README/EMAIL notes (D-215 (7), (8)) are in 15_openvt_package_delivery_tests.jl.
 #
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # The generator (pinned)
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 #   PottsModels.openvt_submission_package(outdir::AbstractString;
-#                                         bulk = get(ENV, "OPENVT_PACKAGE_BULK", nothing)) -> outdir
+#                                         bulk = get(ENV, "OPENVT_PACKAGE_BULK", nothing))
+#                                         -> outdir
 #
-# builds, under `outdir`, exactly two trees: `implementations/Potts.jl/` and `results/Potts.jl/`,
-# from the merged records under `lib/PottsModels/reproductions/data/15/` (D-146) and the bulk
-# directory `bulk` (D-204). It runs no simulation. It throws `ArgumentError` when `outdir` is
-# inside this git checkout (the package lives outside git) or exists and is not empty (no stale
-# files), and (D-204) when `bulk` is `nothing`, is not a directory, lies inside a git checkout,
-# or lacks a file of the BULK layout below or holds one whose sha256 differs from the git
-# manifest; a failed build leaves nothing behind (D-180). Two calls on the same commit and the
-# same bulk directory give byte-identical trees (no timestamps, no absolute paths, fixed row
-# order; the archives are copied byte for byte, never re-zipped). This test passes `bulk`
-# through the environment variable only, so that it also runs against the first-version
-# generator (which ignores it).
+# builds, under `outdir`, exactly two trees: `implementations/Potts.jl/` and
+# `results/Potts.jl/`, from the merged records under
+# `lib/PottsModels/reproductions/data/15/` (D-146) and the bulk directory `bulk` (D-204). It
+# runs no simulation. It throws `ArgumentError` when `outdir` is inside this git checkout
+# (the package lives outside git) or exists and is not empty (no stale files), and (D-204)
+# when `bulk` is `nothing`, is not a directory, lies inside a git checkout, or lacks a file
+# of the BULK layout below or holds one whose sha256 differs from the git manifest; a failed
+# build leaves nothing behind (D-180). Two calls on the same commit and the same bulk
+# directory give byte-identical trees (no timestamps, no absolute paths, fixed row order;
+# the archives are copied byte for byte, never re-zipped). This test passes `bulk` through
+# the environment variable only, so that it also runs against the first-version generator
+# (which ignores it).
 #
-# Records are found the way the page test (`15_openvt_page_tests.jl`) finds them: the directories of `data/15/`
-# whose `provenance.toml` names the record's item ID (`ITEMS` below): the calibration (F2, S5), F5,
-# F3/F8, F1/F4, the sweeps (F6, T1, F7; merged, D-174/D-178), and (D-204) the O1 re-run record. The newest directory (by name) wins when an item has
-# several.
+# Records are found the way the page test (`15_openvt_page_tests.jl`) finds them: the
+# directories of `data/15/` whose `provenance.toml` names the record's item ID (`ITEMS`
+# below): the calibration (F2, S5), F5, F3/F8, F1/F4, the sweeps (F6, T1, F7; merged,
+# D-174/D-178), and (D-204) the O1 re-run record. The newest directory (by name) wins when
+# an item has several.
 #
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # REQUIRED files (all derivable from git records; values must equal the records)
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # implementations/Potts.jl/
 #   README.md            how to run: the repo URL, `Pkg.instantiate`, the test environment
-#                        `--project=lib/PottsModels/test`, each runner's package path, the record
-#                        commits (8 hex), and `openvt_submission_package` to rebuild the package
+#                        `--project=lib/PottsModels/test`, each runner's package path, the
+#                        record commits (8 hex), and `openvt_submission_package` to rebuild
+#                        the package
 #   parameters.csv       `name,value,unit`; the Table S1 values and the Potts settings below
 #   src/openvt_reference.jl, src/openvt_chain.jl
-#                        byte-identical to lib/PottsModels/src/ (the `@potts_model` listings)
+#                        byte-identical to lib/PottsModels/src/ (the `@potts_model`
+#                        listings)
 #   scripts/<record>/<runner>.jl
-#                        the runner named in each record's provenance.toml, byte-identical; other
-#                        scripts/<record>/<name>.jl may be added only as byte copies of that
-#                        record's <name>.jl
+#                        the runner named in each record's provenance.toml, byte-identical;
+#                        other scripts/<record>/<name>.jl may be added only as byte copies
+#                        of that record's <name>.jl
 # results/Potts.jl/
 #   README.md            units, seeds, a Deviations table (D-154), the readings C1–C17, the
-#                        closeup's colours (D-185: area on coolwarm, provisional scale limits),
-#                        a "Pending" section (see below)
-#   closeup.png          byte-identical to the F1/F4 record's fig1_panel.png, the bare Potts.jl
-#                        panel without the banner, which the .tex adds (G:results/<FW>/closeup.png)
+#                        closeup's colours (D-185: area on coolwarm, provisional scale
+#                        limits), a "Pending" section (see below)
+#   closeup.png          byte-identical to the F1/F4 record's fig1_panel.png, the bare
+#                        Potts.jl panel without the banner, which the .tex adds
+#                        (G:results/<FW>/closeup.png)
 #   provenance/<record>.toml
 #                        each record's provenance.toml, with the key `hostname` removed
 #                        (spec §4.0.1 item 6; nothing private)
@@ -146,127 +162,143 @@
 #       headers exactly as TST's mean/STD columns (G:results/TST/Relaxation/…):
 #         `Normalized time (T),Mean Tissue width (CD),STD Tissue width (CD)` and
 #         `Normalized time (T),Mean inner width (CD),STD inner width (CD)`;
-#       one row per record row (burn-in at t < 0 included, TST does the same), in record order,
-#       values equal to the record's t_over_T and mean/sd columns. Per-replicate columns are not
-#       in the record and are not required.
-#   Relaxation/table_S5.csv  `lambda,T (MCS),MSE`; λ = 1, 2, 3, 5; T = the record's T_ours; MSE =
-#       PottsModels.Analysis.relaxation_mse on the record's t ≥ 0 rows against reference.tsv (P9)
+#       one row per record row (burn-in at t < 0 included, TST does the same), in record
+#       order, values equal to the record's t_over_T and mean/sd columns. Per-replicate
+#       columns are not in the record and are not required.
+#   Relaxation/table_S5.csv `lambda,T (MCS),MSE`; λ = 1, 2, 3, 5; T = the record's T_ours;
+#   MSE =
+#       PottsModels.Analysis.relaxation_mse on the record's t ≥ 0 rows against reference.tsv
+#       (P9)
 #   Monolayer/metrics/<case>/measurements_s<seed>.csv   (O6 per run, cases a, b, e, f)
-#       `MCS,t,N,r,A,C,w,g`, t = MCS/775 (cycles; D-173 cycle_mcs), one row per record save, in
-#       MCS order, values equal to timeseries.tsv (NaN where the record has nan)
+#       `MCS,t,N,r,A,C,w,g`, t = MCS/775 (cycles; D-173 cycle_mcs), one row per record save,
+#       in MCS order, values equal to timeseries.tsv (NaN where the record has nan)
 #   Monolayer/metrics/measurements_<case>_mean.csv     (schema: report the arithmetic mean)
-#       `MCS,t,N,r,A,C,w,g,runs`; rows at the MCS that are multiples of 39 and saved by every run
-#       of the case; each column the mean over runs of its non-NaN values (NaN if none); `runs`
-#       the case's run count
+#       `MCS,t,N,r,A,C,w,g,runs`; rows at the MCS that are multiples of 39 and saved by
+#       every run of the case; each column the mean over runs of its non-NaN values (NaN if
+#       none); `runs` the case's run count
 #   Monolayer/metrics/neighbors_<case>.csv              (O6 `n,p`; Category 3 histogram)
-#       `n,p`, p in % of the case's final cells pooled over its runs (neighbors.tsv), rows for
-#       every n with a nonzero count, ascending
+#       `n,p`, p in % of the case's final cells pooled over its runs (neighbors.tsv), rows
+#       for every n with a nonzero count, ascending
 #
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Formerly OPTIONAL items: REQUIRED since D-204 (none may be named in a "Pending" section)
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # key  path under results/Potts.jl/                                      columns
-# O1   Monolayer/Potts.jl_centroids_<case>.zip, case ∈ {a, b, e, f} (plus c, d only if the O1
-#      record has them). A zip whose members are exactly, in this order, the record manifest's
-#      files `centroids/<case>/potts_<case>_s<seed>_<MCS:06d>.csv` (spec §3.1 names; unzipped
-#      in `Monolayer/` they land where the first version put loose O1 files). Each member: the
-#      header `x,y,i,n`, one row per live cell. Bytes equal to the bulk archive and to the
-#      record's archives.tsv sha256. Loose O1 files are no longer allowed (allowlist).
-# O1m  Monolayer/Potts.jl_centroids_manifest.csv                        archive,file,rows,bytes,
+# O1   Monolayer/Potts.jl_centroids_<case>.zip, case ∈ {a, b, e, f} (plus c, d only if the
+#      O1 record has them). A zip whose members are exactly, in this order, the record
+#      manifest's files `centroids/<case>/potts_<case>_s<seed>_<MCS:06d>.csv` (spec §3.1
+#      names; unzipped in `Monolayer/` they land where the first version put loose O1
+#      files). Each member: the header `x,y,i,n`, one row per live cell. Bytes equal to the
+#      bulk archive and to the record's archives.tsv sha256. Loose O1 files are no longer
+#      allowed (allowlist).
+# O1m  Monolayer/Potts.jl_centroids_manifest.csv                    archive,file,rows,bytes,
 #      sha256: the record's o1_manifest.tsv rows in its order (archive = the zip's name)
-# O2   Monolayer/Potts.jl_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv, k = 1:100
-#                                                                        x,y,r,f,a (F5; checked
-#      against the F5 record as before, and their sha256 against the record's o2_manifest.tsv)
+# O2   Monolayer/Potts.jl_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv, k =
+#      1:100
+#                                                                        x,y,r,f,a (F5;
+#                                                                        checked
+#      against the F5 record as before, and their sha256 against the record's
+#      o2_manifest.tsv)
 # A3   Monolayer/metrics/<case>/inhibition_s<seed>.csv                   MCS,t,f0,f1,f2,f3
-#      for every run of cases a and e, and of c and d where O1 has them (spec §4.0 A3); one row
-#      per O1 save in MCS order; t = MCS/775; f_k = (count of cells with i = k)/(cells), the
-#      counts and cells of that save's O1 file (= the manifest's i0…i3 and rows).
-# O3   Monolayer/Potts.jl_time_to_10k_vs_beta.csv, …_vs_gamma.csv        beta|gamma,Time to 10k
+#      for every run of cases a and e, and of c and d where O1 has them (spec §4.0 A3); one
+#      row per O1 save in MCS order; t = MCS/775; f_k = (count of cells with i = k)/(cells),
+#      the counts and cells of that save's O1 file (= the manifest's i0…i3 and rows).
+# O3   Monolayer/Potts.jl_time_to_10k_vs_beta.csv, …_vs_gamma.csv     beta|gamma,Time to 10k
 #      (MCS),Time to 10k (5T)   (F6, T1; byte copies of the sweeps record's files)
-# O5   Monolayer/final_snapshot_data/Potts.jl_gamma_<γ>_<MCS>MCS.csv    x_pos,y_pos,radius_i,
+# O5   Monolayer/final_snapshot_data/Potts.jl_gamma_<γ>_<MCS>MCS.csv   x_pos,y_pos,radius_i,
 #      inhibited   (F7; byte copies of the sweeps record's f7/ files, at least 5)
 # The results README may keep a "Pending" section for other things, but it names none of the
 # items above (their stems are in REQUIRED) and none of the first version's required ones.
 # Both READMEs carry the MIT line (D-181): one line with "MIT", "licence"/"license" and
 # "LICENSE" (the repository's LICENSE file). The copyright holder's name is not written into
-# the package: the privacy scan (10) bans it, and the LICENSE file in the repository carries it.
+# the package: the privacy scan (10) bans it, and the LICENSE file in the repository carries
+# it.
 #
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # BULK inputs (outside git; ENV["OPENVT_PACKAGE_BULK"])
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 #   <bulk>/Potts.jl_centroids_<case>.zip              one per case of the O1 record
 #   <bulk>/Potts.jl_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv, k = 1:100
-# Nothing else is read from it. Expected volume (rows from the F3/F8 record's timeseries.tsv,
-# about 44 B per O1 row and 20 B zipped with full-precision write_openvt floats, measured on
-# the F5 O2 centroids): (a) 3 030 files, 4.34 M rows, ~190 MB raw, ~90 MB zipped; (e) 3 244,
-# 5.74 M, ~250 MB, ~115 MB; (b) 20 741, 3.13 M, ~140 MB, ~65 MB; (f) 19 956, 2.40 M, ~105 MB,
-# ~50 MB; O2 ~8 MB. About 320 MB zipped in all: D-204's ask-before-upload threshold applies.
+# Nothing else is read from it. Expected volume (rows from the F3/F8 record's
+# timeseries.tsv, about 44 B per O1 row and 20 B zipped with full-precision write_openvt
+# floats, measured on the F5 O2 centroids): (a) 3 030 files, 4.34 M rows, ~190 MB raw, ~90
+# MB zipped; (e) 3 244, 5.74 M, ~250 MB, ~115 MB; (b) 20 741, 3.13 M, ~140 MB, ~65 MB; (f)
+# 19 956, 2.40 M, ~105 MB, ~50 MB; O2 ~8 MB. About 320 MB zipped in all: D-204's
+# ask-before-upload threshold applies.
 #
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # The O1 re-run record (git; D-146 form; provenance.toml `item = ITEMS[:o1]`)
-# ---------------------------------------------------------------------------------------------
-# data/15/<name>/ (e.g. o1-2026-10-10/), small files only, no verdicts.tsv or deviations.tsv:
-#   provenance.toml   item `ITEMS[:o1]`, runner (in this directory), commit, threads, wall times,
-#                     manifest_sha256 (as the other records; the package drops hostname/work)
-#   runs.tsv          case k seed mcs N saves: one row per re-run; for a, b, e, f equal to the
-#                     F3/F8 record's runs.tsv on these columns (D-204: the record reproduced)
+# ------------------------------------------------------------------------------------------
+# data/15/<name>/ (e.g. o1-2026-10-10/), small files only, no verdicts.tsv or
+# deviations.tsv:
+#   provenance.toml   item `ITEMS[:o1]`, runner (in this directory), commit, threads, wall
+#                     times, manifest_sha256 (as the other records; the package drops
+#                     hostname/work)
+#   runs.tsv          case k seed mcs N saves: one row per re-run; for a, b, e, f equal to
+#                     the F3/F8 record's runs.tsv on these columns (D-204: the record
+#                     reproduced)
 #   o1_manifest.tsv   case seed mcs file rows bytes i0 i1 i2 i3 sha256: one row per O1 file,
 #                     sorted by file; file = the archive member path; rows = data rows
-#                     (header excluded); bytes = file size; i_k = cells with code k; sha256 of
-#                     the file's bytes (lower-case hex)
+#                     (header excluded); bytes = file size; i_k = cells with code k; sha256
+#                     of the file's bytes (lower-case hex)
 #   archives.tsv      case archive members bytes sha256: one row per case,
 #                     archive = Potts.jl_centroids_<case>.zip
 #   o2_manifest.tsv   k file rows bytes sha256: k = 1:100, file =
 #                     Potts.jl_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv
 #   run_o1.jl         the runner
-# Header-only templates of the four TSVs: test/reproductions/data/15j/ (tab-separated, '\n').
+# Header-only templates of the four TSVs: test/reproductions/data/15j/ (tab-separated,
+# '\n').
 #
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # The O1 recorder (what the runner must write, and when; not implemented here)
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # - Runs: cases a, b, e, f of the F3/F8 test (`CASES`, its seeds k ↦ seed, its
 #   lattices, `ALG` = SequentialCPM(Moore(1)), the closed lattice, edge_guard(5;
 #   terminate = true), stop_at_cells), i.e. `problem` and `growth_run` reused, not copied.
 # - When: exactly at the saves `growth_run` records, by extending its `record(integ)`: MCS 0
-#   (the callback's `initialize`), every MCS with t % 39 == 0, and the stopping MCS (first MCS
-#   with ≥ cells live cells). Same callback, so the O1 stamps are the timeseries.tsv saves by
-#   construction. At each save, after `growth_row`:
-#     fr = PottsModels.openvt_frame(current_state(integ); beta = c.beta, gamma = c.gamma)       # x, y in R, i, n
+#   (the callback's `initialize`), every MCS with t % 39 == 0, and the stopping MCS (first
+#   MCS with ≥ cells live cells). Same callback, so the O1 stamps are the timeseries.tsv
+#   saves by construction. At each save, after `growth_row`:
+#     # x, y in R, i, n
+#     fr = PottsModels.openvt_frame(current_state(integ); beta = c.beta, gamma = c.gamma)
 #     write_openvt(joinpath(stage, "centroids", case,
 #                  openvt_filename(:O1; case, seed, mcs = Int(integ.t))), :O1, fr)
 #   (`openvt_frame` takes the centroids from `openvt_snapshot`, as `growth_row` does, so
 #   `openvt_metrics` of the written file equals the record's r, A, C, w, g bit for bit; this
 #   test recomputes them.) After each run, assert its series equals the F3/F8 record's rows.
-# - Then: hash every file into o1_manifest.tsv, write runs.tsv, and zip each case with sorted
-#   members, no directory entries and no extra attributes, from inside the staging directory:
-#     find centroids/<case> -type f | LC_ALL=C sort | zip -X -D -9 -q -@ Potts.jl_centroids_<case>.zip
-#   then archives.tsv. The zips go to the bulk directory; only the small files are committed.
+# - Then: hash every file into o1_manifest.tsv, write runs.tsv, and zip each case with
+#   sorted members, no directory entries and no extra attributes, from inside the staging
+#   directory:
+#     find centroids/<case> -type f | LC_ALL=C sort | zip -X -D -9 -q -@
+#     Potts.jl_centroids_<case>.zip
+#   then archives.tsv. The zips go to the bulk directory; only the small files are
+#   committed.
 # - O2: copy the surviving F5 files (the F5 runner's F5_O2_DIR) into the bulk directory; if
 #   they are gone, write them from the case-b re-run's stop state with `openvt_snapshot`
 #   (x, y, r, f, a; `write_openvt(…, :O2, …)`). Either way the F5 checks below must hold and
 #   their x, y must equal the O1 stop file of the same seed (seed 15000 + k).
 #
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Content rules
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # - Allowlist: every file under outdir matches a required path; nothing else, so no
-#   G file, figure or archive can ride along. Opt-in (OPENVT_MONOLAYER_REPO = a local G clone):
-#   no package file is byte-identical to a G file.
+#   G file, figure or archive can ride along. Opt-in (OPENVT_MONOLAYER_REPO = a local G
+#   clone): no package file is byte-identical to a G file.
 # - Deviations (D-154; as the page test, D-178): results README has a level-2 heading with
-#   "Deviations" or "Differences"; its Markdown tables have header cells "Ours", a paper column
-#   ("Paper", "Manuscript" or "M"), "cause" and "Author question"; rows (keyed by first cell):
-#   every C# of spec §1.1; every row of every data/15/*/deviations.tsv (its first decimal number
-#   and FAIL when the target says FAIL); every non-control FAIL verdict (with FAIL); V1 (15.17,
-#   13.57, C13, "actual area", "target area", not PASS); the F1 colour row (D-185: area on
-#   coolwarm, the scale limits marked provisional);
-#   the boundary row (a closed lattice with an edge guard instead of the schema's unbounded
-#   plane). Last cell starts with "not an author question", "not asked" or "resolved"; a row
-#   naming Q# says "our open question list".
+#   "Deviations" or "Differences"; its Markdown tables have header cells "Ours", a paper
+#   column ("Paper", "Manuscript" or "M"), "cause" and "Author question"; rows (keyed by
+#   first cell): every C# of spec §1.1; every row of every data/15/*/deviations.tsv (its
+#   first decimal number and FAIL when the target says FAIL); every non-control FAIL verdict
+#   (with FAIL); V1 (15.17, 13.57, C13, "actual area", "target area", not PASS); the F1
+#   colour row (D-185: area on coolwarm, the scale limits marked provisional); the boundary
+#   row (a closed lattice with an edge guard instead of the schema's unbounded plane). Last
+#   cell starts with "not an author question", "not asked" or "resolved"; a row naming Q#
+#   says "our open question list".
 # - Units and seeds: the results README names "775", "156" (T(λ = 2) in MCS), R as the cell
 #   radius, CD = 10 px, and every case's seed range from the F3/F8 record's meta.toml.
 # - Nothing private, nothing implying contact (all text files): the page test's list, plus
-#   the user name (except inside "PraneethMerugu/Potts.jl", the public repository), host names,
-#   absolute paths, the PC's address and "PI".
+#   the user name (except inside "PraneethMerugu/Potts.jl", the public repository), host
+#   names, absolute paths, the PC's address and "PI".
 
 @testsetup module OpenVTPackageSetup
 include(joinpath(@__DIR__, "..", "shared", "common.jl"))
@@ -274,9 +306,12 @@ using Test, TOML, SHA, Printf, PottsModels
 const ROOT = normpath(joinpath(@__DIR__, "..", "..", "..", ".."))
 const DATA = joinpath(ROOT, "lib", "PottsModels", "reproductions", "data", "15")
 const SRC = joinpath(ROOT, "lib", "PottsModels", "src")
-const SPEC = joinpath(ROOT, "docs", "design", "research", "model-specs", "15_openvt_monolayer.md")
+const SPEC = joinpath(
+    ROOT, "docs", "design", "research", "model-specs", "15_openvt_monolayer.md"
+)
 # D-215 (9): the framework token is a parameter (no spaces): "Potts.jl" for the sequential
-# entry; "Potts.jl_checkerboard" later (the checkerboard entry). Paths and file stems use it, never a literal.
+# entry; "Potts.jl_checkerboard" later (the checkerboard entry). Paths and file stems use
+# it, never a literal.
 const PACKAGE_FW = "Potts.jl"
 const IMPL = joinpath("implementations", PACKAGE_FW)
 const RES = joinpath("results", PACKAGE_FW)
@@ -315,10 +350,10 @@ const O1_STEM = Dict(
     "e" => "$(PACKAGE_FW)_beta0.8_gamma0.0", "f" => "$(PACKAGE_FW)_No_CI_deterministic"
 )
 o1_zip(case) = get(O1_STEM, case, "$(PACKAGE_FW)_case_$(case)") * ".zip"
-o1_case(zipname) = (
-    i = findfirst(c -> o1_zip(c) == zipname, collect(keys(O1_STEM)));
-    i === nothing ? nothing : collect(keys(O1_STEM))[i]
-)
+function o1_case(zipname)
+    i = findfirst(c -> o1_zip(c) == zipname, collect(keys(O1_STEM)))
+    return i === nothing ? nothing : collect(keys(O1_STEM))[i]
+end
 const O1_MEMBER = r"^([^/]+)/s(\d+)/potts_([a-z]+)_s(\d+)_(\d{6})\.csv$"
 # stem, seed, case, seed, MCS
 # the O1 re-run record keeps its own (historical) names: the D-215 post-processing
@@ -326,7 +361,9 @@ const O1_MEMBER = r"^([^/]+)/s(\d+)/potts_([a-z]+)_s(\d+)_(\d{6})\.csv$"
 o1_zip_raw(case) = "Potts.jl_centroids_$(case).zip"
 const O1_MEMBER_RAW = r"^centroids/([a-z]+)/potts_([a-z]+)_s(\d+)_(\d{6})\.csv$"
 const O2_DIR_RAW = "Potts.jl_5T_MonolayerGrowth_1000_Data"
-const H_O1M = ["case", "seed", "mcs", "file", "rows", "bytes", "i0", "i1", "i2", "i3", "sha256"]
+const H_O1M = [
+    "case", "seed", "mcs", "file", "rows", "bytes", "i0", "i1", "i2", "i3", "sha256",
+]
 const H_ARCH = ["case", "archive", "members", "bytes", "sha256"]
 const H_O2M = ["k", "file", "rows", "bytes", "sha256"]
 const H_O1RUNS = ["case", "k", "seed", "mcs", "N", "saves"]
@@ -356,22 +393,45 @@ const H_T1 = "parameter,multiple,threshold"
 
 # parameters.csv rows (Table S1; src/openvt_reference.jl; spec §4.0.1 item 5)
 const PARAMS = Dict(
-    "A0" => 50.0, "lambda" => 2.0, "temperature" => 20.0, "alpha" => 50 / 775, "mu_X" => 2.0,
+    "A0" => 50.0, "lambda" => 2.0, "temperature" => 20.0, "alpha" => 50 / 775, "mu_X" =>
+        2.0,
     "sigma_X" => 0.4, "J_cell_cell" => 20.0, "J_cell_medium" => 10.0, "cycle_MCS" => 775.0,
     "T_relax_lambda2_MCS" => 156.0, "R_px" => sqrt(50 / pi), "CD_px" => 10.0
 )
 const PARAM_STR = Dict("neighbourhood" => "Moore(1)", "boundary" => "closed")
-# required items (optional in the first version): key => (stem that a Pending section must not
-# name, path regex under results/Potts.jl/)
+# required items (optional in the first version): key => (stem that a Pending section must
+# not name, path regex under results/Potts.jl/)
 const REQUIRED = [
-    (:O1, "MonolayerGrowth|No_CI|beta0|centroids_[a-z]\\.", package_re(raw"^Monolayer/((?:{FW})_(?:beta[0-9.]+_gamma[0-9.]+|No_CI_[a-z]+|case_[a-z]+))\.zip$")),
+    (
+        :O1,
+        "MonolayerGrowth|No_CI|beta0|centroids_[a-z]\\.",
+        package_re(
+            raw"^Monolayer/((?:{FW})_(?:beta[0-9.]+_gamma[0-9.]+|No_CI_[a-z]+|case_[a-z]+))\.zip$"
+        ),
+    ),
     (:O1m, "centroids_manifest", package_re(raw"^Monolayer/{FW}_centroids_manifest\.csv$")),
-    (:O2, "MonolayerGrowth_1000", package_re(raw"^Monolayer/{FW}_5T_MonolayerGrowth_1000_Data\.zip$")),
+    (
+        :O2, "MonolayerGrowth_1000",
+        package_re(raw"^Monolayer/{FW}_5T_MonolayerGrowth_1000_Data\.zip$"),
+    ),
     (:A3, "inhibition_s", r"^Monolayer/metrics/([a-z]+)/inhibition_s(\d+)\.csv$"),
-    (:O3b, "time_to_10k_vs_beta", package_re(raw"^Monolayer/{FW}_time_to_10k_vs_beta\.csv$")),
-    (:O3g, "time_to_10k_vs_gamma", package_re(raw"^Monolayer/{FW}_time_to_10k_vs_gamma\.csv$")),
-    # D-215 (4): O5 names carry both parameters (TST, CC3D): Fig 7 (γ) and Fig 8 (β) colonies
-    (:O5, "final_snapshot_data", package_re(raw"^Monolayer/final_snapshot_data/{FW}_beta_([0-9.eE+-]+)_gamma_([0-9.eE+-]+)_(\d+)MCS\.csv$")),
+    (
+        :O3b, "time_to_10k_vs_beta",
+        package_re(raw"^Monolayer/{FW}_time_to_10k_vs_beta\.csv$"),
+    ),
+    (
+        :O3g, "time_to_10k_vs_gamma",
+        package_re(raw"^Monolayer/{FW}_time_to_10k_vs_gamma\.csv$"),
+    ),
+    # D-215 (4): O5 names carry both parameters (TST, CC3D): Fig 7 (γ) and Fig 8 (β)
+    # colonies
+    (
+        :O5,
+        "final_snapshot_data",
+        package_re(
+            raw"^Monolayer/final_snapshot_data/{FW}_beta_([0-9.eE+-]+)_gamma_([0-9.eE+-]+)_(\d+)MCS\.csv$"
+        ),
+    ),
     # D-215 (6): Table 1
     (:T1, "table1", package_re(raw"^Monolayer/{FW}_table1\.csv$")),
     # D-211: M's Figures 5, 7 and 8
@@ -383,15 +443,23 @@ const FORBIDDEN = [
     # the page test's list (D-178 (h))
     r"\bsheets?\b"i, r"PI_SHEET"i, r"author-questions"i,
     r"docs/references"i, r"POTTS_REFERENCES", r"manuscript-draft"i,
-    r"correspondence"i, r"\be-?mails?\b"i, r"\basked on\b"i, r"\bwe (have )?(asked|wrote|sent|contacted|emailed)\b"i,
+    r"correspondence"i, r"\be-?mails?\b"i, r"\basked on\b"i,
+    r"\bwe (have )?(asked|wrote|sent|contacted|emailed)\b"i,
     r"\bcontacted (the|R\.|Dr)"i, r"\banswered by\b"i, r"personal communication"i,
     r"\bletters? (to|from)\b"i, r"\bsubmitted to\b"i,
     # private: people, machines, local paths
-    r"praneeth"i, r"merugu"i, r"jiang"i, r"\bPI\b", r"nucbox"i, r"tailscale"i, r"100\.107\.",
+    r"praneeth"i, r"merugu"i, r"jiang"i, r"\bPI\b", r"nucbox"i, r"tailscale"i,
+    r"100\.107\.",
     r"/Users/", r"/home/", r"/private/", r"/tmp/", r"\.claude", r"scratchpad"i,
 ]
-# ---- small readers -------------------------------------------------------------------------------
-package_lines(path) = filter(!isempty, split(replace(read(path, String), "\r\n" => "\n"), '\n'))
+# ---- small readers
+# -------------------------------------------------------------------------------
+function package_lines(path)
+    return filter(
+        !isempty,
+        split(replace(read(path, String), "\r\n" => "\n"), '\n')
+    )
+end
 function package_tsv(path)
     ls = package_lines(path)
     head = split(ls[1], '\t')
@@ -405,13 +473,19 @@ end
 # the same for a CSV given as bytes (a zip member)
 function csv_bytes(buf)
     ls = filter(!isempty, split(replace(String(copy(buf)), "\r\n" => "\n"), '\n'))
-    return isempty(ls) ? ("", Vector{String}[]) : (String(ls[1]), [String.(split(l, ',')) for l in ls[2:end]])
+    return if isempty(ls)
+        ("", Vector{String}[])
+    else
+        (String(ls[1]), [String.(split(l, ',')) for l in ls[2:end]])
+    end
 end
 # the F5 run k (1…100) ↦ its O2 member in the package's O2 zip (D-215 (3): k − 1)
 o2_member(k_f5) = "$(O2_DIR)/cell_data_no_inhibition_$(k_f5 - 1).csv"
 package_f(s) = parse(Float64, strip(s))
-package_eq(a, b; rtol = 1.0e-12, atol = 1.0e-12) = (isnan(a) && isnan(b)) || (a == b) ||
-    (isfinite(a) && isfinite(b) && abs(a - b) <= atol + rtol * max(abs(a), abs(b)))
+function package_eq(a, b; rtol = 1.0e-12, atol = 1.0e-12)
+    return (isnan(a) && isnan(b)) || (a == b) ||
+        (isfinite(a) && isfinite(b) && abs(a - b) <= atol + rtol * max(abs(a), abs(b)))
+end
 col(head, name) = findfirst(==(name), head)
 # records by item ID (as `15_openvt_page_tests.jl` finds them)
 function package_records()
@@ -456,7 +530,8 @@ function tables(sec)
         if startswith(s, "|") && endswith(s, "|")
             occursin(r"^\|[\s:|-]+\|$", s) || push!(cur, String.(package_cells(s)))
         elseif !isempty(cur)
-            push!(tabs, cur); cur = Vector{Vector{String}}()
+            push!(tabs, cur)
+            cur = Vector{Vector{String}}()
         end
     end
     isempty(cur) || push!(tabs, cur)
@@ -468,16 +543,28 @@ function package_rows(sec)
     for t in tables(sec)
         h = t[1]
         hdr_ok &= any(==("Ours"), h) && any(c -> c in ("Paper", "Manuscript", "M"), h) &&
-            any(c -> occursin(r"cause"i, c), h) && any(c -> occursin(r"Author question"i, c), h)
+            any(c -> occursin(r"cause"i, c), h) &&
+            any(c -> occursin(r"Author question"i, c), h)
         append!(rows, t[2:end])
     end
     return rows, hdr_ok && !isempty(rows)
 end
-# a row is keyed by its first cell's first token: "C1" matches "C1" and "C1 (cycle)", not "C13"
-package_row(rows, key) = findfirst(r -> !isempty(r) && occursin(Regex("^\\Q" * key * "\\E(?![0-9A-Za-z.])"), r[1]), rows)
+# a row is keyed by its first cell's first token: "C1" matches "C1" and "C1 (cycle)", not
+# "C13"
+function package_row(rows, key)
+    return findfirst(
+        r -> !isempty(r) && occursin(Regex("^\\Q" * key * "\\E(?![0-9A-Za-z.])"), r[1]),
+        rows
+    )
+end
 first_decimal(s) = (m = match(r"\d+\.\d+", s); m === nothing ? nothing : m.match)
-spec_cs() = unique([m.captures[1] for m in eachmatch(r"^\| (C\d+) \|"m, read(SPEC, String))])
-# expected values from the records ---------------------------------------------------------------
+function spec_cs()
+    return unique(
+        [m.captures[1] for m in eachmatch(r"^\| (C\d+) \|"m, read(SPEC, String))]
+    )
+end
+# expected values from the records
+# ---------------------------------------------------------------
 function package_timeseries()
     head, rows = package_tsv(joinpath(package_rec(:f3f8), "timeseries.tsv"))
     runs = Dict{Tuple{String, Int}, Vector{Vector{Float64}}}()
@@ -518,13 +605,19 @@ function package_neighbors(case)
     tot = sum(values(c))
     return [(n, 100 * c[n] / tot) for n in sort(collect(keys(c))) if c[n] > 0]
 end
-# ---- build the package (twice, for determinism) ------------------------------------------------
+# ---- build the package (twice, for determinism)
+# ------------------------------------------------
 const OUT = mktempdir()
 const PACKAGE_A = joinpath(OUT, "a")
 const PACKAGE_B = joinpath(OUT, "b")
 const BUILT = Ref(false)
 # the bulk directory reaches the generator through the environment only (see the header)
-withbulk(f, bulk) = withenv(f, BULK_ENV => (bulk === nothing || isempty(bulk) ? nothing : bulk))
+function withbulk(f, bulk)
+    return withenv(
+        f, BULK_ENV =>
+            (bulk === nothing || isempty(bulk) ? nothing : bulk)
+    )
+end
 function build()
     BUILT[] && return true
     withbulk(BULK) do
@@ -537,7 +630,8 @@ end
 package_pkg(rel...) = joinpath(PACKAGE_A, rel...)
 res(rel...) = joinpath(PACKAGE_A, RES, rel...)
 impl(rel...) = joinpath(PACKAGE_A, IMPL, rel...)
-# ---- D-204 helpers: git manifests, the bulk directory, zip members ------------------------------
+# ---- D-204 helpers: git manifests, the bulk directory, zip members
+# ------------------------------
 function in_git(path)
     d = abspath(path)
     while true
@@ -562,9 +656,13 @@ function package_o1_manifest(rec)
     for r in rows
         all(c -> haskey(r, c), H_O1M) || continue
         e = (;
-            case = r["case"], seed = parse(Int, r["seed"]), mcs = parse(Int, r["mcs"]), file = r["file"],
+            case = r["case"], seed = parse(Int, r["seed"]), mcs = parse(Int, r["mcs"]),
+            file = r["file"],
             rows = parse(Int, r["rows"]), bytes = parse(Int, r["bytes"]),
-            i = (parse(Int, r["i0"]), parse(Int, r["i1"]), parse(Int, r["i2"]), parse(Int, r["i3"])), sha = r["sha256"],
+            i = (
+                parse(Int, r["i0"]), parse(Int, r["i1"]),
+                parse(Int, r["i2"]), parse(Int, r["i3"]),
+            ), sha = r["sha256"],
         )
         push!(get!(out, (e.case, e.seed), Any[]), e)
     end
@@ -576,7 +674,12 @@ o1g_rec() = haskey(RECS, :o1g) ? package_rec(:o1g) : ""
 # D-215 post-processing
 o1_cases(man) = sort(unique(first.(collect(keys(man)))))
 # the manifest rows of one case in member order (by file name)
-o1_members(man, case) = sort([e for ((c, _), v) in man if c == case for e in v]; by = e -> e.file)
+function o1_members(man, case)
+    return sort(
+        [e for ((c, _), v) in man if c == case for e in v];
+        by = e -> e.file
+    )
+end
 # a bulk directory with every expected name but wrong bytes (for the refusal check)
 function bogus_bulk(cases)
     d = mktempdir()
@@ -604,14 +707,17 @@ function o1_scan(buf::Vector{UInt8}; g::Bool = false)
         e = j - 1                                      # last byte of the n field
         if g && c3 !== nothing && c3 < j
             gi = findnext(==(comma), buf, c3 + 1)
-            if gi === nothing || gi >= j || gi != j - 2 || !(buf[j - 1] in (zero, zero + 1)) ||
+            if gi === nothing || gi >= j || gi != j - 2 ||
+                    !(buf[j - 1] in (zero, zero + 1)) ||
                     (buf[j - 1] == zero + 1) != (c2 !== nothing && buf[c2 + 1] == zero)
                 ok = false
             end
             e = gi === nothing ? j - 1 : gi - 1
         end
-        if c3 === nothing || c3 >= j || c3 != c2 + 2 || !(zero <= buf[c2 + 1] <= zero + 3) || c3 + 1 > e ||
-                !all(b -> zero <= b <= nine, view(buf, (c3 + 1):e)) || c1 == k || c2 == c1 + 1
+        if c3 === nothing || c3 >= j || c3 != c2 + 2 ||
+                !(zero <= buf[c2 + 1] <= zero + 3) || c3 + 1 > e ||
+                !all(b -> zero <= b <= nine, view(buf, (c3 + 1):e)) || c1 == k || c2 == c1 +
+                1
             ok = false
         else
             cnt[buf[c2 + 1] - zero + 1] += 1
@@ -635,31 +741,38 @@ function package_runs3()
     return Dict((String(r["case"]), parse(Int, r["seed"])) => r for r in rows)
 end
 # D-215 (4): the O5 colonies the package must carry, from the records' own file names (f7: γ
-# at β = 0, record name <FW>_gamma_<γ>_<MCS>MCS.csv; f8: β at γ = 0, <FW>_beta_<β>_<MCS>MCS.csv):
-# (β, γ, MCS) => source path
+# at β = 0, record name <FW>_gamma_<γ>_<MCS>MCS.csv; f8: β at γ = 0,
+# <FW>_beta_<β>_<MCS>MCS.csv): (β, γ, MCS) => source path
 function o5_sources()
     out = Dict{Tuple{Float64, Float64, Int}, String}()
     if haskey(RECS, :sweeps) && isdir(joinpath(package_rec(:sweeps), "f7"))
         d = joinpath(package_rec(:sweeps), "f7")
         for n in readdir(d)
             m = match(package_re(raw"^{FW}_gamma_([0-9.eE+-]+)_(\d+)MCS\.csv$"), n)
-            m === nothing || (out[(0.0, parse(Float64, m[1]), parse(Int, m[2]))] = joinpath(d, n))
+            m === nothing ||
+                (out[(0.0, parse(Float64, m[1]), parse(Int, m[2]))] = joinpath(d, n))
         end
     end
     if haskey(RECS, :f8beta) && isdir(joinpath(package_rec(:f8beta), "f8"))
         d = joinpath(package_rec(:f8beta), "f8")
         for n in readdir(d)
             m = match(package_re(raw"^{FW}_beta_([0-9.eE+-]+)_(\d+)MCS\.csv$"), n)
-            m === nothing || (out[(parse(Float64, m[1]), 0.0, parse(Int, m[2]))] = joinpath(d, n))
+            m === nothing ||
+                (out[(parse(Float64, m[1]), 0.0, parse(Int, m[2]))] = joinpath(d, n))
         end
     end
     return out
 end
-o5_key(f) = (
-    m = match(REQUIRED[findfirst(x -> x[1] == :O5, REQUIRED)][3], f);
-    m === nothing ? nothing : (parse(Float64, m[1]), parse(Float64, m[2]), parse(Int, m[3]))
-)
-# the formerly optional items, all required (D-204) -----------------------------------------------
+function o5_key(f)
+    m = match(REQUIRED[findfirst(x -> x[1] == :O5, REQUIRED)][3], f)
+    return if m === nothing
+        nothing
+    else
+        (parse(Float64, m[1]), parse(Float64, m[2]), parse(Int, m[3]))
+    end
+end
+# the formerly optional items, all required (D-204)
+# -----------------------------------------------
 function package_present(rels, key)
     re = only(x[3] for x in REQUIRED if x[1] == key)
     return filter(f -> occursin(re, f), rels)
@@ -668,7 +781,10 @@ end
 # figure labels a line names, "Figure 3/9" and "Figures 3 and 9" included
 function fig_labels(l)
     out = String[]
-    for m in eachmatch(r"\b(?:Figures?|Figs?\.?)\s*((?:\d+)(?:\s*(?:,|and|&|/|–)\s*\d+)*)", l)
+    for m in eachmatch(
+            r"\b(?:Figures?|Figs?\.?)\s*((?:\d+)(?:\s*(?:,|and|&|/|–)\s*\d+)*)",
+            l
+        )
         append!(out, [String(n.match) for n in eachmatch(r"\d+", m[1])])
     end
     return out
@@ -677,7 +793,9 @@ const CCIRCLE = r"C\s*/\s*C_?\{?circle\}?|C/C<sub>circle</sub>"
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "15 openvt package (0) records present" setup = [OpenVTPackageSetup] tags = [:pottsmodels, :reproductions] begin
+@testitem "15 openvt package (0) records present" setup = [OpenVTPackageSetup] tags = [
+    :pottsmodels, :reproductions,
+] begin
     @testset "15 openvt package (0) records present" begin
         for k in (:calib, :f5, :f3f8, :f1f4)
             @test haskey(RECS, k)
@@ -686,20 +804,26 @@ end
         @test haskey(RECS, :sweeps)
         @test haskey(RECS, :o1)
         @test haskey(RECS, :f8beta)                          # D-211: the Fig 8 β record
-        @test haskey(RECS, :o1g)                             # D-215: the O1/O2 post-processing record
+        # D-215: the O1/O2 post-processing record
+        @test haskey(RECS, :o1g)
         @test isfile(SPEC)
         @test length(spec_cs()) >= 17
     end
 end
 
-@testitem "15 openvt package (1) generator: builds both trees, refuses git and non-empty dirs" setup = [OpenVTPackageSetup] tags = [:pottsmodels, :reproductions] begin
-    @testset "15 openvt package (1) generator: builds both trees, refuses git and non-empty dirs" begin
+@testitem "15 openvt package (1) generator: builds both trees, refuses git and non-empty \
+    dirs" setup = [OpenVTPackageSetup] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    @testset "15 openvt package (1) generator: builds both trees, refuses git and \
+        non-empty dirs" begin
         @test build()
         @test sort(readdir(PACKAGE_A)) == ["implementations", "results"]
         @test readdir(joinpath(PACKAGE_A, "implementations")) == [PACKAGE_FW]
         @test readdir(joinpath(PACKAGE_A, "results")) == [PACKAGE_FW]
-        # outside git only: test against an isolated temporary `git init` directory so this check
-        # does not assume the test runner's own checkout carries `.git` (e.g. rsync/archive copies)
+        # outside git only: test against an isolated temporary `git init` directory so this
+        # check does not assume the test runner's own checkout carries `.git` (e.g.
+        # rsync/archive copies)
         mktempdir() do gitdir
             run(`git init -q $gitdir`)
             ingit = joinpath(gitdir, "must_not_exist")
@@ -709,8 +833,8 @@ end
             @test !ispath(ingit)
             # no stale files: a non-empty directory is refused
             @test_throws ArgumentError PottsModels.openvt_submission_package(PACKAGE_A)
-            # D-204: the bulk directory is given, outside git, complete and equal to the git manifests;
-            # otherwise the build is refused and leaves nothing behind
+            # D-204: the bulk directory is given, outside git, complete and equal to the git
+            # manifests; otherwise the build is refused and leaves nothing behind
             @test !isempty(BULK) && isdir(BULK) && !in_git(BULK)
             for bulk in (nothing, gitdir, DATA, mktempdir(), bogus_bulk(O1_CASES))
                 out = joinpath(mktempdir(), "pkg")
@@ -727,7 +851,11 @@ end
     end
 end
 
-@testitem "15 openvt package (2) deterministic: same bytes twice" setup = [OpenVTPackageSetup] tags = [:pottsmodels, :reproductions] begin
+@testitem "15 openvt package (2) deterministic: same bytes twice" setup = [
+    OpenVTPackageSetup,
+] tags = [
+    :pottsmodels, :reproductions,
+] begin
     @testset "15 openvt package (2) deterministic: same bytes twice" begin
         @test build()
         ta, tb = package_tree(PACKAGE_A), package_tree(PACKAGE_B)
@@ -739,8 +867,12 @@ end
     end
 end
 
-@testitem "15 openvt package (3) implementations/<token>: model, runners, README, parameters" setup = [OpenVTPackageSetup] tags = [:pottsmodels, :reproductions] begin
-    @testset "15 openvt package (3) implementations/<token>: model, runners, README, parameters" begin
+@testitem "15 openvt package (3) implementations/<token>: model, runners, README, \
+    parameters" setup = [OpenVTPackageSetup] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    @testset "15 openvt package (3) implementations/<token>: model, runners, README, \
+        parameters" begin
         @test build()
         for f in ("openvt_reference.jl", "openvt_chain.jl")
             p = impl("src", f)
@@ -788,8 +920,12 @@ end
     end
 end
 
-@testitem "15 openvt package (4) Relaxation: O4 widths and Table S5 equal the calibration record" setup = [OpenVTPackageSetup] tags = [:pottsmodels, :reproductions] begin
-    @testset "15 openvt package (4) Relaxation: O4 widths and Table S5 equal the calibration record" begin
+@testitem "15 openvt package (4) Relaxation: O4 widths and Table S5 equal the calibration \
+    record" setup = [OpenVTPackageSetup] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    @testset "15 openvt package (4) Relaxation: O4 widths and Table S5 equal the \
+        calibration record" begin
         @test build()
         rec = package_rec(:calib)
         meta = TOML.parsefile(joinpath(rec, "meta.toml"))
@@ -804,20 +940,30 @@ end
             length(got) == length(rows) || return
             ok = true
             for (g, r) in zip(got, rows)
-                ok &= length(g) == 3 && all(package_eq(package_f(g[j]), package_f(r[cols[j]])) for j in 1:3)
+                ok &= length(g) == 3 &&
+                    all(package_eq(package_f(g[j]), package_f(r[cols[j]])) for j in 1:3)
             end
             @test ok
         end
         lam(λ) = filter(r -> r["lambda"] == string(λ), r11)
-        check(res("Relaxation", "11cells", "width.csv"), H_WIDTH, lam(2), ("t_over_T", "w11_mean", "w11_sd"))
-        check(res("Relaxation", "11+10cells", "width.csv"), H_WIDTH, r21, ("t_over_T", "w21_mean", "w21_sd"))
+        check(
+            res("Relaxation", "11cells", "width.csv"), H_WIDTH, lam(2), (
+                "t_over_T", "w11_mean", "w11_sd",
+            )
+        )
+        check(
+            res("Relaxation", "11+10cells", "width.csv"), H_WIDTH, r21, (
+                "t_over_T", "w21_mean", "w21_sd",
+            )
+        )
         check(
             res("Relaxation", "11+10cells", "inner_width.csv"), H_INNER, r21,
             ("t_over_T", "inner_w11_mean", "inner_w11_sd")
         )
         for λ in LAMBDAS
             check(
-                res("Relaxation", "lambda_scan", "11cells_lambda$(λ)_width.csv"), H_WIDTH, lam(λ),
+                res("Relaxation", "lambda_scan", "11cells_lambda$(λ)_width.csv"), H_WIDTH,
+                lam(λ),
                 ("t_over_T", "w11_mean", "w11_sd")
             )
         end
@@ -845,8 +991,12 @@ end
     end
 end
 
-@testitem "15 openvt package (5) Monolayer metrics: O6 per run, means, neighbours equal the F3/F8 record" setup = [OpenVTPackageSetup] tags = [:pottsmodels, :reproductions] begin
-    @testset "15 openvt package (5) Monolayer metrics: O6 per run, means, neighbours equal the F3/F8 record" begin
+@testitem "15 openvt package (5) Monolayer metrics: O6 per run, means, neighbours equal \
+    the F3/F8 record" setup = [OpenVTPackageSetup] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    @testset "15 openvt package (5) Monolayer metrics: O6 per run, means, neighbours \
+        equal the F3/F8 record" begin
         @test build()
         ts = package_timeseries()
         _, runs = package_tsv(joinpath(package_rec(:f3f8), "runs.tsv"))
@@ -880,7 +1030,13 @@ end
                 ok = length(got) == length(want) && length(want) > 10
                 if ok
                     for (g, w) in zip(got, want)
-                        ok &= length(g) == 9 && all(package_eq(package_f(g[j]), w[j]; rtol = 1.0e-10, atol = 1.0e-10) for j in 1:9)
+                        ok &= length(g) == 9 && all(
+                            package_eq(
+                                package_f(g[j]), w[j]; rtol = 1.0e-10,
+                                atol = 1.0e-10
+                            )
+                                for j in 1:9
+                        )
                     end
                 end
                 @test ok
@@ -894,7 +1050,8 @@ end
                 want = package_neighbors(case)
                 @test length(got) == length(want)
                 @test all(
-                    length(g) == 2 && parse(Int, g[1]) == w[1] && package_eq(package_f(g[2]), w[2]; rtol = 1.0e-10)
+                    length(g) == 2 && parse(Int, g[1]) == w[1] &&
+                        package_eq(package_f(g[2]), w[2]; rtol = 1.0e-10)
                         for (g, w) in zip(got, want)
                 )
             end
@@ -902,7 +1059,11 @@ end
     end
 end
 
-@testitem "15 openvt package (6) closeup and provenance equal the records" setup = [OpenVTPackageSetup] tags = [:pottsmodels, :reproductions] begin
+@testitem "15 openvt package (6) closeup and provenance equal the records" setup = [
+    OpenVTPackageSetup,
+] tags = [
+    :pottsmodels, :reproductions,
+] begin
     @testset "15 openvt package (6) closeup and provenance equal the records" begin
         @test build()
         p = res("closeup.png")
@@ -915,11 +1076,16 @@ end
             @test isfile(q) && TOML.parsefile(q) == want
         end
         pd = res("provenance")
-        @test isdir(pd) && sort(readdir(pd)) == sort([RECS[k] * ".toml" for k in keys(RECS)])
+        @test isdir(pd) &&
+            sort(readdir(pd)) == sort([RECS[k] * ".toml" for k in keys(RECS)])
     end
 end
 
-@testitem "15 openvt package (7) formerly optional items: all present and checked" setup = [OpenVTPackageSetup] tags = [:pottsmodels, :reproductions] begin
+@testitem "15 openvt package (7) formerly optional items: all present and checked" setup = [
+    OpenVTPackageSetup,
+] tags = [
+    :pottsmodels, :reproductions,
+] begin
     @testset "15 openvt package (7) formerly optional items: all present and checked" begin
         @test build()
         rels = package_tree(joinpath(PACKAGE_A, RES))
@@ -931,30 +1097,47 @@ end
         end
         # required items are never "pending" (a Pending section may remain for other things)
         for stem in (
-                "width.csv", "table_S5", "measurements_", "neighbors_", "closeup", "provenance",
+                "width.csv", "table_S5", "measurements_", "neighbors_", "closeup",
+                "provenance",
                 "O1", "O2", "A3", "O3", "O5", "parked",
             )
             @test !occursin(stem, pend)
         end
 
         ts = package_timeseries()
-        rec = o1g_rec()                    # D-215: the post-processed manifests (item `ITEMS[:o1g]`)
-        man = isempty(rec) ? Dict{Tuple{String, Int}, Vector{Any}}() : package_o1_manifest(rec)
+        # D-215: the post-processed manifests (item `ITEMS[:o1g]`)
+        rec = o1g_rec()
+        man = if isempty(rec)
+            Dict{Tuple{String, Int}, Vector{Any}}()
+        else
+            package_o1_manifest(rec)
+        end
         o1cases = o1_cases(man)
-        # O1: one archive per case of the O1 record, by its D-215 name (bytes and members: 11b, 12)
+        # O1: one archive per case of the O1 record, by its D-215 name (bytes and members:
+        # 11b, 12)
         @test !isempty(o1cases)
-        @test sort([something(o1_case(basename(f)), "?") for f in package_present(rels, :O1)]) == o1cases
+        @test sort(
+            [
+                something(o1_case(basename(f)), "?")
+                    for f in package_present(rels, :O1)
+            ]
+        ) == o1cases
         @test sort(basename.(package_present(rels, :O1))) == sort(o1_zip.(o1cases))
 
         # O2 (D-215 (3)): one zip, O2_ZIP, whose members are exactly, in this order, the
-        # sorted names <O2 dir>/cell_data_no_inhibition_<k>.csv, k = 0…99; member k equals the F5
-        # runs.tsv row k + 1 (N, n_f0, Σf, Σa, max f, min a, max a), and its bytes the O2 manifest
+        # sorted names <O2 dir>/cell_data_no_inhibition_<k>.csv, k = 0…99; member k equals
+        # the F5 runs.tsv row k + 1 (N, n_f0, Σf, Σa, max f, min a, max a), and its bytes
+        # the O2 manifest
         o2 = package_present(rels, :O2)
         @test length(o2) == 1
         o2z = length(o2) == 1 ? res(only(o2)) : ""
         _, fr = package_tsv(joinpath(package_rec(:f5), "runs.tsv"))
         fb = filter(r -> r["case"] == "b", fr)
-        _, o2m = isempty(rec) ? (String[], Dict{String, String}[]) : tsv_or_empty(joinpath(rec, "o2_manifest.tsv"))
+        _, o2m = if isempty(rec)
+            (String[], Dict{String, String}[])
+        else
+            tsv_or_empty(joinpath(rec, "o2_manifest.tsv"))
+        end
         o2row = Dict(r["file"] => r for r in o2m if haskey(r, "file"))
         want_o2 = sort(["$(O2_DIR)/cell_data_no_inhibition_$(k).csv" for k in O2_K])
         @test isfile(o2z) && zip_names(o2z) == want_o2
@@ -976,16 +1159,23 @@ end
             @test package_eq(minimum(av), package_f(r["a_min"]); rtol = 1.0e-10)
             @test package_eq(maximum(av), package_f(r["a_max"]); rtol = 1.0e-10)
             m = get(o2row, mname, nothing)
-            @test m !== nothing && m["sha256"] == bytes2hex(sha256(buf)) && parse(Int, m["bytes"]) == length(buf) &&
+            @test m !== nothing && m["sha256"] == bytes2hex(sha256(buf)) &&
+                parse(Int, m["bytes"]) == length(buf) &&
                 parse(Int, m["rows"]) == length(rows)
         end
 
-        # A3: shares of the inhibition codes per O1 save, for every run of cases a and e (and of c, d
-        # where O1 has them); f_k = i_k/cells of that save's O1 file; f0 is the record's g
+        # A3: shares of the inhibition codes per O1 save, for every run of cases a and e
+        # (and of c, d where O1 has them); f_k = i_k/cells of that save's O1 file; f0 is the
+        # record's g
         a3 = package_present(rels, :A3)
         a3cases = sort(union(A3_CASES, intersect(o1cases, collect(keys(SWEEP_CASE)))))
         want = sort([(c, s) for (c, s) in keys(isempty(man) ? ts : man) if c in a3cases])
-        got = sort([(m.captures[1], parse(Int, m.captures[2])) for f in a3 for m in (match(REQUIRED[4][3], f),)])
+        got = sort(
+            [
+                (m.captures[1], parse(Int, m.captures[2])) for f in a3
+                    for m in (match(REQUIRED[4][3], f),)
+            ]
+        )
         @test !isempty(want) && got == want
         for f in a3
             m = match(REQUIRED[4][3], f)
@@ -994,23 +1184,29 @@ end
             h, rows = package_csv(res(f))
             @test h == H_A3
             case in PACKAGE_CASES &&
-                @test [package_f(x[1]) for x in rows] == [r[1] for r in get(ts, (case, s), Vector{Float64}[])]
-            @test all(x -> abs(sum(package_f.(x[3:6])) - 1) <= 1.0e-9 && all(>=(0), package_f.(x[3:6])), rows)
+                @test [package_f(x[1]) for x in rows] ==
+                [r[1] for r in get(ts, (case, s), Vector{Float64}[])]
+            @test all(
+                x -> abs(sum(package_f.(x[3:6])) - 1) <= 1.0e-9 &&
+                    all(>=(0), package_f.(x[3:6])), rows
+            )
             mrows = get(man, (case, s), Any[])
             ok = length(rows) == length(mrows)
             for (x, e) in zip(rows, mrows)
-                ok &= length(x) == 6 && package_f(x[1]) == e.mcs && package_eq(package_f(x[2]), e.mcs / CYCLE) &&
+                ok &= length(x) == 6 && package_f(x[1]) == e.mcs &&
+                    package_eq(package_f(x[2]), e.mcs / CYCLE) &&
                     all(package_eq(package_f(x[2 + k]), e.i[k] / e.rows) for k in 1:4)
             end
             @test ok
             if haskey(ts, (case, s))
                 w = ts[(case, s)]
-                @test length(rows) == length(w) && all(package_eq(package_f(x[3]), r[7]) for (x, r) in zip(rows, w))
+                @test length(rows) == length(w) &&
+                    all(package_eq(package_f(x[3]), r[7]) for (x, r) in zip(rows, w))
             end
         end
 
-        # O3: header, ≥ 5 rows, 5T = MCS / 775 (or both non-finite for capped runs); byte copies of
-        # the sweeps record's tables
+        # O3: header, ≥ 5 rows, 5T = MCS / 775 (or both non-finite for capped runs); byte
+        # copies of the sweeps record's tables
         sw = haskey(RECS, :sweeps) ? package_rec(:sweeps) : ""
         for (key, par) in ((:O3b, "beta"), (:O3g, "gamma"))
             files = package_present(rels, key)
@@ -1021,14 +1217,16 @@ end
                 @test length(rows) >= 5
                 @test all(rows) do x
                     mcs, t = package_f(x[2]), package_f(x[3])
-                    length(x) == 3 && (isfinite(mcs) ? abs(t - mcs / CYCLE) <= 0.005 : !isfinite(t))
+                    length(x) == 3 &&
+                        (isfinite(mcs) ? abs(t - mcs / CYCLE) <= 0.005 : !isfinite(t))
                 end
                 @test !isempty(sw) && read(res(f)) == read(joinpath(sw, basename(f)))
             end
         end
         # O5 (D-215 (4)): <FW>_beta_<β>_gamma_<γ>_<MCS>MCS.csv, one per colony of the sweeps
-        # record's f7/ (β = 0) and the Fig 8 β record's f8/ (γ = 0), numbers equal to the record
-        # names' (as parsed), bytes equal to the record files; header, inhibited ∈ {0, 1}
+        # record's f7/ (β = 0) and the Fig 8 β record's f8/ (γ = 0), numbers equal to the
+        # record names' (as parsed), bytes equal to the record files; header, inhibited ∈
+        # {0, 1}
         o5 = package_present(rels, :O5)
         src = o5_sources()
         @test length(src) >= 10
@@ -1042,9 +1240,10 @@ end
             @test haskey(src, k) && read(res(f)) == read(src[k])
         end
 
-        # Table 1 (D-215 (6)): <FW>_table1.csv; header starts "parameter,multiple,threshold"; one
-        # row per row of the sweeps record's table1.tsv, in its order; parameter equal, multiple
-        # and threshold equal as numbers ("—" in the record: NaN or empty)
+        # Table 1 (D-215 (6)): <FW>_table1.csv; header starts
+        # "parameter,multiple,threshold"; one row per row of the sweeps record's table1.tsv,
+        # in its order; parameter equal, multiple and threshold equal as numbers ("—" in the
+        # record: NaN or empty)
         t1 = package_present(rels, :T1)
         @test length(t1) == 1
         if length(t1) == 1 && !isempty(sw)
@@ -1054,30 +1253,47 @@ end
             @test length(rows) == length(want)
             thr(x) = strip(x) in ("", "NaN", "—") ? NaN : package_f(x)
             @test length(rows) == length(want) && all(zip(rows, want)) do (g, w)
-                length(g) >= 3 && g[1] == w["parameter"] && package_f(g[2]) == package_f(w["multiple"]) &&
+                length(g) >= 3 && g[1] == w["parameter"] &&
+                    package_f(g[2]) == package_f(w["multiple"]) &&
                     package_eq(thr(g[3]), thr(w["threshold"]))
             end
         end
     end
 end
 
-@testitem "15 openvt package (8) allowlist: nothing but the pinned files (no G data, no stray files)" setup = [OpenVTPackageSetup] tags = [:pottsmodels, :reproductions] begin
-    @testset "15 openvt package (8) allowlist: nothing but the pinned files (no G data, no stray files)" begin
+@testitem "15 openvt package (8) allowlist: nothing but the pinned files (no G data, no \
+    stray files)" setup = [OpenVTPackageSetup] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    @testset "15 openvt package (8) allowlist: nothing but the pinned files (no G data, \
+        no stray files)" begin
         @test build()
         tree = package_tree(PACKAGE_A)
-        impl_ok(f) = f in ("README.md", "parameters.csv", "src/openvt_reference.jl", "src/openvt_chain.jl") ||
-            occursin(r"^scripts/[^/]+/[^/]+\.jl$", f)
+        function impl_ok(f)
+            return f in (
+                "README.md", "parameters.csv",
+                "src/openvt_reference.jl", "src/openvt_chain.jl",
+            ) ||
+                occursin(r"^scripts/[^/]+/[^/]+\.jl$", f)
+        end
         lam_files = ["Relaxation/lambda_scan/11cells_lambda$(λ)_width.csv" for λ in LAMBDAS]
         res_fixed = Set(
             [
-                "README.md", "closeup.png", "Relaxation/11cells/width.csv", "Relaxation/11+10cells/width.csv",
-                "Relaxation/11+10cells/inner_width.csv", "Relaxation/table_S5.csv", lam_files...,
+                "README.md", "closeup.png", "Relaxation/11cells/width.csv",
+                "Relaxation/11+10cells/width.csv",
+                "Relaxation/11+10cells/inner_width.csv", "Relaxation/table_S5.csv",
+                lam_files...,
             ]
         )
-        res_ok(f) = f in res_fixed || occursin(r"^provenance/[^/]+\.toml$", f) ||
-            occursin(r"^Monolayer/metrics/[a-z]+/measurements_s\d+\.csv$", f) ||
-            occursin(r"^Monolayer/metrics/(measurements_[a-z]+_mean|neighbors_[a-z]+)\.csv$", f) ||
-            any(x -> occursin(x[3], f), REQUIRED)
+        function res_ok(f)
+            return f in res_fixed || occursin(r"^provenance/[^/]+\.toml$", f) ||
+                occursin(r"^Monolayer/metrics/[a-z]+/measurements_s\d+\.csv$", f) ||
+                occursin(
+                r"^Monolayer/metrics/(measurements_[a-z]+_mean|neighbors_[a-z]+)\.csv$",
+                f
+            ) ||
+                any(x -> occursin(x[3], f), REQUIRED)
+        end
         stray = String[]
         for f in tree
             ip, rp = "implementations/$(PACKAGE_FW)/", "results/$(PACKAGE_FW)/"
@@ -1091,9 +1307,18 @@ end
         end
         @test isempty(stray)
         # no consortium framework names in any path (G:results/<FW>/…)
-        @test !any(f -> occursin(r"TST|Morpheus|CompuCell|CC3D|Artistoo|PhysiCell|Chaste|polyhoop|tinydem|relaxation_exact"i, f), tree)
+        @test !any(
+            f -> occursin(
+                r"TST|Morpheus|CompuCell|CC3D|Artistoo|PhysiCell|Chaste|polyhoop|tinydem|relaxation_exact"i,
+                f
+            ),
+            tree
+        )
         # metrics only for the cases run
-        @test Set(m.captures[1] for f in tree for m in (match(r"/metrics/([a-z]+)/measurements_s", f),) if m !== nothing) ==
+        @test Set(
+            m.captures[1] for f in tree
+                for m in (match(r"/metrics/([a-z]+)/measurements_s", f),) if m !== nothing
+        ) ==
             Set(PACKAGE_CASES)
         # opt-in: no package file is byte-identical to a G file
         g = get(ENV, "OPENVT_MONOLAYER_REPO", "")
@@ -1110,8 +1335,12 @@ end
     end
 end
 
-@testitem "15 openvt package (9) results README: deviations, readings, colours, units, seeds" setup = [OpenVTPackageSetup] tags = [:pottsmodels, :reproductions] begin
-    @testset "15 openvt package (9) results README: deviations, readings, colours, units, seeds" begin
+@testitem "15 openvt package (9) results README: deviations, readings, colours, units, \
+    seeds" setup = [OpenVTPackageSetup] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    @testset "15 openvt package (9) results README: deviations, readings, colours, units, \
+        seeds" begin
         @test build()
         readme = isfile(res("README.md")) ? read(res("README.md"), String) : ""
         @test !isempty(readme)
@@ -1122,7 +1351,8 @@ end
             i = package_row(rows, key)
             i === nothing && return false
             line = join(rows[i], " | ")
-            return all(m -> occursin(m, line), must) && !any(m -> occursin(m, line), mustnot)
+            return all(m -> occursin(m, line), must) &&
+                !any(m -> occursin(m, line), mustnot)
         end
         for c in spec_cs()
             @test has(c)
@@ -1151,19 +1381,25 @@ end
                 @test has(String(split(r["target"])[1]); must = ["FAIL"])
             end
         end
-        @test has("V1"; must = ["15.17", "13.57", "C13", "actual area", "target area"], mustnot = ["PASS"])
+        @test has(
+            "V1"; must = ["15.17", "13.57", "C13", "actual area", "target area"],
+            mustnot = ["PASS"]
+        )
         i = findfirst(
-            r -> occursin(r"^F1"i, r[1]) && any(c -> occursin(r"coolwarm"i, c), r) && any(c -> occursin(r"area"i, c), r) &&
+            r -> occursin(r"^F1"i, r[1]) && any(c -> occursin(r"coolwarm"i, c), r) &&
+                any(c -> occursin(r"area"i, c), r) &&
                 any(c -> occursin(r"provisional"i, c), r), rows
         )
         @test i !== nothing                                         # F1 colour row (D-185)
         @test findfirst(
-            r -> any(c -> occursin(r"closed"i, c), r) && any(c -> occursin(r"edge[_ ]guard"i, c), r) &&
+            r -> any(c -> occursin(r"closed"i, c), r) &&
+                any(c -> occursin(r"edge[_ ]guard"i, c), r) &&
                 any(c -> occursin(r"unbounded"i, c), r), rows
         ) !== nothing
         for r in rows
             @test occursin(r"^(not an author question|not asked|resolved)"i, r[end])
-            any(c -> occursin(r"\bQ\d+\b", c), r) && @test any(c -> occursin("our open question list", c), r)
+            any(c -> occursin(r"\bQ\d+\b", c), r) &&
+                @test any(c -> occursin("our open question list", c), r)
         end
         # the closeup's colours stated in the prose too (D-185)
         @test occursin(r"coolwarm", readme) && occursin(r"provisional"i, readme)
@@ -1179,14 +1415,21 @@ end
     end
 end
 
-@testitem "15 openvt package (10) nothing private, nothing implying contact" setup = [OpenVTPackageSetup] tags = [:pottsmodels, :reproductions] begin
+@testitem "15 openvt package (10) nothing private, nothing implying contact" setup = [
+    OpenVTPackageSetup,
+] tags = [
+    :pottsmodels, :reproductions,
+] begin
     @testset "15 openvt package (10) nothing private, nothing implying contact" begin
         @test build()
         bad = String[]
         for f in package_tree(PACKAGE_A)
             any(e -> endswith(f, e), (".md", ".csv", ".toml", ".jl", ".txt")) || continue
             # the public repository's owner/name (URLs to it are required) is not private
-            s = replace(read(joinpath(PACKAGE_A, f), String), "PraneethMerugu/Potts.jl" => "")
+            s = replace(
+                read(joinpath(PACKAGE_A, f), String),
+                "PraneethMerugu/Potts.jl" => ""
+            )
             for re in FORBIDDEN
                 occursin(re, s) && push!(bad, "$f: $(re.pattern)")
             end
@@ -1197,29 +1440,44 @@ end
     end
 end
 
-@testitem "15 openvt package (11) O1 re-run record: its manifest reproduces the F3/F8 record (b)" setup = [OpenVTPackageSetup] tags = [:pottsmodels, :reproductions] begin
-    @testset "15 openvt package (11) O1 re-run record: its manifest reproduces the F3/F8 record (b)" begin
+@testitem "15 openvt package (11) O1 re-run record: its manifest reproduces the F3/F8 \
+    record (b)" setup = [OpenVTPackageSetup] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    @testset "15 openvt package (11) O1 re-run record: its manifest reproduces the F3/F8 \
+        record (b)" begin
         rec = o1_rec()
         @test !isempty(rec)
         if !isempty(rec)
-            for f in ("provenance.toml", "runs.tsv", "o1_manifest.tsv", "archives.tsv", "o2_manifest.tsv")
+            for f in (
+                    "provenance.toml", "runs.tsv", "o1_manifest.tsv", "archives.tsv",
+                    "o2_manifest.tsv",
+                )
                 @test package_has(rec, f)
             end
-            prov = package_has(rec, "provenance.toml") ? TOML.parsefile(joinpath(rec, "provenance.toml")) : Dict{String, Any}()
+            prov = if package_has(rec, "provenance.toml")
+                TOML.parsefile(joinpath(rec, "provenance.toml"))
+            else
+                Dict{String, Any}()
+            end
             @test get(prov, "item", "") == "P6.15j"
             @test occursin(r"^[0-9a-f]{40}$", get(prov, "commit", ""))
             @test package_has(rec, basename(get(prov, "runner", "-")))
-            @test !haskey(prov, "work")                                  # no local paths (D-195)
+            # no local paths (D-195)
+            @test !haskey(prov, "work")
             @test !package_has(rec, "verdicts.tsv") && !package_has(rec, "deviations.tsv")
             for (f, h) in (
-                    ("o1_manifest.tsv", H_O1M), ("archives.tsv", H_ARCH), ("o2_manifest.tsv", H_O2M),
+                    ("o1_manifest.tsv", H_O1M), ("archives.tsv", H_ARCH), (
+                        "o2_manifest.tsv", H_O2M,
+                    ),
                     ("runs.tsv", H_O1RUNS),
                 )
                 @test first(tsv_or_empty(joinpath(rec, f))) == h
             end
             man = package_o1_manifest(rec)
             cases = o1_cases(man)
-            @test issubset(O1_CASES, cases) && issubset(cases, ["a", "b", "c", "d", "e", "f"])
+            @test issubset(O1_CASES, cases) &&
+                issubset(cases, ["a", "b", "c", "d", "e", "f"])
             # rows well formed (spec §3.1 names), files unique and sorted
             _, raw = tsv_or_empty(joinpath(rec, "o1_manifest.tsv"))
             files = [r["file"] for r in raw if haskey(r, "file")]
@@ -1228,13 +1486,15 @@ end
             for v in values(man), e in v
                 m = match(O1_MEMBER_RAW, e.file)
                 ok &= m !== nothing && m.captures[1] == e.case && m.captures[2] == e.case &&
-                    parse(Int, m.captures[3]) == e.seed && parse(Int, m.captures[4]) == e.mcs &&
-                    e.rows >= 1 && all(>=(0), e.i) && sum(e.i) == e.rows && e.bytes > ncodeunits(H_O1_RAW) + 1 &&
+                    parse(Int, m.captures[3]) == e.seed &&
+                    parse(Int, m.captures[4]) == e.mcs &&
+                    e.rows >= 1 && all(>=(0), e.i) && sum(e.i) == e.rows &&
+                    e.bytes > ncodeunits(H_O1_RAW) + 1 &&
                     hex(e.sha)
             end
             @test ok
-            # the F3/F8 record reproduced: every save's MCS and cell count, the growing fraction
-            # (i = 0 share = g), the stop MCS, final N and save count of runs.tsv
+            # the F3/F8 record reproduced: every save's MCS and cell count, the growing
+            # fraction (i = 0 share = g), the stop MCS, final N and save count of runs.tsv
             ts = package_timeseries()
             runs3 = package_runs3()
             meta3 = TOML.parsefile(joinpath(package_rec(:f3f8), "meta.toml"))
@@ -1246,33 +1506,48 @@ end
                     v, w, r = get(man, (case, s), Any[]), ts[(case, s)], runs3[(case, s)]
                     @test [e.mcs for e in v] == [Int(x[1]) for x in w]
                     @test [e.rows for e in v] == [Int(x[2]) for x in w]
-                    @test length(v) == length(w) && all(package_eq(e.i[1] / e.rows, x[7]) for (e, x) in zip(v, w))
-                    @test !isempty(v) && last(v).mcs == parse(Int, r["mcs"]) && last(v).rows == parse(Int, r["N"]) &&
+                    @test length(v) == length(w) &&
+                        all(package_eq(e.i[1] / e.rows, x[7]) for (e, x) in zip(v, w))
+                    @test !isempty(v) && last(v).mcs == parse(Int, r["mcs"]) &&
+                        last(v).rows == parse(Int, r["N"]) &&
                         length(v) == parse(Int, r["saves"])
                     γ0 && @test all(e -> e.i[3] == 0 && e.i[4] == 0, v)
                 end
             end
-            # cases c and d only where O1 has them: the sweeps record's stops; saves at 0, every 39 MCS, the stop
+            # cases c and d only where O1 has them: the sweeps record's stops; saves at 0,
+            # every 39 MCS, the stop
             if any(in(cases), ("c", "d"))
                 inv = Dict(v => k for (k, v) in SWEEP_CASE)
                 _, swr = package_tsv(joinpath(package_rec(:sweeps), "runs.tsv"))
-                sweep = Dict((inv[String(r["sweep"])], parse(Int, r["seed"])) => r for r in swr)
+                sweep = Dict(
+                    (inv[String(r["sweep"])], parse(Int, r["seed"])) => r
+                        for r in swr
+                )
                 for ((c, s), v) in man
                     c in ("c", "d") || continue
                     r = get(sweep, (c, s), nothing)
-                    @test r !== nothing && last(v).mcs == parse(Int, r["mcs"]) && last(v).rows == parse(Int, r["N"])
+                    @test r !== nothing && last(v).mcs == parse(Int, r["mcs"]) &&
+                        last(v).rows == parse(Int, r["N"])
                     m = [e.mcs for e in v]
-                    @test m[1] == 0 && all(x -> x % GRID == 0, m[1:(end - 1)]) && all(diff(m) .> 0)
+                    @test m[1] == 0 && all(x -> x % GRID == 0, m[1:(end - 1)]) &&
+                        all(diff(m) .> 0)
                 end
             end
-            # runs.tsv: one row per re-run, equal to the F3/F8 record's rows on these columns
+            # runs.tsv: one row per re-run, equal to the F3/F8 record's rows on these
+            # columns
             _, rr = tsv_or_empty(joinpath(rec, "runs.tsv"))
-            got = Dict((r["case"], parse(Int, r["seed"])) => r for r in rr if haskey(r, "case") && haskey(r, "seed"))
+            got = Dict(
+                (r["case"], parse(Int, r["seed"])) => r
+                    for r in rr if haskey(r, "case") && haskey(r, "seed")
+            )
             @test Set(keys(got)) == Set(keys(man))
             for ((c, s), r3) in runs3
                 c in O1_CASES || continue
                 r = get(got, (c, s), nothing)
-                @test r !== nothing && all(get(r, k, "") == String(r3[k]) for k in ("k", "mcs", "N", "saves"))
+                @test r !== nothing && all(
+                    get(r, k, "") == String(r3[k])
+                        for k in ("k", "mcs", "N", "saves")
+                )
             end
             # archives.tsv: one archive per case, with its member count
             _, ar = tsv_or_empty(joinpath(rec, "archives.tsv"))
@@ -1288,34 +1563,53 @@ end
             nb = Dict(String(r["k"]) => parse(Int, r["N"]) for r in fr if r["case"] == "b")
             @test sort([parse(Int, get(r, "k", "0")) for r in o2m]) == 1:100
             for r in o2m
-                @test get(r, "file", "") == "$(O2_DIR_RAW)/cell_data_no_inhibition_$(r["k"]).csv" &&
-                    parse(Int, r["rows"]) == get(nb, r["k"], -1) && parse(Int, r["bytes"]) > 0 && hex(r["sha256"])
+                @test get(r, "file", "") ==
+                    "$(O2_DIR_RAW)/cell_data_no_inhibition_$(r["k"]).csv" &&
+                    parse(Int, r["rows"]) == get(nb, r["k"], -1) &&
+                    parse(Int, r["bytes"]) > 0 && hex(r["sha256"])
             end
         end
     end
 end
 
-@testitem "15 openvt package (11b) post-processing record: the record renamed, g added (no re-run)" setup = [OpenVTPackageSetup] tags = [:pottsmodels, :reproductions] begin
-    @testset "15 openvt package (11b) post-processing record: the record renamed, g added (no re-run)" begin
+@testitem "15 openvt package (11b) post-processing record: the record renamed, g added \
+    (no re-run)" setup = [OpenVTPackageSetup] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    @testset "15 openvt package (11b) post-processing record: the record renamed, g added \
+        (no re-run)" begin
         raw, rec = o1_rec(), o1g_rec()
         @test !isempty(raw) && !isempty(rec)
         if !isempty(raw) && !isempty(rec)
-            for f in ("provenance.toml", "o1_manifest.tsv", "archives.tsv", "o2_manifest.tsv")
+            for f in (
+                    "provenance.toml", "o1_manifest.tsv", "archives.tsv",
+                    "o2_manifest.tsv",
+                )
                 @test package_has(rec, f)
             end
-            prov = package_has(rec, "provenance.toml") ? TOML.parsefile(joinpath(rec, "provenance.toml")) : Dict{String, Any}()
+            prov = if package_has(rec, "provenance.toml")
+                TOML.parsefile(joinpath(rec, "provenance.toml"))
+            else
+                Dict{String, Any}()
+            end
             @test get(prov, "item", "") == "P6.15l"
-            @test get(prov, "source", "") == basename(raw)                  # the O1 re-run record it maps
+            # the O1 re-run record it maps
+            @test get(prov, "source", "") == basename(raw)
             @test occursin(r"^[0-9a-f]{40}$", get(prov, "commit", ""))
             @test package_has(rec, basename(get(prov, "runner", "-")))
             @test !haskey(prov, "work")
             @test !package_has(rec, "verdicts.tsv") && !package_has(rec, "deviations.tsv")
-            for (f, h) in (("o1_manifest.tsv", H_O1M), ("archives.tsv", H_ARCH), ("o2_manifest.tsv", H_O2M))
+            for (f, h) in (
+                    ("o1_manifest.tsv", H_O1M), ("archives.tsv", H_ARCH), (
+                        "o2_manifest.tsv", H_O2M,
+                    ),
+                )
                 @test first(tsv_or_empty(joinpath(rec, f))) == h
             end
-            # O1: one row per O1 re-run record row, same case, seed, MCS, rows and codes; the file renamed to
-            # <stem>/s<seed>/<the O1 re-run record's base name>; bytes + 2 per line (",g" on the header and every
-            # row); its own sha256; rows sorted by file
+            # O1: one row per O1 re-run record row, same case, seed, MCS, rows and codes;
+            # the file renamed to <stem>/s<seed>/<the O1 re-run record's base name>; bytes +
+            # 2 per line (",g" on the header and every row); its own sha256; rows sorted by
+            # file
             old, new = package_o1_manifest(raw), package_o1_manifest(rec)
             @test Set(keys(old)) == Set(keys(new))
             ok = true
@@ -1325,17 +1619,21 @@ end
                 length(w) == length(v) || continue
                 for (a, b) in zip(v, w)
                     m = match(O1_MEMBER, b.file)
-                    ok &= a.mcs == b.mcs && a.rows == b.rows && a.i == b.i && b.bytes == a.bytes + 2 * (a.rows + 1) &&
+                    ok &= a.mcs == b.mcs && a.rows == b.rows && a.i == b.i &&
+                        b.bytes == a.bytes + 2 * (a.rows + 1) &&
                         b.file == "$(O1_STEM[a.case])/s$(a.seed)/$(basename(a.file))" &&
-                        m !== nothing && m[1] == O1_STEM[a.case] && parse(Int, m[2]) == a.seed &&
-                        m[3] == a.case && parse(Int, m[4]) == a.seed && parse(Int, m[5]) == a.mcs && hex(b.sha)
+                        m !== nothing && m[1] == O1_STEM[a.case] &&
+                        parse(Int, m[2]) == a.seed &&
+                        m[3] == a.case && parse(Int, m[4]) == a.seed &&
+                        parse(Int, m[5]) == a.mcs && hex(b.sha)
                 end
             end
             @test ok
             _, rawm = tsv_or_empty(joinpath(rec, "o1_manifest.tsv"))
             files = [r["file"] for r in rawm if haskey(r, "file")]
             @test files == sort(files) && allunique(files)
-            # O2: k = 0…99, the O1 re-run record's row k + 1's bytes (unchanged content), renamed
+            # O2: k = 0…99, the O1 re-run record's row k + 1's bytes (unchanged content),
+            # renamed
             _, o2a = tsv_or_empty(joinpath(raw, "o2_manifest.tsv"))
             _, o2b = tsv_or_empty(joinpath(rec, "o2_manifest.tsv"))
             byk = Dict(parse(Int, r["k"]) => r for r in o2a if haskey(r, "k"))
@@ -1343,28 +1641,44 @@ end
             for r in o2b
                 k = parse(Int, r["k"])
                 a = get(byk, k + 1, nothing)
-                @test a !== nothing && r["file"] == "$(O2_DIR)/cell_data_no_inhibition_$(k).csv" &&
-                    r["rows"] == a["rows"] && r["bytes"] == a["bytes"] && r["sha256"] == a["sha256"]
+                @test a !== nothing &&
+                    r["file"] == "$(O2_DIR)/cell_data_no_inhibition_$(k).csv" &&
+                    r["rows"] == a["rows"] && r["bytes"] == a["bytes"] &&
+                    r["sha256"] == a["sha256"]
             end
-            # archives: one per O1 case by its D-215 name, and the O2 zip (case "O2", 100 members)
+            # archives: one per O1 case by its D-215 name, and the O2 zip (case "O2", 100
+            # members)
             _, ar = tsv_or_empty(joinpath(rec, "archives.tsv"))
             cases = o1_cases(new)
             @test sort([get(r, "case", "") for r in ar]) == sort(vcat(cases, "O2"))
             for r in ar
-                want = r["case"] == "O2" ? (O2_ZIP, length(O2_K)) :
+                want = if r["case"] == "O2"
+                    (O2_ZIP, length(O2_K))
+                else
                     (o1_zip(r["case"]), length(o1_members(new, r["case"])))
-                @test get(r, "archive", "") == want[1] && parse(Int, r["members"]) == want[2] &&
+                end
+                @test get(r, "archive", "") == want[1] &&
+                    parse(Int, r["members"]) == want[2] &&
                     parse(Int, r["bytes"]) > 0 && hex(r["sha256"])
             end
         end
     end
 end
 
-@testitem "15 openvt package (12) O1 archives in the package: bytes and every member equal the manifest" setup = [OpenVTPackageSetup] tags = [:pottsmodels, :reproductions] begin
-    @testset "15 openvt package (12) O1 archives in the package: bytes and every member equal the manifest" begin
+@testitem "15 openvt package (12) O1 archives in the package: bytes and every member \
+    equal the manifest" setup = [OpenVTPackageSetup] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    @testset "15 openvt package (12) O1 archives in the package: bytes and every member \
+        equal the manifest" begin
         @test build()
-        rec = o1g_rec()                    # D-215: the post-processed archives and manifests
-        man = isempty(rec) ? Dict{Tuple{String, Int}, Vector{Any}}() : package_o1_manifest(rec)
+        # D-215: the post-processed archives and manifests
+        rec = o1g_rec()
+        man = if isempty(rec)
+            Dict{Tuple{String, Int}, Vector{Any}}()
+        else
+            package_o1_manifest(rec)
+        end
         cases = o1_cases(man)
         @test !isempty(cases)
         @test Sys.which("unzip") !== nothing
@@ -1379,7 +1693,11 @@ end
                     for c in cases for e in o1_members(man, c)
             ]
         end
-        _, ar = isempty(rec) ? (String[], Dict{String, String}[]) : tsv_or_empty(joinpath(rec, "archives.tsv"))
+        _, ar = if isempty(rec)
+            (String[], Dict{String, String}[])
+        else
+            tsv_or_empty(joinpath(rec, "archives.tsv"))
+        end
         arch = Dict(r["case"] => r for r in ar if haskey(r, "case"))
         ts = package_timeseries()
         _, nbr = package_tsv(joinpath(package_rec(:f3f8), "neighbors.tsv"))
@@ -1389,11 +1707,15 @@ end
             d[parse(Int, r["n"])] = get(d, parse(Int, r["n"]), 0) + parse(Int, r["count"])
         end
         _, fr = package_tsv(joinpath(package_rec(:f5), "runs.tsv"))
-        o2k = Dict(parse(Int, r["seed"]) => parse(Int, r["k"]) for r in fr if r["case"] == "b")
+        o2k = Dict(
+            parse(Int, r["seed"]) => parse(Int, r["k"])
+                for r in fr if r["case"] == "b"
+        )
         # the O2 zip (D-215 (3)): the record's bytes, and the bulk directory's (copied)
         o2z = res("Monolayer", O2_ZIP)
         a2 = get(arch, "O2", nothing)
-        @test isfile(o2z) && a2 !== nothing && filesize(o2z) == parse(Int, a2["bytes"]) && package_sha(o2z) == a2["sha256"]
+        @test isfile(o2z) && a2 !== nothing && filesize(o2z) == parse(Int, a2["bytes"]) &&
+            package_sha(o2z) == a2["sha256"]
         bz2 = joinpath(BULK, O2_ZIP)
         @test isfile(bz2) && isfile(o2z) && package_sha(bz2) == package_sha(o2z)
         o2names = isfile(o2z) ? zip_names(o2z) : String[]
@@ -1402,16 +1724,20 @@ end
             a = get(arch, case, nothing)
             @test isfile(z) && a !== nothing
             (isfile(z) && a !== nothing && Sys.which("unzip") !== nothing) || continue
-            # bytes: the record's archive, and the bulk directory's (copied, never re-zipped)
+            # bytes: the record's archive, and the bulk directory's (copied, never
+            # re-zipped)
             @test filesize(z) == parse(Int, a["bytes"]) && package_sha(z) == a["sha256"]
             bz = joinpath(BULK, o1_zip(case))
-            @test isfile(bz) && filesize(bz) == filesize(z) && package_sha(bz) == a["sha256"]
+            @test isfile(bz) && filesize(bz) == filesize(z) &&
+                package_sha(bz) == a["sha256"]
             mem = o1_members(man, case)
-            @test zip_names(z) == [e.file for e in mem]               # exactly these, in this order
-            # every member: sha256, header x,y,i,n,g, rows, code counts, n ≥ 0, g = (i == 0) (byte scan). Spot set
-            # (parsed): every save of the case's first seed and every run's stop: finite x, y; the
-            # record's N, r, A, C, w, g recomputed by openvt_metrics; the stop's neighbour histogram
-            # (neighbors.tsv); for case b, the stop's x, y equal to the O2 file of the same seed
+            # exactly these, in this order
+            @test zip_names(z) == [e.file for e in mem]
+            # every member: sha256, header x,y,i,n,g, rows, code counts, n ≥ 0, g = (i == 0)
+            # (byte scan). Spot set (parsed): every save of the case's first seed and every
+            # run's stop: finite x, y; the record's N, r, A, C, w, g recomputed by
+            # openvt_metrics; the stop's neighbour histogram (neighbors.tsv); for case b,
+            # the stop's x, y equal to the O2 file of the same seed
             seeds = sort(unique(e.seed for e in mem))
             stop = Dict(s => maximum(e.mcs for e in mem if e.seed == s) for s in seeds)
             bad = String[]
@@ -1421,10 +1747,12 @@ end
                     length(buf) == e.bytes || (push!(bad, "$(e.file): short"); break)
                     bytes2hex(sha256(buf)) == e.sha || push!(bad, "$(e.file): sha256")
                     sc = o1_scan(buf; g = true)
-                    (sc.ok && sc.header == H_O1 && sc.rows == e.rows && sc.i == e.i) || push!(bad, "$(e.file): content")
+                    (sc.ok && sc.header == H_O1 && sc.rows == e.rows && sc.i == e.i) ||
+                        push!(bad, "$(e.file): content")
                     (e.seed == first(seeds) || e.mcs == stop[e.seed]) || continue
                     o = o1_parse(buf)
-                    (all(isfinite, o.x) && all(isfinite, o.y)) || push!(bad, "$(e.file): non-finite centroid")
+                    (all(isfinite, o.x) && all(isfinite, o.y)) ||
+                        push!(bad, "$(e.file): non-finite centroid")
                     if haskey(ts, (case, e.seed))
                         j = findfirst(r -> Int(r[1]) == e.mcs, ts[(case, e.seed)])
                         if j === nothing
@@ -1434,8 +1762,11 @@ end
                             mt = PottsModels.openvt_metrics(o.x, o.y, Float64.(o.i .== 0))
                             (
                                 length(o.x) == Int(w[2]) && all(
-                                    package_eq(getfield(mt, k), w[c]) for (k, c) in
-                                        ((:r, 3), (:A, 4), (:C, 5), (:w, 6), (:g, 7))
+                                    package_eq(getfield(mt, k), w[c])
+                                        for (k, c) in (
+                                            (:r, 3), (:A, 4), (:C, 5), (:w, 6),
+                                            (:g, 7),
+                                        )
                                 )
                             ) ||
                                 push!(bad, "$(e.file): metrics differ from timeseries.tsv")
@@ -1445,15 +1776,19 @@ end
                     if haskey(nbh, (case, e.seed))
                         hist = Dict{Int, Int}()
                         foreach(n -> hist[n] = get(hist, n, 0) + 1, o.n)
-                        hist == nbh[(case, e.seed)] || push!(bad, "$(e.file): neighbour histogram differs from neighbors.tsv")
+                        hist == nbh[(case, e.seed)] ||
+                            push!(bad, "$(e.file): neighbour histogram differs from \
+                                neighbors.tsv")
                     end
                     if case == "b"
                         mname = o2_member(get(o2k, e.seed, 0))
                         if mname in o2names
                             _, r2 = csv_bytes(read(`unzip -p $o2z $mname`))
                             (
-                                length(r2) == length(o.x) &&
-                                    all(package_f(r[1]) == x && package_f(r[2]) == y for (r, x, y) in zip(r2, o.x, o.y))
+                                length(r2) == length(o.x) && all(
+                                    package_f(r[1]) == x && package_f(r[2]) == y
+                                        for (r, x, y) in zip(r2, o.x, o.y)
+                                )
                             ) ||
                                 push!(bad, "$(e.file): x, y differ from the O2 file")
                         else
@@ -1469,49 +1804,70 @@ end
     end
 end
 
-@testitem "15 openvt package (13) MIT licence line in both READMEs" setup = [OpenVTPackageSetup] tags = [:pottsmodels, :reproductions] begin
+@testitem "15 openvt package (13) MIT licence line in both READMEs" setup = [
+    OpenVTPackageSetup,
+] tags = [
+    :pottsmodels, :reproductions,
+] begin
     @testset "15 openvt package (13) MIT licence line in both READMEs" begin
         @test build()
         for p in (impl("README.md"), res("README.md"))
             txt = isfile(p) ? read(p, String) : ""
             @test any(
-                l -> occursin(Regex("\\b" * LICENCE * "\\b"), l) && occursin("LICENSE", l) &&
+                l -> occursin(Regex("\\b" * LICENCE * "\\b"), l) &&
+                    occursin("LICENSE", l) &&
                     occursin(REPO_URL, l), split(txt, '\n')
             )
         end
     end
 end
 
-@testitem "15 openvt package (14): Figures 5, 7, 8 and the Fig 8 colonies (R1, R2, R4); Fig 9 (R3)" setup = [OpenVTPackageSetup] tags = [:pottsmodels, :reproductions] begin
-    @testset "15 openvt package (14): Figures 5, 7, 8 and the Fig 8 colonies (R1, R2, R4); Fig 9 (R3)" begin
+@testitem "15 openvt package (14): Figures 5, 7, 8 and the Fig 8 colonies (R1, R2, R4); \
+    Fig 9 (R3)" setup = [OpenVTPackageSetup] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    @testset "15 openvt package (14): Figures 5, 7, 8 and the Fig 8 colonies (R1, R2, \
+        R4); Fig 9 (R3)" begin
         @test build()
         rels = package_tree(joinpath(PACKAGE_A, RES))
         # the figures: byte copies of the records' renders
-        for (key, rk, f) in ((:Fig5, :f5, "fig5_shared.png"), (:Fig7, :sweeps, "fig7_grid.png"), (:Fig8, :f8beta, "fig8_grid.png"))
+        for (key, rk, f) in (
+                (:Fig5, :f5, "fig5_shared.png"), (:Fig7, :sweeps, "fig7_grid.png"),
+                (:Fig8, :f8beta, "fig8_grid.png"),
+            )
             files = package_present(rels, key)
             @test length(files) == 1
             src = haskey(RECS, rk) ? joinpath(package_rec(rk), f) : ""
             @test isfile(src) && length(files) == 1 && read(res(only(files))) == read(src)
         end
-        # the Fig 8 colonies: O5 at γ = 0 and β > 0, byte copies of the Fig 8 β record's f8/ (five;
-        # names per D-215 (4), checked in (7))
+        # the Fig 8 colonies: O5 at γ = 0 and β > 0, byte copies of the Fig 8 β record's f8/
+        # (five; names per D-215 (4), checked in (7))
         f8src = Dict(k => v for (k, v) in o5_sources() if k[2] == 0.0 && k[1] > 0)
-        o5b = [f for f in package_present(rels, :O5) if (k = o5_key(f); k !== nothing && haskey(f8src, k))]
+        o5b = [
+            f
+                for f in package_present(rels, :O5)
+                if (k = o5_key(f); k !== nothing && haskey(f8src, k))
+        ]
         @test length(f8src) == 5 && length(o5b) == 5
         for f in o5b
             h, rows = package_csv(res(f))
-            @test h == H_O5 && !isempty(rows) && all(x -> length(x) == 4 && x[4] in ("0", "1"), rows)
+            @test h == H_O5 && !isempty(rows) &&
+                all(x -> length(x) == 4 && x[4] in ("0", "1"), rows)
             @test read(res(f)) == read(f8src[o5_key(f)])
         end
         # the results README's Figures section
         readme = isfile(res("README.md")) ? read(res("README.md"), String) : ""
         sec = section(readme, r"^##\s+Figures\b")
         @test !isempty(sec)
-        for s in ("figures/fig5.png", "figures/fig7.png", "figures/fig8.png", "metrics.cpp", "18.6", "93")
+        for s in (
+                "figures/fig5.png", "figures/fig7.png", "figures/fig8.png", "metrics.cpp",
+                "18.6", "93",
+            )
             @test occursin(s, sec)
         end
         @test occursin(CCIRCLE, sec) && occursin(r"concave"i, sec) && occursin("1.5", sec)
-        @test occursin(r"yellow"i, sec) && occursin(r"teal"i, sec) && occursin(r"\bred\b"i, sec)
+        @test occursin(r"yellow"i, sec) && occursin(r"teal"i, sec) &&
+            occursin(r"\bred\b"i, sec)
         for (rk, f) in ((:sweeps, "fig7_grid.tsv"), (:f8beta, "fig8_grid.tsv"))
             p = haskey(RECS, rk) ? joinpath(package_rec(rk), f) : ""
             @test isfile(p)
@@ -1523,14 +1879,28 @@ end
             end
         end
         paras = split(sec, r"\n\s*\n")
-        @test any(p -> occursin(r"label"i, p) && occursin(r"unstated|not stated"i, p) && occursin("our open question list", p), paras)
+        @test any(
+            p -> occursin(r"label"i, p) && occursin(r"unstated|not stated"i, p) &&
+                occursin("our open question list", p),
+            paras
+        )
         # R3: the metrics figure is Fig 9 in both READMEs
         for p in (impl("README.md"), res("README.md"))
             txt = isfile(p) ? read(p, String) : ""
-            bad = [l for l in split(txt, '\n') if "8" in fig_labels(l) && !occursin(r"β|beta|area[- ]inhibit|formerly|2 Oct"i, l)]
-            isempty(bad) || @info "15 openvt package (14): lines that still call the metrics figure Figure 8" p bad
+            bad = [
+                l
+                    for l in split(txt, '\n')
+                    if "8" in fig_labels(l) &&
+                    !occursin(r"β|beta|area[- ]inhibit|formerly|2 Oct"i, l)
+            ]
+            isempty(bad) ||
+                @info "15 openvt package (14): lines that still call the metrics figure \
+                    Figure 8" p bad
             @test isempty(bad)
         end
-        @test any(l -> "9" in fig_labels(l) && occursin(r"metrics|measurements"i, l), split(readme, '\n'))
+        @test any(
+            l -> "9" in fig_labels(l) && occursin(r"metrics|measurements"i, l),
+            split(readme, '\n')
+        )
     end
 end

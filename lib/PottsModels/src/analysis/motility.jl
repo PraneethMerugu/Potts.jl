@@ -1,18 +1,23 @@
 # Cell motility: unwrapped tracks, the mean squared displacement and the
-# modified Fürth model of a persistent random walk with a fast diffusive part (Fortuna et al.
-# 2020, Eq. 1–2 and the fit procedure of their S1). Plain Julia on vectors of points.
+# modified Fürth model of a persistent random walk with a fast diffusive part (Fortuna et
+# al. 2020, Eq. 1–2 and the fit procedure of their S1). Plain Julia on vectors of points.
 
 # A point: a tuple or a vector of reals.
 _point_tuple(p::Tuple, ::Val{N}) where {N} = ntuple(d -> Float64(p[d]), Val(N))
-_point_tuple(p::AbstractVector{<:Real}, ::Val{N}) where {N} = ntuple(d -> Float64(p[d]), Val(N))
-_point_tuple(p, ::Val) = throw(ArgumentError("a point is a tuple or a vector of reals, got $(repr(p))"))
+function _point_tuple(p::AbstractVector{<:Real}, ::Val{N}) where {N}
+    return ntuple(d -> Float64(p[d]), Val(N))
+end
+function _point_tuple(p, ::Val)
+    throw(ArgumentError("a point is a tuple or a vector of reals, got $(repr(p))"))
+end
 
 # The points of a track as `NTuple{N, Float64}`s, all of one dimension.
 function _track_points(points, ::Val{N}, what) where {N}
     out = Vector{NTuple{N, Float64}}(undef, length(points))
     for (k, p) in enumerate(points)
         length(p) == N ||
-            throw(ArgumentError("$what: the points have mixed dimensions ($N and $(length(p)))"))
+            throw(ArgumentError("$what: the points have mixed dimensions ($N \
+                and $(length(p)))"))
         out[k] = _point_tuple(p, Val(N))
     end
     return out
@@ -27,11 +32,11 @@ The track of `points` (tuples or vectors of N reals, one per sample, as
 the identity on a non-periodic axis and, on a periodic axis `d`, the minimum image in
 `[−dims[d]/2, dims[d]/2)` (a displacement of exactly half the period maps to `−dims[d]/2`).
 
-`dims` holds one period per axis (the lattice size); `periodic` is one `Bool` per axis or one
-`Bool` for every axis. The result is right when every true displacement between consecutive
-samples is below half the period; this is not detected, so sample often enough. A `NaN`
-coordinate (the centroid of a cell that owns no site) is not detected either: it propagates
-to that sample and every later one on its axis.
+`dims` holds one period per axis (the lattice size); `periodic` is one `Bool` per axis or
+one `Bool` for every axis. The result is right when every true displacement between
+consecutive samples is below half the period; this is not detected, so sample often enough.
+A `NaN` coordinate (the centroid of a cell that owns no site) is not detected either: it
+propagates to that sample and every later one on its axis.
 
 Throws an `ArgumentError` for an empty track, points of mixed dimensions, `dims` or
 `periodic` of another length than the points, and a non-positive period.
@@ -43,12 +48,19 @@ function unwrap_track(points, dims, periodic)
 end
 function _unwrap_track(points, dims, periodic, ::Val{N}) where {N}
     length(dims) == N ||
-        throw(ArgumentError("unwrap_track: `dims` has $(length(dims)) entries, the points are $(N)D"))
-    per = periodic isa Bool ? ntuple(_ -> periodic, Val(N)) :
-          (length(periodic) == N ? ntuple(d -> Bool(periodic[d]), Val(N)) :
-           throw(ArgumentError("unwrap_track: `periodic` has $(length(periodic)) entries, the points are $(N)D")))
+        throw(ArgumentError("unwrap_track: `dims` has $(length(dims)) entries, the points \
+            are $(N)D"))
+    per = if periodic isa Bool
+        ntuple(_ -> periodic, Val(N))
+    elseif length(periodic) == N
+        ntuple(d -> Bool(periodic[d]), Val(N))
+    else
+        throw(ArgumentError("unwrap_track: `periodic` has $(length(periodic)) entries, \
+            the points are $(N)D"))
+    end
     L = ntuple(d -> Float64(dims[d]), Val(N))
-    all(l -> l > 0, L) || throw(ArgumentError("unwrap_track: the periods must be positive, got $dims"))
+    all(l -> l > 0, L) ||
+        throw(ArgumentError("unwrap_track: the periods must be positive, got $dims"))
     pts = _track_points(points, Val(N), "unwrap_track")
     out = similar(pts)
     out[1] = pts[1]
@@ -62,8 +74,10 @@ function _unwrap_track(points, dims, periodic, ::Val{N}) where {N}
 end
 
 # One track (a vector of points) or a vector of tracks.
-_is_point(p) = p isa Tuple || (p isa AbstractVector && eltype(p) <: Real) ||
-               (p isa AbstractVector && !isempty(p) && first(p) isa Real)
+function _is_point(p)
+    return p isa Tuple || (p isa AbstractVector && eltype(p) <: Real) ||
+        (p isa AbstractVector && !isempty(p) && first(p) isa Real)
+end
 
 """
     mean_squared_displacement(tracks; lags = 1:(n − 1)) -> Vector{Float64}
@@ -91,10 +105,13 @@ function mean_squared_displacement(tracks; lags = nothing)
     any(isempty, trs) && throw(ArgumentError("mean_squared_displacement: a track is empty"))
     n = length(first(trs))
     all(t -> length(t) == n, trs) ||
-        throw(ArgumentError("mean_squared_displacement: the tracks have unequal lengths $(unique(length.(trs)))"))
+        throw(ArgumentError("mean_squared_displacement: the tracks have unequal \
+            lengths $(unique(length.(trs)))"))
     ls = lags === nothing ? (1:(n - 1)) : lags
     for l in ls
-        1 <= l < n || throw(ArgumentError("mean_squared_displacement: lag $l is outside 1:$(n - 1) (the tracks have $n samples)"))
+        1 <= l < n ||
+            throw(ArgumentError("mean_squared_displacement: lag $l is outside 1:$(n - 1) \
+                (the tracks have $n samples)"))
     end
     N = length(first(first(trs)))
     return _msd(trs, collect(Int, ls), Val(N))
@@ -120,7 +137,7 @@ end
 # truncation error is below x³/60 relative, < 2e-14).
 function _furth_g(t, P)
     x = t / P
-    return x < 1e-4 ? P * (x^2 / 2 - x^3 / 6 + x^4 / 24) : P * (x + expm1(-x))
+    return x < 1.0e-4 ? P * (x^2 / 2 - x^3 / 6 + x^4 / 24) : P * (x + expm1(-x))
 end
 
 function _furth_params(S, D, P, what)
@@ -165,8 +182,8 @@ end
     furth_fit(Δt, m; method = :paper, range = nothing, short = nothing, offset = true)
         -> (; S, D, P, D_fast, D_slow, v_eff, offset, method)
 
-Fit the modified Fürth model ([`furth_mean_squared_displacement`](@ref)) to an MSD `m` at the times `Δt`
-(positive, strictly increasing, at least 4 of them). The derived fields are
+Fit the modified Fürth model ([`furth_mean_squared_displacement`](@ref)) to an MSD `m` at
+the times `Δt` (positive, strictly increasing, at least 4 of them). The derived fields are
 `D_fast = DS/(1 − S)`, `D_slow = D + D_fast = D/(1 − S)` and the effective speed
 `v_eff = √(D/P)/(1 − S)`; `offset` is the fitted constant (the localisation error), 0 when
 `offset = false`. Both methods are deterministic.
@@ -176,32 +193,38 @@ Fit the modified Fürth model ([`furth_mean_squared_displacement`](@ref)) to an 
   the interior times (those in `range = (lo, hi)`, default all) that are positive are fitted
   by ordinary least squares to `log dᵢ = c₀ + c₁Δtᵢ`, the logarithm of Eq. 1's second
   derivative `(2D/P)e^{−Δt/P}`, which gives `P = −1/c₁` and `D = e^{c₀}P/2`. The residual
-  `m − furth_mean_squared_displacement(Δt, 0, D, P)` at the short times (`short = (lo, hi)`, default `Δt ≤ P`,
-  or the first two times when fewer than two qualify) is then fitted by the line
-  `2D_fast·Δt + offset`, and `S = D_fast/(D_fast + D)`. `D_fast` is not clamped, so noise
-  can make it, and `S`, negative. With fewer than 3 positive second differences, or a
+  `m − furth_mean_squared_displacement(Δt, 0, D, P)` at the short times (`short = (lo, hi)`,
+  default `Δt ≤ P`, or the first two times when fewer than two qualify) is then fitted by
+  the line `2D_fast·Δt + offset`, and `S = D_fast/(D_fast + D)`. `D_fast` is not clamped, so
+  noise can make it, and `S`, negative. With fewer than 3 positive second differences, or a
   non-decaying fit (`c₁ ≥ 0`), it throws: the data do not resolve a persistence (a purely
   diffusive or a ballistic MSD), and `method = :lsq` is the cross-check.
 - `method = :lsq` minimizes the relative squared error `Σ((model − m)/m)²` of Eq. 1 (plus a
   free `offset`) over `D`, `D_fast ≥ 0` and `P`: for fixed `P` the model is linear in
   `a = 2D` and `b = 2D_fast`, solved exactly under `a, b ≥ 0`; `P` runs over a 200-point
   logarithmic grid on `[Δt₁/10, 100·Δt_end]`, refined by golden section to a relative
-  `1e-10` (ties go to the smaller `P`). `D_slow` is `(a + b)/2` directly, which stays exact as
-  `S → 1`; `S = b/(a + b)` (`NaN` when both vanish). It needs `m > 0`. On a purely diffusive
-  MSD only `D_slow` is identifiable. A fitted `P` at either end of the grid (`Δt₁/10` or
-  `100·Δt_end`) means the persistence is not resolved by the data (a purely diffusive or a
-  ballistic MSD): read `D_slow` or `v_eff`, not `P`, `D` or `S`.
+  `1e-10` (ties go to the smaller `P`). `D_slow` is `(a + b)/2` directly, which stays exact
+  as `S → 1`; `S = b/(a + b)` (`NaN` when both vanish). It needs `m > 0`. On a purely
+  diffusive MSD only `D_slow` is identifiable. A fitted `P` at either end of the grid
+  (`Δt₁/10` or `100·Δt_end`) means the persistence is not resolved by the data (a purely
+  diffusive or a ballistic MSD): read `D_slow` or `v_eff`, not `P`, `D` or `S`.
 
 Throws an `ArgumentError` for fewer than 4 points, `Δt` and `m` of different lengths,
 non-finite values, a `Δt` that is not positive and strictly increasing, an unknown
 `method`, and the method-specific conditions above.
 """
-function furth_fit(Δt, m; method::Symbol = :paper, range = nothing, short = nothing, offset::Bool = true)
+function furth_fit(
+        Δt, m; method::Symbol = :paper, range = nothing,
+        short = nothing, offset::Bool = true
+    )
     t = collect(Float64, Δt)
     y = collect(Float64, m)
-    length(t) == length(y) || throw(ArgumentError("furth_fit: Δt has $(length(t)) values, m $(length(y))"))
-    length(t) >= 4 || throw(ArgumentError("furth_fit: at least 4 points are needed, got $(length(t))"))
-    (all(isfinite, t) && all(isfinite, y)) || throw(ArgumentError("furth_fit: Δt and m must be finite"))
+    length(t) == length(y) ||
+        throw(ArgumentError("furth_fit: Δt has $(length(t)) values, m $(length(y))"))
+    length(t) >= 4 ||
+        throw(ArgumentError("furth_fit: at least 4 points are needed, got $(length(t))"))
+    (all(isfinite, t) && all(isfinite, y)) ||
+        throw(ArgumentError("furth_fit: Δt and m must be finite"))
     (t[1] > 0 && all(i -> t[i + 1] > t[i], 1:(length(t) - 1))) ||
         throw(ArgumentError("furth_fit: Δt must be positive and strictly increasing"))
     method === :paper && return _furth_paper(t, y, range, short, offset)
@@ -210,7 +233,10 @@ function furth_fit(Δt, m; method::Symbol = :paper, range = nothing, short = not
 end
 
 function _furth_result(S, D, P, Df, Ds, c, method)
-    return (; S, D, P, D_fast = Df, D_slow = Ds, v_eff = sqrt(D / P) / (1 - S), offset = c, method)
+    return (;
+        S, D, P, D_fast = Df, D_slow = Ds,
+        v_eff = sqrt(D / P) / (1 - S), offset = c, method,
+    )
 end
 
 # Ordinary least squares of y on x (a line; through the origin when `intercept = false`):
@@ -230,13 +256,20 @@ _time_window(w, t) = findall(x -> first(w) <= x <= last(w), t)
 function _furth_paper(t, y, range, short, offset)
     n = length(t)
     h = t[2] - t[1]
-    all(i -> abs((t[i + 1] - t[i]) - h) <= 1e-9 * h, 1:(n - 1)) ||
-        throw(ArgumentError("furth_fit: method = :paper needs uniformly spaced Δt (use method = :lsq)"))
+    all(i -> abs((t[i + 1] - t[i]) - h) <= 1.0e-9 * h, 1:(n - 1)) ||
+        throw(ArgumentError("furth_fit: method = :paper needs uniformly spaced Δt (use \
+            method = :lsq)"))
     inner = 2:(n - 1)
     range === nothing || (inner = filter(in(_time_window(range, t)), inner))
     keep = [i for i in inner if (y[i + 1] - 2y[i] + y[i - 1]) / h^2 > 0]
-    nores() = throw(ArgumentError("furth_fit: no decaying second derivative (persistence not resolved); " *
-                                  "try method = :lsq"))
+    function nores()
+        throw(
+            ArgumentError(
+                "furth_fit: no decaying second derivative (persistence not resolved); " *
+                    "try method = :lsq"
+            )
+        )
+    end
     length(keep) >= 3 || nores()
     d = [(y[i + 1] - 2y[i] + y[i - 1]) / h^2 for i in keep]
     c1, c0 = _ols_line(t[keep], log.(d), true)
@@ -248,7 +281,8 @@ function _furth_paper(t, y, range, short, offset)
         length(s) >= 2 ? s : [1, 2]
     else
         s = _time_window(short, t)
-        length(s) >= 2 || throw(ArgumentError("furth_fit: `short` = $short holds fewer than 2 times"))
+        length(s) >= 2 ||
+            throw(ArgumentError("furth_fit: `short` = $short holds fewer than 2 times"))
         s
     end
     r = [y[i] - 2D * _furth_g(t[i], P) for i in idx]
@@ -284,7 +318,9 @@ function _furth_linear(t, y, P, offset)
 end
 
 function _furth_lsq(t, y, offset)
-    all(>(0), y) || throw(ArgumentError("furth_fit: method = :lsq weights by 1/m, so m must be positive"))
+    all(>(0), y) ||
+        throw(ArgumentError("furth_fit: method = :lsq weights by 1/m, so m must be \
+            positive"))
     lo, hi = log(t[1] / 10), log(100 * t[end])
     K = 200
     grid = [lo + (hi - lo) * (k - 1) / (K - 1) for k in 1:K]
@@ -295,7 +331,7 @@ function _furth_lsq(t, y, offset)
     φ = (sqrt(5) - 1) / 2
     x1, x2 = b - φ * (b - a), a + φ * (b - a)
     f1, f2 = f(x1), f(x2)
-    while b - a > 1e-10
+    while b - a > 1.0e-10
         if f1 <= f2                              # ties: keep the smaller P
             b, x2, f2 = x2, x1, f1
             x1 = b - φ * (b - a)

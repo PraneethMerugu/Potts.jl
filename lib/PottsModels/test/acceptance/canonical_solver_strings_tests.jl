@@ -6,9 +6,9 @@
 #     levels by its type alone. `Adaptive(Rodas5P(); isoutofdomain = Guard(nest(12, 1.0)))`
 #     and the same with 2.0 print the same canonical string, so they fingerprint alike (a
 #     checkpoint loads across them) and, given to two ODE unknowns through `solvers`, share
-#     one solver group: one `_AdaptiveODE` phase integrates both with the first solver and the
-#     second is silently dropped. A self-referential value is cut the same way. At depth 3
-#     the two differ (two phases, two fingerprints).
+#     one solver group: one `_AdaptiveODE` phase integrates both with the first solver and
+#     the second is silently dropped. A self-referential value is cut the same way. At depth
+#     3 the two differ (two phases, two fingerprints).
 #  c. `_check_internal_suffix` (src/system.jl) rejects declared scalar variables and
 #     parameters ending in `__ode`, `__tick` or `__next`, and, because components are bound
 #     into a rebuilt `PottsSystem`, component unknowns (`comp₊x__ode`), discrete nodes
@@ -116,8 +116,8 @@ const STABLE = [
 problem(solver; T = Float64) = PottsProblem(SolverStringPair(; name = :pair), solver_string_op(), (0, 6); T, seed = 1, ode_solver = solver)
 stable_problem(label; T = Float64) = problem(Dict(STABLE)[label]; T)
 """
-# The definitions are evaluated in `Main`, as the worker processes below evaluate them, so the
-# fingerprints of the two agree (shared/main_definitions.jl).
+# The definitions are evaluated in `Main`, as the worker processes below evaluate them, so
+# the fingerprints of the two agree (shared/main_definitions.jl).
 include(joinpath(@__DIR__, "..", "shared", "main_definitions.jl"))
 define_in_main(
     @__MODULE__, :SolverStringPair, quote
@@ -125,7 +125,8 @@ define_in_main(
         using OrdinaryDiffEqRosenbrock: Rodas5P
         const solver_string_Adaptive = Potts.Adaptive
         const solver_string_RK4 = Potts.RK4
-    end, DEFS, "canonical_solver_strings_definitions"
+    end,
+    DEFS, "canonical_solver_strings_definitions"
 )
 """`:ok` if `f()` throws an `ArgumentError` whose message contains every one of `words`;
 otherwise a description of what happened (shown by `@test` on failure)."""
@@ -133,18 +134,29 @@ function rejection(f, words...)
     try
         f()
     catch e
-        e isa ArgumentError || return "not an ArgumentError: $(typeof(e)): $(first(sprint(showerror, e), 300))"
-        isempty(words) || occursin(first(words), sprint(showerror, e)) || return "message does not name $(first(words))"
+        e isa ArgumentError ||
+            return "not an ArgumentError: $(typeof(e)): $(first(sprint(showerror, e), 300))"
+        isempty(words) || occursin(first(words), sprint(showerror, e)) ||
+            return "message does not name $(first(words))"
         return :ok
     end
     return "accepted silently"
 end
 adaptive_phases(prob) = count(ph -> ph isa Potts._AdaptiveODE, prob.f.phases.after_mcs)
-solver_string_var(sys, n) = only(filter(x -> string(x) in (string(n), string(n, "(t)")), Potts.declared_variables(sys)))
+function solver_string_var(sys, n)
+    return only(
+        filter(
+            x -> string(x) in (string(n), string(n, "(t)")), Potts.declared_variables(sys)
+        )
+    )
+end
 """The pair model with `y => a` and `s => b` through `solvers`."""
 function solver_string_split(a, b)
     sys = SolverStringPair(; name = :pair)
-    return PottsProblem(sys, solver_string_op(), (0, 6); seed = 1, solvers = [solver_string_var(sys, :y) => a, solver_string_var(sys, :s) => b])
+    return PottsProblem(
+        sys, solver_string_op(), (0, 6); seed = 1,
+        solvers = [solver_string_var(sys, :y) => a, solver_string_var(sys, :s) => b]
+    )
 end
 # deep and cyclic values (B)
 mutable struct SolverStringCycle
@@ -154,10 +166,24 @@ end
 solver_string_cycle(w) = (c = SolverStringCycle(nothing, w); c.next = c; c)
 deep(w; n = 12) = SolverStringGuard(solver_string_nest(n, w))
 const DEEP = [
-    "isoutofdomain = Guard(nest(12, 1.0))" => (() -> solver_string_Adaptive(Rodas5P(); isoutofdomain = deep(1.0)), "isoutofdomain"),
-    "isoutofdomain = Guard(nest(30, 1.0))" => (() -> solver_string_Adaptive(Rodas5P(); isoutofdomain = deep(1.0; n = 30)), "isoutofdomain"),
-    "isoutofdomain = Guard(cycle(1.0))" => (() -> solver_string_Adaptive(Rodas5P(); isoutofdomain = SolverStringGuard(solver_string_cycle(1.0))), "isoutofdomain"),
-    "Rodas5P(step_limiter! = Guard(nest(12, 1.0)))" => (() -> solver_string_Adaptive(Rodas5P(step_limiter! = deep(1.0))), nothing),
+    "isoutofdomain = Guard(nest(12, 1.0))" =>
+        (
+        () -> solver_string_Adaptive(Rodas5P(); isoutofdomain = deep(1.0)),
+        "isoutofdomain",
+    ),
+    "isoutofdomain = Guard(nest(30, 1.0))" =>
+        (
+        () -> solver_string_Adaptive(Rodas5P(); isoutofdomain = deep(1.0; n = 30)),
+        "isoutofdomain",
+    ),
+    "isoutofdomain = Guard(cycle(1.0))" => (
+        () -> solver_string_Adaptive(
+            Rodas5P(); isoutofdomain = SolverStringGuard(solver_string_cycle(1.0))
+        ),
+        "isoutofdomain",
+    ),
+    "Rodas5P(step_limiter! = Guard(nest(12, 1.0)))" =>
+        (() -> solver_string_Adaptive(Rodas5P(step_limiter! = deep(1.0))), nothing),
 ]
 # compiler-generated names (D)
 solver_string_mk(w) = (u, p, t) -> any(<(w), u)
@@ -168,12 +194,38 @@ end
 anon = (u, p, t) -> false
 # a non-constant global bound to an anonymous function
 const UNSTABLE = [
-    "isoutofdomain = anonymous" => (() -> solver_string_Adaptive(Rodas5P(); isoutofdomain = (u, p, t) -> false), "isoutofdomain"),
-    "isoutofdomain = global anonymous" => (() -> solver_string_Adaptive(Rodas5P(); isoutofdomain = anon), "isoutofdomain"),
-    "isoutofdomain = closure solver_string_mk(0.3)" => (() -> solver_string_Adaptive(Rodas5P(); isoutofdomain = solver_string_mk(0.3)), "isoutofdomain"),
-    "isoutofdomain = local named function" => (() -> solver_string_Adaptive(Rodas5P(); isoutofdomain = solver_string_local()), "isoutofdomain"),
-    "isoutofdomain = Guard(anonymous)" => (() -> solver_string_Adaptive(Rodas5P(); isoutofdomain = SolverStringGuard((u, p, t) -> false)), "isoutofdomain"),
-    "Rodas5P(step_limiter! = anonymous)" => (() -> solver_string_Adaptive(Rodas5P(step_limiter! = (u, i, p, t) -> nothing)), nothing),
+    "isoutofdomain = anonymous" =>
+        (
+        () -> solver_string_Adaptive(Rodas5P(); isoutofdomain = (u, p, t) -> false),
+        "isoutofdomain",
+    ),
+    "isoutofdomain = global anonymous" =>
+        (() -> solver_string_Adaptive(Rodas5P(); isoutofdomain = anon), "isoutofdomain"),
+    "isoutofdomain = closure solver_string_mk(0.3)" =>
+        (
+        () -> solver_string_Adaptive(Rodas5P(); isoutofdomain = solver_string_mk(0.3)),
+        "isoutofdomain",
+    ),
+    "isoutofdomain = local named function" =>
+        (
+        () -> solver_string_Adaptive(Rodas5P(); isoutofdomain = solver_string_local()),
+        "isoutofdomain",
+    ),
+    "isoutofdomain = Guard(anonymous)" => (
+        () -> solver_string_Adaptive(
+            Rodas5P(); isoutofdomain = SolverStringGuard(
+                (
+                    u, p, t
+                ) -> false
+            )
+        ),
+        "isoutofdomain",
+    ),
+    "Rodas5P(step_limiter! = anonymous)" =>
+        (
+        () -> solver_string_Adaptive(Rodas5P(step_limiter! = (u, i, p, t) -> nothing)),
+        nothing,
+    ),
     "Rodas5P(step_limiter! = closure)" => (
         () -> solver_string_Adaptive(
             Rodas5P(
@@ -212,12 +264,21 @@ function build(stmts...)
     end
     return Base.invokelatest(eval, ex)
 end
-runs(m) = Symbol(
-    solve(
-        PottsProblem(m, [ownership => (s = zeros(Int32, 12, 12); s[3:5, 3:5] .= 1; s), kind => [:A]], (0, 2)),
-        SequentialCPM()
-    ).retcode
-) === :Success
+function runs(m)
+    return Symbol(
+        solve(
+            PottsProblem(
+                m, [
+                    ownership => (s = zeros(Int32, 12, 12); s[3:5, 3:5] .= 1; s),
+                    kind => [:A],
+                ], (
+                    0, 2,
+                )
+            ),
+            SequentialCPM()
+        ).retcode
+    ) === :Success
+end
 # `@potts_model` resolves a component's system in module scope: a global slot
 const SYSTEM = Ref{Any}(nothing)
 function solver_string_component(sys, comp::Symbol)
@@ -252,9 +313,11 @@ function solver_string_session(dir, tag, body; other = nothing)
         using OrdinaryDiffEqRosenbrock: Rodas5P
         const solver_string_Adaptive = Potts.Adaptive
         const solver_string_RK4 = Potts.RK4
-        """ * DEFS * """
+        """ * DEFS *
+            """
             const SESSION_CLOSURE = $body
-            prob = problem(solver_string_Adaptive(Rodas5P(); isoutofdomain = SESSION_CLOSURE))
+            prob = problem(solver_string_Adaptive(Rodas5P(); isoutofdomain = \
+            SESSION_CLOSURE))
             r = Dict{String, Any}("fp" => repr(prob.f.fingerprint))
             integ = init(prob, SequentialCPM())
             step!(integ)
@@ -267,7 +330,8 @@ function solver_string_session(dir, tag, body; other = nothing)
                     init(prob, SequentialCPM(); checkpoint = load_checkpoint(other))
                     "loaded"
                 catch e
-                    e isa ArgumentError ? "refused" : "error: " * first(sprint(showerror, e), 200)
+                    e isa ArgumentError ? "refused" : "error: " * first(sprint(showerror, \
+            e), 200)
                 end
             end
             open(io -> TOML.print(io, r), $(repr(outfile)), "w")
@@ -315,8 +379,12 @@ end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "canonical solver strings: controls" setup = [CanonicalSolverStringsSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "canonical solver strings: controls" setup = [
+    CanonicalSolverStringsSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # Controls (pass on the base)
     @testset "canonical solver strings: controls" begin
         # every stable solver builds; equal specifications built afresh fingerprint alike
@@ -328,15 +396,19 @@ end
         for i in eachindex(fps), j in (i + 1):lastindex(fps)
             @test fps[i].second != fps[j].second
         end
-        # within the cap, nested values print in full: two solvers differing at depth 3 are two
-        # groups (two phases) and two fingerprints
+        # within the cap, nested values print in full: two solvers differing at depth 3 are
+        # two groups (two phases) and two fingerprints
         a = STABLE[end - 1].second
         b = STABLE[end].second
         @test adaptive_phases(solver_string_split(a, b)) == 2
         @test adaptive_phases(solver_string_split(a, a)) == 1
-        @test solver_string_split(a, b).f.fingerprint != solver_string_split(a, a).f.fingerprint
+        @test solver_string_split(a, b).f.fingerprint !=
+            solver_string_split(a, a).f.fingerprint
         # a callable struct and a named function run as `isoutofdomain`
-        for label in ("Rodas5P(isoutofdomain = Guard(0.3))", "Rodas5P(isoutofdomain = ood)", "Rodas5P(isoutofdomain = Guard(nest(3, 1.0)))")
+        for label in (
+                "Rodas5P(isoutofdomain = Guard(0.3))", "Rodas5P(isoutofdomain = ood)",
+                "Rodas5P(isoutofdomain = Guard(nest(3, 1.0)))",
+            )
             sol = solve(stable_problem(label), SequentialCPM())
             @test Symbol(sol.retcode) === :Success
             @test sol.u[end].cell.y[1] ≈ exp(-0.3 * 6) rtol = 1.0e-2
@@ -346,25 +418,41 @@ end
         @test occursin("var\"#", sprint(show, typeof(solver_string_mk(0.3))))
         @test !occursin("var\"#", sprint(show, typeof(ood)))
         # a weight closure in a named relation is not a solver: still accepted (D-122/D-124)
-        @test Symbol(solve(PottsProblem(SolverStringWeighted(; name = :w), solver_string_op(), (0, 2)), SequentialCPM()).retcode) === :Success
+        @test Symbol(
+            solve(
+                PottsProblem(SolverStringWeighted(; name = :w), solver_string_op(), (0, 2)),
+                SequentialCPM()
+            ).retcode
+        ) === :Success
     end
 end
 
-@testitem "canonical solver strings B: values beyond the canonical cap are an ArgumentError" setup = [CanonicalSolverStringsSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "canonical solver strings B: values beyond the canonical cap are an \
+    ArgumentError" setup = [CanonicalSolverStringsSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # B. A value deeper than the cap, or cyclic, is an error, not a truncation
-    @testset "canonical solver strings B: values beyond the canonical cap are an ArgumentError" begin
+    @testset "canonical solver strings B: values beyond the canonical cap are an \
+        ArgumentError" begin
         for (label, (mk, kw)) in DEEP
             words = kw === nothing ? ("Adaptive",) : ("Adaptive", kw)
             @testset "$label" begin
-                @test rejection(() -> problem(mk()), words...) === :ok                       # ode_solver
-                @test rejection(() -> solver_string_split(solver_string_RK4(), mk()), words...) === :ok            # solvers
+                # ode_solver
+                @test rejection(() -> problem(mk()), words...) === :ok
+                @test rejection(
+                    () -> solver_string_split(solver_string_RK4(), mk()),
+                    words...
+                ) ===
+                    :ok            # solvers
                 prob = problem(solver_string_RK4())
-                @test rejection(() -> remake(prob; ode_solver = mk()), words...) === :ok           # remake
+                # remake
+                @test rejection(() -> remake(prob; ode_solver = mk()), words...) === :ok
             end
         end
-        # the reproducer: two solvers that differ only deep down no longer share a group (today
-        # one phase integrates both with the first solver) and no longer fingerprint alike
+        # the reproducer: two solvers that differ only deep down no longer share a group
+        # (today one phase integrates both with the first solver) and no longer fingerprint
+        # alike
         @test rejection(
             () -> solver_string_split(
                 solver_string_Adaptive(Rodas5P(); isoutofdomain = deep(1.0)),
@@ -372,51 +460,109 @@ end
             ), "Adaptive"
         ) === :ok
         @test rejection(
-            () -> problem(solver_string_Adaptive(Rodas5P(); isoutofdomain = SolverStringGuard(solver_string_cycle(2.0)))),
+            () -> problem(
+                solver_string_Adaptive(
+                    Rodas5P(); isoutofdomain = SolverStringGuard(solver_string_cycle(2.0))
+                )
+            ),
             "Adaptive"
         ) === :ok
     end
 end
 
-@testitem "canonical solver strings C: reserved suffixes on vector, observed and component observed names" setup = [CanonicalSolverStringsSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "canonical solver strings C: reserved suffixes on vector, observed and component observed names" begin
+@testitem "canonical solver strings C: reserved suffixes on vector, observed and \
+    component observed names" setup = [CanonicalSolverStringsSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "canonical solver strings C: reserved suffixes on vector, observed and \
+        component observed names" begin
         for suf in SUFFIXES
             @testset "$suf" begin
                 v = Symbol(:v, suf)
                 d = Symbol(:d, suf)
                 n = Symbol(:n, suf)
-                @test rejection(() -> build(:(@variables $v(cell)[1:2] = 0.0)), String(v), suf) === :ok
-                @test rejection(() -> build(:(@parameters $d[1:2] = 1.0)), String(d), suf) === :ok
-                @test rejection(() -> build(:(@observed $n ~ sum(volume for c in cells))), String(n), suf) === :ok
+                @test rejection(
+                    () -> build(:(@variables $v(cell)[1:2] = 0.0)), String(v),
+                    suf
+                ) ===
+                    :ok
+                @test rejection(
+                    () -> build(:(@parameters $d[1:2] = 1.0)), String(d),
+                    suf
+                ) ===
+                    :ok
+                @test rejection(
+                    () -> build(
+                        :(
+                            @observed $n ~
+                                sum(volume for c in cells)
+                        )
+                    ), String(n), suf
+                ) ===
+                    :ok
             end
         end
-        @test rejection(() -> build(:(@variables s__next(site)[1:2] = 0.0)), "s__next", "__next") === :ok
-        @test rejection(() -> build(:(@variables m__tick(model)[1:3] = 0.0)), "m__tick", "__tick") === :ok
+        @test rejection(
+            () -> build(:(@variables s__next(site)[1:2] = 0.0)), "s__next",
+            "__next"
+        ) ===
+            :ok
+        @test rejection(
+            () -> build(:(@variables m__tick(model)[1:3] = 0.0)), "m__tick",
+            "__tick"
+        ) ===
+            :ok
         # a component's observed name `comp₊w__ode`
-        @test rejection(() -> solver_string_component(continuous(:z; observed = :w__ode), :comp), "w__ode", "__ode") === :ok
+        @test rejection(
+            () -> solver_string_component(continuous(:z; observed = :w__ode), :comp),
+            "w__ode", "__ode"
+        ) === :ok
     end
 end
 
-@testitem "canonical solver strings C: controls (regression guards and accepted names)" setup = [CanonicalSolverStringsSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "canonical solver strings C: controls (regression guards and accepted names)" begin
-        # rejected on the base: scalar variables and parameters, component unknowns, discrete
-        # nodes and component parameters
-        @test rejection(() -> build(:(@variables x__ode(cell) = 0.0)), "x__ode", "__ode") === :ok
-        @test rejection(() -> build(:(@parameters q__next = 1.0)), "q__next", "__next") === :ok
-        @test rejection(() -> solver_string_component(continuous(:x, :x__ode), :comp), "x__ode", "__ode") === :ok
+@testitem "canonical solver strings C: controls (regression guards and accepted \
+    names)" setup = [CanonicalSolverStringsSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "canonical solver strings C: controls (regression guards and accepted \
+        names)" begin
+        # rejected on the base: scalar variables and parameters, component unknowns,
+        # discrete nodes and component parameters
+        @test rejection(
+            () -> build(:(@variables x__ode(cell) = 0.0)), "x__ode",
+            "__ode"
+        ) ===
+            :ok
+        @test rejection(() -> build(:(@parameters q__next = 1.0)), "q__next", "__next") ===
+            :ok
+        @test rejection(
+            () -> solver_string_component(continuous(:x, :x__ode), :comp),
+            "x__ode", "__ode"
+        ) ===
+            :ok
         t = Potts.t
         k = ShiftIndex(t, 0)
         Xs = Potts.ModelingToolkitBase.@variables X(t)::Bool = false X__tick(t)::Bool = true
         net = System([Xs[1](k) ~ !Xs[1](k - 1), Xs[2](k) ~ Xs[1](k - 1)], t; name = :net)
-        @test rejection(() -> solver_string_component(net, :net), "X__tick", "__tick") === :ok
+        @test rejection(() -> solver_string_component(net, :net), "X__tick", "__tick") ===
+            :ok
         yk = only(Potts.ModelingToolkitBase.@variables yk(t) = 1.0)
         kk = only(Potts.ModelingToolkitBase.@parameters k__ode = 0.3)
-        @test rejection(() -> solver_string_component(System([Potts.D(yk) ~ -kk * yk], t; name = :comp), :comp), "k__ode", "__ode") === :ok
-        # accepted: a suffix that is not at the end, and the same quantities with other names
+        @test rejection(
+            () -> solver_string_component(
+                System([Potts.D(yk) ~ -kk * yk], t; name = :comp),
+                :comp
+            ),
+            "k__ode",
+            "__ode"
+        ) === :ok
+        # accepted: a suffix that is not at the end, and the same quantities with other
+        # names
         @test runs(
             build(
                 :(@variables v__oder(cell)[1:2] = 0.0), :(@parameters ode__d[1:2] = 1.0),
-                :(@observed n_ode ~ sum(volume for c in cells)), :(@variables s__nexts(site)[1:2] = 0.0)
+                :(@observed n_ode ~ sum(volume for c in cells)),
+                :(@variables s__nexts(site)[1:2] = 0.0)
             )
         )
         @test runs(solver_string_component(continuous(:z; observed = :w), :comp))
@@ -424,30 +570,44 @@ end
     end
 end
 
-@testitem "canonical solver strings D: an Adaptive solver with a compiler-generated name builds" setup = [CanonicalSolverStringsSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "canonical solver strings D: an Adaptive solver with a compiler-generated name builds" begin
+@testitem "canonical solver strings D: an Adaptive solver with a compiler-generated name \
+    builds" setup = [CanonicalSolverStringsSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "canonical solver strings D: an Adaptive solver with a compiler-generated \
+        name builds" begin
         for (label, (mk, _)) in UNSTABLE
             @testset "$label" begin
-                @test problem(mk()) isa PottsProblem                                   # ode_solver
-                @test solver_string_split(solver_string_RK4(), mk()) isa PottsProblem                        # solvers
+                # ode_solver
+                @test problem(mk()) isa PottsProblem
+                # solvers
+                @test solver_string_split(solver_string_RK4(), mk()) isa PottsProblem
                 prob = problem(solver_string_RK4())
-                @test remake(prob; ode_solver = mk()) isa PottsProblem                       # remake
+                # remake
+                @test remake(prob; ode_solver = mk()) isa PottsProblem
                 @test remake(prob; ode_solver = mk()).f.fingerprint != prob.f.fingerprint
             end
         end
     end
 end
 
-@testitem "canonical solver strings D: within a session, closures fingerprint by identity and checkpoints load" setup = [CanonicalSolverStringsSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "canonical solver strings D: within a session, closures fingerprint by identity and checkpoints load" begin
+@testitem "canonical solver strings D: within a session, closures fingerprint by identity \
+    and checkpoints load" setup = [CanonicalSolverStringsSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "canonical solver strings D: within a session, closures fingerprint by \
+        identity and checkpoints load" begin
         fp(f) = closure_problem(f).f.fingerprint
-        # the same closure object, and closures of the same type with the same captures, alike
+        # the same closure object, and closures of the same type with the same captures,
+        # alike
         @test fp(CLOSURE) == fp(CLOSURE)
         @test fp(solver_string_mk(-1.0)) == fp(solver_string_mk(-1.0))
         # different closures (another body, other captures) and the stable solver differ
         fps = [
-            fp(CLOSURE), fp(CLOSURE_OTHER), fp(solver_string_mk(-1.0)), fp(solver_string_mk(-2.0)),
-            stable_problem("Rodas5P()").f.fingerprint, stable_problem("Rodas5P(isoutofdomain = ood)").f.fingerprint,
+            fp(CLOSURE), fp(CLOSURE_OTHER), fp(solver_string_mk(-1.0)),
+            fp(solver_string_mk(-2.0)),
+            stable_problem("Rodas5P()").f.fingerprint,
+            stable_problem("Rodas5P(isoutofdomain = ood)").f.fingerprint,
         ]
         for i in eachindex(fps), j in (i + 1):lastindex(fps)
             @test fps[i] != fps[j]
@@ -466,36 +626,62 @@ end
         mktempdir() do dir
             path = joinpath(dir, "closure.jls")
             save_checkpoint(path, ck)
-            @test init(closure_problem(), SequentialCPM(); checkpoint = load_checkpoint(path)).t == 2
+            @test init(
+                closure_problem(), SequentialCPM();
+                checkpoint = load_checkpoint(path)
+            ).t ==
+                2
         end
         # negative controls: refused by another closure and by the stable solver
-        @test_throws ArgumentError init(closure_problem(CLOSURE_OTHER), SequentialCPM(); checkpoint = ck)
-        @test_throws ArgumentError init(stable_problem("Rodas5P()"), SequentialCPM(); checkpoint = ck)
+        @test_throws ArgumentError init(
+            closure_problem(CLOSURE_OTHER), SequentialCPM();
+            checkpoint = ck
+        )
+        @test_throws ArgumentError init(
+            stable_problem("Rodas5P()"), SequentialCPM();
+            checkpoint = ck
+        )
     end
 end
 
-@testitem "canonical solver strings D: a closure's fingerprint is bound to its session" setup = [CanonicalSolverStringsSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "canonical solver strings D: a closure's fingerprint is bound to its session" begin
+@testitem "canonical solver strings D: a closure's fingerprint is bound to its \
+    session" setup = [CanonicalSolverStringsSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "canonical solver strings D: a closure's fingerprint is bound to its \
+        session" begin
         mktempdir() do dir
             a1 = solver_string_session(dir, "a1", "(u, p, t) -> false")
-            a2 = solver_string_session(dir, "a2", "(u, p, t) -> false"; other = a1["ck"])           # same script
-            b = solver_string_session(dir, "b", "(u, p, t) -> any(isnan, u)"; other = a1["ck"])     # another body
-            # the same source in two sessions: different fingerprints, the checkpoint refused
+            # same script
+            a2 = solver_string_session(dir, "a2", "(u, p, t) -> false"; other = a1["ck"])
+            # another body
+            b = solver_string_session(
+                dir, "b", "(u, p, t) -> any(isnan, u)";
+                other = a1["ck"]
+            )
+            # the same source in two sessions: different fingerprints, the checkpoint
+            # refused
             @test a1["fp"] != a2["fp"]
             @test a2["other"] == "refused"
             # another closure in another session never collides
             @test a1["fp"] != b["fp"]
             @test b["other"] == "refused"
             # nor loads here
-            @test_throws ArgumentError init(closure_problem(), SequentialCPM(); checkpoint = load_checkpoint(a1["ck"]))
+            @test_throws ArgumentError init(
+                closure_problem(), SequentialCPM(); checkpoint = load_checkpoint(a1["ck"])
+            )
             # control: within its own session the checkpoint is a valid one of that problem
             @test load_checkpoint(a1["ck"]).fingerprint == parse(UInt64, a1["fp"])
         end
     end
 end
 
-@testitem "canonical solver strings D: stable solvers fingerprint alike in another process" setup = [CanonicalSolverStringsSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "canonical solver strings D: stable solvers fingerprint alike in another process" begin
+@testitem "canonical solver strings D: stable solvers fingerprint alike in another \
+    process" setup = [CanonicalSolverStringsSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "canonical solver strings D: stable solvers fingerprint alike in another \
+        process" begin
         mktempdir() do dir
             r = solver_string_worker(dir)
             for (label, _) in STABLE
@@ -508,10 +694,15 @@ end
                     @test current_state(integ).ownership == ck.state.ownership
                 end
             end
-            # negative controls: another solver's fingerprint differs and its checkpoint is refused
-            g3, g7 = "Rodas5P(isoutofdomain = Guard(0.3))", "Rodas5P(isoutofdomain = Guard(0.7))"
+            # negative controls: another solver's fingerprint differs and its checkpoint is
+            # refused
+            g3, g7 = "Rodas5P(isoutofdomain = Guard(0.3))",
+                "Rodas5P(isoutofdomain = Guard(0.7))"
             @test parse(UInt64, r["fp " * g3]) != stable_problem(g7).f.fingerprint
-            @test_throws ArgumentError init(stable_problem(g7), SequentialCPM(); checkpoint = load_checkpoint(r["ck " * g3]))
+            @test_throws ArgumentError init(
+                stable_problem(g7), SequentialCPM();
+                checkpoint = load_checkpoint(r["ck " * g3])
+            )
             @test_throws ArgumentError init(
                 stable_problem("Rodas5P()"), SequentialCPM();
                 checkpoint = load_checkpoint(r["ck Rodas5P(isoutofdomain = ood)"])
@@ -520,16 +711,28 @@ end
     end
 end
 
-@testitem "canonical solver strings E: tools/fingerprint_compare.jl exists and parses" setup = [CanonicalSolverStringsSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "canonical solver strings E: tools/fingerprint_compare.jl exists and \
+    parses" setup = [CanonicalSolverStringsSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # E. The fingerprint comparison tool
-    @testset "canonical solver strings E: tools/fingerprint_compare.jl exists and parses" begin
+    @testset "canonical solver strings E: tools/fingerprint_compare.jl exists and \
+        parses" begin
         path = joinpath(@__DIR__, "..", "..", "..", "..", "tools", "fingerprint_compare.jl")
         @test isfile(path)
         if isfile(path)
             ex = Meta.parseall(read(path, String); filename = path)
             bad = Ref(false)
-            walk(x) = x isa Expr && (x.head in (:error, :incomplete) ? (bad[] = true) : foreach(walk, x.args))
+            function walk(x)
+                return x isa Expr && (
+                    if x.head in (:error, :incomplete)
+                        bad[] = true
+                    else
+                        foreach(walk, x.args)
+                    end
+                )
+            end
             walk(ex)
             @test !bad[]
         end

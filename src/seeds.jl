@@ -36,11 +36,12 @@ end
 
 The random stream of a randomized layout layer or initial-state builder with top-level seed
 `seed` (an integer in `0:typemax(UInt64)`): `StableRNG(UInt64(seed))`, or, for the named
-sub-stream `stream` (a `Symbol` or string), `StableRNG(Potts._substream_seed(seed, stream))`.
-Both are the same on every Julia version (StableRNGs). Use the two-argument form for
-a second, independent stream drawn from the same seed (for example a builder's clocks next
-to its layout): a seed derived as `seed + 1` would give a shifted copy of the first stream.
-Throws an `ArgumentError` for a seed outside `0:typemax(UInt64)`.
+sub-stream `stream` (a `Symbol` or string),
+`StableRNG(Potts._substream_seed(seed, stream))`. Both are the same on every Julia version
+(StableRNGs). Use the two-argument form for a second, independent stream drawn from the same
+seed (for example a builder's clocks next to its layout): a seed derived as `seed + 1` would
+give a shifted copy of the first stream. Throws an `ArgumentError` for a seed outside
+`0:typemax(UInt64)`.
 
 ```julia
 rng = Potts.layer_rng(seed, :clock)
@@ -55,6 +56,7 @@ end
 
 function _check_seed(seed::Integer, what)
     0 <= seed <= typemax(UInt64) ||
-        throw(ArgumentError("$what: seed must be in 0:typemax(UInt64), got $seed; pass a non-negative integer seed"))
+        throw(ArgumentError("$what: seed must be in 0:typemax(UInt64), got $seed; pass a \
+            non-negative integer seed"))
     return nothing
 end

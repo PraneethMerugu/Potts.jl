@@ -1,7 +1,8 @@
 module DownstreamFixture
 
 using MakiePotts
-import MakiePotts: available_channels, cell_metadata, frame_channel, encode_frame, LegendEntry
+import MakiePotts: available_channels, cell_metadata, frame_channel, encode_frame,
+    LegendEntry
 import MakiePotts: encoding_kind, encoding_label, frame_geometry, frame_mcs
 import MakiePotts: frame_provenance, frame_size
 import MakiePotts: owner_at, required_channels
@@ -27,18 +28,22 @@ frame_mcs(frame::ColumnarFrame) = frame.stamp
 frame_size(frame::ColumnarFrame) = frame.shape
 frame_geometry(frame::ColumnarFrame) = frame.spatial
 owner_at(frame::ColumnarFrame, site) = frame.site_records[site]
-cell_metadata(frame::ColumnarFrame, identity::RenderCellIdentity) =
-    frame.identity_records[identity]
-cell_metadata(frame::ColumnarFrame, owner::RenderOwner) =
-    frame.owner_records[owner.id]
+function cell_metadata(frame::ColumnarFrame, identity::RenderCellIdentity)
+    return frame.identity_records[identity]
+end
+function cell_metadata(frame::ColumnarFrame, owner::RenderOwner)
+    return frame.owner_records[owner.id]
+end
 available_channels(frame::ColumnarFrame) = Tuple(keys(frame.stream_records))
 frame_channel(frame::ColumnarFrame, key::RenderChannelKey) = frame.stream_records[key]
 frame_provenance(frame::ColumnarFrame) = frame.lineage
 
 function columnar_frame(phase::Integer = 0)
     shape = (4, 3)
-    spatial = RenderGeometry(shape;
-        spacing = (0.75, 1.25), origin = (-1.5, 2.0))
+    spatial = RenderGeometry(
+        shape;
+        spacing = (0.75, 1.25), origin = (-1.5, 2.0)
+    )
     first_identity = RenderCellIdentity(11, 4)
     second_identity = RenderCellIdentity(29, 8)
     first_metadata = RenderCellMetadata(first_identity, 2; label = "Alpha")
@@ -53,11 +58,11 @@ function columnar_frame(phase::Integer = 0)
     site_records = Dict(site => owners[site] for site in CartesianIndices(shape))
     identity_records = Dict(
         first_identity => first_metadata,
-        second_identity => second_metadata,
+        second_identity => second_metadata
     )
     owner_records = Dict(
         first_identity.id => first_metadata,
-        second_identity.id => second_metadata,
+        second_identity.id => second_metadata
     )
     values = [
         phase + 0.0 phase + 0.2 phase + 0.4;
@@ -67,12 +72,16 @@ function columnar_frame(phase::Integer = 0)
     ]
     stream_records = Dict{Any, Any}(
         SIGNAL_KEY => RenderChannel(
-            SIGNAL_KEY, values; label = "Foreign signal", units = "a.u."),
+            SIGNAL_KEY, values; label = "Foreign signal", units = "a.u."
+        ),
     )
     lineage = RenderProvenance(
-        :downstream_fixture, ColumnarFrame, :host, RenderRequest())
-    return ColumnarFrame(Int(phase), shape, spatial, site_records,
-        identity_records, owner_records, stream_records, lineage)
+        :downstream_fixture, ColumnarFrame, :host, RenderRequest()
+    )
+    return ColumnarFrame(
+        Int(phase), shape, spatial, site_records,
+        identity_records, owner_records, stream_records, lineage
+    )
 end
 
 """Custom continuous encoding supplied by a downstream package."""
@@ -97,8 +106,10 @@ function encode_frame(frame::AbstractPottsRenderFrame, encoding::RootSignalEncod
         lower, upper = extrema(finite)
         lower == upper ? (lower - 0.5, upper + 0.5) : (lower, upper)
     end
-    return EncodedPottsFrame(values, encoding, LegendEntry[],
-        encoding_label(encoding), source.units, limits)
+    return EncodedPottsFrame(
+        values, encoding, LegendEntry[],
+        encoding_label(encoding), source.units, limits
+    )
 end
 
 end

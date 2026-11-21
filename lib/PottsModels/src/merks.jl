@@ -1,40 +1,54 @@
-# The chemoattractant of the Merks models as plain MTK `PDESystem`s on the lattice, coupled into
-# each model with `@fields`. Their inputs are 0/1 site fields that the `@fields` line binds to
-# kind tests: `cell` (an endothelial site), `ecm` (a medium site) and `frame` (a border site).
-# The parameters keep the names and defaults of the models.
+# The chemoattractant of the Merks models as plain MTK `PDESystem`s on the lattice, coupled
+# into each model with `@fields`. Their inputs are 0/1 site fields that the `@fields` line
+# binds to kind tests: `cell` (an endothelial site), `ecm` (a medium site) and `frame` (a
+# border site). The parameters keep the names and defaults of the models.
 module MerksField
-using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters, t_nounits
+    using Potts.ModelingToolkitBase: PDESystem, Differential, @variables, @parameters,
+        t_nounits as t
     using Potts.LatticePDE: laplacian, masked, step_index, lattice_domain
-const t = t_nounits                     # the time of every Potts model (`Potts.t`)
-const Dt = Differential(t)
-@parameters x y
-@variables c(..) cell(..)::Bool [input = true] ecm(..)::Bool [input = true] frame(..)::Bool [input = true]
-const C = c(t, x, y)
+    const Dt = Differential(t)
+    @parameters x y
+    @variables c(..) cell(..)::Bool [input = true] ecm(..)::Bool [input = true] frame(
+        ..
+    )::Bool [input = true]
+    const C = c(t, x, y)
 
-# `∂c/∂t = D Δc + α δ_cell − ε c (1 − δ_cell)` (2006 Eq. 6) with zero flux at the lattice faces
-function vasculogenesis(lattice)
-    @parameters Dc = 0.75 σc = 5.4e-3 δc = 5.4e-3
+    # `∂c/∂t = D Δc + α δ_cell − ε c (1 − δ_cell)` (2006 Eq. 6) with zero flux at the
+    # lattice faces
+    function vasculogenesis(lattice)
+        @parameters Dc = 0.75 σc = 5.4e-3 δc = 5.4e-3
         eq = Dt(C) ~ Dc * laplacian(C) + σc * cell(t, x, y) - δc * C * ecm(t, x, y)
-    return PDESystem([eq], [c(0, x, y) ~ 0.0], lattice_domain(t, (x, y), lattice), [t, x, y],
-        [C, cell(t, x, y), ecm(t, x, y)], [Dc, σc, δc]; name = :merks_field)
-end
+        return PDESystem(
+            [eq], [c(0, x, y) ~ 0.0], lattice_domain(t, (x, y), lattice), [t, x, y],
+            [C, cell(t, x, y), ecm(t, x, y)], [Dc, σc, δc]; name = :merks_field
+        )
+    end
 
-# the same equation, held at `c = 0` on the border sites after every substep
-function merks2006(lattice)
-    @parameters Dc = 0.75 α = 5.4e-3 ε = 5.4e-3
+    # the same equation, held at `c = 0` on the border sites after every substep
+    function merks2006(lattice)
+        @parameters Dc = 0.75 α = 5.4e-3 ε = 5.4e-3
         eq = Dt(C) ~ Dc * laplacian(C) + α * cell(t, x, y) - ε * C * ecm(t, x, y)
-    return PDESystem([eq], [c(0, x, y) ~ 0.0, C ~ masked(frame(t, x, y), 0.0)], lattice_domain(t, (x, y), lattice),
-        [t, x, y], [C, cell(t, x, y), ecm(t, x, y), frame(t, x, y)], [Dc, α, ε]; name = :merks_field)
-end
+        return PDESystem(
+            [eq], [c(0, x, y) ~ 0.0, C ~ masked(frame(t, x, y), 0.0)],
+            lattice_domain(t, (x, y), lattice),
+            [t, x, y], [C, cell(t, x, y), ecm(t, x, y), frame(t, x, y)], [Dc, α, ε];
+            name = :merks_field
+        )
+    end
 
-# 2008 Eq. 1: as `merks2006`, but off for the first `t_relax` MCS (`step_index(t)` is the MCS)
-function merks2008(lattice)
-    @parameters Dc = 0.75 α = 0.03 ε = 0.03 t_relax = 100.0
+    # 2008 Eq. 1: as `merks2006`, but off for the first `t_relax` MCS (`step_index(t)` is
+    # the MCS)
+    function merks2008(lattice)
+        @parameters Dc = 0.75 α = 0.03 ε = 0.03 t_relax = 100.0
         rate = Dc * laplacian(C) + α * cell(t, x, y) - ε * C * ecm(t, x, y)
-    eq = Dt(C) ~ ifelse(step_index(t) >= t_relax, rate, 0.0)
-    return PDESystem([eq], [c(0, x, y) ~ 0.0, C ~ masked(frame(t, x, y), 0.0)], lattice_domain(t, (x, y), lattice),
-        [t, x, y], [C, cell(t, x, y), ecm(t, x, y), frame(t, x, y)], [Dc, α, ε, t_relax]; name = :merks_field)
-end
+        eq = Dt(C) ~ ifelse(step_index(t) >= t_relax, rate, 0.0)
+        return PDESystem(
+            [eq], [c(0, x, y) ~ 0.0, C ~ masked(frame(t, x, y), 0.0)],
+            lattice_domain(t, (x, y), lattice),
+            [t, x, y], [C, cell(t, x, y), ecm(t, x, y), frame(t, x, y)],
+            [Dc, α, ε, t_relax]; name = :merks_field
+        )
+    end
 end
 
 """
@@ -98,7 +112,9 @@ prob = PottsProblem(MerksVasculogenesis(; name = :merks), merks_state(), (0, 10_
         χ = 1000.0
     end
     @lattice Lattice(lattice; boundary = Closed(), neighborhood = Moore(1))
-    @fields c = MerksField.vasculogenesis(lattice) (MerksField.cell => kind == endothelial, MerksField.ecm => kind == medium)
+    @fields c = MerksField.vasculogenesis(lattice) (
+        MerksField.cell => kind == endothelial, MerksField.ecm => kind == medium,
+    )
     @parameters begin
         T = 50.0
         J[kind, kind] = [0.0 20.0; 20.0 40.0]
@@ -109,7 +125,11 @@ prob = PottsProblem(MerksVasculogenesis(; name = :merks), merks_state(), (0, 10_
         contacts => J[kind, neighbor_kind]
     end
     if contact_inhibited
-        @drive copy => ifelse((old == 0) && (kind[new] == endothelial), -χ * (c[target] - c[source]), 0.0)
+        @drive copy =>
+            ifelse(
+            (old == 0) && (kind[new] == endothelial), -χ * (c[target] - c[source]),
+            0.0
+        )
     else
         @drive copy => -χ * (c[target] - c[source])
     end
@@ -118,18 +138,21 @@ prob = PottsProblem(MerksVasculogenesis(; name = :merks), merks_state(), (0, 10_
 end
 
 """
-    merks_state(; lattice = (500, 500), region = lattice == (500, 500) ? (333, 333) : lattice,
+    merks_state(; lattice = (500, 500), region = lattice == (500, 500) ? (333,
+        333) : lattice,
         n = 282, side = 10, seed = 1)
 
 `n` square endothelial cells of `side²` sites (the default 10² is the target area
-`A = 100`) at random, non-overlapping positions (one-site gaps) in a centered `region` (Merks
-et al. 2006: 282 cells over 333 × 333 sites of a 500² lattice): `[ownership => σ, kind => fill(:endothelial, n)]`.
-It is `layout(merks_layout(; lattice, kw...), lattice)`.
+`A = 100`) at random, non-overlapping positions (one-site gaps) in a centered `region`
+(Merks et al. 2006: 282 cells over 333 × 333 sites of a 500² lattice):
+`[ownership => σ, kind => fill(:endothelial, n)]`. It is
+`layout(merks_layout(; lattice, kw...), lattice)`.
 """
 merks_state(; lattice = (500, 500), kw...) = layout(merks_layout(; lattice, kw...), lattice)
 
 """
-    merks_layout(; lattice = (500, 500), region = lattice == (500, 500) ? (333, 333) : lattice,
+    merks_layout(; lattice = (500, 500), region = lattice == (500, 500) ? (333,
+        333) : lattice,
         n = 282, side = 10, seed = 1) -> Scattered
 
 The layout behind [`merks_state`](@ref): `n` endothelial boxes of `side²` sites, one medium
@@ -137,8 +160,10 @@ site apart, at uniformly random corners in a centered `region` (`off + 2 : off +
 axis, `off = (lattice − region) ÷ 2`), drawn from a `StableRNG(seed)`:
 `Scattered(n, (side, side); region, kinds = [:endothelial], seed, gap = 1)`.
 """
-function merks_layout(; lattice = (500, 500), region = lattice == (500, 500) ? (333, 333) : lattice,
-        n = 282, side = 10, seed = 1)
+function merks_layout(;
+        lattice = (500, 500), region = lattice == (500, 500) ? (333, 333) : lattice,
+        n = 282, side = 10, seed = 1
+    )
     off = (lattice .- region) .÷ 2
     reg = ntuple(d -> (off[d] + 2):(off[d] + region[d] - 1), 2)
     return Scattered(n, (side, side); region = reg, kinds = [:endothelial], seed, gap = 1)
@@ -151,27 +176,36 @@ The [`Merks2006`](@ref) start: [`merks_layout`](@ref)`(; lattice, kw...)` inside
 border one site thick, `overlay(Frame(:border; width = 1), merks_layout(; lattice, kw...))`.
 The default is the paper's Fig. 4 geometry: 282 cells of 10² over the central 333² of 500².
 """
-merks2006_layout(; lattice = (500, 500), kw...) = overlay(Frame(:border; width = 1), merks_layout(; lattice, kw...))
+function merks2006_layout(; lattice = (500, 500), kw...)
+    return overlay(Frame(:border; width = 1), merks_layout(; lattice, kw...))
+end
 
 """
     merks2008_sprout(; rounds = 50, divisions = 7, seed = 1)
 
 The [`Merks2008`](@ref) sprouting start of the released parameter files (`sprout_*.par`):
-one Eden blob grown for `rounds` rounds from the lattice center with 8 neighbors,
-divided `divisions` times (7 gives 128 cells, 8 the 256 of 01b Fig. 12), inside a frozen
-border two sites thick:
+one Eden blob grown for `rounds` rounds from the lattice center with 8 neighbors, divided
+`divisions` times (7 gives 128 cells, 8 the 256 of 01b Fig. 12), inside a frozen border two
+sites thick:
 
 ```julia
 overlay(Frame(:border; width = 2),
-    Splits(Eden(Center(); rounds, kinds = [:endothelial], seed, neighborhood = Moore(1)), divisions;
+    Splits(Eden(Center(); rounds, kinds = [:endothelial], seed, neighborhood = Moore(1)), \
+divisions;
         splits = :allow))
 ```
 
 A few of the 128 cells are cut into pieces, as in the authors' code, so `splits = :allow`.
 """
-merks2008_sprout(; rounds = 50, divisions = 7, seed = 1) =
-    overlay(Frame(:border; width = 2),
-        Splits(Eden(Center(); rounds, kinds = [:endothelial], seed, neighborhood = Moore(1)), divisions; splits = :allow))
+function merks2008_sprout(; rounds = 50, divisions = 7, seed = 1)
+    return overlay(
+        Frame(:border; width = 2),
+        Splits(
+            Eden(Center(); rounds, kinds = [:endothelial], seed, neighborhood = Moore(1)),
+            divisions; splits = :allow
+        )
+    )
+end
 
 """
     merks2008_denovo(; lattice = (202, 202), n = 360, rounds = 10,
@@ -183,7 +217,8 @@ frozen border two sites thick:
 
 ```julia
 overlay(Frame(:border; width = 2),
-    Eden(RandomPoints(n; region, replace = true, seed); rounds, kinds = [:endothelial], seed,
+    Eden(RandomPoints(n; region, replace = true, seed); rounds, kinds = [:endothelial], \
+seed,
         neighborhood = Moore(1), shortfall = :allow))
 ```
 
@@ -191,21 +226,37 @@ The default is the released files' (`denovo_*.par`: 360 seeds on the 198² inter
 about 355 cells of 47 sites). 01b Fig. 2's geometry is
 `merks2008_denovo(; lattice = (502, 502), n = 1000, region = (85:417, 85:417))`.
 """
-merks2008_denovo(; lattice = (202, 202), n = 360, rounds = 10, region = (3:(lattice[1] - 2), 3:(lattice[2] - 2)),
-    seed = 1) =
-    overlay(Frame(:border; width = 2),
-        Eden(RandomPoints(n; region, replace = true, seed); rounds, kinds = [:endothelial], seed,
-            neighborhood = Moore(1), shortfall = :allow))
+function merks2008_denovo(;
+        lattice = (202, 202), n = 360, rounds = 10, region = (
+            3:(lattice[1] - 2), 3:(lattice[2] - 2),
+        ),
+        seed = 1
+    )
+    return overlay(
+        Frame(:border; width = 2),
+        Eden(
+            RandomPoints(n; region, replace = true, seed); rounds, kinds = [:endothelial],
+            seed,
+            neighborhood = Moore(1), shortfall = :allow
+        )
+    )
+end
 
-_merks_choice(x, allowed, model, key) = x in allowed ? x :
-                                        throw(ArgumentError("$model: `$key` must be one of $(join(repr.(allowed), ", ")), got $(repr(x))"))
+function _merks_choice(x, allowed, model, key)
+    if x in allowed
+        return x
+    else
+        throw(ArgumentError("$model: `$key` must be one of $(join(repr.(allowed), ", ")), \
+            got $(repr(x))"))
+    end
+end
 
 """
     Merks2006(; name, lattice = (500, 500), rule = :soft, …)
 
 Vasculogenesis by autocrine chemotaxis of elongated cells: Merks, Brodsky, Goligorsky,
-Newman & Glazier, *Dev. Biol.* **289**, 44 (2006) (model-spec 01, Variant E; paper-vs-code item M1–M5).
-Kinds `medium`, `endothelial` and `border[frozen]`; start it with
+Newman & Glazier, *Dev. Biol.* **289**, 44 (2006) (model-spec 01, Variant E; paper-vs-code
+item M1–M5). Kinds `medium`, `endothelial` and `border[frozen]`; start it with
 [`merks2006_layout`](@ref).
 
 - Energy (Eqs. 1, 4, 5): `Σ J(1 − δ)` over the 8 Moore neighbors, `λ (a − A)²` and
@@ -213,17 +264,17 @@ Kinds `medium`, `endothelial` and `border[frozen]`; start it with
   cell's inertia tensor (`major_length`).
 - Chemotaxis at every copy (Eq. 2, the files' `vecadherinknockout = true`):
   `−χ (f(c[target]) − f(c[source]))` with `f(c) = c/(1 + s c)`, `χ = χcM` when the target's
-  or the source's owner is the medium and `χcc` otherwise; both are 1000 (the paper's γ)
-  and `s = 0`.
-- Connectivity (paper-vs-code item M3): `rule = :soft` adds `E₀` to every copy that breaks the losing
-  endothelial cell's 8-site ring (TST's `ConnectivityPreservedP`; under Metropolis this is
-  TST's threshold shift); `rule = :hard` vetoes those copies instead.
+  or the source's owner is the medium and `χcc` otherwise; both are 1000 (the paper's γ) and
+  `s = 0`.
+- Connectivity (paper-vs-code item M3): `rule = :soft` adds `E₀` to every copy that breaks
+  the losing endothelial cell's 8-site ring (TST's `ConnectivityPreservedP`; under
+  Metropolis this is TST's threshold shift); `rule = :hard` vetoes those copies instead.
 - A frozen border (`Frame(:border)`, one site thick) with `J(c,B) = 100`, `J(M,B) = 0`
   (paper-vs-code item M4).
-- The field (Eq. 6, paper-vs-code item M5): `∂c/∂t = D Δc + α[endothelial] − ε c [medium]`, 5-point `laplacian`,
-  held at `c = 0` on the border after every substep (the masked condition
-  `c ~ masked(frame, 0.0)`), stepped before the sweep of each MCS (`@schedule fields, sweep`).
-  The field is a plain MTK `PDESystem`, coupled with `@fields`.
+- The field (Eq. 6, paper-vs-code item M5): `∂c/∂t = D Δc + α[endothelial] − ε c [medium]`,
+  5-point `laplacian`, held at `c = 0` on the border after every substep (the masked
+  condition `c ~ masked(frame, 0.0)`), stepped before the sweep of each MCS
+  (`@schedule fields, sweep`). The field is a plain MTK `PDESystem`, coupled with `@fields`.
 
 Parameters, in lattice units (Δx = 2 µm, 1 MCS = 30 s): `T = 50`, `λ = 50`, `A = 100`,
 `λ_L = 5`, `L = 50` ("about 100 µm"; the released files' 60 is `L = 60.0`), `E₀ = 5000`,
@@ -234,7 +285,8 @@ Parameters, in lattice units (Δx = 2 µm, 1 MCS = 30 s): `T = 50`, `λ = 50`, `
 The paper's field solver is 15 explicit substeps of 2 s per MCS:
 
 ```julia
-prob = PottsProblem(Merks2006(; name = :m), layout(merks2006_layout(), (500, 500)), (0, 5760);
+prob = PottsProblem(Merks2006(; name = :m), layout(merks2006_layout(), (500, 500)), (0, \
+5760);
     field_solver = ExplicitEuler(substeps = 15))
 ```
 """
@@ -256,16 +308,19 @@ prob = PottsProblem(Merks2006(; name = :m), layout(merks2006_layout(), (500, 500
         s = 0.0
     end
     @lattice Lattice(lattice; boundary = Closed(), neighborhood = Moore(1))
-    @fields c = MerksField.merks2006(lattice) (MerksField.cell => kind == endothelial, MerksField.ecm => kind == medium,
-        MerksField.frame => kind == border)
+    @fields c = MerksField.merks2006(lattice) (
+        MerksField.cell => kind == endothelial, MerksField.ecm => kind == medium,
+        MerksField.frame => kind == border,
+    )
     @parameters J[kind, kind] = [0.0 20.0 0.0; 20.0 40.0 100.0; 0.0 100.0 0.0]
     @relations proposal = Moore(1)
     @energy begin
         cells(endothelial) => λ * (volume - A)^2 + λ_L * (major_length - L)^2
         contacts => J[kind, neighbor_kind]
     end
-    @drive copy => -ifelse((old == 0) | (new == 0), χcM, χcc) *
-                   (c[target] / (1 + s * c[target]) - c[source] / (1 + s * c[source]))
+    @drive copy =>
+        -ifelse((old == 0) | (new == 0), χcM, χcc) *
+        (c[target] / (1 + s * c[target]) - c[source] / (1 + s * c[source]))
     if _merks_choice(rule, (:soft, :hard), "Merks2006", :rule) === :soft
         @drive connectivity(endothelial; rule = ArcOrPair(), penalty = E₀)
     else
@@ -279,23 +334,23 @@ end
     Merks2008(; name, lattice = (202, 202), mode = :extension_retraction, …)
 
 Contact-inhibited chemotaxis in de novo and sprouting blood-vessel growth: Merks, Perryn,
-Shirinifard & Glazier, *PLoS Comput. Biol.* **4**, e1000163 (2008) (model-spec 01,
-Variant CI; paper-vs-code item M1, M4–M7). Kinds `medium`, `endothelial` and `border[frozen]`;
-start it with [`merks2008_sprout`](@ref) (Figs. 4–11) or [`merks2008_denovo`](@ref)
-(Fig. 2).
+Shirinifard & Glazier, *PLoS Comput. Biol.* **4**, e1000163 (2008) (model-spec 01, Variant
+CI; paper-vs-code item M1, M4–M7). Kinds `medium`, `endothelial` and `border[frozen]`; start
+it with [`merks2008_sprout`](@ref) (Figs. 4–11) or [`merks2008_denovo`](@ref) (Fig. 2).
 
-- Energy (Eq. 2): `Σ J(1 − δ)` over the 20 neighbors of `NeighborOrder(4)` (first to
-  fourth order, the files' `neighbours = 3`), and `λ (a − A)²` for every endothelial cell.
-  Copies also take their source among the 20 neighbors.
+- Energy (Eq. 2): `Σ J(1 − δ)` over the 20 neighbors of `NeighborOrder(4)` (first to fourth
+  order, the files' `neighbours = 3`), and `λ (a − A)²` for every endothelial cell. Copies
+  also take their source among the 20 neighbors.
 - Chemotaxis (Eq. 3): `−χ (f(c[target]) − f(c[source]))`, `f(c) = c/(1 + s c)`, with
   `χ = χcM` at cell–medium copies (the target's or the source's owner is the medium) and
   `χcc` at cell–cell copies. `χcc = 0` is contact inhibition; `χcc = χcM` removes it, and
-  any value between is the continuous ratio of Fig. 5 (paper-vs-code item M7). `mode =
-  :extension_only` (Eq. 4) drops the term when the source is the medium (a retraction).
+  any value between is the continuous ratio of Fig. 5 (paper-vs-code item M7).
+  `mode = :extension_only` (Eq. 4) drops the term when the source is the medium (a
+  retraction).
 - A frozen border (`Frame(:border; width = 2)`; the authors' 1-site frame on 200², whose
   20-site stencil reaches one site further) with `J(c,B) = 100`, `J(M,B) = 0`.
-- The field (Eq. 1): `∂c/∂t = D Δc + α[endothelial] − ε c [medium]`, 5-point `laplacian`, `c = 0`
-  on the border after every substep, stepped before the sweep of each MCS. As in the
+- The field (Eq. 1): `∂c/∂t = D Δc + α[endothelial] − ε c [medium]`, 5-point `laplacian`,
+  `c = 0` on the border after every substep, stepped before the sweep of each MCS. As in the
   released code the field is off for the first `t_relax` MCS (MCS 0 to `t_relax − 1`, the
   files' `relaxation`, paper-vs-code item M6), so chemotaxis starts after it.
 
@@ -306,7 +361,8 @@ Parameters, in lattice units (Δx = 2 µm, 1 MCS = 30 s): `T = 50`, `λ = 25`, `
 The paper's field solver is 15 explicit substeps of 2 s per MCS:
 
 ```julia
-prob = PottsProblem(Merks2008(; name = :m), layout(merks2008_sprout(), (202, 202)), (0, 10_100);
+prob = PottsProblem(Merks2008(; name = :m), layout(merks2008_sprout(), (202, 202)), (0, \
+10_100);
     field_solver = ExplicitEuler(substeps = 15))
 ```
 """
@@ -325,20 +381,27 @@ prob = PottsProblem(Merks2008(; name = :m), layout(merks2008_sprout(), (202, 202
         s = 0.0
     end
     @lattice Lattice(lattice; boundary = Closed(), neighborhood = NeighborOrder(4))
-    @fields c = MerksField.merks2008(lattice) (MerksField.cell => kind == endothelial, MerksField.ecm => kind == medium,
-        MerksField.frame => kind == border)
+    @fields c = MerksField.merks2008(lattice) (
+        MerksField.cell => kind == endothelial, MerksField.ecm => kind == medium,
+        MerksField.frame => kind == border,
+    )
     @parameters J[kind, kind] = [0.0 20.0 0.0; 20.0 40.0 100.0; 0.0 100.0 0.0]
     @relations proposal = NeighborOrder(4)
     @energy begin
         cells(endothelial) => λ * (volume - A)^2
         contacts => J[kind, neighbor_kind]
     end
-    if _merks_choice(mode, (:extension_retraction, :extension_only), "Merks2008", :mode) === :extension_retraction
-        @drive copy => -ifelse((old == 0) | (new == 0), χcM, χcc) *
-                       (c[target] / (1 + s * c[target]) - c[source] / (1 + s * c[source]))
+    if _merks_choice(mode, (:extension_retraction, :extension_only), "Merks2008", :mode) ===
+            :extension_retraction
+        @drive copy =>
+            -ifelse((old == 0) | (new == 0), χcM, χcc) *
+            (c[target] / (1 + s * c[target]) - c[source] / (1 + s * c[source]))
     else
-        @drive copy => ifelse(new == 0, 0.0,
-            -ifelse(old == 0, χcM, χcc) * (c[target] / (1 + s * c[target]) - c[source] / (1 + s * c[source])))
+        @drive copy => ifelse(
+            new == 0, 0.0,
+            -ifelse(old == 0, χcM, χcc) *
+                (c[target] / (1 + s * c[target]) - c[source] / (1 + s * c[source]))
+        )
     end
     @schedule fields, sweep
     @sweep Metropolis(; temperature = T)

@@ -11,7 +11,8 @@
 # lamellipodium–nucleus distance, 14a Fig 12; 14c's base statistics over a cluster).
 #
 # Scope (D-231 follow-ups): E2 named pairs; E6 docs for cell references; E7 helpers
-# `centroid(c, k)`, `minimum_image`, `cluster_integral` (api-synthesis §6.4), with their own tests.
+# `centroid(c, k)`, `minimum_image`, `cluster_integral` (api-synthesis §6.4), with their own
+# tests.
 #
 # =========================================================================================
 # THE PUBLIC API THESE TESTS EXPECT (names, signatures, semantics)
@@ -23,8 +24,9 @@
 #    - `Pairs` is bound inside model bodies (a new `Potts.DSL` name). `k₁`, `k₂` are kind
 #      names of the model's `@kinds`; `v` is a number or an expression of scalar parameters
 #      (as the matrix form allows, `api_defects_tests.jl`).
-#    - Symmetric fill (the default, `symmetric = true`): entry (k₁, k₂) and (k₂, k₁) both get
-#      v; every unlisted entry gets `default`. With `symmetric = false` only (k₁, k₂) is set.
+#    - Symmetric fill (the default, `symmetric = true`): entry (k₁, k₂) and (k₂, k₁) both
+#      get v; every unlisted entry gets `default`. With `symmetric = false` only (k₁, k₂) is
+#      set.
 #    - It lowers to the same matrix: the parameter object equals the hand-written matrix
 #      form's (`prob.p == prob_matrix.p`, same type), so there is zero runtime cost, and a
 #      parameter entry follows `remake` on both sides of the diagonal.
@@ -69,12 +71,13 @@
 #    the site expression `x` over every site of every
 #    alive member of the current cell's cluster (each site weight 1; divide by the
 #    cluster's volume for the mean). The same value for every member. For a cell that is
-#    its own cluster it equals plain `integral(x)`, which stays the cell sum. Cell scope like `integral` (updates,
-#    `@observed`); refused in `@energy` with a `PottsCompileError` (as `integral` is: no ΔH).
-#    The integrand is in site scope (spec-owner ruling, 2026-10-14): `kind` and `volume`
-#    inside `x` bind to the site's owner, the member cell the site belongs to, so
-#    `integral(volume; over = cluster)` = Σ_members V_m², not (Σ V_m)·V_current. An unknown
-#    `over =` value, and `over = cluster` outside a cell or cluster context, are refused.
+#    its own cluster it equals plain `integral(x)`, which stays the cell sum. Cell scope
+#    like `integral` (updates, `@observed`); refused in `@energy` with a `PottsCompileError`
+#    (as `integral` is: no ΔH). The integrand is in site scope (spec-owner ruling,
+#    2026-10-14): `kind` and `volume` inside `x` bind to the site's owner, the member cell
+#    the site belongs to, so `integral(volume; over = cluster)` = Σ_members V_m², not (Σ
+#    V_m)·V_current. An unknown `over =` value, and `over = cluster` outside a cell or
+#    cluster context, are refused.
 # F. Cost. The checkerboard claims nothing (D-271), so the test that these helpers add no
 #    reads or claims (old section 9) is removed.
 #
@@ -105,22 +108,23 @@
 #   O8 `centroid(c)` (one argument, a vector) is not pinned: it would clash with
 #      `centroid(k)`, the current cell's axis k.
 #   O9 `Pairs` value types: a mixed Int/Float/parameter list is pinned; class keys are not.
-#   R1 (ruling) The binding inside `integral(x; over = cluster)`: site scope, the owner's `kind` and
+#   R1 (ruling) The binding inside `integral(x; over = cluster)`: site scope, the owner's
+#   `kind` and
 #      `volume` (section 3, "integral(x; over = cluster) sums over the cluster's sites").
 #
 # Sections: 1 the fixtures build; 2 named pairs (E2); 3 centroid(c, k), minimum_image,
-# separation and integral(x; over = cluster) by hand (square, periodic × closed); 4 dead referents;
-# 5 after-MCS writes against `@observed` and an independent oracle after a short run; 6
-# minimum_image in a drive and an energy, bitwise against an explicit-wrap twin; 7 the
-# hexagonal torus; 8 refusals and axis errors (negative controls); 9 device.
+# separation and integral(x; over = cluster) by hand (square, periodic × closed); 4 dead
+# referents; 5 after-MCS writes against `@observed` and an independent oracle after a short
+# run; 6 minimum_image in a drive and an energy, bitwise against an explicit-wrap twin; 7
+# the hexagonal torus; 8 refusals and axis errors (negative controls); 9 device.
 #
 # Today (base commit 588ad407) every assertion that reads a new name fails (marked DEFECT
-# CHECK): `Pairs`, `minimum_image` and `separation` are undefined, `integral` has no `over` keyword, and
-# `centroid` has no two-argument method, so the fixtures that use them do not build. The
-# explicit-wrap twins, the matrix twins, the hand oracles' own checks and the existing
-# refusals pass (marked CONTROL). On the base commit (Apple M-series): 22 pass, 16 fail,
-# 11 errors (fixtures that do not build), 1 broken (the device testset's skip); ~15 s after
-# precompilation. The hand values were checked on the base commit with today's
+# CHECK): `Pairs`, `minimum_image` and `separation` are undefined, `integral` has no `over`
+# keyword, and `centroid` has no two-argument method, so the fixtures that use them do not
+# build. The explicit-wrap twins, the matrix twins, the hand oracles' own checks and the
+# existing refusals pass (marked CONTROL). On the base commit (Apple M-series): 22 pass, 16
+# fail, 11 errors (fixtures that do not build), 1 broken (the device testset's skip); ~15 s
+# after precompilation. The hand values were checked on the base commit with today's
 # primitives (`centroid(k)`, `integral`, `CorePotts.centroid`, `centroid_distance`) on the
 # same states. Runtime: a few model compilations and ~10 MCS on small lattices; no FULL
 # tier.
@@ -140,8 +144,14 @@ function define(name::Symbol, ex::Expr)
     end
     return nothing
 end
-model(name::Symbol) = isdefined(@__MODULE__, name) ? getfield(@__MODULE__, name) :
-    error("cell reference helpers fixture $name did not build: $(get(DEFINE_ERRORS, name, "unknown"))")
+function model(name::Symbol)
+    if isdefined(@__MODULE__, name)
+        return getfield(@__MODULE__, name)
+    else
+        error("cell reference helpers fixture $name did not \
+            build: $(get(DEFINE_ERRORS, name, "unknown"))")
+    end
+end
 system(name::Symbol; sysname = :m) = Base.invokelatest(model(name); name = sysname)
 vol(u) = Array(u.cell.volume)
 col(u, n) = Array(getfield(u.cell, n))
@@ -177,7 +187,12 @@ function helper_props(prob, u)
     end
     return out
 end
-helper_prop(prob, u, old, new) = first(filter(p -> p.old == old && p.new == new, helper_props(prob, u)))
+function helper_prop(
+        prob, u, old,
+        new
+    )
+    return first(filter(p -> p.old == old && p.new == new, helper_props(prob, u)))
+end
 function apply(prob, u, prop)
     a = deepcopy(u)
     a.ownership[prop.target] = prop.new
@@ -202,14 +217,20 @@ function oracle_centroid(σ, c, dims, periodic)
 end
 oracle_wrap(d, L, periodic) = periodic ? d - L * round(d / L) : d
 function oracle_sibling(u, c, k)
-    v = vol(u); kd = col(u, :kind); cl = col(u, :cluster)
+    v = vol(u)
+    kd = col(u, :kind)
+    cl = col(u, :cluster)
     ms = [m for m in eachindex(v) if v[m] > 0 && cl[m] == cl[c] && kd[m] == k]
     @assert length(ms) <= 1
     return isempty(ms) ? 0 : ms[1]
 end
 function oracle_cluster_sum(u, F, c)
-    σ = Array(u.ownership); cl = col(u, :cluster)
-    return sum((F[I] for I in CartesianIndices(σ) if σ[I] != 0 && cl[σ[I]] == cl[c]); init = 0.0)
+    σ = Array(u.ownership)
+    cl = col(u, :cluster)
+    return sum(
+        (F[I] for I in CartesianIndices(σ) if σ[I] != 0 && cl[σ[I]] == cl[c]);
+        init = 0.0
+    )
 end
 # ---------------------------------------------------------------------------------------
 # Fixtures
@@ -223,22 +244,25 @@ const PAIRS_BODY = quote
     end
     @sweep Metropolis(; temperature = T)
 end
-pairs_expr(name::Symbol, Jline::Expr, μline::Expr) = :(
-    @potts_model $name begin
-        @kinds medium substrate cytoplasm nucleus
-        @parameters begin
-            Jcn = 7.0
-            T = 4.0
-            $Jline
-            $μline
+function pairs_expr(name::Symbol, Jline::Expr, μline::Expr)
+    return :(
+        @potts_model $name begin
+            @kinds medium substrate cytoplasm nucleus
+            @parameters begin
+                Jcn = 7.0
+                T = 4.0
+                $Jline
+                $μline
+            end
+            $(PAIRS_BODY.args...)
         end
-        $(PAIRS_BODY.args...)
-    end
-)
+    )
+end
 const J_PAIRS = :(
     J[kind, kind] = Pairs(
         default = 0.0, (medium, substrate) => 20, (medium, cytoplasm) => 16,
-        (substrate, cytoplasm) => 3.5, (cytoplasm, nucleus) => Jcn, (nucleus, nucleus) => 2.5
+        (substrate, cytoplasm) => 3.5, (cytoplasm, nucleus) => Jcn,
+        (nucleus, nucleus) => 2.5
     )
 )
 const μ_PAIRS = :(
@@ -248,7 +272,12 @@ const μ_PAIRS = :(
     )
 )
 const J_MATRIX = :(J[kind, kind] = [0 20 16 0; 20 0 3.5 0; 16 3.5 0 Jcn; 0 0 Jcn 2.5])
-const μ_MATRIX = :(μ[kind, kind] = [1.0 1.0 1.0 1.0; 1.0 1.0 1.0 1.0; 1.0 1.0 1.0 4.0; 1.0 1.0 9.0 1.0])
+const μ_MATRIX = :(
+    μ[kind, kind] = [
+        1.0 1.0 1.0 1.0; 1.0 1.0 1.0 1.0; 1.0 1.0 1.0 4.0;
+        1.0 1.0 9.0 1.0
+    ]
+)
 define(:HelperPairs, pairs_expr(:HelperPairs, J_PAIRS, μ_PAIRS))
 define(:PairsMatrix, pairs_expr(:PairsMatrix, J_MATRIX, μ_MATRIX))
 # the twin
@@ -264,7 +293,12 @@ function pairs_sigma()
     return σ
 end
 const PAIRS_OP = [ownership => pairs_sigma(), kind => [:substrate, :cytoplasm, :nucleus]]
-pairs_problem(name; seed = 1) = PottsProblem(system(name; sysname = :pr), PAIRS_OP, (0, 3); seed)
+function pairs_problem(name; seed = 1)
+    return PottsProblem(
+        system(name; sysname = :pr), PAIRS_OP, (0, 3);
+        seed
+    )
+end
 # F2. Geometry fixture (sections 3–5, 10). 20 × 12, axis 1 periodic, axis 2 closed.
 # Kinds: medium 0, cytoplasm 1, nucleus 2, lamellipodium 3. References appear only in
 # updates and observables.
@@ -286,7 +320,10 @@ define(
                 wsn(cell) = 0.0
                 wci(cell) = 0.0
             end
-            @lattice Lattice((20, 12); boundary = (Periodic(), Closed()), neighborhood = Moore(1))
+            @lattice Lattice(
+                (20, 12); boundary = (Periodic(), Closed()),
+                neighborhood = Moore(1)
+            )
             @energy begin
                 cells => λ * (volume - Vt)^2
                 contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 0.5, 1.0)
@@ -320,7 +357,8 @@ define(
                 civ(cell) ~ integral(G; over = cluster)
                 cvol(cell) ~ integral(volume; over = cluster)
                 own_int(cell) ~ integral(F)
-                Πx(cell) ~ volume * minimum_image(centroid(1) - centroid(sibling(nucleus), 1), 1) /
+                Πx(cell) ~
+                    volume * minimum_image(centroid(1) - centroid(sibling(nucleus), 1), 1) /
                     (volume + volume[sibling(nucleus)])
                 tot ~ sum(centroid(c, 1) for c in cells(nucleus))
             end
@@ -351,10 +389,16 @@ function refs_problem(; tspan = (0, 3), seed = 1, T = Float64)
     return PottsProblem(
         sys, [
             ownership => refs_sigma(),
-            kind => [:cytoplasm, :nucleus, :lamellipodium, :cytoplasm, :nucleus, :cytoplasm],
-            cluster => [1, 1, 1, 4, 4, 6], :Vt => [12.0, 4.0, 1.0, 9.0, 2.0, 4.0], :dd => HELPER_DD,
+            kind =>
+                [:cytoplasm, :nucleus, :lamellipodium, :cytoplasm, :nucleus, :cytoplasm],
+            cluster => [1, 1, 1, 4, 4, 6], :Vt => [12.0, 4.0, 1.0, 9.0, 2.0, 4.0], :dd =>
+                HELPER_DD,
             :F => HELPER_F, :G => ones(20, 12),
-        ], tspan; seed, T, capacity = 8
+        ],
+        tspan;
+        seed,
+        T,
+        capacity = 8
     )
 end
 # F3. minimum_image in a drive and a cell energy (section 6), and its explicit-wrap twin.
@@ -374,7 +418,10 @@ define(
             @variables begin
                 q(cell) = 0.0
             end
-            @lattice Lattice((20, 12); boundary = (Periodic(), Closed()), neighborhood = Moore(1))
+            @lattice Lattice(
+                (20, 12); boundary = (Periodic(), Closed()),
+                neighborhood = Moore(1)
+            )
             @energy begin
                 cells => λ * (volume - 9.0)^2 + μ * minimum_image(q - x0, 1)^2
                 contacts => 2.0
@@ -399,17 +446,29 @@ define(
     end
     @lattice Lattice((20, 12); boundary = (Periodic(), Closed()), neighborhood = Moore(1))
     @energy begin
-        cells => λ * (volume - 9.0)^2 +
-            μ * ifelse(2 * (q - x0) > Lw, q - x0 - Lw, ifelse(2 * (q - x0) < -Lw, q - x0 + Lw, q - x0))^2
+        cells =>
+            λ * (volume - 9.0)^2 +
+            μ *
+            ifelse(
+            2 * (q - x0) > Lw, q - x0 - Lw, ifelse(
+                2 * (q - x0) < -Lw, q - x0 + Lw, q -
+                    x0
+            )
+        )^2
         contacts => 2.0
     end
-    @drive copy => κ * ifelse(
+    @drive copy =>
+        κ * ifelse(
         2 * (position[target][1] - x0) > Lw, position[target][1] - x0 - Lw,
-        ifelse(2 * (position[target][1] - x0) < -Lw, position[target][1] - x0 + Lw, position[target][1] - x0)
+        ifelse(
+            2 * (position[target][1] - x0) < -Lw,
+            position[target][1] - x0 + Lw, position[target][1] - x0
+        )
     )
     @sweep Metropolis(; temperature = T)
 end
-# three 3×3 cells, cell 1 across the x seam. q − x0 = 13.75, −16, 0.5 → wrapped −6.25, 4, 0.5.
+# three 3×3 cells, cell 1 across the x seam. q − x0 = 13.75, −16, 0.5 → wrapped −6.25, 4,
+# 0.5.
 function wrap_sigma()
     σ = zeros(Int32, 20, 12)
     σ[[19, 20, 1], 2:4] .= 1
@@ -417,11 +476,15 @@ function wrap_sigma()
     σ[13:15, 8:10] .= 3
     return σ
 end
-const WRAP_OP = [ownership => wrap_sigma(), kind => fill(:cell, 3), :q => [17.25, -12.5, 4.0]]
-wrap_problem(; seed = 1, T = Float64, tspan = (0, 5)) =
-    PottsProblem(system(:Wrap; sysname = :wr), WRAP_OP, tspan; seed, T)
-wrapref_problem(; seed = 1, T = Float64, tspan = (0, 5), Lw = 20.0) =
-    PottsProblem(WrapRef(; name = :wf, Lw), WRAP_OP, tspan; seed, T)
+const WRAP_OP = [
+    ownership => wrap_sigma(), kind => fill(:cell, 3), :q => [17.25, -12.5, 4.0],
+]
+function wrap_problem(; seed = 1, T = Float64, tspan = (0, 5))
+    return PottsProblem(system(:Wrap; sysname = :wr), WRAP_OP, tspan; seed, T)
+end
+function wrapref_problem(; seed = 1, T = Float64, tspan = (0, 5), Lw = 20.0)
+    return PottsProblem(WrapRef(; name = :wf, Lw), WRAP_OP, tspan; seed, T)
+end
 const WRAP_CELL_TERM = 0.25 * (6.25^2 + 4.0^2 + 0.5^2)
 # μ Σ minimum_image(q − x0)² = 13.828125
 
@@ -438,7 +501,10 @@ define(
                 me(cell)::CellRef
                 partner(cell)::CellRef
             end
-            @lattice Lattice((10, 10); geometry = Hexagonal(), boundary = Periodic(), neighborhood = Hex(1))
+            @lattice Lattice(
+                (10, 10); geometry = Hexagonal(), boundary = Periodic(),
+                neighborhood = Hex(1)
+            )
             @energy cells => (volume - 1.0)^2
             @observed begin
                 hx(cell) ~ separation(me, partner)[1]
@@ -459,30 +525,36 @@ function hex_problem()
         system(:HelperHex; sysname = :hx), [
             ownership => σ, kind => [:blob, :blob],
             :me => [1, 2], :partner => [2, 1],
-        ], (0, 1)
+        ],
+        (0, 1)
     )
 end
 # F5. Refusal templates (section 8): one model per refused form, on F2's lattice.
-bad_expr(name::Symbol; energy = :((volume - 9.0)^2), update = :(w ~ 0.0)) = :(
-    @potts_model $name begin
-        @kinds medium cytoplasm nucleus
-        @parameters begin
-            ax = 1.0
+function bad_expr(name::Symbol; energy = :((volume - 9.0)^2), update = :(w ~ 0.0))
+    return :(
+        @potts_model $name begin
+            @kinds medium cytoplasm nucleus
+            @parameters begin
+                ax = 1.0
+            end
+            @variables begin
+                dd(cell) = 0.0
+                w(cell) = 0.0
+                F(site) = 0.0
+            end
+            @lattice Lattice(
+                (20, 12); boundary = (Periodic(), Closed()),
+                neighborhood = Moore(1)
+            )
+            @energy begin
+                cells => $energy
+                contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 0.5, 1.0)
+            end
+            @after_mcs $update
+            @sweep Metropolis(; temperature = 1.0)
         end
-        @variables begin
-            dd(cell) = 0.0
-            w(cell) = 0.0
-            F(site) = 0.0
-        end
-        @lattice Lattice((20, 12); boundary = (Periodic(), Closed()), neighborhood = Moore(1))
-        @energy begin
-            cells => $energy
-            contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 0.5, 1.0)
-        end
-        @after_mcs $update
-        @sweep Metropolis(; temperature = 1.0)
-    end
-)
+    )
+end
 function bad_op(sys)
     σ = zeros(Int32, 20, 12)
     σ[3:5, 3:5] .= 1
@@ -509,7 +581,11 @@ function check_writes(prob, u; atol)
         n == 0 && continue
         w = oracle_wrap(cc[1] - cn[1], 20, true)
         m = observe(prob, :mi, u)[c]
-        abs(abs(w) - 10) < 1.0e-6 ? (@test isapprox(abs(m), 10.0; atol)) : (@test isapprox(m, w; atol))   # a tie: up to sign (O2)
+        if abs(abs(w) - 10) < 1.0e-6
+            @test isapprox(abs(m), 10.0; atol)
+        else
+            @test isapprox(m, w; atol)
+        end   # a tie: up to sign (O2)
         @test isapprox(observe(prob, :ci, u)[c], oracle_cluster_sum(u, HELPER_F, c); atol)
     end
     return nothing
@@ -517,57 +593,90 @@ end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "cell reference helpers: the fixtures build" setup = [CellReferenceHelpersSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "cell reference helpers: the fixtures build" setup = [
+    CellReferenceHelpersSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 1. The fixtures build
     @testset "cell reference helpers: the fixtures build" begin
         # (the constructor runs the model body, where the new names are resolved)
-        builds(name) = try
-            system(name)
-            true
-        catch
-            false
+        function builds(name)
+            return try
+                system(name)
+                true
+            catch
+                false
+            end
         end
         for name in (:HelperPairs, :Refs, :Wrap, :HelperHex)
-            @test builds(name)                                       # DEFECT CHECK: `Pairs`, `minimum_image`, … unknown today
+            # DEFECT CHECK: `Pairs`, `minimum_image`, … unknown today
+            @test builds(name)
         end
         @test builds(:PairsMatrix)                              # CONTROL: the matrix twin
-        @test builds(:WrapRef)                                  # CONTROL: the explicit-wrap twin
+        # CONTROL: the explicit-wrap twin
+        @test builds(:WrapRef)
     end
 end
 
-@testitem "cell reference helpers: Pairs lowers to the hand-written matrix (E2)" setup = [CellReferenceHelpersSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "cell reference helpers: Pairs lowers to the hand-written matrix (E2)" setup = [
+    CellReferenceHelpersSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 2. Named pairs (E2)
     @testset "cell reference helpers: Pairs lowers to the hand-written matrix (E2)" begin
         pm = pairs_problem(:PairsMatrix)
         # CONTROL: the matrix twin carries the hand matrices
         @test getp(pm, :J)(pm) == J_hand()
         @test getp(pm, :μ)(pm) == μ_HAND
-        pp = pairs_problem(:HelperPairs)                        # DEFECT CHECK (the whole testset below)
-        @test getp(pp, :J)(pp) == J_hand()                     # symmetric fill, default 0, a parameter entry
-        @test getp(pp, :μ)(pp) == μ_HAND                       # symmetric = false: only the listed order
-        @test typeof(pp.p) == typeof(pm.p)                           # the same parameter object type …
-        @test pp.p == pm.p                                           # … and values: zero runtime cost
+        # DEFECT CHECK (the whole testset below)
+        pp = pairs_problem(:HelperPairs)
+        # symmetric fill, default 0, a parameter entry
+        @test getp(pp, :J)(pp) == J_hand()
+        # symmetric = false: only the listed order
+        @test getp(pp, :μ)(pp) == μ_HAND
+        # the same parameter object type …
+        @test typeof(pp.p) == typeof(pm.p)
+        # … and values: zero runtime cost
+        @test pp.p == pm.p
         @test total_energy(pp, pp.u0) == total_energy(pm, pm.u0)
         # a parameter entry follows remake on both sides of the diagonal
         pr = remake(pp; p = [:Jcn => 11.0])
         @test getp(pr, :J)(pr) == J_hand(11.0)
         @test getp(pr, :J)(pr)[3, 4] == 11.0 && getp(pr, :J)(pr)[4, 3] == 11.0
         # and the same trajectory as the matrix form
-        sp, sm = solve(pp, SequentialCPM(); saveat = 1), solve(pm, SequentialCPM(); saveat = 1)
-        @test all(i -> Array(sp.u[i].ownership) == Array(sm.u[i].ownership), eachindex(sm.u))
+        sp, sm = solve(pp, SequentialCPM(); saveat = 1),
+            solve(pm, SequentialCPM(); saveat = 1)
+        @test all(
+            i -> Array(sp.u[i].ownership) == Array(sm.u[i].ownership),
+            eachindex(sm.u)
+        )
     end
 end
 
-@testitem "cell reference helpers: Pairs refuses unknown names, non-kinds and pairs given twice (E2)" setup = [CellReferenceHelpersSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "cell reference helpers: Pairs refuses unknown names, non-kinds and pairs given twice (E2)" begin
+@testitem "cell reference helpers: Pairs refuses unknown names, non-kinds and pairs given \
+    twice (E2)" setup = [CellReferenceHelpersSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "cell reference helpers: Pairs refuses unknown names, non-kinds and pairs \
+        given twice (E2)" begin
         op = sys -> PAIRS_OP
         good_μ = μ_PAIRS
         bad(name, J) = build_error(name, pairs_expr(name, J, good_μ), op)
         # a misspelled kind
-        e1 = bad(:PairsTypo, :(J[kind, kind] = Pairs(default = 0.0, (medium, cytoplsm) => 1.0)))
-        @test e1 isa ArgumentError                                   # DEFECT CHECK (today: `Pairs` undefined)
+        e1 = bad(
+            :PairsTypo, :(
+                J[kind, kind] = Pairs(
+                    default = 0.0, (medium, cytoplsm) =>
+                        1.0
+                )
+            )
+        )
+        # DEFECT CHECK (today: `Pairs` undefined)
+        @test e1 isa ArgumentError
         @test occursin("cytoplsm", msg(e1))
         # a bound name that is not a kind (a parameter)
         e2 = bad(:PairsParam, :(J[kind, kind] = Pairs(default = 0.0, (medium, Jcn) => 1.0)))
@@ -593,32 +702,41 @@ end
             )
         )
         @test e4 isa ArgumentError                                   # DEFECT CHECK
-        # control: the same reversed pair is accepted with symmetric = false (given to μ, which
-        # the energy does not read, so the contact table J stays symmetric)
+        # control: the same reversed pair is accepted with symmetric = false (given to μ,
+        # which the energy does not read, so the contact table J stays symmetric)
         e5 = build_error(
             :PairsAsym, pairs_expr(
                 :PairsAsym, J_PAIRS,
                 :(
                     μ[kind, kind] = Pairs(
-                        (medium, substrate) => 1.0, (substrate, medium) => 2.0; default = 0.0,
+                        (medium, substrate) => 1.0, (substrate, medium) => 2.0;
+                        default = 0.0,
                         symmetric = false
                     )
                 )
-            ), op
+            ),
+            op
         )
-        @test e5 === nothing                                         # DEFECT CHECK (positive control of the rule)
+        # DEFECT CHECK (positive control of the rule)
+        @test e5 === nothing
     end
 end
 
-@testitem "cell reference helpers: the hand oracles' own checks" setup = [CellReferenceHelpersSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "cell reference helpers: the hand oracles' own checks" setup = [
+    CellReferenceHelpersSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 3. centroid(c, k), minimum_image, separation, integral(x; over = cluster): hand values
     @testset "cell reference helpers: the hand oracles' own checks" begin
         # CONTROL (passes today): the independent oracles reproduce the hand values
         σ = refs_sigma()
         C = c -> oracle_centroid(σ, c, DIMS, PER)
-        @test C(1) == (20.5, 4.0)                                    # across the seam: 19, 20, 21, 22 → 20.5
-        @test C(2) == (3.5, 3.5) && C(3) == (17.0, 11.0) && C(4) == (9.0, 9.0) && C(5) == (11.0, 8.5)
+        # across the seam: 19, 20, 21, 22 → 20.5
+        @test C(1) == (20.5, 4.0)
+        @test C(2) == (3.5, 3.5) && C(3) == (17.0, 11.0) && C(4) == (9.0, 9.0) &&
+            C(5) == (11.0, 8.5)
         @test C(6) == (14.5, 1.5)
         @test oracle_wrap(17.0, 20, true) == -3.0 && oracle_wrap(13.5, 20, true) == -6.5
         @test oracle_wrap(7.5, 12, false) == 7.5
@@ -628,24 +746,38 @@ end
     end
 end
 
-@testitem "cell reference helpers: centroid(c, k) reads another cell's centroid (hand values)" setup = [CellReferenceHelpersSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "cell reference helpers: centroid(c, k) reads another cell's centroid (hand values)" begin
-        prob = refs_problem()                                  # DEFECT CHECK (the whole testset)
+@testitem "cell reference helpers: centroid(c, k) reads another cell's centroid (hand \
+    values)" setup = [CellReferenceHelpersSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "cell reference helpers: centroid(c, k) reads another cell's centroid (hand \
+        values)" begin
+        # DEFECT CHECK (the whole testset)
+        prob = refs_problem()
         u = prob.u0
         @test vol(u)[1:6] == [12, 4, 1, 9, 2, 4]
-        @test observe(prob, :own1, u)[1:6] == [20.5, 3.5, 17.0, 9.0, 11.0, 14.5]   # centroid(k): today's convention
-        @test observe(prob, :cnx, u)[1:6] == [3.5, 3.5, 3.5, 11.0, 11.0, 0.0]      # no nucleus in cell 6's cluster → 0
+        # centroid(k): today's convention
+        @test observe(prob, :own1, u)[1:6] == [20.5, 3.5, 17.0, 9.0, 11.0, 14.5]
+        # no nucleus in cell 6's cluster → 0
+        @test observe(prob, :cnx, u)[1:6] == [3.5, 3.5, 3.5, 11.0, 11.0, 0.0]
         @test observe(prob, :cny, u)[1:6] == [3.5, 3.5, 3.5, 8.5, 8.5, 0.0]
         @test observe(prob, :clx, u)[1:6] == [17.0, 17.0, 17.0, 0.0, 0.0, 0.0]
         @test observe(prob, :cly, u)[1:6] == [11.0, 11.0, 11.0, 0.0, 0.0, 0.0]
-        @test observe(prob, :ccx, u)[1:6] == [20.5, 20.5, 20.5, 9.0, 9.0, 14.5]   # the seam cell, wrapped into [1, 21)
-        @test observe(prob, :tot, u) == 3.5 + 11.0                   # centroid(c, 1) over cells(nucleus)
+        # the seam cell, wrapped into [1, 21)
+        @test observe(prob, :ccx, u)[1:6] == [20.5, 20.5, 20.5, 9.0, 9.0, 14.5]
+        # centroid(c, 1) over cells(nucleus)
+        @test observe(prob, :tot, u) == 3.5 + 11.0
     end
 end
 
-@testitem "cell reference helpers: minimum_image (periodic and closed axes)" setup = [CellReferenceHelpersSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "cell reference helpers: minimum_image (periodic and closed axes)" setup = [
+    CellReferenceHelpersSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "cell reference helpers: minimum_image (periodic and closed axes)" begin
-        prob = refs_problem()                                  # DEFECT CHECK (the whole testset)
+        # DEFECT CHECK (the whole testset)
+        prob = refs_problem()
         u = prob.u0
         # centroid differences: the raw difference (negative control: not wrapped) …
         @test observe(prob, :raw, u)[1:5] == [17.0, 0.0, 13.5, -2.0, 0.0]
@@ -662,65 +794,113 @@ end
     end
 end
 
-@testitem "cell reference helpers: separation is the minimum-image centroid difference" setup = [CellReferenceHelpersSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "cell reference helpers: separation is the minimum-image centroid difference" begin
-        prob = refs_problem()                                  # DEFECT CHECK (the whole testset)
+@testitem "cell reference helpers: separation is the minimum-image centroid \
+    difference" setup = [CellReferenceHelpersSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "cell reference helpers: separation is the minimum-image centroid \
+        difference" begin
+        # DEFECT CHECK (the whole testset)
+        prob = refs_problem()
         u = prob.u0
-        # lamellipodium (17, 11) − nucleus (3.5, 3.5): x 13.5 → −6.5 (periodic), y 7.5 (closed)
+        # lamellipodium (17, 11) − nucleus (3.5, 3.5): x 13.5 → −6.5 (periodic), y 7.5
+        # (closed)
         @test observe(prob, :sepx, u)[1:3] == [-6.5, -6.5, -6.5]
         @test observe(prob, :sepy, u)[1:3] == [7.5, 7.5, 7.5]
         @test observe(prob, :sepn, u)[1:3] ≈ fill(sqrt(6.5^2 + 7.5^2), 3) atol = 1.0e-12
-        # cytoplasm − nucleus: A (20.5, 4) − (3.5, 3.5) → (−3, 0.5); B (9, 9) − (11, 8.5) → (−2, 0.5)
+        # cytoplasm − nucleus: A (20.5, 4) − (3.5, 3.5) → (−3, 0.5); B (9, 9) − (11, 8.5) →
+        # (−2, 0.5)
         @test observe(prob, :scx, u)[1:5] == [-3.0, -3.0, -3.0, -2.0, -2.0]
         @test observe(prob, :scy, u)[1:5] == [0.5, 0.5, 0.5, 0.5, 0.5]
-        @test observe(prob, :sncx, u)[1:5] == [3.0, 3.0, 3.0, 2.0, 2.0]   # antisymmetric (no tie)
+        # antisymmetric (no tie)
+        @test observe(prob, :sncx, u)[1:5] == [3.0, 3.0, 3.0, 2.0, 2.0]
         @test observe(prob, :scn, u)[[1, 4]] ≈ [sqrt(9.25), sqrt(4.25)] atol = 1.0e-12
     end
 end
 
-@testitem "cell reference helpers: integral(x; over = cluster) sums over the cluster's sites" setup = [CellReferenceHelpersSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "cell reference helpers: integral(x; over = cluster) sums over the cluster's sites" begin
-        prob = refs_problem()                                  # DEFECT CHECK (the whole testset)
+@testitem "cell reference helpers: integral(x; over = cluster) sums over the cluster's \
+    sites" setup = [CellReferenceHelpersSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "cell reference helpers: integral(x; over = cluster) sums over the cluster's \
+        sites" begin
+        # DEFECT CHECK (the whole testset)
+        prob = refs_problem()
         u = prob.u0
         @test observe(prob, :ci, u)[1:6] == [7457.0, 7457.0, 7457.0, 9903.0, 9903.0, 658.0]
-        @test observe(prob, :civ, u)[1:6] == [17.0, 17.0, 17.0, 11.0, 11.0, 4.0]   # Σ 1 = the cluster's volume
+        # Σ 1 = the cluster's volume
+        @test observe(prob, :civ, u)[1:6] == [17.0, 17.0, 17.0, 11.0, 11.0, 4.0]
         # the integrand is in site scope (ruling R1): `volume` is the site owner's, so the
-        # two-member cluster B (V₄ = 9, V₅ = 2) gives 9² + 2² = 85 for both members. Negative
-        # control (the other reading, the current cell's volume): (9 + 2)·9 = 99 for cell 4 and
-        # (9 + 2)·2 = 22 for cell 5. Cluster A: 12² + 4² + 1² = 161; lone cell 6: 4² = 16.
+        # two-member cluster B (V₄ = 9, V₅ = 2) gives 9² + 2² = 85 for both members.
+        # Negative control (the other reading, the current cell's volume): (9 + 2)·9 = 99
+        # for cell 4 and (9 + 2)·2 = 22 for cell 5. Cluster A: 12² + 4² + 1² = 161; lone
+        # cell 6: 4² = 16.
         cv = observe(prob, :cvol, u)
         @test cv[4:5] == [85.0, 85.0]
         @test cv[4] != 99.0 && cv[5] != 22.0
         @test cv[1:3] == [161.0, 161.0, 161.0] && cv[6] == 16.0
         oi = observe(prob, :own_int, u)
-        @test oi[1:6] == [4926.0, 1414.0, 1117.0, 8181.0, 1722.0, 658.0]           # integral(F), per cell
-        @test observe(prob, :ci, u)[6] == oi[6]                      # a lone cell: the cluster sum = integral
-        @test observe(prob, :ci, u)[1] == oi[1] + oi[2] + oi[3]      # the members' integrals add up
+        # integral(F), per cell
+        @test oi[1:6] == [4926.0, 1414.0, 1117.0, 8181.0, 1722.0, 658.0]
+        # a lone cell: the cluster sum = integral
+        @test observe(prob, :ci, u)[6] == oi[6]
+        # the members' integrals add up
+        @test observe(prob, :ci, u)[1] == oi[1] + oi[2] + oi[3]
         # plain `integral(x)` stays the cell sum (D-243 amendment): cell 1's own sites only,
         # not the cluster's (7457)
         @test oi[1] == 4926.0 && oi[1] != 7457.0
     end
 end
 
-@testitem "cell reference helpers: integral(x; over = …) refusals" setup = [CellReferenceHelpersSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "cell reference helpers: integral(x; over = …) refusals" setup = [
+    CellReferenceHelpersSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "cell reference helpers: integral(x; over = …) refusals" begin
         op = bad_op
         # an unknown `over =` value
-        eo = build_error(:BadOver, bad_expr(:BadOver; update = :(w ~ integral(F; over = lattice))), op)
+        eo = build_error(
+            :BadOver, bad_expr(
+                :BadOver; update = :(
+                    w ~
+                        integral(F; over = lattice)
+                )
+            ), op
+        )
         @test eo isa ArgumentError                                   # DEFECT CHECK
         @test occursin("over", msg(eo))
         # `over = cluster` outside a cell or cluster context (a site-scope update)
-        es = build_error(:BadOverSite, bad_expr(:BadOverSite; update = :(F ~ integral(F; over = cluster))), op)
-        @test es isa Potts.PottsCompileError                                   # DEFECT CHECK
+        es = build_error(
+            :BadOverSite, bad_expr(
+                :BadOverSite; update = :(
+                    F ~
+                        integral(F; over = cluster)
+                )
+            ), op
+        )
+        # DEFECT CHECK
+        @test es isa Potts.PottsCompileError
         @test occursin("integral", msg(es))
         # CONTROL (DEFECT CHECK today): `over = cluster` in a cell-scope update builds
-        eok = build_error(:OkOver, bad_expr(:OkOver; update = :(w ~ integral(F; over = cluster))), op)
+        eok = build_error(
+            :OkOver, bad_expr(
+                :OkOver; update = :(
+                    w ~
+                        integral(F; over = cluster)
+                )
+            ), op
+        )
         @test eok === nothing                                        # DEFECT CHECK
     end
 end
 
-@testitem "cell reference helpers: the Π_CN−N polarization of 14b Eq 10 from the helpers" setup = [CellReferenceHelpersSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "cell reference helpers: the Π_CN−N polarization of 14b Eq 10 from the helpers" begin
+@testitem "cell reference helpers: the Π_CN−N polarization of 14b Eq 10 from the \
+    helpers" setup = [CellReferenceHelpersSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "cell reference helpers: the Π_CN−N polarization of 14b Eq 10 from the \
+        helpers" begin
         prob = refs_problem()                                  # DEFECT CHECK
         u = prob.u0
         Π = observe(prob, :Πx, u)
@@ -730,25 +910,38 @@ end
     end
 end
 
-@testitem "cell reference helpers: a dead referent's centroid reads 0; the integral drops its sites" setup = [CellReferenceHelpersSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "cell reference helpers: a dead referent's centroid reads 0; the integral drops \
+    its sites" setup = [CellReferenceHelpersSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 4. Dead referents
-    @testset "cell reference helpers: a dead referent's centroid reads 0; the integral drops its sites" begin
-        prob = refs_problem()                                  # DEFECT CHECK (the whole testset)
+    @testset "cell reference helpers: a dead referent's centroid reads 0; the integral \
+        drops its sites" begin
+        # DEFECT CHECK (the whole testset)
+        prob = refs_problem()
         u = prob.u0
-        a = apply(prob, u, helper_prop(prob, u, 3, 0))          # the medium takes the lamellipodium's only site
+        # the medium takes the lamellipodium's only site
+        a = apply(prob, u, helper_prop(prob, u, 3, 0))
         @test vol(a)[3] == 0
-        @test observe(prob, :clx, a)[1:2] == [0.0, 0.0]              # dead referent → 0.0 (open, O4)
+        # dead referent → 0.0 (open, O4)
+        @test observe(prob, :clx, a)[1:2] == [0.0, 0.0]
         @test observe(prob, :cly, a)[1:2] == [0.0, 0.0]
         @test observe(prob, :ci, a)[1:2] == [7457.0 - 1117.0, 7457.0 - 1117.0]
         @test observe(prob, :civ, a)[1:2] == [16.0, 16.0]
-        @test observe(prob, :cnx, a)[1:2] == [3.5, 3.5]              # an alive referent is unaffected
+        # an alive referent is unaffected
+        @test observe(prob, :cnx, a)[1:2] == [3.5, 3.5]
     end
 end
 
-@testitem "cell reference helpers: after-MCS writes match @observed and the oracle (sequential and checkerboard)" setup = [CellReferenceHelpersSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "cell reference helpers: after-MCS writes match @observed and the oracle (sequential and checkerboard)" begin
-        for alg in (SequentialCPM(), CheckerboardCPM())              # DEFECT CHECK (the whole testset)
+@testitem "cell reference helpers: after-MCS writes match @observed and the oracle \
+    (sequential and checkerboard)" setup = [CellReferenceHelpersSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "cell reference helpers: after-MCS writes match @observed and the oracle \
+        (sequential and checkerboard)" begin
+        # DEFECT CHECK (the whole testset)
+        for alg in (SequentialCPM(), CheckerboardCPM())
             prob = refs_problem(; tspan = (0, 4), seed = 3)
             sol = solve(prob, alg; saveat = 1)
             @test Symbol(sol.retcode) === :Success
@@ -757,66 +950,110 @@ end
     end
 end
 
-@testitem "cell reference helpers: minimum_image in a drive and an energy equals the explicit wrap (bitwise)" setup = [CellReferenceHelpersSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "cell reference helpers: minimum_image in a drive and an energy equals the \
+    explicit wrap (bitwise)" setup = [CellReferenceHelpersSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 6. minimum_image in a drive and an energy, against the explicit-wrap twin
-    @testset "cell reference helpers: minimum_image in a drive and an energy equals the explicit wrap (bitwise)" begin
+    @testset "cell reference helpers: minimum_image in a drive and an energy equals the \
+        explicit wrap (bitwise)" begin
         pr = wrapref_problem()
         # CONTROL: the twin's cell term is the hand value μ Σ wrap(q − x0)²
         p0 = remake(pr; p = [:μ => 0.0])
         @test total_energy(pr, pr.u0) - total_energy(p0, p0.u0) == WRAP_CELL_TERM
-        # CONTROL (negative): without the wrap the twin's trajectory changes, so equality pins it
+        # CONTROL (negative): without the wrap the twin's trajectory changes, so equality
+        # pins it
         rr = solve(pr, SequentialCPM(); saveat = 1)
         rn = solve(wrapref_problem(; Lw = 1.0e6), SequentialCPM(); saveat = 1)
-        @test any(i -> Array(rr.u[i].ownership) != Array(rn.u[i].ownership), eachindex(rr.u))
+        @test any(
+            i -> Array(rr.u[i].ownership) != Array(rn.u[i].ownership),
+            eachindex(rr.u)
+        )
         pw = wrap_problem()                                    # DEFECT CHECK (the rest)
         @test total_energy(pw, pw.u0) == total_energy(pr, pr.u0)
         ctxw, ctxr = ctx(pw), ctx(pr)
         props = helper_props(pw, pw.u0)
-        @test all(p -> pw.f.bias(pw.u0, pw.p, p, ctxw) == pr.f.bias(pr.u0, pr.p, p, ctxr), props)
+        @test all(
+            p -> pw.f.bias(pw.u0, pw.p, p, ctxw) == pr.f.bias(pr.u0, pr.p, p, ctxr),
+            props
+        )
         @test all(p -> energy_change(pw, pw.u0, p) == energy_change(pr, pr.u0, p), props)
         for alg in (SequentialCPM(), CheckerboardCPM())
             sw = solve(pw, alg; saveat = 1)
             sr = solve(pr, alg; saveat = 1)
-            @test all(i -> Array(sw.u[i].ownership) == Array(sr.u[i].ownership), eachindex(sr.u))
+            @test all(
+                i -> Array(sw.u[i].ownership) == Array(sr.u[i].ownership),
+                eachindex(sr.u)
+            )
         end
     end
 end
 
-@testitem "cell reference helpers: separation on the periodic hexagonal lattice is the embedded nearest image" setup = [CellReferenceHelpersSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "cell reference helpers: separation on the periodic hexagonal lattice is the \
+    embedded nearest image" setup = [CellReferenceHelpersSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 7. The hexagonal torus
-    @testset "cell reference helpers: separation on the periodic hexagonal lattice is the embedded nearest image" begin
-        prob = hex_problem()                                   # DEFECT CHECK (the whole testset)
+    @testset "cell reference helpers: separation on the periodic hexagonal lattice is the \
+        embedded nearest image" begin
+        # DEFECT CHECK (the whole testset)
+        prob = hex_problem()
         u = prob.u0
         s3 = sqrt(3.0) / 2
-        @test observe(prob, :hx, u)[1:2] ≈ [-4.5, 4.5] atol = 1.0e-12  # a − b → image (−6, 3), embedded
+        # a − b → image (−6, 3), embedded
+        @test observe(prob, :hx, u)[1:2] ≈ [-4.5, 4.5] atol = 1.0e-12
         @test observe(prob, :hy, u)[1:2] ≈ [3s3, -3s3] atol = 1.0e-12
-        @test observe(prob, :hn, u)[1:2] ≈ fill(sqrt(27.0), 2) atol = 1.0e-12        # not √37 (per-axis wrap)
+        # not √37 (per-axis wrap)
+        @test observe(prob, :hn, u)[1:2] ≈ fill(sqrt(27.0), 2) atol = 1.0e-12
         # the same distance as CorePotts's centroid distance (the link-energy measure)
-        @test CorePotts.centroid_distance(Float64, u.cell, prob.lattice, 1, 2) ≈ sqrt(27.0) atol = 1.0e-12  # CONTROL
-        # centroid(c, k) is embedded, as centroid(k): b = (2, 2) → (3, √3), a = (6, 5) → (8.5, 5√3/2)
+        # CONTROL
+        @test CorePotts.centroid_distance(Float64, u.cell, prob.lattice, 1, 2) ≈
+            sqrt(27.0) atol = 1.0e-12
+        # centroid(c, k) is embedded, as centroid(k): b = (2, 2) → (3, √3), a = (6, 5) →
+        #     (8.5, 5√3/2)
         @test observe(prob, :hpx, u)[1:2] ≈ [3.0, 8.5] atol = 1.0e-12
         @test observe(prob, :hpy, u)[1:2] ≈ [2s3, 5s3] atol = 1.0e-12
     end
 end
 
-@testitem "cell reference helpers: refusals in energies and axis errors" setup = [CellReferenceHelpersSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "cell reference helpers: refusals in energies and axis errors" setup = [
+    CellReferenceHelpersSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 8. Refusals and axis errors (negative controls)
     @testset "cell reference helpers: refusals in energies and axis errors" begin
         op = bad_op
         # CONTROL (passes today): the harness sees today's refusals
-        e0 = build_error(:BadOld, bad_expr(:BadOld; energy = :((volume - 9.0)^2 + centroid(1))), op)
+        e0 = build_error(
+            :BadOld, bad_expr(
+                :BadOld; energy = :(
+                    (volume - 9.0)^2 +
+                        centroid(1)
+                )
+            ), op
+        )
         @test e0 isa Potts.PottsCompileError && occursin("centroid", msg(e0))
-        e00 = build_error(:BadOldAxis, bad_expr(:BadOldAxis; update = :(w ~ centroid(3))), op)
+        e00 = build_error(
+            :BadOldAxis, bad_expr(:BadOldAxis; update = :(w ~ centroid(3))),
+            op
+        )
         @test e00 isa Potts.PottsCompileError && occursin("centroid", msg(e00))
-        # CONTROL (DEFECT CHECK today): the template itself builds with the helpers in an update
+        # CONTROL (DEFECT CHECK today): the template itself builds with the helpers in an
+        # update
         eok = build_error(
             :BadNone, bad_expr(
                 :BadNone;
-                update = :(w ~ centroid(sibling(nucleus), 1) + minimum_image(dd, 1) + integral(F; over = cluster))
-            ), op
+                update = :(
+                    w ~
+                        centroid(sibling(nucleus), 1) + minimum_image(dd, 1) +
+                        integral(F; over = cluster)
+                )
+            ),
+            op
         )
         @test eok === nothing                                        # DEFECT CHECK
         # centroid(c, k) in an energy (no ΔH; D-032 until R7, open O5)
@@ -824,50 +1061,89 @@ end
             :BadCE, bad_expr(
                 :BadCE;
                 energy = :((volume - 9.0)^2 + centroid(sibling(nucleus), 1))
-            ), op
+            ),
+            op
         )
-        @test e1 isa Potts.PottsCompileError                                   # DEFECT CHECK
+        # DEFECT CHECK
+        @test e1 isa Potts.PottsCompileError
         @test occursin("centroid", msg(e1))
-        # integral(x; over = cluster) in an energy (refreshed once per MCS: no ΔH, as integral)
-        e2 = build_error(:BadCI, bad_expr(:BadCI; energy = :((volume - 9.0)^2 + integral(F; over = cluster))), op)
-        @test e2 isa Potts.PottsCompileError                                   # DEFECT CHECK
+        # integral(x; over = cluster) in an energy (refreshed once per MCS: no ΔH, as
+        #     integral)
+        e2 = build_error(
+            :BadCI,
+            bad_expr(:BadCI; energy = :((volume - 9.0)^2 + integral(F; over = cluster))),
+            op
+        )
+        # DEFECT CHECK
+        @test e2 isa Potts.PottsCompileError
         @test occursin("integral", msg(e2))
         # axes: not an axis of the 2D lattice, and not a literal
-        e3 = build_error(:BadCA, bad_expr(:BadCA; update = :(w ~ centroid(sibling(nucleus), 3))), op)
-        @test e3 isa Potts.PottsCompileError                                   # DEFECT CHECK
+        e3 = build_error(
+            :BadCA, bad_expr(
+                :BadCA; update = :(
+                    w ~
+                        centroid(sibling(nucleus), 3)
+                )
+            ), op
+        )
+        # DEFECT CHECK
+        @test e3 isa Potts.PottsCompileError
         @test occursin("centroid", msg(e3))
         e4 = build_error(:BadMA, bad_expr(:BadMA; update = :(w ~ minimum_image(dd, 3))), op)
-        @test e4 isa Potts.PottsCompileError                                   # DEFECT CHECK
+        # DEFECT CHECK
+        @test e4 isa Potts.PottsCompileError
         @test occursin("minimum_image", msg(e4))
-        e5 = build_error(:BadML, bad_expr(:BadML; update = :(w ~ minimum_image(dd, ax))), op)
-        @test e5 isa Potts.PottsCompileError                                   # DEFECT CHECK
+        e5 = build_error(
+            :BadML, bad_expr(:BadML; update = :(w ~ minimum_image(dd, ax))),
+            op
+        )
+        # DEFECT CHECK
+        @test e5 isa Potts.PottsCompileError
         @test occursin("minimum_image", msg(e5))
     end
 end
 
-@testitem "cell reference helpers: the helpers on the device" setup = [CellReferenceHelpersSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "cell reference helpers: the helpers on the device" setup = [
+    CellReferenceHelpersSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 9. Device
     @testset "cell reference helpers: the helpers on the device" begin
         if PottsDevices.on_device()
             backend = PottsDevices.device_backend()
             alg = CheckerboardCPM(; proposal = Moore(1))
-            # after-MCS writes of centroid(c, k), minimum_image, separation, integral(x; over = cluster)
+            # after-MCS writes of centroid(c, k), minimum_image, separation, integral(x;
+            # over = cluster)
             prob = refs_problem(; tspan = (0, 4), seed = 3, T = Float32)
             sol = solve(prob, alg; backend, saveat = 1)
             @test Symbol(sol.retcode) === :Success
             check_writes(prob, sol.u[end]; atol = 1.0e-3)
-            # minimum_image in a drive and an energy: bitwise equal to the explicit wrap on the
-            # device (every value is dyadic, so Float32 is exact)
+            # minimum_image in a drive and an energy: bitwise equal to the explicit wrap on
+            # the device (every value is dyadic, so Float32 is exact)
             sw = solve(wrap_problem(; T = Float32), alg; backend, saveat = 1)
             sr = solve(wrapref_problem(; T = Float32), alg; backend, saveat = 1)
             @test Symbol(sw.retcode) === :Success
-            @test all(i -> Array(sw.u[i].ownership) == Array(sr.u[i].ownership), eachindex(sr.u))
+            @test all(
+                i -> Array(sw.u[i].ownership) == Array(sr.u[i].ownership),
+                eachindex(sr.u)
+            )
             # named pairs on the device: the same trajectory as the matrix form
-            pp = PottsProblem(system(:HelperPairs; sysname = :pr), PAIRS_OP, (0, 3); seed = 1, T = Float32)
-            pm = PottsProblem(system(:PairsMatrix; sysname = :pr), PAIRS_OP, (0, 3); seed = 1, T = Float32)
-            sp, sm = solve(pp, alg; backend, saveat = 1), solve(pm, alg; backend, saveat = 1)
-            @test all(i -> Array(sp.u[i].ownership) == Array(sm.u[i].ownership), eachindex(sm.u))
+            pp = PottsProblem(
+                system(:HelperPairs; sysname = :pr),
+                PAIRS_OP, (0, 3); seed = 1, T = Float32
+            )
+            pm = PottsProblem(
+                system(:PairsMatrix; sysname = :pr),
+                PAIRS_OP, (0, 3); seed = 1, T = Float32
+            )
+            sp, sm = solve(pp, alg; backend, saveat = 1),
+                solve(pm, alg; backend, saveat = 1)
+            @test all(
+                i -> Array(sp.u[i].ownership) == Array(sm.u[i].ownership),
+                eachindex(sm.u)
+            )
         else
             @test_skip "device (POTTS_GPU=metal|rocm)"
         end

@@ -44,7 +44,8 @@ _model_id(name) = "model-" * replace(name, "_" => "-")
 function _with_model_id(src, name)
     lines = String.(split(src, '\n'))
     i = findfirst(l -> startswith(l, "# # "), lines)
-    (i === nothing || occursin("(@id ", lines[i])) && return src, occursin("(@id $(_model_id(name)))", src)
+    (i === nothing || occursin("(@id ", lines[i])) &&
+        return src, occursin("(@id $(_model_id(name)))", src)
     lines[i] = "# # [" * strip(lines[i][5:end]) * "](@id $(_model_id(name)))"
     return join(lines, '\n'), true
 end
@@ -60,23 +61,27 @@ if WITH_PUBLISHED
         endswith(f, ".jl") || continue
         stem = splitext(f)[1]
         k = findfirst(p -> p[1] == stem, PAPER_PAGES)
-        Literate.markdown(joinpath(REPRODUCTIONS, f), PUBLISHED; documenter = true, credit = false,
-            preprocess = s -> begin
-                k === nothing && return s
-                s, ok = _with_model_id(s, PAPER_PAGES[k][2])
-                ok && push!(has_model_id, stem)
-                s
-            end)
+        pre = s -> begin
+            k === nothing && return s
+            s, ok = _with_model_id(s, PAPER_PAGES[k][2])
+            ok && push!(has_model_id, stem)
+            s
+        end
+        kw = (; documenter = true, credit = false, preprocess = pre)
+        Literate.markdown(joinpath(REPRODUCTIONS, f), PUBLISHED; kw...)
         push!(published, joinpath("published", stem * ".md"))
     end
     # the old index page of the "Published models" section, now a page linking onward
-    write(joinpath(PUBLISHED, "index.md"), """
-    # [Published models (moved)](@id published-models)
+    write(
+        joinpath(PUBLISHED, "index.md"), """
+        # [Published models (moved)](@id published-models)
 
-    !!! note "This section has moved"
-        The reproduction pages are now in the **Paper models** section, one page per paper,
-        listed on [Paper models: status](../status.md). Their addresses are unchanged.
-    """)
+        !!! note "This section has moved"
+            The reproduction pages are now in the **Paper models** section, one page per \
+        paper,
+            listed on [Paper models: status](../status.md). Their addresses are unchanged.
+        """
+    )
 end
 
 # The model pages (`docs/models/render.jl`): a model whose reproduction page is built gets a
@@ -92,8 +97,10 @@ let built = Set(basename.(published))
         elseif !has_model_page
             continue
         elseif stem * ".md" in built
-            render_model_stub(name, joinpath("published", stem * ".md"), title;
-                id = stem in has_model_id ? nothing : _model_id(name))
+            render_model_stub(
+                name, joinpath("published", stem * ".md"), title;
+                id = stem in has_model_id ? nothing : _model_id(name)
+            )
             push!(paper_pages, title => joinpath("published", stem * ".md"))
         else
             append!(rendered, render_models(; names = [name]))
@@ -125,9 +132,11 @@ const MODEL_PAGE_NAMES = let names = Set{Symbol}()
 end
 on_model_page(x) = x isa Union{Function, Type} && nameof(x) in MODEL_PAGE_NAMES
 
-# CorePotts' interface for model compilers (`CorePotts.MODEL_COMPILER_INTERFACE`): public, but
-# listed apart from the modeling API on the API page
-corepotts_interface(x) = any(n -> getfield(CorePotts, n) === x, CorePotts.MODEL_COMPILER_INTERFACE)
+# CorePotts' interface for model compilers (`CorePotts.MODEL_COMPILER_INTERFACE`): public,
+# but listed apart from the modeling API on the API page
+function corepotts_interface(x)
+    return any(n -> getfield(CorePotts, n) === x, CorePotts.MODEL_COMPILER_INTERFACE)
+end
 
 const PAPER_RUNS = joinpath(SRC, "assets", "paper_runs")
 
@@ -148,13 +157,23 @@ note instead. Used by the tutorials as `Main.paper_run(…) # hide` in an `@exam
 """
 function paper_run(stem::AbstractString, prefix::AbstractString = "")
     video = joinpath(PAPER_RUNS, stem * ".mp4")
-    isfile(video) || return Base.Docs.HTML("<p><em>The full paper run of this model is being generated " *
-                                           "and will appear here.</em></p>")
+    isfile(video) || return Base.Docs.HTML(
+        "<p><em>The full paper run of this model is being generated " *
+            "and will appear here.</em></p>"
+    )
     side = joinpath(PAPER_RUNS, stem * ".toml")
     caption = isfile(side) ? strip(get(TOML.parsefile(side), "caption", "")) : ""
-    esc_html(s) = replace(String(s), "&" => "&amp;", "<" => "&lt;", ">" => "&gt;", "*" => "&#42;", "_" => "&#95;")  # `*`/`_` would read as emphasis
-    return Base.Docs.HTML("""<figure><video src="$(prefix)assets/paper_runs/$stem.mp4" controls loop muted playsinline width="480"></video>""" *
-                          "<figcaption>$(esc_html(caption))</figcaption></figure>")
+    function esc_html(s)
+        return replace(
+            String(s), "&" => "&amp;", "<" => "&lt;",
+            ">" => "&gt;", "*" => "&#42;", "_" => "&#95;"
+        )
+    end  # `*`/`_` would read as emphasis
+    return Base.Docs.HTML(
+        """<figure><video src="$(prefix)assets/paper_runs/$stem.mp4" controls loop muted \
+        playsinline width="480"></video>""" *
+            "<figcaption>$(esc_html(caption))</figcaption></figure>"
+    )
 end
 
 tutorials = [
@@ -195,8 +214,8 @@ manual = [
     "manual/plotting.md",
 ]
 
-# `models/index.md` and `published/index.md` (the old section index pages) are built at their
-# old URLs but are not in the navigation.
+# `models/index.md` and `published/index.md` (the old section index pages) are built at
+# their old URLs but are not in the navigation.
 pages = Any[
     "Home" => "index.md",
     "Getting started" => "getting_started.md",
@@ -205,20 +224,27 @@ pages = Any[
     "Workshop" => "workshop.md",
     "Manual" => manual,
 ]
-append!(pages, Any[
-    "Coming from CompuCell3D or Morpheus" => "coming_from.md",
-    "FAQ and common errors" => "faq.md",
-    "Relation to ModelingToolkit" => "modelingtoolkit.md",
-    "API" => "api.md",
-    "Roadmap" => "roadmap.md",
-])
+append!(
+    pages, Any[
+        "Coming from CompuCell3D or Morpheus" => "coming_from.md",
+        "FAQ and common errors" => "faq.md",
+        "Relation to ModelingToolkit" => "modelingtoolkit.md",
+        "API" => "api.md",
+        "Roadmap" => "roadmap.md",
+    ]
+)
 
 makedocs(;
     sitename = "Potts.jl",
-    modules = [Potts, CorePotts, Potts.LatticePDE, PottsModels, PottsModels.Analysis, MakiePotts],
+    modules = [
+        Potts, CorePotts, Potts.LatticePDE, PottsModels, PottsModels.Analysis, MakiePotts,
+    ],
     remotes = nothing,
-    format = Documenter.HTML(; prettyurls = true, edit_link = nothing, repolink = nothing,
-        size_threshold = nothing, size_threshold_warn = nothing),
+    format = Documenter.HTML(;
+        prettyurls = true, edit_link = nothing, repolink = nothing,
+        size_threshold = nothing, size_threshold_warn = nothing
+    ),
     checkdocs = :exports,
     doctest = true,
-    pages)
+    pages
+)

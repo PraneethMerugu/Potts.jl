@@ -6,7 +6,8 @@ compiler. This file holds only `include` lines; each layer is a submodule in its
 own directory.
 
   - [`Exec`](@ref LatticeFields.Exec): the host executor, the generic device wrapper,
-    prebuilt launches, plan walks and parallel compile. CorePotts runs its kernels through it.
+    prebuilt launches, plan walks and parallel compile. CorePotts runs its kernels through
+    it.
   - `IR`: the host-side field IR and its builder.
   - `Compile`: the passes from the semantic normal form to emitted bodies.
   - `Schedule`: step order, cost-model fusion and launch descriptions.

@@ -1,10 +1,11 @@
 # Definitions of schedule/fusion_tests.jl that other test files use.
 using LatticeFields.Schedule: traffic, modeled_time, working_set, merge_kernels, step_order,
-                              fusion_report, CostModel
+    fusion_report, CostModel
 
 """
 K masked-Helmholtz smoother components sharing one byte mask (6 streams each: u stencil,
-u_prev, b, uⁿ, mask, out), the launch-bound and DRAM test family of the field-kernel benchmarks.
+u_prev, b, uⁿ, mask, out), the launch-bound and DRAM test family of the field-kernel
+benchmarks.
 """
 function smoother(dims, K)
     N = length(dims)
@@ -12,14 +13,19 @@ function smoother(dims, K)
     m = mask!(pb, "kind")
     offs = [ntuple(e -> e == d ? s : 0, N) for d in 1:N for s in (-1, 1)]
     for k in 1:K
-        u, up, b, un = (field!(pb, "$(x)$k"; role = :input) for x in ("u", "uprev", "b", "un"))
+        u, up, b, un = (
+            field!(pb, "$(x)$k"; role = :input)
+                for x in ("u", "uprev", "b", "un")
+        )
         out = field!(pb, "out$k"; role = :output)
         kb = kernel(pb)
         c = load(kb, u)
         Au = 2N * c - sum(load(kb, u; offset = o) for o in offs)
         r = load(kb, b) - param(kb, 1) * Au - param(kb, 2) * load(kb, up)
-        live = select(eq(load(kb, m), IR.constant(kb, 0, U8)), c, load(kb, un) +
-                                                                  param(kb, 3) * r)
+        live = select(
+            eq(load(kb, m), IR.constant(kb, 0, U8)), c, load(kb, un) +
+                param(kb, 3) * r
+        )
         store(kb, out, live)
         add!(pb, kb, "smooth$k")
     end
@@ -40,8 +46,11 @@ function residual(dims, K)
         kb = kernel(pb)
         c = load(kb, u)
         res = load(kb, b) -
-              param(kb, 1) * (2N * c - sum(load(kb, u; offset = o) for o in offs))
-        store(kb, r, select(eq(load(kb, m), IR.constant(kb, 0, U8)), IR.constant(kb, 0), res))
+            param(kb, 1) * (2N * c - sum(load(kb, u; offset = o) for o in offs))
+        store(
+            kb, r,
+            select(eq(load(kb, m), IR.constant(kb, 0, U8)), IR.constant(kb, 0), res)
+        )
         add!(pb, kb, "residual$k")
     end
     return semantic(program(pb))
@@ -57,8 +66,10 @@ function restrict(dims, K)
         r = field!(pb, "r$k"; role = :input)
         rc = field!(pb, "rc$k"; role = :output, levels = [1])
         kb = kernel(pb, Space{N}(; level = 1))
-        kids = [load(kb, r; level = -1, offset = Tuple(o) .- 1)
-                for o in CartesianIndices(ntuple(_ -> 2, N))]
+        kids = [
+            load(kb, r; level = -1, offset = Tuple(o) .- 1)
+                for o in CartesianIndices(ntuple(_ -> 2, N))
+        ]
         store(kb, rc, sum(kids) * (1 / 2^N))
         add!(pb, kb, "restrict$k")
     end
@@ -78,8 +89,12 @@ function prolong(dims, K)
         out = field!(pb, "out$k"; role = :output)
         kb = kernel(pb)
         c = load(kb, u)
-        store(kb, out, select(eq(load(kb, m), IR.constant(kb, 0, U8)), c, c +
-                                                                          load(kb, e; level = 1)))
+        store(
+            kb, out, select(
+                eq(load(kb, m), IR.constant(kb, 0, U8)), c, c +
+                    load(kb, e; level = 1)
+            )
+        )
         add!(pb, kb, "prolong$k")
     end
     return semantic(program(pb))
@@ -116,13 +131,21 @@ end
 
 # Negative-control rules the cost model replaces.
 function shares_read(s)
-    (rs = [Set((a.field, a.level) for a in k.accesses) for k in s.kernels];
-        !isempty(intersect(rs...)))
+    (
+        rs = [Set((a.field, a.level) for a in k.accesses) for k in s.kernels];
+        !isempty(intersect(rs...))
+    )
 end
 function stream_cap_ok(s, cap)
-    length(traffic(s,
-        merge_kernels(s, collect(eachindex(s.kernels)),
-            Dict(i => i for i in eachindex(s.kernels)))).arrays) <= cap
+    return length(
+        traffic(
+            s,
+            merge_kernels(
+                s, collect(eachindex(s.kernels)),
+                Dict(i => i for i in eachindex(s.kernels))
+            )
+        ).arrays
+    ) <= cap
 end
 
 """

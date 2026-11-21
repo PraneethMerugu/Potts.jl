@@ -41,8 +41,11 @@ function rejection(f, words...)
         f()
     catch e
         e isa LoadError && (e = e.error)
-        e isa Union{ArgumentError, Potts.PottsCompileError} || return "not an ArgumentError or PottsCompileError: $(typeof(e)): $(first(sprint(showerror, e), 300))"
-        isempty(words) || occursin(first(words), sprint(showerror, e)) || return "message does not contain $(first(words))"
+        e isa Union{ArgumentError, Potts.PottsCompileError} ||
+            return "not an ArgumentError or \
+                PottsCompileError: $(typeof(e)): $(first(sprint(showerror, e), 300))"
+        isempty(words) || occursin(first(words), sprint(showerror, e)) ||
+            return "message does not contain $(first(words))"
         return :ok
     end
     return "accepted silently"
@@ -56,7 +59,8 @@ function field_pde()
     W = w(t, x, y)
     return Potts.ModelingToolkitBase.PDESystem(
         [Potts.D(W) ~ src(t, x, y) - W], [w(0, x, y) ~ 0.0],
-        L.lattice_domain(t, (x, y), (10, 10)), [t, x, y], [W, src(t, x, y)], Any[]; name = :prime_field
+        L.lattice_domain(t, (x, y), (10, 10)), [t, x, y], [W, src(t, x, y)], Any[];
+        name = :prime_field
     )
 end
 const ONE = (s = zeros(Int32, 10, 10); s[3:5, 3:5] .= 1; s)
@@ -69,9 +73,13 @@ end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "prime errors: primes of non-site variables" setup = [PrimeErrorsSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "prime errors: primes of non-site variables" setup = [PrimeErrorsSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "prime errors: primes of non-site variables" begin
-        @testset "`m′` of a cell variable is rejected where it is written ($where)" for (where, stmt) in [
+        @testset "`m′` of a cell variable is rejected where it is written ($where)" for (
+                where, stmt,
+            ) in [
                 "contact energy" => :(@energy contacts => J[kind, neighbor_kind] + m′),
                 "cell energy" => :(@energy cells(A) => m′ * volume),
                 "drive" => :(@drive copy => m′),
@@ -79,29 +87,47 @@ end
                 "update" => :(@after_mcs m ~ m′ + 1),
                 "on-copy update" => :(@on_copy c ~ m′),
                 "field input binding" => :(@fields field_pde() (:src => m′)),
-                "observed" => :(@observed q ~ m′),
+                "observed" => :(@observed q ~ m′)
             ]
             @test rejection(() -> mtkcompile(prime_model(stmt)), "m′", PHRASE) === :ok
         end
 
         @testset "`g′` of a model variable is rejected" begin
             @test rejection(
-                () -> mtkcompile(prime_model(:(@energy contacts => J[kind, neighbor_kind] + g′))),
+                () -> mtkcompile(
+                    prime_model(
+                        :(
+                            @energy contacts =>
+                                J[kind, neighbor_kind] + g′
+                        )
+                    )
+                ),
                 "g′", PHRASE
             ) === :ok
-            @test rejection(() -> mtkcompile(prime_model(:(@after_mcs g ~ g′ + 1))), "g′", PHRASE) === :ok
+            @test rejection(
+                () -> mtkcompile(prime_model(:(@after_mcs g ~ g′ + 1))), "g′",
+                PHRASE
+            ) ===
+                :ok
         end
 
-        @testset "a programmatic PottsSystem may not declare `c′` next to a site variable `c`" begin
+        @testset "a programmatic PottsSystem may not declare `c′` next to a site variable \
+            `c`" begin
             base = prime_model()
             t = Potts.t
             # a cell variable named `c′`
             cprime = Potts.variable(only(Potts.Symbolics.@variables c′(t)), :cell)
             @test rejection("c′") do
                 sys = PottsSystem(;
-                    name = :prog, kinds = getfield(getfield(base, :part), :kinds), lattice = Potts.lattice(base),
-                    parameters = Potts.declared_parameters(base), variables = [Potts.declared_variables(base); cprime],
-                    energies = getfield(getfield(base, :part), :energies), sweep = getfield(getfield(base, :part), :sweep)
+                    name = :prog, kinds = getfield(getfield(base, :part), :kinds),
+                    lattice = Potts.lattice(base),
+                    parameters = Potts.declared_parameters(base), variables = [
+                        Potts.declared_variables(base);
+                        cprime
+                    ],
+                    energies = getfield(getfield(base, :part), :energies), sweep = getfield(
+                        getfield(base, :part), :sweep
+                    )
                 )
                 mtkcompile(sys)
             end === :ok
@@ -109,17 +135,25 @@ end
             pprime = Potts.parameter(Symbol("c′"), 1.0)
             @test rejection("c′") do
                 sys = PottsSystem(;
-                    name = :prog, kinds = getfield(getfield(base, :part), :kinds), lattice = Potts.lattice(base),
-                    parameters = [Potts.declared_parameters(base); pprime], variables = Potts.declared_variables(base),
-                    energies = getfield(getfield(base, :part), :energies), sweep = getfield(getfield(base, :part), :sweep)
+                    name = :prog, kinds = getfield(getfield(base, :part), :kinds),
+                    lattice = Potts.lattice(base),
+                    parameters = [Potts.declared_parameters(base); pprime],
+                    variables = Potts.declared_variables(base),
+                    energies = getfield(getfield(base, :part), :energies), sweep = getfield(
+                        getfield(base, :part), :sweep
+                    )
                 )
                 mtkcompile(sys)
             end === :ok
             # control: the same programmatic rebuild without the clash builds and runs
             ok = PottsSystem(;
-                name = :prog, kinds = getfield(getfield(base, :part), :kinds), lattice = Potts.lattice(base),
-                parameters = Potts.declared_parameters(base), variables = Potts.declared_variables(base),
-                energies = getfield(getfield(base, :part), :energies), sweep = getfield(getfield(base, :part), :sweep)
+                name = :prog, kinds = getfield(getfield(base, :part), :kinds),
+                lattice = Potts.lattice(base),
+                parameters = Potts.declared_parameters(base),
+                variables = Potts.declared_variables(base),
+                energies = getfield(getfield(base, :part), :energies), sweep = getfield(
+                    getfield(base, :part), :sweep
+                )
             )
             @test prime_runs(ok)
         end
@@ -130,12 +164,20 @@ end
 
         @testset "negative controls" begin
             # D-061: `c′` of a site variable in a contact energy still builds and runs
-            @test prime_runs(prime_model(:(@energy contacts => J[kind, neighbor_kind] + (c + c′) / 2)))
+            @test prime_runs(
+                prime_model(
+                    :(
+                        @energy contacts =>
+                            J[kind, neighbor_kind] + (c + c′) / 2
+                    )
+                )
+            )
             # an unprimed cell variable still works in energies and updates
             @test prime_runs(prime_model(:(@energy cells(A) => 0.1 * m * volume)))
             @test prime_runs(prime_model(:(@after_mcs m ~ m + 1)))
             # a primed site variable outside a contact term keeps its own (existing) error
-            @test rejection(() -> mtkcompile(prime_model(:(@energy cells(A) => c′)))) === :ok
+            @test rejection(() -> mtkcompile(prime_model(:(@energy cells(A) => c′)))) ===
+                :ok
         end
     end
 end

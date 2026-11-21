@@ -58,13 +58,13 @@
 # Tiers.
 # - always: the peak rule and the V4 verdicts on synthetic pools with known answers.
 # - SMOKE (the default; under a minute plus one model compilation): 2 + 2 runs to 300 cells
-#   on 240 × 240; the O2 rows are consistent and the rules evaluate; the γ = 1e-4 control has
-#   a higher mean a than case (b) (the mechanism the control rests on).
+#   on 240 × 240; the O2 rows are consistent and the rules evaluate; the γ = 1e-4 control
+#   has a higher mean a than case (b) (the mechanism the control rests on).
 # - FULL record (always, cheap): reads the committed D-146 record
 #   `reproductions/data/15/f5-2026-10-07/` (`runs.tsv`, `hist.tsv`), recomputes every V4
-#   row from it with the rules of this file, and requires V4 to pass for case (b) and to fail
-#   (on V4.4 and V4.6) for the control. A failing case (b) row must instead appear in the
-#   record's `deviations.tsv` (D-154: our value | paper's value | suspected cause |
+#   row from it with the rules of this file, and requires V4 to pass for case (b) and to
+#   fail (on V4.4 and V4.6) for the control. A failing case (b) row must instead appear in
+#   the record's `deviations.tsv` (D-154: our value | paper's value | suspected cause |
 #   author-question status), and the row is then `@test_broken`.
 # - FULL (POTTS_FULL_REPRODUCTION=true or REPRO=full, offline, D-146): reruns the 100 + 20
 #   runs and requires the same verdicts.
@@ -73,11 +73,12 @@
 include(joinpath(@__DIR__, "..", "shared", "common.jl"))
 using Potts, PottsModels, Test
 using Statistics: mean
-const RUNS_FULL = get(ENV, "POTTS_FULL_REPRODUCTION", "false") == "true" || get(ENV, "REPRO", "") == "full"
+const RUNS_FULL = get(ENV, "POTTS_FULL_REPRODUCTION", "false") == "true" ||
+    get(ENV, "REPRO", "") == "full"
 const RECORD = joinpath(pkgdir(PottsModels), "reproductions", "data", "15", "f5-2026-10-07")
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # V4 (spec 15 §4.1), verbatim, and the pass bands (test author)
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 const V4_PAPER = (
     f0 = "≈ 0.89", f_peak = "0.25–0.35", f_max = "≤ 0.56", a_peak = "0.85–0.90",
     a_range = "0.42–1.09", a_mean = "0.85–0.86", f_mean = "≈ 0.03",
@@ -104,9 +105,9 @@ runs_seed(k) = 15_000 + k
 seed_ctl(k) = 15_500 + k
 seed_smoke(k) = 95_000 + k
 const ALG = SequentialCPM(; proposal = Moore(1))
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # The rules
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 runs_bin(x) = floor(Int, 100x + 1.0e-9)
 # 0-based bin of width 0.01
 function runs_hist(xs)
@@ -118,23 +119,33 @@ function runs_hist(xs)
     end
     return h
 end
-# the peak: centre of the bin with the largest centred 5-bin running mean; `skip0` drops bin 0
+# the peak: centre of the bin with the largest centred 5-bin running mean; `skip0` drops bin
+# 0
 function runs_peak(h; skip0 = false)
     g = copy(h)
     skip0 && (g[1] = 0)
     n = length(g)
-    s = [sum(g[max(1, k - 2):min(n, k + 2)]) / (min(n, k + 2) - max(1, k - 2) + 1) for k in 1:n]
+    s = [
+        sum(g[max(1, k - 2):min(n, k + 2)]) / (min(n, k + 2) - max(1, k - 2) + 1)
+            for k in 1:n
+    ]
     return (argmax(s) - 0.5) / 100
 end
 # Pooled summary of a set of cells: everything V4 reads
-runs_summary(f, a) = (;
-    n = length(f), n_f0 = count(==(0), f), sum_f = sum(f; init = 0.0),
-    sum_a = sum(a; init = 0.0), f_max = maximum(f), a_min = minimum(a), a_max = maximum(a),
-    hf = runs_hist(f), ha = runs_hist(a),
-)
+function runs_summary(f, a)
+    return (;
+        n = length(f), n_f0 = count(==(0), f), sum_f = sum(f; init = 0.0),
+        sum_a = sum(a; init = 0.0), f_max = maximum(f), a_min = minimum(a),
+        a_max = maximum(a),
+        hf = runs_hist(f), ha = runs_hist(a),
+    )
+end
 function runs_merge(ss)
     return (;
-        n = sum(s.n for s in ss), n_f0 = sum(s.n_f0 for s in ss), sum_f = sum(s.sum_f for s in ss),
+        n = sum(s.n for s in ss), n_f0 = sum(s.n_f0 for s in ss), sum_f = sum(
+            s.sum_f
+                for s in ss
+        ),
         sum_a = sum(s.sum_a for s in ss), f_max = maximum(s.f_max for s in ss),
         a_min = minimum(s.a_min for s in ss), a_max = maximum(s.a_max for s in ss),
         hf = sum(s.hf for s in ss), ha = sum(s.ha for s in ss),
@@ -152,7 +163,8 @@ function runs_v4(s)
     )
     B = BAND
     ok = (
-        f0 = runs_in(v.f0, B.f0), f_peak = runs_in(v.f_peak, B.f_peak), f_max = runs_in(v.f_max, B.f_max),
+        f0 = runs_in(v.f0, B.f0), f_peak = runs_in(v.f_peak, B.f_peak),
+        f_max = runs_in(v.f_max, B.f_max),
         a_peak = runs_in(v.a_peak, B.a_peak),
         a_range = runs_in(v.a_min, B.a_min) && runs_in(v.a_max, B.a_max),
         a_mean = runs_in(v.a_mean, B.a_mean), f_mean = runs_in(v.f_mean, B.f_mean),
@@ -162,14 +174,22 @@ end
 # One run of case (b) (γ = 0) or the control (γ > 0): the O2 rows of the stopping state
 function problem(L)
     sys = OpenVTReferenceMonolayer(; name = Symbol(:runs_m, L), lattice = (L, L))
-    return PottsProblem(sys, openvt_reference_state(; lattice = (L, L)), (0, 100_000); capacity = 1500, seed = 1)
+    return PottsProblem(
+        sys, openvt_reference_state(; lattice = (L, L)),
+        (0, 100_000); capacity = 1500, seed = 1
+    )
 end
 function runs_run(prob, seed, γ; cells = CELLS)
     sol = solve(
         remake(prob; seed, p = [:γ => γ]), ALG;
-        callback = Potts.CorePotts.CallbackSet(PottsModels.stop_at_cells(cells), PottsModels.edge_guard(5; terminate = true))
+        callback = Potts.CorePotts.CallbackSet(
+            PottsModels.stop_at_cells(cells), PottsModels.edge_guard(5; terminate = true)
+        )
     )
-    return (; retcode = Symbol(sol.retcode), mcs = sol.t[end], rows = PottsModels.openvt_snapshot(sol.u[end]))
+    return (;
+        retcode = Symbol(sol.retcode), mcs = sol.t[end],
+        rows = PottsModels.openvt_snapshot(sol.u[end]),
+    )
 end
 function ensemble_runs(prob, seeds, γ; cells = CELLS)
     out = Vector{Any}(undef, length(seeds))
@@ -178,9 +198,9 @@ function ensemble_runs(prob, seeds, γ; cells = CELLS)
     end
     return out
 end
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # FULL record (D-146): recompute V4 from the committed runs.tsv / hist.tsv
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 function runs_tsv(path)
     l = split.(readlines(path), '\t')
     return [Dict(zip(l[1], r)) for r in l[2:end]]
@@ -199,20 +219,29 @@ function record_summary(runs, hist, case)
     return (;
             n = sum(P(r["N"], Int) for r in rs), n_f0 = sum(P(r["n_f0"], Int) for r in rs),
             sum_f = sum(P(r["sum_f"]) for r in rs), sum_a = sum(P(r["sum_a"]) for r in rs),
-            f_max = maximum(P(r["f_max"]) for r in rs), a_min = minimum(P(r["a_min"]) for r in rs),
+            f_max = maximum(P(r["f_max"]) for r in rs), a_min = minimum(
+                P(r["a_min"])
+                for r in rs
+            ),
             a_max = maximum(P(r["a_max"]) for r in rs), hf, ha,
-        ), rs
+        ),
+        rs
 end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "15 openvt f5 rules: bins, peak, V4 verdicts on synthetic pools" setup = [OpenVTF5Setup] tags = [:pottsmodels, :reproductions] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "15 openvt f5 rules: bins, peak, V4 verdicts on synthetic pools" setup = [
+    OpenVTF5Setup,
+] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    # --------------------------------------------------------------------------------------
     # always: the rules on synthetic pools
-    # ---------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     @testset "15 openvt f5 rules: bins, peak, V4 verdicts on synthetic pools" begin
         @test runs_bin(0.0) == 0 && runs_bin(0.009999) == 0 && runs_bin(0.01) == 1
-        @test runs_bin(0.29) == 29 && runs_bin(29 / 100) == 29 && runs_bin(0.3) == 30 && runs_bin(1.09) == 109
+        @test runs_bin(0.29) == 29 && runs_bin(29 / 100) == 29 && runs_bin(0.3) == 30 &&
+            runs_bin(1.09) == 109
         @test runs_bin(1 / 3) == 33 && runs_bin(0.5) == 50
         @test_throws ArgumentError runs_hist([2.0])
         @test_throws ArgumentError runs_hist([-0.001])
@@ -220,10 +249,12 @@ end
         h = zeros(Int, NBINS)
         h[31:33] .= 10            # bins 30–32: a broad mode around 0.31
         h[71] = 25                # a lone spike at bin 70
-        @test runs_peak(h) ≈ 0.305                        # windows of bins 30, 31, 32 tie; first
+        # windows of bins 30, 31, 32 tie; first
+        @test runs_peak(h) ≈ 0.305
         @test runs_peak(h; skip0 = true) ≈ 0.305
         h[1] = 1000
-        @test runs_peak(h) ≈ 0.005                        # bins 0–2 (truncated window); first maximum
+        # bins 0–2 (truncated window); first maximum
+        @test runs_peak(h) ≈ 0.005
         @test runs_peak(h; skip0 = true) ≈ 0.305          # bin 0 dropped
         # a pool built to sit inside every band passes; each clause can fail on its own
         f = [zeros(890); fill(0.3, 100); fill(0.31, 9); 0.55]
@@ -231,37 +262,55 @@ end
         s = runs_summary(f, a)
         r = runs_v4(s)
         @test r.pass && all(r.ok)
-        @test r.v.f0 == 0.89 && r.v.f_peak ≈ 0.295 && r.v.a_peak ≈ 0.845   # first tied windows
+        # first tied windows
+        @test r.v.f0 == 0.89 && r.v.f_peak ≈ 0.295 && r.v.a_peak ≈ 0.845
         @test isapprox(r.v.f_mean, (30 + 2.79 + 0.55) / 1000) && 0.02 <= r.v.f_mean <= 0.04
-        @test !runs_v4(runs_summary([zeros(800); fill(0.3, 200)], a)).ok.f0          # 80 % at f = 0
-        @test !runs_v4(runs_summary([f[1:(end - 1)]; 0.7], a)).ok.f_max                # one cell above
-        @test !runs_v4(runs_summary([zeros(890); fill(0.5, 110)], a)).ok.f_peak        # peak at 0.5
-        @test !runs_v4(runs_summary(f, [a[1:(end - 1)]; 0.2])).ok.a_range              # a too low
+        # 80 % at f = 0
+        @test !runs_v4(runs_summary([zeros(800); fill(0.3, 200)], a)).ok.f0
+        # one cell above
+        @test !runs_v4(runs_summary([f[1:(end - 1)]; 0.7], a)).ok.f_max
+        # peak at 0.5
+        @test !runs_v4(runs_summary([zeros(890); fill(0.5, 110)], a)).ok.f_peak
+        # a too low
+        @test !runs_v4(runs_summary(f, [a[1:(end - 1)]; 0.2])).ok.a_range
         @test !runs_v4(runs_summary(f, fill(0.99, 1000))).ok.a_mean
         @test !runs_v4(runs_summary(f, fill(0.99, 1000))).ok.a_peak
         @test !runs_v4(runs_summary(f, fill(0.99, 1000))).pass
         # merging run summaries is pooling the cells
-        m = runs_merge([runs_summary(f[1:500], a[1:500]), runs_summary(f[501:end], a[501:end])])
-        @test m.n == s.n && m.n_f0 == s.n_f0 && m.hf == s.hf && m.ha == s.ha && m.f_max == s.f_max &&
-            m.a_min == s.a_min && m.a_max == s.a_max && m.sum_f ≈ s.sum_f && m.sum_a ≈ s.sum_a
+        m = runs_merge(
+            [
+                runs_summary(f[1:500], a[1:500]), runs_summary(f[501:end], a[501:end]),
+            ]
+        )
+        @test m.n == s.n && m.n_f0 == s.n_f0 && m.hf == s.hf && m.ha == s.ha &&
+            m.f_max == s.f_max &&
+            m.a_min == s.a_min && m.a_max == s.a_max && m.sum_f ≈ s.sum_f &&
+            m.sum_a ≈ s.sum_a
     end
 end
 
-@testitem "15 openvt f5 SMOKE: case (b) and the γ control to 300 cells" setup = [OpenVTF5Setup] tags = [:pottsmodels, :reproductions] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "15 openvt f5 SMOKE: case (b) and the γ control to 300 cells" setup = [
+    OpenVTF5Setup,
+] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    # --------------------------------------------------------------------------------------
     # SMOKE: 2 + 2 runs to 300 cells on 240 × 240
-    # ---------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     if !RUNS_FULL
         @testset "15 openvt f5 SMOKE: case (b) and the γ control to 300 cells" begin
             prob = problem(240)
             b = ensemble_runs(prob, [seed_smoke(k) for k in 1:2], 0.0; cells = 300)
             c = ensemble_runs(prob, [seed_smoke(k) for k in 3:4], GAMMA_CTL; cells = 300)
             for r in [b; c]
-                @test r.retcode === :Terminated                   # stopped by stop_at_cells, not the edge guard
+                # stopped by stop_at_cells, not the edge guard
+                @test r.retcode === :Terminated
                 n = length(r.rows.f)
                 @test 300 <= n <= 310
-                @test all(x -> 0 <= x <= 1, r.rows.f) && all(>(0), r.rows.a) && all(>(0), r.rows.r)
-                # the O2 lengths are in R from the centre: inside the lattice (120 px = 30.1 R)
+                @test all(x -> 0 <= x <= 1, r.rows.f) && all(>(0), r.rows.a) &&
+                    all(>(0), r.rows.r)
+                # the O2 lengths are in R from the centre: inside the lattice (120 px = 30.1
+                # R)
                 @test 10 < maximum(hypot.(r.rows.x, r.rows.y)) < 30
                 @test count(==(0), r.rows.f) > 0
             end
@@ -271,29 +320,44 @@ end
             @info "15 openvt f5 SMOKE" vb.v vc.v
             @test all(isfinite, values(vb.v)) && all(isfinite, values(vc.v))
             @test sb.n == sum(sb.hf) == sum(sb.ha) && sb.n_f0 <= sb.hf[1]
-            # the control's mechanism: arrested interior cells relax toward their reference area
-            @test vc.v.a_mean > vb.v.a_mean + 0.015          # measured 0.957 vs 0.925 on these seeds
+            # the control's mechanism: arrested interior cells relax toward their reference
+            # area
+            # measured 0.957 vs 0.925 on these seeds
+            @test vc.v.a_mean > vb.v.a_mean + 0.015
             # and the control takes longer to reach 300 cells
             @test minimum(r.mcs for r in c) > maximum(r.mcs for r in b)
         end
     end
 end
 
-@testitem "15 openvt f5 FULL record: V4 (case (b), 100 runs of 1000 cells) and the negative control" setup = [OpenVTF5Setup] tags = [:pottsmodels, :reproductions] begin
-    @testset "15 openvt f5 FULL record: V4 (case (b), 100 runs of 1000 cells) and the negative control" begin
+@testitem "15 openvt f5 FULL record: V4 (case (b), 100 runs of 1000 cells) and the \
+    negative control" setup = [OpenVTF5Setup] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    @testset "15 openvt f5 FULL record: V4 (case (b), 100 runs of 1000 cells) and the \
+        negative control" begin
         runs_f, hist_f = joinpath(RECORD, "runs.tsv"), joinpath(RECORD, "hist.tsv")
-        @test isfile(runs_f) && isfile(hist_f) && isfile(joinpath(RECORD, "provenance.toml"))
+        @test isfile(runs_f) && isfile(hist_f) &&
+            isfile(joinpath(RECORD, "provenance.toml"))
         if isfile(runs_f) && isfile(hist_f)
             runs, hist = runs_tsv(runs_f), runs_tsv(hist_f)
             sb, rb = record_summary(runs, hist, "b")
             sc, rc = record_summary(runs, hist, "control")
             # the record is the pre-registered protocol
-            @test sort([parse(Int, r["seed"]) for r in rb]) == [runs_seed(k) for k in 1:RUNS_N]
+            @test sort([parse(Int, r["seed"]) for r in rb]) ==
+                [runs_seed(k) for k in 1:RUNS_N]
             @test sort([parse(Int, r["seed"]) for r in rc]) == [seed_ctl(k) for k in 1:NCTL]
-            @test all(r -> parse(Float64, r["gamma"]) == 0, rb) && all(r -> parse(Float64, r["gamma"]) == GAMMA_CTL, rc)
-            @test all(r -> r["retcode"] == "Terminated" && parse(Int, r["N"]) >= CELLS, [rb; rc])
+            @test all(r -> parse(Float64, r["gamma"]) == 0, rb) &&
+                all(r -> parse(Float64, r["gamma"]) == GAMMA_CTL, rc)
+            @test all(
+                r -> r["retcode"] == "Terminated" && parse(Int, r["N"]) >= CELLS, [
+                    rb;
+                    rc
+                ]
+            )
             @test all(r -> parse(Int, r["lattice"]) == RUNS_L, [rb; rc])
-            # the histograms hold every cell once per quantity; bin 0 of f holds the f == 0 cells
+            # the histograms hold every cell once per quantity; bin 0 of f holds the f == 0
+            # cells
             for s in (sb, sc)
                 @test sum(s.hf) == s.n == sum(s.ha)
                 @test s.hf[1] >= s.n_f0
@@ -315,8 +379,13 @@ end
             ver = runs_tsv(joinpath(RECORD, "verdicts.tsv"))
             for row in ROWS
                 id = ROW_ID[row]
-                rr = [r for r in ver if startswith(r["target"], id * " ") && r["case"] == "b"]
-                @test length(rr) == 1 && only(rr)["result"] == (vb.ok[row] ? "PASS" : "FAIL")
+                rr = [
+                    r
+                        for r in ver
+                        if startswith(r["target"], id * " ") && r["case"] == "b"
+                ]
+                @test length(rr) == 1 &&
+                    only(rr)["result"] == (vb.ok[row] ? "PASS" : "FAIL")
             end
             # negative control: V4 fails, on V4.4 and V4.6 at least
             vc = runs_v4(sc)
@@ -327,10 +396,14 @@ end
     end
 end
 
-@testitem "15 openvt f5 FULL: V4 and the negative control, rerun" setup = [OpenVTF5Setup] tags = [:pottsmodels, :reproductions] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "15 openvt f5 FULL: V4 and the negative control, rerun" setup = [
+    OpenVTF5Setup,
+] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    # --------------------------------------------------------------------------------------
     # FULL: rerun the 100 + 20 runs (offline, D-146)
-    # ---------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     if RUNS_FULL
         @testset "15 openvt f5 FULL: V4 and the negative control, rerun" begin
             prob = problem(RUNS_L)

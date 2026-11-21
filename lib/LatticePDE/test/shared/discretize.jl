@@ -9,9 +9,16 @@ using LatticePDE: BC
 
 const euler = (kb, c, r) -> c + runtime(kb, 2) * r          # rt = (t, dt)
 ir(cf) = sprint(print_program, cf.program)
-dom2(a = 1.0, b = 1.0) = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, a), y ∈ Interval(0.0, b)]
+function dom2(a = 1.0, b = 1.0)
+    return [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, a), y ∈ Interval(0.0, b)]
+end
 pde(eqs, bcs, dvs, ps; d = dom2()) = PDESystem(eqs, bcs, d, [t, x, y], dvs, ps; name = :f)
-lower64(sys, dims; kw...) = symbolic_discretize(sys, LatticeDiscretization(Grid(dims); T = Float64); update = euler, kw...)
+function lower64(sys, dims; kw...)
+    return symbolic_discretize(
+        sys, LatticeDiscretization(Grid(dims); T = Float64);
+        update = euler, kw...
+    )
+end
 
 """Semantic program, step plan and host store of a lowered system (Float64)."""
 function runner(cf)
@@ -26,18 +33,25 @@ function steps!(R, dt, n; P = R.P)
     end
     return R
 end
-throws_with(f, s) = (try
-                         f()
-                         false
-                     catch e
-                         e isa ArgumentError && occursin(s, sprint(showerror, e))
-                     end)
+function throws_with(f, s)
+    return try
+        f()
+        false
+    catch e
+        e isa ArgumentError && occursin(s, sprint(showerror, e))
+    end
+end
 
-@parameters x y z Dc = 1e-3 k = 0.1 h0 = 2.0 g0 = 0.5 K0 = 2.0 cT = 0.1 dx [lattice_spacing = 1] dy [lattice_spacing = 2]
+@parameters x y z Dc = 1.0e-3 k = 0.1 h0 = 2.0 g0 = 0.5 K0 = 2.0 cT = 0.1 dx [
+    lattice_spacing = 1,
+] dy [lattice_spacing = 2]
 @parameters Dk[1:3] = [1.0, 2.0, 3.0]
-@variables c(..) o(..) K(..) N(..) kindₛ(..)::Int32 [input = true] vel(..)[1:2] [input = true] u(..)[1:2]
+@variables c(..) o(..) K(..) N(..) kindₛ(..)::Int32 [input = true] vel(..)[1:2] [
+    input = true,
+] u(..)[1:2]
 Dx, Dy = Differential(x), Differential(y)
-ce, oe, Ke, Ne, ke, ue = c(t, x, y), o(t, x, y), K(t, x, y), N(t, x, y), kindₛ(t, x, y), u(t, x, y)
+ce, oe, Ke, Ne, ke, ue = c(t, x, y), o(t, x, y), K(t, x, y), N(t, x, y), kindₛ(t, x, y),
+    u(t, x, y)
 
 # a 2D rate system with periodic y (a 1D profile in x, 2 rows)
 function profile(bcs, n; rhs = laplacian(ce), ps = [g0, h0], steps = 20000)

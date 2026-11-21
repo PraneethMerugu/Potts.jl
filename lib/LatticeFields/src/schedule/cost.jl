@@ -1,21 +1,25 @@
 # The fusion cost model. Not a shared-reads rule and no stream cap:
 #   t = max(bytes / (η(streams, ws) · BW(ws)), flops / F) + launch_dep(arrays)
-# Calibration values live in `CostModel` (DECISIONS item; the crossover between 128³ and 256³
-# is not measured finely). `ws` is the working set of the whole candidate sequence, the same
-# for both arms, so fused and split are compared in one regime.
+# Calibration values live in `CostModel` (DECISIONS item; the crossover between 128³ and
+# 256³ is not measured finely). `ws` is the working set of the whole candidate sequence, the
+# same for both arms, so fused and split are compared in one regime.
 
 """
-Measured η tables as `(streams, η)` points (fused, DRAM; measured on the field-kernel benchmarks).
+Measured η tables as `(streams, η)` points (fused, DRAM; measured on the field-kernel
+benchmarks).
 """
-const ETA_GENERATOR = Dict(2 => [(2, 0.99), (8, 0.91), (16, 0.85), (32, 0.80), (64, 0.64)],
-    3 => [(2, 0.97), (4, 0.87), (8, 0.87), (16, 0.84)])   # monotone envelope (8: 0.92 measured)
+const ETA_GENERATOR = Dict(
+    2 => [(2, 0.99), (8, 0.91), (16, 0.85), (32, 0.8), (64, 0.64)],
+    3 => [(2, 0.97), (4, 0.87), (8, 0.87), (16, 0.84)]
+)   # monotone envelope (8: 0.92 measured)
 const ETA_REALISTIC = Dict(
-    2 => [(6, 0.95), (11, 0.94), (16, 0.92), (21, 0.91), (26, 0.90)],
-    3 => [(6, 0.94), (11, 0.91), (16, 0.87), (21, 0.83), (26, 0.78)])
+    2 => [(6, 0.95), (11, 0.94), (16, 0.92), (21, 0.91), (26, 0.9)],
+    3 => [(6, 0.94), (11, 0.91), (16, 0.87), (21, 0.83), (26, 0.78)]
+)
 
 Base.@kwdef struct CostModel
-    bw_dram::Float64 = 235e9          # 232–237 GB/s
-    bw_cache::Float64 = 674e9         # cache-resident ceiling 617–731 GB/s
+    bw_dram::Float64 = 235.0e9          # 232–237 GB/s
+    bw_cache::Float64 = 674.0e9         # cache-resident ceiling 617–731 GB/s
     cache_ws::Float64 = 32 * 2.0^20   # cache-resident up to 32 MiB
     dram_ws::Float64 = 64 * 2.0^20    # DRAM from 64 MiB
     eta_lo_ws::Float64 = 256 * 2.0^20 # η = 1 below (fused wins at 128³; calibration)
@@ -26,7 +30,8 @@ Base.@kwdef struct CostModel
     realistic_reads::Float64 = 0.75   # read fraction from which the realistic table applies
     # Hard limits (blockers, not costs): kernel arguments and the register prefilter. Below
     # 256 MiB η = 1, so without them the model would fuse any number of components.
-    max_arrays::Int = 32              # array arguments per kernel (the benchmarks measured up to 26)
+    # array arguments per kernel (the benchmarks measured up to 26)
+    max_arrays::Int = 32
     arg_bytes_per_array::Int = 48     # device array descriptor (pointer, dims, length)
     max_arg_bytes::Int = 4096         # kernel-argument budget (4 KiB on ROCm and Metal)
     max_live::Int = 96                # live-value estimate; x2/x3 kernels had VGPR ≤ 78
@@ -39,7 +44,6 @@ PG-17 checks the real VGPR count and scratch = 0 after compile).
 function live_estimate(k::Kernel)
     last = collect(1:length(k.nodes))
     for (i, n) in enumerate(k.nodes), a in args(k, n)
-
         last[a] = max(last[a], i)
     end
     foreach(s -> last[s.value] = length(k.nodes) + 1, k.stores)
@@ -86,8 +90,10 @@ function eta(m::CostModel, N, streams, rf, ws)
     return 1 - w * (1 - _interp(tab, streams))
 end
 function bandwidth(m::CostModel, ws)
-    exp(log(m.bw_cache) +
-        _logfrac(ws, m.cache_ws, m.dram_ws) * log(m.bw_dram / m.bw_cache))
+    return exp(
+        log(m.bw_cache) +
+            _logfrac(ws, m.cache_ws, m.dram_ws) * log(m.bw_dram / m.bw_cache)
+    )
 end
 
 """
@@ -108,15 +114,20 @@ function traffic(p::Program{N}, k::Kernel{N}) where {N}
     function add!(f, comp, rel, rw)
         (f, comp, Int8(k.space.level + rel), rw) in arr && return
         push!(arr, (f, comp, Int8(k.space.level + rel), rw))
-        bytes[] += n * lanebytes(p.fields[f].storage) * 2.0^(-N * rel)
+        return bytes[] += n * lanebytes(p.fields[f].storage) * 2.0^(-N * rel)
     end
-    foreach(a -> add!(a.field, a.comp.a, a.level, :r), (k.accesses[x.imm]
-    for x in k.nodes if x.op == LOAD))
+    foreach(
+        a -> add!(a.field, a.comp.a, a.level, :r), (
+            k.accesses[x.imm]
+                for x in k.nodes if x.op == LOAD
+        )
+    )
     k.space.kind == MASKED && add!(p.masks[k.space.mask].field, Int16(1), 0, :r)
     for s in k.stores
         f = p.fields[s.access.field]
         key = (s.access.field, s.access.comp.a, Int8(k.space.level), :r)
-        if f.buffers == 1 && key in arr     # read and written in place: one array, both bytes
+        # read and written in place: one array, both bytes
+        if f.buffers == 1 && key in arr
             delete!(arr, key)
             push!(arr, (key[1], key[2], key[3], :rw))
             bytes[] += n * lanebytes(f.storage)
@@ -128,7 +139,7 @@ function traffic(p::Program{N}, k::Kernel{N}) where {N}
     end
     nr, nw = count(x -> x[4] != :w, arr), count(x -> x[4] != :r, arr)
     flops = n *
-            count(x -> !(x.op in (LOAD, CONST, PARAM, COORD, RUNTIME, INSIDE_OP)), k.nodes)
+        count(x -> !(x.op in (LOAD, CONST, PARAM, COORD, RUNTIME, INSIDE_OP)), k.nodes)
     return Traffic(arr, bytes[], nr, nw, flops)
 end
 
@@ -138,10 +149,12 @@ Working set (bytes) of the arrays touched by a set of traffics.
 function working_set(p::Program{N}, ts) where {N}
     u = Set{Tuple{Int32, Int16, Int8, Bool}}()
     for t in ts, (f, c, l, rw) in t.arrays
-
         push!(u, (f, c, l, rw == :w && p.fields[f].buffers == 2))
     end
-    return sum((nsites(p, l) * lanebytes(p.fields[f].storage) for (f, c, l, _) in u); init = 0.0)
+    return sum(
+        (nsites(p, l) * lanebytes(p.fields[f].storage) for (f, c, l, _) in u);
+        init = 0.0
+    )
 end
 
 """

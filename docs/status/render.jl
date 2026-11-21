@@ -7,21 +7,21 @@
 # - The per-model rows (status, open deviations, links) come from `docs/status/models.toml`.
 # - The PASS / FAIL / PARKED counts are computed from the committed verdict TSVs,
 #   `lib/PottsModels/reproductions/data/<NN>/<record>/verdicts*.tsv` (D-146).
-# - The remaining build order is kept by hand in `BUILD_ORDER` below, each item with its state
-#   as the ROADMAP (`docs/design/ROADMAP.md`) gives it.
+# - The remaining build order is kept by hand in `BUILD_ORDER` below, each item with its
+#   state as the ROADMAP (`docs/design/ROADMAP.md`) gives it.
 #
 # Counting rules (stated on the page):
 # - the `result` column is read; PASS, FAIL and PARKED are counted, every other value
 #   (`info: …`, `reported`) is information, as is a row of `kind` `info` (record 04);
 # - a control row is one with a non-empty `required` column: the result (PASS or FAIL) the
 #   control must show. It is not a verdict on the model; controls are counted apart,
-#   as "N of M as required". Records without the column (the byte-pinned 15 records) are read
-#   by their own convention: a band saying "control: must FAIL" requires FAIL; a `case`
+#   as "N of M as required". Records without the column (the byte-pinned 15 records) are
+#   read by their own convention: a band saying "control: must FAIL" requires FAIL; a `case`
 #   `control` row whose target names the control's own verdict requires PASS; the other rows
 #   of a control arm (judged against the model's bands, with no required outcome) are
 #   information;
-# - a summary row ("… (all rows)") restates other rows and is not counted, nor is a per-point
-#   line (`check` "point …") that its curve's row judges;
+# - a summary row ("… (all rows)") restates other rows and is not counted, nor is a
+#   per-point line (`check` "point …") that its curve's row judges;
 # - a PARKED row is superseded, and not counted, when another record of the same model has a
 #   PASS or FAIL row for the same target id (its first word, e.g. `V-A6`).
 using TOML: TOML
@@ -47,7 +47,9 @@ function _required(r)
 end
 _target(r) = get(r, "target", get(r, "criterion", ""))
 # a per-point line (`check` "point …", 01b) is judged inside its curve's row
-_is_summary(r) = occursin("(all rows)", _target(r)) || startswith(get(r, "check", ""), "point ")
+function _is_summary(r)
+    return occursin("(all rows)", _target(r)) || startswith(get(r, "check", ""), "point ")
+end
 _target_id(r) = first(split(_target(r) * " "))
 
 # one record directory: its verdict rows, tagged with the file they came from
@@ -65,8 +67,11 @@ function _record_rows(dir)
 end
 
 function _count(rows, all_rows)
-    c = Dict("PASS" => 0, "FAIL" => 0, "PARKED" => 0, "controls" => 0, "controls_as_required" => 0,
-        "info" => 0, "superseded" => 0)
+    c = Dict(
+        "PASS" => 0, "FAIL" => 0, "PARKED" => 0, "controls" => 0, "controls_as_required" =>
+            0,
+        "info" => 0, "superseded" => 0
+    )
     for r in rows
         res = strip(get(r, "result", ""))
         _is_summary(r) && continue
@@ -78,8 +83,10 @@ function _count(rows, all_rows)
             c["info"] += 1
         elseif res == "PARKED"
             id = _target_id(r)
-            sup = any(o -> o["_file"] != r["_file"] && _target_id(o) == id &&
-                               strip(get(o, "result", "")) in ("PASS", "FAIL"), all_rows)
+            sup = any(
+                o -> o["_file"] != r["_file"] && _target_id(o) == id &&
+                    strip(get(o, "result", "")) in ("PASS", "FAIL"), all_rows
+            )
             sup ? (c["superseded"] += 1) : (c["PARKED"] += 1)
         elseif res in ("PASS", "FAIL")
             c[res] += 1
@@ -90,8 +97,15 @@ function _count(rows, all_rows)
     return c
 end
 
-_short_machine(cpu) = occursin(r"ryzen"i, cpu) ? "PC (AMD Ryzen AI Max+ 395)" :
-                      occursin("Apple", cpu) ? "Mac ($(strip(cpu)))" : strip(cpu)
+function _short_machine(cpu)
+    if occursin(r"ryzen"i, cpu)
+        return "PC (AMD Ryzen AI Max+ 395)"
+    elseif occursin("Apple", cpu)
+        return "Mac ($(strip(cpu)))"
+    else
+        return strip(cpu)
+    end
+end
 
 function _provenance(dir)
     p = joinpath(dir, "provenance.toml")
@@ -99,15 +113,28 @@ function _provenance(dir)
     t = TOML.parsefile(p)
     m = get(t, "machine", nothing)
     cpu = m isa AbstractDict ? get(m, "cpu", "—") : get(t, "cpu", "—")
-    backend = m isa AbstractDict && haskey(m, "backend") ? m["backend"] :
-              haskey(t, "threads") ? "CPU, $(t["threads"]) thread$(t["threads"] == 1 ? "" : "s")" : "CPU"
-    wall = haskey(t, "wall_s") ? "$(round(t["wall_s"] / 60; digits = 1)) min wall" :
-           haskey(t, "main_wall_s") ? "$(round(t["main_wall_s"] / 60; digits = 1)) min wall" :
-           haskey(get(t, "execution", Dict()), "replicate_wall_summed_h") ?
-           "$(t["execution"]["replicate_wall_summed_h"]) h summed over replicate processes" :
-           haskey(t, "replicate_wall_summed_h") ? "$(t["replicate_wall_summed_h"]) h summed over replicates" : "—"
-    return (; machine = _short_machine(cpu) * ", " * backend, run = wall,
-            commit = haskey(t, "commit") ? "`" * t["commit"][1:8] * "`" : "—")
+    backend = if m isa AbstractDict && haskey(m, "backend")
+        m["backend"]
+    elseif haskey(t, "threads")
+        "CPU, $(t["threads"]) thread$(t["threads"] == 1 ? "" : "s")"
+    else
+        "CPU"
+    end
+    wall = if haskey(t, "wall_s")
+        "$(round(t["wall_s"] / 60; digits = 1)) min wall"
+    elseif haskey(t, "main_wall_s")
+        "$(round(t["main_wall_s"] / 60; digits = 1)) min wall"
+    elseif haskey(get(t, "execution", Dict()), "replicate_wall_summed_h")
+        "$(t["execution"]["replicate_wall_summed_h"]) h summed over replicate processes"
+    elseif haskey(t, "replicate_wall_summed_h")
+        "$(t["replicate_wall_summed_h"]) h summed over replicates"
+    else
+        "—"
+    end
+    return (;
+        machine = _short_machine(cpu) * ", " * backend, run = wall,
+        commit = haskey(t, "commit") ? "`" * t["commit"][1:8] * "`" : "—",
+    )
 end
 
 # every record of a model that has a verdict table
@@ -124,24 +151,46 @@ function _records(nn)
     return out
 end
 
-# The remaining work, by topic: (topic, state, what). The state ("done", "open" or "planned")
-# is kept by hand; update it when the ROADMAP item it follows changes.
+# The remaining work, by topic: (topic, state, what). The state ("done", "open" or
+# "planned") is kept by hand; update it when the ROADMAP item it follows changes.
 const BUILD_ORDER = [
     (
         "Full runs on the PC",
         [
-            ("OpenVT threshold sweeps", "done", "OpenVT Figure 6, Table 1 and Figure 7: the threshold sweeps (V1–V3b). Estimated about 45 core-hours with `SequentialCPM(; skip_interior = true)` (PC, AMD Ryzen AI Max+ 395, CPU; from the 2.83× case (a) speed-up)."),
-            ("Merks full run", "open", "Merks: the FULL run and the digitised 01b figure targets."),
+            (
+                "OpenVT threshold sweeps",
+                "done",
+                "OpenVT Figure 6, Table 1 and Figure 7: the threshold sweeps (V1–V3b). \
+                    Estimated about 45 core-hours with \
+                        `SequentialCPM(; skip_interior = true)` (PC, AMD Ryzen AI Max+ \
+                            395, CPU; from the 2.83× case (a) speed-up).",
+            ),
+            (
+                "Merks full run", "open",
+                "Merks: the FULL run and the digitised 01b figure targets.",
+            ),
         ],
     ),
     (
         "Foam (model 04)",
         [
-            ("Copy scopes", "open", "copy-scope `direction`, `time`, `mcs`; initialization at `at_init`"),
+            (
+                "Copy scopes", "open",
+                "copy-scope `direction`, `time`, `mcs`; initialization at `at_init`",
+            ),
             ("Proposal laws", "open", "general proposal laws with Hastings acceptance"),
-            ("Cell lifecycle events", "open", "`@retire`, `@transition`, discrete events, `@terminate`"),
-            ("Brick-wall tilings", "open", "brick-wall tilings; T1 counts and topology moments"),
-            ("Foam reproduction", "done", "reproduction 04 (ships with the provisional shear-form default)"),
+            (
+                "Cell lifecycle events", "open",
+                "`@retire`, `@transition`, discrete events, `@terminate`",
+            ),
+            (
+                "Brick-wall tilings", "open",
+                "brick-wall tilings; T1 counts and topology moments",
+            ),
+            (
+                "Foam reproduction", "done",
+                "reproduction 04 (ships with the provisional shear-form default)",
+            ),
         ],
     ),
     (
@@ -149,8 +198,14 @@ const BUILD_ORDER = [
         [
             ("Cell references", "done", "cell references; liveness"),
             ("Ownership changes", "done", "the shared ownership-delta routine; `@convert`"),
-            ("Object geometry", "done", "`Fill`, `Objects`, `Group`; predicate-sourced PDEs; MSD fits"),
-            ("Nucleus and migration reproduction", "open", "reproduction 14a / 14b (and 14c)"),
+            (
+                "Object geometry", "done",
+                "`Fill`, `Objects`, `Group`; predicate-sourced PDEs; MSD fits",
+            ),
+            (
+                "Nucleus and migration reproduction",
+                "open", "reproduction 14a / 14b (and 14c)",
+            ),
         ],
     ),
     (
@@ -178,10 +233,10 @@ const STATUS_HEADER = """
 # [Paper models: status](@id paper-status)
 
 One row per model of the Potts.jl paper: the 12 reference models and the OpenVT monolayer
-benchmark. The PASS, FAIL and PARKED counts are computed from the committed verdict tables of
-the full reproduction runs (`lib/PottsModels/reproductions/data/<NN>/`) each time these docs
-are built, so they always match the records. The status and the open deviations are kept by
-hand in `docs/status/models.toml`.
+benchmark. The PASS, FAIL and PARKED counts are computed from the committed verdict tables
+of the full reproduction runs (`lib/PottsModels/reproductions/data/<NN>/`) each time these
+docs are built, so they always match the records. The status and the open deviations are
+kept by hand in `docs/status/models.toml`.
 
 !!! note "Policy"
     - **All 12 models.** The paper covers all 12 reference models; there is no reduced
@@ -203,7 +258,13 @@ by hand in `docs/status/render.jl` and follows the project roadmap.
 """
 
 _cell(s) = replace(String(s), "|" => "∣")
-_controls(c) = c === nothing || c["controls"] == 0 ? "—" : "$(c["controls_as_required"]) of $(c["controls"])"
+function _controls(c)
+    return if c === nothing || c["controls"] == 0
+        "—"
+    else
+        "$(c["controls_as_required"]) of $(c["controls"])"
+    end
+end
 
 function render_status(; published::Bool = false)
     models = TOML.parsefile(joinpath(STATUS_DIR, "models.toml"))["model"]
@@ -212,17 +273,19 @@ function render_status(; published::Bool = false)
     println(
         io, """
 
-    ## Status
+        ## Status
 
-    | # | Model | Status | PASS | FAIL | PARKED | Controls as required | Open deviations | Page |
-    |:--|:------|:-------|-----:|-----:|-------:|---------------------:|:----------------|:-----|""")
+        | # | Model | Status | PASS | FAIL | PARKED | Controls as required | Open deviations | Page |
+        |:--|:------|:-------|-----:|-----:|-------:|---------------------:|:----------------|:-----|"""
+    )
     details = IOBuffer()
     for m in models
         nn = m["spec"]
         recs = haskey(m, "data") ? _records(m["data"]) : []
         all_rows = reduce(vcat, (r.rows for r in recs); init = Dict{String, String}[])
         counts = isempty(recs) ? nothing : _count(all_rows, all_rows)
-        status = "**" * m["status"] * "**" * (haskey(m, "status_note") ? " ($(m["status_note"]))" : "")
+        status = "**" * m["status"] * "**" *
+            (haskey(m, "status_note") ? " ($(m["status_note"]))" : "")
         if m["status"] == "partial" && isempty(recs)
             status = "**partial (smoke tier)** ($(m["status_note"]))"
         end
@@ -236,63 +299,88 @@ function render_status(; published::Bool = false)
         elseif haskey(m, "models_page")
             push!(links, "[model page](@ref $(m["models_page"]))")
         end
-        println(io, "| $nn | $(_cell(m["name"])) | $status | $(pf("PASS")) | $(pf("FAIL")) | $(pf("PARKED")) | $(_controls(counts)) | $devs | ",
-                isempty(links) ? "—" : join(links, ", "), " |")
+        println(
+            io, "| $nn | $(_cell(m["name"])) | $status | ",
+            "$(pf("PASS")) | $(pf("FAIL")) | $(pf("PARKED")) | ",
+            "$(_controls(counts)) | $devs | ",
+            isempty(links) ? "—" : join(links, ", "), " |"
+        )
         isempty(recs) && continue
         println(details, "\n### $nn: $(m["name"])\n")
-        println(details, "| Record | PASS | FAIL | PARKED | Controls as required | Information rows | Machine and backend | Run time | Commit |")
+        println(
+            details,
+            "| Record | PASS | FAIL | PARKED | Controls as required | Information rows | ",
+            "Machine and backend | Run time | Commit |"
+        )
         println(details, "|:--|--:|--:|--:|--:|--:|:--|:--|:--|")
         for r in recs
             c = _count(r.rows, all_rows)
             p = _provenance(r.dir)
             sup = c["superseded"] > 0 ? " (+$(c["superseded"]) superseded)" : ""
             ctl = _controls(c)
-            println(details, "| `data/$(m["data"])/$(r.name)/` | $(c["PASS"]) | $(c["FAIL"]) | $(c["PARKED"])$sup | ",
-                    "$ctl | $(c["info"]) | $(p.machine) | $(p.run) | $(p.commit) |")
+            println(
+                details,
+                "| `data/$(m["data"])/$(r.name)/` | ",
+                "$(c["PASS"]) | $(c["FAIL"]) | $(c["PARKED"])$sup | ",
+                "$ctl | $(c["info"]) | $(p.machine) | $(p.run) | $(p.commit) |"
+            )
         end
     end
-    println(io, """
+    println(
+        io, """
 
-    A dash means the model has no committed full-run record yet. A model whose results come only
-    from the docs-build (SMOKE) tier is "partial (smoke tier)".""",
-            published ? " Each row links its paper's page in this section: the reproduction page, which " *
-                        "builds the model and runs it against the paper's targets." :
-            " Each row links its paper's page in this section, the model page. The full reproduction " *
-            "pages are built only with `POTTS_DOCS_PUBLISHED=true`; each row then links its reproduction page.")
-    println(io, """
+        A dash means the model has no committed full-run record yet. A model whose results
+        come only from the docs-build (SMOKE) tier is "partial (smoke tier)".""",
+        if published
+            " Each row links its paper's page in this section: the reproduction page, " *
+                "which builds the model and runs it against the paper's targets."
+        else
+            " Each row links its paper's page in this section, the model page. The full " *
+                "reproduction pages are built only with `POTTS_DOCS_PUBLISHED=true`; each \
+                    row then links its reproduction page."
+        end
+    )
+    println(
+        io, """
 
-    The section also has one model page that is **not a reproduction**:
-    [Actin-driven migration (the Act model)](@ref model-wortel-act) builds the Act model of
-    Niculescu et al. (2015) and Wortel et al. (2021) as a tutorial, without comparing it with
-    the papers' results.""")
-    println(io, """
+        The section also has one model page that is **not a reproduction**: [Actin-driven
+        migration (the Act model)](@ref model-wortel-act) builds the Act model of Niculescu
+        et al. (2015) and Wortel et al. (2021) as a tutorial, without comparing it with the
+        papers' results."""
+    )
+    println(
+        io, """
 
-    ## How the counts are made
+        ## How the counts are made
 
-    - Each record's `verdicts*.tsv` is read, and its `result` column counted: PASS, FAIL and
-      PARKED. Every other value (`info: in band`, `reported`) is an information row, as is a
-      row the record marks as information (`kind` `info`).
-    - A control row (a deliberately broken model or parameter set, or a reference arm) is not
-      a verdict on the model and is not counted with the checks. Its `required` column gives
-      the result it must show: FAIL when the row applies the model's target to a broken model
-      (which the target must reject), PASS when the row states the control's own rule. The
-      "Controls as required" columns count the control rows whose result is the required one,
-      "N of M". The frozen tests fix which rows are controls and what each requires.
-    - The OpenVT records predate the `required` column and are pinned byte for byte: there a
-      band saying "control: must FAIL" requires FAIL, a control case's own verdict row requires
-      PASS, and the control case's other rows (the model's bands applied to the control, with
-      no required outcome) are information rows.
-    - A summary row ("… (all rows)") repeats other rows and is not counted. Nor is a
-      per-point line (`check` "point …"): its curve's row is the verdict.
-    - A PARKED row is "superseded" when another record of the same model measures the same
-      target (the same id, such as `V-A6`) with a PASS or FAIL; it is not counted as PARKED.
-    - Targets that are parked or not yet run on a page, but have no row in a record, are not
-      counted; they are listed under the open deviations.
+        - Each record's `verdicts*.tsv` is read, and its `result` column counted: PASS, FAIL
+          and PARKED. Every other value (`info: in band`, `reported`) is an information row,
+          as is a row the record marks as information (`kind` `info`).
+        - A control row (a deliberately broken model or parameter set, or a reference arm)
+          is not a verdict on the model and is not counted with the checks. Its `required`
+          column gives the result it must show: FAIL when the row applies the model's target
+          to a broken model (which the target must reject), PASS when the row states the
+          control's own rule. The "Controls as required" columns count the control rows
+          whose result is the required one, "N of M". The frozen tests fix which rows are
+          controls and what each requires.
+        - The OpenVT records predate the `required` column and are pinned byte for byte:
+          there a band saying "control: must FAIL" requires FAIL, a control case's own
+          verdict row requires PASS, and the control case's other rows (the model's bands
+          applied to the control, with no required outcome) are information rows.
+        - A summary row ("… (all rows)") repeats other rows and is not counted. Nor is a
+          per-point line (`check` "point …"): its curve's row is the verdict.
+        - A PARKED row is "superseded" when another record of the same model measures the
+          same target (the same id, such as `V-A6`) with a PASS or FAIL; it is not counted
+          as PARKED.
+        - Targets that are parked or not yet run on a page, but have no row in a record, are
+          not counted; they are listed under the open deviations.
 
-    ## Records
+        ## Records
 
-    Every timing names its machine and backend. "PC" is an AMD Ryzen AI Max+ 395 workstation
-    (16 cores, Ubuntu 24.04); "Mac" is an Apple M1 Pro. All records ran on the CPU.""")
+        Every timing names its machine and backend. "PC" is an AMD Ryzen AI Max+ 395
+        workstation (16 cores, Ubuntu 24.04); "Mac" is an Apple M1 Pro. All records ran on
+        the CPU."""
+    )
     print(io, String(take!(details)))
     println(io, BUILD_ORDER_INTRO)
     for (step, items) in BUILD_ORDER

@@ -26,7 +26,9 @@ using Polyester: @batch
 
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
-public HOST_GRAIN, COMPILE_ONLY, VERBOSE, compiling, ishost, supports, default_float, register_float64!, float64_registered, FLOAT64_KERNELS, FLOAT64_ARRAY, host_launch!, launch!, compile!, compile_all!, Launch, Plan, walker
+public HOST_GRAIN, COMPILE_ONLY, VERBOSE, compiling, ishost, supports, default_float,
+    register_float64!, float64_registered, FLOAT64_KERNELS, FLOAT64_ARRAY, host_launch!,
+    launch!, compile!, compile_all!, Launch, Plan, walker
 
 # ---------------------------------------------------------------------------------------
 # Capabilities
@@ -49,8 +51,10 @@ executor runs every type. A device runs `Float32`, and `Float64` where the hardw
 only when a choice depends on the hardware (a Float64 solver group, an explicit Float64
 problem); the type device code gets by default is [`default_float`](@ref).
 """
-supports(backend, ::Type{T}) where {T} =
-    ishost(backend) || T === Float32 || (T === Float64 && KernelAbstractions.supports_float64(backend))
+function supports(backend, ::Type{T}) where {T}
+    return ishost(backend) || T <: Float32 ||
+        (T <: Float64 && KernelAbstractions.supports_float64(backend))
+end
 
 """
     default_float(backend) -> Type
@@ -58,8 +62,8 @@ supports(backend, ::Type{T}) where {T} =
 Policy: the float type of code emitted for `backend` when the caller names none. `Float64`
 on the host executor, `Float32` on every device: default device code stays `Float32`, so it
 runs unchanged on backends without doubles (Metal) and gives the same results on every
-device (the device scan checks production Float32 paths for doubles). This is not a query of the
-hardware; ask [`supports`](@ref) for that.
+device (the device scan checks production Float32 paths for doubles). This is not a query of
+the hardware; ask [`supports`](@ref) for that.
 """
 default_float(backend) = ishost(backend) ? Float64 : Float32
 
@@ -67,10 +71,11 @@ default_float(backend) = ishost(backend) ? Float64 : Float32
     register_float64!(parts::String...)
 
 The carve-out: a kernel whose Float64 its user declared (a
-group's `compute_type` or `solver_type` of Float64, or a field's `lattice_storage = Float64`, on a
-device whose default float is Float32) is registered by the parts of its signature text: a
-kernel signature that holds every part is skipped by the no-`double` scan of the device test
-suites, which still flags every other kernel. [`float64_registered`](@ref) asks.
+group's `compute_type` or `solver_type` of Float64, or a field's
+`lattice_storage = Float64`, on a device whose default float is Float32) is registered by
+the parts of its signature text: a kernel signature that holds every part is skipped by the
+no-`double` scan of the device test suites, which still flags every other kernel.
+[`float64_registered`](@ref) asks.
 """
 function register_float64!(parts::String...)
     lock(_FLOAT64_LOCK) do
@@ -86,16 +91,23 @@ const _FLOAT64_LOCK = ReentrantLock()
 
 Whether a kernel signature text holds every part of a [`register_float64!`](@ref) entry.
 """
-float64_registered(sig::AbstractString) =
-    lock(() -> any(e -> all(q -> _holds(sig, q), e), FLOAT64_KERNELS), _FLOAT64_LOCK)
+function float64_registered(sig::AbstractString)
+    return lock(() -> any(e -> all(q -> _holds(sig, q), e), FLOAT64_KERNELS), _FLOAT64_LOCK)
+end
 """
-The part of a [`register_float64!`](@ref) entry that stands for a Float64 device array in the
-signature, whatever its dimension: Julia prints a 1D or 2D device array by its alias
+The part of a [`register_float64!`](@ref) entry that stands for a Float64 device array in
+the signature, whatever its dimension: Julia prints a 1D or 2D device array by its alias
 (`ROCDeviceVector{Float64, 1}`, `ROCDeviceMatrix{Float64, 1}`), a 3D one as
 `ROCDeviceArray{Float64, 3, 1}`.
 """
 const FLOAT64_ARRAY = "a Float64 device array"
-_holds(sig, q) = q == FLOAT64_ARRAY ? occursin(r"Device(Array|Vector|Matrix)\{Float64[,}]", sig) : occursin(q, sig)
+function _holds(sig, q)
+    return if q == FLOAT64_ARRAY
+        occursin(r"Device(Array|Vector|Matrix)\{Float64[,}]", sig)
+    else
+        occursin(q, sig)
+    end
+end
 
 # ---------------------------------------------------------------------------------------
 # Host executor
@@ -111,11 +123,12 @@ const HOST_GRAIN = 8192
     host_launch!(body, n, args)
 
 Run `body(i, args...)` for `i in 1:n` on the host: a plain loop when `n ≤ HOST_GRAIN` or
-with one thread, else `ceil(n / chunk)` chunks of `chunk = max(cld(n, nthreads), HOST_GRAIN)`
-items on Polyester's persistent workers (`@batch`: no task is created, so a warm launch
-allocates nothing; nested under busy workers, e.g. inside `EnsembleThreads`, the chunks run
-serially). Under `@batch`, Polyester passes top-level `Array`s in `args` as `PtrArray`s, so a
-body compiles for both array types. Returns `nothing`.
+with one thread, else `ceil(n / chunk)` chunks of
+`chunk = max(cld(n, nthreads), HOST_GRAIN)` items on Polyester's persistent workers
+(`@batch`: no task is created, so a warm launch allocates nothing; nested under busy
+workers, e.g. inside `EnsembleThreads`, the chunks run serially). Under `@batch`, Polyester
+passes top-level `Array`s in `args` as `PtrArray`s, so a body compiles for both array types.
+Returns `nothing`.
 """
 function host_launch!(body::B, n::Integer, args::A) where {B, A}
     nt = Threads.nthreads()
@@ -136,7 +149,9 @@ function _host_loop!(body::B, n::Integer, args::A) where {B, A}
     return nothing
 end
 
-@noinline function _host_threaded!(body::B, n::Integer, chunk::Integer, args::A) where {B, A}
+@noinline function _host_threaded!(body::B, n::Integer, chunk::Integer, args::A) where {
+        B, A,
+    }
     nc = cld(n, chunk)
     @batch per = thread for c in 1:nc
         _host_chunk!(body, n, chunk, c, args)
@@ -192,11 +207,13 @@ runtime's launch sequence to compile it ahead of the first step (the implicit
 launches in the pending compile task). The host executor ignores it.
 """
 compiling() = COMPILE_ONLY[]
-"""Compile mode, task-scoped (`Base.ScopedValues.with(Exec.COMPILE_ONLY => true) do … end`)."""
+"""
+Compile mode, task-scoped (`Base.ScopedValues.with(Exec.COMPILE_ONLY => true) do … end`).
+"""
 const COMPILE_ONLY = Base.ScopedValues.ScopedValue(false)
 """
-Whether a run's warnings print, task-scoped: `false` inside an owned run given `verbose = false`
-(SciML's `verbose` keyword); every warning of a run checks it.
+Whether a run's warnings print, task-scoped: `false` inside an owned run given
+`verbose = false` (SciML's `verbose` keyword); every warning of a run checks it.
 """
 const VERBOSE = Base.ScopedValues.ScopedValue(true)
 
@@ -229,8 +246,9 @@ with no arguments: `l()` enqueues it (does not synchronize). On a device it hold
 object of the generic wrapper with a static workgroup size `WG` and, with `static = true`,
 a static ndrange (`n` rounded up to a multiple of `WG`). On KA 0.9 a static ndrange saves
 1.6–1.8 µs and about 900 B per launch (pass 3), but each distinct ndrange is its own kernel
-type, so its own compile (`static` has no default: the caller decides): use it for bodies that run at one size, and `static = false` for
-bodies launched at several sizes. On the host the launch is [`host_launch!`](@ref).
+type, so its own compile (`static` has no default: the caller decides): use it for bodies
+that run at one size, and `static = false` for bodies launched at several sizes. On the host
+the launch is [`host_launch!`](@ref).
 
 Type parameters: `K` the kernel object (or the host executor), `WG` the workgroup size (0 on
 the host), `NP` the launch tuple `(body, args, n)`.
@@ -238,16 +256,17 @@ the host), `NP` the launch tuple `(body, args, n)`.
 struct Launch{K, WG, NP <: Tuple{Any, Tuple, Union{Int, Tuple}}}
     kernel::K
     params::NP
-    ndrange::Int        # the dynamic linear ndrange; 0 for a static one (in the kernel type)
+    # the dynamic linear ndrange; 0 for a static one (in the kernel type)
+    ndrange::Int
 end
 
 # a linear launch carries `n::Int`, a Cartesian one its ndrange `NTuple{N, Int}`
 const LinearLaunch{K, WG} = Launch{K, WG, <:Tuple{Any, Tuple, Int}}
 const CartesianLaunch{K, WG} = Launch{K, WG, <:Tuple{Any, Tuple, Tuple}}
 
-# The Cartesian device kernel (the Schedule–Exec contract, contract.jl): `body(x, args...)` with
-# `x::NTuple{N, Int}` 1-based; the body guards every axis itself (padded items are no-ops).
-# `live = false` is the compile launch: no item calls the body.
+# The Cartesian device kernel (the Schedule–Exec contract, contract.jl): `body(x, args...)`
+# with `x::NTuple{N, Int}` 1-based; the body guards every axis itself (padded items are
+# no-ops). `live = false` is the compile launch: no item calls the body.
 @kernel unsafe_indices = true function _kernel_cart!(body, args, live)
     x = @index(Global, NTuple)
     if live
@@ -255,7 +274,10 @@ const CartesianLaunch{K, WG} = Launch{K, WG, <:Tuple{Any, Tuple, Tuple}}
     end
 end
 
-function Launch(backend, body::B, args::A, n::Integer; static::Bool, workgroupsize::Integer = 256) where {B, A <: Tuple}
+function Launch(
+        backend, body::B, args::A, n::Integer; static::Bool,
+        workgroupsize::Integer = 256
+    ) where {B, A <: Tuple}
     n >= 0 || throw(ArgumentError("Launch: n = $n < 0"))
     params = (body, args, Int(n))
     ishost(backend) && return Launch{HostExec, 0, typeof(params)}(HostExec(), params, 0)
@@ -276,18 +298,35 @@ the launch is Cartesian: `body(x, args...)` for `x` over the ndrange (padded up 
 multiple of the workgroup per axis on a device; the body guards every axis), a plain
 column-major loop over `CartesianIndices(ndrange)` on the host.
 """
-function Launch(backend, body::B, args::A, ndrange::NTuple{N, Integer};
-        workgroupsize::Union{Integer, NTuple{N, Integer}} = N == 1 ? 256 : (64, ntuple(_ -> 1, N - 1)...),
-        static::Bool, cartesian::Bool = N > 1) where {B, A <: Tuple, N}
-    cartesian || return Launch(backend, body, args, only(ndrange); workgroupsize = only(workgroupsize), static)
-    all(>=(0), ndrange) || throw(ArgumentError("Launch: ndrange $ndrange has a negative axis"))
+function Launch(
+        backend, body::B, args::A, ndrange::NTuple{N, Integer};
+        workgroupsize::Union{Integer, NTuple{N, Integer}} = if N == 1
+            256
+        else
+            (64, ntuple(_ -> 1, N - 1)...)
+        end,
+        static::Bool, cartesian::Bool = N > 1
+    ) where {B, A <: Tuple, N}
+    cartesian || return Launch(
+        backend, body, args, only(ndrange); workgroupsize = only(workgroupsize), static
+    )
+    all(>=(0), ndrange) ||
+        throw(ArgumentError("Launch: ndrange $ndrange has a negative axis"))
     nd = map(Int, ndrange)
     params = (body, args, nd)
     ishost(backend) && return Launch{HostExec, 0, typeof(params)}(HostExec(), params, 0)
-    wg = map(Int, workgroupsize isa Integer ? (workgroupsize, ntuple(_ -> 1, N - 1)...) : workgroupsize)
+    wg = map(
+        Int, if workgroupsize isa Integer
+            (workgroupsize, ntuple(_ -> 1, N - 1)...)
+        else
+            workgroupsize
+        end
+    )
     all(>=(1), wg) || throw(ArgumentError("Launch: workgroupsize = $wg has an axis < 1"))
     pad = map((n, w) -> max(cld(n, w), 1) * w, nd, wg)
-    static || throw(ArgumentError("Launch: a Cartesian launch takes a static ndrange in this version"))
+    static ||
+        throw(ArgumentError("Launch: a Cartesian launch takes a static ndrange in this \
+            version"))
     k = _kernel_cart!(backend, wg, pad)
     return Launch{typeof(k), wg, typeof(params)}(k, params, 0)
 end
@@ -316,18 +355,28 @@ function _host_cartesian!(body::B, R::CartesianIndices, args::A) where {B, A}
     return nothing
 end
 
-# chunks of the last axis on Polyester's persistent workers (`@batch`: no task is created, so
-# a warm launch allocates nothing; nested under busy workers it runs the chunks serially)
-@noinline function _host_cartesian_threaded!(body::B, nd::NTuple{N}, chunk::Integer, args::A) where {B, N, A}
+# chunks of the last axis on Polyester's persistent workers (`@batch`: no task is created,
+# so a warm launch allocates nothing; nested under busy workers it runs the chunks serially)
+@noinline function _host_cartesian_threaded!(
+        body::B, nd::NTuple{N}, chunk::Integer,
+        args::A
+    ) where {
+        B, N, A,
+    }
     nc = cld(last(nd), chunk)
     @batch per = thread for c in 1:nc
         _host_cartesian_chunk!(body, nd, chunk, c, args)
     end
     return nothing
 end
-function _host_cartesian_chunk!(body::B, nd::NTuple{N}, chunk::Integer, c::Integer, args::A) where {B, N, A}
+function _host_cartesian_chunk!(
+        body::B, nd::NTuple{N}, chunk::Integer, c::Integer, args::A
+    ) where {B, N, A}
     lo, hi = (c - 1) * chunk + 1, min(c * chunk, last(nd))
-    _host_cartesian!(body, CartesianIndices(ntuple(d -> d == N ? (lo:hi) : (1:nd[d]), Val(N))), args)
+    _host_cartesian!(
+        body,
+        CartesianIndices(ntuple(d -> d == N ? (lo:hi) : (1:nd[d]), Val(N))), args
+    )
     return nothing
 end
 function (l::CartesianLaunch)()
@@ -392,8 +441,12 @@ function compile_all!(backend, jobs)
     return nothing
 end
 
-_compile_job!(backend, l::Launch) = (compile!(l); KernelAbstractions.synchronize(backend); nothing)
-_compile_job!(backend, f::F) where {F} = (f(); KernelAbstractions.synchronize(backend); nothing)
+function _compile_job!(backend, l::Launch)
+    (compile!(l); KernelAbstractions.synchronize(backend); nothing)
+end
+function _compile_job!(backend, f::F) where {F}
+    (f(); KernelAbstractions.synchronize(backend); nothing)
+end
 
 # ---------------------------------------------------------------------------------------
 # Plans
@@ -430,10 +483,12 @@ function walker(n::Integer)
     return lock(_WALKERS_LOCK) do
         get!(_WALKERS, Int(n)) do
             calls = [:(getfield(t, $i)()) for i in 1:n]
-            ex = :(function (t)
-                $(calls...)
-                return nothing
-            end)
+            ex = :(
+                function (t)
+                    $(calls...)
+                    return nothing
+                end
+            )
             RuntimeGeneratedFunctions.drop_expr(@RuntimeGeneratedFunction(ex))
         end
     end

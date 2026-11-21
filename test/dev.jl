@@ -16,7 +16,8 @@
 try
     @eval using Revise
 catch
-    @warn "Revise is not on the load path (add it to your default environment); src edits need a new session"
+    @warn "Revise is not on the load path (add it to your default environment); src edits \
+        need a new session"
 end
 include(joinpath(@__DIR__, "shared", "rti.jl"))
 
@@ -28,8 +29,14 @@ that carry every tag in `tags`, in this session (`nworkers = 0`) or in worker pr
 Other keywords go to `ReTestItems.runtests`.
 """
 function ti(name = nothing; tags = nothing, nworkers = 0, kw...)
-    pat = name isa AbstractString ? Regex(replace(name, r"[\\^$.|?*+()\[\]{}]" => s"\\\0")) : name
-    return PottsRTI.rti(PottsRTI.TESTDIR; name = pat, tags, nworkers, PottsRTI.OPTIONS..., kw...)
+    pat = if name isa AbstractString
+        Regex(replace(name, r"[\\^$.|?*+()\[\]{}]" => s"\\\0"))
+    else
+        name
+    end
+    return PottsRTI.rti(
+        PottsRTI.TESTDIR; name = pat, tags, nworkers, PottsRTI.OPTIONS..., kw...
+    )
 end
 
 """
@@ -37,6 +44,12 @@ end
 
 Run every item of one file of test/ (for example `"fields_short_tests.jl"`).
 """
-tf(file; nworkers = 0, kw...) = PottsRTI.rti(joinpath(PottsRTI.TESTDIR, file); nworkers, PottsRTI.OPTIONS..., kw...)
+function tf(file; nworkers = 0, kw...)
+    return PottsRTI.rti(
+        joinpath(PottsRTI.TESTDIR, file); nworkers, PottsRTI.OPTIONS...,
+        kw...
+    )
+end
 
-@info "Potts test session: ti(\"name\"), ti(r\"regex\"), ti(; tags = :file_tag), tf(\"file_tests.jl\")"
+@info "Potts test session: ti(\"name\"), ti(r\"regex\"), ti(; tags = :file_tag), \
+    tf(\"file_tests.jl\")"

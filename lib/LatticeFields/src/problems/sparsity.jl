@@ -1,10 +1,10 @@
 # The Jacobian of the ODE right side: its sparsity
 # pattern read off the IR, a distance-2 coloring of its columns, the colored Dual Jacobian
-# (`jac = true`) and the Jacobian-vector product (`jvp`). The pattern comes from the semantic
-# rate program the right side runs: every load's site (offsets, the boundary rules' ghost and
-# clamp reads, coarse levels and restrictions, a hexagonal lattice's axial offsets), folded
-# through the aux fields the program computes from the state. No tracing: the IR knows the
-# stencil.
+# (`jac = true`) and the Jacobian-vector product (`jvp`). The pattern comes from the
+# semantic rate program the right side runs: every load's site (offsets, the boundary rules'
+# ghost and clamp reads, coarse levels and restrictions, a hexagonal lattice's axial
+# offsets), folded through the aux fields the program computes from the state. No tracing:
+# the IR knows the stencil.
 
 # a field's rows' state columns in the walk (`SparseMatrixCSC`, column = row), or nothing
 const _Deps = Union{Nothing, SparseArrays.SparseMatrixCSC{Bool, Int}}
@@ -18,9 +18,12 @@ and the state columns found (deduplicated by a stamp per column).
 """
 mutable struct _Walk{N}
     s::Program{N}
-    k::IR.Kernel{N}                          # the kernel (concrete: a node visit dispatches statically)
-    deps::Vector{_Deps}                      # per field: its rows' state columns (`SparseMatrixCSC`, column = row) or nothing
-    tdeps::Dict{Int32, Vector{Int}}          # per table a reduction fills: the state columns of its value
+    # the kernel (concrete: a node visit dispatches statically)
+    k::IR.Kernel{N}
+    # per field: its rows' state columns (`SparseMatrixCSC`, column = row) or nothing
+    deps::Vector{_Deps}
+    # per table a reduction fills: the state columns of its value
+    tdeps::Dict{Int32, Vector{Int}}
     seen::Vector{Int}
     stamp::Int
     counter::Int
@@ -32,8 +35,8 @@ mutable struct _Walk{N}
     depth::Int
 end
 
-# the coordinate of access `a` along axis `d` at offset `o` before wrapping, and the level it
-# is taken on (the emitted index, `Compile._fine`)
+# the coordinate of access `a` along axis `d` at offset `o` before wrapping, and the level
+# it is taken on (the emitted index, `Compile._fine`)
 function _pcoord(w::_Walk, a, d, o)
     L = Int(w.k.space.level)
     a.level >= 0 && return w.x[d] + o, L
@@ -44,9 +47,10 @@ function _pcoord(w::_Walk, a, d, o)
     return (w.x[d] - 1) * (1 << m) + 1 + ch + o, lev
 end
 
-# the linear row of field `a.field` that access `a` (offset arm `off`, component `comp`) reads
-# at the walk's site, or 0 when it reads none (a `ZERO` read outside, an `INSIDE` read past the
-# box, which a guard never takes); the wrap, clamp and parent maps of `Compile._target`
+# the linear row of field `a.field` that access `a` (offset arm `off`, component `comp`)
+# reads at the walk's site, or 0 when it reads none (a `ZERO` read outside, an `INSIDE` read
+# past the box, which a guard never takes); the wrap, clamp and parent maps of
+# `Compile._target`
 function _prow(w::_Walk{N}, a, off, comp) where {N}
     s = w.s
     L = Int(w.k.space.level)
@@ -64,7 +68,8 @@ function _prow(w::_Walk{N}, a, off, comp) where {N}
         elseif shifted && a.policy == CLAMP
             y = clamp(y, 1, nd)
         elseif !(1 <= y <= nd)
-            return 0                          # (ZERO outside reads 0; INSIDE outside is never read)
+            # (ZERO outside reads 0; INSIDE outside is never read)
+            return 0
         end
         if a.level > 0 && leveldims(s, fl)[d] != 1
             y = min(((y - 1) >> Int(a.level)) + 1, Int(ns[d]))
@@ -124,7 +129,8 @@ function _pload!(w::_Walk, a)
     D = w.deps[a.field]
     D === nothing && return nothing
     for off in (a.offset.cond == 0 ? (a.offset.a,) : (a.offset.a, a.offset.b)),
-        comp in (a.comp.cond == 0 ? (a.comp.a,) : (a.comp.a, a.comp.b))
+            comp in (a.comp.cond == 0 ? (a.comp.a,) : (a.comp.a, a.comp.b))
+
         row = _prow(w, a, off, comp)
         row == 0 || _paddcols!(w, D, row)
     end
@@ -159,23 +165,32 @@ function _pwalk!(w::_Walk{N}, i) where {N}
     return nothing
 end
 
-# a `RESTRICT` at a coarse site: its operand once per child (2 per coarsened axis, a third at
-# the last site of an odd axis; `2^m` per axis for an operand `m` levels below), as emitted
+# a `RESTRICT` at a coarse site: its operand once per child (2 per coarsened axis, a third
+# at the last site of an odd axis; `2^m` per axis for an operand `m` levels below), as
+# emitted
 function _prestrict!(w::_Walk{N}, i) where {N}
     k, s = w.k, w.s
     root = IR.args(k, k.nodes[i])[1]
     depth = 1
     for j in _pcone(k, root)
         nj = k.nodes[j]
-        nj.op in (LOAD, IR.INSIDE_OP) && (depth = max(depth, -Int(k.accesses[nj.imm].level)))
+        nj.op in (LOAD, IR.INSIDE_OP) &&
+            (depth = max(depth, -Int(k.accesses[nj.imm].level)))
     end
     L = Int(k.space.level)
-    ranges = ntuple(d -> leveldims(s, L - depth)[d] == 1 ? (0:0) : depth == 1 ? (0:2) : (0:((1 << depth) - 1)), N)
+    dims = leveldims(s, L - depth)
+    span = depth == 1 ? (0:2) : (0:((1 << depth) - 1))
+    ranges = ntuple(d -> dims[d] == 1 ? (0:0) : span, N)
     saved = w.stamp
     for o in Iterators.product(ranges...)
         # the third child exists only at the last site of an odd axis
-        depth == 1 && any(d -> o[d] == 2 && !(w.x[d] == leveldims(s, L)[d] && leveldims(s, L - 1)[d] > 2 * leveldims(s, L)[d]),
-            1:N) && continue
+        depth == 1 && any(
+            d -> o[d] == 2 && !(
+                w.x[d] == leveldims(s, L)[d] &&
+                    leveldims(s, L - 1)[d] > 2 * leveldims(s, L)[d]
+            ),
+            1:N
+        ) && continue
         w.counter += 1
         w.stamp = w.counter
         w.child, w.depth = o, depth
@@ -199,7 +214,14 @@ end
 # the sites of kernel `k`'s space (a restricted space skips its inset)
 function _psites(s::Program{N}, k) where {N}
     dims = Tuple(Int.(leveldims(s, k.space.level)))
-    rs = ntuple(d -> k.space.kind == IR.RESTRICTED ? ((1 + k.space.inset[d][1]):(dims[d] - k.space.inset[d][2])) : (1:dims[d]), N)
+    rs = ntuple(
+        d -> if k.space.kind == IR.RESTRICTED
+            (1 + k.space.inset[d][1]):(dims[d] - k.space.inset[d][2])
+        else
+            1:dims[d]
+        end,
+        N
+    )
     return CartesianIndices(rs), dims
 end
 
@@ -208,15 +230,31 @@ function _pkernel!(deps, tdeps, s::Program{N}, k, n) where {N}
     sites, dims = _psites(s, k)
     nk = prod(dims)
     lin = LinearIndices(dims)
-    w = _Walk{N}(s, k, deps, tdeps, zeros(Int, length(k.nodes)), 0, 0, zeros(Int, n), 0, Int[], ntuple(_ -> 1, N),
-        ntuple(_ -> 0, N), 0)
-    walk!(v, x) = (w.counter += 1; w.stamp = w.counter; w.mstamp += 1; empty!(w.buf); w.x = Tuple(x); _pwalk!(w, v); w.buf)
-    out = Dict{Int32, Tuple{Vector{Int}, Vector{Int}, BitVector}}()      # field => (columns, rows, rows written)
+    w = _Walk{N}(
+        s, k, deps, tdeps, zeros(Int, length(k.nodes)), 0,
+        0, zeros(Int, n), 0, Int[], ntuple(_ -> 1, N),
+        ntuple(_ -> 0, N), 0
+    )
+    function walk!(v, x)
+        w.counter += 1
+        w.stamp = w.counter
+        w.mstamp += 1
+        empty!(w.buf)
+        w.x = Tuple(x)
+        _pwalk!(w, v)
+        return w.buf
+    end
+    # field => (columns, rows, rows written)
+    out = Dict{Int32, Tuple{Vector{Int}, Vector{Int}, BitVector}}()
     for st in k.stores
         f = st.access.field
         nrows = nsites(s, s.fields[f].levels[1]) * ncomp(s.fields[f])
         I, J, written = get!(() -> (Int[], Int[], falses(nrows)), out, f)
-        comps = st.access.comp.cond == 0 ? (st.access.comp.a,) : (st.access.comp.a, st.access.comp.b)
+        comps = if st.access.comp.cond == 0
+            (st.access.comp.a,)
+        else
+            (st.access.comp.a, st.access.comp.b)
+        end
         for x in sites
             cols = walk!(st.value, x)
             for c in comps
@@ -237,7 +275,8 @@ function _pkernel!(deps, tdeps, s::Program{N}, k, n) where {N}
     for (f, (I, J, written)) in out
         nrows = length(written)
         old = deps[f]
-        if old !== nothing                         # the rows the kernel does not overwrite keep theirs
+        # the rows the kernel does not overwrite keep theirs
+        if old !== nothing
             oI, oJ, _ = SparseArrays.findnz(old)
             keep = [!written[j] for j in oJ]
             I, J = [I; oI[keep]], [J; oJ[keep]]
@@ -265,7 +304,8 @@ dense: such a system is refused, with the route `jvp`.
 field_jacobian_sparsity(prob) = _sparsity(lattice_metadata(prob)::LatticeMetadata)
 function _sparsity(m::LatticeMetadata)
     fp = m.problem
-    m.family == :ode || throw(ArgumentError("a map's problem (a `DiscreteProblem`) has no Jacobian"))
+    m.family == :ode ||
+        throw(ArgumentError("a map's problem (a `DiscreteProblem`) has no Jacobian"))
     s = _sem(m)
     ids = Int[fieldid(s, k) for k in fp.state]
     slots = state_layout(s, ids)
@@ -277,7 +317,10 @@ function _sparsity(m::LatticeMetadata)
     end
     tdeps = Dict{Int32, Vector{Int}}()
     init = Set(fp.initkeys)
-    ks = [[k for k in s.kernels if k.key in init]; [k for k in s.kernels if !(k.key in init)]]
+    ks = [
+        [k for k in s.kernels if k.key in init];
+        [k for k in s.kernels if !(k.key in init)]
+    ]
     for k in ks
         _pkernel!(deps, tdeps, s, k, n)
     end
@@ -293,20 +336,31 @@ function _sparsity(m::LatticeMetadata)
     return SparseArrays.sparse(I, J, true, n, n, |)
 end
 # a rate that reads a reduction of the state: every row is dense
-_dense_refusal(s, t) = throw(ArgumentError(string("the rates read a reduction (a sum over the lattice) of the state, table `",
-    s.tables[t].key, "`: every rate then depends on every site, so the Jacobian is dense and `sparse = true` and ",
-    "`jac = true` are refused; the Jacobian-vector product (`jvp = true`, the default) with a Krylov linear solver ",
-    "(`linsolve = KrylovJL_GMRES()`) is the route")))
+function _dense_refusal(s, t)
+    throw(
+        ArgumentError(
+            string(
+                "the rates read a reduction (a sum over the lattice) of the state, table `",
+                s.tables[t].key, "`: every rate then depends on every site, so the \
+                    Jacobian is dense and `sparse = true` and ",
+                "`jac = true` are refused; the Jacobian-vector product (`jvp = true`, the \
+                    default) with a Krylov linear solver ",
+                "(`linsolve = KrylovJL_GMRES()`) is the route"
+            )
+        )
+    )
+end
 
 """
     column_colors(S[, coords]) -> Vector{Int}
 
 A distance-2 coloring of the columns of `S`: two columns that share a row get different
-colors, so one Dual evaluation with one partial per color gives every entry of the Jacobian. With the lattice coordinates of the columns (`coords`, one column per entry of the
-state, `N` rows) a stencil's lattice coloring `(a ⋅ x) mod m` is tried first (5 colors for a
+colors, so one Dual evaluation with one partial per color gives every entry of the Jacobian.
+With the lattice coordinates of the columns (`coords`, one column per entry of the state,
+`N` rows) a stencil's lattice coloring `(a ⋅ x) mod m` is tried first (5 colors for a
 5-point stencil, 7 for a 3D 7-point one, 9 for a 9-point one, when the box allows it: a
-periodic axis needs `m` to divide its size); otherwise, or when it takes more colors, the greedy
-coloring in column order (7 for a 5-point stencil).
+periodic axis needs `m` to divide its size); otherwise, or when it takes more colors, the
+greedy coloring in column order (7 for a 5-point stencil).
 """
 function column_colors(S::SparseArrays.SparseMatrixCSC, coords = nothing)
     St = SparseArrays.sparse(transpose(S))
@@ -316,7 +370,8 @@ function column_colors(S::SparseArrays.SparseMatrixCSC, coords = nothing)
     lo = maximum((length(SparseArrays.nzrange(St, i)) for i in axes(St, 2)); init = 1)
     N = size(coords, 1)
     for m in lo:(best - 1), a in Iterators.product(ntuple(_ -> 1:min(m - 1, 4), N)...)
-        a[1] == 1 || continue                    # (a multiple of a coloring is the same partition)
+        # (a multiple of a coloring is the same partition)
+        a[1] == 1 || continue
         c = [mod(sum(a[d] * coords[d, j] for d in 1:N), m) + 1 for j in axes(S, 2)]
         _valid_colors(S, St, c) && return c
     end
@@ -353,8 +408,8 @@ function _valid_colors(S, St, c)
     end
     return true
 end
-# the lattice coordinates of the state's entries (a field's sites on its own grid, the same for
-# each component)
+# the lattice coordinates of the state's entries (a field's sites on its own grid, the same
+# for each component)
 function _state_coords(fp::FieldProblem)
     s = fp.program
     N = _ndims(s)
@@ -386,9 +441,12 @@ struct LatticeJacobian{M}
     cache::Dict{Type, Any}
     lock::ReentrantLock
 end
-LatticeJacobian(meta, pattern, colors; chunk = min(maximum(colors; init = 1), 12)) =
-    LatticeJacobian(meta, pattern, colors, chunk, Dict{Type, Any}(), ReentrantLock())
-Base.deepcopy_internal(j::LatticeJacobian, ::IdDict) = LatticeJacobian(j.meta, j.pattern, j.colors; chunk = j.chunk)
+function LatticeJacobian(meta, pattern, colors; chunk = min(maximum(colors; init = 1), 12))
+    return LatticeJacobian(meta, pattern, colors, chunk, Dict{Type, Any}(), ReentrantLock())
+end
+function Base.deepcopy_internal(j::LatticeJacobian, ::IdDict)
+    return LatticeJacobian(j.meta, j.pattern, j.colors; chunk = j.chunk)
+end
 (j::LatticeJacobian)(J, u, p, t) = colored_jacobian!(J, j, u, p, t)
 
 """
@@ -403,10 +461,13 @@ struct LatticeJVP{M}
     meta::M
     cache::Dict{Type, Any}
     lock::ReentrantLock
-    calls::Base.RefValue{Int}                # the products taken (a test reads it; shared by copies)
+    # the products taken (a test reads it; shared by copies)
+    calls::Base.RefValue{Int}
 end
 LatticeJVP(meta) = LatticeJVP(meta, Dict{Type, Any}(), ReentrantLock(), Ref(0))
-Base.deepcopy_internal(j::LatticeJVP, ::IdDict) = LatticeJVP(j.meta, Dict{Type, Any}(), ReentrantLock(), j.calls)
+function Base.deepcopy_internal(j::LatticeJVP, ::IdDict)
+    return LatticeJVP(j.meta, Dict{Type, Any}(), ReentrantLock(), j.calls)
+end
 (j::LatticeJVP)(Jv, v, u, p, t) = (j.calls[] += 1; lattice_jvp!(Jv, j, v, u, p, t))
 
 """
@@ -418,33 +479,51 @@ extension).
 """
 function colored_jacobian! end
 function lattice_jvp! end
-colored_jacobian!(J, j, u, p, t) = throw(ArgumentError("`jac = true` evaluates the right side on ForwardDiff Duals: load ForwardDiff"))
-lattice_jvp!(Jv, j, v, u, p, t) = throw(ArgumentError("the Jacobian-vector product evaluates the right side on ForwardDiff Duals: load ForwardDiff"))
+function colored_jacobian!(J, j, u, p, t)
+    throw(
+        ArgumentError(
+            "`jac = true` evaluates the right side on ForwardDiff Duals: load ForwardDiff"
+        )
+    )
+end
+function lattice_jvp!(Jv, j, v, u, p, t)
+    throw(ArgumentError("the Jacobian-vector product evaluates the right side on \
+        ForwardDiff Duals: load ForwardDiff"))
+end
 
 """
     JacobianOperator(jvp, u, p, t)
 
 The matrix-free Jacobian of a problem on a device: a
 `SciMLOperators.FunctionOperator` whose product is [`LatticeJVP`](@ref), the `jac_prototype`
-of an `ODEProblem` on a device, so an implicit OrdinaryDiffEq solver forms `W = J − M/γ` as an
-operator and solves it with a Krylov method (precondition it with `LatticeMultigrid()`).
+of an `ODEProblem` on a device, so an implicit OrdinaryDiffEq solver forms `W = J − M/γ` as
+an operator and solves it with a Krylov method (precondition it with `LatticeMultigrid()`).
 """
 function JacobianOperator(jvp::LatticeJVP, u, p, t)
-    return SciMLOperators.FunctionOperator(jvp, u, u; u, p, t, isinplace = true, outofplace = false,
-        T = eltype(u), isconstant = false, islinear = true)
+    return SciMLOperators.FunctionOperator(
+        jvp, u, u; u, p, t, isinplace = true, outofplace = false,
+        T = eltype(u), isconstant = false, islinear = true
+    )
 end
 
-# the Jacobian keywords of `lattice_problem` (`jac`, `sparse`, `jvp`) as `ODEFunction` keywords:
-# the sparse prototype (the pattern with its diagonal, which `W = J − M/γ` holds) and its
-# coloring on the host; the matrix-free operator on a device
+# the Jacobian keywords of `lattice_problem` (`jac`, `sparse`, `jvp`) as `ODEFunction`
+# keywords: the sparse prototype (the pattern with its diagonal, which `W = J − M/γ` holds)
+# and its coloring on the host; the matrix-free operator on a device
 function _jacobian_kw(meta::LatticeMetadata, U, lp; jac::Bool, sparse::Bool, jvp::Bool)
     fp = meta.problem
     host = Exec.ishost(fp.backend)
     if !host && (sparse || jac)
-        throw(ArgumentError(string("`", sparse ? "sparse" : "jac", " = true` builds a sparse matrix on the host; the ",
-            "problem's backend is ", nameof(typeof(fp.backend)), ", and no KernelAbstractions sparse matrix exists ",
-            "(a hardware limit): on a device the Jacobian is the matrix-free product (`jvp = true`, the default), ",
-                    "the problem's `jac_prototype`, for a Krylov linear solver with `precs = LatticeMultigrid()`"
+        throw(
+            ArgumentError(
+                string(
+                    "`", sparse ? "sparse" : "jac",
+                    " = true` builds a sparse matrix on the host; the ",
+                    "problem's backend is ", nameof(typeof(fp.backend)),
+                    ", and no KernelAbstractions sparse matrix exists ",
+                    "(a hardware limit): on a device the Jacobian is the matrix-free \
+                        product (`jvp = true`, the default), ",
+                    "the problem's `jac_prototype`, for a Krylov linear solver with \
+                        `precs = LatticeMultigrid()`"
                 )
             )
         )

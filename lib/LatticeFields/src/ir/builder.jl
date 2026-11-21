@@ -2,8 +2,8 @@
 # interned on (op, type, operands, imm); commutative operands are flattened (ADD, MUL) and
 # sorted by a structural order that never looks at node ids, so equal expressions get equal
 # ids whatever the build order. `finish` renumbers nodes, accesses and constants in a
-# canonical depth-first order from the sorted stores. Passes never mutate nodes: they rebuild
-# through this builder (`rebuild`), so a folded DAG is canonical again.
+# canonical depth-first order from the sorted stores. Passes never mutate nodes: they
+# rebuild through this builder (`rebuild`), so a folded DAG is canonical again.
 
 mutable struct KernelBuilder{N}
     fieldkeys::Vector{String}
@@ -27,7 +27,8 @@ function KernelBuilder{N}(fieldkeys, fieldlanes, tablekeys, space::Space{N}) whe
         fieldkeys, fieldlanes, tablekeys, space, Node[], Int32[], Float64[],
         Access{N}[], Symbol[], Store{N}[], Reduction[], Int32(0),
         Dict{Tuple{Op, Scalar, Vector{Int32}, Int64}, Int32}(),
-        Dict{UInt64, Int32}(), Dict{Access{N}, Int32}())
+        Dict{UInt64, Int32}(), Dict{Access{N}, Int32}()
+    )
 end
 
 """
@@ -41,12 +42,22 @@ end
 nodeargs(b::KernelBuilder, i) = view(b.operands, b.nodes[i].args)
 
 # ---- structural order (never uses node ids, so it is build-order independent) ----------
-_cmp(a, b) = isless(a, b) ? -1 : isless(b, a) ? 1 : 0
+function _cmp(a, b)
+    if isless(a, b)
+        return -1
+    elseif isless(b, a)
+        return 1
+    else
+        return 0
+    end
+end
 function _accesscmp(b::KernelBuilder, x::Access, y::Access)
     c = _cmp(b.fieldkeys[x.field], b.fieldkeys[y.field])
     c == 0 || return c
-    c = _cmp((x.class, x.comp.a, x.comp.b, x.offset.a, x.offset.b, x.level, Int(x.policy)),
-        (y.class, y.comp.a, y.comp.b, y.offset.a, y.offset.b, y.level, Int(y.policy)))
+    c = _cmp(
+        (x.class, x.comp.a, x.comp.b, x.offset.a, x.offset.b, x.level, Int(x.policy)),
+        (y.class, y.comp.a, y.comp.b, y.offset.a, y.offset.b, y.level, Int(y.policy))
+    )
     c == 0 || return c
     c = scmp(b, x.comp.cond, y.comp.cond)
     return c != 0 ? c : scmp(b, x.offset.cond, y.offset.cond)
@@ -86,9 +97,11 @@ end
 """
 Intern a node; flattens and sorts commutative operands.
 """
-function node!(b::KernelBuilder, op::Op, type::Scalar,
+function node!(
+        b::KernelBuilder, op::Op, type::Scalar,
         args::Vector{Int32} = Int32[], imm::Integer = 0;
-        flatten = true)
+        flatten = true
+    )
     if flatten && op in (ADD, MUL)
         flat = Int32[]
         for a in args
@@ -136,7 +149,8 @@ loadtype(s::Scalar) = isfloat(s) ? REAL : s
 
 function load!(
         b::KernelBuilder{N}, field::Integer, storage::Scalar; offset = ntuple(_ -> 0, N),
-        comp = 1, level = 0, policy = RESOLVE, class = 0) where {N}
+        comp = 1, level = 0, policy = RESOLVE, class = 0
+    ) where {N}
     off = offset isa Sel ? offset : Sel(NTuple{N, Int16}(offset))
     cmp = comp isa Sel ? comp : Sel(Int16(comp))
     a = Access{N}(Int32(field), Int8(class), cmp, off, Int8(level), policy)
@@ -147,8 +161,9 @@ param!(b::KernelBuilder, slot::Integer) = node!(b, PARAM, REAL, Int32[], slot)
 runtime!(b::KernelBuilder, slot::Integer) = node!(b, RUNTIME, REAL, Int32[], slot)
 coord!(b::KernelBuilder, axis::Integer) = node!(b, COORD, I32, Int32[], axis)
 function table!(b::KernelBuilder, table::Integer, storage::Scalar, index::Integer)
-    node!(
-        b, TABLE, loadtype(storage), Int32[cast!(b, index, I32)], table)
+    return node!(
+        b, TABLE, loadtype(storage), Int32[cast!(b, index, I32)], table
+    )
 end
 function call!(b::KernelBuilder, f::Symbol, x::Integer)
     f in CALLS || irerror("CALL: `$f` is not in the whitelist $(CALLS)")
@@ -157,7 +172,8 @@ function call!(b::KernelBuilder, f::Symbol, x::Integer)
     return node!(b, CALL, REAL, Int32[cast!(b, x, REAL)], k)
 end
 
-# ---- typing -------------------------------------------------------------------------------
+# ---- typing
+# -------------------------------------------------------------------------------
 function cast!(b::KernelBuilder, x::Integer, t::Scalar)
     b.nodes[x].type == t && return Int32(x)
     n = b.nodes[x]
@@ -188,36 +204,51 @@ end
 Eager select (both arms computed, emitted as `ifelse`).
 """
 function select!(b::KernelBuilder, c, x, y; op = SELECT)
-    (t = jointype(b, (x, y));
-        node!(b, op, t, Int32[c, cast!(b, x, t), cast!(b, y, t)]))
+    (
+        t = jointype(b, (x, y));
+        node!(b, op, t, Int32[c, cast!(b, x, t), cast!(b, y, t)])
+    )
 end
 """
 Lazy conditional (user `ifelse`): emitted as a branch.
 """
 cond!(b::KernelBuilder, c, x, y) = select!(b, c, x, y; op = COND)
 function bittest!(b::KernelBuilder, x::Integer, bit::Integer)
-    (isunsigned_lane(b.nodes[x].type) ||
+    (
+        isunsigned_lane(b.nodes[x].type) ||
             irerror("BITTEST needs an unsigned operand");
-        node!(b, BITTEST, BOOL, Int32[x], bit))
+        node!(b, BITTEST, BOOL, Int32[x], bit)
+    )
 end
 
-function store!(b::KernelBuilder{N}, field::Integer, storage::Scalar, value::Integer;
-        comp = 1, law = :owned) where {N}
+function store!(
+        b::KernelBuilder{N}, field::Integer, storage::Scalar, value::Integer;
+        comp = 1, law = :owned
+    ) where {N}
     isfloat(storage) && (value = cast!(b, value, REAL))
-    a = Access{N}(Int32(field), Int8(0), Sel(Int16(comp)),
-        Sel(ntuple(_ -> Int16(0), N)), Int8(0), INSIDE)
+    a = Access{N}(
+        Int32(field), Int8(0), Sel(Int16(comp)),
+        Sel(ntuple(_ -> Int16(0), N)), Int8(0), INSIDE
+    )
     push!(b.stores, Store{N}(a, Int32(value), law))
     return nothing
 end
 
-# ---- operators on handles -----------------------------------------------------------------
+# ---- operators on handles
+# -----------------------------------------------------------------
 _id(b, x::Ex) = x.id
 _id(b, x::Real) = constant!(b, x)
 # Written out (no `@eval Base.$f`): the frozen seed scan reads definition names literally.
 _bin(op, x::Ex, y::Union{Ex, Real}) = Ex(x.b, arith!(x.b, op, x.id, _id(x.b, y)))
 _bin(op, x::Real, y::Ex) = Ex(y.b, arith!(y.b, op, _id(y.b, x), y.id))
-_un(op, x::Ex) = Ex(x.b, arith!(x.b, op, x.id;
-    type = op in (NEG, ABS) ? jointype(x.b, (x.id,)) : REAL))
+function _un(op, x::Ex)
+    return Ex(
+        x.b, arith!(
+            x.b, op, x.id;
+            type = op in (NEG, ABS) ? jointype(x.b, (x.id,)) : REAL
+        )
+    )
+end
 Base.:+(x::Ex, y::Union{Ex, Real}) = _bin(ADD, x, y)
 Base.:+(x::Real, y::Ex) = _bin(ADD, x, y)
 Base.:*(x::Ex, y::Union{Ex, Real}) = _bin(MUL, x, y)
@@ -252,13 +283,21 @@ cond(c::Ex, x, y) = Ex(c.b, cond!(c.b, c.id, _id(c.b, x), _id(c.b, y)))
 """
 `RESTRICT`: combine `x` (built with level −1 accesses relative to a child) over the
 children of the coarse site, `op ∈ (:sum, :max, :plurality)`. `:plurality` takes the most
-frequent value of an integer `x` (ties: the smallest nonzero value; 0 only when no nonzero value
-ties).
+frequent value of an integer `x` (ties: the smallest nonzero value; 0 only when no nonzero
+value ties).
 """
 function restrict(x::Ex; op::Symbol = :sum)
-    op in (:sum, :max, :plurality) || irerror("RESTRICT: op `$op` is not :sum, :max or :plurality")
+    op in (:sum, :max, :plurality) ||
+        irerror("RESTRICT: op `$op` is not :sum, :max or :plurality")
     t = x.b.nodes[x.id].type
-    return Ex(x.b, node!(x.b, RESTRICT, t, Int32[x.id], op == :sum ? 0 : op == :max ? 1 : 2))
+    code = if op == :sum
+        0
+    elseif op == :max
+        1
+    else
+        2
+    end
+    return Ex(x.b, node!(x.b, RESTRICT, t, Int32[x.id], code))
 end
 """
 Reduce `x` over the kernel's sites into the partials table `target` (`op ∈ (:sum, :max)`).
@@ -273,7 +312,8 @@ Gate the kernel on the `BOOL` expression `c` (see `Kernel`).
 """
 gate!(kb::KernelBuilder, c::Ex) = (kb.gate = c.id; nothing)
 
-# ---- canonical finish ---------------------------------------------------------------------
+# ---- canonical finish
+# ---------------------------------------------------------------------
 """
 Node dependencies, including `Sel` conditions carried by accesses.
 """
@@ -301,19 +341,23 @@ function finish(b::KernelBuilder{N}, key::AbstractString) where {N}
     stores = sort(b.stores; lt = (s, t) -> _storeless(b, s, t))
     order = Int32[]
     seen = falses(length(b.nodes))
-    visit(i) = (
-        seen[i] && return; seen[i] = true; foreach(visit, deps(b, i)); push!(order, i))
+    function visit(i)
+        seen[i] && return
+        seen[i] = true
+        foreach(visit, deps(b, i))
+        return push!(order, i)
+    end
     foreach(s -> visit(s.value), stores)
     foreach(r -> visit(r.value), b.reductions)
     b.gate != 0 && visit(b.gate)
     newid = zeros(Int32, length(b.nodes))
     newid[order] .= 1:length(order)
     nodes, operands, consts, accesses, calls = Node[], Int32[], Float64[], Access{N}[],
-    Symbol[]
+        Symbol[]
     remapc(c) = c == 0 ? Int32(0) : newid[c]
     function slot!(v, x)
         k = findfirst(isequal(x), v)
-        k === nothing ? (push!(v, x); length(v)) : k
+        return k === nothing ? (push!(v, x); length(v)) : k
     end
     for i in order
         n = b.nodes[i]
@@ -324,9 +368,13 @@ function finish(b::KernelBuilder{N}, key::AbstractString) where {N}
             imm = slot!(consts, b.consts[n.imm])
         elseif n.op in (LOAD, INSIDE_OP)
             a = b.accesses[n.imm]
-            imm = slot!(accesses,
-                Access{N}(a.field, a.class, Sel(a.comp.a, a.comp.b, remapc(a.comp.cond)),
-                    Sel(a.offset.a, a.offset.b, remapc(a.offset.cond)), a.level, a.policy))
+            imm = slot!(
+                accesses,
+                Access{N}(
+                    a.field, a.class, Sel(a.comp.a, a.comp.b, remapc(a.comp.cond)),
+                    Sel(a.offset.a, a.offset.b, remapc(a.offset.cond)), a.level, a.policy
+                )
+            )
         elseif n.op == CALL
             imm = slot!(calls, b.calls[n.imm])
         end
@@ -337,19 +385,23 @@ function finish(b::KernelBuilder{N}, key::AbstractString) where {N}
     tabs = Int32[n.imm for n in nodes if n.op == TABLE]
     return Kernel{N}(
         String(key), b.space, nodes, operands, consts, accesses,
-        unique!([tabs; Int32[r.target for r in red]]), calls, st, red, remapc(b.gate))
+        unique!([tabs; Int32[r.target for r in red]]), calls, st, red, remapc(b.gate)
+    )
 end
 
 """
     rebuild(f, k, keys; space, fieldmap, tablemap)
 
-Rebuild kernel `k` through a fresh builder. For each node in order, `f(b, k, i, newargs, ctx)`
-returns the new id, with `ctx = (newids, fieldmap, tablemap)`; `copy_node!` re-interns it unchanged. `fieldmap`/`tablemap` renumber
-field and table ids; `keys = (fieldkeys, fieldlanes, tablekeys)` of the target program.
-This is how every semantic pass changes a kernel.
+Rebuild kernel `k` through a fresh builder. For each node in order,
+`f(b, k, i, newargs, ctx)` returns the new id, with `ctx = (newids, fieldmap, tablemap)`;
+`copy_node!` re-interns it unchanged. `fieldmap`/`tablemap` renumber field and table ids;
+`keys = (fieldkeys, fieldlanes, tablekeys)` of the target program. This is how every
+semantic pass changes a kernel.
 """
-function rebuild(f::F, k::Kernel{N}, keys::Tuple; space = k.space, fieldmap = identity,
-        tablemap = identity, key = k.key, storefn = (b, s, v) -> v) where {F, N}
+function rebuild(
+        f::F, k::Kernel{N}, keys::Tuple; space = k.space, fieldmap = identity,
+        tablemap = identity, key = k.key, storefn = (b, s, v) -> v
+    ) where {F, N}
     b = KernelBuilder{N}(keys..., space)
     new = zeros(Int32, length(k.nodes))
     for i in eachindex(k.nodes)
@@ -359,12 +411,16 @@ function rebuild(f::F, k::Kernel{N}, keys::Tuple; space = k.space, fieldmap = id
         a = s.access
         s2 = Store{N}(
             Access{N}(
-                Int32(fieldmap(a.field)), a.class, a.comp, a.offset, a.level, a.policy),
-            new[s.value], s.law)
+                Int32(fieldmap(a.field)), a.class, a.comp, a.offset, a.level, a.policy
+            ),
+            new[s.value], s.law
+        )
         push!(b.stores, Store{N}(s2.access, storefn(b, s2, s2.value), s.law))
     end
-    append!(b.reductions,
-        (Reduction(r.op, new[r.value], tablemap(r.target)) for r in k.reductions))
+    append!(
+        b.reductions,
+        (Reduction(r.op, new[r.value], tablemap(r.target)) for r in k.reductions)
+    )
     k.gate != 0 && (b.gate = new[k.gate])
     return finish(b, key)
 end
@@ -389,5 +445,6 @@ function remap_access(a::Access{N}, new, fieldmap) where {N}
     rc(c) = c == 0 ? Int32(0) : new[c]
     return Access{N}(
         Int32(fieldmap(a.field)), a.class, Sel(a.comp.a, a.comp.b, rc(a.comp.cond)),
-        Sel(a.offset.a, a.offset.b, rc(a.offset.cond)), a.level, a.policy)
+        Sel(a.offset.a, a.offset.b, rc(a.offset.cond)), a.level, a.policy
+    )
 end

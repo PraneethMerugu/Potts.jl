@@ -1,28 +1,31 @@
 # Callbacks on the owned path. They run after each window, in
 # SciML's order: the continuous callbacks (an event located inside the window), then the
-# discrete ones, then the saves due. A callback whose affect changes the state, the parameters
-# or the data drops every group's history ([`reset!`](@ref): Crank–Nicolson damps again, BDF2
-# starts again) unless the affect calls `derivative_discontinuity!(integ, false)`. On a device
-# the conditions read a host copy of the state: one copy per window while a callback is active,
-# and one more after an affect when another condition reads it (`sol.stats.syncs`); with no callback the windows read nothing
-# back. An affect that changes nothing still drops the history, as in SciML: a callback that
-# only observes calls `derivative_discontinuity!(integ, false)` to keep it.
-# The callbacks are held in their `CallbackSet` (a tuple of each kind) and walked by recursion,
-# so a warm window with callbacks whose conditions do not fire allocates nothing.
+# discrete ones, then the saves due. A callback whose affect changes the state, the
+# parameters or the data drops every group's history ([`reset!`](@ref): Crank–Nicolson damps
+# again, BDF2 starts again) unless the affect calls `derivative_discontinuity!(integ,
+# false)`. On a device the conditions read a host copy of the state: one copy per window
+# while a callback is active, and one more after an affect when another condition reads it
+# (`sol.stats.syncs`); with no callback the windows read nothing back. An affect that
+# changes nothing still drops the history, as in SciML: a callback that only observes calls
+# `derivative_discontinuity!(integ, false)` to keep it. The callbacks are held in their
+# `CallbackSet` (a tuple of each kind) and walked by recursion, so a warm window with
+# callbacks whose conditions do not fire allocates nothing.
 
 # the state a condition reads: the store's buffer on the host, a host copy on a device
 _ustate(::FieldIntegrator{P, A, S, RT, T, PV, TB, U}) where {P, A, S, RT, T, PV, TB, U} = U
 _savetype(::FieldIntegrator{P, A, S, RT, T}) where {P, A, S, RT, T} = T
-# (one concrete type: the walks below dispatch statically; a mixed store's conditions read a copy)
+# (one concrete type: the walks below dispatch statically; a mixed store's conditions read a
+# copy)
 function _cb_u(integ::FieldIntegrator)
     st = integ.store
     host = Exec.ishost(integ.prob.backend)
-    host && !mixed_state(st) && !isempty(st.flat) && return st.flat[_parity(integ)]::_ustate(integ)
+    host && !mixed_state(st) && !isempty(st.flat) &&
+        return st.flat[_parity(integ)]::_ustate(integ)
     host || (integ.syncs += 1)
     return convert(Vector{_savetype(integ)}, _current(integ))::Vector{_savetype(integ)}
 end
-# the continuous conditions at the window's start (`g0`) and end (`g1`), one entry per scalar
-# callback and `len` per vector callback
+# the continuous conditions at the window's start (`g0`) and end (`g1`), one entry per
+# scalar callback and `len` per vector callback
 mutable struct _CondBuf
     g0::Vector{Float64}
     g1::Vector{Float64}
@@ -43,7 +46,8 @@ function _conds!(g, k, cbs::Tuple, u, t, integ)
     return nothing
 end
 
-# a callback built with SciML's defaults: its `initialize` and `finalize` (they read no state)
+# a callback built with SciML's defaults: its `initialize` and `finalize` (they read no
+# state)
 const _DEFAULTS = SciMLBase.DiscreteCallback((u, t, i) -> false, i -> nothing)
 # `callback` at `init`: a `CallbackSet` kept on the integrator, each callback's `initialize`
 # run at the start time, and the continuous conditions at the start
@@ -85,14 +89,16 @@ function _finalize_cbs!(integ::FieldIntegrator, cs)
     return nothing
 end
 
-# after each window (behind a barrier; one dispatch on the set's type, then type-stable): the
-# continuous callbacks, then the discrete ones
+# after each window (behind a barrier; one dispatch on the set's type, then type-stable):
+# the continuous callbacks, then the discrete ones
 _apply_callbacks!(integ::FieldIntegrator) = _apply_cbs!(integ, integ.cbs)
 function _apply_cbs!(integ::FieldIntegrator, cs::SciMLBase.CallbackSet)
     u = _cb_u(integ)
-    if !isempty(cs.continuous_callbacks) && _continuous!(integ, cs.continuous_callbacks, u) &&
-       !isempty(cs.discrete_callbacks)
-        _discrete!(integ, _cb_u(integ), cs.discrete_callbacks)   # (an event moved the state)
+    if !isempty(cs.continuous_callbacks) &&
+            _continuous!(integ, cs.continuous_callbacks, u) &&
+            !isempty(cs.discrete_callbacks)
+        # (an event moved the state)
+        _discrete!(integ, _cb_u(integ), cs.discrete_callbacks)
     else
         _discrete!(integ, u, cs.discrete_callbacks)
     end
@@ -105,13 +111,14 @@ function _discrete!(integ::FieldIntegrator, u, cbs::Tuple)
     rest = Base.tail(cbs)
     if cb.condition(u, _time(integ), integ)
         _fire!(integ, cb, cb.affect!)
-        isempty(rest) || (u = _cb_u(integ))     # (the state the affect left, for the next condition)
+        # (the state the affect left, for the next condition)
+        isempty(rest) || (u = _cb_u(integ))
     end
     _discrete!(integ, u, rest)
     return nothing
 end
-# one callback's affect, with its saves before and after (`save_positions`, as SciML: before,
-# the saves due and the state as it is; after, the state the affect left)
+# one callback's affect, with its saves before and after (`save_positions`, as SciML:
+# before, the saves due and the state as it is; after, the state the affect left)
 function _fire!(integ::FieldIntegrator, cb, affect!, args...)
     sp = cb.save_positions
     if sp[1]
@@ -128,12 +135,14 @@ end
 # Continuous callbacks: each condition at the window's end against its value at
 # the window's start; a sign change is an event, located by linear interpolation of the
 # condition (the solution is linear between the window's ends), so its time is first-order
-# accurate. The earliest event of the window fires: the integrator moves to its time with the
-# interpolated state, the affect runs (`affect!` on an upcrossing, `affect_neg!` on a
-# downcrossing), the groups' history is dropped, and the next window is shortened to land back
-# on the window's end (and then on the grid).
-# the affect of a crossing: `affect!` up, `affect_neg!` down (a vector callback has one)
-_affect(cb, up::Bool) = up || !hasfield(typeof(cb), :affect_neg!) ? cb.affect! : cb.affect_neg!
+# accurate. The earliest event of the window fires: the integrator moves to its time with
+# the interpolated state, the affect runs (`affect!` on an upcrossing, `affect_neg!` on a
+# downcrossing), the groups' history is dropped, and the next window is shortened to land
+# back on the window's end (and then on the grid). the affect of a crossing: `affect!` up,
+# `affect_neg!` down (a vector callback has one)
+function _affect(cb, up::Bool)
+    return up || !hasfield(typeof(cb), :affect_neg!) ? cb.affect! : cb.affect_neg!
+end
 # the earliest crossing: `(θ, callback, entry, up)`, callback 0 for none
 _best(buf, ::Tuple{}, k, j, best) = best
 function _best(buf, cbs::Tuple, k, j, best)
@@ -172,7 +181,8 @@ end
         _load_state!(integ.store, ue)
         integ.tnow = te
         integ.iter = _floor_count((te - integ.t0) / integ.dt)
-        t1 < integ.tend - tol && SciMLBase.add_tstop!(integ, t1)    # (the window's end again, exactly)
+        # (the window's end again, exactly)
+        t1 < integ.tend - tol && SciMLBase.add_tstop!(integ, t1)
     end
     _fire_nth!(integ, ccbs, j, q, up)
     # the conditions after the event, the start of the next window's check
@@ -184,6 +194,10 @@ function _fire_nth!(integ, cbs::Tuple, j, q, up)
     j == 1 || return _fire_nth!(integ, Base.tail(cbs), j - 1, q, up)
     cb = first(cbs)
     aff = _affect(cb, up)
-    cb isa SciMLBase.VectorContinuousCallback ? _fire!(integ, cb, aff, q) : _fire!(integ, cb, aff)
+    if cb isa SciMLBase.VectorContinuousCallback
+        _fire!(integ, cb, aff, q)
+    else
+        _fire!(integ, cb, aff)
+    end
     return nothing
 end

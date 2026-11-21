@@ -1,4 +1,5 @@
-#     julia --project=lib/PottsModels/test -t <threads> benchmark/kinetics/act.jl <runs> [<nmcs> <out>]
+#     julia --project=lib/PottsModels/test -t <threads> benchmark/kinetics/act.jl <runs> \
+#         [<nmcs> <out>]
 # Act: one Act cell (Niculescu et al. 2015; `WortelAct`, 200² torus, amoeboid
 # defaults) at several λ_act, CheckerboardCPM against SequentialCPM. Sultan et al. (arXiv
 # 2312.09317, Fig. 5B) found the Act cell's persistence the most sensitive to the
@@ -15,13 +16,20 @@ const NMCS = parse(Int, get(ARGS, 2, "1500"))
 const OUT = expanduser(get(ARGS, 3, "kinetics_act.tsv"))
 const BURN, LAG, L = 100, 10, 200
 const LAMBDAS = (100.0, 200.0, 300.0)
-const ALGS = (("seq", SequentialCPM(; proposal = Moore(1))), ("cb", CheckerboardCPM(; proposal = Moore(1), threads = false)))
+const ALGS = (
+    ("seq", SequentialCPM(; proposal = Moore(1))),
+    ("cb", CheckerboardCPM(; proposal = Moore(1), threads = false)),
+)
 
 function problem(λ_act, seed)
     σ = zeros(Int32, L, L)
     σ[89:111, 89:111] .= 1
-    return PottsProblem(WortelAct(; name = :a, lattice = (L, L)), [ownership => σ, kind => [:cell], :λ_act => λ_act],
-        (0, NMCS); seed)
+    return PottsProblem(
+        WortelAct(; name = :a, lattice = (L, L)), [
+            ownership => σ, kind => [:cell], :λ_act => λ_act,
+        ],
+        (0, NMCS); seed
+    )
 end
 
 # the centroid on the torus: the circular mean per axis
@@ -40,7 +48,10 @@ end
 minimage(d) = d - L * round(d / L)
 
 function run(alg, λ_act, seed)
-    integ = init(problem(λ_act, seed), alg; save_start = false, save_end = false, save_everystep = false)
+    integ = init(
+        problem(λ_act, seed), alg; save_start = false,
+        save_end = false, save_everystep = false
+    )
     x = zeros(2, NMCS)
     prev = centroid(Array(integ.state.ownership))
     pos = copy(prev)
@@ -55,13 +66,18 @@ function run(alg, λ_act, seed)
     n = size(x, 2)
     d = [x[:, t + LAG] - x[:, t] for t in 1:LAG:(n - LAG)]
     speed = mean(v -> sqrt(sum(abs2, v)), d) / LAG
-    cosines = [sum(d[i] .* d[i + 1]) / sqrt(sum(abs2, d[i]) * sum(abs2, d[i + 1])) for i in 1:(length(d) - 1)
-               if sum(abs2, d[i]) > 0 && sum(abs2, d[i + 1]) > 0]
+    cosines = [
+        sum(d[i] .* d[i + 1]) / sqrt(sum(abs2, d[i]) * sum(abs2, d[i + 1]))
+            for i in 1:(length(d) - 1)
+            if sum(abs2, d[i]) > 0 && sum(abs2, d[i + 1]) > 0
+    ]
     msd = mean(t -> sum(abs2, x[:, t + 10LAG] - x[:, t]), 1:(n - 10LAG))
     return (speed, mean(cosines), msd)
 end
 
-boot(a, b; rng = Xoshiro(3)) = [mean(rand(rng, a, length(a))) / mean(rand(rng, b, length(b))) for _ in 1:4000]
+function boot(a, b; rng = Xoshiro(3))
+    return [mean(rand(rng, a, length(a))) / mean(rand(rng, b, length(b))) for _ in 1:4000]
+end
 open(OUT, "w") do io
     println(io, "lambda_act\talg\tseed\tspeed\tpers\tmsd")
 end
@@ -74,15 +90,24 @@ for λ_act in LAMBDAS
         end
         res[name] = R
         open(OUT, "a") do io
-            foreach(j -> println(io, join((λ_act, name, 5_000 + j, R[j, :]...), '\t')), 1:NRUN)
+            foreach(
+                j -> println(io, join((λ_act, name, 5_000 + j, R[j, :]...), '\t')),
+                1:NRUN
+            )
         end
-        @printf("λ_act %5.0f  %-4s  speed %.4f  pers %.3f  msd %.1f  wall %.0f s\n", λ_act, name,
-            mean(R[:, 1]), mean(R[:, 2]), mean(R[:, 3]), wall)
+        @printf(
+            "λ_act %5.0f  %-4s  speed %.4f  pers %.3f  msd %.1f  wall %.0f s\n",
+            λ_act, name,
+            mean(R[:, 1]), mean(R[:, 2]), mean(R[:, 3]), wall
+        )
     end
     for (k, obs) in enumerate(("speed", "pers", "msd"))
         a, b = res["cb"][:, k], res["seq"][:, k]
         q = boot(a, b)
         z = (mean(a) - mean(b)) / sqrt(std(a)^2 / length(a) + std(b)^2 / length(b))
-        @printf("    %-5s r %.3f [%.3f, %.3f]  z %+.2f\n", obs, mean(a) / mean(b), quantile(q, 0.025), quantile(q, 0.975), z)
+        @printf(
+            "    %-5s r %.3f [%.3f, %.3f]  z %+.2f\n",
+            obs, mean(a) / mean(b), quantile(q, 0.025), quantile(q, 0.975), z
+        )
     end
 end

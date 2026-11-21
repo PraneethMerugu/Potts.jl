@@ -41,8 +41,8 @@
 #     kinds `medium, compressed, relaxed`; parameters λ = 2, T = 20, A = 50, A_c = 25 and
 #     J[kind, kind] with cell–cell 20, cell–medium 10 (Table S1, P3); energies
 #     `cells(compressed) => λ (volume − A_c)²`, `cells(relaxed) => λ (volume − A)²` and
-#     `contacts => J[kind, neighbor_kind]`; lattice periodic on both axes with Moore(1) (P1, P4);
-#     proposals Moore(1); Metropolis at T; no growth and no division.
+#     `contacts => J[kind, neighbor_kind]`; lattice periodic on both axes with Moore(1) (P1,
+#     P4); proposals Moore(1); Metropolis at T; no growth and no division.
 #   openvt_chain(n) -> [ownership => σ, kind => kinds]   (PottsModels, exported)
 #     n = 11: 11 compressed 5 × 5 cells packed edge to edge on 150 × 5 at x ∈ 49:103;
 #     n = 21: on 250 × 5, 5 relaxed 10 × 5 cells at x ∈ 49:98, 11 compressed at 99:153 and
@@ -60,10 +60,10 @@
 # MCS from 100 on.
 #
 # Tiers. The fixture rows and SMOKE run in the PottsModels suite (seconds plus one model
-# compilation). FULL runs with POTTS_FULL_REPRODUCTION=true (or REPRO=full), offline (D-146);
-# it is cheap (500 runs on 150 × 5 and 250 × 5, about 20 s on 4 threads for a minimal
-# implementation), but its outputs follow the D-146 export rule.
-# Rows marked "G" also run when OPENVT_MONOLAYER_REPO points at the consortium repo G
+# compilation). FULL runs with POTTS_FULL_REPRODUCTION=true (or REPRO=full), offline
+# (D-146); it is cheap (500 runs on 150 × 5 and 250 × 5, about 20 s on 4 threads for a
+# minimal implementation), but its outputs follow the D-146 export rule. Rows marked "G"
+# also run when OPENVT_MONOLAYER_REPO points at the consortium repo G
 # (gitlab.com/rvet/monolayergrowth at 54f375f; read only, never copied into git) and are
 # skipped otherwise.
 #
@@ -96,12 +96,13 @@
 include(joinpath(@__DIR__, "..", "shared", "common.jl"))
 using Potts, PottsModels, Test
 using Statistics: mean
-const CALIBRATION_FULL = get(ENV, "POTTS_FULL_REPRODUCTION", "false") == "true" || get(ENV, "REPRO", "") == "full"
+const CALIBRATION_FULL = get(ENV, "POTTS_FULL_REPRODUCTION", "false") == "true" ||
+    get(ENV, "REPRO", "") == "full"
 const REPO = get(ENV, "OPENVT_MONOLAYER_REPO", "")
 const CALIBRATION_A = PottsModels.Analysis
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Constants, verbatim from spec 15
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 const RATE = 18.2816647214633
 # k/η per T (§4.2.2, `relaxation_exact.m:4`)
 # §4.2.2 / verification log: w(t) of the free 11-bead chain, 4 printed decimals
@@ -147,9 +148,9 @@ calibration_seed(λ::Integer, i::Integer) = 1000λ + i
 seed21(i::Integer) = 21_000 + i
 seed_smoke(i::Integer) = 90_000 + i
 const ALG = SequentialCPM(; proposal = Moore(1))
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Helpers (test-internal)
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 
 # Linear interpolation of w (sampled at s, ascending) at r ∈ [s[1], s[end]]
 function interp(s, w, r)
@@ -190,7 +191,10 @@ state_kinds(st) = collect(only(p.second for p in st if p.first === kind))
 # (time × run), plus the compressed cells' mean area at t = 0 and t = tmax.
 function runs(n, λ, seeds; tmax, release = true)
     L = n == 11 ? 150 : 250
-    sys = OpenVTChain(; name = Symbol(:calibration_chain, n), lattice = (L, 5), λ = Float64(λ))
+    sys = OpenVTChain(;
+        name = Symbol(:calibration_chain, n), lattice = (L, 5),
+        λ = Float64(λ)
+    )
     prob = PottsProblem(sys, openvt_chain(n), (0, BURNIN + tmax); seed = first(seeds))
     saves = BURNIN:(BURNIN + tmax)
     W = fill(NaN, length(saves), length(seeds))
@@ -215,9 +219,9 @@ function runs(n, λ, seeds; tmax, release = true)
     return (; t = collect(0:tmax), W, In, area)
 end
 calibration_mean(M) = vec(mean(M; dims = 2))
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # P8 / P9 and the V7 / V8 constants against the consortium's λ = 2 curves (G)
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 
 # (s = t / T, w) columns of a G curve file
 function gcurve(path, delim, tcol, wcol)
@@ -231,28 +235,34 @@ end
 # a G value matches the spec's printed value to half a unit of its last printed digit
 printed(x, ref, digits) = abs(x - ref) <= 0.5 * 10.0^-digits * (1 + 1.0e-9)
 in_spread(x, (lo, hi)) = lo <= round(x; digits = 2) <= hi
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # SMOKE: λ = 2, 4 seeds, 5 × 155 MCS after the release
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 
 # mean of the replicate-mean curve over the MCS window `r` (spec time)
 window(t, wbar, r) = mean(wbar[k] for k in eachindex(t) if t[k] in r)
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "15 openvt calibration P11: spring–dashpot reference (spec 15 §4.2.2)" setup = [OpenVTCalibrationSetup] tags = [:pottsmodels, :reproductions] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "15 openvt calibration P11: spring–dashpot reference (spec 15 §4.2.2)" setup = [
+    OpenVTCalibrationSetup,
+] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    # --------------------------------------------------------------------------------------
     # P11: the spring–dashpot reference (spec 15 §4.2.2)
-    # ---------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     @testset "15 openvt calibration P11: spring–dashpot reference (spec 15 §4.2.2)" begin
         @test abs(spring_dashpot_width(0.0; rate = RATE) - 5) <= 1.0e-12
         for (t, w) in REF_W
             @test abs(spring_dashpot_width(t; rate = RATE) - w) <= 5.0e-5
         end
-        # k/η is the root of w(1) = 9 (`fzero`, `relaxation_exact.m:4`), and it is the default
+        # k/η is the root of w(1) = 9 (`fzero`, `relaxation_exact.m:4`), and it is the
+        # default
         @test abs(spring_dashpot_width(1.0; rate = RATE) - 9) <= 1.0e-7
         @test spring_dashpot_width(1.0) == spring_dashpot_width(1.0; rate = RATE)
-        @test spring_dashpot_width(1.0; rate = RATE, n = 11) == spring_dashpot_width(1.0; rate = RATE)
+        @test spring_dashpot_width(1.0; rate = RATE, n = 11) ==
+            spring_dashpot_width(1.0; rate = RATE)
         # relaxed length n − 1 = 10 CD, approached monotonically from below
         ws = [spring_dashpot_width(t; rate = RATE) for t in 0:0.05:5]
         @test all(diff(ws) .> 0) && ws[end] < 10
@@ -264,7 +274,11 @@ end
     end
 end
 
-@testitem "15 openvt calibration P11: relaxation_exact.csv (G)" setup = [OpenVTCalibrationSetup] tags = [:pottsmodels, :reproductions] begin
+@testitem "15 openvt calibration P11: relaxation_exact.csv (G)" setup = [
+    OpenVTCalibrationSetup,
+] tags = [
+    :pottsmodels, :reproductions,
+] begin
     @testset "15 openvt calibration P11: relaxation_exact.csv (G)" begin
         path = joinpath(REPO, "results", "relaxation_exact.csv")
         if isempty(REPO) || !isfile(path)
@@ -274,17 +288,27 @@ end
             @test lines[1] == "t,w"
             rows = [parse.(Float64, split(l, ',')) for l in lines[2:end]]
             @test length(rows) == 51
-            @test all(isapprox(r[1], REF_T[k]; atol = 1.0e-12) for (k, r) in enumerate(rows))
-            @test maximum(abs(spring_dashpot_width(r[1]; rate = RATE) - r[2]) for r in rows) <= 1.0e-6
+            @test all(
+                isapprox(r[1], REF_T[k]; atol = 1.0e-12)
+                    for (k, r) in enumerate(rows)
+            )
+            @test maximum(
+                abs(spring_dashpot_width(r[1]; rate = RATE) - r[2])
+                    for r in rows
+            ) <= 1.0e-6
         end
     end
 end
 
-@testitem "15 openvt calibration P1–P4: OpenVTChain (Table S1, periodic strip, Moore(1))" setup = [OpenVTCalibrationSetup] tags = [:pottsmodels, :reproductions] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "15 openvt calibration P1–P4: OpenVTChain (Table S1, periodic strip, \
+    Moore(1))" setup = [OpenVTCalibrationSetup] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    # --------------------------------------------------------------------------------------
     # P1–P5: the model, the initial chains and the release
-    # ---------------------------------------------------------------------------------------------
-    @testset "15 openvt calibration P1–P4: OpenVTChain (Table S1, periodic strip, Moore(1))" begin
+    # --------------------------------------------------------------------------------------
+    @testset "15 openvt calibration P1–P4: OpenVTChain (Table S1, periodic strip, \
+        Moore(1))" begin
         for (n, L) in ((11, 150), (21, 250))
             sys = OpenVTChain(; name = Symbol(:calibration_m, n), lattice = (L, 5))
             lat = Potts.lattice(sys)
@@ -305,7 +329,11 @@ end
     end
 end
 
-@testitem "15 openvt calibration P2: initial chains (Morpheus placement and ids)" setup = [OpenVTCalibrationSetup] tags = [:pottsmodels, :reproductions] begin
+@testitem "15 openvt calibration P2: initial chains (Morpheus placement and ids)" setup = [
+    OpenVTCalibrationSetup,
+] tags = [
+    :pottsmodels, :reproductions,
+] begin
     @testset "15 openvt calibration P2: initial chains (Morpheus placement and ids)" begin
         for n in (11, 21)
             st = openvt_chain(n)
@@ -319,7 +347,8 @@ end
             if n == 11
                 @test cols(1) == 49:53 && cols(11) == 99:103
             else
-                @test cols(1) == 49:58 && cols(5) == 89:98 && cols(6) == 99:103 && cols(16) == 149:153 &&
+                @test cols(1) == 49:58 && cols(5) == 89:98 && cols(6) == 99:103 &&
+                    cols(16) == 149:153 &&
                     cols(17) == 154:163 && cols(21) == 194:203
             end
             # every cell spans the strip; compressed 25 sites, relaxed 50
@@ -335,9 +364,16 @@ end
     end
 end
 
-@testitem "15 openvt calibration P5: the release switches A_c at the end of MCS 100 (t = 0)" setup = [OpenVTCalibrationSetup] tags = [:pottsmodels, :reproductions] begin
-    @testset "15 openvt calibration P5: the release switches A_c at the end of MCS 100 (t = 0)" begin
-        prob = PottsProblem(OpenVTChain(; name = :rel), openvt_chain(11), (0, 102); seed = 7)
+@testitem "15 openvt calibration P5: the release switches A_c at the end of MCS 100 (t = \
+    0)" setup = [OpenVTCalibrationSetup] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    @testset "15 openvt calibration P5: the release switches A_c at the end of MCS 100 (t \
+        = 0)" begin
+        prob = PottsProblem(
+            OpenVTChain(; name = :rel), openvt_chain(11), (0, 102);
+            seed = 7
+        )
         integ = init(
             prob, ALG; callback = openvt_release(BURNIN), saveat = [99, 100, 101],
             save_start = false
@@ -357,7 +393,8 @@ end
         @test integ.saved_u[1].ownership == σ99 && integ.saved_u[2].ownership == σ100
         # a different release time moves the switch
         integ2 = init(prob, ALG; callback = openvt_release(3))
-        step!(integ2); step!(integ2)
+        step!(integ2)
+        step!(integ2)
         @test integ2.ps[:A_c] == 25.0
         step!(integ2)
         @test integ2.t == 3 && integ2.ps[:A_c] == 50.0
@@ -370,10 +407,14 @@ end
     end
 end
 
-@testitem "15 openvt calibration P6: Analysis.centroids with periodic axes" setup = [OpenVTCalibrationSetup] tags = [:pottsmodels, :reproductions] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "15 openvt calibration P6: Analysis.centroids with periodic axes" setup = [
+    OpenVTCalibrationSetup,
+] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    # --------------------------------------------------------------------------------------
     # P6: periodic centroids and chain widths on hand-built lattices
-    # ---------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     @testset "15 openvt calibration P6: Analysis.centroids with periodic axes" begin
         σ = zeros(Int, 10, 4)
         σ[[9, 10, 1, 2], 1:4] .= 1          # straddles the x seam
@@ -404,8 +445,12 @@ end
     end
 end
 
-@testitem "15 openvt calibration P6: chain_centroids and chain_width across the periodic seam" setup = [OpenVTCalibrationSetup] tags = [:pottsmodels, :reproductions] begin
-    @testset "15 openvt calibration P6: chain_centroids and chain_width across the periodic seam" begin
+@testitem "15 openvt calibration P6: chain_centroids and chain_width across the periodic \
+    seam" setup = [OpenVTCalibrationSetup] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    @testset "15 openvt calibration P6: chain_centroids and chain_width across the \
+        periodic seam" begin
         σA = zeros(Int, 30, 5)
         σA[5:9, :] .= 1
         σA[10:14, :] .= 2
@@ -436,53 +481,78 @@ end
         for s in (0, 50, 75, 100, 120, 149)
             @test CALIBRATION_A.chain_width(circshift(σ11, (s, 0))) == 5.0
         end
-        # a stretched chain spanning most of the lattice: the largest gap still marks the ends
+        # a stretched chain spanning most of the lattice: the largest gap still marks the
+        # ends
         σC = zeros(Int, 40, 2)
         for c in 1:6
-            σC[mod1.((6c - 5 + 30):(6c - 2 + 30), 40), :] .= c   # 4 sites per cell, 2 medium between
+            # 4 sites per cell, 2 medium between
+            σC[mod1.((6c - 5 + 30):(6c - 2 + 30), 40), :] .= c
         end
         @test CALIBRATION_A.chain_width(σC; CD = 1) == 30.0
     end
 end
 
-@testitem "15 openvt calibration P8: crossing_time (first MCS with w ≥ 9)" setup = [OpenVTCalibrationSetup] tags = [:pottsmodels, :reproductions] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "15 openvt calibration P8: crossing_time (first MCS with w ≥ 9)" setup = [
+    OpenVTCalibrationSetup,
+] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    # --------------------------------------------------------------------------------------
     # P8 and P9 on synthetic curves with known answers
-    # ---------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     @testset "15 openvt calibration P8: crossing_time (first MCS with w ≥ 9)" begin
         t = collect(0:5)
         w = [5.0, 7.0, 8.99, 9.0, 8.5, 9.5]
-        @test CALIBRATION_A.crossing_time(t, w) == 3                 # ≥, and the first crossing
+        # ≥, and the first crossing
+        @test CALIBRATION_A.crossing_time(t, w) == 3
         @test CALIBRATION_A.crossing_time(t, w, 8.0) == 2
-        @test CALIBRATION_A.crossing_time(t .+ 100, w) == 103         # returns t, not the index
+        # returns t, not the index
+        @test CALIBRATION_A.crossing_time(t .+ 100, w) == 103
         @test CALIBRATION_A.crossing_time(t, fill(8.999, 6)) === nothing
-        # on the reference sampled every MCS with T = 155 the crossing is MCS 155 (w = 9 there up
-        # to rounding, so 156 is allowed)
+        # on the reference sampled every MCS with T = 155 the crossing is MCS 155 (w = 9
+        # there up to rounding, so 156 is allowed)
         tt = collect(0:775)
-        @test CALIBRATION_A.crossing_time(tt, [spring_dashpot_width(x / 155; rate = RATE) for x in tt]) in (155, 156)
+        @test CALIBRATION_A.crossing_time(
+            tt, [
+                spring_dashpot_width(x / 155; rate = RATE)
+                    for x in tt
+            ]
+        ) in (155, 156)
     end
 end
 
-@testitem "15 openvt calibration P9: relaxation_mse" setup = [OpenVTCalibrationSetup] tags = [:pottsmodels, :reproductions] begin
+@testitem "15 openvt calibration P9: relaxation_mse" setup = [
+    OpenVTCalibrationSetup,
+] tags = [
+    :pottsmodels, :reproductions,
+] begin
     @testset "15 openvt calibration P9: relaxation_mse" begin
         rw = 5 .+ REF_T
         t = collect(0:775)
         w = 5 .+ t ./ 155
         @test CALIBRATION_A.relaxation_mse(t, w, 155, REF_T, rw) <= 1.0e-24
-        @test abs(CALIBRATION_A.relaxation_mse(t, w .+ 0.1, 155, REF_T, rw) - 0.01) <= 1.0e-12
+        @test abs(CALIBRATION_A.relaxation_mse(t, w .+ 0.1, 155, REF_T, rw) - 0.01) <=
+            1.0e-12
         # T scales time: w sampled at t = 0:1550 with T = 310 is the same curve
         t2 = collect(0:1550)
         @test CALIBRATION_A.relaxation_mse(t2, 5 .+ t2 ./ 310, 310, REF_T, rw) <= 1.0e-24
         # linear interpolation between coarse samples: s² on knots h = 0.3125 against s² at
-        # the reference points; the interpolation error at s ∈ [a, a + h] is (s − a)(a + h − s)
+        # the reference points; the interpolation error at s ∈ [a, a + h] is (s − a)(a + h −
+        # s)
         h = 0.3125
         tk = collect(0:50:800)                                  # T = 160, s = t / T = 0:h:5
         wk = (tk ./ 160) .^ 2
-        expect = mean(((s - h * fld(s + 1.0e-12, h)) * (h * fld(s + 1.0e-12, h) + h - s))^2 for s in REF_T)
-        @test abs(CALIBRATION_A.relaxation_mse(tk, wk, 160, REF_T, REF_T .^ 2) - expect) <= 1.0e-12
+        expect = mean(
+            ((s - h * fld(s + 1.0e-12, h)) * (h * fld(s + 1.0e-12, h) + h - s))^2
+                for s in REF_T
+        )
+        @test abs(CALIBRATION_A.relaxation_mse(tk, wk, 160, REF_T, REF_T .^ 2) - expect) <=
+            1.0e-12
         @test expect > 1.0e-5                                     # the case is not trivial
         # the run must cover 0 … 5 T
-        @test_throws ArgumentError CALIBRATION_A.relaxation_mse(collect(0:700), 5 .+ (0:700) ./ 155, 155, REF_T, rw)
+        @test_throws ArgumentError CALIBRATION_A.relaxation_mse(
+            collect(0:700), 5 .+ (0:700) ./ 155, 155, REF_T, rw
+        )
         # the reference itself has MSE ≈ 0 against itself at T = 155
         wref = [spring_dashpot_width(x / 155; rate = RATE) for x in t]
         refw = [spring_dashpot_width(x; rate = RATE) for x in REF_T]
@@ -490,8 +560,12 @@ end
     end
 end
 
-@testitem "15 openvt calibration P8/P9/V7/V8: the rules and constants on G's curves (G)" setup = [OpenVTCalibrationSetup] tags = [:pottsmodels, :reproductions] begin
-    @testset "15 openvt calibration P8/P9/V7/V8: the rules and constants on G's curves (G)" begin
+@testitem "15 openvt calibration P8/P9/V7/V8: the rules and constants on G's curves \
+    (G)" setup = [OpenVTCalibrationSetup] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    @testset "15 openvt calibration P8/P9/V7/V8: the rules and constants on G's curves \
+        (G)" begin
         R = joinpath(REPO, "results")
         if isempty(REPO) || !isdir(R)
             @test_skip isdir(R)
@@ -508,12 +582,18 @@ end
                         "Morpheus_1D_Relaxation_J10_11_cells_N100stats.csv"
                     ), ",", 1, 2
                 ),
-                Artistoo = gcurve(joinpath(R, "Artistoo", "Relax", "average_sim1_11_cells.csv"), "\t", 1, 2),
+                Artistoo = gcurve(
+                    joinpath(R, "Artistoo", "Relax", "average_sim1_11_cells.csv"), "\t", 1,
+                    2
+                ),
             )
             for name in keys(c11)
                 s, w = c11[name]
                 # P9 on s = t / T (T = 1) reproduces the spec's MSE (P9)
-                @test printed(CALIBRATION_A.relaxation_mse(s, w, 1, REF_T, rw), G_MSE[name], 5)
+                @test printed(
+                    CALIBRATION_A.relaxation_mse(s, w, 1, REF_T, rw), G_MSE[name],
+                    5
+                )
                 # P8 on whole MCS (t = round(155 s)) gives T within 1 % of 155 (V6 at λ = 2)
                 k = findall(>=(0), s)
                 tc = CALIBRATION_A.crossing_time(round.(Int, 155 .* s[k]), w[k])
@@ -523,11 +603,14 @@ end
                     @test in_spread(interp(s, w, r), spread)
                 end
                 # each is inside V7's MSE bound at λ = 2
-                @test CALIBRATION_A.relaxation_mse(s, w, 1, REF_T, rw) <= MSE_FACTOR * MSE_S5[2]
+                @test CALIBRATION_A.relaxation_mse(s, w, 1, REF_T, rw) <=
+                    MSE_FACTOR * MSE_S5[2]
             end
-            # negative control: CC3D (λ = 5, T = 84) has the spec's MSE and fails the λ = 2 bound
+            # negative control: CC3D (λ = 5, T = 84) has the spec's MSE and fails the λ = 2
+            # bound
             cc = gcurve(
-                joinpath(R, "CompuCell3D", "Relaxation", "Tissue_Width_11_Cells.csv"), ",", "Time",
+                joinpath(R, "CompuCell3D", "Relaxation", "Tissue_Width_11_Cells.csv"), ",",
+                "Time",
                 "Tissue_Width(CD)"
             )
             mcc = CALIBRATION_A.relaxation_mse(cc..., 1, REF_T, rw)
@@ -541,7 +624,8 @@ end
                         "Normalized time (T)", "Mean Tissue width (CD)"
                     ),
                     gcurve(
-                        joinpath(R, "TST", "Relaxation", "11+10cells", "inner_width.csv"), ",",
+                        joinpath(R, "TST", "Relaxation", "11+10cells", "inner_width.csv"),
+                        ",",
                         "Normalized time (T)", "Mean inner width (CD)"
                     ),
                 ),
@@ -560,8 +644,16 @@ end
                     ),
                 ),
                 Artistoo = (
-                    gcurve(joinpath(R, "Artistoo", "Relax", "average_sim2_21_cells.csv"), "\t", 1, 2),
-                    gcurve(joinpath(R, "Artistoo", "Relax", "average_sim2_11_center_cells.csv"), "\t", 1, 2),
+                    gcurve(
+                        joinpath(R, "Artistoo", "Relax", "average_sim2_21_cells.csv"),
+                        "\t", 1, 2
+                    ),
+                    gcurve(
+                        joinpath(
+                            R, "Artistoo", "Relax",
+                            "average_sim2_11_center_cells.csv"
+                        ), "\t", 1, 2
+                    ),
                 ),
             )
             for name in keys(c21)
@@ -580,7 +672,11 @@ end
     end
 end
 
-@testitem "15 openvt calibration SMOKE: the 11-chain relaxes (λ = 2, 4 seeds)" setup = [OpenVTCalibrationSetup] tags = [:pottsmodels, :reproductions] begin
+@testitem "15 openvt calibration SMOKE: the 11-chain relaxes (λ = 2, 4 seeds)" setup = [
+    OpenVTCalibrationSetup,
+] tags = [
+    :pottsmodels, :reproductions,
+] begin
     if !CALIBRATION_FULL
         @testset "15 openvt calibration SMOKE: the 11-chain relaxes (λ = 2, 4 seeds)" begin
             seeds = [seed_smoke(i) for i in 1:4]
@@ -605,16 +701,19 @@ end
             @test window(ctl.t, calibration_mean(ctl.W), 150:155) < 6.0
         end
     end
-    # ---------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     # FULL: V6, V7 (11-chain, λ ∈ {1, 2, 3, 5}) and V8 (21-chain, λ = 2), offline (D-146)
-    # ---------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     if CALIBRATION_FULL
         @testset "15 openvt calibration FULL: V6, V7, V8" begin
             rw = [spring_dashpot_width(x; rate = RATE) for x in REF_T]
             T = Dict{Int, Int}()
             for λ in LAMBDAS
                 # 7 × T_S5 MCS covers 5 T for any T up to 1.4 × Table S5
-                run = runs(11, λ, [calibration_seed(λ, i) for i in 1:CALIBRATION_N]; tmax = 7 * T_S5[λ])
+                run = runs(
+                    11, λ, [calibration_seed(λ, i) for i in 1:CALIBRATION_N]; tmax = 7 *
+                        T_S5[λ]
+                )
                 wbar = calibration_mean(run.W)
                 tc = CALIBRATION_A.crossing_time(run.t, wbar, LEVEL)
                 tc === nothing || (T[λ] = tc)
@@ -629,7 +728,10 @@ end
                             MSE_FACTOR * MSE_S5[λ]
                         if λ == 2
                             for (r, spread) in V7_SPREAD
-                                @test within(interp(run.t ./ tc, wbar, r), spread, V7_MARGIN)
+                                @test within(
+                                    interp(run.t ./ tc, wbar, r), spread,
+                                    V7_MARGIN
+                                )
                             end
                         end
                     end
@@ -637,7 +739,8 @@ end
             end
             @testset "V6 monotone in λ" begin
                 @test length(T) == length(LAMBDAS)
-                length(T) == length(LAMBDAS) && @test all(diff([T[λ] for λ in LAMBDAS]) .< 0)
+                length(T) == length(LAMBDAS) &&
+                    @test all(diff([T[λ] for λ in LAMBDAS]) .< 0)
             end
             @testset "V8 21-chain with T from λ = 2 (no refit)" begin
                 @test haskey(T, 2)
@@ -652,7 +755,8 @@ end
                         @test within(ibar[k * T2 + 1], spread, V8_MARGIN)
                     end
                     pe = CALIBRATION_A.crossing_time(run.t, wbar, wbar[1] + PLATEAU_RISE)
-                    @test pe !== nothing && V8_PLATEAU_BAND[1] <= pe / T2 <= V8_PLATEAU_BAND[2]
+                    @test pe !== nothing &&
+                        V8_PLATEAU_BAND[1] <= pe / T2 <= V8_PLATEAU_BAND[2]
                 end
             end
         end

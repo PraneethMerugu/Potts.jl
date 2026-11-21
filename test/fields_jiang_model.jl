@@ -1,51 +1,74 @@
 # The Jiang-like model (fields_jiang_tests.jl) and its spheroid.
 isdefined(@__MODULE__, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
 module JgPDE
-using ..FieldPDE
-@variables o(..) [lattice_level = Coarse(4)] g(..) [lattice_level = Coarse(4)] l(..) [lattice_level = Coarse(4)]
-@variables gf(..) [lattice_level = Coarse(4)] inh(..) [lattice_level = Coarse(4)]
-@variables pq(..)::Bool [input = true] kP(..)::Bool [input = true] kQ(..)::Bool [input = true] kN(..)::Bool [input = true]
-@variables med(..)::Bool [input = true]
+    using ..FieldPDE
+    @variables o(..) [lattice_level = Coarse(4)] g(..) [lattice_level = Coarse(4)] l(..) [
+        lattice_level = Coarse(4),
+    ]
+    @variables gf(..) [lattice_level = Coarse(4)] inh(..) [lattice_level = Coarse(4)]
+    @variables pq(..)::Bool [input = true] kP(..)::Bool [input = true] kQ(..)::Bool [
+        input = true,
+    ] kN(..)::Bool [input = true]
+    @variables med(..)::Bool [input = true]
     # The majority twin's mask at the coarse level (no fine read: the whole-block fold)
-@variables medc(..)::Bool [input = true, lattice_level = Coarse(4)]
-# the five fields on a coarse grid (`Coarse(4)`); the kinds are bound inputs: `pq` is
-# `ismember(kind, (P, Q))`, `kP`, `kQ`, `kN` the kinds and `med` the medium
-function jiang(dims; coarsemask = false)
-    @parameters Do = 2880.0 Dg = 73.7 Dl = 103.0 Df = 0.048 Di = 0.048 a0 = 324.0 b0 = 648.0 C0 = 720.0 oT = 0.02 gT = 0.06
-    @parameters oO = 0.28 gO = 5.5 o0 = 0.08 g0 = 5.5 df = 3.0 ei = 3.0
-    X = (t, x, y, z)
-    O, G, L, GF, INH = o(X...), g(X...), l(X...), gf(X...), inh(X...)
-    PQ, P, Q, N, M = pq(X...), kP(X...), kQ(X...), kN(X...), (coarsemask ? medc(X...) : med(X...))
+    @variables medc(..)::Bool [input = true, lattice_level = Coarse(4)]
+    # the five fields on a coarse grid (`Coarse(4)`); the kinds are bound inputs: `pq` is
+    # `ismember(kind, (P, Q))`, `kP`, `kQ`, `kN` the kinds and `med` the medium
+    function jiang(dims; coarsemask = false)
+        @parameters Do = 2880.0 Dg = 73.7 Dl = 103.0 Df = 0.048 Di = 0.048 a0 = 324.0 b0 =
+            648.0 C0 = 720.0 oT = 0.02 gT = 0.06
+        @parameters oO = 0.28 gO = 5.5 o0 = 0.08 g0 = 5.5 df = 3.0 ei = 3.0
+        X = (t, x, y, z)
+        O, G, L, GF, INH = o(X...), g(X...), l(X...), gf(X...), inh(X...)
+        PQ, P, Q, N, M = pq(X...), kP(X...), kQ(X...), kN(X...),
+            (coarsemask ? medc(X...) : med(X...))
         eqs = [
             Dt(O) ~ Do * laplacian(O) - a0 * max(O - oT, 0) / (oO - oT) * PQ,
             Dt(G) ~ Dg * laplacian(G) - b0 * max(G - gT, 0) / (gO - gT) * PQ,
-            Dt(L) ~ Dl * laplacian(L) + C0 * (max(O - oT, 0) / (oO - oT) + max(G - gT, 0) / (gO - gT)) / 2 * PQ,
+            Dt(L) ~
+                Dl * laplacian(L) +
+                C0 * (max(O - oT, 0) / (oO - oT) + max(G - gT, 0) / (gO - gT)) / 2 * PQ,
             Dt(GF) ~ Df * laplacian(GF) - df * GF * (P + 0.5 * Q),
             Dt(INH) ~ Di * laplacian(INH) + ei * (Q + 2 * N),
         ]
-    bcs = [o(0, x, y, z) ~ 0.0, g(0, x, y, z) ~ 0.0, l(0, x, y, z) ~ 0.0, gf(0, x, y, z) ~ 0.0, inh(0, x, y, z) ~ 0.0,
-        O ~ masked(M, o0), G ~ masked(M, g0), L ~ masked(M, 0.0), GF ~ masked(M, 1.0), INH ~ masked(M, 0.0)]
-    return pdesys(eqs, bcs, dims, [O, G, L, GF, INH, PQ, P, Q, N, M],
-        [Do, Dg, Dl, Df, Di, a0, b0, C0, oT, gT, oO, gO, o0, g0, df, ei])
-end
+        bcs = [
+            o(0, x, y, z) ~ 0.0, g(0, x, y, z) ~ 0.0, l(0, x, y, z) ~ 0.0,
+            gf(0, x, y, z) ~ 0.0, inh(0, x, y, z) ~ 0.0,
+            O ~ masked(M, o0), G ~ masked(M, g0), L ~ masked(M, 0.0), GF ~ masked(M, 1.0),
+            INH ~
+                masked(M, 0.0),
+        ]
+        return pdesys(
+            eqs, bcs, dims, [O, G, L, GF, INH, PQ, P, Q, N, M],
+            [Do, Dg, Dl, Df, Di, a0, b0, C0, oT, gT, oO, gO, o0, g0, df, ei]
+        )
+    end
 end
 # the model on lattice `dims` (`frozen`: the cells do not move)
 function jiang_model(name, dims; frozen = true)
     kinds = frozen ? :(@kinds medium P[frozen] Q[frozen] N[frozen]) : :(@kinds medium P Q N)
-    return eval(:(@potts_model $name begin
-        $kinds
-        @variables ocell(cell) = 0.0
-        @lattice Lattice($dims; boundary = Closed())
-        @energy cells => (volume - 27.0)^2
-        # O₂, glucose, lactate, growth factor and inhibitor (diffusion in voxel²/MCS; O₂ and
-        # glucose consumption and lactate production in mM/MCS; thresholds, optimal and medium
-        # concentrations in mM, relative for the factors)
-        @fields o = JgPDE.jiang($dims) (JgPDE.pq => ismember(kind, (P, Q)), JgPDE.kP => kind == P, JgPDE.kQ => kind == Q,
-            JgPDE.kN => kind == N, JgPDE.med => kind == medium)
-        @after_mcs ocell ~ integral(o) / volume
-        @schedule repeat(4, sweep(fraction = 1//4), fields), after_mcs
-        @sweep Metropolis(; temperature = 2.0)
-    end))
+    return eval(
+        :(
+            @potts_model $name begin
+                $kinds
+                @variables ocell(cell) = 0.0
+                @lattice Lattice($dims; boundary = Closed())
+                @energy cells => (volume - 27.0)^2
+                # O₂, glucose, lactate, growth factor and inhibitor (diffusion in
+                # voxel²/MCS; O₂ and glucose consumption and lactate production in mM/MCS;
+                # thresholds, optimal and medium concentrations in mM, relative for the
+                # factors)
+                @fields o = JgPDE.jiang($dims) (
+                    JgPDE.pq => ismember(kind, (P, Q)), JgPDE.kP => kind == P, JgPDE.kQ =>
+                        kind == Q,
+                    JgPDE.kN => kind == N, JgPDE.med => kind == medium,
+                )
+                @after_mcs ocell ~ integral(o) / volume
+                @schedule repeat(4, sweep(fraction = 1 // 4), fields), after_mcs
+                @sweep Metropolis(; temperature = 2.0)
+            end
+        )
+    )
 end
 # a spheroid of 3×3×3 cells at the center: necrotic core, quiescent shell, proliferating rim
 function jiang_state(dims; r = dims[1] / 3)
@@ -67,7 +90,15 @@ function jiang_state(dims; r = dims[1] / 3)
     for k in ids
         J = Tuple(CartesianIndices(dims .÷ 3 .+ 1)[k]) .- 1
         ρ = sqrt(sum(abs2, (J .* 3 .+ 2) .- c))
-        push!(kinds, ρ < r / 3 ? :N : ρ < 2r / 3 ? :Q : :P)
+        push!(
+            kinds, if ρ < r / 3
+                :N
+            elseif ρ < 2r / 3
+                :Q
+            else
+                :P
+            end
+        )
     end
     return σ, kinds
 end

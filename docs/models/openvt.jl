@@ -75,9 +75,14 @@
 #     end
 #     @before_mcs X ~ ifelse(Pre(X) > 0, Pre(X), randn(μ_X, σ_X; lower_bound = 0.0))
 #     @after_mcs begin
-#         f ~ ifelse(count(true for _ in contacts) > 0,
-#             count(neighbor_kind == medium for _ in contacts) / count(true for _ in contacts), 1.0)
-#         A_star ~ ifelse((volume / Pre(A_star) >= β) && (f >= γ), Pre(A_star) + α, Pre(A_star))
+#         f ~ ifelse(
+#             count(true for _ in contacts) > 0,
+#             count(neighbor_kind == medium for _ in contacts) /
+#                 count(true for _ in contacts),
+#             1.0
+#         )
+#         A_star ~
+#             ifelse((volume / Pre(A_star) >= β) && (f >= γ), Pre(A_star) + α, Pre(A_star))
 #     end
 #     @divide cells(cell) when = volume >= X * A₀, along = RandomPlane(), A_star => Split(),
 #         X => randn(μ_X, σ_X; lower_bound = 0.0)
@@ -112,15 +117,24 @@ mkpath("openvt") #hide
 # (`PottsModels.stop_at_cells`):
 
 @named ref = OpenVTReferenceMonolayer(; lattice = (120, 120))
-prob_ref = PottsProblem(ref, openvt_reference_state(; lattice = (120, 120)), (0, 3 * 775); seed = 1, capacity = 256)
-guards = CallbackSet(PottsModels.edge_guard(5; terminate = true), PottsModels.stop_at_cells(64))
+prob_ref = PottsProblem(
+    ref, openvt_reference_state(; lattice = (120, 120)), (0, 3 * 775);
+    seed = 1, capacity = 256
+)
+guards = CallbackSet(
+    PottsModels.edge_guard(5; terminate = true),
+    PottsModels.stop_at_cells(64)
+)
 sol_ref = solve(prob_ref, SequentialCPM(); saveat = 0:15:(3 * 775), callback = guards)
 (retcode = sol_ref.retcode, cells = count(>(0), sol_ref.u[end].cell.volume))
 
 # The colony, colored by cell:
 
-record_potts("openvt/reference.mp4", sol_ref; framerate = 15, title = "Table S1 monolayer",
-    encoding = CellIdentityEncoding(), figure = (; size = (440, 440)), axis = (; limits = (20, 100, 20, 100)))
+record_potts(
+    "openvt/reference.mp4", sol_ref; framerate = 15, title = "Table S1 monolayer",
+    encoding = CellIdentityEncoding(), figure = (; size = (440, 440)),
+    axis = (; limits = (20, 100, 20, 100))
+)
 nothing #hide
 
 # ```@raw html
@@ -131,14 +145,20 @@ nothing #hide
 # lengths in units of ``R``) for the last state:
 
 snap = PottsModels.openvt_snapshot(sol_ref.u[end])
-(n = length(snap.x), mean_f = sum(snap.f) / length(snap.f), mean_a = sum(snap.a) / length(snap.a))
+(
+    n = length(snap.x), mean_f = sum(snap.f) / length(snap.f),
+    mean_a = sum(snap.a) / length(snap.a),
+)
 
 # The O1 rows, M's time-series format (`PottsModels.openvt_frame`): the same centroids, the
 # inhibition code at given thresholds β and γ, and the number of distinct neighboring cells
 # on `Moore(1)`. `write_openvt(path, :O1, frame)` writes them.
 
 frame = PottsModels.openvt_frame(sol_ref.u[end]; beta = 0.0, gamma = 0.0)
-(n = length(frame.x), mean_neighbours = sum(frame.n) / length(frame.n), growing = count(==(0), frame.i))
+(
+    n = length(frame.x), mean_neighbours = sum(frame.n) / length(frame.n),
+    growing = count(==(0), frame.i),
+)
 
 # ```@docs
 # OpenVTReferenceMonolayer
@@ -266,8 +286,11 @@ sol = solve(prob, SequentialCPM(); saveat = 0:8:840)
 # (`CellIdentityEncoding`), and zooms in on the central 180 × 180 sites, where the colony
 # grows, through the `axis` limits:
 
-record_potts("openvt/monolayer.mp4", sol; framerate = 15, title = "Growing monolayer",
-    encoding = CellIdentityEncoding(), figure = (; size = (440, 440)), axis = (; limits = (110, 290, 110, 290)))
+record_potts(
+    "openvt/monolayer.mp4", sol; framerate = 15, title = "Growing monolayer",
+    encoding = CellIdentityEncoding(), figure = (; size = (440, 440)),
+    axis = (; limits = (110, 290, 110, 290))
+)
 nothing #hide
 
 # ```@raw html
@@ -377,4 +400,3 @@ fig
 # read_openvt
 # openvt_filename
 # ```
-

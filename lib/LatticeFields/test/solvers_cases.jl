@@ -1,20 +1,25 @@
 # Solver test geometries (the reference cases of the masked multigrid design):
 # a masked disk or sphere (Dirichlet value 1 in the medium and on the box layer), a box with
-# face Dirichlet on x (0 at the low face, 1 at the high face) and periodic y, optionally with
-# masked islands, and a periodic box. Face coefficients 1, shift `s` (scaled form).
+# face Dirichlet on x (0 at the low face, 1 at the high face) and periodic y, optionally
+# with masked islands, and a periodic box. Face coefficients 1, shift `s` (scaled form).
 
 using Random
-using LatticeFields.Solvers: CellOperator, FieldSolver, LatticePCG, LatticeMultigrid, LatticeBlockSolve, VCycle, steady!,
-                             field, scalars, rebuild!, lift!, solve!, lkey, RuleWeights,
-                             solution_key
+using LatticeFields.Solvers: CellOperator, FieldSolver, LatticePCG, LatticeMultigrid,
+    LatticeBlockSolve, VCycle, steady!,
+    field, scalars, rebuild!, lift!, solve!, lkey, RuleWeights,
+    solution_key
 
 """
 Masked ball of radius `R` (cells) centered at `ctr`, box layer masked: `(op, inputs)`.
 """
-function ball_case(dims::NTuple{N, Int}; s, R = 0.4 * dims[1],
-        ctr = ntuple(d -> dims[d] / 2 + 0.31, N)) where {N}
-    act = [sum(abs2, (Tuple(c) .- 0.5) .- ctr) < R^2 &&
-               all(d -> 1 < c[d] < dims[d], 1:N) for c in CartesianIndices(dims)]
+function ball_case(
+        dims::NTuple{N, Int}; s, R = 0.4 * dims[1],
+        ctr = ntuple(d -> dims[d] / 2 + 0.31, N)
+    ) where {N}
+    act = [
+        sum(abs2, (Tuple(c) .- 0.5) .- ctr) < R^2 &&
+            all(d -> 1 < c[d] < dims[d], 1:N) for c in CartesianIndices(dims)
+    ]
     op = CellOperator(dims; shift = s, mask = "in.mask", value = 1.0)
     return op, ("in.mask" => vec(UInt8.(.!act)),)
 end
@@ -37,9 +42,11 @@ function box_case(nx, ny; s, islands = 0.0, rad = 3.0, seed = 1)
             end
         end
     end
-    op = CellOperator((nx, ny); periodic = (false, true), shift = s,
+    op = CellOperator(
+        (nx, ny); periodic = (false, true), shift = s,
         mask = islands > 0 ? "in.mask" : nothing, value = 0.0,
-        dirichlet = ((0.0, 1.0), (nothing, nothing)))
+        dirichlet = ((0.0, 1.0), (nothing, nothing))
+    )
     return op, islands > 0 ? ("in.mask" => vec(UInt8.(.!act)),) : ()
 end
 
@@ -82,7 +89,8 @@ const REFERENCE = Dict(
     ("box300x192", 5.5e-6) => (7, 9), ("box300x192", 1.9e-3) => (6, 8),
     ("box128", 5.5e-6) => (6, 9), ("box512", 5.5e-6) => (6, 9),
     ("box+isl256", 5.5e-6) => (8, 10), ("per256", 5.5e-6) => (8, 12),
-    ("per300", 5.5e-6) => (12, 20))
+    ("per300", 5.5e-6) => (12, 20)
+)
 
 function named_case(name, s)
     m = match(r"^disk(\d+)$", name)
@@ -118,7 +126,8 @@ function cycle_factor(case; rule = RuleWeights(), cycle = VCycle(2, 2), T = Floa
     op = CellOperator(
         op0.dims; periodic = op0.periodic, face = op0.face, shift = op0.shift,
         mask = op0.mask, value = 0.0,
-        dirichlet = map(d -> map(g -> g === nothing ? nothing : 0.0, d), op0.dirichlet))
+        dirichlet = map(d -> map(g -> g === nothing ? nothing : 0.0, d), op0.dirichlet)
+    )
     sv = case_solver((op, inputs), T; linsolve = LatticeMultigrid(; cycle), rule)
     rebuild!(sv)
     lift!(sv)
@@ -149,7 +158,6 @@ function level_matrix(sv, l)
     for (q, i) in enumerate(cells)
         A[q, q] += s[i]
         for a in 1:N, σ in (1, -1)
-
             c = Tuple(CI[i])
             v = c[a] + σ
             (1 <= v <= d[a]) || per[a] || continue
@@ -171,8 +179,10 @@ function true_residual(sv, xs = field(sv, Solvers.solution_key(sv)))
     N, per = length(d), sv.op.periodic
     act = field(sv, lkey(0, "active")) .!= 0
     w = [Float64.(field(sv, lkey(0, "w$a"))) for a in 1:N]
-    s = Float64.(field(sv, lkey(0, "s")) .+ field(sv, lkey(0, "sbox")) .+
-                 field(sv, lkey(0, "sint")))
+    s = Float64.(
+        field(sv, lkey(0, "s")) .+ field(sv, lkey(0, "sbox")) .+
+            field(sv, lkey(0, "sint"))
+    )
     b = Float64.(field(sv, sv.alg isa Solvers.FusedPCG ? "pcg.b" : lkey(0, "b")))
     x = Float64.(xs)
     CI, LI = CartesianIndices(d), LinearIndices(d)
@@ -180,7 +190,6 @@ function true_residual(sv, xs = field(sv, Solvers.solution_key(sv)))
     for i in findall(act)
         Ax = s[i] * x[i]
         for a in 1:N, σ in (1, -1)
-
             c = Tuple(CI[i])
             v = c[a] + σ
             (1 <= v <= d[a]) || per[a] || continue

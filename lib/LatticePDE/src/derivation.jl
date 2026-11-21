@@ -4,26 +4,38 @@
     derivation(base, computed) -> LatticeFields.Problems.Derivation
 
 The computed parameters `computed` (`name => default`, the default an expression of the
-parameters, or an array with expression entries for a kind table) as one compiled function of
-the base parameters `base` (names, in the order of the values the derivation takes). Chains
-(`k3 = 2k2`, `k2 = 3a`) evaluate in their order; a cycle is an `ArgumentError`. The rules are
-those of `LatticeFields.Problems.Derivation`: the expression is compiled as written
-(Base and registered functions, `÷` as integer division, a lazy `ifelse`), and a kind-table
-read `value_at(t, k)` or `value_at(t, k, l)` takes kind numbers (medium 0). Potts and `discretize` call
-it; a caller that keeps computed values (Potts' parameter object, `LatticePDE`'s computed slots)
-evaluates it after every write of base values.
+parameters, or an array with expression entries for a kind table) as one compiled function
+of the base parameters `base` (names, in the order of the values the derivation takes).
+Chains (`k3 = 2k2`, `k2 = 3a`) evaluate in their order; a cycle is an `ArgumentError`. The
+rules are those of `LatticeFields.Problems.Derivation`: the expression is compiled as
+written (Base and registered functions, `÷` as integer division, a lazy `ifelse`), and a
+kind-table read `value_at(t, k)` or `value_at(t, k, l)` takes kind numbers (medium 0). Potts
+and `discretize` call it; a caller that keeps computed values (Potts' parameter object,
+`LatticePDE`'s computed slots) evaluates it after every write of base values.
 """
 function derivation(base::AbstractVector, computed::AbstractVector)
     names = Symbol[Symbol(first(c)) for c in computed]
     defs = Dict{Symbol, Any}(Symbol(first(c)) => last(c) for c in computed)
-    reads(e) = e isa AbstractArray ? reduce(union, (reads(x) for x in e); init = Set{Symbol}()) :
-               _isterm(e) ? Set{Symbol}(_varname(v) for v in Symbolics.get_variables(e)) : Set{Symbol}()
+    function reads(e)
+        if e isa AbstractArray
+            return reduce(union, (reads(x) for x in e); init = Set{Symbol}())
+        elseif _isterm(e)
+            return Set{Symbol}(_varname(v) for v in Symbolics.get_variables(e))
+        else
+            return Set{Symbol}()
+        end
+    end
     deps = Dict(n => intersect(reads(defs[n]), names) for n in names)
     order, done = Symbol[], Set{Symbol}()
     while length(order) < length(names)
         k = findfirst(n -> !(n in done) && issubset(deps[n], done), names)
-        k === nothing && throw(ArgumentError("the computed parameters " *
-            join(("`$n = $(defs[n])`" for n in names if !(n in done)), ", ") * " read one another in a cycle"))
+        k === nothing && throw(
+            ArgumentError(
+                "the computed parameters " *
+                    join(("`$n = $(defs[n])`" for n in names if !(n in done)), ", ") *
+                    " read one another in a cycle"
+            )
+        )
         push!(order, names[k])
         push!(done, names[k])
     end
@@ -32,18 +44,34 @@ function derivation(base::AbstractVector, computed::AbstractVector)
     for n in order
         e = defs[n]
         ex = e isa AbstractArray ? _array_expr(n, e) : _derive_expr(n, e)
-        push!(body, :($n = try
-            $ex
-        catch $er
+        push!(
+            body, :(
+                $n = try
+                    $ex
+                catch $er
                     $(isfatal)($er) && rethrow()
-            $(Problems.derive_fail)($(QuoteNode(n)), $(as_written(_deftext(e))), $er)
-        end))
+                    $(Problems.derive_fail)(
+                        $(QuoteNode(n)), $(as_written(_deftext(e))),
+                        $er
+                    )
+                end
+            )
+        )
     end
     fn = Expr(:->, vs, Expr(:block, body..., Expr(:tuple, names...)))
     return Problems.Derivation(Problems.rgf(fn), Symbol[Symbol(b) for b in base], names)
 end
 _isterm(e) = e isa Union{Num, SymbolicUtils.BasicSymbolic}
-_varname(v) = (u = unwrap(v); iscall(u) && operation(u) === getindex ? _varname(arguments(u)[1]) : Symbol(string(u)))
+function _varname(v)
+    (
+        u = unwrap(v);
+        if iscall(u) && operation(u) === getindex
+            _varname(arguments(u)[1])
+        else
+            Symbol(string(u))
+        end
+    )
+end
 _deftext(e) = e isa AbstractArray ? string(e) : replace(string(e), "LatticePDE." => "")
 # an entry or a scalar default as Julia code: `value_at` read by kind number
 function _derive_expr(n, e)
@@ -60,4 +88,9 @@ function _kind_reads(n, ex)
     end
     return Expr(ex.head, args...)
 end
-_array_expr(n, e) = Expr(:call, reshape, Expr(:vect, (_derive_expr(n, x) for x in vec(e))...), size(e))
+function _array_expr(n, e)
+    return Expr(
+        :call, reshape, Expr(:vect, (_derive_expr(n, x) for x in vec(e))...),
+        size(e)
+    )
+end

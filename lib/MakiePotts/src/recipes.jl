@@ -14,13 +14,15 @@ function _heatmap_edges(geometry::RenderGeometry{2})
     end
 end
 
-function _semantic_overlay(frame::AbstractPottsRenderFrame{2},
-        encoding::AbstractPottsEncoding, medium_color, obstacle_color)
+function _semantic_overlay(
+        frame::AbstractPottsRenderFrame{2},
+        encoding::AbstractPottsEncoding, medium_color, obstacle_color
+    )
     transparent = Makie.RGBAf(0, 0, 0, 0)
     medium = Makie.to_color(medium_color)
     obstacle = Makie.to_color(obstacle_color)
     overlay_medium = encoding isa ChannelEncoding &&
-                     encoding.key isa RenderChannelKey{CellChannelScope}
+        encoding.key isa RenderChannelKey{CellChannelScope}
     result = Matrix{Makie.RGBAf}(undef, frame_size(frame))
     for site in CartesianIndices(result)
         owner = owner_at(frame, site)
@@ -39,7 +41,8 @@ function _resolved_colormap(encoded, continuous_colormap, category_palette, medi
     encoding_kind(encoded.encoding) === CategoricalEncoding ||
         return continuous_colormap
     return Makie.Categorical(
-        _categorical_colors(encoded.categories, category_palette, medium_color))
+        _categorical_colors(encoded.categories, category_palette, medium_color)
+    )
 end
 
 function _plot_colorrange(encoded, requested)
@@ -84,19 +87,22 @@ Makie.@recipe(PottsBoundaries, frame) do scene
         linewidth = Makie.theme(scene, :linewidth; default = 1.0),
         linestyle = nothing,
         visible = true,
-        inspectable = false,
+        inspectable = false
     )
 end
 @doc "Makie recipe type for a composable finite-cell boundary overlay." PottsBoundaries
-@doc "Add a [`PottsBoundaries`](@ref) overlay to an existing Makie scene or axis." pottsboundaries!
+@doc "Add a [`PottsBoundaries`](@ref) overlay to an existing Makie scene or \
+    axis." pottsboundaries!
 
 function Makie.plot!(plot::PottsBoundaries)
     validated_frame = Makie.lift(assert_render_frame_conformance, plot.frame)
     segments = Makie.lift(_boundary_segments, validated_frame)
-    Makie.linesegments!(plot, segments;
+    Makie.linesegments!(
+        plot, segments;
         color = plot.color, linewidth = plot.linewidth,
         linestyle = plot.linestyle, visible = plot.visible,
-        inspectable = plot.inspectable)
+        inspectable = plot.inspectable
+    )
     return plot
 end
 
@@ -124,7 +130,7 @@ Makie.@recipe(PottsPlot, frame) do scene
         visible = true,
         alpha = 1.0,
         inspectable = true,
-        inspector_label = Makie.automatic,
+        inspector_label = Makie.automatic
     )
 end
 @doc "Makie recipe type for a two-dimensional frame or orthogonal slice." PottsPlot
@@ -142,53 +148,81 @@ function Makie.plot!(plot::PottsPlot)
     values = Makie.lift(item -> item.values, encoded)
     colormap = Makie.lift(
         _resolved_colormap, encoded, plot.colormap,
-        plot.category_palette, plot.medium_color)
+        plot.category_palette, plot.medium_color
+    )
     colorrange = Makie.lift(_plot_colorrange, encoded, plot.colorrange)
     labeler = Makie.lift(
-            plot.inspector_label, validated_frame, plot.encoding) do custom, frame, enc
-        custom === Makie.automatic ?
-        ((child, index, position) -> inspection_label(frame, enc, index)) : custom
+        plot.inspector_label, validated_frame, plot.encoding
+    ) do custom, frame, enc
+        if custom === Makie.automatic
+            (child, index, position) -> inspection_label(frame, enc, index)
+        else
+            custom
+        end
     end
 
-    Makie.heatmap!(plot, heatmap_xs, heatmap_ys, values;
+    Makie.heatmap!(
+        plot, heatmap_xs, heatmap_ys, values;
         colormap, colorrange, colorscale = plot.colorscale,
         nan_color = plot.nan_color, lowclip = plot.lowclip,
         highclip = plot.highclip, interpolate = plot.interpolate,
         visible = plot.visible, alpha = plot.alpha,
-        inspectable = plot.inspectable, inspector_label = labeler)
+        inspectable = plot.inspectable, inspector_label = labeler
+    )
 
     semantic_overlay = Makie.lift(
         _semantic_overlay, validated_frame, plot.encoding,
-        plot.medium_color, plot.obstacle_color)
-    Makie.image!(plot, image_xs, image_ys, semantic_overlay;
-        interpolate = false, visible = plot.visible, inspectable = false)
+        plot.medium_color, plot.obstacle_color
+    )
+    Makie.image!(
+        plot, image_xs, image_ys, semantic_overlay;
+        interpolate = false, visible = plot.visible, inspectable = false
+    )
 
-    pottsboundaries!(plot, validated_frame;
+    pottsboundaries!(
+        plot, validated_frame;
         color = plot.boundary_color, linewidth = plot.boundary_width,
-        visible = plot.boundaries, inspectable = false)
+        visible = plot.boundaries, inspectable = false
+    )
     return plot
 end
 
 Makie.plottype(::AbstractPottsRenderFrame{2}) = PottsPlot
-Makie.convert_arguments(::Type{<:PottsPlot},
-    frame::AbstractPottsRenderFrame{2}) = (frame,)
-Makie.used_attributes(::Type{<:PottsPlot},
-    ::AbstractPottsRenderFrame{2}) = ()
+function Makie.convert_arguments(
+        ::Type{<:PottsPlot},
+        frame::AbstractPottsRenderFrame{2}
+    )
+    return (frame,)
+end
+function Makie.used_attributes(
+        ::Type{<:PottsPlot},
+        ::AbstractPottsRenderFrame{2}
+    )
+    return ()
+end
 Makie.preferred_axis_type(::Type{<:PottsPlot}) = Makie.Axis
 Makie.preferred_axis_type(::AbstractPottsRenderFrame{2}) = Makie.Axis
-Makie.preferred_axis_attributes(::Type{Makie.Axis},
-    ::Type{<:PottsPlot}) = (aspect = Makie.DataAspect(),)
+function Makie.preferred_axis_attributes(
+        ::Type{Makie.Axis},
+        ::Type{<:PottsPlot}
+    )
+    return (aspect = Makie.DataAspect(),)
+end
 
 function Makie.data_limits(plot::PottsPlot)
     geometry = frame_geometry(plot.frame[])
     return Makie.Rect3d(
         Makie.Point3d(geometry.origin[1], geometry.origin[2], 0),
-        Makie.Vec3d(geometry.size[1] * geometry.spacing[1],
-            geometry.size[2] * geometry.spacing[2], 0))
+        Makie.Vec3d(
+            geometry.size[1] * geometry.spacing[1],
+            geometry.size[2] * geometry.spacing[2], 0
+        )
+    )
 end
 
-Makie.boundingbox(plot::PottsPlot, ::Symbol = :data) =
-    Makie.apply_transform_and_model(plot, Makie.data_limits(plot))
+function Makie.boundingbox(plot::PottsPlot, ::Symbol = :data)
+    return Makie.apply_transform_and_model(plot, Makie.data_limits(plot))
+end
 
 function Makie.extract_colormap(plot::PottsPlot)
     isempty(plot.plots) && return nothing
@@ -196,8 +230,10 @@ function Makie.extract_colormap(plot::PottsPlot)
 end
 
 """A compact theme fragment suitable for `with_theme` or `set_theme!`."""
-function potts_theme(; medium_color = :gray18, obstacle_color = :gray45,
-        boundary_color = :black, boundary_width = 1.0, kwargs...)
+function potts_theme(;
+        medium_color = :gray18, obstacle_color = :gray45,
+        boundary_color = :black, boundary_width = 1.0, kwargs...
+    )
     return Makie.Theme(
         PottsPlot = (
             medium_color = medium_color,
@@ -205,7 +241,8 @@ function potts_theme(; medium_color = :gray18, obstacle_color = :gray45,
             boundary_color = boundary_color,
             boundary_width = boundary_width,
         );
-        kwargs...)
+        kwargs...
+    )
 end
 
 function _legend_elements(encoded, palette, medium_color)
@@ -225,9 +262,12 @@ function potts_legend(position, plot::PottsPlot; title = nothing, kwargs...)
     encoding_kind(encoded.encoding) === CategoricalEncoding ||
         throw(ArgumentError("continuous Potts encodings use `Colorbar(position, plot)`"))
     elements, labels = _legend_elements(
-        encoded, plot.category_palette[], plot.medium_color[])
-    if any(site -> owner_at(plot.frame[], site).kind === ObstacleSite,
-            CartesianIndices(frame_size(plot.frame[])))
+        encoded, plot.category_palette[], plot.medium_color[]
+    )
+    if any(
+            site -> owner_at(plot.frame[], site).kind === ObstacleSite,
+            CartesianIndices(frame_size(plot.frame[]))
+        )
         push!(elements, Makie.PolyElement(color = plot.obstacle_color[]))
         push!(labels, "Obstacle")
     end
@@ -249,7 +289,7 @@ Makie.@recipe(PottsVolume, frame) do scene
         nan_color = :transparent,
         algorithm = :mip,
         absorption = 1.0,
-        visible = true,
+        visible = true
     )
 end
 @doc "Makie recipe type for a true three-dimensional frame." PottsVolume
@@ -261,20 +301,31 @@ function Makie.plot!(plot::PottsVolume)
     values = Makie.lift(item -> item.values, encoded)
     colormap = Makie.lift(
         _resolved_colormap, encoded, plot.colormap,
-        plot.category_palette, plot.medium_color)
+        plot.category_palette, plot.medium_color
+    )
     colorrange = Makie.lift(_plot_colorrange, encoded, plot.colorrange)
-    Makie.volume!(plot, values;
+    Makie.volume!(
+        plot, values;
         colormap, colorrange, nan_color = plot.nan_color,
         algorithm = plot.algorithm, absorption = plot.absorption,
-        visible = plot.visible)
+        visible = plot.visible
+    )
     return plot
 end
 
 Makie.plottype(::AbstractPottsRenderFrame{3}) = PottsVolume
-Makie.convert_arguments(::Type{<:PottsVolume},
-    frame::AbstractPottsRenderFrame{3}) = (frame,)
-Makie.used_attributes(::Type{<:PottsVolume},
-    ::AbstractPottsRenderFrame{3}) = ()
+function Makie.convert_arguments(
+        ::Type{<:PottsVolume},
+        frame::AbstractPottsRenderFrame{3}
+    )
+    return (frame,)
+end
+function Makie.used_attributes(
+        ::Type{<:PottsVolume},
+        ::AbstractPottsRenderFrame{3}
+    )
+    return ()
+end
 Makie.preferred_axis_type(::Type{<:PottsVolume}) = Makie.LScene
 Makie.preferred_axis_type(::AbstractPottsRenderFrame{3}) = Makie.LScene
 

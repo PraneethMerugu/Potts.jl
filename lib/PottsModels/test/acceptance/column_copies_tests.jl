@@ -3,8 +3,8 @@
 # `docs/design/research/gpu-host-transfer-audit.md` §4 (A1–A4) and §5 (H1–H4).
 #
 # Accept: per-MCS bytes of an adaptive-ODE fixture and a `HostPhase` fixture scale
-# with the columns used, not with all cell quantities; results unchanged up to floating-point
-# tolerance.
+# with the columns used, not with all cell quantities; results unchanged up to
+# floating-point tolerance.
 #
 # What is pinned. Each fixture comes as a pair that differs ONLY by quantities the phase
 # does not touch: extra cell columns (Float, Int32 and a matrix column), an extra model
@@ -13,8 +13,8 @@
 # drop). On Metal (POTTS_GPU=metal with Metal loaded; Float32, CheckerboardCPM):
 #  1. Pair invariance. The per-MCS counter triple (syncs, transfers, transfer_bytes) of
 #     `step!` is identical between the two members, MCS by MCS. The fixtures have no
-#     lifecycle, and every other phase is a device phase (`transfer_counters_tests.jl` target (a): 0 / 0 / 0),
-#     so the whole triple is the ODE's / HostPhase's.
+#     lifecycle, and every other phase is a device phase (`transfer_counters_tests.jl`
+#     target (a): 0 / 0 / 0), so the whole triple is the ODE's / HostPhase's.
 #  2. Lattice-size invariance. A phase that does not read σ moves the same bytes on a
 #     16² (12²) and a 32² (24²) lattice with the same cells. The lattices carry a domain
 #     mask (all sites in the domain), so this also pins A4/H3: the static mask is not copied
@@ -39,19 +39,19 @@
 # HostPhase API (proposed surface; needs a ruling). `HostPhase` today declares
 # nothing (it gets `f!` and `every`), so it cannot know its columns. This file uses
 #     HostPhase(f!; every = 1, reads = nothing, writes = nothing)
-# `reads` / `writes`: tuples of Symbols naming the state leaves the body touches: `:ownership` (the
-# labels) or a cell column name. `nothing` (the default) keeps today's behaviour: the whole
-# state down, every cell column up. Columns in `writes` are copied down too (bodies update
-# them in place) and are the only columns copied back. A name that is not `:ownership` or a cell
-# column of the state is an `ArgumentError` by the first MCS the phase runs (on every
-# backend, so a typo never silently reads a stale host copy). What `f!` sees in undeclared
-# leaves is unspecified. Potts fills the declarations in for its generated `@link`/`@unlink`
-# phases (pinned through the `@link` pair below).
+# `reads` / `writes`: tuples of Symbols naming the state leaves the body touches:
+# `:ownership` (the labels) or a cell column name. `nothing` (the default) keeps today's
+# behaviour: the whole state down, every cell column up. Columns in `writes` are copied down
+# too (bodies update them in place) and are the only columns copied back. A name that is not
+# `:ownership` or a cell column of the state is an `ArgumentError` by the first MCS the
+# phase runs (on every backend, so a typo never silently reads a stale host copy). What `f!`
+# sees in undeclared leaves is unspecified. Potts fills the declarations in for its
+# generated `@link`/`@unlink` phases (pinned through the `@link` pair below).
 #
 # Today: the CPU ODE and `@link` testsets pass (the current path is the reference); the
-# HostPhase testsets fail with `MethodError: no method matching HostPhase(…; reads, writes)`;
-# on Metal the pair and lattice invariances fail (the snapshot copies σ, every cell column,
-# every model/site leaf, the mask and every parameter table each MCS).
+# HostPhase testsets fail with `MethodError: no method matching HostPhase(…; reads,
+# writes)`; on Metal the pair and lattice invariances fail (the snapshot copies σ, every
+# cell column, every model/site leaf, the mask and every parameter table each MCS).
 
 @testsetup module ColumnCopiesSetup
 include(joinpath(@__DIR__, "..", "shared", "common.jl"))
@@ -64,7 +64,9 @@ counts(s) = (s.syncs, s.transfers, s.transfer_bytes)
 column_bytes(arrays) = isempty(arrays) ? 0 : sum(sizeof, arrays)
 """Per-MCS counter triples of `step!` (no saves), after `nwarm` warm-up MCS."""
 function deltas(prob, alg; backend, nwarm = 1, nstep = 3)
-    integ = init(prob, alg; backend, save_start = false, save_everystep = false, save_end = false)
+    integ = init(
+        prob, alg; backend, save_start = false, save_everystep = false, save_end = false
+    )
     for _ in 1:nwarm
         step!(integ)
     end
@@ -132,8 +134,11 @@ function ode_problem(; wide = false, lattice = (16, 16), T = Float64, nmcs = 5)
     σ[10:13, 10:13] .= 2
     M = wide ? OdeWide : Ode
     return PottsProblem(
-        M(; name = :ode, lattice), [ownership => σ, kind => [:A, :A], :r => COLUMN_R], (0, nmcs);
-        T, capacity = CAPACITY, seed = 3, ode_solver = Adaptive(Rodas5P(); reltol = 1.0e-8, abstol = 1.0e-10)
+        M(; name = :ode, lattice), [ownership => σ, kind => [:A, :A], :r => COLUMN_R], (
+            0, nmcs,
+        );
+        T, capacity = CAPACITY, seed = 3,
+        ode_solver = Adaptive(Rodas5P(); reltol = 1.0e-8, abstol = 1.0e-10)
     )
 end
 """Bytes the ODE phases may move per MCS: down y, r, volume, kind and g (plus any scratch
@@ -157,23 +162,32 @@ g_exact(t) = exp(-COLUMN_K * t)
 # The wide member adds cell columns z1 (Float), z2 (Int32), z3 (3 × capacity), a model
 # quantity q, a site field h and a parameter table Q.
 const NCELL = 32
-copy_x_to_y!(cell, st, p, ctx, mcs) = (
+function copy_x_to_y!(cell, st, p, ctx, mcs)
     for c in eachindex(cell.y)
         cell.y[c] += cell.x[c]
-    end; nothing
-)
-copy_sigma_to_y!(cell, st, p, ctx, mcs) = (
+    end
+    return nothing
+end
+function copy_sigma_to_y!(cell, st, p, ctx, mcs)
     for c in 1:2
         cell.y[c] = count(==(Int32(c)), st.ownership)
-    end; nothing
-)
+    end
+    return nothing
+end
 function hostphase(body; bad = false)
     body === :none && return CorePotts.HostPhase(copy_x_to_y!)
-    body === :xy && return CorePotts.HostPhase(copy_x_to_y!; reads = bad ? (:x, :nonexistent) : (:x,), writes = (:y,))
-    body === :sigma && return CorePotts.HostPhase(copy_sigma_to_y!; reads = (:ownership,), writes = (:y,))
+    body === :xy &&
+        return CorePotts.HostPhase(
+        copy_x_to_y!; reads = bad ? (:x, :nonexistent) : (:x,),
+        writes = (:y,)
+    )
+    body === :sigma &&
+        return CorePotts.HostPhase(copy_sigma_to_y!; reads = (:ownership,), writes = (:y,))
     error("unknown body $body")
 end
-function host_problem(; body = :xy, wide = false, dims = (12, 12), T = Float64, bad = false, nmcs = 4)
+function host_problem(;
+        body = :xy, wide = false, dims = (12, 12), T = Float64, bad = false, nmcs = 4
+    )
     σ = zeros(Int32, dims)
     σ[3:6, 3:6] .= 1
     σ[8:11, 7:10] .= 2
@@ -182,12 +196,24 @@ function host_problem(; body = :xy, wide = false, dims = (12, 12), T = Float64, 
     model = (;)
     site = (;)
     if wide
-        cell = merge(cell, (; z1 = fill(T(2), n), z2 = fill(Int32(7), n), z3 = ones(T, 3, n)))
+        cell = merge(
+            cell, (;
+                z1 = fill(T(2), n), z2 = fill(Int32(7), n), z3 = ones(T, 3, n),
+            )
+        )
         model = (; q = T[5])
         site = (; h = fill(T(0.5), dims))
     end
     u0 = CorePotts.initial_state(σ, ones(Int32, n); cell, model, site)
-    dH(st, p, prop, ctx) = CorePotts.volume_delta(st.cell.volume, prop, (v, c) -> p.λ * (v - p.V0)^2)
+    function dH(st, p, prop, ctx)
+        return CorePotts.volume_delta(
+            st.cell.volume, prop, (v, c) -> p.λ *
+                (
+                v -
+                    p.V0
+            )^2
+        )
+    end
     f = CorePotts.CPMFunction(
         dH; temperature = (st, p, prop, ctx) -> p.T,
         phases = CorePotts.Phases(; after_mcs = (hostphase(body; bad),))
@@ -250,27 +276,42 @@ is_link_column(n) = startswith(String(n), "links") || startswith(String(n), "lin
 function link_bound(u0)
     cell = u0.cell
     rel = [getfield(cell, n) for n in keys(cell) if is_link_column(n)]
-    reads = [getfield(cell, n) for n in (:kind, :volume, :anchor, :m1, :m2) if haskey(cell, n)]
+    reads = [
+        getfield(cell, n)
+            for n in (:kind, :volume, :anchor, :m1, :m2) if haskey(cell, n)
+    ]
     return sizeof(u0.ownership) + column_bytes(reads) + 2 * column_bytes(rel) + SLACK
 end
 column_bond(cell) = CorePotts.link_store(cell, :bond)
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "column copies: fixtures differ only by untouched quantities" setup = [ColumnCopiesSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "column copies: fixtures differ only by untouched quantities" setup = [
+    ColumnCopiesSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     @testset "column copies: fixtures differ only by untouched quantities" begin
         a, b = ode_problem(), ode_problem(; wide = true)
-        @test issubset(keys(a.u0.cell), keys(b.u0.cell)) && length(keys(b.u0.cell)) >= length(keys(a.u0.cell)) + 3
+        @test issubset(keys(a.u0.cell), keys(b.u0.cell)) &&
+            length(keys(b.u0.cell)) >= length(keys(a.u0.cell)) + 3
         @test haskey(b.u0.model, :q) && haskey(b.u0.site, :h) && !haskey(a.u0.site, :h)
-        @test a.lattice.mask !== nothing                          # the mask exists (pins A4)
-        @test all(c -> sizeof(getfield(a.u0.cell, c)) >= 64, keys(a.u0.cell))   # slack < any column
+        # the mask exists (pins A4)
+        @test a.lattice.mask !== nothing
+        # slack < any column
+        @test all(c -> sizeof(getfield(a.u0.cell, c)) >= 64, keys(a.u0.cell))
         a, b = link_problem(), link_problem(; wide = true)
-        @test issubset(keys(a.u0.cell), keys(b.u0.cell)) && length(keys(b.u0.cell)) >= length(keys(a.u0.cell)) + 2
+        @test issubset(keys(a.u0.cell), keys(b.u0.cell)) &&
+            length(keys(b.u0.cell)) >= length(keys(a.u0.cell)) + 2
     end
 end
 
-@testitem "column copies: adaptive ODE results on the CPU (current path)" setup = [ColumnCopiesSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "column copies: adaptive ODE results on the CPU (current path)" setup = [
+    ColumnCopiesSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "column copies: adaptive ODE results on the CPU (current path)" begin
         for alg in (SequentialCPM(), CheckerboardCPM())
             n = 5
@@ -279,22 +320,29 @@ end
             @test ua.cell.y[1:2] ≈ y_exact(n) rtol = 1.0e-6
             @test ua.model.g[1] ≈ g_exact(n) rtol = 1.0e-6
             @test ub.cell.y[1:2] == ua.cell.y[1:2] && ub.model.g == ua.model.g
-            @test ub.ownership == ua.ownership                                          # the extras change nothing else
+            # the extras change nothing else
+            @test ub.ownership == ua.ownership
             @test ub.cell.z1[1:2] == fill(2.0 + n, 2)                   # the extra rule ran
         end
     end
 end
 
-@testitem "column copies: HostPhase declarations on the CPU" setup = [ColumnCopiesSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "column copies: HostPhase declarations on the CPU" setup = [
+    ColumnCopiesSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "column copies: HostPhase declarations on the CPU" begin
         n = 4
         for alg in (SequentialCPM(), CheckerboardCPM())
             ref = solve(host_problem(; body = :none, nmcs = n), alg).u[end]
             for wide in (false, true)
                 u = solve(host_problem(; body = :xy, wide, nmcs = n), alg).u[end]
-                @test u.cell.y == ref.cell.y                            # same effect as undeclared
+                # same effect as undeclared
+                @test u.cell.y == ref.cell.y
                 @test u.ownership == ref.ownership
-                @test u.cell.y ≈ n .* u.cell.x                          # the body ran every MCS
+                # the body ran every MCS
+                @test u.cell.y ≈ n .* u.cell.x
                 u = solve(host_problem(; body = :sigma, wide, nmcs = n), alg).u[end]
                 @test u.cell.y[1:2] == Float64.(u.cell.volume[1:2])     # σ was read
                 @test all(iszero, u.cell.y[3:end])
@@ -307,20 +355,29 @@ end
     end
 end
 
-@testitem "column copies: @link results on the CPU (current path)" setup = [ColumnCopiesSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "column copies: @link results on the CPU (current path)" setup = [
+    ColumnCopiesSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "column copies: @link results on the CPU (current path)" begin
         for alg in (SequentialCPM(), CheckerboardCPM())
             ua = solve(link_problem(), alg).u[end]
             ub = solve(link_problem(; wide = true), alg).u[end]
             A, B = column_bond(ua.cell), column_bond(ub.cell)
-            @test CorePotts.linked(A, 1, 2) && !CorePotts.linked(A, 1, 3) && !CorePotts.linked(A, 2, 3)
+            @test CorePotts.linked(A, 1, 2) && !CorePotts.linked(A, 1, 3) &&
+                !CorePotts.linked(A, 2, 3)
             @test A.links == B.links && ua.cell.link_rest == ub.cell.link_rest
             @test ua.ownership == ub.ownership
         end
     end
 end
 
-@testitem "column copies: adaptive-ODE column-only copies on the device" setup = [ColumnCopiesSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "column copies: adaptive-ODE column-only copies on the device" setup = [
+    ColumnCopiesSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "column copies: adaptive-ODE column-only copies on the device" begin
         if ON_DEVICE
             backend = PottsDevices.device_backend()
@@ -330,10 +387,13 @@ end
             da, ia = deltas(nar, alg; backend)
             db, ib = deltas(ode_problem(; T = Float32, wide = true), alg; backend)
             dl, il = deltas(ode_problem(; T = Float32, lattice = (32, 32)), alg; backend)
-            @info "column copies adaptive-ODE MCS (syncs, transfers, bytes)" narrow = da wide = db lattice32 = dl bound = ode_bound(nar.u0)
+            @info "column copies adaptive-ODE MCS (syncs, transfers, bytes)" narrow =
+                da wide = db lattice32 = dl bound = ode_bound(nar.u0)
             @test all(==(first(da)), da)                                # the same every MCS
-            @test db == da                                              # extra quantities: not moved
-            @test dl == da                                              # no σ, no mask per MCS
+            # extra quantities: not moved
+            @test db == da
+            # no σ, no mask per MCS
+            @test dl == da
             @test all(d -> d[3] <= ode_bound(nar.u0), da)
             # negative controls: the ODEs ran (4 MCS: t = 4) and match the CPU
             for integ in (ia, ib, il)
@@ -350,7 +410,11 @@ end
     end
 end
 
-@testitem "column copies: HostPhase column-only copies on the device" setup = [ColumnCopiesSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "column copies: HostPhase column-only copies on the device" setup = [
+    ColumnCopiesSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "column copies: HostPhase column-only copies on the device" begin
         if ON_DEVICE
             backend = PottsDevices.device_backend()
@@ -359,26 +423,43 @@ end
             for body in (:xy, :sigma)
                 nar = host_problem(; body, T = Float32)
                 da, ia = deltas(nar, alg; backend)
-                db, ib = deltas(host_problem(; body, T = Float32, wide = true), alg; backend)
-                @info "column copies HostPhase MCS (syncs, transfers, bytes)" body narrow = da wide = db bound = host_bound(nar.u0, body)
+                db, ib = deltas(
+                    host_problem(; body, T = Float32, wide = true), alg;
+                    backend
+                )
+                @info "column copies HostPhase MCS (syncs, transfers, bytes)" body narrow =
+                    da wide = db bound = host_bound(
+                    nar.u0, body
+                )
                 @test all(==(first(da)), da)
                 @test db == da
                 @test all(d -> d[3] <= host_bound(nar.u0, body), da)
                 if body === :xy
-                    dl, il = deltas(host_problem(; body, T = Float32, dims = (24, 24)), alg; backend)
-                    @test dl == da                                      # σ not read: lattice-free
-                    @test all(d -> d[3] > 0, da)                        # x and y do cross (host body)
-                    # negative control: 4 MCS ran the body; same effect as the undeclared phase
+                    dl, il = deltas(
+                        host_problem(; body, T = Float32, dims = (24, 24)), alg;
+                        backend
+                    )
+                    # σ not read: lattice-free
+                    @test dl == da
+                    # x and y do cross (host body)
+                    @test all(d -> d[3] > 0, da)
+                    # negative control: 4 MCS ran the body; same effect as the undeclared
+                    # phase
                     for integ in (ia, ib, il)
                         @test host(integ.state.cell.y) ≈ 4 .* host(integ.state.cell.x)
                     end
-                    _, iref = deltas(host_problem(; body = :none, T = Float32), alg; backend)
+                    _, iref = deltas(
+                        host_problem(; body = :none, T = Float32), alg;
+                        backend
+                    )
                     @test host(ia.state.cell.y) == host(iref.state.cell.y)
                     @test host(ia.state.ownership) == host(iref.state.ownership)
                 else
-                    @test all(d -> d[3] >= sizeof(nar.u0.ownership), da)       # σ declared: it comes down
+                    # σ declared: it comes down
+                    @test all(d -> d[3] >= sizeof(nar.u0.ownership), da)
                     for integ in (ia, ib)
-                        @test host(integ.state.cell.y)[1:2] == Float32.(host(integ.state.cell.volume)[1:2])
+                        @test host(integ.state.cell.y)[1:2] ==
+                            Float32.(host(integ.state.cell.volume)[1:2])
                         @test all(iszero, host(integ.state.cell.y)[3:end])
                     end
                 end
@@ -389,7 +470,11 @@ end
     end
 end
 
-@testitem "column copies: @link column-only copies on the device" setup = [ColumnCopiesSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "column copies: @link column-only copies on the device" setup = [
+    ColumnCopiesSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "column copies: @link column-only copies on the device" begin
         if ON_DEVICE
             backend = PottsDevices.device_backend()
@@ -398,7 +483,8 @@ end
             nar = link_problem(; T = Float32)
             da, ia = deltas(nar, alg; backend)
             db, ib = deltas(link_problem(; T = Float32, wide = true), alg; backend)
-            @info "column copies @link MCS (syncs, transfers, bytes)" narrow = da wide = db bound = link_bound(nar.u0)
+            @info "column copies @link MCS (syncs, transfers, bytes)" narrow = da wide =
+                db bound = link_bound(nar.u0)
             @test all(==(first(da)), da)
             @test db == da
             @test all(d -> d[3] <= link_bound(nar.u0), da)
@@ -406,7 +492,8 @@ end
             for integ in (ia, ib)
                 cell = map(host, integ.state.cell)
                 S = column_bond(cell)
-                @test CorePotts.linked(S, 1, 2) && !CorePotts.linked(S, 1, 3) && !CorePotts.linked(S, 2, 3)
+                @test CorePotts.linked(S, 1, 2) && !CorePotts.linked(S, 1, 3) &&
+                    !CorePotts.linked(S, 2, 3)
                 @test S.links == column_bond(cpu.cell).links
                 @test cell.link_rest == cpu.cell.link_rest
             end

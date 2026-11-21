@@ -11,7 +11,8 @@
 const _Point2 = NTuple{2, Float64}
 
 """
-    concave_hull(points; concavity = 2.0, length_threshold = 0.0) -> Vector{NTuple{2, Float64}}
+    concave_hull(points; concavity = 2.0, length_threshold = 0.0) -> Vector{NTuple{2,
+        Float64}}
 
 The concave hull of the planar points `points` (any collection of 2-tuples or 2-vectors of
 reals; converted to `Float64`, and not modified). The result is the closed boundary, without
@@ -74,9 +75,11 @@ seconds for ``10⁴`` points on one line.
 function concave_hull(points; concavity::Real = 2.0, length_threshold::Real = 0.0)
     pts = _Point2[(Float64(p[1]), Float64(p[2])) for p in points]
     isempty(pts) && throw(ArgumentError("concave_hull: no points"))
-    concavity > 0 || throw(ArgumentError("concave_hull: concavity must be positive (got $concavity)"))
+    concavity > 0 ||
+        throw(ArgumentError("concave_hull: concavity must be positive (got $concavity)"))
     length_threshold >= 0 ||
-        throw(ArgumentError("concave_hull: length_threshold must be non-negative (got $length_threshold)"))
+        throw(ArgumentError("concave_hull: length_threshold must be non-negative \
+            (got $length_threshold)"))
     all(p -> isfinite(p[1]) && isfinite(p[2]), pts) ||
         throw(ArgumentError("concave_hull: the points must have finite coordinates"))
     hull = _graham_hull!(pts)
@@ -84,13 +87,14 @@ function concave_hull(points; concavity::Real = 2.0, length_threshold::Real = 0.
     return _concaveman(pts, hull, Float64(concavity), Float64(length_threshold))
 end
 
-# ── kernels (metrics.cpp and concaveman.h, operation for operation) ────────────────────────
+# ── kernels (metrics.cpp and concaveman.h, operation for operation)
+# ────────────────────────
 
 # metrics.cpp `orientation`, with the sign made exact: −1 clockwise, +1 counter-clockwise,
 # 0 collinear. The value is metrics.cpp's expression; when its magnitude is within the
 # expression's rounding bound the sign is decided in exact rational arithmetic. Wherever the
-# floating-point sign is certain the result is metrics.cpp's; elsewhere metrics.cpp's sign is
-# rounding noise, which made its Graham order inconsistent (spec 15 D12).
+# floating-point sign is certain the result is metrics.cpp's; elsewhere metrics.cpp's sign
+# is rounding noise, which made its Graham order inconsistent (spec 15 D12).
 function _orientation(a::_Point2, b::_Point2, c::_Point2)
     t1 = a[1] * (b[2] - c[2])
     t2 = b[1] * (c[2] - a[2])
@@ -106,24 +110,29 @@ end
 # Integer coordinates below 2²⁵ in magnitude: differences < 2²⁶, products < 2⁵¹ and the
 # three-term sum < 2⁵³, all exact in Float64, so `v` itself is exact (lattice data).
 _small_int(x) = isinteger(x) & (abs(x) < 33554432.0)
-_small_integers(a, b, c) = _small_int(a[1]) & _small_int(a[2]) & _small_int(b[1]) & _small_int(b[2]) &
-    _small_int(c[1]) & _small_int(c[2])
+function _small_integers(a, b, c)
+    return _small_int(a[1]) & _small_int(a[2]) & _small_int(b[1]) & _small_int(b[2]) &
+        _small_int(c[1]) & _small_int(c[2])
+end
 
 function _orientation_exact(a::_Point2, b::_Point2, c::_Point2)
     R(x) = Rational{BigInt}(x)
-    v = R(a[1]) * (R(b[2]) - R(c[2])) + R(b[1]) * (R(c[2]) - R(a[2])) + R(c[1]) * (R(a[2]) - R(b[2]))
+    v = R(a[1]) * (R(b[2]) - R(c[2])) + R(b[1]) * (R(c[2]) - R(a[2])) +
+        R(c[1]) * (R(a[2]) - R(b[2]))
     return Int(sign(v))
 end
 
 # concaveman.h `orient2d`
-_orient2d(p1::_Point2, p2::_Point2, p3::_Point2) =
-    (p2[2] - p1[2]) * (p3[1] - p2[1]) - (p2[1] - p1[1]) * (p3[2] - p2[2])
+function _orient2d(p1::_Point2, p2::_Point2, p3::_Point2)
+    return (p2[2] - p1[2]) * (p3[1] - p2[1]) - (p2[1] - p1[1]) * (p3[2] - p2[2])
+end
 
 # concaveman.h `intersects`: edges (p1, q1) and (p2, q2) cross
-_intersects(p1::_Point2, q1::_Point2, p2::_Point2, q2::_Point2) =
-    p1 != q2 && q1 != p2 &&
-    (_orient2d(p1, q1, p2) > 0) != (_orient2d(p1, q1, q2) > 0) &&
-    (_orient2d(p2, q2, p1) > 0) != (_orient2d(p2, q2, q1) > 0)
+function _intersects(p1::_Point2, q1::_Point2, p2::_Point2, q2::_Point2)
+    return p1 != q2 && q1 != p2 &&
+        (_orient2d(p1, q1, p2) > 0) != (_orient2d(p1, q1, q2) > 0) &&
+        (_orient2d(p2, q2, p1) > 0) != (_orient2d(p2, q2, q1) > 0)
+end
 
 # concaveman.h `getSqDist`
 function _sqdist(p1::_Point2, p2::_Point2)
@@ -151,11 +160,12 @@ function _sqsegdist(p::_Point2, p1::_Point2, p2::_Point2)
     return dx * dx + dy * dy
 end
 
-# ── Graham scan (metrics.cpp `convex_hull`, include_collinear = false) ─────────────────────
+# ── Graham scan (metrics.cpp `convex_hull`, include_collinear = false)
+# ─────────────────────
 
-# Sorts `pts` in place into Graham order and returns the strictly convex hull as indices into
-# it. The order is a strict weak ordering (exact orientation about p₀; on one ray from p₀,
-# nearer first), so the result does not depend on the sort algorithm; metrics.cpp's
+# Sorts `pts` in place into Graham order and returns the strictly convex hull as indices
+# into it. The order is a strict weak ordering (exact orientation about p₀; on one ray from
+# p₀, nearer first), so the result does not depend on the sort algorithm; metrics.cpp's
 # comparator is not one for points collinear with p₀ (spec 15 D12).
 function _graham_hull!(pts::Vector{_Point2})
     p0 = pts[1]
@@ -165,7 +175,8 @@ function _graham_hull!(pts::Vector{_Point2})
     sort!(pts; lt = (a, b) -> _graham_before(p0, a, b))
     hull = Int[]
     for i in eachindex(pts)
-        while length(hull) > 1 && !(_orientation(pts[hull[end - 1]], pts[hull[end]], pts[i]) < 0)
+        while length(hull) > 1 &&
+                !(_orientation(pts[hull[end - 1]], pts[hull[end]], pts[i]) < 0)
             pop!(hull)
         end
         push!(hull, i)
@@ -174,19 +185,22 @@ function _graham_hull!(pts::Vector{_Point2})
     return hull
 end
 
-# a before b in Graham order: clockwise about p0 first; on one ray, nearer first. The squared
-# distance is metrics.cpp's (monotone along a ray, as rounding is monotone); distinct points
-# whose distances round alike are ordered by |Δx|, |Δy| (also monotone), then by coordinates.
+# a before b in Graham order: clockwise about p0 first; on one ray, nearer first. The
+# squared distance is metrics.cpp's (monotone along a ray, as rounding is monotone);
+# distinct points whose distances round alike are ordered by |Δx|, |Δy| (also monotone),
+# then by coordinates.
 function _graham_before(p0::_Point2, a::_Point2, b::_Point2)
     o = _orientation(p0, a, b)
     o == 0 || return o < 0
     da = (p0[1] - a[1]) * (p0[1] - a[1]) + (p0[2] - a[2]) * (p0[2] - a[2])
     db = (p0[1] - b[1]) * (p0[1] - b[1]) + (p0[2] - b[2]) * (p0[2] - b[2])
     da == db || return da < db
-    return (abs(a[1] - p0[1]), abs(a[2] - p0[2]), a[1], a[2]) < (abs(b[1] - p0[1]), abs(b[2] - p0[2]), b[1], b[2])
+    return (abs(a[1] - p0[1]), abs(a[2] - p0[2]), a[1], a[2]) <
+        (abs(b[1] - p0[1]), abs(b[2] - p0[2]), b[1], b[2])
 end
 
-# ── a uniform grid over the points' bounding box ───────────────────────────────────────────
+# ── a uniform grid over the points' bounding box
+# ───────────────────────────────────────────
 
 # Cells are `h` wide from (x0, y0); coordinates outside the box clamp to the border cells.
 # The grid only selects what to examine, so its own rounding cannot change a result as long
@@ -212,8 +226,19 @@ function _Grid(pts::Vector{_Point2})
     return _Grid(xmin, ymin, h, nx, ny)
 end
 
-_cellaxis(v, v0, h, n) = (s = (v - v0) / h; s < 1 ? 1 : s >= n ? n : floor(Int, s) + 1)
-_cell(g::_Grid, p::_Point2) = (_cellaxis(p[1], g.x0, g.h, g.nx), _cellaxis(p[2], g.y0, g.h, g.ny))
+function _cellaxis(v, v0, h, n)
+    s = (v - v0) / h
+    return if s < 1
+        1
+    elseif s >= n
+        n
+    else
+        floor(Int, s) + 1
+    end
+end
+function _cell(g::_Grid, p::_Point2)
+    return (_cellaxis(p[1], g.x0, g.h, g.nx), _cellaxis(p[2], g.y0, g.h, g.ny))
+end
 _cellid(g::_Grid, i::Int, j::Int) = i + (j - 1) * g.nx
 
 # the cells covering the box [xlo, xhi] × [ylo, yhi], widened by a relative margin
@@ -226,7 +251,8 @@ function _cellspan(g::_Grid, xlo, xhi, ylo, yhi)
     return i1:i2, j1:j2
 end
 
-# ── concaveman (concaveman.h `concaveman` and `findCandidate`) ─────────────────────────────
+# ── concaveman (concaveman.h `concaveman` and `findCandidate`)
+# ─────────────────────────────
 
 mutable struct _Concaveman
     const pts::Vector{_Point2}
@@ -264,8 +290,10 @@ function _Concaveman(pts::Vector{_Point2})
         cellpts[cursor[k]] = i
         cursor[k] += 1
     end
-    return _Concaveman(pts, fill(true, length(pts)), grid, cellstart, cellpts,
-        _Point2[], Int[], Int[], [NTuple{2, Int}[] for _ in 1:ncell], Int[], Int[], 0)
+    return _Concaveman(
+        pts, fill(true, length(pts)), grid, cellstart, cellpts,
+        _Point2[], Int[], Int[], [NTuple{2, Int}[] for _ in 1:ncell], Int[], Int[], 0
+    )
 end
 
 # C++ `tree.erase(p)`: the point and every duplicate of it leave the candidates
@@ -316,11 +344,17 @@ end
 
 # the live points with squared distance to the segment (b, c) at most maxsq, as
 # (distance, index), nearest first (ties: lower Graham index first)
-function _candidates!(out::Vector{Tuple{Float64, Int}}, cm::_Concaveman, b::_Point2, c::_Point2, maxsq::Float64)
+function _candidates!(
+        out::Vector{Tuple{Float64, Int}}, cm::_Concaveman,
+        b::_Point2, c::_Point2, maxsq::Float64
+    )
     empty!(out)
     r = isnan(maxsq) ? Inf : sqrt(maxsq)   # NaN: the C++ `dist > maxDist` keeps every point
     r = r + 1.0e-9 * r
-    is, js = _cellspan(cm.grid, min(b[1], c[1]) - r, max(b[1], c[1]) + r, min(b[2], c[2]) - r, max(b[2], c[2]) + r)
+    is, js = _cellspan(
+        cm.grid, min(b[1], c[1]) - r, max(b[1], c[1]) + r,
+        min(b[2], c[2]) - r, max(b[2], c[2]) + r
+    )
     for j in js, i in is
         k = _cellid(cm.grid, i, j)
         for q in cm.cellstart[k]:(cm.cellstart[k + 1] - 1)
@@ -334,7 +368,10 @@ function _candidates!(out::Vector{Tuple{Float64, Int}}, cm::_Concaveman, b::_Poi
     return sort!(out)
 end
 
-function _concaveman(pts::Vector{_Point2}, hull::Vector{Int}, concavity::Float64, length_threshold::Float64)
+function _concaveman(
+        pts::Vector{_Point2}, hull::Vector{Int}, concavity::Float64,
+        length_threshold::Float64
+    )
     cm = _Concaveman(pts)
     for h in hull
         _erase_point!(cm, pts[h])
@@ -370,7 +407,7 @@ function _concaveman(pts::Vector{_Point2}, hull::Vector{Int}, concavity::Float64
         for (dist, n) in _candidates!(cands, cm, b, c, maxsqlen)
             p = pts[n]
             if dist < _sqsegdist(p, a, b) && dist < _sqsegdist(p, c, d) &&
-               _no_intersections(cm, b, p) && _no_intersections(cm, c, p)
+                    _no_intersections(cm, b, p) && _no_intersections(cm, c, p)
                 found = n
                 break
             end

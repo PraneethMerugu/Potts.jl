@@ -1,11 +1,14 @@
-# `split_ids(σ, periodic)` and `split_cells(σ, periodic)`: the cells of an ownership matrix whose
-# sites are not one 8-connected piece, by flood fill.
+# `split_ids(σ, periodic)` and `split_cells(σ, periodic)`: the cells of an ownership matrix
+# whose sites are not one 8-connected piece, by flood fill.
 """Cells whose sites are not one 8-connected piece (axes periodic as given)."""
 function split_ids(σ, periodic)
-    X, Y = size(σ); out = eltype(σ)[]
+    X, Y = size(σ)
+    out = eltype(σ)[]
     for c in unique(σ)
         c == 0 && continue
-        idx = findall(==(c), σ); seen = Set([idx[1]]); st = [idx[1]]
+        idx = findall(==(c), σ)
+        seen = Set([idx[1]])
+        st = [idx[1]]
         while !isempty(st)
             q = pop!(st)
             for dx in -1:1, dy in -1:1

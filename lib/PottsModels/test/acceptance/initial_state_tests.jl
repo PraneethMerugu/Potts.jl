@@ -34,8 +34,8 @@
 #     of unit ranges in lattice indices), overwriting earlier layers (no `into`). Report
 #     row `:Fill`: requested = painted = 1, misses 0, counted 1, `clipped` per D-138 (box
 #     sites outside the domain count), dropped 1 if a later layer removes every site.
-#     `ArgumentError`s: a region with no in-domain site ("Fill: the region has no site in the
-#     lattice's domain"), a box outside the lattice (the existing `_region` message), a
+#     `ArgumentError`s: a region with no in-domain site ("Fill: the region has no site in
+#     the lattice's domain"), a box outside the lattice (the existing `_region` message), a
 #     dimension mismatch, a bad `splits`, a vector `kind`. `remake(f; region)` works.
 #     RNG-free.
 # A3. `Objects(shape, points = nothing; kinds, splits = :warn)` (exported). One cell per
@@ -50,11 +50,11 @@
 #     `layout`), a bad `splits`. `remake(o; points)` works.
 # A4. `Group(layers...)` (exported). Paints its children exactly like `overlay` (each child
 #     a leaf row; no row and no column of its own; ids in paint order). Every cell allocated
-#     while a child paints belongs to the group; the surviving ones form ONE cluster. Allowed
-#     as the top-level layout or a member of a top-level `overlay`; inside another `Group`
-#     (directly or through an `overlay`), as `Splits`' inner layer, or inside a custom
-#     layer's `paint!` it is an `ArgumentError`. `Group()` is an `ArgumentError`; `remake`
-#     of a `Group` is the existing "does not support remake" `ArgumentError`.
+#     while a child paints belongs to the group; the surviving ones form ONE cluster.
+#     Allowed as the top-level layout or a member of a top-level `overlay`; inside another
+#     `Group` (directly or through an `overlay`), as `Splits`' inner layer, or inside a
+#     custom layer's `paint!` it is an `ArgumentError`. `Group()` is an `ArgumentError`;
+#     `remake` of a `Group` is the existing "does not support remake" `ArgumentError`.
 # A5. `Potts.set_column!(op::LayoutState, name::Symbol, id::Integer, value)` (public, NOT
 #     exported). Records `value` for cell `id` (must be in 1:ncells(op), else an
 #     `ArgumentError` naming the id and ncells); `name ∈ (:ownership, :kind)` is an
@@ -64,20 +64,22 @@
 #     emitted as `name => values` (a model's cell variable, e.g. `:V_target`).
 # A6. `layout(l, x)` returns `[ownership => σ, kind => kinds, (cluster => ids)?,
 #     (name => values)…]`:
-#     - `cluster` iff some cell got a label (by `Group` or `set_column!`): ids[c] = the final
-#       id of the lowest-id surviving cell with the same label; an unlabelled cell gets its
-#       own final id (so a layout with one `Group` first reads 1 for the group's cells);
-#     - user columns, one per name in order of first `set_column!`, compacted with the cells,
-#       element type `identity.` of the values; if a surviving cell lacks a value for a user
-#       column, an `ArgumentError` at the end of `layout` naming the column and the missing
-#       cells' final ids (brief Q-5; `:cluster` exempt: an unset cell is its own cluster);
+#     - `cluster` iff some cell got a label (by `Group` or `set_column!`): ids[c] = the
+#       final id of the lowest-id surviving cell with the same label; an unlabelled cell
+#       gets its own final id (so a layout with one `Group` first reads 1 for the group's
+#       cells);
+#     - user columns, one per name in order of first `set_column!`, compacted with the
+#       cells, element type `identity.` of the values; if a surviving cell lacks a value for
+#       a user column, an `ArgumentError` at the end of `layout` naming the column and the
+#       missing cells' final ids (brief Q-5; `:cluster` exempt: an unset cell is its own
+#       cluster);
 #     - with neither, exactly today's two entries, byte for byte (pinned below);
 #     - `report = true` returns `(point, rows)`, rows unchanged in schema.
 # A7. `_layer_kinds` covers `Fill`, `Objects` and `Group`: `layout(…, sys)` rejects a kind
 #     class (D-135) before painting.
 # A8. Docs (D-087): `docs/src/manual/layouts.md` lists `Fill`, `Objects`, `Group` in the
-#     built-in-layers table and shows a `Fill(` plane recipe, an `Objects(` sphere recipe and
-#     a `Group(` compartment example (brief §4.D docs check).
+#     built-in-layers table and shows a `Fill(` plane recipe, an `Objects(` sphere recipe
+#     and a `Group(` compartment example (brief §4.D docs check).
 #
 # Hand counts. Every count below was re-derived by the test author by brute force (an
 # exhaustive scan of every lattice site with the membership rule, exact integer squared
@@ -87,16 +89,17 @@
 # `_region_sites`).
 #
 # Sections: 1 names; 2 strict vs closed membership (A1 table); 3 `Interior` validation and
-# use as a region; 4 clipping, wrap and domain (A2); 5 `Fill` basics (A3); 6 `Objects` basics
-# (A4); 7 `Group` and `cluster` (A5 a–f); 8 `set_column!` (A5 h); 9 `Group` into
-# `PottsProblem` (A5 g); 10 the Fortuna geometry (A6); 11 the 2D analogue; 12 determinism and
-# laziness (A7); 13 the kinds check; 14 docs.
+# use as a region; 4 clipping, wrap and domain (A2); 5 `Fill` basics (A3); 6 `Objects`
+# basics (A4); 7 `Group` and `cluster` (A5 a–f); 8 `set_column!` (A5 h); 9 `Group` into
+# `PottsProblem` (A5 g); 10 the Fortuna geometry (A6); 11 the 2D analogue; 12 determinism
+# and laziness (A7); 13 the kinds check; 14 docs.
 #
 # Controls (pass on the base commit) are marked `control`; assertions that fail today
 # carry `DEFECT CHECK` (one per testset marks the first, the rest of the testset fails
 # with it). `negative control` marks a check that the rule under test matters (the other
-# rule, or the mechanism off, gives a different answer); it may use the new names. The new names do not exist on the base commit, so a testset that uses
-# them errors at its first use (UndefVarError); the file itself loads.
+# rule, or the mechanism off, gives a different answer); it may use the new names. The new
+# names do not exist on the base commit, so a testset that uses them errors at its first use
+# (UndefVarError); the file itself loads.
 
 @testsetup module InitialStateSetup
 include(joinpath(@__DIR__, "..", "shared", "common.jl"))
@@ -108,7 +111,10 @@ using StableRNGs: StableRNG
 initial_σ(op) = op[1].second
 initial_kinds(op) = op[2].second
 # the entry of an operating point with key `key` (`cluster`, a Symbol), or nothing
-entry(op, key) = (i = findfirst(p -> isequal(p.first, key), op); i === nothing ? nothing : op[i].second)
+function entry(op, key)
+    i = findfirst(p -> isequal(p.first, key), op)
+    return i === nothing ? nothing : op[i].second
+end
 initial_cluster(op) = entry(op, Potts.cluster)
 sites(σ, id) = Set(Tuple.(findall(==(id), σ)))
 # the partition of 1:n into classes of equal label
@@ -122,7 +128,9 @@ cart(x, hex) = hex ? (x[1] + x[2] / 2, x[2] * sqrt(3) / 2) : Float64.(Tuple(x))
 # squared distance to `c` (any periodic image; k ∈ -1:1 suffices here) satisfies `inside`.
 # `inside(d2)` is the rule: exact for integer d2 (square lattice, integer centre), the
 # brief's tolerance rule on Float64 distances otherwise.
-function oracle_sites(dims, c, inside; per = map(_ -> false, dims), hex = false, mask = nothing)
+function oracle_sites(
+        dims, c, inside; per = map(_ -> false, dims), hex = false, mask = nothing
+    )
     N = length(dims)
     out = Set{NTuple{N, Int}}()
     for I in CartesianIndices(dims)
@@ -139,11 +147,15 @@ closed_int(r2) = d2 -> round(Int, d2) <= r2
 strict_tol(r) = d2 -> sqrt(d2) < r * (1 - 1.0e-12)
 closed_tol(r) = d2 -> sqrt(d2) <= r * (1 + 1.0e-12)
 # the hexagonal squared distance between site-centred points is a² + ab + b² (exact)
-hex_count(r2; strict) = count(
-    ((a, b),) -> (q = a^2 + a * b + b^2; strict ? q < r2 : q <= r2),
-    Iterators.product(-10:10, -10:10)
+function hex_count(r2; strict)
+    return count(
+        ((a, b),) -> (q = a^2 + a * b + b^2; strict ? q < r2 : q <= r2),
+        Iterators.product(-10:10, -10:10)
+    )
+end
+const ROW_KEYS = (
+    :layer, :type, :requested, :painted, :dropped, :misses, :counted, :clipped, :splits,
 )
-const ROW_KEYS = (:layer, :type, :requested, :painted, :dropped, :misses, :counted, :clipped, :splits)
 # A custom layer (D-091 protocol) that paints one site per entry of `labels` along row
 # `y`, starting at column `x0`, and, for each non-`nothing` label, calls
 # `set_column!(op, name, id, label)`. `twice`: set the first cell's value twice (the second
@@ -156,7 +168,11 @@ struct Labels <: Potts.AbstractLayout
     kind::Symbol
     twice::Bool
 end
-Labels(name, labels; y = 1, x0 = 1, kind = :a, twice = false) = Labels(name, Any[labels...], y, x0, kind, twice)
+function Labels(name, labels; y = 1, x0 = 1, kind = :a, twice = false)
+    return Labels(
+        name, Any[labels...], y, x0, kind, twice
+    )
+end
 function Potts.paint!(op::Potts.LayoutState, l::Labels, lat)
     for (k, lab) in enumerate(l.labels)
         id = Potts.new_cell!(op, l.kind)
@@ -204,14 +220,17 @@ function Potts.paint!(op::Potts.LayoutState, ::Keep, lat)
 end
 # a custom layer that paints a `Group` inside its own `paint!` (must throw)
 struct PaintsGroup <: Potts.AbstractLayout end
-Potts.paint!(op::Potts.LayoutState, ::PaintsGroup, lat) =
-    Potts.paint!(op, Group(Fill(:a; region = (1:2, 1:2))), lat)
+function Potts.paint!(op::Potts.LayoutState, ::PaintsGroup, lat)
+    return Potts.paint!(op, Group(Fill(:a; region = (1:2, 1:2))), lat)
+end
 # the error message of `f()` ("" if it does not throw an ArgumentError)
-initial_msg(f) = try
-    f()
-    ""
-catch e
-    e isa ArgumentError ? e.msg : ""
+function initial_msg(f)
+    return try
+        f()
+        ""
+    catch e
+        e isa ArgumentError ? e.msg : ""
+    end
 end
 # ---------------------------------------------------------------------------------------
 # 2. Strict vs closed membership: the brief's A1 table (centre on a site, lattice large
@@ -230,9 +249,20 @@ const INITIAL_A1 = [
     ("hex, r = √3", (21, 21), (11, 11), sqrt(3.0), 3, 7, 13, true),
     ("hex, r = 2", (21, 21), (11, 11), 2.0, 4, 13, 19, true),
 ]
-initial_shape(c, r) = length(c) == 2 ? Circle(Point(Float64.(c)...), r) : Sphere(Point(Float64.(c)...), r)
-initial_target(dims, hex) = hex ? Lattice(dims; geometry = Hexagonal(), boundary = Closed()) :
-    Lattice(dims; boundary = Closed())
+function initial_shape(c, r)
+    return if length(c) == 2
+        Circle(Point(Float64.(c)...), r)
+    else
+        Sphere(Point(Float64.(c)...), r)
+    end
+end
+function initial_target(dims, hex)
+    if hex
+        return Lattice(dims; geometry = Hexagonal(), boundary = Closed())
+    else
+        return Lattice(dims; boundary = Closed())
+    end
+end
 # ---------------------------------------------------------------------------------------
 # 7. `Group` and `cluster` (brief §4.A5 a–f; 2D 10×10 closed)
 const BODY = () -> Group(
@@ -242,7 +272,10 @@ const BODY = () -> Group(
 # Layouts without `Group` or `set_column!`: their pair shape is the initial state's.
 const REGRESSION = [
     () -> layout(Tiling((3, 3); spacing = 1, kinds = [:a, :b]), (12, 10)),
-    () -> layout(Voronoi(RandomPoints(6; seed = 3); lloyd = 2, kinds = [:a, :b, :c]), Lattice((16, 14); boundary = (Periodic(), Closed()))),
+    () -> layout(
+        Voronoi(RandomPoints(6; seed = 3); lloyd = 2, kinds = [:a, :b, :c]),
+        Lattice((16, 14); boundary = (Periodic(), Closed()))
+    ),
 ]
 # ---------------------------------------------------------------------------------------
 # 9. `Group` into `PottsProblem` (brief §4.A5 g, h)
@@ -282,7 +315,8 @@ end
 fortuna_lattice(L, Lz) = Lattice((L, L, Lz); boundary = (Periodic(), Periodic(), Closed()))
 # the A8 recipe, verbatim but for `shape` (the closed control swaps the shape)
 function fortuna_layout(R, L, Lz, target; strict = true)
-    c = (L ÷ 2 + 1, L ÷ 2 + 1, R + 1)                            # our z = R + 1 ⇒ bottom layer z = 2
+    # our z = R + 1 ⇒ bottom layer z = 2
+    c = (L ÷ 2 + 1, L ÷ 2 + 1, R + 1)
     ball = Sphere(Point(Float64.(c)...), Float64(R))
     body = Group(
         Objects(strict ? Interior(ball) : ball; kinds = [:cytoplasm]),
@@ -298,8 +332,14 @@ end
 # (R, L, Lz, centre, strict ball, z-range, sites at z = 2, nucleus box, cytoplasm,
 #  closed ball, closed z-range, closed cytoplasm after the planes)
 const FORTUNA = [
-    (10, 80, 21, (41, 41, 11), 4139, 2:20, 61, (38:43, 38:43, 8:13), 3923, 4169, 1:21, 3951),
-    (15, 120, 31, (61, 61, 16), 13997, 2:30, 89, (58:63, 58:63, 13:18), 13781, 14147, 1:31, 13929),
+    (
+        10, 80, 21, (41, 41, 11), 4139, 2:20, 61,
+        (38:43, 38:43, 8:13), 3923, 4169, 1:21, 3951,
+    ),
+    (
+        15, 120, 31, (61, 61, 16), 13997, 2:30, 89,
+        (58:63, 58:63, 13:18), 13781, 14147, 1:31, 13929,
+    ),
 ]
 # The kinds and targets of a Fortuna-shaped model built from the layout alone (R = 10).
 @potts_model InitialFortuna begin
@@ -313,7 +353,10 @@ const FORTUNA = [
         kind == nucleus, φ_n,
         ifelse(kind == lamellipodium, φ_l, ifelse(kind == cytoplasm, 1 - φ_n - φ_l, 0.0))
     ) * (4 / 3 * 3.141592653589793 * R^3)
-    @lattice Lattice((80, 80, 21); boundary = (Periodic(), Periodic(), Closed()), neighborhood = Moore(1))
+    @lattice Lattice(
+        (80, 80, 21); boundary = (Periodic(), Periodic(), Closed()),
+        neighborhood = Moore(1)
+    )
     @energy begin
         cells(cytoplasm, lamellipodium, nucleus) => (volume - V_target)^2
         contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 1.0, 3.0)
@@ -331,41 +374,54 @@ end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "initial state: the new names are exported, `set_column!` is public" setup = [InitialStateSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "initial state: the new names are exported, `set_column!` is public" setup = [
+    InitialStateSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 1. Names
     @testset "initial state: the new names are exported, `set_column!` is public" begin
         for n in (:Interior, :Fill, :Objects, :Group)
             @test Base.isexported(Potts.Layouts, n)                  # DEFECT CHECK
         end
         @test Base.ispublic(Potts, :set_column!)                     # DEFECT CHECK
-        @test !Base.isexported(Potts, :set_column!)                  # public, not exported (control today: absent)
+        # public, not exported (control today: absent)
+        @test !Base.isexported(Potts, :set_column!)
         # D-087: no named aliases for the replaced layers; D-138: no `Rect`
         for n in (:Plane, :Spheres, :Rect)
             @test !isdefined(Potts, n)                               # control
         end
-        @test Base.isexported(Potts.Layouts, :Sphere) && Base.isexported(Potts.Layouts, :Circle)   # control (D-138)
+        @test Base.isexported(Potts.Layouts, :Sphere) &&
+            Base.isexported(Potts.Layouts, :Circle)   # control (D-138)
     end
 end
 
-@testitem "initial state: strict (`Interior`) vs closed membership, the A1 table" setup = [InitialStateSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "initial state: strict (`Interior`) vs closed membership, the A1 table ($(case[1]))" for case in INITIAL_A1
+@testitem "initial state: strict (`Interior`) vs closed membership, the A1 table" setup = [
+    InitialStateSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "initial state: strict (`Interior`) vs closed membership, the A1 table \
+        ($(case[1]))" for case in INITIAL_A1
         label, dims, ci, r, r2, nstrict, nclosed, hex = case
         c = cart(ci, hex)
-        # the oracle reproduces the table (exact integer squared distances), and the hex counts
-        # agree with the a² + ab + b² form
+        # the oracle reproduces the table (exact integer squared distances), and the hex
+        # counts agree with the a² + ab + b² form
         os = oracle_sites(dims, c, strict_int(r2); hex)
         oc = oracle_sites(dims, c, closed_int(r2); hex)
         @test length(os) == nstrict && length(oc) == nclosed         # control (oracle)
-        hex && @test hex_count(r2; strict = true) == nstrict && hex_count(r2; strict = false) == nclosed
+        hex && @test hex_count(r2; strict = true) == nstrict &&
+            hex_count(r2; strict = false) == nclosed
         # the tolerance rules give the same sets (no site sits within 1e-12 of r but off it)
         @test os == oracle_sites(dims, c, strict_tol(r); hex)
         @test oc == oracle_sites(dims, c, closed_tol(r); hex)
-        @test nstrict != nclosed                                     # negative control: the rules differ
+        # negative control: the rules differ
+        @test nstrict != nclosed
         target = initial_target(dims, hex)
         s = initial_shape(c, r)
-        # today's closed rule, through an existing shape layer (a single Voronoi generator fills
-        # its region): the closed column
+        # today's closed rule, through an existing shape layer (a single Voronoi generator
+        # fills its region): the closed column
         v = layout(Voronoi([Point(c...)]; region = s, kinds = [:a]), target)
         @test sites(initial_σ(v), 1) == oc                         # control
         # `Interior`: the strict column
@@ -380,8 +436,12 @@ end
     end
 end
 
-@testitem "initial state: `Interior` validation and r = 0" setup = [InitialStateSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "initial state: `Interior` validation and r = 0" setup = [
+    InitialStateSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 3. `Interior`: validation, r = 0, and use as the region of existing layers
     @testset "initial state: `Interior` validation and r = 0" begin
         s = Circle(Point(5.0, 5.0), 2.0)
@@ -398,53 +458,99 @@ end
         @test_throws ArgumentError Interior(Circle(Point(NaN, 5.0), 2.0))
         @test_throws ArgumentError Interior(Circle(Point(5.0, 5.0), Inf))
         @test_throws ArgumentError Interior(Circle(Point(5.0, 5.0), -1.0))
-        # r = 0: the empty set, so a `Fill` of it has no site and throws (the closed r = 0 shape
-        # is the centre site)
+        # r = 0: the empty set, so a `Fill` of it has no site and throws (the closed r = 0
+        # shape is the centre site)
         z = Interior(Circle(Point(5.0, 5.0), 0.0))
         @test_throws ArgumentError layout(Fill(:a; region = z), (10, 10))
-        @test count(==(1), initial_σ(layout(Fill(:a; region = Circle(Point(5.0, 5.0), 0.0)), (10, 10)))) == 1
+        @test count(
+            ==(1), initial_σ(
+                layout(
+                    Fill(:a; region = Circle(Point(5.0, 5.0), 0.0)), (
+                        10, 10,
+                    )
+                )
+            )
+        ) == 1
     end
 end
 
-@testitem "initial state: `Interior` as the region of RandomPoints, Voronoi and Eden" setup = [InitialStateSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "initial state: `Interior` as the region of RandomPoints, Voronoi and Eden" begin
-        reg = Interior(Circle(Point(6.0, 6.0), 2.0))                 # strict: the 3×3 block 5:7 × 5:7 (9 sites)
+@testitem "initial state: `Interior` as the region of RandomPoints, Voronoi and \
+    Eden" setup = [InitialStateSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "initial state: `Interior` as the region of RandomPoints, Voronoi and \
+        Eden" begin
+        # strict: the 3×3 block 5:7 × 5:7 (9 sites)
+        reg = Interior(Circle(Point(6.0, 6.0), 2.0))
         block = Set((x, y) for x in 5:7, y in 5:7)
-        @test oracle_sites((12, 12), (6.0, 6.0), strict_int(4)) == block   # control (oracle)
+        # control (oracle)
+        @test oracle_sites((12, 12), (6.0, 6.0), strict_int(4)) == block
         # RandomPoints draws only strict sites: 9 distinct points exist, 10 do not
-        pts = Potts.points(RandomPoints(9; region = reg, seed = 3), (12, 12))        # DEFECT CHECK
+        # DEFECT CHECK
+        pts = Potts.points(RandomPoints(9; region = reg, seed = 3), (12, 12))
         @test Set(map(p -> (round(Int, p[1]), round(Int, p[2])), pts)) == block
-        @test_throws ArgumentError Potts.points(RandomPoints(10; region = reg, seed = 3), (12, 12))
+        @test_throws ArgumentError Potts.points(
+            RandomPoints(10; region = reg, seed = 3), (
+                12, 12,
+            )
+        )
         # Voronoi fills exactly the strict sites
         v = layout(Voronoi([Point(6.0, 6.0)]; region = reg, kinds = [:a]), (12, 12))
         @test sites(initial_σ(v), 1) == block
         # Eden grows inside the strict region only: with enough rounds it fills it
-        e = layout(Eden([Point(6.0, 6.0)]; rounds = 50, region = reg, kinds = [:a], seed = 1), (12, 12))
+        e = layout(
+            Eden(
+                [Point(6.0, 6.0)]; rounds = 50, region = reg, kinds = [:a], seed = 1
+            ), (
+                12, 12,
+            )
+        )
         @test sites(initial_σ(e), 1) == block
         # negative control: the closed region (13 sites) is larger
-        @test count(==(1), initial_σ(layout(Voronoi([Point(6.0, 6.0)]; region = Circle(Point(6.0, 6.0), 2.0), kinds = [:a]), (12, 12)))) == 13
+        @test count(
+            ==(1),
+            initial_σ(
+                layout(
+                    Voronoi(
+                        [Point(6.0, 6.0)]; region = Circle(Point(6.0, 6.0), 2.0),
+                        kinds = [:a]
+                    ),
+                    (12, 12)
+                )
+            )
+        ) == 13
     end
 end
 
-@testitem "initial state: clipping and wrap (Fill of a shape at the corner)" setup = [InitialStateSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "initial state: clipping and wrap (Fill of a shape at the corner)" setup = [
+    InitialStateSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 4. Clipping, wrap and the domain (brief §4.A2)
     @testset "initial state: clipping and wrap (Fill of a shape at the corner)" begin
         closed5 = Lattice((5, 5); boundary = Closed())
         per5 = Lattice((5, 5); boundary = Periodic())
         c = Circle(Point(1.0, 1.0), 2.0)
-        # oracles: closed r = 2 has 13 points, 6 of them with x, y ≥ 1; strict has 9, 4 with x, y ≥ 1
-        @test length(oracle_sites((5, 5), (1.0, 1.0), closed_int(4))) == 6            # control
-        @test length(oracle_sites((5, 5), (1.0, 1.0), closed_int(4); per = (true, true))) == 13
+        # oracles: closed r = 2 has 13 points, 6 of them with x, y ≥ 1; strict has 9, 4 with
+        # x, y ≥ 1
+        # control
+        @test length(oracle_sites((5, 5), (1.0, 1.0), closed_int(4))) == 6
+        @test length(oracle_sites((5, 5), (1.0, 1.0), closed_int(4); per = (true, true))) ==
+            13
         @test length(oracle_sites((5, 5), (1.0, 1.0), strict_int(4))) == 4
-        @test length(oracle_sites((5, 5), (1.0, 1.0), strict_int(4); per = (true, true))) == 9
+        @test length(oracle_sites((5, 5), (1.0, 1.0), strict_int(4); per = (true, true))) ==
+            9
         for (shape, lat, per, n, clipped, rule) in (
                 (c, closed5, (false, false), 6, 7, closed_int(4)),
                 (c, per5, (true, true), 13, 0, closed_int(4)),
-                (Interior(c), closed5, (false, false), 4, 5, strict_int(4)),         # DEFECT CHECK (Interior)
+                # DEFECT CHECK (Interior)
+                (Interior(c), closed5, (false, false), 4, 5, strict_int(4)),
                 (Interior(c), per5, (true, true), 9, 0, strict_int(4)),
             )
-            op, rows = layout(Fill(:a; region = shape), lat; report = true)               # DEFECT CHECK (Fill)
+            # DEFECT CHECK (Fill)
+            op, rows = layout(Fill(:a; region = shape), lat; report = true)
             @test sites(initial_σ(op), 1) == oracle_sites((5, 5), (1.0, 1.0), rule; per)
             @test count(==(1), initial_σ(op)) == n
             @test only(rows).clipped == clipped
@@ -453,49 +559,89 @@ end
     end
 end
 
-@testitem "initial state: the domain (never painted outside, counted as clipped)" setup = [InitialStateSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "initial state: the domain (never painted outside, counted as clipped)" setup = [
+    InitialStateSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "initial state: the domain (never painted outside, counted as clipped)" begin
         dom = Lattice((10, 10); boundary = Closed(), domain = x -> x[1] <= 5)
         # a box region: its 20 sites, 10 in the domain, 10 clipped
-        op, rows = layout(Fill(:a; region = (1:10, 1:2)), dom; report = true)              # DEFECT CHECK
+        # DEFECT CHECK
+        op, rows = layout(Fill(:a; region = (1:10, 1:2)), dom; report = true)
         @test sites(initial_σ(op), 1) == Set((x, y) for x in 1:5, y in 1:2)
         @test only(rows).clipped == 10
         # the default region is the domain's sites: 50 sites, nothing clipped
         op2, rows2 = layout(Fill(:bg), dom; report = true)
         @test count(==(1), initial_σ(op2)) == 50 && only(rows2).clipped == 0
         @test all(initial_σ(op2)[6:10, :] .== 0)
-        # a shape cut by the domain: closed r = 2 at (5, 5) has 13 sites, 9 with x ≤ 5 (4 clipped)
-        op3, rows3 = layout(Fill(:a; region = Circle(Point(5.0, 5.0), 2.0)), dom; report = true)
+        # a shape cut by the domain: closed r = 2 at (5, 5) has 13 sites, 9 with x ≤ 5 (4
+        # clipped)
+        op3, rows3 = layout(
+            Fill(:a; region = Circle(Point(5.0, 5.0), 2.0)), dom;
+            report = true
+        )
         want = oracle_sites((10, 10), (5.0, 5.0), closed_int(4); mask = x -> x[1] <= 5)
         @test length(want) == 9                                      # control (oracle)
         @test sites(initial_σ(op3), 1) == want && only(rows3).clipped == 4
         # Objects: the same clip per copy
-        op4, rows4 = layout(Objects(Interior(Circle(Point(0.0, 0.0), 2.0)), [Point(5.0, 5.0)]; kinds = [:a]), dom; report = true)
+        op4, rows4 = layout(
+            Objects(
+                Interior(Circle(Point(0.0, 0.0), 2.0)), [Point(5.0, 5.0)];
+                kinds = [:a]
+            ),
+            dom;
+            report = true
+        )
         want4 = oracle_sites((10, 10), (5.0, 5.0), strict_int(4); mask = x -> x[1] <= 5)
-        @test length(want4) == 6                                     # control (oracle): 9 strict, 3 at x = 6
+        # control (oracle): 9 strict, 3 at x = 6
+        @test length(want4) == 6
         @test sites(initial_σ(op4), 1) == want4 && only(rows4).clipped == 3
     end
 end
 
-@testitem "initial state: a box Fill beyond the lattice throws" setup = [InitialStateSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "initial state: a box Fill beyond the lattice throws" setup = [
+    InitialStateSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "initial state: a box Fill beyond the lattice throws" begin
-        @test_throws ArgumentError layout(Fill(:a; region = (1:12, 1:1)), (10, 10))       # DEFECT CHECK
-        @test occursin("outside the lattice", initial_msg(() -> layout(Fill(:a; region = (0:3, 1:1)), (10, 10))))
+        # DEFECT CHECK
+        @test_throws ArgumentError layout(Fill(:a; region = (1:12, 1:1)), (10, 10))
+        @test occursin(
+            "outside the lattice",
+            initial_msg(() -> layout(Fill(:a; region = (0:3, 1:1)), (10, 10)))
+        )
         # control: the existing layers' message for the same box
-        @test occursin("outside the lattice", initial_msg(() -> layout(Tiling((1, 1); region = (1:12, 1:1), kinds = [:a]), (10, 10))))
+        @test occursin(
+            "outside the lattice",
+            initial_msg(
+                () -> layout(
+                    Tiling((1, 1); region = (1:12, 1:1), kinds = [:a]), (
+                        10, 10,
+                    )
+                )
+            )
+        )
     end
 end
 
-@testitem "initial state: Fill basics (row, background, overwrite)" setup = [InitialStateSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "initial state: Fill basics (row, background, overwrite)" setup = [
+    InitialStateSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 5. `Fill` basics (brief §4.A3; 2D 10×10 closed)
     @testset "initial state: Fill basics (row, background, overwrite)" begin
-        op, rows = layout(Fill(:w; region = (1:10, 1:1)), (10, 10); report = true)        # DEFECT CHECK
+        # DEFECT CHECK
+        op, rows = layout(Fill(:w; region = (1:10, 1:1)), (10, 10); report = true)
         @test length(op) == 2                                        # no cluster, no column
         @test sites(initial_σ(op), 1) == Set((x, 1) for x in 1:10)
         @test count(>(0), initial_σ(op)) == 10 && initial_kinds(op) == [:w]
         @test only(rows) == (;
-            layer = 1, type = :Fill, requested = 1, painted = 1, dropped = 0, misses = 0, counted = 1,
+            layer = 1, type = :Fill, requested = 1, painted = 1, dropped = 0, misses = 0,
+            counted = 1,
             clipped = 0, splits = 0,
         )
         @test keys(only(rows)) == ROW_KEYS                      # the D-091 schema
@@ -503,12 +649,18 @@ end
         bg = layout(Fill(:bg), (10, 10))
         @test all(==(1), initial_σ(bg)) && initial_kinds(bg) == [:bg]
         # overwrite: the later layer takes its sites, ids follow layer order
-        o2, r2 = layout(overlay(Fill(:bg), Fill(:w; region = (1:10, 1:1))), (10, 10); report = true)
+        o2, r2 = layout(
+            overlay(Fill(:bg), Fill(:w; region = (1:10, 1:1))), (10, 10);
+            report = true
+        )
         @test count(==(1), initial_σ(o2)) == 90 && count(==(2), initial_σ(o2)) == 10
         @test initial_kinds(o2) == [:bg, :w]
         @test all(r -> r.type === :Fill && r.dropped == 0 && r.splits == 0, r2)
         # a later layer removing every site: dropped
-        o3, r3 = layout(overlay(Fill(:a; region = (1:2, 1:2)), Fill(:b; region = (1:3, 1:3))), (10, 10); report = true)
+        o3, r3 = layout(
+            overlay(Fill(:a; region = (1:2, 1:2)), Fill(:b; region = (1:3, 1:3))),
+            (10, 10); report = true
+        )
         @test initial_kinds(o3) == [:b] && r3[1].dropped == 1 && r3[2].dropped == 0
         # deterministic, RNG-free
         @test isequal(
@@ -519,18 +671,31 @@ end
         f = Fill(:a; region = (1:2, 1:2))
         g = remake(f; region = (3:5, 3:5))
         @test count(==(1), initial_σ(layout(g, (10, 10)))) == 9
-        @test count(==(1), initial_σ(layout(f, (10, 10)))) == 4         # the original is unchanged
+        # the original is unchanged
+        @test count(==(1), initial_σ(layout(f, (10, 10)))) == 4
     end
 end
 
-@testitem "initial state: Fill cutting a cell warns and counts a split" setup = [InitialStateSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "initial state: Fill cutting a cell warns and counts a split" setup = [
+    InitialStateSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "initial state: Fill cutting a cell warns and counts a split" begin
         cut = overlay(Fill(:a; region = (1:10, 4:6)), Fill(:b; region = (5:5, 1:10)))
-        op, rows = @test_logs (:warn, r"split cell 1") match_mode = :any initial_report(cut, (10, 10))   # DEFECT CHECK
-        @test count(==(1), initial_σ(op)) == 27                          # 30 − the 3 sites of column x = 5
+        op, rows = @test_logs (:warn, r"split cell 1") match_mode = :any initial_report(
+            cut, (
+                10, 10,
+            )
+        )   # DEFECT CHECK
+        # 30 − the 3 sites of column x = 5
+        @test count(==(1), initial_σ(op)) == 27
         @test rows[2].splits == 1 && rows[1].splits == 0
         # `splits = :allow` on the cutting layer: no warning, the row still counts it
-        allow = overlay(Fill(:a; region = (1:10, 4:6)), Fill(:b; region = (5:5, 1:10), splits = :allow))
+        allow = overlay(
+            Fill(:a; region = (1:10, 4:6)),
+            Fill(:b; region = (5:5, 1:10), splits = :allow)
+        )
         op2, rows2 = @test_logs initial_report(allow, (10, 10))
         @test rows2[2].splits == 1
         # negative control: a cut that leaves one piece does not warn
@@ -539,87 +704,176 @@ end
     end
 end
 
-@testitem "initial state: Fill errors" setup = [InitialStateSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "initial state: Fill errors" setup = [InitialStateSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "initial state: Fill errors" begin
         far = Circle(Point(-10.0, -10.0), 1.0)
-        @test_throws ArgumentError layout(Fill(:a; region = far), (10, 10))               # DEFECT CHECK
-        @test occursin("Fill: the region has no site in the lattice's domain", initial_msg(() -> layout(Fill(:a; region = far), (10, 10))))
+        # DEFECT CHECK
+        @test_throws ArgumentError layout(Fill(:a; region = far), (10, 10))
+        @test occursin(
+            "Fill: the region has no site in the lattice's domain",
+            initial_msg(() -> layout(Fill(:a; region = far), (10, 10)))
+        )
         dom = Lattice((10, 10); boundary = Closed(), domain = x -> x[1] <= 5)
-        @test_throws ArgumentError layout(Fill(:a; region = (7:9, 1:3)), dom)            # box entirely outside the domain
+        # box entirely outside the domain
+        @test_throws ArgumentError layout(Fill(:a; region = (7:9, 1:3)), dom)
         @test_throws ArgumentError Fill([:a, :b])                    # Fill paints one cell
         @test_throws ArgumentError Fill(:a; splits = :maybe)
-        @test_throws ArgumentError layout(Fill(:a; region = (1:2,)), (10, 10))            # dimension mismatch
-        @test_throws ArgumentError layout(Fill(:a; region = Sphere(Point(1.0, 1.0, 1.0), 2.0)), (10, 10))
+        # dimension mismatch
+        @test_throws ArgumentError layout(Fill(:a; region = (1:2,)), (10, 10))
+        @test_throws ArgumentError layout(
+            Fill(:a; region = Sphere(Point(1.0, 1.0, 1.0), 2.0)), (
+                10, 10,
+            )
+        )
     end
 end
 
-@testitem "initial state: Objects translate a template, the first copy wins" setup = [InitialStateSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "initial state: Objects translate a template, the first copy wins" setup = [
+    InitialStateSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 6. `Objects` basics (brief §4.A4; 2D closed 10×8 unless stated)
     @testset "initial state: Objects translate a template, the first copy wins" begin
-        tpl = Interior(Circle(Point(0.0, 0.0), 2.0))                 # strict r = 2: a 3×3 block
-        op, rows = layout(Objects(tpl, [Point(3.0, 3.0), Point(5.0, 3.0)]; kinds = [:a, :b]), (10, 8); report = true)  # DEFECT CHECK
+        # strict r = 2: a 3×3 block
+        tpl = Interior(Circle(Point(0.0, 0.0), 2.0))
+        op, rows = layout(
+            Objects(tpl, [Point(3.0, 3.0), Point(5.0, 3.0)]; kinds = [:a, :b]),
+            (10, 8); report = true
+        )  # DEFECT CHECK
         σ = initial_σ(op)
         @test initial_kinds(op) == [:a, :b]
         @test sites(σ, 1) == Set((x, y) for x in 2:4, y in 2:4)  # 9 sites
-        @test sites(σ, 2) == Set((x, y) for x in 5:6, y in 2:4)  # 6: the shared column x = 4 stays with copy 1
+        # 6: the shared column x = 4 stays with copy 1
+        @test sites(σ, 2) == Set((x, y) for x in 5:6, y in 2:4)
         r = only(rows)
-        @test (r.type, r.requested, r.painted, r.dropped, r.misses, r.counted, r.clipped) == (:Objects, 2, 2, 0, 0, 2, 0)
+        @test (r.type, r.requested, r.painted, r.dropped, r.misses, r.counted, r.clipped) ==
+            (:Objects, 2, 2, 0, 0, 2, 0)
         # swapping the points swaps the winner (negative control for a last-wins rule)
-        sw = initial_σ(layout(Objects(tpl, [Point(5.0, 3.0), Point(3.0, 3.0)]; kinds = [:a, :b]), (10, 8)))
+        sw = initial_σ(
+            layout(
+                Objects(
+                    tpl, [Point(5.0, 3.0), Point(3.0, 3.0)]; kinds = [
+                        :a, :b,
+                    ]
+                ), (10, 8)
+            )
+        )
         @test sites(sw, 1) == Set((x, y) for x in 4:6, y in 2:4)
         @test sites(sw, 2) == Set((x, y) for x in 2:3, y in 2:4)
         # the layer overwrites an earlier Fill on its 15 sites
-        o2 = layout(overlay(Fill(:bg), Objects(tpl, [Point(3.0, 3.0), Point(5.0, 3.0)]; kinds = [:a, :b])), (10, 8))
-        @test count(==(1), initial_σ(o2)) == 65 && count(==(2), initial_σ(o2)) == 9 && count(==(3), initial_σ(o2)) == 6
+        o2 = layout(
+            overlay(
+                Fill(:bg), Objects(
+                    tpl, [Point(3.0, 3.0), Point(5.0, 3.0)]; kinds = [
+                        :a, :b,
+                    ]
+                )
+            ),
+            (10, 8)
+        )
+        @test count(==(1), initial_σ(o2)) == 65 && count(==(2), initial_σ(o2)) == 9 &&
+            count(==(3), initial_σ(o2)) == 6
         # kinds cycle over the copies
-        o3 = layout(Objects(tpl, [Point(2.0, 2.0), Point(6.0, 2.0), Point(2.0, 6.0)]; kinds = [:a, :b]), (10, 8))
+        o3 = layout(
+            Objects(
+                tpl, [Point(2.0, 2.0), Point(6.0, 2.0), Point(2.0, 6.0)]; kinds = [
+                    :a, :b,
+                ]
+            ),
+            (10, 8)
+        )
         @test initial_kinds(o3) == [:a, :b, :a]
     end
 end
 
-@testitem "initial state: Objects without points, Center, a Point, 3D, hex" setup = [InitialStateSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "initial state: Objects without points, Center, a Point, 3D, hex" setup = [
+    InitialStateSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "initial state: Objects without points, Center(), a Point, 3D, hex" begin
         # no points: the shape where it is (strict r = 3: 25 sites)
-        op = layout(Objects(Interior(Circle(Point(5.0, 5.0), 3.0)); kinds = [:c]), (10, 10))     # DEFECT CHECK
+        # DEFECT CHECK
+        op = layout(Objects(Interior(Circle(Point(5.0, 5.0), 3.0)); kinds = [:c]), (10, 10))
         @test sites(initial_σ(op), 1) == oracle_sites((10, 10), (5.0, 5.0), strict_int(9))
         @test count(==(1), initial_σ(op)) == 25
         # Center() on a 11×11 lattice is (6, 6); a single Point
-        oc = layout(Objects(Interior(Circle(Point(0.0, 0.0), 2.0)), Center(); kinds = [:c]), (11, 11))
+        oc = layout(
+            Objects(Interior(Circle(Point(0.0, 0.0), 2.0)), Center(); kinds = [:c]), (
+                11, 11,
+            )
+        )
         @test sites(initial_σ(oc), 1) == Set((x, y) for x in 5:7, y in 5:7)
-        op1 = layout(Objects(Interior(Circle(Point(0.0, 0.0), 2.0)), Point(3.0, 4.0); kinds = [:c]), (11, 11))
+        op1 = layout(
+            Objects(Interior(Circle(Point(0.0, 0.0), 2.0)), Point(3.0, 4.0); kinds = [:c]),
+            (
+                11, 11,
+            )
+        )
         @test sites(initial_σ(op1), 1) == Set((x, y) for x in 2:4, y in 3:5)
         # 3D: strict r = 2 has 27 sites
-        o3 = layout(Objects(Interior(Sphere(Point(0.0, 0.0, 0.0), 2.0)), [Point(5.0, 5.0, 5.0)]; kinds = [:s]), (10, 10, 10))
+        o3 = layout(
+            Objects(
+                Interior(Sphere(Point(0.0, 0.0, 0.0), 2.0)), [Point(5.0, 5.0, 5.0)];
+                kinds = [:s]
+            ),
+            (10, 10, 10)
+        )
         @test count(==(1), initial_σ(o3)) == 27
-        @test sites(initial_σ(o3), 1) == oracle_sites((10, 10, 10), (5.0, 5.0, 5.0), strict_int(4))
+        @test sites(initial_σ(o3), 1) ==
+            oracle_sites((10, 10, 10), (5.0, 5.0, 5.0), strict_int(4))
         # the docs' Spheres recipe: two balls of strict r = 3 (93 sites each)
         o4 = layout(
-            Objects(Interior(Sphere(Point(0.0, 0.0, 0.0), 3.0)), [Point(5.0, 5.0, 5.0), Point(13.0, 5.0, 5.0)]; kinds = [:cell]),
+            Objects(
+                Interior(Sphere(Point(0.0, 0.0, 0.0), 3.0)),
+                [Point(5.0, 5.0, 5.0), Point(13.0, 5.0, 5.0)]; kinds = [:cell]
+            ),
             (20, 10, 10)
         )
         @test count(==(1), initial_σ(o4)) == 93 && count(==(2), initial_σ(o4)) == 93
         # hex: a disc of r = √3 at a site has 7 sites (the site and its 6 neighbours)
         hexl = Lattice((21, 21); geometry = Hexagonal(), boundary = Closed())
         c = cart((11, 11), true)
-        oh = layout(Objects(Interior(Circle(Point(0.0, 0.0), sqrt(3.0))), [Point(c...)]; kinds = [:h]), hexl)
-        @test sites(initial_σ(oh), 1) == oracle_sites((21, 21), c, strict_int(3); hex = true)
+        oh = layout(
+            Objects(
+                Interior(Circle(Point(0.0, 0.0), sqrt(3.0))), [Point(c...)];
+                kinds = [:h]
+            ), hexl
+        )
+        @test sites(initial_σ(oh), 1) ==
+            oracle_sites((21, 21), c, strict_int(3); hex = true)
         @test count(==(1), initial_σ(oh)) == 7
     end
 end
 
-@testitem "initial state: Objects clipping, a dropped copy, RandomPoints, remake" setup = [InitialStateSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "initial state: Objects clipping, a dropped copy, RandomPoints, remake" setup = [
+    InitialStateSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "initial state: Objects clipping, a dropped copy, RandomPoints, remake" begin
-        tpl = Interior(Circle(Point(0.0, 0.0), 1.5))                 # strict r = 1.5: 3×3 (√2 < 1.5)
+        # strict r = 1.5: 3×3 (√2 < 1.5)
+        tpl = Interior(Circle(Point(0.0, 0.0), 1.5))
         # copy 2 lies entirely off the closed lattice: allocated, painted nothing, dropped
-        op, rows = layout(Objects(tpl, [Point(3.0, 3.0), Point(-10.0, -10.0)]; kinds = [:a]), (10, 10); report = true)  # DEFECT CHECK
+        op, rows = layout(
+            Objects(tpl, [Point(3.0, 3.0), Point(-10.0, -10.0)]; kinds = [:a]),
+            (10, 10); report = true
+        )  # DEFECT CHECK
         r = only(rows)
         @test (r.requested, r.painted, r.dropped, r.clipped) == (2, 2, 1, 9)
         @test initial_kinds(op) == [:a] && count(==(1), initial_σ(op)) == 9
         # a copy at the corner: 4 of its 9 sites on the lattice, 5 clipped; sites lost to an
         # earlier copy are not clipped
-        _, rows2 = layout(Objects(tpl, [Point(1.0, 1.0), Point(2.0, 1.0)]; kinds = [:a]), (10, 10); report = true)
-        @test only(rows2).clipped == 5 + 3                           # copy 1: 5; copy 2 at (2,1): its y = 0 row (3 sites)
+        _, rows2 = layout(
+            Objects(tpl, [Point(1.0, 1.0), Point(2.0, 1.0)]; kinds = [:a]),
+            (10, 10); report = true
+        )
+        # copy 1: 5; copy 2 at (2,1): its y = 0 row (3 sites)
+        @test only(rows2).clipped == 5 + 3
         # RandomPoints: reproducible, and the copies sit at `Potts.points` of the pattern
         shp = Interior(Circle(Point(0.0, 0.0), 2.0))
         o = Objects(shp, RandomPoints(3; seed = 7); kinds = [:a])
@@ -638,23 +892,46 @@ end
     end
 end
 
-@testitem "initial state: Objects errors" setup = [InitialStateSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "initial state: Objects errors" setup = [InitialStateSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "initial state: Objects errors" begin
         s = Interior(Circle(Point(0.0, 0.0), 2.0))
-        @test_throws ArgumentError Objects(s, [Point(1.0, 1.0)]; kinds = Symbol[])       # DEFECT CHECK
-        @test_throws ArgumentError Objects((1:2, 1:2), [Point(1.0, 1.0)]; kinds = [:a])   # not round
+        # DEFECT CHECK
+        @test_throws ArgumentError Objects(s, [Point(1.0, 1.0)]; kinds = Symbol[])
+        # not round
+        @test_throws ArgumentError Objects((1:2, 1:2), [Point(1.0, 1.0)]; kinds = [:a])
         @test_throws ArgumentError Objects(Point(1.0, 1.0); kinds = [:a])
-        @test_throws ArgumentError Objects(s, Point{2, Float64}[]; kinds = [:a])         # no points
-        @test_throws ArgumentError Objects(s, [Point(1.0, 1.0)]; kinds = [:a], splits = :maybe)
-        @test_throws ArgumentError layout(Objects(Interior(Sphere(Point(0.0, 0.0, 0.0), 2.0)), [Point(3.0, 3.0, 3.0)]; kinds = [:a]), (10, 10))
-        @test_throws ArgumentError layout(Objects(s, [Point(3.0, 3.0, 3.0)]; kinds = [:a]), (10, 10))
+        # no points
+        @test_throws ArgumentError Objects(s, Point{2, Float64}[]; kinds = [:a])
+        @test_throws ArgumentError Objects(
+            s, [Point(1.0, 1.0)]; kinds = [:a],
+            splits = :maybe
+        )
+        @test_throws ArgumentError layout(
+            Objects(
+                Interior(Sphere(Point(0.0, 0.0, 0.0), 2.0)), [Point(3.0, 3.0, 3.0)];
+                kinds = [:a]
+            ),
+            (10, 10)
+        )
+        @test_throws ArgumentError layout(
+            Objects(s, [Point(3.0, 3.0, 3.0)]; kinds = [:a]), (
+                10, 10,
+            )
+        )
     end
 end
 
-@testitem "initial state: Group emits one cluster (a, b)" setup = [InitialStateSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "initial state: Group emits one cluster (a, b)" setup = [
+    InitialStateSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "initial state: Group emits one cluster (a, b)" begin
         # (a) the group first: cyto 1 (25 − 4 = 21), nuc 2 (4), wall 3 (10)
-        l = overlay(BODY(), Fill(:wall; region = (1:10, 1:1)))                      # DEFECT CHECK
+        # DEFECT CHECK
+        l = overlay(BODY(), Fill(:wall; region = (1:10, 1:1)))
         op, rows = layout(l, (10, 10); report = true)
         σ = initial_σ(op)
         @test initial_kinds(op) == [:cyto, :nuc, :wall]
@@ -674,10 +951,13 @@ end
         # the group alone (top level)
         og = layout(BODY(), (10, 10))
         @test initial_cluster(og) == [1, 1]
-        # negative control: the same cells without `Group` emit no cluster (today's two entries)
+        # negative control: the same cells without `Group` emit no cluster (today's two
+        # entries)
         on = layout(
             overlay(
-                Objects(Interior(Circle(Point(5.0, 5.0), 3.0)); kinds = [:cyto]), Fill(:nuc; region = (5:6, 5:6)),
+                Objects(Interior(Circle(Point(5.0, 5.0), 3.0)); kinds = [:cyto]), Fill(
+                    :nuc; region = (5:6, 5:6)
+                ),
                 Fill(:wall; region = (1:10, 1:1))
             ), (10, 10)
         )
@@ -686,11 +966,21 @@ end
     end
 end
 
-@testitem "initial state: several groups, a dropped first member (c, d)" setup = [InitialStateSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "initial state: several groups, a dropped first member (c, d)" setup = [
+    InitialStateSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "initial state: several groups, a dropped first member (c, d)" begin
-        g(k, x) = Group(Fill(Symbol(:a, k); region = (x:(x + 1), 1:2)), Fill(Symbol(:b, k); region = (x:(x + 1), 3:4)))
+        function g(k, x)
+            return Group(
+                Fill(Symbol(:a, k); region = (x:(x + 1), 1:2)),
+                Fill(Symbol(:b, k); region = (x:(x + 1), 3:4))
+            )
+        end
         # (c) two groups on disjoint regions
-        op = layout(overlay(g(1, 1), g(2, 5)), (10, 10))                                 # DEFECT CHECK
+        # DEFECT CHECK
+        op = layout(overlay(g(1, 1), g(2, 5)), (10, 10))
         @test initial_kinds(op) == [:a1, :b1, :a2, :b2]
         @test initial_cluster(op) == [1, 1, 3, 3]
         # many compartment cells in plain Julia: one Group per cell
@@ -700,55 +990,113 @@ end
         op4 = layout(overlay(g(1, 1), Fill(:w; region = (1:10, 10:10)), g(2, 5)), (10, 10))
         @test initial_cluster(op4) == [1, 1, 3, 4, 4]
         # (d) the first member fully overwritten: `b` becomes id 1
-        od, rows = layout(Group(Fill(:a; region = (2:4, 2:4)), Fill(:b; region = (2:4, 2:4))), (10, 10); report = true)
+        od, rows = layout(
+            Group(Fill(:a; region = (2:4, 2:4)), Fill(:b; region = (2:4, 2:4))),
+            (10, 10); report = true
+        )
         @test initial_kinds(od) == [:b] && initial_cluster(od) == [1]
         @test rows[1].dropped == 1 && rows[2].dropped == 0
         # a group member overwritten by a later layer outside the group
-        oe = layout(overlay(Group(Fill(:a; region = (1:2, 1:2)), Fill(:b; region = (5:6, 5:6))), Fill(:c; region = (1:3, 1:3))), (10, 10))
+        oe = layout(
+            overlay(
+                Group(Fill(:a; region = (1:2, 1:2)), Fill(:b; region = (5:6, 5:6))),
+                Fill(:c; region = (1:3, 1:3))
+            ),
+            (10, 10)
+        )
         @test initial_kinds(oe) == [:b, :c] && initial_cluster(oe) == [1, 2]
     end
 end
 
-@testitem "initial state: a layout without Group keeps its shape (e)" setup = [InitialStateSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "initial state: a layout without Group keeps its shape (e)" setup = [
+    InitialStateSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "initial state: a layout without Group keeps its shape (e)" begin
         for f in REGRESSION
             op = f()
             @test op isa Vector{Pair{Any, Array}}                    # control
             @test length(op) == 2                                    # control
-            @test isequal(op[1].first, ownership) && isequal(op[2].first, kind)     # control
-            @test eltype(initial_σ(op)) == Int32 && initial_kinds(op) isa Vector{Symbol}   # control
+            # control
+            @test isequal(op[1].first, ownership) && isequal(op[2].first, kind)
+            # control
+            @test eltype(initial_σ(op)) == Int32 && initial_kinds(op) isa Vector{Symbol}
             ids = sort(unique(initial_σ(op)))
-            @test ids == collect(ids[1]:ids[end]) && length(ids) >= 2   # ids are contiguous labels
+            # ids are contiguous labels
+            @test ids == collect(ids[1]:ids[end]) && length(ids) >= 2
         end
         # a layout of the new layers without a group: two entries too
-        @test length(layout(overlay(Fill(:bg), Objects(Interior(Circle(Point(5.0, 5.0), 2.0)); kinds = [:a])), (10, 10))) == 2   # DEFECT CHECK
+        @test length(
+            layout(
+                overlay(
+                    Fill(:bg),
+                    Objects(Interior(Circle(Point(5.0, 5.0), 2.0)); kinds = [:a])
+                ),
+                (10, 10)
+            )
+        ) == 2   # DEFECT CHECK
     end
 end
 
-@testitem "initial state: Group placement errors (f)" setup = [InitialStateSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "initial state: Group placement errors (f)" setup = [InitialStateSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "initial state: Group placement errors (f)" begin
         @test_throws ArgumentError Group()                           # DEFECT CHECK
         inner = () -> Group(Fill(:a; region = (1:2, 1:2)))
         @test_throws ArgumentError layout(Group(inner()), (10, 10))
-        @test_throws ArgumentError layout(Group(overlay(inner(), Fill(:b; region = (5:6, 5:6)))), (10, 10))
+        @test_throws ArgumentError layout(
+            Group(
+                overlay(
+                    inner(), Fill(
+                        :b; region = (
+                            5:6, 5:6,
+                        )
+                    )
+                )
+            ), (10, 10)
+        )
         @test_throws ArgumentError layout(Splits(inner(), 1), (10, 10))
         @test_throws ArgumentError layout(PaintsGroup(), (10, 10))
         @test occursin("does not support remake", initial_msg(() -> remake(inner())))
-        # negative control: a Group nested in nested overlays at the top level is a member of the
+        # negative control: a Group nested in nested overlays at the top level is a member
+        # of the
         # (flattened) top-level overlay, so it is allowed
-        @test initial_cluster(layout(overlay(overlay(inner(), Fill(:b; region = (5:6, 5:6)))), (10, 10))) == [1, 2]
+        @test initial_cluster(
+            layout(
+                overlay(
+                    overlay(
+                        inner(), Fill(
+                            :b; region = (
+                                5:6, 5:6,
+                            )
+                        )
+                    )
+                ), (10, 10)
+            )
+        ) == [1, 2]
     end
 end
 
-@testitem "initial state: set_column! labels clusters" setup = [InitialStateSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "initial state: set_column! labels clusters" setup = [InitialStateSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 8. `set_column!` (brief §4.A5 h, Q-5)
     @testset "initial state: set_column! labels clusters" begin
-        op = layout(Labels(:cluster, [:x, :x, :y]), (10, 10))                        # DEFECT CHECK
+        # DEFECT CHECK
+        op = layout(Labels(:cluster, [:x, :x, :y]), (10, 10))
         @test initial_kinds(op) == [:a, :a, :a]
         @test initial_cluster(op) == [1, 1, 3]
         # labels compare with isequal; an unset cell is its own cluster
-        @test initial_cluster(layout(Labels(:cluster, Any[1.0, nothing, 1.0, "u", "u"]), (10, 10))) == [1, 2, 1, 4, 4]
+        @test initial_cluster(
+            layout(
+                Labels(:cluster, Any[1.0, nothing, 1.0, "u", "u"]), (
+                    10, 10,
+                )
+            )
+        ) == [1, 2, 1, 4, 4]
         # a Group's label never equals a user label (here the user labels are 1 and 2)
         og = layout(
             overlay(
@@ -758,52 +1106,101 @@ end
         )
         @test initial_cluster(og) == [1, 1, 3, 3, 5]
         # setting twice overwrites
-        @test initial_cluster(layout(Labels(:cluster, [:x, :x]; twice = true), (10, 10))) == [1, 1]
+        @test initial_cluster(layout(Labels(:cluster, [:x, :x]; twice = true), (10, 10))) ==
+            [1, 1]
     end
 end
 
-@testitem "initial state: set_column! emits user columns" setup = [InitialStateSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "initial state: set_column! emits user columns" setup = [
+    InitialStateSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "initial state: set_column! emits user columns" begin
-        op = layout(Labels(:V_target, [10.0, 20.0, 30.0]), (10, 10))                 # DEFECT CHECK
+        # DEFECT CHECK
+        op = layout(Labels(:V_target, [10.0, 20.0, 30.0]), (10, 10))
         @test length(op) == 3 && initial_cluster(op) === nothing
         @test op[3].first === :V_target
         @test op[3].second == [10.0, 20.0, 30.0] && op[3].second isa Vector{Float64}
-        # `cluster` comes before the user columns; user columns in order of first set_column!;
-        # `identity.` element types
+        # `cluster` comes before the user columns; user columns in order of first
+        # set_column!; `identity.` element types
         o2 = layout(Multi(), (10, 10))
         @test length(o2) == 5
         @test isequal(o2[3].first, Potts.cluster) && o2[3].second == [1, 2, 1]
-        @test o2[4].first === :q && o2[4].second == [1, 2, 3] && o2[4].second isa Vector{Int}
-        @test o2[5].first === :r && o2[5].second == ["s", "t", "u"] && o2[5].second isa Vector{String}
+        @test o2[4].first === :q && o2[4].second == [1, 2, 3] &&
+            o2[4].second isa Vector{Int}
+        @test o2[5].first === :r && o2[5].second == ["s", "t", "u"] &&
+            o2[5].second isa Vector{String}
         # setting twice overwrites
-        @test layout(Labels(:V_target, [5.0, 6.0]; twice = true), (10, 10))[3].second == [5.0, 6.0]
+        @test layout(Labels(:V_target, [5.0, 6.0]; twice = true), (10, 10))[3].second ==
+            [5.0, 6.0]
         # compaction: a cell removed by a later layer takes its value with it
-        o3 = layout(overlay(Labels(:V_target, [10.0, 20.0, 30.0]), Labels(:V_target, [99.0]; x0 = 2)), (10, 10))
+        o3 = layout(
+            overlay(
+                Labels(:V_target, [10.0, 20.0, 30.0]),
+                Labels(:V_target, [99.0]; x0 = 2)
+            ), (
+                10, 10,
+            )
+        )
         @test initial_kinds(o3) == [:a, :a, :a]
-        @test initial_σ(o3)[1:3, 1] == [1, 3, 2]                         # cell 2 dropped; the later cell is id 3
+        # cell 2 dropped; the later cell is id 3
+        @test initial_σ(o3)[1:3, 1] == [1, 3, 2]
         @test o3[3].second == [10.0, 30.0, 99.0]
     end
 end
 
-@testitem "initial state: an incomplete user column is an ArgumentError (Q-5)" setup = [InitialStateSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "initial state: an incomplete user column is an ArgumentError (Q-5)" setup = [
+    InitialStateSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "initial state: an incomplete user column is an ArgumentError (Q-5)" begin
         # 2 of 3 cells
-        @test_throws ArgumentError layout(Labels(:V_target, Any[10.0, nothing, 30.0]), (10, 10))   # DEFECT CHECK
-        msg = initial_msg(() -> layout(Labels(:V_target, Any[10.0, nothing, 30.0]), (10, 10)))
-        @test occursin("V_target", msg)                              # the column missing a value
+        @test_throws ArgumentError layout(
+            Labels(:V_target, Any[10.0, nothing, 30.0]), (
+                10, 10,
+            )
+        )   # DEFECT CHECK
+        msg = initial_msg(
+            () -> layout(
+                Labels(:V_target, Any[10.0, nothing, 30.0]), (
+                    10, 10,
+                )
+            )
+        )
+        # the column missing a value
+        @test occursin("V_target", msg)
         # a cell of another layer that survives without a value
-        @test_throws ArgumentError layout(overlay(Labels(:V_target, [10.0]), Fill(:w; region = (1:10, 10:10))), (10, 10))
-        # negative control: the missing cell is dropped by a later layer, so the column is complete
-        @test layout(overlay(Labels(:V_target, Any[10.0, nothing]), Labels(:V_target, [7.0]; x0 = 2)), (10, 10))[3].second ==
+        @test_throws ArgumentError layout(
+            overlay(Labels(:V_target, [10.0]), Fill(:w; region = (1:10, 10:10))), (10, 10)
+        )
+        # negative control: the missing cell is dropped by a later layer, so the column is
+        # complete
+        @test layout(
+            overlay(
+                Labels(:V_target, Any[10.0, nothing]),
+                Labels(:V_target, [7.0]; x0 = 2)
+            ),
+            (10, 10)
+        )[3].second ==
             [10.0, 7.0]
         # `:cluster` is exempt
-        @test initial_cluster(layout(overlay(Labels(:cluster, [:x]), Fill(:w; region = (1:10, 10:10))), (10, 10))) == [1, 2]
+        @test initial_cluster(
+            layout(
+                overlay(Labels(:cluster, [:x]), Fill(:w; region = (1:10, 10:10))), (10, 10)
+            )
+        ) ==
+            [1, 2]
     end
 end
 
-@testitem "initial state: set_column! errors" setup = [InitialStateSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "initial state: set_column! errors" setup = [InitialStateSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "initial state: set_column! errors" begin
-        @test_throws ArgumentError layout(adColumn(:kind), (10, 10))                 # DEFECT CHECK
+        # DEFECT CHECK
+        @test_throws ArgumentError layout(adColumn(:kind), (10, 10))
         @test_throws ArgumentError layout(adColumn(:ownership), (10, 10))
         @test_throws ArgumentError layout(adColumn(:unallocated), (10, 10))
         @test_throws ArgumentError layout(adColumn(:zero), (10, 10))
@@ -816,13 +1213,18 @@ end
     end
 end
 
-@testitem "initial state: a Group layout builds a compartment problem (g)" setup = [InitialStateSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "initial state: a Group layout builds a compartment problem (g)" setup = [
+    InitialStateSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "initial state: a Group layout builds a compartment problem (g)" begin
         sys = omp(; name = :pc)
         l = overlay(BODY(), Fill(:wall; region = (1:10, 1:1)))
         op = layout(l, sys)                                          # DEFECT CHECK
         @test initial_cluster(op) == [1, 1, 3]
-        prob = PottsProblem(sys, op, (0, 1))                         # no hand-written cluster
+        # no hand-written cluster
+        prob = PottsProblem(sys, op, (0, 1))
         cl = Array(prob.u0.cell.cluster)[1:3]
         # the partition equals the layout's (root ids may differ: `prefer`)
         @test partition(cl) == partition([1, 1, 3])
@@ -831,45 +1233,93 @@ end
         @test Array(prob.u0.cell.V_target)[1:2] == [24.0, 6.0]
         # the same cells entered by hand (today's way) give the same partition and σ
         @test initial_σ(op) == hand_σ()
-        ph = PottsProblem(sys, [ownership => hand_σ(), kind => [:cyto, :nuc, :wall], Potts.cluster => [1, 1, 3]], (0, 1))
+        ph = PottsProblem(
+            sys,
+            [
+                ownership => hand_σ(), kind => [:cyto, :nuc, :wall], Potts.cluster =>
+                    [1, 1, 3],
+            ],
+            (0, 1)
+        )
         @test partition(Array(ph.u0.cell.cluster)[1:3]) == partition(cl)
         # a model without compartments rejects the layout's cluster (the existing error)
         plain = Plain(; name = :pp)
-        @test occursin("uses no compartments", initial_msg(() -> PottsProblem(plain, layout(l, plain), (0, 1))))
-    end
-end
-
-@testitem "initial state: the compartment model with a hand-written cluster (controls)" setup = [InitialStateSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "initial state: the compartment model with a hand-written cluster (controls)" begin
-        sys = omp(; name = :pc)
-        σ = hand_σ()
-        @test count(==(1), σ) == 21 && count(==(2), σ) == 4 && count(==(3), σ) == 10    # control
-        ph = PottsProblem(sys, [ownership => σ, kind => [:cyto, :nuc, :wall], Potts.cluster => [1, 1, 3]], (0, 1))
-        cl = Array(ph.u0.cell.cluster)[1:3]
-        @test cl[1] == cl[2] && cl[3] != cl[1]                       # control
-        @test Array(ph.u0.cell.V_target)[1:2] == [24.0, 6.0]         # control (E1, `convert_tests.jl`)
-        plain = Plain(; name = :pp)
         @test occursin(
-            "uses no compartments",                       # control: the existing error
-            initial_msg(() -> PottsProblem(plain, [ownership => σ, kind => [:cyto, :nuc, :wall], Potts.cluster => [1, 1, 3]], (0, 1)))
+            "uses no compartments", initial_msg(
+                () -> PottsProblem(
+                    plain, layout(l, plain), (
+                        0, 1,
+                    )
+                )
+            )
         )
     end
 end
 
-@testitem "initial state: a set_column! column overrides the kind default (h)" setup = [InitialStateSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "initial state: the compartment model with a hand-written cluster \
+    (controls)" setup = [InitialStateSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "initial state: the compartment model with a hand-written cluster \
+        (controls)" begin
+        sys = omp(; name = :pc)
+        σ = hand_σ()
+        # control
+        @test count(==(1), σ) == 21 && count(==(2), σ) == 4 && count(==(3), σ) == 10
+        ph = PottsProblem(
+            sys, [ownership => σ, kind => [:cyto, :nuc, :wall], Potts.cluster => [1, 1, 3]],
+            (0, 1)
+        )
+        cl = Array(ph.u0.cell.cluster)[1:3]
+        @test cl[1] == cl[2] && cl[3] != cl[1]                       # control
+        # control (E1, `convert_tests.jl`)
+        @test Array(ph.u0.cell.V_target)[1:2] == [24.0, 6.0]
+        plain = Plain(; name = :pp)
+        @test occursin(
+            "uses no compartments",                       # control: the existing error
+            initial_msg(
+                () -> PottsProblem(
+                    plain,
+                    [
+                        ownership => σ, kind => [:cyto, :nuc, :wall],
+                        Potts.cluster => [1, 1, 3],
+                    ],
+                    (0, 1)
+                )
+            )
+        )
+    end
+end
+
+@testitem "initial state: a set_column! column overrides the kind default (h)" setup = [
+    InitialStateSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "initial state: a set_column! column overrides the kind default (h)" begin
         sys = Plain(; name = :pp)
-        op = layout(overlay(Labels(:V_target, [11.0, 12.0]; kind = :cyto), Labels(:V_target, [13.0]; kind = :nuc, x0 = 5)), sys)   # DEFECT CHECK
+        op = layout(
+            overlay(
+                Labels(:V_target, [11.0, 12.0]; kind = :cyto),
+                Labels(:V_target, [13.0]; kind = :nuc, x0 = 5)
+            ),
+            sys
+        )   # DEFECT CHECK
         prob = PottsProblem(sys, op, (0, 1))
         @test Array(prob.u0.cell.V_target)[1:3] == [11.0, 12.0, 13.0]
         # control: without the column the kind defaults apply (cyto 24, nuc 6)
-        σ = zeros(Int32, 10, 10); σ[1, 1] = 1; σ[2, 1] = 2; σ[5, 1] = 3
+        σ = zeros(Int32, 10, 10)
+        σ[1, 1] = 1
+        σ[2, 1] = 2
+        σ[5, 1] = 3
         p0 = PottsProblem(sys, [ownership => σ, kind => [:cyto, :cyto, :nuc]], (0, 1))
         @test Array(p0.u0.cell.V_target)[1:3] == [24.0, 24.0, 6.0]
     end
 end
 
-@testitem "initial state: the Fortuna start, R" setup = [InitialStateSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "initial state: the Fortuna start, R" setup = [InitialStateSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "initial state: the Fortuna start, R = $(case[1])" for case in FORTUNA
         R, L, Lz, c, nball, zr, nz2, nbox, ncyto, nclosed, zrc, ncytoc = case
         lat = fortuna_lattice(L, Lz)
@@ -879,21 +1329,26 @@ end
         @test Set(x[3] for x in ball) == Set(zr)
         @test count(x -> x[3] == 2, ball) == nz2
         box = Set(Tuple(I) for I in CartesianIndices(nbox))
-        @test length(box) == 216 && box ⊆ ball                       # control: the nucleus lies wholly inside
+        # control: the nucleus lies wholly inside
+        @test length(box) == 216 && box ⊆ ball
         closed = oracle_sites((L, L, Lz), Float64.(c), closed_int(R^2))
         @test length(closed) == nclosed && Set(x[3] for x in closed) == Set(zrc)   # control
-        @test length(closed) - nball == (R == 10 ? 30 : 150)         # the brief: the closed ball adds 30 / 150
+        # the brief: the closed ball adds 30 / 150
+        @test length(closed) - nball == (R == 10 ? 30 : 150)
         # the layout
-        (op, rows) = @test_logs fortuna_layout(R, L, Lz, lat)   # DEFECT CHECK; no split warning
+        # DEFECT CHECK; no split warning
+        (op, rows) = @test_logs fortuna_layout(R, L, Lz, lat)
         σ = initial_σ(op)
         @test initial_kinds(op) == [:cytoplasm, :nucleus, :substrate, :lid]
         @test sites(σ, 1) == setdiff(ball, box)                 # the cytoplasm
         @test count(==(1), σ) == ncyto
         @test sites(σ, 2) == box
-        @test count(==(1), view(σ, :, :, 2)) == nz2                  # the contact disc (x² + y² < 2R − 1)
+        # the contact disc (x² + y² < 2R − 1)
+        @test count(==(1), view(σ, :, :, 2)) == nz2
         @test count(==(3), σ) == L^2 && all(==(3), view(σ, :, :, 1))
         @test count(==(4), σ) == L^2 && all(==(4), view(σ, :, :, Lz))
-        @test !any(==(1), view(σ, :, :, 1)) && !any(==(1), view(σ, :, :, Lz))      # no cytoplasm on either plane
+        # no cytoplasm on either plane
+        @test !any(==(1), view(σ, :, :, 1)) && !any(==(1), view(σ, :, :, Lz))
         @test initial_cluster(op) == [1, 1, 3, 4]
         @test all(r -> r.dropped == 0 && r.splits == 0, rows)
         @test [r.type for r in rows] == [:Objects, :Fill, :Fill, :Fill]
@@ -905,35 +1360,59 @@ end
     end
 end
 
-@testitem "initial state: the Fortuna ball at a non-integer radius and centre" setup = [InitialStateSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "initial state: the Fortuna ball at a non-integer radius and centre" setup = [
+    InitialStateSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "initial state: the Fortuna ball at a non-integer radius and centre" begin
-        # the audited ruling's arithmetic (the initial-state rulings' choice; included so non-integer centres and
-        # radii are covered): R = 15, φ_n = 0.15, φ_l = 0.05, V = (4π/3)·15³
+        # the audited ruling's arithmetic (the initial-state rulings' choice; included so
+        # non-integer centres and radii are covered): R = 15, φ_n = 0.15, φ_l = 0.05, V =
+        # (4π/3)·15³
         V = (4π / 3) * 15^3
         @test V ≈ 14137.17 atol = 0.01                               # control
         lat = fortuna_lattice(120, 31)
-        for (φl, r0, n, ztop, nz2) in ((0.05, 14.012856, 11512, 29, 89), (0.3, 12.402584, 7980, 25, 69))
+        for (φl, r0, n, ztop, nz2) in (
+                (0.05, 14.012856, 11512, 29, 89), (
+                    0.3, 12.402584, 7980, 25, 69,
+                ),
+            )
             r = cbrt(((1 - 0.15 - φl) * V + 216) / (4π / 3))
             @test r ≈ r0 atol = 1.0e-6                                 # control
             c = (61.0, 61.0, r + 1)
             os = oracle_sites((120, 120, 31), c, strict_tol(r))
             oc = oracle_sites((120, 120, 31), c, closed_tol(r))
-            @test length(os) == n && length(oc) == n + 1             # control (oracle): the point at distance r on z = 1
+            # control (oracle): the point at distance r on z = 1
+            @test length(os) == n && length(oc) == n + 1
             @test only(setdiff(oc, os)) == (61, 61, 1)
-            op = layout(Objects(Interior(Sphere(Point(c...), r)); kinds = [:cytoplasm]), lat)      # DEFECT CHECK
+            # DEFECT CHECK
+            op = layout(
+                Objects(Interior(Sphere(Point(c...), r)); kinds = [:cytoplasm]),
+                lat
+            )
             σ = initial_σ(op)
             @test sites(σ, 1) == os
             @test count(==(1), σ) == n
             @test findall(z -> any(==(1), view(σ, :, :, z)), 1:31) == collect(2:ztop)
             @test count(==(1), view(σ, :, :, 2)) == nz2
             # the closed rule includes the z = 1 point
-            @test count(==(1), initial_σ(layout(Objects(Sphere(Point(c...), r); kinds = [:cytoplasm]), lat))) == n + 1
+            @test count(
+                ==(1),
+                initial_σ(
+                    layout(Objects(Sphere(Point(c...), r); kinds = [:cytoplasm]), lat)
+                )
+            ) ==
+                n + 1
         end
     end
 end
 
-@testitem "initial state: the Fortuna start builds the problem (kinds, targets, one cluster)" setup = [InitialStateSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "initial state: the Fortuna start builds the problem (kinds, targets, one cluster)" begin
+@testitem "initial state: the Fortuna start builds the problem (kinds, targets, one \
+    cluster)" setup = [InitialStateSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "initial state: the Fortuna start builds the problem (kinds, targets, one \
+        cluster)" begin
         sys = InitialFortuna(; name = :fo)
         (op, _) = fortuna_layout(10, 80, 21, sys)               # DEFECT CHECK
         prob = PottsProblem(sys, op, (0, 1))
@@ -945,10 +1424,12 @@ end
         alive = findall(>(0), vol)
         @test length(alive) == 4
         @test vol[1:4] == [3923, 216, 6400, 6400]
-        # targets fixed from t = 0 by the kind defaults: cytoplasm (1 − φ_n − φ_l)V, nucleus φ_n V
+        # targets fixed from t = 0 by the kind defaults: cytoplasm (1 − φ_n − φ_l)V, nucleus
+        # φ_n V
         @test vt[1] ≈ 0.8 * V rtol = 1.0e-12
         @test vt[2] ≈ 0.15 * V rtol = 1.0e-12
-        # no lamellipodium cell at t = 0 (kind index 4 of `medium substrate lid cytoplasm lamellipodium nucleus`)
+        # no lamellipodium cell at t = 0 (kind index 4 of `medium substrate lid cytoplasm
+        # lamellipodium nucleus`)
         @test !any(c -> kd[c] == 4, alive)
         # one cluster {cytoplasm, nucleus}; the planes alone
         cl = Array(u0.cell.cluster)
@@ -956,42 +1437,82 @@ end
     end
 end
 
-@testitem "initial state: a 2D cell on a substrate line reproduces the strict count" setup = [InitialStateSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "initial state: a 2D cell on a substrate line reproduces the strict count" setup =
+    [InitialStateSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 11. The 2D analogue: a disc tangent to the substrate line
-    @testset "initial state: a 2D cell on a substrate line reproduces the strict count" begin
+    @testset "initial state: a 2D cell on a substrate line reproduces the strict \
+        count" begin
         for (r, n, nclosed) in ((3, 25, 29), (5, 69, 81))
             c = (11.0, r + 1.0)                                      # bottom row y = 2
-            l = overlay(Objects(Interior(Circle(Point(c...), Float64(r))); kinds = [:cell]), Fill(:sub; region = (1:21, 1:1)))
-            op = layout(l, Lattice((21, 21); boundary = (Periodic(), Closed())))          # DEFECT CHECK
+            l = overlay(
+                Objects(Interior(Circle(Point(c...), Float64(r))); kinds = [:cell]),
+                Fill(:sub; region = (1:21, 1:1))
+            )
+            # DEFECT CHECK
+            op = layout(l, Lattice((21, 21); boundary = (Periodic(), Closed())))
             @test count(==(1), initial_σ(op)) == n
             @test !any(==(1), view(initial_σ(op), :, 1))
             # negative control: the closed disc touches the line (one site) and loses it
-            lc = overlay(Objects(Circle(Point(c...), Float64(r)); kinds = [:cell]), Fill(:sub; region = (1:21, 1:1)))
-            @test count(==(1), initial_σ(layout(lc, Lattice((21, 21); boundary = (Periodic(), Closed()))))) == nclosed - 1
+            lc = overlay(
+                Objects(Circle(Point(c...), Float64(r)); kinds = [:cell]),
+                Fill(:sub; region = (1:21, 1:1))
+            )
+            @test count(
+                ==(1), initial_σ(
+                    layout(
+                        lc, Lattice(
+                            (21, 21); boundary = (
+                                Periodic(), Closed(),
+                            )
+                        )
+                    )
+                )
+            ) == nclosed - 1
         end
     end
 end
 
-@testitem "initial state: deterministic; Objects scans per-copy boxes" setup = [InitialStateSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "initial state: deterministic; Objects scans per-copy boxes" setup = [
+    InitialStateSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 12. Determinism and laziness (brief §4.A7)
     @testset "initial state: deterministic; Objects scans per-copy boxes" begin
         l = overlay(
-            Fill(:bg), Objects(Interior(Circle(Point(0.0, 0.0), 2.5)), RandomPoints(20; seed = 11); kinds = [:a, :b]),
+            Fill(:bg), Objects(
+                Interior(Circle(Point(0.0, 0.0), 2.5)),
+                RandomPoints(20; seed = 11); kinds = [:a, :b]
+            ),
             Group(Fill(:c; region = (1:3, 1:3)), Fill(:d; region = (4:5, 1:3)))
         )
         a = layout(l, (40, 40))                                      # DEFECT CHECK
         @test isequal(a, layout(l, (40, 40)))
-        # 10⁴ copies of a strict r = 2 ball (27 sites each) on 200³: O(Σ bounding boxes), not
-        # O(sites × copies), so it finishes. Explicit points from a fixed stream (the test's
-        # own); the first copy wins, so the oracle paints copies in order onto unowned sites.
+        # 10⁴ copies of a strict r = 2 ball (27 sites each) on 200³: O(Σ bounding boxes),
+        # not O(sites × copies), so it finishes. Explicit points from a fixed stream (the
+        # test's own); the first copy wins, so the oracle paints copies in order onto
+        # unowned sites.
         rng = StableRNG(5)
-        pts = [Point(Float64(rand(rng, 1:200)), Float64(rand(rng, 1:200)), Float64(rand(rng, 1:200))) for _ in 1:10_000]
-        t = @elapsed op = layout(Objects(Interior(Sphere(Point(0.0, 0.0, 0.0), 2.0)), pts; kinds = [:s]), (200, 200, 200))
-        @info "initial state: 10⁴ Objects copies on 200³ took $(round(t; digits = 2)) s (informational)"
+        pts = [
+            Point(
+                Float64(rand(rng, 1:200)), Float64(rand(rng, 1:200)),
+                Float64(rand(rng, 1:200))
+            )
+                for _ in 1:10_000
+        ]
+        t = @elapsed op = layout(
+            Objects(Interior(Sphere(Point(0.0, 0.0, 0.0), 2.0)), pts; kinds = [:s]),
+            (200, 200, 200)
+        )
+        @info "initial state: 10⁴ Objects copies on 200³ took $(round(t; digits = 2)) s \
+            (informational)"
         want = zeros(Int32, 200, 200, 200)
-        offs = [(i, j, k) for i in -1:1, j in -1:1, k in -1:1]       # strict r = 2: the 3³ block
+        # strict r = 2: the 3³ block
+        offs = [(i, j, k) for i in -1:1, j in -1:1, k in -1:1]
         for (n, p) in enumerate(pts)
             q = round.(Int, Tuple(p))
             for o in offs
@@ -1011,29 +1532,77 @@ end
     end
 end
 
-@testitem "initial state: a kind class is not a layer kind" setup = [InitialStateSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "initial state: a kind class is not a layer kind" setup = [
+    InitialStateSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "initial state: a kind class is not a layer kind" begin
         sys = lasses(; name = :kc)
-        @test occursin("kind class", initial_msg(() -> layout(Tiling((2, 2); kinds = [:g]), sys)))     # control (existing layers)
-        @test occursin("kind class", initial_msg(() -> layout(Fill(:g; region = (1:2, 1:2)), sys)))   # DEFECT CHECK
-        @test occursin("kind class", initial_msg(() -> layout(Objects(Interior(Circle(Point(3.0, 3.0), 2.0)); kinds = [:g]), sys)))
-        @test occursin("kind class", initial_msg(() -> layout(Group(Fill(:cyto; region = (1:2, 1:2)), Fill(:g; region = (3:4, 1:2))), sys)))
+        # control (existing layers)
+        @test occursin(
+            "kind class",
+            initial_msg(() -> layout(Tiling((2, 2); kinds = [:g]), sys))
+        )
+        @test occursin(
+            "kind class", initial_msg(
+                () -> layout(
+                    Fill(
+                        :g; region = (
+                            1:2, 1:2,
+                        )
+                    ), sys
+                )
+            )
+        )   # DEFECT CHECK
+        @test occursin(
+            "kind class",
+            initial_msg(
+                () -> layout(
+                    Objects(Interior(Circle(Point(3.0, 3.0), 2.0)); kinds = [:g]),
+                    sys
+                )
+            )
+        )
+        @test occursin(
+            "kind class",
+            initial_msg(
+                () -> layout(
+                    Group(Fill(:cyto; region = (1:2, 1:2)), Fill(:g; region = (3:4, 1:2))),
+                    sys
+                )
+            )
+        )
         @test length(layout(Fill(:cyto; region = (1:2, 1:2)), sys)) == 2
     end
 end
 
-@testitem "initial state: the layouts manual shows the recipes" setup = [InitialStateSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "initial state: the layouts manual shows the recipes" setup = [
+    InitialStateSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 14. Docs (brief §3.A8, §4.D; D-087)
     @testset "initial state: the layouts manual shows the recipes" begin
-        md = read(joinpath(@__DIR__, "..", "..", "..", "..", "docs", "src", "manual", "layouts.md"), String)
-        @test occursin("Voronoi", md)                                # control: the page exists and lists today's layers
+        md = read(
+            joinpath(
+                @__DIR__, "..", "..", "..", "..", "docs", "src", "manual", "layouts.md"
+            ), String
+        )
+        # control: the page exists and lists today's layers
+        @test occursin("Voronoi", md)
         for n in ("Fill", "Objects", "Group")
-            @test occursin(Regex("^\\|\\s*`$(n)", "m"), md)           # DEFECT CHECK: a row of the built-in-layers table
+            # DEFECT CHECK: a row of the built-in-layers table
+            @test occursin(Regex("^\\|\\s*`$(n)", "m"), md)
         end
-        # the Plane recipe: any `Fill` whose region is a one-layer z slab (spec owner, D-244)
-        @test occursin(r"Fill\(:\w+;[^\n]*region\s*=\s*\([^()\n]+,[^()\n]+,\s*([\w+\-]+):\1\s*\)", md)
+        # the Plane recipe: any `Fill` whose region is a one-layer z slab (spec owner,
+        # D-244)
+        @test occursin(
+            r"Fill\(:\w+;[^\n]*region\s*=\s*\([^()\n]+,[^()\n]+,\s*([\w+\-]+):\1\s*\)", md
+        )
         @test occursin("Objects(Interior(Sphere(", md)               # the Spheres recipe
-        @test occursin("Group(", md)                                 # the compartment example
+        # the compartment example
+        @test occursin("Group(", md)
     end
 end

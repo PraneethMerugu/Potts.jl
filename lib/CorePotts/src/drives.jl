@@ -17,8 +17,10 @@ concentration: `identity` (linear), `saturating(s)` = `c/(s + c)`,
 `saturating_linear(s)` = `c/(s c + 1)`, or any function. Gate it by kind and copy type in
 the model.
 """
-@inline chemotaxis_delta(c, prop, χ; response::F = identity) where {F} =
-    -χ * (response(@inbounds(c[prop.target])) - response(@inbounds(c[prop.source])))
+@inline function chemotaxis_delta(c, prop, χ; response::F = identity) where {F}
+    # bounds: the proposal's target and source are sites ≤ nsites = length(c)
+    return -χ * (response(@inbounds(c[prop.target])) - response(@inbounds(c[prop.source])))
+end
 
 """`saturating(s)`: the response `c -> c/(s + c)`."""
 saturating(s) = c -> c / (s + c)
@@ -38,7 +40,13 @@ struct Log1pGeometricMean <: AbstractNeighborhoodMean end
 @inline _fold_term(::GeometricMean, a) = a > 0 ? log(a) : zero(a)
 @inline _fold_term(::Log1pGeometricMean, a) = log1p(max(zero(a), a))
 @inline _fold_end(::ArithmeticMean, total, n, zero_seen) = total / n
-@inline _fold_end(::GeometricMean, total, n, zero_seen) = zero_seen ? zero(total) : exp(total / n)
+@inline function _fold_end(::GeometricMean, total, n, zero_seen)
+    return if zero_seen
+        zero(total)
+    else
+        exp(total / n)
+    end
+end
 @inline _fold_end(::Log1pGeometricMean, total, n, zero_seen) = expm1(total / n)
 
 """
@@ -48,7 +56,10 @@ Mean of `x` over `site` (if `owner` owns it) and its `relation` neighbors owned 
 `owner`. Zero for the medium or an empty set. The neighborhood-memory drive of the Act
 family is `−(λ/max)(mean(source, new) − mean(target, old))`.
 """
-@inline function neighborhood_mean(x, σ, ctx, site, owner; relation, fold::M = GeometricMean()) where {M <: AbstractNeighborhoodMean}
+@inline function neighborhood_mean(
+        x, σ, ctx, site, owner; relation,
+        fold::M = GeometricMean()
+    ) where {M <: AbstractNeighborhoodMean}
     T = eltype(x)
     owner == 0 && return zero(T)
     lat = ctx.lattice
@@ -56,6 +67,7 @@ family is `−(λ/max)(mean(source, new) − mean(target, old))`.
     total = zero(T)
     n = 0
     zero_seen = false
+    # bounds: site and inside neighbors have linear indices ≤ nsites
     if @inbounds(σ[site]) == owner
         a = @inbounds x[site]
         total += _fold_term(fold, a)
@@ -76,7 +88,9 @@ family is `−(λ/max)(mean(source, new) − mean(target, old))`.
     return _fold_end(fold, total, n, zero_seen)
 end
 
-"""Extinction policy `ForbidExtinction`: veto a copy that would remove a cell's last site."""
+# bounds: prop.old is a cell id ≤ capacity = length(volume)
+"""Extinction policy `ForbidExtinction`: veto a copy that would remove a cell's last \
+site."""
 @inline forbid_extinction(volume, prop) = prop.old == 0 || @inbounds(volume[prop.old]) > 1
 
 # ---------------------------------------------------------------------------------------
@@ -93,15 +107,19 @@ cell. Zero for the medium, when the target is the cell's last site, or when it i
 isolated fragment. Connectivity rules are expressions over it: `local_components == 1`
 (hard, exactly one piece as in CompuCell3D), `λ * (local_components > 1)` (soft).
 """
-@inline local_components(σ, ctx, prop::Proposal) =
-    prop.old == 0 ? 0 : Int(_old_pieces(read_shell(σ, ctx, prop), ctx.lattice, prop))
+@inline function local_components(σ, ctx, prop::Proposal)
+    return prop.old == 0 ? 0 : Int(_old_pieces(read_shell(σ, ctx, prop), ctx.lattice, prop))
+end
 
 """
 `locally_connected(σ, ctx, prop)`: the losing cell stays exactly one local piece,
 `prop.old == 0 || local_components(σ, ctx, prop) == 1`. Zero pieces (the cell's last
 site, an isolated fragment) is rejected like two.
 """
-@inline locally_connected(σ, ctx, prop::Proposal) = prop.old == 0 || local_components(σ, ctx, prop) == 1
+@inline function locally_connected(σ, ctx, prop::Proposal)
+    return prop.old == 0 ||
+        local_components(σ, ctx, prop) == 1
+end
 
 """
     ring_arcs(σ, ctx, prop) -> Int
@@ -121,7 +139,12 @@ The shell is fixed, whatever the model's neighborhood.
 Number of distinct cells (medium excluded) on the target's neighbor shell (see
 [`ring_arcs`](@ref)).
 """
-@inline ring_cells(σ, ctx, prop::Proposal) = _distinct_cells(read_shell(σ, ctx, prop).owners)
+@inline function ring_cells(
+        σ, ctx,
+        prop::Proposal
+    )
+    return _distinct_cells(read_shell(σ, ctx, prop).owners)
+end
 
 """
     ring_medium(σ, ctx, prop) -> Int
@@ -135,7 +158,10 @@ axis the shell wraps.
 # The 6 hex neighbours in angular order (axial offsets at 0°, 60°, …, 300°).
 const _HEX_RING = ((1, 0), (0, 1), (-1, 1), (-1, 0), (0, -1), (1, -1))
 # The 26 sites of the cubic Moore shell (ternary order, the origin left out).
-const _CUBIC_SHELL = Tuple((i, j, k) for k in -1:1 for j in -1:1 for i in -1:1 if (i, j, k) != (0, 0, 0))
+const _CUBIC_SHELL = Tuple(
+    (i, j, k) for k in -1:1 for j in -1:1
+        for i in -1:1 if (i, j, k) != (0, 0, 0)
+)
 
 # face pieces of the losing cell's shell positions (σ may be a `ShellRead`; `shell.jl`)
 @inline function _old_pieces(s, lat, prop)

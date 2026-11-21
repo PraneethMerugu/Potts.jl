@@ -37,20 +37,34 @@ alg = SequentialCPM(; skip_interior = true)
 start = sheared_foam_state(; lattice = L)
 prob = PottsProblem(foam, start, (0, 10); seed = 1)
 shaken = solve(remake(prob; p = [:T => 3.0]), alg; save_everystep = false).u[end]
-relaxed = solve(remake(prob; u0 = [ownership => Array(shaken.ownership); start[2:3]], tspan = (0, 300)), alg; save_everystep = false).u[end]
+relaxed = solve(
+    remake(prob; u0 = [ownership => Array(shaken.ownership); start[2:3]], tspan = (0, 300)),
+    alg; save_everystep = false
+).u[end]
 sheared = solve(
-    remake(prob; u0 = [ownership => Array(relaxed.ownership); start[2:3]], p = [:γ0 => 36.0], tspan = (0, 4000)),
-    alg; saveat = 0:20:4000)
+    remake(
+        prob; u0 = [ownership => Array(relaxed.ownership); start[2:3]],
+        p = [:γ0 => 36.0], tspan = (0, 4000)
+    ),
+    alg; saveat = 0:20:4000
+)
 nothing #hide
 
 # The run, one color per bubble, the lattice filling the frame:
 
-bare = (; limits = (0, L[1], 0, L[2]), titlevisible = false, xticksvisible = false, yticksvisible = false,
-    xticklabelsvisible = false, yticklabelsvisible = false, xgridvisible = false, ygridvisible = false,
-    leftspinevisible = false, rightspinevisible = false, topspinevisible = false, bottomspinevisible = false)
+bare = (;
+    limits = (0, L[1], 0, L[2]), titlevisible = false, xticksvisible = false,
+    yticksvisible = false,
+    xticklabelsvisible = false, yticklabelsvisible = false, xgridvisible = false,
+    ygridvisible = false,
+    leftspinevisible = false, rightspinevisible = false, topspinevisible = false,
+    bottomspinevisible = false,
+)
 frame = (; size = 4 .* L, figure_padding = 0)
-record_potts("foam/boundary_shear.mp4", sheared; framerate = 20, encoding = CellIdentityEncoding(),
-    plot = (; boundaries = false), figure = frame, axis = bare)
+record_potts(
+    "foam/boundary_shear.mp4", sheared; framerate = 20, encoding = CellIdentityEncoding(),
+    plot = (; boundaries = false), figure = frame, axis = bare
+)
 nothing #hide
 
 # ```@raw html
@@ -66,10 +80,23 @@ CairoMakie.activate!(type = "png")
 lat = Lattice(L; boundary = (Periodic(), Closed()))
 φ = [stored_energy(Array(u.ownership), lat) for u in sheared.u]
 graphs = [cell_graph(Array(u.ownership), lat) for u in sheared.u]
-t1 = cumsum([0.0; [t1_events(graphs[i], graphs[i + 1]; unit = :t1) for i in 1:(length(graphs) - 1)]])
+t1 = cumsum(
+    [
+        0.0; [
+            t1_events(graphs[i], graphs[i + 1]; unit = :t1)
+                for i in 1:(length(graphs) - 1)
+        ]
+    ]
+)
 fig = Figure(size = (720, 260))
-lines(fig[1, 1], sheared.t, φ ./ φ[1]; axis = (; xlabel = "MCS", ylabel = "stored energy / start"))
-lines(fig[1, 2], sheared.t, t1; axis = (; xlabel = "MCS", ylabel = "T1 events (cumulative)"))
+lines(
+    fig[1, 1], sheared.t, φ ./ φ[1];
+    axis = (; xlabel = "MCS", ylabel = "stored energy / start")
+)
+lines(
+    fig[1, 2], sheared.t, t1;
+    axis = (; xlabel = "MCS", ylabel = "T1 events (cumulative)")
+)
 fig
 
 # ```@raw html
@@ -101,7 +128,10 @@ fig
 #     @variables begin
 #         A(cell) = 256.0                      # target area, 16²
 #     end
-#     @lattice Lattice(lattice; boundary = (Periodic(), Closed()), neighborhood = NeighborOrder(4))
+#     @lattice Lattice(
+#         lattice; boundary = (Periodic(), Closed()),
+#         neighborhood = NeighborOrder(4)
+#     )
 #     @relations proposal = NeighborOrder(4)
 #     @energy begin
 #         contacts => J
@@ -109,7 +139,10 @@ fig
 #     end
 #     @drive copy => ifelse(periodic > 0.5, sin(ω * mcs), 1.0) *
 #                    ifelse(bulk > 0.5, -β * (position[target][2] - ymid),
-#         γ0 * (ifelse(position[target][2] < 1.5, 1.0, 0.0) - ifelse(position[target][2] > ytop - 0.5, 1.0, 0.0))) *
+#         γ0 * (
+#             ifelse(position[target][2] < 1.5, 1.0, 0.0) -
+#                 ifelse(position[target][2] > ytop - 0.5, 1.0, 0.0)
+#         )) *
 #                    direction[1]
 #     @sweep Metropolis(; temperature = T)
 # end
@@ -129,10 +162,15 @@ fig
 
 bulk = solve(
     remake(
-        prob; u0 = [ownership => Array(relaxed.ownership); start[2:3]], p = [:β => 0.2, :bulk => 1.0],
-        tspan = (0, 1500)), alg; saveat = 0:20:1500)
-record_potts("foam/bulk_shear.mp4", bulk; framerate = 20, encoding = CellIdentityEncoding(),
-    plot = (; boundaries = false), figure = frame, axis = bare)
+        prob; u0 = [ownership => Array(relaxed.ownership); start[2:3]],
+        p = [:β => 0.2, :bulk => 1.0],
+        tspan = (0, 1500)
+    ), alg; saveat = 0:20:1500
+)
+record_potts(
+    "foam/bulk_shear.mp4", bulk; framerate = 20, encoding = CellIdentityEncoding(),
+    plot = (; boundaries = false), figure = frame, axis = bare
+)
 nothing #hide
 
 # ```@raw html

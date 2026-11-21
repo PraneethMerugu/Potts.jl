@@ -2,9 +2,11 @@ module CITelemetry
 
     export observe, record_duration
 
-    escape_json(value) = replace(
-        string(value), '\\' => "\\\\", '"' => "\\\"", '\n' => "\\n", '\r' => "\\r"
-    )
+    function escape_json(value)
+        return replace(
+            string(value), '\\' => "\\\\", '"' => "\\\"", '\n' => "\\n", '\r' => "\\r"
+        )
+    end
 
     function emit_record(label, elapsed_seconds, status; kind = "phase", detail = "")
         path = get(ENV, "CI_TELEMETRY_PATH", "")
@@ -41,9 +43,11 @@ module CITelemetry
         return nothing
     end
 
-    observe(label, detail) = emit_record(
-        label, 0.0, "observed"; kind = "observation", detail
-    )
+    function observe(label, detail)
+        return emit_record(
+            label, 0.0, "observed"; kind = "observation", detail
+        )
+    end
 
     function record_duration(action, label; kind = "phase")
         started = time_ns()

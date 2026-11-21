@@ -12,18 +12,23 @@ using Atomix: Atomix
 using CommonSolve: CommonSolve, init, solve, solve!, step!
 using KernelAbstractions: KernelAbstractions, @kernel, @index, @localmem, @synchronize, CPU
 using Logging: @logmsg, LogLevel
+using PrecompileTools: @setup_workload, @compile_workload
 using LatticeFields: LatticeFields, Exec, Problems, isfatal
-using SciMLBase: SciMLBase, remake, reinit!, derivative_discontinuity!, EnsembleProblem, EnsembleSerial, EnsembleThreads,
+using SciMLBase: SciMLBase, remake, reinit!, derivative_discontinuity!, EnsembleProblem,
+    EnsembleSerial, EnsembleThreads,
     DiscreteCallback, CallbackSet, terminate!
 using Base.ScopedValues: ScopedValue, @with
 using Serialization: Serialization
 using StaticArrays: MVector, SMatrix
 using SymbolicIndexingInterface: SymbolicIndexingInterface, getu, setu, getp, setp
 
-export Lattice, Periodic, Closed, nsites, Moore, VonNeumann, NeighborOrder, EuclideanBall, Stencil,
+export Lattice, Periodic, Closed, nsites, Moore, VonNeumann, NeighborOrder, EuclideanBall,
+    Stencil,
     Square, Hexagonal, Hex, embed, embed_covariance, centroid_position,
-    Weighted, OnIndices, relation, AllMobile, MaskMobility, is_mobile, in_domain, host_lattice
-export CPMState, ownership, cell_kinds, cell_generations, volumes, initial_state, Proposal, Footprint, CPMFunction, commit_volume!,
+    Weighted, OnIndices, relation, AllMobile, MaskMobility, is_mobile, in_domain,
+    host_lattice
+export CPMState, ownership, cell_kinds, cell_generations, volumes, initial_state, Proposal,
+    Footprint, CPMFunction, commit_volume!,
     contact_delta, volume_delta, surface_change, surface_delta, commit_surface!,
     recompute_surface, site_delta
 export euler_change, commit_euler!, recompute_euler
@@ -32,47 +37,61 @@ export ContactCount, ContactCounts, commit_contact_count!, recompute_contact_cou
 export init_moments, commit_moments!, centroid, centroid_shift, covariance,
     principal_moments, cell_shape, major_length, major_length_after, min_image
 export commit_site_sum!, recompute_site_sum, commit_site_min!, recompute_site_min!
-export Phases, SweepPhase, LifecyclePhase, Repeat, SitePhase, CellPhase, ModelPhase, CopyPhase, HistoryPush, history_buffer, history_slot,
+export Phases, SweepPhase, LifecyclePhase, Repeat, SitePhase, CellPhase, ModelPhase,
+    CopyPhase, HistoryPush, history_buffer, history_slot,
     clear_on_copy!
 export is_extension, is_retraction, chemotaxis_delta, saturating, saturating_linear,
-    neighborhood_mean, AbstractNeighborhoodMean, ArithmeticMean, GeometricMean, Log1pGeometricMean,
-    local_components, locally_connected, ring_arcs, ring_cells, ring_medium, forbid_extinction
+    neighborhood_mean, AbstractNeighborhoodMean, ArithmeticMean, GeometricMean,
+    Log1pGeometricMean,
+    local_components, locally_connected, ring_arcs, ring_cells, ring_medium,
+    forbid_extinction
 export is_boundary_site, count_neighbors, CellReduce, ContactGraph, contact_graph,
     contact_neighbors, empty_contacts, ContactPhase, contact_slot, contact_measure
-export Lifecycle, EVENT_NONE, EVENT_DIVIDE, EVENT_DIVIDE_CLUSTER, EVENT_REMOVE, EVENT_TRANSITION, AlongMinorAxis,
-    AlongMajorAxis, RandomPlane, along_minor_axis, along_major_axis, random_plane,
+export Lifecycle, EVENT_NONE, EVENT_DIVIDE, EVENT_DIVIDE_CLUSTER, EVENT_REMOVE,
+    EVENT_TRANSITION, AlongMinorAxis,
+    AlongMajorAxis, RandomPlane,
     principal_axis, rebuild_trackers!, with_capacity
-export empty_links, linked, link_count, link_slot, add_link!, remove_link!, remove_incident!,
+export empty_links, linked, link_count, link_slot, add_link!, remove_link!,
+    remove_incident!,
     centroid_distance, centroid_separation, link_delta, HostPhase
 export cluster_of, same_cluster, init_clusters, recompute_cluster_volume,
     recompute_cluster_surface, commit_cluster_volume!, cluster_volume_delta,
     cluster_surface_change, cluster_surface_delta, commit_cluster_surface!
 export FieldPhase, owner_kind
 export Metropolis, Barker, SequentialCPM, CheckerboardCPM
-export PottsProblem, PottsIntegrator, PottsSolution, current_state, refresh_frozen!, frozen_sites, StateIndex, getu, setu, getp, setp
+export PottsProblem, PottsIntegrator, PottsSolution, current_state, refresh_frozen!,
+    frozen_sites, StateIndex, getu, setu, getp, setp
 export init, solve, solve!, step!, remake, CPU
 # SciML ensembles and callbacks, as solver packages re-export them
-export EnsembleProblem, EnsembleSerial, EnsembleThreads, DiscreteCallback, CallbackSet, terminate!, derivative_discontinuity!
+export EnsembleProblem, EnsembleSerial, EnsembleThreads, DiscreteCallback, CallbackSet,
+    terminate!, derivative_discontinuity!
 export PottsCheckpoint, checkpoint, save_checkpoint, load_checkpoint, reinit!
 export read_piff, write_piff
 # Public but not exported: generic lattice and randomness primitives for hand-written models
 # and generated code, and the frozen-mask hooks a model system extends (ExplicitImports
 # checks qualified accesses against this list).
-public CHECKPOINT_FORMAT, Part, BindingScratch, coordinates, shift, interior, neighbor_index, linear_index, draw, cell_entity, uniform, normal, bounded_normal, radius, weight, RNGKey, frozen_varies, frozen_kinds, frozen_reads,
+public CHECKPOINT_FORMAT, Part, BindingScratch, coordinates, shift, interior,
+    neighbor_index, linear_index, draw, cell_entity, uniform, normal, bounded_normal,
+    radius, weight, RNGKey, frozen_varies, frozen_kinds, frozen_reads,
     DeviceTimeoutError, isfatal,
     TrackEnergyChange, track_eltype, phase_context, phase_contexts, field_clamp,
-    shell_offsets, shell_owners, shell_mask, shell_pieces, local_rule, arc_or_pair, simple_point, ShellRead, read_shell, check_shell_lattice,
-    ConnectivityHooks, GlobalExact, GlobalBoard, GlobalLocal, GlobalSearch, global_keeps, global_gains, global_defer,
-    pieces_after!, pieces_defer, commit_pieces!, connectivity_ctx, NEXT_BIRTH, oncopy_cell!,
-    ConvertPass, convert_scratch, CONVERT_FLAGS, reduce_scratch, REDUCE_STATUS, STATUS_SUM_RANGE
+    shell_offsets, shell_owners, shell_mask, shell_pieces, local_rule, arc_or_pair,
+    simple_point, ShellRead, read_shell, check_shell_lattice,
+    ConnectivityHooks, GlobalExact, GlobalBoard, GlobalLocal, GlobalSearch, global_keeps,
+    global_gains, global_defer,
+    pieces_after!, pieces_defer, commit_pieces!, connectivity_ctx, NEXT_BIRTH,
+    oncopy_cell!,
+    ConvertPass, convert_scratch, CONVERT_FLAGS, reduce_scratch, REDUCE_STATUS,
+    STATUS_SUM_RANGE
 
-# The interface the symbolic layer (Potts) builds problems and generates code against: hooks it
-# extends (`remake_*`, `report_run`, the setters), defaults it compares with, and the counted
-# host transfers and atomics its generated phases call. Public so that a model compiler uses
-# it without reaching into internals; not part of the modeling API (the API page lists it
-# apart).
+# The interface the symbolic layer (Potts) builds problems and generates code against: hooks
+# it extends (`remake_*`, `report_run`, the setters), defaults it compares with, and the
+# counted host transfers and atomics its generated phases call. Public so that a model
+# compiler uses it without reaching into internals; not part of the modeling API (the API
+# page lists it apart).
 const MODEL_COMPILER_INTERFACE = (
-    :AbstractBoundary, :AbstractRelationSpec, :run_phases, :link_frame, :link_at, :maxdegree,
+    :AbstractBoundary, :AbstractRelationSpec, :run_phases, :link_frame, :link_at,
+    :maxdegree,
     :derived, :snapshot, :run_phase, :sync!, :counted_copy!, :adapt_host, :host_leaves,
     :host_buffer, :adjacency_name, :always, :is_symmetric, :has_origin,
     :MODEL_STATUS, :bump!, :atomic_add!, :cv_write!, :to_host, :report_run, :no_bias,

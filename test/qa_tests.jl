@@ -12,25 +12,27 @@ using InteractiveUtils: code_llvm
 
 # the discrete-component fixtures (`xcell`, `toggle`, `sampler`, `DiscreteHybrid`,
 # `discrete_counter_model`, `_discrete_blocks`): shared with test/symbolic_tests.jl
-isdefined(@__MODULE__, :discrete_counter_model) || include(joinpath(@__DIR__, "shared", "discrete_fixtures.jl"))
-
+isdefined(@__MODULE__, :discrete_counter_model) ||
+    include(joinpath(@__DIR__, "shared", "discrete_fixtures.jl"))
 
 # D-047: every PottsModels model, Float64 and Float32. JET cannot see inside
-# RuntimeGeneratedFunction bodies, so the generated code is also `eval`'d into plain functions.
-using PottsModels: GranerGlazier, WortelAct, MerksVasculogenesis, OpenVTGrowingMonolayer, AkeebInvasion, akeeb_state,
+# RuntimeGeneratedFunction bodies, so the generated code is also `eval`'d into plain
+# functions.
+using PottsModels: GranerGlazier, WortelAct, MerksVasculogenesis, OpenVTGrowingMonolayer,
+    AkeebInvasion, akeeb_state,
     graner_glazier_state, openvt_monolayer_state
-
 
 const _QA_MOD = Module(:PottsQA)
 
 Core.eval(_QA_MOD, :(using Potts; using Potts: CorePotts))
 
-
 _qa_float64_literals(ex) = (n = Ref(0); _qa_walk(x -> x isa Float64 && (n[] += 1), ex); n[])
 
 _qa_walk(f, x) = (f(x); x isa Expr && foreach(a -> _qa_walk(f, a), x.args))
 
-const _CLOSURE_HEADS = (:->, :function, :do, :generator, :comprehension, :typed_comprehension)
+const _CLOSURE_HEADS = (
+    :->, :function, :do, :generator, :comprehension, :typed_comprehension,
+)
 
 function _qa_closure_heads(ex)
     ex isa Expr || return 0
@@ -78,7 +80,6 @@ end
 
 _qa_warm_allocated(integ) = (step!(integ); @allocated step!(integ))
 
-
 # Discrete components' tick phases (kind-gated, fused with couplings, clocked, model
 # scope) are type stable, allocation free and, in Float32, free of Float64.
 @potts_model QADiscreteKinds begin
@@ -91,7 +92,6 @@ _qa_warm_allocated(integ) = (step!(integ); @allocated step!(integ))
     @energy cells => (volume - 9.0)^2
     @sweep Metropolis(; temperature = 1.0)
 end
-
 
 @potts_model QADiscreteScratch begin
     @kinds medium A
@@ -107,30 +107,45 @@ end
     @sweep Metropolis(; temperature = 1.0)
 end
 
-
 # D-051 R0: no model- or author-named code in the core packages. Identifiers, macro names,
 # symbols and non-doc strings are scanned (comments and docstrings may cite sources);
 # identifiers are split on `_` and camel case. Exceptions live in `privileged_allow.txt`.
-const _DENY = ["merks", "wortel", "niculescu", "graner", "glazier", "akeeb", "jiang", "bauer", "zajac",
-    "starruss", "myxo", "fortuna", "osborne", "chaste", "artistoo", "openvt", "cc3d", "compucell", "morpheus",
-    "savill", "hogeweg", "act", "leader", "follower", "endothelial", "tumor", "tumour", "vasculo", "angiogen",
-    "keratocyte", "amoeboid"]
+const _DENY = [
+    "merks", "wortel", "niculescu", "graner", "glazier", "akeeb", "jiang", "bauer", "zajac",
+    "starruss", "myxo", "fortuna", "osborne", "chaste", "artistoo",
+    "openvt", "cc3d", "compucell", "morpheus",
+    "savill", "hogeweg", "act", "leader", "follower", "endothelial",
+    "tumor", "tumour", "vasculo", "angiogen",
+    "keratocyte", "amoeboid",
+]
 
-_tokens(s) = [lowercase(t) for t in split(s, r"[^A-Za-z0-9]+|(?<=[a-z])(?=[A-Z])") if !isempty(t)]
+function _tokens(s)
+    return [
+        lowercase(t)
+            for t in split(s, r"[^A-Za-z0-9]+|(?<=[a-z])(?=[A-Z])") if !isempty(t)
+    ]
+end
 
-_denied(s) = [d for d in _DENY if any(t -> t == d || (length(d) > 4 && occursin(d, t)), _tokens(s))]
-
+function _denied(s)
+    return [
+        d
+            for d in _DENY
+            if any(t -> t == d || (length(d) > 4 && occursin(d, t)), _tokens(s))
+    ]
+end
 
 const JS = Base.JuliaSyntax
-# The kind names are resolved at run time: Julia 1.13 removed `K"MacroName"` and spells a macro
-# name as a `macro_name` node around a plain `Identifier` leaf (value `:name`), where 1.12 and
-# earlier have one `MacroName` leaf whose value is `Symbol("@name")`. A macro name keeps the `@`
-# its allowlist key has always had, either way (`_macro_text`), so both versions report the same
-# hits on the same lines.
-_js_kind(name) = try
-    JS.Kind(name)
-catch
-    nothing
+# The kind names are resolved at run time: Julia 1.13 removed `K"MacroName"` and spells a
+# macro name as a `macro_name` node around a plain `Identifier` leaf (value `:name`), where
+# 1.12 and earlier have one `MacroName` leaf whose value is `Symbol("@name")`. A macro name
+# keeps the `@` its allowlist key has always had, either way (`_macro_text`), so both
+# versions report the same hits on the same lines.
+function _js_kind(name)
+    return try
+        JS.Kind(name)
+    catch
+        nothing
+    end
 end
 const _K_IDENT = _js_kind("Identifier")
 const _K_STRING = _js_kind("String")
@@ -164,18 +179,18 @@ function _privileged_hits(file)
     return out
 end
 
-
 # ExplicitImports guardrails (CLAUDE.md code rules). Every name Potts uses is
 # imported explicitly and by its owner. The allowlists name each non-public access the
 # package genuinely needs; add to them only by review, with the reason.
-using ExplicitImports: ExplicitImports, check_no_implicit_imports, check_all_explicit_imports_are_public,
-    check_no_stale_explicit_imports, check_all_qualified_accesses_via_owners, check_all_qualified_accesses_are_public
-
+using ExplicitImports: ExplicitImports, check_no_implicit_imports,
+    check_all_explicit_imports_are_public,
+    check_no_stale_explicit_imports,
+    check_all_qualified_accesses_via_owners,
+    check_all_qualified_accesses_are_public
 
 # ExplicitImports analyses a package's loaded extensions with it: load DynamicQuantities
 # so that `PottsDynamicQuantitiesExt` is always checked, whatever ran before.
 using DynamicQuantities: DynamicQuantities
-
 
 const POTTS_NONPUBLIC_QUALIFIED = (
     # (Potts -> CorePotts: the interface Potts generates code against is public,
@@ -186,7 +201,8 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     Symbol("@nospecializeinfer"),  # the remake hooks inferred once for every model
     # --- Potts -> Symbolics
     :rename,              # Symbolics.rename: renames a component system (`k.x` is `k₊x`)
-    :VarDomainPairing,    # what `Potts.kind ∈ (1, 2)` builds: a binding of it is refused by name
+    # what `Potts.kind ∈ (1, 2)` builds: a binding of it is refused by name
+    :VarDomainPairing,
     # --- PottsDynamicQuantitiesExt -> Potts: the extension is part of Potts and gives
     # Potts's own symbolic operators their unit rules, so it reads Potts internals.
     :at, :at2, :history_lag, :cell_integral, :Δ, :cell_centroid, :copy_displacement,
@@ -201,14 +217,15 @@ const POTTS_NONPUBLIC_QUALIFIED = (
     :VariableTimeDomain,  # metadata key holding a discrete variable's clock
     :IntegerSequence,     # the clock of `ShiftIndex(t, 0)` (one tick per step, no period)
     # --- Potts -> MTKBase: the container around System. MTKBase's
-    # `is_parameter(::AbstractSystem, ::ParameterIndex)` answers `is_split` of the container,
-    # which has no index cache; the owned method forwards it to the inner System instead.
+    # `is_parameter(::AbstractSystem, ::ParameterIndex)` answers `is_split` of the
+    # container, which has no index cache; the owned method forwards it to the inner System
+    # instead.
     :ParameterIndex,
     # --- Potts -> MTKBase: `description(sys)` is MTK's documented accessor of a system's
     # description (`@description`); MTKBase does not declare it public. Potts forwards it.
     :description,
-    # --- Potts -> SciMLBase: the error `CheckInit()` throws, as SciML's own initializations do;
-    # SciMLBase does not declare it public
+    # --- Potts -> SciMLBase: the error `CheckInit()` throws, as SciML's own initializations
+    # do; SciMLBase does not declare it public
     :CheckInitFailureError,
 )
 
@@ -218,42 +235,47 @@ const POTTS_NONPUBLIC_EXPLICIT = (
     :get_unit, :ValidationError,  # ext -> MTK's unit-inference API; not declared public
 )
 
-
 # D-085: every synchronize and host↔device copy of the step path goes through the
 # counted helpers in `lib/CorePotts/src/transfers.jl`. A raw call anywhere else must be in
 # this allowlist, with the reason it is not in the step path (or not a transfer).
 const RAW_TRANSFER_ALLOW = Dict(
-    # Lattice `==` and `hash` (host utilities, 79-80); `Array{Bool}` of host masks: the domain
-    # (66, construction), `mobility` (366, construction), `_set_mobility!` (392, converts the
-    # host mask; its device copy is the counted `counted_copy!`)
+    # Lattice `==` and `hash` (host utilities, 79-80); `Array{Bool}` of host masks: the
+    # domain (66, construction), `mobility` (366, construction), `_set_mobility!` (392,
+    # converts the host mask; its device copy is the counted `counted_copy!`)
     "lib/CorePotts/src/lattice.jl" => 6,
     # `initial_state` builds host arrays (53 `Vector{Int32}`, 66 `Array{Int32}`; setup)
     "lib/CorePotts/src/model.jl" => 2,
-    # `_standard_frozen` on a host state (problem construction, remake, reinit!, `frozen_sites`;
-    # 122-123); `_set_state_array!` converts the user's host value (650; the copy is counted);
-    # `Base.Array(::PottsSolution)` refuses (D-287 X9: no transfer)
+    # `_standard_frozen` on a host state (problem construction, remake, reinit!,
+    # `frozen_sites`; 122-123); `_set_state_array!` converts the user's host value (650; the
+    # copy is counted); `Base.Array(::PottsSolution)` refuses (D-287 X9: no transfer)
     "lib/CorePotts/src/problem.jl" => 4,
     # the boundary set's shadow copies of σ and the frozen mask (120, 125) under
     # `SequentialCPM(; skip_interior = true)`: host arrays only, the algorithm is CPU-only
     # (D-177)
     "lib/CorePotts/src/boundary_site.jl" => 2,
-    "lib/CorePotts/src/checkpoint.jl" => 1,  # `reinit!`'s `_copy_state!` (setup; the counters are reset after it)
-    "lib/CorePotts/src/fields.jl" => 1,      # `_bind_copy!`: a field phase's kind tables to the backend when it binds, and at a rebind its tables and status word (setup and rebinding, never per MCS)
+    # `reinit!`'s `_copy_state!` (setup; the counters are reset after it)
+    "lib/CorePotts/src/checkpoint.jl" => 1,
+    # `_bind_copy!`: a field phase's kind tables to the backend when it binds, and at a
+    # rebind its tables and status word (setup and rebinding, never per MCS)
+    "lib/CorePotts/src/fields.jl" => 1,
     # `_device_copy!` on the CPU backend (host arrays); on a device it is a kernel, since
     # Metal.jl's device→device `copyto!` waits for the GPU twice (D-101)
     "lib/CorePotts/src/phases.jl" => 1,
-    "src/layouts.jl" => 2,                   # initial layouts on host arrays (setup; Frame masks)
+    # initial layouts on host arrays (setup; Frame masks)
+    "src/layouts.jl" => 2
 )
 
 # `synchronize` of any module, `Array(`/`Base.Array(`/`Array{…}(`, `Vector(`/`Vector{…}(`,
 # `Adapt.adapt(Array`, `convert(Array`, `copyto!(`, `unsafe_copyto!(`. `collect` and `copy`
 # are left to the runtime wait-identity test (test/transfer_counts.jl).
-const RAW_TRANSFER = r"\w+\.synchronize\(|(?<![\w.])Array\(|Base\.Array\(|(?<![\w.])Array\{[^{}]*\}\(|(?<![\w.])Vector(\{[^{}]*\})?\(|Adapt\.adapt\(Array|convert\(Array|(?<![\w!])copyto!\(|(?<![\w!])unsafe_copyto!\("
+const RAW_TRANSFER =
+    r"\w+\.synchronize\(|(?<![\w.])Array\(|Base\.Array\(|(?<![\w.])Array\{[^{}]*\}\(|(?<![\w.])Vector(\{[^{}]*\})?\(|Adapt\.adapt\(Array|convert\(Array|(?<![\w!])copyto!\(|(?<![\w!])unsafe_copyto!\("
 
 function _raw_transfer_hits(path)
     n = 0
     for line in eachline(path)
-        code = replace(first(split(line, '#'; limit = 2)), r"`[^`]*`" => "")   # no comments, no doc code
+        # no comments, no doc code
+        code = replace(first(split(line, '#'; limit = 2)), r"`[^`]*`" => "")
         n += length(collect(eachmatch(RAW_TRANSFER, code)))
     end
     return n
@@ -262,23 +284,68 @@ include(joinpath(@__DIR__, "shared", "qa_common.jl"))
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "QA: generated models are type stable and allocation free (name)" setup = [QaSetup, PortsSetup, SymbolicSetup] tags = [:potts, :qa] begin
-    @testset "QA: generated models are type stable and allocation free ($name)" for (name, make) in (
+@testitem "QA: generated models are type stable and allocation free (name)" setup = [
+    QaSetup, PortsSetup, SymbolicSetup,
+] tags = [:potts, :qa] begin
+    @testset "QA: generated models are type stable and allocation free ($name)" for (
+            name,
+            make,
+        ) in (
             ("graner", () -> symbolic_graner_problem(; nmcs = 5)),
             ("wortel", symbolic_wortel_problem), ("merks", symbolic_merks_problem),
             ("openvt", symbolic_openvt_problem),
-            ("compartments", () -> (c = compartment_state(); PottsProblem(Compartments(; name = :comp),
-                [ownership => c[1], kind => c[2], cluster => c[3]], (0, 5)))),
-            ("components", () -> (σ = zeros(Int32, 20, 20); σ[3:7, 3:7] .= 1; σ[12:16, 12:16] .= 2;
-                PottsProblem(component_model(), [ownership => σ, kind => [:A, :B]], (0, 5); ode_solver = Potts.RK4(substeps = 2)))),
-            ("persistent", () -> (σ = zeros(Int32, 48, 48); σ[22:26, 22:26] .= 1;
-                remake(PottsProblem(Persistent(; name = :p), [ownership => σ, kind => [1]], (0, 5)); p = [:μ => 500.0]))),
-            ("lags", () -> (σ = zeros(Int32, 8, 8); σ[3:5, 3:5] .= 1;
-                PottsProblem(Lags(; name = :l), [ownership => σ, kind => [1]], (0, 5)))),
-            ("integrals", () -> (σ = zeros(Int32, 20, 20); σ[3:6, 3:6] .= 1;
-                PottsProblem(Integrals(; name = :i), [ownership => σ, kind => [1]], (0, 5)))),
-            ("systemic", () -> (σ = zeros(Int32, 20, 20); σ[2:4, 2:4] .= 1;
-                    PottsProblem(Systemic(; name = :s), [ownership => σ, kind => [1]], (0, 5); ode_solver = Potts.RK4(substeps = 4))
+            (
+                "compartments", () -> (
+                    c = compartment_state(); PottsProblem(
+                        Compartments(; name = :comp),
+                        [ownership => c[1], kind => c[2], cluster => c[3]], (0, 5)
+                    )
+                ),
+            ),
+            (
+                "components", () -> (
+                    σ = zeros(Int32, 20, 20); σ[3:7, 3:7] .= 1; σ[12:16, 12:16] .= 2;
+                    PottsProblem(
+                        component_model(), [ownership => σ, kind => [:A, :B]],
+                        (0, 5); ode_solver = Potts.RK4(substeps = 2)
+                    )
+                ),
+            ),
+            (
+                "persistent", () -> (
+                    σ = zeros(Int32, 48, 48); σ[22:26, 22:26] .= 1;
+                    remake(
+                        PottsProblem(
+                            Persistent(; name = :p), [ownership => σ, kind => [1]], (
+                                0, 5,
+                            )
+                        );
+                        p = [:μ => 500.0]
+                    )
+                ),
+            ),
+            (
+                "lags", () -> (
+                    σ = zeros(Int32, 8, 8); σ[3:5, 3:5] .= 1;
+                    PottsProblem(Lags(; name = :l), [ownership => σ, kind => [1]], (0, 5))
+                ),
+            ),
+            (
+                "integrals", () -> (
+                    σ = zeros(Int32, 20, 20); σ[3:6, 3:6] .= 1;
+                    PottsProblem(
+                        Integrals(; name = :i), [ownership => σ, kind => [1]],
+                        (0, 5)
+                    )
+                ),
+            ),
+            (
+                "systemic", () -> (
+                    σ = zeros(Int32, 20, 20); σ[2:4, 2:4] .= 1;
+                    PottsProblem(
+                        Systemic(; name = :s), [ownership => σ, kind => [1]],
+                        (0, 5); ode_solver = Potts.RK4(substeps = 4)
+                    )
                 ),
             ),
         )
@@ -296,32 +363,74 @@ end
 
 @testitem "QA: Aqua" setup = [QaSetup] tags = [:potts, :qa] begin
     @testset "QA: Aqua" begin
-        # `check_extras = false`: workspace test-only deps live in test/Project.toml, not [extras].
+        # `check_extras = false`: workspace test-only deps live in test/Project.toml, not
+        # [extras].
         qa_aqua(Potts; deps_compat = (; check_extras = false))
         # the piracy check inside each loaded extension (the DynamicQuantities one at least)
         @eval using DynamicQuantities: DynamicQuantities
         exts = qa_extension_piracies(Potts)
         @test Base.get_extension(Potts, :PottsDynamicQuantitiesExt) in exts
         # CorePotts' DiffEqBase extension: its own test environment does not load DiffEqBase
-        @test Base.get_extension(CorePotts, :CorePottsDiffEqBaseExt) in qa_extension_piracies(CorePotts)
+        @test Base.get_extension(CorePotts, :CorePottsDiffEqBaseExt) in
+            qa_extension_piracies(CorePotts)
     end
 end
 
-@testitem "QA: the extension piracy check flags a planted pirate" setup = [QaSetup] tags = [:potts, :qa] begin
+@testitem "QA: the extension piracy check flags a planted pirate" setup = [QaSetup] tags = [
+    :potts, :qa,
+] begin
     @testset "QA: the extension piracy check flags a planted pirate" begin
         qa_piracy_control()
     end
 end
 
-@testitem "QA: generated code of label (T)" setup = [QaSetup, PortsSetup] tags = [:potts, :qa] begin
+@testitem "QA: generated code of label (T)" setup = [QaSetup, PortsSetup] tags = [
+    :potts,
+    :qa,
+] begin
     @testset "QA: generated code of $label ($T)" for (label, make) in (
-            ("Graner–Glazier", () -> (GranerGlazier(; name = :gg), (s = graner_glazier_state(); [ownership => s[1], kind => s[2]]), nothing)),
-            ("Wortel", () -> (WortelAct(; name = :w, lattice = (16, 16)), [ownership => wortel_state(), kind => [:cell, :cell]], nothing)),
-            ("Merks", () -> (MerksVasculogenesis(; name = :m, lattice = (8, 8)), [ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s),
-                kind => [:endothelial]], nothing, (; field_solver = MERKS_SOLVER))),
-            ("OpenVT", () -> (OpenVTGrowingMonolayer(; name = :o, lattice = (24, 24)), openvt_monolayer_state(; lattice = (24, 24)), 16)),
-            ("Akeeb", () -> (AkeebInvasion(; name = :a, lattice = (99, 60)), akeeb_state(; lattice = (99, 60)), 1000))),
-        T in (Float64, Float32)
+                (
+                    "Graner–Glazier",
+                    () -> (
+                        GranerGlazier(; name = :gg),
+                        (s = graner_glazier_state(); [ownership => s[1], kind => s[2]]),
+                        nothing,
+                    ),
+                ),
+                (
+                    "Wortel",
+                    () -> (
+                        WortelAct(; name = :w, lattice = (16, 16)),
+                        [ownership => wortel_state(), kind => [:cell, :cell]], nothing,
+                    ),
+                ),
+                (
+                    "Merks", () -> (
+                        MerksVasculogenesis(; name = :m, lattice = (8, 8)), [
+                            ownership => (s = zeros(Int32, 8, 8); s[3:5, 3:5] .= 1; s),
+                            kind => [:endothelial],
+                        ],
+                        nothing,
+                        (; field_solver = MERKS_SOLVER),
+                    ),
+                ),
+                (
+                    "OpenVT",
+                    () -> (
+                        OpenVTGrowingMonolayer(; name = :o, lattice = (24, 24)),
+                        openvt_monolayer_state(; lattice = (24, 24)), 16,
+                    ),
+                ),
+                (
+                    "Akeeb",
+                    () -> (
+                        AkeebInvasion(; name = :a, lattice = (99, 60)),
+                        akeeb_state(; lattice = (99, 60)), 1000,
+                    ),
+                ),
+            ),
+            T in (Float64, Float32)
+
         sys, op, cap, kw... = make()
         skw = get(kw, 1, (;))      # solver keywords (D-075)
         prob = PottsProblem(sys, op, (0, 3); T, capacity = cap, skw...)
@@ -335,10 +444,17 @@ end
         for fn in (prob.f.delta_H, prob.f.commit!, prob.f.temperature, prob.f.constraint)
             @test isempty(check_allocs(fn, typeof.((st, p, prop, ctx))))
         end
-        # a warm MCS allocates nothing: phases, the lifecycle check and checkerboard colors that
-        # fit one CPU workgroup run as plain loops (`CorePotts._launch`)
-        for alg in (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
-            wi = init(PottsProblem(sys, op, (0, 100); T, capacity = cap, skw...), alg; save_start = false, save_end = false, save_everystep = false)
+        # a warm MCS allocates nothing: phases, the lifecycle check and checkerboard colors
+        # that fit one CPU workgroup run as plain loops (`CorePotts._launch`)
+        for alg in (
+                SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(;
+                    proposal = Moore(1)
+                ),
+            )
+            wi = init(
+                PottsProblem(sys, op, (0, 100); T, capacity = cap, skw...), alg;
+                save_start = false, save_end = false, save_everystep = false
+            )
             @test minimum(_qa_warm_allocated(wi) for _ in 1:5) == 0
         end
         gc = generated_code(sys; T, skw...)
@@ -348,17 +464,33 @@ end
             ex === nothing && continue
             fn = Core.eval(_QA_MOD, ex)
             types = Tuple{typeof.((st, p, prop, ctx))...}
-            @test isempty(JET.get_reports(Base.invokelatest(JET.report_opt, fn, types; target_modules = (CorePotts, Potts))))
-            if T === Float32                                  # device code: no Float64 (Metal)
+            @test isempty(
+                JET.get_reports(
+                    Base.invokelatest(
+                        JET.report_opt, fn, types; target_modules = (CorePotts, Potts)
+                    )
+                )
+            )
+            # device code: no Float64 (Metal)
+            if T === Float32
                 @test _qa_float64_literals(ex) == 0
-                @test !occursin(r"\bdouble\b", sprint((io, f, t) -> Base.invokelatest(code_llvm, io, f, t), fn, types))
+                @test !occursin(
+                    r"\bdouble\b",
+                    sprint((io, f, t) -> Base.invokelatest(code_llvm, io, f, t), fn, types)
+                )
             end
         end
     end
 end
 
-@testitem "QA: generated edge and lifecycle code has no closure heads" setup = [QaSetup] tags = [:potts, :qa] begin
-    @testset "QA: generated edge and lifecycle code has no closure heads ($T)" for T in (Float64, Float32)
+@testitem "QA: generated edge and lifecycle code has no closure heads" setup = [
+    QaSetup,
+] tags = [
+    :potts, :qa,
+] begin
+    @testset "QA: generated edge and lifecycle code has no closure heads ($T)" for T in (
+            Float64, Float32,
+        )
         gc = generated_code(QAEdgeModel(; name = :qe); T)
         @test all(ex -> _qa_closure_heads(ex) == 0, _qa_generated_exprs(gc))
     end
@@ -366,16 +498,49 @@ end
 
 @testitem "QA: discrete components (label, T)" setup = [QaSetup] tags = [:potts, :qa] begin
     @testset "QA: discrete components ($label, $T)" for (label, make) in (
-            ("scratch", () -> (QADiscreteScratch(; name = :s), [ownership => _discrete_blocks(2), kind => [1, 1]])),
-            ("kinds", () -> (QADiscreteKinds(; name = :k), [ownership => _discrete_blocks(4), kind => [1, 2, 1, 2], :inp => [0, 1, 0, 1]])),
-            ("hybrid", () -> (DiscreteHybrid(; name = :h), [ownership => _discrete_blocks(2), kind => [1, 1]])),
-            ("model clock", () -> (discrete_counter_model(ShiftIndex(Clock(2.0)); scope = :model),
-                [ownership => _discrete_blocks(3), kind => [1, 1, 1]]))),
-        T in (Float64, Float32)
+                (
+                    "scratch",
+                    () -> (
+                        QADiscreteScratch(; name = :s),
+                        [ownership => _discrete_blocks(2), kind => [1, 1]],
+                    ),
+                ),
+                (
+                    "kinds",
+                    () -> (
+                        QADiscreteKinds(; name = :k),
+                        [
+                            ownership => _discrete_blocks(4), kind => [1, 2, 1, 2], :inp =>
+                            [0, 1, 0, 1],
+                        ],
+                    ),
+                ),
+                (
+                    "hybrid",
+                    () -> (
+                        DiscreteHybrid(; name = :h),
+                        [ownership => _discrete_blocks(2), kind => [1, 1]],
+                    ),
+                ),
+                (
+                    "model clock", () -> (
+                        discrete_counter_model(ShiftIndex(Clock(2.0)); scope = :model),
+                        [ownership => _discrete_blocks(3), kind => [1, 1, 1]],
+                    ),
+                ),
+            ),
+            T in (Float64, Float32)
+
         sys, op = make()
         prob = PottsProblem(sys, op, (0, 100); T)
-        for alg in (SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(; proposal = Moore(1)))
-            integ = init(prob, alg; save_start = false, save_end = false, save_everystep = false)
+        for alg in (
+                SequentialCPM(; proposal = Moore(1)), CheckerboardCPM(;
+                    proposal = Moore(1)
+                ),
+            )
+            integ = init(
+                prob, alg; save_start = false, save_end = false, save_everystep = false
+            )
             @test minimum(_qa_warm_allocated(integ) for _ in 1:5) == 0
             @test_opt target_modules = (CorePotts, Potts) step!(integ)
         end
@@ -383,29 +548,55 @@ end
         step!(integ)
         c = mtkcompile(sys)
         for b in getfield(c, :discrete)
-            ex = Potts._tick_expr([b], T, getfield(c, :gather_names), b.scope; scratch = Potts._tick_scratch(c))
+            ex = Potts._tick_expr(
+                [b], T, getfield(c, :gather_names),
+                b.scope; scratch = Potts._tick_scratch(c)
+            )
             @test _qa_closure_heads(ex) == 0
             fn = Core.eval(_QA_MOD, ex)
-            args = b.scope === :cell ? (integ.state, integ.p, integ.ctx, integ.key, 1, Int32(1)) :
-                   (integ.state, integ.p, integ.ctx, integ.key, 1)
+            args = if b.scope === :cell
+                (integ.state, integ.p, integ.ctx, integ.key, 1, Int32(1))
+            else
+                (integ.state, integ.p, integ.ctx, integ.key, 1)
+            end
             types = Tuple{typeof.(args)...}
-            @test isempty(JET.get_reports(Base.invokelatest(JET.report_opt, fn, types; target_modules = (CorePotts, Potts))))
+            @test isempty(
+                JET.get_reports(
+                    Base.invokelatest(
+                        JET.report_opt, fn, types; target_modules = (CorePotts, Potts)
+                    )
+                )
+            )
             @test isempty(Base.invokelatest(check_allocs, fn, types))
             if T === Float32
                 @test _qa_float64_literals(ex) == 0
-                @test !occursin(r"\bdouble\b", sprint((io, f, t) -> Base.invokelatest(code_llvm, io, f, t), fn, types))
+                @test !occursin(
+                    r"\bdouble\b",
+                    sprint((io, f, t) -> Base.invokelatest(code_llvm, io, f, t), fn, types)
+                )
             end
         end
     end
 end
 
-@testitem "QA: no model-named code in the core packages" setup = [QaSetup] tags = [:potts, :qa] begin
+@testitem "QA: no model-named code in the core packages" setup = [QaSetup] tags = [
+    :potts,
+    :qa,
+] begin
     @testset "QA: no model-named code in the core packages" begin
         root = joinpath(@__DIR__, "..")
-        allow = Set(strip(first(split(l, "   #"))) for l in eachline(joinpath(@__DIR__, "privileged_allow.txt"))
-                    if !startswith(l, "#") && !isempty(strip(l)))
+        allow = Set(
+            strip(first(split(l, "   #")))
+                for l in eachline(joinpath(@__DIR__, "privileged_allow.txt"))
+                if !startswith(l, "#") && !isempty(strip(l))
+        )
         bad = String[]
-        for d in ("src", "lib/CorePotts/src", "lib/LatticeFields/src", "lib/MakiePotts/src"), (dir, _, fs) in walkdir(joinpath(root, d)), f in fs
+        for d in (
+                    "src", "lib/CorePotts/src", "lib/LatticeFields/src",
+                    "lib/MakiePotts/src",
+                ),
+                (dir, _, fs) in walkdir(joinpath(root, d)), f in fs
+
             endswith(f, ".jl") || continue
             rel = relpath(joinpath(dir, f), root)
             for (line, s) in _privileged_hits(joinpath(dir, f))
@@ -421,16 +612,26 @@ end
     end
 end
 
-@testitem "QA: no development-process IDs in names, titles, comments or messages" setup = [QaSetup] tags = [:potts, :qa] begin
+@testitem "QA: no development-process IDs in names, titles, comments or messages" setup = [
+    QaSetup,
+] tags = [
+    :potts, :qa,
+] begin
     @testset "QA: no development-process IDs in names, titles, comments or messages" begin
         # Positive controls, built by concatenation so that this file does not match itself.
         for (s, tok) in (
-                ("see " * "P6" * ".0as here", "P6" * ".0as"), ("p6" * "_0as_x.jl", "p6" * "_0as"),
+                ("see " * "P6" * ".0as here", "P6" * ".0as"), (
+                    "p6" * "_0as_x.jl", "p6" * "_0as",
+                ),
                 ("P60" * "AS_NAMED", "P60" * "AS_"), ("p64" * "r_rate", "p64" * "r_"),
-                ("F4" * "-E15", "F4" * "-E15"), ("F3" * "-21b", "F3" * "-21b"), ("TS" * "1b", "TS" * "1b"),
+                ("F4" * "-E15", "F4" * "-E15"), ("F3" * "-21b", "F3" * "-21b"), (
+                    "TS" * "1b", "TS" * "1b",
+                ),
                 ("review" * " r1", "review" * " r1"), ("r3" * " S1", "r3" * " S1"),
                 ("front " * "end A", "front " * "end A"), ("W-" * "lite", "W-" * "lite"),
-                ("cutover " * "C8", "cutover " * "C8"), ("F3 " * "design §3.4", "F3 " * "design"),
+                ("cutover " * "C8", "cutover " * "C8"), (
+                    "F3 " * "design §3.4", "F3 " * "design",
+                ),
                 ("v3 " * "§7.1", "v3 " * "§"), ("D-" * "F2" * "-1", "D-" * "F2" * "-1"),
                 ("P60" * "ccDevice", "P60" * "ccD"), ("review" * " M2", "review" * " M2"),
                 ("review" * " 4", "review" * " 4"), ("review" * " B1 #1", "review" * " B1"),
@@ -440,8 +641,11 @@ end
         end
         # Negative controls: domain names of the same shape.
         for s in (
-                "before_mcs", "frozen_kinds", "Float64", "RK4", "BDF2", "F1-F4", "V-C12", "O5",
-                "C12(curve, k)", "T1 transition", "## Step 1: the lattice", "paired A/B", "D-" * "157",
+                "before_mcs", "frozen_kinds", "Float64", "RK4", "BDF2", "F1-F4", "V-C12",
+                "O5",
+                "C12(curve, k)", "T1 transition", "## Step 1: the lattice", "paired A/B",
+                "D-" *
+                    "157",
                 "50 Eden rounds", "round 1", "review the code", "PRE §III B4", "p53 levels",
             )
             @test isempty(qa_phase_tokens(s))
@@ -451,7 +655,8 @@ end
         @test isempty(qa_decision_ids("x = 1   # D-" * "123"))
         @test qa_decision_ids("# D-" * "123"; prose = true) == ["D-" * "123"]
         @test isempty(qa_decision_ids("D-12, D-1234, VD-123"))
-        # Scratch-directory control: a planted ID fails, and an allowlist entry lets it pass.
+        # Scratch-directory control: a planted ID fails, and an allowlist entry lets it
+        # pass.
         mktempdir() do tmp
             mkpath(joinpath(tmp, "src"))
             write(joinpath(tmp, "src", "planted.jl"), "# see " * "P6" * ".0as\nx = 1\n")
@@ -459,7 +664,8 @@ end
             @test qa_no_phase_names(tmp) == ["src/planted.jl:1: " * "P6" * ".0as"]
             mkpath(joinpath(tmp, "docs", "src"))
             write(joinpath(tmp, "docs", "src", "page.md"), "The sweep (D-" * "157).\n")
-            @test qa_no_phase_names(tmp) == ["docs/src/page.md:1: D-" * "157", "src/planted.jl:1: " * "P6" * ".0as"]
+            @test qa_no_phase_names(tmp) ==
+                ["docs/src/page.md:1: D-" * "157", "src/planted.jl:1: " * "P6" * ".0as"]
             rm(joinpath(tmp, "docs"); recursive = true)
             allow = joinpath(tmp, "allow.txt")
             write(allow, "src/planted.jl\t" * "P6" * ".0as\ta planted control\n")
@@ -469,7 +675,62 @@ end
         end
         # The repository: every hit not in test/phase_names_allow.txt.
         bad = qa_no_phase_names(joinpath(@__DIR__, ".."))
-        isempty(bad) || @error "development-process IDs (rename them, or add an allowlist entry with a reason)" bad
+        isempty(bad) ||
+            @error "development-process IDs (rename them, or add an allowlist entry with \
+                a reason)" bad
+        @test isempty(bad)
+    end
+end
+
+@testitem "QA: lines fit in 92 columns" setup = [QaSetup] tags = [:potts, :qa] begin
+    @testset "QA: lines fit in 92 columns" begin
+        # Scratch-directory control: a planted long line fails; a long URL line, a long line
+        # under docs/design/ and a short line pass; an allowlist entry lets the planted line
+        # pass, and an entry that matches nothing is reported.
+        mktempdir() do tmp
+            long = "x = " * repeat("1 + ", 25) * "1"
+            mkpath(joinpath(tmp, "src"))
+            write(joinpath(tmp, "src", "planted.jl"), "y = 1\n" * long * "\n")
+            write(
+                joinpath(tmp, "src", "url.jl"),
+                "# https://example.org/" * repeat("a", 100) * "\n"
+            )
+            mkpath(joinpath(tmp, "docs", "design"))
+            write(joinpath(tmp, "docs", "design", "notes.jl"), long * "\n")
+            # by kind: a table row in a comment and a line made long by its regex pass;
+            # code that builds a table row and long code holding a short regex fail
+            cells = repeat("| \$a ", 30) * "|"
+            build = "push!(rows, \"" * cells * "\")"
+            regex = "m = match(r\"" * repeat("[0-9]", 30) * "\", s)"
+            code = long * " + f(r\"a\")"
+            write(
+                joinpath(tmp, "src", "kinds.jl"),
+                join(["# " * cells, build, regex, code], "\n") * "\n"
+            )
+            @test qa_long_lines(tmp) == [
+                "src/kinds.jl:2: $(textwidth(build))",
+                "src/kinds.jl:4: $(textwidth(code))",
+                "src/planted.jl:2: $(textwidth(long))",
+            ]
+            rm(joinpath(tmp, "src", "kinds.jl"))
+            @test qa_long_lines(tmp) == ["src/planted.jl:2: $(textwidth(long))"]
+            @test isempty(qa_long_lines(tmp; limit = textwidth(long)))
+            allow = joinpath(tmp, "allow.txt")
+            write(allow, "src/planted.jl\t1 + 1\ta planted control\n")
+            @test isempty(qa_long_lines(tmp; allow = qa_line_allowlist(allow)))
+            write(allow, "src/planted.jl\t*\ta planted control, whole file\n")
+            @test isempty(qa_long_lines(tmp; allow = qa_line_allowlist(allow)))
+            write(allow, "src/planted.jl\t1 + 1\ta planted control\nsrc/url.jl\tz\tstale\n")
+            @test qa_long_lines(tmp; allow = qa_line_allowlist(allow)) ==
+                ["allowlist: src/url.jl: z"]
+            write(allow, "src/planted.jl\t1 + 1\n")
+            @test_throws ArgumentError qa_line_allowlist(allow)
+        end
+        # The repository: every long line not exempt and not in test/line_length_allow.txt.
+        bad = qa_long_lines(joinpath(@__DIR__, ".."))
+        isempty(bad) ||
+            @error "lines over 92 columns (wrap them, or add an allowlist entry with a \
+                reason)" bad
         @test isempty(bad)
     end
 end
@@ -506,7 +767,9 @@ end
     end
 end
 
-@testitem "QA: no raw host transfer outside the counted helpers" setup = [QaSetup] tags = [:potts, :qa] begin
+@testitem "QA: no raw host transfer outside the counted helpers" setup = [QaSetup] tags = [
+    :potts, :qa,
+] begin
     @testset "QA: no raw host transfer outside the counted helpers" begin
         root = joinpath(@__DIR__, "..")
         hits = Dict{String, Int}()
@@ -515,7 +778,9 @@ end
             n = _raw_transfer_hits(joinpath(root, d, f))
             n > 0 && (hits["$d/$f"] = n)
         end
-        hits == RAW_TRANSFER_ALLOW || @error "raw synchronize/Array/adapt/copyto! outside transfers.jl" hits RAW_TRANSFER_ALLOW
+        hits == RAW_TRANSFER_ALLOW ||
+            @error "raw synchronize/Array/adapt/copyto! outside \
+                transfers.jl" hits RAW_TRANSFER_ALLOW
         @test hits == RAW_TRANSFER_ALLOW
     end
 end
@@ -523,31 +788,58 @@ end
 # D-138: the Voronoi layer (tessellation, Lloyd, repair) and shape regions are type
 # stable on square, hexagonal and 3D lattices (host-side, but `graner_glazier_aggregate`
 # runs it at paper size for every replicate).
-@testitem "QA: Voronoi and shape regions are type stable (label)" setup = [QaSetup] tags = [:potts, :qa] begin
+@testitem "QA: Voronoi and shape regions are type stable (label)" setup = [QaSetup] tags = [
+    :potts, :qa,
+] begin
     using Potts.Layouts
     @testset "QA: Voronoi and shape regions are type stable ($label)" for (label, L) in (
-            ("hex periodic", Lattice((30, 30); geometry = Hexagonal())), ("square closed", Lattice((30, 30); boundary = Closed())),
-            ("3D", Lattice((12, 12, 12); boundary = Closed())))
+            ("hex periodic", Lattice((30, 30); geometry = Hexagonal())), (
+                "square closed", Lattice((30, 30); boundary = Closed()),
+            ),
+            ("3D", Lattice((12, 12, 12); boundary = Closed())),
+        )
         lat = Potts._layout_spec(L)
         N = length(lat.dims)
         S = HyperSphere{N, Float64}
-        @test_opt target_modules = (Potts,) Potts._region_sites(S(Point(ntuple(_ -> 6.0, N)), 4.0), lat, "")
-        @test_opt target_modules = (Potts,) Potts.paint!(Potts.LayoutState(lat.dims),
-            Voronoi(RandomPoints(10; region = S(Point(ntuple(_ -> 6.0, N)), 4.0), seed = 1); lloyd = 3, kinds = [:a]), lat)
+        @test_opt target_modules = (
+            Potts,
+        ) Potts._region_sites(S(Point(ntuple(_ -> 6.0, N)), 4.0), lat, "")
+        @test_opt target_modules = (Potts,) Potts.paint!(
+            Potts.LayoutState(lat.dims),
+            Voronoi(
+                RandomPoints(10; region = S(Point(ntuple(_ -> 6.0, N)), 4.0), seed = 1);
+                lloyd = 3, kinds = [:a]
+            ), lat
+        )
     end
 end
 
 # D-141: Eden's growth and the Splits passes are type stable on square, hexagonal and
 # 3D lattices (host-side; the growth loop runs once per round over the frontier).
-@testitem "QA: Eden and Splits are type stable (label)" setup = [QaSetup] tags = [:potts, :qa] begin
+@testitem "QA: Eden and Splits are type stable (label)" setup = [QaSetup] tags = [
+    :potts,
+    :qa,
+] begin
     using Potts.Layouts
     @testset "QA: Eden and Splits are type stable ($label)" for (label, L) in (
-            ("hex periodic", Lattice((30, 30); geometry = Hexagonal())), ("square closed", Lattice((30, 30); boundary = Closed())),
-            ("3D", Lattice((12, 12, 12); boundary = Closed())))
+            ("hex periodic", Lattice((30, 30); geometry = Hexagonal())), (
+                "square closed", Lattice((30, 30); boundary = Closed()),
+            ),
+            ("3D", Lattice((12, 12, 12); boundary = Closed())),
+        )
         lat = Potts._layout_spec(L)
-        e = Eden(RandomPoints(5; replace = true, seed = 1); rounds = 3, kinds = [:a], seed = 1, shortfall = :allow)
-        @test_opt target_modules = (Potts,) Potts.paint!(Potts.LayoutState(lat.dims), e, lat)
-        @test_opt target_modules = (Potts,) Potts.paint!(Potts.LayoutState(lat.dims), Splits(e, 2; shortfall = :allow, splits = :allow), lat)
+        e = Eden(
+            RandomPoints(5; replace = true, seed = 1); rounds = 3,
+            kinds = [:a], seed = 1, shortfall = :allow
+        )
+        @test_opt target_modules = (Potts,) Potts.paint!(
+            Potts.LayoutState(lat.dims), e,
+            lat
+        )
+        @test_opt target_modules = (Potts,) Potts.paint!(
+            Potts.LayoutState(lat.dims),
+            Splits(e, 2; shortfall = :allow, splits = :allow), lat
+        )
     end
 end
 
@@ -558,14 +850,19 @@ end
             Potts;
             locals = [
                 # the build closure assigns `phases` and `lifecycle`, which the enclosing
-                # function assigns again after it: a boxed capture, read after its assignment
+                # function assigns again after it: a boxed capture, read after its
+                # assignment
                 r"`(phases|lifecycle)` is not defined \(problem\.jl\)" => "boxed capture",
             ]
         )
     end
 end
 
-@testitem "QA: the JET analysis flags an undefined name and field" setup = [QaSetup] tags = [:potts, :qa] begin
+@testitem "QA: the JET analysis flags an undefined name and field" setup = [
+    QaSetup,
+] tags = [
+    :potts, :qa,
+] begin
     @testset "QA: the JET analysis flags an undefined name and field" begin
         qa_jet_control()
     end
@@ -579,11 +876,19 @@ end
 end
 
 # every external dependency of a workspace test project has a compat bound (D-298)
-@testitem "QA: test projects bound their external dependencies" setup = [QaSetup] tags = [:potts, :qa] begin
+@testitem "QA: test projects bound their external dependencies" setup = [QaSetup] tags = [
+    :potts, :qa,
+] begin
     @testset "QA: test projects bound their external dependencies" begin
         root = pkgdir(Potts)
-        workspace = Base.parsed_toml(joinpath(root, "Project.toml"))["workspace"]["projects"]
-        own = [Base.parsed_toml(joinpath(root, p, "Project.toml"))["name"] for p in workspace if !endswith(p, "test") && p != "benchmark" && p != "docs"]
+        workspace = Base.parsed_toml(joinpath(root, "Project.toml"))["workspace"][
+            "projects",
+        ]
+        own = [
+            Base.parsed_toml(joinpath(root, p, "Project.toml"))["name"]
+                for p in workspace
+                if !endswith(p, "test") && p != "benchmark" && p != "docs"
+        ]
         push!(own, "Potts")
         for p in filter(endswith("test"), workspace)
             @test isempty(qa_missing_compat(joinpath(root, p, "Project.toml"); own))

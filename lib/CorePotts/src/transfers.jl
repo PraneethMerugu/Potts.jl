@@ -4,7 +4,8 @@
 #
 #   sync!(stats, backend)          _device_wait(backend), 1 sync
 #   to_host(stats, a)              Array(a), 1 transfer of sizeof(a)
-#   counted_copy!(stats, dst, src)         copyto!(dst, src), 1 transfer when it crosses host↔device
+#   counted_copy!(stats, dst, src)         copyto!(dst, src), 1 transfer when it crosses
+#                                          host↔device
 #   _readback(stats, a)             the first element of a 1-element array (an `Array` copy)
 #   snapshot(stats, backend, st)   host copy of a state: 1 transfer per device array leaf
 #
@@ -14,12 +15,13 @@
 # `PottsStats` or `nothing` (a call outside an integrator: nothing is counted).
 #
 # Every wait for a device goes through `_device_wait` (D-179): `sync!`, and every
-# device→host copy (`to_host`, `counted_copy!` and with them `_readback` and `snapshot`), which is
-# enqueued without waiting (`_copy_to_host!`) and then waited for. On the CPU the wait is a
-# no-op and on Metal `KernelAbstractions.synchronize` (Metal's own copy to the host waits the
-# same way); on ROCm (the AMDGPU extension) it spins on the stream without allocating:
-# AMDGPU's default wait, which every `copyto!` to the host makes too, wakes up through a HIP
-# host callback and Julia's event loop, ~13 ms per read point on the lifecycle models.
+# device→host copy (`to_host`, `counted_copy!` and with them `_readback` and `snapshot`),
+# which is enqueued without waiting (`_copy_to_host!`) and then waited for. On the CPU the
+# wait is a no-op and on Metal `KernelAbstractions.synchronize` (Metal's own copy to the
+# host waits the same way); on ROCm (the AMDGPU extension) it spins on the stream without
+# allocating: AMDGPU's default wait, which every `copyto!` to the host makes too, wakes up
+# through a HIP host callback and Julia's event loop, ~13 ms per read point on the lifecycle
+# models.
 
 """Seconds a device wait spins before it raises (`_device_wait`): far beyond any MCS's
 queued work, well before a hang goes unnoticed."""
@@ -33,7 +35,9 @@ Wait until every operation queued on `backend` has finished. A no-op on the CPU 
 non-allocating `hipStreamQuery` spin (`_spin_until`) and then a blocking stream synchronize,
 which returns at once and reports a stream error.
 """
-_device_wait(backend; timeout::Real = DEVICE_WAIT_TIMEOUT) = (KernelAbstractions.synchronize(backend); nothing)
+function _device_wait(backend; timeout::Real = DEVICE_WAIT_TIMEOUT)
+    (KernelAbstractions.synchronize(backend); nothing)
+end
 _device_wait(::KernelAbstractions.CPU; timeout::Real = DEVICE_WAIT_TIMEOUT) = nothing
 
 """
@@ -49,8 +53,9 @@ function _spin_until(done::F, timeout::Real) where {F}
     limit = timeout * 1.0e9
     k = 0
     while !done()
-        # the CPU's spin-wait hint (x86 `pause`, ARM `yield`): Julia has no public form of it
-        # (`Base.Threads` uses this ccall in its own spin locks); an upstream gap, see D-294
+        # the CPU's spin-wait hint (x86 `pause`, ARM `yield`): Julia has no public form of
+        # it (`Base.Threads` uses this ccall in its own spin locks); an upstream gap, see
+        # D-294
         ccall(:jl_cpu_pause, Cvoid, ())
         GC.safepoint()
         k += 1
@@ -70,17 +75,22 @@ Exception thrown when waiting for queued device work exceeds `timeout` seconds.
 struct DeviceTimeoutError <: Exception
     timeout::Float64
 end
-Base.showerror(io::IO, e::DeviceTimeoutError) =
-    print(io, "device wait timed out after $(e.timeout) s: the work queued on the device is not done")
+function Base.showerror(io::IO, e::DeviceTimeoutError)
+    return print(io, "device wait timed out after $(e.timeout) s: the work queued on the \
+        device is not done")
+end
 
 @noinline _wait_timed_out(timeout) = throw(DeviceTimeoutError(Float64(timeout)))
 
-"""`copyto!(dst, doff, src, soff, n)` from device array `src` into host array `dst`, finished
-on return: enqueued without waiting and then waited for (`_device_wait`) where the backend
-allows (ROCm: the AMDGPU extension); elsewhere the backend's own copy waits as
+"""`copyto!(dst, doff, src, soff, n)` from device array `src` into host array `dst`,
+finished on return: enqueued without waiting and then waited for (`_device_wait`) where the
+backend allows (ROCm: the AMDGPU extension); elsewhere the backend's own copy waits as
 `_device_wait` would."""
-_copy_to_host!(dst::AbstractArray, doff::Integer, src::AbstractArray, soff::Integer, n::Integer) =
-    copyto!(dst, doff, src, soff, n)
+function _copy_to_host!(
+        dst::AbstractArray, doff::Integer, src::AbstractArray, soff::Integer, n::Integer
+    )
+    return copyto!(dst, doff, src, soff, n)
+end
 _copy_to_host!(dst::AbstractArray, src::AbstractArray) = copyto!(dst, src)
 
 """`Array(a)` for device array `a`, finished on return (through `_copy_to_host!`)."""
@@ -89,9 +99,14 @@ _host_copy(a::AbstractArray) = Array(a)
 """Whether array `a` lives on a device (not host memory)."""
 _ondevice(::Array) = false
 _ondevice(::BitArray) = false
-_ondevice(a::AbstractArray) = !(KernelAbstractions.get_backend(a) isa KernelAbstractions.CPU)
+function _ondevice(a::AbstractArray)
+    return !(KernelAbstractions.get_backend(a) isa KernelAbstractions.CPU)
+end
 
-"""The one counter: add `syncs` synchronizations and `transfers` copies of `bytes` in total to `stats`."""
+"""
+The one counter: add `syncs` synchronizations and `transfers` copies of `bytes` in total to
+`stats`.
+"""
 @inline _count_transfer!(::Nothing, syncs, transfers, bytes) = nothing
 @inline function _count_transfer!(stats, syncs, transfers, bytes)
     stats.syncs += syncs
@@ -127,10 +142,17 @@ end
 
 """`copyto!(dst, doff, src, soff, n)`: `n` elements, counted (`n` elements' bytes) when it
 crosses between the host and a device."""
-function counted_copy!(stats, dst::AbstractArray, doff::Integer, src::AbstractArray, soff::Integer, n::Integer)
+function counted_copy!(
+        stats, dst::AbstractArray, doff::Integer,
+        src::AbstractArray, soff::Integer, n::Integer
+    )
     d, s = _ondevice(dst), _ondevice(src)
     d == s || _count_transfer!(stats, 0, 1, n * sizeof(eltype(src)))
-    return s && !d ? _copy_to_host!(dst, doff, src, soff, n) : copyto!(dst, doff, src, soff, n)
+    return if s && !d
+        _copy_to_host!(dst, doff, src, soff, n)
+    else
+        copyto!(dst, doff, src, soff, n)
+    end
 end
 
 """The first element of a 1-element array, on the host (no copy on the CPU)."""
@@ -142,8 +164,9 @@ host leaf is kept as `Adapt.adapt(Array, …)` keeps it."""
 struct _HostCopy{S}
     stats::S
 end
-Adapt.adapt_storage(h::_HostCopy, a::AbstractArray) =
-    _ondevice(a) ? to_host(h.stats, a) : Adapt.adapt_storage(Array, a)
+function Adapt.adapt_storage(h::_HostCopy, a::AbstractArray)
+    return _ondevice(a) ? to_host(h.stats, a) : Adapt.adapt_storage(Array, a)
+end
 
 """`Adapt.adapt(Array, x)`, counting every device array leaf of `x`."""
 adapt_host(stats, x) = Adapt.adapt(_HostCopy(stats), x)
@@ -189,15 +212,30 @@ _adapt_host_cached(stats, x) = Adapt.adapt(_CachedHostCopy(stats), x)
 host_buffer(a::AbstractArray) = Array{eltype(a)}(undef, size(a))
 
 """
-Host state for host code that touches only some leaves of `st`: `ownership` (when `ownership`) and the
-leaves named in `cell`, `site`, `model` and `history` are host copies (counted on a device;
-the live arrays themselves on the host); every other leaf is the live array, which on a
-device must not be read on the host.
+Host state for host code that touches only some leaves of `st`: `ownership` (when
+`ownership`) and the leaves named in `cell`, `site`, `model` and `history` are host copies
+(counted on a device; the live arrays themselves on the host); every other leaf is the live
+array, which on a device must not be read on the host.
 """
-function host_leaves(stats, st::CPMState; ownership::Bool = false, cell = (), site = (), model = (), history = ())
-    part(nt, names) = isempty(names) ? nt :
-        merge(nt, NamedTuple{Tuple(names)}(map(n -> adapt_host(stats, getfield(nt, n)), Tuple(names))))
+function host_leaves(
+        stats, st::CPMState; ownership::Bool = false,
+        cell = (), site = (), model = (), history = ()
+    )
+    function part(nt, names)
+        if isempty(names)
+            return nt
+        else
+            return merge(
+                nt,
+                NamedTuple{Tuple(names)}(
+                    map(n -> adapt_host(stats, getfield(nt, n)), Tuple(names))
+                )
+            )
+        end
+    end
     return CPMState(
-        ownership ? adapt_host(stats, st.ownership) : st.ownership, part(st.cell, cell), part(st.site, site),
-        part(st.model, model), part(st.history, history))
+        ownership ? adapt_host(stats, st.ownership) : st.ownership, part(st.cell, cell),
+        part(st.site, site),
+        part(st.model, model), part(st.history, history)
+    )
 end

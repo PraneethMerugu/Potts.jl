@@ -7,7 +7,6 @@ using Potts: CorePotts
 isdefined(@__MODULE__, :PottsDevices) || include(joinpath(@__DIR__, "shared", "devices.jl"))
 using DynamicQuantities: @u_str
 
-
 @potts_model UnitSorting begin
     @kinds medium A
     @parameters begin
@@ -30,7 +29,6 @@ using DynamicQuantities: @u_str
     @observed total ~ sum(m for n in cells)
     @sweep Metropolis(; temperature = T)
 end
-
 
 @potts_model UnitCase begin
     @structural_parameters kind_case = :divide_good_integral
@@ -114,7 +112,6 @@ end
     @sweep Metropolis(; temperature = T)
 end
 
-
 @potts_model UnitRate begin
     @kinds medium A
     @parameters begin
@@ -132,34 +129,50 @@ end
 
 @testitem "units: dimensional analysis" setup = [UnitsSetup] tags = [:potts, :units] begin
     @testset "units: dimensional analysis" begin
-        c = mtkcompile(UnitSorting(; name = :s))                              # consistent: compiles
-        σ = zeros(Int32, 16, 16); σ[5:9, 5:9] .= 1
-        @test Symbol(solve(PottsProblem(c, [ownership => σ, kind => [1]], (0, 2)), SequentialCPM()).retcode) == :Success
+        # consistent: compiles
+        c = mtkcompile(UnitSorting(; name = :s))
+        σ = zeros(Int32, 16, 16)
+        σ[5:9, 5:9] .= 1
+        @test Symbol(
+            solve(
+                PottsProblem(c, [ownership => σ, kind => [1]], (0, 2)),
+                SequentialCPM()
+            ).retcode
+        ) ==
+            :Success
         @test unit_refuses(:drive_bad_unit)              # H in J, drive in m
         @test unit_refuses(:after_bad_add)               # mol ≠ mol + m
         @test unit_refuses(:after_bad_mul)               # mol·m ≠ mol
         @test unit_refuses(:divide_bad_unit)             # mol vs unitless
         @test unit_refuses(:obs_bad_unit)
         @test unit_compile(:divide_good_integral) isa CompiledPottsSystem     # mol vs mol
-        # literal zeros take any unit (published-model patterns); real clashes in max/min still fail
+        # literal zeros take any unit (published-model patterns); real clashes in max/min
+        # still fail
         @test unit_compile(:drive_good_zero) isa CompiledPottsSystem
         @test unit_compile(:after_good_max) isa CompiledPottsSystem
         @test unit_refuses(:after_bad_max)
-        @test_throws ArgumentError unit_compile(:drive_bad_cond)              # SymbolicUtils rejects non-Bool ifelse condition before compile
+        # SymbolicUtils rejects non-Bool ifelse condition before compile
+        @test_throws ArgumentError unit_compile(:drive_bad_cond)
         # A-56: zero in comparisons and rules; equations need x's units per unit of time
         @test unit_compile(:divide_good_zero) isa CompiledPottsSystem
         @test unit_compile(:after_good_zero) isa CompiledPottsSystem
         @test unit_refuses(:eq_bad_unit)                 # m per time ≠ m
         @test unit_compile(:eq_good_rate) isa CompiledPottsSystem             # per MCS
-        @test unit_compile(:divide_good_logic) isa CompiledPottsSystem        # `&`, `!` of conditions
-        @test mtkcompile(UnitPreDiff(; name = :pd)) isa CompiledPottsSystem   # `m - Pre(m)` in mol
+        # `&`, `!` of conditions
+        @test unit_compile(:divide_good_logic) isa CompiledPottsSystem
+        # `m - Pre(m)` in mol
+        @test mtkcompile(UnitPreDiff(; name = :pd)) isa CompiledPottsSystem
     end
 end
 
 # Potts' unit rules for `Pre` and the logic operations live in Potts' own unit check
-# (the model cases above); MTK's `get_unit` answers those operations with its own methods for
-# every other expression, so loading Potts changes no MTK model's unit check
-@testitem "units: MTK's get_unit is not extended for MTK's operations" setup = [UnitsSetup] tags = [:potts, :units] begin
+# (the model cases above); MTK's `get_unit` answers those operations with its own methods
+# for every other expression, so loading Potts changes no MTK model's unit check
+@testitem "units: MTK's get_unit is not extended for MTK's operations" setup = [
+    UnitsSetup,
+] tags = [
+    :potts, :units,
+] begin
     @testset "units: MTK's get_unit is not extended for MTK's operations" begin
         MTK = Potts.ModelingToolkitBase
         ext = Base.get_extension(Potts, :PottsDynamicQuantitiesExt)
@@ -170,7 +183,10 @@ end
     end
 end
 
-@testitem "units: rates per unit of time (A-56)" setup = [UnitsSetup] tags = [:potts, :units] begin
+@testitem "units: rates per unit of time (A-56)" setup = [UnitsSetup] tags = [
+    :potts,
+    :units,
+] begin
     @testset "units: rates per unit of time (A-56)" begin
         @test mtkcompile(UnitRate(; name = :r)) isa CompiledPottsSystem
     end

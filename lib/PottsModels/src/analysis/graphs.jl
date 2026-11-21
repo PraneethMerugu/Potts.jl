@@ -1,24 +1,30 @@
-# Cell adjacency of a state: the contact graph as adjacency lists, breadth-first reachability,
-# connected components of induced subgraphs, and cell centroids.
+# Cell adjacency of a state: the contact graph as adjacency lists, breadth-first
+# reachability, connected components of induced subgraphs, and cell centroids.
 
 """
-    cell_graph(σ; periodic = (false, …), neighborhood = VonNeumann(1)) -> Vector{Vector{Int}}
+    cell_graph(σ; periodic = (false, …),
+        neighborhood = VonNeumann(1)) -> Vector{Vector{Int}}
     cell_graph(σ, lattice::Lattice; neighborhood = VonNeumann(1))
 
 The contact graph of the cells of σ as adjacency lists: `g[c]` holds, sorted, the distinct
 cells that own a site neighboring (under `neighborhood`) a site of cell `c`, for `c` in
-`1:maximum(σ)`. The medium (0) is not a cell. `periodic` gives one flag per axis for a square
-lattice; pass a CorePotts `Lattice` instead for a hexagonal lattice or a domain. Built on
-CorePotts' [`contact_graph`](@ref).
+`1:maximum(σ)`. The medium (0) is not a cell. `periodic` gives one flag per axis for a
+square lattice; pass a CorePotts `Lattice` instead for a hexagonal lattice or a domain.
+Built on CorePotts' [`contact_graph`](@ref).
 """
-function cell_graph(σ::AbstractArray; periodic = ntuple(_ -> false, ndims(σ)), neighborhood = VonNeumann(1))
+function cell_graph(
+        σ::AbstractArray; periodic = ntuple(_ -> false, ndims(σ)),
+        neighborhood = VonNeumann(1)
+    )
     length(periodic) == ndims(σ) ||
-        throw(ArgumentError("cell_graph: σ is $(ndims(σ))D, got $(length(periodic)) periodic flags"))
+        throw(ArgumentError("cell_graph: σ is $(ndims(σ))D, got $(length(periodic)) \
+            periodic flags"))
     lat = Lattice(size(σ); boundary = map(p -> p ? Periodic() : Closed(), Tuple(periodic)))
     return cell_graph(σ, lat; neighborhood)
 end
 function cell_graph(σ::AbstractArray, lat::Lattice; neighborhood = VonNeumann(1))
-    size(σ) == lat.dims || throw(ArgumentError("cell_graph: σ has size $(size(σ)), the lattice $(lat.dims)"))
+    size(σ) == lat.dims ||
+        throw(ArgumentError("cell_graph: σ has size $(size(σ)), the lattice $(lat.dims)"))
     n = Int(maximum(σ; init = 0))
     cg = contact_graph(σ, lat, relation(neighborhood, lat), n)
     return [Vector{Int}(contact_neighbors(cg, c)) for c in 1:n]
@@ -95,10 +101,14 @@ to the cell's first site in column-major order, and the mean is wrapped into
 `[1, size(σ, d) + 1)`, CorePotts `centroid`'s convention: a cell owning columns 10 and 1 of
 a 10-wide periodic lattice has its centroid at 10.5. Non-periodic axes (the default) take
 the plain mean of the indices, with no unwrapping. The minimum image is exact for a cell
-at most half the lattice wide along `d`. A wider cell gets a result that depends on where its
-first site (column-major) falls: on a 10-wide axis, a cell owning 5:10 reads 5.83, not 7.5.
+at most half the lattice wide along `d`. A wider cell gets a result that depends on where
+its first site (column-major) falls: on a 10-wide axis, a cell owning 5:10 reads 5.83, not
+7.5.
 """
-function centroids(σ::AbstractArray{<:Integer, N}; periodic = ntuple(_ -> false, N)) where {N}
+function centroids(
+        σ::AbstractArray{<:Integer, N};
+        periodic = ntuple(_ -> false, N)
+    ) where {N}
     per = _periodic_axes(periodic, Val(N))
     dims = size(σ)
     n = Int(maximum(σ; init = 0))
@@ -119,7 +129,9 @@ end
 
 _periodic_axes(p::Bool, ::Val{N}) where {N} = ntuple(_ -> p, N)
 function _periodic_axes(p, ::Val{N}) where {N}
-    length(p) == N || throw(ArgumentError("centroids: `periodic` needs one entry per axis ($N), got $(repr(p))"))
+    length(p) == N ||
+        throw(ArgumentError("centroids: `periodic` needs one entry per axis ($N), \
+            got $(repr(p))"))
     return ntuple(d -> Bool(p[d]), N)
 end
 # the offset δ taken modulo L into [-L ÷ 2, L - L ÷ 2)

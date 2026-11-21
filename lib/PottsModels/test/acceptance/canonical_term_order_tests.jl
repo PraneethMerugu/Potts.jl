@@ -2,12 +2,12 @@
 # Symbolics stores a sum or product as a dictionary of terms and hands its operands to
 # `lower` in that dictionary's order, which follows the terms' hashes. The hash of a term
 # includes the hash of its function, and the hash of a Potts-registered operator
-# (`population`, `gather`, `value_at`) is derived from its type, so it changes with each package
-# build's module id. The generated arithmetic of a rate with several terms therefore changes
-# order between builds of identical source, and its floating-point result by a few ulp.
-# Base functions (`sin`, `exp`) hash stably across builds, but the same mechanism orders
-# their terms; within one session, repeated `generated_code` calls can also swap two operands
-# (hash-consed terms rebuilt with another dictionary history).
+# (`population`, `gather`, `value_at`) is derived from its type, so it changes with each
+# package build's module id. The generated arithmetic of a rate with several terms therefore
+# changes order between builds of identical source, and its floating-point result by a few
+# ulp. Base functions (`sin`, `exp`) hash stably across builds, but the same mechanism
+# orders their terms; within one session, repeated `generated_code` calls can also swap two
+# operands (hash-consed terms rebuilt with another dictionary history).
 #
 # How a different build is reproduced inside one process: this file adds methods
 # `Base.hash(::typeof(op), h)` for the operators above that return the ordinary hash while
@@ -18,25 +18,27 @@
 #
 # Measured on the code before the change (feat/p6-0ah at b011b772, Julia 1.12, Symbolics
 # 7.41.1, SymbolicUtils 4.48.0; this file run alone):
-#   - item 1: salts 1–4 change the generated code of every fixture except `CanonicalSum16` under
-#     the Potts operators, and of every fixture under `sin`/`cos`/`exp` (`CanonicalModelPop` in 18 of
-#     24 cases; 162 of 192 code comparisons fail); final states move by a few ulp (e.g. `Mix` z by 4.4e-16) in 30
-#     of 64 state comparisons; `Mix`'s fingerprint changes under 2 of 8 salted builds:
-#     the numbering of hoisted population folds (`__odepop1`, `__odepop2`, …, model state
-#     columns) follows the term order, and `_commutative_order!` does not normalise names, so
-#     fingerprints are NOT fully canonical today for models with several hoisted folds;
-#   - item 2: `CanonicalSum16`'s code changes between rounds (3 of 18 fail; two operands of a sum
-#     swap, as in `14tt + y_1` → `y_1 + 14tt`); its states are equal;
+#   - item 1: salts 1–4 change the generated code of every fixture except `CanonicalSum16`
+#     under the Potts operators, and of every fixture under `sin`/`cos`/`exp`
+#     (`CanonicalModelPop` in 18 of 24 cases; 162 of 192 code comparisons fail); final
+#     states move by a few ulp (e.g. `Mix` z by 4.4e-16) in 30 of 64 state comparisons;
+#     `Mix`'s fingerprint changes under 2 of 8 salted builds: the numbering of hoisted
+#     population folds (`__odepop1`, `__odepop2`, …, model state columns) follows the term
+#     order, and `_commutative_order!` does not normalise names, so fingerprints are NOT
+#     fully canonical today for models with several hoisted folds;
+#   - item 2: `CanonicalSum16`'s code changes between rounds (3 of 18 fail; two operands of
+#     a sum swap, as in `14tt + y_1` → `y_1 + 14tt`); its states are equal;
 #   - item 3 (two fresh Potts builds, different module ids and `hash(population)`): 48 of 96
 #     report entries differ: the code of 20 of 24 fixture × solver × T cases (all four
-#     fixtures) and 28 of 48 final states (by a few ulp); no fingerprint differs between them;
+#     fixtures) and 28 of 48 final states (by a few ulp); no fingerprint differs between
+#     them;
 #   - item 4 passes.
 #
 # Pinned here:
 #  1. Generated code is independent of operator hashes. For each fixture, each solver
-#     (`ExplicitEuler()`, `Potts.RK4()`, `Adaptive(Rodas5P())`) and T ∈ {Float64, Float32}, every
-#     expression of `Potts.generated_code` (line numbers stripped) under salts 1–4 of the
-#     Potts operators, and separately of `sin`/`cos`/`exp`, is identical to the unsalted
+#     (`ExplicitEuler()`, `Potts.RK4()`, `Adaptive(Rodas5P())`) and T ∈ {Float64, Float32},
+#     every expression of `Potts.generated_code` (line numbers stripped) under salts 1–4 of
+#     the Potts operators, and separately of `sin`/`cos`/`exp`, is identical to the unsalted
 #     one; the problem fingerprint and the final state (σ and every cell and model column,
 #     RK4, both algorithms, Float64 and Float32, 10 MCS, seed 7) are bitwise identical too.
 #     Negative control: the salt does reorder Symbolics' operands of a sum of Potts terms.
@@ -47,14 +49,16 @@
 #     Potts builds with different module ids (checked, as is that `hash(population)`
 #     differs). Both report the generated code, fingerprint and final states of every
 #     fixture × solver × T × algorithm; they must be identical. Run at merge with
-#       POTTS_CROSSBUILD=1 julia --project=lib/PottsModels/test -e 'using Test, Potts, PottsModels;
+#       POTTS_CROSSBUILD=1 julia --project=lib/PottsModels/test \
+#           -e 'using Test, Potts, PottsModels;
 #           include("lib/PottsModels/test/acceptance/canonical_term_order_tests.jl")'
 #     from the repository root (the worker processes take about 3.5 minutes, the whole file
 #     about 5; the temporary depots are deleted afterwards). Skipped by default (it compiles
 #     Potts twice).
-#  4. Salt invariance: the fingerprint of every fixture (including `CanonicalAt`, gather, `value_at` and
-#     Base terms in a cell rate, and the multi-fold models `Mix`, `CanonicalModelPop`) is the
-#     same under every operator-hash salt (item 1). No fingerprint value is stored.
+#  4. Salt invariance: the fingerprint of every fixture (including `CanonicalAt`, gather,
+#     `value_at` and Base terms in a cell rate, and the multi-fold models `Mix`,
+#     `CanonicalModelPop`) is the same under every operator-hash salt (item 1). No
+#     fingerprint value is stored.
 
 @testsetup module CanonicalTermOrderSetup
 include(joinpath(@__DIR__, "..", "shared", "common.jl"))
@@ -221,7 +225,8 @@ function canonical_worker(dir)
     script = joinpath(dir, "worker.jl")
     write(
         script, """
-        Base.compilecache(Base.identify_package("Potts"))   # a new Potts build in this depot
+        Base.compilecache(Base.identify_package("Potts"))   # a new Potts build in this \
+        depot
         using Potts, TOML
         include_string(Main, read($(repr(shared)), String))
         r = canonical_report()
@@ -240,10 +245,14 @@ end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "canonical term order: repeated generated_code and problem builds are identical" setup = [CanonicalTermOrderSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "canonical term order: repeated generated_code and problem builds are \
+    identical" setup = [CanonicalTermOrderSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 2. Repeated calls within one session (first: on fixtures no earlier test has built)
-    @testset "canonical term order: repeated generated_code and problem builds are identical ($(nameof(M)))" for M in reverse(MODELS)
+    @testset "canonical term order: repeated generated_code and problem builds are \
+        identical ($(nameof(M)))" for M in reverse(MODELS)
         for (sl, solver) in SOLVERS[1:2]
             first_code = first_fp = first_u = nothing
             for rep in 1:4
@@ -263,8 +272,12 @@ end
     end
 end
 
-@testitem "canonical term order: the salt is a different build (negative control)" setup = [CanonicalTermOrderSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "canonical term order: the salt is a different build (negative control)" setup = [
+    CanonicalTermOrderSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # 1. Independent of operator hashes
     @testset "canonical term order: the salt is a different build (negative control)" begin
         # unsalted, the added methods return the ordinary hash
@@ -272,14 +285,16 @@ end
             @test hash(f, UInt(17)) == invoke(hash, Tuple{Function, UInt}, f, UInt(17))
         end
         Potts.Symbolics.@variables a b
-        sx() = string.(
-            Potts.SymbolicUtils.arguments(
-                Potts.Symbolics.unwrap(
-                    Potts.population(a, b, true) + Potts.gather(a, b, a, b) +
-                        Potts.value_at(a, b) + Potts.population(b, a, true) + sin(a)
+        function sx()
+            return string.(
+                Potts.SymbolicUtils.arguments(
+                    Potts.Symbolics.unwrap(
+                        Potts.population(a, b, true) + Potts.gather(a, b, a, b) +
+                            Potts.value_at(a, b) + Potts.population(b, a, true) + sin(a)
+                    )
                 )
             )
-        )
+        end
         sx0 = sx()
         orders = [canonical_salted(sx, POTTS_OPS, s) for s in SALTS]
         @test all(o -> sort(o) == sort(sx0), orders)       # the same terms
@@ -288,9 +303,15 @@ end
     end
 end
 
-@testitem "canonical term order: generated code independent of operator hashes" setup = [CanonicalTermOrderSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "canonical term order: generated code independent of operator hashes ($(nameof(M)), $opl)" for M in MODELS,
+@testitem "canonical term order: generated code independent of operator hashes" setup = [
+    CanonicalTermOrderSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "canonical term order: generated code independent of operator hashes \
+        ($(nameof(M)), $opl)" for M in MODELS,
             (opl, ops) in OPSETS
+
         for (sl, solver) in SOLVERS, T in (Float64, Float32)
             base = canonical_code(M, solver; T)
             for s in SALTS
@@ -299,16 +320,22 @@ end
                 @test same
                 if !same
                     bad = [first(b) for (a, b) in zip(salted, base) if a != b]
-                    @info "canonical term order: code depends on operator hashes: $(nameof(M)) $opl salt $s $sl $T: $(join(bad, ", "))"
+                    @info "canonical term order: code depends on operator \
+                        hashes: $(nameof(M)) $opl salt $s $sl $T: $(join(bad, ", "))"
                 end
             end
         end
     end
 end
 
-@testitem "canonical term order: fingerprints and results independent of operator hashes" setup = [CanonicalTermOrderSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "canonical term order: fingerprints and results independent of operator hashes ($(nameof(M)), $opl)" for M in MODELS,
+@testitem "canonical term order: fingerprints and results independent of operator \
+    hashes" setup = [CanonicalTermOrderSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "canonical term order: fingerprints and results independent of operator \
+        hashes ($(nameof(M)), $opl)" for M in MODELS,
             (opl, ops) in OPSETS
+
         for T in (Float64, Float32)
             prob = canonical_problem(M, Potts.RK4(); T)
             want = [digest(solve(prob, alg).u[end]) for alg in ALGS]
@@ -324,7 +351,11 @@ end
     end
 end
 
-@testitem "canonical term order: identical code and results across package builds" setup = [CanonicalTermOrderSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "canonical term order: identical code and results across package builds" setup = [
+    CanonicalTermOrderSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "canonical term order: identical code and results across package builds" begin
         if get(ENV, "POTTS_CROSSBUILD", "") == "1"
             mktempdir() do dir
@@ -333,7 +364,8 @@ end
                 # preconditions: two different builds, loaded from the fresh depots
                 @test a["build id"] != b["build id"]
                 @test a["hash(population)"] != b["hash(population)"]
-                @test startswith(a["cache"], joinpath(dir, "a")) && startswith(b["cache"], joinpath(dir, "b"))
+                @test startswith(a["cache"], joinpath(dir, "a")) &&
+                    startswith(b["cache"], joinpath(dir, "b"))
                 meta = ("build id", "hash(population)", "cache")
                 ka = sort!(filter(k -> !(k in meta), collect(keys(a))))
                 @test ka == sort!(filter(k -> !(k in meta), collect(keys(b))))

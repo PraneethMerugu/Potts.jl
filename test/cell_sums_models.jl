@@ -3,14 +3,19 @@
 isdefined(@__MODULE__, :JiangLike) || include(joinpath(@__DIR__, "fields_jiang_model.jl"))
 isdefined(@__MODULE__, :FieldPDE) || include(joinpath(@__DIR__, "shared", "field_pde.jl"))
 module CsPDE
-using ..FieldPDE
-@variables c(..) src(..)::Bool [input = true]
-const C = c(t, x, y)
-    threshold() = pdesys([Dt(C) ~ 0.2 * laplacian(C) + 0.05 * src(t, x, y) - 0.02 * C], [c(0, x, y) ~ 0.0], (200, 200), [C, src(t, x, y)])
+    using ..FieldPDE
+    @variables c(..) src(..)::Bool [input = true]
+    const C = c(t, x, y)
+    function threshold()
+        return pdesys(
+            [Dt(C) ~ 0.2 * laplacian(C) + 0.05 * src(t, x, y) - 0.02 * C],
+            [c(0, x, y) ~ 0.0], (200, 200), [C, src(t, x, y)]
+        )
+    end
 end
 
-# Merks-like: cells secrete `c`, chemotaxis up its gradient, and the target volume moves when
-# the cell's average of `c` passes θ
+# Merks-like: cells secrete `c`, chemotaxis up its gradient, and the target volume moves
+# when the cell's average of `c` passes θ
 @potts_model CsThreshold begin
     @kinds medium A
     @parameters begin
@@ -33,27 +38,40 @@ function cs_threshold_op(dims = (200, 200))
         k += 1
         σ[i:(i + 4), j:(j + 4)] .= k
     end
-    c0 = [1.0 + sin(0.37i) * cos(0.23j) + 0.5 * sin(1.7i + 2.3j) for i in 1:dims[1], j in 1:dims[2]]
+    c0 = [
+        1.0 + sin(0.37i) * cos(0.23j) + 0.5 * sin(1.7i + 2.3j)
+            for i in 1:dims[1], j in 1:dims[2]
+    ]
     return [ownership => σ, kind => fill(:A, k), :c => c0]
 end
 cs_digest(x) = string(hash(Array(x)); base = 16)
 
 # [ocell, σ, cavg] of the Jiang-like model (2 MCS, CPU, Float64) and the Merks-like model
-# (8 MCS); `ctl = true` restores the float atomics (negative control). `run = 1` makes the host
-# site passes one site per item, so at these lattice sizes they are threaded (the default run
-# of 256 sites leaves fewer items than `HOST_GRAIN`, a plain loop)
+# (8 MCS); `ctl = true` restores the float atomics (negative control). `run = 1` makes the
+# host site passes one site per item, so at these lattice sizes they are threaded (the
+# default run of 256 sites leaves fewer items than `HOST_GRAIN`, a plain loop)
 function cs_digests1(ctl::Bool; run = CorePotts._CR_RUN_HOST[])
     CorePotts._FLOAT_ATOMICS[] = ctl
     r0 = CorePotts._CR_RUN_HOST[]
     CorePotts._CR_RUN_HOST[] = run
     try
         σ, kinds = jiang_state(JG_DIMS)
-        j = init(PottsProblem(JiangLike(; name = :j), [ownership => σ, kind => kinds], (0, 2); seed = 7,
-            field_solver = BackwardEuler()), SequentialCPM())
+        j = init(
+            PottsProblem(
+                JiangLike(; name = :j), [ownership => σ, kind => kinds], (0, 2); seed = 7,
+                field_solver = BackwardEuler()
+            ), SequentialCPM()
+        )
         foreach(_ -> step!(j), 1:2)
-        m = solve(PottsProblem(CsThreshold(; name = :m), cs_threshold_op(), (0, 8); seed = 7), SequentialCPM();
-            save_start = false).u[end]
-        return [cs_digest(current_state(j).cell.ocell), cs_digest(m.ownership), cs_digest(m.cell.cavg)]
+        m = solve(
+            PottsProblem(CsThreshold(; name = :m), cs_threshold_op(), (0, 8); seed = 7),
+            SequentialCPM();
+            save_start = false
+        ).u[end]
+        return [
+            cs_digest(current_state(j).cell.ocell),
+            cs_digest(m.ownership), cs_digest(m.cell.cavg),
+        ]
     finally
         CorePotts._FLOAT_ATOMICS[] = false
         CorePotts._CR_RUN_HOST[] = r0
@@ -76,8 +94,12 @@ cs_digests() = vcat(cs_digests1(false), cs_digests1(false; run = 1), cs_digests1
     @sweep Metropolis(; temperature = 4.0)
 end
 # values whose float sums depend on the order: magnitudes over 8 decades, both signs
-cs_site_values(dims = (200, 200)) =
-    Float32[(0.5 + sin(1.3i + 0.7j)) * 10.0f0^((3i + 5j) % 9 - 4) for i in 1:dims[1], j in 1:dims[2]]
+function cs_site_values(dims = (200, 200))
+    return Float32[
+        (0.5 + sin(1.3i + 0.7j)) * 10.0f0^((3i + 5j) % 9 - 4)
+            for i in 1:dims[1], j in 1:dims[2]
+    ]
+end
 cs_site_op() = (op = cs_threshold_op(); [op[1], op[2], :h => cs_site_values()])
 
 # The other sums over sites. Weighted surfaces after divisions (the device
@@ -105,7 +127,8 @@ function cs_wsurf_op(dims = (120, 120))
     return [ownership => σ, kind => fill(:A, k)]
 end
 
-# compartments over a weighted neighborhood: a cluster surface energy, clusters that grow and divide
+# compartments over a weighted neighborhood: a cluster surface energy, clusters that grow
+# and divide
 @potts_model CsWComp begin
     @kinds medium cytoplasm nucleus
     @parameters begin
@@ -115,7 +138,8 @@ end
     @lattice Lattice((60, 60); boundary = Periodic(), neighborhood = CS_W)
     @energy begin
         cells => (volume - V₀[kind])^2
-        contacts => ifelse(cluster[owner] == cluster[neighbor_owner], 2.0, J[kind, neighbor_kind])
+        contacts =>
+            ifelse(cluster[owner] == cluster[neighbor_owner], 2.0, J[kind, neighbor_kind])
         clusters(cytoplasm) => 0.1 * (cluster_surface - 30.0)^2
     end
     @divide clusters(cytoplasm) when = cluster_volume >= 60, along = (1.0, 0.0)
@@ -132,7 +156,10 @@ function cs_wcomp_op()
         lo = minimum(findall(==(c), σ))
         σ[(lo[1] + 2):(lo[1] + 5), (lo[2] + 2):(lo[2] + 5)] .= n + c
     end
-    return [ownership => σ, kind => vcat(fill(:cytoplasm, n), fill(:nucleus, n)), cluster => vcat(1:n, 1:n)]
+    return [
+        ownership => σ, kind => vcat(fill(:cytoplasm, n), fill(:nucleus, n)),
+        cluster => vcat(1:n, 1:n),
+    ]
 end
 
 # `@convert` compound writes with non-dyadic values over 6 decades, into a model and a cell
@@ -172,28 +199,37 @@ end
 cs_bits(x) = string(hash(reinterpret(UInt32, Float32.(vec(Array(x))))); base = 16)
 # [w σ, w surface, comp σ, comp cluster surface, conv σ, conv tot, conv V_target]
 # in Float32 with CheckerboardCPM on `backend` (on the CPU with the device lifecycle, as a
-# device runs it; the weighted surface model staged, the compartments fused); `ctl = true` restores the float atomics (negative control). Also returns
-# the division counts (checked > 0).
-# `host = true`: on the CPU, the host lifecycle planner instead (the same unit
+# device runs it; the weighted surface model staged, the compartments fused); `ctl = true`
+# restores the float atomics (negative control). Also returns the division counts (checked >
+# 0). `host = true`: on the CPU, the host lifecycle planner instead (the same unit
 # arithmetic, so the same bits)
-function cs_site_sum_digests(backend = CorePotts.CPU(); ctl::Bool = false, mcs = 80, host::Bool = false)
+function cs_site_sum_digests(
+        backend = CorePotts.CPU(); ctl::Bool = false, mcs = 80,
+        host::Bool = false
+    )
     CorePotts._FLOAT_ATOMICS[] = ctl
     f0 = CorePotts._FORCE_DEVICE_LIFECYCLE[]
     CorePotts._FORCE_DEVICE_LIFECYCLE[] = !host
     try
         # Pin `threads = false` so the 1-thread vs 4-thread comparison stays deterministic
         # regardless of `inline_max_blocks`.
-        run(m, op, t; kw...) = solve(
-            PottsProblem(m, op, (0, t); T = Float32, seed = 7, capacity = 2000),
-            CheckerboardCPM(; threads = false, kw...); backend, save_start = false
-        )
+        function run(m, op, t; kw...)
+            return solve(
+                PottsProblem(m, op, (0, t); T = Float32, seed = 7, capacity = 2000),
+                CheckerboardCPM(; threads = false, kw...); backend, save_start = false
+            )
+        end
         # the weighted surface in the staged device lifecycle (one kernel per stage), the
         # compartments in the fused one (one workgroup: `fused_lifecycle_max_sites`)
         sw = run(CsWSurf(; name = :w), cs_wsurf_op(), mcs; fused_lifecycle_max_sites = 0)
         sc = run(CsWComp(; name = :c), cs_wcomp_op(), 40)
         sv = run(CsConv(; name = :v), cs_conv_op(), 30)
         w, c, v = sw.u[end], sc.u[end], sv.u[end]
-        d = [cs_digest(w.ownership), cs_bits(w.cell.surface), cs_digest(c.ownership), cs_bits(c.cell.cluster_surface), cs_digest(v.ownership), cs_bits(v.model.tot), cs_bits(v.cell.V_target)]
+        d = [
+            cs_digest(w.ownership), cs_bits(w.cell.surface),
+            cs_digest(c.ownership), cs_bits(c.cell.cluster_surface),
+            cs_digest(v.ownership), cs_bits(v.model.tot), cs_bits(v.cell.V_target),
+        ]
         return d, (sw.stats.lifecycle.divisions, sc.stats.lifecycle.divisions)
     finally
         CorePotts._FLOAT_ATOMICS[] = false
@@ -204,9 +240,15 @@ end
 function cs_conv_digests(backend = CorePotts.CPU(); ctl::Bool = false)
     CorePotts._FLOAT_ATOMICS[] = ctl
     try
-        # Pin `threads = false` so `:auto` does not switch to threaded execution under `-t 4`.
-        v = solve(PottsProblem(CsConv(; name = :v), cs_conv_op(), (0, 30); T = Float32, seed = 7, capacity = 8),
-            CheckerboardCPM(; threads = false); backend, save_start = false).u[end]
+        # Pin `threads = false` so `:auto` does not switch to threaded execution under `-t
+        # 4`.
+        v = solve(
+            PottsProblem(
+                CsConv(; name = :v), cs_conv_op(), (0, 30);
+                T = Float32, seed = 7, capacity = 8
+            ),
+            CheckerboardCPM(; threads = false); backend, save_start = false
+        ).u[end]
         return [cs_digest(v.ownership), cs_bits(v.model.tot), cs_bits(v.cell.V_target)]
     finally
         CorePotts._FLOAT_ATOMICS[] = false
@@ -218,7 +260,7 @@ end
     @lattice Lattice((1536, 1536))
     @energy cells => (volume - 64.0)^2 + 0.01 * (surface - 32.0)^2
     @energy contacts => 4.0
-    @schedule repeat(2, sweep(fraction = 1//2))
+    @schedule repeat(2, sweep(fraction = 1 // 2))
     @sweep Metropolis(; temperature = 2.0)
 end
 
@@ -230,7 +272,10 @@ function cs_threaded_cb_invariants()
         id += 1
         σ[(bi + 1):(bi + 4), (bj + 1):(bj + 4)] .= id
     end
-    prob = PottsProblem(CsThreadedCBRepeat(; name = :tcb), [ownership => σ, kind => fill(:A, id)], (0, 2); seed = 7)
+    prob = PottsProblem(
+        CsThreadedCBRepeat(; name = :tcb),
+        [ownership => σ, kind => fill(:A, id)], (0, 2); seed = 7
+    )
     alg = CheckerboardCPM(; threads = true)
     integ = init(prob, alg; save_start = false)
     lay = integ.cache.layout
@@ -240,11 +285,16 @@ function cs_threaded_cb_invariants()
     σ_arr = Array(u.ownership)
     vol_recount = [count(==(c), σ_arr) for c in 1:length(u.cell.volume)]
     vol_ok = all(u.cell.volume .== vol_recount)
-    surf_recount = CorePotts.recompute_surface(σ_arr, prob.lattice, prob.relations.surface, length(u.cell.volume))
+    surf_recount = CorePotts.recompute_surface(
+        σ_arr, prob.lattice, prob.relations.surface, length(u.cell.volume)
+    )
     surf_ok = Array(u.cell.surface) == surf_recount
     attempts_ok = sol.stats.attempts == 2 * length(σ_arr)
     committed_ok = sol.stats.accepted >= sol.stats.committed > 0
-    return (id > 0 && nblocks_pass > alg.inline_max_blocks, vol_ok, surf_ok, attempts_ok, committed_ok)
+    return (
+        id > 0 && nblocks_pass > alg.inline_max_blocks,
+        vol_ok, surf_ok, attempts_ok, committed_ok,
+    )
 end
 
 @potts_model CsThreadedCBGlobalVeto begin
@@ -272,7 +322,10 @@ function cs_threaded_cb_global_veto_check(M; threads::Bool = true)
         id += 1
         σ[(bi + 1):(bi + 6), (bj + 1):(bj + 6)] .= id
     end
-    prob = PottsProblem(M(; name = :gv), [ownership => σ, kind => fill(:A, id)], (0, 6); seed = 7)
+    prob = PottsProblem(
+        M(; name = :gv), [ownership => σ, kind => fill(:A, id)], (0, 6);
+        seed = 7
+    )
     alg = CheckerboardCPM(; threads)
     integ = init(prob, alg; save_start = false)
     lay = integ.cache.layout
@@ -282,7 +335,10 @@ function cs_threaded_cb_global_veto_check(M; threads::Bool = true)
     σ_arr = Array(u.ownership)
     vol_recount = [count(==(c), σ_arr) for c in 1:length(u.cell.volume)]
     vol_ok = all(u.cell.volume .== vol_recount)
-    pieces, _ = CorePotts.recompute_pieces(σ_arr, prob.lattice, Val(false), length(u.cell.volume))
+    pieces, _ = CorePotts.recompute_pieces(
+        σ_arr, prob.lattice, Val(false),
+        length(u.cell.volume)
+    )
     live = findall(>(0), Array(u.cell.volume))
     one_piece_ok = !isempty(live) && all(==(1), pieces[live])
     return (;

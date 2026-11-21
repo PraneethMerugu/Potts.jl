@@ -1,24 +1,24 @@
 # The tests run generated bodies through Exec's host executor (LatticeFields.Problems binds
 # each launch description of a step plan to an Exec.Launch). The padded host loop below is
-# kept only as an oracle: it pads launches as a device does (linear: up to a multiple of 256,
-# guarded `s <= G.n`; Cartesian: the padded box, each axis guarded by the body), and every
-# test step compares Exec's result with it bit for bit.
+# kept only as an oracle: it pads launches as a device does (linear: up to a multiple of
+# 256, guarded `s <= G.n`; Cartesian: the padded box, each axis guarded by the body), and
+# every test step compares Exec's result with it bit for bit.
 
 using LatticeFields
 using LatticeFields: IR, Compile, Schedule, Problems
 using KernelAbstractions: KernelAbstractions
 using LatticeFields.IR: Grid, Coef, FaceRule, ImmersedRule, NodeValueRule, Space,
-                        ProgramBuilder,
-                        field!, mask!, rule!, kernel, load, store, param, coord, select, eq,
-                        add!, program,
-                        F32, F16, F64, U8, I32, U32, MASKED, RESTRICTED
+    ProgramBuilder,
+    field!, mask!, rule!, kernel, load, store, param, coord, select, eq,
+    add!, program,
+    F32, F16, F64, U8, I32, U32, MASKED, RESTRICTED
 using LatticeFields.Compile: CompileOptions, debug_options, semantic, compile_kernel,
-                             body_function, derive_function, fingerprint, LOWERING
+    body_function, derive_function, fingerprint, LOWERING
 using LatticeFields.Schedule: plan, StepPlan, LaunchSpec, CostModel
 
 const HOST = KernelAbstractions.CPU()
 using LatticeFields.Problems: FieldStore, array, current, launch_geometry,
-                              launch_parameters, launch_arrays
+    launch_parameters, launch_arrays
 
 # ---- the oracle: padded host loops over the same bodies ----------------------------------
 function oracle_loop!(body::F, n, S, P, G) where {F}
@@ -38,8 +38,11 @@ function oracle_launch!(p, l::LaunchSpec, st, Praw, rt)
     S, P, G = launch_arrays(st, l), launch_parameters(ck, Praw), launch_geometry(p, ck, rt)
     body = Compile.body_function(ck)
     padded = map((n, w) -> cld(n, w) * w, l.ndrange, l.workgroup)
-    ck.strategy == :cartesian ? oracle_cartesian!(body, padded, S, P, G) :
-    oracle_loop!(body, G.n, S, P, G)
+    if ck.strategy == :cartesian
+        oracle_cartesian!(body, padded, S, P, G)
+    else
+        oracle_loop!(body, G.n, S, P, G)
+    end
     return nothing
 end
 
@@ -54,17 +57,29 @@ function HostStore(p::IR.Program; init = (key, A) -> nothing)
         foreach(a -> init(f.key, a), A)
         length(A) == 2 && copyto!(A[2], A[1])
     end
-    foreach(i -> st.tables[i] = zeros(IR.juliatype(p.tables[i].storage), 4), eachindex(st.tables))
+    foreach(
+        i -> st.tables[i] = zeros(IR.juliatype(p.tables[i].storage), 4),
+        eachindex(st.tables)
+    )
     return st
 end
 function _rt2(rt)
-    length(rt) == 2 ? Float64.(Tuple(rt)) :
-    length(rt) == 1 ? (Float64(rt[1]), 0.0) : (0.0, 0.0)
+    return if length(rt) == 2
+        Float64.(Tuple(rt))
+    elseif length(rt) == 1
+        (Float64(rt[1]), 0.0)
+    else
+        (0.0, 0.0)
+    end
 end
 function _snapshot(st)
-    FieldStore(st.backend, Vector{Any}[Any[copy(a) for a in b] for b in st.bufs], copy(st.cur), copy(st.tables))
+    return FieldStore(
+        st.backend, Vector{Any}[Any[copy(a) for a in b] for b in st.bufs],
+        copy(st.cur), copy(st.tables)
+    )
 end
-_same(a, b) = length(a) == length(b) && all(i -> isequal(a[i], b[i]), eachindex(a))   # -0.0 ≠ 0.0, NaN = NaN
+# -0.0 ≠ 0.0, NaN = NaN
+_same(a, b) = length(a) == length(b) && all(i -> isequal(a[i], b[i]), eachindex(a))
 
 """
 A launch bound through Exec (host executor); `run!` is the warm call.
@@ -73,8 +88,11 @@ function prepare(p::IR.Program, l::LaunchSpec, st, Praw; rt = ())
     ck = l.kernel
     isempty(ck.kernel.reductions) || return WorkgroupPrep(          # contract item 5
         body_function(ck), l.ndrange[1] ÷ Schedule.WG, zeros(ck.T, Schedule.reduce_lds(ck)),
-        launch_arrays(st, l), launch_parameters(ck, Praw), launch_geometry(p, ck, _rt2(rt)))
-    return Problems.bind_program(HOST, p, l, launch_arrays(st, l), launch_parameters(ck, Praw), _rt2(rt))
+        launch_arrays(st, l), launch_parameters(ck, Praw), launch_geometry(p, ck, _rt2(rt))
+    )
+    return Problems.bind_program(
+        HOST, p, l, launch_arrays(st, l), launch_parameters(ck, Praw), _rt2(rt)
+    )
 end
 run!(l) = (l(); nothing)
 
@@ -92,8 +110,10 @@ struct WorkgroupPrep{F, L, S, P, G}
     G::G
 end
 function run!(w::WorkgroupPrep; reverse = HOST_REVERSE[])
-    Schedule.host_workgroups!(w.body, w.ngroups, Schedule.WG, Schedule.REDUCE_PHASES, w.lds,
-        w.S, w.P, w.G; reverse)
+    Schedule.host_workgroups!(
+        w.body, w.ngroups, Schedule.WG, Schedule.REDUCE_PHASES, w.lds,
+        w.S, w.P, w.G; reverse
+    )
     return nothing
 end
 """
@@ -119,8 +139,10 @@ function oracle_reduce!(w::WorkgroupPrep, ck)
         end
         for (q, r) in enumerate(ck.kernel.reductions)
             v = w.lds[((q - 1) * WG + 1):(q * WG)]
-            l, j = only((l, j) for (l, as) in enumerate(ck.args)
-            for (j, a) in enumerate(as) if a == (r.target, :table))
+            l, j = only(
+                (l, j) for (l, as) in enumerate(ck.args)
+                    for (j, a) in enumerate(as) if a == (r.target, :table)
+            )
             A = w.S[l][j]
             A[min(g, length(A))] = r.op == :sum ? pair(v) : reduce(max, v)
         end
@@ -155,8 +177,10 @@ function run_step!(p::IR.Program, sp::StepPlan, st, Praw; rt = ())
         Problems.run_step!(HOST, p, sp, st, Praw; rt = _rt2(rt))
     end
     Problems.swap!(ref, sp)
-    @test all(i -> all(j -> _same(st.bufs[i][j], ref.bufs[i][j]), eachindex(st.bufs[i])),
-        eachindex(st.bufs))
+    @test all(
+        i -> all(j -> _same(st.bufs[i][j], ref.bufs[i][j]), eachindex(st.bufs[i])),
+        eachindex(st.bufs)
+    )
     return st
 end
 
@@ -208,14 +232,18 @@ end
 Semantic program and step plan. Every Float32 launch is checked on the way: no Float64
 in the body, and a warm host launch allocates nothing (on a scratch store).
 """
-function build(pb; options = CompileOptions(), fuse = !options.debug, stages = LOWERING,
-        passes = Compile.SEMANTIC_PASSES, kw...)
+function build(
+        pb; options = CompileOptions(), fuse = !options.debug, stages = LOWERING,
+        passes = Compile.SEMANTIC_PASSES, kw...
+    )
     s = semantic(program(pb); passes)
     sp = plan(s; options, fuse, stages, kw...)
     if something(options.T, Float32) == Float32
         st = HostStore(s)
-        foreach(i -> st.tables[Int32(i)] = zeros(IR.juliatype(s.tables[i].storage), 4),
-            eachindex(s.tables))
+        foreach(
+            i -> st.tables[Int32(i)] = zeros(IR.juliatype(s.tables[i].storage), 4),
+            eachindex(s.tables)
+        )
         for l in sp.launches
             @test !has_f64(l.kernel.body)
             prep = prepare(s, l, st, ntuple(_ -> 1.0, s.nparams))
@@ -226,10 +254,12 @@ function build(pb; options = CompileOptions(), fuse = !options.debug, stages = L
     return s, sp
 end
 
-# The executor protocol of LatticeFields.Solvers on the host (Exec implements it at the merge).
+# The executor protocol of LatticeFields.Solvers on the host (Exec implements it at the
+# merge).
 using LatticeFields: Solvers
 struct HostExec
-    f64::Bool                             # false: a host stand-in for a backend without Float64
+    # false: a host stand-in for a backend without Float64
+    f64::Bool
 end
 HostExec() = HostExec(true)
 Solvers.alloc(::HostExec, ::Type{T}, n) where {T} = zeros(T, n)
@@ -239,8 +269,10 @@ function Solvers.launch!(::HostExec, l::Solvers.Launch)
     if l.wg == 0
         _hostrun(l.body, l.n, l.S, l.P, l.G)
     else
-        Schedule.host_workgroups!(l.body, l.n, l.wg, l.phases, l.lds, l.S, l.P, l.G;
-            reverse = HOST_REVERSE[])
+        Schedule.host_workgroups!(
+            l.body, l.n, l.wg, l.phases, l.lds, l.S, l.P, l.G;
+            reverse = HOST_REVERSE[]
+        )
     end
     return nothing
 end

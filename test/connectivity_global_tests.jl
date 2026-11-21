@@ -1,7 +1,7 @@
 # Whole-cell connectivity beside the acceptance file
-# lib/PottsModels/test/acceptance/global_connectivity_tests.jl: the build check of every shell-based quantity on a periodic
-# axis of length 1 (the shell wraps onto the target), and `reinit!` clearing the
-# checkerboard's deferred-refusal counter.
+# lib/PottsModels/test/acceptance/global_connectivity_tests.jl: the build check of every
+# shell-based quantity on a periodic axis of length 1 (the shell wraps onto the target), and
+# `reinit!` clearing the checkerboard's deferred-refusal counter.
 
 # in-plane relations: a z offset would itself wrap onto the origin on the thin axis
 
@@ -11,9 +11,19 @@ using Potts: CorePotts
 isdefined(@__MODULE__, :PottsDevices) || include(joinpath(@__DIR__, "shared", "devices.jl"))
 const CG_INPLANE = :(Stencil([(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0)]))
 
-const CG_THIN = :(Lattice((5, 5, 1); boundary = (Closed(), Closed(), Periodic()), neighborhood = $CG_INPLANE))
+const CG_THIN = :(
+    Lattice(
+        (5, 5, 1); boundary = (Closed(), Closed(), Periodic()),
+        neighborhood = $CG_INPLANE
+    )
+)
 
-const CG_PLANE = :(Lattice((5, 5, 2); boundary = (Closed(), Closed(), Closed()), neighborhood = $CG_INPLANE))
+const CG_PLANE = :(
+    Lattice(
+        (5, 5, 2); boundary = (Closed(), Closed(), Closed()),
+        neighborhood = $CG_INPLANE
+    )
+)
 
 const CG_RULES = [
     "Local" => :(@constraint connectivity(A; rule = Local())),
@@ -23,13 +33,14 @@ const CG_RULES = [
     "Global" => :(@drive copy => 2.0 * !connected(old; rule = Global())),
     "pieces/largest_piece" => :(@energy cells => 0.5 * pieces + 0.25 * largest_piece),
     "local_components" => :(@drive copy => 0.5 * local_components),
-    "euler" => :(@energy cells => 0.5 * euler),
+    "euler" => :(@energy cells => 0.5 * euler)
 ]
 
 cg_sigma(dims) = (σ = zeros(Int32, dims); σ[1:3, 2, 1] .= 1; σ)
 
+for (i, (_, line)) in enumerate(CG_RULES),
+        (tag, lat) in (("Thin", CG_THIN), ("Plane", CG_PLANE))
 
-for (i, (_, line)) in enumerate(CG_RULES), (tag, lat) in (("Thin", CG_THIN), ("Plane", CG_PLANE))
     @eval @potts_model $(Symbol("CGShell", tag, i)) begin
         @kinds medium A
         @lattice $lat
@@ -48,7 +59,6 @@ end
     @sweep Metropolis(; temperature = 2.0)
 end
 
-
 @potts_model CGWindow begin
     @kinds medium A
     @lattice Lattice((24, 24); boundary = Periodic(), neighborhood = Moore(1))
@@ -60,12 +70,20 @@ end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "shell-based quantities refuse a periodic axis of length 1" setup = [ConnectivityGlobalSetup] tags = [:potts, :connectivity_global] begin
+@testitem "shell-based quantities refuse a periodic axis of length 1" setup = [
+    ConnectivityGlobalSetup,
+] tags = [
+    :potts, :connectivity_global,
+] begin
     @testset "shell-based quantities refuse a periodic axis of length 1" begin
         for (i, (name, _)) in enumerate(CG_RULES)
             thin = getfield(@__MODULE__, Symbol("CGShellThin", i))
             err = try
-                PottsProblem(thin(; name = :t), [ownership => cg_sigma((5, 5, 1)), kind => [:A]], (0, 1))
+                PottsProblem(
+                    thin(; name = :t), [
+                        ownership => cg_sigma((5, 5, 1)), kind => [:A],
+                    ], (0, 1)
+                )
                 nothing
             catch e
                 e
@@ -73,31 +91,60 @@ end
             @test err isa ArgumentError
             # the control: the same model on a lattice without a thin periodic axis builds
             plane = getfield(@__MODULE__, Symbol("CGShellPlane", i))
-            @test PottsProblem(plane(; name = :p), [ownership => cg_sigma((5, 5, 2)), kind => [:A]], (0, 1)) isa PottsProblem
+            @test PottsProblem(
+                plane(; name = :p), [
+                    ownership => cg_sigma((5, 5, 2)), kind => [:A],
+                ], (0, 1)
+            ) isa
+                PottsProblem
         end
         # a model reading no shell quantity is unaffected by the thin axis
-        @test PottsProblem(CGNoShellThin(; name = :n), [ownership => cg_sigma((5, 5, 1)), kind => [:A]], (0, 1)) isa
-              PottsProblem
+        @test PottsProblem(
+            CGNoShellThin(; name = :n),
+            [ownership => cg_sigma((5, 5, 1)), kind => [:A]], (0, 1)
+        ) isa
+            PottsProblem
         # the one check, in CorePotts (also `recompute_euler`'s)
-        lat = Potts.CorePotts.Lattice((5, 5, 1); boundary = (Potts.CorePotts.Closed(), Potts.CorePotts.Closed(), Potts.CorePotts.Periodic()))
+        lat = Potts.CorePotts.Lattice(
+            (5, 5, 1);
+            boundary = (
+                Potts.CorePotts.Closed(), Potts.CorePotts.Closed(),
+                Potts.CorePotts.Periodic(),
+            )
+        )
         @test_throws ArgumentError Potts.CorePotts.check_shell_lattice(lat, "Global")
-        @test_throws ArgumentError Potts.CorePotts.recompute_euler(cg_sigma((5, 5, 1)), lat, Val(:face), 1)
-        @test Potts.CorePotts.check_shell_lattice(Potts.CorePotts.Lattice((5, 5, 1); boundary = Potts.CorePotts.Closed()), "Global") === nothing
+        @test_throws ArgumentError Potts.CorePotts.recompute_euler(
+            cg_sigma((5, 5, 1)), lat,
+            Val(:face), 1
+        )
+        @test Potts.CorePotts.check_shell_lattice(
+            Potts.CorePotts.Lattice((5, 5, 1); boundary = Potts.CorePotts.Closed()),
+            "Global"
+        ) === nothing
     end
 end
 
-@testitem "reinit! clears the deferred-refusal counter" setup = [ConnectivityGlobalSetup] tags = [:potts, :connectivity_global] begin
+@testitem "reinit! clears the deferred-refusal counter" setup = [
+    ConnectivityGlobalSetup,
+] tags = [
+    :potts, :connectivity_global,
+] begin
     @testset "reinit! clears the deferred-refusal counter" begin
         σ = zeros(Int32, 24, 24)
         σ[5:12, 5:12] .= 1
         σ[14:20, 6:14] .= 2
-        prob = PottsProblem(CGWindow(; name = :w), [ownership => σ, kind => [:A, :A]], (0, 20); seed = 4)
+        prob = PottsProblem(
+            CGWindow(; name = :w), [ownership => σ, kind => [:A, :A]], (
+                0, 20,
+            ); seed = 4
+        )
         integ = init(prob, CheckerboardCPM(); save_start = false, save_end = false)
         # an old run's refusals, still on the counter (not yet read)
         integ.cache.serial.deferred .= UInt32(7)
         integ.cache.serial.count .= UInt32(3)
         reinit!(integ)
-        @test all(iszero, integ.cache.serial.deferred) && all(iszero, integ.cache.serial.count)
+        @test all(iszero, integ.cache.serial.deferred) &&
+            all(iszero, integ.cache.serial.count)
         Potts.CorePotts.current_state(integ)
         @test integ.stats.connectivity_deferred == 0
         # and the new run counts from 0: the same as a fresh integrator with the same seed
@@ -113,21 +160,38 @@ end
 # in `site_index_type`, Int64 above 2³¹ − 1 sites. Forced on 24² (`_FORCE_WIDE_SITES`, read
 # when the scratch is built), the exact flood (SequentialCPM) and the windowed search
 # (CheckerboardCPM) must give the Int32 run exactly, refusals included.
-@testitem "the flood stacks at the Int64 site width" setup = [ConnectivityGlobalSetup] tags = [:potts, :connectivity_global] begin
+@testitem "the flood stacks at the Int64 site width" setup = [
+    ConnectivityGlobalSetup,
+] tags = [
+    :potts, :connectivity_global,
+] begin
     @testset "the flood stacks at the Int64 site width" begin
         σ = zeros(Int32, 24, 24)
         σ[5:12, 5:12] .= 1
         σ[14:20, 6:14] .= 2
-        prob = PottsProblem(CGWindow(; name = :w), [ownership => σ, kind => [:A, :A]], (0, 20); seed = 4)
-        wide(f) = (Potts.CorePotts._FORCE_WIDE_SITES[] = true; try f() finally Potts.CorePotts._FORCE_WIDE_SITES[] = false end)
+        prob = PottsProblem(
+            CGWindow(; name = :w), [ownership => σ, kind => [:A, :A]], (
+                0, 20,
+            ); seed = 4
+        )
+        function wide(f)
+            Potts.CorePotts._FORCE_WIDE_SITES[] = true
+            return try
+                f()
+            finally
+                Potts.CorePotts._FORCE_WIDE_SITES[] = false
+            end
+        end
         for alg in (SequentialCPM(), CheckerboardCPM())
             a = solve(prob, alg; saveat = 1)
             b = wide(() -> solve(prob, alg; saveat = 1))
             @test all(i -> a.u[i].ownership == b.u[i].ownership, eachindex(a.u))
-            @test a.stats.accepted == b.stats.accepted && a.stats.connectivity_deferred == b.stats.connectivity_deferred
+            @test a.stats.accepted == b.stats.accepted &&
+                a.stats.connectivity_deferred == b.stats.connectivity_deferred
             @test eltype(wide(() -> init(prob, alg)).ctx.flood.stack) === Int64
             @test eltype(init(prob, alg).ctx.flood.stack) === Int32
         end
-        @test solve(prob, CheckerboardCPM()).stats.connectivity_deferred > 0     # the window is exercised
+        # the window is exercised
+        @test solve(prob, CheckerboardCPM()).stats.connectivity_deferred > 0
     end
 end

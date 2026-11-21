@@ -23,9 +23,11 @@ using Printf: @sprintf
 
 const MACHINES = [
     (; key = "mac", cpu = r"^Apple M1 Pro", bench = Int[], work = "", memmax = ""),
-    (; key = "nucbox", cpu = r"RYZEN AI MAX\+ 395"i,
+    (;
+        key = "nucbox", cpu = r"RYZEN AI MAX\+ 395"i,
         bench = [12, 13, 14, 15], work = "0-11,16-27",
-        memmax = "8G")
+        memmax = "8G",
+    ),
 ]
 
 cpu_model() = strip(Sys.cpu_info()[1].model)
@@ -99,8 +101,10 @@ CI run fail (CI run 37721528049).
 """
 function mem_cmd(m; works = user_scope_works)
     cap = strip(get(ENV, "POTTS_BENCH_MEMMAX", m.memmax))
-    (isempty(cap) || cap == "0" || !Sys.islinux() ||
-     Sys.which("systemd-run") === nothing) && return ``
+    (
+        isempty(cap) || cap == "0" || !Sys.islinux() ||
+            Sys.which("systemd-run") === nothing
+    ) && return ``
     works() || return ``
     return `systemd-run --user --scope -q -p MemoryMax=$cap`
 end
@@ -115,13 +119,17 @@ the memory cap.
 function user_scope_works()
     USER_SCOPE[] === nothing || return USER_SCOPE[]
     ok = try
-        success(pipeline(`systemd-run --user --scope -q true`; stdout = devnull,
-            stderr = devnull))
+        success(
+            pipeline(
+                `systemd-run --user --scope -q true`; stdout = devnull,
+                stderr = devnull
+            )
+        )
     catch
         false
     end
     ok || @warn "systemd-run --user is unavailable here (no user service manager, e.g. " *
-                "inside a CI job): timed children run without the memory cap"
+        "inside a CI job): timed children run without the memory cap"
     USER_SCOPE[] = ok
     return ok
 end
@@ -201,8 +209,10 @@ function cpu_busy(cpus; dt = 0.5)
     a = _jiffies()
     sleep(dt)
     b = _jiffies()
-    return Dict(c => (t = b[c][1] - a[c][1]; t == 0 ? 0.0 : 1 - (b[c][2] - a[c][2]) / t)
-    for c in cpus if haskey(a, c))
+    return Dict(
+        c => (t = b[c][1] - a[c][1]; t == 0 ? 0.0 : 1 - (b[c][2] - a[c][2]) / t)
+            for c in cpus if haskey(a, c)
+    )
 end
 
 """
@@ -256,14 +266,15 @@ any `extra` PIDs passed in (such as live sibling A/B children from `GO`).
 """
 function gpu_users(; exclude = _default_gpu_exclude(), dir = "/sys/class/kfd/kfd/proc")
     isdir(dir) || return Int[]
-    return [parse(Int, p)
+    return [
+        parse(Int, p)
             for p in readdir(dir) if all(isdigit, p) && !(parse(Int, p) in exclude)
     ]
 end
 
 """
-Wait up to `timeout` s for exiting KFD clients (whose `/proc/<pid>` is already gone) to finish
-kernel teardown before declaring the GPU busy.
+Wait up to `timeout` s for exiting KFD clients (whose `/proc/<pid>` is already gone) to
+finish kernel teardown before declaring the GPU busy.
 """
 function wait_kfd_clear(;
         exclude = _default_gpu_exclude(), timeout = 2.0,
@@ -307,6 +318,7 @@ function wait_idle(;
         time() > deadline && return false
         sleep(poll)
     end
+    return
 end
 
 """
@@ -327,7 +339,8 @@ What disturbs a timed run on logical CPU `c` right now: `busy_reasons`, plus a b
 sibling of `c` (over 5 %) or a busy other reserved CPU (over 50 %; a benchmark there shares
 the L3 and the power budget). Empty when nothing does.
 """
-function disturbances(c, reserved; gpu = false, ci = true, dt = 0.5,
+function disturbances(
+        c, reserved; gpu = false, ci = true, dt = 0.5,
         busy = cpus -> cpu_busy(cpus; dt), siblings = siblings,
         linux = Sys.islinux(), exclude = Int[],
         reasons = () -> busy_reasons(; gpu, ci, exclude)
@@ -354,7 +367,9 @@ reserved cores. Timed children are pinned explicitly.
 """
 function pin_self_to_work!(m)
     pins(m) && !isempty(m.work) || return false
-    p = run(pipeline(ignorestatus(`taskset -a -cp $(m.work) $(getpid())`); stdout = devnull))
+    p = run(
+        pipeline(ignorestatus(`taskset -a -cp $(m.work) $(getpid())`); stdout = devnull)
+    )
     return success(p)
 end
 
@@ -369,11 +384,15 @@ function pin_or_reexec(m, args)
     c = bench_cpu(m)
     allowed_cpus() == [c] && return nothing
     get(ENV, "POTTS_BENCH_PINNED", "") == "1" &&
-        (@warn "POTTS_BENCH_PINNED=1 but this process may run on $(allowed_cpus())";
-            return nothing)
+        (
+        @warn "POTTS_BENCH_PINNED=1 but this process may run on $(allowed_cpus())";
+        return nothing
+    )
     proj = Base.active_project()
-    cmd = `$(mem_cmd(m)) $(pin_cmd(m, c)) $(Base.julia_cmd()) --startup-file=no --project=$(dirname(proj)) $(abspath(PROGRAM_FILE)) $args`
-    println("pinning to logical CPU $c (machine $(m.key)); siblings $(siblings(c)) left idle")
+    cmd = `$(mem_cmd(m)) $(pin_cmd(m, c)) $(Base.julia_cmd()) --startup-file=no \
+        --project=$(dirname(proj)) $(abspath(PROGRAM_FILE)) $args`
+    println("pinning to logical CPU $c (machine $(m.key)); siblings $(siblings(c)) left \
+        idle")
     p = run(ignorestatus(setenv(cmd, merge(ENV, Dict("POTTS_BENCH_PINNED" => "1")))))
     return p.exitcode
 end
@@ -397,7 +416,8 @@ end
 """
 function type_cache_stats()
     # read the field at run time: the cache vector is replaced when it grows, and a load
-    # from the constant `Tuple.name` may otherwise be folded to the vector seen at compile time
+    # from the constant `Tuple.name` may otherwise be folded to the vector seen at compile
+    # time
     c = getfield(Base.inferencebarrier(Tuple.name), :cache)
     c isa Core.SimpleVector || return (0, 0)
     n = 0

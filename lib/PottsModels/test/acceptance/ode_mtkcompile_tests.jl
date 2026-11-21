@@ -20,43 +20,45 @@
 #  A. `Potts.ode_system` is a public (not exported) name of Potts with a docstring.
 #  S. `Potts.ode_system(csys::CompiledPottsSystem, scope)` for `scope` in `:cell`, `:model`
 #     returns the `ModelingToolkitBase.System` that `mtkcompile` produced for that scope's
-#     `@equations`, or `nothing` when the scope has none. It is complete and scheduled (MTK's
-#     own mark of an `mtkcompile` result). Its unknowns are the scope's differential
-#     variables (by declared name), each algebraic variable is an `observed` equation and not
-#     an unknown, and each declared parameter the equations read is a parameter under its
-#     declared name. Other quantities the ODEs read (built-ins such as `volume`, other scopes'
-#     variables, gathers, population folds, cross-cell reads `y[3 - id]`) are inputs: further
-#     parameters, names not pinned. A template with no inputs is an ordinary MTK system: MTK's
-#     own `ODEProblem` solves it (oracle: the analytic solution). Other scopes (`:site`,
-#     `:field`, anything else) are an `ArgumentError`, and so is a `PottsSystem` that has not
-#     been through `mtkcompile` (the message names `mtkcompile`).
+#     `@equations`, or `nothing` when the scope has none. It is complete and scheduled
+#     (MTK's own mark of an `mtkcompile` result). Its unknowns are the scope's differential
+#     variables (by declared name), each algebraic variable is an `observed` equation and
+#     not an unknown, and each declared parameter the equations read is a parameter under
+#     its declared name. Other quantities the ODEs read (built-ins such as `volume`, other
+#     scopes' variables, gathers, population folds, cross-cell reads `y[3 - id]`) are
+#     inputs: further parameters, names not pinned. A template with no inputs is an ordinary
+#     MTK system: MTK's own `ODEProblem` solves it (oracle: the analytic solution). Other
+#     scopes (`:site`, `:field`, anything else) are an `ArgumentError`, and so is a
+#     `PottsSystem` that has not been through `mtkcompile` (the message names `mtkcompile`).
 #  E. Elimination shows up in the run: a model with `D(x) ~ -k*xalias; xalias ~ x` runs
-#     exactly like its hand-substituted twin `D(x) ~ -k*x` (same seed, every save, rtol 1e-12:
-#     D-158's tolerance for values that pass through upstream code; MTK's symbolic pass is
-#     upstream), matches the exact discrete oracle of explicit Euler (x0·0.9^N) and the
-#     analytic one under RK4 (x0·e^(−0.1N), rtol 1e-7), and `sol[:xalias] ≈ sol[:x]`. An
-#     `@after_mcs` update reading `xalias` reads `x` (oracle: Σ x0·0.9^j). The same for a chain
-#     of algebraic variables that read built-ins and a neighbour gather (`gather_ode_allocations_tests.jl`'s shape:
-#     `w ~ volume`, `g ~ sum(volume[owner[n]] for n in Moore(1)(42))`, `h ~ g − w`, written
-#     out of order), with `sol[:w]` equal to the cell volumes counted on the saved lattice and
-#     `sol[:g]` one value per cell (an algebraic variable's values have its declared shape), and
-#     for a model-scope pair `D(m) ~ r*gap; gap ~ 1 − m` (oracles 1 − 0.8^N and 1 − e^(−0.2N)).
-#     Zero warm allocations per `step!` (the fixed-step gate) for these models.
+#     exactly like its hand-substituted twin `D(x) ~ -k*x` (same seed, every save, rtol
+#     1e-12: D-158's tolerance for values that pass through upstream code; MTK's symbolic
+#     pass is upstream), matches the exact discrete oracle of explicit Euler (x0·0.9^N) and
+#     the analytic one under RK4 (x0·e^(−0.1N), rtol 1e-7), and `sol[:xalias] ≈ sol[:x]`. An
+#     `@after_mcs` update reading `xalias` reads `x` (oracle: Σ x0·0.9^j). The same for a
+#     chain of algebraic variables that read built-ins and a neighbour gather
+#     (`gather_ode_allocations_tests.jl`'s shape: `w ~ volume`, `g ~ sum(volume[owner[n]]
+#     for n in Moore(1)(42))`, `h ~ g − w`, written out of order), with `sol[:w]` equal to
+#     the cell volumes counted on the saved lattice and `sol[:g]` one value per cell (an
+#     algebraic variable's values have its declared shape), and for a model-scope pair `D(m)
+#     ~ r*gap; gap ~ 1 − m` (oracles 1 − 0.8^N and 1 − e^(−0.2N)). Zero warm allocations per
+#     `step!` (the fixed-step gate) for these models.
 #  U. Unchanged: models whose `@equations` are all differential keep their results (recorded
 #     on 4b81dd79, the tree before this item: a gather rate and a cross-cell rate, both CPM
-#     algorithms, explicit Euler and RK4; rtol 1e-12) and have no observed variables in their
-#     template. Every published model has no cell or model ODE, so both its templates are
-#     `nothing`; the published model with ODEs (Merks, field PDEs) runs bitwise as recorded on
-#     4b81dd79 (our own field step, D-158). Generated code and fingerprints of all-differential
-#     models are pinned byte-identical by `abstract_system_tests.jl` (D-137 rule 7), not here.
-#  R. Rejections, at `mtkcompile` (`PottsCompileError`; the words listed must appear): an implicit
-#     equation (`xalias + x ~ 1`: "algebraic"); an algebraic equation for a field
+#     algorithms, explicit Euler and RK4; rtol 1e-12) and have no observed variables in
+#     their template. Every published model has no cell or model ODE, so both its templates
+#     are `nothing`; the published model with ODEs (Merks, field PDEs) runs bitwise as
+#     recorded on 4b81dd79 (our own field step, D-158). Generated code and fingerprints of
+#     all-differential models are pinned byte-identical by `abstract_system_tests.jl` (D-137
+#     rule 7), not here.
+#  R. Rejections, at `mtkcompile` (`PottsCompileError`; the words listed must appear): an
+#     implicit equation (`xalias + x ~ 1`: "algebraic"); an algebraic equation for a field
 #     ("algebraic", the name); a variable with both `D(·)` and an algebraic equation, two
 #     algebraic equations for one variable, a self-reference, and a cycle through two
 #     equations ("algebraic", the name where there is one); an update writing an algebraic
-#     variable ("algebraic", the name). Whether ModelingToolkit (full, with tearing) is loaded
-#     must not change what is accepted. An operating-point value for an algebraic variable is
-#     an ArgumentError naming it.
+#     variable ("algebraic", the name). Whether ModelingToolkit (full, with tearing) is
+#     loaded must not change what is accepted. An operating-point value for an algebraic
+#     variable is an ArgumentError naming it.
 #  N. Negative controls: a plain MTK `System` with the same alias keeps `xalias` as an
 #     unknown under `complete` and is not scheduled (the detector used in S can fail), and
 #     loses it under `mtkcompile` (the detector can pass); an oracle with a wrong rate does
@@ -94,8 +96,8 @@ function clear(E::Type{<:Exception}, f, words...)
 end
 # ---------------------------------------------------------------------------------------
 # Fixtures: two 4×4 cells side by side (x = 3:6 and 7:10, y = 3:6) on a 12×8 lattice, as in
-# `gather_ode_allocations_tests.jl`. Site 42 is (6, 4), on their interface. No energy reads an ODE variable, so a model
-# and its twin see the same sweep for the same seed.
+# `gather_ode_allocations_tests.jl`. Site 42 is (6, 4), on their interface. No energy reads
+# an ODE variable, so a model and its twin see the same sweep for the same seed.
 
 # E: an alias of the differential variable, read by the ODE and by an update
 @potts_model Alias begin
@@ -180,7 +182,8 @@ end
     @equations D(m) ~ r * (1 - m)
     @sweep Metropolis(; temperature = 1.0)
 end
-# U: a cross-cell read of the template's own unknown (`cell_ode_jacobi_tests.jl`'s Jacobi path)
+# U: a cross-cell read of the template's own unknown (`cell_ode_jacobi_tests.jl`'s Jacobi
+# path)
 @potts_model OdePair begin
     @kinds medium A
     @variables y(cell) = 0.0
@@ -303,13 +306,26 @@ ode_op(extra...) = Any[ownership => sigma(), kind => [:A, :A], extra...]
 const ODE_X0 = [2.0, 3.0]
 const ODE_N = 10
 # MCS per run
-const ALGS = (("SequentialCPM", SequentialCPM(; proposal = Moore(1))), ("CheckerboardCPM", CheckerboardCPM(; proposal = Moore(1))))
-const SOLVERS = (("ExplicitEuler()", (;)), ("RK4(substeps = 4)", (; ode_solver = Potts.RK4(substeps = 4))))
-ode_solve(M, op, alg, kw) = solve(PottsProblem(M(; name = :x), op, (0, ODE_N); seed = 7, kw...), alg; saveat = 1)
+const ALGS = (
+    ("SequentialCPM", SequentialCPM(; proposal = Moore(1))),
+    ("CheckerboardCPM", CheckerboardCPM(; proposal = Moore(1))),
+)
+const SOLVERS = (
+    ("ExplicitEuler()", (;)),
+    ("RK4(substeps = 4)", (; ode_solver = Potts.RK4(substeps = 4))),
+)
+function ode_solve(M, op, alg, kw)
+    return solve(
+        PottsProblem(M(; name = :x), op, (0, ODE_N); seed = 7, kw...), alg; saveat = 1
+    )
+end
 ode_cells(sol, n) = [Vector{Float64}(Array(getproperty(u.cell, n))) for u in sol.u]
 ode_series(sol, n) = [Vector{Float64}(Array(v)) for v in sol[n]]
 ode_volumes(sol) = [[Float64(count(==(c), u.ownership)) for c in 1:2] for u in sol.u]
-ode_close(a, b; rtol = 1.0e-12) = length(a) == length(b) && all(i -> isapprox(a[i], b[i]; rtol), eachindex(a, b))
+function ode_close(a, b; rtol = 1.0e-12)
+    return length(a) == length(b) &&
+        all(i -> isapprox(a[i], b[i]; rtol), eachindex(a, b))
+end
 """Bytes allocated by each of five warm `step!`s (after two warm-up steps)."""
 function warm_allocs(prob, alg)
     integ = init(prob, alg; save_start = false, save_end = false, save_everystep = false)
@@ -332,27 +348,46 @@ end
 const MODELS = [
     ("GranerGlazier", () -> GranerGlazier(; name = :gg)),
     ("WortelAct", () -> WortelAct(; name = :act, lattice = (8, 8))),
-    ("WortelAct connected", () -> WortelAct(; name = :act, lattice = (8, 8), connected = true)),
+    (
+        "WortelAct connected",
+        () -> WortelAct(; name = :act, lattice = (8, 8), connected = true),
+    ),
     ("MerksVasculogenesis", () -> MerksVasculogenesis(; name = :merks, lattice = (8, 8))),
     (
         "MerksVasculogenesis contact-inhibited",
-        () -> MerksVasculogenesis(; name = :merks, lattice = (8, 8), contact_inhibited = true),
+        () -> MerksVasculogenesis(;
+            name = :merks, lattice = (8, 8),
+            contact_inhibited = true
+        ),
     ),
     ("Merks2006", () -> Merks2006(; name = :m6, lattice = (16, 16))),
     ("Merks2006 hard", () -> Merks2006(; name = :m6, lattice = (16, 16), rule = :hard)),
     ("Merks2008", () -> Merks2008(; name = :m8, lattice = (16, 16))),
-    ("Merks2008 extension only", () -> Merks2008(; name = :m8, lattice = (16, 16), mode = :extension_only)),
+    (
+        "Merks2008 extension only",
+        () -> Merks2008(; name = :m8, lattice = (16, 16), mode = :extension_only),
+    ),
     ("SingleDivisionFixture", () -> SingleDivisionFixture(; name = :fixture)),
-    ("OpenVTGrowingMonolayer", () -> OpenVTGrowingMonolayer(; name = :openvt, lattice = (24, 24))),
+    (
+        "OpenVTGrowingMonolayer",
+        () -> OpenVTGrowingMonolayer(; name = :openvt, lattice = (24, 24)),
+    ),
     ("AkeebInvasion", () -> AkeebInvasion(; name = :akeeb, lattice = (60, 40))),
     ("OpenVTChain", () -> OpenVTChain(; name = :chain)),
-    ("OpenVTReferenceMonolayer", () -> OpenVTReferenceMonolayer(; name = :ref, lattice = (24, 24))),
+    (
+        "OpenVTReferenceMonolayer",
+        () -> OpenVTReferenceMonolayer(; name = :ref, lattice = (24, 24)),
+    ),
 ]
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "ode mtkcompile A: public name with a docstring" setup = [ODEMTKCompileSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "ode mtkcompile A: public name with a docstring" setup = [
+    ODEMTKCompileSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # A. Public name
     @testset "ode mtkcompile A: public name with a docstring" begin
         @test isdefined(Potts, :ode_system) && Base.ispublic(Potts, :ode_system)
@@ -361,8 +396,12 @@ end
     end
 end
 
-@testitem "ode mtkcompile S: the cell template of the alias model" setup = [ODEMTKCompileSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "ode mtkcompile S: the cell template of the alias model" setup = [
+    ODEMTKCompileSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # S. The ODE part is an MTK System compiled by mtkcompile
     @testset "ode mtkcompile S: the cell template of the alias model" begin
         sys = Alias(; name = :alias)
@@ -374,7 +413,11 @@ end
             @test :xalias in observed_names(s)
             @test ode_names(ODE_M.parameters(s)) == Set([:k])        # no inputs: k only
             eqs = ODE_M.equations(s)
-            @test length(eqs) == 1 && ode_name(only(Potts.SymbolicUtils.arguments(ODE_S.unwrap(only(eqs).lhs)))) === :x
+            @test length(eqs) == 1 &&
+                ode_name(
+                only(Potts.SymbolicUtils.arguments(ODE_S.unwrap(only(eqs).lhs)))
+            ) ===
+                :x
             @test ode(cs, :model) === nothing
             # the compiled model lists xalias as observed, not as a state (MTK semantics)
             @test !(:xalias in ode_names(ODE_M.unknowns(getfield(cs, :sys))))
@@ -383,7 +426,11 @@ end
     end
 end
 
-@testitem "ode mtkcompile S: MTK solves the template itself (analytic oracle)" setup = [ODEMTKCompileSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "ode mtkcompile S: MTK solves the template itself (analytic oracle)" setup = [
+    ODEMTKCompileSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "ode mtkcompile S: MTK solves the template itself (analytic oracle)" begin
         s = ode(mtkcompile(Alias(; name = :alias)), :cell)
         x = byname(ODE_M.unknowns(s), :x)
@@ -394,11 +441,16 @@ end
         sol = Potts.SciMLBase.solve(prob, Rodas5P(); abstol = 1.0e-12, reltol = 1.0e-12)
         @test isapprox(sol[x][end], 2.0 * exp(-1.0); rtol = 1.0e-8)
         xalias = only(o.lhs for o in ODE_M.observed(s) if ode_name(o.lhs) === :xalias)
-        @test ode_close(sol[xalias], sol[x])                           # the observed value is available
+        # the observed value is available
+        @test ode_close(sol[xalias], sol[x])
     end
 end
 
-@testitem "ode mtkcompile S: built-in, gather and model-scope templates" setup = [ODEMTKCompileSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "ode mtkcompile S: built-in, gather and model-scope templates" setup = [
+    ODEMTKCompileSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "ode mtkcompile S: built-in, gather and model-scope templates" begin
         cs = mtkcompile(Inputs(; name = :inp))
         s = ode(cs, :cell)
@@ -419,20 +471,31 @@ end
     end
 end
 
-@testitem "ode mtkcompile S: all-differential models have templates without observed variables" setup = [ODEMTKCompileSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "ode mtkcompile S: all-differential models have templates without observed variables" begin
-        for (M, scope, n) in ((AliasHand, :cell, :x), (InputsHand, :cell, :y), (ModelHand, :model, :m), (OdePair, :cell, :y))
+@testitem "ode mtkcompile S: all-differential models have templates without observed \
+    variables" setup = [ODEMTKCompileSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "ode mtkcompile S: all-differential models have templates without observed \
+        variables" begin
+        for (M, scope, n) in (
+                (AliasHand, :cell, :x), (InputsHand, :cell, :y),
+                (ModelHand, :model, :m), (OdePair, :cell, :y),
+            )
             s = ode(mtkcompile(M(; name = :h)), scope)
             @test s isa ODE_M.System && scheduled(s)
-            @test ode_names(ODE_M.unknowns(s)) == Set([n])       # a cross-cell `y[3 - id]` is an input
+            # a cross-cell `y[3 - id]` is an input
+            @test ode_names(ODE_M.unknowns(s)) == Set([n])
             @test isempty(ODE_M.observed(s))
             @test length(ODE_M.equations(s)) == 1
         end
-        @test ode_names(ODE_M.parameters(ode(mtkcompile(AliasHand(; name = :h)), :cell))) == Set([:k])
+        @test ode_names(ODE_M.parameters(ode(mtkcompile(AliasHand(; name = :h)), :cell))) ==
+            Set([:k])
     end
 end
 
-@testitem "ode mtkcompile S: scope and form errors" setup = [ODEMTKCompileSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "ode mtkcompile S: scope and form errors" setup = [ODEMTKCompileSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "ode mtkcompile S: scope and form errors" begin
         sys = Alias(; name = :alias)
         cs = mtkcompile(sys)
@@ -443,10 +506,14 @@ end
     end
 end
 
-@testitem "ode mtkcompile E: alias model = its hand-substituted twin, and the oracles" setup = [ODEMTKCompileSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "ode mtkcompile E: alias model = its hand-substituted twin, and the \
+    oracles" setup = [ODEMTKCompileSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # E. Elimination in the run
-    @testset "ode mtkcompile E: alias model = its hand-substituted twin, and the oracles" begin
+    @testset "ode mtkcompile E: alias model = its hand-substituted twin, and the \
+        oracles" begin
         op = ode_op(:x => ODE_X0)
         for (alab, alg) in ALGS, (slab, kw) in SOLVERS
             @testset "$alab, $slab" begin
@@ -456,45 +523,71 @@ end
                 xa = ode_cells(sa, :x)
                 @test ode_close(xa, ode_cells(sh, :x))
                 @test ode_close(ode_cells(sa, :acc), ode_cells(sh, :acc))
-                @test ode_close(ode_series(sa, :xalias), ode_series(sa, :x))   # observed value
+                # observed value
+                @test ode_close(ode_series(sa, :xalias), ode_series(sa, :x))
                 if kw == (;)
-                    # exact discrete oracle of one explicit Euler step per MCS: x_N = x0·0.9^N
+                    # exact discrete oracle of one explicit Euler step per MCS: x_N =
+                    # x0·0.9^N
                     @test ode_close(xa, [ODE_X0 .* 0.9^N for N in 0:ODE_N])
                     # the update reads xalias = x before each step: acc_N = Σ_{j<N} x0·0.9^j
-                    @test ode_close(ode_cells(sa, :acc)[end], ODE_X0 .* ((1 - 0.9^ODE_N) / 0.1))
+                    @test ode_close(
+                        ode_cells(sa, :acc)[end], ODE_X0 .*
+                            ((1 - 0.9^ODE_N) / 0.1)
+                    )
                     # negative control: a wrong rate does not match
                     @test !ode_close(xa, [ODE_X0 .* 0.89^N for N in 0:ODE_N]; rtol = 1.0e-6)
                 else
-                    @test ode_close(xa, [ODE_X0 .* exp(-0.1N) for N in 0:ODE_N]; rtol = 1.0e-7)
-                    @test !ode_close(xa, [ODE_X0 .* exp(-0.11N) for N in 0:ODE_N]; rtol = 1.0e-7)
+                    @test ode_close(
+                        xa, [ODE_X0 .* exp(-0.1N) for N in 0:ODE_N];
+                        rtol = 1.0e-7
+                    )
+                    @test !ode_close(
+                        xa, [ODE_X0 .* exp(-0.11N) for N in 0:ODE_N];
+                        rtol = 1.0e-7
+                    )
                 end
             end
         end
     end
 end
 
-@testitem "ode mtkcompile E: algebraic chain over built-ins and a gather = its twin" setup = [ODEMTKCompileSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "ode mtkcompile E: algebraic chain over built-ins and a gather = its twin" begin
+@testitem "ode mtkcompile E: algebraic chain over built-ins and a gather = its twin" setup =
+    [ODEMTKCompileSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "ode mtkcompile E: algebraic chain over built-ins and a gather = its \
+        twin" begin
         op = ode_op()
         for (alab, alg) in ALGS, (slab, kw) in SOLVERS
             @testset "$alab, $slab" begin
                 si = ode_solve(Inputs, op, alg, kw)
                 sh = ode_solve(InputsHand, op, alg, kw)
-                @test [u.ownership for u in si.u] == [u.ownership for u in sh.u]                  # the same sweep
+                # the same sweep
+                @test [u.ownership for u in si.u] == [u.ownership for u in sh.u]
                 @test ode_close(ode_cells(si, :y), ode_cells(sh, :y))
                 vols = ode_volumes(si)
-                @test ode_series(si, :w) == vols                                  # w ~ volume, counted
-                # values have the declared shape: one per cell for a cell variable, even when the
-                # definition reads no cell quantity (g reads a gather at a literal site)
+                # w ~ volume, counted
+                @test ode_series(si, :w) == vols
+                # values have the declared shape: one per cell for a cell variable, even
+                # when the definition reads no cell quantity (g reads a gather at a literal
+                # site)
                 @test all(v -> length(v) == 2 && v[1] == v[2], ode_series(si, :g))
-                @test ode_close(ode_series(si, :h), ode_series(si, :g) .- ode_series(si, :w))
-                @test !all(v -> v == [16.0, 16.0], vols)                            # volumes do change
+                @test ode_close(
+                    ode_series(si, :h), ode_series(si, :g) .-
+                        ode_series(si, :w)
+                )
+                # volumes do change
+                @test !all(v -> v == [16.0, 16.0], vols)
             end
         end
     end
 end
 
-@testitem "ode mtkcompile E: model scope = its twin, and the oracles" setup = [ODEMTKCompileSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "ode mtkcompile E: model scope = its twin, and the oracles" setup = [
+    ODEMTKCompileSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "ode mtkcompile E: model scope = its twin, and the oracles" begin
         op = ode_op()
         for (alab, alg) in ALGS, (slab, kw) in SOLVERS
@@ -504,16 +597,31 @@ end
                 m = Float64.(sm[:m])
                 @test ode_close(m, Float64.(sh[:m]))
                 @test ode_close(Float64.(sm[:gap]), 1 .- m)
-                want = kw == (;) ? [1 - 0.8^N for N in 0:ODE_N] : [1 - exp(-0.2N) for N in 0:ODE_N]
-                @test ode_close(m[2:end], want[2:end]; rtol = kw == (;) ? 1.0e-12 : 1.0e-7) && m[1] == 0.0
+                want = if kw == (;)
+                    [1 - 0.8^N for N in 0:ODE_N]
+                else
+                    [1 - exp(-0.2N) for N in 0:ODE_N]
+                end
+                @test ode_close(
+                    m[2:end], want[2:end]; rtol = kw == (;) ? 1.0e-12 :
+                        1.0e-7
+                ) && m[1] == 0.0
             end
         end
     end
 end
 
-@testitem "ode mtkcompile E: zero warm allocations (fixed-step solvers)" setup = [ODEMTKCompileSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "ode mtkcompile E: zero warm allocations (fixed-step solvers)" setup = [
+    ODEMTKCompileSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "ode mtkcompile E: zero warm allocations (fixed-step solvers)" begin
-        for (M, op) in ((Alias, ode_op(:x => ODE_X0)), (Inputs, ode_op()), (Model, ode_op())),
+        for (M, op) in (
+                    (Alias, ode_op(:x => ODE_X0)), (Inputs, ode_op()), (
+                        Model, ode_op(),
+                    ),
+                ),
                 (alab, alg) in ALGS, (slab, kw) in SOLVERS
             prob = PottsProblem(M(; name = :x), op, (0, 100); seed = 7, kw...)
             a = warm_allocs(prob, alg)
@@ -523,11 +631,16 @@ end
     end
 end
 
-@testitem "ode mtkcompile U: the Jacobi pair reaches the mean" setup = [ODEMTKCompileSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "ode mtkcompile U: the Jacobi pair reaches the mean" setup = [
+    ODEMTKCompileSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # U. The Jacobi pair
     @testset "ode mtkcompile U: the Jacobi pair reaches the mean" begin
-        # hand oracle: two all-differential cells of y = (1, 2) exchange until both are the mean
+        # hand oracle: two all-differential cells of y = (1, 2) exchange until both are the
+        # mean
         for (_, alg) in ALGS
             got = ode_cells(ode_solve(OdePair, ode_op(:y => [1.0, 2.0]), alg, (;)), :y)
             @test ode_close(got[end], [1.5, 1.5])
@@ -535,7 +648,11 @@ end
     end
 end
 
-@testitem "ode mtkcompile U: published models have no cell or model template" setup = [ODEMTKCompileSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "ode mtkcompile U: published models have no cell or model template" setup = [
+    ODEMTKCompileSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "ode mtkcompile U: published models have no cell or model template" begin
         @testset "$label" for (label, build) in MODELS
             cs = mtkcompile(build())
@@ -545,39 +662,78 @@ end
     end
 end
 
-@testitem "ode mtkcompile R: rejected algebraic equations" setup = [ODEMTKCompileSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "ode mtkcompile R: rejected algebraic equations" setup = [
+    ODEMTKCompileSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # R. Rejections
     @testset "ode mtkcompile R: rejected algebraic equations" begin
-        @test clear(Potts.PottsCompileError, () -> mtkcompile(Implicit(; name = :r)), "algebraic")
-        # an aux-only field model builds (the auxiliary-field ruling): its field phase evaluates `cfield ~ 1.0`
+        @test clear(
+            Potts.PottsCompileError, () -> mtkcompile(Implicit(; name = :r)),
+            "algebraic"
+        )
+        # an aux-only field model builds (the auxiliary-field ruling): its field phase
+        # evaluates `cfield ~ 1.0`
         let s = zeros(Int32, 12, 8)
             s[3:6, 3:6] .= 1
             u = solve(
-                PottsProblem(FieldAlg(; name = :r), [ownership => s, kind => [:A]], (0, 1); seed = 1),
+                PottsProblem(
+                    FieldAlg(; name = :r), [ownership => s, kind => [:A]], (0, 1);
+                    seed = 1
+                ),
                 SequentialCPM()
             ).u[end]
             @test all(==(1.0), Array(u.site.cfield))
         end
-        @test clear(Potts.PottsCompileError, () -> mtkcompile(Both(; name = :r)), "algebraic", "xalias")
-        @test clear(Potts.PottsCompileError, () -> mtkcompile(Twice(; name = :r)), "algebraic", "xalias")
-        @test clear(Potts.PottsCompileError, () -> mtkcompile(Self(; name = :r)), "algebraic", "xalias")
-        @test clear(Potts.PottsCompileError, () -> mtkcompile(OdeCycle(; name = :r)), "algebraic")
-        @test clear(Potts.PottsCompileError, () -> mtkcompile(Write(; name = :r)), "algebraic", "xalias")
+        @test clear(
+            Potts.PottsCompileError, () -> mtkcompile(Both(; name = :r)),
+            "algebraic", "xalias"
+        )
+        @test clear(
+            Potts.PottsCompileError, () -> mtkcompile(Twice(; name = :r)),
+            "algebraic", "xalias"
+        )
+        @test clear(
+            Potts.PottsCompileError, () -> mtkcompile(Self(; name = :r)),
+            "algebraic", "xalias"
+        )
+        @test clear(
+            Potts.PottsCompileError, () -> mtkcompile(OdeCycle(; name = :r)),
+            "algebraic"
+        )
+        @test clear(
+            Potts.PottsCompileError, () -> mtkcompile(Write(; name = :r)),
+            "algebraic", "xalias"
+        )
     end
 end
 
-@testitem "ode mtkcompile R: no initial value for an algebraic variable" setup = [ODEMTKCompileSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "ode mtkcompile R: no initial value for an algebraic variable" setup = [
+    ODEMTKCompileSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "ode mtkcompile R: no initial value for an algebraic variable" begin
         @test clear(
-            () -> PottsProblem(Alias(; name = :x), ode_op(:x => ODE_X0, :xalias => [1.0, 1.0]), (0, 1)),
+            () -> PottsProblem(
+                Alias(; name = :x), ode_op(
+                    :x => ODE_X0, :xalias =>
+                        [1.0, 1.0]
+                ), (0, 1)
+            ),
             "xalias"
         )
     end
 end
 
-@testitem "ode mtkcompile N: complete keeps the alias, mtkcompile eliminates it" setup = [ODEMTKCompileSetup] tags = [:pottsmodels, :acceptance] begin
-    # ---------------------------------------------------------------------------------------
+@testitem "ode mtkcompile N: complete keeps the alias, mtkcompile eliminates it" setup = [
+    ODEMTKCompileSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    # --------------------------------------------------------------------------------------
     # N. Negative controls for the detectors
     @testset "ode mtkcompile N: complete keeps the alias, mtkcompile eliminates it" begin
         plain = ode_plain()

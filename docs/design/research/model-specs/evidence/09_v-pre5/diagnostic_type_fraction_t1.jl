@@ -13,7 +13,9 @@ for p in (0.45, 0.5, 0.55, 0.6)
         q = PottsProblem(GranerGlazier(; name = :f, lattice = size(σ0)), [ownership => σ0, kind => k], (0, PAPER_MCS); seed = s)
         σ = ownership(solve(q, alg; saveat = PAPER_MCS).u[end])
         b = bond_counts(annealed(σ, k), k); N = sum(values(b))
-        for key in keys(acc); acc[key] += b[key] / N / 4; end
+        for key in keys(acc)
+            acc[key] += b[key] / N / 4
+        end
     end
-    println("p = $p: dd $(round(acc[:dd]; digits=3)) ll $(round(acc[:ll]; digits=3)) dl $(round(acc[:dl]; digits=3))")
+    println("p = $p: dd $(round(acc[:dd]; digits = 3)) ll $(round(acc[:ll]; digits = 3)) dl $(round(acc[:dl]; digits = 3))")
 end

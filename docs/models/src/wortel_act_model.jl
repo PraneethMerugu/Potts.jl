@@ -1,7 +1,7 @@
-# The model built in docs/models/wortel_act.jl. The page shows its fragments (the lines after
-# each `#> name` marker, up to the next marker or `#<`) and then runs the whole file;
-# lib/PottsModels/test/tutorial_models_tests.jl checks that it compiles to the same problem as
-# `PottsModels.WortelAct`.
+# The model built in docs/models/wortel_act.jl. The page shows its fragments (the lines
+# after each `#> name` marker, up to the next marker or `#<`) and then runs the whole file;
+# lib/PottsModels/test/tutorial_models_tests.jl checks that it compiles to the same problem
+# as `PottsModels.WortelAct`.
 @potts_model ActMigration begin
     #> lattice
     @structural_parameters begin
@@ -34,7 +34,10 @@
         #<
     end
     #> drive
-    act_mean(s) = geomean(act[n] for n in Moore(1; include_self = true)(s) if owner[n] == owner[s])
+    act_mean(s) = geomean(
+        act[n]
+            for n in Moore(1; include_self = true)(s) if owner[n] == owner[s]
+    )
     @drive copy => -(λ_act / max_act) * (act_mean(source) - act_mean(target))
     #> updates
     @on_copy act[target] ~ ifelse(new != 0, max_act, 0.0)

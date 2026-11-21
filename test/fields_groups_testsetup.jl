@@ -8,33 +8,67 @@ module FgPDE
     using .FieldPDE
     @variables c(..) u(..) o(..) v(..) w(..) s1(..) s2(..) dk(..) [input = true]
     const X = (t, x, y)
-    const C, U, O, V, W, S1, S2, DK = c(X...), u(X...), o(X...), v(X...), w(X...), s1(X...), s2(X...), dk(X...)
+    const C, U, O, V, W, S1, S2, DK = c(X...),
+        u(X...), o(X...), v(X...), w(X...), s1(X...), s2(X...), dk(X...)
     const MCS = step_index(t)
     ic(f, v = 0.0) = f(0, x, y) ~ v
-    field1(rate, dims, ps = []; bcs = [], c0 = 0.0, dvs = [C]) = pdesys([Dt(C) ~ rate], [ic(c, c0); bcs], dims, dvs, ps)
-    ode(rates, fs, u0, ps = []; dims = (6, 6)) =
-        pdesys([Dt(f(X...)) ~ r for (f, r) in zip(fs, rates)], [ic(f, v) for (f, v) in zip(fs, u0)], dims, [f(X...) for f in fs], ps)
+    function field1(rate, dims, ps = []; bcs = [], c0 = 0.0, dvs = [C])
+        return pdesys(
+            [Dt(C) ~ rate], [ic(c, c0); bcs], dims, dvs, ps
+        )
+    end
+    function ode(rates, fs, u0, ps = []; dims = (6, 6))
+        return pdesys(
+            [Dt(f(X...)) ~ r for (f, r) in zip(fs, rates)],
+            [ic(f, v) for (f, v) in zip(fs, u0)], dims, [f(X...) for f in fs], ps
+        )
+    end
     rot() = (@parameters k = 0.5; ode([-k * O, k * C], (c, o), [1.0, 0.0], [k]))
     one_way() = (@parameters k = 3.0; ode([-0.1 * C, k * C - U], (c, u), [1.0, 0.0], [k]))
-    loop3() = (@parameters k = 3.0; ode([-k * O, -k * V, k * C], (c, o, v), [1.0, 0.0, 0.0], [k]))
-    loop_chain() = (@parameters k = 30.0 r = 0.5; ode([-r * O, r * C, k * C - U], (c, o, u), [1.0, 0.0, 0.0], [k, r]))
+    function loop3()
+        @parameters k = 3.0
+        return ode([-k * O, -k * V, k * C], (c, o, v), [1.0, 0.0, 0.0], [k])
+    end
+    function loop_chain()
+        @parameters k = 30.0 r = 0.5
+        return ode([-r * O, r * C, k * C - U], (c, o, u), [1.0, 0.0, 0.0], [k, r])
+    end
     function unseen_chain()
         @parameters k = 3.0
         @variables z(..)
         Z = z(X...)
-        return ode([-0.1 * C - 1.0e-9 * C * Z^2, k * C - U, -0.5 * Z], (c, u, z), [1.0, 0.0, 1.0], [k])
+        return ode(
+            [-0.1 * C - 1.0e-9 * C * Z^2, k * C - U, -0.5 * Z], (c, u, z), [
+                1.0, 0.0, 1.0,
+            ], [k]
+        )
     end
-    self_src() = (@parameters k = 3.0; ode([-0.1 * S1^2, k * S1 - U], (s1, u), [1.0, 0.0], [k]))
-    chain_loop() = (@parameters k = 3.0 w = 0.05; ode([-0.1 * S1, k * S1 - w * C, w * S2], (s1, s2, c), [1.0, 0.0, 0.5], [k, w]))
-    rot_cells() = (
-        @parameters k = 0.5 Dc = 0.1;
-        pdesys([Dt(C) ~ Dc * laplacian(C) - k * O - DK * O, Dt(O) ~ k * C], [ic(c, 1.0), ic(o)], (6, 6), [C, O, DK], [k, Dc])
-    )
+    function self_src()
+        @parameters k = 3.0
+        return ode([-0.1 * S1^2, k * S1 - U], (s1, u), [1.0, 0.0], [k])
+    end
+    function chain_loop()
+        @parameters k = 3.0 w = 0.05
+        return ode(
+            [-0.1 * S1, k * S1 - w * C, w * S2], (s1, s2, c), [1.0, 0.0, 0.5],
+            [k, w]
+        )
+    end
+    function rot_cells()
+        @parameters k = 0.5 Dc = 0.1
+        return pdesys(
+            [Dt(C) ~ Dc * laplacian(C) - k * O - DK * O, Dt(O) ~ k * C],
+            [ic(c, 1.0), ic(o)], (6, 6), [C, O, DK], [k, Dc]
+        )
+    end
     mcs_source() = (@parameters η = 0.5; field1(-C + η * MCS, (6, 6), [η]; c0 = 1.0))
     mcs_diff() = (@parameters ε = 0.5; field1((1 + ε * MCS) * laplacian(C), (6, 6), [ε]))
     clock_repeat() = ode([MCS, t], (c, u), [0.0, 0.0]; dims = (4, 4))
     time_read() = field1(-C + sin(t), (4, 4); c0 = 0.3)
-    clock_half() = (@parameters η = 0.5; ode([MCS, t, -W + η * MCS], (c, u, w), [0.0, 0.0, 1.0], [η]; dims = (4, 4)))
+    function clock_half()
+        @parameters η = 0.5
+        return ode([MCS, t, -W + η * MCS], (c, u, w), [0.0, 0.0, 1.0], [η]; dims = (4, 4))
+    end
 end
 
 @potts_model _FgFrozen6x6 begin
@@ -56,10 +90,25 @@ end
 FdRot(; name = :FdRot, kw...) = _FgFrozen6x6(; sys_fn = FgPDE.rot, name, kw...)
 FdOneWay(; name = :FdOneWay, kw...) = _FgFrozen6x6(; sys_fn = FgPDE.one_way, name, kw...)
 FdLoop3(; name = :FdLoop3, kw...) = _FgFrozen6x6(; sys_fn = FgPDE.loop3, name, kw...)
-FdLoopChain(; name = :FdLoopChain, kw...) = _FgFrozen6x6(; sys_fn = FgPDE.loop_chain, name, kw...)
-FdUnseenChain(; name = :FdUnseenChain, kw...) = _FgFrozen6x6(; sys_fn = FgPDE.unseen_chain, name, kw...)
+function FdLoopChain(; name = :FdLoopChain, kw...)
+    return _FgFrozen6x6(;
+        sys_fn = FgPDE.loop_chain, name,
+        kw...
+    )
+end
+function FdUnseenChain(; name = :FdUnseenChain, kw...)
+    return _FgFrozen6x6(;
+        sys_fn = FgPDE.unseen_chain,
+        name, kw...
+    )
+end
 FdSelfSrc(; name = :FdSelfSrc, kw...) = _FgFrozen6x6(; sys_fn = FgPDE.self_src, name, kw...)
-FdChainLoop(; name = :FdChainLoop, kw...) = _FgFrozen6x6(; sys_fn = FgPDE.chain_loop, name, kw...)
+function FdChainLoop(; name = :FdChainLoop, kw...)
+    return _FgFrozen6x6(;
+        sys_fn = FgPDE.chain_loop, name,
+        kw...
+    )
+end
 fd_rot_md(md) = _FgFrozen6x6(; sys_fn = FgPDE.rot, md, name = :rmd)
 
 @potts_model FdRotCells begin
@@ -83,8 +132,17 @@ end
     @sweep Metropolis(; temperature = 1.0)
 end
 
-FdMcsSource(; name = :FdMcsSource, kw...) = _FgMcs6x6(; periodic = false, sys_fn = FgPDE.mcs_source, name, kw...)
-FdMcsDiff(; name = :FdMcsDiff, kw...) = _FgMcs6x6(; periodic = true, sys_fn = FgPDE.mcs_diff, name, kw...)
+function FdMcsSource(; name = :FdMcsSource, kw...)
+    return _FgMcs6x6(;
+        periodic = false, sys_fn = FgPDE.mcs_source, name, kw...
+    )
+end
+function FdMcsDiff(; name = :FdMcsDiff, kw...)
+    return _FgMcs6x6(;
+        periodic = true,
+        sys_fn = FgPDE.mcs_diff, name, kw...
+    )
+end
 
 @potts_model _Fg4x4 begin
     @structural_parameters variant = :clock_repeat
@@ -107,7 +165,12 @@ FdMcsDiff(; name = :FdMcsDiff, kw...) = _FgMcs6x6(; periodic = true, sys_fn = Fg
     end
 end
 
-FdClockRepeat(; name = :FdClockRepeat, kw...) = _Fg4x4(; variant = :clock_repeat, name, kw...)
+function FdClockRepeat(; name = :FdClockRepeat, kw...)
+    return _Fg4x4(;
+        variant = :clock_repeat, name,
+        kw...
+    )
+end
 FdTimeRead(; name = :FdTimeRead, kw...) = _Fg4x4(; variant = :time_read, name, kw...)
 FdClockHalf(; name = :FdClockHalf, kw...) = _Fg4x4(; variant = :clock_half, name, kw...)
 
@@ -127,10 +190,23 @@ end
 
 Potts.LatticeFields.Problems.nbuffers(::AStub) = 2
 Potts.LatticeFields.Problems.update_key(::AStub) = :euler
-Potts.LatticeFields.Problems.update_rule(::AStub) = Potts.LatticeFields.Problems.update_rule(ExplicitEuler())
-Potts.LatticeFields.Problems.alg_cache(a::AStub, group, store) = AStubCache(zeros(UInt32, 8), 0, a)
+function Potts.LatticeFields.Problems.update_rule(
+        ::AStub
+    )
+    return Potts.LatticeFields.Problems.update_rule(ExplicitEuler())
+end
+function Potts.LatticeFields.Problems.alg_cache(
+        a::AStub, group,
+        store
+    )
+    return AStubCache(zeros(UInt32, 8), 0, a)
+end
 Potts.LatticeFields.Problems.status_word(c::AStubCache) = c.word
-Potts.LatticeFields.Problems.substeps(::Potts.LatticeFields.Problems.GroupSpec, ::AStub, dt, pp; kw...) = 1
+function Potts.LatticeFields.Problems.substeps(
+        ::Potts.LatticeFields.Problems.GroupSpec, ::AStub, dt, pp; kw...
+    )
+    return 1
+end
 function Potts.LatticeFields.Problems.step_retcode!(c::AStubCache, rt)
     LFP = Potts.LatticeFields.Problems
     c.steps += 1
@@ -138,7 +214,8 @@ function Potts.LatticeFields.Problems.step_retcode!(c::AStubCache, rt)
     c.a.need > c.a.budget && (c.word[LFP.STATUS_BUDGET] += 1)
     if c.a.code > 0 && c.steps == c.a.at
         c.word[LFP.STATUS_CODE] = c.a.code
-        c.a.code >= 2 && (c.word[LFP.STATUS_WINDOW] = rt.totals.windows; c.word[LFP.STATUS_CAUSE] = 0x02)
+        c.a.code >= 2 &&
+            (c.word[LFP.STATUS_WINDOW] = rt.totals.windows; c.word[LFP.STATUS_CAUSE] = 0x02)
     end
     return Potts.SciMLBase.ReturnCode.Success
 end

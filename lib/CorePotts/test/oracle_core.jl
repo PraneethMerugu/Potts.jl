@@ -8,7 +8,6 @@
 
 module Oracle
 
-
 const State = Vector{Int8}
 
 struct Tiny
@@ -23,8 +22,9 @@ struct Tiny
     periodic::Bool
     drive_x::Float64
 end
-Tiny(dims, proposal, contact, kinds, J, λ, V0, T, periodic = false) =
-    Tiny(dims, proposal, contact, kinds, J, λ, V0, T, periodic, 0.0)
+function Tiny(dims, proposal, contact, kinds, J, λ, V0, T, periodic = false)
+    return Tiny(dims, proposal, contact, kinds, J, λ, V0, T, periodic, 0.0)
+end
 
 nsite(m::Tiny) = prod(m.dims)
 lin(m::Tiny, x, y) = x + (y - 1) * m.dims[1]
@@ -64,7 +64,10 @@ function dx(m::Tiny, t, s)
     return d - L * round(d / L)
 end
 
-"""One random-site attempt over `sites`: target uniform over `sites`, direction uniform over the relation."""
+"""
+One random-site attempt over `sites`: target uniform over `sites`, direction uniform over
+the relation.
+"""
 function attempt_sites(m::Tiny, dist, sites)
     out = Dict{State, Float64}()
     M, K = length(sites), length(m.proposal)
@@ -78,23 +81,28 @@ function attempt_sites(m::Tiny, dist, sites)
                 add!(out, σ, q)
                 continue
             end
-            σ′ = copy(σ); σ′[t] = σ[s]
+            σ′ = copy(σ)
+            σ′[t] = σ[s]
             dH = (H(m, σ′) - h) + m.drive_x * dx(m, t, s)
             a = pacc(m, dH)
-            add!(out, σ′, q * a); add!(out, σ, q * (1 - a))
+            add!(out, σ′, q * a)
+            add!(out, σ, q * (1 - a))
         end
     end
     return out
 end
 
-"""One random-site attempt: target uniform over all sites, direction uniform over the relation."""
+"""
+One random-site attempt: target uniform over all sites, direction uniform over the relation.
+"""
 attempt(m::Tiny, dist) = attempt_sites(m, dist, 1:nsite(m))
 sequential_mcs(m, dist) = foldl((d, _) -> attempt(m, d), 1:nsite(m); init = dist)
 
 """
-One `CheckerboardCPM` MCS for general `BlockLayout` (`parts = k`, `region = b`, `switches = 1`):
-each of the `P = k^2` phases activates a uniform offset in `{0, ..., k-1}^2`, and each block
-makes `length(S)` uniform attempts inside its active sub-region `S` in block order.
+One `CheckerboardCPM` MCS for general `BlockLayout` (`parts = k`, `region = b`,
+`switches = 1`): each of the `P = k^2` phases activates a uniform offset in
+`{0, ..., k-1}^2`, and each block makes `length(S)` uniform attempts inside its active
+sub-region `S` in block order.
 """
 function layout_mcs(m::Tiny, dist, k::Int, b::Int = 1, switches::Int = 1)
     dims = m.dims
@@ -186,14 +194,18 @@ Pearson χ² of the counts against the exact distribution (states with expected 
 pooled into one bin), as a Wilson–Hilferty z-score: ≈ N(0, 1) when the sampler is exact.
 """
 function chi2_z(exact, counts, R)
-    X = 0.0; k = -1
-    pe = 0.0; pc = 0
+    X = 0.0
+    k = -1
+    pe = 0.0
+    pc = 0
     for (σ, p) in exact
         c = get(counts, σ, 0)
         if R * p >= 5
-            X += (c - R * p)^2 / (R * p); k += 1
+            X += (c - R * p)^2 / (R * p)
+            k += 1
         else
-            pe += p; pc += c
+            pe += p
+            pc += c
         end
     end
     pc += sum(c for (σ, c) in counts if !haskey(exact, σ); init = 0)   # impossible states

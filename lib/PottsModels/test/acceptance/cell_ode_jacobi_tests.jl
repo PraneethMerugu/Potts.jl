@@ -7,12 +7,12 @@
 #     Metal. The cross-cell reads are the public ones a cell ODE can write:
 #       - an indexed read `y[j]` of an ODE unknown of the same solver group (`y[3 - id]`,
 #         `y[max(id - 1, 1)]`, `y[min(id + 1, n)]`);
-#       - a population fold over cells that cannot be hoisted to a model slot (its body reads
-#         `time`), so it reads the cells' ODE state inside the ODE kernel.
+#       - a population fold over cells that cannot be hoisted to a model slot (its body
+#         reads `time`), so it reads the cells' ODE state inside the ODE kernel.
 #  2. Another cell's state is held at its start-of-step value over the whole step, as a
 #     different solver group's state already is (D-078): the cell's own unknowns advance
-#     through the solver's stages and substeps, the other cells' do not. With `Potts.RK4()` or
-#     `Adaptive(…)` the oracle is the cell's own ODE with that held forcing.
+#     through the solver's stages and substeps, the other cells' do not. With `Potts.RK4()`
+#     or `Adaptive(…)` the oracle is the cell's own ODE with that held forcing.
 #  3. Several solver groups in one scope, one of them `Adaptive`, combined with cross-cell
 #     reads both within a group and across groups: the same Jacobi result.
 #  4. Results do not depend on the cell labels: relabelling the cells (and permuting their
@@ -20,14 +20,14 @@
 #  5. Zero warm allocations for fixed-step cross-cell ODEs, with one or several groups.
 #  6. An empty cell slot (volume 0) does not integrate, and a live cell that reads it reads
 #     its unchanged value.
-# Every fixture uses `mcs_duration = 1` and one step per MCS (`ExplicitEuler()`, `Potts.RK4()`),
-# so the synchronous explicit-Euler oracles are exact in small integers. Each oracle comes
-# with a Gauss–Seidel (ascending cell order) counterpart that differs from it, so the
-# fixtures can tell the two apart (negative control, D-048).
-# Not here: model ODEs reading cells (they see the cells' new values by design, D-077 N3),
-# substeps > 1 of fixed-step solvers (covered by the held-state rule of item 2), and the
-# fold fixture on Metal (an unhoisted fold in a cell ODE does not compile for Metal at all
-# today, a separate defect).
+# Every fixture uses `mcs_duration = 1` and one step per MCS (`ExplicitEuler()`,
+# `Potts.RK4()`), so the synchronous explicit-Euler oracles are exact in small integers.
+# Each oracle comes with a Gauss–Seidel (ascending cell order) counterpart that differs from
+# it, so the fixtures can tell the two apart (negative control, D-048). Not here: model ODEs
+# reading cells (they see the cells' new values by design, D-077 N3), substeps > 1 of
+# fixed-step solvers (covered by the held-state rule of item 2), and the fold fixture on
+# Metal (an unhoisted fold in a cell ODE does not compile for Metal at all today, a separate
+# defect).
 
 @testsetup module CellODEJacobiSetup
 include(joinpath(@__DIR__, "..", "shared", "common.jl"))
@@ -107,7 +107,8 @@ end
 end
 # ---------------------------------------------------------------------------------------
 # States: n slots in a row, slot i a 4×4 block at x = 6(i − 1) + 2 …; `labels[i]` is the
-# label the block at position i carries (a relabelling permutes them); `dead` slots own no site
+# label the block at position i carries (a relabelling permutes them); `dead` slots own no
+# site
 function sigma(n; labels = 1:n, dead = (), height = 8)
     σ = zeros(Int32, 6n, height)
     for i in 1:n
@@ -134,10 +135,10 @@ end
 """Trajectory of `name` (one vector over labels per saved time), host arrays."""
 jacobi_traj(sol, name) = [Float64.(Array(getproperty(u.cell, name))) for u in sol.u]
 # ---------------------------------------------------------------------------------------
-# Oracles. `rate(y, c)` is cell c's rate on state `y`. Jacobi: every cell steps from the same
-# start-of-step state. Gauss–Seidel: cells step in place in ascending order (what a sequential
-# kernel without scratch computes). Both with h = 1 (one explicit-Euler step per MCS);
-# `skip` cells do not integrate (empty slots).
+# Oracles. `rate(y, c)` is cell c's rate on state `y`. Jacobi: every cell steps from the
+# same start-of-step state. Gauss–Seidel: cells step in place in ascending order (what a
+# sequential kernel without scratch computes). Both with h = 1 (one explicit-Euler step per
+# MCS); `skip` cells do not integrate (empty slots).
 function jacobi(rate, y0, m; skip = ())
     traj = [copy(y0)]
     for _ in 1:m
@@ -170,10 +171,18 @@ const DEAD = 4
 # Explicit Euler (h = 1): y ← w − y, z ← w. RK4 (one step): the linear decay toward the held
 # target scales the deviation by R(−λ) = 1 − λ + λ²/2 − λ³/6 + λ⁴/24. Adaptive: the exact
 # solution, deviation × e^(−λ).
-decay(solver, λ) = solver === :ee ? 1 - λ :
-    solver === :rk4 ? 1 - λ + λ^2 / 2 - λ^3 / 6 + λ^4 / 24 : exp(-λ)
+function decay(solver, λ)
+    if solver === :ee
+        return 1 - λ
+    elseif solver === :rk4
+        return 1 - λ + λ^2 / 2 - λ^3 / 6 + λ^4 / 24
+    else
+        return exp(-λ)
+    end
+end
 function mixed_oracle(y0, z0, m; ysolver = :ee, zsolver = :ee)
-    ys = [copy(y0)]; zs = [copy(z0)]
+    ys = [copy(y0)]
+    zs = [copy(z0)]
     for _ in 1:m
         y, z = ys[end], zs[end]
         w = [y[3 - c] + z[3 - c] for c in 1:2]
@@ -184,19 +193,31 @@ function mixed_oracle(y0, z0, m; ysolver = :ee, zsolver = :ee)
 end
 # what the mixed model gives if the cells step in place in ascending order (explicit Euler)
 function mixed_gauss_seidel(y0, z0, m)
-    ys = [copy(y0)]; zs = [copy(z0)]
+    ys = [copy(y0)]
+    zs = [copy(z0)]
     for _ in 1:m
         y, z = copy(ys[end]), copy(zs[end])
         for c in 1:2
             w = y[3 - c] + z[3 - c]
             y[c], z[c] = w - y[c], w
         end
-        push!(ys, y); push!(zs, z)
+        push!(ys, y)
+        push!(zs, z)
     end
     return ys, zs
 end
-jacobi_close(a, b, T) = length(a) == length(b) &&
-    all(isapprox.(a, b; rtol = T === Float32 ? 1.0e-5 : 1.0e-9, atol = T === Float32 ? 1.0e-5 : 1.0e-9))
+function jacobi_close(a, b, T)
+    return length(a) == length(b) && all(
+        isapprox.(
+            a, b; rtol = T === Float32 ? 1.0e-5 : 1.0e-9, atol = if T ===
+                    Float32
+                1.0e-5
+            else
+                1.0e-9
+            end
+        )
+    )
+end
 function warm_allocs(prob, alg)
     integ = init(prob, alg; save_start = false, save_end = false, save_everystep = false)
     step!(integ)
@@ -211,124 +232,193 @@ const jacobi_M = 4
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "cell ode jacobi: the oracles tell Jacobi from Gauss–Seidel (negative control)" setup = [CellODEJacobiSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "cell ode jacobi: the oracles tell Jacobi from Gauss–Seidel (negative \
+    control)" setup = [CellODEJacobiSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
     # MCS compared against the oracles
 
-    # ---------------------------------------------------------------------------------------
-    @testset "cell ode jacobi: the oracles tell Jacobi from Gauss–Seidel (negative control)" begin
-        @test jacobi(pair_rate(1.0), [1.0, 2.0], jacobi_M) != gauss_seidel(pair_rate(1.0), [1.0, 2.0], jacobi_M)
-        @test jacobi(pair_rate(0.25), [1.0, 2.0], jacobi_M) != gauss_seidel(pair_rate(0.25), [1.0, 2.0], jacobi_M)
+    # --------------------------------------------------------------------------------------
+    @testset "cell ode jacobi: the oracles tell Jacobi from Gauss–Seidel (negative \
+        control)" begin
+        @test jacobi(pair_rate(1.0), [1.0, 2.0], jacobi_M) !=
+            gauss_seidel(pair_rate(1.0), [1.0, 2.0], jacobi_M)
+        @test jacobi(pair_rate(0.25), [1.0, 2.0], jacobi_M) !=
+            gauss_seidel(pair_rate(0.25), [1.0, 2.0], jacobi_M)
         @test jacobi(forward_rate, SHIFT0, jacobi_M; skip = (DEAD,)) !=
             gauss_seidel(forward_rate, SHIFT0, jacobi_M; skip = (DEAD,))
-        # backward: an ascending in-place loop reads not-yet-stepped cells, so it is right by
-        # accident; the forward register is the one that catches it, a descending loop the reverse
+        # backward: an ascending in-place loop reads not-yet-stepped cells, so it is right
+        # by accident; the forward register is the one that catches it, a descending loop
+        # the reverse
         @test jacobi(backward_rate, SHIFT0, jacobi_M; skip = (DEAD,)) ==
             gauss_seidel(backward_rate, SHIFT0, jacobi_M; skip = (DEAD,))
-        @test jacobi(fold_rate(1:3), [1.0, 2.0, 4.0], jacobi_M) != gauss_seidel(fold_rate(1:3), [1.0, 2.0, 4.0], jacobi_M)
-        @test mixed_oracle([1.0, 2.0], [4.0, 8.0], 3)[1] != mixed_gauss_seidel([1.0, 2.0], [4.0, 8.0], 3)[1]
+        @test jacobi(fold_rate(1:3), [1.0, 2.0, 4.0], jacobi_M) !=
+            gauss_seidel(fold_rate(1:3), [1.0, 2.0, 4.0], jacobi_M)
+        @test mixed_oracle([1.0, 2.0], [4.0, 8.0], 3)[1] !=
+            mixed_gauss_seidel([1.0, 2.0], [4.0, 8.0], 3)[1]
         # hand check of the pair (k = 1 swaps): (1, 2) → (2, 1) → (1, 2)
         @test jacobi(pair_rate(1.0), [1.0, 2.0], 2) == [[1.0, 2.0], [2.0, 1.0], [1.0, 2.0]]
-        # hand check of the forward register, slot 4 empty: one slot per MCS, slot 5 reads slot 4
-        @test jacobi(forward_rate, SHIFT0, 2; skip = (DEAD,))[3] == [1.0, 1.0, 1.0, 8.0, 8.0, 8.0, 16.0]
+        # hand check of the forward register, slot 4 empty: one slot per MCS, slot 5 reads
+        # slot 4
+        @test jacobi(forward_rate, SHIFT0, 2; skip = (DEAD,))[3] ==
+            [1.0, 1.0, 1.0, 8.0, 8.0, 8.0, 16.0]
     end
 end
 
-@testitem "cell ode jacobi: two cells exchanging through y[j] are Jacobi" setup = [CellODEJacobiSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "cell ode jacobi: two cells exchanging through y[j] are Jacobi" setup = [
+    CellODEJacobiSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "cell ode jacobi: two cells exchanging through y[j] are Jacobi" begin
         for T in (Float64, Float32), k in (1.0, 0.25), alg in ALGS
-            prob = problem(JacobiPair(; name = :pair), 2, (0, jacobi_M); T, vals = (:y => [1.0, 2.0],))
+            prob = problem(
+                JacobiPair(; name = :pair), 2, (0, jacobi_M); T, vals = (:y => [1.0, 2.0],)
+            )
             prob = remake(prob; p = [:k => k])
             sol = solve(prob, alg; saveat = 0:jacobi_M)
-            @test jacobi_close(jacobi_traj(sol, :y), jacobi(pair_rate(k), [1.0, 2.0], jacobi_M), T)
+            @test jacobi_close(
+                jacobi_traj(sol, :y),
+                jacobi(pair_rate(k), [1.0, 2.0], jacobi_M), T
+            )
         end
     end
 end
 
-@testitem "cell ode jacobi: shift registers move one slot per MCS in both directions" setup = [CellODEJacobiSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "cell ode jacobi: shift registers move one slot per MCS in both directions" begin
+@testitem "cell ode jacobi: shift registers move one slot per MCS in both \
+    directions" setup = [CellODEJacobiSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "cell ode jacobi: shift registers move one slot per MCS in both \
+        directions" begin
         for T in (Float64, Float32), alg in ALGS
-            for (model, rate) in ((ShiftForward, forward_rate), (ShiftBackward, backward_rate))
-                prob = problem(model(; name = :shift), 7, (0, jacobi_M); T, dead = (DEAD,), vals = (:y => SHIFT0,))
+            for (model, rate) in (
+                    (ShiftForward, forward_rate), (
+                        ShiftBackward, backward_rate,
+                    ),
+                )
+                prob = problem(
+                    model(; name = :shift), 7, (0, jacobi_M);
+                    T, dead = (DEAD,), vals = (:y => SHIFT0,)
+                )
                 sol = solve(prob, alg; saveat = 0:jacobi_M)
-                @test jacobi_close(jacobi_traj(sol, :y), jacobi(rate, SHIFT0, jacobi_M; skip = (DEAD,)), T)
+                @test jacobi_close(
+                    jacobi_traj(sol, :y),
+                    jacobi(rate, SHIFT0, jacobi_M; skip = (DEAD,)), T
+                )
                 @test all(>(0), Array(sol.u[end].cell.volume)[[1:(DEAD - 1); (DEAD + 1):7]])
             end
         end
     end
 end
 
-@testitem "cell ode jacobi: a population fold read inside the ODE kernel is Jacobi" setup = [CellODEJacobiSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "cell ode jacobi: a population fold read inside the ODE kernel is Jacobi" setup =
+    [CellODEJacobiSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "cell ode jacobi: a population fold read inside the ODE kernel is Jacobi" begin
         y0 = [1.0, 2.0, 4.0]
         want = jacobi(fold_rate(1:3), y0, jacobi_M)
         for T in (Float64, Float32), alg in ALGS
             for model in (Fold, FoldHoisted)      # the hoisted fold is the positive control
-                sol = solve(problem(model(; name = :fold), 3, (0, jacobi_M); T, vals = (:y => y0,)), alg; saveat = 0:jacobi_M)
+                sol = solve(
+                    problem(model(; name = :fold), 3, (0, jacobi_M); T, vals = (:y => y0,)),
+                    alg; saveat = 0:jacobi_M
+                )
                 @test jacobi_close(jacobi_traj(sol, :y), want, T)
             end
         end
     end
 end
 
-@testitem "cell ode jacobi: results do not depend on the cell labels" setup = [CellODEJacobiSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "cell ode jacobi: results do not depend on the cell labels" setup = [
+    CellODEJacobiSetup,
+] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "cell ode jacobi: results do not depend on the cell labels" begin
         for alg in ALGS
             # the pair, labels swapped (the model is symmetric under 1 ↔ 2)
             for k in (1.0, 0.25)
-                go(labels) = jacobi_traj(
-                    solve(
-                        remake(
-                            problem(
-                                JacobiPair(; name = :pair), 2, (0, jacobi_M); labels,
-                                vals = (:y => [1.0, 2.0],)
-                            ); p = [:k => k]
-                        ), alg; saveat = 0:jacobi_M
-                    ), :y
-                )
+                function go(labels)
+                    return jacobi_traj(
+                        solve(
+                            remake(
+                                problem(
+                                    JacobiPair(; name = :pair), 2, (0, jacobi_M); labels,
+                                    vals = (:y => [1.0, 2.0],)
+                                ); p = [:k => k]
+                            ), alg; saveat = 0:jacobi_M
+                        ), :y
+                    )
+                end
                 a, b = go([1, 2]), go([2, 1])
                 @test all(t -> b[t][[2, 1]] ≈ a[t], eachindex(a))
             end
             # the fold over three cells, under every relabelling of a 3-cycle and a reversal
             y0 = [1.0, 2.0, 4.0]
-            run3(labels) = jacobi_traj(
-                solve(
-                    problem(Fold(; name = :fold), 3, (0, jacobi_M); labels, vals = (:y => y0,)),
-                    alg; saveat = 0:jacobi_M
-                ), :y
-            )
+            function run3(labels)
+                return jacobi_traj(
+                    solve(
+                        problem(
+                            Fold(; name = :fold), 3, (0, jacobi_M);
+                            labels, vals = (:y => y0,)
+                        ),
+                        alg; saveat = 0:jacobi_M
+                    ), :y
+                )
+            end
             a = run3([1, 2, 3])
             for labels in ([3, 2, 1], [2, 3, 1], [3, 1, 2])
                 b = run3(labels)
                 @test all(t -> b[t][labels] ≈ a[t], eachindex(a))
             end
             # the mixed model, labels swapped, with an adaptive group
-            runm(labels) = (
+            function runm(labels)
                 sol = solve(
                     problem(
                         JacobiMixed(; name = :mixed), 2, (0, 3); labels,
-                        vals = (:y => [1.0, 2.0], :z => [4.0, 8.0]), solvers = [:z => rodas()]
+                        vals = (:y => [1.0, 2.0], :z => [4.0, 8.0]), solvers = [
+                            :z =>
+                                rodas(),
+                        ]
                     ), alg; saveat = 0:3
-                );
-                (jacobi_traj(sol, :y), jacobi_traj(sol, :z))
-            )
+                )
+                return (jacobi_traj(sol, :y), jacobi_traj(sol, :z))
+            end
             (ya, za), (yb, zb) = runm([1, 2]), runm([2, 1])
-            @test all(t -> isapprox(yb[t][[2, 1]], ya[t]; rtol = 1.0e-9) && isapprox(zb[t][[2, 1]], za[t]; rtol = 1.0e-9), eachindex(ya))
+            @test all(
+                t -> isapprox(yb[t][[2, 1]], ya[t]; rtol = 1.0e-9) &&
+                    isapprox(zb[t][[2, 1]], za[t]; rtol = 1.0e-9),
+                eachindex(ya)
+            )
         end
     end
 end
 
-@testitem "cell ode jacobi: several solver groups (one adaptive) with cross-cell reads" setup = [CellODEJacobiSetup] tags = [:pottsmodels, :acceptance] begin
-    @testset "cell ode jacobi: several solver groups (one adaptive) with cross-cell reads" begin
+@testitem "cell ode jacobi: several solver groups (one adaptive) with cross-cell \
+    reads" setup = [CellODEJacobiSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
+    @testset "cell ode jacobi: several solver groups (one adaptive) with cross-cell \
+        reads" begin
         y0, z0 = [1.0, 2.0], [4.0, 8.0]
         configs = (
-            ((;), :ee, :ee),                                                        # one fixed-step group
-            ((; solvers = [:z => jacobi_RK4()]), :ee, :rk4),                          # two fixed-step groups
-            ((; solvers = [:z => rodas()]), :ee, :adaptive),                   # fixed-step + adaptive
-            ((; solvers = [:y => rodas()]), :adaptive, :ee),                   # the adaptive group first
-            ((; ode_solver = rodas()), :adaptive, :adaptive),                  # one adaptive group
+            # one fixed-step group
+            ((;), :ee, :ee),
+            # two fixed-step groups
+            ((; solvers = [:z => jacobi_RK4()]), :ee, :rk4),
+            # fixed-step + adaptive
+            ((; solvers = [:z => rodas()]), :ee, :adaptive),
+            # the adaptive group first
+            ((; solvers = [:y => rodas()]), :adaptive, :ee),
+            # one adaptive group
+            ((; ode_solver = rodas()), :adaptive, :adaptive),
         )
         for (kw, ys, zs) in configs, alg in ALGS
-            prob = problem(JacobiMixed(; name = :mixed), 2, (0, 3); vals = (:y => y0, :z => z0), kw...)
+            prob = problem(
+                JacobiMixed(; name = :mixed), 2, (0, 3); vals = (:y => y0, :z => z0), kw...
+            )
             sol = solve(prob, alg; saveat = 0:3)
             wy, wz = mixed_oracle(y0, z0, 3; ysolver = ys, zsolver = zs)
             tol = (ys === :adaptive || zs === :adaptive) ? 1.0e-7 : 1.0e-12
@@ -338,52 +428,91 @@ end
     end
 end
 
-@testitem "cell ode jacobi: zero warm allocations" setup = [CellODEJacobiSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "cell ode jacobi: zero warm allocations" setup = [CellODEJacobiSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "cell ode jacobi: zero warm allocations" begin
         for T in (Float64, Float32), alg in ALGS
-            @test warm_allocs(problem(JacobiPair(; name = :pair), 2, (0, 100); T, vals = (:y => [1.0, 2.0],)), alg) == 0
+            @test warm_allocs(
+                problem(
+                    JacobiPair(; name = :pair), 2, (0, 100); T, vals = (:y => [1.0, 2.0],)
+                ),
+                alg
+            ) == 0
             @test warm_allocs(
                 problem(
                     ShiftForward(; name = :shift), 7, (0, 100); T, dead = (DEAD,),
                     vals = (:y => SHIFT0,)
                 ), alg
             ) == 0
-            @test warm_allocs(problem(Fold(; name = :fold), 3, (0, 100); T, vals = (:y => [1.0, 2.0, 4.0],)), alg) == 0
+            @test warm_allocs(
+                problem(
+                    Fold(; name = :fold), 3, (0, 100); T, vals = (:y => [1.0, 2.0, 4.0],)
+                ),
+                alg
+            ) == 0
             @test warm_allocs(
                 problem(
                     JacobiMixed(; name = :mixed), 2, (0, 100); T,
-                    vals = (:y => [1.0, 2.0], :z => [4.0, 8.0]), solvers = [:z => jacobi_RK4()]
+                    vals = (:y => [1.0, 2.0], :z => [4.0, 8.0]), solvers = [
+                        :z =>
+                            jacobi_RK4(),
+                    ]
                 ), alg
             ) == 0
         end
     end
 end
 
-@testitem "cell ode jacobi: on the device" setup = [CellODEJacobiSetup] tags = [:pottsmodels, :acceptance] begin
+@testitem "cell ode jacobi: on the device" setup = [CellODEJacobiSetup] tags = [
+    :pottsmodels, :acceptance,
+] begin
     @testset "cell ode jacobi: on the device" begin
         if PottsDevices.on_device()
             backend = PottsDevices.device_backend()
             alg = CheckerboardCPM(; proposal = Moore(1))
             T = Float32
             for k in (1.0, 0.25)
-                prob = remake(problem(JacobiPair(; name = :pair), 2, (0, jacobi_M); T, vals = (:y => [1.0, 2.0],)); p = [:k => k])
+                prob = remake(
+                    problem(
+                        JacobiPair(; name = :pair), 2, (0, jacobi_M);
+                        T, vals = (:y => [1.0, 2.0],)
+                    );
+                    p = [:k => k]
+                )
                 sol = solve(prob, alg; backend, saveat = 0:jacobi_M)
-                @test jacobi_close(jacobi_traj(sol, :y), jacobi(pair_rate(k), [1.0, 2.0], jacobi_M), T)
+                @test jacobi_close(
+                    jacobi_traj(sol, :y),
+                    jacobi(pair_rate(k), [1.0, 2.0], jacobi_M), T
+                )
             end
-            for (model, rate) in ((ShiftForward, forward_rate), (ShiftBackward, backward_rate))
-                prob = problem(model(; name = :shift), 7, (0, jacobi_M); T, dead = (DEAD,), vals = (:y => SHIFT0,))
+            for (model, rate) in (
+                    (ShiftForward, forward_rate), (
+                        ShiftBackward, backward_rate,
+                    ),
+                )
+                prob = problem(
+                    model(; name = :shift), 7, (0, jacobi_M);
+                    T, dead = (DEAD,), vals = (:y => SHIFT0,)
+                )
                 sol = solve(prob, alg; backend, saveat = 0:jacobi_M)
-                @test jacobi_close(jacobi_traj(sol, :y), jacobi(rate, SHIFT0, jacobi_M; skip = (DEAD,)), T)
+                @test jacobi_close(
+                    jacobi_traj(sol, :y),
+                    jacobi(rate, SHIFT0, jacobi_M; skip = (DEAD,)), T
+                )
             end
-            # (`Fold` is not run here: a fold left in the ODE kernel does not compile for Metal
-            # yet, with or without cross-cell reads; that is not this item)
+            # (`Fold` is not run here: a fold left in the ODE kernel does not compile for
+            # Metal yet, with or without cross-cell reads; that is not this item)
             prob = problem(
-                JacobiMixed(; name = :mixed), 2, (0, 3); T, vals = (:y => [1.0, 2.0], :z => [4.0, 8.0]),
+                JacobiMixed(; name = :mixed), 2, (0, 3); T, vals = (
+                    :y => [1.0, 2.0], :z => [4.0, 8.0],
+                ),
                 solvers = [:z => jacobi_RK4()]
             )
             sol = solve(prob, alg; backend, saveat = 0:3)
             wy, wz = mixed_oracle([1.0, 2.0], [4.0, 8.0], 3; zsolver = :rk4)
-            @test jacobi_close(jacobi_traj(sol, :y), wy, T) && jacobi_close(jacobi_traj(sol, :z), wz, T)
+            @test jacobi_close(jacobi_traj(sol, :y), wy, T) &&
+                jacobi_close(jacobi_traj(sol, :z), wz, T)
         else
             @test_skip "device (POTTS_GPU=metal|rocm)"
         end

@@ -23,8 +23,11 @@
 
 # face offsets (the shell tables' `xface` positions as offsets)
 const _FACE2 = map(o -> Int32.(o), ((1, 0), (-1, 0), (0, 1), (0, -1)))
-const _FACE3 = map(o -> Int32.(o), (
-    (1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)))
+const _FACE3 = map(
+    o -> Int32.(o), (
+        (1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1),
+    )
+)
 
 """
 The adjacency offsets of a cell's sites: face (`Val(false)`) or full (`Val(true)`).
@@ -39,24 +42,43 @@ The adjacency offsets of a cell's sites: face (`Val(false)`) or full (`Val(true)
 # the shell positions adjacent to x under the adjacency, in shell (`shell_offsets`) order
 const _SQUARE_XFACE = _bits(_SQUARE_SHELL, o -> sum(abs, o) == 1)
 @inline _touch_bits(::Lattice{2, M, Hexagonal}, ::Val{F}) where {M, F} = _RING_ALL6
-@inline _touch_bits(::Lattice{2, M, Square}, ::Val{F}) where {M, F} = F ? _RING_ALL8 :
-                                                                      _SQUARE_XFACE
-@inline _touch_bits(::Lattice{3}, ::Val{F}) where {F} = F ? _CUBE_TABLES.all :
-                                                        _CUBE_TABLES.xface
+@inline function _touch_bits(::Lattice{2, M, Square}, ::Val{F}) where {M, F}
+    if F
+        return _RING_ALL8
+    else
+        return _SQUARE_XFACE
+    end
+end
+@inline function _touch_bits(::Lattice{3}, ::Val{F}) where {F}
+    if F
+        return _CUBE_TABLES.all
+    else
+        return _CUBE_TABLES.xface
+    end
+end
 
 # the shell pieces of the mask `m` (shell order) that meet its touches `touch`, with the
 # shell kernels: runs of the ring in 2D, dilation in the 3×3×3 box in 3D
-@inline _touched_pieces(lat::Lattice, m::UInt32, touch::UInt32, ::Val{F}) where {F} = _touched_pieces(
-    _ring_bits(lat), m, touch, F)
+@inline function _touched_pieces(lat::Lattice, m::UInt32, touch::UInt32, ::Val{F}) where {F}
+    return _touched_pieces(
+        _ring_bits(lat), m, touch, F
+    )
+end
 @inline function _touched_pieces(r::Val{:ring8}, m::UInt32, touch::UInt32, full::Bool)
     mr = _to_ring8(m)
     # full: every position of m is a touch; face: the runs holding a face neighbour
     return full ? _pieces(mr, true, r, nothing) : _runs8_touching(mr)
 end
-@inline _touched_pieces(r::Val{:ring6}, m::UInt32, touch::UInt32, full::Bool) = _pieces(
-    m, full, r, nothing)                     # every hex position is a touch
-@inline _touched_pieces(::Val{:box}, m::UInt32, touch::UInt32, full::Bool) = _components27(
-    m, full, touch)
+@inline function _touched_pieces(r::Val{:ring6}, m::UInt32, touch::UInt32, full::Bool)
+    return _pieces(
+        m, full, r, nothing
+    )
+end                     # every hex position is a touch
+@inline function _touched_pieces(::Val{:box}, m::UInt32, touch::UInt32, full::Bool)
+    return _components27(
+        m, full, touch
+    )
+end
 
 """
 Evaluation mode for `Global`: exact floods everywhere (`GlobalExact`, used by host
@@ -64,7 +86,10 @@ algorithms), or windowed search (`GlobalBoard`, used by `CheckerboardCPM`).
 """
 struct GlobalExact end
 
-"""Windowed global connectivity evaluation mode used by `CheckerboardCPM` when a rule sets a search window."""
+"""
+Windowed global connectivity evaluation mode used by `CheckerboardCPM` when a rule sets a
+search window.
+"""
 struct GlobalBoard end
 
 """
@@ -73,7 +98,10 @@ Stage of the `Global` veto (`ConnectivityHooks.post`): local shell test only (`0
 """
 struct GlobalLocal end
 
-"""Full-search stage of the `Global` veto (`ConnectivityHooks.post`): returns `0` (pass), `1` (refused for want of window), or `2` (refused)."""
+"""
+Full-search stage of the `Global` veto (`ConnectivityHooks.post`): returns `0` (pass), `1`
+(refused for want of window), or `2` (refused).
+"""
 struct GlobalSearch end
 
 const GLOBAL_PASS = Int32(0)
@@ -94,7 +122,8 @@ The whole-cell connectivity parts of a `CPMFunction`:
     serial kernel over the scratch;
   - `uses_global`: the model uses `Global` (veto, penalty or `connected`): the integrator
     counts `stats.connectivity_deferred`;
-  - `exact_veto`: a veto `Global()` without window (exact search: host only on the checkerboard);
+  - `exact_veto`: a veto `Global()` without window (exact search: host only on the
+    checkerboard);
   - `after_slots`: the cell-scope adjacencies tracked (0, 1 or 2): the after-value buffer;
   - `window`: the largest window of the model's windowed `Global` searches (0: none). The
     checkerboard keeps concurrent copies farther apart than it.
@@ -126,8 +155,10 @@ function FloodScratch(backend, lat::Lattice, after_slots::Integer)
     n = nsites(lat)
     z(T, dims...) = KernelAbstractions.zeros(backend, T, dims...)   # host or device scratch
     # the stack holds sites: `site_index_type` (D-253), Int64 above 2³¹ − 1 sites
-    return FloodScratch(z(UInt32, n), z(site_index_type(n), n), z(UInt32, 1),
-        after_slots > 0 ? z(Int32, 4 * after_slots, n) : nothing)
+    return FloodScratch(
+        z(UInt32, n), z(site_index_type(n), n), z(UInt32, 1),
+        after_slots > 0 ? z(Int32, 4 * after_slots, n) : nothing
+    )
 end
 
 """
@@ -137,11 +168,11 @@ The run-context fields of a model with whole-cell connectivity (`f.connectivity`
 flood scratch and the evaluation mode (`GlobalExact()` or `GlobalBoard()`); empty otherwise.
 """
 function connectivity_ctx(backend, f, lat, mode)
-    _connectivity_ctx(backend, f.connectivity, lat, mode)
+    return _connectivity_ctx(backend, f.connectivity, lat, mode)
 end
 _connectivity_ctx(backend, ::Nothing, lat, mode) = (;)
 function _connectivity_ctx(backend, h::ConnectivityHooks, lat, mode)
-    (; flood = FloodScratch(backend, lat, h.after_slots), global_mode = mode)
+    return (; flood = FloodScratch(backend, lat, h.after_slots), global_mode = mode)
 end
 
 # `k` fresh stamps; the marks are cleared when the counter would wrap (serial callers only)
@@ -159,6 +190,7 @@ end
 
 # the site of shell position k (1-based) of x; a touch is always in the domain
 @inline function _shell_site(lat, x, k)
+    # bounds: k ≤ the shell's size, the length of shell_offsets(lat)
     _, y = shift(lat, x, @inbounds shell_offsets(lat)[k])
     return linear_index(lat, y)
 end
@@ -166,13 +198,16 @@ end
 # Flood cell `c` from site `s0` (marked `S` by the caller), never through `skip`: marks
 # reached sites `S`, counts the touches it meets (sites pre-marked `S + 1`) into `found`,
 # and stops once `found == stop` (`stop = 0`: never). Returns (sites reached, found).
-function _flood!(σ, lat, fl::FloodScratch, s0::Int, c, skip::Int,
-        S::UInt32, adj::Val, found::Int, stop::Int)
+function _flood!(
+        σ, lat, fl::FloodScratch, s0::Int, c, skip::Int,
+        S::UInt32, adj::Val, found::Int, stop::Int
+    )
     mark = fl.mark
     stack = fl.stack
     offs = _adjacency_offsets(lat, adj)
     top = 1
-    @inbounds stack[1] = eltype(stack)(s0)      # stack has nsites entries: each site enters once
+    # stack has nsites entries: each site enters once
+    @inbounds stack[1] = eltype(stack)(s0)
     size = 1
     while top > 0
         s = Int(@inbounds stack[top])
@@ -199,7 +234,8 @@ function _flood!(σ, lat, fl::FloodScratch, s0::Int, c, skip::Int,
     return size, found
 end
 
-# pre-mark the touches (shell positions in `touch`) of x with `S + 1`; their count and the first
+# pre-mark the touches (shell positions in `touch`) of x with `S + 1`; their count and the
+# first
 function _mark_touches!(lat, fl::FloodScratch, x, touch::UInt32, S::UInt32)
     n = 0
     first = 0
@@ -208,7 +244,8 @@ function _mark_touches!(lat, fl::FloodScratch, x, touch::UInt32, S::UInt32)
         k = trailing_zeros(m) + 1
         m &= m - UInt32(1)
         s = _shell_site(lat, x, k)
-        if @inbounds(fl.mark[s]) != S + UInt32(1)        # a short periodic axis may repeat a site
+        # a short periodic axis may repeat a site
+        if @inbounds(fl.mark[s]) != S + UInt32(1)
             @inbounds fl.mark[s] = S + UInt32(1)
             n += 1
             first == 0 && (first = s)
@@ -230,10 +267,12 @@ end
 
 # exact: the touches are connected in `c` without x
 function _keeps_exact(
-        σ, lat, fl::FloodScratch, x, t::Int, c, touch::UInt32, adj::Val)
+        σ, lat, fl::FloodScratch, x, t::Int, c, touch::UInt32, adj::Val
+    )
     S = _stamps!(fl, UInt32(2))
     n, s0 = _mark_touches!(lat, fl, x, touch, S)
     n <= 1 && return true
+    # bounds: s0 is a window position from `_mark_touches!`, ≤ length(fl.mark)
     @inbounds fl.mark[s0] = S
     _, found = _flood!(σ, lat, fl, s0, c, t, S, adj, 1, n)
     return found == n
@@ -262,11 +301,20 @@ end
     end
     return idx
 end
-@inline _box_size(lat::Lattice{N}, W::Int) where {N} = prod(ntuple(
-    d -> min(lat.dims[d], 2W +
-                          1), Val(N)))
+@inline function _box_size(lat::Lattice{N}, W::Int) where {N}
+    return prod(
+        ntuple(
+            d -> min(
+                lat.dims[d], 2W +
+                    1
+            ), Val(N)
+        )
+    )
+end
 
-@inline _bit(v, i::Int) = (@inbounds(v[(i >> 5) + 1]) >> (i & 31)) & UInt32(1) != 0      # i < 32 length(v)
+# i < 32 length(v)
+@inline _bit(v, i::Int) = (@inbounds(v[(i >> 5) + 1]) >> (i & 31)) & UInt32(1) != 0
+# bounds: i < 32 length(v), as for `_bit`
 @inline _setbit!(v, i::Int) = (@inbounds(v[(i >> 5) + 1] |= UInt32(1) << (i & 31)); nothing)
 
 """
@@ -277,8 +325,10 @@ box |Δ| ≤ W round x; otherwise a touching piece that stays inside the box is 
 the visited bits are `MVector`s sized by `CAP` (no allocation, device-safe). `CAP` bounds
 the box (`_box_size`); a larger box is refused for want of window.
 """
-function _keeps_window(σ, lat::Lattice{N}, x, t::Int, c, touch::UInt32,
-        adj::Val, ::Val{W}, ::Val{CAP}, ::Type{I}) where {N, W, CAP, I}
+function _keeps_window(
+        σ, lat::Lattice{N}, x, t::Int, c, touch::UInt32,
+        adj::Val, ::Val{W}, ::Val{CAP}, ::Type{I}
+    ) where {N, W, CAP, I}
     _box_size(lat, W) <= CAP || return GLOBAL_WINDOW
     seen = MVector{cld(CAP, 32), UInt32}(ntuple(_ -> UInt32(0), Val(cld(CAP, 32))))
     tmark = MVector{cld(CAP, 32), UInt32}(ntuple(_ -> UInt32(0), Val(cld(CAP, 32))))
@@ -310,7 +360,8 @@ function _keeps_window(σ, lat::Lattice{N}, x, t::Int, c, touch::UInt32,
         _setbit!(seen, i0)
         found += 1
         top = 1
-        @inbounds stack[1] = I(linear_index(lat, y0))             # each box site enters once: top ≤ CAP
+        # each box site enters once: top ≤ CAP
+        @inbounds stack[1] = I(linear_index(lat, y0))
         escaped = false
         while top > 0
             s = Int(@inbounds stack[top])
@@ -335,7 +386,8 @@ function _keeps_window(σ, lat::Lattice{N}, x, t::Int, c, touch::UInt32,
         end
         first && found == ntouch && return GLOBAL_PASS
         first = false
-        escaped || return GLOBAL_REFUSED           # a whole piece inside the box: a true split
+        # a whole piece inside the box: a true split
+        escaped || return GLOBAL_REFUSED
     end
     return GLOBAL_WINDOW
 end
@@ -345,7 +397,9 @@ end
 
 `Global`'s decision for the losing cell `old` (always `GLOBAL_PASS` for the medium): 0
 passes, 1 is a refusal for want of window, 2 a refusal. `GlobalLocal()` runs the local
-test only (1: undecided); `GlobalSearch()` decides, exactly under `ctx.global_mode = GlobalExact()` (or without window), in the box of radius `window` under `GlobalBoard()`.
+test only (1: undecided); `GlobalSearch()` decides, exactly under
+`ctx.global_mode = GlobalExact()` (or without window), in the box of radius `window` under
+`GlobalBoard()`.
 """
 @inline function global_keeps(σ, ctx, prop::Proposal, adj::Val, w::Val, cap::Val, stage)
     prop.old == 0 && return GLOBAL_PASS
@@ -355,14 +409,28 @@ test only (1: undecided); `GlobalSearch()` decides, exactly under `ctx.global_mo
     stage isa GlobalLocal && return GLOBAL_WINDOW
     return _keeps_search(ctx.global_mode, σ, ctx, prop, touch, adj, w, cap)
 end
-@inline _keeps_search(::GlobalExact, σ, ctx, prop, touch, adj, w, cap) = _keeps_exact(
-    σ, ctx.lattice, ctx.flood, prop.x, prop.target, prop.old, touch, adj) ? GLOBAL_PASS :
-                                                                         GLOBAL_REFUSED
-@inline _keeps_search(
-    ::GlobalBoard, σ, ctx, prop, touch, adj, ::Val{nothing}, cap) = _keeps_search(
-    GlobalExact(), σ, ctx, prop, touch, adj, Val(nothing), cap)
-@inline _keeps_search(::GlobalBoard, σ, ctx, prop, touch, adj, w::Val, cap) = _keeps_window(
-    σ, ctx.lattice, prop.x, prop.target, prop.old, touch, adj, w, cap, eltype(ctx.flood.stack))
+@inline function _keeps_search(::GlobalExact, σ, ctx, prop, touch, adj, w, cap)
+    if _keeps_exact(
+            σ, ctx.lattice, ctx.flood, prop.x, prop.target, prop.old, touch, adj
+        )
+        return GLOBAL_PASS
+    else
+        return GLOBAL_REFUSED
+    end
+end
+@inline function _keeps_search(
+        ::GlobalBoard, σ, ctx, prop, touch, adj, ::Val{nothing}, cap
+    )
+    return _keeps_search(
+        GlobalExact(), σ, ctx, prop, touch, adj, Val(nothing), cap
+    )
+end
+@inline function _keeps_search(::GlobalBoard, σ, ctx, prop, touch, adj, w::Val, cap)
+    return _keeps_window(
+        σ, ctx.lattice, prop.x, prop.target, prop.old,
+        touch, adj, w, cap, eltype(ctx.flood.stack)
+    )
+end
 
 """
     global_gains(σ, ctx, prop, Val(full)) -> Bool
@@ -373,16 +441,20 @@ pieces, i.e. x is adjacent to `new` under the adjacency.
 @inline function global_gains(σ, ctx, prop::Proposal, adj::Val)
     prop.new == 0 && return true
     lat = ctx.lattice
-    return (shell_mask(read_shell(σ, ctx, prop).owners, prop.new) &
-            _touch_bits(lat, adj)) != 0
+    return (
+        shell_mask(read_shell(σ, ctx, prop).owners, prop.new) &
+            _touch_bits(lat, adj)
+    ) != 0
 end
 
 """
 Whether `global_keeps` needs the search for this copy (the local test fails).
 """
-@inline global_defer(σ, ctx, prop::Proposal, adj::Val) = prop.old != 0 &&
-                                                         !_losing_shell(
-    σ, ctx.lattice, prop.x, prop.old, adj)[3]
+@inline function global_defer(σ, ctx, prop::Proposal, adj::Val)
+    return prop.old != 0 && !_losing_shell(
+        σ, ctx.lattice, prop.x, prop.old, adj
+    )[3]
+end
 
 # ---------------------------------------------------------------------------------------
 # Cell-scope pieces and largest_piece
@@ -396,7 +468,8 @@ function _pieces_lose(σ, ctx, prop::Proposal, P, L, V, adj::Val)
     v == 1 && return Int32(0), Int32(0), p0, l0
     lat = ctx.lattice
     _, touch, ok = _losing_shell(σ, lat, prop.x, a, adj)
-    touch == 0 && return Int32(p0 - 1), Int32(l0), p0, l0          # an isolated site: its piece goes
+    # an isolated site: its piece goes
+    touch == 0 && return Int32(p0 - 1), Int32(l0), p0, l0
     p0 == 1 && ok && return Int32(1), Int32(v - 1), p0, l0
     # the pieces of P_x \ {x}, from the touches
     fl = ctx.flood
@@ -415,8 +488,10 @@ function _pieces_lose(σ, ctx, prop::Proposal, P, L, V, adj::Val)
         @inbounds fl.mark[s] = S
         found += 1
         sz, found = _flood!(
-            σ, lat, fl, s, a, prop.target, S, adj, found, p0 == 1 && k == 0 ? n : 0)
-        p0 == 1 && k == 0 && found == n && return Int32(1), Int32(v - 1), p0, l0   # one piece, still connected
+            σ, lat, fl, s, a, prop.target, S, adj, found, p0 == 1 && k == 0 ? n : 0
+        )
+        # one piece, still connected
+        p0 == 1 && k == 0 && found == n && return Int32(1), Int32(v - 1), p0, l0
         k += 1
         total += sz
         maxc = max(maxc, sz)
@@ -439,6 +514,7 @@ end
 # after-values of the gaining cell `b`
 function _pieces_gain(σ, ctx, prop::Proposal, P, L, V, adj::Val)
     b = prop.new
+    # bounds: b = prop.new is a cell id ≤ capacity = length(V) = length(P)
     v = Int(@inbounds V[b])
     p0 = Int(@inbounds P[b])
     l0 = Int(@inbounds L[b])
@@ -466,25 +542,35 @@ function _pieces_gain(σ, ctx, prop::Proposal, P, L, V, adj::Val)
 end
 
 """
-    pieces_after!(σ, ctx, prop, P, L, V, Val(full), slot) -> (pieces_old, largest_old, pieces_new, largest_new)
+    pieces_after!(σ, ctx, prop, P, L, V, Val(full), slot) -> (pieces_old, largest_old,
+        pieces_new, largest_new)
 
 The exact pieces and largest piece of the old and new cells after the copy (0 for the
 medium), from the trackers `P`, `L` (this adjacency) and the volumes `V`. The values are
 also stored for the target in `ctx.flood.after` (rows `4(slot − 1) + 1:4`) for
-[`commit_pieces!`](@ref): on the lockless checkerboard (`ctx.lockless`) as the changes from the
-values read. A cell in one piece that stays in one piece changes its largest piece by ∓1 (its
-volume's change), not by a difference of two reads that a concurrent copy of the cell may
-separate; every other change is local (the copy's own site) or comes from the floods, which
-run with nothing in flight.
+[`commit_pieces!`](@ref): on the lockless checkerboard (`ctx.lockless`) as the changes from
+the values read. A cell in one piece that stays in one piece changes its largest piece by ∓1
+(its volume's change), not by a difference of two reads that a concurrent copy of the cell
+may separate; every other change is local (the copy's own site) or comes from the floods,
+which run with nothing in flight.
 """
 @inline function pieces_after!(σ, ctx, prop::Proposal, P, L, V, adj::Val, slot::Int)
-    po, lo, p0, l0 = prop.old == 0 ? (Int32(0), Int32(0), 0, 0) : _pieces_lose(σ, ctx, prop, P, L, V, adj)
-    pn, ln, q0, m0 = prop.new == 0 ? (Int32(0), Int32(0), 0, 0) : _pieces_gain(σ, ctx, prop, P, L, V, adj)
+    po, lo, p0, l0 = if prop.old == 0
+        (Int32(0), Int32(0), 0, 0)
+    else
+        _pieces_lose(σ, ctx, prop, P, L, V, adj)
+    end
+    pn, ln, q0, m0 = if prop.new == 0
+        (Int32(0), Int32(0), 0, 0)
+    else
+        _pieces_gain(σ, ctx, prop, P, L, V, adj)
+    end
     a = ctx.flood.after
     r = 4 * (slot - 1)
     t = prop.target
     # rows 4·slot ≤ size(after, 1); t in 1:nsites = size(after, 2)
     if _lockless(ctx)
+        # bounds: rows 4·slot ≤ size(after, 1); t in 1:nsites = size(after, 2)
         @inbounds a[r + 1, t] = po - Int32(p0)
         @inbounds a[r + 2, t] = p0 == 1 && po == 1 ? Int32(-1) : lo - Int32(l0)
         @inbounds a[r + 3, t] = pn - Int32(q0)
@@ -511,8 +597,9 @@ other copies of its cells are in flight (no flood runs outside the serial pass).
         a = prop.old
         m = shell_mask(owners, a)
         touch = m & _touch_bits(lat, adj)
+        # bounds: a = prop.old is a cell id ≤ capacity = length(V) = length(P)
         fast = @inbounds(V[a]) == 1 || touch == 0 ||
-               (@inbounds(P[a]) == 1 && _touched_pieces(lat, m, touch, adj) <= 1)
+            (@inbounds(P[a]) == 1 && _touched_pieces(lat, m, touch, adj) <= 1)
         fast || return true
     end
     if prop.new != 0
@@ -523,8 +610,8 @@ other copies of its cells are in flight (no flood runs outside the serial pass).
 end
 
 """
-Apply the after-values `pieces_after!` stored for the target to the trackers `P`, `L` (on the
-lockless checkerboard, add the stored changes atomically).
+Apply the after-values `pieces_after!` stored for the target to the trackers `P`, `L` (on
+the lockless checkerboard, add the stored changes atomically).
 """
 @inline function commit_pieces!(P, L, prop::Proposal, ctx, slot::Int)
     a = ctx.flood.after
@@ -532,6 +619,7 @@ lockless checkerboard, add the stored changes atomically).
     t = prop.target
     if _lockless(ctx)
         if prop.old != 0                       # a nonzero owner is a cell id in 1:capacity
+            # bounds: rows r + 1, r + 2 ≤ size(a, 1); t ≤ nsites = size(a, 2)
             Atomix.@atomic P[prop.old] += @inbounds(a[r + 1, t])
             Atomix.@atomic L[prop.old] += @inbounds(a[r + 2, t])
         end

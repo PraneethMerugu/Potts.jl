@@ -1,6 +1,6 @@
 # Definitions of ir/builder_tests.jl that other test files use.
 using LatticeFields.IR: Ex, KernelBuilder, IRError, verify, ADD, MUL, LOAD, REAL, nodeargs,
-                        scmp
+    scmp
 using LatticeFields.Compile: check_types
 
 """

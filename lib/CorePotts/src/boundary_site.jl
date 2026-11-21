@@ -21,12 +21,15 @@
 # about 0.25 ms on 1400²); quiet sites cost nothing else.
 
 mutable struct BoundaryCache{N, K, FZ, I}
-    const list::Vector{I}           # B in `list[1:n]`, any order (I: `site_index_type`, D-253)
+    # B in `list[1:n]`, any order (I: `site_index_type`, D-253)
+    const list::Vector{I}
     const pos::Vector{I}            # position in `list`, 0 outside B
     const unlike::Vector{Int32}     # on-lattice mobile proposal neighbours of another owner
     const σ0::Vector{Int32}         # σ as B last saw it
-    const frozen0::FZ               # the frozen mask as B last saw it (`nothing`: all mobile)
-    const rev::NTuple{K, NTuple{N, Int32}}  # negated proposal offsets: the sites that read a site
+    # the frozen mask as B last saw it (`nothing`: all mobile)
+    const frozen0::FZ
+    # negated proposal offsets: the sites that read a site
+    const rev::NTuple{K, NTuple{N, Int32}}
     n::Int
     nq::Int                         # the `n` and the `N` of the cached `lq` (-1: none)
     Nq::Int
@@ -37,8 +40,10 @@ function BoundaryCache(σ, mob, lat::Lattice{N}, proposal::Relation{N, K}) where
     m = length(σ)
     rev = map(o -> map(-, o), proposal.offsets)
     I = site_index_type(m)
-    B = BoundaryCache{N, K, _shadow_type(mob), I}(zeros(I, m), zeros(I, m), zeros(Int32, m),
-        zeros(Int32, m), _shadow_mask(mob, m), rev, 0, -1, -1, 0.0)
+    B = BoundaryCache{N, K, _shadow_type(mob), I}(
+        zeros(I, m), zeros(I, m), zeros(Int32, m),
+        zeros(Int32, m), _shadow_mask(mob, m), rev, 0, -1, -1, 0.0
+    )
     _rebuild_boundary!(B, σ, mob, lat, proposal.offsets)
     return B
 end
@@ -77,8 +82,12 @@ end
     end
     return nothing
 end
-@inline _recount!(B::BoundaryCache, σ, mob, lat, offsets, u::Int, x) =
-    (c = _unlike(σ, mob, lat, offsets, u, x); @inbounds B.unlike[u] = c; _set_boundary!(B, u, c > 0 && is_mobile(mob, u)))
+@inline function _recount!(B::BoundaryCache, σ, mob, lat, offsets, u::Int, x)
+    c = _unlike(σ, mob, lat, offsets, u, x)
+    # bounds: u ≤ nsites = length(B.unlike)
+    @inbounds B.unlike[u] = c
+    return _set_boundary!(B, u, c > 0 && is_mobile(mob, u))
+end
 
 # The committed copy t: a → b (t mobile, nothing else changed): t is recounted, and every
 # site u whose proposal reaches t gains or loses one unlike neighbour.
@@ -123,10 +132,12 @@ function _rebuild_boundary!(B::BoundaryCache, σ, mob, lat, offsets)
     return B
 end
 _copy_mask!(::Nothing, mob) = nothing
-_copy_mask!(f0::AbstractVector{Bool}, mob::MaskMobility) = (copyto!(f0, vec(mob.frozen)); nothing)
+function _copy_mask!(f0::AbstractVector{Bool}, mob::MaskMobility)
+    (copyto!(f0, vec(mob.frozen)); nothing)
+end
 
-# Bring B up to the current σ and mask: blocks of 64 sites are compared branch-free, and only
-# a block that differs is visited site by site.
+# Bring B up to the current σ and mask: blocks of 64 sites are compared branch-free, and
+# only a block that differs is visited site by site.
 function _sync_boundary!(B::BoundaryCache, σ, mob, lat, offsets)
     σ0 = B.σ0
     m = length(σ0)
@@ -134,7 +145,8 @@ function _sync_boundary!(B::BoundaryCache, σ, mob, lat, offsets)
         hi = min(lo + 63, m)
         _block_changed(σ, σ0, B.frozen0, mob, lo, hi) || continue
         for i in lo:hi
-            (@inbounds(σ[i]) != @inbounds(σ0[i]) || _mask_changed(B.frozen0, mob, i)) || continue
+            (@inbounds(σ[i]) != @inbounds(σ0[i]) || _mask_changed(B.frozen0, mob, i)) ||
+                continue
             @inbounds σ0[i] = σ[i]          # i ∈ lo:hi ⊆ 1:m, both of length m
             _note_mask!(B.frozen0, mob, i)
             _touch_boundary!(B, σ, mob, lat, offsets, i, coordinates(lat, i))
@@ -145,7 +157,8 @@ end
 @inline function _block_changed(σ, σ0, f0, mob, lo, hi)
     d = false
     @simd for i in lo:hi
-        d |= @inbounds(σ[i]) != @inbounds(σ0[i])            # lo:hi ⊆ 1:length(σ0) = 1:length(σ)
+        # lo:hi ⊆ 1:length(σ0) = 1:length(σ)
+        d |= @inbounds(σ[i]) != @inbounds(σ0[i])
     end
     return d || _block_mask_changed(f0, mob, lo, hi)
 end
@@ -154,14 +167,26 @@ end
     d = false
     fz = mob.frozen
     @simd for i in lo:hi
-        d |= @inbounds(fz[i]) != @inbounds(f0[i])           # the mask has the lattice's size
+        # the mask has the lattice's size
+        d |= @inbounds(fz[i]) != @inbounds(f0[i])
     end
     return d
 end
 @inline _mask_changed(::Nothing, mob, i) = false
-@inline _mask_changed(f0::AbstractVector{Bool}, mob::MaskMobility, i) = @inbounds(mob.frozen[i]) != @inbounds(f0[i])
+# bounds: i ≤ nsites, the length of the mask and of its copy f0
+@inline function _mask_changed(
+        f0::AbstractVector{Bool}, mob::MaskMobility,
+        i
+    )
+    return @inbounds(mob.frozen[i]) !=
+        @inbounds(f0[i])
+end
 @inline _note_mask!(::Nothing, mob, i) = nothing
-@inline _note_mask!(f0::AbstractVector{Bool}, mob::MaskMobility, i) = (@inbounds f0[i] = mob.frozen[i]; nothing)
+# bounds: i ≤ nsites, the length of the mask and of its copy f0
+@inline function _note_mask!(f0::AbstractVector{Bool}, mob::MaskMobility, i)
+    @inbounds f0[i] = mob.frozen[i]
+    return nothing
+end
 
 # log(1 - n/N) of the geometric skip, cached for the pair (n, N): a mask change can move N
 # (the mobile count) and leave n as it was
@@ -179,16 +204,25 @@ up to date with its state. For tests; `integ.alg` must be
 """
 function _boundary_sites(integ)
     B = integ.cache
-    B isa BoundaryCache || throw(ArgumentError(
-        "_boundary_sites: the integrator runs $(integ.alg), not SequentialCPM(; skip_interior = true)"))
-    _sync_boundary!(B, integ.state.ownership, integ.ctx.mobility, integ.ctx.lattice, integ.ctx.proposal.offsets)
+    B isa BoundaryCache || throw(
+        ArgumentError(
+            "_boundary_sites: the integrator runs $(integ.alg), not SequentialCPM(; \
+                skip_interior = true)"
+        )
+    )
+    _sync_boundary!(
+        B, integ.state.ownership, integ.ctx.mobility,
+        integ.ctx.lattice, integ.ctx.proposal.offsets
+    )
     return view(B.list, 1:B.n)
 end
 
 # Returns `(accepted, status, tracked)`, as `sequential_mcs!`. RNG: draw `j` of the MCS (the
 # j-th boundary pick) gives the skip, the site in B, the direction and the acceptance.
-function boundary_site_mcs!(st, f::F, p, ctx, law::L, key::RNGKey, mcs::Integer, B::BoundaryCache,
-        track::TK = nothing) where {F, L, TK}
+function boundary_site_mcs!(
+        st, f::F, p, ctx, law::L, key::RNGKey, mcs::Integer, B::BoundaryCache,
+        track::TK = nothing
+    ) where {F, L, TK}
     σ = st.ownership
     lat = ctx.lattice
     mob = ctx.mobility
@@ -198,7 +232,8 @@ function boundary_site_mcs!(st, f::F, p, ctx, law::L, key::RNGKey, mcs::Integer,
     _sync_boundary!(B, σ, mob, lat, offsets)
     accepted = 0
     tracked = track === nothing ? nothing : 0.0
-    attempts = 0                            # attempts of this MCS used so far (null skips included)
+    # attempts of this MCS used so far (null skips included)
+    attempts = 0
     j = 0
     while true
         n = B.n
@@ -206,15 +241,16 @@ function boundary_site_mcs!(st, f::F, p, ctx, law::L, key::RNGKey, mcs::Integer,
         j += 1
         rg, rt, rd, ra = draw(key, mcs, j, STREAM_BOUNDARY_SITE)
         if n < nsite
-            g = log(uniform(Float64, rg)) / _skip_lq!(B, n, nsite)     # the null attempts before this one
+            # the null attempts before this one
+            g = log(uniform(Float64, rg)) / _skip_lq!(B, n, nsite)
             g < nsite - attempts || break
             attempts += unsafe_trunc(Int, g) + 1             # 0 ≤ g < nsite - attempts
         else
             attempts < nsite || break
             attempts += 1
         end
-        # the pick ∈ 0:n-1. In the two-word regime (the context's type, set by the caller above
-        # 2^24 mobile sites) the second word is draw j's local index 1 (D-247)
+        # the pick ∈ 0:n-1. In the two-word regime (the context's type, set by the caller
+        # above 2^24 mobile sites) the second word is draw j's local index 1 (D-247)
         t = Int(@inbounds B.list[_boundary_pick(_pick_regime(ctx), rt, key, mcs, j, n) + 1])
         x = coordinates(lat, t)
         dir = bounded(rd, K) + 1
@@ -235,7 +271,8 @@ function boundary_site_mcs!(st, f::F, p, ctx, law::L, key::RNGKey, mcs::Integer,
         if accept(law, T(dH), temperature, uniform(T, ra))
             # the whole-cell veto (`Global`) after the draw: the same trajectory as
             # before ΔH, at a fraction of the cost (no code without it)
-            has_post(f) && _post(f)(st, p, prop, ctx, GlobalSearch()) != GLOBAL_PASS && continue
+            has_post(f) && _post(f)(st, p, prop, ctx, GlobalSearch()) != GLOBAL_PASS &&
+                continue
             track === nothing || (tracked += Float64(track(st, p, prop, ctx, dH0)))
             @inbounds σ[t] = b
             f.commit!(st, p, prop, ctx)
@@ -247,7 +284,16 @@ function boundary_site_mcs!(st, f::F, p, ctx, law::L, key::RNGKey, mcs::Integer,
     return accepted, UInt32(0), tracked
 end
 
-# the boundary sweep's pick (D-247): the two-word regime draws its second word only when used
-@inline _boundary_pick(::Nothing, rt::UInt32, key, mcs, j, n) = Int((UInt64(rt) * UInt64(n)) >> 32)   # `bounded`, inlined (see `site_pick`)
-@inline _boundary_pick(::TwoWordPick, rt::UInt32, key, mcs, j, n) =
-    bounded64(rt, draw(key, mcs, j, STREAM_BOUNDARY_SITE, 1)[1], n)
+# the boundary sweep's pick (D-247): the two-word regime draws its second word only when
+# used
+@inline function _boundary_pick(::Nothing, rt::UInt32, key, mcs, j, n)
+    return Int(
+        (
+            UInt64(rt) *
+                UInt64(n)
+        ) >> 32
+    )
+end   # `bounded`, inlined (see `site_pick`)
+@inline function _boundary_pick(::TwoWordPick, rt::UInt32, key, mcs, j, n)
+    return bounded64(rt, draw(key, mcs, j, STREAM_BOUNDARY_SITE, 1)[1], n)
+end

@@ -61,7 +61,10 @@ function species(dims::NTuple{N}, K, T; layout = :sep, kernels = :one) where {N}
 end
 
 function speciesP(K, T)
-    return (0.01, (x for k in 1:K for x in (1.0 + 0.1k, 0.3, (0.05 * j for j in 1:T)...))...)
+    return (
+        0.01,
+        (x for k in 1:K for x in (1.0 + 0.1k, 0.3, (0.05 * j for j in 1:T)...))...,
+    )
 end
 function inputs(dims, K; seed = 11)
     (rng = Xoshiro(seed); [rand(rng, Float32, prod(dims)) .* 0.1f0 for _ in 1:K])
@@ -79,8 +82,11 @@ function run_species(s, sp, X, P, layout)
         copyto!(current(st, s, "u"), reduce(vcat, X))
     end
     run_step!(s, sp, st, P)
-    out = layout == :sep ? [copy(current(st, s, "u$k")) for k in 1:K] :
+    out = if layout == :sep
+        [copy(current(st, s, "u$k")) for k in 1:K]
+    else
         collect(Iterators.partition(copy(current(st, s, "u")), length(X[1])))
+    end
     return reduce(vcat, map(o -> reinterpret(UInt32, collect(o)), out))
 end
 

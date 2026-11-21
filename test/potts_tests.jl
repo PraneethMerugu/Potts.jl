@@ -37,7 +37,9 @@ end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "PottsProblem SciML interface conformance" setup = [PottsInterfaceSetup] tags = [:potts] begin
+@testitem "PottsProblem SciML interface conformance" setup = [PottsInterfaceSetup] tags = [
+    :potts,
+] begin
     SS = Potts.SciMLStructures
     SII = Potts.SymbolicIndexingInterface
     @testset "PottsProblem SciML interface conformance" begin
@@ -64,8 +66,13 @@ end
         end
 
         prob_rm = remake(prob; p = [:λ => 5.0])
-        prob_fresh = PottsProblem(ScimlConforming(; name = :sc), sciml_op([:λ => 5.0]), (0, 6); seed = 11)
-        @test solve(prob_rm, SequentialCPM()).u[end].ownership == solve(prob_fresh, SequentialCPM()).u[end].ownership
+        prob_fresh = PottsProblem(
+            ScimlConforming(; name = :sc), sciml_op([:λ => 5.0]), (
+                0, 6,
+            ); seed = 11
+        )
+        @test solve(prob_rm, SequentialCPM()).u[end].ownership ==
+            solve(prob_fresh, SequentialCPM()).u[end].ownership
 
         @test SS.isscimlstructure(prob.p)
         vals, repack, _ = SS.canonicalize(SS.Tunable(), prob.p)
@@ -86,10 +93,12 @@ end
 
         cb_term = DiscreteCallback((u, t, integ) -> t == 3, terminate!)
         sol_term = solve(prob, SequentialCPM(); callback = cb_term)
-        @test sol_term.retcode == Potts.SciMLBase.ReturnCode.Terminated && sol_term.t[end] == 3
+        @test sol_term.retcode == Potts.SciMLBase.ReturnCode.Terminated &&
+            sol_term.t[end] == 3
 
         cb_never = DiscreteCallback((u, t, integ) -> false, integ -> error("must not fire"))
-        @test solve(prob, SequentialCPM(); callback = cb_never).retcode == Potts.SciMLBase.ReturnCode.Success
+        @test solve(prob, SequentialCPM(); callback = cb_never).retcode ==
+            Potts.SciMLBase.ReturnCode.Success
     end
 end
 
@@ -142,31 +151,57 @@ end
 include(joinpath(@__DIR__, "shared", "export_visible.jl"))
 end
 
-@testitem "user boundary refusals carry diagnosis and remedy" setup = [BoundaryRefusalSetup] tags = [:potts] begin
+@testitem "user boundary refusals carry diagnosis and remedy" setup = [
+    BoundaryRefusalSetup,
+] tags = [:potts] begin
     @testset "user boundary refusals carry diagnosis and remedy" begin
-        σ = zeros(Int32, 8, 8); σ[3:4, 3:4] .= 1
-        prob = PottsProblem(VecParamModel(; name = :sc), [ownership => σ, kind => [:A]], (0, 2))
+        σ = zeros(Int32, 8, 8)
+        σ[3:4, 3:4] .= 1
+        prob = PottsProblem(
+            VecParamModel(; name = :sc), [ownership => σ, kind => [:A]], (
+                0, 2,
+            )
+        )
         @test_throws ArgumentError remake(prob; bogus_kw = 1)
 
         raw = CorePotts.PottsProblem(
             CorePotts.CPMFunction((Δs, u, s, c) -> 0.0; temperature = (u, s, p, c) -> 1.0),
             CorePotts.initial_state(zeros(Int32, 8, 8), Int32[]),
-            CorePotts.Lattice((8, 8)), (0, 1), (;),
+            CorePotts.Lattice((8, 8)), (0, 1), (;)
         )
         @test_throws ArgumentError total_energy(raw)
 
-        @test_throws ArgumentError PottsProblem(VecParamModel(; name = :vp), [ownership => σ, kind => [:A], :d => [1.0, 2.0, 3.0]], (0, 1))
+        @test_throws ArgumentError PottsProblem(
+            VecParamModel(; name = :vp),
+            [ownership => σ, kind => [:A], :d => [1.0, 2.0, 3.0]], (0, 1)
+        )
 
-        @test_throws ArgumentError Potts.lattice_spec((8, 8); geometry = Hexagonal(), spacing = (1.0, 2.0))
+        @test_throws ArgumentError Potts.lattice_spec(
+            (8, 8); geometry = Hexagonal(), spacing = (
+                1.0, 2.0,
+            )
+        )
 
-        cyc_prob = PottsProblem(CyclicObsModel(; name = :cyc), [ownership => σ, kind => [:A]], (0, 1))
+        cyc_prob = PottsProblem(
+            CyclicObsModel(; name = :cyc), [
+                ownership => σ, kind => [:A],
+            ], (0, 1)
+        )
         @test_throws ArgumentError Potts.observe(cyc_prob, :oa)
 
         @test_throws ArgumentError NoLatModel(; name = :nl)
         @test_throws ArgumentError NoSweepModel(; name = :ns)
 
-        @test_throws Potts.PottsCompileError mtkcompile(BadEnergyCase(; name = :bc, kind_case = :cluster_gather))
-        @test_throws Potts.PottsCompileError mtkcompile(BadEnergyCase(; name = :bs, kind_case = :site_gather))
-        @test_throws Potts.PottsCompileError mtkcompile(BadEnergyCase(; name = :bm, kind_case = :cell_medium))
+        @test_throws Potts.PottsCompileError mtkcompile(
+            BadEnergyCase(;
+                name = :bc, kind_case = :cluster_gather
+            )
+        )
+        @test_throws Potts.PottsCompileError mtkcompile(
+            BadEnergyCase(; name = :bs, kind_case = :site_gather)
+        )
+        @test_throws Potts.PottsCompileError mtkcompile(
+            BadEnergyCase(; name = :bm, kind_case = :cell_medium)
+        )
     end
 end

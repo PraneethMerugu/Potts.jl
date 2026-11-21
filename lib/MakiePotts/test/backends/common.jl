@@ -15,23 +15,28 @@ function smoke_frame(phase::Integer = 0)
         RenderOwner(MediumSite, 1) RenderOwner(MediumSite, 1) RenderOwner(MediumSite, 1);
     ]
     phase == 0 || reverse!(owners; dims = 1)
-    geometry = RenderGeometry(size(owners);
-        spacing = (0.5, 1.25), origin = (-1.0, 2.0))
+    geometry = RenderGeometry(
+        size(owners);
+        spacing = (0.5, 1.25), origin = (-1.0, 2.0)
+    )
     return PottsRenderFrame(phase, owners, cells; geometry)
 end
 
 function smoke_figure()
     first_frame = smoke_frame()
     observable = Makie.Observable(first_frame)
-    figure, axis, plot = Makie.plot(observable;
-        boundaries = true, boundary_width = 1.5)
+    figure, axis, plot = Makie.plot(
+        observable;
+        boundaries = true, boundary_width = 1.5
+    )
     plot isa PottsPlot || error("backend did not construct PottsPlot")
     axis isa Makie.Axis || error("backend did not construct Axis")
     observable[] = smoke_frame(1)
     frame_mcs(plot.frame[]) == 1 ||
         error("reactive update did not publish the replacement frame")
     expected = Makie.Rect3d(
-        Makie.Point3d(-1.0, 2.0, 0), Makie.Vec3d(2.0, 3.75, 0))
+        Makie.Point3d(-1.0, 2.0, 0), Makie.Vec3d(2.0, 3.75, 0)
+    )
     Makie.data_limits(plot) == expected ||
         error("backend changed physical PottsPlot limits")
     return figure, plot

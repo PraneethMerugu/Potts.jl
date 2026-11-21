@@ -1,4 +1,5 @@
-# Top-level definitions for solvers test suites (`solvers_tests.jl`, `solvers_canonical_tests.jl`, `solvers_validation_tests.jl`).
+# Top-level definitions for solvers test suites (`solvers_tests.jl`,
+# `solvers_canonical_tests.jl`, `solvers_validation_tests.jl`).
 
 @testsetup module SolversSetup
 using Potts, Test
@@ -7,8 +8,8 @@ isdefined(@__MODULE__, :PottsDevices) || include(joinpath(@__DIR__, "shared", "d
 using PottsModels: GranerGlazier, OpenVTGrowingMonolayer
 using OrdinaryDiffEqTsit5: Tsit5
 
-# y' = −s, s' = y − s, listed in both orders. With `s => Potts.RK4()` and y under explicit Euler
-# the two run in separate groups; Jacobi means each step reads (y, s) at its start.
+# y' = −s, s' = y − s, listed in both orders. With `s => Potts.RK4()` and y under explicit
+# Euler the two run in separate groups; Jacobi means each step reads (y, s) at its start.
 @potts_model SolverPairYS begin
     @kinds medium A
     @variables begin
@@ -67,8 +68,21 @@ module SvPDE
     using ..FieldPDE
     @variables c(..)
     const C = c(t, x, y)
-    decay(dims, k, c0 = 0.0; D = 0.1) = pdesys([Dt(C) ~ D * laplacian(C) - k * C], [c(0, x, y) ~ c0], dims, [C])
-    field() = (@parameters Dc = 0.1; pdesys([Dt(C) ~ Dc * laplacian(C) - 0.05 * C], [c(0, x, y) ~ 0.0], (16, 16), [C], [Dc]))
+    function decay(dims, k, c0 = 0.0; D = 0.1)
+        return pdesys(
+            [Dt(C) ~ D * laplacian(C) - k * C], [
+                c(0, x, y) ~
+                    c0,
+            ], dims, [C]
+        )
+    end
+    function field()
+        @parameters Dc = 0.1
+        return pdesys(
+            [Dt(C) ~ Dc * laplacian(C) - 0.05 * C], [c(0, x, y) ~ 0.0], (16, 16), [C],
+            [Dc]
+        )
+    end
 end
 
 @potts_model SolverField begin
@@ -81,17 +95,27 @@ end
 
 solver_sigma() = (σ = zeros(Int32, 16, 16); σ[5:8, 5:8] .= 1; σ)
 solver_op() = [ownership => solver_sigma(), kind => [:A]]
-solver_var(sys, n) = only(filter(x -> string(x) in (string(n), string(n, "(t)")), Potts.declared_variables(sys)))
+function solver_var(sys, n)
+    return only(
+        filter(
+            x -> string(x) in (string(n), string(n, "(t)")), Potts.declared_variables(sys)
+        )
+    )
+end
 
-solver_err(f) = try
-    f(); nothing
-catch e
-    e
+function solver_err(f)
+    return try
+        f()
+        nothing
+    catch e
+        e
+    end
 end
 
 function sv_throws(T, pats, f)
     err = try
-        f(); nothing
+        f()
+        nothing
     catch e
         e
     end
@@ -140,7 +164,12 @@ two_cells() = (s = zeros(Int32, 12, 8); s[3:6, 3:6] .= 1; s[7:10, 3:6] .= 2; s)
 end
 
 OwnUnknownIndex(; name = :OwnUnknownIndex, kw...) = _OwnUnknown(; by_id = true, name, kw...)
-OwnUnknownPlain(; name = :OwnUnknownPlain, kw...) = _OwnUnknown(; by_id = false, name, kw...)
+function OwnUnknownPlain(; name = :OwnUnknownPlain, kw...)
+    return _OwnUnknown(;
+        by_id = false, name,
+        kw...
+    )
+end
 
 @potts_model JacobiGather begin
     @kinds medium A

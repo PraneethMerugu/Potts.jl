@@ -20,18 +20,22 @@ Build the experimental reference explorer from already materialized frames.
 Call `close(explorer)` to release its slider subscription and optional
 `DataInspector`; closing is idempotent.
 """
-function explore_potts(frames::AbstractVector{<:AbstractPottsRenderFrame{2}};
+function explore_potts(
+        frames::AbstractVector{<:AbstractPottsRenderFrame{2}};
         title::AbstractString = "Potts model", inspector::Bool = true,
         encoding::AbstractPottsEncoding = CellTypeEncoding(),
-        figure = (;), axis = (;), plot = (;))
+        figure = (;), axis = (;), plot = (;)
+    )
     isempty(frames) && throw(ArgumentError("the explorer requires at least one frame"))
     expected_geometry = frame_geometry(first(frames))
     all(frame -> frame_geometry(frame) == expected_geometry, frames) ||
         throw(ArgumentError("explorer frames must have compatible geometry"))
 
     fig = Makie.Figure(; figure...)
-    ax = Makie.Axis(fig[1, 1];
-        title = String(title), aspect = Makie.DataAspect(), axis...)
+    ax = Makie.Axis(
+        fig[1, 1];
+        title = String(title), aspect = Makie.DataAspect(), axis...
+    )
     index = Makie.Observable(1)
     frame = Makie.lift(i -> frames[i], index)
     rendered = pottsplot!(ax, frame; encoding, plot...)
@@ -40,18 +44,23 @@ function explore_potts(frames::AbstractVector{<:AbstractPottsRenderFrame{2}};
         index[] = Int(value)
     end
     data_inspector = inspector ? Makie.DataInspector(fig) : nothing
-    return PottsExplorer(fig, ax, rendered, slider, index,
-        subscription, data_inspector, Ref(false))
+    return PottsExplorer(
+        fig, ax, rendered, slider, index,
+        subscription, data_inspector, Ref(false)
+    )
 end
 
-function explore_potts(solution::CorePotts.PottsSolution;
-        request::RenderRequest = RenderRequest(), kwargs...)
+function explore_potts(
+        solution::CorePotts.PottsSolution;
+        request::RenderRequest = RenderRequest(), kwargs...
+    )
     return explore_potts(renderframes(solution, request); kwargs...)
 end
 
 Base.showable(::MIME"text/plain", ::PottsExplorer) = true
-Base.show(io::IO, ::MIME"text/plain", explorer::PottsExplorer) =
-    show(io, MIME"text/plain"(), explorer.figure)
+function Base.show(io::IO, ::MIME"text/plain", explorer::PottsExplorer)
+    return show(io, MIME"text/plain"(), explorer.figure)
+end
 
 Base.isopen(explorer::PottsExplorer) = !explorer.closed[]
 

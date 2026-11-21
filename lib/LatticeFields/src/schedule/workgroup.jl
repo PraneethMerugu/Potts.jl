@@ -26,10 +26,11 @@ The host form: workgroups in order, phases in order, items in order (`reverse = 
 the items of each phase backwards: a body that is free of intra-phase races gives the
 same bits either way). `lds` is a host array of at least the launch's `ldslen` elements.
 """
-function host_workgroups!(body::F, ngroups, wg, phases, lds, S, P, G;
-        reverse::Bool = false) where {F}
+function host_workgroups!(
+        body::F, ngroups, wg, phases, lds, S, P, G;
+        reverse::Bool = false
+    ) where {F}
     for g in Int32(1):Int32(ngroups), ph in Int32(1):Int32(phases)
-
         if reverse
             for t in Int32(wg):Int32(-1):Int32(1)
                 body(ph, g, t, lds, S, P, G)
@@ -55,16 +56,22 @@ workers (`@batch`: no task is created, a warm launch allocates nothing), chunk `
 `c` of `lds` (`chunks · ldslen` elements). Every block computes the same values in the same
 order whatever the chunk, so the result does not depend on `chunks` or the thread count.
 """
-function host_reduce!(body::F, ngroups, wg, lds, ldslen, S, P, G; chunks::Integer = 1) where {F}
+function host_reduce!(
+        body::F, ngroups, wg, lds, ldslen, S, P, G; chunks::Integer = 1
+    ) where {F}
     if chunks <= 1
         _reduce_blocks!(body, 1, Int(ngroups), wg, lds, S, P, G)
     else
-        _host_reduce_threaded!(body, Int(ngroups), Int(chunks), wg, lds, Int(ldslen), S, P, G)
+        _host_reduce_threaded!(
+            body, Int(ngroups), Int(chunks), wg, lds, Int(ldslen), S, P, G
+        )
     end
     return nothing
 end
 
-@noinline function _host_reduce_threaded!(body::F, ngroups, nc, wg, lds, ldslen, S, P, G) where {F}
+@noinline function _host_reduce_threaded!(
+        body::F, ngroups, nc, wg, lds, ldslen, S, P, G
+    ) where {F}
     per = cld(ngroups, nc)
     @batch per = thread for c in 1:nc
         _reduce_chunk!(body, c, per, ngroups, wg, lds, ldslen, S, P, G)
@@ -94,7 +101,8 @@ end
 
 # The device wrapper: one workgroup per `g`, `@synchronize` after every phase.
 @kernel unsafe_indices = true function _workgroups!(
-        body, S, P, G, phases, ::Type{T}, ::Val{M}) where {T, M}
+        body, S, P, G, phases, ::Type{T}, ::Val{M}
+    ) where {T, M}
     g = @index(Group, Linear)
     t = @index(Local, Linear)
     lds = @localmem T (M,)
@@ -110,11 +118,15 @@ end
 Enqueue a workgroup launch on a KernelAbstractions `backend` (no wait): `ngroups` groups of
 `wg` items, `ldslen` elements of `T` of workgroup memory.
 """
-function workgroups!(backend, body::F, ngroups, wg, phases, ::Type{T}, ldslen, S, P,
-        G) where {F, T}
+function workgroups!(
+        backend, body::F, ngroups, wg, phases, ::Type{T}, ldslen, S, P,
+        G
+    ) where {F, T}
     # compile mode (`Exec.compiling`): one group with no phase compiles the kernel
     c = Exec.compiling()
-    _workgroups!(backend, wg)(body, S, P, G, Int32(c ? 0 : phases), T, Val(max(Int(ldslen), 1));
-        ndrange = (c ? 1 : ngroups) * wg)
+    _workgroups!(backend, wg)(
+        body, S, P, G, Int32(c ? 0 : phases), T, Val(max(Int(ldslen), 1));
+        ndrange = (c ? 1 : ngroups) * wg
+    )
     return nothing
 end

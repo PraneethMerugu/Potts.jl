@@ -1,10 +1,10 @@
 # reproduction 01, the digitised figure
-# targets of Merks, Perryn, Shirinifard & Glazier, PLoS Comput Biol 4:e1000163 (2008) ("01b"),
-# Figs 5, 7, 8, 9, 10, 12 and 13, through the continuous-χ superset (D-050 M7).
-# This file is the 01b section of the reproduction-01 test: it adds
-# rows and leaves `01_merks_tests.jl` (D-153, D-200) and every one of its rows and verdicts
-# unchanged. It is a separate file because the page test (`01_merks_page_tests.jl`, D-184/D-200)
-# reads the FULL record's D-200 amendment.
+# targets of Merks, Perryn, Shirinifard & Glazier, PLoS Comput Biol 4:e1000163 (2008)
+# ("01b"), Figs 5, 7, 8, 9, 10, 12 and 13, through the continuous-χ superset (D-050 M7).
+# This file is the 01b section of the reproduction-01 test: it adds rows and leaves
+# `01_merks_tests.jl` (D-153, D-200) and every one of its rows and verdicts unchanged. It is
+# a separate file because the page test (`01_merks_page_tests.jl`, D-184/D-200) reads the
+# FULL record's D-200 amendment.
 #
 # The paper is the target; the released code is evidence only (D-200). Digitised values are
 # in `data/01b/fig*.tsv` (method, pages and uncertainty in `data/01b/README.md`); the
@@ -19,7 +19,8 @@
 # reading: its curves change during the first ≈ 100 MCS, before any chemoattractant exists.
 # Sweeps also record N + 100 (the relaxation-end clock, D-156), not gating.
 # Observable: O1 compactness (as `merks_compactness`), and for Fig 13 Σ ΔH over the accepted
-# copies, `track = (:energy_change,)` (energy plus the chemotaxis drive, as TST's SumDH; D-17).
+# copies, `track = (:energy_change,)` (energy plus the chemotaxis drive, as TST's SumDH;
+# D-17).
 #
 # | Fig | Curves (paper → ours) | Lattice, start | Grid (targets) | n per point | N (MCS) | Seeds |
 # |---|---|---|---|---|---|---|
@@ -36,26 +37,29 @@
 # page while it stands):
 #   I1 Figs 12–13 start: 256 cells as `rounds = 71, divisions = 8` (50·√2 rounds keep TST's
 #      ≈ 16 sites per cell at the split; Dataset S1 has no Fig 12 file, D-2).
-#   I2 Fig 10's 1024-cell start: `rounds = 141, divisions = 10` (50·√8) on 402² (the caption's
+#   I2 Fig 10's 1024-cell start: `rounds = 141, divisions = 10` (50·√8) on 402² (the
+#   caption's
 #      "400×400-pixel lattices" plus our 2-site frame; no file, D-2, A-10).
 #   I3 n = 10 for Figs 7–10 (their captions give no n; Fig 5's does).
 #   I4 "No contact inhibition" is χcc = χcM (TST's `vecadherinknockout`), in every figure.
-#   I5 Fig 13's H − H0 is Σ ΔH over the accepted copies including the chemotaxis term (D-17),
+#   I5 Fig 13's H − H0 is Σ ΔH over the accepted copies including the chemotaxis term
+#   (D-17),
 #      in Float64; TST truncates each term to an integer (D-7), so only sign, order and
 #      magnitude to within √10 are pinned.
-#   I6 The time axis includes the 100 relaxation MCS (A-19; Fig 12's early rise supports it).
-#   I7 The Fig 10 legend draws the 1024-cell curve solid; the caption says dashed-dotted. The
+#   I6 The time axis includes the 100 relaxation MCS (A-19; Fig 12's early rise supports
+#   it). I7 The Fig 10 legend draws the 1024-cell curve solid; the caption says
+#   dashed-dotted. The
 #      flatter solid curve is read as 1024 cells (the text: 1024-cell clusters sprout for
 #      D > 3·10⁻¹³, 128-cell clusters do not).
 #
 # Bands. Each point's band is the wider of the paper's spread and our digitisation
 # uncertainty, rounded up to 0.005:
 #   Fig 5: the median error-bar half-length (one SD over 10 runs) of the bars within ±0.02;
-#   Figs 7–10: the grey ±1 SD curve read at that x; Fig 12: the grey SD curve, read as 0.03 at
-#   1000 MCS and 0.02–0.025 at 5000, so 0.03 for t ≤ 1500 and 0.025 after.
-# A ±1 SD band on a mean of n replicates is wide (about 2.2 standard errors of a difference of
-# two n = 10 means), so a curve passes when at most max(1, ⌊0.1 n_points⌋) of its points fall
-# outside their bands; every point's verdict is still recorded.
+#   Figs 7–10: the grey ±1 SD curve read at that x; Fig 12: the grey SD curve, read as 0.03
+#   at 1000 MCS and 0.02–0.025 at 5000, so 0.03 for t ≤ 1500 and 0.025 after.
+# A ±1 SD band on a mean of n replicates is wide (about 2.2 standard errors of a difference
+# of two n = 10 means), so a curve passes when at most max(1, ⌊0.1 n_points⌋) of its points
+# fall outside their bands; every point's verdict is still recorded.
 #
 # | Row | Statistic | Paper | Pass |
 # |---|---|---|---|
@@ -86,19 +90,20 @@
 # Not pinned (listed): Fig 6 (V-C12 covers 6E; 6F's velocity and the trajectory panels are
 # not digitised); Fig 11 (V-C9 covers it); every inset; Fig 5 at r = 0 and 1 (hidden by the
 # frame; V-C3 pins them); Fig 10 below D = 0.2·10⁻¹³ (CI) and 0.5·10⁻¹³ (no CI), where the
-# curves are near-vertical; Fig 12 before 100 MCS (the start geometry, I1, dominates); Fig 13's
-# magnitude beyond √10 (I5: the model has no integer ΔH truncation; D-7).
+# curves are near-vertical; Fig 12 before 100 MCS (the start geometry, I1, dominates); Fig
+# 13's magnitude beyond √10 (I5: the model has no integer ΔH truncation; D-7).
 #
 # Tiers.
-# - always: the digitised files, the target table and its bands; the rules on the paper's own
-#   numbers (pass) and on perturbed and control comparisons (fail); the job list.
-# - SMOKE (PottsModels suite, light): the job functions on 62² with 8 cells for ≤ 300 MCS; the
-#   two modes are identical through the relaxation; the D conversion and a run at the
+# - always: the digitised files, the target table and its bands; the rules on the paper's
+#   own numbers (pass) and on perturbed and control comparisons (fail); the job list.
+# - SMOKE (PottsModels suite, light): the job functions on 62² with 8 cells for ≤ 300 MCS;
+#   the two modes are identical through the relaxation; the D conversion and a run at the
 #   explicit-Euler limit (D = 5·10⁻¹³, Dc = 3.75); the 256- and 1024-cell starts.
-# - FULL record (always, cheap): reads `reproductions/data/01/full-01b-*` (D-146): `sweeps.tsv`,
-#   `series.tsv`, `verdicts.tsv`, `provenance.toml`, optional `deviations.tsv`. It requires
-#   exactly the job list once each and recomputes every row and control. A failing row must be
-#   in `deviations.tsv` (D-154) and is then `@test_broken`.
+# - FULL record (always, cheap): reads `reproductions/data/01/full-01b-*` (D-146):
+#   `sweeps.tsv`, `series.tsv`, `verdicts.tsv`, `provenance.toml`, optional
+#   `deviations.tsv`. It requires exactly the job list once each and recomputes every row
+#   and control. A failing row must be in `deviations.tsv` (D-154) and is then
+#   `@test_broken`.
 # - FULL (POTTS_FULL_REPRODUCTION=true or REPRO=full; offline on the PC, D-156/D-157): runs
 #   the 1330 jobs and applies the same rules. Cost from the 2026-10-08 record's walls (107 s
 #   per 202² × 5000 MCS job): ≈ 103 thread-hours, ≈ 4.3 h at the 24-thread cap; Figs 12–13
@@ -119,10 +124,10 @@ const FIGURE_FULL = get(ENV, "POTTS_FULL_REPRODUCTION", "false") == "true" ||
 const SOLVER = ExplicitEuler(substeps = 15)
 const DIGI = joinpath(@__DIR__, "data", "01b")
 const DATA = joinpath(@__DIR__, "..", "..", "reproductions", "data", "01")
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Targets: (fig, curve, x, paper mean, band). x: Fig 5 χcc/χcM; 7 J_cc; 8 χcM; 9 s;
 # 10 D in 10⁻¹³ m²/s; 12 t in MCS.
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 const TARGETS = [
     ("F5", "CI", 0.05, 0.346, 0.035),
     ("F5", "CI", 0.1, 0.352, 0.045),
@@ -287,18 +292,20 @@ allowed(n) = max(1, floor(Int, 0.1n))
 D (10⁻¹³ m²/s) → `Dc` (lattice units per MCS): D · 30 s / (2 µm)² = 0.75 D.
 """
 figure_Dc(D) = 0.75 * D
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Observable (the 01 reproduction test's O1, restated so this file stands alone)
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 figure_cross(o, a, b) = (a[1] - o[1]) * (b[2] - o[2]) - (a[2] - o[2]) * (b[1] - o[1])
 function hull_area(pts)
     P = sort(unique(pts))
     length(P) < 3 && return 0.0
-    chain(Q) = foldl(Q; init = eltype(Q)[]) do h, q
-        while length(h) >= 2 && figure_cross(h[end - 1], h[end], q) <= 0
-            pop!(h)
+    function chain(Q)
+        return foldl(Q; init = eltype(Q)[]) do h, q
+            while length(h) >= 2 && figure_cross(h[end - 1], h[end], q) <= 0
+                pop!(h)
+            end
+            push!(h, q)
         end
-        push!(h, q)
     end
     h = [chain(P)[1:(end - 1)]; chain(reverse(P))[1:(end - 1)]]
     length(h) < 3 && return 0.0
@@ -323,9 +330,9 @@ function crossing(xs, ys, level)
     end
     return nothing
 end
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # Protocol
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 figure_J(Jcc) = [0.0 20.0 0.0; 20.0 Jcc 100.0; 0.0 100.0 0.0]
 """
 The set-up of one sweep point: parameters, lattice, start and N.
@@ -368,7 +375,10 @@ Run one start to `maximum(saves)`; at each save record (C, Σ ΔH or nothing). R
 records and the integrator.
 """
 function figure_run(seed, set, saves; track = false)
-    op = layout(merks2008_sprout(; rounds = set.rounds, divisions = set.divisions, seed), set.lattice)
+    op = layout(
+        merks2008_sprout(; rounds = set.rounds, divisions = set.divisions, seed),
+        set.lattice
+    )
     tend = maximum(saves)
     prob = PottsProblem(
         Merks2008(; name = :m8b, lattice = set.lattice, mode = set.mode),
@@ -377,7 +387,12 @@ function figure_run(seed, set, saves; track = false)
     )
     integ = init(prob, SequentialCPM(); save_start = false, save_end = false)
     out = Dict{Int, Tuple{Float64, Union{Nothing, Float64}}}()
-    record!(t) = (out[t] = (compactness(Array(current_state(integ).ownership)), integ.stats.accepted_energy_change))
+    function record!(t)
+        return out[t] = (
+            compactness(Array(current_state(integ).ownership)),
+            integ.stats.accepted_energy_change,
+        )
+    end
     0 in saves && record!(0)
     while integ.t < tend
         step!(integ)
@@ -395,7 +410,6 @@ function figure_jobs()
     for (fig, curve) in curves()
         fig == "F12" && continue
         for (k, t) in enumerate(figure_points(fig, curve)), i in 1:N_SWEEP
-
             push!(
                 sweeps, (;
                     fig, curve, x = t[3], seed = BASE[(fig, curve)] + 100k + i,
@@ -404,7 +418,6 @@ function figure_jobs()
         end
     end
     for arm in ("ER50", "ER200", "EO200"), i in 1:N_SERIES
-
         push!(series, (; arm, seed = BASE[("F12", arm)] + i))
     end
     return (; sweeps, series)
@@ -428,10 +441,10 @@ function series_job(j; set = arm_setup(j.arm), saves = SERIES_T)
     out, _ = figure_run(j.seed, set, saves; track = true)
     return [(t = t, C = out[t][1], dH = out[t][2]) for t in saves]
 end
-# ---------------------------------------------------------------------------------------------
-# Rules. msweep[(fig, curve, x)] = mean C at N; mseries[(arm, t)] = (C = mean C, dH = mean ΣΔH).
-# Returns [(row, check, ours, rule, ok, control)].
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
+# Rules. msweep[(fig, curve, x)] = mean C at N; mseries[(arm, t)] = (C = mean C, dH = mean
+# ΣΔH). Returns [(row, check, ours, rule, ok, control)].
+# ------------------------------------------------------------------------------------------
 function points_rule(ours, refs)
     # refs: [(label, key of ours, paper, band)]
     out = [(label = r[1], ours = ours(r[2]), paper = r[3], band = r[4]) for r in refs]
@@ -444,11 +457,13 @@ function figure_verdicts(msweep, mseries)
         (:row, :check, :ours, :rule, :ok, :control),
         Tuple{String, String, String, String, Bool, Bool},
     }[]
-    add!(row, check, ours, rule, ok; control = false) = push!(
-        V, (;
-            row, check, ours, rule, ok, control,
+    function add!(row, check, ours, rule, ok; control = false)
+        return push!(
+            V, (;
+                row, check, ours, rule, ok, control,
+            )
         )
-    )
+    end
     S(fig, curve, x) = msweep[(fig, curve, Float64(x))]
     C12(arm, t) = mseries[(arm, Int(t))].C
     H13(arm, t) = mseries[(arm, Int(t))].dH / 1.0e8
@@ -551,11 +566,17 @@ function figure_verdicts(msweep, mseries)
         )
     end
     # negative controls (each must fail)
-    ctl!(row, r) = add!(
-        row, "points outside band", "$(r.nout)/$(r.n)",
-        "≤ $(allowed(r.n)) (must fail)", r.ok; control = true
-    )
-    sh = [t for t in f5 if t[3] <= 0.85 + 1.0e-9 && isinteger(round(t[3] / 0.05; digits = 6))]       # r = 0.05:0.05:0.85
+    function ctl!(row, r)
+        return add!(
+            row, "points outside band", "$(r.nout)/$(r.n)",
+            "≤ $(allowed(r.n)) (must fail)", r.ok; control = true
+        )
+    end
+    sh = [
+        t
+            for t in f5
+            if t[3] <= 0.85 + 1.0e-9 && isinteger(round(t[3] / 0.05; digits = 6))
+    ]       # r = 0.05:0.05:0.85
     ctl!(
         "NC-F5",
         points_rule(
@@ -572,7 +593,10 @@ function figure_verdicts(msweep, mseries)
             ),
             ("NC-F8", "F8", "CI", "noCI", (500.0, 1000.0, 2000.0, 3000.0, 4000.0, 5000.0)),
             ("NC-F9", "F9", "CI", "noCI", (0.0, 0.05, 0.1, 0.15, 0.2, 0.25)),
-            ("NC-F10", "F10", "CI1024", "CI128", (0.2, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 4.5, 5.0)),
+            (
+                "NC-F10", "F10", "CI1024", "CI128",
+                (0.2, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 4.5, 5.0),
+            ),
         )
         ctl!(
             row,
@@ -618,7 +642,6 @@ function paper_means()
         mseries[(t[2], Int(t[3]))] = (C = t[4], dH = NaN)
     end
     for arm in ("ER50", "ER200", "EO200"), tt in (2500,)
-
         f12 = figure_tsv(joinpath(DIGI, "fig12.tsv"))
         r = only(r for r in f12 if r["curve"] == arm && r["x"] == string(tt))
         mseries[(arm, tt)] = (C = parse(Float64, r["y"]), dH = NaN)
@@ -636,13 +659,16 @@ function figure_tsv(path)
     return [Dict(zip(h, split(l, '\t'))) for l in lines[2:end]]
 end
 figure_up(v; q = 0.005) = ceil(round(v / q; digits = 6)) * q
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 # FULL record (always; cheap): reproductions/data/01/full-01b-*
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------------------
 function means(sweeps, series)
     acc = Dict{Tuple{String, String, Float64}, Vector{Float64}}()
     for r in sweeps
-        push!(get!(acc, (r["fig"], r["curve"], parse(Float64, r["x"])), Float64[]), parse(Float64, r["C_N"]))
+        push!(
+            get!(acc, (r["fig"], r["curve"], parse(Float64, r["x"])), Float64[]),
+            parse(Float64, r["C_N"])
+        )
     end
     msweep = Dict(k => mean(v) for (k, v) in acc)
     acc2 = Dict{Tuple{String, Int}, Vector{NTuple{2, Float64}}}()
@@ -676,10 +702,12 @@ end
 include(joinpath(@__DIR__, "..", "shared", "export_visible.jl"))
 end
 
-@testitem "01b digitised data and targets" setup = [Merks2008FiguresSetup] tags = [:pottsmodels, :reproductions] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "01b digitised data and targets" setup = [Merks2008FiguresSetup] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    # --------------------------------------------------------------------------------------
     # Always: the digitised data, the targets, the rules, the job list
-    # ---------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     @testset "01b digitised data and targets" begin
         figs = Dict(
             "F5" => "fig05.tsv", "F7" => "fig07.tsv", "F8" => "fig08.tsv",
@@ -712,8 +740,11 @@ end
                         for q in rows if abs(parse(Float64, q["x"]) - t[3]) <= 0.02 + 1.0e-9
                 ]
                 sort!(sds)
-                med = isodd(length(sds)) ? sds[(end + 1) ÷ 2] :
+                med = if isodd(length(sds))
+                    sds[(end + 1) ÷ 2]
+                else
                     (sds[end ÷ 2] + sds[end ÷ 2 + 1]) / 2
+                end
                 @test t[5] ≈ figure_up(max(med, unc)) atol = 1.0e-9
             elseif t[1] == "F12"
                 @test t[5] ≈ figure_up(max(t[3] <= 1500 ? 0.03 : 0.025, unc)) atol = 1.0e-9
@@ -744,19 +775,24 @@ end
     end
 end
 
-@testitem "01b rules on the paper's own numbers" setup = [Merks2008FiguresSetup] tags = [:pottsmodels, :reproductions] begin
+@testitem "01b rules on the paper's own numbers" setup = [Merks2008FiguresSetup] tags = [
+    :pottsmodels, :reproductions,
+] begin
     @testset "01b rules on the paper's own numbers" begin
         msweep, mseries = paper_means()
         V = figure_verdicts(msweep, mseries)
         rows = filter(v -> !v.control && !startswith(v.check, "point "), V)
-        @test length(rows) == 13 + 7 + 1 + 3 + 2 + 3                          # point rows, shape rows, F12, F13
+        # point rows, shape rows, F12, F13
+        @test length(rows) == 13 + 7 + 1 + 3 + 2 + 3
         for v in rows
             @test v.ok
         end
         ctls = filter(v -> v.control, V)
         @test length(ctls) == 7
-        @test all(v -> !v.ok, ctls)                                           # every control fails
-        # a curve moved by twice its bands fails; a single point moved still passes (≤ 1 allowed)
+        # every control fails
+        @test all(v -> !v.ok, ctls)
+        # a curve moved by twice its bands fails; a single point moved still passes (≤ 1
+        # allowed)
         m2 = copy(msweep)
         for t in figure_points("F7", "CI")
             m2[(t[1], t[2], t[3])] = t[4] + 2t[5]
@@ -783,7 +819,10 @@ end
     end
 end
 
-@testitem "01b job list" setup = [Merks2008FiguresSetup] tags = [:pottsmodels, :reproductions] begin
+@testitem "01b job list" setup = [Merks2008FiguresSetup] tags = [
+    :pottsmodels,
+    :reproductions,
+] begin
     @testset "01b job list" begin
         J = figure_jobs()
         @test length(J.sweeps) == 10 * count(t -> t[1] != "F12", TARGETS) == 1030
@@ -791,17 +830,20 @@ end
         keys_ = [figure_key.(J.sweeps); figure_key.(J.series)]
         @test allunique(keys_)
         seeds = [[j.seed for j in J.sweeps]; [j.seed for j in J.series]]
-        @test allunique(seeds) && minimum(seeds) > 300_000                    # disjoint from the 01 reproduction seeds
+        # disjoint from the 01 reproduction seeds
+        @test allunique(seeds) && minimum(seeds) > 300_000
         @test setup("F10", "CI1024", 2.0).lattice == (402, 402)
         @test setup("F5", "CI", 0.5).N == 10_000 &&
             setup("F9", "noCI", 0.1).N == 5000
     end
 end
 
-@testitem "01b SMOKE: protocol on 62², 8 cells" setup = [Merks2008FiguresSetup] tags = [:pottsmodels, :reproductions] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "01b SMOKE: protocol on 62², 8 cells" setup = [Merks2008FiguresSetup] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    # --------------------------------------------------------------------------------------
     # SMOKE: the protocol at toy size
-    # ---------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     @testset "01b SMOKE: protocol on 62², 8 cells" begin
         small(arm) = arm_setup(arm; lattice = (62, 62), rounds = 12, divisions = 3)
         saves = (0, 100, 200, 300)
@@ -811,10 +853,13 @@ end
         @test [r.t for r in er] == collect(saves)
         @test er[1].dH == 0.0 && eo[1].dH == 0.0
         @test all(r -> isfinite(r.C) && r.C > 0 && isfinite(r.dH), [er; eo])
-        # no field during the relaxation, so the two modes are the same dynamics through MCS 100
+        # no field during the relaxation, so the two modes are the same dynamics through MCS
+        # 100
         @test er[2].dH == eo[2].dH && er[2].C == eo[2].C
-        @test er[2].dH < 0                                                    # the cells inflate towards A = 50
-        @test er[4].dH != eo[4].dH                                            # the modes differ once the field is on
+        # the cells inflate towards A = 50
+        @test er[2].dH < 0
+        # the modes differ once the field is on
+        @test er[4].dH != eo[4].dH
         # a sweep job at the explicit-Euler limit: D = 5·10⁻¹³ → Dc = 3.75, 15 substeps
         set = setup("F10", "CI128", 5.0)
         set = merge(set, (lattice = (62, 62), rounds = 12, divisions = 3))
@@ -823,18 +868,29 @@ end
         @test all(isfinite, c) && minimum(c) >= 0 && maximum(c) > 0
         @test isfinite(out[250][1]) && out[250][2] === nothing
         # the inferred starts: 256 cells (Figs 12–13) and 1024 cells (Fig 10)
-        for (rounds, divisions, G, n) in ((71, 8, (502, 502), 256), (141, 10, (402, 402), 1024))
+        for (rounds, divisions, G, n) in (
+                (71, 8, (502, 502), 256), (
+                    141, 10, (402, 402), 1024,
+                ),
+            )
             σ = layout(merks2008_sprout(; rounds, divisions, seed = 90_103), G)[1].second
             @test length(unique(σ[σ .>= 2])) == n
         end
     end
 end
 
-@testitem "01b FULL record" setup = [Merks2008FiguresSetup] tags = [:pottsmodels, :reproductions] begin
+@testitem "01b FULL record" setup = [Merks2008FiguresSetup] tags = [
+    :pottsmodels, :reproductions,
+] begin
     @testset "01b FULL record" begin
-        dirs = isdir(DATA) ?
-            filter(d -> startswith(d, "full-01b-") && isdir(joinpath(DATA, d)), readdir(DATA)) :
+        dirs = if isdir(DATA)
+            filter(
+                d -> startswith(d, "full-01b-") && isdir(joinpath(DATA, d)),
+                readdir(DATA)
+            )
+        else
             String[]
+        end
         @test length(dirs) == 1
         D = joinpath(DATA, first(dirs))
         for f in ("sweeps.tsv", "series.tsv", "verdicts.tsv", "provenance.toml")
@@ -874,10 +930,12 @@ end
     end
 end
 
-@testitem "01b FULL: Figs 5, 7–10, 12, 13" setup = [Merks2008FiguresSetup] tags = [:pottsmodels, :reproductions] begin
-    # ---------------------------------------------------------------------------------------------
+@testitem "01b FULL: Figs 5, 7–10, 12, 13" setup = [Merks2008FiguresSetup] tags = [
+    :pottsmodels, :reproductions,
+] begin
+    # --------------------------------------------------------------------------------------
     # FULL (offline, on the PC): run the 1330 jobs and apply the rules
-    # ---------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------
     if FIGURE_FULL
         @testset "01b FULL: Figs 5, 7–10, 12, 13" begin
             J = figure_jobs()
