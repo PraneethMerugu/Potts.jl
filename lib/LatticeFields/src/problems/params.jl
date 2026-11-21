@@ -102,14 +102,33 @@ function Base.show(io::IO, p::LatticeParameters)
 end
 
 """
-    TableSlot(key, entry)
+    TableSlot(key, entry, shape = ())
 
 The parameter index of a table (`entry = 0`) or of one entry of it, in a
-[`LatticeParameters`](@ref).
+[`LatticeParameters`](@ref). `shape` is the declared size of a matrix table, which is stored
+flat (column-major): a read of the whole table has that shape.
 """
 struct TableSlot
     key::String
     entry::Int
+    shape::Tuple{Vararg{Int}}
+end
+TableSlot(key, entry) = TableSlot(key, entry, ())
+# a matrix written to a matrix table must have its shape (a transposed one has the same
+# length and would be read as another table); a vector or tuple is taken flat, column-major
+function _check_table_shape(key, v, shape)
+    (v isa AbstractMatrix && length(shape) >= 2 && size(v) != shape) || return nothing
+    throw(
+        ArgumentError(
+            "the table `$key` is $(join(shape, "×")); give a matrix of that size, or " *
+                "its $(prod(shape)) values flat, column-major (got a " *
+                "$(join(size(v), "×")) matrix)"
+        )
+    )
+end
+# a whole table as read: flat, or in its declared matrix shape
+function _table_shaped(v, shape)
+    return length(shape) >= 2 && prod(shape) == length(v) ? reshape(v, shape) : v
 end
 """
     InputSlot(key, index)
@@ -135,7 +154,7 @@ SII.parameter_values(p::LatticeParameters, i::Integer) = p.values[i]
 SII.parameter_values(p::LatticeParameters, i::AbstractVector{<:Integer}) = p.values[i]
 function SII.parameter_values(p::LatticeParameters, s::TableSlot)
     v = last(p.tables[_tabpos(p, s.key)])
-    return s.entry == 0 ? copy(v) : v[s.entry]
+    return s.entry == 0 ? _table_shaped(copy(v), s.shape) : v[s.entry]
 end
 function SII.parameter_values(p::LatticeParameters, s::InputSlot)
     v = last(p.inputs[_inpos(p, s.key)])
@@ -168,6 +187,7 @@ function SII.set_parameter!(p::LatticeParameters, v, s::TableSlot)
                 )
             )
         end
+        _check_table_shape(s.key, v, s.shape)
         all(x -> x isa Real && isfinite(x), v) ||
             throw(ArgumentError("the table `$(s.key)` must hold finite values (got $v)"))
         vals .= vec(collect(v))

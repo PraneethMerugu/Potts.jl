@@ -684,16 +684,63 @@ const _CMP = (
 )
 # the other calls `lower` takes by identity: arithmetic, `ifelse` and the logic of
 # conditions
-const _OPS = (+, -, *, /, ^, min, max, ifelse, !=, !, &, |)
+const _OPS = (+, -, *, /, ^, min, max, clamp, ifelse, !=, !, &, |)
+
+# the declared size of the array parameter `T` (`(n,)` for `T[1:n]`, `(n1, n2)` for `J[1:n1,
+# 1:n2]`); a table is stored flat, in column-major order (`vec(J)`)
+_table_dims(T) = Tuple(length.(SymbolicUtils.shape(unwrap(T))))
+
+# the place of the literal entry `ix` of table `T` (read as `u`) in its flat, column-major
+# storage: one integer literal per axis, each inside its axis
+function _entry(u, T, ix)
+    dims = _table_dims(T)
+    length(ix) == length(dims) && all(i -> i isa Real && isinteger(i), ix) ||
+        _lerr(
+        u, "an entry of a table takes one integer literal per axis ($(length(dims))); " *
+            "read a computed index with `value_at`"
+    )
+    n = Int.(ix)
+    all(d -> 1 <= n[d] <= dims[d], eachindex(n)) ||
+        _lerr(u, "the entry is outside the table's size $(join(dims, "×"))")
+    return LinearIndices(dims)[n...]
+end
+
+# `value_at(J, a, b)`: one read of the flat table at `(clamp(b) − 1) n1 + clamp(a)`, each
+# index clamped into its axis; index 0 in either argument gives index 0, which reads 0
+# (`oob = :zero_at_0`), as the host method does
+function _pair_read(e::Env, u, a)
+    J = unwrap(a[1])
+    haskey(e.tables, J) ||
+        _lerr(u, "`value_at(J, a, b)` reads an array parameter `J`")
+    dims = _table_dims(J)
+    length(dims) == 2 ||
+        _lerr(u, "`value_at(J, a, b)` reads a matrix parameter (`J[1:n1, 1:n2]`)")
+    i, j = (cast!(e.kb, _num(e, [lower(y, e)])[1], I32) for y in a[2:3])
+    k(v) = constant!(e.kb, v, I32)
+    z = node!(e.kb, OR, BOOL, Int32[_cmp(e, EQ, i, k(0)), _cmp(e, EQ, j, k(0))])
+    ci, cj = (_op(e, MIN, _op(e, MAX, x, k(1)), k(n)) for (x, n) in zip((i, j), dims))
+    flat = _op(e, ADD, _op(e, MUL, _op(e, ADD, cj, k(-1)), k(dims[1])), ci)
+    return table!(e.kb, e.tables[J]..., select!(e.kb, z, k(0), flat))
+end
+
+# the supported calls, for the refusal of any other call
+const CALLS_HINT = "the supported calls are `+ - * / ^`, `min`, `max`, `clamp`, \
+    `== != < <= > >= ! & |`, `ifelse`, `sqrt`, `exp`, `log`, `abs`, \
+    $(join(("`$f`" for f in CALLS), ", ")); a registered or special function \
+    (`erf`, `@register_symbolic`) has no device body and is not one of them"
 
 """
     lowers_call(f) -> Bool
 
 Whether the lattice lowering takes a call of `f` inside a term: arithmetic (`+ - * / ^`,
-`min`, `max`), comparisons and logic (`== != < <= > >= ! & |`), `ifelse`, `sqrt`, `exp`,
-`log`, `abs` and the calls of the IR (`sin`, `cos`, `tan`, `tanh`, `sinh`, `cosh`, `cbrt`,
-`exp2`, `log2`, `log10`, `expm1`, `log1p`, `atan`, `floor`, `ceil`, `round`), and `identity`
-(SymbolicUtils keeps `π` and `ℯ` as `identity(π)`). It is the one
+`min`, `max`, `clamp`), comparisons and logic (`== != < <= > >= ! & |`), `ifelse`, `sqrt`,
+`exp`, `log`, `abs` and the calls of the IR (`sin`, `cos`, `tan`, `tanh`, `sinh`, `cosh`,
+`cbrt`, `exp2`, `log2`, `log10`, `expm1`, `log1p`, `atan`, `floor`, `ceil`, `round`,
+`sign`, `mod`, `rem`), and `identity` (SymbolicUtils keeps `π` and `ℯ` as
+`identity(π)`). `mod` and `rem` are Base's float methods; `clamp(x, lo, hi)` lowers as
+Base's `ifelse(x > hi, hi, ifelse(x < lo, lo, x))`. A special function (`erf`) or a
+function registered with `@register_symbolic` is not taken: it has no device body in the
+IR. It is the one
 allowlist across callers: any caller that converts its own terms (`Potts`) asks it, so a
 call lowers consistently everywhere.
 The operators (`laplacian`, `DivKGrad`, `Advect`, `Differential`), the reads (`value_at`,
@@ -742,10 +789,11 @@ function lower(x, e::Env{N}) where {N}
     if f === getindex
         b = unwrap(a[1])
         _isfield(e, b) && return _load(e, b, Int(unwrap_const(a[2])))
+        # an entry `T[i]` or `J[i, j]`: its place in the flat, column-major table
         haskey(e.tables, b) &&
             return table!(
             e.kb, e.tables[b]...,
-            cast!(e.kb, _literal(e, unwrap_const(a[2])), I32)
+            constant!(e.kb, _entry(u, b, map(y -> unwrap_const(unwrap(y)), a[2:end])), I32)
         )
         _lerr(u, "indexing is defined for array fields and array parameters only")
     end
@@ -780,6 +828,7 @@ function lower(x, e::Env{N}) where {N}
             cast!(e.kb, _num(e, [lower(a[2], e)])[1], I32)
         )
     end
+    f === value_at && length(a) == 3 && return _pair_read(e, u, a)
     f === ifelse && return cond!(
         e.kb, _bool(e, lower(a[1], e)), _num(
             e, [
@@ -826,7 +875,12 @@ function lower(x, e::Env{N}) where {N}
     end
     i = findfirst(r -> r[1] === f, _UNARY)
     i === nothing || return arith!(e.kb, _UNARY[i][2], _real(e, ids[1]); type = REAL)
-    f isa Function && nameof(f) in CALLS && length(ids) == 1 &&
-        return call!(e.kb, nameof(f), ids[1])
-    return _lerr(u, "`$f` has no lattice lowering")
+    # `clamp(x, lo, hi)` as Base defines it: `ifelse(x > hi, hi, ifelse(x < lo, lo, x))`
+    if f === clamp && length(ids) == 3
+        x, lo, hi = _num(e, ids)
+        return cond!(e.kb, _cmp(e, LT, hi, x), hi, cond!(e.kb, _cmp(e, LT, x, lo), lo, x))
+    end
+    f isa Function && nameof(f) in CALLS && length(ids) == call_arity(nameof(f)) &&
+        return call!(e.kb, nameof(f), ids...)
+    return _lerr(u, "`$f` has no lattice lowering; $CALLS_HINT")
 end

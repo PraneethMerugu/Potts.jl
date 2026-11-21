@@ -65,7 +65,9 @@ function print_layout(io::IO, p::Program{N}) where {N}
             f.symmetric, " buffers=", f.buffers, " role=", f.role, " epoch=", _lc(f.epoch),
             " classes=", [Int.(c.half) for c in f.classes], " levels=[",
             join(f.levels, ","), "]",
-            f.fixed ? " fixed" : ""
+            f.fixed ? " fixed" : "",
+            # (printed only when it differs from the lattice's)
+            f.periodic == p.periodic ? "" : " periodic=$(f.periodic)"
         )
     end
     for t in p.tables

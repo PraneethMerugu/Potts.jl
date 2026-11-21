@@ -137,15 +137,22 @@ end
     operand_reads(eqs, ops) -> Vector
 
 The fields of `ops` (operations, `c`) that a spatial operator in the right sides of `eqs`
-reads as its operand (`laplacian(c)`, `DivKGrad(K, c)`, `Advect(v, c)`, a raw flux): its
-value past a face needs the field's face conditions. A group that reads another group's
-field so marks it `LatticeCutField`.
+reads as its operand (`laplacian(c)`, `DivKGrad(K, c)`, `Advect(v, c)`, a raw flux), or
+that a term reads at an offset (`c(t, x + dx, y)` in a map): its value past a face needs
+the field's face conditions, and its neighbors its own periodicity. A group that reads
+another group's field so marks it `LatticeCutField`, as the whole system reads it.
 """
 function operand_reads(eqs, ops)
     out = Any[]
     function walk(u)
         u = unwrap(u)
         iscall(u) || return nothing
+        # an offset read: a space argument that is not the bare variable
+        f = operation(u)
+        if any(op -> isequal(op, f), ops) && any(iscall ∘ unwrap, arguments(u)[2:end]) &&
+                !any(x -> isequal(x, f), out)
+            push!(out, f)
+        end
         if _xg_isop(u) && (o = _xg_operand(u)) !== nothing
             for op in ops
                 _reads(o, (op,)) && !any(x -> isequal(x, op), out) && push!(out, op)

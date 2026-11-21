@@ -61,8 +61,15 @@ opname(op::Op) = op == INSIDE_OP ? "inside" : lowercase(string(op))
 const COMMUTATIVE = (ADD, MUL, MIN, MAX, EQ, AND, OR, XOR)
 const CALLS = (
     :sin, :cos, :tan, :tanh, :sinh, :cosh, :cbrt, :exp2, :log2, :log10, :expm1, :log1p,
-    :atan, :floor, :ceil, :round,
+    :atan, :floor, :ceil, :round, :sign, :mod, :rem,
 )
+"""
+    call_arity(f::Symbol) -> Int
+
+The number of operands of an IR call of `f` (a name in `CALLS`): 2 for `mod(x, y)` and
+`rem(x, y)`, 1 for every other call. [`call!`](@ref) checks it.
+"""
+call_arity(f::Symbol) = f in (:mod, :rem) ? 2 : 1
 
 """
     Grid(dims; geometry = CUBIC, domain = 0)
@@ -119,13 +126,9 @@ struct FieldDecl{N}
     # a declared storage (`lattice_storage`): the float lane holds its own type under `lanes
     # = :state` (`lanetype`)
     fixed::Bool
-end
-function FieldDecl{N}(
-        key, classes, shape, symmetric, storage, levels, epoch, buffers, role
-    ) where {N}
-    return FieldDecl{N}(
-        key, classes, shape, symmetric, storage, levels, epoch, buffers, role, false
-    )
+    # per axis, whether the field wraps (its accesses wrap there; a closed axis takes the
+    # field's face rules)
+    periodic::NTuple{N, Bool}
 end
 ncomp(f::FieldDecl) = isempty(f.shape) ? 1 : Int(prod(f.shape))
 

@@ -165,11 +165,21 @@ function table!(b::KernelBuilder, table::Integer, storage::Scalar, index::Intege
         b, TABLE, loadtype(storage), Int32[cast!(b, index, I32)], table
     )
 end
-function call!(b::KernelBuilder, f::Symbol, x::Integer)
+"""
+    call!(b::KernelBuilder, f::Symbol, xs::Integer...) -> Int32
+
+Add a `CALL` node of `f` on the nodes `xs` to kernel `b` and return its id. `f` must be in
+`CALLS` and take `call_arity(f)` operands (`mod` and `rem` two, the others one); each
+operand is cast to `REAL`, and the result is `REAL`. The body is Base's method of `f` for
+the kernel's real type. Other names, or another operand count, throw an `IRError`.
+"""
+function call!(b::KernelBuilder, f::Symbol, xs::Integer...)
     f in CALLS || irerror("CALL: `$f` is not in the whitelist $(CALLS)")
+    length(xs) == call_arity(f) ||
+        irerror("CALL: `$f` takes ", call_arity(f), " operands, not ", length(xs))
     k = findfirst(==(f), b.calls)
     k === nothing && (push!(b.calls, f); k = length(b.calls))
-    return node!(b, CALL, REAL, Int32[cast!(b, x, REAL)], k)
+    return node!(b, CALL, REAL, Int32[cast!(b, x, REAL) for x in xs], k)
 end
 
 # ---- typing
@@ -432,7 +442,7 @@ function copy_node!(b::KernelBuilder{N}, k::Kernel{N}, i, newargs, ctx) where {N
     new, fieldmap, tablemap = ctx
     n = k.nodes[i]
     n.op == CONST && return constant!(b, k.consts[n.imm], n.type)
-    n.op == CALL && return call!(b, k.calls[n.imm], newargs[1])
+    n.op == CALL && return call!(b, k.calls[n.imm], newargs...)
     imm = n.imm
     if n.op in (LOAD, INSIDE_OP)
         imm = access!(b, remap_access(k.accesses[n.imm], new, fieldmap))

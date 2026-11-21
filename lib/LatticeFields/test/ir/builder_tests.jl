@@ -69,6 +69,10 @@ end
         @test kb.nodes[(m + IR.constant(kb, 2, U8)).id].type == U8
         @test_throws IRError IR.bittest(load(kb, x), 1)
         @test_throws IRError IR.call!(kb, :evalfile, m.id)
+        # `mod` and `rem` take two operands, every other call one
+        @test kb.nodes[IR.call!(kb, :mod, m.id, load(kb, x).id)].type == REAL
+        @test_throws IRError IR.call!(kb, :rem, m.id)
+        @test_throws IRError IR.call!(kb, :sign, m.id, m.id)
         neg_exp = -1
         @test_throws IRError m^neg_exp
         @test_throws IRError IR.restrict(m; op = :bad)

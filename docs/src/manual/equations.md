@@ -71,7 +71,8 @@ maximum(sol[:c][end])
 - **Domain.** The domain of `sys` is the lattice's, in the model's length unit: axis `d`
   spans `[0, dims[d] · spacing[d]]`. `lattice_domain(t, (x, y), dims; spacing)` gives it.
   Another interval is an error that names both. The time interval of `sys` is not read:
-  the problem's `tspan` is. Periodicity is the lattice's, for every field.
+  the problem's `tspan` is. A field wraps on the lattice's periodic axes and is closed on
+  its closed axes, unless its own conditions say otherwise (see Boundary conditions).
 - **Initial value.** A field starts at its default (`c(..) = 0.0`) or at a condition at the
   start time (`c(0, x, y) ~ v`). An operating-point entry `:c => values` replaces it.
   LatticePDE's `discretize` reads only the condition, so a `PDESystem` that you also solve
@@ -604,9 +605,20 @@ u = solve(prob, SequentialCPM(); save_everystep = false).u[end]
   field enters through the face. The bound of the field solvers covers these ghost values.
   The harmonic mean of `0³` and `2³` is 0, so `DivKGrad(:harmonic)` keeps a degenerate
   front (`K = 0` where `c = 0`) from moving; use `DivKGrad(:arithmetic)` for degenerate
-  diffusion. A condition on a periodic axis, on an axis the lattice lacks, or on a field
-  whose equation has no spatial operator of it is an error naming it. So is a periodic pair on an axis the lattice closes: periodicity is the lattice's,
-  for every field.
+  diffusion. Periodicity is per field and axis. A periodic pair
+  (`c(t, x, 0) ~ c(t, x, L)`) makes that field wrap on that axis, also where the lattice
+  is closed. A face condition on an axis the lattice wraps closes that field there; the
+  other fields still wrap. A read of a field follows that field's own conditions, in
+  every equation that reads it: with `c` periodic on x and `d` closed there,
+  `laplacian(c)` in the rate of `d` wraps, and `laplacian(d)` in the rate of `c` takes
+  the faces of `d` (as in MethodOfLines). An aux field (`K ~ k * d`) wraps where the
+  fields it reads wrap, so `DivKGrad(:arithmetic)(K, d)` keeps the zero-flux face of `d`.
+  An input wraps only where every field wraps. On an axis where the fields differ, a
+  neighbor read of an input, or of an aux field that reads fields of both kinds
+  (`K ~ c + d`), is an error, and so is a `domain` mask. A condition on an axis the
+  lattice lacks, a face condition and a periodic pair of one field on the same axis, a
+  pair that joins two fields, or a condition on a field whose equation has no spatial
+  operator of it is an error naming it.
 - **Site masks.** `c ~ masked(condition, v)` is a node value: every explicit substep writes
   `v` at every site where the condition holds (after the `lower_bound` clip, so a mask value
   below `lower_bound` wins), and a fresh initial state (the problem's `u0`, `init`, `reinit!`) is

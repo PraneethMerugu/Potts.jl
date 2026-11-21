@@ -29,12 +29,16 @@ end
 Declare a field; returns its provisional id. `fixed = true` (a declared storage): the
 float lane `storage` holds its own type under `lanes = :state` too, where a lane otherwise
 holds the problem's value type ([`lanetype`](@ref LatticeFields.Compile.lanetype)).
+`periodic` (default: the program's) gives, per axis, whether the field wraps; on a closed
+axis its accesses take its face rules.
 """
 function field!(
         pb::ProgramBuilder{N}, key; storage = F32, shape = Int16[], symmetric = false,
         buffers = 1, role = :state, epoch = PERSTEP, levels = Int8[0],
-        classes = [Placement{N}()], fixed = false
+        classes = [Placement{N}()], fixed = false, periodic = pb.periodic
     ) where {N}
+    length(periodic) == N ||
+        irerror("field `$key`: `periodic` has ", length(periodic), " axes, not ", N)
     any(f -> f.key == key, pb.fields) && irerror("field `$key` declared twice")
     role in (:state, :aux, :input, :output, :scratch) ||
         irerror("field `$key`: unknown role `$role`")
@@ -43,7 +47,7 @@ function field!(
         pb.fields,
         FieldDecl{N}(
             String(key), classes, Int16.(shape), symmetric, storage,
-            Int8.(levels), epoch, Int8(buffers), role, fixed
+            Int8.(levels), epoch, Int8(buffers), role, fixed, Tuple(Bool.(periodic))
         )
     )
     return Int32(length(pb.fields))
@@ -157,6 +161,13 @@ function program(pb::ProgramBuilder{N}) where {N}
         pb.nparams
     )
 end
+
+"""
+    fieldperiodic(p, f) -> NTuple{N, Bool}
+
+Per axis, whether field `f` (an id) of program `p` wraps.
+"""
+fieldperiodic(p::Program, f::Integer) = p.fields[f].periodic
 
 """
 Replace the kernels of `p` (passes return new programs; nothing is mutated).

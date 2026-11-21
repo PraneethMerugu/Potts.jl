@@ -85,6 +85,9 @@ module FpPDE
     end
     interior() = b_dc([c(t, 3, y) ~ 1.0, c(t, 8, y) ~ 0.0])
     periodic_bcs() = b_dc([c(t, x, 0) ~ c(t, x, 6)])
+    # on a periodic lattice: `c` closed on x by a face, wrapping on y (the lattice's pair)
+    face_on_periodic() = b_dc([c(t, 0, y) ~ 1.0])
+    face_periodic_y() = b_dc([c(t, 0, y) ~ 1.0, c(t, x, 0) ~ c(t, x, 6)])
     function b_mask_earlier()
         return pdesys(
             [Dt(C) ~ 0.5 * laplacian(C) - 0.2 * C, Dt(E) ~ 0.1],
@@ -137,9 +140,10 @@ end
     @structural_parameters begin
         sys_fn = FpPDE.p_divk
         spacing = 1.0
+        boundary = Closed()
     end
     @kinds medium A
-    @lattice Lattice((8, 6); boundary = Closed(), spacing = (spacing, spacing))
+    @lattice Lattice((8, 6); boundary, spacing = (spacing, spacing))
     @energy cells(A) => (volume - 9.0)^2
     @fields sys_fn()
     @sweep Metropolis(; temperature = 1.0)
@@ -211,6 +215,9 @@ function FbPeriodicBcs(; name = :FbPeriodicBcs, kw...)
         sys_fn = FpPDE.periodic_bcs, name,
         kw...
     )
+end
+function FbFaceOnPeriodic(; name = :FbFaceOnPeriodic, kw...)
+    return _Fp8x6(; sys_fn = FpPDE.face_on_periodic, boundary = Periodic(), name, kw...)
 end
 
 @potts_model _Fp6x4 begin

@@ -5,7 +5,7 @@
 function _two_slot(f::FieldDecl{N}) where {N}
     return FieldDecl{N}(
         f.key, f.classes, f.shape, f.symmetric, f.storage,
-        f.levels, f.epoch, Int8(2), f.role, f.fixed
+        f.levels, f.epoch, Int8(2), f.role, f.fixed, f.periodic
     )
 end
 
@@ -145,7 +145,7 @@ function fuse_residual(p::Program{N}, rule; widen16::Bool = false) where {N}
             fields, FieldDecl{N}(
                 "res:" * c, f.classes, f.shape, f.symmetric, wide ? F32 : f.storage,
                 f.levels, f.epoch,
-                Int8(1), :scratch, wide ? false : f.fixed
+                Int8(1), :scratch, wide ? false : f.fixed, f.periodic
             )
         )
         res[c] = Int32(nk + j)
@@ -156,7 +156,7 @@ function fuse_residual(p::Program{N}, rule; widen16::Bool = false) where {N}
             fields,
             FieldDecl{N}(
                 c * "__n", f.classes, f.shape, f.symmetric, f.storage,
-                f.levels, f.epoch, Int8(1), :input, f.fixed
+                f.levels, f.epoch, Int8(1), :input, f.fixed, f.periodic
             )
         )
         hist[c] = Int32(nk + length(order) + j)

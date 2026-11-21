@@ -27,7 +27,7 @@ using LatticeFields.IR: F16, Grid, Program, ProgramBuilder, Coef, FaceRule, Node
     program,
     node!, constant!, param!, runtime!, coord!, table!, call!, cast!,
     arith!,
-    compare!, select!, cond!, load!, access!, store!, isfloat, CALLS,
+    compare!, select!, cond!, load!, access!, store!, isfloat, CALLS, call_arity,
     F32, F64, I32, U8, U32, REAL, BOOL, RESOLVE, CLAMP, INSIDE, ZERO,
     PERSIGMA,
     ADD, MUL, NEG, DIV, MIN, MAX, ABS, SQRT, EXP, LOG, POWI, EQ, LT, LE,
@@ -40,7 +40,7 @@ using LatticeFields.Solvers: LatticePCG, LatticeGMRES, LatticeMultigrid, Lattice
     VCycle
 using LatticeFields.Compile: CompileOptions, fingerprint_text, fuse_update, promote_dual,
     primal
-using LatticeFields.IR: fieldid, RESOLVE, degenerate, leveldims, sitecoefs
+using LatticeFields.IR: fieldid, fieldperiodic, RESOLVE, degenerate, leveldims, sitecoefs
 using LatticeFields.Problems: FieldProblem, FieldSlot, LatticeIndex,
     ExplicitEuler, ExplicitMap, LatticeNewton, BackwardEuler,
     CrankNicolson, BDF2, QuasiSteady, FieldGroups, RT_DT,
@@ -184,7 +184,10 @@ over its current values. Index 0 is evaluated only when that interval holds 0.
 
 `value_at(J, a, b)`: entry `(a, b)` of the pair table `J` (`value_at(J, kindₛ, kindₛ′)`). It
 reads as the two-argument form does along each axis: index 0 in either argument reads 0, and
-each index is clamped into its axis (`1:size(J, 1)`, `1:size(J, 2)`).
+each index is clamped into its axis (`1:size(J, 1)`, `1:size(J, 2)`). In a field term the
+read is one table read. The problem stores `J` flat, in column-major order; `prob.ps[J]`
+reads it back as a matrix, `remake` and `setp` take a matrix (or its `vec`), and a literal
+entry `J[i, j]` reads entry `(i, j)`.
 
 With two or more integer inputs (for example the two kinds of a pair table read),
 `mtkcompile(sys; inputs = [a, b])` can fail with `AssertionError: last_idx <= idx` in

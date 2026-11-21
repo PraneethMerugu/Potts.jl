@@ -101,6 +101,8 @@ function opexpr(op::Op, a::Vector{Any}, n::Node, k::Kernel, T::Type)
     op == SQRT && return _guarded(:sqrt, a[1], T)
     op == LOG && return _guarded(:log, a[1], T)
     op == POWI && return :(powi($(a[1]), $(Int(n.imm))))   # no library `pow`
+    # (`mod` and `rem` take two operands: Base's float methods, branch-only, no `throw`)
+    op == CALL && length(a) == 2 && return Expr(:call, k.calls[n.imm], a[1], a[2])
     op == CALL && return _guarded(k.calls[n.imm], a[1], T)
     op == BITTEST && return :((($(a[1]) >> $(Int(n.imm))) & one($(a[1]))) != zero($(a[1])))
     if op == CAST
@@ -250,7 +252,7 @@ function _target(c::Ctx{N}, a::Access{N}; bounded::Bool = true) where {N}
         y, fl = _fine(c, a, d)
         n = _dim(c, fl, d)
         shifted = a.offset.cond != 0 || a.offset.a[d] != 0 || a.level < 0
-        if shifted && a.policy != INSIDE && c.p.periodic[d]
+        if shifted && a.policy != INSIDE && fieldperiodic(c.p, a.field)[d]
             y = if c.o.debug || _maxoff(c, a, d) >= leveldims(c.p, fl)[d]
                 :(mod1($y, $n))
             else
@@ -310,8 +312,8 @@ function _inside(c::Ctx{N}, a::Access{N}) where {N}
     ys, lev = _target(c, a; bounded = false)
     ts = Any[]
     for d in 1:N
-        (a.offset.cond != 0 || a.offset.a[d] != 0 || a.level < 0) && !c.p.periodic[d] ||
-            continue
+        (a.offset.cond != 0 || a.offset.a[d] != 0 || a.level < 0) &&
+            !fieldperiodic(c.p, a.field)[d] || continue
         fl = a.level < 0 ? lev : c.k.space.level
         push!(ts, :(($(_I(c, 1)) <= $(ys[d])) & ($(ys[d]) <= $(_dim(c, fl, d)))))
     end

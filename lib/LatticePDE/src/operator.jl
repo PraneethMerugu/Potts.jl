@@ -112,9 +112,26 @@ end
 # or nothing when a derivative stays unexpanded (a registered function of `c` with no rule)
 function _local_derivative(term, c)
     v = Symbolics.variable(:__f3_u)
-    d = Symbolics.derivative(substitute(term, Dict(c => v); fold = Val(false)), v)
+    w = _ae_form(unwrap(substitute(term, Dict(c => v); fold = Val(false))))
+    d = Symbolics.derivative(w, v)
     _hasdiff(unwrap(d)) && return nothing
     return substitute(d, Dict(unwrap(v) => c); fold = Val(false))
+end
+# `mod(x, y)` as `x - y floor(x / y)` and `rem(x, y)` as `x - y trunc(x / y)`: equal values,
+# and the derivative that holds away from the jumps (Symbolics' rule gives NaN at each jump,
+# where `x / y` is an integer)
+function _ae_form(u)
+    iscall(u) || return u
+    a0 = arguments(u)
+    a = map(y -> _ae_form(unwrap(y)), a0)
+    f = operation(u)
+    if f === mod || f === rem
+        x, y = Symbolics.wrap(a[1]), Symbolics.wrap(a[2])
+        q = x / y
+        return unwrap(x - y * (f === mod ? floor(q) : ifelse(q < 0, ceil(q), floor(q))))
+    end
+    all(i -> a[i] === a0[i], eachindex(a)) && return u
+    return TermInterface.maketerm(typeof(u), f, a, TermInterface.metadata(u))
 end
 function _hasdiff(u)
     return iscall(u) &&
@@ -306,7 +323,8 @@ function _interval(x, params::Dict{Any, Int}, tabs, box)
     end
     iscall(u) || return nothing
     f, a = operation(u), arguments(u)
-    if (f === value_at || f === getindex) && length(a) == 2 && haskey(tabs, unwrap(a[1]))
+    if (f === value_at || f === getindex) && length(a) in (2, 3) &&
+            haskey(tabs, unwrap(a[1]))
         k = tabs[unwrap(a[1])]
         return pp -> begin
             pp isa Problems.ParamsTables || return (-Inf, Inf)
@@ -349,6 +367,31 @@ function _interval(x, params::Dict{Any, Int}, tabs, box)
     f === max &&
         return pp -> (qs = map(b -> b(pp), bs); (maximum(first, qs), maximum(last, qs)))
     (f === sin || f === cos) && return _ -> (-1.0, 1.0)
+    f === sign && return pp -> (q = bs[1](pp); (sign(q[1]), sign(q[2])))
+    # `mod(x, y)` has the sign of `y`, `rem(x, y)` the sign of `x`; each is below `|y|`. A
+    # divisor interval that holds 0 (NaN) or an infinite value bounds nothing
+    divisor_ok(w) = isfinite(w[1]) && isfinite(w[2]) && (w[1] > 0 || w[2] < 0)
+    if f === mod
+        return pp -> begin
+            w = bs[2](pp)
+            divisor_ok(w) ? (min(w[1], 0.0), max(w[2], 0.0)) : (-Inf, Inf)
+        end
+    end
+    if f === rem
+        return pp -> begin
+            q, w = bs[1](pp), bs[2](pp)
+            m = max(abs(w[1]), abs(w[2]))
+            divisor_ok(w) ? (max(min(q[1], 0.0), -m), min(max(q[2], 0.0), m)) : (-Inf, Inf)
+        end
+    end
+    # the kernel's `ifelse(x > hi, hi, ifelse(x < lo, lo, x))` is `min(max(x, lo), hi)` when
+    # `lo <= hi` and takes `lo` or `hi` when the bounds cross: the hull of both orders
+    f === clamp && return pp -> begin
+        q, lo, hi = bs[1](pp), bs[2](pp), bs[3](pp)
+        a = (min(max(q[1], lo[1]), hi[1]), min(max(q[2], lo[2]), hi[2]))
+        b = (max(min(q[1], hi[1]), lo[1]), max(min(q[2], hi[2]), lo[2]))
+        (min(a[1], b[1]), max(a[2], b[2]))
+    end
     return nothing
 end
 # the Gershgorin bound of a diffusion term out of the operator, `4 max|m| max|K| Σ_a 1/h_a²`
@@ -867,6 +910,7 @@ function _jac_program(
     end
     for (k, pl) in sort!(collect(plans); by = first)
         id = fieldid_in(pb, k)
+        per = pb.fields[id].periodic                # (the row's field wraps on these axes)
         lane = pb.fields[id].storage
         L = Int(pb.fields[id].levels[1])
         dlid = domat(L)
@@ -917,7 +961,7 @@ function _jac_program(
             end
             for (a, o) in enumerate(((1, 0), (0, 1), (1, -1)))
                 w = wl
-                all(s.periodic) || (w = select!(kb, inside(o), w, zero_))
+                all(per) || (w = select!(kb, inside(o), w, zero_))
                 dlid == 0 ||
                     (
                     w = select!(
@@ -929,7 +973,7 @@ function _jac_program(
             end
             # the ghost rule's `d⁺` of face (a, side), or nothing
             function dplus(a, side)
-                s.periodic[a] && return nothing
+                per[a] && return nothing
                 r = findfirst(
                     x -> x isa FaceRule && x.field == fieldid(s, k) && x.axis == a &&
                         x.side == side,
@@ -998,7 +1042,7 @@ function _jac_program(
                 end
                 # no face across the box (the solver's zero flux) or across the domain's
                 # edge
-                s.periodic[a] || (w = select!(kb, inside(o), w, zero_))
+                per[a] || (w = select!(kb, inside(o), w, zero_))
                 dlid == 0 ||
                     (
                     w = select!(
@@ -1008,7 +1052,7 @@ function _jac_program(
                     )
                 )
                 store!(kb, wids[a], lane, w)
-                s.periodic[a] && continue
+                per[a] && continue
                 # the face conditions of the box: the ghost rule's diagonal `w_b d⁺`
                 for (j, side) in enumerate((-1, 1))
                     r = findfirst(

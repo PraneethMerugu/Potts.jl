@@ -42,7 +42,23 @@ function iv_log(a::Iv)
     return a[1] <= 0 ? (-Inf, a[2] <= 0 ? -Inf : nextfloat(log(a[2]))) : iv_mono(log, a)
 end
 iv_hull(a::Iv, b::Iv) = (min(a[1], b[1]), max(a[2], b[2]))
-const _MONO_CALLS = (:tanh, :sinh, :cbrt, :exp2, :expm1, :atan, :floor, :ceil, :round)
+const _MONO_CALLS = (
+    :tanh, :sinh, :cbrt, :exp2, :expm1, :atan, :floor, :ceil, :round, :sign,
+)
+# a divisor interval that holds 0 (`mod(x, 0)` is NaN) or an infinite value (`mod(x, Inf)`
+# is `x` or NaN) bounds nothing
+_iv_divisor_ok(y::Iv) = isfinite(y[1]) && isfinite(y[2]) && (y[1] > 0 || y[2] < 0)
+# `mod(x, y)` has the sign of `y` and `|mod(x, y)| < |y|`
+function iv_mod(::Iv, y::Iv)
+    _iv_divisor_ok(y) || return (-Inf, Inf)
+    return (min(y[1], 0.0), max(y[2], 0.0))
+end
+# `rem(x, y)` has the sign of `x` and `|rem(x, y)| <= min(|x|, |y|)`
+function iv_rem(x::Iv, y::Iv)
+    _iv_divisor_ok(y) || return (-Inf, Inf)
+    m = max(abs(y[1]), abs(y[2]))
+    return (max(min(x[1], 0.0), -m), min(max(x[2], 0.0), m))
+end
 
 function _ivexpr(k::Kernel, i, p::Program, bounds, a)
     n = k.nodes[i]
@@ -83,6 +99,8 @@ function _ivexpr(k::Kernel, i, p::Program, bounds, a)
         f = k.calls[n.imm]
         f in (:sin, :cos) && return (-1.0, 1.0)
         f in _MONO_CALLS && return :(iv_mono($f, $(a[1])))
+        f === :mod && return :(iv_mod($(a[1]), $(a[2])))
+        f === :rem && return :(iv_rem($(a[1]), $(a[2])))
     end
     irerror(
         "interval evaluator: op `", opname(op),

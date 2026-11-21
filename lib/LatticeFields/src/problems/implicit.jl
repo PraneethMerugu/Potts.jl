@@ -706,13 +706,13 @@ end
 # the Dirichlet faces of axis `a` (0.0 at each, `nothing` elsewhere; none on a periodic
 # axis)
 function _dirichlet_faces(s::Program, id, a, p)
-    s.periodic[a] && return (nothing, nothing)
+    fieldperiodic(s, id)[a] && return (nothing, nothing)
     return ntuple(k -> _face_kind(s, id, a, k, p)[1] === :dirichlet ? 0.0 : nothing, 2)
 end
 # the Robin faces of axis `a` (`(α, β, 0.0)` at each, `nothing` elsewhere; none on a
 # periodic axis)
 function _robin_faces(s::Program, id, a, p)
-    s.periodic[a] && return (nothing, nothing)
+    fieldperiodic(s, id)[a] && return (nothing, nothing)
     return ntuple(2) do k
         f = _face_kind(s, id, a, k, p)
         return f[1] === :robin ? (f[2], f[3], 0.0) : nothing
@@ -753,7 +753,8 @@ function _numeric_operator(
     # a steady solve (γh = ∞) takes a Robin face's negative part into its operator too: with
     # no time-step shift to keep dominant, it stays symmetric and exact
     op = Solvers.CellOperator(
-        dims; periodic = s.periodic, face, shift, mask = mask ? "mask" : nothing,
+        dims; periodic = fieldperiodic(s, id), face, shift,
+        mask = mask ? "mask" : nothing,
         value = 0.0,
         dirichlet = dir, robin = rob, name = r.key, robin_full = isinf(γ * h),
         hex = _ishex(s)
@@ -1152,6 +1153,7 @@ function bind_cache(
         else
             numeric = nothing
             N = length(s.periodic)
+            per = fieldperiodic(s, id)
             dims = Tuple(Int.(leveldims(s, s.fields[id].levels[1])))
             sh = _zeros(st.backend, T, nsite)
             usemask = mask !== nothing || r.domain || r.scaled
@@ -1163,7 +1165,7 @@ function bind_cache(
             # (a hexagonal lattice: three face directions)
             nf = _ishex(s) ? 3 : N
             cop = Solvers.CellOperator(
-                dims; periodic = s.periodic, face = ntuple(a -> "w$a", nf), shift = "s",
+                dims; periodic = per, face = ntuple(a -> "w$a", nf), shift = "s",
                 mask = usemask ? "mask" : nothing, value = r.scaled ? "v" : 0.0, name = key,
                 hex = _ishex(s)
             )
@@ -2334,7 +2336,8 @@ function _steady_refusals(spec::GroupSpec, op::OperatorSpec, keys, p)
         (g < 0 || r.iterate || r.switch || !isempty(r.cross)) && continue
         any(x -> x isa NodeValueRule && x.field == id, s.rules) && continue
         any(
-            a -> !s.periodic[a] && any(k -> _face_kind(s, id, a, k, p)[1] !== :none, 1:2),
+            a -> !fieldperiodic(s, id)[a] &&
+                any(k -> _face_kind(s, id, a, k, p)[1] !== :none, 1:2),
             eachindex(s.periodic)
         ) && continue
         throw(
@@ -2360,8 +2363,9 @@ end
 # mask only raises it, so a masked row is checked without its mask, and accepted when that
 # passes)
 function _steady_indefinite(s::Program{N}, r::RowOperator, id, shift, p) where {N}
+    per = fieldperiodic(s, id)
     kinds = [
-        ntuple(k -> s.periodic[a] ? (:none, 0.0, 0.0) : _face_kind(s, id, a, k, p), 2)
+        ntuple(k -> per[a] ? (:none, 0.0, 0.0) : _face_kind(s, id, a, k, p), 2)
             for a in 1:N
     ]
     any(
@@ -2376,13 +2380,13 @@ function _steady_indefinite(s::Program{N}, r::RowOperator, id, shift, p) where {
     # barrier)
     _ishex(s) && return _steady_refuse(
         r,
-        Base.inferencebarrier(_hex_steady_min)(r, kinds, dims, s.periodic, shift, p)...
+        Base.inferencebarrier(_hex_steady_min)(r, kinds, dims, per, shift, p)...
     )
     λ, scale = shift, abs(shift)
     for a in 1:N
         w = _coefsum(r.faces[a], p)
         scale += 4abs(w)
-        s.periodic[a] && continue                   # (a periodic axis: its smallest is 0)
+        per[a] && continue                          # (a periodic axis: its smallest is 0)
         n = dims[a]
         d = fill(2w, n)
         for (k, i) in ((1, 1), (2, n))

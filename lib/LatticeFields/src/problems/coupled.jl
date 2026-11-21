@@ -837,8 +837,11 @@ function coupled_modes(s::Program{N}, op::OperatorSpec, keys, p) where {N}
             f[2] / (f[2] / 2 + f[3])
         end
     end
+    # (rows that differ in periodicity on an axis: no common modes)
+    per = fieldperiodic(s, ids[1])
+    all(i -> fieldperiodic(s, i) == per, ids) || return nothing
     for a in 1:N, k in 1:2
-        s.periodic[a] && continue
+        per[a] && continue
         g0 = ghost(ids[1], a, k)
         all(i -> isapprox(ghost(i, a, k), g0; rtol = 1.0e-12, atol = 1.0e-14), ids) ||
             return nothing
@@ -871,7 +874,7 @@ function coupled_modes(s::Program{N}, op::OperatorSpec, keys, p) where {N}
     lam = map(1:N) do a
         n = dims[a]
         n == 1 && return [0.0]
-        s.periodic[a] && return [2 - 2cos(2π * q / n) for q in 0:(n - 1)]
+        per[a] && return [2 - 2cos(2π * q / n) for q in 0:(n - 1)]
         d = fill(2.0, n)
         d[1] += ghost(ids[1], a, 1) - 1
         d[n] += ghost(ids[1], a, 2) - 1
@@ -1084,7 +1087,9 @@ function _check_growth(cs, alg, s::Program, op::OperatorSpec, keys, p)
         cs.pending = 1
         return nothing
     end
-    # (the modes decided already)
+    # (the modes decided already). `coupled_modes` is `nothing` when the rows have no common
+    # modes: a coefficient that varies by site, rows that differ in periodicity or faces on
+    # an axis, a hexagonal lattice. The Arnoldi estimate decides those
     coupled_modes(s, op, keys, p) === nothing || return nothing
     σ = _growth_shift(op, keys, p)
     λ = coupled_growth(cs, σ, 0.0)
@@ -1092,7 +1097,9 @@ function _check_growth(cs, alg, s::Program, op::OperatorSpec, keys, p)
     throw(
         _growth_refusal(
             keys, λ, 0.0,
-            ", estimated through the coupled operator: a coefficient varies by site"
+            ", estimated through the coupled operator: the rows have no common modes (a " *
+                "coefficient varies by site, the rows differ in periodicity or faces, or " *
+                "the lattice is hexagonal)"
         )
     )
 end
