@@ -35,7 +35,7 @@ ODEs. It differentiates only the fields' response to the parameters along the pa
 
 | Where | Seed | Read |
 |---|---|---|
-| a Potts model | a Dual for a parameter, or a Dual initial value of a field, in the operating point; `remake(prob; p = [k => Dual])` | `sol.u[i].site.c`, `integ[c]`, `current_state(integ)` (Dual arrays) |
+| a Potts model | a Dual for a parameter, or a Dual initial value of a field, in the operating point; `remake(prob; p = [k => Dual])` | `sol[:c][i]`, `integ[c]`, `current_state(integ)` (Dual arrays) |
 | a LatticePDE problem (`discretize`) | `remake(prob; p = [k => Dual])`, or a Dual `u0` | `sol.u[i]` (Dual arrays) |
 
 - In a Potts model, the live state `integ.u` stays primal. Only the field arrays are Duals.

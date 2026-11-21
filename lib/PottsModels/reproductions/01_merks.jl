@@ -184,7 +184,7 @@ function field_mcs(c, σ, p; split)
     return c
 end
 dev_u = sol.u[end]
-dev_c, dev_σ = Float64.(Array(dev_u.site.c)), Int.(Array(dev_u.ownership))
+dev_c, dev_σ = Float64.(Array(sol[:c][end])), Int.(Array(ownership(dev_u)))
 dev_p = (; α = getp(prob, :α)(prob), ε = getp(prob, :ε)(prob), Dc = getp(prob, :Dc)(prob))
 split_rel = maximum(abs, field_mcs(dev_c, dev_σ, dev_p; split = true) .- field_mcs(dev_c, dev_σ, dev_p; split = false)) /
     maximum(dev_c)
@@ -792,7 +792,7 @@ function network(σ)
     return (; share = maximum(occ) / sum(occ), lacunae = count(k -> !touch[k] && med[k] >= 10, eachindex(med)))
 end
 isnetwork(r) = r.share >= 0.9 && r.lacunae >= 3
-σs(sol) = [Int.(Array(u.ownership)) for u in sol.u]
+σs(sol) = [Int.(Array(ownership(u))) for u in sol.u]
 nothing #hide
 
 # ### Ensembles
@@ -819,7 +819,7 @@ function run06(seed, saves; lattice = (500, 500), n = 282, p = Pair[])
         (0, maximum(saves)); field_solver = SOLVER, seed
     )
     sol = solve(prob, SequentialCPM(); saveat = saves)
-    return Dict(Int(t) => Int.(Array(u.ownership)) for (t, u) in zip(sol.t, sol.u))
+    return Dict(Int(t) => Int.(Array(ownership(u))) for (t, u) in zip(sol.t, sol.u))
 end
 function run08(seed, saves; p = Pair[], mode = :extension_retraction, denovo = false)
     lattice = denovo ? (502, 502) : (202, 202)
@@ -829,7 +829,7 @@ function run08(seed, saves; p = Pair[], mode = :extension_retraction, denovo = f
         field_solver = SOLVER, seed
     )
     sol = solve(prob, SequentialCPM(); saveat = saves)
-    return Dict(Int(t) => Int.(Array(u.ownership)) for (t, u) in zip(sol.t, sol.u))
+    return Dict(Int(t) => Int.(Array(ownership(u))) for (t, u) in zip(sol.t, sol.u))
 end
 function anisotropy(σs)
     par = perp = 0.0
@@ -1009,12 +1009,14 @@ record_potts(
 
 function record_field(file, sol; title, figsize, every = 1)
     frames = renderframes(sol, RenderRequest())
-    field(i) = Float64.(Array(sol.u[i].site.c))
+    cs = sol[:c]
+    field(i) = Float64.(Array(cs[i]))
     ## endothelial sites by kind (every cell that is not of the frame's kind); NaN is transparent
-    frame_kind = sol.u[1].cell.kind[Array(sol.u[1].ownership)[1, 1]]         # the corner site is the frozen frame
+    ## the corner site is the frozen frame
+    frame_kind = cell_kinds(sol.u[1])[Array(ownership(sol.u[1]))[1, 1]]
     function cells(i)
-        σ = Array(sol.u[i].ownership)
-        kd = sol.u[i].cell.kind
+        σ = Array(ownership(sol.u[i]))
+        kd = cell_kinds(sol.u[i])
         return [c != 0 && kd[c] != frame_kind ? 1.0 : NaN for c in σ]
     end
     nx, ny = frame_size(frames[1])
