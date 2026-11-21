@@ -212,7 +212,7 @@ public hamiltonian, drives, PottsSweepSpec
 # the container around MTK's System: the inner System, the field PDESystem, the payload;
 # wrap_system and components (`compose` and `extend` are MTK's, exported above); the field
 # bindings
-public inner, fields, part, component, wrap_system, PottsPart, FieldBinding, resolve
+public inner, fields, part, component, wrap_system, PottsPart, FieldBinding
 # a plain PDESystem as the model's fields, its inputs bound to CPM expressions; the
 # current values of those inputs, for SciML solvers of the PDESystem
 public couple, field_inputs, is_kind

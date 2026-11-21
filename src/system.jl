@@ -30,7 +30,7 @@ A coupling of a model input to the field side: the input `name` of the component
 
 Bindings are stored per component as `(path, name)`. `compose` prefixes the path with the
 component name, and after the wrap the input resolves as
-`getproperty(foldl(getproperty, path; init = sys), name)` ([`Potts.resolve`](@ref)), a
+`getproperty(foldl(getproperty, path; init = sys), name)` (`Potts.resolve`), a
 term of `unknowns(sys)`. Bindings are stored and printed; the field compiler reads them.
 
 # Fields
@@ -38,7 +38,7 @@ term of `unknowns(sys)`. Bindings are stored and printed; the field compiler rea
 - `name::Symbol`: the input's name.
 - `source`: what drives the input.
 
-See also [`Potts.resolve`](@ref), [`Potts.PottsPart`](@ref).
+See also `Potts.resolve`, [`Potts.PottsPart`](@ref).
 """
 struct FieldBinding
     path::Vector{Symbol}
