@@ -830,8 +830,8 @@ Fields moved from `CorePotts.FieldStep` (explicit Euler only) to two new MIT pac
 
 Open and deferred:
 - [x] D-286 2026-11-16 **Confirm the provisional entries.** D-256 to D-270 and the C8/C9 re-freeze entries still say "provisional, awaiting confirmation". The maintainer's OK of 2026-10-17 and 2026-10-19 is recorded only in the git-ignored `PottsWorktrees/lattice-pde/HANDOFF.md` §1. C10 was to write it into DECISIONS. Also give numbers to the placeholder ids (D-C*, D-F2-*, D-F3-*, D-F4-*, D-INT-1 (now D-322)).
-- [ ] **C10** Field-compiler docs. Stopped by the maintainer 2026-10-18; unverified WIP `8601032c` on the local branch `lp/c10` (HANDOFF status table). Some docs landed later with F4-B4d (3213f17b).
-- [ ] **F5** Polish, the last step of the 2026-10-18 plan F1 → F5 → C10 → C11 (HANDOFF). Nothing built.
+- [x] 4944e171, e3fbf0db 2026-11-21 **C10** Field-compiler docs: the Fields (LatticePDE) docs section, field plotting and live recipe attributes (D-302), then the convergence page from committed data, numbered decision ids and amended-by notes (D-325). The old local branch `lp/c10` is deleted.
+- [x] 4c6b0157 2026-11-21 **F5** The feature batch: pair tables, `sign`, `mod`, `rem` and `clamp` in field terms, and per-field periodicity (D-301).
 - [ ] **KernelAbstractions 0.10.** One commit with its own A/B once the upstream packages are registered (D-256 item 4). The compat is `0.9.42` today (`Project.toml:47`).
 - [ ] **After the paper.** LBM in its own package (D-256 item 6). FEM, IMEX, split stepping of mixed rate and map systems, and Duals for field and ODE parameters in Potts (rulings Q4, Q8, Q9, Q10 of 2026-10-18, HANDOFF). A two-ring hexagonal Galerkin coarse operator (D-321).
 - [ ] **`DivKGrad(:harmonic)` fine-reading blending twin** (deferred, `_migration/HANDOFF-coordinator-2026-11-12-b.md:69`). The note says the twin needs front end A, which D-320 deleted. Its route needs a new decision.
@@ -851,10 +851,10 @@ Goal (maintainer, 2026-11-11 and 2026-11-12): a fast test harness at SciML quali
 
 ## Next phase
 
-- [ ] **Asynchronous frame writer** (user, 2026-11-17; starts after the conformance batches) A callback for `PottsProblem` that writes state frames to disk while the run continues: an asynchronous device-to-host copy into two reused pinned host buffers, a writer task (`Threads.@spawn`) appending frames to a file (JLD2, HDF5 or Zarr; choose by measurement), and `save_positions = (false, false)`. It is an ordinary callback in the DiffEqCallbacks pattern (`FunctionCallingCallback`, `SavingCallback`), used with `save_everystep = false` or `saveat`; users can swap in their own writer. A lazy reader indexes and plots the written frames like a solution. R6 (D-287) stays: the default saves every MCS, as in SciML.
-  - Why: on ROCm, saving every MCS in memory costs 3.0× at 1008² (2.13 against 0.721 ms/MCS) and 3.6× at 2016² (6.62 against 1.815), and holds every state on the host (221 states of 2016², 3.5 GiB). Script and log: `~/lpwork/conf-b3/defsave/` on the PC.
-  - Accept: at 1008² and 2016² on ROCm, writing every 10 MCS costs at most 10% over `save_everystep = false`, and memory stays flat over the run. Also report the cost of writing every MCS. Read-back frames equal the in-memory saves.
+- [x] 1db3d3bf 2026-11-20 **Asynchronous frame writer** A `PottsProblem` callback that writes state frames to segment files while the run continues (D-300). Writing every 10 MCS at 2016² on ROCm costs 7.2 % over `save_everystep = false`, and a killed run loses at most `checkpoint` + 2 frames.
+- [x] f8a0d07d, 3a1c54e1, 4109d2ab, abf0fcd2 2026-11-21 **Docstring batch** SciMLStyle template docstrings on every exported and public name, in three waves, and the public-surface rule: a public name nothing outside its package uses is unmarked (D-326).
 
 - [ ] **C11** (approved 2026-11-16, D-286; starts after F5 and C10) Move the paper models onto LatticePDE. Port each published model to native LatticePDE use: `PDESystem` fields and the solver its paper states. One model per commit, each with fidelity tests.
-  - Accept: Fortuna 3D matches or beats 14 ms/step.
+  - Scope (maintainer, 2026-11-21): Merks is already native (D-319); C11 respells Fortuna (only on the old branch `feat/p6-5d1`) with whole-field oracle tests, adds a Merks field oracle, and times Fortuna. Models not built yet (Bauer 2009 and 2007, Jiang 2005, FBCA, Andasari) are built natively when their turn comes. Audit: `~/lpwork/c11/audit.md` on the PC.
+  - Accept: Fortuna 3D matches or beats 14 ms/step, measured provisionally as a whole MCS on the PC, one thread, R = 15, φ_l = 0.05 (the original meaning of the 14 ms); also report 8 threads and the field step alone. The maintainer may adjust the bar.
 - [ ] **Device libraries 7.0 put doubles in Potts kernels.** A fresh resolve (ROCmDeviceLibs_jll 6.2.1 to 7.0.2) adds `fpext float to double` and `llvm.frexp.f64` to 12 Potts LatticeFields kernels, and the device IR scan fails (`test/shared/device_ir_scan.jl`). CI's locked Manifest (D-272) is clean, so the next dependency update hits it. Find the Float32 call that now lowers through `frexp` and give it a Float32-only form.
