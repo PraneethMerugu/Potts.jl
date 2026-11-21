@@ -211,8 +211,8 @@ A discretization of the second kind is refused, with an `ArgumentError`, in thes
 - a device backend, given to `PottsProblem` or `solve`.
 
 A `LatticeDiscretization` of the first kind is checked too: its grid must be the lattice's,
-its methods `FiniteVolume`, and `T`, `backend`, `domain` and `clock` left out or equal to
-what the problem sets. The keywords of the window's solve (`reltol`, …) are not exposed yet.
+its methods `FiniteVolume`, `backend` and `domain` left out, and `T` and `clock` left out
+or equal to what the problem sets. The keywords of the window's solve (`reltol`, …) are not exposed yet.
 
 ## The Hamiltonian as Symbolics expressions [C3]
 

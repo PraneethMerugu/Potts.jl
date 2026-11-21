@@ -36,9 +36,9 @@ one. `QuasiSteady` gives the steady state, which the stepped fields approach.
 | `ExplicitEuler()` | 1 | one rate evaluation | a field with a small automatic count |
 | `BackwardEuler()` | 1 | one linear solve | a stiff field (fast diffusion or decay) |
 | `CrankNicolson()` | 2 | one linear solve | a stiff field with smooth data |
-| `BDF2()` | 2 | one linear solve | a stiff field, without the ringing of Crank–Nicolson |
-| `QuasiSteady()` | none | one solve per window | a field that relaxes much faster than its inputs change |
-| `ExplicitMap()` | none | one application per window | a map `Shift(t, 1)(m) ~ rhs` (see [Maps](@ref fields-maps)) |
+| `BDF2()` | 2 | one linear solve | a stiff field, without Crank–Nicolson's ringing |
+| `QuasiSteady()` | none | one solve per window | a field faster than its inputs |
+| `ExplicitMap()` | none | one map per window | a [map](@ref fields-maps) |
 
 `BackwardEuler` pays a linear solve per substep. It is the faster choice when the explicit
 count is large (fast diffusion, a stiff decay). For a field whose explicit count is a few

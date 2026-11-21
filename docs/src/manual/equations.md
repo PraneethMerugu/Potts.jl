@@ -295,8 +295,8 @@ those rules is one MCS times `mcs_duration`. These rules hold only in a Potts mo
   a change of the cells' kinds are not checked again. In LatticePDE every parameter write
   is.
 - `field_report` takes a `PottsProblem`, a `PottsIntegrator` or a `PottsSolution`.
-- Merks' model on 100² takes about 4.9 ms per MCS with `BackwardEuler(; lower_bound = 0.0)`
-  against 0.8 ms with `ExplicitEuler(; substeps = 15)` (4 CPU threads).
+- On Merks' model, `BackwardEuler(; lower_bound = 0.0)` costs more per MCS than
+  `ExplicitEuler(; substeps = 15)`. Time both on your machine before you choose.
 
 ```@example equations
 prob2 = remake(prob; ode_solver = Adaptive(Tsit5(); reltol = 1e-8), solvers = [:g => Potts.RK4(substeps = 4)])

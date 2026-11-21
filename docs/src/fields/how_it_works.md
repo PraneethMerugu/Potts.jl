@@ -42,9 +42,10 @@ n = \left\lceil \frac{dt \, \rho(p)}{1.8} \right\rceil
 - A coefficient that reads the time is bounded over each window's time span.
 - These terms are ones the bound cannot see, and they make the automatic count refuse the
   problem:
-  - advection;
-  - a nonlinear rate;
-  - a coefficient with more than 6 kind sets and comparisons;
+  - a nonlinear rate over a field with no declared `bounds`;
+  - a velocity that reads the field it moves (Burgers);
+  - a coefficient with more than 6 kind sets and comparisons, or with more than 4096
+    evaluations (the evaluation cap);
   - a parameter without a value;
   - coupled rows that are not diagonally dominant, whose spectrum may be complex.
 - `substeps = n` is a minimum. The count is the larger of `n` and the bound over the terms
