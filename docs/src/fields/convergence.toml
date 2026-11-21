@@ -1,0 +1,159 @@
+# Observed convergence orders of LatticePDE (max-norm errors).
+# Written by lib/LatticePDE/test/write_convergence_data.jl;
+# do not edit by hand.
+# The LatticePDE convergence tests check this file against what
+# they compute.
+
+[[case]]
+name = "ExplicitEuler"
+kind = "solver"
+method = "ExplicitEuler"
+problem = "diffusion with a source, 16 × 16, to t = 0.2"
+norm = "max"
+variable = "dt"
+sizes = [16, 16, 16]
+steps = [0.04, 0.02, 0.01]
+errors = [0.004324724632068566, 0.00216752124194608, 0.001085046138045831]
+observed_orders = [0.9965621429530308, 0.9982897422138934]
+observed_order = 0.9974259425834624
+expected_order = 1.0
+
+[[case]]
+name = "BackwardEuler"
+kind = "solver"
+method = "BackwardEuler"
+problem = "diffusion with a source, 16 × 16, to t = 0.2"
+norm = "max"
+variable = "dt"
+sizes = [16, 16, 16]
+steps = [0.04, 0.02, 0.01]
+errors = [0.004365723130143717, 0.0021777711840529346, 0.0010876086434417065]
+observed_orders = [1.0033682592461166, 1.0016928577820798]
+observed_order = 1.0025305585140984
+expected_order = 1.0
+
+[[case]]
+name = "CrankNicolson"
+kind = "solver"
+method = "CrankNicolson"
+problem = "diffusion with a source, 16 × 16, to t = 0.2"
+norm = "max"
+variable = "dt"
+sizes = [16, 16, 16]
+steps = [0.04, 0.02, 0.01]
+errors = [0.0004218150091084283, 0.00010491484186125888, 2.616168778413197e-5]
+observed_orders = [2.0073916459666576, 2.0036912619773655]
+observed_order = 2.0055414539720116
+expected_order = 2.0
+
+[[case]]
+name = "BDF2"
+kind = "solver"
+method = "BDF2"
+problem = "diffusion with a source, 16 × 16, to t = 0.2"
+norm = "max"
+variable = "dt"
+sizes = [16, 16, 16]
+steps = [0.04, 0.02, 0.01]
+errors = [0.0012770106591999397, 0.0003203769752098129, 8.009204875114584e-5]
+observed_orders = [1.9949281939992993, 2.0000395388342582]
+observed_order = 1.9974838664167789
+expected_order = 2.0
+
+[[case]]
+name = "FieldGroups IMEX"
+kind = "solver"
+method = "FieldGroups(ExplicitEuler, BackwardEuler)"
+problem = "two coupled fields, 12 × 12, to t = 0.2"
+norm = "max"
+variable = "dt"
+sizes = [12, 12, 12]
+steps = [0.02, 0.01, 0.005]
+errors = [0.0019639983254535753, 0.0009827916663862624, 0.0004915931655700145]
+observed_orders = [0.998836170095591, 0.9994207657548173]
+observed_order = 0.9991284679252043
+expected_order = 1.0
+
+[[case]]
+name = "DivKGrad harmonic"
+kind = "operator"
+method = "DivKGrad(:harmonic)"
+problem = "steady variable-coefficient diffusion, Dirichlet"
+norm = "max"
+variable = "h"
+sizes = [16, 32, 64]
+steps = [0.0625, 0.03125, 0.015625]
+errors = [0.0031455391390716736, 0.0007896892889509566, 0.00019754610873901068]
+observed_orders = [1.9939502858871594, 1.9990956939170101]
+observed_order = 1.9965229899020858
+expected_order = 2.0
+
+[[case]]
+name = "DivKGrad arithmetic"
+kind = "operator"
+method = "DivKGrad(:arithmetic)"
+problem = "steady variable-coefficient diffusion, Dirichlet"
+norm = "max"
+variable = "h"
+sizes = [16, 32, 64]
+steps = [0.0625, 0.03125, 0.015625]
+errors = [0.0030707130469891375, 0.0007706875172214245, 0.00019276414657787289]
+observed_orders = [1.9943557721497145, 1.9993092833565107]
+observed_order = 1.9968325277531132
+expected_order = 2.0
+
+[[case]]
+name = "Advect Upwind1"
+kind = "operator"
+method = "Advect(Upwind1())"
+problem = "steady periodic advection-reaction"
+norm = "max"
+variable = "h"
+sizes = [16, 32, 64, 128]
+steps = [0.0625, 0.03125, 0.015625, 0.0078125]
+errors = [0.1885935526537119, 0.09517491232976845, 0.0481022483158178, 0.024147057677722433]
+observed_orders = [0.9866271152527435, 0.9844770082124259, 0.9942569204568059]
+observed_order = 0.9880560139978352
+expected_order = 1.0
+
+[[case]]
+name = "Robin face"
+kind = "operator"
+method = "laplacian, Robin face"
+problem = "steady reaction-diffusion with a Robin face"
+norm = "max"
+variable = "h"
+sizes = [16, 32, 64]
+steps = [0.0625, 0.03125, 0.015625]
+errors = [0.0009582057451531512, 0.00024184491707424094, 6.074815818002399e-5]
+observed_orders = [1.9862532469651797, 1.9931696430516863]
+observed_order = 1.9897114450084328
+expected_order = 2.0
+
+[[case]]
+name = "Hexagonal Laplacian"
+kind = "operator"
+method = "laplacian, HEX grid"
+problem = "steady periodic Helmholtz problem"
+norm = "max"
+variable = "h"
+sizes = [16, 32, 64]
+steps = [0.0625, 0.03125, 0.015625]
+errors = [0.012384145122191437, 0.003124075754421529, 0.000782766104713728]
+observed_orders = [1.98699294041888, 1.996776246275393]
+observed_order = 1.9918845933471365
+expected_order = 2.0
+
+[[case]]
+name = "Laplacian (LatticePCG)"
+kind = "operator"
+method = "laplacian"
+problem = "steady reaction-diffusion, Dirichlet"
+norm = "max"
+variable = "h"
+sizes = [32, 64, 128]
+steps = [0.03125, 0.015625, 0.0078125]
+errors = [0.0005991313586140024, 0.00015002249570073012, 3.752061092299197e-5]
+observed_orders = [1.9976934989226058, 1.9994236238097556]
+observed_order = 1.9985585613661812
+expected_order = 2.0

@@ -295,6 +295,7 @@ fields = [
     "SciML interop" => "fields/sciml.md",
     "Coupling to a Potts model" => "fields/coupling.md",
     "How it works" => "fields/how_it_works.md",
+    "Convergence" => "fields/convergence.md",
     "API" => "fields/api.md",
     "Developer reference" => "fields/developer.md",
 ]

@@ -27,6 +27,7 @@ Serialization = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 SymbolicUtils = "d1185830-fcd6-423d-90d6-eec64667417b"
 SymbolicIndexingInterface = "2efcf032-c050-4f8e-a9bb-153293bab1f5"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
+TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]
@@ -53,4 +54,5 @@ SciMLStructures = "1.10.3"
 SymbolicIndexingInterface = "0.3"
 Symbolics = "7"
 SymbolicUtils = "4"
+TOML = "1"
 Test = "1"
