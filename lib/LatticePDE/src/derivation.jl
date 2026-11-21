@@ -12,6 +12,14 @@ written (Base and registered functions, `÷` as integer division, a lazy `ifelse
 kind-table read `value_at(t, k)` or `value_at(t, k, l)` takes kind numbers (medium 0). Potts
 and `discretize` call it; a caller that keeps computed values (Potts' parameter object,
 `LatticePDE`'s computed slots) evaluates it after every write of base values.
+
+# Arguments
+- `base::AbstractVector`: the names of the base parameters, in the order of the values the
+  derivation takes.
+- `computed::AbstractVector`: the computed parameters, as `name => default` pairs.
+
+# Returns
+- The compiled `LatticeFields.Problems.Derivation`.
 """
 function derivation(base::AbstractVector, computed::AbstractVector)
     names = Symbol[Symbol(first(c)) for c in computed]

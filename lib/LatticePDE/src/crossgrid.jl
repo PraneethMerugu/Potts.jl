@@ -10,9 +10,21 @@
 # The pass runs before the equations are classified, so a hoisted term is an aux row for the
 # rest of the lowering, the solvers, and callers.
 
-"""Whether the field key `k` is an aux field that `crossgrid_form` added (`laplacian(c)`,
-`DivKGrad(c)`: a call, which no field of a model is): callers that manage their fields
-separately keep it as scratch of the binding, not as state."""
+"""
+    is_crossgrid_key(k::AbstractString) -> Bool
+
+Whether the field key `k` is an aux field that the cross-grid pass added (`laplacian(c)`,
+`DivKGrad(c)`: a call, which no field of a model is). Callers that manage their fields
+separately keep such a field as scratch of the binding, not as state.
+
+# Examples
+```jldoctest
+julia> using LatticePDE
+
+julia> LatticePDE.is_crossgrid_key("laplacian(c)"), LatticePDE.is_crossgrid_key("c")
+(true, false)
+```
+"""
 is_crossgrid_key(k::AbstractString) = occursin('(', k)
 
 # the operand of a spatial operator call `u`: a field read `c(t, x, y)` or `c(t, x, y)[i]`
@@ -141,6 +153,13 @@ reads as its operand (`laplacian(c)`, `DivKGrad(K, c)`, `Advect(v, c)`, a raw fl
 that a term reads at an offset (`c(t, x + dx, y)` in a map): its value past a face needs
 the field's face conditions, and its neighbors its own periodicity. A group that reads
 another group's field so marks it `LatticeCutField`, as the whole system reads it.
+
+# Arguments
+- `eqs`: the equations.
+- `ops`: the field operations to look for.
+
+# Returns
+- The operations of `ops` read in this way, each once, in the order they are found.
 """
 function operand_reads(eqs, ops)
     out = Any[]

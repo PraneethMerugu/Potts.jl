@@ -40,6 +40,20 @@ pay for the bound).
 determines (`steady_rows`), and the spec's `steady` lists those fields: their groups
 take `QuasiSteady` only. `steady` names more such fields (a front end that writes its steady
 rows as rates itself). A system with no time is a steady system (`spec.timefree`).
+
+# Arguments
+- `pdesys::PDESystem`: the system.
+- `disc::LatticeDiscretization`: the lattice.
+
+# Keywords
+- `fields = nothing`: the state variables of the group; `nothing` is all of them.
+- `values = true`: read the system's defaults.
+- `bound = true`: build the stability bound now.
+- `filled = ()`: the input keys the front end writes at every step.
+- `steady = String[]`: more steady fields.
+
+# Returns
+- The group's `LatticeFields.Problems.GroupSpec`.
 """
 function lower_group(
         sys::PDESystem, disc::LatticeDiscretization; fields = nothing,
@@ -54,7 +68,10 @@ end
 
 The stability bound of a group lowered with `lower_group(…; bound = false)`, not built yet:
 it holds the lowered system that [`resolve_bound`](@ref) builds the bound from. Calling it
-is an error that names `resolve_bound`.
+throws an `ArgumentError` that names `resolve_bound`.
+
+# Fields
+- `cf`, `sys`: the lowered field system and the system the bound is built from.
 """
 struct DeferredBound
     cf::Any
@@ -72,8 +89,11 @@ end
 """
     resolve_bound(spec) -> GroupSpec
 
-`spec` with its stability bound built (and the terms the bound cannot see in `texts.terms`)
-when it was lowered with `bound = false`; else `spec` itself.
+Build the stability bound of a group lowered with `lower_group(…; bound = false)`.
+
+# Returns
+- `spec` with its stability bound built and the terms the bound cannot see in
+  `texts.terms`, when its bound is a [`DeferredBound`](@ref). Else `spec` itself.
 """
 function resolve_bound(spec::Problems.GroupSpec)
     d = spec.stability
