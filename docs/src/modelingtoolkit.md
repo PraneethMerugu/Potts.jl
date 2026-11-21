@@ -163,6 +163,44 @@ A field reads as SciML reads a variable in a Potts solution too: `sol[c]` (or `s
 one grid per save, and `field_series(sol, :c)` is the time-first view of the field over the
 saved MCS.
 
+## [The fields under another discretization](@id mtk-discretization)
+
+As above, `Potts.fields(model)` is a plain ModelingToolkit `PDESystem`, with each binding
+written in as its CPM input:
+
+```@example mtk
+Potts.fields(sys) isa PDESystem
+```
+
+`PottsProblem(…; discretization)` gives the model's fields to any
+`SciMLBase.AbstractDiscretization`. There is no other keyword for it:
+
+1. Leave `discretization` out, or give a `LatticeDiscretization` of the model's lattice:
+   the fields are the fused lattice fields, and the run is the same.
+2. Give any other discretization: each MCS window steps
+   `discretize(Potts.fields(model), discretization; inputs)`, solved with `field_solver`
+   (a SciML algorithm such as `Tsit5()`), on the CPU.
+
+```@example mtk
+using Potts.LatticePDE: LatticeDiscretization, Grid
+lprob = remake(prob; discretization = LatticeDiscretization(Grid((12, 8))))
+solve(lprob, SequentialCPM())[:c][end] == solve(prob, SequentialCPM())[:c][end]
+```
+
+A discretization of the second kind must meet these rules. `PottsProblem` and `remake`
+check them and throw an `ArgumentError` otherwise:
+
+- `discretize` takes `inputs = [name => array, …]`, the CPM inputs at that MCS
+  ([`Potts.field_inputs`](@ref) names them).
+- The integrator reads and writes each field by name (`getu`, `setu`) as a vector of the
+  lattice's sites in column-major order.
+- The integrator sets each input and parameter by name (`setp`).
+
+A discretization that grids the domain its own way (such as MethodOfLines') does not meet
+them. Each window starts from the fields' current values and the CPM inputs at that MCS.
+`remake(prob; discretization = …)` switches it, and a checkpoint loads only into a problem
+with an equal discretization.
+
 ## The Hamiltonian as Symbolics expressions [C3]
 
 `Potts.hamiltonian(sys)` gives the `@energy` terms as `domain => expr` pairs of Symbolics

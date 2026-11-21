@@ -24,7 +24,7 @@ This page lists what changes when it does, and where each step is shown.
 3. Couple a `PDESystem` as a function with `Potts.couple`, and solve the fields of a model
    with OrdinaryDiffEq: [The SciML path](@ref manual-sciml-path).
 4. Give the fields of a model another discretization with `PottsProblem(…; discretization)`:
-   [Relation to ModelingToolkit](@ref modelingtoolkit).
+   [The fields under another discretization](@ref mtk-discretization).
 
 `Potts.fields(model)` returns the fields of a model as a plain `PDESystem`, with each
 binding written in as its CPM input. Every page of this section applies to it.

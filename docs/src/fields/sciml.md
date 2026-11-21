@@ -4,6 +4,9 @@
 `DiscreteProblem` of the maps. This page shows how to solve it with OrdinaryDiffEq, change
 it with `remake` and the integrator, and read the solution.
 
+`Potts.fields(model)` returns the fields of a Potts model as a plain `PDESystem`, so every
+step on this page applies to it as well.
+
 The examples use a stiff system: fast diffusion from a source block.
 
 ```@example fsciml
