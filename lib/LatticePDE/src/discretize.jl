@@ -740,10 +740,10 @@ function symbolic_discretize(
         ntuple(d -> all(k -> fper(k)[d], own), N)
     end
     mixed = ntuple(d -> !allequal(fper(k)[d] for k in own), N)
-    # an aux field wraps where the fields it reads (through other aux fields too) wrap; where
-    # they differ it is ambiguous there, and a neighbor read of it on that axis is refused
-    # (`_check_mixed_reads`). An aux field that reads no such field follows its reader,
-    # as an input does
+    # an aux field wraps where the fields it reads (through other aux fields too) wrap;
+    # where they differ it is ambiguous there, and a neighbor read of it on that axis is
+    # refused (`_check_mixed_reads`). An aux field that reads no such field follows its
+    # reader, as an input does
     function auxdeps(k, seen = Set([k]))
         out = String[]
         for op in allops
@@ -1269,9 +1269,8 @@ function _check_mixed_reads(prog::Program{N}, ambig, follow, fper::F) where {N, 
             K = prog.fields[a.field].key
             K in readers && continue
             if haskey(ambig, K) && ambig[K][1][d]
-                how = join(
-                    ("`$x` $(fper(x)[d] ? "wraps" : "is closed")" for x in ambig[K][2]), ", "
-                )
+                rule(x) = "`$x` $(fper(x)[d] ? "wraps" : "is closed")"
+                how = join((rule(x) for x in ambig[K][2]), ", ")
                 _dverr(
                     "`$rname` reads the aux field `$K` at a neighbor site on axis $d, " *
                         "where the fields its expression reads wrap differently ($how)" *
