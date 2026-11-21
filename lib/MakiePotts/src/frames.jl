@@ -114,12 +114,12 @@ end
 """
     RenderCellMetadata(identity, cell_type; label = "Cell \$(identity.id)")
 
-The metadata of one live cell in a frame: its identity, its cell type and its name.
+The metadata of one live cell in a frame: its identity, its kind and its name.
 
 # Arguments
 
   - `identity::RenderCellIdentity`: the cell.
-  - `cell_type::Integer`: the cell type number, in `1:typemax(UInt32)`. Throws an
+  - `cell_type::Integer`: the kind number, in `1:typemax(UInt32)`. Throws an
     `ArgumentError` otherwise. [`renderframe`](@ref) uses the kind number of the cell.
 
 # Keywords

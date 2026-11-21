@@ -25,7 +25,7 @@ end
 Return the `DataInspector` text of one site of a 2D render frame.
 
 The text gives the site, the frame's source axes and the owner: number, generation and
-cell type of a cell, or the medium number (marked as an obstacle when it is one). A
+kind of a cell, or the medium number (marked as an obstacle when it is one). A
 continuous encoding adds its title, the value (or `"missing"`) and the units.
 
 # Arguments

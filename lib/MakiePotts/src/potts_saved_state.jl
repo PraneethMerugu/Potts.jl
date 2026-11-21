@@ -157,7 +157,7 @@ end
 Return the render frame of one saved state, a copy that later steps do not change.
 
 Each cell with a positive volume gets a [`RenderCellMetadata`](@ref) with its kind number
-as cell type. Medium sites are owned by medium 1, and medium sites marked in `frozen`
+as `cell_type`. Medium sites are owned by medium 1, and medium sites marked in `frozen`
 become obstacle sites. Site channels cover the full state and are cut to the extent the
 same way as the ownership; cell and medium channels are kept as given.
 

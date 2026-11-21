@@ -13,9 +13,10 @@ end
 """
     CellTypeEncoding(; label = "Cell type")
 
-Color cells by cell type. This is the default encoding of the plot recipes.
+Color cells by kind (the frame's `cell_type`). This is the default encoding of the plot
+recipes.
 
-Categorical: medium and obstacle sites take the first category, and each cell type
+Categorical: medium and obstacle sites take the first category, and each kind
 present in the frame takes the next ones in increasing order.
 
 # Keywords
@@ -216,7 +217,7 @@ One entry of a categorical legend, independent of Makie.
 
 # Fields
 
-  - `value`: the category: `:medium`, a cell type number or a
+  - `value`: the category: `:medium`, a kind number or a
     [`RenderCellIdentity`](@ref).
   - `label::String`: the text of the entry, for example `"Cell type 2"`.
   - `color_key::UInt64`: the key of the default color of the category; `0` for the
