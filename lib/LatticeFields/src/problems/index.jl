@@ -20,7 +20,7 @@ indices(s::FieldSlot) = reshape(s.range, s.dims)
     LatticeIndex(; key = identity, variables, parameters, independent_variables, defaults,
                  inputs = [], inputnames = [], boolinputs = [], inputbounds = [],
                      derived = [], observed = [],
-                 tables = [], aux = [])
+                 tables = [], tableshapes = [], aux = [])
 
 The symbol table of a field problem (the `sys` of its `ODEFunction`, and the symbolic
 container of `FieldProblem`, `FieldSolution` and `FieldIntegrator`). `variables` is a vector
@@ -39,7 +39,9 @@ symbols to how they read, `(p, t) -> value` from the raw parameters (a function,
 `remake` and `setp` refuse them (their `parameter_index` throws); `tables` maps the symbols
 of array parameters to their table keys, or an entry's symbol to `(key, i)`
 (`remake(prob::FieldProblem; p =
-[Dk => values])` gives new values; `integ.ps[Dk]`, `getp(prob, Dk)` read them); `aux` maps
+[Dk => values])` gives new values; `integ.ps[Dk]`, `getp(prob, Dk)` read them);
+`tableshapes` maps a table key to its declared size when it is a matrix (a table is stored
+flat, column-major; a read of the whole table has this shape); `aux` maps
 `symbols => key`, the aux fields of the program (`K ~ rhs`): not part of the state, they are
 evaluated from it and read by `sol[K]` and `integ[K]` ([`aux_key`](@ref); on the ODE path
 they are observed, `rhs(u(t), t)`, through the evaluator `ode_problem` sets); `coordinates`
@@ -67,6 +69,8 @@ struct LatticeIndex{F}
     observed::Dict{Any, Any}
     # symbol → (table key, entry; 0 for the whole table)
     tables::Dict{Any, Tuple{String, Int}}
+    # table key → declared size of a matrix table (stored flat, column-major)
+    tableshapes::Dict{String, Tuple{Vararg{Int}}}
     # slot → declared `bounds`, checked at every write
     parambounds::Dict{Int, Tuple{Float64, Float64}}
     # `nothing`, or `(Derivation, sources, slots)`: the computed slots
@@ -90,7 +94,8 @@ function LatticeIndex(;
         independent_variables = Any[], defaults = Dict{Any, Any}(), inputs = Pair[],
         inputnames = Pair[], boolinputs = String[], inputbounds = Pair[], derived = Pair[],
         observed = Pair[],
-        tables = Pair[], parambounds = Pair[], derive = nothing, aux = Pair[],
+        tables = Pair[], tableshapes = Pair[], parambounds = Pair[], derive = nothing,
+        aux = Pair[],
         coordinates = Pair[],
         maskevents = Any[], maskunlocated::Bool = false
     ) where {F}
@@ -161,6 +166,7 @@ function LatticeIndex(;
             key(s) => (k isa Tuple ? (String(k[1]), Int(k[2])) : (String(k), 0))
                 for (ss, k) in tables for s in syms(ss)
         ),
+        Dict{String, Tuple{Vararg{Int}}}(String(k) => Tuple(d) for (k, d) in tableshapes),
         Dict{Int, Tuple{Float64, Float64}}(
             Int(i) => Float64.((b[1], b[2]))
                 for (i, b) in parambounds
@@ -325,7 +331,10 @@ function SII.parameter_index(ix::LatticeIndex, sym)
         return Int(sym)
     end
     k = ix.key(sym)
-    haskey(ix.tables, k) && return TableSlot(ix.tables[k]...)
+    if haskey(ix.tables, k)
+        t, e = ix.tables[k]
+        return TableSlot(t, e, get(ix.tableshapes, t, ()))
+    end
     _scalar(sym) || return nothing
     ki = input_key(ix, sym)
     ki === nothing || return InputSlot(ki, ix)

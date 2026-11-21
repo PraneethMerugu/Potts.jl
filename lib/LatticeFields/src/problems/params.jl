@@ -102,14 +102,21 @@ function Base.show(io::IO, p::LatticeParameters)
 end
 
 """
-    TableSlot(key, entry)
+    TableSlot(key, entry, shape = ())
 
 The parameter index of a table (`entry = 0`) or of one entry of it, in a
-[`LatticeParameters`](@ref).
+[`LatticeParameters`](@ref). `shape` is the declared size of a matrix table, which is stored
+flat (column-major): a read of the whole table has that shape.
 """
 struct TableSlot
     key::String
     entry::Int
+    shape::Tuple{Vararg{Int}}
+end
+TableSlot(key, entry) = TableSlot(key, entry, ())
+# a whole table as read: flat, or in its declared matrix shape
+function _table_shaped(v, shape)
+    return length(shape) >= 2 && prod(shape) == length(v) ? reshape(v, shape) : v
 end
 """
     InputSlot(key, index)
@@ -135,7 +142,7 @@ SII.parameter_values(p::LatticeParameters, i::Integer) = p.values[i]
 SII.parameter_values(p::LatticeParameters, i::AbstractVector{<:Integer}) = p.values[i]
 function SII.parameter_values(p::LatticeParameters, s::TableSlot)
     v = last(p.tables[_tabpos(p, s.key)])
-    return s.entry == 0 ? copy(v) : v[s.entry]
+    return s.entry == 0 ? _table_shaped(copy(v), s.shape) : v[s.entry]
 end
 function SII.parameter_values(p::LatticeParameters, s::InputSlot)
     v = last(p.inputs[_inpos(p, s.key)])

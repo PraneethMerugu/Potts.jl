@@ -72,9 +72,16 @@ function derive!(p, tables, ix)
     ix isa LatticeIndex || return p
     ix.derive === nothing && return p
     d, src, slots = ix.derive
+    # (a matrix table in its declared shape: an expression reads `J[i, j]`)
     vals = Tuple(
-        s isa Integer ? p[s] : last(tables[findfirst(x -> first(x) == s, tables)])
-            for s in src
+        if s isa Integer
+            p[s]
+        else
+            _table_shaped(
+                last(tables[findfirst(x -> first(x) == s, tables)]),
+                get(ix.tableshapes, s, ())
+            )
+        end for s in src
     )
     for (i, v) in zip(slots, d(vals))
         i == 0 || (p[i] = v)                       # (0: a computed parameter with no slot)

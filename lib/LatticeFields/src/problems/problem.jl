@@ -2162,7 +2162,9 @@ function _read_table(x::Union{FieldProblem, FieldIntegrator, FieldSolution}, sym
     tables = x isa FieldIntegrator ? x.tables : (x isa FieldProblem ? x : x.prob).tables
     vals = last(tables[findfirst(x -> first(x) == t, tables)])
     e = table_entry(ix, sym)
-    return e == 0 ? copy(vals) : vals[e]
+    e == 0 || return vals[e]
+    # a matrix table reads in its declared shape (it is stored flat, column-major)
+    return _table_shaped(copy(vals), get(ix.tableshapes, t, ()))
 end
 function _has_table(ix, sym)
     if sym isa Union{AbstractVector, Tuple} && table_key(ix, sym) === nothing
@@ -2714,7 +2716,8 @@ function _write_table!(i::FieldIntegrator, v, sym)
                 )
             )
         end
-        vals .= [_table_value(eltype(vals), t, x) for x in v]
+        # (a matrix table as a matrix or flat, column-major)
+        vals .= vec([_table_value(eltype(vals), t, x) for x in v])
     else
         num(v) ||
             throw(ArgumentError("`$(_symtext(sym))` is entry $e of the table `$t`: give \
