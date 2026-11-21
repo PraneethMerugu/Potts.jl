@@ -71,10 +71,16 @@ via RuntimeGeneratedFunction + `drop_expr`. `eval_expression`/`eval_module` and
 `expression = Val(true)` supported as in MTK. `cse = true` default.
 
 ## D-015 Symbolic front end dependency
+
+Amended by D-256: full ModelingToolkit is no longer an extension; `PottsModelingToolkitExt` was removed, and Potts depends on ModelingToolkitBase only.
+
 Decision: ModelingToolkitBase (not full ModelingToolkit) in Potts; full MTK,
 MethodOfLines, Unitful, Metal, CUDA as extensions.
 
 ## D-016 Fingerprint
+
+Amended by D-257 (item 1): the field part of the fingerprint is the printed semantic LatticeFields IR after pass 2 plus the storage layout, not the fields' generated code; the CPM part still hashes generated code.
+
 Decision: one `UInt64` fingerprint = hash(generated code strings, structural parameters,
 lattice, scalar type). Used only for checkpoint compatibility.
 
@@ -308,6 +314,8 @@ an init-once OrdinaryDiffEq integrator and couples through SII. Also deferred: D
 jump components, MethodOfLines components, and output couplings into kind tables.
 
 ## D-039 No `compose` for Potts systems; units on DynamicQuantities (2026-09-29)
+
+Amended by D-259: MTK systems compose into a Potts model as components through `Potts.compose` (MTK's `get_parent`), and `extend` became the Potts-owned `Potts.extend`; the D-287 conformance batch later made both methods of MTK's `compose` and `extend`.
 
 Decision: Potts models do not implement MTK's namespacing `compose(sys, subsystems)`.
 Composition works in three ways:
@@ -611,6 +619,8 @@ list and build order in the README) is under review first, so that every model i
 only from general public primitives.
 
 ## D-051 Feature roadmap review: maintainer answers (2026-09-30)
+
+Amended by D-257 (item 7), D-323 and D-324: a coarse field folds every fine read by its block mean, a mask on a coarse grid blends by its masked fraction, and only the domain folds by Majority.
 
 Answers to `research/feature-roadmap-review.md` §7 questions 11, 1, 4, 5, 2 and 12, in
 that order below. Questions 3 (Hastings correction for non-symmetric proposal laws) and
@@ -1282,6 +1292,10 @@ session.
 
 ## D-075 The target API (api-synthesis round 3) and its breaking batch (2026-09-30, maintainer)
 
+Amended by D-257 (item 7) and D-324: Q5's `All()` coarse-grid clamp default is gone; a coarse mask blends by its masked fraction (Majority between D-257 and D-324).
+
+Amended by D-311: a field with no solver gets the default `ExplicitEuler()`, so "no default solver" no longer holds; a published model's docstring still names its scheme.
+
 - **Source.** `research/api-synthesis.md` at round 3, written by the spec-owner session
   and reviewed adversarially three times by the coordinator's reviewer. Round 3 was
   approved for ratification with no blockers (`/tmp/api-synthesis-review-r3.md`).
@@ -1363,6 +1377,8 @@ session.
   **P6.0m2**, immediately after P6.0m and before P6.0c.
 
 ## D-077 MTK discrete-time components (2026-09-30, P6.0k; extends D-038 and D-065 Q9)
+
+Amended by D-256: G1 no longer applies; full ModelingToolkit left the dependencies, and discrete components compile through ModelingToolkitBase's `mtkcompile` only.
 
 - **What.** Boolean and discrete networks are plain MTK clocked Systems (`Shift`) in
   `@components`. There is no Potts helper (D-065 Q9).
@@ -1750,6 +1766,8 @@ session.
 
 ## D-101 P6.0v3 + P6.0v8: no GPU wait in a quiet MCS; launch fusion (2026-10-02, P6.0v3; coordinator, from the P6.0v audit)
 
+Amended by D-315: a coupled steady field group may wait on the GPU once per dot product; every other field path keeps the no-wait rule.
+
 - **Targets.** On Metal, a quiet MCS of every gate model (Graner–Glazier 72, Wortel Act 100, Merks 100 with 15 substeps, OpenVT 100, Akeeb 99×60) makes 0 counted syncs, 0 transfers, 0 B and 0 actual GPU waits (`Metal.wait_cmdbuf!` wrapped). Every device→device copy in the step path (field substeps, generated copy phases) waits 0 times, whatever the substep count (today 2 per copy: Merks makes 30 waits per MCS). Launches per quiet MCS fall within [floor, bound] from audit §8.1/§10/§11: GG 8, Wortel ≤ 33 (≥ 32), Merks ≤ 38 (≥ 23), OpenVT 9 and Akeeb 13 (a model cell phase fused into the lifecycle kernel, F1; today 10 and 14). Two consecutive adaptive-ODE host phases make one sync, not two.
 - **Invariants.** Results unchanged: CPU bitwise against explicit-Euler and swap oracles and recorded Merks digests (32², 15 substeps, seed 7); Metal bitwise equal to the CPU Float32 run; no Float64 in the Float32 builds' parameters, state, context or kernel functions on Metal.
 - **Frozen acceptance** `p6_0v3_launch_fusion.jl` (wired into `test/gpu.jl` as `P60v3OnMetal`). On the base: Merks waits, the copy-wait fixtures, OpenVT and Akeeb launch counts and the two-adaptive-phase sync fail; every control passes.
@@ -1794,6 +1812,8 @@ session.
 
 ## D-107 P6.0ah: generated code does not depend on operator hashes (2026-10-03, P6.0ah; coordinator, from D-105)
 
+Amended by D-257 (item 1): field terms are lowered by LatticePDE to the LatticeFields IR, and their part of the fingerprint is the printed IR, which names operators and never hashes them; the rule still covers the generated CPM code.
+
 - **Requirement.** The generated code of every rate, update and energy is a function of the model alone: the order of commutative operands and the numbering of hoisted population folds (`__odepop1`, …) must not depend on any hash (Potts-registered operators' hashes change per package build; Base functions' could change too). Results are then bitwise identical across package builds, repeated builds in one session, and calls of `generated_code`. Values may move once by a few ulp from today's order; fingerprints of models that hoist two or more folds may change once.
 - **Frozen acceptance** `p6_0ah_canonical_term_order.jl`: simulates another build in one process by salting `Base.hash` for `population`, `gather`, `at`, `at2`, `sin`, `cos`, `exp` (inert at salt 0; a negative control shows a salt reorders a sum); requires `generated_code` identical under salts 1–4 and over repeated builds, fingerprints and RK4 states bitwise identical under salts, GranerGlazier/Merks/`P60ahAt` fingerprints unchanged; an opt-in cross-build check (`POTTS_CROSSBUILD=1`, two processes with fresh depots, ≈ 3.5 min) compares code and results of two real builds. On the base: 162/192 code comparisons, 32/128 result comparisons and the repeated-build check fail; cross-build 48/96 entries differ.
 - **After merge.** Item 3 of `p6_0ag_ode_expand_all.jl` can return to bitwise (a D-060-style re-freeze under this decision, in the same merge if the values are recorded from the canonical order).
@@ -1829,6 +1849,8 @@ session.
 
 ## D-112 P6.0ak: explicit parameter values survive unrelated changes (2026-10-03, P6.0ak; coordinator, from the D-111 review; amends D-111)
 
+Amended by D-312: computed parameters are read-only and follow their inputs, so an explicit value of a computed parameter can no longer be given, and "an explicit value survives unrelated changes" is withdrawn.
+
 - **Rule.** A *change* is the set of parameters named by one `remake(prob; p = map)` or one integrator setter (`integ.ps[x] = v`, `setp`). A computed parameter (a scalar default that is an expression of parameters, or a kind table with expression entries) is re-derived by a change iff it is not named in the change and one of its expression's inputs is named in the change or is re-derived by it (transitively). Every other parameter keeps its current value, so an explicit value (from `remake`, a setter or the operating point) survives every change that does not touch its inputs; a change of an input re-derives it and overrides the explicit value (give it again in the same change to keep it). In a chain α → β = 2α → γ = β + 1, a change of α re-derives β and γ even when β was explicit; a change of β re-derives γ; an unrelated change touches neither. A parameter object given whole (`remake(prob; p = ck.p)`) sets every value. Problem build is unchanged; values keep the problem's scalar type. Amends D-111's "whenever the table itself is not set explicitly" and the parameters page.
 - **Stateless.** A computed parameter never set explicitly always equals its expression under this rule, so no per-parameter flag is needed: the result depends only on the current values and the change.
 - **Frozen acceptance** `p6_0ak_explicit_parameters.jl` (freeze e8e894e1): hand-computed energies and values on a two-cell fixture for explicit tables and scalars under unrelated and input changes, through `remake`, setters, the operating point, a checkpoint (`remake(prob; p = ck.p)` and continuation) and Float32, with chains through a scalar and a table; negative controls (input changes re-derive, computed defaults follow their inputs, asymmetric/unknown/mis-sized values rejected, the source problem unchanged). On eee2dec3: 36 of 92 fail, each a kept value re-derived.
@@ -1850,12 +1872,16 @@ session.
 
 ## D-115 P6.0an: `remake` with a NamedTuple (2026-10-03, P6.0an; coordinator, from the D-112 review)
 
+Amended by D-312: a whole parameter object given to `remake` contributes its base values, and its computed values are derived again.
+
 - **Context.** `remake(prob; p = (λ = 3.0,))` on a model's problem fell through to CorePotts' identity `remake_parameters`: `prob.p` silently became the one-field NamedTuple and the run failed later ("no field `V₀`"); any non-map value (`3.0`, `(3.0,)`, `[1.0, 2.0]`, `Any[:λ => 3.0]`) was taken as the parameter object the same way. A NamedTuple `u0` to `remake`/`reinit!` threw where symbol pairs work.
 - **Rule.** On a model's problem, a NamedTuple `p` is a parameter map equal to the pairs of its fields: one change under D-112 (named values set, computed parameters re-derived iff an input is named, the scalar type kept, tables checked, an unknown field an `ArgumentError` naming it); one naming every parameter sets every value, `(;)` changes nothing. A vector or tuple of `Pair`s is a map too; a `PottsParameters` is a whole object; any other value is an `ArgumentError`, never a silent replacement. A NamedTuple `u0` (to `remake` or `reinit!`) is an operating point equal to its pairs. This holds wherever `remake` runs (ensemble `prob_func` included). A hand-written CorePotts problem (no model) keeps CorePotts' contract: `remake(prob; p = x)` replaces the parameter object with `x`.
 - **Frozen acceptance** `p6_0an_remake_namedtuple.jl` (freeze 21e9525a): hand-computed energies on the P6.0ak fixture for NamedTuple ≡ pairs ≡ Dict, chains, whole tables, all-names and empty NamedTuples, Float32, NamedTuple `u0` in `remake` and `reinit!`, setters after a NamedTuple remake, an ensemble `prob_func`; negative controls (unknown name, variable name, mis-sized and asymmetric tables, non-maps, source problem unchanged); the hand-written CorePotts contract as a regression guard. On a1c3ed57, 41 of 54 recorded results fail or error, each from the fall-through; 114/114 against stubs.
 - **Review and merge.** Two rounds. Round 1: maps, empty maps, symbolic keys, `remake(prob)` keeping `p`, checkpoints, rejections all correct; should-fix: a whole `PottsParameters` was accepted unchecked (another model's object failed later; a Float32 object turned a Float64 problem into Float32). Round 2: a same-type object is returned as given (the checkpoint fast path); otherwise its names must match (an `ArgumentError` names the differences) and its values are converted through the NamedTuple path. As in SciML, `p = missing`/`nothing` keeps the parameters and `u0 = missing`/`nothing` keeps the state (`reinit!` resets to the problem's state); any other `u0` that is not a state, pairs, a `Dict` or a NamedTuple is an `ArgumentError`.
 
 ## D-116 P6.0ap: parameter-setter loose ends (2026-10-03, P6.0ap; coordinator, from the D-112 review)
+
+Amended by D-312: the `setsym` list rule holds for base parameters only; computed parameters are read-only.
 
 - **Context.** `setp(integ, [:λ, :w])` (a parameter and a state) set λ and then threw a `MethodError`; `SII.setsym(integ, [names…])` applied the names one at a time (order-dependent); `SII.remake_buffer(prob, prob.p, keys, vals)` overflowed the stack (SII's untyped fallback and its deprecated `Dict` method call each other); `setp`/`getp`/`integ.ps[x]` on a hand-written CorePotts problem threw `MethodError: symbolic_container(::Nothing)`.
 - **Rule.** A `setp` list naming a state is an `ArgumentError` when the setter is built, pointing to `setu`/`setsym`; nothing is set. `SII.setsym(integ, list)` sets the list's parameters as one change (D-112, as `setp`) and its states as `setu` does; a single name is unchanged, an unknown name is an `ArgumentError`, and a rejected parameter value leaves the parameters unchanged. On a model's problem, `SII.remake_buffer(prob, prob.p, keys, vals)` returns a new parameter object equal to `remake(prob; p = Dict(keys .=> vals)).p` (same type, original untouched; an unknown key or a variable is an `ArgumentError`). On a hand-written CorePotts problem whose parameter object is a NamedTuple, its fields are its parameters by name: `getp`, `setp` (one name or a list) and `integ.ps[x]` work on an integrator (values converted to the field's type), `getp` works on the problem, `setp` applied to the problem is the "immutable, use `remake`" `ArgumentError`, a missing field is an `ArgumentError`; a parameter object that is not a NamedTuple has no names (`ArgumentError`).
@@ -1988,6 +2014,8 @@ session.
 
 ## D-133 P6.0u: remaining `@components` gaps and review nits (2026-10-04, P6.0u; coordinator, from the P6.0k2, P6.0e2, P6.0d and P6.0m3 reviews; amends D-084, D-088, D-081, D-080)
 
+Amended by D-310: a component binding that reads only parameters builds; the rejection stays for a binding that reads an unknown.
+
 - **Gap.** Measured on fe057508: MTK `tstops` and `assertions` on a component System (also in a subsystem) were accepted and ignored. Component bindings Potts cannot evaluate failed without naming the component (`y(t) = 2k`, `y(t) = 2z` → "cell/model variable `comp7₊y` has no initial value"; `initial_conditions = [y => 2k]` → "`2k` does not reduce to a number …"; `k2 = 2k` → "unknown symbol `k2` in …"; discrete `X(t) = !Y` → "`net7₊X` has no initial value"). An `x′` `UndefVarError` raised inside a hand-written (non-`@potts_model`) `@extend` base was relabelled with the outer model's (or another base's) description of `x`. `init` warned about `frozen_varies` even when a system defined `frozen_varies(sys) = false` on purpose. The temperature's `integral(Pre(x))` error had no location.
 - **Rule.** (1) At `mtkcompile`, a component whose System (including subsystems) carries non-empty `tstops` or `assertions` is an `ArgumentError` naming the component and the field, like the F7 fields; an empty list is accepted. (2) Every rejected component binding (an MTK binding of a variable or parameter, or an `initial_conditions` value that is an expression), cell or model scope, continuous or discrete, is an `ArgumentError` naming the component ("component `c`" or the location "@components cells|model c") and the bound name, at build or at `PottsProblem`. Plain values and `guesses` are unchanged; missing values of the model's own quantities never mention a component. (3) An error raised inside an `@extend` base's constructor propagates as the base raised it: the extension's prime translation applies only to its own section code (a `@potts_model` base translates with its own description; a hand-written base's `UndefVarError` stays one); the extension's own primes and primes of names bound from a base are still translated. (4) `init` warns only when `remake_frozen` is overridden and `frozen_varies` is CorePotts' default method; a `frozen_varies` method defined outside CorePotts (also on a supertype, also `false`) silences it. (5) The temperature's `integral(Pre(x))` error ends with the location "in @sweep" (Metropolis and Barker). Generated code and fingerprints are unchanged.
 - **Frozen acceptance** `p6_0u_components_gaps.jl` (freeze 272a6c73): 72 tests — targets per gap (8, 5 per scope, 3, 3, 2), negative and unchanged-message controls (a `@potts_model` base's own description, the extension's own and inherited primes, the default-`frozen_varies` warning, `integral(w)`, the `@equations` location, a Potts parameter without a default, F7 `continuous_events`), 7 fixture fingerprints pinned. On fe057508, 26 of 72 fail (all targets); a prototype (+28/−4) passes 72/72, and p6_0k, k2, e2, m3, am and d pass on it.
@@ -2014,6 +2042,8 @@ session.
 - **Applied (coordinator).** Also in scope: the pin blocks of p6_0ag, p6_0ax and p6_0g (merged or merging meanwhile), and any later frozen file that pins a fingerprint. "Pinned once" means one table of (system or fixture → value) in the suite; a file that needs a fixture's fingerprint for its own logic (e.g. "differs from the old pin", D-124) reads it from the suite's table or compares two builds, never a literal. Re-pins under future decisions then touch only the suite. The consolidation must change no fingerprint value: the suite's table equals the union of today's pins, and the run on the consolidating commit shows every moved check still fails on the commit before the fix it guards (spot-check one per decision via the decision's recorded base commit).
 
 ## D-137 P6.0o: `PottsSystem <: AbstractSystem`, its accessor contract and the property-read rule (2026-10-04, P6.0o; coordinator, from the MTK-native review; implements D-075 §0.1)
+
+Superseded by D-256: `PottsSystem` is the W-lite container, which wraps a complete inner MTK `System`, a `PDESystem` and the Potts payload; D-259 and D-260 record how rules 1 to 4 changed.
 
 - **Gap.** Measured on 33f681df: `PottsSystem` is a plain struct. MTK's `equations`, `unknowns`, `observed`, `complete`, `getmetadata`, `setmetadata` and `toggle_namespacing` are MethodErrors on it, and `ModelingToolkitBase.parameters` silently returns an empty list. `sys.λ` is a FieldError. `compose(sys, [x])` falls into MTK's varargs `compose` and recurses without end. `ODEProblem`, `JumpProblem` and `extend(sys, ::System)` are MethodErrors. Aqua finds one ambiguity (`_pre`, src/vocabulary.jl). Potts reads PottsSystem fields by property 357 times in src/ and ext/. Six frozen files (p6_0av, merks_2006_defaults, p6_0al, p6_0e2, p6_0am, p6_0t) read them in test code.
 - **Rule.**
@@ -2145,6 +2175,10 @@ session.
 - **Frozen file.** `lib/PottsModels/reproductions/09_cell_sorting.jl` is edited under this entry; its `frozen.toml` decision becomes D-144. Reported in the phase report (AUTONOMY §7.5) as a pre-registered failure explained after the run.
 
 ## D-145 P6.3b: `@boundary` per face and per site mask, `@schedule` as the phase order with the sweep and lifecycle as entries (2026-10-05, P6.3b; coordinator, from the P6.3b test author; implements R5 per api-synthesis §2.11–§2.12 and §6.4; amends D-035 as D-075 states)
+
+Amended by D-257 (item 3): a mask is one rule in three forms (an identity row in the explicit steppers, the correction form in multigrid, lifted and eliminated in Krylov solvers), not a clamp after each explicit substep.
+
+Amended by D-320: `@boundary`, `Dirichlet` and `NoFlux` are removed; field conditions and masks are written in the coupled `PDESystem`.
 
 - **`@boundary <field> begin … end`.** One block per field; `<field>` must be a `(field)` variable, else an error naming it.
   - **Face entries:** `x | y | z => (low, high)`, each side `Dirichlet(v)` or `NoFlux()`.
@@ -2663,6 +2697,8 @@ session.
 - **PC probes.** Heavy PC processes run under a memory cap (`systemd-run --user --scope -p MemoryMax=…`). The P6.0be probes were OOM-killed twice on 2026-10-07; CI was unaffected.
 
 ## D-160 P6.0bm: `hamiltonian(sys)`, `drives(sys)` and the `PottsSweepSpec` metadata payload (2026-10-07; coordinator, from the P6.0bm test author; implements D-159 / mtk-native-plan §6)
+
+Amended by D-262: a `PottsSystem` refused MTK's metadata functions, so generic code read the payload from `Potts.inner(sys)`; the D-287 conformance batch later made the container forward them, so `hasmetadata(sys, PottsSweepSpec)` works again.
 
 - **Why.** Plan §5 says a Potts model's Hamiltonian is a Symbolics expression "that ModelingToolkit's generic tools can inspect". Today the terms exist as `EnergyTerm`s but are reachable only through `getfield`, and generic code cannot tell that a system has a lattice sweep.
 - **API (public, not exported).**
