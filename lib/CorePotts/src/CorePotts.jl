@@ -67,6 +67,8 @@ export EnsembleProblem, EnsembleSerial, EnsembleThreads, DiscreteCallback, Callb
     terminate!, derivative_discontinuity!
 export PottsCheckpoint, checkpoint, save_checkpoint, load_checkpoint, reinit!
 export read_piff, write_piff
+export FrameWritingCallback, FrameFile, PottsFrames, AbstractFrameWriter, FrameWriteError,
+    open_frames!, write_frame!, frame_times, read_frame
 # Public but not exported: generic lattice and randomness primitives for hand-written models
 # and generated code, and the frozen-mask hooks a model system extends (ExplicitImports
 # checks qualified accesses against this list).
@@ -128,6 +130,7 @@ include("boundary_site.jl")
 include("checkerboard.jl")
 include("problem.jl")
 include("checkpoint.jl")
+include("frames.jl")
 include("precompile.jl")
 
 end

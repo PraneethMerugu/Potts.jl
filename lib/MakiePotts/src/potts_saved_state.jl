@@ -157,6 +157,11 @@ Defensively materialize one native Makie frame from a saved host state (a
 the same full-domain or orthogonal-slice projection as ownership. Cell and medium
 channels retain their identity-keyed representation. Frozen medium sites render as
 obstacles.
+
+    renderframe(solution, request=RenderRequest(); index=lastindex(solution.u), channels=())
+
+The frame of the `index`-th saved state of `solution`, a `PottsSolution` or the frames a
+run wrote to disk (`CorePotts.PottsFrames`, given its `prob` to draw obstacles).
 """
 function renderframe(
         state::CorePotts.CPMState,
@@ -169,26 +174,63 @@ function renderframe(
     return _build_renderframe(state, request, channels, mcs, frozen, spacing)
 end
 
+"""A run's saved states: an in-memory solution or the frames written to disk."""
+const SavedRun = Union{CorePotts.PottsSolution, CorePotts.PottsFrames}
+
+# the saved state's own obstacles: a frozen mask that follows the state (D-081) differs
+# from the problem's t0 mask once a cell enters or leaves a frozen kind. Frames read
+# without their problem draw no obstacles and unit spacing.
+_saved_frozen(prob, u) = CorePotts.frozen_sites(prob, u)
+_saved_frozen(::Nothing, u) = nothing
+_saved_spacing(prob) = prob.spacing
+_saved_spacing(::Nothing) = nothing
+
 function renderframe(
-        solution::CorePotts.PottsSolution,
+        solution::SavedRun,
         request::RenderRequest = RenderRequest();
         index::Integer = lastindex(solution.u),
         channels::Tuple = ()
     )
     checkbounds(solution.u, index)
+    u = solution.u[index]
     return renderframe(
-        solution.u[index], request; mcs = solution.t[index], channels,
-        # the saved state's own obstacles: a frozen mask that follows the state (D-081)
-        # differs from the problem's t0 mask once a cell enters or leaves a frozen kind
-        frozen = CorePotts.frozen_sites(solution.prob, solution.u[index]),
-        spacing = solution.prob.spacing
+        u, request; mcs = solution.t[index], channels,
+        frozen = _saved_frozen(solution.prob, u), spacing = _saved_spacing(solution.prob)
     )
 end
 
-"""Eagerly materialize independent frames from a retained solution."""
+"""Eagerly materialize independent frames from a retained solution or from written frames
+(`CorePotts.PottsFrames`, read one at a time but all kept). `record_potts` and
+`explore_potts` render written frames one at a time instead."""
 function renderframes(
-        solution::CorePotts.PottsSolution,
+        solution::SavedRun,
         request::RenderRequest = RenderRequest()
     )
     return [renderframe(solution, request; index) for index in eachindex(solution.u)]
+end
+
+# the first frame of written frames, checked; the frames that follow are rendered one at a
+# time (`_next_written_frame`) and must have its geometry
+function _first_written_frame(frames::CorePotts.PottsFrames, request::RenderRequest)
+    isempty(frames.t) && throw(ArgumentError("written frames: the run wrote no frames"))
+    first_frame = renderframe(frames, request; index = 1)
+    assert_render_frame_conformance(first_frame)
+    return first_frame
+end
+function _next_written_frame(
+        frames::CorePotts.PottsFrames, request::RenderRequest, index::Integer,
+        first_frame
+    )
+    index == 1 && return first_frame
+    frame = renderframe(frames, request; index)
+    assert_render_frame_conformance(frame)
+    expected = frame_geometry(first_frame)
+    actual = frame_geometry(frame)
+    actual == expected || throw(
+        ArgumentError(
+            "written frame $index has incompatible geometry; expected $expected, \
+                got $actual"
+        )
+    )
+    return frame
 end

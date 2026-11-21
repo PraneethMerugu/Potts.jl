@@ -1769,10 +1769,17 @@ function CommonSolve.solve!(integ::PottsIntegrator)
     return _solve!(integ)
 end
 function _solve!(integ::PottsIntegrator)
-    while integ.t < _final_stop(integ) && integ.retcode == SciMLBase.ReturnCode.Default
-        step!(integ)
+    try
+        while integ.t < _final_stop(integ) && integ.retcode == SciMLBase.ReturnCode.Default
+            step!(integ)
+        end
+        _finish!(integ)
+    catch err
+        # a failed or interrupted run: callbacks that hold a file close it (frames.jl;
+        # `_abort_frames!` logs its own errors, so this run's error is the one raised)
+        _each(_abort_callback!, integ.callbacks)
+        rethrow()
     end
-    _finish!(integ)
     return PottsSolution(integ)
 end
 
