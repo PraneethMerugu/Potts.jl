@@ -84,8 +84,8 @@ fig
 The table and the plot read the committed file `docs/src/fields/convergence.toml`. The docs
 build runs no solver for this page. The LatticePDE convergence tests write the same cases,
 and they fail when the file no longer agrees with what they compute (relative tolerance
-``10^{-4}``). After a change that moves an error, run this command from the repository root
-and commit the file:
+``10^{-4}``). After a change that moves an error, run these commands from the
+repository root and commit the file:
 
 ```sh
 julia --project=lib/LatticePDE/test -e 'using Pkg; Pkg.instantiate()'
