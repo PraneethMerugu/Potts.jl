@@ -86,14 +86,16 @@ to write or read one. `PottsFrames(path)` reads the segments as one run.
 
 A segment is closed when it holds `checkpoint` frames, and a closed segment is not written
 again. If the process is killed (a `SIGKILL`, an out-of-memory kill or a device reset), the
-closed segments stay readable: the run loses the frames of the open segment (fewer than
-`checkpoint`) and the frames still in the host buffers (at most 2). A crash of the
-operating system can also lose data that it had not yet written to the disk. After a
+closed segments stay readable: the run loses at most `checkpoint` + 2 frames (the frames of
+the segment that is open or closing, and the frames still in the host buffers). A crash of
+the operating system can also lose data that it had not yet written to the disk. After a
 normal finish, an error or an interrupt, every segment is closed.
 
 A `FrameFile` holds one run. A second start (another `solve` with the same callback,
 `reinit!`, another trajectory of an ensemble) is refused: give each run its own
-`FrameFile`. A new `FrameFile` at the path of an earlier run replaces that run's segments.
+`FrameFile`. In one Julia process, a second `FrameFile` at a path that another `FrameFile`
+writes is also refused; give each trajectory its own path. A new `FrameFile` at the path of
+an earlier, finished run replaces that run's segments.
 """
 mutable struct FrameFile <: AbstractFrameWriter
     const path::String

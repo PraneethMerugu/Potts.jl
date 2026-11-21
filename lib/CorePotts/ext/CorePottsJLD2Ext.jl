@@ -20,22 +20,49 @@ function segment_number(name::AbstractString)
     return m === nothing ? nothing : parse(Int, m.captures[1])
 end
 
+# the paths that a FrameFile of this process writes, so that a second FrameFile at the same
+# path is refused (other processes are not checked)
+const OPEN_PATHS = Set{String}()
+const OPEN_PATHS_LOCK = ReentrantLock()
+path_key(w::FrameFile) = normpath(abspath(w.path))
+
 function CorePotts.open_frames!(w::FrameFile, u)
+    ispath(w.path) && !isdir(w.path) && throw(
+        ArgumentError(
+            "FrameFile writes a directory of segments, and $(repr(w.path)) is a file"
+        )
+    )
     (@atomicreplace w.state 0 => 1).success || throw(
         ArgumentError(
             "$w holds a run already (or is writing one); give each run (each `solve`, \
                 `reinit!` or trajectory) its own FrameFile"
         )
     )
-    ispath(w.path) && !isdir(w.path) && throw(
-        ArgumentError(
-            "FrameFile writes a directory of segments, and $(repr(w.path)) is a file"
+    key = path_key(w)
+    claimed = @lock OPEN_PATHS_LOCK begin
+        key in OPEN_PATHS ? false : (push!(OPEN_PATHS, key); true)
+    end
+    if !claimed
+        @atomic w.state = 0
+        throw(
+            ArgumentError(
+                "another FrameFile writes $(repr(w.path)); give each run its own path"
+            )
         )
-    )
-    mkpath(w.path)
-    # a new run replaces the segments of an earlier one
-    for name in readdir(w.path)
-        segment_number(name) === nothing || rm(joinpath(w.path, name))
+    end
+    try
+        close_reader!(w)
+        mkpath(w.path)
+        # a new run replaces the segments of an earlier one, the highest-numbered first, so
+        # that a kill during the cleanup leaves a prefix of the old run
+        old = filter(n -> segment_number(n) !== nothing, readdir(w.path))
+        for name in sort!(old; by = segment_number, rev = true)
+            rm(joinpath(w.path, name))
+        end
+    catch err
+        @lock OPEN_PATHS_LOCK delete!(OPEN_PATHS, key)
+        @atomic w.state = 0
+        rethrow()
     end
     w.segment = 0
     w.count = 0
@@ -80,14 +107,22 @@ end
 
 function Base.close(w::FrameFile)
     if (@atomic w.state) == 1
-        close_segment!(w)
-        @atomic w.state = 2
+        try
+            close_segment!(w)
+        finally
+            @atomic w.state = 2
+            @lock OPEN_PATHS_LOCK delete!(OPEN_PATHS, path_key(w))
+        end
     end
+    close_reader!(w)
+    return nothing
+end
+
+function close_reader!(w::FrameFile)
     r = w.reader
-    if r !== nothing
-        w.reader = nothing
-        r.file === nothing || close(r.file)
-    end
+    r === nothing && return nothing
+    w.reader = nothing
+    r.file === nothing || close(r.file)
     return nothing
 end
 

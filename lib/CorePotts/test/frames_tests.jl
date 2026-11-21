@@ -378,6 +378,56 @@ end
     end
 end
 
+@testitem "frames: a FrameFile path is written by one FrameFile at a time" setup = [
+    CP_frames,
+] tags = [:corepotts] begin
+    prob = frames_problem(; tf = 10)
+    mktempdir() do dir
+        path = joinpath(dir, "run")
+        cb = FrameWritingCallback(FrameFile(path; checkpoint = 1); saveat = 1)
+        solve(prob, SequentialCPM(); save_everystep = false, callback = cb)
+        @test length(readdir(path)) == 11
+        # a FrameFile that was read before its run reads the new run, not the old one
+        w = FrameFile(path)
+        @test frame_times(w) == 0:10
+        cb = FrameWritingCallback(w; saveat = 5)
+        solve(prob, SequentialCPM(); save_everystep = false, callback = cb)
+        @test frame_times(w) == [0, 5, 10]
+        @test readdir(path) == ["frames-000001.jld2"]
+        close(w)
+        # a second FrameFile at a path that a run writes is refused, and stays unclaimed
+        integ = init(
+            prob, SequentialCPM(); save_everystep = false,
+            callback = FrameWritingCallback(FrameFile(path); saveat = 5)
+        )
+        w2 = FrameFile(path)
+        cb2 = FrameWritingCallback(w2; saveat = 5)
+        @test_throws ArgumentError solve(
+            prob, SequentialCPM(); save_everystep = false, callback = cb2
+        )
+        # negative control: another path is written beside the open run
+        other = FrameWritingCallback(FrameFile(joinpath(dir, "other")); saveat = 5)
+        solve(prob, SequentialCPM(); save_everystep = false, callback = other)
+        @test PottsFrames(joinpath(dir, "other")).t == [0, 5, 10]
+        solve!(integ)
+        solve(prob, SequentialCPM(); save_everystep = false, callback = cb2)
+        @test frame_times(w2) == [0, 5, 10]
+        close(w2)
+        # a failed path check leaves the FrameFile unclaimed
+        file = joinpath(dir, "file")
+        write(file, "x")
+        w3 = FrameFile(file)
+        cb3 = FrameWritingCallback(w3; saveat = 5)
+        @test_throws ArgumentError solve(
+            prob, SequentialCPM(); save_everystep = false, callback = cb3
+        )
+        rm(file)
+        solve(prob, SequentialCPM(); save_everystep = false, callback = cb3)
+        @test frame_times(w3) == [0, 5, 10]
+        close(w3)
+    end
+end
+
 @testitem "frames: the reader indexes by frame and by MCS" setup = [CP_frames] tags = [
     :corepotts,
 ] begin

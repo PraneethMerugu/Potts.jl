@@ -75,13 +75,13 @@ a time, when you index it. MakiePotts records and explores it one frame at a tim
 
 Put `FrameWritingCallback` first in a `CallbackSet`, so that it writes the state before
 other callbacks change it. A `FrameFile` holds one run. A second run with the same callback
-is refused; in an ensemble, make the callback in `prob_func`, with a path for each
-trajectory.
+is refused, and so is a second `FrameFile` at a path that is being written. In an
+ensemble, make the callback in `prob_func`, with a path for each trajectory.
 
 `FrameFile` writes a directory of segment files and closes a segment every `checkpoint`
 frames (default 10). If the process is killed (out of memory, a GPU reset, `SIGKILL`), the
-closed segments stay readable. The run then loses fewer than `checkpoint` frames, plus at
-most 2 frames in the buffers. `PottsFrames` skips an unreadable last segment with a
+closed segments stay readable. The run then loses at most `checkpoint` + 2 frames: the
+segment that was open or closing, and the frames in the buffers. `PottsFrames` skips an unreadable last segment with a
 warning. An operating system crash can also lose data that was not yet on the disk.
 
 !!! details "How the writer works"
