@@ -1,6 +1,7 @@
 # Write the committed data file of the convergence docs page,
 # docs/src/fields/convergence.toml, from the cases of convergence_orders_tests.jl:
 #
+#   julia --project=lib/LatticePDE/test -e 'using Pkg; Pkg.instantiate()'
 #   julia --project=lib/LatticePDE/test lib/LatticePDE/test/write_convergence_data.jl
 #
 # The convergence tests fail when the file and the computed cases differ, so rerun this

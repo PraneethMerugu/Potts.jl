@@ -3,6 +3,7 @@
 # shared/convergence_cases.jl; each item also checks the committed data file of the
 # convergence docs page (docs/src/fields/convergence.toml) against what it computes.
 # Regenerate that file with
+#   julia --project=lib/LatticePDE/test -e 'using Pkg; Pkg.instantiate()'
 #   julia --project=lib/LatticePDE/test lib/LatticePDE/test/write_convergence_data.jl
 
 @testsetup module LP_convergence_orders

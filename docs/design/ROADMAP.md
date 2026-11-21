@@ -829,7 +829,7 @@ Fields moved from `CorePotts.FieldStep` (explicit Euler only) to two new MIT pac
 - [x] 5e972579 2026-11-13 **Integration** onto `monorepo` after D-271 to D-273 (D-322). Pins that both sides had re-pinned were removed for the TS series.
 
 Open and deferred:
-- [x] D-286 2026-11-16 **Confirm the provisional entries.** D-256 to D-270 and the C8/C9 re-freeze entries still say "provisional, awaiting confirmation". The maintainer's OK of 2026-10-17 and 2026-10-19 is recorded only in the git-ignored `PottsWorktrees/lattice-pde/HANDOFF.md` §1. C10 was to write it into DECISIONS. Also give numbers to the placeholder ids (D-C*, D-F2-*, D-F3-*, D-F4-*, D-322).
+- [x] D-286 2026-11-16 **Confirm the provisional entries.** D-256 to D-270 and the C8/C9 re-freeze entries still say "provisional, awaiting confirmation". The maintainer's OK of 2026-10-17 and 2026-10-19 is recorded only in the git-ignored `PottsWorktrees/lattice-pde/HANDOFF.md` §1. C10 was to write it into DECISIONS. Also give numbers to the placeholder ids (D-C*, D-F2-*, D-F3-*, D-F4-*, D-INT-1 (now D-322)).
 - [ ] **C10** Field-compiler docs. Stopped by the maintainer 2026-10-18; unverified WIP `8601032c` on the local branch `lp/c10` (HANDOFF status table). Some docs landed later with F4-B4d (3213f17b).
 - [ ] **F5** Polish, the last step of the 2026-10-18 plan F1 → F5 → C10 → C11 (HANDOFF). Nothing built.
 - [ ] **KernelAbstractions 0.10.** One commit with its own A/B once the upstream packages are registered (D-256 item 4). The compat is `0.9.42` today (`Project.toml:47`).

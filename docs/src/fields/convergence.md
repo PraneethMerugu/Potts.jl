@@ -1,8 +1,8 @@
 # [Convergence](@id fields-convergence)
 
 This page gives the observed order of each LatticePDE time stepper and spatial operator.
-Each case solves a problem with a known solution at three or four time steps or grid
-sizes, and fits the slope of the error against the step on a log-log scale.
+Each case solves a problem with a known or reference solution at three or four time
+steps or grid sizes, and fits the slope of the error against the step on a log-log scale.
 
 ## How the orders are measured
 
@@ -11,7 +11,7 @@ sizes, and fits the slope of the error against the step on a log-log scale.
   holds no spatial part.
 - **Operators.** The error of a steady problem is measured against its exact solution at
   the site centers. The linear system is solved by `LatticePCG` to a relative tolerance of
-  ``10^{-12}``.
+  ``10^{-12}``, or by a direct sparse solve for the nonsymmetric upwind case.
 - **Norm.** Every error is the largest absolute error over all sites (the max norm).
 - **Observed order.** The least-squares slope of ``\log(\text{error})`` against
   ``\log(\Delta t)`` or ``\log(h)``.
@@ -45,18 +45,20 @@ cases = TOML.parsefile(file)["case"]
 colors = Makie.wong_colors()[1:6]      # colorblind-safe (Okabe-Ito)
 markers = [:circle, :rect, :utriangle, :diamond, :dtriangle, :star5]
 panels = (
-    ("solver", "Time steppers", "time step Δt", [0.005, 0.01, 0.02, 0.04], string),
-    ("operator", "Spatial operators", "grid spacing h", 1 ./ [128, 64, 32, 16],
-        h -> "1/$(round(Int, 1 / h))"),
+    ("solver", "Time steppers", "time step Δt", string),
+    ("operator", "Spatial operators", "grid spacing h", h -> "1/$(round(Int, 1 / h))"),
 )
 fig = Figure(; size = (900, 560))
-for (j, (kind, title, xlabel, ticks, fmt)) in enumerate(panels)
+for (j, (kind, title, xlabel, fmt)) in enumerate(panels)
+    sel = filter(c -> c["kind"] == kind, cases)
+    ticks = sort(unique(reduce(vcat, [c["steps"] for c in sel])))  # the levels in the file
+    lo, hi = extrema(reduce(vcat, [c["errors"] for c in sel]))
+    decades = floor(Int, log10(lo) - 0.5):ceil(Int, log10(hi))   # room for the guide lines
     ax = Axis(
         fig[1, j]; xscale = log10, yscale = log10, title, xlabel,
         ylabel = "max-norm error", xticks = (ticks, fmt.(ticks)),
-        yticks = (10.0 .^ (-6:0), [rich("10", superscript("$e")) for e in -6:0])
+        yticks = (10.0 .^ decades, [rich("10", superscript("$e")) for e in decades])
     )
-    sel = filter(c -> c["kind"] == kind, cases)
     for (i, c) in enumerate(sel)
         scatterlines!(
             ax, c["steps"], c["errors"]; color = colors[i], marker = markers[i],
@@ -86,6 +88,7 @@ and they fail when the file no longer agrees with what they compute (relative to
 and commit the file:
 
 ```sh
+julia --project=lib/LatticePDE/test -e 'using Pkg; Pkg.instantiate()'
 julia --project=lib/LatticePDE/test lib/LatticePDE/test/write_convergence_data.jl
 ```
 
