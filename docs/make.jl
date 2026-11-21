@@ -250,6 +250,7 @@ manual = [
 
 # The fields section: LatticePDE on its own, in the order of a SciML package's docs
 fields = [
+    "Getting started" => "fields/getting_started.md",
     "API" => "fields/api.md",
 ]
 
