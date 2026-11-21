@@ -21,7 +21,7 @@ The operators, conditions, reads and variable options a `PDESystem` is written i
 checks of a system against them.
 
 ```@autodocs
-Modules = [LatticePDE]
+Modules = [Potts.LatticePDE]
 Private = false
 Filter = t -> Main.latticepde_section(t) === :vocabulary
 ```
@@ -34,7 +34,7 @@ LatticePDE.HEX
 ```
 
 ```@autodocs
-Modules = [LatticePDE]
+Modules = [Potts.LatticePDE]
 Private = false
 Filter = t -> Main.latticepde_section(t) === :discretization
 ```
@@ -70,7 +70,7 @@ LatticePDE.field_series
 ```
 
 ```@autodocs
-Modules = [LatticePDE]
+Modules = [Potts.LatticePDE]
 Private = false
 Filter = t -> Main.latticepde_section(t) === :reports
 ```
@@ -81,7 +81,7 @@ Public names that the Potts compiler and other front ends build on. A field mode
 not need them.
 
 ```@autodocs
-Modules = [LatticePDE]
+Modules = [Potts.LatticePDE]
 Private = false
 Filter = t -> Main.latticepde_section(t) === :interface
 ```

@@ -216,8 +216,8 @@ nothing #hide
 # ## Measuring the invasion
 #
 # For each saved state `u`, `ownership(u)` gives the owner array and `cell_kinds(u)` each
-# cell's kind (1 leader, 2 follower). The mean height of each kind's sites shows leaders moving ahead
-# of the followers:
+# cell's kind (1 leader, 2 follower). The mean height of each kind's sites shows leaders
+# moving ahead of the followers:
 
 using Statistics: mean
 function mean_height(
