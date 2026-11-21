@@ -121,13 +121,9 @@ struct FieldDecl{N}
     # a declared storage (`lattice_storage`): the float lane holds its own type under `lanes
     # = :state` (`lanetype`)
     fixed::Bool
-end
-function FieldDecl{N}(
-        key, classes, shape, symmetric, storage, levels, epoch, buffers, role
-    ) where {N}
-    return FieldDecl{N}(
-        key, classes, shape, symmetric, storage, levels, epoch, buffers, role, false
-    )
+    # per axis, whether the field wraps (its accesses wrap there; a closed axis takes the
+    # field's face rules)
+    periodic::NTuple{N, Bool}
 end
 ncomp(f::FieldDecl) = isempty(f.shape) ? 1 : Int(prod(f.shape))
 

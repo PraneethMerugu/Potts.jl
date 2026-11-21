@@ -262,7 +262,7 @@ end
 function _resolve_load!(b::KernelBuilder{N}, p::Program{N}, a::Access{N}) where {N}
     a.offset.cond == 0 || return _loadacc!(b, p, a)
     off = a.offset.a
-    axes = [d for d in 1:N if off[d] != 0 && !p.periodic[d]]
+    axes = [d for d in 1:N if off[d] != 0 && !fieldperiodic(p, a.field)[d]]
     !isempty(axes) && a.level != 0 && irerror(
         "field `", p.fields[a.field].key,
         "`: a level-shifted access at a non-periodic offset needs policy CLAMP or ZERO"

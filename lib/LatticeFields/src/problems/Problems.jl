@@ -26,6 +26,7 @@ using SymbolicIndexingInterface: SymbolicIndexingInterface as SII
 using ..LatticeFields: isfatal
 using ..Exec: Exec
 using ..IR: IR, CLAMP, INSIDE, Coef, DomainEdgeRule, HEX, Ex, FaceRule, sitecoefs,
+    fieldperiodic,
     NodeValueRule, Program, RUNTIME, PARAM, LOAD, fieldid, print_program, isfloat,
     juliatype, leveldims, ncomp, nsites,
     runtime!, degenerate, FACE_RTOL, F64, F16, U8, I32, U32

@@ -13,7 +13,7 @@ using RuntimeGeneratedFunctions: RuntimeGeneratedFunctions, RuntimeGeneratedFunc
 using SHA: sha1
 using ..Exec: Exec
 using ..IR: IR, Access, BOOL, CALL, CAST, CLAMP, COND, CONST, COORD, Coef, DIV,
-    DomainEdgeRule,
+    DomainEdgeRule, fieldperiodic,
     ELEMENT_SUM, EQ, EXP, F16, F32, F64, FMA, FULL, FaceRule, IDX, INSIDE,
     INSIDE_OP,
     ImmersedRule, Kernel, sitecoefs,

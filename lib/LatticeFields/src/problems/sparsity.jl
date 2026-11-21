@@ -63,7 +63,7 @@ function _prow(w::_Walk{N}, a, off, comp) where {N}
         y, fl = _pcoord(w, a, d, o)
         nd = Int(leveldims(s, fl)[d])
         shifted = a.offset.cond != 0 || o != 0 || a.level < 0
-        if shifted && a.policy != INSIDE && s.periodic[d]
+        if shifted && a.policy != INSIDE && fieldperiodic(s, a.field)[d]
             y = mod1(y, nd)
         elseif shifted && a.policy == CLAMP
             y = clamp(y, 1, nd)
@@ -85,7 +85,7 @@ function _pinside(w::_Walk{N}, a) where {N}
     a.offset.cond != 0 && return -1
     L = Int(w.k.space.level)
     for d in 1:N
-        (a.offset.a[d] != 0 || a.level < 0) && !w.s.periodic[d] || continue
+        (a.offset.a[d] != 0 || a.level < 0) && !fieldperiodic(w.s, a.field)[d] || continue
         y, fl = _pcoord(w, a, d, Int(a.offset.a[d]))
         1 <= y <= leveldims(w.s, a.level < 0 ? fl : L)[d] || return 0
     end

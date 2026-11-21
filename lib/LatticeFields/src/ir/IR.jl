@@ -16,7 +16,7 @@ public Grid, Program, IRError, fieldid, ProgramBuilder, KernelBuilder, Space, Ac
     program, node!, Ex, constant!, param!, runtime!, coord!, table!, call!, cast!,
     arith!,
     compare!, select!, cond!, load!, access!, store!, isfloat, juliatype, print_program,
-    CALLS, call_arity,
+    CALLS, call_arity, fieldperiodic,
     F16, F32, F64, U8, I32, U32, REAL, BOOL, RESOLVE, INSIDE, ZERO, CLAMP, STATIC,
     PERSIGMA,
     PERSTEP, INNER, ADD, MUL, NEG, DIV, FMA, MIN, MAX, ABS, POWI, SQRT, EXP, LOG, EQ, LT,

@@ -252,7 +252,7 @@ function _target(c::Ctx{N}, a::Access{N}; bounded::Bool = true) where {N}
         y, fl = _fine(c, a, d)
         n = _dim(c, fl, d)
         shifted = a.offset.cond != 0 || a.offset.a[d] != 0 || a.level < 0
-        if shifted && a.policy != INSIDE && c.p.periodic[d]
+        if shifted && a.policy != INSIDE && fieldperiodic(c.p, a.field)[d]
             y = if c.o.debug || _maxoff(c, a, d) >= leveldims(c.p, fl)[d]
                 :(mod1($y, $n))
             else
@@ -312,8 +312,8 @@ function _inside(c::Ctx{N}, a::Access{N}) where {N}
     ys, lev = _target(c, a; bounded = false)
     ts = Any[]
     for d in 1:N
-        (a.offset.cond != 0 || a.offset.a[d] != 0 || a.level < 0) && !c.p.periodic[d] ||
-            continue
+        (a.offset.cond != 0 || a.offset.a[d] != 0 || a.level < 0) &&
+            !fieldperiodic(c.p, a.field)[d] || continue
         fl = a.level < 0 ? lev : c.k.space.level
         push!(ts, :(($(_I(c, 1)) <= $(ys[d])) & ($(ys[d]) <= $(_dim(c, fl, d)))))
     end
