@@ -10,16 +10,40 @@
 """
     stored_energy(σ, lattice::Lattice; neighborhood = NeighborOrder(4), θ = 1) -> Real
 
-The stored energy φ of Eq. (8) (04b p.5823; spec 04 §2.8),
-φ ≡ Σ_{i,j} θ (1 − δ_{σ_i, σ_j}): `θ` times the number of unordered neighbor pairs
-`{i, j}` under `neighborhood` with `σ_i ≠ σ_j`, each pair counted once (reading (a):
-only φ/φ(0) is plotted, so the factor 2 of the ordered sum cancels). The default shell is
-the paper's fourth-nearest neighborhood (04b p.5822; spec §8). Pairs wrap on `Periodic()`
-axes; a pair that leaves a `Closed()` axis, or the lattice domain, does not exist. Every
-owner counts, the medium (0) included. The neighborhood must be symmetric (each offset's
-negation also in it); weights of a `Weighted` relation are ignored.
+Return the stored energy φ of a foam, Eq. (8) of Jiang et al. 1999 (p. 5823;
+`docs/design/research/model-specs/04_foam.md` §2.8): φ ≡ Σ_{i,j} θ (1 − δ_{σ_i, σ_j}).
 
-One pass over the sites with half the offsets, no allocation beyond the relation.
+The result is `θ` times the number of unordered neighbor pairs `{i, j}` under
+`neighborhood` with `σ_i ≠ σ_j`, each pair counted once. Only φ/φ(0) is plotted in the
+paper, so the factor 2 of the ordered sum cancels. The default shell is the paper's
+fourth-nearest neighborhood (p. 5822). Pairs wrap on `Periodic()` axes; a pair that leaves
+a `Closed()` axis, or the lattice mask, does not exist. Every owner counts, the medium (0)
+included. Weights of a `Weighted` relation are ignored.
+
+# Arguments
+- `σ::AbstractArray{<:Integer, N}`: the ownership.
+- `lattice::Lattice{N}`: a lattice of the size of `σ`. Throws an `ArgumentError` for
+  another size.
+
+# Keywords
+- `neighborhood = NeighborOrder(4)`: the neighbor pairs. It must be symmetric (each
+  offset's negation also in it); throws an `ArgumentError` otherwise.
+- `θ::Real = 1`: the energy per unlike pair.
+
+# Returns
+- `Real`: φ, of the type of `θ` times an `Int`.
+
+# Examples
+```jldoctest
+julia> using PottsModels.Analysis, Potts
+
+julia> σ = repeat([1 1 2 2], 4); lattice = Lattice((4, 4); boundary = Closed());
+
+julia> stored_energy(σ, lattice; neighborhood = VonNeumann(1))
+4
+```
+
+See also [`side_counts`](@ref), [`topology_moments`](@ref).
 """
 function stored_energy(
         σ::AbstractArray{<:Integer, N}, lat::Lattice{N}; neighborhood = NeighborOrder(4),
@@ -91,18 +115,44 @@ end
 """
     side_counts(σ, lattice::Lattice; neighborhood = VonNeumann(1)) -> Vector{Int}
 
-The number of sides `n` of each bubble `1:maximum(σ)` (04b p.5823: a bubble's sides are its
-distinct neighbors; spec 04 §2.8): `length.(cell_graph(σ, lattice; neighborhood))`. Edge
-sharing (`VonNeumann(1)`) is the default; `Moore(1)` also counts corner-only contacts, which
-inflates n (spec §2.8, topology audit 2026-10-01). Contacts wrap on `Periodic()` axes; a
-`Closed()` wall is not a side, and neither is the medium.
+Return the number of sides `n` of each bubble `1:maximum(σ)`:
+`length.(cell_graph(σ, lattice; neighborhood))`.
+
+A bubble's sides are its distinct neighbors (Jiang et al. 1999, p. 5823;
+`docs/design/research/model-specs/04_foam.md` §2.8). Edge sharing (`VonNeumann(1)`) is the
+default; `Moore(1)` also counts corner-only contacts, which inflates `n`. Contacts wrap on
+`Periodic()` axes; a closed boundary is not a side, and neither is the medium.
 
 !!! warning
 
-    The result is indexed by id: an id in `1:maximum(σ)` that owns no site is not a bubble
-    but still gets an entry, `0`. Drop those ids (keep `n[i]` only for the `i` with sites)
-    before passing `n` to [`topology_distribution`](@ref) or [`central_moment`](@ref);
-    [`topology_moments`](@ref) does this itself.
+    The result is indexed by cell number: a number in `1:maximum(σ)` that owns no site is
+    not a bubble but still gets an entry, `0`. Drop those entries (keep `n[i]` only for the
+    `i` with sites) before passing `n` to [`topology_distribution`](@ref) or
+    [`central_moment`](@ref); [`topology_moments`](@ref) does this itself.
+
+# Arguments
+- `σ::AbstractArray`: the ownership.
+- `lattice::Lattice`: a lattice of the size of `σ`.
+
+# Keywords
+- `neighborhood = VonNeumann(1)`: the contacts that make a side.
+
+# Returns
+- `Vector{Int}`: the side count of each cell number.
+
+# Examples
+```jldoctest
+julia> using PottsModels.Analysis, Potts
+
+julia> σ = repeat([1 1 2 2], 4); lattice = Lattice((4, 4); boundary = Closed());
+
+julia> side_counts(σ, lattice)
+2-element Vector{Int64}:
+ 1
+ 1
+```
+
+See also [`topology_distribution`](@ref), [`topology_moments`](@ref).
 """
 function side_counts(σ::AbstractArray, lat::Lattice; neighborhood = VonNeumann(1))
     return length.(cell_graph(σ, lat; neighborhood))
@@ -111,14 +161,32 @@ end
 """
     topology_distribution(n) -> (; n, ρ)
 
-The topology distribution ρ(n) (04b p.5823; spec 04 §2.8): the sorted distinct values of
-`n` (a `Vector{Int}`, e.g. from [`side_counts`](@ref)) and the fraction ρ of entries taking
-each. Empty input is an `ArgumentError`.
+Return the topology distribution ρ(n) (Jiang et al. 1999, p. 5823;
+`docs/design/research/model-specs/04_foam.md` §2.8): the sorted distinct values of `n` and
+the fraction ρ of entries taking each.
 
 !!! warning
 
-    Every entry of `n` counts as a bubble. [`side_counts`](@ref) gives an id that owns no
-    site an entry of `0`; drop such ids first, as [`topology_moments`](@ref) does.
+    Every entry of `n` counts as a bubble. [`side_counts`](@ref) gives a cell number that
+    owns no site an entry of `0`; drop such entries first, as [`topology_moments`](@ref)
+    does.
+
+# Arguments
+- `n::AbstractVector{<:Integer}`: the side counts, for example from [`side_counts`](@ref).
+  Throws an `ArgumentError` when empty.
+
+# Returns
+- `NamedTuple`: `(; n, ρ)`, with `n::Vector{Int}` and `ρ::Vector{Float64}`.
+
+# Examples
+```jldoctest
+julia> using PottsModels.Analysis
+
+julia> topology_distribution([5, 6, 6, 7])
+(n = [5, 6, 7], ρ = [0.25, 0.5, 0.25])
+```
+
+See also [`central_moment`](@ref), [`topology_moments`](@ref).
 """
 function topology_distribution(n::AbstractVector{<:Integer})
     isempty(n) && throw(ArgumentError("topology_distribution: no bubbles"))
@@ -142,10 +210,29 @@ end
 """
     central_moment(x, m = 2) -> AbstractFloat
 
-The `m`-th central moment μ_m ≡ Σ_v ρ(v)(v − ⟨v⟩)^m (04b p.5823; spec 04 §2.8) of the values
-`x`, which is the population moment (1/N) Σ_i (x_i − x̄)^m, in `float(eltype(x))` (`Float64`
-for integer `x`, `Float32` for `Float32` `x`). μ2(n) and μ2(a) of the paper are
-`central_moment(n)` and `central_moment(a)`. Empty `x` is an `ArgumentError`.
+Return the `m`-th central moment μ_m ≡ Σ_v ρ(v)(v − ⟨v⟩)^m of the values `x` (Jiang et
+al. 1999, p. 5823; `docs/design/research/model-specs/04_foam.md` §2.8).
+
+This is the population moment (1/N) Σ_i (x_i − x̄)^m. μ2(n) and μ2(a) of the paper are
+`central_moment(n)` and `central_moment(a)`.
+
+# Arguments
+- `x::AbstractVector{<:Real}`: the values. Throws an `ArgumentError` when empty.
+- `m::Integer = 2`: the order.
+
+# Returns
+- `AbstractFloat`: the moment, in `float(eltype(x))` (`Float64` for integer `x`,
+  `Float32` for `Float32` `x`).
+
+# Examples
+```jldoctest
+julia> using PottsModels.Analysis
+
+julia> central_moment([5, 6, 6, 7])
+0.5
+```
+
+See also [`topology_moments`](@ref).
 """
 function central_moment(x::AbstractVector{<:Real}, m::Integer = 2)
     isempty(x) && throw(ArgumentError("central_moment: no values"))
@@ -155,13 +242,39 @@ function central_moment(x::AbstractVector{<:Real}, m::Integer = 2)
 end
 
 """
-    topology_moments(σ, lattice::Lattice; neighborhood = VonNeumann(1)) -> (; mean_n, mu2_n,
-        mean_a, mu2_a)
+    topology_moments(σ, lattice::Lattice; neighborhood = VonNeumann(1))
+        -> (; mean_n, mu2_n, mean_a, mu2_a)
 
-⟨n⟩, μ2(n), ⟨a⟩ and μ2(a) (04b p.5823; spec 04 §2.8, [`central_moment`](@ref)) over the
-bubbles of `σ`: the ids in `1:maximum(σ)` that own at least one site (an id with no site is
-not a bubble). `n` is from [`side_counts`](@ref) with `neighborhood`, `a` is the bubble's
-site count (areas stay in sites; any rescaling of μ2(a) is a calibration).
+Return ⟨n⟩, μ2(n), ⟨a⟩ and μ2(a) (Jiang et al. 1999, p. 5823;
+`docs/design/research/model-specs/04_foam.md` §2.8) over the bubbles of `σ`.
+
+The bubbles are the cell numbers in `1:maximum(σ)` that own at least one site. `n` is from
+[`side_counts`](@ref) with `neighborhood`, and `a` is the bubble's site count (areas stay
+in sites; any rescaling of μ2(a) is a calibration). The moments are
+[`central_moment`](@ref)s.
+
+# Arguments
+- `σ::AbstractArray{<:Integer}`: the ownership. Throws an `ArgumentError` when it has no
+  bubble.
+- `lattice::Lattice`: a lattice of the size of `σ`.
+
+# Keywords
+- `neighborhood = VonNeumann(1)`: the contacts that make a side.
+
+# Returns
+- `NamedTuple`: `(; mean_n, mu2_n, mean_a, mu2_a)`, each a `Float64`.
+
+# Examples
+```jldoctest
+julia> using PottsModels.Analysis, Potts
+
+julia> σ = repeat([1 1 2 2], 4); lattice = Lattice((4, 4); boundary = Closed());
+
+julia> topology_moments(σ, lattice)
+(mean_n = 1.0, mu2_n = 0.0, mean_a = 8.0, mu2_a = 0.0)
+```
+
+See also [`side_counts`](@ref), [`central_moment`](@ref).
 """
 function topology_moments(
         σ::AbstractArray{<:Integer}, lat::Lattice;
@@ -189,14 +302,30 @@ end
 """
     contact_changes(prev, next) -> (; lost, gained)
 
-The contacts that changed between two neighbor lists in [`cell_graph`](@ref)'s form
-(`g[c]` the sorted neighbors of bubble `c`): `lost` holds the unordered pairs `(a, b)`,
-`a < b`, adjacent in `prev` but not in `next`, and `gained` those adjacent in `next` but not
-in `prev`, both sorted. A bubble missing from the shorter list has no neighbors there. The
-lists are assumed symmetric (`b ∈ g[a]` iff `a ∈ g[b]`), as `cell_graph`'s are.
+Return the contacts that changed between two neighbor lists in [`cell_graph`](@ref)'s form
+(`g[c]` the sorted neighbors of bubble `c`).
 
-Per-MCS T1 detection (04b p.5823; spec 04 §2.8) counts these changes: see
-[`t1_events`](@ref).
+`lost` holds the unordered pairs `(a, b)`, `a < b`, adjacent in `prev` but not in `next`,
+and `gained` those adjacent in `next` but not in `prev`, both sorted. A bubble missing from
+the shorter list has no neighbors there. Per-MCS T1 detection (Jiang et al. 1999, p. 5823)
+counts these changes: see [`t1_events`](@ref).
+
+# Arguments
+- `prev::AbstractVector`, `next::AbstractVector`: the neighbor lists. They are assumed
+  symmetric (`b ∈ g[a]` if and only if `a ∈ g[b]`), as those of `cell_graph` are.
+
+# Returns
+- `NamedTuple`: `(; lost, gained)`, each a `Vector{Tuple{Int, Int}}`.
+
+# Examples
+```jldoctest
+julia> using PottsModels.Analysis
+
+julia> contact_changes([[2], [1]], [[3], Int[], [1]])
+(lost = [(1, 2)], gained = [(1, 3)])
+```
+
+See also [`t1_events`](@ref), [`cell_graph`](@ref).
 """
 function contact_changes(prev::AbstractVector, next::AbstractVector)
     lost = Tuple{Int, Int}[]
@@ -212,10 +341,11 @@ end
 """
     t1_events(prev, next; unit = :t1) -> Float64
 
-The T1 events between two consecutive neighbor lists (04b p.5823: "A change in the neighbor
-list indicates a topological change which … has to be a T1 event"; spec 04 §2.8), in the
-counting unit `unit` (A-15). With `L` and `G` the numbers of lost and gained contacts of
-[`contact_changes`](@ref):
+Return the T1 events between two consecutive neighbor lists, in the counting unit `unit`.
+
+The paper (Jiang et al. 1999, p. 5823) reads a change in the neighbor list as a T1 event;
+see `docs/design/research/model-specs/04_foam.md` §2.8 for the units. With `L` and `G` the
+numbers of lost and gained contacts of [`contact_changes`](@ref):
 
   - `:t1`: `(L + G) / 2`. One full T1 (one pair parts, another meets) is 1; half of a T1
     seen through a transient four-fold vertex is 1/2 (the half-integers of the Fig. 5
@@ -223,9 +353,31 @@ counting unit `unit` (A-15). With `L` and `G` the numbers of lost and gained con
   - `:pairs`: `L + G`. One T1 is 2 (the even-valued bars of Figs. 4(b) and 5(b)).
   - `:bubbles`: the number of bubbles whose neighbor list changed. One T1 is 4.
 
-Any other `unit` is an `ArgumentError`. The result is a `Float64` in every unit, so a series
-of counts has one element type. Nothing is allocated: the sorted lists are merged in place,
-so a call costs one pass over both lists.
+The sorted lists are merged in place, so a call costs one pass over both lists and
+allocates nothing.
+
+# Arguments
+- `prev::AbstractVector`, `next::AbstractVector`: the neighbor lists, as from
+  [`cell_graph`](@ref).
+
+# Keywords
+- `unit::Symbol = :t1`: `:t1`, `:pairs` or `:bubbles`. Throws an `ArgumentError`
+  otherwise.
+
+# Returns
+- `Float64`: the count, in every unit, so a series of counts has one element type.
+
+# Examples
+```jldoctest
+julia> using PottsModels.Analysis
+
+julia> prev, next = [[2], [1]], [[3], Int[], [1]];
+
+julia> t1_events(prev, next), t1_events(prev, next; unit = :pairs)
+(1.0, 2.0)
+```
+
+See also [`contact_changes`](@ref), [`mean_t1`](@ref).
 """
 function t1_events(prev::AbstractVector, next::AbstractVector; unit::Symbol = :t1)
     unit in (:t1, :pairs, :bubbles) ||
@@ -294,20 +446,43 @@ end
 """
     power_spectrum(x; dt = 1) -> (; f, S)
 
-The power spectrum of Eq. (9) (04b p.5827; spec 04 §2.8),
-p_N(f) = ∫dt ∫dτ e^{−ifτ} N(t) N(t+τ), of the series `x` (one sample every `dt` MCS): by the
-Wiener–Khinchin theorem, the periodogram
+Return the power spectrum of Eq. (9) of Jiang et al. 1999 (p. 5827;
+`docs/design/research/model-specs/04_foam.md` §2.8),
+p_N(f) = ∫dt ∫dτ e^{−ifτ} N(t) N(t+τ), of the series `x`.
+
+By the Wiener–Khinchin theorem, this is the periodogram
 
     S_k = |Σ_{t=0}^{L−1} x_t e^{−2πi k t / L}|² / L,    f_k = k / (L·dt),    k = 1:L÷2,
 
 for `L = length(x)`. With `dt = 1` the frequencies are in cycles per MCS and end at the
 Nyquist frequency 0.5, as the axes of Figs. 8 and 10. The f = 0 bin is left out, so a
 constant offset does not change `S`. No window is applied (the paper's low-f ringing in
-Fig. 8 is the raw periodogram's). Fewer than two samples is an `ArgumentError`.
+Fig. 8 is the raw periodogram's).
 
 The transform is FFTW's real-to-halfcomplex FFT, O(L log L) for any length. It is not
 `rfft`: FFTA (a KernelDensity dependency) also extends `plan_rfft` for real arrays, and
 the two methods are ambiguous when both packages are loaded.
+
+# Arguments
+- `x::AbstractVector{<:Real}`: the series, at least 2 samples. Throws an `ArgumentError`
+  otherwise.
+
+# Keywords
+- `dt::Real = 1`: the sample interval, in MCS. It must be positive; throws an
+  `ArgumentError` otherwise.
+
+# Returns
+- `NamedTuple`: `(; f, S)`, each a `Vector{Float64}` of length `L ÷ 2`.
+
+# Examples
+```jldoctest
+julia> using PottsModels.Analysis
+
+julia> power_spectrum([1, -1, 1, -1])
+(f = [0.25, 0.5], S = [0.0, 4.0])
+```
+
+See also [`spectral_exponent`](@ref).
 """
 function power_spectrum(x::AbstractVector{<:Real}; dt::Real = 1)
     L = length(x)
@@ -326,10 +501,33 @@ end
 """
     spectral_exponent(f, S, range) -> Float64
 
-The exponent α of a power law S ∝ f^−α (spec 04 §2.8; the f^−α guides of Figs. 8 and 10):
-`α = −` the ordinary least-squares slope of `log10(S)` on `log10(f)` over the bins with
-`range[1] ≤ f ≤ range[2]` and `S > 0`. Fewer than two such bins, or bins that all share one
-frequency (no slope to fit), is an `ArgumentError`.
+Return the exponent α of a power law S ∝ f^−α (the f^−α guides of Figs. 8 and 10 of
+Jiang et al. 1999; `docs/design/research/model-specs/04_foam.md` §2.8).
+
+`α` is minus the ordinary least-squares slope of `log10(S)` on `log10(f)` over the bins
+with `range[1] ≤ f ≤ range[2]` and `S > 0`.
+
+# Arguments
+- `f::AbstractVector{<:Real}`: the frequencies.
+- `S::AbstractVector{<:Real}`: the spectrum, as many values as `f`. Throws a
+  `DimensionMismatch` otherwise.
+- `range`: the frequency range `(lo, hi)` of the fit.
+
+Throws an `ArgumentError` for fewer than two bins in the range, or bins that all share one
+frequency.
+
+# Returns
+- `Float64`: α.
+
+# Examples
+```jldoctest
+julia> using PottsModels.Analysis
+
+julia> spectral_exponent([1, 10, 100], [1, 0.01, 0.0001], (1, 100))
+2.0
+```
+
+See also [`power_spectrum`](@ref).
 """
 function spectral_exponent(f::AbstractVector{<:Real}, S::AbstractVector{<:Real}, range)
     length(f) == length(S) ||
@@ -369,10 +567,30 @@ end
 """
     mean_t1(N, bubbles, strain) -> Float64
 
-N̄ (04b p.5829, Fig. 9; spec 04 §2.8), "the average number of T1 events per bubble per unit
-shear": `sum(N) / (bubbles · strain)`. `N` is a T1 series in the caller's counting unit (see
-[`t1_events`](@ref), A-15) and `strain` the total strain it spans, as the caller measures it
-(A-9). `bubbles ≤ 0` or `strain ≤ 0` is an `ArgumentError`.
+Return N̄, "the average number of T1 events per bubble per unit shear" (Jiang et al. 1999,
+p. 5829 and Fig. 9): `sum(N) / (bubbles · strain)`.
+
+# Arguments
+- `N::AbstractVector{<:Real}`: a T1 series in the caller's counting unit (see
+  [`t1_events`](@ref)).
+- `bubbles::Real`: the number of bubbles. It must be positive.
+- `strain::Real`: the total strain the series spans, as the caller measures it. It must be
+  positive.
+
+Throws an `ArgumentError` when `bubbles ≤ 0` or `strain ≤ 0`.
+
+# Returns
+- `Float64`: N̄.
+
+# Examples
+```jldoctest
+julia> using PottsModels.Analysis
+
+julia> mean_t1([1.0, 2.0, 1.0], 100, 0.5)
+0.08
+```
+
+See also [`t1_events`](@ref), [`yield_strain`](@ref).
 """
 function mean_t1(N::AbstractVector{<:Real}, bubbles::Real, strain::Real)
     bubbles > 0 || throw(ArgumentError("mean_t1: bubbles must be positive, got $bubbles"))
@@ -381,14 +599,38 @@ function mean_t1(N::AbstractVector{<:Real}, bubbles::Real, strain::Real)
 end
 
 """
-    yield_strain(strain, N; threshold = 1, window = 1) -> Real or nothing
+    yield_strain(strain, N; threshold = 1, window = 1) -> Union{Real, Nothing}
 
-The yield strain (04b p.5830; spec 04 §2.8), the strain "at which the first T1 avalanches
-occur": `strain[i]` for the first sample `i` with `N[i] > 0` and
-`sum(N[i:min(i + window − 1, end)]) ≥ threshold`, or `nothing` if no sample qualifies. `N`
-is the T1 series sampled at `strain`; converting the boundary displacement to strain (A-9;
-spec §3.2's calibration ε ≈ c·β·t) is the caller's. Different lengths are a
-`DimensionMismatch`; `threshold ≤ 0` or `window < 1` is an `ArgumentError`.
+Return the yield strain, the strain "at which the first T1 avalanches occur" (Jiang et al.
+1999, p. 5830; `docs/design/research/model-specs/04_foam.md` §2.8).
+
+The result is `strain[i]` for the first sample `i` with `N[i] > 0` and
+`sum(N[i:min(i + window − 1, end)]) ≥ threshold`, or `nothing` if no sample qualifies.
+Converting the boundary displacement to strain is the caller's task.
+
+# Arguments
+- `strain::AbstractVector{<:Real}`: the strain of each sample.
+- `N::AbstractVector{<:Real}`: the T1 series sampled at `strain`, as many values. Throws a
+  `DimensionMismatch` otherwise.
+
+# Keywords
+- `threshold::Real = 1`: the T1 count of an avalanche. It must be positive.
+- `window::Integer = 1`: the samples summed, at least 1.
+
+Throws an `ArgumentError` when `threshold ≤ 0` or `window < 1`.
+
+# Returns
+- The element of `strain`, or `nothing`.
+
+# Examples
+```jldoctest
+julia> using PottsModels.Analysis
+
+julia> yield_strain([0.1, 0.2, 0.3], [0, 1, 3]; threshold = 2)
+0.3
+```
+
+See also [`mean_t1`](@ref).
 """
 function yield_strain(
         strain::AbstractVector{<:Real}, N::AbstractVector{<:Real}; threshold::Real = 1,
