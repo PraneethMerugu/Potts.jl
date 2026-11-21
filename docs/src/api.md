@@ -122,14 +122,10 @@ Modules = [PottsModels.Analysis]
 Private = false
 ```
 
-## LatticePDE
+## LatticePDE and LatticeFields
 
-Lattice PDE grid, problem, operator, and stability analysis types.
-
-```@autodocs
-Modules = [Potts.LatticePDE]
-Private = false
-```
+The field library has its own API page in the fields section:
+[Fields API](@ref fields-api).
 
 ## MakiePotts
 

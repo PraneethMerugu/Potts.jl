@@ -27,7 +27,7 @@ the algorithm's (history, `c__prev`); the steps use the first two.
 
 State fields with different storage (a declared `lattice_storage` beside the problem's type)
 are not packed: each has its own arrays, as in a coupled `PottsProblem`; `st.flat` is
-empty and `st.slots` still places each in the flat state vector ([`mixed_state`](@ref)).
+empty and `st.slots` still places each in the flat state vector (`mixed_state`).
 """
 struct FieldStore{B}
     backend::B
@@ -145,7 +145,7 @@ end
 """
     MixedState(st, E)
 
-The current state of a mixed store ([`mixed_state`](@ref)) as one flat vector of element
+The current state of a mixed store (`mixed_state`) as one flat vector of element
 type `E` (SciML's `state_values`): a read gathers from each field's current array, a write
 scatters into it (each field in its own storage type). A host copy per access: a write path,
 not a step path.
