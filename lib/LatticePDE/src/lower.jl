@@ -690,8 +690,20 @@ const _OPS = (+, -, *, /, ^, min, max, clamp, ifelse, !=, !, &, |)
 # 1:n2]`); a table is stored flat, in column-major order (`vec(J)`)
 _table_dims(T) = Tuple(length.(SymbolicUtils.shape(unwrap(T))))
 
-# the place of the literal entry `ix` of table `T` in its flat, column-major storage
-_entry(T, ix) = LinearIndices(_table_dims(T))[Int.(ix)...]
+# the place of the literal entry `ix` of table `T` (read as `u`) in its flat, column-major
+# storage: one integer literal per axis, each inside its axis
+function _entry(u, T, ix)
+    dims = _table_dims(T)
+    length(ix) == length(dims) && all(i -> i isa Real && isinteger(i), ix) ||
+        _lerr(
+        u, "an entry of a table takes one integer literal per axis ($(length(dims))); " *
+            "read a computed index with `value_at`"
+    )
+    n = Int.(ix)
+    all(d -> 1 <= n[d] <= dims[d], eachindex(n)) ||
+        _lerr(u, "the entry is outside the table's size $(join(dims, "×"))")
+    return LinearIndices(dims)[n...]
+end
 
 # `value_at(J, a, b)`: one read of the flat table at `(clamp(b) − 1) n1 + clamp(a)`, each
 # index clamped into its axis; index 0 in either argument gives index 0, which reads 0
@@ -781,7 +793,7 @@ function lower(x, e::Env{N}) where {N}
         haskey(e.tables, b) &&
             return table!(
             e.kb, e.tables[b]...,
-            constant!(e.kb, _entry(b, map(y -> unwrap_const(unwrap(y)), a[2:end])), I32)
+            constant!(e.kb, _entry(u, b, map(y -> unwrap_const(unwrap(y)), a[2:end])), I32)
         )
         _lerr(u, "indexing is defined for array fields and array parameters only")
     end

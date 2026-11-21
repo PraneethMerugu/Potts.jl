@@ -368,18 +368,29 @@ function _interval(x, params::Dict{Any, Int}, tabs, box)
         return pp -> (qs = map(b -> b(pp), bs); (maximum(first, qs), maximum(last, qs)))
     (f === sin || f === cos) && return _ -> (-1.0, 1.0)
     f === sign && return pp -> (q = bs[1](pp); (sign(q[1]), sign(q[2])))
-    # `mod(x, y)` has the sign of `y`, `rem(x, y)` the sign of `x`; each is below `|y|`
-    f === mod && return pp -> (q = bs[2](pp); (min(q[1], 0.0), max(q[2], 0.0)))
+    # `mod(x, y)` has the sign of `y`, `rem(x, y)` the sign of `x`; each is below `|y|`. A
+    # divisor interval that holds 0 (NaN) or an infinite value bounds nothing
+    divisor_ok(w) = isfinite(w[1]) && isfinite(w[2]) && (w[1] > 0 || w[2] < 0)
+    if f === mod
+        return pp -> begin
+            w = bs[2](pp)
+            divisor_ok(w) ? (min(w[1], 0.0), max(w[2], 0.0)) : (-Inf, Inf)
+        end
+    end
     if f === rem
         return pp -> begin
             q, w = bs[1](pp), bs[2](pp)
             m = max(abs(w[1]), abs(w[2]))
-            (max(min(q[1], 0.0), -m), min(max(q[2], 0.0), m))
+            divisor_ok(w) ? (max(min(q[1], 0.0), -m), min(max(q[2], 0.0), m)) : (-Inf, Inf)
         end
     end
+    # the kernel's `ifelse(x > hi, hi, ifelse(x < lo, lo, x))` is `min(max(x, lo), hi)` when
+    # `lo <= hi` and takes `lo` or `hi` when the bounds cross: the hull of both orders
     f === clamp && return pp -> begin
         q, lo, hi = bs[1](pp), bs[2](pp), bs[3](pp)
-        (min(max(q[1], lo[1]), hi[1]), min(max(q[2], lo[2]), hi[2]))
+        a = (min(max(q[1], lo[1]), hi[1]), min(max(q[2], lo[2]), hi[2]))
+        b = (max(min(q[1], hi[1]), lo[1]), max(min(q[2], hi[2]), lo[2]))
+        (min(a[1], b[1]), max(a[2], b[2]))
     end
     return nothing
 end

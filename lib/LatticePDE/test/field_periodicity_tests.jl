@@ -60,6 +60,9 @@ end
     LP_field_periodicity,
 ] tags = [:latticepde, :field_periodicity] begin
     alg = ExplicitEuler(; substeps = 16)
+    # each system takes the 16 substeps (a stability count above 16 would break the bitwise
+    # comparison; this names the cause)
+    @test all(p -> init(p(), alg; dt = 0.05).substeps == 16, (both, onlyc, onlyd))
     sb = solve(both(), alg; dt = 0.05)
     sc, sd = solve(onlyc(), alg; dt = 0.05), solve(onlyd(), alg; dt = 0.05)
     @test sb[ce, length(sb.t)] == sc[ce, length(sc.t)]
@@ -100,7 +103,36 @@ end
         @test isapprox(sb[ce, length(sb.t)], sc[ce, length(sc.t)]; rtol = 1.0e-10)
         @test isapprox(sb[de, length(sb.t)], sd[de, length(sd.t)]; rtol = 1.0e-10)
         @test sum(sb[ce, length(sb.t)]) ≈ sum(sb[ce, 1]) rtol = 1.0e-9
+        # `d` with a Dirichlet face: `c`'s row deflates its constant mode and `d`'s does
+        # not (a rule shared by the group would deflate both or neither)
+        fd = [d(t, 0, y) ~ 0.0; PD]
+        pf = prob([D(ce) ~ RC, D(de) ~ RD], [PC; fd], [ce, de], [Dc, Dd, kd])
+        sf = solve(pf, alg; dt = 0.05)
+        sg = solve(prob([D(de) ~ RD], fd, [de], [Dd, kd]), alg; dt = 0.05)
+        @test isapprox(sf[ce, length(sf.t)], sc[ce, length(sc.t)]; rtol = 1.0e-10)
+        @test isapprox(sf[de, length(sf.t)], sg[de, length(sg.t)]; rtol = 1.0e-10)
     end
+    # the steady state, where the constant mode matters: `c` periodic with a weak decay
+    # (its operator nearly singular), `d` fixed by its Dirichlet face
+    src = bump(0.3, 0.6)
+    rq = Dc * laplacian(ce) - 1.0e-3 * ce + src
+    fd = [d(t, 0, y) ~ 0.0; PD]
+    qs = QuasiSteady(; linsolve = LatticePCG(; reltol = 1.0e-12, maxiters = 400))
+    sq = solve(
+        prob([D(ce) ~ rq, D(de) ~ RD + src], [PC; fd], [ce, de], [Dc, Dd, kd]), qs;
+        dt = 0.05
+    )
+    sqc = solve(prob([D(ce) ~ rq], PC, [ce], [Dc]), qs; dt = 0.05)
+    sqd = solve(prob([D(de) ~ RD + src], fd, [de], [Dd, kd]), qs; dt = 0.05)
+    @test isapprox(sq[ce, length(sq.t)], sqc[ce, length(sqc.t)]; rtol = 1.0e-8)
+    @test isapprox(sq[de, length(sq.t)], sqd[de, length(sqd.t)]; rtol = 1.0e-8)
+    # the steady `c` balances its source (the wrapped Laplacian sums to 0): the decay of
+    # its sum equals the source's sum over the cell centers
+    S = [
+        exp(-(((i - 0.5) / NX - 0.3)^2 + ((j - 0.5) / NY - 0.6)^2) / 0.02)
+            for i in 1:NX, j in 1:NY
+    ]
+    @test 1.0e-3 * sum(sq[ce, length(sq.t)]) ≈ sum(S) rtol = 1.0e-6
 end
 
 @testitem "per-field periodicity in Float32 and with a Dual parameter" setup = [
