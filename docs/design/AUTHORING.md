@@ -547,7 +547,7 @@ The variable's scope decides what the equation is: a cell variable becomes a bat
 per-cell ODE, a model variable a scalar ODE. `D = Differential(t)` and `t` are MTK's. A
 field is not written here: its PDE is a PDESystem (`using Potts.Fields`), coupled into the
 model with `@fields` (§12.5). A field line in `@equations` is refused with that route
-(D-F4-B6). `MethodOfLines` remains available for PDEs that should not use the built-in
+(D-320). `MethodOfLines` remains available for PDEs that should not use the built-in
 stencils.
 
 ---
@@ -1018,7 +1018,7 @@ with the target site added or removed. The length constraint is
 
 A model's fields are a plain MTK `PDESystem`, written with `using Potts.Fields` and coupled
 into the model with `@fields` (or `Potts.couple(model, pdesys; inputs)`); front end A's field
-lines in `@equations`, `@boundary` and `@bcs` were removed in F4-B6 (D-F4-B6). The CPM enters
+lines in `@equations`, `@boundary` and `@bcs` were removed in F4-B6 (D-320). The CPM enters
 through inputs (`[input = true]`) that the `@fields` line binds to model expressions; a kind
 table is the model's (`dk => δ[kind]`).
 
