@@ -258,6 +258,7 @@ fields = [
     "Maps" => "fields/maps.md",
     "SciML interop" => "fields/sciml.md",
     "Coupling to a Potts model" => "fields/coupling.md",
+    "How it works" => "fields/how_it_works.md",
     "API" => "fields/api.md",
 ]
 
