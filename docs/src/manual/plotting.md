@@ -12,6 +12,9 @@ backend: CairoMakie for files and notebooks, GLMakie for interactive windows.
 | `record_potts(file, sol)` | a video of every saved state of a solution (or of a vector of frames) |
 | `potts_legend(position, plot)` | a legend of the kinds |
 
+The fields of a LatticePDE solution have their own recipe, `fieldplot`, and video,
+`record_field`; [Getting started](@ref fields-getting-started) shows both.
+
 `pottsplot` attributes: `encoding` (`CellTypeEncoding()`, the default, colors by kind;
 `CellIdentityEncoding()` by cell; `ChannelEncoding(key)` by a channel), `boundaries`
 (cell outlines; off by default, and never used in these docs), `medium_color`,

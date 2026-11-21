@@ -21,6 +21,7 @@ sol = solve(prob, ExplicitEuler(); dt = 1.0, saveat = 1.0)
 sum(sol[c][end])   # 8.3327...
 ```
 
-Documentation: the "Fields (LatticePDE)" section of the Potts.jl docs, starting at
-[Getting started](../../docs/src/fields/getting_started.md). Build the docs as the
-[root README](../../README.md) shows.
+Documentation: the "Fields (LatticePDE)" section of the Potts.jl docs, starting at its
+"Getting started" page. The docs are not hosted yet: build them with
+`julia --project=docs docs/make.jl` from the repository root, then open
+`docs/build/index.html`.

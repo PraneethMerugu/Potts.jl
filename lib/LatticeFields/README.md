@@ -21,6 +21,7 @@ prob = discretize(stiff, LatticeDiscretization(Grid((64, 64))))
 sol = solve(prob, BackwardEuler(; linsolve = LatticePCG()); dt = 0.5)
 ```
 
-Documentation: the LatticeFields part of the
-[Fields API page](../../docs/src/fields/api.md), and
-[How it works](../../docs/src/fields/how_it_works.md) for the pipeline.
+Documentation: the "Developer reference" page of the "Fields (LatticePDE)" section of
+the Potts.jl docs, and its "How it works" page for the pipeline.
+The docs are not hosted yet: build them with `julia --project=docs docs/make.jl` from
+the repository root, then open `docs/build/index.html`.

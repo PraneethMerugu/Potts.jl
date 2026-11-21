@@ -130,8 +130,8 @@ An input that changes in time takes a function of the time, `inputs = [q => t ->
 - A field algorithm writes the input at the start and at the end of each window.
 - An OrdinaryDiffEq solver evaluates it at every call of the right side, at each stage time.
 
-The masks that read the input follow it. This system has a source that a moving front
-switches on:
+A mask that reads such an input follows it too. This system has no mask: its source is an
+input that a moving front switches on, one row of `x` sites at a time:
 
 ```@example fsciml
 @parameters Dw = 0.5 kw = 0.1
@@ -140,7 +140,8 @@ W, F = w(t, x, y), front(t, x, y)
 wdom = lattice_domain(t, (x, y), (20, 10); spacing = 0.5, tspan = (0.0, 2.0))
 @named pulse = PDESystem([D(W) ~ Dw * laplacian(W) - kw * W + F], [w(0, x, y) ~ 0.0],
     wdom, [t, x, y], [W, F], [Dw, kw])
-lit(t) = [i <= 10t ? 1.0 : 0.0 for i in 1:20, j in 1:10]   # columns 1 to 10t are on
+# rows 1 to 10t (the x index) are on
+lit(t) = [i <= 10t ? 1.0 : 0.0 for i in 1:20, j in 1:10]
 pprob = discretize(pulse, LatticeDiscretization(Grid((20, 10))); inputs = [F => lit])
 psol = solve(pprob, ExplicitEuler(); dt = 0.1, save_everystep = false)
 round.(psol[W][end][:, 5]; digits = 2)

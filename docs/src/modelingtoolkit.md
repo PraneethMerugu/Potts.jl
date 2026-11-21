@@ -201,6 +201,19 @@ them. Each window starts from the fields' current values and the CPM inputs at t
 `remake(prob; discretization = …)` switches it, and a checkpoint loads only into a problem
 with an equal discretization.
 
+A discretization of the second kind is refused, with an `ArgumentError`, in these cases:
+
+- a model with aux fields or map fields;
+- a `repeat` of the fields within one MCS;
+- field entries in `solvers`, or `FieldGroups` as `field_solver`;
+- a `field_solver` that is a lattice field solver, not a SciML algorithm, or no
+  `field_solver`;
+- a device backend, given to `PottsProblem` or `solve`.
+
+A `LatticeDiscretization` of the first kind is checked too: its grid must be the lattice's,
+its methods `FiniteVolume`, and `T`, `backend`, `domain` and `clock` left out or equal to
+what the problem sets. The keywords of the window's solve (`reltol`, …) are not exposed yet.
+
 ## The Hamiltonian as Symbolics expressions [C3]
 
 `Potts.hamiltonian(sys)` gives the `@energy` terms as `domain => expr` pairs of Symbolics
@@ -277,7 +290,8 @@ cells start with different values:
 
 ```@example mtk
 isys = Potts.initialization_system(csys, :cell)
-(MTK.initialization_equations(isys), prob.u0.cell.rt)
+integ = init(prob, SequentialCPM(); save_everystep = false)
+(MTK.initialization_equations(isys), integ[:rt])
 ```
 
 Cross-entity and lattice initialization stay in Potts' own initialization phase (see

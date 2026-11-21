@@ -13,6 +13,7 @@ ownership(u)   # the cell number of each site; 0 is the medium
 volumes(u)     # [2, 1]
 ```
 
-Documentation: the [Potts.jl docs](../../docs/src/index.md), in particular
-[Problems, solvers and solutions](../../docs/src/manual/problems.md). Build them as the
-[root README](../../README.md) shows.
+Documentation: the Potts.jl docs, in particular the page "Problems, solvers and solutions"
+of the Manual. The docs are not hosted yet: build them with
+`julia --project=docs docs/make.jl` from the repository root, then open
+`docs/build/index.html`.

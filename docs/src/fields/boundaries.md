@@ -149,5 +149,7 @@ default, and [Equations and solvers](@ref manual-equations) gives the rules for 
 whose conditions differ from the lattice's. A coupled system may leave its domain out:
 each axis then spans the lattice. Write the high face from the lattice size and spacing
 that the model uses, for example `dims = (200, 100)` with
-`lattice_domain(t, (x, y), dims)`, and `c(t, maximum(dom[2].domain), y)`. A resize then
-moves the face with the lattice.
+`lattice_domain(t, (x, y), dims)`, and `c(t, maximum(dom[2].domain), y)`. The face is a
+number fixed when the system is built: a lattice of another size needs the conditions
+written again. Writing the face from the domain keeps `dims` in one place, so that rewrite
+is one change.

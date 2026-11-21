@@ -13,6 +13,6 @@ prob = PottsProblem(gg, [ownership => σ0, kind => k0], (0, 200); seed = 1)
 sol = solve(prob, SequentialCPM(); saveat = 2)
 ```
 
-Documentation: the "Paper models" section of the Potts.jl docs, with one page per model
-under [docs/models](../../docs/models). Build the docs as the [root README](../../README.md)
-shows.
+Documentation: the "Paper models" section of the Potts.jl docs, one page per model.
+The docs are not hosted yet: build them with `julia --project=docs docs/make.jl` from
+the repository root, then open `docs/build/index.html`.

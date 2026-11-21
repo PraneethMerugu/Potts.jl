@@ -33,7 +33,8 @@ nothing # hide
 
 - `laplacian(c)` is the lattice Laplacian. `Δ` is the same function.
 - `lattice_domain` gives `x ∈ [0, 64]` and `y ∈ [0, 64]`: one length unit per site.
-- The condition at `t = 0` is the initial value. The spot is centered at the middle site.
+- The condition at `t = 0` is the initial value. The spot is centered at the middle of the
+  lattice.
 - The system has no face conditions, so each face has zero flux.
 
 ## Step 2: Discretize
