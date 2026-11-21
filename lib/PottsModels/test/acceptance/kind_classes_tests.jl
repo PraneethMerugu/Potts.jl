@@ -985,7 +985,7 @@ end
     fingerprint)" setup = [KindClassesSetup] tags = [
     :pottsmodels, :acceptance,
 ] begin
-    # pin removed at integration (D-INT-1); replaced by a correctness test in the TS series
+    # pin removed at integration (D-322); replaced by a correctness test in the TS series
     @testset "kind classes: classes lower to the explicit gates (same code, same \
         fingerprint)" begin
         pairs = (
@@ -1025,7 +1025,7 @@ end
         end
         # a class no statement reads changes nothing
         @test problem(class_model(:XSpare)).f.fingerprint == problem(ClassX).f.fingerprint
-        # pin removed at integration (D-INT-1); replaced by a correctness test in the TS
+        # pin removed at integration (D-322); replaced by a correctness test in the TS
         # series
     end
 end
