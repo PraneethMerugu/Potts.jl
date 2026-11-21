@@ -2,7 +2,37 @@
 # graph. Site predicates are device functions; `CellReduce` and `ContactPhase` are phases;
 # the host `contact_graph` (CSR) is built at a synchronization point.
 
-"""`true` if some in-domain `relation` neighbor of site `i` has a different owner."""
+"""
+    is_boundary_site(σ, ctx, i; relation = ctx.contact) -> Bool
+
+Return `true` if some in-domain `relation` neighbor of site `i` has another owner.
+
+# Arguments
+- `σ`: the `ownership` array.
+- `ctx`: the kernel context; the function reads `ctx.lattice` and, by default,
+  `ctx.contact`.
+- `i`: the linear site index.
+
+# Keywords
+- `relation = ctx.contact`: the resolved relation of the neighbors.
+
+# Returns
+- `Bool`.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> l = Lattice((3, 1); boundary = Closed()); σ = Int32[1, 1, 2];
+
+julia> ctx = (; lattice = l, contact = relation(VonNeumann(), l));
+
+julia> is_boundary_site(σ, ctx, 1), is_boundary_site(σ, ctx, 2)
+(false, true)
+```
+
+See also [`count_neighbors`](@ref).
+"""
 @inline function is_boundary_site(σ, ctx, i; relation = ctx.contact)
     lat = ctx.lattice
     x = coordinates(lat, i)
@@ -15,7 +45,39 @@
     return false
 end
 
-"""Weighted count of in-domain `relation` neighbors `j` of site `i` with `pred(σ[j])`."""
+"""
+    count_neighbors(pred, σ, ctx, i; relation = ctx.contact)
+
+Return the weighted count of the in-domain `relation` neighbors `j` of site `i` with
+`pred(σ[j])`.
+
+# Arguments
+- `pred`: a predicate on owners.
+- `σ`: the `ownership` array.
+- `ctx`: the kernel context; the function reads `ctx.lattice` and, by default,
+  `ctx.contact`.
+- `i`: the linear site index.
+
+# Keywords
+- `relation = ctx.contact`: the resolved relation of the neighbors.
+
+# Returns
+- The sum of the weights of the matching neighbors, of the relation's weight type.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> l = Lattice((3, 1); boundary = Closed()); σ = Int32[1, 1, 2];
+
+julia> ctx = (; lattice = l, contact = relation(VonNeumann(), l));
+
+julia> count_neighbors(==(1), σ, ctx, 2)
+1
+```
+
+See also [`is_boundary_site`](@ref).
+"""
 @inline function count_neighbors(pred::F, σ, ctx, i; relation = ctx.contact) where {F}
     lat = ctx.lattice
     x = coordinates(lat, i)
@@ -31,32 +93,47 @@ end
 """
     CellReduce((:cell, :name), f; op = +)
 
-Phase: `st.cell.name[c] = op_{i ∈ c} f(st, p, ctx, key, mcs, i)` over every cell's sites
-(`op ∈ (+, max, min)`). Covers owner sums, means (divide by volume), counts of sites
-satisfying a predicate (return a `Bool`/`Int32`), and structured owner sums.
+Construct a phase that reduces a site function over every cell's sites:
+`st.cell.name[c] = op_{i ∈ c} f(st, p, ctx, key, mcs, i)`.
 
-The result is the same for every order of the sites, so for every thread count and backend:
+It covers owner sums, means (divide by the volume), counts of the sites that satisfy a
+predicate (return a `Bool` or `Int32`), and structured owner sums.
 
-  - an integer column, and `max`/`min`, use atomics, which are exact;
-  - a float sum (Float16, Float32, Float64) is an exact Int64 fixed-point sum with a
-    power-of-two scale per cell, chosen from the largest value `m` in the cell (two passes
-    over the sites). Each term is rounded to a unit of about `m * N * 2^-62` (`N` the number
-    of lattice sites; 1.5e-11 m at 300³), so the cell average is within about
-    `m * N * 2^-62` of the exact average. For a cell whose sum sits in values far below `m`,
-    the relative error of the sum can reach `n_c * N * 2^-62` (`n_c` the cell's sites):
-    3.7e-6 for one cell of 2048² with one site at `m`, coarser than a Float64 sum and no
-    finer than a sequential Float32 sum. `f` may not read `dst` (the column keeps its old
-    values until the sum is written). The integer sum cannot overflow. A NaN in a cell gives
-    NaN; ±Inf give ±Inf (NaN if both). A sum beyond its column's number type is stored as
-    ±Inf and the integrator warns at its next read point. On a device without 64-bit atomics
-    (Metal) the sum is held in a pair of 32-bit words, with the same result;
-  - any other number type (a `BigFloat`, a `Dual`) is summed in site order on the host, and
-    is refused on a device.
+The result is the same for every order of the sites, so for every thread count and
+backend:
 
-A float sum needs the reduction scratch in the state:
-`sc = CorePotts.reduce_scratch(ncell)`, merged into the cell and model state
-(`initial_state(σ, kinds; cell = (; …, sc.cell...), model =
-sc.model)`). Potts adds it to every model with an `integral`.
+- An integer column, and `max` or `min`, use atomics, which are exact.
+- A float sum (Float16, Float32, Float64) is an exact Int64 fixed-point sum with a
+  power-of-two scale per cell, chosen from the largest value `m` in the cell (two passes
+  over the sites). Each term is rounded to a unit of about `m * N * 2^-62`, with `N` the
+  number of lattice sites (at most about 1.5e-11 m at 300³ sites). So the cell average is
+  within about `m * N * 2^-62` of the exact average. For a cell whose values are mostly
+  far below `m`, the relative error of the sum can reach `n_c * N * 2^-62`, with `n_c`
+  the cell's sites. That is about 3.7e-6 for one cell of 2048² sites with one site at
+  `m`: coarser than a Float64 sum and no finer than a sequential Float32 sum. The integer
+  sum cannot overflow. A NaN in a cell gives NaN; ±Inf give ±Inf (NaN if both). A sum
+  beyond its column's number type is stored as ±Inf, and the integrator warns at its next
+  read point. On a device without 64-bit atomics (Metal), the sum is held in a pair of
+  32-bit words, with the same result.
+- Any other number type (a `BigFloat`, a `Dual`) is summed in site order on the host, and
+  is refused on a device.
+
+`f` must not read the destination column: it keeps its old values until the sum is
+written.
+
+A float sum needs the reduction scratch in the state. Merge
+`sc = CorePotts.reduce_scratch(ncell)` into the cell and model state, as in
+`initial_state(σ, kinds; cell = (; …, sc.cell...), model = sc.model)`. Potts adds it to
+every model with an `integral`.
+
+# Arguments
+- `(:cell, :name)`: the destination cell column.
+- `f`: the site function, `f(st, p, ctx, key, mcs, i)`.
+
+# Keywords
+- `op = +`: the reduction, `+`, `max` or `min`.
+
+See also [`reduce_scratch`](@ref), [`REDUCE_STATUS`](@ref).
 """
 struct CellReduce{D <: Part, F, O}
     dst::D
@@ -140,23 +217,51 @@ const _CR_HI = Symbol("#cr_hi")
 const _CR_EXP = Symbol("#cr_exp")
 const _CR_FLAG = Symbol("#cr_flag")
 """
-`st.model` key of the cell-sum status word (`UInt32[1]`, `reduce_scratch`): bit
-`STATUS_SUM_RANGE` is set when a cell sum exceeded the range of its column's number type
-(stored as ±Inf), and bits 9–32 hold the position of that column in the cell state (the
-largest one, if several). The integrator warns at its next host read point, naming the
-column, and clears the word; the run continues.
+    REDUCE_STATUS
+
+The `st.model` key of the cell-sum status word of [`CellReduce`](@ref), a `UInt32[1]`.
+
+Bit [`STATUS_SUM_RANGE`](@ref) is set when a cell sum exceeded the range of its column's
+number type (and was stored as ±Inf). Bits 9 to 32 hold the position of that column in
+the cell state (the largest one, if several). The integrator warns at its next host read
+point, names the column, and clears the word; the run continues.
+
+See also [`reduce_scratch`](@ref).
 """
 const REDUCE_STATUS = Symbol("#cr_status")
-"""Status bit of `REDUCE_STATUS`: a cell sum exceeded its column's number type."""
+"""
+    STATUS_SUM_RANGE
+
+The status bit of [`REDUCE_STATUS`](@ref) that is set when a cell sum exceeded its
+column's number type (`0x00000001`).
+"""
 const STATUS_SUM_RANGE = UInt32(1)
 
 """
     reduce_scratch(ncell) -> (; cell, model)
 
-The state a float-sum `CellReduce` needs, as two `NamedTuple`s to merge into the cell state
-(columns for `ncell` slots, grown with the state by `with_capacity`) and the model state.
-Names start with `#cr_`; a division daughter never copies them. The scratch is zero between
-reductions.
+Return the state that a float-sum [`CellReduce`](@ref) needs.
+
+The `cell` part holds columns for `ncell` slots, which grow with the state. The `model`
+part holds the status word [`REDUCE_STATUS`](@ref). Every name starts with `#cr_`, and a
+division daughter never copies them. The scratch is zero between reductions.
+
+# Arguments
+- `ncell::Integer`: the number of cell slots.
+
+# Returns
+- `(; cell, model)`: two `NamedTuple`s of arrays, to merge into the cell and the model
+  state.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> sc = CorePotts.reduce_scratch(3);
+
+julia> length(sc.cell), sc.model
+(5, (var"#cr_status" = UInt32[0x00000000],))
+```
 """
 function reduce_scratch(ncell::Integer)
     return (;
@@ -525,9 +630,18 @@ end
 """
     ContactGraph
 
-Cells that touch over a relation and their shared interface measure (weighted bond count),
-in CSR form: the neighbors of `c` are `col[row_ptr[c]:row_ptr[c+1]-1]` with `measure`
-alongside; `medium[c]` is `c`'s interface with the medium.
+The cells that touch over a relation and their shared interface measure (weighted bond
+count), in compressed sparse row form.
+
+Build one with [`contact_graph`](@ref) and query it with [`contact_neighbors`](@ref) and
+[`contact_measure`](@ref).
+
+# Fields
+- `row_ptr::Vector{Int32}`: the neighbors of cell `c` are
+  `col[row_ptr[c]:row_ptr[c+1]-1]`.
+- `col::Vector{Int32}`: the neighbor cells, sorted within each row.
+- `measure::Vector{T}`: the interface measure of each neighbor, alongside `col`.
+- `medium::Vector{T}`: the interface of each cell with the medium.
 """
 struct ContactGraph{T}
     row_ptr::Vector{Int32}
@@ -539,8 +653,33 @@ end
 """
     contact_graph(σ, lattice, relation, ncell) -> ContactGraph
 
-Build the graph from scratch (face-sharing neighbors with `VonNeumann(1)`, as CompuCell3D's
-NeighborTracker; any relation, weighted or not, works).
+Build the contact graph of cells `1:ncell` from scratch, on the host.
+
+Any resolved relation works, weighted or not. A face-sharing graph uses the relation of
+`VonNeumann()`.
+
+# Arguments
+- `σ`: the `ownership` array, on the host.
+- `lattice::Lattice`: the lattice of `σ`.
+- `relation`: a resolved relation (see [`relation`](@ref)).
+- `ncell::Integer`: the number of cell slots.
+
+# Returns
+- `ContactGraph`: with measures of the relation's weight type.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> l = Lattice((2, 2); boundary = Closed()); σ = Int32[1 2; 0 2];
+
+julia> g = contact_graph(σ, l, relation(VonNeumann(), l), 2);
+
+julia> collect(contact_neighbors(g, 2)), contact_measure(g, 1, 2), contact_measure(g, 2, 0)
+(Int32[1], 1, 1)
+```
+
+See also [`ContactGraph`](@ref), [`empty_contacts`](@ref).
 """
 function contact_graph(σ, lat::Lattice, r::Relation, ncell::Integer)
     T = typeof(weight(r, 1))
@@ -578,9 +717,39 @@ function contact_graph(σ, lat::Lattice, r::Relation, ncell::Integer)
     return ContactGraph(row_ptr, col, measure, medium)
 end
 
-"""Neighboring cells of `c` (sorted ids)."""
+"""
+    contact_neighbors(g::ContactGraph, c)
+
+Return the neighboring cells of cell `c`, sorted by number.
+
+# Arguments
+- `g::ContactGraph`: the contact graph.
+- `c`: the cell number.
+
+# Returns
+- A view of `g.col`.
+
+See also [`contact_measure`](@ref), [`contact_graph`](@ref).
+"""
 contact_neighbors(g::ContactGraph, c) = view(g.col, g.row_ptr[c]:(g.row_ptr[c + 1] - 1))
-"""Shared interface measure of cells `c` and `n` (zero if they do not touch)."""
+"""
+    contact_measure(g::ContactGraph, c, n)
+
+Return the shared interface measure of cells `c` and `n` in the contact graph.
+
+The result is zero if they do not touch. With `n = 0` it is `c`'s interface with the
+medium.
+
+# Arguments
+- `g::ContactGraph`: the contact graph.
+- `c`: the cell number.
+- `n`: the other cell number, or `0` for the medium.
+
+# Returns
+- The measure, of the graph's measure type.
+
+See also [`contact_neighbors`](@ref), [`contact_graph`](@ref).
+"""
 function contact_measure(g::ContactGraph{T}, c, n) where {T}
     n == 0 && return g.medium[c]
     r = g.row_ptr[c]:(g.row_ptr[c + 1] - 1)
@@ -594,12 +763,31 @@ end
 """
     empty_contacts(maxdeg, ncell; T = Float32) -> NamedTuple
 
-Device-resident contact table to merge into the cell state, filled by `ContactPhase`:
-`contact_nbr[k, c]` (0 = empty slot, rows in no particular order), `contact_measure[k, c]`
-(shared weighted bond count), `contact_medium[c]` and `contact_overflow[c]` (bonds dropped
-because `c`'s row was full; nonzero means `maxdeg` is too small, and which bonds were
-dropped then depends on the order). The `#ct_` columns are the scratch of a weighted
-relation's exact sums (integer weight units).
+Return an empty contact table to merge into the cell state, filled by
+[`ContactPhase`](@ref).
+
+The columns are:
+
+- `contact_nbr[k, c]`: the neighbor in slot `k` of cell `c` (`0` for an empty slot); the
+  rows are in no fixed order.
+- `contact_measure[k, c]`: the shared weighted bond count.
+- `contact_medium[c]`: the interface with the medium.
+- `contact_overflow[c]`: the bonds dropped because `c`'s row was full. A nonzero value
+  means `maxdeg` is too small; which bonds were dropped then depends on the order.
+- The `#ct_` columns: the scratch of a weighted relation's exact sums, in integer weight
+  units.
+
+# Arguments
+- `maxdeg::Integer`: the number of neighbor slots per cell.
+- `ncell::Integer`: the number of cell slots.
+
+# Keywords
+- `T::Type = Float32`: the element type of the measures.
+
+# Returns
+- `NamedTuple`: the columns above.
+
+See also [`ContactPhase`](@ref), [`contact_slot`](@ref).
 """
 function empty_contacts(maxdeg::Integer, ncell::Integer; T::Type = Float32)
     return (;
@@ -618,11 +806,19 @@ const _CT_HI = Symbol("#ct_hi")
 """
     ContactPhase(relation = :contact)
 
-Phase that rebuilds the contact table (`empty_contacts`) from `σ` over the named `ctx`
-relation, on the device. Rows are built with atomic insertion, so their order varies;
-query with `contact_slot`/`contact_measure`. The measures do not depend on the order: a
-weighted relation in a float table is summed in integer weight units (`_units_for`), and
-unit weights are integer counts.
+Construct a phase that rebuilds the contact table of [`empty_contacts`](@ref) from `σ` on
+the device.
+
+Rows are built with atomic insertion, so the order of the slots varies; query the table
+with [`contact_slot`](@ref) and `contact_measure(cell, a, b)`. The measures do not depend
+on the order: a weighted relation in a float table is summed in integer weight units, and
+unit weights are integer counts. A weighted relation needs the `#ct_` columns of
+`empty_contacts`; without them the phase throws an `ArgumentError`.
+
+# Arguments
+- `relation::Symbol = :contact`: the name of the relation in the run context.
+
+See also [`empty_contacts`](@ref).
 """
 struct ContactPhase{R} end
 ContactPhase(relation::Symbol = :contact) = ContactPhase{relation}()
@@ -730,7 +926,32 @@ function (ph::ContactPhase{R})(st, p, ctx, key, mcs, backend) where {R}
     return 6
 end
 
-"""Slot of `b` in `a`'s contact row, or 0 (device or host)."""
+"""
+    contact_slot(cell, a, b) -> Int
+
+Return the slot of cell `b` in cell `a`'s contact row, or `0` if `b` is not there.
+
+It works on the device and on the host.
+
+# Arguments
+- `cell`: the cell state, with a `contact_nbr` column.
+- `a`, `b`: the cell numbers.
+
+# Returns
+- `Int`: the slot, or `0`.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> cell = (; contact_nbr = Int32[3 1; 0 0]);
+
+julia> contact_slot(cell, 1, 3), contact_slot(cell, 2, 3)
+(1, 0)
+```
+
+See also [`ContactPhase`](@ref).
+"""
 @inline function contact_slot(cell, a, b)
     for k in 1:size(cell.contact_nbr, 1)
         # bounds: k over the rows of contact_nbr; a is a cell id ≤ capacity
@@ -739,7 +960,22 @@ end
     return 0
 end
 """
-Shared interface measure of cells `a` and `b` from the contact table (`b = 0`: medium).
+    contact_measure(cell, a, b)
+
+Return the shared interface measure of cells `a` and `b` from the contact table.
+
+With `b = 0` it is `a`'s interface with the medium. The result is zero if `b` is not in
+`a`'s row.
+
+# Arguments
+- `cell`: the cell state, with the columns of [`empty_contacts`](@ref).
+- `a`: the cell number.
+- `b`: the other cell number, or `0` for the medium.
+
+# Returns
+- The measure, of the table's measure type.
+
+See also [`contact_slot`](@ref), [`ContactPhase`](@ref).
 """
 @inline function contact_measure(cell, a, b)
     # bounds: a is a cell id ≤ capacity = length(cell.contact_medium)
