@@ -5,17 +5,13 @@ version = "0.4.0-DEV"
 
 [deps]
 CorePotts = "047998c1-3edd-4edf-b561-cee99549c5a6"
+LatticeFields = "27141c10-c94d-4a11-8a68-94c33ddb5bc4"
 Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
 PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
 
-[weakdeps]
-LatticeFields = "27141c10-c94d-4a11-8a68-94c33ddb5bc4"
-
-[extensions]
-MakiePottsLatticeFieldsExt = "LatticeFields"
-
 [sources]
 CorePotts = {path = "../CorePotts"}
+LatticeFields = {path = "../LatticeFields"}
 
 [compat]
 CorePotts = "0.3"

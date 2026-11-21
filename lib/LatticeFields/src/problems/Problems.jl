@@ -105,7 +105,7 @@ public field_jacobian_sparsity, column_colors, LatticeJacobian, LatticeJVP,
 # the lattice multigrid as a LinearSolve preconditioner and algorithm
 public LatticeMultigrid, MGPreconditioner, LatticePCG
 # solutions
-public FieldSeries, field_series, LatticeStats, LatticeSolution, finish!
+public FieldSeries, field_series, site_centers, LatticeStats, LatticeSolution, finish!
 # the saved size above which a run that saves every step warns (field runs and Potts runs)
 public LARGE_SAVE_BYTES
 # the coupling between field groups and the per-group counts

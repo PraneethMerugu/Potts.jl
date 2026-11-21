@@ -5,6 +5,7 @@ Potts solutions.
 module MakiePotts
 
 using CorePotts: CorePotts, isfatal
+using LatticeFields.Problems: FieldSolution, LatticeSolution, field_series, site_centers
 using Makie: Makie
 using PrecompileTools: PrecompileTools
 

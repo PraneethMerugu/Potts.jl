@@ -1,18 +1,20 @@
 # Fields of a lattice field solution (LatticePDE, LatticeFields): a Makie recipe and a
-# recording wrapper. The solution types live in LatticeFields, a weak dependency: the
-# extension `MakiePottsLatticeFieldsExt` adds the `field_frames` methods that read them.
+# recording wrapper. The solution types and their reads come from LatticeFields.
 
 """
-    FieldFrames(t, series)
+    FieldFrames(t, series; centers = nothing)
 
 The saves of one field of a lattice field solution, as the field recipe reads them: the
-save times `t` and the time-first values `series` (size `(length(t), dims...)`, a
-LatticeFields `FieldSeries`). `field_frames(sol, c)` builds it when LatticeFields is loaded.
+save times `t`, the time-first values `series` (size `(length(t), dims...)`, a
+LatticeFields `FieldSeries`) and the coordinates of the site centers on each axis
+(`centers`, one vector per axis of length `dims[k]`, or `nothing` to count sites).
+`field_frames(sol, c)` builds it.
 """
-struct FieldFrames{TT, S <: AbstractArray}
+struct FieldFrames{TT, S <: AbstractArray, C}
     t::Vector{TT}
     series::S
-    function FieldFrames(t::AbstractVector, series::AbstractArray)
+    centers::C
+    function FieldFrames(t::AbstractVector, series::AbstractArray; centers = nothing)
         length(t) == size(series, 1) || throw(
             ArgumentError(
                 "field frames: $(length(t)) save times but $(size(series, 1)) saves"
@@ -25,31 +27,74 @@ struct FieldFrames{TT, S <: AbstractArray}
                 $(ndims(series) - 1)D one"
             )
         )
+        dims = size(series)[2:end]
+        cs = centers === nothing ? ntuple(k -> 1:dims[k], length(dims)) : Tuple(centers)
+        length(cs) == length(dims) && all(k -> length(cs[k]) == dims[k], eachindex(dims)) ||
+            throw(
+            ArgumentError(
+                "field frames: the centers have lengths $(map(length, cs)); the grid \
+                    is $(join(dims, "×"))"
+            )
+        )
         tt = collect(t)
-        return new{eltype(tt), typeof(series)}(tt, series)
+        return new{eltype(tt), typeof(series), typeof(cs)}(tt, series, cs)
     end
 end
 
 """
     field_frames(sol, c) -> FieldFrames
 
-The saves of field `c` of a lattice field solution `sol`. The methods come with the
-LatticeFields extension: for the solution of a problem from `LatticePDE.discretize` (a
-field algorithm or an OrdinaryDiffEq solver) and for a LatticeFields `FieldSolution`.
+The saves of field `c` of a lattice field solution `sol`: the solution of a problem from
+`LatticePDE.discretize` (a field algorithm or an OrdinaryDiffEq solver) or a LatticeFields
+`FieldSolution`. The centers are the system's coordinates when the solution has them
+(`sol[x]`), else the site counts `1:n`.
 """
-function field_frames end
+function field_frames(sol::Union{FieldSolution, LatticeSolution}, field)
+    series = field_series(sol, field)
+    dims = size(series)[2:end]
+    return FieldFrames(sol.t, series; centers = _field_centers(site_centers(sol), dims))
+end
 
-# the grid at save `i` (a host copy)
-function _field_grid(f::FieldFrames, i::Integer)
+# the centers of a grid of size `dims` from the lattice's site centers: the centers
+# themselves, the node centers of a coarse grid (a node covers a block of `k` sites), or the
+# site counts when the solution has no coordinates
+_field_centers(::Nothing, dims) = nothing
+function _field_centers(sites::Tuple, dims)
+    length(sites) == length(dims) || return nothing
+    return ntuple(length(dims)) do k
+        r, n = sites[k], dims[k]
+        length(r) == n && return collect(Float64, r)
+        (n > 0 && length(r) % n == 0 && length(r) > 1) || return collect(Float64, 1:n)
+        h = (last(r) - first(r)) / (length(r) - 1)
+        b = length(r) ÷ n
+        return [first(r) - h / 2 + (j - 1 / 2) * b * h for j in 1:n]
+    end
+end
+
+# the save number `i`, checked
+function _field_save(f::FieldFrames, i::Integer)
     1 <= i <= length(f.t) || throw(
         ArgumentError("field plot: save $i is outside 1:$(length(f.t))")
     )
-    n = ndims(f.series) - 1
-    return Array(f.series[i, ntuple(_ -> Colon(), n)...])
+    return Int(i)
 end
-function _field_grid(f::FieldFrames, i)
-    i === Makie.automatic && return _field_grid(f, length(f.t))
+function _field_save(f::FieldFrames, i)
+    i === Makie.automatic && return length(f.t)
     throw(ArgumentError("field plot: `index` is a save number; got $(repr(i))"))
+end
+
+# the grid at save `i` (a host copy)
+function _field_grid(f::FieldFrames, i)
+    n = ndims(f.series) - 1
+    return Array(f.series[_field_save(f, i), ntuple(_ -> Colon(), n)...])
+end
+
+# the plotted extent of each axis: the outer faces of the end sites
+function _field_extent(c::AbstractVector)
+    length(c) == 1 && return (first(c) - 0.5, first(c) + 0.5)
+    lo = first(c) - (c[2] - c[1]) / 2
+    hi = last(c) + (c[end] - c[end - 1]) / 2
+    return (Float64(lo), Float64(hi))
 end
 
 # the color range over every save, so the colors of a video do not drift
@@ -76,9 +121,11 @@ Plot field `c` of a lattice field solution at one save: a heatmap of a 2D field 
 volume of a 3D field. `sol` is the solution of a problem from `LatticePDE.discretize`,
 solved by a field algorithm or an OrdinaryDiffEq solver, or a LatticeFields
 `FieldSolution`. `c` is any key that `sol[c]` takes: the variable, `c(t, x, y)` or `:c`.
-The methods come with LatticeFields: load LatticePDE (or LatticeFields) beside MakiePotts.
 
-The axes count sites: site `(i, j)` covers `[i - 1/2, i + 1/2] × [j - 1/2, j + 1/2]`.
+The axes show the system's coordinates: each cell of the heatmap is centered at its site
+center (`sol[x]`), and a coarse field's cell covers its block. A solution with no
+coordinates counts sites instead, with site `i` centered at `i`. The axes and the grid size
+follow the data: a new `solution` of another size redraws them (a 2D plot stays 2D).
 
 # Arguments
 
@@ -92,6 +139,7 @@ The axes count sites: site `(i, j)` covers `[i - 1/2, i + 1/2] × [j - 1/2, j + 
   - `colorrange = automatic`: the color limits; `automatic` takes the extrema of the field
     over all saves, so the colors stay fixed when `index` changes.
   - `colormap = :viridis`, `nan_color = :transparent`, `alpha = 1.0`, `visible = true`.
+    `alpha` sets the opacity of the heatmap and of the volume.
   - `interpolate = false`: smooth the heatmap of a 2D field.
   - `algorithm = :mip`, `absorption = 1.0`: the volume rendering of a 3D field, as in
     Makie's `volume`.
@@ -137,21 +185,25 @@ function Makie.plot!(plot::FieldPlot)
     map!(field_frames, plot, [:solution, :field], :frames)
     map!(_field_grid, plot, [:frames, :index], :grid)
     map!(_field_colorrange, plot, [:frames, :colorrange], :field_colorrange)
-    dims = size(plot.grid[])
-    if length(dims) == 2
+    # the axes follow the data: centers in 2D, extents in 3D
+    map!(f -> f.centers[1], plot, :frames, :xs)
+    map!(f -> f.centers[2], plot, :frames, :ys)
+    if ndims(plot.grid[]) == 2
         Makie.heatmap!(
-            plot, 1:dims[1], 1:dims[2], plot.grid;
+            plot, plot.xs, plot.ys, plot.grid;
             colormap = plot.colormap, colorrange = plot.field_colorrange,
             nan_color = plot.nan_color, interpolate = plot.interpolate, alpha = plot.alpha,
             visible = plot.visible
         )
     else
+        map!(f -> _field_extent(f.centers[1]), plot, :frames, :xextent)
+        map!(f -> _field_extent(f.centers[2]), plot, :frames, :yextent)
+        map!(f -> _field_extent(f.centers[3]), plot, :frames, :zextent)
         Makie.volume!(
-            plot, (0.5, dims[1] + 0.5), (0.5, dims[2] + 0.5), (0.5, dims[3] + 0.5),
-            plot.grid;
+            plot, plot.xextent, plot.yextent, plot.zextent, plot.grid;
             colormap = plot.colormap, colorrange = plot.field_colorrange,
             nan_color = plot.nan_color, algorithm = plot.algorithm,
-            absorption = plot.absorption, visible = plot.visible
+            absorption = plot.absorption, alpha = plot.alpha, visible = plot.visible
         )
     end
     return plot
@@ -204,7 +256,7 @@ function record_field(
     frames = field_frames(sol, field)
     idx = indices === Makie.automatic ? eachindex(frames.t) : indices
     isempty(idx) && throw(ArgumentError("record_field: no saves to record"))
-    foreach(i -> _field_grid(frames, i), (first(idx), last(idx)))
+    foreach(i -> _field_save(frames, i), idx)
     three = ndims(frames.series) == 4
     fig = Makie.Figure(; figure...)
     index = Makie.Observable(first(idx))

@@ -115,6 +115,19 @@ struct _GetterSlice{G, S}
     sol::S
 end
 (s::_GetterSlice)(i) = s.g(s.sol, i)
+"""
+    site_centers(sol) -> Tuple or nothing
+
+The coordinates of the site centers on each spatial axis of a lattice solution, in axis
+order (one range per axis, as `sol[x]` reads one axis), or `nothing` when the solution
+carries no coordinates (a `FieldSolution` of a `FieldProblem` built without a system).
+"""
+function site_centers(sol)
+    ix = _lindex(sol)
+    ix isa LatticeIndex || return nothing
+    isempty(ix.coordsyms) && return nothing
+    return Tuple(ix.coords[ix.key(c)] for c in ix.coordsyms)
+end
 # the series of `sym` when it names a state or aux field of a lattice solution, else nothing
 # the `LatticeIndex` of a solution (a solution's container is its problem, whose is the
 # index)
