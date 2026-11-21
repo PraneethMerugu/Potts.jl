@@ -184,7 +184,10 @@ over its current values. Index 0 is evaluated only when that interval holds 0.
 
 `value_at(J, a, b)`: entry `(a, b)` of the pair table `J` (`value_at(J, kindₛ, kindₛ′)`). It
 reads as the two-argument form does along each axis: index 0 in either argument reads 0, and
-each index is clamped into its axis (`1:size(J, 1)`, `1:size(J, 2)`).
+each index is clamped into its axis (`1:size(J, 1)`, `1:size(J, 2)`). In a field term the
+read is one table read. The problem stores `J` flat, in column-major order; `prob.ps[J]`
+reads it back as a matrix, `remake` and `setp` take a matrix (or its `vec`), and a literal
+entry `J[i, j]` reads entry `(i, j)`.
 
 With two or more integer inputs (for example the two kinds of a pair table read),
 `mtkcompile(sys; inputs = [a, b])` can fail with `AssertionError: last_idx <= idx` in

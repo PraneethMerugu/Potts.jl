@@ -63,8 +63,10 @@ end
 struct CoefBound
     # one compiled function of the parameters per assignment
     fs::Vector{Any}
-    # per read, in argument order: table, literal index, group (0: literal)
-    reads::Vector{Tuple{String, Int, Int}}
+    # per read, in argument order: the table, per index (one, or two for a pair table
+    # `value_at(J, a, b)`) its literal and group (0: literal), and the first axis's size
+    # of a pair table (0 for one index)
+    reads::Vector{Tuple{String, Vector{Tuple{Int, Int}}, Int}}
     # per group: its index expression as an interval tree (`_ivtree`)
     groups::Vector{Any}
     text::String                            # the coefficient, for messages
@@ -250,8 +252,23 @@ function _site_of(t, p, i)
     end
     return s === nothing ? nothing : Tuple(CartesianIndices(sz)[s])
 end
-# a table read as the kernel does it (emit.jl TABLE, `oob = :zero_at_0`)
-_tabread(v, i::Integer) = i == 0 ? 0.0 : Float64(v[clamp(i, 1, length(v))])
+# a table read as the kernel does it (emit.jl TABLE, `oob = :zero_at_0`): index 0 reads 0,
+# any other index is clamped into its axis; a pair table (`n1 > 0`, stored flat) reads entry
+# `(clamp(b) − 1) n1 + clamp(a)`
+function _tabread(v, ix::Tuple, n1::Integer)
+    any(iszero, ix) && return 0.0
+    n1 == 0 && return Float64(v[clamp(ix[1], 1, length(v))])
+    a, b = _clampix(ix, length(v), n1)
+    return Float64(v[(b - 1) * n1 + a])
+end
+# the indices `ix` clamped into a table of `len` entries (first axis `n1`, 0: one index)
+function _clampix(ix::Tuple, len::Integer, n1::Integer)
+    any(iszero, ix) && return map(zero, ix)
+    n1 == 0 && return (clamp(ix[1], 1, len),)
+    return (clamp(ix[1], 1, n1), clamp(ix[2], 1, len ÷ n1))
+end
+# the number of entries a read's index `a` can address (its axis length)
+_axislen(len, n1, a) = n1 == 0 ? len : (a == 1 ? n1 : len ÷ n1)
 # a value of the coefficient; a domain error (`sqrt` of a negative entry) is `NaN`; an
 # interval coefficient gives the ends of its enclosure
 _val(f::_IvCoef, args) = (q = f.iv(args); (Float64(q[1]), Float64(q[2])))
@@ -273,15 +290,22 @@ function _ranges(c::CoefBound, p)
     tv = [last(p.tables[findfirst(x -> first(x) == k, p.tables)]) for (k, _, _) in c.reads]
     any(isempty, tv) && return nothing
     maxl = [
-        maximum((length(tv[j]) for j in eachindex(c.reads) if c.reads[j][3] == g); init = 0)
-            for g in eachindex(c.groups)
+        maximum(
+            (
+                _axislen(length(tv[j]), r[3], a) for (j, r) in enumerate(c.reads)
+                    for (a, (_, h)) in enumerate(r[2]) if h == g
+            ); init = 0
+        ) for g in eachindex(c.groups)
     ]
     rs = [_group_indices(c.groups[g], p, maxl[g]) for g in eachindex(c.groups)]
     # in Float64: an integer product of many lengths overflows (16^16 == 0)
     length(c.fs) * prod(Float64 ∘ length, rs; init = 1.0) <= _MAXEVALS || return nothing
     return tv, rs
 end
-_indices(c::CoefBound, is) = (((_, e, g),) -> g == 0 ? e : is[g]).(c.reads)
+function _indices(c::CoefBound, is)
+    return [Tuple(g == 0 ? e : is[g] for (e, g) in r[2]) for r in c.reads]
+end
+_readval(c::CoefBound, tv, j, ix) = _tabread(tv[j], ix, c.reads[j][3])
 function _vals(c::CoefBound, p)
     out = Float64[]
     if isempty(c.reads)
@@ -293,13 +317,8 @@ function _vals(c::CoefBound, p)
     tv, rs = r
     q = _pv(p)
     for f in c.fs, is in Iterators.product(rs...)
-        _push_val!(
-            out, _val(
-                f, (
-                    q..., (_tabread(tv[j], i) for (j, i) in enumerate(_indices(c, is)))...,
-                )
-            )
-        )
+        vs = (_readval(c, tv, j, i) for (j, i) in enumerate(_indices(c, is)))
+        _push_val!(out, _val(f, (q..., vs...)))
     end
     return out
 end
@@ -322,23 +341,23 @@ when no table is read), at most `_MAXWHY` of them, and how many more there are.
 function _why(c::CoefBound, p)
     all(isfinite, _vals(c, p)) && return nothing
     isempty(c.box) || return _IntervalWhy(c.box)
-    isempty(c.reads) && return ([Tuple{String, Int, Float64}[]], 0)
+    isempty(c.reads) && return ([Tuple{String, Tuple, Float64}[]], 0)
     p isa Problems.ParamsTables || return :tables
     r = _ranges(c, p)
     r === nothing && return :cap
     tv, rs = r
     q = _pv(p)
-    combos = Vector{Tuple{String, Int, Float64}}[]
+    combos = Vector{Tuple{String, Tuple, Float64}}[]
     for f in c.fs, is in Iterators.product(rs...)
         ix = _indices(c, is)
-        _isfin(_val(f, (q..., (_tabread(tv[j], i) for (j, i) in enumerate(ix))...))) &&
+        _isfin(_val(f, (q..., (_readval(c, tv, j, i) for (j, i) in enumerate(ix))...))) &&
             continue
         # the index each read takes, clamped as the kernel clamps it
         w = unique!(
             [
                 (
-                    c.reads[j][1], i == 0 ? 0 : clamp(i, 1, length(tv[j])),
-                    _tabread(tv[j], i),
+                    c.reads[j][1], _clampix(i, length(tv[j]), c.reads[j][3]),
+                    _readval(c, tv, j, i),
                 ) for (j, i) in enumerate(ix)
             ]
         )
@@ -365,24 +384,26 @@ function _coef_bound(x, params, tabs = Dict{Any, String}(), ivars = (); box = ()
     u0 = unwrap(x)
     # the table reads, each a fresh variable; the `value_at` reads grouped by index
     # expression: a group takes one index for all its reads
-    reads, tvars, reps = Tuple{String, Int, Int}[], Any[], Dict{Any, Any}()
+    reads = Tuple{String, Vector{Tuple{Int, Int}}, Int}[]
+    tvars, reps = Any[], Dict{Any, Any}()
     gkeys = Any[]
+    # an index: a literal reads its own entry, any other expression is a group
+    function index(x)
+        i = unwrap_const(unwrap(x))
+        (i isa Integer || (i isa AbstractFloat && isinteger(i))) && return (Int(i), 0)
+        g = findfirst(j -> isequal(gkeys[j], unwrap(x)), eachindex(gkeys))
+        g === nothing && (push!(gkeys, unwrap(x)); g = length(gkeys))
+        return (0, g)
+    end
     function walkt(y)
         iscall(y) || return nothing
         f, a = operation(y), arguments(y)
-        if (f === getindex || f === value_at) && length(a) == 2 &&
+        if ((f === getindex || f === value_at) && length(a) in (2, 3)) &&
                 haskey(tabs, unwrap(a[1]))
             any(k -> isequal(k, y), keys(reps)) && return nothing
-            k = tabs[unwrap(a[1])]
-            i = unwrap_const(unwrap(a[2]))
-            # a literal index reads its own entry
-            if i isa Integer || (i isa AbstractFloat && isinteger(i))
-                push!(reads, (k, Int(i), 0))
-            else
-                g = findfirst(j -> isequal(gkeys[j], unwrap(a[2])), eachindex(gkeys))
-                g === nothing && (push!(gkeys, unwrap(a[2])); g = length(gkeys))
-                push!(reads, (k, 0, g))
-            end
+            # a pair table read takes two index groups, one per axis
+            n1 = length(a) == 3 ? first(_table_dims(a[1])) : 0
+            push!(reads, (tabs[unwrap(a[1])], [index(x) for x in a[2:end]], n1))
             v = unwrap(Symbolics.variable(:__table_read, length(reads)))
             push!(tvars, v)
             reps[y] = v
@@ -1357,7 +1378,7 @@ function _why_text(text, w)
     # with no site, the index's interval (its declared bounds, an `ifelse` hull) holds 0 and
     # no site value says otherwise: the bound is conservative there
     function read(t, i)
-        if i == 0
+        if any(iszero, i)
             if site === nothing
                 return "index 0 of `$t` (the index's interval holds 0; no site value is \
                     known, so this is conservative)"
@@ -1365,7 +1386,7 @@ function _why_text(text, w)
                 return "index 0 of `$t` (at site $site)"
             end
         else
-            return "`$t[$i]`"
+            return "`$t[$(join(i, ", "))]`"
         end
     end
     return string(
@@ -2212,6 +2233,10 @@ function _index(
                     for q in _params(sys) if string(unwrap(q)) == k
                     for (i, e) in enumerate(Symbolics.scalarize(unwrap(q)))
             ]
+        ],
+        tableshapes = Pair[
+            k => _table_dims(q) for (k, _) in cf.tables
+                for q in _params(sys) if string(unwrap(q)) == k
         ]
     )
 end
@@ -2329,9 +2354,10 @@ function _check_tables(cf::CompiledField, sys::PDESystem)
     for (k, vals) in cf.tables
         p = only(q for q in _params(sys) if string(unwrap(q)) == k)
         n = length(Symbolics.scalarize(unwrap(p)))
+        shape = join(("1:$d" for d in _table_dims(p)), ", ")
         isempty(vals) && _dverr(
             "the array parameter `$k` has no value (a table is not read as zeros): give " *
-                "it a default, `@parameters $k[1:$n] = [v₁, …]`"
+                "it a default, `@parameters $k[$shape] = …`"
         )
         length(vals) == n ||
             _dverr("the array parameter `$k` is declared with $n entries; its default \

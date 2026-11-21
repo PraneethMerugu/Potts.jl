@@ -1201,3 +1201,28 @@ end
         )
     end
 end
+
+@testitem "a pair table read on pgpu equals the host" setup = [LP_device] tags = [
+    :latticepde, :device, :gpu_only,
+] begin
+    @parameters Jg[1:2, 1:3] = [1.0 2.0 3.0; 4.0 5.0 6.0]
+    @variables g1(..)::Int32 [input = true] g2(..)::Int32 [input = true]
+    a, b = g1(t, x, y), g2(t, x, y)
+    sys = PDESystem(
+        [D(ce) ~ value_at(Jg, a, b) * laplacian(ce) - value_at(Jg, a, b) * ce],
+        [c(0, x, y) ~ 1.0],
+        [t ∈ Interval(0.0, 0.5), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)],
+        [t, x, y], [ce, a, b], [Jg]; name = :pairdev
+    )
+    A = Int32[mod(i + j, 4) for i in 1:16, j in 1:16]
+    B = Int32[mod(i * j, 5) for i in 1:16, j in 1:16]
+    function mk(be)
+        return discretize(
+            sys, LatticeDiscretization(Grid((16, 16)); T = Float32, backend = be);
+            inputs = [a => A, b => B]
+        )
+    end
+    sd = solve(mk(PDEV), ExplicitEuler(); dt = 0.01f0)
+    sh = solve(mk(KernelAbstractions.CPU()), ExplicitEuler(); dt = 0.01f0)
+    @test isapprox(Array(sd.u[end]), sh.u[end]; rtol = 1.0f-5)
+end

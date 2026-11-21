@@ -306,7 +306,8 @@ function _interval(x, params::Dict{Any, Int}, tabs, box)
     end
     iscall(u) || return nothing
     f, a = operation(u), arguments(u)
-    if (f === value_at || f === getindex) && length(a) == 2 && haskey(tabs, unwrap(a[1]))
+    if (f === value_at || f === getindex) && length(a) in (2, 3) &&
+            haskey(tabs, unwrap(a[1]))
         k = tabs[unwrap(a[1])]
         return pp -> begin
             pp isa Problems.ParamsTables || return (-Inf, Inf)

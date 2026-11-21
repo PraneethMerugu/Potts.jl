@@ -1159,7 +1159,8 @@ function symbolic_discretize(
                     end
                 )
             );
-            _promoted(collect(unwrap_const.(unwrap.(d))))
+            # (a matrix flat, column-major: the kernel's `value_at(J, a, b)` read)
+            _promoted(vec(collect(unwrap_const.(unwrap.(d)))))
         ) for p in arrays
     ]
     return CompiledField{N}(

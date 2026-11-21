@@ -686,6 +686,31 @@ const _CMP = (
 # conditions
 const _OPS = (+, -, *, /, ^, min, max, ifelse, !=, !, &, |)
 
+# the declared size of the array parameter `T` (`(n,)` for `T[1:n]`, `(n1, n2)` for `J[1:n1,
+# 1:n2]`); a table is stored flat, in column-major order (`vec(J)`)
+_table_dims(T) = Tuple(length.(SymbolicUtils.shape(unwrap(T))))
+
+# the place of the literal entry `ix` of table `T` in its flat, column-major storage
+_entry(T, ix) = LinearIndices(_table_dims(T))[Int.(ix)...]
+
+# `value_at(J, a, b)`: one read of the flat table at `(clamp(b) − 1) n1 + clamp(a)`, each
+# index clamped into its axis; index 0 in either argument gives index 0, which reads 0
+# (`oob = :zero_at_0`), as the host method does
+function _pair_read(e::Env, u, a)
+    J = unwrap(a[1])
+    haskey(e.tables, J) ||
+        _lerr(u, "`value_at(J, a, b)` reads an array parameter `J`")
+    dims = _table_dims(J)
+    length(dims) == 2 ||
+        _lerr(u, "`value_at(J, a, b)` reads a matrix parameter (`J[1:n1, 1:n2]`)")
+    i, j = (cast!(e.kb, _num(e, [lower(y, e)])[1], I32) for y in a[2:3])
+    k(v) = constant!(e.kb, v, I32)
+    z = node!(e.kb, OR, BOOL, Int32[_cmp(e, EQ, i, k(0)), _cmp(e, EQ, j, k(0))])
+    ci, cj = (_op(e, MIN, _op(e, MAX, x, k(1)), k(n)) for (x, n) in zip((i, j), dims))
+    flat = _op(e, ADD, _op(e, MUL, _op(e, ADD, cj, k(-1)), k(dims[1])), ci)
+    return table!(e.kb, e.tables[J]..., select!(e.kb, z, k(0), flat))
+end
+
 """
     lowers_call(f) -> Bool
 
@@ -742,10 +767,11 @@ function lower(x, e::Env{N}) where {N}
     if f === getindex
         b = unwrap(a[1])
         _isfield(e, b) && return _load(e, b, Int(unwrap_const(a[2])))
+        # an entry `T[i]` or `J[i, j]`: its place in the flat, column-major table
         haskey(e.tables, b) &&
             return table!(
             e.kb, e.tables[b]...,
-            cast!(e.kb, _literal(e, unwrap_const(a[2])), I32)
+            constant!(e.kb, _entry(b, map(y -> unwrap_const(unwrap(y)), a[2:end])), I32)
         )
         _lerr(u, "indexing is defined for array fields and array parameters only")
     end
@@ -780,6 +806,7 @@ function lower(x, e::Env{N}) where {N}
             cast!(e.kb, _num(e, [lower(a[2], e)])[1], I32)
         )
     end
+    f === value_at && length(a) == 3 && return _pair_read(e, u, a)
     f === ifelse && return cond!(
         e.kb, _bool(e, lower(a[1], e)), _num(
             e, [
