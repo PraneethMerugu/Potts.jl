@@ -253,10 +253,34 @@ function workgroup(N, strategy)
 end
 
 """
-    plan(p, ids = all kernels; options, cost) -> StepPlan
+    plan(p::Program, ids = eachindex(p.kernels); options = CompileOptions(),
+         cost = CostModel(), stages = LOWERING, fuse = !options.debug,
+         merge = merge_kernels) -> StepPlan
 
 Order the kernels of one step, fuse by the cost model (`t_fused < Σ t_split`; legality
 first, every split reported), lower each launch and bind buffers. Debug mode never fuses.
+
+A kernel joins the current group only if no fusion blocker and no resource limit stops it
+and the modeled fused time is less than the modeled split time. Each group is checked for
+legality and compiled. A launch is static when its kernel runs at one ndrange only.
+
+# Arguments
+- `p`: the field program (`LatticeFields.IR.Program`).
+- `ids`: the indices of the kernels of `p` to plan.
+
+# Keywords
+- `options = CompileOptions()`: the compile options of every launch.
+- `cost = CostModel()`: the cost model of the fusion decisions.
+- `stages = LOWERING`: the lowering passes given to the kernel compiler.
+- `fuse = !options.debug`: `false` splits every kernel (reason `:debug`).
+- `merge = merge_kernels`: the function that merges a group into one kernel for
+  compilation.
+
+# Returns
+- A `StepPlan`: the launch descriptions in order, the double-buffered fields to swap after
+  the step, and every fusion decision.
+
+See also [`fusion_report`](@ref).
 """
 function plan(
         p::Program{N}, ids::Vector{Int} = collect(eachindex(p.kernels));
@@ -352,6 +376,13 @@ end
 The fusion decisions of a step plan, one line per decision: `fuse` or `split`, the kernels,
 the candidate and the reason (the modeled fused and split times of a cost decision). Part of
 `Problems.field_report`, which prints it per field group.
+
+# Arguments
+- `io`: the stream to print to.
+- `plan`: a step plan from [`plan`](@ref).
+
+# Returns
+- `nothing`.
 """
 function fusion_report(io::IO, sp::StepPlan)
     for d in sp.decisions
