@@ -5,6 +5,21 @@
 # canonical depth-first order from the sorted stores. Passes never mutate nodes: they
 # rebuild through this builder (`rebuild`), so a folded DAG is canonical again.
 
+"""
+    KernelBuilder{N}(fieldkeys, fieldlanes, tablekeys, space::Space{N})
+
+The interning builder of one kernel. Every node is interned on its op, type, operands and
+immediate, so equal expressions get equal ids whatever the build order. Commutative operands
+are flattened (`ADD`, `MUL`) and sorted by a structural order that never looks at node ids.
+Front ends get one from [`kernel`](@ref) and finish it with [`add!`](@ref).
+
+# Arguments
+- `fieldkeys`, `fieldlanes`: the keys and storage lanes of the program's fields.
+- `tablekeys`: the keys of the program's tables.
+- `space`: the [`Space`](@ref) the kernel runs on.
+
+See also [`Ex`](@ref), [`node!`](@ref), [`load!`](@ref), [`store!`](@ref).
+"""
 mutable struct KernelBuilder{N}
     fieldkeys::Vector{String}
     fieldlanes::Vector{Scalar}
@@ -32,7 +47,17 @@ function KernelBuilder{N}(fieldkeys, fieldlanes, tablekeys, space::Space{N}) whe
 end
 
 """
+    Ex(b::KernelBuilder, id::Int32)
+
 A node handle for writing expressions with ordinary operators.
+
+`+`, `-`, `*`, `/`, `^` (an integer power), `min`, `max`, `abs`, `sqrt`, `exp`, `log`,
+`<` and `<=` on handles (and real numbers) intern the matching nodes in `b`. A real operand
+becomes a constant node.
+
+# Fields
+- `b`: the kernel builder.
+- `id::Int32`: the node id.
 """
 struct Ex{B}
     b::B
@@ -95,7 +120,24 @@ end
 
 # ---- interning ---------------------------------------------------------------------------
 """
+    node!(b::KernelBuilder, op::Op, type::Scalar, args = Int32[], imm = 0;
+          flatten = true) -> Int32
+
 Intern a node; flattens and sorts commutative operands.
+
+# Arguments
+- `b`: the kernel builder.
+- `op`: the [`Op`](@ref).
+- `type`: the result type, a [`Scalar`](@ref).
+- `args = Int32[]`: the operand node ids.
+- `imm = 0`: the immediate (a constant pool id, a parameter slot, an access id, ...).
+
+# Keywords
+- `flatten = true`: flatten nested `ADD` and `MUL` nodes of the same type into one.
+
+# Returns
+- The node id, an existing one if an equal node is already interned. A flattened sum or
+  product of one operand returns that operand.
 """
 function node!(
         b::KernelBuilder, op::Op, type::Scalar,
@@ -124,7 +166,17 @@ function node!(
 end
 
 """
+    constant!(b::KernelBuilder, v::Real, type::Scalar = REAL) -> Int32
+
 A constant (Float64, interned by bit pattern so `0.0` and `-0.0` stay distinct).
+
+# Arguments
+- `b`: the kernel builder.
+- `v`: the value, converted to `Float64`.
+- `type = REAL`: the node type.
+
+# Returns
+- The id of the `CONST` node.
 """
 function constant!(b::KernelBuilder, v::Real, type::Scalar = REAL)
     v = Float64(v)
@@ -135,6 +187,18 @@ function constant!(b::KernelBuilder, v::Real, type::Scalar = REAL)
     return node!(b, CONST, type, Int32[], k)
 end
 
+"""
+    access!(b::KernelBuilder, a::Access) -> Int32
+
+Intern access `a` in kernel builder `b`.
+
+# Arguments
+- `b`: the kernel builder.
+- `a`: the [`Access`](@ref).
+
+# Returns
+- The access id, an existing one if `b` already holds an equal access.
+"""
 function access!(b::KernelBuilder{N}, a::Access{N}) where {N}
     return get!(b.accid, a) do
         push!(b.accesses, a)
@@ -147,6 +211,28 @@ Element type a LOAD of field `f` produces: integer lanes keep their type, floats
 """
 loadtype(s::Scalar) = isfloat(s) ? REAL : s
 
+"""
+    load!(b::KernelBuilder, field::Integer, storage::Scalar; offset = (0, …), comp = 1,
+          level = 0, policy = RESOLVE, class = 0) -> Int32
+
+A `LOAD` node: the read of field `field` at an offset from the kernel's site. A float lane
+loads as `REAL`; an integer lane keeps its type.
+
+# Arguments
+- `b`: the kernel builder.
+- `field`: the field id.
+- `storage`: the field's storage lane.
+
+# Keywords
+- `offset = (0, …)`: the offset per axis, a tuple or a [`Sel`](@ref).
+- `comp = 1`: the component, an integer or a `Sel`.
+- `level = 0`: the relative level (+1 coarser, −1 finer).
+- `policy = RESOLVE`: the [`Bpolicy`](@ref).
+- `class = 0`: the placement class.
+
+# Returns
+- The node id.
+"""
 function load!(
         b::KernelBuilder{N}, field::Integer, storage::Scalar; offset = ntuple(_ -> 0, N),
         comp = 1, level = 0, policy = RESOLVE, class = 0
@@ -157,9 +243,67 @@ function load!(
     return node!(b, LOAD, loadtype(storage), Int32[], access!(b, a))
 end
 
+"""
+    param!(b::KernelBuilder, slot::Integer) -> Int32
+
+A `PARAM` node of type `REAL`: the value of runtime parameter `slot`.
+
+# Arguments
+- `b`: the kernel builder.
+- `slot`: the parameter slot.
+
+# Returns
+- The node id.
+"""
 param!(b::KernelBuilder, slot::Integer) = node!(b, PARAM, REAL, Int32[], slot)
+"""
+    runtime!(b::KernelBuilder, slot::Integer) -> Int32
+
+A `RUNTIME` node of type `REAL`: the value of runtime slot `slot` (for example the time).
+
+# Arguments
+- `b`: the kernel builder.
+- `slot`: the runtime slot.
+
+# Returns
+- The node id.
+"""
 runtime!(b::KernelBuilder, slot::Integer) = node!(b, RUNTIME, REAL, Int32[], slot)
+"""
+    coord!(b::KernelBuilder, axis::Integer) -> Int32
+
+A `COORD` node of type `I32`: the site's coordinate on axis `axis`.
+
+# Arguments
+- `b`: the kernel builder.
+- `axis`: the axis.
+
+# Returns
+- The node id.
+"""
 coord!(b::KernelBuilder, axis::Integer) = node!(b, COORD, I32, Int32[], axis)
+"""
+    table!(b::KernelBuilder, table::Integer, storage::Scalar, index::Integer) -> Int32
+    table!(pb::ProgramBuilder, key; storage = F32, oob = :zero_at_0) -> Int32
+
+On a kernel builder: a `TABLE` node that reads entry `index` (a node, cast to `I32`) of
+table `table`. A float table loads as `REAL`.
+
+On a program builder: declare a per-cell or per-kind table `key`. With `oob = :zero_at_0`,
+a read at index 0 gives 0.
+
+# Arguments
+- `b`, `table`, `storage`, `index`: the kernel builder, the table id, its storage lane and
+  the index node.
+- `pb`, `key`: the program builder and the table's key.
+
+# Keywords
+- `storage = F32`: the table's storage lane.
+- `oob = :zero_at_0`: the out-of-bounds rule.
+
+# Returns
+- The node id on a kernel builder; the provisional table id on a program builder.
+"""
 function table!(b::KernelBuilder, table::Integer, storage::Scalar, index::Integer)
     return node!(
         b, TABLE, loadtype(storage), Int32[cast!(b, index, I32)], table
@@ -172,6 +316,14 @@ Add a `CALL` node of `f` on the nodes `xs` to kernel `b` and return its id. `f` 
 `CALLS` and take `call_arity(f)` operands (`mod` and `rem` two, the others one); each
 operand is cast to `REAL`, and the result is `REAL`. The body is Base's method of `f` for
 the kernel's real type. Other names, or another operand count, throw an `IRError`.
+
+# Arguments
+- `b`: the kernel builder.
+- `f`: the function name, in [`CALLS`](@ref).
+- `xs`: the operand node ids.
+
+# Returns
+- The node id.
 """
 function call!(b::KernelBuilder, f::Symbol, xs::Integer...)
     f in CALLS || irerror("CALL: `$f` is not in the whitelist $(CALLS)")
@@ -184,6 +336,20 @@ end
 
 # ---- typing
 # -------------------------------------------------------------------------------
+"""
+    cast!(b::KernelBuilder, x::Integer, t::Scalar) -> Int32
+
+Node `x` converted to type `t`. A node of type `t` is returned as it is; a constant becomes
+a new constant (rounded to `F16` or `F32` for those types); any other node gets a `CAST`.
+
+# Arguments
+- `b`: the kernel builder.
+- `x`: the node id.
+- `t`: the target [`Scalar`](@ref).
+
+# Returns
+- The node id.
+"""
 function cast!(b::KernelBuilder, x::Integer, t::Scalar)
     b.nodes[x].type == t && return Int32(x)
     n = b.nodes[x]
@@ -203,15 +369,59 @@ function jointype(b::KernelBuilder, xs)
     return all(==(ts[1]), ts) ? ts[1] : I32
 end
 
+"""
+    arith!(b::KernelBuilder, op::Op, xs::Integer...; type = jointype(b, xs)) -> Int32
+
+An arithmetic node `op` on the nodes `xs`, each cast to `type` first. The default type is
+`REAL` if any operand is a float, the common type if all operands share one, else `I32`.
+
+# Arguments
+- `b`: the kernel builder.
+- `op`: the [`Op`](@ref), for example `ADD` or `MUL`.
+- `xs`: the operand node ids.
+
+# Keywords
+- `type`: the result type.
+
+# Returns
+- The node id.
+"""
 function arith!(b::KernelBuilder, op::Op, xs::Integer...; type = jointype(b, xs))
     return node!(b, op, type, Int32[cast!(b, x, type) for x in xs])
 end
+"""
+    compare!(b::KernelBuilder, op::Op, x::Integer, y::Integer) -> Int32
+
+A comparison node `op` (`EQ`, `LT` or `LE`) of nodes `x` and `y`, both cast to their
+common type first. The result type is `BOOL`.
+
+# Arguments
+- `b`: the kernel builder.
+- `op`: the comparison [`Op`](@ref).
+- `x`, `y`: the operand node ids.
+
+# Returns
+- The node id.
+"""
 function compare!(b::KernelBuilder, op::Op, x::Integer, y::Integer)
     t = jointype(b, (x, y))
     return node!(b, op, BOOL, Int32[cast!(b, x, t), cast!(b, y, t)])
 end
 """
+    select!(b::KernelBuilder, c, x, y; op = SELECT) -> Int32
+
 Eager select (both arms computed, emitted as `ifelse`).
+
+# Arguments
+- `b`: the kernel builder.
+- `c`: the `BOOL` condition node.
+- `x`, `y`: the arm nodes, cast to their common type.
+
+# Keywords
+- `op = SELECT`: `SELECT`, or `COND` for the lazy form ([`cond!`](@ref)).
+
+# Returns
+- The node id.
 """
 function select!(b::KernelBuilder, c, x, y; op = SELECT)
     (
@@ -220,7 +430,19 @@ function select!(b::KernelBuilder, c, x, y; op = SELECT)
     )
 end
 """
+    cond!(b::KernelBuilder, c, x, y) -> Int32
+
 Lazy conditional (user `ifelse`): emitted as a branch.
+
+# Arguments
+- `b`: the kernel builder.
+- `c`: the `BOOL` condition node.
+- `x`, `y`: the arm nodes.
+
+# Returns
+- The id of the `COND` node.
+
+See also [`select!`](@ref).
 """
 cond!(b::KernelBuilder, c, x, y) = select!(b, c, x, y; op = COND)
 function bittest!(b::KernelBuilder, x::Integer, bit::Integer)
@@ -231,6 +453,27 @@ function bittest!(b::KernelBuilder, x::Integer, bit::Integer)
     )
 end
 
+"""
+    store!(b::KernelBuilder, field::Integer, storage::Scalar, value::Integer; comp = 1,
+           law = :owned)
+
+Add a store of node `value` into field `field` at the kernel's own site. A float lane
+stores the value cast to `REAL`.
+
+# Arguments
+- `b`: the kernel builder.
+- `field`: the field id.
+- `storage`: the field's storage lane.
+- `value`: the node id of the value.
+
+# Keywords
+- `comp = 1`: the component.
+- `law = :owned`: `:owned` (write the value) or `:accumulate` (add it to the current
+  value).
+
+# Returns
+- `nothing`.
+"""
 function store!(
         b::KernelBuilder{N}, field::Integer, storage::Scalar, value::Integer;
         comp = 1, law = :owned

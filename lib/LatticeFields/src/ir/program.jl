@@ -2,6 +2,43 @@
 # build kernels against provisional ids; `program` sorts every table by key, renumbers the
 # ids and rebuilds each kernel canonically, so declaration order never reaches the IR.
 
+"""
+    ProgramBuilder(grid::Grid; periodic = (false, …), spacing = (1.0, …), nparams = 0,
+                   levels = 1)
+
+The builder of a field program. Front ends declare fields, masks, tables and rules in any
+order and build kernels against provisional ids; [`program`](@ref) sorts every table by key
+and renumbers the ids, so declaration order never reaches the IR.
+
+# Arguments
+- `grid`: the lattice [`Grid`](@ref).
+
+# Keywords
+- `periodic = ntuple(_ -> false, N)`: the periodic axes.
+- `spacing = ntuple(_ -> 1.0, N)`: the lattice spacing per axis.
+- `nparams = 0`: the number of runtime parameters.
+- `levels = 1`: the number of grid levels (the lattice and `levels − 1` coarsenings).
+
+# Examples
+```jldoctest
+julia> using LatticeFields.IR
+
+julia> pb = IR.ProgramBuilder(IR.Grid((4, 4)));
+
+julia> u = IR.field!(pb, "u"; storage = IR.F32);
+
+julia> kb = IR.kernel(pb);
+
+julia> IR.store!(kb, u, IR.F32, IR.constant!(kb, 1.0))
+
+julia> IR.add!(pb, kb, "init:u")
+
+julia> length(IR.program(pb).kernels)
+1
+```
+
+See also [`field!`](@ref), [`kernel`](@ref), [`add!`](@ref), [`program`](@ref).
+"""
 mutable struct ProgramBuilder{N}
     hierarchy::Vector{Level{N}}
     fields::Vector{FieldDecl{N}}
@@ -31,6 +68,28 @@ float lane `storage` holds its own type under `lanes = :state` too, where a lane
 holds the problem's value type ([`lanetype`](@ref LatticeFields.Compile.lanetype)).
 `periodic` (default: the program's) gives, per axis, whether the field wraps; on a closed
 axis its accesses take its face rules.
+
+# Arguments
+- `pb`: the [`ProgramBuilder`](@ref).
+- `key`: the field key, unique in the program.
+
+# Keywords
+- `storage = F32`: the storage lane.
+- `shape = Int16[]`: empty for a scalar field, `[k]` for `k` components.
+- `symmetric = false`: whether the components are stored after symmetry.
+- `buffers = 1`: 1, or 2 for a field with two time slots.
+- `role = :state`: `:state`, `:aux`, `:input`, `:output` or `:scratch`.
+- `epoch = PERSTEP`: the [`Epoch`](@ref).
+- `levels = Int8[0]`: the grid levels the field lives on.
+- `classes`: the placement classes (default: one site class).
+- `fixed = false`: the field declared its storage type.
+- `periodic = pb.periodic`: per axis, whether the field wraps.
+
+A duplicate key, an unknown role, a non-lane storage or a `periodic` of the wrong length
+throws an [`IRError`](@ref).
+
+# Returns
+- The provisional field id, an `Int32`.
 """
 function field!(
         pb::ProgramBuilder{N}, key; storage = F32, shape = Int16[], symmetric = false,
@@ -65,10 +124,33 @@ function table!(pb::ProgramBuilder, key; storage = F32, oob = :zero_at_0)
     push!(pb.tables, TableDecl(String(key), storage, oob))
     return Int32(length(pb.tables))
 end
+"""
+    rule!(pb::ProgramBuilder, r::AbstractBoundaryRule)
+
+Add boundary rule `r` (a [`FaceRule`](@ref), [`DomainEdgeRule`](@ref),
+[`NodeValueRule`](@ref) or immersed rule) to the program.
+
+# Arguments
+- `pb`: the [`ProgramBuilder`](@ref).
+- `r`: the rule, with provisional field and mask ids.
+
+# Returns
+- `nothing`.
+"""
 rule!(pb::ProgramBuilder, r::AbstractBoundaryRule) = (push!(pb.rules, r); nothing)
 
 """
+    kernel(pb::ProgramBuilder, space::Space = Space{N}()) -> KernelBuilder
+
 A kernel builder for space `space` (default: the full space at level 0).
+
+# Arguments
+- `pb`: the [`ProgramBuilder`](@ref). The builder sees the fields and tables declared so
+  far.
+- `space`: the [`Space`](@ref) the kernel runs on.
+
+# Returns
+- A new [`KernelBuilder`](@ref).
 """
 function kernel(pb::ProgramBuilder{N}, space::Space{N} = Space{N}()) where {N}
     return KernelBuilder{N}(
@@ -80,7 +162,20 @@ function kernel(pb::ProgramBuilder{N}, space::Space{N} = Space{N}()) where {N}
 end
 
 """
+    add!(pb::ProgramBuilder, kb::KernelBuilder, key)
+
 Finish kernel builder `kb` under `key` and add it to the program.
+
+Finishing renumbers the nodes in a canonical depth-first order from the sorted stores and
+drops unused nodes. A duplicate key throws an [`IRError`](@ref).
+
+# Arguments
+- `pb`: the [`ProgramBuilder`](@ref).
+- `kb`: the kernel builder.
+- `key`: the kernel key, for example `"rate:u"`.
+
+# Returns
+- `nothing`.
 """
 function add!(pb::ProgramBuilder, kb::KernelBuilder, key)
     any(k -> k.key == key, pb.kernels) && irerror("kernel `$key` declared twice")
@@ -123,7 +218,15 @@ function _rulemap(r::NodeValueRule, fm, mm)
 end
 
 """
+    program(pb::ProgramBuilder) -> Program
+
 Sort fields, masks, tables, rules and kernels by key and rebuild every kernel canonically.
+
+# Arguments
+- `pb`: the [`ProgramBuilder`](@ref).
+
+# Returns
+- The [`Program`](@ref), with final ids.
 """
 function program(pb::ProgramBuilder{N}) where {N}
     fp, finv = _perm([f.key for f in pb.fields])
@@ -166,6 +269,13 @@ end
     fieldperiodic(p, f) -> NTuple{N, Bool}
 
 Per axis, whether field `f` (an id) of program `p` wraps.
+
+# Arguments
+- `p`: a [`Program`](@ref).
+- `f`: the field id.
+
+# Returns
+- The field's `periodic` tuple.
 """
 fieldperiodic(p::Program, f::Integer) = p.fields[f].periodic
 

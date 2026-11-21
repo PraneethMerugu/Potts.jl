@@ -131,7 +131,19 @@ function print_kernel(io::IO, p::Program, k::Kernel)
 end
 
 """
+    print_program(io::IO, p::Program)
+
 Print the whole program: layout, then rules, then kernels in key order.
+
+The text names ops and keys, never codes or ids, so a new op or a new declaration elsewhere
+never changes an existing program's text. It is the fingerprint source.
+
+# Arguments
+- `io`: the stream to print to.
+- `p`: a [`Program`](@ref).
+
+# Returns
+- `nothing`.
 """
 function print_program(io::IO, p::Program)
     print_layout(io, p)

@@ -5,6 +5,9 @@
     IRError(msg)
 
 Exception thrown when field IR construction or verification fails.
+
+# Fields
+- `msg::String`: the message. `showerror` prints it after `IRError: `.
 """
 struct IRError <: Exception
     msg::String
