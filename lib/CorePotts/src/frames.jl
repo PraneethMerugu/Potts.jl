@@ -282,9 +282,9 @@ function _frames_initialize(cb, u, t, integ)
     buffers = (Adapt.adapt(b, src), Adapt.adapt(b, src))
     try
         open_frames!(fw.writer, buffers[1])
-    catch
+    catch err
         _unpin_buffers!(integ.backend, buffers)
-        rethrow()
+        rethrow(err)
     end
     s = _FrameSession(
         buffers, integ.backend, objectid(integ), Channel{Int}(2),

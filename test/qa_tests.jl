@@ -262,7 +262,11 @@ const RAW_TRANSFER_ALLOW = Dict(
     # Metal.jl's device→device `copyto!` waits for the GPU twice (D-101)
     "lib/CorePotts/src/phases.jl" => 1,
     # initial layouts on host arrays (setup; Frame masks)
-    "src/layouts.jl" => 2
+    "src/layouts.jl" => 2,
+    # the frame writer's two host buffers (`Array` allocation and `adapt` at its start) and
+    # the host-to-host copy of a CPU state into them; a device copy goes through the
+    # counted `_frame_copy_async!`
+    "lib/CorePotts/src/frames.jl" => 3
 )
 
 # `synchronize` of any module, `Array(`/`Base.Array(`/`Array{…}(`, `Vector(`/`Vector{…}(`,

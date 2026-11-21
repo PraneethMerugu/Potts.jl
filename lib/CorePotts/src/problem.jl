@@ -1774,10 +1774,10 @@ function _solve!(integ::PottsIntegrator)
             step!(integ)
         end
         _finish!(integ)
-    catch
+    catch err
         # a failed or interrupted run: callbacks that hold a file close it (frames.jl)
         _each(_abort_callback!, integ.callbacks)
-        rethrow()
+        rethrow(err)
     end
     return PottsSolution(integ)
 end
