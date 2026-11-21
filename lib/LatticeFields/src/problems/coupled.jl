@@ -1087,7 +1087,9 @@ function _check_growth(cs, alg, s::Program, op::OperatorSpec, keys, p)
         cs.pending = 1
         return nothing
     end
-    # (the modes decided already)
+    # (the modes decided already). `coupled_modes` is `nothing` when the rows have no common
+    # modes: a coefficient that varies by site, rows that differ in periodicity or faces on
+    # an axis, a hexagonal lattice. The Arnoldi estimate decides those
     coupled_modes(s, op, keys, p) === nothing || return nothing
     σ = _growth_shift(op, keys, p)
     λ = coupled_growth(cs, σ, 0.0)
@@ -1095,7 +1097,9 @@ function _check_growth(cs, alg, s::Program, op::OperatorSpec, keys, p)
     throw(
         _growth_refusal(
             keys, λ, 0.0,
-            ", estimated through the coupled operator: a coefficient varies by site"
+            ", estimated through the coupled operator: the rows have no common modes (a " *
+                "coefficient varies by site, the rows differ in periodicity or faces, or " *
+                "the lattice is hexagonal)"
         )
     )
 end

@@ -63,7 +63,12 @@ const CALLS = (
     :sin, :cos, :tan, :tanh, :sinh, :cosh, :cbrt, :exp2, :log2, :log10, :expm1, :log1p,
     :atan, :floor, :ceil, :round, :sign, :mod, :rem,
 )
-# the number of operands of a call of `f` (`mod(x, y)` and `rem(x, y)` take two)
+"""
+    call_arity(f::Symbol) -> Int
+
+The number of operands of an IR call of `f` (a name in `CALLS`): 2 for `mod(x, y)` and
+`rem(x, y)`, 1 for every other call. [`call!`](@ref) checks it.
+"""
 call_arity(f::Symbol) = f in (:mod, :rem) ? 2 : 1
 
 """

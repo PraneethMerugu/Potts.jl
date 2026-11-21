@@ -85,3 +85,16 @@ end
         @test !all(v -> e2[1] + 0.01w <= v <= e2[2] - 0.01w, ps)
     end
 end
+
+@testitem "mod and rem bound nothing for a divisor through 0 or infinite" setup = [
+    LF_compile_interval,
+] tags = [:latticefields, :compile] begin
+    # a divisor off 0: |mod(x, y)| < |y| with the sign of y, |rem(x, y)| <= |x|, |y|
+    @test Compile.iv_mod((-5.0, 5.0), (0.5, 2.0)) == (0.0, 2.0)
+    @test Compile.iv_rem((-1.0, 5.0), (-3.0, -0.5)) == (-1.0, 3.0)
+    # mod(x, 0) is NaN and mod(x, ±Inf) is x (or NaN): no bound
+    for y in ((-1.0, 1.0), (0.0, 2.0), (-2.0, 0.0), (1.0, Inf), (-Inf, -1.0))
+        @test Compile.iv_mod((0.0, 1.0), y) == (-Inf, Inf)
+        @test Compile.iv_rem((0.0, 1.0), y) == (-Inf, Inf)
+    end
+end

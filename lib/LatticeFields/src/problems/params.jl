@@ -114,6 +114,18 @@ struct TableSlot
     shape::Tuple{Vararg{Int}}
 end
 TableSlot(key, entry) = TableSlot(key, entry, ())
+# a matrix written to a matrix table must have its shape (a transposed one has the same
+# length and would be read as another table); a vector or tuple is taken flat, column-major
+function _check_table_shape(key, v, shape)
+    (v isa AbstractMatrix && length(shape) >= 2 && size(v) != shape) || return nothing
+    throw(
+        ArgumentError(
+            "the table `$key` is $(join(shape, "×")); give a matrix of that size, or " *
+                "its $(prod(shape)) values flat, column-major (got a " *
+                "$(join(size(v), "×")) matrix)"
+        )
+    )
+end
 # a whole table as read: flat, or in its declared matrix shape
 function _table_shaped(v, shape)
     return length(shape) >= 2 && prod(shape) == length(v) ? reshape(v, shape) : v
@@ -175,6 +187,7 @@ function SII.set_parameter!(p::LatticeParameters, v, s::TableSlot)
                 )
             )
         end
+        _check_table_shape(s.key, v, s.shape)
         all(x -> x isa Real && isfinite(x), v) ||
             throw(ArgumentError("the table `$(s.key)` must hold finite values (got $v)"))
         vals .= vec(collect(v))

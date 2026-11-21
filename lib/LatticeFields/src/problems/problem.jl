@@ -2716,7 +2716,8 @@ function _write_table!(i::FieldIntegrator, v, sym)
                 )
             )
         end
-        # (a matrix table as a matrix or flat, column-major)
+        # (a matrix table as a matrix of its shape or flat, column-major)
+        _check_table_shape(t, v, get(ix.tableshapes, t, ()))
         vals .= vec([_table_value(eltype(vals), t, x) for x in v])
     else
         num(v) ||

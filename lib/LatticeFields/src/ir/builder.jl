@@ -165,6 +165,14 @@ function table!(b::KernelBuilder, table::Integer, storage::Scalar, index::Intege
         b, TABLE, loadtype(storage), Int32[cast!(b, index, I32)], table
     )
 end
+"""
+    call!(b::KernelBuilder, f::Symbol, xs::Integer...) -> Int32
+
+Add a `CALL` node of `f` on the nodes `xs` to kernel `b` and return its id. `f` must be in
+`CALLS` and take `call_arity(f)` operands (`mod` and `rem` two, the others one); each
+operand is cast to `REAL`, and the result is `REAL`. The body is Base's method of `f` for
+the kernel's real type. Other names, or another operand count, throw an `IRError`.
+"""
 function call!(b::KernelBuilder, f::Symbol, xs::Integer...)
     f in CALLS || irerror("CALL: `$f` is not in the whitelist $(CALLS)")
     length(xs) == call_arity(f) ||

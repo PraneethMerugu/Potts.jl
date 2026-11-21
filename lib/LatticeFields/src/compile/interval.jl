@@ -45,10 +45,17 @@ iv_hull(a::Iv, b::Iv) = (min(a[1], b[1]), max(a[2], b[2]))
 const _MONO_CALLS = (
     :tanh, :sinh, :cbrt, :exp2, :expm1, :atan, :floor, :ceil, :round, :sign,
 )
+# a divisor interval that holds 0 (`mod(x, 0)` is NaN) or an infinite value (`mod(x, Inf)`
+# is `x` or NaN) bounds nothing
+_iv_divisor_ok(y::Iv) = isfinite(y[1]) && isfinite(y[2]) && (y[1] > 0 || y[2] < 0)
 # `mod(x, y)` has the sign of `y` and `|mod(x, y)| < |y|`
-iv_mod(::Iv, y::Iv) = (min(y[1], 0.0), max(y[2], 0.0))
+function iv_mod(::Iv, y::Iv)
+    _iv_divisor_ok(y) || return (-Inf, Inf)
+    return (min(y[1], 0.0), max(y[2], 0.0))
+end
 # `rem(x, y)` has the sign of `x` and `|rem(x, y)| <= min(|x|, |y|)`
 function iv_rem(x::Iv, y::Iv)
+    _iv_divisor_ok(y) || return (-Inf, Inf)
     m = max(abs(y[1]), abs(y[2]))
     return (max(min(x[1], 0.0), -m), min(max(x[2], 0.0), m))
 end
