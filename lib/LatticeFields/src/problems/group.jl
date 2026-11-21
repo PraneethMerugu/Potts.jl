@@ -635,7 +635,7 @@ past it), and a loop whose gain the rule does not bound is refused (`steady_loop
 the refusal names them.
 
 # Arguments
-- `stability`: the stability bound. of the whole field system.
+- `stability`: the stability bound of the whole field system.
 - `groups`: the groups' state keys, in stepping order.
 - `explicit`: `explicit[g]`, whether group `g` has an explicit count.
 - `pp`: the raw parameters.

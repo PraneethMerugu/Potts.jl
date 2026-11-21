@@ -44,7 +44,8 @@ See also [`juliatype`](@ref), [`isfloat`](@ref).
 @doc """
     REAL::Scalar
 
-The abstract float compute type. Pass 4 resolves it to the compute type `T`. It is not a storage lane.
+The abstract float compute type. Pass 4 resolves it to the compute type `T`. It is not a
+storage lane.
 """ REAL
 @doc """
     BOOL::Scalar
@@ -139,22 +140,26 @@ compiler pass reads it.
 @doc """
     STATIC::Epoch
 
-An [`Epoch`](@ref) value: the values never change in a run.
+An [`Epoch`](@ref) value: declares values that never change in a run. It is recorded and
+printed; no pass reads it or enforces it.
 """ STATIC
 @doc """
     PERSIGMA::Epoch
 
-An [`Epoch`](@ref) value: the values change with the cell configuration σ. The default of masks.
+An [`Epoch`](@ref) value: declares values that change with the cell configuration σ. It is
+recorded and printed; no pass reads it or enforces it. The default of masks.
 """ PERSIGMA
 @doc """
     PERSTEP::Epoch
 
-An [`Epoch`](@ref) value: the values change every step. The default of fields.
+An [`Epoch`](@ref) value: declares values that change every step. It is recorded and
+printed; no pass reads it or enforces it. The default of fields.
 """ PERSTEP
 @doc """
     INNER::Epoch
 
-An [`Epoch`](@ref) value: the values change within the inner iterations of a step.
+An [`Epoch`](@ref) value: declares values that change within the inner iterations of a
+step. It is recorded and printed; no pass reads it or enforces it.
 """ INNER
 """
     Bpolicy
@@ -166,7 +171,8 @@ Boundary policy of an access: `RESOLVE` (pass 2 rewrites out-of-domain reads), `
 @doc """
     RESOLVE::Bpolicy
 
-A [`Bpolicy`](@ref) value: pass 2 rewrites a read outside the domain by the field's boundary rules.
+A [`Bpolicy`](@ref) value: pass 2 rewrites a read outside the domain by the field's
+boundary rules.
 """ RESOLVE
 @doc """
     INSIDE::Bpolicy
@@ -251,7 +257,8 @@ An [`Op`](@ref) value: absolute value.
 @doc """
     POWI::Op
 
-An [`Op`](@ref) value: integer power `x^n`, with `n` in the node's immediate (emitted with `Compile.powi`).
+An [`Op`](@ref) value: integer power `x^n`, with `n` in the node's immediate (emitted with
+`Compile.powi`).
 """ POWI
 @doc """
     SQRT::Op
@@ -321,12 +328,14 @@ An [`Op`](@ref) value: conversion to the node's type.
 @doc """
     INSIDE_OP::Op
 
-An [`Op`](@ref) value: whether an access is inside the domain; the result is `BOOL`. It prints as `inside`.
+An [`Op`](@ref) value: whether an access is inside the domain; the result is `BOOL`. It
+prints as `inside`.
 """ INSIDE_OP
 @doc """
     RESTRICT::Op
 
-An [`Op`](@ref) value: combination of an operand over the children of a coarse site: the immediate is 0 for sum, 1 for max, 2 for plurality.
+An [`Op`](@ref) value: combination of an operand over the children of a coarse site: the
+immediate is 0 for sum, 1 for max, 2 for plurality.
 """ RESTRICT
 
 # RESTRICT(x; imm = 0 sum | 1 max | 2 plurality) at a coarse site combines `x` over the

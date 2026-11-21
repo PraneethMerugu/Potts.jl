@@ -30,8 +30,8 @@ registered in Exec's Float64 registry ([`Exec.register_float64!`](@ref)).
 - `float64_ok::Bool = true`: whether the backend runs Float64; `false` makes a Float64
   compute type or lane a build error.
 - `debug::Bool = false`: the debug emission: no POWI expansion or hoisting, bounds-checked
-  indices, no `@inbounds`. `LatticeFields.Schedule.plan` does not fuse by default in this mode. The
-  internal `debug_options()` also sets `T = Float64` and `I = Int`.
+  indices, no `@inbounds`. `LatticeFields.Schedule.plan` does not fuse by default in this
+  mode. The internal `debug_options()` also sets `T = Float64` and `I = Int`.
 - `index::Symbol = :auto`: `:auto`, `:linear` or `:cartesian`.
 - `lanes::Symbol = :fixed`: `:fixed` or `:state` (see [`lanetype`](@ref)).
 - `clock::Int = 0`: the parameter slot of the clock's step index, or 0.

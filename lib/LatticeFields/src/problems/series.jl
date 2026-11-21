@@ -273,7 +273,8 @@ report words them). It is a `NamedTuple` type.
 - `ρin::Float64`: the bound of the terms out of the operator.
 - `θ::Float64`: the largest ratio sum of a scaled row's terms out of the operator
   ([`inexact_bounds`](@ref)).
-- `smin::Float64`: the decay (the steady shift).
+- `smin::Float64`: the smallest decay `max(−J_loc, 0)` over the group's rows (the steady
+  shift); `NaN` when a row's operator varies by site.
 - `terms::Vector{String}`: the terms out of the operator.
 - `unseen::Vector{String}`: the terms no bound sees.
 """

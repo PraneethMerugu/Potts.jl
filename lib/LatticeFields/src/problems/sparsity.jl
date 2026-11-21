@@ -292,14 +292,14 @@ end
 The sparsity pattern of the Jacobian `∂f/∂u` of the right side of `prob`, read off its IR.
 
 Entry `(i, j)` is stored when the rate of state entry `i` reads state entry `j` at some
-value of the state and parameters. It holds every load of the rate program at its site (the stencil's offsets; a face's ghost
-value, which reads the site on the face; a periodic wrap; a coarse field's parent and a
-restriction's children; a hexagonal lattice's axial neighbors) and the aux fields computed
-from the state in between (an aux chain is folded through). A select decided by the box (a
-face's inside test) keeps the arm the site takes; one decided by data (a mask, `max`) keeps
-both. A masked site keeps its row, so a mask that moves with an input write stays covered.
-A rate that reads a reduction of the state (a sum over the lattice) would make the rows
-dense: such a system is refused, with the route `jvp`.
+value of the state and parameters. It holds every load of the rate program at its site (the
+stencil's offsets; a face's ghost value, which reads the site on the face; a periodic wrap;
+a coarse field's parent and a restriction's children; a hexagonal lattice's axial neighbors)
+and the aux fields computed from the state in between (an aux chain is folded through). A
+select decided by the box (a face's inside test) keeps the arm the site takes; one decided
+by data (a mask, `max`) keeps both. A masked site keeps its row, so a mask that moves with
+an input write stays covered. A rate that reads a reduction of the state (a sum over the
+lattice) would make the rows dense: such a system is refused, with the route `jvp`.
 
 # Arguments
 - `prob`: an `ODEProblem` that `discretize` returned.
@@ -365,11 +365,12 @@ end
 A distance-2 coloring of the columns of `S`.
 
 Two columns that share a row get different colors, so one Dual evaluation with one partial
-per color gives every entry of the Jacobian. With the lattice coordinates of the columns (`coords`, one column per entry of the state,
-`N` rows) a stencil's lattice coloring `(a ⋅ x) mod m` is tried first (5 colors for a
-5-point stencil, 7 for a 3D 7-point one, 9 for a 9-point one, when the box allows it: a
-periodic axis needs `m` to divide its size); otherwise, or when it takes more colors, the
-greedy coloring in column order (7 for a 5-point stencil).
+per color gives every entry of the Jacobian. With the lattice coordinates of the columns
+(`coords`, one column per entry of the state, `N` rows) a stencil's lattice coloring
+`(a ⋅ x) mod m` is tried first (5 colors for a 5-point stencil, 7 for a 3D 7-point one, 9
+for a 9-point one, when the box allows it: a periodic axis needs `m` to divide its size);
+otherwise, or when it takes more colors, the greedy coloring in column order (7 for a
+5-point stencil).
 
 # Arguments
 - `S::SparseMatrixCSC`: the sparsity pattern.

@@ -6,10 +6,8 @@ device wrapper for every device kernel. A kernel is a body `body(i, args...)` ru
 `i in 1:n`.
 
 - **Host executor** ([`host_launch!`](@ref)): a plain loop, or a threaded chunked loop for
-  large `n`. The KernelAbstractions CPU backend never runs production work: on KA 0.10 it is
-  PoCL (5 µs per launch, SPIR-V semantics, invisible to JET and AllocCheck).
-- **Device wrapper** (`_kernel!`): `unsafe_indices = true` with an `if i <= n` guard. KA 0.9
-  refuses `return` inside a kernel; KA 0.10 accepts both.
+  large `n`. The KernelAbstractions CPU backend never runs production work.
+- **Device wrapper** (`_kernel!`): `unsafe_indices = true` with an `if i <= n` guard.
 - **Launches**: [`launch!`](@ref) for a dynamic launch from a runtime `n`;
   [`Launch`](@ref) for a prebuilt, type-stable launch (static ndrange for bodies that run at
   one size); [`Plan`](@ref) for a zero-allocation walk over a tuple of launches.
@@ -47,7 +45,7 @@ the KernelAbstractions CPU backend, false for every device backend.
 
 # Examples
 ```jldoctest
-julia> using LatticeFields, CorePotts  # CorePotts exports `CPU`
+julia> using LatticeFields; using LatticeFields.Exec.KernelAbstractions: CPU
 
 julia> LatticeFields.Exec.ishost(CPU())
 true
@@ -77,7 +75,7 @@ problem); the type device code gets by default is [`default_float`](@ref).
 
 # Examples
 ```jldoctest
-julia> using LatticeFields, CorePotts  # CorePotts exports `CPU`
+julia> using LatticeFields; using LatticeFields.Exec.KernelAbstractions: CPU
 
 julia> LatticeFields.Exec.supports(CPU(), Float64)
 true
@@ -107,7 +105,7 @@ the hardware; ask [`supports`](@ref) for that.
 
 # Examples
 ```jldoctest
-julia> using LatticeFields, CorePotts  # CorePotts exports `CPU`
+julia> using LatticeFields; using LatticeFields.Exec.KernelAbstractions: CPU
 
 julia> LatticeFields.Exec.default_float(CPU())
 Float64
@@ -183,8 +181,8 @@ end
     HOST_GRAIN::Int
 
 Minimum number of work items per host thread. A launch of at most `HOST_GRAIN` items, or
-any launch with one thread, is a plain loop (threaded launches of about 1000 items were 6×
-slower than the loop).
+any launch with one thread, is a plain loop (a threaded launch of few items is slower than
+the loop).
 """
 const HOST_GRAIN = 8192
 
@@ -337,7 +335,7 @@ const VERBOSE = Base.ScopedValues.ScopedValue(true)
 Compile the kernel that [`launch!`](@ref)`(backend, body, n, args)` runs, by a launch of one
 work item with `n = 0` (it passes no guard, so nothing is written). The kernel type does not
 depend on the ndrange of a dynamic launch, so the later launch reuses this compile. A
-launch over an empty ndrange is not used: KA 0.10 returns before compiling it. Nothing on
+launch over an empty ndrange is not used, since it may return before compiling. Nothing on
 the host executor. Does not synchronize.
 
 # Arguments
@@ -368,10 +366,10 @@ struct HostExec end
 A prebuilt launch of `body(i, args...)` for `i in 1:n`, built once at plan time and called
 with no arguments: `l()` enqueues it (does not synchronize). On a device it holds the kernel
 object of the generic wrapper with a static workgroup size `WG` and, with `static = true`,
-a static ndrange (`n` rounded up to a multiple of `WG`). On KA 0.9 a static ndrange saves
-1.6–1.8 µs and about 900 B per launch (pass 3), but each distinct ndrange is its own kernel
-type, so its own compile (`static` has no default: the caller decides): use it for bodies
-that run at one size, and `static = false` for bodies launched at several sizes. On the host
+a static ndrange (`n` rounded up to a multiple of `WG`). A static ndrange avoids a
+per-launch cost, but each distinct ndrange is its own kernel type, so its own compile
+(`static` has no default: the caller decides): use it for bodies that run at one size, and
+`static = false` for bodies launched at several sizes. On the host
 the launch is [`host_launch!`](@ref).
 
 Type parameters: `K` the kernel object (or the host executor), `WG` the workgroup size (0 on
@@ -393,7 +391,7 @@ the host), `NP` the launch tuple `(body, args, n)`.
 
 # Examples
 ```jldoctest
-julia> using LatticeFields, CorePotts  # CorePotts exports `CPU`
+julia> using LatticeFields; using LatticeFields.Exec.KernelAbstractions: CPU
 
 julia> v = zeros(3);
 
@@ -599,9 +597,8 @@ end
 Compile a kernel set in parallel on the host: one task per job (`Threads.@spawn`), each a
 [`Launch`](@ref) or a zero-argument function that compiles (e.g. `() -> compile!(backend,
 body, args)`), and each task synchronizes `backend` before it ends (device streams are
-task-local). Waits for every task; rethrows the first failure. Compilation is the cost
-(about 0.2 s per kernel on ROCm); with 4 threads a 17-kernel set compiles about 1.5 s
-faster than in series (pass 3). Nothing on the host executor.
+task-local). Waits for every task; rethrows the first failure. Compilation is the cost, so
+a set compiles faster than in series. Nothing on the host executor.
 
 # Arguments
 - `backend`: a KernelAbstractions backend.
@@ -645,7 +642,7 @@ A fixed sequence of [`Launch`](@ref)es (or any zero-argument callables), run in 
 `plan()`. The walk is a RuntimeGeneratedFunction emitted once per plan length,
 `t -> (t[1](); t[2](); …; nothing)`: one call per launch, unrolled and type-stable at any
 length. A recursive or `foreach` walk over a tuple of more than 32 launches is not: it
-allocates 10–13 KB per launch (pass 3), and `return_types` does not show it.
+allocates at every launch, and `return_types` does not show it.
 
 # Arguments
 - `launches`: a tuple of [`Launch`](@ref)es or zero-argument callables.

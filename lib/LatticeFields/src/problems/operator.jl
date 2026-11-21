@@ -16,74 +16,78 @@ A front end builds it ([`operator_spec`](@ref)).
 
 # Fields
 - `key::String`: the state field of the row.
-- `faces::Vector{Vector{Coef}}`: `faces[a]` is the face coefficient to `+e_a` (`K_f/h_a²` summed over the row's diffusion
-  terms), as a sum of [`Coef`](@ref LatticeFields.IR.Coef)s (numbers, or numbers times
-  parameter slots), when `field` is false;
-- `jloc::Vector{Coef}`: the local Jacobian (the row's linear local terms, `−k` for a decay `−k c`) as a
-  sum of `Coef`s, when `field` is false;
-- `field::Bool`: the operator varies by site (a face coefficient that reads the coordinates or an
-  input, a local coefficient that reads an input or a table at an input, a site multiplier,
-  an irregular domain): the operator program's kernel `jac:<key>` writes, per site, the face
-  coefficients `jac:<key>.w<a>`, the local Jacobian `jac:<key>.j`, the boundary diagonal of
-  the face conditions `jac:<key>.d` (`K w d⁺` per boundary face, the Dirichlet `d = 2`), and
-  with `scaled` the multiplier `jac:<key>.m`, with `domain` the domain indicator
-  `jac:<key>.dom`;
-- `domain::Bool`: the row has an irregular domain, whose indicator the `jac:` kernel
-  writes;
-- `scaled::Bool`: a site multiplier `m laplacian(c)` (`SiteDiffusion`): the row is scaled by `1/m`
-  (faces stay symmetric), and a row with `m = 0` is solved on its own, `δ = G/(1/h − J_loc)`
-  (the two-stage solve);
+- `faces::Vector{Vector{Coef}}`: `faces[a]` is the face coefficient to `+e_a` (`K_f/h_a²`
+  summed over the row's diffusion terms), as a sum of [`Coef`](@ref LatticeFields.IR.Coef)s
+  (numbers, or numbers times parameter slots), when `field` is false.
+- `jloc::Vector{Coef}`: the local Jacobian (the row's linear local terms, `−k` for a decay
+  `−k c`) as a sum of `Coef`s, when `field` is false.
+- `field::Bool`: the operator varies by site (a face coefficient that reads the coordinates
+  or an input, a local coefficient that reads an input or a table at an input, a site
+  multiplier, an irregular domain): the operator program's kernel `jac:<key>` writes, per
+  site, the face coefficients `jac:<key>.w<a>`, the local Jacobian `jac:<key>.j`, the
+  boundary diagonal of the face conditions `jac:<key>.d` (`K w d⁺` per boundary face, the
+  Dirichlet `d = 2`), and with `scaled` the multiplier `jac:<key>.m`, with `domain` the
+  domain indicator `jac:<key>.dom`.
+- `domain::Bool`: the row has an irregular domain, whose indicator the `jac:` kernel writes.
+- `scaled::Bool`: a site multiplier `m laplacian(c)` (`SiteDiffusion`): the row is scaled by
+  `1/m` (faces stay symmetric), and a row with `m = 0` is solved on its own,
+  `δ = G/(1/h − J_loc)` (the two-stage solve).
 - `local_only::Bool`: the row has no diffusion: each site is solved on its own,
-  `δ = G/(1/h − J_loc)`;
+  `δ = G/(1/h − J_loc)`.
 - `exact::Bool`: every term of the row is in `J̃` (one Newton step is the Backward Euler
-  step of a linear rate);
+  step of a linear rate).
 - `inexact::Vector{String}`: when not `exact`, the terms left in the residual (a defect
-  correction), in the user's words;
-- `iterate::Bool`: the local Jacobian reads the row's own field (a local nonlinear term `f(c)`,
-  `−∂f/∂c` at the iterate, or a switch): the `jac:` kernel runs at every Newton iteration;
-- `switch::Bool`: the row has a switch term `a max(c − c_T, 0)` (`LaggedSwitch`): its Jacobian
-  flips with the iterate, and a group with one takes 2 Newton iterations automatically;
-- `adv::Vector{Any}`: the bound of the row's advection terms: entries whose absolute values sum to
-  the upwind bound `Σ_a 2 max|u_a| / h_a`, each a `Coef` (a velocity of numbers and
+  correction), in the user's words.
+- `iterate::Bool`: the local Jacobian reads the row's own field (a local nonlinear term
+  `f(c)`, `−∂f/∂c` at the iterate, or a switch): the `jac:` kernel runs at every Newton
+  iteration.
+- `switch::Bool`: the row has a switch term `a max(c − c_T, 0)` (`LaggedSwitch`): its
+  Jacobian flips with the iterate, and a group with one takes 2 Newton iterations
+  automatically.
+- `adv::Vector{Any}`: the bound of the row's advection terms: entries whose absolute values
+  sum to the upwind bound `Σ_a 2 max|u_a| / h_a`, each a `Coef` (a velocity of numbers and
   parameters) or `(; f, text)`, `f` a function of the parameters (a velocity that varies by
-  site, bounded over the box by the interval evaluator; NaN when not finite, and the
-  term `text` is then one no bound sees);
-- `cross::Vector{Tuple{String, Coef, String}}`: the row's cross terms `a · o` (`CrossLinear`): the other field's key, `a` as a
-  `Coef` (`NaN` when no number or parameter bounds it), the term's text;
-- `unseen::Vector{String}`: the terms left out of `J̃` that no bound sees (a defect correction whose
-  convergence only the device check decides), in the user's words;
-- `bounds::Vector{Tuple{Any, String, Any}}`: the diffusion terms left out of a scaled
-  row's `J̃` (another face coefficient), each `(bound, text, ratio)`: `bound` a function of the parameters (a
-  [`ParamsTables`](@ref), the tables included) giving its Gershgorin bound (a bound that is
-  not finite at the parameters makes the term unseen), and `ratio` its face-wise ratio θ to
-  the kept term, `max|m K|` of the term over the smallest `m K` kept (NaN when the kept
-  multiplier is not bounded below by a positive value, `nothing` when no interval bounds
-  it): with `L_out ≼ θ L_kept` the correction contracts by θ at any step size, so when the
-  row's θ sum is at most 1/2 the term counts in the Newton count only, not in the substeps;
+  site, bounded over the box by the interval evaluator; NaN when not finite, and the term
+  `text` is then one no bound sees).
+- `cross::Vector{Tuple{String, Coef, String}}`: the row's cross terms `a · o`
+  (`CrossLinear`): the other field's key, `a` as a `Coef` (`NaN` when no number or parameter
+  bounds it), the term's text.
+- `unseen::Vector{String}`: the terms left out of `J̃` that no bound sees (a defect
+  correction whose convergence only the device check decides), in the user's words.
+- `bounds::Vector{Tuple{Any, String, Any}}`: the diffusion terms left out of a scaled row's
+  `J̃` (another face coefficient), each `(bound, text, ratio)`: `bound` a function of the
+  parameters (a [`ParamsTables`](@ref), the tables included) giving its Gershgorin bound (a
+  bound that is not finite at the parameters makes the term unseen), and `ratio` its
+  face-wise ratio θ to the kept term, `max|m K|` of the term over the smallest `m K` kept
+  (NaN when the kept multiplier is not bounded below by a positive value, `nothing` when no
+  interval bounds it): with `L_out ≼ θ L_kept` the correction contracts by θ at any step
+  size, so when the row's θ sum is at most 1/2 the term counts in the Newton count only, not
+  in the substeps.
 - `facemax`: for a field row with diffusion, a function of the parameters giving the largest
   face coefficient per axis (`Σ max|m| max|K| / h_a²`, NaN when not finite), or `nothing`:
-  it bounds the part of a Robin face with a negative diagonal left out of the operator;
+  it bounds the part of a Robin face with a negative diagonal left out of the operator.
 - `jmax`: for a field row with local terms, a function of the parameters giving the largest
-  value of its local Jacobian over the sites (the interval evaluator over the box; NaN
-  when not finite), or `nothing`: the growth that count rule 1 keeps out of the shift;
-- `linear::Bool`: every term of the row is linear in the group's state (diffusion, linear local,
-  advection, cross-linear terms and sources: a coupled solve's directional difference
-  of the residual is then exact at any step, and one Newton step is the solve);
-- `crossfaces::Vector{Tuple{String, Vector{Vector{Coef}}}}`: the row's cross diffusion terms `D laplacian(o)` with a numeric coefficient,
-  each the other field's key and its faces per axis `D/h_a²` as `Coef`s (the coupled steady
-  system's modes);
-- `msign::Vector{Tuple{Any, String, String}}`: the row's diffusion multipliers that read the coordinates, each
-  `(f, mtext, text)`: `f` a function of the parameters giving the multiplier's smallest
-  value over the site centers (the interval evaluator; NaN when it has none), `mtext` the
-  multiplier and `text` the term in the user's words. Where one may be negative the scaled
-  row drops the diffusion (anti-diffusion), so the operator is not exact at those
-  parameters: checked at bind and at every parameter write;
-- `sitefaces::Vector{Tuple{Int, Int, Any}}`: the row's Robin faces whose α or β varies by site or in time, each
-  `(axis, k, f)` (`k` 1 low, 2 high): `f` a function of the parameters giving the smallest
-  and largest ghost diagonal `d = α/(α/2 + β)` over the face's sites at any time (NaN when
-  no interval bounds it, or `α/2 + β` may vanish). A negative part stays out of the operator
-  per site (the row is a field row), so the operator is exact only where `d ≥ 0` at every
-  site.
+  value of its local Jacobian over the sites (the interval evaluator over the box; NaN when
+  not finite), or `nothing`: the growth that the automatic substep count keeps out of the
+  shift.
+- `linear::Bool`: every term of the row is linear in the group's state (diffusion, linear
+  local, advection, cross-linear terms and sources: a coupled solve's directional difference
+  of the residual is then exact at any step, and one Newton step is the solve).
+- `crossfaces::Vector{Tuple{String, Vector{Vector{Coef}}}}`: the row's cross diffusion terms
+  `D laplacian(o)` with a numeric coefficient, each the other field's key and its faces per
+  axis `D/h_a²` as `Coef`s (the coupled steady system's modes).
+- `msign::Vector{Tuple{Any, String, String}}`: the row's diffusion multipliers that read the
+  coordinates, each `(f, mtext, text)`: `f` a function of the parameters giving the
+  multiplier's smallest value over the site centers (the interval evaluator; NaN when it has
+  none), `mtext` the multiplier and `text` the term in the user's words. Where one may be
+  negative the scaled row drops the diffusion (anti-diffusion), so the operator is not exact
+  at those parameters: checked at bind and at every parameter write.
+- `sitefaces::Vector{Tuple{Int, Int, Any}}`: the row's Robin faces whose α or β varies by
+  site or in time, each `(axis, k, f)` (`k` 1 low, 2 high): `f` a function of the parameters
+  giving the smallest and largest ghost diagonal `d = α/(α/2 + β)` over the face's sites at
+  any time (NaN when no interval bounds it, or `α/2 + β` may vanish). A negative part stays
+  out of the operator per site (the row is a field row), so the operator is exact only where
+  `d ≥ 0` at every site.
 """
 struct RowOperator
     key::String

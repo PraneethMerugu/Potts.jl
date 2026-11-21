@@ -355,11 +355,12 @@ inputs are read there) by Newton iterations on the form `(I/h − J̃) δ = G(u_
 terms, face and mask conditions; a front end extracts it: `OperatorSpec`), each a linear
 solve with `linsolve`, and `u_{k+1} = u_k + δ`.
 
-The method is implicit, first order and L-stable. An operator that reads the time is built
-at each substep's end time. One type for both coupled and standalone routes (Potts and
-LatticePDE export this binding). On a hexagonal lattice the operator has the lattice's six
-faces. The window `dt` is the `dt` keyword of `solve`, as for [`ExplicitEuler`](@ref)
-(required on a `FieldProblem` without a clock; in a `PottsProblem` the window is the MCS).
+The method is implicit, first order and L-stable (of the converged step). An operator that
+reads the time is built at each substep's end time. One type for both coupled and standalone
+routes (Potts and LatticePDE export this binding). On a hexagonal lattice the operator has
+the lattice's six faces. The window `dt` is the `dt` keyword of `solve`, as for
+[`ExplicitEuler`](@ref) (required on a `FieldProblem` without a clock; in a `PottsProblem`
+the window is the MCS).
 
 # Keywords
 - `substeps = nothing`: `nothing` is automatic: 1, raised only where the operator needs it
@@ -936,7 +937,8 @@ end
 """
     alg_family(alg) -> Symbol
 
-The family of algorithm `alg`. A problem steps one family (split stepping is planned).
+The family of algorithm `alg`. A problem steps one family: rates and maps are never mixed in
+one problem.
 
 # Arguments
 - `alg`: the field algorithm.
@@ -1067,7 +1069,7 @@ another field counts as reading every other group. A term that reads only its ow
 (`-a^3`) does not. [`substep_counts`](@ref) gives each group's count.
 
 Every group steps the same window, the `dt` of `solve`. A rate algorithm and a map algorithm
-are never mixed (split stepping is planned). A field without a pair and with no `default` is
+are never mixed in one problem. A field without a pair and with no `default` is
 an error naming it.
 
 # Arguments

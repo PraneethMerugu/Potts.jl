@@ -128,8 +128,11 @@ returns an array with one value per site or a number.
 ```jldoctest
 julia> using LatticeFields
 
-julia> LatticeFields.Problems.is_input_function(t -> 2t), LatticeFields.Problems.is_input_function([1.0])
-(true, false)
+julia> LatticeFields.Problems.is_input_function(t -> 2t)
+true
+
+julia> LatticeFields.Problems.is_input_function([1.0])
+false
 ```
 """
 is_input_function(v) = !(v isa Union{Number, AbstractArray, Nothing})
@@ -542,7 +545,7 @@ Base.length(w::ParamsTables) = length(w.p)
 Base.iterate(w::ParamsTables, s...) = iterate(w.p, s...)
 Base.eltype(::Type{ParamsTables{P}}) where {P} = eltype(P)
 """
-    with_tables(p, tables; inputs = [])
+    with_tables(p, tables; inputs = ())
 
 `p` as the stability hooks take it: `ParamsTables(p, tables, inputs)` when there are tables
 or inputs, else `p`.
@@ -556,7 +559,7 @@ only; the problem keeps the values as given).
 - `tables`: the tables, `key => values`.
 
 # Keywords
-- `inputs = []`: the input values the bound reads, `key => values`.
+- `inputs = ()`: the input values the bound reads, `key => values`.
 
 # Returns
 - A [`ParamsTables`](@ref), or `p` when `tables` and `inputs` are empty.

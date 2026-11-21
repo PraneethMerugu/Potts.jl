@@ -289,8 +289,11 @@ julia> using LatticeFields
 
 julia> using LatticeFields.IR: F32
 
-julia> LatticeFields.Compile.lanetype(F32, Float64), LatticeFields.Compile.lanetype(F32, Float64, :state)
-(Float32, Float64)
+julia> LatticeFields.Compile.lanetype(F32, Float64)
+Float32
+
+julia> LatticeFields.Compile.lanetype(F32, Float64, :state)
+Float64
 ```
 """
 function lanetype(

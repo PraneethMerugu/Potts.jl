@@ -116,7 +116,7 @@ end
 """
     Δ
 
-The same function as [`laplacian`](@ref): `Δ(c) === laplacian(c)`.
+The same function as [`laplacian`](@ref): `Δ === laplacian`.
 """
 const Δ = laplacian
 

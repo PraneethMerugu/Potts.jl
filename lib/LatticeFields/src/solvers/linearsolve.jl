@@ -708,7 +708,7 @@ are block partials summed in a fixed order (no atomics, no BLAS), so a run is bi
 repeatable, and the CPU and a GPU give the same bits. Krylov.jl keeps its small
 least-squares problem on the host, so on a GPU each dot product waits for its value (about
 `j + 1` waits at iteration `j` of a cycle; the one exception to the field solvers' rule of
-no GPU wait in a step, user ruling 2026-11-01). Any other value is an `ArgumentError` naming
+no GPU wait in a step). Any other value is an `ArgumentError` naming
 the keyword.
 
 # Keywords

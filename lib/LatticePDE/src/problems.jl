@@ -2663,8 +2663,8 @@ with: at `init` of a field algorithm, and at the first call of the right side wi
 values for an OrdinaryDiffEq solver (`remake`, `setp` on an integrator), so `solve` or
 `step!` throws and never runs them.
 
-A system mixes no rate equations (`D(c) ~ …`) and maps (`Shift(t, 1)(m) ~ …`) in this
-version: one problem steps one kind (split stepping is planned).
+A system mixes no rate equations (`D(c) ~ …`) and maps (`Shift(t, 1)(m) ~ …`): one problem
+steps one kind.
 """
 function discretize(
         sys::PDESystem, disc::LatticeDiscretization{N}; inputs = (), u0 = nothing,
@@ -2725,9 +2725,11 @@ end
 
 Whether `sys` has maps (`Shift(t, 1)(m) ~ rhs`); a system with rate equations and maps both
 is refused, naming the fields of each, with the front end's route (`route`; LatticePDE's:
-two systems). One problem steps one kind in this version, whichever front end builds it and
-however its fields are grouped: a map steps one unit of time, which would step the rates
-with no bound, and separate groups would be split stepping (planned).
+two systems). One problem steps one kind, whichever front end builds it and however its
+fields are grouped: a map steps one unit of time, which would step the rates with no bound.
+
+# Arguments
+- `sys::PDESystem`: the system.
 
 # Keywords
 - `route = "discretize them as two systems"`: the front end's route in the refusal.

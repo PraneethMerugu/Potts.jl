@@ -35,8 +35,11 @@ probe or diagnostic catch.
 ```jldoctest
 julia> using LatticeFields
 
-julia> LatticeFields.isfatal(InterruptException()), LatticeFields.isfatal(ErrorException("x"))
-(true, false)
+julia> LatticeFields.isfatal(InterruptException())
+true
+
+julia> LatticeFields.isfatal(ErrorException("x"))
+false
 ```
 """
 isfatal(e) = e isa Union{InterruptException, StackOverflowError, OutOfMemoryError}

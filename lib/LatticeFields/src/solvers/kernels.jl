@@ -64,7 +64,7 @@ in the user's words (`ArgumentError`).
 julia> using LatticeFields
 
 julia> op = LatticeFields.Solvers.CellOperator((8, 8); shift = 1.0,
-                                               dirichlet = ((0.0, 1.0), (nothing, nothing)));
+           dirichlet = ((0.0, 1.0), (nothing, nothing)));
 
 julia> op.dims, op.shift
 ((8, 8), 1.0)
