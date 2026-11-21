@@ -135,13 +135,14 @@ end
         @test_throws ArgumentError symbolic_discretize(
             pde([eq; D(ke) ~ 1], Equation[], [ce, ke], [Dc]), LatticeDiscretization(g)
         )
-        # wrong bcs are detected: a face of a periodic axis; periodicity for one field only
+        # wrong bcs are detected: a face of an axis the same field's pair makes periodic
         @test_throws ArgumentError symbolic_discretize(
             pde(eq, [c(t, x, 0) ~ c(t, x, 1), c(t, x, 0) ~ 1.0], [ce], [Dc]),
             LatticeDiscretization(g)
         )
+        # periodicity for one field only is per-field periodicity (base: refused)
         two = pde([eq; D(oe) ~ laplacian(oe)], [c(t, x, 0) ~ c(t, x, 1)], [ce, oe], [Dc])
-        @test_throws ArgumentError symbolic_discretize(two, LatticeDiscretization(g))
+        @test symbolic_discretize(two, LatticeDiscretization(g)) isa CompiledField
         # the vocabulary scans run first
         @test_throws ArgumentError symbolic_discretize(
             pde([D(ce) ~ Pre(ce)], Equation[], [ce], [Dc]), LatticeDiscretization(g)

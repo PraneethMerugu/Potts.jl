@@ -1291,7 +1291,7 @@ function bound_parts(b::StabilityBound, p)
                 )
                 w = _why(f, p)
                 # a read at index 0: the first site where it is (from the host input arrays)
-                w isa Tuple && any(c -> any(x -> x[2] == 0, c), w[1]) &&
+                w isa Tuple && any(c -> any(x -> any(iszero, x[2]), c), w[1]) &&
                     (w = (w..., _zero_site(f, p)))
                 w === nothing || any(x -> x[1] == b.keys[i] && x[2] == f.text, nonfinite) ||
                     push!(nonfinite, (b.keys[i], f.text, w))
@@ -1411,16 +1411,17 @@ end
 # index that reaches 0
 function _why_route(w)
     w isa Tuple || return ""
-    rd = unique(reduce(vcat, w[1]; init = Tuple{String, Int, Float64}[]))
+    rd = unique(reduce(vcat, w[1]; init = Tuple{String, Tuple, Float64}[]))
     isempty(rd) && return "; give its parameters values that make it finite"
     parts = String[]
-    any(x -> x[2] == 0, rd) && push!(
+    any(x -> any(iszero, x[2]), rd) && push!(
         parts, "index 0 reads 0 (an input value 0, or a literal 0), and the " *
             "coefficient is not finite there: keep 0 out of the index (write no 0 " *
             "into the input, or declare it `bounds = (1, n)`)"
     )
     for (t, i, v) in rd
-        i == 0 || push!(parts, "for `$t[$i]` ($v), $(_entry_fix(v))")
+        any(iszero, i) && continue
+        push!(parts, "for `$t[$(join(i, ", "))]` ($v), $(_entry_fix(v))")
     end
     return "; " * join(parts, "; ")
 end

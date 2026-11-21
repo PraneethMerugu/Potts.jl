@@ -113,9 +113,9 @@ end
     @test all(==(M[2, 3] + M[1, 2]), rate(remake(o; p = [Jp => M])))
 end
 
-@testitem "pair tables in Float32 and with a Dual parameter" setup = [LP_pair_tables] tags = [
-    :latticepde, :pair_tables,
-] begin
+@testitem "pair tables in Float32 and with a Dual parameter" setup = [
+    LP_pair_tables,
+] tags = [:latticepde, :pair_tables] begin
     p64 = tprob(kd * value_at(Jp, ae, be))
     p32 = tprob(kd * value_at(Jp, ae, be); T = Float32)
     s64 = solve(p64, ExplicitEuler(); dt = 0.1).u[end]
