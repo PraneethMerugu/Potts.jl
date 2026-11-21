@@ -81,26 +81,49 @@ end                     # every hex position is a touch
 end
 
 """
-Evaluation mode for `Global`: exact floods everywhere (`GlobalExact`, used by host
-algorithms), or windowed search (`GlobalBoard`, used by `CheckerboardCPM`).
+    GlobalExact()
+
+The evaluation mode of the `Global` connectivity rule that decides every search with
+exact floods.
+
+Host algorithms use it. It is stored in the run context as `ctx.global_mode`.
+
+See also [`GlobalBoard`](@ref), [`global_keeps`](@ref), [`connectivity_ctx`](@ref).
 """
 struct GlobalExact end
 
 """
-Windowed global connectivity evaluation mode used by `CheckerboardCPM` when a rule sets a
-search window.
+    GlobalBoard()
+
+The evaluation mode of the `Global` connectivity rule that searches inside a window.
+
+[`CheckerboardCPM`](@ref) uses it. A rule without a window still uses the exact search.
+
+See also [`GlobalExact`](@ref), [`global_keeps`](@ref).
 """
 struct GlobalBoard end
 
 """
-Stage of the `Global` veto (`ConnectivityHooks.post`): local shell test only (`0` pass,
-`1` needs search, `2` refused). See [`GlobalSearch`](@ref).
+    GlobalLocal()
+
+The stage of the `Global` veto that runs the local shell test only.
+
+The veto (`ConnectivityHooks.post`) returns `0` when the copy passes, `1` when the copy
+needs the search and `2` when it is refused.
+
+See also [`GlobalSearch`](@ref), [`global_keeps`](@ref).
 """
 struct GlobalLocal end
 
 """
-Full-search stage of the `Global` veto (`ConnectivityHooks.post`): returns `0` (pass), `1`
-(refused for want of window), or `2` (refused).
+    GlobalSearch()
+
+The stage of the `Global` veto that decides with the full search.
+
+The veto (`ConnectivityHooks.post`) returns `0` when the copy passes, `1` when it is
+refused for want of window and `2` when it is refused.
+
+See also [`GlobalLocal`](@ref), [`global_keeps`](@ref).
 """
 struct GlobalSearch end
 
@@ -110,23 +133,30 @@ const GLOBAL_REFUSED = Int32(2)
 
 """
     ConnectivityHooks(; post = nothing, defer = nothing, uses_global = false,
-                      exact_veto = false, after_slots = 0)
+                      exact_veto = false, after_slots = 0, window = 0)
 
-The whole-cell connectivity parts of a `CPMFunction`:
+The whole-cell connectivity parts of a `CPMFunction`.
 
-  - `post(st, p, prop, ctx, stage) -> Int32`: the `Global` veto, evaluated after the
-    acceptance draw (order local → ΔH → draw → Global): `stage` is `GlobalLocal()` or
-    `GlobalSearch()`; 0 passes, 1 is a refusal for want of window, 2 a refusal;
-  - `defer(st, p, prop, ctx) -> Bool`: on the checkerboard, whether a copy needs the exact
-    floods (cell-scope `pieces`, an inline `Global` without window); such copies run in a
-    serial kernel over the scratch;
-  - `uses_global`: the model uses `Global` (veto, penalty or `connected`): the integrator
-    counts `stats.connectivity_deferred`;
-  - `exact_veto`: a veto `Global()` without window (exact search: host only on the
-    checkerboard);
-  - `after_slots`: the cell-scope adjacencies tracked (0, 1 or 2): the after-value buffer;
-  - `window`: the largest window of the model's windowed `Global` searches (0: none). The
-    checkerboard keeps concurrent copies farther apart than it.
+The `Global` veto is evaluated after the acceptance draw, in the order local rules, ΔH,
+draw, `Global`.
+
+# Keywords
+- `post = nothing`: `post(st, p, prop, ctx, stage) -> Int32`, the `Global` veto. `stage`
+  is [`GlobalLocal()`](@ref GlobalLocal) or [`GlobalSearch()`](@ref GlobalSearch). `0`
+  passes, `1` is a refusal for want of window, `2` is a refusal.
+- `defer = nothing`: `defer(st, p, prop, ctx) -> Bool`, on the checkerboard, whether a
+  copy needs the exact floods (cell-scope `pieces`, or an inline `Global` without window).
+  Such copies run in a serial kernel over the scratch.
+- `uses_global::Bool = false`: the model uses `Global` (veto, penalty or `connected`), so
+  the integrator counts `stats.connectivity_deferred`.
+- `exact_veto::Bool = false`: the model has a veto `Global()` without window, an exact
+  search that runs only on the host on the checkerboard.
+- `after_slots::Int = 0`: the number of cell-scope adjacencies tracked (0, 1 or 2), which
+  sizes the after-value buffer.
+- `window::Int = 0`: the largest window of the model's windowed `Global` searches (`0`
+  for none). The checkerboard keeps concurrent copies farther apart than it.
+
+See also [`connectivity_ctx`](@ref).
 """
 Base.@kwdef struct ConnectivityHooks{PO, DF}
     post::PO = nothing
@@ -162,10 +192,19 @@ function FloodScratch(backend, lat::Lattice, after_slots::Integer)
 end
 
 """
-    connectivity_ctx(backend, f, lattice, mode)
+    connectivity_ctx(backend, f, lattice, mode) -> NamedTuple
 
-The run-context fields of a model with whole-cell connectivity (`f.connectivity`): the
-flood scratch and the evaluation mode (`GlobalExact()` or `GlobalBoard()`); empty otherwise.
+Return the run-context fields of a model with whole-cell connectivity.
+
+# Arguments
+- `backend`: the KernelAbstractions backend of the flood scratch.
+- `f`: the model function; the function reads `f.connectivity`.
+- `lattice::Lattice`: the lattice.
+- `mode`: [`GlobalExact()`](@ref GlobalExact) or [`GlobalBoard()`](@ref GlobalBoard).
+
+# Returns
+- `(; flood, global_mode)` with the flood scratch and `mode` when `f.connectivity` is a
+  [`ConnectivityHooks`](@ref), else `(;)`.
 """
 function connectivity_ctx(backend, f, lat, mode)
     return _connectivity_ctx(backend, f.connectivity, lat, mode)
@@ -395,11 +434,30 @@ end
 """
     global_keeps(σ, ctx, prop, Val(full), Val(window), Val(cap), stage) -> Int32
 
-`Global`'s decision for the losing cell `old` (always `GLOBAL_PASS` for the medium): 0
-passes, 1 is a refusal for want of window, 2 a refusal. `GlobalLocal()` runs the local
-test only (1: undecided); `GlobalSearch()` decides, exactly under
-`ctx.global_mode = GlobalExact()` (or without window), in the box of radius `window` under
-`GlobalBoard()`.
+Decide the `Global` connectivity rule for the losing cell.
+
+The copy keeps the losing cell's piece count when the cell's sites next to the target are
+still connected without the target. The local shell test decides most copies. Otherwise,
+`GlobalSearch()` searches: exactly under `ctx.global_mode = GlobalExact()` or without a
+window, and inside the box of radius `window` around the target under `GlobalBoard()`.
+The windowed search refuses when every touching piece leaves the box.
+
+# Arguments
+- `σ`: the `ownership` array.
+- `ctx`: the kernel context; the function reads `ctx.lattice`, `ctx.global_mode` and
+  `ctx.flood`.
+- `prop::Proposal`: the copy attempt.
+- `Val(full)`: `Val(false)` for face adjacency, `Val(true)` for full adjacency.
+- `Val(window)`: the search window, or `Val(nothing)` for none.
+- `Val(cap)`: the size of the fixed stack and visited bits of the windowed search. A box
+  larger than `cap` sites is a refusal for want of window.
+- `stage`: [`GlobalLocal()`](@ref GlobalLocal) or [`GlobalSearch()`](@ref GlobalSearch).
+
+# Returns
+- `Int32`: `0` passes (always for the medium), `1` is undecided after `GlobalLocal()` or a
+  refusal for want of window after `GlobalSearch()`, `2` is a refusal.
+
+See also [`global_gains`](@ref), [`global_defer`](@ref).
 """
 @inline function global_keeps(σ, ctx, prop::Proposal, adj::Val, w::Val, cap::Val, stage)
     prop.old == 0 && return GLOBAL_PASS
@@ -435,8 +493,21 @@ end
 """
     global_gains(σ, ctx, prop, Val(full)) -> Bool
 
-`Global` for the gaining cell `new` (`true` for the medium): gaining x does not increase its
-pieces, i.e. x is adjacent to `new` under the adjacency.
+Decide the `Global` connectivity rule for the gaining cell.
+
+Gaining the target does not increase the cell's piece count exactly when the target is
+adjacent to the cell under the adjacency. The result is `true` for the medium.
+
+# Arguments
+- `σ`: the `ownership` array, or a [`ShellRead`](@ref).
+- `ctx`: the kernel context; the function reads `ctx.lattice`.
+- `prop::Proposal`: the copy attempt.
+- `Val(full)`: `Val(false)` for face adjacency, `Val(true)` for full adjacency.
+
+# Returns
+- `Bool`: whether the gaining cell keeps its piece count.
+
+See also [`global_keeps`](@ref).
 """
 @inline function global_gains(σ, ctx, prop::Proposal, adj::Val)
     prop.new == 0 && return true
@@ -448,7 +519,21 @@ pieces, i.e. x is adjacent to `new` under the adjacency.
 end
 
 """
-Whether `global_keeps` needs the search for this copy (the local test fails).
+    global_defer(σ, ctx, prop, Val(full)) -> Bool
+
+Return `true` if [`global_keeps`](@ref) needs the search for this copy, that is, the
+local shell test does not decide it.
+
+The result is `false` for the medium.
+
+# Arguments
+- `σ`: the `ownership` array.
+- `ctx`: the kernel context; the function reads `ctx.lattice`.
+- `prop::Proposal`: the copy attempt.
+- `Val(full)`: `Val(false)` for face adjacency, `Val(true)` for full adjacency.
+
+# Returns
+- `Bool`.
 """
 @inline function global_defer(σ, ctx, prop::Proposal, adj::Val)
     return prop.old != 0 && !_losing_shell(
@@ -542,17 +627,34 @@ function _pieces_gain(σ, ctx, prop::Proposal, P, L, V, adj::Val)
 end
 
 """
-    pieces_after!(σ, ctx, prop, P, L, V, Val(full), slot) -> (pieces_old, largest_old,
-        pieces_new, largest_new)
+    pieces_after!(σ, ctx, prop, P, L, V, Val(full), slot)
+        -> (pieces_old, largest_old, pieces_new, largest_new)
 
-The exact pieces and largest piece of the old and new cells after the copy (0 for the
-medium), from the trackers `P`, `L` (this adjacency) and the volumes `V`. The values are
-also stored for the target in `ctx.flood.after` (rows `4(slot − 1) + 1:4`) for
-[`commit_pieces!`](@ref): on the lockless checkerboard (`ctx.lockless`) as the changes from
-the values read. A cell in one piece that stays in one piece changes its largest piece by ∓1
-(its volume's change), not by a difference of two reads that a concurrent copy of the cell
-may separate; every other change is local (the copy's own site) or comes from the floods,
-which run with nothing in flight.
+Compute the exact piece count and largest piece of the losing and the gaining cell after
+the copy.
+
+The values come from the shell when the cell is one piece and the local test holds (or
+the target is isolated), else from floods over `ctx.flood`. The medium's values are `0`.
+The values are also stored for the target in `ctx.flood.after`, rows
+`4(slot − 1) + 1:4`, for [`commit_pieces!`](@ref). On the lockless checkerboard (a
+context with a `lockless` entry) they are stored as changes from the values read. A cell
+in one piece that stays in one piece then changes its largest piece by ∓1 (its volume
+change), not by the difference of two reads that a concurrent copy of the cell may
+separate.
+
+# Arguments
+- `σ`: the `ownership` array.
+- `ctx`: the kernel context; the function reads `ctx.lattice` and `ctx.flood`.
+- `prop::Proposal`: the copy attempt.
+- `P`, `L`: the piece-count and largest-piece trackers of this adjacency.
+- `V`: the volume tracker.
+- `Val(full)`: `Val(false)` for face adjacency, `Val(true)` for full adjacency.
+- `slot::Int`: the adjacency's slot in the after-value buffer (1 or 2).
+
+# Returns
+- `(pieces_old, largest_old, pieces_new, largest_new)`, each an `Int32`.
+
+See also [`pieces_defer`](@ref), [`recompute_pieces`](@ref).
 """
 @inline function pieces_after!(σ, ctx, prop::Proposal, P, L, V, adj::Val, slot::Int)
     po, lo, p0, l0 = if prop.old == 0
@@ -585,10 +687,25 @@ which run with nothing in flight.
 end
 
 """
-Whether `pieces_after!` needs the floods for this copy (the checkerboard defers it). A gain
-that does not touch the gaining cell adds a piece; it is deferred too, so in a checkerboard
-phase piece counts only fall, and a copy found fast here stays fast in `pieces_after!` while
-other copies of its cells are in flight (no flood runs outside the serial pass).
+    pieces_defer(σ, ctx, prop, P, V, Val(full)) -> Bool
+
+Return `true` if [`pieces_after!`](@ref) needs the floods for this copy, so the
+checkerboard defers it to the serial pass.
+
+A gain that does not touch the gaining cell adds a piece, and it is deferred too. So in a
+checkerboard phase piece counts only fall, and a copy that is fast here stays fast in
+`pieces_after!` while other copies of its cells are in flight.
+
+# Arguments
+- `σ`: the `ownership` array, or a [`ShellRead`](@ref).
+- `ctx`: the kernel context; the function reads `ctx.lattice`.
+- `prop::Proposal`: the copy attempt.
+- `P`: the piece-count tracker of this adjacency.
+- `V`: the volume tracker.
+- `Val(full)`: `Val(false)` for face adjacency, `Val(true)` for full adjacency.
+
+# Returns
+- `Bool`.
 """
 @inline function pieces_defer(σ, ctx, prop::Proposal, P, V, adj::Val)
     lat = ctx.lattice
@@ -610,8 +727,23 @@ other copies of its cells are in flight (no flood runs outside the serial pass).
 end
 
 """
-Apply the after-values `pieces_after!` stored for the target to the trackers `P`, `L` (on
-the lockless checkerboard, add the stored changes atomically).
+    commit_pieces!(P, L, prop, ctx, slot) -> nothing
+
+Apply the after-values that [`pieces_after!`](@ref) stored for the target to the trackers
+`P` and `L`.
+
+On the lockless checkerboard (a context with a `lockless` entry), the stored changes are
+added atomically.
+Otherwise the stored values are written.
+
+# Arguments
+- `P`, `L`: the piece-count and largest-piece trackers.
+- `prop::Proposal`: the accepted copy.
+- `ctx`: the kernel context; the function reads `ctx.flood`.
+- `slot::Int`: the adjacency's slot in the after-value buffer.
+
+# Returns
+- `nothing`.
 """
 @inline function commit_pieces!(P, L, prop::Proposal, ctx, slot::Int)
     a = ctx.flood.after
@@ -643,9 +775,32 @@ end
 """
     recompute_pieces(σ, lattice, Val(full), ncell) -> (pieces, largest)
 
-The pieces and largest piece of cells `1:ncell` under face (`Val(false)`) or full
-(`Val(true)`) adjacency, from scratch (host): problem construction, lifecycle events, host
-edits of σ. A dead cell has (0, 0).
+Compute the piece count and the largest piece of every cell `1:ncell` from scratch, on
+the host.
+
+Use it at problem construction, after lifecycle events and after host edits of `σ`. A
+dead cell has `(0, 0)`.
+
+# Arguments
+- `σ`: the `ownership` array, on the host.
+- `lattice::Lattice`: the lattice of `σ`.
+- `Val(full)`: `Val(false)` for face adjacency, `Val(true)` for full adjacency.
+- `ncell::Integer`: the number of cell slots.
+
+# Returns
+- `(pieces, largest)`: two `Vector{Int32}`, one entry per cell slot.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> σ = Int32[1 0; 0 1]; l = Lattice((2, 2); boundary = Closed());
+
+julia> recompute_pieces(σ, l, Val(false), 1), recompute_pieces(σ, l, Val(true), 1)
+((Int32[2], Int32[1]), (Int32[1], Int32[2]))
+```
+
+See also [`pieces_after!`](@ref).
 """
 function recompute_pieces(σ, lat::Lattice, adj::Val, ncell::Integer)
     P = zeros(Int32, ncell)

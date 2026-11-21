@@ -7,50 +7,85 @@
 # (`phase_context`).
 
 # bounds: i ≤ nsites; the owner c is a cell id ≤ capacity
-"""Kind of the cell owning site `i` (`0` for the medium)."""
+"""
+    owner_kind(st, i) -> Int32
+
+Return the kind of the cell that owns site `i`, or `0` for the medium.
+
+# Arguments
+- `st`: the state, with `ownership` and `cell.kind`.
+- `i`: the linear site index.
+
+# Returns
+- The kind of the owner, or `0`.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> st = (; ownership = Int32[1, 0], cell = (; kind = Int32[2]));
+
+julia> CorePotts.owner_kind(st, 1), CorePotts.owner_kind(st, 2)
+(2, 0)
+```
+"""
 @inline function owner_kind(st, i)
     c = @inbounds st.ownership[i]
     return c == 0 ? Int32(0) : @inbounds st.cell.kind[c]
 end
 
 """
-    FieldPhase{K}(group, alg, arrays; tables, params, substeps, dt, period = dt, options, T,
-        init = false, aux_only = false,
-                  start = false)
+    FieldPhase{K}(group, alg, arrays; tables = Pair{Int, Symbol}[], params = Symbol[],
+                  substeps, dt, period = dt, options, T, init = false,
+                  aux_only = false, start = false, rule_tables = Pair{String, Symbol}[])
 
-A group of fields stepped by algorithm `alg` (`ExplicitEuler`) over one MCS of length `dt`,
-in `n` substeps of `dt / n`: `group` is the group's `LatticeFields.Problems.FieldGroup` (its
-`GroupSpec`, its fused program and its plans), stepped through the shared runtime
-(`Problems.GroupRuntime`, [`phase_context`](@ref)), as `LatticeFields` steps standalone
-groups. `program`, `masks` and `step` are the group's semantic program of `alg` and its
-plans (the masks of masked conditions, run once per MCS before the substeps: the masks
-follow σ; and one substep), planned once for value type `T` with `options`. `arrays[f]`
-binds program field `f` to state arrays: `(Part, nothing)` for a one-buffer field (an input
-or a mask), `(Part, Part)` for a state field and its scratch. `tables` binds table ids to
-kind tables of the parameters and `params` the parameter slots to parameter names.
-`substeps(praw)` is the substep count at raw parameter values `praw`, with the phase's
-tables (`LatticeFields.Problems.with_tables`) when it has any (a host function, evaluated
-when the parameters change, never per MCS).
+Construct a phase that steps a group of fields with algorithm `alg` over one MCS.
 
-`period` is the MCS (`mcs_duration`), the clock's period: a window starts at
-`mcs · period`, plus `(r − 1) dt` in pass `r` of a sub-MCS `repeat`.
+One MCS of length `dt` runs as `n` substeps of length `dt / n`. The group is stepped
+through the shared runtime of LatticeFields (`Problems.GroupRuntime`), as LatticeFields
+steps standalone groups. The constructor plans the group's program once, for value type
+`T` with `options`: the masks of masked conditions (run once per MCS before the
+substeps, since the masks follow σ) and one substep.
 
-`K` names the entry of the run context that holds the trajectory's runtime
-([`phase_context`](@ref)). The field ends every MCS in its `st.site` array: after an odd
-number of substeps one copy brings the scratch buffer back (`ends_in = :slot1`). With
-`init = true` the phase is the masked-condition clamp of a fresh initial state (one substep
-of length zero: each masked site takes its value, every other site keeps its own); `init`
-from a checkpoint skips it.
+`K` names the entry of the run context that holds the trajectory's runtime (see
+[`phase_context`](@ref)). The field ends every MCS in its `st.site` array: after an odd
+number of substeps, one copy brings the scratch buffer back.
 
-With `aux_only = true` the phase is bound to the group's `aux:` kernels alone (aux fields
-`K ~ rhs`) and takes no substep: one launch evaluates them from the state as
-it is, which it never writes. Front end A runs one at init for a group with state and aux
-fields (no update rule, so no `lower` clip, touches the state).
+# Arguments
+- `group`: the group's `LatticeFields.Problems.FieldGroup` (its spec, fused program and
+  plans).
+- `alg`: the field algorithm, for example `ExplicitEuler()`.
+- `arrays::Tuple`: `arrays[f]` binds program field `f` to state arrays:
+  `(Part, nothing)` for a one-buffer field (an input or a mask), `(Part, Part)` for a
+  state field and its scratch, or a [`BindingScratch`](@ref) for a field that no state
+  array holds.
 
-With `start = true` the phase is a group's steady start (`init = :steady` on its algorithm):
-`alg` is the `QuasiSteady` of `LatticeFields.Problems.steady_start`, bound to the same
-arrays as the step and run once, at init on a fresh state (after the masked-condition
-clamp), never per MCS and not from a checkpoint.
+# Keywords
+- `tables = Pair{Int, Symbol}[]`: table ids of the program bound to kind tables of the
+  parameters.
+- `params = Symbol[]`: the parameter names of the program's parameter slots.
+- `substeps`: `substeps(praw)` is the substep count at raw parameter values `praw`, with
+  the phase's tables when it has any. It is a host function, evaluated when the
+  parameters change, never per MCS. Required.
+- `dt::Real`: the field time of one MCS. Required.
+- `period::Real = dt`: the MCS duration, the clock's period. A window starts at
+  `mcs · period`, plus `(r − 1) dt` in pass `r` of a sub-MCS `repeat`.
+- `options`: the compile options of the plans. Required.
+- `T::Type`: the value type of the plans. Required.
+- `init::Bool = false`: make the phase the masked-condition clamp of a fresh initial
+  state: one substep of length zero, where each masked site takes its value and every
+  other site keeps its own. A start from a checkpoint skips it.
+- `aux_only::Bool = false`: bind the phase to the group's `aux:` kernels alone (aux fields
+  `K ~ rhs`). It takes no substep: one launch evaluates them from the state, which it
+  never writes. Potts runs one at init for a group with state and aux fields.
+- `start::Bool = false`: make the phase the group's steady start (`init = :steady` on its
+  algorithm). `alg` is then the `QuasiSteady` of `LatticeFields.Problems.steady_start`,
+  bound to the same arrays as the step. It runs once, at init on a fresh state (after the
+  masked-condition clamp), never per MCS and not from a checkpoint.
+- `rule_tables = Pair{String, Symbol}[]`: the tables that only the substep rule reads, as
+  `key => name`.
+
+See also [`field_clamp`](@ref), [`phase_context`](@ref), [`table_values`](@ref).
 """
 struct FieldPhase{K, G, AL, A, F, PR, SP}
     group::G
@@ -104,7 +139,20 @@ end
 # the ids of a program's `aux:` kernels (an `aux_only` phase binds them alone)
 _aux_ids(prog) = [i for (i, k) in enumerate(prog.kernels) if startswith(k.key, "aux:")]
 _aux_ids(ph::FieldPhase) = _aux_ids(ph.program)
-"""The masked-condition clamp of field phase `ph` (its at-init form)."""
+"""
+    field_clamp(ph::FieldPhase) -> FieldPhase
+
+Return the masked-condition clamp of the field phase `ph`: the same phase with
+`init = true`.
+
+# Arguments
+- `ph::FieldPhase`: the field phase.
+
+# Returns
+- `FieldPhase`: the at-init clamp, with the same context key.
+
+See also [`FieldPhase`](@ref), [`derived`](@ref).
+"""
 function field_clamp(ph::FieldPhase{K}) where {K}
     return FieldPhase{K}(
         ph.group, ph.alg, ph.arrays; ph.tables, ph.params,
@@ -148,10 +196,13 @@ end
 """
     BindingScratch()
 
-The `arrays` entry of a program field that no state array holds: a face value or a masked
-value that varies by site (`face:c:…`, `maskvalue:c`), which its own kernel computes every
-window. The binding allocates it ([`FieldPhase`](@ref)); it is not part of the state (not
-saved, not in a checkpoint).
+The `arrays` entry of a program field that no state array holds.
+
+Such a field is a face value or a masked value that varies by site (`face:c:…`,
+`maskvalue:c`), which its own kernel computes every window. The binding allocates it. It
+is not part of the state, so it is not saved and not in a checkpoint.
+
+See also [`FieldPhase`](@ref).
 """
 struct BindingScratch end
 (::BindingScratch)(st) = nothing
@@ -206,10 +257,21 @@ function _same_tables(ph::FieldPhase, b::FieldBinding, p)
 end
 
 """
-    table_values(ph::FieldPhase, p)
+    table_values(ph::FieldPhase, p) -> Vector{Pair{String, Vector{Float64}}}
 
-The field phase's tables at `p` by their program keys (the substep bound reads them: a
-table coefficient), and the tables only its substep rule reads.
+Return the field phase's tables at the parameters `p`, by their keys.
+
+The list holds the program's tables (the substep bound reads them as table
+coefficients), then the tables that only the substep rule reads.
+
+# Arguments
+- `ph::FieldPhase`: the field phase.
+- `p`: the parameter object.
+
+# Returns
+- `Vector{Pair{String, Vector{Float64}}}`: `key => values` for every table.
+
+See also [`praw`](@ref).
 """
 function table_values(ph::FieldPhase, p)
     return Pair{String, Vector{Float64}}[
@@ -224,7 +286,22 @@ function table_values(ph::FieldPhase, p)
         ]
     ]
 end
-"""The raw parameter values of the field phase's slots at `p`."""
+"""
+    praw(ph::FieldPhase, p) -> Tuple
+
+Return the raw parameter values of the field phase's parameter slots at `p`.
+
+The clock's slot reads `0.0`: it is not a parameter of the model.
+
+# Arguments
+- `ph::FieldPhase`: the field phase.
+- `p`: the parameter object.
+
+# Returns
+- A tuple with one value per name in the phase's `params`.
+
+See also [`table_values`](@ref).
+"""
 praw(ph::FieldPhase, p) = Tuple(_param(p, n) for n in ph.params)
 # … as the substep rule reads them, with the phase's tables (`field_substeps`,
 # `field_report`)
@@ -311,10 +388,27 @@ end
 """
     phase_context(phase, st, p, backend) -> NamedTuple
 
-The run-context entries a phase needs for one trajectory, built once when an integrator is
-created (after the state and parameters are on `backend`): a [`FieldPhase`](@ref) binds its
-group's runtime to the state's arrays and compiles its launches. Other phases need none
-(`(;)`).
+Return the run-context entries that a phase needs for one trajectory.
+
+It is called once when an integrator is created, after the state and parameters are on
+`backend`. A [`FieldPhase`](@ref) binds its group's runtime to the state's arrays and
+compiles its launches; on a device the compilation runs on host tasks. A field clamp
+(`init = true`) and every other phase need no entry and return `(;)`.
+
+# Arguments
+- `phase`: the phase.
+- `st`: the state, on `backend`.
+- `p`: the parameter object, on `backend`.
+- `backend`: the KernelAbstractions backend.
+
+# Keywords
+For a `FieldPhase` only:
+- `abstol = 1 // 10^6`, `reltol = 1 // 10^3`: the tolerances given to the field binding.
+
+# Returns
+- `NamedTuple`: `(; K = handle)` for a `FieldPhase{K}`, else `(;)`.
+
+See also [`phase_contexts`](@ref).
 """
 phase_context(ph, st, p, backend) = (;)
 function phase_context(
@@ -356,7 +450,27 @@ function (m::_MCSWindow)(w::Integer, t1::Real)
     end
 end
 
-"""The merged [`phase_context`](@ref) of every phase of `phases` (each once)."""
+"""
+    phase_contexts(phases, st, p, backend; abstol = 1 // 10^6, reltol = 1 // 10^3)
+        -> NamedTuple
+
+Return the merged [`phase_context`](@ref) of every phase in `phases`.
+
+The MCS entries (including the entries of each `Repeat`) and the at-init phases are
+visited.
+
+# Arguments
+- `phases::Phases`: the phase order of the model.
+- `st`: the state, on `backend`.
+- `p`: the parameter object, on `backend`.
+- `backend`: the KernelAbstractions backend.
+
+# Keywords
+- `abstol = 1 // 10^6`, `reltol = 1 // 10^3`: passed to each field phase.
+
+# Returns
+- `NamedTuple`: the run context entries of all phases.
+"""
 function phase_contexts(
         phases::Phases, st, p, backend; abstol = 1 // 10^6, reltol = 1 // 10^3
     )
@@ -635,11 +749,21 @@ function _read_statuses!(stats, ctx)
 end
 
 """
-    derived(phases::Tuple)
+    derived(phases::Tuple) -> Tuple
 
-The at-init phases of a state that is not fresh (a checkpoint restore, `Potts.anneal`'s
-per-MCS refresh): the derived refreshes without the field clamps and the steady starts,
-which hold on a fresh initial state only.
+Return the at-init phases to run on a state that is not fresh.
+
+A checkpoint restore and the per-MCS refresh of `Potts.anneal` use it. The result keeps
+the derived refreshes and drops the field clamps and the steady starts, which apply only
+to a fresh initial state.
+
+# Arguments
+- `phases::Tuple`: the at-init phases.
+
+# Returns
+- `Tuple`: the phases without the field phases that have `init` or `start` set.
+
+See also [`field_clamp`](@ref).
 """
 derived(t::Tuple) = filter(ph -> !(ph isa FieldPhase && (ph.init || ph.start)), t)
 
@@ -659,15 +783,24 @@ derived(t::Tuple) = filter(ph -> !(ph isa FieldPhase && (ph.init || ph.start)), 
 # differentiated along it.
 
 """
-    ParameterTangent(p, seeds, u0 = [])
+    ParameterTangent(p, seeds, u0 = Pair{Symbol, Any}[])
 
-The parameters of a run with derivative parts: `p` is the parameter object with
-ForwardDiff Duals in the entries that carry them (the seeded parameters and the computed
-ones that read them), `seeds` the front end's record of the Dual values given
-(`name => value`), and `u0` the derivative parts of the initial fields
-(`name => Dual array or Dual number`: a Dual initial value, or a default that reads a seeded
-parameter). The CPM reads the primal object (`prob.p`); the field groups step the derivative
-parts along the CPM path (`tangent_run`).
+The parameters of a run with derivative parts.
+
+The CPM reads the primal parameter object (`prob.p`). The field groups step the
+derivative parts along the run's CPM path: σ, the cells and every CPM value are held
+fixed, and the fields' response to the parameters is differentiated along that path.
+
+# Fields
+- `p`: the parameter object with ForwardDiff Duals in the entries that carry them (the
+  seeded parameters and the computed ones that read them).
+- `seeds::Vector{Pair{Symbol, Any}}`: the front end's record of the Dual values given, as
+  `name => value`.
+- `u0::Vector{Pair{Symbol, Any}}`: the derivative parts of the initial fields, as
+  `name => Dual array or Dual number`: a Dual initial value, or a default that reads a
+  seeded parameter.
+
+See also [`tangent_parameters`](@ref).
 """
 struct ParameterTangent{P}
     p::P
@@ -685,10 +818,23 @@ end
 """
     tangent_parameters(sys, dp, p)
 
-The parameter object with derivative parts after a parameter write on a run with them: `dp`
-the one before, `p` the new primal object. A symbolic layer keeps each entry whose value the
-write did not change (its derivative parts with it), takes the written values as plain
-numbers, and derives the computed entries again. Here: `p` (no derivative parts).
+Return the parameter object with derivative parts after a parameter write on a run with
+them.
+
+A symbolic layer adds a method for its system type. That method keeps each entry whose
+value the write did not change (with its derivative parts), takes the written values as
+plain numbers, and computes the computed entries again. The generic method returns `p`,
+with no derivative parts.
+
+# Arguments
+- `sys`: the model's system.
+- `dp`: the parameter object with derivative parts before the write.
+- `p`: the new primal parameter object.
+
+# Returns
+- The new parameter object.
+
+See also [`ParameterTangent`](@ref).
 """
 tangent_parameters(sys, dp, p) = p
 

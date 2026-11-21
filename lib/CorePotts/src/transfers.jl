@@ -70,7 +70,13 @@ end
 """
     DeviceTimeoutError(timeout)
 
-Exception thrown when waiting for queued device work exceeds `timeout` seconds.
+The exception thrown when a wait for queued device work takes more than `timeout`
+seconds.
+
+# Fields
+- `timeout::Float64`: the time limit of the wait, in seconds.
+
+See also [`sync!`](@ref).
 """
 struct DeviceTimeoutError <: Exception
     timeout::Float64
@@ -115,7 +121,23 @@ The one counter: add `syncs` synchronizations and `transfers` copies of `bytes` 
     return nothing
 end
 
-"""`_device_wait(backend)`, counted on a device backend."""
+"""
+    sync!(stats, backend) -> nothing
+
+Wait until every operation queued on `backend` has finished, and count one
+synchronization in `stats`.
+
+On the CPU the call does nothing and counts nothing.
+
+# Arguments
+- `stats`: a `PottsStats`, or `nothing` to count nothing.
+- `backend`: a KernelAbstractions backend.
+
+# Returns
+- `nothing`.
+
+See also [`to_host`](@ref), [`counted_copy!`](@ref).
+"""
 function sync!(stats, backend)
     _device_wait(backend)
     _count_transfer!(stats, 1, 0, 0)
@@ -126,22 +148,93 @@ sync!(stats, backend::KernelAbstractions.CPU) = _device_wait(backend)
 """Bytes of the elements of `a` (`sizeof` is not defined alike for every array type)."""
 _nbytes(a::AbstractArray) = length(a) * sizeof(eltype(a))
 
-"""`Array(a)`: a host copy, counted when `a` lives on a device."""
+"""
+    to_host(stats, a) -> Array
+
+Return a host copy of `a`, as `Array(a)`.
+
+When `a` lives on a device, the copy is counted in `stats` as one transfer of the bytes
+of `a`, and it is finished when the call returns.
+
+# Arguments
+- `stats`: a `PottsStats`, or `nothing` to count nothing.
+- `a::AbstractArray`: the array.
+
+# Returns
+- `Array`: the host copy.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> CorePotts.to_host(nothing, [1, 2, 3])
+3-element Vector{Int64}:
+ 1
+ 2
+ 3
+```
+
+See also [`counted_copy!`](@ref), [`adapt_host`](@ref).
+"""
 function to_host(stats, a::AbstractArray)
     _ondevice(a) || return Array(a)
     _count_transfer!(stats, 0, 1, _nbytes(a))
     return _host_copy(a)
 end
 
-"""`copyto!(dst, src)`, counted when it crosses between the host and a device."""
+"""
+    counted_copy!(stats, dst, src) -> dst
+
+Copy `src` into `dst`, as `copyto!(dst, src)`.
+
+When the copy crosses between the host and a device, it is counted in `stats` as one
+transfer. A copy from a device to the host is finished when the call returns.
+
+# Arguments
+- `stats`: a `PottsStats`, or `nothing` to count nothing.
+- `dst::AbstractArray`: the destination.
+- `src::AbstractArray`: the source.
+
+# Returns
+- `dst`.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> CorePotts.counted_copy!(nothing, zeros(Int, 2), [4, 5])
+2-element Vector{Int64}:
+ 4
+ 5
+```
+
+See also [`to_host`](@ref), [`sync!`](@ref).
+"""
 function counted_copy!(stats, dst::AbstractArray, src::AbstractArray)
     d, s = _ondevice(dst), _ondevice(src)
     d == s || _count_transfer!(stats, 0, 1, _nbytes(d ? dst : src))
     return s && !d ? _copy_to_host!(dst, src) : copyto!(dst, src)
 end
 
-"""`copyto!(dst, doff, src, soff, n)`: `n` elements, counted (`n` elements' bytes) when it
-crosses between the host and a device."""
+"""
+    counted_copy!(stats, dst, doff, src, soff, n) -> dst
+
+Copy `n` elements of `src` from index `soff` into `dst` from index `doff`, as
+`copyto!(dst, doff, src, soff, n)`.
+
+When the copy crosses between the host and a device, it is counted in `stats` as one
+transfer of the bytes of `n` elements. A copy from a device to the host is finished when
+the call returns.
+
+# Arguments
+- `stats`: a `PottsStats`, or `nothing` to count nothing.
+- `dst::AbstractArray`, `doff::Integer`: the destination and its first index.
+- `src::AbstractArray`, `soff::Integer`: the source and its first index.
+- `n::Integer`: the number of elements.
+
+# Returns
+- `dst`.
+"""
 function counted_copy!(
         stats, dst::AbstractArray, doff::Integer,
         src::AbstractArray, soff::Integer, n::Integer
@@ -168,11 +261,43 @@ function Adapt.adapt_storage(h::_HostCopy, a::AbstractArray)
     return _ondevice(a) ? to_host(h.stats, a) : Adapt.adapt_storage(Array, a)
 end
 
-"""`Adapt.adapt(Array, x)`, counting every device array leaf of `x`."""
+"""
+    adapt_host(stats, x)
+
+Return `Adapt.adapt(Array, x)`: `x` with every device array leaf replaced by a host copy.
+
+Each device array leaf is counted in `stats` as one transfer. A host leaf is kept as
+`Adapt.adapt(Array, …)` keeps it.
+
+# Arguments
+- `stats`: a `PottsStats`, or `nothing` to count nothing.
+- `x`: any object that Adapt can walk, such as a state or a `NamedTuple` of arrays.
+
+# Returns
+- The adapted object.
+
+See also [`snapshot`](@ref), [`to_host`](@ref).
+"""
 adapt_host(stats, x) = Adapt.adapt(_HostCopy(stats), x)
 
-"""Host snapshot of a state, independent of the live state (a `deepcopy` on the CPU, not
-counted). Does not synchronize."""
+"""
+    snapshot(stats, backend, st)
+
+Return a host copy of the state `st` that does not share memory with the live state.
+
+On the CPU this is a `deepcopy`, not counted. On a device each array leaf is one counted
+transfer (as [`adapt_host`](@ref)). The call does not synchronize first.
+
+# Arguments
+- `stats`: a `PottsStats`, or `nothing` to count nothing.
+- `backend`: the KernelAbstractions backend of `st`.
+- `st`: the state.
+
+# Returns
+- The host copy of `st`.
+
+See also [`host_leaves`](@ref).
+"""
 snapshot(stats, backend, st) = adapt_host(stats, st)
 snapshot(stats, ::KernelAbstractions.CPU, st) = deepcopy(st)
 
@@ -208,14 +333,53 @@ Adapt.adapt_storage(h::_CachedHostCopy, a::AbstractArray) = _cached_host(h.stats
 copied once per run (`_cached_host`)."""
 _adapt_host_cached(stats, x) = Adapt.adapt(_CachedHostCopy(stats), x)
 
-"""Uninitialized host array shaped like `a` (no transfer): a buffer host code fills."""
+"""
+    host_buffer(a) -> Array
+
+Return an uninitialized host array with the element type and size of `a`.
+
+No data is copied: it is a buffer for host code to fill.
+
+# Arguments
+- `a::AbstractArray`: the array to match.
+
+# Returns
+- `Array{eltype(a)}`: the buffer, of size `size(a)`.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> size(CorePotts.host_buffer(zeros(Float32, 3, 2)))
+(3, 2)
+```
+"""
 host_buffer(a::AbstractArray) = Array{eltype(a)}(undef, size(a))
 
 """
-Host state for host code that touches only some leaves of `st`: `ownership` (when
-`ownership`) and the leaves named in `cell`, `site`, `model` and `history` are host copies
-(counted on a device; the live arrays themselves on the host); every other leaf is the live
-array, which on a device must not be read on the host.
+    host_leaves(stats, st; ownership = false, cell = (), site = (), model = (),
+                history = ())
+
+Return a host state for host code that touches only some leaves of `st`.
+
+The `ownership` array (when `ownership` is true) and the leaves named in `cell`, `site`,
+`model` and `history` are host copies: counted transfers on a device, and the live arrays
+themselves on the host. Every other leaf is the live array, which on a device must not be
+read on the host.
+
+# Arguments
+- `stats`: a `PottsStats`, or `nothing` to count nothing.
+- `st::CPMState`: the state.
+
+# Keywords
+- `ownership::Bool = false`: copy the `ownership` array.
+- `cell = ()`, `site = ()`, `model = ()`, `history = ()`: the names of the leaves to copy
+  in each part of the state.
+
+# Returns
+- `CPMState`: the state with the named leaves on the host.
+
+See also [`snapshot`](@ref), [`adapt_host`](@ref).
 """
 function host_leaves(
         stats, st::CPMState; ownership::Bool = false,

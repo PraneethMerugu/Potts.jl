@@ -5,15 +5,28 @@
 # (on the same backend and thread-independent algorithm).
 
 """
-    PottsCheckpoint
+    PottsCheckpoint(state, t, seed, replica, repeat, p, fingerprint, stats)
 
-Host copy of the state at MCS `t`, with the RNG key tuple, parameters, statistics (with
-`accepted_energy_change`, exact here) and the model fingerprint. Continue with
-`init(prob, alg; checkpoint = ck)`; the continuation uses the problem's `p` (so parameters
-may change at a restart; `ck.p` records the old ones).
+A host copy of a run's state at MCS `t`, with everything needed to continue the run.
 
-`format` is the checkpoint format ([`CHECKPOINT_FORMAT`](@ref) when written). A checkpoint
-of another format is refused at `init`.
+A checkpoint holds no RNG state: every random draw is addressed by the key tuple, the
+MCS, the entity and the stream, so continuing from MCS `t` with the same key gives the
+same run as one without the break, on the same backend and with a thread-independent
+algorithm. Make one with [`checkpoint`](@ref) and continue with
+`init(prob, alg; checkpoint = ck)`. `init` refuses a checkpoint of another format or
+fingerprint, or one whose MCS is outside the problem's `tspan`.
+
+# Fields
+- `state`: the host copy of the state.
+- `t::Int`: the MCS of the state.
+- `seed::UInt64`, `replica::UInt32`, `repeat::UInt32`: the RNG key tuple.
+- `p`: the parameters of the run. The continuation uses the problem's `p`, so the
+  parameters can change at a restart; `p` records the old ones.
+- `fingerprint::UInt64`: the model fingerprint.
+- `stats::PottsStats`: the statistics, with an exact `accepted_energy_change`.
+- `format::Int`: the checkpoint format, [`CHECKPOINT_FORMAT`](@ref) when written.
+
+See also [`save_checkpoint`](@ref), [`load_checkpoint`](@ref).
 """
 struct PottsCheckpoint{S, P}
     state::S
@@ -35,13 +48,40 @@ end
 """
     CHECKPOINT_FORMAT
 
-The checkpoint format of this version. Format 2 starts at the field-compiler cutover:
-the fields of a state are stepped by the field compiler, so a checkpoint of format 1 (the
-`FieldStep` path, without a `format` field) is not continued.
+The checkpoint format that this version writes and reads (`2`).
+
+A checkpoint of format 1 (it has no `format` field) cannot be continued.
+
+See also [`PottsCheckpoint`](@ref).
 """
 const CHECKPOINT_FORMAT = 2
 
-"""Checkpoint the integrator (synchronizes)."""
+"""
+    checkpoint(integ) -> PottsCheckpoint
+
+Take a checkpoint of the integrator's current state.
+
+The call synchronizes with the device: it reads the current state to the host first, so
+the copied statistics are exact. A run with derivative parts (Dual parameters) has no
+checkpoint and throws an `ArgumentError`.
+
+# Arguments
+- `integ::PottsIntegrator`: the integrator.
+
+# Returns
+- `PottsCheckpoint`: a host copy of the state, the key tuple, the parameters, the
+  statistics and the model fingerprint.
+
+# Examples
+```julia
+integ = init(prob, alg)
+step!(integ, 100, true)
+ck = checkpoint(integ)
+integ2 = init(prob, alg; checkpoint = ck)   # continues from the same MCS
+```
+
+See also [`save_checkpoint`](@ref), [`PottsCheckpoint`](@ref).
+"""
 function checkpoint(integ::PottsIntegrator)
     prob = integ.prob
     prob.tangent === nothing || throw(
@@ -60,11 +100,41 @@ function checkpoint(integ::PottsIntegrator)
     )
 end
 
-"""Write a checkpoint to `path` (Julia `Serialization`; same package versions to read)."""
+"""
+    save_checkpoint(path, ck)
+
+Write the checkpoint `ck` to the file `path` with Julia's `Serialization`.
+
+Reading the file needs the same package versions.
+
+# Arguments
+- `path::AbstractString`: the file to write.
+- `ck::PottsCheckpoint`: the checkpoint.
+
+# Returns
+- The return value of the `open` call; call it for its effect on the file.
+
+See also [`load_checkpoint`](@ref), [`checkpoint`](@ref).
+"""
 function save_checkpoint(path::AbstractString, ck::PottsCheckpoint)
     return open(io -> Serialization.serialize(io, ck), path, "w")
 end
-"""Read a checkpoint written by `save_checkpoint`."""
+"""
+    load_checkpoint(path) -> PottsCheckpoint
+
+Read a checkpoint that [`save_checkpoint`](@ref) wrote.
+
+A missing file throws a `SystemError`. A file that does not deserialize, or that holds
+an object other than a `PottsCheckpoint`, throws an `ArgumentError`.
+
+# Arguments
+- `path::AbstractString`: the file to read.
+
+# Returns
+- `PottsCheckpoint`: the checkpoint. Its format is checked when it is given to `init`.
+
+See also [`checkpoint`](@ref).
+"""
 function load_checkpoint(path::AbstractString)
     # opening the file is outside the `try`: a missing file is a `SystemError`, not a format
     # error

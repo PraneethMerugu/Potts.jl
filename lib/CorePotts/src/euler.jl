@@ -73,13 +73,29 @@ end
 """
     euler_change(σ, ctx, prop, Val(adjacency)) -> (δold::Int32, δnew::Int32)
 
-Exact change of the Euler characteristics of the old and new cells under `adjacency`
-(`:face` or `:full`; hexagonal lattices have one self-dual adjacency) when `prop`'s target
-changes owner. Reads the target's neighbor shell, which excludes the target on every axis
-of length ≥ 2, so the result is the same before and after the ownership write. On a
-periodic axis of length 1 the shell wraps onto the target and the change is wrong:
-[`recompute_euler`](@ref), which every problem reading `euler` calls when it is built,
-rejects such a lattice. The medium's side is zero.
+Compute the exact change of the Euler characteristics of the losing and the gaining cell
+when `prop`'s target changes owner.
+
+The change is read from the target's neighbor shell. The shell excludes the target on
+every axis of length ≥ 2, so the result is the same before and after the ownership write.
+On a periodic axis of length 1 the shell wraps onto the target and the change is wrong;
+[`recompute_euler`](@ref), which every problem that reads `euler` calls when it is built,
+rejects such a lattice.
+
+# Arguments
+- `σ`: the `ownership` array.
+- `ctx`: the kernel context; the function reads `ctx.lattice`.
+- `prop::Proposal`: the copy attempt.
+- `Val(adjacency)`: `Val(:face)` or `Val(:full)`. On the square and cubic lattices,
+  `:face` reads the cell with face adjacency and its complement with full adjacency;
+  `:full` reads the union of the closed unit pixels or voxels. A hexagonal lattice has
+  one self-dual adjacency, so both values give the same result.
+
+# Returns
+- `(δold, δnew)::NTuple{2, Int32}`: the changes for `prop.old` and `prop.new`. The entry
+  for the medium (`0`) is zero.
+
+See also [`commit_euler!`](@ref), [`recompute_euler`](@ref).
 """
 @inline function euler_change(σ, ctx, prop::Proposal, adj::Val)
     return _euler_change(
@@ -117,7 +133,23 @@ end
     return (ifelse(prop.old == 0, Int32(0), -dold), ifelse(prop.new == 0, Int32(0), dnew))
 end
 
-"""Apply `δ = euler_change(…)` to an Euler tracker (the old and new cells only)."""
+"""
+    commit_euler!(euler, prop, δ) -> nothing
+
+Add `δ = euler_change(…)` to the Euler tracker for the losing and the gaining cell.
+
+The medium (`0`) has no entry. The updates are atomic.
+
+# Arguments
+- `euler::AbstractVector{Int32}`: the tracker, one entry per cell.
+- `prop::Proposal`: the accepted copy.
+- `δ`: the pair `(δold, δnew)` from [`euler_change`](@ref).
+
+# Returns
+- `nothing`.
+
+See also [`recompute_euler`](@ref).
+"""
 @inline function commit_euler!(euler, prop, δ)
     # bounds: a nonzero owner is a cell id in 1:capacity, the tracker's length (as
     # `commit_surface!`)
@@ -247,10 +279,37 @@ end
 """
     recompute_euler(σ, lattice, Val(adjacency), ncell) -> Vector{Int32}
 
-Euler characteristics of cells `1:ncell` under `adjacency` (`:face` or `:full`), from
-scratch (initialization, lifecycle events, host edits of σ). Throws an `ArgumentError` on
-a periodic axis of length 1, where the per-copy change is not local
-([`euler_change`](@ref)): the check runs here, on the host, when a problem is built.
+Compute the Euler characteristic of every cell `1:ncell` from scratch.
+
+Use it at initialization, after lifecycle events and after host edits of `σ`. Sites
+outside the domain belong to no cell. On a periodic axis, the result is the Euler
+characteristic of the cell's subcomplex of the torus.
+
+# Arguments
+- `σ`: the `ownership` array, on the host.
+- `lattice::Lattice`: the lattice of `σ`.
+- `Val(adjacency)`: `Val(:face)` or `Val(:full)`, as in [`euler_change`](@ref).
+- `ncell::Integer`: the number of cell slots.
+
+# Returns
+- `Vector{Int32}`: one Euler characteristic per cell slot.
+
+Throws an `ArgumentError` if a periodic axis has length 1, where the per-copy change is
+not local.
+
+# Examples
+On a closed lattice, two diagonal sites are two components under `:face` and one under
+`:full`:
+```jldoctest
+julia> using CorePotts
+
+julia> σ = Int32[1 0; 0 1]; l = Lattice((2, 2); boundary = Closed());
+
+julia> recompute_euler(σ, l, Val(:face), 1), recompute_euler(σ, l, Val(:full), 1)
+(Int32[2], Int32[1])
+```
+
+See also [`euler_change`](@ref), [`commit_euler!`](@ref).
 """
 function recompute_euler(σ, lat::Lattice, adj::Val, ncell::Integer)
     check_shell_lattice(lat, "euler")

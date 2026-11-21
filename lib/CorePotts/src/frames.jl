@@ -17,39 +17,68 @@
 """
     AbstractFrameWriter
 
-Supertype of the destinations that [`FrameWritingCallback`](@ref) writes frames to. A
-writer implements:
+The supertype of the destinations that [`FrameWritingCallback`](@ref) writes frames to.
 
-- `open_frames!(w, u)`: start a new set of frames; `u` is a host state shaped like every
-  frame (its values are not defined). Called on the run's task when the run starts.
-- `write_frame!(w, t, u)`: append the frame `u` (a host `CPMState`) saved at MCS `t`. `u`
-  is a reused buffer: copy what you keep before returning.
-- `close(w)`: finish the frames (the default does nothing).
+A writer implements:
 
-`write_frame!` and `close` run on the writer task, in order and never at once. To be read
-back by [`PottsFrames`](@ref), a writer or a reader object implements
-`frame_times(source)` and `read_frame(source, i)`. [`FrameFile`](@ref) is the built-in
-writer and reader.
+- [`open_frames!(w, u)`](@ref open_frames!): start a new set of frames. `u` is a host
+  state shaped like every frame; its values are not defined. It is called on the run's
+  task when the run starts.
+- [`write_frame!(w, t, u)`](@ref write_frame!): append the frame `u` (a host `CPMState`)
+  saved at MCS `t`. `u` is a reused buffer, so copy what you keep before returning.
+- `close(w)`: finish the frames. The default does nothing.
+
+`write_frame!` and `close` run on the writer task, in order and never at the same time.
+To be read back by [`PottsFrames`](@ref), a writer or a reader object implements
+[`frame_times(source)`](@ref frame_times) and [`read_frame(source, i)`](@ref read_frame).
+[`FrameFile`](@ref) is the built-in writer and reader.
 """
 abstract type AbstractFrameWriter end
 
 """
-    open_frames!(writer, u)
+    open_frames!(writer, u) -> nothing
 
-Start a new set of frames in `writer` (an [`AbstractFrameWriter`](@ref)): `u` is a host
-state shaped like every frame that follows; its values are not defined. Called once per
-run, on the run's task.
+Start a new set of frames in `writer`.
+
+[`FrameWritingCallback`](@ref) calls it once per run, on the run's task. The generic
+method throws an `ArgumentError` that names the missing method. For a
+[`FrameFile`](@ref), the method comes from the JLD2 extension (`using JLD2`). It throws
+an `ArgumentError` if the `FrameFile` already holds a run, if another `FrameFile` in this
+process writes the same path, or if the path is a file. It replaces the segments of an
+earlier run at the path.
+
+# Arguments
+- `writer`: an [`AbstractFrameWriter`](@ref).
+- `u`: a host state shaped like every frame that follows; its values are not defined.
+
+# Returns
+- `nothing`.
+
+See also [`write_frame!`](@ref).
 """
 function open_frames!(w, u)
     return _no_frame_method(:open_frames!, w)
 end
 
 """
-    write_frame!(writer, t, u)
+    write_frame!(writer, t, u) -> nothing
 
-Append the frame `u` (a host `CPMState`) saved at MCS `t` to `writer` (an
-[`AbstractFrameWriter`](@ref)). `u` is a reused buffer: a writer copies what it keeps.
-Called on the writer task.
+Append the frame `u`, saved at MCS `t`, to `writer`.
+
+[`FrameWritingCallback`](@ref) calls it on the writer task. `u` is a reused buffer: a
+writer copies what it keeps. The generic method throws an `ArgumentError` that names the
+missing method. For a [`FrameFile`](@ref), the method comes from the JLD2 extension
+(`using JLD2`); it closes the open segment when the segment holds `checkpoint` frames.
+
+# Arguments
+- `writer`: an [`AbstractFrameWriter`](@ref).
+- `t`: the MCS of the frame.
+- `u`: the frame, a host `CPMState`.
+
+# Returns
+- `nothing`.
+
+See also [`open_frames!`](@ref).
 """
 function write_frame!(w, t, u)
     return _no_frame_method(:write_frame!, w)
@@ -58,8 +87,19 @@ end
 """
     frame_times(source) -> Vector{Int}
 
-The MCS of the frames in `source` (a [`FrameFile`](@ref) or another frame source), in the
-order they were written. Part of the reader interface of [`PottsFrames`](@ref).
+Return the MCS of the frames in `source`, in the order they were written.
+
+This is part of the reader interface of [`PottsFrames`](@ref). The generic method throws
+an `ArgumentError` that names the missing method. For a [`FrameFile`](@ref), the method
+comes from the JLD2 extension (`using JLD2`).
+
+# Arguments
+- `source`: a [`FrameFile`](@ref) or another frame source.
+
+# Returns
+- `Vector{Int}`: the MCS of every frame.
+
+See also [`read_frame`](@ref).
 """
 function frame_times(source)
     return _no_frame_method(:frame_times, source)
@@ -68,8 +108,20 @@ end
 """
     read_frame(source, i) -> CPMState
 
-The `i`-th frame of `source` (a [`FrameFile`](@ref) or another frame source), as a host
-state. Part of the reader interface of [`PottsFrames`](@ref).
+Read the `i`-th frame of `source` as a host state.
+
+This is part of the reader interface of [`PottsFrames`](@ref). The generic method throws
+an `ArgumentError` that names the missing method. For a [`FrameFile`](@ref), the method
+comes from the JLD2 extension (`using JLD2`).
+
+# Arguments
+- `source`: a [`FrameFile`](@ref) or another frame source.
+- `i`: the frame number, in `1:length(frame_times(source))`.
+
+# Returns
+- `CPMState`: the frame.
+
+See also [`frame_times`](@ref).
 """
 function read_frame(source, i)
     return _no_frame_method(:read_frame, source)
@@ -80,9 +132,11 @@ Base.close(::AbstractFrameWriter) = nothing
 """
     FrameFile(path; checkpoint = 10)
 
-The built-in frame writer and reader: a directory at `path` of JLD2 files (segments), each
-holding up to `checkpoint` frames as `CPMState`s with their MCS. Load JLD2 (`using JLD2`)
-to write or read one. `PottsFrames(path)` reads the segments as one run.
+Construct the built-in frame writer and reader: a directory at `path` of JLD2 files
+(segments), each holding up to `checkpoint` frames as `CPMState`s with their MCS.
+
+Load JLD2 (`using JLD2`) to write or read one. `PottsFrames(path)` reads the segments as
+one run.
 
 A segment is closed when it holds `checkpoint` frames, and a closed segment is not written
 again. If the process is killed (a `SIGKILL`, an out-of-memory kill or a device reset), the
@@ -96,6 +150,22 @@ A `FrameFile` holds one run. A second start (another `solve` with the same callb
 `FrameFile`. In one Julia process, a second `FrameFile` at a path that another `FrameFile`
 writes is also refused; give each trajectory its own path. A new `FrameFile` at the path of
 an earlier, finished run replaces that run's segments.
+
+# Arguments
+- `path::AbstractString`: the directory of the segments.
+
+# Keywords
+- `checkpoint::Integer = 10`: the number of frames per segment, at least 1.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> FrameFile("run1"; checkpoint = 50)
+FrameFile("run1"; checkpoint = 50)
+```
+
+See also [`FrameWritingCallback`](@ref), [`PottsFrames`](@ref).
 """
 mutable struct FrameFile <: AbstractFrameWriter
     const path::String
@@ -130,9 +200,14 @@ end
 """
     FrameWriteError(error::CapturedException)
 
-Exception raised on the run's task when writing frames failed on the writer task. `error`
-holds the writer's exception and its backtrace. The frames written before the failure stay
-in the file, which is closed.
+The exception raised on the run's task when writing frames failed on the writer task.
+
+The frames written before the failure stay in the file, which is closed.
+
+# Fields
+- `error::CapturedException`: the writer's exception and its backtrace.
+
+See also [`FrameWritingCallback`](@ref).
 """
 struct FrameWriteError <: Exception
     error::CapturedException
@@ -258,13 +333,11 @@ end
     FrameWritingCallback(writer; saveat = Int[], save_everystep = isempty(saveat),
         save_start = true, save_end = true, save_idxs = nothing)
 
-A `DiscreteCallback` that writes frames of a `PottsProblem` run to `writer` (a
-[`FrameFile`](@ref) or another [`AbstractFrameWriter`](@ref)) while the run continues. Its
-saving keywords read as `solve`'s: frames at `saveat` (MCS, or a number: every that many MCS
-from `t0`), at every MCS when `save_everystep`, at the start and at the end; `save_idxs`
-names the state leaves to write. The callback saves nothing in the solution
-(`save_positions = (false, false)`): pass `save_everystep = false` or `saveat` to `solve` so
-that the solution holds few states.
+Construct a `DiscreteCallback` that writes frames of a `PottsProblem` run to `writer`
+while the run continues.
+
+The callback saves nothing in the solution (`save_positions = (false, false)`): pass
+`save_everystep = false` or `saveat` to `solve` so that the solution holds few states.
 
 A frame is copied into one of two reused host buffers (pinned on ROCm, where the copy does
 not wait for the device), and a writer task (`Threads.@spawn`) appends it to the file. The
@@ -281,8 +354,34 @@ when `solve` fails or is interrupted. A hand-driven integrator (`init` and `step
 until `solve!(integ)` ends the run; to stop early, call `terminate!(integ)` and then
 `solve!(integ)`. One callback writes one run at a time; give each trajectory of an ensemble
 its own callback and writer (build them in `prob_func`). Runs with derivative parts are
-refused. A warning is given when the frames of a run are more than 16 GiB in total and
-`save_everystep` is on, and for `saveat` times outside the run.
+refused. A warning is given when `save_everystep` is on and the frames of a run are more
+than 16 GiB in total. With `verbose` on, a warning is given for `saveat` times outside the
+run.
+
+# Arguments
+- `writer`: a [`FrameFile`](@ref) or another [`AbstractFrameWriter`](@ref).
+
+# Keywords
+The saving keywords read as `solve`'s:
+- `saveat = Int[]`: the MCS of the frames, or a positive number: a frame every that many
+  MCS from `t0`.
+- `save_everystep::Bool = isempty(saveat)`: write a frame at every MCS.
+- `save_start::Bool = true`: write the frame at the start.
+- `save_end::Bool = true`: write the frame at the end.
+- `save_idxs = nothing`: the state leaves to write; `nothing` writes the whole state.
+
+# Returns
+- `DiscreteCallback`: pass it to `solve` or `init` with `callback`.
+
+# Examples
+```julia
+using JLD2
+cb = FrameWritingCallback(FrameFile("run1"); saveat = 0:100:10_000)
+sol = solve(prob, alg; callback = cb, save_everystep = false)
+frames = PottsFrames("run1"; prob)
+```
+
+See also [`PottsFrames`](@ref), [`FrameFile`](@ref).
 """
 function FrameWritingCallback(
         writer; saveat = Int[], save_everystep::Bool = isempty(saveat),
@@ -526,13 +625,47 @@ end
     PottsFrames(path::AbstractString; prob = nothing)
     PottsFrames(source; prob = nothing)
 
-Written frames read like a solution, each frame read from disk only when indexed. `path`
-is a [`FrameFile`](@ref)'s file; `source` is any object with `frame_times` and
-`read_frame`. `frames[i]` is the `i`-th frame (a host `CPMState`), `frames(t)` the frame
-written at MCS `t`, `frames.t` the MCS of every frame and `frames.u` the frames as a lazy
-vector. Give `prob`, the problem of the run, to draw each frame's frozen sites and the
-lattice spacing in MakiePotts plots and videos, as for a solution. `close(frames)` closes
-the file.
+Construct a reader of written frames that reads like a solution.
+
+Each frame is read from disk only when it is indexed. `frames[i]` is the `i`-th frame,
+`frames(t)` is the frame written at MCS `t`, `frames.t` holds the MCS of every frame and
+`frames.u` holds the frames as a lazy vector. `close(frames)` closes the file. The
+constructor throws an `ArgumentError` if the frames' MCS are not in order, and `frames(t)`
+throws one if no frame was written at `t`.
+
+# Arguments
+- `path::AbstractString`: the directory of a [`FrameFile`](@ref). Reading it needs JLD2
+  (`using JLD2`).
+- `source`: any object with [`frame_times`](@ref) and [`read_frame`](@ref) methods.
+
+# Keywords
+- `prob = nothing`: the problem of the run. MakiePotts plots and videos read it to draw
+  each frame's frozen sites and the lattice spacing, as for a solution.
+
+# Fields
+- `t::Vector{Int}`: the MCS of every frame.
+- `u`: the frames, as a lazy vector.
+- `source`: the frame source.
+- `prob`: the problem given with `prob`.
+
+# Examples
+A source that is not a file only needs the reader interface:
+```jldoctest
+julia> using CorePotts
+
+julia> struct TwoFrames end
+
+julia> CorePotts.frame_times(::TwoFrames) = [0, 5];
+
+julia> CorePotts.read_frame(::TwoFrames, i) = "frame \$i";
+
+julia> f = PottsFrames(TwoFrames());
+
+julia> f.t, f(5), length(f)
+([0, 5], "frame 2", 2)
+```
+
+See also [`FrameWritingCallback`](@ref), [`FrameFile`](@ref).
 """
 struct PottsFrames{S, P}
     source::S

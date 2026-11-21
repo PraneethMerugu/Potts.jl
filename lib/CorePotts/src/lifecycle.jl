@@ -14,26 +14,46 @@
 # Cell ids are `1:capacity`; an id is free when its volume is zero. Reusing an id increments
 # its generation, so cell-addressed randomness never replays.
 
-"""Lifecycle trigger code (`Int32(0)`) indicating no lifecycle event for the cell."""
+"""
+    EVENT_NONE
+
+The lifecycle trigger code `Int32(0)`: no lifecycle event for the cell.
+
+See also [`Lifecycle`](@ref).
+"""
 const EVENT_NONE = Int32(0)
 """
-Lifecycle trigger code (`Int32(1)`) indicating that the cell divides alone along
-`Lifecycle.normal`.
+    EVENT_DIVIDE
+
+The lifecycle trigger code `Int32(1)`: the cell divides alone along `Lifecycle.normal`.
+
+See also [`Lifecycle`](@ref), [`transitioning`](@ref).
 """
 const EVENT_DIVIDE = Int32(1)
 """
-Lifecycle trigger code (`Int32(2)`) indicating that the cell is removed and its sites become
-medium.
+    EVENT_REMOVE
+
+The lifecycle trigger code `Int32(2)`: the cell is removed and its sites become medium.
+
+See also [`Lifecycle`](@ref).
 """
 const EVENT_REMOVE = Int32(2)
 """
-Lifecycle trigger code (`Int32(3)`) indicating that the cell transitions to the kind
-returned by `Lifecycle.kind`.
+    EVENT_TRANSITION
+
+The lifecycle trigger code `Int32(3)`: the cell changes to the kind that
+`Lifecycle.kind` returns.
+
+See also [`Lifecycle`](@ref), [`transitioning`](@ref).
 """
 const EVENT_TRANSITION = Int32(3)
 """
-Lifecycle trigger code (`Int32(4)`) indicating that the cell's compartment cluster divides
-as a unit (evaluated at the root).
+    EVENT_DIVIDE_CLUSTER
+
+The lifecycle trigger code `Int32(4)`: the cell's compartment cluster divides as a unit.
+Only the root's event counts.
+
+See also [`Lifecycle`](@ref).
 """
 const EVENT_DIVIDE_CLUSTER = Int32(4)
 # A division that also transitions the dividing cell (A-17): the transition bit on
@@ -45,18 +65,35 @@ const _TRANSITIONING = Int32(0x10)
 const _EVENT_DIVIDE_CLUSTER_TRANSITION = EVENT_DIVIDE_CLUSTER | _TRANSITIONING
 
 """
-    transitioning(event)
+    transitioning(event) -> Int32
 
-The trigger's return value for a cell that both transitions (to `kind(st, p, ctx, key, mcs,
-c)`, as `EVENT_TRANSITION`) and has `event`, `EVENT_DIVIDE` (it divides alone) or
-`EVENT_DIVIDE_CLUSTER` (its cluster divides; the cell is the root). The transition is
-applied first: the `kind` hook sees the cell before the division, the daughter state rules
-see the new kind, and both halves carry it. It composes with `ruled_event`
-(`ruled_event(transitioning(e), i)`). A division that is deferred (no free slot) still
-transitions the cell. `stats.lifecycle.transitions` counts the cell once.
+Return the trigger value for a cell that both transitions and has `event`.
 
-It is called inside the trigger kernel, so it does not check `event`: the planner does, on
-the host (an `ArgumentError` at the MCS's read point for any other event).
+`event` is [`EVENT_DIVIDE`](@ref) (the cell divides alone) or
+[`EVENT_DIVIDE_CLUSTER`](@ref) (its cluster divides; the cell is the root). The cell
+transitions to `kind(st, p, ctx, key, mcs, c)`, as for [`EVENT_TRANSITION`](@ref). The
+transition is applied first: the `kind` hook sees the cell before the division, the
+daughter state rules see the new kind, and both halves carry it. A division that is
+deferred (no free slot) still transitions the cell. `stats.lifecycle.transitions` counts
+the cell once.
+
+It composes with [`ruled_event`](@ref): `ruled_event(transitioning(e), i)`. It runs
+inside the trigger kernel, so it does not check `event`. The planner checks it on the
+host and throws an `ArgumentError` at the MCS's read point for any other event.
+
+# Arguments
+- `event`: `EVENT_DIVIDE` or `EVENT_DIVIDE_CLUSTER`.
+
+# Returns
+- `Int32`: the event with its transition bit set.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> CorePotts.transitioning(EVENT_DIVIDE)
+17
+```
 """
 @inline transitioning(event) = Int32(event) | _TRANSITIONING
 public transitioning
@@ -86,9 +123,32 @@ end
 # fired above it, so the daughter state rule of that rule alone runs.
 const _RULE_SHIFT = 8
 const _EVENT_MASK = Int32(0xff)
-"""`ruled_event(event, i)`: `event` fired by rule `i` (for a `Lifecycle(…; rules = true)`
-trigger). Return `EVENT_NONE` itself, not `ruled_event(EVENT_NONE, i)`, when no rule fires:
-a nonzero value counts as an event and forces a host plan."""
+"""
+    ruled_event(event, i) -> Int32
+
+Return `event` as fired by rule `i`, for the trigger of a `Lifecycle(…; rules = true)`.
+
+The event is in the low byte and the rule index `i ≥ 1` above it, so only that rule's
+daughter state rule runs. When no rule fires, return [`EVENT_NONE`](@ref) itself, not
+`ruled_event(EVENT_NONE, i)`: a nonzero value counts as an event and forces a host plan.
+
+# Arguments
+- `event`: the trigger code.
+- `i`: the rule index, `≥ 1`.
+
+# Returns
+- `Int32`.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> CorePotts.ruled_event(EVENT_DIVIDE, 2)
+513
+```
+
+See also [`transitioning`](@ref), [`Lifecycle`](@ref).
+"""
 @inline ruled_event(event, i) = Int32(event) | (Int32(i) << _RULE_SHIFT)
 public ruled_event
 @inline _event(::Val{false}, raw) = raw
@@ -107,77 +167,97 @@ end
 end
 
 """
-    Lifecycle(trigger; normal, kind, divide!, rebuild!, every = 1, rules = false,
-              cluster_normal = normal, cluster_divide! = divide!, before = nothing)
+    Lifecycle(trigger; normal = AlongMinorAxis(), kind, divide! = no_divide_rule,
+              rebuild!, every = 1,
+              cluster_normal = normal, cluster_divide! = divide!, rules = false,
+              before = nothing, release = nothing, owner_changed = nothing)
 
-The lifecycle of a model (generated from `@divide`, `@remove`, `@transition` rules, or
-hand-written):
+Construct the lifecycle of a model: cell division, removal and kind transition.
 
-- `trigger(st, p, ctx, key, mcs, c) -> Int32` — the event for live cell `c`: `EVENT_NONE`,
-  `EVENT_DIVIDE` (the cell divides alone), `EVENT_DIVIDE_CLUSTER` (its compartment cluster
-  divides as a unit), `EVENT_REMOVE` or `EVENT_TRANSITION` (priorities are resolved inside).
-- `normal(st, p, ctx, key, mcs, c) -> NTuple{N}` — division plane normal through the
-  centroid (`AlongMinorAxis()`, `AlongMajorAxis()`, `RandomPlane()`, or any vector).
-- `kind(st, p, ctx, key, mcs, c) -> Int32` — the destination kind of a transition.
-- `divide!(st, p, ctx, key, mcs, parent, daughter)` — daughter state rule, run after the
-  default `Copy` of every non-tracker cell quantity (e.g. halve extensive quantities).
-- `rebuild!(st, p, ctx, backend)` — host hook run after the built-in trackers are rebuilt
-  (a lifecycle event moves sites between cells). Model-specific trackers that the lifecycle
-  cannot know, e.g. `commit_site_sum!`/`commit_site_min!` arrays, **must** be recomputed
-  here (`recompute_site_sum`, `recompute_site_min!(…; all = true)`), or they go stale.
-  A host hook needs a host decision: on a device, a lifecycle with `rebuild!` (or a model
-  with a custom `remake_frozen` rule) is planned on the host as on the CPU, with one
-  synchronizing read-back per checked MCS; every other lifecycle runs entirely on
-  the device.
-- `every` — check triggers every `every` MCS.
-- `rules` — rule-carrying events. With `rules = true` the trigger returns
-  `ruled_event(event, i)`, naming the rule `i ≥ 1` that fired, and
-  `divide!`/`cluster_divide!` take an eighth argument, that index (a cluster member gets its
-  root's), so only the firing rule's daughter state rule runs. Needed only when two rules
-  can fire for one cell.
-- `cluster_normal`, `cluster_divide!` — `normal` and `divide!` for cluster divisions.
-- `before(st, p, ctx, key, mcs, c)` — a cell update run for every cell `c` in
-  `1:ncells(st)` at the start of the lifecycle of every MCS (also the MCS it does not
-  check), as a `CellPhase` run just before it would. It must write only cell `c`'s own
-  columns, and the trigger of cell `c` may read a column `before` writes only at index `c`
-  (other values only if `before` does not write them). Then the device lifecycle runs
-  `before` and the trigger of each cell in one work item, one launch for both; the host
-  planner runs `before` as its own launch.
-- `release(st, c)` — the boundary of a model's cell references: run for
-  every cell `c` of an event round before any id is allocated (on a device in the copy
-  stage, before the daughter column copies, while every volume is still the pre-event one),
-  it resets each reference of a live cell `c` whose referent is dead (volume 0) to 0, so no
-  reference aliases the cell that reuses the slot, and daughters copy the reset value. It
-  writes only cell `c`'s own columns and reads `volume`; `nothing` (the default) for a model
-  without references.
-- `owner_changed(st, i)` — the ownership hook (R8): run at every site `i` whose owner
-  the lifecycle changes (a removed cell's sites, a daughter's sites), e.g. to reset site
-  variables declared `clear_on_ownership_change`. It writes only site `i`'s own site values.
-  `nothing` (the default): no hook. Copy hooks (`@on_copy`) never run from the lifecycle.
-
-Cell serials: when `st.cell` has a `birth` column (`Int32`, never copied to a
-daughter) and `st.model` the counter `NEXT_BIRTH` (a 1-element `Int32` array), every
-daughter takes the next serial, in increasing daughter-slot order (the allocation order),
-and the counter advances; a serial is never reused, and a checkpoint keeps the counter.
+Potts generates one from `@divide`, `@remove` and `@transition` rules; it can also be
+written by hand. Division requires the moment trackers (`init_moments`).
 
 Both kinds of division can happen in one MCS:
 
-- `EVENT_DIVIDE_CLUSTER` divides a compartment cluster as a unit (`st.cell.cluster`).
-  Only the root's event counts (members' `EVENT_DIVIDE_CLUSTER` are ignored).
+- [`EVENT_DIVIDE_CLUSTER`](@ref) divides a compartment cluster (`st.cell.cluster`) as a
+  unit. Only the root's event counts; members' `EVENT_DIVIDE_CLUSTER` events are ignored.
   `cluster_normal` is evaluated with the cluster's moments (`st.cell` then holds the
-  cluster's volume and moments at the root's index), and every live member splits along that
-  plane through the cluster centroid; `cluster_divide!` runs for each member. A portable
-  `cluster_normal` reads `st.cell.volume`, `anchor`, `m1`, `m2` only at the root's index,
-  any other cell column only as `generation`, `kind` or `cluster`, and not `st.ownership`:
-  the host planner passes a cluster-labeled `σ` and cluster moments at every root, the
-  device planner the cell-labeled `σ`, the full cell columns, and the cluster's volume and
-  moments at every index. The daughters form a new cluster. A dividing cluster takes
-  precedence over its members' own `EVENT_DIVIDE`.
-- `EVENT_DIVIDE` divides the cell alone along `normal`; `divide!` runs. A compartment's
-  daughter (the parent shares its cluster with another live cell) stays in the parent's
-  cluster; a lone cell's daughter is a lone cell (its own cluster).
+  cluster's volume and moments at the root's index), and every live member splits along
+  that plane through the cluster centroid; `cluster_divide!` runs for each member. A
+  portable `cluster_normal` reads `st.cell.volume`, `anchor`, `m1` and `m2` only at the
+  root's index, any other cell column only as `generation`, `kind` or `cluster`, and not
+  `st.ownership`. The host planner passes a `σ` that holds cluster numbers and cluster
+  moments at every root; the device planner passes a `σ` that holds cell numbers, the full
+  cell columns, and the cluster's volume and moments at every index. The daughters form a
+  new cluster. A dividing cluster takes precedence over its members' own `EVENT_DIVIDE`.
+- [`EVENT_DIVIDE`](@ref) divides the cell alone along `normal`; `divide!` runs. A
+  compartment's daughter (the parent shares its cluster with another live cell) stays in
+  the parent's cluster; a lone cell's daughter is a lone cell.
 
-Division requires the moment trackers (`init_moments`).
+Cell serials: when `st.cell` has a `birth` column (`Int32`, never copied to a daughter)
+and `st.model` has the counter [`NEXT_BIRTH`](@ref), every daughter takes the next serial,
+in increasing daughter-slot order (the allocation order), and the counter advances. A
+serial is never reused, and a checkpoint keeps the counter.
+
+Cell ids are `1:capacity`; an id is free when its volume is zero. Reusing an id increments
+its generation, so cell-addressed random draws never repeat.
+
+# Arguments
+- `trigger`: `trigger(st, p, ctx, key, mcs, c) -> Int32`, the event for live cell `c`:
+  `EVENT_NONE`, `EVENT_DIVIDE`, `EVENT_DIVIDE_CLUSTER`, `EVENT_REMOVE` or
+  `EVENT_TRANSITION` (the trigger resolves priorities itself).
+
+# Keywords
+- `normal = AlongMinorAxis()`: `normal(st, p, ctx, key, mcs, c) -> NTuple{N}`, the normal
+  of the division plane through the centroid: [`AlongMinorAxis()`](@ref AlongMinorAxis),
+  [`AlongMajorAxis()`](@ref AlongMajorAxis), [`RandomPlane()`](@ref RandomPlane), or any
+  function that returns a vector.
+- `kind`: `kind(st, p, ctx, key, mcs, c) -> Int32`, the destination kind of a transition.
+  The default keeps the cell's kind.
+- `divide! = no_divide_rule`: `divide!(st, p, ctx, key, mcs, parent, daughter)`, the
+  daughter state rule, run after the default copy of every non-tracker cell quantity (for
+  example, to halve extensive quantities). [`no_divide_rule`](@ref) does nothing.
+- `rebuild!`: `rebuild!(st, p, ctx, backend)`, a host hook run after the built-in
+  trackers are rebuilt. Model trackers that the lifecycle cannot know, such as the arrays
+  of `commit_site_sum!` and `commit_site_min!`, must be recomputed here
+  (`recompute_site_sum`, `recompute_site_min!(…; all = true)`), or they go stale. On a
+  device, a lifecycle with `rebuild!` (or a model with a custom `remake_frozen` rule) runs
+  its planner on the host as on the CPU, with one synchronizing read-back per checked
+  MCS. Every other lifecycle runs entirely on the device. The default does nothing.
+- `every::Integer = 1`: check the triggers every `every` MCS.
+- `cluster_normal = normal`, `cluster_divide! = divide!`: `normal` and `divide!` for
+  cluster divisions.
+- `rules::Bool = false`: rule-carrying events. With `true`, the trigger returns
+  [`ruled_event(event, i)`](@ref ruled_event), naming the rule `i ≥ 1` that fired, and
+  `divide!` and `cluster_divide!` take that index as an eighth argument (a cluster member
+  gets its root's), so only the firing rule's daughter state rule runs. It is needed only
+  when two rules can fire for one cell.
+- `before = nothing`: `before(st, p, ctx, key, mcs, c)`, a cell update run for every cell
+  `c` in `1:ncells(st)` at the start of the lifecycle of every MCS (also the MCS that the
+  lifecycle does not check), as a `CellPhase` that runs right before the lifecycle. It
+  must write only cell `c`'s own columns. The trigger of cell `c` may read a column that
+  `before` writes only at index `c`. The device lifecycle then runs `before` and the
+  trigger of each cell in one work item; the host planner runs `before` as its own launch.
+- `release = nothing`: `release(st, c)`, the reset of a model's cell references. It runs
+  for every cell `c` of an event round before any id is allocated (on a device in the
+  copy stage, before the daughter column copies, while every volume is still the
+  pre-event one). It resets each reference of a live cell `c` whose referent is dead
+  (volume 0) to 0, so no reference points at the cell that reuses the slot, and
+  daughters copy the reset value. It writes only cell `c`'s own columns and reads
+  `volume`.
+- `owner_changed = nothing`: `owner_changed(st, i)`, the ownership hook, run at every site
+  `i` whose owner the lifecycle changes (a removed cell's sites, a daughter's sites), for
+  example to reset site variables declared `clear_on_ownership_change`. It writes only
+  site `i`'s own site values. Copy hooks (`@on_copy`) never run from the lifecycle.
+
+# Examples
+```julia
+divide_big(st, p, ctx, key, mcs, c) =
+    st.cell.volume[c] > 2 * p.target_volume ? EVENT_DIVIDE : EVENT_NONE
+lc = Lifecycle(divide_big; normal = RandomPlane(), every = 10)
+```
+
+See also [`with_capacity`](@ref), [`rebuild_trackers!`](@ref).
 """
 struct Lifecycle{TR, NO, CN, KI, DV, CD, RB, RU <: Val, BE, RL, OC}
     trigger::TR
@@ -214,9 +294,11 @@ end
 """
     NEXT_BIRTH
 
-The `st.model` key of the cell-serial counter: a 1-element `Int32` array
-holding the serial the next daughter takes. A model state that has it and a `birth` cell
-column gets serials at every division (`Lifecycle`).
+The `st.model` key of the cell-serial counter, a 1-element `Int32` array that holds the
+serial the next daughter takes.
+
+A model state that has it and a `birth` cell column gets serials at every division (see
+[`Lifecycle`](@ref)).
 """
 const NEXT_BIRTH = Symbol("#next_birth")
 
@@ -256,7 +338,19 @@ no_rebuild(st, p, ctx, backend) = nothing
 # bounds: c is a live cell id ≤ capacity (the lifecycle calls it per cell)
 @inline keep_kind(st, p, ctx, key, mcs, c) = @inbounds st.cell.kind[c]
 """
-The no-division-rule default: a daughter keeps the default copy of its parent's values.
+    no_divide_rule(st, p, ctx, key, mcs, parent, daughter) -> nothing
+    no_divide_rule(st, p, ctx, key, mcs, parent, daughter, rule) -> nothing
+
+The default daughter state rule of a [`Lifecycle`](@ref): it does nothing, so a daughter
+keeps the default copy of its parent's values.
+
+# Arguments
+- `st`, `p`, `ctx`, `key`, `mcs`: the state, parameters, context, RNG key and MCS.
+- `parent`, `daughter`: the cell numbers.
+- `rule`: the index of the firing rule, with rule-carrying events.
+
+# Returns
+- `nothing`.
 """
 @inline no_divide_rule(st, p, ctx, key, mcs, parent, daughter) = nothing
 @inline no_divide_rule(st, p, ctx, key, mcs, parent, daughter, rule) = nothing
@@ -267,9 +361,15 @@ const STREAM_DIVISION_PLANE = stream_id("CorePotts.division_plane")
     AlongMinorAxis()
     AlongMinorAxis{T}()
 
-Division plane normal functor in float type `T` (`Float64` when not given). A `Lifecycle`
-evaluates it in the state's float type, whatever `T` it was given. Divides across the cell's
-long axis (the plane contains the minor axis, so the normal is the major principal axis).
+A division plane functor that divides across the cell's long axis: the plane contains the
+minor axis, so the normal is the major principal axis.
+
+A [`Lifecycle`](@ref) evaluates it in the state's float type, whatever `T` it was given.
+
+# Arguments
+- `T`: the float type (`Float64` when not given).
+
+See also [`AlongMajorAxis`](@ref), [`RandomPlane`](@ref), [`principal_axis`](@ref).
 """
 struct AlongMinorAxis{T} end
 AlongMinorAxis() = AlongMinorAxis{Float64}()
@@ -278,9 +378,15 @@ AlongMinorAxis() = AlongMinorAxis{Float64}()
     AlongMajorAxis()
     AlongMajorAxis{T}()
 
-Division plane normal functor in float type `T` (`Float64` when not given). A `Lifecycle`
-evaluates it in the state's float type, whatever `T` it was given. Divides along the cell's
-long axis (the normal is the minor principal axis).
+A division plane functor that divides along the cell's long axis: the normal is the
+minor principal axis.
+
+A [`Lifecycle`](@ref) evaluates it in the state's float type, whatever `T` it was given.
+
+# Arguments
+- `T`: the float type (`Float64` when not given).
+
+See also [`AlongMinorAxis`](@ref), [`RandomPlane`](@ref), [`principal_axis`](@ref).
 """
 struct AlongMajorAxis{T} end
 AlongMajorAxis() = AlongMajorAxis{Float64}()
@@ -289,9 +395,15 @@ AlongMajorAxis() = AlongMajorAxis{Float64}()
     RandomPlane()
     RandomPlane{T}()
 
-Division plane normal functor in float type `T` (`Float64` when not given). A `Lifecycle`
-evaluates it in the state's float type, whatever `T` it was given. Draws a uniformly random
-unit normal addressed by cell id and generation.
+A division plane functor that draws a uniformly random unit normal, addressed by the cell
+number and generation.
+
+A [`Lifecycle`](@ref) evaluates it in the state's float type, whatever `T` it was given.
+
+# Arguments
+- `T`: the float type (`Float64` when not given).
+
+See also [`AlongMinorAxis`](@ref), [`AlongMajorAxis`](@ref).
 """
 struct RandomPlane{T} end
 RandomPlane() = RandomPlane{Float64}()
@@ -322,10 +434,37 @@ end
 end
 
 """
-    principal_axis(::Type{T}, cell, lattice, c, k) -> NTuple{N, T}
+    principal_axis(T, cell, lattice, c, k) -> NTuple{N, T}
 
-Unit eigenvector of cell `c`'s site-coordinate covariance for its `k`-th largest
-eigenvalue, in float type `T`.
+Return the unit eigenvector of cell `c`'s site-coordinate covariance for its `k`-th
+largest eigenvalue, in float type `T`.
+
+On a 1D lattice the result is the axis itself. On a 2D lattice the covariance is taken in
+Cartesian (embedded) coordinates. If the eigenvector is not determined (an isotropic
+cell), a coordinate axis is returned.
+
+# Arguments
+- `T::Type`: the float type of the result.
+- `cell`: the cell state, with `volume` and the moment trackers.
+- `lattice::Lattice`: the lattice.
+- `c`: the cell number.
+- `k`: `1` for the largest eigenvalue, up to `N` for the smallest.
+
+# Returns
+- `NTuple{N, T}`: the unit vector.
+
+# Examples
+A bar of three sites along axis 1:
+```jldoctest
+julia> using CorePotts
+
+julia> l = Lattice((5, 5)); σ = zeros(Int32, 5, 5); σ[2:4, 3] .= 1;
+
+julia> cell = merge((; volume = Int32[3]), init_moments(σ, l, 1));
+
+julia> principal_axis(Float64, cell, l, 1, 1)
+(1.0, 0.0)
+```
 """
 function principal_axis end
 # 1D: the axis itself (a division cuts the cell across its length, A-16)
@@ -758,13 +897,22 @@ function _copy_columns!(stats, a::AbstractArray, dst, src)
 end
 
 """
-    rebuild_trackers!(st, ctx, backend)
+    rebuild_trackers!(st, ctx, backend) -> st
 
-Recompute the built-in trackers present in `st.cell` exactly from `σ`: `volume`, `surface`
-(over `ctx.surface`, if both exist), `euler` and `euler_full`, the `pieces` columns, moments
-(`anchor`, `m1`, `m2`), the cluster trackers (`cluster_volume`, `cluster_surface`) and the
-contact counts named in `ctx.contact_counts` (`ContactCounts`). Host-side; used at lifecycle
-events and after host edits of `σ`.
+Recompute the built-in trackers in `st.cell` exactly from `σ`, on the host.
+
+The trackers are `volume`, `surface` (over `ctx.surface`, if both exist), `euler` and
+`euler_full`, the `pieces` columns, the moments (`anchor`, `m1`, `m2`), the cluster
+trackers (`cluster_volume`, `cluster_surface`) and the contact counts named in
+`ctx.contact_counts`. Use it after host edits of `σ`; the lifecycle uses it at events.
+
+# Arguments
+- `st`: the state.
+- `ctx`: the run context, with `lattice` and the relations.
+- `backend`: the KernelAbstractions backend of `st`.
+
+# Returns
+- `st`, with the trackers updated in place.
 """
 rebuild_trackers!(st, ctx, backend) = _rebuild_trackers!(nothing, st, ctx, backend)
 
@@ -854,12 +1002,34 @@ function _surface_unit_deltas!(
 end
 
 """
-    with_capacity(st, capacity)
+    with_capacity(st, capacity) -> CPMState
 
-A copy of host state `st` whose cell quantities have `capacity` slots (free slots have
-volume 0, kind 1, generation 0). History rings are not resized: build rings of cell
-quantities after `with_capacity` (a `HistoryPush` with a mismatched ring is an error).
-Lifecycle models preallocate capacity.
+Return a state like the host state `st` whose cell quantities have `capacity` slots.
+
+Free slots have volume 0, kind 1 and generation 0, and with a `cluster` column each free
+slot is its own cluster. The cell columns are new arrays; `ownership` and the site, model
+and history parts are shared with `st`. History rings are not resized: build rings of
+cell quantities after `with_capacity` (a `HistoryPush` with a mismatched ring is an
+error). Lifecycle models preallocate capacity this way.
+
+# Arguments
+- `st::CPMState`: the state, on the host.
+- `capacity::Integer`: the number of cell slots, at least the current number.
+
+# Returns
+- `CPMState`.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> st = with_capacity(initial_state(Int32[1 0; 2 2], [1, 2]), 4);
+
+julia> st.cell.kind, st.cell.volume
+(Int32[1, 2, 1, 1], Int32[1, 2, 0, 0])
+```
+
+See also [`Lifecycle`](@ref).
 """
 function with_capacity(st::CPMState, capacity::Integer)
     n = length(st.cell.kind)

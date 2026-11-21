@@ -7,10 +7,37 @@
 """
     read_piff(io_or_path, dims; medium = "Medium") -> (labels, kinds, ids)
 
-Labels (`Int32`, 1-based, `0` = medium) over a lattice of size `dims` from a PIFF file,
-the kind name of each labeled cell and its PIFF cell id. Cells are numbered in order of
-first appearance. Boxes outside the lattice, overlapping cells, or a cell listed with two
-types are errors.
+Read a lattice from a PIFF file, CompuCell3D's Potts Initial File Format.
+
+Each line is `cell_id cell_type x_low x_high y_low y_high z_low z_high`, a box of sites
+with 0-based inclusive coordinates (`z` is 0 in 2D). Empty lines and lines starting with
+`#` are skipped. A cell may span several lines, and its cell number is its order of first
+appearance. The medium may be listed or left implicit. A box outside the lattice,
+overlapping cells or a cell listed with two types throws an `ArgumentError`.
+
+# Arguments
+- `io_or_path`: an `IO`, or the path of the file.
+- `dims::NTuple{N, Integer}`: the lattice size, 2D or 3D.
+
+# Keywords
+- `medium::AbstractString = "Medium"`: the type name of medium boxes.
+
+# Returns
+- `labels::Array{Int32, N}`: the cell number of every site (`0` = medium).
+- `kinds::Vector{String}`: the type name of each cell.
+- `ids::Vector{Int}`: the PIFF cell id of each cell.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> io = IOBuffer("7 A 0 1 0 0 0 0\\n9 B 1 1 1 1 0 0\\n");
+
+julia> read_piff(io, (2, 2))
+(Int32[1 0; 1 2], ["A", "B"], [7, 9])
+```
+
+See also [`write_piff`](@ref), [`initial_state`](@ref).
 """
 read_piff(path::AbstractString, dims; kw...) = open(io -> read_piff(io, dims; kw...), path)
 
@@ -71,9 +98,36 @@ end
 """
     write_piff(io_or_path, labels, kinds; medium = nothing, ids = 1:length(kinds))
 
-Write a labeling as PIFF: one line per run of sites along the first axis. `kinds[c]` is the
-type name of cell `c` (a name, or anything `string` accepts). With `medium` set to a type
-name, medium sites are written too.
+Write a lattice as PIFF, one line per run of sites of one cell along the first axis.
+
+# Arguments
+- `io_or_path`: an `IO`, or the path of the file (overwritten).
+- `labels::AbstractArray{<:Integer}`: the cell number of every site, 2D or 3D (`0` =
+  medium).
+- `kinds`: the type name of each cell: `kinds[c]` for cell `c`, a string or anything that
+  `string` accepts.
+
+# Keywords
+- `medium = nothing`: the type name for medium sites. With `nothing`, medium sites are not
+  written.
+- `ids = 1:length(kinds)`: the PIFF cell id of each cell.
+
+# Returns
+- `nothing`.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> io = IOBuffer(); write_piff(io, Int32[1 1; 0 2], ["A", "B"]);
+
+julia> print(String(take!(io)))
+1 A 0 0 0 0 0 0
+1 A 0 0 1 1 0 0
+2 B 1 1 1 1 0 0
+```
+
+See also [`read_piff`](@ref).
 """
 function write_piff(path::AbstractString, labels, kinds; kw...)
     return open(io -> write_piff(io, labels, kinds; kw...), path, "w")

@@ -18,10 +18,32 @@ const _CUBE_SHELL = Tuple(
 )
 
 """
-    shell_offsets(lattice)
+    shell_offsets(lattice) -> Tuple
 
-The offsets of the target's neighbor shell: the 8 sites of the 3×3 box on a square
-lattice, the 6 neighbors on a hexagonal one, the 26 sites of the 3×3×3 box in 3D.
+Return the offsets of the target's neighbor shell.
+
+The shell is the 8 sites of the 3×3 box on a square lattice, the 6 neighbors on a
+hexagonal lattice, and the 26 sites of the 3×3×3 box on a cubic lattice, whatever the
+model's neighborhood. The square and cubic offsets are in ternary order (axis 1 fastest,
+the origin left out); the hexagonal offsets go round the target.
+
+# Arguments
+- `lattice::Lattice`: a 2D or 3D lattice.
+
+# Returns
+- A tuple of `Int32` offset tuples. Shell masks use bit `k - 1` for offset `k`.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> o = CorePotts.shell_offsets(Lattice((5, 5)));
+
+julia> length(o), o[1], o[8]
+(8, (-1, -1), (1, 1))
+```
+
+See also [`shell_owners`](@ref).
 """
 @inline shell_offsets(::Lattice{2, M, Hexagonal}) where {M} = _HEX_SHELL
 @inline shell_offsets(::Lattice{2}) = _SQUARE_SHELL
@@ -50,8 +72,31 @@ const _CUBE_TABLES = (;
 """
     shell_owners(lattice, σ, x) -> NTuple{K, Int32}
 
-The owners of the shell positions of `x` (see [`shell_offsets`](@ref)); −1 off a closed face
-or outside the domain mask, whatever σ's eltype.
+Return the owners of the shell positions of site `x`, in the order of
+[`shell_offsets`](@ref).
+
+A position off a closed face, or outside the domain mask, reads `-1`, whatever the
+element type of `σ`. If `x` itself is outside the domain mask, every position reads `-1`.
+
+# Arguments
+- `lattice::Lattice`: the lattice of `σ`.
+- `σ`: the `ownership` array.
+- `x`: the site, as a coordinate tuple.
+
+# Returns
+- `NTuple{K, Int32}`: one owner per shell position.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> l = Lattice((3, 3); boundary = Closed()); σ = Int32[1 2 0; 1 1 0; 3 0 0];
+
+julia> CorePotts.shell_owners(l, σ, (1, 1))
+(-1, -1, -1, -1, 1, -1, 2, 1)
+```
+
+See also [`read_shell`](@ref), [`shell_mask`](@ref).
 """
 @inline function shell_owners(lat::Lattice{N}, σ, x) where {N}
     offs = shell_offsets(lat)
@@ -86,13 +131,23 @@ end
 @inline _mask_at(m, i) = @inbounds m[i]          # i in 1:nsites (`shell_owners`)
 
 """
-    check_shell_lattice(lattice, quantity)
+    check_shell_lattice(lattice, quantity) -> nothing
 
-Throw an `ArgumentError` naming `quantity` when `lattice` has a periodic axis of length 1:
-there the target's neighbor shell wraps onto the target itself, so every shell-based
-quantity (the local rules, `Global`, `pieces`, `largest_piece`, `local_components`, the
-`ring_*` built-ins, `euler`) would read x as its own neighbor. The one check, run on the
-host when a problem is built (and by [`recompute_euler`](@ref)).
+Throw an `ArgumentError` that names `quantity` when `lattice` has a periodic axis of
+length 1.
+
+On such an axis the target's neighbor shell wraps onto the target itself, so every
+quantity that reads the shell would read the target as its own neighbor. Potts runs the
+check on the host when a problem is built, and [`recompute_euler`](@ref) runs it too.
+
+# Arguments
+- `lattice::Lattice`: the lattice.
+- `quantity::AbstractString`: the name of the quantity, for the error message.
+
+# Returns
+- `nothing`.
+
+See also [`shell_owners`](@ref).
 """
 function check_shell_lattice(lat::Lattice{N}, quantity::AbstractString) where {N}
     for d in 1:N
@@ -111,19 +166,63 @@ end
 """
     ShellRead(owners)
 
-The owners of a target's shell, read once ([`read_shell`](@ref)) and shared by every shell
-kernel of one generated function: [`local_rule`](@ref), [`arc_or_pair`](@ref),
-[`simple_point`](@ref), [`euler_change`](@ref) and the `ring_*` built-ins take it in place
-of σ.
+The owners of a target's shell, read once and shared by every shell kernel of one
+generated function.
+
+[`local_rule`](@ref), [`arc_or_pair`](@ref), [`simple_point`](@ref),
+[`euler_change`](@ref) and the `ring_*` built-ins take it in place of `σ`.
+
+# Fields
+- `owners::NTuple{K, Int32}`: the owners, as [`shell_owners`](@ref) returns them.
+
+See also [`read_shell`](@ref).
 """
 struct ShellRead{K}
     owners::NTuple{K, Int32}
 end
-"""`read_shell(σ, ctx, prop)`: the [`ShellRead`](@ref) of the copy's target."""
+"""
+    read_shell(σ, ctx, prop) -> ShellRead
+
+Read the shell of the copy's target into a [`ShellRead`](@ref).
+
+If `σ` is already a `ShellRead`, it is returned as it is.
+
+# Arguments
+- `σ`: the `ownership` array, or a `ShellRead`.
+- `ctx`: the kernel context; the function reads `ctx.lattice`.
+- `prop::Proposal`: the copy attempt.
+
+# Returns
+- `ShellRead`.
+
+See also [`shell_owners`](@ref).
+"""
 @inline read_shell(σ, ctx, prop::Proposal) = ShellRead(shell_owners(ctx.lattice, σ, prop.x))
 @inline read_shell(s::ShellRead, ctx, prop::Proposal) = s
 
-"""The mask of the shell positions owned by `c`."""
+"""
+    shell_mask(owners, c) -> UInt32
+
+Return the mask of the shell positions owned by `c`: bit `k - 1` is set when
+`owners[k] == c`.
+
+# Arguments
+- `owners::NTuple{K, Int32}`: the shell owners.
+- `c`: the owner to match; `-1` matches the out-of-domain positions.
+
+# Returns
+- `UInt32`: the mask.
+
+# Examples
+```jldoctest
+julia> using CorePotts
+
+julia> CorePotts.shell_mask(Int32.((1, 2, 1)), 1)
+0x00000005
+```
+
+See also [`shell_pieces`](@ref).
+"""
 @inline function shell_mask(owners::NTuple{K, Int32}, c) where {K}
     m = UInt32(0)
     for k in 1:K
@@ -254,9 +353,32 @@ end
 """
     shell_pieces(lattice, mask, full) -> Int32
 
-Components of the shell positions in `mask`, two positions joined when they are face
-neighbors (`full = false`) or any neighbors (`full = true`; on a hexagonal lattice the
-two are the same).
+Count the components of the shell positions in `mask`.
+
+Two positions are joined when they are face neighbors (`full = false`) or any neighbors
+(`full = true`). On a hexagonal lattice the two adjacencies are the same.
+
+# Arguments
+- `lattice::Lattice`: the lattice, which sets the shell.
+- `mask::UInt32`: the positions, bit `k - 1` for offset `k` of
+  [`shell_offsets`](@ref).
+- `full::Bool`: join any neighbors, not only face neighbors.
+
+# Returns
+- `Int32`: the number of components.
+
+# Examples
+The shell positions `(0, -1)` and `(1, 0)` are diagonal neighbors:
+```jldoctest
+julia> using CorePotts
+
+julia> l = Lattice((5, 5)); m = UInt32(0b10010);
+
+julia> CorePotts.shell_pieces(l, m, false), CorePotts.shell_pieces(l, m, true)
+(2, 1)
+```
+
+See also [`shell_mask`](@ref).
 """
 @inline function shell_pieces(lat::Lattice, mask::UInt32, full::Bool)
     r = _ring_bits(lat)
@@ -266,11 +388,27 @@ end
 """
     local_rule(σ, ctx, prop, gain, full) -> Bool
 
-`Local(; gain, adjacency)` for the losing cell: `true` for the medium; otherwise its shell
-positions form exactly one piece (zero pieces is refused), the shell is not full (every
-position in the domain and owned by `old`), and, if `gain`, `new` owns a shell site adjacent
-to the target (a face neighbor, or any shell site when `full`). σ may be a
-[`ShellRead`](@ref).
+Evaluate the local connectivity rule `Local(; gain, adjacency)` for the losing cell.
+
+The result is `true` when the losing cell is the medium. Otherwise it is `true` when
+all of these hold:
+
+- the losing cell's shell positions form exactly one piece (zero pieces fails);
+- the shell is not full (every position in the domain and owned by the losing cell);
+- if `gain`, the gaining cell owns a shell site adjacent to the target: a face neighbor,
+  or any shell site when `full`.
+
+# Arguments
+- `σ`: the `ownership` array, or a [`ShellRead`](@ref).
+- `ctx`: the kernel context; the function reads `ctx.lattice`.
+- `prop::Proposal`: the copy attempt.
+- `gain::Bool`: also require the gaining cell next to the target.
+- `full::Bool`: use full adjacency for the pieces and the gain test.
+
+# Returns
+- `Bool`: whether the copy keeps the rule.
+
+See also [`simple_point`](@ref), [`arc_or_pair`](@ref).
 """
 @inline function local_rule(σ, ctx, prop::Proposal, gain::Bool, full::Bool)
     return prop.old == 0 ||
@@ -289,10 +427,22 @@ end
 """
     arc_or_pair(σ, ctx, prop) -> Bool
 
-`ArcOrPair()` for the losing cell: `true` for the medium; otherwise its shell positions form
-at most one face piece, or exactly two distinct cells and no medium are on the shell, the
-out-of-domain positions (if any) counting as one extra cell (TST's frame). σ may be a
-[`ShellRead`](@ref).
+Evaluate the connectivity rule `ArcOrPair()` for the losing cell.
+
+The result is `true` when the losing cell is the medium. Otherwise it is `true` when the
+losing cell's shell positions form at most one face piece, or when exactly two distinct
+cells and no medium are on the shell. The out-of-domain positions, if any, count as one
+extra cell (the frame of the Tissue Simulation Toolkit).
+
+# Arguments
+- `σ`: the `ownership` array, or a [`ShellRead`](@ref).
+- `ctx`: the kernel context; the function reads `ctx.lattice`.
+- `prop::Proposal`: the copy attempt.
+
+# Returns
+- `Bool`: whether the copy keeps the rule.
+
+See also [`local_rule`](@ref), [`simple_point`](@ref).
 """
 @inline function arc_or_pair(σ, ctx, prop::Proposal)
     return prop.old == 0 ||
@@ -317,11 +467,28 @@ end
 """
     simple_point(σ, ctx, prop, c, full) -> Bool
 
-`Simple(; adjacency)` for cell `c` (`true` for the medium): the target is a simple point of
-`c`'s shell sites with the target, out-of-domain positions counting as background. 2D
-`full = false`: one 4-component of `c` in the 8-shell touching a face neighbor, and one
-8-component of the background; `full = true` swaps the adjacencies. 3D: the same with 6
-(over the 18-neighborhood) and 26. Hex: one arc of each. σ may be a [`ShellRead`](@ref).
+Return `true` if the target is a simple point of cell `c`: the connectivity rule
+`Simple(; adjacency)`.
+
+The test reads `c`'s shell sites with the target. Out-of-domain positions count as
+background. The result is `true` when `c` is the medium.
+
+- 2D, `full = false`: one 4-component of `c` in the 8-site shell that touches a face
+  neighbor, and one 8-component of the background. `full = true` swaps the adjacencies.
+- 3D: the same with 6-adjacency (over the 18-neighborhood) and 26-adjacency.
+- Hexagonal: one arc of `c` and one arc of the background.
+
+# Arguments
+- `σ`: the `ownership` array, or a [`ShellRead`](@ref).
+- `ctx`: the kernel context; the function reads `ctx.lattice`.
+- `prop::Proposal`: the copy attempt; the function reads its target.
+- `c`: the cell to test.
+- `full::Bool`: use full adjacency for `c`.
+
+# Returns
+- `Bool`: whether the target is a simple point of `c`.
+
+See also [`local_rule`](@ref), [`arc_or_pair`](@ref).
 """
 @inline function simple_point(σ, ctx, prop::Proposal, c, full::Bool)
     return c == 0 || _simple_point(read_shell(σ, ctx, prop), ctx.lattice, c, full)
