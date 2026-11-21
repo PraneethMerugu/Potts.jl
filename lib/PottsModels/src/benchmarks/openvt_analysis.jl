@@ -8,12 +8,11 @@
 const _OPENVT_METRICS = (:N, :r, :A, :C, :w, :g, :C_rel, :w_rel)
 
 """
-    openvt_metrics(path::AbstractString)
-    openvt_metrics(x, y, g)
+    openvt_metrics(path::AbstractString) -> NamedTuple
+    openvt_metrics(x, y, g) -> NamedTuple
 
-The OpenVT monolayer metrics of one saved colony, as the consortium's `metrics.cpp`
-computes them: a `NamedTuple` `(; N, r, A, C, w, g, C_rel, w_rel)`, all `Float64` except
-the cell count `N`.
+Return the OpenVT monolayer metrics of one saved colony, as the consortium's `metrics.cpp`
+computes them.
 
 The boundary is [`Analysis.concave_hull`](@ref PottsModels.Analysis.concave_hull) of the
 cell centroids `(x, y)` with concavity 1.5. With `B` boundary vertices, `B > 2`:
@@ -21,35 +20,59 @@ cell centroids `(x, y)` with concavity 1.5. With `B` boundary vertices, `B > 2`:
 - `r`: the mean distance of the vertices from their mean `c`;
 - `A`: the area enclosed (shoelace formula);
 - `C`: the perimeter of the closed boundary;
-- `w`: ``\\sqrt{\\sum (|v - c| - r)^2 / (B - 1)}``, the spread of the vertex radii;
+- `w`: ``\\sqrt{\\sum (|v - c| - r)^2 / (B - 1)}``, the spread of the vertex radii.
 
-and `r`, `A`, `C`, `w` are `NaN` for `B ≤ 2` (fewer than three cells, or collinear ones).
+`r`, `A`, `C` and `w` are `NaN` for `B ≤ 2` (fewer than three cells, or collinear ones).
 `g` is the fraction of growing cells (`Σg/N`, `g` a 0/1 flag per cell),
 `C_rel = C/(2√(πA))` and `w_rel = w/r`.
 
-The file method reads a headed CSV as `metrics.cpp` does: the header is split on `,` and
-`"` and `'` are removed from the names; the columns `x`, `y` and `g` are found by name (the
+The file method reads a headed CSV as `metrics.cpp` does. The header is split on `,`, and
+`"` and `'` are removed from the names. The columns `x`, `y` and `g` are found by name (the
 last one of each name; other columns are ignored), and empty lines are skipped. A field is
 read as C++'s `std::stod`/`std::stoi` read it: leading spaces are skipped and the longest
 numeric prefix is taken, so `1.5abc` reads as 1.5 and a `g` of `1.0` as 1. CRLF line ends
-are accepted (`metrics.cpp` would keep the `\r` in the last header name). A file without
-`g` but with an `i` column (an O1 file, see [`write_openvt`](@ref)) takes `g = (i == 0)`
-(spec C8). A missing `x` or `y`, neither `g` nor `i`, a data row with too few fields, or a
-field that is not a number or overflows `Float64` (where `std::stod` throws) is an
-`ArgumentError`. Unlike `metrics.cpp`, an `n` column is not required. No cells (an empty
-file or empty vectors) and, in the vector method, a non-integer `g` are `ArgumentError`s.
+are accepted (`metrics.cpp` would keep the `\\r` in the last header name). A file without
+`g` but with an `i` column (an O1 file, see [`write_openvt`](@ref)) takes `g = (i == 0)`.
+Unlike `metrics.cpp`, an `n` column is not required.
 
-The sums run in `metrics.cpp`'s order with no fused multiply-adds, and the boundary is
-[`Analysis.concave_hull`](@ref PottsModels.Analysis.concave_hull)'s. The output of
+The sums run in `metrics.cpp`'s order with no fused multiply-adds. The output of
 [`openvt_metrics_line`](@ref) is identical to `metrics.cpp -ffp-contract=off` on the 25
-OpenVT parameter-plane colonies and on fuzzed clouds without ties. It departs from the
-reference on purpose where the reference's boundary depends on luck: its Graham order for
-points collinear with the pivot (spec defect D12), and its R-tree pruning next to
-near-parallel edges (D13). In both, this boundary is the correct hull. Exact ties between
-hull candidates are broken differently from the C++ R-tree, and everything is `Float64`:
-the reference is the arm64 build, where `long double` is `double`.
+OpenVT parameter-plane colonies and on fuzzed clouds without ties
+(`test/acceptance/openvt_analysis_port_tests.jl`). It departs from the reference where the
+reference's boundary depends on chance: its Graham order for points collinear with the
+pivot, and its R-tree pruning next to near-parallel edges
+(`docs/design/research/model-specs/15_openvt_monolayer.md`). In both cases this boundary is
+the correct hull. Exact ties between hull candidates are broken differently from the C++
+R-tree, and everything is `Float64`: the reference is the arm64 build, where `long double`
+is `double`.
 
-See also [`openvt_neighbor_histogram`](@ref) for `metrics.cpp`'s third output.
+# Arguments
+- `path::AbstractString`: a CSV file with the columns `x`, `y` and `g` or `i`.
+- `x::AbstractVector{<:Real}`, `y::AbstractVector{<:Real}`: the cell centroids.
+- `g::AbstractVector{<:Real}`: the growing flag of each cell, 0 or 1.
+
+The file method throws an `ArgumentError` for a missing `x` or `y`, neither `g` nor `i`, a
+data row with too few fields, or a field that is not a number or overflows `Float64` (where
+`std::stod` throws). Both methods throw an `ArgumentError` when there are no cells, and the
+vector method for a `g` that is not an integer and a `DimensionMismatch` for vectors of
+different lengths.
+
+# Returns
+- `NamedTuple`: `(; N, r, A, C, w, g, C_rel, w_rel)`, all `Float64` except the cell count
+  `N::Int`.
+
+# Examples
+```jldoctest
+julia> using PottsModels
+
+julia> m = openvt_metrics([0.0, 2.0, 2.0, 0.0], [0.0, 0.0, 2.0, 2.0], [1, 1, 0, 0]);
+
+julia> m.N, m.A, m.C, m.g
+(4, 4.0, 8.0, 0.5)
+```
+
+See also [`openvt_metrics_line`](@ref), [`openvt_neighbor_histogram`](@ref) for
+`metrics.cpp`'s third output.
 """
 function openvt_metrics(
         x::AbstractVector{<:Real}, y::AbstractVector{<:Real},
@@ -134,9 +157,28 @@ end
 """
     openvt_metrics_line(m) -> String
 
-The line `metrics.cpp` prints for the metrics `m` of [`openvt_metrics`](@ref):
-`N,r,A,C,w,g,C_rel,w_rel` and a newline, each value as C++'s `ostream <<` writes it (C's
-`%g`, six significant digits; `NaN` as `nan`).
+Return the line `metrics.cpp` prints for the metrics `m` of [`openvt_metrics`](@ref).
+
+The line is `N,r,A,C,w,g,C_rel,w_rel` and a newline, each value as C++'s `ostream <<`
+writes it (C's `%g`, six significant digits; `NaN` as `nan`).
+
+# Arguments
+- `m::NamedTuple`: the result of [`openvt_metrics`](@ref).
+
+# Returns
+- `String`: the line, with its newline.
+
+# Examples
+```jldoctest
+julia> using PottsModels
+
+julia> m = openvt_metrics([0.0, 2.0, 2.0, 0.0], [0.0, 0.0, 2.0, 2.0], [1, 1, 0, 0]);
+
+julia> openvt_metrics_line(m)
+"4,1.41421,4,8,0,0.5,1.12838,0\\n"
+```
+
+See also [`openvt_metrics`](@ref), [`write_openvt`](@ref).
 """
 function openvt_metrics_line(m::NamedTuple)
     return join((_cpp_g(m[k]) for k in _OPENVT_METRICS), ',') * "\n"
@@ -145,10 +187,28 @@ end
 """
     openvt_neighbor_histogram(n) -> (; n, p)
 
-The neighbor-number distribution `metrics.cpp` writes: for `n = 0:maximum(n)` (as a
-`Vector{Int}`), the percentage `p = (100·count)/N` of the `N` cells with that many
-neighbors, computed in that order. Write it with `write_openvt(dest, :O6_neighbors, h)`.
-No cells or a negative neighbor count is an `ArgumentError`.
+Return the neighbor-number distribution that `metrics.cpp` writes.
+
+For `n = 0:maximum(n)`, `p` is the percentage `(100·count)/N` of the `N` cells with that
+many neighbors, computed in that order. Write it with
+`write_openvt(dest, :O6_neighbors, h)`.
+
+# Arguments
+- `n::AbstractVector{<:Integer}`: the neighbor count of each cell. Throws an
+  `ArgumentError` when empty or when a count is negative.
+
+# Returns
+- `NamedTuple`: `(; n, p)`, with `n::Vector{Int}` and `p::Vector{Float64}`.
+
+# Examples
+```jldoctest
+julia> using PottsModels
+
+julia> openvt_neighbor_histogram([2, 3, 3, 0])
+(n = [0, 1, 2, 3], p = [25.0, 0.0, 25.0, 50.0])
+```
+
+See also [`openvt_metrics`](@ref), [`write_openvt`](@ref).
 """
 function openvt_neighbor_histogram(n::AbstractVector{<:Integer})
     isempty(n) && throw(ArgumentError("openvt_neighbor_histogram: no cells"))
@@ -166,11 +226,34 @@ end
 """
     openvt_inhibition_code(a, f; beta, gamma) -> Int
 
-The benchmark's per-cell inhibition code (the `i` of an O1 file): 0 growing, 1 inhibited by
-type 1 only, 2 by type 2 only, 3 by both. Type 1 (area) inhibits a cell with relative area
-`a` unless `a ≥ beta` (the model's β); type 2 (free surface) inhibits a cell with
-free-surface fraction `f` unless `f ≥ gamma` (γ). The comparisons are the benchmark text's
-`≥` (spec C9), so `a = beta` grows.
+Return the benchmark's inhibition code of one cell (the `i` of an O1 file): 0 growing, 1
+inhibited by type 1 only, 2 by type 2 only, 3 by both.
+
+Type 1 (area) inhibits a cell with relative area `a` unless `a ≥ beta`; type 2 (free
+surface) inhibits a cell with free-surface fraction `f` unless `f ≥ gamma`. The comparisons
+are the benchmark text's `≥`, so `a = beta` grows.
+
+# Arguments
+- `a::Real`: the relative area, `volume / A_star`.
+- `f::Real`: the free-surface fraction.
+
+# Keywords
+- `beta::Real`: the type-1 threshold, the model's `β`.
+- `gamma::Real`: the type-2 threshold, the model's `γ`.
+
+# Returns
+- `Int`: the code, in `0:3`.
+
+# Examples
+```jldoctest
+julia> using PottsModels
+
+julia> openvt_inhibition_code(0.95, 0.0; beta = 0.9, gamma = 0.1)
+2
+```
+
+See also [`openvt_inhibition_fractions`](@ref),
+[`openvt_frame`](@ref PottsModels.openvt_frame).
 """
 function openvt_inhibition_code(a::Real, f::Real; beta::Real, gamma::Real)
     return (a >= beta ? 0 : 1) + (f >= gamma ? 0 : 2)
@@ -179,9 +262,25 @@ end
 """
     openvt_inhibition_fractions(i) -> (; uninhibited, type1, type2, both)
 
-The shares of the inhibition codes 0, 1, 2 and 3 (see [`openvt_inhibition_code`](@ref))
-among the cells of one save (spec A3). A code outside `0:3`, or no cells, is an
-`ArgumentError`.
+Return the shares of the inhibition codes 0, 1, 2 and 3 (see
+[`openvt_inhibition_code`](@ref)) among the cells of one save.
+
+# Arguments
+- `i::AbstractVector{<:Integer}`: the code of each cell. Throws an `ArgumentError` when
+  empty or when a code is outside `0:3`.
+
+# Returns
+- `NamedTuple`: `(; uninhibited, type1, type2, both)`, each a `Float64`.
+
+# Examples
+```jldoctest
+julia> using PottsModels
+
+julia> openvt_inhibition_fractions([0, 0, 1, 3])
+(uninhibited = 0.5, type1 = 0.25, type2 = 0.0, both = 0.25)
+```
+
+See also [`openvt_inhibition_code`](@ref).
 """
 function openvt_inhibition_fractions(i::AbstractVector{<:Integer})
     isempty(i) && throw(ArgumentError("openvt_inhibition_fractions: no cells"))
@@ -297,33 +396,63 @@ function _openvt_keys(format, data, want)
 end
 
 """
-    write_openvt(dest, format::Symbol, data::NamedTuple)
+    write_openvt(dest, format::Symbol, data::NamedTuple) -> dest
 
-Write `data` as the OpenVT benchmark file `format` (spec 15 §3.1) to `dest`, a path
-(returned) or an `IO`. Every file has a header line, `,` separators, `\\n` line ends
-(including the last line) and no index column. In O1–O5, floats are written so that
-`parse(Float64, field)` returns them exactly (integral values without a fraction, `NaN` as
-`nan`, infinities as `inf`/`-inf`), and integer columns as integers.
+Write `data` as the OpenVT benchmark file `format`
+(`docs/design/research/model-specs/15_openvt_monolayer.md` §3.1) to `dest`, a path or an
+`IO`.
 
-| `format` | `data` | header |
-|:--|:--|:--|
-| `:O1` | `(; x, y, i, n)`: centroid, inhibition code in `0:3`, neighbor count | `x,y,i,n` |
-| `:O2` | `(; x, y, r, f, a)` | `x,y,r,f,a` |
-| `:O3` | `(; beta, mcs)` or `(; gamma, mcs)`; `mcs = NaN` for a run that never reached 10⁴ cells | `beta,Time to 10k (MCS),Time to 10k (5T)`; the 5T column is `mcs/775` |
-| `:O4` | `(; t, widths)`, `widths[k, rep]` in cell diameters | `Normalized time (T),Tissue width rep1 (CD),…,Mean Tissue width (CD),STD Tissue width (CD)`;
-the mean and the population SD (divisor = replicates) of each row,
-        from sequential sums |
-| `:O5` | `(; x_pos, y_pos, radius_i, inhibited)`, `inhibited` 0 or 1 | `x_pos,y_pos,radius_i,inhibited` |
-| `:O6` | `(; t, metrics)`, `metrics[k]` from [`openvt_metrics`](@ref) | `t,N,r,A,C,w,g,C_rel,w_rel`; a row is `t` as `run_metrics.sh` prints it (`%.15g`), `,`,
-        and [`openvt_metrics_line`](@ref) |
-| `:O6_neighbors` | `(; n, p)` from [`openvt_neighbor_histogram`](@ref) | `n,p`; `p` as `metrics.cpp` prints it |
+Every file has a header line, `,` separators, `\\n` line ends (including the last line)
+and no index column. In O1–O5, floats are written so that `parse(Float64, field)` returns
+them exactly (integral values without a fraction, `NaN` as `nan`, infinities as
+`inf`/`-inf`), and integer columns as integers. The formats are:
+
+- `:O1`: `data = (; x, y, i, n)`, the centroid, the inhibition code in `0:3` and the
+  neighbor count. Header `x,y,i,n`.
+- `:O2`: `(; x, y, r, f, a)`. Header `x,y,r,f,a`.
+- `:O3`: `(; beta, mcs)` or `(; gamma, mcs)`, with `mcs = NaN` for a run that never reached
+  10⁴ cells. Header `beta,Time to 10k (MCS),Time to 10k (5T)` (or `gamma,…`); the 5T
+  column is `mcs/775`.
+- `:O4`: `(; t, widths)`, with `widths[k, rep]` in cell diameters. Header
+  `Normalized time (T),Tissue width rep1 (CD),…,Mean Tissue width (CD),STD Tissue width
+  (CD)`: the mean and the population SD (divisor = replicates) of each row, from
+  sequential sums.
+- `:O5`: `(; x_pos, y_pos, radius_i, inhibited)`, with `inhibited` 0 or 1. Header
+  `x_pos,y_pos,radius_i,inhibited`.
+- `:O6`: `(; t, metrics)`, with `metrics[k]` from [`openvt_metrics`](@ref). Header
+  `t,N,r,A,C,w,g,C_rel,w_rel`; a row is `t` as `run_metrics.sh` prints it (`%.15g`), `,`,
+  and [`openvt_metrics_line`](@ref).
+- `:O6_neighbors`: `(; n, p)` from [`openvt_neighbor_histogram`](@ref). Header `n,p`, with
+  `p` as `metrics.cpp` prints it.
 
 The O4 mean and SD are summed left to right; NumPy sums pairwise, so with 8 or more
-replicates they can differ from `numpy.mean`/`numpy.std` in the last bit. The O6 values have
-`metrics.cpp`'s six significant digits. Other fields, an unknown format, an O1 code outside
-`0:3` or an O5 flag other than 0/1 is an `ArgumentError`; columns of different lengths are a
-`DimensionMismatch`. Read a file back with [`read_openvt`](@ref); name it with
-[`openvt_filename`](@ref).
+replicates they can differ from `numpy.mean`/`numpy.std` in the last bit. The O6 values
+have `metrics.cpp`'s six significant digits. Read a file back with [`read_openvt`](@ref),
+and name it with [`openvt_filename`](@ref).
+
+# Arguments
+- `dest`: a path (`AbstractString`) or an `IO`. A path is written only after `data` is
+  validated.
+- `format::Symbol`: `:O1`, `:O2`, `:O3`, `:O4`, `:O5`, `:O6` or `:O6_neighbors`.
+- `data::NamedTuple`: the columns, as listed above.
+
+Throws an `ArgumentError` for other fields, an unknown format, an O1 code outside `0:3` or
+an O5 flag other than 0 or 1, and a `DimensionMismatch` for columns of different lengths.
+
+# Returns
+- The path, for a path `dest`.
+
+# Examples
+```jldoctest
+julia> using PottsModels
+
+julia> print(sprint(io -> write_openvt(io, :O1, (; x = [0.5], y = [-1.0], i = [0],
+                                                 n = [3]))))
+x,y,i,n
+0.5,-1,0,3
+```
+
+See also [`read_openvt`](@ref), [`openvt_filename`](@ref).
 """
 function write_openvt(path::AbstractString, format::Symbol, data::NamedTuple)
     # validate before touching the file
@@ -429,13 +558,33 @@ end
 """
     read_openvt(path, format::Symbol) -> NamedTuple
 
-Read an OpenVT benchmark file written by [`write_openvt`](@ref), returning the columns as
-vectors: the `data` given to `write_openvt` for O1–O5 (for O3 under the parameter's name;
-for O4 the widths matrix, without the mean and SD columns) and O6 neighbors, and
-`(; t, N, r, A, C, w, g, C_rel, w_rel)` for O6. Integer columns (`i`, `n`, `inhibited`, `N`)
-are `Vector{Int}`, the others `Vector{Float64}`; `nan` reads as `NaN`. O1–O5 round-trip
-exactly; O6 values carry `metrics.cpp`'s six significant digits. An unknown format is an
-`ArgumentError`.
+Read an OpenVT benchmark file written by [`write_openvt`](@ref) and return its columns as
+vectors.
+
+For O1–O5 and O6 neighbors, the result is the `data` given to `write_openvt` (for O3 under
+the parameter's name; for O4 the widths matrix, without the mean and SD columns). For O6
+it is `(; t, N, r, A, C, w, g, C_rel, w_rel)`. O1–O5 round-trip exactly; O6 values carry
+`metrics.cpp`'s six significant digits.
+
+# Arguments
+- `path`: the file.
+- `format::Symbol`: `:O1`, `:O2`, `:O3`, `:O4`, `:O5`, `:O6` or `:O6_neighbors`.
+
+Throws an `ArgumentError` for an unknown format, an empty file, a row whose field count
+differs from the header's, or a header that does not match `format`.
+
+# Returns
+- `NamedTuple`: the columns. Integer columns (`i`, `n`, `inhibited`, `N`) are
+  `Vector{Int}`, the others `Vector{Float64}`; `nan` reads as `NaN`.
+
+# Examples
+```julia
+using PottsModels
+path = write_openvt(tempname(), :O6_neighbors, openvt_neighbor_histogram([2, 3, 3]))
+read_openvt(path, :O6_neighbors)
+```
+
+See also [`write_openvt`](@ref).
 """
 function read_openvt(path::AbstractString, format::Symbol)
     _openvt_format(format)
@@ -498,24 +647,45 @@ function _openvt_header(path, format, header, cols)
 end
 
 """
-    openvt_filename(format::Symbol; …) -> String
+    openvt_filename(format::Symbol; kwargs...) -> String
 
-The file name the OpenVT benchmark expects for `format` (spec 15 §3.1):
+Return the file name that the OpenVT benchmark expects for `format`
+(`docs/design/research/model-specs/15_openvt_monolayer.md` §3.1).
 
-- `openvt_filename(:O1; case, seed, mcs)`: `"potts_<case>_s<seed>_<mcs:06d>.csv"`;
+- `openvt_filename(:O1; case, seed, mcs)`: `"potts_<case>_s<seed>_<mcs:06d>.csv"`.
 - `openvt_filename(:O2; k)`:
-  `"Potts.jl_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv"` (joined with the
-  platform's separator);
+  `"Potts.jl_5T_MonolayerGrowth_1000_Data/cell_data_no_inhibition_<k>.csv"`, joined with
+  the platform's separator.
 - `openvt_filename(:O3; parameter)`, `parameter` `:beta` or `:gamma`:
-  `"Potts.jl_time_to_10k_vs_<parameter>.csv"`;
-- `openvt_filename(:O5; gamma, mcs)`: `"Potts.jl_gamma_<gamma>_<mcs>MCS.csv"`, with `gamma`
-  as `string` writes it (the Fig 7 colonies, β = 0);
+  `"Potts.jl_time_to_10k_vs_<parameter>.csv"`.
+- `openvt_filename(:O5; gamma, mcs)`: `"Potts.jl_gamma_<gamma>_<mcs>MCS.csv"`, with
+  `gamma` as `string` writes it (the Fig 7 colonies, β = 0).
 - `openvt_filename(:O5; beta, mcs)`: `"Potts.jl_beta_<beta>_<mcs>MCS.csv"`, with `beta` as
   `string` writes it (the Fig 8 colonies, γ = 0).
 
-O4 and O6 have no fixed names. Another format or an O3 `parameter` other than `:beta` and
-`:gamma` is an `ArgumentError`, and so is an O5 call with both or neither of `gamma` and
-`beta`.
+O4 and O6 have no fixed names.
+
+# Arguments
+- `format::Symbol`: `:O1`, `:O2`, `:O3` or `:O5`.
+
+# Keywords
+- The keywords of `format`, as listed above.
+
+Throws an `ArgumentError` for another format, an O3 `parameter` other than `:beta` and
+`:gamma`, or an O5 call with both or neither of `gamma` and `beta`.
+
+# Returns
+- `String`: the file name.
+
+# Examples
+```jldoctest
+julia> using PottsModels
+
+julia> openvt_filename(:O1; case = "a", seed = 3, mcs = 775)
+"potts_a_s3_000775.csv"
+```
+
+See also [`write_openvt`](@ref).
 """
 function openvt_filename(format::Symbol; kw...)
     if format === :O1
@@ -570,22 +740,41 @@ end
 """
     PottsModels.openvt_spread_compare(ref, alt; z = 4.42) -> NamedTuple
 
-Whether the per-seed values `alt` of one metric (e.g. `CheckerboardCPM` runs) differ from
-the per-seed values `ref` (e.g. the `SequentialCPM` reference runs) beyond the seed spread,
-by the Welch two-sample z of independent runs (spec 15 §1.3):
+Return whether the per-seed values `alt` of one metric (for example of `CheckerboardCPM`
+runs) differ from the per-seed values `ref` (for example of `SequentialCPM` runs) beyond the
+seed spread, by the Welch two-sample z of independent runs
+(`docs/design/research/model-specs/15_openvt_monolayer.md` §1.3).
 
-- `diff = mean(alt) − mean(ref)`, `se = √(sd_ref²/n_ref + sd_alt²/n_alt)` with sample
-  standard deviations (`n − 1`), and the statistic `z = diff / se`;
-- `se == 0` gives `z = 0` when `diff == 0` and `±Inf` (the sign of `diff`) otherwise;
-- `beyond = |z| > z`, where the keyword `z` is the critical value. The default 4.42 is
-  Φ⁻¹(1 − 5·10⁻⁶): a family false-alarm budget of 10⁻³ split over at most 100 two-sided
-  checks, the convention of the ensemble check of `BoundarySiteCPM` against the sequential
-  sampler.
+- `diff = mean(alt) − mean(ref)` and `se = √(sd_ref²/n_ref + sd_alt²/n_alt)`, with sample
+  standard deviations (`n − 1`); the statistic is `z = diff / se`.
+- `se == 0` gives `z = 0` when `diff == 0` and `±Inf` (the sign of `diff`) otherwise.
+- `beyond = |z| > z`, where the keyword `z` is the critical value.
 
-Returns `(; n_ref, n_alt, mean_ref, mean_alt, sd_ref, sd_alt, diff, se, z, beyond)`: the
-counts are `Int`, `beyond` a `Bool`, the rest `Float64`. `ref` and `alt` are vectors of
-reals, each with at least 2 values, all finite; anything else is an `ArgumentError`. The
-statistic uses the normal limit, so it is meant for about 100 seeds per arm.
+The statistic uses the normal limit, so it is meant for about 100 seeds per arm.
+
+# Arguments
+- `ref::AbstractVector{<:Real}`: the reference values, at least 2, all finite.
+- `alt::AbstractVector{<:Real}`: the compared values, at least 2, all finite.
+
+Throws an `ArgumentError` for fewer than 2 values or a value that is not finite.
+
+# Keywords
+- `z::Real = 4.42`: the critical value. The default is Φ⁻¹(1 − 5·10⁻⁶): a family
+  false-alarm budget of 10⁻³ split over at most 100 two-sided checks.
+
+# Returns
+- `NamedTuple`: `(; n_ref, n_alt, mean_ref, mean_alt, sd_ref, sd_alt, diff, se, z,
+  beyond)`. The counts are `Int`, `beyond` is a `Bool` and the rest are `Float64`.
+
+# Examples
+```jldoctest
+julia> using PottsModels
+
+julia> r = PottsModels.openvt_spread_compare([1.0, 2.0, 3.0], [1.5, 2.5, 3.5]);
+
+julia> r.diff, r.beyond
+(0.5, false)
+```
 
 See also [`openvt_spread_table`](@ref PottsModels.openvt_spread_table).
 """
@@ -614,10 +803,34 @@ end
 """
     PottsModels.openvt_spread_table(ref, alt; z = 4.42) -> Vector{NamedTuple}
 
-[`openvt_spread_compare`](@ref PottsModels.openvt_spread_compare) for every metric of a
-table: `ref` and `alt` map metric ids (`String`) to per-seed values and must have the same
-key set (else `ArgumentError`). One row per metric, sorted by metric id, each
+Apply [`openvt_spread_compare`](@ref PottsModels.openvt_spread_compare) to every metric of
+a table.
+
+There is one row per metric, sorted by metric name, each
 `merge((; metric), openvt_spread_compare(ref[metric], alt[metric]; z))`.
+
+# Arguments
+- `ref::AbstractDict{String, <:AbstractVector}`: metric name => reference per-seed values.
+- `alt::AbstractDict{String, <:AbstractVector}`: metric name => compared per-seed values,
+  with the same metric names as `ref`. Throws an `ArgumentError` otherwise.
+
+# Keywords
+- `z::Real = 4.42`: the critical value.
+
+# Returns
+- `Vector{NamedTuple}`: the rows.
+
+# Examples
+```jldoctest
+julia> using PottsModels
+
+julia> ref = Dict("N" => [1.0, 2.0, 3.0]); alt = Dict("N" => [1.0, 2.0, 4.0]);
+
+julia> only(PottsModels.openvt_spread_table(ref, alt)).metric
+"N"
+```
+
+See also [`openvt_spread_compare`](@ref PottsModels.openvt_spread_compare).
 """
 function openvt_spread_table(
         ref::AbstractDict{String, <:AbstractVector},
